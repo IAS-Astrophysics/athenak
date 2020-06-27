@@ -9,6 +9,7 @@ add_executable(
     athena
         main.cpp
         globals.cpp
+        parameter_input.cpp
 
         outputs/io_wrapper.cpp
 
