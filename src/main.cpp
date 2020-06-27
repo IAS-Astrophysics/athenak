@@ -31,7 +31,6 @@
 //  \brief AthenaK main program
 
 int main(int argc, char *argv[]) {
-  std::string athena_version = "version 20.0 - August 2020";
   char *input_filename = nullptr, *restart_filename = nullptr, *prundir = nullptr;
   int res_flag  = 0;  // set to 1 if -r        argument is on cmdline
   int narg_flag = 0;  // set to 1 if -n        argument is on cmdline
@@ -47,13 +46,13 @@ int main(int argc, char *argv[]) {
 #if OPENMP_PARALLEL_ENABLED
   int mpiprv;
   if (MPI_SUCCESS != MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &mpiprv)) {
-    std::cout << "### FATAL ERROR in main" << std::endl
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "MPI Initialization failed." << std::endl;
     return(0);
   }
   if (mpiprv != MPI_THREAD_MULTIPLE) {
-    std::cout << "### FATAL ERROR in main" << std::endl
-              << "MPI_THREAD_MULTIPLE must be supported for the hybrid parallelzation. "
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "MPI_THREAD_MULTIPLE must be supported for hybrid parallelzation. "
               << MPI_THREAD_MULTIPLE << " : " << mpiprv
               << std::endl;
     MPI_Finalize();
@@ -61,14 +60,14 @@ int main(int argc, char *argv[]) {
   }
 #else  // no OpenMP
   if (MPI_SUCCESS != MPI_Init(&argc, &argv)) {
-    std::cout << "### FATAL ERROR in main" << std::endl
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "MPI Initialization failed." << std::endl;
     return(0);
   }
 #endif  // OPENMP_PARALLEL_ENABLED
   // Get process id (rank) in MPI_COMM_WORLD
   if (MPI_SUCCESS != MPI_Comm_rank(MPI_COMM_WORLD, &(global_variable::my_rank))) {
-    std::cout << "### FATAL ERROR in main" << std::endl
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "MPI_Comm_rank failed." << std::endl;
     MPI_Finalize();
     return(0);
@@ -76,7 +75,7 @@ int main(int argc, char *argv[]) {
 
   // Get total number of MPI processes (ranks)
   if (MPI_SUCCESS != MPI_Comm_size(MPI_COMM_WORLD, &global_variable::nranks)) {
-    std::cout << "### FATAL ERROR in main" << std::endl
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "MPI_Comm_size failed." << std::endl;
     MPI_Finalize();
     return(0);
@@ -105,7 +104,7 @@ int main(int argc, char *argv[]) {
           if ((i+1 >= argc) // flag is at the end of the command line options
               || (*argv[i+1] == '-') ) { // flag is followed by another flag
             if (global_variable::my_rank == 0) {
-              std::cout << "### FATAL ERROR in main" << std::endl
+              std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
                         << "-" << opt_letter << " must be followed by a valid argument\n";
 #if MPI_PARALLEL_ENABLED
               MPI_Finalize();
@@ -147,7 +146,7 @@ int main(int argc, char *argv[]) {
         case 'h':
         default:
           if (global_variable::my_rank == 0) {
-            std::cout << "Athena++ " << athena_version << std::endl;
+            std::cout << "Athena++ v" <<ATHENA_VERSION_MAJOR<<"."<<ATHENA_VERSION_MINOR<< std::endl;
             std::cout << "Usage: " << argv[0] << " [options] [block/par=value ...]\n";
             std::cout << "Options:" << std::endl;
             std::cout << "  -i <file>       specify input file [athinput]\n";
@@ -169,10 +168,12 @@ int main(int argc, char *argv[]) {
     } // else if argv[i] not of form "-?" ignore it here (tested in ModifyFromCmdline)
   }
 
+  // print error if input or restart file not given
   if (restart_filename == nullptr && input_filename == nullptr) {
     // no input file is given
-    std::cout << "### FATAL ERROR in main" << std::endl
-              << "No input file or restart file is specified." << std::endl;
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "No input file or restart file is specified." << std::endl
+              << "Use " << argv[0] << " -h for help" << std::endl;
 #if MPI_PARALLEL_ENABLED
     MPI_Finalize();
 #endif

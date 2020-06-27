@@ -13,8 +13,8 @@
 #define PROBLEM_GENERATOR "@PROBLEM@"
 
 // Code versions defined in CMakeLists.txt
-#define Athena_VERSION_MAJOR @Athena_VERSION_MAJOR@
-#define Athena_VERSION_MINOR @Athena_VERSION_MINOR@
+#define ATHENA_VERSION_MAJOR @athena_VERSION_MAJOR@
+#define ATHENA_VERSION_MINOR @athena_VERSION_MINOR@
 
 // use single precision floating-point values (binary32)? default=0 (false; use binary64)
 #define SINGLE_PRECISION_ENABLED @SINGLE_PRECISION_ENABLED@

@@ -10,6 +10,8 @@ add_executable(
         main.cpp
         globals.cpp
 
+        outputs/io_wrapper.cpp
+
         utils/show_config.cpp
 )
 
