@@ -1,0 +1,39 @@
+#ifndef CONFIG_HPP_
+#define CONFIG_HPP_
+//==================================================================================================
+// AthenaXXX astrophysical plasma code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
+// Licensed under the 3-clause BSD License (the "LICENSE")
+//==================================================================================================
+
+// number of ghost cells (string)
+#define NGHOST "@ATHENA_NGHOST@"
+
+// problem generator (string)
+#define PROBLEM_GENERATOR "@PROBLEM@"
+
+// Code versions defined in CMakeLists.txt
+#define Athena_VERSION_MAJOR @Athena_VERSION_MAJOR@
+#define Athena_VERSION_MINOR @Athena_VERSION_MINOR@
+
+// use single precision floating-point values (binary32)? default=0 (false; use binary64)
+#define SINGLE_PRECISION_ENABLED @SINGLE_PRECISION_ENABLED@
+
+// use MPI parallelization? default=0 (false)
+#define MPI_PARALLEL_ENABLED @MPI_PARALLEL_ENABLED@
+
+// use OpenMP parallelization? default=0 (false)
+#define OPENMP_PARALLEL_ENABLED @OPENMP_PARALLEL_ENABLED@
+
+// Kokkos tight loop layout
+//#define @PAR_LOOP_LAYOUT@
+
+// Kokkos nested loop layout (inner)
+//#define @PAR_LOOP_INNER_LAYOUT@
+
+// compiler options
+#define COMPILED_WITH "@COMPILER_CHOICE@"
+#define COMPILER_COMMAND "@COMPILER_COMMAND@"
+#define COMPILED_WITH_OPTIONS "@COMPILER_FLAGS@" // NOLINT
+
+#endif // CONFIG_HPP_
