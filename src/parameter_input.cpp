@@ -59,6 +59,7 @@ ParameterInput::ParameterInput() : last_filename_{} {
 #endif
 }
 
+// this constructor automatically loads data from input_filename in argument
 ParameterInput::ParameterInput(std::string input_filename) : last_filename_{} {
 #ifdef OPENMP_PARALLEL
   omp_init_lock(&lock_);
@@ -307,6 +308,52 @@ void ParameterInput::AddParameter(InputBlock *pb, std::string name, std::string 
   }
   
   return;
+}
+
+//----------------------------------------------------------------------------------------
+//! void ParameterInput::ModifyFromCmdline(int argc, char *argv[])
+//  \brief parse commandline for changes to input parameters
+// Note this function is very forgiving (no warnings!) if there is an error in format
+
+void ParameterInput::ModifyFromCmdline(int argc, char *argv[]) {
+  std::string input_text, block,name, value;
+  std::stringstream msg;
+  InputBlock *pb;
+  InputLine *pl;
+
+  for (int i=1; i<argc; i++) {
+    input_text = argv[i];
+    std::size_t slash_posn = input_text.find_first_of("/");   // find "/" character
+    std::size_t equal_posn = input_text.find_first_of("=");   // find "=" character
+
+    // skip if either "/" or "=" do not exist in input
+    if ((slash_posn == std::string::npos) || (equal_posn == std::string::npos)) continue;
+
+    // extract block/name/value strings
+    block = input_text.substr(0, slash_posn);
+    name  = input_text.substr(slash_posn+1, (equal_posn - slash_posn - 1));
+    value = input_text.substr(equal_posn+1, std::string::npos);
+
+    // get pointer to node with same block name in linked list of InputBlocks
+    pb = GetPtrToBlock(block);
+    if (pb == nullptr) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+                << "Block name '" << block << "' on command line not found" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+
+    // get pointer to node with same parameter name in linked list of InputLines
+    pl = pb->GetPtrToLine(name);
+    if (pl == nullptr) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+                << "Parameter '" << name << "' in block '" << block 
+                << "' on command line not found" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    pl->param_value.assign(value);   // replace existing value
+
+    if (value.length() > pb->max_len_parvalue) pb->max_len_parvalue = value.length();
+  }
 }
 
 //--------------------------------------------------------------------------------------------------

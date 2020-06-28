@@ -187,6 +187,7 @@ int main(int argc, char *argv[]) {
 
   std::unique_ptr<ParameterInput> pinput;
   pinput = std::make_unique<ParameterInput>(input_filename);
+  pinput->ModifyFromCmdline(argc, argv);
 
   // Dump input parameters and quit if code was run with -n option.
   if (narg_flag) {
