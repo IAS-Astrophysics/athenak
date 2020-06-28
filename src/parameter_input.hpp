@@ -15,7 +15,7 @@
 #include <ostream>  // ostream
 #include <string>   // string
 #include <cstdlib>
-#include <forward_list>
+#include <list>
 
 #include "athena.hpp"
 #include "outputs/io_wrapper.hpp"
@@ -26,7 +26,7 @@
 
 //----------------------------------------------------------------------------------------
 //! \struct InputLine
-//  \brief  node in a std::forward_list of parameters contained within 1x input block
+//  \brief  node in a std::list of parameters contained within 1x input block
 
 struct InputLine {
  public:
@@ -41,7 +41,7 @@ struct InputLine {
 
 //----------------------------------------------------------------------------------------
 //! \class InputBlock
-//  \brief node in a std::forward_list of all input blocks contained within input file
+//  \brief node in a std::list of all input blocks contained within input file
 
 class InputBlock {
  public:
@@ -53,7 +53,7 @@ class InputBlock {
   std::size_t max_len_parname;  // length of longest param_name, for nice-looking output
   std::size_t max_len_parvalue; // length of longest param_value, to format outputs
 
-  std::forward_list<InputLine> line;   // singly linked list of input lines (in this block)
+  std::list<InputLine> line;   // singly linked list of input lines (in this block)
 
   // functions
   InputLine* GetPtrToLine(std::string name);
@@ -66,12 +66,13 @@ class InputBlock {
 
 class ParameterInput {
  public:
-  // constructor/destructor
+  // constructor(s)/destructor
   ParameterInput();
+  explicit ParameterInput(std::string input_filename);
   ~ParameterInput();
 
   // data
-  std::forward_list<InputBlock> block;
+  std::list<InputBlock> block;
 
   // functions
   void LoadFromStream(std::istream &is);

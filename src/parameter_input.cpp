@@ -51,12 +51,22 @@
 #endif
 
 //--------------------------------------------------------------------------------------------------
-// ParameterInput constructor
+// ParameterInput constructor(s)
 
 ParameterInput::ParameterInput() : last_filename_{} {
 #if OPENMP_PARALLEL_ENABLED
   omp_init_lock(&lock_);
 #endif
+}
+
+ParameterInput::ParameterInput(std::string input_filename) : last_filename_{} {
+#ifdef OPENMP_PARALLEL
+  omp_init_lock(&lock_);
+#endif
+  IOWrapper infile;
+  infile.Open(input_filename.c_str(), IOWrapper::FileMode::read);
+  LoadFromFile(infile);
+  infile.Close();
 }
 
 // ParameterInput destructor
@@ -202,16 +212,25 @@ void ParameterInput::LoadFromFile(IOWrapper &input) {
 
 InputBlock* ParameterInput::FindOrAddBlock(std::string name) {
 
-  // Search singly linked list of InputBlocks to see if name exists, return if found.
-  for (auto it = block.begin(); it != block.end(); ++it) {
-    if (name.compare(it->block_name) == 0) return &*it;
-  }
+  // if block contains no elements, create the first one
+  if (block.empty()) {
+    block.emplace_front(name);
+    auto it = block.begin();
+    return &block.front();
 
-  // Create new block at end of list if not found above, and return pointer to it
-  block.emplace_after(block.end(),name);
+  // else search singly linked list of InputBlocks to see if name exists, return if found.
+  } else {
+    for (auto it = block.begin(); it != block.end(); ++it) {
+      if (name.compare(it->block_name) == 0) return &*it;
+    }
+
+    // Create new block at end of list if not found above, and return pointer to it
+    block.emplace_back(name);
+    return &block.back();
 //  return &*block.begin();
-  auto it = block.end();
-  return &*it;
+//    auto it = block.end();
+//    return &*it;
+  }
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -262,25 +281,30 @@ void ParameterInput::ParseLine(InputBlock *pib, std::string line, std::string& n
 void ParameterInput::AddParameter(InputBlock *pb, std::string name, std::string value,
                                   std::string comment) {
 
-  // Search singly linked list of InputBlocks to see if name exists, replace contents with new
+  // if line contains no elements, create the first one
+  if (pb->line.empty()) {
+    pb->line.emplace_front(name,value,comment);
+    pb->max_len_parname = name.length();
+    pb->max_len_parvalue = value.length();
+    return;
+
+  // else search singly linked list of InputBlocks to see if name exists, replace contents with new
   // values if found and return.
-  for (auto it = pb->line.begin(); it != pb->line.end(); ++it) {
-    if (name.compare(it->param_name) == 0) {   // param name already exists
-      it->param_value.assign(value);           // replace existing param value
-      it->param_comment.assign(comment);       // replace exisiting param comment
-      if (value.length() > pb->max_len_parvalue) pb->max_len_parvalue = value.length();
-      return;
+  } else {
+    for (auto it = pb->line.begin(); it != pb->line.end(); ++it) {
+      if (name.compare(it->param_name) == 0) {   // param name already exists
+        it->param_value.assign(value);           // replace existing param value
+        it->param_comment.assign(comment);       // replace exisiting param comment
+        if (value.length() > pb->max_len_parvalue) pb->max_len_parvalue = value.length();
+        return;
+      }
     }
-  }
 
   // Parameter not found, so create new node in singly linked list
-//  InputLine new_line;
-//  new_line.param_name.assign(name);
-//  new_line.param_value.assign(value);
-//  new_line.param_comment.assign(comment);
-  pb->line.emplace_after(pb->line.end(),name,value,comment);
-  if (name.length() > pb->max_len_parname) pb->max_len_parname = name.length();
-  if (value.length() > pb->max_len_parvalue) pb->max_len_parvalue = value.length();
+    pb->line.emplace_back(name,value,comment);
+    if (name.length() > pb->max_len_parname) pb->max_len_parname = name.length();
+    if (value.length() > pb->max_len_parvalue) pb->max_len_parvalue = value.length();
+  }
   
   return;
 }

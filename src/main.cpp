@@ -24,6 +24,7 @@
 #include <string>     // string
 
 #include "athena.hpp"
+#include "parameter_input.hpp"
 #include "utils/utils.hpp"
 
 //--------------------------------------------------------------------------------------------------
@@ -181,9 +182,21 @@ int main(int argc, char *argv[]) {
   }
 
   //--- Step 3. ------------------------------------------------------------------------------------
-  // Construct object to store input parameters, then parse input file and command line.
+  // Parse input file and command line and store into ParameterInput object.
   // With MPI, the input is read by every process in parallel using MPI-IO.
 
+  std::unique_ptr<ParameterInput> pinput;
+  pinput = std::make_unique<ParameterInput>(input_filename);
+
+  // Dump input parameters and quit if code was run with -n option.
+  if (narg_flag) {
+    if (global_variable::my_rank == 0) pinput->ParameterDump(std::cout);
+//    if (res_flag == 1) restartfile.Close();
+#ifdef MPI_PARALLEL
+    MPI_Finalize();
+#endif
+    return(0);
+  }
 
   //--- Step 4. ------------------------------------------------------------------------------------
   // Construct and initialize Mesh
