@@ -12,6 +12,7 @@ add_executable(
         parameter_input.cpp
 
         mesh/mesh.cpp
+        mesh/meshblock.cpp
 
         outputs/io_wrapper.cpp
 

@@ -22,10 +22,9 @@ struct GridIndices {
   ~GridIndices() {};
 
   int is,ie,js,je,ks,ke;   // indices of ACTIVE cells
+  int nghost;              // number of ghost zones
   int nx1, nx2, nx3;       // number of ACTIVE cells in each dir
-
-  // total number of cells in each dir, including ghost zones (i.e. ncells2=nx2+2*NGHOST if nx2>1)
-  int ncells1, ncells2, ncells3;
+  int ncells1, ncells2, ncells3; // total # of cells each dir (i.e. ncells2=nx2+2*NGHOST if nx2>1)
 };
 
 //--------------------------------------------------------------------------------------------------
@@ -35,21 +34,18 @@ struct GridIndices {
 class MeshBlock {
 
  public:
-  MeshBlock(Mesh *pm, LogicalLocation iloc, RegionSize input_size, ParameterInput *pin);
+  MeshBlock(Mesh *pm, ParameterInput *pin, RegionSize input_size);
   ~MeshBlock();
 
   // data
   Mesh *pmy_mesh;  // ptr to Mesh containing this MeshBlock
-  LogicalLocation loc;
   RegionSize block_size;
 
   // on 1x coarser level MeshBlock (i.e. ncc2=nx2/2 + 2*NGHOST, if nx2>1)
   GridIndices indx, cindx;
 
   // functions
-  std::size_t GetBlockSizeInBytes();
-  int GetNumberOfMeshBlockCells() {
-    return block_size.nx1*block_size.nx2*block_size.nx3; }
+  int GetNumberOfMeshBlockCells() { return block_size.nx1 * block_size.nx2 * block_size.nx3; }
 
  private:
   // data

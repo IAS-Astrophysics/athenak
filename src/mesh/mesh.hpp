@@ -24,6 +24,7 @@ struct RegionSize {  // aggregate and POD type; do NOT reorder member declaratio
   Real x1max, x2max, x3max;
   Real x1rat, x2rat, x3rat; // ratio of dxf(i)/dxf(i-1)
   int nx1, nx2, nx3;        // number of active cells (not including ghost zones)
+  int nghost;               // number of ghost cells
 };
 
 //--------------------------------------------------------------------------------------
@@ -61,6 +62,7 @@ class Mesh {
 
   // data
   RegionSize root_size;
+  bool adaptive, multilevel;
 
   // array of MeshBlocks belonging to this MPI rank
   MeshBlock *my_blocks;

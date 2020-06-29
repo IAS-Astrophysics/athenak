@@ -37,6 +37,32 @@ Mesh::Mesh(ParameterInput *pin) {
   root_size.nx1   = pin->GetInteger("mesh", "nx1");
   root_size.nx2   = pin->GetInteger("mesh", "nx2");
   root_size.nx3   = pin->GetInteger("mesh", "nx3");
+  root_size.nghost = pin->GetOrAddReal("mesh", "nghost", 2);
+
+  // following sets boolean flags to true/false depending on input strings
+  adaptive = (pin->GetOrAddString("mesh", "refinement", "none") == "adaptive") ? true : false;
+  multilevel = ((adaptive) || (pin->GetOrAddString("mesh", "refinement", "none") == "static")) ?
+               true : false;
+
+  // error check physical size of mesh (root level) from input file.
+  if (root_size.x1max <= root_size.x1min) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+        << "Input x1max must be larger than x1min: x1min=" << root_size.x1min
+        << " x1max=" << root_size.x1max << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (root_size.x2max <= root_size.x2min) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+        << "Input x2max must be larger than x2min: x2min=" << root_size.x2min
+        << " x2max=" << root_size.x2max << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (root_size.x3max <= root_size.x3min) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+        << "Input x3max must be larger than x3min: x3min=" << root_size.x3min
+        << " x3max=" << root_size.x3max << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 
   // error check requested number of grid cells for entire root domain
   if (root_size.nx1 < 4) {
@@ -61,23 +87,16 @@ Mesh::Mesh(ParameterInput *pin) {
     std::exit(EXIT_FAILURE);
   }
 
-  // error check physical size of mesh (root level) from input file.
-  if (root_size.x1max <= root_size.x1min) {
+  // error check number of ghost zones
+  if (root_size.nghost < 2) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "Input x1max must be larger than x1min: x1min=" << root_size.x1min
-        << " x1max=" << root_size.x1max << std::endl;
+        << "More than 2 ghost zones required, but nghost=" << root_size.nghost << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  if (root_size.x2max <= root_size.x2min) {
+  if ((multilevel) && (root_size.nghost % 2 != 0)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "Input x2max must be larger than x2min: x2min=" << root_size.x2min
-        << " x2max=" << root_size.x2max << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-  if (root_size.x3max <= root_size.x3min) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "Input x3max must be larger than x3min: x3min=" << root_size.x3min
-        << " x3max=" << root_size.x3max << std::endl;
+        << "Number of ghost zones must be divisible by two for SMR/AMR calculations, but nghost="
+        << root_size.nghost << std::endl;
     std::exit(EXIT_FAILURE);
   }
 
