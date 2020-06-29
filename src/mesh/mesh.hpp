@@ -13,8 +13,9 @@
 #include <cstdint>     // int64_t
 #include <vector>
 
-//Forward declarations
+// Forward declarations
 class MeshBlock;
+class MeshBlockTree;
 
 //----------------------------------------------------------------------------------------
 //! \struct RegionSize
@@ -33,17 +34,21 @@ struct RegionSize {  // aggregate and POD type; do NOT reorder member declaratio
 //  \brief stores logical location and level of MeshBlock
 
 struct LogicalLocation { // aggregate and POD type
-  // These values can exceed the range of std::int32_t even if the root grid has only a
-  // single MeshBlock if >30 levels of AMR are used, since the corresponding max index =
-  // 1*2^31 > INT_MAX = 2^31 -1 for most 32-bit signed integer type impelementations
-  std::int64_t lx1, lx2, lx3;
-  int level;
+  // WARNING: Following values can exceed the range of std::int32_t if the root grid has >30 levels
+  // of AMR even if the root grid consists of a single MeshBlock, since the corresponding
+  // max index = 1*2^31 > INT_MAX = 2^31 -1 for most 32-bit signed integer type impelementations
+  std::int32_t level, lx1, lx2, lx3;
   // comparison functions for sorting
   static bool Lesser(const LogicalLocation &left, const LogicalLocation &right) {
     return left.level < right.level;
   }
   static bool Greater(const LogicalLocation & left, const LogicalLocation &right) {
     return left.level > right.level;
+  }
+  // overload comparison operator
+  bool operator==(LogicalLocation const &rhs) const {
+    return ((this->level == rhs.level) && (this->lx1 == rhs.lx1) &&
+            (this->lx2 == rhs.lx2) && (this->lx3 == rhs.lx3));
   }
 };
 
@@ -81,6 +86,7 @@ class Mesh {
   int num_mesh_threads_;
 
   LogicalLocation *loclist;
+  MeshBlockTree *tree;    // binary/quad/oct-tree
 
   // functions
 

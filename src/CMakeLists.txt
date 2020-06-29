@@ -13,6 +13,7 @@ add_executable(
 
         mesh/mesh.cpp
         mesh/meshblock.cpp
+        mesh/meshblock_tree.cpp
 
         outputs/io_wrapper.cpp
 

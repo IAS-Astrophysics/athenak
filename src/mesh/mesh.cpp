@@ -13,6 +13,7 @@
 #include "outputs/io_wrapper.hpp"
 #include "mesh.hpp"
 #include "meshblock.hpp"
+#include "meshblock_tree.hpp"
 
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>
