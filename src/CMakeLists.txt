@@ -11,6 +11,8 @@ add_executable(
         globals.cpp
         parameter_input.cpp
 
+        mesh/mesh.cpp
+
         outputs/io_wrapper.cpp
 
         utils/show_config.cpp
