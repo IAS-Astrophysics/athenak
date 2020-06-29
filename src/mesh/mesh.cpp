@@ -21,15 +21,15 @@
 //----------------------------------------------------------------------------------------
 // Mesh constructor, builds mesh at start of calculation using parameters in input file
 
-Mesh::Mesh(ParameterInput *pin) {
+Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) {
 
   // Read properties of mesh from input parameters
   RegionSize root_size;
   root_size.x1min = pin->GetReal("mesh", "x1min");
-  root_size.x1max = pin->GetReal("mesh", "x2min");
-  root_size.x2min = pin->GetReal("mesh", "x3min");
-  root_size.x2max = pin->GetReal("mesh", "x1max");
-  root_size.x3min = pin->GetReal("mesh", "x2max");
+  root_size.x1max = pin->GetReal("mesh", "x1max");
+  root_size.x2min = pin->GetReal("mesh", "x2min");
+  root_size.x2max = pin->GetReal("mesh", "x2max");
+  root_size.x3min = pin->GetReal("mesh", "x3min");
   root_size.x3max = pin->GetReal("mesh", "x3max");
   root_size.x1rat = pin->GetOrAddReal("mesh", "x1rat", 1.0);
   root_size.x2rat = pin->GetOrAddReal("mesh", "x2rat", 1.0);
@@ -135,10 +135,10 @@ Mesh::Mesh(ParameterInput *pin) {
     std::exit(EXIT_FAILURE);
   }
 
-  // calculate the number of blocks
-  nmbx1 = root_size.nx1/block_size.nx1;
-  nmbx2 = root_size.nx2/block_size.nx2;
-  nmbx3 = root_size.nx3/block_size.nx3;
+  // calculate the number of MeshBlocks in root level in each dir
+  nrmbx1 = root_size.nx1/block_size.nx1;
+  nrmbx2 = root_size.nx2/block_size.nx2;
+  nrmbx3 = root_size.nx3/block_size.nx3;
 
 
 #ifdef MPI_PARALLEL
@@ -167,4 +167,29 @@ Mesh::Mesh(ParameterInput *pin) {
 // destructor
 
 Mesh::~Mesh() {
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void Mesh::OutputMeshStructure(int ndim)
+//  \brief print the mesh structure information
+
+void Mesh::OutputMeshStructure() {
+
+  // open 'mesh_structure.dat' file
+  FILE *fp = nullptr;
+  if ((fp = std::fopen("mesh_structure.dat","wb")) == nullptr) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "Cannot open 'mesh_structure.dat' file for output" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
+  // Write overall Mesh structure to stdout and file
+  std::cout << std::endl;
+  std::cout <<"Root grid = "<< nrmbx1 <<" x "<< nrmbx2 <<" x "<< nrmbx3 <<" MeshBlocks"<< std::endl;
+  std::cout <<"Total number of MeshBlocks = " << nmbtotal << std::endl;
+  std::cout <<"Number of physical refinement levels = "<< (max_level - root_level) << std::endl;
+  std::cout <<"Number of logical  refinement levels = "<< max_level << std::endl;
+
+
+  return;
 }

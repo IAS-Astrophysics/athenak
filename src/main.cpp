@@ -26,6 +26,7 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "utils/utils.hpp"
+#include "mesh/mesh.hpp"
 
 //--------------------------------------------------------------------------------------------------
 //! \fn int main(int argc, char *argv[])
@@ -33,10 +34,10 @@
 
 int main(int argc, char *argv[]) {
   char *input_filename = nullptr, *restart_filename = nullptr, *prundir = nullptr;
-  int res_flag  = 0;  // set to 1 if -r        argument is on cmdline
+  int  res_flag = 0;  // set to 1 if -r        argument is on cmdline 
   int narg_flag = 0;  // set to 1 if -n        argument is on cmdline
+  int marg_flag = 0;  // set to 1 if -m        argument is on cmdline
   int iarg_flag = 0;  // set to 1 if -i <file> argument is on cmdline
-  int mesh_flag = 0;  // set to <nproc> if -m <nproc> argument is on cmdline
   int wtlim = 0;
   std::uint64_t mbcnt = 0;
 
@@ -92,15 +93,15 @@ int main(int argc, char *argv[]) {
   for (int i=1; i<argc; i++) {
     // If argv[i] is a 2 character string of the form "-?" then:
     if (*argv[i] == '-'  && *(argv[i]+1) != '\0' && *(argv[i]+2) == '\0') {
-      // check validity of command line options + arguments:
+
+      // check that command line options that require arguments actually have them:
       char opt_letter = *(argv[i]+1);
       switch(opt_letter) {
-        // options that do not take arguments:
-        case 'n':
         case 'c':
         case 'h':
+        case 'm':
+        case 'n':
           break;
-          // options that require arguments:
         default:
           if ((i+1 >= argc) // flag is at the end of the command line options
               || (*argv[i+1] == '-') ) { // flag is followed by another flag
@@ -114,6 +115,8 @@ int main(int argc, char *argv[]) {
             }
           }
       }
+
+      // set arguments, flags, or execute tasks specified by options
       switch(*(argv[i]+1)) {
         case 'i':                      // -i <input_filename>
           input_filename = argv[++i];
@@ -129,8 +132,8 @@ int main(int argc, char *argv[]) {
         case 'n':
           narg_flag = 1;
           break;
-        case 'm':                      // -m <nproc>
-          mesh_flag = static_cast<int>(std::strtol(argv[++i], nullptr, 10));
+        case 'm':
+          marg_flag = 1;
           break;
         case 't':                      // -t <hh:mm:ss>
           int wth, wtm, wts;
@@ -173,8 +176,8 @@ int main(int argc, char *argv[]) {
   if (restart_filename == nullptr && input_filename == nullptr) {
     // no input file is given
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "No input file or restart file is specified." << std::endl
-              << "Use " << argv[0] << " -h for help" << std::endl;
+              << "Either an input or restart file must be specified." << std::endl
+              << "See " << argv[0] << " -h for options and usage." << std::endl;
 #if MPI_PARALLEL_ENABLED
     MPI_Finalize();
 #endif
@@ -202,23 +205,35 @@ int main(int argc, char *argv[]) {
   //--- Step 4. ------------------------------------------------------------------------------------
   // Construct and initialize Mesh
 
+  std::unique_ptr<Mesh> pmesh;
+  pmesh = std::make_unique<Mesh>(pinput);
+
+  // Dump Mesh diagnostics and quit if code was run with -m option
+  if (marg_flag) {
+    if (global_variable::my_rank == 0) pmesh->OutputMeshStructure();
+#ifdef MPI_PARALLEL
+    MPI_Finalize();
+#endif
+    return(0);
+  }
 
   //--- Step 5. ------------------------------------------------------------------------------------
-  // Construct and initialize TaskList
+  // Construct and initialize Physics modules on each MeshBlock
 
   //--- Step 6. ------------------------------------------------------------------------------------
-  // Set initial conditions by calling problem generator, or reading restart file
+  // Construct and initialize TaskLists on each MeshBlock, and execution Driver
 
   //--- Step 7. ------------------------------------------------------------------------------------
-  // Change to run directory, initialize outputs object, and make output of ICs
+  // Set initial conditions by calling problem generator, or reading restart file
 
   //--- Step 8. ------------------------------------------------------------------------------------
+  // Change to run directory, initialize Outputs, and make output of ICs
 
   //--- Step 9. ------------------------------------------------------------------------------------
-  // Make the final outputs
+  // Execute Driver
 
   //--- Step 10. -----------------------------------------------------------------------------------
-  // Terminate
+  // Make final outputs, and Terminate
 
 #if MPI_PARALLEL_ENABLED
   MPI_Finalize();

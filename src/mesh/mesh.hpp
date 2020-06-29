@@ -11,6 +11,7 @@
 //  (potentially on different levels) that tile the entire domain.
 
 #include <cstdint>     // int64_t
+#include <vector>
 
 //Forward declarations
 class MeshBlock;
@@ -53,8 +54,9 @@ struct LogicalLocation { // aggregate and POD type
 class Mesh {
  public:
   // 2x function overloads of ctor: normal and restarted simulation
-  explicit Mesh(ParameterInput *pin);
-  Mesh(ParameterInput *pin, IOWrapper &resfile);
+  // Note ParameterInput is smart pointer passed by reference: 
+  explicit Mesh(std::unique_ptr<ParameterInput> &pin);
+  Mesh(std::unique_ptr<ParameterInput> &pin, IOWrapper &resfile);
   ~Mesh();
 
   // accessors
@@ -63,24 +65,25 @@ class Mesh {
   // data
   RegionSize root_size;
   bool adaptive, multilevel;
+  int nrmbx1, nrmbx2, nrmbx3; // number of MeshBlocks in root grid in each direction
+  int nmbtotal;   // total number of MeshBlocks across all levels
+  int root_level; // logical level of root (physical) grid (e.g. Fig. 3 of method paper)
+  int max_level;  // maximum number if logical levels in Mesh
 
-  // array of MeshBlocks belonging to this MPI rank
-  MeshBlock *my_blocks;
+  // 1D vector of MeshBlocks belonging to this MPI rank
+  std::vector<MeshBlock> my_blocks;
 
   // functions
+  void OutputMeshStructure();
 
  private:
   // data
   int num_mesh_threads_;
-  // number of MeshBlocks in the x1, x2, x3 directions of the root grid:
-  // (unlike LogicalLocation.lxi, nrbxi don't grow w/ AMR # of levels, so keep 32-bit int)
-  int nmbx1, nmbx2, nmbx3;
 
   LogicalLocation *loclist;
 
   // functions
 
-  void OutputMeshStructure(int dim);
 };
 
 #endif  // MESH_MESH_HPP_
