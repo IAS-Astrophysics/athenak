@@ -60,8 +60,36 @@ MeshBlockTree::MeshBlockTree(MeshBlockTree *parent, int ox1, int ox2, int ox3)
 
 MeshBlockTree::~MeshBlockTree() {
   if (pleaf_ != nullptr) {
-    for (int i=0; i<nleaf_; i++)
-      delete pleaf_[i];
+    for (int i=0; i<nleaf_; i++) { delete pleaf_[i]; }
     delete [] pleaf_;
   }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MeshBlockTree::CreateRootGrid()
+//  \brief create the root grid; note the root grid can be incomplete (less than 8 leaves)
+
+void MeshBlockTree::CreateRootGrid() {
+  if (loc_.level == 0) {
+    nleaf_ = 2;
+    if (pmesh_->nx2gt1_) nleaf_ = 4;
+    if (pmesh_->nx3gt1_) nleaf_ = 8;
+  }
+  if (loc_.level == pmesh_->root_level) return;
+
+  pleaf_ = new MeshBlockTree*[nleaf_];
+  for (int n=0; n<nleaf_; n++)
+    pleaf_[n] = nullptr;
+
+  std::int64_t levfac = 1LL<<(pmesh_->root_level - loc_.level-1);
+  for (int n=0; n<nleaf_; n++) {
+    int i = n&1, j = (n>>1)&1, k = (n>>2)&1;
+    if ((loc_.lx3*2 + k)*levfac < pmesh_->nrmbx3
+     && (loc_.lx2*2 + j)*levfac < pmesh_->nrmbx2
+     && (loc_.lx1*2 + i)*levfac < pmesh_->nrmbx1) {
+      pleaf_[n] = new MeshBlockTree(this, i, j, k);
+      pleaf_[n]->CreateRootGrid();
+    }
+  }
+  return;
 }

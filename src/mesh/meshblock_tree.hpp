@@ -30,7 +30,7 @@ class MeshBlockTree {
   MeshBlockTree* GetLeaf(int ox1, int ox2, int ox3) { return pleaf_[(ox1 + (ox2<<1) + (ox3<<2))]; }
 
   // functions
-//  void CreateRootGrid();
+  void CreateRootGrid();
 //  void AddMeshBlock(LogicalLocation rloc, int &nnew);
 //  void AddMeshBlockWithoutRefine(LogicalLocation rloc);
 //  void Refine(int &nnew);

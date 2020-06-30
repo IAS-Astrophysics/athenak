@@ -17,7 +17,7 @@
 class MeshBlock;
 class MeshBlockTree;
 
-//----------------------------------------------------------------------------------------
+//--------------------------------------------------------------------------------------------------
 //! \struct RegionSize
 //  \brief physical size and number of cells in a Mesh or a MeshBlock
 
@@ -29,7 +29,7 @@ struct RegionSize {  // aggregate and POD type; do NOT reorder member declaratio
   int nghost;               // number of ghost cells
 };
 
-//--------------------------------------------------------------------------------------
+//--------------------------------------------------------------------------------------------------
 //! \struct LogicalLocation
 //  \brief stores logical location and level of MeshBlock
 
@@ -37,7 +37,7 @@ struct LogicalLocation { // aggregate and POD type
   // WARNING: Following values can exceed the range of std::int32_t if the root grid has >30 levels
   // of AMR even if the root grid consists of a single MeshBlock, since the corresponding
   // max index = 1*2^31 > INT_MAX = 2^31 -1 for most 32-bit signed integer type impelementations
-  std::int32_t level, lx1, lx2, lx3;
+  std::int32_t lx1, lx2, lx3, level;
   // comparison functions for sorting
   static bool Lesser(const LogicalLocation &left, const LogicalLocation &right) {
     return left.level < right.level;
@@ -47,8 +47,8 @@ struct LogicalLocation { // aggregate and POD type
   }
   // overload comparison operator
   bool operator==(LogicalLocation const &rhs) const {
-    return ((this->level == rhs.level) && (this->lx1 == rhs.lx1) &&
-            (this->lx2 == rhs.lx2) && (this->lx3 == rhs.lx3));
+    return ((this->lx1 == rhs.lx1) && (this->lx2 == rhs.lx2) &&
+            (this->lx3 == rhs.lx3) && (this->level == rhs.level));
   }
 };
 
@@ -57,6 +57,8 @@ struct LogicalLocation { // aggregate and POD type
 //  \brief data/functions associated with the overall mesh
 
 class Mesh {
+ friend class MeshBlock;
+ friend class MeshBlockTree;
  public:
   // 2x function overloads of ctor: normal and restarted simulation
   // Note ParameterInput is smart pointer passed by reference: 
@@ -72,21 +74,27 @@ class Mesh {
   bool adaptive, multilevel;
   int nrmbx1, nrmbx2, nrmbx3; // number of MeshBlocks in root grid in each direction
   int nmbtotal;   // total number of MeshBlocks across all levels
-  int root_level; // logical level of root (physical) grid (e.g. Fig. 3 of method paper)
-  int max_level;  // maximum number if logical levels in Mesh
 
   // 1D vector of MeshBlocks belonging to this MPI rank
   std::vector<MeshBlock> my_blocks;
 
   // functions
   void OutputMeshStructure();
+  // compute l-edge posn of i^{th} MeshBlock (counting from 0) in total of n spanning (xmin->xmax)
+  inline Real LeftEdgePosition(std::int32_t ith, std::int32_t n, Real xmin, Real xmax) {
+    Real x = (static_cast<Real>(ith)) / (static_cast<Real>(n));
+    return (x*xmax - x*xmin) - (0.5*xmax - 0.5*xmin) + (0.5*xmin + 0.5*xmax); //symmetrize round-off
+  }
 
  private:
   // data
   int num_mesh_threads_;
+  int root_level; // logical level of root (physical) grid (e.g. Fig. 3 of method paper)
+  int max_level;  // logical level of maximum refinement grid in Mesh
+  bool nx2gt1_, nx3gt1_; // flags to indictate 2D/3D calculations
 
   LogicalLocation *loclist;
-  MeshBlockTree *tree;    // binary/quad/oct-tree
+  MeshBlockTree *ptree;    // binary/quad/oct-tree
 
   // functions
 
