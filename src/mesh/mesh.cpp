@@ -11,6 +11,7 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "outputs/io_wrapper.hpp"
+#include "bvals/bvals.hpp"
 #include "mesh.hpp"
 #include "meshblock.hpp"
 #include "meshblock_tree.hpp"
@@ -40,6 +41,14 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) {
   root_size.nx2   = pin->GetInteger("mesh", "nx2");
   root_size.nx3   = pin->GetInteger("mesh", "nx3");
   root_size.nghost = pin->GetOrAddReal("mesh", "nghost", 2);
+
+  // define some useful variables that indicate 2D/3D calculations
+  nx2gt1_ = (root_size.nx2 > 1) ? true : false;
+  nx3gt1_ = (root_size.nx3 > 1) ? true : false;
+
+  // set boolean flags indicating type of refinement (if any) depending on input strings
+  adaptive = (pin->GetOrAddString("mesh", "refinement", "none") == "adaptive") ? true : false;
+  multilevel = ((adaptive) || (pin->GetString("mesh", "refinement") == "static")) ?  true : false;
 
   // error check physical size of mesh (root level) from input file.
   if (root_size.x1max <= root_size.x1min) {
@@ -96,14 +105,6 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) {
         << root_size.nghost << std::endl;
     std::exit(EXIT_FAILURE);
   }
-
-  // define some useful variables that indicate 2D/3D calculations
-  nx2gt1_ = (root_size.nx2 > 1) ? true : false;
-  nx3gt1_ = (root_size.nx3 > 1) ? true : false;
-
-  // set boolean flags indicating type of refinement (if any) depending on input strings
-  adaptive = (pin->GetOrAddString("mesh", "refinement", "none") == "adaptive") ? true : false;
-  multilevel = ((adaptive) || (pin->GetString("mesh", "refinement") == "static")) ?  true : false;
 
   //=== Step 2 =======================================================
   // Set properties of MeshBlock(s) from input parameters, error check

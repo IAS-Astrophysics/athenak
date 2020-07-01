@@ -10,6 +10,7 @@
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
+#include "bvals/bvals.hpp"
 #include "mesh.hpp"
 #include "meshblock.hpp"
 

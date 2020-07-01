@@ -26,6 +26,7 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "utils/utils.hpp"
+#include "bvals/bvals.hpp"
 #include "mesh/mesh.hpp"
 
 //--------------------------------------------------------------------------------------------------

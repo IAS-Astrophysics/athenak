@@ -33,11 +33,12 @@ struct RegionSize {  // aggregate and POD type; do NOT reorder member declaratio
 //! \struct LogicalLocation
 //  \brief stores logical location and level of MeshBlock
 
-struct LogicalLocation { // aggregate and POD type
-  // WARNING: Following values can exceed the range of std::int32_t if the root grid has >30 levels
-  // of AMR even if the root grid consists of a single MeshBlock, since the corresponding
+struct LogicalLocation {
+  // WARNING: values of lx? can exceed the range of std::int32_t with >30 levels
+  // of AMR, even if the root grid consists of a single MeshBlock, since the corresponding
   // max index = 1*2^31 > INT_MAX = 2^31 -1 for most 32-bit signed integer type impelementations
-  std::int32_t lx1, lx2, lx3, level;
+  // lx1/2/3 = logical location in x1/2/3 = integer index in array of nodes at current level
+  std::int32_t lx1, lx2, lx3, level;  
   // comparison functions for sorting
   static bool Lesser(const LogicalLocation &left, const LogicalLocation &right) {
     return left.level < right.level;
@@ -71,12 +72,12 @@ class Mesh {
 
   // data
   RegionSize root_size;
+  BoundaryFlag mesh_bcs[6];   // physical boundary conditions at 6 faces of root grid
   bool adaptive, multilevel;
-  int nrmbx1, nrmbx2, nrmbx3; // number of MeshBlocks in root grid in each direction
-  int nmbtotal;   // total number of MeshBlocks across all levels
+  int nrmbx1, nrmbx2, nrmbx3; // number of MeshBlocks in root grid in each dir
+  int nmbtotal;               // total number of MeshBlocks across all levels
 
-  // 1D vector of MeshBlocks belonging to this MPI rank
-  std::vector<MeshBlock> my_blocks;
+  std::vector<MeshBlock> my_blocks; // MeshBlocks belonging to this MPI rank
 
   // functions
   void OutputMeshStructure();
