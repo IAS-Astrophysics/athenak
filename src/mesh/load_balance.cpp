@@ -98,7 +98,7 @@ void Mesh::LoadBalance(double *clist, int *rlist, int *slist, int *nlist,
 void Mesh::ResetLoadBalance() {
   if (lb_automatic) {
     for (auto it=my_blocks.begin(); it<my_blocks.end(); ++it) {
-      costlist[it->gid] = std::numeric_limits<double>::min();
+      costlist[it->mb_gid] = std::numeric_limits<double>::min();
       it->lb_cost = std::numeric_limits<double>::min();
     }
   }

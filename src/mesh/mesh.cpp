@@ -121,44 +121,45 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
     std::exit(EXIT_FAILURE);
   }
 
-  //=== Step 2 =======================================================
-  // Set properties of MeshBlock(s) from input parameters, error check
-  RegionSize block_size;
-  block_size.x1rat = mesh_size.x1rat;
-  block_size.x2rat = mesh_size.x2rat;
-  block_size.x3rat = mesh_size.x3rat;
-  block_size.nx1 = pin->GetOrAddInteger("meshblock", "nx1", mesh_size.nx1);
+  //=== Step 2 =========================================================
+  // Set properties of MeshBlock read from input parameters, error check
+  // properties read from input file are number of cells in each dim
+  RegionSize inblock_size;
+  inblock_size.x1rat = mesh_size.x1rat;
+  inblock_size.x2rat = mesh_size.x2rat;
+  inblock_size.x3rat = mesh_size.x3rat;
+  inblock_size.nx1 = pin->GetOrAddInteger("meshblock", "nx1", mesh_size.nx1);
   if (nx2gt1) {
-    block_size.nx2 = pin->GetOrAddInteger("meshblock", "nx2", mesh_size.nx2);
+    inblock_size.nx2 = pin->GetOrAddInteger("meshblock", "nx2", mesh_size.nx2);
   } else {
-    block_size.nx2 = mesh_size.nx2;
+    inblock_size.nx2 = mesh_size.nx2;
   }
   if (nx3gt1) {
-    block_size.nx3 = pin->GetOrAddInteger("meshblock", "nx3", mesh_size.nx3);
+    inblock_size.nx3 = pin->GetOrAddInteger("meshblock", "nx3", mesh_size.nx3);
   } else {
-    block_size.nx3 = mesh_size.nx3;
+    inblock_size.nx3 = mesh_size.nx3;
   }
 
   // error check consistency of the block and mesh
-  if (   mesh_size.nx1 % block_size.nx1 != 0
-      || mesh_size.nx2 % block_size.nx2 != 0
-      || mesh_size.nx3 % block_size.nx3 != 0) {
+  if (   mesh_size.nx1 % inblock_size.nx1 != 0
+      || mesh_size.nx2 % inblock_size.nx2 != 0
+      || mesh_size.nx3 % inblock_size.nx3 != 0) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "Mesh must be evenly divisible by MeshBlocks" << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  if ( block_size.nx1 < 4 ||
-      (block_size.nx2 < 4 && nx2gt1) ||
-      (block_size.nx3 < 4 && nx3gt1) ) {
+  if ( inblock_size.nx1 < 4 ||
+      (inblock_size.nx2 < 4 && nx2gt1) ||
+      (inblock_size.nx3 < 4 && nx3gt1) ) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "MeshBlock must be >= 4 cells in each active dimension" << std::endl;
     std::exit(EXIT_FAILURE);
   }
 
   // calculate the number of MeshBlocks in root level in each dir
-  nmbx1_r = mesh_size.nx1/block_size.nx1;
-  nmbx2_r = mesh_size.nx2/block_size.nx2;
-  nmbx3_r = mesh_size.nx3/block_size.nx3;
+  nmbx1_r = mesh_size.nx1/inblock_size.nx1;
+  nmbx2_r = mesh_size.nx2/inblock_size.nx2;
+  nmbx3_r = mesh_size.nx3/inblock_size.nx3;
 
   // find maximum number of MeshBlocks in any dir
   int nmbmax = (nmbx1_r > nmbx2_r) ? nmbx1_r : nmbx2_r;
@@ -176,7 +177,6 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
 
   //=== Step 4 =======================================================
   // Error check properties for SMR/AMR meshes.
-  // Expand MeshBlockTree to include "refinement" regions specified in input file:
 
   if (adaptive) {
     max_level = pin->GetOrAddInteger("mesh", "numlevel", 1) + root_level - 1;
@@ -192,9 +192,9 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
 
   if (multilevel) {
     // error check that number of cells in MeshBlock divisible by two
-    if (block_size.nx1 % 2 != 0 || 
-       (block_size.nx2 % 2 != 0 && nx2gt1) ||
-       (block_size.nx3 % 2 != 0 && nx3gt1)) {
+    if (inblock_size.nx1 % 2 != 0 || 
+       (inblock_size.nx2 % 2 != 0 && nx2gt1) ||
+       (inblock_size.nx3 % 2 != 0 && nx3gt1)) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Number of cells in MeshBlock must be divisible by 2 "
                 << "with SMR or AMR." << std::endl;
@@ -202,6 +202,7 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
     }
 
     // cycle through ParameterInput list and find "refinement" blocks (SMR), extract data
+    // Expand MeshBlockTree to include "refinement" regions specified in input file:
     for (auto it = pin->block.begin(); it != pin->block.end(); ++it) {
       if (it->block_name.compare(0, 10, "refinement") == 0) {
         RegionSize ref_size;
@@ -355,6 +356,7 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
   tree.GetMeshBlockList(loclist, nullptr, nmbtotal);
 
   //=== Step 5 =======================================================
+  // compute properties of MeshBlocks and initialize 
 
 #if MPI_PARALLEL_ENABLED
   // check there is at least one MeshBlock per MPI rank
@@ -385,20 +387,18 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
   for (int i=0; i<nmbtotal; i++) {costlist[i] = 1.0;}
   LoadBalance(costlist, ranklist, nslist, nblist, nmbtotal);
 
-  //=== Step 5 =======================================================
   // create MeshBlock list for this process
 
   gids = nslist[global_variable::my_rank];
   gide = gids + nblist[global_variable::my_rank] - 1;
   nmbthisrank = nblist[global_variable::my_rank];
   
-// create MeshBlocks for this node
+  // create MeshBlocks for this node
   for (int i=gids; i<=gide; i++) {
-    BoundaryFlag block_bcs[6];
-    SetBlockSizeAndBoundaries(loclist[i], block_size, block_bcs);
-    MeshBlock new_block(this, pin, block_size, block_bcs);
+    BoundaryFlag inblock_bcs[6];
+    SetBlockSizeAndBoundaries(loclist[i], inblock_size, inblock_bcs);
+    MeshBlock new_block(this, pin, inblock_size, inblock_bcs);
     my_blocks.push_back(new_block);  // this requires copy operator!
-//    my_blocks(i-gids_)->pbval->SearchAndSetNeighbors(tree, ranklist, nslist);
   }
 
   ResetLoadBalance();
