@@ -42,7 +42,7 @@ class MeshBlockTree {
                               bool amrflag=false);
 
  private:
-  // data
+  // data: note private variable names have trailing underscore for this class
   MeshBlockTree **pleaf_;  // 1D vector of pointers to leafs
   int gid_;                // grid ID
   LogicalLocation loc_;    // stores logical x1/x2/x3 location, level
