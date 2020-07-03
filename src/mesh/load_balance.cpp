@@ -1,0 +1,107 @@
+//==================================================================================================
+// AthenaXXX astrophysical plasma code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
+// Licensed under the 3-clause BSD License (the "LICENSE")
+//==================================================================================================
+//! \file load_balance.cpp
+//  \brief 
+
+#include <iostream>
+
+#include "athena.hpp"
+#include "parameter_input.hpp"
+#include "outputs/io_wrapper.hpp"
+#include "bvals/bvals.hpp"
+#include "mesh.hpp"
+
+#if MPI_PARALLEL_ENABLED
+#include <mpi.h>
+#endif
+
+//----------------------------------------------------------------------------------------
+// \!fn void Mesh::CalculateLoadBalance(double *clist, int *rlist, int *slist,
+//                                      int *nlist, int nb)
+// \brief Calculate distribution of MeshBlocks based on the cost list
+
+void Mesh::LoadBalance(double *clist, int *rlist, int *slist, int *nlist,
+                                int nb) {
+  double min_cost = std::numeric_limits<double>::max();
+  double max_cost = 0.0, totalcost = 0.0;
+
+  // find min/max and total cost in clist
+  for (int i=0; i<nb; i++) {
+    totalcost += clist[i];
+    min_cost = std::min(min_cost,clist[i]);
+    max_cost = std::max(max_cost,clist[i]);
+  }
+
+  int j = (global_variable::nranks) - 1;
+  double targetcost = totalcost/global_variable::nranks;
+  double mycost = 0.0;
+  // create rank list from the end: the master MPI rank should have less load
+  for (int i=nb-1; i>=0; i--) {
+    if (targetcost == 0.0) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+          << "There is at least one process which has no MeshBlock" << std::endl
+          << "Decrease the number of processes or use smaller MeshBlocks." << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    mycost += clist[i];
+    rlist[i] = j;
+    if (mycost >= targetcost && j>0) {
+      j--;
+      totalcost -= mycost;
+      mycost = 0.0;
+      targetcost = totalcost/(j+1);
+    }
+  }
+  slist[0] = 0;
+  j = 0;
+  for (int i=1; i<nb; i++) { // make the list of nbstart and nblocks
+    if (rlist[i] != rlist[i-1]) {
+      nlist[j] = i-slist[j];
+      slist[++j] = i;
+    }
+  }
+  nlist[j] = nb-slist[j];
+
+  if (global_variable::my_rank == 0) {
+    for (int i=0; i<global_variable::nranks; i++) {
+      double rcost = 0.0;
+      for(int n=slist[i]; n<slist[i]+nlist[i]; n++)
+        rcost += clist[n];
+    }
+  }
+
+#ifdef MPI_PARALLEL
+  if (nb % (global_variable::nranks * num_mesh_threads_) != 0
+      && !adaptive && !lb_flag_ && max_cost == min_cost && global_variable::my_rank == 0) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+    std::cout << "### Warning in CalculateLoadBalance" << std::endl
+              << "The number of MeshBlocks cannot be divided evenly. "
+              << "This will result in poor load balancing." << std::endl;
+  }
+#endif
+  if ((global_variable::nranks)*(num_mesh_threads_) > nb) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+        << "There are fewer MeshBlocks than OpenMP threads on each MPI rank" << std::endl
+        << "Decrease the number of threads or use more MeshBlocks." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+// \!fn void Mesh::ResetLoadBalanceVariables()
+// \brief reset counters and flags for load balancing
+
+void Mesh::ResetLoadBalance() {
+  if (lb_automatic) {
+    for (auto it=my_blocks.begin(); it<my_blocks.end(); ++it) {
+      costlist[it->gid] = std::numeric_limits<double>::min();
+      it->lb_cost = std::numeric_limits<double>::min();
+    }
+  }
+  lb_flag = false;
+  cyc_since_lb = 0;
+}

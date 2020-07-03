@@ -14,10 +14,10 @@
 //
 // Original version of this class written c2015-2016 by K. Tomida.
 
-#include "athena.hpp"
+//#include "athena.hpp"
 
 // Forward declarations
-//class Mesh;
+class Mesh;
 
 //--------------------------------------------------------------------------------------
 //! \class MeshBlockTree

@@ -32,23 +32,31 @@ struct GridIndices {
 //  \brief data/functions associated with a single block
 
 class MeshBlock {
-
+ // the three mesh classes (Mesh, MeshBlock, MeshBlockTree) like to play together
+ friend class Mesh;
+ friend class MeshBlockTree;
  public:
-  MeshBlock(Mesh *pm, ParameterInput *pin, RegionSize input_size);
+  MeshBlock(Mesh *pm, std::unique_ptr<ParameterInput> &pin, RegionSize input_size, BoundaryFlag *input_bcs);
   ~MeshBlock();
 
   // data
   Mesh *pmy_mesh;  // ptr to Mesh containing this MeshBlock
-  RegionSize block_size;
+  RegionSize block_size;     // info about size of this block
+  BoundaryFlag block_bcs[6]; // enums specifying BCs at all 6 faces of this block
+  int gid;                   // grid ID, unique identifier for this MeshBlock
 
-  // on 1x coarser level MeshBlock (i.e. ncc2=nx2/2 + 2*NGHOST, if nx2>1)
-  GridIndices indx, cindx;
+  // indices (is,ie,js,je,ks,ke, etc.) of arrays 
+  GridIndices indx;
+  // indices on 1x coarser level MeshBlock (i.e. ncc2=nx2/2 + 2*NGHOST, if nx2>1)
+  GridIndices cindx;
+
 
   // functions
   int GetNumberOfMeshBlockCells() { return block_size.nx1 * block_size.nx2 * block_size.nx3; }
 
  private:
   // data
+  double lb_cost;  // cost of updating this MeshBlock for load balancing
 
   // functions
 

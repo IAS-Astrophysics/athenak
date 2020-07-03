@@ -12,13 +12,12 @@
 #include "parameter_input.hpp"
 #include "bvals/bvals.hpp"
 #include "mesh.hpp"
-#include "meshblock.hpp"
 
 //----------------------------------------------------------------------------------------
 // MeshBlock constructor: constructs coordinate, boundary condition, hydro, field
 //                        and mesh refinement objects.
 
-MeshBlock::MeshBlock(Mesh *pm, ParameterInput *pin, RegionSize input_block) :
+MeshBlock::MeshBlock(Mesh *pm, std::unique_ptr<ParameterInput> &pin, RegionSize input_block, BoundaryFlag *input_bcs) :
     pmy_mesh(pm), block_size(input_block) {
 
   // initialize grid indices
@@ -84,6 +83,8 @@ MeshBlock::MeshBlock(Mesh *pm, ParameterInput *pin, RegionSize input_block) :
       cindx.ncells3 = 1;
     }
   }
+
+  for (int i=0; i<6; ++i) {block_bcs[i] = input_bcs[i];}
 
   return;
 }

@@ -1,7 +1,7 @@
 #ifndef MESH_MESH_HPP_
 #define MESH_MESH_HPP_
 //==================================================================================================
-// AthenaXXX astrophysical plasma code
+// Athena++K astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //==================================================================================================
@@ -11,11 +11,6 @@
 //  (potentially on different levels) that tile the entire domain.
 
 #include <cstdint>     // int64_t
-#include <vector>
-
-// Forward declarations
-class MeshBlock;
-class MeshBlockTree;
 
 //--------------------------------------------------------------------------------------------------
 //! \struct RegionSize
@@ -53,11 +48,19 @@ struct LogicalLocation {
   }
 };
 
+#include <vector>
+// Forward declarations
+class Mesh;
+
+#include "meshblock.hpp"
+#include "meshblock_tree.hpp"
+
 //--------------------------------------------------------------------------------------------------
 //! \class Mesh
 //  \brief data/functions associated with the overall mesh
 
 class Mesh {
+ // the three mesh classes (Mesh, MeshBlock, MeshBlockTree) like to play together
  friend class MeshBlock;
  friend class MeshBlockTree;
  public:
@@ -71,17 +74,20 @@ class Mesh {
   int GetNumMeshThreads() const {return num_mesh_threads_;}
 
   // data
-  RegionSize root_size;
-  BoundaryFlag mesh_bcs[6];   // physical boundary conditions at 6 faces of root grid
+  RegionSize root_size;       // size of physical domain at root level
+  BoundaryFlag root_bcs[6];   // physical boundary conditions at 6 faces of root grid
   bool adaptive, multilevel;
-  int nrmbx1, nrmbx2, nrmbx3; // number of MeshBlocks in root grid in each dir
-  int nmbtotal;               // total number of MeshBlocks across all levels
+  int nmbx1_r, nmbx2_r, nmbx3_r; // number of MeshBlocks in each dir at root level
+  int nmbtotal;                  // total number of MeshBlocks across all levels
+  int nmbthisrank;               // number of MeshBlocks on this MPI rank (local)
 
   std::vector<MeshBlock> my_blocks; // MeshBlocks belonging to this MPI rank
 
   // functions
   void OutputMeshStructure();
-  // compute l-edge posn of i^{th} MeshBlock (counting from 0) in total of n spanning (xmin->xmax)
+  void SetBlockSizeAndBoundaries(LogicalLocation loc, RegionSize &size, BoundaryFlag *bcs);
+  void LoadBalance(double *clist, int *rlist, int *slist, int *nlist, int nb);
+  void ResetLoadBalance();
   inline Real LeftEdgePosition(std::int32_t ith, std::int32_t n, Real xmin, Real xmax) {
     Real x = (static_cast<Real>(ith)) / (static_cast<Real>(n));
     return (x*xmax - x*xmin) - (0.5*xmax - 0.5*xmin) + (0.5*xmin + 0.5*xmax); //symmetrize round-off
@@ -93,9 +99,28 @@ class Mesh {
   int root_level; // logical level of root (physical) grid (e.g. Fig. 3 of method paper)
   int max_level;  // logical level of maximum refinement grid in Mesh
   bool nx2gt1_, nx3gt1_; // flags to indictate 2D/3D calculations
+  // following 2x arrays allocated with length [nmbtotal]
+  int *ranklist;
+  double *costlist;
+  // following 2x arrays allocated with length [nranks]
+  int *nslist;
+  int *nblist;
+  // following 8x arrays allocated with length [nranks] only with AMR
+  int *nref, *nderef;
+  int *rdisp, *ddisp;
+  int *bnref, *bnderef;
+  int *brdisp, *bddisp;
+  int gids, gide; // start/end of grid IDs on this MPI rank
 
-  LogicalLocation *loclist;
-  MeshBlockTree *ptree;    // binary/quad/oct-tree
+  // variables for load balancing control
+  bool lb_flag;
+  bool lb_automatic, lb_manual;
+  double lb_tolerance;
+  int lb_cyc_interval;
+  int cyc_since_lb;
+
+  MeshBlockTree tree;     // binary/quad/oct-tree
+  LogicalLocation *loclist; // array of LogicalLocations for ALL MeshBlocks
 
   // functions
 
