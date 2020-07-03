@@ -326,14 +326,12 @@ void MeshBlockTree::GetMeshBlockList(LogicalLocation *list, int *pglist, int& co
 
   if (pleaf_ == nullptr) {
     list[count]=loc_;
-    if (pglist != nullptr)
-      pglist[count]=gid_;
+    if (pglist != nullptr) {pglist[count]=gid_;}
     gid_=count;
     count++;
   } else {
     for (int n=0; n<nleaf_; n++) {
-      if (pleaf_[n] != nullptr)
-        pleaf_[n]->GetMeshBlockList(list, pglist, count);
+      if (pleaf_[n] != nullptr) {pleaf_[n]->GetMeshBlockList(list, pglist, count);}
     }
   }
   return;

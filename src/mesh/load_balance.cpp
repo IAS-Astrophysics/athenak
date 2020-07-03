@@ -22,9 +22,13 @@
 // \!fn void Mesh::CalculateLoadBalance(double *clist, int *rlist, int *slist,
 //                                      int *nlist, int nb)
 // \brief Calculate distribution of MeshBlocks based on the cost list
+// input: clist = cost of each MB (array of length nmbtotal)
+//        nb = number of MeshBlocks
+// output: rlist = rank to which each MB is assigned (array of length nmbtotal)
+//         slist = 
+//         nlist = 
 
-void Mesh::LoadBalance(double *clist, int *rlist, int *slist, int *nlist,
-                                int nb) {
+void Mesh::LoadBalance(double *clist, int *rlist, int *slist, int *nlist, int nb) {
   double min_cost = std::numeric_limits<double>::max();
   double max_cost = 0.0, totalcost = 0.0;
 
@@ -66,15 +70,7 @@ void Mesh::LoadBalance(double *clist, int *rlist, int *slist, int *nlist,
   }
   nlist[j] = nb-slist[j];
 
-  if (global_variable::my_rank == 0) {
-    for (int i=0; i<global_variable::nranks; i++) {
-      double rcost = 0.0;
-      for(int n=slist[i]; n<slist[i]+nlist[i]; n++)
-        rcost += clist[n];
-    }
-  }
-
-#ifdef MPI_PARALLEL
+#if MPI_PARALLEL_ENABLED
   if (nb % (global_variable::nranks * num_mesh_threads) != 0
      && !adaptive && !lb_flag_ && max_cost == min_cost && global_variable::my_rank == 0) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl

@@ -7,6 +7,7 @@
 //  \brief implementation of functions in Mesh class
 
 #include <iostream>
+#include <cinttypes>
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
@@ -353,6 +354,7 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
   // initial mesh hierarchy construction is completed here
   tree.CountMeshBlock(nmbtotal);
   loclist = new LogicalLocation[nmbtotal];
+  // following returns LogicalLocation list sorted by Z-ordering
   tree.GetMeshBlockList(loclist, nullptr, nmbtotal);
 
   //=== Step 5 =======================================================
@@ -368,10 +370,10 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
   }
 #endif
 
+  costlist = new double[nmbtotal];
   ranklist = new int[nmbtotal];
   nslist = new int[global_variable::nranks];
   nblist = new int[global_variable::nranks];
-  costlist = new double[nmbtotal];
   if (adaptive) { // allocate arrays for AMR
     nref = new int[global_variable::nranks];
     nderef = new int[global_variable::nranks];
@@ -431,30 +433,143 @@ Mesh::~Mesh() {
 
 //----------------------------------------------------------------------------------------
 //! \fn void Mesh::OutputMeshStructure(int ndim)
-//  \brief print the mesh structure information
+//  \brief outputs information about mesh structure, creates file containing MeshBlock
+//  positions and sizes that can be used to create plots using 'plot_mesh.py' script 
 
-void Mesh::OutputMeshStructure() {
-
-  // open 'mesh_structure.dat' file
-  FILE *fp = nullptr;
-  if ((fp = std::fopen("mesh_structure.dat","wb")) == nullptr) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "Cannot open 'mesh_structure.dat' file for output" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
+void Mesh::OutputMeshStructure(int flag) {
 
   // Write overall Mesh structure to stdout and file
   std::cout << std::endl;
-  std::cout <<"Root grid = "<<nmbx1_r <<" x "<<nmbx2_r <<" x "<<nmbx3_r <<" MeshBlocks"<< std::endl;
+  std::cout <<"Root grid = "<< nmbx1_r <<" x "<< nmbx2_r <<" x "<< nmbx3_r
+            <<" MeshBlocks"<< std::endl;
   std::cout <<"Total number of MeshBlocks = " << nmbtotal << std::endl;
-  std::cout <<"Number of physical levels of refinement = "<< (max_level - root_level) 
-            <<" (" << (max_level - root_level + 1) << " levels total)" << std::endl;
   std::cout <<"Number of logical  levels of refinement = "<< max_level
             <<" (" << (max_level + 1) << " levels total)" << std::endl;
+  std::cout <<"Number of physical levels of refinement = "<< (max_level - root_level) 
+            <<" (" << (max_level - root_level + 1) << " levels total)" << std::endl;
 
+  // if more than one physical level: compute/output # of blocks and cost per level
+  if ((max_level - root_level) > 1) {
+    int nb_per_plevel[max_level];
+    float cost_per_plevel[max_level];
+    for (int i=0; i<=max_level; ++i) {
+      nb_per_plevel[i] = 0;
+      cost_per_plevel[i] = 0.0;
+    }
+    for (int i=0; i<nmbtotal; i++) {
+      nb_per_plevel[(loclist[i].level - root_level)]++;
+      cost_per_plevel[(loclist[i].level - root_level)] += costlist[i];
+    }
+    for (int i=root_level; i<=max_level; i++) {
+      if (nb_per_plevel[i-root_level] != 0) {
+        std::cout << "  Physical level = " << i-root_level << " (logical level = " << i
+                  << "): " << nb_per_plevel[i-root_level] << " MeshBlocks, cost = "
+                  << cost_per_plevel[i-root_level] <<  std::endl;
+      }
+    }
+  }
+
+  std::cout << "Number of parallel ranks = " << global_variable::nranks << std::endl;
+  // if more than one rank: compute/output # of blocks and cost per rank
+  if (global_variable::nranks > 1) {
+    int nb_per_rank[global_variable::nranks];
+    int cost_per_rank[global_variable::nranks];
+    for (int i=0; i<global_variable::nranks; ++i) {
+      nb_per_rank[i] = 0;
+      cost_per_rank[i] = 0;
+    }
+    for (int i=0; i<nmbtotal; i++) {
+      nb_per_rank[ranklist[i]]++;
+      cost_per_rank[ranklist[i]] += costlist[i];
+    }
+    for (int i=0; i<global_variable::nranks; ++i) {
+      std::cout << "  Rank = " << i << ": " << nb_per_rank[i] <<" MeshBlocks, cost = "
+                << cost_per_rank[i] << std::endl;
+    }
+
+    // output total cost and load balancing info
+    double mincost = std::numeric_limits<double>::max();
+    double maxcost = 0.0, totalcost = 0.0;
+    for (int i=root_level; i<=max_level; i++) {
+      for (int j=0; j<nmbtotal; j++) {
+        if (loclist[j].level == i) {
+          mincost = std::min(mincost,costlist[i]);
+          maxcost = std::max(maxcost,costlist[i]);
+          totalcost += costlist[i];
+        }
+      }
+    }
+    std::cout << "Load Balancing:" << std::endl;
+    std::cout << "  Minimum cost = " << mincost << ", Maximum cost = " << maxcost
+              << ", Average cost = " << totalcost/nmbtotal << std::endl;
+  }
+
+  // if -m argument given on command line, and for 2D/3D:
+  // output relative size/locations of meshblock to file, for plotting
+  if (flag && nx2gt1) {
+    FILE *fp = nullptr;
+    if ((fp = std::fopen("mesh_structure.dat","wb")) == nullptr) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ 
+          << std::endl << "Cannot open 'mesh_structure.dat' file for output" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+
+    for (int i=root_level; i<=max_level; i++) {
+      for (int j=0; j<nmbtotal; j++) {
+        if (loclist[j].level == i) {
+          RegionSize b_size;
+          BoundaryFlag b_bcs[6];
+          SetBlockSizeAndBoundaries(loclist[j], b_size, b_bcs);
+          std::int32_t &lx1 = loclist[j].lx1;
+          std::int32_t &lx2 = loclist[j].lx2;
+          std::int32_t &lx3 = loclist[j].lx3;
+          std::fprintf(fp,"#MeshBlock %d on rank=%d with cost=%g\n", j, ranklist[j],
+                       costlist[j]);
+          std::fprintf(
+              fp,"#  Logical level %d, location = (%" PRId32 " %" PRId32 " %" PRId32")\n",
+              loclist[j].level, lx1, lx2, lx3);
+          if (nx2gt1 && !(nx3gt1)) { // 2D
+            std::fprintf(fp, "%g %g\n", b_size.x1min, b_size.x2min);
+            std::fprintf(fp, "%g %g\n", b_size.x1max, b_size.x2min);
+            std::fprintf(fp, "%g %g\n", b_size.x1max, b_size.x2max);
+            std::fprintf(fp, "%g %g\n", b_size.x1min, b_size.x2max);
+            std::fprintf(fp, "%g %g\n", b_size.x1min, b_size.x2min);
+            std::fprintf(fp, "\n\n");
+          }
+          if (nx3gt1) { // 3D
+            std::fprintf(fp, "%g %g %g\n", b_size.x1min, b_size.x2min, b_size.x3min);
+            std::fprintf(fp, "%g %g %g\n", b_size.x1max, b_size.x2min, b_size.x3min);
+            std::fprintf(fp, "%g %g %g\n", b_size.x1max, b_size.x2max, b_size.x3min);
+            std::fprintf(fp, "%g %g %g\n", b_size.x1min, b_size.x2max, b_size.x3min);
+            std::fprintf(fp, "%g %g %g\n", b_size.x1min, b_size.x2min, b_size.x3min);
+            std::fprintf(fp, "%g %g %g\n", b_size.x1min, b_size.x2min, b_size.x3max);
+            std::fprintf(fp, "%g %g %g\n", b_size.x1max, b_size.x2min, b_size.x3max);
+            std::fprintf(fp, "%g %g %g\n", b_size.x1max, b_size.x2min, b_size.x3min);
+            std::fprintf(fp, "%g %g %g\n", b_size.x1max, b_size.x2min, b_size.x3max);
+            std::fprintf(fp, "%g %g %g\n", b_size.x1max, b_size.x2max, b_size.x3max);
+            std::fprintf(fp, "%g %g %g\n", b_size.x1max, b_size.x2max, b_size.x3min);
+            std::fprintf(fp, "%g %g %g\n", b_size.x1max, b_size.x2max, b_size.x3max);
+            std::fprintf(fp, "%g %g %g\n", b_size.x1min, b_size.x2max, b_size.x3max);
+            std::fprintf(fp, "%g %g %g\n", b_size.x1min, b_size.x2max, b_size.x3min);
+            std::fprintf(fp, "%g %g %g\n", b_size.x1min, b_size.x2max, b_size.x3max);
+            std::fprintf(fp, "%g %g %g\n", b_size.x1min, b_size.x2min, b_size.x3max);
+            std::fprintf(fp, "%g %g %g\n", b_size.x1min, b_size.x2min, b_size.x3min);
+            std::fprintf(fp, "\n\n");
+          }
+        }
+      }
+    }
+    std::fclose(fp);
+
+    std::cout << "See the 'mesh_structure.dat' file for a complete list of MeshBlocks."
+              << std::endl;
+    std::cout << "Use 'plot_mesh.py' script to visualize data in 'mesh_structure.dat'"
+              << " file" << std::endl << std::endl;
+  }
 
   return;
 }
+
 
 //----------------------------------------------------------------------------------------
 // \!fn void Mesh::SetBlockSizeAndBoundaries(LogicalLocation loc,

@@ -85,7 +85,7 @@ class Mesh {
   std::vector<MeshBlock> my_blocks; // MeshBlocks belonging to this MPI rank
 
   // functions
-  void OutputMeshStructure();
+  void OutputMeshStructure(int flag);
   void SetBlockSizeAndBoundaries(LogicalLocation loc,RegionSize &size, BoundaryFlag *bcs);
   void LoadBalance(double *clist, int *rlist, int *slist, int *nlist, int nb);
   void ResetLoadBalance();

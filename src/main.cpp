@@ -213,8 +213,8 @@ int main(int argc, char *argv[]) {
   pmesh = std::make_unique<Mesh>(pinput);
 
   // Dump Mesh diagnostics and quit if code was run with -m option
+  if (global_variable::my_rank == 0) pmesh->OutputMeshStructure(marg_flag);
   if (marg_flag) {
-    if (global_variable::my_rank == 0) pmesh->OutputMeshStructure();
 #ifdef MPI_PARALLEL
     MPI_Finalize();
 #endif

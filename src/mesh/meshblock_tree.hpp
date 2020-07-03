@@ -17,7 +17,8 @@
 
 //--------------------------------------------------------------------------------------
 //! \class MeshBlockTree
-//  \brief Objects are nodes in an AMR MeshBlock tree structure
+//  \brief Objects are nodes in an AMR MeshBlock tree structure.  Thus, the class name
+//  does not refer to the overall tree itself, but rather each MeshBlockTree is a node.
 
 class MeshBlockTree {
  public:
@@ -45,7 +46,7 @@ class MeshBlockTree {
   // data: note private variable names have trailing underscore for this class
   MeshBlockTree **pleaf_;  // 1D vector of pointers to leafs
   int gid_;                // grid ID
-  LogicalLocation loc_;    // stores logical x1/x2/x3 location, level
+  LogicalLocation loc_;    // stores logical x1/x2/x3 location, level for node in tree
 
   static Mesh *pmesh_;           // pointer to Mesh containing Tree
   static MeshBlockTree *proot_;  // pointer to leaf at root level
