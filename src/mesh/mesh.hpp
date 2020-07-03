@@ -32,8 +32,8 @@ struct RegionSize {  // aggregate and POD type; do NOT reorder member declaratio
 struct LogicalLocation {
   // WARNING: values of lx? can exceed the range of std::int32_t with >30 levels
   // of AMR, even if the root grid consists of a single MeshBlock, since the corresponding
-  // max index = 1*2^31 > INT_MAX = 2^31 -1 for most 32-bit signed integer type impelementations
-  // lx1/2/3 = logical location in x1/2/3 = integer index in array of nodes at current level
+  // max index = 1*2^31 > INT_MAX = 2^31 -1 for most 32-bit signed integer types
+  // lx1/2/3 = logical location in x1/2/3 = index in array of nodes at current level
   std::int32_t lx1, lx2, lx3, level;  
   // comparison functions for sorting
   static bool Lesser(const LogicalLocation &left, const LogicalLocation &right) {
@@ -72,7 +72,7 @@ class Mesh {
   ~Mesh();
 
   // accessors
-  int GetNumMeshThreads() const {return num_mesh_threads_;}
+  int GetNumMeshThreads() const {return num_mesh_threads;}
 
   // data
   RegionSize root_size;       // size of physical domain at root level
@@ -96,10 +96,10 @@ class Mesh {
 
  private:
   // data
-  int num_mesh_threads_;
+  int num_mesh_threads;
   int root_level; // logical level of root (physical) grid (e.g. Fig. 3 of method paper)
   int max_level;  // logical level of maximum refinement grid in Mesh
-  bool nx2gt1_, nx3gt1_; // flags to indictate 2D/3D calculations
+  bool nx2gt1, nx3gt1;   // flags to indictate 2D/3D calculations
   // following 2x arrays allocated with length [nmbtotal]
   int *ranklist;
   double *costlist;

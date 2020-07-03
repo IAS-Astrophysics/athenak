@@ -75,14 +75,14 @@ void Mesh::LoadBalance(double *clist, int *rlist, int *slist, int *nlist,
   }
 
 #ifdef MPI_PARALLEL
-  if (nb % (global_variable::nranks * num_mesh_threads_) != 0
+  if (nb % (global_variable::nranks * num_mesh_threads) != 0
      && !adaptive && !lb_flag_ && max_cost == min_cost && global_variable::my_rank == 0) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "The number of MeshBlocks cannot be divided evenly. "
               << "This will result in poor load balancing." << std::endl;
   }
 #endif
-  if ((global_variable::nranks)*(num_mesh_threads_) > nb) {
+  if ((global_variable::nranks)*(num_mesh_threads) > nb) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
         << "There are fewer MeshBlocks than OpenMP threads on each MPI rank" << std::endl
         << "Decrease the number of threads or use more MeshBlocks." << std::endl;
