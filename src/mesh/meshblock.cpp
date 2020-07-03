@@ -17,7 +17,8 @@
 // MeshBlock constructor: constructs coordinate, boundary condition, hydro, field
 //                        and mesh refinement objects.
 
-MeshBlock::MeshBlock(Mesh *pm, std::unique_ptr<ParameterInput> &pin, RegionSize input_block, BoundaryFlag *input_bcs) :
+MeshBlock::MeshBlock(Mesh *pm, std::unique_ptr<ParameterInput> &pin,
+                     RegionSize input_block, BoundaryFlag *input_bcs) :
     pmy_mesh(pm), block_size(input_block) {
 
   // initialize grid indices

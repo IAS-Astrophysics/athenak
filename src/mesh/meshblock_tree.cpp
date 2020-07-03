@@ -1,8 +1,8 @@
-//==================================================================================================
+//========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
-//==================================================================================================
+//========================================================================================
 //! \file meshblocktree.cpp
 //  \brief implementation of functions in the MeshBlockTree class
 
@@ -409,8 +409,8 @@ MeshBlockTree* MeshBlockTree::FindNeighbor(LogicalLocation myloc,
       if (level == ll-1) {
         return bt;
       } else {
-        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-            << "Neighbor search failed. The Block Tree is broken." << std::endl;
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+            << std::endl << "Neighbor search failed; MeshBlockTree broken." << std::endl;
         exit(EXIT_FAILURE);
         return nullptr;
       }
@@ -422,8 +422,8 @@ MeshBlockTree* MeshBlockTree::FindNeighbor(LogicalLocation myloc,
     oz = ((lz>>sh) & 1) == 1;
     bt=bt->GetLeaf(ox, oy, oz);
     if (bt == nullptr) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-          << "Neighbor search failed. The Block Tree is broken." << std::endl;
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+          << std::endl << "Neighbor search failed; MeshBlockTree broken." << std::endl;
       exit(EXIT_FAILURE);
       return nullptr;
     }

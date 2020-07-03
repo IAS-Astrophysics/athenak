@@ -1,10 +1,10 @@
 #ifndef PARAMETER_INPUT_HPP_
 #define PARAMETER_INPUT_HPP_
-//==================================================================================================
+//========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
-//==================================================================================================
+//========================================================================================
 //! \file parameter_input.hpp
 //  \brief definition of class ParameterInput
 // Contains data structures used to store, and functions used to access, parameters

@@ -1,8 +1,8 @@
-//==================================================================================================
+//========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
-//==================================================================================================
+//========================================================================================
 //! \file show_config.cpp
 
 #include <iostream>
@@ -10,12 +10,11 @@
 
 #include "athena.hpp"
 
-//--------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------
 //! \fn void ShowConfig()
 //  \brief prints diagnostic messages about the configuration of an Athena++ executable
 
 void ShowConfig() {
-  // To match configure.py output: use 2 space indent for option, value output starts on column 30
   std::cout<<"This Athena++ executable is configured with:" << std::endl;
   std::cout<<"  Problem generator:          " << PROBLEM_GENERATOR << std::endl;
   if (SINGLE_PRECISION_ENABLED) {

@@ -1,23 +1,24 @@
-//==================================================================================================
+//========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
-//==================================================================================================
-//////////////////////////////////////// AthenaXXX Main Program ////////////////////////////////////
+//========================================================================================
+/////////////////////////////////// AthenaXXX Main Program ///////////////////////////////
 //! \file main.cpp
 //  \brief AthenaXXX main program
 //
-// Based on the Athena (Cambridge version) and Athena++ MHD codes.  Athena was  originally written
-// in 2002-2005 by Jim Stone, Tom Gardiner, and Peter Teuben, with many important contributions by
-// many other developers after that, i.e. 2005-2014.
+// Based on the Athena (Cambridge version) and Athena++ MHD codes. Athena was originally
+// written in 2002-2005 by Jim Stone, Tom Gardiner, and Peter Teuben, with many important
+// contributions by many other developers after that, i.e. 2005-2014.
 //
 // Athena++ was started in Jan 2014.  The core design was finished during 4-7/2014 at the
 // KITP by Jim Stone.  GR was implemented by Chris White and AMR by Kengo Tomida during
 // 2014-2016.  Contributions from many others have continued to the present.
 //
-// AthenaXXX is an outgrowth of the Athena-Parthenon collaboration, and is a completely new
-// implementation based on the Kokkos performance-portability library (now an external module)
-//==================================================================================================
+// AthenaXXX is an outgrowth of the Athena-Parthenon collaboration, and is a completely
+// new implementation based on the Kokkos performance-portability library (an external
+// module for this version of the code, required to run on GPUs)
+//========================================================================================
 
 #include <cstdlib>
 #include <iostream>   // cout, endl
@@ -29,7 +30,7 @@
 #include "bvals/bvals.hpp"
 #include "mesh/mesh.hpp"
 
-//--------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------
 //! \fn int main(int argc, char *argv[])
 //  \brief AthenaK main program
 
@@ -42,7 +43,7 @@ int main(int argc, char *argv[]) {
   int wtlim = 0;
   std::uint64_t mbcnt = 0;
 
-  //--- Step 1. ------------------------------------------------------------------------------------
+  //--- Step 1. --------------------------------------------------------------------------
   // Initialize environment
 
 #if MPI_PARALLEL_ENABLED
@@ -88,7 +89,7 @@ int main(int argc, char *argv[]) {
   global_variable::nranks  = 1;
 #endif  // MPI_PARALLEL_ENABLED
 
-  //--- Step 2. ------------------------------------------------------------------------------------
+  //--- Step 2. --------------------------------------------------------------------------
   // Check for command line options and respond.
 
   for (int i=1; i<argc; i++) {
@@ -107,8 +108,9 @@ int main(int argc, char *argv[]) {
           if ((i+1 >= argc) // flag is at the end of the command line options
               || (*argv[i+1] == '-') ) { // flag is followed by another flag
             if (global_variable::my_rank == 0) {
-              std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-                        << "-" << opt_letter << " must be followed by a valid argument\n";
+              std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                        << std::endl << "-" << opt_letter 
+                        << " must be followed by a valid argument" << std::endl;
 #if MPI_PARALLEL_ENABLED
               MPI_Finalize();
 #endif
@@ -151,7 +153,8 @@ int main(int argc, char *argv[]) {
         case 'h':
         default:
           if (global_variable::my_rank == 0) {
-            std::cout << "Athena++ v" <<ATHENA_VERSION_MAJOR<<"."<<ATHENA_VERSION_MINOR<< std::endl;
+            std::cout << "Athena++ v" << ATHENA_VERSION_MAJOR << "." 
+                                      << ATHENA_VERSION_MINOR << std::endl;
             std::cout << "Usage: " << argv[0] << " [options] [block/par=value ...]\n";
             std::cout << "Options:" << std::endl;
             std::cout << "  -i <file>       specify input file [athinput]\n";
@@ -185,7 +188,7 @@ int main(int argc, char *argv[]) {
     return(0);
   }
 
-  //--- Step 3. ------------------------------------------------------------------------------------
+  //--- Step 3. --------------------------------------------------------------------------
   // Parse input file and command line and store into ParameterInput object.
   // With MPI, the input is read by every process in parallel using MPI-IO.
 
@@ -203,7 +206,7 @@ int main(int argc, char *argv[]) {
     return(0);
   }
 
-  //--- Step 4. ------------------------------------------------------------------------------------
+  //--- Step 4. --------------------------------------------------------------------------
   // Construct and initialize Mesh
 
   std::unique_ptr<Mesh> pmesh;
@@ -218,22 +221,22 @@ int main(int argc, char *argv[]) {
     return(0);
   }
 
-  //--- Step 5. ------------------------------------------------------------------------------------
+  //--- Step 5. --------------------------------------------------------------------------
   // Construct and initialize Physics modules on each MeshBlock
 
-  //--- Step 6. ------------------------------------------------------------------------------------
+  //--- Step 6. --------------------------------------------------------------------------
   // Construct and initialize TaskLists on each MeshBlock, and execution Driver
 
-  //--- Step 7. ------------------------------------------------------------------------------------
+  //--- Step 7. --------------------------------------------------------------------------
   // Set initial conditions by calling problem generator, or reading restart file
 
-  //--- Step 8. ------------------------------------------------------------------------------------
+  //--- Step 8. --------------------------------------------------------------------------
   // Change to run directory, initialize Outputs, and make output of ICs
 
-  //--- Step 9. ------------------------------------------------------------------------------------
+  //--- Step 9. --------------------------------------------------------------------------
   // Execute Driver
 
-  //--- Step 10. -----------------------------------------------------------------------------------
+  //--- Step 10. -------------------------------------------------------------------------
   // Make final outputs, and Terminate
 
 #if MPI_PARALLEL_ENABLED

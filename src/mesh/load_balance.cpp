@@ -1,8 +1,8 @@
-//==================================================================================================
+//========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
-//==================================================================================================
+//========================================================================================
 //! \file load_balance.cpp
 //  \brief 
 
@@ -41,9 +41,10 @@ void Mesh::LoadBalance(double *clist, int *rlist, int *slist, int *nlist,
   // create rank list from the end: the master MPI rank should have less load
   for (int i=nb-1; i>=0; i--) {
     if (targetcost == 0.0) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-          << "There is at least one process which has no MeshBlock" << std::endl
-          << "Decrease the number of processes or use smaller MeshBlocks." << std::endl;
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "There is at least one process which has no MeshBlock"
+                << std::endl << "Decrease the number of processes or use smaller "
+                << "MeshBlocks." << std::endl;
       std::exit(EXIT_FAILURE);
     }
     mycost += clist[i];
@@ -75,9 +76,8 @@ void Mesh::LoadBalance(double *clist, int *rlist, int *slist, int *nlist,
 
 #ifdef MPI_PARALLEL
   if (nb % (global_variable::nranks * num_mesh_threads_) != 0
-      && !adaptive && !lb_flag_ && max_cost == min_cost && global_variable::my_rank == 0) {
+     && !adaptive && !lb_flag_ && max_cost == min_cost && global_variable::my_rank == 0) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-    std::cout << "### Warning in CalculateLoadBalance" << std::endl
               << "The number of MeshBlocks cannot be divided evenly. "
               << "This will result in poor load balancing." << std::endl;
   }

@@ -1,13 +1,12 @@
 #ifndef ATHENA_HPP_
 #define ATHENA_HPP_
-//==================================================================================================
+//========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
-//==================================================================================================
+//========================================================================================
 //! \file athena.hpp
 //  \brief contains Athena++ general purpose types, structures, enums, etc.
-
 
 #include "config.hpp"
 #include "globals.hpp"

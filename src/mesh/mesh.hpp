@@ -1,10 +1,10 @@
 #ifndef MESH_MESH_HPP_
 #define MESH_MESH_HPP_
-//==================================================================================================
+//========================================================================================
 // Athena++K astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
-//==================================================================================================
+//========================================================================================
 //! \file mesh.hpp
 //  \brief defines Mesh class.
 //  The Mesh is the overall grid structure, and MeshBlocks are local patches of data
@@ -12,7 +12,8 @@
 
 #include <cstdint>     // int64_t
 
-//--------------------------------------------------------------------------------------------------
+// Define following two structure before other "include" files to resolve declarations
+//----------------------------------------------------------------------------------------
 //! \struct RegionSize
 //  \brief physical size and number of cells in a Mesh or a MeshBlock
 
@@ -24,7 +25,7 @@ struct RegionSize {  // aggregate and POD type; do NOT reorder member declaratio
   int nghost;               // number of ghost cells
 };
 
-//--------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------
 //! \struct LogicalLocation
 //  \brief stores logical location and level of MeshBlock
 
@@ -55,7 +56,7 @@ class Mesh;
 #include "meshblock.hpp"
 #include "meshblock_tree.hpp"
 
-//--------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------
 //! \class Mesh
 //  \brief data/functions associated with the overall mesh
 
@@ -85,12 +86,12 @@ class Mesh {
 
   // functions
   void OutputMeshStructure();
-  void SetBlockSizeAndBoundaries(LogicalLocation loc, RegionSize &size, BoundaryFlag *bcs);
+  void SetBlockSizeAndBoundaries(LogicalLocation loc,RegionSize &size, BoundaryFlag *bcs);
   void LoadBalance(double *clist, int *rlist, int *slist, int *nlist, int nb);
   void ResetLoadBalance();
   inline Real LeftEdgePosition(std::int32_t ith, std::int32_t n, Real xmin, Real xmax) {
     Real x = (static_cast<Real>(ith)) / (static_cast<Real>(n));
-    return (x*xmax - x*xmin) - (0.5*xmax - 0.5*xmin) + (0.5*xmin + 0.5*xmax); //symmetrize round-off
+    return (x*xmax - x*xmin) - (0.5*xmax - 0.5*xmin) + (0.5*xmin + 0.5*xmax); // symm err
   }
 
  private:

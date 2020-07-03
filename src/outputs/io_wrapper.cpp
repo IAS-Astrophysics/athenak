@@ -1,8 +1,8 @@
-//==================================================================================================
+//========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
-//==================================================================================================
+//========================================================================================
 //! \file io_wrapper.cpp
 //  \brief functions that provide wrapper for MPI-IO versus serial input/output
 
@@ -17,10 +17,10 @@
 #include "athena.hpp"
 #include "io_wrapper.hpp"
 
-//--------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------
 //! \fn int IOWrapper::Open(const char* fname, FileMode rw)
 //  \brief wrapper for {MPI_File_open} versus {std::fopen} including error check
-//  This function should not be called by multiple threads in a shared memory parallel region.
+//  This function must not be called by multiple threads in shared memory parallel regions
 
 int IOWrapper::Open(const char* fname, FileMode rw) {
 
@@ -33,8 +33,9 @@ int IOWrapper::Open(const char* fname, FileMode rw) {
       if ((fh_ = std::fopen(fname,"rb")) == nullptr) // NOLINT
 #endif
       {
-        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-                  << "Input file '" << fname << "' could not be opened" << std::endl;
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Input file '" << fname << "' could not be opened"
+                  << std::endl;
         std::exit(EXIT_FAILURE);
       }
 
@@ -48,8 +49,9 @@ int IOWrapper::Open(const char* fname, FileMode rw) {
       if ((fh_ = std::fopen(fname,"wb")) == nullptr) // NOLINT
 #endif
       {
-        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-                  << "Output file '" << fname << "' could not be opened" << std::endl;
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Output file '" << fname << "' could not be opened"
+                  << std::endl;
         std::exit(EXIT_FAILURE);
       }
   } else {
@@ -59,7 +61,7 @@ int IOWrapper::Open(const char* fname, FileMode rw) {
   return true;
 }
 
-//--------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------
 //! \fn int IOWrapper::Read(void *buf, IOWrapperSizeT size, IOWrapperSizeT count)
 //  \brief wrapper for {MPI_File_read} versus {std::fread}
 
@@ -75,7 +77,7 @@ std::size_t IOWrapper::Read(void *buf, IOWrapperSizeT size, IOWrapperSizeT count
 #endif
 }
 
-//--------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------
 //! \fn int IOWrapper::Read_all(void *buf, IOWrapperSizeT size, IOWrapperSizeT count)
 //  \brief wrapper for {MPI_File_read_all} versus {std::fread}
 
@@ -91,7 +93,7 @@ std::size_t IOWrapper::Read_all(void *buf, IOWrapperSizeT size, IOWrapperSizeT c
 #endif
 }
 
-//--------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------
 //! \fn int IOWrapper::Read_at_all(void *buf, IOWrapperSizeT size,
 //                             IOWrapperSizeT count, IOWrapperSizeT offset)
 //  \brief wrapper for {MPI_File_read_at_all} versus {std::fseek+std::fread}
@@ -111,7 +113,7 @@ std::size_t IOWrapper::Read_at_all(void *buf, IOWrapperSizeT size,
 #endif
 }
 
-//--------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------
 //! \fn int IOWrapper::Write(const void *buf, IOWrapperSizeT size, IOWrapperSizeT cnt)
 //  \brief wrapper for {MPI_File_write} versus {std::fwrite}
 
@@ -128,7 +130,7 @@ std::size_t IOWrapper::Write(const void *buf, IOWrapperSizeT size, IOWrapperSize
 #endif
 }
 
-//--------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------
 //! \fn int IOWrapper::Write_at_all(const void *buf, IOWrapperSizeT size,
 //                                  IOWrapperSizeT cnt, IOWrapperSizeT offset)
 //  \brief wrapper for {MPI_File_write_at_all} versus {std::fseek+std::fwrite}.
@@ -150,7 +152,7 @@ std::size_t IOWrapper::Write_at_all(const void *buf, IOWrapperSizeT size,
 }
 
 
-//--------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------
 //! \fn void IOWrapper::Close()
 //  \brief wrapper for {MPI_File_close} versus {std::fclose}
 
@@ -162,7 +164,7 @@ int IOWrapper::Close() {
 #endif
 }
 
-//--------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------
 //! \fn int IOWrapper::Seek(IOWrapperSizeT offset)
 //  \brief wrapper for {MPI_File_seek} versus {std::fseek}
 
@@ -174,7 +176,7 @@ int IOWrapper::Seek(IOWrapperSizeT offset) {
 #endif
 }
 
-//--------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------
 //! \fn IOWrapperSizeT IOWrapper::GetPosition()
 //  \brief wrapper for {MPI_File_get_position} versus {ftell}
 

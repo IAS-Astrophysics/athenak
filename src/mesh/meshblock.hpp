@@ -1,10 +1,10 @@
 #ifndef MESH_MESHBLOCK_HPP_
 #define MESH_MESHBLOCK_HPP_
-//==================================================================================================
+//========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
-//==================================================================================================
+//========================================================================================
 //! \file meshblock.hpp
 //  \brief defines MeshBlock class, and various structs used in them
 //  The Mesh is the overall grid structure, and MeshBlocks are local patches of data
@@ -12,7 +12,7 @@
 
 #include <cstdint>     // int64_t
 
-//--------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------
 //! \struct GridIndices
 //  \brief  structure to store number and indices of grid cells in a MeshBlock
 
@@ -24,10 +24,10 @@ struct GridIndices {
   int is,ie,js,je,ks,ke;   // indices of ACTIVE cells
   int nghost;              // number of ghost zones
   int nx1, nx2, nx3;       // number of ACTIVE cells in each dir
-  int ncells1, ncells2, ncells3; // total # of cells each dir (i.e. ncells2=nx2+2*NGHOST if nx2>1)
+  int ncells1, ncells2, ncells3; // total # of cells each dir including ghost zones
 };
 
-//--------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------
 //! \class MeshBlock
 //  \brief data/functions associated with a single block
 
@@ -36,7 +36,8 @@ class MeshBlock {
  friend class Mesh;
  friend class MeshBlockTree;
  public:
-  MeshBlock(Mesh *pm, std::unique_ptr<ParameterInput> &pin, RegionSize input_size, BoundaryFlag *input_bcs);
+  MeshBlock(Mesh *pm, std::unique_ptr<ParameterInput> &pin, RegionSize input_size,
+            BoundaryFlag *input_bcs);
   ~MeshBlock();
 
   // data
@@ -52,7 +53,8 @@ class MeshBlock {
 
 
   // functions
-  int GetNumberOfMeshBlockCells() { return block_size.nx1 * block_size.nx2 * block_size.nx3; }
+  int GetNumberOfMeshBlockCells()
+    { return block_size.nx1 * block_size.nx2 * block_size.nx3; }
 
  private:
   // data

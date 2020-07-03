@@ -1,8 +1,8 @@
-//==================================================================================================
+//========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
-//==================================================================================================
+//========================================================================================
 //! \file mesh.cpp
 //  \brief implementation of functions in Mesh class
 
@@ -18,7 +18,7 @@
 #include <mpi.h>
 #endif
 
-//--------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------
 // Mesh constructor, builds mesh at start of calculation using parameters in input file
 
 Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
@@ -45,8 +45,10 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
   nx3gt1_ = (root_size.nx3 > 1) ? true : false;
 
   // set boolean flags indicating type of refinement (if any) depending on input strings
-  adaptive = (pin->GetOrAddString("mesh", "refinement", "none") == "adaptive") ? true : false;
-  multilevel = ((adaptive) || (pin->GetString("mesh", "refinement") == "static")) ?  true : false;
+  adaptive = 
+    (pin->GetOrAddString("mesh", "refinement", "none") == "adaptive") ? true : false;
+  multilevel =
+    ((adaptive) || (pin->GetString("mesh", "refinement") == "static")) ?  true : false;
 
   // error check physical size of mesh (root level) from input file.
   if (root_size.x1max <= root_size.x1min) {
@@ -71,17 +73,20 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
   // error check requested number of grid cells for entire root domain
   if (root_size.nx1 < 4) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "In mesh block in input file nx1 must be >= 4, but nx1=" << root_size.nx1 << std::endl;
+        << "In mesh block in input file nx1 must be >= 4, but nx1=" << root_size.nx1
+        << std::endl;
     std::exit(EXIT_FAILURE);
   }
   if (root_size.nx2 < 1) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "In mesh block in input file nx2 must be >= 1, but nx2=" << root_size.nx2 << std::endl;
+        << "In mesh block in input file nx2 must be >= 1, but nx2=" << root_size.nx2
+        << std::endl;
     std::exit(EXIT_FAILURE);
   }
   if (root_size.nx3 < 1) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "In mesh block in input file nx3 must be >= 1, but nx3=" << root_size.nx3 << std::endl;
+        << "In mesh block in input file nx3 must be >= 1, but nx3=" << root_size.nx3
+        << std::endl;
     std::exit(EXIT_FAILURE);
   }
   if (root_size.nx2 == 1 && root_size.nx3 > 1) {
@@ -94,13 +99,13 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
   // error check number of ghost zones
   if (root_size.nghost < 2) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "More than 2 ghost zones required, but nghost=" << root_size.nghost << std::endl;
+      << "More than 2 ghost zones required, but nghost=" << root_size.nghost << std::endl;
     std::exit(EXIT_FAILURE);
   }
   if ((multilevel) && (root_size.nghost % 2 != 0)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "Number of ghost zones must be divisible by two for SMR/AMR calculations, but nghost="
-        << root_size.nghost << std::endl;
+      << "Number of ghost zones must be divisible by two for SMR/AMR calculations, "
+      << "but nghost=" << root_size.nghost << std::endl;
     std::exit(EXIT_FAILURE);
   }
 
@@ -130,7 +135,9 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
               << "Mesh must be evenly divisible by MeshBlocks" << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  if (block_size.nx1 < 4 || (block_size.nx2 < 4 && nx2gt1_) || (block_size.nx3 < 4 && nx3gt1_)) {
+  if ( block_size.nx1 < 4 ||
+      (block_size.nx2 < 4 && nx2gt1_) ||
+      (block_size.nx3 < 4 && nx3gt1_) ) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "MeshBlock must be >= 4 cells in each active dimension" << std::endl;
     std::exit(EXIT_FAILURE);
@@ -142,12 +149,12 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
   nmbx3_r = root_size.nx3/block_size.nx3;
 
   // find maximum number of MeshBlocks in any dir
-  int nbmax = (nmbx1_r > nmbx2_r) ? nmbx1_r : nmbx2_r;
-  nbmax = (nbmax > nmbx3_r) ? nbmax : nmbx3_r;
+  int nmbmax = (nmbx1_r > nmbx2_r) ? nmbx1_r : nmbx2_r;
+  nmbmax = (nmbmax > nmbx3_r) ? nmbmax : nmbx3_r;
 
-  // find smallest N such that 2^N > maximum number of MeshBlocks in any dimension (nbmax).
-  // Then N is the logical level of root grid. Note 2^N implemented as left-shift (1<<root_level)
-  for (root_level=0; ((1<<root_level) < nbmax); root_level++) {}
+  // Find smallest N such that 2^N > max number of MeshBlocks in any dimension (nmbmax)
+  // Then N is logical level of root grid.  2^N implemented as left-shift (1<<root_level)
+  for (root_level=0; ((1<<root_level) < nmbmax); root_level++) {}
   int current_level = root_level; 
 
   //=== Step 3 =======================================================
@@ -162,8 +169,9 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
   if (adaptive) {
     max_level = pin->GetOrAddInteger("mesh", "numlevel", 1) + root_level - 1;
     if (max_level > 31) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-         << "Number of refinement levels must be smaller than " << 31 - root_level + 1 << std::endl;
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Number of refinement levels must be smaller than " 
+                << 31 - root_level + 1 << std::endl;
       std::exit(EXIT_FAILURE);
     }
   } else {
@@ -175,12 +183,13 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
     if (block_size.nx1 % 2 != 0 || 
        (block_size.nx2 % 2 != 0 && nx2gt1_) ||
        (block_size.nx3 % 2 != 0 && nx3gt1_)) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-          << "Number of cells in MeshBlock must be divisible by 2 with SMR or AMR." << std::endl;
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Number of cells in MeshBlock must be divisible by 2 "
+                << "with SMR or AMR." << std::endl;
       std::exit(EXIT_FAILURE);
     }
 
-    // cycle through ParameterInput list and find "refinement" blocks (SMR), extract values
+    // cycle through ParameterInput list and find "refinement" blocks (SMR), extract data
     for (auto it = pin->block.begin(); it != pin->block.end(); ++it) {
       if (it->block_name.compare(0, 10, "refinement") == 0) {
         RegionSize ref_size;
@@ -206,71 +215,84 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
 
         // error check parameters in "refinement" blocks
         if (phy_ref_lev < 1) {
-          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "Refinement level must be larger than 0 (root level = 0)" << std::endl;
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ 
+              << std::endl << "Refinement level must be larger than 0 (root level = 0)"
+              << std::endl;
           std::exit(EXIT_FAILURE);
         }
         if (log_ref_lev > max_level) {
-          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "Refinement level exceeds maximum allowed (" << max_level << ")" << std::endl
-              << "Reduce/specify 'numlevel' in <mesh> input block if using AMR"<< std::endl;
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Refinement level exceeds maximum allowed ("
+              << max_level << ")" << std::endl << "Reduce/specify 'numlevel' in <mesh> "
+              << "input block if using AMR" << std::endl;
           std::exit(EXIT_FAILURE);
         }
         if (   ref_size.x1min > ref_size.x1max
             || ref_size.x2min > ref_size.x2max
             || ref_size.x3min > ref_size.x3max)  {
-          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "Invalid refinement region (xmax < xmin in one direction)."<< std::endl;
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Invalid refinement region (xmax < xmin in one direction)."
+              << std::endl;
           std::exit(EXIT_FAILURE);
         }
         if (   ref_size.x1min < root_size.x1min || ref_size.x1max > root_size.x1max
             || ref_size.x2min < root_size.x2min || ref_size.x2max > root_size.x2max
             || ref_size.x3min < root_size.x3min || ref_size.x3max > root_size.x3max) {
-          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "Refinement region must be fully contained within root mesh." << std::endl;
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Refinement region must be fully contained within root mesh"
+              << std::endl;
           std::exit(EXIT_FAILURE);
         }
 
         // note: if following is too slow, it could be replaced with bi-section search.
-        // Suppose entire root domain is tiled with MeshBlocks at the desired refinement level
-        // Find range of x1-integer indices of such MeshBlocks that cover the refinement region
-        std::int32_t lx1min = 0, lx1max = 0, lx2min = 0, lx2max = 0, lx3min = 0, lx3max = 0;
+        // Suppose entire root domain is tiled with MeshBlocks at the desired refinement
+        // level. Find range of x1-integer indices of such MeshBlocks that cover the
+        // refinement region
+        std::int32_t lx1min = 0, lx1max = 0;
+        std::int32_t lx2min = 0, lx2max = 0;
+        std::int32_t lx3min = 0, lx3max = 0;
         std::int32_t lxmax = nmbx1_r*(1<<phy_ref_lev);
         for (lx1min=0; lx1min<lxmax; lx1min++) {
-          if (LeftEdgePosition(lx1min+1, lxmax, root_size.x1min, root_size.x1max) > ref_size.x1min)
+          if (LeftEdgePosition(lx1min+1, lxmax, root_size.x1min, root_size.x1max) >
+              ref_size.x1min)
             break;
         }
         for (lx1max=lx1min; lx1max<lxmax; lx1max++) {
-          if (LeftEdgePosition(lx1max+1, lxmax, root_size.x1min, root_size.x1max) >= ref_size.x1max)
+          if (LeftEdgePosition(lx1max+1, lxmax, root_size.x1min, root_size.x1max) >=
+              ref_size.x1max)
             break;
         }
         if (lx1min % 2 == 1) lx1min--;
         if (lx1max % 2 == 0) lx1max++;
 
-        // Find range of x2-integer indices of such MeshBlocks that cover the refinement region
+        // Find range of x2-indices of such MeshBlocks that cover the refinement region
         if (nx2gt1_) { // 2D or 3D
           lxmax = nmbx2_r*(1<<phy_ref_lev);
           for (lx2min=0; lx2min<lxmax; lx2min++) {
-          if (LeftEdgePosition(lx2min+1, lxmax, root_size.x2min, root_size.x2max) > ref_size.x2min)
+            if (LeftEdgePosition(lx2min+1, lxmax, root_size.x2min, root_size.x2max) >
+                ref_size.x2min)
             break;
           }
           for (lx2max=lx2min; lx2max<lxmax; lx2max++) {
-          if (LeftEdgePosition(lx2max+1, lxmax, root_size.x2min, root_size.x2max) >= ref_size.x2max)
+            if (LeftEdgePosition(lx2max+1, lxmax, root_size.x2min, root_size.x2max) >=
+                ref_size.x2max)
             break;
           }
           if (lx2min % 2 == 1) lx2min--;
           if (lx2max % 2 == 0) lx2max++;
         }
 
-        // Find range of x3-integer indices of such MeshBlocks that cover the refinement region
+        // Find range of x3-indices of such MeshBlocks that cover the refinement region
         if (nx3gt1_) { // 3D
           lxmax = nmbx3_r*(1<<phy_ref_lev);
           for (lx3min=0; lx3min<lxmax; lx3min++) {
-          if (LeftEdgePosition(lx3min+1, lxmax, root_size.x3min, root_size.x3max) > ref_size.x3min)
+            if (LeftEdgePosition(lx3min+1, lxmax, root_size.x3min, root_size.x3max) >
+                ref_size.x3min)
             break;
           }
           for (lx3max=lx3min; lx3max<lxmax; lx3max++) {
-          if (LeftEdgePosition(lx3max+1, lxmax, root_size.x3min, root_size.x3max) >= ref_size.x3max)
+            if (LeftEdgePosition(lx3max+1, lxmax, root_size.x3min, root_size.x3max) >=
+                ref_size.x3max)
             break;
           }
           if (lx3min % 2 == 1) lx3min--;
@@ -363,20 +385,18 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
     BoundaryFlag block_bcs[6];
     SetBlockSizeAndBoundaries(loclist[i], block_size, block_bcs);
     MeshBlock new_block(this, pin, block_size, block_bcs);
-    my_blocks.push_back(new_block);  // this requires copy operator, but MBs still lightweight 
+    my_blocks.push_back(new_block);  // this requires copy operator!
 //    my_blocks(i-gids_)->pbval->SearchAndSetNeighbors(tree, ranklist, nslist);
   }
 
   ResetLoadBalance();
-
-
 }
 
-//--------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------
 // Mesh constructor for restarts. Load the restart file
 
 
-//--------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------
 // destructor
 
 Mesh::~Mesh() {
@@ -473,7 +493,7 @@ void Mesh::SetBlockSizeAndBoundaries(LogicalLocation loc, RegionSize &block_size
       block_size.x2max = root_size.x2max;
       block_bcs[BoundaryFace::outer_x2] = root_bcs[BoundaryFace::outer_x2];
     } else {
-      block_size.x2max = LeftEdgePosition(lx2+1, nmbx2_l, root_size.x2min, root_size.x2max);
+      block_size.x2max = LeftEdgePosition(lx2+1, nmbx2_l,root_size.x2min,root_size.x2max);
       block_bcs[BoundaryFace::outer_x2] = BoundaryFlag::block;
     }
 
@@ -499,7 +519,7 @@ void Mesh::SetBlockSizeAndBoundaries(LogicalLocation loc, RegionSize &block_size
       block_size.x3max = root_size.x3max;
       block_bcs[BoundaryFace::outer_x3] = root_bcs[BoundaryFace::outer_x3];
     } else {
-      block_size.x3max = LeftEdgePosition(lx3+1, nmbx3_l, root_size.x3min, root_size.x3max);
+      block_size.x3max = LeftEdgePosition(lx3+1, nmbx3_l,root_size.x3min,root_size.x3max);
       block_bcs[BoundaryFace::outer_x3] = BoundaryFlag::block;
     }
   }
