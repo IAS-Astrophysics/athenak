@@ -25,24 +25,36 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
 
   //=== Step 1 ===============================================
   // Set properties of Mesh from input parameters, error check
-  RegionSize root_size;
-  root_size.x1min = pin->GetReal("mesh", "x1min");
-  root_size.x1max = pin->GetReal("mesh", "x1max");
-  root_size.x2min = pin->GetReal("mesh", "x2min");
-  root_size.x2max = pin->GetReal("mesh", "x2max");
-  root_size.x3min = pin->GetReal("mesh", "x3min");
-  root_size.x3max = pin->GetReal("mesh", "x3max");
-  root_size.x1rat = pin->GetOrAddReal("mesh", "x1rat", 1.0);
-  root_size.x2rat = pin->GetOrAddReal("mesh", "x2rat", 1.0);
-  root_size.x3rat = pin->GetOrAddReal("mesh", "x3rat", 1.0);
-  root_size.nx1   = pin->GetInteger("mesh", "nx1");
-  root_size.nx2   = pin->GetInteger("mesh", "nx2");
-  root_size.nx3   = pin->GetInteger("mesh", "nx3");
-  root_size.nghost = pin->GetOrAddReal("mesh", "nghost", 2);
+  mesh_size.x1min = pin->GetReal("mesh", "x1min");
+  mesh_size.x1max = pin->GetReal("mesh", "x1max");
+  mesh_size.x2min = pin->GetReal("mesh", "x2min");
+  mesh_size.x2max = pin->GetReal("mesh", "x2max");
+  mesh_size.x3min = pin->GetReal("mesh", "x3min");
+  mesh_size.x3max = pin->GetReal("mesh", "x3max");
+  mesh_size.x1rat = pin->GetOrAddReal("mesh", "x1rat", 1.0);
+  mesh_size.x2rat = pin->GetOrAddReal("mesh", "x2rat", 1.0);
+  mesh_size.x3rat = pin->GetOrAddReal("mesh", "x3rat", 1.0);
+  mesh_size.nx1   = pin->GetInteger("mesh", "nx1");
+  mesh_size.nx2   = pin->GetInteger("mesh", "nx2");
+  mesh_size.nx3   = pin->GetInteger("mesh", "nx3");
+  mesh_size.nghost = pin->GetOrAddReal("mesh", "nghost", 2);
+
+  mesh_bcs[BoundaryFace::inner_x1] =
+    GetBoundaryFlag(pin->GetOrAddString("mesh", "ix1_bc", "none"));
+  mesh_bcs[BoundaryFace::outer_x1] =
+    GetBoundaryFlag(pin->GetOrAddString("mesh", "ox1_bc", "none"));
+  mesh_bcs[BoundaryFace::inner_x2] =
+    GetBoundaryFlag(pin->GetOrAddString("mesh", "ix2_bc", "none"));
+  mesh_bcs[BoundaryFace::outer_x2] =
+    GetBoundaryFlag(pin->GetOrAddString("mesh", "ox2_bc", "none"));
+  mesh_bcs[BoundaryFace::inner_x3] =
+    GetBoundaryFlag(pin->GetOrAddString("mesh", "ix3_bc", "none"));
+  mesh_bcs[BoundaryFace::outer_x3] =
+    GetBoundaryFlag(pin->GetOrAddString("mesh", "ox3_bc", "none"));
 
   // define some useful variables that indicate 2D/3D calculations
-  nx2gt1 = (root_size.nx2 > 1) ? true : false;
-  nx3gt1 = (root_size.nx3 > 1) ? true : false;
+  nx2gt1 = (mesh_size.nx2 > 1) ? true : false;
+  nx3gt1 = (mesh_size.nx3 > 1) ? true : false;
 
   // set boolean flags indicating type of refinement (if any) depending on input strings
   adaptive = 
@@ -51,86 +63,86 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
     ((adaptive) || (pin->GetString("mesh", "refinement") == "static")) ?  true : false;
 
   // error check physical size of mesh (root level) from input file.
-  if (root_size.x1max <= root_size.x1min) {
+  if (mesh_size.x1max <= mesh_size.x1min) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "Input x1max must be larger than x1min: x1min=" << root_size.x1min
-        << " x1max=" << root_size.x1max << std::endl;
+        << "Input x1max must be larger than x1min: x1min=" << mesh_size.x1min
+        << " x1max=" << mesh_size.x1max << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  if (root_size.x2max <= root_size.x2min) {
+  if (mesh_size.x2max <= mesh_size.x2min) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "Input x2max must be larger than x2min: x2min=" << root_size.x2min
-        << " x2max=" << root_size.x2max << std::endl;
+        << "Input x2max must be larger than x2min: x2min=" << mesh_size.x2min
+        << " x2max=" << mesh_size.x2max << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  if (root_size.x3max <= root_size.x3min) {
+  if (mesh_size.x3max <= mesh_size.x3min) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "Input x3max must be larger than x3min: x3min=" << root_size.x3min
-        << " x3max=" << root_size.x3max << std::endl;
+        << "Input x3max must be larger than x3min: x3min=" << mesh_size.x3min
+        << " x3max=" << mesh_size.x3max << std::endl;
     std::exit(EXIT_FAILURE);
   }
 
   // error check requested number of grid cells for entire root domain
-  if (root_size.nx1 < 4) {
+  if (mesh_size.nx1 < 4) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "In mesh block in input file nx1 must be >= 4, but nx1=" << root_size.nx1
+        << "In mesh block in input file nx1 must be >= 4, but nx1=" << mesh_size.nx1
         << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  if (root_size.nx2 < 1) {
+  if (mesh_size.nx2 < 1) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "In mesh block in input file nx2 must be >= 1, but nx2=" << root_size.nx2
+        << "In mesh block in input file nx2 must be >= 1, but nx2=" << mesh_size.nx2
         << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  if (root_size.nx3 < 1) {
+  if (mesh_size.nx3 < 1) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "In mesh block in input file nx3 must be >= 1, but nx3=" << root_size.nx3
+        << "In mesh block in input file nx3 must be >= 1, but nx3=" << mesh_size.nx3
         << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  if (root_size.nx2 == 1 && root_size.nx3 > 1) {
+  if (mesh_size.nx2 == 1 && mesh_size.nx3 > 1) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "In mesh block in input file: nx2=1, nx3=" << root_size.nx3 
+        << "In mesh block in input file: nx2=1, nx3=" << mesh_size.nx3 
         << ", but 2D problems in x1-x3 plane not supported" << std::endl;
     std::exit(EXIT_FAILURE);
   }
 
   // error check number of ghost zones
-  if (root_size.nghost < 2) {
+  if (mesh_size.nghost < 2) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-      << "More than 2 ghost zones required, but nghost=" << root_size.nghost << std::endl;
+      << "More than 2 ghost zones required, but nghost=" << mesh_size.nghost << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  if ((multilevel) && (root_size.nghost % 2 != 0)) {
+  if ((multilevel) && (mesh_size.nghost % 2 != 0)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
       << "Number of ghost zones must be divisible by two for SMR/AMR calculations, "
-      << "but nghost=" << root_size.nghost << std::endl;
+      << "but nghost=" << mesh_size.nghost << std::endl;
     std::exit(EXIT_FAILURE);
   }
 
   //=== Step 2 =======================================================
   // Set properties of MeshBlock(s) from input parameters, error check
   RegionSize block_size;
-  block_size.x1rat = root_size.x1rat;
-  block_size.x2rat = root_size.x2rat;
-  block_size.x3rat = root_size.x3rat;
-  block_size.nx1 = pin->GetOrAddInteger("meshblock", "nx1", root_size.nx1);
+  block_size.x1rat = mesh_size.x1rat;
+  block_size.x2rat = mesh_size.x2rat;
+  block_size.x3rat = mesh_size.x3rat;
+  block_size.nx1 = pin->GetOrAddInteger("meshblock", "nx1", mesh_size.nx1);
   if (nx2gt1) {
-    block_size.nx2 = pin->GetOrAddInteger("meshblock", "nx2", root_size.nx2);
+    block_size.nx2 = pin->GetOrAddInteger("meshblock", "nx2", mesh_size.nx2);
   } else {
-    block_size.nx2 = root_size.nx2;
+    block_size.nx2 = mesh_size.nx2;
   }
   if (nx3gt1) {
-    block_size.nx3 = pin->GetOrAddInteger("meshblock", "nx3", root_size.nx3);
+    block_size.nx3 = pin->GetOrAddInteger("meshblock", "nx3", mesh_size.nx3);
   } else {
-    block_size.nx3 = root_size.nx3;
+    block_size.nx3 = mesh_size.nx3;
   }
 
   // error check consistency of the block and mesh
-  if (   root_size.nx1 % block_size.nx1 != 0
-      || root_size.nx2 % block_size.nx2 != 0
-      || root_size.nx3 % block_size.nx3 != 0) {
+  if (   mesh_size.nx1 % block_size.nx1 != 0
+      || mesh_size.nx2 % block_size.nx2 != 0
+      || mesh_size.nx3 % block_size.nx3 != 0) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "Mesh must be evenly divisible by MeshBlocks" << std::endl;
     std::exit(EXIT_FAILURE);
@@ -144,9 +156,9 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
   }
 
   // calculate the number of MeshBlocks in root level in each dir
-  nmbx1_r = root_size.nx1/block_size.nx1;
-  nmbx2_r = root_size.nx2/block_size.nx2;
-  nmbx3_r = root_size.nx3/block_size.nx3;
+  nmbx1_r = mesh_size.nx1/block_size.nx1;
+  nmbx2_r = mesh_size.nx2/block_size.nx2;
+  nmbx3_r = mesh_size.nx3/block_size.nx3;
 
   // find maximum number of MeshBlocks in any dir
   int nmbmax = (nmbx1_r > nmbx2_r) ? nmbx1_r : nmbx2_r;
@@ -199,15 +211,15 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
           ref_size.x2min = pin->GetReal(it->block_name, "x2min");
           ref_size.x2max = pin->GetReal(it->block_name, "x2max");
         } else {
-          ref_size.x2min = root_size.x2min;
-          ref_size.x2max = root_size.x2max;
+          ref_size.x2min = mesh_size.x2min;
+          ref_size.x2max = mesh_size.x2max;
         }
         if (nx3gt1) { 
           ref_size.x3min = pin->GetReal(it->block_name, "x3min");
           ref_size.x3max = pin->GetReal(it->block_name, "x3max");
         } else {
-          ref_size.x3min = root_size.x3min;
-          ref_size.x3max = root_size.x3max;
+          ref_size.x3min = mesh_size.x3min;
+          ref_size.x3max = mesh_size.x3max;
         }
         int phy_ref_lev = pin->GetInteger(it->block_name, "level");
         int log_ref_lev = phy_ref_lev + root_level;
@@ -235,9 +247,9 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
               << std::endl;
           std::exit(EXIT_FAILURE);
         }
-        if (   ref_size.x1min < root_size.x1min || ref_size.x1max > root_size.x1max
-            || ref_size.x2min < root_size.x2min || ref_size.x2max > root_size.x2max
-            || ref_size.x3min < root_size.x3min || ref_size.x3max > root_size.x3max) {
+        if (   ref_size.x1min < mesh_size.x1min || ref_size.x1max > mesh_size.x1max
+            || ref_size.x2min < mesh_size.x2min || ref_size.x2max > mesh_size.x2max
+            || ref_size.x3min < mesh_size.x3min || ref_size.x3max > mesh_size.x3max) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "Refinement region must be fully contained within root mesh"
               << std::endl;
@@ -253,12 +265,12 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
         std::int32_t lx3min = 0, lx3max = 0;
         std::int32_t lxmax = nmbx1_r*(1<<phy_ref_lev);
         for (lx1min=0; lx1min<lxmax; lx1min++) {
-          if (LeftEdgePosition(lx1min+1, lxmax, root_size.x1min, root_size.x1max) >
+          if (LeftEdgePosition(lx1min+1, lxmax, mesh_size.x1min, mesh_size.x1max) >
               ref_size.x1min)
             break;
         }
         for (lx1max=lx1min; lx1max<lxmax; lx1max++) {
-          if (LeftEdgePosition(lx1max+1, lxmax, root_size.x1min, root_size.x1max) >=
+          if (LeftEdgePosition(lx1max+1, lxmax, mesh_size.x1min, mesh_size.x1max) >=
               ref_size.x1max)
             break;
         }
@@ -269,12 +281,12 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
         if (nx2gt1) { // 2D or 3D
           lxmax = nmbx2_r*(1<<phy_ref_lev);
           for (lx2min=0; lx2min<lxmax; lx2min++) {
-            if (LeftEdgePosition(lx2min+1, lxmax, root_size.x2min, root_size.x2max) >
+            if (LeftEdgePosition(lx2min+1, lxmax, mesh_size.x2min, mesh_size.x2max) >
                 ref_size.x2min)
             break;
           }
           for (lx2max=lx2min; lx2max<lxmax; lx2max++) {
-            if (LeftEdgePosition(lx2max+1, lxmax, root_size.x2min, root_size.x2max) >=
+            if (LeftEdgePosition(lx2max+1, lxmax, mesh_size.x2min, mesh_size.x2max) >=
                 ref_size.x2max)
             break;
           }
@@ -286,12 +298,12 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
         if (nx3gt1) { // 3D
           lxmax = nmbx3_r*(1<<phy_ref_lev);
           for (lx3min=0; lx3min<lxmax; lx3min++) {
-            if (LeftEdgePosition(lx3min+1, lxmax, root_size.x3min, root_size.x3max) >
+            if (LeftEdgePosition(lx3min+1, lxmax, mesh_size.x3min, mesh_size.x3max) >
                 ref_size.x3min)
             break;
           }
           for (lx3max=lx3min; lx3max<lxmax; lx3max++) {
-            if (LeftEdgePosition(lx3max+1, lxmax, root_size.x3min, root_size.x3max) >=
+            if (LeftEdgePosition(lx3max+1, lxmax, mesh_size.x3min, mesh_size.x3max) >=
                 ref_size.x3max)
             break;
           }
@@ -456,76 +468,76 @@ void Mesh::SetBlockSizeAndBoundaries(LogicalLocation loc, RegionSize &block_size
 
   // calculate physical size of MeshBlock in x1
   if (lx1 == 0) {
-    block_size.x1min = root_size.x1min;
-    block_bcs[BoundaryFace::inner_x1] = root_bcs[BoundaryFace::inner_x1];
+    block_size.x1min = mesh_size.x1min;
+    block_bcs[BoundaryFace::inner_x1] = mesh_bcs[BoundaryFace::inner_x1];
   } else {
-    block_size.x1min = LeftEdgePosition(lx1, nmbx1_l, root_size.x1min, root_size.x1max);
+    block_size.x1min = LeftEdgePosition(lx1, nmbx1_l, mesh_size.x1min, mesh_size.x1max);
     block_bcs[BoundaryFace::inner_x1] = BoundaryFlag::block;
   }
 
   if (lx1 == nmbx1_l - 1) {
-    block_size.x1max = root_size.x1max;
-    block_bcs[BoundaryFace::outer_x1] = root_bcs[BoundaryFace::outer_x1];
+    block_size.x1max = mesh_size.x1max;
+    block_bcs[BoundaryFace::outer_x1] = mesh_bcs[BoundaryFace::outer_x1];
   } else {
-    block_size.x1max = LeftEdgePosition(lx1+1, nmbx1_l, root_size.x1min, root_size.x1max);
+    block_size.x1max = LeftEdgePosition(lx1+1, nmbx1_l, mesh_size.x1min, mesh_size.x1max);
     block_bcs[BoundaryFace::outer_x1] = BoundaryFlag::block;
   }
 
   // calculate physical size of MeshBlock in x2
-  if (root_size.nx2 == 1) {
-    block_size.x2min = root_size.x2min;
-    block_size.x2max = root_size.x2max;
-    block_bcs[BoundaryFace::inner_x2] = root_bcs[BoundaryFace::inner_x2];
-    block_bcs[BoundaryFace::outer_x2] = root_bcs[BoundaryFace::outer_x2];
+  if (mesh_size.nx2 == 1) {
+    block_size.x2min = mesh_size.x2min;
+    block_size.x2max = mesh_size.x2max;
+    block_bcs[BoundaryFace::inner_x2] = mesh_bcs[BoundaryFace::inner_x2];
+    block_bcs[BoundaryFace::outer_x2] = mesh_bcs[BoundaryFace::outer_x2];
   } else {
 
     std::int32_t &lx2 = loc.lx2;
     std::int32_t nmbx2_l = nmbx2_r << (loc.level - root_level);
     if (lx2 == 0) {
-      block_size.x2min = root_size.x2min;
-      block_bcs[BoundaryFace::inner_x2] = root_bcs[BoundaryFace::inner_x2];
+      block_size.x2min = mesh_size.x2min;
+      block_bcs[BoundaryFace::inner_x2] = mesh_bcs[BoundaryFace::inner_x2];
     } else {
-      block_size.x2min = LeftEdgePosition(lx2, nmbx2_l, root_size.x2min, root_size.x2max);
+      block_size.x2min = LeftEdgePosition(lx2, nmbx2_l, mesh_size.x2min, mesh_size.x2max);
       block_bcs[BoundaryFace::inner_x2] = BoundaryFlag::block;
     }
 
     if (lx2 == (nmbx2_l) - 1) {
-      block_size.x2max = root_size.x2max;
-      block_bcs[BoundaryFace::outer_x2] = root_bcs[BoundaryFace::outer_x2];
+      block_size.x2max = mesh_size.x2max;
+      block_bcs[BoundaryFace::outer_x2] = mesh_bcs[BoundaryFace::outer_x2];
     } else {
-      block_size.x2max = LeftEdgePosition(lx2+1, nmbx2_l,root_size.x2min,root_size.x2max);
+      block_size.x2max = LeftEdgePosition(lx2+1, nmbx2_l,mesh_size.x2min,mesh_size.x2max);
       block_bcs[BoundaryFace::outer_x2] = BoundaryFlag::block;
     }
 
   }
 
   // calculate physical size of MeshBlock in x3
-  if (root_size.nx3 == 1) {
-    block_size.x3min = root_size.x3min;
-    block_size.x3max = root_size.x3max;
-    block_bcs[BoundaryFace::inner_x3] = root_bcs[BoundaryFace::inner_x3];
-    block_bcs[BoundaryFace::outer_x3] = root_bcs[BoundaryFace::outer_x3];
+  if (mesh_size.nx3 == 1) {
+    block_size.x3min = mesh_size.x3min;
+    block_size.x3max = mesh_size.x3max;
+    block_bcs[BoundaryFace::inner_x3] = mesh_bcs[BoundaryFace::inner_x3];
+    block_bcs[BoundaryFace::outer_x3] = mesh_bcs[BoundaryFace::outer_x3];
   } else {
     std::int32_t &lx3 = loc.lx3;
     std::int32_t nmbx3_l = nmbx3_r << (loc.level - root_level);
     if (lx3 == 0) {
-      block_size.x3min = root_size.x3min;
-      block_bcs[BoundaryFace::inner_x3] = root_bcs[BoundaryFace::inner_x3];
+      block_size.x3min = mesh_size.x3min;
+      block_bcs[BoundaryFace::inner_x3] = mesh_bcs[BoundaryFace::inner_x3];
     } else {
-      block_size.x3min = LeftEdgePosition(lx3, nmbx3_l, root_size.x3min, root_size.x3max);
+      block_size.x3min = LeftEdgePosition(lx3, nmbx3_l, mesh_size.x3min, mesh_size.x3max);
       block_bcs[BoundaryFace::inner_x3] = BoundaryFlag::block;
     }
     if (lx3 == (nmbx3_l) - 1) {
-      block_size.x3max = root_size.x3max;
-      block_bcs[BoundaryFace::outer_x3] = root_bcs[BoundaryFace::outer_x3];
+      block_size.x3max = mesh_size.x3max;
+      block_bcs[BoundaryFace::outer_x3] = mesh_bcs[BoundaryFace::outer_x3];
     } else {
-      block_size.x3max = LeftEdgePosition(lx3+1, nmbx3_l,root_size.x3min,root_size.x3max);
+      block_size.x3max = LeftEdgePosition(lx3+1, nmbx3_l,mesh_size.x3min,mesh_size.x3max);
       block_bcs[BoundaryFace::outer_x3] = BoundaryFlag::block;
     }
   }
-  block_size.x1rat = root_size.x1rat;
-  block_size.x2rat = root_size.x2rat;
-  block_size.x3rat = root_size.x3rat;
+  block_size.x1rat = mesh_size.x1rat;
+  block_size.x2rat = mesh_size.x2rat;
+  block_size.x3rat = mesh_size.x3rat;
 
   return;
 }

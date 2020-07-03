@@ -11,6 +11,8 @@ add_executable(
         globals.cpp
         parameter_input.cpp
 
+        bvals/boundary_flag.cpp
+
         mesh/load_balance.cpp
         mesh/mesh.cpp
         mesh/meshblock.cpp

@@ -185,14 +185,14 @@ void MeshBlockTree::Refine(int &nnew) {
   for (std::int32_t oz=ozmin; oz<=ozmax; oz++) {
     nloc.lx3 = loc_.lx3 + oz;
     if (nloc.lx3<0) {
-      if (pmesh_->root_bcs[BoundaryFace::inner_x3] != BoundaryFlag::periodic) {
+      if (pmesh_->mesh_bcs[BoundaryFace::inner_x3] != BoundaryFlag::periodic) {
         continue;
       } else {
         nloc.lx3 = nzmax - 1;
       }
     }
     if (nloc.lx3>=nzmax) {
-      if (pmesh_->root_bcs[BoundaryFace::outer_x3] != BoundaryFlag::periodic) {
+      if (pmesh_->mesh_bcs[BoundaryFace::outer_x3] != BoundaryFlag::periodic) {
         continue;
       } else {
         nloc.lx3 = 0;
@@ -202,14 +202,14 @@ void MeshBlockTree::Refine(int &nnew) {
     for (std::int32_t oy=oymin; oy<=oymax; oy++) {
       nloc.lx2=loc_.lx2+oy;
       if (nloc.lx2<0) {
-        if (pmesh_->root_bcs[BoundaryFace::inner_x2] != BoundaryFlag::periodic) {
+        if (pmesh_->mesh_bcs[BoundaryFace::inner_x2] != BoundaryFlag::periodic) {
           continue;
         } else {
           nloc.lx2 = nymax - 1;
         }
       }
       if (nloc.lx2>=nymax) {
-        if (pmesh_->root_bcs[BoundaryFace::outer_x2] != BoundaryFlag::periodic) {
+        if (pmesh_->mesh_bcs[BoundaryFace::outer_x2] != BoundaryFlag::periodic) {
           continue;
         } else {
           nloc.lx2=0;
@@ -220,14 +220,14 @@ void MeshBlockTree::Refine(int &nnew) {
         if (ox==0 && oy==0 && oz==0) continue;
         nloc.lx1 = loc_.lx1 + ox;
         if (nloc.lx1<0) {
-          if (pmesh_->root_bcs[BoundaryFace::inner_x1] != BoundaryFlag::periodic) {
+          if (pmesh_->mesh_bcs[BoundaryFace::inner_x1] != BoundaryFlag::periodic) {
             continue;
           } else {
             nloc.lx1 = nxmax - 1;
           }
         }
         if (nloc.lx1>=nxmax) {
-          if (pmesh_->root_bcs[BoundaryFace::outer_x1] != BoundaryFlag::periodic) {
+          if (pmesh_->mesh_bcs[BoundaryFace::outer_x1] != BoundaryFlag::periodic) {
             continue;
           } else {
             nloc.lx1 = 0;
@@ -358,14 +358,14 @@ MeshBlockTree* MeshBlockTree::FindNeighbor(LogicalLocation myloc,
 
   lx+=ox1; ly+=ox2; lz+=ox3;
   if (lx<0) {
-    if (pmesh_->root_bcs[BoundaryFace::inner_x1] == BoundaryFlag::periodic) {
+    if (pmesh_->mesh_bcs[BoundaryFace::inner_x1] == BoundaryFlag::periodic) {
       lx = (pmesh_->nmbx1_r<<(ll - pmesh_->root_level)) - 1;
     } else {
       return nullptr;
     }
   }
   if (lx>=pmesh_->nmbx1_r<<(ll-pmesh_->root_level)) {
-    if (pmesh_->root_bcs[BoundaryFace::outer_x1] == BoundaryFlag::periodic) {
+    if (pmesh_->mesh_bcs[BoundaryFace::outer_x1] == BoundaryFlag::periodic) {
       lx = 0;
     } else {
       return nullptr;
@@ -373,14 +373,14 @@ MeshBlockTree* MeshBlockTree::FindNeighbor(LogicalLocation myloc,
   }
   bool polar = false;
   if (ly<0) {
-    if (pmesh_->root_bcs[BoundaryFace::inner_x2] == BoundaryFlag::periodic) {
+    if (pmesh_->mesh_bcs[BoundaryFace::inner_x2] == BoundaryFlag::periodic) {
       ly = (pmesh_->nmbx2_r<<(ll - pmesh_->root_level)) - 1;
     } else {
       return nullptr;
     }
   }
   if (ly>=pmesh_->nmbx2_r<<(ll-pmesh_->root_level)) {
-    if (pmesh_->root_bcs[BoundaryFace::outer_x2] == BoundaryFlag::periodic) {
+    if (pmesh_->mesh_bcs[BoundaryFace::outer_x2] == BoundaryFlag::periodic) {
       ly = 0;
     } else {
       return nullptr;
@@ -388,14 +388,14 @@ MeshBlockTree* MeshBlockTree::FindNeighbor(LogicalLocation myloc,
   }
   std::int32_t num_x3 = pmesh_->nmbx3_r<<(ll - pmesh_->root_level);
   if (lz<0) {
-    if (pmesh_->root_bcs[BoundaryFace::inner_x3] == BoundaryFlag::periodic) {
+    if (pmesh_->mesh_bcs[BoundaryFace::inner_x3] == BoundaryFlag::periodic) {
       lz = num_x3 - 1;
     } else {
       return nullptr;
     }
   }
   if (lz>=num_x3) {
-    if (pmesh_->root_bcs[BoundaryFace::outer_x3] == BoundaryFlag::periodic) {
+    if (pmesh_->mesh_bcs[BoundaryFace::outer_x3] == BoundaryFlag::periodic) {
       lz = 0;
     } else {
       return nullptr;

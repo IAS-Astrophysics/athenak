@@ -75,8 +75,8 @@ class Mesh {
   int GetNumMeshThreads() const {return num_mesh_threads;}
 
   // data
-  RegionSize root_size;       // size of physical domain at root level
-  BoundaryFlag root_bcs[6];   // physical boundary conditions at 6 faces of root grid
+  RegionSize mesh_size;       // overall size of mesh (physical root level)
+  BoundaryFlag mesh_bcs[6];   // physical boundary conditions at 6 faces of mesh
   bool adaptive, multilevel;
   int nmbx1_r, nmbx2_r, nmbx3_r; // number of MeshBlocks in each dir at root level
   int nmbtotal;                  // total number of MeshBlocks across all levels

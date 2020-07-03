@@ -21,6 +21,10 @@ enum class NeighborConnection {none, face, edge, corner};
 // identifiers for status of MPI boundary communications
 enum class BoundaryStatus {waiting, arrived, completed};
 
+// free functions to return boundary flag given input string, and vice versa
+BoundaryFlag GetBoundaryFlag(const std::string& input_string);
+std::string GetBoundaryString(BoundaryFlag input_flag);
+
 
 #endif // BVALS_BVALS_HPP_
 
