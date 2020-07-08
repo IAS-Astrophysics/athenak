@@ -227,7 +227,7 @@ int main(int argc, char *argv[]) {
   // Construct and initialize Physics modules.  This requires allocating variables,
   // building the TaskList, and setting boundary condition methods on each MeshBlock.
 
-//  pmesh->SelectPhysics;
+  pmesh->SelectPhysics(pinput);
 
   //--- Step 6. --------------------------------------------------------------------------
   // Construct execution Driver

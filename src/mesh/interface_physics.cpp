@@ -20,10 +20,14 @@
 
 void Mesh::SelectPhysics(std::unique_ptr<ParameterInput> &pin) {
 
+  // parse input blocks to see which physics defined
   bool hydro_defined = pin->DoesBlockExist("hydro");
+
+  // Construct hydro module
   if (hydro_defined) {
+    // loop through MeshBlocks on this rank and initialize Hydro
     for (auto it = mblocks.begin(); it < mblocks.end(); ++it) {
-      it->phydro = new Hydro(&*it,pin);
+      it->phydro = new Hydro(&*it, pin);
     }
   } else {
     std::cout << "Hydro block not found in input file" << std::endl;
