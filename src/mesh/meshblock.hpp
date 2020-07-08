@@ -10,7 +10,10 @@
 //  The Mesh is the overall grid structure, and MeshBlocks are local patches of data
 //  (potentially on different levels) that tile the entire domain.
 
-#include <cstdint>     // int64_t
+#include "parameter_input.hpp"
+
+// Forward declarations
+class Hydro;
 
 //----------------------------------------------------------------------------------------
 //! \struct GridIndices
@@ -42,14 +45,17 @@ class MeshBlock {
 
   // data
   Mesh *pmy_mesh;  // ptr to Mesh containing this MeshBlock
+  int mb_gid;      // grid ID, unique identifier for this MeshBlock
   RegionSize mb_size;     // info about size of this MeshBlock
   BoundaryFlag mb_bcs[6]; // enums specifying BCs at all 6 faces of this MeshBlock
-  int mb_gid;                   // grid ID, unique identifier for this MeshBlock
 
   // indices (is,ie,js,je,ks,ke, etc.) of arrays 
   GridIndices indx;
   // indices on 1x coarser level MeshBlock (i.e. ncc2=nx2/2 + 2*NGHOST, if nx2>1)
   GridIndices cindx;
+
+  // physics modules (controlled by Mesh::SelectPhysics)
+  Hydro *phydro;
 
 
   // functions

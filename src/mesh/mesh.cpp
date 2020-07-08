@@ -12,7 +12,6 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "outputs/io_wrapper.hpp"
-#include "bvals/bvals.hpp"
 #include "mesh.hpp"
 
 #if MPI_PARALLEL_ENABLED
@@ -400,7 +399,7 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
     BoundaryFlag inblock_bcs[6];
     SetBlockSizeAndBoundaries(loclist[i], inblock_size, inblock_bcs);
     MeshBlock new_block(this, pin, inblock_size, inblock_bcs);
-    my_blocks.push_back(new_block);  // this requires copy operator!
+    mblocks.push_back(new_block);  // this requires copy operator!
   }
 
   ResetLoadBalance();

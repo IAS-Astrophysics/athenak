@@ -13,6 +13,9 @@ add_executable(
 
         bvals/boundary_flag.cpp
 
+        hydro/hydro.cpp
+
+        mesh/interface_physics.cpp
         mesh/load_balance.cpp
         mesh/mesh.cpp
         mesh/meshblock.cpp

@@ -25,6 +25,7 @@
 #include <string>     // string
 
 #include "athena.hpp"
+#include "athena_arrays.hpp"
 #include "parameter_input.hpp"
 #include "utils/utils.hpp"
 #include "bvals/bvals.hpp"
@@ -207,12 +208,13 @@ int main(int argc, char *argv[]) {
   }
 
   //--- Step 4. --------------------------------------------------------------------------
-  // Construct and initialize Mesh
+  // Construct and initialize Mesh, MeshTree, and MeshBlocks on this rank
 
   std::unique_ptr<Mesh> pmesh;
   pmesh = std::make_unique<Mesh>(pinput);
 
-  // Dump Mesh diagnostics and quit if code was run with -m option
+  // output Mesh diagnostics.  If code was run with -m option, write mesh structure to
+  // file and quit.
   if (global_variable::my_rank == 0) pmesh->OutputMeshStructure(marg_flag);
   if (marg_flag) {
 #ifdef MPI_PARALLEL
@@ -222,13 +224,20 @@ int main(int argc, char *argv[]) {
   }
 
   //--- Step 5. --------------------------------------------------------------------------
-  // Construct and initialize Physics modules on each MeshBlock
+  // Construct and initialize Physics modules.  This requires allocating variables,
+  // building the TaskList, and setting boundary condition methods on each MeshBlock.
+
+//  pmesh->SelectPhysics;
 
   //--- Step 6. --------------------------------------------------------------------------
-  // Construct and initialize TaskLists on each MeshBlock, and execution Driver
+  // Construct execution Driver
+
+/***  pmesh->ConstructDriver; ***/
 
   //--- Step 7. --------------------------------------------------------------------------
   // Set initial conditions by calling problem generator, or reading restart file
+
+/***  pmesh->SetInitialConditions; ***/
 
   //--- Step 8. --------------------------------------------------------------------------
   // Change to run directory, initialize Outputs, and make output of ICs
@@ -236,8 +245,10 @@ int main(int argc, char *argv[]) {
   //--- Step 9. --------------------------------------------------------------------------
   // Execute Driver
 
+/***  pmesh->ExecuteDriver; ***/
+
   //--- Step 10. -------------------------------------------------------------------------
-  // Make final outputs, and Terminate
+  // Make final outputs, clean up, and Terminate
 
 #if MPI_PARALLEL_ENABLED
   MPI_Finalize();

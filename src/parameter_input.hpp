@@ -79,8 +79,8 @@ class ParameterInput {
   void LoadFromFile(IOWrapper &input);
   void ModifyFromCmdline(int argc, char *argv[]);
   void ParameterDump(std::ostream& os);
-  int  DoesBlockExist(std::string name);
-  int  DoesParameterExist(std::string block, std::string name);
+  bool DoesBlockExist(std::string name);
+  bool DoesParameterExist(std::string block, std::string name);
   int  GetInteger(std::string block, std::string name);
   int  GetOrAddInteger(std::string block, std::string name, int value);
   int  SetInteger(std::string block, std::string name, int value);

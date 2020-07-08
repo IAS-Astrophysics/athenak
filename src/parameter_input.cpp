@@ -356,26 +356,26 @@ void ParameterInput::ModifyFromCmdline(int argc, char *argv[]) {
 
 
 //----------------------------------------------------------------------------------------
-//! \fn int ParameterInput::DoesBlockExist(std::string name)
+//! \fn bool ParameterInput::DoesBlockExist(std::string name)
 //  \brief check whether block of given name exists
 
-int ParameterInput::DoesBlockExist(std::string name) {
+bool ParameterInput::DoesBlockExist(std::string name) {
   InputBlock *pb;
   pb = GetPtrToBlock(name);
-  return (pb == nullptr ? 0 : 1);
+  return (pb == nullptr ? false : true);
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn int ParameterInput::DoesParameterExist(std::string block, std::string name)
+//! \fn bool ParameterInput::DoesParameterExist(std::string block, std::string name)
 //  \brief check whether parameter of given name in given block exists
 
-int ParameterInput::DoesParameterExist(std::string block, std::string name) {
+bool ParameterInput::DoesParameterExist(std::string block, std::string name) {
   InputLine *pl;
   InputBlock *pb;
   pb = GetPtrToBlock(block);
   if (pb == nullptr) return 0;
   pl = pb->GetPtrToLine(name);
-  return (pl == nullptr ? 0 : 1);
+  return (pl == nullptr ? false : true);
 }
 
 //----------------------------------------------------------------------------------------

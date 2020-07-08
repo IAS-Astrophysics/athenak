@@ -12,7 +12,7 @@
 //  are accessed as:  A(n,k,j,i) = A[i + N1*(j + N2*(k + N3*n))]
 //  NOTE THE TRAILING INDEX INSIDE THE PARENTHESES IS INDEXED FASTEST
 
-#include <cstddef> 
+#include <string>
 
 template <typename T>
 class AthenaCenterArray {
@@ -20,7 +20,9 @@ class AthenaCenterArray {
 
   // ctors with various arguments
   // "label" argument added for compatibility with Kokkos view API
-  AthenaCenterArray() : label_(""),nx1_(0),nx2_(0),nx3_(0),nx4_(0),nx5_(0),nx6_(0) {}
+  // default ctor sets null array
+  AthenaCenterArray() :
+    pdata_(nullptr), label_(""), nx1_(0), nx2_(0), nx3_(0), nx4_(0), nx5_(0), nx6_(0) {}
 
   AthenaCenterArray(const std::string &label, int nx6, int nx5, int nx4, int nx3, int nx2,
                     int nx1) :
@@ -56,12 +58,11 @@ class AthenaCenterArray {
   }
 
   // dtor, copy & move ctors, move and overload assignment operators defined below
-  __attribute__((nothrow)) AthenaCenterArray(const AthenaCenterArray<T> &t);
-  __attribute__((nothrow)) ~AthenaCenterArray();
-  __attribute__((nothrow)) AthenaCenterArray<T> &operator=(const AthenaCenterArray<T> &t);
-  __attribute__((nothrow)) AthenaCenterArray(AthenaCenterArray<T> &&t);
-  __attribute__((nothrow)) AthenaCenterArray<T> &operator=
-                           (AthenaCenterArray<T> &&t);
+  AthenaCenterArray(const AthenaCenterArray<T> &t);
+  ~AthenaCenterArray();
+  AthenaCenterArray<T> &operator=(const AthenaCenterArray<T> &t);
+  AthenaCenterArray(AthenaCenterArray<T> &&t);
+  AthenaCenterArray<T> &operator= (AthenaCenterArray<T> &&t);
 
   // getter functions
   int GetDim(int i) const {
@@ -114,6 +115,14 @@ class AthenaCenterArray {
                 const int i) const {
     return pdata_[i + nx1_*(j + nx2_*(k + nx3_*(l + nx4_*(m + nx5_*n))))]; }
 
+  // public SetSize functions (replace "NewAthenaArray") allocates memory after ctor
+  void SetSize(int nx1);
+  void SetSize(int nx2, int nx1);
+  void SetSize(int nx3, int nx2, int nx1);
+  void SetSize(int nx4, int nx3, int nx2, int nx1);
+  void SetSize(int nx5, int nx4, int nx3, int nx2, int nx1);
+  void SetSize(int nx6, int nx5, int nx4, int nx3, int nx2, int nx1);
+
  private:
   T *pdata_;
   int nx1_, nx2_, nx3_, nx4_, nx5_, nx6_;
@@ -126,7 +135,7 @@ class AthenaCenterArray {
 
 template<typename T>
 AthenaCenterArray<T>::~AthenaCenterArray() {
-  delete[] pdata_;
+  if (pdata_ != nullptr) delete[] pdata_;
 }
 
 //----------------------------------------------------------------------------------------
@@ -220,6 +229,97 @@ AthenaCenterArray<T> &AthenaCenterArray<T>::operator= (AthenaCenterArray<T> &&sr
     }
   }
   return *this;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn AthenaArray::SetSize()
+//  \brief allocate new 1D array with elements initialized to zero.
+
+template<typename T>
+void AthenaCenterArray<T>::SetSize(int nx1) {
+  nx1_ = nx1;
+  nx2_ = 1;
+  nx3_ = 1;
+  nx4_ = 1;
+  nx5_ = 1;
+  nx6_ = 1;
+  pdata_ = new T[nx1](); // allocate memory and initialize to zero
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn AthenaArray::SetSize()
+//  \brief 2d data allocation
+
+template<typename T>
+void AthenaCenterArray<T>::SetSize(int nx2, int nx1) {
+  nx1_ = nx1;
+  nx2_ = nx2;
+  nx3_ = 1;
+  nx4_ = 1;
+  nx5_ = 1;
+  nx6_ = 1;
+  pdata_ = new T[nx1*nx2](); // allocate memory and initialize to zero
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn AthenaArray::SetSize()
+//  \brief 3d data allocation
+
+template<typename T>
+void AthenaCenterArray<T>::SetSize(int nx3, int nx2, int nx1) {
+  nx1_ = nx1;
+  nx2_ = nx2;
+  nx3_ = nx3;
+  nx4_ = 1;
+  nx5_ = 1;
+  nx6_ = 1;
+  pdata_ = new T[nx1*nx2*nx3](); // allocate memory and initialize to zero
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn AthenaArray::SetSize()
+//  \brief 4d data allocation
+
+template<typename T>
+void AthenaCenterArray<T>::SetSize(int nx4, int nx3, int nx2,
+                                                             int nx1) {
+  nx1_ = nx1;
+  nx2_ = nx2;
+  nx3_ = nx3;
+  nx4_ = nx4;
+  nx5_ = 1;
+  nx6_ = 1;
+  pdata_ = new T[nx1*nx2*nx3*nx4](); // allocate memory and initialize to zero
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn AthenaArray::SetSize()
+//  \brief 5d data allocation
+
+template<typename T>
+void AthenaCenterArray<T>::SetSize(int nx5, int nx4, int nx3, int nx2, int nx1) {
+  nx1_ = nx1;
+  nx2_ = nx2;
+  nx3_ = nx3;
+  nx4_ = nx4;
+  nx5_ = nx5;
+  nx6_ = 1;
+  pdata_ = new T[nx1*nx2*nx3*nx4*nx5](); // allocate memory and initialize to zero
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn AthenaArray::SetSize()
+//  \brief 6d data allocation
+
+template<typename T>
+void AthenaCenterArray<T>::SetSize(int nx6, int nx5, int nx4, int nx3, int nx2, int nx1) {
+  nx1_ = nx1;
+  nx2_ = nx2;
+  nx3_ = nx3;
+  nx4_ = nx4;
+  nx5_ = nx5;
+  nx6_ = nx6;
+  pdata_ = new T[nx1*nx2*nx3*nx4*nx5*nx6](); // allocate memory and initialize to zero
 }
 
 #endif // ATHENA_ARRAYS_HPP_

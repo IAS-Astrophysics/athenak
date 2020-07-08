@@ -10,7 +10,7 @@
 //  The Mesh is the overall grid structure, and MeshBlocks are local patches of data
 //  (potentially on different levels) that tile the entire domain.
 
-#include <cstdint>     // int64_t
+#include <cstdint>  // int32_t
 
 // Define following two structure before other "include" files to resolve declarations
 //----------------------------------------------------------------------------------------
@@ -53,6 +53,7 @@ struct LogicalLocation {
 // Forward declarations
 class Mesh;
 
+#include "bvals/bvals.hpp"
 #include "meshblock.hpp"
 #include "meshblock_tree.hpp"
 
@@ -82,9 +83,10 @@ class Mesh {
   int nmbtotal;                  // total number of MeshBlocks across all levels
   int nmbthisrank;               // number of MeshBlocks on this MPI rank (local)
 
-  std::vector<MeshBlock> my_blocks; // MeshBlocks belonging to this MPI rank
+  std::vector<MeshBlock> mblocks; // MeshBlocks belonging to this MPI rank
 
   // functions
+  void SelectPhysics(std::unique_ptr<ParameterInput> &pin);
   void OutputMeshStructure(int flag);
   void SetBlockSizeAndBoundaries(LogicalLocation loc,RegionSize &size, BoundaryFlag *bcs);
   void LoadBalance(double *clist, int *rlist, int *slist, int *nlist, int nb);
