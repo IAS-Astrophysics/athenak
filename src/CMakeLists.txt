@@ -23,6 +23,9 @@ add_executable(
 
         outputs/io_wrapper.cpp
 
+        pgen/pgen.cpp
+        pgen/shock_tube.cpp
+
         utils/show_config.cpp
 )
 

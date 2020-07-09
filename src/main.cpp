@@ -30,6 +30,7 @@
 #include "utils/utils.hpp"
 #include "bvals/bvals.hpp"
 #include "mesh/mesh.hpp"
+#include "pgen/pgen.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \fn int main(int argc, char *argv[])
@@ -237,7 +238,8 @@ int main(int argc, char *argv[]) {
   //--- Step 7. --------------------------------------------------------------------------
   // Set initial conditions by calling problem generator, or reading restart file
 
-/***  pmesh->SetInitialConditions; ***/
+  std::unique_ptr<ProblemGenerator> pgen;
+  pgen = std::make_unique<ProblemGenerator>(pmesh, pinput);
 
   //--- Step 8. --------------------------------------------------------------------------
   // Change to run directory, initialize Outputs, and make output of ICs

@@ -12,6 +12,7 @@
 #include "mesh/mesh.hpp"
 #include "hydro.hpp"
 
+namespace hydro {
 //----------------------------------------------------------------------------------------
 // constructor, initializes data structures and parameters
 
@@ -22,3 +23,5 @@ Hydro::Hydro(MeshBlock *pmb, std::unique_ptr<ParameterInput> &pin) : pmy_mblock(
   w.SetSize(5, pmb->indx.ncells3, pmb->indx.ncells2, pmb->indx.ncells1);
 
 }
+
+} // namespace hydro

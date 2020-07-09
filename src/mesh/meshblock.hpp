@@ -13,7 +13,7 @@
 #include "parameter_input.hpp"
 
 // Forward declarations
-class Hydro;
+namespace hydro {class Hydro;}
 
 //----------------------------------------------------------------------------------------
 //! \struct GridIndices
@@ -55,7 +55,7 @@ class MeshBlock {
   GridIndices cindx;
 
   // physics modules (controlled by Mesh::SelectPhysics)
-  Hydro *phydro;
+  hydro::Hydro *phydro;
 
 
   // functions

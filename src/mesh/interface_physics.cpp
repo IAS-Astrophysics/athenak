@@ -16,6 +16,8 @@
 #include <mpi.h>
 #endif
 
+
+using namespace hydro;
 //----------------------------------------------------------------------------------------
 
 void Mesh::SelectPhysics(std::unique_ptr<ParameterInput> &pin) {
@@ -27,7 +29,7 @@ void Mesh::SelectPhysics(std::unique_ptr<ParameterInput> &pin) {
   if (hydro_defined) {
     // loop through MeshBlocks on this rank and initialize Hydro
     for (auto it = mblocks.begin(); it < mblocks.end(); ++it) {
-      it->phydro = new Hydro(&*it, pin);
+      it->phydro = new hydro::Hydro(&*it, pin);
     }
   } else {
     std::cout << "Hydro block not found in input file" << std::endl;
