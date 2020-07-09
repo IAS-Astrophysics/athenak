@@ -70,140 +70,97 @@ using namespace hydro;
   wr[IVZ] = pin->GetReal("problem","wr");
   wr[IPR] = pin->GetReal("problem","pr");
 
-std::cout << "here , dl=" << wl[IDN] << " vzr=" << wr[IVZ] << std::endl; 
-
-/**
   // Initialize the discontinuity in the Hydro variables ---------------------------------
 
+  int &is = pmb->indx.is, &ie = pmb->indx.ie;
+  int &js = pmb->indx.js, &je = pmb->indx.je;
+  int &ks = pmb->indx.ks, &ke = pmb->indx.ke;
   switch(shk_dir) {
+
     //--- shock in 1-direction
     case 1:
       for (int k=ks; k<=ke; ++k) {
         for (int j=js; j<=je; ++j) {
           for (int i=is; i<=ie; ++i) {
-            if (pcoord->x1v(i) < xshock) {
-              phydro->u(IDN,k,j,i) = wl[IDN];
-              phydro->u(IM1,k,j,i) = wl[IVX]*wl[IDN];
-              phydro->u(IM2,k,j,i) = wl[IVY]*wl[IDN];
-              phydro->u(IM3,k,j,i) = wl[IVZ]*wl[IDN];
-              if (NON_BAROTROPIC_EOS) {
-                if (GENERAL_EOS) {
-                  phydro->u(IEN,k,j,i) = peos->EgasFromRhoP(wl[IDN], wl[IPR]);
-                } else {
-                  phydro->u(IEN,k,j,i) = wl[IPR]/(peos->GetGamma() - 1.0);
-                }
-                phydro->u(IEN,k,j,i) += 0.5*wl[IDN]*(wl[IVX]*wl[IVX] + wl[IVY]*wl[IVY]
-                                                     + wl[IVZ]*wl[IVZ]);
-              }
+//            if (pcoord->x1v(i) < xshock) {
+            if (i < (ie-is+1)/2) {
+              pmb->phydro->u(IDN,k,j,i) = wl[IDN];
+              pmb->phydro->u(IM1,k,j,i) = wl[IVX]*wl[IDN];
+              pmb->phydro->u(IM2,k,j,i) = wl[IVY]*wl[IDN];
+              pmb->phydro->u(IM3,k,j,i) = wl[IVZ]*wl[IDN];
+              pmb->phydro->u(IEN,k,j,i) = 1.0;
             } else {
-              phydro->u(IDN,k,j,i) = wr[IDN];
-              phydro->u(IM1,k,j,i) = wr[IVX]*wr[IDN];
-              phydro->u(IM2,k,j,i) = wr[IVY]*wr[IDN];
-              phydro->u(IM3,k,j,i) = wr[IVZ]*wr[IDN];
-              if (NON_BAROTROPIC_EOS) {
-                if (GENERAL_EOS) {
-                  phydro->u(IEN,k,j,i) = peos->EgasFromRhoP(wr[IDN], wr[IPR]);
-                } else {
-                  phydro->u(IEN,k,j,i) = wr[IPR]/(peos->GetGamma() - 1.0);
-                }
-                phydro->u(IEN,k,j,i) += 0.5*wr[IDN]*(wr[IVX]*wr[IVX] + wr[IVY]*wr[IVY]
-                                                     + wr[IVZ]*wr[IVZ]);
-              }
-            }
-          }
-        }
-      }
-      break;
-      //--- shock in 2-direction
-    case 2:
-      for (int k=ks; k<=ke; ++k) {
-        for (int j=js; j<=je; ++j) {
-          if (pcoord->x2v(j) < xshock) {
-            for (int i=is; i<=ie; ++i) {
-              phydro->u(IDN,k,j,i) = wl[IDN];
-              phydro->u(IM2,k,j,i) = wl[IVX]*wl[IDN];
-              phydro->u(IM3,k,j,i) = wl[IVY]*wl[IDN];
-              phydro->u(IM1,k,j,i) = wl[IVZ]*wl[IDN];
-              if (NON_BAROTROPIC_EOS) {
-                if (GENERAL_EOS) {
-                  phydro->u(IEN,k,j,i) = peos->EgasFromRhoP(wl[IDN], wl[IPR]);
-                } else {
-                  phydro->u(IEN,k,j,i) = wl[IPR]/(peos->GetGamma() - 1.0);
-                }
-                phydro->u(IEN,k,j,i) += 0.5*wl[IDN]*(wl[IVX]*wl[IVX] + wl[IVY]*wl[IVY]
-                                                     + wl[IVZ]*wl[IVZ]);
-              }
-            }
-          } else {
-            for (int i=is; i<=ie; ++i) {
-              phydro->u(IDN,k,j,i) = wr[IDN];
-              phydro->u(IM2,k,j,i) = wr[IVX]*wr[IDN];
-              phydro->u(IM3,k,j,i) = wr[IVY]*wr[IDN];
-              phydro->u(IM1,k,j,i) = wr[IVZ]*wr[IDN];
-              if (NON_BAROTROPIC_EOS) {
-                if (GENERAL_EOS) {
-                  phydro->u(IEN,k,j,i) = peos->EgasFromRhoP(wr[IDN], wr[IPR]);
-                } else {
-                  phydro->u(IEN,k,j,i) = wr[IPR]/(peos->GetGamma() - 1.0);
-                }
-                phydro->u(IEN,k,j,i) += 0.5*wr[IDN]*(wr[IVX]*wr[IVX] + wr[IVY]*wr[IVY]
-                                                     + wr[IVZ]*wr[IVZ]);
-              }
+              pmb->phydro->u(IDN,k,j,i) = wr[IDN];
+              pmb->phydro->u(IM1,k,j,i) = wr[IVX]*wr[IDN];
+              pmb->phydro->u(IM2,k,j,i) = wr[IVY]*wr[IDN];
+              pmb->phydro->u(IM3,k,j,i) = wr[IVZ]*wr[IDN];
+              pmb->phydro->u(IEN,k,j,i) = 1.0;
             }
           }
         }
       }
       break;
 
-      //--- shock in 3-direction
+    //--- shock in 2-direction
+    case 2:
+      for (int k=ks; k<=ke; ++k) {
+        for (int j=js; j<=je; ++j) {
+//          if (pcoord->x2v(j) < xshock) {
+          if (j < (je-js+1)/2) {
+            for (int i=is; i<=ie; ++i) {
+              pmb->phydro->u(IDN,k,j,i) = wl[IDN];
+              pmb->phydro->u(IM2,k,j,i) = wl[IVX]*wl[IDN];
+              pmb->phydro->u(IM3,k,j,i) = wl[IVY]*wl[IDN];
+              pmb->phydro->u(IM1,k,j,i) = wl[IVZ]*wl[IDN];
+              pmb->phydro->u(IEN,k,j,i) = 1.0;
+            }
+          } else {
+            for (int i=is; i<=ie; ++i) {
+              pmb->phydro->u(IDN,k,j,i) = wr[IDN];
+              pmb->phydro->u(IM2,k,j,i) = wr[IVX]*wr[IDN];
+              pmb->phydro->u(IM3,k,j,i) = wr[IVY]*wr[IDN];
+              pmb->phydro->u(IM1,k,j,i) = wr[IVZ]*wr[IDN];
+              pmb->phydro->u(IEN,k,j,i) = 1.0;
+            }
+          }
+        }
+      }
+      break;
+
+    //--- shock in 3-direction
     case 3:
       for (int k=ks; k<=ke; ++k) {
-        if (pcoord->x3v(k) < xshock) {
+//        if (pcoord->x3v(k) < xshock) {
+        if (k < (ke-ks+1)/2) {
           for (int j=js; j<=je; ++j) {
             for (int i=is; i<=ie; ++i) {
-              phydro->u(IDN,k,j,i) = wl[IDN];
-              phydro->u(IM3,k,j,i) = wl[IVX]*wl[IDN];
-              phydro->u(IM1,k,j,i) = wl[IVY]*wl[IDN];
-              phydro->u(IM2,k,j,i) = wl[IVZ]*wl[IDN];
-              if (NON_BAROTROPIC_EOS) {
-                if (GENERAL_EOS) {
-                  phydro->u(IEN,k,j,i) = peos->EgasFromRhoP(wl[IDN], wl[IPR]);
-                } else {
-                  phydro->u(IEN,k,j,i) = wl[IPR]/(peos->GetGamma() - 1.0);
-                }
-                phydro->u(IEN,k,j,i) += 0.5*wl[IDN]*(wl[IVX]*wl[IVX] + wl[IVY]*wl[IVY]
-                                                     + wl[IVZ]*wl[IVZ]);
-              }
+              pmb->phydro->u(IDN,k,j,i) = wl[IDN];
+              pmb->phydro->u(IM3,k,j,i) = wl[IVX]*wl[IDN];
+              pmb->phydro->u(IM1,k,j,i) = wl[IVY]*wl[IDN];
+              pmb->phydro->u(IM2,k,j,i) = wl[IVZ]*wl[IDN];
+              pmb->phydro->u(IEN,k,j,i) = 1.0;
             }
           }
         } else {
           for (int j=js; j<=je; ++j) {
             for (int i=is; i<=ie; ++i) {
-              phydro->u(IDN,k,j,i) = wr[IDN];
-              phydro->u(IM3,k,j,i) = wr[IVX]*wr[IDN];
-              phydro->u(IM1,k,j,i) = wr[IVY]*wr[IDN];
-              phydro->u(IM2,k,j,i) = wr[IVZ]*wr[IDN];
-              if (NON_BAROTROPIC_EOS) {
-                if (GENERAL_EOS) {
-                  phydro->u(IEN,k,j,i) = peos->EgasFromRhoP(wr[IDN], wr[IPR]);
-                } else {
-                  phydro->u(IEN,k,j,i) = wr[IPR]/(peos->GetGamma() - 1.0);
-                }
-                phydro->u(IEN,k,j,i) += 0.5*wr[IDN]*(wr[IVX]*wr[IVX] + wr[IVY]*wr[IVY]
-                                                     + wr[IVZ]*wr[IVZ]);
-              }
+              pmb->phydro->u(IDN,k,j,i) = wr[IDN];
+              pmb->phydro->u(IM3,k,j,i) = wr[IVX]*wr[IDN];
+              pmb->phydro->u(IM1,k,j,i) = wr[IVY]*wr[IDN];
+              pmb->phydro->u(IM2,k,j,i) = wr[IVZ]*wr[IDN];
+              pmb->phydro->u(IEN,k,j,i) = 1.0;
             }
           }
         }
       }
       break;
 
+    //--- Invaild input value for shk_dir
     default:
-      msg << "### FATAL ERROR in Problem Generator" << std::endl
-          << "shock_dir=" << shk_dir << " must be either 1,2, or 3" << std::endl;
-      ATHENA_ERROR(msg);
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+                << "shock_dir=" << shk_dir << " must be either 1,2, or 3" << std::endl;
+      exit(EXIT_FAILURE);
   }
-***/
 
   return;
 }
