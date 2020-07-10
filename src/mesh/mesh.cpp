@@ -266,13 +266,11 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
         std::int32_t lx3min = 0, lx3max = 0;
         std::int32_t lxmax = nmbx1_r*(1<<phy_ref_lev);
         for (lx1min=0; lx1min<lxmax; lx1min++) {
-          if (LeftEdgePosition(lx1min+1, lxmax, mesh_size.x1min, mesh_size.x1max) >
-              ref_size.x1min)
+          if (LeftEdgeX(lx1min+1,lxmax,mesh_size.x1min,mesh_size.x1max) > ref_size.x1min)
             break;
         }
         for (lx1max=lx1min; lx1max<lxmax; lx1max++) {
-          if (LeftEdgePosition(lx1max+1, lxmax, mesh_size.x1min, mesh_size.x1max) >=
-              ref_size.x1max)
+          if (LeftEdgeX(lx1max+1,lxmax,mesh_size.x1min,mesh_size.x1max) >= ref_size.x1max)
             break;
         }
         if (lx1min % 2 == 1) lx1min--;
@@ -282,12 +280,12 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
         if (nx2gt1) { // 2D or 3D
           lxmax = nmbx2_r*(1<<phy_ref_lev);
           for (lx2min=0; lx2min<lxmax; lx2min++) {
-            if (LeftEdgePosition(lx2min+1, lxmax, mesh_size.x2min, mesh_size.x2max) >
+            if (LeftEdgeX(lx2min+1, lxmax, mesh_size.x2min, mesh_size.x2max) >
                 ref_size.x2min)
             break;
           }
           for (lx2max=lx2min; lx2max<lxmax; lx2max++) {
-            if (LeftEdgePosition(lx2max+1, lxmax, mesh_size.x2min, mesh_size.x2max) >=
+            if (LeftEdgeX(lx2max+1, lxmax, mesh_size.x2min, mesh_size.x2max) >=
                 ref_size.x2max)
             break;
           }
@@ -299,12 +297,12 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
         if (nx3gt1) { // 3D
           lxmax = nmbx3_r*(1<<phy_ref_lev);
           for (lx3min=0; lx3min<lxmax; lx3min++) {
-            if (LeftEdgePosition(lx3min+1, lxmax, mesh_size.x3min, mesh_size.x3max) >
+            if (LeftEdgeX(lx3min+1, lxmax, mesh_size.x3min, mesh_size.x3max) >
                 ref_size.x3min)
             break;
           }
           for (lx3max=lx3min; lx3max<lxmax; lx3max++) {
-            if (LeftEdgePosition(lx3max+1, lxmax, mesh_size.x3min, mesh_size.x3max) >=
+            if (LeftEdgeX(lx3max+1, lxmax, mesh_size.x3min, mesh_size.x3max) >=
                 ref_size.x3max)
             break;
           }
@@ -585,7 +583,7 @@ void Mesh::SetBlockSizeAndBoundaries(LogicalLocation loc, RegionSize &block_size
     block_size.x1min = mesh_size.x1min;
     block_bcs[BoundaryFace::inner_x1] = mesh_bcs[BoundaryFace::inner_x1];
   } else {
-    block_size.x1min = LeftEdgePosition(lx1, nmbx1_l, mesh_size.x1min, mesh_size.x1max);
+    block_size.x1min = LeftEdgeX(lx1, nmbx1_l, mesh_size.x1min, mesh_size.x1max);
     block_bcs[BoundaryFace::inner_x1] = BoundaryFlag::block;
   }
 
@@ -593,7 +591,7 @@ void Mesh::SetBlockSizeAndBoundaries(LogicalLocation loc, RegionSize &block_size
     block_size.x1max = mesh_size.x1max;
     block_bcs[BoundaryFace::outer_x1] = mesh_bcs[BoundaryFace::outer_x1];
   } else {
-    block_size.x1max = LeftEdgePosition(lx1+1, nmbx1_l, mesh_size.x1min, mesh_size.x1max);
+    block_size.x1max = LeftEdgeX(lx1+1, nmbx1_l, mesh_size.x1min, mesh_size.x1max);
     block_bcs[BoundaryFace::outer_x1] = BoundaryFlag::block;
   }
 
@@ -611,7 +609,7 @@ void Mesh::SetBlockSizeAndBoundaries(LogicalLocation loc, RegionSize &block_size
       block_size.x2min = mesh_size.x2min;
       block_bcs[BoundaryFace::inner_x2] = mesh_bcs[BoundaryFace::inner_x2];
     } else {
-      block_size.x2min = LeftEdgePosition(lx2, nmbx2_l, mesh_size.x2min, mesh_size.x2max);
+      block_size.x2min = LeftEdgeX(lx2, nmbx2_l, mesh_size.x2min, mesh_size.x2max);
       block_bcs[BoundaryFace::inner_x2] = BoundaryFlag::block;
     }
 
@@ -619,7 +617,7 @@ void Mesh::SetBlockSizeAndBoundaries(LogicalLocation loc, RegionSize &block_size
       block_size.x2max = mesh_size.x2max;
       block_bcs[BoundaryFace::outer_x2] = mesh_bcs[BoundaryFace::outer_x2];
     } else {
-      block_size.x2max = LeftEdgePosition(lx2+1, nmbx2_l,mesh_size.x2min,mesh_size.x2max);
+      block_size.x2max = LeftEdgeX(lx2+1, nmbx2_l,mesh_size.x2min,mesh_size.x2max);
       block_bcs[BoundaryFace::outer_x2] = BoundaryFlag::block;
     }
 
@@ -638,14 +636,14 @@ void Mesh::SetBlockSizeAndBoundaries(LogicalLocation loc, RegionSize &block_size
       block_size.x3min = mesh_size.x3min;
       block_bcs[BoundaryFace::inner_x3] = mesh_bcs[BoundaryFace::inner_x3];
     } else {
-      block_size.x3min = LeftEdgePosition(lx3, nmbx3_l, mesh_size.x3min, mesh_size.x3max);
+      block_size.x3min = LeftEdgeX(lx3, nmbx3_l, mesh_size.x3min, mesh_size.x3max);
       block_bcs[BoundaryFace::inner_x3] = BoundaryFlag::block;
     }
     if (lx3 == (nmbx3_l) - 1) {
       block_size.x3max = mesh_size.x3max;
       block_bcs[BoundaryFace::outer_x3] = mesh_bcs[BoundaryFace::outer_x3];
     } else {
-      block_size.x3max = LeftEdgePosition(lx3+1, nmbx3_l,mesh_size.x3min,mesh_size.x3max);
+      block_size.x3max = LeftEdgeX(lx3+1, nmbx3_l,mesh_size.x3min,mesh_size.x3max);
       block_bcs[BoundaryFace::outer_x3] = BoundaryFlag::block;
     }
   }

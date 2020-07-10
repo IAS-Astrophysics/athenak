@@ -91,9 +91,20 @@ class Mesh {
   void SetBlockSizeAndBoundaries(LogicalLocation loc,RegionSize &size, BoundaryFlag *bcs);
   void LoadBalance(double *clist, int *rlist, int *slist, int *nlist, int nb);
   void ResetLoadBalance();
-  inline Real LeftEdgePosition(std::int32_t ith, std::int32_t n, Real xmin, Real xmax) {
+
+  // Following functions compute positions on a regular Cartesian grid.
+  // They provide functionality of the Coordinates class in the C++ version of the code
+  // Averages of linear interpolation from each side used to symmetrize r.o. error
+
+  // returns x-posn of left edge of i^th cell of N in range xmin->xmax
+  inline Real LeftEdgeX(std::int32_t ith, std::int32_t n, Real xmin, Real xmax) {
     Real x = (static_cast<Real>(ith)) / (static_cast<Real>(n));
-    return (x*xmax - x*xmin) - (0.5*xmax - 0.5*xmin) + (0.5*xmin + 0.5*xmax); // symm err
+    return (x*xmax - x*xmin) - (0.5*xmax - 0.5*xmin) + (0.5*xmin + 0.5*xmax);
+  }
+  // returns cell center position of i^th cell of N in range xmin->xmax
+  inline Real CellCenterX(int ith, int n, Real xmin, Real xmax) {
+    Real x = (static_cast<Real>(ith) + 0.5) / (static_cast<Real>(n));
+    return (x*xmax - x*xmin) - (0.5*xmax - 0.5*xmin) + (0.5*xmin + 0.5*xmax);
   }
 
  private:
