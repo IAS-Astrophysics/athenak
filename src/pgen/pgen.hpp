@@ -26,6 +26,7 @@ class ProblemGenerator {
 
   // predefined problem generator functions
   void ShockTube_(MeshBlock *pmb, std::unique_ptr<ParameterInput> &pin);
+  void Advection_(MeshBlock *pmb, std::unique_ptr<ParameterInput> &pin);
 
 };
 

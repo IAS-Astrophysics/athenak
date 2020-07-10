@@ -27,8 +27,11 @@ ProblemGenerator::ProblemGenerator(std::unique_ptr<Mesh> &pmesh,
 
   // else, set pgen function to name read from <problem> block in input file
   // only predefined names of functions in pgen.hpp allowed
+
   if (pgen_fun_name.compare("shock_tube") == 0) {
     pgen_func_ = &ProblemGenerator::ShockTube_; 
+  } else if (pgen_fun_name.compare("advection") == 0) {
+    pgen_func_ = &ProblemGenerator::Advection_;
 
   // else, name not set on command line or input file, print warning and quit
   } else {
@@ -40,8 +43,7 @@ ProblemGenerator::ProblemGenerator(std::unique_ptr<Mesh> &pmesh,
     std::exit(EXIT_FAILURE);
   }
 
-
-  // now cycle through MeshBlocks and call pgen function
+  // now cycle through MeshBlocks and call appropriate pgen function
   for (auto it = pmesh->mblocks.begin(); it < pmesh->mblocks.end(); ++it) {
     (this->*pgen_func_)(&*it, pin);
   }

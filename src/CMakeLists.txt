@@ -25,6 +25,7 @@ add_executable(
 
         pgen/pgen.cpp
         pgen/shock_tube.cpp
+        pgen/advection.cpp
 
         utils/show_config.cpp
 )

@@ -75,6 +75,10 @@ using namespace hydro;
   int &is = pmb->indx.is, &ie = pmb->indx.ie;
   int &js = pmb->indx.js, &je = pmb->indx.je;
   int &ks = pmb->indx.ks, &ke = pmb->indx.ke;
+  Real &x1min = pmb->mb_size.x1min, &x1max = pmb->mb_size.x1max;
+  Real &x2min = pmb->mb_size.x2min, &x2max = pmb->mb_size.x2max;
+  Real &x3min = pmb->mb_size.x3min, &x3max = pmb->mb_size.x3max;
+
   switch(shk_dir) {
 
     //--- shock in 1-direction
@@ -82,8 +86,8 @@ using namespace hydro;
       for (int k=ks; k<=ke; ++k) {
         for (int j=js; j<=je; ++j) {
           for (int i=is; i<=ie; ++i) {
-//            if (pcoord->x1v(i) < xshock) {
-            if (i < (ie-is+1)/2) {
+            Real x1 = pmb->pmy_mesh->CellCenterX(i, pmb->indx.nx1, x1min, x1max);
+            if (x1 < xshock) {
               pmb->phydro->u(IDN,k,j,i) = wl[IDN];
               pmb->phydro->u(IM1,k,j,i) = wl[IVX]*wl[IDN];
               pmb->phydro->u(IM2,k,j,i) = wl[IVY]*wl[IDN];
@@ -105,8 +109,8 @@ using namespace hydro;
     case 2:
       for (int k=ks; k<=ke; ++k) {
         for (int j=js; j<=je; ++j) {
-//          if (pcoord->x2v(j) < xshock) {
-          if (j < (je-js+1)/2) {
+          Real x2 = pmb->pmy_mesh->CellCenterX(j, pmb->indx.nx2, x2min, x2max);
+          if (x2 < xshock) {
             for (int i=is; i<=ie; ++i) {
               pmb->phydro->u(IDN,k,j,i) = wl[IDN];
               pmb->phydro->u(IM2,k,j,i) = wl[IVX]*wl[IDN];
@@ -130,8 +134,8 @@ using namespace hydro;
     //--- shock in 3-direction
     case 3:
       for (int k=ks; k<=ke; ++k) {
-//        if (pcoord->x3v(k) < xshock) {
-        if (k < (ke-ks+1)/2) {
+        Real x3 = pmb->pmy_mesh->CellCenterX(k, pmb->indx.nx3, x3min, x3max);
+        if (x3 < xshock) {
           for (int j=js; j<=je; ++j) {
             for (int i=is; i<=ie; ++i) {
               pmb->phydro->u(IDN,k,j,i) = wl[IDN];
@@ -157,8 +161,8 @@ using namespace hydro;
 
     //--- Invaild input value for shk_dir
     default:
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-                << "shock_dir=" << shk_dir << " must be either 1,2, or 3" << std::endl;
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+        << std::endl << "shock_dir=" <<shk_dir<< " must be either 1,2, or 3" << std::endl;
       exit(EXIT_FAILURE);
   }
 
