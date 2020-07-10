@@ -22,6 +22,7 @@ add_executable(
         mesh/meshblock_tree.cpp
 
         outputs/io_wrapper.cpp
+        outputs/outputs.cpp
 
         pgen/pgen.cpp
         pgen/shock_tube.cpp
