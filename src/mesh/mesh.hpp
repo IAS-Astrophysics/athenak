@@ -93,10 +93,10 @@ class Mesh {
   void ResetLoadBalance();
 
   // Following functions compute positions on a regular Cartesian grid.
-  // They provide functionality of the Coordinates class in the C++ version of the code
-  // Averages of linear interpolation from each side used to symmetrize r.o. error
+  // They provide functionality of the Coordinates class in the C++ version of the code.
 
   // returns x-posn of left edge of i^th cell of N in range xmin->xmax
+  // Averages of linear interpolation from each side used to symmetrize r.o. error
   inline Real LeftEdgeX(std::int32_t ith, std::int32_t n, Real xmin, Real xmax) {
     Real x = (static_cast<Real>(ith)) / (static_cast<Real>(n));
     return (x*xmax - x*xmin) - (0.5*xmax - 0.5*xmin) + (0.5*xmin + 0.5*xmax);
@@ -105,6 +105,10 @@ class Mesh {
   inline Real CellCenterX(int ith, int n, Real xmin, Real xmax) {
     Real x = (static_cast<Real>(ith) + 0.5) / (static_cast<Real>(n));
     return (x*xmax - x*xmin) - (0.5*xmax - 0.5*xmin) + (0.5*xmin + 0.5*xmax);
+  }
+  // returns i-index of cell containing x position
+  inline int CellCenterIndx(Real x, int n, Real xmin, Real xmax) {
+    return static_cast<int>((x/(xmax-xmin))*static_cast<Real>(n));
   }
 
  private:

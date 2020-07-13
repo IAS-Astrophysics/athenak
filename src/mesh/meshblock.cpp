@@ -39,7 +39,7 @@ MeshBlock::MeshBlock(Mesh *pm, std::unique_ptr<ParameterInput> &pin,
   } else {
     indx.js = 0;
     indx.je = 0;
-    indx.nx1 = 1;
+    indx.nx2 = 1;
     indx.ncells2 = 1;
   }
 

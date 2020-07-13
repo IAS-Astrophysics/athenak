@@ -14,7 +14,7 @@
 
 class ProblemGenerator {
  public:
-  ProblemGenerator(std::unique_ptr<Mesh> &pmesh, std::unique_ptr<ParameterInput> &pin);
+  ProblemGenerator(std::unique_ptr<ParameterInput> &pin, std::unique_ptr<Mesh> &pmesh);
   ~ProblemGenerator() = default;
 
   // data

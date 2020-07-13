@@ -26,11 +26,13 @@
 
 #include "athena.hpp"
 #include "athena_arrays.hpp"
-#include "parameter_input.hpp"
 #include "utils/utils.hpp"
+#include "parameter_input.hpp"
 #include "bvals/bvals.hpp"
 #include "mesh/mesh.hpp"
 #include "pgen/pgen.hpp"
+#include "outputs/outputs.hpp"
+#include "driver/driver.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \fn int main(int argc, char *argv[])
@@ -214,9 +216,10 @@ int main(int argc, char *argv[]) {
   std::unique_ptr<Mesh> pmesh;
   pmesh = std::make_unique<Mesh>(pinput);
 
-  // output Mesh diagnostics.  If code was run with -m option, write mesh structure to
-  // file and quit.
+  // output Mesh diagnostics
   if (global_variable::my_rank == 0) pmesh->OutputMeshStructure(marg_flag);
+
+  //  If code was run with -m option, write mesh structure to file and quit.
   if (marg_flag) {
 #ifdef MPI_PARALLEL
     MPI_Finalize();
@@ -225,31 +228,36 @@ int main(int argc, char *argv[]) {
   }
 
   //--- Step 5. --------------------------------------------------------------------------
-  // Construct and initialize Physics modules.  This requires allocating variables,
-  // building the TaskList, and setting boundary condition methods on each MeshBlock.
+  // Construct and initialize Physics modules.
 
   pmesh->SelectPhysics(pinput);
 
   //--- Step 6. --------------------------------------------------------------------------
-  // Construct execution Driver
-
-/***  pmesh->ConstructDriver; ***/
-
-  //--- Step 7. --------------------------------------------------------------------------
   // Set initial conditions by calling problem generator, or reading restart file
 
   std::unique_ptr<ProblemGenerator> pgen;
-  pgen = std::make_unique<ProblemGenerator>(pmesh, pinput);
+  pgen = std::make_unique<ProblemGenerator>(pinput, pmesh);
+
+std::cout << "here 1" << std::endl;
+
+  //--- Step 7. --------------------------------------------------------------------------
+  // Construct Outputs. Output of initial conditions is made in Driver (if needed)
+
+  std::unique_ptr<Outputs> pout;
+  pout = std::make_unique<Outputs>(pinput, pmesh);
+std::cout << "here 2" << std::endl;
 
   //--- Step 8. --------------------------------------------------------------------------
-  // Change to run directory, initialize Outputs, and make output of ICs
+  // Construct and Execute Driver
 
-  //--- Step 9. --------------------------------------------------------------------------
-  // Execute Driver
+  std::unique_ptr<Driver> pdrive;
+  pdrive = std::make_unique<Driver>(pinput, pmesh, pout);
+std::cout << "here 3" << std::endl;
 
-/***  pmesh->ExecuteDriver; ***/
+  pdrive->Execute(pmesh, pout);
 
-  //--- Step 10. -------------------------------------------------------------------------
+std::cout << "here 4" << std::endl;
+  //--- Step 9. -------------------------------------------------------------------------
   // Make final outputs, clean up, and Terminate
 
 #if MPI_PARALLEL_ENABLED

@@ -13,6 +13,8 @@ add_executable(
 
         bvals/boundary_flag.cpp
 
+        driver/driver.cpp
+
         hydro/hydro.cpp
 
         mesh/interface_physics.cpp
@@ -23,6 +25,8 @@ add_executable(
 
         outputs/io_wrapper.cpp
         outputs/outputs.cpp
+        outputs/output_type.cpp
+        outputs/formatted_table.cpp
 
         pgen/pgen.cpp
         pgen/shock_tube.cpp

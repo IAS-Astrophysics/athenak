@@ -8,8 +8,9 @@
 //! \file outputs.hpp
 //  \brief provides classes to handle ALL types of data output
 
-#include <cstdio>  // std::size_t
+//#include <cstdio>  // std::size_t
 #include <string>
+#include <vector>
 
 #include "athena.hpp"
 #include "athena_arrays.hpp"
@@ -46,7 +47,7 @@ struct OutputParameters {
 struct OutputData {
   std::string type;        // one of (SCALARS,VECTORS) used for vtk outputs
   std::string name;
-  AthenaCenterArray<Real> data;  // array containing data (deep copy/slice)
+  AthenaCenterArray<Real> cc_data;  // array containing data (deep copied)
 };
 
 //----------------------------------------------------------------------------------------
@@ -55,7 +56,7 @@ struct OutputData {
 
 class OutputType {
  public:
-  explicit OutputType(OutputParameters oparams);
+  OutputType(OutputParameters oparams, std::unique_ptr<Mesh> &pm);
   virtual ~OutputType() = default;
   // copy constructor and assignment operator
   OutputType(const OutputType& copy_other) = default;
@@ -65,13 +66,18 @@ class OutputType {
   OutputType& operator=(OutputType&&) = default;
 
   // data
-  OutputParameters output_params; // control data read from <output> block
+  int nout1, nout2, nout3;           // dimensions of output arrays for this type
+  int ois, oie, ojs, oje, oks, oke;  // start/end indices of output arrays
+  Real x1posn, x2posn, x3posn;
+  OutputParameters output_params;    // data read from <output> block for this type
 
   // functions
+  void LoadOutputData(std::unique_ptr<Mesh> &pm);
   // following pure virtual function must be implemented in all derived classes
-//  virtual void WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag) = 0;
+  virtual void WriteOutputFile(std::unique_ptr<Mesh> &pm) = 0;
 
  protected:
+  std::list<OutputData> data_list_;
 };
 
 //----------------------------------------------------------------------------------------
@@ -80,8 +86,10 @@ class OutputType {
 
 class FormattedTableOutput : public OutputType {
  public:
-  explicit FormattedTableOutput(OutputParameters oparams) : OutputType(oparams) {}
-//  void WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag) override;
+//  FormattedTableOutput(OutputParameters oparams, std::unique_ptr<Mesh> &pm) :
+//    OutputType(oparams, pm) {}
+  FormattedTableOutput(OutputParameters oparams, std::unique_ptr<Mesh> &pm);
+  void WriteOutputFile(std::unique_ptr<Mesh> &pm) override;
 };
 
 //----------------------------------------------------------------------------------------
@@ -92,11 +100,14 @@ class FormattedTableOutput : public OutputType {
 
 class Outputs {
  public:
-  Outputs(std::unique_ptr<Mesh> &pm, std::unique_ptr<ParameterInput> &pin);
+  Outputs(std::unique_ptr<ParameterInput> &pin, std::unique_ptr<Mesh> &pm);
   ~Outputs();
 
+  // use vector of pointers to OutputTypes since it is an abstract base class 
+  std::vector<OutputType*> poutput_list_;  
+
  private:
-  std::list<OutputType> output_list_;  // linked list of OutputTypes
+
 };
 
 #endif // OUTPUTS_OUTPUTS_HPP_

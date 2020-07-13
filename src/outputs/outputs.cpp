@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file outputs.cpp
-//  \brief implements functions for Athena++ outputs
+//  \brief implements functions in Outputs class
 //
 // The number and types of outputs are all controlled by the number and values of
 // parameters specified in <output[n]> blocks in the input file.  Each output block must
@@ -56,15 +56,9 @@
 #include "outputs.hpp"
 
 //----------------------------------------------------------------------------------------
-// OutputType constructor
-
-OutputType::OutputType(OutputParameters opar) : output_params(opar) {
-}
-
-//----------------------------------------------------------------------------------------
 // Outputs constructor
 
-Outputs::Outputs(std::unique_ptr<Mesh> &pm, std::unique_ptr<ParameterInput> &pin) {
+Outputs::Outputs(std::unique_ptr<ParameterInput> &pin, std::unique_ptr<Mesh> &pm) {
 
   // loop over input block names.  Find those that start with "output", read parameters,
   // and add to linked list of OutputTypes.
@@ -151,9 +145,10 @@ Outputs::Outputs(std::unique_ptr<Mesh> &pm, std::unique_ptr<ParameterInput> &pin
 
       // Construct new OutputType according to file format
       // NEW_OUTPUT_TYPES: Add block to construct new types here
+      OutputType *pnode;
       if (opar.file_type.compare("tab") == 0) {
-        FormattedTableOutput new_out(opar);
-        output_list_.push_front(new_out);
+        pnode = new FormattedTableOutput(opar,pm);
+        poutput_list_.insert(poutput_list_.begin(),pnode);
 //      } else if (opar.file_type.compare("hst") == 0) {
 //        pnew_type = new HistoryOutput(opar);
 //        num_hst++;
