@@ -64,9 +64,9 @@ void FormattedTableOutput::WriteOutputFile(std::unique_ptr<Mesh> &pm) {
 
   // write x1, x2, x3 column headers
   std::fprintf(pfile, "#");
-  if (ois != oie) std::fprintf(pfile, " i       x1v     ");
-  if (ojs != oje) std::fprintf(pfile, " j       x2v     ");
-  if (oks != oke) std::fprintf(pfile, " k       x3v     ");
+  if (nout1 > 1) std::fprintf(pfile, " i       x1v     ");
+  if (nout2 > 1) std::fprintf(pfile, " j       x2v     ");
+  if (nout3 > 1) std::fprintf(pfile, " k       x3v     ");
   // write data col headers from "name" stored in OutputData nodet
   for (auto it : data_list_) {
     if (it.type == "VECTORS") {
@@ -81,27 +81,26 @@ void FormattedTableOutput::WriteOutputFile(std::unique_ptr<Mesh> &pm) {
 
     // loop over all cells in data arrays
   for (int n=0; n<pm->nmbthisrank; ++n) {
-    for (int k=oks; k<=oke; ++k) {
-      for (int j=ojs; j<=oje; ++j) {
-        for (int i=ois; i<=oie; ++i) {
+    for (int k=0; k<nout3; ++k) {
+      for (int j=0; j<nout2; ++j) {
+        for (int i=0; i<nout1; ++i) {
           // write x1, x2, x3 indices and coordinates on start of new line
-          if (ois != oie) {
-            std::fprintf(pfile, "%04d", i);
+          if (nout1 > 1) {
+            std::fprintf(pfile, "%04d", i+ois);
             std::fprintf(pfile, output_params.data_format.c_str(), x1posn);
           }
-          if (ojs != oje) {
-            std::fprintf(pfile, " %04d", j);  // note extra space for formatting
+          if (nout2 > 1) {
+            std::fprintf(pfile, " %04d", j+ojs);  // note extra space for formatting
             std::fprintf(pfile, output_params.data_format.c_str(), x2posn);
           }
-          if (oks != oke) {
-            std::fprintf(pfile, " %04d", k);  // note extra space for formatting
+          if (nout3 > 1) {
+            std::fprintf(pfile, " %04d", k+oks);  // note extra space for formatting
             std::fprintf(pfile, output_params.data_format.c_str(), x3posn);
           }
 
           // step through doubly linked list of OutputData's and write each on same line
           for (auto it : data_list_) {
-            std::fprintf(pfile, output_params.data_format.c_str(),
-                         it.cc_data(n,(k-oks),(j-ojs),(i-ois)));
+            std::fprintf(pfile, output_params.data_format.c_str(), it.cc_data(n,k,j,i));
           }
           std::fprintf(pfile,"\n"); // terminate line
         }

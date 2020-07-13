@@ -67,7 +67,7 @@ class OutputType {
 
   // data
   int nout1, nout2, nout3;           // dimensions of output arrays for this type
-  int ois, oie, ojs, oje, oks, oke;  // start/end indices of output arrays
+  int ois, ojs, oks;                 // starting indices of data to be output
   Real x1posn, x2posn, x3posn;
   OutputParameters output_params;    // data read from <output> block for this type
 

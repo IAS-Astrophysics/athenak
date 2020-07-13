@@ -57,7 +57,8 @@
 #include "outputs.hpp"
 
 //----------------------------------------------------------------------------------------
-// OutputType constructor
+// OutputType base class constructor
+// Sets parameters like size and indices of output arrays
 
 OutputType::OutputType(OutputParameters opar, std::unique_ptr<Mesh> &pm) :
    output_params(opar) {
@@ -74,29 +75,20 @@ OutputType::OutputType(OutputParameters opar, std::unique_ptr<Mesh> &pm) :
       nout3 = it->indx.nx3;
     }
 
-    // set starting/ending indices of output arrays
-    ois = it->indx.is; oie = it->indx.ie;
-    ojs = it->indx.js; oje = it->indx.je;
-    oks = it->indx.ks; oke = it->indx.ke;
+    // set starting indices of output arrays
+    ois = it->indx.is;
+    ojs = it->indx.js;
+    oks = it->indx.ks;
     if (output_params.include_gzs) {
-      if (nout1 > 1) ois -= it->indx.nghost; oie += it->indx.nghost;
-      if (nout2 > 1) ojs -= it->indx.nghost; oje += it->indx.nghost;
-      if (nout3 > 1) oks -= it->indx.nghost; oke += it->indx.nghost;
+      if (nout1 > 1) ois = 0;
+      if (nout2 > 1) ojs = 0;
+      if (nout3 > 1) oks = 0;
     }
 
     // reset array dimensions and indices if data is being sliced
-    if (output_params.slice1) {
-      nout1 = 1;
-      ois = 0; oie = 0;
-    }
-    if (output_params.slice2) {
-      nout2 = 1;
-      ojs = 0; oje = 0;
-    }
-    if (output_params.slice3) {
-      nout3 = 1;
-      oks = 0; oke = 0;
-    }
+    if (output_params.slice1) { nout1 = 1; }
+    if (output_params.slice2) { nout2 = 1; }
+    if (output_params.slice3) { nout3 = 1; }
 
 }
 
@@ -125,29 +117,26 @@ void OutputType::LoadOutputData(std::unique_ptr<Mesh> &pm) {
     int islice=0, jslice=0, kslice=0;
     if (output_params.slice1) {
       islice = pm->CellCenterIndex(output_params.slice_x1, pmb->indx.nx1,
-        pmb->mb_size.x1min, pmb->mb_size.x1max) + pmb->indx.nghost;
+        pmb->mb_size.x1min, pmb->mb_size.x1max);
     }
     if (output_params.slice2) {
       jslice = pm->CellCenterIndex(output_params.slice_x2, pmb->indx.nx2,
-        pmb->mb_size.x2min, pmb->mb_size.x2max) + pmb->indx.nghost;
+        pmb->mb_size.x2min, pmb->mb_size.x2max);
     }
     if (output_params.slice3) {
       kslice = pm->CellCenterIndex(output_params.slice_x3, pmb->indx.nx3,
-        pmb->mb_size.x3min, pmb->mb_size.x3max) + pmb->indx.nghost;
+        pmb->mb_size.x3min, pmb->mb_size.x3max);
     }
-/****/
-std::cout << "nout1 = " << nout1 << "ois,oie = " << ois << "  " << oie << std::endl;
-std::cout << "nout2 = " << nout2 << "ojs,oje = " << ojs << "  " << oje << std::endl;
-std::cout << "nout3 = " << nout3 << "oks,oke = " << oks << "  " << oke << std::endl;
-std::cout << pm->mesh_size.nghost << "  " << pmb->indx.nghost << std::endl;
-std::cout << "kslice = " << kslice << "oks,oke = " << oks << "  " << oke << std::endl;
-/****/
+
+    // note the complicated addressing of array indices.  The output array does not
+    // include ghost zones (unless needed), so it is always addressed starting at 0.
+    // When the array is sliced, only the value at (ijk)slice is stored.
     for (int n=0; n<pm->nmbthisrank; ++n) {
-      for (int k=oks; k<=oke; ++k) {
-      for (int j=ojs; j<=oje; ++j) {
-      for (int i=ois; i<=oie; ++i) {
-        node.cc_data(n,k-oks,j-ojs,i-ois) =
-           pmb->phydro->u(hydro::IDN,(k+kslice),(j+jslice),(i+islice));
+      for (int k=0; k<nout3; ++k) {
+      for (int j=0; j<nout2; ++j) {
+      for (int i=0; i<nout1; ++i) {
+        node.cc_data(n,k,j,i) =
+           pmb->phydro->u(hydro::IDN,(k+oks+kslice),(j+ojs+jslice),(i+ois+islice));
       }}}
     }
     data_list_.push_back(node);
