@@ -36,8 +36,8 @@ struct OutputParameters {
   Real last_time, dt;
   int file_number;
   bool include_gzs;
-  int islice, jslice, kslice;
-  Real x1_slice, x2_slice, x3_slice;
+  bool slice1, slice2, slice3;
+  Real slice_x1, slice_x2, slice_x3;
 };
 
 //----------------------------------------------------------------------------------------

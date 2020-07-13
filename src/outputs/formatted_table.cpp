@@ -100,7 +100,8 @@ void FormattedTableOutput::WriteOutputFile(std::unique_ptr<Mesh> &pm) {
 
           // step through doubly linked list of OutputData's and write each on same line
           for (auto it : data_list_) {
-            std::fprintf(pfile, output_params.data_format.c_str(), it.cc_data(n,k,j,i));
+            std::fprintf(pfile, output_params.data_format.c_str(),
+                         it.cc_data(n,(k-oks),(j-ojs),(i-ois)));
           }
           std::fprintf(pfile,"\n"); // terminate line
         }

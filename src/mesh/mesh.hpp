@@ -107,8 +107,8 @@ class Mesh {
     return (x*xmax - x*xmin) - (0.5*xmax - 0.5*xmin) + (0.5*xmin + 0.5*xmax);
   }
   // returns i-index of cell containing x position
-  inline int CellCenterIndx(Real x, int n, Real xmin, Real xmax) {
-    return static_cast<int>((x/(xmax-xmin))*static_cast<Real>(n));
+  inline int CellCenterIndex(Real x, int n, Real xmin, Real xmax) {
+    return static_cast<int>(((x-xmin)/(xmax-xmin))*static_cast<Real>(n));
   }
 
  private:

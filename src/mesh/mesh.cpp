@@ -650,6 +650,10 @@ void Mesh::SetBlockSizeAndBoundaries(LogicalLocation loc, RegionSize &block_size
   block_size.x1rat = mesh_size.x1rat;
   block_size.x2rat = mesh_size.x2rat;
   block_size.x3rat = mesh_size.x3rat;
+  block_size.nx1 = mesh_size.nx1;
+  block_size.nx2 = mesh_size.nx2;
+  block_size.nx3 = mesh_size.nx3;
+  block_size.nghost = mesh_size.nghost;
 
   return;
 }

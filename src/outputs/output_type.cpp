@@ -62,10 +62,7 @@
 OutputType::OutputType(OutputParameters opar, std::unique_ptr<Mesh> &pm) :
    output_params(opar) {
 
-    // figure out slicing
-
-
-    // set size of output arrays, adjusted accordingly for slicing and ghost zones 
+    // set size of output arrays, adjusted accordingly if ghost zones included 
     auto it = pm->mblocks.begin();
     if (output_params.include_gzs) {
       nout1 = it->indx.ncells1;
@@ -85,6 +82,20 @@ OutputType::OutputType(OutputParameters opar, std::unique_ptr<Mesh> &pm) :
       if (nout1 > 1) ois -= it->indx.nghost; oie += it->indx.nghost;
       if (nout2 > 1) ojs -= it->indx.nghost; oje += it->indx.nghost;
       if (nout3 > 1) oks -= it->indx.nghost; oke += it->indx.nghost;
+    }
+
+    // reset array dimensions and indices if data is being sliced
+    if (output_params.slice1) {
+      nout1 = 1;
+      ois = 0; oie = 0;
+    }
+    if (output_params.slice2) {
+      nout2 = 1;
+      ojs = 0; oje = 0;
+    }
+    if (output_params.slice3) {
+      nout3 = 1;
+      oks = 0; oke = 0;
     }
 
 }
@@ -108,12 +119,35 @@ void OutputType::LoadOutputData(std::unique_ptr<Mesh> &pm) {
     node.name = "dens";
 
     node.cc_data.SetSize(pm->nmbthisrank, nout3, nout2, nout1);
+
     // deep copy one array for each MeshBlock on this rank
+    auto pmb = pm->mblocks.begin();
+    int islice=0, jslice=0, kslice=0;
+    if (output_params.slice1) {
+      islice = pm->CellCenterIndex(output_params.slice_x1, pmb->indx.nx1,
+        pmb->mb_size.x1min, pmb->mb_size.x1max) + pmb->indx.nghost;
+    }
+    if (output_params.slice2) {
+      jslice = pm->CellCenterIndex(output_params.slice_x2, pmb->indx.nx2,
+        pmb->mb_size.x2min, pmb->mb_size.x2max) + pmb->indx.nghost;
+    }
+    if (output_params.slice3) {
+      kslice = pm->CellCenterIndex(output_params.slice_x3, pmb->indx.nx3,
+        pmb->mb_size.x3min, pmb->mb_size.x3max) + pmb->indx.nghost;
+    }
+/****/
+std::cout << "nout1 = " << nout1 << "ois,oie = " << ois << "  " << oie << std::endl;
+std::cout << "nout2 = " << nout2 << "ojs,oje = " << ojs << "  " << oje << std::endl;
+std::cout << "nout3 = " << nout3 << "oks,oke = " << oks << "  " << oke << std::endl;
+std::cout << pm->mesh_size.nghost << "  " << pmb->indx.nghost << std::endl;
+std::cout << "kslice = " << kslice << "oks,oke = " << oks << "  " << oke << std::endl;
+/****/
     for (int n=0; n<pm->nmbthisrank; ++n) {
       for (int k=oks; k<=oke; ++k) {
       for (int j=ojs; j<=oje; ++j) {
       for (int i=ois; i<=oie; ++i) {
-        node.cc_data(n,k,j,i)  = pm->mblocks.begin()->phydro->u(hydro::IDN,k,j,i);
+        node.cc_data(n,k-oks,j-ojs,i-ois) =
+           pmb->phydro->u(hydro::IDN,(k+kslice),(j+jslice),(i+islice));
       }}}
     }
     data_list_.push_back(node);

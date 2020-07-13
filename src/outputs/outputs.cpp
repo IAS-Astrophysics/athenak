@@ -28,8 +28,8 @@
 //   variable    = prim      # variables to be output
 //   data_format = %12.5e    # Optional data format string
 //   dt          = 0.01      # time increment between outputs
-//   x2_slice    = 0.0       # slice in x2
-//   x3_slice    = 0.0       # slice in x3
+//   slice_x2    = 0.0       # slice at x2 
+//   slice_x3    = 0.0       # slice at x3
 //
 // Each <output[n]> block will result in a new node being created in a linked list of
 // OutputType stored in the Outputs class.  During a simulation, outputs are made when
@@ -88,49 +88,49 @@ Outputs::Outputs(std::unique_ptr<ParameterInput> &pin, std::unique_ptr<Mesh> &pm
       opar.file_type = pin->GetString(opar.block_name,"file_type");
 
       // read slicing options.  Check that slice is within mesh
-      if (pin->DoesParameterExist(opar.block_name,"x1_slice")) {
-        Real x1 = pin->GetReal(opar.block_name,"x1_slice");
+      if (pin->DoesParameterExist(opar.block_name,"slice_x1")) {
+        Real x1 = pin->GetReal(opar.block_name,"slice_x1");
         if (x1 >= pm->mesh_size.x1min && x1 < pm->mesh_size.x1max) {
-          opar.x1_slice = x1;
+          opar.slice_x1 = x1;
+          opar.slice1 = true;
         } else {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "Slice at x1=" << x1 << " in output block '"
               << opar.block_name << "' is out of range of Mesh" << std::endl;
           exit(EXIT_FAILURE);
         }
-      // set islice negative if no slice in x1
       } else {
-        opar.islice = -1;
+        opar.slice1 = false;
       }
 
-      if (pin->DoesParameterExist(opar.block_name,"x2_slice")) {
-        Real x2 = pin->GetReal(opar.block_name,"x2_slice");
+      if (pin->DoesParameterExist(opar.block_name,"slice_x2")) {
+        Real x2 = pin->GetReal(opar.block_name,"slice_x2");
         if (x2 >= pm->mesh_size.x2min && x2 < pm->mesh_size.x2max) {
-          opar.x2_slice = x2;
+          opar.slice_x2 = x2;
+          opar.slice2 = true;
         } else {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "Slice at x2=" << x2 << " in output block '"
               << opar.block_name << "' is out of range of Mesh" << std::endl;
           exit(EXIT_FAILURE);
         }
-      // set jslice negative if no slice in x2
       } else {
-        opar.jslice = -1;
+        opar.slice2 = false;
       }
 
-      if (pin->DoesParameterExist(opar.block_name,"x3_slice")) {
-        Real x3 = pin->GetReal(opar.block_name,"x3_slice");
+      if (pin->DoesParameterExist(opar.block_name,"slice_x3")) {
+        Real x3 = pin->GetReal(opar.block_name,"slice_x3");
         if (x3 >= pm->mesh_size.x3min && x3 < pm->mesh_size.x3max) {
-          opar.x3_slice = x3;
+          opar.slice_x3 = x3;
+          opar.slice3 = true;
         } else {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "Slice at x3=" << x3 << " in output block '"
               << opar.block_name << "' is out of range of Mesh" << std::endl;
           exit(EXIT_FAILURE);
         }
-      // set kslice negative if no slice in x3
       } else {
-        opar.kslice = -1;
+        opar.slice3 = false;
       }
 
       // read ghost cell option
