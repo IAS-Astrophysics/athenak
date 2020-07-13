@@ -86,8 +86,6 @@ class OutputType {
 
 class FormattedTableOutput : public OutputType {
  public:
-//  FormattedTableOutput(OutputParameters oparams, std::unique_ptr<Mesh> &pm) :
-//    OutputType(oparams, pm) {}
   FormattedTableOutput(OutputParameters oparams, std::unique_ptr<Mesh> &pm);
   void WriteOutputFile(std::unique_ptr<Mesh> &pm) override;
 };

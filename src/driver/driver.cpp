@@ -31,16 +31,11 @@ Driver::Driver(std::unique_ptr<ParameterInput> &pin, std::unique_ptr<Mesh> &pmes
 
 void Driver::Execute(std::unique_ptr<Mesh> &pmesh, std::unique_ptr<Outputs> &pout) {
 
-std::cout << "here driver 1" << std::endl;
-
   // cycle through output Types and load data
   pout->poutput_list_.front()->LoadOutputData(pmesh);
-std::cout << "here driver 2" << std::endl;
-
 
   // cycle through output Types and write files.  This design allows for asynchronous 
   // outputs to implemented in the future.
   pout->poutput_list_.front()->WriteOutputFile(pmesh);
-std::cout << "here driver 3" << std::endl;
 
 }

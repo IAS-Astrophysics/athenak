@@ -238,25 +238,20 @@ int main(int argc, char *argv[]) {
   std::unique_ptr<ProblemGenerator> pgen;
   pgen = std::make_unique<ProblemGenerator>(pinput, pmesh);
 
-std::cout << "here 1" << std::endl;
-
   //--- Step 7. --------------------------------------------------------------------------
   // Construct Outputs. Output of initial conditions is made in Driver (if needed)
 
   std::unique_ptr<Outputs> pout;
   pout = std::make_unique<Outputs>(pinput, pmesh);
-std::cout << "here 2" << std::endl;
 
   //--- Step 8. --------------------------------------------------------------------------
   // Construct and Execute Driver
 
   std::unique_ptr<Driver> pdrive;
   pdrive = std::make_unique<Driver>(pinput, pmesh, pout);
-std::cout << "here 3" << std::endl;
 
   pdrive->Execute(pmesh, pout);
 
-std::cout << "here 4" << std::endl;
   //--- Step 9. -------------------------------------------------------------------------
   // Make final outputs, clean up, and Terminate
 

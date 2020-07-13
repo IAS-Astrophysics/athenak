@@ -21,47 +21,11 @@
 #include "outputs.hpp"
 
 //----------------------------------------------------------------------------------------
-// OutputType constructor
-          
-/**
-FormattedTableOutput::FormattedTableOutput(OutputParameters opar, std::unique_ptr<Mesh> &pm) :
-   output_params(opar) {
-              
-    // figure out slicing
-std::cout << "FormattedTable constructor:" << pm->nmbthisrank << " " << nout3 << " " << nout2 << " " << nout1 << std::endl;
-      
-      
-    // set size of output arrays, adjusted accordingly for slicing and ghost zones 
-    auto it = pm->mblocks.begin();
-    if (output_params.include_gzs) {
-      nout1 = it->indx.ncells1;
-      nout2 = it->indx.ncells2;
-      nout3 = it->indx.ncells3;
-    } else {
-      nout1 = it->indx.nx1;
-      nout2 = it->indx.nx2;
-      nout3 = it->indx.nx3;
-    } 
-      
-std::cout << "FormattedTable constructor:" << pm->nmbthisrank << " " << nout3 << " " << nout2 << " " << nout1 << std::endl;
-      
-    // set starting/ending indices of output arrays
-    ois = it->indx.is; oie = it->indx.ie;
-    ojs = it->indx.js; oje = it->indx.je;
-    oks = it->indx.ks; oke = it->indx.ke;
-    if (output_params.include_gzs) {
-      if (nout1 > 1) ois -= it->indx.nghost; oie += it->indx.nghost;
-      if (nout2 > 1) ojs -= it->indx.nghost; oje += it->indx.nghost;
-      if (nout3 > 1) oks -= it->indx.nghost; oke += it->indx.nghost;
-    }
+// ctor: calls OutputType base class constructor
 
-} 
-**/
-
-FormattedTableOutput::FormattedTableOutput(OutputParameters opar, std::unique_ptr<Mesh> &pm) : OutputType(opar, pm) {
+FormattedTableOutput::FormattedTableOutput(OutputParameters op, std::unique_ptr<Mesh> &pm)
+  : OutputType(op, pm) {
 }
-
-
 
 //----------------------------------------------------------------------------------------
 //! \fn void FormattedTableOutput:::WriteOutputFile(Mesh *pm)

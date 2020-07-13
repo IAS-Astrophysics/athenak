@@ -63,7 +63,6 @@ OutputType::OutputType(OutputParameters opar, std::unique_ptr<Mesh> &pm) :
    output_params(opar) {
 
     // figure out slicing
-std::cout << "OutputType constructor:" << pm->nmbthisrank << " " << nout3 << " " << nout2 << " " << nout1 << std::endl;
 
 
     // set size of output arrays, adjusted accordingly for slicing and ghost zones 
@@ -77,8 +76,6 @@ std::cout << "OutputType constructor:" << pm->nmbthisrank << " " << nout3 << " "
       nout2 = it->indx.nx2;
       nout3 = it->indx.nx3;
     }
-
-std::cout << "OutputType constructor:" << pm->nmbthisrank << " " << nout3 << " " << nout2 << " " << nout1 << std::endl;
 
     // set starting/ending indices of output arrays
     ois = it->indx.is; oie = it->indx.ie;
@@ -99,11 +96,8 @@ std::cout << "OutputType constructor:" << pm->nmbthisrank << " " << nout3 << " "
 
 void OutputType::LoadOutputData(std::unique_ptr<Mesh> &pm) {
 
-std::cout << "here loaddata 1" << std::endl;
-
   data_list_.clear();  // start with a clean list
 
-std::cout << "here loaddata 2" << std::endl;
   // mass density
   if (output_params.variable.compare("d") == 0 ||
       output_params.variable.compare("density") == 0 ||
@@ -112,12 +106,9 @@ std::cout << "here loaddata 2" << std::endl;
     OutputData node;
     node.type = "SCALARS";
     node.name = "dens";
-std::cout << "here loaddata 3a" << std::endl;
-std::cout << pm->nmbthisrank << " " << nout3 << " " << nout2 << " " << nout1 << std::endl;
 
     node.cc_data.SetSize(pm->nmbthisrank, nout3, nout2, nout1);
     // deep copy one array for each MeshBlock on this rank
-std::cout << "here loaddata 3b" << std::endl;
     for (int n=0; n<pm->nmbthisrank; ++n) {
       for (int k=oks; k<=oke; ++k) {
       for (int j=ojs; j<=oje; ++j) {
@@ -125,7 +116,6 @@ std::cout << "here loaddata 3b" << std::endl;
         node.cc_data(n,k,j,i)  = pm->mblocks.begin()->phydro->u(hydro::IDN,k,j,i);
       }}}
     }
-std::cout << "here loaddata 3c" << std::endl;
     data_list_.push_back(node);
   }
 }
