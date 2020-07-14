@@ -16,6 +16,9 @@ add_executable(
         driver/driver.cpp
 
         hydro/hydro.cpp
+        hydro/hydro_divflux.cpp
+        hydro/eos/eos.cpp
+        hydro/eos/adiabatic_hydro.cpp
 
         mesh/interface_physics.cpp
         mesh/load_balance.cpp

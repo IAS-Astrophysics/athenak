@@ -10,7 +10,8 @@
 #include "athena_arrays.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
-#include "hydro.hpp"
+#include "hydro/hydro.hpp"
+#include "hydro/eos/eos.hpp"
 
 namespace hydro {
 //----------------------------------------------------------------------------------------
@@ -21,6 +22,14 @@ Hydro::Hydro(MeshBlock *pmb, std::unique_ptr<ParameterInput> &pin) : pmy_mblock(
   // allocate memory for conserved and primitive variables
   u.SetSize(5, pmb->indx.ncells3, pmb->indx.ncells2, pmb->indx.ncells1);
   w.SetSize(5, pmb->indx.ncells3, pmb->indx.ncells2, pmb->indx.ncells1);
+
+  // construct EOS object
+  peos = new AdiabaticHydro(this, pin);
+
+  // construct reconstruction object
+
+  // construct Riemann solver object
+
 
 }
 
