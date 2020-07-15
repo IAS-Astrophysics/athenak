@@ -47,7 +47,7 @@ struct OutputParameters {
 struct OutputData {
   std::string type;        // one of (SCALARS,VECTORS) used for vtk outputs
   std::string name;
-  AthenaCenterArray<Real> cc_data;  // array containing data (deep copied)
+  AthenaArray<Real> cc_data;  // array containing data (deep copied)
 };
 
 //----------------------------------------------------------------------------------------

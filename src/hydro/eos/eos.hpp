@@ -28,7 +28,7 @@ class EquationOfState {
   Hydro *pmy_hydro;
 
   virtual void ConservedToPrimitive(const int k, const int j, const int il,const  int iu, 
-    AthenaCenterArray<Real> &cons, AthenaCenterArray<Real> &prim) = 0;
+    AthenaArray<Real> &cons, AthenaArray<Real> &prim) = 0;
 
  protected:
   Real density_floor_, pressure_floor_;
@@ -45,7 +45,7 @@ class AdiabaticHydro : public EquationOfState {
   Real GetGamma() const {return gamma_;}
 
   void ConservedToPrimitive(const int k, const int j, const int il,const  int iu, 
-    AthenaCenterArray<Real> &cons, AthenaCenterArray<Real> &prim) override;
+    AthenaArray<Real> &cons, AthenaArray<Real> &prim) override;
 
  private:
   Real gamma_;

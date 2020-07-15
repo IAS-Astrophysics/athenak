@@ -20,7 +20,7 @@ namespace hydro {
 // \brief Converts conserved into primitive variables in adiabatic hydro.
 
 void AdiabaticHydro::ConservedToPrimitive(const int k, const int j, const int il,
-    const int iu, AthenaCenterArray<Real> &cons, AthenaCenterArray<Real> &prim) {
+    const int iu, AthenaArray<Real> &cons, AthenaArray<Real> &prim) {
 
   Real gm1 = GetGamma() - 1.0;
 

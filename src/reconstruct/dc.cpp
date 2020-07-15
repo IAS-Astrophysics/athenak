@@ -15,8 +15,8 @@
 //! \fn Reconstruction::DonorCellX1()
 //  \brief reconstruct L/R surfaces of the i-th cells
 
-void DonorCell::ReconstructX1(const int il, const int iu, const AthenaCenterArray<Real> &w,
-                              AthenaCenterArray<Real> &wl, AthenaCenterArray<Real> &wr) {
+void DonorCell::ReconstructX1(const int il, const int iu, const AthenaArray<Real> &w,
+                              AthenaArray<Real> &wl, AthenaArray<Real> &wr) {
   int nvar = w.GetDim(2);
   for (int n=0; n<nvar; ++n) {
     for (int i=il; i<=iu; ++i) {
@@ -32,8 +32,8 @@ void DonorCell::ReconstructX1(const int il, const int iu, const AthenaCenterArra
 //  \brief
 
 
-void DonorCell::ReconstructX2(const int il, const int iu, const AthenaCenterArray<Real> &w,
-                              AthenaCenterArray<Real> &wl, AthenaCenterArray<Real> &wr) {
+void DonorCell::ReconstructX2(const int il, const int iu, const AthenaArray<Real> &w,
+                              AthenaArray<Real> &wl, AthenaArray<Real> &wr) {
   int nvar = w.GetDim(2);
   for (int n=0; n<nvar; ++n) {
     for (int i=il; i<=iu; ++i) {
@@ -48,8 +48,8 @@ void DonorCell::ReconstructX2(const int il, const int iu, const AthenaCenterArra
 //! \fn Reconstruction::DonorCellX3()
 //  \brief
 
-void DonorCell::ReconstructX3(const int il, const int iu, const AthenaCenterArray<Real> &w,
-                                 AthenaCenterArray<Real> &wl, AthenaCenterArray<Real> &wr) {
+void DonorCell::ReconstructX3(const int il, const int iu, const AthenaArray<Real> &w,
+                                 AthenaArray<Real> &wl, AthenaArray<Real> &wr) {
   int nvar = w.GetDim(2);
   for (int n=0; n<nvar; ++n) {
     for (int i=il; i<=iu; ++i) {

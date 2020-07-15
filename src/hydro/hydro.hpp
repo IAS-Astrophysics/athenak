@@ -14,7 +14,7 @@
 #include "hydro/eos/eos.hpp"
 
   typedef void (hydro::EquationOfState::*fptr)(const int k, const int j, const int il,
-    const int iu, AthenaCenterArray<Real> &cons, AthenaCenterArray<Real> &prim);
+    const int iu, AthenaArray<Real> &cons, AthenaArray<Real> &prim);
 
 namespace hydro {
 
@@ -28,16 +28,16 @@ class Hydro {
 
   // data
   MeshBlock* pmy_mblock;    // ptr to MeshBlock containing this Hydro
-  AthenaCenterArray<Real> u, w;    // conserved and primitive variables
+  AthenaArray<Real> u, w;    // conserved and primitive variables
 
   EquationOfState *peos;    // EOS object that implements conserved<->primitive
 
   // functions
-  void CalculateDivFlux(AthenaCenterArray<Real> &divf);
+  void CalculateDivFlux(AthenaArray<Real> &divf);
   fptr ConservedToPrimitive;
 
  private:
-  AthenaCenterArray<Real> w_;
+  AthenaArray<Real> w_;
 
 };
 

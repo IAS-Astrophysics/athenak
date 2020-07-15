@@ -15,54 +15,53 @@
 #include <string>
 
 template <typename T>
-class AthenaCenterArray {
+class AthenaArray {
  public:
 
   // ctors with various arguments
   // "label" argument added for compatibility with Kokkos view API
   // default ctor sets null array
-  AthenaCenterArray() :
+  AthenaArray() :
     pdata_(nullptr), label_(""), nx1_(0), nx2_(0), nx3_(0), nx4_(0), nx5_(0), nx6_(0) {}
 
-  AthenaCenterArray(const std::string &label, int nx6, int nx5, int nx4, int nx3, int nx2,
+  AthenaArray(const std::string &label, int nx6, int nx5, int nx4, int nx3, int nx2,
                     int nx1) :
     label_(label), nx1_(nx1), nx2_(nx2), nx3_(nx3), nx4_(nx4), nx5_(nx5), nx6_(nx6) {
     assert(nx6 > 0 && nx5 > 0 && nx4 > 0 && nx3 > 0 && nx2 > 0 && nx1 > 0);
     pdata_ = new T[nx1_*nx2_*nx3_*nx4_*nx5_*nx6_]();
   }
-  AthenaCenterArray(const std::string &label, int nx5, int nx4, int nx3, int nx2,
-                    int nx1) :
+  AthenaArray(const std::string &label, int nx5, int nx4, int nx3, int nx2, int nx1) :
     label_(label), nx1_(nx1), nx2_(nx2), nx3_(nx3), nx4_(nx4), nx5_(nx5), nx6_(1) {
     assert(nx5 > 0 && nx4 > 0 && nx3 > 0 && nx2 > 0 && nx1 > 0);
     pdata_ = new T[nx1_*nx2_*nx3_*nx4_*nx5_*nx6_]();
   }
-  AthenaCenterArray(const std::string &label, int nx4, int nx3, int nx2, int nx1) :
+  AthenaArray(const std::string &label, int nx4, int nx3, int nx2, int nx1) :
     label_(label), nx1_(nx1), nx2_(nx2), nx3_(nx3), nx4_(nx4), nx5_(1), nx6_(1) {
     assert(nx4 > 0 && nx3 > 0 && nx2 > 0 && nx1 > 0);
     pdata_ = new T[nx1_*nx2_*nx3_*nx4_*nx5_*nx6_]();
   }
-  AthenaCenterArray(const std::string &label, int nx3, int nx2, int nx1) :
+  AthenaArray(const std::string &label, int nx3, int nx2, int nx1) :
     label_(label), nx1_(nx1), nx2_(nx2), nx3_(nx3), nx4_(1), nx5_(1), nx6_(1) {
     assert(nx3 > 0 && nx2 > 0 && nx1 > 0);
     pdata_ = new T[nx1_*nx2_*nx3_*nx4_*nx5_*nx6_]();
   }
-  AthenaCenterArray(const std::string &label, int nx2, int nx1) :
+  AthenaArray(const std::string &label, int nx2, int nx1) :
     label_(label), nx1_(nx1), nx2_(nx2), nx3_(1), nx4_(1), nx5_(1), nx6_(1) {
     assert(nx2 > 0 && nx1 > 0);
     pdata_ = new T[nx1_*nx2_*nx3_*nx4_*nx5_*nx6_]();
   }
-  AthenaCenterArray(const std::string &label, int nx1) :
+  AthenaArray(const std::string &label, int nx1) :
     label_(label), nx1_(nx1), nx2_(1), nx3_(1), nx4_(1), nx5_(1), nx6_(1) {
     assert(nx1 > 0);
     pdata_ = new T[nx1_*nx2_*nx3_*nx4_*nx5_*nx6_]();
   }
 
   // dtor, copy & move ctors, move and overload assignment operators defined below
-  AthenaCenterArray(const AthenaCenterArray<T> &t);
-  ~AthenaCenterArray();
-  AthenaCenterArray<T> &operator=(const AthenaCenterArray<T> &t);
-  AthenaCenterArray(AthenaCenterArray<T> &&t);
-  AthenaCenterArray<T> &operator= (AthenaCenterArray<T> &&t);
+  AthenaArray(const AthenaArray<T> &t);
+  ~AthenaArray();
+  AthenaArray<T> &operator=(const AthenaArray<T> &t);
+  AthenaArray(AthenaArray<T> &&t);
+  AthenaArray<T> &operator= (AthenaArray<T> &&t);
 
   // getter functions
   int GetDim(int i) const {
@@ -134,7 +133,7 @@ class AthenaCenterArray {
 // destructor
 
 template<typename T>
-AthenaCenterArray<T>::~AthenaCenterArray() {
+AthenaArray<T>::~AthenaArray() {
   if (pdata_ != nullptr) delete[] pdata_;
 }
 
@@ -143,7 +142,7 @@ AthenaCenterArray<T>::~AthenaCenterArray() {
 
 template<typename T>
 __attribute__((nothrow)) 
-AthenaCenterArray<T>::AthenaCenterArray(const AthenaCenterArray<T>& src) {
+AthenaArray<T>::AthenaArray(const AthenaArray<T>& src) {
   nx1_ = src.nx1_;
   nx2_ = src.nx2_;
   nx3_ = src.nx3_;
@@ -165,7 +164,7 @@ AthenaCenterArray<T>::AthenaCenterArray(const AthenaCenterArray<T>& src) {
 
 template<typename T>
 __attribute__((nothrow))
-AthenaCenterArray<T> &AthenaCenterArray<T>::operator= (const AthenaCenterArray<T> &src) {
+AthenaArray<T> &AthenaArray<T>::operator= (const AthenaArray<T> &src) {
   assert (nx1_ == src.nx1_ && nx2_ == src.nx2_ && nx3_ == src.nx3_ && 
           nx4_ == src.nx4_ && nx5_ == src.nx5_ && nx6_ == src.nx6_);
   if (this != &src) {
@@ -182,7 +181,7 @@ AthenaCenterArray<T> &AthenaCenterArray<T>::operator= (const AthenaCenterArray<T
 
 template<typename T>
 __attribute__((nothrow)) 
-AthenaCenterArray<T>::AthenaCenterArray(AthenaCenterArray<T>&& src) {
+AthenaArray<T>::AthenaArray(AthenaArray<T>&& src) {
   nx1_ = src.nx1_;
   nx2_ = src.nx2_;
   nx3_ = src.nx3_;
@@ -207,7 +206,7 @@ AthenaCenterArray<T>::AthenaCenterArray(AthenaCenterArray<T>&& src) {
 
 template<typename T>
 __attribute__((nothrow))
-AthenaCenterArray<T> &AthenaCenterArray<T>::operator= (AthenaCenterArray<T> &&src) {
+AthenaArray<T> &AthenaArray<T>::operator= (AthenaArray<T> &&src) {
   if (this != &src) {
     delete [] pdata_;   // free the target to prepare to receive src pdata_
     if (src.pdata_) {
@@ -236,7 +235,7 @@ AthenaCenterArray<T> &AthenaCenterArray<T>::operator= (AthenaCenterArray<T> &&sr
 //  \brief allocate new 1D array with elements initialized to zero.
 
 template<typename T>
-void AthenaCenterArray<T>::SetSize(int nx1) {
+void AthenaArray<T>::SetSize(int nx1) {
   nx1_ = nx1;
   nx2_ = 1;
   nx3_ = 1;
@@ -251,7 +250,7 @@ void AthenaCenterArray<T>::SetSize(int nx1) {
 //  \brief 2d data allocation
 
 template<typename T>
-void AthenaCenterArray<T>::SetSize(int nx2, int nx1) {
+void AthenaArray<T>::SetSize(int nx2, int nx1) {
   nx1_ = nx1;
   nx2_ = nx2;
   nx3_ = 1;
@@ -266,7 +265,7 @@ void AthenaCenterArray<T>::SetSize(int nx2, int nx1) {
 //  \brief 3d data allocation
 
 template<typename T>
-void AthenaCenterArray<T>::SetSize(int nx3, int nx2, int nx1) {
+void AthenaArray<T>::SetSize(int nx3, int nx2, int nx1) {
   nx1_ = nx1;
   nx2_ = nx2;
   nx3_ = nx3;
@@ -281,7 +280,7 @@ void AthenaCenterArray<T>::SetSize(int nx3, int nx2, int nx1) {
 //  \brief 4d data allocation
 
 template<typename T>
-void AthenaCenterArray<T>::SetSize(int nx4, int nx3, int nx2,
+void AthenaArray<T>::SetSize(int nx4, int nx3, int nx2,
                                                              int nx1) {
   nx1_ = nx1;
   nx2_ = nx2;
@@ -297,7 +296,7 @@ void AthenaCenterArray<T>::SetSize(int nx4, int nx3, int nx2,
 //  \brief 5d data allocation
 
 template<typename T>
-void AthenaCenterArray<T>::SetSize(int nx5, int nx4, int nx3, int nx2, int nx1) {
+void AthenaArray<T>::SetSize(int nx5, int nx4, int nx3, int nx2, int nx1) {
   nx1_ = nx1;
   nx2_ = nx2;
   nx3_ = nx3;
@@ -312,7 +311,7 @@ void AthenaCenterArray<T>::SetSize(int nx5, int nx4, int nx3, int nx2, int nx1) 
 //  \brief 6d data allocation
 
 template<typename T>
-void AthenaCenterArray<T>::SetSize(int nx6, int nx5, int nx4, int nx3, int nx2, int nx1) {
+void AthenaArray<T>::SetSize(int nx6, int nx5, int nx4, int nx3, int nx2, int nx1) {
   nx1_ = nx1;
   nx2_ = nx2;
   nx3_ = nx3;

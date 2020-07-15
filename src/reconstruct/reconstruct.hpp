@@ -22,12 +22,12 @@ class Reconstruction {
   Reconstruction(std::unique_ptr<ParameterInput> &pin);
   virtual ~Reconstruction() = default;
 
-  virtual void ReconstructX1(const int il, const int iu, const AthenaCenterArray<Real> &w,
-    AthenaCenterArray<Real> &wl, AthenaCenterArray<Real> &wr) = 0;
-  virtual void ReconstructX2(const int il, const int iu, const AthenaCenterArray<Real> &w,
-    AthenaCenterArray<Real> &wl, AthenaCenterArray<Real> &wr) = 0;
-  virtual void ReconstructX3(const int il, const int iu, const AthenaCenterArray<Real> &w,
-    AthenaCenterArray<Real> &wl, AthenaCenterArray<Real> &wr) = 0;
+  virtual void ReconstructX1(const int il, const int iu, const AthenaArray<Real> &w,
+    AthenaArray<Real> &wl, AthenaArray<Real> &wr) = 0;
+  virtual void ReconstructX2(const int il, const int iu, const AthenaArray<Real> &w,
+    AthenaArray<Real> &wl, AthenaArray<Real> &wr) = 0;
+  virtual void ReconstructX3(const int il, const int iu, const AthenaArray<Real> &w,
+    AthenaArray<Real> &wl, AthenaArray<Real> &wr) = 0;
 
  protected:
 };
@@ -40,12 +40,12 @@ class DonorCell : public Reconstruction {
  public:
   DonorCell(std::unique_ptr<ParameterInput> &pin);
 
-  void ReconstructX1(const int il, const int iu, const AthenaCenterArray<Real> &w,
-    AthenaCenterArray<Real> &wl, AthenaCenterArray<Real> &wr) override;
-  void ReconstructX2(const int il, const int iu, const AthenaCenterArray<Real> &w,
-    AthenaCenterArray<Real> &wl, AthenaCenterArray<Real> &wr) override;
-  void ReconstructX3(const int il, const int iu, const AthenaCenterArray<Real> &w,
-    AthenaCenterArray<Real> &wl, AthenaCenterArray<Real> &wr) override;
+  void ReconstructX1(const int il, const int iu, const AthenaArray<Real> &w,
+    AthenaArray<Real> &wl, AthenaArray<Real> &wr) override;
+  void ReconstructX2(const int il, const int iu, const AthenaArray<Real> &w,
+    AthenaArray<Real> &wl, AthenaArray<Real> &wr) override;
+  void ReconstructX3(const int il, const int iu, const AthenaArray<Real> &w,
+    AthenaArray<Real> &wl, AthenaArray<Real> &wr) override;
 
  private:
 };
