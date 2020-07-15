@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file eos.cpp
-//  \brief implements constructors for all EOS base and derived classes
+//  \brief implements ctor and fns for EquationOfState abstract base class
 
 #include <float.h>
 
@@ -25,16 +25,6 @@ EquationOfState::EquationOfState(Hydro *phyd, std::unique_ptr<ParameterInput> &p
 
   density_floor_ = pin->GetOrAddReal("eos","density_floor",(FLT_MIN));
   pressure_floor_ = pin->GetOrAddReal("eos","pressure_floor",(FLT_MIN));
-}
-
-//----------------------------------------------------------------------------------------
-// AdiabaticHydro constructor
-
-AdiabaticHydro::AdiabaticHydro(Hydro *phyd, std::unique_ptr<ParameterInput> &pin)
-  : EquationOfState(phyd, pin) {
-
-  gamma_ = pin->GetReal("eos", "gamma");
-
 }
 
 } // namespace hydro

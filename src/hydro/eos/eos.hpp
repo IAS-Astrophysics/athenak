@@ -27,6 +27,7 @@ class EquationOfState {
 
   Hydro *pmy_hydro;
 
+  // folowing pure virtual functions must be overridden in derived EOS classes
   virtual void ConservedToPrimitive(const int k, const int j, const int il,const  int iu, 
     AthenaArray<Real> &cons, AthenaArray<Real> &prim) = 0;
 
@@ -44,6 +45,7 @@ class AdiabaticHydro : public EquationOfState {
 
   Real GetGamma() const {return gamma_;}
 
+  // functions that implement methods appropriate to adiabatic hydrodynamics
   void ConservedToPrimitive(const int k, const int j, const int il,const  int iu, 
     AthenaArray<Real> &cons, AthenaArray<Real> &prim) override;
 

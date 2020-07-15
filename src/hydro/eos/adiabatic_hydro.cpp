@@ -15,6 +15,17 @@
 #include "eos.hpp"
 
 namespace hydro {
+
+//----------------------------------------------------------------------------------------
+// AdiabaticHydro constructor
+    
+AdiabaticHydro::AdiabaticHydro(Hydro *phyd, std::unique_ptr<ParameterInput> &pin)
+  : EquationOfState(phyd, pin) {
+    
+  gamma_ = pin->GetReal("eos", "gamma");
+    
+}
+
 //----------------------------------------------------------------------------------------
 // \!fn void ConservedToPrimitive()
 // \brief Converts conserved into primitive variables in adiabatic hydro.
