@@ -6,8 +6,9 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file eos.hpp
-//  \brief defines class EquationOfState
-//  Contains data and functions that implement conserved<->primitive variables conversion
+//  \brief defines abstract base class EquationOfState, and various derived classes
+//  Each derived class Contains data and functions that implement conserved<->primitive
+//  variable conversion for that particular EOS, e.g. adiabatic, isothermal, etc.
 
 #include "athena.hpp"
 #include "athena_arrays.hpp"
@@ -36,8 +37,8 @@ class EquationOfState {
 };
 
 //----------------------------------------------------------------------------------------
-//! \class Adiabatic Hydro
-//  \brief derived EOS class for adiabatic hydrodynamics
+//! \class AdiabaticHydro
+//  \brief derived EOS class for nonrelativistic adiabatic hydrodynamics
 
 class AdiabaticHydro : public EquationOfState {
  public:
@@ -51,6 +52,22 @@ class AdiabaticHydro : public EquationOfState {
 
  private:
   Real gamma_;
+};
+
+//----------------------------------------------------------------------------------------
+//! \class IsothermalHydro
+//  \brief derived EOS class for nonrelativistic isothermal hydrodynamics
+
+class IsothermalHydro : public EquationOfState {
+ public:
+  IsothermalHydro(Hydro *phyd, std::unique_ptr<ParameterInput> &pin);
+
+  // functions that implement methods appropriate to adiabatic hydrodynamics
+  void ConservedToPrimitive(const int k, const int j, const int il,const  int iu,
+    AthenaArray<Real> &cons, AthenaArray<Real> &prim) override;
+
+ private:
+  Real iso_cs_;
 };
 
 } // namespace hydro

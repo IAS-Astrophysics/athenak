@@ -80,6 +80,8 @@ Hydro::Hydro(MeshBlock *pmb, std::unique_ptr<ParameterInput> &pin) : pmy_mblock(
   switch (hydro_eos) {
     case HydroEOS::adiabatic:
       peos = new AdiabaticHydro(this, pin);
+    case HydroEOS::isothermal:
+      peos = new IsothermalHydro(this, pin);
   }
 
   // construct reconstruction object
