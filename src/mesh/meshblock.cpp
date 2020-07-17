@@ -19,23 +19,23 @@
 
 MeshBlock::MeshBlock(Mesh *pm, std::unique_ptr<ParameterInput> &pin,
                      RegionSize input_block, BoundaryFlag *input_bcs) :
-    pmy_mesh(pm), mb_size(input_block) {
+    pmy_mesh(pm), mblock_size(input_block) {
 
   // copy input boundary flags into MeshBlock 
-  for (int i=0; i<6; ++i) {mb_bcs[i] = input_bcs[i];}
+  for (int i=0; i<6; ++i) {mblock_bcs[i] = input_bcs[i];}
 
   // initialize grid indices
-  indx.is = mb_size.nghost;
-  indx.ie = indx.is + mb_size.nx1 - 1;
-  indx.nghost = mb_size.nghost;
-  indx.nx1 = mb_size.nx1;
-  indx.ncells1 = mb_size.nx1 + 2*mb_size.nghost;
+  indx.is = mblock_size.nghost;
+  indx.ie = indx.is + mblock_size.nx1 - 1;
+  indx.nghost = mblock_size.nghost;
+  indx.nx1 = mblock_size.nx1;
+  indx.ncells1 = mblock_size.nx1 + 2*mblock_size.nghost;
 
-  if (mb_size.nx2 > 1) {
-    indx.js = mb_size.nghost;
-    indx.je = indx.js + mb_size.nx2 - 1;
-    indx.nx2 = mb_size.nx2;
-    indx.ncells2 = mb_size.nx2 + 2*mb_size.nghost;
+  if (mblock_size.nx2 > 1) {
+    indx.js = mblock_size.nghost;
+    indx.je = indx.js + mblock_size.nx2 - 1;
+    indx.nx2 = mblock_size.nx2;
+    indx.ncells2 = mblock_size.nx2 + 2*mblock_size.nghost;
   } else {
     indx.js = 0;
     indx.je = 0;
@@ -43,11 +43,11 @@ MeshBlock::MeshBlock(Mesh *pm, std::unique_ptr<ParameterInput> &pin,
     indx.ncells2 = 1;
   }
 
-  if (mb_size.nx3 > 1) {
-    indx.ks = mb_size.nghost;
-    indx.ke = indx.ks + mb_size.nx3 - 1;
-    indx.nx3 = mb_size.nx3;
-    indx.ncells3 = mb_size.nx3 + 2*mb_size.nghost;
+  if (mblock_size.nx3 > 1) {
+    indx.ks = mblock_size.nghost;
+    indx.ke = indx.ks + mblock_size.nx3 - 1;
+    indx.nx3 = mblock_size.nx3;
+    indx.ncells3 = mblock_size.nx3 + 2*mblock_size.nghost;
   } else {
     indx.ks = 0;
     indx.ke = 0;
@@ -57,15 +57,15 @@ MeshBlock::MeshBlock(Mesh *pm, std::unique_ptr<ParameterInput> &pin,
 
   // initialize coarse grid indices
   if (pm->multilevel) {
-    cindx.nghost = (mb_size.nghost + 1)/2 + 1;
+    cindx.nghost = (mblock_size.nghost + 1)/2 + 1;
     cindx.is = cindx.nghost;
-    cindx.ie = cindx.is + mb_size.nx1/2 - 1;
+    cindx.ie = cindx.is + mblock_size.nx1/2 - 1;
     cindx.nx1 = cindx.ie - cindx.is + 1;
     cindx.ncells1 = cindx.nx1 + 2*cindx.nghost;
 
-    if (mb_size.nx2 > 1) {
+    if (mblock_size.nx2 > 1) {
       cindx.js = cindx.nghost;
-      cindx.je = cindx.js + mb_size.nx2/2 - 1;
+      cindx.je = cindx.js + mblock_size.nx2/2 - 1;
       cindx.nx2 = cindx.je - cindx.js + 1;
       cindx.ncells2 = cindx.nx2 + 2*cindx.nghost;
     } else {
@@ -75,9 +75,9 @@ MeshBlock::MeshBlock(Mesh *pm, std::unique_ptr<ParameterInput> &pin,
       cindx.ncells2 = 1;
     }
   
-    if (mb_size.nx3 > 1) {
+    if (mblock_size.nx3 > 1) {
       cindx.ks = cindx.nghost;
-      cindx.ke = cindx.ks + mb_size.nx3/2 - 1;
+      cindx.ke = cindx.ks + mblock_size.nx3/2 - 1;
       cindx.nx3 = cindx.ke - cindx.ks + 1;
       cindx.ncells3 = cindx.nx3 + 2*cindx.nghost;
     } else {

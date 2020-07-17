@@ -75,9 +75,9 @@ using namespace hydro;
   int &is = pmb->indx.is, &ie = pmb->indx.ie;
   int &js = pmb->indx.js, &je = pmb->indx.je;
   int &ks = pmb->indx.ks, &ke = pmb->indx.ke;
-  Real &x1min = pmb->mb_size.x1min, &x1max = pmb->mb_size.x1max;
-  Real &x2min = pmb->mb_size.x2min, &x2max = pmb->mb_size.x2max;
-  Real &x3min = pmb->mb_size.x3min, &x3max = pmb->mb_size.x3max;
+  Real &x1min = pmb->mblock_size.x1min, &x1max = pmb->mblock_size.x1max;
+  Real &x2min = pmb->mblock_size.x2min, &x2max = pmb->mblock_size.x2max;
+  Real &x3min = pmb->mblock_size.x3min, &x3max = pmb->mblock_size.x3max;
 
   switch(shk_dir) {
 

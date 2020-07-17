@@ -54,9 +54,9 @@ using namespace hydro;
     exit(EXIT_FAILURE);
   }
 
-  Real &x1min = pmb->mb_size.x1min, &x1max = pmb->mb_size.x1max;
-  Real &x2min = pmb->mb_size.x2min, &x2max = pmb->mb_size.x2max;
-  Real &x3min = pmb->mb_size.x3min, &x3max = pmb->mb_size.x3max;
+  Real &x1min = pmb->mblock_size.x1min, &x1max = pmb->mblock_size.x1max;
+  Real &x2min = pmb->mblock_size.x2min, &x2max = pmb->mblock_size.x2max;
+  Real &x3min = pmb->mblock_size.x3min, &x3max = pmb->mblock_size.x3max;
   for (int k=ks; k<=ke; k++) {
     for (int j=js; j<=je; j++) {
       for (int i=is; i<=ie; i++) {

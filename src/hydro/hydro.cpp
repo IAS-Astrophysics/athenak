@@ -21,10 +21,6 @@ namespace hydro {
 
 Hydro::Hydro(MeshBlock *pmb, std::unique_ptr<ParameterInput> &pin) : pmy_mblock(pmb) {
 
-  // allocate memory for conserved and primitive variables
-  u.SetSize(5, pmb->indx.ncells3, pmb->indx.ncells2, pmb->indx.ncells1);
-  w.SetSize(5, pmb->indx.ncells3, pmb->indx.ncells2, pmb->indx.ncells1);
-
   // set EOS option (no default)
   {std::string eqn_of_state   = pin->GetString("hydro","eos");
   if (eqn_of_state.compare("adiabatic")) {
@@ -82,9 +78,14 @@ Hydro::Hydro(MeshBlock *pmb, std::unique_ptr<ParameterInput> &pin) : pmy_mblock(
   switch (hydro_eos) {
     case HydroEOS::adiabatic:
       peos = new AdiabaticHydro(this, pin);
+      nhydro = 5;
     case HydroEOS::isothermal:
       peos = new IsothermalHydro(this, pin);
+      nhydro = 4;
   }
+
+  // allocate memory for conserved variables
+  u.SetSize(nhydro, pmb->indx.ncells3, pmb->indx.ncells2, pmb->indx.ncells1);
 
   // construct reconstruction object
   switch (hydro_recon) {

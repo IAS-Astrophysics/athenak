@@ -43,13 +43,17 @@ class Hydro {
   Reconstruction  *precon;    // object that implements chosen reconstruction methods
   RiemannSolver   *prsolver;  // object that implements chosen Riemann solver
 
-  AthenaArray<Real> u, w;    // conserved and primitive variables
+  int nhydro;             // number of conserved variables (5/4 for adiabatic/isothermal)
+  AthenaArray<Real> u;    // conserved variables
+  AthenaArray<Real> u1;   // conserved variables at intermediate step 
 
   // functions
   void HydroDivFlux(AthenaArray<Real> &divf);
+  void UpdateHydro(AthenaArray<Real> &u0, AthenaArray<Real> &u1, AthenaArray<Real> &divf);
 
  private:
-  AthenaArray<Real> w_,wl_,wr_,flx_;   // 1D scratch vectors
+  AthenaArray<Real> w_,wl_,wr_,uflux_;   // 1 spatial-D scratch vectors
+  AthenaArray<Real> divf_;              // divergence of fluxes (3 spatial-D)
 
 };
 

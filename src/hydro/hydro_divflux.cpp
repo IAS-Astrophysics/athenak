@@ -30,24 +30,14 @@ void Hydro::HydroDivFlux(AthenaArray<Real> &divf) {
     for (int j=js; j<=je; ++j) {
 
       peos->ConservedToPrimitive(k, j, is-nghost, ie+nghost, u, w_);
+      precon->ReconstructX1(is-1, ie+1, w_, wl_, wr_);
+      prsolver->RSolver(is, ie+1, IVX, wl_, wr_, uflux_);
 
-
-//      ReconstructX1(is-1, ie+1, w_, wl_, wr_);
-
-      // reconstruct L/R states
-//      if (order == 1) {
-//        pmb->precon->DonorCellX1(k, j, is-1, ie+1, w, bcc, wl_, wr_);
-//      } else if (order == 2) {
-//        pmb->precon->PiecewiseLinearX1(k, j, is-1, ie+1, w, bcc, wl_, wr_);
-//      } else {
-//        pmb->precon->PiecewiseParabolicX1(k, j, is-1, ie+1, w, bcc, wl_, wr_);
-//      }
-
-//      RiemannSolver(is, ie+1, IVX, wl_, wr_, x1flux_);
-
-//      for (int i=is; i<=ie; ++i) {
-//        divf(n,k,j,i) = (x1flux_(n,i+1) - x1flux_(i))/dx;
-//      }
+      for (int n=0; n<nhydro; ++n) {
+        for (int i=is; i<=ie; ++i) {
+          divf_(n,k,j,i) = (uflux_(n,i+1) - uflux_(n,i))/pmy_mblock->mblock_size.dx1;
+        }
+      }
 
     }
   }

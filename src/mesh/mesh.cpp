@@ -122,6 +122,11 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
     std::exit(EXIT_FAILURE);
   }
 
+  // passed error checks, compute grid spacing in (virtual) mesh grid
+  mesh_size.dx1 = (mesh_size.x1max-mesh_size.x1min)/static_cast<Real>(mesh_size.nx1);
+  mesh_size.dx2 = (mesh_size.x2max-mesh_size.x2min)/static_cast<Real>(mesh_size.nx2);
+  mesh_size.dx3 = (mesh_size.x3max-mesh_size.x3min)/static_cast<Real>(mesh_size.nx3);
+
   //=== Step 2 =========================================================
   // Set # of cells in MeshBlock read from input parameters, error check
 
@@ -656,6 +661,12 @@ void Mesh::SetBlockSizeAndBoundaries(LogicalLocation loc, RegionSize &block_size
       block_bcs[BoundaryFace::outer_x3] = BoundaryFlag::block;
     }
   }
+  // grid spacing at this level.  Ensure all MeshBlocks at same level have same dx
+  block_size.dx1 = mesh_size.dx1*static_cast<Real>(1<<(loc.level - root_level));
+  block_size.dx2 = mesh_size.dx2*static_cast<Real>(1<<(loc.level - root_level));
+  block_size.dx3 = mesh_size.dx3*static_cast<Real>(1<<(loc.level - root_level));
+std::cout << "dx1=" << block_size.dx1 << "  dx2=" << block_size.dx2 << "  dx3=" << block_size.dx3 << std::endl;
+  // everything else
   block_size.x1rat = mesh_size.x1rat;
   block_size.x2rat = mesh_size.x2rat;
   block_size.x3rat = mesh_size.x3rat;

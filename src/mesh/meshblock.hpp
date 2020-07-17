@@ -45,9 +45,9 @@ class MeshBlock {
 
   // data
   Mesh *pmy_mesh;  // ptr to Mesh containing this MeshBlock
-  int mb_gid;      // grid ID, unique identifier for this MeshBlock
-  RegionSize mb_size;     // info about size of this MeshBlock
-  BoundaryFlag mb_bcs[6]; // enums specifying BCs at all 6 faces of this MeshBlock
+  int mblock_gid;      // grid ID, unique identifier for this MeshBlock
+  RegionSize mblock_size;     // info about size of this MeshBlock
+  BoundaryFlag mblock_bcs[6]; // enums specifying BCs at all 6 faces of this MeshBlock
 
   // indices (is,ie,js,je,ks,ke, etc.) of arrays 
   GridIndices indx;
@@ -60,7 +60,7 @@ class MeshBlock {
 
   // functions
   int GetNumberOfMeshBlockCells()
-    { return mb_size.nx1 * mb_size.nx2 * mb_size.nx3; }
+    { return mblock_size.nx1 * mblock_size.nx2 * mblock_size.nx3; }
 
  private:
   // data

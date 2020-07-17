@@ -117,15 +117,15 @@ void OutputType::LoadOutputData(std::unique_ptr<Mesh> &pm) {
     int islice=0, jslice=0, kslice=0;
     if (output_params.slice1) {
       islice = pm->CellCenterIndex(output_params.slice_x1, pmb->indx.nx1,
-        pmb->mb_size.x1min, pmb->mb_size.x1max);
+        pmb->mblock_size.x1min, pmb->mblock_size.x1max);
     }
     if (output_params.slice2) {
       jslice = pm->CellCenterIndex(output_params.slice_x2, pmb->indx.nx2,
-        pmb->mb_size.x2min, pmb->mb_size.x2max);
+        pmb->mblock_size.x2min, pmb->mblock_size.x2max);
     }
     if (output_params.slice3) {
       kslice = pm->CellCenterIndex(output_params.slice_x3, pmb->indx.nx3,
-        pmb->mb_size.x3min, pmb->mb_size.x3max);
+        pmb->mblock_size.x3min, pmb->mblock_size.x3max);
     }
 
     // note the complicated addressing of array indices.  The output array does not
