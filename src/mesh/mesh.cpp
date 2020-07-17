@@ -25,6 +25,7 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
 
   //=== Step 1 ===============================================
   // Set properties of Mesh from input parameters, error check
+
   mesh_size.x1min = pin->GetReal("mesh", "x1min");
   mesh_size.x1max = pin->GetReal("mesh", "x1max");
   mesh_size.x2min = pin->GetReal("mesh", "x2min");
@@ -122,8 +123,8 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
   }
 
   //=== Step 2 =========================================================
-  // Set properties of MeshBlock read from input parameters, error check
-  // properties read from input file are number of cells in each dim
+  // Set # of cells in MeshBlock read from input parameters, error check
+
   RegionSize inblock_size;
   inblock_size.x1rat = mesh_size.x1rat;
   inblock_size.x2rat = mesh_size.x2rat;
@@ -176,7 +177,7 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
   tree.CreateRootGrid();
 
   //=== Step 4 =======================================================
-  // Error check properties for SMR/AMR meshes.
+  // Error check properties of input paraemters for SMR/AMR meshes.
 
   if (adaptive) {
     max_level = pin->GetOrAddInteger("mesh", "numlevel", 1) + root_level - 1;
@@ -401,6 +402,14 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
   }
 
   ResetLoadBalance();
+
+  //=== Step 5 =======================================================
+  // set initial time/cycle parameters
+
+  time = pin->GetOrAddReal("time", "start_time", 0.0);
+  dt   = std::numeric_limits<float>::max();
+  cfl_no = pin->GetReal("time", "cfl_number");
+  ncycle = 0;
 }
 
 //----------------------------------------------------------------------------------------

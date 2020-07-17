@@ -35,9 +35,7 @@ add_executable(
         pgen/shock_tube.cpp
         pgen/advection.cpp
 
-        reconstruct/reconstruct.cpp
-        reconstruct/dc.cpp
-
+        utils/change_rundir.cpp
         utils/show_config.cpp
 )
 

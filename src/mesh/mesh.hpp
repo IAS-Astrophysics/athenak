@@ -82,6 +82,8 @@ class Mesh {
   int nmbx1_r, nmbx2_r, nmbx3_r; // number of MeshBlocks in each dir at root level
   int nmbtotal;                  // total number of MeshBlocks across all levels
   int nmbthisrank;               // number of MeshBlocks on this MPI rank (local)
+  Real time, dt, cfl_no;           
+  int ncycle;
 
   std::vector<MeshBlock> mblocks; // MeshBlocks belonging to this MPI rank
 

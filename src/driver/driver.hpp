@@ -11,6 +11,12 @@
 #include "athena_arrays.hpp"
 #include "parameter_input.hpp"
 
+// constants that enumerate time evolution options
+enum class DriverTimeEvolution {hydrostatic, kinematic, hydrodynamic, no_time_evolution};
+
+//----------------------------------------------------------------------------------------
+//! \class Driver
+
 class Driver {
  public:
   Driver(std::unique_ptr<ParameterInput> &pin, std::unique_ptr<Mesh> &pmesh,
@@ -18,9 +24,13 @@ class Driver {
   ~Driver() = default;
 
   // data
+  DriverTimeEvolution time_evolution;
+  Real tlim;
+  int nlim, ndiag;
 
   // functions
   void Execute(std::unique_ptr<Mesh> &pmesh, std::unique_ptr<Outputs> &pout);
+  void OutputCycleDiagnostics(std::unique_ptr<Mesh> &pm);
 
 
  private:

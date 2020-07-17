@@ -10,16 +10,23 @@
 
 #include "athena_arrays.hpp"
 #include "parameter_input.hpp"
-//#include "mesh/mesh.hpp"
 #include "hydro/eos/eos.hpp"
-
-  typedef void (hydro::EquationOfState::*fptr)(const int k, const int j, const int il,
-    const int iu, AthenaArray<Real> &cons, AthenaArray<Real> &prim);
+#include "reconstruct/reconstruct.hpp"
+#include "hydro/rsolver/rsolver.hpp"
 
 namespace hydro {
 
+// constants that enumerate Hydro physics options
+enum class HydroEOS {adiabatic, isothermal};
+enum class HydroReconMethod {donor_cell, piecewise_linear, piecewise_parabolic};
+enum class HydroRiemannSolver {llf, hlle, hllc, roe};
+
+// constants that determine array index of Hydro variables
 enum ConsIndex {IDN=0, IM1=1, IM2=2, IM3=3, IEN=4};
 enum PrimIndex {IVX=1, IVY=2, IVZ=3, IPR=4};
+
+//----------------------------------------------------------------------------------------
+//! \class Hydro
 
 class Hydro {
  public:
@@ -27,17 +34,22 @@ class Hydro {
   ~Hydro();
 
   // data
-  MeshBlock* pmy_mblock;    // ptr to MeshBlock containing this Hydro
+  MeshBlock* pmy_mblock;              // ptr to MeshBlock containing this Hydro
+  HydroEOS hydro_eos;                 // enum storing choice for EOS
+  HydroReconMethod hydro_recon;       // enum storing choice of reconstruction method
+  HydroRiemannSolver hydro_rsolver;   // enum storing choice of Riemann solver
+
+  EquationOfState *peos;      // object that implements chosen EOS
+//  Reconstruction  *precon;    // object that implements chosen reconstruction methods
+//  RSolver         *prsolver;  // object that implements chosen Riemann solver
+
   AthenaArray<Real> u, w;    // conserved and primitive variables
 
-  EquationOfState *peos;    // EOS object that implements conserved<->primitive
-
   // functions
-  void CalculateDivFlux(AthenaArray<Real> &divf);
-  fptr ConservedToPrimitive;
+  void HydroDivFlux(AthenaArray<Real> &divf);
 
  private:
-  AthenaArray<Real> w_;
+  AthenaArray<Real> w_,wl_,wr_,flx_;   // 1D scratch vectors
 
 };
 

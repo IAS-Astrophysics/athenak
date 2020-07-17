@@ -39,7 +39,9 @@
 //  \brief AthenaK main program
 
 int main(int argc, char *argv[]) {
-  char *input_filename = nullptr, *restart_filename = nullptr, *prundir = nullptr;
+  char *input_filename = nullptr;
+  char *restart_filename = nullptr;
+  char *prundir = nullptr;
   int  res_flag = 0;  // set to 1 if -r        argument is on cmdline 
   int narg_flag = 0;  // set to 1 if -n        argument is on cmdline
   int marg_flag = 0;  // set to 1 if -m        argument is on cmdline
@@ -250,6 +252,7 @@ int main(int argc, char *argv[]) {
   std::unique_ptr<Driver> pdrive;
   pdrive = std::make_unique<Driver>(pinput, pmesh, pout);
 
+  ChangeRunDir(prundir);
   pdrive->Execute(pmesh, pout);
 
   //--- Step 9. -------------------------------------------------------------------------
