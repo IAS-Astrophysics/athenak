@@ -18,7 +18,6 @@ namespace hydro {
 
 // constants that enumerate Hydro physics options
 enum class HydroEOS {adiabatic, isothermal};
-enum class HydroReconMethod {donor_cell, piecewise_linear, piecewise_parabolic};
 enum class HydroRiemannSolver {llf, hlle, hllc, roe};
 
 // constants that determine array index of Hydro variables
@@ -36,11 +35,11 @@ class Hydro {
   // data
   MeshBlock* pmy_mblock;              // ptr to MeshBlock containing this Hydro
   HydroEOS hydro_eos;                 // enum storing choice for EOS
-  HydroReconMethod hydro_recon;       // enum storing choice of reconstruction method
+  ReconstructionMethod hydro_recon;   // enum storing choice of reconstruction method
   HydroRiemannSolver hydro_rsolver;   // enum storing choice of Riemann solver
 
   EquationOfState *peos;      // object that implements chosen EOS
-//  Reconstruction  *precon;    // object that implements chosen reconstruction methods
+  Reconstruction  *precon;    // object that implements chosen reconstruction methods
 //  RSolver         *prsolver;  // object that implements chosen Riemann solver
 
   AthenaArray<Real> u, w;    // conserved and primitive variables

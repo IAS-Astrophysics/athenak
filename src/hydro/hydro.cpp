@@ -41,11 +41,11 @@ Hydro::Hydro(MeshBlock *pmb, std::unique_ptr<ParameterInput> &pin) : pmy_mblock(
   // set reconstruction method option (default PPM)
   {std::string recon_method = pin->GetOrAddString("hydro","recon","plm");
   if (recon_method.compare("dc")) {
-    hydro_recon = HydroReconMethod::donor_cell;
+    hydro_recon = ReconstructionMethod::donor_cell;
   } else if (recon_method.compare("plm")) {
-    hydro_recon = HydroReconMethod::piecewise_linear;
+    hydro_recon = ReconstructionMethod::piecewise_linear;
   } else if (recon_method.compare("ppm")) {
-    hydro_recon = HydroReconMethod::piecewise_parabolic;
+    hydro_recon = ReconstructionMethod::piecewise_parabolic;
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "<hydro> recon = '" << recon_method << "' not implemented"
@@ -85,10 +85,10 @@ Hydro::Hydro(MeshBlock *pmb, std::unique_ptr<ParameterInput> &pin) : pmy_mblock(
   }
 
   // construct reconstruction object
-//  switch (hydro_recon) {
-//    case donor_cell:
-//      precon = new DonorCell();
-//  }
+  switch (hydro_recon) {
+    case ReconstructionMethod::donor_cell:
+      precon = new DonorCell(pin);
+  }
 
   // construct Riemann solver object
 //  switch (hydro_rsolver) {
