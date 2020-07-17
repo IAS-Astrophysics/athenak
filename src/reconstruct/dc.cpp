@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file dc.cpp
-//  \brief piecewise constant (donor cell) reconstruction
+//  \brief implements piecewise constant (donor cell) reconstruction in derived class
 
 #include "athena.hpp"
 #include "athena_arrays.hpp"
@@ -12,7 +12,14 @@
 #include "reconstruct.hpp"
 
 //----------------------------------------------------------------------------------------
-//! \fn Reconstruction::DonorCellX1()
+// DonorCell constructor
+
+DonorCell::DonorCell(std::unique_ptr<ParameterInput> &pin) : Reconstruction(pin) {
+  
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn DonorCell::ReconstructX1()
 //  \brief reconstruct L/R surfaces of the i-th cells
 
 void DonorCell::ReconstructX1(const int il, const int iu, const AthenaArray<Real> &w,
@@ -28,7 +35,7 @@ void DonorCell::ReconstructX1(const int il, const int iu, const AthenaArray<Real
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn Reconstruction::DonorCellX2()
+//! \fn DonorCell::ReconstructX2()
 //  \brief
 
 
@@ -45,7 +52,7 @@ void DonorCell::ReconstructX2(const int il, const int iu, const AthenaArray<Real
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn Reconstruction::DonorCellX3()
+//! \fn DonorCell::ReconstructX3()
 //  \brief
 
 void DonorCell::ReconstructX3(const int il, const int iu, const AthenaArray<Real> &w,

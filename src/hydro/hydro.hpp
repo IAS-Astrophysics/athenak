@@ -8,6 +8,7 @@
 //! \file hydro.hpp
 //  \brief definitions for Hydro class
 
+#include "athena.hpp"
 #include "athena_arrays.hpp"
 #include "parameter_input.hpp"
 #include "hydro/eos/eos.hpp"
@@ -17,12 +18,12 @@
 namespace hydro {
 
 // constants that enumerate Hydro physics options
-enum class HydroEOS {adiabatic, isothermal};
-enum class HydroRiemannSolver {llf, hlle, hllc, roe};
+//enum class HydroEOS {adiabatic, isothermal};
+//enum class HydroRiemannSolver {llf, hlle, hllc, roe};
 
 // constants that determine array index of Hydro variables
-enum ConsIndex {IDN=0, IM1=1, IM2=2, IM3=3, IEN=4};
-enum PrimIndex {IVX=1, IVY=2, IVZ=3, IPR=4};
+//enum ConsIndex {IDN=0, IM1=1, IM2=2, IM3=3, IEN=4};
+//enum PrimIndex {IVX=1, IVY=2, IVZ=3, IPR=4};
 
 //----------------------------------------------------------------------------------------
 //! \class Hydro
@@ -40,7 +41,7 @@ class Hydro {
 
   EquationOfState *peos;      // object that implements chosen EOS
   Reconstruction  *precon;    // object that implements chosen reconstruction methods
-//  RSolver         *prsolver;  // object that implements chosen Riemann solver
+  RiemannSolver   *prsolver;  // object that implements chosen Riemann solver
 
   AthenaArray<Real> u, w;    // conserved and primitive variables
 

@@ -20,6 +20,8 @@ add_executable(
         hydro/eos/eos.cpp
         hydro/eos/adiabatic_hydro.cpp
         hydro/eos/isothermal_hydro.cpp
+        hydro/rsolver/rsolver.cpp
+        hydro/rsolver/llf.cpp
 
         mesh/interface_physics.cpp
         mesh/load_balance.cpp

@@ -51,7 +51,7 @@ class MeshBlock {
 
   // indices (is,ie,js,je,ks,ke, etc.) of arrays 
   GridIndices indx;
-  // indices on 1x coarser level MeshBlock (i.e. ncc2=nx2/2 + 2*NGHOST, if nx2>1)
+  // indices on 1x coarser level MeshBlock (i.e. ncc2=nx2/2 + 2*nghost, if nx2>1)
   GridIndices cindx;
 
   // physics modules (controlled by Mesh::SelectPhysics)

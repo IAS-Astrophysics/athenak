@@ -22,7 +22,6 @@ void ShowConfig() {
   } else {
     std::cout<<"  Floating-point precision:   double" << std::endl;
   }
-  std::cout<<"  Number of ghost cells:      " << NGHOST << std::endl;
 #ifdef MPI_PARALLEL_ON
   std::cout<<"  MPI parallelism:            ON" << std::endl;
 #else

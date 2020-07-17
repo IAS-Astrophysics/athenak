@@ -6,9 +6,6 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 
-// number of ghost cells (string)
-#define NGHOST "@ATHENA_NGHOST@"
-
 // problem generator (string)
 #define PROBLEM_GENERATOR "@PROBLEM@"
 

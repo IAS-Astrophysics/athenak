@@ -6,7 +6,10 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file reconstruct.hpp
-//  \brief defines class Reconstruction
+//  \brief defines abstract base class Reconstruction, and various derived classes
+//  Each derived class Contains data and functions that implement different spatial
+// reconstruction algorithms, e.g. first-order donor cell, second-order piecewise linear,
+// and third-order piecewise parabolic.
 
 #include "athena.hpp"
 #include "athena_arrays.hpp"
@@ -18,7 +21,7 @@ enum class ReconstructionMethod {donor_cell, piecewise_linear, piecewise_parabol
 
 //----------------------------------------------------------------------------------------
 //! \class EquationOfState
-//  \brief abstract base class for all EOS classes
+//  \brief abstract base class for all Reconstruction classes
 
 class Reconstruction {
  public:
@@ -37,7 +40,7 @@ class Reconstruction {
 
 //----------------------------------------------------------------------------------------
 //! \class DonorCell
-//  \brief derived class
+//  \brief derived Reconstruction class for first-order donor cell method
 
 class DonorCell : public Reconstruction {
  public:

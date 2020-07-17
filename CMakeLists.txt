@@ -5,13 +5,12 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 project(athena VERSION 20.0)
 
-# ----- default values for compile time options  ---------------------------------------------------
-set(ATHENA_NGHOST 2 CACHE STRING "Number of ghost cells") 
+# ----- default values for compile time options  -----------------------------------------
 option(ATHENA_SINGLE_PRECISION "Compile for single precision" OFF)
 option(ATHENA_MPI_ENABLED "Compile with MPI parallelism enabled" OFF)
 option(ATHENA_OPENMP_ENABLED "Compile with OpenMP parallelism enabled" OFF)
 
-# ----- set macros exported to config.hpp ----------------------------------------------------------
+# ----- set macros exported to config.hpp ------------------------------------------------
 # set single precision macro (true/false)
 if ( ATHENA_SINGLE_PRECISION )
   set(SINGLE_PRECISION_ENABLED 1)
@@ -49,7 +48,7 @@ else()
   set(OPENMP_PARALLEL_ENABLED 0)
 endif()
 
-#---------------------------------------------------------------------------------------------------
+#-----------------------------------------------------------------------------------------
 # create configuration header file from template in /src directory
 configure_file(config.hpp.in config.hpp)
 

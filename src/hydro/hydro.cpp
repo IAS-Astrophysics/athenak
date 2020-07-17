@@ -91,10 +91,10 @@ Hydro::Hydro(MeshBlock *pmb, std::unique_ptr<ParameterInput> &pin) : pmy_mblock(
   }
 
   // construct Riemann solver object
-//  switch (hydro_rsolver) {
-//    case llf:
-//      prsolver = new LLF();
-//////  }
+  switch (hydro_rsolver) {
+    case HydroRiemannSolver::llf:
+      prsolver = new LLF(this, pin);
+  }
 
 }
 
