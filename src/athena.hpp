@@ -39,7 +39,7 @@ using Real = double;
 namespace hydro {
 // constants that enumerate Hydro physics options
 enum class HydroEOS {adiabatic, isothermal};
-enum class HydroRiemannSolver {llf, hlle, hllc, roe};
+enum class HydroRiemannSolver {advection, llf, hlle, hllc, roe};
 
 // constants that determine array index of Hydro variables
 enum ConsIndex {IDN=0, IM1=1, IM2=2, IM3=3, IEN=4};

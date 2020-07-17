@@ -60,7 +60,9 @@ Hydro::Hydro(MeshBlock *pmb, std::unique_ptr<ParameterInput> &pin) : pmy_mblock(
   } else {
     rsolver = pin->GetOrAddString("hydro","rsolver","hllc"); 
   }
-  if (rsolver.compare("llf")) {
+  if (rsolver.compare("advection")) {
+    hydro_rsolver = HydroRiemannSolver::advection;
+  } else if (rsolver.compare("llf")) {
     hydro_rsolver = HydroRiemannSolver::llf;
   } else if (rsolver.compare("hlle")) {
     hydro_rsolver = HydroRiemannSolver::hlle;
@@ -92,6 +94,8 @@ Hydro::Hydro(MeshBlock *pmb, std::unique_ptr<ParameterInput> &pin) : pmy_mblock(
 
   // construct Riemann solver object
   switch (hydro_rsolver) {
+    case HydroRiemannSolver::advection:
+      prsolver = new Advection(this, pin);
     case HydroRiemannSolver::llf:
       prsolver = new LLF(this, pin);
   }

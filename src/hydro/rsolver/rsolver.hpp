@@ -35,6 +35,20 @@ class RiemannSolver {
 };
 
 //----------------------------------------------------------------------------------------
+//! \class Advection
+//  \brief derived RiemannSolver class for pure advection problems
+
+class Advection : public RiemannSolver {
+ public:
+  Advection(Hydro *phyd, std::unique_ptr<ParameterInput> &pin);
+
+  void RSolver(const int il, const  int iu, const int dir, const AthenaArray<Real> &wl,
+    const AthenaArray<Real> &wr, AthenaArray<Real> &flx) override;
+
+ private:
+};
+
+//----------------------------------------------------------------------------------------
 //! \class LLF
 //  \brief derived RiemannSolver class for local Lax-Friedrichs (LLF) hydro solver
 
