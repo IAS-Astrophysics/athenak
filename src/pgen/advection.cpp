@@ -32,7 +32,7 @@ using namespace hydro;
   // Read input parameters
   int flow_dir = pin->GetInteger("problem","flow_dir");
   int iprob = pin->GetInteger("problem","iproblem");
-  Real u0 = pin->GetOrAddReal("problem","velocity",1.0);
+  Real vel = pin->GetOrAddReal("problem","velocity",1.0);
   Real amp = pin->GetOrAddReal("problem","amplitude",0.1);
 
   // Initialize the grid
@@ -60,23 +60,23 @@ using namespace hydro;
   for (int k=ks; k<=ke; k++) {
     for (int j=js; j<=je; j++) {
       for (int i=is; i<=ie; i++) {
-        Real r;
+        Real r; // coordinate that will span [0->1]
         if (flow_dir == 1) {
-          r = pmb->pmy_mesh->CellCenterX(i, pmb->indx.nx1, x1min, x1max)/length;
+          r = (pmb->pmy_mesh->CellCenterX(i, pmb->indx.nx1, x1min, x1max)-x1min)/length;
         } else if (flow_dir == 2) {
-          r = pmb->pmy_mesh->CellCenterX(j, pmb->indx.nx2, x2min, x2max)/length;
+          r = (pmb->pmy_mesh->CellCenterX(j, pmb->indx.nx2, x2min, x2max)-x2min)/length;
         } else {
-          r = pmb->pmy_mesh->CellCenterX(k, pmb->indx.nx3, x3min, x3max)/length;
+          r = (pmb->pmy_mesh->CellCenterX(k, pmb->indx.nx3, x3min, x3max)-x3min)/length;
         }
 
         // iprob=1: sine wave
         if (iprob == 1) {
-          pmb->phydro->u(IDN,k,j,i) = 1.0 + amp*std::sin(2.0*(M_PI)*r);
+          pmb->phydro->u0(IDN,k,j,i) = 1.0 + amp*std::sin(2.0*(M_PI)*r);
 
-        // iprob=2: square wave (needs domain -1 < x < 1)
+        // iprob=2: square wave in second quarter of domain
         } else if (iprob == 2) {
-          pmb->phydro->u(IDN,k,j,i) = 1.0;
-          if (std::abs(r) <= 0.5) pmb->phydro->u(IDN,k,j,i) += amp;
+          pmb->phydro->u0(IDN,k,j,i) = 1.0;
+          if (r >= 0.25 && r <= 0.5) pmb->phydro->u0(IDN,k,j,i) += amp;
         } else {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
              << std::endl << "problem/iproblem=" << iprob 
@@ -86,20 +86,20 @@ using namespace hydro;
 
         // now compute momenta, total energy
         if (flow_dir == 1) {
-          pmb->phydro->u(IM1,k,j,i) = u0*pmb->phydro->u(IDN,k,j,i);
-          pmb->phydro->u(IM2,k,j,i) = 0.0;
-          pmb->phydro->u(IM3,k,j,i) = 0.0;
+          pmb->phydro->u0(IM1,k,j,i) = vel*pmb->phydro->u0(IDN,k,j,i);
+          pmb->phydro->u0(IM2,k,j,i) = 0.0;
+          pmb->phydro->u0(IM3,k,j,i) = 0.0;
         } else if (flow_dir == 2) {
-          pmb->phydro->u(IM1,k,j,i) = 0.0;
-          pmb->phydro->u(IM2,k,j,i) = u0*pmb->phydro->u(IDN,k,j,i);
-          pmb->phydro->u(IM3,k,j,i) = 0.0;
+          pmb->phydro->u0(IM1,k,j,i) = 0.0;
+          pmb->phydro->u0(IM2,k,j,i) = vel*pmb->phydro->u0(IDN,k,j,i);
+          pmb->phydro->u0(IM3,k,j,i) = 0.0;
         } else {
-          pmb->phydro->u(IM1,k,j,i) = 0.0;
-          pmb->phydro->u(IM2,k,j,i) = 0.0;
-          pmb->phydro->u(IM3,k,j,i) = u0*pmb->phydro->u(IDN,k,j,i);
+          pmb->phydro->u0(IM1,k,j,i) = 0.0;
+          pmb->phydro->u0(IM2,k,j,i) = 0.0;
+          pmb->phydro->u0(IM3,k,j,i) = vel*pmb->phydro->u0(IDN,k,j,i);
         } 
         
-        pmb->phydro->u(IEN,k,j,i) = 1.0;
+        pmb->phydro->u0(IEN,k,j,i) = 1.0;
       }
     }
   }

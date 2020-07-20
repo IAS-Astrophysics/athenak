@@ -106,7 +106,6 @@ class AthenaArray {
   T operator() (const int m, const int l, const int k, const int j, const int i) const {
     return pdata_[i + nx1_*(j + nx2_*(k + nx3_*(l + nx4_*m)))]; }
 
-  // int l?, int o?
   T &operator() (const int n, const int m, const int l, const int k, const int j,
                  const int i) {
     return pdata_[i + nx1_*(j + nx2_*(k + nx3_*(l + nx4_*(m + nx5_*n))))]; }

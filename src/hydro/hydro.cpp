@@ -34,14 +34,31 @@ Hydro::Hydro(MeshBlock *pmb, std::unique_ptr<ParameterInput> &pin) : pmy_mblock(
     std::exit(EXIT_FAILURE);
   }} // extra brace to limit scope of string
 
-  // set reconstruction method option (default PPM)
+  // set time-evolution option (no default)
+  {std::string evolution_t = pin->GetString("hydro","evolution");
+  if (evolution_t.compare("static") == 0) {
+    hydro_evol = HydroEvolution::hydro_static;
+  } else if (evolution_t.compare("kinematic") == 0) {
+    hydro_evol = HydroEvolution::kinematic;
+  } else if (evolution_t.compare("dynamic") == 0) {
+    hydro_evol = HydroEvolution::hydro_dynamic;
+  } else if (evolution_t.compare("none") == 0) {
+    hydro_evol = HydroEvolution::no_evolution;
+  } else {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "<hydro> evolution = '" << evolution_t << "' not implemented"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }} // extra brace to limit scope of string
+
+  // set reconstruction method option (default PLM)
   {std::string recon_method = pin->GetOrAddString("hydro","recon","plm");
-  if (recon_method.compare("dc")) {
-    hydro_recon = ReconstructionMethod::donor_cell;
-  } else if (recon_method.compare("plm")) {
-    hydro_recon = ReconstructionMethod::piecewise_linear;
-  } else if (recon_method.compare("ppm")) {
-    hydro_recon = ReconstructionMethod::piecewise_parabolic;
+  if (recon_method.compare("dc") == 0) {
+    hydro_recon = HydroReconMethod::donor_cell;
+  } else if (recon_method.compare("plm") == 0) {
+    hydro_recon = HydroReconMethod::piecewise_linear;
+  } else if (recon_method.compare("ppm") == 0) {
+    hydro_recon = HydroReconMethod::piecewise_parabolic;
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "<hydro> recon = '" << recon_method << "' not implemented"
@@ -49,22 +66,23 @@ Hydro::Hydro(MeshBlock *pmb, std::unique_ptr<ParameterInput> &pin) : pmy_mblock(
     std::exit(EXIT_FAILURE);
   }} // extra brace to limit scope of string
 
-  // set Riemann solver option (default depends on EOS)
+  // set Riemann solver option (default depends on EOS and dynamics)
   {std::string rsolver;
   if (hydro_eos == HydroEOS::isothermal) {
     rsolver = pin->GetOrAddString("hydro","rsolver","hlle");
   } else {
     rsolver = pin->GetOrAddString("hydro","rsolver","hllc"); 
   }
-  if (rsolver.compare("advection")) {
+  // always make solver=advection for kinematic problems
+  if (rsolver.compare("advection") == 0 || hydro_evol == HydroEvolution::kinematic) {
     hydro_rsolver = HydroRiemannSolver::advection;
-  } else if (rsolver.compare("llf")) {
+  } else if (rsolver.compare("llf") == 0) {
     hydro_rsolver = HydroRiemannSolver::llf;
-  } else if (rsolver.compare("hlle")) {
+  } else if (rsolver.compare("hlle") == 0) {
     hydro_rsolver = HydroRiemannSolver::hlle;
-  } else if (rsolver.compare("hllc")) {
+  } else if (rsolver.compare("hllc") == 0) {
     hydro_rsolver = HydroRiemannSolver::hllc;
-  } else if (rsolver.compare("roe")) {
+  } else if (rsolver.compare("roe") == 0) {
     hydro_rsolver = HydroRiemannSolver::roe;
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
@@ -73,7 +91,7 @@ Hydro::Hydro(MeshBlock *pmb, std::unique_ptr<ParameterInput> &pin) : pmy_mblock(
     std::exit(EXIT_FAILURE);
   }} // extra brace to limit scope of string
 
-  
+  // DO NOT ALLOCATE ARRAYS ABOVE THIS POINT as nhydro set here
   // construct EOS object
   switch (hydro_eos) {
     case HydroEOS::adiabatic:
@@ -85,20 +103,31 @@ Hydro::Hydro(MeshBlock *pmb, std::unique_ptr<ParameterInput> &pin) : pmy_mblock(
   }
 
   // allocate memory for conserved variables
-  u.SetSize(nhydro, pmb->indx.ncells3, pmb->indx.ncells2, pmb->indx.ncells1);
+  u0.SetSize(nhydro, pmb->indx.ncells3, pmb->indx.ncells2, pmb->indx.ncells1);
 
-  // construct reconstruction object
-  switch (hydro_recon) {
-    case ReconstructionMethod::donor_cell:
-      precon = new DonorCell(pin);
-  }
+  // for time-evolving problems, construct methods, allocate arrays
+  if (hydro_evol != HydroEvolution::no_evolution) {
+    // construct reconstruction object
+    switch (hydro_recon) {
+      case HydroReconMethod::donor_cell:
+        precon = new DonorCell(pin);
+    }
 
-  // construct Riemann solver object
-  switch (hydro_rsolver) {
-    case HydroRiemannSolver::advection:
-      prsolver = new Advection(this, pin);
-    case HydroRiemannSolver::llf:
-      prsolver = new LLF(this, pin);
+    // construct Riemann solver object
+    switch (hydro_rsolver) {
+      case HydroRiemannSolver::advection:
+        prsolver = new Advection(this, pin);
+      case HydroRiemannSolver::llf:
+        prsolver = new LLF(this, pin);
+    }
+
+    // allocate registers, flux divergence, scratch arrays
+    u1.SetSize(nhydro, pmb->indx.ncells3, pmb->indx.ncells2, pmb->indx.ncells1);
+    divf.SetSize(nhydro, pmb->indx.ncells3, pmb->indx.ncells2, pmb->indx.ncells1);
+    w_.SetSize(nhydro, pmb->indx.ncells1);
+    wl_.SetSize(nhydro, pmb->indx.ncells1);
+    wr_.SetSize(nhydro, pmb->indx.ncells1);
+    uflux_.SetSize(nhydro, pmb->indx.ncells1);
   }
 
 }

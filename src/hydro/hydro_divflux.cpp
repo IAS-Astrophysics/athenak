@@ -6,6 +6,8 @@
 //! \file calculate_divflux.cpp
 //  \brief Calculate divergence of the fluxes for hydro only, no mesh refinement
 
+#include <iostream>
+
 #include "athena.hpp"
 #include "athena_arrays.hpp"
 #include "mesh/mesh.hpp"
@@ -17,7 +19,7 @@ namespace hydro {
 //! \fn  void Hydro::CalculateDivFlux
 //  \brief Calculate divergence of the fluxes for hydro only, no mesh refinement
 
-void Hydro::HydroDivFlux(AthenaArray<Real> &divf) {
+void Hydro::HydroDivFlux() {
   int is = pmy_mblock->indx.is; int ie = pmy_mblock->indx.ie;
   int js = pmy_mblock->indx.js; int je = pmy_mblock->indx.je;
   int ks = pmy_mblock->indx.ks; int ke = pmy_mblock->indx.ke;
@@ -29,13 +31,13 @@ void Hydro::HydroDivFlux(AthenaArray<Real> &divf) {
   for (int k=ks; k<=ke; ++k) {
     for (int j=js; j<=je; ++j) {
 
-      peos->ConservedToPrimitive(k, j, is-nghost, ie+nghost, u, w_);
+      peos->ConservedToPrimitive(k, j, is-nghost, ie+nghost, u0, w_);
       precon->ReconstructX1(is-1, ie+1, w_, wl_, wr_);
       prsolver->RSolver(is, ie+1, IVX, wl_, wr_, uflux_);
 
       for (int n=0; n<nhydro; ++n) {
         for (int i=is; i<=ie; ++i) {
-          divf_(n,k,j,i) = (uflux_(n,i+1) - uflux_(n,i))/pmy_mblock->mblock_size.dx1;
+          divf(n,k,j,i) = (uflux_(n,i+1) - uflux_(n,i))/pmy_mblock->mblock_size.dx1;
         }
       }
 

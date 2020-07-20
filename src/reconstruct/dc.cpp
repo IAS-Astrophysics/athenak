@@ -6,6 +6,7 @@
 //! \file dc.cpp
 //  \brief implements piecewise constant (donor cell) reconstruction in derived class
 
+#include <iostream>
 #include "athena.hpp"
 #include "athena_arrays.hpp"
 #include "mesh/mesh.hpp"

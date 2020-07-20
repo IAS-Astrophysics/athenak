@@ -163,13 +163,13 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
   }
 
   // calculate the number of MeshBlocks in root level in each dir
-  nmbx1_r = mesh_size.nx1/inblock_size.nx1;
-  nmbx2_r = mesh_size.nx2/inblock_size.nx2;
-  nmbx3_r = mesh_size.nx3/inblock_size.nx3;
+  nmbroot_x1 = mesh_size.nx1/inblock_size.nx1;
+  nmbroot_x2 = mesh_size.nx2/inblock_size.nx2;
+  nmbroot_x3 = mesh_size.nx3/inblock_size.nx3;
 
   // find maximum number of MeshBlocks in any dir
-  int nmbmax = (nmbx1_r > nmbx2_r) ? nmbx1_r : nmbx2_r;
-  nmbmax = (nmbmax > nmbx3_r) ? nmbmax : nmbx3_r;
+  int nmbmax = (nmbroot_x1 > nmbroot_x2) ? nmbroot_x1 : nmbroot_x2;
+  nmbmax = (nmbmax > nmbroot_x3) ? nmbmax : nmbroot_x3;
 
   // Find smallest N such that 2^N > max number of MeshBlocks in any dimension (nmbmax)
   // Then N is logical level of root grid.  2^N implemented as left-shift (1<<root_level)
@@ -270,7 +270,7 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
         std::int32_t lx1min = 0, lx1max = 0;
         std::int32_t lx2min = 0, lx2max = 0;
         std::int32_t lx3min = 0, lx3max = 0;
-        std::int32_t lxmax = nmbx1_r*(1<<phy_ref_lev);
+        std::int32_t lxmax = nmbroot_x1*(1<<phy_ref_lev);
         for (lx1min=0; lx1min<lxmax; lx1min++) {
           if (LeftEdgeX(lx1min+1,lxmax,mesh_size.x1min,mesh_size.x1max) > ref_size.x1min)
             break;
@@ -284,7 +284,7 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
 
         // Find range of x2-indices of such MeshBlocks that cover the refinement region
         if (nx2gt1) { // 2D or 3D
-          lxmax = nmbx2_r*(1<<phy_ref_lev);
+          lxmax = nmbroot_x2*(1<<phy_ref_lev);
           for (lx2min=0; lx2min<lxmax; lx2min++) {
             if (LeftEdgeX(lx2min+1, lxmax, mesh_size.x2min, mesh_size.x2max) >
                 ref_size.x2min)
@@ -301,7 +301,7 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
 
         // Find range of x3-indices of such MeshBlocks that cover the refinement region
         if (nx3gt1) { // 3D
-          lxmax = nmbx3_r*(1<<phy_ref_lev);
+          lxmax = nmbroot_x3*(1<<phy_ref_lev);
           for (lx3min=0; lx3min<lxmax; lx3min++) {
             if (LeftEdgeX(lx3min+1, lxmax, mesh_size.x3min, mesh_size.x3max) >
                 ref_size.x3min)
@@ -451,7 +451,7 @@ void Mesh::OutputMeshStructure(int flag) {
 
   // Write overall Mesh structure to stdout and file
   std::cout << std::endl;
-  std::cout <<"Root grid = "<< nmbx1_r <<" x "<< nmbx2_r <<" x "<< nmbx3_r
+  std::cout <<"Root grid = "<< nmbroot_x1 <<" x "<< nmbroot_x2 <<" x "<< nmbroot_x3
             <<" MeshBlocks"<< std::endl;
   std::cout <<"Total number of MeshBlocks = " << nmbtotal << std::endl;
   std::cout <<"Number of logical  levels of refinement = "<< max_level
@@ -590,7 +590,7 @@ void Mesh::OutputMeshStructure(int flag) {
 void Mesh::SetBlockSizeAndBoundaries(LogicalLocation loc, RegionSize &block_size,
                                      BoundaryFlag *block_bcs) {
   std::int32_t &lx1 = loc.lx1;
-  std::int32_t nmbx1_l = nmbx1_r << (loc.level - root_level);
+  std::int32_t nmbx1_l = nmbroot_x1 << (loc.level - root_level);
 
   // calculate physical size of MeshBlock in x1
   if (lx1 == 0) {
@@ -618,7 +618,7 @@ void Mesh::SetBlockSizeAndBoundaries(LogicalLocation loc, RegionSize &block_size
   } else {
 
     std::int32_t &lx2 = loc.lx2;
-    std::int32_t nmbx2_l = nmbx2_r << (loc.level - root_level);
+    std::int32_t nmbx2_l = nmbroot_x2 << (loc.level - root_level);
     if (lx2 == 0) {
       block_size.x2min = mesh_size.x2min;
       block_bcs[BoundaryFace::inner_x2] = mesh_bcs[BoundaryFace::inner_x2];
@@ -645,7 +645,7 @@ void Mesh::SetBlockSizeAndBoundaries(LogicalLocation loc, RegionSize &block_size
     block_bcs[BoundaryFace::outer_x3] = mesh_bcs[BoundaryFace::outer_x3];
   } else {
     std::int32_t &lx3 = loc.lx3;
-    std::int32_t nmbx3_l = nmbx3_r << (loc.level - root_level);
+    std::int32_t nmbx3_l = nmbroot_x3 << (loc.level - root_level);
     if (lx3 == 0) {
       block_size.x3min = mesh_size.x3min;
       block_bcs[BoundaryFace::inner_x3] = mesh_bcs[BoundaryFace::inner_x3];
@@ -665,7 +665,6 @@ void Mesh::SetBlockSizeAndBoundaries(LogicalLocation loc, RegionSize &block_size
   block_size.dx1 = mesh_size.dx1*static_cast<Real>(1<<(loc.level - root_level));
   block_size.dx2 = mesh_size.dx2*static_cast<Real>(1<<(loc.level - root_level));
   block_size.dx3 = mesh_size.dx3*static_cast<Real>(1<<(loc.level - root_level));
-std::cout << "dx1=" << block_size.dx1 << "  dx2=" << block_size.dx2 << "  dx3=" << block_size.dx3 << std::endl;
   // everything else
   block_size.x1rat = mesh_size.x1rat;
   block_size.x2rat = mesh_size.x2rat;

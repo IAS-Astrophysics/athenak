@@ -17,6 +17,8 @@ add_executable(
 
         hydro/hydro.cpp
         hydro/hydro_divflux.cpp
+        hydro/hydro_newdt.cpp
+        hydro/hydro_update.cpp
         hydro/eos/eos.cpp
         hydro/eos/adiabatic_hydro.cpp
         hydro/eos/isothermal_hydro.cpp
@@ -36,8 +38,8 @@ add_executable(
         outputs/formatted_table.cpp
 
         pgen/pgen.cpp
-        pgen/shock_tube.cpp
         pgen/advection.cpp
+        pgen/shock_tube.cpp
 
         reconstruct/reconstruct.cpp
         reconstruct/dc.cpp

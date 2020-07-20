@@ -18,8 +18,10 @@
 namespace hydro {
 
 // constants that enumerate Hydro physics options
-//enum class HydroEOS {adiabatic, isothermal};
-//enum class HydroRiemannSolver {llf, hlle, hllc, roe};
+enum class HydroEOS {adiabatic, isothermal};
+enum class HydroEvolution {hydro_static, kinematic, hydro_dynamic, no_evolution};
+enum class HydroReconMethod {donor_cell, piecewise_linear, piecewise_parabolic};
+enum class HydroRiemannSolver {advection, llf, hlle, hllc, roe};
 
 // constants that determine array index of Hydro variables
 //enum ConsIndex {IDN=0, IM1=1, IM2=2, IM3=3, IEN=4};
@@ -35,8 +37,9 @@ class Hydro {
 
   // data
   MeshBlock* pmy_mblock;              // ptr to MeshBlock containing this Hydro
-  HydroEOS hydro_eos;                 // enum storing choice for EOS
-  ReconstructionMethod hydro_recon;   // enum storing choice of reconstruction method
+  HydroEOS hydro_eos;                 // enum storing choice of EOS
+  HydroEvolution hydro_evol;          // enum storing choice of time evolution
+  HydroReconMethod hydro_recon;       // enum storing choice of reconstruction method
   HydroRiemannSolver hydro_rsolver;   // enum storing choice of Riemann solver
 
   EquationOfState *peos;      // object that implements chosen EOS
@@ -44,16 +47,30 @@ class Hydro {
   RiemannSolver   *prsolver;  // object that implements chosen Riemann solver
 
   int nhydro;             // number of conserved variables (5/4 for adiabatic/isothermal)
-  AthenaArray<Real> u;    // conserved variables
-  AthenaArray<Real> u1;   // conserved variables at intermediate step 
+  AthenaArray<Real> u0;   // conserved variables
+
+  // following only used for time-evolving flow
+  AthenaArray<Real> u1;           // conserved variables at intermediate step 
+  AthenaArray<Real> divf;         // divergence of fluxes (3 spatial-D)
+  AthenaArray<Real> uflux_1face;  // fluxes on x1-faces (used in flux correction step)
+  AthenaArray<Real> uflux_2face;  // fluxes on x2-faces
+  AthenaArray<Real> uflux_3face;  // fluxes on x3-faces
+  Real dtnew;
 
   // functions
-  void HydroDivFlux(AthenaArray<Real> &divf);
-  void UpdateHydro(AthenaArray<Real> &u0, AthenaArray<Real> &u1, AthenaArray<Real> &divf);
+//  void HydroDivFlux(AthenaArray<Real> &u);
+//  void UpdateHydro(AthenaArray<Real> &u0, AthenaArray<Real> &u1, AthenaArray<Real> &divf);
+  void CopyConserved(AthenaArray<Real> &in, AthenaArray<Real> &out) {
+    int size = in.GetSize();
+    for (int n=0; n<size; ++n) { out(n) = in(n); }
+    return;
+  }
+  void HydroDivFlux();
+  void HydroUpdate();
+  void NewTimeStep();
 
  private:
   AthenaArray<Real> w_,wl_,wr_,uflux_;   // 1 spatial-D scratch vectors
-  AthenaArray<Real> divf_;              // divergence of fluxes (3 spatial-D)
 
 };
 

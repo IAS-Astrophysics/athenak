@@ -79,10 +79,13 @@ class Mesh {
   // data
   RegionSize mesh_size;       // overall size of mesh (physical root level)
   BoundaryFlag mesh_bcs[6];   // physical boundary conditions at 6 faces of mesh
+  bool nx2gt1, nx3gt1;        // flags to indictate 2D/3D calculations
   bool adaptive, multilevel;
-  int nmbx1_r, nmbx2_r, nmbx3_r; // number of MeshBlocks in each dir at root level
+  int nmbroot_x1, nmbroot_x2, nmbroot_x3; // # of MeshBlocks at root level in each dir
   int nmbtotal;                  // total number of MeshBlocks across all levels
   int nmbthisrank;               // number of MeshBlocks on this MPI rank (local)
+  int nmb_created;               // number of MeshBlcoks created via AMR during run
+  int nmb_deleted;               // number of MeshBlcoks deleted via AMR during run
   Real time, dt, cfl_no;           
   int ncycle;
 
@@ -90,6 +93,7 @@ class Mesh {
 
   // functions
   void SelectPhysics(std::unique_ptr<ParameterInput> &pin);
+  void NewTimeStep(const Real tlim);
   void OutputMeshStructure(int flag);
   void SetBlockSizeAndBoundaries(LogicalLocation loc,RegionSize &size, BoundaryFlag *bcs);
   void LoadBalance(double *clist, int *rlist, int *slist, int *nlist, int nb);
@@ -119,7 +123,6 @@ class Mesh {
   int num_mesh_threads;
   int root_level; // logical level of root (physical) grid (e.g. Fig. 3 of method paper)
   int max_level;  // logical level of maximum refinement grid in Mesh
-  bool nx2gt1, nx3gt1;   // flags to indictate 2D/3D calculations
   // following 2x arrays allocated with length [nmbtotal]
   int *ranklist;
   double *costlist;

@@ -88,17 +88,17 @@ using namespace hydro;
           for (int i=is; i<=ie; ++i) {
             Real x1 = pmb->pmy_mesh->CellCenterX(i, pmb->indx.nx1, x1min, x1max);
             if (x1 < xshock) {
-              pmb->phydro->u(IDN,k,j,i) = wl[IDN];
-              pmb->phydro->u(IM1,k,j,i) = wl[IVX]*wl[IDN];
-              pmb->phydro->u(IM2,k,j,i) = wl[IVY]*wl[IDN];
-              pmb->phydro->u(IM3,k,j,i) = wl[IVZ]*wl[IDN];
-              pmb->phydro->u(IEN,k,j,i) = 1.0;
+              pmb->phydro->u0(IDN,k,j,i) = wl[IDN];
+              pmb->phydro->u0(IM1,k,j,i) = wl[IVX]*wl[IDN];
+              pmb->phydro->u0(IM2,k,j,i) = wl[IVY]*wl[IDN];
+              pmb->phydro->u0(IM3,k,j,i) = wl[IVZ]*wl[IDN];
+              pmb->phydro->u0(IEN,k,j,i) = 1.0;
             } else {
-              pmb->phydro->u(IDN,k,j,i) = wr[IDN];
-              pmb->phydro->u(IM1,k,j,i) = wr[IVX]*wr[IDN];
-              pmb->phydro->u(IM2,k,j,i) = wr[IVY]*wr[IDN];
-              pmb->phydro->u(IM3,k,j,i) = wr[IVZ]*wr[IDN];
-              pmb->phydro->u(IEN,k,j,i) = 1.0;
+              pmb->phydro->u0(IDN,k,j,i) = wr[IDN];
+              pmb->phydro->u0(IM1,k,j,i) = wr[IVX]*wr[IDN];
+              pmb->phydro->u0(IM2,k,j,i) = wr[IVY]*wr[IDN];
+              pmb->phydro->u0(IM3,k,j,i) = wr[IVZ]*wr[IDN];
+              pmb->phydro->u0(IEN,k,j,i) = 1.0;
             }
           }
         }
@@ -112,19 +112,19 @@ using namespace hydro;
           Real x2 = pmb->pmy_mesh->CellCenterX(j, pmb->indx.nx2, x2min, x2max);
           if (x2 < xshock) {
             for (int i=is; i<=ie; ++i) {
-              pmb->phydro->u(IDN,k,j,i) = wl[IDN];
-              pmb->phydro->u(IM2,k,j,i) = wl[IVX]*wl[IDN];
-              pmb->phydro->u(IM3,k,j,i) = wl[IVY]*wl[IDN];
-              pmb->phydro->u(IM1,k,j,i) = wl[IVZ]*wl[IDN];
-              pmb->phydro->u(IEN,k,j,i) = 1.0;
+              pmb->phydro->u0(IDN,k,j,i) = wl[IDN];
+              pmb->phydro->u0(IM2,k,j,i) = wl[IVX]*wl[IDN];
+              pmb->phydro->u0(IM3,k,j,i) = wl[IVY]*wl[IDN];
+              pmb->phydro->u0(IM1,k,j,i) = wl[IVZ]*wl[IDN];
+              pmb->phydro->u0(IEN,k,j,i) = 1.0;
             }
           } else {
             for (int i=is; i<=ie; ++i) {
-              pmb->phydro->u(IDN,k,j,i) = wr[IDN];
-              pmb->phydro->u(IM2,k,j,i) = wr[IVX]*wr[IDN];
-              pmb->phydro->u(IM3,k,j,i) = wr[IVY]*wr[IDN];
-              pmb->phydro->u(IM1,k,j,i) = wr[IVZ]*wr[IDN];
-              pmb->phydro->u(IEN,k,j,i) = 1.0;
+              pmb->phydro->u0(IDN,k,j,i) = wr[IDN];
+              pmb->phydro->u0(IM2,k,j,i) = wr[IVX]*wr[IDN];
+              pmb->phydro->u0(IM3,k,j,i) = wr[IVY]*wr[IDN];
+              pmb->phydro->u0(IM1,k,j,i) = wr[IVZ]*wr[IDN];
+              pmb->phydro->u0(IEN,k,j,i) = 1.0;
             }
           }
         }
@@ -138,21 +138,21 @@ using namespace hydro;
         if (x3 < xshock) {
           for (int j=js; j<=je; ++j) {
             for (int i=is; i<=ie; ++i) {
-              pmb->phydro->u(IDN,k,j,i) = wl[IDN];
-              pmb->phydro->u(IM3,k,j,i) = wl[IVX]*wl[IDN];
-              pmb->phydro->u(IM1,k,j,i) = wl[IVY]*wl[IDN];
-              pmb->phydro->u(IM2,k,j,i) = wl[IVZ]*wl[IDN];
-              pmb->phydro->u(IEN,k,j,i) = 1.0;
+              pmb->phydro->u0(IDN,k,j,i) = wl[IDN];
+              pmb->phydro->u0(IM3,k,j,i) = wl[IVX]*wl[IDN];
+              pmb->phydro->u0(IM1,k,j,i) = wl[IVY]*wl[IDN];
+              pmb->phydro->u0(IM2,k,j,i) = wl[IVZ]*wl[IDN];
+              pmb->phydro->u0(IEN,k,j,i) = 1.0;
             }
           }
         } else {
           for (int j=js; j<=je; ++j) {
             for (int i=is; i<=ie; ++i) {
-              pmb->phydro->u(IDN,k,j,i) = wr[IDN];
-              pmb->phydro->u(IM3,k,j,i) = wr[IVX]*wr[IDN];
-              pmb->phydro->u(IM1,k,j,i) = wr[IVY]*wr[IDN];
-              pmb->phydro->u(IM2,k,j,i) = wr[IVZ]*wr[IDN];
-              pmb->phydro->u(IEN,k,j,i) = 1.0;
+              pmb->phydro->u0(IDN,k,j,i) = wr[IDN];
+              pmb->phydro->u0(IM3,k,j,i) = wr[IVX]*wr[IDN];
+              pmb->phydro->u0(IM1,k,j,i) = wr[IVY]*wr[IDN];
+              pmb->phydro->u0(IM2,k,j,i) = wr[IVZ]*wr[IDN];
+              pmb->phydro->u0(IEN,k,j,i) = 1.0;
             }
           }
         }

@@ -136,7 +136,7 @@ void OutputType::LoadOutputData(std::unique_ptr<Mesh> &pm) {
       for (int j=0; j<nout2; ++j) {
       for (int i=0; i<nout1; ++i) {
         node.cc_data(n,k,j,i) =
-           pmb->phydro->u(hydro::IDN,(k+oks+kslice),(j+ojs+jslice),(i+ois+islice));
+           pmb->phydro->u0(hydro::IDN,(k+oks+kslice),(j+ojs+jslice),(i+ois+islice));
       }}}
     }
     data_list_.push_back(node);

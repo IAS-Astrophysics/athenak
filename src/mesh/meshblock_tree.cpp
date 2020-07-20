@@ -81,9 +81,9 @@ void MeshBlockTree::CreateRootGrid() {
   for (int n=0; n<nleaf_; n++) {
     // i,j,k values are 1st/2nd/3rd bit from end in binary representation of n=0,..,7
     int i = n&1, j = (n>>1)&1, k = (n>>2)&1;
-    if ((loc_.lx3*2 + k)*levfac < pmesh_->nmbx3_r
-     && (loc_.lx2*2 + j)*levfac < pmesh_->nmbx2_r
-     && (loc_.lx1*2 + i)*levfac < pmesh_->nmbx1_r) {
+    if ((loc_.lx3*2 + k)*levfac < pmesh_->nmbroot_x3
+     && (loc_.lx2*2 + j)*levfac < pmesh_->nmbroot_x2
+     && (loc_.lx1*2 + i)*levfac < pmesh_->nmbroot_x1) {
       pleaf_[n] = new MeshBlockTree(this, i, j, k); // call leaf constructor
       pleaf_[n]->CreateRootGrid(); 
     }
@@ -164,7 +164,7 @@ void MeshBlockTree::Refine(int &nnew) {
 
   oxmin = -1;
   oxmax = 1;
-  nxmax = (pmesh_->nmbx1_r<<(loc_.level - pmesh_->root_level));
+  nxmax = (pmesh_->nmbroot_x1<<(loc_.level - pmesh_->root_level));
   oymin = 0;
   oymax = 0;
   nymax = 1;
@@ -174,12 +174,12 @@ void MeshBlockTree::Refine(int &nnew) {
   if (pmesh_->nx2gt1) {
     oymin = -1;
     oymax = 1;
-    nymax = (pmesh_->nmbx2_r<<(loc_.level - pmesh_->root_level));
+    nymax = (pmesh_->nmbroot_x2<<(loc_.level - pmesh_->root_level));
   }
   if (pmesh_->nx3gt1) { // 3D
     ozmin = -1;
     ozmax = 1;
-    nzmax = (pmesh_->nmbx3_r<<(loc_.level - pmesh_->root_level));
+    nzmax = (pmesh_->nmbroot_x3<<(loc_.level - pmesh_->root_level));
   }
 
   for (std::int32_t oz=ozmin; oz<=ozmax; oz++) {
@@ -357,12 +357,12 @@ MeshBlockTree* MeshBlockTree::FindNeighbor(LogicalLocation myloc,
   lx+=ox1; ly+=ox2; lz+=ox3;
   if (lx<0) {
     if (pmesh_->mesh_bcs[BoundaryFace::inner_x1] == BoundaryFlag::periodic) {
-      lx = (pmesh_->nmbx1_r<<(ll - pmesh_->root_level)) - 1;
+      lx = (pmesh_->nmbroot_x1<<(ll - pmesh_->root_level)) - 1;
     } else {
       return nullptr;
     }
   }
-  if (lx>=pmesh_->nmbx1_r<<(ll-pmesh_->root_level)) {
+  if (lx>=pmesh_->nmbroot_x1<<(ll-pmesh_->root_level)) {
     if (pmesh_->mesh_bcs[BoundaryFace::outer_x1] == BoundaryFlag::periodic) {
       lx = 0;
     } else {
@@ -372,19 +372,19 @@ MeshBlockTree* MeshBlockTree::FindNeighbor(LogicalLocation myloc,
   bool polar = false;
   if (ly<0) {
     if (pmesh_->mesh_bcs[BoundaryFace::inner_x2] == BoundaryFlag::periodic) {
-      ly = (pmesh_->nmbx2_r<<(ll - pmesh_->root_level)) - 1;
+      ly = (pmesh_->nmbroot_x2<<(ll - pmesh_->root_level)) - 1;
     } else {
       return nullptr;
     }
   }
-  if (ly>=pmesh_->nmbx2_r<<(ll-pmesh_->root_level)) {
+  if (ly>=pmesh_->nmbroot_x2<<(ll-pmesh_->root_level)) {
     if (pmesh_->mesh_bcs[BoundaryFace::outer_x2] == BoundaryFlag::periodic) {
       ly = 0;
     } else {
       return nullptr;
     }
   }
-  std::int32_t num_x3 = pmesh_->nmbx3_r<<(ll - pmesh_->root_level);
+  std::int32_t num_x3 = pmesh_->nmbroot_x3<<(ll - pmesh_->root_level);
   if (lz<0) {
     if (pmesh_->mesh_bcs[BoundaryFace::inner_x3] == BoundaryFlag::periodic) {
       lz = num_x3 - 1;

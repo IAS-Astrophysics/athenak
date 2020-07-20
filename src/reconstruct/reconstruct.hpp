@@ -17,7 +17,7 @@
 #include "parameter_input.hpp"
 
 // constants that enumerate reconstruction options
-enum class ReconstructionMethod {donor_cell, piecewise_linear, piecewise_parabolic};
+//enum class ReconstructionMethod {donor_cell, piecewise_linear, piecewise_parabolic};
 
 //----------------------------------------------------------------------------------------
 //! \class EquationOfState

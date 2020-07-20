@@ -19,6 +19,7 @@
 
 using namespace hydro;
 //----------------------------------------------------------------------------------------
+// \fn Mesh::SelectPhysics()
 
 void Mesh::SelectPhysics(std::unique_ptr<ParameterInput> &pin) {
 
@@ -34,4 +35,23 @@ void Mesh::SelectPhysics(std::unique_ptr<ParameterInput> &pin) {
   } else {
     std::cout << "Hydro block not found in input file" << std::endl;
   }
+}
+
+//----------------------------------------------------------------------------------------
+// \fn Mesh::NewTimeStep()
+
+void Mesh::NewTimeStep(const Real tlim) {
+
+  // limit increase in timestep to 2x old value
+  dt = 2.0*dt;
+
+  // cycle over all MeshBlocks on this rank and find minimum dt
+  for (const auto &mb : mblocks) { dt = std::min(dt, (cfl_no)*(mb.phydro->dtnew) ); }
+
+  // TODO: get minimum dt over all MPI ranks
+
+  // limit last time step to stop at tlim *exactly*
+  if ( (time < tlim) && ((time + dt) > tlim) ) {dt = tlim - time;}
+
+  return;
 }

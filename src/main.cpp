@@ -253,10 +253,12 @@ int main(int argc, char *argv[]) {
   pdrive = std::make_unique<Driver>(pinput, pmesh, pout);
 
   ChangeRunDir(prundir);
+  pdrive->Initialize(pmesh, pout);
   pdrive->Execute(pmesh, pout);
+  pdrive->Finalize(pmesh, pout);
 
   //--- Step 9. -------------------------------------------------------------------------
-  // Make final outputs, clean up, and Terminate
+  // clean up, and terminate
 
 #if MPI_PARALLEL_ENABLED
   MPI_Finalize();

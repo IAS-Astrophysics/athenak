@@ -8,11 +8,10 @@
 //! \file driver.hpp
 //  \brief definitions for Driver class
 
+#include <ctime>
+
 #include "athena_arrays.hpp"
 #include "parameter_input.hpp"
-
-// constants that enumerate time evolution options
-enum class DriverTimeEvolution {hydrostatic, kinematic, hydrodynamic, no_time_evolution};
 
 //----------------------------------------------------------------------------------------
 //! \class Driver
@@ -24,17 +23,22 @@ class Driver {
   ~Driver() = default;
 
   // data
-  DriverTimeEvolution time_evolution;
-  Real tlim;
-  int nlim, ndiag;
+  bool time_evolution;
+
+  // folowing data only relevant for runs involving time evolution
+  Real tlim;      // stopping time
+  int nlim;       // cycle-limit
+  int ndiag;      // cycles between output of diagnostic information
 
   // functions
+  void Initialize(std::unique_ptr<Mesh> &pmesh, std::unique_ptr<Outputs> &pout);
   void Execute(std::unique_ptr<Mesh> &pmesh, std::unique_ptr<Outputs> &pout);
-  void OutputCycleDiagnostics(std::unique_ptr<Mesh> &pm);
-
+  void Finalize(std::unique_ptr<Mesh> &pmesh, std::unique_ptr<Outputs> &pout);
 
  private:
+  clock_t tstart_, tstop_;  // variables to measure cpu time
+  int nmb_updated_;         // running total of MB updated during run
+  void OutputCycleDiagnostics(std::unique_ptr<Mesh> &pm);
 
 };
-
 #endif // DRIVER_DRIVER_HPP_
