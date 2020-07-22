@@ -10,17 +10,14 @@
 //           currently everything is implemented in this single header file
 //
 // The original idea and implementation of TaskLists was by Kengo Tomida
-// This version includes ideas due to Josh Dolence and the Parthenon development team
+// This version includes improvements due to Josh Dolence and the Parthenon dev team
 
-//#include <cstdint>      // std::uint64_t
-//#include <string>       // std::string
 #include <bitset>
 #include <functional>
 #include <vector>
 #include <list>
 
-//#include "athena.hpp"
-
+// Maximum size of TL
 #define NUMBER_TASKID_BITS 64
 
 // constants = return codes for functions working on individual Tasks and TaskList
@@ -45,14 +42,12 @@ class TaskID {
 
   // functions (all implemented here)
   void Clear() { bitfld_.reset(); }  // set all bits to zero
-
   // return true if all input dependencies are clear
   bool CheckDependencies(const TaskID &dep) const {
     return ((bitfld_ & dep.bitfld_) == dep.bitfld_);
   }
-
-  // mark task with input TaskID as finished
-  void SetFinished(const TaskID &rhs) { bitfld_ |= rhs.bitfld_; }
+  // mark task with input TaskID as complete
+  void SetComplete(const TaskID &rhs) { bitfld_ |= rhs.bitfld_; }
 
   // overload some operators
   bool operator== (const TaskID &rhs) const {return (bitfld_ == rhs.bitfld_); }
@@ -78,10 +73,11 @@ class Task {
   TaskID GetID() { return myid_; }
   TaskID GetDependency() { return dep_; }
   void SetComplete() { complete_ = true; }
+  void SetIncomplete() { complete_ = false; }
   bool IsComplete() { return complete_; }
 
  private:
-  TaskID myid_;   // encodes task ID in bitfld_
+  TaskID myid_;    // encodes task ID in bitfld_
   TaskID dep_;     // encodes dependencies to other tasks in bitfld_
   bool lb_time_;   // flag to include this task in timing for automatic load balancing
   bool complete_ = false;
@@ -101,61 +97,57 @@ class TaskList {
   // functions (all implemented here)
   bool IsComplete() { return task_list_.empty(); }
   int Size() { return task_list_.size(); }
-  void MarkTaskComplete(TaskID id) { tasks_completed_.SetFinished(id); }
+  void MarkTaskComplete(TaskID id) { tasks_completed_.SetComplete(id); }
 
   //
   void Reset() {
-    ntasks_added_ = 0;
-    task_list_.clear();        // std::vect clear() fn
-    dependencies_.clear();     // std::vect clear() fn
     tasks_completed_.Clear();  // TaskID Clear() fn
+    for (auto &it : task_list_) { it.SetIncomplete(); }
   }
 
-  //
-  bool IsReady() {
-    for (auto &l : dependencies_) {
-      if (!l->IsComplete()) { return false; }
-    }
-    return true;
-  }
-
-  //
-  void ClearComplete() {
-    for (auto it = task_list_.begin(); it != task_list_.end(); ++it) {
-      if (it->IsComplete()) { it = task_list_.erase(it);}
-    }
-  }
-
-  //
+  // cycle through task list once, do any tasks whose dependencies are clear
   TaskListStatus DoAvailable() {
     for (auto &task : task_list_) {
       auto dep = task.GetDependency();
       if (tasks_completed_.CheckDependencies(dep)) {
         TaskStatus status = task();  // calls Task function using overloaded operator()
         if (status == TaskStatus::complete) {
-          task.SetComplete();
-          MarkTaskComplete(task.GetID());
+          task.SetComplete();              // set bool flag in task 
+          MarkTaskComplete(task.GetID());  // add TaskID to tasks_completed_ 
         }
       }
     }
-    ClearComplete();
     if (IsComplete()) return TaskListStatus::complete;
     return TaskListStatus::running;
   }
 
-  //
+  // Add static member (or non-member) functions to end of task list.  Functions can have
+  // an arbitrary number of arguments passed through list.  Works by building functor.
+  // Arguments to function are passed by value.  Usage:
+  //   auto taskid = tl.AddTask(DoSomething, dependencies, a, b, c, pin, d, e, pmb);
+  // where a...pmb are arguments to function DoSomething()
   template <class F, class... Args>
   TaskID AddTask(F func, TaskID &dep, Args &&... args) {
-    TaskID id(ntasks_added_ + 1);
+    auto size = task_list_.size();
+    TaskID id(size + 1);
     task_list_.push_back(
         Task(id, dep, [=]() mutable -> TaskStatus { return func(args...); }));
-    ntasks_added_++;
+    return id;
+  }
+
+  // overload of AddTask to add member functions of class T to task list
+  // NOTE: we must capture the object pointer
+  template <class F, class T, class... Args>
+  TaskID AddTask(F func, T *obj, TaskID &dep, Args &&... args) {
+    auto size = task_list_.size();
+    TaskID id(size + 1);
+    task_list_.push_back(
+        Task(id, dep, [=]() mutable -> TaskStatus { return (obj->*func)(args...); }));
     return id;
   }
 
  protected:
   std::list<Task> task_list_;
-  int ntasks_added_ = 0;
   std::vector<TaskList *> dependencies_;
   TaskID tasks_completed_;
 };
