@@ -60,12 +60,6 @@ void Advection::RSolver(const int il, const int iu, const int ivx,
     wri[IVZ]=wr(ivz,i);
     if (pmy_hydro->hydro_eos == HydroEOS::adiabatic) { wri[IPR]=wr(IPR,i); }
 
-    //--- Step 2.  Compute wave speeds in L,R states (see Toro eq. 10.43)
-
-    Real cl = pmy_hydro->peos->SoundSpeed(wli);
-    Real cr = pmy_hydro->peos->SoundSpeed(wri);
-    Real a  = 0.5*std::max( (std::abs(wli[IVX]) + cl), (std::abs(wri[IVX]) + cr) );
-
     //--- Step 3.  Compute upwind fluxes
 
     if (wli[IVX] >= 0.0) {
@@ -75,15 +69,10 @@ void Advection::RSolver(const int il, const int iu, const int ivx,
       flx(IVX,i) = mxl*wli[IVX];
       flx(IVY,i) = mxl*wli[IVY];
       flx(IVZ,i) = mxl*wli[IVZ];
-  
       if (pmy_hydro->hydro_eos == HydroEOS::adiabatic) {
-        Real el = wli[IPR]/gm1;
-        el += 0.5*wli[IDN]*(SQR(wli[IVX]) + SQR(wli[IVY]) + SQR(wli[IVZ]));
-        flx(IVX,i) += wli[IPR];
-        flx(IEN,i) = (el + wli[IPR])*wli[IVX];
-      } else {
-        flx(IVX,i) += (iso_cs*iso_cs)*wli[IDN];
+        flx(IEN,i) = wli[IPR]*wli[IVX]/gm1;
       }
+
     } else {
 
       Real mxr = wri[IDN]*wri[IVX];
@@ -91,16 +80,10 @@ void Advection::RSolver(const int il, const int iu, const int ivx,
       flx(IVX,i) = mxr*wri[IVX];
       flx(IVY,i) = mxr*wri[IVY];
       flx(IVZ,i) = mxr*wri[IVZ];
-  
-      Real el,er;
       if (pmy_hydro->hydro_eos == HydroEOS::adiabatic) {
-        Real er = wri[IPR]/gm1;
-        er += 0.5*wri[IDN]*(SQR(wri[IVX]) + SQR(wri[IVY]) + SQR(wri[IVZ]));
-        flx(IVX,i) += wri[IPR];
-        flx(IEN,i) = (er + wri[IPR])*wri[IVX];
-      } else {
-        flx(IVX,i) += (iso_cs*iso_cs)*wri[IDN];
+        flx(IEN,i) = wri[IPR]*wri[IVX]/gm1;
       }
+
     }
   }
 

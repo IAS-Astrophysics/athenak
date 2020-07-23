@@ -6,7 +6,8 @@
 //! \file adiabatic_hydro.cpp
 //  \brief implements EOS functions in derived class for nonrelativistic adiabatic hydro
 
-// Athena++ headers
+#include <iostream>
+
 #include "athena.hpp"
 #include "athena_arrays.hpp"
 #include "parameter_input.hpp"

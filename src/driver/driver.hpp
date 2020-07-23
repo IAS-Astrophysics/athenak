@@ -12,6 +12,7 @@
 
 #include "athena_arrays.hpp"
 #include "parameter_input.hpp"
+#include "outputs/outputs.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \class Driver
@@ -33,7 +34,7 @@ class Driver {
   std::string integrator;          // integrator name (rk1, rk2, rk3)
   int nstages;                     // total number of stages
   Real cfl_limit;                  // maximum CFL number for integrator
-  Real gam1[3], gam2[3], beta[3];  // averaging weights and fractional timestep per stage
+  Real gam0[3], gam1[3], beta[3];  // averaging weights and fractional timestep per stage
 
   // functions
   void Initialize(std::unique_ptr<Mesh> &pmesh, std::unique_ptr<Outputs> &pout);

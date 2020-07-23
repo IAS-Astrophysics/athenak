@@ -65,8 +65,10 @@ class Hydro {
 //  void UpdateHydro(AthenaArray<Real> &u0, AthenaArray<Real> &u1, AthenaArray<Real> &divf);
   void HydroAddTasks(TaskList &tl);
   TaskStatus CopyConserved(Driver *d, int stage) {
-    int size = u0.GetSize();
-    for (int n=0; n<size; ++n) { u1(n) = u0(n); }
+    if (stage == 1) {
+      int size = u0.GetSize();
+      for (int n=0; n<size; ++n) { u1(n) = u0(n); }
+    }
     return TaskStatus::complete;
   }
   TaskStatus HydroDivFlux(Driver *d, int stage);

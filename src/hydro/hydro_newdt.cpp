@@ -14,6 +14,7 @@
 #include "athena.hpp"
 #include "athena_arrays.hpp"
 #include "mesh/mesh.hpp"
+#include "driver/driver.hpp"
 #include "eos/eos.hpp"
 #include "hydro.hpp"
 
@@ -24,6 +25,8 @@ namespace hydro {
 // \brief calculate the minimum timestep within a MeshBlock for hydrodynamic problems
 
 TaskStatus Hydro::NewTimeStep(Driver *pdrive, int stage) {
+
+  if (stage != pdrive->nstages) return TaskStatus::complete; // only execute on last stage
 
   MeshBlock *pmb = pmy_mblock;
   int is = pmb->indx.is; int js = pmb->indx.js; int ks = pmb->indx.ks;

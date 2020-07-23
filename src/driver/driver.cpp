@@ -65,36 +65,36 @@ Driver::Driver(std::unique_ptr<ParameterInput> &pin, std::unique_ptr<Mesh> &pmes
       // RK1: first-order Runge-Kutta / the forward Euler (FE) method
       nstages = 1;
       cfl_limit = 1.0;
-      gam1[0] = 0.0;
-      gam2[0] = 1.0;
+      gam0[0] = 0.0;
+      gam1[0] = 1.0;
       beta[0] = 1.0;
     } else if (integrator == "rk2") {
       // Heun's method / SSPRK (2,2): Gottlieb (2009) equation 3.1
       // Optimal (in error bounds) explicit two-stage, second-order SSPRK
       nstages = 2;
       cfl_limit = 1.0;  // c_eff = c/nstages = 1/2 (Gottlieb (2009), pg 271)
-      gam1[0] = 0.0;
-      gam2[0] = 1.0;
+      gam0[0] = 0.0;
+      gam1[0] = 1.0;
       beta[0] = 1.0;
   
+      gam0[1] = 0.5;
       gam1[1] = 0.5;
-      gam2[1] = 0.5;
       beta[1] = 0.5;
     } else if (integrator == "rk3") {
       // SSPRK (3,3): Gottlieb (2009) equation 3.2
       // Optimal (in error bounds) explicit three-stage, third-order SSPRK
       nstages = 3;
       cfl_limit = 1.0;  // c_eff = c/nstages = 1/3 (Gottlieb (2009), pg 271)
-      gam1[0] = 0.0;
-      gam2[0] = 1.0;
+      gam0[0] = 0.0;
+      gam1[0] = 1.0;
       beta[0] = 1.0;
 
-      gam1[1] = 0.25;
-      gam2[1] = 0.75;
+      gam0[1] = 0.25;
+      gam1[1] = 0.75;
       beta[1] = 0.25;
 
-      gam1[2] = 2.0/3.0;
-      gam2[2] = 1.0/3.0;
+      gam0[2] = 2.0/3.0;
+      gam1[2] = 1.0/3.0;
       beta[2] = 2.0/3.0;
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -127,7 +127,7 @@ void Driver::Initialize(std::unique_ptr<Mesh> &pmesh, std::unique_ptr<Outputs> &
   if (time_evolution) {
     for (auto it = pmesh->mblocks.begin(); it < pmesh->mblocks.end(); ++it) {
       TaskStatus tstatus;
-      tstatus = it->phydro->NewTimeStep(this, 0);
+      tstatus = it->phydro->NewTimeStep(this, nstages);
     }
     pmesh->NewTimeStep(tlim);
   }

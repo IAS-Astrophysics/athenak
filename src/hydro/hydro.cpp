@@ -24,9 +24,9 @@ Hydro::Hydro(MeshBlock *pmb, std::unique_ptr<ParameterInput> &pin) : pmy_mblock(
 
   // set EOS option (no default)
   {std::string eqn_of_state   = pin->GetString("hydro","eos");
-  if (eqn_of_state.compare("adiabatic")) {
+  if (eqn_of_state.compare("adiabatic") == 0) {
     hydro_eos = HydroEOS::adiabatic;
-  } else if (eqn_of_state.compare("isothermal")) {
+  } else if (eqn_of_state.compare("isothermal") == 0) {
     hydro_eos = HydroEOS::isothermal;
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
@@ -98,9 +98,11 @@ Hydro::Hydro(MeshBlock *pmb, std::unique_ptr<ParameterInput> &pin) : pmy_mblock(
     case HydroEOS::adiabatic:
       peos = new AdiabaticHydro(this, pin);
       nhydro = 5;
+      break;
     case HydroEOS::isothermal:
       peos = new IsothermalHydro(this, pin);
       nhydro = 4;
+      break;
   }
 
   // allocate memory for conserved variables
@@ -113,14 +115,17 @@ Hydro::Hydro(MeshBlock *pmb, std::unique_ptr<ParameterInput> &pin) : pmy_mblock(
     switch (hydro_recon) {
       case HydroReconMethod::donor_cell:
         precon = new DonorCell(pin);
+        break;
     }
 
     // construct Riemann solver object
     switch (hydro_rsolver) {
       case HydroRiemannSolver::advection:
         prsolver = new Advection(this, pin);
+        break;
       case HydroRiemannSolver::llf:
         prsolver = new LLF(this, pin);
+        break;
     }
 
     // allocate registers, flux divergence, scratch arrays

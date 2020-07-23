@@ -7,9 +7,11 @@
 //  \brief Updates hydro conserved variables, using weighted average and partial time
 //  step appropriate for various SSP RK integrators (e.g. RK1, RK2, RK3)
 
+#include <iostream>
 #include "athena.hpp"
 #include "athena_arrays.hpp"
 #include "mesh/mesh.hpp"
+#include "driver/driver.hpp"
 #include "hydro.hpp"
 
 namespace hydro {
@@ -28,17 +30,16 @@ TaskStatus Hydro::HydroUpdate(Driver *pdrive, int stage) {
   // update all variables to intermediate step using weights and fractional time step 
   // appropriate to stage of particular integrator used (see XX)
 
-  Real gam[2];
-  gam[0] = 0.0;
-  gam[1] = 1.0;
-  Real beta = 0.5;
+  Real &gam0 = pdrive->gam0[stage-1];
+  Real &gam1 = pdrive->gam1[stage-1];
+  Real &beta = pdrive->beta[stage-1];
 
   for (int n=0; n<nhydro; ++n) {
 
     for (int k=ks; k<=ke; ++k) {
       for (int j=js; j<=je; ++j) {
         for (int i=is; i<=ie; ++i) {
-          u0(n,k,j,i) = gam[0]*u0(n,k,j,i) + gam[1]*u1(n,k,j,i) 
+          u0(n,k,j,i) = gam0*u0(n,k,j,i) + gam1*u1(n,k,j,i) 
                         - beta*(pmy_mblock->pmy_mesh->dt)*divf(n,k,j,i);
         }
       }
