@@ -19,6 +19,32 @@
 
 //----------------------------------------------------------------------------------------
 // constructor, initializes data structures and parameters
+  // First, define each time-integrator by setting weights for each step of the algorithm
+  // and the CFL number stability limit when coupled to the single-stage spatial operator.
+  // Currently, the explicit, multistage time-integrators must be expressed as 2S-type
+  // algorithms as in Ketcheson (2010) Algorithm 3, which incudes 2N (Williamson) and 2R
+  // (van der Houwen) popular 2-register low-storage RK methods. The 2S-type integrators
+  // depend on a bidiagonally sparse Shu-Osher representation; at each stage l:
+  //
+  //    U^{l} = a_{l,l-2}*U^{l-2} + a_{l-1}*U^{l-1}
+  //          + b_{l,l-2}*dt*Div(F_{l-2}) + b_{l,l-1}*dt*Div(F_{l-1}),
+  //
+  // where U^{l-1} and U^{l-2} are previous stages and a_{l,l-2}, a_{l,l-1}=(1-a_{l,l-2}),
+  // and b_{l,l-2}, b_{l,l-1} are weights that are different for each stage and
+  // integrator. Previous timestep U^{0} = U^n is given, and the integrator solves
+  // for U^{l} for 1 <= l <= nstages.
+  //
+  // The 2x RHS evaluations of Div(F) and source terms per stage is avoided by adding
+  // another weighted average / caching of these terms each stage. The API and framework
+  // is extensible to three register 3S* methods, although none are currently implemented.
+
+  // Notation: exclusively using "stage", equivalent in lit. to "substage" or "substep"
+  // (infrequently "step"), to refer to the intermediate values of U^{l} between each
+  // "timestep" = "cycle" in explicit, multistage methods. This is to disambiguate the
+  // temporal integration from other iterative sequences; "Step" is often used for generic
+  // sequences in code, e.g. main.cpp: "Step 1: MPI"
+  //
+  // main.cpp invokes the tasklist in a for () loop from stage=1 to stage=ptlist->nstages
 
 Driver::Driver(std::unique_ptr<ParameterInput> &pin, std::unique_ptr<Mesh> &pmesh,
      std::unique_ptr<Outputs> &pout) : tlim(-1.0), nlim(-1), ndiag(1),
@@ -30,9 +56,51 @@ Driver::Driver(std::unique_ptr<ParameterInput> &pin, std::unique_ptr<Mesh> &pmes
   }
   // read <time> parameters controlling driver if run requires time-evolution
   if (time_evolution) {
+    integrator = pin->GetOrAddString("time", "integrator", "rk2");
     tlim = pin->GetReal("time", "tlim");
     nlim = pin->GetOrAddInteger("time", "nlim", -1);
     ndiag = pin->GetOrAddInteger("time", "ndiag", 1);
+
+    if (integrator == "rk1") {
+      // RK1: first-order Runge-Kutta / the forward Euler (FE) method
+      nstages = 1;
+      cfl_limit = 1.0;
+      gam1[0] = 0.0;
+      gam2[0] = 1.0;
+      beta[0] = 1.0;
+    } else if (integrator == "rk2") {
+      // Heun's method / SSPRK (2,2): Gottlieb (2009) equation 3.1
+      // Optimal (in error bounds) explicit two-stage, second-order SSPRK
+      nstages = 2;
+      cfl_limit = 1.0;  // c_eff = c/nstages = 1/2 (Gottlieb (2009), pg 271)
+      gam1[0] = 0.0;
+      gam2[0] = 1.0;
+      beta[0] = 1.0;
+  
+      gam1[1] = 0.5;
+      gam2[1] = 0.5;
+      beta[1] = 0.5;
+    } else if (integrator == "rk3") {
+      // SSPRK (3,3): Gottlieb (2009) equation 3.2
+      // Optimal (in error bounds) explicit three-stage, third-order SSPRK
+      nstages = 3;
+      cfl_limit = 1.0;  // c_eff = c/nstages = 1/3 (Gottlieb (2009), pg 271)
+      gam1[0] = 0.0;
+      gam2[0] = 1.0;
+      beta[0] = 1.0;
+
+      gam1[1] = 0.25;
+      gam2[1] = 0.75;
+      beta[1] = 0.25;
+
+      gam1[2] = 2.0/3.0;
+      gam2[2] = 1.0/3.0;
+      beta[2] = 2.0/3.0;
+    } else {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+         << std::endl << "integrator=" << integrator << " not implemented" << std::endl;
+      exit(EXIT_FAILURE);
+    }
   }
 
 }
@@ -82,26 +150,28 @@ void Driver::Execute(std::unique_ptr<Mesh> &pmesh, std::unique_ptr<Outputs> &pou
     if (time_evolution) {
       if (global_variable::my_rank == 0) {OutputCycleDiagnostics(pmesh);}
 
-// Do multi-stage time evolution TaskList
-
 /*** first implementation task list ***/
-      for (auto &mb : pmesh->mblocks) {mb.tl_onestage.Reset();}
 
-      int stage=1;
-      int nmb_completed = 0;
-      while (nmb_completed != pmesh->nmbthisrank) {
-        // TODO(pgrete): need to let Kokkos::PartitionManager handle this
-        for (auto &mb : pmesh->mblocks) {
-          if (!mb.tl_onestage.IsComplete()) {
-            auto status = mb.tl_onestage.DoAvailable(this,stage);
-            if (status == TaskListStatus::complete) { nmb_completed++; }
+      // Do multi-stage time evolution TaskList
+      for (int stage=1; stage<=nstages; ++stage) {
+
+        for (auto &mb : pmesh->mblocks) {mb.tl_onestage.Reset();}
+        int nmb_completed = 0;
+        while (nmb_completed < pmesh->nmbthisrank) {
+          // TODO(pgrete): need to let Kokkos::PartitionManager handle this
+          for (auto &mb : pmesh->mblocks) {
+            if (!mb.tl_onestage.IsComplete()) {
+              auto status = mb.tl_onestage.DoAvailable(this,stage);
+              if (status == TaskListStatus::complete) { nmb_completed++; }
+            }
           }
         }
+
       }
+
+      // Do STS TaskLists
+
 /*** first implementation task list ***/
-
-
-// Do STS TaskLists
 
       pmesh->time = pmesh->time + pmesh->dt;
       pmesh->ncycle++;

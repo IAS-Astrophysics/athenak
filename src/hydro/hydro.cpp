@@ -53,7 +53,7 @@ Hydro::Hydro(MeshBlock *pmb, std::unique_ptr<ParameterInput> &pin) : pmy_mblock(
   }} // extra brace to limit scope of string
 
   // set reconstruction method option (default PLM)
-  {std::string recon_method = pin->GetOrAddString("hydro","recon","plm");
+  {std::string recon_method = pin->GetOrAddString("hydro","reconstruct","plm");
   if (recon_method.compare("dc") == 0) {
     hydro_recon = HydroReconMethod::donor_cell;
   } else if (recon_method.compare("plm") == 0) {

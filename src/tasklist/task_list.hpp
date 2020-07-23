@@ -44,7 +44,7 @@ class TaskID {
 
   // functions (all implemented here)
   void Clear() { bitfld_.reset(); }  // set all bits to zero
-  // return true if all input dependencies are clear
+  // return true if input dependencies are clear
   bool CheckDependencies(const TaskID &dep) const {
     return ((bitfld_ & dep.bitfld_) == dep.bitfld_);
   }
@@ -66,12 +66,13 @@ class TaskID {
 //----------------------------------------------------------------------------------------
 //! \class Task
 //  \brief data and function pointer for an individual Task
+//  NOTE: Task function must take arguments (Driver*, int)
 
 class Task {
  public:
   Task(TaskID id, TaskID dep, std::function<TaskStatus(Driver*, int)> func)
       : myid_(id), dep_(dep), func_(func) {}
-  // overload operator() to call task function
+  // overloaded operator() calls task function
   TaskStatus operator()(Driver *d, int s) { return func_(d,s); }
   TaskID GetID() { return myid_; }
   TaskID GetDependency() { return dep_; }
@@ -90,7 +91,7 @@ class Task {
 
 //----------------------------------------------------------------------------------------
 //! \class TaskList
-//  \brief data and function definitions for task list base class
+//  \brief data and function definitions for task list class
 
 class TaskList {
  public:
@@ -132,9 +133,9 @@ class TaskList {
     return TaskListStatus::running;
   }
 
-  // Add static member (or non-member) functions to end of task list.  Functions must
-  // have arguments (Driver*, int).  Usage:
-  //   auto taskid = tl.AddTask(DoSomething, dependencies);
+  // Add new Task to end of task list with new ID, given dependencies, and a pointer to a
+  // static or non-member function. Function must have arguments (Driver*, int). Usage:
+  //     auto taskid = tl.AddTask(DoSomething, dependencies);
   template <class F>
   TaskID AddTask(F func, TaskID &dep) {
     auto size = task_list_.size();
@@ -144,8 +145,9 @@ class TaskList {
     return id;
   }
 
-  // overload of AddTask to add member functions of class T to task list.  Usage:
-  //   auto taskid = tl.AddTask(&T::DoSomething, T, dependencies);
+  // Add new Task to end of task list with new ID, given dependencies, and a pointer to a
+  // member functions of class T.  Usage:
+  //     auto taskid = tl.AddTask(&T::DoSomething, T, dependencies);
   template <class F, class T>
   TaskID AddTask(F func, T *obj, TaskID &dep) {
     auto size = task_list_.size();
