@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file dc.cpp
-//  \brief implements piecewise constant (donor cell) reconstruction in derived class
+//  \brief piecewise constant (donor cell) reconstruction implemented in a derived class
 
 #include <iostream>
 #include "athena.hpp"
@@ -23,13 +23,13 @@ DonorCell::DonorCell(std::unique_ptr<ParameterInput> &pin) : Reconstruction(pin)
 //! \fn DonorCell::ReconstructX1()
 //  \brief reconstruct L/R surfaces of the i-th cells
 
-void DonorCell::ReconstructX1(const int il, const int iu, const AthenaArray<Real> &w,
-                              AthenaArray<Real> &wl, AthenaArray<Real> &wr) {
-  int nvar = w.GetDim(2);
+void DonorCell::ReconstructX1(const int il, const int iu, const AthenaArray<Real> &q,
+                              AthenaArray<Real> &ql, AthenaArray<Real> &qr) {
+  int nvar = q.GetDim(2);
   for (int n=0; n<nvar; ++n) {
     for (int i=il; i<=iu; ++i) {
-      wl(n,i+1) = w(n,i);
-      wr(n,i  ) = w(n,i);
+      ql(n,i+1) = q(n,i);
+      qr(n,i  ) = q(n,i);
     }
   }
   return;
@@ -40,13 +40,13 @@ void DonorCell::ReconstructX1(const int il, const int iu, const AthenaArray<Real
 //  \brief
 
 
-void DonorCell::ReconstructX2(const int il, const int iu, const AthenaArray<Real> &w,
-                              AthenaArray<Real> &wl, AthenaArray<Real> &wr) {
-  int nvar = w.GetDim(2);
+void DonorCell::ReconstructX2(const int il, const int iu, const AthenaArray<Real> &q,
+                              AthenaArray<Real> &ql, AthenaArray<Real> &qr) {
+  int nvar = q.GetDim(2);
   for (int n=0; n<nvar; ++n) {
     for (int i=il; i<=iu; ++i) {
-      wl(n,i) = w(n,i);
-      wr(n,i) = w(n,i);
+      ql(n,i) = q(n,i);
+      qr(n,i) = q(n,i);
     }
   }
   return;
@@ -56,13 +56,13 @@ void DonorCell::ReconstructX2(const int il, const int iu, const AthenaArray<Real
 //! \fn DonorCell::ReconstructX3()
 //  \brief
 
-void DonorCell::ReconstructX3(const int il, const int iu, const AthenaArray<Real> &w,
-                                 AthenaArray<Real> &wl, AthenaArray<Real> &wr) {
-  int nvar = w.GetDim(2);
+void DonorCell::ReconstructX3(const int il, const int iu, const AthenaArray<Real> &q,
+                                 AthenaArray<Real> &ql, AthenaArray<Real> &qr) {
+  int nvar = q.GetDim(2);
   for (int n=0; n<nvar; ++n) {
     for (int i=il; i<=iu; ++i) {
-      wl(n,i) = w(n,i);
-      wr(n,i) = w(n,i);
+      ql(n,i) = q(n,i);
+      qr(n,i) = q(n,i);
     }
   }
   return;

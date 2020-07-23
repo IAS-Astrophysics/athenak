@@ -19,7 +19,7 @@ namespace hydro {
 
 //void Hydro::HydroUpdate(AthenaArray<Real> &u0, AthenaArray<Real> &u1, 
 //                         AthenaArray<Real> &divf) {
-void Hydro::HydroUpdate() {
+TaskStatus Hydro::HydroUpdate(Driver *pdrive, int stage) {
   int is = pmy_mblock->indx.is; int ie = pmy_mblock->indx.ie;
   int js = pmy_mblock->indx.js; int je = pmy_mblock->indx.je;
   int ks = pmy_mblock->indx.ks; int ke = pmy_mblock->indx.ke;
@@ -46,7 +46,7 @@ void Hydro::HydroUpdate() {
 
   }
 
-  return;
+  return TaskStatus::complete;
 }
 
 } // namespace hydro

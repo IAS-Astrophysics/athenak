@@ -23,7 +23,8 @@ namespace hydro {
 // \!fn void Hydro::NewTimeStep()
 // \brief calculate the minimum timestep within a MeshBlock for hydrodynamic problems
 
-void Hydro::NewTimeStep() {
+TaskStatus Hydro::NewTimeStep(Driver *pdrive, int stage) {
+
   MeshBlock *pmb = pmy_mblock;
   int is = pmb->indx.is; int js = pmb->indx.js; int ks = pmb->indx.ks;
   int ie = pmb->indx.ie; int je = pmb->indx.je; int ke = pmb->indx.ke;
@@ -84,7 +85,7 @@ void Hydro::NewTimeStep() {
     dtnew = std::min(dtnew, (pmb->mblock_size.dx3/dt3));
   }
 
-  return;
+  return TaskStatus::complete;
 }
 
 } // namespace hydro

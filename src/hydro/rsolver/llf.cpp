@@ -38,7 +38,7 @@ LLF::LLF(Hydro *phyd, std::unique_ptr<ParameterInput> &pin) : RiemannSolver(phyd
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void LLF::RiemannSolver
+//! \fn void LLF::RSolver
 //  \brief The LLF Riemann solver for hydrodynamics (both adiabatic and isothermal)
 
 void LLF::RSolver(const int il, const int iu, const int ivx, const AthenaArray<Real> &wl,

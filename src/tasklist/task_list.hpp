@@ -17,6 +17,8 @@
 #include <vector>
 #include <list>
 
+class Driver;
+
 // Maximum size of TL
 #define NUMBER_TASKID_BITS 64
 
@@ -67,9 +69,10 @@ class TaskID {
 
 class Task {
  public:
-  Task(TaskID id, TaskID dep, std::function<TaskStatus()> func)
+  Task(TaskID id, TaskID dep, std::function<TaskStatus(Driver*, int)> func)
       : myid_(id), dep_(dep), func_(func) {}
-  TaskStatus operator()() { return func_(); }  // operator() calls task function
+  // overload operator() to call task function
+  TaskStatus operator()(Driver *d, int s) { return func_(d,s); }
   TaskID GetID() { return myid_; }
   TaskID GetDependency() { return dep_; }
   void SetComplete() { complete_ = true; }
@@ -81,7 +84,7 @@ class Task {
   TaskID dep_;     // encodes dependencies to other tasks in bitfld_
   bool lb_time_;   // flag to include this task in timing for automatic load balancing
   bool complete_ = false;
-  std::function<TaskStatus()> func_;  // ptr to Task function
+  std::function<TaskStatus(Driver*, int)> func_;  // ptr to Task function
 
 };
 
@@ -95,7 +98,15 @@ class TaskList {
   ~TaskList() = default;
 
   // functions (all implemented here)
-  bool IsComplete() { return task_list_.empty(); }
+  bool IsComplete() {
+    // cycle through task list and check if each task completed
+    for (auto &it : task_list_) {
+      auto id = it.GetID();
+      if (!(tasks_completed_.CheckDependencies(id))) return false;
+    }
+    // everything is done
+    return true;
+  }
   int Size() { return task_list_.size(); }
   void MarkTaskComplete(TaskID id) { tasks_completed_.SetComplete(id); }
 
@@ -106,11 +117,11 @@ class TaskList {
   }
 
   // cycle through task list once, do any tasks whose dependencies are clear
-  TaskListStatus DoAvailable() {
+  TaskListStatus DoAvailable(Driver *d, int s) {
     for (auto &task : task_list_) {
       auto dep = task.GetDependency();
       if (tasks_completed_.CheckDependencies(dep)) {
-        TaskStatus status = task();  // calls Task function using overloaded operator()
+        TaskStatus status = task(d,s);  // calls Task function using overloaded operator()
         if (status == TaskStatus::complete) {
           task.SetComplete();              // set bool flag in task 
           MarkTaskComplete(task.GetID());  // add TaskID to tasks_completed_ 
@@ -121,28 +132,26 @@ class TaskList {
     return TaskListStatus::running;
   }
 
-  // Add static member (or non-member) functions to end of task list.  Functions can have
-  // an arbitrary number of arguments passed through list.  Works by building functor.
-  // Arguments to function are passed by value.  Usage:
-  //   auto taskid = tl.AddTask(DoSomething, dependencies, a, b, c, pin, d, e, pmb);
-  // where a...pmb are arguments to function DoSomething()
-  template <class F, class... Args>
-  TaskID AddTask(F func, TaskID &dep, Args &&... args) {
+  // Add static member (or non-member) functions to end of task list.  Functions must
+  // have arguments (Driver*, int).  Usage:
+  //   auto taskid = tl.AddTask(DoSomething, dependencies);
+  template <class F>
+  TaskID AddTask(F func, TaskID &dep) {
     auto size = task_list_.size();
     TaskID id(size + 1);
     task_list_.push_back(
-        Task(id, dep, [=]() mutable -> TaskStatus { return func(args...); }));
+      Task(id, dep, [=](Driver *d, int s) mutable -> TaskStatus { return func(d,s); }));
     return id;
   }
 
-  // overload of AddTask to add member functions of class T to task list
-  // NOTE: we must capture the object pointer
-  template <class F, class T, class... Args>
-  TaskID AddTask(F func, T *obj, TaskID &dep, Args &&... args) {
+  // overload of AddTask to add member functions of class T to task list.  Usage:
+  //   auto taskid = tl.AddTask(&T::DoSomething, T, dependencies);
+  template <class F, class T>
+  TaskID AddTask(F func, T *obj, TaskID &dep) {
     auto size = task_list_.size();
     TaskID id(size + 1);
-    task_list_.push_back(
-        Task(id, dep, [=]() mutable -> TaskStatus { return (obj->*func)(args...); }));
+    task_list_.push_back( Task(id, dep,
+       [=](Driver *d, int s) mutable -> TaskStatus { return (obj->*func)(d,s); }) );
     return id;
   }
 

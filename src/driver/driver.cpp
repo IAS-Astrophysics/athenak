@@ -57,8 +57,10 @@ void Driver::Initialize(std::unique_ptr<Mesh> &pmesh, std::unique_ptr<Outputs> &
   nmb_updated_ = 0;
 
   if (time_evolution) {
-    hydro::Hydro *phyd = pmesh->mblocks.front().phydro;
-    phyd->NewTimeStep();
+    for (auto it = pmesh->mblocks.begin(); it < pmesh->mblocks.end(); ++it) {
+      TaskStatus tstatus;
+      tstatus = it->phydro->NewTimeStep(this, 0);
+    }
     pmesh->NewTimeStep(tlim);
   }
   return;
@@ -74,27 +76,37 @@ void Driver::Execute(std::unique_ptr<Mesh> &pmesh, std::unique_ptr<Outputs> &pou
     std::cout << "\nSetup complete, executing task list...\n" << std::endl;
   }
 
-/*****/
-// Start with simple one-step driver
-/*****/
-
-
   while ((pmesh->time < tlim) &&
          (pmesh->ncycle < nlim || nlim < 0)) {
 
     if (time_evolution) {
       if (global_variable::my_rank == 0) {OutputCycleDiagnostics(pmesh);}
 
-      hydro::Hydro *phyd = pmesh->mblocks.front().phydro;
-      phyd->CopyConserved(phyd->u0, phyd->u1);
-      phyd->HydroDivFlux();
-      phyd->HydroUpdate();
-  
+// Do multi-stage time evolution TaskList
+
+/*** first implementation task list ***/
+      for (auto &mb : pmesh->mblocks) {mb.tl_onestage.Reset();}
+
+      int stage=1;
+      int nmb_completed = 0;
+      while (nmb_completed != pmesh->nmbthisrank) {
+        // TODO(pgrete): need to let Kokkos::PartitionManager handle this
+        for (auto &mb : pmesh->mblocks) {
+          if (!mb.tl_onestage.IsComplete()) {
+            auto status = mb.tl_onestage.DoAvailable(this,stage);
+            if (status == TaskListStatus::complete) { nmb_completed++; }
+          }
+        }
+      }
+/*** first implementation task list ***/
+
+
+// Do STS TaskLists
+
       pmesh->time = pmesh->time + pmesh->dt;
       pmesh->ncycle++;
       nmb_updated_ += pmesh->nmbtotal;
 
-      phyd->NewTimeStep();
       pmesh->NewTimeStep(tlim);
     }
   }

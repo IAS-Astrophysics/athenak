@@ -11,6 +11,7 @@
 //  (potentially on different levels) that tile the entire domain.
 
 #include "parameter_input.hpp"
+#include "tasklist/task_list.hpp"
 
 // Forward declarations
 namespace hydro {class Hydro;}
@@ -54,8 +55,9 @@ class MeshBlock {
   // indices on 1x coarser level MeshBlock (i.e. ncc2=nx2/2 + 2*nghost, if nx2>1)
   GridIndices cindx;
 
-  // physics modules (controlled by Mesh::SelectPhysics)
+  // physics modules and task list (controlled by Mesh::SelectPhysics)
   hydro::Hydro *phydro;
+  TaskList tl_onestage;
 
 
   // functions

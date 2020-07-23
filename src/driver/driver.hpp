@@ -29,6 +29,9 @@ class Driver {
   Real tlim;      // stopping time
   int nlim;       // cycle-limit
   int ndiag;      // cycles between output of diagnostic information
+  Real ssp_gam[3];  // averaging weights (gamma) for SSP RK integrators
+  Real ssp_bet[3];  // fractional time step (beta) for SSP RK integrators
+  int nstages;      // total number of stages in SSP RK integratorj:x
 
   // functions
   void Initialize(std::unique_ptr<Mesh> &pmesh, std::unique_ptr<Outputs> &pout);

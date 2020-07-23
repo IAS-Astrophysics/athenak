@@ -19,7 +19,7 @@ namespace hydro {
 //! \fn  void Hydro::CalculateDivFlux
 //  \brief Calculate divergence of the fluxes for hydro only, no mesh refinement
 
-void Hydro::HydroDivFlux() {
+TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage) {
   int is = pmy_mblock->indx.is; int ie = pmy_mblock->indx.ie;
   int js = pmy_mblock->indx.js; int je = pmy_mblock->indx.je;
   int ks = pmy_mblock->indx.ks; int ke = pmy_mblock->indx.ke;
@@ -120,7 +120,7 @@ void Hydro::HydroDivFlux() {
   }
 ****/
 
-  return;
+  return TaskStatus::complete;
 }
 
 } // namespace hydro

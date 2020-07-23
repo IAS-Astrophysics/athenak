@@ -11,9 +11,12 @@
 #include "athena.hpp"
 #include "athena_arrays.hpp"
 #include "parameter_input.hpp"
+#include "tasklist/task_list.hpp"
 #include "hydro/eos/eos.hpp"
 #include "reconstruct/reconstruct.hpp"
 #include "hydro/rsolver/rsolver.hpp"
+
+class Driver;
 
 namespace hydro {
 
@@ -60,14 +63,15 @@ class Hydro {
   // functions
 //  void HydroDivFlux(AthenaArray<Real> &u);
 //  void UpdateHydro(AthenaArray<Real> &u0, AthenaArray<Real> &u1, AthenaArray<Real> &divf);
-  void CopyConserved(AthenaArray<Real> &in, AthenaArray<Real> &out) {
-    int size = in.GetSize();
-    for (int n=0; n<size; ++n) { out(n) = in(n); }
-    return;
+  void HydroAddTasks(TaskList &tl);
+  TaskStatus CopyConserved(Driver *d, int stage) {
+    int size = u0.GetSize();
+    for (int n=0; n<size; ++n) { u1(n) = u0(n); }
+    return TaskStatus::complete;
   }
-  void HydroDivFlux();
-  void HydroUpdate();
-  void NewTimeStep();
+  TaskStatus HydroDivFlux(Driver *d, int stage);
+  TaskStatus HydroUpdate(Driver *d, int stage);
+  TaskStatus NewTimeStep(Driver *d, int stage);
 
  private:
   AthenaArray<Real> w_,wl_,wr_,uflux_;   // 1 spatial-D scratch vectors

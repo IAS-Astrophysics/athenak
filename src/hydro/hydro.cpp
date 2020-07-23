@@ -11,6 +11,7 @@
 #include "athena.hpp"
 #include "athena_arrays.hpp"
 #include "parameter_input.hpp"
+#include "tasklist/task_list.hpp"
 #include "mesh/mesh.hpp"
 #include "hydro/hydro.hpp"
 #include "hydro/eos/eos.hpp"
@@ -107,6 +108,7 @@ Hydro::Hydro(MeshBlock *pmb, std::unique_ptr<ParameterInput> &pin) : pmy_mblock(
 
   // for time-evolving problems, construct methods, allocate arrays
   if (hydro_evol != HydroEvolution::no_evolution) {
+
     // construct reconstruction object
     switch (hydro_recon) {
       case HydroReconMethod::donor_cell:
@@ -130,6 +132,21 @@ Hydro::Hydro(MeshBlock *pmb, std::unique_ptr<ParameterInput> &pin) : pmy_mblock(
     uflux_.SetSize(nhydro, pmb->indx.ncells1);
   }
 
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void Hydro::HydroAddTasks
+//  \brief
+
+void Hydro::HydroAddTasks(TaskList &tl) {
+
+  TaskID none(0);
+  auto hydro_copycons = tl.AddTask(&Hydro::CopyConserved, this, none);
+  auto hydro_divflux  = tl.AddTask(&Hydro::HydroDivFlux, this, hydro_copycons);
+  auto hydro_update  = tl.AddTask(&Hydro::HydroUpdate, this, hydro_divflux);
+  auto hydro_newdt  = tl.AddTask(&Hydro::NewTimeStep, this, hydro_update);
+
+  return;
 }
 
 } // namespace hydro
