@@ -41,7 +41,7 @@ class MeshBlock {
  friend class MeshBlockTree;
  public:
   MeshBlock(Mesh *pm, std::unique_ptr<ParameterInput> &pin, RegionSize input_size,
-            BoundaryFlag *input_bcs);
+            int igid, BoundaryFlag *input_bcs);
   ~MeshBlock();
 
   // data

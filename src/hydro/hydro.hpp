@@ -76,7 +76,7 @@ class Hydro {
   TaskStatus NewTimeStep(Driver *d, int stage);
 
  private:
-  AthenaArray<Real> w_,wl_,wr_,uflux_;   // 1 spatial-D scratch vectors
+  AthenaArray<Real> w_,wl_,wr_,uflux_;   // 1-spatialD scratch vectors
 
 };
 

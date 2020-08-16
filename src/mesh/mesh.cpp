@@ -402,7 +402,7 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
   for (int i=gids; i<=gide; i++) {
     BoundaryFlag inblock_bcs[6];
     SetBlockSizeAndBoundaries(loclist[i], inblock_size, inblock_bcs);
-    MeshBlock new_block(this, pin, inblock_size, inblock_bcs);
+    MeshBlock new_block(this, pin, inblock_size, i, inblock_bcs);
     mblocks.push_back(new_block);  // this requires copy operator!
   }
 

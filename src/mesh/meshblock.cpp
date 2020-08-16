@@ -18,8 +18,8 @@
 //                        and mesh refinement objects.
 
 MeshBlock::MeshBlock(Mesh *pm, std::unique_ptr<ParameterInput> &pin,
-                     RegionSize input_block, BoundaryFlag *input_bcs) :
-    pmy_mesh(pm), mblock_size(input_block) {
+                     RegionSize input_block, int igid, BoundaryFlag *input_bcs) :
+    pmy_mesh(pm), mblock_size(input_block), mblock_gid(igid) {
 
   // copy input boundary flags into MeshBlock 
   for (int i=0; i<6; ++i) {mblock_bcs[i] = input_bcs[i];}
