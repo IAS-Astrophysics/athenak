@@ -22,10 +22,10 @@ namespace hydro {
 //void Hydro::HydroUpdate(AthenaArray<Real> &u0, AthenaArray<Real> &u1, 
 //                         AthenaArray<Real> &divf) {
 TaskStatus Hydro::HydroUpdate(Driver *pdrive, int stage) {
-  int is = pmy_mblock->indx.is; int ie = pmy_mblock->indx.ie;
-  int js = pmy_mblock->indx.js; int je = pmy_mblock->indx.je;
-  int ks = pmy_mblock->indx.ks; int ke = pmy_mblock->indx.ke;
-  int nghost = pmy_mblock->indx.nghost;
+  int is = pmy_mblock->mblock_cells.is; int ie = pmy_mblock->mblock_cells.ie;
+  int js = pmy_mblock->mblock_cells.js; int je = pmy_mblock->mblock_cells.je;
+  int ks = pmy_mblock->mblock_cells.ks; int ke = pmy_mblock->mblock_cells.ke;
+  int nghost = pmy_mblock->mblock_cells.nghost;
 
   // update all variables to intermediate step using weights and fractional time step 
   // appropriate to stage of particular integrator used (see XX)

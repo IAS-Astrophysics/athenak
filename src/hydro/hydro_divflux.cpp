@@ -20,10 +20,10 @@ namespace hydro {
 //  \brief Calculate divergence of the fluxes for hydro only, no mesh refinement
 
 TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage) {
-  int is = pmy_mblock->indx.is; int ie = pmy_mblock->indx.ie;
-  int js = pmy_mblock->indx.js; int je = pmy_mblock->indx.je;
-  int ks = pmy_mblock->indx.ks; int ke = pmy_mblock->indx.ke;
-  int nghost = pmy_mblock->indx.nghost;
+  int is = pmy_mblock->mblock_cells.is; int ie = pmy_mblock->mblock_cells.ie;
+  int js = pmy_mblock->mblock_cells.js; int je = pmy_mblock->mblock_cells.je;
+  int ks = pmy_mblock->mblock_cells.ks; int ke = pmy_mblock->mblock_cells.ke;
+  int nghost = pmy_mblock->mblock_cells.nghost;
 
   //--------------------------------------------------------------------------------------
   // i-direction
@@ -37,7 +37,7 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage) {
 
       for (int n=0; n<nhydro; ++n) {
         for (int i=is; i<=ie; ++i) {
-          divf(n,k,j,i) = (uflux_(n,i+1) - uflux_(n,i))/pmy_mblock->mblock_size.dx1;
+          divf(n,k,j,i) = (uflux_(n,i+1) - uflux_(n,i))/pmy_mblock->mblock_cells.dx1;
         }
       }
 

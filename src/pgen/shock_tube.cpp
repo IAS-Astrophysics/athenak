@@ -72,9 +72,9 @@ using namespace hydro;
 
   // Initialize the discontinuity in the Hydro variables ---------------------------------
 
-  int &is = pmb->indx.is, &ie = pmb->indx.ie;
-  int &js = pmb->indx.js, &je = pmb->indx.je;
-  int &ks = pmb->indx.ks, &ke = pmb->indx.ke;
+  int &is = pmb->mblock_cells.is, &ie = pmb->mblock_cells.ie;
+  int &js = pmb->mblock_cells.js, &je = pmb->mblock_cells.je;
+  int &ks = pmb->mblock_cells.ks, &ke = pmb->mblock_cells.ke;
   Real &x1min = pmb->mblock_size.x1min, &x1max = pmb->mblock_size.x1max;
   Real &x2min = pmb->mblock_size.x2min, &x2max = pmb->mblock_size.x2max;
   Real &x3min = pmb->mblock_size.x3min, &x3max = pmb->mblock_size.x3max;
@@ -86,7 +86,7 @@ using namespace hydro;
       for (int k=ks; k<=ke; ++k) {
         for (int j=js; j<=je; ++j) {
           for (int i=is; i<=ie; ++i) {
-            Real x1 = pmb->pmy_mesh->CellCenterX(i, pmb->indx.nx1, x1min, x1max);
+            Real x1 = pmb->pmy_mesh->CellCenterX(i, pmb->mblock_cells.nx1, x1min, x1max);
             if (x1 < xshock) {
               pmb->phydro->u0(IDN,k,j,i) = wl[IDN];
               pmb->phydro->u0(IM1,k,j,i) = wl[IVX]*wl[IDN];
@@ -109,7 +109,7 @@ using namespace hydro;
     case 2:
       for (int k=ks; k<=ke; ++k) {
         for (int j=js; j<=je; ++j) {
-          Real x2 = pmb->pmy_mesh->CellCenterX(j, pmb->indx.nx2, x2min, x2max);
+          Real x2 = pmb->pmy_mesh->CellCenterX(j, pmb->mblock_cells.nx2, x2min, x2max);
           if (x2 < xshock) {
             for (int i=is; i<=ie; ++i) {
               pmb->phydro->u0(IDN,k,j,i) = wl[IDN];
@@ -134,7 +134,7 @@ using namespace hydro;
     //--- shock in 3-direction
     case 3:
       for (int k=ks; k<=ke; ++k) {
-        Real x3 = pmb->pmy_mesh->CellCenterX(k, pmb->indx.nx3, x3min, x3max);
+        Real x3 = pmb->pmy_mesh->CellCenterX(k, pmb->mblock_cells.nx3, x3min, x3max);
         if (x3 < xshock) {
           for (int j=js; j<=je; ++j) {
             for (int i=is; i<=ie; ++i) {

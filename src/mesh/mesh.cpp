@@ -32,13 +32,11 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
   mesh_size.x2max = pin->GetReal("mesh", "x2max");
   mesh_size.x3min = pin->GetReal("mesh", "x3min");
   mesh_size.x3max = pin->GetReal("mesh", "x3max");
-  mesh_size.x1rat = pin->GetOrAddReal("mesh", "x1rat", 1.0);
-  mesh_size.x2rat = pin->GetOrAddReal("mesh", "x2rat", 1.0);
-  mesh_size.x3rat = pin->GetOrAddReal("mesh", "x3rat", 1.0);
-  mesh_size.nx1   = pin->GetInteger("mesh", "nx1");
-  mesh_size.nx2   = pin->GetInteger("mesh", "nx2");
-  mesh_size.nx3   = pin->GetInteger("mesh", "nx3");
-  mesh_size.nghost = pin->GetOrAddReal("mesh", "nghost", 2);
+
+  mesh_cells.nghost = pin->GetOrAddReal("mesh", "nghost", 2);
+  mesh_cells.nx1    = pin->GetInteger("mesh", "nx1");
+  mesh_cells.nx2    = pin->GetInteger("mesh", "nx2");
+  mesh_cells.nx3    = pin->GetInteger("mesh", "nx3");
 
   mesh_bcs[BoundaryFace::inner_x1] =
     GetBoundaryFlag(pin->GetOrAddString("mesh", "ix1_bc", "none"));
@@ -54,8 +52,8 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
     GetBoundaryFlag(pin->GetOrAddString("mesh", "ox3_bc", "none"));
 
   // define some useful variables that indicate 2D/3D calculations
-  nx2gt1 = (mesh_size.nx2 > 1) ? true : false;
-  nx3gt1 = (mesh_size.nx3 > 1) ? true : false;
+  nx2gt1 = (mesh_cells.nx2 > 1) ? true : false;
+  nx3gt1 = (mesh_cells.nx3 > 1) ? true : false;
 
   // set boolean flags indicating type of refinement (if any) depending on input strings
   adaptive = 
@@ -84,88 +82,86 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
   }
 
   // error check requested number of grid cells for entire root domain
-  if (mesh_size.nx1 < 4) {
+  if (mesh_cells.nx1 < 4) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "In mesh block in input file nx1 must be >= 4, but nx1=" << mesh_size.nx1
+        << "In mesh block in input file nx1 must be >= 4, but nx1=" << mesh_cells.nx1
         << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  if (mesh_size.nx2 < 1) {
+  if (mesh_cells.nx2 < 1) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "In mesh block in input file nx2 must be >= 1, but nx2=" << mesh_size.nx2
+        << "In mesh block in input file nx2 must be >= 1, but nx2=" << mesh_cells.nx2
         << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  if (mesh_size.nx3 < 1) {
+  if (mesh_cells.nx3 < 1) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "In mesh block in input file nx3 must be >= 1, but nx3=" << mesh_size.nx3
+        << "In mesh block in input file nx3 must be >= 1, but nx3=" << mesh_cells.nx3
         << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  if (mesh_size.nx2 == 1 && mesh_size.nx3 > 1) {
+  if (mesh_cells.nx2 == 1 && mesh_cells.nx3 > 1) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "In mesh block in input file: nx2=1, nx3=" << mesh_size.nx3 
+        << "In mesh block in input file: nx2=1, nx3=" << mesh_cells.nx3 
         << ", but 2D problems in x1-x3 plane not supported" << std::endl;
     std::exit(EXIT_FAILURE);
   }
 
   // error check number of ghost zones
-  if (mesh_size.nghost < 2) {
+  if (mesh_cells.nghost < 2) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-      << "More than 2 ghost zones required, but nghost=" << mesh_size.nghost << std::endl;
+      << "More than 2 ghost zones required, but nghost=" <<mesh_cells.nghost << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  if ((multilevel) && (mesh_size.nghost % 2 != 0)) {
+  if ((multilevel) && (mesh_cells.nghost % 2 != 0)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
       << "Number of ghost zones must be divisible by two for SMR/AMR calculations, "
-      << "but nghost=" << mesh_size.nghost << std::endl;
+      << "but nghost=" << mesh_cells.nghost << std::endl;
     std::exit(EXIT_FAILURE);
   }
 
   // passed error checks, compute grid spacing in (virtual) mesh grid
-  mesh_size.dx1 = (mesh_size.x1max-mesh_size.x1min)/static_cast<Real>(mesh_size.nx1);
-  mesh_size.dx2 = (mesh_size.x2max-mesh_size.x2min)/static_cast<Real>(mesh_size.nx2);
-  mesh_size.dx3 = (mesh_size.x3max-mesh_size.x3min)/static_cast<Real>(mesh_size.nx3);
+  mesh_cells.dx1 = (mesh_size.x1max-mesh_size.x1min)/static_cast<Real>(mesh_cells.nx1);
+  mesh_cells.dx2 = (mesh_size.x2max-mesh_size.x2min)/static_cast<Real>(mesh_cells.nx2);
+  mesh_cells.dx3 = (mesh_size.x3max-mesh_size.x3min)/static_cast<Real>(mesh_cells.nx3);
 
   //=== Step 2 =========================================================
   // Set # of cells in MeshBlock read from input parameters, error check
 
   RegionSize inblock_size;
-  inblock_size.x1rat = mesh_size.x1rat;
-  inblock_size.x2rat = mesh_size.x2rat;
-  inblock_size.x3rat = mesh_size.x3rat;
-  inblock_size.nx1 = pin->GetOrAddInteger("meshblock", "nx1", mesh_size.nx1);
+  RegionCells inblock_cells;
+  inblock_cells.nx1 = pin->GetOrAddInteger("meshblock", "nx1", mesh_cells.nx1);
   if (nx2gt1) {
-    inblock_size.nx2 = pin->GetOrAddInteger("meshblock", "nx2", mesh_size.nx2);
+    inblock_cells.nx2 = pin->GetOrAddInteger("meshblock", "nx2", mesh_cells.nx2);
   } else {
-    inblock_size.nx2 = mesh_size.nx2;
+    inblock_cells.nx2 = mesh_cells.nx2;
   }
   if (nx3gt1) {
-    inblock_size.nx3 = pin->GetOrAddInteger("meshblock", "nx3", mesh_size.nx3);
+    inblock_cells.nx3 = pin->GetOrAddInteger("meshblock", "nx3", mesh_cells.nx3);
   } else {
-    inblock_size.nx3 = mesh_size.nx3;
+    inblock_cells.nx3 = mesh_cells.nx3;
   }
 
   // error check consistency of the block and mesh
-  if (   mesh_size.nx1 % inblock_size.nx1 != 0
-      || mesh_size.nx2 % inblock_size.nx2 != 0
-      || mesh_size.nx3 % inblock_size.nx3 != 0) {
+  if (   mesh_cells.nx1 % inblock_cells.nx1 != 0
+      || mesh_cells.nx2 % inblock_cells.nx2 != 0
+      || mesh_cells.nx3 % inblock_cells.nx3 != 0) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "Mesh must be evenly divisible by MeshBlocks" << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  if ( inblock_size.nx1 < 4 ||
-      (inblock_size.nx2 < 4 && nx2gt1) ||
-      (inblock_size.nx3 < 4 && nx3gt1) ) {
+  if ( inblock_cells.nx1 < 4 ||
+      (inblock_cells.nx2 < 4 && nx2gt1) ||
+      (inblock_cells.nx3 < 4 && nx3gt1) ) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "MeshBlock must be >= 4 cells in each active dimension" << std::endl;
     std::exit(EXIT_FAILURE);
   }
 
   // calculate the number of MeshBlocks in root level in each dir
-  nmbroot_x1 = mesh_size.nx1/inblock_size.nx1;
-  nmbroot_x2 = mesh_size.nx2/inblock_size.nx2;
-  nmbroot_x3 = mesh_size.nx3/inblock_size.nx3;
+  nmbroot_x1 = mesh_cells.nx1/inblock_cells.nx1;
+  nmbroot_x2 = mesh_cells.nx2/inblock_cells.nx2;
+  nmbroot_x3 = mesh_cells.nx3/inblock_cells.nx3;
 
   // find maximum number of MeshBlocks in any dir
   int nmbmax = (nmbroot_x1 > nmbroot_x2) ? nmbroot_x1 : nmbroot_x2;
@@ -198,9 +194,9 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
 
   if (multilevel) {
     // error check that number of cells in MeshBlock divisible by two
-    if (inblock_size.nx1 % 2 != 0 || 
-       (inblock_size.nx2 % 2 != 0 && nx2gt1) ||
-       (inblock_size.nx3 % 2 != 0 && nx3gt1)) {
+    if (inblock_cells.nx1 % 2 != 0 || 
+       (inblock_cells.nx2 % 2 != 0 && nx2gt1) ||
+       (inblock_cells.nx3 % 2 != 0 && nx3gt1)) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Number of cells in MeshBlock must be divisible by 2 "
                 << "with SMR or AMR." << std::endl;
@@ -401,8 +397,8 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
   // create MeshBlocks for this node
   for (int i=gids; i<=gide; i++) {
     BoundaryFlag inblock_bcs[6];
-    SetBlockSizeAndBoundaries(loclist[i], inblock_size, inblock_bcs);
-    MeshBlock new_block(this, pin, inblock_size, i, inblock_bcs);
+    SetBlockSizeAndBoundaries(loclist[i], inblock_size, inblock_cells, inblock_bcs);
+    MeshBlock new_block(this, pin, inblock_size, inblock_cells, i, inblock_bcs);
     mblocks.push_back(new_block);  // this requires copy operator!
   }
 
@@ -529,8 +525,9 @@ void Mesh::OutputMeshStructure(int flag) {
       for (int j=0; j<nmbtotal; j++) {
         if (loclist[j].level == i) {
           RegionSize b_size;
+          RegionCells b_cells;
           BoundaryFlag b_bcs[6];
-          SetBlockSizeAndBoundaries(loclist[j], b_size, b_bcs);
+          SetBlockSizeAndBoundaries(loclist[j], b_size, b_cells, b_bcs);
           std::int32_t &lx1 = loclist[j].lx1;
           std::int32_t &lx2 = loclist[j].lx2;
           std::int32_t &lx3 = loclist[j].lx3;
@@ -588,7 +585,7 @@ void Mesh::OutputMeshStructure(int flag) {
 // \brief Set the physical part of a block_size structure and block boundary conditions
 
 void Mesh::SetBlockSizeAndBoundaries(LogicalLocation loc, RegionSize &block_size,
-                                     BoundaryFlag *block_bcs) {
+                                     RegionCells &block_cells, BoundaryFlag *block_bcs) {
   std::int32_t &lx1 = loc.lx1;
   std::int32_t nmbx1_l = nmbroot_x1 << (loc.level - root_level);
 
@@ -610,7 +607,7 @@ void Mesh::SetBlockSizeAndBoundaries(LogicalLocation loc, RegionSize &block_size
   }
 
   // calculate physical size of MeshBlock in x2
-  if (mesh_size.nx2 == 1) {
+  if (mesh_cells.nx2 == 1) {
     block_size.x2min = mesh_size.x2min;
     block_size.x2max = mesh_size.x2max;
     block_bcs[BoundaryFace::inner_x2] = mesh_bcs[BoundaryFace::inner_x2];
@@ -638,7 +635,7 @@ void Mesh::SetBlockSizeAndBoundaries(LogicalLocation loc, RegionSize &block_size
   }
 
   // calculate physical size of MeshBlock in x3
-  if (mesh_size.nx3 == 1) {
+  if (mesh_cells.nx3 == 1) {
     block_size.x3min = mesh_size.x3min;
     block_size.x3max = mesh_size.x3max;
     block_bcs[BoundaryFace::inner_x3] = mesh_bcs[BoundaryFace::inner_x3];
@@ -662,17 +659,14 @@ void Mesh::SetBlockSizeAndBoundaries(LogicalLocation loc, RegionSize &block_size
     }
   }
   // grid spacing at this level.  Ensure all MeshBlocks at same level have same dx
-  block_size.dx1 = mesh_size.dx1*static_cast<Real>(1<<(loc.level - root_level));
-  block_size.dx2 = mesh_size.dx2*static_cast<Real>(1<<(loc.level - root_level));
-  block_size.dx3 = mesh_size.dx3*static_cast<Real>(1<<(loc.level - root_level));
+  block_cells.dx1 = mesh_cells.dx1*static_cast<Real>(1<<(loc.level - root_level));
+  block_cells.dx2 = mesh_cells.dx2*static_cast<Real>(1<<(loc.level - root_level));
+  block_cells.dx3 = mesh_cells.dx3*static_cast<Real>(1<<(loc.level - root_level));
   // everything else
-  block_size.x1rat = mesh_size.x1rat;
-  block_size.x2rat = mesh_size.x2rat;
-  block_size.x3rat = mesh_size.x3rat;
-  block_size.nx1 = mesh_size.nx1;
-  block_size.nx2 = mesh_size.nx2;
-  block_size.nx3 = mesh_size.nx3;
-  block_size.nghost = mesh_size.nghost;
+  block_cells.nx1 = mesh_cells.nx1;
+  block_cells.nx2 = mesh_cells.nx2;
+  block_cells.nx3 = mesh_cells.nx3;
+  block_cells.nghost = mesh_cells.nghost;
 
   return;
 }

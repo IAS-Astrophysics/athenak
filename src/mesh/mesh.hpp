@@ -15,16 +15,24 @@
 // Define following two structure before other "include" files to resolve declarations
 //----------------------------------------------------------------------------------------
 //! \struct RegionSize
-//  \brief physical size and number of cells in a Mesh or a MeshBlock
+//  \brief physical size in a Mesh or a MeshBlock
 
-struct RegionSize {  // aggregate and POD type; do NOT reorder member declarations:
+struct RegionSize {
   Real x1min, x2min, x3min;
   Real x1max, x2max, x3max;
-  Real x1rat, x2rat, x3rat; // ratio of dxf(i)/dxf(i-1)
-  Real dx1, dx2, dx3;       // (uniform) grid spacing
-  int nx1, nx2, nx3;        // number of active cells (not including ghost zones)
-  int nghost;               // number of ghost cells
 };
+
+//----------------------------------------------------------------------------------------
+//! \struct RegionCells
+//  \brief Number of cells and cell indexing in a Mesh or a MeshBlock
+
+struct RegionCells {  
+  int nghost;               // number of ghost cells
+  int nx1, nx2, nx3;        // number of active cells (not including ghost zones)
+  int is,ie,js,je,ks,ke;    // indices of ACTIVE cells
+  Real dx1, dx2, dx3;       // (uniform) grid spacing
+};
+
 
 //----------------------------------------------------------------------------------------
 //! \struct LogicalLocation
@@ -77,15 +85,18 @@ class Mesh {
   int GetNumMeshThreads() const {return num_mesh_threads;}
 
   // data
-  RegionSize mesh_size;       // overall size of mesh (physical root level)
+  RegionSize  mesh_size;      // physical size of mesh (physical root level)
+  RegionCells mesh_cells;     // number of cells in mesh (physical root level)
   BoundaryFlag mesh_bcs[6];   // physical boundary conditions at 6 faces of mesh
   bool nx2gt1, nx3gt1;        // flags to indictate 2D/3D calculations
   bool adaptive, multilevel;
+
   int nmbroot_x1, nmbroot_x2, nmbroot_x3; // # of MeshBlocks at root level in each dir
   int nmbtotal;                  // total number of MeshBlocks across all levels
   int nmbthisrank;               // number of MeshBlocks on this MPI rank (local)
   int nmb_created;               // number of MeshBlcoks created via AMR during run
   int nmb_deleted;               // number of MeshBlcoks deleted via AMR during run
+
   Real time, dt, cfl_no;           
   int ncycle;
 
@@ -95,7 +106,8 @@ class Mesh {
   void SelectPhysics(std::unique_ptr<ParameterInput> &pin);
   void NewTimeStep(const Real tlim);
   void OutputMeshStructure(int flag);
-  void SetBlockSizeAndBoundaries(LogicalLocation loc,RegionSize &size, BoundaryFlag *bcs);
+  void SetBlockSizeAndBoundaries(LogicalLocation loc, RegionSize &size,
+                                 RegionCells &cells, BoundaryFlag *bcs);
   void LoadBalance(double *clist, int *rlist, int *slist, int *nlist, int nb);
   void ResetLoadBalance();
 

@@ -66,19 +66,21 @@ OutputType::OutputType(OutputParameters opar, std::unique_ptr<Mesh> &pm) :
     // set size of output arrays, adjusted accordingly if ghost zones included 
     auto it = pm->mblocks.begin();
     if (output_params.include_gzs) {
-      nout1 = it->indx.ncells1;
-      nout2 = it->indx.ncells2;
-      nout3 = it->indx.ncells3;
+      nout1 = it->mblock_cells.nx1 + 2*it->mblock_cells.nghost;
+      nout2 = it->mblock_cells.nx2;
+      nout3 = it->mblock_cells.nx3;
+      if (nout2 > 1) nout2 += 2*it->mblock_cells.nghost;
+      if (nout3 > 1) nout3 += 2*it->mblock_cells.nghost;
     } else {
-      nout1 = it->indx.nx1;
-      nout2 = it->indx.nx2;
-      nout3 = it->indx.nx3;
+      nout1 = it->mblock_cells.nx1;
+      nout2 = it->mblock_cells.nx2;
+      nout3 = it->mblock_cells.nx3;
     }
 
     // set starting indices of output arrays
-    ois = it->indx.is;
-    ojs = it->indx.js;
-    oks = it->indx.ks;
+    ois = it->mblock_cells.is;
+    ojs = it->mblock_cells.js;
+    oks = it->mblock_cells.ks;
     if (output_params.include_gzs) {
       if (nout1 > 1) ois = 0;
       if (nout2 > 1) ojs = 0;
@@ -116,15 +118,15 @@ void OutputType::LoadOutputData(std::unique_ptr<Mesh> &pm) {
     auto pmb = pm->mblocks.begin();
     int islice=0, jslice=0, kslice=0;
     if (output_params.slice1) {
-      islice = pm->CellCenterIndex(output_params.slice_x1, pmb->indx.nx1,
+      islice = pm->CellCenterIndex(output_params.slice_x1, pmb->mblock_cells.nx1,
         pmb->mblock_size.x1min, pmb->mblock_size.x1max);
     }
     if (output_params.slice2) {
-      jslice = pm->CellCenterIndex(output_params.slice_x2, pmb->indx.nx2,
+      jslice = pm->CellCenterIndex(output_params.slice_x2, pmb->mblock_cells.nx2,
         pmb->mblock_size.x2min, pmb->mblock_size.x2max);
     }
     if (output_params.slice3) {
-      kslice = pm->CellCenterIndex(output_params.slice_x3, pmb->indx.nx3,
+      kslice = pm->CellCenterIndex(output_params.slice_x3, pmb->mblock_cells.nx3,
         pmb->mblock_size.x3min, pmb->mblock_size.x3max);
     }
 

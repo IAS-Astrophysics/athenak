@@ -17,21 +17,6 @@
 namespace hydro {class Hydro;}
 
 //----------------------------------------------------------------------------------------
-//! \struct GridIndices
-//  \brief  structure to store number and indices of grid cells in a MeshBlock
-
-struct GridIndices {
- public:
-  GridIndices() {};
-  ~GridIndices() {};
-
-  int is,ie,js,je,ks,ke;   // indices of ACTIVE cells
-  int nghost;              // number of ghost zones
-  int nx1, nx2, nx3;       // number of ACTIVE cells in each dir
-  int ncells1, ncells2, ncells3; // total # of cells each dir including ghost zones
-};
-
-//----------------------------------------------------------------------------------------
 //! \class MeshBlock
 //  \brief data/functions associated with a single block
 
@@ -40,20 +25,19 @@ class MeshBlock {
  friend class Mesh;
  friend class MeshBlockTree;
  public:
-  MeshBlock(Mesh *pm, std::unique_ptr<ParameterInput> &pin, RegionSize input_size,
-            int igid, BoundaryFlag *input_bcs);
+  MeshBlock(Mesh *pm, std::unique_ptr<ParameterInput> &pin, RegionSize in_size,
+            RegionCells in_cells, int in_gid, BoundaryFlag *input_bcs);
   ~MeshBlock();
 
   // data
   Mesh *pmy_mesh;  // ptr to Mesh containing this MeshBlock
   int mblock_gid;      // grid ID, unique identifier for this MeshBlock
-  RegionSize mblock_size;     // info about size of this MeshBlock
+  RegionSize  mblock_size;    // physical size of this MeshBlock
+  RegionCells mblock_cells;   // info about cells in this MeshBlock
   BoundaryFlag mblock_bcs[6]; // enums specifying BCs at all 6 faces of this MeshBlock
 
-  // indices (is,ie,js,je,ks,ke, etc.) of arrays 
-  GridIndices indx;
-  // indices on 1x coarser level MeshBlock (i.e. ncc2=nx2/2 + 2*nghost, if nx2>1)
-  GridIndices cindx;
+  // cells on 1x coarser level MeshBlock (i.e. ncc2=nx2/2 + 2*nghost, if nx2>1)
+  RegionCells cmb_cells;
 
   // physics modules and task list (controlled by Mesh::SelectPhysics)
   hydro::Hydro *phydro;
@@ -62,7 +46,7 @@ class MeshBlock {
 
   // functions
   int GetNumberOfMeshBlockCells()
-    { return mblock_size.nx1 * mblock_size.nx2 * mblock_size.nx3; }
+    { return mblock_cells.nx1 * mblock_cells.nx2 * mblock_cells.nx3; }
 
  private:
   // data

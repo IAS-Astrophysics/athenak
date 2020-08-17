@@ -106,7 +106,13 @@ Hydro::Hydro(MeshBlock *pmb, std::unique_ptr<ParameterInput> &pin) : pmy_mblock(
   }
 
   // allocate memory for conserved variables
-  u0.SetSize(nhydro, pmb->indx.ncells3, pmb->indx.ncells2, pmb->indx.ncells1);
+  int ncells1 = pmb->mblock_cells.nx1 + 2*(pmb->mblock_cells.nghost);
+  int ncells2 = pmb->mblock_cells.nx2;
+  int ncells3 = pmb->mblock_cells.nx3;
+  if (ncells2 > 1) {ncells2 += 2*(pmb->mblock_cells.nghost);}
+  if (ncells3 > 1) {ncells3 += 2*(pmb->mblock_cells.nghost);}
+
+  u0.SetSize(nhydro, ncells3, ncells2, ncells1);
 
   // for time-evolving problems, construct methods, allocate arrays
   if (hydro_evol != HydroEvolution::no_evolution) {
@@ -129,12 +135,12 @@ Hydro::Hydro(MeshBlock *pmb, std::unique_ptr<ParameterInput> &pin) : pmy_mblock(
     }
 
     // allocate registers, flux divergence, scratch arrays
-    u1.SetSize(nhydro, pmb->indx.ncells3, pmb->indx.ncells2, pmb->indx.ncells1);
-    divf.SetSize(nhydro, pmb->indx.ncells3, pmb->indx.ncells2, pmb->indx.ncells1);
-    w_.SetSize(nhydro, pmb->indx.ncells1);
-    wl_.SetSize(nhydro, pmb->indx.ncells1);
-    wr_.SetSize(nhydro, pmb->indx.ncells1);
-    uflux_.SetSize(nhydro, pmb->indx.ncells1);
+    u1.SetSize(nhydro, ncells3, ncells2, ncells1);
+    divf.SetSize(nhydro, ncells3, ncells2, ncells1);
+    w_.SetSize(nhydro, ncells1);
+    wl_.SetSize(nhydro, ncells1);
+    wr_.SetSize(nhydro, ncells1);
+    uflux_.SetSize(nhydro, ncells1);
   }
 
 }

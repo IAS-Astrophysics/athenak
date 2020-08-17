@@ -29,8 +29,9 @@ TaskStatus Hydro::NewTimeStep(Driver *pdrive, int stage) {
   if (stage != pdrive->nstages) return TaskStatus::complete; // only execute on last stage
 
   MeshBlock *pmb = pmy_mblock;
-  int is = pmb->indx.is; int js = pmb->indx.js; int ks = pmb->indx.ks;
-  int ie = pmb->indx.ie; int je = pmb->indx.je; int ke = pmb->indx.ke;
+  int is = pmb->mblock_cells.is; int ie = pmb->mblock_cells.ie;
+  int js = pmb->mblock_cells.js; int je = pmb->mblock_cells.je;
+  int ks = pmb->mblock_cells.ks; int ke = pmb->mblock_cells.ke;
   Real wi[5];
 
   Real dt1 = std::numeric_limits<float>::min();
@@ -76,16 +77,16 @@ TaskStatus Hydro::NewTimeStep(Driver *pdrive, int stage) {
 
   // compute minimum of dx1/(max_speed)
   dtnew = std::numeric_limits<float>::max();
-  dtnew = std::min(dtnew, (pmb->mblock_size.dx1/dt1));
+  dtnew = std::min(dtnew, (pmb->mblock_cells.dx1/dt1));
 
   // if grid is 2D/3D, compute minimum of dx2/(max_speed)
   if (pmb->pmy_mesh->nx2gt1) {
-    dtnew = std::min(dtnew, (pmb->mblock_size.dx2/dt2));
+    dtnew = std::min(dtnew, (pmb->mblock_cells.dx2/dt2));
   }
 
   // if grid is 3D, compute minimum of dx3/(max_speed)
   if (pmb->pmy_mesh->nx3gt1) {
-    dtnew = std::min(dtnew, (pmb->mblock_size.dx3/dt3));
+    dtnew = std::min(dtnew, (pmb->mblock_cells.dx3/dt3));
   }
 
   return TaskStatus::complete;
