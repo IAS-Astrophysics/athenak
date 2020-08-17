@@ -36,9 +36,9 @@ using namespace hydro;
   Real amp = pin->GetOrAddReal("problem","amplitude",0.1);
 
   // Initialize the grid
-  int &is = pmb->mblock_cells.is, &ie = pmb->mblock_cells.ie;
-  int &js = pmb->mblock_cells.js, &je = pmb->mblock_cells.je;
-  int &ks = pmb->mblock_cells.ks, &ke = pmb->mblock_cells.ke;
+  int &is = pmb->mb_cells.is, &ie = pmb->mb_cells.ie;
+  int &js = pmb->mb_cells.js, &je = pmb->mb_cells.je;
+  int &ks = pmb->mb_cells.ks, &ke = pmb->mb_cells.ke;
 
   // get size of overall domain
   Real length;
@@ -54,19 +54,19 @@ using namespace hydro;
     exit(EXIT_FAILURE);
   }
 
-  Real &x1min = pmb->mblock_size.x1min, &x1max = pmb->mblock_size.x1max;
-  Real &x2min = pmb->mblock_size.x2min, &x2max = pmb->mblock_size.x2max;
-  Real &x3min = pmb->mblock_size.x3min, &x3max = pmb->mblock_size.x3max;
+  Real &x1min = pmb->mb_size.x1min, &x1max = pmb->mb_size.x1max;
+  Real &x2min = pmb->mb_size.x2min, &x2max = pmb->mb_size.x2max;
+  Real &x3min = pmb->mb_size.x3min, &x3max = pmb->mb_size.x3max;
   for (int k=ks; k<=ke; k++) {
     for (int j=js; j<=je; j++) {
-      for (int i=is-pmb->mblock_cells.nghost; i<=ie+pmb->mblock_cells.nghost; i++) {
+      for (int i=is-pmb->mb_cells.nghost; i<=ie+pmb->mb_cells.nghost; i++) {
         Real r; // coordinate that will span [0->1]
         if (flow_dir == 1) {
-          r = (pmb->pmy_mesh->CellCenterX(i, pmb->mblock_cells.nx1, x1min, x1max)-x1min)/length;
+          r = (pmb->pmy_mesh->CellCenterX(i, pmb->mb_cells.nx1,x1min,x1max)-x1min)/length;
         } else if (flow_dir == 2) {
-          r = (pmb->pmy_mesh->CellCenterX(j, pmb->mblock_cells.nx2, x2min, x2max)-x2min)/length;
+          r = (pmb->pmy_mesh->CellCenterX(j, pmb->mb_cells.nx2,x2min,x2max)-x2min)/length;
         } else {
-          r = (pmb->pmy_mesh->CellCenterX(k, pmb->mblock_cells.nx3, x3min, x3max)-x3min)/length;
+          r = (pmb->pmy_mesh->CellCenterX(k, pmb->mb_cells.nx3,x3min,x3max)-x3min)/length;
         }
 
         // iprob=1: sine wave

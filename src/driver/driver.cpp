@@ -223,7 +223,7 @@ void Driver::Finalize(std::unique_ptr<Mesh> &pmesh, std::unique_ptr<Outputs> &po
       float cpu_time = (tstop_ > tstart_ ? static_cast<float>(tstop_ - tstart_) : 1.0) /
                         static_cast<float>(CLOCKS_PER_SEC);
       std::uint64_t zonecycles = nmb_updated_ *
-          static_cast<std::uint64_t>(pmesh->mblocks.front().GetNumberOfMeshBlockCells());
+          static_cast<std::uint64_t>(pmesh->mblocks.front().NumberOfMeshBlockCells());
       float zc_cpus = static_cast<float>(zonecycles) / cpu_time;
 
       std::cout << std::endl << "zone-cycles = " << zonecycles << std::endl;

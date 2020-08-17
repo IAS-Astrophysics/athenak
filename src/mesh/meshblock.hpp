@@ -31,10 +31,10 @@ class MeshBlock {
 
   // data
   Mesh *pmy_mesh;  // ptr to Mesh containing this MeshBlock
-  int mblock_gid;      // grid ID, unique identifier for this MeshBlock
-  RegionSize  mblock_size;    // physical size of this MeshBlock
-  RegionCells mblock_cells;   // info about cells in this MeshBlock
-  BoundaryFlag mblock_bcs[6]; // enums specifying BCs at all 6 faces of this MeshBlock
+  int mb_gid;      // grid ID, unique identifier for this MeshBlock
+  RegionSize  mb_size;    // physical size of this MeshBlock
+  RegionCells mb_cells;   // info about cells in this MeshBlock
+  BoundaryFlag mb_bcs[6]; // enums specifying BCs at all 6 faces of this MeshBlock
 
   // cells on 1x coarser level MeshBlock (i.e. ncc2=nx2/2 + 2*nghost, if nx2>1)
   RegionCells cmb_cells;
@@ -45,8 +45,8 @@ class MeshBlock {
 
 
   // functions
-  int GetNumberOfMeshBlockCells()
-    { return mblock_cells.nx1 * mblock_cells.nx2 * mblock_cells.nx3; }
+  int NumberOfMeshBlockCells() { return mb_cells.nx1 * mb_cells.nx2 * mb_cells.nx3; }
+  int NumberOfCoarseMeshBlockCells() {return cmb_cells.nx1 *cmb_cells.nx2 *cmb_cells.nx3;}
 
  private:
   // data
