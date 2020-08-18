@@ -398,9 +398,18 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
   for (int i=gids; i<=gide; i++) {
     BoundaryFlag inblock_bcs[6];
     SetBlockSizeAndBoundaries(loclist[i], inblock_size, inblock_cells, inblock_bcs);
-    MeshBlock new_block(this, pin, inblock_size, inblock_cells, i, inblock_bcs);
-    mblocks.push_back(new_block);  // this requires copy operator!
+    MeshBlock new_block(this, pin, i, inblock_size, inblock_cells, inblock_bcs);
+    new_block.SetNeighbors(tree, ranklist);
+    mblocks.push_back(new_block);  // MB vector elements stored in order gids->gide
   }
+
+/*******
+  for (auto it=mblocks.begin(); it<mblocks.end(); ++it) {
+    for (int n=0; n<26; ++n) {
+      std::cout << "n=" << n << " gid=" << it->neighbor[n].ngid << " level=" << it->neighbor[n].nlevel << " rank=" << it->neighbor[n].nrank << std::endl;
+    }
+  }
+**********/
 
   ResetLoadBalance();
 

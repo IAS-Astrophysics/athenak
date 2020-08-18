@@ -21,6 +21,8 @@
 //  does not refer to the overall tree itself, but rather each MeshBlockTree is a node.
 
 class MeshBlockTree {
+ friend class Mesh;
+ friend class MeshBlock;
  public:
   explicit MeshBlockTree(Mesh *pmesh);
   MeshBlockTree(MeshBlockTree *parent, int ox1, int ox2, int ox3);

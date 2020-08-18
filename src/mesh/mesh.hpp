@@ -11,8 +11,9 @@
 //  (potentially on different levels) that tile the entire domain.
 
 #include <cstdint>  // int32_t
+#include <vector>
 
-// Define following two structure before other "include" files to resolve declarations
+// Define following structure before other "include" files to resolve declarations
 //----------------------------------------------------------------------------------------
 //! \struct RegionSize
 //  \brief physical size in a Mesh or a MeshBlock
@@ -33,6 +34,16 @@ struct RegionCells {
   Real dx1, dx2, dx3;       // (uniform) grid spacing
 };
 
+//----------------------------------------------------------------------------------------
+//! \struct NeighborBlock
+//  \brief Information about neighboring MeshBlocks
+
+struct NeighborBlock {  
+  int ngid;
+  int nrank;
+  int nlevel;
+  NeighborBlock() : ngid(-1), nrank(-1), nlevel(-1) {}  // set default values
+};
 
 //----------------------------------------------------------------------------------------
 //! \struct LogicalLocation
@@ -58,13 +69,12 @@ struct LogicalLocation {
   }
 };
 
-#include <vector>
 // Forward declarations
 class Mesh;
 
 #include "bvals/bvals.hpp"
-#include "meshblock.hpp"
 #include "meshblock_tree.hpp"
+#include "meshblock.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \class Mesh
@@ -135,18 +145,21 @@ class Mesh {
   int num_mesh_threads;
   int root_level; // logical level of root (physical) grid (e.g. Fig. 3 of method paper)
   int max_level;  // logical level of maximum refinement grid in Mesh
+  int gids, gide; // start/end of grid IDs on this MPI rank
+
   // following 2x arrays allocated with length [nmbtotal]
-  int *ranklist;
-  double *costlist;
+  int *ranklist;      // rank of each MeshBlock
+  double *costlist;   // cost of each MeshBlock
+
   // following 2x arrays allocated with length [nranks]
-  int *nslist;
-  int *nblist;
+  int *nslist;        // starting grid ID of MeshBlocks in each rank
+  int *nblist;        // number of MeshBlocks on each rank
+
   // following 8x arrays allocated with length [nranks] only with AMR
   int *nref, *nderef;
   int *rdisp, *ddisp;
   int *bnref, *bnderef;
   int *brdisp, *bddisp;
-  int gids, gide; // start/end of grid IDs on this MPI rank
 
   // variables for load balancing control
   bool lb_flag;

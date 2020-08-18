@@ -17,9 +17,9 @@
 // MeshBlock constructor: constructs coordinate, boundary condition, hydro, field
 //                        and mesh refinement objects.
 
-MeshBlock::MeshBlock(Mesh *pm, std::unique_ptr<ParameterInput> &pin,
-               RegionSize isize, RegionCells icells, int igid, BoundaryFlag *input_bcs) :
-    pmy_mesh(pm), mb_size(isize), mb_cells(icells), mb_gid(igid) {
+MeshBlock::MeshBlock(Mesh *pm, std::unique_ptr<ParameterInput> &pin, int igid,
+  RegionSize isize, RegionCells icells, BoundaryFlag *input_bcs) :
+  pmy_mesh(pm), mb_gid(igid), mb_size(isize), mb_cells(icells) {
 
   // copy input boundary flags into MeshBlock 
   for (int i=0; i<6; ++i) {mb_bcs[i] = input_bcs[i];}
@@ -83,4 +83,33 @@ MeshBlock::MeshBlock(Mesh *pm, std::unique_ptr<ParameterInput> &pin,
 // MeshBlock destructor
 
 MeshBlock::~MeshBlock() {
+}
+
+//----------------------------------------------------------------------------------------
+// \!fn void MeshBlock::FindAndSetNeighbors()
+// \brief Search and set all the neighbor blocks
+
+void MeshBlock::SetNeighbors(MeshBlockTree &tree, int *ranklist) {
+
+  MeshBlockTree* neibt;
+  LogicalLocation loc = pmy_mesh->loclist[mb_gid];
+
+  int cnt=-1;
+  // iterate over x3/x2/x1 faces and load all 26 neighbors on a uniform grid.
+  // Neighbors are indexed sequentially starting from lower corner.
+  for (int l=-1; l<=1; ++l) {
+  for (int m=-1; m<=1; ++m) {
+  for (int n=-1; n<=1; ++n) {
+    if (n==0 && m==0 && l==0) {continue;}
+    ++cnt;
+    if (mb_cells.nx3 == 1 && l != 0) {continue;}  // skip if not 3D
+    if (mb_cells.nx2 == 1 && m != 0) {continue;}  // skip if not 2D
+    neibt = tree.FindNeighbor(loc, n, m, l);
+    if (neibt == nullptr) {continue;}
+    neighbor[cnt].ngid   = neibt->gid_;
+    neighbor[cnt].nlevel = neibt->loc_.level;
+    neighbor[cnt].nrank  = ranklist[neibt->gid_];
+  }}}
+
+  return;
 }

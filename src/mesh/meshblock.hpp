@@ -25,16 +25,17 @@ class MeshBlock {
  friend class Mesh;
  friend class MeshBlockTree;
  public:
-  MeshBlock(Mesh *pm, std::unique_ptr<ParameterInput> &pin, RegionSize in_size,
-            RegionCells in_cells, int in_gid, BoundaryFlag *input_bcs);
+  MeshBlock(Mesh *pm, std::unique_ptr<ParameterInput> &pin, int igid,
+    RegionSize isize, RegionCells icells, BoundaryFlag *input_bcs);
   ~MeshBlock();
 
   // data
-  Mesh *pmy_mesh;  // ptr to Mesh containing this MeshBlock
-  int mb_gid;      // grid ID, unique identifier for this MeshBlock
+  Mesh *pmy_mesh;         // ptr to Mesh containing this MeshBlock
+  int mb_gid;             // grid ID, unique identifier for this MeshBlock
   RegionSize  mb_size;    // physical size of this MeshBlock
   RegionCells mb_cells;   // info about cells in this MeshBlock
   BoundaryFlag mb_bcs[6]; // enums specifying BCs at all 6 faces of this MeshBlock
+  NeighborBlock neighbor[26];
 
   // cells on 1x coarser level MeshBlock (i.e. ncc2=nx2/2 + 2*nghost, if nx2>1)
   RegionCells cmb_cells;
@@ -53,6 +54,7 @@ class MeshBlock {
   double lb_cost;  // cost of updating this MeshBlock for load balancing
 
   // functions
+  void SetNeighbors(MeshBlockTree &tree, int *ranklist);
 
 };
 
