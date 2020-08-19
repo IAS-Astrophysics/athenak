@@ -35,17 +35,6 @@ struct RegionCells {
 };
 
 //----------------------------------------------------------------------------------------
-//! \struct NeighborBlock
-//  \brief Information about neighboring MeshBlocks
-
-struct NeighborBlock {  
-  int ngid;
-  int nrank;
-  int nlevel;
-  NeighborBlock() : ngid(-1), nrank(-1), nlevel(-1) {}  // set default values
-};
-
-//----------------------------------------------------------------------------------------
 //! \struct LogicalLocation
 //  \brief stores logical location and level of MeshBlock
 

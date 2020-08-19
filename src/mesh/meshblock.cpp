@@ -7,6 +7,7 @@
 //  \brief implementation of functions in MeshBlock class
 
 #include <cstdlib>
+#include <iostream>
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
@@ -22,7 +23,7 @@ MeshBlock::MeshBlock(Mesh *pm, std::unique_ptr<ParameterInput> &pin, int igid,
   pmesh_mb(pm), mb_gid(igid), mb_size(isize), mb_cells(icells) {
 
   // copy input boundary flags into MeshBlock 
-  for (int i=0; i<6; ++i) {mb_bcs[i] = input_bcs[i];}
+//  for (int i=0; i<6; ++i) {mb_bcs[i] = input_bcs[i];}
 
   // initialize grid indices
   mb_cells.is = mb_cells.ng;
@@ -72,6 +73,10 @@ MeshBlock::MeshBlock(Mesh *pm, std::unique_ptr<ParameterInput> &pin, int igid,
     }
   }
 
+std::cout << "MBConstruct nx1=" << mb_cells.nx1 << " nx2=" << mb_cells.nx2 << " nx3=" << mb_cells.nx3 << std::endl;
+
+  pbval = new BoundaryValues(this, pin, input_bcs);
+
   return;
 }
 
@@ -106,9 +111,9 @@ void MeshBlock::SetNeighbors(MeshBlockTree &tree, int *ranklist) {
     if (mb_cells.nx2 == 1 && m != 0) {continue;}  // skip if not 2D
     neibt = tree.FindNeighbor(loc, n, m, l);
     if (neibt == nullptr) {continue;}
-    neighbor[cnt].ngid   = neibt->gid_;
-    neighbor[cnt].nlevel = neibt->loc_.level;
-    neighbor[cnt].nrank  = ranklist[neibt->gid_];
+    pbval->neighbor[cnt].ngid   = neibt->gid_;
+    pbval->neighbor[cnt].nlevel = neibt->loc_.level;
+    pbval->neighbor[cnt].nrank  = ranklist[neibt->gid_];
   }}}
 
   return;

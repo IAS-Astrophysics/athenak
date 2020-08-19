@@ -14,6 +14,7 @@
 #include "tasklist/task_list.hpp"
 
 // Forward declarations
+class BoundaryValues;
 namespace hydro {class Hydro;}
 
 //----------------------------------------------------------------------------------------
@@ -34,14 +35,19 @@ class MeshBlock {
   int mb_gid;             // grid ID, unique identifier for this MeshBlock
   RegionSize  mb_size;    // physical size of this MeshBlock
   RegionCells mb_cells;   // info about cells in this MeshBlock
-  BoundaryFlag mb_bcs[6]; // enums specifying BCs at all 6 faces of this MeshBlock
-  NeighborBlock neighbor[26];
+
+  BoundaryValues *pbval;
+
+//  BoundaryFlag mb_bcs[6]; // enums specifying BCs at all 6 faces of this MeshBlock
+//  NeighborBlock neighbor[26];
 
   // cells on 1x coarser level MeshBlock (i.e. ncc2=nx2/2 + 2*nghost, if nx2>1)
   RegionCells cmb_cells;
 
-  // physics modules and task list (controlled by Mesh::SelectPhysics)
+  // physics modules (controlled by Mesh::SelectPhysics)
   hydro::Hydro *phydro;
+
+  // task list (initialized by ... )
   TaskList tl_onestage;
 
 

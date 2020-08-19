@@ -406,7 +406,7 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
 /*******/
   for (auto it=mblocks.begin(); it<mblocks.end(); ++it) {
     for (int n=0; n<26; ++n) {
-      std::cout << "n=" << n << " gid=" << it->neighbor[n].ngid << " level=" << it->neighbor[n].nlevel << " rank=" << it->neighbor[n].nrank << std::endl;
+      std::cout << "n=" << n << " gid=" << it->pbval->neighbor[n].ngid << " level=" << it->pbval->neighbor[n].nlevel << " rank=" << it->pbval->neighbor[n].nrank << std::endl;
     }
   }
 /**********/
@@ -672,9 +672,6 @@ void Mesh::SetBlockSizeAndBoundaries(LogicalLocation loc, RegionSize &block_size
   block_cells.dx2 = mesh_cells.dx2*static_cast<Real>(1<<(loc.level - root_level));
   block_cells.dx3 = mesh_cells.dx3*static_cast<Real>(1<<(loc.level - root_level));
   // everything else
-  block_cells.nx1 = mesh_cells.nx1;
-  block_cells.nx2 = mesh_cells.nx2;
-  block_cells.nx3 = mesh_cells.nx3;
   block_cells.ng  = mesh_cells.ng;
 
   return;

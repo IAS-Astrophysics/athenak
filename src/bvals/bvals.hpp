@@ -25,6 +25,56 @@ enum class BoundaryStatus {waiting, arrived, completed};
 BoundaryFlag GetBoundaryFlag(const std::string& input_string);
 std::string GetBoundaryString(BoundaryFlag input_flag);
 
+#include "athena.hpp"
+#include "athena_arrays.hpp"
+#include "parameter_input.hpp"
+
+// Forward delcarations
+class MeshBlock;
+
+//----------------------------------------------------------------------------------------
+//! \struct NeighborBlock
+//  \brief Information about neighboring MeshBlocks
+
+struct NeighborBlock {
+  int ngid;
+  int nrank;
+  int nlevel;
+  NeighborBlock() : ngid(-1), nrank(-1), nlevel(-1) {}  // set default values
+};
+
+//----------------------------------------------------------------------------------------
+//! \class BoundaryBase
+//  \brief
+
+class BoundaryValues {
+ public:
+  BoundaryValues(MeshBlock *pmb, std::unique_ptr<ParameterInput> &pin, BoundaryFlag *bcs);
+  ~BoundaryValues();
+
+  // data
+
+  BoundaryFlag mb_bcs[6]; // enums specifying BCs at all 6 faces of this MeshBlock
+  NeighborBlock neighbor[26];
+  // TO DO: store boundary buffers for different physics in a map
+//  std::map<std::string, Real*> bbuf_send, bbuf_recv;
+  int cc_bbuf_ncells[26];
+  int cc_bbuf_ncells_offset[26];
+  int cc_bbuf_ncells_total;
+  Real *bbuf_send, *bbuf_recv;
+
+  // functions
+//  void SendCellCenteredVariables(const std::string &key, AthenaArray<Real> &a, int nvar);
+//  void ReceiveCellCenteredVariables(const std::string &key, AthenaArray<Real> &a, int nvar);
+//  void SendCellCenteredVariables(const std::string &key, int nvar);
+//  void ReceiveCellCenteredVariables(const std::string &key, int nvar);
+
+ private:
+  MeshBlock *pmblock_bval_;
+
+};
+
+
 
 #endif // BVALS_BVALS_HPP_
 

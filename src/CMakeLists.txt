@@ -12,6 +12,7 @@ add_executable(
         parameter_input.cpp
 
         bvals/boundary_flag.cpp
+        bvals/bvals.cpp
 
         driver/driver.cpp
 
