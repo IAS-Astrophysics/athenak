@@ -30,7 +30,7 @@ class MeshBlock {
   ~MeshBlock();
 
   // data
-  Mesh *pmy_mesh;         // ptr to Mesh containing this MeshBlock
+  Mesh *pmesh_mb;         // ptr to Mesh containing this MeshBlock
   int mb_gid;             // grid ID, unique identifier for this MeshBlock
   RegionSize  mb_size;    // physical size of this MeshBlock
   RegionCells mb_cells;   // info about cells in this MeshBlock

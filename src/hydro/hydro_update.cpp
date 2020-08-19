@@ -22,10 +22,10 @@ namespace hydro {
 //void Hydro::HydroUpdate(AthenaArray<Real> &u0, AthenaArray<Real> &u1, 
 //                         AthenaArray<Real> &divf) {
 TaskStatus Hydro::HydroUpdate(Driver *pdrive, int stage) {
-  int is = pmy_mblock->mb_cells.is; int ie = pmy_mblock->mb_cells.ie;
-  int js = pmy_mblock->mb_cells.js; int je = pmy_mblock->mb_cells.je;
-  int ks = pmy_mblock->mb_cells.ks; int ke = pmy_mblock->mb_cells.ke;
-  int nghost = pmy_mblock->mb_cells.nghost;
+  int is = pmb_hyd->mb_cells.is; int ie = pmb_hyd->mb_cells.ie;
+  int js = pmb_hyd->mb_cells.js; int je = pmb_hyd->mb_cells.je;
+  int ks = pmb_hyd->mb_cells.ks; int ke = pmb_hyd->mb_cells.ke;
+  int nghost = pmb_hyd->mb_cells.nghost;
 
   // update all variables to intermediate step using weights and fractional time step 
   // appropriate to stage of particular integrator used (see XX)
@@ -40,7 +40,7 @@ TaskStatus Hydro::HydroUpdate(Driver *pdrive, int stage) {
       for (int j=js; j<=je; ++j) {
         for (int i=is; i<=ie; ++i) {
           u0(n,k,j,i) = gam0*u0(n,k,j,i) + gam1*u1(n,k,j,i) 
-                        - beta*(pmy_mblock->pmy_mesh->dt)*divf(n,k,j,i);
+                        - beta*(pmb_hyd->pmesh_mb->dt)*divf(n,k,j,i);
         }
       }
     }

@@ -403,13 +403,13 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
     mblocks.push_back(new_block);  // MB vector elements stored in order gids->gide
   }
 
-/*******
+/*******/
   for (auto it=mblocks.begin(); it<mblocks.end(); ++it) {
     for (int n=0; n<26; ++n) {
       std::cout << "n=" << n << " gid=" << it->neighbor[n].ngid << " level=" << it->neighbor[n].nlevel << " rank=" << it->neighbor[n].nrank << std::endl;
     }
   }
-**********/
+/**********/
 
   ResetLoadBalance();
 

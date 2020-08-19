@@ -20,7 +20,7 @@ namespace hydro {
 //----------------------------------------------------------------------------------------
 // constructor, initializes data structures and parameters
 
-Hydro::Hydro(MeshBlock *pmb, std::unique_ptr<ParameterInput> &pin) : pmy_mblock(pmb) {
+Hydro::Hydro(MeshBlock *pmb, std::unique_ptr<ParameterInput> &pin) : pmb_hyd(pmb) {
 
   // set EOS option (no default)
   {std::string eqn_of_state   = pin->GetString("hydro","eos");

@@ -39,7 +39,7 @@ class Hydro {
   ~Hydro();
 
   // data
-  MeshBlock* pmy_mblock;              // ptr to MeshBlock containing this Hydro
+  MeshBlock* pmb_hyd;                 // ptr to MeshBlock containing this Hydro
   HydroEOS hydro_eos;                 // enum storing choice of EOS
   HydroEvolution hydro_evol;          // enum storing choice of time evolution
   HydroReconMethod hydro_recon;       // enum storing choice of reconstruction method

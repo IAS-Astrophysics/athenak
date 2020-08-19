@@ -19,7 +19,7 @@
 
 MeshBlock::MeshBlock(Mesh *pm, std::unique_ptr<ParameterInput> &pin, int igid,
   RegionSize isize, RegionCells icells, BoundaryFlag *input_bcs) :
-  pmy_mesh(pm), mb_gid(igid), mb_size(isize), mb_cells(icells) {
+  pmesh_mb(pm), mb_gid(igid), mb_size(isize), mb_cells(icells) {
 
   // copy input boundary flags into MeshBlock 
   for (int i=0; i<6; ++i) {mb_bcs[i] = input_bcs[i];}
@@ -92,7 +92,7 @@ MeshBlock::~MeshBlock() {
 void MeshBlock::SetNeighbors(MeshBlockTree &tree, int *ranklist) {
 
   MeshBlockTree* neibt;
-  LogicalLocation loc = pmy_mesh->loclist[mb_gid];
+  LogicalLocation loc = pmesh_mb->loclist[mb_gid];
 
   int cnt=-1;
   // iterate over x3/x2/x1 faces and load all 26 neighbors on a uniform grid.
