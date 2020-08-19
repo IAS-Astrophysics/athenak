@@ -66,11 +66,11 @@ OutputType::OutputType(OutputParameters opar, std::unique_ptr<Mesh> &pm) :
     // set size of output arrays, adjusted accordingly if ghost zones included 
     auto it = pm->mblocks.begin();
     if (output_params.include_gzs) {
-      nout1 = it->mb_cells.nx1 + 2*it->mb_cells.nghost;
+      nout1 = it->mb_cells.nx1 + 2*it->mb_cells.ng;
       nout2 = it->mb_cells.nx2;
       nout3 = it->mb_cells.nx3;
-      if (nout2 > 1) nout2 += 2*it->mb_cells.nghost;
-      if (nout3 > 1) nout3 += 2*it->mb_cells.nghost;
+      if (nout2 > 1) nout2 += 2*it->mb_cells.ng;
+      if (nout3 > 1) nout3 += 2*it->mb_cells.ng;
     } else {
       nout1 = it->mb_cells.nx1;
       nout2 = it->mb_cells.nx2;

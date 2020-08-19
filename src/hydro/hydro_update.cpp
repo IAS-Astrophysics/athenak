@@ -25,7 +25,6 @@ TaskStatus Hydro::HydroUpdate(Driver *pdrive, int stage) {
   int is = pmb_hyd->mb_cells.is; int ie = pmb_hyd->mb_cells.ie;
   int js = pmb_hyd->mb_cells.js; int je = pmb_hyd->mb_cells.je;
   int ks = pmb_hyd->mb_cells.ks; int ke = pmb_hyd->mb_cells.ke;
-  int nghost = pmb_hyd->mb_cells.nghost;
 
   // update all variables to intermediate step using weights and fractional time step 
   // appropriate to stage of particular integrator used (see XX)

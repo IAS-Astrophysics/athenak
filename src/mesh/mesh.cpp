@@ -33,10 +33,10 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
   mesh_size.x3min = pin->GetReal("mesh", "x3min");
   mesh_size.x3max = pin->GetReal("mesh", "x3max");
 
-  mesh_cells.nghost = pin->GetOrAddReal("mesh", "nghost", 2);
-  mesh_cells.nx1    = pin->GetInteger("mesh", "nx1");
-  mesh_cells.nx2    = pin->GetInteger("mesh", "nx2");
-  mesh_cells.nx3    = pin->GetInteger("mesh", "nx3");
+  mesh_cells.ng  = pin->GetOrAddReal("mesh", "nghost", 2);
+  mesh_cells.nx1 = pin->GetInteger("mesh", "nx1");
+  mesh_cells.nx2 = pin->GetInteger("mesh", "nx2");
+  mesh_cells.nx3 = pin->GetInteger("mesh", "nx3");
 
   mesh_bcs[BoundaryFace::inner_x1] =
     GetBoundaryFlag(pin->GetOrAddString("mesh", "ix1_bc", "none"));
@@ -108,15 +108,15 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
   }
 
   // error check number of ghost zones
-  if (mesh_cells.nghost < 2) {
+  if (mesh_cells.ng < 2) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-      << "More than 2 ghost zones required, but nghost=" <<mesh_cells.nghost << std::endl;
+      << "More than 2 ghost zones required, but nghost=" <<mesh_cells.ng << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  if ((multilevel) && (mesh_cells.nghost % 2 != 0)) {
+  if ((multilevel) && (mesh_cells.ng % 2 != 0)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
       << "Number of ghost zones must be divisible by two for SMR/AMR calculations, "
-      << "but nghost=" << mesh_cells.nghost << std::endl;
+      << "but nghost=" << mesh_cells.ng << std::endl;
     std::exit(EXIT_FAILURE);
   }
 
@@ -675,7 +675,7 @@ void Mesh::SetBlockSizeAndBoundaries(LogicalLocation loc, RegionSize &block_size
   block_cells.nx1 = mesh_cells.nx1;
   block_cells.nx2 = mesh_cells.nx2;
   block_cells.nx3 = mesh_cells.nx3;
-  block_cells.nghost = mesh_cells.nghost;
+  block_cells.ng  = mesh_cells.ng;
 
   return;
 }

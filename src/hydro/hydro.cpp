@@ -106,11 +106,9 @@ Hydro::Hydro(MeshBlock *pmb, std::unique_ptr<ParameterInput> &pin) : pmb_hyd(pmb
   }
 
   // allocate memory for conserved variables
-  int ncells1 = pmb->mb_cells.nx1 + 2*(pmb->mb_cells.nghost);
-  int ncells2 = pmb->mb_cells.nx2;
-  int ncells3 = pmb->mb_cells.nx3;
-  if (ncells2 > 1) {ncells2 += 2*(pmb->mb_cells.nghost);}
-  if (ncells3 > 1) {ncells3 += 2*(pmb->mb_cells.nghost);}
+  int ncells1 = pmb->mb_cells.nx1 + 2*(pmb->mb_cells.ng);
+  int ncells2 = (pmb->mb_cells.nx2 > 1)? (pmb->mb_cells.nx1 + 2*(pmb->mb_cells.ng)) : 1;
+  int ncells3 = (pmb->mb_cells.nx3 > 1)? (pmb->mb_cells.nx3 + 2*(pmb->mb_cells.ng)) : 1;
 
   u0.SetSize(nhydro, ncells3, ncells2, ncells1);
 

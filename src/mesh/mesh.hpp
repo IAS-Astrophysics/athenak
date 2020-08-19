@@ -28,7 +28,7 @@ struct RegionSize {
 //  \brief Number of cells and cell indexing in a Mesh or a MeshBlock
 
 struct RegionCells {  
-  int nghost;               // number of ghost cells
+  int ng;                   // number of ghost cells
   int nx1, nx2, nx3;        // number of active cells (not including ghost zones)
   int is,ie,js,je,ks,ke;    // indices of ACTIVE cells
   Real dx1, dx2, dx3;       // (uniform) grid spacing

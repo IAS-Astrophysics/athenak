@@ -25,11 +25,11 @@ MeshBlock::MeshBlock(Mesh *pm, std::unique_ptr<ParameterInput> &pin, int igid,
   for (int i=0; i<6; ++i) {mb_bcs[i] = input_bcs[i];}
 
   // initialize grid indices
-  mb_cells.is = mb_cells.nghost;
+  mb_cells.is = mb_cells.ng;
   mb_cells.ie = mb_cells.is + mb_cells.nx1 - 1;
 
   if (mb_cells.nx2 > 1) {
-    mb_cells.js = mb_cells.nghost;
+    mb_cells.js = mb_cells.ng;
     mb_cells.je = mb_cells.js + mb_cells.nx2 - 1;
   } else {
     mb_cells.js = 0;
@@ -37,7 +37,7 @@ MeshBlock::MeshBlock(Mesh *pm, std::unique_ptr<ParameterInput> &pin, int igid,
   }
 
   if (mb_cells.nx3 > 1) {
-    mb_cells.ks = mb_cells.nghost;
+    mb_cells.ks = mb_cells.ng;
     mb_cells.ke = mb_cells.ks + mb_cells.nx3 - 1;
   } else {
     mb_cells.ks = 0;
@@ -46,13 +46,13 @@ MeshBlock::MeshBlock(Mesh *pm, std::unique_ptr<ParameterInput> &pin, int igid,
 
   // initialize coarse grid indices
   if (pm->multilevel) {
-    cmb_cells.nghost = (mb_cells.nghost + 1)/2 + 1;
-    cmb_cells.is = cmb_cells.nghost;
+    cmb_cells.ng = (mb_cells.ng + 1)/2 + 1;
+    cmb_cells.is = cmb_cells.ng;
     cmb_cells.ie = cmb_cells.is + mb_cells.nx1/2 - 1;
     cmb_cells.nx1 = cmb_cells.ie - cmb_cells.is + 1;
 
     if (mb_cells.nx2 > 1) {
-      cmb_cells.js = cmb_cells.nghost;
+      cmb_cells.js = cmb_cells.ng;
       cmb_cells.je = cmb_cells.js + mb_cells.nx2/2 - 1;
       cmb_cells.nx2 = cmb_cells.je - cmb_cells.js + 1;
     } else {
@@ -62,7 +62,7 @@ MeshBlock::MeshBlock(Mesh *pm, std::unique_ptr<ParameterInput> &pin, int igid,
     }
   
     if (mb_cells.nx3 > 1) {
-      cmb_cells.ks = cmb_cells.nghost;
+      cmb_cells.ks = cmb_cells.ng;
       cmb_cells.ke = cmb_cells.ks + mb_cells.nx3/2 - 1;
       cmb_cells.nx3 = cmb_cells.ke - cmb_cells.ks + 1;
     } else {

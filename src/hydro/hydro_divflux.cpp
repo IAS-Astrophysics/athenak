@@ -23,7 +23,7 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage) {
   int is = pmb_hyd->mb_cells.is; int ie = pmb_hyd->mb_cells.ie;
   int js = pmb_hyd->mb_cells.js; int je = pmb_hyd->mb_cells.je;
   int ks = pmb_hyd->mb_cells.ks; int ke = pmb_hyd->mb_cells.ke;
-  int nghost = pmb_hyd->mb_cells.nghost;
+  int ng = pmb_hyd->mb_cells.ng;
 
 std::cout << "HydroDiv nx1=" << pmb_hyd->mb_cells.nx1 << " nx2=" << pmb_hyd->mb_cells.nx2 << " nx3=" << pmb_hyd->mb_cells.nx3 << std::endl;
 
@@ -33,7 +33,7 @@ std::cout << "HydroDiv nx1=" << pmb_hyd->mb_cells.nx1 << " nx2=" << pmb_hyd->mb_
   for (int k=ks; k<=ke; ++k) {
     for (int j=js; j<=je; ++j) {
 
-      peos->ConservedToPrimitive(k, j, is-nghost, ie+nghost, u0, w_);
+      peos->ConservedToPrimitive(k, j, is-ng, ie+ng, u0, w_);
       precon->ReconstructX1(is-1, ie+1, w_, wl_, wr_);
       prsolver->RSolver(is, ie+1, IVX, wl_, wr_, uflux_);
 
