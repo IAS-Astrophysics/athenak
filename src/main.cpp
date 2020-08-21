@@ -39,9 +39,7 @@
 //  \brief AthenaK main program
 
 int main(int argc, char *argv[]) {
-  char *input_filename = nullptr;
-  char *restart_filename = nullptr;
-  char *prundir = nullptr;
+  std::string input_file, restart_file, run_dir;
   int  res_flag = 0;  // set to 1 if -r        argument is on cmdline 
   int narg_flag = 0;  // set to 1 if -n        argument is on cmdline
   int marg_flag = 0;  // set to 1 if -m        argument is on cmdline
@@ -127,16 +125,16 @@ int main(int argc, char *argv[]) {
 
       // set arguments, flags, or execute tasks specified by options
       switch(*(argv[i]+1)) {
-        case 'i':                      // -i <input_filename>
-          input_filename = argv[++i];
+        case 'i':                      // -i <input_file>
+          input_file.assign(argv[++i]);
           iarg_flag = 1;
           break;
         case 'r':                      // -r <restart_file>
           res_flag = 1;
-          restart_filename = argv[++i];
+          restart_file.assign(argv[++i]);
           break;
         case 'd':                      // -d <run_directory>
-          prundir = argv[++i];
+          run_dir.assign(argv[++i]);
           break;
         case 'n':
           narg_flag = 1;
@@ -183,7 +181,7 @@ int main(int argc, char *argv[]) {
   }
 
   // print error if input or restart file not given
-  if (restart_filename == nullptr && input_filename == nullptr) {
+  if (restart_file.empty() && input_file.empty()) {
     // no input file is given
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "Either an input or restart file must be specified." << std::endl
@@ -195,11 +193,11 @@ int main(int argc, char *argv[]) {
   }
 
   //--- Step 3. --------------------------------------------------------------------------
-  // Parse input file and command line and store into ParameterInput object.
-  // With MPI, the input is read by every process in parallel using MPI-IO.
+  // Construct ParameterInput object and store smart pointer to it.
+  // Constructor reads input_file and stores block/parameter names.
+  // With MPI, the input is read by every rank in parallel using MPI-IO.
 
-  std::unique_ptr<ParameterInput> pinput;
-  pinput = std::make_unique<ParameterInput>(input_filename);
+  auto pinput = std::make_unique<ParameterInput>(input_file);
   pinput->ModifyFromCmdline(argc, argv);
 
   // Dump input parameters and quit if code was run with -n option.
@@ -213,10 +211,10 @@ int main(int argc, char *argv[]) {
   }
 
   //--- Step 4. --------------------------------------------------------------------------
-  // Construct and initialize Mesh, MeshTree, and MeshBlocks on this rank
+  // Construct Mesh and MeshBlockTree and store smart pointer to Mesh.  Then initialize
+  // Tree and construct MeshBlocks on this rank
 
-  std::unique_ptr<Mesh> pmesh;
-  pmesh = std::make_unique<Mesh>(pinput);
+  auto pmesh = std::make_unique<Mesh>(pinput);
 
   // output Mesh diagnostics
   if (global_variable::my_rank == 0) pmesh->OutputMeshStructure(marg_flag);
@@ -237,22 +235,19 @@ int main(int argc, char *argv[]) {
   //--- Step 6. --------------------------------------------------------------------------
   // Set initial conditions by calling problem generator, or reading restart file
 
-  std::unique_ptr<ProblemGenerator> pgen;
-  pgen = std::make_unique<ProblemGenerator>(pinput, pmesh);
+  auto pgen = std::make_unique<ProblemGenerator>(pinput, pmesh);
 
   //--- Step 7. --------------------------------------------------------------------------
   // Construct Outputs. Output of initial conditions is made in Driver (if needed)
 
-  std::unique_ptr<Outputs> pout;
-  pout = std::make_unique<Outputs>(pinput, pmesh);
+  auto pout = std::make_unique<Outputs>(pinput, pmesh);
 
   //--- Step 8. --------------------------------------------------------------------------
   // Construct and Execute Driver
 
-  std::unique_ptr<Driver> pdrive;
-  pdrive = std::make_unique<Driver>(pinput, pmesh, pout);
+  auto pdrive = std::make_unique<Driver>(pinput, pmesh, pout);
 
-  ChangeRunDir(prundir);
+  ChangeRunDir(run_dir);
   pdrive->Initialize(pmesh, pout);
   pdrive->Execute(pmesh, pout);
   pdrive->Finalize(pmesh, pout);

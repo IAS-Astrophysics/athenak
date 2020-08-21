@@ -9,6 +9,6 @@
 //  \brief prototypes of functions and class definitions for utils/*.cpp files
 
 void ShowConfig();
-void ChangeRunDir(const char *pdir);
+void ChangeRunDir(const std::string dir);
 
 #endif // UTILS_UTILS_HPP_

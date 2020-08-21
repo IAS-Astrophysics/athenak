@@ -16,14 +16,14 @@
 //! \fn void ChangeRunDir(const char *pdir)
 //  \brief change to input run directory; create if it does not exist yet
 
-void ChangeRunDir(const char *pdir) {
+void ChangeRunDir(const std::string dir) {
 
-  if (pdir == nullptr || *pdir == '\0') return;
+  if (dir.empty()) return;
 
-  mkdir(pdir, 0775);
-  if (chdir(pdir)) {
+  mkdir(dir.c_str(), 0775);
+  if (chdir(dir.c_str())) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "Cannot cd to directory '" << pdir << "'";
+        << "Cannot cd to directory '" << dir << "'";
     exit(EXIT_FAILURE);
   }
 
