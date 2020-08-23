@@ -18,6 +18,18 @@ class BoundaryValues;
 namespace hydro {class Hydro;}
 
 //----------------------------------------------------------------------------------------
+//! \struct NeighborBlock
+//  \brief Information about neighboring MeshBlocks
+
+struct NeighborBlock
+{
+  int ngid;
+  int nrank;
+  int nlevel;
+  NeighborBlock() : ngid(-1), nrank(-1), nlevel(-1) {}  // set default values
+};
+
+//----------------------------------------------------------------------------------------
 //! \class MeshBlock
 //  \brief data/functions associated with a single block
 
@@ -28,7 +40,7 @@ class MeshBlock
  friend class MeshBlockTree;
  public:
   MeshBlock(std::shared_ptr<Mesh> pm, std::unique_ptr<ParameterInput> &pin, int igid,
-    RegionSize isize, RegionCells icells, BoundaryFlag *input_bcs);
+    RegionSize isize, RegionCells icells, BoundaryFlag *ibcs);
   ~MeshBlock();
 
   // data
@@ -37,10 +49,9 @@ class MeshBlock
   RegionSize  mb_size;    // physical size of this MeshBlock
   RegionCells mb_cells;   // info about cells in this MeshBlock
 
+  BoundaryFlag mb_bcs[6]; // enums specifying BCs at all 6 faces of this MeshBlock
+  NeighborBlock neighbor[26];
   BoundaryValues *pbval;
-
-//  BoundaryFlag mb_bcs[6]; // enums specifying BCs at all 6 faces of this MeshBlock
-//  NeighborBlock neighbor[26];
 
   // cells on 1x coarser level MeshBlock (i.e. ncc2=nx2/2 + 2*nghost, if nx2>1)
   RegionCells cmb_cells;

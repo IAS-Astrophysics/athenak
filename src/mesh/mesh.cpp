@@ -431,7 +431,7 @@ void Mesh::BuildTree(std::unique_ptr<ParameterInput> &pin)
 /*******/
   for (auto it=mblocks.begin(); it<mblocks.end(); ++it) {
     for (int n=0; n<26; ++n) {
-      std::cout << "n=" << n << " gid=" << it->pbval->neighbor[n].ngid << " level=" << it->pbval->neighbor[n].nlevel << " rank=" << it->pbval->neighbor[n].nrank << std::endl;
+      std::cout << "n=" << n << " gid=" << it->neighbor[n].ngid << " level=" << it->neighbor[n].nlevel << " rank=" << it->neighbor[n].nrank << std::endl;
     }
   }
 /**********/

@@ -35,13 +35,13 @@ class MeshBlock;
 //----------------------------------------------------------------------------------------
 //! \struct NeighborBlock
 //  \brief Information about neighboring MeshBlocks
-
-struct NeighborBlock {
-  int ngid;
-  int nrank;
-  int nlevel;
-  NeighborBlock() : ngid(-1), nrank(-1), nlevel(-1) {}  // set default values
-};
+//
+//struct NeighborBlock {
+//  int ngid;
+//  int nrank;
+//  int nlevel;
+//  NeighborBlock() : ngid(-1), nrank(-1), nlevel(-1) {}  // set default values
+//};
 
 //----------------------------------------------------------------------------------------
 //! \class BoundaryBase
@@ -55,7 +55,7 @@ class BoundaryValues {
   // data
 
   BoundaryFlag mb_bcs[6]; // enums specifying BCs at all 6 faces of this MeshBlock
-  NeighborBlock neighbor[26];
+//  NeighborBlock neighbor[26];
   // TO DO: store boundary buffers for different physics in a map
 //  std::map<std::string, Real*> bbuf_send, bbuf_recv;
   int cc_bbuf_ncells[26];

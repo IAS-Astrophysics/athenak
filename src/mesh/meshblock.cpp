@@ -19,12 +19,11 @@
 //                        and mesh refinement objects.
 
 MeshBlock::MeshBlock(std::shared_ptr<Mesh> pm, std::unique_ptr<ParameterInput> &pin,
-  int igid, RegionSize isize, RegionCells icells, BoundaryFlag *input_bcs) :
+  int igid, RegionSize isize, RegionCells icells, BoundaryFlag *ibcs) :
   pmesh_mb(pm), mb_gid(igid), mb_size(isize), mb_cells(icells)
 {
-
   // copy input boundary flags into MeshBlock 
-//  for (int i=0; i<6; ++i) {mb_bcs[i] = input_bcs[i];}
+  for (int i=0; i<6; ++i) {mb_bcs[i] = ibcs[i];}
 
   // initialize grid indices
   mb_cells.is = mb_cells.ng;
@@ -76,27 +75,25 @@ MeshBlock::MeshBlock(std::shared_ptr<Mesh> pm, std::unique_ptr<ParameterInput> &
 
 std::cout << "MBConstruct nx1=" << mb_cells.nx1 << " nx2=" << mb_cells.nx2 << " nx3=" << mb_cells.nx3 << std::endl;
 
-  pbval = new BoundaryValues(this, pin, input_bcs);
-
-  return;
+  pbval = new BoundaryValues(this, pin, ibcs);
 }
 
 //----------------------------------------------------------------------------------------
 // MeshBlock constructor for restarts
 
-
 //----------------------------------------------------------------------------------------
 // MeshBlock destructor
 
-MeshBlock::~MeshBlock() {
+MeshBlock::~MeshBlock()
+{
 }
 
 //----------------------------------------------------------------------------------------
 // \!fn void MeshBlock::FindAndSetNeighbors()
 // \brief Search and set all the neighbor blocks
 
-void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklist) {
-
+void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklist)
+{
   MeshBlockTree* neibt;
   LogicalLocation loc = pmesh_mb->loclist[mb_gid];
 
@@ -112,9 +109,9 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
     if (mb_cells.nx2 == 1 && m != 0) {continue;}  // skip if not 2D
     neibt = ptree->FindNeighbor(loc, n, m, l);
     if (neibt == nullptr) {continue;}
-    pbval->neighbor[cnt].ngid   = neibt->gid_;
-    pbval->neighbor[cnt].nlevel = neibt->loc_.level;
-    pbval->neighbor[cnt].nrank  = ranklist[neibt->gid_];
+    neighbor[cnt].ngid   = neibt->gid_;
+    neighbor[cnt].nlevel = neibt->loc_.level;
+    neighbor[cnt].nrank  = ranklist[neibt->gid_];
   }}}
 
   return;
