@@ -20,7 +20,8 @@
 //  \brief Objects are nodes in an AMR MeshBlock tree structure.  Thus, the class name
 //  does not refer to the overall tree itself, but rather each MeshBlockTree is a node.
 
-class MeshBlockTree {
+class MeshBlockTree
+{
  friend class Mesh;
  friend class MeshBlock;
  public:
@@ -34,8 +35,8 @@ class MeshBlockTree {
 
   // functions
   void CreateRootGrid();
-  void AddMeshBlock(LogicalLocation rloc, int &nnew);
-  void AddMeshBlockWithoutRefinement(LogicalLocation rloc);
+  void AddNode(LogicalLocation rloc, int &nnew);
+  void AddNodeWithoutRefinement(LogicalLocation rloc);
   void Refine(int &nnew);
   void Derefine(int &ndel);
   MeshBlockTree* FindMeshBlock(LogicalLocation tloc);

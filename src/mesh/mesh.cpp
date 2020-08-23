@@ -128,6 +128,27 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin)
 //----------------------------------------------------------------------------------------
 // Mesh constructor for restarts. Load the restart file
 
+//----------------------------------------------------------------------------------------
+// destructor
+
+Mesh::~Mesh()
+{
+  delete [] ranklist;
+  delete [] costlist;
+  delete [] nslist;
+  delete [] nblist;
+  if (adaptive) { // deallocate arrays for AMR
+    delete [] nref;
+    delete [] nderef;
+    delete [] rdisp;
+    delete [] ddisp;
+    delete [] bnref;
+    delete [] bnderef;
+    delete [] brdisp;
+    delete [] bddisp;
+  }
+  delete [] loclist;
+}
 
 //----------------------------------------------------------------------------------------
 // Build tree
@@ -324,7 +345,7 @@ void Mesh::BuildTree(std::unique_ptr<ParameterInput> &pin)
             LogicalLocation nloc;
             nloc.level=log_ref_lev, nloc.lx1=i, nloc.lx2=0, nloc.lx3=0;
             int nnew;
-            ptree->AddMeshBlock(nloc, nnew);
+            ptree->AddNode(nloc, nnew);
           }
         }
         if (nx2gt1 && !(nx3gt1)) {  // 2D
@@ -333,7 +354,7 @@ void Mesh::BuildTree(std::unique_ptr<ParameterInput> &pin)
               LogicalLocation nloc;
               nloc.level=log_ref_lev, nloc.lx1=i, nloc.lx2=j, nloc.lx3=0;
               int nnew;
-              ptree->AddMeshBlock(nloc, nnew);
+              ptree->AddNode(nloc, nnew);
             }
           }
         }
@@ -344,7 +365,7 @@ void Mesh::BuildTree(std::unique_ptr<ParameterInput> &pin)
                 LogicalLocation nloc;
                 nloc.level = log_ref_lev, nloc.lx1 = i, nloc.lx2 = j, nloc.lx3 = k;
                 int nnew;
-                ptree->AddMeshBlock(nloc, nnew);
+                ptree->AddNode(nloc, nnew);
               }
             }
           }
@@ -428,32 +449,12 @@ void Mesh::BuildTree(std::unique_ptr<ParameterInput> &pin)
 }
 
 //----------------------------------------------------------------------------------------
-// destructor
-
-Mesh::~Mesh() {
-  delete [] ranklist;
-  delete [] costlist;
-  delete [] nslist;
-  delete [] nblist;
-  if (adaptive) { // deallocate arrays for AMR
-    delete [] nref;
-    delete [] nderef;
-    delete [] rdisp;
-    delete [] ddisp;
-    delete [] bnref;
-    delete [] bnderef;
-    delete [] brdisp;
-    delete [] bddisp;
-  }
-  delete [] loclist;
-}
-
-//----------------------------------------------------------------------------------------
 //! \fn void Mesh::OutputMeshStructure(int ndim)
 //  \brief outputs information about mesh structure, creates file containing MeshBlock
 //  positions and sizes that can be used to create plots using 'plot_mesh.py' script 
 
-void Mesh::OutputMeshStructure(int flag) {
+void Mesh::OutputMeshStructure(int flag)
+{
 
   // Write overall Mesh structure to stdout and file
   std::cout << std::endl;
@@ -594,7 +595,8 @@ void Mesh::OutputMeshStructure(int flag) {
 // \brief Set the physical part of a block_size structure and block boundary conditions
 
 void Mesh::SetBlockSizeAndBoundaries(LogicalLocation loc, RegionSize &block_size,
-                                     RegionCells &block_cells, BoundaryFlag *block_bcs) {
+                                     RegionCells &block_cells, BoundaryFlag *block_bcs)
+{
   std::int32_t &lx1 = loc.lx1;
   std::int32_t nmbx1_l = nmbroot_x1 << (loc.level - root_level);
 
