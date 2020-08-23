@@ -156,40 +156,39 @@ Mesh::~Mesh()
 void Mesh::BuildTree(std::unique_ptr<ParameterInput> &pin)
 {
   // Set # of cells in MeshBlock read from input parameters, error check
-  RegionSize inblock_size;
-  RegionCells inblock_cells;
-  inblock_cells.nx1 = pin->GetOrAddInteger("meshblock", "nx1", mesh_cells.nx1);
+  RegionCells incells;
+  incells.nx1 = pin->GetOrAddInteger("meshblock", "nx1", mesh_cells.nx1);
   if (nx2gt1) {
-    inblock_cells.nx2 = pin->GetOrAddInteger("meshblock", "nx2", mesh_cells.nx2);
+    incells.nx2 = pin->GetOrAddInteger("meshblock", "nx2", mesh_cells.nx2);
   } else {
-    inblock_cells.nx2 = mesh_cells.nx2;
+    incells.nx2 = mesh_cells.nx2;
   }
   if (nx3gt1) {
-    inblock_cells.nx3 = pin->GetOrAddInteger("meshblock", "nx3", mesh_cells.nx3);
+    incells.nx3 = pin->GetOrAddInteger("meshblock", "nx3", mesh_cells.nx3);
   } else {
-    inblock_cells.nx3 = mesh_cells.nx3;
+    incells.nx3 = mesh_cells.nx3;
   }
 
   // error check consistency of the block and mesh
-  if (   mesh_cells.nx1 % inblock_cells.nx1 != 0
-      || mesh_cells.nx2 % inblock_cells.nx2 != 0
-      || mesh_cells.nx3 % inblock_cells.nx3 != 0) {
+  if (   mesh_cells.nx1 % incells.nx1 != 0
+      || mesh_cells.nx2 % incells.nx2 != 0
+      || mesh_cells.nx3 % incells.nx3 != 0) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "Mesh must be evenly divisible by MeshBlocks" << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  if ( inblock_cells.nx1 < 4 ||
-      (inblock_cells.nx2 < 4 && nx2gt1) ||
-      (inblock_cells.nx3 < 4 && nx3gt1) ) {
+  if ( incells.nx1 < 4 ||
+      (incells.nx2 < 4 && nx2gt1) ||
+      (incells.nx3 < 4 && nx3gt1) ) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "MeshBlock must be >= 4 cells in each active dimension" << std::endl;
     std::exit(EXIT_FAILURE);
   }
 
   // calculate the number of MeshBlocks in root level in each dir
-  nmbroot_x1 = mesh_cells.nx1/inblock_cells.nx1;
-  nmbroot_x2 = mesh_cells.nx2/inblock_cells.nx2;
-  nmbroot_x3 = mesh_cells.nx3/inblock_cells.nx3;
+  nmbroot_x1 = mesh_cells.nx1/incells.nx1;
+  nmbroot_x2 = mesh_cells.nx2/incells.nx2;
+  nmbroot_x3 = mesh_cells.nx3/incells.nx3;
 
   // find maximum number of MeshBlocks in any dir
   int nmbmax = (nmbroot_x1 > nmbroot_x2) ? nmbroot_x1 : nmbroot_x2;
@@ -201,7 +200,7 @@ void Mesh::BuildTree(std::unique_ptr<ParameterInput> &pin)
   int current_level = root_level; 
 
   // Construct tree and create root grid
-  ptree = new MeshBlockTree(ThisSharedPtr());
+  ptree = std::make_unique<MeshBlockTree>(ThisSharedPtr());
   ptree->CreateRootGrid();
 
   // Error check properties of input paraemters for SMR/AMR meshes.
@@ -221,9 +220,9 @@ void Mesh::BuildTree(std::unique_ptr<ParameterInput> &pin)
 
   if (multilevel) {
     // error check that number of cells in MeshBlock divisible by two
-    if (inblock_cells.nx1 % 2 != 0 || 
-       (inblock_cells.nx2 % 2 != 0 && nx2gt1) ||
-       (inblock_cells.nx3 % 2 != 0 && nx3gt1)) {
+    if (incells.nx1 % 2 != 0 || 
+       (incells.nx2 % 2 != 0 && nx2gt1) ||
+       (incells.nx3 % 2 != 0 && nx3gt1)) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Number of cells in MeshBlock must be divisible by 2 "
                 << "with SMR or AMR." << std::endl;
@@ -419,14 +418,15 @@ void Mesh::BuildTree(std::unique_ptr<ParameterInput> &pin)
   gide = gids + nblist[global_variable::my_rank] - 1;
   nmbthisrank = nblist[global_variable::my_rank];
   
-  // create MeshBlocks for this node
+  // create MeshBlocks for this node, then set neighbors
   for (int i=gids; i<=gide; i++) {
-    BoundaryFlag inblock_bcs[6];
-    SetBlockSizeAndBoundaries(loclist[i], inblock_size, inblock_cells, inblock_bcs);
-    MeshBlock new_block(this, pin, i, inblock_size, inblock_cells, inblock_bcs);
-    new_block.SetNeighbors(ptree, ranklist);
-    mblocks.push_back(new_block);  // MB vector elements stored in order gids->gide
+    RegionSize insize;
+    BoundaryFlag inbcs[6];
+    SetBlockSizeAndBoundaries(loclist[i], insize, incells, inbcs);
+    // vector of MBs stored in order gids->gide
+    mblocks.emplace_back(MeshBlock(ThisSharedPtr(), pin, i, insize, incells, inbcs));
   }
+  for (auto &mb : mblocks) {mb.SetNeighbors(ptree, ranklist);}
 
 /*******/
   for (auto it=mblocks.begin(); it<mblocks.end(); ++it) {

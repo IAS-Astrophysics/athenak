@@ -162,8 +162,8 @@ class Mesh : public std::enable_shared_from_this<Mesh>
   int lb_cyc_interval;
   int cyc_since_lb;
 
-  MeshBlockTree *ptree;     // binary/quad/oct-tree
-  LogicalLocation *loclist; // array of LogicalLocations for ALL MeshBlocks
+  std::unique_ptr<MeshBlockTree> ptree;  // binary/quad/oct-tree
+  LogicalLocation *loclist;              // array of LogicalLocations for ALL MeshBlocks
 
   // functions
   void SetBlockSizeAndBoundaries(LogicalLocation loc, RegionSize &size,

@@ -18,9 +18,10 @@
 // MeshBlock constructor: constructs coordinate, boundary condition, hydro, field
 //                        and mesh refinement objects.
 
-MeshBlock::MeshBlock(Mesh *pm, std::unique_ptr<ParameterInput> &pin, int igid,
-  RegionSize isize, RegionCells icells, BoundaryFlag *input_bcs) :
-  pmesh_mb(pm), mb_gid(igid), mb_size(isize), mb_cells(icells) {
+MeshBlock::MeshBlock(std::shared_ptr<Mesh> pm, std::unique_ptr<ParameterInput> &pin,
+  int igid, RegionSize isize, RegionCells icells, BoundaryFlag *input_bcs) :
+  pmesh_mb(pm), mb_gid(igid), mb_size(isize), mb_cells(icells)
+{
 
   // copy input boundary flags into MeshBlock 
 //  for (int i=0; i<6; ++i) {mb_bcs[i] = input_bcs[i];}
@@ -94,7 +95,7 @@ MeshBlock::~MeshBlock() {
 // \!fn void MeshBlock::FindAndSetNeighbors()
 // \brief Search and set all the neighbor blocks
 
-void MeshBlock::SetNeighbors(MeshBlockTree *ptree, int *ranklist) {
+void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklist) {
 
   MeshBlockTree* neibt;
   LogicalLocation loc = pmesh_mb->loclist[mb_gid];

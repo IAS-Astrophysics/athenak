@@ -21,17 +21,18 @@ namespace hydro {class Hydro;}
 //! \class MeshBlock
 //  \brief data/functions associated with a single block
 
-class MeshBlock {
+class MeshBlock
+{
  // the three mesh classes (Mesh, MeshBlock, MeshBlockTree) like to play together
  friend class Mesh;
  friend class MeshBlockTree;
  public:
-  MeshBlock(Mesh *pm, std::unique_ptr<ParameterInput> &pin, int igid,
+  MeshBlock(std::shared_ptr<Mesh> pm, std::unique_ptr<ParameterInput> &pin, int igid,
     RegionSize isize, RegionCells icells, BoundaryFlag *input_bcs);
   ~MeshBlock();
 
   // data
-  Mesh *pmesh_mb;         // ptr to Mesh containing this MeshBlock
+  std::shared_ptr<Mesh> pmesh_mb;         // ptr to Mesh containing this MeshBlock
   int mb_gid;             // grid ID, unique identifier for this MeshBlock
   RegionSize  mb_size;    // physical size of this MeshBlock
   RegionCells mb_cells;   // info about cells in this MeshBlock
@@ -60,7 +61,7 @@ class MeshBlock {
   double lb_cost;  // cost of updating this MeshBlock for load balancing
 
   // functions
-  void SetNeighbors(MeshBlockTree *ptree, int *ranklist);
+  void SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklist);
 
 };
 
