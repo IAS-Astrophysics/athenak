@@ -436,7 +436,7 @@ void Mesh::BuildTree(std::unique_ptr<ParameterInput> &pin)
   }
 /**********/
 
-  ResetLoadBalance();
+  ResetLoadBalanceCounters();
 
   // set initial time/cycle parameters
 

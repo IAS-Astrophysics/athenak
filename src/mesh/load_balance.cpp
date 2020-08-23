@@ -28,7 +28,8 @@
 //         slist = 
 //         nlist = 
 
-void Mesh::LoadBalance(double *clist, int *rlist, int *slist, int *nlist, int nb) {
+void Mesh::LoadBalance(double *clist, int *rlist, int *slist, int *nlist, int nb)
+{
   double min_cost = std::numeric_limits<double>::max();
   double max_cost = 0.0, totalcost = 0.0;
 
@@ -88,10 +89,11 @@ void Mesh::LoadBalance(double *clist, int *rlist, int *slist, int *nlist, int nb
 }
 
 //----------------------------------------------------------------------------------------
-// \!fn void Mesh::ResetLoadBalanceVariables()
+// \!fn void Mesh::ResetLoadBalanceCounters()
 // \brief reset counters and flags for load balancing
 
-void Mesh::ResetLoadBalance() {
+void Mesh::ResetLoadBalanceCounters()
+{
   if (lb_automatic) {
     for (auto it=mblocks.begin(); it<mblocks.end(); ++it) {
       costlist[it->mb_gid] = std::numeric_limits<double>::min();

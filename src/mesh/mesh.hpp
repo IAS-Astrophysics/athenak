@@ -112,10 +112,6 @@ class Mesh : public std::enable_shared_from_this<Mesh>
   void SelectPhysics(std::unique_ptr<ParameterInput> &pin);
   void NewTimeStep(const Real tlim);
   void OutputMeshStructure(int flag);
-  void SetBlockSizeAndBoundaries(LogicalLocation loc, RegionSize &size,
-                                 RegionCells &cells, BoundaryFlag *bcs);
-  void LoadBalance(double *clist, int *rlist, int *slist, int *nlist, int nb);
-  void ResetLoadBalance();
 
   // Following functions compute positions on a regular Cartesian grid.
   // They provide functionality of the Coordinates class in the C++ version of the code.
@@ -170,6 +166,10 @@ class Mesh : public std::enable_shared_from_this<Mesh>
   LogicalLocation *loclist; // array of LogicalLocations for ALL MeshBlocks
 
   // functions
+  void SetBlockSizeAndBoundaries(LogicalLocation loc, RegionSize &size,
+                                 RegionCells &cells, BoundaryFlag *bcs);
+  void LoadBalance(double *clist, int *rlist, int *slist, int *nlist, int nb);
+  void ResetLoadBalanceCounters();
 };
 
 #endif  // MESH_MESH_HPP_
