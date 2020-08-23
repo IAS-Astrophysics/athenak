@@ -17,18 +17,16 @@
 #include "mesh.hpp"
 
 // Define static member variables
-Mesh* MeshBlockTree::pmesh_;
+std::shared_ptr<Mesh> MeshBlockTree::pmesh_;
 MeshBlockTree* MeshBlockTree::proot_;
 int MeshBlockTree::nleaf_;
 
-
 //----------------------------------------------------------------------------------------
 //! \fn MeshBlockTree::MeshBlockTree()
-//  \brief constructor for the logical root
+//  \brief constructor for the logical root level
 
-MeshBlockTree::MeshBlockTree(Mesh* pmesh) : pleaf_(nullptr), gid_(-1) {
+MeshBlockTree::MeshBlockTree(std::shared_ptr<Mesh> pmesh) : pleaf_(nullptr), gid_(-1) {
   pmesh_ = pmesh;
-  proot_ = this;
   loc_.lx1 = 0;
   loc_.lx2 = 0;
   loc_.lx3 = 0;
@@ -47,7 +45,6 @@ MeshBlockTree::MeshBlockTree(MeshBlockTree *parent, int ox1, int ox2, int ox3)
   loc_.level = parent->loc_.level + 1;
 }
 
-
 //----------------------------------------------------------------------------------------
 //! \fn MeshBlockTree::~MeshBlockTree()
 //  \brief destructor (for both root and leaves)
@@ -64,12 +61,14 @@ MeshBlockTree::~MeshBlockTree() {
 //  \brief create the root grid; note the root grid can be incomplete (less than 8 leaves)
 
 void MeshBlockTree::CreateRootGrid() {
-  if (loc_.level == 0) {
+  if (loc_.level == 0) {  // initialize base properties of tree (logical level = 0)
+    proot_ = this;
     nleaf_ = 2;
     if (pmesh_->nx2gt1) nleaf_ = 4;
     if (pmesh_->nx3gt1) nleaf_ = 8;
   }
-  // do not create any nodes beyond the logical level of root grid
+  // do not create any nodes beyond the logical level of root grid (which corresponds to
+  // logical level = 0 only in the case of a grid containing a single MeshBlock)
   if (loc_.level == pmesh_->root_level) return;
 
   // Otherwise create vector of leaf pointers
@@ -95,11 +94,13 @@ void MeshBlockTree::CreateRootGrid() {
 //! \fn void MeshBlockTree::AddMeshBlock(LogicalLocation rloc, int &nnew)
 //  \brief add a MeshBlock to the tree, also creates neighboring blocks
 
-void MeshBlockTree::AddMeshBlock(LogicalLocation rloc, int &nnew) {
+void MeshBlockTree::AddMeshBlock(LogicalLocation rloc, int &nnew)
+{
   if (loc_.level == rloc.level) return; // done
 
-  if (pleaf_ == nullptr) // leaf -> create the finer level
-    Refine(nnew);
+  if (pleaf_ == nullptr) {
+    Refine(nnew);             // leaf -> create the finer level
+  }
 
   // get leaf index
   int sh = rloc.level-loc_.level-1;
@@ -118,7 +119,8 @@ void MeshBlockTree::AddMeshBlock(LogicalLocation rloc, int &nnew) {
 //  \brief add a MeshBlock to the tree without refinement, used in restarting.
 //         MeshBlockTree::CreateRootGrid must be called before this method
 
-void MeshBlockTree::AddMeshBlockWithoutRefinement(LogicalLocation rloc) {
+void MeshBlockTree::AddMeshBlockWithoutRefinement(LogicalLocation rloc)
+{
   if (loc_.level == rloc.level) // done
     return;
 

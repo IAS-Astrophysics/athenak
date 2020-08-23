@@ -60,7 +60,7 @@ class MeshBlock {
   double lb_cost;  // cost of updating this MeshBlock for load balancing
 
   // functions
-  void SetNeighbors(MeshBlockTree &tree, int *ranklist);
+  void SetNeighbors(MeshBlockTree *ptree, int *ranklist);
 
 };
 

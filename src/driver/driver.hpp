@@ -19,7 +19,7 @@
 
 class Driver {
  public:
-  Driver(std::unique_ptr<ParameterInput> &pin, std::unique_ptr<Mesh> &pmesh,
+  Driver(std::unique_ptr<ParameterInput> &pin, std::shared_ptr<Mesh> &pmesh,
          std::unique_ptr<Outputs> &pout);
   ~Driver() = default;
 
@@ -37,14 +37,14 @@ class Driver {
   Real gam0[3], gam1[3], beta[3];  // averaging weights and fractional timestep per stage
 
   // functions
-  void Initialize(std::unique_ptr<Mesh> &pmesh, std::unique_ptr<Outputs> &pout);
-  void Execute(std::unique_ptr<Mesh> &pmesh, std::unique_ptr<Outputs> &pout);
-  void Finalize(std::unique_ptr<Mesh> &pmesh, std::unique_ptr<Outputs> &pout);
+  void Initialize(std::shared_ptr<Mesh> &pmesh, std::unique_ptr<Outputs> &pout);
+  void Execute(std::shared_ptr<Mesh> &pmesh, std::unique_ptr<Outputs> &pout);
+  void Finalize(std::shared_ptr<Mesh> &pmesh, std::unique_ptr<Outputs> &pout);
 
  private:
   clock_t tstart_, tstop_;  // variables to measure cpu time
   int nmb_updated_;         // running total of MB updated during run
-  void OutputCycleDiagnostics(std::unique_ptr<Mesh> &pm);
+  void OutputCycleDiagnostics(std::shared_ptr<Mesh> &pm);
 
 };
 #endif // DRIVER_DRIVER_HPP_

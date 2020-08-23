@@ -56,7 +56,7 @@ struct OutputData {
 
 class OutputType {
  public:
-  OutputType(OutputParameters oparams, std::unique_ptr<Mesh> &pm);
+  OutputType(OutputParameters oparams, std::shared_ptr<Mesh> &pm);
   virtual ~OutputType() = default;
   // copy constructor and assignment operator
   OutputType(const OutputType& copy_other) = default;
@@ -72,9 +72,9 @@ class OutputType {
   OutputParameters output_params;    // data read from <output> block for this type
 
   // functions
-  void LoadOutputData(std::unique_ptr<Mesh> &pm);
+  void LoadOutputData(std::shared_ptr<Mesh> &pm);
   // following pure virtual function must be implemented in all derived classes
-  virtual void WriteOutputFile(std::unique_ptr<Mesh> &pm) = 0;
+  virtual void WriteOutputFile(std::shared_ptr<Mesh> &pm) = 0;
 
  protected:
   std::list<OutputData> data_list_;
@@ -86,8 +86,8 @@ class OutputType {
 
 class FormattedTableOutput : public OutputType {
  public:
-  FormattedTableOutput(OutputParameters oparams, std::unique_ptr<Mesh> &pm);
-  void WriteOutputFile(std::unique_ptr<Mesh> &pm) override;
+  FormattedTableOutput(OutputParameters oparams, std::shared_ptr<Mesh> &pm);
+  void WriteOutputFile(std::shared_ptr<Mesh> &pm) override;
 };
 
 //----------------------------------------------------------------------------------------
@@ -98,7 +98,7 @@ class FormattedTableOutput : public OutputType {
 
 class Outputs {
  public:
-  Outputs(std::unique_ptr<ParameterInput> &pin, std::unique_ptr<Mesh> &pm);
+  Outputs(std::unique_ptr<ParameterInput> &pin, std::shared_ptr<Mesh> &pm);
   ~Outputs();
 
   // use vector of pointers to OutputTypes since it is an abstract base class 

@@ -18,7 +18,7 @@
 // constructor, initializes data structures and parameters
 
 ProblemGenerator::ProblemGenerator(std::unique_ptr<ParameterInput> &pin,
-     std::unique_ptr<Mesh> &pmesh) {
+     std::shared_ptr<Mesh> &pmesh) {
 
   std::string pgen_fun_name = pin->GetOrAddString("problem", "pgen_name", "none");
 

@@ -60,7 +60,7 @@
 // OutputType base class constructor
 // Sets parameters like size and indices of output arrays
 
-OutputType::OutputType(OutputParameters opar, std::unique_ptr<Mesh> &pm) :
+OutputType::OutputType(OutputParameters opar, std::shared_ptr<Mesh> &pm) :
    output_params(opar) {
 
     // set size of output arrays, adjusted accordingly if ghost zones included 
@@ -99,7 +99,7 @@ OutputType::OutputType(OutputParameters opar, std::unique_ptr<Mesh> &pm) :
 // create linked list of OutputData objects containing data specified in <output> block
 // for this output type
 
-void OutputType::LoadOutputData(std::unique_ptr<Mesh> &pm) {
+void OutputType::LoadOutputData(std::shared_ptr<Mesh> &pm) {
 
   data_list_.clear();  // start with a clean list
 

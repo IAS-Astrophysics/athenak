@@ -21,9 +21,8 @@
 //----------------------------------------------------------------------------------------
 // Mesh constructor, builds mesh at start of calculation using parameters in input file
 
-Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
-
-  //=== Step 1 ===============================================
+Mesh::Mesh(std::unique_ptr<ParameterInput> &pin)
+{
   // Set properties of Mesh from input parameters, error check
 
   mesh_size.x1min = pin->GetReal("mesh", "x1min");
@@ -124,10 +123,18 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
   mesh_cells.dx1 = (mesh_size.x1max-mesh_size.x1min)/static_cast<Real>(mesh_cells.nx1);
   mesh_cells.dx2 = (mesh_size.x2max-mesh_size.x2min)/static_cast<Real>(mesh_cells.nx2);
   mesh_cells.dx3 = (mesh_size.x3max-mesh_size.x3min)/static_cast<Real>(mesh_cells.nx3);
+}
 
-  //=== Step 2 =========================================================
+//----------------------------------------------------------------------------------------
+// Mesh constructor for restarts. Load the restart file
+
+
+//----------------------------------------------------------------------------------------
+// Build tree
+
+void Mesh::BuildTree(std::unique_ptr<ParameterInput> &pin)
+{
   // Set # of cells in MeshBlock read from input parameters, error check
-
   RegionSize inblock_size;
   RegionCells inblock_cells;
   inblock_cells.nx1 = pin->GetOrAddInteger("meshblock", "nx1", mesh_cells.nx1);
@@ -172,14 +179,11 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
   for (root_level=0; ((1<<root_level) < nmbmax); root_level++) {}
   int current_level = root_level; 
 
-  //=== Step 3 =======================================================
-  //
+  // Construct tree and create root grid
+  ptree = new MeshBlockTree(ThisSharedPtr());
+  ptree->CreateRootGrid();
 
-  tree.CreateRootGrid();
-
-  //=== Step 4 =======================================================
   // Error check properties of input paraemters for SMR/AMR meshes.
-
   if (adaptive) {
     max_level = pin->GetOrAddInteger("mesh", "numlevel", 1) + root_level - 1;
     if (max_level > 31) {
@@ -191,6 +195,8 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
   } else {
     max_level = 31;
   }
+
+  // For meshes with refinement, construct new nodes for <refinement> blocks in input file
 
   if (multilevel) {
     // error check that number of cells in MeshBlock divisible by two
@@ -312,13 +318,13 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
           if (lx3max % 2 == 0) lx3max++;
         }
 
-        // Now add these MeshBlocks to the MeshBlockTree (create the finest level)
+        // Now add nodes to the MeshBlockTree corresponding to these MeshBlocks
         if ( !(nx2gt1) && !(nx3gt1)) {  // 1D
           for (std::int32_t i=lx1min; i<lx1max; i+=2) {
             LogicalLocation nloc;
             nloc.level=log_ref_lev, nloc.lx1=i, nloc.lx2=0, nloc.lx3=0;
             int nnew;
-            tree.AddMeshBlock(nloc, nnew);
+            ptree->AddMeshBlock(nloc, nnew);
           }
         }
         if (nx2gt1 && !(nx3gt1)) {  // 2D
@@ -327,7 +333,7 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
               LogicalLocation nloc;
               nloc.level=log_ref_lev, nloc.lx1=i, nloc.lx2=j, nloc.lx3=0;
               int nnew;
-              tree.AddMeshBlock(nloc, nnew);
+              ptree->AddMeshBlock(nloc, nnew);
             }
           }
         }
@@ -338,7 +344,7 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
                 LogicalLocation nloc;
                 nloc.level = log_ref_lev, nloc.lx1 = i, nloc.lx2 = j, nloc.lx3 = k;
                 int nnew;
-                tree.AddMeshBlock(nloc, nnew);
+                ptree->AddMeshBlock(nloc, nnew);
               }
             }
           }
@@ -351,12 +357,11 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
   if (!adaptive) max_level = current_level;
 
   // initial mesh hierarchy construction is completed here
-  tree.CountMeshBlock(nmbtotal);
+  ptree->CountMeshBlock(nmbtotal);
   loclist = new LogicalLocation[nmbtotal];
   // following returns LogicalLocation list sorted by Z-ordering
-  tree.GetMeshBlockList(loclist, nullptr, nmbtotal);
+  ptree->GetMeshBlockList(loclist, nullptr, nmbtotal);
 
-  //=== Step 5 =======================================================
   // compute properties of MeshBlocks and initialize 
 
 #if MPI_PARALLEL_ENABLED
@@ -389,7 +394,6 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
   LoadBalance(costlist, ranklist, nslist, nblist, nmbtotal);
 
   // create MeshBlock list for this process
-
   gids = nslist[global_variable::my_rank];
   gide = gids + nblist[global_variable::my_rank] - 1;
   nmbthisrank = nblist[global_variable::my_rank];
@@ -399,7 +403,7 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
     BoundaryFlag inblock_bcs[6];
     SetBlockSizeAndBoundaries(loclist[i], inblock_size, inblock_cells, inblock_bcs);
     MeshBlock new_block(this, pin, i, inblock_size, inblock_cells, inblock_bcs);
-    new_block.SetNeighbors(tree, ranklist);
+    new_block.SetNeighbors(ptree, ranklist);
     mblocks.push_back(new_block);  // MB vector elements stored in order gids->gide
   }
 
@@ -413,18 +417,15 @@ Mesh::Mesh(std::unique_ptr<ParameterInput> &pin) : tree(this) {
 
   ResetLoadBalance();
 
-  //=== Step 5 =======================================================
   // set initial time/cycle parameters
 
   time = pin->GetOrAddReal("time", "start_time", 0.0);
   dt   = std::numeric_limits<float>::max();
   cfl_no = pin->GetReal("time", "cfl_number");
   ncycle = 0;
+  
+  return;
 }
-
-//----------------------------------------------------------------------------------------
-// Mesh constructor for restarts. Load the restart file
-
 
 //----------------------------------------------------------------------------------------
 // destructor
@@ -586,7 +587,6 @@ void Mesh::OutputMeshStructure(int flag) {
 
   return;
 }
-
 
 //----------------------------------------------------------------------------------------
 // \!fn void Mesh::SetBlockSizeAndBoundaries(LogicalLocation loc,

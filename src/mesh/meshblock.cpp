@@ -94,7 +94,7 @@ MeshBlock::~MeshBlock() {
 // \!fn void MeshBlock::FindAndSetNeighbors()
 // \brief Search and set all the neighbor blocks
 
-void MeshBlock::SetNeighbors(MeshBlockTree &tree, int *ranklist) {
+void MeshBlock::SetNeighbors(MeshBlockTree *ptree, int *ranklist) {
 
   MeshBlockTree* neibt;
   LogicalLocation loc = pmesh_mb->loclist[mb_gid];
@@ -109,7 +109,7 @@ void MeshBlock::SetNeighbors(MeshBlockTree &tree, int *ranklist) {
     ++cnt;
     if (mb_cells.nx3 == 1 && l != 0) {continue;}  // skip if not 3D
     if (mb_cells.nx2 == 1 && m != 0) {continue;}  // skip if not 2D
-    neibt = tree.FindNeighbor(loc, n, m, l);
+    neibt = ptree->FindNeighbor(loc, n, m, l);
     if (neibt == nullptr) {continue;}
     pbval->neighbor[cnt].ngid   = neibt->gid_;
     pbval->neighbor[cnt].nlevel = neibt->loc_.level;

@@ -38,7 +38,8 @@
 //! \fn int main(int argc, char *argv[])
 //  \brief AthenaK main program
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[])
+{
   std::string input_file, restart_file, run_dir;
   int  res_flag = 0;  // set to 1 if -r        argument is on cmdline 
   int narg_flag = 0;  // set to 1 if -n        argument is on cmdline
@@ -214,7 +215,8 @@ int main(int argc, char *argv[]) {
   // Construct Mesh and MeshBlockTree and store smart pointer to Mesh.  Then initialize
   // Tree and construct MeshBlocks on this rank
 
-  auto pmesh = std::make_unique<Mesh>(pinput);
+  auto pmesh = std::make_shared<Mesh>(pinput);
+  pmesh->BuildTree(pinput);
 
   // output Mesh diagnostics
   if (global_variable::my_rank == 0) pmesh->OutputMeshStructure(marg_flag);
