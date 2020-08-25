@@ -28,7 +28,8 @@
 //! \struct InputLine
 //  \brief  node in a std::list of parameters contained within 1x input block
 
-struct InputLine {
+struct InputLine
+{
  public:
   InputLine(std::string name, std::string value, std::string comment)
     : param_name{name}, param_value{value}, param_comment{comment} {};
@@ -43,7 +44,8 @@ struct InputLine {
 //! \class InputBlock
 //  \brief node in a std::list of all input blocks contained within input file
 
-class InputBlock {
+class InputBlock
+{
  public:
   InputBlock(std::string name) : block_name{name} {};
   ~InputBlock() {};
@@ -52,8 +54,7 @@ class InputBlock {
   std::string block_name;
   std::size_t max_len_parname;  // length of longest param_name, for nice-looking output
   std::size_t max_len_parvalue; // length of longest param_value, to format outputs
-
-  std::list<InputLine> line;   // singly linked list of input lines (in this block)
+  std::list<InputLine> line;    // singly linked list of input lines (in this block)
 
   // functions
   InputLine* GetPtrToLine(std::string name);
@@ -64,7 +65,8 @@ class InputBlock {
 //  \brief data and definitions of functions used to store and access input parameters
 //  Functions are implemented in parameter_input.cpp
 
-class ParameterInput {
+class ParameterInput
+{
  public:
   // constructor(s)/destructor
   ParameterInput();
