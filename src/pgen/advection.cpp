@@ -59,7 +59,7 @@ using namespace hydro;
   Real &x3min = pmb->mb_size.x3min, &x3max = pmb->mb_size.x3max;
   for (int k=ks; k<=ke; k++) {
     for (int j=js; j<=je; j++) {
-      for (int i=is-pmb->mb_cells.ng; i<=ie+pmb->mb_cells.ng; i++) {
+      for (int i=is; i<=ie; i++) {
         Real r; // coordinate that will span [0->1]
         if (flow_dir == 1) {
           r = (pmesh_->CellCenterX(i, pmb->mb_cells.nx1,x1min,x1max)-x1min)/length;

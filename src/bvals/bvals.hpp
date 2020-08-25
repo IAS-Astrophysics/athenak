@@ -28,6 +28,7 @@ std::string GetBoundaryString(BoundaryFlag input_flag);
 #include "athena.hpp"
 #include "athena_arrays.hpp"
 #include "parameter_input.hpp"
+#include "tasklist/task_list.hpp"
 
 // Forward delcarations
 class Mesh;
@@ -44,13 +45,16 @@ class BoundaryValues {
   // data
 
   BoundaryFlag bflags[6]; // enums specifying BCs at all 6 faces of this MeshBlock
-  AthenaArray<Real> cc_bbuf_x1face, cc_bbuf_x2face, cc_bbuf_x3face;
-  AthenaArray<Real> cc_bbuf_x1x2ed, cc_bbuf_x3x1ed, cc_bbuf_x2x3ed;
-  AthenaArray<Real> cc_bbuf_corner;
+  AthenaArray<Real> cc_send_x1face, cc_send_x2face, cc_send_x3face;
+  AthenaArray<Real> cc_send_x1x2ed, cc_send_x3x1ed, cc_send_x2x3ed;
+  AthenaArray<Real> cc_send_corner;
+  AthenaArray<Real> cc_recv_x1face, cc_recv_x2face, cc_recv_x3face;
+  AthenaArray<Real> cc_recv_x1x2ed, cc_recv_x3x1ed, cc_recv_x2x3ed;
+  AthenaArray<Real> cc_recv_corner;
 
   // functions
-  void SendCellCenteredVariables(AthenaArray<Real> &a, int nvar);
-  void ReceiveCellCenteredVariables(AthenaArray<Real> &a, int nvar);
+  TaskStatus SendCellCenteredVariables(AthenaArray<Real> &a, int nvar);
+  TaskStatus ReceiveCellCenteredVariables(AthenaArray<Real> &a, int nvar);
 
  private:
   Mesh *pmesh_;

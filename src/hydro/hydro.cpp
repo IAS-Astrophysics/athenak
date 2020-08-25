@@ -159,7 +159,10 @@ void Hydro::HydroAddTasks(TaskList &tl) {
   auto hydro_copycons = tl.AddTask(&Hydro::CopyConserved, this, none);
   auto hydro_divflux  = tl.AddTask(&Hydro::HydroDivFlux, this, hydro_copycons);
   auto hydro_update  = tl.AddTask(&Hydro::HydroUpdate, this, hydro_divflux);
-  auto hydro_newdt  = tl.AddTask(&Hydro::NewTimeStep, this, hydro_update);
+  auto hydro_send  = tl.AddTask(&Hydro::HydroSend, this, hydro_update);
+  auto hydro_recv  = tl.AddTask(&Hydro::HydroReceive, this, hydro_send);
+//  auto phy_bval  = tl.AddTask(&Hydro::PhysicalBoundaryValues, this, hydro_recv);
+  auto hydro_newdt  = tl.AddTask(&Hydro::NewTimeStep, this, hydro_recv);
 
   return;
 }
@@ -168,22 +171,22 @@ void Hydro::HydroAddTasks(TaskList &tl) {
 //! \fn  void Hydro::HydroSend
 //  \brief
 
-TaskStatus Hydro::HydroSend(Driver *pdrive, int stage) {
-
-  pbvals->SendCellCenteredVariables(u0, nhydro);
-
-  return TaskStatus::complete;
+TaskStatus Hydro::HydroSend(Driver *pdrive, int stage) 
+{
+  TaskStatus tstat;
+  tstat = pbvals->SendCellCenteredVariables(u0, nhydro);
+  return tstat;
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn  void Hydro::HydroReceive
 //  \brief
 
-TaskStatus Hydro::HydroReceive(Driver *pdrive, int stage) {
-
-  pbvals->ReceiveCellCenteredVariables(u0, nhydro);
-
-  return TaskStatus::complete;
+TaskStatus Hydro::HydroReceive(Driver *pdrive, int stage)
+{
+  TaskStatus tstat;
+  tstat = pbvals->ReceiveCellCenteredVariables(u0, nhydro);
+  return tstat;
 }
 
 

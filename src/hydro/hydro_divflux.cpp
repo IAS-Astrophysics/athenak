@@ -27,8 +27,6 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
   int ks = pmb->mb_cells.ks; int ke = pmb->mb_cells.ke;
   int ng = pmb->mb_cells.ng;
 
-std::cout << "HydroDiv nx1=" << pmb->mb_cells.nx1 << " nx2=" << pmb->mb_cells.nx2 << " nx3=" << pmb->mb_cells.nx3 << std::endl;
-
   //--------------------------------------------------------------------------------------
   // i-direction
 
