@@ -20,7 +20,7 @@ namespace hydro {
 //----------------------------------------------------------------------------------------
 // constructor, initializes data structures and parameters
 
-Hydro::Hydro(Mesh *pm, std::unique_ptr<ParameterInput> &pin, int gid) :
+Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
   pmesh_(pm), my_mbgid_(gid)
 {
 

@@ -39,7 +39,7 @@ class Mesh;
 
 class BoundaryValues {
  public:
-  BoundaryValues(Mesh* pm, std::unique_ptr<ParameterInput> &pin, int gid, BoundaryFlag *bcs, int maxvar);
+  BoundaryValues(Mesh* pm, ParameterInput *pin, int gid, BoundaryFlag *bcs, int maxvar);
   ~BoundaryValues();
 
   // data

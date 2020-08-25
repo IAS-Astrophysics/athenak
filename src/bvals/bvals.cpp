@@ -18,7 +18,7 @@
 // MeshBlock constructor: constructs coordinate, boundary condition, hydro, field
 //                        and mesh refinement objects.
 
-BoundaryValues::BoundaryValues(Mesh *pm, std::unique_ptr<ParameterInput> &pin, int gid,
+BoundaryValues::BoundaryValues(Mesh *pm, ParameterInput *pin, int gid,
   BoundaryFlag *ibcs, int maxvar) : pmesh_(pm), my_mbgid_(gid)
 {
   // inheret boundary flags from MeshBlock 

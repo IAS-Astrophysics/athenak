@@ -39,7 +39,7 @@ class MeshBlock
  friend class Mesh;
  friend class MeshBlockTree;
  public:
-  MeshBlock(Mesh *pm, std::unique_ptr<ParameterInput> &pin, int igid,
+  MeshBlock(Mesh *pm, ParameterInput *pin, int igid,
     RegionSize isize, RegionCells icells, BoundaryFlag *ibcs);
   ~MeshBlock();
 
@@ -72,7 +72,7 @@ class MeshBlock
 
 
   // functions
-  void SelectPhysics(std::unique_ptr<ParameterInput> &pin);
+  void SelectPhysics(ParameterInput *pin);
   int NumberOfMeshBlockCells() { return mb_cells.nx1 * mb_cells.nx2 * mb_cells.nx3; }
   int NumberOfCoarseMeshBlockCells() {return cmb_cells.nx1 *cmb_cells.nx2 *cmb_cells.nx3;}
 

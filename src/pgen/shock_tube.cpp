@@ -27,7 +27,7 @@
 //! \fn
 //  \brief Problem Generator for the shock tube (Riemann problem) tests
 
-void ProblemGenerator::ShockTube_(MeshBlock *pmb, std::unique_ptr<ParameterInput> &pin) {
+void ProblemGenerator::ShockTube_(MeshBlock *pmb, ParameterInput *pin) {
 using namespace hydro;
 
   // parse shock direction: {1,2,3} -> {x1,x2,x3}

@@ -18,7 +18,7 @@
 // MeshBlock constructor: constructs coordinate, boundary condition, hydro, field
 //                        and mesh refinement objects.
 
-MeshBlock::MeshBlock(Mesh *pm, std::unique_ptr<ParameterInput> &pin,
+MeshBlock::MeshBlock(Mesh *pm, ParameterInput *pin,
   int igid, RegionSize isize, RegionCells icells, BoundaryFlag *ibcs) :
   pmesh_(pm), mb_gid(igid), mb_size(isize), mb_cells(icells)
 {

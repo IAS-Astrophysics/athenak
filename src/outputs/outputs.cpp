@@ -58,7 +58,7 @@
 //----------------------------------------------------------------------------------------
 // Outputs constructor
 
-Outputs::Outputs(std::unique_ptr<ParameterInput> &pin, Mesh *pm) {
+Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
 
   // loop over input block names.  Find those that start with "output", read parameters,
   // and add to linked list of OutputTypes.

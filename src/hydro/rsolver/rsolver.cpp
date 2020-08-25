@@ -18,7 +18,7 @@ namespace hydro {
 //----------------------------------------------------------------------------------------
 // RSolver constructor
 
-RiemannSolver::RiemannSolver(Hydro *phyd, std::unique_ptr<ParameterInput> &pin) :
+RiemannSolver::RiemannSolver(Hydro *phyd, ParameterInput *pin) :
    pmy_hydro(phyd) {
 
 }

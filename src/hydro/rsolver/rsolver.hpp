@@ -23,7 +23,7 @@ namespace hydro {
 
 class RiemannSolver {
  public:
-  RiemannSolver(Hydro *phyd, std::unique_ptr<ParameterInput> &pin);
+  RiemannSolver(Hydro *phyd, ParameterInput *pin);
   virtual ~RiemannSolver() = default;
 
   Hydro *pmy_hydro;
@@ -40,7 +40,7 @@ class RiemannSolver {
 
 class Advection : public RiemannSolver {
  public:
-  Advection(Hydro *phyd, std::unique_ptr<ParameterInput> &pin);
+  Advection(Hydro *phyd, ParameterInput *pin);
 
   void RSolver(const int il, const  int iu, const int dir, const AthenaArray<Real> &wl,
     const AthenaArray<Real> &wr, AthenaArray<Real> &flx) override;
@@ -54,7 +54,7 @@ class Advection : public RiemannSolver {
 
 class LLF : public RiemannSolver {
  public:
-  LLF(Hydro *phyd, std::unique_ptr<ParameterInput> &pin);
+  LLF(Hydro *phyd, ParameterInput *pin);
 
   void RSolver(const int il, const  int iu, const int dir, const AthenaArray<Real> &wl,
     const AthenaArray<Real> &wr, AthenaArray<Real> &flx) override;

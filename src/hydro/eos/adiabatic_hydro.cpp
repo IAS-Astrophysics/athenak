@@ -20,7 +20,7 @@ namespace hydro {
 //----------------------------------------------------------------------------------------
 // AdiabaticHydro constructor
     
-AdiabaticHydro::AdiabaticHydro(Hydro *phyd, std::unique_ptr<ParameterInput> &pin)
+AdiabaticHydro::AdiabaticHydro(Hydro *phyd, ParameterInput *pin)
   : EquationOfState(phyd, pin) {
     
   gamma_ = pin->GetReal("eos", "gamma");

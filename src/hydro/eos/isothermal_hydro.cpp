@@ -19,7 +19,7 @@ namespace hydro {
 //----------------------------------------------------------------------------------------
 // IsothermalHydro constructor
     
-IsothermalHydro::IsothermalHydro(Hydro *phyd, std::unique_ptr<ParameterInput> &pin)
+IsothermalHydro::IsothermalHydro(Hydro *phyd, ParameterInput *pin)
   : EquationOfState(phyd, pin) {
     
   iso_cs_ = pin->GetReal("eos", "iso_sound_speed");

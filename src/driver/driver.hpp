@@ -19,8 +19,7 @@
 
 class Driver {
  public:
-  Driver(std::unique_ptr<ParameterInput> &pin, Mesh *pmesh,
-         std::unique_ptr<Outputs> &pout);
+  Driver(ParameterInput *pin, Mesh *pmesh, Outputs *pout);
   ~Driver() = default;
 
   // data
@@ -37,9 +36,9 @@ class Driver {
   Real gam0[3], gam1[3], beta[3];  // averaging weights and fractional timestep per stage
 
   // functions
-  void Initialize(Mesh *pmesh, std::unique_ptr<Outputs> &pout);
-  void Execute(Mesh *pmesh, std::unique_ptr<Outputs> &pout);
-  void Finalize(Mesh *pmesh, std::unique_ptr<Outputs> &pout);
+  void Initialize(Mesh *pmesh, Outputs *pout);
+  void Execute(Mesh *pmesh, Outputs *pout);
+  void Finalize(Mesh *pmesh, Outputs *pout);
 
  private:
   clock_t tstart_, tstop_;  // variables to measure cpu time

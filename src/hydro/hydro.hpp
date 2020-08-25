@@ -35,7 +35,7 @@ enum class HydroRiemannSolver {advection, llf, hlle, hllc, roe};
 
 class Hydro {
  public:
-  Hydro(Mesh *pm, std::unique_ptr<ParameterInput> &pin, int gid);
+  Hydro(Mesh *pm, ParameterInput *pin, int gid);
   ~Hydro();
 
   // data

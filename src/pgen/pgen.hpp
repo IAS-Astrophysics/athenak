@@ -14,7 +14,7 @@
 
 class ProblemGenerator {
  public:
-  ProblemGenerator(std::unique_ptr<ParameterInput> &pin, Mesh *pmesh);
+  ProblemGenerator(ParameterInput *pin, Mesh *pmesh);
   ~ProblemGenerator() = default;
 
   // data
@@ -24,11 +24,11 @@ class ProblemGenerator {
   Mesh* pmesh_;
 
   // function pointer for pgen name
-  void (ProblemGenerator::*pgen_func_) (MeshBlock*, std::unique_ptr<ParameterInput>&);
+  void (ProblemGenerator::*pgen_func_) (MeshBlock*, ParameterInput*);
 
   // predefined problem generator functions
-  void ShockTube_(MeshBlock *pmb, std::unique_ptr<ParameterInput> &pin);
-  void Advection_(MeshBlock *pmb, std::unique_ptr<ParameterInput> &pin);
+  void ShockTube_(MeshBlock *pmb, ParameterInput *pin);
+  void Advection_(MeshBlock *pmb, ParameterInput *pin);
 
 };
 

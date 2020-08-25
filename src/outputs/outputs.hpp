@@ -98,7 +98,7 @@ class FormattedTableOutput : public OutputType {
 
 class Outputs {
  public:
-  Outputs(std::unique_ptr<ParameterInput> &pin, Mesh *pm);
+  Outputs(ParameterInput *pin, Mesh *pm);
   ~Outputs();
 
   // use vector of pointers to OutputTypes since it is an abstract base class 

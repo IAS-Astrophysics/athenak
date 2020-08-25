@@ -20,7 +20,7 @@ namespace hydro {
 //----------------------------------------------------------------------------------------
 // EquationOfState constructor
 
-EquationOfState::EquationOfState(Hydro *phyd, std::unique_ptr<ParameterInput> &pin) :
+EquationOfState::EquationOfState(Hydro *phyd, ParameterInput *pin) :
     pmy_hydro(phyd) {
 
   density_floor_ = pin->GetOrAddReal("eos","density_floor",(FLT_MIN));

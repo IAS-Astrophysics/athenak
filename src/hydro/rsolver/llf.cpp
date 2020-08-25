@@ -30,7 +30,7 @@ namespace hydro {
 //----------------------------------------------------------------------------------------
 // LLF constructor
   
-LLF::LLF(Hydro *phyd, std::unique_ptr<ParameterInput> &pin) : RiemannSolver(phyd, pin) {
+LLF::LLF(Hydro *phyd, ParameterInput *pin) : RiemannSolver(phyd, pin) {
 
   void RSolver(const int il, const  int iu, const int dir,
     const AthenaArray<Real> &wl, const AthenaArray<Real> &wr, AthenaArray<Real> &flx);

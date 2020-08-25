@@ -81,8 +81,8 @@ class Mesh
  friend class MeshBlockTree;
  public:
   // 2x function overloads of ctor: normal and restarted simulation
-  explicit Mesh(std::unique_ptr<ParameterInput> &pin);
-  Mesh(std::unique_ptr<ParameterInput> &pin, IOWrapper &resfile);
+  explicit Mesh(ParameterInput *pin);
+  Mesh(ParameterInput *pin, IOWrapper &resfile);
   ~Mesh();
 
   // accessors
@@ -108,7 +108,7 @@ class Mesh
   std::vector<MeshBlock> mblocks; // MeshBlocks belonging to this MPI rank
 
   // functions
-  void BuildTree(std::unique_ptr<ParameterInput> &pin);
+  void BuildTree(ParameterInput *pin);
   void NewTimeStep(const Real tlim);
   void OutputMeshStructure(int flag);
 

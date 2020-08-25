@@ -26,7 +26,7 @@
 //! \fn void MeshBlock::ProblemGenerator(ParameterInput *pin)
 //  \brief Problem Generator for advection problems
 
-void ProblemGenerator::Advection_(MeshBlock *pmb, std::unique_ptr<ParameterInput> &pin) {
+void ProblemGenerator::Advection_(MeshBlock *pmb, ParameterInput *pin) {
 using namespace hydro;
 
   // Read input parameters

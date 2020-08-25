@@ -17,6 +17,6 @@
 //----------------------------------------------------------------------------------------
 // Reconstruction constructor
 
-Reconstruction::Reconstruction(std::unique_ptr<ParameterInput> &pin) {
+Reconstruction::Reconstruction(ParameterInput *pin) {
 
 }

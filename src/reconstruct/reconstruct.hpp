@@ -25,7 +25,7 @@
 
 class Reconstruction {
  public:
-  Reconstruction(std::unique_ptr<ParameterInput> &pin);
+  Reconstruction(ParameterInput *pin);
   virtual ~Reconstruction() = default;
 
   virtual void ReconstructX1(const int il, const int iu, const AthenaArray<Real> &q,
@@ -44,7 +44,7 @@ class Reconstruction {
 
 class DonorCell : public Reconstruction {
  public:
-  DonorCell(std::unique_ptr<ParameterInput> &pin);
+  DonorCell(ParameterInput *pin);
 
   void ReconstructX1(const int il, const int iu, const AthenaArray<Real> &q,
     AthenaArray<Real> &ql, AthenaArray<Real> &qr) override;

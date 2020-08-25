@@ -17,7 +17,7 @@
 //----------------------------------------------------------------------------------------
 // constructor, initializes data structures and parameters
 
-ProblemGenerator::ProblemGenerator(std::unique_ptr<ParameterInput> &pin, Mesh *pm)
+ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm)
  : pmesh_(pm) 
 {
 

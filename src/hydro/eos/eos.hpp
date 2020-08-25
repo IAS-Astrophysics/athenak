@@ -25,7 +25,7 @@ namespace hydro {
 
 class EquationOfState {
  public:
-  EquationOfState(Hydro *phyd, std::unique_ptr<ParameterInput> &pin);
+  EquationOfState(Hydro *phyd, ParameterInput *pin);
   virtual ~EquationOfState() = default;
 
   Hydro *pmy_hydro;
@@ -48,7 +48,7 @@ class EquationOfState {
 
 class AdiabaticHydro : public EquationOfState {
  public:
-  AdiabaticHydro(Hydro *phyd, std::unique_ptr<ParameterInput> &pin);
+  AdiabaticHydro(Hydro *phyd, ParameterInput *pin);
   Real GetGamma() override {return gamma_;}
 
   // functions that implement methods appropriate to adiabatic hydrodynamics
@@ -66,7 +66,7 @@ class AdiabaticHydro : public EquationOfState {
 
 class IsothermalHydro : public EquationOfState {
  public:
-  IsothermalHydro(Hydro *phyd, std::unique_ptr<ParameterInput> &pin);
+  IsothermalHydro(Hydro *phyd, ParameterInput *pin);
 
   // functions that implement methods appropriate to isothermal hydrodynamics
   void ConservedToPrimitive(const int k, const int j, const int il,const  int iu,

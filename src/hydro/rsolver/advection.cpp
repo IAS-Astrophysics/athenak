@@ -21,7 +21,7 @@ namespace hydro {
 //----------------------------------------------------------------------------------------
 // Advection constructor
   
-Advection::Advection(Hydro *phyd, std::unique_ptr<ParameterInput> &pin) 
+Advection::Advection(Hydro *phyd, ParameterInput *pin) 
   : RiemannSolver(phyd, pin) {
 
   void RSolver(const int il, const  int iu, const int dir,

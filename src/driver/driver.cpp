@@ -46,8 +46,8 @@
   //
   // main.cpp invokes the tasklist in a for () loop from stage=1 to stage=ptlist->nstages
 
-Driver::Driver(std::unique_ptr<ParameterInput> &pin, Mesh *pmesh,
-     std::unique_ptr<Outputs> &pout) : tlim(-1.0), nlim(-1), ndiag(1),
+Driver::Driver(ParameterInput *pin, Mesh *pmesh,
+     Outputs *pout) : tlim(-1.0), nlim(-1), ndiag(1),
      time_evolution(false) {
 
   hydro::Hydro *phyd = pmesh->mblocks.front().phydro;
@@ -113,7 +113,7 @@ Driver::Driver(std::unique_ptr<ParameterInput> &pin, Mesh *pmesh,
 // Tasks to be performed before execution of Driver, such as computing initial time step,
 // setting boundary conditions, and outputing ICs
 
-void Driver::Initialize(Mesh *pmesh, std::unique_ptr<Outputs> &pout)
+void Driver::Initialize(Mesh *pmesh, Outputs *pout)
 {
   //---- Step 1.  Set Boundary Conditions on all physics
 
@@ -152,7 +152,7 @@ void Driver::Initialize(Mesh *pmesh, std::unique_ptr<Outputs> &pout)
 //----------------------------------------------------------------------------------------
 // Driver::Execute()
 
-void Driver::Execute(Mesh *pmesh, std::unique_ptr<Outputs> &pout) {
+void Driver::Execute(Mesh *pmesh, Outputs *pout) {
 
   if (global_variable::my_rank == 0) {
     std::cout << "\nSetup complete, executing task list...\n" << std::endl;
@@ -204,7 +204,7 @@ void Driver::Execute(Mesh *pmesh, std::unique_ptr<Outputs> &pout) {
 // Tasks to be performed after execution of Driver, such as making final output and
 // printing diagnostic messages
 
-void Driver::Finalize(Mesh *pmesh, std::unique_ptr<Outputs> &pout) {
+void Driver::Finalize(Mesh *pmesh, Outputs *pout) {
 
   // cycle through output Types and load data / write files.  This design allows for
   // asynchronous outputs to implemented in the future.

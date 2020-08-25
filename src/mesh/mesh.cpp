@@ -21,7 +21,7 @@
 //----------------------------------------------------------------------------------------
 // Mesh constructor, builds mesh at start of calculation using parameters in input file
 
-Mesh::Mesh(std::unique_ptr<ParameterInput> &pin)
+Mesh::Mesh(ParameterInput *pin)
 {
   // Set properties of Mesh from input parameters, error check
 
@@ -153,7 +153,7 @@ Mesh::~Mesh()
 //----------------------------------------------------------------------------------------
 // Build tree
 
-void Mesh::BuildTree(std::unique_ptr<ParameterInput> &pin)
+void Mesh::BuildTree(ParameterInput *pin)
 {
   // Set # of cells in MeshBlock read from input parameters, error check
   RegionCells incells;

@@ -15,7 +15,7 @@
 //----------------------------------------------------------------------------------------
 // DonorCell constructor
 
-DonorCell::DonorCell(std::unique_ptr<ParameterInput> &pin) : Reconstruction(pin) {
+DonorCell::DonorCell(ParameterInput *pin) : Reconstruction(pin) {
   
 }
 

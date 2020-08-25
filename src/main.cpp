@@ -198,12 +198,12 @@ int main(int argc, char *argv[])
   // Constructor reads input_file and stores block/parameter names.
   // With MPI, the input is read by every rank in parallel using MPI-IO.
 
-  auto pinput = std::make_unique<ParameterInput>(input_file);
-  pinput->ModifyFromCmdline(argc, argv);
+  ParameterInput par_input(input_file);
+  par_input.ModifyFromCmdline(argc, argv);
 
   // Dump input parameters and quit if code was run with -n option.
   if (narg_flag) {
-    if (global_variable::my_rank == 0) pinput->ParameterDump(std::cout);
+    if (global_variable::my_rank == 0) par_input.ParameterDump(std::cout);
 //    if (res_flag == 1) restartfile.Close();
 #ifdef MPI_PARALLEL
     MPI_Finalize();
@@ -215,8 +215,8 @@ int main(int argc, char *argv[])
   // Construct Mesh and MeshBlockTree and store smart pointer to Mesh.  Then initialize
   // Tree and construct MeshBlocks on this rank
 
-  Mesh mesh0(pinput);
-  mesh0.BuildTree(pinput);
+  Mesh mesh0(&par_input);
+  mesh0.BuildTree(&par_input);
 
   // output Mesh diagnostics
   if (global_variable::my_rank == 0) mesh0.OutputMeshStructure(marg_flag);
@@ -232,27 +232,27 @@ int main(int argc, char *argv[])
   //--- Step 5. --------------------------------------------------------------------------
   // Construct and initialize Physics modules.
 
-  for (auto &pmb : mesh0.mblocks) {pmb.SelectPhysics(pinput);}
+  for (auto &pmb : mesh0.mblocks) {pmb.SelectPhysics(&par_input);}
 
   //--- Step 6. --------------------------------------------------------------------------
   // Set initial conditions by calling problem generator, or reading restart file
 
-  auto pgen = std::make_unique<ProblemGenerator>(pinput, &mesh0);
+  auto pgen = std::make_unique<ProblemGenerator>(&par_input, &mesh0);
 
   //--- Step 7. --------------------------------------------------------------------------
   // Construct Outputs. Output of initial conditions is made in Driver (if needed)
 
-  auto pout = std::make_unique<Outputs>(pinput, &mesh0);
+  Outputs out_types(&par_input, &mesh0);
 
   //--- Step 8. --------------------------------------------------------------------------
   // Construct and Execute Driver
 
-  auto pdrive = std::make_unique<Driver>(pinput, &mesh0, pout);
+  auto pdrive = std::make_unique<Driver>(&par_input, &mesh0, &out_types);
 
   ChangeRunDir(run_dir);
-  pdrive->Initialize(&mesh0, pout);
-  pdrive->Execute(&mesh0, pout);
-  pdrive->Finalize(&mesh0, pout);
+  pdrive->Initialize(&mesh0, &out_types);
+  pdrive->Execute(&mesh0, &out_types);
+  pdrive->Finalize(&mesh0, &out_types);
 
   //--- Step 9. -------------------------------------------------------------------------
   // clean up, and terminate

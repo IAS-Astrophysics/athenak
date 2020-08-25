@@ -21,7 +21,7 @@ using namespace hydro;
 //----------------------------------------------------------------------------------------
 // \fn Mesh::SelectPhysics()
 
-void MeshBlock::SelectPhysics(std::unique_ptr<ParameterInput> &pin)
+void MeshBlock::SelectPhysics(ParameterInput *pin)
 {
   // parse input blocks to see which physics defined
   bool hydro_defined = pin->DoesBlockExist("hydro");
