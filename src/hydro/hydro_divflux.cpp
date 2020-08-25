@@ -19,13 +19,15 @@ namespace hydro {
 //! \fn  void Hydro::CalculateDivFlux
 //  \brief Calculate divergence of the fluxes for hydro only, no mesh refinement
 
-TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage) {
-  int is = pmb_hyd->mb_cells.is; int ie = pmb_hyd->mb_cells.ie;
-  int js = pmb_hyd->mb_cells.js; int je = pmb_hyd->mb_cells.je;
-  int ks = pmb_hyd->mb_cells.ks; int ke = pmb_hyd->mb_cells.ke;
-  int ng = pmb_hyd->mb_cells.ng;
+TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
+{
+  MeshBlock *pmb = pmesh_->FindMeshBlock(my_mbgid_);
+  int is = pmb->mb_cells.is; int ie = pmb->mb_cells.ie;
+  int js = pmb->mb_cells.js; int je = pmb->mb_cells.je;
+  int ks = pmb->mb_cells.ks; int ke = pmb->mb_cells.ke;
+  int ng = pmb->mb_cells.ng;
 
-std::cout << "HydroDiv nx1=" << pmb_hyd->mb_cells.nx1 << " nx2=" << pmb_hyd->mb_cells.nx2 << " nx3=" << pmb_hyd->mb_cells.nx3 << std::endl;
+std::cout << "HydroDiv nx1=" << pmb->mb_cells.nx1 << " nx2=" << pmb->mb_cells.nx2 << " nx3=" << pmb->mb_cells.nx3 << std::endl;
 
   //--------------------------------------------------------------------------------------
   // i-direction
@@ -39,7 +41,7 @@ std::cout << "HydroDiv nx1=" << pmb_hyd->mb_cells.nx1 << " nx2=" << pmb_hyd->mb_
 
       for (int n=0; n<nhydro; ++n) {
         for (int i=is; i<=ie; ++i) {
-          divf(n,k,j,i) = (uflux_(n,i+1) - uflux_(n,i))/pmb_hyd->mb_cells.dx1;
+          divf(n,k,j,i) = (uflux_(n,i+1) - uflux_(n,i))/pmb->mb_cells.dx1;
         }
       }
 

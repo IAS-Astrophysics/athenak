@@ -17,8 +17,9 @@
 //----------------------------------------------------------------------------------------
 // constructor, initializes data structures and parameters
 
-ProblemGenerator::ProblemGenerator(std::unique_ptr<ParameterInput> &pin,
-     std::shared_ptr<Mesh> &pmesh) {
+ProblemGenerator::ProblemGenerator(std::unique_ptr<ParameterInput> &pin, Mesh *pm)
+ : pmesh_(pm) 
+{
 
   std::string pgen_fun_name = pin->GetOrAddString("problem", "pgen_name", "none");
 
@@ -44,7 +45,7 @@ ProblemGenerator::ProblemGenerator(std::unique_ptr<ParameterInput> &pin,
   }
 
   // now cycle through MeshBlocks and call appropriate pgen function
-  for (auto it = pmesh->mblocks.begin(); it < pmesh->mblocks.end(); ++it) {
+  for (auto it = pmesh_->mblocks.begin(); it < pmesh_->mblocks.end(); ++it) {
     (this->*pgen_func_)(&*it, pin);
   }
 }

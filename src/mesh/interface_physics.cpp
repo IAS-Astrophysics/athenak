@@ -21,26 +21,26 @@ using namespace hydro;
 //----------------------------------------------------------------------------------------
 // \fn Mesh::SelectPhysics()
 
-void Mesh::SelectPhysics(std::unique_ptr<ParameterInput> &pin) {
+void MeshBlock::SelectPhysics(std::unique_ptr<ParameterInput> &pin)
+{
+  pbvals = new BoundaryValues(pmesh_, pin, mb_gid, mb_bcs);
 
   // parse input blocks to see which physics defined
   bool hydro_defined = pin->DoesBlockExist("hydro");
 
   // loop through MBs on this rank and construct physics modules and tasks lists
-  for (auto &mb : mblocks) {
 
     // physics modules
     if (hydro_defined) {
-      mb.phydro = new hydro::Hydro(&mb, pin);
+      phydro = new hydro::Hydro(pmesh_, pin, mb_gid);
     } else {
-      mb.phydro = nullptr;
+      phydro = nullptr;
       std::cout << "Hydro block not found in input file" << std::endl;
     }
 
     // task lists
-    if (mb.phydro != nullptr) mb.phydro->HydroAddTasks(mb.tl_onestage);
+    if (phydro != nullptr) phydro->HydroAddTasks(tl_onestage);
 
-  } // end loop over MBs
 
   return;
 }

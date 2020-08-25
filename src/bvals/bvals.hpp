@@ -30,7 +30,7 @@ std::string GetBoundaryString(BoundaryFlag input_flag);
 #include "parameter_input.hpp"
 
 // Forward delcarations
-class MeshBlock;
+class Mesh;
 
 //----------------------------------------------------------------------------------------
 //! \struct NeighborBlock
@@ -49,7 +49,7 @@ class MeshBlock;
 
 class BoundaryValues {
  public:
-  BoundaryValues(MeshBlock *pmb, std::unique_ptr<ParameterInput> &pin, BoundaryFlag *bcs);
+  BoundaryValues(Mesh* pm, std::unique_ptr<ParameterInput> &pin, int gid, BoundaryFlag *bcs);
   ~BoundaryValues();
 
   // data
@@ -70,7 +70,8 @@ class BoundaryValues {
 //  void ReceiveCellCenteredVariables(const std::string &key, int nvar);
 
  private:
-  MeshBlock *pmblock_bval_;
+  Mesh *pmesh_;
+  int my_mbgid_;
 
 };
 

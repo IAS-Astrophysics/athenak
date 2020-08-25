@@ -43,11 +43,11 @@ using namespace hydro;
   // get size of overall domain
   Real length;
   if (flow_dir == 1) {
-    length = pmb->pmesh_mb->mesh_size.x1max - pmb->pmesh_mb->mesh_size.x1min;
+    length = pmesh_->mesh_size.x1max - pmesh_->mesh_size.x1min;
   } else if (flow_dir == 2) {
-    length = pmb->pmesh_mb->mesh_size.x2max - pmb->pmesh_mb->mesh_size.x2min;
+    length = pmesh_->mesh_size.x2max - pmesh_->mesh_size.x2min;
   } else if (flow_dir == 3) {
-    length = pmb->pmesh_mb->mesh_size.x3max - pmb->pmesh_mb->mesh_size.x3min;
+    length = pmesh_->mesh_size.x3max - pmesh_->mesh_size.x3min;
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "flow_dir=" << flow_dir << " must be either 1,2, or 3" << std::endl;
@@ -62,11 +62,11 @@ using namespace hydro;
       for (int i=is-pmb->mb_cells.ng; i<=ie+pmb->mb_cells.ng; i++) {
         Real r; // coordinate that will span [0->1]
         if (flow_dir == 1) {
-          r = (pmb->pmesh_mb->CellCenterX(i, pmb->mb_cells.nx1,x1min,x1max)-x1min)/length;
+          r = (pmesh_->CellCenterX(i, pmb->mb_cells.nx1,x1min,x1max)-x1min)/length;
         } else if (flow_dir == 2) {
-          r = (pmb->pmesh_mb->CellCenterX(j, pmb->mb_cells.nx2,x2min,x2max)-x2min)/length;
+          r = (pmesh_->CellCenterX(j, pmb->mb_cells.nx2,x2min,x2max)-x2min)/length;
         } else {
-          r = (pmb->pmesh_mb->CellCenterX(k, pmb->mb_cells.nx3,x3min,x3max)-x3min)/length;
+          r = (pmesh_->CellCenterX(k, pmb->mb_cells.nx3,x3min,x3max)-x3min)/length;
         }
 
         // iprob=1: sine wave

@@ -35,11 +35,10 @@ enum class HydroRiemannSolver {advection, llf, hlle, hllc, roe};
 
 class Hydro {
  public:
-  Hydro(MeshBlock *pmb, std::unique_ptr<ParameterInput> &pin);
+  Hydro(Mesh *pm, std::unique_ptr<ParameterInput> &pin, int gid);
   ~Hydro();
 
   // data
-  MeshBlock* pmb_hyd;                 // ptr to MeshBlock containing this Hydro
   HydroEOS hydro_eos;                 // enum storing choice of EOS
   HydroEvolution hydro_evol;          // enum storing choice of time evolution
   HydroReconMethod hydro_recon;       // enum storing choice of reconstruction method
@@ -76,6 +75,8 @@ class Hydro {
   TaskStatus NewTimeStep(Driver *d, int stage);
 
  private:
+  Mesh* pmesh_;                 // ptr to Mesh containing this Hydro
+  int my_mbgid_;
   AthenaArray<Real> w_,wl_,wr_,uflux_;   // 1-spatialD scratch vectors
 
 };

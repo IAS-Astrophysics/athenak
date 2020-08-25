@@ -35,20 +35,20 @@ using namespace hydro;
 
   // parse shock location (must be inside grid)
   Real xshock = pin->GetReal("problem","xshock");
-  if (shk_dir == 1 && (xshock < pmb->pmesh_mb->mesh_size.x1min ||
-                       xshock > pmb->pmesh_mb->mesh_size.x1max)) {
+  if (shk_dir == 1 && (xshock < pmesh_->mesh_size.x1min ||
+                       xshock > pmesh_->mesh_size.x1max)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "xshock=" << xshock << " lies outside x1 domain" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if (shk_dir == 2 && (xshock < pmb->pmesh_mb->mesh_size.x2min ||
-                       xshock > pmb->pmesh_mb->mesh_size.x2max)) {
+  if (shk_dir == 2 && (xshock < pmesh_->mesh_size.x2min ||
+                       xshock > pmesh_->mesh_size.x2max)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "xshock=" << xshock << " lies outside x2 domain" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if (shk_dir == 3 && (xshock < pmb->pmesh_mb->mesh_size.x3min ||
-                       xshock > pmb->pmesh_mb->mesh_size.x3max)) {
+  if (shk_dir == 3 && (xshock < pmesh_->mesh_size.x3min ||
+                       xshock > pmesh_->mesh_size.x3max)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "xshock=" << xshock << " lies outside x3 domain" << std::endl;
     exit(EXIT_FAILURE);
@@ -86,7 +86,7 @@ using namespace hydro;
       for (int k=ks; k<=ke; ++k) {
         for (int j=js; j<=je; ++j) {
           for (int i=is; i<=ie; ++i) {
-            Real x1 = pmb->pmesh_mb->CellCenterX(i, pmb->mb_cells.nx1, x1min, x1max);
+            Real x1 = pmesh_->CellCenterX(i, pmb->mb_cells.nx1, x1min, x1max);
             if (x1 < xshock) {
               pmb->phydro->u0(IDN,k,j,i) = wl[IDN];
               pmb->phydro->u0(IM1,k,j,i) = wl[IVX]*wl[IDN];
@@ -109,7 +109,7 @@ using namespace hydro;
     case 2:
       for (int k=ks; k<=ke; ++k) {
         for (int j=js; j<=je; ++j) {
-          Real x2 = pmb->pmesh_mb->CellCenterX(j, pmb->mb_cells.nx2, x2min, x2max);
+          Real x2 = pmesh_->CellCenterX(j, pmb->mb_cells.nx2, x2min, x2max);
           if (x2 < xshock) {
             for (int i=is; i<=ie; ++i) {
               pmb->phydro->u0(IDN,k,j,i) = wl[IDN];
@@ -134,7 +134,7 @@ using namespace hydro;
     //--- shock in 3-direction
     case 3:
       for (int k=ks; k<=ke; ++k) {
-        Real x3 = pmb->pmesh_mb->CellCenterX(k, pmb->mb_cells.nx3, x3min, x3max);
+        Real x3 = pmesh_->CellCenterX(k, pmb->mb_cells.nx3, x3min, x3max);
         if (x3 < xshock) {
           for (int j=js; j<=je; ++j) {
             for (int i=is; i<=ie; ++i) {

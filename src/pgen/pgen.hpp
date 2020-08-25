@@ -14,13 +14,15 @@
 
 class ProblemGenerator {
  public:
-  ProblemGenerator(std::unique_ptr<ParameterInput> &pin, std::shared_ptr<Mesh> &pmesh);
+  ProblemGenerator(std::unique_ptr<ParameterInput> &pin, Mesh *pmesh);
   ~ProblemGenerator() = default;
 
   // data
 
 
  private:
+  Mesh* pmesh_;
+
   // function pointer for pgen name
   void (ProblemGenerator::*pgen_func_) (MeshBlock*, std::unique_ptr<ParameterInput>&);
 

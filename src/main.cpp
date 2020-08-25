@@ -215,11 +215,11 @@ int main(int argc, char *argv[])
   // Construct Mesh and MeshBlockTree and store smart pointer to Mesh.  Then initialize
   // Tree and construct MeshBlocks on this rank
 
-  auto pmesh = std::make_shared<Mesh>(pinput);
-  pmesh->BuildTree(pinput);
+  Mesh mesh0(pinput);
+  mesh0.BuildTree(pinput);
 
   // output Mesh diagnostics
-  if (global_variable::my_rank == 0) pmesh->OutputMeshStructure(marg_flag);
+  if (global_variable::my_rank == 0) mesh0.OutputMeshStructure(marg_flag);
 
   //  If code was run with -m option, write mesh structure to file and quit.
   if (marg_flag) {
@@ -232,27 +232,27 @@ int main(int argc, char *argv[])
   //--- Step 5. --------------------------------------------------------------------------
   // Construct and initialize Physics modules.
 
-  pmesh->SelectPhysics(pinput);
+  for (auto &pmb : mesh0.mblocks) {pmb.SelectPhysics(pinput);}
 
   //--- Step 6. --------------------------------------------------------------------------
   // Set initial conditions by calling problem generator, or reading restart file
 
-  auto pgen = std::make_unique<ProblemGenerator>(pinput, pmesh);
+  auto pgen = std::make_unique<ProblemGenerator>(pinput, &mesh0);
 
   //--- Step 7. --------------------------------------------------------------------------
   // Construct Outputs. Output of initial conditions is made in Driver (if needed)
 
-  auto pout = std::make_unique<Outputs>(pinput, pmesh);
+  auto pout = std::make_unique<Outputs>(pinput, &mesh0);
 
   //--- Step 8. --------------------------------------------------------------------------
   // Construct and Execute Driver
 
-  auto pdrive = std::make_unique<Driver>(pinput, pmesh, pout);
+  auto pdrive = std::make_unique<Driver>(pinput, &mesh0, pout);
 
   ChangeRunDir(run_dir);
-  pdrive->Initialize(pmesh, pout);
-  pdrive->Execute(pmesh, pout);
-  pdrive->Finalize(pmesh, pout);
+  pdrive->Initialize(&mesh0, pout);
+  pdrive->Execute(&mesh0, pout);
+  pdrive->Finalize(&mesh0, pout);
 
   //--- Step 9. -------------------------------------------------------------------------
   // clean up, and terminate

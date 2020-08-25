@@ -18,9 +18,9 @@
 // MeshBlock constructor: constructs coordinate, boundary condition, hydro, field
 //                        and mesh refinement objects.
 
-MeshBlock::MeshBlock(std::shared_ptr<Mesh> pm, std::unique_ptr<ParameterInput> &pin,
+MeshBlock::MeshBlock(Mesh *pm, std::unique_ptr<ParameterInput> &pin,
   int igid, RegionSize isize, RegionCells icells, BoundaryFlag *ibcs) :
-  pmesh_mb(pm), mb_gid(igid), mb_size(isize), mb_cells(icells)
+  pmesh_(pm), mb_gid(igid), mb_size(isize), mb_cells(icells)
 {
   // copy input boundary flags into MeshBlock 
   for (int i=0; i<6; ++i) {mb_bcs[i] = ibcs[i];}
@@ -75,7 +75,7 @@ MeshBlock::MeshBlock(std::shared_ptr<Mesh> pm, std::unique_ptr<ParameterInput> &
 
 std::cout << "MBConstruct nx1=" << mb_cells.nx1 << " nx2=" << mb_cells.nx2 << " nx3=" << mb_cells.nx3 << std::endl;
 
-  pbval = new BoundaryValues(this, pin, ibcs);
+//  pbval = new BoundaryValues(pmesh_, pin, mb_gid, ibcs);
 }
 
 //----------------------------------------------------------------------------------------
@@ -95,7 +95,7 @@ MeshBlock::~MeshBlock()
 void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklist)
 {
   MeshBlockTree* neibt;
-  LogicalLocation loc = pmesh_mb->loclist[mb_gid];
+  LogicalLocation loc = pmesh_->loclist[mb_gid];
 
   int cnt=-1;
   // iterate over x3/x2/x1 faces and load all 26 neighbors on a uniform grid.

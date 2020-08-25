@@ -23,7 +23,7 @@
 //----------------------------------------------------------------------------------------
 // ctor: calls OutputType base class constructor
 
-FormattedTableOutput::FormattedTableOutput(OutputParameters op, std::shared_ptr<Mesh> &pm)
+FormattedTableOutput::FormattedTableOutput(OutputParameters op, Mesh *pm)
   : OutputType(op, pm) {
 }
 
@@ -32,7 +32,7 @@ FormattedTableOutput::FormattedTableOutput(OutputParameters op, std::shared_ptr<
 //  \brief writes OutputData to file in tabular format using C style std::fprintf
 //         Writes one file per MeshBlock
 
-void FormattedTableOutput::WriteOutputFile(std::shared_ptr<Mesh> &pm) {
+void FormattedTableOutput::WriteOutputFile(Mesh *pm) {
 
   // create filename: "file_basename"+ "."+"blockid"+"."+"file_id"+"."+XXXXX+".tab",
   // where XXXXX = 5-digit file_number

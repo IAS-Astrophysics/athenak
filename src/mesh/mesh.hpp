@@ -74,7 +74,7 @@ class Mesh;
 //! \class Mesh
 //  \brief data/functions associated with the overall mesh
 
-class Mesh : public std::enable_shared_from_this<Mesh>
+class Mesh
 {
  // the three mesh classes (Mesh, MeshBlock, MeshBlockTree) like to play together
  friend class MeshBlock;
@@ -87,7 +87,7 @@ class Mesh : public std::enable_shared_from_this<Mesh>
 
   // accessors
   int GetNumMeshThreads() const {return num_mesh_threads;}
-  std::shared_ptr<Mesh> ThisSharedPtr() { return shared_from_this(); }
+  MeshBlock* FindMeshBlock(int tgid);
 
   // data
   RegionSize  mesh_size;      // physical size of mesh (physical root level)
@@ -109,7 +109,6 @@ class Mesh : public std::enable_shared_from_this<Mesh>
 
   // functions
   void BuildTree(std::unique_ptr<ParameterInput> &pin);
-  void SelectPhysics(std::unique_ptr<ParameterInput> &pin);
   void NewTimeStep(const Real tlim);
   void OutputMeshStructure(int flag);
 
@@ -139,7 +138,7 @@ class Mesh : public std::enable_shared_from_this<Mesh>
   int num_mesh_threads;
   int root_level; // logical level of root (physical) grid (e.g. Fig. 3 of method paper)
   int max_level;  // logical level of maximum refinement grid in Mesh
-  int gids, gide; // start/end of grid IDs on this MPI rank
+  int gids_, gide_; // start/end of grid IDs on this MPI rank
 
   // following 2x arrays allocated with length [nmbtotal]
   int *ranklist;      // rank of each MeshBlock

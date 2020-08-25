@@ -17,7 +17,7 @@
 #include "mesh.hpp"
 
 // Define static member variables
-std::shared_ptr<Mesh> MeshBlockTree::pmesh_;
+Mesh* MeshBlockTree::pmesh_;
 MeshBlockTree* MeshBlockTree::proot_;
 int MeshBlockTree::nleaf_;
 
@@ -25,7 +25,7 @@ int MeshBlockTree::nleaf_;
 //! \fn MeshBlockTree::MeshBlockTree()
 //  \brief constructor for the logical root level
 
-MeshBlockTree::MeshBlockTree(std::shared_ptr<Mesh> pmesh) : pleaf_(nullptr), gid_(-1)
+MeshBlockTree::MeshBlockTree(Mesh *pmesh) : pleaf_(nullptr), gid_(-1)
 {
   pmesh_ = pmesh;
   loc_.lx1 = 0;

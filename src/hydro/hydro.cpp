@@ -20,7 +20,9 @@ namespace hydro {
 //----------------------------------------------------------------------------------------
 // constructor, initializes data structures and parameters
 
-Hydro::Hydro(MeshBlock *pmb, std::unique_ptr<ParameterInput> &pin) : pmb_hyd(pmb) {
+Hydro::Hydro(Mesh *pm, std::unique_ptr<ParameterInput> &pin, int gid) :
+  pmesh_(pm), my_mbgid_(gid)
+{
 
   // set EOS option (no default)
   {std::string eqn_of_state   = pin->GetString("hydro","eos");
@@ -106,6 +108,7 @@ Hydro::Hydro(MeshBlock *pmb, std::unique_ptr<ParameterInput> &pin) : pmb_hyd(pmb
   }
 
   // allocate memory for conserved variables
+  MeshBlock *pmb = pmesh_->FindMeshBlock(my_mbgid_);
   int ncells1 = pmb->mb_cells.nx1 + 2*(pmb->mb_cells.ng);
   int ncells2 = (pmb->mb_cells.nx2 > 1)? (pmb->mb_cells.nx1 + 2*(pmb->mb_cells.ng)) : 1;
   int ncells3 = (pmb->mb_cells.nx3 > 1)? (pmb->mb_cells.nx3 + 2*(pmb->mb_cells.ng)) : 1;

@@ -18,23 +18,25 @@
 // MeshBlock constructor: constructs coordinate, boundary condition, hydro, field
 //                        and mesh refinement objects.
 
-BoundaryValues::BoundaryValues(MeshBlock *pmb, std::unique_ptr<ParameterInput> &pin,
-  BoundaryFlag *input_bcs) {
+BoundaryValues::BoundaryValues(Mesh *pm, std::unique_ptr<ParameterInput> &pin, int gid,
+  BoundaryFlag *input_bcs) : pmesh_(pm), my_mbgid_(gid) {
 //  BoundaryFlag *input_bcs) : pmblock_bval_(pmb) {
 
-  pmblock_bval_ = pmb;
+//  pmblock_bval_ = pmb;
   // copy input boundary flags into MeshBlock 
   for (int i=0; i<6; ++i) {mb_bcs[i] = input_bcs[i];}
 
   // calculate sizes and offsets for boundary buffers for cell-centered variables
   // This implementation currently is specific to the 26 boundary buffers in a UNIFORM
   // grid with no adaptive refinement.
-  int ng = pmblock_bval_->mb_cells.ng;
-  int nx1 = pmblock_bval_->mb_cells.nx1;
-  int nx2 = pmblock_bval_->mb_cells.nx2;
-  int nx3 = pmblock_bval_->mb_cells.nx3;
+  
+  MeshBlock *pmb = pmesh_->FindMeshBlock(my_mbgid_);
+  int ng = pmb->mb_cells.ng;
+  int nx1 = pmb->mb_cells.nx1;
+  int nx2 = pmb->mb_cells.nx2;
+  int nx3 = pmb->mb_cells.nx3;
 
-  if (pmblock_bval_->pmesh_mb->nx3gt1) {
+  if (pmesh_->nx3gt1) {
     cc_bbuf_ncells[0]  = ng*ng*ng;
     cc_bbuf_ncells[1]  = ng*ng*nx1;
     cc_bbuf_ncells[2]  = ng*ng*ng;
@@ -58,7 +60,7 @@ BoundaryValues::BoundaryValues(MeshBlock *pmb, std::unique_ptr<ParameterInput> &
     for (int n=17; n<=25; ++n) { cc_bbuf_ncells[n]=0; }
   }
   
-  if (pmblock_bval_->pmesh_mb->nx2gt1) {
+  if (pmesh_->nx2gt1) {
     cc_bbuf_ncells[9]  = ng*ng*nx3;
     cc_bbuf_ncells[10] = ng*nx1*nx3;
     cc_bbuf_ncells[11] = ng*ng*nx3;
@@ -82,7 +84,7 @@ BoundaryValues::BoundaryValues(MeshBlock *pmb, std::unique_ptr<ParameterInput> &
 std::cout << "ncells_total= " << cc_bbuf_ncells_total << std::endl;
 
   // Note: memory for boundary buffers allocated in Hydro class
-std::cout << "nx1=" << pmblock_bval_->mb_cells.nx1 << " nx2=" << pmblock_bval_->mb_cells.nx2 << " nx3=" << pmblock_bval_->mb_cells.nx3 << std::endl;
+std::cout << "Bvals nx1=" << pmb->mb_cells.nx1 << " nx2=" << pmb->mb_cells.nx2 << " nx3=" << pmb->mb_cells.nx3 << std::endl;
 
 }
 

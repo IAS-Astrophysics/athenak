@@ -200,7 +200,7 @@ void Mesh::BuildTree(std::unique_ptr<ParameterInput> &pin)
   int current_level = root_level; 
 
   // Construct tree and create root grid
-  ptree = std::make_unique<MeshBlockTree>(ThisSharedPtr());
+  ptree = std::make_unique<MeshBlockTree>(this);
   ptree->CreateRootGrid();
 
   // Error check properties of input paraemters for SMR/AMR meshes.
@@ -414,17 +414,17 @@ void Mesh::BuildTree(std::unique_ptr<ParameterInput> &pin)
   LoadBalance(costlist, ranklist, nslist, nblist, nmbtotal);
 
   // create MeshBlock list for this process
-  gids = nslist[global_variable::my_rank];
-  gide = gids + nblist[global_variable::my_rank] - 1;
+  gids_ = nslist[global_variable::my_rank];
+  gide_ = gids_ + nblist[global_variable::my_rank] - 1;
   nmbthisrank = nblist[global_variable::my_rank];
   
   // create MeshBlocks for this node, then set neighbors
-  for (int i=gids; i<=gide; i++) {
+  for (int i=gids_; i<=gide_; i++) {
     RegionSize insize;
     BoundaryFlag inbcs[6];
     SetBlockSizeAndBoundaries(loclist[i], insize, incells, inbcs);
-    // vector of MBs stored in order gids->gide
-    mblocks.emplace_back(MeshBlock(ThisSharedPtr(), pin, i, insize, incells, inbcs));
+    // vector of MBs stored in order gids_->gide_
+    mblocks.emplace_back(MeshBlock(this, pin, i, insize, incells, inbcs));
   }
   for (auto &mb : mblocks) {mb.SetNeighbors(ptree, ranklist);}
 
@@ -677,4 +677,14 @@ void Mesh::SetBlockSizeAndBoundaries(LogicalLocation loc, RegionSize &block_size
   block_cells.ng  = mesh_cells.ng;
 
   return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn MeshBlock* Mesh::FindMeshBlock(int tgid)
+//  \brief return the MeshBlock whose gid is tgid
+
+MeshBlock* Mesh::FindMeshBlock(int tgid)
+{
+  assert (tgid >= gids_ && tgid <= gide_);
+  return &(mblocks[tgid - gids_]);
 }

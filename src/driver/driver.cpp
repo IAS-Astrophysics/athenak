@@ -46,7 +46,7 @@
   //
   // main.cpp invokes the tasklist in a for () loop from stage=1 to stage=ptlist->nstages
 
-Driver::Driver(std::unique_ptr<ParameterInput> &pin, std::shared_ptr<Mesh> &pmesh,
+Driver::Driver(std::unique_ptr<ParameterInput> &pin, Mesh *pmesh,
      std::unique_ptr<Outputs> &pout) : tlim(-1.0), nlim(-1), ndiag(1),
      time_evolution(false) {
 
@@ -113,7 +113,7 @@ Driver::Driver(std::unique_ptr<ParameterInput> &pin, std::shared_ptr<Mesh> &pmes
 // Tasks to be performed before execution of Driver, such as computing initial time step,
 // setting boundary conditions, and outputing ICs
 
-void Driver::Initialize(std::shared_ptr<Mesh> &pmesh, std::unique_ptr<Outputs> &pout) {
+void Driver::Initialize(Mesh *pmesh, std::unique_ptr<Outputs> &pout) {
 
   // cycle through output Types and load data / write files.  This design allows for
   // asynchronous outputs to implemented in the future.
@@ -138,7 +138,7 @@ void Driver::Initialize(std::shared_ptr<Mesh> &pmesh, std::unique_ptr<Outputs> &
 //----------------------------------------------------------------------------------------
 // Driver::Execute()
 
-void Driver::Execute(std::shared_ptr<Mesh> &pmesh, std::unique_ptr<Outputs> &pout) {
+void Driver::Execute(Mesh *pmesh, std::unique_ptr<Outputs> &pout) {
 
   if (global_variable::my_rank == 0) {
     std::cout << "\nSetup complete, executing task list...\n" << std::endl;
@@ -190,7 +190,7 @@ void Driver::Execute(std::shared_ptr<Mesh> &pmesh, std::unique_ptr<Outputs> &pou
 // Tasks to be performed after execution of Driver, such as making final output and
 // printing diagnostic messages
 
-void Driver::Finalize(std::shared_ptr<Mesh> &pmesh, std::unique_ptr<Outputs> &pout) {
+void Driver::Finalize(Mesh *pmesh, std::unique_ptr<Outputs> &pout) {
 
   // cycle through output Types and load data / write files.  This design allows for
   // asynchronous outputs to implemented in the future.
@@ -237,7 +237,7 @@ void Driver::Finalize(std::shared_ptr<Mesh> &pmesh, std::unique_ptr<Outputs> &po
 //----------------------------------------------------------------------------------------
 // Driver::OutputCycleDiagnostics()
 
-void Driver::OutputCycleDiagnostics(std::shared_ptr<Mesh> &pm) {
+void Driver::OutputCycleDiagnostics(Mesh *pm) {
 //  const int dtprcsn = std::numeric_limits<Real>::max_digits10 - 1;
   const int dtprcsn = 6;
   if (pm->ncycle % ndiag == 0) {
