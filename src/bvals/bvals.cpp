@@ -19,12 +19,10 @@
 //                        and mesh refinement objects.
 
 BoundaryValues::BoundaryValues(Mesh *pm, std::unique_ptr<ParameterInput> &pin, int gid,
-  BoundaryFlag *input_bcs) : pmesh_(pm), my_mbgid_(gid) {
-//  BoundaryFlag *input_bcs) : pmblock_bval_(pmb) {
-
-//  pmblock_bval_ = pmb;
-  // copy input boundary flags into MeshBlock 
-  for (int i=0; i<6; ++i) {mb_bcs[i] = input_bcs[i];}
+  BoundaryFlag *ibcs, int maxvar) : pmesh_(pm), my_mbgid_(gid)
+{
+  // inheret boundary flags from MeshBlock 
+  for (int i=0; i<6; ++i) {bflags[i] = ibcs[i];}
 
   // calculate sizes and offsets for boundary buffers for cell-centered variables
   // This implementation currently is specific to the 26 boundary buffers in a UNIFORM
@@ -36,60 +34,87 @@ BoundaryValues::BoundaryValues(Mesh *pm, std::unique_ptr<ParameterInput> &pin, i
   int nx2 = pmb->mb_cells.nx2;
   int nx3 = pmb->mb_cells.nx3;
 
-  if (pmesh_->nx3gt1) {
-    cc_bbuf_ncells[0]  = ng*ng*ng;
-    cc_bbuf_ncells[1]  = ng*ng*nx1;
-    cc_bbuf_ncells[2]  = ng*ng*ng;
-    cc_bbuf_ncells[3]  = ng*ng*nx2;
-    cc_bbuf_ncells[4]  = ng*nx1*nx2;
-    cc_bbuf_ncells[5]  = ng*ng*nx2;
-    cc_bbuf_ncells[6]  = ng*ng*ng;
-    cc_bbuf_ncells[7]  = ng*ng*nx1;
-    cc_bbuf_ncells[8]  = ng*ng*ng;
-    cc_bbuf_ncells[17] = ng*ng*ng;
-    cc_bbuf_ncells[18] = ng*ng*nx1;
-    cc_bbuf_ncells[19] = ng*ng*ng;
-    cc_bbuf_ncells[20] = ng*ng*nx2;
-    cc_bbuf_ncells[21] = ng*nx1*nx2;
-    cc_bbuf_ncells[22] = ng*ng*nx2;
-    cc_bbuf_ncells[23] = ng*ng*ng;
-    cc_bbuf_ncells[24] = ng*ng*nx1;
-    cc_bbuf_ncells[25] = ng*ng*ng;
-  } else {
-    for (int n=0; n<=8; ++n) { cc_bbuf_ncells[n]=0; }
-    for (int n=17; n<=25; ++n) { cc_bbuf_ncells[n]=0; }
-  }
-  
+  cc_bbuf_x1face.SetSize(2,maxvar,nx3,nx2,ng);
+
   if (pmesh_->nx2gt1) {
-    cc_bbuf_ncells[9]  = ng*ng*nx3;
-    cc_bbuf_ncells[10] = ng*nx1*nx3;
-    cc_bbuf_ncells[11] = ng*ng*nx3;
-    cc_bbuf_ncells[14] = ng*ng*nx3;
-    cc_bbuf_ncells[15] = ng*nx1*nx3;
-    cc_bbuf_ncells[16] = ng*ng*nx3;
-  } else {
-    for (int n=9; n<=11; ++n) { cc_bbuf_ncells[n]=0; }
-    for (int n=14; n<=16; ++n) { cc_bbuf_ncells[n]=0; }
+    cc_bbuf_x2face.SetSize(2,maxvar,nx3,ng,nx1);
+    cc_bbuf_x1x2ed.SetSize(4,maxvar,nx3,ng,ng);
   }
 
-  cc_bbuf_ncells[12] = ng*nx2*nx3;
-  cc_bbuf_ncells[13] = ng*nx2*nx3;
-
-  cc_bbuf_ncells_offset[0] = 0;
-  for (int n=1; n<=25; ++n) {
-    cc_bbuf_ncells_offset[n] = cc_bbuf_ncells_offset[n-1] + cc_bbuf_ncells[n-1];
+  if (pmesh_->nx3gt1) {
+    cc_bbuf_x3face.SetSize(2,maxvar,ng,nx2,nx1);
+    cc_bbuf_x3x1ed.SetSize(4,maxvar,ng,nx2,ng);
+    cc_bbuf_x2x3ed.SetSize(4,maxvar,ng,ng,nx1);
+    cc_bbuf_corner.SetSize(8,maxvar,ng,ng,ng);
   }
-  cc_bbuf_ncells_total = cc_bbuf_ncells_offset[25] + cc_bbuf_ncells[25];
 
-std::cout << "ncells_total= " << cc_bbuf_ncells_total << std::endl;
-
-  // Note: memory for boundary buffers allocated in Hydro class
 std::cout << "Bvals nx1=" << pmb->mb_cells.nx1 << " nx2=" << pmb->mb_cells.nx2 << " nx3=" << pmb->mb_cells.nx3 << std::endl;
 
 }
 
+
+
 //----------------------------------------------------------------------------------------
 // BoundaryValues destructor
 
-BoundaryValues::~BoundaryValues() {
+BoundaryValues::~BoundaryValues()
+{
 }
+
+//----------------------------------------------------------------------------------------
+// \!fn void BoundaryValues::SendCellCenteredVariables()
+// \brief Pack boundary buffers for cell-centered variables, and send to neighbors
+
+void BoundaryValues::SendCellCenteredVariables(AthenaArray<Real> &a, int nvar)
+{
+  MeshBlock *pmb = pmesh_->FindMeshBlock(my_mbgid_);
+
+std::cout << "nvar=" << nvar << std::endl;
+
+std::cout << "Bval Send nx1=" << pmb->mb_cells.nx1 << " nx2=" << pmb->mb_cells.nx2 << " nx3=" << pmb->mb_cells.nx3 << std::endl;
+
+  // Now send boundary buffer to neighboring MeshBlocks using MPI
+  // If neighbor is on same MPI rank, use memcpy()
+
+/**
+  for (int nb=0; nb<26; ++nb) {
+    if (neighbor[nb].ngid != -1) {
+      memcpy(&bbuf_send[offset[nb]], &bbuf_recv[offset[25-nb]], nvar*cc_bbuf_ncells[nb]);
+    }
+  }
+**/
+
+std::cout << "Done send" << std::endl;
+}
+
+//----------------------------------------------------------------------------------------
+// \!fn void BoundaryValues::ReceiveCellCenteredVariables()
+// \brief Unpack boundary buffers for cell-centered variables.
+
+void BoundaryValues::ReceiveCellCenteredVariables(AthenaArray<Real> &a, int nvar)
+{
+  MeshBlock *pmb = pmesh_->FindMeshBlock(my_mbgid_);
+
+std::cout << "nx1=" << pmb->mb_cells.nx1 << " nx2=" << pmb->mb_cells.nx2 << " nx3=" << pmb->mb_cells.nx3 << std::endl;
+
+  int ng = pmb->mb_cells.ng;
+  int is = pmb->mb_cells.is; int ie = pmb->mb_cells.ie;
+  int js = pmb->mb_cells.js; int je = pmb->mb_cells.je;
+  int ks = pmb->mb_cells.ks; int ke = pmb->mb_cells.ke;
+  int nx1 = pmb->mb_cells.nx1;
+  int nx2 = pmb->mb_cells.nx2;
+  int nx3 = pmb->mb_cells.nx3;
+
+std::cout << "Bval Receive nx1=" << nx1 << "nx2=" << nx2 << "  nx3=" << nx3 << std::endl;
+
+
+  // TO DO get pointer to appropriate boundary buffer based on key (input argument)
+//  Real *pbbuf = bbuf_send[string];
+
+  // Unpack cell-centered boundary buffer
+
+
+std::cout << "Done receive" << std::endl;
+}
+
+

@@ -49,8 +49,17 @@ class MeshBlock
   RegionCells mb_cells;   // info about cells in this MeshBlock
 
   BoundaryFlag mb_bcs[6]; // enums specifying BCs at all 6 faces of this MeshBlock
-  NeighborBlock neighbor[26];
-  BoundaryValues *pbvals;
+//  NeighborBlock nblocks[26];
+//  BoundaryValues *pbvals;
+
+
+  NeighborBlock nblocks_x1face[2];
+  NeighborBlock nblocks_x2face[2];
+  NeighborBlock nblocks_x3face[2];
+  NeighborBlock nblocks_x1x2ed[4];
+  NeighborBlock nblocks_x3x1ed[4];
+  NeighborBlock nblocks_x2x3ed[4];
+  NeighborBlock nblocks_corner[8];
 
   // cells on 1x coarser level MeshBlock (i.e. ncc2=nx2/2 + 2*nghost, if nx2>1)
   RegionCells cmb_cells;

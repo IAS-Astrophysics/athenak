@@ -97,22 +97,106 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
   MeshBlockTree* neibt;
   LogicalLocation loc = pmesh_->loclist[mb_gid];
 
-  int cnt=-1;
-  // iterate over x3/x2/x1 faces and load all 26 neighbors on a uniform grid.
-  // Neighbors are indexed sequentially starting from lower corner.
-  for (int l=-1; l<=1; ++l) {
-  for (int m=-1; m<=1; ++m) {
-  for (int n=-1; n<=1; ++n) {
-    if (n==0 && m==0 && l==0) {continue;}
-    ++cnt;
-    if (mb_cells.nx3 == 1 && l != 0) {continue;}  // skip if not 3D
-    if (mb_cells.nx2 == 1 && m != 0) {continue;}  // skip if not 2D
-    neibt = ptree->FindNeighbor(loc, n, m, l);
+//  int cnt=-1;
+//  // iterate over x3/x2/x1 faces and load all 26 neighbors on a uniform grid.
+//  // Neighbors are indexed sequentially starting from lower corner.
+//  for (int l=-1; l<=1; ++l) {
+//  for (int m=-1; m<=1; ++m) {
+//  for (int n=-1; n<=1; ++n) {
+//    if (n==0 && m==0 && l==0) {continue;}
+//    ++cnt;
+//    if (mb_cells.nx3 == 1 && l != 0) {continue;}  // skip if not 3D
+//    if (mb_cells.nx2 == 1 && m != 0) {continue;}  // skip if not 2D
+//    neibt = ptree->FindNeighbor(loc, n, m, l);
+//    if (neibt == nullptr) {continue;}
+//    nblocks[cnt].ngid   = neibt->gid_;
+//    nblocks[cnt].nlevel = neibt->loc_.level;
+//    nblocks[cnt].nrank  = ranklist[neibt->gid_];
+//  }}}
+
+  // neighbors on x1face
+
+  int cnt=0;
+  for (int n=-1; n<=1; n+=2) {
+    neibt = ptree->FindNeighbor(loc, n, 0, 0);
     if (neibt == nullptr) {continue;}
-    neighbor[cnt].ngid   = neibt->gid_;
-    neighbor[cnt].nlevel = neibt->loc_.level;
-    neighbor[cnt].nrank  = ranklist[neibt->gid_];
-  }}}
+    nblocks_x1face[cnt].ngid   = neibt->gid_;
+    nblocks_x1face[cnt].nlevel = neibt->loc_.level;
+    nblocks_x1face[cnt].nrank  = ranklist[neibt->gid_];
+    ++cnt;
+  }
+  if (mb_cells.nx2 == 1) {return;}  // stop if 1D
+
+  // neighbors on x2face and x1x2 edges
+
+  cnt=0;
+  for (int m=-1; m<=1; m+=2) {
+    neibt = ptree->FindNeighbor(loc, 0, m, 0);
+    if (neibt == nullptr) {continue;}
+    nblocks_x2face[cnt].ngid   = neibt->gid_;
+    nblocks_x2face[cnt].nlevel = neibt->loc_.level;
+    nblocks_x2face[cnt].nrank  = ranklist[neibt->gid_];
+    ++cnt;
+  }
+  cnt=0;
+  for (int m=-1; m<=1; m+=2) {
+    for (int n=-1; n<=1; n+=2) {
+      neibt = ptree->FindNeighbor(loc, n, m, 0);
+      if (neibt == nullptr) {continue;}
+      nblocks_x1x2ed[cnt].ngid   = neibt->gid_;
+      nblocks_x1x2ed[cnt].nlevel = neibt->loc_.level;
+      nblocks_x1x2ed[cnt].nrank  = ranklist[neibt->gid_];
+      ++cnt;
+    }
+  }
+  if (mb_cells.nx3 == 1) {return;}  // stop if 2D
+
+  // neighbors on x3face, x3x1 and x2x3 edges, and corners
+
+  cnt=0;
+  for (int l=-1; l<=1; l+=2) {
+    neibt = ptree->FindNeighbor(loc, 0, 0, l);
+    if (neibt == nullptr) {continue;}
+    nblocks_x3face[cnt].ngid   = neibt->gid_;
+    nblocks_x3face[cnt].nlevel = neibt->loc_.level;
+    nblocks_x3face[cnt].nrank  = ranklist[neibt->gid_];
+    ++cnt;
+  }
+  cnt=0;
+  for (int l=-1; l<=1; l+=2) {
+    for (int n=-1; n<=1; n+=2) {
+      neibt = ptree->FindNeighbor(loc, n, 0, l);
+      if (neibt == nullptr) {continue;}
+      nblocks_x3x1ed[cnt].ngid   = neibt->gid_;
+      nblocks_x3x1ed[cnt].nlevel = neibt->loc_.level;
+      nblocks_x3x1ed[cnt].nrank  = ranklist[neibt->gid_];
+      ++cnt;
+    }
+  }
+  cnt=0;
+  for (int l=-1; l<=1; l+=2) {
+    for (int m=-1; m<=1; m+=2) {
+      neibt = ptree->FindNeighbor(loc, 0, m, l);
+      if (neibt == nullptr) {continue;}
+      nblocks_x2x3ed[cnt].ngid   = neibt->gid_;
+      nblocks_x2x3ed[cnt].nlevel = neibt->loc_.level;
+      nblocks_x2x3ed[cnt].nrank  = ranklist[neibt->gid_];
+      ++cnt;
+    }
+  }
+  cnt=0;
+  for (int l=-1; l<=1; l+=2) {
+    for (int m=-1; m<=1; m+=2) {
+      for (int n=-1; n<=1; n+=2) {
+        neibt = ptree->FindNeighbor(loc, n, m, l);
+        if (neibt == nullptr) {continue;}
+        nblocks_corner[cnt].ngid   = neibt->gid_;
+        nblocks_corner[cnt].nlevel = neibt->loc_.level;
+        nblocks_corner[cnt].nrank  = ranklist[neibt->gid_];
+        ++cnt;
+      }
+    }
+  }
 
   return;
 }

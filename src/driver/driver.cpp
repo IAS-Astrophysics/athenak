@@ -113,16 +113,24 @@ Driver::Driver(std::unique_ptr<ParameterInput> &pin, Mesh *pmesh,
 // Tasks to be performed before execution of Driver, such as computing initial time step,
 // setting boundary conditions, and outputing ICs
 
-void Driver::Initialize(Mesh *pmesh, std::unique_ptr<Outputs> &pout) {
+void Driver::Initialize(Mesh *pmesh, std::unique_ptr<Outputs> &pout)
+{
+  //---- Step 1.  Set Boundary Conditions on all physics
 
-  // cycle through output Types and load data / write files.  This design allows for
-  // asynchronous outputs to implemented in the future.
+  for (auto &mb : pmesh->mblocks) {
+    TaskStatus tstatus;
+    tstatus = mb.phydro->HydroSend(this, nstages);
+    tstatus = mb.phydro->HydroReceive(this, nstages);
+  }
+
+  //---- Step 2.  Cycle through output Types and load data / write files.
+  //  This design allows for asynchronous outputs to be implemented in the future.
   // TODO: cycle through OutputTypes
+
   pout->poutput_list_.front()->LoadOutputData(pmesh);
   pout->poutput_list_.front()->WriteOutputFile(pmesh);
 
-  tstart_ = clock();
-  nmb_updated_ = 0;
+  //---- Step 3.  Compute first time step (if problem involves time evolution
 
   if (time_evolution) {
     for (auto it = pmesh->mblocks.begin(); it < pmesh->mblocks.end(); ++it) {
@@ -131,6 +139,12 @@ void Driver::Initialize(Mesh *pmesh, std::unique_ptr<Outputs> &pout) {
     }
     pmesh->NewTimeStep(tlim);
   }
+
+  //---- Step 4.  Initialize various counters, timers, etc.
+
+  tstart_ = clock();
+  nmb_updated_ = 0;
+
   return;
 }
 

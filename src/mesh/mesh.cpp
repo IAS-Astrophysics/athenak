@@ -430,8 +430,34 @@ void Mesh::BuildTree(std::unique_ptr<ParameterInput> &pin)
 
 /*******/
   for (auto it=mblocks.begin(); it<mblocks.end(); ++it) {
-    for (int n=0; n<26; ++n) {
-      std::cout << "n=" << n << " gid=" << it->neighbor[n].ngid << " level=" << it->neighbor[n].nlevel << " rank=" << it->neighbor[n].nrank << std::endl;
+    std::cout << "******* Block=" << it->mb_gid << std::endl;
+    std::cout << "x1 Faces" << std::endl;
+    for (int n=0; n<2; ++n) {
+      std::cout << "n=" << n << " gid=" << it->nblocks_x1face[n].ngid << " level=" << it->nblocks_x1face[n].nlevel << " rank=" << it->nblocks_x1face[n].nrank << std::endl;
+    }
+    std::cout << "x2 Faces" << std::endl;
+    for (int n=0; n<2; ++n) {
+      std::cout << "n=" << n << " gid=" << it->nblocks_x2face[n].ngid << " level=" << it->nblocks_x2face[n].nlevel << " rank=" << it->nblocks_x2face[n].nrank << std::endl;
+    }
+    std::cout << "x3 Faces" << std::endl;
+    for (int n=0; n<2; ++n) {
+      std::cout << "n=" << n << " gid=" << it->nblocks_x3face[n].ngid << " level=" << it->nblocks_x3face[n].nlevel << " rank=" << it->nblocks_x3face[n].nrank << std::endl;
+    }
+    std::cout << "x1x2 Edges" << std::endl;
+    for (int n=0; n<4; ++n) {
+      std::cout << "n=" << n << " gid=" << it->nblocks_x1x2ed[n].ngid << " level=" << it->nblocks_x1x2ed[n].nlevel << " rank=" << it->nblocks_x1x2ed[n].nrank << std::endl;
+    }
+    std::cout << "x3x1 Edges" << std::endl;
+    for (int n=0; n<4; ++n) {
+      std::cout << "n=" << n << " gid=" << it->nblocks_x3x1ed[n].ngid << " level=" << it->nblocks_x3x1ed[n].nlevel << " rank=" << it->nblocks_x3x1ed[n].nrank << std::endl;
+    }
+    std::cout << "x2x3 Edges" << std::endl;
+    for (int n=0; n<4; ++n) {
+      std::cout << "n=" << n << " gid=" << it->nblocks_x2x3ed[n].ngid << " level=" << it->nblocks_x2x3ed[n].nlevel << " rank=" << it->nblocks_x2x3ed[n].nrank << std::endl;
+    }
+    std::cout << "Corners" << std::endl;
+    for (int n=0; n<8; ++n) {
+      std::cout << "n=" << n << " gid=" << it->nblocks_corner[n].ngid << " level=" << it->nblocks_corner[n].nlevel << " rank=" << it->nblocks_corner[n].nrank << std::endl;
     }
   }
 /**********/

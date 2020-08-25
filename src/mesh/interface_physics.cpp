@@ -23,8 +23,6 @@ using namespace hydro;
 
 void MeshBlock::SelectPhysics(std::unique_ptr<ParameterInput> &pin)
 {
-  pbvals = new BoundaryValues(pmesh_, pin, mb_gid, mb_bcs);
-
   // parse input blocks to see which physics defined
   bool hydro_defined = pin->DoesBlockExist("hydro");
 

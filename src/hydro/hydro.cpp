@@ -115,6 +115,9 @@ Hydro::Hydro(Mesh *pm, std::unique_ptr<ParameterInput> &pin, int gid) :
 
   u0.SetSize(nhydro, ncells3, ncells2, ncells1);
 
+  // construct boundary values object
+  pbvals = new BoundaryValues(pmesh_, pin, pmb->mb_gid, pmb->mb_bcs, nhydro);
+
   // for time-evolving problems, construct methods, allocate arrays
   if (hydro_evol != HydroEvolution::no_evolution) {
 
@@ -160,5 +163,29 @@ void Hydro::HydroAddTasks(TaskList &tl) {
 
   return;
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn  void Hydro::HydroSend
+//  \brief
+
+TaskStatus Hydro::HydroSend(Driver *pdrive, int stage) {
+
+  pbvals->SendCellCenteredVariables(u0, nhydro);
+
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void Hydro::HydroReceive
+//  \brief
+
+TaskStatus Hydro::HydroReceive(Driver *pdrive, int stage) {
+
+  pbvals->ReceiveCellCenteredVariables(u0, nhydro);
+
+  return TaskStatus::complete;
+}
+
+
 
 } // namespace hydro

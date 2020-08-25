@@ -47,6 +47,7 @@ class Hydro {
   EquationOfState *peos;      // object that implements chosen EOS
   Reconstruction  *precon;    // object that implements chosen reconstruction methods
   RiemannSolver   *prsolver;  // object that implements chosen Riemann solver
+  BoundaryValues  *pbvals;
 
   int nhydro;             // number of conserved variables (5/4 for adiabatic/isothermal)
   AthenaArray<Real> u0;   // conserved variables
@@ -73,6 +74,8 @@ class Hydro {
   TaskStatus HydroDivFlux(Driver *d, int stage);
   TaskStatus HydroUpdate(Driver *d, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
+  TaskStatus HydroSend(Driver *d, int stage); 
+  TaskStatus HydroReceive(Driver *d, int stage); 
 
  private:
   Mesh* pmesh_;                 // ptr to Mesh containing this Hydro
