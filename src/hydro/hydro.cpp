@@ -98,11 +98,11 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
   // construct EOS object
   switch (hydro_eos) {
     case HydroEOS::adiabatic:
-      peos = new AdiabaticHydro(this, pin);
+      peos = new AdiabaticHydro(pmesh_, pin, my_mbgid_);
       nhydro = 5;
       break;
     case HydroEOS::isothermal:
-      peos = new IsothermalHydro(this, pin);
+      peos = new IsothermalHydro(pmesh_, pin, my_mbgid_);
       nhydro = 4;
       break;
   }

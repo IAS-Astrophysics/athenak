@@ -20,11 +20,10 @@ namespace hydro {
 //----------------------------------------------------------------------------------------
 // AdiabaticHydro constructor
     
-AdiabaticHydro::AdiabaticHydro(Hydro *phyd, ParameterInput *pin)
-  : EquationOfState(phyd, pin) {
-    
+AdiabaticHydro::AdiabaticHydro(Mesh* pm, ParameterInput *pin, int igid)
+  : EquationOfState(pm, pin, igid)
+{
   gamma_ = pin->GetReal("eos", "gamma");
-    
 }
 
 //----------------------------------------------------------------------------------------
@@ -32,8 +31,8 @@ AdiabaticHydro::AdiabaticHydro(Hydro *phyd, ParameterInput *pin)
 // \brief Converts conserved into primitive variables in nonrelativistic adiabatic hydro
 
 void AdiabaticHydro::ConservedToPrimitive(const int k, const int j, const int il,
-    const int iu, AthenaArray<Real> &cons, AthenaArray<Real> &prim) {
-
+    const int iu, AthenaArray<Real> &cons, AthenaArray<Real> &prim)
+{
   Real gm1 = GetGamma() - 1.0;
 
   for (int i=il; i<=iu; ++i) {

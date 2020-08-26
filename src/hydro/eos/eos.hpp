@@ -23,12 +23,11 @@ namespace hydro {
 //! \class EquationOfState
 //  \brief abstract base class for all EOS classes
 
-class EquationOfState {
+class EquationOfState
+{
  public:
-  EquationOfState(Hydro *phyd, ParameterInput *pin);
+  EquationOfState(Mesh *pm, ParameterInput *pin, int igid);
   virtual ~EquationOfState() = default;
-
-  Hydro *pmy_hydro;
 
   // functions
   virtual Real GetGamma() {return 0.0;}       // only used in adiabatic EOS
@@ -39,6 +38,8 @@ class EquationOfState {
   virtual Real SoundSpeed(Real prim[5]) = 0;
 
  protected:
+  Mesh* pmesh_;
+  int my_mbgid_;
   Real density_floor_, pressure_floor_;
 };
 
@@ -46,9 +47,10 @@ class EquationOfState {
 //! \class AdiabaticHydro
 //  \brief derived EOS class for nonrelativistic adiabatic hydrodynamics
 
-class AdiabaticHydro : public EquationOfState {
+class AdiabaticHydro : public EquationOfState
+{
  public:
-  AdiabaticHydro(Hydro *phyd, ParameterInput *pin);
+  AdiabaticHydro(Mesh* pm, ParameterInput *pin, int igid);
   Real GetGamma() override {return gamma_;}
 
   // functions that implement methods appropriate to adiabatic hydrodynamics
@@ -64,9 +66,10 @@ class AdiabaticHydro : public EquationOfState {
 //! \class IsothermalHydro
 //  \brief derived EOS class for nonrelativistic isothermal hydrodynamics
 
-class IsothermalHydro : public EquationOfState {
+class IsothermalHydro : public EquationOfState
+{
  public:
-  IsothermalHydro(Hydro *phyd, ParameterInput *pin);
+  IsothermalHydro(Mesh* pm, ParameterInput *pin, int igid);
 
   // functions that implement methods appropriate to isothermal hydrodynamics
   void ConservedToPrimitive(const int k, const int j, const int il,const  int iu,

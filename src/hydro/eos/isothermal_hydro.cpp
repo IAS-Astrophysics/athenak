@@ -19,11 +19,10 @@ namespace hydro {
 //----------------------------------------------------------------------------------------
 // IsothermalHydro constructor
     
-IsothermalHydro::IsothermalHydro(Hydro *phyd, ParameterInput *pin)
-  : EquationOfState(phyd, pin) {
-    
+IsothermalHydro::IsothermalHydro(Mesh* pm, ParameterInput *pin, int igid)
+  : EquationOfState(pm, pin, igid)
+{
   iso_cs_ = pin->GetReal("eos", "iso_sound_speed");
-    
 }
 
 //----------------------------------------------------------------------------------------
@@ -31,8 +30,8 @@ IsothermalHydro::IsothermalHydro(Hydro *phyd, ParameterInput *pin)
 // \brief Converts conserved into primitive variables in nonrelativistic isothermal hydro
 
 void IsothermalHydro::ConservedToPrimitive(const int k, const int j, const int il,
-    const int iu, AthenaArray<Real> &cons, AthenaArray<Real> &prim) {
-
+    const int iu, AthenaArray<Real> &cons, AthenaArray<Real> &prim)
+{
   for (int i=il; i<=iu; ++i) {
     Real& u_d  = cons(IDN,k,j,i);
     Real& u_m1 = cons(IM1,k,j,i);

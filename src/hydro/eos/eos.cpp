@@ -20,9 +20,9 @@ namespace hydro {
 //----------------------------------------------------------------------------------------
 // EquationOfState constructor
 
-EquationOfState::EquationOfState(Hydro *phyd, ParameterInput *pin) :
-    pmy_hydro(phyd) {
-
+EquationOfState::EquationOfState(Mesh* pm, ParameterInput *pin, int igid) :
+    pmesh_(pm), my_mbgid_(igid)
+{
   density_floor_ = pin->GetOrAddReal("eos","density_floor",(FLT_MIN));
   pressure_floor_ = pin->GetOrAddReal("eos","pressure_floor",(FLT_MIN));
 }
