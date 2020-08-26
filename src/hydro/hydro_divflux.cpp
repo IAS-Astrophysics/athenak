@@ -33,8 +33,7 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
   for (int k=ks; k<=ke; ++k) {
     for (int j=js; j<=je; ++j) {
 
-      peos->ConservedToPrimitive(k, j, is-ng, ie+ng, u0, w_);
-      precon->ReconstructX1(is-1, ie+1, w_, wl_, wr_);
+      precon->ReconstructX1(k,j,is-1, ie+1, w0, wl_, wr_);
       prsolver->RSolver(is, ie+1, IVX, wl_, wr_, uflux_);
 
       for (int n=0; n<nhydro; ++n) {

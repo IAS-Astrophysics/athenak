@@ -115,12 +115,19 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh,
 
 void Driver::Initialize(Mesh *pmesh, Outputs *pout)
 {
-  //---- Step 1.  Set Boundary Conditions on all physics
+  //---- Step 1.  Set Boundary Conditions on conservd variables in all physics
 
   for (auto &mb : pmesh->mblocks) {
     TaskStatus tstatus;
     tstatus = mb.phydro->HydroSend(this, nstages);
     tstatus = mb.phydro->HydroReceive(this, nstages);
+  }
+
+  // convert conserved to primitive over whole mesh
+
+  for (auto &mb : pmesh->mblocks) {
+    TaskStatus tstatus;
+    tstatus = mb.phydro->ConToPrim(this, nstages);
   }
 
   //---- Step 2.  Cycle through output Types and load data / write files.

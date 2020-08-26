@@ -33,8 +33,7 @@ class EquationOfState
   virtual Real GetGamma() {return 0.0;}       // only used in adiabatic EOS
 
   // folowing pure virtual functions must be overridden in derived EOS classes
-  virtual void ConservedToPrimitive(const int k, const int j, const int il,const  int iu, 
-    AthenaArray<Real> &cons, AthenaArray<Real> &prim) = 0;
+  virtual void ConservedToPrimitive(AthenaArray<Real> &cons, AthenaArray<Real> &prim) = 0;
   virtual Real SoundSpeed(Real prim[5]) = 0;
 
  protected:
@@ -54,8 +53,7 @@ class AdiabaticHydro : public EquationOfState
   Real GetGamma() override {return gamma_;}
 
   // functions that implement methods appropriate to adiabatic hydrodynamics
-  void ConservedToPrimitive(const int k, const int j, const int il,const  int iu, 
-    AthenaArray<Real> &cons, AthenaArray<Real> &prim) override;
+  void ConservedToPrimitive(AthenaArray<Real> &cons, AthenaArray<Real> &prim) override;
   Real SoundSpeed(Real prim[5]) override {return std::sqrt(gamma_*prim[IPR]/prim[IDN]);}
 
  private:
@@ -72,8 +70,7 @@ class IsothermalHydro : public EquationOfState
   IsothermalHydro(Mesh* pm, ParameterInput *pin, int igid);
 
   // functions that implement methods appropriate to isothermal hydrodynamics
-  void ConservedToPrimitive(const int k, const int j, const int il,const  int iu,
-    AthenaArray<Real> &cons, AthenaArray<Real> &prim) override;
+  void ConservedToPrimitive(AthenaArray<Real> &cons, AthenaArray<Real> &prim) override;
   Real SoundSpeed(Real prim[5]) override {return iso_cs_;}
 
  private:

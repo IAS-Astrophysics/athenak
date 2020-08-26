@@ -114,6 +114,7 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
   int ncells3 = (pmb->mb_cells.nx3 > 1)? (pmb->mb_cells.nx3 + 2*(pmb->mb_cells.ng)) : 1;
 
   u0.SetSize(nhydro, ncells3, ncells2, ncells1);
+  w0.SetSize(nhydro, ncells3, ncells2, ncells1);
 
   // construct boundary values object
   pbvals = new BoundaryValues(pmesh_, pin, pmb->mb_gid, pmb->mb_bcs, nhydro);
@@ -162,7 +163,8 @@ void Hydro::HydroAddTasks(TaskList &tl) {
   auto hydro_send  = tl.AddTask(&Hydro::HydroSend, this, hydro_update);
   auto hydro_recv  = tl.AddTask(&Hydro::HydroReceive, this, hydro_send);
 //  auto phy_bval  = tl.AddTask(&Hydro::PhysicalBoundaryValues, this, hydro_recv);
-  auto hydro_newdt  = tl.AddTask(&Hydro::NewTimeStep, this, hydro_recv);
+  auto hydro_con2prim  = tl.AddTask(&Hydro::ConToPrim, this, hydro_recv);
+  auto hydro_newdt  = tl.AddTask(&Hydro::NewTimeStep, this, hydro_con2prim);
 
   return;
 }
@@ -189,6 +191,14 @@ TaskStatus Hydro::HydroReceive(Driver *pdrive, int stage)
   return tstat;
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn  void Hydro::ConToPrim
+//  \brief
 
+TaskStatus Hydro::ConToPrim(Driver *pdrive, int stage)
+{
+  peos->ConservedToPrimitive(u0, w0);
+  return TaskStatus::complete;
+}
 
 } // namespace hydro

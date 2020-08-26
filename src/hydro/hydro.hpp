@@ -51,13 +51,14 @@ class Hydro {
 
   int nhydro;             // number of conserved variables (5/4 for adiabatic/isothermal)
   AthenaArray<Real> u0;   // conserved variables
+  AthenaArray<Real> w0;   // primitive variables
 
   // following only used for time-evolving flow
-  AthenaArray<Real> u1;           // conserved variables at intermediate step 
-  AthenaArray<Real> divf;         // divergence of fluxes (3 spatial-D)
-  AthenaArray<Real> uflux_1face;  // fluxes on x1-faces (used in flux correction step)
-  AthenaArray<Real> uflux_2face;  // fluxes on x2-faces
-  AthenaArray<Real> uflux_3face;  // fluxes on x3-faces
+  AthenaArray<Real> u1;           // 4D conserved variables at intermediate step 
+  AthenaArray<Real> divf;         // 4D divergence of fluxes (3 spatial-D)
+  AthenaArray<Real> uflx_x1face;  // 3D fluxes on x1-faces (used in flux correction step)
+  AthenaArray<Real> uflx_x2face;  // 3D fluxes on x2-faces
+  AthenaArray<Real> uflx_x3face;  // 3D fluxes on x3-faces
   Real dtnew;
 
   // functions
@@ -73,9 +74,10 @@ class Hydro {
   }
   TaskStatus HydroDivFlux(Driver *d, int stage);
   TaskStatus HydroUpdate(Driver *d, int stage);
-  TaskStatus NewTimeStep(Driver *d, int stage);
   TaskStatus HydroSend(Driver *d, int stage); 
   TaskStatus HydroReceive(Driver *d, int stage); 
+  TaskStatus ConToPrim(Driver *d, int stage);
+  TaskStatus NewTimeStep(Driver *d, int stage);
 
  private:
   Mesh* pmesh_;                 // ptr to Mesh containing this Hydro

@@ -32,11 +32,10 @@ TaskStatus Hydro::NewTimeStep(Driver *pdrive, int stage) {
   int is = pmb->mb_cells.is; int ie = pmb->mb_cells.ie;
   int js = pmb->mb_cells.js; int je = pmb->mb_cells.je;
   int ks = pmb->mb_cells.ks; int ke = pmb->mb_cells.ke;
-  Real wi[5];
 
-  Real dt1 = std::numeric_limits<float>::min();
-  Real dt2 = std::numeric_limits<float>::min();
-  Real dt3 = std::numeric_limits<float>::min();
+  Real dv1 = std::numeric_limits<float>::min();
+  Real dv2 = std::numeric_limits<float>::min();
+  Real dv3 = std::numeric_limits<float>::min();
 
   if (hydro_evol == HydroEvolution::kinematic) {
 
@@ -44,12 +43,9 @@ TaskStatus Hydro::NewTimeStep(Driver *pdrive, int stage) {
     for (int k=ks; k<=ke; ++k) {
       for (int j=js; j<=je; ++j) {
         for (int i=is; i<=ie; ++i) {
-          wi[IVX] = u0(IVX,k,j,i)/u0(IDN,k,j,i);
-          wi[IVY] = u0(IVY,k,j,i)/u0(IDN,k,j,i);
-          wi[IVZ] = u0(IVZ,k,j,i)/u0(IDN,k,j,i);
-          dt1 = std::max((std::abs(wi[IVX])), dt1);
-          dt2 = std::max((std::abs(wi[IVY])), dt2);
-          dt3 = std::max((std::abs(wi[IVZ])), dt3);
+          dv1 = std::max(std::abs(w0(IVX,k,j,i)), dv1);
+          dv2 = std::max(std::abs(w0(IVY,k,j,i)), dv2);
+          dv3 = std::max(std::abs(w0(IVZ,k,j,i)), dv3);
         }
       }
     }
@@ -58,17 +54,17 @@ TaskStatus Hydro::NewTimeStep(Driver *pdrive, int stage) {
     // find largest (v +/- C) in each dirn for hydrodynamic problems
     for (int k=ks; k<=ke; ++k) {
       for (int j=js; j<=je; ++j) {
-        peos->ConservedToPrimitive(k, j, is, ie, u0, w_);
         for (int i=is; i<=ie; ++i) {
-          wi[IDN] = w_(IDN,i);
-          wi[IVX] = w_(IVX,i);
-          wi[IVY] = w_(IVY,i);
-          wi[IVZ] = w_(IVZ,i);
-          wi[IPR] = w_(IPR,i);  // this value never used in isothermal EOS
+          Real wi[5];
+          wi[IDN] = w0(IDN,k,j,i);
+          wi[IVX] = w0(IVX,k,j,i);
+          wi[IVY] = w0(IVY,k,j,i);
+          wi[IVZ] = w0(IVZ,k,j,i);
+          wi[IPR] = w0(IPR,k,j,i);  // this value never used in isothermal EOS
           Real cs = peos->SoundSpeed(wi);
-          dt1 = std::max((std::abs(wi[IVX]) + cs), dt1);
-          dt2 = std::max((std::abs(wi[IVY]) + cs), dt2);
-          dt3 = std::max((std::abs(wi[IVZ]) + cs), dt3);
+          dv1 = std::max((std::abs(wi[IVX]) + cs), dv1);
+          dv2 = std::max((std::abs(wi[IVY]) + cs), dv2);
+          dv3 = std::max((std::abs(wi[IVZ]) + cs), dv3);
         }
       }
     }
@@ -77,16 +73,16 @@ TaskStatus Hydro::NewTimeStep(Driver *pdrive, int stage) {
 
   // compute minimum of dx1/(max_speed)
   dtnew = std::numeric_limits<float>::max();
-  dtnew = std::min(dtnew, (pmb->mb_cells.dx1/dt1));
+  dtnew = std::min(dtnew, (pmb->mb_cells.dx1/dv1));
 
   // if grid is 2D/3D, compute minimum of dx2/(max_speed)
   if (pmesh_->nx2gt1) {
-    dtnew = std::min(dtnew, (pmb->mb_cells.dx2/dt2));
+    dtnew = std::min(dtnew, (pmb->mb_cells.dx2/dv2));
   }
 
   // if grid is 3D, compute minimum of dx3/(max_speed)
   if (pmesh_->nx3gt1) {
-    dtnew = std::min(dtnew, (pmb->mb_cells.dx3/dt3));
+    dtnew = std::min(dtnew, (pmb->mb_cells.dx3/dv3));
   }
 
   return TaskStatus::complete;

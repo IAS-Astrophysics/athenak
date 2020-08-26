@@ -28,12 +28,12 @@ class Reconstruction {
   Reconstruction(ParameterInput *pin);
   virtual ~Reconstruction() = default;
 
-  virtual void ReconstructX1(const int il, const int iu, const AthenaArray<Real> &q,
-    AthenaArray<Real> &ql, AthenaArray<Real> &qr) = 0;
-  virtual void ReconstructX2(const int il, const int iu, const AthenaArray<Real> &q,
-    AthenaArray<Real> &ql, AthenaArray<Real> &qr) = 0;
-  virtual void ReconstructX3(const int il, const int iu, const AthenaArray<Real> &q,
-    AthenaArray<Real> &ql, AthenaArray<Real> &qr) = 0;
+  virtual void ReconstructX1(const int k, const int j, const int il, const int iu,
+    const AthenaArray<Real> &q, AthenaArray<Real> &ql, AthenaArray<Real> &qr) = 0;
+  virtual void ReconstructX2(const int k, const int j, const int il, const int iu,
+    const AthenaArray<Real> &q, AthenaArray<Real> &ql, AthenaArray<Real> &qr) = 0;
+  virtual void ReconstructX3(const int k, const int j, const int il, const int iu,
+    const AthenaArray<Real> &q, AthenaArray<Real> &ql, AthenaArray<Real> &qr) = 0;
 
  protected:
 };
@@ -46,12 +46,12 @@ class DonorCell : public Reconstruction {
  public:
   DonorCell(ParameterInput *pin);
 
-  void ReconstructX1(const int il, const int iu, const AthenaArray<Real> &q,
-    AthenaArray<Real> &ql, AthenaArray<Real> &qr) override;
-  void ReconstructX2(const int il, const int iu, const AthenaArray<Real> &q,
-    AthenaArray<Real> &ql, AthenaArray<Real> &qr) override;
-  void ReconstructX3(const int il, const int iu, const AthenaArray<Real> &q,
-    AthenaArray<Real> &ql, AthenaArray<Real> &qr) override;
+  void ReconstructX1(const int k, const int j, const int il, const int iu,
+    const AthenaArray<Real> &q, AthenaArray<Real> &ql, AthenaArray<Real> &qr) override;
+  void ReconstructX2(const int k, const int j, const int il, const int iu,
+    const AthenaArray<Real> &q, AthenaArray<Real> &ql, AthenaArray<Real> &qr) override;
+  void ReconstructX3(const int k, const int j, const int il, const int iu,
+    const AthenaArray<Real> &q, AthenaArray<Real> &ql, AthenaArray<Real> &qr) override;
 
  private:
 };
