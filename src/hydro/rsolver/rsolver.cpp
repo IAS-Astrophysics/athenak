@@ -18,8 +18,9 @@ namespace hydro {
 //----------------------------------------------------------------------------------------
 // RSolver constructor
 
-RiemannSolver::RiemannSolver(Hydro *phyd, ParameterInput *pin) :
-   pmy_hydro(phyd) {
+RiemannSolver::RiemannSolver(Mesh* pm, ParameterInput* pin, int igid) :
+   pmesh_(pm), my_mbgid_(igid)
+{
 
 }
 

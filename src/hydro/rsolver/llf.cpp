@@ -30,11 +30,10 @@ namespace hydro {
 //----------------------------------------------------------------------------------------
 // LLF constructor
   
-LLF::LLF(Hydro *phyd, ParameterInput *pin) : RiemannSolver(phyd, pin) {
-
+LLF::LLF(Mesh* pm, ParameterInput* pin, int igid) : RiemannSolver(pm, pin, igid)
+{
   void RSolver(const int il, const  int iu, const int dir,
     const AthenaArray<Real> &wl, const AthenaArray<Real> &wr, AthenaArray<Real> &flx);
-  
 }
 
 //----------------------------------------------------------------------------------------
@@ -42,17 +41,19 @@ LLF::LLF(Hydro *phyd, ParameterInput *pin) : RiemannSolver(phyd, pin) {
 //  \brief The LLF Riemann solver for hydrodynamics (both adiabatic and isothermal)
 
 void LLF::RSolver(const int il, const int iu, const int ivx, const AthenaArray<Real> &wl,
-                  const AthenaArray<Real> &wr, AthenaArray<Real> &flx) {
+                  const AthenaArray<Real> &wr, AthenaArray<Real> &flx)
+{
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
   Real wli[5],wri[5],du[5];
   Real fl[5],fr[5],flxi[5];
   Real gm1, iso_cs;
-  if (pmy_hydro->hydro_eos == HydroEOS::adiabatic) {
-    gm1 = pmy_hydro->peos->GetGamma() - 1.0;
+  MeshBlock* pmb = pmesh_->FindMeshBlock(my_mbgid_);
+  if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) {
+    gm1 = pmb->phydro->peos->GetGamma() - 1.0;
   }
-  if (pmy_hydro->hydro_eos == HydroEOS::isothermal) {
-    iso_cs = pmy_hydro->peos->SoundSpeed(wli);  // wli is just "dummy argument"
+  if (pmb->phydro->hydro_eos == HydroEOS::isothermal) {
+    iso_cs = pmb->phydro->peos->SoundSpeed(wli);  // wli is just "dummy argument"
   }
 
   for (int i=il; i<=iu; ++i) {
@@ -61,18 +62,18 @@ void LLF::RSolver(const int il, const int iu, const int ivx, const AthenaArray<R
     wli[IVX]=wl(ivx,i);
     wli[IVY]=wl(ivy,i);
     wli[IVZ]=wl(ivz,i);
-    if (pmy_hydro->hydro_eos == HydroEOS::adiabatic) { wli[IPR]=wl(IPR,i); }
+    if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) { wli[IPR]=wl(IPR,i); }
 
     wri[IDN]=wr(IDN,i);
     wri[IVX]=wr(ivx,i);
     wri[IVY]=wr(ivy,i);
     wri[IVZ]=wr(ivz,i);
-    if (pmy_hydro->hydro_eos == HydroEOS::adiabatic) { wri[IPR]=wr(IPR,i); }
+    if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) { wri[IPR]=wr(IPR,i); }
 
     //--- Step 2.  Compute wave speeds in L,R states (see Toro eq. 10.43)
 
-    Real cl = pmy_hydro->peos->SoundSpeed(wli);
-    Real cr = pmy_hydro->peos->SoundSpeed(wri);
+    Real cl = pmb->phydro->peos->SoundSpeed(wli);
+    Real cr = pmb->phydro->peos->SoundSpeed(wri);
     Real a  = 0.5*std::max( (std::abs(wli[IVX]) + cl), (std::abs(wri[IVX]) + cr) );
 
     //--- Step 3.  Compute L/R fluxes
@@ -93,7 +94,7 @@ void LLF::RSolver(const int il, const int iu, const int ivx, const AthenaArray<R
     fr[IVZ] = mxr*wri[IVZ];
 
     Real el,er;
-    if (pmy_hydro->hydro_eos == HydroEOS::adiabatic) {
+    if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) {
       el = wli[IPR]/gm1 + 0.5*wli[IDN]*(SQR(wli[IVX]) + SQR(wli[IVY]) + SQR(wli[IVZ]));
       er = wri[IPR]/gm1 + 0.5*wri[IDN]*(SQR(wri[IVX]) + SQR(wri[IVY]) + SQR(wri[IVZ]));
       fl[IVX] += wli[IPR];
@@ -111,7 +112,7 @@ void LLF::RSolver(const int il, const int iu, const int ivx, const AthenaArray<R
     du[IVX] = wri[IDN]*wri[IVX] - wli[IDN]*wli[IVX];
     du[IVY] = wri[IDN]*wri[IVY] - wli[IDN]*wli[IVY];
     du[IVZ] = wri[IDN]*wri[IVZ] - wli[IDN]*wli[IVZ];
-    if (pmy_hydro->hydro_eos == HydroEOS::adiabatic) { du[IEN] = er - el; }
+    if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) { du[IEN] = er - el; }
 
     //--- Step 5. Compute the LLF flux at interface (see Toro eq. 10.42).
 
@@ -119,7 +120,7 @@ void LLF::RSolver(const int il, const int iu, const int ivx, const AthenaArray<R
     flxi[IVX] = 0.5*(fl[IVX] + fr[IVX]) - a*du[IVX];
     flxi[IVY] = 0.5*(fl[IVY] + fr[IVY]) - a*du[IVY];
     flxi[IVZ] = 0.5*(fl[IVZ] + fr[IVZ]) - a*du[IVZ];
-    if (pmy_hydro->hydro_eos == HydroEOS::adiabatic) {
+    if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) {
       flxi[IEN] = 0.5*(fl[IEN] + fr[IEN]) - a*du[IEN];
     }
 
@@ -129,7 +130,7 @@ void LLF::RSolver(const int il, const int iu, const int ivx, const AthenaArray<R
     flx(ivx,i) = flxi[IVX];
     flx(ivy,i) = flxi[IVY];
     flx(ivz,i) = flxi[IVZ];
-    if (pmy_hydro->hydro_eos == HydroEOS::adiabatic) { flx(IEN,i) = flxi[IEN]; }
+    if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) { flx(IEN,i) = flxi[IEN]; }
   }
   return;
 }

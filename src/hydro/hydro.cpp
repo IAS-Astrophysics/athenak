@@ -131,10 +131,10 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
     // construct Riemann solver object
     switch (hydro_rsolver) {
       case HydroRiemannSolver::advection:
-        prsolver = new Advection(this, pin);
+        prsolver = new Advection(pmesh_, pin, my_mbgid_);
         break;
       case HydroRiemannSolver::llf:
-        prsolver = new LLF(this, pin);
+        prsolver = new LLF(pmesh_, pin, my_mbgid_);
         break;
     }
 

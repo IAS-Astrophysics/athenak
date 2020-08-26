@@ -21,26 +21,28 @@ namespace hydro {
 //! \class RiemannSolver
 //  \brief abstract base class for all RiemannSolver classes
 
-class RiemannSolver {
+class RiemannSolver
+{
  public:
-  RiemannSolver(Hydro *phyd, ParameterInput *pin);
+  RiemannSolver(Mesh* pm, ParameterInput* pin, int igid);
   virtual ~RiemannSolver() = default;
-
-  Hydro *pmy_hydro;
 
   virtual void RSolver(const int il, const  int iu, const int dir,
     const AthenaArray<Real> &wl, const AthenaArray<Real> &wr, AthenaArray<Real> &flx) = 0;
 
  protected:
+  Mesh *pmesh_;
+  int my_mbgid_;
 };
 
 //----------------------------------------------------------------------------------------
 //! \class Advection
 //  \brief derived RiemannSolver class for pure advection problems
 
-class Advection : public RiemannSolver {
+class Advection : public RiemannSolver
+{
  public:
-  Advection(Hydro *phyd, ParameterInput *pin);
+  Advection(Mesh* pm, ParameterInput* pin, int igid);
 
   void RSolver(const int il, const  int iu, const int dir, const AthenaArray<Real> &wl,
     const AthenaArray<Real> &wr, AthenaArray<Real> &flx) override;
@@ -52,9 +54,10 @@ class Advection : public RiemannSolver {
 //! \class LLF
 //  \brief derived RiemannSolver class for local Lax-Friedrichs (LLF) hydro solver
 
-class LLF : public RiemannSolver {
+class LLF : public RiemannSolver
+{
  public:
-  LLF(Hydro *phyd, ParameterInput *pin);
+  LLF(Mesh* pm, ParameterInput* pin, int igid);
 
   void RSolver(const int il, const  int iu, const int dir, const AthenaArray<Real> &wl,
     const AthenaArray<Real> &wr, AthenaArray<Real> &flx) override;

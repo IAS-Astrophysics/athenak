@@ -21,12 +21,11 @@ namespace hydro {
 //----------------------------------------------------------------------------------------
 // Advection constructor
   
-Advection::Advection(Hydro *phyd, ParameterInput *pin) 
-  : RiemannSolver(phyd, pin) {
-
+Advection::Advection(Mesh* pm, ParameterInput* pin, int igid) : 
+  RiemannSolver(pm, pin, igid)
+{
   void RSolver(const int il, const  int iu, const int dir,
     const AthenaArray<Real> &wl, const AthenaArray<Real> &wr, AthenaArray<Real> &flx);
-  
 }
 
 //----------------------------------------------------------------------------------------
@@ -39,11 +38,12 @@ void Advection::RSolver(const int il, const int iu, const int ivx,
   int ivz = IVX + ((ivx-IVX)+2)%3;
   Real wli[5],wri[5];
   Real gm1, iso_cs;
-  if (pmy_hydro->hydro_eos == HydroEOS::adiabatic) {
-    gm1 = pmy_hydro->peos->GetGamma() - 1.0;
+  MeshBlock* pmb = pmesh_->FindMeshBlock(my_mbgid_);
+  if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) {
+    gm1 = pmb->phydro->peos->GetGamma() - 1.0;
   }
-  if (pmy_hydro->hydro_eos == HydroEOS::isothermal) {
-    iso_cs = pmy_hydro->peos->SoundSpeed(wli);  // wli is just "dummy argument"
+  if (pmb->phydro->hydro_eos == HydroEOS::isothermal) {
+    iso_cs = pmb->phydro->peos->SoundSpeed(wli);  // wli is just "dummy argument"
   }
 
   for (int i=il; i<=iu; ++i) {
@@ -52,13 +52,13 @@ void Advection::RSolver(const int il, const int iu, const int ivx,
     wli[IVX]=wl(ivx,i);
     wli[IVY]=wl(ivy,i);
     wli[IVZ]=wl(ivz,i);
-    if (pmy_hydro->hydro_eos == HydroEOS::adiabatic) { wli[IPR]=wl(IPR,i); }
+    if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) { wli[IPR]=wl(IPR,i); }
 
     wri[IDN]=wr(IDN,i);
     wri[IVX]=wr(ivx,i);
     wri[IVY]=wr(ivy,i);
     wri[IVZ]=wr(ivz,i);
-    if (pmy_hydro->hydro_eos == HydroEOS::adiabatic) { wri[IPR]=wr(IPR,i); }
+    if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) { wri[IPR]=wr(IPR,i); }
 
     //--- Step 3.  Compute upwind fluxes
 
@@ -69,7 +69,7 @@ void Advection::RSolver(const int il, const int iu, const int ivx,
       flx(IVX,i) = mxl*wli[IVX];
       flx(IVY,i) = mxl*wli[IVY];
       flx(IVZ,i) = mxl*wli[IVZ];
-      if (pmy_hydro->hydro_eos == HydroEOS::adiabatic) {
+      if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) {
         flx(IEN,i) = wli[IPR]*wli[IVX]/gm1;
       }
 
@@ -80,7 +80,7 @@ void Advection::RSolver(const int il, const int iu, const int ivx,
       flx(IVX,i) = mxr*wri[IVX];
       flx(IVY,i) = mxr*wri[IVY];
       flx(IVZ,i) = mxr*wri[IVZ];
-      if (pmy_hydro->hydro_eos == HydroEOS::adiabatic) {
+      if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) {
         flx(IEN,i) = wri[IPR]*wri[IVX]/gm1;
       }
 
