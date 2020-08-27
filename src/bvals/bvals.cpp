@@ -283,7 +283,7 @@ TaskStatus BoundaryValues::SendCellCenteredVariables(AthenaArray<Real> &a, int n
   }
   ndata = nvar*ng*ng*ng;
   for (int n=0; n<8; ++n) {
-    Real *psrc = &(cc_send_corner(8-n,0,0,0,0));
+    Real *psrc = &(cc_send_corner(7-n,0,0,0,0));
     Real *pdest = &(cc_recv_corner(n,0,0,0,0));
     memcpy(pdest, psrc, ndata*sizeof(Real));
   }
