@@ -65,6 +65,21 @@ class LLF : public RiemannSolver
  private:
 };
 
+//----------------------------------------------------------------------------------------
+//! \class HLLC
+//  \brief derived RiemannSolver class for HLLC hydro solver
+    
+class HLLC : public RiemannSolver
+{   
+ public:
+  HLLC(Mesh* pm, ParameterInput* pin, int igid);
+
+  void RSolver(const int il, const  int iu, const int dir, const AthenaArray<Real> &wl,
+    const AthenaArray<Real> &wr, AthenaArray<Real> &flx) override;
+    
+ private:
+};  
+
 } // namespace hydro
 
 #endif // HYDRO_RSOLVER_RSOLVER_HPP_

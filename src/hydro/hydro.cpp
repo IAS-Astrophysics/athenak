@@ -84,7 +84,14 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
   } else if (rsolver.compare("hlle") == 0) {
     hydro_rsolver = HydroRiemannSolver::hlle;
   } else if (rsolver.compare("hllc") == 0) {
-    hydro_rsolver = HydroRiemannSolver::hllc;
+    if (hydro_eos == HydroEOS::isothermal) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "<hydro> rsolver = '" << rsolver
+                << "' cannot be used with isothermal EOS" << std::endl;
+      std::exit(EXIT_FAILURE);
+    } else {
+      hydro_rsolver = HydroRiemannSolver::hllc;
+    }
   } else if (rsolver.compare("roe") == 0) {
     hydro_rsolver = HydroRiemannSolver::roe;
   } else {
@@ -136,6 +143,9 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
         break;
       case HydroRiemannSolver::llf:
         prsolver = new LLF(pmesh_, pin, my_mbgid_);
+        break;
+      case HydroRiemannSolver::hllc:
+        prsolver = new HLLC(pmesh_, pin, my_mbgid_);
         break;
     }
 

@@ -26,6 +26,7 @@ add_executable(
         hydro/rsolver/rsolver.cpp
         hydro/rsolver/advection.cpp
         hydro/rsolver/llf.cpp
+        hydro/rsolver/hllc.cpp
 
         mesh/interface_physics.cpp
         mesh/load_balance.cpp
