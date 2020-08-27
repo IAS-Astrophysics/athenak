@@ -13,7 +13,6 @@
 
 #include "athena.hpp"
 #include "athena_arrays.hpp"
-#include "mesh/meshblock.hpp"
 #include "parameter_input.hpp"
 
 // constants that enumerate reconstruction options

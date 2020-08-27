@@ -185,12 +185,12 @@ void Mesh::BuildTree(ParameterInput *pin)
     std::exit(EXIT_FAILURE);
   }
 
-  // calculate the number of MeshBlocks in root level in each dir
+  // calculate the number of MeshBlocks at root level in each dir
   nmbroot_x1 = mesh_cells.nx1/incells.nx1;
   nmbroot_x2 = mesh_cells.nx2/incells.nx2;
   nmbroot_x3 = mesh_cells.nx3/incells.nx3;
 
-  // find maximum number of MeshBlocks in any dir
+  // find maximum number of MeshBlocks at root level in any dir
   int nmbmax = (nmbroot_x1 > nmbroot_x2) ? nmbroot_x1 : nmbroot_x2;
   nmbmax = (nmbmax > nmbroot_x3) ? nmbmax : nmbroot_x3;
 
@@ -423,7 +423,7 @@ void Mesh::BuildTree(ParameterInput *pin)
     RegionSize insize;
     BoundaryFlag inbcs[6];
     SetBlockSizeAndBoundaries(loclist[i], insize, incells, inbcs);
-    // vector of MBs stored in order gids_->gide_
+    // vector of MBs guaranteed to be stored in order gids_->gide_
     mblocks.emplace_back(MeshBlock(this, pin, i, insize, incells, inbcs));
   }
   for (auto &mb : mblocks) {mb.SetNeighbors(ptree, ranklist);}
@@ -465,7 +465,6 @@ void Mesh::BuildTree(ParameterInput *pin)
   ResetLoadBalanceCounters();
 
   // set initial time/cycle parameters
-
   time = pin->GetOrAddReal("time", "start_time", 0.0);
   dt   = std::numeric_limits<float>::max();
   cfl_no = pin->GetReal("time", "cfl_number");
@@ -481,7 +480,6 @@ void Mesh::BuildTree(ParameterInput *pin)
 
 void Mesh::OutputMeshStructure(int flag)
 {
-
   // Write overall Mesh structure to stdout and file
   std::cout << std::endl;
   std::cout <<"Root grid = "<< nmbroot_x1 <<" x "<< nmbroot_x2 <<" x "<< nmbroot_x3

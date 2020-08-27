@@ -25,7 +25,6 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
   int is = pmb->mb_cells.is; int ie = pmb->mb_cells.ie;
   int js = pmb->mb_cells.js; int je = pmb->mb_cells.je;
   int ks = pmb->mb_cells.ks; int ke = pmb->mb_cells.ke;
-  int ng = pmb->mb_cells.ng;
 
   //--------------------------------------------------------------------------------------
   // i-direction
@@ -33,7 +32,7 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
   for (int k=ks; k<=ke; ++k) {
     for (int j=js; j<=je; ++j) {
 
-      precon->ReconstructX1(k,j,is-1, ie+1, w0, wl_, wr_);
+      precon->ReconstructX1(k, j, is, ie+1, w0, wl_, wr_);
       prsolver->RSolver(is, ie+1, IVX, wl_, wr_, uflux_);
 
       for (int n=0; n<nhydro; ++n) {
@@ -44,83 +43,58 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
 
     }
   }
+  if (!(pmesh_->nx2gt1)) return TaskStatus::complete;
 
-/****
   //--------------------------------------------------------------------------------------
   // j-direction
 
-  if (pmb->pmy_mesh->f2) {
-    // set the loop limits
-    il = is-1, iu = ie+1, kl = ks, ku = ke;
-    // TODO(felker): fix loop limits for fourth-order hydro
-    //    if (MAGNETIC_FIELDS_ENABLED) {
-    if (pmb->block_size.nx3 == 1) // 2D
-      kl = ks, ku = ke;
-    else // 3D
-      kl = ks-1, ku = ke+1;
-    //    }
+  for (int k=ks; k<=ke; ++k) {
+    for (int j=js; j<=je+1; ++j) {
 
-    for (int k=kl; k<=ku; ++k) {
-      // reconstruct the first row
-      if (order == 1) {
-        pmb->precon->DonorCellX2(k, js-1, il, iu, w, bcc, wl_, wr_);
-      } else if (order == 2) {
-        pmb->precon->PiecewiseLinearX2(k, js-1, il, iu, w, bcc, wl_, wr_);
-      } else {
-        pmb->precon->PiecewiseParabolicX2(k, js-1, il, iu, w, bcc, wl_, wr_);
-      }
-      for (int j=js; j<=je+1; ++j) {
-        // reconstruct L/R states at j
-        if (order == 1) {
-          pmb->precon->DonorCellX2(k, j, il, iu, w, bcc, wlb_, wr_);
-        } else if (order == 2) {
-          pmb->precon->PiecewiseLinearX2(k, j, il, iu, w, bcc, wlb_, wr_);
-        } else {
-          pmb->precon->PiecewiseParabolicX2(k, j, il, iu, w, bcc, wlb_, wr_);
+      precon->ReconstructX2(k, j, is, ie, w0, wl_, wr_);
+      prsolver->RSolver(is, ie, IVY, wl_, wr_, uflux_);
+
+      for (int n=0; n<nhydro; ++n) {
+        if (j>js) {
+          for (int i=is; i<=ie; ++i) {
+            divf(n,k,j-1,i) += uflux_(n,i)/pmb->mb_cells.dx2;
+          }
         }
-
-        pmb->pcoord->CenterWidth2(k, j, il, iu, dxw_);
-        RiemannSolver(k, j, il, iu, IVY, wl_, wr_, x2flux, dxw_);
+        if (j<(je+1)) {
+          for (int i=is; i<=ie; ++i) {
+            divf(n,k,j,i) -= uflux_(n,i)/pmb->mb_cells.dx2;
+          }
+        }
       }
+
     }
   }
+  if (!(pmesh_->nx3gt1)) return TaskStatus::complete;
 
   //--------------------------------------------------------------------------------------
   // k-direction
 
-  if (pmb->pmy_mesh->f3) {
-    // set the loop limits
-    // TODO(felker): fix loop limits for fourth-order hydro
-    //    if (MAGNETIC_FIELDS_ENABLED)
-    il = is-1, iu = ie+1, jl = js-1, ju = je+1;
+  for (int k=ks; k<=ke+1; ++k) {
+    for (int j=js; j<=je; ++j) {
 
-    for (int j=jl; j<=ju; ++j) { // this loop ordering is intentional
-      // reconstruct the first row
-      if (order == 1) {
-        pmb->precon->DonorCellX3(ks-1, j, il, iu, w, bcc, wl_, wr_);
-      } else if (order == 2) {
-        pmb->precon->PiecewiseLinearX3(ks-1, j, il, iu, w, bcc, wl_, wr_);
-      } else {
-        pmb->precon->PiecewiseParabolicX3(ks-1, j, il, iu, w, bcc, wl_, wr_);
-      }
-      for (int k=ks; k<=ke+1; ++k) {
-        // reconstruct L/R states at k
-        if (order == 1) {
-          pmb->precon->DonorCellX3(k, j, il, iu, w, bcc, wlb_, wr_);
-        } else if (order == 2) {
-          pmb->precon->PiecewiseLinearX3(k, j, il, iu, w, bcc, wlb_, wr_);
-        } else {
-          pmb->precon->PiecewiseParabolicX3(k, j, il, iu, w, bcc, wlb_, wr_);
+      precon->ReconstructX3(k, j, is, ie, w0, wl_, wr_);
+      prsolver->RSolver(is, ie, IVZ, wl_, wr_, uflux_);
+
+      for (int n=0; n<nhydro; ++n) {
+        if (k>ks) {
+          for (int i=is; i<=ie; ++i) {
+            divf(n,k-1,j,i) += uflux_(n,i)/pmb->mb_cells.dx3;
+          }
         }
-
-        pmb->pcoord->CenterWidth3(k, j, il, iu, dxw_);
-        RiemannSolver(k, j, il, iu, IVZ, wl_, wr_, x3flux, dxw_);
-
+        if (k<(ke+1)) {
+          for (int i=is; i<=ie; ++i) {
+            divf(n,k,j,i) -= uflux_(n,i)/pmb->mb_cells.dx3;
+          }
+        }
       }
+
     }
   }
-****/
-
   return TaskStatus::complete;
 }
 

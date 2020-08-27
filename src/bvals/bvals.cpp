@@ -218,7 +218,7 @@ TaskStatus BoundaryValues::SendCellCenteredVariables(AthenaArray<Real> &a, int n
           }
           for (int i=nx1; i<=ie; ++i) {
             cc_send_x1face(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
-            cc_send_x3x1ed(3,n,k-ks ,j-nx2,i-nx1) = a(n,k,j,i);
+            cc_send_x1x2ed(3,n,k-ks ,j-nx2,i-nx1) = a(n,k,j,i);
           }
 
         } else {

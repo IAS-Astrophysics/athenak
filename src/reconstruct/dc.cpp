@@ -9,14 +9,13 @@
 #include <iostream>
 #include "athena.hpp"
 #include "athena_arrays.hpp"
-#include "mesh/mesh.hpp"
 #include "reconstruct.hpp"
 
 //----------------------------------------------------------------------------------------
 // DonorCell constructor
 
-DonorCell::DonorCell(ParameterInput *pin) : Reconstruction(pin) {
-  
+DonorCell::DonorCell(ParameterInput *pin) : Reconstruction(pin)
+{
 }
 
 //----------------------------------------------------------------------------------------
@@ -29,8 +28,8 @@ void DonorCell::ReconstructX1(const int k, const int j, const int il, const int 
   int nvar = q.GetDim(4);
   for (int n=0; n<nvar; ++n) {
     for (int i=il; i<=iu; ++i) {
-      ql(n,i+1) = q(n,k,j,i);
-      qr(n,i  ) = q(n,k,j,i);
+      ql(n,i) = q(n,k,j,i-1);
+      qr(n,i) = q(n,k,j,i  );
     }
   }
   return;
@@ -47,8 +46,8 @@ void DonorCell::ReconstructX2(const int k, const int j, const int il, const int 
   int nvar = q.GetDim(4);
   for (int n=0; n<nvar; ++n) {
     for (int i=il; i<=iu; ++i) {
-      ql(n,i) = q(n,k,j,i);
-      qr(n,i) = q(n,k,j,i);
+      ql(n,i) = q(n,k,j-1,i);
+      qr(n,i) = q(n,k,j  ,i);
     }
   }
   return;
@@ -64,8 +63,8 @@ void DonorCell::ReconstructX3(const int k, const int j, const int il, const int 
   int nvar = q.GetDim(4);
   for (int n=0; n<nvar; ++n) {
     for (int i=il; i<=iu; ++i) {
-      ql(n,i) = q(n,k,j,i);
-      qr(n,i) = q(n,k,j,i);
+      ql(n,i) = q(n,k-1,j,i);
+      qr(n,i) = q(n,k  ,j,i);
     }
   }
   return;

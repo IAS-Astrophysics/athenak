@@ -132,10 +132,11 @@ void Driver::Initialize(Mesh *pmesh, Outputs *pout)
 
   //---- Step 2.  Cycle through output Types and load data / write files.
   //  This design allows for asynchronous outputs to be implemented in the future.
-  // TODO: cycle through OutputTypes
 
-  pout->poutput_list_.front()->LoadOutputData(pmesh);
-  pout->poutput_list_.front()->WriteOutputFile(pmesh);
+  for (auto &out : pout->poutput_list_) {
+    out->LoadOutputData(pmesh);
+    out->WriteOutputFile(pmesh);
+  }
 
   //---- Step 3.  Compute first time step (if problem involves time evolution
 
