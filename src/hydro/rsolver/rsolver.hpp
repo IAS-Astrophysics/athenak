@@ -66,6 +66,22 @@ class LLF : public RiemannSolver
 };
 
 //----------------------------------------------------------------------------------------
+//! \class HLLE
+//  \brief derived RiemannSolver class for Harten-Lax-van Leer hydro solver with Einfeldt
+//  fix to prevent unphysical solutions (HLLE)
+    
+class HLLE : public RiemannSolver
+{   
+ public:
+  HLLE(Mesh* pm, ParameterInput* pin, int igid);
+
+  void RSolver(const int il, const  int iu, const int dir, const AthenaArray<Real> &wl,
+    const AthenaArray<Real> &wr, AthenaArray<Real> &flx) override;
+    
+ private:
+};  
+
+//----------------------------------------------------------------------------------------
 //! \class HLLC
 //  \brief derived RiemannSolver class for HLLC hydro solver
     

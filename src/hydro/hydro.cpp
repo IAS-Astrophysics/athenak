@@ -147,6 +147,9 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
       case HydroRiemannSolver::hllc:
         prsolver = new HLLC(pmesh_, pin, my_mbgid_);
         break;
+      case HydroRiemannSolver::hlle:
+        prsolver = new HLLE(pmesh_, pin, my_mbgid_);
+        break;
     }
 
     // allocate registers, flux divergence, scratch arrays
