@@ -7,8 +7,8 @@
 //  \brief functions to computes timestep on given MeshBlock using CFL condition
 
 #include <algorithm>  // min()
-#include <cmath>      // fabs(), sqrt()
 #include <limits>
+#include <math.h>
 #include <iostream>
 
 #include "athena.hpp"
@@ -43,9 +43,9 @@ TaskStatus Hydro::NewTimeStep(Driver *pdrive, int stage) {
     for (int k=ks; k<=ke; ++k) {
       for (int j=js; j<=je; ++j) {
         for (int i=is; i<=ie; ++i) {
-          dv1 = std::max(std::abs(w0(IVX,k,j,i)), dv1);
-          dv2 = std::max(std::abs(w0(IVY,k,j,i)), dv2);
-          dv3 = std::max(std::abs(w0(IVZ,k,j,i)), dv3);
+          dv1 = std::max(fabs(w0(IVX,k,j,i)), dv1);
+          dv2 = std::max(fabs(w0(IVY,k,j,i)), dv2);
+          dv3 = std::max(fabs(w0(IVZ,k,j,i)), dv3);
         }
       }
     }

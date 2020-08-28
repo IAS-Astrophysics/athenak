@@ -79,4 +79,25 @@ class PiecewiseLinear : public Reconstruction
  AthenaArray<Real> dql_, dqr_, dqm_;
 };
 
+//----------------------------------------------------------------------------------------
+//! \class PiecewiseParabolic
+//  \brief derived Reconstruction class for third-order PPM method
+
+class PiecewiseParabolic : public Reconstruction
+{
+ public:
+  PiecewiseParabolic(ParameterInput *pin, int nvar, int ncells1);
+
+  void ReconstructX1(const int k, const int j, const int il, const int iu,
+    const AthenaArray<Real> &q, AthenaArray<Real> &ql, AthenaArray<Real> &qr) override;
+  void ReconstructX2(const int k, const int j, const int il, const int iu,
+    const AthenaArray<Real> &q, AthenaArray<Real> &ql, AthenaArray<Real> &qr) override;
+  void ReconstructX3(const int k, const int j, const int il, const int iu,
+    const AthenaArray<Real> &q, AthenaArray<Real> &ql, AthenaArray<Real> &qr) override;
+
+ private:
+ AthenaArray<Real> qlv_, qrv_;
+};
+
+
 #endif // RECONSTRUCT_HPP_

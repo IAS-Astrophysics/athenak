@@ -137,6 +137,9 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
       case HydroReconMethod::piecewise_linear:
         precon = new PiecewiseLinear(pin, nhydro, ncells1);
         break;
+      case HydroReconMethod::piecewise_parabolic:
+        precon = new PiecewiseParabolic(pin, nhydro, ncells1);
+        break;
     }
 
     // construct Riemann solver object

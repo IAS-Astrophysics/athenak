@@ -32,9 +32,9 @@ PiecewiseLinear::PiecewiseLinear(ParameterInput *pin, int nvar, int ncells1) :
 void PiecewiseLinear::ReconstructX1(const int k, const int j, const int il, const int iu,
     const AthenaArray<Real> &q, AthenaArray<Real> &ql, AthenaArray<Real> &qr)
 {
-  // compute L/R slopes for each variable
   int nvar = q.GetDim(4);
   for (int n=0; n<nvar; ++n) {
+    // compute L/R slopes for each variable
     for (int i=il; i<=iu; ++i) {
       dql_(i) = (q(n,k,j,i  ) - q(n,k,j,i-1));
       dqr_(i) = (q(n,k,j,i+1) - q(n,k,j,i  ));
@@ -64,9 +64,9 @@ void PiecewiseLinear::ReconstructX1(const int k, const int j, const int il, cons
 void PiecewiseLinear::ReconstructX2(const int k, const int j, const int il, const int iu,
     const AthenaArray<Real> &q, AthenaArray<Real> &ql_jp1, AthenaArray<Real> &qr_j)
 {
-  // compute L/R slopes for each variable
   int nvar = q.GetDim(4);
   for (int n=0; n<nvar; ++n) {
+    // compute L/R slopes for each variable
     for (int i=il; i<=iu; ++i) {
       dql_(i) = (q(n,k,j  ,i) - q(n,k,j-1,i));
       dqr_(i) = (q(n,k,j+1,i) - q(n,k,j  ,i));
@@ -96,9 +96,9 @@ void PiecewiseLinear::ReconstructX2(const int k, const int j, const int il, cons
 void PiecewiseLinear::ReconstructX3(const int k, const int j, const int il, const int iu,
     const AthenaArray<Real> &q, AthenaArray<Real> &ql_kp1, AthenaArray<Real> &qr_k)
 {
-  // compute L/R slopes for each variable
   int nvar = q.GetDim(4);
   for (int n=0; n<nvar; ++n) {
+    // compute L/R slopes for each variable
     for (int i=il; i<=iu; ++i) {
       dql_(i) = (q(n,k  ,j,i) - q(n,k-1,j,i));
       dqr_(i) = (q(n,k+1,j,i) - q(n,k  ,j,i));
