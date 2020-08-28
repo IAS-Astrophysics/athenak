@@ -8,8 +8,8 @@
 //! \file reconstruct.hpp
 //  \brief defines abstract base class Reconstruction, and various derived classes
 //  Each derived class Contains data and functions that implement different spatial
-// reconstruction algorithms, e.g. first-order donor cell, second-order piecewise linear,
-// and third-order piecewise parabolic.
+//  reconstruction algorithms, e.g. first-order donor cell, second-order piecewise linear,
+//  and third-order piecewise parabolic.
 
 #include "athena.hpp"
 #include "athena_arrays.hpp"
@@ -19,14 +19,16 @@
 //enum class ReconstructionMethod {donor_cell, piecewise_linear, piecewise_parabolic};
 
 //----------------------------------------------------------------------------------------
-//! \class EquationOfState
+//! \class Reconstruction
 //  \brief abstract base class for all Reconstruction classes
 
-class Reconstruction {
+class Reconstruction
+{
  public:
-  Reconstruction(ParameterInput *pin);
+  Reconstruction(ParameterInput *pin, int nvar, int ncells1);
   virtual ~Reconstruction() = default;
 
+  // pure virtual reconstruction functions overwritten in each derived class
   virtual void ReconstructX1(const int k, const int j, const int il, const int iu,
     const AthenaArray<Real> &q, AthenaArray<Real> &ql, AthenaArray<Real> &qr) = 0;
   virtual void ReconstructX2(const int k, const int j, const int il, const int iu,
@@ -35,15 +37,17 @@ class Reconstruction {
     const AthenaArray<Real> &q, AthenaArray<Real> &ql, AthenaArray<Real> &qr) = 0;
 
  protected:
+  int nvar_, ncells1_;
 };
 
 //----------------------------------------------------------------------------------------
 //! \class DonorCell
 //  \brief derived Reconstruction class for first-order donor cell method
 
-class DonorCell : public Reconstruction {
+class DonorCell : public Reconstruction
+{
  public:
-  DonorCell(ParameterInput *pin);
+  DonorCell(ParameterInput *pin, int nvar, int ncells1);
 
   void ReconstructX1(const int k, const int j, const int il, const int iu,
     const AthenaArray<Real> &q, AthenaArray<Real> &ql, AthenaArray<Real> &qr) override;
@@ -53,6 +57,26 @@ class DonorCell : public Reconstruction {
     const AthenaArray<Real> &q, AthenaArray<Real> &ql, AthenaArray<Real> &qr) override;
 
  private:
+};
+
+//----------------------------------------------------------------------------------------
+//! \class PiecewiseLinear
+//  \brief derived Reconstruction class for second-order PLM method
+
+class PiecewiseLinear : public Reconstruction
+{
+ public:
+  PiecewiseLinear(ParameterInput *pin, int nvar, int ncells1);
+
+  void ReconstructX1(const int k, const int j, const int il, const int iu,
+    const AthenaArray<Real> &q, AthenaArray<Real> &ql, AthenaArray<Real> &qr) override;
+  void ReconstructX2(const int k, const int j, const int il, const int iu,
+    const AthenaArray<Real> &q, AthenaArray<Real> &ql, AthenaArray<Real> &qr) override;
+  void ReconstructX3(const int k, const int j, const int il, const int iu,
+    const AthenaArray<Real> &q, AthenaArray<Real> &ql, AthenaArray<Real> &qr) override;
+
+ private:
+ AthenaArray<Real> dql_, dqr_, dqm_;
 };
 
 #endif // RECONSTRUCT_HPP_

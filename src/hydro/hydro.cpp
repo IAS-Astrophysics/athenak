@@ -132,7 +132,10 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
     // construct reconstruction object
     switch (hydro_recon) {
       case HydroReconMethod::donor_cell:
-        precon = new DonorCell(pin);
+        precon = new DonorCell(pin, nhydro, ncells1);
+        break;
+      case HydroReconMethod::piecewise_linear:
+        precon = new PiecewiseLinear(pin, nhydro, ncells1);
         break;
     }
 

@@ -14,7 +14,8 @@
 //----------------------------------------------------------------------------------------
 // DonorCell constructor
 
-DonorCell::DonorCell(ParameterInput *pin) : Reconstruction(pin)
+DonorCell::DonorCell(ParameterInput *pin, int nvar, int ncells1) :
+  Reconstruction(pin, nvar, ncells1)
 {
 }
 
@@ -22,6 +23,7 @@ DonorCell::DonorCell(ParameterInput *pin) : Reconstruction(pin)
 //! \fn DonorCell::ReconstructX1()
 //  \brief For each cell-centered value q(i), returns ql(i+1) and qr(i) over il to iu.
 //  Therefore range of indices for which BOTH L/R states returned is il+1 to il-1
+//  This function should be called over [is-1,ie+1] to get BOTH L/R states over [is,ie]
 
 void DonorCell::ReconstructX1(const int k, const int j, const int il, const int iu,
      const AthenaArray<Real> &q, AthenaArray<Real> &ql, AthenaArray<Real> &qr)
@@ -40,7 +42,6 @@ void DonorCell::ReconstructX1(const int k, const int j, const int il, const int 
 //! \fn DonorCell::ReconstructX2()
 //  \brief For each cell-centered value q(j), returns ql(j+1) and qr(j) over il to iu.
 //  This function should be called over [js-1,je+1] to get BOTH L/R states over [js,je]
-
 
 void DonorCell::ReconstructX2(const int k, const int j, const int il, const int iu,
      const AthenaArray<Real> &q, AthenaArray<Real> &ql_jp1, AthenaArray<Real> &qr_j)

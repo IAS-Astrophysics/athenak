@@ -47,6 +47,7 @@ add_executable(
 
         reconstruct/reconstruct.cpp
         reconstruct/dc.cpp
+        reconstruct/plm.cpp
 
         utils/change_rundir.cpp
         utils/show_config.cpp

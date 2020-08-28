@@ -17,6 +17,7 @@
 //----------------------------------------------------------------------------------------
 // Reconstruction constructor
 
-Reconstruction::Reconstruction(ParameterInput *pin) {
-
+Reconstruction::Reconstruction(ParameterInput *pin, int nvar, int ncells1) :
+  nvar_(nvar), ncells1_(ncells1)
+{
 }
