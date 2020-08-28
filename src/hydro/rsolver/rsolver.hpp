@@ -96,6 +96,21 @@ class HLLC : public RiemannSolver
  private:
 };  
 
+//----------------------------------------------------------------------------------------
+//! \class Roe
+//  \brief derived RiemannSolver class for Roe hydro solver
+
+class Roe : public RiemannSolver
+{
+ public:
+  Roe(Mesh* pm, ParameterInput* pin, int igid);
+
+  void RSolver(const int il, const  int iu, const int dir, const AthenaArray<Real> &wl,
+    const AthenaArray<Real> &wr, AthenaArray<Real> &flx) override;
+
+ private:
+};
+
 } // namespace hydro
 
 #endif // HYDRO_RSOLVER_RSOLVER_HPP_
