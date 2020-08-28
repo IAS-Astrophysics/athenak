@@ -31,10 +31,11 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
 
   for (int k=ks; k<=ke; ++k) {
     for (int j=js; j<=je; ++j) {
-
-      precon->ReconstructX1(k, j, is, ie+1, w0, wl_, wr_);
+      // compute fluxes over [is,ie+1]
+      precon->ReconstructX1(k, j, is-1, ie+1, w0, wl_, wr_);
       prsolver->RSolver(is, ie+1, IVX, wl_, wr_, uflux_);
 
+      // compute dF/dx1
       for (int n=0; n<nhydro; ++n) {
         for (int i=is; i<=ie; ++i) {
           divf(n,k,j,i) = (uflux_(n,i+1) - uflux_(n,i))/pmb->mb_cells.dx1;
@@ -49,11 +50,15 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
   // j-direction
 
   for (int k=ks; k<=ke; ++k) {
+    // compute qL(js)
+    precon->ReconstructX2(k, js-1, is, ie, w0, wl_jp1, wr_);
     for (int j=js; j<=je+1; ++j) {
-
-      precon->ReconstructX2(k, j, is, ie, w0, wl_, wr_);
+      // compute fluxes over [js,je+1]
+      wl_ = wl_jp1;
+      precon->ReconstructX2(k, j, is, ie, w0, wl_jp1, wr_);
       prsolver->RSolver(is, ie, IVY, wl_, wr_, uflux_);
 
+      // Add dF/dx2
       for (int n=0; n<nhydro; ++n) {
         if (j>js) {
           for (int i=is; i<=ie; ++i) {
@@ -72,14 +77,18 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
   if (!(pmesh_->nx3gt1)) return TaskStatus::complete;
 
   //--------------------------------------------------------------------------------------
-  // k-direction
+  // k-direction. Note order of k,j loops switched
 
-  for (int k=ks; k<=ke+1; ++k) {
-    for (int j=js; j<=je; ++j) {
-
-      precon->ReconstructX3(k, j, is, ie, w0, wl_, wr_);
+  for (int j=js; j<=je; ++j) {
+    // compute qL(ks)
+    precon->ReconstructX3(ks-1, j, is, ie, w0, wl_kp1, wr_);
+    for (int k=ks; k<=ke+1; ++k) {
+      // compute fluxes over [ks,ke+1]
+      wl_ = wl_kp1;
+      precon->ReconstructX3(k, j, is, ie, w0, wl_kp1, wr_);
       prsolver->RSolver(is, ie, IVZ, wl_, wr_, uflux_);
 
+      // Add dF/dx3
       for (int n=0; n<nhydro; ++n) {
         if (k>ks) {
           for (int i=is; i<=ie; ++i) {

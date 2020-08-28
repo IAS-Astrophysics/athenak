@@ -160,6 +160,8 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
     divf.SetSize(nhydro, ncells3, ncells2, ncells1);
     w_.SetSize(nhydro, ncells1);
     wl_.SetSize(nhydro, ncells1);
+    wl_jp1.SetSize(nhydro, ncells1);
+    wl_kp1.SetSize(nhydro, ncells1);
     wr_.SetSize(nhydro, ncells1);
     uflux_.SetSize(nhydro, ncells1);
   }

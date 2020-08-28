@@ -20,7 +20,8 @@ DonorCell::DonorCell(ParameterInput *pin) : Reconstruction(pin)
 
 //----------------------------------------------------------------------------------------
 //! \fn DonorCell::ReconstructX1()
-//  \brief reconstruct L/R surfaces of the i-th cells
+//  \brief For each cell-centered value q(i), returns ql(i+1) and qr(i) over il to iu.
+//  Therefore range of indices for which BOTH L/R states returned is il+1 to il-1
 
 void DonorCell::ReconstructX1(const int k, const int j, const int il, const int iu,
      const AthenaArray<Real> &q, AthenaArray<Real> &ql, AthenaArray<Real> &qr)
@@ -28,8 +29,8 @@ void DonorCell::ReconstructX1(const int k, const int j, const int il, const int 
   int nvar = q.GetDim(4);
   for (int n=0; n<nvar; ++n) {
     for (int i=il; i<=iu; ++i) {
-      ql(n,i) = q(n,k,j,i-1);
-      qr(n,i) = q(n,k,j,i  );
+      ql(n,i+1) = q(n,k,j,i);
+      qr(n,i  ) = q(n,k,j,i);
     }
   }
   return;
@@ -37,17 +38,18 @@ void DonorCell::ReconstructX1(const int k, const int j, const int il, const int 
 
 //----------------------------------------------------------------------------------------
 //! \fn DonorCell::ReconstructX2()
-//  \brief
+//  \brief For each cell-centered value q(j), returns ql(j+1) and qr(j) over il to iu.
+//  This function should be called over [js-1,je+1] to get BOTH L/R states over [js,je]
 
 
 void DonorCell::ReconstructX2(const int k, const int j, const int il, const int iu,
-     const AthenaArray<Real> &q, AthenaArray<Real> &ql, AthenaArray<Real> &qr)
+     const AthenaArray<Real> &q, AthenaArray<Real> &ql_jp1, AthenaArray<Real> &qr_j)
 {
   int nvar = q.GetDim(4);
   for (int n=0; n<nvar; ++n) {
     for (int i=il; i<=iu; ++i) {
-      ql(n,i) = q(n,k,j-1,i);
-      qr(n,i) = q(n,k,j  ,i);
+      ql_jp1(n,i) = q(n,k,j,i);
+      qr_j(n,i)   = q(n,k,j,i);
     }
   }
   return;
@@ -55,16 +57,17 @@ void DonorCell::ReconstructX2(const int k, const int j, const int il, const int 
 
 //----------------------------------------------------------------------------------------
 //! \fn DonorCell::ReconstructX3()
-//  \brief
+//  \brief For each cell-centered value q(k), returns ql(k+1) and qr(k) over il to iu.
+//  This function should be called over [ks-1,ke+1] to get BOTH L/R states over [ks,ke]
 
 void DonorCell::ReconstructX3(const int k, const int j, const int il, const int iu,
-     const AthenaArray<Real> &q, AthenaArray<Real> &ql, AthenaArray<Real> &qr)
+     const AthenaArray<Real> &q, AthenaArray<Real> &ql_kp1, AthenaArray<Real> &qr_k)
 {
   int nvar = q.GetDim(4);
   for (int n=0; n<nvar; ++n) {
     for (int i=il; i<=iu; ++i) {
-      ql(n,i) = q(n,k-1,j,i);
-      qr(n,i) = q(n,k  ,j,i);
+      ql_kp1(n,i) = q(n,k,j,i);
+      qr_k(n,i)   = q(n,k,j,i);
     }
   }
   return;

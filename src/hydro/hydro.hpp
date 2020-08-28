@@ -82,7 +82,7 @@ class Hydro {
  private:
   Mesh* pmesh_;                 // ptr to Mesh containing this Hydro
   int my_mbgid_;
-  AthenaArray<Real> w_,wl_,wr_,uflux_;   // 1-spatialD scratch vectors
+  AthenaArray<Real> w_,wl_,wl_jp1,wl_kp1,wr_,uflux_;   // 1-spatialD scratch vectors
 
 };
 
