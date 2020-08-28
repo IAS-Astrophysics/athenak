@@ -15,8 +15,7 @@
 #include "mesh/mesh.hpp"
 
 //----------------------------------------------------------------------------------------
-// MeshBlock constructor: constructs coordinate, boundary condition, hydro, field
-//                        and mesh refinement objects.
+// BoundaryValues constructor:
 
 BoundaryValues::BoundaryValues(Mesh *pm, ParameterInput *pin, int gid,
   BoundaryFlag *ibcs, int maxvar) : pmesh_(pm), my_mbgid_(gid)
@@ -24,10 +23,12 @@ BoundaryValues::BoundaryValues(Mesh *pm, ParameterInput *pin, int gid,
   // inheret boundary flags from MeshBlock 
   for (int i=0; i<6; ++i) {bflags[i] = ibcs[i];}
 
-  // calculate sizes and offsets for boundary buffers for cell-centered variables
+  // Allocate memory for send and receive boundary buffers for cell-centered variables.
+  // These are stored in 7 different AthenaArrays corresponding to the faces, edges, and
+  // corners of a 3D grid.
   // This implementation currently is specific to the 26 boundary buffers in a UNIFORM
   // grid with no adaptive refinement.
-  
+
   MeshBlock *pmb = pmesh_->FindMeshBlock(my_mbgid_);
   int ng = pmb->mb_cells.ng;
   int nx1 = pmb->mb_cells.nx1;
@@ -79,7 +80,7 @@ TaskStatus BoundaryValues::SendCellCenteredVariables(AthenaArray<Real> &a, int n
   int nx2 = pmb->mb_cells.nx2;
   int nx3 = pmb->mb_cells.nx3;
 
-//  load buffer *******
+  // load buffers, NO AMR
 
   for (int n=0; n<nvar; ++n) {
   for (int k=ks; k<=ke; ++k) {
@@ -236,6 +237,7 @@ TaskStatus BoundaryValues::SendCellCenteredVariables(AthenaArray<Real> &a, int n
 
   // Now send boundary buffer to neighboring MeshBlocks using MPI
   // If neighbor is on same MPI rank, just copy data
+  // TODO add MPI sends
   // TODO get working for multiple meshblocks
 
   // copy x1 faces
@@ -304,10 +306,10 @@ TaskStatus BoundaryValues::ReceiveCellCenteredVariables(AthenaArray<Real> &a, in
   int js = pmb->mb_cells.js; int je = pmb->mb_cells.je;
   int ks = pmb->mb_cells.ks; int ke = pmb->mb_cells.ke;
   int ncells1 = pmb->mb_cells.nx1 + 2*ng;
-  int ncells2 = (pmb->mb_cells.nx2 > 1)? (pmb->mb_cells.nx1 + 2*ng) : 1;
+  int ncells2 = (pmb->mb_cells.nx2 > 1)? (pmb->mb_cells.nx2 + 2*ng) : 1;
   int ncells3 = (pmb->mb_cells.nx3 > 1)? (pmb->mb_cells.nx3 + 2*ng) : 1;
 
-// unpack with NO AMR
+// unpack, NO AMR
 
   for (int n=0; n<nvar; ++n) {
   for (int k=0; k<ncells3; ++k) {
