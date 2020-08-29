@@ -15,10 +15,8 @@ rsolver     = advection
 gamma           = 1.4   # gamma = C_p/C_v
 iso_sound_speed = 1.0   # isothermal sound speed
 
-<driver>
-integrator = rk1
-
 <time>
+integrator = rk2
 cfl_number = 0.8       # The Courant, Friedrichs, & Lewy (CFL) Number
 nlim       = -1        # cycle limit (no limit if <0)
 tlim       = 0.5       # time limit
