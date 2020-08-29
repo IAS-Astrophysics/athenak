@@ -13,12 +13,15 @@
 
 #include "bvals.hpp"
 
+// identifiers for boundary conditions
+enum class BoundaryFlag {block=0, reflect, outflow, user, periodic};
+
 //----------------------------------------------------------------------------------------
 //! \fn GetBoundaryFlag(std::string input_string)
 //  \brief Parses input string to return scoped enumerator flag specifying boundary
 //  condition. Typically called in Mesh() ctor and in pgen/*.cpp files.
 
-BoundaryFlag GetBoundaryFlag(const std::string& input_string) {
+static BoundaryFlag GetBoundaryFlag(const std::string& input_string) {
   if (input_string == "reflecting") {
     return BoundaryFlag::reflect;
   } else if (input_string == "outflow") {
@@ -27,10 +30,6 @@ BoundaryFlag GetBoundaryFlag(const std::string& input_string) {
     return BoundaryFlag::user;
   } else if (input_string == "periodic") {
     return BoundaryFlag::periodic;
-  } else if (input_string == "none") {
-    return BoundaryFlag::undef;
-  } else if (input_string == "block") {
-    return BoundaryFlag::block;
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "Input string = '" << input_string << "' is an invalid boundary type"
@@ -45,12 +44,10 @@ BoundaryFlag GetBoundaryFlag(const std::string& input_string) {
 //  string describing the boundary condition. Typicall used to format descriptive errors
 //  or diagnostics. Inverse of GetBoundaryFlag().
 
-std::string GetBoundaryString(BoundaryFlag input_flag) {
+static std::string GetBoundaryString(BoundaryFlag input_flag) {
   switch (input_flag) {
-    case BoundaryFlag::block:  // -1
+    case BoundaryFlag::block:  // 0
       return "block";
-    case BoundaryFlag::undef:  // 0
-      return "none";
     case BoundaryFlag::reflect:
       return "reflecting";
     case BoundaryFlag::outflow:

@@ -35,7 +35,7 @@ void AdiabaticHydro::ConservedToPrimitive(AthenaArray<Real> &cons, AthenaArray<R
   MeshBlock* pmb = pmesh_->FindMeshBlock(my_mbgid_);
   int ng = pmb->mb_cells.ng;
   int ncells1 = pmb->mb_cells.nx1 + 2*ng;
-  int ncells2 = (pmb->mb_cells.nx2 > 1)? (pmb->mb_cells.nx1 + 2*ng) : 1;
+  int ncells2 = (pmb->mb_cells.nx2 > 1)? (pmb->mb_cells.nx2 + 2*ng) : 1;
   int ncells3 = (pmb->mb_cells.nx3 > 1)? (pmb->mb_cells.nx3 + 2*ng) : 1;
   Real gm1 = GetGamma() - 1.0;
 

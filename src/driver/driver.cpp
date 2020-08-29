@@ -122,6 +122,9 @@ void Driver::Initialize(Mesh *pmesh, Outputs *pout)
     tstatus = mb.phydro->HydroSend(this, nstages);
     tstatus = mb.phydro->HydroReceive(this, nstages);
   }
+  for (auto &mb : pmesh->mblocks) {
+    mb.pbvals->ApplyPhysicalBCs(this, nstages);
+  }
 
   // convert conserved to primitive over whole mesh
 

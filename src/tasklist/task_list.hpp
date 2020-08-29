@@ -12,10 +12,12 @@
 // The original idea and implementation of TaskLists was by Kengo Tomida
 // This version includes improvements due to Josh Dolence and the Parthenon dev team
 
+#include <iostream>
 #include <bitset>
 #include <functional>
 #include <vector>
 #include <list>
+#include <iterator>
 
 class Driver;
 
@@ -48,6 +50,8 @@ class TaskID {
   bool CheckDependencies(const TaskID &dep) const {
     return ((bitfld_ & dep.bitfld_) == dep.bitfld_);
   }
+  // output ID (useful for debugging)
+  void PrintID() {std::cout << "TaskID = " << bitfld_.to_string() << std::endl;}
   // mark task with input TaskID as complete
   void SetComplete(const TaskID &rhs) { bitfld_ |= rhs.bitfld_; }
 
@@ -56,6 +60,16 @@ class TaskID {
   TaskID operator| (const TaskID &rhs) const {
     TaskID ret;
     ret.bitfld_ = (bitfld_ | rhs.bitfld_);
+    return ret;
+  }
+  TaskID operator^ (const TaskID &rhs) const {
+    TaskID ret;
+    ret.bitfld_ = (bitfld_ ^ rhs.bitfld_);
+    return ret;
+  }
+  TaskID operator& (const TaskID &rhs) const {
+    TaskID ret;
+    ret.bitfld_ = (bitfld_ & rhs.bitfld_);
     return ret;
   }
 
@@ -79,6 +93,9 @@ class Task {
   void SetComplete() { complete_ = true; }
   void SetIncomplete() { complete_ = false; }
   bool IsComplete() { return complete_; }
+  void ChangeDependency(TaskID id, TaskID newdep) {
+    if ((dep_ & id) == id) {dep_ = ((dep_ ^ id) | newdep);}
+  }
 
  private:
   TaskID myid_;    // encodes task ID in bitfld_
@@ -110,6 +127,10 @@ class TaskList {
   }
   int Size() { return task_list_.size(); }
   void MarkTaskComplete(TaskID id) { tasks_completed_.SetComplete(id); }
+  TaskID GetIDLastTask() {return task_list_.back().GetID();}
+  // output diagnostics (useful for debugging)
+  void PrintIDs() { for (auto &it : task_list_) {it.GetID().PrintID();} }
+  void PrintDependencies() {for (auto &it : task_list_) {it.GetDependency().PrintID();}}
 
   //
   void Reset() {
@@ -121,7 +142,7 @@ class TaskList {
   TaskListStatus DoAvailable(Driver *d, int s) {
     for (auto &task : task_list_) {
       auto dep = task.GetDependency();
-      if (tasks_completed_.CheckDependencies(dep)) {
+      if ( tasks_completed_.CheckDependencies(dep) && !(task.IsComplete()) ) {
         TaskStatus status = task(d,s);  // calls Task function using overloaded operator()
         if (status == TaskStatus::complete) {
           task.SetComplete();              // set bool flag in task 
@@ -157,9 +178,25 @@ class TaskList {
     return id;
   }
 
+  // Append new Task to end of task list
+  // member functions of class T.  Usage:
+  //     auto taskid = tl.AddTask(&T::DoSomething, T, dependencies);
+  template <class F, class T>
+  TaskID InsertTask(F func, T *obj, TaskID &dep) {
+    auto size = task_list_.size();
+    TaskID id(size + 1);
+    task_list_.push_back( Task(id, dep,
+       [=](Driver *d, int s) mutable -> TaskStatus { return (obj->*func)(d,s); }) );
+    // new change dependencies for all but this newly added Task
+    for (auto it=task_list_.begin(); it!=std::prev(task_list_.end()); ++it) {
+      it->ChangeDependency(dep, id);
+    }
+    return id;
+  }
+
  protected:
   std::list<Task> task_list_;
-  std::vector<TaskList *> dependencies_;
+//  std::vector<TaskList *> dependencies_;
   TaskID tasks_completed_;
 };
 

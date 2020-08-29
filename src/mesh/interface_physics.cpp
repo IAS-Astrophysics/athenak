@@ -41,9 +41,27 @@ void MeshBlock::SelectPhysics(ParameterInput *pin)
   // allocate memory for boundary buffers for each physics
   pbvals->AllocateBuffers(phydro->nhydro);
 
-  // task lists
-  if (phydro != nullptr) phydro->HydroAddTasks(tl_onestage);
+  // build task lists
+  TaskID none(0);
+  std::vector<TaskID> hydro_tasks;
 
+  // add hydro tasks
+  if (phydro != nullptr) phydro->HydroAddTasks(tl_onestage, none, hydro_tasks);
+
+  // add physical boundary conditions
+  // TODO: insert this before hydro_con2prim
+  TaskID penultimate = hydro_tasks[hydro_tasks.size()-2];
+  penultimate.PrintID();
+
+  auto bvals_physical =
+    tl_onestage.InsertTask(&BoundaryValues::ApplyPhysicalBCs, pbvals, penultimate);
+//  auto bvals_physical =
+//    tl_onestage.AddTask(&BoundaryValues::ApplyPhysicalBCs, pbvals, hydro_tasks.back());
+
+/****/
+  tl_onestage.PrintIDs();
+  tl_onestage.PrintDependencies();
+/****/
 
   return;
 }

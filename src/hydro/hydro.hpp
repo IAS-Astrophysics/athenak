@@ -8,6 +8,7 @@
 //! \file hydro.hpp
 //  \brief definitions for Hydro class
 
+#include <vector>
 #include "athena.hpp"
 #include "athena_arrays.hpp"
 #include "parameter_input.hpp"
@@ -63,7 +64,7 @@ class Hydro {
   // functions
 //  void HydroDivFlux(AthenaArray<Real> &u);
 //  void UpdateHydro(AthenaArray<Real> &u0, AthenaArray<Real> &u1, AthenaArray<Real> &divf);
-  void HydroAddTasks(TaskList &tl);
+  void HydroAddTasks(TaskList &tl, TaskID start, std::vector<TaskID> &added);
   TaskStatus CopyConserved(Driver *d, int stage) {
     if (stage == 1) {
       int size = u0.GetSize();

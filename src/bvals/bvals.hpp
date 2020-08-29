@@ -13,7 +13,7 @@
 enum BoundaryFace {undef=-1, inner_x1, outer_x1, inner_x2, outer_x2, inner_x3, outer_x3};
 
 // identifiers for boundary conditions
-enum class BoundaryFlag {block=-1, undef, reflect, outflow, user, periodic};
+//enum class BoundaryFlag {block=-1, undef, reflect, outflow, user, periodic};
 
 // identifiers for types of neighbor blocks (connectivity with current MeshBlock)
 enum class NeighborConnection {none, face, edge, corner};
@@ -22,13 +22,14 @@ enum class NeighborConnection {none, face, edge, corner};
 enum class BoundaryStatus {waiting, arrived, completed};
 
 // free functions to return boundary flag given input string, and vice versa
-BoundaryFlag GetBoundaryFlag(const std::string& input_string);
-std::string GetBoundaryString(BoundaryFlag input_flag);
+//BoundaryFlag GetBoundaryFlag(const std::string& input_string);
+//std::string GetBoundaryString(BoundaryFlag input_flag);
 
 #include "athena.hpp"
 #include "athena_arrays.hpp"
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
+#include "boundary_flag.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \struct NeighborBlock
@@ -76,6 +77,14 @@ class BoundaryValues {
   void AllocateBuffers(int maxv);
   TaskStatus SendCellCenteredVariables(AthenaArray<Real> &a, int nvar);
   TaskStatus ReceiveCellCenteredVariables(AthenaArray<Real> &a, int nvar);
+
+  TaskStatus ApplyPhysicalBCs(Driver* pd, int stage);
+  void ReflectInnerX1();
+  void ReflectOuterX1();
+  void ReflectInnerX2();
+  void ReflectOuterX2();
+  void ReflectInnerX3();
+  void ReflectOuterX3();
 
  private:
   Mesh *pmesh_;

@@ -11,8 +11,9 @@ add_executable(
         globals.cpp
         parameter_input.cpp
 
-        bvals/boundary_flag.cpp
         bvals/bvals.cpp
+        bvals/reflect.cpp
+        bvals/cc_sendreceive.cpp
 
         driver/driver.cpp
 

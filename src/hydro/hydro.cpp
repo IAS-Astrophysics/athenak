@@ -117,7 +117,7 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
   // allocate memory for conserved variables
   MeshBlock *pmb = pmesh_->FindMeshBlock(my_mbgid_);
   int ncells1 = pmb->mb_cells.nx1 + 2*(pmb->mb_cells.ng);
-  int ncells2 = (pmb->mb_cells.nx2 > 1)? (pmb->mb_cells.nx1 + 2*(pmb->mb_cells.ng)) : 1;
+  int ncells2 = (pmb->mb_cells.nx2 > 1)? (pmb->mb_cells.nx2 + 2*(pmb->mb_cells.ng)) : 1;
   int ncells3 = (pmb->mb_cells.nx3 > 1)? (pmb->mb_cells.nx3 + 2*(pmb->mb_cells.ng)) : 1;
 
   u0.SetSize(nhydro, ncells3, ncells2, ncells1);
@@ -175,17 +175,24 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
 //! \fn  void Hydro::HydroAddTasks
 //  \brief
 
-void Hydro::HydroAddTasks(TaskList &tl) {
+void Hydro::HydroAddTasks(TaskList &tl, TaskID start, std::vector<TaskID> &added) {
 
-  TaskID none(0);
-  auto hydro_copycons = tl.AddTask(&Hydro::CopyConserved, this, none);
+  auto hydro_copycons = tl.AddTask(&Hydro::CopyConserved, this, start);
   auto hydro_divflux  = tl.AddTask(&Hydro::HydroDivFlux, this, hydro_copycons);
   auto hydro_update  = tl.AddTask(&Hydro::HydroUpdate, this, hydro_divflux);
   auto hydro_send  = tl.AddTask(&Hydro::HydroSend, this, hydro_update);
-  auto hydro_recv  = tl.AddTask(&Hydro::HydroReceive, this, hydro_send);
+  auto hydro_newdt  = tl.AddTask(&Hydro::NewTimeStep, this, hydro_send);
+  auto hydro_recv  = tl.AddTask(&Hydro::HydroReceive, this, hydro_newdt);
 //  auto phy_bval  = tl.AddTask(&Hydro::PhysicalBoundaryValues, this, hydro_recv);
   auto hydro_con2prim  = tl.AddTask(&Hydro::ConToPrim, this, hydro_recv);
-  auto hydro_newdt  = tl.AddTask(&Hydro::NewTimeStep, this, hydro_con2prim);
+
+  added.emplace_back(hydro_copycons);
+  added.emplace_back(hydro_divflux);
+  added.emplace_back(hydro_update);
+  added.emplace_back(hydro_send);
+  added.emplace_back(hydro_newdt);
+  added.emplace_back(hydro_recv);
+  added.emplace_back(hydro_con2prim);
 
   return;
 }
