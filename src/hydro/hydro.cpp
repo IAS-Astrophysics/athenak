@@ -123,9 +123,6 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
   u0.SetSize(nhydro, ncells3, ncells2, ncells1);
   w0.SetSize(nhydro, ncells3, ncells2, ncells1);
 
-  // construct boundary values object
-  pbvals = new BoundaryValues(pmesh_, pin, pmb->mb_gid, pmb->mb_bcs, nhydro);
-
   // for time-evolving problems, construct methods, allocate arrays
   if (hydro_evol != HydroEvolution::no_evolution) {
 
@@ -199,8 +196,9 @@ void Hydro::HydroAddTasks(TaskList &tl) {
 
 TaskStatus Hydro::HydroSend(Driver *pdrive, int stage) 
 {
+  MeshBlock* pmb = pmesh_->FindMeshBlock(my_mbgid_);
   TaskStatus tstat;
-  tstat = pbvals->SendCellCenteredVariables(u0, nhydro);
+  tstat = pmb->pbvals->SendCellCenteredVariables(u0, nhydro);
   return tstat;
 }
 
@@ -210,8 +208,9 @@ TaskStatus Hydro::HydroSend(Driver *pdrive, int stage)
 
 TaskStatus Hydro::HydroReceive(Driver *pdrive, int stage)
 {
+  MeshBlock* pmb = pmesh_->FindMeshBlock(my_mbgid_);
   TaskStatus tstat;
-  tstat = pbvals->ReceiveCellCenteredVariables(u0, nhydro);
+  tstat = pmb->pbvals->ReceiveCellCenteredVariables(u0, nhydro);
   return tstat;
 }
 

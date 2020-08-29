@@ -30,6 +30,18 @@ std::string GetBoundaryString(BoundaryFlag input_flag);
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
 
+//----------------------------------------------------------------------------------------
+//! \struct NeighborBlock
+//  \brief Information about neighboring MeshBlocks
+
+struct NeighborBlock
+{
+  int ngid;
+  int nrank;
+  int nlevel;
+  NeighborBlock() : ngid(-1), nrank(-1), nlevel(-1) {}  // set default values
+};
+
 // Forward delcarations
 class Mesh;
 
@@ -39,12 +51,20 @@ class Mesh;
 
 class BoundaryValues {
  public:
-  BoundaryValues(Mesh* pm, ParameterInput *pin, int gid, BoundaryFlag *bcs, int maxvar);
+  BoundaryValues(Mesh* pm, ParameterInput *pin, int gid, BoundaryFlag *bcs);
   ~BoundaryValues();
 
   // data
+  BoundaryFlag bndry_flags[6]; // enums specifying BCs at all 6 faces of this MeshBlock
 
-  BoundaryFlag bflags[6]; // enums specifying BCs at all 6 faces of this MeshBlock
+  NeighborBlock nblocks_x1face[2];
+  NeighborBlock nblocks_x2face[2]; 
+  NeighborBlock nblocks_x3face[2];
+  NeighborBlock nblocks_x1x2ed[4];
+  NeighborBlock nblocks_x3x1ed[4];
+  NeighborBlock nblocks_x2x3ed[4];
+  NeighborBlock nblocks_corner[8];
+
   AthenaArray<Real> cc_send_x1face, cc_send_x2face, cc_send_x3face;
   AthenaArray<Real> cc_send_x1x2ed, cc_send_x3x1ed, cc_send_x2x3ed;
   AthenaArray<Real> cc_send_corner;
@@ -53,6 +73,7 @@ class BoundaryValues {
   AthenaArray<Real> cc_recv_corner;
 
   // functions
+  void AllocateBuffers(int maxv);
   TaskStatus SendCellCenteredVariables(AthenaArray<Real> &a, int nvar);
   TaskStatus ReceiveCellCenteredVariables(AthenaArray<Real> &a, int nvar);
 

@@ -26,18 +26,23 @@ void MeshBlock::SelectPhysics(ParameterInput *pin)
   // parse input blocks to see which physics defined
   bool hydro_defined = pin->DoesBlockExist("hydro");
 
-  // loop through MBs on this rank and construct physics modules and tasks lists
+  // construct physics modules and tasks lists on this MeshBlock
+  // TODO: add multiple physics, store in std::vector of pointers?
+  // TODO: add element of std::vector in BoundaryValues for send/recv buffers each physics
+  
+  // physics modules
+  if (hydro_defined) {
+    phydro = new hydro::Hydro(pmesh_, pin, mb_gid);
+  } else {
+    phydro = nullptr;
+    std::cout << "Hydro block not found in input file" << std::endl;
+  }
 
-    // physics modules
-    if (hydro_defined) {
-      phydro = new hydro::Hydro(pmesh_, pin, mb_gid);
-    } else {
-      phydro = nullptr;
-      std::cout << "Hydro block not found in input file" << std::endl;
-    }
+  // allocate memory for boundary buffers for each physics
+  pbvals->AllocateBuffers(phydro->nhydro);
 
-    // task lists
-    if (phydro != nullptr) phydro->HydroAddTasks(tl_onestage);
+  // task lists
+  if (phydro != nullptr) phydro->HydroAddTasks(tl_onestage);
 
 
   return;

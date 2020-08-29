@@ -18,11 +18,24 @@
 // BoundaryValues constructor:
 
 BoundaryValues::BoundaryValues(Mesh *pm, ParameterInput *pin, int gid,
-  BoundaryFlag *ibcs, int maxvar) : pmesh_(pm), my_mbgid_(gid)
+  BoundaryFlag *ibcs) : pmesh_(pm), my_mbgid_(gid)
 {
   // inheret boundary flags from MeshBlock 
-  for (int i=0; i<6; ++i) {bflags[i] = ibcs[i];}
+  for (int i=0; i<6; ++i) {bndry_flags[i] = ibcs[i];}
+}
 
+//----------------------------------------------------------------------------------------
+// BoundaryValues destructor
+
+BoundaryValues::~BoundaryValues()
+{
+}
+
+//----------------------------------------------------------------------------------------
+// \!fn void BoundaryValues::AllocateBuffers
+
+void BoundaryValues::AllocateBuffers(int maxvar)
+{
   // Allocate memory for send and receive boundary buffers for cell-centered variables.
   // These are stored in 7 different AthenaArrays corresponding to the faces, edges, and
   // corners of a 3D grid.
@@ -55,14 +68,7 @@ BoundaryValues::BoundaryValues(Mesh *pm, ParameterInput *pin, int gid,
     cc_recv_x2x3ed.SetSize(4,maxvar,ng,ng,nx1);
     cc_recv_corner.SetSize(8,maxvar,ng,ng,ng);
   }
-
-}
-
-//----------------------------------------------------------------------------------------
-// BoundaryValues destructor
-
-BoundaryValues::~BoundaryValues()
-{
+  return;
 }
 
 //----------------------------------------------------------------------------------------
