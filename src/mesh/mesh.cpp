@@ -37,18 +37,12 @@ Mesh::Mesh(ParameterInput *pin)
   mesh_cells.nx2 = pin->GetInteger("mesh", "nx2");
   mesh_cells.nx3 = pin->GetInteger("mesh", "nx3");
 
-  mesh_bcs[BoundaryFace::inner_x1] =
-    GetBoundaryFlag(pin->GetOrAddString("mesh", "ix1_bc", "none"));
-  mesh_bcs[BoundaryFace::outer_x1] =
-    GetBoundaryFlag(pin->GetOrAddString("mesh", "ox1_bc", "none"));
-  mesh_bcs[BoundaryFace::inner_x2] =
-    GetBoundaryFlag(pin->GetOrAddString("mesh", "ix2_bc", "none"));
-  mesh_bcs[BoundaryFace::outer_x2] =
-    GetBoundaryFlag(pin->GetOrAddString("mesh", "ox2_bc", "none"));
-  mesh_bcs[BoundaryFace::inner_x3] =
-    GetBoundaryFlag(pin->GetOrAddString("mesh", "ix3_bc", "none"));
-  mesh_bcs[BoundaryFace::outer_x3] =
-    GetBoundaryFlag(pin->GetOrAddString("mesh", "ox3_bc", "none"));
+  mesh_bcs[BoundaryFace::inner_x1] = GetBoundaryFlag(pin->GetString("mesh", "ix1_bc"));
+  mesh_bcs[BoundaryFace::outer_x1] = GetBoundaryFlag(pin->GetString("mesh", "ox1_bc"));
+  mesh_bcs[BoundaryFace::inner_x2] = GetBoundaryFlag(pin->GetString("mesh", "ix2_bc"));
+  mesh_bcs[BoundaryFace::outer_x2] = GetBoundaryFlag(pin->GetString("mesh", "ox2_bc"));
+  mesh_bcs[BoundaryFace::inner_x3] = GetBoundaryFlag(pin->GetString("mesh", "ix3_bc"));
+  mesh_bcs[BoundaryFace::outer_x3] = GetBoundaryFlag(pin->GetString("mesh", "ox3_bc"));
 
   // define some useful variables that indicate 2D/3D calculations
   nx2gt1 = (mesh_cells.nx2 > 1) ? true : false;
@@ -701,14 +695,4 @@ void Mesh::SetBlockSizeAndBoundaries(LogicalLocation loc, RegionSize &block_size
   block_cells.ng  = mesh_cells.ng;
 
   return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn MeshBlock* Mesh::FindMeshBlock(int tgid)
-//  \brief return the MeshBlock whose gid is tgid
-
-MeshBlock* Mesh::FindMeshBlock(int tgid)
-{
-  assert (tgid >= gids_ && tgid <= gide_);
-  return &(mblocks[tgid - gids_]);
 }

@@ -93,8 +93,8 @@ class FormattedTableOutput : public OutputType {
 //----------------------------------------------------------------------------------------
 //! \class Outputs
 
-//  \brief root class for all Athena++ outputs. Provides a singly linked list of
-//  OutputTypes, with each node representing one mode/format of output to be made.
+//  \brief root class for all Athena++ outputs. Provides a std::vector of OutputTypes,
+//   with each element representing one mode/format of output to be made.
 
 class Outputs {
  public:

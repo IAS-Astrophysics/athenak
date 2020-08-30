@@ -87,7 +87,11 @@ class Mesh
 
   // accessors
   int GetNumMeshThreads() const {return num_mesh_threads;}
-  MeshBlock* FindMeshBlock(int tgid);
+  MeshBlock* FindMeshBlock(int tgid)
+  {
+    assert (tgid >= gids_ && tgid <= gide_);
+    return &(mblocks[tgid - gids_]);
+  }
 
   // data
   RegionSize  mesh_size;      // physical size of mesh (physical root level)
@@ -128,6 +132,7 @@ class Mesh
     return (x*xmax - x*xmin) - (0.5*xmax - 0.5*xmin) + (0.5*xmin + 0.5*xmax);
   }
   // returns i-index of cell containing x position
+  // TODO: set trap if out-of-range
   inline int CellCenterIndex(Real x, int n, Real xmin, Real xmax)
   {
     return static_cast<int>(((x-xmin)/(xmax-xmin))*static_cast<Real>(n));

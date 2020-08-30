@@ -48,20 +48,13 @@ void MeshBlock::SelectPhysics(ParameterInput *pin)
   // add hydro tasks
   if (phydro != nullptr) phydro->HydroAddTasks(tl_onestage, none, hydro_tasks);
 
-  // add physical boundary conditions
-  // TODO: insert this before hydro_con2prim
-  TaskID penultimate = hydro_tasks[hydro_tasks.size()-2];
-  penultimate.PrintID();
-
+  // add physical boundary conditions, and make depend on hydro_recv (penultimate task)
+  TaskID hydro_recv = hydro_tasks[hydro_tasks.size()-2];
   auto bvals_physical =
-    tl_onestage.InsertTask(&BoundaryValues::ApplyPhysicalBCs, pbvals, penultimate);
+    tl_onestage.InsertTask(&BoundaryValues::ApplyPhysicalBCs, pbvals, hydro_recv);
+
 //  auto bvals_physical =
 //    tl_onestage.AddTask(&BoundaryValues::ApplyPhysicalBCs, pbvals, hydro_tasks.back());
-
-/****/
-  tl_onestage.PrintIDs();
-  tl_onestage.PrintDependencies();
-/****/
 
   return;
 }

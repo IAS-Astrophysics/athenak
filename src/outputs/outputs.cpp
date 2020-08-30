@@ -12,9 +12,8 @@
 // implemented in the ParameterInput class, a second output block with the same integer
 // "n" of an earlier block will silently overwrite the values read by the first block. The
 // numbering of the output blocks does not need to be consecutive, and blocks may appear
-// in any order in the input file.  Moreover, unlike the C version of Athena, the total
-// number of <output[n]> blocks does not need to be specified -- in Athena++ a new output
-// type will be created for each and every <output[n]> block in the input file.
+// in any order in the input file. A new output type will be created for each and every
+// <output[n]> block in the input file.
 //
 // Required parameters that must be specified in an <output[n]> block are:
 //   - variable     = cons,prim,D,d,E,e,m,m1,m2,m3,v,v1=vx,v2=vy,v3=vz,p,
@@ -22,7 +21,7 @@
 //   - file_type    = rst,tab,vtk,hst,hdf5
 //   - dt           = problem time between outputs
 //
-// EXAMPLE of an <output[n]> block for a VTK dump:
+// EXAMPLE of an <output[n]> block for a TAB dump:
 //   <output3>
 //   file_type   = tab       # Tabular data dump
 //   variable    = prim      # variables to be output
@@ -46,7 +45,6 @@
 #include <iomanip>
 #include <iostream>
 #include <sstream>
-#include <stdexcept>
 #include <string>   // std::string, to_string()
 
 #include "athena.hpp"

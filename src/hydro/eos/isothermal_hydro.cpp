@@ -32,14 +32,14 @@ IsothermalHydro::IsothermalHydro(Mesh* pm, ParameterInput *pin, int igid)
 void IsothermalHydro::ConservedToPrimitive(AthenaArray<Real> &cons, AthenaArray<Real> &prim)
 {
   MeshBlock* pmb = pmesh_->FindMeshBlock(my_mbgid_);
-  int is = pmb->mb_cells.is; int ie = pmb->mb_cells.ie;
-  int js = pmb->mb_cells.js; int je = pmb->mb_cells.je;
-  int ks = pmb->mb_cells.ks; int ke = pmb->mb_cells.ke;
   int ng = pmb->mb_cells.ng;
+  int ncells1 = pmb->mb_cells.nx1 + 2*ng;
+  int ncells2 = (pmb->mb_cells.nx2 > 1)? (pmb->mb_cells.nx2 + 2*ng) : 1;
+  int ncells3 = (pmb->mb_cells.nx3 > 1)? (pmb->mb_cells.nx3 + 2*ng) : 1;
 
-  for (int k=ks-ng; k<=ke+ng; ++k) {
-    for (int j=js-ng; j<=je+ng; ++j) {
-      for (int i=is-ng; i<=ie+ng; ++i) {
+  for (int k=0; k<ncells3; ++k) {
+    for (int j=0; j<ncells2; ++j) {
+      for (int i=0; i<ncells1; ++i) {
         Real& u_d  = cons(IDN,k,j,i);
         Real& u_m1 = cons(IM1,k,j,i);
         Real& u_m2 = cons(IM2,k,j,i);
