@@ -26,8 +26,11 @@ namespace hydro {
 class EquationOfState
 {
  public:
-  EquationOfState(Mesh *pm, ParameterInput *pin, int igid);
+  EquationOfState(Mesh *pm, ParameterInput *pin, int igid, std::string type);
   virtual ~EquationOfState() = default;
+
+  // data
+  bool adiabatic_eos;
 
   // functions
   virtual Real GetGamma() {return 0.0;}       // only used in adiabatic EOS

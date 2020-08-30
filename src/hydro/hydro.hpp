@@ -21,39 +21,29 @@ class Driver;
 
 namespace hydro {
 
-// constants that enumerate Hydro physics options
-enum class HydroEOS {adiabatic, isothermal};
+// constants that enumerate Hydro dynamics options
 enum class HydroEvolution {hydro_static, kinematic, hydro_dynamic, no_evolution};
-enum class HydroReconMethod {donor_cell, piecewise_linear, piecewise_parabolic};
-enum class HydroRiemannSolver {advection, llf, hlle, hllc, roe};
-
-// constants that determine array index of Hydro variables
-//enum ConsIndex {IDN=0, IM1=1, IM2=2, IM3=3, IEN=4};
-//enum PrimIndex {IVX=1, IVY=2, IVZ=3, IPR=4};
 
 //----------------------------------------------------------------------------------------
 //! \class Hydro
 
-class Hydro {
+class Hydro
+{
  public:
   Hydro(Mesh *pm, ParameterInput *pin, int gid);
   ~Hydro();
 
   // data
-  HydroEOS hydro_eos;                 // enum storing choice of EOS
-  HydroEvolution hydro_evol;          // enum storing choice of time evolution
-  HydroReconMethod hydro_recon;       // enum storing choice of reconstruction method
-  HydroRiemannSolver hydro_rsolver;   // enum storing choice of Riemann solver
-
+  HydroEvolution hydro_evol;  // enum storing choice of time evolution
   EquationOfState *peos;      // object that implements chosen EOS
-  Reconstruction  *precon;    // object that implements chosen reconstruction methods
-  RiemannSolver   *prsolver;  // object that implements chosen Riemann solver
 
   int nhydro;             // number of conserved variables (5/4 for adiabatic/isothermal)
   AthenaArray<Real> u0;   // conserved variables
   AthenaArray<Real> w0;   // primitive variables
 
   // following only used for time-evolving flow
+  Reconstruction  *precon;    // object that implements chosen reconstruction methods
+  RiemannSolver   *prsolver;  // object that implements chosen Riemann solver
   AthenaArray<Real> u1;           // 4D conserved variables at intermediate step 
   AthenaArray<Real> divf;         // 4D divergence of fluxes (3 spatial-D)
   AthenaArray<Real> uflx_x1face;  // 3D fluxes on x1-faces (used in flux correction step)
@@ -62,8 +52,6 @@ class Hydro {
   Real dtnew;
 
   // functions
-//  void HydroDivFlux(AthenaArray<Real> &u);
-//  void UpdateHydro(AthenaArray<Real> &u0, AthenaArray<Real> &u1, AthenaArray<Real> &divf);
   void HydroAddTasks(TaskList &tl, TaskID start, std::vector<TaskID> &added);
   TaskStatus CopyConserved(Driver *d, int stage) {
     if (stage == 1) {
@@ -83,7 +71,6 @@ class Hydro {
   Mesh* pmesh_;                 // ptr to Mesh containing this Hydro
   int my_mbgid_;
   AthenaArray<Real> w_,wl_,wl_jp1,wl_kp1,wr_,uflux_;   // 1-spatialD scratch vectors
-
 };
 
 } // namespace hydro

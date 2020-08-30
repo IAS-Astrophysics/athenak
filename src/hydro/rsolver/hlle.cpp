@@ -53,11 +53,11 @@ void HLLE::RSolver(const int il, const int iu, const int ivx, const AthenaArray<
   Real fl[5],fr[5],flxi[5];
   Real gm1, igm1, iso_cs;
   MeshBlock* pmb = pmesh_->FindMeshBlock(my_mbgid_);
-  if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) {
+  bool adiabatic_eos = pmb->phydro->peos->adiabatic_eos;
+  if (adiabatic_eos) {
     gm1 = pmb->phydro->peos->GetGamma() - 1.0;
     igm1 = 1.0/gm1;
-  }
-  if (pmb->phydro->hydro_eos == HydroEOS::isothermal) {
+  } else {
     iso_cs = pmb->phydro->peos->SoundSpeed(wli);  // wli is just "dummy argument"
   }
 
@@ -67,13 +67,13 @@ void HLLE::RSolver(const int il, const int iu, const int ivx, const AthenaArray<
     wli[IVX]=wl(ivx,i);
     wli[IVY]=wl(ivy,i);
     wli[IVZ]=wl(ivz,i);
-    if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) { wli[IPR]=wl(IPR,i); }
+    if (adiabatic_eos) { wli[IPR]=wl(IPR,i); }
 
     wri[IDN]=wr(IDN,i);
     wri[IVX]=wr(ivx,i);
     wri[IVY]=wr(ivy,i);
     wri[IVZ]=wr(ivz,i);
-    if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) { wri[IPR]=wr(IPR,i); }
+    if (adiabatic_eos) { wri[IPR]=wr(IPR,i); }
 
     Real el,er,cl,cr,al,ar;
     //--- Step 2.  Compute Roe-averaged state
@@ -89,7 +89,7 @@ void HLLE::RSolver(const int il, const int iu, const int ivx, const AthenaArray<
     // Following Roe(1981), the enthalpy H=(E+P)/d is averaged for adiabatic flows,
     // rather than E or P directly.  sqrtdl*hl = sqrtdl*(el+pl)/dl = (el+pl)/sqrtdl
     Real hroe;
-    if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) {
+    if (adiabatic_eos) {
       el = wli[IPR]*igm1 + 0.5*wli[IDN]*(SQR(wli[IVX]) + SQR(wli[IVY]) + SQR(wli[IVZ]));
       er = wri[IPR]*igm1 + 0.5*wri[IDN]*(SQR(wri[IVX]) + SQR(wri[IVY]) + SQR(wri[IVZ]));
       hroe = ((el + wli[IPR])/sqrtdl + (er + wri[IPR])/sqrtdr)*isdlpdr;
@@ -100,7 +100,7 @@ void HLLE::RSolver(const int il, const int iu, const int ivx, const AthenaArray<
     cl = pmb->phydro->peos->SoundSpeed(wli);
     cr = pmb->phydro->peos->SoundSpeed(wri);
     Real a  = iso_cs;
-    if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) {
+    if (adiabatic_eos) {
       Real q = hroe - 0.5*(SQR(wroe[IVX]) + SQR(wroe[IVY]) + SQR(wroe[IVZ]));
       a = (q < 0.0) ? 0.0 : std::sqrt(gm1*q);
     }
@@ -128,7 +128,7 @@ void HLLE::RSolver(const int il, const int iu, const int ivx, const AthenaArray<
     fl[IVZ] = wli[IDN]*wli[IVZ]*vxl;
     fr[IVZ] = wri[IDN]*wri[IVZ]*vxr;
 
-    if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) {
+    if (adiabatic_eos) {
       fl[IVX] += wli[IPR];
       fr[IVX] += wri[IPR];
       fl[IEN] = el*vxl + wli[IPR]*wli[IVX];
@@ -146,15 +146,13 @@ void HLLE::RSolver(const int il, const int iu, const int ivx, const AthenaArray<
     flxi[IVX] = 0.5*(fl[IVX]+fr[IVX]) + (fl[IVX]-fr[IVX])*tmp;
     flxi[IVY] = 0.5*(fl[IVY]+fr[IVY]) + (fl[IVY]-fr[IVY])*tmp;
     flxi[IVZ] = 0.5*(fl[IVZ]+fr[IVZ]) + (fl[IVZ]-fr[IVZ])*tmp;
-    if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) {
-      flxi[IEN] = 0.5*(fl[IEN]+fr[IEN]) + (fl[IEN]-fr[IEN])*tmp;
-    }
+    if (adiabatic_eos) { flxi[IEN] = 0.5*(fl[IEN]+fr[IEN]) + (fl[IEN]-fr[IEN])*tmp; }
 
     flx(IDN,i) = flxi[IDN];
     flx(ivx,i) = flxi[IVX];
     flx(ivy,i) = flxi[IVY];
     flx(ivz,i) = flxi[IVZ];
-    if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) {flx(IEN,i) = flxi[IEN];}
+    if (adiabatic_eos) { flx(IEN,i) = flxi[IEN]; }
   }
   return;
 }

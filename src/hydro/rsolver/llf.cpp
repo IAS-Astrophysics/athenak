@@ -49,10 +49,10 @@ void LLF::RSolver(const int il, const int iu, const int ivx, const AthenaArray<R
   Real fl[5],fr[5],flxi[5];
   Real gm1, iso_cs;
   MeshBlock* pmb = pmesh_->FindMeshBlock(my_mbgid_);
-  if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) {
+  bool adiabatic_eos = pmb->phydro->peos->adiabatic_eos;
+  if (adiabatic_eos) {
     gm1 = pmb->phydro->peos->GetGamma() - 1.0;
-  }
-  if (pmb->phydro->hydro_eos == HydroEOS::isothermal) {
+  } else {
     iso_cs = pmb->phydro->peos->SoundSpeed(wli);  // wli is just "dummy argument"
   }
 
@@ -62,13 +62,13 @@ void LLF::RSolver(const int il, const int iu, const int ivx, const AthenaArray<R
     wli[IVX]=wl(ivx,i);
     wli[IVY]=wl(ivy,i);
     wli[IVZ]=wl(ivz,i);
-    if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) { wli[IPR]=wl(IPR,i); }
+    if (adiabatic_eos) { wli[IPR]=wl(IPR,i); }
 
     wri[IDN]=wr(IDN,i);
     wri[IVX]=wr(ivx,i);
     wri[IVY]=wr(ivy,i);
     wri[IVZ]=wr(ivz,i);
-    if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) { wri[IPR]=wr(IPR,i); }
+    if (adiabatic_eos) { wri[IPR]=wr(IPR,i); }
 
     //--- Step 2.  Compute wave speeds in L,R states (see Toro eq. 10.43)
 
@@ -94,7 +94,7 @@ void LLF::RSolver(const int il, const int iu, const int ivx, const AthenaArray<R
     fr[IVZ] = mxr*wri[IVZ];
 
     Real el,er;
-    if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) {
+    if (adiabatic_eos) {
       el = wli[IPR]/gm1 + 0.5*wli[IDN]*(SQR(wli[IVX]) + SQR(wli[IVY]) + SQR(wli[IVZ]));
       er = wri[IPR]/gm1 + 0.5*wri[IDN]*(SQR(wri[IVX]) + SQR(wri[IVY]) + SQR(wri[IVZ]));
       fl[IVX] += wli[IPR];
@@ -112,7 +112,7 @@ void LLF::RSolver(const int il, const int iu, const int ivx, const AthenaArray<R
     du[IVX] = wri[IDN]*wri[IVX] - wli[IDN]*wli[IVX];
     du[IVY] = wri[IDN]*wri[IVY] - wli[IDN]*wli[IVY];
     du[IVZ] = wri[IDN]*wri[IVZ] - wli[IDN]*wli[IVZ];
-    if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) { du[IEN] = er - el; }
+    if (adiabatic_eos) { du[IEN] = er - el; }
 
     //--- Step 5. Compute the LLF flux at interface (see Toro eq. 10.42).
 
@@ -120,7 +120,7 @@ void LLF::RSolver(const int il, const int iu, const int ivx, const AthenaArray<R
     flxi[IVX] = 0.5*(fl[IVX] + fr[IVX]) - a*du[IVX];
     flxi[IVY] = 0.5*(fl[IVY] + fr[IVY]) - a*du[IVY];
     flxi[IVZ] = 0.5*(fl[IVZ] + fr[IVZ]) - a*du[IVZ];
-    if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) {
+    if (adiabatic_eos) {
       flxi[IEN] = 0.5*(fl[IEN] + fr[IEN]) - a*du[IEN];
     }
 
@@ -130,7 +130,7 @@ void LLF::RSolver(const int il, const int iu, const int ivx, const AthenaArray<R
     flx(ivx,i) = flxi[IVX];
     flx(ivy,i) = flxi[IVY];
     flx(ivz,i) = flxi[IVZ];
-    if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) { flx(IEN,i) = flxi[IEN]; }
+    if (adiabatic_eos) { flx(IEN,i) = flxi[IEN]; }
   }
   return;
 }

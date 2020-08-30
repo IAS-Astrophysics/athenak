@@ -39,10 +39,10 @@ void Advection::RSolver(const int il, const int iu, const int ivx,
   Real wli[5],wri[5];
   Real gm1, iso_cs;
   MeshBlock* pmb = pmesh_->FindMeshBlock(my_mbgid_);
-  if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) {
+  bool adiabatic_eos = pmb->phydro->peos->adiabatic_eos;
+  if (adiabatic_eos) {
     gm1 = pmb->phydro->peos->GetGamma() - 1.0;
-  }
-  if (pmb->phydro->hydro_eos == HydroEOS::isothermal) {
+  } else {
     iso_cs = pmb->phydro->peos->SoundSpeed(wli);  // wli is just "dummy argument"
   }
 
@@ -52,13 +52,13 @@ void Advection::RSolver(const int il, const int iu, const int ivx,
     wli[IVX]=wl(ivx,i);
     wli[IVY]=wl(ivy,i);
     wli[IVZ]=wl(ivz,i);
-    if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) { wli[IPR]=wl(IPR,i); }
+    if (adiabatic_eos) { wli[IPR]=wl(IPR,i); }
 
     wri[IDN]=wr(IDN,i);
     wri[IVX]=wr(ivx,i);
     wri[IVY]=wr(ivy,i);
     wri[IVZ]=wr(ivz,i);
-    if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) { wri[IPR]=wr(IPR,i); }
+    if (adiabatic_eos) { wri[IPR]=wr(IPR,i); }
 
     //--- Step 3.  Compute upwind fluxes
 
@@ -69,9 +69,7 @@ void Advection::RSolver(const int il, const int iu, const int ivx,
       flx(ivx,i) = mxl*wli[IVX];
       flx(ivy,i) = mxl*wli[IVY];
       flx(ivz,i) = mxl*wli[IVZ];
-      if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) {
-        flx(IEN,i) = wli[IPR]*wli[IVX]/gm1;
-      }
+      if (adiabatic_eos) { flx(IEN,i) = wli[IPR]*wli[IVX]/gm1; }
 
     } else {
 
@@ -80,9 +78,7 @@ void Advection::RSolver(const int il, const int iu, const int ivx,
       flx(ivx,i) = mxr*wri[IVX];
       flx(ivy,i) = mxr*wri[IVY];
       flx(ivz,i) = mxr*wri[IVZ];
-      if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) {
-        flx(IEN,i) = wri[IPR]*wri[IVX]/gm1;
-      }
+      if (adiabatic_eos) { flx(IEN,i) = wri[IPR]*wri[IVX]/gm1; }
 
     }
   }

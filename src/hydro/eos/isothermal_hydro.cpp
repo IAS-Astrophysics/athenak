@@ -20,8 +20,9 @@ namespace hydro {
 // IsothermalHydro constructor
     
 IsothermalHydro::IsothermalHydro(Mesh* pm, ParameterInput *pin, int igid)
-  : EquationOfState(pm, pin, igid)
+  : EquationOfState(pm, pin, igid, "isothermal")
 {
+  adiabatic_eos = false;
   iso_cs_ = pin->GetReal("eos", "iso_sound_speed");
 }
 

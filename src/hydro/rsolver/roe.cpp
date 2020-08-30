@@ -31,18 +31,18 @@ namespace hydro {
 
 Roe::Roe(Mesh* pm, ParameterInput* pin, int igid) : RiemannSolver(pm, pin, igid)
 {
-  void RSolver(const int il, const  int iu, const int dir,
-               const AthenaArray<Real> &wl, const AthenaArray<Real> &wr,
-               AthenaArray<Real> &flx);
+  void RSolver(const int il, const  int iu, const int dir, const AthenaArray<Real> &wl,
+               const AthenaArray<Real> &wr, AthenaArray<Real> &flx);
 }
 
+
+// prototype for functions to compute Roe fluxes from eigenmatrices
 namespace roe {
 
-// prototype for function to compute Roe fluxes from eigenmatrices
-inline void RoeFlux(const MeshBlock* pmb, const Real wroe[], const Real du[],
-                    const Real wli[], Real flx[], Real eigenvalues[], int &flag);
-// (gamma-1) and isothermal sound speed made global so can be shared with flux fn
-Real gm1, iso_cs;
+inline void RoeFluxAdb(const MeshBlock* pmb, const Real wroe[], const Real du[],
+   const Real wli[], const Real gm1, Real flx[], Real eigenvalues[], int &flag);
+inline void RoeFluxIso(const MeshBlock* pmb, const Real wroe[], const Real du[],
+   const Real wli[], const Real isocs, Real flx[], Real eigenvalues[], int &flag);
 
 } // namespace roe
 
@@ -59,11 +59,12 @@ void Roe::RSolver(const int il, const int iu, const int ivx, const AthenaArray<R
   Real fl[5],fr[5],flxi[5];
   Real ev[5],du[5];
   MeshBlock* pmb = pmesh_->FindMeshBlock(my_mbgid_);
-  if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) {
-    roe::gm1 = pmb->phydro->peos->GetGamma() - 1.0;
-  }
-  if (pmb->phydro->hydro_eos == HydroEOS::isothermal) {
-    roe::iso_cs = pmb->phydro->peos->SoundSpeed(wli);  // wli is just "dummy argument"
+  bool adiabatic_eos = pmb->phydro->peos->adiabatic_eos;
+  Real gm1, iso_cs;
+  if (adiabatic_eos) {
+    gm1 = pmb->phydro->peos->GetGamma() - 1.0;
+  } else {
+    iso_cs = pmb->phydro->peos->SoundSpeed(wli);  // wli is just "dummy argument"
   }
 
   for (int i=il; i<=iu; ++i) {
@@ -72,13 +73,13 @@ void Roe::RSolver(const int il, const int iu, const int ivx, const AthenaArray<R
     wli[IVX]=wl(ivx,i);
     wli[IVY]=wl(ivy,i);
     wli[IVZ]=wl(ivz,i);
-    if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) wli[IPR]=wl(IPR,i);
+    if (adiabatic_eos) wli[IPR]=wl(IPR,i);
 
     wri[IDN]=wr(IDN,i);
     wri[IVX]=wr(ivx,i);
     wri[IVY]=wr(ivy,i);
     wri[IVZ]=wr(ivz,i);
-    if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) wri[IPR]=wr(IPR,i);
+    if (adiabatic_eos) wri[IPR]=wr(IPR,i);
 
     //--- Step 2.  Compute Roe-averaged data from left- and right-states
 
@@ -94,9 +95,9 @@ void Roe::RSolver(const int il, const int iu, const int ivx, const AthenaArray<R
     // Following Roe(1981), the enthalpy H=(E+P)/d is averaged for adiabatic flows,
     // rather than E or P directly.  sqrtdl*hl = sqrtdl*(el+pl)/dl = (el+pl)/sqrtdl
     Real el,er;
-    if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) {
-      el = wli[IPR]/roe::gm1 + 0.5*wli[IDN]*(SQR(wli[IVX])+SQR(wli[IVY])+SQR(wli[IVZ]));
-      er = wri[IPR]/roe::gm1 + 0.5*wri[IDN]*(SQR(wri[IVX])+SQR(wri[IVY])+SQR(wri[IVZ]));
+    if (adiabatic_eos) {
+      el = wli[IPR]/gm1 + 0.5*wli[IDN]*(SQR(wli[IVX])+SQR(wli[IVY])+SQR(wli[IVZ]));
+      er = wri[IPR]/gm1 + 0.5*wri[IDN]*(SQR(wri[IVX])+SQR(wri[IVY])+SQR(wri[IVZ]));
       wroe[IPR] = ((el + wli[IPR])/sqrtdl + (er + wri[IPR])/sqrtdr)*isdlpdr;
     }
 
@@ -117,14 +118,14 @@ void Roe::RSolver(const int il, const int iu, const int ivx, const AthenaArray<R
     fl[IVZ] = mxl*wli[IVZ];
     fr[IVZ] = mxr*wri[IVZ];
 
-    if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) {
+    if (adiabatic_eos) {
       fl[IVX] += wli[IPR];
       fr[IVX] += wri[IPR];
       fl[IEN] = (el + wli[IPR])*wli[IVX];
       fr[IEN] = (er + wri[IPR])*wri[IVX];
     } else {
-      fl[IVX] += (roe::iso_cs*roe::iso_cs)*wli[IDN];
-      fr[IVX] += (roe::iso_cs*roe::iso_cs)*wri[IDN];
+      fl[IVX] += (iso_cs*iso_cs)*wli[IDN];
+      fr[IVX] += (iso_cs*iso_cs)*wri[IDN];
     }
 
     //--- Step 4.  Compute Roe fluxes.
@@ -133,16 +134,20 @@ void Roe::RSolver(const int il, const int iu, const int ivx, const AthenaArray<R
     du[IVX] = wri[IDN]*wri[IVX] - wli[IDN]*wli[IVX];
     du[IVY] = wri[IDN]*wri[IVY] - wli[IDN]*wli[IVY];
     du[IVZ] = wri[IDN]*wri[IVZ] - wli[IDN]*wli[IVZ];
-    if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) du[IEN] = er - el;
+    if (adiabatic_eos) du[IEN] = er - el;
 
     flxi[IDN] = 0.5*(fl[IDN] + fr[IDN]);
     flxi[IVX] = 0.5*(fl[IVX] + fr[IVX]);
     flxi[IVY] = 0.5*(fl[IVY] + fr[IVY]);
     flxi[IVZ] = 0.5*(fl[IVZ] + fr[IVZ]);
-    if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) flxi[IEN] = 0.5*(fl[IEN] + fr[IEN]);
+    if (adiabatic_eos) flxi[IEN] = 0.5*(fl[IEN] + fr[IEN]);
 
     int llf_flag = 0;
-    roe::RoeFlux(pmb,wroe,du,wli,flxi,ev,llf_flag);
+    if (adiabatic_eos) {
+      roe::RoeFluxAdb(pmb,wroe,du,wli,gm1,flxi,ev,llf_flag);
+    } else {
+      roe::RoeFluxIso(pmb,wroe,du,wli,iso_cs,flxi,ev,llf_flag);
+    }
 
     //--- Step 5.  Overwrite with upwind flux if flow is supersonic
 
@@ -151,9 +156,9 @@ void Roe::RSolver(const int il, const int iu, const int ivx, const AthenaArray<R
       flxi[IVX] = fl[IVX];
       flxi[IVY] = fl[IVY];
       flxi[IVZ] = fl[IVZ];
-      if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) flxi[IEN] = fl[IEN];
+      if (adiabatic_eos) flxi[IEN] = fl[IEN];
     }
-    if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) {
+    if (adiabatic_eos) {
       if (ev[4] <= 0.0) {
         flxi[IDN] = fr[IDN];
         flxi[IVX] = fr[IVX];
@@ -181,7 +186,7 @@ void Roe::RSolver(const int il, const int iu, const int ivx, const AthenaArray<R
       flxi[IVX] = 0.5*(fl[IVX] + fr[IVX]) - a*du[IVX];
       flxi[IVY] = 0.5*(fl[IVY] + fr[IVY]) - a*du[IVY];
       flxi[IVZ] = 0.5*(fl[IVZ] + fr[IVZ]) - a*du[IVZ];
-      if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) {
+      if (adiabatic_eos) {
         flxi[IEN] = 0.5*(fl[IEN] + fr[IEN]) - a*du[IEN];
       }
     }
@@ -192,7 +197,7 @@ void Roe::RSolver(const int il, const int iu, const int ivx, const AthenaArray<R
     flx(ivx,i) = flxi[IVX];
     flx(ivy,i) = flxi[IVY];
     flx(ivz,i) = flxi[IVZ];
-    if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) flx(IEN,i) = flxi[IEN];
+    if (adiabatic_eos) flx(IEN,i) = flxi[IEN];
   }
   return;
 }
@@ -224,20 +229,18 @@ namespace roe {
 // - J. Stone, T. Gardiner, P. Teuben, J. Hawley, & J. Simon "Athena: A new code for
 //   astrophysical MHD", ApJS, (2008), Appendix A.  Equation numbers refer to this paper.
 
-inline void RoeFlux(const MeshBlock* pmb, const Real wroe[], const Real du[],
-                    const Real wli[], Real flx[], Real ev[], int &llf_flag)
+inline void RoeFluxAdb(const MeshBlock* pmb, const Real wroe[], const Real du[],
+  const Real wli[], const Real gm1,  Real flx[], Real ev[], int &llf_flag)
 {
   Real d  = wroe[IDN];
   Real v1 = wroe[IVX];
   Real v2 = wroe[IVY];
   Real v3 = wroe[IVZ];
 
-  //--- Adiabatic hydrodynamics
-  if (pmb->phydro->hydro_eos == HydroEOS::adiabatic) {
     Real h = wroe[IPR];
     Real vsq = v1*v1 + v2*v2 + v3*v3;
     Real q = h - 0.5*vsq;
-    Real cs_sq = (q < 0.0) ? (std::numeric_limits<float>::min()) : roe::gm1*q;
+    Real cs_sq = (q < 0.0) ? (std::numeric_limits<float>::min()) : gm1*q;
     Real cs = std::sqrt(cs_sq);
 
     // Compute eigenvalues (eq. B2)
@@ -250,11 +253,11 @@ inline void RoeFlux(const MeshBlock* pmb, const Real wroe[], const Real du[],
     // Compute projection of dU onto L-eigenvectors using matrix elements from eq. B4
     Real a[5];
     Real na = 0.5/cs_sq;
-    a[0]  = du[0]*(0.5*roe::gm1*vsq + v1*cs);
-    a[0] -= du[1]*(roe::gm1*v1 + cs);
-    a[0] -= du[2]*roe::gm1*v2;
-    a[0] -= du[3]*roe::gm1*v3;
-    a[0] += du[4]*roe::gm1;
+    a[0]  = du[0]*(0.5*gm1*vsq + v1*cs);
+    a[0] -= du[1]*(gm1*v1 + cs);
+    a[0] -= du[2]*gm1*v2;
+    a[0] -= du[3]*gm1*v3;
+    a[0] += du[4]*gm1;
     a[0] *= na;
 
     a[1]  = du[0]*(-v2);
@@ -263,18 +266,18 @@ inline void RoeFlux(const MeshBlock* pmb, const Real wroe[], const Real du[],
     a[2]  = du[0]*(-v3);
     a[2] += du[3];
 
-    Real qa = roe::gm1/cs_sq;
-    a[3]  = du[0]*(1.0 - na*roe::gm1*vsq);
+    Real qa = gm1/cs_sq;
+    a[3]  = du[0]*(1.0 - na*gm1*vsq);
     a[3] += du[1]*qa*v1;
     a[3] += du[2]*qa*v2;
     a[3] += du[3]*qa*v3;
     a[3] -= du[4]*qa;
 
-    a[4]  = du[0]*(0.5*roe::gm1*vsq - v1*cs);
-    a[4] -= du[1]*(roe::gm1*v1 - cs);
-    a[4] -= du[2]*roe::gm1*v2;
-    a[4] -= du[3]*roe::gm1*v3;
-    a[4] += du[4]*roe::gm1;
+    a[4]  = du[0]*(0.5*gm1*vsq - v1*cs);
+    a[4] -= du[1]*(gm1*v1 - cs);
+    a[4] -= du[2]*gm1*v2;
+    a[4] -= du[3]*gm1*v3;
+    a[4] += du[4]*gm1;
     a[4] *= na;
 
     Real coeff[5];
@@ -317,19 +320,32 @@ inline void RoeFlux(const MeshBlock* pmb, const Real wroe[], const Real du[],
     flx[4] += coeff[3]*0.5*vsq;
     flx[4] += coeff[4]*(h + v1*cs);
 
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn RoeFlux()
+
+inline void RoeFluxIso(const MeshBlock* pmb, const Real wroe[], const Real du[],
+  const Real wli[], const Real iso_cs,  Real flx[], Real ev[], int &llf_flag)
+{
+  Real d  = wroe[IDN];
+  Real v1 = wroe[IVX];
+  Real v2 = wroe[IVY];
+  Real v3 = wroe[IVZ];
+
     //--- Isothermal hydrodynamics
 
-  } else {
     // Compute eigenvalues (eq. B6)
-    ev[0] = v1 - roe::iso_cs;
+    ev[0] = v1 - iso_cs;
     ev[1] = v1;
     ev[2] = v1;
-    ev[3] = v1 + roe::iso_cs;
+    ev[3] = v1 + iso_cs;
 
     // Compute projection of dU onto L-eigenvectors using matrix elements from eq. B7
     Real a[4];
-    a[0]  = du[0]*(0.5 + 0.5*v1/roe::iso_cs);
-    a[0] -= du[1]*0.5/roe::iso_cs;
+    a[0]  = du[0]*(0.5 + 0.5*v1/iso_cs);
+    a[0] -= du[1]*0.5/iso_cs;
 
     a[1]  = du[0]*(-v2);
     a[1] += du[2];
@@ -337,8 +353,8 @@ inline void RoeFlux(const MeshBlock* pmb, const Real wroe[], const Real du[],
     a[2]  = du[0]*(-v3);
     a[2] += du[3];
 
-    a[3]  = du[0]*(0.5 - 0.5*v1/roe::iso_cs);
-    a[3] += du[1]*0.5/roe::iso_cs;
+    a[3]  = du[0]*(0.5 - 0.5*v1/iso_cs);
+    a[3] += du[1]*0.5/iso_cs;
 
     Real coeff[4];
     coeff[0] = -0.5*std::abs(ev[0])*a[0];
@@ -358,8 +374,8 @@ inline void RoeFlux(const MeshBlock* pmb, const Real wroe[], const Real du[],
     flx[0] += coeff[0];
     flx[0] += coeff[3];
 
-    flx[1] += coeff[0]*(v1 - roe::iso_cs);
-    flx[1] += coeff[3]*(v1 + roe::iso_cs);
+    flx[1] += coeff[0]*(v1 - iso_cs);
+    flx[1] += coeff[3]*(v1 + iso_cs);
 
     flx[2] += coeff[0]*v2;
     flx[2] += coeff[1];
@@ -368,7 +384,6 @@ inline void RoeFlux(const MeshBlock* pmb, const Real wroe[], const Real du[],
     flx[3] += coeff[0]*v3;
     flx[3] += coeff[2];
     flx[3] += coeff[3]*v3;
-  }
   return;
 }
 } // namespace roe
