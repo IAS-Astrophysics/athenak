@@ -41,6 +41,7 @@ add_executable(
         outputs/outputs.cpp
         outputs/output_type.cpp
         outputs/formatted_table.cpp
+        outputs/history.cpp
 
         pgen/pgen.cpp
         pgen/advection.cpp

@@ -87,6 +87,9 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
   if (out_params.slice2) { nout2 = 1; }
   if (out_params.slice3) { nout3 = 1; }
 
+  // exit for history files
+  if (out_params.file_type.compare("hst") == 0) {return;}
+
   // calculate spatial positions of output data
   out_x1posn_.SetSize(pm->nmbthisrank, nout1);
   out_x1posn_.SetLabel("x1v");

@@ -63,9 +63,8 @@ class OutputType
   AthenaArray<bool> hydro_cons_out_vars;
   AthenaArray<bool> hydro_prim_out_vars;
 
-  // functions
-  void LoadOutputData(Mesh *pm);
-  // following pure virtual function must be implemented in all derived classes
+  // virtual functions over-ridden in derived classes
+  virtual void LoadOutputData(Mesh *pm);
   virtual void WriteOutputFile(Mesh *pm, ParameterInput *pin) = 0;
 
  protected:
@@ -85,6 +84,18 @@ class FormattedTableOutput : public OutputType
   FormattedTableOutput(OutputParameters oparams, Mesh *pm);
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
 };
+
+//----------------------------------------------------------------------------------------
+//! \class HistoryOutput
+//  \brief derived OutputType class for history data
+    
+class HistoryOutput : public OutputType
+{   
+ public:
+  HistoryOutput(OutputParameters oparams, Mesh *pm);
+  void LoadOutputData(Mesh *pm) override;
+  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+};  
 
 //----------------------------------------------------------------------------------------
 //! \class Outputs

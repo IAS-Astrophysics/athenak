@@ -70,7 +70,7 @@ void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   FILE *pfile;
   if ((pfile = std::fopen(fname.c_str(),"w")) == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << std::endl << "Output file '" << fname << "' could not be opened" << std::endl;
+        << "Output file '" << fname << "' could not be opened" << std::endl;
     exit(EXIT_FAILURE);
   }
 
