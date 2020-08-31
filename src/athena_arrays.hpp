@@ -85,7 +85,7 @@ class AthenaArray
   }
   int GetSize() const { return nx1_*nx2_*nx3_*nx4_*nx5_*nx6_; }
   std::size_t GetSizeInBytes() const { return nx1_*nx2_*nx3_*nx4_*nx5_*nx6_*sizeof(T); }
-  std::string GetName() const { return label_; }
+  std::string GetLabel() const { return label_; }
 
   // overload "function call" operator() to access 1d-6d data
   // provides Fortran-like syntax for multidimensional arrays vs. "subscript" operator[]

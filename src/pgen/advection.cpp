@@ -62,11 +62,11 @@ using namespace hydro;
       for (int i=is; i<=ie; i++) {
         Real r; // coordinate that will span [0->1]
         if (flow_dir == 1) {
-          r = (pmesh_->CellCenterX(i, pmb->mb_cells.nx1,x1min,x1max)-x1min)/length;
+          r = (pmesh_->CellCenterX(i-is, pmb->mb_cells.nx1,x1min,x1max)-x1min)/length;
         } else if (flow_dir == 2) {
-          r = (pmesh_->CellCenterX(j, pmb->mb_cells.nx2,x2min,x2max)-x2min)/length;
+          r = (pmesh_->CellCenterX(j-js, pmb->mb_cells.nx2,x2min,x2max)-x2min)/length;
         } else {
-          r = (pmesh_->CellCenterX(k, pmb->mb_cells.nx3,x3min,x3max)-x3min)/length;
+          r = (pmesh_->CellCenterX(k-ks, pmb->mb_cells.nx3,x3min,x3max)-x3min)/length;
         }
 
         // iprob=1: sine wave

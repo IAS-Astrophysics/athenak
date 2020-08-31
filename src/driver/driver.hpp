@@ -36,9 +36,9 @@ class Driver {
   Real gam0[3], gam1[3], beta[3];  // averaging weights and fractional timestep per stage
 
   // functions
-  void Initialize(Mesh *pmesh, Outputs *pout);
-  void Execute(Mesh *pmesh, Outputs *pout);
-  void Finalize(Mesh *pmesh, Outputs *pout);
+  void Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout);
+  void Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout);
+  void Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout);
 
  private:
   clock_t tstart_, tstop_;  // variables to measure cpu time

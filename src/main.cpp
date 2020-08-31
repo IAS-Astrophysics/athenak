@@ -250,9 +250,9 @@ int main(int argc, char *argv[])
   auto pdrive = std::make_unique<Driver>(&par_input, &mesh0, &out_types);
 
   ChangeRunDir(run_dir);
-  pdrive->Initialize(&mesh0, &out_types);
-  pdrive->Execute(&mesh0, &out_types);
-  pdrive->Finalize(&mesh0, &out_types);
+  pdrive->Initialize(&mesh0, &par_input,  &out_types);
+  pdrive->Execute(&mesh0, &par_input,  &out_types);
+  pdrive->Finalize(&mesh0, &par_input,  &out_types);
 
   //--- Step 9. -------------------------------------------------------------------------
   // clean up, and terminate

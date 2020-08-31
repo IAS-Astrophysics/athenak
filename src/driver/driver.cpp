@@ -113,7 +113,7 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh,
 // Tasks to be performed before execution of Driver, such as computing initial time step,
 // setting boundary conditions, and outputing ICs
 
-void Driver::Initialize(Mesh *pmesh, Outputs *pout)
+void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
 {
   //---- Step 1.  Set Boundary Conditions on conservd variables in all physics
 
@@ -138,7 +138,7 @@ void Driver::Initialize(Mesh *pmesh, Outputs *pout)
 
   for (auto &out : pout->poutput_list_) {
     out->LoadOutputData(pmesh);
-    out->WriteOutputFile(pmesh);
+    out->WriteOutputFile(pmesh, pin);
   }
 
   //---- Step 3.  Compute first time step (if problem involves time evolution
@@ -163,7 +163,7 @@ void Driver::Initialize(Mesh *pmesh, Outputs *pout)
 //----------------------------------------------------------------------------------------
 // Driver::Execute()
 
-void Driver::Execute(Mesh *pmesh, Outputs *pout) {
+void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
 
   if (global_variable::my_rank == 0) {
     std::cout << "\nSetup complete, executing task list...\n" << std::endl;
@@ -198,6 +198,8 @@ void Driver::Execute(Mesh *pmesh, Outputs *pout) {
 
 /*** first implementation task list ***/
 
+// TODO add outputs during execution
+
       pmesh->time = pmesh->time + pmesh->dt;
       pmesh->ncycle++;
       nmb_updated_ += pmesh->nmbtotal;
@@ -215,13 +217,13 @@ void Driver::Execute(Mesh *pmesh, Outputs *pout) {
 // Tasks to be performed after execution of Driver, such as making final output and
 // printing diagnostic messages
 
-void Driver::Finalize(Mesh *pmesh, Outputs *pout) {
+void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
 
   // cycle through output Types and load data / write files.  This design allows for
   // asynchronous outputs to implemented in the future.
   // TODO: cycle through OutputTypes
   pout->poutput_list_.front()->LoadOutputData(pmesh);
-  pout->poutput_list_.front()->WriteOutputFile(pmesh);
+  pout->poutput_list_.front()->WriteOutputFile(pmesh,pin);
     
   tstop_ = clock();
 

@@ -61,60 +61,81 @@
 // Sets parameters like size and indices of output arrays
 
 OutputType::OutputType(OutputParameters opar, Mesh *pm) :
-   output_params(opar) {
-
-    // set size of output arrays, adjusted accordingly if ghost zones included 
+   output_params(opar)
+{
+    // set size & starting indices of output arrays, adjusted accordingly if gz included 
+    // Since all MeshBlocks the same, only need to compute values from first MB
     auto it = pm->mblocks.begin();
     if (output_params.include_gzs) {
-      nout1 = it->mb_cells.nx1 + 2*it->mb_cells.ng;
-      nout2 = it->mb_cells.nx2;
-      nout3 = it->mb_cells.nx3;
-      if (nout2 > 1) nout2 += 2*it->mb_cells.ng;
-      if (nout3 > 1) nout3 += 2*it->mb_cells.ng;
+      nout1 = it->mb_cells.nx1 + 2*(it->mb_cells.ng);
+      nout2 = (it->mb_cells.nx2 > 1)? (it->mb_cells.nx2 + 2*(it->mb_cells.ng)) : 1;
+      nout3 = (it->mb_cells.nx3 > 1)? (it->mb_cells.nx3 + 2*(it->mb_cells.ng)) : 1;
+      ois = 0;
+      ojs = 0;
+      oks = 0;
     } else {
       nout1 = it->mb_cells.nx1;
       nout2 = it->mb_cells.nx2;
       nout3 = it->mb_cells.nx3;
+      ois = it->mb_cells.is;
+      ojs = it->mb_cells.js;
+      oks = it->mb_cells.ks;
     }
 
-    // set starting indices of output arrays
-    ois = it->mb_cells.is;
-    ojs = it->mb_cells.js;
-    oks = it->mb_cells.ks;
-    if (output_params.include_gzs) {
-      if (nout1 > 1) ois = 0;
-      if (nout2 > 1) ojs = 0;
-      if (nout3 > 1) oks = 0;
-    }
-
-    // reset array dimensions and indices if data is being sliced
+    // reset array dimensions if data is being sliced
     if (output_params.slice1) { nout1 = 1; }
     if (output_params.slice2) { nout2 = 1; }
     if (output_params.slice3) { nout3 = 1; }
+
+    // calculate spatial positions of output data
+    output_x1posn_.SetSize(pm->nmbthisrank, nout1);
+    output_x1posn_.SetLabel("x1v");
+    output_x2posn_.SetSize(pm->nmbthisrank, nout2);
+    output_x2posn_.SetLabel("x2v");
+    output_x3posn_.SetSize(pm->nmbthisrank, nout3);
+    output_x3posn_.SetLabel("x3v");
+
+    // TODO get working with multuple meshblocks
+    auto pmb = pm->mblocks.begin();
+    for (int n=0; n<pm->nmbthisrank; ++n) {
+      for (int i=0; i<nout1; ++i) {
+        output_x1posn_(n,i) = pm->CellCenterX((i-(pmb->mb_cells.is - ois)),
+           pmb->mb_cells.nx1, pmb->mb_size.x1min, pmb->mb_size.x1max);
+      }
+      for (int j=0; j<nout2; ++j) {
+        output_x2posn_(n,j) = pm->CellCenterX((j-(pmb->mb_cells.js - ojs)),
+           pmb->mb_cells.nx2, pmb->mb_size.x2min, pmb->mb_size.x2max);
+      }
+      for (int k=0; k<nout3; ++k) {
+        output_x3posn_(n,k) = pm->CellCenterX((k-(pmb->mb_cells.ks - oks)),
+           pmb->mb_cells.nx3, pmb->mb_size.x3min, pmb->mb_size.x3max);
+      }
+    }
 
 }
 
 //----------------------------------------------------------------------------------------
 // OutputType::LoadOutputData()
-// create linked list of OutputData objects containing data specified in <output> block
-// for this output type
+// create std::vector of AthenaArrays containing data specified in <output> block for
+// this output type
 
-void OutputType::LoadOutputData(Mesh *pm) {
-
-  data_list_.clear();  // start with a clean list
+void OutputType::LoadOutputData(Mesh *pm)
+{
+  output_data_.clear();  // start with a clean list
 
   // mass density
   if (output_params.variable.compare("d") == 0 ||
       output_params.variable.compare("density") == 0 ||
       output_params.variable.compare("prim") == 0 ||
       output_params.variable.compare("cons") == 0) {
-    OutputData node;
-    node.type = "SCALARS";
-    node.name = "dens";
+    AthenaArray<Real> new_data;
 
-    node.cc_data.SetSize(pm->nmbthisrank, nout3, nout2, nout1);
+    new_data.SetSize(pm->nmbthisrank, nout3, nout2, nout1);
+    new_data.SetLabel("dens");
 
     // deep copy one array for each MeshBlock on this rank
+    // TODO add data from each MeshBlock
+    // TODO add loop over all variables
     auto pmb = pm->mblocks.begin();
     int islice=0, jslice=0, kslice=0;
     if (output_params.slice1) {
@@ -137,10 +158,10 @@ void OutputType::LoadOutputData(Mesh *pm) {
       for (int k=0; k<nout3; ++k) {
       for (int j=0; j<nout2; ++j) {
       for (int i=0; i<nout1; ++i) {
-        node.cc_data(n,k,j,i) =
+        new_data(n,k,j,i) =
            pmb->phydro->u0(hydro::IDN,(k+oks+kslice),(j+ojs+jslice),(i+ois+islice));
       }}}
     }
-    data_list_.push_back(node);
+    output_data_.push_back(new_data);
   }
 }

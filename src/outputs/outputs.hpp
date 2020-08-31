@@ -8,7 +8,6 @@
 //! \file outputs.hpp
 //  \brief provides classes to handle ALL types of data output
 
-//#include <cstdio>  // std::size_t
 #include <string>
 #include <vector>
 
@@ -19,13 +18,13 @@
 // forward declarations
 class Mesh;
 class ParameterInput;
-class Coordinates;
 
 //----------------------------------------------------------------------------------------
 //! \struct OutputParameters
 //  \brief  container for parameters read from <output> block in the input file
 
-struct OutputParameters {
+struct OutputParameters
+{
   int block_number;
   std::string block_name;
   std::string file_basename;
@@ -41,20 +40,11 @@ struct OutputParameters {
 };
 
 //----------------------------------------------------------------------------------------
-//! \struct OutputData
-//  \brief container for output data and metadata; node in std::list
-
-struct OutputData {
-  std::string type;        // one of (SCALARS,VECTORS) used for vtk outputs
-  std::string name;
-  AthenaArray<Real> cc_data;  // array containing data (deep copied)
-};
-
-//----------------------------------------------------------------------------------------
 // \brief abstract base class for different output types (modes/formats); node in
 //        std::list of OutputType created & stored in the Outputs class
 
-class OutputType {
+class OutputType
+{
  public:
   OutputType(OutputParameters oparams, Mesh *pm);
   virtual ~OutputType() = default;
@@ -68,26 +58,29 @@ class OutputType {
   // data
   int nout1, nout2, nout3;           // dimensions of output arrays for this type
   int ois, ojs, oks;                 // starting indices of data to be output
-  Real x1posn, x2posn, x3posn;
   OutputParameters output_params;    // data read from <output> block for this type
 
   // functions
   void LoadOutputData(Mesh *pm);
   // following pure virtual function must be implemented in all derived classes
-  virtual void WriteOutputFile(Mesh *pm) = 0;
+  virtual void WriteOutputFile(Mesh *pm, ParameterInput *pin) = 0;
 
  protected:
-  std::list<OutputData> data_list_;
+  std::vector<AthenaArray<Real>> output_data_;
+  AthenaArray<Real> output_x1posn_;
+  AthenaArray<Real> output_x2posn_;
+  AthenaArray<Real> output_x3posn_;
 };
 
 //----------------------------------------------------------------------------------------
 //! \class FormattedTableOutput
 //  \brief derived OutputType class for formatted table (tabular) data
 
-class FormattedTableOutput : public OutputType {
+class FormattedTableOutput : public OutputType
+{
  public:
   FormattedTableOutput(OutputParameters oparams, Mesh *pm);
-  void WriteOutputFile(Mesh *pm) override;
+  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
 };
 
 //----------------------------------------------------------------------------------------
@@ -96,7 +89,8 @@ class FormattedTableOutput : public OutputType {
 //  \brief root class for all Athena++ outputs. Provides a std::vector of OutputTypes,
 //   with each element representing one mode/format of output to be made.
 
-class Outputs {
+class Outputs
+{
  public:
   Outputs(ParameterInput *pin, Mesh *pm);
   ~Outputs();

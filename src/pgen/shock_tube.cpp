@@ -86,7 +86,7 @@ using namespace hydro;
       for (int k=ks; k<=ke; ++k) {
         for (int j=js; j<=je; ++j) {
           for (int i=is; i<=ie; ++i) {
-            Real x1 = pmesh_->CellCenterX(i, pmb->mb_cells.nx1, x1min, x1max);
+            Real x1 = pmesh_->CellCenterX(i-is, pmb->mb_cells.nx1, x1min, x1max);
             if (x1 < xshock) {
               pmb->phydro->u0(IDN,k,j,i) = wl[IDN];
               pmb->phydro->u0(IM1,k,j,i) = wl[IVX]*wl[IDN];
@@ -109,7 +109,7 @@ using namespace hydro;
     case 2:
       for (int k=ks; k<=ke; ++k) {
         for (int j=js; j<=je; ++j) {
-          Real x2 = pmesh_->CellCenterX(j, pmb->mb_cells.nx2, x2min, x2max);
+          Real x2 = pmesh_->CellCenterX(j-js, pmb->mb_cells.nx2, x2min, x2max);
           if (x2 < xshock) {
             for (int i=is; i<=ie; ++i) {
               pmb->phydro->u0(IDN,k,j,i) = wl[IDN];
@@ -134,7 +134,7 @@ using namespace hydro;
     //--- shock in 3-direction
     case 3:
       for (int k=ks; k<=ke; ++k) {
-        Real x3 = pmesh_->CellCenterX(k, pmb->mb_cells.nx3, x3min, x3max);
+        Real x3 = pmesh_->CellCenterX(k-ks, pmb->mb_cells.nx3, x3min, x3max);
         if (x3 < xshock) {
           for (int j=js; j<=je; ++j) {
             for (int i=is; i<=ie; ++i) {
