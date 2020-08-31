@@ -99,7 +99,9 @@ using namespace hydro;
           pmb->phydro->u0(IM3,k,j,i) = vel*pmb->phydro->u0(IDN,k,j,i);
         } 
         
-        pmb->phydro->u0(IEN,k,j,i) = 1.0;
+        pmb->phydro->u0(IEN,k,j,i) = 1.0 + 0.5*(SQR(pmb->phydro->u0(IM1,k,j,i))
+          + SQR(pmb->phydro->u0(IM2,k,j,i)) + SQR(pmb->phydro->u0(IM3,k,j,i)))/
+            pmb->phydro->u0(IDN,k,j,i);
       }
     }
   }
