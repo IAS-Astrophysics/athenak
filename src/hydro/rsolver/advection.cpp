@@ -69,7 +69,7 @@ void Advection::RSolver(const int il, const int iu, const int ivx,
       flx(ivx,i) = mxl*wli[IVX];
       flx(ivy,i) = mxl*wli[IVY];
       flx(ivz,i) = mxl*wli[IVZ];
-      if (adiabatic_eos) { flx(IEN,i) = wli[IPR]*wli[IVX]/gm1; }
+      if (adiabatic_eos) { flx(IEN,i) = (wli[IPR]/gm1 + 0.5*mxl*wli[IVX])*wli[IVX]; }
 
     } else {
 
@@ -78,7 +78,7 @@ void Advection::RSolver(const int il, const int iu, const int ivx,
       flx(ivx,i) = mxr*wri[IVX];
       flx(ivy,i) = mxr*wri[IVY];
       flx(ivz,i) = mxr*wri[IVZ];
-      if (adiabatic_eos) { flx(IEN,i) = wri[IPR]*wri[IVX]/gm1; }
+      if (adiabatic_eos) { flx(IEN,i) = (wri[IPR]/gm1 + 0.5*mxr*wri[IVX])*wri[IVX]; }
 
     }
   }
