@@ -48,8 +48,8 @@
 
 Driver::Driver(ParameterInput *pin, Mesh *pmesh,
      Outputs *pout) : tlim(-1.0), nlim(-1), ndiag(1),
-     time_evolution(false) {
-
+     time_evolution(false)
+{
   hydro::Hydro *phyd = pmesh->mblocks.front().phydro;
   if (phyd->hydro_evol != hydro::HydroEvolution::no_evolution) {
     time_evolution = true;
@@ -163,8 +163,8 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
 //----------------------------------------------------------------------------------------
 // Driver::Execute()
 
-void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
-
+void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
+{
   if (global_variable::my_rank == 0) {
     std::cout << "\nSetup complete, executing task list...\n" << std::endl;
   }
@@ -217,13 +217,14 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
 // Tasks to be performed after execution of Driver, such as making final output and
 // printing diagnostic messages
 
-void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
-
-  // cycle through output Types and load data / write files.  This design allows for
-  // asynchronous outputs to implemented in the future.
-  // TODO: cycle through OutputTypes
-  pout->pout_list_.front()->LoadOutputData(pmesh);
-  pout->pout_list_.front()->WriteOutputFile(pmesh,pin);
+void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
+{
+  // cycle through output Types and load data / write files
+  //  This design allows for asynchronous outputs to implemented in the future.
+  for (auto &out : pout->pout_list_) {
+    out->LoadOutputData(pmesh);
+    out->WriteOutputFile(pmesh, pin);
+  }
     
   tstop_ = clock();
 
@@ -264,7 +265,8 @@ void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
 //----------------------------------------------------------------------------------------
 // Driver::OutputCycleDiagnostics()
 
-void Driver::OutputCycleDiagnostics(Mesh *pm) {
+void Driver::OutputCycleDiagnostics(Mesh *pm)
+{
 //  const int dtprcsn = std::numeric_limits<Real>::max_digits10 - 1;
   const int dtprcsn = 6;
   if (pm->ncycle % ndiag == 0) {
