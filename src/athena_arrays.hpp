@@ -15,44 +15,53 @@
 #include <string>
 
 template <typename T>
-class AthenaArray {
+class AthenaArray
+{
  public:
-
   // ctors with various arguments
   // "label" argument added for compatibility with Kokkos view API
   // default ctor sets null array
   AthenaArray() :
     pdata_(nullptr), label_(""), nx1_(0), nx2_(0), nx3_(0), nx4_(0), nx5_(0), nx6_(0) {}
 
-  AthenaArray(const std::string &label, int nx6, int nx5, int nx4, int nx3, int nx2,
-                    int nx1) :
-    label_(label), nx1_(nx1), nx2_(nx2), nx3_(nx3), nx4_(nx4), nx5_(nx5), nx6_(nx6) {
-    assert(nx6 > 0 && nx5 > 0 && nx4 > 0 && nx3 > 0 && nx2 > 0 && nx1 > 0);
-    pdata_ = new T[nx1_*nx2_*nx3_*nx4_*nx5_*nx6_]();
-  }
-  AthenaArray(const std::string &label, int nx5, int nx4, int nx3, int nx2, int nx1) :
-    label_(label), nx1_(nx1), nx2_(nx2), nx3_(nx3), nx4_(nx4), nx5_(nx5), nx6_(1) {
-    assert(nx5 > 0 && nx4 > 0 && nx3 > 0 && nx2 > 0 && nx1 > 0);
-    pdata_ = new T[nx1_*nx2_*nx3_*nx4_*nx5_*nx6_]();
-  }
-  AthenaArray(const std::string &label, int nx4, int nx3, int nx2, int nx1) :
-    label_(label), nx1_(nx1), nx2_(nx2), nx3_(nx3), nx4_(nx4), nx5_(1), nx6_(1) {
-    assert(nx4 > 0 && nx3 > 0 && nx2 > 0 && nx1 > 0);
-    pdata_ = new T[nx1_*nx2_*nx3_*nx4_*nx5_*nx6_]();
-  }
-  AthenaArray(const std::string &label, int nx3, int nx2, int nx1) :
-    label_(label), nx1_(nx1), nx2_(nx2), nx3_(nx3), nx4_(1), nx5_(1), nx6_(1) {
-    assert(nx3 > 0 && nx2 > 0 && nx1 > 0);
+  AthenaArray(const std::string &label) :
+    pdata_(nullptr),label_(label),nx1_(0), nx2_(0), nx3_(0), nx4_(0), nx5_(0), nx6_(0) {}
+
+  AthenaArray(const std::string &label, int nx1) :
+    label_(label), nx1_(nx1), nx2_(1), nx3_(1), nx4_(1), nx5_(1), nx6_(1)
+  {
+    assert(nx1 > 0);
     pdata_ = new T[nx1_*nx2_*nx3_*nx4_*nx5_*nx6_]();
   }
   AthenaArray(const std::string &label, int nx2, int nx1) :
-    label_(label), nx1_(nx1), nx2_(nx2), nx3_(1), nx4_(1), nx5_(1), nx6_(1) {
+    label_(label), nx1_(nx1), nx2_(nx2), nx3_(1), nx4_(1), nx5_(1), nx6_(1)
+  {
     assert(nx2 > 0 && nx1 > 0);
     pdata_ = new T[nx1_*nx2_*nx3_*nx4_*nx5_*nx6_]();
   }
-  AthenaArray(const std::string &label, int nx1) :
-    label_(label), nx1_(nx1), nx2_(1), nx3_(1), nx4_(1), nx5_(1), nx6_(1) {
-    assert(nx1 > 0);
+  AthenaArray(const std::string &label, int nx3, int nx2, int nx1) :
+    label_(label), nx1_(nx1), nx2_(nx2), nx3_(nx3), nx4_(1), nx5_(1), nx6_(1)
+  {
+    assert(nx3 > 0 && nx2 > 0 && nx1 > 0);
+    pdata_ = new T[nx1_*nx2_*nx3_*nx4_*nx5_*nx6_]();
+  }
+  AthenaArray(const std::string &label, int nx4, int nx3, int nx2, int nx1) :
+    label_(label), nx1_(nx1), nx2_(nx2), nx3_(nx3), nx4_(nx4), nx5_(1), nx6_(1)
+  {
+    assert(nx4 > 0 && nx3 > 0 && nx2 > 0 && nx1 > 0);
+    pdata_ = new T[nx1_*nx2_*nx3_*nx4_*nx5_*nx6_]();
+  }
+  AthenaArray(const std::string &label, int nx5, int nx4, int nx3, int nx2, int nx1) :
+    label_(label), nx1_(nx1), nx2_(nx2), nx3_(nx3), nx4_(nx4), nx5_(nx5), nx6_(1)
+  {
+    assert(nx5 > 0 && nx4 > 0 && nx3 > 0 && nx2 > 0 && nx1 > 0);
+    pdata_ = new T[nx1_*nx2_*nx3_*nx4_*nx5_*nx6_]();
+  }
+  AthenaArray(const std::string &label, int nx6, int nx5, int nx4, int nx3, int nx2,
+                    int nx1) :
+    label_(label), nx1_(nx1), nx2_(nx2), nx3_(nx3), nx4_(nx4), nx5_(nx5), nx6_(nx6)
+  {
+    assert(nx6 > 0 && nx5 > 0 && nx4 > 0 && nx3 > 0 && nx2 > 0 && nx1 > 0);
     pdata_ = new T[nx1_*nx2_*nx3_*nx4_*nx5_*nx6_]();
   }
 
@@ -64,7 +73,8 @@ class AthenaArray {
   AthenaArray<T> &operator= (AthenaArray<T> &&t);
 
   // getter functions
-  int GetDim(int i) const {
+  int GetDim(int i) const
+  {
     assert (i>0 && i<7);
     if (i==1) { return nx1_; }
     else if (i==2) { return nx2_; }
@@ -75,12 +85,7 @@ class AthenaArray {
   }
   int GetSize() const { return nx1_*nx2_*nx3_*nx4_*nx5_*nx6_; }
   std::size_t GetSizeInBytes() const { return nx1_*nx2_*nx3_*nx4_*nx5_*nx6_*sizeof(T); }
-
-  // "getter" function to access private data member
-  // TODO(felker): Replace this unrestricted "getter" with a limited, safer alternative.
-  // TODO(felker): Rename function. Conflicts with "AthenaArray<> data" OutputData member.
-//  T *data() { return pdata_; }
-//  const T *data() const { return pdata_; }
+  std::string GetName() const { return label_; }
 
   // overload "function call" operator() to access 1d-6d data
   // provides Fortran-like syntax for multidimensional arrays vs. "subscript" operator[]
@@ -91,29 +96,30 @@ class AthenaArray {
   T &operator() (const int j, const int i) { return pdata_[i + nx1_*j]; }
   T operator() (const int j, const int i) const { return pdata_[i + nx1_*j]; }
 
-  T &operator() (const int k, const int j, const int i) {
-    return pdata_[i + nx1_*(j + nx2_*k)]; }
-  T operator() (const int k, const int j, const int i) const {
-    return pdata_[i + nx1_*(j + nx2_*k)]; }
+  T &operator() (const int k, const int j, const int i)
+    { return pdata_[i + nx1_*(j + nx2_*k)]; }
+  T operator() (const int k, const int j, const int i) const
+    { return pdata_[i + nx1_*(j + nx2_*k)]; }
 
-  T &operator() (const int l, const int k, const int j, const int i) {
-    return pdata_[i + nx1_*(j + nx2_*(k + nx3_*l))]; }
-  T operator() (const int l, const int k, const int j, const int i) const {
-    return pdata_[i + nx1_*(j + nx2_*(k + nx3_*l))]; }
+  T &operator() (const int l, const int k, const int j, const int i)
+    { return pdata_[i + nx1_*(j + nx2_*(k + nx3_*l))]; }
+  T operator() (const int l, const int k, const int j, const int i) const
+    { return pdata_[i + nx1_*(j + nx2_*(k + nx3_*l))]; }
 
-  T &operator() (const int m, const int l, const int k, const int j, const int i) {
-    return pdata_[i + nx1_*(j + nx2_*(k + nx3_*(l + nx4_*m)))]; }
-  T operator() (const int m, const int l, const int k, const int j, const int i) const {
-    return pdata_[i + nx1_*(j + nx2_*(k + nx3_*(l + nx4_*m)))]; }
+  T &operator() (const int m, const int l, const int k, const int j, const int i)
+    { return pdata_[i + nx1_*(j + nx2_*(k + nx3_*(l + nx4_*m)))]; }
+  T operator() (const int m, const int l, const int k, const int j, const int i) const
+    { return pdata_[i + nx1_*(j + nx2_*(k + nx3_*(l + nx4_*m)))]; }
 
   T &operator() (const int n, const int m, const int l, const int k, const int j,
-                 const int i) {
-    return pdata_[i + nx1_*(j + nx2_*(k + nx3_*(l + nx4_*(m + nx5_*n))))]; }
+                 const int i)
+    { return pdata_[i + nx1_*(j + nx2_*(k + nx3_*(l + nx4_*(m + nx5_*n))))]; }
   T operator() (const int n, const int m, const int l, const int k, const int j,
-                const int i) const {
-    return pdata_[i + nx1_*(j + nx2_*(k + nx3_*(l + nx4_*(m + nx5_*n))))]; }
+                const int i) const
+    { return pdata_[i + nx1_*(j + nx2_*(k + nx3_*(l + nx4_*(m + nx5_*n))))]; }
 
   // public SetSize functions (replace "NewAthenaArray") allocates memory after ctor
+  void SetLabel(std::string label) { label_ = label; };
   void SetSize(int nx1);
   void SetSize(int nx2, int nx1);
   void SetSize(int nx3, int nx2, int nx1);
@@ -132,7 +138,8 @@ class AthenaArray {
 // destructor
 
 template<typename T>
-AthenaArray<T>::~AthenaArray() {
+AthenaArray<T>::~AthenaArray()
+{
   if (pdata_ != nullptr) delete[] pdata_;
 }
 
@@ -141,7 +148,9 @@ AthenaArray<T>::~AthenaArray() {
 
 template<typename T>
 __attribute__((nothrow)) 
-AthenaArray<T>::AthenaArray(const AthenaArray<T>& src) {
+AthenaArray<T>::AthenaArray(const AthenaArray<T>& src)
+{
+  label_ = src.label_;
   nx1_ = src.nx1_;
   nx2_ = src.nx2_;
   nx3_ = src.nx3_;
@@ -163,7 +172,8 @@ AthenaArray<T>::AthenaArray(const AthenaArray<T>& src) {
 
 template<typename T>
 __attribute__((nothrow))
-AthenaArray<T> &AthenaArray<T>::operator= (const AthenaArray<T> &src) {
+AthenaArray<T> &AthenaArray<T>::operator= (const AthenaArray<T> &src)
+{
   assert (nx1_ == src.nx1_ && nx2_ == src.nx2_ && nx3_ == src.nx3_ && 
           nx4_ == src.nx4_ && nx5_ == src.nx5_ && nx6_ == src.nx6_);
   if (this != &src) {
@@ -180,7 +190,9 @@ AthenaArray<T> &AthenaArray<T>::operator= (const AthenaArray<T> &src) {
 
 template<typename T>
 __attribute__((nothrow)) 
-AthenaArray<T>::AthenaArray(AthenaArray<T>&& src) {
+AthenaArray<T>::AthenaArray(AthenaArray<T>&& src)
+{
+  label_ = src.label_;
   nx1_ = src.nx1_;
   nx2_ = src.nx2_;
   nx3_ = src.nx3_;
@@ -191,6 +203,7 @@ AthenaArray<T>::AthenaArray(AthenaArray<T>&& src) {
     pdata_ = src.pdata_;
     // remove ownership of data from src to prevent it from free'ing the resources
     src.pdata_ = nullptr;
+    src.label_="";
     src.nx1_ = 0;
     src.nx2_ = 0;
     src.nx3_ = 0;
@@ -205,10 +218,12 @@ AthenaArray<T>::AthenaArray(AthenaArray<T>&& src) {
 
 template<typename T>
 __attribute__((nothrow))
-AthenaArray<T> &AthenaArray<T>::operator= (AthenaArray<T> &&src) {
+AthenaArray<T> &AthenaArray<T>::operator= (AthenaArray<T> &&src)
+{
   if (this != &src) {
     delete [] pdata_;   // free the target to prepare to receive src pdata_
     if (src.pdata_) {
+      label_ = src.label_;
       nx1_ = src.nx1_;
       nx2_ = src.nx2_;
       nx3_ = src.nx3_;
@@ -218,6 +233,7 @@ AthenaArray<T> &AthenaArray<T>::operator= (AthenaArray<T> &&src) {
       pdata_ = src.pdata_;
 
       src.pdata_ = nullptr;
+      src.label_="";
       src.nx1_ = 0;
       src.nx2_ = 0;
       src.nx3_ = 0;
@@ -234,7 +250,8 @@ AthenaArray<T> &AthenaArray<T>::operator= (AthenaArray<T> &&src) {
 //  \brief allocate new 1D array with elements initialized to zero.
 
 template<typename T>
-void AthenaArray<T>::SetSize(int nx1) {
+void AthenaArray<T>::SetSize(int nx1)
+{
   nx1_ = nx1;
   nx2_ = 1;
   nx3_ = 1;
@@ -249,7 +266,8 @@ void AthenaArray<T>::SetSize(int nx1) {
 //  \brief 2d data allocation
 
 template<typename T>
-void AthenaArray<T>::SetSize(int nx2, int nx1) {
+void AthenaArray<T>::SetSize(int nx2, int nx1)
+{
   nx1_ = nx1;
   nx2_ = nx2;
   nx3_ = 1;
@@ -264,7 +282,8 @@ void AthenaArray<T>::SetSize(int nx2, int nx1) {
 //  \brief 3d data allocation
 
 template<typename T>
-void AthenaArray<T>::SetSize(int nx3, int nx2, int nx1) {
+void AthenaArray<T>::SetSize(int nx3, int nx2, int nx1)
+{
   nx1_ = nx1;
   nx2_ = nx2;
   nx3_ = nx3;
@@ -279,8 +298,8 @@ void AthenaArray<T>::SetSize(int nx3, int nx2, int nx1) {
 //  \brief 4d data allocation
 
 template<typename T>
-void AthenaArray<T>::SetSize(int nx4, int nx3, int nx2,
-                                                             int nx1) {
+void AthenaArray<T>::SetSize(int nx4, int nx3, int nx2, int nx1)
+{
   nx1_ = nx1;
   nx2_ = nx2;
   nx3_ = nx3;
@@ -295,7 +314,8 @@ void AthenaArray<T>::SetSize(int nx4, int nx3, int nx2,
 //  \brief 5d data allocation
 
 template<typename T>
-void AthenaArray<T>::SetSize(int nx5, int nx4, int nx3, int nx2, int nx1) {
+void AthenaArray<T>::SetSize(int nx5, int nx4, int nx3, int nx2, int nx1)
+{
   nx1_ = nx1;
   nx2_ = nx2;
   nx3_ = nx3;
@@ -310,7 +330,8 @@ void AthenaArray<T>::SetSize(int nx5, int nx4, int nx3, int nx2, int nx1) {
 //  \brief 6d data allocation
 
 template<typename T>
-void AthenaArray<T>::SetSize(int nx6, int nx5, int nx4, int nx3, int nx2, int nx1) {
+void AthenaArray<T>::SetSize(int nx6, int nx5, int nx4, int nx3, int nx2, int nx1)
+{
   nx1_ = nx1;
   nx2_ = nx2;
   nx3_ = nx3;
