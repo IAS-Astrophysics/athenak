@@ -146,7 +146,7 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
       OutputType *pnode;
       if (opar.file_type.compare("tab") == 0) {
         pnode = new FormattedTableOutput(opar,pm);
-        poutput_list_.insert(poutput_list_.begin(),pnode);
+        pout_list_.insert(pout_list_.begin(),pnode);
 //      } else if (opar.file_type.compare("hst") == 0) {
 //        pnew_type = new HistoryOutput(opar);
 //        num_hst++;

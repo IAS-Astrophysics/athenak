@@ -22,14 +22,14 @@
 #include "outputs.hpp"
 
 //----------------------------------------------------------------------------------------
-// ctor: calls OutputType base class constructor
+// ctor: also calls OutputType base class constructor
 
 FormattedTableOutput::FormattedTableOutput(OutputParameters op, Mesh *pm)
   : OutputType(op, pm)
 {
   // check that 1D slice specified, otherwise issue warning and quit
   if (pm->nx2gt1) {
-    if (!(output_params.slice1) && !(output_params.slice2)) {
+    if (!(out_params.slice1) && !(out_params.slice2)) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Formatted table outputs can only contain 1D slices"
                 << std::endl << "Please add additional slice planes" << std::endl;
@@ -37,15 +37,14 @@ FormattedTableOutput::FormattedTableOutput(OutputParameters op, Mesh *pm)
     }
   }
   if (pm->nx3gt1) {
-    if ((!(output_params.slice2) && !(output_params.slice3)) ||
-        (!(output_params.slice1) && !(output_params.slice3))) {
+    if ((!(out_params.slice2) && !(out_params.slice3)) ||
+        (!(out_params.slice1) && !(out_params.slice3))) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Formatted table outputs can only contain 1D slices"
                 << std::endl << "Please add additional slice planes" << std::endl;
       exit(EXIT_FAILURE);
     }
   }
-  
 }
 
 //----------------------------------------------------------------------------------------
@@ -58,11 +57,11 @@ void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   // where XXXXX = 5-digit file_number
   std::string fname;
   char number[6];
-  std::snprintf(number, sizeof(number), "%05d", output_params.file_number);
+  std::snprintf(number, sizeof(number), "%05d", out_params.file_number);
 
-  fname.assign(output_params.file_basename);
+  fname.assign(out_params.file_basename);
   fname.append(".");
-  fname.append(output_params.file_id);
+  fname.append(out_params.file_id);
   fname.append(".");
   fname.append(number);
   fname.append(".tab");
@@ -84,8 +83,8 @@ void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   if (nout1 > 1) std::fprintf(pfile, " i       x1v     ");
   if (nout2 > 1) std::fprintf(pfile, " j       x2v     ");
   if (nout3 > 1) std::fprintf(pfile, " k       x3v     ");
-  // write data col headers from "name" stored in output_data_ AthenaArray
-  for (auto it : output_data_) {
+  // write data col headers from "name" stored in out_data_ AthenaArray
+  for (auto it : out_data_) {
     std::fprintf(pfile, "    %s      ", it.GetLabel().c_str());
   }
   std::fprintf(pfile, "\n"); // terminate line
@@ -98,20 +97,20 @@ void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
           // write x1, x2, x3 indices and coordinates on start of new line
           if (nout1 > 1) {
             std::fprintf(pfile, "%04d", i+ois);
-            std::fprintf(pfile, output_params.data_format.c_str(), output_x1posn_(n,i));
+            std::fprintf(pfile, out_params.data_format.c_str(), out_x1posn_(n,i));
           }
           if (nout2 > 1) {
             std::fprintf(pfile, " %04d", j+ojs);  // note extra space for formatting
-            std::fprintf(pfile, output_params.data_format.c_str(), output_x2posn_(n,j));
+            std::fprintf(pfile, out_params.data_format.c_str(), out_x2posn_(n,j));
           }
           if (nout3 > 1) {
             std::fprintf(pfile, " %04d", k+oks);  // note extra space for formatting
-            std::fprintf(pfile, output_params.data_format.c_str(), output_x3posn_(n,k));
+            std::fprintf(pfile, out_params.data_format.c_str(), out_x3posn_(n,k));
           }
 
-          // step through std::vector of output_data_ and write each on same line
-          for (auto it : output_data_) {
-            std::fprintf(pfile, output_params.data_format.c_str(), it(n,k,j,i));
+          // step through std::vector of out_data_ and write each on same line
+          for (auto it : out_data_) {
+            std::fprintf(pfile, out_params.data_format.c_str(), it(n,k,j,i));
           }
           std::fprintf(pfile,"\n"); // terminate line
         }
@@ -122,11 +121,11 @@ void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   std::fclose(pfile);   // don't forget to close the output file
 
   // increment counters
-  output_params.file_number++;
-  output_params.last_time += output_params.dt;
+  out_params.file_number++;
+  out_params.last_time += out_params.dt;
   // store filenumber and time into ParameterInput for restarts
-  pin->SetInteger(output_params.block_name, "file_number", output_params.file_number);
-  pin->SetReal(output_params.block_name, "last_time", output_params.last_time);
+  pin->SetInteger(out_params.block_name, "file_number", out_params.file_number);
+  pin->SetReal(out_params.block_name, "last_time", out_params.last_time);
 
   return;
 }

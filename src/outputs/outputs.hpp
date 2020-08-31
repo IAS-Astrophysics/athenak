@@ -58,7 +58,10 @@ class OutputType
   // data
   int nout1, nout2, nout3;           // dimensions of output arrays for this type
   int ois, ojs, oks;                 // starting indices of data to be output
-  OutputParameters output_params;    // data read from <output> block for this type
+  OutputParameters out_params;    // data read from <output> block for this type
+
+  AthenaArray<bool> hydro_cons_out_vars;
+  AthenaArray<bool> hydro_prim_out_vars;
 
   // functions
   void LoadOutputData(Mesh *pm);
@@ -66,10 +69,10 @@ class OutputType
   virtual void WriteOutputFile(Mesh *pm, ParameterInput *pin) = 0;
 
  protected:
-  std::vector<AthenaArray<Real>> output_data_;
-  AthenaArray<Real> output_x1posn_;
-  AthenaArray<Real> output_x2posn_;
-  AthenaArray<Real> output_x3posn_;
+  std::vector<AthenaArray<Real>> out_data_;
+  AthenaArray<Real> out_x1posn_;
+  AthenaArray<Real> out_x2posn_;
+  AthenaArray<Real> out_x3posn_;
 };
 
 //----------------------------------------------------------------------------------------
@@ -96,7 +99,7 @@ class Outputs
   ~Outputs();
 
   // use vector of pointers to OutputTypes since it is an abstract base class 
-  std::vector<OutputType*> poutput_list_;  
+  std::vector<OutputType*> pout_list_;  
 
  private:
 

@@ -61,57 +61,107 @@
 // Sets parameters like size and indices of output arrays
 
 OutputType::OutputType(OutputParameters opar, Mesh *pm) :
-   output_params(opar)
+   out_params(opar)
 {
-    // set size & starting indices of output arrays, adjusted accordingly if gz included 
-    // Since all MeshBlocks the same, only need to compute values from first MB
-    auto it = pm->mblocks.begin();
-    if (output_params.include_gzs) {
-      nout1 = it->mb_cells.nx1 + 2*(it->mb_cells.ng);
-      nout2 = (it->mb_cells.nx2 > 1)? (it->mb_cells.nx2 + 2*(it->mb_cells.ng)) : 1;
-      nout3 = (it->mb_cells.nx3 > 1)? (it->mb_cells.nx3 + 2*(it->mb_cells.ng)) : 1;
-      ois = 0;
-      ojs = 0;
-      oks = 0;
-    } else {
-      nout1 = it->mb_cells.nx1;
-      nout2 = it->mb_cells.nx2;
-      nout3 = it->mb_cells.nx3;
-      ois = it->mb_cells.is;
-      ojs = it->mb_cells.js;
-      oks = it->mb_cells.ks;
+  // set size & starting indices of output arrays, adjusted accordingly if gz included 
+  // Since all MeshBlocks the same, only need to compute values from first MB
+  auto it = pm->mblocks.begin();
+  if (out_params.include_gzs) {
+    nout1 = it->mb_cells.nx1 + 2*(it->mb_cells.ng);
+    nout2 = (it->mb_cells.nx2 > 1)? (it->mb_cells.nx2 + 2*(it->mb_cells.ng)) : 1;
+    nout3 = (it->mb_cells.nx3 > 1)? (it->mb_cells.nx3 + 2*(it->mb_cells.ng)) : 1;
+    ois = 0;
+    ojs = 0;
+    oks = 0;
+  } else {
+    nout1 = it->mb_cells.nx1;
+    nout2 = it->mb_cells.nx2;
+    nout3 = it->mb_cells.nx3;
+    ois = it->mb_cells.is;
+    ojs = it->mb_cells.js;
+    oks = it->mb_cells.ks;
+  }
+
+  // reset array dimensions if data is being sliced
+  if (out_params.slice1) { nout1 = 1; }
+  if (out_params.slice2) { nout2 = 1; }
+  if (out_params.slice3) { nout3 = 1; }
+
+  // calculate spatial positions of output data
+  out_x1posn_.SetSize(pm->nmbthisrank, nout1);
+  out_x1posn_.SetLabel("x1v");
+  out_x2posn_.SetSize(pm->nmbthisrank, nout2);
+  out_x2posn_.SetLabel("x2v");
+  out_x3posn_.SetSize(pm->nmbthisrank, nout3);
+  out_x3posn_.SetLabel("x3v");
+
+  // TODO get working with multuple meshblocks
+  auto pmb = pm->mblocks.begin();
+  for (int n=0; n<pm->nmbthisrank; ++n) {
+    for (int i=0; i<nout1; ++i) {
+      out_x1posn_(n,i) = pm->CellCenterX((i-(pmb->mb_cells.is - ois)),
+         pmb->mb_cells.nx1, pmb->mb_size.x1min, pmb->mb_size.x1max);
     }
-
-    // reset array dimensions if data is being sliced
-    if (output_params.slice1) { nout1 = 1; }
-    if (output_params.slice2) { nout2 = 1; }
-    if (output_params.slice3) { nout3 = 1; }
-
-    // calculate spatial positions of output data
-    output_x1posn_.SetSize(pm->nmbthisrank, nout1);
-    output_x1posn_.SetLabel("x1v");
-    output_x2posn_.SetSize(pm->nmbthisrank, nout2);
-    output_x2posn_.SetLabel("x2v");
-    output_x3posn_.SetSize(pm->nmbthisrank, nout3);
-    output_x3posn_.SetLabel("x3v");
-
-    // TODO get working with multuple meshblocks
-    auto pmb = pm->mblocks.begin();
-    for (int n=0; n<pm->nmbthisrank; ++n) {
-      for (int i=0; i<nout1; ++i) {
-        output_x1posn_(n,i) = pm->CellCenterX((i-(pmb->mb_cells.is - ois)),
-           pmb->mb_cells.nx1, pmb->mb_size.x1min, pmb->mb_size.x1max);
-      }
-      for (int j=0; j<nout2; ++j) {
-        output_x2posn_(n,j) = pm->CellCenterX((j-(pmb->mb_cells.js - ojs)),
-           pmb->mb_cells.nx2, pmb->mb_size.x2min, pmb->mb_size.x2max);
-      }
-      for (int k=0; k<nout3; ++k) {
-        output_x3posn_(n,k) = pm->CellCenterX((k-(pmb->mb_cells.ks - oks)),
-           pmb->mb_cells.nx3, pmb->mb_size.x3min, pmb->mb_size.x3max);
-      }
+    for (int j=0; j<nout2; ++j) {
+      out_x2posn_(n,j) = pm->CellCenterX((j-(pmb->mb_cells.js - ojs)),
+         pmb->mb_cells.nx2, pmb->mb_size.x2min, pmb->mb_size.x2max);
     }
+    for (int k=0; k<nout3; ++k) {
+      out_x3posn_(n,k) = pm->CellCenterX((k-(pmb->mb_cells.ks - oks)),
+         pmb->mb_cells.nx3, pmb->mb_size.x3min, pmb->mb_size.x3max);
+    }
+  }
 
+  // parse list of variables for each physics and flag variables to be output
+  // hydro conserved variables
+  hydro_cons_out_vars.SetSize(pmb->phydro->nhydro);
+  for (int n=0; n<pmb->phydro->nhydro; ++n) { hydro_cons_out_vars(n) = false; }
+
+  if (out_params.variable.compare("cons") == 0) {
+    for (int n=0; n<pmb->phydro->nhydro; ++n) { hydro_cons_out_vars(n) = true; }
+  }
+  if (out_params.variable.compare("D") == 0)  { hydro_cons_out_vars(hydro::IDN) = true; }
+  if (out_params.variable.compare("E") == 0)  { hydro_cons_out_vars(hydro::IEN) = true; }
+  if (out_params.variable.compare("M1") == 0) { hydro_cons_out_vars(hydro::IM1) = true; }
+  if (out_params.variable.compare("M2") == 0) { hydro_cons_out_vars(hydro::IM2) = true; }
+  if (out_params.variable.compare("M3") == 0) { hydro_cons_out_vars(hydro::IM3) = true; }
+  if (out_params.variable.compare("mom") == 0) {
+    hydro_cons_out_vars(hydro::IM1) = true;
+    hydro_cons_out_vars(hydro::IM2) = true;
+    hydro_cons_out_vars(hydro::IM3) = true;
+  }
+
+  // hydro primitive variables
+  hydro_prim_out_vars.SetSize(pmb->phydro->nhydro);
+  for (int n=0; n<pmb->phydro->nhydro; ++n) { hydro_prim_out_vars(n) = false; }
+
+  if (out_params.variable.compare("prim") == 0) {
+    for (int n=0; n<pmb->phydro->nhydro; ++n) { hydro_prim_out_vars(n) = true; }
+  }
+  if (out_params.variable.compare("d") == 0)  { hydro_prim_out_vars(hydro::IDN) = true; }
+  if (out_params.variable.compare("p") == 0)  { hydro_prim_out_vars(hydro::IPR) = true; }
+  if (out_params.variable.compare("vx") == 0) { hydro_prim_out_vars(hydro::IVX) = true; }
+  if (out_params.variable.compare("vy") == 0) { hydro_prim_out_vars(hydro::IVY) = true; }
+  if (out_params.variable.compare("vz") == 0) { hydro_prim_out_vars(hydro::IVZ) = true; }
+  if (out_params.variable.compare("vel") == 0) {
+    hydro_prim_out_vars(hydro::IVX) = true;
+    hydro_prim_out_vars(hydro::IVY) = true;
+    hydro_prim_out_vars(hydro::IVZ) = true;
+  }
+
+  // check for valid output variable in <input> block
+  int cnt=0;
+  for (int n=0; n<pmb->phydro->nhydro; ++n) {
+    if (hydro_cons_out_vars(n)) ++cnt;
+    if (hydro_prim_out_vars(n)) ++cnt;
+  }
+  if (cnt==0) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+       << "Output variable '" << out_params.variable << "' not implemented" << std::endl
+       << "Allowed hydro variables: cons,D,E,mom,M1,M2,M3,prim,d,p,vel,vx,vy,vz"
+       << std::endl;
+    exit(EXIT_FAILURE);
+  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -121,47 +171,105 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
 
 void OutputType::LoadOutputData(Mesh *pm)
 {
-  output_data_.clear();  // start with a clean list
+  out_data_.clear();  // start with a clean list
 
-  // mass density
-  if (output_params.variable.compare("d") == 0 ||
-      output_params.variable.compare("density") == 0 ||
-      output_params.variable.compare("prim") == 0 ||
-      output_params.variable.compare("cons") == 0) {
-    AthenaArray<Real> new_data;
+  // the components of the out_data_ vector are each variable to be output over all
+  // cells and MeshBlocks.  So start iteration over variables
 
-    new_data.SetSize(pm->nmbthisrank, nout3, nout2, nout1);
-    new_data.SetLabel("dens");
+  // TODO: get this working for multiple physics, which may be either defined/undef
 
-    // deep copy one array for each MeshBlock on this rank
-    // TODO add data from each MeshBlock
-    // TODO add loop over all variables
-    auto pmb = pm->mblocks.begin();
-    int islice=0, jslice=0, kslice=0;
-    if (output_params.slice1) {
-      islice = pm->CellCenterIndex(output_params.slice_x1, pmb->mb_cells.nx1,
-        pmb->mb_size.x1min, pmb->mb_size.x1max);
-    }
-    if (output_params.slice2) {
-      jslice = pm->CellCenterIndex(output_params.slice_x2, pmb->mb_cells.nx2,
-        pmb->mb_size.x2min, pmb->mb_size.x2max);
-    }
-    if (output_params.slice3) {
-      kslice = pm->CellCenterIndex(output_params.slice_x3, pmb->mb_cells.nx3,
-        pmb->mb_size.x3min, pmb->mb_size.x3max);
-    }
+  // output hydro conserved
+  for (int n=0; n<(pm->mblocks.begin()->phydro->nhydro); ++n) {
+    if (hydro_cons_out_vars(n)) { // variable exists for output
+      AthenaArray<Real> new_data;
+      new_data.SetSize(pm->nmbthisrank, nout3, nout2, nout1);
+      if (n == hydro::IDN) new_data.SetLabel("dens");
+      if (n == hydro::IEN) new_data.SetLabel("tote");
+      if (n == hydro::IM1) new_data.SetLabel("mom1");
+      if (n == hydro::IM2) new_data.SetLabel("mom2");
+      if (n == hydro::IM3) new_data.SetLabel("mom3");
 
-    // note the complicated addressing of array indices.  The output array does not
-    // include ghost zones (unless needed), so it is always addressed starting at 0.
-    // When the array is sliced, only the value at (ijk)slice is stored.
-    for (int n=0; n<pm->nmbthisrank; ++n) {
-      for (int k=0; k<nout3; ++k) {
-      for (int j=0; j<nout2; ++j) {
-      for (int i=0; i<nout1; ++i) {
-        new_data(n,k,j,i) =
-           pmb->phydro->u0(hydro::IDN,(k+oks+kslice),(j+ojs+jslice),(i+ois+islice));
-      }}}
+      // loop over all MeshBlocks
+      int imb=0;
+      for (auto &mb : pm->mblocks) {
+        int islice=0, jslice=0, kslice=0;
+        //TODO fix this so there is no output if slice is out of range
+        if (out_params.slice1) { 
+          islice = pm->CellCenterIndex(out_params.slice_x1, mb.mb_cells.nx1,
+            mb.mb_size.x1min, mb.mb_size.x1max);
+        }   
+        if (out_params.slice2) {
+          jslice = pm->CellCenterIndex(out_params.slice_x2, mb.mb_cells.nx2,
+            mb.mb_size.x2min, mb.mb_size.x2max);
+        }   
+        if (out_params.slice3) {
+          kslice = pm->CellCenterIndex(out_params.slice_x3, mb.mb_cells.nx3,
+            mb.mb_size.x3min, mb.mb_size.x3max);
+        }
+        
+        // loop over all cells
+        // deep copy one array for each MeshBlock on this rank
+        // note the complicated addressing of array indices.  The output array is always
+        // include ghost zones (unless needed), so it is always addressed starting at 0.
+        // When the array is sliced, only the value at (ijk)slice is stored.
+        for (int k=0; k<nout3; ++k) {
+        for (int j=0; j<nout2; ++j) {
+        for (int i=0; i<nout1; ++i) {
+          new_data(imb,k,j,i) =
+             mb.phydro->u0(n,(k+oks+kslice),(j+ojs+jslice),(i+ois+islice));
+        }}}
+        ++imb;
+      }
+      // append this variable to end of out_data_ vector
+      out_data_.push_back(new_data);
     }
-    output_data_.push_back(new_data);
   }
+
+  // output hydro primitive
+  for (int n=0; n<(pm->mblocks.begin()->phydro->nhydro); ++n) {
+    if (hydro_prim_out_vars(n)) { // variable exists for output
+      AthenaArray<Real> new_data;
+      new_data.SetSize(pm->nmbthisrank, nout3, nout2, nout1);
+      if (n == hydro::IDN) new_data.SetLabel("dens");
+      if (n == hydro::IEN) new_data.SetLabel("pres");
+      if (n == hydro::IM1) new_data.SetLabel("velx");
+      if (n == hydro::IM2) new_data.SetLabel("vely");
+      if (n == hydro::IM3) new_data.SetLabel("velz");
+      
+      // loop over all MeshBlocks
+      int imb=0; 
+      for (auto &mb : pm->mblocks) {
+        int islice=0, jslice=0, kslice=0;
+        //TODO fix this so there is no output if slice is out of range
+        if (out_params.slice1) { 
+          islice = pm->CellCenterIndex(out_params.slice_x1, mb.mb_cells.nx1,
+            mb.mb_size.x1min, mb.mb_size.x1max);
+        }   
+        if (out_params.slice2) {
+          jslice = pm->CellCenterIndex(out_params.slice_x2, mb.mb_cells.nx2,
+            mb.mb_size.x2min, mb.mb_size.x2max);
+        }   
+        if (out_params.slice3) {
+          kslice = pm->CellCenterIndex(out_params.slice_x3, mb.mb_cells.nx3,
+            mb.mb_size.x3min, mb.mb_size.x3max);
+        }
+        
+        // loop over all cells
+        // deep copy one array for each MeshBlock on this rank
+        // note the complicated addressing of array indices.  The output array is always
+        // include ghost zones (unless needed), so it is always addressed starting at 0.
+        // When the array is sliced, only the value at (ijk)slice is stored.
+        for (int k=0; k<nout3; ++k) {
+        for (int j=0; j<nout2; ++j) {
+        for (int i=0; i<nout1; ++i) {
+          new_data(imb,k,j,i) =
+             mb.phydro->w0(n,(k+oks+kslice),(j+ojs+jslice),(i+ois+islice));
+        }}}
+        ++imb;
+      }
+      // append this variable to end of out_data_ vector
+      out_data_.push_back(new_data);
+    }
+  }
+
 }

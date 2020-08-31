@@ -136,7 +136,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
   //---- Step 2.  Cycle through output Types and load data / write files.
   //  This design allows for asynchronous outputs to be implemented in the future.
 
-  for (auto &out : pout->poutput_list_) {
+  for (auto &out : pout->pout_list_) {
     out->LoadOutputData(pmesh);
     out->WriteOutputFile(pmesh, pin);
   }
@@ -222,8 +222,8 @@ void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
   // cycle through output Types and load data / write files.  This design allows for
   // asynchronous outputs to implemented in the future.
   // TODO: cycle through OutputTypes
-  pout->poutput_list_.front()->LoadOutputData(pmesh);
-  pout->poutput_list_.front()->WriteOutputFile(pmesh,pin);
+  pout->pout_list_.front()->LoadOutputData(pmesh);
+  pout->pout_list_.front()->WriteOutputFile(pmesh,pin);
     
   tstop_ = clock();
 
