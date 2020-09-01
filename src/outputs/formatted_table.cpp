@@ -89,7 +89,8 @@ void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   }
   std::fprintf(pfile, "\n"); // terminate line
 
-    // loop over all cells in data arrays
+  // TODO loop over multiple MeshBlocks
+  // loop over all cells in data arrays
   for (int n=0; n<pm->nmbthisrank; ++n) {
     for (int k=0; k<nout3; ++k) {
       for (int j=0; j<nout2; ++j) {
@@ -97,15 +98,15 @@ void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
           // write x1, x2, x3 indices and coordinates on start of new line
           if (nout1 > 1) {
             std::fprintf(pfile, "%04d", i+ois);
-            std::fprintf(pfile, out_params.data_format.c_str(), out_x1posn_(n,i));
+            std::fprintf(pfile, out_params.data_format.c_str(), x1_cc_(n,i));
           }
           if (nout2 > 1) {
             std::fprintf(pfile, " %04d", j+ojs);  // note extra space for formatting
-            std::fprintf(pfile, out_params.data_format.c_str(), out_x2posn_(n,j));
+            std::fprintf(pfile, out_params.data_format.c_str(), x2_cc_(n,j));
           }
           if (nout3 > 1) {
             std::fprintf(pfile, " %04d", k+oks);  // note extra space for formatting
-            std::fprintf(pfile, out_params.data_format.c_str(), out_x3posn_(n,k));
+            std::fprintf(pfile, out_params.data_format.c_str(), x3_cc_(n,k));
           }
 
           // step through std::vector of out_data_ and write each on same line

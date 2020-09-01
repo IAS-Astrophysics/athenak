@@ -118,6 +118,7 @@ class Mesh
 
   // Following functions compute positions on a regular Cartesian grid.
   // They provide functionality of the Coordinates class in the C++ version of the code.
+
   // returns x-posn of left edge of i^th cell of N in range xmin->xmax
   // Averages of linear interpolation from each side used to symmetrize r.o. error
   inline Real LeftEdgeX(std::int32_t ith, std::int32_t n, Real xmin, Real xmax)

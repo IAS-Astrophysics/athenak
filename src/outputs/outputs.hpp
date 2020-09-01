@@ -29,8 +29,8 @@ struct OutputParameters
   std::string block_name;
   std::string file_basename;
   std::string file_id;
-  std::string variable;
   std::string file_type;
+  std::string variable;
   std::string data_format;
   Real last_time, dt;
   int file_number;
@@ -69,9 +69,9 @@ class OutputType
 
  protected:
   std::vector<AthenaArray<Real>> out_data_;
-  AthenaArray<Real> out_x1posn_;
-  AthenaArray<Real> out_x2posn_;
-  AthenaArray<Real> out_x3posn_;
+  AthenaArray<Real> x1_cc_, x1_fc_;
+  AthenaArray<Real> x2_cc_, x2_fc_;
+  AthenaArray<Real> x3_cc_, x3_fc_;
 };
 
 //----------------------------------------------------------------------------------------
@@ -96,6 +96,17 @@ class HistoryOutput : public OutputType
   void LoadOutputData(Mesh *pm) override;
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
 };  
+
+//----------------------------------------------------------------------------------------
+//! \class VTKOutput
+//  \brief derived OutputType class for vtk binary data (VTK legacy format)
+
+class VTKOutput : public OutputType
+{
+ public:
+  VTKOutput(OutputParameters oparams, Mesh *pm);
+  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+};
 
 //----------------------------------------------------------------------------------------
 //! \class Outputs

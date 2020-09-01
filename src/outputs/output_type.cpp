@@ -91,37 +91,55 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
   if (out_params.file_type.compare("hst") == 0) {return;}
 
   // calculate spatial positions of output data
-  out_x1posn_.SetSize(pm->nmbthisrank, nout1);
-  out_x1posn_.SetLabel("x1v");
-  out_x2posn_.SetSize(pm->nmbthisrank, nout2);
-  out_x2posn_.SetLabel("x2v");
-  out_x3posn_.SetSize(pm->nmbthisrank, nout3);
-  out_x3posn_.SetLabel("x3v");
+  x1_cc_.SetSize(pm->nmbthisrank, nout1);
+  x1_fc_.SetSize(pm->nmbthisrank, nout1+1);
+  x1_cc_.SetLabel("x1v");
+  x1_fc_.SetLabel("x1f");
+  x2_cc_.SetSize(pm->nmbthisrank, nout2);
+  x2_fc_.SetSize(pm->nmbthisrank, nout2+1);
+  x2_cc_.SetLabel("x2v");
+  x2_fc_.SetLabel("x2f");
+  x3_cc_.SetSize(pm->nmbthisrank, nout3);
+  x3_fc_.SetSize(pm->nmbthisrank, nout3+1);
+  x3_cc_.SetLabel("x3v");
+  x3_fc_.SetLabel("x3f");
 
   // TODO get working with multuple meshblocks
   auto pmb = pm->mblocks.begin();
   for (int n=0; n<pm->nmbthisrank; ++n) {
     for (int i=0; i<nout1; ++i) {
-      out_x1posn_(n,i) = pm->CellCenterX((i-(pmb->mb_cells.is - ois)),
+      x1_cc_(n,i) = pm->CellCenterX((i-(pmb->mb_cells.is - ois)),
+         pmb->mb_cells.nx1, pmb->mb_size.x1min, pmb->mb_size.x1max);
+      x1_fc_(n,i) = pm->LeftEdgeX((i-(pmb->mb_cells.is - ois)),
          pmb->mb_cells.nx1, pmb->mb_size.x1min, pmb->mb_size.x1max);
     }
+    x1_fc_(n,nout1) = pmb->mb_size.x1max;
+
     for (int j=0; j<nout2; ++j) {
-      out_x2posn_(n,j) = pm->CellCenterX((j-(pmb->mb_cells.js - ojs)),
+      x2_cc_(n,j) = pm->CellCenterX((j-(pmb->mb_cells.js - ojs)),
+         pmb->mb_cells.nx2, pmb->mb_size.x2min, pmb->mb_size.x2max);
+      x2_fc_(n,j) = pm->LeftEdgeX((j-(pmb->mb_cells.js - ojs)),
          pmb->mb_cells.nx2, pmb->mb_size.x2min, pmb->mb_size.x2max);
     }
+    x2_fc_(n,nout2) = pmb->mb_size.x2max;
+
     for (int k=0; k<nout3; ++k) {
-      out_x3posn_(n,k) = pm->CellCenterX((k-(pmb->mb_cells.ks - oks)),
+      x3_cc_(n,k) = pm->CellCenterX((k-(pmb->mb_cells.ks - oks)),
+         pmb->mb_cells.nx3, pmb->mb_size.x3min, pmb->mb_size.x3max);
+      x3_cc_(n,k) = pm->LeftEdgeX((k-(pmb->mb_cells.ks - oks)),
          pmb->mb_cells.nx3, pmb->mb_size.x3min, pmb->mb_size.x3max);
     }
+    x3_fc_(n,nout3) = pmb->mb_size.x3max;
   }
 
   // parse list of variables for each physics and flag variables to be output
   // hydro conserved variables
-  hydro_cons_out_vars.SetSize(pmb->phydro->nhydro);
-  for (int n=0; n<pmb->phydro->nhydro; ++n) { hydro_cons_out_vars(n) = false; }
+  int &nhydro = pm->mblocks.begin()->phydro->nhydro;
+  hydro_cons_out_vars.SetSize(nhydro);
+  for (int n=0; n<nhydro; ++n) { hydro_cons_out_vars(n) = false; }
 
   if (out_params.variable.compare("cons") == 0) {
-    for (int n=0; n<pmb->phydro->nhydro; ++n) { hydro_cons_out_vars(n) = true; }
+    for (int n=0; n<nhydro; ++n) { hydro_cons_out_vars(n) = true; }
   }
   if (out_params.variable.compare("D") == 0)  { hydro_cons_out_vars(hydro::IDN) = true; }
   if (out_params.variable.compare("E") == 0)  { hydro_cons_out_vars(hydro::IEN) = true; }
@@ -135,11 +153,11 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
   }
 
   // hydro primitive variables
-  hydro_prim_out_vars.SetSize(pmb->phydro->nhydro);
-  for (int n=0; n<pmb->phydro->nhydro; ++n) { hydro_prim_out_vars(n) = false; }
+  hydro_prim_out_vars.SetSize(nhydro);
+  for (int n=0; n<nhydro; ++n) { hydro_prim_out_vars(n) = false; }
 
   if (out_params.variable.compare("prim") == 0) {
-    for (int n=0; n<pmb->phydro->nhydro; ++n) { hydro_prim_out_vars(n) = true; }
+    for (int n=0; n<nhydro; ++n) { hydro_prim_out_vars(n) = true; }
   }
   if (out_params.variable.compare("d") == 0)  { hydro_prim_out_vars(hydro::IDN) = true; }
   if (out_params.variable.compare("p") == 0)  { hydro_prim_out_vars(hydro::IPR) = true; }
@@ -154,7 +172,7 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
 
   // check for valid output variable in <input> block
   int cnt=0;
-  for (int n=0; n<pmb->phydro->nhydro; ++n) {
+  for (int n=0; n<nhydro; ++n) {
     if (hydro_cons_out_vars(n)) ++cnt;
     if (hydro_prim_out_vars(n)) ++cnt;
   }
@@ -176,13 +194,14 @@ void OutputType::LoadOutputData(Mesh *pm)
 {
   out_data_.clear();  // start with a clean list
 
-  // the components of the out_data_ vector are each variable to be output over all
-  // cells and MeshBlocks.  So start iteration over variables
+  // the out_data_ vector stores each variable to be output over all cells and MeshBlocks.
+  // So start iteration over elements of out_data_ vector (variables)
 
   // TODO: get this working for multiple physics, which may be either defined/undef
 
   // output hydro conserved
-  for (int n=0; n<(pm->mblocks.begin()->phydro->nhydro); ++n) {
+  int &nhydro = pm->mblocks.begin()->phydro->nhydro;
+  for (int n=0; n<nhydro; ++n) {
     if (hydro_cons_out_vars(n)) { // variable exists for output
       AthenaArray<Real> new_data;
       new_data.SetSize(pm->nmbthisrank, nout3, nout2, nout1);
@@ -229,7 +248,7 @@ void OutputType::LoadOutputData(Mesh *pm)
   }
 
   // output hydro primitive
-  for (int n=0; n<(pm->mblocks.begin()->phydro->nhydro); ++n) {
+  for (int n=0; n<nhydro; ++n) {
     if (hydro_prim_out_vars(n)) { // variable exists for output
       AthenaArray<Real> new_data;
       new_data.SetSize(pm->nmbthisrank, nout3, nout2, nout1);

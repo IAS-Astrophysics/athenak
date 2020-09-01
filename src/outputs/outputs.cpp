@@ -151,8 +151,9 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
         pnode = new HistoryOutput(opar,pm);
         pout_list_.insert(pout_list_.begin(),pnode);
         num_hst++;
-//      } else if (opar.file_type.compare("vtk") == 0) {
-//        pnew_type = new VTKOutput(opar);
+      } else if (opar.file_type.compare("vtk") == 0) {
+        pnode = new VTKOutput(opar,pm);
+        pout_list_.insert(pout_list_.begin(),pnode);
 //      } else if (op.file_type.compare("rst") == 0) {
   // Move restarts to the tail end of the OutputType list, so file counters for other
   // output types are up-to-date in restart file
