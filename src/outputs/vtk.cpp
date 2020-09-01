@@ -111,7 +111,7 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   std::fprintf(pfile, "DATASET RECTILINEAR_GRID\n");
   std::fprintf(pfile, "DIMENSIONS %d %d %d\n", ncoord1, ncoord2, ncoord3);
 
-  // TODO coordinates of entire grid
+  // TODO coordinates of entire grid for multiple MeshBlocks
   // write x1-coordinates as binary float in big endian order
   std::fprintf(pfile, "X_COORDINATES %d float\n", ncoord1);
   if (nout1 == 1) {
@@ -155,8 +155,8 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   // the out_data_ vector stores each variable to be output over all cells and MeshBlocks.
   // So start iteration over elements of out_data_ vector (variables)
 
-  // TODO write data for multiple MeshBlocks
   for (auto it : out_data_) {
+    // TODO get VECTORS working
     // write data type (SCALARS or VECTORS) and name
 //    std::fprintf(pfile, "\n%s %s float\n", pdata->type.c_str(),  pdata->name.c_str());
 //    int nvar = pdata->data.GetDim4();
@@ -164,6 +164,7 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
     std::fprintf(pfile, "\nSCALARS %s float\n", it.GetLabel().c_str());
     std::fprintf(pfile, "LOOKUP_TABLE default\n");
 
+  // TODO write data properly for multiple MeshBlocks
     // Loop over MeshBlocks
     for (int n=0; n<pm->nmbthisrank; ++n) {
       for (int k=0; k<nout3; ++k) {

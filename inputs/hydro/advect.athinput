@@ -60,4 +60,5 @@ data_format = %12.5e   # Optional data format string
 dt          = 0.1      # time increment between outputs
 slice_x2    = 0.0      # slice in x2
 slice_x3    = 0.0      # slice in x3
+ghost_zones = false    # are ghost zones included?
 

@@ -1,11 +1,13 @@
 #! /usr/bin/env python
 
 """
-Script for plotting mesh structure in mesh_structure.dat (default) file produced
+Script for plotting mesh structure in mesh_structure.dat (default name) file produced
 by running Athena++ with "-m" argument.
 
-Can optionally specify "-i <input_file>" and/or "-o <output_file>". Output
-defaults to using "show()" command rather than saving to file.
+Can optionally specify "-i <input_file>" and/or "-o <output_file>". If -o argument
+is omitted, output defaults to display on screen rather than saving to file.
+
+Run "plot_mesh.py -h" for help.
 """
 
 # Python modules
@@ -60,11 +62,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-i', '--input',
                         default='mesh_structure.dat',
-                        help='name of mesh structure file')
+                        help='name of input (mesh structure) file')
     parser.add_argument('-o',
                         '--output',
                         default='show',
-                        help=('name of output image file to create; omit to '
-                              'display rather than save image'))
+                        help='name of output image file; omit to display to screen')
     args = parser.parse_args()
     main(**vars(args))
