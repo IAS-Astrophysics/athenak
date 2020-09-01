@@ -127,21 +127,12 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
   }
 
   // convert conserved to primitive over whole mesh
-
   for (auto &mb : pmesh->mblocks) {
     TaskStatus tstatus;
     tstatus = mb.phydro->ConToPrim(this, nstages);
   }
 
-  //---- Step 2.  Cycle through output Types and load data / write files.
-  //  This design allows for asynchronous outputs to be implemented in the future.
-
-  for (auto &out : pout->pout_list_) {
-    out->LoadOutputData(pmesh);
-    out->WriteOutputFile(pmesh, pin);
-  }
-
-  //---- Step 3.  Compute first time step (if problem involves time evolution
+  //---- Step 2.  Compute first time step (if problem involves time evolution
 
   if (time_evolution) {
     for (auto it = pmesh->mblocks.begin(); it < pmesh->mblocks.end(); ++it) {
@@ -149,6 +140,13 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
       tstatus = it->phydro->NewTimeStep(this, nstages);
     }
     pmesh->NewTimeStep(tlim);
+  }
+
+  //---- Step 3.  Cycle through output Types and load data / write files.
+
+  for (auto &out : pout->pout_list_) {
+    out->LoadOutputData(pmesh);
+    out->WriteOutputFile(pmesh, pin);
   }
 
   //---- Step 4.  Initialize various counters, timers, etc.
@@ -175,8 +173,6 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
     if (time_evolution) {
       if (global_variable::my_rank == 0) {OutputCycleDiagnostics(pmesh);}
 
-/*** first implementation task list ***/
-
       // Do multi-stage time evolution TaskList
       for (int stage=1; stage<=nstages; ++stage) {
 
@@ -194,17 +190,28 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
 
       }
 
-      // Do STS TaskLists
+      // Add STS TaskLists, etc here....
 
-/*** first implementation task list ***/
 
-// TODO add outputs during execution
-
+      // increment time, ncycle, etc.
+      // Compute new timestep
       pmesh->time = pmesh->time + pmesh->dt;
       pmesh->ncycle++;
       nmb_updated_ += pmesh->nmbtotal;
-
       pmesh->NewTimeStep(tlim);
+
+      // Make outputs during execution
+      for (auto &out : pout->pout_list_) {
+        // compare at floating point (32-bit) precision to reduce effect of round off
+        float time_32 = static_cast<float>(pmesh->time);
+        float next_32 = static_cast<float>(out->out_params.last_time+out->out_params.dt);
+        float tlim_32 = static_cast<float>(tlim);
+        if (time_32 >= next_32 && time_32 < tlim_32) {
+          out->LoadOutputData(pmesh);
+          out->WriteOutputFile(pmesh, pin);
+        }
+      }
+
     }
   }
 

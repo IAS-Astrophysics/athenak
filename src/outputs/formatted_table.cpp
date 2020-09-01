@@ -123,7 +123,11 @@ void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
 
   // increment counters
   out_params.file_number++;
-  out_params.last_time += out_params.dt;
+  if (out_params.last_time < 0.0) {
+    out_params.last_time = pm->time;
+  } else {
+    out_params.last_time += out_params.dt;
+  }
   // store filenumber and time into ParameterInput for restarts
   pin->SetInteger(out_params.block_name, "file_number", out_params.file_number);
   pin->SetReal(out_params.block_name, "last_time", out_params.last_time);

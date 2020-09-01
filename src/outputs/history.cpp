@@ -142,6 +142,9 @@ void HistoryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
         std::fprintf(pfile,"[%d]=tot-E   ", iout++);
       }
       std::fprintf(pfile,"\n");                              // terminate line
+      // increment counters so headers are not written again
+      out_params.file_number++;
+      pin->SetInteger(out_params.block_name, "file_number", out_params.file_number);
     }
 
     // write history variables
@@ -154,9 +157,11 @@ void HistoryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   }
 
   // increment counters, clean up
-  out_params.file_number++;
-  out_params.last_time += out_params.dt;
-  pin->SetInteger(out_params.block_name, "file_number", out_params.file_number);
+  if (out_params.last_time < 0.0) {
+    out_params.last_time = pm->time;
+  } else {
+    out_params.last_time += out_params.dt;
+  }
   pin->SetReal(out_params.block_name, "last_time", out_params.last_time);
   return;
 }

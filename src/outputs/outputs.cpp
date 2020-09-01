@@ -72,7 +72,8 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
       opar.block_name.assign(it->block_name);
 
       // set time of last output, time between outputs
-      opar.last_time = pin->GetOrAddReal(opar.block_name,"last_time", 0.0);
+      // when last_time < 0, then outputs will always be made
+      opar.last_time = pin->GetOrAddReal(opar.block_name,"last_time", -1.0);
       opar.dt = pin->GetReal(opar.block_name,"dt");
 
       if (opar.dt <= 0.0) continue;  // only add output if dt>0
