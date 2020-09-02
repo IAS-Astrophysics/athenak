@@ -69,14 +69,14 @@ using namespace hydro;
           r = (pmesh_->CellCenterX(k-ks, pmb->mb_cells.nx3,x3min,x3max)-x3min)/length;
         }
 
-        // iprob=1: sine wave
+        Real f; // value for advected quantity, depending on problem type
         if (iprob == 1) {
-          pmb->phydro->u0(IDN,k,j,i) = 1.0 + amp*std::sin(2.0*(M_PI)*r);
-
-        // iprob=2: square wave in second quarter of domain
+          // iprob=1: sine wave
+          f = 1.0 + amp*std::sin(2.0*(M_PI)*r);
         } else if (iprob == 2) {
-          pmb->phydro->u0(IDN,k,j,i) = 1.0;
-          if (r >= 0.25 && r <= 0.5) pmb->phydro->u0(IDN,k,j,i) += amp;
+          // iprob=2: square wave in second quarter of domain
+          f = 1.0;
+          if (r >= 0.25 && r <= 0.5) { f += amp; }
         } else {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
              << std::endl << "problem/iproblem=" << iprob 
@@ -84,21 +84,21 @@ using namespace hydro;
           exit(EXIT_FAILURE);
         }
 
-        // now compute momenta, total energy
+        // now compute density  momenta, total energy
+        pmb->phydro->u0(IDN,k,j,i) = 1.0;
         if (flow_dir == 1) {
-          pmb->phydro->u0(IM1,k,j,i) = vel*pmb->phydro->u0(IDN,k,j,i);
-          pmb->phydro->u0(IM2,k,j,i) = 0.0;
-          pmb->phydro->u0(IM3,k,j,i) = 0.0;
+          pmb->phydro->u0(IM1,k,j,i) = vel;
+          pmb->phydro->u0(IM2,k,j,i) = f;
+          pmb->phydro->u0(IM3,k,j,i) = f;
         } else if (flow_dir == 2) {
-          pmb->phydro->u0(IM1,k,j,i) = 0.0;
-          pmb->phydro->u0(IM2,k,j,i) = vel*pmb->phydro->u0(IDN,k,j,i);
-          pmb->phydro->u0(IM3,k,j,i) = 0.0;
+          pmb->phydro->u0(IM1,k,j,i) = f;
+          pmb->phydro->u0(IM2,k,j,i) = vel;
+          pmb->phydro->u0(IM3,k,j,i) = f;
         } else {
-          pmb->phydro->u0(IM1,k,j,i) = 0.0;
-          pmb->phydro->u0(IM2,k,j,i) = 0.0;
-          pmb->phydro->u0(IM3,k,j,i) = vel*pmb->phydro->u0(IDN,k,j,i);
+          pmb->phydro->u0(IM1,k,j,i) = f;
+          pmb->phydro->u0(IM2,k,j,i) = f;
+          pmb->phydro->u0(IM3,k,j,i) = vel;
         } 
-        
         pmb->phydro->u0(IEN,k,j,i) = 1.0 + 0.5*(SQR(pmb->phydro->u0(IM1,k,j,i))
           + SQR(pmb->phydro->u0(IM2,k,j,i)) + SQR(pmb->phydro->u0(IM3,k,j,i)))/
             pmb->phydro->u0(IDN,k,j,i);

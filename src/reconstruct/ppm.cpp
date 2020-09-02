@@ -130,6 +130,16 @@ void PiecewiseParabolic::ReconstructX1(const int k,const int j,const int il,cons
           qlv_(i) = q(n,k,j,i) + (qlv_(i) - q(n,k,j,i))*d2qlim/d2q;
           qrv_(i) = q(n,k,j,i) + (qrv_(i) - q(n,k,j,i))*d2qlim/d2q;
         }
+      } else {
+        // Monotonize again, away from extrema (CW eqn 1.10, PH 3.32)
+        Real qc = qrv_(i) - q(n,k,j,i);
+        Real qd = qlv_(i) - q(n,k,j,i);
+        if (fabs(qc) >= 2.0*fabs(qd)) {
+          qrv_(i) = q(n,k,j,i) - 2.0*qd;
+        }
+        if (fabs(qd) >= 2.0*fabs(qc)) {
+          qlv_(i) = q(n,k,j,i) - 2.0*qc;
+        }
       }
     }
 
@@ -228,6 +238,16 @@ void PiecewiseParabolic::ReconstructX2(const int k,const int j,const int il,cons
           qlv_(i) = q(n,k,j,i) + (qlv_(i) - q(n,k,j,i))*d2qlim/d2q;
           qrv_(i) = q(n,k,j,i) + (qrv_(i) - q(n,k,j,i))*d2qlim/d2q;
         }
+      } else {
+        // Monotonize again, away from extrema (CW eqn 1.10, PH 3.32)
+        Real qc = qrv_(i) - q(n,k,j,i);
+        Real qd = qlv_(i) - q(n,k,j,i);
+        if (fabs(qc) >= 2.0*fabs(qd)) {
+          qrv_(i) = q(n,k,j,i) - 2.0*qd;
+        }
+        if (fabs(qd) >= 2.0*fabs(qc)) {
+          qlv_(i) = q(n,k,j,i) - 2.0*qc;
+        }
       }
     }
 
@@ -325,6 +345,16 @@ void PiecewiseParabolic::ReconstructX3(const int k,const int j,const int il,cons
         } else {  // add limited slope (PH 3.39)
           qlv_(i) = q(n,k,j,i) + (qlv_(i) - q(n,k,j,i))*d2qlim/d2q;
           qrv_(i) = q(n,k,j,i) + (qrv_(i) - q(n,k,j,i))*d2qlim/d2q;
+        }
+      } else {
+        // Monotonize again, away from extrema (CW eqn 1.10, PH 3.32)
+        Real qc = qrv_(i) - q(n,k,j,i);
+        Real qd = qlv_(i) - q(n,k,j,i);
+        if (fabs(qc) >= 2.0*fabs(qd)) {
+          qrv_(i) = q(n,k,j,i) - 2.0*qd;
+        }
+        if (fabs(qd) >= 2.0*fabs(qc)) {
+          qlv_(i) = q(n,k,j,i) - 2.0*qc;
         }
       }
     }
