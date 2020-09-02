@@ -24,15 +24,19 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm)
   std::string pgen_fun_name = pin->GetOrAddString("problem", "pgen_name", "none");
 
   // Set problem generator function to name specied on cmake command line
-  //  ... code here ..
+  //  TODO add custom pgens
 
   // else, set pgen function to name read from <problem> block in input file
   // only predefined names of functions in pgen.hpp allowed
+
+  // TODO make internal pgens a dictionary or map with input key
 
   if (pgen_fun_name.compare("shock_tube") == 0) {
     pgen_func_ = &ProblemGenerator::ShockTube_; 
   } else if (pgen_fun_name.compare("advection") == 0) {
     pgen_func_ = &ProblemGenerator::Advection_;
+  } else if (pgen_fun_name.compare("implode") == 0) {
+    pgen_func_ = &ProblemGenerator::LWImplode_;
 
   // else, name not set on command line or input file, print warning and quit
   } else {

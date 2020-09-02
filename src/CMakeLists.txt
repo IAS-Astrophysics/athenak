@@ -46,6 +46,7 @@ add_executable(
 
         pgen/pgen.cpp
         pgen/advection.cpp
+        pgen/lw_implode.cpp
         pgen/shock_tube.cpp
 
         reconstruct/reconstruct.cpp

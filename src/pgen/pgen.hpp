@@ -29,6 +29,7 @@ class ProblemGenerator {
   // predefined problem generator functions
   void ShockTube_(MeshBlock *pmb, ParameterInput *pin);
   void Advection_(MeshBlock *pmb, ParameterInput *pin);
+  void LWImplode_(MeshBlock *pmb, ParameterInput *pin);
 
 };
 

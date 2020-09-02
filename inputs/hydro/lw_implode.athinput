@@ -1,0 +1,67 @@
+<comment>
+problem   = 2D implosion from Liska & Wendroff
+reference = Liska, R. & Wendroff, B., SIAM J. Sci. Comput., 25, 995-1017 (2003)
+configure = --prob=lw_implode
+
+<job>
+problem_id = Implode   # problem ID: basename of output filenames
+
+<hydro>
+evolution   = dynamic
+eos         = adiabatic
+reconstruct = ppm
+rsolver     = hllc
+
+<eos>
+gamma      = 1.4         # gamma = C_p/C_v
+
+<time>
+integrator = rk3       # time integration algorithm
+cfl_number = 0.4       # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1        # cycle limit
+tlim       = 2.5       # time limit
+ndiag      = 1         # cycles between diagostic output
+
+<mesh>
+nx1        = 200         # Number of zones in X1-direction
+x1min      = 0.0         # minimum value of X1
+x1max      = 0.3         # maximum value of X1
+ix1_bc     = reflecting  # inner-X1 boundary flag
+ox1_bc     = reflecting  # outer-X1 boundary flag
+
+nx2        = 200         # Number of zones in X2irection
+x2min      = 0.0         # minimum value of X2
+x2max      = 0.3         # maximum value of X2
+ix2_bc     = reflecting  # inner-X2 boundary flag
+ox2_bc     = reflecting  # outer-X2 boundary flag
+
+nx3        = 1           # Number of zones in X3-direction
+x3min      = -0.5        # minimum value of X3
+x3max      = 0.5         # maximum value of X3
+ix3_bc     = periodic    # inner-X3 boundary flag
+ox3_bc     = periodic    # outer-X3 boundary flag
+
+<meshblock>
+nx1=200
+nx2=200
+nx3=1
+
+<problem>
+pgen_name = implode
+# Interior Conditions
+d_in  = 0.125            # density
+p_in  = 0.14             # pressure
+
+# Exterior Conditions
+d_out  = 1.0             # density
+p_out  = 1.0             # pressure
+
+<output1>
+file_type  = hst       # History data dump
+dt         = 0.1       # time increment between outputs
+
+<output2>
+file_type  = vtk       # Binary data dump
+variable   = prim      # variables to be output
+dt         = 0.01      # time increment between outputs
+
