@@ -14,7 +14,7 @@
 #include "bvals.hpp"
 
 // identifiers for boundary conditions
-enum class BoundaryFlag {block=0, reflect, outflow, user, periodic};
+enum class BoundaryFlag {undef=-1, block, reflect, outflow, user, periodic};
 
 //----------------------------------------------------------------------------------------
 //! \fn GetBoundaryFlag(std::string input_string)
@@ -30,6 +30,8 @@ static BoundaryFlag GetBoundaryFlag(const std::string& input_string) {
     return BoundaryFlag::user;
   } else if (input_string == "periodic") {
     return BoundaryFlag::periodic;
+  } else if (input_string == "undef") {
+    return BoundaryFlag::undef;
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "Input string = '" << input_string << "' is an invalid boundary type"
@@ -56,6 +58,8 @@ static std::string GetBoundaryString(BoundaryFlag input_flag) {
       return "user";
     case BoundaryFlag::periodic:
       return "periodic";
+    case BoundaryFlag::undef:
+      return "undef";
     default:
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
          << std::endl << "Input enum class BoundaryFlag=" << static_cast<int>(input_flag)
