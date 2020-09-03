@@ -28,9 +28,11 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
   if (eqn_of_state.compare("adiabatic") == 0) {
     peos = new AdiabaticHydro(pmesh_, pin, my_mbgid_);
     nhydro = 5;
+
   } else if (eqn_of_state.compare("isothermal") == 0) {
     peos = new IsothermalHydro(pmesh_, pin, my_mbgid_);
     nhydro = 4;
+
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "<hydro> eos = '" << eqn_of_state << "' not implemented"
@@ -42,12 +44,16 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
   {std::string evolution_t = pin->GetString("hydro","evolution");
   if (evolution_t.compare("static") == 0) {
     hydro_evol = HydroEvolution::hydro_static;
+
   } else if (evolution_t.compare("kinematic") == 0) {
     hydro_evol = HydroEvolution::kinematic;
+
   } else if (evolution_t.compare("dynamic") == 0) {
     hydro_evol = HydroEvolution::hydro_dynamic;
+
   } else if (evolution_t.compare("none") == 0) {
     hydro_evol = HydroEvolution::no_evolution;
+
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "<hydro> evolution = '" << evolution_t << "' not implemented"
@@ -70,10 +76,20 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
     {std::string recon_method = pin->GetOrAddString("hydro","reconstruct","plm");
     if (recon_method.compare("dc") == 0) {
       precon = new DonorCell(pin, nhydro, ncells1);
+
     } else if (recon_method.compare("plm") == 0) {
       precon = new PiecewiseLinear(pin, nhydro, ncells1);
+
     } else if (recon_method.compare("ppm") == 0) {
+      // check that nghost > 2
+      if (pmb->mb_cells.ng < 3) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+            << std::endl << "PPM reconstruction requires at least 3 ghost zones, "
+            << "but ng=" << pmb->mb_cells.ng << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
       precon = new PiecewiseParabolic(pin, nhydro, ncells1);
+
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "<hydro> recon = '" << recon_method
@@ -85,16 +101,21 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
     {std::string rsolver;
     if (peos->adiabatic_eos) {
       rsolver = pin->GetOrAddString("hydro","rsolver","hllc");
+
     } else {
       rsolver = pin->GetOrAddString("hydro","rsolver","hlle"); 
     }
+
     // always make solver=advection for kinematic problems
     if (rsolver.compare("advection") == 0 || hydro_evol == HydroEvolution::kinematic) {
       prsolver = new Advection(pmesh_, pin, my_mbgid_);
+
     } else if (rsolver.compare("llf") == 0) {
       prsolver = new LLF(pmesh_, pin, my_mbgid_);
+
     } else if (rsolver.compare("hlle") == 0) {
       prsolver = new HLLE(pmesh_, pin, my_mbgid_);
+
     } else if (rsolver.compare("hllc") == 0) {
       if (!(peos->adiabatic_eos)) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -104,8 +125,10 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
       } else {
         prsolver = new HLLC(pmesh_, pin, my_mbgid_);
       }
+
     } else if (rsolver.compare("roe") == 0) {
       prsolver = new Roe(pmesh_, pin, my_mbgid_);
+
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "<hydro> rsolver = '" << rsolver << "' not implemented"
