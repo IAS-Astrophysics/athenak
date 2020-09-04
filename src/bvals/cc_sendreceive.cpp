@@ -187,56 +187,63 @@ TaskStatus BoundaryValues::SendCellCenteredVariables(AthenaArray<Real> &a, int n
   // Now send boundary buffer to neighboring MeshBlocks using MPI
   // If neighbor is on same MPI rank, just copy data
   // TODO add MPI sends
-  // TODO get working for multiple meshblocks
+  // TODO get working for different physics
 
   // copy x1 faces
   int ndata = nvar*nx3*nx2*ng;
   for (int n=0; n<2; ++n) {
-    Real *psrc = &(cc_send_x1face(1-n,0,0,0,0));
-    Real *pdest = &(cc_recv_x1face(n,0,0,0,0));
-    memcpy(pdest, psrc, ndata*sizeof(Real));
+    MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x1face[n].ngid);
+    Real *psend = &(cc_send_x1face(1-n,0,0,0,0));
+    Real *pdest = &(pdest_mb->pbvals->cc_recv_x1face(n,0,0,0,0));
+    memcpy(pdest, psend, ndata*sizeof(Real));
   }
   if (!(pmesh_->nx2gt1)) return TaskStatus::complete;
 
   // copy x2 faces and x1x2 edges
   ndata = nvar*nx3*ng*nx1;
   for (int n=0; n<2; ++n) {
-    Real *psrc = &(cc_send_x2face(1-n,0,0,0,0));
-    Real *pdest = &(cc_recv_x2face(n,0,0,0,0));
-    memcpy(pdest, psrc, ndata*sizeof(Real));
+    MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x2face[n].ngid);
+    Real *psend = &(cc_send_x2face(1-n,0,0,0,0));
+    Real *pdest = &(pdest_mb->pbvals->cc_recv_x2face(n,0,0,0,0));
+    memcpy(pdest, psend, ndata*sizeof(Real));
   }
   ndata = nvar*nx3*ng*ng;
   for (int n=0; n<4; ++n) {
-    Real *psrc = &(cc_send_x1x2ed(3-n,0,0,0,0));
-    Real *pdest = &(cc_recv_x1x2ed(n,0,0,0,0));
-    memcpy(pdest, psrc, ndata*sizeof(Real));
+    MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x1x2ed[n].ngid);
+    Real *psend = &(cc_send_x1x2ed(3-n,0,0,0,0));
+    Real *pdest = &(pdest_mb->pbvals->cc_recv_x1x2ed(n,0,0,0,0));
+    memcpy(pdest, psend, ndata*sizeof(Real));
   }
   if (!(pmesh_->nx3gt1)) return TaskStatus::complete;
   
   // copy x3 faces, x3x1 and x2x3 edges, and corners
   ndata = nvar*ng*nx2*nx1;
   for (int n=0; n<2; ++n) {
-    Real *psrc = &(cc_send_x3face(1-n,0,0,0,0));
-    Real *pdest = &(cc_recv_x3face(n,0,0,0,0));
-    memcpy(pdest, psrc, ndata*sizeof(Real));
+    MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x3face[n].ngid);
+    Real *psend = &(cc_send_x3face(1-n,0,0,0,0));
+    Real *pdest = &(pdest_mb->pbvals->cc_recv_x3face(n,0,0,0,0));
+    memcpy(pdest, psend, ndata*sizeof(Real));
   }
   ndata = nvar*ng*nx2*ng;
   for (int n=0; n<4; ++n) {
-    Real *psrc = &(cc_send_x3x1ed(3-n,0,0,0,0));
-    Real *pdest = &(cc_recv_x3x1ed(n,0,0,0,0));
-    memcpy(pdest, psrc, ndata*sizeof(Real));
+    MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x3x1ed[n].ngid);
+    Real *psend = &(cc_send_x3x1ed(3-n,0,0,0,0));
+    Real *pdest = &(pdest_mb->pbvals->cc_recv_x3x1ed(n,0,0,0,0));
+    memcpy(pdest, psend, ndata*sizeof(Real));
   }
   ndata = nvar*ng*ng*nx1;
   for (int n=0; n<4; ++n) {
-    Real *psrc = &(cc_send_x2x3ed(3-n,0,0,0,0));
-    Real *pdest = &(cc_recv_x2x3ed(n,0,0,0,0));
-    memcpy(pdest, psrc, ndata*sizeof(Real));
+    MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x2x3ed[n].ngid);
+    Real *psend = &(cc_send_x2x3ed(3-n,0,0,0,0));
+    Real *pdest = &(pdest_mb->pbvals->cc_recv_x2x3ed(n,0,0,0,0));
+    memcpy(pdest, psend, ndata*sizeof(Real));
   }
   ndata = nvar*ng*ng*ng;
   for (int n=0; n<8; ++n) {
-    Real *psrc = &(cc_send_corner(7-n,0,0,0,0));
-    Real *pdest = &(cc_recv_corner(n,0,0,0,0));
-    memcpy(pdest, psrc, ndata*sizeof(Real));
+    MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_corner[n].ngid);
+    Real *psend = &(cc_send_corner(7-n,0,0,0,0));
+    Real *pdest = &(pdest_mb->pbvals->cc_recv_corner(n,0,0,0,0));
+    memcpy(pdest, psend, ndata*sizeof(Real));
   }
 
   return TaskStatus::complete;

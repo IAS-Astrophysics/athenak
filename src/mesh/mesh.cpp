@@ -41,18 +41,24 @@ Mesh::Mesh(ParameterInput *pin)
   nx2gt1 = (mesh_cells.nx2 > 1) ? true : false;
   nx3gt1 = (mesh_cells.nx3 > 1) ? true : false;
 
-  // note BCs MUST be entered for ix1/ox1, but are set to "undef" by default for ix2/ox2 and
-  // ix3/ox3 in the case of 1D or 2D problems
+  // note BCs always MUST be entered for ix1/ox1, but are set to "undef" by default for
+  // ix2/ox2 and ix3/ox3 in the case of 1D or 2D problems
   mesh_bcs[BoundaryFace::inner_x1] = GetBoundaryFlag(pin->GetString("mesh", "ix1_bc"));
   mesh_bcs[BoundaryFace::outer_x1] = GetBoundaryFlag(pin->GetString("mesh", "ox1_bc"));
-  mesh_bcs[BoundaryFace::inner_x2] =
-                            GetBoundaryFlag(pin->GetOrAddString("mesh", "ix2_bc", "undef"));
-  mesh_bcs[BoundaryFace::outer_x2] =
-                            GetBoundaryFlag(pin->GetOrAddString("mesh", "ox2_bc", "undef"));
-  mesh_bcs[BoundaryFace::inner_x3] =
-                            GetBoundaryFlag(pin->GetOrAddString("mesh", "ix3_bc", "undef"));
-  mesh_bcs[BoundaryFace::outer_x3] =
-                            GetBoundaryFlag(pin->GetOrAddString("mesh", "ox3_bc", "undef"));
+  if (nx2gt1) {
+    mesh_bcs[BoundaryFace::inner_x2] = GetBoundaryFlag(pin->GetString("mesh", "ix2_bc"));
+    mesh_bcs[BoundaryFace::outer_x2] = GetBoundaryFlag(pin->GetString("mesh", "ox2_bc"));
+  } else {
+    mesh_bcs[BoundaryFace::inner_x2] = BoundaryFlag::undef;
+    mesh_bcs[BoundaryFace::outer_x2] = BoundaryFlag::undef;
+  }
+  if (nx3gt1) {
+    mesh_bcs[BoundaryFace::inner_x3] = GetBoundaryFlag(pin->GetString("mesh", "ix3_bc"));
+    mesh_bcs[BoundaryFace::outer_x3] = GetBoundaryFlag(pin->GetString("mesh", "ox3_bc"));
+  } else {
+    mesh_bcs[BoundaryFace::inner_x3] = BoundaryFlag::undef;
+    mesh_bcs[BoundaryFace::outer_x3] = BoundaryFlag::undef;
+  }
 
   // set boolean flags indicating type of refinement (if any) depending on input strings
   adaptive = 

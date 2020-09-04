@@ -59,6 +59,7 @@ def tab(filename):
 
     # Go through lines
     data_array = []
+    num_lines = 0
     with open(filename, 'r') as data_file:
         first_line = True
         for line in data_file:
@@ -69,19 +70,17 @@ def tab(filename):
             # Extract cell indices
             vals = line.split()
             if first_line:
-                i_min = i_max = int(vals[0])
                 num_entries = len(vals) - dimensions
                 first_line = False
-            else:
-                i_max = max(i_max, int(vals[0]))
 
             # Extract cell values
             if dimensions == 1:
                 vals = vals[1:]
             data_array.append([float(val) for val in vals])
+            num_lines += 1
 
     # Reshape array
-    array_shape = (i_max-i_min+1, num_entries)
+    array_shape = (num_lines, num_entries)
     array_transpose = (1, 0)
     data_array = np.transpose(np.reshape(data_array, array_shape), array_transpose)
 
