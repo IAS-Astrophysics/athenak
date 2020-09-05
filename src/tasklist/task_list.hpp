@@ -126,6 +126,7 @@ class TaskList {
     return true;
   }
   int Size() { return task_list_.size(); }
+  bool Empty() { return task_list_.empty(); }
   void MarkTaskComplete(TaskID id) { tasks_completed_.SetComplete(id); }
   TaskID GetIDLastTask() {return task_list_.back().GetID();}
   // output diagnostics (useful for debugging)

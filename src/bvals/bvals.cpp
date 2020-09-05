@@ -34,11 +34,12 @@ BoundaryValues::~BoundaryValues()
 //----------------------------------------------------------------------------------------
 // \!fn void BoundaryValues::AllocateBuffers
 
-void BoundaryValues::AllocateBuffers(int maxvar)
+void BoundaryValues::AllocateBuffers(BoundaryBuffer &bbuf, const int maxvar)
 {
-  // Allocate memory for send and receive boundary buffers for cell-centered variables.
-  // These are stored in 7 different AthenaArrays corresponding to the faces, edges, and
-  // corners of a 3D grid.
+  // Allocate memory for send and receive boundary buffers, and initialize 
+  // BoundaryStatus flags.
+  // The buffers are stored in 7 different AthenaArrays corresponding to the faces, edges,
+  // and corners of a 3D grid.  The flags are also stored in 7 arrays.
   // This implementation currently is specific to the 26 boundary buffers in a UNIFORM
   // grid with no adaptive refinement.
 
@@ -48,26 +49,42 @@ void BoundaryValues::AllocateBuffers(int maxvar)
   int nx2 = pmb->mb_cells.nx2;
   int nx3 = pmb->mb_cells.nx3;
 
-  cc_send_x1face.SetSize(2,maxvar,nx3,nx2,ng);
-  cc_recv_x1face.SetSize(2,maxvar,nx3,nx2,ng);
+  bbuf.cc_send_x1face.SetSize(2,maxvar,nx3,nx2,ng);
+  bbuf.cc_recv_x1face.SetSize(2,maxvar,nx3,nx2,ng);
 
   if (pmesh_->nx2gt1) {
-    cc_send_x2face.SetSize(2,maxvar,nx3,ng,nx1);
-    cc_send_x1x2ed.SetSize(4,maxvar,nx3,ng,ng);
-    cc_recv_x2face.SetSize(2,maxvar,nx3,ng,nx1);
-    cc_recv_x1x2ed.SetSize(4,maxvar,nx3,ng,ng);
+    bbuf.cc_send_x2face.SetSize(2,maxvar,nx3,ng,nx1);
+    bbuf.cc_send_x1x2ed.SetSize(4,maxvar,nx3,ng,ng);
+    bbuf.cc_recv_x2face.SetSize(2,maxvar,nx3,ng,nx1);
+    bbuf.cc_recv_x1x2ed.SetSize(4,maxvar,nx3,ng,ng);
   }
 
   if (pmesh_->nx3gt1) {
-    cc_send_x3face.SetSize(2,maxvar,ng,nx2,nx1);
-    cc_send_x3x1ed.SetSize(4,maxvar,ng,nx2,ng);
-    cc_send_x2x3ed.SetSize(4,maxvar,ng,ng,nx1);
-    cc_send_corner.SetSize(8,maxvar,ng,ng,ng);
-    cc_recv_x3face.SetSize(2,maxvar,ng,nx2,nx1);
-    cc_recv_x3x1ed.SetSize(4,maxvar,ng,nx2,ng);
-    cc_recv_x2x3ed.SetSize(4,maxvar,ng,ng,nx1);
-    cc_recv_corner.SetSize(8,maxvar,ng,ng,ng);
+    bbuf.cc_send_x3face.SetSize(2,maxvar,ng,nx2,nx1);
+    bbuf.cc_send_x3x1ed.SetSize(4,maxvar,ng,nx2,ng);
+    bbuf.cc_send_x2x3ed.SetSize(4,maxvar,ng,ng,nx1);
+    bbuf.cc_send_corner.SetSize(8,maxvar,ng,ng,ng);
+    bbuf.cc_recv_x3face.SetSize(2,maxvar,ng,nx2,nx1);
+    bbuf.cc_recv_x3x1ed.SetSize(4,maxvar,ng,nx2,ng);
+    bbuf.cc_recv_x2x3ed.SetSize(4,maxvar,ng,ng,nx1);
+    bbuf.cc_recv_corner.SetSize(8,maxvar,ng,ng,ng);
   }
+
+  // initialize all boundary status arrays to undef
+  for (int i=0; i<2; ++i) {
+    bbuf.bstat_x1face[i] = BoundaryStatus::undef;
+    bbuf.bstat_x2face[i] = BoundaryStatus::undef;
+    bbuf.bstat_x3face[i] = BoundaryStatus::undef;
+  }
+  for (int i=0; i<4; ++i) {
+    bbuf.bstat_x1x2ed[i] = BoundaryStatus::undef;
+    bbuf.bstat_x3x1ed[i] = BoundaryStatus::undef;
+    bbuf.bstat_x2x3ed[i] = BoundaryStatus::undef;
+  }
+  for (int i=0; i<8; ++i) {
+    bbuf.bstat_corner[i] = BoundaryStatus::undef;
+  }
+
   return;
 }
 

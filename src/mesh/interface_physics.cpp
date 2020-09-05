@@ -28,30 +28,32 @@ void MeshBlock::SelectPhysics(ParameterInput *pin)
 
   // construct physics modules and tasks lists on this MeshBlock
   // TODO: add multiple physics, store in std::vector of pointers?
-  // TODO: add element of std::vector in BoundaryValues for send/recv buffers each physics
   
   // physics modules
   if (hydro_defined) {
-    phydro = new hydro::Hydro(pmesh_, pin, mb_gid);
+    phydro = new hydro::Hydro(pmesh_, pin, mb_gid); // construct new Hydro object
+    pbvals->bbuf_ptr["hydro"] = &(phydro->bbuf);    // add pointer to Hydro bbufs in map
   } else {
     phydro = nullptr;
     std::cout << "Hydro block not found in input file" << std::endl;
   }
 
-  // allocate memory for boundary buffers for each physics
-  pbvals->AllocateBuffers(phydro->nhydro);
 
   // build task lists
   TaskID none(0);
-  std::vector<TaskID> hydro_tasks;
+  std::vector<TaskID> hydro_start_tasks, hydro_run_tasks, hydro_end_tasks;
 
   // add hydro tasks
-  if (phydro != nullptr) phydro->HydroAddTasks(tl_onestage, none, hydro_tasks);
+  if (phydro != nullptr) {
+    phydro->HydroStageStartTasks(tl_stagestart, none, hydro_start_tasks);
+    phydro->HydroStageRunTasks(tl_stagerun, none, hydro_run_tasks);
+    phydro->HydroStageEndTasks(tl_stageend, none, hydro_end_tasks);
+  }
 
   // add physical boundary conditions, and make depend on hydro_recv (penultimate task)
-  TaskID hydro_recv = hydro_tasks[hydro_tasks.size()-2];
+  TaskID hydro_recv = hydro_run_tasks[hydro_run_tasks.size()-2];
   auto bvals_physical =
-    tl_onestage.InsertTask(&BoundaryValues::ApplyPhysicalBCs, pbvals, hydro_recv);
+    tl_stagerun.InsertTask(&BoundaryValues::ApplyPhysicalBCs, pbvals, hydro_recv);
 
 //  auto bvals_physical =
 //    tl_onestage.AddTask(&BoundaryValues::ApplyPhysicalBCs, pbvals, hydro_tasks.back());

@@ -16,6 +16,7 @@
 #include "hydro/eos/eos.hpp"
 #include "reconstruct/reconstruct.hpp"
 #include "hydro/rsolver/rsolver.hpp"
+#include "bvals/bvals.hpp"
 
 class Driver;
 
@@ -41,6 +42,8 @@ class Hydro
   AthenaArray<Real> u0;   // conserved variables
   AthenaArray<Real> w0;   // primitive variables
 
+  BoundaryBuffer bbuf;
+
   // following only used for time-evolving flow
   Reconstruction  *precon;    // object that implements chosen reconstruction methods
   RiemannSolver   *prsolver;  // object that implements chosen Riemann solver
@@ -52,14 +55,11 @@ class Hydro
   Real dtnew;
 
   // functions
-  void HydroAddTasks(TaskList &tl, TaskID start, std::vector<TaskID> &added);
-  TaskStatus CopyConserved(Driver *d, int stage) {
-    if (stage == 1) {
-      int size = u0.GetSize();
-      for (int n=0; n<size; ++n) { u1(n) = u0(n); }
-    }
-    return TaskStatus::complete;
-  }
+  void HydroStageStartTasks(TaskList &tl, TaskID start, std::vector<TaskID> &added);
+  void HydroStageRunTasks(TaskList &tl, TaskID start, std::vector<TaskID> &added);
+  void HydroStageEndTasks(TaskList &tl, TaskID start, std::vector<TaskID> &added);
+  TaskStatus HydroInitStage(Driver *d, int stage);
+  TaskStatus HydroCopyCons(Driver *d, int stage);
   TaskStatus HydroDivFlux(Driver *d, int stage);
   TaskStatus HydroUpdate(Driver *d, int stage);
   TaskStatus HydroSend(Driver *d, int stage); 

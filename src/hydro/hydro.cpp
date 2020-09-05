@@ -69,6 +69,9 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
   u0.SetSize(nhydro, ncells3, ncells2, ncells1);
   w0.SetSize(nhydro, ncells3, ncells2, ncells1);
 
+  // allocate memory for boundary buffers
+  pmb->pbvals->AllocateBuffers(bbuf, nhydro);
+
   // for time-evolving problems, continue to construct methods, allocate arrays
   if (hydro_evol != HydroEvolution::no_evolution) {
 
@@ -149,18 +152,31 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn  void Hydro::HydroAddTasks
-//  \brief
+//! \fn  void Hydro::HydroStageStartTasks
+//  \brief adds Hydro tasks to stage start TaskList
+//  These are taks that must be cmpleted (such as posting MPI receives, setting 
+//  BoundaryStatus flags, etc) over all MeshBlocks before stage can be run.
 
-void Hydro::HydroAddTasks(TaskList &tl, TaskID start, std::vector<TaskID> &added) {
+void Hydro::HydroStageStartTasks(TaskList &tl, TaskID start, std::vector<TaskID> &added)
+{
+  auto hydro_init = tl.AddTask(&Hydro::HydroInitStage, this, start);
+  added.emplace_back(hydro_init);
 
-  auto hydro_copycons = tl.AddTask(&Hydro::CopyConserved, this, start);
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void Hydro::HydroStageRunTasks
+//  \brief adds Hydro tasks to stage run TaskList
+
+void Hydro::HydroStageRunTasks(TaskList &tl, TaskID start, std::vector<TaskID> &added)
+{
+  auto hydro_copycons = tl.AddTask(&Hydro::HydroCopyCons, this, start);
   auto hydro_divflux  = tl.AddTask(&Hydro::HydroDivFlux, this, hydro_copycons);
   auto hydro_update  = tl.AddTask(&Hydro::HydroUpdate, this, hydro_divflux);
   auto hydro_send  = tl.AddTask(&Hydro::HydroSend, this, hydro_update);
   auto hydro_newdt  = tl.AddTask(&Hydro::NewTimeStep, this, hydro_send);
   auto hydro_recv  = tl.AddTask(&Hydro::HydroReceive, this, hydro_newdt);
-//  auto phy_bval  = tl.AddTask(&Hydro::PhysicalBoundaryValues, this, hydro_recv);
   auto hydro_con2prim  = tl.AddTask(&Hydro::ConToPrim, this, hydro_recv);
 
   added.emplace_back(hydro_copycons);
@@ -175,6 +191,66 @@ void Hydro::HydroAddTasks(TaskList &tl, TaskID start, std::vector<TaskID> &added
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn  void Hydro::HydroStageEndTasks
+//  \brief adds Hydro tasks to stage end TaskList
+//  These are tasks that can only be cmpleted after all the stage run tasks are finished
+//  over all MeshBlocks.  Current NoOp.
+
+void Hydro::HydroStageEndTasks(TaskList &tl, TaskID start, std::vector<TaskID> &added)
+{
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void Hydro::HydroCopyCons
+//  \brief
+
+TaskStatus Hydro::HydroInitStage(Driver *pdrive, int stage)
+{
+  // initialize all boundary status arrays to waiting
+  for (int n=0; n<2; ++n) {
+    bbuf.bstat_x1face[n] = BoundaryStatus::waiting;
+  }
+  if (pmesh_->nx2gt1) {
+    for (int n=0; n<2; ++n) {
+      bbuf.bstat_x2face[n] = BoundaryStatus::waiting;
+    }
+    for (int n=0; n<4; ++n) {
+      bbuf.bstat_x1x2ed[n] = BoundaryStatus::waiting;
+    }
+  }
+  if (pmesh_->nx3gt1) {
+    for (int n=0; n<2; ++n) {
+      bbuf.bstat_x3face[n] = BoundaryStatus::waiting;
+    }
+    for (int n=0; n<4; ++n) {
+      bbuf.bstat_x3x1ed[n] = BoundaryStatus::waiting;
+      bbuf.bstat_x2x3ed[n] = BoundaryStatus::waiting;
+    }
+    for (int n=0; n<8; ++n) {
+      bbuf.bstat_corner[n] = BoundaryStatus::waiting;
+    }
+  }
+
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void Hydro::HydroCopyCons
+//  \brief
+
+TaskStatus Hydro::HydroCopyCons(Driver *pdrive, int stage)
+{
+  // copy u0 --> u1 in first stage
+  if (stage == 1) {
+    int size = u0.GetSize();
+    for (int n=0; n<size; ++n) { u1(n) = u0(n); }
+  }
+
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn  void Hydro::HydroSend
 //  \brief
 
@@ -182,7 +258,7 @@ TaskStatus Hydro::HydroSend(Driver *pdrive, int stage)
 {
   MeshBlock* pmb = pmesh_->FindMeshBlock(my_mbgid_);
   TaskStatus tstat;
-  tstat = pmb->pbvals->SendCellCenteredVariables(u0, nhydro);
+  tstat = pmb->pbvals->SendCellCenteredVariables(u0, nhydro, "hydro");
   return tstat;
 }
 
@@ -194,7 +270,7 @@ TaskStatus Hydro::HydroReceive(Driver *pdrive, int stage)
 {
   MeshBlock* pmb = pmesh_->FindMeshBlock(my_mbgid_);
   TaskStatus tstat;
-  tstat = pmb->pbvals->ReceiveCellCenteredVariables(u0, nhydro);
+  tstat = pmb->pbvals->ReceiveCellCenteredVariables(u0, nhydro, "hydro");
   return tstat;
 }
 

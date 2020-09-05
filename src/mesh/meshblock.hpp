@@ -54,9 +54,10 @@ class MeshBlock
   // physics modules (controlled by Mesh::SelectPhysics)
   hydro::Hydro *phydro;
 
-  // task list (initialized by ... )
-  TaskList tl_onestage;
-
+  // task lists (each physics module adds its own tasks)
+  TaskList tl_stagestart;
+  TaskList tl_stagerun;
+  TaskList tl_stageend;
 
   // functions
   void SelectPhysics(ParameterInput *pin);

@@ -117,9 +117,13 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
 {
   //---- Step 1.  Set Boundary Conditions on conservd variables in all physics
 
+  // Note sends on ALL MBs must be complete before receives execute
   for (auto &mb : pmesh->mblocks) {
     TaskStatus tstatus;
     tstatus = mb.phydro->HydroSend(this, nstages);
+  }
+  for (auto &mb : pmesh->mblocks) {
+    TaskStatus tstatus;
     tstatus = mb.phydro->HydroReceive(this, nstages);
   }
   for (auto &mb : pmesh->mblocks) {
@@ -173,25 +177,75 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
     if (time_evolution) {
       if (global_variable::my_rank == 0) {OutputCycleDiagnostics(pmesh);}
 
-      // Do multi-stage time evolution TaskList
+      // Do multi-stage time evolution TaskLists
       for (int stage=1; stage<=nstages; ++stage) {
 
-        for (auto &mb : pmesh->mblocks) {mb.tl_onestage.Reset();}
+        // tasks that must be completed over all MBs before start of each stage
+        {for (auto &mb : pmesh->mblocks) {
+          if (!(mb.tl_stagestart.Empty())) {mb.tl_stagestart.Reset();}
+        }
         int nmb_completed = 0;
-        while (nmb_completed < pmesh->nmbthisrank) {
-          // TODO(pgrete): need to let Kokkos::PartitionManager handle this
-          for (auto &mb : pmesh->mblocks) {
-            if (!mb.tl_onestage.IsComplete()) {
-              auto status = mb.tl_onestage.DoAvailable(this,stage);
-              if (status == TaskListStatus::complete) { nmb_completed++; }
+        for (auto &mb : pmesh->mblocks) {
+          if (mb.tl_stagestart.Empty()) {
+            nmb_completed++;
+          } else {
+            while (nmb_completed < pmesh->nmbthisrank) {
+              // TODO(pgrete): need to let Kokkos::PartitionManager handle this
+              for (auto &mb : pmesh->mblocks) {
+                if (!mb.tl_stagestart.IsComplete()) {
+                  auto status = mb.tl_stagestart.DoAvailable(this,stage);
+                  if (status == TaskListStatus::complete) { nmb_completed++; }
+                }
+              }
             }
           }
-        }
+        }} // extra brace to enclose scope
 
-      }
+        // tasks in each stage
+        {for (auto &mb : pmesh->mblocks) {
+          if (!(mb.tl_stagerun.Empty())) {mb.tl_stagerun.Reset();}
+        }
+        int nmb_completed = 0;
+        for (auto &mb : pmesh->mblocks) {
+          if (mb.tl_stagerun.Empty()) {
+            nmb_completed++; 
+          } else {
+            while (nmb_completed < pmesh->nmbthisrank) {
+              // TODO(pgrete): need to let Kokkos::PartitionManager handle this
+              for (auto &mb : pmesh->mblocks) {
+                if (!mb.tl_stagerun.IsComplete()) {
+                  auto status = mb.tl_stagerun.DoAvailable(this,stage);
+                  if (status == TaskListStatus::complete) { nmb_completed++; }
+                }
+              }
+            }
+          }
+        }} // extra brace to enclose scope
+
+        // tasks that must be completed over all MBs at the end of each stage
+        {for (auto &mb : pmesh->mblocks) {
+          if (!(mb.tl_stageend.Empty())) {mb.tl_stageend.Reset();}
+        }
+        int nmb_completed = 0;
+        for (auto &mb : pmesh->mblocks) {
+          if (mb.tl_stageend.Empty()) {
+            nmb_completed++; 
+          } else {
+            while (nmb_completed < pmesh->nmbthisrank) {
+              // TODO(pgrete): need to let Kokkos::PartitionManager handle this
+              for (auto &mb : pmesh->mblocks) {
+                if (!mb.tl_stageend.IsComplete()) {
+                  auto status = mb.tl_stageend.DoAvailable(this,stage);
+                  if (status == TaskListStatus::complete) { nmb_completed++; }
+                }
+              }
+            }
+          }
+        }} // extra brace to enclose scope
+
+      } // end of loop over stages
 
       // Add STS TaskLists, etc here....
-
 
       // increment time, ncycle, etc.
       // Compute new timestep
