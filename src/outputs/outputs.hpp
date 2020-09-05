@@ -56,8 +56,8 @@ class OutputType
   OutputType& operator=(OutputType&&) = default;
 
   // data
-  int nout1, nout2, nout3;           // dimensions of output arrays for this type
-  int ois, ojs, oks;                 // starting indices of data to be output
+  int nout1, nout2, nout3;        // dimensions of output arrays for this type
+  int ois, ojs, oks;              // starting indices of data to be output
   OutputParameters out_params;    // data read from <output> block for this type
 
   AthenaArray<bool> hydro_cons_out_vars;
@@ -68,10 +68,15 @@ class OutputType
   virtual void WriteOutputFile(Mesh *pm, ParameterInput *pin) = 0;
 
  protected:
-  std::vector<AthenaArray<Real>> out_data_;
-  AthenaArray<Real> x1_cc_, x1_fc_;
-  AthenaArray<Real> x2_cc_, x2_fc_;
-  AthenaArray<Real> x3_cc_, x3_fc_;
+  // output data stored in vector of AthenaArrays which will be of length (# output MBs) 
+  // With slicing this may be different than nmbthisrank since not all MBs are output
+  // This vector is stored in another vector which will be of length (# of output vars)
+  std::vector< std::vector<AthenaArray<Real>> > out_data_;
+  // coordinates of out_data_ stored in vectors which will be of length (# output MBs)
+  std::vector<AthenaArray<Real>> x1_cc_, x1_fc_;
+  std::vector<AthenaArray<Real>> x2_cc_, x2_fc_;
+  std::vector<AthenaArray<Real>> x3_cc_, x3_fc_;
+  std::vector<int> out_gids_;  // GridIDs of output MBs
 };
 
 //----------------------------------------------------------------------------------------

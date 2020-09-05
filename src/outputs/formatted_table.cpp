@@ -83,35 +83,39 @@ void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   if (nout1 > 1) std::fprintf(pfile, " i       x1v     ");
   if (nout2 > 1) std::fprintf(pfile, " j       x2v     ");
   if (nout3 > 1) std::fprintf(pfile, " k       x3v     ");
-  // write data col headers from "name" stored in out_data_ AthenaArray
+
+  // TODO get working with MPI (have root output all data)
+
+  // write data col headers from "name" stored in out_data_ AthenaArrays
+  // Note iterator will be vector of length (# of output MBs)
   for (auto it : out_data_) {
-    std::fprintf(pfile, "    %s      ", it.GetLabel().c_str());
+    std::fprintf(pfile, "    %s      ", it[0].GetLabel().c_str());
   }
   std::fprintf(pfile, "\n"); // terminate line
 
-  // TODO loop over multiple MeshBlocks
-  // loop over all cells in data arrays
-  for (int n=0; n<pm->nmbthisrank; ++n) {
+  // loop over output MeshBlocks, output all data
+  int nout_mbs = static_cast<int>(x1_cc_.size());
+  for (int m=0; m<nout_mbs; ++m) {
     for (int k=0; k<nout3; ++k) {
       for (int j=0; j<nout2; ++j) {
         for (int i=0; i<nout1; ++i) {
           // write x1, x2, x3 indices and coordinates on start of new line
           if (nout1 > 1) {
             std::fprintf(pfile, "%04d", i+ois);
-            std::fprintf(pfile, out_params.data_format.c_str(), x1_cc_(n,i));
+            std::fprintf(pfile, out_params.data_format.c_str(), x1_cc_[m](i));
           }
           if (nout2 > 1) {
             std::fprintf(pfile, " %04d", j+ojs);  // note extra space for formatting
-            std::fprintf(pfile, out_params.data_format.c_str(), x2_cc_(n,j));
+            std::fprintf(pfile, out_params.data_format.c_str(), x2_cc_[m](j));
           }
           if (nout3 > 1) {
             std::fprintf(pfile, " %04d", k+oks);  // note extra space for formatting
-            std::fprintf(pfile, out_params.data_format.c_str(), x3_cc_(n,k));
+            std::fprintf(pfile, out_params.data_format.c_str(), x3_cc_[m](k));
           }
 
           // step through std::vector of out_data_ and write each on same line
           for (auto it : out_data_) {
-            std::fprintf(pfile, out_params.data_format.c_str(), it(n,k,j,i));
+            std::fprintf(pfile, out_params.data_format.c_str(), it[m](k,j,i));
           }
           std::fprintf(pfile,"\n"); // terminate line
         }

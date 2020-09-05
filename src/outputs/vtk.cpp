@@ -115,10 +115,10 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   // write x1-coordinates as binary float in big endian order
   std::fprintf(pfile, "X_COORDINATES %d float\n", ncoord1);
   if (nout1 == 1) {
-    data[0] = static_cast<float>(x1_cc_(0,ois));
+    data[0] = static_cast<float>(x1_cc_[0](ois));
   } else {
     for (int i=0; i<ncoord1; ++i) {
-      data[i] = static_cast<float>(x1_fc_(0,i));
+      data[i] = static_cast<float>(x1_fc_[0](i));
     }
   }
   if (!big_end) {for (int i=0; i<ncoord1; ++i) swap_functions::Swap4Bytes(&data[i]);}
@@ -127,10 +127,10 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   // write x2-coordinates as binary float in big endian order
   std::fprintf(pfile, "\nY_COORDINATES %d float\n", ncoord2);
   if (nout2 == 1) {
-    data[0] = static_cast<float>(x2_cc_(0,ojs));
+    data[0] = static_cast<float>(x2_cc_[0](ojs));
   } else {
     for (int j=0; j<ncoord2; ++j) {
-      data[j] = static_cast<float>(x2_fc_(0,j));
+      data[j] = static_cast<float>(x2_fc_[0](j));
     }
   }
   if (!big_end) {for (int i=0; i<ncoord2; ++i) swap_functions::Swap4Bytes(&data[i]);}
@@ -139,10 +139,10 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   // write x3-coordinates as binary float in big endian order
   std::fprintf(pfile, "\nZ_COORDINATES %d float\n", ncoord3);
   if (nout3 == 1) {
-    data[0] = static_cast<float>(x3_cc_(0,oks));
+    data[0] = static_cast<float>(x3_cc_[0](oks));
   } else {
     for (int k=0; k<ncoord3; ++k) {
-      data[k] = static_cast<float>(x3_fc_(0,k));
+      data[k] = static_cast<float>(x3_fc_[0](k));
     }
   }
   if (!big_end) {for (int i=0; i<ncoord3; ++i) swap_functions::Swap4Bytes(&data[i]);}
@@ -161,16 +161,16 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
 //    std::fprintf(pfile, "\n%s %s float\n", pdata->type.c_str(),  pdata->name.c_str());
 //    int nvar = pdata->data.GetDim4();
 //    if (nvar == 1) std::fprintf(pfile, "LOOKUP_TABLE default\n");
-    std::fprintf(pfile, "\nSCALARS %s float\n", it.GetLabel().c_str());
+    std::fprintf(pfile, "\nSCALARS %s float\n", it[0].GetLabel().c_str());
     std::fprintf(pfile, "LOOKUP_TABLE default\n");
 
   // TODO write data properly for multiple MeshBlocks
     // Loop over MeshBlocks
-    for (int n=0; n<pm->nmbthisrank; ++n) {
+    for (int m=0; m<pm->nmbthisrank; ++m) {
       for (int k=0; k<nout3; ++k) {
         for (int j=0; j<nout2; ++j) { 
           for (int i=0; i<nout1; ++i) {
-            data[i] = static_cast<float>(it(n,k,j,i));
+            data[i] = static_cast<float>(it[m](k,j,i));
           }
 
           // write data in big endian order

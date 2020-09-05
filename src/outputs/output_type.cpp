@@ -90,49 +90,61 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
   // exit for history files
   if (out_params.file_type.compare("hst") == 0) {return;}
 
-  // calculate spatial positions of output data
-  x1_cc_.SetSize(pm->nmbthisrank, nout1);
-  x1_fc_.SetSize(pm->nmbthisrank, nout1+1);
-  x1_cc_.SetLabel("x1v");
-  x1_fc_.SetLabel("x1f");
-  x2_cc_.SetSize(pm->nmbthisrank, nout2);
-  x2_fc_.SetSize(pm->nmbthisrank, nout2+1);
-  x2_cc_.SetLabel("x2v");
-  x2_fc_.SetLabel("x2f");
-  x3_cc_.SetSize(pm->nmbthisrank, nout3);
-  x3_fc_.SetSize(pm->nmbthisrank, nout3+1);
-  x3_cc_.SetLabel("x3v");
-  x3_fc_.SetLabel("x3f");
+  // Add coordinates of output data
+  for (auto &mb : pm->mblocks) {
+    // skip if slice is out of range of this MB
+    if ( out_params.slice1 &&
+        (out_params.slice_x1 <  mb.mb_size.x1min ||
+         out_params.slice_x1 >= mb.mb_size.x1max) ) { continue; }
+    if ( out_params.slice2 &&
+        (out_params.slice_x2 <  mb.mb_size.x2min ||
+         out_params.slice_x2 >= mb.mb_size.x2max) ) { continue; }
+    if ( out_params.slice3 &&
+        (out_params.slice_x3 <  mb.mb_size.x3min ||
+         out_params.slice_x3 >= mb.mb_size.x3max) ) { continue; }
 
-  // TODO get working with multuple meshblocks
-  auto pmb = pm->mblocks.begin();
-  for (int n=0; n<pm->nmbthisrank; ++n) {
+    // initialize new AthenaArrays for coordinates
+    //AthenaArray<Real> new_x1_cc("x1v",nout1);
+    //AthenaArray<Real> new_x1_fc("x1f",nout1+1);
+    //AthenaArray<Real> new_x2_cc("x2v",nout2);
+    //AthenaArray<Real> new_x2_fc("x2f",nout2+1);
+    //AthenaArray<Real> new_x3_cc("x3v",nout3);
+    //AthenaArray<Real> new_x3_fc("x3f",nout3+1);
+    x1_cc_.emplace_back("x1v",nout1);
+    x1_fc_.emplace_back("x1f",nout1+1);
+    x2_cc_.emplace_back("x2v",nout2);
+    x2_fc_.emplace_back("x2f",nout2+1);
+    x3_cc_.emplace_back("x3v",nout3);
+    x3_fc_.emplace_back("x3f",nout3+1);
+
+    int indx = static_cast<int>(x1_cc_.size()) - 1;
     for (int i=0; i<nout1; ++i) {
-      x1_cc_(n,i) = pm->CellCenterX((i-(pmb->mb_cells.is - ois)),
-         pmb->mb_cells.nx1, pmb->mb_size.x1min, pmb->mb_size.x1max);
-      x1_fc_(n,i) = pm->LeftEdgeX((i-(pmb->mb_cells.is - ois)),
-         pmb->mb_cells.nx1, pmb->mb_size.x1min, pmb->mb_size.x1max);
+      x1_cc_[indx](i) = pm->CellCenterX((i-(mb.mb_cells.is - ois)),
+         mb.mb_cells.nx1, mb.mb_size.x1min, mb.mb_size.x1max);
+      x1_fc_[indx](i) = pm->LeftEdgeX((i-(mb.mb_cells.is - ois)),
+         mb.mb_cells.nx1, mb.mb_size.x1min, mb.mb_size.x1max);
     }
-    x1_fc_(n,nout1) = pmb->mb_size.x1max;
+    x1_fc_[indx](nout1) = mb.mb_size.x1max;
 
     for (int j=0; j<nout2; ++j) {
-      x2_cc_(n,j) = pm->CellCenterX((j-(pmb->mb_cells.js - ojs)),
-         pmb->mb_cells.nx2, pmb->mb_size.x2min, pmb->mb_size.x2max);
-      x2_fc_(n,j) = pm->LeftEdgeX((j-(pmb->mb_cells.js - ojs)),
-         pmb->mb_cells.nx2, pmb->mb_size.x2min, pmb->mb_size.x2max);
+      x2_cc_[indx](j) = pm->CellCenterX((j-(mb.mb_cells.js - ojs)),
+         mb.mb_cells.nx2, mb.mb_size.x2min, mb.mb_size.x2max);
+      x2_fc_[indx](j) = pm->LeftEdgeX((j-(mb.mb_cells.js - ojs)),
+         mb.mb_cells.nx2, mb.mb_size.x2min, mb.mb_size.x2max);
     }
-    x2_fc_(n,nout2) = pmb->mb_size.x2max;
+    x2_fc_[indx](nout2) = mb.mb_size.x2max;
 
     for (int k=0; k<nout3; ++k) {
-      x3_cc_(n,k) = pm->CellCenterX((k-(pmb->mb_cells.ks - oks)),
-         pmb->mb_cells.nx3, pmb->mb_size.x3min, pmb->mb_size.x3max);
-      x3_cc_(n,k) = pm->LeftEdgeX((k-(pmb->mb_cells.ks - oks)),
-         pmb->mb_cells.nx3, pmb->mb_size.x3min, pmb->mb_size.x3max);
+      x3_cc_[indx](k) = pm->CellCenterX((k-(mb.mb_cells.ks - oks)),
+         mb.mb_cells.nx3, mb.mb_size.x3min, mb.mb_size.x3max);
+      x3_cc_[indx](k) = pm->LeftEdgeX((k-(mb.mb_cells.ks - oks)),
+         mb.mb_cells.nx3, mb.mb_size.x3min, mb.mb_size.x3max);
     }
-    x3_fc_(n,nout3) = pmb->mb_size.x3max;
+    x3_fc_[indx](nout3) = mb.mb_size.x3max;
   }
 
   // parse list of variables for each physics and flag variables to be output
+  // TODO get working with multiple physics
   // hydro conserved variables
   int &nhydro = pm->mblocks.begin()->phydro->nhydro;
   hydro_cons_out_vars.SetSize(nhydro);
@@ -194,7 +206,7 @@ void OutputType::LoadOutputData(Mesh *pm)
 {
   out_data_.clear();  // start with a clean list
 
-  // the out_data_ vector stores each variable to be output over all cells and MeshBlocks.
+  // out_data_ vector stores vectors (over # of output MBs) of each output variable
   // So start iteration over elements of out_data_ vector (variables)
 
   // TODO: get this working for multiple physics, which may be either defined/undef
@@ -203,19 +215,29 @@ void OutputType::LoadOutputData(Mesh *pm)
   int &nhydro = pm->mblocks.begin()->phydro->nhydro;
   for (int n=0; n<nhydro; ++n) {
     if (hydro_cons_out_vars(n)) { // variable exists for output
-      AthenaArray<Real> new_data;
-      new_data.SetSize(pm->nmbthisrank, nout3, nout2, nout1);
-      if (n == hydro::IDN) new_data.SetLabel("dens");
-      if (n == hydro::IEN) new_data.SetLabel("tote");
-      if (n == hydro::IM1) new_data.SetLabel("mom1");
-      if (n == hydro::IM2) new_data.SetLabel("mom2");
-      if (n == hydro::IM3) new_data.SetLabel("mom3");
+      std::vector<AthenaArray<Real>> new_data;
 
       // loop over all MeshBlocks
-      int imb=0;
       for (auto &mb : pm->mblocks) {
+      // skip if slice is out of range of this MB
+        if ( out_params.slice1 &&
+            (out_params.slice_x1 <  mb.mb_size.x1min ||
+             out_params.slice_x1 >= mb.mb_size.x1max) ) { continue; }
+        if ( out_params.slice2 &&
+            (out_params.slice_x2 <  mb.mb_size.x2min ||
+             out_params.slice_x2 >= mb.mb_size.x2max) ) { continue; }
+        if ( out_params.slice3 &&
+            (out_params.slice_x3 <  mb.mb_size.x3min ||
+             out_params.slice_x3 >= mb.mb_size.x3max) ) { continue; }
+
+        if (n == hydro::IDN) new_data.emplace_back("dens",nout3,nout2,nout1);
+        if (n == hydro::IEN) new_data.emplace_back("tote",nout3,nout2,nout1);
+        if (n == hydro::IM1) new_data.emplace_back("mom1",nout3,nout2,nout1);
+        if (n == hydro::IM2) new_data.emplace_back("mom2",nout3,nout2,nout1);
+        if (n == hydro::IM3) new_data.emplace_back("mom3",nout3,nout2,nout1);
+
+        // find index of slice(s) [if any]
         int islice=0, jslice=0, kslice=0;
-        //TODO fix this so there is no output if slice is out of range
         if (out_params.slice1) { 
           islice = pm->CellCenterIndex(out_params.slice_x1, mb.mb_cells.nx1,
             mb.mb_size.x1min, mb.mb_size.x1max);
@@ -234,13 +256,13 @@ void OutputType::LoadOutputData(Mesh *pm)
         // note the complicated addressing of array indices.  The output array is always
         // include ghost zones (unless needed), so it is always addressed starting at 0.
         // When the array is sliced, only the value at (ijk)slice is stored.
+        int indx = static_cast<int>(new_data.size()) - 1;
         for (int k=0; k<nout3; ++k) {
         for (int j=0; j<nout2; ++j) {
         for (int i=0; i<nout1; ++i) {
-          new_data(imb,k,j,i) =
+          new_data[indx](k,j,i) =
              mb.phydro->u0(n,(k+oks+kslice),(j+ojs+jslice),(i+ois+islice));
         }}}
-        ++imb;
       }
       // append this variable to end of out_data_ vector
       out_data_.push_back(new_data);
@@ -250,19 +272,29 @@ void OutputType::LoadOutputData(Mesh *pm)
   // output hydro primitive
   for (int n=0; n<nhydro; ++n) {
     if (hydro_prim_out_vars(n)) { // variable exists for output
-      AthenaArray<Real> new_data;
-      new_data.SetSize(pm->nmbthisrank, nout3, nout2, nout1);
-      if (n == hydro::IDN) new_data.SetLabel("dens");
-      if (n == hydro::IEN) new_data.SetLabel("pres");
-      if (n == hydro::IM1) new_data.SetLabel("velx");
-      if (n == hydro::IM2) new_data.SetLabel("vely");
-      if (n == hydro::IM3) new_data.SetLabel("velz");
-      
+      std::vector<AthenaArray<Real>> new_data;
+
       // loop over all MeshBlocks
-      int imb=0; 
       for (auto &mb : pm->mblocks) {
+      // skip if slice is out of range of this MB
+        if ( out_params.slice1 &&
+            (out_params.slice_x1 < mb.mb_size.x1min || 
+             out_params.slice_x1 > mb.mb_size.x1max) ) { continue; }
+        if ( out_params.slice2 &&
+            (out_params.slice_x2 < mb.mb_size.x2min || 
+             out_params.slice_x2 > mb.mb_size.x2max) ) { continue; }
+        if ( out_params.slice3 &&
+            (out_params.slice_x3 < mb.mb_size.x3min || 
+             out_params.slice_x3 > mb.mb_size.x3max) ) { continue; }
+        
+        if (n == hydro::IDN) new_data.emplace_back("dens",nout3,nout2,nout1);
+        if (n == hydro::IPR) new_data.emplace_back("pres",nout3,nout2,nout1);
+        if (n == hydro::IVX) new_data.emplace_back("velx",nout3,nout2,nout1);
+        if (n == hydro::IVY) new_data.emplace_back("vely",nout3,nout2,nout1);
+        if (n == hydro::IVZ) new_data.emplace_back("velz",nout3,nout2,nout1);
+      
+        // find index of slice(s) [if any]
         int islice=0, jslice=0, kslice=0;
-        //TODO fix this so there is no output if slice is out of range
         if (out_params.slice1) { 
           islice = pm->CellCenterIndex(out_params.slice_x1, mb.mb_cells.nx1,
             mb.mb_size.x1min, mb.mb_size.x1max);
@@ -281,13 +313,13 @@ void OutputType::LoadOutputData(Mesh *pm)
         // note the complicated addressing of array indices.  The output array is always
         // include ghost zones (unless needed), so it is always addressed starting at 0.
         // When the array is sliced, only the value at (ijk)slice is stored.
+        int indx = static_cast<int>(new_data.size()) - 1;
         for (int k=0; k<nout3; ++k) {
         for (int j=0; j<nout2; ++j) {
         for (int i=0; i<nout1; ++i) {
-          new_data(imb,k,j,i) =
+          new_data[indx](k,j,i) =
              mb.phydro->w0(n,(k+oks+kslice),(j+ojs+jslice),(i+ois+islice));
         }}}
-        ++imb;
       }
       // append this variable to end of out_data_ vector
       out_data_.push_back(new_data);
