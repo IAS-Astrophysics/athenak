@@ -18,6 +18,7 @@
 #include "hydro/rsolver/rsolver.hpp"
 #include "bvals/bvals.hpp"
 
+// forward declarations
 class Driver;
 
 namespace hydro {
@@ -42,7 +43,7 @@ class Hydro
   AthenaArray<Real> u0;   // conserved variables
   AthenaArray<Real> w0;   // primitive variables
 
-  BoundaryBuffer bbuf;
+  BoundaryBuffer bbuf;    // send/recv buffers and BoundaryStatus flags for Hydro comms.
 
   // following only used for time-evolving flow
   Reconstruction  *precon;    // object that implements chosen reconstruction methods
@@ -68,8 +69,8 @@ class Hydro
   TaskStatus NewTimeStep(Driver *d, int stage);
 
  private:
-  Mesh* pmesh_;                 // ptr to Mesh containing this Hydro
-  int my_mbgid_;
+  Mesh* pmesh_;   // ptr to Mesh containing this Hydro
+  int my_mbgid_;  // GridID of MeshBlock contianing this Hydro
   AthenaArray<Real> w_,wl_,wl_jp1,wl_kp1,wr_,uflux_;   // 1-spatialD scratch vectors
 };
 

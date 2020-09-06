@@ -11,7 +11,6 @@
 #include "athena.hpp"
 #include "athena_arrays.hpp"
 #include "mesh/mesh.hpp"
-#include "hydro/hydro.hpp"
 #include "parameter_input.hpp"
 #include "eos.hpp"
 
@@ -20,8 +19,8 @@ namespace hydro {
 //----------------------------------------------------------------------------------------
 // EquationOfState constructor
 
-EquationOfState::EquationOfState(Mesh* pm, ParameterInput *pin, int igid, std::string type) :
-    pmesh_(pm), my_mbgid_(igid)
+EquationOfState::EquationOfState(Mesh* pm,ParameterInput *pin,int igid,std::string type)
+   : pmesh_(pm), my_mbgid_(igid)
 {
   density_floor_ = pin->GetOrAddReal("eos","density_floor",(FLT_MIN));
   pressure_floor_ = pin->GetOrAddReal("eos","pressure_floor",(FLT_MIN));

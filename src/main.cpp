@@ -232,7 +232,7 @@ int main(int argc, char *argv[])
   //--- Step 5. --------------------------------------------------------------------------
   // Construct and initialize Physics modules.
 
-  for (auto &pmb : mesh0.mblocks) {pmb.SelectPhysics(&par_input);}
+  for (auto &pmb : mesh0.mblocks) {pmb.InitPhysicsModules(&par_input);}
 
   //--- Step 6. --------------------------------------------------------------------------
   // Set initial conditions by calling problem generator, or reading restart file

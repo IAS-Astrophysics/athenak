@@ -6,7 +6,6 @@
 //! \file isothermal_hydro.cpp
 //  \brief implements EOS functions in derived class for nonrelativistic isothermal hydro
 
-// Athena++ headers
 #include "athena.hpp"
 #include "athena_arrays.hpp"
 #include "parameter_input.hpp"
@@ -30,7 +29,8 @@ IsothermalHydro::IsothermalHydro(Mesh* pm, ParameterInput *pin, int igid)
 // \!fn void ConservedToPrimitive()
 // \brief Converts conserved into primitive variables in nonrelativistic isothermal hydro
 
-void IsothermalHydro::ConservedToPrimitive(AthenaArray<Real> &cons, AthenaArray<Real> &prim)
+void IsothermalHydro::ConservedToPrimitive(AthenaArray<Real> &cons,
+                                           AthenaArray<Real> &prim)
 {
   MeshBlock* pmb = pmesh_->FindMeshBlock(my_mbgid_);
   int ng = pmb->mb_cells.ng;

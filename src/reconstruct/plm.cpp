@@ -82,7 +82,7 @@ void PiecewiseLinear::ReconstructX2(const int k, const int j, const int il, cons
     // compute ql_(j+1/2) and qr_(j-1/2) using limited slopes
     for (int i=il; i<=iu; ++i) {
       ql_jp1(n,i) = q(n,k,j,i) + dqm_(i);
-      qr_j(n,i)   = q(n,k,j,i) - dqm_(i);
+      qr_j  (n,i) = q(n,k,j,i) - dqm_(i);
     }
   }
   return;
@@ -114,7 +114,7 @@ void PiecewiseLinear::ReconstructX3(const int k, const int j, const int il, cons
     // compute ql_(k+1/2) and qr_(k-1/2) using limited slopes
     for (int i=il; i<=iu; ++i) {
       ql_kp1(n,i) = q(n,k,j,i) + dqm_(i);
-      qr_k(n,i)   = q(n,k,j,i) - dqm_(i);
+      qr_k  (n,i) = q(n,k,j,i) - dqm_(i);
     }
   }
   return;

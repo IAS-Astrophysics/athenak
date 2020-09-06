@@ -254,7 +254,7 @@ void PiecewiseParabolic::ReconstructX2(const int k,const int j,const int il,cons
     // set L/R states
     for (int i=il; i<=iu; ++i) {
       ql_jp1(n,i) = qrv_(i);
-      qr_j(n,i)   = qlv_(i);
+      qr_j  (n,i) = qlv_(i);
     }
   }
   return;
@@ -362,7 +362,7 @@ void PiecewiseParabolic::ReconstructX3(const int k,const int j,const int il,cons
     // set L/R states
     for (int i=il; i<=iu; ++i) {
       ql_kp1(n,i) = qrv_(i);
-      qr_k(n,i  ) = qlv_(i);
+      qr_k  (n,i) = qlv_(i);
     }
   }
   return;

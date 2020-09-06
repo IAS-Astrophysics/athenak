@@ -6,7 +6,6 @@
 //! \file dc.cpp
 //  \brief piecewise constant (donor cell) reconstruction implemented in a derived class
 
-#include <iostream>
 #include "athena.hpp"
 #include "athena_arrays.hpp"
 #include "reconstruct.hpp"
@@ -50,7 +49,7 @@ void DonorCell::ReconstructX2(const int k, const int j, const int il, const int 
   for (int n=0; n<nvar; ++n) {
     for (int i=il; i<=iu; ++i) {
       ql_jp1(n,i) = q(n,k,j,i);
-      qr_j(n,i)   = q(n,k,j,i);
+      qr_j  (n,i) = q(n,k,j,i);
     }
   }
   return;
@@ -68,7 +67,7 @@ void DonorCell::ReconstructX3(const int k, const int j, const int il, const int 
   for (int n=0; n<nvar; ++n) {
     for (int i=il; i<=iu; ++i) {
       ql_kp1(n,i) = q(n,k,j,i);
-      qr_k(n,i)   = q(n,k,j,i);
+      qr_k  (n,i) = q(n,k,j,i);
     }
   }
   return;

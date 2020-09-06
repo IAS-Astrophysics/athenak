@@ -55,8 +55,6 @@ class DonorCell : public Reconstruction
     const AthenaArray<Real> &q, AthenaArray<Real> &ql, AthenaArray<Real> &qr) override;
   void ReconstructX3(const int k, const int j, const int il, const int iu,
     const AthenaArray<Real> &q, AthenaArray<Real> &ql, AthenaArray<Real> &qr) override;
-
- private:
 };
 
 //----------------------------------------------------------------------------------------
@@ -76,7 +74,7 @@ class PiecewiseLinear : public Reconstruction
     const AthenaArray<Real> &q, AthenaArray<Real> &ql, AthenaArray<Real> &qr) override;
 
  private:
- AthenaArray<Real> dql_, dqr_, dqm_;
+  AthenaArray<Real> dql_, dqr_, dqm_;
 };
 
 //----------------------------------------------------------------------------------------
@@ -96,7 +94,7 @@ class PiecewiseParabolic : public Reconstruction
     const AthenaArray<Real> &q, AthenaArray<Real> &ql, AthenaArray<Real> &qr) override;
 
  private:
- AthenaArray<Real> qlv_, qrv_;
+  AthenaArray<Real> qlv_, qrv_;
 };
 
 

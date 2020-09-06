@@ -36,37 +36,27 @@ class MeshBlock
   RegionSize  mb_size;    // physical size of this MeshBlock
   RegionCells mb_cells;   // info about cells in this MeshBlock
 
-  BoundaryValues* pbvals;
-//  BoundaryFlag mb_bcs[6]; // enums specifying BCs at all 6 faces of this MeshBlock
-//  NeighborBlock nblocks[26];
-//  BoundaryValues *pbvals;
-//  NeighborBlock nblocks_x1face[2];
-//  NeighborBlock nblocks_x2face[2];
-//  NeighborBlock nblocks_x3face[2];
-//  NeighborBlock nblocks_x1x2ed[4];
-//  NeighborBlock nblocks_x3x1ed[4];
-//  NeighborBlock nblocks_x2x3ed[4];
-//  NeighborBlock nblocks_corner[8];
+  BoundaryValues* pbvals; // object containing neighbor list, BC flags, etc
 
   // cells on 1x coarser level MeshBlock (i.e. ncc2=nx2/2 + 2*nghost, if nx2>1)
   RegionCells cmb_cells;
 
-  // physics modules (controlled by Mesh::SelectPhysics)
+  // physics modules (controlled by InitPhysicsModules)
   hydro::Hydro *phydro;
 
-  // task lists (each physics module adds its own tasks)
+  // task lists (each physics module adds its own tasks to each list)
   TaskList tl_stagestart;
   TaskList tl_stagerun;
   TaskList tl_stageend;
 
   // functions
-  void SelectPhysics(ParameterInput *pin);
+  void InitPhysicsModules(ParameterInput *pin);
   int NumberOfMeshBlockCells() { return mb_cells.nx1 * mb_cells.nx2 * mb_cells.nx3; }
   int NumberOfCoarseMeshBlockCells() {return cmb_cells.nx1 *cmb_cells.nx2 *cmb_cells.nx3;}
 
  private:
   // data
-  Mesh *pmesh_;         // ptr to Mesh containing this MeshBlock
+  Mesh *pmesh_;    // ptr to Mesh containing this MeshBlock
   double lb_cost;  // cost of updating this MeshBlock for load balancing
 
   // functions

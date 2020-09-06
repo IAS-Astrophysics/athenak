@@ -33,7 +33,8 @@ Advection::Advection(Mesh* pm, ParameterInput* pin, int igid) :
 //  \brief An advection Riemann solver for hydrodynamics (both adiabatic and isothermal)
 
 void Advection::RSolver(const int il, const int iu, const int ivx,
-      const AthenaArray<Real> &wl, const AthenaArray<Real> &wr, AthenaArray<Real> &flx) {
+      const AthenaArray<Real> &wl, const AthenaArray<Real> &wr, AthenaArray<Real> &flx)
+{
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
   Real wli[5],wri[5];

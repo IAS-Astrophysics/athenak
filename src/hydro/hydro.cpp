@@ -20,8 +20,7 @@ namespace hydro {
 //----------------------------------------------------------------------------------------
 // constructor, initializes data structures and parameters
 
-Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
-  pmesh_(pm), my_mbgid_(gid)
+Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) : pmesh_(pm), my_mbgid_(gid)
 {
   // construct EOS object (no default)
   {std::string eqn_of_state   = pin->GetString("hydro","eos");

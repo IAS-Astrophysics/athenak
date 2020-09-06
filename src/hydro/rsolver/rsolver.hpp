@@ -43,11 +43,8 @@ class Advection : public RiemannSolver
 {
  public:
   Advection(Mesh* pm, ParameterInput* pin, int igid);
-
   void RSolver(const int il, const  int iu, const int dir, const AthenaArray<Real> &wl,
     const AthenaArray<Real> &wr, AthenaArray<Real> &flx) override;
-
- private:
 };
 
 //----------------------------------------------------------------------------------------
@@ -58,11 +55,8 @@ class LLF : public RiemannSolver
 {
  public:
   LLF(Mesh* pm, ParameterInput* pin, int igid);
-
   void RSolver(const int il, const  int iu, const int dir, const AthenaArray<Real> &wl,
     const AthenaArray<Real> &wr, AthenaArray<Real> &flx) override;
-
- private:
 };
 
 //----------------------------------------------------------------------------------------
@@ -74,11 +68,8 @@ class HLLE : public RiemannSolver
 {   
  public:
   HLLE(Mesh* pm, ParameterInput* pin, int igid);
-
   void RSolver(const int il, const  int iu, const int dir, const AthenaArray<Real> &wl,
     const AthenaArray<Real> &wr, AthenaArray<Real> &flx) override;
-    
- private:
 };  
 
 //----------------------------------------------------------------------------------------
@@ -89,11 +80,8 @@ class HLLC : public RiemannSolver
 {   
  public:
   HLLC(Mesh* pm, ParameterInput* pin, int igid);
-
   void RSolver(const int il, const  int iu, const int dir, const AthenaArray<Real> &wl,
     const AthenaArray<Real> &wr, AthenaArray<Real> &flx) override;
-    
- private:
 };  
 
 //----------------------------------------------------------------------------------------
@@ -104,11 +92,8 @@ class Roe : public RiemannSolver
 {
  public:
   Roe(Mesh* pm, ParameterInput* pin, int igid);
-
   void RSolver(const int il, const  int iu, const int dir, const AthenaArray<Real> &wl,
     const AthenaArray<Real> &wr, AthenaArray<Real> &flx) override;
-
- private:
 };
 
 } // namespace hydro

@@ -8,9 +8,8 @@
 
 #include "athena.hpp"
 #include "athena_arrays.hpp"
-#include "mesh/mesh.hpp"
-#include "hydro/hydro.hpp"
 #include "parameter_input.hpp"
+#include "mesh/mesh.hpp"
 #include "hydro/rsolver/rsolver.hpp"
 
 namespace hydro {
