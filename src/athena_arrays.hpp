@@ -58,7 +58,7 @@ class AthenaArray
     pdata_ = new T[nx1_*nx2_*nx3_*nx4_*nx5_*nx6_]();
   }
   AthenaArray(const std::string &label, int nx6, int nx5, int nx4, int nx3, int nx2,
-                    int nx1) :
+              int nx1) :
     label_(label), nx1_(nx1), nx2_(nx2), nx3_(nx3), nx4_(nx4), nx5_(nx5), nx6_(nx6)
   {
     assert(nx6 > 0 && nx5 > 0 && nx4 > 0 && nx3 > 0 && nx2 > 0 && nx1 > 0);

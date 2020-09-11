@@ -39,8 +39,8 @@ PiecewiseParabolic::PiecewiseParabolic(ParameterInput *pin, int nvar, int ncells
   Reconstruction(pin, nvar, ncells1)
 {
   // allocate space for scratch arrays
-  qlv_.SetSize(ncells1_);
-  qrv_.SetSize(ncells1_);
+//  qlv_.SetSize(ncells1_);
+//  qrv_.SetSize(ncells1_);
 }
 
 //----------------------------------------------------------------------------------------
@@ -54,18 +54,16 @@ void PiecewiseParabolic::ReconstructX1(const int k,const int j,const int il,cons
 {
   int nvar = q.GetDim(4);
   for (int n=0; n<nvar; ++n) {
-    // Compute L/R values (CS eqns 12-15, PH 3.26 and 3.27)
-    // qlv = q at left  side of cell-center = q[i-1/2] = a_{j,-} in CS
-    // qrv = q at right side of cell-center = q[i+1/2] = a_{j,+} in CS
     for (int i=il; i<=iu; ++i) {
-      qlv_(i) = (7.0*(q(n,k,j,i) + q(n,k,j,i-1)) - (q(n,k,j,i-2) + q(n,k,j,i+1)))/12.0;
-      qrv_(i) = (7.0*(q(n,k,j,i) + q(n,k,j,i+1)) - (q(n,k,j,i-1) + q(n,k,j,i+2)))/12.0;
-    }
+      //---- Compute L/R values (CS eqns 12-15, PH 3.26 and 3.27) ----
+      // qlv = q at left  side of cell-center = q[i-1/2] = a_{j,-} in CS
+      // qrv = q at right side of cell-center = q[i+1/2] = a_{j,+} in CS
+      Real qlv_ = (7.0*(q(n,k,j,i) + q(n,k,j,i-1)) - (q(n,k,j,i-2) + q(n,k,j,i+1)))/12.0;
+      Real qrv_ = (7.0*(q(n,k,j,i) + q(n,k,j,i+1)) - (q(n,k,j,i-1) + q(n,k,j,i+2)))/12.0;
 
-    // Apply CS monotonicity limiters to qrv_ and qlv_
-    for (int i=il; i<=iu; ++i) {
+      //---- Apply CS monotonicity limiters to qrv_ and qlv_ ----
       // approximate second derivatives at i-1/2 (PH 3.35) 
-      Real d2qc = 3.0*(q(n,k,j,i-1) - 2.0*qlv_(i) + q(n,k,j,i));
+      Real d2qc = 3.0*(q(n,k,j,i-1) - 2.0*qlv_ + q(n,k,j,i));
       Real d2ql = (q(n,k,j,i-2) - 2.0*q(n,k,j,i-1) + q(n,k,j,i  ));
       Real d2qr = (q(n,k,j,i-1) - 2.0*q(n,k,j,i  ) + q(n,k,j,i+1));
     
@@ -79,10 +77,10 @@ void PiecewiseParabolic::ReconstructX1(const int k,const int j,const int il,cons
         d2qlim = SIGN(d2qc)*std::min(1.25*lim_slope,fabs(d2qc));
       } 
       // compute limited value for qlv_ (PH 3.34)
-      qlv_(i) = 0.5*(q(n,k,j,i) + q(n,k,j,i-1)) - d2qlim/6.0;
+      qlv_ = 0.5*(q(n,k,j,i) + q(n,k,j,i-1)) - d2qlim/6.0;
 
       // approximate second derivatives at i+1/2 (PH 3.35) 
-      d2qc = 3.0*(q(n,k,j,i) - 2.0*qrv_(i) + q(n,k,j,i+1));
+      d2qc = 3.0*(q(n,k,j,i) - 2.0*qrv_ + q(n,k,j,i+1));
       d2ql = d2qr;
       d2qr = (q(n,k,j,i  ) - 2.0*q(n,k,j,i+1) + q(n,k,j,i+2));
 
@@ -96,17 +94,15 @@ void PiecewiseParabolic::ReconstructX1(const int k,const int j,const int il,cons
         d2qlim = SIGN(d2qc)*std::min(1.25*lim_slope,fabs(d2qc));
       }
       // compute limited value for qrv_ (PH 3.33)
-      qrv_(i) = 0.5*(q(n,k,j,i) + q(n,k,j,i+1)) - d2qlim/6.0;
-    }
+      qrv_ = 0.5*(q(n,k,j,i) + q(n,k,j,i+1)) - d2qlim/6.0;
 
-    // identify extrema, use smooth extremum limiter
-    for (int i=il; i<=iu; ++i) {
+      //---- identify extrema, use smooth extremum limiter ----
       // CS 20 (missing "OR"), and PH 3.31
-      Real qa = (qrv_(i) - q(n,k,j,i))*(q(n,k,j,i) - qlv_(i));
+      Real qa = (qrv_ - q(n,k,j,i))*(q(n,k,j,i) - qlv_);
       Real qb = (q(n,k,j,i-1) - q(n,k,j,i))*(q(n,k,j,i) - q(n,k,j,i+1));
       if (qa <= 0.0 || qb <= 0.0) {
         // approximate secnd derivates (PH 3.37)
-        Real d2q  = 6.0*(qlv_(i) - 2.0*q(n,k,j,i) + qrv_(i));
+        Real d2q  = 6.0*(qlv_ - 2.0*q(n,k,j,i) + qrv_);
         Real d2qc = (q(n,k,j,i-1) - 2.0*q(n,k,j,i  ) + q(n,k,j,i+1));
         Real d2ql = (q(n,k,j,i-2) - 2.0*q(n,k,j,i-1) + q(n,k,j,i  ));
         Real d2qr = (q(n,k,j,i  ) - 2.0*q(n,k,j,i+1) + q(n,k,j,i+2));
@@ -124,29 +120,27 @@ void PiecewiseParabolic::ReconstructX1(const int k,const int j,const int il,cons
 
         // limit L/R states at extrema (PH 3.39)
         if (d2q == 0.0) {  // revert to donor cell
-          qlv_(i) = q(n,k,j,i);
-          qrv_(i) = q(n,k,j,i);
+          qlv_ = q(n,k,j,i);
+          qrv_ = q(n,k,j,i);
         } else {  // add limited slope (PH 3.39)
-          qlv_(i) = q(n,k,j,i) + (qlv_(i) - q(n,k,j,i))*d2qlim/d2q;
-          qrv_(i) = q(n,k,j,i) + (qrv_(i) - q(n,k,j,i))*d2qlim/d2q;
+          qlv_ = q(n,k,j,i) + (qlv_ - q(n,k,j,i))*d2qlim/d2q;
+          qrv_ = q(n,k,j,i) + (qrv_ - q(n,k,j,i))*d2qlim/d2q;
         }
       } else {
         // Monotonize again, away from extrema (CW eqn 1.10, PH 3.32)
-        Real qc = qrv_(i) - q(n,k,j,i);
-        Real qd = qlv_(i) - q(n,k,j,i);
+        Real qc = qrv_ - q(n,k,j,i);
+        Real qd = qlv_ - q(n,k,j,i);
         if (fabs(qc) >= 2.0*fabs(qd)) {
-          qrv_(i) = q(n,k,j,i) - 2.0*qd;
+          qrv_ = q(n,k,j,i) - 2.0*qd;
         }
         if (fabs(qd) >= 2.0*fabs(qc)) {
-          qlv_(i) = q(n,k,j,i) - 2.0*qc;
+          qlv_ = q(n,k,j,i) - 2.0*qc;
         }
       }
-    }
 
-    // set L/R states
-    for (int i=il; i<=iu; ++i) {
-      ql(n,i+1) = qrv_(i);
-      qr(n,i  ) = qlv_(i);
+      //---- set L/R states ----
+      ql(n,i+1) = qrv_;
+      qr(n,i  ) = qlv_;
     }
   }
   return;
@@ -162,18 +156,16 @@ void PiecewiseParabolic::ReconstructX2(const int k,const int j,const int il,cons
 {
   int nvar = q.GetDim(4);
   for (int n=0; n<nvar; ++n) {
-    // Compute L/R values (CS eqns 12-15, PH 3.26 and 3.27)
-    // qlv = q at left  side of cell-center = q[i-1/2] = a_{j,-} in CS
-    // qrv = q at right side of cell-center = q[i+1/2] = a_{j,+} in CS
     for (int i=il; i<=iu; ++i) {
-      qlv_(i) = (7.0*(q(n,k,j,i) + q(n,k,j-1,i)) - (q(n,k,j-2,i) + q(n,k,j+1,i)))/12.0;
-      qrv_(i) = (7.0*(q(n,k,j,i) + q(n,k,j+1,i)) - (q(n,k,j-1,i) + q(n,k,j+2,i)))/12.0;
-    }
+      //---- Compute L/R values (CS eqns 12-15, PH 3.26 and 3.27) ----
+      // qlv = q at left  side of cell-center = q[i-1/2] = a_{j,-} in CS
+      // qrv = q at right side of cell-center = q[i+1/2] = a_{j,+} in CS
+      Real qlv_ = (7.0*(q(n,k,j,i) + q(n,k,j-1,i)) - (q(n,k,j-2,i) + q(n,k,j+1,i)))/12.0;
+      Real qrv_ = (7.0*(q(n,k,j,i) + q(n,k,j+1,i)) - (q(n,k,j-1,i) + q(n,k,j+2,i)))/12.0;
 
-    // Apply CS monotonicity limiters to qrv_ and qlv_
-    for (int i=il; i<=iu; ++i) {
+      // Apply CS monotonicity limiters to qrv_ and qlv_
       // approximate second derivatives at i-1/2 (PH 3.35) 
-      Real d2qc = 3.0*(q(n,k,j-1,i) - 2.0*qlv_(i) + q(n,k,j,i));
+      Real d2qc = 3.0*(q(n,k,j-1,i) - 2.0*qlv_ + q(n,k,j,i));
       Real d2ql = (q(n,k,j-2,i) - 2.0*q(n,k,j-1,i) + q(n,k,j  ,i));
       Real d2qr = (q(n,k,j-1,i) - 2.0*q(n,k,j  ,i) + q(n,k,j+1,i));
     
@@ -187,10 +179,10 @@ void PiecewiseParabolic::ReconstructX2(const int k,const int j,const int il,cons
         d2qlim = SIGN(d2qc)*std::min(1.25*lim_slope,fabs(d2qc));
       } 
       // compute limited value for qlv_ (PH 3.34)
-      qlv_(i) = 0.5*(q(n,k,j,i) + q(n,k,j-1,i)) - d2qlim/6.0;
+      qlv_ = 0.5*(q(n,k,j,i) + q(n,k,j-1,i)) - d2qlim/6.0;
 
       // approximate second derivatives at i+1/2 (PH 3.35) 
-      d2qc = 3.0*(q(n,k,j,i) - 2.0*qrv_(i) + q(n,k,j+1,i));
+      d2qc = 3.0*(q(n,k,j,i) - 2.0*qrv_ + q(n,k,j+1,i));
       d2ql = d2qr;
       d2qr = (q(n,k,j,i  ) - 2.0*q(n,k,j+1,i) + q(n,k,j+2,i));
 
@@ -204,17 +196,15 @@ void PiecewiseParabolic::ReconstructX2(const int k,const int j,const int il,cons
         d2qlim = SIGN(d2qc)*std::min(1.25*lim_slope,fabs(d2qc));
       }
       // compute limited value for qrv_ (PH 3.33)
-      qrv_(i) = 0.5*(q(n,k,j,i) + q(n,k,j+1,i)) - d2qlim/6.0;
-    }
+      qrv_ = 0.5*(q(n,k,j,i) + q(n,k,j+1,i)) - d2qlim/6.0;
 
-    // identify extrema, use smooth extremum limiter
-    for (int i=il; i<=iu; ++i) {
+      //---- identify extrema, use smooth extremum limiter ----
       // CS 20 (missing "OR"), and PH 3.31
-      Real qa = (qrv_(i) - q(n,k,j,i))*(q(n,k,j,i) - qlv_(i));
+      Real qa = (qrv_ - q(n,k,j,i))*(q(n,k,j,i) - qlv_);
       Real qb = (q(n,k,j-1,i) - q(n,k,j,i))*(q(n,k,j,i) - q(n,k,j+1,i));
       if (qa <= 0.0 || qb <= 0.0) {
         // approximate secnd derivates (PH 3.37)
-        Real d2q  = 6.0*(qlv_(i) - 2.0*q(n,k,j,i) + qrv_(i));
+        Real d2q  = 6.0*(qlv_ - 2.0*q(n,k,j,i) + qrv_);
         Real d2qc = (q(n,k,j-1,i) - 2.0*q(n,k,j  ,i) + q(n,k,j+1,i));
         Real d2ql = (q(n,k,j-2,i) - 2.0*q(n,k,j-1,i) + q(n,k,j  ,i));
         Real d2qr = (q(n,k,j  ,i) - 2.0*q(n,k,j+1,i) + q(n,k,j+2,i));
@@ -232,29 +222,27 @@ void PiecewiseParabolic::ReconstructX2(const int k,const int j,const int il,cons
 
         // limit L/R states at extrema (PH 3.39)
         if (d2q == 0.0) {  // revert to donor cell
-          qlv_(i) = q(n,k,j,i);
-          qrv_(i) = q(n,k,j,i);
+          qlv_ = q(n,k,j,i);
+          qrv_ = q(n,k,j,i);
         } else {  // add limited slope (PH 3.39)
-          qlv_(i) = q(n,k,j,i) + (qlv_(i) - q(n,k,j,i))*d2qlim/d2q;
-          qrv_(i) = q(n,k,j,i) + (qrv_(i) - q(n,k,j,i))*d2qlim/d2q;
+          qlv_ = q(n,k,j,i) + (qlv_ - q(n,k,j,i))*d2qlim/d2q;
+          qrv_ = q(n,k,j,i) + (qrv_ - q(n,k,j,i))*d2qlim/d2q;
         }
       } else {
         // Monotonize again, away from extrema (CW eqn 1.10, PH 3.32)
-        Real qc = qrv_(i) - q(n,k,j,i);
-        Real qd = qlv_(i) - q(n,k,j,i);
+        Real qc = qrv_ - q(n,k,j,i);
+        Real qd = qlv_ - q(n,k,j,i);
         if (fabs(qc) >= 2.0*fabs(qd)) {
-          qrv_(i) = q(n,k,j,i) - 2.0*qd;
+          qrv_ = q(n,k,j,i) - 2.0*qd;
         }
         if (fabs(qd) >= 2.0*fabs(qc)) {
-          qlv_(i) = q(n,k,j,i) - 2.0*qc;
+          qlv_ = q(n,k,j,i) - 2.0*qc;
         }
       }
-    }
 
-    // set L/R states
-    for (int i=il; i<=iu; ++i) {
-      ql_jp1(n,i) = qrv_(i);
-      qr_j  (n,i) = qlv_(i);
+      //---- set L/R states ----
+      ql_jp1(n,i) = qrv_;
+      qr_j  (n,i) = qlv_;
     }
   }
   return;
@@ -270,18 +258,16 @@ void PiecewiseParabolic::ReconstructX3(const int k,const int j,const int il,cons
 {
   int nvar = q.GetDim(4);
   for (int n=0; n<nvar; ++n) {
-    // Compute L/R values (CS eqns 12-15, PH 3.26 and 3.27)
+    //---- Compute L/R values (CS eqns 12-15, PH 3.26 and 3.27) ----
     // qlv = q at left  side of cell-center = q[i-1/2] = a_{j,-} in CS
     // qrv = q at right side of cell-center = q[i+1/2] = a_{j,+} in CS
     for (int i=il; i<=iu; ++i) {
-      qlv_(i) = (7.0*(q(n,k,j,i) + q(n,k-1,j,i)) - (q(n,k-2,j,i) + q(n,k+1,j,i)))/12.0;
-      qrv_(i) = (7.0*(q(n,k,j,i) + q(n,k+1,j,i)) - (q(n,k-1,j,i) + q(n,k+2,j,i)))/12.0;
-    }
+      Real qlv_ = (7.0*(q(n,k,j,i) + q(n,k-1,j,i)) - (q(n,k-2,j,i) + q(n,k+1,j,i)))/12.0;
+      Real qrv_ = (7.0*(q(n,k,j,i) + q(n,k+1,j,i)) - (q(n,k-1,j,i) + q(n,k+2,j,i)))/12.0;
 
-    // Apply CS monotonicity limiters to qrv_ and qlv_
-    for (int i=il; i<=iu; ++i) {
+      //---- Apply CS monotonicity limiters to qrv_ and qlv_ ----
       // approximate second derivatives at i-1/2 (PH 3.35) 
-      Real d2qc = 3.0*(q(n,k-1,j,i) - 2.0*qlv_(i) + q(n,k,j,i));
+      Real d2qc = 3.0*(q(n,k-1,j,i) - 2.0*qlv_ + q(n,k,j,i));
       Real d2ql = (q(n,k-2,j,i) - 2.0*q(n,k-1,j,i) + q(n,k  ,j,i));
       Real d2qr = (q(n,k-1,j,i) - 2.0*q(n,k  ,j,i) + q(n,k+1,j,i));
     
@@ -295,10 +281,10 @@ void PiecewiseParabolic::ReconstructX3(const int k,const int j,const int il,cons
         d2qlim = SIGN(d2qc)*std::min(1.25*lim_slope,fabs(d2qc));
       } 
       // compute limited value for qlv_ (PH 3.34)
-      qlv_(i) = 0.5*(q(n,k,j,i) + q(n,k-1,j,i)) - d2qlim/6.0;
+      qlv_ = 0.5*(q(n,k,j,i) + q(n,k-1,j,i)) - d2qlim/6.0;
 
       // approximate second derivatives at i+1/2 (PH 3.35) 
-      d2qc = 3.0*(q(n,k,j,i) - 2.0*qrv_(i) + q(n,k+1,j,i));
+      d2qc = 3.0*(q(n,k,j,i) - 2.0*qrv_ + q(n,k+1,j,i));
       d2ql = d2qr;
       d2qr = (q(n,k,j,i  ) - 2.0*q(n,k+1,j,i) + q(n,k+2,j,i));
 
@@ -312,17 +298,15 @@ void PiecewiseParabolic::ReconstructX3(const int k,const int j,const int il,cons
         d2qlim = SIGN(d2qc)*std::min(1.25*lim_slope,fabs(d2qc));
       }
       // compute limited value for qrv_ (PH 3.33)
-      qrv_(i) = 0.5*(q(n,k,j,i) + q(n,k+1,j,i)) - d2qlim/6.0;
-    }
+      qrv_ = 0.5*(q(n,k,j,i) + q(n,k+1,j,i)) - d2qlim/6.0;
 
-    // identify extrema, use smooth extremum limiter
-    for (int i=il; i<=iu; ++i) {
+      //---- identify extrema, use smooth extremum limiter ----
       // CS 20 (missing "OR"), and PH 3.31
-      Real qa = (qrv_(i) - q(n,k,j,i))*(q(n,k,j,i) - qlv_(i));
+      Real qa = (qrv_ - q(n,k,j,i))*(q(n,k,j,i) - qlv_);
       Real qb = (q(n,k-1,j,i) - q(n,k,j,i))*(q(n,k,j,i) - q(n,k+1,j,i));
       if (qa <= 0.0 || qb <= 0.0) {
         // approximate secnd derivates (PH 3.37)
-        Real d2q  = 6.0*(qlv_(i) - 2.0*q(n,k,j,i) + qrv_(i));
+        Real d2q  = 6.0*(qlv_ - 2.0*q(n,k,j,i) + qrv_);
         Real d2qc = (q(n,k-1,j,i) - 2.0*q(n,k  ,j,i) + q(n,k+1,j,i));
         Real d2ql = (q(n,k-2,j,i) - 2.0*q(n,k-1,j,i) + q(n,k  ,j,i));
         Real d2qr = (q(n,k  ,j,i) - 2.0*q(n,k+1,j,i) + q(n,k+2,j,i));
@@ -340,29 +324,27 @@ void PiecewiseParabolic::ReconstructX3(const int k,const int j,const int il,cons
 
         // limit L/R states at extrema (PH 3.39)
         if (d2q == 0.0) {  // revert to donor cell
-          qlv_(i) = q(n,k,j,i);
-          qrv_(i) = q(n,k,j,i);
+          qlv_ = q(n,k,j,i);
+          qrv_ = q(n,k,j,i);
         } else {  // add limited slope (PH 3.39)
-          qlv_(i) = q(n,k,j,i) + (qlv_(i) - q(n,k,j,i))*d2qlim/d2q;
-          qrv_(i) = q(n,k,j,i) + (qrv_(i) - q(n,k,j,i))*d2qlim/d2q;
+          qlv_ = q(n,k,j,i) + (qlv_ - q(n,k,j,i))*d2qlim/d2q;
+          qrv_ = q(n,k,j,i) + (qrv_ - q(n,k,j,i))*d2qlim/d2q;
         }
       } else {
         // Monotonize again, away from extrema (CW eqn 1.10, PH 3.32)
-        Real qc = qrv_(i) - q(n,k,j,i);
-        Real qd = qlv_(i) - q(n,k,j,i);
+        Real qc = qrv_ - q(n,k,j,i);
+        Real qd = qlv_ - q(n,k,j,i);
         if (fabs(qc) >= 2.0*fabs(qd)) {
-          qrv_(i) = q(n,k,j,i) - 2.0*qd;
+          qrv_ = q(n,k,j,i) - 2.0*qd;
         }
         if (fabs(qd) >= 2.0*fabs(qc)) {
-          qlv_(i) = q(n,k,j,i) - 2.0*qc;
+          qlv_ = q(n,k,j,i) - 2.0*qc;
         }
       }
-    }
 
-    // set L/R states
-    for (int i=il; i<=iu; ++i) {
-      ql_kp1(n,i) = qrv_(i);
-      qr_k  (n,i) = qlv_(i);
+      //---- set L/R states ----
+      ql_kp1(n,i) = qrv_;
+      qr_k  (n,i) = qlv_;
     }
   }
   return;
