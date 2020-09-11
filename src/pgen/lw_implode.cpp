@@ -36,7 +36,6 @@ void ProblemGenerator::LWImplode_(MeshBlock *pmb, ParameterInput *pin)
   int &ks = pmb->mb_cells.ks, &ke = pmb->mb_cells.ke;
   Real &x1min = pmb->mb_size.x1min, &x1max = pmb->mb_size.x1max;
   Real &x2min = pmb->mb_size.x2min, &x2max = pmb->mb_size.x2max;
-  Real &x3min = pmb->mb_size.x3min, &x3max = pmb->mb_size.x3max;
 
   // to make ICs symmetric, set y0 to be in between cell center and face
   Real y0 = 0.5*(x2max + x2min) + 0.25*(pmb->mb_cells.dx2);

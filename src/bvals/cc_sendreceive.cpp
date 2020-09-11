@@ -279,7 +279,6 @@ TaskStatus BoundaryValues::ReceiveCellCenteredVariables(AthenaArray<Real> &a, in
   int is = pmb->mb_cells.is; int ie = pmb->mb_cells.ie;
   int js = pmb->mb_cells.js; int je = pmb->mb_cells.je;
   int ks = pmb->mb_cells.ks; int ke = pmb->mb_cells.ke;
-  int ncells1 = pmb->mb_cells.nx1 + 2*ng;
   int ncells2 = (pmb->mb_cells.nx2 > 1)? (pmb->mb_cells.nx2 + 2*ng) : 1;
   int ncells3 = (pmb->mb_cells.nx3 > 1)? (pmb->mb_cells.nx3 + 2*ng) : 1;
 

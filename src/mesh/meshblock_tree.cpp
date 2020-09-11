@@ -383,7 +383,6 @@ MeshBlockTree* MeshBlockTree::FindNeighbor(LogicalLocation myloc,
       return nullptr;
     }
   }
-  bool polar = false;
   if (ly<0) {
     if (pmesh_->mesh_bcs[BoundaryFace::inner_x2] == BoundaryFlag::periodic) {
       ly = (pmesh_->nmbroot_x2<<(ll - pmesh_->root_level)) - 1;

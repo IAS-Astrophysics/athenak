@@ -19,7 +19,7 @@
 
 class Driver {
  public:
-  Driver(ParameterInput *pin, Mesh *pmesh, Outputs *pout);
+  Driver(ParameterInput *pin, Mesh *pmesh);
   ~Driver() = default;
 
   // data

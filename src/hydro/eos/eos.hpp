@@ -26,7 +26,7 @@ namespace hydro {
 class EquationOfState
 {
  public:
-  EquationOfState(Mesh *pm, ParameterInput *pin, int igid, std::string type);
+  EquationOfState(Mesh *pm, ParameterInput *pin, int igid);
   virtual ~EquationOfState() = default;
 
   // data
@@ -37,7 +37,8 @@ class EquationOfState
 
   // folowing pure virtual functions must be overridden in derived EOS classes
   virtual void ConservedToPrimitive(AthenaArray<Real> &cons, AthenaArray<Real> &prim) = 0;
-  virtual Real SoundSpeed(Real prim[5]) = 0;
+  virtual Real SoundSpeed(Real prim[5]);
+  virtual Real SoundSpeed();
 
  protected:
   Mesh* pmesh_;
@@ -74,7 +75,7 @@ class IsothermalHydro : public EquationOfState
 
   // functions that implement methods appropriate to isothermal hydrodynamics
   void ConservedToPrimitive(AthenaArray<Real> &cons, AthenaArray<Real> &prim) override;
-  Real SoundSpeed(Real prim[5]) override {return iso_cs_;}
+  Real SoundSpeed() override {return iso_cs_;}
 
  private:
   Real iso_cs_;

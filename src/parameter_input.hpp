@@ -101,7 +101,7 @@ class ParameterInput
 
   InputBlock* FindOrAddBlock(std::string name);
   InputBlock* GetPtrToBlock(std::string name);
-  void ParseLine(InputBlock *pib, std::string line, std::string &name, std::string &val,
+  void ParseLine(std::string line, std::string &name, std::string &val,
                  std::string &comment);
   void AddParameter(InputBlock *pib, std::string name, std::string val, std::string comm);
 

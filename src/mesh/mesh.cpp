@@ -708,3 +708,27 @@ void Mesh::SetBlockSizeAndBoundaries(LogicalLocation loc, RegionSize &block_size
 
   return;
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn GetBoundaryFlag(std::string input_string)
+//  \brief Parses input string to return scoped enumerator flag specifying boundary
+//  condition. Typically called in Mesh() ctor and in pgen/*.cpp files.
+
+BoundaryFlag Mesh::GetBoundaryFlag(const std::string& input_string) {
+  if (input_string == "reflecting") {
+    return BoundaryFlag::reflect;
+  } else if (input_string == "outflow") {
+    return BoundaryFlag::outflow;
+  } else if (input_string == "user") {
+    return BoundaryFlag::user;
+  } else if (input_string == "periodic") {
+    return BoundaryFlag::periodic;
+  } else if (input_string == "undef") {
+    return BoundaryFlag::undef;
+  } else {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "Input string = '" << input_string << "' is an invalid boundary type"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+}

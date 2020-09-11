@@ -1,3 +1,5 @@
+#ifndef BVALS_BOUNDARY_FLAG_HPP_
+#define BVALS_BOUNDARY_FLAG_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
@@ -9,9 +11,6 @@
 
 #include <iostream>
 #include <sstream>
-//#include <string>
-
-#include "bvals.hpp"
 
 // identifiers for boundary conditions
 enum class BoundaryFlag {undef=-1, block, reflect, outflow, user, periodic};
@@ -68,3 +67,5 @@ static std::string GetBoundaryString(BoundaryFlag input_flag) {
       break;
   }
 }
+
+#endif  // BVALS_BOUNDARY_FLAG_HPP_

@@ -46,9 +46,8 @@
   //
   // main.cpp invokes the tasklist in a for () loop from stage=1 to stage=ptlist->nstages
 
-Driver::Driver(ParameterInput *pin, Mesh *pmesh,
-     Outputs *pout) : tlim(-1.0), nlim(-1), ndiag(1),
-     time_evolution(false)
+Driver::Driver(ParameterInput *pin, Mesh *pmesh) :
+  time_evolution(false), tlim(-1.0), nlim(-1), ndiag(1)
 {
   hydro::Hydro *phyd = pmesh->mblocks.front().phydro;
   if (phyd->hydro_evol != hydro::HydroEvolution::no_evolution) {

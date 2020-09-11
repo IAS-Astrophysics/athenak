@@ -1,5 +1,3 @@
-//========================================================================================
-// AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
@@ -75,9 +73,6 @@ void HLLC::RSolver(const int il, const int iu, const int ivx, const AthenaArray<
     Real rhoa = .5 * (wli[IDN] + wri[IDN]); // average density
     Real ca = .5 * (cl + cr); // average sound speed
     Real pmid = .5 * (wli[IPR] + wri[IPR] + (wli[IVX]-wri[IVX]) * rhoa * ca);
-    Real umid = .5 * (wli[IVX] + wri[IVX] + (wli[IPR]-wri[IPR]) / (rhoa * ca));
-    Real rhol = wli[IDN] + (wli[IVX] - umid) * rhoa / ca; // mid-left density
-    Real rhor = wri[IDN] + (umid - wri[IVX]) * rhoa / ca; // mid-right density
 
     //--- Step 3.  Compute sound speed in L,R
 

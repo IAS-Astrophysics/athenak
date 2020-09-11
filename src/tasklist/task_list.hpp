@@ -100,7 +100,7 @@ class Task {
  private:
   TaskID myid_;    // encodes task ID in bitfld_
   TaskID dep_;     // encodes dependencies to other tasks in bitfld_
-  bool lb_time_;   // flag to include this task in timing for automatic load balancing
+//  bool lb_time_;   // flag to include this task in timing for automatic load balancing
   bool complete_ = false;
   std::function<TaskStatus(Driver*, int)> func_;  // ptr to Task function
 
@@ -197,7 +197,6 @@ class TaskList {
 
  protected:
   std::list<Task> task_list_;
-//  std::vector<TaskList *> dependencies_;
   TaskID tasks_completed_;
 };
 

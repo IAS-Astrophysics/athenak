@@ -163,7 +163,7 @@ void ParameterInput::LoadFromStream(std::istream &is)
         std::exit(EXIT_FAILURE);
     }
     // parse line and add name/value/comment strings (if found) to current block name
-    ParseLine(pib, line, param_name, param_value, param_comment);
+    ParseLine(line, param_name, param_value, param_comment);
     AddParameter(pib, param_name, param_value, param_comment);
   }
   return;
@@ -224,7 +224,6 @@ InputBlock* ParameterInput::FindOrAddBlock(std::string name)
   // if block contains no elements, create the first one
   if (block.empty()) {
     block.emplace_front(name);
-    auto it = block.begin();
     return &block.front();
 
   // else search linked list of InputBlocks to see if name exists, return if found.
@@ -240,12 +239,12 @@ InputBlock* ParameterInput::FindOrAddBlock(std::string name)
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void ParameterInput::ParseLine(InputBlock *pib, std::string line,
+//! \fn void ParameterInput::ParseLine(std::string line,
 //           std::string& name, std::string& value, std::string& comment)
 //  \brief parse "name = value # comment" format, return name/value/comment strings.
 
-void ParameterInput::ParseLine(InputBlock *pib, std::string line, std::string& name,
-                               std::string& value, std::string& comment)
+void ParameterInput::ParseLine(std::string line, std::string& name, std::string& value,
+                               std::string& comment)
 {
   std::size_t first_char, last_char, equal_char, hash_char, len;
   first_char = line.find_first_not_of(" ");   // find first non-white space

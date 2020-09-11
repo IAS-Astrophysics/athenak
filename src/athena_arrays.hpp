@@ -129,8 +129,8 @@ class AthenaArray
 
  private:
   T *pdata_;
-  int nx1_, nx2_, nx3_, nx4_, nx5_, nx6_;
   std::string label_;
+  int nx1_, nx2_, nx3_, nx4_, nx5_, nx6_;
 };
 
 

@@ -115,6 +115,7 @@ class Mesh
   void BuildTree(ParameterInput *pin);
   void NewTimeStep(const Real tlim);
   void OutputMeshStructure(int flag);
+  BoundaryFlag GetBoundaryFlag(const std::string& input_string);
 
   // Following functions compute positions on a regular Cartesian grid.
   // They provide functionality of the Coordinates class in the C++ version of the code.

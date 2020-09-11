@@ -20,7 +20,7 @@
 
 MeshBlock::MeshBlock(Mesh *pm, ParameterInput *pin,
   int igid, RegionSize isize, RegionCells icells, BoundaryFlag *ibcs) :
-  pmesh_(pm), mb_gid(igid), mb_size(isize), mb_cells(icells)
+  mb_gid(igid), mb_size(isize), mb_cells(icells), pmesh_(pm)
 {
   // copy input boundary flags into MeshBlock 
 //  for (int i=0; i<6; ++i) {mb_bcs[i] = ibcs[i];}

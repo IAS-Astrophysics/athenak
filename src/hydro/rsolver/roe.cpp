@@ -39,10 +39,10 @@ Roe::Roe(Mesh* pm, ParameterInput* pin, int igid) : RiemannSolver(pm, pin, igid)
 // prototype for functions to compute Roe fluxes from eigenmatrices
 namespace roe {
 
-inline void RoeFluxAdb(const MeshBlock* pmb, const Real wroe[], const Real du[],
-   const Real wli[], const Real gm1, Real flx[], Real eigenvalues[], int &flag);
-inline void RoeFluxIso(const MeshBlock* pmb, const Real wroe[], const Real du[],
-   const Real wli[], const Real isocs, Real flx[], Real eigenvalues[], int &flag);
+inline void RoeFluxAdb(const Real wroe[], const Real du[], const Real wli[],
+                       const Real gm1, Real flx[], Real eigenvalues[], int &flag);
+inline void RoeFluxIso(const Real wroe[], const Real du[], const Real wli[],
+                       const Real isocs, Real flx[], Real eigenvalues[], int &flag);
 
 } // namespace roe
 
@@ -144,9 +144,9 @@ void Roe::RSolver(const int il, const int iu, const int ivx, const AthenaArray<R
 
     int llf_flag = 0;
     if (adiabatic_eos) {
-      roe::RoeFluxAdb(pmb,wroe,du,wli,gm1,flxi,ev,llf_flag);
+      roe::RoeFluxAdb(wroe,du,wli,gm1,flxi,ev,llf_flag);
     } else {
-      roe::RoeFluxIso(pmb,wroe,du,wli,iso_cs,flxi,ev,llf_flag);
+      roe::RoeFluxIso(wroe,du,wli,iso_cs,flxi,ev,llf_flag);
     }
 
     //--- Step 5.  Overwrite with upwind flux if flow is supersonic
@@ -229,10 +229,9 @@ namespace roe {
 // - J. Stone, T. Gardiner, P. Teuben, J. Hawley, & J. Simon "Athena: A new code for
 //   astrophysical MHD", ApJS, (2008), Appendix A.  Equation numbers refer to this paper.
 
-inline void RoeFluxAdb(const MeshBlock* pmb, const Real wroe[], const Real du[],
-  const Real wli[], const Real gm1,  Real flx[], Real ev[], int &llf_flag)
+inline void RoeFluxAdb(const Real wroe[], const Real du[], const Real wli[],
+                       const Real gm1,  Real flx[], Real ev[], int &llf_flag)
 {
-  Real d  = wroe[IDN];
   Real v1 = wroe[IVX];
   Real v2 = wroe[IVY];
   Real v3 = wroe[IVZ];
@@ -326,10 +325,9 @@ inline void RoeFluxAdb(const MeshBlock* pmb, const Real wroe[], const Real du[],
 //----------------------------------------------------------------------------------------
 //! \fn RoeFlux()
 
-inline void RoeFluxIso(const MeshBlock* pmb, const Real wroe[], const Real du[],
-  const Real wli[], const Real iso_cs,  Real flx[], Real ev[], int &llf_flag)
+inline void RoeFluxIso(const Real wroe[], const Real du[], const Real wli[],
+                       const Real iso_cs,  Real flx[], Real ev[], int &llf_flag)
 {
-  Real d  = wroe[IDN];
   Real v1 = wroe[IVX];
   Real v2 = wroe[IVY];
   Real v3 = wroe[IVZ];

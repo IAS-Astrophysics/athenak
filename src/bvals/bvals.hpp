@@ -8,19 +8,20 @@
 //! \file bvals.hpp
 //  \brief defines BoundaryBase, BoundaryValues classes used for setting BCs on all data
 
-
 // identifiers for all 6 faces of a MeshBlock
 enum BoundaryFace {undef=-1, inner_x1, outer_x1, inner_x2, outer_x2, inner_x3, outer_x3};
 
 // identifiers for status of MPI boundary communications
 enum class BoundaryStatus {undef=-1, waiting, completed};
 
+// identifiers for boundary conditions
+enum class BoundaryFlag {undef=-1, block, reflect, outflow, user, periodic};
+
 #include <map>
 #include "athena.hpp"
 #include "athena_arrays.hpp"
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
-#include "boundary_flag.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \struct NeighborBlock

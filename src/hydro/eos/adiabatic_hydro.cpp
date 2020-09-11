@@ -21,7 +21,7 @@ namespace hydro {
 // AdiabaticHydro constructor
     
 AdiabaticHydro::AdiabaticHydro(Mesh* pm, ParameterInput *pin, int igid)
-  : EquationOfState(pm, pin, igid, "adiabatic")
+  : EquationOfState(pm, pin, igid)
 {
   adiabatic_eos = true;
   gamma_ = pin->GetReal("eos", "gamma");

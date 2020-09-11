@@ -28,7 +28,7 @@
 #include "athena_arrays.hpp"
 #include "utils/utils.hpp"
 #include "parameter_input.hpp"
-#include "bvals/bvals.hpp"
+//#include "bvals/bvals.hpp"
 #include "mesh/mesh.hpp"
 #include "pgen/pgen.hpp"
 #include "outputs/outputs.hpp"
@@ -46,7 +46,6 @@ int main(int argc, char *argv[])
   int marg_flag = 0;  // set to 1 if -m        argument is on cmdline
   int iarg_flag = 0;  // set to 1 if -i <file> argument is on cmdline
   int wtlim = 0;
-  std::uint64_t mbcnt = 0;
 
   //--- Step 1. --------------------------------------------------------------------------
   // Initialize environment
@@ -247,7 +246,7 @@ int main(int argc, char *argv[])
   //--- Step 8. --------------------------------------------------------------------------
   // Construct and Execute Driver
 
-  auto pdrive = std::make_unique<Driver>(&par_input, &mesh0, &out_types);
+  auto pdrive = std::make_unique<Driver>(&par_input, &mesh0);
 
   ChangeRunDir(run_dir);
   pdrive->Initialize(&mesh0, &par_input,  &out_types);
