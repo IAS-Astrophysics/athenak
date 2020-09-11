@@ -38,9 +38,6 @@
 PiecewiseParabolic::PiecewiseParabolic(ParameterInput *pin, int nvar, int ncells1) :
   Reconstruction(pin, nvar, ncells1)
 {
-  // allocate space for scratch arrays
-//  qlv_.SetSize(ncells1_);
-//  qrv_.SetSize(ncells1_);
 }
 
 //----------------------------------------------------------------------------------------

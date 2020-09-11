@@ -17,10 +17,6 @@
 PiecewiseLinear::PiecewiseLinear(ParameterInput *pin, int nvar, int ncells1) :
   Reconstruction(pin, nvar, ncells1)
 {
-  // allocate space for scratch arrays
-//  dql_.SetSize(ncells1_);
-//  dqr_.SetSize(ncells1_);
-//  dqm_.SetSize(ncells1_);
 }
 
 //----------------------------------------------------------------------------------------
