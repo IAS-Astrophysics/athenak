@@ -143,10 +143,10 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) : pmesh_(pm), my_mbgid_(gid
     divf.SetSize(nhydro, ncells3, ncells2, ncells1);
     w_.SetSize(nhydro, ncells1);
     wl_.SetSize(nhydro, ncells1);
-    wl_jp1.SetSize(nhydro, ncells1);
-    wl_kp1.SetSize(nhydro, ncells1);
     wr_.SetSize(nhydro, ncells1);
+    wl_p1.SetSize(nhydro, ncells1);
     uflux_.SetSize(nhydro, ncells1);
+    uflux_m1.SetSize(nhydro, ncells1);
   }
 }
 
@@ -206,28 +206,47 @@ void Hydro::HydroStageEndTasks(TaskList &tl, TaskID start, std::vector<TaskID> &
 
 TaskStatus Hydro::HydroInitStage(Driver *pdrive, int stage)
 {
+  BoundaryValues* pbval = pmesh_->FindMeshBlock(my_mbgid_)->pbvals;
   // initialize all boundary status arrays to waiting
   for (int n=0; n<2; ++n) {
-    bbuf.bstat_x1face[n] = BoundaryStatus::waiting;
+    if (pbval->bndry_flag[n]==BoundaryFlag::block ||
+        pbval->bndry_flag[n]==BoundaryFlag::periodic) {
+      bbuf.bstat_x1face[n] = BoundaryStatus::waiting;
+    }
   }
   if (pmesh_->nx2gt1) {
     for (int n=0; n<2; ++n) {
-      bbuf.bstat_x2face[n] = BoundaryStatus::waiting;
+      if (pbval->bndry_flag[n+2]==BoundaryFlag::block ||
+          pbval->bndry_flag[n+2]==BoundaryFlag::periodic) {
+        bbuf.bstat_x2face[n] = BoundaryStatus::waiting;
+      }
     }
     for (int n=0; n<4; ++n) {
-      bbuf.bstat_x1x2ed[n] = BoundaryStatus::waiting;
+      if (pbval->bndry_flag[(n/2)+2]==BoundaryFlag::block ||
+          pbval->bndry_flag[(n/2)+2]==BoundaryFlag::periodic){
+        bbuf.bstat_x1x2ed[n] = BoundaryStatus::waiting;
+      }
     }
   }
   if (pmesh_->nx3gt1) {
     for (int n=0; n<2; ++n) {
-      bbuf.bstat_x3face[n] = BoundaryStatus::waiting;
+      if (pbval->bndry_flag[n+4]==BoundaryFlag::block ||
+          pbval->bndry_flag[n+4]==BoundaryFlag::periodic) {
+        bbuf.bstat_x3face[n] = BoundaryStatus::waiting;
+      }
     }
     for (int n=0; n<4; ++n) {
-      bbuf.bstat_x3x1ed[n] = BoundaryStatus::waiting;
-      bbuf.bstat_x2x3ed[n] = BoundaryStatus::waiting;
+      if (pbval->bndry_flag[(n/2)+4]==BoundaryFlag::block ||
+          pbval->bndry_flag[(n/2)+4]==BoundaryFlag::periodic){
+        bbuf.bstat_x3x1ed[n] = BoundaryStatus::waiting;
+        bbuf.bstat_x2x3ed[n] = BoundaryStatus::waiting;
+      }
     }
     for (int n=0; n<8; ++n) {
-      bbuf.bstat_corner[n] = BoundaryStatus::waiting;
+      if (pbval->bndry_flag[(n/4)+4]==BoundaryFlag::block ||
+          pbval->bndry_flag[(n/4)+4]==BoundaryFlag::periodic){
+        bbuf.bstat_corner[n] = BoundaryStatus::waiting;
+      }
     }
   }
 

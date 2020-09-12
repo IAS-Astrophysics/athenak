@@ -21,7 +21,7 @@ BoundaryValues::BoundaryValues(Mesh *pm, ParameterInput *pin, int gid,
   BoundaryFlag *ibcs) : pmesh_(pm), my_mbgid_(gid)
 {
   // inheret boundary flags from MeshBlock 
-  for (int i=0; i<6; ++i) {bndry_flags[i] = ibcs[i];}
+  for (int i=0; i<6; ++i) {bndry_flag[i] = ibcs[i];}
 }
 
 //----------------------------------------------------------------------------------------
@@ -96,7 +96,7 @@ void BoundaryValues::AllocateBuffers(BoundaryBuffer &bbuf, const int maxvar)
 TaskStatus BoundaryValues::ApplyPhysicalBCs(Driver* pdrive, int stage)
 {
   // apply physical bounaries to inner_x1
-  switch (bndry_flags[BoundaryFace::inner_x1]) {
+  switch (bndry_flag[BoundaryFace::inner_x1]) {
     case BoundaryFlag::reflect:
       ReflectInnerX1();
       break;
@@ -105,7 +105,7 @@ TaskStatus BoundaryValues::ApplyPhysicalBCs(Driver* pdrive, int stage)
   }
 
   // apply physical bounaries to outer_x1
-  switch (bndry_flags[BoundaryFace::outer_x1]) {
+  switch (bndry_flag[BoundaryFace::outer_x1]) {
     case BoundaryFlag::reflect:
       ReflectOuterX1();
       break;
@@ -115,7 +115,7 @@ TaskStatus BoundaryValues::ApplyPhysicalBCs(Driver* pdrive, int stage)
   if (!(pmesh_->nx2gt1)) return TaskStatus::complete;
 
   // apply physical bounaries to inner_x2
-  switch (bndry_flags[BoundaryFace::inner_x2]) {
+  switch (bndry_flag[BoundaryFace::inner_x2]) {
     case BoundaryFlag::reflect:
       ReflectInnerX2();
       break;
@@ -124,7 +124,7 @@ TaskStatus BoundaryValues::ApplyPhysicalBCs(Driver* pdrive, int stage)
   }
 
   // apply physical bounaries to outer_x1
-  switch (bndry_flags[BoundaryFace::outer_x2]) {
+  switch (bndry_flag[BoundaryFace::outer_x2]) {
     case BoundaryFlag::reflect:
       ReflectOuterX2();
       break;
@@ -134,7 +134,7 @@ TaskStatus BoundaryValues::ApplyPhysicalBCs(Driver* pdrive, int stage)
   if (!(pmesh_->nx3gt1)) return TaskStatus::complete;
 
   // apply physical bounaries to inner_x3
-  switch (bndry_flags[BoundaryFace::inner_x3]) {
+  switch (bndry_flag[BoundaryFace::inner_x3]) {
     case BoundaryFlag::reflect:
       ReflectInnerX3();
       break;
@@ -143,7 +143,7 @@ TaskStatus BoundaryValues::ApplyPhysicalBCs(Driver* pdrive, int stage)
   }
 
   // apply physical bounaries to outer_x3
-  switch (bndry_flags[BoundaryFace::outer_x3]) {
+  switch (bndry_flag[BoundaryFace::outer_x3]) {
     case BoundaryFlag::reflect:
       ReflectOuterX3();
       break;

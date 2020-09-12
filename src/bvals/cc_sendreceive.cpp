@@ -195,72 +195,83 @@ TaskStatus BoundaryValues::SendCellCenteredVariables(AthenaArray<Real> &a, int n
   // copy x1 faces
   int ndata = nvar*nx3*nx2*ng;
   for (int n=0; n<2; ++n) {
-    MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x1face[1-n].ngid);
-    Real *psend = &(pbb->cc_send_x1face(1-n,0,0,0,0));
-    Real *pdest = &(pdest_mb->pbvals->bbuf_ptr[key]->cc_recv_x1face(n,0,0,0,0));
-    memcpy(pdest, psend, ndata*sizeof(Real));
-    pdest_mb->pbvals->bbuf_ptr[key]->bstat_x1face[n] = BoundaryStatus::completed;
+    if (bndry_flag[n]==BoundaryFlag::block || bndry_flag[n]==BoundaryFlag::periodic) {
+      MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x1face[1-n].ngid);
+      Real *psend = &(pbb->cc_send_x1face(1-n,0,0,0,0));
+      Real *pdest = &(pdest_mb->pbvals->bbuf_ptr[key]->cc_recv_x1face(n,0,0,0,0));
+      memcpy(pdest, psend, ndata*sizeof(Real));
+      pdest_mb->pbvals->bbuf_ptr[key]->bstat_x1face[n] = BoundaryStatus::completed;
+    }
   }
-/***
-std::cout << "send buffer " << std::endl;
-  for (int n=0; n<2; ++n) {
-BoundaryBuffer* pdest = pmesh_->FindMeshBlock(nblocks_x1face[1-n].ngid)->pbvals->bbuf_ptr[key];
-std::cout << "n=" << n << "  gid=" << my_mbgid_ << "my bbuf status" << static_cast<int>(pbb->bstat_x1face[n]) << "dest bbuf status" << static_cast<int>(pdest->bstat_x1face[n]) << std::endl;
-}
-***/
   if (!(pmesh_->nx2gt1)) return TaskStatus::complete;
 
   // copy x2 faces and x1x2 edges
   ndata = nvar*nx3*ng*nx1;
   for (int n=0; n<2; ++n) {
-    MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x2face[1-n].ngid);
-    Real *psend = &(pbb->cc_send_x2face(1-n,0,0,0,0));
-    Real *pdest = &(pdest_mb->pbvals->bbuf_ptr[key]->cc_recv_x2face(n,0,0,0,0));
-    memcpy(pdest, psend, ndata*sizeof(Real));
-    pdest_mb->pbvals->bbuf_ptr[key]->bstat_x2face[n] = BoundaryStatus::completed;
+    if (bndry_flag[n+2]==BoundaryFlag::block || bndry_flag[n+2]==BoundaryFlag::periodic) {
+      MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x2face[1-n].ngid);
+      Real *psend = &(pbb->cc_send_x2face(1-n,0,0,0,0));
+      Real *pdest = &(pdest_mb->pbvals->bbuf_ptr[key]->cc_recv_x2face(n,0,0,0,0));
+      memcpy(pdest, psend, ndata*sizeof(Real));
+      pdest_mb->pbvals->bbuf_ptr[key]->bstat_x2face[n] = BoundaryStatus::completed;
+    }
   }
   ndata = nvar*nx3*ng*ng;
   for (int n=0; n<4; ++n) {
-    MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x1x2ed[3-n].ngid);
-    Real *psend = &(pbb->cc_send_x1x2ed(3-n,0,0,0,0));
-    Real *pdest = &(pdest_mb->pbvals->bbuf_ptr[key]->cc_recv_x1x2ed(n,0,0,0,0));
-    memcpy(pdest, psend, ndata*sizeof(Real));
-    pdest_mb->pbvals->bbuf_ptr[key]->bstat_x1x2ed[n] = BoundaryStatus::completed;
+    if (bndry_flag[(n/2)+2]==BoundaryFlag::block ||
+        bndry_flag[(n/2)+2]==BoundaryFlag::periodic) {
+      MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x1x2ed[3-n].ngid);
+      Real *psend = &(pbb->cc_send_x1x2ed(3-n,0,0,0,0));
+      Real *pdest = &(pdest_mb->pbvals->bbuf_ptr[key]->cc_recv_x1x2ed(n,0,0,0,0));
+      memcpy(pdest, psend, ndata*sizeof(Real));
+      pdest_mb->pbvals->bbuf_ptr[key]->bstat_x1x2ed[n] = BoundaryStatus::completed;
+    }
   }
   if (!(pmesh_->nx3gt1)) return TaskStatus::complete;
   
   // copy x3 faces, x3x1 and x2x3 edges, and corners
   ndata = nvar*ng*nx2*nx1;
   for (int n=0; n<2; ++n) {
-    MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x3face[1-n].ngid);
-    Real *psend = &(pbb->cc_send_x3face(1-n,0,0,0,0));
-    Real *pdest = &(pdest_mb->pbvals->bbuf_ptr[key]->cc_recv_x3face(n,0,0,0,0));
-    memcpy(pdest, psend, ndata*sizeof(Real));
-    pdest_mb->pbvals->bbuf_ptr[key]->bstat_x3face[n] = BoundaryStatus::completed;
+    if (bndry_flag[n+4]==BoundaryFlag::block || bndry_flag[n+4]==BoundaryFlag::periodic) {
+      MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x3face[1-n].ngid);
+      Real *psend = &(pbb->cc_send_x3face(1-n,0,0,0,0));
+      Real *pdest = &(pdest_mb->pbvals->bbuf_ptr[key]->cc_recv_x3face(n,0,0,0,0));
+      memcpy(pdest, psend, ndata*sizeof(Real));
+      pdest_mb->pbvals->bbuf_ptr[key]->bstat_x3face[n] = BoundaryStatus::completed;
+    }
   }
   ndata = nvar*ng*nx2*ng;
   for (int n=0; n<4; ++n) {
-    MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x3x1ed[3-n].ngid);
-    Real *psend = &(pbb->cc_send_x3x1ed(3-n,0,0,0,0));
-    Real *pdest = &(pdest_mb->pbvals->bbuf_ptr[key]->cc_recv_x3x1ed(n,0,0,0,0));
-    memcpy(pdest, psend, ndata*sizeof(Real));
-    pdest_mb->pbvals->bbuf_ptr[key]->bstat_x3x1ed[n] = BoundaryStatus::completed;
+    if (bndry_flag[(n/2)+4]==BoundaryFlag::block ||
+        bndry_flag[(n/2)+4]==BoundaryFlag::periodic) {
+      MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x3x1ed[3-n].ngid);
+      Real *psend = &(pbb->cc_send_x3x1ed(3-n,0,0,0,0));
+      Real *pdest = &(pdest_mb->pbvals->bbuf_ptr[key]->cc_recv_x3x1ed(n,0,0,0,0));
+      memcpy(pdest, psend, ndata*sizeof(Real));
+      pdest_mb->pbvals->bbuf_ptr[key]->bstat_x3x1ed[n] = BoundaryStatus::completed;
+    }
   }
   ndata = nvar*ng*ng*nx1;
   for (int n=0; n<4; ++n) {
-    MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x2x3ed[3-n].ngid);
-    Real *psend = &(pbb->cc_send_x2x3ed(3-n,0,0,0,0));
-    Real *pdest = &(pdest_mb->pbvals->bbuf_ptr[key]->cc_recv_x2x3ed(n,0,0,0,0));
-    memcpy(pdest, psend, ndata*sizeof(Real));
-    pdest_mb->pbvals->bbuf_ptr[key]->bstat_x2x3ed[n] = BoundaryStatus::completed;
+    if (bndry_flag[(n/2)+4]==BoundaryFlag::block ||
+        bndry_flag[(n/2)+4]==BoundaryFlag::periodic) {
+      MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x2x3ed[3-n].ngid);
+      Real *psend = &(pbb->cc_send_x2x3ed(3-n,0,0,0,0));
+      Real *pdest = &(pdest_mb->pbvals->bbuf_ptr[key]->cc_recv_x2x3ed(n,0,0,0,0));
+      memcpy(pdest, psend, ndata*sizeof(Real));
+      pdest_mb->pbvals->bbuf_ptr[key]->bstat_x2x3ed[n] = BoundaryStatus::completed;
+    }
   }
   ndata = nvar*ng*ng*ng;
   for (int n=0; n<8; ++n) {
-    MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_corner[7-n].ngid);
-    Real *psend = &(pbb->cc_send_corner(7-n,0,0,0,0));
-    Real *pdest = &(pdest_mb->pbvals->bbuf_ptr[key]->cc_recv_corner(n,0,0,0,0));
-    memcpy(pdest, psend, ndata*sizeof(Real));
-    pdest_mb->pbvals->bbuf_ptr[key]->bstat_corner[n] = BoundaryStatus::completed;
+    if (bndry_flag[(n/4)+4]==BoundaryFlag::block ||
+        bndry_flag[(n/4)+4]==BoundaryFlag::periodic) {
+      MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_corner[7-n].ngid);
+      Real *psend = &(pbb->cc_send_corner(7-n,0,0,0,0));
+      Real *pdest = &(pdest_mb->pbvals->bbuf_ptr[key]->cc_recv_corner(n,0,0,0,0));
+      memcpy(pdest, psend, ndata*sizeof(Real));
+      pdest_mb->pbvals->bbuf_ptr[key]->bstat_corner[n] = BoundaryStatus::completed;
+    }
   }
 
   return TaskStatus::complete;

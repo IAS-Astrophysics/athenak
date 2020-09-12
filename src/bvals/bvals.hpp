@@ -69,7 +69,7 @@ class BoundaryValues {
   ~BoundaryValues();
 
   // data
-  BoundaryFlag bndry_flags[6]; // enums specifying BCs at all 6 faces of this MeshBlock
+  BoundaryFlag bndry_flag[6]; // enums specifying BCs at all 6 faces of this MeshBlock
 
   // map to store pointers to BoundaryBuffers for different physics
   // elements are added in mesh/interface_physics after physics modules cons in MBs

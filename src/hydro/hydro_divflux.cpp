@@ -36,9 +36,11 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
       prsolver->RSolver(is, ie+1, IVX, wl_, wr_, uflux_);
 
       // compute dF/dx1
+      // 
+      Real &dx1 = pmb->mb_cells.dx1;
       for (int n=0; n<nhydro; ++n) {
         for (int i=is; i<=ie; ++i) {
-          divf(n,k,j,i) = (uflux_(n,i+1) - uflux_(n,i))/pmb->mb_cells.dx1;
+          divf(n,k,j,i) = (uflux_(n,i+1) - uflux_(n,i))/dx1;
         }
       }
 
@@ -51,23 +53,24 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
 
   for (int k=ks; k<=ke; ++k) {
     // compute qL(js)
-    precon->ReconstructX2(k, js-1, is, ie, w0, wl_jp1, wr_);
+    precon->ReconstructX2(k, js-1, is, ie, w0, wl_p1, wr_);
     for (int j=js; j<=je+1; ++j) {
       // compute fluxes over [js,je+1]
-      wl_ = wl_jp1;
-      precon->ReconstructX2(k, j, is, ie, w0, wl_jp1, wr_);
+      wl_ = wl_p1;
+      precon->ReconstructX2(k, j, is, ie, w0, wl_p1, wr_);
       prsolver->RSolver(is, ie, IVY, wl_, wr_, uflux_);
 
       // Add dF/dx2
+      Real &dx2 = pmb->mb_cells.dx2;
       for (int n=0; n<nhydro; ++n) {
         if (j>js) {
           for (int i=is; i<=ie; ++i) {
-            divf(n,k,j-1,i) += uflux_(n,i)/pmb->mb_cells.dx2;
+            divf(n,k,j-1,i) += (uflux_(n,i) - uflux_m1(n,i))/dx2;
           }
         }
         if (j<(je+1)) {
           for (int i=is; i<=ie; ++i) {
-            divf(n,k,j,i) -= uflux_(n,i)/pmb->mb_cells.dx2;
+            uflux_m1(n,i) = uflux_(n,i);
           }
         }
       }
@@ -81,23 +84,24 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
 
   for (int j=js; j<=je; ++j) {
     // compute qL(ks)
-    precon->ReconstructX3(ks-1, j, is, ie, w0, wl_kp1, wr_);
+    precon->ReconstructX3(ks-1, j, is, ie, w0, wl_p1, wr_);
     for (int k=ks; k<=ke+1; ++k) {
       // compute fluxes over [ks,ke+1]
-      wl_ = wl_kp1;
-      precon->ReconstructX3(k, j, is, ie, w0, wl_kp1, wr_);
+      wl_ = wl_p1;
+      precon->ReconstructX3(k, j, is, ie, w0, wl_p1, wr_);
       prsolver->RSolver(is, ie, IVZ, wl_, wr_, uflux_);
 
       // Add dF/dx3
+      Real &dx3 = pmb->mb_cells.dx3;
       for (int n=0; n<nhydro; ++n) {
         if (k>ks) {
           for (int i=is; i<=ie; ++i) {
-            divf(n,k-1,j,i) += uflux_(n,i)/pmb->mb_cells.dx3;
+            divf(n,k-1,j,i) += (uflux_(n,i) - uflux_m1(n,i))/dx3;
           }
         }
         if (k<(ke+1)) {
           for (int i=is; i<=ie; ++i) {
-            divf(n,k,j,i) -= uflux_(n,i)/pmb->mb_cells.dx3;
+            uflux_m1(n,i) = uflux_(n,i);
           }
         }
       }

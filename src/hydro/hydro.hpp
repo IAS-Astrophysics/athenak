@@ -71,7 +71,7 @@ class Hydro
  private:
   Mesh* pmesh_;   // ptr to Mesh containing this Hydro
   int my_mbgid_;  // GridID of MeshBlock contianing this Hydro
-  AthenaArray<Real> w_,wl_,wl_jp1,wl_kp1,wr_,uflux_;   // 1-spatialD scratch vectors
+  AthenaArray<Real> w_,wl_,wr_,wl_p1,uflux_,uflux_m1;   // 1-spatialD scratch vectors
 };
 
 } // namespace hydro
