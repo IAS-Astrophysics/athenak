@@ -36,7 +36,6 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
       prsolver->RSolver(is, ie+1, IVX, wl_, wr_, uflux_);
 
       // compute dF/dx1
-      // 
       Real &dx1 = pmb->mb_cells.dx1;
       for (int n=0; n<nhydro; ++n) {
         for (int i=is; i<=ie; ++i) {
@@ -61,6 +60,7 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
       prsolver->RSolver(is, ie, IVY, wl_, wr_, uflux_);
 
       // Add dF/dx2
+      // Note fluxes are summed together first to symmetrize round-off error in each dir
       Real &dx2 = pmb->mb_cells.dx2;
       for (int n=0; n<nhydro; ++n) {
         if (j>js) {
@@ -92,6 +92,7 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
       prsolver->RSolver(is, ie, IVZ, wl_, wr_, uflux_);
 
       // Add dF/dx3
+      // Note fluxes are summed together first to symmetrize round-off error in each dir
       Real &dx3 = pmb->mb_cells.dx3;
       for (int n=0; n<nhydro; ++n) {
         if (k>ks) {

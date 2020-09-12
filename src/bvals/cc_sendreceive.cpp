@@ -32,9 +32,10 @@ TaskStatus BoundaryValues::SendCellCenteredVariables(AthenaArray<Real> &a, int n
   int nx2 = pmb->mb_cells.nx2;
   int nx3 = pmb->mb_cells.nx3;
 
-  // load buffers, NO AMR
+  // Find the physics module containing the send buffer, using bbuf_ptr map and [key]
   BoundaryBuffer *pbb = pmb->pbvals->bbuf_ptr[key];
 
+  // load buffers, NO AMR
   for (int n=0; n<nvar; ++n) {
   for (int k=ks; k<=ke; ++k) {
     for (int j=js; j<=je; ++j) {
@@ -188,8 +189,9 @@ TaskStatus BoundaryValues::SendCellCenteredVariables(AthenaArray<Real> &a, int n
 
   }}  // end loops over n,k
 
-  // Now, for periodic or block boundaries, send boundary buffer to neighboring MeshBlocks
-  // using MPI, OR if neighbor is on same MPI rank, just memcpy data
+  // Now, for block or periodic boundaries, send boundary buffer to neighboring MeshBlocks
+  // using MPI, or if neighbor is on same MPI rank, just memcpy data
+  // Note physics module containing the recv buffer is found using bbuf_ptr map and [key]
   // TODO add MPI sends
 
   // copy x1 faces
@@ -293,14 +295,10 @@ TaskStatus BoundaryValues::ReceiveCellCenteredVariables(AthenaArray<Real> &a, in
   int ncells2 = (pmb->mb_cells.nx2 > 1)? (pmb->mb_cells.nx2 + 2*ng) : 1;
   int ncells3 = (pmb->mb_cells.nx3 > 1)? (pmb->mb_cells.nx3 + 2*ng) : 1;
 
-  // check that recv boundary buffers have all completed, exit if not.
+  // Find the physics module containing the recv buffer, using bbuf_ptr map and [key]
   BoundaryBuffer *pbb = pmb->pbvals->bbuf_ptr[key];
-/***
-std::cout << "recv buffer " << std::endl;
-  for (int n=0; n<2; ++n) {
-std::cout << "n=" << n << "  gid=" << my_mbgid_ << " bbuf status" << static_cast<int>(pbb->bstat_x1face[n])  << std::endl;
-}
-***/
+
+  // check that recv boundary buffers have all completed, exit if not.
   for (int n=0; n<2; ++n) {
     if (pbb->bstat_x1face[n]==BoundaryStatus::waiting) { return TaskStatus::incomplete;}
   }
@@ -326,7 +324,6 @@ std::cout << "n=" << n << "  gid=" << my_mbgid_ << " bbuf status" << static_cast
   }
   
   // buffers have all completed, so unpack (THIS VERSION NO AMR)
-
   for (int n=0; n<nvar; ++n) {
   for (int k=0; k<ncells3; ++k) {
     for (int j=0; j<ncells2; ++j) {
