@@ -1,10 +1,22 @@
+# Master CMakeLists.txt file for AthenaNike in root of source directories
+
 cmake_minimum_required(VERSION 3.10)
+project(athena VERSION 20.0 LANGUAGES C CXX)
+
+# Disable in-source builds to prevent source tree corruption.
+if( "${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}" )
+  message( FATAL_ERROR "FATAL: In-source builds disabled. Please create a separate build directory in which to run cmake, e.g. mkdir build; cd build; cmake ../" )
+endif()
+
+# AthenaNike (and Kokkos) require C++14 standard as minimum
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# Kokkos recommends NOT using default compiler extensions
 set(CMAKE_CXX_EXTENSIONS OFF)
 #set(CMAKE_CXX_FLAGS -O3)
+# required to enable target_link_libraries() below 
+cmake_policy(SET CMP0079 NEW)
 
-project(athena VERSION 20.0)
 
 # ----- default values for compile time options  -----------------------------------------
 option(ATHENA_SINGLE_PRECISION "Compile for single precision" OFF)
@@ -49,12 +61,26 @@ else()
   set(OPENMP_PARALLEL_ENABLED 0)
 endif()
 
+# Tell Kokkos to vectorize aggressively
+# Kokkos prefers this capitalization for debugging reasons
+SET (Kokkos_ENABLE_AGGRESSIVE_VECTORIZATION ON CACHE BOOL
+     "Kokkos aggressive vectorization")
+
+# Tell Kokkos we need lambdas in Cuda.
+if (Kokkos_ENABLE_CUDA)
+  SET (Kokkos_ENABLE_CUDA_LAMBDA ON CACHE BOOL
+       "Enable lambda expressions in CUDA")
+endif()
+
 #-----------------------------------------------------------------------------------------
 # create configuration header file from template in /src directory
 configure_file(config.hpp.in config.hpp)
 
-# add subdirectories containing source code
+# add subdirectories for source code and include files
 add_subdirectory(src)
+add_subdirectory(kokkos)
+include_directories(${Kokkos_INCLUDE_DIRS_RET})
+target_link_libraries(athena kokkos)
 
 # enable include of header files created in build directories
 target_include_directories(athena PUBLIC
