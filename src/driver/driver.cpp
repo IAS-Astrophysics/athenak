@@ -154,7 +154,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
 
   //---- Step 4.  Initialize various counters, timers, etc.
 
-  tstart_ = clock();
+  run_time_.reset();
   nmb_updated_ = 0;
 
   return;
@@ -286,7 +286,7 @@ void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
     out->WriteOutputFile(pmesh, pin);
   }
     
-  tstop_ = clock();
+  float exe_time = run_time_.seconds();
 
   if (time_evolution) { 
     if (global_variable::my_rank == 0) {
@@ -307,16 +307,14 @@ void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
                   << pmesh->nmb_deleted << " were deleted during this run." << std::endl;
       }
   
-      // Calculate and print the zone-cycles/cpu-second and wall-second
-      float cpu_time = (tstop_ > tstart_ ? static_cast<float>(tstop_ - tstart_) : 1.0) /
-                        static_cast<float>(CLOCKS_PER_SEC);
+      // Calculate and print the zone-cycles/exe-second and wall-second
       std::uint64_t zonecycles = nmb_updated_ *
           static_cast<std::uint64_t>(pmesh->mblocks.front().NumberOfMeshBlockCells());
-      float zc_cpus = static_cast<float>(zonecycles) / cpu_time;
+      float zcps = static_cast<float>(zonecycles) / exe_time;
 
       std::cout << std::endl << "zone-cycles = " << zonecycles << std::endl;
-      std::cout << "cpu time used  = " << cpu_time << std::endl;
-      std::cout << "zone-cycles/cpu_second = " << zc_cpus << std::endl;
+      std::cout << "cpu time used  = " << exe_time << std::endl;
+      std::cout << "zone-cycles/cpu_second = " << zcps << std::endl;
     }
   }
   return;

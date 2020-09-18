@@ -17,6 +17,14 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # required to enable target_link_libraries() below 
 cmake_policy(SET CMP0079 NEW)
 
+#if(NOT CMAKE_BUILD_TYPE)
+#  set(CMAKE_BUILD_TYPE Release)
+#endif()
+#
+#set(CMAKE_CXX_FLAGS "-Wall -Wextra")
+#set(CMAKE_CXX_FLAGS_DEBUG "-g")
+#set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+
 
 # ----- default values for compile time options  -----------------------------------------
 option(ATHENA_SINGLE_PRECISION "Compile for single precision" OFF)

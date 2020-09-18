@@ -40,7 +40,7 @@ class Driver {
   void Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout);
 
  private:
-  clock_t tstart_, tstop_;  // variables to measure cpu time
+  Kokkos::Timer run_time_;   // generalized timer for cpu/gpu/etc
   int nmb_updated_;         // running total of MB updated during run
   void OutputCycleDiagnostics(Mesh *pm);
 
