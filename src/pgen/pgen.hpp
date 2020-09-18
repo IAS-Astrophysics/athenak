@@ -9,7 +9,6 @@
 //  \brief definitions for ProblemGenerator class
 
 #include <functional>
-#include "athena_arrays.hpp"
 #include "parameter_input.hpp"
 
 class ProblemGenerator {

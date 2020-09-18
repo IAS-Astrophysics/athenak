@@ -29,8 +29,8 @@ IsothermalHydro::IsothermalHydro(Mesh* pm, ParameterInput *pin, int igid)
 // \!fn void ConservedToPrimitive()
 // \brief Converts conserved into primitive variables in nonrelativistic isothermal hydro
 
-void IsothermalHydro::ConservedToPrimitive(AthenaArray<Real> &cons,
-                                           AthenaArray<Real> &prim)
+void IsothermalHydro::ConservedToPrimitive(AthenaArray4D<Real> &cons,
+                                           AthenaArray4D<Real> &prim)
 {
   MeshBlock* pmb = pmesh_->FindMeshBlock(my_mbgid_);
   int ng = pmb->mb_cells.ng;
@@ -46,10 +46,10 @@ void IsothermalHydro::ConservedToPrimitive(AthenaArray<Real> &cons,
         Real& u_m2 = cons(IM2,k,j,i);
         Real& u_m3 = cons(IM3,k,j,i);
 
-        Real& w_d  = prim(IDN,i);
-        Real& w_vx = prim(IVX,i);
-        Real& w_vy = prim(IVY,i);
-        Real& w_vz = prim(IVZ,i);
+        Real& w_d  = prim(IDN,k,j,i);
+        Real& w_vx = prim(IVX,k,j,i);
+        Real& w_vy = prim(IVY,k,j,i);
+        Real& w_vz = prim(IVZ,k,j,i);
 
         // apply density floor, without changing momentum or energy
         u_d = (u_d > density_floor_) ?  u_d : density_floor_;

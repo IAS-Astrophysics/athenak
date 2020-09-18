@@ -161,7 +161,7 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
 //    std::fprintf(pfile, "\n%s %s float\n", pdata->type.c_str(),  pdata->name.c_str());
 //    int nvar = pdata->data.GetDim4();
 //    if (nvar == 1) std::fprintf(pfile, "LOOKUP_TABLE default\n");
-    std::fprintf(pfile, "\nSCALARS %s float\n", it[0].GetLabel().c_str());
+    std::fprintf(pfile, "\nSCALARS %s float\n", it[0].label().c_str());
     std::fprintf(pfile, "LOOKUP_TABLE default\n");
 
   // TODO write data properly for multiple MeshBlocks

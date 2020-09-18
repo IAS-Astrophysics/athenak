@@ -20,7 +20,7 @@
 // This routine always packs ALL the buffers, but they are only sent (via MPI) or copied
 // for periodic or block boundaries
 
-TaskStatus BoundaryValues::SendCellCenteredVariables(AthenaArray<Real> &a, int nvar,
+TaskStatus BoundaryValues::SendCellCenteredVariables(AthenaArray4D<Real> &a, int nvar,
                                                      std::string key)
 {
   MeshBlock *pmb = pmesh_->FindMeshBlock(my_mbgid_);
@@ -44,53 +44,53 @@ TaskStatus BoundaryValues::SendCellCenteredVariables(AthenaArray<Real> &a, int n
       if (pmesh_->nx3gt1 && k<(ks+ng)) {
         if (pmesh_->nx2gt1 && j<(js+ng)) {
           for (int i=is; i<(is+ng); ++i) {
-            pbb->cc_send_corner(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
-            pbb->cc_send_x3x1ed(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
-            pbb->cc_send_x1x2ed(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
-            pbb->cc_send_x1face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
+            pbb->send_corner(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
+            pbb->send_x3x1ed(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
+            pbb->send_x1x2ed(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
+            pbb->send_x1face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
           }
           for (int i=is; i<=ie; ++i) {
-            pbb->cc_send_x2x3ed(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
-            pbb->cc_send_x3face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
-            pbb->cc_send_x2face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
+            pbb->send_x2x3ed(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
+            pbb->send_x3face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
+            pbb->send_x2face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
           }
           for (int i=nx1; i<=ie; ++i) {
-            pbb->cc_send_corner(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
-            pbb->cc_send_x3x1ed(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
-            pbb->cc_send_x1x2ed(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
-            pbb->cc_send_x1face(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
+            pbb->send_corner(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
+            pbb->send_x3x1ed(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
+            pbb->send_x1x2ed(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
+            pbb->send_x1face(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
           }
   
         } else if (pmesh_->nx2gt1 && j>=nx2) {
           for (int i=is; i<(is+ng); ++i) {
-            pbb->cc_send_x3x1ed(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
-            pbb->cc_send_corner(2,n,k-ks ,j-nx2,i-is ) = a(n,k,j,i);
-            pbb->cc_send_x1face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
-            pbb->cc_send_x1x2ed(2,n,k-ks ,j-nx2,i-is ) = a(n,k,j,i);
+            pbb->send_x3x1ed(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
+            pbb->send_corner(2,n,k-ks ,j-nx2,i-is ) = a(n,k,j,i);
+            pbb->send_x1face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
+            pbb->send_x1x2ed(2,n,k-ks ,j-nx2,i-is ) = a(n,k,j,i);
           }
           for (int i=is; i<=ie; ++i) {
-            pbb->cc_send_x3face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
-            pbb->cc_send_x2x3ed(1,n,k-ks ,j-nx2,i-is ) = a(n,k,j,i);
-            pbb->cc_send_x2face(1,n,k-ks ,j-nx2,i-is ) = a(n,k,j,i);
+            pbb->send_x3face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
+            pbb->send_x2x3ed(1,n,k-ks ,j-nx2,i-is ) = a(n,k,j,i);
+            pbb->send_x2face(1,n,k-ks ,j-nx2,i-is ) = a(n,k,j,i);
           }
           for (int i=nx1; i<=ie; ++i) {
-            pbb->cc_send_x3x1ed(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
-            pbb->cc_send_corner(3,n,k-ks ,j-nx2,i-nx1) = a(n,k,j,i);
-            pbb->cc_send_x1face(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
-            pbb->cc_send_x1x2ed(3,n,k-ks ,j-nx2,i-nx1) = a(n,k,j,i);
+            pbb->send_x3x1ed(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
+            pbb->send_corner(3,n,k-ks ,j-nx2,i-nx1) = a(n,k,j,i);
+            pbb->send_x1face(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
+            pbb->send_x1x2ed(3,n,k-ks ,j-nx2,i-nx1) = a(n,k,j,i);
           }
   
         } else {
           for (int i=is; i<(is+ng); ++i) {
-            pbb->cc_send_x3x1ed(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
-            pbb->cc_send_x1face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
+            pbb->send_x3x1ed(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
+            pbb->send_x1face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
           }
           for (int i=is; i<=ie; ++i) {
-            pbb->cc_send_x3face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
+            pbb->send_x3face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
           }
           for (int i=nx1; i<=ie; ++i) {
-            pbb->cc_send_x3x1ed(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
-            pbb->cc_send_x1face(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
+            pbb->send_x3x1ed(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
+            pbb->send_x1face(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
           }
         }
 
@@ -98,53 +98,53 @@ TaskStatus BoundaryValues::SendCellCenteredVariables(AthenaArray<Real> &a, int n
       } else if (pmesh_->nx3gt1 && k>=nx3) {
         if (pmesh_->nx2gt1 && j<(js+ng)) {
           for (int i=is; i<(is+ng); ++i) {
-            pbb->cc_send_x1x2ed(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
-            pbb->cc_send_x1face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
-            pbb->cc_send_corner(4,n,k-nx3,j-js ,i-is ) = a(n,k,j,i);
-            pbb->cc_send_x3x1ed(2,n,k-nx3,j-js ,i-is ) = a(n,k,j,i);
+            pbb->send_x1x2ed(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
+            pbb->send_x1face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
+            pbb->send_corner(4,n,k-nx3,j-js ,i-is ) = a(n,k,j,i);
+            pbb->send_x3x1ed(2,n,k-nx3,j-js ,i-is ) = a(n,k,j,i);
           }
           for (int i=is; i<=ie; ++i) {
-            pbb->cc_send_x2face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
-            pbb->cc_send_x2x3ed(2,n,k-nx3,j-js ,i-is ) = a(n,k,j,i);
-            pbb->cc_send_x3face(1,n,k-nx3,j-js ,i-is ) = a(n,k,j,i);
+            pbb->send_x2face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
+            pbb->send_x2x3ed(2,n,k-nx3,j-js ,i-is ) = a(n,k,j,i);
+            pbb->send_x3face(1,n,k-nx3,j-js ,i-is ) = a(n,k,j,i);
           }
           for (int i=nx1; i<=ie; ++i) {
-            pbb->cc_send_x1x2ed(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
-            pbb->cc_send_x1face(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
-            pbb->cc_send_corner(5,n,k-nx3,j-js ,i-nx1) = a(n,k,j,i);
-            pbb->cc_send_x3x1ed(3,n,k-nx3,j-js ,i-nx1) = a(n,k,j,i);
+            pbb->send_x1x2ed(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
+            pbb->send_x1face(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
+            pbb->send_corner(5,n,k-nx3,j-js ,i-nx1) = a(n,k,j,i);
+            pbb->send_x3x1ed(3,n,k-nx3,j-js ,i-nx1) = a(n,k,j,i);
           }
 
         } else if (pmesh_->nx2gt1 && j>=nx2) {
           for (int i=is; i<(is+ng); ++i) {
-            pbb->cc_send_x1face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
-            pbb->cc_send_x1x2ed(2,n,k-ks ,j-nx2,i-is ) = a(n,k,j,i);
-            pbb->cc_send_x3x1ed(2,n,k-nx3,j-js ,i-is ) = a(n,k,j,i);
-            pbb->cc_send_corner(6,n,k-nx3,j-nx2,i-is ) = a(n,k,j,i);
+            pbb->send_x1face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
+            pbb->send_x1x2ed(2,n,k-ks ,j-nx2,i-is ) = a(n,k,j,i);
+            pbb->send_x3x1ed(2,n,k-nx3,j-js ,i-is ) = a(n,k,j,i);
+            pbb->send_corner(6,n,k-nx3,j-nx2,i-is ) = a(n,k,j,i);
           }
           for (int i=is; i<=ie; ++i) {
-            pbb->cc_send_x2face(1,n,k-ks ,j-nx2,i-is ) = a(n,k,j,i);
-            pbb->cc_send_x3face(1,n,k-nx3,j-js ,i-is ) = a(n,k,j,i);
-            pbb->cc_send_x2x3ed(3,n,k-nx3,j-nx2,i-is ) = a(n,k,j,i);
+            pbb->send_x2face(1,n,k-ks ,j-nx2,i-is ) = a(n,k,j,i);
+            pbb->send_x3face(1,n,k-nx3,j-js ,i-is ) = a(n,k,j,i);
+            pbb->send_x2x3ed(3,n,k-nx3,j-nx2,i-is ) = a(n,k,j,i);
           }
           for (int i=nx1; i<=ie; ++i) {
-            pbb->cc_send_x1face(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
-            pbb->cc_send_x1x2ed(3,n,k-ks ,j-nx2,i-nx1) = a(n,k,j,i);
-            pbb->cc_send_x3x1ed(3,n,k-nx3,j-js ,i-nx1) = a(n,k,j,i);
-            pbb->cc_send_corner(7,n,k-nx3,j-nx2,i-nx1) = a(n,k,j,i);
+            pbb->send_x1face(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
+            pbb->send_x1x2ed(3,n,k-ks ,j-nx2,i-nx1) = a(n,k,j,i);
+            pbb->send_x3x1ed(3,n,k-nx3,j-js ,i-nx1) = a(n,k,j,i);
+            pbb->send_corner(7,n,k-nx3,j-nx2,i-nx1) = a(n,k,j,i);
           }
 
         } else {
           for (int i=is; i<(is+ng); ++i) {
-            pbb->cc_send_x1face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
-            pbb->cc_send_x3x1ed(2,n,k-nx3,j-js ,i-is ) = a(n,k,j,i);
+            pbb->send_x1face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
+            pbb->send_x3x1ed(2,n,k-nx3,j-js ,i-is ) = a(n,k,j,i);
           }
           for (int i=is; i<=ie; ++i) {
-            pbb->cc_send_x3face(1,n,k-nx3,j-js ,i-is ) = a(n,k,j,i);
+            pbb->send_x3face(1,n,k-nx3,j-js ,i-is ) = a(n,k,j,i);
           }
           for (int i=nx1; i<=ie; ++i) {
-            pbb->cc_send_x1face(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
-            pbb->cc_send_x3x1ed(3,n,k-nx3,j-js ,i-nx1) = a(n,k,j,i);
+            pbb->send_x1face(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
+            pbb->send_x3x1ed(3,n,k-nx3,j-js ,i-nx1) = a(n,k,j,i);
           }
         }
 
@@ -152,36 +152,36 @@ TaskStatus BoundaryValues::SendCellCenteredVariables(AthenaArray<Real> &a, int n
       } else {
         if (pmesh_->nx2gt1 && j<(js+ng)) {
           for (int i=is; i<(is+ng); ++i) {
-            pbb->cc_send_x1x2ed(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
-            pbb->cc_send_x1face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
+            pbb->send_x1x2ed(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
+            pbb->send_x1face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
           }
           for (int i=is; i<=ie; ++i) {
-            pbb->cc_send_x2face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
+            pbb->send_x2face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
           }
           for (int i=nx1; i<=ie; ++i) {
-            pbb->cc_send_x1x2ed(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
-            pbb->cc_send_x1face(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
+            pbb->send_x1x2ed(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
+            pbb->send_x1face(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
           }
 
         } else if (pmesh_->nx2gt1 && j>=nx2) {
           for (int i=is; i<(is+ng); ++i) {
-            pbb->cc_send_x1face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
-            pbb->cc_send_x1x2ed(2,n,k-ks ,j-nx2,i-is ) = a(n,k,j,i);
+            pbb->send_x1face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
+            pbb->send_x1x2ed(2,n,k-ks ,j-nx2,i-is ) = a(n,k,j,i);
           }
           for (int i=is; i<=ie; ++i) {
-            pbb->cc_send_x2face(1,n,k-ks ,j-nx2,i-is ) = a(n,k,j,i);
+            pbb->send_x2face(1,n,k-ks ,j-nx2,i-is ) = a(n,k,j,i);
           }
           for (int i=nx1; i<=ie; ++i) {
-            pbb->cc_send_x1face(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
-            pbb->cc_send_x1x2ed(3,n,k-ks ,j-nx2,i-nx1) = a(n,k,j,i);
+            pbb->send_x1face(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
+            pbb->send_x1x2ed(3,n,k-ks ,j-nx2,i-nx1) = a(n,k,j,i);
           }
 
         } else {
           for (int i=is; i<(is+ng); ++i) {
-            pbb->cc_send_x1face(0,n,k-ks ,j-js,i-is ) = a(n,k,j,i);
+            pbb->send_x1face(0,n,k-ks ,j-js,i-is ) = a(n,k,j,i);
           }
           for (int i=nx1; i<=ie; ++i) {
-            pbb->cc_send_x1face(1,n,k-ks ,j-js,i-nx1) = a(n,k,j,i);
+            pbb->send_x1face(1,n,k-ks ,j-js,i-nx1) = a(n,k,j,i);
           }
         }
       }
@@ -199,8 +199,8 @@ TaskStatus BoundaryValues::SendCellCenteredVariables(AthenaArray<Real> &a, int n
   for (int n=0; n<2; ++n) {
     if (bndry_flag[n]==BoundaryFlag::block || bndry_flag[n]==BoundaryFlag::periodic) {
       MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x1face[1-n].ngid);
-      Real *psend = &(pbb->cc_send_x1face(1-n,0,0,0,0));
-      Real *pdest = &(pdest_mb->pbvals->bbuf_ptr[key]->cc_recv_x1face(n,0,0,0,0));
+      Real *psend = &(pbb->send_x1face(1-n,0,0,0,0));
+      Real *pdest = &(pdest_mb->pbvals->bbuf_ptr[key]->recv_x1face(n,0,0,0,0));
       memcpy(pdest, psend, ndata*sizeof(Real));
       pdest_mb->pbvals->bbuf_ptr[key]->bstat_x1face[n] = BoundaryStatus::completed;
     }
@@ -212,8 +212,8 @@ TaskStatus BoundaryValues::SendCellCenteredVariables(AthenaArray<Real> &a, int n
   for (int n=0; n<2; ++n) {
     if (bndry_flag[n+2]==BoundaryFlag::block || bndry_flag[n+2]==BoundaryFlag::periodic) {
       MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x2face[1-n].ngid);
-      Real *psend = &(pbb->cc_send_x2face(1-n,0,0,0,0));
-      Real *pdest = &(pdest_mb->pbvals->bbuf_ptr[key]->cc_recv_x2face(n,0,0,0,0));
+      Real *psend = &(pbb->send_x2face(1-n,0,0,0,0));
+      Real *pdest = &(pdest_mb->pbvals->bbuf_ptr[key]->recv_x2face(n,0,0,0,0));
       memcpy(pdest, psend, ndata*sizeof(Real));
       pdest_mb->pbvals->bbuf_ptr[key]->bstat_x2face[n] = BoundaryStatus::completed;
     }
@@ -223,8 +223,8 @@ TaskStatus BoundaryValues::SendCellCenteredVariables(AthenaArray<Real> &a, int n
     if (bndry_flag[(n/2)+2]==BoundaryFlag::block ||
         bndry_flag[(n/2)+2]==BoundaryFlag::periodic) {
       MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x1x2ed[3-n].ngid);
-      Real *psend = &(pbb->cc_send_x1x2ed(3-n,0,0,0,0));
-      Real *pdest = &(pdest_mb->pbvals->bbuf_ptr[key]->cc_recv_x1x2ed(n,0,0,0,0));
+      Real *psend = &(pbb->send_x1x2ed(3-n,0,0,0,0));
+      Real *pdest = &(pdest_mb->pbvals->bbuf_ptr[key]->recv_x1x2ed(n,0,0,0,0));
       memcpy(pdest, psend, ndata*sizeof(Real));
       pdest_mb->pbvals->bbuf_ptr[key]->bstat_x1x2ed[n] = BoundaryStatus::completed;
     }
@@ -236,8 +236,8 @@ TaskStatus BoundaryValues::SendCellCenteredVariables(AthenaArray<Real> &a, int n
   for (int n=0; n<2; ++n) {
     if (bndry_flag[n+4]==BoundaryFlag::block || bndry_flag[n+4]==BoundaryFlag::periodic) {
       MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x3face[1-n].ngid);
-      Real *psend = &(pbb->cc_send_x3face(1-n,0,0,0,0));
-      Real *pdest = &(pdest_mb->pbvals->bbuf_ptr[key]->cc_recv_x3face(n,0,0,0,0));
+      Real *psend = &(pbb->send_x3face(1-n,0,0,0,0));
+      Real *pdest = &(pdest_mb->pbvals->bbuf_ptr[key]->recv_x3face(n,0,0,0,0));
       memcpy(pdest, psend, ndata*sizeof(Real));
       pdest_mb->pbvals->bbuf_ptr[key]->bstat_x3face[n] = BoundaryStatus::completed;
     }
@@ -247,8 +247,8 @@ TaskStatus BoundaryValues::SendCellCenteredVariables(AthenaArray<Real> &a, int n
     if (bndry_flag[(n/2)+4]==BoundaryFlag::block ||
         bndry_flag[(n/2)+4]==BoundaryFlag::periodic) {
       MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x3x1ed[3-n].ngid);
-      Real *psend = &(pbb->cc_send_x3x1ed(3-n,0,0,0,0));
-      Real *pdest = &(pdest_mb->pbvals->bbuf_ptr[key]->cc_recv_x3x1ed(n,0,0,0,0));
+      Real *psend = &(pbb->send_x3x1ed(3-n,0,0,0,0));
+      Real *pdest = &(pdest_mb->pbvals->bbuf_ptr[key]->recv_x3x1ed(n,0,0,0,0));
       memcpy(pdest, psend, ndata*sizeof(Real));
       pdest_mb->pbvals->bbuf_ptr[key]->bstat_x3x1ed[n] = BoundaryStatus::completed;
     }
@@ -258,8 +258,8 @@ TaskStatus BoundaryValues::SendCellCenteredVariables(AthenaArray<Real> &a, int n
     if (bndry_flag[(n/2)+4]==BoundaryFlag::block ||
         bndry_flag[(n/2)+4]==BoundaryFlag::periodic) {
       MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x2x3ed[3-n].ngid);
-      Real *psend = &(pbb->cc_send_x2x3ed(3-n,0,0,0,0));
-      Real *pdest = &(pdest_mb->pbvals->bbuf_ptr[key]->cc_recv_x2x3ed(n,0,0,0,0));
+      Real *psend = &(pbb->send_x2x3ed(3-n,0,0,0,0));
+      Real *pdest = &(pdest_mb->pbvals->bbuf_ptr[key]->recv_x2x3ed(n,0,0,0,0));
       memcpy(pdest, psend, ndata*sizeof(Real));
       pdest_mb->pbvals->bbuf_ptr[key]->bstat_x2x3ed[n] = BoundaryStatus::completed;
     }
@@ -269,8 +269,8 @@ TaskStatus BoundaryValues::SendCellCenteredVariables(AthenaArray<Real> &a, int n
     if (bndry_flag[(n/4)+4]==BoundaryFlag::block ||
         bndry_flag[(n/4)+4]==BoundaryFlag::periodic) {
       MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_corner[7-n].ngid);
-      Real *psend = &(pbb->cc_send_corner(7-n,0,0,0,0));
-      Real *pdest = &(pdest_mb->pbvals->bbuf_ptr[key]->cc_recv_corner(n,0,0,0,0));
+      Real *psend = &(pbb->send_corner(7-n,0,0,0,0));
+      Real *pdest = &(pdest_mb->pbvals->bbuf_ptr[key]->recv_corner(n,0,0,0,0));
       memcpy(pdest, psend, ndata*sizeof(Real));
       pdest_mb->pbvals->bbuf_ptr[key]->bstat_corner[n] = BoundaryStatus::completed;
     }
@@ -280,11 +280,11 @@ TaskStatus BoundaryValues::SendCellCenteredVariables(AthenaArray<Real> &a, int n
 }
 
 //----------------------------------------------------------------------------------------
-// \!fn void BoundaryValues::ReceiveCellCenteredVariables()
+// \!fn void BoundaryValues::RecvCellCenteredVariables()
 // \brief Unpack boundary buffers for cell-centered variables.
 
-TaskStatus BoundaryValues::ReceiveCellCenteredVariables(AthenaArray<Real> &a, int nvar,
-                                                        std::string key)
+TaskStatus BoundaryValues::RecvCellCenteredVariables(AthenaArray4D<Real> &a, int nvar,
+                                                     std::string key)
 {
   MeshBlock *pmb = pmesh_->FindMeshBlock(my_mbgid_);
 
@@ -332,35 +332,35 @@ TaskStatus BoundaryValues::ReceiveCellCenteredVariables(AthenaArray<Real> &a, in
       if (pmesh_->nx3gt1 && k<ks) {
         if (pmesh_->nx2gt1 && j<js) {
           for (int i=0; i<ng; ++i) {
-            a(n,k,j,i) = pbb->cc_recv_corner(0,n,k,j,i);
+            a(n,k,j,i) = pbb->recv_corner(0,n,k,j,i);
           }
           for (int i=is; i<=ie; ++i) {
-            a(n,k,j,i) = pbb->cc_recv_x2x3ed(0,n,k,j,i-is);
+            a(n,k,j,i) = pbb->recv_x2x3ed(0,n,k,j,i-is);
           }
           for (int i=0; i<ng; ++i) {
-            a(n,k,j,i+ie+1) = pbb->cc_recv_corner(1,n,k,j,i);
+            a(n,k,j,i+ie+1) = pbb->recv_corner(1,n,k,j,i);
           }
 
         } else if (pmesh_->nx2gt1 && j>je) {
           for (int i=0; i<ng; ++i) {
-            a(n,k,j,i) = pbb->cc_recv_corner(2,n,k,j-je-1,i);
+            a(n,k,j,i) = pbb->recv_corner(2,n,k,j-je-1,i);
           }
           for (int i=is; i<=ie; ++i) {
-            a(n,k,j,i) = pbb->cc_recv_x2x3ed(1,n,k,j-je-1,i-is);
+            a(n,k,j,i) = pbb->recv_x2x3ed(1,n,k,j-je-1,i-is);
           }
           for (int i=0; i<ng; ++i) {
-            a(n,k,j,i+ie+1) = pbb->cc_recv_corner(3,n,k,j-je-1,i);
+            a(n,k,j,i+ie+1) = pbb->recv_corner(3,n,k,j-je-1,i);
           }
 
         } else {
           for (int i=0; i<ng; ++i) {
-            a(n,k,j,i) = pbb->cc_recv_x3x1ed(0,n,k,j-js,i);
+            a(n,k,j,i) = pbb->recv_x3x1ed(0,n,k,j-js,i);
           }
           for (int i=is; i<=ie; ++i) {
-            a(n,k,j,i) = pbb->cc_recv_x3face(0,n,k,j-js,i-is);
+            a(n,k,j,i) = pbb->recv_x3face(0,n,k,j-js,i-is);
           }
           for (int i=0; i<ng; ++i) {
-            a(n,k,j,i+ie+1) = pbb->cc_recv_x3x1ed(1,n,k,j-js,i);
+            a(n,k,j,i+ie+1) = pbb->recv_x3x1ed(1,n,k,j-js,i);
           }
         }
 
@@ -368,35 +368,35 @@ TaskStatus BoundaryValues::ReceiveCellCenteredVariables(AthenaArray<Real> &a, in
       } else if (pmesh_->nx3gt1 && k>ke) {
         if (pmesh_->nx2gt1 && j<js) {
           for (int i=0; i<ng; ++i) {
-            a(n,k,j,i) = pbb->cc_recv_corner(4,n,k-ke-1,j,i);
+            a(n,k,j,i) = pbb->recv_corner(4,n,k-ke-1,j,i);
           }
           for (int i=is; i<=ie; ++i) {
-            a(n,k,j,i) = pbb->cc_recv_x2x3ed(2,n,k-ke-1,j,i-is);
+            a(n,k,j,i) = pbb->recv_x2x3ed(2,n,k-ke-1,j,i-is);
           }
           for (int i=0; i<ng; ++i) {
-            a(n,k,j,i+ie+1) = pbb->cc_recv_corner(5,n,k-ke-1,j,i);
+            a(n,k,j,i+ie+1) = pbb->recv_corner(5,n,k-ke-1,j,i);
           }
 
         } else if (pmesh_->nx2gt1 && j>je) {
           for (int i=0; i<ng; ++i) {
-            a(n,k,j,i) = pbb->cc_recv_corner(6,n,k-ke-1,j-je-1,i);
+            a(n,k,j,i) = pbb->recv_corner(6,n,k-ke-1,j-je-1,i);
           }
           for (int i=is; i<=ie; ++i) {
-            a(n,k,j,i) = pbb->cc_recv_x2x3ed(3,n,k-ke-1,j-je-1,i-is);
+            a(n,k,j,i) = pbb->recv_x2x3ed(3,n,k-ke-1,j-je-1,i-is);
           }
           for (int i=0; i<ng; ++i) {
-            a(n,k,j,i+ie+1) = pbb->cc_recv_corner(7,n,k-ke-1,j-je-1,i);
+            a(n,k,j,i+ie+1) = pbb->recv_corner(7,n,k-ke-1,j-je-1,i);
           }
 
         } else {
           for (int i=0; i<ng; ++i) {
-            a(n,k,j,i) = pbb->cc_recv_x3x1ed(2,n,k-ke-1,j-js,i);
+            a(n,k,j,i) = pbb->recv_x3x1ed(2,n,k-ke-1,j-js,i);
           }
           for (int i=is; i<=ie; ++i) {
-            a(n,k,j,i) = pbb->cc_recv_x3face(1,n,k-ke-1,j-js,i-is);
+            a(n,k,j,i) = pbb->recv_x3face(1,n,k-ke-1,j-js,i-is);
           }
           for (int i=0; i<ng; ++i) {
-            a(n,k,j,i+ie+1) = pbb->cc_recv_x3x1ed(3,n,k-ke-1,j-js,i);
+            a(n,k,j,i+ie+1) = pbb->recv_x3x1ed(3,n,k-ke-1,j-js,i);
           }
         }
 
@@ -404,32 +404,32 @@ TaskStatus BoundaryValues::ReceiveCellCenteredVariables(AthenaArray<Real> &a, in
       } else {
         if (pmesh_->nx2gt1 && j<js) {
           for (int i=0; i<ng; ++i) {
-            a(n,k,j,i) = pbb->cc_recv_x1x2ed(0,n,k-ks,j,i);
+            a(n,k,j,i) = pbb->recv_x1x2ed(0,n,k-ks,j,i);
           }
           for (int i=is; i<=ie; ++i) {
-            a(n,k,j,i) = pbb->cc_recv_x2face(0,n,k-ks,j,i-is);
+            a(n,k,j,i) = pbb->recv_x2face(0,n,k-ks,j,i-is);
           }
           for (int i=0; i<ng; ++i) {
-            a(n,k,j,i+ie+1) = pbb->cc_recv_x1x2ed(1,n,k,j,i);
+            a(n,k,j,i+ie+1) = pbb->recv_x1x2ed(1,n,k,j,i);
           }
 
         } else if (pmesh_->nx2gt1 && j>je) {
           for (int i=0; i<ng; ++i) {
-            a(n,k,j,i) = pbb->cc_recv_x1x2ed(2,n,k-ks,j-je-1,i);
+            a(n,k,j,i) = pbb->recv_x1x2ed(2,n,k-ks,j-je-1,i);
           }
           for (int i=is; i<=ie; ++i) {
-            a(n,k,j,i) = pbb->cc_recv_x2face(1,n,k-ks,j-je-1,i-is);
+            a(n,k,j,i) = pbb->recv_x2face(1,n,k-ks,j-je-1,i-is);
           }
           for (int i=0; i<ng; ++i) {
-            a(n,k,j,i+ie+1) = pbb->cc_recv_x1x2ed(3,n,k-ks,j-je-1,i);
+            a(n,k,j,i+ie+1) = pbb->recv_x1x2ed(3,n,k-ks,j-je-1,i);
           }
 
         } else {
           for (int i=0; i<ng; ++i) {
-            a(n,k,j,i) = pbb->cc_recv_x1face(0,n,k-ks,j-js,i);
+            a(n,k,j,i) = pbb->recv_x1face(0,n,k-ks,j-js,i);
           }
           for (int i=0; i<ng; ++i) {
-            a(n,k,j,i+ie+1) = pbb->cc_recv_x1face(1,n,k-ks,j-js,i);
+            a(n,k,j,i+ie+1) = pbb->recv_x1face(1,n,k-ks,j-js,i);
           }
         }
       }

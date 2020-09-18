@@ -29,9 +29,9 @@ HistoryOutput::HistoryOutput(OutputParameters op, Mesh *pm) : OutputType(op, pm)
 {
   // construct AthenaArrays in vector of length (# of MeshBlocks), store in out_data_
   // no slicing with history data, so all MeshBlocks produce output
-  std::vector<AthenaArray<Real>> new_data;
+  std::vector<HostArray3D<Real>> new_data;
   for (int m=0; m<(pm->nmbthisrank); ++m) {
-    new_data.emplace_back("hst_data",NHISTORY_VARIABLES);
+    new_data.emplace_back("hst_data",1,1,NHISTORY_VARIABLES);
   }
   out_data_.push_back(new_data);
 }
@@ -45,7 +45,7 @@ void HistoryOutput::LoadOutputData(Mesh *pm)
 { 
   // initialize variable sums to 0.0
   for (int m=0; m<(pm->nmbthisrank); ++m) {
-    for (int n=0; n<NHISTORY_VARIABLES; ++n) out_data_[0][m](n) = 0.0;
+    for (int n=0; n<NHISTORY_VARIABLES; ++n) out_data_[0][m](0,0,n) = 0.0;
   }
 
   // loop over all MeshBlocks on this MPI rank
@@ -66,19 +66,19 @@ void HistoryOutput::LoadOutputData(Mesh *pm)
           Real& u_mx = phyd->u0(hydro::IM1,k,j,i);
           Real& u_my = phyd->u0(hydro::IM2,k,j,i);
           Real& u_mz = phyd->u0(hydro::IM3,k,j,i);
-          out_data_[0][m](0) += u_d;
-          out_data_[0][m](1) += u_mx;
-          out_data_[0][m](2) += u_my;
-          out_data_[0][m](3) += u_mz;
+          out_data_[0][m](0,0,0) += u_d;
+          out_data_[0][m](0,0,1) += u_mx;
+          out_data_[0][m](0,0,2) += u_my;
+          out_data_[0][m](0,0,3) += u_mz;
 
           // Hydro KE
-          out_data_[0][m](4) += 0.5*SQR(u_mx)/u_d;
-          out_data_[0][m](5) += 0.5*SQR(u_my)/u_d;
-          out_data_[0][m](6) += 0.5*SQR(u_mz)/u_d;
+          out_data_[0][m](0,0,4) += 0.5*SQR(u_mx)/u_d;
+          out_data_[0][m](0,0,5) += 0.5*SQR(u_my)/u_d;
+          out_data_[0][m](0,0,6) += 0.5*SQR(u_mz)/u_d;
           
           if (phyd->peos->adiabatic_eos) {
             Real& u_e = phyd->u0(hydro::IEN,k,j,i);;
-            out_data_[0][m](7) += u_e;
+            out_data_[0][m](0,0,7) += u_e;
           }
         }
       }
@@ -86,8 +86,8 @@ void HistoryOutput::LoadOutputData(Mesh *pm)
 
     // normalize sums by volume of this MeshBlock
     for (int n=0; n<NHISTORY_VARIABLES; ++n) {
-      out_data_[0][m](n) /= (pmb->mb_cells.nx1)*(pmb->mb_cells.nx2)*(pmb->mb_cells.nx3);
-      out_data_[0][m](n) *= (pmb->mb_size.x1max - pmb->mb_size.x1min)*
+      out_data_[0][m](0,0,n) /= (pmb->mb_cells.nx1)*(pmb->mb_cells.nx2)*(pmb->mb_cells.nx3);
+      out_data_[0][m](0,0,n) *= (pmb->mb_size.x1max - pmb->mb_size.x1min)*
                             (pmb->mb_size.x2max - pmb->mb_size.x2min)*
                             (pmb->mb_size.x3max - pmb->mb_size.x3min);
     }
@@ -104,11 +104,11 @@ void HistoryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
 {
   // sume history data in each MeshBlock
   // TODO add MPI communications for global sum
-  AthenaArray<Real> hst_data("summed_hst_data",NHISTORY_VARIABLES);
+  HostArray1D<Real> hst_data("summed_hst_data",NHISTORY_VARIABLES);
 
   for (int m=0; m<(pm->nmbthisrank); ++m) {
     for (int n=0; n<NHISTORY_VARIABLES; ++n) {
-      hst_data(n) += out_data_[0][m](n);
+      hst_data(n) += out_data_[0][m](0,0,n);
     }
   }
 

@@ -25,9 +25,9 @@ DonorCell::DonorCell(ParameterInput *pin, int nvar, int ncells1) :
 //  This function should be called over [is-1,ie+1] to get BOTH L/R states over [is,ie]
 
 void DonorCell::ReconstructX1(const int k, const int j, const int il, const int iu,
-     const AthenaArray<Real> &q, AthenaArray<Real> &ql, AthenaArray<Real> &qr)
+     const AthenaArray4D<Real> &q, AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr)
 {
-  int nvar = q.GetDim(4);
+  int nvar = q.extent_int(0);
   for (int n=0; n<nvar; ++n) {
     for (int i=il; i<=iu; ++i) {
       ql(n,i+1) = q(n,k,j,i);
@@ -43,9 +43,9 @@ void DonorCell::ReconstructX1(const int k, const int j, const int il, const int 
 //  This function should be called over [js-1,je+1] to get BOTH L/R states over [js,je]
 
 void DonorCell::ReconstructX2(const int k, const int j, const int il, const int iu,
-     const AthenaArray<Real> &q, AthenaArray<Real> &ql_jp1, AthenaArray<Real> &qr_j)
+     const AthenaArray4D<Real> &q, AthenaArray2D<Real> &ql_jp1, AthenaArray2D<Real> &qr_j)
 {
-  int nvar = q.GetDim(4);
+  int nvar = q.extent_int(0);
   for (int n=0; n<nvar; ++n) {
     for (int i=il; i<=iu; ++i) {
       ql_jp1(n,i) = q(n,k,j,i);
@@ -61,9 +61,9 @@ void DonorCell::ReconstructX2(const int k, const int j, const int il, const int 
 //  This function should be called over [ks-1,ke+1] to get BOTH L/R states over [ks,ke]
 
 void DonorCell::ReconstructX3(const int k, const int j, const int il, const int iu,
-     const AthenaArray<Real> &q, AthenaArray<Real> &ql_kp1, AthenaArray<Real> &qr_k)
+     const AthenaArray4D<Real> &q, AthenaArray2D<Real> &ql_kp1, AthenaArray2D<Real> &qr_k)
 {
-  int nvar = q.GetDim(4);
+  int nvar = q.extent_int(0);
   for (int n=0; n<nvar; ++n) {
     for (int i=il; i<=iu; ++i) {
       ql_kp1(n,i) = q(n,k,j,i);

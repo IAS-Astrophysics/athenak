@@ -26,9 +26,9 @@ PiecewiseLinear::PiecewiseLinear(ParameterInput *pin, int nvar, int ncells1) :
 //  This function should be called over [is-1,ie+1] to get BOTH L/R states over [is,ie]
 
 void PiecewiseLinear::ReconstructX1(const int k, const int j, const int il, const int iu,
-    const AthenaArray<Real> &q, AthenaArray<Real> &ql, AthenaArray<Real> &qr)
+    const AthenaArray4D<Real> &q, AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr)
 {
-  int nvar = q.GetDim(4);
+  int nvar = q.extent_int(0);
   for (int n=0; n<nvar; ++n) {
     // compute L/R slopes for each variable
     for (int i=il; i<=iu; ++i) {
@@ -54,9 +54,9 @@ void PiecewiseLinear::ReconstructX1(const int k, const int j, const int il, cons
 //  This function should be called over [js-1,je+1] to get BOTH L/R states over [js,je]
 
 void PiecewiseLinear::ReconstructX2(const int k, const int j, const int il, const int iu,
-    const AthenaArray<Real> &q, AthenaArray<Real> &ql_jp1, AthenaArray<Real> &qr_j)
+    const AthenaArray4D<Real> &q, AthenaArray2D<Real> &ql_jp1, AthenaArray2D<Real> &qr_j)
 {
-  int nvar = q.GetDim(4);
+  int nvar = q.extent_int(0);
   for (int n=0; n<nvar; ++n) {
     // compute L/R slopes for each variable
     for (int i=il; i<=iu; ++i) {
@@ -82,9 +82,9 @@ void PiecewiseLinear::ReconstructX2(const int k, const int j, const int il, cons
 //  This function should be called over [ks-1,ke+1] to get BOTH L/R states over [ks,ke]
 
 void PiecewiseLinear::ReconstructX3(const int k, const int j, const int il, const int iu,
-    const AthenaArray<Real> &q, AthenaArray<Real> &ql_kp1, AthenaArray<Real> &qr_k)
+    const AthenaArray4D<Real> &q, AthenaArray2D<Real> &ql_kp1, AthenaArray2D<Real> &qr_k)
 {
-  int nvar = q.GetDim(4);
+  int nvar = q.extent_int(0);
   for (int n=0; n<nvar; ++n) {
     // compute L/R slopes for each variable
     for (int i=il; i<=iu; ++i) {

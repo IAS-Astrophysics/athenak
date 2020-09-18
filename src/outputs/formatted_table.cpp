@@ -89,7 +89,7 @@ void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   // write data col headers from "name" stored in out_data_ AthenaArrays
   // Note iterator will be vector of length (# of output MBs)
   for (auto it : out_data_) {
-    std::fprintf(pfile, "    %s      ", it[0].GetLabel().c_str());
+    std::fprintf(pfile, "    %s      ", it[0].label().c_str());
   }
   std::fprintf(pfile, "\n"); // terminate line
 

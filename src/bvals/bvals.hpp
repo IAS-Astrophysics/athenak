@@ -19,7 +19,6 @@ enum class BoundaryFlag {undef=-1, block, reflect, outflow, user, periodic};
 
 #include <map>
 #include "athena.hpp"
-#include "athena_arrays.hpp"
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
 
@@ -41,12 +40,15 @@ struct NeighborBlock
 
 struct BoundaryBuffer
 {
-  AthenaArray<Real> cc_send_x1face, cc_send_x2face, cc_send_x3face;
-  AthenaArray<Real> cc_send_x1x2ed, cc_send_x3x1ed, cc_send_x2x3ed;
-  AthenaArray<Real> cc_send_corner;
-  AthenaArray<Real> cc_recv_x1face, cc_recv_x2face, cc_recv_x3face;
-  AthenaArray<Real> cc_recv_x1x2ed, cc_recv_x3x1ed, cc_recv_x2x3ed;
-  AthenaArray<Real> cc_recv_corner;
+  // face, edge, and corner send buffers
+  AthenaArray5D<Real> send_x1face, send_x2face, send_x3face;
+  AthenaArray5D<Real> send_x1x2ed, send_x3x1ed, send_x2x3ed;
+  AthenaArray5D<Real> send_corner;
+  // face, edge, and corner recv buffers
+  AthenaArray5D<Real> recv_x1face, recv_x2face, recv_x3face;
+  AthenaArray5D<Real> recv_x1x2ed, recv_x3x1ed, recv_x2x3ed;
+  AthenaArray5D<Real> recv_corner;
+  // face, edge, and corner status flags
   BoundaryStatus bstat_x1face[2];
   BoundaryStatus bstat_x2face[2];
   BoundaryStatus bstat_x3face[2];
@@ -54,6 +56,23 @@ struct BoundaryBuffer
   BoundaryStatus bstat_x3x1ed[4];
   BoundaryStatus bstat_x2x3ed[4];
   BoundaryStatus bstat_corner[8];
+
+  // constructor (calls View constructor with appropriate labels)
+  BoundaryBuffer() :
+    send_x1face("x1face_send_buf",1,1,1,1,1),
+    send_x2face("x2face_send_buf",1,1,1,1,1),
+    send_x3face("x3face_send_buf",1,1,1,1,1),
+    send_x1x2ed("x1x2edge_send_buf",1,1,1,1,1),
+    send_x3x1ed("x3x1edge_send_buf",1,1,1,1,1),
+    send_x2x3ed("x2x3edge_send_buf",1,1,1,1,1),
+    send_corner("corner_send_buf",1,1,1,1,1),
+    recv_x1face("x1face_recv_buf",1,1,1,1,1),
+    recv_x2face("x2face_recv_buf",1,1,1,1,1),
+    recv_x3face("x3face_recv_buf",1,1,1,1,1),
+    recv_x1x2ed("x1x2edge_recv_buf",1,1,1,1,1),
+    recv_x3x1ed("x3x1edge_recv_buf",1,1,1,1,1),
+    recv_x2x3ed("x2x3edge_recv_buf",1,1,1,1,1),
+    recv_corner("corner_recv_buf",1,1,1,1,1) {}
 };
 
 // Forward delcarations
@@ -85,8 +104,8 @@ class BoundaryValues {
 
   // functions
   void AllocateBuffers(BoundaryBuffer &bbuf, const int maxv);
-  TaskStatus SendCellCenteredVariables(AthenaArray<Real> &a, int nvar, std::string key);
-  TaskStatus ReceiveCellCenteredVariables(AthenaArray<Real> &a,int nvar,std::string key);
+  TaskStatus SendCellCenteredVariables(AthenaArray4D<Real> &a, int nvar, std::string key);
+  TaskStatus RecvCellCenteredVariables(AthenaArray4D<Real> &a, int nvar, std::string key);
 
   TaskStatus ApplyPhysicalBCs(Driver* pd, int stage);
   void ReflectInnerX1();

@@ -10,7 +10,6 @@
 
 #include <vector>
 #include "athena.hpp"
-#include "athena_arrays.hpp"
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
 #include "hydro/eos/eos.hpp"
@@ -40,19 +39,19 @@ class Hydro
   EquationOfState *peos;      // object that implements chosen EOS
 
   int nhydro;             // number of conserved variables (5/4 for adiabatic/isothermal)
-  AthenaArray<Real> u0;   // conserved variables
-  AthenaArray<Real> w0;   // primitive variables
+  AthenaArray4D<Real> u0;   // conserved variables
+  AthenaArray4D<Real> w0;   // primitive variables
 
   BoundaryBuffer bbuf;    // send/recv buffers and BoundaryStatus flags for Hydro comms.
 
   // following only used for time-evolving flow
   Reconstruction  *precon;    // object that implements chosen reconstruction methods
   RiemannSolver   *prsolver;  // object that implements chosen Riemann solver
-  AthenaArray<Real> u1;           // 4D conserved variables at intermediate step 
-  AthenaArray<Real> divf;         // 4D divergence of fluxes (3 spatial-D)
-  AthenaArray<Real> uflx_x1face;  // 3D fluxes on x1-faces (used in flux correction step)
-  AthenaArray<Real> uflx_x2face;  // 3D fluxes on x2-faces
-  AthenaArray<Real> uflx_x3face;  // 3D fluxes on x3-faces
+  AthenaArray4D<Real> u1;    // conserved variables at intermediate step 
+  AthenaArray4D<Real> divf;   // divergence of fluxes
+  AthenaArray3D<Real> uflx_x1face;  // fluxes on x1-faces
+  AthenaArray3D<Real> uflx_x2face;  // fluxes on x2-faces
+  AthenaArray3D<Real> uflx_x3face;  // fluxes on x3-faces
   Real dtnew;
 
   // functions
@@ -71,7 +70,12 @@ class Hydro
  private:
   Mesh* pmesh_;   // ptr to Mesh containing this Hydro
   int my_mbgid_;  // GridID of MeshBlock contianing this Hydro
-  AthenaArray<Real> w_,wl_,wr_,wl_p1,uflux_,uflux_m1;   // 1-spatialD scratch vectors
+  AthenaArray2D<Real> w_;
+  AthenaArray2D<Real> wl_;
+  AthenaArray2D<Real> wr_;
+  AthenaArray2D<Real> wl_p1_;
+  AthenaArray2D<Real> uflux_;
+  AthenaArray2D<Real> uflux_m1_;
 };
 
 } // namespace hydro

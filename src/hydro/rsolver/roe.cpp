@@ -31,8 +31,8 @@ namespace hydro {
 
 Roe::Roe(Mesh* pm, ParameterInput* pin, int igid) : RiemannSolver(pm, pin, igid)
 {
-  void RSolver(const int il, const  int iu, const int dir, const AthenaArray<Real> &wl,
-               const AthenaArray<Real> &wr, AthenaArray<Real> &flx);
+  void RSolver(const int il, const  int iu, const int dir, const AthenaArray2D<Real> &wl,
+               const AthenaArray2D<Real> &wr, AthenaArray2D<Real> &flx);
 }
 
 
@@ -50,8 +50,9 @@ inline void RoeFluxIso(const Real wroe[], const Real du[], const Real wli[],
 //! \fn void Hydro::RiemannSolver
 //  \brief The Roe Riemann solver for hydrodynamics (both adiabatic and isothermal)
 
-void Roe::RSolver(const int il, const int iu, const int ivx, const AthenaArray<Real> &wl,
-                  const AthenaArray<Real> &wr, AthenaArray<Real> &flx)
+void Roe::RSolver(const int il, const int iu, const int ivx,
+                  const AthenaArray2D<Real> &wl, const AthenaArray2D<Real> &wr,
+                  AthenaArray2D<Real> &flx)
 {
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;

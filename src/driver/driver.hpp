@@ -10,7 +10,6 @@
 
 #include <ctime>
 
-#include "athena_arrays.hpp"
 #include "parameter_input.hpp"
 #include "outputs/outputs.hpp"
 

@@ -20,7 +20,14 @@ namespace hydro {
 //----------------------------------------------------------------------------------------
 // constructor, initializes data structures and parameters
 
-Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) : pmesh_(pm), my_mbgid_(gid)
+Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
+  pmesh_(pm), my_mbgid_(gid),
+  u0("cons",1,1,1,1), w0("prim",1,1,1,1), u1("cons1",1,1,1,1), divf("divF",1,1,1,1),
+  uflx_x1face("uflx_x1face",1,1,1),
+  uflx_x2face("uflx_x2face",1,1,1),
+  uflx_x3face("uflx_x3face",1,1,1),
+  wl_("Wl",1,1), wr_("Wr",1,1),wl_p1_("Wlp1",1,1),
+  uflux_("uflux",1,1),uflux_m1_("ufluxm1",1,1)
 {
   // construct EOS object (no default)
   {std::string eqn_of_state   = pin->GetString("hydro","eos");
@@ -65,8 +72,8 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) : pmesh_(pm), my_mbgid_(gid
   int ncells1 = pmb->mb_cells.nx1 + 2*(pmb->mb_cells.ng);
   int ncells2 = (pmb->mb_cells.nx2 > 1)? (pmb->mb_cells.nx2 + 2*(pmb->mb_cells.ng)) : 1;
   int ncells3 = (pmb->mb_cells.nx3 > 1)? (pmb->mb_cells.nx3 + 2*(pmb->mb_cells.ng)) : 1;
-  u0.SetSize(nhydro, ncells3, ncells2, ncells1);
-  w0.SetSize(nhydro, ncells3, ncells2, ncells1);
+  Kokkos::resize(u0,nhydro, ncells3, ncells2, ncells1);
+  Kokkos::resize(w0,nhydro, ncells3, ncells2, ncells1);
 
   // allocate memory for boundary buffers
   pmb->pbvals->AllocateBuffers(bbuf, nhydro);
@@ -139,14 +146,14 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) : pmesh_(pm), my_mbgid_(gid
     }} // extra brace to limit scope of string
 
     // allocate registers, flux divergence, scratch arrays for time-dep probs
-    u1.SetSize(nhydro, ncells3, ncells2, ncells1);
-    divf.SetSize(nhydro, ncells3, ncells2, ncells1);
-    w_.SetSize(nhydro, ncells1);
-    wl_.SetSize(nhydro, ncells1);
-    wr_.SetSize(nhydro, ncells1);
-    wl_p1.SetSize(nhydro, ncells1);
-    uflux_.SetSize(nhydro, ncells1);
-    uflux_m1.SetSize(nhydro, ncells1);
+    Kokkos::resize(u1,nhydro, ncells3, ncells2, ncells1);
+    Kokkos::resize(divf,nhydro, ncells3, ncells2, ncells1);
+    Kokkos::resize(w_,nhydro, ncells1);
+    Kokkos::resize(wl_,nhydro, ncells1);
+    Kokkos::resize(wr_,nhydro, ncells1);
+    Kokkos::resize(wl_p1_,nhydro, ncells1);
+    Kokkos::resize(uflux_,nhydro, ncells1);
+    Kokkos::resize(uflux_m1_,nhydro, ncells1);
   }
 }
 
@@ -261,8 +268,7 @@ TaskStatus Hydro::HydroCopyCons(Driver *pdrive, int stage)
 {
   // copy u0 --> u1 in first stage
   if (stage == 1) {
-    int size = u0.GetSize();
-    for (int n=0; n<size; ++n) { u1(n) = u0(n); }
+    Kokkos::deep_copy(u1,u0);
   }
 
   return TaskStatus::complete;
@@ -288,7 +294,7 @@ TaskStatus Hydro::HydroReceive(Driver *pdrive, int stage)
 {
   MeshBlock* pmb = pmesh_->FindMeshBlock(my_mbgid_);
   TaskStatus tstat;
-  tstat = pmb->pbvals->ReceiveCellCenteredVariables(u0, nhydro, "hydro");
+  tstat = pmb->pbvals->RecvCellCenteredVariables(u0, nhydro, "hydro");
   return tstat;
 }
 

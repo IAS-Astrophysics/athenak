@@ -29,16 +29,17 @@ namespace hydro {
 
 HLLC::HLLC(Mesh* pm, ParameterInput* pin, int igid) : RiemannSolver(pm, pin, igid)
 {
-  void RSolver(const int il, const  int iu, const int dir,
-    const AthenaArray<Real> &wl, const AthenaArray<Real> &wr, AthenaArray<Real> &flx);
+  void RSolver(const int il, const  int iu, const int dir, const AthenaArray2D<Real> &wl,
+               const AthenaArray2D<Real> &wr, AthenaArray2D<Real> &flx);
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn void HLLC::RSolver
 //! \brief The HLLC Riemann solver for adiabatic hydrodynamics (use HLLE for isothermal)
 
-void HLLC::RSolver(const int il, const int iu, const int ivx, const AthenaArray<Real> &wl,
-                   const AthenaArray<Real> &wr, AthenaArray<Real> &flx)
+void HLLC::RSolver(const int il, const int iu, const int ivx,
+                   const AthenaArray2D<Real> &wl, const AthenaArray2D<Real> &wr,
+                   AthenaArray2D<Real> &flx)
 {
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;

@@ -25,10 +25,8 @@
 #include <string>     // string
 
 #include "athena.hpp"
-#include "athena_arrays.hpp"
 #include "utils/utils.hpp"
 #include "parameter_input.hpp"
-//#include "bvals/bvals.hpp"
 #include "mesh/mesh.hpp"
 #include "pgen/pgen.hpp"
 #include "outputs/outputs.hpp"
@@ -49,6 +47,8 @@ int main(int argc, char *argv[])
 
   //--- Step 1. --------------------------------------------------------------------------
   // Initialize environment
+
+  Kokkos::initialize(argc, argv);
 
 #if MPI_PARALLEL_ENABLED
 #if OPENMP_PARALLEL_ENABLED
@@ -259,5 +259,6 @@ int main(int argc, char *argv[])
 #if MPI_PARALLEL_ENABLED
   MPI_Finalize();
 #endif
+  Kokkos::finalize();
   return(0);
 }

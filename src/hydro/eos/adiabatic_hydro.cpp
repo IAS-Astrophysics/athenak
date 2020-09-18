@@ -31,7 +31,8 @@ AdiabaticHydro::AdiabaticHydro(Mesh* pm, ParameterInput *pin, int igid)
 // \!fn void ConservedToPrimitive()
 // \brief Converts conserved into primitive variables in nonrelativistic adiabatic hydro
 
-void AdiabaticHydro::ConservedToPrimitive(AthenaArray<Real> &cons,AthenaArray<Real> &prim)
+void AdiabaticHydro::ConservedToPrimitive(AthenaArray4D<Real> &cons,
+                                          AthenaArray4D<Real> &prim)
 {
   MeshBlock* pmb = pmesh_->FindMeshBlock(my_mbgid_);
   int ng = pmb->mb_cells.ng;

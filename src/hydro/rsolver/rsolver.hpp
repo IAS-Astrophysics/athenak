@@ -11,7 +11,6 @@
 //  solvers for nonrelativistic hydrodynamics
 
 #include "athena.hpp"
-#include "athena_arrays.hpp"
 #include "mesh/meshblock.hpp"
 #include "parameter_input.hpp"
 
@@ -28,7 +27,8 @@ class RiemannSolver
   virtual ~RiemannSolver() = default;
 
   virtual void RSolver(const int il, const  int iu, const int dir,
-    const AthenaArray<Real> &wl, const AthenaArray<Real> &wr, AthenaArray<Real> &flx) = 0;
+                       const AthenaArray2D<Real> &wl, const AthenaArray2D<Real> &wr,
+                       AthenaArray2D<Real> &flx) = 0;
 
  protected:
   Mesh *pmesh_;
@@ -43,8 +43,8 @@ class Advection : public RiemannSolver
 {
  public:
   Advection(Mesh* pm, ParameterInput* pin, int igid);
-  void RSolver(const int il, const  int iu, const int dir, const AthenaArray<Real> &wl,
-    const AthenaArray<Real> &wr, AthenaArray<Real> &flx) override;
+  void RSolver(const int il, const  int iu, const int dir, const AthenaArray2D<Real> &wl,
+               const AthenaArray2D<Real> &wr, AthenaArray2D<Real> &flx) override;
 };
 
 //----------------------------------------------------------------------------------------
@@ -55,8 +55,8 @@ class LLF : public RiemannSolver
 {
  public:
   LLF(Mesh* pm, ParameterInput* pin, int igid);
-  void RSolver(const int il, const  int iu, const int dir, const AthenaArray<Real> &wl,
-    const AthenaArray<Real> &wr, AthenaArray<Real> &flx) override;
+  void RSolver(const int il, const  int iu, const int dir, const AthenaArray2D<Real> &wl,
+               const AthenaArray2D<Real> &wr, AthenaArray2D<Real> &flx) override;
 };
 
 //----------------------------------------------------------------------------------------
@@ -68,8 +68,8 @@ class HLLE : public RiemannSolver
 {   
  public:
   HLLE(Mesh* pm, ParameterInput* pin, int igid);
-  void RSolver(const int il, const  int iu, const int dir, const AthenaArray<Real> &wl,
-    const AthenaArray<Real> &wr, AthenaArray<Real> &flx) override;
+  void RSolver(const int il, const  int iu, const int dir, const AthenaArray2D<Real> &wl,
+               const AthenaArray2D<Real> &wr, AthenaArray2D<Real> &flx) override;
 };  
 
 //----------------------------------------------------------------------------------------
@@ -80,8 +80,8 @@ class HLLC : public RiemannSolver
 {   
  public:
   HLLC(Mesh* pm, ParameterInput* pin, int igid);
-  void RSolver(const int il, const  int iu, const int dir, const AthenaArray<Real> &wl,
-    const AthenaArray<Real> &wr, AthenaArray<Real> &flx) override;
+  void RSolver(const int il, const  int iu, const int dir, const AthenaArray2D<Real> &wl,
+               const AthenaArray2D<Real> &wr, AthenaArray2D<Real> &flx) override;
 };  
 
 //----------------------------------------------------------------------------------------
@@ -92,8 +92,8 @@ class Roe : public RiemannSolver
 {
  public:
   Roe(Mesh* pm, ParameterInput* pin, int igid);
-  void RSolver(const int il, const  int iu, const int dir, const AthenaArray<Real> &wl,
-    const AthenaArray<Real> &wr, AthenaArray<Real> &flx) override;
+  void RSolver(const int il, const  int iu, const int dir, const AthenaArray2D<Real> &wl,
+               const AthenaArray2D<Real> &wr, AthenaArray2D<Real> &flx) override;
 };
 
 } // namespace hydro

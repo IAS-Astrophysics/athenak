@@ -13,7 +13,6 @@
 #include <cmath> 
 
 #include "athena.hpp"
-#include "athena_arrays.hpp"
 #include "mesh/meshblock.hpp"
 #include "parameter_input.hpp"
 
@@ -36,7 +35,7 @@ class EquationOfState
   virtual Real GetGamma() {return 0.0;}       // only used in adiabatic EOS
 
   // folowing pure virtual functions must be overridden in derived EOS classes
-  virtual void ConservedToPrimitive(AthenaArray<Real> &cons, AthenaArray<Real> &prim) = 0;
+  virtual void ConservedToPrimitive(AthenaArray4D<Real> &cons,AthenaArray4D<Real> &prim) = 0;
   virtual Real SoundSpeed(Real prim[5]);
   virtual Real SoundSpeed();
 
@@ -57,7 +56,7 @@ class AdiabaticHydro : public EquationOfState
   Real GetGamma() override {return gamma_;}
 
   // functions that implement methods appropriate to adiabatic hydrodynamics
-  void ConservedToPrimitive(AthenaArray<Real> &cons, AthenaArray<Real> &prim) override;
+  void ConservedToPrimitive(AthenaArray4D<Real> &cons,AthenaArray4D<Real> &prim) override;
   Real SoundSpeed(Real prim[5]) override {return std::sqrt(gamma_*prim[IPR]/prim[IDN]);}
 
  private:
@@ -74,7 +73,7 @@ class IsothermalHydro : public EquationOfState
   IsothermalHydro(Mesh* pm, ParameterInput *pin, int igid);
 
   // functions that implement methods appropriate to isothermal hydrodynamics
-  void ConservedToPrimitive(AthenaArray<Real> &cons, AthenaArray<Real> &prim) override;
+  void ConservedToPrimitive(AthenaArray4D<Real> &cons,AthenaArray4D<Real> &prim) override;
   Real SoundSpeed() override {return iso_cs_;}
 
  private:

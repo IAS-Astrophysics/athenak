@@ -104,12 +104,6 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
          out_params.slice_x3 >= mb.mb_size.x3max) ) { continue; }
 
     // initialize new AthenaArrays for coordinates
-    //AthenaArray<Real> new_x1_cc("x1v",nout1);
-    //AthenaArray<Real> new_x1_fc("x1f",nout1+1);
-    //AthenaArray<Real> new_x2_cc("x2v",nout2);
-    //AthenaArray<Real> new_x2_fc("x2f",nout2+1);
-    //AthenaArray<Real> new_x3_cc("x3v",nout3);
-    //AthenaArray<Real> new_x3_fc("x3f",nout3+1);
     x1_cc_.emplace_back("x1v",nout1);
     x1_fc_.emplace_back("x1f",nout1+1);
     x2_cc_.emplace_back("x2v",nout2);
@@ -119,26 +113,26 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
 
     int indx = static_cast<int>(x1_cc_.size()) - 1;
     for (int i=0; i<nout1; ++i) {
-      x1_cc_[indx](i) = pm->CellCenterX((i-(mb.mb_cells.is - ois)),
-         mb.mb_cells.nx1, mb.mb_size.x1min, mb.mb_size.x1max);
-      x1_fc_[indx](i) = pm->LeftEdgeX((i-(mb.mb_cells.is - ois)),
-         mb.mb_cells.nx1, mb.mb_size.x1min, mb.mb_size.x1max);
+      x1_cc_[indx](i) = pm->CellCenterX((i-(mb.mb_cells.is - ois)), mb.mb_cells.nx1,
+                                        mb.mb_size.x1min, mb.mb_size.x1max);
+      x1_fc_[indx](i) = pm->LeftEdgeX((i-(mb.mb_cells.is - ois)), mb.mb_cells.nx1,
+                                      mb.mb_size.x1min, mb.mb_size.x1max);
     }
     x1_fc_[indx](nout1) = mb.mb_size.x1max;
 
     for (int j=0; j<nout2; ++j) {
-      x2_cc_[indx](j) = pm->CellCenterX((j-(mb.mb_cells.js - ojs)),
-         mb.mb_cells.nx2, mb.mb_size.x2min, mb.mb_size.x2max);
-      x2_fc_[indx](j) = pm->LeftEdgeX((j-(mb.mb_cells.js - ojs)),
-         mb.mb_cells.nx2, mb.mb_size.x2min, mb.mb_size.x2max);
+      x2_cc_[indx](j) = pm->CellCenterX((j-(mb.mb_cells.js - ojs)), mb.mb_cells.nx2,
+                                        mb.mb_size.x2min, mb.mb_size.x2max);
+      x2_fc_[indx](j) = pm->LeftEdgeX((j-(mb.mb_cells.js - ojs)), mb.mb_cells.nx2,
+                                      mb.mb_size.x2min, mb.mb_size.x2max);
     }
     x2_fc_[indx](nout2) = mb.mb_size.x2max;
 
     for (int k=0; k<nout3; ++k) {
-      x3_cc_[indx](k) = pm->CellCenterX((k-(mb.mb_cells.ks - oks)),
-         mb.mb_cells.nx3, mb.mb_size.x3min, mb.mb_size.x3max);
-      x3_cc_[indx](k) = pm->LeftEdgeX((k-(mb.mb_cells.ks - oks)),
-         mb.mb_cells.nx3, mb.mb_size.x3min, mb.mb_size.x3max);
+      x3_cc_[indx](k) = pm->CellCenterX((k-(mb.mb_cells.ks - oks)), mb.mb_cells.nx3,
+                                        mb.mb_size.x3min, mb.mb_size.x3max);
+      x3_cc_[indx](k) = pm->LeftEdgeX((k-(mb.mb_cells.ks - oks)), mb.mb_cells.nx3,
+                                      mb.mb_size.x3min, mb.mb_size.x3max);
     }
     x3_fc_[indx](nout3) = mb.mb_size.x3max;
   }
@@ -147,7 +141,7 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
   // TODO get working with multiple physics
   // hydro conserved variables
   int &nhydro = pm->mblocks.begin()->phydro->nhydro;
-  hydro_cons_out_vars.SetSize(nhydro);
+  Kokkos::resize(hydro_cons_out_vars,nhydro);
   for (int n=0; n<nhydro; ++n) { hydro_cons_out_vars(n) = false; }
 
   if (out_params.variable.compare("cons") == 0) {
@@ -165,7 +159,7 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
   }
 
   // hydro primitive variables
-  hydro_prim_out_vars.SetSize(nhydro);
+  Kokkos::resize(hydro_prim_out_vars,nhydro);
   for (int n=0; n<nhydro; ++n) { hydro_prim_out_vars(n) = false; }
 
   if (out_params.variable.compare("prim") == 0) {
@@ -215,7 +209,7 @@ void OutputType::LoadOutputData(Mesh *pm)
   int &nhydro = pm->mblocks.begin()->phydro->nhydro;
   for (int n=0; n<nhydro; ++n) {
     if (hydro_cons_out_vars(n)) { // variable exists for output
-      std::vector<AthenaArray<Real>> new_data;
+      std::vector<HostArray3D<Real>> new_data;
 
       // loop over all MeshBlocks
       for (auto &mb : pm->mblocks) {
@@ -272,7 +266,7 @@ void OutputType::LoadOutputData(Mesh *pm)
   // output hydro primitive
   for (int n=0; n<nhydro; ++n) {
     if (hydro_prim_out_vars(n)) { // variable exists for output
-      std::vector<AthenaArray<Real>> new_data;
+      std::vector<HostArray3D<Real>> new_data;
 
       // loop over all MeshBlocks
       for (auto &mb : pm->mblocks) {

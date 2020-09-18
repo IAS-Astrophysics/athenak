@@ -12,11 +12,7 @@
 //  and third-order piecewise parabolic.
 
 #include "athena.hpp"
-#include "athena_arrays.hpp"
 #include "parameter_input.hpp"
-
-// constants that enumerate reconstruction options
-//enum class ReconstructionMethod {donor_cell, piecewise_linear, piecewise_parabolic};
 
 //----------------------------------------------------------------------------------------
 //! \class Reconstruction
@@ -30,11 +26,14 @@ class Reconstruction
 
   // pure virtual reconstruction functions overwritten in each derived class
   virtual void ReconstructX1(const int k, const int j, const int il, const int iu,
-    const AthenaArray<Real> &q, AthenaArray<Real> &ql, AthenaArray<Real> &qr) = 0;
+                             const AthenaArray4D<Real> &q,
+                             AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr) = 0;
   virtual void ReconstructX2(const int k, const int j, const int il, const int iu,
-    const AthenaArray<Real> &q, AthenaArray<Real> &ql, AthenaArray<Real> &qr) = 0;
+                             const AthenaArray4D<Real> &q,
+                             AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr) = 0;
   virtual void ReconstructX3(const int k, const int j, const int il, const int iu,
-    const AthenaArray<Real> &q, AthenaArray<Real> &ql, AthenaArray<Real> &qr) = 0;
+                             const AthenaArray4D<Real> &q,
+                             AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr) = 0;
 
  protected:
   int nvar_, ncells1_;
@@ -50,11 +49,14 @@ class DonorCell : public Reconstruction
   DonorCell(ParameterInput *pin, int nvar, int ncells1);
 
   void ReconstructX1(const int k, const int j, const int il, const int iu,
-    const AthenaArray<Real> &q, AthenaArray<Real> &ql, AthenaArray<Real> &qr) override;
+                     const AthenaArray4D<Real> &q,
+                     AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr) override;
   void ReconstructX2(const int k, const int j, const int il, const int iu,
-    const AthenaArray<Real> &q, AthenaArray<Real> &ql, AthenaArray<Real> &qr) override;
+                     const AthenaArray4D<Real> &q,
+                     AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr) override;
   void ReconstructX3(const int k, const int j, const int il, const int iu,
-    const AthenaArray<Real> &q, AthenaArray<Real> &ql, AthenaArray<Real> &qr) override;
+                     const AthenaArray4D<Real> &q,
+                     AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr) override;
 };
 
 //----------------------------------------------------------------------------------------
@@ -67,13 +69,14 @@ class PiecewiseLinear : public Reconstruction
   PiecewiseLinear(ParameterInput *pin, int nvar, int ncells1);
 
   void ReconstructX1(const int k, const int j, const int il, const int iu,
-    const AthenaArray<Real> &q, AthenaArray<Real> &ql, AthenaArray<Real> &qr) override;
+                     const AthenaArray4D<Real> &q,
+                     AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr) override;
   void ReconstructX2(const int k, const int j, const int il, const int iu,
-    const AthenaArray<Real> &q, AthenaArray<Real> &ql, AthenaArray<Real> &qr) override;
+                     const AthenaArray4D<Real> &q,
+                     AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr) override;
   void ReconstructX3(const int k, const int j, const int il, const int iu,
-    const AthenaArray<Real> &q, AthenaArray<Real> &ql, AthenaArray<Real> &qr) override;
-
- private:
+                     const AthenaArray4D<Real> &q,
+                     AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr) override;
 };
 
 //----------------------------------------------------------------------------------------
@@ -86,14 +89,14 @@ class PiecewiseParabolic : public Reconstruction
   PiecewiseParabolic(ParameterInput *pin, int nvar, int ncells1);
 
   void ReconstructX1(const int k, const int j, const int il, const int iu,
-    const AthenaArray<Real> &q, AthenaArray<Real> &ql, AthenaArray<Real> &qr) override;
+                     const AthenaArray4D<Real> &q,
+                     AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr) override;
   void ReconstructX2(const int k, const int j, const int il, const int iu,
-    const AthenaArray<Real> &q, AthenaArray<Real> &ql, AthenaArray<Real> &qr) override;
+                     const AthenaArray4D<Real> &q,
+                     AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr) override;
   void ReconstructX3(const int k, const int j, const int il, const int iu,
-    const AthenaArray<Real> &q, AthenaArray<Real> &ql, AthenaArray<Real> &qr) override;
-
- private:
+                     const AthenaArray4D<Real> &q,
+                     AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr) override;
 };
-
 
 #endif // RECONSTRUCT_HPP_

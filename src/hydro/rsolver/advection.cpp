@@ -24,8 +24,8 @@ namespace hydro {
 Advection::Advection(Mesh* pm, ParameterInput* pin, int igid) : 
   RiemannSolver(pm, pin, igid)
 {
-  void RSolver(const int il, const  int iu, const int dir,
-    const AthenaArray<Real> &wl, const AthenaArray<Real> &wr, AthenaArray<Real> &flx);
+  void RSolver(const int il, const  int iu, const int dir, const AthenaArray2D<Real> &wl,
+               const AthenaArray2D<Real> &wr, AthenaArray2D<Real> &flx);
 }
 
 //----------------------------------------------------------------------------------------
@@ -33,7 +33,8 @@ Advection::Advection(Mesh* pm, ParameterInput* pin, int igid) :
 //  \brief An advection Riemann solver for hydrodynamics (both adiabatic and isothermal)
 
 void Advection::RSolver(const int il, const int iu, const int ivx,
-      const AthenaArray<Real> &wl, const AthenaArray<Real> &wr, AthenaArray<Real> &flx)
+                        const AthenaArray2D<Real> &wl, const AthenaArray2D<Real> &wr,
+                        AthenaArray2D<Real> &flx)
 {
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
