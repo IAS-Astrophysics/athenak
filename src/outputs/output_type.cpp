@@ -53,6 +53,7 @@
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "hydro/hydro.hpp"
+#include "utils/grid_locations.hpp"
 #include "outputs.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -112,26 +113,26 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
 
     int indx = static_cast<int>(x1_cc_.size()) - 1;
     for (int i=0; i<nout1; ++i) {
-      x1_cc_[indx](i) = pm->CellCenterX((i-(mb.mb_cells.is - ois)), mb.mb_cells.nx1,
-                                        mb.mb_size.x1min, mb.mb_size.x1max);
-      x1_fc_[indx](i) = pm->LeftEdgeX((i-(mb.mb_cells.is - ois)), mb.mb_cells.nx1,
-                                      mb.mb_size.x1min, mb.mb_size.x1max);
+      x1_cc_[indx](i) = CellCenterX((i-(mb.mb_cells.is - ois)), mb.mb_cells.nx1,
+                                    mb.mb_size.x1min, mb.mb_size.x1max);
+      x1_fc_[indx](i) = LeftEdgeX((i-(mb.mb_cells.is - ois)), mb.mb_cells.nx1,
+                                  mb.mb_size.x1min, mb.mb_size.x1max);
     }
     x1_fc_[indx](nout1) = mb.mb_size.x1max;
 
     for (int j=0; j<nout2; ++j) {
-      x2_cc_[indx](j) = pm->CellCenterX((j-(mb.mb_cells.js - ojs)), mb.mb_cells.nx2,
-                                        mb.mb_size.x2min, mb.mb_size.x2max);
-      x2_fc_[indx](j) = pm->LeftEdgeX((j-(mb.mb_cells.js - ojs)), mb.mb_cells.nx2,
-                                      mb.mb_size.x2min, mb.mb_size.x2max);
+      x2_cc_[indx](j) = CellCenterX((j-(mb.mb_cells.js - ojs)), mb.mb_cells.nx2,
+                                    mb.mb_size.x2min, mb.mb_size.x2max);
+      x2_fc_[indx](j) = LeftEdgeX((j-(mb.mb_cells.js - ojs)), mb.mb_cells.nx2,
+                                  mb.mb_size.x2min, mb.mb_size.x2max);
     }
     x2_fc_[indx](nout2) = mb.mb_size.x2max;
 
     for (int k=0; k<nout3; ++k) {
-      x3_cc_[indx](k) = pm->CellCenterX((k-(mb.mb_cells.ks - oks)), mb.mb_cells.nx3,
-                                        mb.mb_size.x3min, mb.mb_size.x3max);
-      x3_cc_[indx](k) = pm->LeftEdgeX((k-(mb.mb_cells.ks - oks)), mb.mb_cells.nx3,
-                                      mb.mb_size.x3min, mb.mb_size.x3max);
+      x3_cc_[indx](k) = CellCenterX((k-(mb.mb_cells.ks - oks)), mb.mb_cells.nx3,
+                                    mb.mb_size.x3min, mb.mb_size.x3max);
+      x3_cc_[indx](k) = LeftEdgeX((k-(mb.mb_cells.ks - oks)), mb.mb_cells.nx3,
+                                  mb.mb_size.x3min, mb.mb_size.x3max);
     }
     x3_fc_[indx](nout3) = mb.mb_size.x3max;
   }
@@ -232,15 +233,15 @@ void OutputType::LoadOutputData(Mesh *pm)
         // find index of slice(s) [if any]
         int islice=0, jslice=0, kslice=0;
         if (out_params.slice1) { 
-          islice = pm->CellCenterIndex(out_params.slice_x1, mb.mb_cells.nx1,
+          islice = CellCenterIndex(out_params.slice_x1, mb.mb_cells.nx1,
             mb.mb_size.x1min, mb.mb_size.x1max);
         }   
         if (out_params.slice2) {
-          jslice = pm->CellCenterIndex(out_params.slice_x2, mb.mb_cells.nx2,
+          jslice = CellCenterIndex(out_params.slice_x2, mb.mb_cells.nx2,
             mb.mb_size.x2min, mb.mb_size.x2max);
         }   
         if (out_params.slice3) {
-          kslice = pm->CellCenterIndex(out_params.slice_x3, mb.mb_cells.nx3,
+          kslice = CellCenterIndex(out_params.slice_x3, mb.mb_cells.nx3,
             mb.mb_size.x3min, mb.mb_size.x3max);
         }
         
@@ -289,15 +290,15 @@ void OutputType::LoadOutputData(Mesh *pm)
         // find index of slice(s) [if any]
         int islice=0, jslice=0, kslice=0;
         if (out_params.slice1) { 
-          islice = pm->CellCenterIndex(out_params.slice_x1, mb.mb_cells.nx1,
+          islice = CellCenterIndex(out_params.slice_x1, mb.mb_cells.nx1,
             mb.mb_size.x1min, mb.mb_size.x1max);
         }   
         if (out_params.slice2) {
-          jslice = pm->CellCenterIndex(out_params.slice_x2, mb.mb_cells.nx2,
+          jslice = CellCenterIndex(out_params.slice_x2, mb.mb_cells.nx2,
             mb.mb_size.x2min, mb.mb_size.x2max);
         }   
         if (out_params.slice3) {
-          kslice = pm->CellCenterIndex(out_params.slice_x3, mb.mb_cells.nx3,
+          kslice = CellCenterIndex(out_params.slice_x3, mb.mb_cells.nx3,
             mb.mb_size.x3min, mb.mb_size.x3max);
         }
         

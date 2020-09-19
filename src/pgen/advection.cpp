@@ -19,6 +19,7 @@
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "hydro/hydro.hpp"
+#include "utils/grid_locations.hpp"
 #include "pgen.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -61,14 +62,14 @@ using namespace hydro;
       for (int i=is; i<=ie; i++) {
         Real r; // coordinate that will span [0->1]
         if (flow_dir == 1) {
-          r = (pmesh_->CellCenterX(i-is, pmb->mb_cells.nx1,x1min,x1max) -
-               pmesh_->mesh_size.x1min)/length;
+          r = (CellCenterX(i-is, pmb->mb_cells.nx1,x1min,x1max) - pmesh_->mesh_size.x1min)
+              /length;
         } else if (flow_dir == 2) {
-          r = (pmesh_->CellCenterX(j-js, pmb->mb_cells.nx2,x2min,x2max) -
-               pmesh_->mesh_size.x3min)/length;
+          r = (CellCenterX(j-js, pmb->mb_cells.nx2,x2min,x2max) - pmesh_->mesh_size.x3min)
+              /length;
         } else {
-          r = (pmesh_->CellCenterX(k-ks, pmb->mb_cells.nx3,x3min,x3max) -
-               pmesh_->mesh_size.x3min)/length;
+          r = (CellCenterX(k-ks, pmb->mb_cells.nx3,x3min,x3max) - pmesh_->mesh_size.x3min)
+              /length;
         }
 
         Real f; // value for advected quantity, depending on problem type

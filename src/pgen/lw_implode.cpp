@@ -13,6 +13,7 @@
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "hydro/hydro.hpp"
+#include "utils/grid_locations.hpp"
 #include "pgen.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -46,8 +47,8 @@ void ProblemGenerator::LWImplode_(MeshBlock *pmb, ParameterInput *pin)
         pmb->phydro->u0(IM1,k,j,i) = 0.0;
         pmb->phydro->u0(IM2,k,j,i) = 0.0;
         pmb->phydro->u0(IM3,k,j,i) = 0.0;
-        Real x1v = pmesh_->CellCenterX(i-is, pmb->mb_cells.nx1, x1min, x1max);
-        Real x2v = pmesh_->CellCenterX(j-js, pmb->mb_cells.nx2, x2min, x2max);
+        Real x1v = CellCenterX(i-is, pmb->mb_cells.nx1, x1min, x1max);
+        Real x2v = CellCenterX(j-js, pmb->mb_cells.nx2, x2min, x2max);
         if (x2v > (y0 - x1v)) {
           pmb->phydro->u0(IDN,k,j,i) = d_out;
           pmb->phydro->u0(IEN,k,j,i) = p_out/gm1;
