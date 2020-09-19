@@ -18,13 +18,10 @@
 // MeshBlock constructor: constructs coordinate, boundary condition, hydro, field
 //                        and mesh refinement objects.
 
-MeshBlock::MeshBlock(Mesh *pm, ParameterInput *pin,
-  int igid, RegionSize isize, RegionCells icells, BoundaryFlag *ibcs) :
-  mb_gid(igid), mb_size(isize), mb_cells(icells), pmesh_(pm)
+MeshBlock::MeshBlock(Mesh *pm, ParameterInput *pin, int igid, RegionSize isize,
+                     RegionCells icells, BoundaryFlag *ibcs) :
+  mb_gid(igid), mb_size(isize), mb_cells(icells), exe_space(DevExecSpace()), pmesh_(pm)
 {
-  // copy input boundary flags into MeshBlock 
-//  for (int i=0; i<6; ++i) {mb_bcs[i] = ibcs[i];}
-
   // initialize grid indices
   mb_cells.is = mb_cells.ng;
   mb_cells.ie = mb_cells.is + mb_cells.nx1 - 1;

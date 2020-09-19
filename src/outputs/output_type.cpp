@@ -50,7 +50,6 @@
 #include <string>   // std::string, to_string()
 
 #include "athena.hpp"
-#include "athena_arrays.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "hydro/hydro.hpp"
@@ -103,7 +102,7 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
         (out_params.slice_x3 <  mb.mb_size.x3min ||
          out_params.slice_x3 >= mb.mb_size.x3max) ) { continue; }
 
-    // initialize new AthenaArrays for coordinates
+    // construct new HostArray1Ds for coordinates
     x1_cc_.emplace_back("x1v",nout1);
     x1_fc_.emplace_back("x1f",nout1+1);
     x2_cc_.emplace_back("x2v",nout2);
@@ -193,7 +192,7 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
 
 //----------------------------------------------------------------------------------------
 // OutputType::LoadOutputData()
-// create std::vector of AthenaArrays containing data specified in <output> block for
+// create std::vector of HostArray3Ds containing data specified in <output> block for
 // this output type
 
 void OutputType::LoadOutputData(Mesh *pm)

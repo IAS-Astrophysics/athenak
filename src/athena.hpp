@@ -87,4 +87,110 @@ using AthenaScratch2D = Kokkos::View<T **, LayoutWrapper, ScratchMemSpace,
 // type alias for Kokkos thread teams
 using TeamMember_t = Kokkos::TeamPolicy<>::member_type;
 
+//----------------------------------------------------------------------------------------
+// wrappers for Kokkos::parallel_for
+// Currently these wrappers all implement a 1D range policy, since experiments in
+// K-Athena and Parthenon indicate these, in general, are faster then MD range policy.
+
+// 3D loop using Kokkos 1D Range
+template <typename Function>
+inline void par_for(const std::string &name, DevExecSpace exec_space,
+                    const int &kl, const int &ku, const int &jl, const int &ju,
+                    const int &il, const int &iu, const Function &function)
+{ 
+  // compute total number of elements and call Kokkos::parallel_for()
+  const int nk = ku - kl + 1;
+  const int nj = ju - jl + 1;
+  const int ni = iu - il + 1;
+  const int nkji = nk * nj * ni;
+  const int nji  = nj * ni;
+  Kokkos::parallel_for(name, Kokkos::RangePolicy<>(exec_space, 0, nkji),
+                       KOKKOS_LAMBDA(const int &idx)
+  { 
+    // compute n,k,j,i indices of thread and call function
+    int k = (idx)/nji;
+    int j = (idx - k*nji)/ni;
+    int i = (idx - k*nji - j*ni);
+    k += kl;
+    j += jl;
+    i += il;
+    function(k, j, i);
+  });
+}
+
+// 4D loop using Kokkos 1D Range
+template <typename Function>
+inline void par_for(const std::string &name, DevExecSpace exec_space,
+                    const int &nl, const int &nu, const int &kl, const int &ku,
+                    const int &jl, const int &ju, const int &il, const int &iu,
+                    const Function &function) {
+  // compute total number of elements and call Kokkos::parallel_for()
+  const int nn = nu - nl + 1;
+  const int nk = ku - kl + 1;
+  const int nj = ju - jl + 1;
+  const int ni = iu - il + 1;
+  const int nnkji = nn * nk * nj * ni;
+  const int nkji  = nk * nj * ni;
+  const int nji   = nj * ni;
+  Kokkos::parallel_for(name, Kokkos::RangePolicy<>(exec_space, 0, nnkji),
+                       KOKKOS_LAMBDA(const int &idx)
+  {
+    // compute n,k,j,i indices of thread and call function
+    int n = (idx)/nkji;
+    int k = (idx - n*nkji)/nji;
+    int j = (idx - n*nkji - k*nji)/ni;
+    int i = (idx - n*nkji - k*nji - j*ni);
+    n += nl;
+    k += kl;
+    j += jl;
+    i += il;
+    function(n, k, j, i);
+  });
+}
+
+// 1D outer parallel loop using Kokkos Teams
+template <typename Function>
+inline void par_for_outer(const std::string &name, DevExecSpace exec_space,
+                          size_t scr_size, const int scr_level,
+                          const int kl, const int ku, const Function &function)
+{
+  const int nk = ku + 1 - kl;
+  Kokkos::TeamPolicy<> policy(exec_space, nk, Kokkos::AUTO);
+  Kokkos::parallel_for(name, policy.set_scratch_size(scr_level,Kokkos::PerTeam(scr_size)),
+                       KOKKOS_LAMBDA(TeamMember_t tmember)
+  {
+    const int k = tmember.league_rank() + kl;
+    function(tmember, k);
+  });
+}
+
+// 2D outer parallel loop using Kokkos Teams
+template <typename Function>
+inline void par_for_outer(const std::string &name, DevExecSpace exec_space,
+                          size_t scr_size, const int scr_level,
+                          const int kl, const int ku, const int jl, const int ju,
+                          const Function &function)
+{ 
+  const int nk = ku - kl + 1;
+  const int nj = ju - jl + 1;
+  const int nkj = nk*nj;
+  Kokkos::TeamPolicy<> policy(exec_space, nkj, Kokkos::AUTO);
+  Kokkos::parallel_for(name, policy.set_scratch_size(scr_level,Kokkos::PerTeam(scr_size)),
+                       KOKKOS_LAMBDA(TeamMember_t tmember)
+  { 
+    const int k = tmember.league_rank()/nj + kl;
+    const int j = tmember.league_rank()%nj + jl;
+    function(tmember, k, j);
+  });
+}
+
+// 1D inner parallel loop using TeamVectorRange
+template <typename Function>
+KOKKOS_INLINE_FUNCTION void par_for_inner(TeamMember_t tmember, const int il,const int iu,
+                                          const Function &function)
+{
+  // Note Kokkos::TeamVectorRange only iterates from ibegin to iend-1, so must pass iu+1
+  Kokkos::parallel_for(Kokkos::TeamVectorRange(tmember, il, iu+1), function);
+}
+
 #endif // ATHENA_HPP_

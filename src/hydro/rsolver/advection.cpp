@@ -10,7 +10,6 @@
 #include <algorithm>  // max(), min()
 
 #include "athena.hpp"
-#include "athena_arrays.hpp"
 #include "mesh/mesh.hpp"
 #include "hydro/eos/eos.hpp"
 #include "hydro/hydro.hpp"

@@ -7,7 +7,6 @@
 //  \brief piecewise constant (donor cell) reconstruction implemented in a derived class
 
 #include "athena.hpp"
-#include "athena_arrays.hpp"
 #include "reconstruct.hpp"
 
 //----------------------------------------------------------------------------------------

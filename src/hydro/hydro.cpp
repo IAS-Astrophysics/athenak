@@ -9,7 +9,6 @@
 #include <iostream>
 
 #include "athena.hpp"
-#include "athena_arrays.hpp"
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
 #include "mesh/mesh.hpp"

@@ -29,7 +29,6 @@
 #include <math.h>
 
 #include "athena.hpp"
-#include "athena_arrays.hpp"
 #include "reconstruct.hpp"
 
 //----------------------------------------------------------------------------------------

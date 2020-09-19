@@ -35,11 +35,11 @@ class MeshBlock
   int mb_gid;             // grid ID, unique identifier for this MeshBlock
   RegionSize  mb_size;    // physical size of this MeshBlock
   RegionCells mb_cells;   // info about cells in this MeshBlock
+  DevExecSpace exe_space; // Kokkos execution space for this MeshBlock
+  // cells on next coarser level MB (i.e. ncells2=nx2/2 + 2*nghost, if nx2>1)
+  RegionCells cmb_cells;
 
   BoundaryValues* pbvals; // object containing neighbor list, BC flags, etc
-
-  // cells on 1x coarser level MeshBlock (i.e. ncc2=nx2/2 + 2*nghost, if nx2>1)
-  RegionCells cmb_cells;
 
   // physics modules (controlled by InitPhysicsModules)
   hydro::Hydro *phydro;

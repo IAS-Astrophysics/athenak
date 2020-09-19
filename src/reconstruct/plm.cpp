@@ -8,7 +8,6 @@
 //  This version only works with uniform mesh spacing
 
 #include "athena.hpp"
-#include "athena_arrays.hpp"
 #include "reconstruct.hpp"
 
 //----------------------------------------------------------------------------------------

@@ -12,7 +12,6 @@
 #include <iostream>
 
 #include "athena.hpp"
-#include "athena_arrays.hpp"
 #include "mesh/mesh.hpp"
 #include "driver/driver.hpp"
 #include "eos/eos.hpp"
