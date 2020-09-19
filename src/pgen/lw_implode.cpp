@@ -41,24 +41,23 @@ void ProblemGenerator::LWImplode_(MeshBlock *pmb, ParameterInput *pin)
   Real y0 = 0.5*(x2max + x2min) + 0.25*(pmb->mb_cells.dx2);
 
   // Set initial conditions
-  for (int k=ks; k<=ke; k++) {
-    for (int j=js; j<=je; j++) {
-      for (int i=is; i<=ie; i++) {
-        pmb->phydro->u0(IM1,k,j,i) = 0.0;
-        pmb->phydro->u0(IM2,k,j,i) = 0.0;
-        pmb->phydro->u0(IM3,k,j,i) = 0.0;
-        Real x1v = CellCenterX(i-is, pmb->mb_cells.nx1, x1min, x1max);
-        Real x2v = CellCenterX(j-js, pmb->mb_cells.nx2, x2min, x2max);
-        if (x2v > (y0 - x1v)) {
-          pmb->phydro->u0(IDN,k,j,i) = d_out;
-          pmb->phydro->u0(IEN,k,j,i) = p_out/gm1;
-        } else {
-          pmb->phydro->u0(IDN,k,j,i) = d_in;
-          pmb->phydro->u0(IEN,k,j,i) = p_in/gm1;
-        }
+  par_for("pgen", pmb->exe_space, ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int k, int j, int i)
+    {
+      pmb->phydro->u0(IM1,k,j,i) = 0.0;
+      pmb->phydro->u0(IM2,k,j,i) = 0.0;
+      pmb->phydro->u0(IM3,k,j,i) = 0.0;
+      Real x1v = CellCenterX(i-is, pmb->mb_cells.nx1, x1min, x1max);
+      Real x2v = CellCenterX(j-js, pmb->mb_cells.nx2, x2min, x2max);
+      if (x2v > (y0 - x1v)) {
+        pmb->phydro->u0(IDN,k,j,i) = d_out;
+        pmb->phydro->u0(IEN,k,j,i) = p_out/gm1;
+      } else {
+        pmb->phydro->u0(IDN,k,j,i) = d_in;
+        pmb->phydro->u0(IEN,k,j,i) = p_in/gm1;
       }
     }
-  }
+  );
 
   return;
 }
