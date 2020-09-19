@@ -86,7 +86,6 @@ class Mesh
   ~Mesh();
 
   // accessors
-  int GetNumMeshThreads() const {return num_mesh_threads;}
   MeshBlock* FindMeshBlock(int tgid)
   {
     assert (tgid >= gids_ && tgid <= gide_);
@@ -142,7 +141,6 @@ class Mesh
 
  private:
   // data
-  int num_mesh_threads;
   int root_level; // logical level of root (physical) grid (e.g. Fig. 3 of method paper)
   int max_level;  // logical level of maximum refinement grid in Mesh
   int gids_, gide_; // start/end of grid IDs on this MPI rank

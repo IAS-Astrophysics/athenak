@@ -10,6 +10,7 @@
 //  The Mesh is the overall grid structure, and MeshBlocks are local patches of data
 //  (potentially on different levels) that tile the entire domain.
 
+#include <memory>
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
 

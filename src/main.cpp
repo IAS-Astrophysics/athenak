@@ -23,6 +23,7 @@
 #include <cstdlib>
 #include <iostream>   // cout, endl
 #include <string>     // string
+#include <memory>
 
 #include "athena.hpp"
 #include "utils/utils.hpp"
