@@ -34,6 +34,7 @@ using namespace hydro;
   int iprob = pin->GetInteger("problem","iproblem");
   Real vel = pin->GetOrAddReal("problem","velocity",1.0);
   Real amp = pin->GetOrAddReal("problem","amplitude",0.1);
+  Real gm1 = pmb->phydro->peos->GetGamma() - 1.0;
 
   // Initialize the grid
   int &is = pmb->mb_cells.is, &ie = pmb->mb_cells.ie;
@@ -65,7 +66,7 @@ using namespace hydro;
   Real &x2min = pmb->mb_size.x2min, &x2max = pmb->mb_size.x2max;
   Real &x3min = pmb->mb_size.x3min, &x3max = pmb->mb_size.x3max;
 
-  par_for("pgen", pmb->exe_space, ks, ke, js, je, is, ie,
+  par_for("pgen_advect", pmb->exe_space, ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int k, int j, int i)
     {
       Real r; // coordinate that will span [0->1]
@@ -103,7 +104,7 @@ using namespace hydro;
         pmb->phydro->u0(IM2,k,j,i) = f;
         pmb->phydro->u0(IM3,k,j,i) = vel;
       } 
-      pmb->phydro->u0(IEN,k,j,i) = 1.0 + 0.5*(SQR(pmb->phydro->u0(IM1,k,j,i))
+      pmb->phydro->u0(IEN,k,j,i) = 1.0/gm1 + 0.5*(SQR(pmb->phydro->u0(IM1,k,j,i))
         + SQR(pmb->phydro->u0(IM2,k,j,i)) + SQR(pmb->phydro->u0(IM3,k,j,i)))/
           pmb->phydro->u0(IDN,k,j,i);
     }

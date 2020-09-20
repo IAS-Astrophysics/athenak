@@ -72,6 +72,7 @@ using namespace hydro;
 
   // Initialize the discontinuity in the Hydro variables ---------------------------------
 
+  Real gm1 = pmb->phydro->peos->GetGamma() - 1.0;
   int &is = pmb->mb_cells.is, &ie = pmb->mb_cells.ie;
   int &js = pmb->mb_cells.js, &je = pmb->mb_cells.je;
   int &ks = pmb->mb_cells.ks, &ke = pmb->mb_cells.ke;
@@ -83,7 +84,7 @@ using namespace hydro;
 
     //--- shock in 1-direction
     case 1:
-      par_for("shock_tube_case1", pmb->exe_space, ks, ke, js, je, is, ie,
+      par_for("pgen_shock_tube1", pmb->exe_space, ks, ke, js, je, is, ie,
         KOKKOS_LAMBDA(int k, int j, int i)
         {
           Real x1 = CellCenterX(i-is, pmb->mb_cells.nx1, x1min, x1max);
@@ -92,13 +93,15 @@ using namespace hydro;
             pmb->phydro->u0(IM1,k,j,i) = wl[IVX]*wl[IDN];
             pmb->phydro->u0(IM2,k,j,i) = wl[IVY]*wl[IDN];
             pmb->phydro->u0(IM3,k,j,i) = wl[IVZ]*wl[IDN];
-            pmb->phydro->u0(IEN,k,j,i) = 1.0;
+            pmb->phydro->u0(IEN,k,j,i) = wl[IPR]/gm1 +
+               0.5*wl[IDN]*(SQR(wl[IVX]) + SQR(wl[IVY]) + SQR(wl[IVZ]));
           } else {
             pmb->phydro->u0(IDN,k,j,i) = wr[IDN];
             pmb->phydro->u0(IM1,k,j,i) = wr[IVX]*wr[IDN];
             pmb->phydro->u0(IM2,k,j,i) = wr[IVY]*wr[IDN];
             pmb->phydro->u0(IM3,k,j,i) = wr[IVZ]*wr[IDN];
-            pmb->phydro->u0(IEN,k,j,i) = 1.0;
+            pmb->phydro->u0(IEN,k,j,i) = wr[IPR]/gm1 +
+               0.5*wr[IDN]*(SQR(wr[IVX]) + SQR(wr[IVY]) + SQR(wr[IVZ]));
           }
         }
       );
@@ -106,7 +109,7 @@ using namespace hydro;
 
     //--- shock in 2-direction
     case 2:
-      par_for("shock_tube_case2", pmb->exe_space, ks, ke, js, je, is, ie,
+      par_for("pgen_shock_tube2", pmb->exe_space, ks, ke, js, je, is, ie,
         KOKKOS_LAMBDA(int k, int j, int i)
         {
           Real x2 = CellCenterX(j-js, pmb->mb_cells.nx2, x2min, x2max);
@@ -115,13 +118,15 @@ using namespace hydro;
             pmb->phydro->u0(IM2,k,j,i) = wl[IVX]*wl[IDN];
             pmb->phydro->u0(IM3,k,j,i) = wl[IVY]*wl[IDN];
             pmb->phydro->u0(IM1,k,j,i) = wl[IVZ]*wl[IDN];
-            pmb->phydro->u0(IEN,k,j,i) = 1.0;
+            pmb->phydro->u0(IEN,k,j,i) = wl[IPR]/gm1 +
+               0.5*wl[IDN]*(SQR(wl[IVX]) + SQR(wl[IVY]) + SQR(wl[IVZ]));
           } else {
             pmb->phydro->u0(IDN,k,j,i) = wr[IDN];
             pmb->phydro->u0(IM2,k,j,i) = wr[IVX]*wr[IDN];
             pmb->phydro->u0(IM3,k,j,i) = wr[IVY]*wr[IDN];
             pmb->phydro->u0(IM1,k,j,i) = wr[IVZ]*wr[IDN];
-            pmb->phydro->u0(IEN,k,j,i) = 1.0;
+            pmb->phydro->u0(IEN,k,j,i) = wr[IPR]/gm1 +
+               0.5*wr[IDN]*(SQR(wr[IVX]) + SQR(wr[IVY]) + SQR(wr[IVZ]));
           }
         }
       );
@@ -129,7 +134,7 @@ using namespace hydro;
 
     //--- shock in 3-direction
     case 3:
-      par_for("shock_tube_case3", pmb->exe_space, ks, ke, js, je, is, ie,
+      par_for("pgen_shock_tube3", pmb->exe_space, ks, ke, js, je, is, ie,
         KOKKOS_LAMBDA(int k, int j, int i)
         {
           Real x3 = CellCenterX(k-ks, pmb->mb_cells.nx3, x3min, x3max);
@@ -138,13 +143,15 @@ using namespace hydro;
             pmb->phydro->u0(IM3,k,j,i) = wl[IVX]*wl[IDN];
             pmb->phydro->u0(IM1,k,j,i) = wl[IVY]*wl[IDN];
             pmb->phydro->u0(IM2,k,j,i) = wl[IVZ]*wl[IDN];
-            pmb->phydro->u0(IEN,k,j,i) = 1.0;
+            pmb->phydro->u0(IEN,k,j,i) = wl[IPR]/gm1 +
+               0.5*wl[IDN]*(SQR(wl[IVX]) + SQR(wl[IVY]) + SQR(wl[IVZ]));
           } else {
             pmb->phydro->u0(IDN,k,j,i) = wr[IDN];
             pmb->phydro->u0(IM3,k,j,i) = wr[IVX]*wr[IDN];
             pmb->phydro->u0(IM1,k,j,i) = wr[IVY]*wr[IDN];
             pmb->phydro->u0(IM2,k,j,i) = wr[IVZ]*wr[IDN];
-            pmb->phydro->u0(IEN,k,j,i) = 1.0;
+            pmb->phydro->u0(IEN,k,j,i) = wr[IPR]/gm1 +
+               0.5*wr[IDN]*(SQR(wr[IVX]) + SQR(wr[IVY]) + SQR(wr[IVZ]));
           }
         }
       );

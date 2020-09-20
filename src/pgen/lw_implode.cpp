@@ -41,7 +41,7 @@ void ProblemGenerator::LWImplode_(MeshBlock *pmb, ParameterInput *pin)
   Real y0 = 0.5*(x2max + x2min) + 0.25*(pmb->mb_cells.dx2);
 
   // Set initial conditions
-  par_for("pgen", pmb->exe_space, ks, ke, js, je, is, ie,
+  par_for("pgen_lw_implode", pmb->exe_space, ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int k, int j, int i)
     {
       pmb->phydro->u0(IM1,k,j,i) = 0.0;
