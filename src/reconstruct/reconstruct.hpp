@@ -6,13 +6,14 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file reconstruct.hpp
-//  \brief defines abstract base class Reconstruction, and various derived classes
-//  Each derived class Contains data and functions that implement different spatial
-//  reconstruction algorithms, e.g. first-order donor cell, second-order piecewise linear,
-//  and third-order piecewise parabolic.
+//  \brief Contains data and functions that implement different spatial reconstruction
+//  algorithms, e.g. first-order donor cell, second-order piecewise linear, and
+//  third-order piecewise parabolic.
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
+
+enum class ReconstructionMethod {donor_cell, piecewise_linear, piecewise_parabolic};
 
 //----------------------------------------------------------------------------------------
 //! \class Reconstruction
@@ -21,82 +22,55 @@
 class Reconstruction
 {
  public:
-  Reconstruction(ParameterInput *pin, int nvar, int ncells1);
+  Reconstruction(ParameterInput *pin, int nghost);
   virtual ~Reconstruction() = default;
 
-  // pure virtual reconstruction functions overwritten in each derived class
-  virtual void ReconstructX1(const int k, const int j, const int il, const int iu,
-                             const AthenaArray4D<Real> &q,
-                             AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr) = 0;
-  virtual void ReconstructX2(const int k, const int j, const int il, const int iu,
-                             const AthenaArray4D<Real> &q,
-                             AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr) = 0;
-  virtual void ReconstructX3(const int k, const int j, const int il, const int iu,
-                             const AthenaArray4D<Real> &q,
-                             AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr) = 0;
-
- protected:
-  int nvar_, ncells1_;
-};
-
-//----------------------------------------------------------------------------------------
-//! \class DonorCell
-//  \brief derived Reconstruction class for first-order donor cell method
-
-class DonorCell : public Reconstruction
-{
- public:
-  DonorCell(ParameterInput *pin, int nvar, int ncells1);
-
+  // wrapper functions that call different methods
   void ReconstructX1(const int k, const int j, const int il, const int iu,
                      const AthenaArray4D<Real> &q,
-                     AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr) override;
+                     AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr);
   void ReconstructX2(const int k, const int j, const int il, const int iu,
                      const AthenaArray4D<Real> &q,
-                     AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr) override;
+                     AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr);
   void ReconstructX3(const int k, const int j, const int il, const int iu,
                      const AthenaArray4D<Real> &q,
-                     AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr) override;
-};
+                     AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr);
 
-//----------------------------------------------------------------------------------------
-//! \class PiecewiseLinear
-//  \brief derived Reconstruction class for second-order PLM method
+  // first-order donor cell reconstruction
+  void DonorCellX1(const int k, const int j, const int il, const int iu,
+                   const AthenaArray4D<Real> &q,
+                   AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr);
+  void DonorCellX2(const int k, const int j, const int il, const int iu,
+                   const AthenaArray4D<Real> &q,
+                   AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr);
+  void DonorCellX3(const int k, const int j, const int il, const int iu,
+                   const AthenaArray4D<Real> &q,
+                   AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr);
 
-class PiecewiseLinear : public Reconstruction
-{
- public:
-  PiecewiseLinear(ParameterInput *pin, int nvar, int ncells1);
+  // second-order piecewise linear reconstruction in the primitive variables
+  void PLMX1(const int k, const int j, const int il, const int iu,
+             const AthenaArray4D<Real> &q,
+             AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr);
+  void PLMX2(const int k, const int j, const int il, const int iu,
+             const AthenaArray4D<Real> &q,
+             AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr);
+  void PLMX3(const int k, const int j, const int il, const int iu,
+             const AthenaArray4D<Real> &q,
+             AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr);
 
-  void ReconstructX1(const int k, const int j, const int il, const int iu,
-                     const AthenaArray4D<Real> &q,
-                     AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr) override;
-  void ReconstructX2(const int k, const int j, const int il, const int iu,
-                     const AthenaArray4D<Real> &q,
-                     AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr) override;
-  void ReconstructX3(const int k, const int j, const int il, const int iu,
-                     const AthenaArray4D<Real> &q,
-                     AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr) override;
-};
+  // third-order piecewise parabolic reconstruction in the primitive variables
+  void PPMX1(const int k, const int j, const int il, const int iu,
+             const AthenaArray4D<Real> &q,
+             AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr);
+  void PPMX2(const int k, const int j, const int il, const int iu,
+             const AthenaArray4D<Real> &q,
+             AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr);
+  void PPMX3(const int k, const int j, const int il, const int iu,
+             const AthenaArray4D<Real> &q,
+             AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr);
 
-//----------------------------------------------------------------------------------------
-//! \class PiecewiseParabolic
-//  \brief derived Reconstruction class for third-order PPM method
-
-class PiecewiseParabolic : public Reconstruction
-{
- public:
-  PiecewiseParabolic(ParameterInput *pin, int nvar, int ncells1);
-
-  void ReconstructX1(const int k, const int j, const int il, const int iu,
-                     const AthenaArray4D<Real> &q,
-                     AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr) override;
-  void ReconstructX2(const int k, const int j, const int il, const int iu,
-                     const AthenaArray4D<Real> &q,
-                     AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr) override;
-  void ReconstructX3(const int k, const int j, const int il, const int iu,
-                     const AthenaArray4D<Real> &q,
-                     AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr) override;
+ private:
+  ReconstructionMethod recon_method_;
 };
 
 #endif // RECONSTRUCT_HPP_

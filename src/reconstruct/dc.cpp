@@ -4,26 +4,18 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file dc.cpp
-//  \brief piecewise constant (donor cell) reconstruction implemented in a derived class
+//  \brief piecewise constant (donor cell) reconstruction
 
 #include "athena.hpp"
 #include "reconstruct.hpp"
 
 //----------------------------------------------------------------------------------------
-// DonorCell constructor
-
-DonorCell::DonorCell(ParameterInput *pin, int nvar, int ncells1) :
-  Reconstruction(pin, nvar, ncells1)
-{
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn DonorCell::ReconstructX1()
+//! \fn Reconstruction::DonorCellX1()
 //  \brief For each cell-centered value q(i), returns ql(i+1) and qr(i) over il to iu.
 //  Therefore range of indices for which BOTH L/R states returned is il+1 to il-1
 //  This function should be called over [is-1,ie+1] to get BOTH L/R states over [is,ie]
 
-void DonorCell::ReconstructX1(const int k, const int j, const int il, const int iu,
+void Reconstruction::DonorCellX1(const int k, const int j, const int il, const int iu,
      const AthenaArray4D<Real> &q, AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr)
 {
   int nvar = q.extent_int(0);
@@ -37,11 +29,11 @@ void DonorCell::ReconstructX1(const int k, const int j, const int il, const int 
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn DonorCell::ReconstructX2()
+//! \fn Reconstruction::DonorCellX2()
 //  \brief For each cell-centered value q(j), returns ql(j+1) and qr(j) over il to iu.
 //  This function should be called over [js-1,je+1] to get BOTH L/R states over [js,je]
 
-void DonorCell::ReconstructX2(const int k, const int j, const int il, const int iu,
+void Reconstruction::DonorCellX2(const int k, const int j, const int il, const int iu,
      const AthenaArray4D<Real> &q, AthenaArray2D<Real> &ql_jp1, AthenaArray2D<Real> &qr_j)
 {
   int nvar = q.extent_int(0);
@@ -55,11 +47,11 @@ void DonorCell::ReconstructX2(const int k, const int j, const int il, const int 
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn DonorCell::ReconstructX3()
+//! \fn Reconstruction::DonorCellX3()
 //  \brief For each cell-centered value q(k), returns ql(k+1) and qr(k) over il to iu.
 //  This function should be called over [ks-1,ke+1] to get BOTH L/R states over [ks,ke]
 
-void DonorCell::ReconstructX3(const int k, const int j, const int il, const int iu,
+void Reconstruction::DonorCellX3(const int k, const int j, const int il, const int iu,
      const AthenaArray4D<Real> &q, AthenaArray2D<Real> &ql_kp1, AthenaArray2D<Real> &qr_k)
 {
   int nvar = q.extent_int(0);

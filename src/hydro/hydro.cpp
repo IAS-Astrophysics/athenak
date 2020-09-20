@@ -80,30 +80,8 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
   // for time-evolving problems, continue to construct methods, allocate arrays
   if (hydro_evol != HydroEvolution::no_evolution) {
 
-    // allocate reconstruction method (default PLM)
-    {std::string recon_method = pin->GetOrAddString("hydro","reconstruct","plm");
-    if (recon_method.compare("dc") == 0) {
-      precon = new DonorCell(pin, nhydro, ncells1);
-
-    } else if (recon_method.compare("plm") == 0) {
-      precon = new PiecewiseLinear(pin, nhydro, ncells1);
-
-    } else if (recon_method.compare("ppm") == 0) {
-      // check that nghost > 2
-      if (pmb->mb_cells.ng < 3) {
-        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-            << std::endl << "PPM reconstruction requires at least 3 ghost zones, "
-            << "but ng=" << pmb->mb_cells.ng << std::endl;
-        std::exit(EXIT_FAILURE);
-      }
-      precon = new PiecewiseParabolic(pin, nhydro, ncells1);
-
-    } else {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "<hydro> recon = '" << recon_method
-                << "' not implemented" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }} // extra brace to limit scope of string
+    // construct reconstruction method (default PLM)
+    precon = new Reconstruction(pin, pmb->mb_cells.ng);
 
     // allocate Riemann solver object (default depends on EOS and dynamics)
     {std::string rsolver;

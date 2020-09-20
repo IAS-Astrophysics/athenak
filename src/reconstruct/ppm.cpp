@@ -32,20 +32,12 @@
 #include "reconstruct.hpp"
 
 //----------------------------------------------------------------------------------------
-// PiecewiseLinear constructor
-
-PiecewiseParabolic::PiecewiseParabolic(ParameterInput *pin, int nvar, int ncells1) :
-  Reconstruction(pin, nvar, ncells1)
-{
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn Reconstruction::PiecewiseParabolicX1()
+//! \fn Reconstruction::PPMX1()
 //  \brief Reconstructs parabolic slope in cell i to compute ql(i+1) and qr(i) in [il,iu]
 //  Therefore range of indices for which BOTH L/R states returned is il+1 to il-1
 //  This function should be called over [is-1,ie+1] to get BOTH L/R states over [is,ie]
 
-void PiecewiseParabolic::ReconstructX1(const int k,const int j,const int il,const int iu,
+void Reconstruction::PPMX1(const int k,const int j,const int il,const int iu,
     const AthenaArray4D<Real> &q, AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr)
 {
   int nvar = q.extent_int(0);
@@ -143,11 +135,11 @@ void PiecewiseParabolic::ReconstructX1(const int k,const int j,const int il,cons
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn Reconstruction::PiecewiseLinearX2()
+//! \fn Reconstruction::PPMX2()
 //  \brief Reconstructs linear slope in cell j to cmpute ql(j+1) and qr(j) over [il,iu]
 //  This function should be called over [js-1,je+1] to get BOTH L/R states over [js,je]
 
-void PiecewiseParabolic::ReconstructX2(const int k,const int j,const int il,const int iu,
+void Reconstruction::PPMX2(const int k,const int j,const int il,const int iu,
     const AthenaArray4D<Real> &q, AthenaArray2D<Real> &ql_jp1, AthenaArray2D<Real> &qr_j)
 {
   int nvar = q.extent_int(0);
@@ -245,11 +237,11 @@ void PiecewiseParabolic::ReconstructX2(const int k,const int j,const int il,cons
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn Reconstruction::PiecewiseLinearX3()
+//! \fn Reconstruction::PPMX3()
 //  \brief Reconstructs linear slope in cell k to cmpute ql(k+1) and qr(k) over [il,iu]
 //  This function should be called over [ks-1,ke+1] to get BOTH L/R states over [ks,ke]
 
-void PiecewiseParabolic::ReconstructX3(const int k,const int j,const int il,const int iu,
+void Reconstruction::PPMX3(const int k,const int j,const int il,const int iu,
     const AthenaArray4D<Real> &q, AthenaArray2D<Real> &ql_kp1, AthenaArray2D<Real> &qr_k)
 {
   int nvar = q.extent_int(0);
