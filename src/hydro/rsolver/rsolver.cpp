@@ -62,25 +62,26 @@ RiemannSolver::RiemannSolver(Mesh* pm, ParameterInput* pin, int igid, bool is_ad
 //----------------------------------------------------------------------------------------
 // RSolver() 
   
-void RiemannSolver::RSolver(const int il, const  int iu, const int dir,
-                            const AthenaArray2D<Real> &wl, const AthenaArray2D<Real> &wr,
-                            AthenaArray2D<Real> &flx)
+KOKKOS_FUNCTION
+void RiemannSolver::RSolver(TeamMember_t const &member, const int il, const  int iu,
+     const int dir, const AthenaScratch2D<Real> &wl, const AthenaScratch2D<Real> &wr,
+     AthenaScratch2D<Real> &flx)
 {                  
   switch (rsolver_method_) {
     case RiemannSolverMethod::advection:
-      Advection(il, iu, dir, wl, wr, flx);
+      Advection(member, il, iu, dir, wl, wr, flx);
       break;
     case RiemannSolverMethod::llf:
-      LLF(il, iu, dir, wl, wr, flx);
+      LLF(member, il, iu, dir, wl, wr, flx);
       break;
     case RiemannSolverMethod::hlle:
-      HLLE(il, iu, dir, wl, wr, flx);
+      HLLE(member, il, iu, dir, wl, wr, flx);
       break;
     case RiemannSolverMethod::hllc:
-      HLLC(il, iu, dir, wl, wr, flx);
+      HLLC(member, il, iu, dir, wl, wr, flx);
       break;
     case RiemannSolverMethod::roe:
-      Roe(il, iu, dir, wl, wr, flx);
+      Roe(member, il, iu, dir, wl, wr, flx);
       break;
     default: 
       break; 

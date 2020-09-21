@@ -27,9 +27,10 @@ namespace hydro {
 //! \fn void RiemannSolver::HLLC
 //! \brief The HLLC Riemann solver for adiabatic hydrodynamics (use HLLE for isothermal)
 
-void RiemannSolver::HLLC(const int il, const int iu, const int ivx,
-                         const AthenaArray2D<Real> &wl, const AthenaArray2D<Real> &wr,
-                         AthenaArray2D<Real> &flx)
+KOKKOS_FUNCTION
+void RiemannSolver::HLLC(TeamMember_t const &member, const int il, const int iu,
+     const int ivx, const AthenaScratch2D<Real> &wl, const AthenaScratch2D<Real> &wr,
+     AthenaScratch2D<Real> &flx)
 {
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
@@ -40,7 +41,8 @@ void RiemannSolver::HLLC(const int il, const int iu, const int ivx,
   Real gamma0 = pmb->phydro->peos->GetGamma();
   Real igm1 = 1.0/(gamma0 - 1.0);
 
-  for (int i=il; i<=iu; ++i) {
+  par_for_inner(member, il, iu, [&](const int i)
+  {
     //--- Step 1.  Load L/R states into local variables
     wli[IDN]=wl(IDN,i);
     wli[IVX]=wl(ivx,i);
@@ -147,7 +149,7 @@ void RiemannSolver::HLLC(const int il, const int iu, const int ivx,
     flx(ivy,i) = flxi[IVY];
     flx(ivz,i) = flxi[IVZ];
     flx(IEN,i) = flxi[IEN];
-  }
+  });
   return;
 }
 

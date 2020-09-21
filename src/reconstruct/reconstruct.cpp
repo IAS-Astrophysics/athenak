@@ -42,19 +42,20 @@ Reconstruction::Reconstruction(ParameterInput *pin, int nghost)
 //----------------------------------------------------------------------------------------
 // ReconstructX1()
 
-void Reconstruction::ReconstructX1(const int k, const int j, const int il, const int iu,
-                                   const AthenaArray4D<Real> &q,
-                                   AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr)
+KOKKOS_FUNCTION
+void Reconstruction::ReconstructX1(TeamMember_t const &member, const int k, const int j,
+     const int il, const int iu, const AthenaArray4D<Real> &q,
+     AthenaScratch2D<Real> &ql, AthenaScratch2D<Real> &qr)
 {
   switch (recon_method_) {
     case ReconstructionMethod::donor_cell:
-      DonorCellX1(k, j, il, iu, q, ql, qr);
+      DonorCellX1(member, k, j, il, iu, q, ql, qr);
       break;
     case ReconstructionMethod::piecewise_linear:
-      PLMX1(k, j, il, iu, q, ql, qr);
+      PLMX1(member, k, j, il, iu, q, ql, qr);
       break;
     case ReconstructionMethod::piecewise_parabolic:
-      PPMX1(k, j, il, iu, q, ql, qr);
+      PPMX1(member, k, j, il, iu, q, ql, qr);
       break;
     default:
       break;
@@ -64,20 +65,21 @@ void Reconstruction::ReconstructX1(const int k, const int j, const int il, const
 
 //----------------------------------------------------------------------------------------
 // ReconstructX2()
-
-void Reconstruction::ReconstructX2(const int k, const int j, const int il, const int iu,
-                                   const AthenaArray4D<Real> &q,
-                                   AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr)
+ 
+KOKKOS_FUNCTION
+void Reconstruction::ReconstructX2(TeamMember_t const &member, const int k, const int j,
+     const int il, const int iu, const AthenaArray4D<Real> &q,
+     AthenaScratch2D<Real> &ql, AthenaScratch2D<Real> &qr)
 {
   switch (recon_method_) {
     case ReconstructionMethod::donor_cell:
-      DonorCellX2(k, j, il, iu, q, ql, qr);
+      DonorCellX2(member, k, j, il, iu, q, ql, qr);
       break;
     case ReconstructionMethod::piecewise_linear:
-      PLMX2(k, j, il, iu, q, ql, qr);
+      PLMX2(member, k, j, il, iu, q, ql, qr);
       break;
     case ReconstructionMethod::piecewise_parabolic:
-      PPMX2(k, j, il, iu, q, ql, qr);
+      PPMX2(member, k, j, il, iu, q, ql, qr);
       break;
     default:
       break;
@@ -87,19 +89,20 @@ void Reconstruction::ReconstructX2(const int k, const int j, const int il, const
 //----------------------------------------------------------------------------------------
 // ReconstructX3()
 
-void Reconstruction::ReconstructX3(const int k, const int j, const int il, const int iu,
-                                   const AthenaArray4D<Real> &q,
-                                   AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr)
+KOKKOS_FUNCTION
+void Reconstruction::ReconstructX3(TeamMember_t const &member, const int k, const int j,
+     const int il, const int iu, const AthenaArray4D<Real> &q,
+     AthenaScratch2D<Real> &ql, AthenaScratch2D<Real> &qr)
 {
   switch (recon_method_) {
     case ReconstructionMethod::donor_cell:
-      DonorCellX3(k, j, il, iu, q, ql, qr);
+      DonorCellX3(member, k, j, il, iu, q, ql, qr);
       break;
     case ReconstructionMethod::piecewise_linear:
-      PLMX3(k, j, il, iu, q, ql, qr);
+      PLMX3(member, k, j, il, iu, q, ql, qr);
       break;
     case ReconstructionMethod::piecewise_parabolic:
-      PPMX3(k, j, il, iu, q, ql, qr);
+      PPMX3(member, k, j, il, iu, q, ql, qr);
       break;
     default:
       break;

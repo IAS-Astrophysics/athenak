@@ -28,9 +28,9 @@ namespace hydro {
 // prototype for functions to compute Roe fluxes from eigenmatrices
 namespace roe {
 
-inline void RoeFluxAdb(const Real wroe[], const Real du[], const Real wli[],
+void RoeFluxAdb(const Real wroe[], const Real du[], const Real wli[],
                        const Real gm1, Real flx[], Real eigenvalues[], int &flag);
-inline void RoeFluxIso(const Real wroe[], const Real du[], const Real wli[],
+void RoeFluxIso(const Real wroe[], const Real du[], const Real wli[],
                        const Real isocs, Real flx[], Real eigenvalues[], int &flag);
 
 } // namespace roe
@@ -39,9 +39,10 @@ inline void RoeFluxIso(const Real wroe[], const Real du[], const Real wli[],
 //! \fn void RiemannSolver::Roe
 //  \brief The Roe Riemann solver for hydrodynamics (both adiabatic and isothermal)
 
-void RiemannSolver::Roe(const int il, const int iu, const int ivx,
-                  const AthenaArray2D<Real> &wl, const AthenaArray2D<Real> &wr,
-                  AthenaArray2D<Real> &flx)
+KOKKOS_FUNCTION
+void RiemannSolver::Roe(TeamMember_t const &member, const int il, const int iu,
+     const int ivx, const AthenaScratch2D<Real> &wl, const AthenaScratch2D<Real> &wr,
+     AthenaScratch2D<Real> &flx)
 {
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
@@ -53,7 +54,8 @@ void RiemannSolver::Roe(const int il, const int iu, const int ivx,
   Real gm1 = pmb->phydro->peos->GetGamma() - 1.0;
   Real iso_cs = pmb->phydro->peos->GetIsoCs();
 
-  for (int i=il; i<=iu; ++i) {
+  par_for_inner(member, il, iu, [&](const int i)
+  {
     //--- Step 1.  Load L/R states into local variables
     wli[IDN]=wl(IDN,i);
     wli[IVX]=wl(ivx,i);
@@ -190,7 +192,7 @@ void RiemannSolver::Roe(const int il, const int iu, const int ivx,
     flx(ivy,i) = flxi[IVY];
     flx(ivz,i) = flxi[IVZ];
     if (adiabatic_eos) flx(IEN,i) = flxi[IEN];
-  }
+  });
   return;
 }
 
@@ -221,8 +223,9 @@ namespace roe {
 // - J. Stone, T. Gardiner, P. Teuben, J. Hawley, & J. Simon "Athena: A new code for
 //   astrophysical MHD", ApJS, (2008), Appendix A.  Equation numbers refer to this paper.
 
-inline void RoeFluxAdb(const Real wroe[], const Real du[], const Real wli[],
-                       const Real gm1,  Real flx[], Real ev[], int &llf_flag)
+KOKKOS_INLINE_FUNCTION
+void RoeFluxAdb(const Real wroe[], const Real du[], const Real wli[], const Real gm1,
+     Real flx[], Real ev[], int &llf_flag)
 {
   Real v1 = wroe[IVX];
   Real v2 = wroe[IVY];
@@ -317,8 +320,9 @@ inline void RoeFluxAdb(const Real wroe[], const Real du[], const Real wli[],
 //----------------------------------------------------------------------------------------
 //! \fn RoeFlux()
 
-inline void RoeFluxIso(const Real wroe[], const Real du[], const Real wli[],
-                       const Real iso_cs,  Real flx[], Real ev[], int &llf_flag)
+KOKKOS_INLINE_FUNCTION
+void RoeFluxIso(const Real wroe[], const Real du[], const Real wli[], const Real iso_cs,
+     Real flx[], Real ev[], int &llf_flag)
 {
   Real v1 = wroe[IVX];
   Real v2 = wroe[IVY];

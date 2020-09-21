@@ -24,9 +24,7 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
   u0("cons",1,1,1,1), w0("prim",1,1,1,1), u1("cons1",1,1,1,1), divf("divF",1,1,1,1),
   uflx_x1face("uflx_x1face",1,1,1),
   uflx_x2face("uflx_x2face",1,1,1),
-  uflx_x3face("uflx_x3face",1,1,1),
-  wl_("Wl",1,1), wr_("Wr",1,1),wl_p1_("Wlp1",1,1),
-  uflux_("uflux",1,1),uflux_m1_("ufluxm1",1,1)
+  uflx_x3face("uflx_x3face",1,1,1)
 {
   // construct EOS object (no default)
   peos = new EquationOfState(pmesh_, pin, my_mbgid_);
@@ -82,12 +80,6 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
     // allocate registers, flux divergence, scratch arrays for time-dep probs
     Kokkos::resize(u1,nhydro, ncells3, ncells2, ncells1);
     Kokkos::resize(divf,nhydro, ncells3, ncells2, ncells1);
-    Kokkos::resize(w_,nhydro, ncells1);
-    Kokkos::resize(wl_,nhydro, ncells1);
-    Kokkos::resize(wr_,nhydro, ncells1);
-    Kokkos::resize(wl_p1_,nhydro, ncells1);
-    Kokkos::resize(uflux_,nhydro, ncells1);
-    Kokkos::resize(uflux_m1_,nhydro, ncells1);
   }
 }
 

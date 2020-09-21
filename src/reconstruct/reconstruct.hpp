@@ -26,48 +26,48 @@ class Reconstruction
   ~Reconstruction() = default;
 
   // wrapper functions that call different methods
-  void ReconstructX1(const int k, const int j, const int il, const int iu,
-                     const AthenaArray4D<Real> &q,
-                     AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr);
-  void ReconstructX2(const int k, const int j, const int il, const int iu,
-                     const AthenaArray4D<Real> &q,
-                     AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr);
-  void ReconstructX3(const int k, const int j, const int il, const int iu,
-                     const AthenaArray4D<Real> &q,
-                     AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr);
+  void ReconstructX1(TeamMember_t const &member, const int k, const int j,
+                     const int il, const int iu, const AthenaArray4D<Real> &q,
+                     AthenaScratch2D<Real> &ql, AthenaScratch2D<Real> &qr);
+  void ReconstructX2(TeamMember_t const &member, const int k, const int j,
+                     const int il, const int iu, const AthenaArray4D<Real> &q,
+                     AthenaScratch2D<Real> &ql, AthenaScratch2D<Real> &qr);
+  void ReconstructX3(TeamMember_t const &member, const int k, const int j,
+                     const int il, const int iu, const AthenaArray4D<Real> &q,
+                     AthenaScratch2D<Real> &ql, AthenaScratch2D<Real> &qr);
 
   // first-order donor cell reconstruction
-  void DonorCellX1(const int k, const int j, const int il, const int iu,
-                   const AthenaArray4D<Real> &q,
-                   AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr);
-  void DonorCellX2(const int k, const int j, const int il, const int iu,
-                   const AthenaArray4D<Real> &q,
-                   AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr);
-  void DonorCellX3(const int k, const int j, const int il, const int iu,
-                   const AthenaArray4D<Real> &q,
-                   AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr);
+  void DonorCellX1(TeamMember_t const &member, const int k, const int j,
+                   const int il, const int iu, const AthenaArray4D<Real> &q,
+                   AthenaScratch2D<Real> &ql, AthenaScratch2D<Real> &qr);
+  void DonorCellX2(TeamMember_t const &member, const int k, const int j,
+                   const int il, const int iu, const AthenaArray4D<Real> &q,
+                   AthenaScratch2D<Real> &ql, AthenaScratch2D<Real> &qr);
+  void DonorCellX3(TeamMember_t const &member, const int k, const int j,
+                   const int il, const int iu, const AthenaArray4D<Real> &q,
+                   AthenaScratch2D<Real> &ql, AthenaScratch2D<Real> &qr);
 
   // second-order piecewise linear reconstruction in the primitive variables
-  void PLMX1(const int k, const int j, const int il, const int iu,
-             const AthenaArray4D<Real> &q,
-             AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr);
-  void PLMX2(const int k, const int j, const int il, const int iu,
-             const AthenaArray4D<Real> &q,
-             AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr);
-  void PLMX3(const int k, const int j, const int il, const int iu,
-             const AthenaArray4D<Real> &q,
-             AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr);
+  void PLMX1(TeamMember_t const &member, const int k, const int j,
+             const int il, const int iu, const AthenaArray4D<Real> &q,
+             AthenaScratch2D<Real> &ql, AthenaScratch2D<Real> &qr);
+  void PLMX2(TeamMember_t const &member, const int k, const int j,
+             const int il, const int iu, const AthenaArray4D<Real> &q,
+             AthenaScratch2D<Real> &ql, AthenaScratch2D<Real> &qr);
+  void PLMX3(TeamMember_t const &member, const int k, const int j,
+             const int il, const int iu, const AthenaArray4D<Real> &q,
+             AthenaScratch2D<Real> &ql, AthenaScratch2D<Real> &qr);
 
   // third-order piecewise parabolic reconstruction in the primitive variables
-  void PPMX1(const int k, const int j, const int il, const int iu,
-             const AthenaArray4D<Real> &q,
-             AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr);
-  void PPMX2(const int k, const int j, const int il, const int iu,
-             const AthenaArray4D<Real> &q,
-             AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr);
-  void PPMX3(const int k, const int j, const int il, const int iu,
-             const AthenaArray4D<Real> &q,
-             AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr);
+  void PPMX1(TeamMember_t const &member, const int k, const int j,
+             const int il, const int iu, const AthenaArray4D<Real> &q,
+             AthenaScratch2D<Real> &ql, AthenaScratch2D<Real> &qr);
+  void PPMX2(TeamMember_t const &member, const int k, const int j,
+             const int il, const int iu, const AthenaArray4D<Real> &q,
+             AthenaScratch2D<Real> &ql, AthenaScratch2D<Real> &qr);
+  void PPMX3(TeamMember_t const &member, const int k, const int j,
+             const int il, const int iu, const AthenaArray4D<Real> &q,
+             AthenaScratch2D<Real> &ql, AthenaScratch2D<Real> &qr);
 
  private:
   ReconstructionMethod recon_method_;  // enum that selects which method to use

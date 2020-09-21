@@ -49,7 +49,7 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
       for (int n=0; n<nhydro; ++n) {
         par_for_inner(member, is, ie, [&](const int i)
         {
-          divf(n,k,j,i) = (uflux_(n,i+1) - uflux_(n,i))/dx1;
+          divf(n,k,j,i) = (uflux(n,i+1) - uflux(n,i))/dx1;
         });
       }
     }

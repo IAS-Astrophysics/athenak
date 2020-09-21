@@ -31,24 +31,30 @@ class RiemannSolver
   ~RiemannSolver() = default;
 
   // wrapper function that calls appropriate solver
-  void RSolver(const int il, const  int iu, const int dir, const AthenaArray2D<Real> &wl,
-               const AthenaArray2D<Real> &wr, AthenaArray2D<Real> &flx);
+  void RSolver(TeamMember_t const &member, const int il, const  int iu, const int dir,
+       const AthenaScratch2D<Real> &wl, const AthenaScratch2D<Real> &wr,
+       AthenaScratch2D<Real> &flx);
 
   // functions that implement various solvers
-  void Advection(const int il, const  int iu, const int dir, const AthenaArray2D<Real> &wl,
-                 const AthenaArray2D<Real> &wr, AthenaArray2D<Real> &flx);
+  void Advection(TeamMember_t const &member, const int il, const  int iu, const int dir,
+       const AthenaScratch2D<Real> &wl, const AthenaScratch2D<Real> &wr,
+       AthenaScratch2D<Real> &flx);
 
-  void LLF(const int il, const  int iu, const int dir, const AthenaArray2D<Real> &wl,
-           const AthenaArray2D<Real> &wr, AthenaArray2D<Real> &flx);
+  void LLF(TeamMember_t const &member, const int il, const  int iu, const int dir,
+       const AthenaScratch2D<Real> &wl, const AthenaScratch2D<Real> &wr,
+       AthenaScratch2D<Real> &flx);
 
-  void HLLE(const int il, const  int iu, const int dir, const AthenaArray2D<Real> &wl,
-            const AthenaArray2D<Real> &wr, AthenaArray2D<Real> &flx);
+  void HLLE(TeamMember_t const &member, const int il, const  int iu, const int dir,
+       const AthenaScratch2D<Real> &wl, const AthenaScratch2D<Real> &wr,
+       AthenaScratch2D<Real> &flx);
 
-  void HLLC(const int il, const  int iu, const int dir, const AthenaArray2D<Real> &wl,
-            const AthenaArray2D<Real> &wr, AthenaArray2D<Real> &flx);
+  void HLLC(TeamMember_t const &member, const int il, const  int iu, const int dir,
+       const AthenaScratch2D<Real> &wl, const AthenaScratch2D<Real> &wr,
+       AthenaScratch2D<Real> &flx);
 
-  void Roe(const int il, const  int iu, const int dir, const AthenaArray2D<Real> &wl,
-           const AthenaArray2D<Real> &wr, AthenaArray2D<Real> &flx);
+  void Roe(TeamMember_t const &member, const int il, const  int iu, const int dir,
+       const AthenaScratch2D<Real> &wl, const AthenaScratch2D<Real> &wr,
+       AthenaScratch2D<Real> &flx);
 
  private:
   Mesh *pmesh_;

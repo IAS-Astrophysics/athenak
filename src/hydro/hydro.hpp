@@ -70,12 +70,6 @@ class Hydro
  private:
   Mesh* pmesh_;   // ptr to Mesh containing this Hydro
   int my_mbgid_;  // GridID of MeshBlock contianing this Hydro
-  AthenaArray2D<Real> w_;
-  AthenaArray2D<Real> wl_;
-  AthenaArray2D<Real> wr_;
-  AthenaArray2D<Real> wl_p1_;
-  AthenaArray2D<Real> uflux_;
-  AthenaArray2D<Real> uflux_m1_;
 };
 
 } // namespace hydro

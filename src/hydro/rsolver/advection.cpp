@@ -21,9 +21,10 @@ namespace hydro {
 //! \fn void RiemannSolver::Advection
 //  \brief An advection Riemann solver for hydrodynamics (both adiabatic and isothermal)
 
-void RiemannSolver::Advection(const int il, const int iu, const int ivx,
-                        const AthenaArray2D<Real> &wl, const AthenaArray2D<Real> &wr,
-                        AthenaArray2D<Real> &flx)
+KOKKOS_FUNCTION
+void RiemannSolver::Advection(TeamMember_t const &member, const int il, const int iu,
+     const int ivx, const AthenaScratch2D<Real> &wl, const AthenaScratch2D<Real> &wr,
+     AthenaScratch2D<Real> &flx)
 {
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
@@ -34,7 +35,8 @@ void RiemannSolver::Advection(const int il, const int iu, const int ivx,
   Real iso_cs = pmb->phydro->peos->GetIsoCs();
   
 
-  for (int i=il; i<=iu; ++i) {
+  par_for_inner(member, il, iu, [&](const int i)
+  {
     //--- Step 1.  Load L/R states into local variables
     wli[IDN]=wl(IDN,i);
     wli[IVX]=wl(ivx,i);
@@ -69,7 +71,7 @@ void RiemannSolver::Advection(const int il, const int iu, const int ivx,
       if (adiabatic_eos) { flx(IEN,i) = (wri[IPR]/gm1 + 0.5*mxr*wri[IVX])*wri[IVX]; }
 
     }
-  }
+  });
 
   return;
 }

@@ -37,21 +37,24 @@
 //  Therefore range of indices for which BOTH L/R states returned is il+1 to il-1
 //  This function should be called over [is-1,ie+1] to get BOTH L/R states over [is,ie]
 
-void Reconstruction::PPMX1(const int k,const int j,const int il,const int iu,
-    const AthenaArray4D<Real> &q, AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr)
+KOKKOS_FUNCTION
+void Reconstruction::PPMX1(TeamMember_t const &member, const int k, const int j,
+     const int il, const int iu, const AthenaArray4D<Real> &q,
+     AthenaScratch2D<Real> &ql, AthenaScratch2D<Real> &qr)
 {
   int nvar = q.extent_int(0);
   for (int n=0; n<nvar; ++n) {
-    for (int i=il; i<=iu; ++i) {
+    par_for_inner(member, il, iu, [&](const int i)
+    { 
       //---- Compute L/R values (CS eqns 12-15, PH 3.26 and 3.27) ----
       // qlv = q at left  side of cell-center = q[i-1/2] = a_{j,-} in CS
       // qrv = q at right side of cell-center = q[i+1/2] = a_{j,+} in CS
-      Real qlv_ = (7.0*(q(n,k,j,i) + q(n,k,j,i-1)) - (q(n,k,j,i-2) + q(n,k,j,i+1)))/12.0;
-      Real qrv_ = (7.0*(q(n,k,j,i) + q(n,k,j,i+1)) - (q(n,k,j,i-1) + q(n,k,j,i+2)))/12.0;
+      Real qlv = (7.0*(q(n,k,j,i) + q(n,k,j,i-1)) - (q(n,k,j,i-2) + q(n,k,j,i+1)))/12.0;
+      Real qrv = (7.0*(q(n,k,j,i) + q(n,k,j,i+1)) - (q(n,k,j,i-1) + q(n,k,j,i+2)))/12.0;
 
-      //---- Apply CS monotonicity limiters to qrv_ and qlv_ ----
+      //---- Apply CS monotonicity limiters to qrv and qlv ----
       // approximate second derivatives at i-1/2 (PH 3.35) 
-      Real d2qc = 3.0*(q(n,k,j,i-1) - 2.0*qlv_ + q(n,k,j,i));
+      Real d2qc = 3.0*(q(n,k,j,i-1) - 2.0*qlv + q(n,k,j,i));
       Real d2ql = (q(n,k,j,i-2) - 2.0*q(n,k,j,i-1) + q(n,k,j,i  ));
       Real d2qr = (q(n,k,j,i-1) - 2.0*q(n,k,j,i  ) + q(n,k,j,i+1));
     
@@ -64,11 +67,11 @@ void Reconstruction::PPMX1(const int k,const int j,const int il,const int iu,
       if (d2qc < 0.0 && d2ql < 0.0 && d2qr < 0.0) {
         d2qlim = SIGN(d2qc)*std::min(1.25*lim_slope,fabs(d2qc));
       } 
-      // compute limited value for qlv_ (PH 3.34)
-      qlv_ = 0.5*(q(n,k,j,i) + q(n,k,j,i-1)) - d2qlim/6.0;
+      // compute limited value for qlv (PH 3.34)
+      qlv = 0.5*(q(n,k,j,i) + q(n,k,j,i-1)) - d2qlim/6.0;
 
       // approximate second derivatives at i+1/2 (PH 3.35) 
-      d2qc = 3.0*(q(n,k,j,i) - 2.0*qrv_ + q(n,k,j,i+1));
+      d2qc = 3.0*(q(n,k,j,i) - 2.0*qrv + q(n,k,j,i+1));
       d2ql = d2qr;
       d2qr = (q(n,k,j,i  ) - 2.0*q(n,k,j,i+1) + q(n,k,j,i+2));
 
@@ -81,16 +84,16 @@ void Reconstruction::PPMX1(const int k,const int j,const int il,const int iu,
       if (d2qc < 0.0 && d2ql < 0.0 && d2qr < 0.0) {
         d2qlim = SIGN(d2qc)*std::min(1.25*lim_slope,fabs(d2qc));
       }
-      // compute limited value for qrv_ (PH 3.33)
-      qrv_ = 0.5*(q(n,k,j,i) + q(n,k,j,i+1)) - d2qlim/6.0;
+      // compute limited value for qrv (PH 3.33)
+      qrv = 0.5*(q(n,k,j,i) + q(n,k,j,i+1)) - d2qlim/6.0;
 
       //---- identify extrema, use smooth extremum limiter ----
       // CS 20 (missing "OR"), and PH 3.31
-      Real qa = (qrv_ - q(n,k,j,i))*(q(n,k,j,i) - qlv_);
+      Real qa = (qrv - q(n,k,j,i))*(q(n,k,j,i) - qlv);
       Real qb = (q(n,k,j,i-1) - q(n,k,j,i))*(q(n,k,j,i) - q(n,k,j,i+1));
       if (qa <= 0.0 || qb <= 0.0) {
         // approximate secnd derivates (PH 3.37)
-        Real d2q  = 6.0*(qlv_ - 2.0*q(n,k,j,i) + qrv_);
+        Real d2q  = 6.0*(qlv - 2.0*q(n,k,j,i) + qrv);
         Real d2qc = (q(n,k,j,i-1) - 2.0*q(n,k,j,i  ) + q(n,k,j,i+1));
         Real d2ql = (q(n,k,j,i-2) - 2.0*q(n,k,j,i-1) + q(n,k,j,i  ));
         Real d2qr = (q(n,k,j,i  ) - 2.0*q(n,k,j,i+1) + q(n,k,j,i+2));
@@ -108,28 +111,28 @@ void Reconstruction::PPMX1(const int k,const int j,const int il,const int iu,
 
         // limit L/R states at extrema (PH 3.39)
         if (d2q == 0.0) {  // revert to donor cell
-          qlv_ = q(n,k,j,i);
-          qrv_ = q(n,k,j,i);
+          qlv = q(n,k,j,i);
+          qrv = q(n,k,j,i);
         } else {  // add limited slope (PH 3.39)
-          qlv_ = q(n,k,j,i) + (qlv_ - q(n,k,j,i))*d2qlim/d2q;
-          qrv_ = q(n,k,j,i) + (qrv_ - q(n,k,j,i))*d2qlim/d2q;
+          qlv = q(n,k,j,i) + (qlv - q(n,k,j,i))*d2qlim/d2q;
+          qrv = q(n,k,j,i) + (qrv - q(n,k,j,i))*d2qlim/d2q;
         }
       } else {
         // Monotonize again, away from extrema (CW eqn 1.10, PH 3.32)
-        Real qc = qrv_ - q(n,k,j,i);
-        Real qd = qlv_ - q(n,k,j,i);
+        Real qc = qrv - q(n,k,j,i);
+        Real qd = qlv - q(n,k,j,i);
         if (fabs(qc) >= 2.0*fabs(qd)) {
-          qrv_ = q(n,k,j,i) - 2.0*qd;
+          qrv = q(n,k,j,i) - 2.0*qd;
         }
         if (fabs(qd) >= 2.0*fabs(qc)) {
-          qlv_ = q(n,k,j,i) - 2.0*qc;
+          qlv = q(n,k,j,i) - 2.0*qc;
         }
       }
 
       //---- set L/R states ----
-      ql(n,i+1) = qrv_;
-      qr(n,i  ) = qlv_;
-    }
+      ql(n,i+1) = qrv;
+      qr(n,i  ) = qlv;
+    });
   }
   return;
 }
@@ -139,21 +142,24 @@ void Reconstruction::PPMX1(const int k,const int j,const int il,const int iu,
 //  \brief Reconstructs linear slope in cell j to cmpute ql(j+1) and qr(j) over [il,iu]
 //  This function should be called over [js-1,je+1] to get BOTH L/R states over [js,je]
 
-void Reconstruction::PPMX2(const int k,const int j,const int il,const int iu,
-    const AthenaArray4D<Real> &q, AthenaArray2D<Real> &ql_jp1, AthenaArray2D<Real> &qr_j)
+KOKKOS_FUNCTION
+void Reconstruction::PPMX2(TeamMember_t const &member, const int k, const int j,
+     const int il, const int iu, const AthenaArray4D<Real> &q,
+     AthenaScratch2D<Real> &ql_jp1, AthenaScratch2D<Real> &qr_j)
 {
   int nvar = q.extent_int(0);
   for (int n=0; n<nvar; ++n) {
-    for (int i=il; i<=iu; ++i) {
+    par_for_inner(member, il, iu, [&](const int i)
+    { 
       //---- Compute L/R values (CS eqns 12-15, PH 3.26 and 3.27) ----
       // qlv = q at left  side of cell-center = q[i-1/2] = a_{j,-} in CS
       // qrv = q at right side of cell-center = q[i+1/2] = a_{j,+} in CS
-      Real qlv_ = (7.0*(q(n,k,j,i) + q(n,k,j-1,i)) - (q(n,k,j-2,i) + q(n,k,j+1,i)))/12.0;
-      Real qrv_ = (7.0*(q(n,k,j,i) + q(n,k,j+1,i)) - (q(n,k,j-1,i) + q(n,k,j+2,i)))/12.0;
+      Real qlv = (7.0*(q(n,k,j,i) + q(n,k,j-1,i)) - (q(n,k,j-2,i) + q(n,k,j+1,i)))/12.0;
+      Real qrv = (7.0*(q(n,k,j,i) + q(n,k,j+1,i)) - (q(n,k,j-1,i) + q(n,k,j+2,i)))/12.0;
 
-      // Apply CS monotonicity limiters to qrv_ and qlv_
+      // Apply CS monotonicity limiters to qrv and qlv
       // approximate second derivatives at i-1/2 (PH 3.35) 
-      Real d2qc = 3.0*(q(n,k,j-1,i) - 2.0*qlv_ + q(n,k,j,i));
+      Real d2qc = 3.0*(q(n,k,j-1,i) - 2.0*qlv + q(n,k,j,i));
       Real d2ql = (q(n,k,j-2,i) - 2.0*q(n,k,j-1,i) + q(n,k,j  ,i));
       Real d2qr = (q(n,k,j-1,i) - 2.0*q(n,k,j  ,i) + q(n,k,j+1,i));
     
@@ -166,11 +172,11 @@ void Reconstruction::PPMX2(const int k,const int j,const int il,const int iu,
       if (d2qc < 0.0 && d2ql < 0.0 && d2qr < 0.0) {
         d2qlim = SIGN(d2qc)*std::min(1.25*lim_slope,fabs(d2qc));
       } 
-      // compute limited value for qlv_ (PH 3.34)
-      qlv_ = 0.5*(q(n,k,j,i) + q(n,k,j-1,i)) - d2qlim/6.0;
+      // compute limited value for qlv (PH 3.34)
+      qlv = 0.5*(q(n,k,j,i) + q(n,k,j-1,i)) - d2qlim/6.0;
 
       // approximate second derivatives at i+1/2 (PH 3.35) 
-      d2qc = 3.0*(q(n,k,j,i) - 2.0*qrv_ + q(n,k,j+1,i));
+      d2qc = 3.0*(q(n,k,j,i) - 2.0*qrv + q(n,k,j+1,i));
       d2ql = d2qr;
       d2qr = (q(n,k,j,i  ) - 2.0*q(n,k,j+1,i) + q(n,k,j+2,i));
 
@@ -183,16 +189,16 @@ void Reconstruction::PPMX2(const int k,const int j,const int il,const int iu,
       if (d2qc < 0.0 && d2ql < 0.0 && d2qr < 0.0) {
         d2qlim = SIGN(d2qc)*std::min(1.25*lim_slope,fabs(d2qc));
       }
-      // compute limited value for qrv_ (PH 3.33)
-      qrv_ = 0.5*(q(n,k,j,i) + q(n,k,j+1,i)) - d2qlim/6.0;
+      // compute limited value for qrv (PH 3.33)
+      qrv = 0.5*(q(n,k,j,i) + q(n,k,j+1,i)) - d2qlim/6.0;
 
       //---- identify extrema, use smooth extremum limiter ----
       // CS 20 (missing "OR"), and PH 3.31
-      Real qa = (qrv_ - q(n,k,j,i))*(q(n,k,j,i) - qlv_);
+      Real qa = (qrv - q(n,k,j,i))*(q(n,k,j,i) - qlv);
       Real qb = (q(n,k,j-1,i) - q(n,k,j,i))*(q(n,k,j,i) - q(n,k,j+1,i));
       if (qa <= 0.0 || qb <= 0.0) {
         // approximate secnd derivates (PH 3.37)
-        Real d2q  = 6.0*(qlv_ - 2.0*q(n,k,j,i) + qrv_);
+        Real d2q  = 6.0*(qlv - 2.0*q(n,k,j,i) + qrv);
         Real d2qc = (q(n,k,j-1,i) - 2.0*q(n,k,j  ,i) + q(n,k,j+1,i));
         Real d2ql = (q(n,k,j-2,i) - 2.0*q(n,k,j-1,i) + q(n,k,j  ,i));
         Real d2qr = (q(n,k,j  ,i) - 2.0*q(n,k,j+1,i) + q(n,k,j+2,i));
@@ -210,28 +216,28 @@ void Reconstruction::PPMX2(const int k,const int j,const int il,const int iu,
 
         // limit L/R states at extrema (PH 3.39)
         if (d2q == 0.0) {  // revert to donor cell
-          qlv_ = q(n,k,j,i);
-          qrv_ = q(n,k,j,i);
+          qlv = q(n,k,j,i);
+          qrv = q(n,k,j,i);
         } else {  // add limited slope (PH 3.39)
-          qlv_ = q(n,k,j,i) + (qlv_ - q(n,k,j,i))*d2qlim/d2q;
-          qrv_ = q(n,k,j,i) + (qrv_ - q(n,k,j,i))*d2qlim/d2q;
+          qlv = q(n,k,j,i) + (qlv - q(n,k,j,i))*d2qlim/d2q;
+          qrv = q(n,k,j,i) + (qrv - q(n,k,j,i))*d2qlim/d2q;
         }
       } else {
         // Monotonize again, away from extrema (CW eqn 1.10, PH 3.32)
-        Real qc = qrv_ - q(n,k,j,i);
-        Real qd = qlv_ - q(n,k,j,i);
+        Real qc = qrv - q(n,k,j,i);
+        Real qd = qlv - q(n,k,j,i);
         if (fabs(qc) >= 2.0*fabs(qd)) {
-          qrv_ = q(n,k,j,i) - 2.0*qd;
+          qrv = q(n,k,j,i) - 2.0*qd;
         }
         if (fabs(qd) >= 2.0*fabs(qc)) {
-          qlv_ = q(n,k,j,i) - 2.0*qc;
+          qlv = q(n,k,j,i) - 2.0*qc;
         }
       }
 
       //---- set L/R states ----
-      ql_jp1(n,i) = qrv_;
-      qr_j  (n,i) = qlv_;
-    }
+      ql_jp1(n,i) = qrv;
+      qr_j  (n,i) = qlv;
+    });
   }
   return;
 }
@@ -241,21 +247,24 @@ void Reconstruction::PPMX2(const int k,const int j,const int il,const int iu,
 //  \brief Reconstructs linear slope in cell k to cmpute ql(k+1) and qr(k) over [il,iu]
 //  This function should be called over [ks-1,ke+1] to get BOTH L/R states over [ks,ke]
 
-void Reconstruction::PPMX3(const int k,const int j,const int il,const int iu,
-    const AthenaArray4D<Real> &q, AthenaArray2D<Real> &ql_kp1, AthenaArray2D<Real> &qr_k)
+KOKKOS_FUNCTION
+void Reconstruction::PPMX3(TeamMember_t const &member, const int k, const int j,
+     const int il, const int iu, const AthenaArray4D<Real> &q,
+     AthenaScratch2D<Real> &ql_kp1, AthenaScratch2D<Real> &qr_k)
 {
   int nvar = q.extent_int(0);
   for (int n=0; n<nvar; ++n) {
     //---- Compute L/R values (CS eqns 12-15, PH 3.26 and 3.27) ----
     // qlv = q at left  side of cell-center = q[i-1/2] = a_{j,-} in CS
     // qrv = q at right side of cell-center = q[i+1/2] = a_{j,+} in CS
-    for (int i=il; i<=iu; ++i) {
-      Real qlv_ = (7.0*(q(n,k,j,i) + q(n,k-1,j,i)) - (q(n,k-2,j,i) + q(n,k+1,j,i)))/12.0;
-      Real qrv_ = (7.0*(q(n,k,j,i) + q(n,k+1,j,i)) - (q(n,k-1,j,i) + q(n,k+2,j,i)))/12.0;
+    par_for_inner(member, il, iu, [&](const int i)
+    { 
+      Real qlv = (7.0*(q(n,k,j,i) + q(n,k-1,j,i)) - (q(n,k-2,j,i) + q(n,k+1,j,i)))/12.0;
+      Real qrv = (7.0*(q(n,k,j,i) + q(n,k+1,j,i)) - (q(n,k-1,j,i) + q(n,k+2,j,i)))/12.0;
 
-      //---- Apply CS monotonicity limiters to qrv_ and qlv_ ----
+      //---- Apply CS monotonicity limiters to qrv and qlv ----
       // approximate second derivatives at i-1/2 (PH 3.35) 
-      Real d2qc = 3.0*(q(n,k-1,j,i) - 2.0*qlv_ + q(n,k,j,i));
+      Real d2qc = 3.0*(q(n,k-1,j,i) - 2.0*qlv + q(n,k,j,i));
       Real d2ql = (q(n,k-2,j,i) - 2.0*q(n,k-1,j,i) + q(n,k  ,j,i));
       Real d2qr = (q(n,k-1,j,i) - 2.0*q(n,k  ,j,i) + q(n,k+1,j,i));
     
@@ -268,11 +277,11 @@ void Reconstruction::PPMX3(const int k,const int j,const int il,const int iu,
       if (d2qc < 0.0 && d2ql < 0.0 && d2qr < 0.0) {
         d2qlim = SIGN(d2qc)*std::min(1.25*lim_slope,fabs(d2qc));
       } 
-      // compute limited value for qlv_ (PH 3.34)
-      qlv_ = 0.5*(q(n,k,j,i) + q(n,k-1,j,i)) - d2qlim/6.0;
+      // compute limited value for qlv (PH 3.34)
+      qlv = 0.5*(q(n,k,j,i) + q(n,k-1,j,i)) - d2qlim/6.0;
 
       // approximate second derivatives at i+1/2 (PH 3.35) 
-      d2qc = 3.0*(q(n,k,j,i) - 2.0*qrv_ + q(n,k+1,j,i));
+      d2qc = 3.0*(q(n,k,j,i) - 2.0*qrv + q(n,k+1,j,i));
       d2ql = d2qr;
       d2qr = (q(n,k,j,i  ) - 2.0*q(n,k+1,j,i) + q(n,k+2,j,i));
 
@@ -285,16 +294,16 @@ void Reconstruction::PPMX3(const int k,const int j,const int il,const int iu,
       if (d2qc < 0.0 && d2ql < 0.0 && d2qr < 0.0) {
         d2qlim = SIGN(d2qc)*std::min(1.25*lim_slope,fabs(d2qc));
       }
-      // compute limited value for qrv_ (PH 3.33)
-      qrv_ = 0.5*(q(n,k,j,i) + q(n,k+1,j,i)) - d2qlim/6.0;
+      // compute limited value for qrv (PH 3.33)
+      qrv = 0.5*(q(n,k,j,i) + q(n,k+1,j,i)) - d2qlim/6.0;
 
       //---- identify extrema, use smooth extremum limiter ----
       // CS 20 (missing "OR"), and PH 3.31
-      Real qa = (qrv_ - q(n,k,j,i))*(q(n,k,j,i) - qlv_);
+      Real qa = (qrv - q(n,k,j,i))*(q(n,k,j,i) - qlv);
       Real qb = (q(n,k-1,j,i) - q(n,k,j,i))*(q(n,k,j,i) - q(n,k+1,j,i));
       if (qa <= 0.0 || qb <= 0.0) {
         // approximate secnd derivates (PH 3.37)
-        Real d2q  = 6.0*(qlv_ - 2.0*q(n,k,j,i) + qrv_);
+        Real d2q  = 6.0*(qlv - 2.0*q(n,k,j,i) + qrv);
         Real d2qc = (q(n,k-1,j,i) - 2.0*q(n,k  ,j,i) + q(n,k+1,j,i));
         Real d2ql = (q(n,k-2,j,i) - 2.0*q(n,k-1,j,i) + q(n,k  ,j,i));
         Real d2qr = (q(n,k  ,j,i) - 2.0*q(n,k+1,j,i) + q(n,k+2,j,i));
@@ -312,28 +321,28 @@ void Reconstruction::PPMX3(const int k,const int j,const int il,const int iu,
 
         // limit L/R states at extrema (PH 3.39)
         if (d2q == 0.0) {  // revert to donor cell
-          qlv_ = q(n,k,j,i);
-          qrv_ = q(n,k,j,i);
+          qlv = q(n,k,j,i);
+          qrv = q(n,k,j,i);
         } else {  // add limited slope (PH 3.39)
-          qlv_ = q(n,k,j,i) + (qlv_ - q(n,k,j,i))*d2qlim/d2q;
-          qrv_ = q(n,k,j,i) + (qrv_ - q(n,k,j,i))*d2qlim/d2q;
+          qlv = q(n,k,j,i) + (qlv - q(n,k,j,i))*d2qlim/d2q;
+          qrv = q(n,k,j,i) + (qrv - q(n,k,j,i))*d2qlim/d2q;
         }
       } else {
         // Monotonize again, away from extrema (CW eqn 1.10, PH 3.32)
-        Real qc = qrv_ - q(n,k,j,i);
-        Real qd = qlv_ - q(n,k,j,i);
+        Real qc = qrv - q(n,k,j,i);
+        Real qd = qlv - q(n,k,j,i);
         if (fabs(qc) >= 2.0*fabs(qd)) {
-          qrv_ = q(n,k,j,i) - 2.0*qd;
+          qrv = q(n,k,j,i) - 2.0*qd;
         }
         if (fabs(qd) >= 2.0*fabs(qc)) {
-          qlv_ = q(n,k,j,i) - 2.0*qc;
+          qlv = q(n,k,j,i) - 2.0*qc;
         }
       }
 
       //---- set L/R states ----
-      ql_kp1(n,i) = qrv_;
-      qr_k  (n,i) = qlv_;
-    }
+      ql_kp1(n,i) = qrv;
+      qr_k  (n,i) = qlv;
+    });
   }
   return;
 }
