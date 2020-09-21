@@ -17,21 +17,10 @@
 namespace hydro {
 
 //----------------------------------------------------------------------------------------
-// AdiabaticHydro constructor
-    
-AdiabaticHydro::AdiabaticHydro(Mesh* pm, ParameterInput *pin, int igid)
-  : EquationOfState(pm, pin, igid)
-{
-  adiabatic_eos = true;
-  gamma_ = pin->GetReal("eos", "gamma");
-}
-
-//----------------------------------------------------------------------------------------
 // \!fn void ConservedToPrimitive()
 // \brief Converts conserved into primitive variables in nonrelativistic adiabatic hydro
 
-void AdiabaticHydro::ConservedToPrimitive(AthenaArray4D<Real> &cons,
-                                          AthenaArray4D<Real> &prim)
+void EquationOfState::ConToPrimAdi(AthenaArray4D<Real> &cons, AthenaArray4D<Real> &prim)
 {
   MeshBlock* pmb = pmesh_->FindMeshBlock(my_mbgid_);
   int ng = pmb->mb_cells.ng;

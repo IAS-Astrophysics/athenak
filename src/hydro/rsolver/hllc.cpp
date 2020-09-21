@@ -24,21 +24,12 @@
 namespace hydro {
 
 //----------------------------------------------------------------------------------------
-// HLLC constructor
-
-HLLC::HLLC(Mesh* pm, ParameterInput* pin, int igid) : RiemannSolver(pm, pin, igid)
-{
-  void RSolver(const int il, const  int iu, const int dir, const AthenaArray2D<Real> &wl,
-               const AthenaArray2D<Real> &wr, AthenaArray2D<Real> &flx);
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void HLLC::RSolver
+//! \fn void RiemannSolver::HLLC
 //! \brief The HLLC Riemann solver for adiabatic hydrodynamics (use HLLE for isothermal)
 
-void HLLC::RSolver(const int il, const int iu, const int ivx,
-                   const AthenaArray2D<Real> &wl, const AthenaArray2D<Real> &wr,
-                   AthenaArray2D<Real> &flx)
+void RiemannSolver::HLLC(const int il, const int iu, const int ivx,
+                         const AthenaArray2D<Real> &wl, const AthenaArray2D<Real> &wr,
+                         AthenaArray2D<Real> &flx)
 {
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
@@ -66,8 +57,8 @@ void HLLC::RSolver(const int il, const int iu, const int ivx,
     //--- Step 2.  Compute middle state estimates with PVRS (Toro 10.5.2)
 
     Real al, ar, el, er;
-    Real cl = pmb->phydro->peos->SoundSpeed(wli);
-    Real cr = pmb->phydro->peos->SoundSpeed(wri);
+    Real cl = pmb->phydro->peos->SoundSpeed(wli[IPR],wli[IDN]);
+    Real cr = pmb->phydro->peos->SoundSpeed(wri[IPR],wri[IDN]);
     el = wli[IPR]*igm1 + 0.5*wli[IDN]*(SQR(wli[IVX]) + SQR(wli[IVY]) + SQR(wli[IVZ]));
     er = wri[IPR]*igm1 + 0.5*wri[IDN]*(SQR(wri[IVX]) + SQR(wri[IVY]) + SQR(wri[IVZ]));
     Real rhoa = .5 * (wli[IDN] + wri[IDN]); // average density

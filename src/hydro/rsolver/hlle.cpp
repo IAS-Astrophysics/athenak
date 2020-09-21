@@ -31,19 +31,10 @@
 namespace hydro {
 
 //----------------------------------------------------------------------------------------
-// HLLE constructor
-
-HLLE::HLLE(Mesh* pm, ParameterInput* pin, int igid) : RiemannSolver(pm, pin, igid)
-{
-  void RSolver(const int il, const  int iu, const int dir, const AthenaArray2D<Real> &wl,
-               const AthenaArray2D<Real> &wr, AthenaArray2D<Real> &flx);
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void HLLE::RSolver
+//! \fn void RiemannSolver::HLLE
 //  \brief The HLLE Riemann solver for hydrodynamics (both adiabatic and isothermal)
 
-void HLLE::RSolver(const int il, const int iu, const int ivx,
+void RiemannSolver::HLLE(const int il, const int iu, const int ivx,
                    const AthenaArray2D<Real> &wl, const AthenaArray2D<Real> &wr,
                    AthenaArray2D<Real> &flx)
 {
@@ -51,15 +42,11 @@ void HLLE::RSolver(const int il, const int iu, const int ivx,
   int ivz = IVX + ((ivx-IVX)+2)%3;
   Real wli[5],wri[5],wroe[5];
   Real fl[5],fr[5],flxi[5];
-  Real gm1, igm1, iso_cs;
   MeshBlock* pmb = pmesh_->FindMeshBlock(my_mbgid_);
-  bool adiabatic_eos = pmb->phydro->peos->adiabatic_eos;
-  if (adiabatic_eos) {
-    gm1 = pmb->phydro->peos->GetGamma() - 1.0;
-    igm1 = 1.0/gm1;
-  } else {
-    iso_cs = pmb->phydro->peos->SoundSpeed(wli);  // wli is just "dummy argument"
-  }
+  bool adiabatic_eos = pmb->phydro->peos->IsAdiabatic();
+  Real gm1 = pmb->phydro->peos->GetGamma() - 1.0;
+  Real igm1 = 1.0/gm1;
+  Real iso_cs = pmb->phydro->peos->GetIsoCs();
 
   for (int i=il; i<=iu; ++i) {
     //--- Step 1.  Load L/R states into local variables
@@ -75,7 +62,6 @@ void HLLE::RSolver(const int il, const int iu, const int ivx,
     wri[IVZ]=wr(ivz,i);
     if (adiabatic_eos) { wri[IPR]=wr(IPR,i); }
 
-    Real el,er,cl,cr,al,ar;
     //--- Step 2.  Compute Roe-averaged state
     Real sqrtdl = std::sqrt(wli[IDN]);
     Real sqrtdr = std::sqrt(wri[IDN]);
@@ -88,7 +74,7 @@ void HLLE::RSolver(const int il, const int iu, const int ivx,
 
     // Following Roe(1981), the enthalpy H=(E+P)/d is averaged for adiabatic flows,
     // rather than E or P directly.  sqrtdl*hl = sqrtdl*(el+pl)/dl = (el+pl)/sqrtdl
-    Real hroe;
+    Real el,er,hroe;
     if (adiabatic_eos) {
       el = wli[IPR]*igm1 + 0.5*wli[IDN]*(SQR(wli[IVX]) + SQR(wli[IVY]) + SQR(wli[IVZ]));
       er = wri[IPR]*igm1 + 0.5*wri[IDN]*(SQR(wri[IVX]) + SQR(wri[IVY]) + SQR(wri[IVZ]));
@@ -97,17 +83,21 @@ void HLLE::RSolver(const int il, const int iu, const int ivx,
 
     //--- Step 3.  Compute sound speed in L,R, and Roe-averaged states
 
-    cl = pmb->phydro->peos->SoundSpeed(wli);
-    cr = pmb->phydro->peos->SoundSpeed(wri);
+    Real cl,cr;
     Real a  = iso_cs;
     if (adiabatic_eos) {
+      cl = pmb->phydro->peos->SoundSpeed(wli[IPR],wli[IDN]);
+      cr = pmb->phydro->peos->SoundSpeed(wri[IPR],wri[IDN]);
       Real q = hroe - 0.5*(SQR(wroe[IVX]) + SQR(wroe[IVY]) + SQR(wroe[IVZ]));
       a = (q < 0.0) ? 0.0 : std::sqrt(gm1*q);
+    } else {
+      cl = iso_cs;
+      cr = iso_cs;
     }
 
     //--- Step 4. Compute the max/min wave speeds based on L/R and Roe-averaged values
-    al = std::min((wroe[IVX] - a),(wli[IVX] - cl));
-    ar = std::max((wroe[IVX] + a),(wri[IVX] + cr));
+    Real al = std::min((wroe[IVX] - a),(wli[IVX] - cl));
+    Real ar = std::max((wroe[IVX] + a),(wri[IVX] + cr));
 
     Real bp = ar > 0.0 ? ar : 0.0;
     Real bm = al < 0.0 ? al : 0.0;

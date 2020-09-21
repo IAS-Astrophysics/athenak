@@ -49,7 +49,7 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh) :
   time_evolution(false), tlim(-1.0), nlim(-1), ndiag(1)
 {
   hydro::Hydro *phyd = pmesh->mblocks.front().phydro;
-  if (phyd->hydro_evol != hydro::HydroEvolution::no_evolution) {
+  if (phyd->hydro_evol != HydroEvolution::no_evolution) {
     time_evolution = true;
   }
   // read <time> parameters controlling driver if run requires time-evolution

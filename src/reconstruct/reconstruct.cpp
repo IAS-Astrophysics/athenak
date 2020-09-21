@@ -17,6 +17,7 @@ Reconstruction::Reconstruction(ParameterInput *pin, int nghost)
 {
   // select reconstruction method (default PLM)
   std::string xorder = pin->GetOrAddString("hydro","reconstruct","plm");
+
   if (xorder.compare("dc") == 0) {
     recon_method_ = ReconstructionMethod::donor_cell;
   } else if (xorder.compare("plm") == 0) {

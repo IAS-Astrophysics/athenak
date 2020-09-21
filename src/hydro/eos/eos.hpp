@@ -6,9 +6,8 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file eos.hpp
-//  \brief defines abstract base class EquationOfState, and various derived classes
-//  Each derived class Contains data and functions that implement conserved<->primitive
-//  variable conversion for that particular EOS, e.g. adiabatic, isothermal, etc.
+//  \brief Contains data and functions that implement conserved<->primitive
+//  variable conversion for various EOS, e.g. adiabatic, isothermal, etc.
 
 #include <cmath> 
 
@@ -16,68 +15,43 @@
 #include "mesh/meshblock.hpp"
 #include "parameter_input.hpp"
 
+enum class EOSType {adiabatic_nr_hydro, isothermal_nr_hydro};
+
 namespace hydro {
 
 //----------------------------------------------------------------------------------------
 //! \class EquationOfState
-//  \brief abstract base class for all EOS classes
+//  \brief functions for EOS
 
 class EquationOfState
 {
  public:
   EquationOfState(Mesh *pm, ParameterInput *pin, int igid);
-  virtual ~EquationOfState() = default;
+  ~EquationOfState() = default;
 
-  // data
-  bool adiabatic_eos;
+  // getter functions
+  Real GetGamma() {return gamma_;}
+  Real GetIsoCs() {return iso_cs_;}
+  bool IsAdiabatic() {return adiabatic_eos_;}
 
-  // functions
-  virtual Real GetGamma() {return 0.0;}       // only used in adiabatic EOS
+  // wrapper function that calls different conversion routines
+  void ConservedToPrimitive(AthenaArray4D<Real> &cons,AthenaArray4D<Real> &prim);
 
-  // folowing pure virtual functions must be overridden in derived EOS classes
-  virtual void ConservedToPrimitive(AthenaArray4D<Real> &cons,AthenaArray4D<Real> &prim) = 0;
-  virtual Real SoundSpeed(Real prim[5]);
-  virtual Real SoundSpeed();
+  // cons to prim functions for different EOS
+  void ConToPrimAdi(AthenaArray4D<Real> &cons,AthenaArray4D<Real> &prim);
+  void ConToPrimIso(AthenaArray4D<Real> &cons,AthenaArray4D<Real> &prim);
 
- protected:
+  // sound speed function for adiabatic EOS 
+  Real SoundSpeed(Real p, Real d) {return std::sqrt(gamma_*p/d);}
+
+ private:
   Mesh* pmesh_;
   int my_mbgid_;
   Real density_floor_, pressure_floor_;
-};
-
-//----------------------------------------------------------------------------------------
-//! \class AdiabaticHydro
-//  \brief derived EOS class for nonrelativistic adiabatic hydrodynamics
-
-class AdiabaticHydro : public EquationOfState
-{
- public:
-  AdiabaticHydro(Mesh* pm, ParameterInput *pin, int igid);
-  Real GetGamma() override {return gamma_;}
-
-  // functions that implement methods appropriate to adiabatic hydrodynamics
-  void ConservedToPrimitive(AthenaArray4D<Real> &cons,AthenaArray4D<Real> &prim) override;
-  Real SoundSpeed(Real prim[5]) override {return std::sqrt(gamma_*prim[IPR]/prim[IDN]);}
-
- private:
   Real gamma_;
-};
-
-//----------------------------------------------------------------------------------------
-//! \class IsothermalHydro
-//  \brief derived EOS class for nonrelativistic isothermal hydrodynamics
-
-class IsothermalHydro : public EquationOfState
-{
- public:
-  IsothermalHydro(Mesh* pm, ParameterInput *pin, int igid);
-
-  // functions that implement methods appropriate to isothermal hydrodynamics
-  void ConservedToPrimitive(AthenaArray4D<Real> &cons,AthenaArray4D<Real> &prim) override;
-  Real SoundSpeed() override {return iso_cs_;}
-
- private:
   Real iso_cs_;
+  EOSType eos_type_;    // enum that specifies EOS type
+  bool adiabatic_eos_;  // true if EOS is adiabatic
 };
 
 } // namespace hydro

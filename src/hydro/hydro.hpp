@@ -20,10 +20,10 @@
 // forward declarations
 class Driver;
 
-namespace hydro {
-
 // constants that enumerate Hydro dynamics options
-enum class HydroEvolution {hydro_static, kinematic, hydro_dynamic, no_evolution};
+enum HydroEvolution {hydro_static, kinematic, hydro_dynamic, no_evolution};
+
+namespace hydro {
 
 //----------------------------------------------------------------------------------------
 //! \class Hydro

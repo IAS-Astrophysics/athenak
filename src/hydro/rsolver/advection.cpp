@@ -18,34 +18,21 @@
 namespace hydro {
 
 //----------------------------------------------------------------------------------------
-// Advection constructor
-  
-Advection::Advection(Mesh* pm, ParameterInput* pin, int igid) : 
-  RiemannSolver(pm, pin, igid)
-{
-  void RSolver(const int il, const  int iu, const int dir, const AthenaArray2D<Real> &wl,
-               const AthenaArray2D<Real> &wr, AthenaArray2D<Real> &flx);
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void Advection::RSolver
+//! \fn void RiemannSolver::Advection
 //  \brief An advection Riemann solver for hydrodynamics (both adiabatic and isothermal)
 
-void Advection::RSolver(const int il, const int iu, const int ivx,
+void RiemannSolver::Advection(const int il, const int iu, const int ivx,
                         const AthenaArray2D<Real> &wl, const AthenaArray2D<Real> &wr,
                         AthenaArray2D<Real> &flx)
 {
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
   Real wli[5],wri[5];
-  Real gm1, iso_cs;
   MeshBlock* pmb = pmesh_->FindMeshBlock(my_mbgid_);
-  bool adiabatic_eos = pmb->phydro->peos->adiabatic_eos;
-  if (adiabatic_eos) {
-    gm1 = pmb->phydro->peos->GetGamma() - 1.0;
-  } else {
-    iso_cs = pmb->phydro->peos->SoundSpeed(wli);  // wli is just "dummy argument"
-  }
+  bool adiabatic_eos = pmb->phydro->peos->IsAdiabatic();
+  Real gm1 = pmb->phydro->peos->GetGamma() - 1.0;
+  Real iso_cs = pmb->phydro->peos->GetIsoCs();
+  
 
   for (int i=il; i<=iu; ++i) {
     //--- Step 1.  Load L/R states into local variables

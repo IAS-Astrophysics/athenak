@@ -76,7 +76,7 @@ void HistoryOutput::LoadOutputData(Mesh *pm)
           out_data_[0][m](0,0,5) += 0.5*SQR(u_my)/u_d;
           out_data_[0][m](0,0,6) += 0.5*SQR(u_mz)/u_d;
           
-          if (phyd->peos->adiabatic_eos) {
+          if (phyd->peos->IsAdiabatic()) {
             Real& u_e = phyd->u0(hydro::IEN,k,j,i);;
             out_data_[0][m](0,0,7) += u_e;
           }
@@ -141,7 +141,7 @@ void HistoryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
       std::fprintf(pfile,"[%d]=1-KE     ", iout++);
       std::fprintf(pfile,"[%d]=2-KE     ", iout++);
       std::fprintf(pfile,"[%d]=3-KE     ", iout++);
-      if (pm->mblocks.begin()->phydro->peos->adiabatic_eos) {
+      if (pm->mblocks.begin()->phydro->peos->IsAdiabatic()) {
         std::fprintf(pfile,"[%d]=tot-E   ", iout++);
       }
       std::fprintf(pfile,"\n");                              // terminate line

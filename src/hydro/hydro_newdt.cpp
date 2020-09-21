@@ -60,7 +60,7 @@ TaskStatus Hydro::NewTimeStep(Driver *pdrive, int stage) {
           wi[IVY] = w0(IVY,k,j,i);
           wi[IVZ] = w0(IVZ,k,j,i);
           wi[IPR] = w0(IPR,k,j,i);  // this value never used in isothermal EOS
-          Real cs = peos->SoundSpeed(wi);
+          Real cs = peos->SoundSpeed(wi[IPR],wi[IDN]);
           dv1 = std::max((std::abs(wi[IVX]) + cs), dv1);
           dv2 = std::max((std::abs(wi[IVY]) + cs), dv2);
           dv3 = std::max((std::abs(wi[IVZ]) + cs), dv3);

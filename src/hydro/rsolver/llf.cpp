@@ -27,34 +27,21 @@
 namespace hydro {
 
 //----------------------------------------------------------------------------------------
-// LLF constructor
-  
-LLF::LLF(Mesh* pm, ParameterInput* pin, int igid) : RiemannSolver(pm, pin, igid)
-{
-  void RSolver(const int il, const  int iu, const int dir, const AthenaArray2D<Real> &wl,
-               const AthenaArray2D<Real> &wr, AthenaArray2D<Real> &flx);
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void LLF::RSolver
+//! \fn void RiemannSolver::LLF
 //  \brief The LLF Riemann solver for hydrodynamics (both adiabatic and isothermal)
 
-void LLF::RSolver(const int il, const int iu, const int ivx,
-                  const AthenaArray2D<Real> &wl, const AthenaArray2D<Real> &wr,
-                  AthenaArray2D<Real> &flx)
+void RiemannSolver::LLF(const int il, const int iu, const int ivx,
+                        const AthenaArray2D<Real> &wl, const AthenaArray2D<Real> &wr,
+                        AthenaArray2D<Real> &flx)
 {
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
   Real wli[5],wri[5],du[5];
   Real fl[5],fr[5],flxi[5];
-  Real gm1, iso_cs;
   MeshBlock* pmb = pmesh_->FindMeshBlock(my_mbgid_);
-  bool adiabatic_eos = pmb->phydro->peos->adiabatic_eos;
-  if (adiabatic_eos) {
-    gm1 = pmb->phydro->peos->GetGamma() - 1.0;
-  } else {
-    iso_cs = pmb->phydro->peos->SoundSpeed(wli);  // wli is just "dummy argument"
-  }
+  bool adiabatic_eos = pmb->phydro->peos->IsAdiabatic();
+  Real gm1 = pmb->phydro->peos->GetGamma() - 1.0;
+  Real iso_cs = pmb->phydro->peos->GetIsoCs();
 
   for (int i=il; i<=iu; ++i) {
     //--- Step 1.  Load L/R states into local variables
@@ -72,8 +59,14 @@ void LLF::RSolver(const int il, const int iu, const int ivx,
 
     //--- Step 2.  Compute wave speeds in L,R states (see Toro eq. 10.43)
 
-    Real cl = pmb->phydro->peos->SoundSpeed(wli);
-    Real cr = pmb->phydro->peos->SoundSpeed(wri);
+    Real cl,cr;
+    if (adiabatic_eos) {
+      cl = pmb->phydro->peos->SoundSpeed(wli[IPR],wli[IDN]);
+      cr = pmb->phydro->peos->SoundSpeed(wri[IPR],wri[IDN]);
+    } else {
+      cl = iso_cs;
+      cr = iso_cs;
+    }
     Real a  = 0.5*std::max( (std::abs(wli[IVX]) + cl), (std::abs(wri[IVX]) + cr) );
 
     //--- Step 3.  Compute L/R fluxes

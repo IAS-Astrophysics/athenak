@@ -6,94 +6,54 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file rsolver.hpp
-//  \brief defines abstract base class RiemannSolver, and various derived classes
-//  Each derived class contains data and functions that implement different Riemann
-//  solvers for nonrelativistic hydrodynamics
+//  \brief Contains data and functions that implement different Riemann solvers for
+//   nonrelativistic hydrodynamics
 
 #include "athena.hpp"
-#include "mesh/meshblock.hpp"
 #include "parameter_input.hpp"
+#include "mesh/meshblock.hpp"
+//#include "hydro/hydro.hpp"
 
+enum class RiemannSolverMethod {advection, llf, hlle, hllc, roe};
+
+//enum HydroEvolution {hydro_static, kinematic, hydro_dynamic, no_evolution};
 namespace hydro {
 
 //----------------------------------------------------------------------------------------
 //! \class RiemannSolver
-//  \brief abstract base class for all RiemannSolver classes
+//  \brief functions for Riemann solvers
 
 class RiemannSolver
 {
  public:
-  RiemannSolver(Mesh* pm, ParameterInput* pin, int igid);
-  virtual ~RiemannSolver() = default;
+  RiemannSolver(Mesh* pm, ParameterInput* pin, int igid, bool is_adiabatic,
+                bool is_dynamic);
+  ~RiemannSolver() = default;
 
-  virtual void RSolver(const int il, const  int iu, const int dir,
-                       const AthenaArray2D<Real> &wl, const AthenaArray2D<Real> &wr,
-                       AthenaArray2D<Real> &flx) = 0;
+  // wrapper function that calls appropriate solver
+  void RSolver(const int il, const  int iu, const int dir, const AthenaArray2D<Real> &wl,
+               const AthenaArray2D<Real> &wr, AthenaArray2D<Real> &flx);
 
- protected:
+  // functions that implement various solvers
+  void Advection(const int il, const  int iu, const int dir, const AthenaArray2D<Real> &wl,
+                 const AthenaArray2D<Real> &wr, AthenaArray2D<Real> &flx);
+
+  void LLF(const int il, const  int iu, const int dir, const AthenaArray2D<Real> &wl,
+           const AthenaArray2D<Real> &wr, AthenaArray2D<Real> &flx);
+
+  void HLLE(const int il, const  int iu, const int dir, const AthenaArray2D<Real> &wl,
+            const AthenaArray2D<Real> &wr, AthenaArray2D<Real> &flx);
+
+  void HLLC(const int il, const  int iu, const int dir, const AthenaArray2D<Real> &wl,
+            const AthenaArray2D<Real> &wr, AthenaArray2D<Real> &flx);
+
+  void Roe(const int il, const  int iu, const int dir, const AthenaArray2D<Real> &wl,
+           const AthenaArray2D<Real> &wr, AthenaArray2D<Real> &flx);
+
+ private:
   Mesh *pmesh_;
   int my_mbgid_;
-};
-
-//----------------------------------------------------------------------------------------
-//! \class Advection
-//  \brief derived RiemannSolver class for pure advection problems
-
-class Advection : public RiemannSolver
-{
- public:
-  Advection(Mesh* pm, ParameterInput* pin, int igid);
-  void RSolver(const int il, const  int iu, const int dir, const AthenaArray2D<Real> &wl,
-               const AthenaArray2D<Real> &wr, AthenaArray2D<Real> &flx) override;
-};
-
-//----------------------------------------------------------------------------------------
-//! \class LLF
-//  \brief derived RiemannSolver class for local Lax-Friedrichs (LLF) hydro solver
-
-class LLF : public RiemannSolver
-{
- public:
-  LLF(Mesh* pm, ParameterInput* pin, int igid);
-  void RSolver(const int il, const  int iu, const int dir, const AthenaArray2D<Real> &wl,
-               const AthenaArray2D<Real> &wr, AthenaArray2D<Real> &flx) override;
-};
-
-//----------------------------------------------------------------------------------------
-//! \class HLLE
-//  \brief derived RiemannSolver class for Harten-Lax-van Leer hydro solver with Einfeldt
-//  fix to prevent unphysical solutions (HLLE)
-    
-class HLLE : public RiemannSolver
-{   
- public:
-  HLLE(Mesh* pm, ParameterInput* pin, int igid);
-  void RSolver(const int il, const  int iu, const int dir, const AthenaArray2D<Real> &wl,
-               const AthenaArray2D<Real> &wr, AthenaArray2D<Real> &flx) override;
-};  
-
-//----------------------------------------------------------------------------------------
-//! \class HLLC
-//  \brief derived RiemannSolver class for HLLC hydro solver
-    
-class HLLC : public RiemannSolver
-{   
- public:
-  HLLC(Mesh* pm, ParameterInput* pin, int igid);
-  void RSolver(const int il, const  int iu, const int dir, const AthenaArray2D<Real> &wl,
-               const AthenaArray2D<Real> &wr, AthenaArray2D<Real> &flx) override;
-};  
-
-//----------------------------------------------------------------------------------------
-//! \class Roe
-//  \brief derived RiemannSolver class for Roe hydro solver
-
-class Roe : public RiemannSolver
-{
- public:
-  Roe(Mesh* pm, ParameterInput* pin, int igid);
-  void RSolver(const int il, const  int iu, const int dir, const AthenaArray2D<Real> &wl,
-               const AthenaArray2D<Real> &wr, AthenaArray2D<Real> &flx) override;
+  RiemannSolverMethod rsolver_method_;   // enum that selects which solver to use
 };
 
 } // namespace hydro

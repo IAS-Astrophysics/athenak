@@ -17,13 +17,13 @@ enum class ReconstructionMethod {donor_cell, piecewise_linear, piecewise_parabol
 
 //----------------------------------------------------------------------------------------
 //! \class Reconstruction
-//  \brief abstract base class for all Reconstruction classes
+//  \brief functions for reconstruction methods
 
 class Reconstruction
 {
  public:
   Reconstruction(ParameterInput *pin, int nghost);
-  virtual ~Reconstruction() = default;
+  ~Reconstruction() = default;
 
   // wrapper functions that call different methods
   void ReconstructX1(const int k, const int j, const int il, const int iu,
@@ -70,7 +70,7 @@ class Reconstruction
              AthenaArray2D<Real> &ql, AthenaArray2D<Real> &qr);
 
  private:
-  ReconstructionMethod recon_method_;
+  ReconstructionMethod recon_method_;  // enum that selects which method to use
 };
 
 #endif // RECONSTRUCT_HPP_

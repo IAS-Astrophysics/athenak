@@ -9,6 +9,7 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
+//#include "hydro
 #include "hydro/rsolver/rsolver.hpp"
 
 namespace hydro {
@@ -16,10 +17,75 @@ namespace hydro {
 //----------------------------------------------------------------------------------------
 // RSolver constructor
 
-RiemannSolver::RiemannSolver(Mesh* pm, ParameterInput* pin, int igid) :
-   pmesh_(pm), my_mbgid_(igid)
+RiemannSolver::RiemannSolver(Mesh* pm, ParameterInput* pin, int igid, bool is_adiabatic,
+  bool is_dynamic) : pmesh_(pm), my_mbgid_(igid)
 {
-
+  // select Riemann solver (no default).  Test for compatibility of options
+  std::string rsolver = pin->GetString("hydro","rsolver");
+    
+  if (rsolver.compare("advection") == 0) {
+    if (is_dynamic) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ 
+                << std::endl << "<hydro>/rsolver = '" << rsolver
+                << "' cannot be used with hydrodynamic problems" << std::endl;
+      std::exit(EXIT_FAILURE);
+    } else {
+      rsolver_method_ = RiemannSolverMethod::advection;
+    }
+  } else if (!is_dynamic) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "<hydro>/rsolver = '" << rsolver
+              << "' cannot be used with non-hydrodynamic problems" << std::endl;
+    std::exit(EXIT_FAILURE);
+  } else if (rsolver.compare("llf") == 0) {
+    rsolver_method_ = RiemannSolverMethod::llf;
+  } else if (rsolver.compare("hlle") == 0) {
+    rsolver_method_ = RiemannSolverMethod::hlle;
+  } else if (rsolver.compare("hllc") == 0) {
+    if (is_adiabatic) {
+      rsolver_method_ = RiemannSolverMethod::hllc;
+    } else {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ 
+                << std::endl << "<hydro>/rsolver = '" << rsolver
+                << "' cannot be used with isothermal EOS" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  } else if (rsolver.compare("roe") == 0) {
+    rsolver_method_ = RiemannSolverMethod::roe;
+  } else {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "<hydro> rsolver = '" << rsolver << "' not implemented" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 }
+
+//----------------------------------------------------------------------------------------
+// RSolver() 
+  
+void RiemannSolver::RSolver(const int il, const  int iu, const int dir,
+                            const AthenaArray2D<Real> &wl, const AthenaArray2D<Real> &wr,
+                            AthenaArray2D<Real> &flx)
+{                  
+  switch (rsolver_method_) {
+    case RiemannSolverMethod::advection:
+      Advection(il, iu, dir, wl, wr, flx);
+      break;
+    case RiemannSolverMethod::llf:
+      LLF(il, iu, dir, wl, wr, flx);
+      break;
+    case RiemannSolverMethod::hlle:
+      HLLE(il, iu, dir, wl, wr, flx);
+      break;
+    case RiemannSolverMethod::hllc:
+      HLLC(il, iu, dir, wl, wr, flx);
+      break;
+    case RiemannSolverMethod::roe:
+      Roe(il, iu, dir, wl, wr, flx);
+      break;
+    default: 
+      break; 
+  }
+  return;
+} 
 
 } // namespace hydro

@@ -25,16 +25,6 @@
 
 namespace hydro {
 
-//----------------------------------------------------------------------------------------
-// Roe constructor
-
-Roe::Roe(Mesh* pm, ParameterInput* pin, int igid) : RiemannSolver(pm, pin, igid)
-{
-  void RSolver(const int il, const  int iu, const int dir, const AthenaArray2D<Real> &wl,
-               const AthenaArray2D<Real> &wr, AthenaArray2D<Real> &flx);
-}
-
-
 // prototype for functions to compute Roe fluxes from eigenmatrices
 namespace roe {
 
@@ -46,10 +36,10 @@ inline void RoeFluxIso(const Real wroe[], const Real du[], const Real wli[],
 } // namespace roe
 
 //----------------------------------------------------------------------------------------
-//! \fn void Hydro::RiemannSolver
+//! \fn void RiemannSolver::Roe
 //  \brief The Roe Riemann solver for hydrodynamics (both adiabatic and isothermal)
 
-void Roe::RSolver(const int il, const int iu, const int ivx,
+void RiemannSolver::Roe(const int il, const int iu, const int ivx,
                   const AthenaArray2D<Real> &wl, const AthenaArray2D<Real> &wr,
                   AthenaArray2D<Real> &flx)
 {
@@ -59,13 +49,9 @@ void Roe::RSolver(const int il, const int iu, const int ivx,
   Real fl[5],fr[5],flxi[5];
   Real ev[5],du[5];
   MeshBlock* pmb = pmesh_->FindMeshBlock(my_mbgid_);
-  bool adiabatic_eos = pmb->phydro->peos->adiabatic_eos;
-  Real gm1, iso_cs;
-  if (adiabatic_eos) {
-    gm1 = pmb->phydro->peos->GetGamma() - 1.0;
-  } else {
-    iso_cs = pmb->phydro->peos->SoundSpeed(wli);  // wli is just "dummy argument"
-  }
+  bool adiabatic_eos = pmb->phydro->peos->IsAdiabatic();
+  Real gm1 = pmb->phydro->peos->GetGamma() - 1.0;
+  Real iso_cs = pmb->phydro->peos->GetIsoCs();
 
   for (int i=il; i<=iu; ++i) {
     //--- Step 1.  Load L/R states into local variables
@@ -178,8 +164,14 @@ void Roe::RSolver(const int il, const int iu, const int ivx,
     //--- Step 6.  Overwrite with LLF flux if any of intermediate states are negative
 
     if (llf_flag != 0) {
-      Real cl = pmb->phydro->peos->SoundSpeed(wli);
-      Real cr = pmb->phydro->peos->SoundSpeed(wri);
+      Real cl,cr;
+      if (adiabatic_eos) {
+        cl = pmb->phydro->peos->SoundSpeed(wli[IPR],wli[IDN]);
+        cr = pmb->phydro->peos->SoundSpeed(wri[IPR],wri[IDN]);
+      } else {
+        cl = iso_cs;
+        cr = iso_cs;
+      }
       Real a  = 0.5*std::max( (std::abs(wli[IVX]) + cl), (std::abs(wri[IVX]) + cr) );
 
       flxi[IDN] = 0.5*(fl[IDN] + fr[IDN]) - a*du[IDN];
