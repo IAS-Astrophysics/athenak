@@ -31,27 +31,33 @@ class RiemannSolver
   ~RiemannSolver() = default;
 
   // wrapper function that calls appropriate solver
+  KOKKOS_FUNCTION
   void RSolver(TeamMember_t const &member, const int il, const  int iu, const int dir,
        const AthenaScratch2D<Real> &wl, const AthenaScratch2D<Real> &wr,
        AthenaScratch2D<Real> &flx);
 
   // functions that implement various solvers
+  KOKKOS_FUNCTION
   void Advection(TeamMember_t const &member, const int il, const  int iu, const int dir,
        const AthenaScratch2D<Real> &wl, const AthenaScratch2D<Real> &wr,
        AthenaScratch2D<Real> &flx);
 
+  KOKKOS_FUNCTION
   void LLF(TeamMember_t const &member, const int il, const  int iu, const int dir,
        const AthenaScratch2D<Real> &wl, const AthenaScratch2D<Real> &wr,
        AthenaScratch2D<Real> &flx);
 
+  KOKKOS_FUNCTION
   void HLLE(TeamMember_t const &member, const int il, const  int iu, const int dir,
        const AthenaScratch2D<Real> &wl, const AthenaScratch2D<Real> &wr,
        AthenaScratch2D<Real> &flx);
 
+  KOKKOS_FUNCTION
   void HLLC(TeamMember_t const &member, const int il, const  int iu, const int dir,
        const AthenaScratch2D<Real> &wl, const AthenaScratch2D<Real> &wr,
        AthenaScratch2D<Real> &flx);
 
+  KOKKOS_FUNCTION
   void Roe(TeamMember_t const &member, const int il, const  int iu, const int dir,
        const AthenaScratch2D<Real> &wl, const AthenaScratch2D<Real> &wr,
        AthenaScratch2D<Real> &flx);

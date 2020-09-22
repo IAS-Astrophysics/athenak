@@ -71,8 +71,8 @@ void RiemannSolver::Roe(TeamMember_t const &member, const int il, const int iu,
 
     //--- Step 2.  Compute Roe-averaged data from left- and right-states
 
-    Real sqrtdl = std::sqrt(wli[IDN]);
-    Real sqrtdr = std::sqrt(wri[IDN]);
+    Real sqrtdl = sqrt(wli[IDN]);
+    Real sqrtdr = sqrt(wri[IDN]);
     Real isdlpdr = 1.0/(sqrtdl + sqrtdr);
 
     wroe[IDN]  = sqrtdl*sqrtdr;
@@ -174,7 +174,7 @@ void RiemannSolver::Roe(TeamMember_t const &member, const int il, const int iu,
         cl = iso_cs;
         cr = iso_cs;
       }
-      Real a  = 0.5*std::max( (std::abs(wli[IVX]) + cl), (std::abs(wri[IVX]) + cr) );
+      Real a  = 0.5*fmax( (fabs(wli[IVX]) + cl), (fabs(wri[IVX]) + cr) );
 
       flxi[IDN] = 0.5*(fl[IDN] + fr[IDN]) - a*du[IDN];
       flxi[IVX] = 0.5*(fl[IVX] + fr[IVX]) - a*du[IVX];
@@ -235,7 +235,7 @@ void RoeFluxAdb(const Real wroe[], const Real du[], const Real wli[], const Real
     Real vsq = v1*v1 + v2*v2 + v3*v3;
     Real q = h - 0.5*vsq;
     Real cs_sq = (q < 0.0) ? (std::numeric_limits<float>::min()) : gm1*q;
-    Real cs = std::sqrt(cs_sq);
+    Real cs = sqrt(cs_sq);
 
     // Compute eigenvalues (eq. B2)
     ev[0] = v1 - cs;
@@ -275,11 +275,11 @@ void RoeFluxAdb(const Real wroe[], const Real du[], const Real wli[], const Real
     a[4] *= na;
 
     Real coeff[5];
-    coeff[0] = -0.5*std::abs(ev[0])*a[0];
-    coeff[1] = -0.5*std::abs(ev[1])*a[1];
-    coeff[2] = -0.5*std::abs(ev[2])*a[2];
-    coeff[3] = -0.5*std::abs(ev[3])*a[3];
-    coeff[4] = -0.5*std::abs(ev[4])*a[4];
+    coeff[0] = -0.5*fabs(ev[0])*a[0];
+    coeff[1] = -0.5*fabs(ev[1])*a[1];
+    coeff[2] = -0.5*fabs(ev[2])*a[2];
+    coeff[3] = -0.5*fabs(ev[3])*a[3];
+    coeff[4] = -0.5*fabs(ev[4])*a[4];
 
     // compute density in intermediate states and check that it is positive, set flag
     // This requires computing the [0][*] components of the right-eigenmatrix
@@ -351,10 +351,10 @@ void RoeFluxIso(const Real wroe[], const Real du[], const Real wli[], const Real
     a[3] += du[1]*0.5/iso_cs;
 
     Real coeff[4];
-    coeff[0] = -0.5*std::abs(ev[0])*a[0];
-    coeff[1] = -0.5*std::abs(ev[1])*a[1];
-    coeff[2] = -0.5*std::abs(ev[2])*a[2];
-    coeff[3] = -0.5*std::abs(ev[3])*a[3];
+    coeff[0] = -0.5*fabs(ev[0])*a[0];
+    coeff[1] = -0.5*fabs(ev[1])*a[1];
+    coeff[2] = -0.5*fabs(ev[2])*a[2];
+    coeff[3] = -0.5*fabs(ev[3])*a[3];
 
     // compute density in intermediate states and check that it is positive, set flag
     // This requires computing the [0][*] components of the right-eigenmatrix

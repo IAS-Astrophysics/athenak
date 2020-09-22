@@ -71,9 +71,9 @@ void RiemannSolver::HLLC(TeamMember_t const &member, const int il, const int iu,
 
     Real ql, qr;
     ql = (pmid <= wli[IPR]) ? 1.0 :
-         (1.0 + (gamma0 + 1.0) / std::sqrt(2.0 * gamma0) * (pmid / wli[IPR]-1.0));
+         (1.0 + (gamma0 + 1.0) / sqrt(2.0 * gamma0) * (pmid / wli[IPR]-1.0));
     qr = (pmid <= wri[IPR]) ? 1.0 :
-         (1.0 + (gamma0 + 1.0) / std::sqrt(2.0 * gamma0) * (pmid / wri[IPR]-1.0));
+         (1.0 + (gamma0 + 1.0) / sqrt(2.0 * gamma0) * (pmid / wri[IPR]-1.0));
 
     //--- Step 4.  Compute the max/min wave speeds based on L/R
 

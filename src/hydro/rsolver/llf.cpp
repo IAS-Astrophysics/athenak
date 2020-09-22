@@ -69,7 +69,7 @@ void RiemannSolver::LLF(TeamMember_t const &member, const int il, const int iu,
       cl = iso_cs;
       cr = iso_cs;
     }
-    Real a  = 0.5*std::max( (std::abs(wli[IVX]) + cl), (std::abs(wri[IVX]) + cr) );
+    Real a  = 0.5*fmax( (fabs(wli[IVX]) + cl), (fabs(wri[IVX]) + cr) );
 
     //--- Step 3.  Compute L/R fluxes
 

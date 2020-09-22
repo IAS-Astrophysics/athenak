@@ -74,10 +74,12 @@ endif()
 SET (Kokkos_ENABLE_AGGRESSIVE_VECTORIZATION ON CACHE BOOL
      "Kokkos aggressive vectorization")
 
-# Tell Kokkos we need lambdas in Cuda.
+# Tell Kokkos we need lambdas and RDC in Cuda.
 if (Kokkos_ENABLE_CUDA)
   SET (Kokkos_ENABLE_CUDA_LAMBDA ON CACHE BOOL
        "Enable lambda expressions in CUDA")
+  SET (Kokkos_ENABLE_CUDA_RELOCATABLE_DEVICE_CODE  ON CACHE BOOL
+      "Enable relocatable device code")
 endif()
 
 #-----------------------------------------------------------------------------------------

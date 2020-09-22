@@ -60,12 +60,12 @@ void Reconstruction::PPMX1(TeamMember_t const &member, const int k, const int j,
     
       // limit second derivative (PH 3.36)
       Real d2qlim = 0.0;
-      Real lim_slope = std::min(fabs(d2ql),fabs(d2qr));
+      Real lim_slope = fmin(fabs(d2ql),fabs(d2qr));
       if (d2qc > 0.0 && d2ql > 0.0 && d2qr > 0.0) {
-        d2qlim = SIGN(d2qc)*std::min(1.25*lim_slope,fabs(d2qc));
+        d2qlim = SIGN(d2qc)*fmin(1.25*lim_slope,fabs(d2qc));
       }
       if (d2qc < 0.0 && d2ql < 0.0 && d2qr < 0.0) {
-        d2qlim = SIGN(d2qc)*std::min(1.25*lim_slope,fabs(d2qc));
+        d2qlim = SIGN(d2qc)*fmin(1.25*lim_slope,fabs(d2qc));
       } 
       // compute limited value for qlv (PH 3.34)
       qlv = 0.5*(q(n,k,j,i) + q(n,k,j,i-1)) - d2qlim/6.0;
@@ -77,12 +77,12 @@ void Reconstruction::PPMX1(TeamMember_t const &member, const int k, const int j,
 
       // limit second derivative (PH 3.36)
       d2qlim = 0.0;
-      lim_slope = std::min(fabs(d2ql),fabs(d2qr));
+      lim_slope = fmin(fabs(d2ql),fabs(d2qr));
       if (d2qc > 0.0 && d2ql > 0.0 && d2qr > 0.0) {
-        d2qlim = SIGN(d2qc)*std::min(1.25*lim_slope,fabs(d2qc));
+        d2qlim = SIGN(d2qc)*fmin(1.25*lim_slope,fabs(d2qc));
       }
       if (d2qc < 0.0 && d2ql < 0.0 && d2qr < 0.0) {
-        d2qlim = SIGN(d2qc)*std::min(1.25*lim_slope,fabs(d2qc));
+        d2qlim = SIGN(d2qc)*fmin(1.25*lim_slope,fabs(d2qc));
       }
       // compute limited value for qrv (PH 3.33)
       qrv = 0.5*(q(n,k,j,i) + q(n,k,j,i+1)) - d2qlim/6.0;
@@ -100,13 +100,13 @@ void Reconstruction::PPMX1(TeamMember_t const &member, const int k, const int j,
 
         // limit second derivatives (PH 3.38)
         Real d2qlim = 0.0;
-        Real lim_slope = std::min(fabs(d2ql),fabs(d2qr));
-        lim_slope = std::min(fabs(d2qc),lim_slope);
+        Real lim_slope = fmin(fabs(d2ql),fabs(d2qr));
+        lim_slope = fmin(fabs(d2qc),lim_slope);
         if (d2qc > 0.0 && d2ql > 0.0 && d2qr > 0.0 && d2q > 0.0) {
-          d2qlim = SIGN(d2q)*std::min(1.25*lim_slope,fabs(d2q));
+          d2qlim = SIGN(d2q)*fmin(1.25*lim_slope,fabs(d2q));
         }
         if (d2qc < 0.0 && d2ql < 0.0 && d2qr < 0.0 && d2q < 0.0) {
-          d2qlim = SIGN(d2q)*std::min(1.25*lim_slope,fabs(d2q));
+          d2qlim = SIGN(d2q)*fmin(1.25*lim_slope,fabs(d2q));
         }
 
         // limit L/R states at extrema (PH 3.39)
@@ -165,12 +165,12 @@ void Reconstruction::PPMX2(TeamMember_t const &member, const int k, const int j,
     
       // limit second derivative (PH 3.36)
       Real d2qlim = 0.0;
-      Real lim_slope = std::min(fabs(d2ql),fabs(d2qr));
+      Real lim_slope = fmin(fabs(d2ql),fabs(d2qr));
       if (d2qc > 0.0 && d2ql > 0.0 && d2qr > 0.0) {
-        d2qlim = SIGN(d2qc)*std::min(1.25*lim_slope,fabs(d2qc));
+        d2qlim = SIGN(d2qc)*fmin(1.25*lim_slope,fabs(d2qc));
       }
       if (d2qc < 0.0 && d2ql < 0.0 && d2qr < 0.0) {
-        d2qlim = SIGN(d2qc)*std::min(1.25*lim_slope,fabs(d2qc));
+        d2qlim = SIGN(d2qc)*fmin(1.25*lim_slope,fabs(d2qc));
       } 
       // compute limited value for qlv (PH 3.34)
       qlv = 0.5*(q(n,k,j,i) + q(n,k,j-1,i)) - d2qlim/6.0;
@@ -182,12 +182,12 @@ void Reconstruction::PPMX2(TeamMember_t const &member, const int k, const int j,
 
       // limit second derivative (PH 3.36)
       d2qlim = 0.0;
-      lim_slope = std::min(fabs(d2ql),fabs(d2qr));
+      lim_slope = fmin(fabs(d2ql),fabs(d2qr));
       if (d2qc > 0.0 && d2ql > 0.0 && d2qr > 0.0) {
-        d2qlim = SIGN(d2qc)*std::min(1.25*lim_slope,fabs(d2qc));
+        d2qlim = SIGN(d2qc)*fmin(1.25*lim_slope,fabs(d2qc));
       }
       if (d2qc < 0.0 && d2ql < 0.0 && d2qr < 0.0) {
-        d2qlim = SIGN(d2qc)*std::min(1.25*lim_slope,fabs(d2qc));
+        d2qlim = SIGN(d2qc)*fmin(1.25*lim_slope,fabs(d2qc));
       }
       // compute limited value for qrv (PH 3.33)
       qrv = 0.5*(q(n,k,j,i) + q(n,k,j+1,i)) - d2qlim/6.0;
@@ -205,13 +205,13 @@ void Reconstruction::PPMX2(TeamMember_t const &member, const int k, const int j,
 
         // limit second derivatives (PH 3.38)
         Real d2qlim = 0.0;
-        Real lim_slope = std::min(fabs(d2ql),fabs(d2qr));
-        lim_slope = std::min(fabs(d2qc),lim_slope);
+        Real lim_slope = fmin(fabs(d2ql),fabs(d2qr));
+        lim_slope = fmin(fabs(d2qc),lim_slope);
         if (d2qc > 0.0 && d2ql > 0.0 && d2qr > 0.0 && d2q > 0.0) {
-          d2qlim = SIGN(d2q)*std::min(1.25*lim_slope,fabs(d2q));
+          d2qlim = SIGN(d2q)*fmin(1.25*lim_slope,fabs(d2q));
         }
         if (d2qc < 0.0 && d2ql < 0.0 && d2qr < 0.0 && d2q < 0.0) {
-          d2qlim = SIGN(d2q)*std::min(1.25*lim_slope,fabs(d2q));
+          d2qlim = SIGN(d2q)*fmin(1.25*lim_slope,fabs(d2q));
         }
 
         // limit L/R states at extrema (PH 3.39)
@@ -270,12 +270,12 @@ void Reconstruction::PPMX3(TeamMember_t const &member, const int k, const int j,
     
       // limit second derivative (PH 3.36)
       Real d2qlim = 0.0;
-      Real lim_slope = std::min(fabs(d2ql),fabs(d2qr));
+      Real lim_slope = fmin(fabs(d2ql),fabs(d2qr));
       if (d2qc > 0.0 && d2ql > 0.0 && d2qr > 0.0) {
-        d2qlim = SIGN(d2qc)*std::min(1.25*lim_slope,fabs(d2qc));
+        d2qlim = SIGN(d2qc)*fmin(1.25*lim_slope,fabs(d2qc));
       }
       if (d2qc < 0.0 && d2ql < 0.0 && d2qr < 0.0) {
-        d2qlim = SIGN(d2qc)*std::min(1.25*lim_slope,fabs(d2qc));
+        d2qlim = SIGN(d2qc)*fmin(1.25*lim_slope,fabs(d2qc));
       } 
       // compute limited value for qlv (PH 3.34)
       qlv = 0.5*(q(n,k,j,i) + q(n,k-1,j,i)) - d2qlim/6.0;
@@ -287,12 +287,12 @@ void Reconstruction::PPMX3(TeamMember_t const &member, const int k, const int j,
 
       // limit second derivative (PH 3.36)
       d2qlim = 0.0;
-      lim_slope = std::min(fabs(d2ql),fabs(d2qr));
+      lim_slope = fmin(fabs(d2ql),fabs(d2qr));
       if (d2qc > 0.0 && d2ql > 0.0 && d2qr > 0.0) {
-        d2qlim = SIGN(d2qc)*std::min(1.25*lim_slope,fabs(d2qc));
+        d2qlim = SIGN(d2qc)*fmin(1.25*lim_slope,fabs(d2qc));
       }
       if (d2qc < 0.0 && d2ql < 0.0 && d2qr < 0.0) {
-        d2qlim = SIGN(d2qc)*std::min(1.25*lim_slope,fabs(d2qc));
+        d2qlim = SIGN(d2qc)*fmin(1.25*lim_slope,fabs(d2qc));
       }
       // compute limited value for qrv (PH 3.33)
       qrv = 0.5*(q(n,k,j,i) + q(n,k+1,j,i)) - d2qlim/6.0;
@@ -310,13 +310,13 @@ void Reconstruction::PPMX3(TeamMember_t const &member, const int k, const int j,
 
         // limit second derivatives (PH 3.38)
         Real d2qlim = 0.0;
-        Real lim_slope = std::min(fabs(d2ql),fabs(d2qr));
-        lim_slope = std::min(fabs(d2qc),lim_slope);
+        Real lim_slope = fmin(fabs(d2ql),fabs(d2qr));
+        lim_slope = fmin(fabs(d2qc),lim_slope);
         if (d2qc > 0.0 && d2ql > 0.0 && d2qr > 0.0 && d2q > 0.0) {
-          d2qlim = SIGN(d2q)*std::min(1.25*lim_slope,fabs(d2q));
+          d2qlim = SIGN(d2q)*fmin(1.25*lim_slope,fabs(d2q));
         }
         if (d2qc < 0.0 && d2ql < 0.0 && d2qr < 0.0 && d2q < 0.0) {
-          d2qlim = SIGN(d2q)*std::min(1.25*lim_slope,fabs(d2q));
+          d2qlim = SIGN(d2q)*fmin(1.25*lim_slope,fabs(d2q));
         }
 
         // limit L/R states at extrema (PH 3.39)

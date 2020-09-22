@@ -26,45 +26,57 @@ class Reconstruction
   ~Reconstruction() = default;
 
   // wrapper functions that call different methods
+  KOKKOS_FUNCTION
   void ReconstructX1(TeamMember_t const &member, const int k, const int j,
                      const int il, const int iu, const AthenaArray4D<Real> &q,
                      AthenaScratch2D<Real> &ql, AthenaScratch2D<Real> &qr);
+  KOKKOS_FUNCTION
   void ReconstructX2(TeamMember_t const &member, const int k, const int j,
                      const int il, const int iu, const AthenaArray4D<Real> &q,
                      AthenaScratch2D<Real> &ql, AthenaScratch2D<Real> &qr);
+  KOKKOS_FUNCTION
   void ReconstructX3(TeamMember_t const &member, const int k, const int j,
                      const int il, const int iu, const AthenaArray4D<Real> &q,
                      AthenaScratch2D<Real> &ql, AthenaScratch2D<Real> &qr);
 
   // first-order donor cell reconstruction
+  KOKKOS_FUNCTION
   void DonorCellX1(TeamMember_t const &member, const int k, const int j,
                    const int il, const int iu, const AthenaArray4D<Real> &q,
                    AthenaScratch2D<Real> &ql, AthenaScratch2D<Real> &qr);
+  KOKKOS_FUNCTION
   void DonorCellX2(TeamMember_t const &member, const int k, const int j,
                    const int il, const int iu, const AthenaArray4D<Real> &q,
                    AthenaScratch2D<Real> &ql, AthenaScratch2D<Real> &qr);
+  KOKKOS_FUNCTION
   void DonorCellX3(TeamMember_t const &member, const int k, const int j,
                    const int il, const int iu, const AthenaArray4D<Real> &q,
                    AthenaScratch2D<Real> &ql, AthenaScratch2D<Real> &qr);
 
   // second-order piecewise linear reconstruction in the primitive variables
+  KOKKOS_FUNCTION
   void PLMX1(TeamMember_t const &member, const int k, const int j,
              const int il, const int iu, const AthenaArray4D<Real> &q,
              AthenaScratch2D<Real> &ql, AthenaScratch2D<Real> &qr);
+  KOKKOS_FUNCTION
   void PLMX2(TeamMember_t const &member, const int k, const int j,
              const int il, const int iu, const AthenaArray4D<Real> &q,
              AthenaScratch2D<Real> &ql, AthenaScratch2D<Real> &qr);
+  KOKKOS_FUNCTION
   void PLMX3(TeamMember_t const &member, const int k, const int j,
              const int il, const int iu, const AthenaArray4D<Real> &q,
              AthenaScratch2D<Real> &ql, AthenaScratch2D<Real> &qr);
 
   // third-order piecewise parabolic reconstruction in the primitive variables
+  KOKKOS_FUNCTION
   void PPMX1(TeamMember_t const &member, const int k, const int j,
              const int il, const int iu, const AthenaArray4D<Real> &q,
              AthenaScratch2D<Real> &ql, AthenaScratch2D<Real> &qr);
+  KOKKOS_FUNCTION
   void PPMX2(TeamMember_t const &member, const int k, const int j,
              const int il, const int iu, const AthenaArray4D<Real> &q,
              AthenaScratch2D<Real> &ql, AthenaScratch2D<Real> &qr);
+  KOKKOS_FUNCTION
   void PPMX3(TeamMember_t const &member, const int k, const int j,
              const int il, const int iu, const AthenaArray4D<Real> &q,
              AthenaScratch2D<Real> &ql, AthenaScratch2D<Real> &qr);

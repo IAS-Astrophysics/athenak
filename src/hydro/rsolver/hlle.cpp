@@ -65,8 +65,8 @@ void RiemannSolver::HLLE(TeamMember_t const &member, const int il, const int iu,
     if (adiabatic_eos) { wri[IPR]=wr(IPR,i); }
 
     //--- Step 2.  Compute Roe-averaged state
-    Real sqrtdl = std::sqrt(wli[IDN]);
-    Real sqrtdr = std::sqrt(wri[IDN]);
+    Real sqrtdl = sqrt(wli[IDN]);
+    Real sqrtdr = sqrt(wri[IDN]);
     Real isdlpdr = 1.0/(sqrtdl + sqrtdr);
 
     wroe[IDN] = sqrtdl*sqrtdr;
@@ -91,15 +91,15 @@ void RiemannSolver::HLLE(TeamMember_t const &member, const int il, const int iu,
       cl = pmb->phydro->peos->SoundSpeed(wli[IPR],wli[IDN]);
       cr = pmb->phydro->peos->SoundSpeed(wri[IPR],wri[IDN]);
       Real q = hroe - 0.5*(SQR(wroe[IVX]) + SQR(wroe[IVY]) + SQR(wroe[IVZ]));
-      a = (q < 0.0) ? 0.0 : std::sqrt(gm1*q);
+      a = (q < 0.0) ? 0.0 : sqrt(gm1*q);
     } else {
       cl = iso_cs;
       cr = iso_cs;
     }
 
     //--- Step 4. Compute the max/min wave speeds based on L/R and Roe-averaged values
-    Real al = std::min((wroe[IVX] - a),(wli[IVX] - cl));
-    Real ar = std::max((wroe[IVX] + a),(wri[IVX] + cr));
+    Real al = fmin((wroe[IVX] - a),(wli[IVX] - cl));
+    Real ar = fmax((wroe[IVX] + a),(wri[IVX] + cr));
 
     Real bp = ar > 0.0 ? ar : 0.0;
     Real bm = al < 0.0 ? al : 0.0;
