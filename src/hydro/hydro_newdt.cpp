@@ -28,9 +28,9 @@ TaskStatus Hydro::NewTimeStep(Driver *pdrive, int stage) {
   if (stage != pdrive->nstages) return TaskStatus::complete; // only execute on last stage
   
   MeshBlock *pmb = pmesh_->FindMeshBlock(my_mbgid_);
-  int is = pmb->mb_cells.is; int ie = pmb->mb_cells.ie;
-  int js = pmb->mb_cells.js; int je = pmb->mb_cells.je;
-  int ks = pmb->mb_cells.ks; int ke = pmb->mb_cells.ke;
+  int is = pmb->mb_cells.is; int nx1 = pmb->mb_cells.nx1;
+  int js = pmb->mb_cells.js; int nx2 = pmb->mb_cells.nx2;
+  int ks = pmb->mb_cells.ks; int nx3 = pmb->mb_cells.nx3;
 
   Real dv1 = std::numeric_limits<float>::min();
   Real dv2 = std::numeric_limits<float>::min();
@@ -38,35 +38,46 @@ TaskStatus Hydro::NewTimeStep(Driver *pdrive, int stage) {
 
   if (hydro_evol == HydroEvolution::kinematic) {
 
-    // find largest (v) in each dirn for advection problems
-    for (int k=ks; k<=ke; ++k) {
-      for (int j=js; j<=je; ++j) {
-        for (int i=is; i<=ie; ++i) {
-          dv1 = std::max(fabs(w0(IVX,k,j,i)), dv1);
-          dv2 = std::max(fabs(w0(IVY,k,j,i)), dv2);
-          dv3 = std::max(fabs(w0(IVZ,k,j,i)), dv3);
-        }
-      }
-    }
+    // find largest (v) in each direction for advection problems
+    // Kokkos::parallel_reduce uses 1D range policy
+    const int nkji = nx3*nx2*nx1;
+    const int nji  = nx2*nx1;
+    Kokkos::parallel_reduce("HydroNudtAdvect",Kokkos::RangePolicy<>(pmb->exe_space, 0, nkji),
+      KOKKOS_LAMBDA(const int &idx, Real &max_dv1, Real &max_dv2, Real &max_dv3)
+    {
+      // compute n,k,j,i indices of thread and call function
+      int k = (idx)/nji;
+      int j = (idx - k*nji)/nx1;
+      int i = (idx - k*nji - j*nx1);
+      k += ks;
+      j += js;
+      i += is;
+      max_dv1 = fmax(fabs(w0(IVX,k,j,i)), max_dv1);
+      max_dv2 = fmax(fabs(w0(IVY,k,j,i)), max_dv2);
+      max_dv3 = fmax(fabs(w0(IVZ,k,j,i)), max_dv3);
+    }, Kokkos::Max<Real>(dv1), Kokkos::Max<Real>(dv2),Kokkos::Max<Real>(dv3));
 
   } else {
     // find largest (v +/- C) in each dirn for hydrodynamic problems
-    for (int k=ks; k<=ke; ++k) {
-      for (int j=js; j<=je; ++j) {
-        for (int i=is; i<=ie; ++i) {
-          Real wi[5];
-          wi[IDN] = w0(IDN,k,j,i);
-          wi[IVX] = w0(IVX,k,j,i);
-          wi[IVY] = w0(IVY,k,j,i);
-          wi[IVZ] = w0(IVZ,k,j,i);
-          wi[IPR] = w0(IPR,k,j,i);  // this value never used in isothermal EOS
-          Real cs = peos->SoundSpeed(wi[IPR],wi[IDN]);
-          dv1 = std::max((std::abs(wi[IVX]) + cs), dv1);
-          dv2 = std::max((std::abs(wi[IVY]) + cs), dv2);
-          dv3 = std::max((std::abs(wi[IVZ]) + cs), dv3);
-        }
-      }
-    }
+    // Kokkos::parallel_reduce uses 1D range policy
+    const int nkji = nx3*nx2*nx1;
+    const int nji  = nx2*nx1;
+    Kokkos::parallel_reduce("HydroNudt",Kokkos::RangePolicy<>(pmb->exe_space, 0, nkji),
+      KOKKOS_LAMBDA(const int &idx, Real &max_dv1, Real &max_dv2, Real &max_dv3)
+    { 
+      // compute n,k,j,i indices of thread and call function
+      int k = (idx)/nji;
+      int j = (idx - k*nji)/nx1;
+      int i = (idx - k*nji - j*nx1);
+      k += ks;
+      j += js;
+      i += is;
+
+      Real cs = peos->SoundSpeed(w0(IPR,k,j,i),w0(IDN,k,j,i));
+      max_dv1 = std::max((std::abs(w0(IVX,k,j,i)) + cs), max_dv1);
+      max_dv2 = std::max((std::abs(w0(IVY,k,j,i)) + cs), max_dv2);
+      max_dv3 = std::max((std::abs(w0(IVZ,k,j,i)) + cs), max_dv3);
+    }, Kokkos::Max<Real>(dv1), Kokkos::Max<Real>(dv2),Kokkos::Max<Real>(dv3));
 
   }
 

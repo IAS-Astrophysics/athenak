@@ -7,7 +7,6 @@
 //  \brief Updates hydro conserved variables, using weighted average and partial time
 //  step appropriate for various SSP RK integrators (e.g. RK1, RK2, RK3)
 
-#include <iostream>
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
 #include "driver/driver.hpp"
@@ -16,10 +15,8 @@
 namespace hydro {
 //----------------------------------------------------------------------------------------
 //! \fn  void Hydro::HydroUpdate
-//  \brief Calculate divergence of the fluxes for hydro only, no mesh refinement
+//  \brief Update conserved variables 
 
-//void Hydro::HydroUpdate(AthenaArray<Real> &u0, AthenaArray<Real> &u1, 
-//                         AthenaArray<Real> &divf) {
 TaskStatus Hydro::HydroUpdate(Driver *pdrive, int stage)
 {
   MeshBlock *pmb = pmesh_->FindMeshBlock(my_mbgid_);
@@ -27,25 +24,25 @@ TaskStatus Hydro::HydroUpdate(Driver *pdrive, int stage)
   int js = pmb->mb_cells.js; int je = pmb->mb_cells.je;
   int ks = pmb->mb_cells.ks; int ke = pmb->mb_cells.ke;
 
-  // update all variables to intermediate step using weights and fractional time step 
-  // appropriate to stage of particular integrator used (see XX)
-
   Real &gam0 = pdrive->gam0[stage-1];
   Real &gam1 = pdrive->gam1[stage-1];
   Real &beta = pdrive->beta[stage-1];
 
-  for (int n=0; n<nhydro; ++n) {
+  // 4D parallel loop that updates conserved variables to intermediate step using weights
+  // and fractional time step appropriate to stages of time-integrator used (see XX)
 
-    for (int k=ks; k<=ke; ++k) {
+  par_for_outer("hydro_update", pmb->exe_space, 0, 1, 0, (nhydro-1), ks, ke,
+    KOKKOS_LAMBDA(TeamMember_t member, const int n, const int k)
+    {
       for (int j=js; j<=je; ++j) {
-        for (int i=is; i<=ie; ++i) {
-          u0(n,k,j,i) = gam0*u0(n,k,j,i) + gam1*u1(n,k,j,i) 
-                        - beta*(pmesh_->dt)*divf(n,k,j,i);
-        }
+        par_for_inner(member, is, ie, [&](const int i)
+        {
+          u0(n,k,j,i) = gam0*u0(n,k,j,i) + gam1*u1(n,k,j,i) -
+                        beta*(pmesh_->dt)*divf(n,k,j,i);
+        });
       }
     }
-
-  }
+  );
 
   return TaskStatus::complete;
 }

@@ -42,6 +42,7 @@ class EquationOfState
   void ConToPrimIso(AthenaArray4D<Real> &cons,AthenaArray4D<Real> &prim);
 
   // sound speed function for adiabatic EOS 
+  KOKKOS_INLINE_FUNCTION
   Real SoundSpeed(Real p, Real d) {return std::sqrt(gamma_*p/d);}
 
  private:

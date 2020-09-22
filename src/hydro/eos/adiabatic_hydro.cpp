@@ -29,39 +29,38 @@ void EquationOfState::ConToPrimAdi(AthenaArray4D<Real> &cons, AthenaArray4D<Real
   int ncells3 = (pmb->mb_cells.nx3 > 1)? (pmb->mb_cells.nx3 + 2*ng) : 1;
   Real gm1 = GetGamma() - 1.0;
 
-  for (int k=0; k<ncells3; ++k) {
-    for (int j=0; j<ncells2; ++j) {
-      for (int i=0; i<ncells1; ++i) {
-        Real& u_d  = cons(IDN,k,j,i);
-        Real& u_m1 = cons(IM1,k,j,i);
-        Real& u_m2 = cons(IM2,k,j,i);
-        Real& u_m3 = cons(IM3,k,j,i);
-        Real& u_e  = cons(IEN,k,j,i);
+  par_for("hydro_update", pmb->exe_space, 0, (ncells3-1), 0, (ncells2-1), 0, (ncells1-1),
+    KOKKOS_LAMBDA(int k, int j, int i)
+    {
+      Real& u_d  = cons(IDN,k,j,i);
+      Real& u_m1 = cons(IM1,k,j,i);
+      Real& u_m2 = cons(IM2,k,j,i);
+      Real& u_m3 = cons(IM3,k,j,i);
+      Real& u_e  = cons(IEN,k,j,i);
 
-        Real& w_d  = prim(IDN,k,j,i);
-        Real& w_vx = prim(IVX,k,j,i);
-        Real& w_vy = prim(IVY,k,j,i);
-        Real& w_vz = prim(IVZ,k,j,i);
-        Real& w_p  = prim(IPR,k,j,i);
+      Real& w_d  = prim(IDN,k,j,i);
+      Real& w_vx = prim(IVX,k,j,i);
+      Real& w_vy = prim(IVY,k,j,i);
+      Real& w_vz = prim(IVZ,k,j,i);
+      Real& w_p  = prim(IPR,k,j,i);
 
-        // apply density floor, without changing momentum or energy
-        u_d = (u_d > density_floor_) ?  u_d : density_floor_;
-        w_d = u_d;
+      // apply density floor, without changing momentum or energy
+      u_d = (u_d > density_floor_) ?  u_d : density_floor_;
+      w_d = u_d;
 
-        Real di = 1.0/u_d;
-        w_vx = u_m1*di;
-        w_vy = u_m2*di;
-        w_vz = u_m3*di;
+      Real di = 1.0/u_d;
+      w_vx = u_m1*di;
+      w_vy = u_m2*di;
+      w_vz = u_m3*di;
 
-        Real e_k = 0.5*di*(u_m1*u_m1 + u_m2*u_m2 + u_m3*u_m3);
-        w_p = gm1*(u_e - e_k);
+      Real e_k = 0.5*di*(u_m1*u_m1 + u_m2*u_m2 + u_m3*u_m3);
+      w_p = gm1*(u_e - e_k);
 
-        // apply pressure floor, correct total energy
-        u_e = (w_p > pressure_floor_) ?  u_e : ((pressure_floor_/gm1) + e_k);
-        w_p = (w_p > pressure_floor_) ?  w_p : pressure_floor_;
-      }
+      // apply pressure floor, correct total energy
+      u_e = (w_p > pressure_floor_) ?  u_e : ((pressure_floor_/gm1) + e_k);
+      w_p = (w_p > pressure_floor_) ?  w_p : pressure_floor_;
     }
-  }
+  );
 
   return;
 }
