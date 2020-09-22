@@ -110,10 +110,9 @@ inline void par_for(const std::string &name, DevExecSpace exec_space,
     // compute n,k,j,i indices of thread and call function
     int k = (idx)/nji;
     int j = (idx - k*nji)/ni;
-    int i = (idx - k*nji - j*ni);
+    int i = (idx - k*nji - j*ni) + il;
     k += kl;
     j += jl;
-    i += il;
     function(k, j, i);
   });
 }
@@ -139,11 +138,10 @@ inline void par_for(const std::string &name, DevExecSpace exec_space,
     int n = (idx)/nkji;
     int k = (idx - n*nkji)/nji;
     int j = (idx - n*nkji - k*nji)/ni;
-    int i = (idx - n*nkji - k*nji - j*ni);
+    int i = (idx - n*nkji - k*nji - j*ni) + il;
     n += nl;
     k += kl;
     j += jl;
-    i += il;
     function(n, k, j, i);
   });
 }
@@ -183,6 +181,32 @@ inline void par_for_outer(const std::string &name, DevExecSpace exec_space,
     function(tmember, k, j);
   });
 }
+
+// 3D outer parallel loop using Kokkos Teams
+template <typename Function>
+inline void par_for_outer(const std::string &name, DevExecSpace exec_space,
+                          size_t scr_size, const int scr_level,
+                          const int nl, const int nu, const int kl, const int ku,
+                          const int jl, const int ju, const Function &function)
+{
+  const int nn = nu - nl + 1;
+  const int nk = ku - kl + 1;
+  const int nj = ju - jl + 1;
+  const int nkj  = nk*nj;
+  const int nnkj = nn*nk*nj;
+  Kokkos::TeamPolicy<> policy(exec_space, nnkj, Kokkos::AUTO);
+  Kokkos::parallel_for(name, policy.set_scratch_size(scr_level,Kokkos::PerTeam(scr_size)),
+                       KOKKOS_LAMBDA(TeamMember_t tmember)
+  {
+    int n = (tmember.league_rank())/nkj;
+    int k = (tmember.league_rank() - n*nkj)/nj;
+    int j = (tmember.league_rank() - n*nkj - k*nj) + jl;
+    n += nl;
+    k += kl;
+    function(tmember, n, k, j);
+  });
+}
+
 
 // 1D inner parallel loop using TeamVectorRange
 template <typename Function>

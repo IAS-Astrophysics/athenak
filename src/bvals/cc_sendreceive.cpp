@@ -36,242 +36,255 @@ TaskStatus BoundaryValues::SendCellCenteredVariables(AthenaArray4D<Real> &a, int
   BoundaryBuffer *pbb = pmb->pbvals->bbuf_ptr[key];
 
   // load buffers, NO AMR
-  for (int n=0; n<nvar; ++n) {
-  for (int k=ks; k<=ke; ++k) {
-    for (int j=js; j<=je; ++j) {
-
+  int scr_level = 1;
+  par_for_outer("SendCC", pmb->exe_space, 0, scr_level, 0, (nvar-1), ks, ke, js, je,
+    KOKKOS_LAMBDA(TeamMember_t member, const int n, const int k, const int j)
+    {
       // 2D slice in bottom two cells in k-direction
       if (pmesh_->nx3gt1 && k<(ks+ng)) {
         if (pmesh_->nx2gt1 && j<(js+ng)) {
-          for (int i=is; i<(is+ng); ++i) {
-            pbb->send_corner(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
-            pbb->send_x3x1ed(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
-            pbb->send_x1x2ed(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
-            pbb->send_x1face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
-          }
-          for (int i=is; i<=ie; ++i) {
+          par_for_inner(member, is, ie, [&](const int i)
+          {
             pbb->send_x2x3ed(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
             pbb->send_x3face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
             pbb->send_x2face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
-          }
-          for (int i=nx1; i<=ie; ++i) {
-            pbb->send_corner(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
-            pbb->send_x3x1ed(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
-            pbb->send_x1x2ed(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
-            pbb->send_x1face(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
-          }
-  
+            if (i<(is+ng)) {
+              pbb->send_corner(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
+              pbb->send_x3x1ed(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
+              pbb->send_x1x2ed(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
+              pbb->send_x1face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
+            }
+            if (i>=nx1) {
+              pbb->send_corner(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
+              pbb->send_x3x1ed(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
+              pbb->send_x1x2ed(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
+              pbb->send_x1face(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
+            }
+          });
         } else if (pmesh_->nx2gt1 && j>=nx2) {
-          for (int i=is; i<(is+ng); ++i) {
-            pbb->send_x3x1ed(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
-            pbb->send_corner(2,n,k-ks ,j-nx2,i-is ) = a(n,k,j,i);
-            pbb->send_x1face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
-            pbb->send_x1x2ed(2,n,k-ks ,j-nx2,i-is ) = a(n,k,j,i);
-          }
-          for (int i=is; i<=ie; ++i) {
+          par_for_inner(member, is, ie, [&](const int i)
+          {
             pbb->send_x3face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
             pbb->send_x2x3ed(1,n,k-ks ,j-nx2,i-is ) = a(n,k,j,i);
             pbb->send_x2face(1,n,k-ks ,j-nx2,i-is ) = a(n,k,j,i);
-          }
-          for (int i=nx1; i<=ie; ++i) {
-            pbb->send_x3x1ed(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
-            pbb->send_corner(3,n,k-ks ,j-nx2,i-nx1) = a(n,k,j,i);
-            pbb->send_x1face(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
-            pbb->send_x1x2ed(3,n,k-ks ,j-nx2,i-nx1) = a(n,k,j,i);
-          }
-  
+            if (i<(is+ng)) {
+              pbb->send_x3x1ed(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
+              pbb->send_corner(2,n,k-ks ,j-nx2,i-is ) = a(n,k,j,i);
+              pbb->send_x1face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
+              pbb->send_x1x2ed(2,n,k-ks ,j-nx2,i-is ) = a(n,k,j,i);
+            }
+            if (i>=nx1) {
+              pbb->send_x3x1ed(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
+              pbb->send_corner(3,n,k-ks ,j-nx2,i-nx1) = a(n,k,j,i);
+              pbb->send_x1face(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
+              pbb->send_x1x2ed(3,n,k-ks ,j-nx2,i-nx1) = a(n,k,j,i);
+            }
+          });
         } else {
-          for (int i=is; i<(is+ng); ++i) {
-            pbb->send_x3x1ed(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
-            pbb->send_x1face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
-          }
-          for (int i=is; i<=ie; ++i) {
+          par_for_inner(member, is, ie, [&](const int i)
+          {
             pbb->send_x3face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
-          }
-          for (int i=nx1; i<=ie; ++i) {
-            pbb->send_x3x1ed(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
-            pbb->send_x1face(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
-          }
+            if (i<(is+ng)) {
+              pbb->send_x3x1ed(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
+              pbb->send_x1face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
+            }
+            if (i>=nx1) {
+              pbb->send_x3x1ed(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
+              pbb->send_x1face(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
+            }
+          });
         }
 
       // 2D slice in top two cells in k-direction
       } else if (pmesh_->nx3gt1 && k>=nx3) {
         if (pmesh_->nx2gt1 && j<(js+ng)) {
-          for (int i=is; i<(is+ng); ++i) {
-            pbb->send_x1x2ed(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
-            pbb->send_x1face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
-            pbb->send_corner(4,n,k-nx3,j-js ,i-is ) = a(n,k,j,i);
-            pbb->send_x3x1ed(2,n,k-nx3,j-js ,i-is ) = a(n,k,j,i);
-          }
-          for (int i=is; i<=ie; ++i) {
+          par_for_inner(member, is, ie, [&](const int i)
+          {
             pbb->send_x2face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
             pbb->send_x2x3ed(2,n,k-nx3,j-js ,i-is ) = a(n,k,j,i);
             pbb->send_x3face(1,n,k-nx3,j-js ,i-is ) = a(n,k,j,i);
-          }
-          for (int i=nx1; i<=ie; ++i) {
-            pbb->send_x1x2ed(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
-            pbb->send_x1face(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
-            pbb->send_corner(5,n,k-nx3,j-js ,i-nx1) = a(n,k,j,i);
-            pbb->send_x3x1ed(3,n,k-nx3,j-js ,i-nx1) = a(n,k,j,i);
-          }
-
+            if (i<(is+ng)) {
+              pbb->send_x1x2ed(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
+              pbb->send_x1face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
+              pbb->send_corner(4,n,k-nx3,j-js ,i-is ) = a(n,k,j,i);
+              pbb->send_x3x1ed(2,n,k-nx3,j-js ,i-is ) = a(n,k,j,i);
+            }
+            if (i>=nx1) {
+              pbb->send_x1x2ed(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
+              pbb->send_x1face(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
+              pbb->send_corner(5,n,k-nx3,j-js ,i-nx1) = a(n,k,j,i);
+              pbb->send_x3x1ed(3,n,k-nx3,j-js ,i-nx1) = a(n,k,j,i);
+            }
+          });
         } else if (pmesh_->nx2gt1 && j>=nx2) {
-          for (int i=is; i<(is+ng); ++i) {
-            pbb->send_x1face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
-            pbb->send_x1x2ed(2,n,k-ks ,j-nx2,i-is ) = a(n,k,j,i);
-            pbb->send_x3x1ed(2,n,k-nx3,j-js ,i-is ) = a(n,k,j,i);
-            pbb->send_corner(6,n,k-nx3,j-nx2,i-is ) = a(n,k,j,i);
-          }
-          for (int i=is; i<=ie; ++i) {
+          par_for_inner(member, is, ie, [&](const int i)
+          {
             pbb->send_x2face(1,n,k-ks ,j-nx2,i-is ) = a(n,k,j,i);
             pbb->send_x3face(1,n,k-nx3,j-js ,i-is ) = a(n,k,j,i);
             pbb->send_x2x3ed(3,n,k-nx3,j-nx2,i-is ) = a(n,k,j,i);
-          }
-          for (int i=nx1; i<=ie; ++i) {
-            pbb->send_x1face(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
-            pbb->send_x1x2ed(3,n,k-ks ,j-nx2,i-nx1) = a(n,k,j,i);
-            pbb->send_x3x1ed(3,n,k-nx3,j-js ,i-nx1) = a(n,k,j,i);
-            pbb->send_corner(7,n,k-nx3,j-nx2,i-nx1) = a(n,k,j,i);
-          }
-
+            if (i<(is+ng)) {
+              pbb->send_x1face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
+              pbb->send_x1x2ed(2,n,k-ks ,j-nx2,i-is ) = a(n,k,j,i);
+              pbb->send_x3x1ed(2,n,k-nx3,j-js ,i-is ) = a(n,k,j,i);
+              pbb->send_corner(6,n,k-nx3,j-nx2,i-is ) = a(n,k,j,i);
+            }
+            if (i>=nx1) {
+              pbb->send_x1face(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
+              pbb->send_x1x2ed(3,n,k-ks ,j-nx2,i-nx1) = a(n,k,j,i);
+              pbb->send_x3x1ed(3,n,k-nx3,j-js ,i-nx1) = a(n,k,j,i);
+              pbb->send_corner(7,n,k-nx3,j-nx2,i-nx1) = a(n,k,j,i);
+            }
+          });
         } else {
-          for (int i=is; i<(is+ng); ++i) {
-            pbb->send_x1face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
-            pbb->send_x3x1ed(2,n,k-nx3,j-js ,i-is ) = a(n,k,j,i);
-          }
-          for (int i=is; i<=ie; ++i) {
+          par_for_inner(member, is, ie, [&](const int i)
+          {
             pbb->send_x3face(1,n,k-nx3,j-js ,i-is ) = a(n,k,j,i);
-          }
-          for (int i=nx1; i<=ie; ++i) {
-            pbb->send_x1face(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
-            pbb->send_x3x1ed(3,n,k-nx3,j-js ,i-nx1) = a(n,k,j,i);
-          }
+            if (i<(is+ng)) {
+              pbb->send_x1face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
+              pbb->send_x3x1ed(2,n,k-nx3,j-js ,i-is ) = a(n,k,j,i);
+            }
+            if (i>=nx1) {
+              pbb->send_x1face(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
+              pbb->send_x3x1ed(3,n,k-nx3,j-js ,i-nx1) = a(n,k,j,i);
+            }
+          });
         }
 
       // 2D slice in middle of grid
       } else {
         if (pmesh_->nx2gt1 && j<(js+ng)) {
-          for (int i=is; i<(is+ng); ++i) {
-            pbb->send_x1x2ed(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
-            pbb->send_x1face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
-          }
-          for (int i=is; i<=ie; ++i) {
+          par_for_inner(member, is, ie, [&](const int i)
+          {
             pbb->send_x2face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
-          }
-          for (int i=nx1; i<=ie; ++i) {
-            pbb->send_x1x2ed(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
-            pbb->send_x1face(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
-          }
-
+            if (i<(is+ng)) {
+              pbb->send_x1x2ed(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
+              pbb->send_x1face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
+            }
+            if (i>=nx1) {
+              pbb->send_x1x2ed(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
+              pbb->send_x1face(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
+            }
+          });
         } else if (pmesh_->nx2gt1 && j>=nx2) {
-          for (int i=is; i<(is+ng); ++i) {
-            pbb->send_x1face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
-            pbb->send_x1x2ed(2,n,k-ks ,j-nx2,i-is ) = a(n,k,j,i);
-          }
-          for (int i=is; i<=ie; ++i) {
+          par_for_inner(member, is, ie, [&](const int i)
+          {
             pbb->send_x2face(1,n,k-ks ,j-nx2,i-is ) = a(n,k,j,i);
-          }
-          for (int i=nx1; i<=ie; ++i) {
-            pbb->send_x1face(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
-            pbb->send_x1x2ed(3,n,k-ks ,j-nx2,i-nx1) = a(n,k,j,i);
-          }
-
+            if (i<(is+ng)) {
+              pbb->send_x1face(0,n,k-ks ,j-js ,i-is ) = a(n,k,j,i);
+              pbb->send_x1x2ed(2,n,k-ks ,j-nx2,i-is ) = a(n,k,j,i);
+            }
+            if (i>=nx1) {
+              pbb->send_x1face(1,n,k-ks ,j-js ,i-nx1) = a(n,k,j,i);
+              pbb->send_x1x2ed(3,n,k-ks ,j-nx2,i-nx1) = a(n,k,j,i);
+            }
+          });
         } else {
-          for (int i=is; i<(is+ng); ++i) {
-            pbb->send_x1face(0,n,k-ks ,j-js,i-is ) = a(n,k,j,i);
-          }
-          for (int i=nx1; i<=ie; ++i) {
-            pbb->send_x1face(1,n,k-ks ,j-js,i-nx1) = a(n,k,j,i);
-          }
+          par_for_inner(member, is, ie, [&](const int i)
+          {
+            if (i<(is+ng)) {
+              pbb->send_x1face(0,n,k-ks ,j-js,i-is ) = a(n,k,j,i);
+            }
+            if (i>=nx1) {
+              pbb->send_x1face(1,n,k-ks ,j-js,i-nx1) = a(n,k,j,i);
+            }
+          });
         }
       }
     }
-
-  }}  // end loops over n,k
+  ); // end par_for_outer
 
   // Now, for block or periodic boundaries, send boundary buffer to neighboring MeshBlocks
-  // using MPI, or if neighbor is on same MPI rank, just memcpy data
-  // Note physics module containing the recv buffer is found using bbuf_ptr map and [key]
+  // using MPI, or if neighbor is on same MPI rank, use Kokkos::deep_copy of subviews
+  // Note (1) physics module containing the recv buffer is found using bbuf_ptr map and
+  // the [key], (2) in general recv_buffer[n] maps to recv_buffer[X-n] (where X is number
+  // of buffers of each type), and (3) BoundaryStatus flag must be sent for copies 
   // TODO add MPI sends
 
   // copy x1 faces
-  int ndata = nvar*nx3*nx2*ng;
   for (int n=0; n<2; ++n) {
     if (bndry_flag[n]==BoundaryFlag::block || bndry_flag[n]==BoundaryFlag::periodic) {
       MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x1face[1-n].ngid);
-      Real *psend = &(pbb->send_x1face(1-n,0,0,0,0));
-      Real *pdest = &(pdest_mb->pbvals->bbuf_ptr[key]->recv_x1face(n,0,0,0,0));
-      memcpy(pdest, psend, ndata*sizeof(Real));
+      auto sendbuf = Kokkos::subview(pbb->send_x1face,
+                    (1-n),Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+      auto recvbuf = Kokkos::subview(pdest_mb->pbvals->bbuf_ptr[key]->recv_x1face,
+                    (n  ),Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+      Kokkos::deep_copy(recvbuf, sendbuf);
       pdest_mb->pbvals->bbuf_ptr[key]->bstat_x1face[n] = BoundaryStatus::completed;
     }
   }
   if (!(pmesh_->nx2gt1)) return TaskStatus::complete;
 
   // copy x2 faces and x1x2 edges
-  ndata = nvar*nx3*ng*nx1;
   for (int n=0; n<2; ++n) {
     if (bndry_flag[n+2]==BoundaryFlag::block || bndry_flag[n+2]==BoundaryFlag::periodic) {
       MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x2face[1-n].ngid);
-      Real *psend = &(pbb->send_x2face(1-n,0,0,0,0));
-      Real *pdest = &(pdest_mb->pbvals->bbuf_ptr[key]->recv_x2face(n,0,0,0,0));
-      memcpy(pdest, psend, ndata*sizeof(Real));
+      auto sendbuf = Kokkos::subview(pbb->send_x2face,
+                    (1-n),Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+      auto recvbuf = Kokkos::subview(pdest_mb->pbvals->bbuf_ptr[key]->recv_x2face,
+                    (n  ),Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+      Kokkos::deep_copy(recvbuf, sendbuf);
       pdest_mb->pbvals->bbuf_ptr[key]->bstat_x2face[n] = BoundaryStatus::completed;
     }
   }
-  ndata = nvar*nx3*ng*ng;
   for (int n=0; n<4; ++n) {
     if (bndry_flag[(n/2)+2]==BoundaryFlag::block ||
         bndry_flag[(n/2)+2]==BoundaryFlag::periodic) {
       MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x1x2ed[3-n].ngid);
-      Real *psend = &(pbb->send_x1x2ed(3-n,0,0,0,0));
-      Real *pdest = &(pdest_mb->pbvals->bbuf_ptr[key]->recv_x1x2ed(n,0,0,0,0));
-      memcpy(pdest, psend, ndata*sizeof(Real));
+      auto sendbuf = Kokkos::subview(pbb->send_x1x2ed,
+                    (3-n),Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+      auto recvbuf = Kokkos::subview(pdest_mb->pbvals->bbuf_ptr[key]->recv_x1x2ed,
+                    (n  ),Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+      Kokkos::deep_copy(recvbuf, sendbuf);
       pdest_mb->pbvals->bbuf_ptr[key]->bstat_x1x2ed[n] = BoundaryStatus::completed;
     }
   }
   if (!(pmesh_->nx3gt1)) return TaskStatus::complete;
   
   // copy x3 faces, x3x1 and x2x3 edges, and corners
-  ndata = nvar*ng*nx2*nx1;
   for (int n=0; n<2; ++n) {
     if (bndry_flag[n+4]==BoundaryFlag::block || bndry_flag[n+4]==BoundaryFlag::periodic) {
       MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x3face[1-n].ngid);
-      Real *psend = &(pbb->send_x3face(1-n,0,0,0,0));
-      Real *pdest = &(pdest_mb->pbvals->bbuf_ptr[key]->recv_x3face(n,0,0,0,0));
-      memcpy(pdest, psend, ndata*sizeof(Real));
+      auto sendbuf = Kokkos::subview(pbb->send_x3face,
+                    (1-n),Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+      auto recvbuf = Kokkos::subview(pdest_mb->pbvals->bbuf_ptr[key]->recv_x3face,
+                    (n  ),Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+      Kokkos::deep_copy(recvbuf, sendbuf);
       pdest_mb->pbvals->bbuf_ptr[key]->bstat_x3face[n] = BoundaryStatus::completed;
     }
   }
-  ndata = nvar*ng*nx2*ng;
   for (int n=0; n<4; ++n) {
     if (bndry_flag[(n/2)+4]==BoundaryFlag::block ||
         bndry_flag[(n/2)+4]==BoundaryFlag::periodic) {
       MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x3x1ed[3-n].ngid);
-      Real *psend = &(pbb->send_x3x1ed(3-n,0,0,0,0));
-      Real *pdest = &(pdest_mb->pbvals->bbuf_ptr[key]->recv_x3x1ed(n,0,0,0,0));
-      memcpy(pdest, psend, ndata*sizeof(Real));
+      auto sendbuf = Kokkos::subview(pbb->send_x3x1ed,
+                    (3-n),Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+      auto recvbuf = Kokkos::subview(pdest_mb->pbvals->bbuf_ptr[key]->recv_x3x1ed,
+                    (n  ),Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+      Kokkos::deep_copy(recvbuf, sendbuf);
       pdest_mb->pbvals->bbuf_ptr[key]->bstat_x3x1ed[n] = BoundaryStatus::completed;
     }
   }
-  ndata = nvar*ng*ng*nx1;
   for (int n=0; n<4; ++n) {
     if (bndry_flag[(n/2)+4]==BoundaryFlag::block ||
         bndry_flag[(n/2)+4]==BoundaryFlag::periodic) {
       MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x2x3ed[3-n].ngid);
-      Real *psend = &(pbb->send_x2x3ed(3-n,0,0,0,0));
-      Real *pdest = &(pdest_mb->pbvals->bbuf_ptr[key]->recv_x2x3ed(n,0,0,0,0));
-      memcpy(pdest, psend, ndata*sizeof(Real));
+      auto sendbuf = Kokkos::subview(pbb->send_x2x3ed,
+                    (3-n),Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+      auto recvbuf = Kokkos::subview(pdest_mb->pbvals->bbuf_ptr[key]->recv_x2x3ed,
+                    (n  ),Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+      Kokkos::deep_copy(recvbuf, sendbuf);
       pdest_mb->pbvals->bbuf_ptr[key]->bstat_x2x3ed[n] = BoundaryStatus::completed;
     }
   }
-  ndata = nvar*ng*ng*ng;
   for (int n=0; n<8; ++n) {
     if (bndry_flag[(n/4)+4]==BoundaryFlag::block ||
         bndry_flag[(n/4)+4]==BoundaryFlag::periodic) {
       MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_corner[7-n].ngid);
-      Real *psend = &(pbb->send_corner(7-n,0,0,0,0));
-      Real *pdest = &(pdest_mb->pbvals->bbuf_ptr[key]->recv_corner(n,0,0,0,0));
-      memcpy(pdest, psend, ndata*sizeof(Real));
+      auto sendbuf = Kokkos::subview(pbb->send_corner,
+                    (7-n),Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+      auto recvbuf = Kokkos::subview(pdest_mb->pbvals->bbuf_ptr[key]->recv_corner,
+                    (n  ),Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+      Kokkos::deep_copy(recvbuf, sendbuf);
       pdest_mb->pbvals->bbuf_ptr[key]->bstat_corner[n] = BoundaryStatus::completed;
     }
   }
@@ -292,6 +305,7 @@ TaskStatus BoundaryValues::RecvCellCenteredVariables(AthenaArray4D<Real> &a, int
   int is = pmb->mb_cells.is; int ie = pmb->mb_cells.ie;
   int js = pmb->mb_cells.js; int je = pmb->mb_cells.je;
   int ks = pmb->mb_cells.ks; int ke = pmb->mb_cells.ke;
+  int ncells1 = pmb->mb_cells.nx1 + 2*ng;
   int ncells2 = (pmb->mb_cells.nx2 > 1)? (pmb->mb_cells.nx2 + 2*ng) : 1;
   int ncells3 = (pmb->mb_cells.nx3 > 1)? (pmb->mb_cells.nx3 + 2*ng) : 1;
 
@@ -324,118 +338,122 @@ TaskStatus BoundaryValues::RecvCellCenteredVariables(AthenaArray4D<Real> &a, int
   }
   
   // buffers have all completed, so unpack (THIS VERSION NO AMR)
-  for (int n=0; n<nvar; ++n) {
-  for (int k=0; k<ncells3; ++k) {
-    for (int j=0; j<ncells2; ++j) {
-
+  int scr_level = 1;
+  par_for_outer("RecvCC", pmb->exe_space, 0, scr_level, 0, (nvar-1), 0, (ncells3-1),
+                 0, (ncells2-1),
+    KOKKOS_LAMBDA(TeamMember_t member, const int n, const int k, const int j)
+    {
       // 2D slice in bottom two cells in k-direction
       if (pmesh_->nx3gt1 && k<ks) {
         if (pmesh_->nx2gt1 && j<js) {
-          for (int i=0; i<ng; ++i) {
-            a(n,k,j,i) = pbb->recv_corner(0,n,k,j,i);
-          }
-          for (int i=is; i<=ie; ++i) {
-            a(n,k,j,i) = pbb->recv_x2x3ed(0,n,k,j,i-is);
-          }
-          for (int i=0; i<ng; ++i) {
-            a(n,k,j,i+ie+1) = pbb->recv_corner(1,n,k,j,i);
-          }
-
+          par_for_inner(member, 0, (ncells1-1), [&](const int i)
+          {
+            if (i<is) {
+              a(n,k,j,i) = pbb->recv_corner(0,n,k,j,i);
+            } else if (i>ie) {
+              a(n,k,j,i) = pbb->recv_corner(1,n,k,j,i-(ie+1));
+            } else {
+              a(n,k,j,i) = pbb->recv_x2x3ed(0,n,k,j,i-is);
+            }
+          });
         } else if (pmesh_->nx2gt1 && j>je) {
-          for (int i=0; i<ng; ++i) {
-            a(n,k,j,i) = pbb->recv_corner(2,n,k,j-je-1,i);
-          }
-          for (int i=is; i<=ie; ++i) {
-            a(n,k,j,i) = pbb->recv_x2x3ed(1,n,k,j-je-1,i-is);
-          }
-          for (int i=0; i<ng; ++i) {
-            a(n,k,j,i+ie+1) = pbb->recv_corner(3,n,k,j-je-1,i);
-          }
-
+          par_for_inner(member, 0, (ncells1-1), [&](const int i)
+          {
+            if (i<is) {
+              a(n,k,j,i) = pbb->recv_corner(2,n,k,j-je-1,i);
+            } else if (i>ie) {
+              a(n,k,j,i) = pbb->recv_corner(3,n,k,j-je-1,i-(ie+1));
+            } else {
+              a(n,k,j,i) = pbb->recv_x2x3ed(1,n,k,j-je-1,i-is);
+            }
+          });
         } else {
-          for (int i=0; i<ng; ++i) {
-            a(n,k,j,i) = pbb->recv_x3x1ed(0,n,k,j-js,i);
-          }
-          for (int i=is; i<=ie; ++i) {
-            a(n,k,j,i) = pbb->recv_x3face(0,n,k,j-js,i-is);
-          }
-          for (int i=0; i<ng; ++i) {
-            a(n,k,j,i+ie+1) = pbb->recv_x3x1ed(1,n,k,j-js,i);
-          }
+          par_for_inner(member, 0, (ncells1-1), [&](const int i)
+          {
+            if (i<is) {
+              a(n,k,j,i) = pbb->recv_x3x1ed(0,n,k,j-js,i);
+            } else if (i>ie) {
+              a(n,k,j,i) = pbb->recv_x3x1ed(1,n,k,j-js,i-(ie+1));
+            } else {
+              a(n,k,j,i) = pbb->recv_x3face(0,n,k,j-js,i-is);
+            }
+          });
         }
 
       // 2D slice in top two cells in k-direction
       } else if (pmesh_->nx3gt1 && k>ke) {
         if (pmesh_->nx2gt1 && j<js) {
-          for (int i=0; i<ng; ++i) {
-            a(n,k,j,i) = pbb->recv_corner(4,n,k-ke-1,j,i);
-          }
-          for (int i=is; i<=ie; ++i) {
-            a(n,k,j,i) = pbb->recv_x2x3ed(2,n,k-ke-1,j,i-is);
-          }
-          for (int i=0; i<ng; ++i) {
-            a(n,k,j,i+ie+1) = pbb->recv_corner(5,n,k-ke-1,j,i);
-          }
-
+          par_for_inner(member, 0, (ncells1-1), [&](const int i)
+          {
+            if (i<is) {
+              a(n,k,j,i) = pbb->recv_corner(4,n,k-ke-1,j,i);
+            } else if (i>ie) {
+              a(n,k,j,i) = pbb->recv_corner(5,n,k-ke-1,j,i-(ie+1));
+            } else {
+              a(n,k,j,i) = pbb->recv_x2x3ed(2,n,k-ke-1,j,i-is);
+            }
+          });
         } else if (pmesh_->nx2gt1 && j>je) {
-          for (int i=0; i<ng; ++i) {
-            a(n,k,j,i) = pbb->recv_corner(6,n,k-ke-1,j-je-1,i);
-          }
-          for (int i=is; i<=ie; ++i) {
-            a(n,k,j,i) = pbb->recv_x2x3ed(3,n,k-ke-1,j-je-1,i-is);
-          }
-          for (int i=0; i<ng; ++i) {
-            a(n,k,j,i+ie+1) = pbb->recv_corner(7,n,k-ke-1,j-je-1,i);
-          }
-
+          par_for_inner(member, 0, (ncells1-1), [&](const int i)
+          {
+            if (i<is) {
+              a(n,k,j,i) = pbb->recv_corner(6,n,k-ke-1,j-je-1,i);
+            } else if (i>ie) {
+              a(n,k,j,i) = pbb->recv_corner(7,n,k-ke-1,j-je-1,i-(ie+1));
+            } else {
+              a(n,k,j,i) = pbb->recv_x2x3ed(3,n,k-ke-1,j-je-1,i-is);
+            }
+          });
         } else {
-          for (int i=0; i<ng; ++i) {
-            a(n,k,j,i) = pbb->recv_x3x1ed(2,n,k-ke-1,j-js,i);
-          }
-          for (int i=is; i<=ie; ++i) {
-            a(n,k,j,i) = pbb->recv_x3face(1,n,k-ke-1,j-js,i-is);
-          }
-          for (int i=0; i<ng; ++i) {
-            a(n,k,j,i+ie+1) = pbb->recv_x3x1ed(3,n,k-ke-1,j-js,i);
-          }
+          par_for_inner(member, 0, (ncells1-1), [&](const int i)
+          {
+            if (i<is) {
+              a(n,k,j,i) = pbb->recv_x3x1ed(2,n,k-ke-1,j-js,i);
+            } else if (i>ie) {
+              a(n,k,j,i) = pbb->recv_x3x1ed(3,n,k-ke-1,j-js,i-(ie+1));
+            } else {
+              a(n,k,j,i) = pbb->recv_x3face(1,n,k-ke-1,j-js,i-is);
+            }
+          });
         }
 
       // 2D slice in middle of grid
       } else {
         if (pmesh_->nx2gt1 && j<js) {
-          for (int i=0; i<ng; ++i) {
-            a(n,k,j,i) = pbb->recv_x1x2ed(0,n,k-ks,j,i);
-          }
-          for (int i=is; i<=ie; ++i) {
-            a(n,k,j,i) = pbb->recv_x2face(0,n,k-ks,j,i-is);
-          }
-          for (int i=0; i<ng; ++i) {
-            a(n,k,j,i+ie+1) = pbb->recv_x1x2ed(1,n,k,j,i);
-          }
-
+          par_for_inner(member, 0, (ncells1-1), [&](const int i)
+          {
+            if (i<is) {
+              a(n,k,j,i) = pbb->recv_x1x2ed(0,n,k-ks,j,i);
+            } else if (i>ie) {
+              a(n,k,j,i) = pbb->recv_x1x2ed(1,n,k-ks,j,i-(ie+1));
+            } else {
+              a(n,k,j,i) = pbb->recv_x2face(0,n,k-ks,j,i-is);
+            }
+          });
         } else if (pmesh_->nx2gt1 && j>je) {
-          for (int i=0; i<ng; ++i) {
-            a(n,k,j,i) = pbb->recv_x1x2ed(2,n,k-ks,j-je-1,i);
-          }
-          for (int i=is; i<=ie; ++i) {
-            a(n,k,j,i) = pbb->recv_x2face(1,n,k-ks,j-je-1,i-is);
-          }
-          for (int i=0; i<ng; ++i) {
-            a(n,k,j,i+ie+1) = pbb->recv_x1x2ed(3,n,k-ks,j-je-1,i);
-          }
-
+          par_for_inner(member, 0, (ncells1-1), [&](const int i)
+          {
+            if (i<is) {
+              a(n,k,j,i) = pbb->recv_x1x2ed(2,n,k-ks,j-je-1,i);
+            } else if (i>ie) {
+              a(n,k,j,i) = pbb->recv_x1x2ed(3,n,k-ks,j-je-1,i-(ie+1));
+            } else {
+              a(n,k,j,i) = pbb->recv_x2face(1,n,k-ks,j-je-1,i-is);
+            }
+          });
         } else {
-          for (int i=0; i<ng; ++i) {
-            a(n,k,j,i) = pbb->recv_x1face(0,n,k-ks,j-js,i);
-          }
-          for (int i=0; i<ng; ++i) {
-            a(n,k,j,i+ie+1) = pbb->recv_x1face(1,n,k-ks,j-js,i);
-          }
+          par_for_inner(member, 0, (ncells1-1), [&](const int i)
+          {
+            if (i<is) {
+              a(n,k,j,i) = pbb->recv_x1face(0,n,k-ks,j-js,i);
+            } else if (i>ie) {
+              a(n,k,j,i) = pbb->recv_x1face(1,n,k-ks,j-js,i-(ie+1));
+            }
+          });
         }
       }
     }
-
-  }}  // end loops over n,k
+  );  // end par_for_outer
 
   return TaskStatus::complete;
 }
