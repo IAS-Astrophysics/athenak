@@ -83,7 +83,7 @@ using namespace hydro;
 
       Real f; // value for advected quantity, depending on problem type
       if (iprob == 1) {               // iprob=1: sine wave
-        f = 1.0 + amp*std::sin(2.0*(M_PI)*r);
+        f = 1.0 + amp*sin(2.0*(M_PI)*r);
       } else if (iprob == 2) {        // iprob=2: square wave in second quarter of domain
         f = 1.0;
         if (r >= 0.25 && r <= 0.5) { f += amp; }

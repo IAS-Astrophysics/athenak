@@ -18,10 +18,6 @@ class ProblemGenerator {
 
   // data
 
-
- private:
-  Mesh* pmesh_;
-
   // function pointer for pgen name
   void (ProblemGenerator::*pgen_func_) (MeshBlock*, ParameterInput*);
 
@@ -30,6 +26,8 @@ class ProblemGenerator {
   void Advection_(MeshBlock *pmb, ParameterInput *pin);
   void LWImplode_(MeshBlock *pmb, ParameterInput *pin);
 
+ private:
+  Mesh* pmesh_;
 };
 
 #endif // PGEN_PGEN_HPP_

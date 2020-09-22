@@ -88,7 +88,7 @@ class Mesh
   // accessors
   MeshBlock* FindMeshBlock(int tgid)
   {
-    assert (tgid >= gids_ && tgid <= gide_);
+//    assert (tgid >= gids_ && tgid <= gide_);
     return &(mblocks[tgid - gids_]);
   }
 

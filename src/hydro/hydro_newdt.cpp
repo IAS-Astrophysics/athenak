@@ -74,9 +74,9 @@ TaskStatus Hydro::NewTimeStep(Driver *pdrive, int stage) {
       i += is;
 
       Real cs = peos->SoundSpeed(w0(IPR,k,j,i),w0(IDN,k,j,i));
-      max_dv1 = std::max((std::abs(w0(IVX,k,j,i)) + cs), max_dv1);
-      max_dv2 = std::max((std::abs(w0(IVY,k,j,i)) + cs), max_dv2);
-      max_dv3 = std::max((std::abs(w0(IVZ,k,j,i)) + cs), max_dv3);
+      max_dv1 = fmax((fabs(w0(IVX,k,j,i)) + cs), max_dv1);
+      max_dv2 = fmax((fabs(w0(IVY,k,j,i)) + cs), max_dv2);
+      max_dv3 = fmax((fabs(w0(IVZ,k,j,i)) + cs), max_dv3);
     }, Kokkos::Max<Real>(dv1), Kokkos::Max<Real>(dv2),Kokkos::Max<Real>(dv3));
 
   }
