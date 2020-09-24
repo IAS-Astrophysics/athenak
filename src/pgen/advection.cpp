@@ -26,13 +26,9 @@
 //! \fn void MeshBlock::ProblemGenerator(ParameterInput *pin)
 //  \brief Problem Generator for advection problems
 
-void ProblemGenerator::Advection_(MeshBlock *pmb, ParameterInput *pin) {
-using namespace hydro;
-
-std::cout << "in pgen" << std::endl;
-
-Kokkos::fence();
-
+void ProblemGenerator::Advection_(MeshBlock *pmb, ParameterInput *pin)
+{
+  using namespace hydro;
 
   // Read input parameters
   int flow_dir = pin->GetInteger("problem","flow_dir");
@@ -121,8 +117,6 @@ Kokkos::fence();
           u0(IDN,k,j,i);
     }
   );
-
-std::cout << "done pgen" << std::endl;
 
   return;
 }
