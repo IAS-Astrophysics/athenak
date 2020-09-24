@@ -29,6 +29,11 @@
 void ProblemGenerator::Advection_(MeshBlock *pmb, ParameterInput *pin) {
 using namespace hydro;
 
+std::cout << "in pgen" << std::endl;
+
+Kokkos::fence();
+
+
   // Read input parameters
   int flow_dir = pin->GetInteger("problem","flow_dir");
   int iprob = pin->GetInteger("problem","iproblem");
@@ -65,19 +70,26 @@ using namespace hydro;
   Real &x1min = pmb->mb_size.x1min, &x1max = pmb->mb_size.x1max;
   Real &x2min = pmb->mb_size.x2min, &x2max = pmb->mb_size.x2max;
   Real &x3min = pmb->mb_size.x3min, &x3max = pmb->mb_size.x3max;
+  Real &x1min_mesh = pmesh_->mesh_size.x1min;
+  Real &x2min_mesh = pmesh_->mesh_size.x2min;
+  Real &x3min_mesh = pmesh_->mesh_size.x3min;
+  int &nx1 = pmb->mb_cells.nx1;
+  int &nx2 = pmb->mb_cells.nx2;
+  int &nx3 = pmb->mb_cells.nx3;
+  auto &u0 = pmb->phydro->u0;
 
   par_for("pgen_advect", pmb->exe_space, ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int k, int j, int i)
     {
       Real r; // coordinate that will span [0->1]
       if (flow_dir == 1) {
-        r = (CellCenterX(i-is, pmb->mb_cells.nx1,x1min,x1max) - pmesh_->mesh_size.x1min)
+        r = (CellCenterX(i-is,nx1,x1min,x1max) - x1min_mesh)
             /length;
       } else if (flow_dir == 2) {
-        r = (CellCenterX(j-js, pmb->mb_cells.nx2,x2min,x2max) - pmesh_->mesh_size.x3min)
+        r = (CellCenterX(j-js,nx2,x2min,x2max) - x2min_mesh)
             /length;
       } else {
-        r = (CellCenterX(k-ks, pmb->mb_cells.nx3,x3min,x3max) - pmesh_->mesh_size.x3min)
+        r = (CellCenterX(k-ks,nx3,x3min,x3max) - x3min_mesh)
             /length;
       }
 
@@ -90,25 +102,27 @@ using namespace hydro;
       }
 
       // now compute density  momenta, total energy
-      pmb->phydro->u0(IDN,k,j,i) = 1.0;
+      u0(IDN,k,j,i) = 1.0;
       if (flow_dir == 1) {
-        pmb->phydro->u0(IM1,k,j,i) = vel;
-        pmb->phydro->u0(IM2,k,j,i) = f;
-        pmb->phydro->u0(IM3,k,j,i) = f;
+        u0(IM1,k,j,i) = vel;
+        u0(IM2,k,j,i) = f;
+        u0(IM3,k,j,i) = f;
       } else if (flow_dir == 2) {
-        pmb->phydro->u0(IM1,k,j,i) = f;
-        pmb->phydro->u0(IM2,k,j,i) = vel;
-        pmb->phydro->u0(IM3,k,j,i) = f;
+        u0(IM1,k,j,i) = f;
+        u0(IM2,k,j,i) = vel;
+        u0(IM3,k,j,i) = f;
       } else {
-        pmb->phydro->u0(IM1,k,j,i) = f;
-        pmb->phydro->u0(IM2,k,j,i) = f;
-        pmb->phydro->u0(IM3,k,j,i) = vel;
+        u0(IM1,k,j,i) = f;
+        u0(IM2,k,j,i) = f;
+        u0(IM3,k,j,i) = vel;
       } 
-      pmb->phydro->u0(IEN,k,j,i) = 1.0/gm1 + 0.5*(SQR(pmb->phydro->u0(IM1,k,j,i))
-        + SQR(pmb->phydro->u0(IM2,k,j,i)) + SQR(pmb->phydro->u0(IM3,k,j,i)))/
-          pmb->phydro->u0(IDN,k,j,i);
+      u0(IEN,k,j,i) = 1.0/gm1 + 0.5*(SQR(u0(IM1,k,j,i))
+        + SQR(u0(IM2,k,j,i)) + SQR(u0(IM3,k,j,i)))/
+          u0(IDN,k,j,i);
     }
   );
+
+std::cout << "done pgen" << std::endl;
 
   return;
 }

@@ -82,6 +82,16 @@ if (Kokkos_ENABLE_CUDA)
       "Enable relocatable device code")
 endif()
 
+# If this is a debug build, set kokkos debug on
+if (${CMAKE_BUILD_TYPE} STREQUAL "DEBUG")
+  message(STATUS "Enabling Kokkos debug mode")
+  set(Kokkos_ENABLE_DEBUG ON CACHE BOOL "Most general debug settings")
+  set(Kokkos_ENABLE_DEBUG_BOUNDS_CHECK ON CACHE BOOL
+     "Bounds checking on Kokkos views")
+  set(Kokkos_ENABLE_DEBUG_DUALVIEW_MODIFY_CHECK ON CACHE BOOL
+      "Sanity checks on Kokkos DualView")
+endif()
+
 #-----------------------------------------------------------------------------------------
 # create configuration header file from template in /src directory
 configure_file(config.hpp.in config.hpp)

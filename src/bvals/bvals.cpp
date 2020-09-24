@@ -49,25 +49,25 @@ void BoundaryValues::AllocateBuffers(BoundaryBuffer &bbuf, const int maxvar)
   int nx2 = pmb->mb_cells.nx2;
   int nx3 = pmb->mb_cells.nx3;
 
-  Kokkos::resize(bbuf.send_x1face,2,maxvar,nx3,nx2,ng);
-  Kokkos::resize(bbuf.recv_x1face,2,maxvar,nx3,nx2,ng);
+  Kokkos::realloc(bbuf.send_x1face,2,maxvar,nx3,nx2,ng);
+  Kokkos::realloc(bbuf.recv_x1face,2,maxvar,nx3,nx2,ng);
 
   if (pmesh_->nx2gt1) {
-    Kokkos::resize(bbuf.send_x2face,2,maxvar,nx3,ng,nx1);
-    Kokkos::resize(bbuf.send_x1x2ed,4,maxvar,nx3,ng,ng);
-    Kokkos::resize(bbuf.recv_x2face,2,maxvar,nx3,ng,nx1);
-    Kokkos::resize(bbuf.recv_x1x2ed,4,maxvar,nx3,ng,ng);
+    Kokkos::realloc(bbuf.send_x2face,2,maxvar,nx3,ng,nx1);
+    Kokkos::realloc(bbuf.send_x1x2ed,4,maxvar,nx3,ng,ng);
+    Kokkos::realloc(bbuf.recv_x2face,2,maxvar,nx3,ng,nx1);
+    Kokkos::realloc(bbuf.recv_x1x2ed,4,maxvar,nx3,ng,ng);
   }
 
   if (pmesh_->nx3gt1) {
-    Kokkos::resize(bbuf.send_x3face,2,maxvar,ng,nx2,nx1);
-    Kokkos::resize(bbuf.send_x3x1ed,4,maxvar,ng,nx2,ng);
-    Kokkos::resize(bbuf.send_x2x3ed,4,maxvar,ng,ng,nx1);
-    Kokkos::resize(bbuf.send_corner,8,maxvar,ng,ng,ng);
-    Kokkos::resize(bbuf.recv_x3face,2,maxvar,ng,nx2,nx1);
-    Kokkos::resize(bbuf.recv_x3x1ed,4,maxvar,ng,nx2,ng);
-    Kokkos::resize(bbuf.recv_x2x3ed,4,maxvar,ng,ng,nx1);
-    Kokkos::resize(bbuf.recv_corner,8,maxvar,ng,ng,ng);
+    Kokkos::realloc(bbuf.send_x3face,2,maxvar,ng,nx2,nx1);
+    Kokkos::realloc(bbuf.send_x3x1ed,4,maxvar,ng,nx2,ng);
+    Kokkos::realloc(bbuf.send_x2x3ed,4,maxvar,ng,ng,nx1);
+    Kokkos::realloc(bbuf.send_corner,8,maxvar,ng,ng,ng);
+    Kokkos::realloc(bbuf.recv_x3face,2,maxvar,ng,nx2,nx1);
+    Kokkos::realloc(bbuf.recv_x3x1ed,4,maxvar,ng,nx2,ng);
+    Kokkos::realloc(bbuf.recv_x2x3ed,4,maxvar,ng,ng,nx1);
+    Kokkos::realloc(bbuf.recv_corner,8,maxvar,ng,ng,ng);
   }
 
   // initialize all boundary status arrays to undef

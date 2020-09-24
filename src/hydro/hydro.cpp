@@ -60,8 +60,8 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
   int ncells1 = pmb->mb_cells.nx1 + 2*(pmb->mb_cells.ng);
   int ncells2 = (pmb->mb_cells.nx2 > 1)? (pmb->mb_cells.nx2 + 2*(pmb->mb_cells.ng)) : 1;
   int ncells3 = (pmb->mb_cells.nx3 > 1)? (pmb->mb_cells.nx3 + 2*(pmb->mb_cells.ng)) : 1;
-  Kokkos::resize(u0,nhydro, ncells3, ncells2, ncells1);
-  Kokkos::resize(w0,nhydro, ncells3, ncells2, ncells1);
+  Kokkos::realloc(u0,nhydro, ncells3, ncells2, ncells1);
+  Kokkos::realloc(w0,nhydro, ncells3, ncells2, ncells1);
 
   // allocate memory for boundary buffers
   pmb->pbvals->AllocateBuffers(bbuf, nhydro);
@@ -78,8 +78,8 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
     prsolver = new RiemannSolver(pmesh_, pin, my_mbgid_, peos->IsAdiabatic(), is_dynamic);
 
     // allocate registers, flux divergence, scratch arrays for time-dep probs
-    Kokkos::resize(u1,nhydro, ncells3, ncells2, ncells1);
-    Kokkos::resize(divf,nhydro, ncells3, ncells2, ncells1);
+    Kokkos::realloc(u1,nhydro, ncells3, ncells2, ncells1);
+    Kokkos::realloc(divf,nhydro, ncells3, ncells2, ncells1);
   }
 }
 
@@ -105,19 +105,19 @@ void Hydro::HydroStageRunTasks(TaskList &tl, TaskID start, std::vector<TaskID> &
 {
   auto hydro_copycons = tl.AddTask(&Hydro::HydroCopyCons, this, start);
   auto hydro_divflux  = tl.AddTask(&Hydro::HydroDivFlux, this, hydro_copycons);
-  auto hydro_update  = tl.AddTask(&Hydro::HydroUpdate, this, hydro_divflux);
-  auto hydro_send  = tl.AddTask(&Hydro::HydroSend, this, hydro_update);
-  auto hydro_newdt  = tl.AddTask(&Hydro::NewTimeStep, this, hydro_send);
-  auto hydro_recv  = tl.AddTask(&Hydro::HydroReceive, this, hydro_newdt);
-  auto hydro_con2prim  = tl.AddTask(&Hydro::ConToPrim, this, hydro_recv);
+//  auto hydro_update  = tl.AddTask(&Hydro::HydroUpdate, this, hydro_divflux);
+//  auto hydro_send  = tl.AddTask(&Hydro::HydroSend, this, hydro_update);
+//  auto hydro_newdt  = tl.AddTask(&Hydro::NewTimeStep, this, hydro_send);
+//  auto hydro_recv  = tl.AddTask(&Hydro::HydroReceive, this, hydro_newdt);
+//  auto hydro_con2prim  = tl.AddTask(&Hydro::ConToPrim, this, hydro_recv);
 
   added.emplace_back(hydro_copycons);
   added.emplace_back(hydro_divflux);
-  added.emplace_back(hydro_update);
-  added.emplace_back(hydro_send);
-  added.emplace_back(hydro_newdt);
-  added.emplace_back(hydro_recv);
-  added.emplace_back(hydro_con2prim);
+//  added.emplace_back(hydro_update);
+//  added.emplace_back(hydro_send);
+//  added.emplace_back(hydro_newdt);
+//  added.emplace_back(hydro_recv);
+//  added.emplace_back(hydro_con2prim);
 
   return;
 }
@@ -192,9 +192,10 @@ TaskStatus Hydro::HydroInitStage(Driver *pdrive, int stage)
 
 TaskStatus Hydro::HydroCopyCons(Driver *pdrive, int stage)
 {
+  MeshBlock* pmb = pmesh_->FindMeshBlock(my_mbgid_);
   // copy u0 --> u1 in first stage
   if (stage == 1) {
-    Kokkos::deep_copy(u1,u0);
+    Kokkos::deep_copy(pmb->exe_space, u1, u0);
   }
 
   return TaskStatus::complete;

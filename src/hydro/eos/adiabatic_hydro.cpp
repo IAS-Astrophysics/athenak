@@ -29,6 +29,11 @@ void EquationOfState::ConToPrimAdi(AthenaArray4D<Real> &cons, AthenaArray4D<Real
   int ncells3 = (pmb->mb_cells.nx3 > 1)? (pmb->mb_cells.nx3 + 2*ng) : 1;
   Real gm1 = GetGamma() - 1.0;
 
+std::cout << "in cons_to_prim" << std::endl;
+
+  Real &dfloor_ = density_floor_;
+  Real &pfloor_ = pressure_floor_;
+
   par_for("hydro_update", pmb->exe_space, 0, (ncells3-1), 0, (ncells2-1), 0, (ncells1-1),
     KOKKOS_LAMBDA(int k, int j, int i)
     {
@@ -45,7 +50,7 @@ void EquationOfState::ConToPrimAdi(AthenaArray4D<Real> &cons, AthenaArray4D<Real
       Real& w_p  = prim(IPR,k,j,i);
 
       // apply density floor, without changing momentum or energy
-      u_d = (u_d > density_floor_) ?  u_d : density_floor_;
+      u_d = (u_d > dfloor_) ?  u_d : dfloor_;
       w_d = u_d;
 
       Real di = 1.0/u_d;
@@ -57,10 +62,12 @@ void EquationOfState::ConToPrimAdi(AthenaArray4D<Real> &cons, AthenaArray4D<Real
       w_p = gm1*(u_e - e_k);
 
       // apply pressure floor, correct total energy
-      u_e = (w_p > pressure_floor_) ?  u_e : ((pressure_floor_/gm1) + e_k);
-      w_p = (w_p > pressure_floor_) ?  w_p : pressure_floor_;
+      u_e = (w_p > pfloor_) ?  u_e : ((pfloor_/gm1) + e_k);
+      w_p = (w_p > pfloor_) ?  w_p : pfloor_;
     }
   );
+
+std::cout << "done cons_to_prim" << std::endl;
 
   return;
 }

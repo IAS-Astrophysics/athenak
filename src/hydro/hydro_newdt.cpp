@@ -6,7 +6,7 @@
 //! \file hydro_newdt.cpp
 //  \brief functions to computes timestep on given MeshBlock using CFL condition
 
-#include <algorithm>  // min()
+//#include <algorithm>  // min()
 #include <limits>
 #include <math.h>
 #include <iostream>
@@ -31,20 +31,29 @@ TaskStatus Hydro::NewTimeStep(Driver *pdrive, int stage) {
   int is = pmb->mb_cells.is; int nx1 = pmb->mb_cells.nx1;
   int js = pmb->mb_cells.js; int nx2 = pmb->mb_cells.nx2;
   int ks = pmb->mb_cells.ks; int nx3 = pmb->mb_cells.nx3;
+//  int ie = pmb->mb_cells.ie;
+//  int je = pmb->mb_cells.je;
+//  int ke = pmb->mb_cells.ke;
 
   Real dv1 = std::numeric_limits<float>::min();
   Real dv2 = std::numeric_limits<float>::min();
   Real dv3 = std::numeric_limits<float>::min();
 
+std::cout << "in nudt" << std::endl;
+
   if (hydro_evol == HydroEvolution::kinematic) {
 
+std::cout << "start loop in nudt" << std::endl;
     // find largest (v) in each direction for advection problems
     // Kokkos::parallel_reduce uses 1D range policy
+
+    auto &w0_ = w0;
     const int nkji = nx3*nx2*nx1;
     const int nji  = nx2*nx1;
-    Kokkos::parallel_reduce("HydroNudtAdvect",Kokkos::RangePolicy<>(pmb->exe_space, 0, nkji),
+
+    Kokkos::parallel_reduce("HydroNudt1",Kokkos::RangePolicy<>(pmb->exe_space, 0, nkji),
       KOKKOS_LAMBDA(const int &idx, Real &max_dv1, Real &max_dv2, Real &max_dv3)
-    {
+      {
       // compute n,k,j,i indices of thread and call function
       int k = (idx)/nji;
       int j = (idx - k*nji)/nx1;
@@ -52,17 +61,20 @@ TaskStatus Hydro::NewTimeStep(Driver *pdrive, int stage) {
       k += ks;
       j += js;
       i += is;
-      max_dv1 = fmax(fabs(w0(IVX,k,j,i)), max_dv1);
-      max_dv2 = fmax(fabs(w0(IVY,k,j,i)), max_dv2);
-      max_dv3 = fmax(fabs(w0(IVZ,k,j,i)), max_dv3);
+      max_dv1 = fmax(fabs(w0_(IVX,k,j,i)), max_dv1);
+      max_dv2 = fmax(fabs(w0_(IVY,k,j,i)), max_dv2);
+      max_dv3 = fmax(fabs(w0_(IVZ,k,j,i)), max_dv3);
     }, Kokkos::Max<Real>(dv1), Kokkos::Max<Real>(dv2),Kokkos::Max<Real>(dv3));
+ 
+std::cout << "end loop in nudt" << std::endl;
 
   } else {
     // find largest (v +/- C) in each dirn for hydrodynamic problems
     // Kokkos::parallel_reduce uses 1D range policy
+    auto &w0_ = w0;
     const int nkji = nx3*nx2*nx1;
     const int nji  = nx2*nx1;
-    Kokkos::parallel_reduce("HydroNudt",Kokkos::RangePolicy<>(pmb->exe_space, 0, nkji),
+    Kokkos::parallel_reduce("HydroNudt2",Kokkos::RangePolicy<>(pmb->exe_space, 0, nkji),
       KOKKOS_LAMBDA(const int &idx, Real &max_dv1, Real &max_dv2, Real &max_dv3)
     { 
       // compute n,k,j,i indices of thread and call function
@@ -73,10 +85,10 @@ TaskStatus Hydro::NewTimeStep(Driver *pdrive, int stage) {
       j += js;
       i += is;
 
-      Real cs = peos->SoundSpeed(w0(IPR,k,j,i),w0(IDN,k,j,i));
-      max_dv1 = fmax((fabs(w0(IVX,k,j,i)) + cs), max_dv1);
-      max_dv2 = fmax((fabs(w0(IVY,k,j,i)) + cs), max_dv2);
-      max_dv3 = fmax((fabs(w0(IVZ,k,j,i)) + cs), max_dv3);
+      Real cs = peos->SoundSpeed(w0_(IPR,k,j,i),w0_(IDN,k,j,i));
+      max_dv1 = fmax((fabs(w0_(IVX,k,j,i)) + cs), max_dv1);
+      max_dv2 = fmax((fabs(w0_(IVY,k,j,i)) + cs), max_dv2);
+      max_dv3 = fmax((fabs(w0_(IVZ,k,j,i)) + cs), max_dv3);
     }, Kokkos::Max<Real>(dv1), Kokkos::Max<Real>(dv2),Kokkos::Max<Real>(dv3));
 
   }
@@ -95,6 +107,7 @@ TaskStatus Hydro::NewTimeStep(Driver *pdrive, int stage) {
     dtnew = std::min(dtnew, (pmb->mb_cells.dx3/dv3));
   }
 
+std::cout << "done nudt" << std::endl;
   return TaskStatus::complete;
 }
 
