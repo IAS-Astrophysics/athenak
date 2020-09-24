@@ -13,7 +13,7 @@ set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Kokkos recommends NOT using default compiler extensions
 set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_CXX_FLAGS -O3)
+#set(CMAKE_CXX_FLAGS -O3)
 # required to enable target_link_libraries() below 
 cmake_policy(SET CMP0079 NEW)
 

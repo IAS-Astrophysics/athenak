@@ -32,8 +32,6 @@ TaskStatus BoundaryValues::SendCellCenteredVariables(AthenaArray4D<Real> &a, int
   int nx2 = pmb->mb_cells.nx2;
   int nx3 = pmb->mb_cells.nx3;
 
-std::cout << "in send" << std::endl;
-
   // Find the physics module containing the send buffer, using bbuf_ptr map and [key]
   BoundaryBuffer *pbb = pmb->pbvals->bbuf_ptr[key];
 
@@ -206,8 +204,6 @@ std::cout << "in send" << std::endl;
     }
   ); // end par_for_outer
 
-std::cout << "finished load" << std::endl;
-
   // Now, for block or periodic boundaries, send boundary buffer to neighboring MeshBlocks
   // using MPI, or if neighbor is on same MPI rank, use Kokkos::deep_copy of subviews
   // Note (1) physics module containing the recv buffer is found using bbuf_ptr map and
@@ -228,8 +224,6 @@ std::cout << "finished load" << std::endl;
     }
   }
   if (!(pmesh_->nx2gt1)) return TaskStatus::complete;
-
-std::cout << "finished send1" << std::endl;
 
   // copy x2 faces and x1x2 edges
   for (int n=0; n<2; ++n) {
@@ -257,9 +251,6 @@ std::cout << "finished send1" << std::endl;
   }
   if (!(pmesh_->nx3gt1)) return TaskStatus::complete;
   
-
-std::cout << "finished send2" << std::endl;
-
   // copy x3 faces, x3x1 and x2x3 edges, and corners
   for (int n=0; n<2; ++n) {
     if (bndry_flag[n+4]==BoundaryFlag::block || bndry_flag[n+4]==BoundaryFlag::periodic) {
@@ -309,8 +300,6 @@ std::cout << "finished send2" << std::endl;
     }
   }
 
-std::cout << "end send" << std::endl;
-
   return TaskStatus::complete;
 }
 
@@ -330,9 +319,6 @@ TaskStatus BoundaryValues::RecvCellCenteredVariables(AthenaArray4D<Real> &a, int
   int ncells1 = pmb->mb_cells.nx1 + 2*ng;
   int ncells2 = (pmb->mb_cells.nx2 > 1)? (pmb->mb_cells.nx2 + 2*ng) : 1;
   int ncells3 = (pmb->mb_cells.nx3 > 1)? (pmb->mb_cells.nx3 + 2*ng) : 1;
-
-std::cout << "in recv" << std::endl;
-
 
   // Find the physics module containing the recv buffer, using bbuf_ptr map and [key]
   BoundaryBuffer *pbb = pmb->pbvals->bbuf_ptr[key];
@@ -490,9 +476,6 @@ std::cout << "in recv" << std::endl;
       }
     }
   );  // end par_for_outer
-
-
-std::cout << "done recv" << std::endl;
 
   return TaskStatus::complete;
 }

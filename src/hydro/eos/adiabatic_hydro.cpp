@@ -29,8 +29,6 @@ void EquationOfState::ConToPrimAdi(AthenaArray4D<Real> &cons, AthenaArray4D<Real
   int ncells3 = (pmb->mb_cells.nx3 > 1)? (pmb->mb_cells.nx3 + 2*ng) : 1;
   Real gm1 = eos_data.gamma - 1.0;
 
-std::cout << "in cons_to_prim" << std::endl;
-
   Real &dfloor_ = eos_data.density_floor;
   Real &pfloor_ = eos_data.pressure_floor;
 
@@ -66,8 +64,6 @@ std::cout << "in cons_to_prim" << std::endl;
       w_p = (w_p > pfloor_) ?  w_p : pfloor_;
     }
   );
-
-std::cout << "done cons_to_prim" << std::endl;
 
   return;
 }

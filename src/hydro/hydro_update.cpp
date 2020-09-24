@@ -30,6 +30,10 @@ TaskStatus Hydro::HydroUpdate(Driver *pdrive, int stage)
   Real &gam0 = pdrive->gam0[stage-1];
   Real &gam1 = pdrive->gam1[stage-1];
   Real &beta = pdrive->beta[stage-1];
+  auto u0_ = u0;
+  auto u1_ = u1;
+  auto divf_ = divf;
+  Real dt = pmesh_->dt;
 
   // 4D parallel loop that updates conserved variables to intermediate step using weights
   // and fractional time step appropriate to stages of time-integrator used (see XX)
@@ -40,8 +44,7 @@ TaskStatus Hydro::HydroUpdate(Driver *pdrive, int stage)
       for (int j=js; j<=je; ++j) {
         par_for_inner(member, is, ie, [&](const int i)
         {
-          u0(n,k,j,i) = gam0*u0(n,k,j,i) + gam1*u1(n,k,j,i) -
-                        beta*(pmesh_->dt)*divf(n,k,j,i);
+          u0_(n,k,j,i) = gam0*u0_(n,k,j,i) + gam1*u1_(n,k,j,i) - beta*dt*divf_(n,k,j,i);
         });
       }
     }

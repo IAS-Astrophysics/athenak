@@ -41,11 +41,8 @@ TaskStatus Hydro::NewTimeStep(Driver *pdrive, int stage) {
 
   auto &eos = pmb->phydro->peos->eos_data;
 
-std::cout << "in nudt" << std::endl;
-
   if (hydro_evol == HydroEvolution::kinematic) {
 
-std::cout << "start loop in nudt" << std::endl;
     // find largest (v) in each direction for advection problems
     // Kokkos::parallel_reduce uses 1D range policy
 
@@ -68,8 +65,6 @@ std::cout << "start loop in nudt" << std::endl;
       max_dv3 = fmax(fabs(w0_(IVZ,k,j,i)), max_dv3);
     }, Kokkos::Max<Real>(dv1), Kokkos::Max<Real>(dv2),Kokkos::Max<Real>(dv3));
  
-std::cout << "end loop in nudt" << std::endl;
-
   } else {
     // find largest (v +/- C) in each dirn for hydrodynamic problems
     // Kokkos::parallel_reduce uses 1D range policy
@@ -109,7 +104,6 @@ std::cout << "end loop in nudt" << std::endl;
     dtnew = std::min(dtnew, (pmb->mb_cells.dx3/dv3));
   }
 
-std::cout << "done nudt" << std::endl;
   return TaskStatus::complete;
 }
 
