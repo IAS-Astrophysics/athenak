@@ -21,17 +21,21 @@ namespace hydro {
 EquationOfState::EquationOfState(Mesh* pm, ParameterInput *pin, int igid)
    : pmesh_(pm), my_mbgid_(igid)
 {
-  density_floor_ = pin->GetOrAddReal("eos","density_floor",(FLT_MIN));
-  pressure_floor_ = pin->GetOrAddReal("eos","pressure_floor",(FLT_MIN));
+  eos_data.density_floor = pin->GetOrAddReal("eos","density_floor",(FLT_MIN));
+  eos_data.pressure_floor = pin->GetOrAddReal("eos","pressure_floor",(FLT_MIN));
 
   // construct EOS type (no default)
   std::string eqn_of_state = pin->GetString("hydro","eos");
   if (eqn_of_state.compare("adiabatic") == 0) {
     eos_type_ = EOSType::adiabatic_nr_hydro;
-    adiabatic_eos_ = true;
+    eos_data.is_adiabatic = true;
+    eos_data.gamma = pin->GetReal("eos","gamma");
+    eos_data.iso_cs = 0.0;
   } else if (eqn_of_state.compare("isothermal") == 0) {
     eos_type_ = EOSType::isothermal_nr_hydro;
-    adiabatic_eos_ = false;
+    eos_data.is_adiabatic = false;
+    eos_data.iso_cs = pin->GetReal("eos","iso_sound_speed");
+    eos_data.gamma = 0.0;
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "<hydro> eos = '" << eqn_of_state << "' not implemented" << std::endl;

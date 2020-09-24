@@ -39,7 +39,7 @@ Kokkos::fence();
   int iprob = pin->GetInteger("problem","iproblem");
   Real vel = pin->GetOrAddReal("problem","velocity",1.0);
   Real amp = pin->GetOrAddReal("problem","amplitude",0.1);
-  Real gm1 = pmb->phydro->peos->GetGamma() - 1.0;
+  Real gm1 = pmb->phydro->peos->eos_data.gamma - 1.0;
 
   // Initialize the grid
   int &is = pmb->mb_cells.is, &ie = pmb->mb_cells.ie;

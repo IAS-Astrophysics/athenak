@@ -39,6 +39,8 @@ TaskStatus Hydro::NewTimeStep(Driver *pdrive, int stage) {
   Real dv2 = std::numeric_limits<float>::min();
   Real dv3 = std::numeric_limits<float>::min();
 
+  auto &eos = pmb->phydro->peos->eos_data;
+
 std::cout << "in nudt" << std::endl;
 
   if (hydro_evol == HydroEvolution::kinematic) {
@@ -85,7 +87,7 @@ std::cout << "end loop in nudt" << std::endl;
       j += js;
       i += is;
 
-      Real cs = peos->SoundSpeed(w0_(IPR,k,j,i),w0_(IDN,k,j,i));
+      Real cs = eos.SoundSpeed(w0_(IPR,k,j,i),w0_(IDN,k,j,i));
       max_dv1 = fmax((fabs(w0_(IVX,k,j,i)) + cs), max_dv1);
       max_dv2 = fmax((fabs(w0_(IVY,k,j,i)) + cs), max_dv2);
       max_dv3 = fmax((fabs(w0_(IVZ,k,j,i)) + cs), max_dv3);

@@ -12,10 +12,15 @@
 #include "mesh/mesh.hpp"
 #include "hydro.hpp"
 #include "hydro/eos/eos.hpp"
-// include inlined reconstructions methods (yuck...)
+// include inlined reconstruction methods (yuck...)
 #include "reconstruct/dc.cpp"
 #include "reconstruct/plm.cpp"
 #include "reconstruct/ppm.cpp"
+// include inlined Riemann solvers (double yuck...)
+#include "hydro/rsolver/advect.cpp"
+#include "hydro/rsolver/llf.cpp"
+#include "hydro/rsolver/hllc.cpp"
+#include "hydro/rsolver/roe.cpp"
 
 namespace hydro {
 //----------------------------------------------------------------------------------------
@@ -31,6 +36,8 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
   int ncells1 = pmb->mb_cells.nx1 + 2*(pmb->mb_cells.ng);
 
   auto recon_method = recon_method_;
+  auto rsolver_method = rsolver_method_;
+  auto &eos = pmb->phydro->peos->eos_data;
 
   //--------------------------------------------------------------------------------------
   // i-direction
@@ -63,7 +70,23 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
       }
 
       // compute fluxes over [is,ie+1]
-      prsolver->RSolver(member, is, ie+1, IVX, wl, wr, uflux);
+      switch (rsolver_method)
+      {
+        case RiemannSolver::advect:
+          Advect(member, eos, is, ie+1, IVX, wl, wr, uflux);
+          break;
+        case RiemannSolver::llf:
+          LLF(member, eos, is, ie+1, IVX, wl, wr, uflux);
+          break;
+        case RiemannSolver::hllc:
+          HLLC(member, eos, is, ie+1, IVX, wl, wr, uflux);
+          break;
+        case RiemannSolver::roe:
+          Roe(member, eos, is, ie+1, IVX, wl, wr, uflux);
+          break;
+        default:
+          break;
+      }
 
       // compute dF/dx1
       for (int n=0; n<nhydro; ++n) {
@@ -121,7 +144,23 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
 
         // compute fluxes over [js,je+1]
         if (j>(js-1)) {
-          prsolver->RSolver(member, is, ie, IVY, wl, wr, uflux);
+          switch (rsolver_method)
+          {
+            case RiemannSolver::advect:
+              Advect(member, eos, is, ie, IVY, wl, wr, uflux);
+              break;
+            case RiemannSolver::llf:
+              LLF(member, eos, is, ie, IVY, wl, wr, uflux);
+              break;
+            case RiemannSolver::hllc:
+              HLLC(member, eos, is, ie, IVY, wl, wr, uflux);
+              break;
+            case RiemannSolver::roe:
+              Roe(member, eos, is, ie, IVY, wl, wr, uflux);
+              break;
+            default:
+              break;
+          }
         }
 
         // Add dF/dx2
@@ -193,7 +232,23 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
 
         // compute fluxes over [ks,ke+1]
         if (k>(ks-1)) {
-          prsolver->RSolver(member, is, ie, IVZ, wl, wr, uflux);
+          switch (rsolver_method)
+          {
+            case RiemannSolver::advect:
+              Advect(member, eos, is, ie, IVZ, wl, wr, uflux);
+              break;
+            case RiemannSolver::llf:
+              LLF(member, eos, is, ie, IVZ, wl, wr, uflux);
+              break;
+            case RiemannSolver::hllc:
+              HLLC(member, eos, is, ie, IVZ, wl, wr, uflux);
+              break;
+            case RiemannSolver::roe:
+              Roe(member, eos, is, ie, IVZ, wl, wr, uflux);
+              break;
+            default:
+              break;
+          }
         }
 
         // Add dF/dx3

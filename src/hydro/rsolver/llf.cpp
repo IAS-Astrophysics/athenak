@@ -22,16 +22,15 @@
 #include "mesh/mesh.hpp"
 #include "hydro/eos/eos.hpp"
 #include "hydro/hydro.hpp"
-#include "hydro/rsolver/rsolver.hpp"
 
 namespace hydro {
 
 //----------------------------------------------------------------------------------------
-//! \fn void RiemannSolver::LLF
+//! \fn void LLF
 //  \brief The LLF Riemann solver for hydrodynamics (both adiabatic and isothermal)
 
-KOKKOS_FUNCTION
-void RiemannSolver::LLF(TeamMember_t const &member, const int il, const int iu,
+KOKKOS_INLINE_FUNCTION
+void LLF(TeamMember_t const &member, const EOSData &eos, const int il, const int iu,
      const int ivx, const AthenaScratch2D<Real> &wl, const AthenaScratch2D<Real> &wr,
      AthenaScratch2D<Real> &flx)
 {
@@ -39,10 +38,8 @@ void RiemannSolver::LLF(TeamMember_t const &member, const int il, const int iu,
   int ivz = IVX + ((ivx-IVX)+2)%3;
   Real wli[5],wri[5],du[5];
   Real fl[5],fr[5],flxi[5];
-  MeshBlock* pmb = pmesh_->FindMeshBlock(my_mbgid_);
-  bool adiabatic_eos = pmb->phydro->peos->IsAdiabatic();
-  Real gm1 = pmb->phydro->peos->GetGamma() - 1.0;
-  Real iso_cs = pmb->phydro->peos->GetIsoCs();
+  Real gm1 = eos.gamma - 1.0;
+  Real iso_cs = eos.iso_cs;
 
   par_for_inner(member, il, iu, [&](const int i)
   {
@@ -51,20 +48,20 @@ void RiemannSolver::LLF(TeamMember_t const &member, const int il, const int iu,
     wli[IVX]=wl(ivx,i);
     wli[IVY]=wl(ivy,i);
     wli[IVZ]=wl(ivz,i);
-    if (adiabatic_eos) { wli[IPR]=wl(IPR,i); }
+    if (eos.is_adiabatic) { wli[IPR]=wl(IPR,i); }
 
     wri[IDN]=wr(IDN,i);
     wri[IVX]=wr(ivx,i);
     wri[IVY]=wr(ivy,i);
     wri[IVZ]=wr(ivz,i);
-    if (adiabatic_eos) { wri[IPR]=wr(IPR,i); }
+    if (eos.is_adiabatic) { wri[IPR]=wr(IPR,i); }
 
     //--- Step 2.  Compute wave speeds in L,R states (see Toro eq. 10.43)
 
     Real cl,cr;
-    if (adiabatic_eos) {
-      cl = pmb->phydro->peos->SoundSpeed(wli[IPR],wli[IDN]);
-      cr = pmb->phydro->peos->SoundSpeed(wri[IPR],wri[IDN]);
+    if (eos.is_adiabatic) {
+      cl = eos.SoundSpeed(wli[IPR],wli[IDN]);
+      cr = eos.SoundSpeed(wri[IPR],wri[IDN]);
     } else {
       cl = iso_cs;
       cr = iso_cs;
@@ -89,7 +86,7 @@ void RiemannSolver::LLF(TeamMember_t const &member, const int il, const int iu,
     fr[IVZ] = mxr*wri[IVZ];
 
     Real el,er;
-    if (adiabatic_eos) {
+    if (eos.is_adiabatic) {
       el = wli[IPR]/gm1 + 0.5*wli[IDN]*(SQR(wli[IVX]) + SQR(wli[IVY]) + SQR(wli[IVZ]));
       er = wri[IPR]/gm1 + 0.5*wri[IDN]*(SQR(wri[IVX]) + SQR(wri[IVY]) + SQR(wri[IVZ]));
       fl[IVX] += wli[IPR];
@@ -107,7 +104,7 @@ void RiemannSolver::LLF(TeamMember_t const &member, const int il, const int iu,
     du[IVX] = wri[IDN]*wri[IVX] - wli[IDN]*wli[IVX];
     du[IVY] = wri[IDN]*wri[IVY] - wli[IDN]*wli[IVY];
     du[IVZ] = wri[IDN]*wri[IVZ] - wli[IDN]*wli[IVZ];
-    if (adiabatic_eos) { du[IEN] = er - el; }
+    if (eos.is_adiabatic) { du[IEN] = er - el; }
 
     //--- Step 5. Compute the LLF flux at interface (see Toro eq. 10.42).
 
@@ -115,7 +112,7 @@ void RiemannSolver::LLF(TeamMember_t const &member, const int il, const int iu,
     flxi[IVX] = 0.5*(fl[IVX] + fr[IVX]) - a*du[IVX];
     flxi[IVY] = 0.5*(fl[IVY] + fr[IVY]) - a*du[IVY];
     flxi[IVZ] = 0.5*(fl[IVZ] + fr[IVZ]) - a*du[IVZ];
-    if (adiabatic_eos) {
+    if (eos.is_adiabatic) {
       flxi[IEN] = 0.5*(fl[IEN] + fr[IEN]) - a*du[IEN];
     }
 
@@ -125,7 +122,7 @@ void RiemannSolver::LLF(TeamMember_t const &member, const int il, const int iu,
     flx(ivx,i) = flxi[IVX];
     flx(ivy,i) = flxi[IVY];
     flx(ivz,i) = flxi[IVZ];
-    if (adiabatic_eos) { flx(IEN,i) = flxi[IEN]; }
+    if (eos.is_adiabatic) { flx(IEN,i) = flxi[IEN]; }
   });
   return;
 }

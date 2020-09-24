@@ -11,6 +11,9 @@
 #include "mesh/mesh.hpp"
 #include "driver/driver.hpp"
 #include "hydro.hpp"
+#include "reconstruct/dc.cpp"
+#include "reconstruct/plm.cpp"
+#include "reconstruct/ppm.cpp"
 
 namespace hydro {
 //----------------------------------------------------------------------------------------

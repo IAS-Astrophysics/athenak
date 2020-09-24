@@ -3,7 +3,7 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file advection.cpp
+//! \file advect.cpp
 //  \brief Riemann solver for pure advection problems (v = constant).  Simply computes the
 //  upwind flux of each vriable.
 
@@ -13,27 +13,22 @@
 #include "mesh/mesh.hpp"
 #include "hydro/eos/eos.hpp"
 #include "hydro/hydro.hpp"
-#include "hydro/rsolver/rsolver.hpp"
 
 namespace hydro {
 
 //----------------------------------------------------------------------------------------
-//! \fn void RiemannSolver::Advection
+//! \fn void Advection
 //  \brief An advection Riemann solver for hydrodynamics (both adiabatic and isothermal)
 
-KOKKOS_FUNCTION
-void RiemannSolver::Advection(TeamMember_t const &member, const int il, const int iu,
+KOKKOS_INLINE_FUNCTION
+void Advect(TeamMember_t const &member, const EOSData eos,  const int il, const int iu,
      const int ivx, const AthenaScratch2D<Real> &wl, const AthenaScratch2D<Real> &wr,
      AthenaScratch2D<Real> &flx)
 {
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
   Real wli[5],wri[5];
-  MeshBlock* pmb = pmesh_->FindMeshBlock(my_mbgid_);
-  bool adiabatic_eos = pmb->phydro->peos->IsAdiabatic();
-  Real gm1 = pmb->phydro->peos->GetGamma() - 1.0;
-  Real iso_cs = pmb->phydro->peos->GetIsoCs();
-  
+  Real gm1 = eos.gamma - 1.0;
 
   par_for_inner(member, il, iu, [&](const int i)
   {
@@ -42,13 +37,13 @@ void RiemannSolver::Advection(TeamMember_t const &member, const int il, const in
     wli[IVX]=wl(ivx,i);
     wli[IVY]=wl(ivy,i);
     wli[IVZ]=wl(ivz,i);
-    if (adiabatic_eos) { wli[IPR]=wl(IPR,i); }
+    if (eos.is_adiabatic) { wli[IPR]=wl(IPR,i); }
 
     wri[IDN]=wr(IDN,i);
     wri[IVX]=wr(ivx,i);
     wri[IVY]=wr(ivy,i);
     wri[IVZ]=wr(ivz,i);
-    if (adiabatic_eos) { wri[IPR]=wr(IPR,i); }
+    if (eos.is_adiabatic) { wri[IPR]=wr(IPR,i); }
 
     //--- Step 3.  Compute upwind fluxes
 
@@ -59,7 +54,7 @@ void RiemannSolver::Advection(TeamMember_t const &member, const int il, const in
       flx(ivx,i) = mxl*wli[IVX];
       flx(ivy,i) = mxl*wli[IVY];
       flx(ivz,i) = mxl*wli[IVZ];
-      if (adiabatic_eos) { flx(IEN,i) = (wli[IPR]/gm1 + 0.5*mxl*wli[IVX])*wli[IVX]; }
+      if (eos.is_adiabatic) { flx(IEN,i) = (wli[IPR]/gm1 + 0.5*mxl*wli[IVX])*wli[IVX]; }
 
     } else {
 
@@ -68,7 +63,7 @@ void RiemannSolver::Advection(TeamMember_t const &member, const int il, const in
       flx(ivx,i) = mxr*wri[IVX];
       flx(ivy,i) = mxr*wri[IVY];
       flx(ivz,i) = mxr*wri[IVZ];
-      if (adiabatic_eos) { flx(IEN,i) = (wri[IPR]/gm1 + 0.5*mxr*wri[IVX])*wri[IVX]; }
+      if (eos.is_adiabatic) { flx(IEN,i) = (wri[IPR]/gm1 + 0.5*mxr*wri[IVX])*wri[IVX]; }
 
     }
   });

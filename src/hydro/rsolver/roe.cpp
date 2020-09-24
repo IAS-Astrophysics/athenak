@@ -21,7 +21,6 @@
 #include "mesh/mesh.hpp"
 #include "hydro/eos/eos.hpp"
 #include "hydro/hydro.hpp"
-#include "hydro/rsolver/rsolver.hpp"
 
 namespace hydro {
 
@@ -36,11 +35,11 @@ void RoeFluxIso(const Real wroe[], const Real du[], const Real wli[],
 } // namespace roe
 
 //----------------------------------------------------------------------------------------
-//! \fn void RiemannSolver::Roe
+//! \fn void Roe
 //  \brief The Roe Riemann solver for hydrodynamics (both adiabatic and isothermal)
 
-KOKKOS_FUNCTION
-void RiemannSolver::Roe(TeamMember_t const &member, const int il, const int iu,
+KOKKOS_INLINE_FUNCTION
+void Roe(TeamMember_t const &member, const EOSData &eos, const int il, const int iu,
      const int ivx, const AthenaScratch2D<Real> &wl, const AthenaScratch2D<Real> &wr,
      AthenaScratch2D<Real> &flx)
 {
@@ -49,10 +48,8 @@ void RiemannSolver::Roe(TeamMember_t const &member, const int il, const int iu,
   Real wli[5],wri[5],wroe[5];
   Real fl[5],fr[5],flxi[5];
   Real ev[5],du[5];
-  MeshBlock* pmb = pmesh_->FindMeshBlock(my_mbgid_);
-  bool adiabatic_eos = pmb->phydro->peos->IsAdiabatic();
-  Real gm1 = pmb->phydro->peos->GetGamma() - 1.0;
-  Real iso_cs = pmb->phydro->peos->GetIsoCs();
+  Real gm1 = eos.gamma - 1.0;
+  Real iso_cs = eos.iso_cs;
 
   par_for_inner(member, il, iu, [&](const int i)
   {
@@ -61,13 +58,13 @@ void RiemannSolver::Roe(TeamMember_t const &member, const int il, const int iu,
     wli[IVX]=wl(ivx,i);
     wli[IVY]=wl(ivy,i);
     wli[IVZ]=wl(ivz,i);
-    if (adiabatic_eos) wli[IPR]=wl(IPR,i);
+    if (eos.is_adiabatic) wli[IPR]=wl(IPR,i);
 
     wri[IDN]=wr(IDN,i);
     wri[IVX]=wr(ivx,i);
     wri[IVY]=wr(ivy,i);
     wri[IVZ]=wr(ivz,i);
-    if (adiabatic_eos) wri[IPR]=wr(IPR,i);
+    if (eos.is_adiabatic) wri[IPR]=wr(IPR,i);
 
     //--- Step 2.  Compute Roe-averaged data from left- and right-states
 
@@ -83,7 +80,7 @@ void RiemannSolver::Roe(TeamMember_t const &member, const int il, const int iu,
     // Following Roe(1981), the enthalpy H=(E+P)/d is averaged for adiabatic flows,
     // rather than E or P directly.  sqrtdl*hl = sqrtdl*(el+pl)/dl = (el+pl)/sqrtdl
     Real el,er;
-    if (adiabatic_eos) {
+    if (eos.is_adiabatic) {
       el = wli[IPR]/gm1 + 0.5*wli[IDN]*(SQR(wli[IVX])+SQR(wli[IVY])+SQR(wli[IVZ]));
       er = wri[IPR]/gm1 + 0.5*wri[IDN]*(SQR(wri[IVX])+SQR(wri[IVY])+SQR(wri[IVZ]));
       wroe[IPR] = ((el + wli[IPR])/sqrtdl + (er + wri[IPR])/sqrtdr)*isdlpdr;
@@ -106,7 +103,7 @@ void RiemannSolver::Roe(TeamMember_t const &member, const int il, const int iu,
     fl[IVZ] = mxl*wli[IVZ];
     fr[IVZ] = mxr*wri[IVZ];
 
-    if (adiabatic_eos) {
+    if (eos.is_adiabatic) {
       fl[IVX] += wli[IPR];
       fr[IVX] += wri[IPR];
       fl[IEN] = (el + wli[IPR])*wli[IVX];
@@ -122,16 +119,16 @@ void RiemannSolver::Roe(TeamMember_t const &member, const int il, const int iu,
     du[IVX] = wri[IDN]*wri[IVX] - wli[IDN]*wli[IVX];
     du[IVY] = wri[IDN]*wri[IVY] - wli[IDN]*wli[IVY];
     du[IVZ] = wri[IDN]*wri[IVZ] - wli[IDN]*wli[IVZ];
-    if (adiabatic_eos) du[IEN] = er - el;
+    if (eos.is_adiabatic) du[IEN] = er - el;
 
     flxi[IDN] = 0.5*(fl[IDN] + fr[IDN]);
     flxi[IVX] = 0.5*(fl[IVX] + fr[IVX]);
     flxi[IVY] = 0.5*(fl[IVY] + fr[IVY]);
     flxi[IVZ] = 0.5*(fl[IVZ] + fr[IVZ]);
-    if (adiabatic_eos) flxi[IEN] = 0.5*(fl[IEN] + fr[IEN]);
+    if (eos.is_adiabatic) flxi[IEN] = 0.5*(fl[IEN] + fr[IEN]);
 
     int llf_flag = 0;
-    if (adiabatic_eos) {
+    if (eos.is_adiabatic) {
       roe::RoeFluxAdb(wroe,du,wli,gm1,flxi,ev,llf_flag);
     } else {
       roe::RoeFluxIso(wroe,du,wli,iso_cs,flxi,ev,llf_flag);
@@ -144,9 +141,9 @@ void RiemannSolver::Roe(TeamMember_t const &member, const int il, const int iu,
       flxi[IVX] = fl[IVX];
       flxi[IVY] = fl[IVY];
       flxi[IVZ] = fl[IVZ];
-      if (adiabatic_eos) flxi[IEN] = fl[IEN];
+      if (eos.is_adiabatic) flxi[IEN] = fl[IEN];
     }
-    if (adiabatic_eos) {
+    if (eos.is_adiabatic) {
       if (ev[4] <= 0.0) {
         flxi[IDN] = fr[IDN];
         flxi[IVX] = fr[IVX];
@@ -167,9 +164,9 @@ void RiemannSolver::Roe(TeamMember_t const &member, const int il, const int iu,
 
     if (llf_flag != 0) {
       Real cl,cr;
-      if (adiabatic_eos) {
-        cl = pmb->phydro->peos->SoundSpeed(wli[IPR],wli[IDN]);
-        cr = pmb->phydro->peos->SoundSpeed(wri[IPR],wri[IDN]);
+      if (eos.is_adiabatic) {
+        cl = eos.SoundSpeed(wli[IPR],wli[IDN]);
+        cr = eos.SoundSpeed(wri[IPR],wri[IDN]);
       } else {
         cl = iso_cs;
         cr = iso_cs;
@@ -180,7 +177,7 @@ void RiemannSolver::Roe(TeamMember_t const &member, const int il, const int iu,
       flxi[IVX] = 0.5*(fl[IVX] + fr[IVX]) - a*du[IVX];
       flxi[IVY] = 0.5*(fl[IVY] + fr[IVY]) - a*du[IVY];
       flxi[IVZ] = 0.5*(fl[IVZ] + fr[IVZ]) - a*du[IVZ];
-      if (adiabatic_eos) {
+      if (eos.is_adiabatic) {
         flxi[IEN] = 0.5*(fl[IEN] + fr[IEN]) - a*du[IEN];
       }
     }
@@ -191,7 +188,7 @@ void RiemannSolver::Roe(TeamMember_t const &member, const int il, const int iu,
     flx(ivx,i) = flxi[IVX];
     flx(ivy,i) = flxi[IVY];
     flx(ivz,i) = flxi[IVZ];
-    if (adiabatic_eos) flx(IEN,i) = flxi[IEN];
+    if (eos.is_adiabatic) flx(IEN,i) = flxi[IEN];
   });
   return;
 }

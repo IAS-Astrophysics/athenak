@@ -13,7 +13,6 @@
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
 #include "hydro/eos/eos.hpp"
-#include "hydro/rsolver/rsolver.hpp"
 #include "bvals/bvals.hpp"
 
 // forward declarations
@@ -22,6 +21,7 @@ class Driver;
 // constants that enumerate Hydro dynamics options
 enum HydroEvolution {hydro_static, kinematic, hydro_dynamic, no_evolution};
 enum ReconstructionMethod {dc, plm, ppm};
+enum RiemannSolver {advect, llf, hlle, hllc, roe};
 
 namespace hydro {
 
@@ -70,6 +70,7 @@ class Hydro
   Mesh* pmesh_;   // ptr to Mesh containing this Hydro
   int my_mbgid_;  // GridID of MeshBlock contianing this Hydro
   ReconstructionMethod recon_method_;
+  RiemannSolver rsolver_method_;
 };
 
 } // namespace hydro

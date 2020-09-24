@@ -26,17 +26,16 @@
 #include "mesh/mesh.hpp"
 #include "hydro/eos/eos.hpp"
 #include "hydro/hydro.hpp"
-#include "hydro/rsolver/rsolver.hpp"
 
 namespace hydro {
 
 //----------------------------------------------------------------------------------------
-//! \fn void RiemannSolver::HLLE
+//! \fn void HLLE
 //  \brief The HLLE Riemann solver for hydrodynamics (both adiabatic and isothermal)
 
-KOKKOS_FUNCTION
-void RiemannSolver::HLLE(TeamMember_t const &member, const int il, const int iu,
-     const int ivx, const AthenaScratch2D<Real> &wl, const AthenaScratch2D<Real> &wr,
+KOKKOS_INLINE_FUNCTION
+void HLLE(TeamMember_t const &member, const int il, const int iu, const int ivx,
+     const AthenaScratch2D<Real> &wl, const AthenaScratch2D<Real> &wr,
      AthenaScratch2D<Real> &flx)
 {
   int ivy = IVX + ((ivx-IVX)+1)%3;

@@ -72,7 +72,7 @@ using namespace hydro;
 
   // Initialize the discontinuity in the Hydro variables ---------------------------------
 
-  Real gm1 = pmb->phydro->peos->GetGamma() - 1.0;
+  Real gm1 = pmb->phydro->peos->eos_data.gamma - 1.0;
   int &is = pmb->mb_cells.is, &ie = pmb->mb_cells.ie;
   int &js = pmb->mb_cells.js, &je = pmb->mb_cells.je;
   int &ks = pmb->mb_cells.ks, &ke = pmb->mb_cells.ke;

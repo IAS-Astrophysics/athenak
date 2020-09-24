@@ -25,6 +25,7 @@ void EquationOfState::ConToPrimIso(AthenaArray4D<Real> &cons, AthenaArray4D<Real
   int ncells1 = pmb->mb_cells.nx1 + 2*ng;
   int ncells2 = (pmb->mb_cells.nx2 > 1)? (pmb->mb_cells.nx2 + 2*ng) : 1;
   int ncells3 = (pmb->mb_cells.nx3 > 1)? (pmb->mb_cells.nx3 + 2*ng) : 1;
+  Real &dfloor_ = eos_data.density_floor;
 
   par_for("hydro_update", pmb->exe_space, 0, (ncells3-1), 0, (ncells2-1), 0, (ncells1-1),
     KOKKOS_LAMBDA(int k, int j, int i)
@@ -40,7 +41,7 @@ void EquationOfState::ConToPrimIso(AthenaArray4D<Real> &cons, AthenaArray4D<Real
       Real& w_vz = prim(IVZ,k,j,i);
 
       // apply density floor, without changing momentum or energy
-      u_d = (u_d > density_floor_) ?  u_d : density_floor_;
+      u_d = (u_d > dfloor_) ?  u_d : dfloor_;
       w_d = u_d;
 
       Real di = 1.0/u_d;

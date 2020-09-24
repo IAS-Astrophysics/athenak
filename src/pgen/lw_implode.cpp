@@ -29,7 +29,7 @@ void ProblemGenerator::LWImplode_(MeshBlock *pmb, ParameterInput *pin)
   Real d_out = pin->GetReal("problem","d_out");
   Real p_out = pin->GetReal("problem","p_out");
 
-  Real gm1 = pmb->phydro->peos->GetGamma() - 1.0;
+  Real gm1 = pmb->phydro->peos->eos_data.gamma - 1.0;
 
   int &is = pmb->mb_cells.is, &ie = pmb->mb_cells.ie;
   int &js = pmb->mb_cells.js, &je = pmb->mb_cells.je;

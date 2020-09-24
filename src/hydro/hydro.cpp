@@ -28,7 +28,7 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
 {
   // construct EOS object (no default)
   peos = new EquationOfState(pmesh_, pin, my_mbgid_);
-  if (peos->IsAdiabatic()) {
+  if (peos->eos_data.is_adiabatic) {
     nhydro = 5;
   } else {
     nhydro = 4;
@@ -92,10 +92,44 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
       std::exit(EXIT_FAILURE);
     }}
 
-    // allocate Riemann solver object (default depends on EOS and dynamics)
-    bool is_dynamic = false;
-    if (hydro_evol == HydroEvolution::hydro_dynamic) {is_dynamic = true;}
-    prsolver = new RiemannSolver(pmesh_, pin, my_mbgid_, peos->IsAdiabatic(), is_dynamic);
+    // select Riemann solver (no default).  Test for compatibility of options
+    {std::string rsolver = pin->GetString("hydro","rsolver");
+
+    if (rsolver.compare("advection") == 0) {
+      if (hydro_evol == HydroEvolution::hydro_dynamic) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "<hydro>/rsolver = '" << rsolver
+                  << "' cannot be used with hydrodynamic problems" << std::endl;
+        std::exit(EXIT_FAILURE);
+      } else {
+        rsolver_method_ = RiemannSolver::advect;
+      }
+    } else if (hydro_evol != HydroEvolution::hydro_dynamic) { 
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "<hydro>/rsolver = '" << rsolver
+                << "' cannot be used with non-hydrodynamic problems" << std::endl;
+      std::exit(EXIT_FAILURE);
+    } else if (rsolver.compare("llf") == 0) {
+      rsolver_method_ = RiemannSolver::llf;
+    } else if (rsolver.compare("hlle") == 0) {
+      rsolver_method_ = RiemannSolver::hlle;
+    } else if (rsolver.compare("hllc") == 0) {
+      if (peos->eos_data.is_adiabatic) {
+        rsolver_method_ = RiemannSolver::hllc;
+      } else { 
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "<hydro>/rsolver = '" << rsolver
+                  << "' cannot be used with isothermal EOS" << std::endl;
+        std::exit(EXIT_FAILURE); 
+        }  
+    } else if (rsolver.compare("roe") == 0) {
+      rsolver_method_ = RiemannSolver::roe;
+    } else {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "<hydro> rsolver = '" << rsolver << "' not implemented"
+                << std::endl;
+      std::exit(EXIT_FAILURE); 
+    }}
 
     // allocate registers, flux divergence, scratch arrays for time-dep probs
     Kokkos::realloc(u1,nhydro, ncells3, ncells2, ncells1);

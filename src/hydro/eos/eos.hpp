@@ -15,7 +15,22 @@
 #include "mesh/meshblock.hpp"
 #include "parameter_input.hpp"
 
-enum class EOSType {adiabatic_nr_hydro, isothermal_nr_hydro};
+enum EOSType {adiabatic_nr_hydro, isothermal_nr_hydro};
+
+//----------------------------------------------------------------------------------------
+//! \struct EOSData
+//  \brief container for variables associated with EOS
+
+struct EOSData
+{
+  Real gamma;
+  Real iso_cs;
+  bool is_adiabatic;
+  Real density_floor, pressure_floor;
+  // sound speed function for adiabatic EOS 
+  KOKKOS_INLINE_FUNCTION
+  Real SoundSpeed(Real p, Real d) const {return std::sqrt(gamma*p/d);}
+};
 
 namespace hydro {
 
@@ -29,10 +44,7 @@ class EquationOfState
   EquationOfState(Mesh *pm, ParameterInput *pin, int igid);
   ~EquationOfState() = default;
 
-  // getter functions
-  Real GetGamma() {return gamma_;}
-  Real GetIsoCs() {return iso_cs_;}
-  bool IsAdiabatic() {return adiabatic_eos_;}
+  EOSData eos_data;
 
   // wrapper function that calls different conversion routines
   void ConservedToPrimitive(AthenaArray4D<Real> &cons,AthenaArray4D<Real> &prim);
@@ -42,17 +54,13 @@ class EquationOfState
   void ConToPrimIso(AthenaArray4D<Real> &cons,AthenaArray4D<Real> &prim);
 
   // sound speed function for adiabatic EOS 
-  KOKKOS_INLINE_FUNCTION
-  Real SoundSpeed(Real p, Real d) {return std::sqrt(gamma_*p/d);}
+//  KOKKOS_INLINE_FUNCTION
+//  Real SoundSpeed(Real p, Real d) {return std::sqrt(eos_data.gamma*p/d);}
 
  private:
   Mesh* pmesh_;
   int my_mbgid_;
-  Real density_floor_, pressure_floor_;
-  Real gamma_;
-  Real iso_cs_;
   EOSType eos_type_;    // enum that specifies EOS type
-  bool adiabatic_eos_;  // true if EOS is adiabatic
 };
 
 } // namespace hydro

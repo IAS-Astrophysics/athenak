@@ -24,12 +24,6 @@ add_executable(
         hydro/eos/eos.cpp
         hydro/eos/adiabatic_hydro.cpp
         hydro/eos/isothermal_hydro.cpp
-        hydro/rsolver/rsolver.cpp
-        hydro/rsolver/advection.cpp
-        hydro/rsolver/llf.cpp
-        hydro/rsolver/hllc.cpp
-        hydro/rsolver/hlle.cpp
-        hydro/rsolver/roe.cpp
 
         mesh/interface_physics.cpp
         mesh/load_balance.cpp
@@ -48,10 +42,6 @@ add_executable(
         pgen/advection.cpp
         pgen/lw_implode.cpp
         pgen/shock_tube.cpp
-
-        reconstruct/dc.cpp
-        reconstruct/plm.cpp
-        reconstruct/ppm.cpp
 
         utils/change_rundir.cpp
         utils/show_config.cpp

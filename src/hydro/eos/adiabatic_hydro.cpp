@@ -27,12 +27,12 @@ void EquationOfState::ConToPrimAdi(AthenaArray4D<Real> &cons, AthenaArray4D<Real
   int ncells1 = pmb->mb_cells.nx1 + 2*ng;
   int ncells2 = (pmb->mb_cells.nx2 > 1)? (pmb->mb_cells.nx2 + 2*ng) : 1;
   int ncells3 = (pmb->mb_cells.nx3 > 1)? (pmb->mb_cells.nx3 + 2*ng) : 1;
-  Real gm1 = GetGamma() - 1.0;
+  Real gm1 = eos_data.gamma - 1.0;
 
 std::cout << "in cons_to_prim" << std::endl;
 
-  Real &dfloor_ = density_floor_;
-  Real &pfloor_ = pressure_floor_;
+  Real &dfloor_ = eos_data.density_floor;
+  Real &pfloor_ = eos_data.pressure_floor;
 
   par_for("hydro_update", pmb->exe_space, 0, (ncells3-1), 0, (ncells2-1), 0, (ncells1-1),
     KOKKOS_LAMBDA(int k, int j, int i)
