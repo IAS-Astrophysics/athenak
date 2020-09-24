@@ -69,8 +69,28 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
   // for time-evolving problems, continue to construct methods, allocate arrays
   if (hydro_evol != HydroEvolution::no_evolution) {
 
-    // construct reconstruction method (default PLM)
-    precon = new Reconstruction(pin, pmb->mb_cells.ng);
+    // select reconstruction method (default PLM)
+    {std::string xorder = pin->GetOrAddString("hydro","reconstruct","plm");
+  
+    if (xorder.compare("dc") == 0) {
+      recon_method_ = ReconstructionMethod::dc;
+    } else if (xorder.compare("plm") == 0) {
+      recon_method_ = ReconstructionMethod::plm;
+    } else if (xorder.compare("ppm") == 0) {
+      // check that nghost > 2
+      if (pmb->mb_cells.ng < 3) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+            << std::endl << "PPM reconstruction requires at least 3 ghost zones, "
+            << "but <mesh>/nghost=" << pmb->mb_cells.ng << std::endl;
+        std::exit(EXIT_FAILURE); 
+      }                
+      recon_method_ = ReconstructionMethod::ppm;
+    } else {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "<hydro> recon = '" << xorder << "' not implemented"
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }}
 
     // allocate Riemann solver object (default depends on EOS and dynamics)
     bool is_dynamic = false;
@@ -105,19 +125,19 @@ void Hydro::HydroStageRunTasks(TaskList &tl, TaskID start, std::vector<TaskID> &
 {
   auto hydro_copycons = tl.AddTask(&Hydro::HydroCopyCons, this, start);
   auto hydro_divflux  = tl.AddTask(&Hydro::HydroDivFlux, this, hydro_copycons);
-//  auto hydro_update  = tl.AddTask(&Hydro::HydroUpdate, this, hydro_divflux);
-//  auto hydro_send  = tl.AddTask(&Hydro::HydroSend, this, hydro_update);
-//  auto hydro_newdt  = tl.AddTask(&Hydro::NewTimeStep, this, hydro_send);
-//  auto hydro_recv  = tl.AddTask(&Hydro::HydroReceive, this, hydro_newdt);
-//  auto hydro_con2prim  = tl.AddTask(&Hydro::ConToPrim, this, hydro_recv);
+  auto hydro_update  = tl.AddTask(&Hydro::HydroUpdate, this, hydro_divflux);
+  auto hydro_send  = tl.AddTask(&Hydro::HydroSend, this, hydro_update);
+  auto hydro_newdt  = tl.AddTask(&Hydro::NewTimeStep, this, hydro_send);
+  auto hydro_recv  = tl.AddTask(&Hydro::HydroReceive, this, hydro_newdt);
+  auto hydro_con2prim  = tl.AddTask(&Hydro::ConToPrim, this, hydro_recv);
 
   added.emplace_back(hydro_copycons);
   added.emplace_back(hydro_divflux);
-//  added.emplace_back(hydro_update);
-//  added.emplace_back(hydro_send);
-//  added.emplace_back(hydro_newdt);
-//  added.emplace_back(hydro_recv);
-//  added.emplace_back(hydro_con2prim);
+  added.emplace_back(hydro_update);
+  added.emplace_back(hydro_send);
+  added.emplace_back(hydro_newdt);
+  added.emplace_back(hydro_recv);
+  added.emplace_back(hydro_con2prim);
 
   return;
 }

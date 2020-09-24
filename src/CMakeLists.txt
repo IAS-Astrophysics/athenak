@@ -49,7 +49,6 @@ add_executable(
         pgen/lw_implode.cpp
         pgen/shock_tube.cpp
 
-        reconstruct/reconstruct.cpp
         reconstruct/dc.cpp
         reconstruct/plm.cpp
         reconstruct/ppm.cpp

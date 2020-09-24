@@ -29,16 +29,15 @@
 #include <math.h>
 
 #include "athena.hpp"
-#include "reconstruct.hpp"
 
 //----------------------------------------------------------------------------------------
-//! \fn Reconstruction::PPMX1()
+//! \fn PiecewiseParabolicX1()
 //  \brief Reconstructs parabolic slope in cell i to compute ql(i+1) and qr(i) in [il,iu]
 //  Therefore range of indices for which BOTH L/R states returned is il+1 to il-1
 //  This function should be called over [is-1,ie+1] to get BOTH L/R states over [is,ie]
 
-KOKKOS_FUNCTION
-void Reconstruction::PPMX1(TeamMember_t const &member, const int k, const int j,
+KOKKOS_INLINE_FUNCTION
+void PiecewiseParabolicX1(TeamMember_t const &member, const int k, const int j,
      const int il, const int iu, const AthenaArray4D<Real> &q,
      AthenaScratch2D<Real> &ql, AthenaScratch2D<Real> &qr)
 {
@@ -138,12 +137,12 @@ void Reconstruction::PPMX1(TeamMember_t const &member, const int k, const int j,
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn Reconstruction::PPMX2()
+//! \fn PiecewiseParabolicX2()
 //  \brief Reconstructs linear slope in cell j to cmpute ql(j+1) and qr(j) over [il,iu]
 //  This function should be called over [js-1,je+1] to get BOTH L/R states over [js,je]
 
-KOKKOS_FUNCTION
-void Reconstruction::PPMX2(TeamMember_t const &member, const int k, const int j,
+KOKKOS_INLINE_FUNCTION
+void PiecewiseParabolicX2(TeamMember_t const &member, const int k, const int j,
      const int il, const int iu, const AthenaArray4D<Real> &q,
      AthenaScratch2D<Real> &ql_jp1, AthenaScratch2D<Real> &qr_j)
 {
@@ -243,12 +242,12 @@ void Reconstruction::PPMX2(TeamMember_t const &member, const int k, const int j,
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn Reconstruction::PPMX3()
+//! \fn PiecewiseParabolicX3()
 //  \brief Reconstructs linear slope in cell k to cmpute ql(k+1) and qr(k) over [il,iu]
 //  This function should be called over [ks-1,ke+1] to get BOTH L/R states over [ks,ke]
 
-KOKKOS_FUNCTION
-void Reconstruction::PPMX3(TeamMember_t const &member, const int k, const int j,
+KOKKOS_INLINE_FUNCTION
+void PiecewiseParabolicX3(TeamMember_t const &member, const int k, const int j,
      const int il, const int iu, const AthenaArray4D<Real> &q,
      AthenaScratch2D<Real> &ql_kp1, AthenaScratch2D<Real> &qr_k)
 {

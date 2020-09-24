@@ -4,20 +4,19 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file plm.cpp
-//  \brief  piecewise linear reconstruction implemented in a derived class
+//  \brief  piecewise linear reconstruction implemented as inline functions
 //  This version only works with uniform mesh spacing
 
 #include "athena.hpp"
-#include "reconstruct.hpp"
 
 //----------------------------------------------------------------------------------------
-//! \fn Reconstruction::PLMX1()
+//! \fn PiecewiseLinearX1()
 //  \brief Reconstructs linear slope in cell i to compute ql(i+1) and qr(i) over [il,iu]
 //  Therefore range of indices for which BOTH L/R states returned is il+1 to il-1
 //  This function should be called over [is-1,ie+1] to get BOTH L/R states over [is,ie]
 
-KOKKOS_FUNCTION
-void Reconstruction::PLMX1(TeamMember_t const &member, const int k, const int j,
+KOKKOS_INLINE_FUNCTION
+void PiecewiseLinearX1(TeamMember_t const &member, const int k, const int j,
      const int il, const int iu, const AthenaArray4D<Real> &q,
      AthenaScratch2D<Real> &ql, AthenaScratch2D<Real> &qr)
 {
@@ -43,12 +42,12 @@ void Reconstruction::PLMX1(TeamMember_t const &member, const int k, const int j,
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn Reconstruction::PLMX2()
+//! \fn PiecewiseLinearX2()
 //  \brief Reconstructs linear slope in cell j to cmpute ql(j+1) and qr(j) over [il,iu]
 //  This function should be called over [js-1,je+1] to get BOTH L/R states over [js,je]
 
-KOKKOS_FUNCTION
-void Reconstruction::PLMX2(TeamMember_t const &member, const int k, const int j,
+KOKKOS_INLINE_FUNCTION
+void PiecewiseLinearX2(TeamMember_t const &member, const int k, const int j,
      const int il, const int iu, const AthenaArray4D<Real> &q,
      AthenaScratch2D<Real> &ql_jp1, AthenaScratch2D<Real> &qr_j)
 {
@@ -74,12 +73,12 @@ void Reconstruction::PLMX2(TeamMember_t const &member, const int k, const int j,
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn Reconstruction::PLMX3()
+//! \fn PiecewiseLinearX3()
 //  \brief Reconstructs linear slope in cell k to cmpute ql(k+1) and qr(k) over [il,iu]
 //  This function should be called over [ks-1,ke+1] to get BOTH L/R states over [ks,ke]
 
-KOKKOS_FUNCTION
-void Reconstruction::PLMX3(TeamMember_t const &member, const int k, const int j,
+KOKKOS_INLINE_FUNCTION
+void PiecewiseLinearX3(TeamMember_t const &member, const int k, const int j,
      const int il, const int iu, const AthenaArray4D<Real> &q,
      AthenaScratch2D<Real> &ql_kp1, AthenaScratch2D<Real> &qr_k)
 {

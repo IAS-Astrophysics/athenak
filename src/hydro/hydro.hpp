@@ -13,7 +13,6 @@
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
 #include "hydro/eos/eos.hpp"
-#include "reconstruct/reconstruct.hpp"
 #include "hydro/rsolver/rsolver.hpp"
 #include "bvals/bvals.hpp"
 
@@ -22,6 +21,7 @@ class Driver;
 
 // constants that enumerate Hydro dynamics options
 enum HydroEvolution {hydro_static, kinematic, hydro_dynamic, no_evolution};
+enum ReconstructionMethod {dc, plm, ppm};
 
 namespace hydro {
 
@@ -45,7 +45,6 @@ class Hydro
   BoundaryBuffer bbuf;    // send/recv buffers and BoundaryStatus flags for Hydro comms.
 
   // following only used for time-evolving flow
-  Reconstruction  *precon;    // object that implements chosen reconstruction methods
   RiemannSolver   *prsolver;  // object that implements chosen Riemann solver
   AthenaArray4D<Real> u1;    // conserved variables at intermediate step 
   AthenaArray4D<Real> divf;   // divergence of fluxes
@@ -70,6 +69,7 @@ class Hydro
  private:
   Mesh* pmesh_;   // ptr to Mesh containing this Hydro
   int my_mbgid_;  // GridID of MeshBlock contianing this Hydro
+  ReconstructionMethod recon_method_;
 };
 
 } // namespace hydro

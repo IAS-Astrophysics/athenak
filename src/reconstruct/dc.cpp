@@ -4,19 +4,18 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file dc.cpp
-//  \brief piecewise constant (donor cell) reconstruction
+//  \brief piecewise constant (donor cell) reconstruction implemented as inline functions
 
 #include "athena.hpp"
-#include "reconstruct.hpp"
 
 //----------------------------------------------------------------------------------------
-//! \fn Reconstruction::DonorCellX1()
+//! \fn DonorCellX1()
 //  \brief For each cell-centered value q(i), returns ql(i+1) and qr(i) over il to iu.
 //  Therefore range of indices for which BOTH L/R states returned is il+1 to il-1
 //  This function should be called over [is-1,ie+1] to get BOTH L/R states over [is,ie]
 
-KOKKOS_FUNCTION
-void Reconstruction::DonorCellX1(TeamMember_t const &member, const int k, const int j,
+KOKKOS_INLINE_FUNCTION
+void DonorCellX1(TeamMember_t const &member, const int k, const int j,
      const int il, const int iu, const AthenaArray4D<Real> &q,
      AthenaScratch2D<Real> &ql, AthenaScratch2D<Real> &qr)
 {
@@ -32,12 +31,12 @@ void Reconstruction::DonorCellX1(TeamMember_t const &member, const int k, const 
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn Reconstruction::DonorCellX2()
+//! \fn DonorCellX2()
 //  \brief For each cell-centered value q(j), returns ql(j+1) and qr(j) over il to iu.
 //  This function should be called over [js-1,je+1] to get BOTH L/R states over [js,je]
 
-KOKKOS_FUNCTION
-void Reconstruction::DonorCellX2(TeamMember_t const &member, const int k, const int j,
+KOKKOS_INLINE_FUNCTION
+void DonorCellX2(TeamMember_t const &member, const int k, const int j,
      const int il, const int iu, const AthenaArray4D<Real> &q,
      AthenaScratch2D<Real> &ql_jp1, AthenaScratch2D<Real> &qr_j)
 {
@@ -53,12 +52,12 @@ void Reconstruction::DonorCellX2(TeamMember_t const &member, const int k, const 
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn Reconstruction::DonorCellX3()
+//! \fn DonorCellX3()
 //  \brief For each cell-centered value q(k), returns ql(k+1) and qr(k) over il to iu.
 //  This function should be called over [ks-1,ke+1] to get BOTH L/R states over [ks,ke]
 
-KOKKOS_FUNCTION
-void Reconstruction::DonorCellX3(TeamMember_t const &member, const int k, const int j,
+KOKKOS_INLINE_FUNCTION
+void DonorCellX3(TeamMember_t const &member, const int k, const int j,
      const int il, const int iu, const AthenaArray4D<Real> &q,
      AthenaScratch2D<Real> &ql_kp1, AthenaScratch2D<Real> &qr_k)
 {
