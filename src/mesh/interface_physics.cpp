@@ -20,8 +20,6 @@ void MeshBlock::InitPhysicsModules(ParameterInput *pin)
   // construct physics modules and tasks lists on this MeshBlock
   // physics modules
 
-std::cout << "in init physics" << std::endl;
-
   // Hydro physics module
   if (pin->DoesBlockExist("hydro")) {
     phydro = new hydro::Hydro(pmesh_, pin, mb_gid); // construct new Hydro object
@@ -30,7 +28,6 @@ std::cout << "in init physics" << std::endl;
     phydro = nullptr;
   }
 
-std::cout << "in init physics" << std::endl;
   // build task lists
   TaskID none(0);
   std::vector<TaskID> hydro_start_tasks, hydro_run_tasks, hydro_end_tasks;

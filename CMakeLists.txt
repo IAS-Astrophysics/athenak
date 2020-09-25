@@ -79,8 +79,8 @@ SET (Kokkos_ENABLE_AGGRESSIVE_VECTORIZATION ON CACHE BOOL
 if (Kokkos_ENABLE_CUDA)
   SET (Kokkos_ENABLE_CUDA_LAMBDA ON CACHE BOOL
        "Enable lambda expressions in CUDA")
-  SET (Kokkos_ENABLE_CUDA_RELOCATABLE_DEVICE_CODE  ON CACHE BOOL
-      "Enable relocatable device code")
+#  SET (Kokkos_ENABLE_CUDA_RELOCATABLE_DEVICE_CODE  ON CACHE BOOL
+#      "Enable relocatable device code")
 endif()
 
 # If this is a debug build, set kokkos debug on
