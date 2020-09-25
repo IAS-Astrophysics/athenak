@@ -68,6 +68,9 @@ using AthenaArray5D = Kokkos::View<T *****, LayoutWrapper, DevMemSpace>;
 template <typename T>
 using AthenaArray6D = Kokkos::View<T ******, LayoutWrapper, DevMemSpace>;
 
+template <typename T>
+using AthenaArray2DSlice = Kokkos::View<T **, Kokkos::LayoutStride, DevMemSpace>;
+
 // alias template declarations for construction of HostArrays for, e.g. outputs
 template <typename T>
 using HostArray1D = Kokkos::View<T *, LayoutWrapper, HostMemSpace>;
