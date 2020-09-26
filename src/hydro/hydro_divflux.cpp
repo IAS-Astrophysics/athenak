@@ -34,19 +34,20 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
   int js = pmb->mb_cells.js; int je = pmb->mb_cells.je;
   int ks = pmb->mb_cells.ks; int ke = pmb->mb_cells.ke;
 
+  // capture Hydro and EOS class variables used in kernel
   int nhydro_ = nhydro;
-  auto recon_method = recon_method_;
-  auto rsolver_method = rsolver_method_;
-  auto &eos = pmb->phydro->peos->eos_data;
-  auto &w0_ = w0;
-  auto &divf_ = divf;
+  ReconstructionMethod &recon_method = recon_method_;
+  RiemannSolver &rsolver_method = rsolver_method_;
+  EOSData &eos = pmb->phydro->peos->eos_data;
+  AthenaArray4D<Real> &w0_ = w0;
+  AthenaArray4D<Real> &divf_ = divf;
 
   //--------------------------------------------------------------------------------------
   // i-direction
 
   int ncells1 = pmb->mb_cells.nx1 + 2*(pmb->mb_cells.ng);
   size_t scr_size = AthenaScratch2D<Real>::shmem_size(nhydro, ncells1) * 3;
-  int scr_level = 1;
+  const int scr_level = 0;
   Real &dx1 = pmb->mb_cells.dx1;
 
   par_for_outer("divflux_x1", pmb->exe_space, scr_size, scr_level, ks, ke, js, je,
@@ -54,7 +55,6 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
     {
       AthenaScratch2D<Real> wl(member.team_scratch(scr_level), nhydro_, ncells1);
       AthenaScratch2D<Real> wr(member.team_scratch(scr_level), nhydro_, ncells1);
-      AthenaScratch2D<Real> uflux(member.team_scratch(scr_level), nhydro_, ncells1);
 
       AthenaArray2DSlice<Real> qi = Kokkos::subview(w0_,Kokkos::ALL(),k,j,Kokkos::ALL());
       // Reconstruction qR[i] and qL[i+1]
@@ -72,8 +72,10 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
         default:
           break;
       }
+      member.team_barrier();
 
       // compute fluxes over [is,ie+1]
+      AthenaScratch2D<Real> uflux(member.team_scratch(scr_level), nhydro_, ncells1);
       switch (rsolver_method)
       {
         case RiemannSolver::advect:
@@ -91,6 +93,7 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
         default:
           break;
       }
+      member.team_barrier();
 
       // compute dF/dx1
       for (int n=0; n<nhydro_; ++n) {
@@ -99,6 +102,7 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
           divf_(n,k,j,i) = (uflux(n,i+1) - uflux(n,i))/dx1;
         });
       }
+      member.team_barrier();
     }
   );
   if (!(pmesh_->nx2gt1)) return TaskStatus::complete;
@@ -106,9 +110,8 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
   //--------------------------------------------------------------------------------------
   // j-direction
 
+  // capture variables used in kernel
   int ncells2 = pmb->mb_cells.nx2 + 2*(pmb->mb_cells.ng);
-  scr_size = AthenaScratch2D<Real>::shmem_size(nhydro, ncells2) * 3;
-  scr_level = 1;
   Real &dx2 = pmb->mb_cells.dx2;
 
   par_for_outer("divflux_x2", pmb->exe_space, scr_size, scr_level, ks, ke, is, ie,
@@ -116,7 +119,6 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
     {
       AthenaScratch2D<Real> wl(member.team_scratch(scr_level), nhydro_, ncells2);
       AthenaScratch2D<Real> wr(member.team_scratch(scr_level), nhydro_, ncells2);
-      AthenaScratch2D<Real> uflux(member.team_scratch(scr_level), nhydro_, ncells2);
 
       // Reconstruction qR[j] and qL[j+1]
       AthenaArray2DSlice<Real> qj = Kokkos::subview(w0_,Kokkos::ALL(),k,Kokkos::ALL(),i);
@@ -134,8 +136,10 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
         default:
           break;
       }
+      member.team_barrier();
 
       // compute fluxes over [js,je+1]
+      AthenaScratch2D<Real> uflux(member.team_scratch(scr_level), nhydro_, ncells2);
       switch (rsolver_method)
       {
         case RiemannSolver::advect:
@@ -153,6 +157,7 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
         default:
           break;
       }
+      member.team_barrier();
 
       // Add dF/dx2
       // Fluxes must be summed together to symmetrize round-off error in each dir
@@ -162,6 +167,7 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
           divf_(n,k,j,i) += (uflux(n,j+1) - uflux(n,j))/dx2;
         });
       }
+      member.team_barrier();
     }
   );
   if (!(pmesh_->nx3gt1)) return TaskStatus::complete;
@@ -169,9 +175,8 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
   //--------------------------------------------------------------------------------------
   // k-direction. Note order of k,j loops switched
 
+  // capture variables used in kernel
   int ncells3 = pmb->mb_cells.nx3 + 2*(pmb->mb_cells.ng);
-  scr_size = AthenaScratch2D<Real>::shmem_size(nhydro, ncells3) * 3;
-  scr_level = 1;
   Real &dx3 = pmb->mb_cells.dx3;
 
   par_for_outer("divflux_x3", pmb->exe_space, scr_size, scr_level, js, je, is, ie,
@@ -179,7 +184,6 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
     {
       AthenaScratch2D<Real> wl(member.team_scratch(scr_level), nhydro_, ncells3);
       AthenaScratch2D<Real> wr(member.team_scratch(scr_level), nhydro_, ncells3);
-      AthenaScratch2D<Real> uflux(member.team_scratch(scr_level), nhydro_, ncells3);
 
       AthenaArray2DSlice<Real> qk = Kokkos::subview(w0_,Kokkos::ALL(),Kokkos::ALL(),j,i);
       switch (recon_method)
@@ -196,8 +200,10 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
         default:
           break;
       }
+      member.team_barrier();
 
       // compute fluxes over [ks,ke+1]
+      AthenaScratch2D<Real> uflux(member.team_scratch(scr_level), nhydro_, ncells3);
       switch (rsolver_method)
       {
         case RiemannSolver::advect:
@@ -215,6 +221,7 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
         default:
           break;
       }
+      member.team_barrier();
 
       // Add dF/dx3
       // Fluxes must be summed together to symmetrize round-off error in each dir
@@ -224,6 +231,7 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
           divf_(n,k,j,i) += (uflux(n,k+1) - uflux(n,k))/dx3;
         });
       }
+      member.team_barrier();
     }
   );
   return TaskStatus::complete;

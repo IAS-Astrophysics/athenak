@@ -14,6 +14,7 @@
 // - P. Roe, "Approximate Riemann solvers, parameter vectors, and difference schemes",
 //   JCP, 43, 357 (1981).
 
+#include <float.h>
 #include <algorithm>  // max()
 #include <cmath>      // sqrt()
 
@@ -27,8 +28,10 @@ namespace hydro {
 // prototype for functions to compute Roe fluxes from eigenmatrices
 namespace roe {
 
+KOKKOS_INLINE_FUNCTION
 void RoeFluxAdb(const Real wroe[], const Real du[], const Real wli[],
                        const Real gm1, Real flx[], Real eigenvalues[], int &flag);
+KOKKOS_INLINE_FUNCTION
 void RoeFluxIso(const Real wroe[], const Real du[], const Real wli[],
                        const Real isocs, Real flx[], Real eigenvalues[], int &flag);
 
@@ -231,7 +234,7 @@ void RoeFluxAdb(const Real wroe[], const Real du[], const Real wli[], const Real
     Real h = wroe[IPR];
     Real vsq = v1*v1 + v2*v2 + v3*v3;
     Real q = h - 0.5*vsq;
-    Real cs_sq = (q < 0.0) ? (std::numeric_limits<float>::min()) : gm1*q;
+    Real cs_sq = (q < 0.0) ? (FLT_MIN) : gm1*q;
     Real cs = sqrt(cs_sq);
 
     // Compute eigenvalues (eq. B2)

@@ -27,43 +27,27 @@ void Advect(TeamMember_t const &member, const EOSData eos,  const int il, const 
 {
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
-  Real wli[5],wri[5];
   Real gm1 = eos.gamma - 1.0;
 
   par_for_inner(member, il, iu, [&](const int i)
   {
-    //--- Step 1.  Load L/R states into local variables
-    wli[IDN]=wl(IDN,i);
-    wli[IVX]=wl(ivx,i);
-    wli[IVY]=wl(ivy,i);
-    wli[IVZ]=wl(ivz,i);
-    if (eos.is_adiabatic) { wli[IPR]=wl(IPR,i); }
+    if (wl(IVX,i) >= 0.0) {
 
-    wri[IDN]=wr(IDN,i);
-    wri[IVX]=wr(ivx,i);
-    wri[IVY]=wr(ivy,i);
-    wri[IVZ]=wr(ivz,i);
-    if (eos.is_adiabatic) { wri[IPR]=wr(IPR,i); }
-
-    //--- Step 3.  Compute upwind fluxes
-
-    if (wli[IVX] >= 0.0) {
-
-      Real mxl = wli[IDN]*wli[IVX];
+      Real mxl = wl(IDN,i)*wl(IVX,i);
       flx(IDN,i) = mxl;
-      flx(ivx,i) = mxl*wli[IVX];
-      flx(ivy,i) = mxl*wli[IVY];
-      flx(ivz,i) = mxl*wli[IVZ];
-      if (eos.is_adiabatic) { flx(IEN,i) = (wli[IPR]/gm1 + 0.5*mxl*wli[IVX])*wli[IVX]; }
+      flx(ivx,i) = mxl*wl(IVX,i);
+      flx(ivy,i) = mxl*wl(IVY,i);
+      flx(ivz,i) = mxl*wl(IVZ,i);
+      if (eos.is_adiabatic) {flx(IEN,i) = (wl(IPR,i)/gm1 + 0.5*mxl*wl(IVX,i))*wl(IVX,i);}
 
     } else {
 
-      Real mxr = wri[IDN]*wri[IVX];
+      Real mxr = wr(IDN,i)*wr(IVX,i);
       flx(IDN,i) = mxr;
-      flx(ivx,i) = mxr*wri[IVX];
-      flx(ivy,i) = mxr*wri[IVY];
-      flx(ivz,i) = mxr*wri[IVZ];
-      if (eos.is_adiabatic) { flx(IEN,i) = (wri[IPR]/gm1 + 0.5*mxr*wri[IVX])*wri[IVX]; }
+      flx(ivx,i) = mxr*wr(IVX,i);
+      flx(ivy,i) = mxr*wr(IVY,i);
+      flx(ivz,i) = mxr*wr(IVZ,i);
+      if (eos.is_adiabatic) {flx(IEN,i) = (wr(IPR,i)/gm1 + 0.5*mxr*wr(IVX,i))*wr(IVX,i);}
 
     }
   });

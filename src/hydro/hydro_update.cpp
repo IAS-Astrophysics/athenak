@@ -29,24 +29,28 @@ TaskStatus Hydro::HydroUpdate(Driver *pdrive, int stage)
 
   Real &gam0 = pdrive->gam0[stage-1];
   Real &gam1 = pdrive->gam1[stage-1];
-  Real &beta = pdrive->beta[stage-1];
+  Real beta_dt = (pdrive->beta[stage-1])*(pmesh_->dt);
   auto u0_ = u0;
   auto u1_ = u1;
   auto divf_ = divf;
-  Real dt = pmesh_->dt;
 
   // 4D parallel loop that updates conserved variables to intermediate step using weights
   // and fractional time step appropriate to stages of time-integrator used (see XX)
 
-  par_for_outer("hydro_update", pmb->exe_space, 0, 1, 0, (nhydro-1), ks, ke,
-    KOKKOS_LAMBDA(TeamMember_t member, const int n, const int k)
+//  par_for_outer("hydro_update", pmb->exe_space, 0, 0, 0, (nhydro-1), ks, ke, js, je,
+//    KOKKOS_LAMBDA(TeamMember_t member, const int n, const int k, const int j)
+//    {
+//      par_for_inner(member, is, ie, [&](const int i)
+//      {
+//        u0_(n,k,j,i) = gam0*u0_(n,k,j,i) + gam1*u1_(n,k,j,i) - beta_dt*divf_(n,k,j,i);
+//      });
+//    }
+//  );
+
+  par_for("hydro_update", pmb->exe_space, 0, (nhydro-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(const int n, const int k, const int j, const int i)
     {
-      for (int j=js; j<=je; ++j) {
-        par_for_inner(member, is, ie, [&](const int i)
-        {
-          u0_(n,k,j,i) = gam0*u0_(n,k,j,i) + gam1*u1_(n,k,j,i) - beta*dt*divf_(n,k,j,i);
-        });
-      }
+      u0_(n,k,j,i) = (gam0*u0_(n,k,j,i) + gam1*u1_(n,k,j,i) - beta_dt*divf_(n,k,j,i));
     }
   );
 
