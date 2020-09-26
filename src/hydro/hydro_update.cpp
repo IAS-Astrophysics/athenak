@@ -11,9 +11,6 @@
 #include "mesh/mesh.hpp"
 #include "driver/driver.hpp"
 #include "hydro.hpp"
-#include "reconstruct/dc.cpp"
-#include "reconstruct/plm.cpp"
-#include "reconstruct/ppm.cpp"
 
 namespace hydro {
 //----------------------------------------------------------------------------------------
@@ -34,23 +31,18 @@ TaskStatus Hydro::HydroUpdate(Driver *pdrive, int stage)
   auto u1_ = u1;
   auto divf_ = divf;
 
-  // 4D parallel loop that updates conserved variables to intermediate step using weights
-  // and fractional time step appropriate to stages of time-integrator used (see XX)
+  // hierarchical parallel loop that updates conserved variables to intermediate step
+  // using weights and fractional time step appropriate to stages of time-integrator used
+  // (see XX)
+  // Important to use vector inner loop for good performance on cpus
 
-//  par_for_outer("hydro_update", pmb->exe_space, 0, 0, 0, (nhydro-1), ks, ke, js, je,
-//    KOKKOS_LAMBDA(TeamMember_t member, const int n, const int k, const int j)
-//    {
-//      par_for_inner(member, is, ie, [&](const int i)
-//      {
-//        u0_(n,k,j,i) = gam0*u0_(n,k,j,i) + gam1*u1_(n,k,j,i) - beta_dt*divf_(n,k,j,i);
-//      });
-//    }
-//  );
-
-  par_for("hydro_update", pmb->exe_space, 0, (nhydro-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(const int n, const int k, const int j, const int i)
+  par_for_outer("hydro_update", pmb->exe_space, 0, 0, 0, (nhydro-1), ks, ke, js, je,
+    KOKKOS_LAMBDA(TeamMember_t member, const int n, const int k, const int j)
     {
-      u0_(n,k,j,i) = (gam0*u0_(n,k,j,i) + gam1*u1_(n,k,j,i) - beta_dt*divf_(n,k,j,i));
+      par_for_inner(member, is, ie, [&](const int i)
+      {
+        u0_(n,k,j,i) = gam0*u0_(n,k,j,i) + gam1*u1_(n,k,j,i) - beta_dt*divf_(n,k,j,i);
+      });
     }
   );
 
