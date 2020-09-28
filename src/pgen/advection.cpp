@@ -10,10 +10,8 @@
 //    - problem/u0   = flow speed
 
 #include <cmath>
-#include <iostream>   // endl
-#include <sstream>    // stringstream
-#include <stdexcept>  // runtime_error
-#include <string>     // c_str()
+#include <iostream>
+#include <sstream>
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
@@ -63,6 +61,7 @@ void ProblemGenerator::Advection_(MeshBlock *pmb, ParameterInput *pin)
     exit(EXIT_FAILURE);
   }
 
+  // capture variables for kernel
   Real &x1min = pmb->mb_size.x1min, &x1max = pmb->mb_size.x1max;
   Real &x2min = pmb->mb_size.x2min, &x2max = pmb->mb_size.x2max;
   Real &x3min = pmb->mb_size.x3min, &x3max = pmb->mb_size.x3max;

@@ -9,11 +9,8 @@
 // Problem generator for shock tube (1-D Riemann) problems. Initializes plane-parallel
 // shock along x1 (in 1D, 2D, 3D), along x2 (in 2D, 3D), and along x3 (in 3D).
 
-// C++ headers
-#include <cmath>      // sqrt()
-#include <iostream>   // endl
-#include <sstream>    // stringstream
-#include <string>
+#include <iostream>
+#include <sstream>
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
@@ -22,13 +19,13 @@
 #include "utils/grid_locations.hpp"
 #include "pgen.hpp"
 
-
 //----------------------------------------------------------------------------------------
 //! \fn
 //  \brief Problem Generator for the shock tube (Riemann problem) tests
 
-void ProblemGenerator::ShockTube_(MeshBlock *pmb, ParameterInput *pin) {
-using namespace hydro;
+void ProblemGenerator::ShockTube_(MeshBlock *pmb, ParameterInput *pin)
+{
+  using namespace hydro;
 
   // parse shock direction: {1,2,3} -> {x1,x2,x3}
   int shk_dir = pin->GetInteger("problem","shock_dir");
@@ -72,6 +69,7 @@ using namespace hydro;
 
   // Initialize the discontinuity in the Hydro variables ---------------------------------
 
+ // capture variables for the kernel
   Real gm1 = pmb->phydro->peos->eos_data.gamma - 1.0;
   int &is = pmb->mb_cells.is, &ie = pmb->mb_cells.ie;
   int &js = pmb->mb_cells.js, &je = pmb->mb_cells.je;
@@ -79,6 +77,10 @@ using namespace hydro;
   Real &x1min = pmb->mb_size.x1min, &x1max = pmb->mb_size.x1max;
   Real &x2min = pmb->mb_size.x2min, &x2max = pmb->mb_size.x2max;
   Real &x3min = pmb->mb_size.x3min, &x3max = pmb->mb_size.x3max;
+  int &nx1 = pmb->mb_cells.nx1;
+  int &nx2 = pmb->mb_cells.nx2;
+  int &nx3 = pmb->mb_cells.nx3;
+  auto &u0 = pmb->phydro->u0;
 
   switch(shk_dir) {
 
@@ -87,20 +89,20 @@ using namespace hydro;
       par_for("pgen_shock_tube1", pmb->exe_space, ks, ke, js, je, is, ie,
         KOKKOS_LAMBDA(int k, int j, int i)
         {
-          Real x1 = CellCenterX(i-is, pmb->mb_cells.nx1, x1min, x1max);
+          Real x1 = CellCenterX(i-is, nx1, x1min, x1max);
           if (x1 < xshock) {
-            pmb->phydro->u0(IDN,k,j,i) = wl[IDN];
-            pmb->phydro->u0(IM1,k,j,i) = wl[IVX]*wl[IDN];
-            pmb->phydro->u0(IM2,k,j,i) = wl[IVY]*wl[IDN];
-            pmb->phydro->u0(IM3,k,j,i) = wl[IVZ]*wl[IDN];
-            pmb->phydro->u0(IEN,k,j,i) = wl[IPR]/gm1 +
+            u0(IDN,k,j,i) = wl[IDN];
+            u0(IM1,k,j,i) = wl[IVX]*wl[IDN];
+            u0(IM2,k,j,i) = wl[IVY]*wl[IDN];
+            u0(IM3,k,j,i) = wl[IVZ]*wl[IDN];
+            u0(IEN,k,j,i) = wl[IPR]/gm1 +
                0.5*wl[IDN]*(SQR(wl[IVX]) + SQR(wl[IVY]) + SQR(wl[IVZ]));
           } else {
-            pmb->phydro->u0(IDN,k,j,i) = wr[IDN];
-            pmb->phydro->u0(IM1,k,j,i) = wr[IVX]*wr[IDN];
-            pmb->phydro->u0(IM2,k,j,i) = wr[IVY]*wr[IDN];
-            pmb->phydro->u0(IM3,k,j,i) = wr[IVZ]*wr[IDN];
-            pmb->phydro->u0(IEN,k,j,i) = wr[IPR]/gm1 +
+            u0(IDN,k,j,i) = wr[IDN];
+            u0(IM1,k,j,i) = wr[IVX]*wr[IDN];
+            u0(IM2,k,j,i) = wr[IVY]*wr[IDN];
+            u0(IM3,k,j,i) = wr[IVZ]*wr[IDN];
+            u0(IEN,k,j,i) = wr[IPR]/gm1 +
                0.5*wr[IDN]*(SQR(wr[IVX]) + SQR(wr[IVY]) + SQR(wr[IVZ]));
           }
         }
@@ -112,20 +114,20 @@ using namespace hydro;
       par_for("pgen_shock_tube2", pmb->exe_space, ks, ke, js, je, is, ie,
         KOKKOS_LAMBDA(int k, int j, int i)
         {
-          Real x2 = CellCenterX(j-js, pmb->mb_cells.nx2, x2min, x2max);
+          Real x2 = CellCenterX(j-js, nx2, x2min, x2max);
           if (x2 < xshock) {
-            pmb->phydro->u0(IDN,k,j,i) = wl[IDN];
-            pmb->phydro->u0(IM2,k,j,i) = wl[IVX]*wl[IDN];
-            pmb->phydro->u0(IM3,k,j,i) = wl[IVY]*wl[IDN];
-            pmb->phydro->u0(IM1,k,j,i) = wl[IVZ]*wl[IDN];
-            pmb->phydro->u0(IEN,k,j,i) = wl[IPR]/gm1 +
+            u0(IDN,k,j,i) = wl[IDN];
+            u0(IM2,k,j,i) = wl[IVX]*wl[IDN];
+            u0(IM3,k,j,i) = wl[IVY]*wl[IDN];
+            u0(IM1,k,j,i) = wl[IVZ]*wl[IDN];
+            u0(IEN,k,j,i) = wl[IPR]/gm1 +
                0.5*wl[IDN]*(SQR(wl[IVX]) + SQR(wl[IVY]) + SQR(wl[IVZ]));
           } else {
-            pmb->phydro->u0(IDN,k,j,i) = wr[IDN];
-            pmb->phydro->u0(IM2,k,j,i) = wr[IVX]*wr[IDN];
-            pmb->phydro->u0(IM3,k,j,i) = wr[IVY]*wr[IDN];
-            pmb->phydro->u0(IM1,k,j,i) = wr[IVZ]*wr[IDN];
-            pmb->phydro->u0(IEN,k,j,i) = wr[IPR]/gm1 +
+            u0(IDN,k,j,i) = wr[IDN];
+            u0(IM2,k,j,i) = wr[IVX]*wr[IDN];
+            u0(IM3,k,j,i) = wr[IVY]*wr[IDN];
+            u0(IM1,k,j,i) = wr[IVZ]*wr[IDN];
+            u0(IEN,k,j,i) = wr[IPR]/gm1 +
                0.5*wr[IDN]*(SQR(wr[IVX]) + SQR(wr[IVY]) + SQR(wr[IVZ]));
           }
         }
@@ -137,20 +139,20 @@ using namespace hydro;
       par_for("pgen_shock_tube3", pmb->exe_space, ks, ke, js, je, is, ie,
         KOKKOS_LAMBDA(int k, int j, int i)
         {
-          Real x3 = CellCenterX(k-ks, pmb->mb_cells.nx3, x3min, x3max);
+          Real x3 = CellCenterX(k-ks, nx3, x3min, x3max);
           if (x3 < xshock) {
-            pmb->phydro->u0(IDN,k,j,i) = wl[IDN];
-            pmb->phydro->u0(IM3,k,j,i) = wl[IVX]*wl[IDN];
-            pmb->phydro->u0(IM1,k,j,i) = wl[IVY]*wl[IDN];
-            pmb->phydro->u0(IM2,k,j,i) = wl[IVZ]*wl[IDN];
-            pmb->phydro->u0(IEN,k,j,i) = wl[IPR]/gm1 +
+            u0(IDN,k,j,i) = wl[IDN];
+            u0(IM3,k,j,i) = wl[IVX]*wl[IDN];
+            u0(IM1,k,j,i) = wl[IVY]*wl[IDN];
+            u0(IM2,k,j,i) = wl[IVZ]*wl[IDN];
+            u0(IEN,k,j,i) = wl[IPR]/gm1 +
                0.5*wl[IDN]*(SQR(wl[IVX]) + SQR(wl[IVY]) + SQR(wl[IVZ]));
           } else {
-            pmb->phydro->u0(IDN,k,j,i) = wr[IDN];
-            pmb->phydro->u0(IM3,k,j,i) = wr[IVX]*wr[IDN];
-            pmb->phydro->u0(IM1,k,j,i) = wr[IVY]*wr[IDN];
-            pmb->phydro->u0(IM2,k,j,i) = wr[IVZ]*wr[IDN];
-            pmb->phydro->u0(IEN,k,j,i) = wr[IPR]/gm1 +
+            u0(IDN,k,j,i) = wr[IDN];
+            u0(IM3,k,j,i) = wr[IVX]*wr[IDN];
+            u0(IM1,k,j,i) = wr[IVY]*wr[IDN];
+            u0(IM2,k,j,i) = wr[IVZ]*wr[IDN];
+            u0(IEN,k,j,i) = wr[IPR]/gm1 +
                0.5*wr[IDN]*(SQR(wr[IVX]) + SQR(wr[IVY]) + SQR(wr[IVZ]));
           }
         }

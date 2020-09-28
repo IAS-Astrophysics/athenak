@@ -29,13 +29,16 @@ void ProblemGenerator::LWImplode_(MeshBlock *pmb, ParameterInput *pin)
   Real d_out = pin->GetReal("problem","d_out");
   Real p_out = pin->GetReal("problem","p_out");
 
+  // capture variables for kernel
   Real gm1 = pmb->phydro->peos->eos_data.gamma - 1.0;
-
   int &is = pmb->mb_cells.is, &ie = pmb->mb_cells.ie;
   int &js = pmb->mb_cells.js, &je = pmb->mb_cells.je;
   int &ks = pmb->mb_cells.ks, &ke = pmb->mb_cells.ke;
   Real &x1min = pmb->mb_size.x1min, &x1max = pmb->mb_size.x1max;
   Real &x2min = pmb->mb_size.x2min, &x2max = pmb->mb_size.x2max;
+  int &nx1 = pmb->mb_cells.nx1;
+  int &nx2 = pmb->mb_cells.nx2;
+  auto &u0 = pmb->phydro->u0;
 
   // to make ICs symmetric, set y0 to be in between cell center and face
   Real y0 = 0.5*(x2max + x2min) + 0.25*(pmb->mb_cells.dx2);
@@ -44,17 +47,17 @@ void ProblemGenerator::LWImplode_(MeshBlock *pmb, ParameterInput *pin)
   par_for("pgen_lw_implode", pmb->exe_space, ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int k, int j, int i)
     {
-      pmb->phydro->u0(IM1,k,j,i) = 0.0;
-      pmb->phydro->u0(IM2,k,j,i) = 0.0;
-      pmb->phydro->u0(IM3,k,j,i) = 0.0;
-      Real x1v = CellCenterX(i-is, pmb->mb_cells.nx1, x1min, x1max);
-      Real x2v = CellCenterX(j-js, pmb->mb_cells.nx2, x2min, x2max);
+      u0(IM1,k,j,i) = 0.0;
+      u0(IM2,k,j,i) = 0.0;
+      u0(IM3,k,j,i) = 0.0;
+      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
       if (x2v > (y0 - x1v)) {
-        pmb->phydro->u0(IDN,k,j,i) = d_out;
-        pmb->phydro->u0(IEN,k,j,i) = p_out/gm1;
+        u0(IDN,k,j,i) = d_out;
+        u0(IEN,k,j,i) = p_out/gm1;
       } else {
-        pmb->phydro->u0(IDN,k,j,i) = d_in;
-        pmb->phydro->u0(IEN,k,j,i) = p_in/gm1;
+        u0(IDN,k,j,i) = d_in;
+        u0(IEN,k,j,i) = p_in/gm1;
       }
     }
   );
