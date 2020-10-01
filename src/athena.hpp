@@ -78,6 +78,8 @@ template <typename T>
 using HostArray2D = Kokkos::View<T **, LayoutWrapper, HostMemSpace>;
 template <typename T>
 using HostArray3D = Kokkos::View<T ***, LayoutWrapper, HostMemSpace>;
+template <typename T>
+using HostArray4D = Kokkos::View<T ****, LayoutWrapper, HostMemSpace>;
 
 // alias template declarations for construction of 1D...2D scratch arrays as Kokkos::View
 template <typename T>

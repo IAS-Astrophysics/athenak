@@ -63,126 +63,31 @@
 OutputType::OutputType(OutputParameters opar, Mesh *pm) :
    out_params(opar)
 {
+  // exit for history files
+  if (out_params.file_type.compare("hst") == 0) {return;}
+
   // set size & starting indices of output arrays, adjusted accordingly if gz included 
   // Since all MeshBlocks the same, only need to compute values from first MB
   auto it = pm->mblocks.begin();
   if (out_params.include_gzs) {
-    nout1 = it->mb_cells.nx1 + 2*(it->mb_cells.ng);
-    nout2 = (it->mb_cells.nx2 > 1)? (it->mb_cells.nx2 + 2*(it->mb_cells.ng)) : 1;
-    nout3 = (it->mb_cells.nx3 > 1)? (it->mb_cells.nx3 + 2*(it->mb_cells.ng)) : 1;
-    ois = 0;
-    ojs = 0;
-    oks = 0;
+    int nout1 = it->mb_cells.nx1 + 2*(it->mb_cells.ng);
+    int nout2 = (it->mb_cells.nx2 > 1)? (it->mb_cells.nx2 + 2*(it->mb_cells.ng)) : 1;
+    int nout3 = (it->mb_cells.nx3 > 1)? (it->mb_cells.nx3 + 2*(it->mb_cells.ng)) : 1;
+    ois = 0; oie = nout1-1;
+    ojs = 0; oje = nout2-1;
+    oks = 0; oke = nout3-1;
   } else {
-    nout1 = it->mb_cells.nx1;
-    nout2 = it->mb_cells.nx2;
-    nout3 = it->mb_cells.nx3;
-    ois = it->mb_cells.is;
-    ojs = it->mb_cells.js;
-    oks = it->mb_cells.ks;
-  }
-
-  // reset array dimensions if data is being sliced
-  if (out_params.slice1) { nout1 = 1; }
-  if (out_params.slice2) { nout2 = 1; }
-  if (out_params.slice3) { nout3 = 1; }
-
-  // exit for history files
-  if (out_params.file_type.compare("hst") == 0) {return;}
-
-  // Add coordinates of output data
-  for (auto &mb : pm->mblocks) {
-    // skip if slice is out of range of this MB
-    if ( out_params.slice1 &&
-        (out_params.slice_x1 <  mb.mb_size.x1min ||
-         out_params.slice_x1 >= mb.mb_size.x1max) ) { continue; }
-    if ( out_params.slice2 &&
-        (out_params.slice_x2 <  mb.mb_size.x2min ||
-         out_params.slice_x2 >= mb.mb_size.x2max) ) { continue; }
-    if ( out_params.slice3 &&
-        (out_params.slice_x3 <  mb.mb_size.x3min ||
-         out_params.slice_x3 >= mb.mb_size.x3max) ) { continue; }
-
-    // construct new HostArray1Ds for coordinates
-    x1_cc_.emplace_back("x1v",nout1);
-    x1_fc_.emplace_back("x1f",nout1+1);
-    x2_cc_.emplace_back("x2v",nout2);
-    x2_fc_.emplace_back("x2f",nout2+1);
-    x3_cc_.emplace_back("x3v",nout3);
-    x3_fc_.emplace_back("x3f",nout3+1);
-
-    int indx = static_cast<int>(x1_cc_.size()) - 1;
-    for (int i=0; i<nout1; ++i) {
-      x1_cc_[indx](i) = CellCenterX((i-(mb.mb_cells.is - ois)), mb.mb_cells.nx1,
-                                    mb.mb_size.x1min, mb.mb_size.x1max);
-      x1_fc_[indx](i) = LeftEdgeX((i-(mb.mb_cells.is - ois)), mb.mb_cells.nx1,
-                                  mb.mb_size.x1min, mb.mb_size.x1max);
-    }
-    x1_fc_[indx](nout1) = mb.mb_size.x1max;
-
-    for (int j=0; j<nout2; ++j) {
-      x2_cc_[indx](j) = CellCenterX((j-(mb.mb_cells.js - ojs)), mb.mb_cells.nx2,
-                                    mb.mb_size.x2min, mb.mb_size.x2max);
-      x2_fc_[indx](j) = LeftEdgeX((j-(mb.mb_cells.js - ojs)), mb.mb_cells.nx2,
-                                  mb.mb_size.x2min, mb.mb_size.x2max);
-    }
-    x2_fc_[indx](nout2) = mb.mb_size.x2max;
-
-    for (int k=0; k<nout3; ++k) {
-      x3_cc_[indx](k) = CellCenterX((k-(mb.mb_cells.ks - oks)), mb.mb_cells.nx3,
-                                    mb.mb_size.x3min, mb.mb_size.x3max);
-      x3_cc_[indx](k) = LeftEdgeX((k-(mb.mb_cells.ks - oks)), mb.mb_cells.nx3,
-                                  mb.mb_size.x3min, mb.mb_size.x3max);
-    }
-    x3_fc_[indx](nout3) = mb.mb_size.x3max;
+    ois = it->mb_cells.is; oie = it->mb_cells.ie;
+    ojs = it->mb_cells.js; oje = it->mb_cells.je;
+    oks = it->mb_cells.ks; oke = it->mb_cells.ke;
   }
 
   // parse list of variables for each physics and flag variables to be output
-  // TODO get working with multiple physics
-  // hydro conserved variables
-  int &nhydro = pm->mblocks.begin()->phydro->nhydro;
-  Kokkos::resize(hydro_cons_out_vars,nhydro);
-  for (int n=0; n<nhydro; ++n) { hydro_cons_out_vars(n) = false; }
-
-  if (out_params.variable.compare("cons") == 0) {
-    for (int n=0; n<nhydro; ++n) { hydro_cons_out_vars(n) = true; }
-  }
-  if (out_params.variable.compare("D") == 0)  { hydro_cons_out_vars(hydro::IDN) = true; }
-  if (out_params.variable.compare("E") == 0)  { hydro_cons_out_vars(hydro::IEN) = true; }
-  if (out_params.variable.compare("M1") == 0) { hydro_cons_out_vars(hydro::IM1) = true; }
-  if (out_params.variable.compare("M2") == 0) { hydro_cons_out_vars(hydro::IM2) = true; }
-  if (out_params.variable.compare("M3") == 0) { hydro_cons_out_vars(hydro::IM3) = true; }
-  if (out_params.variable.compare("mom") == 0) {
-    hydro_cons_out_vars(hydro::IM1) = true;
-    hydro_cons_out_vars(hydro::IM2) = true;
-    hydro_cons_out_vars(hydro::IM3) = true;
-  }
-
-  // hydro primitive variables
-  Kokkos::resize(hydro_prim_out_vars,nhydro);
-  for (int n=0; n<nhydro; ++n) { hydro_prim_out_vars(n) = false; }
-
-  if (out_params.variable.compare("prim") == 0) {
-    for (int n=0; n<nhydro; ++n) { hydro_prim_out_vars(n) = true; }
-  }
-  if (out_params.variable.compare("d") == 0)  { hydro_prim_out_vars(hydro::IDN) = true; }
-  if (out_params.variable.compare("p") == 0)  { hydro_prim_out_vars(hydro::IPR) = true; }
-  if (out_params.variable.compare("vx") == 0) { hydro_prim_out_vars(hydro::IVX) = true; }
-  if (out_params.variable.compare("vy") == 0) { hydro_prim_out_vars(hydro::IVY) = true; }
-  if (out_params.variable.compare("vz") == 0) { hydro_prim_out_vars(hydro::IVZ) = true; }
-  if (out_params.variable.compare("vel") == 0) {
-    hydro_prim_out_vars(hydro::IVX) = true;
-    hydro_prim_out_vars(hydro::IVY) = true;
-    hydro_prim_out_vars(hydro::IVZ) = true;
-  }
+  nvar = 1;
+  out_data_label_.push_back("dens");
 
   // check for valid output variable in <input> block
-  int cnt=0;
-  for (int n=0; n<nhydro; ++n) {
-    if (hydro_cons_out_vars(n)) ++cnt;
-    if (hydro_prim_out_vars(n)) ++cnt;
-  }
-  if (cnt==0) {
+  if (false) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output variable '" << out_params.variable << "' not implemented" << std::endl
        << "Allowed hydro variables: cons,D,E,mom,M1,M2,M3,prim,d,p,vel,vx,vy,vz"
@@ -200,124 +105,74 @@ void OutputType::LoadOutputData(Mesh *pm)
 {
   out_data_.clear();  // start with a clean list
 
-  // out_data_ vector stores vectors (over # of output MBs) of each output variable
-  // So start iteration over elements of out_data_ vector (variables)
+  // out_data_ vector (indexed over # of output MBs) stores 4D array of variables
+  // so start iteration over number of MeshBlocks
 
   // TODO: get this working for multiple physics, which may be either defined/undef
 
-  // output hydro conserved
-  int &nhydro = pm->mblocks.begin()->phydro->nhydro;
-  for (int n=0; n<nhydro; ++n) {
-    if (hydro_cons_out_vars(n)) { // variable exists for output
-      std::vector<HostArray3D<Real>> new_data;
+  // loop over all MeshBlocks
+  for (auto &mb : pm->mblocks) {
 
-      // loop over all MeshBlocks
-      for (auto &mb : pm->mblocks) {
+    // check for slicing in each dimension
+    if (out_params.slice1) {
       // skip if slice is out of range of this MB
-        if ( out_params.slice1 &&
-            (out_params.slice_x1 <  mb.mb_size.x1min ||
-             out_params.slice_x1 >= mb.mb_size.x1max) ) { continue; }
-        if ( out_params.slice2 &&
-            (out_params.slice_x2 <  mb.mb_size.x2min ||
-             out_params.slice_x2 >= mb.mb_size.x2max) ) { continue; }
-        if ( out_params.slice3 &&
-            (out_params.slice_x3 <  mb.mb_size.x3min ||
-             out_params.slice_x3 >= mb.mb_size.x3max) ) { continue; }
-
-        if (n == hydro::IDN) new_data.emplace_back("dens",nout3,nout2,nout1);
-        if (n == hydro::IEN) new_data.emplace_back("tote",nout3,nout2,nout1);
-        if (n == hydro::IM1) new_data.emplace_back("mom1",nout3,nout2,nout1);
-        if (n == hydro::IM2) new_data.emplace_back("mom2",nout3,nout2,nout1);
-        if (n == hydro::IM3) new_data.emplace_back("mom3",nout3,nout2,nout1);
-
-        // find index of slice(s) [if any]
-        int islice=0, jslice=0, kslice=0;
-        if (out_params.slice1) { 
-          islice = CellCenterIndex(out_params.slice_x1, mb.mb_cells.nx1,
-            mb.mb_size.x1min, mb.mb_size.x1max);
-        }   
-        if (out_params.slice2) {
-          jslice = CellCenterIndex(out_params.slice_x2, mb.mb_cells.nx2,
-            mb.mb_size.x2min, mb.mb_size.x2max);
-        }   
-        if (out_params.slice3) {
-          kslice = CellCenterIndex(out_params.slice_x3, mb.mb_cells.nx3,
-            mb.mb_size.x3min, mb.mb_size.x3max);
-        }
-        
-        // loop over all cells
-        // deep copy one array for each MeshBlock on this rank
-        // note the complicated addressing of array indices.  The output array is always
-        // include ghost zones (unless needed), so it is always addressed starting at 0.
-        // When the array is sliced, only the value at (ijk)slice is stored.
-        int indx = static_cast<int>(new_data.size()) - 1;
-        for (int k=0; k<nout3; ++k) {
-        for (int j=0; j<nout2; ++j) {
-        for (int i=0; i<nout1; ++i) {
-          new_data[indx](k,j,i) =
-             mb.phydro->u0(n,(k+oks+kslice),(j+ojs+jslice),(i+ois+islice));
-        }}}
-      }
-      // append this variable to end of out_data_ vector
-      out_data_.push_back(new_data);
+      if (out_params.slice_x1 <  mb.mb_size.x1min ||
+          out_params.slice_x1 >= mb.mb_size.x1max) { continue; }
+      // set index of slice
+      Real &xmin = mb.mb_size.x1min;
+      Real &xmax = mb.mb_size.x1max;
+      ois = CellCenterIndex(out_params.slice_x1, mb.mb_cells.nx1, xmin, xmax);
+      oie = ois;
     }
-  }
 
-  // output hydro primitive
-  for (int n=0; n<nhydro; ++n) {
-    if (hydro_prim_out_vars(n)) { // variable exists for output
-      std::vector<HostArray3D<Real>> new_data;
-
-      // loop over all MeshBlocks
-      for (auto &mb : pm->mblocks) {
+    if (out_params.slice2) {
       // skip if slice is out of range of this MB
-        if ( out_params.slice1 &&
-            (out_params.slice_x1 < mb.mb_size.x1min || 
-             out_params.slice_x1 > mb.mb_size.x1max) ) { continue; }
-        if ( out_params.slice2 &&
-            (out_params.slice_x2 < mb.mb_size.x2min || 
-             out_params.slice_x2 > mb.mb_size.x2max) ) { continue; }
-        if ( out_params.slice3 &&
-            (out_params.slice_x3 < mb.mb_size.x3min || 
-             out_params.slice_x3 > mb.mb_size.x3max) ) { continue; }
-        
-        if (n == hydro::IDN) new_data.emplace_back("dens",nout3,nout2,nout1);
-        if (n == hydro::IPR) new_data.emplace_back("pres",nout3,nout2,nout1);
-        if (n == hydro::IVX) new_data.emplace_back("velx",nout3,nout2,nout1);
-        if (n == hydro::IVY) new_data.emplace_back("vely",nout3,nout2,nout1);
-        if (n == hydro::IVZ) new_data.emplace_back("velz",nout3,nout2,nout1);
+      if (out_params.slice_x2 <  mb.mb_size.x2min ||
+          out_params.slice_x2 >= mb.mb_size.x2max) { continue; }
+      // set index of slice
+      Real &xmin = mb.mb_size.x2min;
+      Real &xmax = mb.mb_size.x2max;
+      ojs = CellCenterIndex(out_params.slice_x2, mb.mb_cells.nx2, xmin, xmax);
+      oje = ojs;
+    }
+
+    if (out_params.slice3) {
+      // skip if slice is out of range of this MB
+      if (out_params.slice_x3 <  mb.mb_size.x3min ||
+          out_params.slice_x3 >= mb.mb_size.x3max) { continue; }
+      // set index of slice
+      Real &xmin = mb.mb_size.x3min;
+      Real &xmax = mb.mb_size.x3max;
+      oks = CellCenterIndex(out_params.slice_x3, mb.mb_cells.nx3, xmin, xmax);
+      oke = oks;
+    }
+
+    // load all the outpustr variables on this MeshBlock
+    HostArray4D<Real> new_data("out",nvar,(oke-oks+1),(oje-ojs+1),(oie-ois+1));
+
+    for (int n=0; n<nvar; ++n) {
+/**** hardwired for IM2 to start ****/
+      auto dev_data_slice = Kokkos::subview(mb.phydro->u0, 2, std::make_pair(oks,oke+1),
+                            std::make_pair(ojs,oje+1), std::make_pair(ois,oie+1));
+      auto hst_data_slice = Kokkos::create_mirror_view(dev_data_slice);
+      auto new_data_slice = Kokkos::subview(new_data, n, Kokkos::ALL(), Kokkos::ALL(),
+                      Kokkos::ALL());
+      Kokkos::deep_copy(new_data_slice,hst_data_slice);
+/****/
+//      for (int k=oks; k<=oke; ++k) {
+//      for (int j=ojs; j<=oje; ++j) {
+//      for (int i=ois; i<=oie; ++i) {
+//        new_data(n,k-oks,j-ojs,i-ois) = hst_data_slice(k-oks,j-ojs,i-ois);
+//      }}}
+//for (int i=ois; i<oie; ++i) {
+//std::cout << new_data(0,0,0,i-ois) << std::endl;
+//}
+/****/
       
-        // find index of slice(s) [if any]
-        int islice=0, jslice=0, kslice=0;
-        if (out_params.slice1) { 
-          islice = CellCenterIndex(out_params.slice_x1, mb.mb_cells.nx1,
-            mb.mb_size.x1min, mb.mb_size.x1max);
-        }   
-        if (out_params.slice2) {
-          jslice = CellCenterIndex(out_params.slice_x2, mb.mb_cells.nx2,
-            mb.mb_size.x2min, mb.mb_size.x2max);
-        }   
-        if (out_params.slice3) {
-          kslice = CellCenterIndex(out_params.slice_x3, mb.mb_cells.nx3,
-            mb.mb_size.x3min, mb.mb_size.x3max);
-        }
-        
-        // loop over all cells
-        // deep copy one array for each MeshBlock on this rank
-        // note the complicated addressing of array indices.  The output array is always
-        // include ghost zones (unless needed), so it is always addressed starting at 0.
-        // When the array is sliced, only the value at (ijk)slice is stored.
-        int indx = static_cast<int>(new_data.size()) - 1;
-        for (int k=0; k<nout3; ++k) {
-        for (int j=0; j<nout2; ++j) {
-        for (int i=0; i<nout1; ++i) {
-          new_data[indx](k,j,i) =
-             mb.phydro->w0(n,(k+oks+kslice),(j+ojs+jslice),(i+ois+islice));
-        }}}
-      }
-      // append this variable to end of out_data_ vector
-      out_data_.push_back(new_data);
     }
-  }
 
+    // append variables on this MeshBlock to end of out_data_ vector
+    out_data_.push_back(new_data);
+    out_data_gid_.push_back(mb.mb_gid);
+  }
 }

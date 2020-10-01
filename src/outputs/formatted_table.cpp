@@ -19,6 +19,7 @@
 
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
+#include "utils/grid_locations.hpp"
 #include "outputs.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -80,42 +81,52 @@ void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
 
   // write one of x1, x2, x3 column headers
   std::fprintf(pfile, "#");
-  if (nout1 > 1) std::fprintf(pfile, " i       x1v     ");
-  if (nout2 > 1) std::fprintf(pfile, " j       x2v     ");
-  if (nout3 > 1) std::fprintf(pfile, " k       x3v     ");
+  if (oie != ois) std::fprintf(pfile, " i       x1v     ");
+  if (oje != ojs) std::fprintf(pfile, " j       x2v     ");
+  if (oke != oks) std::fprintf(pfile, " k       x3v     ");
 
   // TODO get working with MPI (have root output all data)
 
-  // write data col headers from "name" stored in out_data_ AthenaArrays
-  // Note iterator will be vector of length (# of output MBs)
-  for (auto it : out_data_) {
-    std::fprintf(pfile, "    %s      ", it[0].label().c_str());
+  // write data col headers from out_data_label_ vector
+  for (auto it : out_data_label_) {
+    std::fprintf(pfile, "    %s      ", it.c_str());
   }
   std::fprintf(pfile, "\n"); // terminate line
 
   // loop over output MeshBlocks, output all data
-  int nout_mbs = static_cast<int>(x1_cc_.size());
+  int nout_mbs = static_cast<int>(out_data_.size());
   for (int m=0; m<nout_mbs; ++m) {
-    for (int k=0; k<nout3; ++k) {
-      for (int j=0; j<nout2; ++j) {
-        for (int i=0; i<nout1; ++i) {
+    MeshBlock* pmb = pm->FindMeshBlock(out_data_gid_[m]);
+    Real &x1min = pmb->mb_size.x1min, &x1max = pmb->mb_size.x1max;
+    Real &x2min = pmb->mb_size.x2min, &x2max = pmb->mb_size.x2max;
+    Real &x3min = pmb->mb_size.x3min, &x3max = pmb->mb_size.x3max;
+    int &nx1 = pmb->mb_cells.nx1;
+    int &nx2 = pmb->mb_cells.nx2;
+    int &nx3 = pmb->mb_cells.nx3;
+    for (int k=oks; k<=oke; ++k) {
+      for (int j=ojs; j<=oje; ++j) {
+        for (int i=ois; i<=oie; ++i) {
           // write x1, x2, x3 indices and coordinates on start of new line
-          if (nout1 > 1) {
-            std::fprintf(pfile, "%04d", i+ois);
-            std::fprintf(pfile, out_params.data_format.c_str(), x1_cc_[m](i));
+          if (oie != ois) {
+            std::fprintf(pfile, "%04d", i);
+            Real x1cc = CellCenterX(i-ois,nx1,x1min,x1max);
+            std::fprintf(pfile, out_params.data_format.c_str(), x1cc);
           }
-          if (nout2 > 1) {
-            std::fprintf(pfile, " %04d", j+ojs);  // note extra space for formatting
-            std::fprintf(pfile, out_params.data_format.c_str(), x2_cc_[m](j));
+          if (oje != ojs) {
+            std::fprintf(pfile, " %04d", j);  // note extra space for formatting
+            Real x2cc = CellCenterX(j-ojs,nx2,x2min,x2max);
+            std::fprintf(pfile, out_params.data_format.c_str(), x2cc);
           }
-          if (nout3 > 1) {
-            std::fprintf(pfile, " %04d", k+oks);  // note extra space for formatting
-            std::fprintf(pfile, out_params.data_format.c_str(), x3_cc_[m](k));
+          if (oke != oks) {
+            std::fprintf(pfile, " %04d", k);  // note extra space for formatting
+            Real x3cc = CellCenterX(k-oks,nx3,x3min,x3max);
+            std::fprintf(pfile, out_params.data_format.c_str(), x3cc);
           }
 
-          // step through std::vector of out_data_ and write each on same line
-          for (auto it : out_data_) {
-            std::fprintf(pfile, out_params.data_format.c_str(), it[m](k,j,i));
+          // write each output variable on same line
+          for (int n=0; n<nvar; ++n) {
+            std::fprintf(pfile, out_params.data_format.c_str(),
+                         out_data_[m](n,k-oks,j-ojs,i-ois));
           }
           std::fprintf(pfile,"\n"); // terminate line
         }

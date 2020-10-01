@@ -55,27 +55,21 @@ class OutputType
   OutputType& operator=(OutputType&&) = default;
 
   // data
-  int nout1, nout2, nout3;        // dimensions of output arrays for this type
-  int ois, ojs, oks;              // starting indices of data to be output
-  OutputParameters out_params;    // data read from <output> block for this type
-
-  HostArray1D<bool> hydro_cons_out_vars;
-  HostArray1D<bool> hydro_prim_out_vars;
+  int nvar;
+  int ois, oie, ojs, oje, oks, oke;     // starting indices of data to be output
+  OutputParameters out_params      ;    // data read from <output> block for this type
 
   // virtual functions over-ridden in derived classes
   virtual void LoadOutputData(Mesh *pm);
   virtual void WriteOutputFile(Mesh *pm, ParameterInput *pin) = 0;
 
  protected:
-  // output data stored in vector of HostArrays which will be of length (# output MBs) 
-  // With slicing this may be different than nmbthisrank since not all MBs are output
-  // This vector is stored in another vector which will be of length (# of output vars)
-  std::vector< std::vector<HostArray3D<Real>> > out_data_;
-  // coordinates of out_data_ stored in vectors which will be of length (# output MBs)
-  std::vector<HostArray1D<Real>> x1_cc_, x1_fc_;
-  std::vector<HostArray1D<Real>> x2_cc_, x2_fc_;
-  std::vector<HostArray1D<Real>> x3_cc_, x3_fc_;
-  std::vector<int> out_gids_;  // GridIDs of output MBs
+  // Following vectors are of length (# output MBs)
+  // With slicing this may be different than nmbthisrank since not all MBs produce output
+  std::vector<HostArray4D<Real>> out_data_;
+  std::vector<int> out_data_gid_;              // gids of MeshBlocks producing output
+  // Following vector is of length (# of output variables)
+  std::vector<std::string> out_data_label_;   // labels of output data
 };
 
 //----------------------------------------------------------------------------------------
@@ -93,24 +87,24 @@ class FormattedTableOutput : public OutputType
 //! \class HistoryOutput
 //  \brief derived OutputType class for history data
     
-class HistoryOutput : public OutputType
-{   
- public:
-  HistoryOutput(OutputParameters oparams, Mesh *pm);
-  void LoadOutputData(Mesh *pm) override;
-  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
-};  
+//class HistoryOutput : public OutputType
+//{   
+// public:
+//  HistoryOutput(OutputParameters oparams, Mesh *pm);
+//  void LoadOutputData(Mesh *pm) override;
+//  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+//};  
 
 //----------------------------------------------------------------------------------------
 //! \class VTKOutput
 //  \brief derived OutputType class for vtk binary data (VTK legacy format)
 
-class VTKOutput : public OutputType
-{
- public:
-  VTKOutput(OutputParameters oparams, Mesh *pm);
-  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
-};
+//class VTKOutput : public OutputType
+//{
+// public:
+//  VTKOutput(OutputParameters oparams, Mesh *pm);
+//  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+//};
 
 //----------------------------------------------------------------------------------------
 //! \class Outputs
