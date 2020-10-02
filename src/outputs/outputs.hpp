@@ -100,12 +100,12 @@ class FormattedTableOutput : public OutputType
 //! \class VTKOutput
 //  \brief derived OutputType class for vtk binary data (VTK legacy format)
 
-//class VTKOutput : public OutputType
-//{
-// public:
-//  VTKOutput(OutputParameters oparams, Mesh *pm);
-//  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
-//};
+class VTKOutput : public OutputType
+{
+ public:
+  VTKOutput(OutputParameters oparams, Mesh *pm);
+  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+};
 
 //----------------------------------------------------------------------------------------
 //! \class Outputs

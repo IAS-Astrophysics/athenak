@@ -123,7 +123,13 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
       for (int j=js-1; j<=je+1; ++j) {
         // copy Wl from last iteration of j (unless this is the first time through)
         if (j>(js-1)) {
-          wl_flx = wl_jp1;
+          for (int n=0; n<nhydro_; ++n) {
+            par_for_inner(member, 0, (ncells1-1), [&](const int i)
+            {
+              wl_flx(n,i) = wl_jp1(n,i);
+            });
+          }
+          member.team_barrier();
         }
 
         // Reconstruction qR[j] and qL[j+1]
@@ -162,8 +168,8 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
             default:
               break;
           }
+          member.team_barrier();
         }
-        member.team_barrier();
 
         // Add dF/dx2
         // Fluxes must be summed together to symmetrize round-off error in each dir
@@ -174,12 +180,18 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
               divf_(n,k,j-1,i) += (wl_flx(n,i) - uflux_jm1(n,i))/dx2;
             });
           }
+          member.team_barrier();
         }
-        member.team_barrier();
   
         // copy flux for use in next iteration
         if (j>(js-1) && j<(je+1)) {
-          uflux_jm1 = wl_flx;
+          for (int n=0; n<nhydro_; ++n) {
+            par_for_inner(member, 0, (ncells1-1), [&](const int i)
+            {
+              uflux_jm1(n,i) = wl_flx(n,i);
+            });
+          }
+          member.team_barrier();
         }
       } // end of loop over j
     }
@@ -203,7 +215,13 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
       for (int k=ks-1; k<=ke+1; ++k) {
         // copy Wl from last iteration of k (unless this is the first time through)
         if (k>(ks-1)) { 
-          wl_flx = wl_kp1;
+          for (int n=0; n<nhydro_; ++n) {
+            par_for_inner(member, 0, (ncells1-1), [&](const int i)
+            {
+              wl_flx(n,i) = wl_kp1(n,i);
+            });
+          }
+          member.team_barrier();
         }
 
         switch (recon_method)
@@ -241,8 +259,8 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
             default:
               break;
           }
+          member.team_barrier();
         }
-        member.team_barrier();
 
         // Add dF/dx3
         // Fluxes must be summed together to symmetrize round-off error in each dir
@@ -253,12 +271,18 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
               divf_(n,k-1,j,i) += (wl_flx(n,i) - uflux_km1(n,i))/dx3;
             });
           }
+          member.team_barrier();
         }
-        member.team_barrier();
 
         // copy flux for use in next iteration
         if (k>(ks-1) && k<(ke+1)) {
-          uflux_km1 = wl_flx;
+          for (int n=0; n<nhydro_; ++n) {
+            par_for_inner(member, 0, (ncells1-1), [&](const int i)
+            {
+              uflux_km1(n,i) = wl_flx(n,i);
+            });
+          }
+          member.team_barrier();
         }
       } // end loop over k
     }

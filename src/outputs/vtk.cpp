@@ -19,6 +19,7 @@
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
 #include "hydro/hydro.hpp"
+#include "utils/grid_locations.hpp"
 #include "outputs.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -96,6 +97,9 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
 
   //  4. Dataset structure
   // TODO numbers of cells in entire grid
+  int nout1 = (oie-ois+1);
+  int nout2 = (oje-ojs+1);
+  int nout3 = (oke-oks+1);
   int ncoord1 = (nout1 > 1)? nout1+1 : nout1;
   int ncoord2 = (nout2 > 1)? nout2+1 : nout2;
   int ncoord3 = (nout3 > 1)? nout3+1 : nout3;
@@ -112,36 +116,47 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
 
   // TODO coordinates of entire grid for multiple MeshBlocks
   // write x1-coordinates as binary float in big endian order
+  MeshBlock* pmb = pm->FindMeshBlock(out_data_gid_[0]);
+  int &is = pmb->mb_cells.is;
+  Real &x1min = pmb->mb_size.x1min, &x1max = pmb->mb_size.x1max;
+  int &nx1 = pmb->mb_cells.nx1;
+
   std::fprintf(pfile, "X_COORDINATES %d float\n", ncoord1);
   if (nout1 == 1) {
-    data[0] = static_cast<float>(x1_cc_[0](ois));
+    data[0] = static_cast<float>(LeftEdgeX(ois,nx1,x1min,x1max));
   } else {
     for (int i=0; i<ncoord1; ++i) {
-      data[i] = static_cast<float>(x1_fc_[0](i));
+      data[i] = static_cast<float>(CellCenterX(i-is,nx1,x1min,x1max));
     }
   }
   if (!big_end) {for (int i=0; i<ncoord1; ++i) swap_functions::Swap4Bytes(&data[i]);}
   std::fwrite(data, sizeof(float), static_cast<std::size_t>(ncoord1), pfile);
 
   // write x2-coordinates as binary float in big endian order
+  int &js = pmb->mb_cells.js;
+  Real &x2min = pmb->mb_size.x2min, &x2max = pmb->mb_size.x2max;
+  int &nx2 = pmb->mb_cells.nx2;
   std::fprintf(pfile, "\nY_COORDINATES %d float\n", ncoord2);
   if (nout2 == 1) {
-    data[0] = static_cast<float>(x2_cc_[0](ojs));
+    data[0] = static_cast<float>(LeftEdgeX(ojs,nx2,x2min,x2max));
   } else {
     for (int j=0; j<ncoord2; ++j) {
-      data[j] = static_cast<float>(x2_fc_[0](j));
+      data[j] = static_cast<float>(CellCenterX(j-js,nx2,x2min,x2max));
     }
   }
   if (!big_end) {for (int i=0; i<ncoord2; ++i) swap_functions::Swap4Bytes(&data[i]);}
   std::fwrite(data, sizeof(float), static_cast<std::size_t>(ncoord2), pfile);
 
   // write x3-coordinates as binary float in big endian order
+  int &ks = pmb->mb_cells.ks;
+  Real &x3min = pmb->mb_size.x3min, &x3max = pmb->mb_size.x3max;
+  int &nx3 = pmb->mb_cells.nx3;
   std::fprintf(pfile, "\nZ_COORDINATES %d float\n", ncoord3);
   if (nout3 == 1) {
-    data[0] = static_cast<float>(x3_cc_[0](oks));
+    data[0] = static_cast<float>(LeftEdgeX(oks,nx3,x3min,x3max));
   } else {
     for (int k=0; k<ncoord3; ++k) {
-      data[k] = static_cast<float>(x3_fc_[0](k));
+      data[k] = static_cast<float>(CellCenterX(k-ks,nx3,x3min,x3max));
     }
   }
   if (!big_end) {for (int i=0; i<ncoord3; ++i) swap_functions::Swap4Bytes(&data[i]);}
@@ -151,25 +166,24 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   //  in the OutputData doubly linked lists), all in binary floats format
   std::fprintf(pfile, "\nCELL_DATA %d", nout1*nout2*nout3);
 
-  // the out_data_ vector stores each variable to be output over all cells and MeshBlocks.
-  // So start iteration over elements of out_data_ vector (variables)
-
-  for (auto it : out_data_) {
+  // Loop over elements of out_data_ vector (variables)
+  for (int n=0; n<nvar; ++n) {
     // TODO get VECTORS working
     // write data type (SCALARS or VECTORS) and name
 //    std::fprintf(pfile, "\n%s %s float\n", pdata->type.c_str(),  pdata->name.c_str());
 //    int nvar = pdata->data.GetDim4();
 //    if (nvar == 1) std::fprintf(pfile, "LOOKUP_TABLE default\n");
-    std::fprintf(pfile, "\nSCALARS %s float\n", it[0].label().c_str());
+    std::fprintf(pfile, "\nSCALARS %s float\n", out_data_label_[n].c_str());
     std::fprintf(pfile, "LOOKUP_TABLE default\n");
 
   // TODO write data properly for multiple MeshBlocks
     // Loop over MeshBlocks
-    for (int m=0; m<pm->nmbthisrank; ++m) {
-      for (int k=0; k<nout3; ++k) {
-        for (int j=0; j<nout2; ++j) { 
-          for (int i=0; i<nout1; ++i) {
-            data[i] = static_cast<float>(it[m](k,j,i));
+    int nout_mbs = static_cast<int>(out_data_.size());
+    for (int m=0; m<nout_mbs; ++m) {
+      for (int k=oks; k<=oke; ++k) {
+        for (int j=ojs; j<=oje; ++j) { 
+          for (int i=ois; i<=oie; ++i) {
+            data[i-ois] = static_cast<float>(out_data_[m](n,k-oks,j-ojs,i-ois));
           }
 
           // write data in big endian order
