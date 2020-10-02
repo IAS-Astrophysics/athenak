@@ -100,6 +100,9 @@ TaskStatus BoundaryValues::ApplyPhysicalBCs(Driver* pdrive, int stage)
     case BoundaryFlag::reflect:
       ReflectInnerX1();
       break;
+    case BoundaryFlag::outflow:
+      OutflowInnerX1();
+      break;
     default:
       break;
   }
@@ -108,6 +111,9 @@ TaskStatus BoundaryValues::ApplyPhysicalBCs(Driver* pdrive, int stage)
   switch (bndry_flag[BoundaryFace::outer_x1]) {
     case BoundaryFlag::reflect:
       ReflectOuterX1();
+      break;
+    case BoundaryFlag::outflow:
+      OutflowOuterX1();
       break;
     default:
       break;
@@ -119,6 +125,9 @@ TaskStatus BoundaryValues::ApplyPhysicalBCs(Driver* pdrive, int stage)
     case BoundaryFlag::reflect:
       ReflectInnerX2();
       break;
+    case BoundaryFlag::outflow:
+      OutflowInnerX2();
+      break;
     default:
       break;
   }
@@ -127,6 +136,9 @@ TaskStatus BoundaryValues::ApplyPhysicalBCs(Driver* pdrive, int stage)
   switch (bndry_flag[BoundaryFace::outer_x2]) {
     case BoundaryFlag::reflect:
       ReflectOuterX2();
+      break;
+    case BoundaryFlag::outflow:
+      OutflowOuterX2();
       break;
     default:
       break;
@@ -138,6 +150,9 @@ TaskStatus BoundaryValues::ApplyPhysicalBCs(Driver* pdrive, int stage)
     case BoundaryFlag::reflect:
       ReflectInnerX3();
       break;
+    case BoundaryFlag::outflow:
+      OutflowInnerX3();
+      break;
     default:
       break;
   }
@@ -146,6 +161,9 @@ TaskStatus BoundaryValues::ApplyPhysicalBCs(Driver* pdrive, int stage)
   switch (bndry_flag[BoundaryFace::outer_x3]) {
     case BoundaryFlag::reflect:
       ReflectOuterX3();
+      break;
+    case BoundaryFlag::outflow:
+      OutflowOuterX3();
       break;
     default:
       break;

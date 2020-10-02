@@ -114,6 +114,12 @@ class BoundaryValues {
   void ReflectOuterX2();
   void ReflectInnerX3();
   void ReflectOuterX3();
+  void OutflowInnerX1();
+  void OutflowOuterX1();
+  void OutflowInnerX2();
+  void OutflowOuterX2();
+  void OutflowInnerX3();
+  void OutflowOuterX3();
 
  private:
   Mesh *pmesh_;
