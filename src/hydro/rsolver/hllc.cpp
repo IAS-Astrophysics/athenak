@@ -34,10 +34,10 @@ void HLLC(TeamMember_t const &member, const EOSData &eos, const int il, const in
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
   Real wli[5],wri[5];
-  Real fl[5],fr[5],flxi[5];
+  Real fl[5],fr[5];
 
-  Real gamma0 = eos.gamma;
-  Real igm1 = 1.0/(gamma0 - 1.0);
+  Real igm1 = 1.0/((eos.gamma) - 1.0);
+  Real alpha = ((eos.gamma) + 1.0)/sqrt(2.0*(eos.gamma));
 
   par_for_inner(member, il, iu, [&](const int i)
   {
@@ -56,97 +56,85 @@ void HLLC(TeamMember_t const &member, const EOSData &eos, const int il, const in
 
     //--- Step 2.  Compute middle state estimates with PVRS (Toro 10.5.2)
 
-    Real al, ar, el, er;
-    Real cl = eos.SoundSpeed(wli[IPR],wli[IDN]);
-    Real cr = eos.SoundSpeed(wri[IPR],wri[IDN]);
-    el = wli[IPR]*igm1 + 0.5*wli[IDN]*(SQR(wli[IVX]) + SQR(wli[IVY]) + SQR(wli[IVZ]));
-    er = wri[IPR]*igm1 + 0.5*wri[IDN]*(SQR(wri[IVX]) + SQR(wri[IVY]) + SQR(wri[IVZ]));
-    Real rhoa = .5 * (wli[IDN] + wri[IDN]); // average density
-    Real ca = .5 * (cl + cr); // average sound speed
-    Real pmid = .5 * (wli[IPR] + wri[IPR] + (wli[IVX]-wri[IVX]) * rhoa * ca);
+    // define 6 registers used below
+    Real qa,qb,qc,qd,qe,qf;
+    qa = eos.SoundSpeed(wli[IPR],wli[IDN]);
+    qb = eos.SoundSpeed(wri[IPR],wri[IDN]);
+    Real el = wli[IPR]*igm1 + 0.5*wli[IDN]*(SQR(wli[IVX])+SQR(wli[IVY])+SQR(wli[IVZ]));
+    Real er = wri[IPR]*igm1 + 0.5*wri[IDN]*(SQR(wri[IVX])+SQR(wri[IVY])+SQR(wri[IVZ]));
+    qc = 0.25*(wli[IDN] + wri[IDN])*(qa + qb);  // average density * average sound speed
+    qd = 0.5 * (wli[IPR] + wri[IPR] + (wli[IVX]-wri[IVX]) * qc);  // P_mid
 
     //--- Step 3.  Compute sound speed in L,R
 
-    Real ql, qr;
-    ql = (pmid <= wli[IPR]) ? 1.0 :
-         (1.0 + (gamma0 + 1.0) / sqrt(2.0 * gamma0) * (pmid / wli[IPR]-1.0));
-    qr = (pmid <= wri[IPR]) ? 1.0 :
-         (1.0 + (gamma0 + 1.0) / sqrt(2.0 * gamma0) * (pmid / wri[IPR]-1.0));
+    qe = (qd <= wli[IPR]) ? 1.0 : (1.0 + alpha * ((qd / wli[IPR]) - 1.0));
+    qf = (qd <= wri[IPR]) ? 1.0 : (1.0 + alpha * ((qd / wri[IPR]) - 1.0));
 
     //--- Step 4.  Compute the max/min wave speeds based on L/R
 
-    al = wli[IVX] - cl*ql;
-    ar = wri[IVX] + cr*qr;
+    qc = wli[IVX] - qa*qe;  // ql
+    qd = wri[IVX] + qb*qf;  // qr
 
-    Real bp = ar > 0.0 ? ar : 0.0;
-    Real bm = al < 0.0 ? al : 0.0;
+    qa = qd > 0.0 ? qd : 0.0;
+    qb = qc < 0.0 ? qc : 0.0;
 
     //--- Step 5. Compute the contact wave speed and pressure
 
-    Real vxl = wli[IVX] - al;
-    Real vxr = wri[IVX] - ar;
+    qe = wli[IVX] - qc;
+    qf = wri[IVX] - qd;
 
-    Real tl = wli[IPR] + vxl*wli[IDN]*wli[IVX];
-    Real tr = wri[IPR] + vxr*wri[IDN]*wri[IVX];
+    qc = wli[IPR] + qe*wli[IDN]*wli[IVX];  // tl
+    qd = wri[IPR] + qf*wri[IDN]*wri[IVX];  // tr
 
-    Real ml =   wli[IDN]*vxl;
-    Real mr = -(wri[IDN]*vxr);
+    Real ml =   wli[IDN]*qe;
+    Real mr = -(wri[IDN]*qf);
 
     // Determine the contact wave speed...
-    Real am = (tl - tr)/(ml + mr);
+    Real am = (qc - qd)/(ml + mr);
     // ...and the pressure at the contact surface
-    Real cp = (ml*tr + mr*tl)/(ml + mr);
+    Real cp = (ml*qd + mr*qc)/(ml + mr);
     cp = cp > 0.0 ? cp : 0.0;
 
-    // No loop-carried dependencies anywhere in this loop
-    //    #pragma distribute_point
-    //--- Step 6. Compute L/R fluxes along the line bm, bp
+    //--- Step 6. Compute L/R fluxes along the line bm (qb), bp (qa)
 
-    vxl = wli[IVX] - bm;
-    vxr = wri[IVX] - bp;
+    qe = wli[IVX] - qb;
+    qf = wri[IVX] - qa;
 
-    fl[IDN] = wli[IDN]*vxl;
-    fr[IDN] = wri[IDN]*vxr;
+    fl[IDN] = wli[IDN]*qe;
+    fr[IDN] = wri[IDN]*qf;
 
-    fl[IVX] = wli[IDN]*wli[IVX]*vxl + wli[IPR];
-    fr[IVX] = wri[IDN]*wri[IVX]*vxr + wri[IPR];
+    fl[IVX] = wli[IDN]*wli[IVX]*qe + wli[IPR];
+    fr[IVX] = wri[IDN]*wri[IVX]*qf + wri[IPR];
 
-    fl[IVY] = wli[IDN]*wli[IVY]*vxl;
-    fr[IVY] = wri[IDN]*wri[IVY]*vxr;
+    fl[IVY] = wli[IDN]*wli[IVY]*qe;
+    fr[IVY] = wri[IDN]*wri[IVY]*qf;
 
-    fl[IVZ] = wli[IDN]*wli[IVZ]*vxl;
-    fr[IVZ] = wri[IDN]*wri[IVZ]*vxr;
+    fl[IVZ] = wli[IDN]*wli[IVZ]*qe;
+    fr[IVZ] = wri[IDN]*wri[IVZ]*qf;
 
-    fl[IEN] = el*vxl + wli[IPR]*wli[IVX];
-    fr[IEN] = er*vxr + wri[IPR]*wri[IVX];
+    fl[IEN] = el*qe + wli[IPR]*wli[IVX];
+    fr[IEN] = er*qf + wri[IPR]*wri[IVX];
 
     //--- Step 8. Compute flux weights or scales
 
-    Real sl,sr,sm;
     if (am >= 0.0) {
-      sl =  am/(am - bm);
-      sr = 0.0;
-      sm = -bm/(am - bm);
+      qc =  am/(am - qb);
+      qd = 0.0;
+      qe = -qb/(am - qb);
     } else {
-      sl =  0.0;
-      sr = -am/(bp - am);
-      sm =  bp/(bp - am);
+      qc =  0.0;
+      qd = -am/(qa - am);
+      qe =  qa/(qa - am);
     }
 
     //--- Step 9. Compute the HLLC flux at interface, including weighted contribution
     // of the flux along the contact
 
-    flxi[IDN] = sl*fl[IDN] + sr*fr[IDN];
-    flxi[IVX] = sl*fl[IVX] + sr*fr[IVX] + sm*cp;
-    flxi[IVY] = sl*fl[IVY] + sr*fr[IVY];
-    flxi[IVZ] = sl*fl[IVZ] + sr*fr[IVZ];
-    flxi[IEN] = sl*fl[IEN] + sr*fr[IEN] + sm*cp*am;
-
-    flx(IDN,i) = flxi[IDN];
-    flx(ivx,i) = flxi[IVX];
-    flx(ivy,i) = flxi[IVY];
-    flx(ivz,i) = flxi[IVZ];
-    flx(IEN,i) = flxi[IEN];
+    flx(IDN,i) = qc*fl[IDN] + qd*fr[IDN];
+    flx(ivx,i) = qc*fl[IVX] + qd*fr[IVX] + qe*cp;
+    flx(ivy,i) = qc*fl[IVY] + qd*fr[IVY];
+    flx(ivz,i) = qc*fl[IVZ] + qd*fr[IVZ];
+    flx(IEN,i) = qc*fl[IEN] + qd*fr[IEN] + qe*cp*am;
   });
   return;
 }

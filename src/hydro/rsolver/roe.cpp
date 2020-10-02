@@ -180,9 +180,7 @@ void Roe(TeamMember_t const &member, const EOSData &eos, const int il, const int
       flxi[IVX] = 0.5*(fl[IVX] + fr[IVX]) - a*du[IVX];
       flxi[IVY] = 0.5*(fl[IVY] + fr[IVY]) - a*du[IVY];
       flxi[IVZ] = 0.5*(fl[IVZ] + fr[IVZ]) - a*du[IVZ];
-      if (eos.is_adiabatic) {
-        flxi[IEN] = 0.5*(fl[IEN] + fr[IEN]) - a*du[IEN];
-      }
+      if (eos.is_adiabatic) {flxi[IEN] = 0.5*(fl[IEN] + fr[IEN]) - a*du[IEN];}
     }
 
     //--- Step 7. Store results into 3D array of fluxes
