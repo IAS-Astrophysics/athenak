@@ -59,6 +59,7 @@ class OutputType
   int ois, oie, ojs, oje, oks, oke;     // starting indices of data to be output
   OutputParameters out_params      ;    // data read from <output> block for this type
 
+  AthenaArray3D<Real> ComputeData(MeshBlock &mb, std::string label);
   // virtual functions over-ridden in derived classes
   virtual void LoadOutputData(Mesh *pm);
   virtual void WriteOutputFile(Mesh *pm, ParameterInput *pin) = 0;

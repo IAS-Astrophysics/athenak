@@ -83,11 +83,66 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
   }
 
   // parse list of variables for each physics and flag variables to be output
-  nvar = 1;
-  out_data_label_.push_back("dens");
+  nvar = 0; int var_cnt=0;
+  if (out_params.variable.compare("D") == 0 ||
+      out_params.variable.compare("cons") == 0) {
+    out_data_label_.push_back("Dens");
+    nvar++; var_cnt++;
+  }
+  if (out_params.variable.compare("E") == 0 ||
+      out_params.variable.compare("cons") == 0) {
+    out_data_label_.push_back("Ener");
+    nvar++; var_cnt++;
+  }
+  if (out_params.variable.compare("M1") == 0 ||
+      out_params.variable.compare("mom") == 0 ||
+      out_params.variable.compare("cons") == 0) {
+    out_data_label_.push_back("Mom1");
+    nvar++; var_cnt++;
+  }
+  if (out_params.variable.compare("M2") == 0 ||
+      out_params.variable.compare("mom") == 0 ||
+      out_params.variable.compare("cons") == 0) {
+    out_data_label_.push_back("Mom2");
+    nvar++; var_cnt++;
+  }
+  if (out_params.variable.compare("M3") == 0 ||
+      out_params.variable.compare("mom") == 0 ||
+      out_params.variable.compare("cons") == 0) {
+    out_data_label_.push_back("Mom3");
+    nvar++; var_cnt++;
+  }
+  if (out_params.variable.compare("d") == 0 ||
+      out_params.variable.compare("prim") == 0) {
+    out_data_label_.push_back("dens");
+    nvar++; var_cnt++;
+  }
+  if (out_params.variable.compare("p") == 0 ||
+      out_params.variable.compare("prim") == 0) {
+    out_data_label_.push_back("pres");
+    nvar++; var_cnt++;
+  }
+  if (out_params.variable.compare("vx") == 0 ||
+      out_params.variable.compare("vel") == 0 ||
+      out_params.variable.compare("prim") == 0) {
+    out_data_label_.push_back("velx");
+    nvar++; var_cnt++;
+  }
+  if (out_params.variable.compare("vy") == 0 ||
+      out_params.variable.compare("vel") == 0 ||
+      out_params.variable.compare("prim") == 0) {
+    out_data_label_.push_back("vely");
+    nvar++; var_cnt++;
+  }
+  if (out_params.variable.compare("vz") == 0 ||
+      out_params.variable.compare("vel") == 0 ||
+      out_params.variable.compare("prim") == 0) {
+    out_data_label_.push_back("velz");
+    nvar++; var_cnt++;
+  }
 
   // check for valid output variable in <input> block
-  if (false) {
+  if (var_cnt == 0) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output variable '" << out_params.variable << "' not implemented" << std::endl
        << "Allowed hydro variables: cons,D,E,mom,M1,M2,M3,prim,d,p,vel,vx,vy,vz"
@@ -149,15 +204,69 @@ void OutputType::LoadOutputData(Mesh *pm)
 
     // load all the outpustr variables on this MeshBlock
     HostArray4D<Real> new_data("out",nvar,(oke-oks+1),(oje-ojs+1),(oie-ois+1));
-
     for (int n=0; n<nvar; ++n) {
-/**** hardwired for IM2 to start ****/
-      auto dev_data_slice = Kokkos::subview(mb.phydro->u0, 2, std::make_pair(oks,oke+1),
-                            std::make_pair(ojs,oje+1), std::make_pair(ois,oie+1));
-      auto hst_data_slice = Kokkos::create_mirror_view(dev_data_slice);
-      auto new_data_slice = Kokkos::subview(new_data, n, Kokkos::ALL(), Kokkos::ALL(),
-                      Kokkos::ALL());
-      Kokkos::deep_copy(new_data_slice,hst_data_slice);
+      AthenaArray3D<Real> dev_buff("dev_buff",(oke-oks+1),(oje-ojs+1),(oie-ois+1));
+      if (out_data_label_[n].compare("Dens")  == 0) {
+        // Note capital "D" used to distinguish conserved from primitive mass density
+        // (important for relativistic dynamics)
+        auto dev_slice = Kokkos::subview(mb.phydro->u0, static_cast<int>(hydro::IDN),
+          std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
+        Kokkos::deep_copy(dev_buff,dev_slice);
+      }
+      if (out_data_label_[n].compare("Mom1")  == 0) {
+        auto dev_slice = Kokkos::subview(mb.phydro->u0, static_cast<int>(hydro::IM1),
+          std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
+        Kokkos::deep_copy(dev_buff,dev_slice);
+      }
+      if (out_data_label_[n].compare("Mom2")  == 0) {
+        auto dev_slice = Kokkos::subview(mb.phydro->u0, static_cast<int>(hydro::IM2),
+          std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
+        Kokkos::deep_copy(dev_buff,dev_slice);
+      }
+      if (out_data_label_[n].compare("Mom3")  == 0) {
+        auto dev_slice = Kokkos::subview(mb.phydro->u0, static_cast<int>(hydro::IM3),
+          std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
+        Kokkos::deep_copy(dev_buff,dev_slice);
+      }
+      if (out_data_label_[n].compare("Ener")  == 0) {
+        auto dev_slice = Kokkos::subview(mb.phydro->u0, static_cast<int>(hydro::IEN),
+          std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
+        Kokkos::deep_copy(dev_buff,dev_slice);
+      }
+      if (out_data_label_[n].compare("dens")  == 0) {
+        auto dev_slice = Kokkos::subview(mb.phydro->w0, static_cast<int>(hydro::IDN),
+          std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
+        Kokkos::deep_copy(dev_buff,dev_slice);
+      }
+      if (out_data_label_[n].compare("velx")  == 0) {
+        auto dev_slice = Kokkos::subview(mb.phydro->w0, static_cast<int>(hydro::IVX),
+          std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
+        Kokkos::deep_copy(dev_buff,dev_slice);
+      }
+      if (out_data_label_[n].compare("vely")  == 0) {
+        auto dev_slice = Kokkos::subview(mb.phydro->w0, static_cast<int>(hydro::IVY),
+          std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
+        Kokkos::deep_copy(dev_buff,dev_slice);
+      }
+      if (out_data_label_[n].compare("velz")  == 0) {
+        auto dev_slice = Kokkos::subview(mb.phydro->w0, static_cast<int>(hydro::IVZ),
+          std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
+        Kokkos::deep_copy(dev_buff,dev_slice);
+      }
+      if (out_data_label_[n].compare("pres")  == 0) {
+        auto dev_slice = Kokkos::subview(mb.phydro->w0, static_cast<int>(hydro::IPR),
+          std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
+        Kokkos::deep_copy(dev_buff,dev_slice);
+      }
+
+//std::cout << "rank=" << dev_buff.rank << " dim0=" << dev_buff.extent_int(0) << " dim1=" << dev_buff.extent_int(1)<< " dim2=" << dev_buff.extent_int(2) <<  std::endl;
+
+      // copy to host mirror array, and then to 4D host View containing all variables
+      AthenaArray3D<Real>::HostMirror hst_buff = Kokkos::create_mirror(dev_buff);
+      Kokkos::deep_copy(hst_buff,dev_buff);
+      auto hst_slice = Kokkos::subview(new_data, n, Kokkos::ALL(), Kokkos::ALL(),
+                       Kokkos::ALL());
+      Kokkos::deep_copy(hst_slice,hst_buff);
 /****/
 //      for (int k=oks; k<=oke; ++k) {
 //      for (int j=ojs; j<=oje; ++j) {
@@ -165,7 +274,7 @@ void OutputType::LoadOutputData(Mesh *pm)
 //        new_data(n,k-oks,j-ojs,i-ois) = hst_data_slice(k-oks,j-ojs,i-ois);
 //      }}}
 //for (int i=ois; i<oie; ++i) {
-//std::cout << new_data(0,0,0,i-ois) << std::endl;
+//std::cout << hst_data_slice(0,0,i-ois) << std::endl;
 //}
 /****/
       
@@ -175,4 +284,28 @@ void OutputType::LoadOutputData(Mesh *pm)
     out_data_.push_back(new_data);
     out_data_gid_.push_back(mb.mb_gid);
   }
+}
+
+//----------------------------------------------------------------------------------------
+// OutputType::ComputeOutputData()
+
+AthenaArray3D<Real> OutputType::ComputeData(MeshBlock &mb, std::string label)
+{
+  AthenaArray3D<Real> data("output_dev_buff",(oke-oks+1),(oje-ojs+1),(oie-ois+1));
+
+  // capture variables for lambdas
+  auto u0_ = mb.phydro->u0;
+
+std::cout << label << std::endl;
+
+  if (label.compare("dens_c")  == 0) {
+    par_for("pgen_advect", mb.exe_space, oks, oke, ojs, oje, ois, oie,
+      KOKKOS_LAMBDA(int k, int j, int i)
+      {
+        data(k-oks,j-ojs,i-ois) = u0_(hydro::IDN,k,j,i);
+      }
+    );
+  }
+std::cout << "done load" << std::endl;
+  return data;
 }
