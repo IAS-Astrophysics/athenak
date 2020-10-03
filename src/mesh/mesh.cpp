@@ -46,16 +46,42 @@ Mesh::Mesh(ParameterInput *pin)
   // ix2/ox2 and ix3/ox3 in the case of 1D or 2D problems
   mesh_bcs[BoundaryFace::inner_x1] = GetBoundaryFlag(pin->GetString("mesh", "ix1_bc"));
   mesh_bcs[BoundaryFace::outer_x1] = GetBoundaryFlag(pin->GetString("mesh", "ox1_bc"));
+  if ((mesh_bcs[BoundaryFace::inner_x1] == BoundaryFlag::periodic &&
+       mesh_bcs[BoundaryFace::outer_x1] != BoundaryFlag::periodic) ||
+      (mesh_bcs[BoundaryFace::outer_x1] == BoundaryFlag::periodic &&
+       mesh_bcs[BoundaryFace::inner_x1] != BoundaryFlag::periodic)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+        << "Both inner and outer x1 bcs must be periodic" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
   if (nx2gt1) {
     mesh_bcs[BoundaryFace::inner_x2] = GetBoundaryFlag(pin->GetString("mesh", "ix2_bc"));
     mesh_bcs[BoundaryFace::outer_x2] = GetBoundaryFlag(pin->GetString("mesh", "ox2_bc"));
+    if ((mesh_bcs[BoundaryFace::inner_x2] == BoundaryFlag::periodic &&
+         mesh_bcs[BoundaryFace::outer_x2] != BoundaryFlag::periodic) ||
+        (mesh_bcs[BoundaryFace::outer_x2] == BoundaryFlag::periodic &&
+         mesh_bcs[BoundaryFace::inner_x2] != BoundaryFlag::periodic)) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+          << std::endl << "Both inner and outer x2 bcs must be periodic" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
   } else {
     mesh_bcs[BoundaryFace::inner_x2] = BoundaryFlag::undef;
     mesh_bcs[BoundaryFace::outer_x2] = BoundaryFlag::undef;
   }
+
   if (nx3gt1) {
     mesh_bcs[BoundaryFace::inner_x3] = GetBoundaryFlag(pin->GetString("mesh", "ix3_bc"));
     mesh_bcs[BoundaryFace::outer_x3] = GetBoundaryFlag(pin->GetString("mesh", "ox3_bc"));
+    if ((mesh_bcs[BoundaryFace::inner_x3] == BoundaryFlag::periodic &&
+         mesh_bcs[BoundaryFace::outer_x3] != BoundaryFlag::periodic) ||
+        (mesh_bcs[BoundaryFace::outer_x3] == BoundaryFlag::periodic &&
+         mesh_bcs[BoundaryFace::inner_x3] != BoundaryFlag::periodic)) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+          << std::endl << "Both inner and outer x3 bcs must be periodic" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
   } else {
     mesh_bcs[BoundaryFace::inner_x3] = BoundaryFlag::undef;
     mesh_bcs[BoundaryFace::outer_x3] = BoundaryFlag::undef;
