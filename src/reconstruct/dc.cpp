@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file dc.cpp
-//  \brief piecewise constant (donor cell) reconstruction implemented as inline functions
+//  \brief piecewise constant (donor cell) reconstruction implemented as inline function
 
 #include "athena.hpp"
 
@@ -15,58 +15,16 @@
 //  This function should be called over [is-1,ie+1] to get BOTH L/R states over [is,ie]
 
 KOKKOS_INLINE_FUNCTION
-void DonorCellX1(TeamMember_t const &member, const int k, const int j,
-     const int il, const int iu, const AthenaArray4D<Real> &q,
-     AthenaScratch2D<Real> &ql, AthenaScratch2D<Real> &qr)
+void DonorCell(TeamMember_t const &member, const int il, const int iu,
+               const AthenaArray2DSlice<Real> &q,
+               AthenaScratch2D<Real> &ql, AthenaScratch2D<Real> &qr)
 {
   int nvar = q.extent_int(0);
   for (int n=0; n<nvar; ++n) {
     par_for_inner(member, il, iu, [&](const int i)
     {
-      ql(n,i+1) = q(n,k,j,i);
-      qr(n,i  ) = q(n,k,j,i);
-    });
-  }
-  return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn DonorCellX2()
-//  \brief For each cell-centered value q(j), returns ql(j+1) and qr(j) over il to iu.
-//  This function should be called over [js-1,je+1] to get BOTH L/R states over [js,je]
-
-KOKKOS_INLINE_FUNCTION
-void DonorCellX2(TeamMember_t const &member, const int k, const int j,
-     const int il, const int iu, const AthenaArray4D<Real> &q,
-     AthenaScratch2D<Real> &ql_jp1, AthenaScratch2D<Real> &qr_j)
-{
-  int nvar = q.extent_int(0);
-  for (int n=0; n<nvar; ++n) {
-    par_for_inner(member, il, iu, [&](const int i)
-    {
-      ql_jp1(n,i) = q(n,k,j,i);
-      qr_j  (n,i) = q(n,k,j,i);
-    });
-  }
-  return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn DonorCellX3()
-//  \brief For each cell-centered value q(k), returns ql(k+1) and qr(k) over il to iu.
-//  This function should be called over [ks-1,ke+1] to get BOTH L/R states over [ks,ke]
-
-KOKKOS_INLINE_FUNCTION
-void DonorCellX3(TeamMember_t const &member, const int k, const int j,
-     const int il, const int iu, const AthenaArray4D<Real> &q,
-     AthenaScratch2D<Real> &ql_kp1, AthenaScratch2D<Real> &qr_k)
-{
-  int nvar = q.extent_int(0);
-  for (int n=0; n<nvar; ++n) {
-    par_for_inner(member, il, iu, [&](const int i)
-    {
-      ql_kp1(n,i) = q(n,k,j,i);
-      qr_k  (n,i) = q(n,k,j,i);
+      ql(n,i+1) = q(n,i);
+      qr(n,i  ) = q(n,i);
     });
   }
   return;
