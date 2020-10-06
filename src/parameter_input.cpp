@@ -70,6 +70,7 @@ ParameterInput::ParameterInput(std::string input_filename) : last_filename{}
   infile.Close();
 }
 
+//----------------------------------------------------------------------------------------
 // ParameterInput destructor
 
 ParameterInput::~ParameterInput()
@@ -761,28 +762,4 @@ void ParameterInput::ParameterDump(std::ostream& os)
 
   os<< "#------------------------- PAR_DUMP -------------------------" << std::endl;
   os<< "<par_end>" << std::endl;    // finish with par-end (needed for restart files)
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void ParameterInput::Lock()
-//  \brief Lock ParameterInput for reading and writing
-
-void ParameterInput::Lock()
-{
-#if OPENMP_PARALLEL_ENABLED
-  omp_set_lock(&lock_);
-#endif
-  return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void ParameterInput::Unlock()
-//  \brief Unlock ParameterInput for reading and writing
-
-void ParameterInput::Unlock()
-{
-#if OPENMP_PARALLEL_ENABLED
-  omp_unset_lock(&lock_);
-#endif
-  return;
 }

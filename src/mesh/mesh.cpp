@@ -421,7 +421,7 @@ void Mesh::BuildTree(ParameterInput *pin)
   // check there is at least one MeshBlock per MPI rank
   if (nmbtotal < global_variable::nranks) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "Fewer MeshBlocks (nmbtotal="<<nmbtotal<") than MPI ranks (nranks="
+        << "Fewer MeshBlocks (nmbtotal=" << nmbtotal << ") than MPI ranks (nranks="
         << global_variable::nranks << ")" << std::endl;
     std::exit(EXIT_FAILURE);
   }

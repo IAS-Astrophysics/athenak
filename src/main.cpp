@@ -33,6 +33,15 @@
 #include "outputs/outputs.hpp"
 #include "driver/driver.hpp"
 
+// MPI/OpenMP headers
+#ifdef MPI_PARALLEL
+#include <mpi.h>
+#endif
+
+#ifdef OPENMP_PARALLEL
+#include <omp.h>
+#endif
+
 //----------------------------------------------------------------------------------------
 //! \fn int main(int argc, char *argv[])
 //  \brief AthenaK main program

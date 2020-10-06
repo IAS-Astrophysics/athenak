@@ -137,11 +137,11 @@ class Mesh
   int *brdisp, *bddisp;
 
   // variables for load balancing control
-  bool lb_flag;
-  bool lb_automatic, lb_manual;
-  double lb_tolerance;
-  int lb_cyc_interval;
-  int cyc_since_lb;
+  bool lb_flag_;
+  bool lb_automatic_, lb_manual_;
+  double lb_tolerance_;
+  int lb_cyc_interval_;
+  int cyc_since_lb_;
 
   std::unique_ptr<MeshBlockTree> ptree;  // binary/quad/oct-tree
   LogicalLocation *loclist;              // array of LogicalLocations for ALL MeshBlocks

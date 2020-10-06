@@ -110,8 +110,19 @@ class ParameterInput
   omp_lock_t lock_;
 #endif
 
-  // functions to set/unset thread locks
-  void Lock();
-  void Unlock();
+  // functions to set/unset thread locks for reading and writing
+  inline void Lock() {
+#if OPENMP_PARALLEL_ENABLED
+    omp_set_lock(&lock_);
+#endif
+    return;
+  }
+  inline void Unlock() {
+#if OPENMP_PARALLEL_ENABLED
+    omp_unset_lock(&lock_);
+#endif
+    return;
+  }
+
 };
 #endif // PARAMETER_INPUT_HPP_
