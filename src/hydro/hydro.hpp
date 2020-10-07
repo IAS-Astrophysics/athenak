@@ -44,7 +44,6 @@ class Hydro
   BoundaryBuffer bbuf;    // send/recv buffers and BoundaryStatus flags for Hydro comms.
 
   // following only used for time-evolving flow
-  RiemannSolver   *prsolver;  // object that implements chosen Riemann solver
   AthenaArray4D<Real> u1;    // conserved variables at intermediate step 
   AthenaArray4D<Real> divf;   // divergence of fluxes
   AthenaArray3D<Real> uflx_x1face;  // fluxes on x1-faces
