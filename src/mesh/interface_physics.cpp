@@ -12,6 +12,10 @@
 #include "mesh.hpp"
 #include "hydro/hydro.hpp"
 
+#if MPI_PARALLEL_ENABLED
+#include <mpi.h>
+#endif
+
 //----------------------------------------------------------------------------------------
 // \fn Mesh::SelectPhysics()
 
@@ -59,7 +63,10 @@ void Mesh::NewTimeStep(const Real tlim)
   // limit increase in timestep to 2x old value
   for (const auto &mb : mblocks) { dt = std::min(2.0*dt, (cfl_no)*(mb.phydro->dtnew) ); }
 
-  // TODO: get minimum dt over all MPI ranks
+  // get minimum dt over all MPI ranks
+#if MPI_PARALLEL_ENABLED
+  MPI_Allreduce(MPI_IN_PLACE, &dt, 1, MPI_ATHENA_REAL, MPI_MIN, MPI_COMM_WORLD);
+#endif
 
   // limit last time step to stop at tlim *exactly*
   if ( (time < tlim) && ((time + dt) > tlim) ) {dt = tlim - time;}
