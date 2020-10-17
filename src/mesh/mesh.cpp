@@ -24,8 +24,7 @@
 
 Mesh::Mesh(ParameterInput *pin)
 {
-  // Set properties of Mesh from input parameters, error check
-
+  // Set physical size and number of cells in mesh (root level)
   mesh_size.x1min = pin->GetReal("mesh", "x1min");
   mesh_size.x1max = pin->GetReal("mesh", "x1max");
   mesh_size.x2min = pin->GetReal("mesh", "x2min");
@@ -42,47 +41,47 @@ Mesh::Mesh(ParameterInput *pin)
   nx2gt1 = (mesh_cells.nx2 > 1) ? true : false;
   nx3gt1 = (mesh_cells.nx3 > 1) ? true : false;
 
-  // note BCs always MUST be entered for ix1/ox1, but are set to "undef" by default for
-  // ix2/ox2 and ix3/ox3 in the case of 1D or 2D problems
+  // Set BC flags for ix1/ox1 boundaries and error check
   mesh_bcs[BoundaryFace::inner_x1] = GetBoundaryFlag(pin->GetString("mesh", "ix1_bc"));
   mesh_bcs[BoundaryFace::outer_x1] = GetBoundaryFlag(pin->GetString("mesh", "ox1_bc"));
-  if ((mesh_bcs[BoundaryFace::inner_x1] == BoundaryFlag::periodic &&
-       mesh_bcs[BoundaryFace::outer_x1] != BoundaryFlag::periodic) ||
-      (mesh_bcs[BoundaryFace::outer_x1] == BoundaryFlag::periodic &&
-       mesh_bcs[BoundaryFace::inner_x1] != BoundaryFlag::periodic)) {
+  if ((mesh_bcs[BoundaryFace::inner_x1] == BoundaryFlag::periodic ||
+       mesh_bcs[BoundaryFace::outer_x1] == BoundaryFlag::periodic) &&
+       mesh_bcs[BoundaryFace::inner_x1] != mesh_bcs[BoundaryFace::outer_x1]) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
         << "Both inner and outer x1 bcs must be periodic" << std::endl;
     std::exit(EXIT_FAILURE);
   }
 
+  // Set BC flags for ix2/ox2 boundaries and error check
   if (nx2gt1) {
     mesh_bcs[BoundaryFace::inner_x2] = GetBoundaryFlag(pin->GetString("mesh", "ix2_bc"));
     mesh_bcs[BoundaryFace::outer_x2] = GetBoundaryFlag(pin->GetString("mesh", "ox2_bc"));
-    if ((mesh_bcs[BoundaryFace::inner_x2] == BoundaryFlag::periodic &&
-         mesh_bcs[BoundaryFace::outer_x2] != BoundaryFlag::periodic) ||
-        (mesh_bcs[BoundaryFace::outer_x2] == BoundaryFlag::periodic &&
-         mesh_bcs[BoundaryFace::inner_x2] != BoundaryFlag::periodic)) {
+    if ((mesh_bcs[BoundaryFace::inner_x2] == BoundaryFlag::periodic ||
+         mesh_bcs[BoundaryFace::outer_x2] == BoundaryFlag::periodic) &&
+         mesh_bcs[BoundaryFace::inner_x2] != mesh_bcs[BoundaryFace::outer_x2]) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "Both inner and outer x2 bcs must be periodic" << std::endl;
       std::exit(EXIT_FAILURE);
     }
   } else {
+    // ix2/ox2 BC flags set to undef for 1D problems
     mesh_bcs[BoundaryFace::inner_x2] = BoundaryFlag::undef;
     mesh_bcs[BoundaryFace::outer_x2] = BoundaryFlag::undef;
   }
 
+  // Set BC flags for ix3/ox3 boundaries and error check
   if (nx3gt1) {
     mesh_bcs[BoundaryFace::inner_x3] = GetBoundaryFlag(pin->GetString("mesh", "ix3_bc"));
     mesh_bcs[BoundaryFace::outer_x3] = GetBoundaryFlag(pin->GetString("mesh", "ox3_bc"));
-    if ((mesh_bcs[BoundaryFace::inner_x3] == BoundaryFlag::periodic &&
-         mesh_bcs[BoundaryFace::outer_x3] != BoundaryFlag::periodic) ||
-        (mesh_bcs[BoundaryFace::outer_x3] == BoundaryFlag::periodic &&
-         mesh_bcs[BoundaryFace::inner_x3] != BoundaryFlag::periodic)) {
+    if ((mesh_bcs[BoundaryFace::inner_x3] == BoundaryFlag::periodic ||
+         mesh_bcs[BoundaryFace::outer_x3] == BoundaryFlag::periodic) &&
+         mesh_bcs[BoundaryFace::inner_x3] != mesh_bcs[BoundaryFace::outer_x3]) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "Both inner and outer x3 bcs must be periodic" << std::endl;
       std::exit(EXIT_FAILURE);
     }
   } else {
+    // ix3/ox3 BC flags set to undef for 1D or 2D problems
     mesh_bcs[BoundaryFace::inner_x3] = BoundaryFlag::undef;
     mesh_bcs[BoundaryFace::outer_x3] = BoundaryFlag::undef;
   }
@@ -466,31 +465,31 @@ void Mesh::BuildTree(ParameterInput *pin)
     std::cout << "******* Block=" << it->mb_gid << std::endl;
     std::cout << "x1 Faces" << std::endl;
     for (int n=0; n<2; ++n) {
-      std::cout << "n=" << n << " gid=" << it->pbvals->nblocks_x1face[n].ngid << " level=" << it->pbvals->nblocks_x1face[n].nlevel << " rank=" << it->pbvals->nblocks_x1face[n].nrank << std::endl;
+      std::cout << "n=" << n << " gid=" << it->pbvals->nblocks_x1face[n].gid << " level=" << it->pbvals->nblocks_x1face[n].level << " rank=" << it->pbvals->nblocks_x1face[n].rank << std::endl;
     }
     std::cout << "x2 Faces" << std::endl;
     for (int n=0; n<2; ++n) {
-      std::cout << "n=" << n << " gid=" << it->pbvals->nblocks_x2face[n].ngid << " level=" << it->pbvals->nblocks_x2face[n].nlevel << " rank=" << it->pbvals->nblocks_x2face[n].nrank << std::endl;
+      std::cout << "n=" << n << " gid=" << it->pbvals->nblocks_x2face[n].gid << " level=" << it->pbvals->nblocks_x2face[n].level << " rank=" << it->pbvals->nblocks_x2face[n].rank << std::endl;
     }
     std::cout << "x3 Faces" << std::endl;
     for (int n=0; n<2; ++n) {
-      std::cout << "n=" << n << " gid=" << it->pbvals->nblocks_x3face[n].ngid << " level=" << it->pbvals->nblocks_x3face[n].nlevel << " rank=" << it->pbvals->nblocks_x3face[n].nrank << std::endl;
+      std::cout << "n=" << n << " gid=" << it->pbvals->nblocks_x3face[n].gid << " level=" << it->pbvals->nblocks_x3face[n].level << " rank=" << it->pbvals->nblocks_x3face[n].rank << std::endl;
     }
     std::cout << "x1x2 Edges" << std::endl;
     for (int n=0; n<4; ++n) {
-      std::cout << "n=" << n << " gid=" << it->pbvals->nblocks_x1x2ed[n].ngid << " level=" << it->pbvals->nblocks_x1x2ed[n].nlevel << " rank=" << it->pbvals->nblocks_x1x2ed[n].nrank << std::endl;
+      std::cout << "n=" << n << " gid=" << it->pbvals->nblocks_x1x2ed[n].gid << " level=" << it->pbvals->nblocks_x1x2ed[n].level << " rank=" << it->pbvals->nblocks_x1x2ed[n].rank << std::endl;
     }
     std::cout << "x3x1 Edges" << std::endl;
     for (int n=0; n<4; ++n) {
-      std::cout << "n=" << n << " gid=" << it->pbvals->nblocks_x3x1ed[n].ngid << " level=" << it->pbvals->nblocks_x3x1ed[n].nlevel << " rank=" << it->pbvals->nblocks_x3x1ed[n].nrank << std::endl;
+      std::cout << "n=" << n << " gid=" << it->pbvals->nblocks_x3x1ed[n].gid << " level=" << it->pbvals->nblocks_x3x1ed[n].level << " rank=" << it->pbvals->nblocks_x3x1ed[n].rank << std::endl;
     }
     std::cout << "x2x3 Edges" << std::endl;
     for (int n=0; n<4; ++n) {
-      std::cout << "n=" << n << " gid=" << it->pbvals->nblocks_x2x3ed[n].ngid << " level=" << it->pbvals->nblocks_x2x3ed[n].nlevel << " rank=" << it->pbvals->nblocks_x2x3ed[n].nrank << std::endl;
+      std::cout << "n=" << n << " gid=" << it->pbvals->nblocks_x2x3ed[n].gid << " level=" << it->pbvals->nblocks_x2x3ed[n].level << " rank=" << it->pbvals->nblocks_x2x3ed[n].rank << std::endl;
     }
     std::cout << "Corners" << std::endl;
     for (int n=0; n<8; ++n) {
-      std::cout << "n=" << n << " gid=" << it->pbvals->nblocks_corner[n].ngid << " level=" << it->pbvals->nblocks_corner[n].nlevel << " rank=" << it->pbvals->nblocks_corner[n].nrank << std::endl;
+      std::cout << "n=" << n << " gid=" << it->pbvals->nblocks_corner[n].gid << " level=" << it->pbvals->nblocks_corner[n].level << " rank=" << it->pbvals->nblocks_corner[n].rank << std::endl;
     }
   }
 /**********/

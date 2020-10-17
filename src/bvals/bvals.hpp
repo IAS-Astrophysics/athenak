@@ -28,10 +28,10 @@ enum class BoundaryFlag {undef=-1, block, reflect, outflow, user, periodic};
 
 struct NeighborBlock
 {
-  int ngid;
-  int nrank;
-  int nlevel;
-  NeighborBlock() : ngid(-1), nrank(-1), nlevel(-1) {}  // set default values
+  int gid;
+  int rank;
+  int level;
+  NeighborBlock() : gid(-1), rank(-1), level(-1) {}  // set default values
 };
 
 //----------------------------------------------------------------------------------------
@@ -56,6 +56,15 @@ struct BoundaryBuffer
   BoundaryStatus bstat_x3x1ed[4];
   BoundaryStatus bstat_x2x3ed[4];
   BoundaryStatus bstat_corner[8];
+#if MPI_PARALLEL_ENABLED
+  MPI_Request send_rq_x1face[2], recv_rq_x1face[2];
+  MPI_Request send_rq_x2face[2], recv_rq_x2face[2];
+  MPI_Request send_rq_x3face[2], recv_rq_x3face[2];
+  MPI_Request send_rq_x1x2ed[4], recv_rq_x1x2ed[4];
+  MPI_Request send_rq_x3x1ed[4], recv_rq_x3x1ed[4];
+  MPI_Request send_rq_x2x3ed[4], recv_rq_x2x3ed[4];
+  MPI_Request send_rq_corner[8], recv_rq_corner[8];
+#endif
 
   // constructor (calls View constructor with appropriate labels)
   BoundaryBuffer() :

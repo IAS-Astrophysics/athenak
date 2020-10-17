@@ -213,9 +213,9 @@ TaskStatus BoundaryValues::SendCellCenteredVariables(AthenaArray4D<Real> &a, int
 
   // copy x1 faces
   for (int n=0; n<2; ++n) {
-    if (nblocks_x1face[1-n].ngid >= 0) {
+    if (nblocks_x1face[1-n].gid >= 0) {
 //    if (bndry_flag[n]==BoundaryFlag::block || bndry_flag[n]==BoundaryFlag::periodic) {
-      MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x1face[1-n].ngid);
+      MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x1face[1-n].gid);
       auto sendbuf = Kokkos::subview(pbb->send_x1face,
                     (1-n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
       auto recvbuf = Kokkos::subview(pdest_mb->pbvals->bbuf_ptr[key]->recv_x1face,
@@ -228,9 +228,9 @@ TaskStatus BoundaryValues::SendCellCenteredVariables(AthenaArray4D<Real> &a, int
 
   // copy x2 faces and x1x2 edges
   for (int n=0; n<2; ++n) {
-    if (nblocks_x2face[1-n].ngid >= 0) {
+    if (nblocks_x2face[1-n].gid >= 0) {
 //    if (bndry_flag[n+2]==BoundaryFlag::block || bndry_flag[n+2]==BoundaryFlag::periodic) {
-      MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x2face[1-n].ngid);
+      MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x2face[1-n].gid);
       auto sendbuf = Kokkos::subview(pbb->send_x2face,
                     (1-n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
       auto recvbuf = Kokkos::subview(pdest_mb->pbvals->bbuf_ptr[key]->recv_x2face,
@@ -240,10 +240,10 @@ TaskStatus BoundaryValues::SendCellCenteredVariables(AthenaArray4D<Real> &a, int
     }
   }
   for (int n=0; n<4; ++n) {
-    if (nblocks_x1x2ed[3-n].ngid >= 0) {
+    if (nblocks_x1x2ed[3-n].gid >= 0) {
 //    if (bndry_flag[(n/2)+2]==BoundaryFlag::block ||
 //        bndry_flag[(n/2)+2]==BoundaryFlag::periodic) {
-      MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x1x2ed[3-n].ngid);
+      MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x1x2ed[3-n].gid);
       auto sendbuf = Kokkos::subview(pbb->send_x1x2ed,
                     (3-n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
       auto recvbuf = Kokkos::subview(pdest_mb->pbvals->bbuf_ptr[key]->recv_x1x2ed,
@@ -256,9 +256,9 @@ TaskStatus BoundaryValues::SendCellCenteredVariables(AthenaArray4D<Real> &a, int
   
   // copy x3 faces, x3x1 and x2x3 edges, and corners
   for (int n=0; n<2; ++n) {
-    if (nblocks_x3face[1-n].ngid >= 0) {
+    if (nblocks_x3face[1-n].gid >= 0) {
 //    if (bndry_flag[n+4]==BoundaryFlag::block || bndry_flag[n+4]==BoundaryFlag::periodic) {
-      MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x3face[1-n].ngid);
+      MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x3face[1-n].gid);
       auto sendbuf = Kokkos::subview(pbb->send_x3face,
                     (1-n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
       auto recvbuf = Kokkos::subview(pdest_mb->pbvals->bbuf_ptr[key]->recv_x3face,
@@ -268,10 +268,10 @@ TaskStatus BoundaryValues::SendCellCenteredVariables(AthenaArray4D<Real> &a, int
     }
   }
   for (int n=0; n<4; ++n) {
-    if (nblocks_x3x1ed[3-n].ngid >= 0) {
+    if (nblocks_x3x1ed[3-n].gid >= 0) {
 //    if (bndry_flag[(n/2)+4]==BoundaryFlag::block ||
 //        bndry_flag[(n/2)+4]==BoundaryFlag::periodic) {
-      MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x3x1ed[3-n].ngid);
+      MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x3x1ed[3-n].gid);
       auto sendbuf = Kokkos::subview(pbb->send_x3x1ed,
                     (3-n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
       auto recvbuf = Kokkos::subview(pdest_mb->pbvals->bbuf_ptr[key]->recv_x3x1ed,
@@ -281,10 +281,10 @@ TaskStatus BoundaryValues::SendCellCenteredVariables(AthenaArray4D<Real> &a, int
     }
   }
   for (int n=0; n<4; ++n) {
-    if (nblocks_x2x3ed[3-n].ngid >= 0) {
+    if (nblocks_x2x3ed[3-n].gid >= 0) {
 //    if (bndry_flag[(n/2)+4]==BoundaryFlag::block ||
 //        bndry_flag[(n/2)+4]==BoundaryFlag::periodic) {
-      MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x2x3ed[3-n].ngid);
+      MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x2x3ed[3-n].gid);
       auto sendbuf = Kokkos::subview(pbb->send_x2x3ed,
                     (3-n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
       auto recvbuf = Kokkos::subview(pdest_mb->pbvals->bbuf_ptr[key]->recv_x2x3ed,
@@ -294,10 +294,10 @@ TaskStatus BoundaryValues::SendCellCenteredVariables(AthenaArray4D<Real> &a, int
     }
   }
   for (int n=0; n<8; ++n) {
-    if (nblocks_corner[7-n].ngid >= 0) {
+    if (nblocks_corner[7-n].gid >= 0) {
 //    if (bndry_flag[(n/4)+4]==BoundaryFlag::block ||
 //        bndry_flag[(n/4)+4]==BoundaryFlag::periodic) {
-      MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_corner[7-n].ngid);
+      MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_corner[7-n].gid);
       auto sendbuf = Kokkos::subview(pbb->send_corner,
                     (7-n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
       auto recvbuf = Kokkos::subview(pdest_mb->pbvals->bbuf_ptr[key]->recv_corner,

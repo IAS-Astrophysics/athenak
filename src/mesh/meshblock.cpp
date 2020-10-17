@@ -116,9 +116,9 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
   for (int n=-1; n<=1; n+=2) {
     neibt = ptree->FindNeighbor(loc, n, 0, 0);
     if (neibt == nullptr) {continue;}
-    pbvals->nblocks_x1face[cnt].ngid   = neibt->gid_;
-    pbvals->nblocks_x1face[cnt].nlevel = neibt->loc_.level;
-    pbvals->nblocks_x1face[cnt].nrank  = ranklist[neibt->gid_];
+    pbvals->nblocks_x1face[cnt].gid   = neibt->gid_;
+    pbvals->nblocks_x1face[cnt].level = neibt->loc_.level;
+    pbvals->nblocks_x1face[cnt].rank  = ranklist[neibt->gid_];
     ++cnt;
   }
   if (mb_cells.nx2 == 1) {return;}  // stop if 1D
@@ -129,9 +129,9 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
   for (int m=-1; m<=1; m+=2) {
     neibt = ptree->FindNeighbor(loc, 0, m, 0);
     if (neibt == nullptr) {continue;}
-    pbvals->nblocks_x2face[cnt].ngid   = neibt->gid_;
-    pbvals->nblocks_x2face[cnt].nlevel = neibt->loc_.level;
-    pbvals->nblocks_x2face[cnt].nrank  = ranklist[neibt->gid_];
+    pbvals->nblocks_x2face[cnt].gid   = neibt->gid_;
+    pbvals->nblocks_x2face[cnt].level = neibt->loc_.level;
+    pbvals->nblocks_x2face[cnt].rank  = ranklist[neibt->gid_];
     ++cnt;
   }
   cnt=0;
@@ -139,9 +139,9 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
     for (int n=-1; n<=1; n+=2) {
       neibt = ptree->FindNeighbor(loc, n, m, 0);
       if (neibt == nullptr) {continue;}
-      pbvals->nblocks_x1x2ed[cnt].ngid   = neibt->gid_;
-      pbvals->nblocks_x1x2ed[cnt].nlevel = neibt->loc_.level;
-      pbvals->nblocks_x1x2ed[cnt].nrank  = ranklist[neibt->gid_];
+      pbvals->nblocks_x1x2ed[cnt].gid   = neibt->gid_;
+      pbvals->nblocks_x1x2ed[cnt].level = neibt->loc_.level;
+      pbvals->nblocks_x1x2ed[cnt].rank  = ranklist[neibt->gid_];
       ++cnt;
     }
   }
@@ -153,9 +153,9 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
   for (int l=-1; l<=1; l+=2) {
     neibt = ptree->FindNeighbor(loc, 0, 0, l);
     if (neibt == nullptr) {continue;}
-    pbvals->nblocks_x3face[cnt].ngid   = neibt->gid_;
-    pbvals->nblocks_x3face[cnt].nlevel = neibt->loc_.level;
-    pbvals->nblocks_x3face[cnt].nrank  = ranklist[neibt->gid_];
+    pbvals->nblocks_x3face[cnt].gid   = neibt->gid_;
+    pbvals->nblocks_x3face[cnt].level = neibt->loc_.level;
+    pbvals->nblocks_x3face[cnt].rank  = ranklist[neibt->gid_];
     ++cnt;
   }
   cnt=0;
@@ -163,9 +163,9 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
     for (int n=-1; n<=1; n+=2) {
       neibt = ptree->FindNeighbor(loc, n, 0, l);
       if (neibt == nullptr) {continue;}
-      pbvals->nblocks_x3x1ed[cnt].ngid   = neibt->gid_;
-      pbvals->nblocks_x3x1ed[cnt].nlevel = neibt->loc_.level;
-      pbvals->nblocks_x3x1ed[cnt].nrank  = ranklist[neibt->gid_];
+      pbvals->nblocks_x3x1ed[cnt].gid   = neibt->gid_;
+      pbvals->nblocks_x3x1ed[cnt].level = neibt->loc_.level;
+      pbvals->nblocks_x3x1ed[cnt].rank  = ranklist[neibt->gid_];
       ++cnt;
     }
   }
@@ -174,9 +174,9 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
     for (int m=-1; m<=1; m+=2) {
       neibt = ptree->FindNeighbor(loc, 0, m, l);
       if (neibt == nullptr) {continue;}
-      pbvals->nblocks_x2x3ed[cnt].ngid   = neibt->gid_;
-      pbvals->nblocks_x2x3ed[cnt].nlevel = neibt->loc_.level;
-      pbvals->nblocks_x2x3ed[cnt].nrank  = ranklist[neibt->gid_];
+      pbvals->nblocks_x2x3ed[cnt].gid   = neibt->gid_;
+      pbvals->nblocks_x2x3ed[cnt].level = neibt->loc_.level;
+      pbvals->nblocks_x2x3ed[cnt].rank  = ranklist[neibt->gid_];
       ++cnt;
     }
   }
@@ -186,9 +186,9 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
       for (int n=-1; n<=1; n+=2) {
         neibt = ptree->FindNeighbor(loc, n, m, l);
         if (neibt == nullptr) {continue;}
-        pbvals->nblocks_corner[cnt].ngid   = neibt->gid_;
-        pbvals->nblocks_corner[cnt].nlevel = neibt->loc_.level;
-        pbvals->nblocks_corner[cnt].nrank  = ranklist[neibt->gid_];
+        pbvals->nblocks_corner[cnt].gid   = neibt->gid_;
+        pbvals->nblocks_corner[cnt].level = neibt->loc_.level;
+        pbvals->nblocks_corner[cnt].rank  = ranklist[neibt->gid_];
         ++cnt;
       }
     }
