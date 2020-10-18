@@ -41,7 +41,7 @@ class Hydro
   AthenaArray4D<Real> u0;   // conserved variables
   AthenaArray4D<Real> w0;   // primitive variables
 
-  BoundaryBuffer bbuf;    // send/recv buffers and BoundaryStatus flags for Hydro comms.
+  BBuffer bbuf;    // send/recv buffers and BoundaryStatus flags for Hydro comms.
 
   // following only used for time-evolving flow
   AthenaArray4D<Real> u1;    // conserved variables at intermediate step 

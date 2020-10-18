@@ -93,25 +93,7 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
   MeshBlockTree* neibt;
   LogicalLocation loc = pmesh_->loclist[mb_gid];
 
-//  int cnt=-1;
-//  // iterate over x3/x2/x1 faces and load all 26 neighbors on a uniform grid.
-//  // Neighbors are indexed sequentially starting from lower corner.
-//  for (int l=-1; l<=1; ++l) {
-//  for (int m=-1; m<=1; ++m) {
-//  for (int n=-1; n<=1; ++n) {
-//    if (n==0 && m==0 && l==0) {continue;}
-//    ++cnt;
-//    if (mb_cells.nx3 == 1 && l != 0) {continue;}  // skip if not 3D
-//    if (mb_cells.nx2 == 1 && m != 0) {continue;}  // skip if not 2D
-//    neibt = ptree->FindNeighbor(loc, n, m, l);
-//    if (neibt == nullptr) {continue;}
-//    nblocks[cnt].ngid   = neibt->gid_;
-//    nblocks[cnt].nlevel = neibt->loc_.level;
-//    nblocks[cnt].nrank  = ranklist[neibt->gid_];
-//  }}}
-
   // neighbors on x1face
-
   int cnt=0;
   for (int n=-1; n<=1; n+=2) {
     neibt = ptree->FindNeighbor(loc, n, 0, 0);
@@ -124,7 +106,6 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
   if (mb_cells.nx2 == 1) {return;}  // stop if 1D
 
   // neighbors on x2face and x1x2 edges
-
   cnt=0;
   for (int m=-1; m<=1; m+=2) {
     neibt = ptree->FindNeighbor(loc, 0, m, 0);
@@ -148,7 +129,6 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
   if (mb_cells.nx3 == 1) {return;}  // stop if 2D
 
   // neighbors on x3face, x3x1 and x2x3 edges, and corners
-
   cnt=0;
   for (int l=-1; l<=1; l+=2) {
     neibt = ptree->FindNeighbor(loc, 0, 0, l);

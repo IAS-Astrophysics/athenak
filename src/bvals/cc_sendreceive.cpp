@@ -33,7 +33,7 @@ TaskStatus BoundaryValues::SendCellCenteredVars(AthenaArray4D<Real> &a, int nvar
   int nx3 = pmb->mb_cells.nx3;
 
   // Find the physics module containing the send buffer, using bbuf_ptr map and [key]
-  BoundaryBuffer *pbb = pmb->pbvals->bbuf_ptr[key];
+  BBuffer *pbb = pmb->pbvals->bbuf_ptr[key];
 
   // create local references for variables in kernel
   auto &nx3gt1 = pmesh_->nx3gt1;
@@ -211,17 +211,16 @@ TaskStatus BoundaryValues::SendCellCenteredVars(AthenaArray4D<Real> &a, int nvar
   // set to "completed" when deep_copy is used.
 
   // copy x1 faces
+  using Kokkos::ALL;
   for (int n=0; n<2; ++n) {
     if (nghbr_x1face[n].gid >= 0) {  // this is not a physical boundary
-      auto sendbuf = Kokkos::subview(pbb->send_x1face,
-                     (n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
+      auto sendbuf = Kokkos::subview(pbb->send_x1face,n,ALL,ALL,ALL,ALL);
       if (nghbr_x1face[n].rank == global_variable::my_rank) {
         // copy buffer if destination MeshBlock is on the same rank
-        MeshBlock *pdmb = pmesh_->FindMeshBlock(nghbr_x1face[n].gid);
-        auto recvbuf = Kokkos::subview(pdmb->pbvals->bbuf_ptr[key]->recv_x1face,
-                       (1-n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
+        BBuffer *pdbb = pmesh_->FindMeshBlock(nghbr_x1face[n].gid)->pbvals->bbuf_ptr[key];
+        auto recvbuf = Kokkos::subview(pdbb->recv_x1face,(1-n),ALL,ALL,ALL,ALL);
         Kokkos::deep_copy(pmb->exe_space, recvbuf, sendbuf);
-        pdmb->pbvals->bbuf_ptr[key]->bstat_x1face[1-n] = BoundaryRecvStatus::completed;
+        pdbb->bstat_x1face[1-n] = BoundaryRecvStatus::completed;
 #if MPI_PARALLEL_ENABLED
       } else {
         // send buffer via MPI if destination MeshBlock is NOT on the same rank
@@ -234,15 +233,13 @@ TaskStatus BoundaryValues::SendCellCenteredVars(AthenaArray4D<Real> &a, int nvar
   // copy x2 faces and x1x2 edges
   for (int n=0; n<2; ++n) {
     if (nghbr_x2face[n].gid >= 0) {
-      auto sendbuf = Kokkos::subview(pbb->send_x2face,
-                     (n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
+      auto sendbuf = Kokkos::subview(pbb->send_x2face,n,ALL,ALL,ALL,ALL);
       if (nghbr_x2face[n].rank == global_variable::my_rank) {
         // copy buffer if destination MeshBlock is on the same rank
-        MeshBlock *pdmb = pmesh_->FindMeshBlock(nghbr_x2face[n].gid);
-        auto recvbuf = Kokkos::subview(pdmb->pbvals->bbuf_ptr[key]->recv_x2face,
-                       (1-n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
+        BBuffer *pdbb = pmesh_->FindMeshBlock(nghbr_x2face[n].gid)->pbvals->bbuf_ptr[key];
+        auto recvbuf = Kokkos::subview(pdbb->recv_x2face,(1-n),ALL,ALL,ALL,ALL);
         Kokkos::deep_copy(pmb->exe_space, recvbuf, sendbuf);
-        pdmb->pbvals->bbuf_ptr[key]->bstat_x2face[1-n] = BoundaryRecvStatus::completed;
+        pdbb->bstat_x2face[1-n] = BoundaryRecvStatus::completed;
 #if MPI_PARALLEL_ENABLED
       } else {
         // send buffer via MPI if destination MeshBlock is NOT on the same rank
@@ -252,15 +249,13 @@ TaskStatus BoundaryValues::SendCellCenteredVars(AthenaArray4D<Real> &a, int nvar
   }
   for (int n=0; n<4; ++n) {
     if (nghbr_x1x2ed[n].gid >= 0) {
-      auto sendbuf = Kokkos::subview(pbb->send_x1x2ed,
-                     (n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
+      auto sendbuf = Kokkos::subview(pbb->send_x1x2ed,n,ALL,ALL,ALL,ALL);
       if (nghbr_x1x2ed[n].rank == global_variable::my_rank) {
         // copy buffer if destination MeshBlock is on the same rank
-        MeshBlock *pdmb = pmesh_->FindMeshBlock(nghbr_x1x2ed[n].gid);
-        auto recvbuf = Kokkos::subview(pdmb->pbvals->bbuf_ptr[key]->recv_x1x2ed,
-                       (3-n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
+        BBuffer *pdbb = pmesh_->FindMeshBlock(nghbr_x1x2ed[n].gid)->pbvals->bbuf_ptr[key];
+        auto recvbuf = Kokkos::subview(pdbb->recv_x1x2ed,(3-n),ALL,ALL,ALL,ALL);
         Kokkos::deep_copy(pmb->exe_space, recvbuf, sendbuf);
-        pdmb->pbvals->bbuf_ptr[key]->bstat_x1x2ed[3-n] = BoundaryRecvStatus::completed;
+        pdbb->bstat_x1x2ed[3-n] = BoundaryRecvStatus::completed;
 #if MPI_PARALLEL_ENABLED
       } else {
         // send buffer via MPI if destination MeshBlock is NOT on the same rank
@@ -273,15 +268,13 @@ TaskStatus BoundaryValues::SendCellCenteredVars(AthenaArray4D<Real> &a, int nvar
   // copy x3 faces, x3x1 and x2x3 edges, and corners
   for (int n=0; n<2; ++n) {
     if (nghbr_x3face[n].gid >= 0) {
-      auto sendbuf = Kokkos::subview(pbb->send_x3face,
-                     (n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
+      auto sendbuf = Kokkos::subview(pbb->send_x3face,n,ALL,ALL,ALL,ALL);
       if (nghbr_x3face[n].rank == global_variable::my_rank) {
         // copy buffer if destination MeshBlock is on the same rank
-        MeshBlock *pdmb = pmesh_->FindMeshBlock(nghbr_x3face[n].gid);
-        auto recvbuf = Kokkos::subview(pdmb->pbvals->bbuf_ptr[key]->recv_x3face,
-                       (1-n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
+        BBuffer *pdbb = pmesh_->FindMeshBlock(nghbr_x3face[n].gid)->pbvals->bbuf_ptr[key];
+        auto recvbuf = Kokkos::subview(pdbb->recv_x3face,(1-n),ALL,ALL,ALL,ALL);
         Kokkos::deep_copy(pmb->exe_space, recvbuf, sendbuf);
-        pdmb->pbvals->bbuf_ptr[key]->bstat_x3face[1-n] = BoundaryRecvStatus::completed;
+        pdbb->bstat_x3face[1-n] = BoundaryRecvStatus::completed;
 #if MPI_PARALLEL_ENABLED
       } else {
         // send buffer via MPI if destination MeshBlock is NOT on the same rank
@@ -291,15 +284,13 @@ TaskStatus BoundaryValues::SendCellCenteredVars(AthenaArray4D<Real> &a, int nvar
   }
   for (int n=0; n<4; ++n) {
     if (nghbr_x3x1ed[n].gid >= 0) {
-      auto sendbuf = Kokkos::subview(pbb->send_x3x1ed,
-                     (n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
+      auto sendbuf = Kokkos::subview(pbb->send_x3x1ed,n,ALL,ALL,ALL,ALL);
       if (nghbr_x3x1ed[n].rank == global_variable::my_rank) {
         // copy buffer if destination MeshBlock is on the same rank
-        MeshBlock *pdmb = pmesh_->FindMeshBlock(nghbr_x3x1ed[n].gid);
-        auto recvbuf = Kokkos::subview(pdmb->pbvals->bbuf_ptr[key]->recv_x3x1ed,
-                       (3-n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
+        BBuffer *pdbb = pmesh_->FindMeshBlock(nghbr_x3x1ed[n].gid)->pbvals->bbuf_ptr[key];
+        auto recvbuf = Kokkos::subview(pdbb->recv_x3x1ed,(3-n),ALL,ALL,ALL,ALL);
         Kokkos::deep_copy(pmb->exe_space, recvbuf, sendbuf);
-        pdmb->pbvals->bbuf_ptr[key]->bstat_x3x1ed[3-n] = BoundaryRecvStatus::completed;
+        pdbb->bstat_x3x1ed[3-n] = BoundaryRecvStatus::completed;
 #if MPI_PARALLEL_ENABLED
       } else {
         // send buffer via MPI if destination MeshBlock is NOT on the same rank
@@ -309,15 +300,13 @@ TaskStatus BoundaryValues::SendCellCenteredVars(AthenaArray4D<Real> &a, int nvar
   }
   for (int n=0; n<4; ++n) {
     if (nghbr_x2x3ed[n].gid >= 0) {
-      auto sendbuf = Kokkos::subview(pbb->send_x2x3ed,
-                     (n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
+      auto sendbuf = Kokkos::subview(pbb->send_x2x3ed,n,ALL,ALL,ALL,ALL);
       if (nghbr_x2x3ed[n].rank == global_variable::my_rank) {
         // copy buffer if destination MeshBlock is on the same rank
-        MeshBlock *pdmb = pmesh_->FindMeshBlock(nghbr_x2x3ed[n].gid);
-        auto recvbuf = Kokkos::subview(pdmb->pbvals->bbuf_ptr[key]->recv_x2x3ed,
-                       (3-n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
+        BBuffer *pdbb = pmesh_->FindMeshBlock(nghbr_x2x3ed[n].gid)->pbvals->bbuf_ptr[key];
+        auto recvbuf = Kokkos::subview(pdbb->recv_x2x3ed,(3-n),ALL,ALL,ALL,ALL);
         Kokkos::deep_copy(pmb->exe_space, recvbuf, sendbuf);
-        pdmb->pbvals->bbuf_ptr[key]->bstat_x2x3ed[3-n] = BoundaryRecvStatus::completed;
+        pdbb->bstat_x2x3ed[3-n] = BoundaryRecvStatus::completed;
 #if MPI_PARALLEL_ENABLED
       } else {
         // send buffer via MPI if destination MeshBlock is NOT on the same rank
@@ -327,8 +316,7 @@ TaskStatus BoundaryValues::SendCellCenteredVars(AthenaArray4D<Real> &a, int nvar
   }
   for (int n=0; n<8; ++n) {
     if (nghbr_corner[n].gid >= 0) {
-      auto sendbuf = Kokkos::subview(pbb->send_corner,
-                     (n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
+      auto sendbuf = Kokkos::subview(pbb->send_corner,n,ALL,ALL,ALL,ALL);
       if (nghbr_corner[n].rank == global_variable::my_rank) {
         // copy buffer if destination MeshBlock is on the same rank
         MeshBlock *pdmb = pmesh_->FindMeshBlock(nghbr_corner[n].gid);
@@ -365,7 +353,7 @@ TaskStatus BoundaryValues::RecvCellCenteredVars(AthenaArray4D<Real> &a, int nvar
   int ncells3 = (pmb->mb_cells.nx3 > 1)? (pmb->mb_cells.nx3 + 2*ng) : 1;
 
   // Find the physics module containing the recv buffer, using bbuf_ptr map and [key]
-  BoundaryBuffer *pbb = pmb->pbvals->bbuf_ptr[key];
+  BBuffer *pbb = pmb->pbvals->bbuf_ptr[key];
 
   // check that recv boundary buffers have all completed, exit if not.
   for (int n=0; n<2; ++n) {

@@ -38,7 +38,7 @@ struct NeighborBlock
 //! \struct BoundaryBuffer
 //  \brief Stores send/receive buffers and BoundaryStatus flags
 
-struct BoundaryBuffer
+struct BBuffer
 {
   // face, edge, and corner send buffers
   AthenaArray5D<Real> send_x1face, send_x2face, send_x3face;
@@ -68,7 +68,7 @@ struct BoundaryBuffer
 #endif
 
   // constructor (calls View constructor with appropriate labels)
-  BoundaryBuffer() :
+  BBuffer() :
     send_x1face("x1face_send_buf",1,1,1,1,1),
     send_x2face("x2face_send_buf",1,1,1,1,1),
     send_x3face("x3face_send_buf",1,1,1,1,1),
@@ -100,9 +100,9 @@ class BoundaryValues {
   // data
   BoundaryFlag bndry_flag[6]; // enums specifying BCs at all 6 faces of this MeshBlock
 
-  // map to store pointers to BoundaryBuffers for different physics
+  // map to store pointers to BBuffers for different physics
   // elements are added in mesh/interface_physics after physics modules cons in MBs
-  std::map<std::string,BoundaryBuffer*> bbuf_ptr;
+  std::map<std::string,BBuffer*> bbuf_ptr;
 
   NeighborBlock nghbr_x1face[2];
   NeighborBlock nghbr_x2face[2]; 
@@ -113,7 +113,7 @@ class BoundaryValues {
   NeighborBlock nghbr_corner[8];
 
   // functions
-  void AllocateBuffers(BoundaryBuffer &bbuf, const int maxv);
+  void AllocateBuffers(BBuffer &bbuf, const int maxv);
   TaskStatus SendCellCenteredVars(AthenaArray4D<Real> &a, int nvar, std::string key);
   TaskStatus RecvCellCenteredVars(AthenaArray4D<Real> &a, int nvar, std::string key);
 

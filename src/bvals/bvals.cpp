@@ -34,7 +34,7 @@ BoundaryValues::~BoundaryValues()
 //----------------------------------------------------------------------------------------
 // \!fn void BoundaryValues::AllocateBuffers
 
-void BoundaryValues::AllocateBuffers(BoundaryBuffer &bbuf, const int maxvar)
+void BoundaryValues::AllocateBuffers(BBuffer &bbuf, const int maxvar)
 {
   // Allocate memory for send and receive boundary buffers, and initialize 
   // BoundaryRecvStatus flags.
