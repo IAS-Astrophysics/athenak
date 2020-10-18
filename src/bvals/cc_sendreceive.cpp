@@ -15,12 +15,12 @@
 #include "mesh/mesh.hpp"
 
 //----------------------------------------------------------------------------------------
-// \!fn void BoundaryValues::SendCellCenteredVariables()
+// \!fn void BoundaryValues::SendCellCenteredVars()
 // \brief Pack boundary buffers for cell-centered variables, and send to neighbors
-// This routine always packs ALL the buffers, but they are only sent (via MPI) or copied
-// for periodic or block boundaries
+// This routine packs ALL the buffers on ALL the faces, edges, and corners simultaneously
+// They are then sent (via MPI) or copied directly for periodic or block boundaries
 
-TaskStatus BoundaryValues::SendCellCenteredVariables(AthenaArray4D<Real> &a, int nvar,
+TaskStatus BoundaryValues::SendCellCenteredVars(AthenaArray4D<Real> &a, int nvar,
                                                      std::string key)
 {
   MeshBlock *pmb = pmesh_->FindMeshBlock(my_mbgid_);
@@ -204,106 +204,143 @@ TaskStatus BoundaryValues::SendCellCenteredVariables(AthenaArray4D<Real> &a, int
     }
   ); // end par_for_outer
 
-  // Now, for block or periodic boundaries, send boundary buffer to neighboring MeshBlocks
-  // using MPI, or if neighbor is on same MPI rank, use Kokkos::deep_copy of subviews
-  // Note (1) physics module containing the recv buffer is found using bbuf_ptr map and
-  // the [key], (2) in general recv_buffer[n] maps to recv_buffer[X-n] (where X is number
-  // of buffers of each type), and (3) BoundaryStatus flag must be sent for copies 
-  // TODO add MPI sends
+  // Send boundary buffer to neighboring MeshBlocks using MPI or Kokkos::deep_copy if
+  // neighbor is on same MPI rank. Note (1) physics module containing the recv buffer is
+  // found using bbuf_ptr map and [key], (2) send_buffer[n] maps to recv_buffer[X-n]
+  // (where X is number of buffers of each type), and (3) BoundaryRecvStatus flag must be
+  // set to "completed" when deep_copy is used.
 
   // copy x1 faces
   for (int n=0; n<2; ++n) {
-    if (nblocks_x1face[1-n].gid >= 0) {
-//    if (bndry_flag[n]==BoundaryFlag::block || bndry_flag[n]==BoundaryFlag::periodic) {
-      MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x1face[1-n].gid);
+    if (nghbr_x1face[n].gid >= 0) {  // this is not a physical boundary
       auto sendbuf = Kokkos::subview(pbb->send_x1face,
-                    (1-n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
-      auto recvbuf = Kokkos::subview(pdest_mb->pbvals->bbuf_ptr[key]->recv_x1face,
-                    (n  ),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
-      Kokkos::deep_copy(pmb->exe_space, recvbuf, sendbuf);
-      pdest_mb->pbvals->bbuf_ptr[key]->bstat_x1face[n] = BoundaryStatus::completed;
+                     (n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
+      if (nghbr_x1face[n].rank == global_variable::my_rank) {
+        // copy buffer if destination MeshBlock is on the same rank
+        MeshBlock *pdmb = pmesh_->FindMeshBlock(nghbr_x1face[n].gid);
+        auto recvbuf = Kokkos::subview(pdmb->pbvals->bbuf_ptr[key]->recv_x1face,
+                       (1-n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
+        Kokkos::deep_copy(pmb->exe_space, recvbuf, sendbuf);
+        pdmb->pbvals->bbuf_ptr[key]->bstat_x1face[1-n] = BoundaryRecvStatus::completed;
+#if MPI_PARALLEL_ENABLED
+      } else {
+        // send buffer via MPI if destination MeshBlock is NOT on the same rank
+#endif
+      }
     }
   }
   if (!(pmesh_->nx2gt1)) return TaskStatus::complete;
 
   // copy x2 faces and x1x2 edges
   for (int n=0; n<2; ++n) {
-    if (nblocks_x2face[1-n].gid >= 0) {
-//    if (bndry_flag[n+2]==BoundaryFlag::block || bndry_flag[n+2]==BoundaryFlag::periodic) {
-      MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x2face[1-n].gid);
+    if (nghbr_x2face[n].gid >= 0) {
       auto sendbuf = Kokkos::subview(pbb->send_x2face,
-                    (1-n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
-      auto recvbuf = Kokkos::subview(pdest_mb->pbvals->bbuf_ptr[key]->recv_x2face,
-                    (n  ),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
-      Kokkos::deep_copy(pmb->exe_space, recvbuf, sendbuf);
-      pdest_mb->pbvals->bbuf_ptr[key]->bstat_x2face[n] = BoundaryStatus::completed;
+                     (n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
+      if (nghbr_x2face[n].rank == global_variable::my_rank) {
+        // copy buffer if destination MeshBlock is on the same rank
+        MeshBlock *pdmb = pmesh_->FindMeshBlock(nghbr_x2face[n].gid);
+        auto recvbuf = Kokkos::subview(pdmb->pbvals->bbuf_ptr[key]->recv_x2face,
+                       (1-n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
+        Kokkos::deep_copy(pmb->exe_space, recvbuf, sendbuf);
+        pdmb->pbvals->bbuf_ptr[key]->bstat_x2face[1-n] = BoundaryRecvStatus::completed;
+#if MPI_PARALLEL_ENABLED
+      } else {
+        // send buffer via MPI if destination MeshBlock is NOT on the same rank
+#endif
+      }
     }
   }
   for (int n=0; n<4; ++n) {
-    if (nblocks_x1x2ed[3-n].gid >= 0) {
-//    if (bndry_flag[(n/2)+2]==BoundaryFlag::block ||
-//        bndry_flag[(n/2)+2]==BoundaryFlag::periodic) {
-      MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x1x2ed[3-n].gid);
+    if (nghbr_x1x2ed[n].gid >= 0) {
       auto sendbuf = Kokkos::subview(pbb->send_x1x2ed,
-                    (3-n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
-      auto recvbuf = Kokkos::subview(pdest_mb->pbvals->bbuf_ptr[key]->recv_x1x2ed,
-                    (n  ),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
-      Kokkos::deep_copy(pmb->exe_space, recvbuf, sendbuf);
-      pdest_mb->pbvals->bbuf_ptr[key]->bstat_x1x2ed[n] = BoundaryStatus::completed;
+                     (n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
+      if (nghbr_x1x2ed[n].rank == global_variable::my_rank) {
+        // copy buffer if destination MeshBlock is on the same rank
+        MeshBlock *pdmb = pmesh_->FindMeshBlock(nghbr_x1x2ed[n].gid);
+        auto recvbuf = Kokkos::subview(pdmb->pbvals->bbuf_ptr[key]->recv_x1x2ed,
+                       (3-n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
+        Kokkos::deep_copy(pmb->exe_space, recvbuf, sendbuf);
+        pdmb->pbvals->bbuf_ptr[key]->bstat_x1x2ed[3-n] = BoundaryRecvStatus::completed;
+#if MPI_PARALLEL_ENABLED
+      } else {
+        // send buffer via MPI if destination MeshBlock is NOT on the same rank
+#endif
+      }
     }
   }
   if (!(pmesh_->nx3gt1)) return TaskStatus::complete;
   
   // copy x3 faces, x3x1 and x2x3 edges, and corners
   for (int n=0; n<2; ++n) {
-    if (nblocks_x3face[1-n].gid >= 0) {
-//    if (bndry_flag[n+4]==BoundaryFlag::block || bndry_flag[n+4]==BoundaryFlag::periodic) {
-      MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x3face[1-n].gid);
+    if (nghbr_x3face[n].gid >= 0) {
       auto sendbuf = Kokkos::subview(pbb->send_x3face,
-                    (1-n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
-      auto recvbuf = Kokkos::subview(pdest_mb->pbvals->bbuf_ptr[key]->recv_x3face,
-                    (n  ),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
-      Kokkos::deep_copy(pmb->exe_space, recvbuf, sendbuf);
-      pdest_mb->pbvals->bbuf_ptr[key]->bstat_x3face[n] = BoundaryStatus::completed;
+                     (n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
+      if (nghbr_x3face[n].rank == global_variable::my_rank) {
+        // copy buffer if destination MeshBlock is on the same rank
+        MeshBlock *pdmb = pmesh_->FindMeshBlock(nghbr_x3face[n].gid);
+        auto recvbuf = Kokkos::subview(pdmb->pbvals->bbuf_ptr[key]->recv_x3face,
+                       (1-n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
+        Kokkos::deep_copy(pmb->exe_space, recvbuf, sendbuf);
+        pdmb->pbvals->bbuf_ptr[key]->bstat_x3face[1-n] = BoundaryRecvStatus::completed;
+#if MPI_PARALLEL_ENABLED
+      } else {
+        // send buffer via MPI if destination MeshBlock is NOT on the same rank
+#endif
+      }
     }
   }
   for (int n=0; n<4; ++n) {
-    if (nblocks_x3x1ed[3-n].gid >= 0) {
-//    if (bndry_flag[(n/2)+4]==BoundaryFlag::block ||
-//        bndry_flag[(n/2)+4]==BoundaryFlag::periodic) {
-      MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x3x1ed[3-n].gid);
+    if (nghbr_x3x1ed[n].gid >= 0) {
       auto sendbuf = Kokkos::subview(pbb->send_x3x1ed,
-                    (3-n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
-      auto recvbuf = Kokkos::subview(pdest_mb->pbvals->bbuf_ptr[key]->recv_x3x1ed,
-                    (n  ),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
-      Kokkos::deep_copy(pmb->exe_space, recvbuf, sendbuf);
-      pdest_mb->pbvals->bbuf_ptr[key]->bstat_x3x1ed[n] = BoundaryStatus::completed;
+                     (n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
+      if (nghbr_x3x1ed[n].rank == global_variable::my_rank) {
+        // copy buffer if destination MeshBlock is on the same rank
+        MeshBlock *pdmb = pmesh_->FindMeshBlock(nghbr_x3x1ed[n].gid);
+        auto recvbuf = Kokkos::subview(pdmb->pbvals->bbuf_ptr[key]->recv_x3x1ed,
+                       (3-n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
+        Kokkos::deep_copy(pmb->exe_space, recvbuf, sendbuf);
+        pdmb->pbvals->bbuf_ptr[key]->bstat_x3x1ed[3-n] = BoundaryRecvStatus::completed;
+#if MPI_PARALLEL_ENABLED
+      } else {
+        // send buffer via MPI if destination MeshBlock is NOT on the same rank
+#endif
+      }
     }
   }
   for (int n=0; n<4; ++n) {
-    if (nblocks_x2x3ed[3-n].gid >= 0) {
-//    if (bndry_flag[(n/2)+4]==BoundaryFlag::block ||
-//        bndry_flag[(n/2)+4]==BoundaryFlag::periodic) {
-      MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_x2x3ed[3-n].gid);
+    if (nghbr_x2x3ed[n].gid >= 0) {
       auto sendbuf = Kokkos::subview(pbb->send_x2x3ed,
-                    (3-n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
-      auto recvbuf = Kokkos::subview(pdest_mb->pbvals->bbuf_ptr[key]->recv_x2x3ed,
-                    (n  ),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
-      Kokkos::deep_copy(pmb->exe_space, recvbuf, sendbuf);
-      pdest_mb->pbvals->bbuf_ptr[key]->bstat_x2x3ed[n] = BoundaryStatus::completed;
+                     (n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
+      if (nghbr_x2x3ed[n].rank == global_variable::my_rank) {
+        // copy buffer if destination MeshBlock is on the same rank
+        MeshBlock *pdmb = pmesh_->FindMeshBlock(nghbr_x2x3ed[n].gid);
+        auto recvbuf = Kokkos::subview(pdmb->pbvals->bbuf_ptr[key]->recv_x2x3ed,
+                       (3-n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
+        Kokkos::deep_copy(pmb->exe_space, recvbuf, sendbuf);
+        pdmb->pbvals->bbuf_ptr[key]->bstat_x2x3ed[3-n] = BoundaryRecvStatus::completed;
+#if MPI_PARALLEL_ENABLED
+      } else {
+        // send buffer via MPI if destination MeshBlock is NOT on the same rank
+#endif
+      }
     }
   }
   for (int n=0; n<8; ++n) {
-    if (nblocks_corner[7-n].gid >= 0) {
-//    if (bndry_flag[(n/4)+4]==BoundaryFlag::block ||
-//        bndry_flag[(n/4)+4]==BoundaryFlag::periodic) {
-      MeshBlock *pdest_mb = pmesh_->FindMeshBlock(nblocks_corner[7-n].gid);
+    if (nghbr_corner[n].gid >= 0) {
       auto sendbuf = Kokkos::subview(pbb->send_corner,
-                    (7-n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
-      auto recvbuf = Kokkos::subview(pdest_mb->pbvals->bbuf_ptr[key]->recv_corner,
-                    (n  ),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
-      Kokkos::deep_copy(pmb->exe_space, recvbuf, sendbuf);
-      pdest_mb->pbvals->bbuf_ptr[key]->bstat_corner[n] = BoundaryStatus::completed;
+                     (n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
+      if (nghbr_corner[n].rank == global_variable::my_rank) {
+        // copy buffer if destination MeshBlock is on the same rank
+        MeshBlock *pdmb = pmesh_->FindMeshBlock(nghbr_corner[n].gid);
+        auto recvbuf = Kokkos::subview(pdmb->pbvals->bbuf_ptr[key]->recv_corner,
+                       (7-n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
+        Kokkos::deep_copy(pmb->exe_space, recvbuf, sendbuf);
+        pdmb->pbvals->bbuf_ptr[key]->bstat_corner[7-n] = BoundaryRecvStatus::completed;
+#if MPI_PARALLEL_ENABLED
+      } else {
+        // send buffer via MPI if destination MeshBlock is NOT on the same rank
+#endif
+      }
     }
   }
 
@@ -311,11 +348,11 @@ TaskStatus BoundaryValues::SendCellCenteredVariables(AthenaArray4D<Real> &a, int
 }
 
 //----------------------------------------------------------------------------------------
-// \!fn void BoundaryValues::RecvCellCenteredVariables()
+// \!fn void BoundaryValues::RecvCellCenteredVars()
 // \brief Unpack boundary buffers for cell-centered variables.
 
-TaskStatus BoundaryValues::RecvCellCenteredVariables(AthenaArray4D<Real> &a, int nvar,
-                                                     std::string key)
+TaskStatus BoundaryValues::RecvCellCenteredVars(AthenaArray4D<Real> &a, int nvar,
+                                                std::string key)
 {
   MeshBlock *pmb = pmesh_->FindMeshBlock(my_mbgid_);
 
@@ -332,26 +369,26 @@ TaskStatus BoundaryValues::RecvCellCenteredVariables(AthenaArray4D<Real> &a, int
 
   // check that recv boundary buffers have all completed, exit if not.
   for (int n=0; n<2; ++n) {
-    if (pbb->bstat_x1face[n]==BoundaryStatus::waiting) { return TaskStatus::incomplete;}
+    if (pbb->bstat_x1face[n]==BoundaryRecvStatus::waiting) { return TaskStatus::incomplete;}
   }
   if (pmesh_->nx2gt1) {
     for (int n=0; n<2; ++n) {
-      if (pbb->bstat_x2face[n]==BoundaryStatus::waiting) {return TaskStatus::incomplete;}
+      if (pbb->bstat_x2face[n]==BoundaryRecvStatus::waiting) {return TaskStatus::incomplete;}
     }
     for (int n=0; n<4; ++n) {
-      if (pbb->bstat_x1x2ed[n]==BoundaryStatus::waiting) {return TaskStatus::incomplete;}
+      if (pbb->bstat_x1x2ed[n]==BoundaryRecvStatus::waiting) {return TaskStatus::incomplete;}
     }
   }
   if (pmesh_->nx3gt1) {
     for (int n=0; n<2; ++n) {
-      if (pbb->bstat_x3face[n]==BoundaryStatus::waiting) {return TaskStatus::incomplete;}
+      if (pbb->bstat_x3face[n]==BoundaryRecvStatus::waiting) {return TaskStatus::incomplete;}
     }
     for (int n=0; n<4; ++n) {
-      if (pbb->bstat_x3x1ed[n]==BoundaryStatus::waiting) {return TaskStatus::incomplete;}
-      if (pbb->bstat_x2x3ed[n]==BoundaryStatus::waiting) {return TaskStatus::incomplete;}
+      if (pbb->bstat_x3x1ed[n]==BoundaryRecvStatus::waiting) {return TaskStatus::incomplete;}
+      if (pbb->bstat_x2x3ed[n]==BoundaryRecvStatus::waiting) {return TaskStatus::incomplete;}
     }
     for (int n=0; n<8; ++n) {
-      if (pbb->bstat_corner[n]==BoundaryStatus::waiting) {return TaskStatus::incomplete;}
+      if (pbb->bstat_corner[n]==BoundaryRecvStatus::waiting) {return TaskStatus::incomplete;}
     }
   }
   

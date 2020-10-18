@@ -12,7 +12,7 @@
 enum BoundaryFace {undef=-1, inner_x1, outer_x1, inner_x2, outer_x2, inner_x3, outer_x3};
 
 // identifiers for status of MPI boundary communications
-enum class BoundaryStatus {undef=-1, waiting, completed};
+enum class BoundaryRecvStatus {undef=-1, waiting, completed};
 
 // identifiers for boundary conditions
 enum class BoundaryFlag {undef=-1, block, reflect, outflow, user, periodic};
@@ -49,14 +49,15 @@ struct BoundaryBuffer
   AthenaArray5D<Real> recv_x1x2ed, recv_x3x1ed, recv_x2x3ed;
   AthenaArray5D<Real> recv_corner;
   // face, edge, and corner status flags
-  BoundaryStatus bstat_x1face[2];
-  BoundaryStatus bstat_x2face[2];
-  BoundaryStatus bstat_x3face[2];
-  BoundaryStatus bstat_x1x2ed[4];
-  BoundaryStatus bstat_x3x1ed[4];
-  BoundaryStatus bstat_x2x3ed[4];
-  BoundaryStatus bstat_corner[8];
+  BoundaryRecvStatus bstat_x1face[2];
+  BoundaryRecvStatus bstat_x2face[2];
+  BoundaryRecvStatus bstat_x3face[2];
+  BoundaryRecvStatus bstat_x1x2ed[4];
+  BoundaryRecvStatus bstat_x3x1ed[4];
+  BoundaryRecvStatus bstat_x2x3ed[4];
+  BoundaryRecvStatus bstat_corner[8];
 #if MPI_PARALLEL_ENABLED
+  // MPI send/recv requests for face, edge, and corners
   MPI_Request send_rq_x1face[2], recv_rq_x1face[2];
   MPI_Request send_rq_x2face[2], recv_rq_x2face[2];
   MPI_Request send_rq_x3face[2], recv_rq_x3face[2];
@@ -84,7 +85,7 @@ struct BoundaryBuffer
     recv_corner("corner_recv_buf",1,1,1,1,1) {}
 };
 
-// Forward delcarations
+// Forward declarations
 class Mesh;
 
 //----------------------------------------------------------------------------------------
@@ -103,18 +104,18 @@ class BoundaryValues {
   // elements are added in mesh/interface_physics after physics modules cons in MBs
   std::map<std::string,BoundaryBuffer*> bbuf_ptr;
 
-  NeighborBlock nblocks_x1face[2];
-  NeighborBlock nblocks_x2face[2]; 
-  NeighborBlock nblocks_x3face[2];
-  NeighborBlock nblocks_x1x2ed[4];
-  NeighborBlock nblocks_x3x1ed[4];
-  NeighborBlock nblocks_x2x3ed[4];
-  NeighborBlock nblocks_corner[8];
+  NeighborBlock nghbr_x1face[2];
+  NeighborBlock nghbr_x2face[2]; 
+  NeighborBlock nghbr_x3face[2];
+  NeighborBlock nghbr_x1x2ed[4];
+  NeighborBlock nghbr_x3x1ed[4];
+  NeighborBlock nghbr_x2x3ed[4];
+  NeighborBlock nghbr_corner[8];
 
   // functions
   void AllocateBuffers(BoundaryBuffer &bbuf, const int maxv);
-  TaskStatus SendCellCenteredVariables(AthenaArray4D<Real> &a, int nvar, std::string key);
-  TaskStatus RecvCellCenteredVariables(AthenaArray4D<Real> &a, int nvar, std::string key);
+  TaskStatus SendCellCenteredVars(AthenaArray4D<Real> &a, int nvar, std::string key);
+  TaskStatus RecvCellCenteredVars(AthenaArray4D<Real> &a, int nvar, std::string key);
 
   TaskStatus ApplyPhysicalBCs(Driver* pd, int stage);
   void ReflectInnerX1();

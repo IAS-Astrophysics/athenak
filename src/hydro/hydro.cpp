@@ -141,7 +141,7 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
 //! \fn  void Hydro::HydroStageStartTasks
 //  \brief adds Hydro tasks to stage start TaskList
 //  These are taks that must be cmpleted (such as posting MPI receives, setting 
-//  BoundaryStatus flags, etc) over all MeshBlocks before stage can be run.
+//  BoundaryRecvStatus flags, etc) over all MeshBlocks before stage can be run.
 
 void Hydro::HydroStageStartTasks(TaskList &tl, TaskID start, std::vector<TaskID> &added)
 {
@@ -198,23 +198,23 @@ TaskStatus Hydro::HydroInitStage(Driver *pdrive, int stage)
   for (int n=0; n<2; ++n) {
 //    if (pbval->bndry_flag[n]==BoundaryFlag::block ||
 //        pbval->bndry_flag[n]==BoundaryFlag::periodic) {
-    if (pbval->nblocks_x1face[1-n].gid >= 0) {
-      bbuf.bstat_x1face[n] = BoundaryStatus::waiting;
+    if (pbval->nghbr_x1face[1-n].gid >= 0) {
+      bbuf.bstat_x1face[n] = BoundaryRecvStatus::waiting;
     }
   }
   if (pmesh_->nx2gt1) {
     for (int n=0; n<2; ++n) {
 //      if (pbval->bndry_flag[n+2]==BoundaryFlag::block ||
 //          pbval->bndry_flag[n+2]==BoundaryFlag::periodic) {
-      if (pbval->nblocks_x2face[1-n].gid >= 0) {
-        bbuf.bstat_x2face[n] = BoundaryStatus::waiting;
+      if (pbval->nghbr_x2face[1-n].gid >= 0) {
+        bbuf.bstat_x2face[n] = BoundaryRecvStatus::waiting;
       }
     }
     for (int n=0; n<4; ++n) {
 //      if (pbval->bndry_flag[(n/2)+2]==BoundaryFlag::block ||
 //          pbval->bndry_flag[(n/2)+2]==BoundaryFlag::periodic){
-      if (pbval->nblocks_x1x2ed[3-n].gid >= 0) {
-        bbuf.bstat_x1x2ed[n] = BoundaryStatus::waiting;
+      if (pbval->nghbr_x1x2ed[3-n].gid >= 0) {
+        bbuf.bstat_x1x2ed[n] = BoundaryRecvStatus::waiting;
       }
     }
   }
@@ -222,25 +222,25 @@ TaskStatus Hydro::HydroInitStage(Driver *pdrive, int stage)
     for (int n=0; n<2; ++n) {
 //      if (pbval->bndry_flag[n+4]==BoundaryFlag::block ||
 //          pbval->bndry_flag[n+4]==BoundaryFlag::periodic) {
-      if (pbval->nblocks_x3face[1-n].gid >= 0) {
-        bbuf.bstat_x3face[n] = BoundaryStatus::waiting;
+      if (pbval->nghbr_x3face[1-n].gid >= 0) {
+        bbuf.bstat_x3face[n] = BoundaryRecvStatus::waiting;
       }
     }
     for (int n=0; n<4; ++n) {
 //      if (pbval->bndry_flag[(n/2)+4]==BoundaryFlag::block ||
 //          pbval->bndry_flag[(n/2)+4]==BoundaryFlag::periodic){
-      if (pbval->nblocks_x3x1ed[3-n].gid >= 0) {
-        bbuf.bstat_x3x1ed[n] = BoundaryStatus::waiting;
+      if (pbval->nghbr_x3x1ed[3-n].gid >= 0) {
+        bbuf.bstat_x3x1ed[n] = BoundaryRecvStatus::waiting;
       }
-      if (pbval->nblocks_x2x3ed[3-n].gid >= 0) {
-        bbuf.bstat_x2x3ed[n] = BoundaryStatus::waiting;
+      if (pbval->nghbr_x2x3ed[3-n].gid >= 0) {
+        bbuf.bstat_x2x3ed[n] = BoundaryRecvStatus::waiting;
       }
     }
     for (int n=0; n<8; ++n) {
 //      if (pbval->bndry_flag[(n/4)+4]==BoundaryFlag::block ||
 //          pbval->bndry_flag[(n/4)+4]==BoundaryFlag::periodic){
-      if (pbval->nblocks_corner[7-n].gid >= 0) {
-        bbuf.bstat_corner[n] = BoundaryStatus::waiting;
+      if (pbval->nghbr_corner[7-n].gid >= 0) {
+        bbuf.bstat_corner[n] = BoundaryRecvStatus::waiting;
       }
     }
   }
@@ -271,7 +271,7 @@ TaskStatus Hydro::HydroSend(Driver *pdrive, int stage)
 {
   MeshBlock* pmb = pmesh_->FindMeshBlock(my_mbgid_);
   TaskStatus tstat;
-  tstat = pmb->pbvals->SendCellCenteredVariables(u0, nhydro, "hydro");
+  tstat = pmb->pbvals->SendCellCenteredVars(u0, nhydro, "hydro");
   return tstat;
 }
 
@@ -283,7 +283,7 @@ TaskStatus Hydro::HydroReceive(Driver *pdrive, int stage)
 {
   MeshBlock* pmb = pmesh_->FindMeshBlock(my_mbgid_);
   TaskStatus tstat;
-  tstat = pmb->pbvals->RecvCellCenteredVariables(u0, nhydro, "hydro");
+  tstat = pmb->pbvals->RecvCellCenteredVars(u0, nhydro, "hydro");
   return tstat;
 }
 
