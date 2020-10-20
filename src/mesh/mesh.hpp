@@ -120,15 +120,15 @@ class Mesh
   // data
   int root_level; // logical level of root (physical) grid (e.g. Fig. 3 of method paper)
   int max_level;  // logical level of maximum refinement grid in Mesh
-  int gids_, gide_; // start/end of grid IDs on this MPI rank
+  int gids_, gide_; // start/end of global IDs on this MPI rank
 
   // following 2x arrays allocated with length [nmbtotal]
   int *ranklist;      // rank of each MeshBlock
   double *costlist;   // cost of each MeshBlock
 
   // following 2x arrays allocated with length [nranks]
-  int *nslist;        // starting grid ID of MeshBlocks in each rank
-  int *nblist;        // number of MeshBlocks on each rank
+  int *gidslist;        // starting global ID of MeshBlocks in each rank
+  int *nmblist;        // number of MeshBlocks on each rank
 
   // following 8x arrays allocated with length [nranks] only with AMR
   int *nref, *nderef;

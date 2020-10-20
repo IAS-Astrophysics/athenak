@@ -167,8 +167,8 @@ Mesh::~Mesh()
 {
   delete [] ranklist;
   delete [] costlist;
-  delete [] nslist;
-  delete [] nblist;
+  delete [] gidslist;
+  delete [] nmblist;
   if (adaptive) { // deallocate arrays for AMR
     delete [] nref;
     delete [] nderef;
@@ -428,8 +428,8 @@ void Mesh::BuildTree(ParameterInput *pin)
 
   costlist = new double[nmbtotal];
   ranklist = new int[nmbtotal];
-  nslist = new int[global_variable::nranks];
-  nblist = new int[global_variable::nranks];
+  gidslist = new int[global_variable::nranks];
+  nmblist  = new int[global_variable::nranks];
   if (adaptive) { // allocate arrays for AMR
     nref = new int[global_variable::nranks];
     nderef = new int[global_variable::nranks];
@@ -443,12 +443,12 @@ void Mesh::BuildTree(ParameterInput *pin)
 
   // initialize cost array with the simplest estimate; all the blocks are equal
   for (int i=0; i<nmbtotal; i++) {costlist[i] = 1.0;}
-  LoadBalance(costlist, ranklist, nslist, nblist, nmbtotal);
+  LoadBalance(costlist, ranklist, gidslist, nmblist, nmbtotal);
 
   // create MeshBlock list for this process
-  gids_ = nslist[global_variable::my_rank];
-  gide_ = gids_ + nblist[global_variable::my_rank] - 1;
-  nmbthisrank = nblist[global_variable::my_rank];
+  gids_ = gidslist[global_variable::my_rank];
+  gide_ = gids_ + nmblist[global_variable::my_rank] - 1;
+  nmbthisrank = nmblist[global_variable::my_rank];
   
   // create MeshBlocks for this node, then set neighbors
   for (int i=gids_; i<=gide_; i++) {

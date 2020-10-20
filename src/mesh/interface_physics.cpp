@@ -26,8 +26,8 @@ void MeshBlock::InitPhysicsModules(ParameterInput *pin)
 
   // Hydro physics module
   if (pin->DoesBlockExist("hydro")) {
-    phydro = new hydro::Hydro(pmesh_, pin, mb_gid); // construct new Hydro object
-    pbvals->bbuf_ptr["hydro"] = &(phydro->bbuf);    // add pointer to Hydro bbufs in map
+    phydro = new hydro::Hydro(pmesh_, pin, mb_gid);          // construct new Hydro object
+    pbvals->bbuf_ptr[PhysicsID::Hydro_ID] = &(phydro->bbuf); // add ptr to Hydro bbufs
   } else {
     phydro = nullptr;
   }
@@ -63,8 +63,8 @@ void Mesh::NewTimeStep(const Real tlim)
   // limit increase in timestep to 2x old value
   for (const auto &mb : mblocks) { dt = std::min(2.0*dt, (cfl_no)*(mb.phydro->dtnew) ); }
 
-  // get minimum dt over all MPI ranks
 #if MPI_PARALLEL_ENABLED
+  // get minimum dt over all MPI ranks
   MPI_Allreduce(MPI_IN_PLACE, &dt, 1, MPI_ATHENA_REAL, MPI_MIN, MPI_COMM_WORLD);
 #endif
 

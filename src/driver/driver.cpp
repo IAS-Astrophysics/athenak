@@ -118,20 +118,32 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
   // Note sends on ALL MBs must be complete before receives execute
   for (auto &mb : pmesh->mblocks) {
     TaskStatus tstatus;
-    tstatus = mb.phydro->HydroSend(this, nstages);
+    tstatus = mb.phydro->HydroInitRecv(this, 0);
   }
   for (auto &mb : pmesh->mblocks) {
     TaskStatus tstatus;
-    tstatus = mb.phydro->HydroReceive(this, nstages);
+    tstatus = mb.phydro->HydroSend(this, 0);
   }
   for (auto &mb : pmesh->mblocks) {
-    mb.pbvals->ApplyPhysicalBCs(this, nstages);
+    TaskStatus tstatus;
+    tstatus = mb.phydro->HydroClearSend(this, 0);
+  }
+  for (auto &mb : pmesh->mblocks) {
+    TaskStatus tstatus;
+    tstatus = mb.phydro->HydroClearRecv(this, 0);
+  }
+  for (auto &mb : pmesh->mblocks) {
+    TaskStatus tstatus;
+    tstatus = mb.phydro->HydroReceive(this, 0);
+  }
+  for (auto &mb : pmesh->mblocks) {
+    mb.pbvals->ApplyPhysicalBCs(this, 0);
   }
 
   // convert conserved to primitive over whole mesh
   for (auto &mb : pmesh->mblocks) {
     TaskStatus tstatus;
-    tstatus = mb.phydro->ConToPrim(this, nstages);
+    tstatus = mb.phydro->ConToPrim(this, 0);
   }
 
   //---- Step 2.  Compute first time step (if problem involves time evolution

@@ -171,3 +171,18 @@ TaskStatus BoundaryValues::ApplyPhysicalBCs(Driver* pdrive, int stage)
 
   return TaskStatus::complete;
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn int BoundaryValues::CreateMPItag(int lid, int bufid, int phys)
+//  \brief calculate an MPI tag for boundary buffer communications
+//  MPI tag = lid of sender (remaining bits) + bufid of sender (6 bits) + physics(4 bits)
+
+// WARN: The below procedure of generating unsigned integer bitfields from signed integer
+// types and converting output to signed integer tags (required by MPI) is tricky and may
+// lead to unsafe conversions (and overflows from built-in types and MPI_TAG_UB).  Note,
+// the MPI standard requires signed int tag, with MPI_TAG_UB>= 2^15-1 = 32,767 (inclusive)
+
+int BoundaryValues::CreateMPItag(int lid, int bufid, int phys)
+{
+  return (lid<<10) | (bufid<<4) | phys;
+}

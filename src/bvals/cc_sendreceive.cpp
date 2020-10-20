@@ -20,8 +20,7 @@
 // This routine packs ALL the buffers on ALL the faces, edges, and corners simultaneously
 // They are then sent (via MPI) or copied directly for periodic or block boundaries
 
-TaskStatus BoundaryValues::SendCellCenteredVars(AthenaArray4D<Real> &a, int nvar,
-                                                     std::string key)
+TaskStatus BoundaryValues::SendCellCenteredVars(AthenaArray4D<Real> &a, int nvar, int key)
 {
   MeshBlock *pmb = pmesh_->FindMeshBlock(my_mbgid_);
   int ng = pmb->mb_cells.ng;
@@ -205,10 +204,12 @@ TaskStatus BoundaryValues::SendCellCenteredVars(AthenaArray4D<Real> &a, int nvar
   ); // end par_for_outer
 
   // Send boundary buffer to neighboring MeshBlocks using MPI or Kokkos::deep_copy if
-  // neighbor is on same MPI rank. Note (1) physics module containing the recv buffer is
-  // found using bbuf_ptr map and [key], (2) send_buffer[n] maps to recv_buffer[X-n]
-  // (where X is number of buffers of each type), and (3) BoundaryRecvStatus flag must be
-  // set to "completed" when deep_copy is used.
+  // neighbor is on same MPI rank.
+  //
+  // Note (1) physics module containing the recv buffer is found using bbuf_ptr map and
+  // [key], (2) send_buffer[n] maps to recv_buffer[X-n] (where X is number of buffers of
+  // each type), and (3) BoundaryRecvStatus flag must be set to "completed" when deep_copy
+  // is used.
 
   // copy x1 faces
   using Kokkos::ALL;
@@ -216,14 +217,18 @@ TaskStatus BoundaryValues::SendCellCenteredVars(AthenaArray4D<Real> &a, int nvar
     if (nghbr_x1face[n].gid >= 0) {  // this is not a physical boundary
       auto sendbuf = Kokkos::subview(pbb->send_x1face,n,ALL,ALL,ALL,ALL);
       if (nghbr_x1face[n].rank == global_variable::my_rank) {
-        // copy buffer if destination MeshBlock is on the same rank
         BBuffer *pdbb = pmesh_->FindMeshBlock(nghbr_x1face[n].gid)->pbvals->bbuf_ptr[key];
         auto recvbuf = Kokkos::subview(pdbb->recv_x1face,(1-n),ALL,ALL,ALL,ALL);
         Kokkos::deep_copy(pmb->exe_space, recvbuf, sendbuf);
         pdbb->bstat_x1face[1-n] = BoundaryRecvStatus::completed;
 #if MPI_PARALLEL_ENABLED
       } else {
-        // send buffer via MPI if destination MeshBlock is NOT on the same rank
+        // create tag using local ID and buffer index of *sending* MeshBlock
+        int lid = nghbr_x1face[n].gid - pmesh_->gidslist(pbval->nghbr_x1face[n].rank);
+        int tag = CreateMPItag((pmb->mb_gid - pmesh_->gids_), (1-n), key);
+        void* send_ptr = sendbuf.data();
+        int ierr = MPI_Isend(send_ptr, sendbuf.size(), MPI_ATHENA_REAL,
+          nghbr_x1face[n].rank, tag, MPI_COMM_WORLD, pbb->send_rq_x1face[n]);
 #endif
       }
     }
@@ -339,8 +344,7 @@ TaskStatus BoundaryValues::SendCellCenteredVars(AthenaArray4D<Real> &a, int nvar
 // \!fn void BoundaryValues::RecvCellCenteredVars()
 // \brief Unpack boundary buffers for cell-centered variables.
 
-TaskStatus BoundaryValues::RecvCellCenteredVars(AthenaArray4D<Real> &a, int nvar,
-                                                std::string key)
+TaskStatus BoundaryValues::RecvCellCenteredVars(AthenaArray4D<Real> &a, int nvar, int key)
 {
   MeshBlock *pmb = pmesh_->FindMeshBlock(my_mbgid_);
 
@@ -355,30 +359,90 @@ TaskStatus BoundaryValues::RecvCellCenteredVars(AthenaArray4D<Real> &a, int nvar
   // Find the physics module containing the recv buffer, using bbuf_ptr map and [key]
   BBuffer *pbb = pmb->pbvals->bbuf_ptr[key];
 
-  // check that recv boundary buffers have all completed, exit if not.
+#if MPI_PARALLEL_ENABLED
+  // probe MPI communications.  This is a bit of black magic that seems to promote
+  // communications to top of stack and gets them to complete more quickly
+  int test;
+  MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &test, MPI_STATUS_IGNORE);
+#endif
+
+  bool bflag = true;
+
+  // check that recv boundary buffer communications have all completed
+  // x1faces
   for (int n=0; n<2; ++n) {
-    if (pbb->bstat_x1face[n]==BoundaryRecvStatus::waiting) { return TaskStatus::incomplete;}
+    if (nghbr_x1face[n].rank == global_variable::my_rank) {
+      if (pbb->bstat_x1face[n] == BoundaryRecvStatus::waiting) bflag = false;
+#if MPI_PARALLEL_ENABLED
+    } else {
+      MPI_Test(&(pbb->recv_rq_x1face[n]), &test, MPI_STATUS_IGNORE);
+      if (static_cast<bool>(test)) {
+        pbb->bstat_x1face[n] == BoundaryRecvStatus::completed;
+      } else {
+        bflag = false;
+      }
+#endif
+    }
   }
+
+  // x2faces and x1x2 edges
   if (pmesh_->nx2gt1) {
     for (int n=0; n<2; ++n) {
-      if (pbb->bstat_x2face[n]==BoundaryRecvStatus::waiting) {return TaskStatus::incomplete;}
+      if (nghbr_x2face[n].rank == global_variable::my_rank) {
+        if (pbb->bstat_x2face[n] == BoundaryRecvStatus::waiting) bflag = false;
+#if MPI_PARALLEL_ENABLED
+      } else {
+#endif
+      }
     }
     for (int n=0; n<4; ++n) {
-      if (pbb->bstat_x1x2ed[n]==BoundaryRecvStatus::waiting) {return TaskStatus::incomplete;}
+      if (nghbr_x1x2ed[n].rank == global_variable::my_rank) {
+        if (pbb->bstat_x1x2ed[n] == BoundaryRecvStatus::waiting) bflag = false;
+#if MPI_PARALLEL_ENABLED
+      } else {
+#endif
+      }
     }
   }
+
+  // x3faces, x3x1 and x2x3 edges, and corners
   if (pmesh_->nx3gt1) {
     for (int n=0; n<2; ++n) {
-      if (pbb->bstat_x3face[n]==BoundaryRecvStatus::waiting) {return TaskStatus::incomplete;}
+      if (nghbr_x3face[n].rank == global_variable::my_rank) {
+        if (pbb->bstat_x3face[n] == BoundaryRecvStatus::waiting) bflag = false;
+#if MPI_PARALLEL_ENABLED
+      } else {
+#endif
+      }
     }
     for (int n=0; n<4; ++n) {
-      if (pbb->bstat_x3x1ed[n]==BoundaryRecvStatus::waiting) {return TaskStatus::incomplete;}
-      if (pbb->bstat_x2x3ed[n]==BoundaryRecvStatus::waiting) {return TaskStatus::incomplete;}
+      if (nghbr_x3x1ed[n].rank == global_variable::my_rank) {
+        if (pbb->bstat_x3x1ed[n] == BoundaryRecvStatus::waiting) bflag = false;
+#if MPI_PARALLEL_ENABLED
+      } else {
+#endif
+      }
+    }
+    for (int n=0; n<4; ++n) {
+      if (nghbr_x2x3ed[n].rank == global_variable::my_rank) {
+        if (pbb->bstat_x2x3ed[n] == BoundaryRecvStatus::waiting) bflag = false;
+#if MPI_PARALLEL_ENABLED
+      } else {
+#endif
+      }
     }
     for (int n=0; n<8; ++n) {
-      if (pbb->bstat_corner[n]==BoundaryRecvStatus::waiting) {return TaskStatus::incomplete;}
+      if (nghbr_corner[n].rank == global_variable::my_rank) {
+        if (pbb->bstat_corner[n] == BoundaryRecvStatus::waiting) bflag = false;
+#if MPI_PARALLEL_ENABLED
+      } else {
+#endif
+      }
     }
   }
+
+  // exit if recv boundary buffer communications have not completed
+  if (!(bflag)) {return TaskStatus::incomplete;}
   
   // buffers have all completed, so unpack (THIS VERSION NO AMR)
   // create local references for variables in kernel

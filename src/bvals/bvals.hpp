@@ -102,7 +102,7 @@ class BoundaryValues {
 
   // map to store pointers to BBuffers for different physics
   // elements are added in mesh/interface_physics after physics modules cons in MBs
-  std::map<std::string,BBuffer*> bbuf_ptr;
+  std::map<int,BBuffer*> bbuf_ptr;
 
   NeighborBlock nghbr_x1face[2];
   NeighborBlock nghbr_x2face[2]; 
@@ -114,8 +114,9 @@ class BoundaryValues {
 
   // functions
   void AllocateBuffers(BBuffer &bbuf, const int maxv);
-  TaskStatus SendCellCenteredVars(AthenaArray4D<Real> &a, int nvar, std::string key);
-  TaskStatus RecvCellCenteredVars(AthenaArray4D<Real> &a, int nvar, std::string key);
+  int CreateMPItag(int lid, int buff_id, int phys_id);
+  TaskStatus SendCellCenteredVars(AthenaArray4D<Real> &a, int nvar, int key);
+  TaskStatus RecvCellCenteredVars(AthenaArray4D<Real> &a, int nvar, int key);
 
   TaskStatus ApplyPhysicalBCs(Driver* pd, int stage);
   void ReflectInnerX1();
@@ -138,4 +139,3 @@ class BoundaryValues {
 };
 
 #endif // BVALS_BVALS_HPP_
-
