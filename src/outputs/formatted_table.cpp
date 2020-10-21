@@ -67,75 +67,95 @@ void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   fname.append(number);
   fname.append(".tab");
 
-  // open file for output
+  // master rank creates file and writes header
+  if (global_variable::my_rank == 0) {
+    FILE *pfile;
+    if ((pfile = std::fopen(fname.c_str(),"w")) == nullptr) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+          << "Output file '" << fname << "' could not be opened" << std::endl;
+      exit(EXIT_FAILURE);
+    }
+
+    // print file header
+    std::fprintf(pfile, "# Athena++ data at time=%e", pm->time);
+    std::fprintf(pfile, "  cycle=%d \n", pm->ncycle);
+
+    // write one of x1, x2, x3 column headers
+    std::fprintf(pfile, "# gid  ");
+    if (oie != ois) std::fprintf(pfile, " i       x1v     ");
+    if (oje != ojs) std::fprintf(pfile, " j       x2v     ");
+    if (oke != oks) std::fprintf(pfile, " k       x3v     ");
+
+    // write data col headers from out_data_label_ vector
+    for (auto it : out_data_label_) {
+      std::fprintf(pfile, "    %s     ", it.c_str());
+    }
+    std::fprintf(pfile, "\n"); // terminate line
+    std::fclose(pfile);   // don't forget to close the output file
+  }
+#if MPI_PARALLEL_ENABLED
+  int ierr = MPI_Barrier(MPI_COMM_WORLD);
+#endif
+
+  // now all ranks open file and append data
   FILE *pfile;
-  if ((pfile = std::fopen(fname.c_str(),"w")) == nullptr) {
+  if ((pfile = std::fopen(fname.c_str(),"a")) == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
         << "Output file '" << fname << "' could not be opened" << std::endl;
     exit(EXIT_FAILURE);
   }
+  for (int r=0; r<global_variable::nranks; ++r) {
+    // MPI ranks append datas one-at-a-time in order, thanks to MPI_Barrier at end of loop
+    if (r == global_variable::my_rank) {
+      // loop over output MeshBlocks, output all data
+      int nout_mbs = static_cast<int>(out_data_.size());
+      for (int m=0; m<nout_mbs; ++m) {
+        MeshBlock* pmb = pm->FindMeshBlock(out_data_gid_[m]);
+        int &is = pmb->mb_cells.is;
+        int &js = pmb->mb_cells.js;
+        int &ks = pmb->mb_cells.ks;
+        Real &x1min = pmb->mb_size.x1min, &x1max = pmb->mb_size.x1max;
+        Real &x2min = pmb->mb_size.x2min, &x2max = pmb->mb_size.x2max;
+        Real &x3min = pmb->mb_size.x3min, &x3max = pmb->mb_size.x3max;
+        int &nx1 = pmb->mb_cells.nx1;
+        int &nx2 = pmb->mb_cells.nx2;
+        int &nx3 = pmb->mb_cells.nx3;
+        for (int k=oks; k<=oke; ++k) {
+          for (int j=ojs; j<=oje; ++j) {
+            for (int i=ois; i<=oie; ++i) {
+              std::fprintf(pfile, "%05d", pmb->mb_gid);
+              // write x1, x2, x3 indices and coordinates
+              if (oie != ois) {
+                std::fprintf(pfile, " %04d", i);
+                Real x1cc = CellCenterX(i-is,nx1,x1min,x1max);
+                std::fprintf(pfile, out_params.data_format.c_str(), x1cc);
+              }
+              if (oje != ojs) {
+                std::fprintf(pfile, " %04d", j);  // note extra space for formatting
+                Real x2cc = CellCenterX(j-js,nx2,x2min,x2max);
+                std::fprintf(pfile, out_params.data_format.c_str(), x2cc);
+              }
+              if (oke != oks) {
+                std::fprintf(pfile, " %04d", k);  // note extra space for formatting
+                Real x3cc = CellCenterX(k-ks,nx3,x3min,x3max);
+                std::fprintf(pfile, out_params.data_format.c_str(), x3cc);
+              }
 
-  // print file header
-  std::fprintf(pfile, "# Athena++ data at time=%e", pm->time);
-  std::fprintf(pfile, "  cycle=%d \n", pm->ncycle);
-
-  // write one of x1, x2, x3 column headers
-  std::fprintf(pfile, "#");
-  if (oie != ois) std::fprintf(pfile, " i       x1v     ");
-  if (oje != ojs) std::fprintf(pfile, " j       x2v     ");
-  if (oke != oks) std::fprintf(pfile, " k       x3v     ");
-
-  // TODO get working with MPI (have root output all data)
-
-  // write data col headers from out_data_label_ vector
-  for (auto it : out_data_label_) {
-    std::fprintf(pfile, "    %s     ", it.c_str());
-  }
-  std::fprintf(pfile, "\n"); // terminate line
-
-  // loop over output MeshBlocks, output all data
-  int nout_mbs = static_cast<int>(out_data_.size());
-  for (int m=0; m<nout_mbs; ++m) {
-    MeshBlock* pmb = pm->FindMeshBlock(out_data_gid_[m]);
-    int &is = pmb->mb_cells.is;
-    int &js = pmb->mb_cells.js;
-    int &ks = pmb->mb_cells.ks;
-    Real &x1min = pmb->mb_size.x1min, &x1max = pmb->mb_size.x1max;
-    Real &x2min = pmb->mb_size.x2min, &x2max = pmb->mb_size.x2max;
-    Real &x3min = pmb->mb_size.x3min, &x3max = pmb->mb_size.x3max;
-    int &nx1 = pmb->mb_cells.nx1;
-    int &nx2 = pmb->mb_cells.nx2;
-    int &nx3 = pmb->mb_cells.nx3;
-    for (int k=oks; k<=oke; ++k) {
-      for (int j=ojs; j<=oje; ++j) {
-        for (int i=ois; i<=oie; ++i) {
-          // write x1, x2, x3 indices and coordinates on start of new line
-          if (oie != ois) {
-            std::fprintf(pfile, "%04d", i);
-            Real x1cc = CellCenterX(i-is,nx1,x1min,x1max);
-            std::fprintf(pfile, out_params.data_format.c_str(), x1cc);
+              // write each output variable on same line
+              for (int n=0; n<nvar; ++n) {
+                std::fprintf(pfile, out_params.data_format.c_str(),
+                             out_data_[m](n,k-oks,j-ojs,i-ois));
+              }
+              std::fprintf(pfile,"\n"); // terminate line
+            }
           }
-          if (oje != ojs) {
-            std::fprintf(pfile, "%04d", j);  // note extra space for formatting
-            Real x2cc = CellCenterX(j-js,nx2,x2min,x2max);
-            std::fprintf(pfile, out_params.data_format.c_str(), x2cc);
-          }
-          if (oke != oks) {
-            std::fprintf(pfile, "%04d", k);  // note extra space for formatting
-            Real x3cc = CellCenterX(k-ks,nx3,x3min,x3max);
-            std::fprintf(pfile, out_params.data_format.c_str(), x3cc);
-          }
-
-          // write each output variable on same line
-          for (int n=0; n<nvar; ++n) {
-            std::fprintf(pfile, out_params.data_format.c_str(),
-                         out_data_[m](n,k-oks,j-ojs,i-ois));
-          }
-          std::fprintf(pfile,"\n"); // terminate line
         }
-      }
+      }  // end loop over MeshBlocks
     }
-  }  // end loop over MeshBlocks
+#if MPI_PARALLEL_ENABLED
+    int ierr = MPI_Barrier(MPI_COMM_WORLD);
+#endif
+  }
 
   std::fclose(pfile);   // don't forget to close the output file
 

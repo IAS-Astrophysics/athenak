@@ -51,11 +51,7 @@ def tab(filename):
         headings = line.split()[1:]
     data_dict['time'] = float(attributes.group(1))
     data_dict['cycle'] = int(attributes.group(2))
-    if headings[0] == 'i' or headings[0] == 'j' or headings[0] == 'k':
-        headings = headings[1:]
-        dimensions = 1
-    else:
-        raise RuntimeError('athena_read.tab: Could not parse header')
+    headings = headings[1:]
 
     # Go through lines
     data_array = []
@@ -70,12 +66,11 @@ def tab(filename):
             # Extract cell indices
             vals = line.split()
             if first_line:
-                num_entries = len(vals) - dimensions
+                num_entries = len(vals) - 1
                 first_line = False
 
             # Extract cell values
-            if dimensions == 1:
-                vals = vals[1:]
+            vals = vals[1:]
             data_array.append([float(val) for val in vals])
             num_lines += 1
 
