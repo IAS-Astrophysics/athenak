@@ -97,10 +97,11 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
   int cnt=0;
   for (int n=-1; n<=1; n+=2) {
     neibt = ptree->FindNeighbor(loc, n, 0, 0);
-    if (neibt == nullptr) {continue;}
-    pbvals->nghbr_x1face[cnt].gid   = neibt->gid_;
-    pbvals->nghbr_x1face[cnt].level = neibt->loc_.level;
-    pbvals->nghbr_x1face[cnt].rank  = ranklist[neibt->gid_];
+    if (neibt != nullptr) {
+      pbvals->nghbr_x1face[cnt].gid   = neibt->gid_;
+      pbvals->nghbr_x1face[cnt].level = neibt->loc_.level;
+      pbvals->nghbr_x1face[cnt].rank  = ranklist[neibt->gid_];
+    }
     ++cnt;
   }
   if (mb_cells.nx2 == 1) {return;}  // stop if 1D
@@ -109,20 +110,22 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
   cnt=0;
   for (int m=-1; m<=1; m+=2) {
     neibt = ptree->FindNeighbor(loc, 0, m, 0);
-    if (neibt == nullptr) {continue;}
-    pbvals->nghbr_x2face[cnt].gid   = neibt->gid_;
-    pbvals->nghbr_x2face[cnt].level = neibt->loc_.level;
-    pbvals->nghbr_x2face[cnt].rank  = ranklist[neibt->gid_];
+    if (neibt != nullptr) {
+      pbvals->nghbr_x2face[cnt].gid   = neibt->gid_;
+      pbvals->nghbr_x2face[cnt].level = neibt->loc_.level;
+      pbvals->nghbr_x2face[cnt].rank  = ranklist[neibt->gid_];
+    }
     ++cnt;
   }
   cnt=0;
   for (int m=-1; m<=1; m+=2) {
     for (int n=-1; n<=1; n+=2) {
       neibt = ptree->FindNeighbor(loc, n, m, 0);
-      if (neibt == nullptr) {continue;}
-      pbvals->nghbr_x1x2ed[cnt].gid   = neibt->gid_;
-      pbvals->nghbr_x1x2ed[cnt].level = neibt->loc_.level;
-      pbvals->nghbr_x1x2ed[cnt].rank  = ranklist[neibt->gid_];
+      if (neibt != nullptr) {
+        pbvals->nghbr_x1x2ed[cnt].gid   = neibt->gid_;
+        pbvals->nghbr_x1x2ed[cnt].level = neibt->loc_.level;
+        pbvals->nghbr_x1x2ed[cnt].rank  = ranklist[neibt->gid_];
+      }
       ++cnt;
     }
   }
@@ -132,20 +135,22 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
   cnt=0;
   for (int l=-1; l<=1; l+=2) {
     neibt = ptree->FindNeighbor(loc, 0, 0, l);
-    if (neibt == nullptr) {continue;}
-    pbvals->nghbr_x3face[cnt].gid   = neibt->gid_;
-    pbvals->nghbr_x3face[cnt].level = neibt->loc_.level;
-    pbvals->nghbr_x3face[cnt].rank  = ranklist[neibt->gid_];
+    if (neibt != nullptr) {
+      pbvals->nghbr_x3face[cnt].gid   = neibt->gid_;
+      pbvals->nghbr_x3face[cnt].level = neibt->loc_.level;
+      pbvals->nghbr_x3face[cnt].rank  = ranklist[neibt->gid_];
+    }
     ++cnt;
   }
   cnt=0;
   for (int l=-1; l<=1; l+=2) {
     for (int n=-1; n<=1; n+=2) {
       neibt = ptree->FindNeighbor(loc, n, 0, l);
-      if (neibt == nullptr) {continue;}
-      pbvals->nghbr_x3x1ed[cnt].gid   = neibt->gid_;
-      pbvals->nghbr_x3x1ed[cnt].level = neibt->loc_.level;
-      pbvals->nghbr_x3x1ed[cnt].rank  = ranklist[neibt->gid_];
+      if (neibt != nullptr) {
+        pbvals->nghbr_x3x1ed[cnt].gid   = neibt->gid_;
+        pbvals->nghbr_x3x1ed[cnt].level = neibt->loc_.level;
+        pbvals->nghbr_x3x1ed[cnt].rank  = ranklist[neibt->gid_];
+      }
       ++cnt;
     }
   }
@@ -153,10 +158,11 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
   for (int l=-1; l<=1; l+=2) {
     for (int m=-1; m<=1; m+=2) {
       neibt = ptree->FindNeighbor(loc, 0, m, l);
-      if (neibt == nullptr) {continue;}
-      pbvals->nghbr_x2x3ed[cnt].gid   = neibt->gid_;
-      pbvals->nghbr_x2x3ed[cnt].level = neibt->loc_.level;
-      pbvals->nghbr_x2x3ed[cnt].rank  = ranklist[neibt->gid_];
+      if (neibt != nullptr) {
+        pbvals->nghbr_x2x3ed[cnt].gid   = neibt->gid_;
+        pbvals->nghbr_x2x3ed[cnt].level = neibt->loc_.level;
+        pbvals->nghbr_x2x3ed[cnt].rank  = ranklist[neibt->gid_];
+      }
       ++cnt;
     }
   }
@@ -165,10 +171,11 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
     for (int m=-1; m<=1; m+=2) {
       for (int n=-1; n<=1; n+=2) {
         neibt = ptree->FindNeighbor(loc, n, m, l);
-        if (neibt == nullptr) {continue;}
-        pbvals->nghbr_corner[cnt].gid   = neibt->gid_;
-        pbvals->nghbr_corner[cnt].level = neibt->loc_.level;
-        pbvals->nghbr_corner[cnt].rank  = ranklist[neibt->gid_];
+        if (neibt != nullptr) {
+          pbvals->nghbr_corner[cnt].gid   = neibt->gid_;
+          pbvals->nghbr_corner[cnt].level = neibt->loc_.level;
+          pbvals->nghbr_corner[cnt].rank  = ranklist[neibt->gid_];
+        }
         ++cnt;
       }
     }

@@ -34,8 +34,8 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
     nhydro = 4;
   }
 
-  // set time-evolution option (no default)
-  {std::string evolution_t = pin->GetString("hydro","evolution");
+  // set time-evolution option (default=dynamic)
+  {std::string evolution_t = pin->GetOrAddString("hydro","evolution","dynamic");
   if (evolution_t.compare("static") == 0) {
     hydro_evol = HydroEvolution::hydro_static;
 
