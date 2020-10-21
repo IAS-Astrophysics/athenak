@@ -14,6 +14,8 @@
 #include "athena.hpp"
 #include "io_wrapper.hpp"
 
+#define NHISTORY_VARIABLES 8
+
 // forward declarations
 class Mesh;
 class ParameterInput;
@@ -88,13 +90,14 @@ class FormattedTableOutput : public OutputType
 //! \class HistoryOutput
 //  \brief derived OutputType class for history data
     
-//class HistoryOutput : public OutputType
-//{   
-// public:
-//  HistoryOutput(OutputParameters oparams, Mesh *pm);
-//  void LoadOutputData(Mesh *pm) override;
-//  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
-//};  
+class HistoryOutput : public OutputType
+{   
+ public:
+  Real history_data[NHISTORY_VARIABLES];
+  HistoryOutput(OutputParameters oparams, Mesh *pm);
+  void LoadOutputData(Mesh *pm) override;
+  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+};  
 
 //----------------------------------------------------------------------------------------
 //! \class VTKOutput

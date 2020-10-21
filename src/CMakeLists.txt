@@ -36,7 +36,7 @@ add_executable(
         outputs/outputs.cpp
         outputs/output_type.cpp
         outputs/formatted_table.cpp
-#        outputs/history.cpp
+        outputs/history.cpp
         outputs/vtk.cpp
 
         pgen/pgen.cpp

@@ -19,21 +19,57 @@
 #include "hydro/hydro.hpp"
 #include "outputs.hpp"
 
-#define NHISTORY_VARIABLES 8
-
 //----------------------------------------------------------------------------------------
 // ctor: also calls OutputType base class constructor
 // history data stored in 2D AthenaArray with dims (nMeshBlocks,NHISTORY_VARS) 
 
 HistoryOutput::HistoryOutput(OutputParameters op, Mesh *pm) : OutputType(op, pm)
 {
-  // construct AthenaArrays in vector of length (# of MeshBlocks), store in out_data_
-  // no slicing with history data, so all MeshBlocks produce output
-  std::vector<HostArray3D<Real>> new_data;
-  for (int m=0; m<(pm->nmbthisrank); ++m) {
-    new_data.emplace_back("hst_data",1,1,NHISTORY_VARIABLES);
-  }
-  out_data_.push_back(new_data);
+}
+
+//----------------------------------------------------------------------------------------
+//! \struct array_type
+// Following code is copied from Kokkos wiki pages on building custom reducers.  It allows
+// multiple sum reductions to be computed simultaneously, as required for history outputs
+
+namespace hist_sum {  // namespace helps with name resolution in reduction identity 
+  template< class ScalarType, int N >
+  struct array_type {
+    ScalarType the_array[N];
+  
+    KOKKOS_INLINE_FUNCTION   // Default constructor - Initialize to 0's
+    array_type() { 
+      for (int i = 0; i < N; i++ ) { the_array[i] = 0; }
+    }
+    KOKKOS_INLINE_FUNCTION   // Copy Constructor
+    array_type(const array_type & rhs) { 
+       for (int i = 0; i < N; i++ ){
+          the_array[i] = rhs.the_array[i];
+       }
+    }
+    KOKKOS_INLINE_FUNCTION   // add operator
+    array_type& operator += (const array_type& src) {
+      for ( int i = 0; i < N; i++ ) {
+         the_array[i]+=src.the_array[i];
+      }
+      return *this;
+    } 
+    KOKKOS_INLINE_FUNCTION   // volatile add operator 
+    void operator += (const volatile array_type& src) volatile {
+      for ( int i = 0; i < N; i++ ) {
+        the_array[i]+=src.the_array[i];
+      }
+    }
+  };
+  typedef array_type<Real,(NHISTORY_VARIABLES)> GlobalSum;  // used to simplify code below
+}
+namespace Kokkos { //reduction identity must be defined in Kokkos namespace
+  template<>
+  struct reduction_identity< hist_sum::GlobalSum > {
+     KOKKOS_FORCEINLINE_FUNCTION static hist_sum::GlobalSum sum() {
+        return hist_sum::GlobalSum();
+     }
+  };
 }
 
 //----------------------------------------------------------------------------------------
@@ -43,54 +79,60 @@ HistoryOutput::HistoryOutput(OutputParameters op, Mesh *pm) : OutputType(op, pm)
 
 void HistoryOutput::LoadOutputData(Mesh *pm)
 { 
-  // initialize variable sums to 0.0
-  for (int m=0; m<(pm->nmbthisrank); ++m) {
-    for (int n=0; n<NHISTORY_VARIABLES; ++n) out_data_[0][m](0,0,n) = 0.0;
+  // initialize sums over MeshBlocks on this rank to zero
+  for (int n=0; n<NHISTORY_VARIABLES; ++n) {
+    history_data[n] = 0.0;
   }
 
   // loop over all MeshBlocks on this MPI rank
   for (int m=0; m<(pm->nmbthisrank); ++m) {
     MeshBlock *pmb = &(pm->mblocks[m]);
-    hydro::Hydro *phyd = pmb->phydro;
-    int is = pmb->mb_cells.is, ie = pmb->mb_cells.ie;
-    int js = pmb->mb_cells.js, je = pmb->mb_cells.je;
-    int ks = pmb->mb_cells.ks, ke = pmb->mb_cells.ke;
+    int is = pmb->mb_cells.is; int nx1 = pmb->mb_cells.nx1;
+    int js = pmb->mb_cells.js; int nx2 = pmb->mb_cells.nx2;
+    int ks = pmb->mb_cells.ks; int nx3 = pmb->mb_cells.nx3;
     
-    // Sum history variables over cells.  Note ghost cells are never included in sums
-    for (int k=ks; k<=ke; ++k) { 
-      for (int j=js; j<=je; ++j) { 
-        for (int i=is; i<=ie; ++i) {
-          
-          // Hydro conserved variables:
-          Real& u_d  = phyd->u0(hydro::IDN,k,j,i);
-          Real& u_mx = phyd->u0(hydro::IM1,k,j,i);
-          Real& u_my = phyd->u0(hydro::IM2,k,j,i);
-          Real& u_mz = phyd->u0(hydro::IM3,k,j,i);
-          out_data_[0][m](0,0,0) += u_d;
-          out_data_[0][m](0,0,1) += u_mx;
-          out_data_[0][m](0,0,2) += u_my;
-          out_data_[0][m](0,0,3) += u_mz;
+    auto &u0_ = pmb->phydro->u0;
+    const int nkji = nx3*nx2*nx1;
+    const int nji  = nx2*nx1;
 
-          // Hydro KE
-          out_data_[0][m](0,0,4) += 0.5*SQR(u_mx)/u_d;
-          out_data_[0][m](0,0,5) += 0.5*SQR(u_my)/u_d;
-          out_data_[0][m](0,0,6) += 0.5*SQR(u_mz)/u_d;
-          
-          if (phyd->peos->eos_data.is_adiabatic) {
-            Real& u_e = phyd->u0(hydro::IEN,k,j,i);;
-            out_data_[0][m](0,0,7) += u_e;
-          }
-        }
-      }
-    }
+    hist_sum::GlobalSum sum_this_mb;         
+    Kokkos::parallel_reduce("HistSums",Kokkos::RangePolicy<>(pmb->exe_space, 0, nkji),
+      KOKKOS_LAMBDA(const int &idx, hist_sum::GlobalSum &mb_sum)
+      {
+        // compute n,k,j,i indices of thread
+        int k = (idx)/nji;
+        int j = (idx - k*nji)/nx1;
+        int i = (idx - k*nji - j*nx1) + is;
+        k += ks;
+        j += js;
 
-    // normalize sums by volume of this MeshBlock
+        // Hydro conserved variables:
+        hist_sum::GlobalSum hvars;
+        hvars.the_array[0] = u0_(hydro::IDN,k,j,i);
+        hvars.the_array[1] = u0_(hydro::IM1,k,j,i);
+        hvars.the_array[2] = u0_(hydro::IM2,k,j,i);
+        hvars.the_array[3] = u0_(hydro::IM3,k,j,i);
+        hvars.the_array[4] = u0_(hydro::IEN,k,j,i);
+
+        // Hydro KE
+        hvars.the_array[5] = 0.5*SQR(u0_(hydro::IM1,k,j,i))/u0_(hydro::IDN,k,j,i);
+        hvars.the_array[6] = 0.5*SQR(u0_(hydro::IM2,k,j,i))/u0_(hydro::IDN,k,j,i);
+        hvars.the_array[7] = 0.5*SQR(u0_(hydro::IM3,k,j,i))/u0_(hydro::IDN,k,j,i);
+
+        // sum into parallel reduce
+        mb_sum += hvars;
+
+      }, Kokkos::Sum<hist_sum::GlobalSum>(sum_this_mb)
+    );
+
+    // normalize sums by volume of this MeshBlock and sum into output array
+    Real volume = ((pmb->mb_size.x1max - pmb->mb_size.x1min)*
+      (pmb->mb_size.x2max - pmb->mb_size.x2min)*(pmb->mb_size.x3max - pmb->mb_size.x3min))
+      /static_cast<Real>(nx1*nx2*nx3);
     for (int n=0; n<NHISTORY_VARIABLES; ++n) {
-      out_data_[0][m](0,0,n) /= (pmb->mb_cells.nx1)*(pmb->mb_cells.nx2)*(pmb->mb_cells.nx3);
-      out_data_[0][m](0,0,n) *= (pmb->mb_size.x1max - pmb->mb_size.x1min)*
-                            (pmb->mb_size.x2max - pmb->mb_size.x2min)*
-                            (pmb->mb_size.x3max - pmb->mb_size.x3min);
+      history_data[n] += volume*sum_this_mb.the_array[n];
     }
+
   }  // end loop over MeshBlocks
 
   return;
@@ -102,15 +144,16 @@ void HistoryOutput::LoadOutputData(Mesh *pm)
 
 void HistoryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
 {
-  // sume history data in each MeshBlock
-  // TODO add MPI communications for global sum
-  HostArray1D<Real> hst_data("summed_hst_data",NHISTORY_VARIABLES);
-
-  for (int m=0; m<(pm->nmbthisrank); ++m) {
-    for (int n=0; n<NHISTORY_VARIABLES; ++n) {
-      hst_data(n) += out_data_[0][m](0,0,n);
-    }
+#if MPI_PARALLEL_ENABLED
+  // in-place sum over all MPI ranks
+  if (global_variable::my_rank == 0) {
+    MPI_Reduce(MPI_IN_PLACE, &(history_data[0]), NHISTORY_VARIABLES, MPI_ATHENA_REAL,
+       MPI_SUM, 0, MPI_COMM_WORLD);
+  } else {
+    MPI_Reduce(&(history_data[0]), &(history_data[0]), NHISTORY_VARIABLES,
+       MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
   }
+#endif
 
   // only the master rank writes the file
   if (global_variable::my_rank == 0) {
@@ -138,12 +181,12 @@ void HistoryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
       std::fprintf(pfile,"[%d]=1-mom    ", iout++);
       std::fprintf(pfile,"[%d]=2-mom    ", iout++);
       std::fprintf(pfile,"[%d]=3-mom    ", iout++);
-      std::fprintf(pfile,"[%d]=1-KE     ", iout++);
-      std::fprintf(pfile,"[%d]=2-KE     ", iout++);
-      std::fprintf(pfile,"[%d]=3-KE     ", iout++);
       if (pm->mblocks.begin()->phydro->peos->eos_data.is_adiabatic) {
         std::fprintf(pfile,"[%d]=tot-E   ", iout++);
       }
+      std::fprintf(pfile,"[%d]=1-KE     ", iout++);
+      std::fprintf(pfile,"[%d]=2-KE     ", iout++);
+      std::fprintf(pfile,"[%d]=3-KE     ", iout++);
       std::fprintf(pfile,"\n");                              // terminate line
       // increment counters so headers are not written again
       out_params.file_number++;
@@ -154,7 +197,7 @@ void HistoryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
     std::fprintf(pfile, out_params.data_format.c_str(), pm->time);
     std::fprintf(pfile, out_params.data_format.c_str(), pm->dt);
     for (int n=0; n<(NHISTORY_VARIABLES); ++n)
-      std::fprintf(pfile, out_params.data_format.c_str(), hst_data(n));
+      std::fprintf(pfile, out_params.data_format.c_str(), history_data[n]);
     std::fprintf(pfile,"\n"); // terminate line
     std::fclose(pfile);
   }
