@@ -446,16 +446,16 @@ void Mesh::BuildTree(ParameterInput *pin)
   LoadBalance(costlist, ranklist, gidslist, nmblist, nmbtotal);
 
   // create MeshBlock list for this process
-  gids_ = gidslist[global_variable::my_rank];
-  gide_ = gids_ + nmblist[global_variable::my_rank] - 1;
+  gids = gidslist[global_variable::my_rank];
+  gide = gids + nmblist[global_variable::my_rank] - 1;
   nmbthisrank = nmblist[global_variable::my_rank];
   
   // create MeshBlocks for this node, then set neighbors
-  for (int i=gids_; i<=gide_; i++) {
+  for (int i=gids; i<=gide; i++) {
     RegionSize insize;
     BoundaryFlag inbcs[6];
     SetBlockSizeAndBoundaries(loclist[i], insize, incells, inbcs);
-    // vector of MBs guaranteed to be stored in order gids_->gide_
+    // vector of MBs guaranteed to be stored in order gids->gide
     mblocks.emplace_back(MeshBlock(this, pin, i, insize, incells, inbcs));
   }
   for (auto &mb : mblocks) {mb.SetNeighbors(ptree, ranklist);}

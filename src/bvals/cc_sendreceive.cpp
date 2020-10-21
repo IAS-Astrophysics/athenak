@@ -223,12 +223,12 @@ TaskStatus BoundaryValues::SendCellCenteredVars(AthenaArray4D<Real> &a, int nvar
         pdbb->bstat_x1face[1-n] = BoundaryRecvStatus::completed;
 #if MPI_PARALLEL_ENABLED
       } else {
-        // create tag using local ID and buffer index of *sending* MeshBlock
-        int lid = nghbr_x1face[n].gid - pmesh_->gidslist(pbval->nghbr_x1face[n].rank);
-        int tag = CreateMPItag((pmb->mb_gid - pmesh_->gids_), (1-n), key);
+        // create tag using local ID and buffer index of *receiving* MeshBlock
+        int lid = nghbr_x1face[n].gid - pmesh_->gidslist[nghbr_x1face[n].rank];
+        int tag = CreateMPItag((pmb->mb_gid - pmesh_->gids), (1-n), key);
         void* send_ptr = sendbuf.data();
         int ierr = MPI_Isend(send_ptr, sendbuf.size(), MPI_ATHENA_REAL,
-          nghbr_x1face[n].rank, tag, MPI_COMM_WORLD, pbb->send_rq_x1face[n]);
+          nghbr_x1face[n].rank, tag, MPI_COMM_WORLD, &(pbb->send_rq_x1face[n]));
 #endif
       }
     }
@@ -377,7 +377,7 @@ TaskStatus BoundaryValues::RecvCellCenteredVars(AthenaArray4D<Real> &a, int nvar
     } else {
       MPI_Test(&(pbb->recv_rq_x1face[n]), &test, MPI_STATUS_IGNORE);
       if (static_cast<bool>(test)) {
-        pbb->bstat_x1face[n] == BoundaryRecvStatus::completed;
+        pbb->bstat_x1face[n] = BoundaryRecvStatus::completed;
       } else {
         bflag = false;
       }

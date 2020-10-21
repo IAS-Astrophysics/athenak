@@ -175,7 +175,8 @@ TaskStatus BoundaryValues::ApplyPhysicalBCs(Driver* pdrive, int stage)
 //----------------------------------------------------------------------------------------
 //! \fn int BoundaryValues::CreateMPItag(int lid, int bufid, int phys)
 //  \brief calculate an MPI tag for boundary buffer communications
-//  MPI tag = lid of sender (remaining bits) + bufid of sender (6 bits) + physics(4 bits)
+//  MPI tag = lid (remaining bits) + bufid (6 bits) + physics(4 bits)
+//  Note the convention in Athena++ is lid and bufid are both for the *receiving* process
 
 // WARN: The below procedure of generating unsigned integer bitfields from signed integer
 // types and converting output to signed integer tags (required by MPI) is tricky and may

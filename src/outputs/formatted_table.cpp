@@ -152,6 +152,7 @@ void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
         }
       }  // end loop over MeshBlocks
     }
+    std::fflush(pfile);
 #if MPI_PARALLEL_ENABLED
     int ierr = MPI_Barrier(MPI_COMM_WORLD);
 #endif

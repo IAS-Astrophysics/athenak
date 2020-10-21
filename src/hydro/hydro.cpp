@@ -196,23 +196,23 @@ void Hydro::HydroStageEndTasks(TaskList &tl, TaskID start, std::vector<TaskID> &
 
 TaskStatus Hydro::HydroInitRecv(Driver *pdrive, int stage)
 {
-  BoundaryValues* pbval = pmesh_->FindMeshBlock(my_mbgid_)->pbvals;
+  BoundaryValues* pbvals = pmesh_->FindMeshBlock(my_mbgid_)->pbvals;
 
   // initialize all boundary receive status flags to waiting, post non-blocking receives
   // x1 faces
   for (int n=0; n<2; ++n) {
-    if (pbval->nghbr_x1face[n].gid >= 0) {
+    if (pbvals->nghbr_x1face[n].gid >= 0) {
 #if MPI_PARALLEL_ENABLED
       // post non-blocking receive if neighboring MeshBlock on a different rank 
-      if (pbval->nghbr_x1face[n].rank != global_variable::my_rank) {
-        using Kokkos::ALL();
+      if (pbvals->nghbr_x1face[n].rank != global_variable::my_rank) {
+        using Kokkos::ALL;
         // create tag using local ID and buffer index of *receiving* MeshBlock
-        int lid = my_mbgid - pmesh_->gids_;
-        int tag = pbval->CreateMPItag(lid, n, PhysicsID::Hydro_ID);
+        int lid = my_mbgid_ - pmesh_->gids;
+        int tag = pbvals->CreateMPItag(lid, n, PhysicsID::Hydro_ID);
         auto recvbuf = Kokkos::subview(bbuf.recv_x1face,n,ALL,ALL,ALL,ALL);
         void* recv_ptr = recvbuf.data();
         int ierr = MPI_Irecv(recv_ptr, recvbuf.size(), MPI_ATHENA_REAL,
-           pbval->nghbr_x1face[n].rank, tag, MPI_COMM_WORLD, &(bbuf.recv_rq_x1face[n]));
+           pbvals->nghbr_x1face[n].rank, tag, MPI_COMM_WORLD, &(bbuf.recv_rq_x1face[n]));
       }
 #endif
       bbuf.bstat_x1face[1-n] = BoundaryRecvStatus::waiting;
@@ -222,12 +222,12 @@ TaskStatus Hydro::HydroInitRecv(Driver *pdrive, int stage)
   // x2faces and x1x2 edges
   if (pmesh_->nx2gt1) {
     for (int n=0; n<2; ++n) {
-      if (pbval->nghbr_x2face[n].gid >= 0) {
+      if (pbvals->nghbr_x2face[n].gid >= 0) {
         bbuf.bstat_x2face[1-n] = BoundaryRecvStatus::waiting;
       }
     }
     for (int n=0; n<4; ++n) {
-      if (pbval->nghbr_x1x2ed[n].gid >= 0) {
+      if (pbvals->nghbr_x1x2ed[n].gid >= 0) {
         bbuf.bstat_x1x2ed[3-n] = BoundaryRecvStatus::waiting;
       }
     }
@@ -236,20 +236,20 @@ TaskStatus Hydro::HydroInitRecv(Driver *pdrive, int stage)
   // x3faces, x3x1 and x2x3 edges, and corners
   if (pmesh_->nx3gt1) {
     for (int n=0; n<2; ++n) {
-      if (pbval->nghbr_x3face[n].gid >= 0) {
+      if (pbvals->nghbr_x3face[n].gid >= 0) {
         bbuf.bstat_x3face[1-n] = BoundaryRecvStatus::waiting;
       }
     }
     for (int n=0; n<4; ++n) {
-      if (pbval->nghbr_x3x1ed[n].gid >= 0) {
+      if (pbvals->nghbr_x3x1ed[n].gid >= 0) {
         bbuf.bstat_x3x1ed[3-n] = BoundaryRecvStatus::waiting;
       }
-      if (pbval->nghbr_x2x3ed[n].gid >= 0) {
+      if (pbvals->nghbr_x2x3ed[n].gid >= 0) {
         bbuf.bstat_x2x3ed[3-n] = BoundaryRecvStatus::waiting;
       }
     }
     for (int n=0; n<8; ++n) {
-      if (pbval->nghbr_corner[n].gid >= 0) {
+      if (pbvals->nghbr_corner[n].gid >= 0) {
         bbuf.bstat_corner[7-n] = BoundaryRecvStatus::waiting;
       }
     }
@@ -266,11 +266,12 @@ TaskStatus Hydro::HydroClearRecv(Driver *pdrive, int stage)
 {
 #if MPI_PARALLEL_ENABLED
   // wait for all non-blocking receives to finish before continuing 
+  BoundaryValues* pbvals = pmesh_->FindMeshBlock(my_mbgid_)->pbvals;
 
   // x1 faces
   for (int n=0; n<2; ++n) {
-    if (pbval->nghbr_x1face[n].gid >= 0) {
-      if (pbval->nghbr_x1face[n].rank != global_variable::my_rank) {
+    if (pbvals->nghbr_x1face[n].gid >= 0) {
+      if (pbvals->nghbr_x1face[n].rank != global_variable::my_rank) {
         MPI_Wait(&(bbuf.recv_rq_x1face[n]), MPI_STATUS_IGNORE);
       }
     }
@@ -279,15 +280,15 @@ TaskStatus Hydro::HydroClearRecv(Driver *pdrive, int stage)
   // x2faces and x1x2 edges
   if (pmesh_->nx2gt1) {
     for (int n=0; n<2; ++n) {
-      if (pbval->nghbr_x2face[n].gid >= 0) {
-        if (pbval->nghbr_x2face[n].rank != global_variable::my_rank) {
+      if (pbvals->nghbr_x2face[n].gid >= 0) {
+        if (pbvals->nghbr_x2face[n].rank != global_variable::my_rank) {
           MPI_Wait(&(bbuf.recv_rq_x2face[n]), MPI_STATUS_IGNORE);
         }
       }
     }
     for (int n=0; n<4; ++n) {
-      if (pbval->nghbr_x1x2ed[n].gid >= 0) {
-        if (pbval->nghbr_x1x2ed[n].rank != global_variable::my_rank) {
+      if (pbvals->nghbr_x1x2ed[n].gid >= 0) {
+        if (pbvals->nghbr_x1x2ed[n].rank != global_variable::my_rank) {
           MPI_Wait(&(bbuf.recv_rq_x1x2ed[n]), MPI_STATUS_IGNORE);
         }
       }
@@ -297,27 +298,27 @@ TaskStatus Hydro::HydroClearRecv(Driver *pdrive, int stage)
   // x3faces, x3x1 and x2x3 edges, and corners
   if (pmesh_->nx3gt1) {
     for (int n=0; n<2; ++n) {
-      if (pbval->nghbr_x3face[n].gid >= 0) {
-        if (pbval->nghbr_x3face[n].rank != global_variable::my_rank) {
+      if (pbvals->nghbr_x3face[n].gid >= 0) {
+        if (pbvals->nghbr_x3face[n].rank != global_variable::my_rank) {
           MPI_Wait(&(bbuf.recv_rq_x3face[n]), MPI_STATUS_IGNORE);
         }
       }
     }
     for (int n=0; n<4; ++n) {
-      if (pbval->nghbr_x3x1ed[n].gid >= 0) {
-        if (pbval->nghbr_x3x1ed[n].rank != global_variable::my_rank) {
+      if (pbvals->nghbr_x3x1ed[n].gid >= 0) {
+        if (pbvals->nghbr_x3x1ed[n].rank != global_variable::my_rank) {
           MPI_Wait(&(bbuf.recv_rq_x3x1ed[n]), MPI_STATUS_IGNORE);
         }
       }
-      if (pbval->nghbr_x2x3ed[n].gid >= 0) {
-        if (pbval->nghbr_x2x3ed[n].rank != global_variable::my_rank) {
+      if (pbvals->nghbr_x2x3ed[n].gid >= 0) {
+        if (pbvals->nghbr_x2x3ed[n].rank != global_variable::my_rank) {
           MPI_Wait(&(bbuf.recv_rq_x2x3ed[n]), MPI_STATUS_IGNORE);
         }
       }
     }
     for (int n=0; n<8; ++n) {
-      if (pbval->nghbr_corner[n].gid >= 0) {
-        if (pbval->nghbr_corner[n].rank != global_variable::my_rank) {
+      if (pbvals->nghbr_corner[n].gid >= 0) {
+        if (pbvals->nghbr_corner[n].rank != global_variable::my_rank) {
           MPI_Wait(&(bbuf.recv_rq_corner[n]), MPI_STATUS_IGNORE);
         }
       }
@@ -336,11 +337,12 @@ TaskStatus Hydro::HydroClearSend(Driver *pdrive, int stage)
 {
 #if MPI_PARALLEL_ENABLED
   // wait for all non-blocking sends to finish before continuing 
+  BoundaryValues* pbvals = pmesh_->FindMeshBlock(my_mbgid_)->pbvals;
 
   // x1 faces
   for (int n=0; n<2; ++n) {
-    if (pbval->nghbr_x1face[n].gid >= 0) {
-      if (pbval->nghbr_x1face[n].rank != global_variable::my_rank) {
+    if (pbvals->nghbr_x1face[n].gid >= 0) {
+      if (pbvals->nghbr_x1face[n].rank != global_variable::my_rank) {
         MPI_Wait(&(bbuf.send_rq_x1face[n]), MPI_STATUS_IGNORE);
       }
     }
@@ -349,15 +351,15 @@ TaskStatus Hydro::HydroClearSend(Driver *pdrive, int stage)
   // x2faces and x1x2 edges
   if (pmesh_->nx2gt1) {
     for (int n=0; n<2; ++n) {
-      if (pbval->nghbr_x2face[n].gid >= 0) {
-        if (pbval->nghbr_x2face[n].rank != global_variable::my_rank) {
+      if (pbvals->nghbr_x2face[n].gid >= 0) {
+        if (pbvals->nghbr_x2face[n].rank != global_variable::my_rank) {
           MPI_Wait(&(bbuf.send_rq_x2face[n]), MPI_STATUS_IGNORE);
         }
       }
     }
     for (int n=0; n<4; ++n) {
-      if (pbval->nghbr_x1x2ed[n].gid >= 0) {
-        if (pbval->nghbr_x1x2ed[n].rank != global_variable::my_rank) {
+      if (pbvals->nghbr_x1x2ed[n].gid >= 0) {
+        if (pbvals->nghbr_x1x2ed[n].rank != global_variable::my_rank) {
           MPI_Wait(&(bbuf.send_rq_x1x2ed[n]), MPI_STATUS_IGNORE);
         }
       }
@@ -367,27 +369,27 @@ TaskStatus Hydro::HydroClearSend(Driver *pdrive, int stage)
   // x3faces, x3x1 and x2x3 edges, and corners
   if (pmesh_->nx3gt1) {
     for (int n=0; n<2; ++n) {
-      if (pbval->nghbr_x3face[n].gid >= 0) {
-        if (pbval->nghbr_x3face[n].rank != global_variable::my_rank) {
+      if (pbvals->nghbr_x3face[n].gid >= 0) {
+        if (pbvals->nghbr_x3face[n].rank != global_variable::my_rank) {
           MPI_Wait(&(bbuf.send_rq_x3face[n]), MPI_STATUS_IGNORE);
         }
       }
     }
     for (int n=0; n<4; ++n) {
-      if (pbval->nghbr_x3x1ed[n].gid >= 0) {
-        if (pbval->nghbr_x3x1ed[n].rank != global_variable::my_rank) {
+      if (pbvals->nghbr_x3x1ed[n].gid >= 0) {
+        if (pbvals->nghbr_x3x1ed[n].rank != global_variable::my_rank) {
           MPI_Wait(&(bbuf.send_rq_x3x1ed[n]), MPI_STATUS_IGNORE);
         }
       }
-      if (pbval->nghbr_x2x3ed[n].gid >= 0) {
-        if (pbval->nghbr_x2x3ed[n].rank != global_variable::my_rank) {
+      if (pbvals->nghbr_x2x3ed[n].gid >= 0) {
+        if (pbvals->nghbr_x2x3ed[n].rank != global_variable::my_rank) {
           MPI_Wait(&(bbuf.send_rq_x2x3ed[n]), MPI_STATUS_IGNORE);
         }
       }
     }
     for (int n=0; n<8; ++n) {
-      if (pbval->nghbr_corner[n].gid >= 0) {
-        if (pbval->nghbr_corner[n].rank != global_variable::my_rank) {
+      if (pbvals->nghbr_corner[n].gid >= 0) {
+        if (pbvals->nghbr_corner[n].rank != global_variable::my_rank) {
           MPI_Wait(&(bbuf.send_rq_corner[n]), MPI_STATUS_IGNORE);
         }
       }

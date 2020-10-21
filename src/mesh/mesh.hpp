@@ -88,8 +88,8 @@ class Mesh
   // accessors
   MeshBlock* FindMeshBlock(int tgid)
   {
-//    assert (tgid >= gids_ && tgid <= gide_);
-    return &(mblocks[tgid - gids_]);
+//    assert (tgid >= gids && tgid <= gide);
+    return &(mblocks[tgid - gids]);
   }
 
   // data
@@ -105,22 +105,9 @@ class Mesh
   int nmb_created;               // number of MeshBlcoks created via AMR during run
   int nmb_deleted;               // number of MeshBlcoks deleted via AMR during run
 
-  Real time, dt, cfl_no;           
-  int ncycle;
-
-  std::vector<MeshBlock> mblocks; // MeshBlocks belonging to this MPI rank
-
-  // functions
-  void BuildTree(ParameterInput *pin);
-  void NewTimeStep(const Real tlim);
-  void OutputMeshStructure(int flag);
-  BoundaryFlag GetBoundaryFlag(const std::string& input_string);
-
- private:
-  // data
   int root_level; // logical level of root (physical) grid (e.g. Fig. 3 of method paper)
   int max_level;  // logical level of maximum refinement grid in Mesh
-  int gids_, gide_; // start/end of global IDs on this MPI rank
+  int gids, gide; // start/end of global IDs on this MPI rank
 
   // following 2x arrays allocated with length [nmbtotal]
   int *ranklist;      // rank of each MeshBlock
@@ -136,6 +123,18 @@ class Mesh
   int *bnref, *bnderef;
   int *brdisp, *bddisp;
 
+  Real time, dt, cfl_no;           
+  int ncycle;
+
+  std::vector<MeshBlock> mblocks; // MeshBlocks belonging to this MPI rank
+
+  // functions
+  void BuildTree(ParameterInput *pin);
+  void NewTimeStep(const Real tlim);
+  void OutputMeshStructure(int flag);
+  BoundaryFlag GetBoundaryFlag(const std::string& input_string);
+
+ private:
   // variables for load balancing control
   bool lb_flag_;
   bool lb_automatic_, lb_manual_;
