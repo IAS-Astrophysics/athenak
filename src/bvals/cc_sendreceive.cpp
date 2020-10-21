@@ -214,7 +214,7 @@ TaskStatus BoundaryValues::SendCellCenteredVars(AthenaArray4D<Real> &a, int nvar
   // copy x1 faces
   using Kokkos::ALL;
   for (int n=0; n<2; ++n) {
-    if (nghbr_x1face[n].gid >= 0) {  // this is not a physical boundary
+    if (nghbr_x1face[n].gid >= 0) {  // ID of buffer != -1, so not a physical boundary
       auto sendbuf = Kokkos::subview(pbb->send_x1face,n,ALL,ALL,ALL,ALL);
       if (nghbr_x1face[n].rank == global_variable::my_rank) {
         BBuffer *pdbb = pmesh_->FindMeshBlock(nghbr_x1face[n].gid)->pbvals->bbuf_ptr[key];
@@ -237,33 +237,41 @@ TaskStatus BoundaryValues::SendCellCenteredVars(AthenaArray4D<Real> &a, int nvar
 
   // copy x2 faces and x1x2 edges
   for (int n=0; n<2; ++n) {
-    if (nghbr_x2face[n].gid >= 0) {
+    if (nghbr_x2face[n].gid >= 0) {  // ID of buffer != -1, so not a physical boundary
       auto sendbuf = Kokkos::subview(pbb->send_x2face,n,ALL,ALL,ALL,ALL);
       if (nghbr_x2face[n].rank == global_variable::my_rank) {
-        // copy buffer if destination MeshBlock is on the same rank
         BBuffer *pdbb = pmesh_->FindMeshBlock(nghbr_x2face[n].gid)->pbvals->bbuf_ptr[key];
         auto recvbuf = Kokkos::subview(pdbb->recv_x2face,(1-n),ALL,ALL,ALL,ALL);
         Kokkos::deep_copy(pmb->exe_space, recvbuf, sendbuf);
         pdbb->bstat_x2face[1-n] = BoundaryRecvStatus::completed;
 #if MPI_PARALLEL_ENABLED
       } else {
-        // send buffer via MPI if destination MeshBlock is NOT on the same rank
+        // create tag using local ID and buffer index of *receiving* MeshBlock
+        int lid = nghbr_x2face[n].gid - pmesh_->gidslist[nghbr_x2face[n].rank];
+        int tag = CreateMPItag((pmb->mb_gid - pmesh_->gids), 2+(1-n), key);
+        void* send_ptr = sendbuf.data();
+        int ierr = MPI_Isend(send_ptr, sendbuf.size(), MPI_ATHENA_REAL,
+          nghbr_x2face[n].rank, tag, MPI_COMM_WORLD, &(pbb->send_rq_x2face[n]));
 #endif
       }
     }
   }
   for (int n=0; n<4; ++n) {
-    if (nghbr_x1x2ed[n].gid >= 0) {
+    if (nghbr_x1x2ed[n].gid >= 0) {  // ID of buffer != -1, so not a physical boundary
       auto sendbuf = Kokkos::subview(pbb->send_x1x2ed,n,ALL,ALL,ALL,ALL);
       if (nghbr_x1x2ed[n].rank == global_variable::my_rank) {
-        // copy buffer if destination MeshBlock is on the same rank
         BBuffer *pdbb = pmesh_->FindMeshBlock(nghbr_x1x2ed[n].gid)->pbvals->bbuf_ptr[key];
         auto recvbuf = Kokkos::subview(pdbb->recv_x1x2ed,(3-n),ALL,ALL,ALL,ALL);
         Kokkos::deep_copy(pmb->exe_space, recvbuf, sendbuf);
         pdbb->bstat_x1x2ed[3-n] = BoundaryRecvStatus::completed;
 #if MPI_PARALLEL_ENABLED
       } else {
-        // send buffer via MPI if destination MeshBlock is NOT on the same rank
+        // create tag using local ID and buffer index of *receiving* MeshBlock
+        int lid = nghbr_x1x2ed[n].gid - pmesh_->gidslist[nghbr_x1x2ed[n].rank];
+        int tag = CreateMPItag((pmb->mb_gid - pmesh_->gids), 4+(3-n), key);
+        void* send_ptr = sendbuf.data();
+        int ierr = MPI_Isend(send_ptr, sendbuf.size(), MPI_ATHENA_REAL,
+          nghbr_x1x2ed[n].rank, tag, MPI_COMM_WORLD, &(pbb->send_rq_x1x2ed[n]));
 #endif
       }
     }
@@ -272,66 +280,81 @@ TaskStatus BoundaryValues::SendCellCenteredVars(AthenaArray4D<Real> &a, int nvar
   
   // copy x3 faces, x3x1 and x2x3 edges, and corners
   for (int n=0; n<2; ++n) {
-    if (nghbr_x3face[n].gid >= 0) {
+    if (nghbr_x3face[n].gid >= 0) {  // ID of buffer != -1, so not a physical boundary
       auto sendbuf = Kokkos::subview(pbb->send_x3face,n,ALL,ALL,ALL,ALL);
       if (nghbr_x3face[n].rank == global_variable::my_rank) {
-        // copy buffer if destination MeshBlock is on the same rank
         BBuffer *pdbb = pmesh_->FindMeshBlock(nghbr_x3face[n].gid)->pbvals->bbuf_ptr[key];
         auto recvbuf = Kokkos::subview(pdbb->recv_x3face,(1-n),ALL,ALL,ALL,ALL);
         Kokkos::deep_copy(pmb->exe_space, recvbuf, sendbuf);
         pdbb->bstat_x3face[1-n] = BoundaryRecvStatus::completed;
 #if MPI_PARALLEL_ENABLED
       } else {
-        // send buffer via MPI if destination MeshBlock is NOT on the same rank
+        // create tag using local ID and buffer index of *receiving* MeshBlock
+        int lid = nghbr_x3face[n].gid - pmesh_->gidslist[nghbr_x3face[n].rank];
+        int tag = CreateMPItag((pmb->mb_gid - pmesh_->gids), 8+(1-n), key);
+        void* send_ptr = sendbuf.data();
+        int ierr = MPI_Isend(send_ptr, sendbuf.size(), MPI_ATHENA_REAL,
+          nghbr_x3face[n].rank, tag, MPI_COMM_WORLD, &(pbb->send_rq_x3face[n]));
 #endif
       }
     }
   }
   for (int n=0; n<4; ++n) {
-    if (nghbr_x3x1ed[n].gid >= 0) {
+    if (nghbr_x3x1ed[n].gid >= 0) {  // ID of buffer != -1, so not a physical boundary
       auto sendbuf = Kokkos::subview(pbb->send_x3x1ed,n,ALL,ALL,ALL,ALL);
       if (nghbr_x3x1ed[n].rank == global_variable::my_rank) {
-        // copy buffer if destination MeshBlock is on the same rank
         BBuffer *pdbb = pmesh_->FindMeshBlock(nghbr_x3x1ed[n].gid)->pbvals->bbuf_ptr[key];
         auto recvbuf = Kokkos::subview(pdbb->recv_x3x1ed,(3-n),ALL,ALL,ALL,ALL);
         Kokkos::deep_copy(pmb->exe_space, recvbuf, sendbuf);
         pdbb->bstat_x3x1ed[3-n] = BoundaryRecvStatus::completed;
 #if MPI_PARALLEL_ENABLED
       } else {
-        // send buffer via MPI if destination MeshBlock is NOT on the same rank
+        // create tag using local ID and buffer index of *receiving* MeshBlock
+        int lid = nghbr_x3x1ed[n].gid - pmesh_->gidslist[nghbr_x3x1ed[n].rank];
+        int tag = CreateMPItag((pmb->mb_gid - pmesh_->gids), 10+(3-n), key);
+        void* send_ptr = sendbuf.data();
+        int ierr = MPI_Isend(send_ptr, sendbuf.size(), MPI_ATHENA_REAL,
+          nghbr_x3x1ed[n].rank, tag, MPI_COMM_WORLD, &(pbb->send_rq_x3x1ed[n]));
 #endif
       }
     }
   }
   for (int n=0; n<4; ++n) {
-    if (nghbr_x2x3ed[n].gid >= 0) {
+    if (nghbr_x2x3ed[n].gid >= 0) {  // ID of buffer != -1, so not a physical boundary
       auto sendbuf = Kokkos::subview(pbb->send_x2x3ed,n,ALL,ALL,ALL,ALL);
       if (nghbr_x2x3ed[n].rank == global_variable::my_rank) {
-        // copy buffer if destination MeshBlock is on the same rank
         BBuffer *pdbb = pmesh_->FindMeshBlock(nghbr_x2x3ed[n].gid)->pbvals->bbuf_ptr[key];
         auto recvbuf = Kokkos::subview(pdbb->recv_x2x3ed,(3-n),ALL,ALL,ALL,ALL);
         Kokkos::deep_copy(pmb->exe_space, recvbuf, sendbuf);
         pdbb->bstat_x2x3ed[3-n] = BoundaryRecvStatus::completed;
 #if MPI_PARALLEL_ENABLED
       } else {
-        // send buffer via MPI if destination MeshBlock is NOT on the same rank
+        // create tag using local ID and buffer index of *receiving* MeshBlock
+        int lid = nghbr_x2x3ed[n].gid - pmesh_->gidslist[nghbr_x2x3ed[n].rank];
+        int tag = CreateMPItag((pmb->mb_gid - pmesh_->gids), 14+(3-n), key);
+        void* send_ptr = sendbuf.data();
+        int ierr = MPI_Isend(send_ptr, sendbuf.size(), MPI_ATHENA_REAL,
+          nghbr_x2x3ed[n].rank, tag, MPI_COMM_WORLD, &(pbb->send_rq_x2x3ed[n]));
 #endif
       }
     }
   }
   for (int n=0; n<8; ++n) {
-    if (nghbr_corner[n].gid >= 0) {
+    if (nghbr_corner[n].gid >= 0) {  // ID of buffer != -1, so not a physical boundary
       auto sendbuf = Kokkos::subview(pbb->send_corner,n,ALL,ALL,ALL,ALL);
       if (nghbr_corner[n].rank == global_variable::my_rank) {
-        // copy buffer if destination MeshBlock is on the same rank
-        MeshBlock *pdmb = pmesh_->FindMeshBlock(nghbr_corner[n].gid);
-        auto recvbuf = Kokkos::subview(pdmb->pbvals->bbuf_ptr[key]->recv_corner,
-                       (7-n),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL(),Kokkos::ALL());
+        BBuffer *pdbb = pmesh_->FindMeshBlock(nghbr_corner[n].gid)->pbvals->bbuf_ptr[key];
+        auto recvbuf = Kokkos::subview(pdbb->recv_corner,(7-n),ALL,ALL,ALL,ALL);
         Kokkos::deep_copy(pmb->exe_space, recvbuf, sendbuf);
-        pdmb->pbvals->bbuf_ptr[key]->bstat_corner[7-n] = BoundaryRecvStatus::completed;
+        pdbb->bstat_corner[7-n] = BoundaryRecvStatus::completed;
 #if MPI_PARALLEL_ENABLED
       } else {
-        // send buffer via MPI if destination MeshBlock is NOT on the same rank
+        // create tag using local ID and buffer index of *receiving* MeshBlock
+        int lid = nghbr_corner[n].gid - pmesh_->gidslist[nghbr_corner[n].rank];
+        int tag = CreateMPItag((pmb->mb_gid - pmesh_->gids), 18+(7-n), key);
+        void* send_ptr = sendbuf.data();
+        int ierr = MPI_Isend(send_ptr, sendbuf.size(), MPI_ATHENA_REAL,
+          nghbr_corner[n].rank, tag, MPI_COMM_WORLD, &(pbb->send_rq_corner[n]));
 #endif
       }
     }
