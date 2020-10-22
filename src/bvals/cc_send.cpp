@@ -225,7 +225,7 @@ TaskStatus BoundaryValues::SendCellCenteredVars(AthenaArray4D<Real> &a, int nvar
       } else {
         // create tag using local ID and buffer index of *receiving* MeshBlock
         int lid = nghbr_x1face[n].gid - pmesh_->gidslist[nghbr_x1face[n].rank];
-        int tag = CreateMPItag((pmb->mb_gid - pmesh_->gids), (1-n), key);
+        int tag = CreateMPItag(lid, (1-n), key);
         void* send_ptr = sendbuf.data();
         int ierr = MPI_Isend(send_ptr, sendbuf.size(), MPI_ATHENA_REAL,
           nghbr_x1face[n].rank, tag, MPI_COMM_WORLD, &(pbb->send_rq_x1face[n]));
@@ -248,7 +248,7 @@ TaskStatus BoundaryValues::SendCellCenteredVars(AthenaArray4D<Real> &a, int nvar
       } else {
         // create tag using local ID and buffer index of *receiving* MeshBlock
         int lid = nghbr_x2face[n].gid - pmesh_->gidslist[nghbr_x2face[n].rank];
-        int tag = CreateMPItag((pmb->mb_gid - pmesh_->gids), 2+(1-n), key);
+        int tag = CreateMPItag(lid, 2+(1-n), key);
         void* send_ptr = sendbuf.data();
         int ierr = MPI_Isend(send_ptr, sendbuf.size(), MPI_ATHENA_REAL,
           nghbr_x2face[n].rank, tag, MPI_COMM_WORLD, &(pbb->send_rq_x2face[n]));
@@ -268,7 +268,7 @@ TaskStatus BoundaryValues::SendCellCenteredVars(AthenaArray4D<Real> &a, int nvar
       } else {
         // create tag using local ID and buffer index of *receiving* MeshBlock
         int lid = nghbr_x1x2ed[n].gid - pmesh_->gidslist[nghbr_x1x2ed[n].rank];
-        int tag = CreateMPItag((pmb->mb_gid - pmesh_->gids), 4+(3-n), key);
+        int tag = CreateMPItag(lid, 4+(3-n), key);
         void* send_ptr = sendbuf.data();
         int ierr = MPI_Isend(send_ptr, sendbuf.size(), MPI_ATHENA_REAL,
           nghbr_x1x2ed[n].rank, tag, MPI_COMM_WORLD, &(pbb->send_rq_x1x2ed[n]));
@@ -291,7 +291,7 @@ TaskStatus BoundaryValues::SendCellCenteredVars(AthenaArray4D<Real> &a, int nvar
       } else {
         // create tag using local ID and buffer index of *receiving* MeshBlock
         int lid = nghbr_x3face[n].gid - pmesh_->gidslist[nghbr_x3face[n].rank];
-        int tag = CreateMPItag((pmb->mb_gid - pmesh_->gids), 8+(1-n), key);
+        int tag = CreateMPItag(lid, 8+(1-n), key);
         void* send_ptr = sendbuf.data();
         int ierr = MPI_Isend(send_ptr, sendbuf.size(), MPI_ATHENA_REAL,
           nghbr_x3face[n].rank, tag, MPI_COMM_WORLD, &(pbb->send_rq_x3face[n]));
@@ -311,7 +311,7 @@ TaskStatus BoundaryValues::SendCellCenteredVars(AthenaArray4D<Real> &a, int nvar
       } else {
         // create tag using local ID and buffer index of *receiving* MeshBlock
         int lid = nghbr_x3x1ed[n].gid - pmesh_->gidslist[nghbr_x3x1ed[n].rank];
-        int tag = CreateMPItag((pmb->mb_gid - pmesh_->gids), 10+(3-n), key);
+        int tag = CreateMPItag(lid, 10+(3-n), key);
         void* send_ptr = sendbuf.data();
         int ierr = MPI_Isend(send_ptr, sendbuf.size(), MPI_ATHENA_REAL,
           nghbr_x3x1ed[n].rank, tag, MPI_COMM_WORLD, &(pbb->send_rq_x3x1ed[n]));
@@ -331,7 +331,7 @@ TaskStatus BoundaryValues::SendCellCenteredVars(AthenaArray4D<Real> &a, int nvar
       } else {
         // create tag using local ID and buffer index of *receiving* MeshBlock
         int lid = nghbr_x2x3ed[n].gid - pmesh_->gidslist[nghbr_x2x3ed[n].rank];
-        int tag = CreateMPItag((pmb->mb_gid - pmesh_->gids), 14+(3-n), key);
+        int tag = CreateMPItag(lid, 14+(3-n), key);
         void* send_ptr = sendbuf.data();
         int ierr = MPI_Isend(send_ptr, sendbuf.size(), MPI_ATHENA_REAL,
           nghbr_x2x3ed[n].rank, tag, MPI_COMM_WORLD, &(pbb->send_rq_x2x3ed[n]));
@@ -351,7 +351,7 @@ TaskStatus BoundaryValues::SendCellCenteredVars(AthenaArray4D<Real> &a, int nvar
       } else {
         // create tag using local ID and buffer index of *receiving* MeshBlock
         int lid = nghbr_corner[n].gid - pmesh_->gidslist[nghbr_corner[n].rank];
-        int tag = CreateMPItag((pmb->mb_gid - pmesh_->gids), 18+(7-n), key);
+        int tag = CreateMPItag(lid, 18+(7-n), key);
         void* send_ptr = sendbuf.data();
         int ierr = MPI_Isend(send_ptr, sendbuf.size(), MPI_ATHENA_REAL,
           nghbr_corner[n].rank, tag, MPI_COMM_WORLD, &(pbb->send_rq_corner[n]));
