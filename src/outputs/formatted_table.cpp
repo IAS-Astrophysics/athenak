@@ -67,12 +67,13 @@ void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   fname.append(number);
   fname.append(".tab");
 
-  // master rank creates file and writes header
+  // master rank creates file and writes header (even though it may not have any actual
+  // data to write below)
   if (global_variable::my_rank == 0) {
     FILE *pfile;
     if ((pfile = std::fopen(fname.c_str(),"w")) == nullptr) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-          << "Output file '" << fname << "' could not be opened" << std::endl;
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+         << std::endl << "Output file '" << fname << "' could not be opened" << std::endl;
       exit(EXIT_FAILURE);
     }
 
@@ -82,9 +83,9 @@ void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
 
     // write one of x1, x2, x3 column headers
     std::fprintf(pfile, "# gid  ");
-    if (oie != ois) std::fprintf(pfile, " i       x1v     ");
-    if (oje != ojs) std::fprintf(pfile, " j       x2v     ");
-    if (oke != oks) std::fprintf(pfile, " k       x3v     ");
+    if (!(out_params.slice1)) std::fprintf(pfile, " i       x1v     ");
+    if (!(out_params.slice2)) std::fprintf(pfile, " j       x2v     ");
+    if (!(out_params.slice3)) std::fprintf(pfile, " k       x3v     ");
 
     // write data col headers from out_data_label_ vector
     for (auto it : out_data_label_) {
@@ -105,7 +106,7 @@ void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
     exit(EXIT_FAILURE);
   }
   for (int r=0; r<global_variable::nranks; ++r) {
-    // MPI ranks append datas one-at-a-time in order, thanks to MPI_Barrier at end of loop
+    // MPI ranks append data one-at-a-time in order, thanks to MPI_Barrier at end of loop
     if (r == global_variable::my_rank) {
       // loop over output MeshBlocks, output all data
       int nout_mbs = static_cast<int>(out_data_.size());
