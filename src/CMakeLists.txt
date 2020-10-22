@@ -12,7 +12,8 @@ add_executable(
         parameter_input.cpp
 
         bvals/bvals.cpp
-        bvals/cc_sendreceive.cpp
+        bvals/cc_send.cpp
+        bvals/cc_recv.cpp
         bvals/reflect.cpp
         bvals/outflow.cpp
 
