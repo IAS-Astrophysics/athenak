@@ -36,48 +36,54 @@ TaskStatus BoundaryValues::RecvCellCenteredVars(AthenaArray4D<Real> &a, int nvar
   // check that recv boundary buffer communications have all completed
   // x1faces
   for (int n=0; n<2; ++n) {
-    if (nghbr_x1face[n].rank == global_variable::my_rank) {
-      if (pbb->bstat_x1face[n] == BoundaryRecvStatus::waiting) bflag = true;
+    if (nghbr_x1face[n].gid >= 0) { // ID of buffer != -1, so not a physical boundary
+      if (nghbr_x1face[n].rank == global_variable::my_rank) {
+        if (pbb->bstat_x1face[n] == BoundaryRecvStatus::waiting) bflag = true;
 #if MPI_PARALLEL_ENABLED
-    } else {
-      MPI_Test(&(pbb->recv_rq_x1face[n]), &test, MPI_STATUS_IGNORE);
-      if (static_cast<bool>(test)) {
-        pbb->bstat_x1face[n] = BoundaryRecvStatus::completed;
       } else {
-        bflag = true;
-      }
+        MPI_Test(&(pbb->recv_rq_x1face[n]), &test, MPI_STATUS_IGNORE);
+        if (static_cast<bool>(test)) {
+          pbb->bstat_x1face[n] = BoundaryRecvStatus::completed;
+        } else {
+          bflag = true;
+        }
 #endif
+      }
     }
   }
 
   // x2faces and x1x2 edges
   if (pmesh_->nx2gt1) {
     for (int n=0; n<2; ++n) {
-      if (nghbr_x2face[n].rank == global_variable::my_rank) {
-        if (pbb->bstat_x2face[n] == BoundaryRecvStatus::waiting) bflag = true;
+      if (nghbr_x2face[n].gid >= 0) { // ID of buffer != -1, so not a physical boundary
+        if (nghbr_x2face[n].rank == global_variable::my_rank) {
+          if (pbb->bstat_x2face[n] == BoundaryRecvStatus::waiting) bflag = true;
 #if MPI_PARALLEL_ENABLED
-      } else {
-        MPI_Test(&(pbb->recv_rq_x2face[n]), &test, MPI_STATUS_IGNORE);
-        if (static_cast<bool>(test)) {
-          pbb->bstat_x2face[n] = BoundaryRecvStatus::completed;
         } else {
-          bflag = true;
-        }
+          MPI_Test(&(pbb->recv_rq_x2face[n]), &test, MPI_STATUS_IGNORE);
+          if (static_cast<bool>(test)) {
+            pbb->bstat_x2face[n] = BoundaryRecvStatus::completed;
+          } else {
+            bflag = true;
+          }
 #endif
+        }
       }
     }
     for (int n=0; n<4; ++n) {
-      if (nghbr_x1x2ed[n].rank == global_variable::my_rank) {
-        if (pbb->bstat_x1x2ed[n] == BoundaryRecvStatus::waiting) bflag = true;
+      if (nghbr_x1x2ed[n].gid >= 0) { // ID of buffer != -1, so not a physical boundary
+        if (nghbr_x1x2ed[n].rank == global_variable::my_rank) {
+          if (pbb->bstat_x1x2ed[n] == BoundaryRecvStatus::waiting) bflag = true;
 #if MPI_PARALLEL_ENABLED
-      } else {
-        MPI_Test(&(pbb->recv_rq_x1x2ed[n]), &test, MPI_STATUS_IGNORE);
-        if (static_cast<bool>(test)) {
-          pbb->bstat_x1x2ed[n] = BoundaryRecvStatus::completed;
         } else {
-          bflag = true;
-        }
+          MPI_Test(&(pbb->recv_rq_x1x2ed[n]), &test, MPI_STATUS_IGNORE);
+          if (static_cast<bool>(test)) {
+            pbb->bstat_x1x2ed[n] = BoundaryRecvStatus::completed;
+          } else {
+            bflag = true;
+          }
 #endif
+        }
       }
     }
   }
@@ -85,59 +91,67 @@ TaskStatus BoundaryValues::RecvCellCenteredVars(AthenaArray4D<Real> &a, int nvar
   // x3faces, x3x1 and x2x3 edges, and corners
   if (pmesh_->nx3gt1) {
     for (int n=0; n<2; ++n) {
-      if (nghbr_x3face[n].rank == global_variable::my_rank) {
-        if (pbb->bstat_x3face[n] == BoundaryRecvStatus::waiting) bflag = true;
+      if (nghbr_x3face[n].gid >= 0) { // ID of buffer != -1, so not a physical boundary
+        if (nghbr_x3face[n].rank == global_variable::my_rank) {
+          if (pbb->bstat_x3face[n] == BoundaryRecvStatus::waiting) bflag = true;
 #if MPI_PARALLEL_ENABLED
-      } else {
-        MPI_Test(&(pbb->recv_rq_x3face[n]), &test, MPI_STATUS_IGNORE);
-        if (static_cast<bool>(test)) {
-          pbb->bstat_x3face[n] = BoundaryRecvStatus::completed;
         } else {
-          bflag = true;
-        }
+          MPI_Test(&(pbb->recv_rq_x3face[n]), &test, MPI_STATUS_IGNORE);
+          if (static_cast<bool>(test)) {
+            pbb->bstat_x3face[n] = BoundaryRecvStatus::completed;
+          } else {
+            bflag = true;
+          }
 #endif
+        }
       }
     }
     for (int n=0; n<4; ++n) {
-      if (nghbr_x3x1ed[n].rank == global_variable::my_rank) {
-        if (pbb->bstat_x3x1ed[n] == BoundaryRecvStatus::waiting) bflag = true;
+      if (nghbr_x3x1ed[n].gid >= 0) { // ID of buffer != -1, so not a physical boundary
+        if (nghbr_x3x1ed[n].rank == global_variable::my_rank) {
+          if (pbb->bstat_x3x1ed[n] == BoundaryRecvStatus::waiting) bflag = true;
 #if MPI_PARALLEL_ENABLED
-      } else {
-        MPI_Test(&(pbb->recv_rq_x3x1ed[n]), &test, MPI_STATUS_IGNORE);
-        if (static_cast<bool>(test)) {
-          pbb->bstat_x3x1ed[n] = BoundaryRecvStatus::completed;
         } else {
-          bflag = true;
-        }
+          MPI_Test(&(pbb->recv_rq_x3x1ed[n]), &test, MPI_STATUS_IGNORE);
+          if (static_cast<bool>(test)) {
+            pbb->bstat_x3x1ed[n] = BoundaryRecvStatus::completed;
+          } else {
+            bflag = true;
+          }
 #endif
+        }
       }
     }
     for (int n=0; n<4; ++n) {
-      if (nghbr_x2x3ed[n].rank == global_variable::my_rank) {
-        if (pbb->bstat_x2x3ed[n] == BoundaryRecvStatus::waiting) bflag = true;
+      if (nghbr_x2x3ed[n].gid >= 0) { // ID of buffer != -1, so not a physical boundary
+        if (nghbr_x2x3ed[n].rank == global_variable::my_rank) {
+          if (pbb->bstat_x2x3ed[n] == BoundaryRecvStatus::waiting) bflag = true;
 #if MPI_PARALLEL_ENABLED
-      } else {
-        MPI_Test(&(pbb->recv_rq_x2x3ed[n]), &test, MPI_STATUS_IGNORE);
-        if (static_cast<bool>(test)) {
-          pbb->bstat_x2x3ed[n] = BoundaryRecvStatus::completed;
         } else {
-          bflag = true;
-        }
+          MPI_Test(&(pbb->recv_rq_x2x3ed[n]), &test, MPI_STATUS_IGNORE);
+          if (static_cast<bool>(test)) {
+            pbb->bstat_x2x3ed[n] = BoundaryRecvStatus::completed;
+          } else {
+            bflag = true;
+          }
 #endif
+        }
       }
     }
     for (int n=0; n<8; ++n) {
-      if (nghbr_corner[n].rank == global_variable::my_rank) {
-        if (pbb->bstat_corner[n] == BoundaryRecvStatus::waiting) bflag = true;
+      if (nghbr_corner[n].gid >= 0) { // ID of buffer != -1, so not a physical boundary
+        if (nghbr_corner[n].rank == global_variable::my_rank) {
+          if (pbb->bstat_corner[n] == BoundaryRecvStatus::waiting) bflag = true;
 #if MPI_PARALLEL_ENABLED
-      } else {
-        MPI_Test(&(pbb->recv_rq_corner[n]), &test, MPI_STATUS_IGNORE);
-        if (static_cast<bool>(test)) {
-          pbb->bstat_corner[n] = BoundaryRecvStatus::completed;
         } else {
-          bflag = true;
-        }
+          MPI_Test(&(pbb->recv_rq_corner[n]), &test, MPI_STATUS_IGNORE);
+          if (static_cast<bool>(test)) {
+            pbb->bstat_corner[n] = BoundaryRecvStatus::completed;
+          } else {
+            bflag = true;
+          }
 #endif
+        }
       }
     }
   }
