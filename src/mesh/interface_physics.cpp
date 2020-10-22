@@ -43,8 +43,10 @@ void MeshBlock::InitPhysicsModules(ParameterInput *pin)
     phydro->HydroStageEndTasks(tl_stageend, none, hydro_end_tasks);
   }
 
-  // add physical boundary conditions, and make depend on hydro_recv (penultimate task)
-  TaskID hydro_recv = hydro_run_tasks[hydro_run_tasks.size()-2];
+  // add physical boundary conditions, and make them depend on hydro_recv
+  // WARNING: If number or order of Hydro tasks is changed in Hydro::HydroStageRunTasks()
+  // then index of hydro_recv may need to be changed below
+  TaskID hydro_recv = hydro_run_tasks[4];
   auto bvals_physical =
     tl_stagerun.InsertTask(&BoundaryValues::ApplyPhysicalBCs, this->pbvals, hydro_recv);
 
