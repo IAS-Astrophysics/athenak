@@ -157,21 +157,24 @@ void Hydro::HydroStageStartTasks(TaskList &tl, TaskID start, std::vector<TaskID>
 
 void Hydro::HydroStageRunTasks(TaskList &tl, TaskID start, std::vector<TaskID> &added)
 {
+  // WARNING: If number or order of Hydro tasks below is changed then index of hydro_recv
+  // in Mesh::InitPhysicsModules may need to be changed 
+
   auto hydro_copycons = tl.AddTask(&Hydro::HydroCopyCons, this, start);
   auto hydro_divflux  = tl.AddTask(&Hydro::HydroDivFlux, this, hydro_copycons);
   auto hydro_update  = tl.AddTask(&Hydro::HydroUpdate, this, hydro_divflux);
   auto hydro_send  = tl.AddTask(&Hydro::HydroSend, this, hydro_update);
-  auto hydro_newdt  = tl.AddTask(&Hydro::NewTimeStep, this, hydro_send);
-  auto hydro_recv  = tl.AddTask(&Hydro::HydroReceive, this, hydro_newdt);
+  auto hydro_recv  = tl.AddTask(&Hydro::HydroReceive, this, hydro_send);
   auto hydro_con2prim  = tl.AddTask(&Hydro::ConToPrim, this, hydro_recv);
+  auto hydro_newdt  = tl.AddTask(&Hydro::NewTimeStep, this, hydro_con2prim);
 
   added.emplace_back(hydro_copycons);
   added.emplace_back(hydro_divflux);
   added.emplace_back(hydro_update);
   added.emplace_back(hydro_send);
-  added.emplace_back(hydro_newdt);
   added.emplace_back(hydro_recv);
   added.emplace_back(hydro_con2prim);
+  added.emplace_back(hydro_newdt);
 
   return;
 }
@@ -215,7 +218,7 @@ TaskStatus Hydro::HydroInitRecv(Driver *pdrive, int stage)
           pbvals->nghbr_x1face[n].rank, tag, MPI_COMM_WORLD, &(bbuf.recv_rq_x1face[n]));
       }
 #endif
-      bbuf.bstat_x1face[1-n] = BoundaryRecvStatus::waiting;
+      bbuf.bstat_x1face[n] = BoundaryRecvStatus::waiting;
     }
   }
 
@@ -235,7 +238,7 @@ TaskStatus Hydro::HydroInitRecv(Driver *pdrive, int stage)
             pbvals->nghbr_x2face[n].rank, tag, MPI_COMM_WORLD, &(bbuf.recv_rq_x2face[n]));
         }
 #endif
-        bbuf.bstat_x2face[1-n] = BoundaryRecvStatus::waiting;
+        bbuf.bstat_x2face[n] = BoundaryRecvStatus::waiting;
       }
     }
     for (int n=0; n<4; ++n) {
@@ -252,7 +255,7 @@ TaskStatus Hydro::HydroInitRecv(Driver *pdrive, int stage)
             pbvals->nghbr_x1x2ed[n].rank, tag, MPI_COMM_WORLD, &(bbuf.recv_rq_x1x2ed[n]));
         }
 #endif
-        bbuf.bstat_x1x2ed[3-n] = BoundaryRecvStatus::waiting;
+        bbuf.bstat_x1x2ed[n] = BoundaryRecvStatus::waiting;
       }
     }
   }
@@ -273,7 +276,7 @@ TaskStatus Hydro::HydroInitRecv(Driver *pdrive, int stage)
             pbvals->nghbr_x3face[n].rank, tag, MPI_COMM_WORLD, &(bbuf.recv_rq_x3face[n]));
         }
 #endif
-        bbuf.bstat_x3face[1-n] = BoundaryRecvStatus::waiting;
+        bbuf.bstat_x3face[n] = BoundaryRecvStatus::waiting;
       }
     }
     for (int n=0; n<4; ++n) {
@@ -290,7 +293,7 @@ TaskStatus Hydro::HydroInitRecv(Driver *pdrive, int stage)
             pbvals->nghbr_x3x1ed[n].rank, tag, MPI_COMM_WORLD, &(bbuf.recv_rq_x3x1ed[n]));
         }
 #endif
-        bbuf.bstat_x3x1ed[3-n] = BoundaryRecvStatus::waiting;
+        bbuf.bstat_x3x1ed[n] = BoundaryRecvStatus::waiting;
       }
       if (pbvals->nghbr_x2x3ed[n].gid >= 0) {
 #if MPI_PARALLEL_ENABLED
@@ -305,7 +308,7 @@ TaskStatus Hydro::HydroInitRecv(Driver *pdrive, int stage)
             pbvals->nghbr_x2x3ed[n].rank, tag, MPI_COMM_WORLD, &(bbuf.recv_rq_x2x3ed[n]));
         }
 #endif
-        bbuf.bstat_x2x3ed[3-n] = BoundaryRecvStatus::waiting;
+        bbuf.bstat_x2x3ed[n] = BoundaryRecvStatus::waiting;
       }
     }
     for (int n=0; n<8; ++n) {
@@ -322,7 +325,7 @@ TaskStatus Hydro::HydroInitRecv(Driver *pdrive, int stage)
             pbvals->nghbr_corner[n].rank, tag, MPI_COMM_WORLD, &(bbuf.recv_rq_corner[n]));
         }
 #endif
-        bbuf.bstat_corner[7-n] = BoundaryRecvStatus::waiting;
+        bbuf.bstat_corner[n] = BoundaryRecvStatus::waiting;
       }
     }
   }
