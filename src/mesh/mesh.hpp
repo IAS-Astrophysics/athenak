@@ -133,6 +133,7 @@ class Mesh
   void NewTimeStep(const Real tlim);
   void OutputMeshStructure(int flag);
   BoundaryFlag GetBoundaryFlag(const std::string& input_string);
+  std::string GetBoundaryString(BoundaryFlag input_flag);
 
  private:
   // variables for load balancing control

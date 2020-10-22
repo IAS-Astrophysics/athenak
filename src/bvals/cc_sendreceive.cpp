@@ -369,17 +369,8 @@ TaskStatus BoundaryValues::SendCellCenteredVars(AthenaArray4D<Real> &a, int nvar
 
 TaskStatus BoundaryValues::RecvCellCenteredVars(AthenaArray4D<Real> &a, int nvar, int key)
 {
-  MeshBlock *pmb = pmesh_->FindMeshBlock(my_mbgid_);
-
-  int ng = pmb->mb_cells.ng;
-  int is = pmb->mb_cells.is; int ie = pmb->mb_cells.ie;
-  int js = pmb->mb_cells.js; int je = pmb->mb_cells.je;
-  int ks = pmb->mb_cells.ks; int ke = pmb->mb_cells.ke;
-  int ncells1 = pmb->mb_cells.nx1 + 2*ng;
-  int ncells2 = (pmb->mb_cells.nx2 > 1)? (pmb->mb_cells.nx2 + 2*ng) : 1;
-  int ncells3 = (pmb->mb_cells.nx3 > 1)? (pmb->mb_cells.nx3 + 2*ng) : 1;
-
   // Find the physics module containing the recv buffer, using bbuf_ptr map and [key]
+  MeshBlock *pmb = pmesh_->FindMeshBlock(my_mbgid_);
   BBuffer *pbb = pmb->pbvals->bbuf_ptr[key];
 
 #if MPI_PARALLEL_ENABLED
@@ -389,13 +380,13 @@ TaskStatus BoundaryValues::RecvCellCenteredVars(AthenaArray4D<Real> &a, int nvar
   MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &test, MPI_STATUS_IGNORE);
 #endif
 
-  bool bflag = true;
+  bool bflag = false;
 
   // check that recv boundary buffer communications have all completed
   // x1faces
   for (int n=0; n<2; ++n) {
     if (nghbr_x1face[n].rank == global_variable::my_rank) {
-      if (pbb->bstat_x1face[n] == BoundaryRecvStatus::waiting) bflag = false;
+      if (pbb->bstat_x1face[n] == BoundaryRecvStatus::waiting) bflag = true;
 #if MPI_PARALLEL_ENABLED
     } else {
       MPI_Test(&(pbb->recv_rq_x1face[n]), &test, MPI_STATUS_IGNORE);
@@ -412,7 +403,7 @@ TaskStatus BoundaryValues::RecvCellCenteredVars(AthenaArray4D<Real> &a, int nvar
   if (pmesh_->nx2gt1) {
     for (int n=0; n<2; ++n) {
       if (nghbr_x2face[n].rank == global_variable::my_rank) {
-        if (pbb->bstat_x2face[n] == BoundaryRecvStatus::waiting) bflag = false;
+        if (pbb->bstat_x2face[n] == BoundaryRecvStatus::waiting) bflag = true;
 #if MPI_PARALLEL_ENABLED
       } else {
 #endif
@@ -420,7 +411,7 @@ TaskStatus BoundaryValues::RecvCellCenteredVars(AthenaArray4D<Real> &a, int nvar
     }
     for (int n=0; n<4; ++n) {
       if (nghbr_x1x2ed[n].rank == global_variable::my_rank) {
-        if (pbb->bstat_x1x2ed[n] == BoundaryRecvStatus::waiting) bflag = false;
+        if (pbb->bstat_x1x2ed[n] == BoundaryRecvStatus::waiting) bflag = true;
 #if MPI_PARALLEL_ENABLED
       } else {
 #endif
@@ -432,7 +423,7 @@ TaskStatus BoundaryValues::RecvCellCenteredVars(AthenaArray4D<Real> &a, int nvar
   if (pmesh_->nx3gt1) {
     for (int n=0; n<2; ++n) {
       if (nghbr_x3face[n].rank == global_variable::my_rank) {
-        if (pbb->bstat_x3face[n] == BoundaryRecvStatus::waiting) bflag = false;
+        if (pbb->bstat_x3face[n] == BoundaryRecvStatus::waiting) bflag = true;
 #if MPI_PARALLEL_ENABLED
       } else {
 #endif
@@ -440,7 +431,7 @@ TaskStatus BoundaryValues::RecvCellCenteredVars(AthenaArray4D<Real> &a, int nvar
     }
     for (int n=0; n<4; ++n) {
       if (nghbr_x3x1ed[n].rank == global_variable::my_rank) {
-        if (pbb->bstat_x3x1ed[n] == BoundaryRecvStatus::waiting) bflag = false;
+        if (pbb->bstat_x3x1ed[n] == BoundaryRecvStatus::waiting) bflag = true;
 #if MPI_PARALLEL_ENABLED
       } else {
 #endif
@@ -448,7 +439,7 @@ TaskStatus BoundaryValues::RecvCellCenteredVars(AthenaArray4D<Real> &a, int nvar
     }
     for (int n=0; n<4; ++n) {
       if (nghbr_x2x3ed[n].rank == global_variable::my_rank) {
-        if (pbb->bstat_x2x3ed[n] == BoundaryRecvStatus::waiting) bflag = false;
+        if (pbb->bstat_x2x3ed[n] == BoundaryRecvStatus::waiting) bflag = true;
 #if MPI_PARALLEL_ENABLED
       } else {
 #endif
@@ -456,7 +447,7 @@ TaskStatus BoundaryValues::RecvCellCenteredVars(AthenaArray4D<Real> &a, int nvar
     }
     for (int n=0; n<8; ++n) {
       if (nghbr_corner[n].rank == global_variable::my_rank) {
-        if (pbb->bstat_corner[n] == BoundaryRecvStatus::waiting) bflag = false;
+        if (pbb->bstat_corner[n] == BoundaryRecvStatus::waiting) bflag = true;
 #if MPI_PARALLEL_ENABLED
       } else {
 #endif
@@ -465,9 +456,17 @@ TaskStatus BoundaryValues::RecvCellCenteredVars(AthenaArray4D<Real> &a, int nvar
   }
 
   // exit if recv boundary buffer communications have not completed
-  if (!(bflag)) {return TaskStatus::incomplete;}
+  if (bflag) {return TaskStatus::incomplete;}
   
   // buffers have all completed, so unpack (THIS VERSION NO AMR)
+  int ng = pmb->mb_cells.ng;
+  int is = pmb->mb_cells.is; int ie = pmb->mb_cells.ie;
+  int js = pmb->mb_cells.js; int je = pmb->mb_cells.je;
+  int ks = pmb->mb_cells.ks; int ke = pmb->mb_cells.ke;
+  int ncells1 = pmb->mb_cells.nx1 + 2*ng;
+  int ncells2 = (pmb->mb_cells.nx2 > 1)? (pmb->mb_cells.nx2 + 2*ng) : 1;
+  int ncells3 = (pmb->mb_cells.nx3 > 1)? (pmb->mb_cells.nx3 + 2*ng) : 1;
+
   // create local references for variables in kernel
   auto &nx3gt1 = pmesh_->nx3gt1;
   auto &nx2gt1 = pmesh_->nx2gt1;

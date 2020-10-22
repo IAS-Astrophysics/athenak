@@ -465,15 +465,15 @@ void Mesh::BuildTree(ParameterInput *pin)
     std::cout << "******* Block=" << it->mb_gid << std::endl;
     std::cout << "x1 Faces" << std::endl;
     for (int n=0; n<2; ++n) {
-      std::cout << "n=" << n << " gid=" << it->pbvals->nghbr_x1face[n].gid << " level=" << it->pbvals->nghbr_x1face[n].level << " rank=" << it->pbvals->nghbr_x1face[n].rank << std::endl;
+      std::cout << "n=" << n << " gid=" << it->pbvals->nghbr_x1face[n].gid << " level=" << it->pbvals->nghbr_x1face[n].level << " rank=" << it->pbvals->nghbr_x1face[n].rank << " bc_flag=" << GetBoundaryString(it->pbvals->bndry_flag[n]) << std::endl;
     }
     std::cout << "x2 Faces" << std::endl;
     for (int n=0; n<2; ++n) {
-      std::cout << "n=" << n << " gid=" << it->pbvals->nghbr_x2face[n].gid << " level=" << it->pbvals->nghbr_x2face[n].level << " rank=" << it->pbvals->nghbr_x2face[n].rank << std::endl;
+      std::cout << "n=" << n << " gid=" << it->pbvals->nghbr_x2face[n].gid << " level=" << it->pbvals->nghbr_x2face[n].level << " rank=" << it->pbvals->nghbr_x2face[n].rank << " bc_flag=" << GetBoundaryString(it->pbvals->bndry_flag[n+2]) <<  std::endl;
     }
     std::cout << "x3 Faces" << std::endl;
     for (int n=0; n<2; ++n) {
-      std::cout << "n=" << n << " gid=" << it->pbvals->nghbr_x3face[n].gid << " level=" << it->pbvals->nghbr_x3face[n].level << " rank=" << it->pbvals->nghbr_x3face[n].rank << std::endl;
+      std::cout << "n=" << n << " gid=" << it->pbvals->nghbr_x3face[n].gid << " level=" << it->pbvals->nghbr_x3face[n].level << " rank=" << it->pbvals->nghbr_x3face[n].rank << " bc_flag=" << GetBoundaryString(it->pbvals->bndry_flag[n+4]) <<  std::endl;
     }
     std::cout << "x1x2 Edges" << std::endl;
     for (int n=0; n<4; ++n) {
@@ -740,7 +740,8 @@ void Mesh::SetBlockSizeAndBoundaries(LogicalLocation loc, RegionSize &block_size
 //  \brief Parses input string to return scoped enumerator flag specifying boundary
 //  condition. Typically called in Mesh() ctor and in pgen/*.cpp files.
 
-BoundaryFlag Mesh::GetBoundaryFlag(const std::string& input_string) {
+BoundaryFlag Mesh::GetBoundaryFlag(const std::string& input_string) 
+{
   if (input_string == "reflecting") {
     return BoundaryFlag::reflect;
   } else if (input_string == "outflow") {
@@ -756,5 +757,35 @@ BoundaryFlag Mesh::GetBoundaryFlag(const std::string& input_string) {
               << "Input string = '" << input_string << "' is an invalid boundary type"
               << std::endl;
     std::exit(EXIT_FAILURE);
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn GetBoundaryString(BoundaryFlag input_flag)
+//  \brief Parses enumerated type BoundaryFlag internal integer representation to return
+//  string describing the boundary condition. Typicall used to format descriptive errors
+//  or diagnostics. Inverse of GetBoundaryFlag().
+
+std::string Mesh::GetBoundaryString(BoundaryFlag input_flag)
+{
+  switch (input_flag) {
+    case BoundaryFlag::block:  // 0
+      return "block";
+    case BoundaryFlag::reflect:
+      return "reflecting";
+    case BoundaryFlag::outflow:
+      return "outflow";
+    case BoundaryFlag::user:
+      return "user";
+    case BoundaryFlag::periodic:
+      return "periodic";
+    case BoundaryFlag::undef:
+      return "undef";
+    default:
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+         << std::endl << "Input enum class BoundaryFlag=" << static_cast<int>(input_flag)
+         << " is an invalid boundary type" << std::endl;
+      std::exit(EXIT_FAILURE);
+      break;
   }
 }
