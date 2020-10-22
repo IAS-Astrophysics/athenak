@@ -46,7 +46,7 @@ void MeshBlock::InitPhysicsModules(ParameterInput *pin)
   // add physical boundary conditions, and make depend on hydro_recv (penultimate task)
   TaskID hydro_recv = hydro_run_tasks[hydro_run_tasks.size()-2];
   auto bvals_physical =
-    tl_stagerun.InsertTask(&BoundaryValues::ApplyPhysicalBCs, pbvals, hydro_recv);
+    tl_stagerun.InsertTask(&BoundaryValues::ApplyPhysicalBCs, this->pbvals, hydro_recv);
 
 //  auto bvals_physical =
 //    tl_onestage.AddTask(&BoundaryValues::ApplyPhysicalBCs, pbvals, hydro_tasks.back());
@@ -61,7 +61,8 @@ void Mesh::NewTimeStep(const Real tlim)
 {
   // cycle over all MeshBlocks on this rank and find minimum dt
   // limit increase in timestep to 2x old value
-  for (const auto &mb : mblocks) { dt = std::min(2.0*dt, (cfl_no)*(mb.phydro->dtnew) ); }
+  dt = 2.0*dt;
+  for (const auto &mb : mblocks) { dt = std::min(dt, (cfl_no)*(mb.phydro->dtnew) ); }
 
 #if MPI_PARALLEL_ENABLED
   // get minimum dt over all MPI ranks
