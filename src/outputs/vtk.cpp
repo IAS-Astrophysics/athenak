@@ -104,16 +104,16 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
       << "BINARY" << std::endl
       << "DATASET RECTILINEAR_GRID" << std::endl
       << "DIMENSIONS " << ncoord1 << " " << ncoord2 << " " << ncoord3 << std::endl;
-  header_offset = msg.str().size();
-  vtkfile.Write(msg.str().c_str(),sizeof(char),msg.str().size());}
+  vtkfile.Write(msg.str().c_str(),sizeof(char),msg.str().size());
+  header_offset = msg.str().size();}
 
   // write x1-coordinates of entire root mesh as binary float in big endian order
   //  If N>1, then write N+1 cell faces as binary floats.
   //  If N=1, then write 1 cell center position.
   {std::stringstream msg;
   msg << "X_COORDINATES " << ncoord1 << " float" << std::endl;
-  header_offset += msg.str().size();
-  vtkfile.Write(msg.str().c_str(),sizeof(char),msg.str().size());}
+  vtkfile.Write(msg.str().c_str(),sizeof(char),msg.str().size());
+  header_offset += msg.str().size();}
 
   int &is = pm->mesh_cells.is;
   Real &x1min = pm->mesh_size.x1min, &x1max = pm->mesh_size.x1max;
@@ -121,23 +121,22 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
 
   if (nout1 == 1) {
     data[0] = static_cast<float>(out_params.slice_x1);
-    header_offset += sizeof(float);
   } else {
     for (int i=0; i<ncoord1; ++i) {
       data[i] = static_cast<float>(CellCenterX(i-is,nx1,x1min,x1max));
     }
-    header_offset += ncoord1*sizeof(float);
   }
   if (!big_end) {for (int i=0; i<ncoord1; ++i) swap_functions::Swap4Bytes(&data[i]);}
   vtkfile.Write(&(data[0]),sizeof(float),ncoord1);
+  header_offset += ncoord1*sizeof(float);
 
   // write x2-coordinates of entire root mesh as binary float in big endian order
   //  If N>1, then write N+1 cell faces as binary floats.
   //  If N=1, then write 1 cell center position.
   {std::stringstream msg;
   msg << std::endl << "Y_COORDINATES " << ncoord2 << " float" << std::endl;
-  header_offset += msg.str().size(); 
-  vtkfile.Write(msg.str().c_str(),sizeof(char),msg.str().size());}
+  vtkfile.Write(msg.str().c_str(),sizeof(char),msg.str().size());
+  header_offset += msg.str().size();} 
   
   int &js = pm->mesh_cells.js;
   Real &x2min = pm->mesh_size.x2min, &x2max = pm->mesh_size.x2max;
@@ -145,23 +144,22 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   
   if (nout2 == 1) {
     data[0] = static_cast<float>(out_params.slice_x2);
-    header_offset += sizeof(float);
   } else {
     for (int j=0; j<ncoord2; ++j) {
       data[j] = static_cast<float>(CellCenterX(j-js,nx2,x2min,x2max));
     } 
-    header_offset += ncoord2*sizeof(float);
   } 
   if (!big_end) {for (int i=0; i<ncoord2; ++i) swap_functions::Swap4Bytes(&data[i]);}
   vtkfile.Write(&(data[0]),sizeof(float),ncoord2);
+  header_offset += ncoord2*sizeof(float);
 
   // write x3-coordinates of entire root mesh as binary float in big endian order
   //  If N>1, then write N+1 cell faces as binary floats.
   //  If N=1, then write 1 cell center position.
   {std::stringstream msg;
   msg << std::endl << "Z_COORDINATES " << ncoord3 << " float" << std::endl;
-  header_offset += msg.str().size(); 
-  vtkfile.Write(msg.str().c_str(),sizeof(char),msg.str().size());}
+  vtkfile.Write(msg.str().c_str(),sizeof(char),msg.str().size());
+  header_offset += msg.str().size();} 
   
   int &ks = pm->mesh_cells.ks;
   Real &x3min = pm->mesh_size.x3min, &x3max = pm->mesh_size.x3max;
@@ -169,22 +167,21 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   
   if (nout3 == 1) {
     data[0] = static_cast<float>(out_params.slice_x3);
-    header_offset += sizeof(float);
   } else {
     for (int k=0; k<ncoord3; ++k) {
       data[k] = static_cast<float>(CellCenterX(k-ks,nx3,x3min,x3max));
     } 
-    header_offset += ncoord3*sizeof(float);
   } 
   if (!big_end) {for (int i=0; i<ncoord3; ++i) swap_functions::Swap4Bytes(&data[i]);}
   vtkfile.Write(&(data[0]),sizeof(float),ncoord3);
+  header_offset += ncoord3*sizeof(float);
 
   //  5. Data.  An arbitrary number of scalars and vectors can be written (every node
   //  in the OutputData doubly linked lists), all in binary floats format
   {std::stringstream msg;
   msg << std::endl << "CELL_DATA " << nout1*nout2*nout3 << std::endl;
-  header_offset += msg.str().size(); 
-  vtkfile.Write(msg.str().c_str(),sizeof(char),msg.str().size());}
+  vtkfile.Write(msg.str().c_str(),sizeof(char),msg.str().size());
+  header_offset += msg.str().size();}
 
   // Loop over elements of out_data_ vector (variables)
   for (int n=0; n<nvar; ++n) {
@@ -192,8 +189,8 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
     {std::stringstream msg;
     msg << std::endl << "SCALARS " << out_data_label_[n].c_str() << " float" << std::endl
         << "LOOKUP_TABLE default" << std::endl;
-    header_offset += msg.str().size(); 
-    vtkfile.Write(msg.str().c_str(),sizeof(char),msg.str().size());}
+    vtkfile.Write_at_all(msg.str().c_str(),sizeof(char),msg.str().size(),header_offset);
+    header_offset += msg.str().size();}
 
     // Loop over MeshBlocks
     int nout_mbs = static_cast<int>(out_data_.size());
@@ -204,10 +201,7 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
       int &mb_nx2 = pmb->mb_cells.nx2;
       int &mb_nx3 = pmb->mb_cells.nx3;
       size_t data_offset = (loc.lx1*mb_nx1 + loc.lx2*(mb_nx2*nout1) +
-                            loc.lx3*(mb_nx3*nout1*nout2))*sizeof(float);
-/*****/
-std::cout << "lx1,lx2,lx3= " << loc.lx1 << " " << loc.lx2 << " " << loc.lx3 << " data_offset=" << data_offset << std::endl;
-/*****/
+        loc.lx3*(mb_nx3*nout1*nout2))*sizeof(float);
 
       for (int k=oks; k<=oke; ++k) {
         for (int j=ojs; j<=oje; ++j) {
@@ -226,10 +220,8 @@ std::cout << "lx1,lx2,lx3= " << loc.lx1 << " " << loc.lx2 << " " << loc.lx3 << "
         }
       }
     }  // end loop over MeshBlocks
+    header_offset += (nout1*nout2*nout3)*sizeof(float);
   }
-
-
-  std::cout << "size=" << header_offset + nout1*nout2*nout3*sizeof(float) << std::endl;
 
   // close the output file and clean up ptrs to data
   vtkfile.Close();
