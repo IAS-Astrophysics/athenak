@@ -165,8 +165,9 @@ Mesh::Mesh(ParameterInput *pin)
 
 Mesh::~Mesh()
 {
-  delete [] ranklist;
   delete [] costlist;
+  delete [] ranklist;
+  delete [] loclist;
   delete [] gidslist;
   delete [] nmblist;
   if (adaptive) { // deallocate arrays for AMR
@@ -179,7 +180,6 @@ Mesh::~Mesh()
     delete [] brdisp;
     delete [] bddisp;
   }
-  delete [] loclist;
 }
 
 //----------------------------------------------------------------------------------------
@@ -410,7 +410,24 @@ void Mesh::BuildTree(ParameterInput *pin)
 
   // initial mesh hierarchy construction is completed here
   ptree->CountMeshBlock(nmbtotal);
-  loclist = new LogicalLocation[nmbtotal];
+
+  costlist = new double[nmbtotal];
+  ranklist = new int[nmbtotal];
+  loclist  = new LogicalLocation[nmbtotal];
+
+  gidslist = new int[global_variable::nranks];
+  nmblist  = new int[global_variable::nranks];
+  if (adaptive) { // allocate arrays for AMR
+    nref = new int[global_variable::nranks];
+    nderef = new int[global_variable::nranks];
+    rdisp = new int[global_variable::nranks];
+    ddisp = new int[global_variable::nranks];
+    bnref = new int[global_variable::nranks];
+    bnderef = new int[global_variable::nranks];
+    brdisp = new int[global_variable::nranks];
+    bddisp = new int[global_variable::nranks];
+  }
+
   // following returns LogicalLocation list sorted by Z-ordering
   ptree->GetMeshBlockList(loclist, nullptr, nmbtotal);
 
@@ -426,20 +443,6 @@ void Mesh::BuildTree(ParameterInput *pin)
   }
 #endif
 
-  costlist = new double[nmbtotal];
-  ranklist = new int[nmbtotal];
-  gidslist = new int[global_variable::nranks];
-  nmblist  = new int[global_variable::nranks];
-  if (adaptive) { // allocate arrays for AMR
-    nref = new int[global_variable::nranks];
-    nderef = new int[global_variable::nranks];
-    rdisp = new int[global_variable::nranks];
-    ddisp = new int[global_variable::nranks];
-    bnref = new int[global_variable::nranks];
-    bnderef = new int[global_variable::nranks];
-    brdisp = new int[global_variable::nranks];
-    bddisp = new int[global_variable::nranks];
-  }
 
   // initialize cost array with the simplest estimate; all the blocks are equal
   for (int i=0; i<nmbtotal; i++) {costlist[i] = 1.0;}

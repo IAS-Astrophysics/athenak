@@ -61,6 +61,19 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
 {
   int big_end = swap_functions::IsBigEndian(); // =1 on big endian machine
 
+  // numbers of cells in entire grid
+  int nout1 = (out_params.slice1)? 1 : (pm->mesh_cells.nx1);
+  int nout2 = (out_params.slice2)? 1 : (pm->mesh_cells.nx2);
+  int nout3 = (out_params.slice3)? 1 : (pm->mesh_cells.nx3);
+  int ncoord1 = (nout1 > 1)? nout1+1 : nout1;
+  int ncoord2 = (nout2 > 1)? nout2+1 : nout2;
+  int ncoord3 = (nout3 > 1)? nout3+1 : nout3;
+
+  // allocate 1D vector of floats used to convert and output data
+  float *data;
+  int ndata = std::max(std::max(ncoord1, ncoord2), ncoord3);
+  data = new float[ndata];
+
   // create filename: "file_basename" + "." + "file_id" + "." + XXXXX + ".vtk"
   // where XXXXX = 5-digit file_number
   std::string fname;
@@ -74,131 +87,152 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   fname.append(number);
   fname.append(".vtk");
 
-  // open file for output
-  FILE *pfile;
-  std::stringstream msg;
-  if ((pfile = std::fopen(fname.c_str(), "w")) == nullptr) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "Output file '" << fname << "' could not be opened" << std::endl;
-    exit(EXIT_FAILURE);
-  }
+  IOWrapper vtkfile;
+  std::size_t header_offset=0;
+  vtkfile.Open(fname.c_str(), IOWrapper::FileMode::write);
 
   // There are five basic parts to the VTK "legacy" file format.
-  //  1. Write file version and identifier
-  std::fprintf(pfile, "# vtk DataFile Version 2.0\n");
-
+  //  1. File version and identifier
   //  2. Header
-  std::fprintf(pfile, "# Athena++ data at time=%e", pm->time);
-  std::fprintf(pfile, "  cycle=%d", pm->ncycle);
-  std::fprintf(pfile, "  variables=%s \n", out_params.variable.c_str());
-
   //  3. File format
-  std::fprintf(pfile, "BINARY\n");
+  //  4. Dataset structure, including type and dimensions of data, and coordinates.
+  {std::stringstream msg;
+  msg << "# vtk DataFile Version 2.0" << std::endl
+      << "# Athena++ data at time=" << pm->time
+      << "  cycle=" << pm->ncycle
+      << "  variables=" << out_params.variable.c_str() << std::endl
+      << "BINARY" << std::endl
+      << "DATASET RECTILINEAR_GRID" << std::endl
+      << "DIMENSIONS " << ncoord1 << " " << ncoord2 << " " << ncoord3 << std::endl;
+  header_offset = msg.str().size();
+  vtkfile.Write(msg.str().c_str(),sizeof(char),msg.str().size());}
 
-  //  4. Dataset structure
-  // TODO numbers of cells in entire grid
-  int nout1 = (oie-ois+1);
-  int nout2 = (oje-ojs+1);
-  int nout3 = (oke-oks+1);
-  int ncoord1 = (nout1 > 1)? nout1+1 : nout1;
-  int ncoord2 = (nout2 > 1)? nout2+1 : nout2;
-  int ncoord3 = (nout3 > 1)? nout3+1 : nout3;
+  // write x1-coordinates of entire root mesh as binary float in big endian order
+  //  If N>1, then write N+1 cell faces as binary floats.
+  //  If N=1, then write 1 cell center position.
+  {std::stringstream msg;
+  msg << "X_COORDINATES " << ncoord1 << " float" << std::endl;
+  header_offset += msg.str().size();
+  vtkfile.Write(msg.str().c_str(),sizeof(char),msg.str().size());}
 
-  // allocate 1D vector of floats used to convert and output data
-  float *data;
-  int ndata = std::max(std::max(ncoord1, ncoord2), ncoord3);
-  data = new float[3*ndata];
+  int &is = pm->mesh_cells.is;
+  Real &x1min = pm->mesh_size.x1min, &x1max = pm->mesh_size.x1max;
+  int &nx1 = pm->mesh_cells.nx1;
 
-  // Specify the type of data, dimensions, and coordinates.  If N>1, then write N+1
-  // cell faces as binary floats.  If N=1, then write 1 cell center position.
-  std::fprintf(pfile, "DATASET RECTILINEAR_GRID\n");
-  std::fprintf(pfile, "DIMENSIONS %d %d %d\n", ncoord1, ncoord2, ncoord3);
-
-  // TODO coordinates of entire grid for multiple MeshBlocks
-  // write x1-coordinates as binary float in big endian order
-  MeshBlock* pmb = pm->FindMeshBlock(out_data_gid_[0]);
-  int &is = pmb->mb_cells.is;
-  Real &x1min = pmb->mb_size.x1min, &x1max = pmb->mb_size.x1max;
-  int &nx1 = pmb->mb_cells.nx1;
-
-  std::fprintf(pfile, "X_COORDINATES %d float\n", ncoord1);
   if (nout1 == 1) {
-    data[0] = static_cast<float>(LeftEdgeX(ois,nx1,x1min,x1max));
+    data[0] = static_cast<float>(out_params.slice_x1);
+    header_offset += sizeof(float);
   } else {
     for (int i=0; i<ncoord1; ++i) {
       data[i] = static_cast<float>(CellCenterX(i-is,nx1,x1min,x1max));
     }
+    header_offset += ncoord1*sizeof(float);
   }
   if (!big_end) {for (int i=0; i<ncoord1; ++i) swap_functions::Swap4Bytes(&data[i]);}
-  std::fwrite(data, sizeof(float), static_cast<std::size_t>(ncoord1), pfile);
+  vtkfile.Write(&(data[0]),sizeof(float),ncoord1);
 
-  // write x2-coordinates as binary float in big endian order
-  int &js = pmb->mb_cells.js;
-  Real &x2min = pmb->mb_size.x2min, &x2max = pmb->mb_size.x2max;
-  int &nx2 = pmb->mb_cells.nx2;
-  std::fprintf(pfile, "\nY_COORDINATES %d float\n", ncoord2);
+  // write x2-coordinates of entire root mesh as binary float in big endian order
+  //  If N>1, then write N+1 cell faces as binary floats.
+  //  If N=1, then write 1 cell center position.
+  {std::stringstream msg;
+  msg << std::endl << "Y_COORDINATES " << ncoord2 << " float" << std::endl;
+  header_offset += msg.str().size(); 
+  vtkfile.Write(msg.str().c_str(),sizeof(char),msg.str().size());}
+  
+  int &js = pm->mesh_cells.js;
+  Real &x2min = pm->mesh_size.x2min, &x2max = pm->mesh_size.x2max;
+  int &nx2 = pm->mesh_cells.nx2;
+  
   if (nout2 == 1) {
-    data[0] = static_cast<float>(LeftEdgeX(ojs,nx2,x2min,x2max));
+    data[0] = static_cast<float>(out_params.slice_x2);
+    header_offset += sizeof(float);
   } else {
     for (int j=0; j<ncoord2; ++j) {
       data[j] = static_cast<float>(CellCenterX(j-js,nx2,x2min,x2max));
-    }
-  }
+    } 
+    header_offset += ncoord2*sizeof(float);
+  } 
   if (!big_end) {for (int i=0; i<ncoord2; ++i) swap_functions::Swap4Bytes(&data[i]);}
-  std::fwrite(data, sizeof(float), static_cast<std::size_t>(ncoord2), pfile);
+  vtkfile.Write(&(data[0]),sizeof(float),ncoord2);
 
-  // write x3-coordinates as binary float in big endian order
-  int &ks = pmb->mb_cells.ks;
-  Real &x3min = pmb->mb_size.x3min, &x3max = pmb->mb_size.x3max;
-  int &nx3 = pmb->mb_cells.nx3;
-  std::fprintf(pfile, "\nZ_COORDINATES %d float\n", ncoord3);
+  // write x3-coordinates of entire root mesh as binary float in big endian order
+  //  If N>1, then write N+1 cell faces as binary floats.
+  //  If N=1, then write 1 cell center position.
+  {std::stringstream msg;
+  msg << std::endl << "Z_COORDINATES " << ncoord3 << " float" << std::endl;
+  header_offset += msg.str().size(); 
+  vtkfile.Write(msg.str().c_str(),sizeof(char),msg.str().size());}
+  
+  int &ks = pm->mesh_cells.ks;
+  Real &x3min = pm->mesh_size.x3min, &x3max = pm->mesh_size.x3max;
+  int &nx3 = pm->mesh_cells.nx3;
+  
   if (nout3 == 1) {
-    data[0] = static_cast<float>(LeftEdgeX(oks,nx3,x3min,x3max));
+    data[0] = static_cast<float>(out_params.slice_x3);
+    header_offset += sizeof(float);
   } else {
     for (int k=0; k<ncoord3; ++k) {
       data[k] = static_cast<float>(CellCenterX(k-ks,nx3,x3min,x3max));
-    }
-  }
+    } 
+    header_offset += ncoord3*sizeof(float);
+  } 
   if (!big_end) {for (int i=0; i<ncoord3; ++i) swap_functions::Swap4Bytes(&data[i]);}
-  std::fwrite(data, sizeof(float), static_cast<std::size_t>(ncoord3), pfile);
+  vtkfile.Write(&(data[0]),sizeof(float),ncoord3);
 
   //  5. Data.  An arbitrary number of scalars and vectors can be written (every node
   //  in the OutputData doubly linked lists), all in binary floats format
-  std::fprintf(pfile, "\nCELL_DATA %d", nout1*nout2*nout3);
+  {std::stringstream msg;
+  msg << std::endl << "CELL_DATA " << nout1*nout2*nout3 << std::endl;
+  header_offset += msg.str().size(); 
+  vtkfile.Write(msg.str().c_str(),sizeof(char),msg.str().size());}
 
   // Loop over elements of out_data_ vector (variables)
   for (int n=0; n<nvar; ++n) {
-    // TODO get VECTORS working
     // write data type (SCALARS or VECTORS) and name
-//    std::fprintf(pfile, "\n%s %s float\n", pdata->type.c_str(),  pdata->name.c_str());
-//    int nvar = pdata->data.GetDim4();
-//    if (nvar == 1) std::fprintf(pfile, "LOOKUP_TABLE default\n");
-    std::fprintf(pfile, "\nSCALARS %s float\n", out_data_label_[n].c_str());
-    std::fprintf(pfile, "LOOKUP_TABLE default\n");
+    {std::stringstream msg;
+    msg << std::endl << "SCALARS " << out_data_label_[n].c_str() << " float" << std::endl
+        << "LOOKUP_TABLE default" << std::endl;
+    header_offset += msg.str().size(); 
+    vtkfile.Write(msg.str().c_str(),sizeof(char),msg.str().size());}
 
-  // TODO write data properly for multiple MeshBlocks
     // Loop over MeshBlocks
     int nout_mbs = static_cast<int>(out_data_.size());
     for (int m=0; m<nout_mbs; ++m) {
+      LogicalLocation loc = pm->loclist[out_data_gid_[m]];
+      MeshBlock* pmb = pm->FindMeshBlock(out_data_gid_[m]);
+      int &mb_nx1 = pmb->mb_cells.nx1;
+      int &mb_nx2 = pmb->mb_cells.nx2;
+      int &mb_nx3 = pmb->mb_cells.nx3;
+      size_t data_offset = (loc.lx1*mb_nx1 + loc.lx2*(mb_nx2*nout1) +
+                            loc.lx3*(mb_nx3*nout1*nout2))*sizeof(float);
+/*****/
+std::cout << "lx1,lx2,lx3= " << loc.lx1 << " " << loc.lx2 << " " << loc.lx3 << " data_offset=" << data_offset << std::endl;
+/*****/
+
       for (int k=oks; k<=oke; ++k) {
-        for (int j=ojs; j<=oje; ++j) { 
+        for (int j=ojs; j<=oje; ++j) {
           for (int i=ois; i<=oie; ++i) {
             data[i-ois] = static_cast<float>(out_data_[m](n,k-oks,j-ojs,i-ois));
           }
 
           // write data in big endian order
           if (!big_end) {
-            for (int i=0; i<nout1; ++i)
+            for (int i=0; i<(oie-ois+1); ++i)
               swap_functions::Swap4Bytes(&data[i]);
           }
-          std::fwrite(data, sizeof(float), static_cast<std::size_t>(nout1), pfile);
+          size_t my_offset = header_offset + data_offset +
+                             ((j-ojs)*nout1 + (k-oks)*nout1*nout2)*sizeof(float);
+          vtkfile.Write_at_all(&data[0], sizeof(float), (oie-ois+1), my_offset);
         }
       }
     }  // end loop over MeshBlocks
   }
 
-  // don't forget to close the output file and clean up ptrs to data in OutputData
-  std::fclose(pfile);
+
+  std::cout << "size=" << header_offset + nout1*nout2*nout3*sizeof(float) << std::endl;
+
+  // close the output file and clean up ptrs to data
+  vtkfile.Close();
   delete [] data;
 
   // increment counters

@@ -110,8 +110,9 @@ class Mesh
   int gids, gide; // start/end of global IDs on this MPI rank
 
   // following 2x arrays allocated with length [nmbtotal]
-  int *ranklist;      // rank of each MeshBlock
-  double *costlist;   // cost of each MeshBlock
+  int *ranklist;             // rank of each MeshBlock
+  double *costlist;          // cost of each MeshBlock
+  LogicalLocation *loclist;  // LogicalLocations for each MeshBlocks
 
   // following 2x arrays allocated with length [nranks]
   int *gidslist;        // starting global ID of MeshBlocks in each rank
@@ -144,7 +145,6 @@ class Mesh
   int cyc_since_lb_;
 
   std::unique_ptr<MeshBlockTree> ptree;  // binary/quad/oct-tree
-  LogicalLocation *loclist;              // array of LogicalLocations for ALL MeshBlocks
 
   // functions
   void SetBlockSizeAndBoundaries(LogicalLocation loc, RegionSize &size,
