@@ -4,41 +4,8 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file output_type.cpp
-//  \brief implements functions in OutputType class
+//  \brief implements base class OutputType constructor, and LoadOutputData functions
 //
-// The number and types of outputs are all controlled by the number and values of
-// parameters specified in <output[n]> blocks in the input file.  Each output block must
-// be labelled by a unique integer "n".  Following the convention of the parser
-// implemented in the ParameterInput class, a second output block with the same integer
-// "n" of an earlier block will silently overwrite the values read by the first block. The
-// numbering of the output blocks does not need to be consecutive, and blocks may appear
-// in any order in the input file.  Moreover, unlike the C version of Athena, the total
-// number of <output[n]> blocks does not need to be specified -- in Athena++ a new output
-// type will be created for each and every <output[n]> block in the input file.
-//
-// Required parameters that must be specified in an <output[n]> block are:
-//   - variable     = cons,prim,D,d,E,e,m,m1,m2,m3,v,v1=vx,v2=vy,v3=vz,p,
-//                    bcc,bcc1,bcc2,bcc3,b,b1,b2,b3,phi,uov
-//   - file_type    = rst,tab,vtk,hst,hdf5
-//   - dt           = problem time between outputs
-//
-// EXAMPLE of an <output[n]> block for a VTK dump:
-//   <output3>
-//   file_type   = tab       # Tabular data dump
-//   variable    = prim      # variables to be output
-//   data_format = %12.5e    # Optional data format string
-//   dt          = 0.01      # time increment between outputs
-//   x2_slice    = 0.0       # slice in x2
-//   x3_slice    = 0.0       # slice in x3
-//
-// Each <output[n]> block will result in a new node being created in a linked list of
-// OutputType stored in the Outputs class.  During a simulation, outputs are made when
-// the simulation time satisfies the criteria implemented in the XXXX
-//
-// To implement a new output type, write a new OutputType derived class, and construct
-// an object of this class in the Outputs constructor at the location indicated by the
-// comment text: 'NEW_OUTPUT_TYPES'.
-//========================================================================================
 
 #include <cstdio>
 #include <cstdlib>
@@ -83,6 +50,7 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
   }
 
   // parse list of variables for each physics and flag variables to be output
+  // TODO: get this working for multiple physics
   nvar = 0; int var_cnt=0;
   if (out_params.variable.compare("D") == 0 ||
       out_params.variable.compare("cons") == 0) {
@@ -162,7 +130,6 @@ void OutputType::LoadOutputData(Mesh *pm)
 
   // out_data_ vector (indexed over # of output MBs) stores 4D array of variables
   // so start iteration over number of MeshBlocks
-
   // TODO: get this working for multiple physics, which may be either defined/undef
 
   // loop over all MeshBlocks
@@ -202,7 +169,7 @@ void OutputType::LoadOutputData(Mesh *pm)
       oke = oks;
     }
 
-    // load all the outpustr variables on this MeshBlock
+    // load all the output variables on this MeshBlock
     HostArray4D<Real> new_data("out",nvar,(oke-oks+1),(oje-ojs+1),(oie-ois+1));
     for (int n=0; n<nvar; ++n) {
       AthenaArray3D<Real> dev_buff("dev_buff",(oke-oks+1),(oje-ojs+1),(oie-ois+1));
@@ -259,53 +226,15 @@ void OutputType::LoadOutputData(Mesh *pm)
         Kokkos::deep_copy(dev_buff,dev_slice);
       }
 
-//std::cout << "rank=" << dev_buff.rank << " dim0=" << dev_buff.extent_int(0) << " dim1=" << dev_buff.extent_int(1)<< " dim2=" << dev_buff.extent_int(2) <<  std::endl;
-
       // copy to host mirror array, and then to 4D host View containing all variables
       AthenaArray3D<Real>::HostMirror hst_buff = Kokkos::create_mirror(dev_buff);
       Kokkos::deep_copy(hst_buff,dev_buff);
-      auto hst_slice = Kokkos::subview(new_data, n, Kokkos::ALL(), Kokkos::ALL(),
-                       Kokkos::ALL());
+      auto hst_slice = Kokkos::subview(new_data,n,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
       Kokkos::deep_copy(hst_slice,hst_buff);
-/****/
-//      for (int k=oks; k<=oke; ++k) {
-//      for (int j=ojs; j<=oje; ++j) {
-//      for (int i=ois; i<=oie; ++i) {
-//        new_data(n,k-oks,j-ojs,i-ois) = hst_data_slice(k-oks,j-ojs,i-ois);
-//      }}}
-//for (int i=ois; i<oie; ++i) {
-//std::cout << hst_data_slice(0,0,i-ois) << std::endl;
-//}
-/****/
-      
     }
 
     // append variables on this MeshBlock to end of out_data_ vector
     out_data_.push_back(new_data);
     out_data_gid_.push_back(mb.mb_gid);
   }
-}
-
-//----------------------------------------------------------------------------------------
-// OutputType::ComputeOutputData()
-
-AthenaArray3D<Real> OutputType::ComputeData(MeshBlock &mb, std::string label)
-{
-  AthenaArray3D<Real> data("output_dev_buff",(oke-oks+1),(oje-ojs+1),(oie-ois+1));
-
-  // capture variables for lambdas
-  auto u0_ = mb.phydro->u0;
-
-std::cout << label << std::endl;
-
-  if (label.compare("dens_c")  == 0) {
-    par_for("pgen_advect", mb.exe_space, oks, oke, ojs, oje, ois, oie,
-      KOKKOS_LAMBDA(int k, int j, int i)
-      {
-        data(k-oks,j-ojs,i-ois) = u0_(hydro::IDN,k,j,i);
-      }
-    );
-  }
-std::cout << "done load" << std::endl;
-  return data;
 }

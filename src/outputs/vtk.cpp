@@ -6,6 +6,7 @@
 //! \file vtk.cpp
 //  \brief writes output data in (legacy) vtk format.
 //  Data is written in RECTILINEAR_GRID geometry, in BINARY format, and in FLOAT type
+//  Data over multiple MeshBlocks and MPI ranks is written to a single file using MPI-IO.
 
 #include <algorithm>
 #include <cstdio>      // fwrite(), fclose(), fopen(), fnprintf(), snprintf()
@@ -54,8 +55,8 @@ inline void Swap4Bytes(void *vdat)
 
 //----------------------------------------------------------------------------------------
 //! \fn void VTKOutput:::WriteOutputFile(Mesh *pm)
-//  \brief Cycles over all MeshBlocks and writes OutputData in (legacy) vtk format, one
-//         MeshBlock per file
+//  \brief Cycles over all MeshBlocks and writes OutputData in (legacy) vtk format
+//   All MeshBlocks are written to the same file.
 
 void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
 {

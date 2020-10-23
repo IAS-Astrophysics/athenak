@@ -7,7 +7,7 @@
 //  \brief writes output data as a formatted (ASCI) table.  Since outputing data in this
 //  format is very slow and creates large files, it cannot be used for anything other than
 //  1D slices.  Code will issue error if this format is selected for 2D or 3D outputs.
-//  TODO: Uses MPI-IO to write all MeshBlocks to a single file
+//  Output is written to a single file even with multiple MeshBlocks and MPI ranks.
 
 #include <cstdio>      // fwrite(), fclose(), fopen(), fnprintf(), snprintf()
 #include <cstdlib>
@@ -106,7 +106,9 @@ void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
     exit(EXIT_FAILURE);
   }
   for (int r=0; r<global_variable::nranks; ++r) {
-    // MPI ranks append data one-at-a-time in order, thanks to MPI_Barrier at end of loop
+    // MPI ranks append data one-at-a-time in order, due to MPI_Barrier at end of loop
+    // This could be slow for very large numbers of ranks, however this is not a regime
+    // where .tab files are expected to be used very much.
     if (r == global_variable::my_rank) {
       // loop over output MeshBlocks, output all data
       int nout_mbs = static_cast<int>(out_data_.size());
@@ -127,7 +129,7 @@ void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
               std::fprintf(pfile, "%05d", pmb->mb_gid);
               // write x1, x2, x3 indices and coordinates
               if (oie != ois) {
-                std::fprintf(pfile, " %04d", i);
+                std::fprintf(pfile, " %04d", i);  // note extra space for formatting
                 Real x1cc = CellCenterX(i-is,nx1,x1min,x1max);
                 std::fprintf(pfile, out_params.data_format.c_str(), x1cc);
               }

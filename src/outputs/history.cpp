@@ -5,7 +5,7 @@
 //========================================================================================
 //! \file history.cpp
 //  \brief writes history output data, volume-averaged quantities that are output
-//         frequently in time to trace their history.
+//         frequently in time to trace their evolution.
 
 #include <cstdio>
 #include <cstdlib>
@@ -21,7 +21,6 @@
 
 //----------------------------------------------------------------------------------------
 // ctor: also calls OutputType base class constructor
-// history data stored in 2D AthenaArray with dims (nMeshBlocks,NHISTORY_VARS) 
 
 HistoryOutput::HistoryOutput(OutputParameters op, Mesh *pm) : OutputType(op, pm)
 {
@@ -66,16 +65,16 @@ namespace hist_sum {  // namespace helps with name resolution in reduction ident
 namespace Kokkos { //reduction identity must be defined in Kokkos namespace
   template<>
   struct reduction_identity< hist_sum::GlobalSum > {
-     KOKKOS_FORCEINLINE_FUNCTION static hist_sum::GlobalSum sum() {
-        return hist_sum::GlobalSum();
-     }
+    KOKKOS_FORCEINLINE_FUNCTION static hist_sum::GlobalSum sum() {
+      return hist_sum::GlobalSum();
+    }
   };
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn void HistoryOutput::LoadOutputData()
-//  \brief Compute and store history data over all MeshBlocks on this rank in a single
-//  AthenaArray
+//  \brief Compute and store history data over all MeshBlocks on this rank
+//  Data is stored in a Real array defined in derived class.
 
 void HistoryOutput::LoadOutputData(Mesh *pm)
 { 
