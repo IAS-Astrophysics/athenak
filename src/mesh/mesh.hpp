@@ -88,8 +88,8 @@ class Mesh
   // accessors
   MeshBlock* FindMeshBlock(int tgid)
   {
-//    assert (tgid >= gids_ && tgid <= gide_);
-    return &(mblocks[tgid - gids_]);
+//    assert (tgid >= gids && tgid <= gide);
+    return &(mblocks[tgid - gids]);
   }
 
   // data
@@ -105,6 +105,25 @@ class Mesh
   int nmb_created;               // number of MeshBlcoks created via AMR during run
   int nmb_deleted;               // number of MeshBlcoks deleted via AMR during run
 
+  int root_level; // logical level of root (physical) grid (e.g. Fig. 3 of method paper)
+  int max_level;  // logical level of maximum refinement grid in Mesh
+  int gids, gide; // start/end of global IDs on this MPI rank
+
+  // following 2x arrays allocated with length [nmbtotal]
+  int *ranklist;             // rank of each MeshBlock
+  double *costlist;          // cost of each MeshBlock
+  LogicalLocation *loclist;  // LogicalLocations for each MeshBlocks
+
+  // following 2x arrays allocated with length [nranks]
+  int *gidslist;        // starting global ID of MeshBlocks in each rank
+  int *nmblist;        // number of MeshBlocks on each rank
+
+  // following 8x arrays allocated with length [nranks] only with AMR
+  int *nref, *nderef;
+  int *rdisp, *ddisp;
+  int *bnref, *bnderef;
+  int *brdisp, *bddisp;
+
   Real time, dt, cfl_no;           
   int ncycle;
 
@@ -115,27 +134,9 @@ class Mesh
   void NewTimeStep(const Real tlim);
   void OutputMeshStructure(int flag);
   BoundaryFlag GetBoundaryFlag(const std::string& input_string);
+  std::string GetBoundaryString(BoundaryFlag input_flag);
 
  private:
-  // data
-  int root_level; // logical level of root (physical) grid (e.g. Fig. 3 of method paper)
-  int max_level;  // logical level of maximum refinement grid in Mesh
-  int gids_, gide_; // start/end of grid IDs on this MPI rank
-
-  // following 2x arrays allocated with length [nmbtotal]
-  int *ranklist;      // rank of each MeshBlock
-  double *costlist;   // cost of each MeshBlock
-
-  // following 2x arrays allocated with length [nranks]
-  int *nslist;        // starting grid ID of MeshBlocks in each rank
-  int *nblist;        // number of MeshBlocks on each rank
-
-  // following 8x arrays allocated with length [nranks] only with AMR
-  int *nref, *nderef;
-  int *rdisp, *ddisp;
-  int *bnref, *bnderef;
-  int *brdisp, *bddisp;
-
   // variables for load balancing control
   bool lb_flag_;
   bool lb_automatic_, lb_manual_;
@@ -144,7 +145,6 @@ class Mesh
   int cyc_since_lb_;
 
   std::unique_ptr<MeshBlockTree> ptree;  // binary/quad/oct-tree
-  LogicalLocation *loclist;              // array of LogicalLocations for ALL MeshBlocks
 
   // functions
   void SetBlockSizeAndBoundaries(LogicalLocation loc, RegionSize &size,

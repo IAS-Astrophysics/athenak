@@ -14,6 +14,8 @@
 #include "athena.hpp"
 #include "io_wrapper.hpp"
 
+#define NHISTORY_VARIABLES 8
+
 // forward declarations
 class Mesh;
 class ParameterInput;
@@ -57,9 +59,8 @@ class OutputType
   // data
   int nvar;
   int ois, oie, ojs, oje, oks, oke;     // starting indices of data to be output
-  OutputParameters out_params      ;    // data read from <output> block for this type
+  OutputParameters out_params;          // data read from <output> block for this type
 
-  AthenaArray3D<Real> ComputeData(MeshBlock &mb, std::string label);
   // virtual functions over-ridden in derived classes
   virtual void LoadOutputData(Mesh *pm);
   virtual void WriteOutputFile(Mesh *pm, ParameterInput *pin) = 0;
@@ -88,13 +89,14 @@ class FormattedTableOutput : public OutputType
 //! \class HistoryOutput
 //  \brief derived OutputType class for history data
     
-//class HistoryOutput : public OutputType
-//{   
-// public:
-//  HistoryOutput(OutputParameters oparams, Mesh *pm);
-//  void LoadOutputData(Mesh *pm) override;
-//  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
-//};  
+class HistoryOutput : public OutputType
+{   
+ public:
+  Real history_data[NHISTORY_VARIABLES];  // vector to store history data
+  HistoryOutput(OutputParameters oparams, Mesh *pm);
+  void LoadOutputData(Mesh *pm) override;
+  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+};  
 
 //----------------------------------------------------------------------------------------
 //! \class VTKOutput
@@ -109,7 +111,6 @@ class VTKOutput : public OutputType
 
 //----------------------------------------------------------------------------------------
 //! \class Outputs
-
 //  \brief root class for all Athena++ outputs. Provides a std::vector of OutputTypes,
 //   with each element representing one mode/format of output to be made.
 
@@ -121,9 +122,6 @@ class Outputs
 
   // use vector of pointers to OutputTypes since it is an abstract base class 
   std::vector<OutputType*> pout_list_;  
-
- private:
-
 };
 
 #endif // OUTPUTS_OUTPUTS_HPP_

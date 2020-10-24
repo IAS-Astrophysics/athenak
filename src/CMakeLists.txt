@@ -12,7 +12,8 @@ add_executable(
         parameter_input.cpp
 
         bvals/bvals.cpp
-        bvals/cc_sendreceive.cpp
+        bvals/cc_send.cpp
+        bvals/cc_recv.cpp
         bvals/reflect.cpp
         bvals/outflow.cpp
 
@@ -36,11 +37,12 @@ add_executable(
         outputs/outputs.cpp
         outputs/output_type.cpp
         outputs/formatted_table.cpp
-#        outputs/history.cpp
+        outputs/history.cpp
         outputs/vtk.cpp
 
         pgen/pgen.cpp
         pgen/advection.cpp
+        pgen/linear_wave.cpp
         pgen/lw_implode.cpp
         pgen/shock_tube.cpp
 

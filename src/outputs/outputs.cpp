@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file outputs.cpp
-//  \brief implements functions in Outputs class
+//  \brief implements Outputs class constructor
 //
 // The number and types of outputs are all controlled by the number and values of
 // parameters specified in <output[n]> blocks in the input file.  Each output block must
@@ -32,7 +32,7 @@
 //
 // Each <output[n]> block will result in a new node being created in a linked list of
 // OutputType stored in the Outputs class.  During a simulation, outputs are made when
-// the simulation time satisfies the criteria implemented in the XXXX
+// the simulation time satisfies the criteria implemented in the Driver class.
 //
 // To implement a new output type, write a new OutputType derived class, and construct
 // an object of this class in the Outputs constructor at the location indicated by the
@@ -147,16 +147,16 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
       if (opar.file_type.compare("tab") == 0) {
         pnode = new FormattedTableOutput(opar,pm);
         pout_list_.insert(pout_list_.begin(),pnode);
-//      } else if (opar.file_type.compare("hst") == 0) {
-//        pnode = new HistoryOutput(opar,pm);
-//        pout_list_.insert(pout_list_.begin(),pnode);
-//        num_hst++;
+      } else if (opar.file_type.compare("hst") == 0) {
+        pnode = new HistoryOutput(opar,pm);
+        pout_list_.insert(pout_list_.begin(),pnode);
+        num_hst++;
       } else if (opar.file_type.compare("vtk") == 0) {
         pnode = new VTKOutput(opar,pm);
         pout_list_.insert(pout_list_.begin(),pnode);
 //      } else if (op.file_type.compare("rst") == 0) {
-  // Move restarts to the tail end of the OutputType list, so file counters for other
-  // output types are up-to-date in restart file
+//    // Move restarts to the tail end of the OutputType list, so file counters for other
+//    // output types are up-to-date in restart file
 //        pnew_type = new RestartOutput(op);
 //        num_rst++;
       } else {

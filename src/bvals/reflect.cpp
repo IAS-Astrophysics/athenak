@@ -13,7 +13,7 @@
 #include "hydro/hydro.hpp"
 
 //----------------------------------------------------------------------------------------
-//! \fn void HydroBoundaryVariable::ReflectInnerX1(
+//! \fn void BoundaryValues::ReflectInnerX1(
 //  \brief REFLECTING boundary conditions, inner x1 boundary
 
 void BoundaryValues::ReflectInnerX1()
@@ -42,7 +42,7 @@ void BoundaryValues::ReflectInnerX1()
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void HydroBoundaryVariable::ReflectOuterX1(
+//! \fn void BoundaryValues::ReflectOuterX1(
 //  \brief REFLECTING boundary conditions, outer x1 boundary
 
 void BoundaryValues::ReflectOuterX1()
@@ -71,7 +71,7 @@ void BoundaryValues::ReflectOuterX1()
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void HydroBoundaryVariable::ReflectInnerX2(
+//! \fn void BoundaryValues::ReflectInnerX2(
 //  \brief REFLECTING boundary conditions, inner x2 boundary
 
 void BoundaryValues::ReflectInnerX2()
@@ -100,7 +100,7 @@ void BoundaryValues::ReflectInnerX2()
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void HydroBoundaryVariable::ReflectOuterX2(
+//! \fn void BoundaryValues::ReflectOuterX2(
 //  \brief REFLECTING boundary conditions, outer x2 boundary
 
 void BoundaryValues::ReflectOuterX2()
@@ -130,7 +130,7 @@ void BoundaryValues::ReflectOuterX2()
 
 
 //----------------------------------------------------------------------------------------
-//! \fn void HydroBoundaryVariable::ReflectInnerX3(
+//! \fn void BoundaryValues::ReflectInnerX3(
 //  \brief REFLECTING boundary conditions, inner x3 boundary
 
 void BoundaryValues::ReflectInnerX3()
@@ -159,7 +159,7 @@ void BoundaryValues::ReflectInnerX3()
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void HydroBoundaryVariable::ReflectOuterX3(
+//! \fn void BoundaryValues::ReflectOuterX3(
 //  \brief REFLECTING boundary conditions, outer x3 boundary
 
 void BoundaryValues::ReflectOuterX3()

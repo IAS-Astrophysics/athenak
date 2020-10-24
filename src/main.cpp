@@ -20,11 +20,13 @@
 // module for this version of the code, required to run on GPUs)
 //========================================================================================
 
+// C/C++ headers
 #include <cstdlib>
-#include <iostream>   // cout, endl
-#include <string>     // string
+#include <iostream>
+#include <string>
 #include <memory>
 
+// Athena++ headers
 #include "athena.hpp"
 #include "utils/utils.hpp"
 #include "parameter_input.hpp"
@@ -34,11 +36,11 @@
 #include "driver/driver.hpp"
 
 // MPI/OpenMP headers
-#ifdef MPI_PARALLEL
+#if MPI_PARALLEL_ENABLED
 #include <mpi.h>
 #endif
 
-#ifdef OPENMP_PARALLEL
+#if OPENMP_PARALLEL_ENABLED
 #include <omp.h>
 #endif
 
@@ -53,12 +55,9 @@ int main(int argc, char *argv[])
   int narg_flag = 0;  // set to 1 if -n        argument is on cmdline
   int marg_flag = 0;  // set to 1 if -m        argument is on cmdline
   int iarg_flag = 0;  // set to 1 if -i <file> argument is on cmdline
-  int wtlim = 0;
 
   //--- Step 1. --------------------------------------------------------------------------
-  // Initialize environment
-
-  Kokkos::initialize(argc, argv);
+  // Initialize environment (must initialize MPI first, then Kokkos)
 
 #if MPI_PARALLEL_ENABLED
 #if OPENMP_PARALLEL_ENABLED
@@ -103,6 +102,8 @@ int main(int argc, char *argv[])
   global_variable::nranks  = 1;
 #endif  // MPI_PARALLEL_ENABLED
 
+  Kokkos::initialize(argc, argv);
+
   //--- Step 2. --------------------------------------------------------------------------
   // Check for command line options and respond.
 
@@ -128,6 +129,7 @@ int main(int argc, char *argv[])
 #if MPI_PARALLEL_ENABLED
               MPI_Finalize();
 #endif
+              Kokkos::finalize();
               return(0);
             }
           }
@@ -152,16 +154,12 @@ int main(int argc, char *argv[])
         case 'm':
           marg_flag = 1;
           break;
-        case 't':                      // -t <hh:mm:ss>
-          int wth, wtm, wts;
-          std::sscanf(argv[++i], "%d:%d:%d", &wth, &wtm, &wts);
-          wtlim = wth*3600 + wtm*60 + wts;
-          break;
         case 'c':
           if (global_variable::my_rank == 0) ShowConfig();
 #if MPI_PARALLEL_ENABLED
           MPI_Finalize();
 #endif
+          Kokkos::finalize();
           return(0);
           break;
         case 'h':
@@ -177,13 +175,13 @@ int main(int argc, char *argv[])
             std::cout << "  -n              parse input file and quit\n";
             std::cout << "  -c              show configuration and quit\n";
             std::cout << "  -m <nproc>      output mesh structure and quit\n";
-            std::cout << "  -t hh:mm:ss     wall time limit for final output\n";
             std::cout << "  -h              this help\n";
             ShowConfig();
           }
 #if MPI_PARALLEL_ENABLED
           MPI_Finalize();
 #endif
+          Kokkos::finalize();
           return(0);
           break;
       }
@@ -199,6 +197,7 @@ int main(int argc, char *argv[])
 #if MPI_PARALLEL_ENABLED
     MPI_Finalize();
 #endif
+    Kokkos::finalize();
     return(0);
   }
 
@@ -214,9 +213,10 @@ int main(int argc, char *argv[])
   if (narg_flag) {
     if (global_variable::my_rank == 0) par_input.ParameterDump(std::cout);
 //    if (res_flag == 1) restartfile.Close();
-#ifdef MPI_PARALLEL
+#if MPI_PARALLEL_ENABLED
     MPI_Finalize();
 #endif
+    Kokkos::finalize();
     return(0);
   }
 
@@ -232,9 +232,10 @@ int main(int argc, char *argv[])
 
   //  If code was run with -m option, write mesh structure to file and quit.
   if (marg_flag) {
-#ifdef MPI_PARALLEL
+#if MPI_PARALLEL_ENABLED
     MPI_Finalize();
 #endif
+    Kokkos::finalize();
     return(0);
   }
 

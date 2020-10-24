@@ -13,7 +13,7 @@
 #include "hydro/hydro.hpp"
 
 //----------------------------------------------------------------------------------------
-//! \fn void HydroBoundaryVariable::OutflowInnerX1(
+//! \fn void BoundaryValues::OutflowInnerX1(
 //  \brief OUTFLOW boundary conditions, inner x1 boundary
 
 void BoundaryValues::OutflowInnerX1()
@@ -38,7 +38,7 @@ void BoundaryValues::OutflowInnerX1()
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void HydroBoundaryVariable::OutflowOuterX1(
+//! \fn void BoundaryValues::OutflowOuterX1(
 //  \brief OUTFLOW boundary conditions, outer x1 boundary
 
 void BoundaryValues::OutflowOuterX1()
@@ -63,7 +63,7 @@ void BoundaryValues::OutflowOuterX1()
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void HydroBoundaryVariable::OutflowInnerX2(
+//! \fn void BoundaryValues::OutflowInnerX2(
 //  \brief OUTFLOW boundary conditions, inner x2 boundary
 
 void BoundaryValues::OutflowInnerX2()
@@ -88,7 +88,7 @@ void BoundaryValues::OutflowInnerX2()
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void HydroBoundaryVariable::OutflowOuterX2(
+//! \fn void BoundaryValues::OutflowOuterX2(
 //  \brief OUTFLOW boundary conditions, outer x2 boundary
 
 void BoundaryValues::OutflowOuterX2()
@@ -114,7 +114,7 @@ void BoundaryValues::OutflowOuterX2()
 
 
 //----------------------------------------------------------------------------------------
-//! \fn void HydroBoundaryVariable::OutflowInnerX3(
+//! \fn void BoundaryValues::OutflowInnerX3(
 //  \brief OUTFLOW boundary conditions, inner x3 boundary
 
 void BoundaryValues::OutflowInnerX3()
@@ -139,7 +139,7 @@ void BoundaryValues::OutflowInnerX3()
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void HydroBoundaryVariable::OutflowOuterX3(
+//! \fn void BoundaryValues::OutflowOuterX3(
 //  \brief OUTFLOW boundary conditions, outer x3 boundary
 
 void BoundaryValues::OutflowOuterX3()

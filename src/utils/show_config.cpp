@@ -22,12 +22,12 @@ void ShowConfig() {
   } else {
     std::cout<<"  Floating-point precision:   double" << std::endl;
   }
-#ifdef MPI_PARALLEL_ON
+#if MPI_PARALLEL_ENABLED
   std::cout<<"  MPI parallelism:            ON" << std::endl;
 #else
   std::cout<<"  MPI parallelism:            OFF" << std::endl;
 #endif
-#ifdef OPENMP_PARALLEL_ON
+#if OPENMP_PARALLEL_ENABLED
   std::cout<<"  OpenMP parallelism:         ON" << std::endl;
 #else
   std::cout<<"  OpenMP parallelism:         OFF" << std::endl;

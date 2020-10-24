@@ -24,8 +24,7 @@
 
 Mesh::Mesh(ParameterInput *pin)
 {
-  // Set properties of Mesh from input parameters, error check
-
+  // Set physical size and number of cells in mesh (root level)
   mesh_size.x1min = pin->GetReal("mesh", "x1min");
   mesh_size.x1max = pin->GetReal("mesh", "x1max");
   mesh_size.x2min = pin->GetReal("mesh", "x2min");
@@ -42,47 +41,47 @@ Mesh::Mesh(ParameterInput *pin)
   nx2gt1 = (mesh_cells.nx2 > 1) ? true : false;
   nx3gt1 = (mesh_cells.nx3 > 1) ? true : false;
 
-  // note BCs always MUST be entered for ix1/ox1, but are set to "undef" by default for
-  // ix2/ox2 and ix3/ox3 in the case of 1D or 2D problems
+  // Set BC flags for ix1/ox1 boundaries and error check
   mesh_bcs[BoundaryFace::inner_x1] = GetBoundaryFlag(pin->GetString("mesh", "ix1_bc"));
   mesh_bcs[BoundaryFace::outer_x1] = GetBoundaryFlag(pin->GetString("mesh", "ox1_bc"));
-  if ((mesh_bcs[BoundaryFace::inner_x1] == BoundaryFlag::periodic &&
-       mesh_bcs[BoundaryFace::outer_x1] != BoundaryFlag::periodic) ||
-      (mesh_bcs[BoundaryFace::outer_x1] == BoundaryFlag::periodic &&
-       mesh_bcs[BoundaryFace::inner_x1] != BoundaryFlag::periodic)) {
+  if ((mesh_bcs[BoundaryFace::inner_x1] == BoundaryFlag::periodic ||
+       mesh_bcs[BoundaryFace::outer_x1] == BoundaryFlag::periodic) &&
+       mesh_bcs[BoundaryFace::inner_x1] != mesh_bcs[BoundaryFace::outer_x1]) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
         << "Both inner and outer x1 bcs must be periodic" << std::endl;
     std::exit(EXIT_FAILURE);
   }
 
+  // Set BC flags for ix2/ox2 boundaries and error check
   if (nx2gt1) {
     mesh_bcs[BoundaryFace::inner_x2] = GetBoundaryFlag(pin->GetString("mesh", "ix2_bc"));
     mesh_bcs[BoundaryFace::outer_x2] = GetBoundaryFlag(pin->GetString("mesh", "ox2_bc"));
-    if ((mesh_bcs[BoundaryFace::inner_x2] == BoundaryFlag::periodic &&
-         mesh_bcs[BoundaryFace::outer_x2] != BoundaryFlag::periodic) ||
-        (mesh_bcs[BoundaryFace::outer_x2] == BoundaryFlag::periodic &&
-         mesh_bcs[BoundaryFace::inner_x2] != BoundaryFlag::periodic)) {
+    if ((mesh_bcs[BoundaryFace::inner_x2] == BoundaryFlag::periodic ||
+         mesh_bcs[BoundaryFace::outer_x2] == BoundaryFlag::periodic) &&
+         mesh_bcs[BoundaryFace::inner_x2] != mesh_bcs[BoundaryFace::outer_x2]) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "Both inner and outer x2 bcs must be periodic" << std::endl;
       std::exit(EXIT_FAILURE);
     }
   } else {
+    // ix2/ox2 BC flags set to undef for 1D problems
     mesh_bcs[BoundaryFace::inner_x2] = BoundaryFlag::undef;
     mesh_bcs[BoundaryFace::outer_x2] = BoundaryFlag::undef;
   }
 
+  // Set BC flags for ix3/ox3 boundaries and error check
   if (nx3gt1) {
     mesh_bcs[BoundaryFace::inner_x3] = GetBoundaryFlag(pin->GetString("mesh", "ix3_bc"));
     mesh_bcs[BoundaryFace::outer_x3] = GetBoundaryFlag(pin->GetString("mesh", "ox3_bc"));
-    if ((mesh_bcs[BoundaryFace::inner_x3] == BoundaryFlag::periodic &&
-         mesh_bcs[BoundaryFace::outer_x3] != BoundaryFlag::periodic) ||
-        (mesh_bcs[BoundaryFace::outer_x3] == BoundaryFlag::periodic &&
-         mesh_bcs[BoundaryFace::inner_x3] != BoundaryFlag::periodic)) {
+    if ((mesh_bcs[BoundaryFace::inner_x3] == BoundaryFlag::periodic ||
+         mesh_bcs[BoundaryFace::outer_x3] == BoundaryFlag::periodic) &&
+         mesh_bcs[BoundaryFace::inner_x3] != mesh_bcs[BoundaryFace::outer_x3]) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "Both inner and outer x3 bcs must be periodic" << std::endl;
       std::exit(EXIT_FAILURE);
     }
   } else {
+    // ix3/ox3 BC flags set to undef for 1D or 2D problems
     mesh_bcs[BoundaryFace::inner_x3] = BoundaryFlag::undef;
     mesh_bcs[BoundaryFace::outer_x3] = BoundaryFlag::undef;
   }
@@ -166,10 +165,11 @@ Mesh::Mesh(ParameterInput *pin)
 
 Mesh::~Mesh()
 {
-  delete [] ranklist;
   delete [] costlist;
-  delete [] nslist;
-  delete [] nblist;
+  delete [] ranklist;
+  delete [] loclist;
+  delete [] gidslist;
+  delete [] nmblist;
   if (adaptive) { // deallocate arrays for AMR
     delete [] nref;
     delete [] nderef;
@@ -180,7 +180,6 @@ Mesh::~Mesh()
     delete [] brdisp;
     delete [] bddisp;
   }
-  delete [] loclist;
 }
 
 //----------------------------------------------------------------------------------------
@@ -411,7 +410,24 @@ void Mesh::BuildTree(ParameterInput *pin)
 
   // initial mesh hierarchy construction is completed here
   ptree->CountMeshBlock(nmbtotal);
-  loclist = new LogicalLocation[nmbtotal];
+
+  costlist = new double[nmbtotal];
+  ranklist = new int[nmbtotal];
+  loclist  = new LogicalLocation[nmbtotal];
+
+  gidslist = new int[global_variable::nranks];
+  nmblist  = new int[global_variable::nranks];
+  if (adaptive) { // allocate arrays for AMR
+    nref = new int[global_variable::nranks];
+    nderef = new int[global_variable::nranks];
+    rdisp = new int[global_variable::nranks];
+    ddisp = new int[global_variable::nranks];
+    bnref = new int[global_variable::nranks];
+    bnderef = new int[global_variable::nranks];
+    brdisp = new int[global_variable::nranks];
+    bddisp = new int[global_variable::nranks];
+  }
+
   // following returns LogicalLocation list sorted by Z-ordering
   ptree->GetMeshBlockList(loclist, nullptr, nmbtotal);
 
@@ -427,36 +443,22 @@ void Mesh::BuildTree(ParameterInput *pin)
   }
 #endif
 
-  costlist = new double[nmbtotal];
-  ranklist = new int[nmbtotal];
-  nslist = new int[global_variable::nranks];
-  nblist = new int[global_variable::nranks];
-  if (adaptive) { // allocate arrays for AMR
-    nref = new int[global_variable::nranks];
-    nderef = new int[global_variable::nranks];
-    rdisp = new int[global_variable::nranks];
-    ddisp = new int[global_variable::nranks];
-    bnref = new int[global_variable::nranks];
-    bnderef = new int[global_variable::nranks];
-    brdisp = new int[global_variable::nranks];
-    bddisp = new int[global_variable::nranks];
-  }
 
   // initialize cost array with the simplest estimate; all the blocks are equal
   for (int i=0; i<nmbtotal; i++) {costlist[i] = 1.0;}
-  LoadBalance(costlist, ranklist, nslist, nblist, nmbtotal);
+  LoadBalance(costlist, ranklist, gidslist, nmblist, nmbtotal);
 
   // create MeshBlock list for this process
-  gids_ = nslist[global_variable::my_rank];
-  gide_ = gids_ + nblist[global_variable::my_rank] - 1;
-  nmbthisrank = nblist[global_variable::my_rank];
+  gids = gidslist[global_variable::my_rank];
+  gide = gids + nmblist[global_variable::my_rank] - 1;
+  nmbthisrank = nmblist[global_variable::my_rank];
   
   // create MeshBlocks for this node, then set neighbors
-  for (int i=gids_; i<=gide_; i++) {
+  for (int i=gids; i<=gide; i++) {
     RegionSize insize;
     BoundaryFlag inbcs[6];
     SetBlockSizeAndBoundaries(loclist[i], insize, incells, inbcs);
-    // vector of MBs guaranteed to be stored in order gids_->gide_
+    // vector of MBs guaranteed to be stored in order gids->gide
     mblocks.emplace_back(MeshBlock(this, pin, i, insize, incells, inbcs));
   }
   for (auto &mb : mblocks) {mb.SetNeighbors(ptree, ranklist);}
@@ -466,31 +468,31 @@ void Mesh::BuildTree(ParameterInput *pin)
     std::cout << "******* Block=" << it->mb_gid << std::endl;
     std::cout << "x1 Faces" << std::endl;
     for (int n=0; n<2; ++n) {
-      std::cout << "n=" << n << " gid=" << it->pbvals->nblocks_x1face[n].ngid << " level=" << it->pbvals->nblocks_x1face[n].nlevel << " rank=" << it->pbvals->nblocks_x1face[n].nrank << std::endl;
+      std::cout << "n=" << n << " gid=" << it->pbvals->nghbr_x1face[n].gid << " level=" << it->pbvals->nghbr_x1face[n].level << " rank=" << it->pbvals->nghbr_x1face[n].rank << " bc_flag=" << GetBoundaryString(it->pbvals->bndry_flag[n]) << std::endl;
     }
     std::cout << "x2 Faces" << std::endl;
     for (int n=0; n<2; ++n) {
-      std::cout << "n=" << n << " gid=" << it->pbvals->nblocks_x2face[n].ngid << " level=" << it->pbvals->nblocks_x2face[n].nlevel << " rank=" << it->pbvals->nblocks_x2face[n].nrank << std::endl;
+      std::cout << "n=" << n << " gid=" << it->pbvals->nghbr_x2face[n].gid << " level=" << it->pbvals->nghbr_x2face[n].level << " rank=" << it->pbvals->nghbr_x2face[n].rank << " bc_flag=" << GetBoundaryString(it->pbvals->bndry_flag[n+2]) <<  std::endl;
     }
     std::cout << "x3 Faces" << std::endl;
     for (int n=0; n<2; ++n) {
-      std::cout << "n=" << n << " gid=" << it->pbvals->nblocks_x3face[n].ngid << " level=" << it->pbvals->nblocks_x3face[n].nlevel << " rank=" << it->pbvals->nblocks_x3face[n].nrank << std::endl;
+      std::cout << "n=" << n << " gid=" << it->pbvals->nghbr_x3face[n].gid << " level=" << it->pbvals->nghbr_x3face[n].level << " rank=" << it->pbvals->nghbr_x3face[n].rank << " bc_flag=" << GetBoundaryString(it->pbvals->bndry_flag[n+4]) <<  std::endl;
     }
     std::cout << "x1x2 Edges" << std::endl;
     for (int n=0; n<4; ++n) {
-      std::cout << "n=" << n << " gid=" << it->pbvals->nblocks_x1x2ed[n].ngid << " level=" << it->pbvals->nblocks_x1x2ed[n].nlevel << " rank=" << it->pbvals->nblocks_x1x2ed[n].nrank << std::endl;
+      std::cout << "n=" << n << " gid=" << it->pbvals->nghbr_x1x2ed[n].gid << " level=" << it->pbvals->nghbr_x1x2ed[n].level << " rank=" << it->pbvals->nghbr_x1x2ed[n].rank << std::endl;
     }
     std::cout << "x3x1 Edges" << std::endl;
     for (int n=0; n<4; ++n) {
-      std::cout << "n=" << n << " gid=" << it->pbvals->nblocks_x3x1ed[n].ngid << " level=" << it->pbvals->nblocks_x3x1ed[n].nlevel << " rank=" << it->pbvals->nblocks_x3x1ed[n].nrank << std::endl;
+      std::cout << "n=" << n << " gid=" << it->pbvals->nghbr_x3x1ed[n].gid << " level=" << it->pbvals->nghbr_x3x1ed[n].level << " rank=" << it->pbvals->nghbr_x3x1ed[n].rank << std::endl;
     }
     std::cout << "x2x3 Edges" << std::endl;
     for (int n=0; n<4; ++n) {
-      std::cout << "n=" << n << " gid=" << it->pbvals->nblocks_x2x3ed[n].ngid << " level=" << it->pbvals->nblocks_x2x3ed[n].nlevel << " rank=" << it->pbvals->nblocks_x2x3ed[n].nrank << std::endl;
+      std::cout << "n=" << n << " gid=" << it->pbvals->nghbr_x2x3ed[n].gid << " level=" << it->pbvals->nghbr_x2x3ed[n].level << " rank=" << it->pbvals->nghbr_x2x3ed[n].rank << std::endl;
     }
     std::cout << "Corners" << std::endl;
     for (int n=0; n<8; ++n) {
-      std::cout << "n=" << n << " gid=" << it->pbvals->nblocks_corner[n].ngid << " level=" << it->pbvals->nblocks_corner[n].nlevel << " rank=" << it->pbvals->nblocks_corner[n].nrank << std::endl;
+      std::cout << "n=" << n << " gid=" << it->pbvals->nghbr_corner[n].gid << " level=" << it->pbvals->nghbr_corner[n].level << " rank=" << it->pbvals->nghbr_corner[n].rank << std::endl;
     }
   }
 /**********/
@@ -741,7 +743,8 @@ void Mesh::SetBlockSizeAndBoundaries(LogicalLocation loc, RegionSize &block_size
 //  \brief Parses input string to return scoped enumerator flag specifying boundary
 //  condition. Typically called in Mesh() ctor and in pgen/*.cpp files.
 
-BoundaryFlag Mesh::GetBoundaryFlag(const std::string& input_string) {
+BoundaryFlag Mesh::GetBoundaryFlag(const std::string& input_string) 
+{
   if (input_string == "reflecting") {
     return BoundaryFlag::reflect;
   } else if (input_string == "outflow") {
@@ -757,5 +760,35 @@ BoundaryFlag Mesh::GetBoundaryFlag(const std::string& input_string) {
               << "Input string = '" << input_string << "' is an invalid boundary type"
               << std::endl;
     std::exit(EXIT_FAILURE);
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn GetBoundaryString(BoundaryFlag input_flag)
+//  \brief Parses enumerated type BoundaryFlag internal integer representation to return
+//  string describing the boundary condition. Typicall used to format descriptive errors
+//  or diagnostics. Inverse of GetBoundaryFlag().
+
+std::string Mesh::GetBoundaryString(BoundaryFlag input_flag)
+{
+  switch (input_flag) {
+    case BoundaryFlag::block:  // 0
+      return "block";
+    case BoundaryFlag::reflect:
+      return "reflecting";
+    case BoundaryFlag::outflow:
+      return "outflow";
+    case BoundaryFlag::user:
+      return "user";
+    case BoundaryFlag::periodic:
+      return "periodic";
+    case BoundaryFlag::undef:
+      return "undef";
+    default:
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+         << std::endl << "Input enum class BoundaryFlag=" << static_cast<int>(input_flag)
+         << " is an invalid boundary type" << std::endl;
+      std::exit(EXIT_FAILURE);
+      break;
   }
 }

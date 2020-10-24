@@ -12,6 +12,10 @@
 #include "mesh.hpp"
 #include "hydro/hydro.hpp"
 
+#if MPI_PARALLEL_ENABLED
+#include <mpi.h>
+#endif
+
 //----------------------------------------------------------------------------------------
 // \fn Mesh::SelectPhysics()
 
@@ -22,8 +26,8 @@ void MeshBlock::InitPhysicsModules(ParameterInput *pin)
 
   // Hydro physics module
   if (pin->DoesBlockExist("hydro")) {
-    phydro = new hydro::Hydro(pmesh_, pin, mb_gid); // construct new Hydro object
-    pbvals->bbuf_ptr["hydro"] = &(phydro->bbuf);    // add pointer to Hydro bbufs in map
+    phydro = new hydro::Hydro(pmesh_, pin, mb_gid);          // construct new Hydro object
+    pbvals->bbuf_ptr[PhysicsID::Hydro_ID] = &(phydro->bbuf); // add ptr to Hydro bbufs
   } else {
     phydro = nullptr;
   }
@@ -39,10 +43,12 @@ void MeshBlock::InitPhysicsModules(ParameterInput *pin)
     phydro->HydroStageEndTasks(tl_stageend, none, hydro_end_tasks);
   }
 
-  // add physical boundary conditions, and make depend on hydro_recv (penultimate task)
-  TaskID hydro_recv = hydro_run_tasks[hydro_run_tasks.size()-2];
+  // add physical boundary conditions, and make them depend on hydro_recv
+  // WARNING: If number or order of Hydro tasks is changed in Hydro::HydroStageRunTasks()
+  // then index of hydro_recv may need to be changed below
+  TaskID hydro_recv = hydro_run_tasks[4];
   auto bvals_physical =
-    tl_stagerun.InsertTask(&BoundaryValues::ApplyPhysicalBCs, pbvals, hydro_recv);
+    tl_stagerun.InsertTask(&BoundaryValues::ApplyPhysicalBCs, this->pbvals, hydro_recv);
 
 //  auto bvals_physical =
 //    tl_onestage.AddTask(&BoundaryValues::ApplyPhysicalBCs, pbvals, hydro_tasks.back());
@@ -57,9 +63,13 @@ void Mesh::NewTimeStep(const Real tlim)
 {
   // cycle over all MeshBlocks on this rank and find minimum dt
   // limit increase in timestep to 2x old value
-  for (const auto &mb : mblocks) { dt = std::min(2.0*dt, (cfl_no)*(mb.phydro->dtnew) ); }
+  dt = 2.0*dt;
+  for (const auto &mb : mblocks) { dt = std::min(dt, (cfl_no)*(mb.phydro->dtnew) ); }
 
-  // TODO: get minimum dt over all MPI ranks
+#if MPI_PARALLEL_ENABLED
+  // get minimum dt over all MPI ranks
+  MPI_Allreduce(MPI_IN_PLACE, &dt, 1, MPI_ATHENA_REAL, MPI_MIN, MPI_COMM_WORLD);
+#endif
 
   // limit last time step to stop at tlim *exactly*
   if ( (time < tlim) && ((time + dt) > tlim) ) {dt = tlim - time;}

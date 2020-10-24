@@ -45,6 +45,10 @@ enum ConsIndex {IDN=0, IM1=1, IM2=2, IM3=3, IEN=4};
 enum PrimIndex {IVX=1, IVY=2, IVZ=3, IPR=4};
 } // namespace hydro
 
+// integer constants to specify physics module (maximum of 16 set by number of bits used
+// to encode ID in BoundaryValues::CreateMPItag)
+enum PhysicsID {Hydro_ID, Scalars_ID, MHD_ID};
+
 //----------------------------------------------------------------------------------------
 // define default Kokkos execution and memory spaces
 

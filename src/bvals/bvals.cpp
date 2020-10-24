@@ -34,10 +34,10 @@ BoundaryValues::~BoundaryValues()
 //----------------------------------------------------------------------------------------
 // \!fn void BoundaryValues::AllocateBuffers
 
-void BoundaryValues::AllocateBuffers(BoundaryBuffer &bbuf, const int maxvar)
+void BoundaryValues::AllocateBuffers(BBuffer &bbuf, const int maxvar)
 {
   // Allocate memory for send and receive boundary buffers, and initialize 
-  // BoundaryStatus flags.
+  // BoundaryRecvStatus flags.
   // The buffers are stored in 7 different AthenaArrays corresponding to the faces, edges,
   // and corners of a 3D grid.  The flags are also stored in 7 arrays.
   // This implementation currently is specific to the 26 boundary buffers in a UNIFORM
@@ -72,17 +72,17 @@ void BoundaryValues::AllocateBuffers(BoundaryBuffer &bbuf, const int maxvar)
 
   // initialize all boundary status arrays to undef
   for (int i=0; i<2; ++i) {
-    bbuf.bstat_x1face[i] = BoundaryStatus::undef;
-    bbuf.bstat_x2face[i] = BoundaryStatus::undef;
-    bbuf.bstat_x3face[i] = BoundaryStatus::undef;
+    bbuf.bstat_x1face[i] = BoundaryRecvStatus::undef;
+    bbuf.bstat_x2face[i] = BoundaryRecvStatus::undef;
+    bbuf.bstat_x3face[i] = BoundaryRecvStatus::undef;
   }
   for (int i=0; i<4; ++i) {
-    bbuf.bstat_x1x2ed[i] = BoundaryStatus::undef;
-    bbuf.bstat_x3x1ed[i] = BoundaryStatus::undef;
-    bbuf.bstat_x2x3ed[i] = BoundaryStatus::undef;
+    bbuf.bstat_x1x2ed[i] = BoundaryRecvStatus::undef;
+    bbuf.bstat_x3x1ed[i] = BoundaryRecvStatus::undef;
+    bbuf.bstat_x2x3ed[i] = BoundaryRecvStatus::undef;
   }
   for (int i=0; i<8; ++i) {
-    bbuf.bstat_corner[i] = BoundaryStatus::undef;
+    bbuf.bstat_corner[i] = BoundaryRecvStatus::undef;
   }
 
   return;
@@ -170,4 +170,20 @@ TaskStatus BoundaryValues::ApplyPhysicalBCs(Driver* pdrive, int stage)
   }
 
   return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn int BoundaryValues::CreateMPItag(int lid, int bufid, int phys)
+//  \brief calculate an MPI tag for boundary buffer communications
+//  MPI tag = lid (remaining bits) + bufid (6 bits) + physics(4 bits)
+//  Note the convention in Athena++ is lid and bufid are both for the *receiving* process
+
+// WARN: The below procedure of generating unsigned integer bitfields from signed integer
+// types and converting output to signed integer tags (required by MPI) is tricky and may
+// lead to unsafe conversions (and overflows from built-in types and MPI_TAG_UB).  Note,
+// the MPI standard requires signed int tag, with MPI_TAG_UB>= 2^15-1 = 32,767 (inclusive)
+
+int BoundaryValues::CreateMPItag(int lid, int bufid, int phys)
+{
+  return (lid<<10) | (bufid<<4) | phys;
 }

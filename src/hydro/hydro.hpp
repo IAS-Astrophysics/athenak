@@ -41,10 +41,9 @@ class Hydro
   AthenaArray4D<Real> u0;   // conserved variables
   AthenaArray4D<Real> w0;   // primitive variables
 
-  BoundaryBuffer bbuf;    // send/recv buffers and BoundaryStatus flags for Hydro comms.
+  BBuffer bbuf;    // send/recv buffers and BoundaryStatus flags for Hydro comms.
 
   // following only used for time-evolving flow
-  RiemannSolver   *prsolver;  // object that implements chosen Riemann solver
   AthenaArray4D<Real> u1;    // conserved variables at intermediate step 
   AthenaArray4D<Real> divf;   // divergence of fluxes
   AthenaArray3D<Real> uflx_x1face;  // fluxes on x1-faces
@@ -56,7 +55,9 @@ class Hydro
   void HydroStageStartTasks(TaskList &tl, TaskID start, std::vector<TaskID> &added);
   void HydroStageRunTasks(TaskList &tl, TaskID start, std::vector<TaskID> &added);
   void HydroStageEndTasks(TaskList &tl, TaskID start, std::vector<TaskID> &added);
-  TaskStatus HydroInitStage(Driver *d, int stage);
+  TaskStatus HydroInitRecv(Driver *d, int stage);
+  TaskStatus HydroClearRecv(Driver *d, int stage);
+  TaskStatus HydroClearSend(Driver *d, int stage);
   TaskStatus HydroCopyCons(Driver *d, int stage);
   TaskStatus HydroDivFlux(Driver *d, int stage);
   TaskStatus HydroUpdate(Driver *d, int stage);
