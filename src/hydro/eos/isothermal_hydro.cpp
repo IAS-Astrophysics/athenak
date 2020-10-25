@@ -25,6 +25,8 @@ void EquationOfState::ConToPrimIso(AthenaArray4D<Real> &cons, AthenaArray4D<Real
   int ncells1 = pmb->mb_cells.nx1 + 2*ng;
   int ncells2 = (pmb->mb_cells.nx2 > 1)? (pmb->mb_cells.nx2 + 2*ng) : 1;
   int ncells3 = (pmb->mb_cells.nx3 > 1)? (pmb->mb_cells.nx3 + 2*ng) : 1;
+  int &nhydro = pmb->phydro->nhydro;
+  int &nscalars = pmb->phydro->nscalars;
   Real &dfloor_ = eos_data.density_floor;
 
   par_for("hydro_update", pmb->exe_space, 0, (ncells3-1), 0, (ncells2-1), 0, (ncells1-1),
@@ -48,6 +50,11 @@ void EquationOfState::ConToPrimIso(AthenaArray4D<Real> &cons, AthenaArray4D<Real
       w_vx = u_m1*di;
       w_vy = u_m2*di;
       w_vz = u_m3*di;
+
+      // convert scalars (if any)
+      for (int n=nhydro; n<(nhydro+nscalars); ++n) {
+        prim(n,k,j,i) = cons(n,k,j,i)/u_d;
+      }
     }
   );
 

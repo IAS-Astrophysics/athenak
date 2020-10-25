@@ -27,6 +27,8 @@ void EquationOfState::ConToPrimAdi(AthenaArray4D<Real> &cons, AthenaArray4D<Real
   int ncells1 = pmb->mb_cells.nx1 + 2*ng;
   int ncells2 = (pmb->mb_cells.nx2 > 1)? (pmb->mb_cells.nx2 + 2*ng) : 1;
   int ncells3 = (pmb->mb_cells.nx3 > 1)? (pmb->mb_cells.nx3 + 2*ng) : 1;
+  int &nhydro = pmb->phydro->nhydro;
+  int &nscalars = pmb->phydro->nscalars;
   Real gm1 = eos_data.gamma - 1.0;
 
   Real &dfloor_ = eos_data.density_floor;
@@ -62,6 +64,11 @@ void EquationOfState::ConToPrimAdi(AthenaArray4D<Real> &cons, AthenaArray4D<Real
       // apply pressure floor, correct total energy
       u_e = (w_p > pfloor_) ?  u_e : ((pfloor_/gm1) + e_k);
       w_p = (w_p > pfloor_) ?  w_p : pfloor_;
+
+      // convert scalars (if any)
+      for (int n=nhydro; n<(nhydro+nscalars); ++n) {
+        prim(n,k,j,i) = cons(n,k,j,i)/u_d;
+      }
     }
   );
 

@@ -80,6 +80,11 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
     out_data_label_.push_back("Mom3");
     nvar++; var_cnt++;
   }
+  // TODO: get working for multiple scalars
+  if (out_params.variable.compare("S") == 0) {
+    out_data_label_.push_back("S0");
+    nvar++; var_cnt++;
+  }
   if (out_params.variable.compare("d") == 0 ||
       out_params.variable.compare("prim") == 0) {
     out_data_label_.push_back("dens");
@@ -108,12 +113,17 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
     out_data_label_.push_back("velz");
     nvar++; var_cnt++;
   }
+  // TODO: get working for multiple scalars
+  if (out_params.variable.compare("r") == 0) {
+    out_data_label_.push_back("r0");
+    nvar++; var_cnt++;
+  }
 
   // check for valid output variable in <input> block
   if (var_cnt == 0) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output variable '" << out_params.variable << "' not implemented" << std::endl
-       << "Allowed hydro variables: cons,D,E,mom,M1,M2,M3,prim,d,p,vel,vx,vy,vz"
+       << "Allowed hydro variables: cons,D,E,mom,M1,M2,M3,S,prim,d,p,vel,vx,vy,vz,r"
        << std::endl;
     exit(EXIT_FAILURE);
   }
@@ -222,6 +232,19 @@ void OutputType::LoadOutputData(Mesh *pm)
       }
       if (out_data_label_[n].compare("pres")  == 0) {
         auto dev_slice = Kokkos::subview(mb.phydro->w0, static_cast<int>(hydro::IPR),
+          std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
+        Kokkos::deep_copy(dev_buff,dev_slice);
+      }
+      // TODO get this working for multiple scalars
+      if (out_data_label_[n].compare("S0")  == 0) {
+        int nhyd = mb.phydro->nhydro;
+        auto dev_slice = Kokkos::subview(mb.phydro->u0, static_cast<int>(nhyd),
+          std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
+        Kokkos::deep_copy(dev_buff,dev_slice);
+      }
+      if (out_data_label_[n].compare("r0")  == 0) {
+        int nhyd = mb.phydro->nhydro;
+        auto dev_slice = Kokkos::subview(mb.phydro->w0, static_cast<int>(nhyd),
           std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
         Kokkos::deep_copy(dev_buff,dev_slice);
       }

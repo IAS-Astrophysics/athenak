@@ -49,6 +49,9 @@ enum PrimIndex {IVX=1, IVY=2, IVZ=3, IPR=4};
 // to encode ID in BoundaryValues::CreateMPItag)
 enum PhysicsID {Hydro_ID, Scalars_ID, MHD_ID};
 
+// integer constants to specify reconstruction methods
+enum ReconstructionMethod {dc, plm, ppm};
+
 //----------------------------------------------------------------------------------------
 // define default Kokkos execution and memory spaces
 

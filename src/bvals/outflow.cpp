@@ -22,12 +22,12 @@ void BoundaryValues::OutflowInnerX1()
   int ng = pmb->mb_cells.ng;
   int n2 = (pmb->mb_cells.nx2 > 1)? (pmb->mb_cells.nx2 + 2*ng) : 1;
   int n3 = (pmb->mb_cells.nx3 > 1)? (pmb->mb_cells.nx3 + 2*ng) : 1;
-  int &nhyd = pmb->phydro->nhydro;
+  int nvar = pmb->phydro->nhydro + pmb->phydro->nscalars;
   int &is = pmb->mb_cells.is;
   auto &u0_ = pmb->phydro->u0;
 
   // project hydro variables in first active cell into ghost zones
-  par_for("outflow_ix1", pmb->exe_space, 0, (nhyd-1), 0, (n3-1), 0, (n2-1), 0, (ng-1),
+  par_for("outflow_ix1", pmb->exe_space, 0, (nvar-1), 0, (n3-1), 0, (n2-1), 0, (ng-1),
     KOKKOS_LAMBDA(int n, int k, int j, int i)
     {
       u0_(n,k,j,is-i-1) = u0_(n,k,j,is);
@@ -47,12 +47,12 @@ void BoundaryValues::OutflowOuterX1()
   int ng = pmb->mb_cells.ng;
   int n2 = (pmb->mb_cells.nx2 > 1)? (pmb->mb_cells.nx2 + 2*ng) : 1;
   int n3 = (pmb->mb_cells.nx3 > 1)? (pmb->mb_cells.nx3 + 2*ng) : 1;
-  int &nhyd = pmb->phydro->nhydro;
+  int nvar = pmb->phydro->nhydro + pmb->phydro->nscalars;
   int &ie = pmb->mb_cells.ie;
   auto &u0_ = pmb->phydro->u0;
 
   // project hydro variables in first active cell into ghost zones
-  par_for("outflow_ox1", pmb->exe_space, 0, (nhyd-1), 0, (n3-1), 0, (n2-1), 0, (ng-1),
+  par_for("outflow_ox1", pmb->exe_space, 0, (nvar-1), 0, (n3-1), 0, (n2-1), 0, (ng-1),
     KOKKOS_LAMBDA(int n, int k, int j, int i)
     {
       u0_(n,k,j,ie+i+1) = u0_(n,k,j,ie);
@@ -72,12 +72,12 @@ void BoundaryValues::OutflowInnerX2()
   int ng = pmb->mb_cells.ng;
   int n1 = pmb->mb_cells.nx1 + 2*ng;
   int n3 = (pmb->mb_cells.nx3 > 1)? (pmb->mb_cells.nx3 + 2*ng) : 1;
-  int &nhyd = pmb->phydro->nhydro;
+  int nvar = pmb->phydro->nhydro + pmb->phydro->nscalars;
   int &js = pmb->mb_cells.js;
   auto &u0_ = pmb->phydro->u0;
 
   // project hydro variables in first active cell into ghost zones
-  par_for("outflow_ix2", pmb->exe_space, 0, (nhyd-1), 0, (n3-1), 0, (ng-1), 0, (n1-1),
+  par_for("outflow_ix2", pmb->exe_space, 0, (nvar-1), 0, (n3-1), 0, (ng-1), 0, (n1-1),
     KOKKOS_LAMBDA(int n, int k, int j, int i)
     { 
       u0_(n,k,js-j-1,i) =  u0_(n,k,js,i);
@@ -97,12 +97,12 @@ void BoundaryValues::OutflowOuterX2()
   int ng = pmb->mb_cells.ng;
   int n1 = pmb->mb_cells.nx1 + 2*ng;
   int n3 = (pmb->mb_cells.nx3 > 1)? (pmb->mb_cells.nx3 + 2*ng) : 1;
-  int &nhyd = pmb->phydro->nhydro;
+  int nvar = pmb->phydro->nhydro + pmb->phydro->nscalars;
   int &je = pmb->mb_cells.je;
   auto &u0_ = pmb->phydro->u0;
 
   // project hydro variables in first active cell into ghost zones
-  par_for("outflow_ox2", pmb->exe_space, 0, (nhyd-1), 0, (n3-1), 0, (ng-1), 0, (n1-1),
+  par_for("outflow_ox2", pmb->exe_space, 0, (nvar-1), 0, (n3-1), 0, (ng-1), 0, (n1-1),
     KOKKOS_LAMBDA(int n, int k, int j, int i)
     { 
       u0_(n,k,je+j+1,i) =  u0_(n,k,je,i);
@@ -123,12 +123,12 @@ void BoundaryValues::OutflowInnerX3()
   int ng = pmb->mb_cells.ng;
   int n1 = pmb->mb_cells.nx1 + 2*ng;
   int n2 = (pmb->mb_cells.nx2 > 1)? (pmb->mb_cells.nx2 + 2*ng) : 1;
-  int &nhyd = pmb->phydro->nhydro;
+  int nvar = pmb->phydro->nhydro + pmb->phydro->nscalars;
   int &ks = pmb->mb_cells.ks;
   auto &u0_ = pmb->phydro->u0;
 
   // project hydro variables in first active cell into ghost zones
-  par_for("outflow_ix3", pmb->exe_space, 0, (nhyd-1), 0, (ng-1), 0, (n2-1), 0, (n1-1),
+  par_for("outflow_ix3", pmb->exe_space, 0, (nvar-1), 0, (ng-1), 0, (n2-1), 0, (n1-1),
     KOKKOS_LAMBDA(int n, int k, int j, int i)
     { 
       u0_(n,ks-k-1,j,i) =  u0_(n,ks,j,i);
@@ -148,12 +148,12 @@ void BoundaryValues::OutflowOuterX3()
   int ng = pmb->mb_cells.ng;
   int n1 = pmb->mb_cells.nx1 + 2*ng;
   int n2 = (pmb->mb_cells.nx2 > 1)? (pmb->mb_cells.nx2 + 2*ng) : 1;
-  int &nhyd = pmb->phydro->nhydro;
+  int nvar = pmb->phydro->nhydro + pmb->phydro->nscalars;
   int &ke = pmb->mb_cells.ke;
   auto &u0_ = pmb->phydro->u0;
 
   // project hydro variables in first active cell into ghost zones
-  par_for("outflow_ox3", pmb->exe_space, 0, (nhyd-1), 0, (ng-1), 0, (n2-1), 0, (n1-1),
+  par_for("outflow_ox3", pmb->exe_space, 0, (nvar-1), 0, (ng-1), 0, (n2-1), 0, (n1-1),
     KOKKOS_LAMBDA(int n, int k, int j, int i)
     {   
       u0_(n,ke+k+1,j,i) =  u0_(n,ke,j,i);

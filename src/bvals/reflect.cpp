@@ -22,12 +22,12 @@ void BoundaryValues::ReflectInnerX1()
   int ng = pmb->mb_cells.ng;
   int n2 = (pmb->mb_cells.nx2 > 1)? (pmb->mb_cells.nx2 + 2*ng) : 1;
   int n3 = (pmb->mb_cells.nx3 > 1)? (pmb->mb_cells.nx3 + 2*ng) : 1;
-  int &nhyd = pmb->phydro->nhydro;
+  int nvar = pmb->phydro->nhydro + pmb->phydro->nscalars;
   int &is = pmb->mb_cells.is;
   auto &u0_ = pmb->phydro->u0;
 
   // copy hydro variables into ghost zones, reflecting v1
-  par_for("reflect_ix1", pmb->exe_space, 0, (nhyd-1), 0, (n3-1), 0, (n2-1), 0, (ng-1),
+  par_for("reflect_ix1", pmb->exe_space, 0, (nvar-1), 0, (n3-1), 0, (n2-1), 0, (ng-1),
     KOKKOS_LAMBDA(int n, int k, int j, int i)
     {
       if (n == (hydro::IVX)) {  // reflect 1-velocity
@@ -51,12 +51,12 @@ void BoundaryValues::ReflectOuterX1()
   int ng = pmb->mb_cells.ng;
   int n2 = (pmb->mb_cells.nx2 > 1)? (pmb->mb_cells.nx2 + 2*ng) : 1;
   int n3 = (pmb->mb_cells.nx3 > 1)? (pmb->mb_cells.nx3 + 2*ng) : 1;
-  int &nhyd = pmb->phydro->nhydro;
+  int nvar = pmb->phydro->nhydro + pmb->phydro->nscalars;
   int &ie = pmb->mb_cells.ie;
   auto &u0_ = pmb->phydro->u0;
 
   // copy hydro variables into ghost zones, reflecting v1
-  par_for("reflect_ox1", pmb->exe_space, 0, (nhyd-1), 0, (n3-1), 0, (n2-1), 0, (ng-1),
+  par_for("reflect_ox1", pmb->exe_space, 0, (nvar-1), 0, (n3-1), 0, (n2-1), 0, (ng-1),
     KOKKOS_LAMBDA(int n, int k, int j, int i)
     {
       if (n == (hydro::IVX)) {  // reflect 1-velocity
@@ -80,12 +80,12 @@ void BoundaryValues::ReflectInnerX2()
   int ng = pmb->mb_cells.ng;
   int n1 = pmb->mb_cells.nx1 + 2*ng;
   int n3 = (pmb->mb_cells.nx3 > 1)? (pmb->mb_cells.nx3 + 2*ng) : 1;
-  int &nhyd = pmb->phydro->nhydro;
+  int nvar = pmb->phydro->nhydro + pmb->phydro->nscalars;
   int &js = pmb->mb_cells.js;
   auto &u0_ = pmb->phydro->u0;
 
   // copy hydro variables into ghost zones, reflecting v2
-  par_for("reflect_ix2", pmb->exe_space, 0, (nhyd-1), 0, (n3-1), 0, (ng-1), 0, (n1-1),
+  par_for("reflect_ix2", pmb->exe_space, 0, (nvar-1), 0, (n3-1), 0, (ng-1), 0, (n1-1),
     KOKKOS_LAMBDA(int n, int k, int j, int i)
     { 
       if (n == (hydro::IVY)) {  // reflect 2-velocity
@@ -109,12 +109,12 @@ void BoundaryValues::ReflectOuterX2()
   int ng = pmb->mb_cells.ng;
   int n1 = pmb->mb_cells.nx1 + 2*ng;
   int n3 = (pmb->mb_cells.nx3 > 1)? (pmb->mb_cells.nx3 + 2*ng) : 1;
-  int &nhyd = pmb->phydro->nhydro;
+  int nvar = pmb->phydro->nhydro + pmb->phydro->nscalars;
   int &je = pmb->mb_cells.je;
   auto &u0_ = pmb->phydro->u0;
 
   // copy hydro variables into ghost zones, reflecting v2
-  par_for("reflect_ox2", pmb->exe_space, 0, (nhyd-1), 0, (n3-1), 0, (ng-1), 0, (n1-1),
+  par_for("reflect_ox2", pmb->exe_space, 0, (nvar-1), 0, (n3-1), 0, (ng-1), 0, (n1-1),
     KOKKOS_LAMBDA(int n, int k, int j, int i)
     { 
       if (n == (hydro::IVY)) {  // reflect 2-velocity
@@ -139,12 +139,12 @@ void BoundaryValues::ReflectInnerX3()
   int ng = pmb->mb_cells.ng;
   int n1 = pmb->mb_cells.nx1 + 2*ng;
   int n2 = (pmb->mb_cells.nx2 > 1)? (pmb->mb_cells.nx2 + 2*ng) : 1;
-  int &nhyd = pmb->phydro->nhydro;
+  int nvar = pmb->phydro->nhydro + pmb->phydro->nscalars;
   int &ks = pmb->mb_cells.ks;
   auto &u0_ = pmb->phydro->u0;
 
   // copy hydro variables into ghost zones, reflecting v3
-  par_for("reflect_ix3", pmb->exe_space, 0, (nhyd-1), 0, (ng-1), 0, (n2-1), 0, (n1-1),
+  par_for("reflect_ix3", pmb->exe_space, 0, (nvar-1), 0, (ng-1), 0, (n2-1), 0, (n1-1),
     KOKKOS_LAMBDA(int n, int k, int j, int i)
     { 
       if (n == (hydro::IVZ)) {  // reflect 3-velocity
@@ -168,12 +168,12 @@ void BoundaryValues::ReflectOuterX3()
   int ng = pmb->mb_cells.ng;
   int n1 = pmb->mb_cells.nx1 + 2*ng;
   int n2 = (pmb->mb_cells.nx2 > 1)? (pmb->mb_cells.nx2 + 2*ng) : 1;
-  int &nhyd = pmb->phydro->nhydro;
+  int nvar = pmb->phydro->nhydro + pmb->phydro->nscalars;
   int &ke = pmb->mb_cells.ke;
   auto &u0_ = pmb->phydro->u0;
 
   // copy hydro variables into ghost zones, reflecting v3
-  par_for("reflect_ox3", pmb->exe_space, 0, (nhyd-1), 0, (ng-1), 0, (n2-1), 0, (n1-1),
+  par_for("reflect_ox3", pmb->exe_space, 0, (nvar-1), 0, (ng-1), 0, (n2-1), 0, (n1-1),
     KOKKOS_LAMBDA(int n, int k, int j, int i)
     {   
       if (n == (hydro::IVZ)) {  // reflect 3-velocity

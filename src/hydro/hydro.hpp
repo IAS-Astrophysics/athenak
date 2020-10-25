@@ -17,9 +17,8 @@
 // forward declarations
 class Driver;
 
-// constants that enumerate Hydro dynamics options
+// constants that enumerate Hydro dynamics and Riemann Solver options
 enum HydroEvolution {hydro_static, kinematic, hydro_dynamic, no_evolution};
-enum ReconstructionMethod {dc, plm, ppm};
 enum RiemannSolver {advect, llf, hlle, hllc, roe};
 
 namespace hydro {
@@ -37,7 +36,8 @@ class Hydro
   HydroEvolution hydro_evol;  // enum storing choice of time evolution
   EquationOfState *peos;      // object that implements chosen EOS
 
-  int nhydro;             // number of conserved variables (5/4 for adiabatic/isothermal)
+  int nhydro;               // number of hydro variables (5/4 for adiabatic/isothermal)
+  int nscalars;             // number of passive scalars
   AthenaArray4D<Real> u0;   // conserved variables
   AthenaArray4D<Real> w0;   // primitive variables
 

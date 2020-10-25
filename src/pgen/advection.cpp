@@ -68,6 +68,8 @@ void ProblemGenerator::Advection_(MeshBlock *pmb, ParameterInput *pin)
   Real &x1min_mesh = pmesh_->mesh_size.x1min;
   Real &x2min_mesh = pmesh_->mesh_size.x2min;
   Real &x3min_mesh = pmesh_->mesh_size.x3min;
+  int &nhydro = pmb->phydro->nhydro;
+  int &nscalars = pmb->phydro->nscalars;
   int &nx1 = pmb->mb_cells.nx1;
   int &nx2 = pmb->mb_cells.nx2;
   int &nx3 = pmb->mb_cells.nx3;
@@ -114,6 +116,10 @@ void ProblemGenerator::Advection_(MeshBlock *pmb, ParameterInput *pin)
       u0(IEN,k,j,i) = 1.0/gm1 + 0.5*(SQR(u0(IM1,k,j,i))
         + SQR(u0(IM2,k,j,i)) + SQR(u0(IM3,k,j,i)))/
           u0(IDN,k,j,i);
+      // add passive scalars
+      for (int n=nhydro; n<(nhydro+nscalars); ++n) {
+        u0(n,k,j,i) = f;
+      }
     }
   );
 

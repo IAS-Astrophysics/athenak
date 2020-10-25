@@ -38,6 +38,8 @@ void ProblemGenerator::LWImplode_(MeshBlock *pmb, ParameterInput *pin)
   Real &x2min = pmb->mb_size.x2min, &x2max = pmb->mb_size.x2max;
   int &nx1 = pmb->mb_cells.nx1;
   int &nx2 = pmb->mb_cells.nx2;
+  int &nscalars = pmb->phydro->nscalars;
+  int &nhydro = pmb->phydro->nhydro;
   auto &u0 = pmb->phydro->u0;
 
   // to make ICs symmetric, set y0 to be in between cell center and face
@@ -55,9 +57,11 @@ void ProblemGenerator::LWImplode_(MeshBlock *pmb, ParameterInput *pin)
       if (x2v > (y0 - x1v)) {
         u0(IDN,k,j,i) = d_out;
         u0(IEN,k,j,i) = p_out/gm1;
+        if (nscalars > 0) u0(nhydro,k,j,i) = 0.0;
       } else {
         u0(IDN,k,j,i) = d_in;
         u0(IEN,k,j,i) = p_in/gm1;
+        if (nscalars > 0) u0(nhydro,k,j,i) = d_in;
       }
     }
   );

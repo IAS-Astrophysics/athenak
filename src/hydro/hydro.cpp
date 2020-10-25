@@ -58,16 +58,19 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
     std::exit(EXIT_FAILURE);
   }} // extra brace to limit scope of string
 
+  // Initialize number of scalars
+  nscalars = pin->GetOrAddInteger("hydro","nscalars",0);
+
   // allocate memory for conserved and primitive variables
   MeshBlock *pmb = pmesh_->FindMeshBlock(my_mbgid_);
   int ncells1 = pmb->mb_cells.nx1 + 2*(pmb->mb_cells.ng);
   int ncells2 = (pmb->mb_cells.nx2 > 1)? (pmb->mb_cells.nx2 + 2*(pmb->mb_cells.ng)) : 1;
   int ncells3 = (pmb->mb_cells.nx3 > 1)? (pmb->mb_cells.nx3 + 2*(pmb->mb_cells.ng)) : 1;
-  Kokkos::realloc(u0,nhydro, ncells3, ncells2, ncells1);
-  Kokkos::realloc(w0,nhydro, ncells3, ncells2, ncells1);
+  Kokkos::realloc(u0, (nhydro+nscalars), ncells3, ncells2, ncells1);
+  Kokkos::realloc(w0, (nhydro+nscalars), ncells3, ncells2, ncells1);
 
   // allocate memory for boundary buffers
-  pmb->pbvals->AllocateBuffers(bbuf, nhydro);
+  pmb->pbvals->AllocateBuffers(bbuf, (nhydro+nscalars));
 
   // for time-evolving problems, continue to construct methods, allocate arrays
   if (hydro_evol != HydroEvolution::no_evolution) {
@@ -142,8 +145,8 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
     }}
 
     // allocate registers, flux divergence, scratch arrays for time-dep probs
-    Kokkos::realloc(u1,nhydro, ncells3, ncells2, ncells1);
-    Kokkos::realloc(divf,nhydro, ncells3, ncells2, ncells1);
+    Kokkos::realloc(u1,   (nhydro+nscalars), ncells3, ncells2, ncells1);
+    Kokkos::realloc(divf, (nhydro+nscalars), ncells3, ncells2, ncells1);
   }
 }
 
@@ -508,7 +511,7 @@ TaskStatus Hydro::HydroSend(Driver *pdrive, int stage)
 {
   MeshBlock* pmb = pmesh_->FindMeshBlock(my_mbgid_);
   TaskStatus tstat;
-  tstat = pmb->pbvals->SendCellCenteredVars(u0, nhydro, PhysicsID::Hydro_ID);
+  tstat = pmb->pbvals->SendCellCenteredVars(u0, (nhydro+nscalars), PhysicsID::Hydro_ID);
   return tstat;
 }
 
@@ -520,7 +523,7 @@ TaskStatus Hydro::HydroReceive(Driver *pdrive, int stage)
 {
   MeshBlock* pmb = pmesh_->FindMeshBlock(my_mbgid_);
   TaskStatus tstat;
-  tstat = pmb->pbvals->RecvCellCenteredVars(u0, nhydro, PhysicsID::Hydro_ID);
+  tstat = pmb->pbvals->RecvCellCenteredVars(u0, (nhydro+nscalars), PhysicsID::Hydro_ID);
   return tstat;
 }
 
