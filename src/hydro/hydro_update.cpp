@@ -33,9 +33,7 @@ TaskStatus Hydro::HydroUpdate(Driver *pdrive, int stage)
 
   // hierarchical parallel loop that updates conserved variables to intermediate step
   // using weights and fractional time step appropriate to stages of time-integrator used
-  // (see XX)
   // Important to use vector inner loop for good performance on cpus
-
   par_for_outer("hydro_update", pmb->exe_space, 0, 0, 0, (nhydro-1), ks, ke, js, je,
     KOKKOS_LAMBDA(TeamMember_t member, const int n, const int k, const int j)
     {
@@ -48,5 +46,4 @@ TaskStatus Hydro::HydroUpdate(Driver *pdrive, int stage)
 
   return TaskStatus::complete;
 }
-
 } // namespace hydro

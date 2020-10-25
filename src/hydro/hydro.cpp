@@ -21,7 +21,10 @@ namespace hydro {
 
 Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
   pmesh_(pm), my_mbgid_(gid),
-  u0("cons",1,1,1,1), w0("prim",1,1,1,1), u1("cons1",1,1,1,1), divf("divF",1,1,1,1),
+  u0("cons",1,1,1,1),
+  w0("prim",1,1,1,1),
+  u1("cons1",1,1,1,1),
+  divf("divF",1,1,1,1),
   uflx_x1face("uflx_x1face",1,1,1),
   uflx_x2face("uflx_x2face",1,1,1),
   uflx_x3face("uflx_x3face",1,1,1)
@@ -71,11 +74,12 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
 
     // select reconstruction method (default PLM)
     {std::string xorder = pin->GetOrAddString("hydro","reconstruct","plm");
-  
     if (xorder.compare("dc") == 0) {
       recon_method_ = ReconstructionMethod::dc;
+
     } else if (xorder.compare("plm") == 0) {
       recon_method_ = ReconstructionMethod::plm;
+
     } else if (xorder.compare("ppm") == 0) {
       // check that nghost > 2
       if (pmb->mb_cells.ng < 3) {
@@ -85,6 +89,7 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
         std::exit(EXIT_FAILURE); 
       }                
       recon_method_ = ReconstructionMethod::ppm;
+
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "<hydro> recon = '" << xorder << "' not implemented"
@@ -94,7 +99,6 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
 
     // select Riemann solver (no default).  Test for compatibility of options
     {std::string rsolver = pin->GetString("hydro","rsolver");
-
     if (rsolver.compare("advection") == 0) {
       if (hydro_evol == HydroEvolution::hydro_dynamic) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -104,15 +108,19 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
       } else {
         rsolver_method_ = RiemannSolver::advect;
       }
+
     } else if (hydro_evol != HydroEvolution::hydro_dynamic) { 
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "<hydro>/rsolver = '" << rsolver
                 << "' cannot be used with non-hydrodynamic problems" << std::endl;
       std::exit(EXIT_FAILURE);
+
     } else if (rsolver.compare("llf") == 0) {
       rsolver_method_ = RiemannSolver::llf;
+
     } else if (rsolver.compare("hlle") == 0) {
       rsolver_method_ = RiemannSolver::hlle;
+
     } else if (rsolver.compare("hllc") == 0) {
       if (peos->eos_data.is_adiabatic) {
         rsolver_method_ = RiemannSolver::hllc;
@@ -122,8 +130,10 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
                   << "' cannot be used with isothermal EOS" << std::endl;
         std::exit(EXIT_FAILURE); 
         }  
+
     } else if (rsolver.compare("roe") == 0) {
       rsolver_method_ = RiemannSolver::roe;
+
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "<hydro> rsolver = '" << rsolver << "' not implemented"

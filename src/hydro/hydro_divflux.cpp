@@ -55,18 +55,9 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
     {
       AthenaScratch2D<Real> wl(member.team_scratch(scr_level), nhydro_, ncells1);
       AthenaScratch2D<Real> wr(member.team_scratch(scr_level), nhydro_, ncells1);
-//      AthenaScratch2D<Real> qi(member.team_scratch(scr_level), nhydro_, ncells1);
-
-      AthenaArray2DSlice<Real> qi = Kokkos::subview(w0_,Kokkos::ALL(),k,j,Kokkos::ALL());
-//      for (int n=0; n<nhydro_; ++n) {
-//        par_for_inner(member, 0, (ncells1-1), [&](const int i)
-//        {
-//          qi(n,i) = w0_(n,k,j,i);
-//        });
-//      }
-//      member.team_barrier();
 
       // Reconstruction qR[i] and qL[i+1]
+      AthenaArray2DSlice<Real> qi = Kokkos::subview(w0_,Kokkos::ALL(),k,j,Kokkos::ALL());
       switch (recon_method)
       {
         case ReconstructionMethod::dc:
@@ -84,7 +75,6 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
       member.team_barrier();
 
       // compute fluxes over [is,ie+1]
-//      AthenaScratch2D<Real> uflux(member.team_scratch(scr_level), nhydro_, ncells1);
       switch (rsolver_method)
       {
         case RiemannSolver::advect:
@@ -129,17 +119,9 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
     {
       AthenaScratch2D<Real> wl(member.team_scratch(scr_level), nhydro_, ncells2);
       AthenaScratch2D<Real> wr(member.team_scratch(scr_level), nhydro_, ncells2);
-//      AthenaScratch2D<Real> qj(member.team_scratch(scr_level), nhydro_, ncells2);
 
       // Reconstruction qR[j] and qL[j+1]
       AthenaArray2DSlice<Real> qj = Kokkos::subview(w0_,Kokkos::ALL(),k,Kokkos::ALL(),i);
-//      for (int n=0; n<nhydro_; ++n) {
-//        par_for_inner(member, 0, (ncells2-1), [&](const int j)
-//        {
-//          qj(n,j) = w0_(n,k,j,i);
-//        });
-//      }
-//      member.team_barrier();
       switch (recon_method)
       {
         case ReconstructionMethod::dc:
@@ -157,7 +139,6 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
       member.team_barrier();
 
       // compute fluxes over [js,je+1]
-//      AthenaScratch2D<Real> uflux(member.team_scratch(scr_level), nhydro_, ncells2);
       switch (rsolver_method)
       {
         case RiemannSolver::advect:
@@ -203,17 +184,9 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
     {
       AthenaScratch2D<Real> wl(member.team_scratch(scr_level), nhydro_, ncells3);
       AthenaScratch2D<Real> wr(member.team_scratch(scr_level), nhydro_, ncells3);
-//      AthenaScratch2D<Real> qk(member.team_scratch(scr_level), nhydro_, ncells3);
 
+      // Reconstruction qR[k] and qL[k+1]
       AthenaArray2DSlice<Real> qk = Kokkos::subview(w0_,Kokkos::ALL(),Kokkos::ALL(),j,i);
-//      for (int n=0; n<nhydro_; ++n) {
-//        par_for_inner(member, 0, (ncells3-1), [&](const int k)
-//        {
-//          qk(n,k) = w0_(n,k,j,i);
-//        });
-//      }
-//      member.team_barrier();
-
       switch (recon_method)
       {
         case ReconstructionMethod::dc:
@@ -231,7 +204,6 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
       member.team_barrier();
 
       // compute fluxes over [ks,ke+1]
-//      AthenaScratch2D<Real> uflux(member.team_scratch(scr_level), nhydro_, ncells3);
       switch (rsolver_method)
       {
         case RiemannSolver::advect:
