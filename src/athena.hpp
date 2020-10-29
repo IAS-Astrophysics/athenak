@@ -52,6 +52,9 @@ enum PhysicsID {Hydro_ID, Scalars_ID, MHD_ID};
 // integer constants to specify reconstruction methods
 enum ReconstructionMethod {dc, plm, ppm};
 
+// constants that enumerate time evolution options
+enum TimeEvolution {stationary, kinematic, dynamic};
+
 //----------------------------------------------------------------------------------------
 // define default Kokkos execution and memory spaces
 

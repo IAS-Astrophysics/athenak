@@ -17,8 +17,7 @@
 class Driver;
 class EquationOfState;
 
-// constants that enumerate Hydro dynamics and Riemann Solver options
-enum HydroEvolution {hydro_static, kinematic, hydro_dynamic, no_evolution};
+// constants that enumerate Hydro Riemann Solver options
 enum RiemannSolver {advect, llf, hlle, hllc, roe};
 
 namespace hydro {
@@ -33,8 +32,7 @@ class Hydro
   ~Hydro();
 
   // data
-  HydroEvolution hydro_evol;  // enum storing choice of time evolution
-  EquationOfState *peos;      // object that implements chosen EOS
+  EquationOfState *peos;    // object that implements chosen EOS
 
   int nhydro;               // number of hydro variables (5/4 for adiabatic/isothermal)
   int nscalars;             // number of passive scalars

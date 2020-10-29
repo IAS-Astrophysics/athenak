@@ -6,7 +6,6 @@ reference =
 problem_id  = Advect    # problem ID: basename of output filenames
 
 <hydro>
-evolution   = kinematic
 eos         = adiabatic
 reconstruct = plm
 rsolver     = advection
@@ -16,6 +15,7 @@ gamma           = 1.4   # gamma = C_p/C_v
 iso_sound_speed = 1.0   # isothermal sound speed
 
 <time>
+evolution  = kinematic
 integrator = rk2
 cfl_number = 0.2       # The Courant, Friedrichs, & Lewy (CFL) Number
 nlim       = -1        # cycle limit (no limit if <0)

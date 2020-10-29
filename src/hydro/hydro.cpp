@@ -37,29 +37,11 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
     nhydro = 4;
   }
 
-  // set time-evolution option (default=dynamic)
-  {std::string evolution_t = pin->GetOrAddString("hydro","evolution","dynamic");
-  if (evolution_t.compare("static") == 0) {
-    hydro_evol = HydroEvolution::hydro_static;
-
-  } else if (evolution_t.compare("kinematic") == 0) {
-    hydro_evol = HydroEvolution::kinematic;
-
-  } else if (evolution_t.compare("dynamic") == 0) {
-    hydro_evol = HydroEvolution::hydro_dynamic;
-
-  } else if (evolution_t.compare("none") == 0) {
-    hydro_evol = HydroEvolution::no_evolution;
-
-  } else {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "<hydro> evolution = '" << evolution_t << "' not implemented"
-              << std::endl;
-    std::exit(EXIT_FAILURE);
-  }} // extra brace to limit scope of string
-
   // Initialize number of scalars
   nscalars = pin->GetOrAddInteger("hydro","nscalars",0);
+
+  // set time-evolution option (default=dynamic) [error checked in driver constructor]
+  std::string evolution_t = pin->GetOrAddString("hydro","evolution","dynamic");
 
   // allocate memory for conserved and primitive variables
   MeshBlock *pmb = pmesh_->FindMeshBlock(my_mbgid_);
@@ -73,7 +55,7 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
   pmb->pbvals->AllocateBuffers(bbuf, (nhydro+nscalars));
 
   // for time-evolving problems, continue to construct methods, allocate arrays
-  if (hydro_evol != HydroEvolution::no_evolution) {
+  if (evolution_t.compare("stationary") != 0) {
 
     // select reconstruction method (default PLM)
     {std::string xorder = pin->GetOrAddString("hydro","reconstruct","plm");
@@ -103,7 +85,7 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
     // select Riemann solver (no default).  Test for compatibility of options
     {std::string rsolver = pin->GetString("hydro","rsolver");
     if (rsolver.compare("advection") == 0) {
-      if (hydro_evol == HydroEvolution::hydro_dynamic) {
+      if (evolution_t.compare("dynamic") == 0) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                   << std::endl << "<hydro>/rsolver = '" << rsolver
                   << "' cannot be used with hydrodynamic problems" << std::endl;
@@ -112,7 +94,7 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
         rsolver_method_ = RiemannSolver::advect;
       }
 
-    } else if (hydro_evol != HydroEvolution::hydro_dynamic) { 
+    } else  if (evolution_t.compare("dynamic") != 0) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "<hydro>/rsolver = '" << rsolver
                 << "' cannot be used with non-hydrodynamic problems" << std::endl;

@@ -18,42 +18,54 @@
 
 //----------------------------------------------------------------------------------------
 // constructor, initializes data structures and parameters
-  // First, define each time-integrator by setting weights for each step of the algorithm
-  // and the CFL number stability limit when coupled to the single-stage spatial operator.
-  // Currently, the explicit, multistage time-integrators must be expressed as 2S-type
-  // algorithms as in Ketcheson (2010) Algorithm 3, which incudes 2N (Williamson) and 2R
-  // (van der Houwen) popular 2-register low-storage RK methods. The 2S-type integrators
-  // depend on a bidiagonally sparse Shu-Osher representation; at each stage l:
-  //
-  //    U^{l} = a_{l,l-2}*U^{l-2} + a_{l-1}*U^{l-1}
-  //          + b_{l,l-2}*dt*Div(F_{l-2}) + b_{l,l-1}*dt*Div(F_{l-1}),
-  //
-  // where U^{l-1} and U^{l-2} are previous stages and a_{l,l-2}, a_{l,l-1}=(1-a_{l,l-2}),
-  // and b_{l,l-2}, b_{l,l-1} are weights that are different for each stage and
-  // integrator. Previous timestep U^{0} = U^n is given, and the integrator solves
-  // for U^{l} for 1 <= l <= nstages.
-  //
-  // The 2x RHS evaluations of Div(F) and source terms per stage is avoided by adding
-  // another weighted average / caching of these terms each stage. The API and framework
-  // is extensible to three register 3S* methods, although none are currently implemented.
+// First, define each time-integrator by setting weights for each step of the algorithm
+// and the CFL number stability limit when coupled to the single-stage spatial operator.
+// Currently, the explicit, multistage time-integrators must be expressed as 2S-type
+// algorithms as in Ketcheson (2010) Algorithm 3, which incudes 2N (Williamson) and 2R
+// (van der Houwen) popular 2-register low-storage RK methods. The 2S-type integrators
+// depend on a bidiagonally sparse Shu-Osher representation; at each stage l:
+//
+//    U^{l} = a_{l,l-2}*U^{l-2} + a_{l-1}*U^{l-1}
+//          + b_{l,l-2}*dt*Div(F_{l-2}) + b_{l,l-1}*dt*Div(F_{l-1}),
+//
+// where U^{l-1} and U^{l-2} are previous stages and a_{l,l-2}, a_{l,l-1}=(1-a_{l,l-2}),
+// and b_{l,l-2}, b_{l,l-1} are weights that are different for each stage and
+// integrator. Previous timestep U^{0} = U^n is given, and the integrator solves
+// for U^{l} for 1 <= l <= nstages.
+//
+// The 2x RHS evaluations of Div(F) and source terms per stage is avoided by adding
+// another weighted average / caching of these terms each stage. The API and framework
+// is extensible to three register 3S* methods, although none are currently implemented.
 
-  // Notation: exclusively using "stage", equivalent in lit. to "substage" or "substep"
-  // (infrequently "step"), to refer to the intermediate values of U^{l} between each
-  // "timestep" = "cycle" in explicit, multistage methods. This is to disambiguate the
-  // temporal integration from other iterative sequences; "Step" is often used for generic
-  // sequences in code, e.g. main.cpp: "Step 1: MPI"
-  //
-  // main.cpp invokes the tasklist in a for () loop from stage=1 to stage=ptlist->nstages
+// Notation: exclusively using "stage", equivalent in lit. to "substage" or "substep"
+// (infrequently "step"), to refer to the intermediate values of U^{l} between each
+// "timestep" = "cycle" in explicit, multistage methods.
+//
+// Driver::Execute() invokes the tasklist from stage=1 to stage=ptlist->nstages
 
 Driver::Driver(ParameterInput *pin, Mesh *pmesh) :
-  time_evolution(false), tlim(-1.0), nlim(-1), ndiag(1)
+  tlim(-1.0), nlim(-1), ndiag(1)
 {
-  hydro::Hydro *phyd = pmesh->mblocks.front().phydro;
-  if (phyd->hydro_evol != HydroEvolution::no_evolution) {
-    time_evolution = true;
-  }
+  // set time-evolution option (default=dynamic)
+  {std::string evolution_t = pin->GetOrAddString("time","evolution","dynamic");
+  if (evolution_t.compare("stationary") == 0) {
+    time_evolution = TimeEvolution::stationary;
+
+  } else if (evolution_t.compare("kinematic") == 0) {
+    time_evolution = TimeEvolution::kinematic;
+
+  } else if (evolution_t.compare("dynamic") == 0) {
+    time_evolution = TimeEvolution::dynamic;
+
+  } else {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "<hydro> evolution = '" << evolution_t << "' not implemented"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }} // extra brace to limit scope of string
+
   // read <time> parameters controlling driver if run requires time-evolution
-  if (time_evolution) {
+  if (time_evolution != TimeEvolution::stationary) {
     integrator = pin->GetOrAddString("time", "integrator", "rk2");
     tlim = pin->GetReal("time", "tlim");
     nlim = pin->GetOrAddInteger("time", "nlim", -1);
@@ -148,7 +160,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
 
   //---- Step 2.  Compute first time step (if problem involves time evolution
 
-  if (time_evolution) {
+  if (time_evolution != TimeEvolution::stationary) {
     for (auto it = pmesh->mblocks.begin(); it < pmesh->mblocks.end(); ++it) {
       TaskStatus tstatus;
       tstatus = it->phydro->NewTimeStep(this, nstages);
@@ -184,7 +196,7 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
   while ((pmesh->time < tlim) &&
          (pmesh->ncycle < nlim || nlim < 0)) {
 
-    if (time_evolution) {
+    if (time_evolution != TimeEvolution::stationary) {
       if (global_variable::my_rank == 0) {OutputCycleDiagnostics(pmesh);}
 
       // Do multi-stage time evolution TaskLists
@@ -299,7 +311,7 @@ void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
     
   float exe_time = run_time_.seconds();
 
-  if (time_evolution) { 
+  if (time_evolution != TimeEvolution::stationary) { 
     if (global_variable::my_rank == 0) {
       // Print diagnostic messages related to the end of the simulation
       OutputCycleDiagnostics(pmesh);

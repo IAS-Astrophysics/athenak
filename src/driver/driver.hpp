@@ -22,7 +22,7 @@ class Driver {
   ~Driver() = default;
 
   // data
-  bool time_evolution;
+  TimeEvolution time_evolution;
 
   // folowing data only relevant for runs involving time evolution
   Real tlim;      // stopping time

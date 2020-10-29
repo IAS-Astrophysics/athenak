@@ -22,9 +22,9 @@ namespace hydro {
 // \!fn void Hydro::NewTimeStep()
 // \brief calculate the minimum timestep within a MeshBlock for hydrodynamic problems
 
-TaskStatus Hydro::NewTimeStep(Driver *pdrive, int stage) {
+TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage) {
 
-  if (stage != pdrive->nstages) return TaskStatus::complete; // only execute on last stage
+  if (stage != pdriver->nstages) return TaskStatus::complete; // only execute on last stage
   
   MeshBlock *pmb = pmesh_->FindMeshBlock(my_mbgid_);
   int is = pmb->mb_cells.is; int nx1 = pmb->mb_cells.nx1;
@@ -36,7 +36,7 @@ TaskStatus Hydro::NewTimeStep(Driver *pdrive, int stage) {
   Real dv2 = std::numeric_limits<float>::min();
   Real dv3 = std::numeric_limits<float>::min();
 
-  if (hydro_evol == HydroEvolution::kinematic) {
+  if (pdriver->time_evolution == TimeEvolution::kinematic) {
 
     // find largest (v) in each direction for advection problems
     auto &w0_ = w0;
