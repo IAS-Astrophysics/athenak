@@ -17,15 +17,16 @@ add_executable(
         bvals/reflect.cpp
         bvals/outflow.cpp
 
+        eos/eos.cpp
+        eos/adiabatic_hydro.cpp
+        eos/isothermal_hydro.cpp
+
         driver/driver.cpp
 
         hydro/hydro.cpp
         hydro/hydro_divflux.cpp
         hydro/hydro_newdt.cpp
         hydro/hydro_update.cpp
-        hydro/eos/eos.cpp
-        hydro/eos/adiabatic_hydro.cpp
-        hydro/eos/isothermal_hydro.cpp
 
         mesh/interface_physics.cpp
         mesh/load_balance.cpp

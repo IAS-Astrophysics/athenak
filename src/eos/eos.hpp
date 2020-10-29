@@ -1,5 +1,5 @@
-#ifndef HYDRO_EOS_EOS_HPP_
-#define HYDRO_EOS_EOS_HPP_
+#ifndef EOS_EOS_HPP_
+#define EOS_EOS_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
@@ -15,13 +15,13 @@
 #include "mesh/meshblock.hpp"
 #include "parameter_input.hpp"
 
-enum EOSType {adiabatic_nr_hydro, isothermal_nr_hydro};
+enum EOS_Type {adiabatic_nr_hydro, isothermal_nr_hydro};
 
 //----------------------------------------------------------------------------------------
 //! \struct EOSData
 //  \brief container for variables associated with EOS
 
-struct EOSData
+struct EOS_Data
 {
   Real gamma;
   Real iso_cs;
@@ -44,7 +44,7 @@ class EquationOfState
   EquationOfState(Mesh *pm, ParameterInput *pin, int igid);
   ~EquationOfState() = default;
 
-  EOSData eos_data;
+  EOS_Data eos_data;
 
   // wrapper function that calls different conversion routines
   void ConservedToPrimitive(AthenaArray4D<Real> &cons,AthenaArray4D<Real> &prim);
@@ -56,9 +56,9 @@ class EquationOfState
  private:
   Mesh* pmesh_;
   int my_mbgid_;
-  EOSType eos_type_;    // enum that specifies EOS type
+  EOS_Type eos_type_;    // enum that specifies EOS type
 };
 
 } // namespace hydro
 
-#endif // HYDRO_EOS_EOS_HPP_
+#endif // EOS_EOS_HPP_

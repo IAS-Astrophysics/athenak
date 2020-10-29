@@ -11,11 +11,11 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
-#include "hydro/eos/eos.hpp"
 #include "bvals/bvals.hpp"
 
 // forward declarations
 class Driver;
+class EquationOfState;
 
 // constants that enumerate Hydro dynamics and Riemann Solver options
 enum HydroEvolution {hydro_static, kinematic, hydro_dynamic, no_evolution};

@@ -27,12 +27,12 @@ EquationOfState::EquationOfState(Mesh* pm, ParameterInput *pin, int igid)
   // construct EOS type (no default)
   std::string eqn_of_state = pin->GetString("hydro","eos");
   if (eqn_of_state.compare("adiabatic") == 0) {
-    eos_type_ = EOSType::adiabatic_nr_hydro;
+    eos_type_ = EOS_Type::adiabatic_nr_hydro;
     eos_data.is_adiabatic = true;
     eos_data.gamma = pin->GetReal("eos","gamma");
     eos_data.iso_cs = 0.0;
   } else if (eqn_of_state.compare("isothermal") == 0) {
-    eos_type_ = EOSType::isothermal_nr_hydro;
+    eos_type_ = EOS_Type::isothermal_nr_hydro;
     eos_data.is_adiabatic = false;
     eos_data.iso_cs = pin->GetReal("eos","iso_sound_speed");
     eos_data.gamma = 0.0;
@@ -50,10 +50,10 @@ void EquationOfState::ConservedToPrimitive(AthenaArray4D<Real> &cons,
                                            AthenaArray4D<Real> &prim)
 {                  
   switch (eos_type_) {
-    case EOSType::adiabatic_nr_hydro:
+    case EOS_Type::adiabatic_nr_hydro:
       ConToPrimAdi(cons, prim);
       break;
-    case EOSType::isothermal_nr_hydro:
+    case EOS_Type::isothermal_nr_hydro:
       ConToPrimIso(cons, prim);
       break;
     default:

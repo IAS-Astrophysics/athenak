@@ -9,11 +9,6 @@
 
 #include <algorithm>  // max(), min()
 
-#include "athena.hpp"
-#include "mesh/mesh.hpp"
-#include "hydro/eos/eos.hpp"
-#include "hydro/hydro.hpp"
-
 namespace hydro {
 
 //----------------------------------------------------------------------------------------
@@ -21,7 +16,7 @@ namespace hydro {
 //  \brief An advection Riemann solver for hydrodynamics (both adiabatic and isothermal)
 
 KOKKOS_INLINE_FUNCTION
-void Advect(TeamMember_t const &member, const EOSData eos,  const int il, const int iu,
+void Advect(TeamMember_t const &member, const EOS_Data eos,  const int il, const int iu,
      const int ivx, const AthenaScratch2D<Real> &wl, const AthenaScratch2D<Real> &wr,
      AthenaScratch2D<Real> &flx)
 {

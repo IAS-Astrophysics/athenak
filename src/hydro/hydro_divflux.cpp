@@ -10,8 +10,8 @@
 
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
+#include "eos/eos.hpp"
 #include "hydro.hpp"
-#include "hydro/eos/eos.hpp"
 // include inlined reconstruction methods (yuck...)
 #include "reconstruct/dc.cpp"
 #include "reconstruct/plm.cpp"
@@ -40,7 +40,7 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
   int nvars_ = nhydro + nscalars;
   ReconstructionMethod &recon_method = recon_method_;
   RiemannSolver &rsolver_method = rsolver_method_;
-  EOSData &eos = pmb->phydro->peos->eos_data;
+  EOS_Data &eos = pmb->phydro->peos->eos_data;
   AthenaArray4D<Real> &w0_ = w0;
   AthenaArray4D<Real> &divf_ = divf;
 

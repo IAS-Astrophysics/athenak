@@ -12,8 +12,8 @@
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
 #include "mesh/mesh.hpp"
+#include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
-#include "hydro/eos/eos.hpp"
 
 namespace hydro {
 //----------------------------------------------------------------------------------------

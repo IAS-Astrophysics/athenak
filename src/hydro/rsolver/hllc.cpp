@@ -15,11 +15,6 @@
 #include <algorithm>  // max(), min()
 #include <cmath>      // sqrt()
 
-#include "athena.hpp"
-#include "mesh/mesh.hpp"
-#include "hydro/eos/eos.hpp"
-#include "hydro/hydro.hpp"
-
 namespace hydro {
 
 //----------------------------------------------------------------------------------------
@@ -27,7 +22,7 @@ namespace hydro {
 //! \brief The HLLC Riemann solver for adiabatic hydrodynamics (use HLLE for isothermal)
 
 KOKKOS_INLINE_FUNCTION
-void HLLC(TeamMember_t const &member, const EOSData &eos, const int il, const int iu,
+void HLLC(TeamMember_t const &member, const EOS_Data &eos, const int il, const int iu,
      const int ivx, const AthenaScratch2D<Real> &wl, const AthenaScratch2D<Real> &wr,
      AthenaScratch2D<Real> &flx)
 {

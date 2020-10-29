@@ -22,13 +22,14 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
+#include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 #include "utils/grid_locations.hpp"
 #include "pgen.hpp"
 
 // function to compute eigenvectors of linear waves
 void Eigensystem(const Real d, const Real p, const Real v1, const Real v2, const Real v3,
-                 const EOSData &eos, Real right_eigenmatrix[5][5]);
+                 const EOS_Data &eos, Real right_eigenmatrix[5][5]);
 
 //----------------------------------------------------------------------------------------
 //! \fn void MeshBlock::ProblemGenerator(ParameterInput *pin)
@@ -111,7 +112,7 @@ void ProblemGenerator::LinearWave_(MeshBlock *pmb, ParameterInput *pin)
 
   // Compute eigenvectors, where u0 is parallel to the
   // wavevector, and v0, and w0 are perpendicular.
-  EOSData &eos = pmb->phydro->peos->eos_data;
+  EOS_Data &eos = pmb->phydro->peos->eos_data;
   Real gm1 = eos.gamma - 1.0;
   Real d0 = 1.0;
   Real p0 = 1.0/eos.gamma;
@@ -164,7 +165,7 @@ void ProblemGenerator::LinearWave_(MeshBlock *pmb, ParameterInput *pin)
 //  \brief computes eigenvectors of linear waves
 
 void Eigensystem(const Real d, const Real p, const Real v1, const Real v2, const Real v3,
-                 const EOSData &eos, Real right_eigenmatrix[5][5])
+                 const EOS_Data &eos, Real right_eigenmatrix[5][5])
 {
     //--- Adiabatic Hydrodynamics ---
   if (eos.is_adiabatic) {
