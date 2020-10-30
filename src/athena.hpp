@@ -103,6 +103,20 @@ using AthenaScratch2D = Kokkos::View<T **, LayoutWrapper, ScratchMemSpace,
 using TeamMember_t = Kokkos::TeamPolicy<>::member_type;
 
 //----------------------------------------------------------------------------------------
+// struct for storing face-, edge-, and corner centered variables
+// (currently only face-centered fields implemented)
+
+template <typename T>
+struct FaceArray3D {
+  AthenaArray3D<T> x1f, x2f, x3f;
+  FaceArray3D(const std::string &label, int n3, int n2, int n1) :
+    x1f(label + ".x1f", n3, n2, n1),
+    x2f(label + ".x2f", n3, n2, n1),
+    x3f(label + ".x3f", n3, n2, n1) {}
+  ~FaceArray3D() = default;
+};
+
+//----------------------------------------------------------------------------------------
 // wrappers for Kokkos::parallel_for
 // Currently these wrappers all implement a 1D range policy, since experiments in
 // K-Athena and Parthenon indicate these, in general, are faster then MD range policy.

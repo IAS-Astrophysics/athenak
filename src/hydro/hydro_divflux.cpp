@@ -39,7 +39,7 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
   int nhydro_ = nhydro;
   int nvars_ = nhydro + nscalars;
   ReconstructionMethod &recon_method = recon_method_;
-  RiemannSolver &rsolver_method = rsolver_method_;
+  Hydro_RSolver &rsolver_method = rsolver_method_;
   EOS_Data &eos = pmb->phydro->peos->eos_data;
   AthenaArray4D<Real> &w0_ = w0;
   AthenaArray4D<Real> &divf_ = divf;
@@ -79,16 +79,16 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
       // compute hydro fluxes over [is,ie+1]
       switch (rsolver_method)
       {
-        case RiemannSolver::advect:
+        case Hydro_RSolver::advect:
           Advect(member, eos, is, ie+1, IVX, wl, wr, wl);
           break;
-        case RiemannSolver::llf:
+        case Hydro_RSolver::llf:
           LLF(member, eos, is, ie+1, IVX, wl, wr, wl);
           break;
-        case RiemannSolver::hllc:
+        case Hydro_RSolver::hllc:
           HLLC(member, eos, is, ie+1, IVX, wl, wr, wl);
           break;
-//        case RiemannSolver::roe:
+//        case Hydro_RSolver::roe:
 //          Roe(member, eos, is, ie+1, IVX, wl, wr, wl);
 //          break;
         default:
@@ -158,16 +158,16 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
       // compute hydro fluxes over [js,je+1]
       switch (rsolver_method)
       {
-        case RiemannSolver::advect:
+        case Hydro_RSolver::advect:
           Advect(member, eos, js, je+1, IVY, wl, wr, wl);
           break;
-        case RiemannSolver::llf:
+        case Hydro_RSolver::llf:
           LLF(member, eos, js, je+1, IVY, wl, wr, wl);
           break;
-        case RiemannSolver::hllc:
+        case Hydro_RSolver::hllc:
           HLLC(member, eos, js, je+1, IVY, wl, wr, wl);
           break;
-//        case RiemannSolver::roe:
+//        case Hydro_RSolver::roe:
 //          Roe(member, eos, js, je+1, IVY, wl, wr, wl);
 //          break;
         default:
@@ -238,16 +238,16 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
       // compute hydro fluxes over [ks,ke+1]
       switch (rsolver_method)
       {
-        case RiemannSolver::advect:
+        case Hydro_RSolver::advect:
           Advect(member, eos, ks, ke+1, IVZ, wl, wr, wl);
           break;
-        case RiemannSolver::llf:
+        case Hydro_RSolver::llf:
           LLF(member, eos, ks, ke+1, IVZ, wl, wr, wl);
           break;
-        case RiemannSolver::hllc:
+        case Hydro_RSolver::hllc:
           HLLC(member, eos, ks, ke+1, IVZ, wl, wr, wl);
           break;
-//        case RiemannSolver::roe:
+//        case Hydro_RSolver::roe:
 //          Roe(member, eos, ks, ke+1, IVZ, wl, wr, wl);
 //          break;
         default:

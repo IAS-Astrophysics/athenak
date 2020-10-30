@@ -15,7 +15,7 @@
 #include "mesh/meshblock.hpp"
 #include "parameter_input.hpp"
 
-enum EOS_Type {adiabatic_nr_hydro, isothermal_nr_hydro};
+enum EOS_Type {adiabatic_hydro, isothermal_hydro};
 
 //----------------------------------------------------------------------------------------
 //! \struct EOSData
@@ -31,8 +31,6 @@ struct EOS_Data
   KOKKOS_INLINE_FUNCTION
   Real SoundSpeed(Real p, Real d) const {return std::sqrt(gamma*p/d);}
 };
-
-namespace hydro {
 
 //----------------------------------------------------------------------------------------
 //! \class EquationOfState
@@ -50,15 +48,13 @@ class EquationOfState
   void ConservedToPrimitive(AthenaArray4D<Real> &cons,AthenaArray4D<Real> &prim);
 
   // cons to prim functions for different EOS
-  void ConToPrimAdi(AthenaArray4D<Real> &cons,AthenaArray4D<Real> &prim);
-  void ConToPrimIso(AthenaArray4D<Real> &cons,AthenaArray4D<Real> &prim);
+  void HydroConToPrimAdi(AthenaArray4D<Real> &cons,AthenaArray4D<Real> &prim);
+  void HydroConToPrimIso(AthenaArray4D<Real> &cons,AthenaArray4D<Real> &prim);
 
  private:
   Mesh* pmesh_;
   int my_mbgid_;
   EOS_Type eos_type_;    // enum that specifies EOS type
 };
-
-} // namespace hydro
 
 #endif // EOS_EOS_HPP_

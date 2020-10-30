@@ -1,12 +1,12 @@
-#ifndef HYDRO_HYDRO_HPP_
-#define HYDRO_HYDRO_HPP_
+#ifndef MHD_MHD_HPP_
+#define MHD_MHD_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file hydro.hpp
-//  \brief definitions for Hydro class
+//! \file mhd.hpp
+//  \brief definitions for MHD class
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
@@ -17,19 +17,19 @@
 class Driver;
 class EquationOfState;
 
-// constants that enumerate Hydro Riemann Solver options
-enum Hydro_RSolver {advect, llf, hllc, roe};
+// constants that enumerate MHD Riemann Solver options
+enum MHD_RSolver {advect, llf, hlld, roe};
 
-namespace hydro {
+namespace mhd {
 
 //----------------------------------------------------------------------------------------
-//! \class Hydro
+//! \class MHD
 
-class Hydro
+class MHD
 {
  public:
-  Hydro(Mesh *pm, ParameterInput *pin, int gid);
-  ~Hydro();
+  MHD(Mesh *pm, ParameterInput *pin, int gid);
+  ~MHD();
 
   // data
   EquationOfState *peos;    // object that implements chosen EOS
@@ -38,38 +38,40 @@ class Hydro
   int nscalars;             // number of passive scalars
   AthenaArray4D<Real> u0;   // conserved variables
   AthenaArray4D<Real> w0;   // primitive variables
+  FaceArray3D<Real>   b0;   // face-centered magnetic fields
 
-  BBuffer bbuf;    // send/recv buffers and BoundaryStatus flags for Hydro comms.
+  BBuffer bbuf;    // send/recv buffers and BoundaryStatus flags for MHD comms.
 
   // following only used for time-evolving flow
-  AthenaArray4D<Real> u1;    // conserved variables at intermediate step 
+  AthenaArray4D<Real> u1;     // conserved variables at intermediate step 
   AthenaArray4D<Real> divf;   // divergence of fluxes
+  FaceArray3D<Real>   b1;     // face-centered magnetic fields at intermediate step
   AthenaArray3D<Real> uflx_x1face;  // fluxes on x1-faces
   AthenaArray3D<Real> uflx_x2face;  // fluxes on x2-faces
   AthenaArray3D<Real> uflx_x3face;  // fluxes on x3-faces
   Real dtnew;
 
   // functions
-  void HydroStageStartTasks(TaskList &tl, TaskID start, std::vector<TaskID> &added);
-  void HydroStageRunTasks(TaskList &tl, TaskID start, std::vector<TaskID> &added);
-  void HydroStageEndTasks(TaskList &tl, TaskID start, std::vector<TaskID> &added);
-  TaskStatus HydroInitRecv(Driver *d, int stage);
-  TaskStatus HydroClearRecv(Driver *d, int stage);
-  TaskStatus HydroClearSend(Driver *d, int stage);
-  TaskStatus HydroCopyCons(Driver *d, int stage);
-  TaskStatus HydroDivFlux(Driver *d, int stage);
-  TaskStatus HydroUpdate(Driver *d, int stage);
-  TaskStatus HydroSend(Driver *d, int stage); 
-  TaskStatus HydroReceive(Driver *d, int stage); 
+  void MHDStageStartTasks(TaskList &tl, TaskID start, std::vector<TaskID> &added);
+  void MHDStageRunTasks(TaskList &tl, TaskID start, std::vector<TaskID> &added);
+  void MHDStageEndTasks(TaskList &tl, TaskID start, std::vector<TaskID> &added);
+  TaskStatus MHDInitRecv(Driver *d, int stage);
+  TaskStatus MHDClearRecv(Driver *d, int stage);
+  TaskStatus MHDClearSend(Driver *d, int stage);
+  TaskStatus MHDCopyCons(Driver *d, int stage);
+  TaskStatus MHDDivFlux(Driver *d, int stage);
+  TaskStatus MHDUpdate(Driver *d, int stage);
+  TaskStatus MHDSend(Driver *d, int stage); 
+  TaskStatus MHDReceive(Driver *d, int stage); 
   TaskStatus ConToPrim(Driver *d, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
 
  private:
-  Mesh* pmesh_;   // ptr to Mesh containing this Hydro
-  int my_mbgid_;  // GridID of MeshBlock contianing this Hydro
+  Mesh* pmesh_;   // ptr to Mesh containing this MHD
+  int my_mbgid_;  // GridID of MeshBlock contianing this MHD
   ReconstructionMethod recon_method_;
-  Hydro_RSolver rsolver_method_;
+  MHD_RSolver rsolver_method_;
 };
 
-} // namespace hydro
-#endif // HYDRO_HYDRO_HPP_
+} // namespace mhd
+#endif // MHD_MHD_HPP_

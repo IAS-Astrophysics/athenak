@@ -91,7 +91,7 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
                   << "' cannot be used with hydrodynamic problems" << std::endl;
         std::exit(EXIT_FAILURE);
       } else {
-        rsolver_method_ = RiemannSolver::advect;
+        rsolver_method_ = Hydro_RSolver::advect;
       }
 
     } else  if (evolution_t.compare("dynamic") != 0) {
@@ -101,14 +101,11 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
       std::exit(EXIT_FAILURE);
 
     } else if (rsolver.compare("llf") == 0) {
-      rsolver_method_ = RiemannSolver::llf;
-
-    } else if (rsolver.compare("hlle") == 0) {
-      rsolver_method_ = RiemannSolver::hlle;
+      rsolver_method_ = Hydro_RSolver::llf;
 
     } else if (rsolver.compare("hllc") == 0) {
       if (peos->eos_data.is_adiabatic) {
-        rsolver_method_ = RiemannSolver::hllc;
+        rsolver_method_ = Hydro_RSolver::hllc;
       } else { 
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                   << std::endl << "<hydro>/rsolver = '" << rsolver
@@ -117,7 +114,7 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
         }  
 
     } else if (rsolver.compare("roe") == 0) {
-      rsolver_method_ = RiemannSolver::roe;
+      rsolver_method_ = Hydro_RSolver::roe;
 
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__

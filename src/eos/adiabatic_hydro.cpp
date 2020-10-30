@@ -14,13 +14,11 @@
 #include "hydro/hydro.hpp"
 #include "eos.hpp"
 
-namespace hydro {
-
 //----------------------------------------------------------------------------------------
 // \!fn void ConservedToPrimitive()
 // \brief Converts conserved into primitive variables in nonrelativistic adiabatic hydro
 
-void EquationOfState::ConToPrimAdi(AthenaArray4D<Real> &cons, AthenaArray4D<Real> &prim)
+void EquationOfState::HydroConToPrimAdi(AthenaArray4D<Real> &cons,AthenaArray4D<Real> &prim)
 {
   MeshBlock* pmb = pmesh_->FindMeshBlock(my_mbgid_);
   int ng = pmb->mb_cells.ng;
@@ -37,17 +35,17 @@ void EquationOfState::ConToPrimAdi(AthenaArray4D<Real> &cons, AthenaArray4D<Real
   par_for("hydro_update", pmb->exe_space, 0, (ncells3-1), 0, (ncells2-1), 0, (ncells1-1),
     KOKKOS_LAMBDA(int k, int j, int i)
     {
-      Real& u_d  = cons(IDN,k,j,i);
-      Real& u_m1 = cons(IM1,k,j,i);
-      Real& u_m2 = cons(IM2,k,j,i);
-      Real& u_m3 = cons(IM3,k,j,i);
-      Real& u_e  = cons(IEN,k,j,i);
+      Real& u_d  = cons(hydro::IDN,k,j,i);
+      Real& u_m1 = cons(hydro::IM1,k,j,i);
+      Real& u_m2 = cons(hydro::IM2,k,j,i);
+      Real& u_m3 = cons(hydro::IM3,k,j,i);
+      Real& u_e  = cons(hydro::IEN,k,j,i);
 
-      Real& w_d  = prim(IDN,k,j,i);
-      Real& w_vx = prim(IVX,k,j,i);
-      Real& w_vy = prim(IVY,k,j,i);
-      Real& w_vz = prim(IVZ,k,j,i);
-      Real& w_p  = prim(IPR,k,j,i);
+      Real& w_d  = prim(hydro::IDN,k,j,i);
+      Real& w_vx = prim(hydro::IVX,k,j,i);
+      Real& w_vy = prim(hydro::IVY,k,j,i);
+      Real& w_vz = prim(hydro::IVZ,k,j,i);
+      Real& w_p  = prim(hydro::IPR,k,j,i);
 
       // apply density floor, without changing momentum or energy
       u_d = (u_d > dfloor_) ?  u_d : dfloor_;
@@ -74,5 +72,3 @@ void EquationOfState::ConToPrimAdi(AthenaArray4D<Real> &cons, AthenaArray4D<Real
 
   return;
 }
-
-} // namespace hydro
