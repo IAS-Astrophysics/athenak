@@ -17,6 +17,7 @@
 // Forward declarations
 class BoundaryValues;
 namespace hydro {class Hydro;}
+namespace mhd {class MHD;}
 
 //----------------------------------------------------------------------------------------
 //! \class MeshBlock
@@ -44,6 +45,7 @@ class MeshBlock
 
   // physics modules (controlled by InitPhysicsModules)
   hydro::Hydro *phydro;
+  mhd::MHD *pmhd;
 
   // task lists (each physics module adds its own tasks to each list)
   TaskList tl_stagestart;

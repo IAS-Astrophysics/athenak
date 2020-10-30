@@ -20,6 +20,8 @@ add_executable(
         eos/eos.cpp
         eos/adiabatic_hydro.cpp
         eos/isothermal_hydro.cpp
+        eos/adiabatic_mhd.cpp
+        eos/isothermal_mhd.cpp
 
         driver/driver.cpp
 
@@ -35,6 +37,7 @@ add_executable(
         mesh/meshblock_tree.cpp
 
         mhd/mhd.cpp
+        mhd/mhd_tasks.cpp
 
         outputs/io_wrapper.cpp
         outputs/outputs.cpp

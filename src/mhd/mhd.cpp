@@ -39,7 +39,10 @@ MHD::MHD(Mesh *pm, ParameterInput *pin, int gid) :
     nhydro = 4;
   }
 
-  // Initialize number of scalars
+  // Initialize magnetic filed indices in primtives, number of scalars
+  hydro::IBX = nhydro;
+  hydro::IBY = nhydro + 1;
+  hydro::IBZ = nhydro + 2;
   nscalars = pin->GetOrAddInteger("mhd","nscalars",0);
 
   // set time-evolution option (default=dynamic) [error checked in driver constructor]

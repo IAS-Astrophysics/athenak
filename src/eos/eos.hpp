@@ -48,8 +48,10 @@ class EquationOfState
   void ConservedToPrimitive(AthenaArray4D<Real> &cons,AthenaArray4D<Real> &prim);
 
   // cons to prim functions for different EOS
-  void HydroConToPrimAdi(AthenaArray4D<Real> &cons,AthenaArray4D<Real> &prim);
-  void HydroConToPrimIso(AthenaArray4D<Real> &cons,AthenaArray4D<Real> &prim);
+  void NR_HydroAdi(AthenaArray4D<Real> &cons, AthenaArray4D<Real> &prim);
+  void NR_HydroIso(AthenaArray4D<Real> &cons, AthenaArray4D<Real> &prim);
+  void NR_MHDAdi(AthenaArray4D<Real> &c, AthenaArray4D<Real> &p, FaceArray3D<Real> &b);
+  void NR_MHDIso(AthenaArray4D<Real> &c, AthenaArray4D<Real> &p, FaceArray3D<Real> &b);
 
  private:
   Mesh* pmesh_;

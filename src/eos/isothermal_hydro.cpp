@@ -16,7 +16,7 @@
 // \!fn void ConservedToPrimitive()
 // \brief Converts conserved into primitive variables in nonrelativistic isothermal hydro
 
-void EquationOfState::HydroConToPrimIso(AthenaArray4D<Real> &cons,AthenaArray4D<Real> &prim)
+void EquationOfState::NR_HydroIso(AthenaArray4D<Real> &cons, AthenaArray4D<Real> &prim)
 {
   MeshBlock* pmb = pmesh_->FindMeshBlock(my_mbgid_);
   int ng = pmb->mb_cells.ng;
@@ -27,7 +27,7 @@ void EquationOfState::HydroConToPrimIso(AthenaArray4D<Real> &cons,AthenaArray4D<
   int &nscalars = pmb->phydro->nscalars;
   Real &dfloor_ = eos_data.density_floor;
 
-  par_for("hydro_update", pmb->exe_space, 0, (ncells3-1), 0, (ncells2-1), 0, (ncells1-1),
+  par_for("hyd_con2prim", pmb->exe_space, 0, (ncells3-1), 0, (ncells2-1), 0, (ncells1-1),
     KOKKOS_LAMBDA(int k, int j, int i)
     {
       Real& u_d  = cons(hydro::IDN,k,j,i);

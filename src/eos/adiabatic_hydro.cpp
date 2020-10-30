@@ -6,8 +6,6 @@
 //! \file adiabatic_hydro.cpp
 //  \brief implements EOS functions in derived class for nonrelativistic adiabatic hydro
 
-#include <iostream>
-
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
@@ -18,7 +16,7 @@
 // \!fn void ConservedToPrimitive()
 // \brief Converts conserved into primitive variables in nonrelativistic adiabatic hydro
 
-void EquationOfState::HydroConToPrimAdi(AthenaArray4D<Real> &cons,AthenaArray4D<Real> &prim)
+void EquationOfState::NR_HydroAdi(AthenaArray4D<Real> &cons, AthenaArray4D<Real> &prim)
 {
   MeshBlock* pmb = pmesh_->FindMeshBlock(my_mbgid_);
   int ng = pmb->mb_cells.ng;
@@ -32,7 +30,7 @@ void EquationOfState::HydroConToPrimAdi(AthenaArray4D<Real> &cons,AthenaArray4D<
   Real &dfloor_ = eos_data.density_floor;
   Real &pfloor_ = eos_data.pressure_floor;
 
-  par_for("hydro_update", pmb->exe_space, 0, (ncells3-1), 0, (ncells2-1), 0, (ncells1-1),
+  par_for("hyd_con2prim", pmb->exe_space, 0, (ncells3-1), 0, (ncells2-1), 0, (ncells1-1),
     KOKKOS_LAMBDA(int k, int j, int i)
     {
       Real& u_d  = cons(hydro::IDN,k,j,i);

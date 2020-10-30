@@ -49,10 +49,10 @@ void EquationOfState::ConservedToPrimitive(AthenaArray4D<Real> &cons,
 {                  
   switch (eos_type_) {
     case EOS_Type::adiabatic_hydro:
-      HydroConToPrimAdi(cons, prim);
+      NR_HydroAdi(cons, prim);
       break;
     case EOS_Type::isothermal_hydro:
-      HydroConToPrimIso(cons, prim);
+      NR_HydroIso(cons, prim);
       break;
     default:
       break; 
