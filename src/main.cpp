@@ -126,10 +126,10 @@ int main(int argc, char *argv[])
               std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                         << std::endl << "-" << opt_letter 
                         << " must be followed by a valid argument" << std::endl;
+              Kokkos::finalize();
 #if MPI_PARALLEL_ENABLED
               MPI_Finalize();
 #endif
-              Kokkos::finalize();
               return(0);
             }
           }
@@ -156,10 +156,10 @@ int main(int argc, char *argv[])
           break;
         case 'c':
           if (global_variable::my_rank == 0) ShowConfig();
+          Kokkos::finalize();
 #if MPI_PARALLEL_ENABLED
           MPI_Finalize();
 #endif
-          Kokkos::finalize();
           return(0);
           break;
         case 'h':
@@ -178,10 +178,10 @@ int main(int argc, char *argv[])
             std::cout << "  -h              this help\n";
             ShowConfig();
           }
+          Kokkos::finalize();
 #if MPI_PARALLEL_ENABLED
           MPI_Finalize();
 #endif
-          Kokkos::finalize();
           return(0);
           break;
       }
@@ -194,10 +194,10 @@ int main(int argc, char *argv[])
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "Either an input or restart file must be specified." << std::endl
               << "See " << argv[0] << " -h for options and usage." << std::endl;
+    Kokkos::finalize();
 #if MPI_PARALLEL_ENABLED
     MPI_Finalize();
 #endif
-    Kokkos::finalize();
     return(0);
   }
 
@@ -213,10 +213,10 @@ int main(int argc, char *argv[])
   if (narg_flag) {
     if (global_variable::my_rank == 0) par_input.ParameterDump(std::cout);
 //    if (res_flag == 1) restartfile.Close();
+    Kokkos::finalize();
 #if MPI_PARALLEL_ENABLED
     MPI_Finalize();
 #endif
-    Kokkos::finalize();
     return(0);
   }
 
@@ -232,10 +232,10 @@ int main(int argc, char *argv[])
 
   //  If code was run with -m option, write mesh structure to file and quit.
   if (marg_flag) {
+    Kokkos::finalize();
 #if MPI_PARALLEL_ENABLED
     MPI_Finalize();
 #endif
-    Kokkos::finalize();
     return(0);
   }
 
@@ -267,9 +267,9 @@ int main(int argc, char *argv[])
   //--- Step 9. -------------------------------------------------------------------------
   // clean up, and terminate
 
+  Kokkos::finalize();
 #if MPI_PARALLEL_ENABLED
   MPI_Finalize();
 #endif
-  Kokkos::finalize();
   return(0);
 }
