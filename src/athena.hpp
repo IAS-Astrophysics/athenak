@@ -43,10 +43,12 @@ namespace hydro {
 // constants that determine array index of Hydro variables
 enum ConsIndex {IDN=0, IM1=1, IM2=2, IM3=3, IEN=4};
 enum PrimIndex {IVX=1, IVY=2, IVZ=3, IPR=4};
-// following have to be variables since they depend on nhydro which is set at run time
-// values are set in MHD constructor (yes, this is a bit sketchy)
-int IBX, IBY, IBZ;
 } // namespace hydro
+namespace mhd {
+// constants that determine array index of cell-centered magnetic field components
+enum BFldIndex {IBX=0, IBY=1, IBZ=2};
+} // namespace mhd
+
 
 // integer constants to specify physics module (maximum of 16 set by number of bits used
 // to encode ID in BoundaryValues::CreateMPItag)

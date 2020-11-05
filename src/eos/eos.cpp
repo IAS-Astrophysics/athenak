@@ -44,15 +44,15 @@ EquationOfState::EquationOfState(Mesh* pm, ParameterInput *pin, int igid)
 //----------------------------------------------------------------------------------------
 // ConservedToPrimitive() 
 
-void EquationOfState::ConservedToPrimitive(AthenaArray4D<Real> &cons,
+void EquationOfState::ConservedToPrimitive(const AthenaArray4D<Real> &cons,
                                            AthenaArray4D<Real> &prim)
 {                  
   switch (eos_type_) {
     case EOS_Type::adiabatic_hydro:
-      NR_HydroAdi(cons, prim);
+      ConsToPrimAdiHydro(cons, prim);
       break;
     case EOS_Type::isothermal_hydro:
-      NR_HydroIso(cons, prim);
+      ConsToPrimIsoHydro(cons, prim);
       break;
     default:
       break; 

@@ -45,13 +45,15 @@ class EquationOfState
   EOS_Data eos_data;
 
   // wrapper function that calls different conversion routines
-  void ConservedToPrimitive(AthenaArray4D<Real> &cons,AthenaArray4D<Real> &prim);
+  void ConservedToPrimitive(const AthenaArray4D<Real> &cons, AthenaArray4D<Real> &prim);
 
   // cons to prim functions for different EOS
-  void NR_HydroAdi(AthenaArray4D<Real> &cons, AthenaArray4D<Real> &prim);
-  void NR_HydroIso(AthenaArray4D<Real> &cons, AthenaArray4D<Real> &prim);
-  void NR_MHDAdi(AthenaArray4D<Real> &c, AthenaArray4D<Real> &p, FaceArray3D<Real> &b);
-  void NR_MHDIso(AthenaArray4D<Real> &c, AthenaArray4D<Real> &p, FaceArray3D<Real> &b);
+  void ConsToPrimAdiHydro(const AthenaArray4D<Real> &cons, AthenaArray4D<Real> &prim);
+  void ConsToPrimIsoHydro(const AthenaArray4D<Real> &cons, AthenaArray4D<Real> &prim);
+  void ConsToPrimAdiMHD(const AthenaArray4D<Real> &cons, AthenaArray4D<Real> &prim,
+                        const FaceArray3D<Real> &bfc, AthenaArray4D<Real> &bcc);
+  void ConsToPrimIsoMHD(const AthenaArray4D<Real> &cons, AthenaArray4D<Real> &prim,
+                        const FaceArray3D<Real> &bfc, AthenaArray4D<Real> &bcc);
 
  private:
   Mesh* pmesh_;

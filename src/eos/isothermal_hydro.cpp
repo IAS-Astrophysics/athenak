@@ -16,7 +16,8 @@
 // \!fn void ConservedToPrimitive()
 // \brief Converts conserved into primitive variables in nonrelativistic isothermal hydro
 
-void EquationOfState::NR_HydroIso(AthenaArray4D<Real> &cons, AthenaArray4D<Real> &prim)
+void EquationOfState::ConsToPrimIsoHydro(const AthenaArray4D<Real> &cons,
+                                         AthenaArray4D<Real> &prim)
 {
   MeshBlock* pmb = pmesh_->FindMeshBlock(my_mbgid_);
   int ng = pmb->mb_cells.ng;
