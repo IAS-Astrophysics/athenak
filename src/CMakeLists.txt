@@ -36,9 +36,6 @@ add_executable(
         mesh/meshblock.cpp
         mesh/meshblock_tree.cpp
 
-        mhd/mhd.cpp
-        mhd/mhd_tasks.cpp
-
         outputs/io_wrapper.cpp
         outputs/outputs.cpp
         outputs/output_type.cpp
