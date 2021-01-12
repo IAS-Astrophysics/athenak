@@ -465,34 +465,13 @@ void Mesh::BuildTree(ParameterInput *pin)
 
 /*******/
   for (auto it=mblocks.begin(); it<mblocks.end(); ++it) {
+    int nnghbr = it->pbvals->nghbr.size();
     std::cout << "******* Block=" << it->mb_gid << std::endl;
-    std::cout << "x1 Faces" << std::endl;
-    for (int n=0; n<2; ++n) {
-      std::cout << "n=" << n << " gid=" << it->pbvals->nghbr_x1face[n].gid << " level=" << it->pbvals->nghbr_x1face[n].level << " rank=" << it->pbvals->nghbr_x1face[n].rank << " bc_flag=" << GetBoundaryString(it->pbvals->bndry_flag[n]) << std::endl;
+    for (int n=0; n<6; ++n) {
+      std::cout << "n=" << n << " bc_flag=" << GetBoundaryString(it->pbvals->bndry_flag[n]) << std::endl;
     }
-    std::cout << "x2 Faces" << std::endl;
-    for (int n=0; n<2; ++n) {
-      std::cout << "n=" << n << " gid=" << it->pbvals->nghbr_x2face[n].gid << " level=" << it->pbvals->nghbr_x2face[n].level << " rank=" << it->pbvals->nghbr_x2face[n].rank << " bc_flag=" << GetBoundaryString(it->pbvals->bndry_flag[n+2]) <<  std::endl;
-    }
-    std::cout << "x3 Faces" << std::endl;
-    for (int n=0; n<2; ++n) {
-      std::cout << "n=" << n << " gid=" << it->pbvals->nghbr_x3face[n].gid << " level=" << it->pbvals->nghbr_x3face[n].level << " rank=" << it->pbvals->nghbr_x3face[n].rank << " bc_flag=" << GetBoundaryString(it->pbvals->bndry_flag[n+4]) <<  std::endl;
-    }
-    std::cout << "x1x2 Edges" << std::endl;
-    for (int n=0; n<4; ++n) {
-      std::cout << "n=" << n << " gid=" << it->pbvals->nghbr_x1x2ed[n].gid << " level=" << it->pbvals->nghbr_x1x2ed[n].level << " rank=" << it->pbvals->nghbr_x1x2ed[n].rank << std::endl;
-    }
-    std::cout << "x3x1 Edges" << std::endl;
-    for (int n=0; n<4; ++n) {
-      std::cout << "n=" << n << " gid=" << it->pbvals->nghbr_x3x1ed[n].gid << " level=" << it->pbvals->nghbr_x3x1ed[n].level << " rank=" << it->pbvals->nghbr_x3x1ed[n].rank << std::endl;
-    }
-    std::cout << "x2x3 Edges" << std::endl;
-    for (int n=0; n<4; ++n) {
-      std::cout << "n=" << n << " gid=" << it->pbvals->nghbr_x2x3ed[n].gid << " level=" << it->pbvals->nghbr_x2x3ed[n].level << " rank=" << it->pbvals->nghbr_x2x3ed[n].rank << std::endl;
-    }
-    std::cout << "Corners" << std::endl;
-    for (int n=0; n<8; ++n) {
-      std::cout << "n=" << n << " gid=" << it->pbvals->nghbr_corner[n].gid << " level=" << it->pbvals->nghbr_corner[n].level << " rank=" << it->pbvals->nghbr_corner[n].rank << std::endl;
+    for (int n=0; n<nnghbr; ++n) {
+      std::cout << "n=" << n << " gid=" << it->pbvals->nghbr[n].gid << " level=" << it->pbvals->nghbr[n].level << " rank=" << it->pbvals->nghbr[n].rank << " dn=" << it->pbvals->nghbr[n].dn << std::endl;
     }
   }
 /**********/

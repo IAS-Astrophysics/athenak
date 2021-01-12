@@ -90,93 +90,66 @@ MeshBlock::~MeshBlock()
 
 void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklist)
 {
-  MeshBlockTree* neibt;
+  MeshBlockTree* nt;
   LogicalLocation loc = pmesh_->loclist[mb_gid];
 
   // neighbors on x1face
-  int cnt=0;
   for (int n=-1; n<=1; n+=2) {
-    neibt = ptree->FindNeighbor(loc, n, 0, 0);
-    if (neibt != nullptr) {
-      pbvals->nghbr_x1face[cnt].gid   = neibt->gid_;
-      pbvals->nghbr_x1face[cnt].level = neibt->loc_.level;
-      pbvals->nghbr_x1face[cnt].rank  = ranklist[neibt->gid_];
+    nt = ptree->FindNeighbor(loc, n, 0, 0);
+    if (nt != nullptr) {
+      pbvals->nghbr.emplace_back(nt->gid_, nt->loc_.level, ranklist[nt->gid_], -n);
     }
-    ++cnt;
   }
   if (mb_cells.nx2 == 1) {return;}  // stop if 1D
 
   // neighbors on x2face and x1x2 edges
-  cnt=0;
   for (int m=-1; m<=1; m+=2) {
-    neibt = ptree->FindNeighbor(loc, 0, m, 0);
-    if (neibt != nullptr) {
-      pbvals->nghbr_x2face[cnt].gid   = neibt->gid_;
-      pbvals->nghbr_x2face[cnt].level = neibt->loc_.level;
-      pbvals->nghbr_x2face[cnt].rank  = ranklist[neibt->gid_];
+    nt = ptree->FindNeighbor(loc, 0, m, 0);
+    if (nt != nullptr) {
+      pbvals->nghbr.emplace_back(nt->gid_, nt->loc_.level, ranklist[nt->gid_], -m);
     }
-    ++cnt;
   }
-  cnt=0;
   for (int m=-1; m<=1; m+=2) {
     for (int n=-1; n<=1; n+=2) {
-      neibt = ptree->FindNeighbor(loc, n, m, 0);
-      if (neibt != nullptr) {
-        pbvals->nghbr_x1x2ed[cnt].gid   = neibt->gid_;
-        pbvals->nghbr_x1x2ed[cnt].level = neibt->loc_.level;
-        pbvals->nghbr_x1x2ed[cnt].rank  = ranklist[neibt->gid_];
+      nt = ptree->FindNeighbor(loc, n, m, 0);
+      if (nt != nullptr) {
+        pbvals->nghbr.emplace_back(nt->gid_, nt->loc_.level, ranklist[nt->gid_], -2*m-n);
       }
-      ++cnt;
     }
   }
   if (mb_cells.nx3 == 1) {return;}  // stop if 2D
 
   // neighbors on x3face, x3x1 and x2x3 edges, and corners
-  cnt=0;
   for (int l=-1; l<=1; l+=2) {
-    neibt = ptree->FindNeighbor(loc, 0, 0, l);
-    if (neibt != nullptr) {
-      pbvals->nghbr_x3face[cnt].gid   = neibt->gid_;
-      pbvals->nghbr_x3face[cnt].level = neibt->loc_.level;
-      pbvals->nghbr_x3face[cnt].rank  = ranklist[neibt->gid_];
+    nt = ptree->FindNeighbor(loc, 0, 0, l);
+    if (nt != nullptr) {
+      pbvals->nghbr.emplace_back(nt->gid_, nt->loc_.level, ranklist[nt->gid_], -l);
     }
-    ++cnt;
   }
-  cnt=0;
   for (int l=-1; l<=1; l+=2) {
     for (int n=-1; n<=1; n+=2) {
-      neibt = ptree->FindNeighbor(loc, n, 0, l);
-      if (neibt != nullptr) {
-        pbvals->nghbr_x3x1ed[cnt].gid   = neibt->gid_;
-        pbvals->nghbr_x3x1ed[cnt].level = neibt->loc_.level;
-        pbvals->nghbr_x3x1ed[cnt].rank  = ranklist[neibt->gid_];
+      nt = ptree->FindNeighbor(loc, n, 0, l);
+      if (nt != nullptr) {
+        pbvals->nghbr.emplace_back(nt->gid_, nt->loc_.level, ranklist[nt->gid_], -2*l-n);
       }
-      ++cnt;
     }
   }
-  cnt=0;
   for (int l=-1; l<=1; l+=2) {
     for (int m=-1; m<=1; m+=2) {
-      neibt = ptree->FindNeighbor(loc, 0, m, l);
-      if (neibt != nullptr) {
-        pbvals->nghbr_x2x3ed[cnt].gid   = neibt->gid_;
-        pbvals->nghbr_x2x3ed[cnt].level = neibt->loc_.level;
-        pbvals->nghbr_x2x3ed[cnt].rank  = ranklist[neibt->gid_];
+      nt = ptree->FindNeighbor(loc, 0, m, l);
+      if (nt != nullptr) {
+        pbvals->nghbr.emplace_back(nt->gid_, nt->loc_.level, ranklist[nt->gid_], -2*l-m);
       }
-      ++cnt;
     }
   }
-  cnt=0;
   for (int l=-1; l<=1; l+=2) {
     for (int m=-1; m<=1; m+=2) {
       for (int n=-1; n<=1; n+=2) {
-        neibt = ptree->FindNeighbor(loc, n, m, l);
-        if (neibt != nullptr) {
-          pbvals->nghbr_corner[cnt].gid   = neibt->gid_;
-          pbvals->nghbr_corner[cnt].level = neibt->loc_.level;
-          pbvals->nghbr_corner[cnt].rank  = ranklist[neibt->gid_];
+        nt = ptree->FindNeighbor(loc, n, m, l);
+        if (nt != nullptr) {
+          pbvals->nghbr.emplace_back(
+            nt->gid_,nt->loc_.level,ranklist[nt->gid_], -4*l - 2*m - n);
         }
-        ++cnt;
       }
     }
   }

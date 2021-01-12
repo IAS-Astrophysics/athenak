@@ -40,7 +40,7 @@ class MHD
   AthenaArray4D<Real> w0;   // primitive variables
   FaceArray3D<Real>   b0;   // face-centered magnetic fields
 
-  BBuffer bbuf;    // send/recv buffers and BoundaryStatus flags for MHD comms.
+  std::vector<BoundaryBuffer> send_buf, recv_buf;   // send/recv buffers for MHD comms.
 
   // following only used for time-evolving flow
   AthenaArray4D<Real> u1;     // conserved variables at intermediate step 

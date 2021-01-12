@@ -27,7 +27,6 @@ void MeshBlock::InitPhysicsModules(ParameterInput *pin)
   // Hydro physics module
   if (pin->DoesBlockExist("hydro")) {
     phydro = new hydro::Hydro(pmesh_, pin, mb_gid);          // construct new Hydro object
-    pbvals->bbuf_ptr[PhysicsID::Hydro_ID] = &(phydro->bbuf); // add ptr to Hydro bbufs
   } else {
     phydro = nullptr;
   }

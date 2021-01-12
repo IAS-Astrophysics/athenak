@@ -11,16 +11,16 @@
 // identifiers for all 6 faces of a MeshBlock
 enum BoundaryFace {undef=-1, inner_x1, outer_x1, inner_x2, outer_x2, inner_x3, outer_x3};
 
-// identifiers for status of MPI boundary communications
-enum class BoundaryRecvStatus {undef=-1, waiting, completed};
-
 // identifiers for boundary conditions
 enum class BoundaryFlag {undef=-1, block, reflect, outflow, user, periodic};
 
-#include <map>
+// identifiers for status of MPI boundary communications
+enum class BoundaryCommStatus {undef=-1, waiting, sent, received};
+
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
+#include "mesh/mesh.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \struct NeighborBlock
@@ -29,60 +29,31 @@ enum class BoundaryFlag {undef=-1, block, reflect, outflow, user, periodic};
 struct NeighborBlock
 {
   int gid;
-  int rank;
   int level;
-  NeighborBlock() : gid(-1), rank(-1), level(-1) {}  // set default values
+  int rank;
+  int dn; // difference between index of this and target neighbor for comms
+  // constructor
+  NeighborBlock(int id, int lev, int rnk, int deltan) :
+    gid(id), level(lev), rank(rnk), dn(deltan) {}
 };
 
 //----------------------------------------------------------------------------------------
 //! \struct BoundaryBuffer
-//  \brief Stores send/receive buffers and BoundaryStatus flags
+//  \brief index ranges, storage, and flags for data passed at boundaries
 
-struct BBuffer
+struct BoundaryBuffer
 {
-  // face, edge, and corner send buffers
-  AthenaArray5D<Real> send_x1face, send_x2face, send_x3face;
-  AthenaArray5D<Real> send_x1x2ed, send_x3x1ed, send_x2x3ed;
-  AthenaArray5D<Real> send_corner;
-  // face, edge, and corner recv buffers
-  AthenaArray5D<Real> recv_x1face, recv_x2face, recv_x3face;
-  AthenaArray5D<Real> recv_x1x2ed, recv_x3x1ed, recv_x2x3ed;
-  AthenaArray5D<Real> recv_corner;
-  // face, edge, and corner status flags
-  BoundaryRecvStatus bstat_x1face[2];
-  BoundaryRecvStatus bstat_x2face[2];
-  BoundaryRecvStatus bstat_x3face[2];
-  BoundaryRecvStatus bstat_x1x2ed[4];
-  BoundaryRecvStatus bstat_x3x1ed[4];
-  BoundaryRecvStatus bstat_x2x3ed[4];
-  BoundaryRecvStatus bstat_corner[8];
+  int il, iu, jl, ju, kl, ku;
+  AthenaArray2D<Real> data;
+  BoundaryCommStatus bcomm_stat;
 #if MPI_PARALLEL_ENABLED
-  // MPI send/recv requests for face, edge, and corners
-  MPI_Request send_rq_x1face[2], recv_rq_x1face[2];
-  MPI_Request send_rq_x2face[2], recv_rq_x2face[2];
-  MPI_Request send_rq_x3face[2], recv_rq_x3face[2];
-  MPI_Request send_rq_x1x2ed[4], recv_rq_x1x2ed[4];
-  MPI_Request send_rq_x3x1ed[4], recv_rq_x3x1ed[4];
-  MPI_Request send_rq_x2x3ed[4], recv_rq_x2x3ed[4];
-  MPI_Request send_rq_corner[8], recv_rq_corner[8];
+  MPI_Request comm_req;
 #endif
-
-  // constructor (calls View constructor with appropriate labels)
-  BBuffer() :
-    send_x1face("x1face_send_buf",1,1,1,1,1),
-    send_x2face("x2face_send_buf",1,1,1,1,1),
-    send_x3face("x3face_send_buf",1,1,1,1,1),
-    send_x1x2ed("x1x2edge_send_buf",1,1,1,1,1),
-    send_x3x1ed("x3x1edge_send_buf",1,1,1,1,1),
-    send_x2x3ed("x2x3edge_send_buf",1,1,1,1,1),
-    send_corner("corner_send_buf",1,1,1,1,1),
-    recv_x1face("x1face_recv_buf",1,1,1,1,1),
-    recv_x2face("x2face_recv_buf",1,1,1,1,1),
-    recv_x3face("x3face_recv_buf",1,1,1,1,1),
-    recv_x1x2ed("x1x2edge_recv_buf",1,1,1,1,1),
-    recv_x3x1ed("x3x1edge_recv_buf",1,1,1,1,1),
-    recv_x2x3ed("x2x3edge_recv_buf",1,1,1,1,1),
-    recv_corner("corner_recv_buf",1,1,1,1,1) {}
+  // constructor
+  BoundaryBuffer(int nvar, int i0, int i1, int j0, int j1, int k0, int k1) :
+    il(i0), iu(i1), jl(j0), ju(j1), kl(k0), ku(k1),
+    data("bbuff", nvar, ((i1-i0+1)*(j1-j0+1)*(k1-k0+1))),
+    bcomm_stat(BoundaryCommStatus::undef) {}
 };
 
 // Forward declarations
@@ -100,23 +71,14 @@ class BoundaryValues {
   // data
   BoundaryFlag bndry_flag[6]; // enums specifying BCs at all 6 faces of this MeshBlock
 
-  // map to store pointers to BBuffers for different physics
-  // elements are added in mesh/interface_physics after physics modules cons in MBs
-  std::map<int,BBuffer*> bbuf_ptr;
-
-  NeighborBlock nghbr_x1face[2];
-  NeighborBlock nghbr_x2face[2]; 
-  NeighborBlock nghbr_x3face[2];
-  NeighborBlock nghbr_x1x2ed[4];
-  NeighborBlock nghbr_x3x1ed[4];
-  NeighborBlock nghbr_x2x3ed[4];
-  NeighborBlock nghbr_corner[8];
+  std::vector<NeighborBlock> nghbr;
 
   // functions
-  void AllocateBuffers(BBuffer &bbuf, const int maxv);
+  void AllocateBuffersCC(const RegionCells ncells, const int nvar,
+    std::vector<BoundaryBuffer> &send_buf, std::vector<BoundaryBuffer> &recv_buf);
   int CreateMPItag(int lid, int buff_id, int phys_id);
-  TaskStatus SendCellCenteredVars(AthenaArray4D<Real> &a, int nvar, int key);
-  TaskStatus RecvCellCenteredVars(AthenaArray4D<Real> &a, int nvar, int key);
+  TaskStatus SendBuffers(AthenaArray4D<Real> &a);
+  TaskStatus RecvBuffers(AthenaArray4D<Real> &a);
 
   TaskStatus ApplyPhysicalBCs(Driver* pd, int stage);
   void ReflectInnerX1();

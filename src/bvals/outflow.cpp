@@ -8,8 +8,8 @@
 
 // Athena++ headers
 #include "athena.hpp"
-#include "bvals.hpp"
 #include "mesh/mesh.hpp"
+#include "bvals.hpp"
 #include "hydro/hydro.hpp"
 
 //----------------------------------------------------------------------------------------

@@ -52,7 +52,7 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
   Kokkos::realloc(w0, (nhydro+nscalars), ncells3, ncells2, ncells1);
 
   // allocate memory for boundary buffers
-  pmb->pbvals->AllocateBuffers(bbuf, (nhydro+nscalars));
+  pmb->pbvals->AllocateBuffersCC(pmb->mb_cells, (nhydro+nscalars), send_buf, recv_buf);
 
   // for time-evolving problems, continue to construct methods, allocate arrays
   if (evolution_t.compare("stationary") != 0) {
@@ -133,7 +133,7 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
 //! \fn  void Hydro::HydroStageStartTasks
 //  \brief adds Hydro tasks to stage start TaskList
 //  These are taks that must be cmpleted (such as posting MPI receives, setting 
-//  BoundaryRecvStatus flags, etc) over all MeshBlocks before stage can be run.
+//  BoundaryCommStatus flags, etc) over all MeshBlocks before stage can be run.
 
 void Hydro::HydroStageStartTasks(TaskList &tl, TaskID start, std::vector<TaskID> &added)
 {
@@ -195,9 +195,9 @@ TaskStatus Hydro::HydroInitRecv(Driver *pdrive, int stage)
   int lid = my_mbgid_ - pmesh_->gids; // local ID for creating MPI tags
 
   // initialize all boundary receive status flags to waiting, post non-blocking receives
-  // x1 faces
-  for (int n=0; n<2; ++n) {
-    if (pbvals->nghbr_x1face[n].gid >= 0) {
+  int nnghbr = pbvals->nghbr.size();
+  for (int n=0; n<nnghbr; ++n) {
+    if (pbvals->nghbr[n].gid >= 0) {
 #if MPI_PARALLEL_ENABLED
       // post non-blocking receive if neighboring MeshBlock on a different rank 
       if (pbvals->nghbr_x1face[n].rank != global_variable::my_rank) {
@@ -210,115 +210,7 @@ TaskStatus Hydro::HydroInitRecv(Driver *pdrive, int stage)
           pbvals->nghbr_x1face[n].rank, tag, MPI_COMM_WORLD, &(bbuf.recv_rq_x1face[n]));
       }
 #endif
-      bbuf.bstat_x1face[n] = BoundaryRecvStatus::waiting;
-    }
-  }
-
-  // x2faces and x1x2 edges
-  if (pmesh_->nx2gt1) {
-    for (int n=0; n<2; ++n) {
-      if (pbvals->nghbr_x2face[n].gid >= 0) {
-#if MPI_PARALLEL_ENABLED
-        // post non-blocking receive if neighboring MeshBlock on a different rank 
-        if (pbvals->nghbr_x2face[n].rank != global_variable::my_rank) {
-          using Kokkos::ALL;
-          // create tag using local ID and buffer index of *receiving* MeshBlock
-          int tag = pbvals->CreateMPItag(lid, (2+n), PhysicsID::Hydro_ID);
-          auto recvbuf = Kokkos::subview(bbuf.recv_x2face,n,ALL,ALL,ALL,ALL);
-          void* recv_ptr = recvbuf.data();
-          int ierr = MPI_Irecv(recv_ptr, recvbuf.size(), MPI_ATHENA_REAL,
-            pbvals->nghbr_x2face[n].rank, tag, MPI_COMM_WORLD, &(bbuf.recv_rq_x2face[n]));
-        }
-#endif
-        bbuf.bstat_x2face[n] = BoundaryRecvStatus::waiting;
-      }
-    }
-    for (int n=0; n<4; ++n) {
-      if (pbvals->nghbr_x1x2ed[n].gid >= 0) {
-#if MPI_PARALLEL_ENABLED
-        // post non-blocking receive if neighboring MeshBlock on a different rank 
-        if (pbvals->nghbr_x1x2ed[n].rank != global_variable::my_rank) {
-          using Kokkos::ALL;
-          // create tag using local ID and buffer index of *receiving* MeshBlock
-          int tag = pbvals->CreateMPItag(lid, (4+n), PhysicsID::Hydro_ID);
-          auto recvbuf = Kokkos::subview(bbuf.recv_x1x2ed,n,ALL,ALL,ALL,ALL);
-          void* recv_ptr = recvbuf.data();
-          int ierr = MPI_Irecv(recv_ptr, recvbuf.size(), MPI_ATHENA_REAL,
-            pbvals->nghbr_x1x2ed[n].rank, tag, MPI_COMM_WORLD, &(bbuf.recv_rq_x1x2ed[n]));
-        }
-#endif
-        bbuf.bstat_x1x2ed[n] = BoundaryRecvStatus::waiting;
-      }
-    }
-  }
-
-  // x3faces, x3x1 and x2x3 edges, and corners
-  if (pmesh_->nx3gt1) {
-    for (int n=0; n<2; ++n) {
-      if (pbvals->nghbr_x3face[n].gid >= 0) {
-#if MPI_PARALLEL_ENABLED
-        // post non-blocking receive if neighboring MeshBlock on a different rank 
-        if (pbvals->nghbr_x3face[n].rank != global_variable::my_rank) {
-          using Kokkos::ALL;
-          // create tag using local ID and buffer index of *receiving* MeshBlock
-          int tag = pbvals->CreateMPItag(lid, (8+n), PhysicsID::Hydro_ID);
-          auto recvbuf = Kokkos::subview(bbuf.recv_x3face,n,ALL,ALL,ALL,ALL);
-          void* recv_ptr = recvbuf.data();
-          int ierr = MPI_Irecv(recv_ptr, recvbuf.size(), MPI_ATHENA_REAL,
-            pbvals->nghbr_x3face[n].rank, tag, MPI_COMM_WORLD, &(bbuf.recv_rq_x3face[n]));
-        }
-#endif
-        bbuf.bstat_x3face[n] = BoundaryRecvStatus::waiting;
-      }
-    }
-    for (int n=0; n<4; ++n) {
-      if (pbvals->nghbr_x3x1ed[n].gid >= 0) {
-#if MPI_PARALLEL_ENABLED
-        // post non-blocking receive if neighboring MeshBlock on a different rank 
-        if (pbvals->nghbr_x3x1ed[n].rank != global_variable::my_rank) {
-          using Kokkos::ALL;
-          // create tag using local ID and buffer index of *receiving* MeshBlock
-          int tag = pbvals->CreateMPItag(lid, (10+n), PhysicsID::Hydro_ID);
-          auto recvbuf = Kokkos::subview(bbuf.recv_x3x1ed,n,ALL,ALL,ALL,ALL);
-          void* recv_ptr = recvbuf.data();
-          int ierr = MPI_Irecv(recv_ptr, recvbuf.size(), MPI_ATHENA_REAL,
-            pbvals->nghbr_x3x1ed[n].rank, tag, MPI_COMM_WORLD, &(bbuf.recv_rq_x3x1ed[n]));
-        }
-#endif
-        bbuf.bstat_x3x1ed[n] = BoundaryRecvStatus::waiting;
-      }
-      if (pbvals->nghbr_x2x3ed[n].gid >= 0) {
-#if MPI_PARALLEL_ENABLED
-        // post non-blocking receive if neighboring MeshBlock on a different rank 
-        if (pbvals->nghbr_x2x3ed[n].rank != global_variable::my_rank) {
-          using Kokkos::ALL;
-          // create tag using local ID and buffer index of *receiving* MeshBlock
-          int tag = pbvals->CreateMPItag(lid, (14+n), PhysicsID::Hydro_ID);
-          auto recvbuf = Kokkos::subview(bbuf.recv_x2x3ed,n,ALL,ALL,ALL,ALL);
-          void* recv_ptr = recvbuf.data();
-          int ierr = MPI_Irecv(recv_ptr, recvbuf.size(), MPI_ATHENA_REAL,
-            pbvals->nghbr_x2x3ed[n].rank, tag, MPI_COMM_WORLD, &(bbuf.recv_rq_x2x3ed[n]));
-        }
-#endif
-        bbuf.bstat_x2x3ed[n] = BoundaryRecvStatus::waiting;
-      }
-    }
-    for (int n=0; n<8; ++n) {
-      if (pbvals->nghbr_corner[n].gid >= 0) {
-#if MPI_PARALLEL_ENABLED
-        // post non-blocking receive if neighboring MeshBlock on a different rank 
-        if (pbvals->nghbr_corner[n].rank != global_variable::my_rank) {
-          using Kokkos::ALL;
-          // create tag using local ID and buffer index of *receiving* MeshBlock
-          int tag = pbvals->CreateMPItag(lid, (18+n), PhysicsID::Hydro_ID);
-          auto recvbuf = Kokkos::subview(bbuf.recv_corner,n,ALL,ALL,ALL,ALL);
-          void* recv_ptr = recvbuf.data();
-          int ierr = MPI_Irecv(recv_ptr, recvbuf.size(), MPI_ATHENA_REAL,
-            pbvals->nghbr_corner[n].rank, tag, MPI_COMM_WORLD, &(bbuf.recv_rq_corner[n]));
-        }
-#endif
-        bbuf.bstat_corner[n] = BoundaryRecvStatus::waiting;
-      }
+      recv_buf[n].bcomm_stat = BoundaryCommStatus::waiting;
     }
   }
 
@@ -335,8 +227,7 @@ TaskStatus Hydro::HydroClearRecv(Driver *pdrive, int stage)
   // wait for all non-blocking receives to finish before continuing 
   BoundaryValues* pbvals = pmesh_->FindMeshBlock(my_mbgid_)->pbvals;
 
-  // x1 faces
-  for (int n=0; n<2; ++n) {
+  for (int n=0; n<nnghbr; ++n) {
     if (pbvals->nghbr_x1face[n].gid >= 0) {
       if (pbvals->nghbr_x1face[n].rank != global_variable::my_rank) {
         MPI_Wait(&(bbuf.recv_rq_x1face[n]), MPI_STATUS_IGNORE);
@@ -344,53 +235,6 @@ TaskStatus Hydro::HydroClearRecv(Driver *pdrive, int stage)
     }
   }
 
-  // x2faces and x1x2 edges
-  if (pmesh_->nx2gt1) {
-    for (int n=0; n<2; ++n) {
-      if (pbvals->nghbr_x2face[n].gid >= 0) {
-        if (pbvals->nghbr_x2face[n].rank != global_variable::my_rank) {
-          MPI_Wait(&(bbuf.recv_rq_x2face[n]), MPI_STATUS_IGNORE);
-        }
-      }
-    }
-    for (int n=0; n<4; ++n) {
-      if (pbvals->nghbr_x1x2ed[n].gid >= 0) {
-        if (pbvals->nghbr_x1x2ed[n].rank != global_variable::my_rank) {
-          MPI_Wait(&(bbuf.recv_rq_x1x2ed[n]), MPI_STATUS_IGNORE);
-        }
-      }
-    }
-  }
-
-  // x3faces, x3x1 and x2x3 edges, and corners
-  if (pmesh_->nx3gt1) {
-    for (int n=0; n<2; ++n) {
-      if (pbvals->nghbr_x3face[n].gid >= 0) {
-        if (pbvals->nghbr_x3face[n].rank != global_variable::my_rank) {
-          MPI_Wait(&(bbuf.recv_rq_x3face[n]), MPI_STATUS_IGNORE);
-        }
-      }
-    }
-    for (int n=0; n<4; ++n) {
-      if (pbvals->nghbr_x3x1ed[n].gid >= 0) {
-        if (pbvals->nghbr_x3x1ed[n].rank != global_variable::my_rank) {
-          MPI_Wait(&(bbuf.recv_rq_x3x1ed[n]), MPI_STATUS_IGNORE);
-        }
-      }
-      if (pbvals->nghbr_x2x3ed[n].gid >= 0) {
-        if (pbvals->nghbr_x2x3ed[n].rank != global_variable::my_rank) {
-          MPI_Wait(&(bbuf.recv_rq_x2x3ed[n]), MPI_STATUS_IGNORE);
-        }
-      }
-    }
-    for (int n=0; n<8; ++n) {
-      if (pbvals->nghbr_corner[n].gid >= 0) {
-        if (pbvals->nghbr_corner[n].rank != global_variable::my_rank) {
-          MPI_Wait(&(bbuf.recv_rq_corner[n]), MPI_STATUS_IGNORE);
-        }
-      }
-    }
-  }
 #endif
   return TaskStatus::complete;
 }
@@ -406,8 +250,7 @@ TaskStatus Hydro::HydroClearSend(Driver *pdrive, int stage)
   // wait for all non-blocking sends to finish before continuing 
   BoundaryValues* pbvals = pmesh_->FindMeshBlock(my_mbgid_)->pbvals;
 
-  // x1 faces
-  for (int n=0; n<2; ++n) {
+  for (int n=0; n<nnghbr; ++n) {
     if (pbvals->nghbr_x1face[n].gid >= 0) {
       if (pbvals->nghbr_x1face[n].rank != global_variable::my_rank) {
         MPI_Wait(&(bbuf.send_rq_x1face[n]), MPI_STATUS_IGNORE);
@@ -415,53 +258,6 @@ TaskStatus Hydro::HydroClearSend(Driver *pdrive, int stage)
     }
   }
 
-  // x2faces and x1x2 edges
-  if (pmesh_->nx2gt1) {
-    for (int n=0; n<2; ++n) {
-      if (pbvals->nghbr_x2face[n].gid >= 0) {
-        if (pbvals->nghbr_x2face[n].rank != global_variable::my_rank) {
-          MPI_Wait(&(bbuf.send_rq_x2face[n]), MPI_STATUS_IGNORE);
-        }
-      }
-    }
-    for (int n=0; n<4; ++n) {
-      if (pbvals->nghbr_x1x2ed[n].gid >= 0) {
-        if (pbvals->nghbr_x1x2ed[n].rank != global_variable::my_rank) {
-          MPI_Wait(&(bbuf.send_rq_x1x2ed[n]), MPI_STATUS_IGNORE);
-        }
-      }
-    }
-  }
-
-  // x3faces, x3x1 and x2x3 edges, and corners
-  if (pmesh_->nx3gt1) {
-    for (int n=0; n<2; ++n) {
-      if (pbvals->nghbr_x3face[n].gid >= 0) {
-        if (pbvals->nghbr_x3face[n].rank != global_variable::my_rank) {
-          MPI_Wait(&(bbuf.send_rq_x3face[n]), MPI_STATUS_IGNORE);
-        }
-      }
-    }
-    for (int n=0; n<4; ++n) {
-      if (pbvals->nghbr_x3x1ed[n].gid >= 0) {
-        if (pbvals->nghbr_x3x1ed[n].rank != global_variable::my_rank) {
-          MPI_Wait(&(bbuf.send_rq_x3x1ed[n]), MPI_STATUS_IGNORE);
-        }
-      }
-      if (pbvals->nghbr_x2x3ed[n].gid >= 0) {
-        if (pbvals->nghbr_x2x3ed[n].rank != global_variable::my_rank) {
-          MPI_Wait(&(bbuf.send_rq_x2x3ed[n]), MPI_STATUS_IGNORE);
-        }
-      }
-    }
-    for (int n=0; n<8; ++n) {
-      if (pbvals->nghbr_corner[n].gid >= 0) {
-        if (pbvals->nghbr_corner[n].rank != global_variable::my_rank) {
-          MPI_Wait(&(bbuf.send_rq_corner[n]), MPI_STATUS_IGNORE);
-        }
-      }
-    }
-  }
 #endif
   return TaskStatus::complete;
 }
@@ -490,7 +286,7 @@ TaskStatus Hydro::HydroSend(Driver *pdrive, int stage)
 {
   MeshBlock* pmb = pmesh_->FindMeshBlock(my_mbgid_);
   TaskStatus tstat;
-  tstat = pmb->pbvals->SendCellCenteredVars(u0, (nhydro+nscalars), PhysicsID::Hydro_ID);
+  tstat = pmb->pbvals->SendBuffers(u0);
   return tstat;
 }
 
@@ -502,7 +298,7 @@ TaskStatus Hydro::HydroReceive(Driver *pdrive, int stage)
 {
   MeshBlock* pmb = pmesh_->FindMeshBlock(my_mbgid_);
   TaskStatus tstat;
-  tstat = pmb->pbvals->RecvCellCenteredVars(u0, (nhydro+nscalars), PhysicsID::Hydro_ID);
+  tstat = pmb->pbvals->RecvBuffers(u0);
   return tstat;
 }
 

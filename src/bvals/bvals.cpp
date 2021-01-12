@@ -11,8 +11,8 @@
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
-#include "bvals.hpp"
 #include "mesh/mesh.hpp"
+#include "bvals.hpp"
 
 //----------------------------------------------------------------------------------------
 // BoundaryValues constructor:
@@ -32,57 +32,99 @@ BoundaryValues::~BoundaryValues()
 }
 
 //----------------------------------------------------------------------------------------
-// \!fn void BoundaryValues::AllocateBuffers
+// \!fn void BoundaryValues::AllocateBuffersCC
 
-void BoundaryValues::AllocateBuffers(BBuffer &bbuf, const int maxvar)
+void BoundaryValues::AllocateBuffersCC(const RegionCells ncells, const int nvar,
+  std::vector<BoundaryBuffer> &send_buf, std::vector<BoundaryBuffer> &recv_buf)
 {
-  // Allocate memory for send and receive boundary buffers, and initialize 
-  // BoundaryRecvStatus flags.
-  // The buffers are stored in 7 different AthenaArrays corresponding to the faces, edges,
-  // and corners of a 3D grid.  The flags are also stored in 7 arrays.
-  // This implementation currently is specific to the 26 boundary buffers in a UNIFORM
-  // grid with no adaptive refinement.
+  // construct vector of BoundaryBuffers for cell-centered variables
+  // NOTE: order of vector elements is crucial and cannot be changed.  It must match
+  // order of boundaries in nghbr vector
+  // TODO: do not allocate memory for send buffers when target on same MPI rank
+  const int &ng = ncells.ng;
+  const int &is = ncells.is;
+  const int &ie = ncells.ie;
+  const int &js = ncells.js;
+  const int &je = ncells.je;
+  const int &ks = ncells.ks;
+  const int &ke = ncells.ke;
+  int ng1 = ng-1;
 
-  MeshBlock *pmb = pmesh_->FindMeshBlock(my_mbgid_);
-  int ng = pmb->mb_cells.ng;
-  int nx1 = pmb->mb_cells.nx1;
-  int nx2 = pmb->mb_cells.nx2;
-  int nx3 = pmb->mb_cells.nx3;
+  // x1 faces
+  send_buf.emplace_back(nvar, is,     is+ng1, js, je, ks, ke);
+  send_buf.emplace_back(nvar, ie-ng1, ie,     js, je, ks, ke);
 
-  Kokkos::realloc(bbuf.send_x1face,2,maxvar,nx3,nx2,ng);
-  Kokkos::realloc(bbuf.recv_x1face,2,maxvar,nx3,nx2,ng);
+  recv_buf.emplace_back(nvar, is-ng, is-1,  js, je, ks, ke);
+  recv_buf.emplace_back(nvar, ie+1,  ie+ng, js, je, ks, ke);
 
   if (pmesh_->nx2gt1) {
-    Kokkos::realloc(bbuf.send_x2face,2,maxvar,nx3,ng,nx1);
-    Kokkos::realloc(bbuf.send_x1x2ed,4,maxvar,nx3,ng,ng);
-    Kokkos::realloc(bbuf.recv_x2face,2,maxvar,nx3,ng,nx1);
-    Kokkos::realloc(bbuf.recv_x1x2ed,4,maxvar,nx3,ng,ng);
+    // x2 faces
+    send_buf.emplace_back(nvar, is, ie, js,     js+ng1, ks, ke);
+    send_buf.emplace_back(nvar, is, ie, je-ng1, je,     ks, ke);
+
+    recv_buf.emplace_back(nvar, is, ie, js-ng, js-1,  ks, ke);
+    recv_buf.emplace_back(nvar, is, ie, je+1,  je+ng, ks, ke);
+
+    // x1x2 edges
+    send_buf.emplace_back(nvar, is,     is+ng1, js,     js+ng1, ks, ke);
+    send_buf.emplace_back(nvar, ie-ng1, ie,     js,     js+ng1, ks, ke);
+    send_buf.emplace_back(nvar, is,     is+ng1, je-ng1, je,     ks, ke);
+    send_buf.emplace_back(nvar, ie-ng1, ie,     je-ng1, je,     ks, ke);
+
+    recv_buf.emplace_back(nvar, is-ng, is-1,  js-ng, js-1,  ks, ke);
+    recv_buf.emplace_back(nvar, ie+1,  ie+ng, js-ng, js-1,  ks, ke);
+    recv_buf.emplace_back(nvar, is-ng, is-1,  je+1,  je+ng, ks, ke);
+    recv_buf.emplace_back(nvar, ie+1,  ie+ng, je+1,  je+ng, ks, ke);
   }
 
   if (pmesh_->nx3gt1) {
-    Kokkos::realloc(bbuf.send_x3face,2,maxvar,ng,nx2,nx1);
-    Kokkos::realloc(bbuf.send_x3x1ed,4,maxvar,ng,nx2,ng);
-    Kokkos::realloc(bbuf.send_x2x3ed,4,maxvar,ng,ng,nx1);
-    Kokkos::realloc(bbuf.send_corner,8,maxvar,ng,ng,ng);
-    Kokkos::realloc(bbuf.recv_x3face,2,maxvar,ng,nx2,nx1);
-    Kokkos::realloc(bbuf.recv_x3x1ed,4,maxvar,ng,nx2,ng);
-    Kokkos::realloc(bbuf.recv_x2x3ed,4,maxvar,ng,ng,nx1);
-    Kokkos::realloc(bbuf.recv_corner,8,maxvar,ng,ng,ng);
-  }
+    // x3 faces
+    send_buf.emplace_back(nvar, is, ie, js, je, ks,     ks+ng1);
+    send_buf.emplace_back(nvar, is, ie, js, je, ke-ng1, ke    );
 
-  // initialize all boundary status arrays to undef
-  for (int i=0; i<2; ++i) {
-    bbuf.bstat_x1face[i] = BoundaryRecvStatus::undef;
-    bbuf.bstat_x2face[i] = BoundaryRecvStatus::undef;
-    bbuf.bstat_x3face[i] = BoundaryRecvStatus::undef;
-  }
-  for (int i=0; i<4; ++i) {
-    bbuf.bstat_x1x2ed[i] = BoundaryRecvStatus::undef;
-    bbuf.bstat_x3x1ed[i] = BoundaryRecvStatus::undef;
-    bbuf.bstat_x2x3ed[i] = BoundaryRecvStatus::undef;
-  }
-  for (int i=0; i<8; ++i) {
-    bbuf.bstat_corner[i] = BoundaryRecvStatus::undef;
+    recv_buf.emplace_back(nvar, is, ie, js, je, ks-ng, ks-1 );
+    recv_buf.emplace_back(nvar, is, ie, js, je, ke+1,  ke+ng);
+
+    // x3x1 edges
+    send_buf.emplace_back(nvar, is,     is+ng1, js, je, ks,     ks+ng1);
+    send_buf.emplace_back(nvar, ie-ng1, ie,     js, je, ks,     ks+ng1);
+    send_buf.emplace_back(nvar, is,     is+ng1, js, je, ke-ng1, ke    );
+    send_buf.emplace_back(nvar, ie-ng1, ie,     js, je, ke-ng1, ke    );
+
+    recv_buf.emplace_back(nvar, is-ng, is-1,  js, je, ks-ng, ks-1 );
+    recv_buf.emplace_back(nvar, ie+1,  ie+ng, js, je, ks-ng, ks-1 );
+    recv_buf.emplace_back(nvar, is-ng, is-1,  js, je, ke+1,  ke+ng);
+    recv_buf.emplace_back(nvar, ie+1,  ie+ng, js, je, ke+1,  ke+ng);
+
+    // x2x3 edges
+    send_buf.emplace_back(nvar, is, ie, js,     js+ng1, ks,     ks+ng1);
+    send_buf.emplace_back(nvar, is, ie, je-ng1, je,     ks,     ks+ng1);
+    send_buf.emplace_back(nvar, is, ie, js,     js+ng1, ke-ng1, ke    );
+    send_buf.emplace_back(nvar, is, ie, je-ng1, je,     ke-ng1, ke    );
+
+    recv_buf.emplace_back(nvar, is, ie, js-ng, js-1,  ks-ng, ks-1 );
+    recv_buf.emplace_back(nvar, is, ie, je+1,  je+ng, ks-ng, ks-1 );
+    recv_buf.emplace_back(nvar, is, ie, js-ng, js-1,  ke+1,  ke+ng);
+    recv_buf.emplace_back(nvar, is, ie, je+1,  je+ng, ke+1,  ke+ng);
+
+    // corners
+    send_buf.emplace_back(nvar, is,     is+ng1, js,     js+ng1, ks,     ks+ng1);
+    send_buf.emplace_back(nvar, ie-ng1, ie,     js,     js+ng1, ks,     ks+ng1);
+    send_buf.emplace_back(nvar, is,     is+ng1, je-ng1, je,     ks,     ks+ng1);
+    send_buf.emplace_back(nvar, ie-ng1, ie,     je-ng1, je,     ks,     ks+ng1);
+    send_buf.emplace_back(nvar, is,     is+ng1, js,     js+ng1, ke-ng1, ke    );
+    send_buf.emplace_back(nvar, ie-ng1, ie,     js,     js+ng1, ke-ng1, ke    );
+    send_buf.emplace_back(nvar, is,     is+ng1, je-ng1, je,     ke-ng1, ke    );
+    send_buf.emplace_back(nvar, ie-ng1, ie,     je-ng1, je,     ke-ng1, ke    );
+
+    recv_buf.emplace_back(nvar, is-ng, is-1,  js-ng, js-1,  ks-ng, ks-1 );
+    recv_buf.emplace_back(nvar, ie+1,  ie+ng, js-ng, js-1,  ks-ng, ks-1 );
+    recv_buf.emplace_back(nvar, is-ng, is-1,  je+1,  je+ng, ks-ng, ks-1 );
+    recv_buf.emplace_back(nvar, ie+1,  ie+ng, je+1,  je+ng, ks-ng, ks-1 );
+    recv_buf.emplace_back(nvar, is-ng, is-1,  js-ng, js-1,  ke+1,  ke+ng);
+    recv_buf.emplace_back(nvar, ie+1,  ie+ng, js-ng, js-1,  ke+1,  ke+ng);
+    recv_buf.emplace_back(nvar, is-ng, is-1,  je+1,  je+ng, ke+1,  ke+ng);
+    recv_buf.emplace_back(nvar, ie+1,  ie+ng, je+1,  je+ng, ke+1,  ke+ng);
   }
 
   return;
