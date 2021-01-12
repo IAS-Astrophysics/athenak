@@ -31,7 +31,6 @@ TaskStatus BoundaryValues::RecvBuffers(AthenaArray4D<Real> &a)
   int test;
   MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &test, MPI_STATUS_IGNORE);
 #endif
-
   bool bflag = false;
 
   // check that recv boundary buffer communications have all completed

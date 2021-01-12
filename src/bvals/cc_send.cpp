@@ -73,8 +73,8 @@ TaskStatus BoundaryValues::SendBuffers(AthenaArray4D<Real> &a)
         Kokkos::deep_copy(pmb->exe_space,
           pmesh_->FindMeshBlock(nghbr[n].gid)->phydro->recv_buf[n + nghbr[n].dn].data,
           send_buf[n].data);
-        pmesh_->FindMeshBlock(nghbr[n].gid)->phydro->recv_buf[n].bcomm_stat =
-          BoundaryCommStatus::received;
+        pmesh_->FindMeshBlock(nghbr[n].gid)->phydro->recv_buf[n + nghbr[n].dn].bcomm_stat
+          = BoundaryCommStatus::received;
 #if MPI_PARALLEL_ENABLED
       } else {
         // create tag using local ID and buffer index of *receiving* MeshBlock

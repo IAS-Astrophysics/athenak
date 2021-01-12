@@ -98,6 +98,8 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
     nt = ptree->FindNeighbor(loc, n, 0, 0);
     if (nt != nullptr) {
       pbvals->nghbr.emplace_back(nt->gid_, nt->loc_.level, ranklist[nt->gid_], -n);
+    } else {
+      pbvals->nghbr.emplace_back(-1, -1, -1, 0);
     }
   }
   if (mb_cells.nx2 == 1) {return;}  // stop if 1D
@@ -107,6 +109,8 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
     nt = ptree->FindNeighbor(loc, 0, m, 0);
     if (nt != nullptr) {
       pbvals->nghbr.emplace_back(nt->gid_, nt->loc_.level, ranklist[nt->gid_], -m);
+    } else {
+      pbvals->nghbr.emplace_back(-1, -1, -1, 0);
     }
   }
   for (int m=-1; m<=1; m+=2) {
@@ -114,6 +118,8 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
       nt = ptree->FindNeighbor(loc, n, m, 0);
       if (nt != nullptr) {
         pbvals->nghbr.emplace_back(nt->gid_, nt->loc_.level, ranklist[nt->gid_], -2*m-n);
+      } else {
+        pbvals->nghbr.emplace_back(-1, -1, -1, 0);
       }
     }
   }
@@ -124,6 +130,8 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
     nt = ptree->FindNeighbor(loc, 0, 0, l);
     if (nt != nullptr) {
       pbvals->nghbr.emplace_back(nt->gid_, nt->loc_.level, ranklist[nt->gid_], -l);
+    } else {
+      pbvals->nghbr.emplace_back(-1, -1, -1, 0);
     }
   }
   for (int l=-1; l<=1; l+=2) {
@@ -131,6 +139,8 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
       nt = ptree->FindNeighbor(loc, n, 0, l);
       if (nt != nullptr) {
         pbvals->nghbr.emplace_back(nt->gid_, nt->loc_.level, ranklist[nt->gid_], -2*l-n);
+      } else {
+        pbvals->nghbr.emplace_back(-1, -1, -1, 0);
       }
     }
   }
@@ -139,6 +149,8 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
       nt = ptree->FindNeighbor(loc, 0, m, l);
       if (nt != nullptr) {
         pbvals->nghbr.emplace_back(nt->gid_, nt->loc_.level, ranklist[nt->gid_], -2*l-m);
+      } else {
+        pbvals->nghbr.emplace_back(-1, -1, -1, 0);
       }
     }
   }
@@ -149,6 +161,8 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
         if (nt != nullptr) {
           pbvals->nghbr.emplace_back(
             nt->gid_,nt->loc_.level,ranklist[nt->gid_], -4*l - 2*m - n);
+        } else {
+          pbvals->nghbr.emplace_back(-1, -1, -1, 0);
         }
       }
     }

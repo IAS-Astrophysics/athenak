@@ -49,83 +49,84 @@ void BoundaryValues::AllocateBuffersCC(const RegionCells ncells, const int nvar,
   const int &ks = ncells.ks;
   const int &ke = ncells.ke;
   int ng1 = ng-1;
+  int nnghbr = nghbr.size();
 
   // x1 faces
-  send_buf.emplace_back(nvar, is,     is+ng1, js, je, ks, ke);
-  send_buf.emplace_back(nvar, ie-ng1, ie,     js, je, ks, ke);
+  send_buf.emplace_back(nvar, is,    is+ng1, js, je, ks, ke);
+  send_buf.emplace_back(nvar, ie-ng1, ie,    js, je, ks, ke);
 
-  recv_buf.emplace_back(nvar, is-ng, is-1,  js, je, ks, ke);
-  recv_buf.emplace_back(nvar, ie+1,  ie+ng, js, je, ks, ke);
+  recv_buf.emplace_back(nvar, is-ng, is-1,   js, je, ks, ke);
+  recv_buf.emplace_back(nvar, ie+1,   ie+ng, js, je, ks, ke);
 
-  if (pmesh_->nx2gt1) {
-    // x2 faces
-    send_buf.emplace_back(nvar, is, ie, js,     js+ng1, ks, ke);
-    send_buf.emplace_back(nvar, is, ie, je-ng1, je,     ks, ke);
+  if (ncells.nx2 == 1) {return;}  // stop if 1D
+   
+  // x2 faces
+  send_buf.emplace_back(nvar, is, ie, js,    js+ng1, ks, ke);
+  send_buf.emplace_back(nvar, is, ie, je-ng1, je,    ks, ke);
 
-    recv_buf.emplace_back(nvar, is, ie, js-ng, js-1,  ks, ke);
-    recv_buf.emplace_back(nvar, is, ie, je+1,  je+ng, ks, ke);
+  recv_buf.emplace_back(nvar, is, ie, js-ng, js-1,   ks, ke);
+  recv_buf.emplace_back(nvar, is, ie, je+1,   je+ng, ks, ke);
 
-    // x1x2 edges
-    send_buf.emplace_back(nvar, is,     is+ng1, js,     js+ng1, ks, ke);
-    send_buf.emplace_back(nvar, ie-ng1, ie,     js,     js+ng1, ks, ke);
-    send_buf.emplace_back(nvar, is,     is+ng1, je-ng1, je,     ks, ke);
-    send_buf.emplace_back(nvar, ie-ng1, ie,     je-ng1, je,     ks, ke);
+  // x1x2 edges
+  send_buf.emplace_back(nvar, is,    is+ng1, js,    js+ng1, ks, ke);
+  send_buf.emplace_back(nvar, ie-ng1, ie,    js,     js+ng1, ks, ke);
+  send_buf.emplace_back(nvar, is,    is+ng1, je-ng1, je,    ks, ke);
+  send_buf.emplace_back(nvar, ie-ng1, ie,     je-ng1, je,    ks, ke);
 
-    recv_buf.emplace_back(nvar, is-ng, is-1,  js-ng, js-1,  ks, ke);
-    recv_buf.emplace_back(nvar, ie+1,  ie+ng, js-ng, js-1,  ks, ke);
-    recv_buf.emplace_back(nvar, is-ng, is-1,  je+1,  je+ng, ks, ke);
-    recv_buf.emplace_back(nvar, ie+1,  ie+ng, je+1,  je+ng, ks, ke);
-  }
+  recv_buf.emplace_back(nvar, is-ng, is-1,   js-ng, js-1,   ks, ke);
+  recv_buf.emplace_back(nvar, ie+1,   ie+ng, js-ng,  js-1,   ks, ke);
+  recv_buf.emplace_back(nvar, is-ng, is-1,   je+1,   je+ng, ks, ke);
+  recv_buf.emplace_back(nvar, ie+1,   ie+ng,  je+1,   je+ng, ks, ke);
 
-  if (pmesh_->nx3gt1) {
-    // x3 faces
-    send_buf.emplace_back(nvar, is, ie, js, je, ks,     ks+ng1);
-    send_buf.emplace_back(nvar, is, ie, js, je, ke-ng1, ke    );
+  if (ncells.nx3 == 1) {return;}  // stop if 2D
 
-    recv_buf.emplace_back(nvar, is, ie, js, je, ks-ng, ks-1 );
-    recv_buf.emplace_back(nvar, is, ie, js, je, ke+1,  ke+ng);
+  // x3 faces
+  send_buf.emplace_back(nvar, is, ie, js, je, ks,    ks+ng1);
+  send_buf.emplace_back(nvar, is, ie, js, je, ke-ng1, ke   );
 
-    // x3x1 edges
-    send_buf.emplace_back(nvar, is,     is+ng1, js, je, ks,     ks+ng1);
-    send_buf.emplace_back(nvar, ie-ng1, ie,     js, je, ks,     ks+ng1);
-    send_buf.emplace_back(nvar, is,     is+ng1, js, je, ke-ng1, ke    );
-    send_buf.emplace_back(nvar, ie-ng1, ie,     js, je, ke-ng1, ke    );
+  recv_buf.emplace_back(nvar, is, ie, js, je, ks-ng, ks-1  );
+  recv_buf.emplace_back(nvar, is, ie, js, je, ke+1,   ke+ng);
 
-    recv_buf.emplace_back(nvar, is-ng, is-1,  js, je, ks-ng, ks-1 );
-    recv_buf.emplace_back(nvar, ie+1,  ie+ng, js, je, ks-ng, ks-1 );
-    recv_buf.emplace_back(nvar, is-ng, is-1,  js, je, ke+1,  ke+ng);
-    recv_buf.emplace_back(nvar, ie+1,  ie+ng, js, je, ke+1,  ke+ng);
+  // x3x1 edges
+  send_buf.emplace_back(nvar, is,    is+ng1, js, je, ks,    ks+ng1);
+  send_buf.emplace_back(nvar, ie-ng1, ie,    js, je, ks,    ks+ng1);
+  send_buf.emplace_back(nvar, is,    is+ng1, js, je, ke-ng1, ke   );
+  send_buf.emplace_back(nvar, ie-ng1, ie,    js, je, ke-ng1, ke   );
 
-    // x2x3 edges
-    send_buf.emplace_back(nvar, is, ie, js,     js+ng1, ks,     ks+ng1);
-    send_buf.emplace_back(nvar, is, ie, je-ng1, je,     ks,     ks+ng1);
-    send_buf.emplace_back(nvar, is, ie, js,     js+ng1, ke-ng1, ke    );
-    send_buf.emplace_back(nvar, is, ie, je-ng1, je,     ke-ng1, ke    );
+  recv_buf.emplace_back(nvar, is-ng, is-1,   js, je, ks-ng, ks-1  );
+  recv_buf.emplace_back(nvar, ie+1,   ie+ng, js, je, ks-ng, ks-1  );
+  recv_buf.emplace_back(nvar, is-ng, is-1,   js, je, ke+1,   ke+ng);
+  recv_buf.emplace_back(nvar, ie+1,   ie+ng, js, je, ke+1,   ke+ng);
 
-    recv_buf.emplace_back(nvar, is, ie, js-ng, js-1,  ks-ng, ks-1 );
-    recv_buf.emplace_back(nvar, is, ie, je+1,  je+ng, ks-ng, ks-1 );
-    recv_buf.emplace_back(nvar, is, ie, js-ng, js-1,  ke+1,  ke+ng);
-    recv_buf.emplace_back(nvar, is, ie, je+1,  je+ng, ke+1,  ke+ng);
+  // x2x3 edges
+  send_buf.emplace_back(nvar, is, ie, js,    js+ng1, ks,    ks+ng1);
+  send_buf.emplace_back(nvar, is, ie, je-ng1, je,    ks,    ks+ng1);
+  send_buf.emplace_back(nvar, is, ie, js,    js+ng1, ke-ng1, ke   );
+  send_buf.emplace_back(nvar, is, ie, je-ng1, je,    ke-ng1, ke   );
 
-    // corners
-    send_buf.emplace_back(nvar, is,     is+ng1, js,     js+ng1, ks,     ks+ng1);
-    send_buf.emplace_back(nvar, ie-ng1, ie,     js,     js+ng1, ks,     ks+ng1);
-    send_buf.emplace_back(nvar, is,     is+ng1, je-ng1, je,     ks,     ks+ng1);
-    send_buf.emplace_back(nvar, ie-ng1, ie,     je-ng1, je,     ks,     ks+ng1);
-    send_buf.emplace_back(nvar, is,     is+ng1, js,     js+ng1, ke-ng1, ke    );
-    send_buf.emplace_back(nvar, ie-ng1, ie,     js,     js+ng1, ke-ng1, ke    );
-    send_buf.emplace_back(nvar, is,     is+ng1, je-ng1, je,     ke-ng1, ke    );
-    send_buf.emplace_back(nvar, ie-ng1, ie,     je-ng1, je,     ke-ng1, ke    );
+  recv_buf.emplace_back(nvar, is, ie, js-ng, js-1,   ks-ng, ks-1  );
+  recv_buf.emplace_back(nvar, is, ie, je+1,   je+ng, ks-ng, ks-1  );
+  recv_buf.emplace_back(nvar, is, ie, js-ng, js-1,   ke+1,   ke+ng);
+  recv_buf.emplace_back(nvar, is, ie, je+1,   je+ng, ke+1,   ke+ng);
+  
+  // corners
+  send_buf.emplace_back(nvar, is,    is+ng1, js,    js+ng1, ks,    ks+ng1);
+  send_buf.emplace_back(nvar, ie-ng1, ie,    js,    js+ng1, ks,    ks+ng1);
+  send_buf.emplace_back(nvar, is,    is+ng1, je-ng1, je,    ks,    ks+ng1);
+  send_buf.emplace_back(nvar, ie-ng1, ie,    je-ng1, je,    ks,    ks+ng1);
+  send_buf.emplace_back(nvar, is,    is+ng1, js,    js+ng1, ke-ng1, ke   );
+  send_buf.emplace_back(nvar, ie-ng1, ie,    js,    js+ng1, ke-ng1, ke   );
+  send_buf.emplace_back(nvar, is,    is+ng1, je-ng1, je,    ke-ng1, ke   );
+  send_buf.emplace_back(nvar, ie-ng1, ie,    je-ng1, je,    ke-ng1, ke   );
 
-    recv_buf.emplace_back(nvar, is-ng, is-1,  js-ng, js-1,  ks-ng, ks-1 );
-    recv_buf.emplace_back(nvar, ie+1,  ie+ng, js-ng, js-1,  ks-ng, ks-1 );
-    recv_buf.emplace_back(nvar, is-ng, is-1,  je+1,  je+ng, ks-ng, ks-1 );
-    recv_buf.emplace_back(nvar, ie+1,  ie+ng, je+1,  je+ng, ks-ng, ks-1 );
-    recv_buf.emplace_back(nvar, is-ng, is-1,  js-ng, js-1,  ke+1,  ke+ng);
-    recv_buf.emplace_back(nvar, ie+1,  ie+ng, js-ng, js-1,  ke+1,  ke+ng);
-    recv_buf.emplace_back(nvar, is-ng, is-1,  je+1,  je+ng, ke+1,  ke+ng);
-    recv_buf.emplace_back(nvar, ie+1,  ie+ng, je+1,  je+ng, ke+1,  ke+ng);
-  }
+  recv_buf.emplace_back(nvar, is-ng, is-1,   js-ng, js-1,   ks-ng, ks-1  );
+  recv_buf.emplace_back(nvar, ie+1,   ie+ng, js-ng, js-1,   ks-ng, ks-1  );
+  recv_buf.emplace_back(nvar, is-ng, is-1,   je+1,   je+ng, ks-ng, ks-1  );
+  recv_buf.emplace_back(nvar, ie+1,   ie+ng, je+1,   je+ng, ks-ng, ks-1  );
+  recv_buf.emplace_back(nvar, is-ng, is-1,   js-ng, js-1,   ke+1,   ke+ng);
+  recv_buf.emplace_back(nvar, ie+1,   ie+ng, js-ng, js-1,   ke+1,   ke+ng);
+  recv_buf.emplace_back(nvar, is-ng, is-1,   je+1,   je+ng, ke+1,   ke+ng);
+  recv_buf.emplace_back(nvar, ie+1,   ie+ng, je+1,   je+ng, ke+1,   ke+ng);
 
   return;
 }

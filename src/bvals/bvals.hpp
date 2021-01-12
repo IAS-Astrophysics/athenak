@@ -31,7 +31,7 @@ struct NeighborBlock
   int gid;
   int level;
   int rank;
-  int dn; // difference between index of this and target neighbor for comms
+  int dn;     // difference between index of this and target neighbor for comms
   // constructor
   NeighborBlock(int id, int lev, int rnk, int deltan) :
     gid(id), level(lev), rank(rnk), dn(deltan) {}
