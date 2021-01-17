@@ -22,7 +22,7 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
-#include "eos/eos.hpp"
+#include "hydro/eos/hydro_eos.hpp"
 #include "hydro/hydro.hpp"
 #include "utils/grid_locations.hpp"
 #include "pgen.hpp"

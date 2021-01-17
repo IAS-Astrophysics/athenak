@@ -143,7 +143,7 @@ void OutputType::LoadOutputData(Mesh *pm)
   // TODO: get this working for multiple physics, which may be either defined/undef
 
   // loop over all MeshBlocks
-  MeshBlockPack* pmbp;
+  MeshBlockPack* pmbp = pm->pmb_pack;;
   int nmb = pmbp->nmb_thispack;
   for (int m=0; m<nmb; ++m) {
 

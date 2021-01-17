@@ -16,7 +16,7 @@
 
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
-#include "eos/eos.hpp"
+#include "hydro/eos/hydro_eos.hpp"
 #include "hydro/hydro.hpp"
 #include "outputs.hpp"
 

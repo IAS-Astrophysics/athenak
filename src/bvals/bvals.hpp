@@ -24,17 +24,22 @@ enum class BoundaryCommStatus {undef=-1, waiting, sent, received};
 
 //----------------------------------------------------------------------------------------
 //! \struct NeighborBlock
-//  \brief Information about neighboring MeshBlocks
+//  \brief Information about neighboring MeshBlocks.  This information is stored in a
+//  vector of length (# of neighboring blocks).  Latter is 26 for a uniform grid in 3D,
+//  and up to 56 for a 3D grid with AMR.
+//  Data copied from this NeighborBlock goes to nghbr[destn] on the target MeshBlock 
+//  e.g. when swapping data on x1-faces: nghbr[0] on source -> nghbr[1] on target and
+//  nghbr[1] on source -> nghbr[0] on target
 
 struct NeighborBlock
 {
-  int gid;
-  int level;
-  int rank;
-  int dn;     // difference between index of this and target neighbor for comms
+  int gid;      // global ID
+  int level;    // logical level
+  int rank;     // MPI rank     
+  int destn;    // index of recv buffer in target vector of NeighborBlocks
   // constructor
-  NeighborBlock(int id, int lev, int rnk, int deltan) :
-    gid(id), level(lev), rank(rnk), dn(deltan) {}
+  NeighborBlock(int id, int lev, int rnk, int dest) :
+    gid(id), level(lev), rank(rnk), destn(dest) {}
 };
 
 //----------------------------------------------------------------------------------------

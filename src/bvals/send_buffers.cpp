@@ -40,7 +40,7 @@ TaskStatus SendBuffers(AthenaArray5D<Real> &a,
   // load buffers, using 3 levels of hierarchical parallelism
   int scr_level = 0;
   size_t scr_size = 16*sizeof(int);
-  par_for_outer("SendCC", DevExeSpace(), scr_size, scr_level, 0, nmb, 0, (nnghbr-1),
+  par_for_outer("SendCC", DevExeSpace(), scr_size, scr_level, 0, (nmb-1), 0, (nnghbr-1),
     KOKKOS_LAMBDA(TeamMember_t tmember, const int m, const int n)
     {
       const int il = send_buf[m][n].index(0);
@@ -64,10 +64,12 @@ TaskStatus SendBuffers(AthenaArray5D<Real> &a,
   
           // copy directly into recv buffer if MeshBlocks on same rank
           if (mblocks[m].nghbr[n].rank == my_rank) {
-            int nn = n + mblocks[m].nghbr[n].dn; // find index of recv'ing boundary
+            int nn = mblocks[m].nghbr[n].destn; // index of recv'ing boundary buffer
+            // index of recv;ing MB: assumes MB IDs are stored sequentially in mblocks[]
+            int mm = mblocks[m].nghbr[n].gid - mblocks[0].mb_gid;
             Kokkos::parallel_for(
               Kokkos::ThreadVectorRange(tmember, il, iu + 1), [&](const int i) {
-                recv_buf[m][nn].data(v, i-il + ni*(j-jl + nj*(k-kl))) = a(m, v, k, j, i);
+                recv_buf[mm][nn].data(v, i-il + ni*(j-jl + nj*(k-kl))) = a(m, v, k, j, i);
               }
             );
 

@@ -62,7 +62,7 @@ TaskStatus RecvBuffers(AthenaArray5D<Real> &a,
   // buffers have all completed, so unpack
   int scr_level = 0;
   size_t scr_size = 16*sizeof(int);
-  par_for_outer("RecvCC", DevExeSpace(), scr_size, scr_level, 0, nmb, 0, (nnghbr-1),
+  par_for_outer("RecvCC", DevExeSpace(), scr_size, scr_level, 0, (nmb-1), 0, (nnghbr-1),
     KOKKOS_LAMBDA(TeamMember_t tmember, const int m, const int n)
     { 
       const int il = recv_buf[m][n].index(0);

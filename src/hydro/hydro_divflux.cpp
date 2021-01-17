@@ -10,7 +10,7 @@
 
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
-#include "eos/eos.hpp"
+#include "hydro/eos/hydro_eos.hpp"
 #include "hydro.hpp"
 // include inlined reconstruction methods (yuck...)
 #include "reconstruct/dc.cpp"

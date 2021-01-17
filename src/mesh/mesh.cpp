@@ -478,7 +478,7 @@ void Mesh::BuildTree(ParameterInput *pin)
       std::cout << "n=" << n << " bc_flag=" << GetBoundaryString(it->mb_bcs[n]) << std::endl;
     }
     for (int n=0; n<nnghbr; ++n) {
-      std::cout << "n=" << n << " gid=" << it->nghbr[n].gid << " level=" << it->nghbr[n].level << " rank=" << it->nghbr[n].rank << " dn=" << it->nghbr[n].dn << std::endl;
+      std::cout << "n=" << n << " gid=" << it->nghbr[n].gid << " level=" << it->nghbr[n].level << " rank=" << it->nghbr[n].rank << " destn=" << it->nghbr[n].destn << std::endl;
     }
   }
 /**********/
