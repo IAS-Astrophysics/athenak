@@ -21,7 +21,7 @@
 //! \fn void MeshBlock::ProblemGenerator(ParameterInput *pin)
 //  \brief Problem Generator for advection problems
 
-void ProblemGenerator::LWImplode_(MeshBlock *pmb, ParameterInput *pin)
+void ProblemGenerator::LWImplode_(MeshBlockPack *pmbp, ParameterInput *pin)
 {
   using namespace hydro;
   Real d_in = pin->GetReal("problem","d_in");
@@ -31,38 +31,38 @@ void ProblemGenerator::LWImplode_(MeshBlock *pmb, ParameterInput *pin)
   Real p_out = pin->GetReal("problem","p_out");
 
   // capture variables for kernel
-  Real gm1 = pmb->phydro->peos->eos_data.gamma - 1.0;
-  int &is = pmb->mb_cells.is, &ie = pmb->mb_cells.ie;
-  int &js = pmb->mb_cells.js, &je = pmb->mb_cells.je;
-  int &ks = pmb->mb_cells.ks, &ke = pmb->mb_cells.ke;
-  Real &x1min = pmb->mb_size.x1min, &x1max = pmb->mb_size.x1max;
-  Real &x2min = pmb->mb_size.x2min, &x2max = pmb->mb_size.x2max;
-  int &nx1 = pmb->mb_cells.nx1;
-  int &nx2 = pmb->mb_cells.nx2;
-  int &nscalars = pmb->phydro->nscalars;
-  int &nhydro = pmb->phydro->nhydro;
-  auto &u0 = pmb->phydro->u0;
+  Real gm1 = pmbp->phydro->peos->eos_data.gamma - 1.0;
+  int &is = pmbp->mb_cells.is, &ie = pmbp->mb_cells.ie;
+  int &js = pmbp->mb_cells.js, &je = pmbp->mb_cells.je;
+  int &ks = pmbp->mb_cells.ks, &ke = pmbp->mb_cells.ke;
+  int &nx1 = pmbp->mb_cells.nx1;
+  int &nx2 = pmbp->mb_cells.nx2;
+  int &nscalars = pmbp->phydro->nscalars;
+  int &nhydro = pmbp->phydro->nhydro;
+  auto &u0 = pmbp->phydro->u0;
 
-  // to make ICs symmetric, set y0 to be in between cell center and face
-  Real y0 = 0.5*(x2max + x2min) + 0.25*(pmb->mb_cells.dx2);
 
   // Set initial conditions
-  par_for("pgen_lw_implode", pmb->exe_space, ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int k, int j, int i)
+  par_for("pgen_lw_implode", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
-      u0(IM1,k,j,i) = 0.0;
-      u0(IM2,k,j,i) = 0.0;
-      u0(IM3,k,j,i) = 0.0;
-      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
-      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+      auto size = pmbp->mblocks[m].mb_size;
+      // to make ICs symmetric, set y0 to be in between cell center and face
+      Real y0 = 0.5*(size.x2max + size.x2min) + 0.25*(size.dx2);
+
+      u0(m,IM1,k,j,i) = 0.0;
+      u0(m,IM2,k,j,i) = 0.0;
+      u0(m,IM3,k,j,i) = 0.0;
+      Real x1v = CellCenterX(i-is, nx1, size.x1min, size.x1max);
+      Real x2v = CellCenterX(j-js, nx2, size.x2min, size.x2max);
       if (x2v > (y0 - x1v)) {
-        u0(IDN,k,j,i) = d_out;
-        u0(IEN,k,j,i) = p_out/gm1;
-        if (nscalars > 0) u0(nhydro,k,j,i) = 0.0;
+        u0(m,IDN,k,j,i) = d_out;
+        u0(m,IEN,k,j,i) = p_out/gm1;
+        if (nscalars > 0) u0(m,nhydro,k,j,i) = 0.0;
       } else {
-        u0(IDN,k,j,i) = d_in;
-        u0(IEN,k,j,i) = p_in/gm1;
-        if (nscalars > 0) u0(nhydro,k,j,i) = d_in;
+        u0(m,IDN,k,j,i) = d_in;
+        u0(m,IEN,k,j,i) = p_in/gm1;
+        if (nscalars > 0) u0(m,nhydro,k,j,i) = d_in;
       }
     }
   );

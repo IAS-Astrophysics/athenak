@@ -7,23 +7,27 @@
 //========================================================================================
 //! \file meshblock_tree.hpp
 //  \brief defines the MeshBlockTree class
-// The MeshBlockTree stores the logical grid structure, and is used for neighbor searches,
-// storing global IDs, etc. Levels refer to "logical level", where the logical root
-// (single block) level is 0 (see Figs. 1 and 3 of method paper). Note the logical level
-// of the physical root grid (user-specified root grid) will be greater than zero if it
-// contains more than one MeshBlock
+// The MeshBlockTree stores the logical grid structure in a binary tree, and is used for
+// neighbor searches, storing global IDs, etc. Levels refer to "logical level", where the
+// logical root (single block) level is 0 (see Figs. 1 and 3 of method paper). Note the
+// logical level of the physical root grid (user-specified root grid) will be greater than
+// zero if it contains more than one MeshBlock.
 //
-// Original version of this class written c2015-2016 by K. Tomida.
+// Original version of this foundational class written c2015-2016 by K. Tomida.
 
 //--------------------------------------------------------------------------------------
 //! \class MeshBlockTree
-//  \brief Objects are nodes in an AMR MeshBlock tree structure.  Thus, the class name
-//  does not refer to the overall tree itself, but rather each MeshBlockTree is a node.
+//  \brief Objects are nodes in a binary tree structure.  Thus, the class name does not
+//  refer to the overall tree itself, but rather each MeshBlockTree is a node. A pointer
+//  to the root node is stored in the Mesh class.
 
 class MeshBlockTree
 {
+ // mesh classes (Mesh, MeshBlock, MeshBlockPack, MeshBlockTree) like to play together
  friend class Mesh;
  friend class MeshBlock;
+ friend class MeshBlockPack;
+
  public:
   explicit MeshBlockTree(Mesh *pmesh);
   MeshBlockTree(MeshBlockTree *parent, int ox1, int ox2, int ox3);
@@ -41,7 +45,7 @@ class MeshBlockTree
   void Derefine(int &ndel);
   MeshBlockTree* FindMeshBlock(LogicalLocation tloc);
   void CountMeshBlock(int& count);
-  void GetMeshBlockList(LogicalLocation *list, int *pglist, int& count);
+  void CreateMeshBlockList(LogicalLocation *list, int *pglist, int& count);
   MeshBlockTree* FindNeighbor(LogicalLocation myloc, int ox1, int ox2, int ox3,
                               bool amrflag=false);
 

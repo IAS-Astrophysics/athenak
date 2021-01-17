@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file mesh.cpp
-//  \brief implementation of functions in Mesh class
+//  \brief implementation of constructor and functions in Mesh class
 
 #include <iostream>
 #include <cinttypes>
@@ -20,7 +20,10 @@
 #endif
 
 //----------------------------------------------------------------------------------------
-// Mesh constructor, builds mesh at start of calculation using parameters in input file
+// Mesh constructor: initializes some mesh variables at start of calculation using
+// parameters in input file.  Most objects in Mesh are constructed in the BuildTree()
+// function, so that they can store a pointer to the Mesh which can be reliably referenced
+// only after the Mesh constructor has finished
 
 Mesh::Mesh(ParameterInput *pin)
 {
@@ -86,7 +89,8 @@ Mesh::Mesh(ParameterInput *pin)
     mesh_bcs[BoundaryFace::outer_x3] = BoundaryFlag::undef;
   }
 
-  // set boolean flags indicating type of refinement (if any) depending on input strings
+  // set boolean flags indicating type of refinement (if any), and whether mesh is
+  // periodic, depending on input strings
   adaptive = 
     (pin->GetOrAddString("mesh", "refinement", "none") == "adaptive") ? true : false;
   multilevel =
@@ -152,9 +156,9 @@ Mesh::Mesh(ParameterInput *pin)
   }
 
   // passed error checks, compute grid spacing in (virtual) mesh grid
-  mesh_cells.dx1 = (mesh_size.x1max-mesh_size.x1min)/static_cast<Real>(mesh_cells.nx1);
-  mesh_cells.dx2 = (mesh_size.x2max-mesh_size.x2min)/static_cast<Real>(mesh_cells.nx2);
-  mesh_cells.dx3 = (mesh_size.x3max-mesh_size.x3min)/static_cast<Real>(mesh_cells.nx3);
+  mesh_size.dx1 = (mesh_size.x1max-mesh_size.x1min)/static_cast<Real>(mesh_cells.nx1);
+  mesh_size.dx2 = (mesh_size.x2max-mesh_size.x2min)/static_cast<Real>(mesh_cells.nx2);
+  mesh_size.dx3 = (mesh_size.x3max-mesh_size.x3min)/static_cast<Real>(mesh_cells.nx3);
 }
 
 //----------------------------------------------------------------------------------------
@@ -183,11 +187,12 @@ Mesh::~Mesh()
 }
 
 //----------------------------------------------------------------------------------------
-// Build tree
+// BuildTree: constructs MeshBlockTree, MeshBlockPack (containing physics modules), and
+// MeshBlock(s).  Does initial load balance based on simple cost estimate.
 
 void Mesh::BuildTree(ParameterInput *pin)
 {
-  // Set # of cells in MeshBlock read from input parameters, error check
+  // Calculate # of cells in MeshBlock read from input parameters, error check
   RegionCells incells;
   incells.nx1 = pin->GetOrAddInteger("meshblock", "nx1", mesh_cells.nx1);
   if (nx2gt1) {
@@ -218,13 +223,13 @@ void Mesh::BuildTree(ParameterInput *pin)
   }
 
   // calculate the number of MeshBlocks at root level in each dir
-  nmbroot_x1 = mesh_cells.nx1/incells.nx1;
-  nmbroot_x2 = mesh_cells.nx2/incells.nx2;
-  nmbroot_x3 = mesh_cells.nx3/incells.nx3;
+  nmb_rootx1 = mesh_cells.nx1/incells.nx1;
+  nmb_rootx2 = mesh_cells.nx2/incells.nx2;
+  nmb_rootx3 = mesh_cells.nx3/incells.nx3;
 
   // find maximum number of MeshBlocks at root level in any dir
-  int nmbmax = (nmbroot_x1 > nmbroot_x2) ? nmbroot_x1 : nmbroot_x2;
-  nmbmax = (nmbmax > nmbroot_x3) ? nmbmax : nmbroot_x3;
+  int nmbmax = (nmb_rootx1 > nmb_rootx2) ? nmb_rootx1 : nmb_rootx2;
+  nmbmax = (nmbmax > nmb_rootx3) ? nmbmax : nmb_rootx3;
 
   // Find smallest N such that 2^N > max number of MeshBlocks in any dimension (nmbmax)
   // Then N is logical level of root grid.  2^N implemented as left-shift (1<<root_level)
@@ -324,7 +329,7 @@ void Mesh::BuildTree(ParameterInput *pin)
         std::int32_t lx1min = 0, lx1max = 0;
         std::int32_t lx2min = 0, lx2max = 0;
         std::int32_t lx3min = 0, lx3max = 0;
-        std::int32_t lxmax = nmbroot_x1*(1<<phy_ref_lev);
+        std::int32_t lxmax = nmb_rootx1*(1<<phy_ref_lev);
         for (lx1min=0; lx1min<lxmax; lx1min++) {
           if (LeftEdgeX(lx1min+1,lxmax,mesh_size.x1min,mesh_size.x1max) > ref_size.x1min)
             break;
@@ -338,7 +343,7 @@ void Mesh::BuildTree(ParameterInput *pin)
 
         // Find range of x2-indices of such MeshBlocks that cover the refinement region
         if (nx2gt1) { // 2D or 3D
-          lxmax = nmbroot_x2*(1<<phy_ref_lev);
+          lxmax = nmb_rootx2*(1<<phy_ref_lev);
           for (lx2min=0; lx2min<lxmax; lx2min++) {
             if (LeftEdgeX(lx2min+1, lxmax, mesh_size.x2min, mesh_size.x2max) >
                 ref_size.x2min)
@@ -355,7 +360,7 @@ void Mesh::BuildTree(ParameterInput *pin)
 
         // Find range of x3-indices of such MeshBlocks that cover the refinement region
         if (nx3gt1) { // 3D
-          lxmax = nmbroot_x3*(1<<phy_ref_lev);
+          lxmax = nmb_rootx3*(1<<phy_ref_lev);
           for (lx3min=0; lx3min<lxmax; lx3min++) {
             if (LeftEdgeX(lx3min+1, lxmax, mesh_size.x3min, mesh_size.x3max) >
                 ref_size.x3min)
@@ -409,11 +414,11 @@ void Mesh::BuildTree(ParameterInput *pin)
   if (!adaptive) max_level = current_level;
 
   // initial mesh hierarchy construction is completed here
-  ptree->CountMeshBlock(nmbtotal);
+  ptree->CountMeshBlock(nmb_total);
 
-  costlist = new double[nmbtotal];
-  ranklist = new int[nmbtotal];
-  loclist  = new LogicalLocation[nmbtotal];
+  costlist = new double[nmb_total];
+  ranklist = new int[nmb_total];
+  loclist  = new LogicalLocation[nmb_total];
 
   gidslist = new int[global_variable::nranks];
   nmblist  = new int[global_variable::nranks];
@@ -429,30 +434,31 @@ void Mesh::BuildTree(ParameterInput *pin)
   }
 
   // following returns LogicalLocation list sorted by Z-ordering
-  ptree->GetMeshBlockList(loclist, nullptr, nmbtotal);
-
-  // compute properties of MeshBlocks and initialize 
+  ptree->CreateMeshBlockList(loclist, nullptr, nmb_total);
 
 #if MPI_PARALLEL_ENABLED
   // check there is at least one MeshBlock per MPI rank
-  if (nmbtotal < global_variable::nranks) {
+  if (nmb_total < global_variable::nranks) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "Fewer MeshBlocks (nmbtotal=" << nmbtotal << ") than MPI ranks (nranks="
+        << "Fewer MeshBlocks (nmb_total=" << nmb_total << ") than MPI ranks (nranks="
         << global_variable::nranks << ")" << std::endl;
     std::exit(EXIT_FAILURE);
   }
 #endif
 
-
   // initialize cost array with the simplest estimate; all the blocks are equal
-  for (int i=0; i<nmbtotal; i++) {costlist[i] = 1.0;}
-  LoadBalance(costlist, ranklist, gidslist, nmblist, nmbtotal);
+  for (int i=0; i<nmb_total; i++) {costlist[i] = 1.0;}
+  LoadBalance(costlist, ranklist, gidslist, nmblist, nmb_total);
 
-  // create MeshBlock list for this process
+  // create MeshBlockPack for this rank
   gids = gidslist[global_variable::my_rank];
   gide = gids + nmblist[global_variable::my_rank] - 1;
-  nmbthisrank = nmblist[global_variable::my_rank];
+  nmb_thisrank = nmblist[global_variable::my_rank];
+
+  pmb_pack = new MeshBlockPack(this, gids, gide, incells);
+  for (auto &mb : pmb_pack->mblocks) {mb.SetNeighbors(ptree, ranklist);}
   
+/***
   // create MeshBlocks for this node, then set neighbors
   for (int i=gids; i<=gide; i++) {
     RegionSize insize;
@@ -462,21 +468,23 @@ void Mesh::BuildTree(ParameterInput *pin)
     mblocks.emplace_back(MeshBlock(this, pin, i, insize, incells, inbcs));
   }
   for (auto &mb : mblocks) {mb.SetNeighbors(ptree, ranklist);}
+***/
 
 /*******/
-  for (auto it=mblocks.begin(); it<mblocks.end(); ++it) {
-    int nnghbr = it->pbvals->nghbr.size();
+  for (auto it=pmb_pack->mblocks.begin(); it<pmb_pack->mblocks.end(); ++it) {
+    int nnghbr = it->nghbr.size();
     std::cout << "******* Block=" << it->mb_gid << std::endl;
     for (int n=0; n<6; ++n) {
-      std::cout << "n=" << n << " bc_flag=" << GetBoundaryString(it->pbvals->bndry_flag[n]) << std::endl;
+      std::cout << "n=" << n << " bc_flag=" << GetBoundaryString(it->mb_bcs[n]) << std::endl;
     }
     for (int n=0; n<nnghbr; ++n) {
-      std::cout << "n=" << n << " gid=" << it->pbvals->nghbr[n].gid << " level=" << it->pbvals->nghbr[n].level << " rank=" << it->pbvals->nghbr[n].rank << " dn=" << it->pbvals->nghbr[n].dn << std::endl;
+      std::cout << "n=" << n << " gid=" << it->nghbr[n].gid << " level=" << it->nghbr[n].level << " rank=" << it->nghbr[n].rank << " dn=" << it->nghbr[n].dn << std::endl;
     }
   }
 /**********/
 
   ResetLoadBalanceCounters();
+  PrintMeshDiagnostics();
 
   // set initial time/cycle parameters
   time = pin->GetOrAddReal("time", "start_time", 0.0);
@@ -488,17 +496,15 @@ void Mesh::BuildTree(ParameterInput *pin)
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void Mesh::OutputMeshStructure(int ndim)
-//  \brief outputs information about mesh structure, creates file containing MeshBlock
-//  positions and sizes that can be used to create plots using 'plot_mesh.py' script 
+//! \fn void Mesh::PrintMeshDiagnostics()
+//  \brief prints information about mesh structure
 
-void Mesh::OutputMeshStructure(int flag)
+void Mesh::PrintMeshDiagnostics()
 {
-  // Write overall Mesh structure to stdout and file
   std::cout << std::endl;
-  std::cout <<"Root grid = "<< nmbroot_x1 <<" x "<< nmbroot_x2 <<" x "<< nmbroot_x3
+  std::cout <<"Root grid = "<< nmb_rootx1 <<" x "<< nmb_rootx2 <<" x "<< nmb_rootx3
             <<" MeshBlocks"<< std::endl;
-  std::cout <<"Total number of MeshBlocks = " << nmbtotal << std::endl;
+  std::cout <<"Total number of MeshBlocks = " << nmb_total << std::endl;
   std::cout <<"Number of logical  levels of refinement = "<< max_level
             <<" (" << (max_level + 1) << " levels total)" << std::endl;
   std::cout <<"Number of physical levels of refinement = "<< (max_level - root_level) 
@@ -512,7 +518,7 @@ void Mesh::OutputMeshStructure(int flag)
       nb_per_plevel[i] = 0;
       cost_per_plevel[i] = 0.0;
     }
-    for (int i=0; i<nmbtotal; i++) {
+    for (int i=0; i<nmb_total; i++) {
       nb_per_plevel[(loclist[i].level - root_level)]++;
       cost_per_plevel[(loclist[i].level - root_level)] += costlist[i];
     }
@@ -534,7 +540,7 @@ void Mesh::OutputMeshStructure(int flag)
       nb_per_rank[i] = 0;
       cost_per_rank[i] = 0;
     }
-    for (int i=0; i<nmbtotal; i++) {
+    for (int i=0; i<nmb_total; i++) {
       nb_per_rank[ranklist[i]]++;
       cost_per_rank[ranklist[i]] += costlist[i];
     }
@@ -547,7 +553,7 @@ void Mesh::OutputMeshStructure(int flag)
     double mincost = std::numeric_limits<double>::max();
     double maxcost = 0.0, totalcost = 0.0;
     for (int i=root_level; i<=max_level; i++) {
-      for (int j=0; j<nmbtotal; j++) {
+      for (int j=0; j<nmb_total; j++) {
         if (loclist[j].level == i) {
           mincost = std::min(mincost,costlist[i]);
           maxcost = std::max(maxcost,costlist[i]);
@@ -557,162 +563,72 @@ void Mesh::OutputMeshStructure(int flag)
     }
     std::cout << "Load Balancing:" << std::endl;
     std::cout << "  Minimum cost = " << mincost << ", Maximum cost = " << maxcost
-              << ", Average cost = " << totalcost/nmbtotal << std::endl;
+              << ", Average cost = " << totalcost/nmb_total << std::endl;
   }
-
-  // if -m argument given on command line, and for 2D/3D:
-  // output relative size/locations of meshblock to file, for plotting
-  if (flag && nx2gt1) {
-    FILE *fp = nullptr;
-    if ((fp = std::fopen("mesh_structure.dat","wb")) == nullptr) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ 
-          << std::endl << "Cannot open 'mesh_structure.dat' file for output" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-
-    for (int i=root_level; i<=max_level; i++) {
-      for (int j=0; j<nmbtotal; j++) {
-        if (loclist[j].level == i) {
-          RegionSize b_size;
-          RegionCells b_cells;
-          BoundaryFlag b_bcs[6];
-          SetBlockSizeAndBoundaries(loclist[j], b_size, b_cells, b_bcs);
-          std::int32_t &lx1 = loclist[j].lx1;
-          std::int32_t &lx2 = loclist[j].lx2;
-          std::int32_t &lx3 = loclist[j].lx3;
-          std::fprintf(fp,"#MeshBlock %d on rank=%d with cost=%g\n", j, ranklist[j],
-                       costlist[j]);
-          std::fprintf(
-              fp,"#  Logical level %d, location = (%" PRId32 " %" PRId32 " %" PRId32")\n",
-              loclist[j].level, lx1, lx2, lx3);
-          if (nx2gt1 && !(nx3gt1)) { // 2D
-            std::fprintf(fp, "%g %g\n", b_size.x1min, b_size.x2min);
-            std::fprintf(fp, "%g %g\n", b_size.x1max, b_size.x2min);
-            std::fprintf(fp, "%g %g\n", b_size.x1max, b_size.x2max);
-            std::fprintf(fp, "%g %g\n", b_size.x1min, b_size.x2max);
-            std::fprintf(fp, "%g %g\n", b_size.x1min, b_size.x2min);
-            std::fprintf(fp, "\n\n");
-          }
-          if (nx3gt1) { // 3D
-            std::fprintf(fp, "%g %g %g\n", b_size.x1min, b_size.x2min, b_size.x3min);
-            std::fprintf(fp, "%g %g %g\n", b_size.x1max, b_size.x2min, b_size.x3min);
-            std::fprintf(fp, "%g %g %g\n", b_size.x1max, b_size.x2max, b_size.x3min);
-            std::fprintf(fp, "%g %g %g\n", b_size.x1min, b_size.x2max, b_size.x3min);
-            std::fprintf(fp, "%g %g %g\n", b_size.x1min, b_size.x2min, b_size.x3min);
-            std::fprintf(fp, "%g %g %g\n", b_size.x1min, b_size.x2min, b_size.x3max);
-            std::fprintf(fp, "%g %g %g\n", b_size.x1max, b_size.x2min, b_size.x3max);
-            std::fprintf(fp, "%g %g %g\n", b_size.x1max, b_size.x2min, b_size.x3min);
-            std::fprintf(fp, "%g %g %g\n", b_size.x1max, b_size.x2min, b_size.x3max);
-            std::fprintf(fp, "%g %g %g\n", b_size.x1max, b_size.x2max, b_size.x3max);
-            std::fprintf(fp, "%g %g %g\n", b_size.x1max, b_size.x2max, b_size.x3min);
-            std::fprintf(fp, "%g %g %g\n", b_size.x1max, b_size.x2max, b_size.x3max);
-            std::fprintf(fp, "%g %g %g\n", b_size.x1min, b_size.x2max, b_size.x3max);
-            std::fprintf(fp, "%g %g %g\n", b_size.x1min, b_size.x2max, b_size.x3min);
-            std::fprintf(fp, "%g %g %g\n", b_size.x1min, b_size.x2max, b_size.x3max);
-            std::fprintf(fp, "%g %g %g\n", b_size.x1min, b_size.x2min, b_size.x3max);
-            std::fprintf(fp, "%g %g %g\n", b_size.x1min, b_size.x2min, b_size.x3min);
-            std::fprintf(fp, "\n\n");
-          }
-        }
-      }
-    }
-    std::fclose(fp);
-
-    std::cout << "See the 'mesh_structure.dat' file for a complete list of MeshBlocks."
-              << std::endl;
-    std::cout << "Use 'plot_mesh.py' script to visualize data in 'mesh_structure.dat'"
-              << " file" << std::endl << std::endl;
-  }
-
-  return;
 }
 
 //----------------------------------------------------------------------------------------
-// \!fn void Mesh::SetBlockSizeAndBoundaries(LogicalLocation loc,
-//                 RegionSize &block_size, BundaryFlag *block_bcs)
-// \brief Set the physical part of a block_size structure and block boundary conditions
+//! \fn void Mesh::WriteMeshStructure(int ndim)
+//  \brief writes file containing MeshBlock positions and sizes that can be used to create
+//  plots using 'plot_mesh.py' script.  Only works for 2D/3D data. 
 
-void Mesh::SetBlockSizeAndBoundaries(LogicalLocation loc, RegionSize &block_size,
-                                     RegionCells &block_cells, BoundaryFlag *block_bcs)
+void Mesh::WriteMeshStructure()
 {
-  std::int32_t &lx1 = loc.lx1;
-  std::int32_t nmbx1_l = nmbroot_x1 << (loc.level - root_level);
+  if (!nx2gt1) return;
 
-  // calculate physical size of MeshBlock in x1
-  if (lx1 == 0) {
-    block_size.x1min = mesh_size.x1min;
-    block_bcs[BoundaryFace::inner_x1] = mesh_bcs[BoundaryFace::inner_x1];
-  } else {
-    block_size.x1min = LeftEdgeX(lx1, nmbx1_l, mesh_size.x1min, mesh_size.x1max);
-    block_bcs[BoundaryFace::inner_x1] = BoundaryFlag::block;
+  FILE *fp = nullptr;
+  if ((fp = std::fopen("mesh_structure.dat","wb")) == nullptr) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ 
+        << std::endl << "Cannot open 'mesh_structure.dat' file for output" << std::endl;
+    std::exit(EXIT_FAILURE);
   }
 
-  if (lx1 == nmbx1_l - 1) {
-    block_size.x1max = mesh_size.x1max;
-    block_bcs[BoundaryFace::outer_x1] = mesh_bcs[BoundaryFace::outer_x1];
-  } else {
-    block_size.x1max = LeftEdgeX(lx1+1, nmbx1_l, mesh_size.x1min, mesh_size.x1max);
-    block_bcs[BoundaryFace::outer_x1] = BoundaryFlag::block;
-  }
-
-  // calculate physical size of MeshBlock in x2
-  if (mesh_cells.nx2 == 1) {
-    block_size.x2min = mesh_size.x2min;
-    block_size.x2max = mesh_size.x2max;
-    block_bcs[BoundaryFace::inner_x2] = mesh_bcs[BoundaryFace::inner_x2];
-    block_bcs[BoundaryFace::outer_x2] = mesh_bcs[BoundaryFace::outer_x2];
-  } else {
-
-    std::int32_t &lx2 = loc.lx2;
-    std::int32_t nmbx2_l = nmbroot_x2 << (loc.level - root_level);
-    if (lx2 == 0) {
-      block_size.x2min = mesh_size.x2min;
-      block_bcs[BoundaryFace::inner_x2] = mesh_bcs[BoundaryFace::inner_x2];
-    } else {
-      block_size.x2min = LeftEdgeX(lx2, nmbx2_l, mesh_size.x2min, mesh_size.x2max);
-      block_bcs[BoundaryFace::inner_x2] = BoundaryFlag::block;
+  for (int i=root_level; i<=max_level; i++) {
+  for (int j=0; j<nmb_total; j++) {
+    if (loclist[j].level == i) {
+      MeshBlock mb(pmb_pack, j);
+      auto size = mb.mb_size;
+      std::int32_t &lx1 = loclist[j].lx1;
+      std::int32_t &lx2 = loclist[j].lx2;
+      std::int32_t &lx3 = loclist[j].lx3;
+      std::fprintf(fp,"#MeshBlock %d on rank=%d with cost=%g\n", j, ranklist[j],
+                   costlist[j]);
+      std::fprintf(
+          fp,"#  Logical level %d, location = (%" PRId32 " %" PRId32 " %" PRId32")\n",
+          loclist[j].level, lx1, lx2, lx3);
+      if (nx2gt1 && !(nx3gt1)) { // 2D
+        std::fprintf(fp,"%g %g\n", size.x1min, size.x2min);
+        std::fprintf(fp,"%g %g\n", size.x1max, size.x2min);
+        std::fprintf(fp,"%g %g\n", size.x1max, size.x2max);
+        std::fprintf(fp,"%g %g\n", size.x1min, size.x2max);
+        std::fprintf(fp,"%g %g\n", size.x1min, size.x2min);
+        std::fprintf(fp,"\n\n");
+      }
+      if (nx3gt1) { // 3D
+        std::fprintf(fp,"%g %g %g\n", size.x1min, size.x2min, size.x3min);
+        std::fprintf(fp,"%g %g %g\n", size.x1max, size.x2min, size.x3min);
+        std::fprintf(fp,"%g %g %g\n", size.x1max, size.x2max, size.x3min);
+        std::fprintf(fp,"%g %g %g\n", size.x1min, size.x2max, size.x3min);
+        std::fprintf(fp,"%g %g %g\n", size.x1min, size.x2min, size.x3min);
+        std::fprintf(fp,"%g %g %g\n", size.x1min, size.x2min, size.x3max);
+        std::fprintf(fp,"%g %g %g\n", size.x1max, size.x2min, size.x3max);
+        std::fprintf(fp,"%g %g %g\n", size.x1max, size.x2min, size.x3min);
+        std::fprintf(fp,"%g %g %g\n", size.x1max, size.x2min, size.x3max);
+        std::fprintf(fp,"%g %g %g\n", size.x1max, size.x2max, size.x3max);
+        std::fprintf(fp,"%g %g %g\n", size.x1max, size.x2max, size.x3min);
+        std::fprintf(fp,"%g %g %g\n", size.x1max, size.x2max, size.x3max);
+        std::fprintf(fp,"%g %g %g\n", size.x1min, size.x2max, size.x3max);
+        std::fprintf(fp,"%g %g %g\n", size.x1min, size.x2max, size.x3min);
+        std::fprintf(fp,"%g %g %g\n", size.x1min, size.x2max, size.x3max);
+        std::fprintf(fp,"%g %g %g\n", size.x1min, size.x2min, size.x3max);
+        std::fprintf(fp,"%g %g %g\n", size.x1min, size.x2min, size.x3min);
+        std::fprintf(fp, "\n\n");
+      }
     }
-
-    if (lx2 == (nmbx2_l) - 1) {
-      block_size.x2max = mesh_size.x2max;
-      block_bcs[BoundaryFace::outer_x2] = mesh_bcs[BoundaryFace::outer_x2];
-    } else {
-      block_size.x2max = LeftEdgeX(lx2+1, nmbx2_l,mesh_size.x2min,mesh_size.x2max);
-      block_bcs[BoundaryFace::outer_x2] = BoundaryFlag::block;
-    }
-
-  }
-
-  // calculate physical size of MeshBlock in x3
-  if (mesh_cells.nx3 == 1) {
-    block_size.x3min = mesh_size.x3min;
-    block_size.x3max = mesh_size.x3max;
-    block_bcs[BoundaryFace::inner_x3] = mesh_bcs[BoundaryFace::inner_x3];
-    block_bcs[BoundaryFace::outer_x3] = mesh_bcs[BoundaryFace::outer_x3];
-  } else {
-    std::int32_t &lx3 = loc.lx3;
-    std::int32_t nmbx3_l = nmbroot_x3 << (loc.level - root_level);
-    if (lx3 == 0) {
-      block_size.x3min = mesh_size.x3min;
-      block_bcs[BoundaryFace::inner_x3] = mesh_bcs[BoundaryFace::inner_x3];
-    } else {
-      block_size.x3min = LeftEdgeX(lx3, nmbx3_l, mesh_size.x3min, mesh_size.x3max);
-      block_bcs[BoundaryFace::inner_x3] = BoundaryFlag::block;
-    }
-    if (lx3 == (nmbx3_l) - 1) {
-      block_size.x3max = mesh_size.x3max;
-      block_bcs[BoundaryFace::outer_x3] = mesh_bcs[BoundaryFace::outer_x3];
-    } else {
-      block_size.x3max = LeftEdgeX(lx3+1, nmbx3_l,mesh_size.x3min,mesh_size.x3max);
-      block_bcs[BoundaryFace::outer_x3] = BoundaryFlag::block;
-    }
-  }
-  // grid spacing at this level.  Ensure all MeshBlocks at same level have same dx
-  block_cells.dx1 = mesh_cells.dx1*static_cast<Real>(1<<(loc.level - root_level));
-  block_cells.dx2 = mesh_cells.dx2*static_cast<Real>(1<<(loc.level - root_level));
-  block_cells.dx3 = mesh_cells.dx3*static_cast<Real>(1<<(loc.level - root_level));
-  // everything else
-  block_cells.ng  = mesh_cells.ng;
+  }}
+  std::fclose(fp);
+  std::cout << "See the 'mesh_structure.dat' file for MeshBlock data" << std::endl;
+  std::cout << "Use 'plot_mesh.py' script to visualize data" << std::endl << std::endl;
 
   return;
 }

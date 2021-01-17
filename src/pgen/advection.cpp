@@ -25,7 +25,7 @@
 //! \fn void MeshBlock::ProblemGenerator(ParameterInput *pin)
 //  \brief Problem Generator for advection problems
 
-void ProblemGenerator::Advection_(MeshBlock *pmb, ParameterInput *pin)
+void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
 {
   using namespace hydro;
 
@@ -34,12 +34,7 @@ void ProblemGenerator::Advection_(MeshBlock *pmb, ParameterInput *pin)
   int iprob = pin->GetInteger("problem","iproblem");
   Real vel = pin->GetOrAddReal("problem","velocity",1.0);
   Real amp = pin->GetOrAddReal("problem","amplitude",0.1);
-  Real gm1 = pmb->phydro->peos->eos_data.gamma - 1.0;
-
-  // Initialize the grid
-  int &is = pmb->mb_cells.is, &ie = pmb->mb_cells.ie;
-  int &js = pmb->mb_cells.js, &je = pmb->mb_cells.je;
-  int &ks = pmb->mb_cells.ks, &ke = pmb->mb_cells.ke;
+  Real gm1 = pmbp->phydro->peos->eos_data.gamma - 1.0;
 
   // get size of overall domain
   Real length;
@@ -63,31 +58,32 @@ void ProblemGenerator::Advection_(MeshBlock *pmb, ParameterInput *pin)
   }
 
   // capture variables for kernel
-  Real &x1min = pmb->mb_size.x1min, &x1max = pmb->mb_size.x1max;
-  Real &x2min = pmb->mb_size.x2min, &x2max = pmb->mb_size.x2max;
-  Real &x3min = pmb->mb_size.x3min, &x3max = pmb->mb_size.x3max;
   Real &x1min_mesh = pmesh_->mesh_size.x1min;
   Real &x2min_mesh = pmesh_->mesh_size.x2min;
   Real &x3min_mesh = pmesh_->mesh_size.x3min;
-  int &nhydro = pmb->phydro->nhydro;
-  int &nscalars = pmb->phydro->nscalars;
-  int &nx1 = pmb->mb_cells.nx1;
-  int &nx2 = pmb->mb_cells.nx2;
-  int &nx3 = pmb->mb_cells.nx3;
-  auto &u0 = pmb->phydro->u0;
+  int &nhydro = pmbp->phydro->nhydro;
+  int &nscalars = pmbp->phydro->nscalars;
+  int &nx1 = pmbp->mb_cells.nx1;
+  int &nx2 = pmbp->mb_cells.nx2;
+  int &nx3 = pmbp->mb_cells.nx3;
+  int &is = pmbp->mb_cells.is, &ie = pmbp->mb_cells.ie;
+  int &js = pmbp->mb_cells.js, &je = pmbp->mb_cells.je;
+  int &ks = pmbp->mb_cells.ks, &ke = pmbp->mb_cells.ke;
+  auto &u0 = pmbp->phydro->u0;
 
-  par_for("pgen_advect", pmb->exe_space, ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int k, int j, int i)
+  par_for("pgen_advect", DevExeSpace(), 0, (pmbp->nmb_thispack-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
+      auto size = pmbp->mblocks[m].mb_size;
       Real r; // coordinate that will span [0->1]
       if (flow_dir == 1) {
-        r = (CellCenterX(i-is,nx1,x1min,x1max) - x1min_mesh)
+        r = (CellCenterX(i-is, nx1, size.x1min, size.x1max) - x1min_mesh)
             /length;
       } else if (flow_dir == 2) {
-        r = (CellCenterX(j-js,nx2,x2min,x2max) - x2min_mesh)
+        r = (CellCenterX(j-js, nx2, size.x2min, size.x2max) - x2min_mesh)
             /length;
       } else {
-        r = (CellCenterX(k-ks,nx3,x3min,x3max) - x3min_mesh)
+        r = (CellCenterX(k-ks, nx3, size.x3min, size.x3max) - x3min_mesh)
             /length;
       }
 
@@ -100,26 +96,26 @@ void ProblemGenerator::Advection_(MeshBlock *pmb, ParameterInput *pin)
       }
 
       // now compute density  momenta, total energy
-      u0(IDN,k,j,i) = 1.0;
+      u0(m,IDN,k,j,i) = 1.0;
       if (flow_dir == 1) {
-        u0(IM1,k,j,i) = vel;
-        u0(IM2,k,j,i) = f;
-        u0(IM3,k,j,i) = f;
+        u0(m,IM1,k,j,i) = vel;
+        u0(m,IM2,k,j,i) = f;
+        u0(m,IM3,k,j,i) = f;
       } else if (flow_dir == 2) {
-        u0(IM1,k,j,i) = f;
-        u0(IM2,k,j,i) = vel;
-        u0(IM3,k,j,i) = f;
+        u0(m,IM1,k,j,i) = f;
+        u0(m,IM2,k,j,i) = vel;
+        u0(m,IM3,k,j,i) = f;
       } else {
-        u0(IM1,k,j,i) = f;
-        u0(IM2,k,j,i) = f;
-        u0(IM3,k,j,i) = vel;
+        u0(m,IM1,k,j,i) = f;
+        u0(m,IM2,k,j,i) = f;
+        u0(m,IM3,k,j,i) = vel;
       } 
-      u0(IEN,k,j,i) = 1.0/gm1 + 0.5*(SQR(u0(IM1,k,j,i))
-        + SQR(u0(IM2,k,j,i)) + SQR(u0(IM3,k,j,i)))/
-          u0(IDN,k,j,i);
+      u0(m,IEN,k,j,i) = 1.0/gm1 + 0.5*(SQR(u0(m,IM1,k,j,i))
+        + SQR(u0(m,IM2,k,j,i)) + SQR(u0(m,IM3,k,j,i)))/
+          u0(m,IDN,k,j,i);
       // add passive scalars
       for (int n=nhydro; n<(nhydro+nscalars); ++n) {
-        u0(n,k,j,i) = f;
+        u0(m,n,k,j,i) = f;
       }
     }
   );

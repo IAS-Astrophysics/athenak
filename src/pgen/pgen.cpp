@@ -49,10 +49,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm)
     std::exit(EXIT_FAILURE);
   }
 
-  // now cycle through MeshBlocks and call appropriate pgen function
-  for (auto it = pmesh_->mblocks.begin(); it < pmesh_->mblocks.end(); ++it) {
-    (this->*pgen_func_)(&*it, pin);
-  }
+  // now call appropriate pgen function
+  (this->*pgen_func_)(pm->pmb_pack, pin);
 }
 
 //----------------------------------------------------------------------------------------

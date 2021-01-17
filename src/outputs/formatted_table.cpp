@@ -113,16 +113,17 @@ void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
       // loop over output MeshBlocks, output all data
       int nout_mbs = static_cast<int>(out_data_.size());
       for (int m=0; m<nout_mbs; ++m) {
+        auto cells = pm->pmb_pack->mb_cells;
         MeshBlock* pmb = pm->FindMeshBlock(out_data_gid_[m]);
-        int &is = pmb->mb_cells.is;
-        int &js = pmb->mb_cells.js;
-        int &ks = pmb->mb_cells.ks;
+        int &is = cells.is;
+        int &js = cells.js;
+        int &ks = cells.ks;
         Real &x1min = pmb->mb_size.x1min, &x1max = pmb->mb_size.x1max;
         Real &x2min = pmb->mb_size.x2min, &x2max = pmb->mb_size.x2max;
         Real &x3min = pmb->mb_size.x3min, &x3max = pmb->mb_size.x3max;
-        int &nx1 = pmb->mb_cells.nx1;
-        int &nx2 = pmb->mb_cells.nx2;
-        int &nx3 = pmb->mb_cells.nx3;
+        int &nx1 = cells.nx1;
+        int &nx2 = cells.nx2;
+        int &nx3 = cells.nx3;
         for (int k=oks; k<=oke; ++k) {
           for (int j=ojs; j<=oje; ++j) {
             for (int i=ois; i<=oie; ++i) {

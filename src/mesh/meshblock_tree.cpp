@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file meshblocktree.cpp
-//  \brief implementation of functions in the MeshBlockTree class
+//  \brief implementation of constructor and functions in the MeshBlockTree class
 
 #include <cstdint>
 #include <iostream>
@@ -13,7 +13,6 @@
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
-#include "bvals/bvals.hpp"
 #include "mesh.hpp"
 
 // Define static member variables
@@ -84,9 +83,9 @@ void MeshBlockTree::CreateRootGrid()
   for (int n=0; n<nleaf_; n++) {
     // i,j,k values are 1st/2nd/3rd bit from end in binary representation of n=0,..,7
     int i = n&1, j = (n>>1)&1, k = (n>>2)&1;
-    if ((loc_.lx3*2 + k)*levfac < pmesh_->nmbroot_x3
-     && (loc_.lx2*2 + j)*levfac < pmesh_->nmbroot_x2
-     && (loc_.lx1*2 + i)*levfac < pmesh_->nmbroot_x1) {
+    if ((loc_.lx3*2 + k)*levfac < pmesh_->nmb_rootx3
+     && (loc_.lx2*2 + j)*levfac < pmesh_->nmb_rootx2
+     && (loc_.lx1*2 + i)*levfac < pmesh_->nmb_rootx1) {
       pleaf_[n] = new MeshBlockTree(this, i, j, k); // call leaf constructor
       pleaf_[n]->CreateRootGrid(); 
     }
@@ -173,7 +172,7 @@ void MeshBlockTree::Refine(int &nnew)
 
   oxmin = -1;
   oxmax = 1;
-  nxmax = (pmesh_->nmbroot_x1<<(loc_.level - pmesh_->root_level));
+  nxmax = (pmesh_->nmb_rootx1<<(loc_.level - pmesh_->root_level));
   oymin = 0;
   oymax = 0;
   nymax = 1;
@@ -183,12 +182,12 @@ void MeshBlockTree::Refine(int &nnew)
   if (pmesh_->nx2gt1) {
     oymin = -1;
     oymax = 1;
-    nymax = (pmesh_->nmbroot_x2<<(loc_.level - pmesh_->root_level));
+    nymax = (pmesh_->nmb_rootx2<<(loc_.level - pmesh_->root_level));
   }
   if (pmesh_->nx3gt1) { // 3D
     ozmin = -1;
     ozmax = 1;
-    nzmax = (pmesh_->nmbroot_x3<<(loc_.level - pmesh_->root_level));
+    nzmax = (pmesh_->nmb_rootx3<<(loc_.level - pmesh_->root_level));
   }
 
   for (std::int32_t oz=ozmin; oz<=ozmax; oz++) {
@@ -333,7 +332,7 @@ void MeshBlockTree::CountMeshBlock(int& count)
 //                                           int *pglist, int& count)
 //  \brief creates the Location list sorted by Z-ordering
 
-void MeshBlockTree::GetMeshBlockList(LogicalLocation *list, int *pglist, int& count)
+void MeshBlockTree::CreateMeshBlockList(LogicalLocation *list, int *pglist, int& count)
 {
   if (loc_.level == 0) count=0;
 
@@ -344,7 +343,7 @@ void MeshBlockTree::GetMeshBlockList(LogicalLocation *list, int *pglist, int& co
     count++;
   } else {
     for (int n=0; n<nleaf_; n++) {
-      if (pleaf_[n] != nullptr) {pleaf_[n]->GetMeshBlockList(list, pglist, count);}
+      if (pleaf_[n] != nullptr) {pleaf_[n]->CreateMeshBlockList(list, pglist, count);}
     }
   }
   return;
@@ -371,12 +370,12 @@ MeshBlockTree* MeshBlockTree::FindNeighbor(LogicalLocation myloc,
   lx+=ox1; ly+=ox2; lz+=ox3;
   if (lx<0) {
     if (pmesh_->mesh_bcs[BoundaryFace::inner_x1] == BoundaryFlag::periodic) {
-      lx = (pmesh_->nmbroot_x1<<(ll - pmesh_->root_level)) - 1;
+      lx = (pmesh_->nmb_rootx1<<(ll - pmesh_->root_level)) - 1;
     } else {
       return nullptr;
     }
   }
-  if (lx>=pmesh_->nmbroot_x1<<(ll-pmesh_->root_level)) {
+  if (lx>=pmesh_->nmb_rootx1<<(ll-pmesh_->root_level)) {
     if (pmesh_->mesh_bcs[BoundaryFace::outer_x1] == BoundaryFlag::periodic) {
       lx = 0;
     } else {
@@ -385,19 +384,19 @@ MeshBlockTree* MeshBlockTree::FindNeighbor(LogicalLocation myloc,
   }
   if (ly<0) {
     if (pmesh_->mesh_bcs[BoundaryFace::inner_x2] == BoundaryFlag::periodic) {
-      ly = (pmesh_->nmbroot_x2<<(ll - pmesh_->root_level)) - 1;
+      ly = (pmesh_->nmb_rootx2<<(ll - pmesh_->root_level)) - 1;
     } else {
       return nullptr;
     }
   }
-  if (ly>=pmesh_->nmbroot_x2<<(ll-pmesh_->root_level)) {
+  if (ly>=pmesh_->nmb_rootx2<<(ll-pmesh_->root_level)) {
     if (pmesh_->mesh_bcs[BoundaryFace::outer_x2] == BoundaryFlag::periodic) {
       ly = 0;
     } else {
       return nullptr;
     }
   }
-  std::int32_t num_x3 = pmesh_->nmbroot_x3<<(ll - pmesh_->root_level);
+  std::int32_t num_x3 = pmesh_->nmb_rootx3<<(ll - pmesh_->root_level);
   if (lz<0) {
     if (pmesh_->mesh_bcs[BoundaryFace::inner_x3] == BoundaryFlag::periodic) {
       lz = num_x3 - 1;

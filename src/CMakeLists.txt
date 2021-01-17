@@ -12,16 +12,9 @@ add_executable(
         parameter_input.cpp
 
         bvals/bvals.cpp
-        bvals/cc_send.cpp
-        bvals/cc_recv.cpp
-        bvals/reflect.cpp
-        bvals/outflow.cpp
+        bvals/send_buffers.cpp
+        bvals/recv_buffers.cpp
 
-        eos/eos.cpp
-        eos/adiabatic_hydro.cpp
-        eos/isothermal_hydro.cpp
-        eos/adiabatic_mhd.cpp
-        eos/isothermal_mhd.cpp
 
         driver/driver.cpp
 
@@ -29,11 +22,18 @@ add_executable(
         hydro/hydro_divflux.cpp
         hydro/hydro_newdt.cpp
         hydro/hydro_update.cpp
+        hydro/bvals/apply_physical_bcs.cpp
+        hydro/bvals/outflow.cpp
+        hydro/bvals/reflect.cpp
+        hydro/eos/hydro_eos.cpp
+        hydro/eos/adiabatic_hydro.cpp
+        hydro/eos/isothermal_hydro.cpp
 
-        mesh/interface_physics.cpp
+        mesh/mesh_physics.cpp
         mesh/load_balance.cpp
         mesh/mesh.cpp
         mesh/meshblock.cpp
+        mesh/meshblock_pack.cpp
         mesh/meshblock_tree.cpp
 
         outputs/io_wrapper.cpp

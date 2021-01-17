@@ -10,8 +10,6 @@
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
-#include "outputs/io_wrapper.hpp"
-#include "bvals/bvals.hpp"
 #include "mesh.hpp"
 
 #if MPI_PARALLEL_ENABLED
@@ -89,7 +87,7 @@ void Mesh::LoadBalance(double *clist, int *rlist, int *slist, int *nlist, int nb
 void Mesh::ResetLoadBalanceCounters()
 {
   if (lb_automatic_) {
-    for (auto it=mblocks.begin(); it<mblocks.end(); ++it) {
+    for (auto it=pmb_pack->mblocks.begin(); it<pmb_pack->mblocks.end(); ++it) {
       costlist[it->mb_gid] = std::numeric_limits<double>::min();
       it->lb_cost = std::numeric_limits<double>::min();
     }

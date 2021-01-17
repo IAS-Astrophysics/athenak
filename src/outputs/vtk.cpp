@@ -194,13 +194,14 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
     header_offset += msg.str().size();}
 
     // Loop over MeshBlocks
+    auto cells = pm->pmb_pack->mb_cells;
     int nout_mbs = static_cast<int>(out_data_.size());
     for (int m=0; m<nout_mbs; ++m) {
       LogicalLocation loc = pm->loclist[out_data_gid_[m]];
       MeshBlock* pmb = pm->FindMeshBlock(out_data_gid_[m]);
-      int &mb_nx1 = pmb->mb_cells.nx1;
-      int &mb_nx2 = pmb->mb_cells.nx2;
-      int &mb_nx3 = pmb->mb_cells.nx3;
+      int &mb_nx1 = cells.nx1;
+      int &mb_nx2 = cells.nx2;
+      int &mb_nx3 = cells.nx3;
       size_t data_offset = (loc.lx1*mb_nx1 + loc.lx2*(mb_nx2*nout1) +
         loc.lx3*(mb_nx3*nout1*nout2))*sizeof(float);
 

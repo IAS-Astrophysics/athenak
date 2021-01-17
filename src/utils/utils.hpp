@@ -6,7 +6,8 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file utils.hpp
-//  \brief prototypes of functions and class definitions for utils/*.cpp files
+//  \brief prototypes of functions in utils/*.cpp files
+//  These "utility" functions provide a variety of useful features.
 
 void ShowConfig();
 void ChangeRunDir(const std::string dir);

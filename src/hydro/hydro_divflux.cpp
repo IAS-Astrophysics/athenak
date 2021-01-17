@@ -30,6 +30,7 @@ namespace hydro {
 
 TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
 {
+/***
   MeshBlock *pmb = pmesh_->FindMeshBlock(my_mbgid_);
   int is = pmb->mb_cells.is; int ie = pmb->mb_cells.ie;
   int js = pmb->mb_cells.js; int je = pmb->mb_cells.je;
@@ -282,6 +283,7 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
       member.team_barrier();
     }
   );
+****/
   return TaskStatus::complete;
 }
 

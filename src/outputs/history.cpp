@@ -84,19 +84,19 @@ void HistoryOutput::LoadOutputData(Mesh *pm)
     history_data[n] = 0.0;
   }
 
+    int is = pm->pmb_pack->mb_cells.is; int nx1 = pm->pmb_pack->mb_cells.nx1;
+    int js = pm->pmb_pack->mb_cells.js; int nx2 = pm->pmb_pack->mb_cells.nx2;
+    int ks = pm->pmb_pack->mb_cells.ks; int nx3 = pm->pmb_pack->mb_cells.nx3;
+
   // loop over all MeshBlocks on this MPI rank
-  for (int m=0; m<(pm->nmbthisrank); ++m) {
-    MeshBlock *pmb = &(pm->mblocks[m]);
-    int is = pmb->mb_cells.is; int nx1 = pmb->mb_cells.nx1;
-    int js = pmb->mb_cells.js; int nx2 = pmb->mb_cells.nx2;
-    int ks = pmb->mb_cells.ks; int nx3 = pmb->mb_cells.nx3;
+  for (int m=0; m<(pm->nmb_thisrank); ++m) {
     
-    auto &u0_ = pmb->phydro->u0;
+    auto &u0_ = pm->pmb_pack->phydro->u0;
     const int nkji = nx3*nx2*nx1;
     const int nji  = nx2*nx1;
 
     hist_sum::GlobalSum sum_this_mb;         
-    Kokkos::parallel_reduce("HistSums",Kokkos::RangePolicy<>(pmb->exe_space, 0, nkji),
+    Kokkos::parallel_reduce("HistSums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nkji),
       KOKKOS_LAMBDA(const int &idx, hist_sum::GlobalSum &mb_sum)
       {
         // compute n,k,j,i indices of thread
@@ -108,16 +108,16 @@ void HistoryOutput::LoadOutputData(Mesh *pm)
 
         // Hydro conserved variables:
         hist_sum::GlobalSum hvars;
-        hvars.the_array[0] = u0_(hydro::IDN,k,j,i);
-        hvars.the_array[1] = u0_(hydro::IM1,k,j,i);
-        hvars.the_array[2] = u0_(hydro::IM2,k,j,i);
-        hvars.the_array[3] = u0_(hydro::IM3,k,j,i);
-        hvars.the_array[4] = u0_(hydro::IEN,k,j,i);
+        hvars.the_array[0] = u0_(m,hydro::IDN,k,j,i);
+        hvars.the_array[1] = u0_(m,hydro::IM1,k,j,i);
+        hvars.the_array[2] = u0_(m,hydro::IM2,k,j,i);
+        hvars.the_array[3] = u0_(m,hydro::IM3,k,j,i);
+        hvars.the_array[4] = u0_(m,hydro::IEN,k,j,i);
 
         // Hydro KE
-        hvars.the_array[5] = 0.5*SQR(u0_(hydro::IM1,k,j,i))/u0_(hydro::IDN,k,j,i);
-        hvars.the_array[6] = 0.5*SQR(u0_(hydro::IM2,k,j,i))/u0_(hydro::IDN,k,j,i);
-        hvars.the_array[7] = 0.5*SQR(u0_(hydro::IM3,k,j,i))/u0_(hydro::IDN,k,j,i);
+        hvars.the_array[5] = 0.5*SQR(u0_(m,hydro::IM1,k,j,i))/u0_(m,hydro::IDN,k,j,i);
+        hvars.the_array[6] = 0.5*SQR(u0_(m,hydro::IM2,k,j,i))/u0_(m,hydro::IDN,k,j,i);
+        hvars.the_array[7] = 0.5*SQR(u0_(m,hydro::IM3,k,j,i))/u0_(m,hydro::IDN,k,j,i);
 
         // sum into parallel reduce
         mb_sum += hvars;
@@ -126,6 +126,7 @@ void HistoryOutput::LoadOutputData(Mesh *pm)
     );
 
     // normalize sums by volume of this MeshBlock and sum into output array
+    MeshBlock *pmb = &(pm->pmb_pack->mblocks[m]);
     Real volume = ((pmb->mb_size.x1max - pmb->mb_size.x1min)*
       (pmb->mb_size.x2max - pmb->mb_size.x2min)*(pmb->mb_size.x3max - pmb->mb_size.x3min))
       /static_cast<Real>(nx1*nx2*nx3);
@@ -181,7 +182,7 @@ void HistoryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
       std::fprintf(pfile,"[%d]=1-mom    ", iout++);
       std::fprintf(pfile,"[%d]=2-mom    ", iout++);
       std::fprintf(pfile,"[%d]=3-mom    ", iout++);
-      if (pm->mblocks.begin()->phydro->peos->eos_data.is_adiabatic) {
+      if (pm->pmb_pack->phydro->peos->eos_data.is_adiabatic) {
         std::fprintf(pfile,"[%d]=tot-E   ", iout++);
       }
       std::fprintf(pfile,"[%d]=1-KE     ", iout++);

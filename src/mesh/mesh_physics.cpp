@@ -3,7 +3,7 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file interface_physics.cpp
+//! \file mesh_physics.cpp
 //  \brief 
 
 #include <iostream>
@@ -19,14 +19,14 @@
 //----------------------------------------------------------------------------------------
 // \fn Mesh::SelectPhysics()
 
-void MeshBlock::InitPhysicsModules(ParameterInput *pin)
+void MeshBlockPack::AddPhysicsModules(ParameterInput *pin)
 {
-  // construct physics modules and tasks lists on this MeshBlock
+  // construct physics modules and tasks lists in this MeshBlockPack
   // physics modules
 
   // Hydro physics module
   if (pin->DoesBlockExist("hydro")) {
-    phydro = new hydro::Hydro(pmesh_, pin, mb_gid);          // construct new Hydro object
+    phydro = new hydro::Hydro(this, pin);   // construct new Hydro object
   } else {
     phydro = nullptr;
   }
@@ -42,16 +42,6 @@ void MeshBlock::InitPhysicsModules(ParameterInput *pin)
     phydro->HydroStageEndTasks(tl_stageend, none, hydro_end_tasks);
   }
 
-  // add physical boundary conditions, and make them depend on hydro_recv
-  // WARNING: If number or order of Hydro tasks is changed in Hydro::HydroStageRunTasks()
-  // then index of hydro_recv may need to be changed below
-  TaskID hydro_recv = hydro_run_tasks[4];
-  auto bvals_physical =
-    tl_stagerun.InsertTask(&BoundaryValues::ApplyPhysicalBCs, this->pbvals, hydro_recv);
-
-//  auto bvals_physical =
-//    tl_onestage.AddTask(&BoundaryValues::ApplyPhysicalBCs, pbvals, hydro_tasks.back());
-
   return;
 }
 
@@ -63,7 +53,7 @@ void Mesh::NewTimeStep(const Real tlim)
   // cycle over all MeshBlocks on this rank and find minimum dt
   // limit increase in timestep to 2x old value
   dt = 2.0*dt;
-  for (const auto &mb : mblocks) { dt = std::min(dt, (cfl_no)*(mb.phydro->dtnew) ); }
+  dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->dtnew) );
 
 #if MPI_PARALLEL_ENABLED
   // get minimum dt over all MPI ranks

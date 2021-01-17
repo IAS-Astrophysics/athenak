@@ -11,7 +11,6 @@
 //  (potentially on different levels) that tile the entire domain.
 
 #include <cstdint>  // int32_t
-#include <vector>
 
 // Define following structure before other "include" files to resolve declarations
 //----------------------------------------------------------------------------------------
@@ -22,6 +21,7 @@ struct RegionSize
 {
   Real x1min, x2min, x3min;
   Real x1max, x2max, x3max;
+  Real dx1, dx2, dx3;       // (uniform) grid spacing
 };
 
 //----------------------------------------------------------------------------------------
@@ -33,19 +33,18 @@ struct RegionCells
   int ng;                   // number of ghost cells
   int nx1, nx2, nx3;        // number of active cells (not including ghost zones)
   int is,ie,js,je,ks,ke;    // indices of ACTIVE cells
-  Real dx1, dx2, dx3;       // (uniform) grid spacing
 };
 
 //----------------------------------------------------------------------------------------
 //! \struct LogicalLocation
 //  \brief stores logical location and level of MeshBlock
+//  lx1/2/3 = logical location in x1/2/3 = index in array of nodes at current level
 // WARNING: values of lx? can exceed the range of std::int32_t with >30 levels
 // of AMR, even if the root grid consists of a single MeshBlock, since the corresponding
 // max index = 1*2^31 > INT_MAX = 2^31 -1 for most 32-bit signed integer types
 
 struct LogicalLocation
 {
-  // lx1/2/3 = logical location in x1/2/3 = index in array of nodes at current level
   std::int32_t lx1, lx2, lx3, level;  
   // comparison functions for sorting, and overloaded operator==
   static bool Lesser(const LogicalLocation &left, const LogicalLocation &right)
@@ -66,9 +65,9 @@ struct LogicalLocation
 // Forward declarations
 class Mesh;
 
-#include "bvals/bvals.hpp"
 #include "meshblock_tree.hpp"
 #include "meshblock.hpp"
+#include "meshblock_pack.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \class Mesh
@@ -76,20 +75,21 @@ class Mesh;
 
 class Mesh
 {
- // the three mesh classes (Mesh, MeshBlock, MeshBlockTree) like to play together
+ // mesh classes (Mesh, MeshBlock, MeshBlockPack, MeshBlockTree) like to play together
  friend class MeshBlock;
+ friend class MeshBlockPack;
  friend class MeshBlockTree;
+
  public:
-  // 2x function overloads of ctor: normal and restarted simulation
   explicit Mesh(ParameterInput *pin);
-  Mesh(ParameterInput *pin, IOWrapper &resfile);
+  Mesh(ParameterInput *pin, IOWrapper &resfile);  // ctor for restarts
   ~Mesh();
 
   // accessors
   MeshBlock* FindMeshBlock(int tgid)
   {
 //    assert (tgid >= gids && tgid <= gide);
-    return &(mblocks[tgid - gids]);
+    return &(pmb_pack->mblocks[tgid - gids]);
   }
 
   // data
@@ -99,9 +99,9 @@ class Mesh
   bool nx2gt1, nx3gt1;        // flags to indictate 2D/3D calculations
   bool adaptive, multilevel;
 
-  int nmbroot_x1, nmbroot_x2, nmbroot_x3; // # of MeshBlocks at root level in each dir
-  int nmbtotal;                  // total number of MeshBlocks across all levels
-  int nmbthisrank;               // number of MeshBlocks on this MPI rank (local)
+  int nmb_rootx1, nmb_rootx2, nmb_rootx3; // # of MeshBlocks at root level in each dir
+  int nmb_total;                 // total number of MeshBlocks across all levels
+  int nmb_thisrank;              // number of MeshBlocks on this MPI rank (local)
   int nmb_created;               // number of MeshBlcoks created via AMR during run
   int nmb_deleted;               // number of MeshBlcoks deleted via AMR during run
 
@@ -127,12 +127,13 @@ class Mesh
   Real time, dt, cfl_no;           
   int ncycle;
 
-  std::vector<MeshBlock> mblocks; // MeshBlocks belonging to this MPI rank
+  MeshBlockPack* pmb_pack;  // container for MeshBlocks on this rank
 
   // functions
   void BuildTree(ParameterInput *pin);
   void NewTimeStep(const Real tlim);
-  void OutputMeshStructure(int flag);
+  void PrintMeshDiagnostics();
+  void WriteMeshStructure();
   BoundaryFlag GetBoundaryFlag(const std::string& input_string);
   std::string GetBoundaryString(BoundaryFlag input_flag);
 
@@ -144,11 +145,9 @@ class Mesh
   int lb_cyc_interval_;
   int cyc_since_lb_;
 
-  std::unique_ptr<MeshBlockTree> ptree;  // binary/quad/oct-tree
+  std::unique_ptr<MeshBlockTree> ptree;  // pointer to root node in binary/quad/oct-tree
 
   // functions
-  void SetBlockSizeAndBoundaries(LogicalLocation loc, RegionSize &size,
-                                 RegionCells &cells, BoundaryFlag *bcs);
   void LoadBalance(double *clist, int *rlist, int *slist, int *nlist, int nb);
   void ResetLoadBalanceCounters();
 };

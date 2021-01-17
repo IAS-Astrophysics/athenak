@@ -63,10 +63,10 @@ enum TimeEvolution {stationary, kinematic, dynamic};
 //----------------------------------------------------------------------------------------
 // define default Kokkos execution and memory spaces
 
-using DevExecSpace = Kokkos::DefaultExecutionSpace;
+using DevExeSpace = Kokkos::DefaultExecutionSpace;
 using DevMemSpace = Kokkos::DefaultExecutionSpace::memory_space;
 using HostMemSpace = Kokkos::HostSpace;
-using ScratchMemSpace = DevExecSpace::scratch_memory_space;
+using ScratchMemSpace = DevExeSpace::scratch_memory_space;
 using LayoutWrapper = Kokkos::LayoutRight;   // increments last index fastest
 
 // alias template declarations for construction of 1D...6D AthenaArrays as Kokkos::View
@@ -128,7 +128,7 @@ struct FaceArray3D {
 
 // 3D loop using Kokkos 1D Range
 template <typename Function>
-inline void par_for(const std::string &name, DevExecSpace exec_space,
+inline void par_for(const std::string &name, DevExeSpace exec_space,
                     const int &kl, const int &ku, const int &jl, const int &ju,
                     const int &il, const int &iu, const Function &function)
 { 
@@ -153,7 +153,7 @@ inline void par_for(const std::string &name, DevExecSpace exec_space,
 
 // 4D loop using Kokkos 1D Range
 template <typename Function>
-inline void par_for(const std::string &name, DevExecSpace exec_space,
+inline void par_for(const std::string &name, DevExeSpace exec_space,
                     const int &nl, const int &nu, const int &kl, const int &ku,
                     const int &jl, const int &ju, const int &il, const int &iu,
                     const Function &function) {
@@ -180,9 +180,43 @@ inline void par_for(const std::string &name, DevExecSpace exec_space,
   });
 }
 
+// 5D loop using Kokkos 1D Range
+template <typename Function>
+inline void par_for(const std::string &name, DevExeSpace exec_space,
+                    const int &ml, const int &mu,
+                    const int &nl, const int &nu, const int &kl, const int &ku,
+                    const int &jl, const int &ju, const int &il, const int &iu,
+                    const Function &function) {
+  // compute total number of elements and call Kokkos::parallel_for()
+  const int nm = mu - ml + 1;
+  const int nn = nu - nl + 1;
+  const int nk = ku - kl + 1;
+  const int nj = ju - jl + 1;
+  const int ni = iu - il + 1;
+  const int nmnkji = nm * nn * nk * nj * ni;
+  const int nnkji  = nn * nk * nj * ni;
+  const int nkji   = nk * nj * ni;
+  const int nji    = nj * ni;
+  Kokkos::parallel_for(name, Kokkos::RangePolicy<>(exec_space, 0, nmnkji),
+                       KOKKOS_LAMBDA(const int &idx)
+  {
+    // compute n,k,j,i indices of thread and call function
+    int m = (idx)/nnkji;
+    int n = (idx - m*nnkji)/nkji;
+    int k = (idx - m*nnkji - n*nkji)/nji;
+    int j = (idx - m*nnkji - n*nkji - k*nji)/ni;
+    int i = (idx - m*nnkji - n*nkji - k*nji - j*ni) + il;
+    m += ml;
+    n += nl;
+    k += kl;
+    j += jl;
+    function(m, n, k, j, i);
+  });
+}
+
 // 1D outer parallel loop using Kokkos Teams
 template <typename Function>
-inline void par_for_outer(const std::string &name, DevExecSpace exec_space,
+inline void par_for_outer(const std::string &name, DevExeSpace exec_space,
                           size_t scr_size, const int scr_level,
                           const int kl, const int ku, const Function &function)
 {
@@ -198,7 +232,7 @@ inline void par_for_outer(const std::string &name, DevExecSpace exec_space,
 
 // 2D outer parallel loop using Kokkos Teams
 template <typename Function>
-inline void par_for_outer(const std::string &name, DevExecSpace exec_space,
+inline void par_for_outer(const std::string &name, DevExeSpace exec_space,
                           size_t scr_size, const int scr_level,
                           const int kl, const int ku, const int jl, const int ju,
                           const Function &function)
@@ -218,7 +252,7 @@ inline void par_for_outer(const std::string &name, DevExecSpace exec_space,
 
 // 3D outer parallel loop using Kokkos Teams
 template <typename Function>
-inline void par_for_outer(const std::string &name, DevExecSpace exec_space,
+inline void par_for_outer(const std::string &name, DevExeSpace exec_space,
                           size_t scr_size, const int scr_level,
                           const int nl, const int nu, const int kl, const int ku,
                           const int jl, const int ju, const Function &function)

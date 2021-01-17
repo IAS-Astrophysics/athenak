@@ -6,7 +6,8 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file bvals.hpp
-//  \brief defines BoundaryBase, BoundaryValues classes used for setting BCs on all data
+//  \brief defines structures and provides prototypes of functions used for boundary
+//  communication.  These are not part of any class, but are general utility functions.
 
 // identifiers for all 6 faces of a MeshBlock
 enum BoundaryFace {undef=-1, inner_x1, outer_x1, inner_x2, outer_x2, inner_x3, outer_x3};
@@ -18,9 +19,8 @@ enum class BoundaryFlag {undef=-1, block, reflect, outflow, user, periodic};
 enum class BoundaryCommStatus {undef=-1, waiting, sent, received};
 
 #include "athena.hpp"
-#include "parameter_input.hpp"
-#include "tasklist/task_list.hpp"
 #include "mesh/mesh.hpp"
+#include "tasklist/task_list.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \struct NeighborBlock
@@ -43,7 +43,7 @@ struct NeighborBlock
 
 struct BoundaryBuffer
 {
-  int il, iu, jl, ju, kl, ku;
+  AthenaArray1D<int> index;
   AthenaArray2D<Real> data;
   BoundaryCommStatus bcomm_stat;
 #if MPI_PARALLEL_ENABLED
@@ -51,53 +51,33 @@ struct BoundaryBuffer
 #endif
   // constructor
   BoundaryBuffer(int nvar, int i0, int i1, int j0, int j1, int k0, int k1) :
-    il(i0), iu(i1), jl(j0), ju(j1), kl(k0), ku(k1),
-    data("bbuff", nvar, ((i1-i0+1)*(j1-j0+1)*(k1-k0+1))),
-    bcomm_stat(BoundaryCommStatus::undef) {}
+    index("bbuff_idx", 6),
+    data("bbuff", nvar, ((i1-i0+1)*(j1-j0+1)*(k1-k0+1)))
+  {
+    index(0) = i0;
+    index(1) = i1;
+    index(2) = j0;
+    index(3) = j1;
+    index(4) = k0;
+    index(5) = k1;
+    bcomm_stat = BoundaryCommStatus::undef;
+  }
 };
 
 // Forward declarations
-class Mesh;
+class MeshBlock;
 
 //----------------------------------------------------------------------------------------
-//! \class BoundaryBase
-//  \brief
+// boundary function prototypes
 
-class BoundaryValues {
- public:
-  BoundaryValues(Mesh* pm, ParameterInput *pin, int gid, BoundaryFlag *bcs);
-  ~BoundaryValues();
-
-  // data
-  BoundaryFlag bndry_flag[6]; // enums specifying BCs at all 6 faces of this MeshBlock
-
-  std::vector<NeighborBlock> nghbr;
-
-  // functions
-  void AllocateBuffersCC(const RegionCells ncells, const int nvar,
+void AllocateBuffersCCVars(const int nvar, const RegionCells ncells,
     std::vector<BoundaryBuffer> &send_buf, std::vector<BoundaryBuffer> &recv_buf);
-  int CreateMPItag(int lid, int buff_id, int phys_id);
-  TaskStatus SendBuffers(AthenaArray4D<Real> &a);
-  TaskStatus RecvBuffers(AthenaArray4D<Real> &a);
-
-  TaskStatus ApplyPhysicalBCs(Driver* pd, int stage);
-  void ReflectInnerX1();
-  void ReflectOuterX1();
-  void ReflectInnerX2();
-  void ReflectOuterX2();
-  void ReflectInnerX3();
-  void ReflectOuterX3();
-  void OutflowInnerX1();
-  void OutflowOuterX1();
-  void OutflowInnerX2();
-  void OutflowOuterX2();
-  void OutflowInnerX3();
-  void OutflowOuterX3();
-
- private:
-  Mesh *pmesh_;
-  int my_mbgid_;
-
-};
+int CreateMPITag(int lid, int buff_id, int phys_id);
+TaskStatus SendBuffers(AthenaArray5D<Real> &a, 
+  std::vector<std::vector<BoundaryBuffer>> send_buf,
+  std::vector<std::vector<BoundaryBuffer>> recv_buf, std::vector<MeshBlock> mblocks);
+TaskStatus RecvBuffers(AthenaArray5D<Real> &a,
+  std::vector<std::vector<BoundaryBuffer>> send_buf,
+  std::vector<std::vector<BoundaryBuffer>> recv_buf, std::vector<MeshBlock> mblocks);
 
 #endif // BVALS_BVALS_HPP_

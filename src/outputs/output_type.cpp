@@ -35,18 +35,18 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
 
   // set size & starting indices of output arrays, adjusted accordingly if gz included 
   // Since all MeshBlocks the same, only need to compute values from first MB
-  auto it = pm->mblocks.begin();
+  auto ncells = pm->pmb_pack->mb_cells;
   if (out_params.include_gzs) {
-    int nout1 = it->mb_cells.nx1 + 2*(it->mb_cells.ng);
-    int nout2 = (it->mb_cells.nx2 > 1)? (it->mb_cells.nx2 + 2*(it->mb_cells.ng)) : 1;
-    int nout3 = (it->mb_cells.nx3 > 1)? (it->mb_cells.nx3 + 2*(it->mb_cells.ng)) : 1;
+    int nout1 = ncells.nx1 + 2*(ncells.ng);
+    int nout2 = (ncells.nx2 > 1)? (ncells.nx2 + 2*(ncells.ng)) : 1;
+    int nout3 = (ncells.nx3 > 1)? (ncells.nx3 + 2*(ncells.ng)) : 1;
     ois = 0; oie = nout1-1;
     ojs = 0; oje = nout2-1;
     oks = 0; oke = nout3-1;
   } else {
-    ois = it->mb_cells.is; oie = it->mb_cells.ie;
-    ojs = it->mb_cells.js; oje = it->mb_cells.je;
-    oks = it->mb_cells.ks; oke = it->mb_cells.ke;
+    ois = ncells.is; oie = ncells.ie;
+    ojs = ncells.js; oje = ncells.je;
+    oks = ncells.ks; oke = ncells.ke;
   }
 
   // parse list of variables for each physics and flag variables to be output
@@ -143,39 +143,37 @@ void OutputType::LoadOutputData(Mesh *pm)
   // TODO: get this working for multiple physics, which may be either defined/undef
 
   // loop over all MeshBlocks
-  for (auto &mb : pm->mblocks) {
+  MeshBlockPack* pmbp;
+  int nmb = pmbp->nmb_thispack;
+  for (int m=0; m<nmb; ++m) {
 
+    auto cells = pmbp->mb_cells;
+    auto size  = pmbp->mblocks[m].mb_size;
     // check for slicing in each dimension
     if (out_params.slice1) {
       // skip if slice is out of range of this MB
-      if (out_params.slice_x1 <  mb.mb_size.x1min ||
-          out_params.slice_x1 >= mb.mb_size.x1max) { continue; }
+      if (out_params.slice_x1 <  size.x1min ||
+          out_params.slice_x1 >= size.x1max) { continue; }
       // set index of slice
-      Real &xmin = mb.mb_size.x1min;
-      Real &xmax = mb.mb_size.x1max;
-      ois = CellCenterIndex(out_params.slice_x1, mb.mb_cells.nx1, xmin, xmax);
+      ois = CellCenterIndex(out_params.slice_x1, cells.nx1, size.x1min, size.x1max);
       oie = ois;
     }
 
     if (out_params.slice2) {
       // skip if slice is out of range of this MB
-      if (out_params.slice_x2 <  mb.mb_size.x2min ||
-          out_params.slice_x2 >= mb.mb_size.x2max) { continue; }
+      if (out_params.slice_x2 <  size.x2min ||
+          out_params.slice_x2 >= size.x2max) { continue; }
       // set index of slice
-      Real &xmin = mb.mb_size.x2min;
-      Real &xmax = mb.mb_size.x2max;
-      ojs = CellCenterIndex(out_params.slice_x2, mb.mb_cells.nx2, xmin, xmax);
+      ojs = CellCenterIndex(out_params.slice_x2, cells.nx2, size.x2min, size.x2max);
       oje = ojs;
     }
 
     if (out_params.slice3) {
       // skip if slice is out of range of this MB
-      if (out_params.slice_x3 <  mb.mb_size.x3min ||
-          out_params.slice_x3 >= mb.mb_size.x3max) { continue; }
+      if (out_params.slice_x3 <  size.x3min ||
+          out_params.slice_x3 >= size.x3max) { continue; }
       // set index of slice
-      Real &xmin = mb.mb_size.x3min;
-      Real &xmax = mb.mb_size.x3max;
-      oks = CellCenterIndex(out_params.slice_x3, mb.mb_cells.nx3, xmin, xmax);
+      oks = CellCenterIndex(out_params.slice_x3, cells.nx3, size.x3min, size.x3max);
       oke = oks;
     }
 
@@ -186,65 +184,65 @@ void OutputType::LoadOutputData(Mesh *pm)
       if (out_data_label_[n].compare("Dens")  == 0) {
         // Note capital "D" used to distinguish conserved from primitive mass density
         // (important for relativistic dynamics)
-        auto dev_slice = Kokkos::subview(mb.phydro->u0, static_cast<int>(hydro::IDN),
+        auto dev_slice = Kokkos::subview(pmbp->phydro->u0, m,static_cast<int>(hydro::IDN),
           std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
         Kokkos::deep_copy(dev_buff,dev_slice);
       }
       if (out_data_label_[n].compare("Mom1")  == 0) {
-        auto dev_slice = Kokkos::subview(mb.phydro->u0, static_cast<int>(hydro::IM1),
+        auto dev_slice = Kokkos::subview(pmbp->phydro->u0, m,static_cast<int>(hydro::IM1),
           std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
         Kokkos::deep_copy(dev_buff,dev_slice);
       }
       if (out_data_label_[n].compare("Mom2")  == 0) {
-        auto dev_slice = Kokkos::subview(mb.phydro->u0, static_cast<int>(hydro::IM2),
+        auto dev_slice = Kokkos::subview(pmbp->phydro->u0, m,static_cast<int>(hydro::IM2),
           std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
         Kokkos::deep_copy(dev_buff,dev_slice);
       }
       if (out_data_label_[n].compare("Mom3")  == 0) {
-        auto dev_slice = Kokkos::subview(mb.phydro->u0, static_cast<int>(hydro::IM3),
+        auto dev_slice = Kokkos::subview(pmbp->phydro->u0, m,static_cast<int>(hydro::IM3),
           std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
         Kokkos::deep_copy(dev_buff,dev_slice);
       }
       if (out_data_label_[n].compare("Ener")  == 0) {
-        auto dev_slice = Kokkos::subview(mb.phydro->u0, static_cast<int>(hydro::IEN),
+        auto dev_slice = Kokkos::subview(pmbp->phydro->u0, m,static_cast<int>(hydro::IEN),
           std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
         Kokkos::deep_copy(dev_buff,dev_slice);
       }
       if (out_data_label_[n].compare("dens")  == 0) {
-        auto dev_slice = Kokkos::subview(mb.phydro->w0, static_cast<int>(hydro::IDN),
+        auto dev_slice = Kokkos::subview(pmbp->phydro->w0, m,static_cast<int>(hydro::IDN),
           std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
         Kokkos::deep_copy(dev_buff,dev_slice);
       }
       if (out_data_label_[n].compare("velx")  == 0) {
-        auto dev_slice = Kokkos::subview(mb.phydro->w0, static_cast<int>(hydro::IVX),
+        auto dev_slice = Kokkos::subview(pmbp->phydro->w0, m,static_cast<int>(hydro::IVX),
           std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
         Kokkos::deep_copy(dev_buff,dev_slice);
       }
       if (out_data_label_[n].compare("vely")  == 0) {
-        auto dev_slice = Kokkos::subview(mb.phydro->w0, static_cast<int>(hydro::IVY),
+        auto dev_slice = Kokkos::subview(pmbp->phydro->w0, m,static_cast<int>(hydro::IVY),
           std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
         Kokkos::deep_copy(dev_buff,dev_slice);
       }
       if (out_data_label_[n].compare("velz")  == 0) {
-        auto dev_slice = Kokkos::subview(mb.phydro->w0, static_cast<int>(hydro::IVZ),
+        auto dev_slice = Kokkos::subview(pmbp->phydro->w0, m,static_cast<int>(hydro::IVZ),
           std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
         Kokkos::deep_copy(dev_buff,dev_slice);
       }
       if (out_data_label_[n].compare("pres")  == 0) {
-        auto dev_slice = Kokkos::subview(mb.phydro->w0, static_cast<int>(hydro::IPR),
+        auto dev_slice = Kokkos::subview(pmbp->phydro->w0, m,static_cast<int>(hydro::IPR),
           std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
         Kokkos::deep_copy(dev_buff,dev_slice);
       }
       // TODO get this working for multiple scalars
       if (out_data_label_[n].compare("S0")  == 0) {
-        int nhyd = mb.phydro->nhydro;
-        auto dev_slice = Kokkos::subview(mb.phydro->u0, static_cast<int>(nhyd),
+        int nhyd = pmbp->phydro->nhydro;
+        auto dev_slice = Kokkos::subview(pmbp->phydro->u0, m, static_cast<int>(nhyd),
           std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
         Kokkos::deep_copy(dev_buff,dev_slice);
       }
       if (out_data_label_[n].compare("r0")  == 0) {
-        int nhyd = mb.phydro->nhydro;
-        auto dev_slice = Kokkos::subview(mb.phydro->w0, static_cast<int>(nhyd),
+        int nhyd = pmbp->phydro->nhydro;
+        auto dev_slice = Kokkos::subview(pmbp->phydro->w0, m, static_cast<int>(nhyd),
           std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
         Kokkos::deep_copy(dev_buff,dev_slice);
       }
@@ -258,6 +256,6 @@ void OutputType::LoadOutputData(Mesh *pm)
 
     // append variables on this MeshBlock to end of out_data_ vector
     out_data_.push_back(new_data);
-    out_data_gid_.push_back(mb.mb_gid);
+    out_data_gid_.push_back(pmbp->mblocks[m].mb_gid);
   }
 }

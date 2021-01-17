@@ -6,18 +6,15 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file meshblock.hpp
-//  \brief defines MeshBlock class, and various structs used in them
-//  The Mesh is the overall grid structure, and MeshBlocks are local patches of data
-//  (potentially on different levels) that tile the entire domain.
+//  \brief defines MeshBlock class, a very lightweight class to store data about
+//  MeshBlocks inside a given MeshBlockPack.
+//  The Mesh is the overall grid structure, MeshBlocks are local patches of data
+//  (potentially on different levels) that tile the entire domain and are stored in
+//  containers called MashBlockPack.
 
-#include <memory>
-#include "parameter_input.hpp"
-#include "tasklist/task_list.hpp"
-
-// Forward declarations
-class BoundaryValues;
-namespace hydro {class Hydro;}
-namespace mhd {class MHD;}
+#include <vector>
+#include "bvals/bvals.hpp"
+#include "meshblock_pack.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \class MeshBlock
@@ -25,41 +22,26 @@ namespace mhd {class MHD;}
 
 class MeshBlock
 {
- // the three mesh classes (Mesh, MeshBlock, MeshBlockTree) like to play together
+ // mesh classes (Mesh, MeshBlock, MeshBlockPack, MeshBlockTree) like to play together
  friend class Mesh;
+ friend class MeshBlockPack;
  friend class MeshBlockTree;
+
  public:
-  MeshBlock(Mesh *pm, ParameterInput *pin, int igid,
-    RegionSize isize, RegionCells icells, BoundaryFlag *ibcs);
+  MeshBlock(MeshBlockPack *pp, int igid);
   ~MeshBlock();
 
   // data
   int mb_gid;             // grid ID, unique identifier for this MeshBlock
   RegionSize  mb_size;    // physical size of this MeshBlock
-  RegionCells mb_cells;   // info about cells in this MeshBlock
-  DevExecSpace exe_space; // Kokkos execution space for this MeshBlock
-  // cells on next coarser level MB (i.e. ncells2=nx2/2 + 2*nghost, if nx2>1)
-  RegionCells cmb_cells;
+  BoundaryFlag mb_bcs[6]; // boundary conditions at 6 faces of MeshBlock
 
-  BoundaryValues* pbvals; // object containing neighbor list, BC flags, etc
+  std::vector<NeighborBlock> nghbr;  // vector storing data about all neighboring MBs
 
-  // physics modules (controlled by InitPhysicsModules)
-  hydro::Hydro *phydro;
-  mhd::MHD *pmhd;
-
-  // task lists (each physics module adds its own tasks to each list)
-  TaskList tl_stagestart;
-  TaskList tl_stagerun;
-  TaskList tl_stageend;
-
-  // functions
-  void InitPhysicsModules(ParameterInput *pin);
-  int NumberOfMeshBlockCells() { return mb_cells.nx1 * mb_cells.nx2 * mb_cells.nx3; }
-  int NumberOfCoarseMeshBlockCells() {return cmb_cells.nx1 *cmb_cells.nx2 *cmb_cells.nx3;}
 
  private:
   // data
-  Mesh *pmesh_;    // ptr to Mesh containing this MeshBlock
+  MeshBlockPack* pmy_pack;
   double lb_cost;  // cost of updating this MeshBlock for load balancing
 
   // functions

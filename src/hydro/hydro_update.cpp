@@ -19,6 +19,7 @@ namespace hydro {
 
 TaskStatus Hydro::HydroUpdate(Driver *pdrive, int stage)
 {
+/****
   MeshBlock *pmb = pmesh_->FindMeshBlock(my_mbgid_);
   int is = pmb->mb_cells.is; int ie = pmb->mb_cells.ie;
   int js = pmb->mb_cells.js; int je = pmb->mb_cells.je;
@@ -45,6 +46,7 @@ TaskStatus Hydro::HydroUpdate(Driver *pdrive, int stage)
     }
   );
 
+****/
   return TaskStatus::complete;
 }
 } // namespace hydro

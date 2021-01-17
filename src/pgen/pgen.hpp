@@ -19,13 +19,13 @@ class ProblemGenerator {
   // data
 
   // function pointer for pgen name
-  void (ProblemGenerator::*pgen_func_) (MeshBlock*, ParameterInput*);
+  void (ProblemGenerator::*pgen_func_) (MeshBlockPack*, ParameterInput*);
 
   // predefined problem generator functions
-  void ShockTube_(MeshBlock *pmb, ParameterInput *pin);
-  void Advection_(MeshBlock *pmb, ParameterInput *pin);
-  void LinearWave_(MeshBlock *pmb, ParameterInput *pin);
-  void LWImplode_(MeshBlock *pmb, ParameterInput *pin);
+  void ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin);
+  void Advection_(MeshBlockPack *pmbp, ParameterInput *pin);
+  void LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin);
+  void LWImplode_(MeshBlockPack *pmbp, ParameterInput *pin);
 
  private:
   Mesh* pmesh_;

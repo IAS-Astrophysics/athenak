@@ -174,7 +174,7 @@ int main(int argc, char *argv[])
             std::cout << "  -d <directory>  specify run dir [current dir]\n";
             std::cout << "  -n              parse input file and quit\n";
             std::cout << "  -c              show configuration and quit\n";
-            std::cout << "  -m <nproc>      output mesh structure and quit\n";
+            std::cout << "  -m              output mesh structure and quit\n";
             std::cout << "  -h              this help\n";
             ShowConfig();
           }
@@ -221,17 +221,16 @@ int main(int argc, char *argv[])
   }
 
   //--- Step 4. --------------------------------------------------------------------------
-  // Construct Mesh and MeshBlockTree and store smart pointer to Mesh.  Then initialize
-  // Tree and construct MeshBlocks on this rank
+  // Construct Mesh.  Then build MeshBlockTree and add MeshBlockPack containing MeshBlocks
+  // on this rank.  Latter cannot be performed in Mesh constructor since it requires
+  // pointer to Mesh.
 
   Mesh mesh0(&par_input);
   mesh0.BuildTree(&par_input);
 
-  // output Mesh diagnostics
-  if (global_variable::my_rank == 0) mesh0.OutputMeshStructure(marg_flag);
-
   //  If code was run with -m option, write mesh structure to file and quit.
   if (marg_flag) {
+    if (global_variable::my_rank == 0) mesh0.WriteMeshStructure();
     Kokkos::finalize();
 #if MPI_PARALLEL_ENABLED
     MPI_Finalize();
@@ -240,9 +239,10 @@ int main(int argc, char *argv[])
   }
 
   //--- Step 5. --------------------------------------------------------------------------
-  // Construct and initialize Physics modules.
+  // Add physics modules to MeshBlockPack.  Note this occurs after Mesh (MeshBlocks and
+  // MeshBlockPack) are fully contructed.
 
-  for (auto &pmb : mesh0.mblocks) {pmb.InitPhysicsModules(&par_input);}
+  mesh0.pmb_pack->AddPhysicsModules(&par_input);
 
   //--- Step 6. --------------------------------------------------------------------------
   // Set initial conditions by calling problem generator, or reading restart file

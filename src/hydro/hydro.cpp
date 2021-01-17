@@ -12,29 +12,35 @@
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
 #include "mesh/mesh.hpp"
-#include "eos/eos.hpp"
+#include "hydro/eos/hydro_eos.hpp"
 #include "hydro/hydro.hpp"
 
 namespace hydro {
 //----------------------------------------------------------------------------------------
 // constructor, initializes data structures and parameters
 
-Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
-  pmesh_(pm), my_mbgid_(gid),
-  u0("cons",1,1,1,1),
-  w0("prim",1,1,1,1),
-  u1("cons1",1,1,1,1),
-  divf("divF",1,1,1,1),
+Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
+  pmy_pack(ppack),
+  u0("cons",1,1,1,1,1),
+  w0("prim",1,1,1,1,1),
+  u1("cons1",1,1,1,1,1),
+  divf("divF",1,1,1,1,1),
   uflx_x1face("uflx_x1face",1,1,1),
   uflx_x2face("uflx_x2face",1,1,1),
   uflx_x3face("uflx_x3face",1,1,1)
 {
   // construct EOS object (no default)
-  peos = new EquationOfState(pmesh_, pin, my_mbgid_);
-  if (peos->eos_data.is_adiabatic) {
+  std::string eqn_of_state = pin->GetString("hydro","eos");
+  if (eqn_of_state.compare("adiabatic") == 0) {
+    peos = new AdiabaticHydro(ppack, pin);
     nhydro = 5;
-  } else {
+  } else if (eqn_of_state.compare("isothermal") == 0) {
+    peos = new IsothermalHydro(ppack, pin);
     nhydro = 4;
+  } else {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "<hydro> eos = '" << eqn_of_state << "' not implemented" << std::endl;
+    std::exit(EXIT_FAILURE);
   }
 
   // Initialize number of scalars
@@ -44,15 +50,21 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
   std::string evolution_t = pin->GetOrAddString("hydro","evolution","dynamic");
 
   // allocate memory for conserved and primitive variables
-  MeshBlock *pmb = pmesh_->FindMeshBlock(my_mbgid_);
-  int ncells1 = pmb->mb_cells.nx1 + 2*(pmb->mb_cells.ng);
-  int ncells2 = (pmb->mb_cells.nx2 > 1)? (pmb->mb_cells.nx2 + 2*(pmb->mb_cells.ng)) : 1;
-  int ncells3 = (pmb->mb_cells.nx3 > 1)? (pmb->mb_cells.nx3 + 2*(pmb->mb_cells.ng)) : 1;
-  Kokkos::realloc(u0, (nhydro+nscalars), ncells3, ncells2, ncells1);
-  Kokkos::realloc(w0, (nhydro+nscalars), ncells3, ncells2, ncells1);
+  int nmb = ppack->nmb_thispack;
+  auto &ncells = ppack->mb_cells;
+  int ncells1 = ncells.nx1 + 2*(ncells.ng);
+  int ncells2 = (ncells.nx2 > 1)? (ncells.nx2 + 2*(ncells.ng)) : 1;
+  int ncells3 = (ncells.nx3 > 1)? (ncells.nx3 + 2*(ncells.ng)) : 1;
+  Kokkos::realloc(u0, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
+  Kokkos::realloc(w0, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
 
   // allocate memory for boundary buffers
-  pmb->pbvals->AllocateBuffersCC(pmb->mb_cells, (nhydro+nscalars), send_buf, recv_buf);
+  for (int i=0; i<nmb; ++i) {
+    std::vector<BoundaryBuffer> snd, rcv;
+    AllocateBuffersCCVars((nhydro+nscalars), ppack->mb_cells, snd, rcv);
+    send_buf.push_back(snd);
+    send_buf.push_back(rcv);
+  }
 
   // for time-evolving problems, continue to construct methods, allocate arrays
   if (evolution_t.compare("stationary") != 0) {
@@ -67,10 +79,10 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
 
     } else if (xorder.compare("ppm") == 0) {
       // check that nghost > 2
-      if (pmb->mb_cells.ng < 3) {
+      if (ncells.ng < 3) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
             << std::endl << "PPM reconstruction requires at least 3 ghost zones, "
-            << "but <mesh>/nghost=" << pmb->mb_cells.ng << std::endl;
+            << "but <mesh>/nghost=" << ncells.ng << std::endl;
         std::exit(EXIT_FAILURE); 
       }                
       recon_method_ = ReconstructionMethod::ppm;
@@ -124,8 +136,8 @@ Hydro::Hydro(Mesh *pm, ParameterInput *pin, int gid) :
     }}
 
     // allocate registers, flux divergence, scratch arrays for time-dep probs
-    Kokkos::realloc(u1,   (nhydro+nscalars), ncells3, ncells2, ncells1);
-    Kokkos::realloc(divf, (nhydro+nscalars), ncells3, ncells2, ncells1);
+    Kokkos::realloc(u1,   nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
+    Kokkos::realloc(divf, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
   }
 }
 
@@ -188,29 +200,30 @@ void Hydro::HydroStageEndTasks(TaskList &tl, TaskID start, std::vector<TaskID> &
 //----------------------------------------------------------------------------------------
 //! \fn  void Hydro::HydroInitRecv
 //  \brief
+// initialize all boundary receive status flags to waiting, post non-blocking receives
 
 TaskStatus Hydro::HydroInitRecv(Driver *pdrive, int stage)
 {
-  BoundaryValues* pbvals = pmesh_->FindMeshBlock(my_mbgid_)->pbvals;
-  int lid = my_mbgid_ - pmesh_->gids; // local ID for creating MPI tags
+  int nmb = pmy_pack->nmb_thispack;
 
-  // initialize all boundary receive status flags to waiting, post non-blocking receives
-  int nnghbr = pbvals->nghbr.size();
-  for (int n=0; n<nnghbr; ++n) {
-    if (pbvals->nghbr[n].gid >= 0) {
+  for (int m=0; m<nmb; ++m) {
+    int nnghbr = pmy_pack->mblocks[m].nghbr.size();
+    for (int n=0; n<nnghbr; ++n) {
+      if (pmy_pack->mblocks[m].nghbr[n].gid >= 0) {
 #if MPI_PARALLEL_ENABLED
-      // post non-blocking receive if neighboring MeshBlock on a different rank 
-      if (pbvals->nghbr_x1face[n].rank != global_variable::my_rank) {
-        using Kokkos::ALL;
-        // create tag using local ID and buffer index of *receiving* MeshBlock
-        int tag = pbvals->CreateMPItag(lid, n, PhysicsID::Hydro_ID);
-        auto recvbuf = Kokkos::subview(bbuf.recv_x1face,n,ALL,ALL,ALL,ALL);
-        void* recv_ptr = recvbuf.data();
-        int ierr = MPI_Irecv(recv_ptr, recvbuf.size(), MPI_ATHENA_REAL,
-          pbvals->nghbr_x1face[n].rank, tag, MPI_COMM_WORLD, &(bbuf.recv_rq_x1face[n]));
-      }
+        // post non-blocking receive if neighboring MeshBlock on a different rank 
+        if (pbvals->nghbr_x1face[n].rank != global_variable::my_rank) {
+          using Kokkos::ALL;
+          // create tag using local ID and buffer index of *receiving* MeshBlock
+          int tag = pbvals->CreateMPItag(lid, n, PhysicsID::Hydro_ID);
+          auto recvbuf = Kokkos::subview(bbuf.recv_x1face,n,ALL,ALL,ALL,ALL);
+          void* recv_ptr = recvbuf.data();
+          int ierr = MPI_Irecv(recv_ptr, recvbuf.size(), MPI_ATHENA_REAL,
+            pbvals->nghbr_x1face[n].rank, tag, MPI_COMM_WORLD, &(bbuf.recv_rq_x1face[n]));
+        }
 #endif
-      recv_buf[n].bcomm_stat = BoundaryCommStatus::waiting;
+        recv_buf[m][n].bcomm_stat = BoundaryCommStatus::waiting;
+      }
     }
   }
 
@@ -265,16 +278,13 @@ TaskStatus Hydro::HydroClearSend(Driver *pdrive, int stage)
 
 //----------------------------------------------------------------------------------------
 //! \fn  void Hydro::HydroCopyCons
-//  \brief
+//  \brief  copy u0 --> u1 in first stage
 
 TaskStatus Hydro::HydroCopyCons(Driver *pdrive, int stage)
 {
-  MeshBlock* pmb = pmesh_->FindMeshBlock(my_mbgid_);
-  // copy u0 --> u1 in first stage
   if (stage == 1) {
-    Kokkos::deep_copy(pmb->exe_space, u1, u0);
+    Kokkos::deep_copy(DevExeSpace(), u1, u0);
   }
-
   return TaskStatus::complete;
 }
 
@@ -284,9 +294,7 @@ TaskStatus Hydro::HydroCopyCons(Driver *pdrive, int stage)
 
 TaskStatus Hydro::HydroSend(Driver *pdrive, int stage) 
 {
-  MeshBlock* pmb = pmesh_->FindMeshBlock(my_mbgid_);
-  TaskStatus tstat;
-  tstat = pmb->pbvals->SendBuffers(u0);
+  TaskStatus tstat = SendBuffers(u0, send_buf, recv_buf, pmy_pack->mblocks);
   return tstat;
 }
 
@@ -296,9 +304,7 @@ TaskStatus Hydro::HydroSend(Driver *pdrive, int stage)
 
 TaskStatus Hydro::HydroReceive(Driver *pdrive, int stage)
 {
-  MeshBlock* pmb = pmesh_->FindMeshBlock(my_mbgid_);
-  TaskStatus tstat;
-  tstat = pmb->pbvals->RecvBuffers(u0);
+  TaskStatus tstat = RecvBuffers(u0, send_buf, recv_buf, pmy_pack->mblocks);
   return tstat;
 }
 
@@ -308,7 +314,7 @@ TaskStatus Hydro::HydroReceive(Driver *pdrive, int stage)
 
 TaskStatus Hydro::ConToPrim(Driver *pdrive, int stage)
 {
-  peos->ConservedToPrimitive(u0, w0);
+  peos->ConsToPrim(u0, w0);
   return TaskStatus::complete;
 }
 

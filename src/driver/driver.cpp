@@ -125,46 +125,28 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh) :
 
 void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
 {
-  //---- Step 1.  Set Boundary Conditions on conservd variables in all physics
-
+  //---- Step 1.  Set Boundary Conditions on conserved variables in all physics
   // Note sends on ALL MBs must be complete before receives execute
-  for (auto &mb : pmesh->mblocks) {
-    TaskStatus tstatus;
-    tstatus = mb.phydro->HydroInitRecv(this, 0);
-  }
-  for (auto &mb : pmesh->mblocks) {
-    TaskStatus tstatus;
-    tstatus = mb.phydro->HydroSend(this, 0);
-  }
-  for (auto &mb : pmesh->mblocks) {
-    TaskStatus tstatus;
-    tstatus = mb.phydro->HydroClearSend(this, 0);
-  }
-  for (auto &mb : pmesh->mblocks) {
-    TaskStatus tstatus;
-    tstatus = mb.phydro->HydroClearRecv(this, 0);
-  }
-  for (auto &mb : pmesh->mblocks) {
-    TaskStatus tstatus;
-    tstatus = mb.phydro->HydroReceive(this, 0);
-  }
-  for (auto &mb : pmesh->mblocks) {
-    mb.pbvals->ApplyPhysicalBCs(this, 0);
-  }
+
+  // TODO: need to cycle through all physics modules/variables in this step
+
+  TaskStatus tstatus;
+  tstatus = pmesh->pmb_pack->phydro->HydroInitRecv(this, 0);
+  tstatus = pmesh->pmb_pack->phydro->HydroSend(this, 0);
+  tstatus = pmesh->pmb_pack->phydro->HydroClearSend(this, 0);
+  tstatus = pmesh->pmb_pack->phydro->HydroClearRecv(this, 0);
+  tstatus = pmesh->pmb_pack->phydro->HydroReceive(this, 0);
+  pmesh->pmb_pack->phydro->HydroApplyPhysicalBCs(this, 0);
 
   // convert conserved to primitive over whole mesh
-  for (auto &mb : pmesh->mblocks) {
-    TaskStatus tstatus;
-    tstatus = mb.phydro->ConToPrim(this, 0);
-  }
+  tstatus = pmesh->pmb_pack->phydro->ConToPrim(this, 0);
 
   //---- Step 2.  Compute first time step (if problem involves time evolution
 
+  // TODO: need to cycle through all physics modules/variables in this step
+
   if (time_evolution != TimeEvolution::stationary) {
-    for (auto it = pmesh->mblocks.begin(); it < pmesh->mblocks.end(); ++it) {
-      TaskStatus tstatus;
-      tstatus = it->phydro->NewTimeStep(this, nstages);
-    }
+    tstatus = pmesh->pmb_pack->phydro->NewTimeStep(this, nstages);
     pmesh->NewTimeStep(tlim);
   }
 
@@ -193,8 +175,9 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
     std::cout << "\nSetup complete, executing task list...\n" << std::endl;
   }
 
-  while ((pmesh->time < tlim) &&
-         (pmesh->ncycle < nlim || nlim < 0)) {
+/****
+
+  while ((pmesh->time < tlim) && (pmesh->ncycle < nlim || nlim < 0)) {
 
     if (time_evolution != TimeEvolution::stationary) {
       if (global_variable::my_rank == 0) {OutputCycleDiagnostics(pmesh);}
@@ -291,6 +274,8 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
     }
   }
 
+****/
+
   return;
 
 }
@@ -325,14 +310,14 @@ void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
       std::cout << "tlim=" << tlim << " nlim=" << nlim << std::endl;
 
       if (pmesh->adaptive) {
-        std::cout << std::endl << "Current number of MeshBlocks = " << pmesh->nmbtotal
+        std::cout << std::endl << "Current number of MeshBlocks = " << pmesh->nmb_total
                   << std::endl << pmesh->nmb_created << " MeshBlocks were created, and "
                   << pmesh->nmb_deleted << " were deleted during this run." << std::endl;
       }
   
       // Calculate and print the zone-cycles/exe-second and wall-second
       std::uint64_t zonecycles = nmb_updated_ *
-          static_cast<std::uint64_t>(pmesh->mblocks.front().NumberOfMeshBlockCells());
+          static_cast<std::uint64_t>(pmesh->pmb_pack->NumberOfMeshBlockCells());
       float zcps = static_cast<float>(zonecycles) / exe_time;
 
       std::cout << std::endl << "zone-cycles = " << zonecycles << std::endl;

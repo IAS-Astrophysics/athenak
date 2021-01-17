@@ -1,5 +1,5 @@
-#ifndef EOS_EOS_HPP_
-#define EOS_EOS_HPP_
+#ifndef HYDRO_EOS_EOS_HPP_
+#define HYDRO_EOS_EOS_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
@@ -14,8 +14,6 @@
 #include "athena.hpp"
 #include "mesh/meshblock.hpp"
 #include "parameter_input.hpp"
-
-enum EOS_Type {adiabatic_hydro, isothermal_hydro};
 
 //----------------------------------------------------------------------------------------
 //! \struct EOSData
@@ -34,31 +32,44 @@ struct EOS_Data
 
 //----------------------------------------------------------------------------------------
 //! \class EquationOfState
-//  \brief functions for EOS
+//  \brief Abstract base class for Hydro EOS
 
 class EquationOfState
 {
  public:
-  EquationOfState(Mesh *pm, ParameterInput *pin, int igid);
+  EquationOfState(MeshBlockPack *pp, ParameterInput *pin);
   ~EquationOfState() = default;
 
+  MeshBlockPack* pmy_pack;
   EOS_Data eos_data;
 
-  // wrapper function that calls different conversion routines
-  void ConservedToPrimitive(const AthenaArray5D<Real> &cons, AthenaArray5D<Real> &prim);
-
-  // cons to prim functions for different EOS
-  void ConsToPrimAdiHydro(const AthenaArray5D<Real> &cons, AthenaArray5D<Real> &prim);
-  void ConsToPrimIsoHydro(const AthenaArray5D<Real> &cons, AthenaArray5D<Real> &prim);
-  void ConsToPrimAdiMHD(const AthenaArray5D<Real> &cons, AthenaArray5D<Real> &prim,
-                        const FaceArray3D<Real> &bfc, AthenaArray4D<Real> &bcc);
-  void ConsToPrimIsoMHD(const AthenaArray5D<Real> &cons, AthenaArray5D<Real> &prim,
-                        const FaceArray3D<Real> &bfc, AthenaArray4D<Real> &bcc);
+  // pure virtual function to convert cons to prim, overwritten in each derived class
+  virtual void ConsToPrim(const AthenaArray5D<Real> &cons, AthenaArray5D<Real> &prim) = 0;
 
  private:
-  Mesh* pmesh_;
-  int my_mbgid_;
-  EOS_Type eos_type_;    // enum that specifies EOS type
 };
 
-#endif // EOS_EOS_HPP_
+//----------------------------------------------------------------------------------------
+//! \class AdibaticHydro
+//  \brief Derived class for Hydro adiabatic EOS
+
+class AdiabaticHydro : public EquationOfState
+{
+ public:
+  AdiabaticHydro(MeshBlockPack *pp, ParameterInput *pin);
+  void ConsToPrim(const AthenaArray5D<Real> &cons, AthenaArray5D<Real> &prim) override;
+};
+
+//----------------------------------------------------------------------------------------
+//! \class IsothermalHydro
+//  \brief Derived class for Hydro isothermal EOS
+
+class IsothermalHydro : public EquationOfState
+{ 
+ public:
+  IsothermalHydro(MeshBlockPack *pp, ParameterInput *pin);
+  void ConsToPrim(const AthenaArray5D<Real> &cons, AthenaArray5D<Real> &prim) override;
+};
+
+
+#endif // HYDRO_EOS_EOS_HPP_

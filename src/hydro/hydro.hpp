@@ -28,7 +28,7 @@ namespace hydro {
 class Hydro
 {
  public:
-  Hydro(Mesh *pm, ParameterInput *pin, int gid);
+  Hydro(MeshBlockPack *ppack, ParameterInput *pin);
   ~Hydro();
 
   // data
@@ -36,14 +36,15 @@ class Hydro
 
   int nhydro;               // number of hydro variables (5/4 for adiabatic/isothermal)
   int nscalars;             // number of passive scalars
-  AthenaArray4D<Real> u0;   // conserved variables
-  AthenaArray4D<Real> w0;   // primitive variables
+  AthenaArray5D<Real> u0;   // conserved variables
+  AthenaArray5D<Real> w0;   // primitive variables
 
-  std::vector<BoundaryBuffer> send_buf, recv_buf;  // send/recv buffers for Hydro comms.
+  // following are vectors of length (#neighbors), stored as a vector of length (#MBs)
+  std::vector<std::vector<BoundaryBuffer>> send_buf, recv_buf;  // send/recv buffers
 
   // following only used for time-evolving flow
-  AthenaArray4D<Real> u1;    // conserved variables at intermediate step 
-  AthenaArray4D<Real> divf;   // divergence of fluxes
+  AthenaArray5D<Real> u1;    // conserved variables at intermediate step 
+  AthenaArray5D<Real> divf;   // divergence of fluxes
   AthenaArray3D<Real> uflx_x1face;  // fluxes on x1-faces
   AthenaArray3D<Real> uflx_x2face;  // fluxes on x2-faces
   AthenaArray3D<Real> uflx_x3face;  // fluxes on x3-faces
@@ -63,10 +64,24 @@ class Hydro
   TaskStatus HydroReceive(Driver *d, int stage); 
   TaskStatus ConToPrim(Driver *d, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
+  TaskStatus HydroApplyPhysicalBCs(Driver* pdrive, int stage);
+
+  // functions to set physical BCs for Hydro conserved variables
+  void ReflectInnerX1();
+  void ReflectOuterX1();
+  void ReflectInnerX2();
+  void ReflectOuterX2();
+  void ReflectInnerX3();
+  void ReflectOuterX3();
+  void OutflowInnerX1();
+  void OutflowOuterX1();
+  void OutflowInnerX2();
+  void OutflowOuterX2();
+  void OutflowInnerX3();
+  void OutflowOuterX3();
 
  private:
-  Mesh* pmesh_;   // ptr to Mesh containing this Hydro
-  int my_mbgid_;  // GridID of MeshBlock contianing this Hydro
+  MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Hydro
   ReconstructionMethod recon_method_;
   Hydro_RSolver rsolver_method_;
 };
