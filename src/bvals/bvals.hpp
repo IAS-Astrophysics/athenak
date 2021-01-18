@@ -79,10 +79,10 @@ void AllocateBuffersCCVars(const int nvar, const RegionCells ncells,
     std::vector<BoundaryBuffer> &send_buf, std::vector<BoundaryBuffer> &recv_buf);
 int CreateMPITag(int lid, int buff_id, int phys_id);
 TaskStatus SendBuffers(AthenaArray5D<Real> &a, 
-  std::vector<std::vector<BoundaryBuffer>> send_buf,
-  std::vector<std::vector<BoundaryBuffer>> recv_buf, std::vector<MeshBlock> mblocks);
+  std::vector<std::vector<BoundaryBuffer>> &send_buf,
+  std::vector<std::vector<BoundaryBuffer>> &recv_buf, std::vector<MeshBlock> &mblocks);
 TaskStatus RecvBuffers(AthenaArray5D<Real> &a,
-  std::vector<std::vector<BoundaryBuffer>> send_buf,
-  std::vector<std::vector<BoundaryBuffer>> recv_buf, std::vector<MeshBlock> mblocks);
+  std::vector<std::vector<BoundaryBuffer>> &send_buf,
+  std::vector<std::vector<BoundaryBuffer>> &recv_buf, std::vector<MeshBlock> &mblocks);
 
 #endif // BVALS_BVALS_HPP_

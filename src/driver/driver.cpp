@@ -175,75 +175,63 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
     std::cout << "\nSetup complete, executing task list...\n" << std::endl;
   }
 
-/****
-
   while ((pmesh->time < tlim) && (pmesh->ncycle < nlim || nlim < 0)) {
 
     if (time_evolution != TimeEvolution::stationary) {
       if (global_variable::my_rank == 0) {OutputCycleDiagnostics(pmesh);}
 
       // Do multi-stage time evolution TaskLists
+      int npacks = 1;
+      MeshBlockPack* pmbp = pmesh->pmb_pack;
       for (int stage=1; stage<=nstages; ++stage) {
 
-        // tasks that must be completed over all MBs before start of each stage
-        {for (auto &mb : pmesh->mblocks) {
-          if (!(mb.tl_stagestart.Empty())) {mb.tl_stagestart.Reset();}
+        // StageStart Tasks ---
+        // tasks that must be completed over all MBPacks before start of each stage
+        {for (int p=0; p<npacks; ++p) {
+          if (!(pmbp->tl_stagestart.Empty())) {pmbp->tl_stagestart.Reset();}
         }
-        int nmb_completed = 0;
-        for (auto &mb : pmesh->mblocks) {
-          if (mb.tl_stagestart.Empty()) {
-            nmb_completed++;
+        int npack_left = npacks;
+        while (npack_left > 0) {
+          if (pmbp->tl_stagestart.Empty()) {
+            npack_left--; 
           } else {
-            while (nmb_completed < pmesh->nmbthisrank) {
-              // TODO(pgrete): need to let Kokkos::PartitionManager handle this
-              for (auto &mb : pmesh->mblocks) {
-                if (!mb.tl_stagestart.IsComplete()) {
-                  auto status = mb.tl_stagestart.DoAvailable(this,stage);
-                  if (status == TaskListStatus::complete) { nmb_completed++; }
-                }
-              }
+            if (!pmbp->tl_stagestart.IsComplete()) {
+              auto status = pmbp->tl_stagestart.DoAvailable(this,stage);
+              if (status == TaskListStatus::complete) { npack_left--; }
             }
           }
         }} // extra brace to enclose scope
 
+        // StageRun Tasks ---
         // tasks in each stage
-        {for (auto &mb : pmesh->mblocks) {
-          if (!(mb.tl_stagerun.Empty())) {mb.tl_stagerun.Reset();}
+        {for (int p=0; p<npacks; ++p) {
+          if (!(pmbp->tl_stagerun.Empty())) {pmbp->tl_stagerun.Reset();}
         }
-        int nmb_completed = 0;
-        for (auto &mb : pmesh->mblocks) {
-          if (mb.tl_stagerun.Empty()) {
-            nmb_completed++; 
+        int npack_left = npacks;
+        while (npack_left > 0) {
+          if (pmbp->tl_stagerun.Empty()) {
+            npack_left--; 
           } else {
-            while (nmb_completed < pmesh->nmbthisrank) {
-              // TODO(pgrete): need to let Kokkos::PartitionManager handle this
-              for (auto &mb : pmesh->mblocks) {
-                if (!mb.tl_stagerun.IsComplete()) {
-                  auto status = mb.tl_stagerun.DoAvailable(this,stage);
-                  if (status == TaskListStatus::complete) { nmb_completed++; }
-                }
-              }
+            if (!pmbp->tl_stagerun.IsComplete()) {
+              auto status = pmbp->tl_stagerun.DoAvailable(this,stage);
+              if (status == TaskListStatus::complete) { npack_left--; }
             }
           }
         }} // extra brace to enclose scope
 
+        // StageEnd Tasks ---
         // tasks that must be completed over all MBs at the end of each stage
-        {for (auto &mb : pmesh->mblocks) {
-          if (!(mb.tl_stageend.Empty())) {mb.tl_stageend.Reset();}
+        {for (int p=0; p<npacks; ++p) {
+          if (!(pmbp->tl_stageend.Empty())) {pmbp->tl_stageend.Reset();}
         }
-        int nmb_completed = 0;
-        for (auto &mb : pmesh->mblocks) {
-          if (mb.tl_stageend.Empty()) {
-            nmb_completed++; 
+        int npack_left = npacks;
+        while (npack_left > 0) {
+          if (pmbp->tl_stageend.Empty()) {
+            npack_left--; 
           } else {
-            while (nmb_completed < pmesh->nmbthisrank) {
-              // TODO(pgrete): need to let Kokkos::PartitionManager handle this
-              for (auto &mb : pmesh->mblocks) {
-                if (!mb.tl_stageend.IsComplete()) {
-                  auto status = mb.tl_stageend.DoAvailable(this,stage);
-                  if (status == TaskListStatus::complete) { nmb_completed++; }
-                }
-              }
+            if (!pmbp->tl_stageend.IsComplete()) {
+              auto status = pmbp->tl_stageend.DoAvailable(this,stage);
+              if (status == TaskListStatus::complete) { npack_left--; }
             }
           }
         }} // extra brace to enclose scope
@@ -256,7 +244,7 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
       // Compute new timestep
       pmesh->time = pmesh->time + pmesh->dt;
       pmesh->ncycle++;
-      nmb_updated_ += pmesh->nmbtotal;
+      nmb_updated_ += pmesh->nmb_total;
       pmesh->NewTimeStep(tlim);
 
       // Make outputs during execution
@@ -273,8 +261,6 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
 
     }
   }
-
-****/
 
   return;
 

@@ -28,12 +28,13 @@
 // TODO: with AMR, buffer indices can be different on different MeshBlocks
 
 TaskStatus SendBuffers(AthenaArray5D<Real> &a,
-  std::vector<std::vector<BoundaryBuffer>> send_buf,
-  std::vector<std::vector<BoundaryBuffer>> recv_buf, std::vector<MeshBlock> mblocks)
+  std::vector<std::vector<BoundaryBuffer>> &send_buf,
+  std::vector<std::vector<BoundaryBuffer>> &recv_buf, std::vector<MeshBlock> &mblocks)
 {
   // create local references for variables in kernel
-  int nnghbr = send_buf.size();
   int nmb  = mblocks.size();
+  // TODO: following only works when all MBs have the same number of neighbors
+  int nnghbr = mblocks[0].nghbr.size();   
   int nvar = a.extent_int(1);  // 2nd index from L of input array must be NVAR
   int &my_rank = global_variable::my_rank;
 
@@ -90,27 +91,28 @@ TaskStatus SendBuffers(AthenaArray5D<Real> &a,
   // neighbor is on same MPI rank.
   // Note send_buf[n] --> recv_buf[n + nghbr[n].dn]
 
-#if MPI_PARALLEL_ENABLED
   using Kokkos::ALL;
-  for (int n=0; n<nnghbr; ++n) {
-    if (nghbr[n].gid >= 0) {  // ID of buffer != -1, so not a physical boundary
-      if (nghbr[n].rank == global_variable::my_rank) {
-//        Kokkos::deep_copy(pmb->exe_space,
-//          pmesh_->FindMeshBlock(nghbr[n].gid)->phydro->recv_buf[n + nghbr[n].dn].data,
-//          send_buf[n].data);
-//        pmesh_->FindMeshBlock(nghbr[n].gid)->phydro->recv_buf[n + nghbr[n].dn].bcomm_stat
-//          = BoundaryCommStatus::received;
-      } else {
-        // create tag using local ID and buffer index of *receiving* MeshBlock
-        int lid = nghbr_x1face[n].gid - pmesh_->gidslist[nghbr_x1face[n].rank];
-        int tag = CreateMPItag(lid, (1-n), key);
-        void* send_ptr = sendbuf.data();
-        int ierr = MPI_Isend(send_ptr, sendbuf.size(), MPI_ATHENA_REAL,
-          nghbr_x1face[n].rank, tag, MPI_COMM_WORLD, &(pbb->send_rq_x1face[n]));
+  for (int m=0; m<nmb; ++m) {
+    for (int n=0; n<nnghbr; ++n) {
+      if (mblocks[m].nghbr[n].gid >= 0) {  // not a physical boundary
+        if (mblocks[m].nghbr[n].rank == my_rank) {
+          int nn = mblocks[m].nghbr[n].destn;
+          int mm = mblocks[m].nghbr[n].gid - mblocks[0].mb_gid;
+          recv_buf[mm][nn].bcomm_stat = BoundaryCommStatus::received;
+
+#if MPI_PARALLEL_ENABLED
+        } else {
+          // create tag using local ID and buffer index of *receiving* MeshBlock
+          int lid = nghbr_x1face[n].gid - pmesh_->gidslist[nghbr_x1face[n].rank];
+          int tag = CreateMPItag(lid, (1-n), key);
+          void* send_ptr = sendbuf.data();
+          int ierr = MPI_Isend(send_ptr, sendbuf.size(), MPI_ATHENA_REAL,
+            nghbr_x1face[n].rank, tag, MPI_COMM_WORLD, &(pbb->send_rq_x1face[n]));
+#endif
+        }
       }
     }
   }
-#endif
 
   return TaskStatus::complete;
 }

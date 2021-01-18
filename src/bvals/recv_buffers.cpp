@@ -20,12 +20,13 @@
 // \brief Unpack boundary buffers
 
 TaskStatus RecvBuffers(AthenaArray5D<Real> &a,
-  std::vector<std::vector<BoundaryBuffer>> send_buf,
-  std::vector<std::vector<BoundaryBuffer>> recv_buf, std::vector<MeshBlock> mblocks)
+  std::vector<std::vector<BoundaryBuffer>> &send_buf,
+  std::vector<std::vector<BoundaryBuffer>> &recv_buf, std::vector<MeshBlock> &mblocks)
 {
   // create local references for variables in kernel
-  int nnghbr = recv_buf.size();
   int nmb  = mblocks.size();
+  // TODO: following only works when all MBs have the same number of neighbors
+  int nnghbr = mblocks[0].nghbr.size();
   int nvar = a.extent_int(1);  // 2nd index from L of input array must be NVAR
 
 #if MPI_PARALLEL_ENABLED
@@ -58,7 +59,7 @@ TaskStatus RecvBuffers(AthenaArray5D<Real> &a,
 
   // exit if recv boundary buffer communications have not completed
   if (bflag) {return TaskStatus::incomplete;}
-  
+
   // buffers have all completed, so unpack
   int scr_level = 0;
   size_t scr_size = 16*sizeof(int);
