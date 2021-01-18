@@ -61,37 +61,38 @@ TaskStatus RecvBuffers(AthenaArray5D<Real> &a,
   if (bflag) {return TaskStatus::incomplete;}
 
   // buffers have all completed, so unpack
-  int scr_level = 0;
-  size_t scr_size = 16*sizeof(int);
-  par_for_outer("RecvCC", DevExeSpace(), scr_size, scr_level, 0, (nmb-1), 0, (nnghbr-1),
-    KOKKOS_LAMBDA(TeamMember_t tmember, const int m, const int n)
-    { 
-      const int il = recv_buf[m][n].index(0);
-      const int iu = recv_buf[m][n].index(1);
-      const int jl = recv_buf[m][n].index(2);
-      const int ju = recv_buf[m][n].index(3);
-      const int kl = recv_buf[m][n].index(4);
-      const int ku = recv_buf[m][n].index(5);
-      const int ni = iu - il + 1;
-      const int nj = ju - jl + 1;
-      const int nk = ku - kl + 1;
-      const int nkj  = nk*nj;
-      const int nvkj = nvar*nk*nj;
-      Kokkos::parallel_for(
-        Kokkos::TeamThreadRange<>(tmember, nvkj), [&](const int idx) {
-          int v = idx / nkj;
-          int k = (idx - v * nkj) / nj;
-          int j = idx - v * nkj - k * nj;
-          k += kl;
-          j += jl;
-          
-          Kokkos::parallel_for(
-            Kokkos::ThreadVectorRange(tmember, il, iu + 1), [&](const int i) {
-              a(m,v,k,j,i) = recv_buf[m][n].data(v,i-il + ni*(j-jl + nj*(k-kl)));
-            });
-        });
-    }
-  ); // end par_for_outer
+  int nmn = nmb*nnghbr;
+  Kokkos::TeamPolicy<> policy(DevExeSpace(), nmn, Kokkos::AUTO);
+  Kokkos::parallel_for("RecvBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember)
+  {
+    const int m = tmember.league_rank()/nnghbr;
+    const int n = tmember.league_rank()%nnghbr;
+    const int il = recv_buf[m][n].index(0);
+    const int iu = recv_buf[m][n].index(1);
+    const int jl = recv_buf[m][n].index(2);
+    const int ju = recv_buf[m][n].index(3);
+    const int kl = recv_buf[m][n].index(4);
+    const int ku = recv_buf[m][n].index(5);
+    const int ni = iu - il + 1;
+    const int nj = ju - jl + 1;
+    const int nk = ku - kl + 1;
+    const int nkj  = nk*nj;
+    const int nvkj = nvar*nk*nj;
+
+    Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nvkj), [&](const int idx)
+    {
+      int v = idx / nkj;
+      int k = (idx - v * nkj) / nj;
+      int j = idx - v * nkj - k * nj;
+      k += kl;
+      j += jl;
+         
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu + 1), [&](const int i)
+      {
+        a(m,v,k,j,i) = recv_buf[m][n].data(v,i-il + ni*(j-jl + nj*(k-kl)));
+       });
+    });
+  }); // end par_for_outer
 
   return TaskStatus::complete;
 }

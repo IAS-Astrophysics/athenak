@@ -194,6 +194,7 @@ void Mesh::BuildTree(ParameterInput *pin)
 {
   // Calculate # of cells in MeshBlock read from input parameters, error check
   RegionCells incells;
+  incells.ng  = mesh_cells.ng;
   incells.nx1 = pin->GetOrAddInteger("meshblock", "nx1", mesh_cells.nx1);
   if (nx2gt1) {
     incells.nx2 = pin->GetOrAddInteger("meshblock", "nx2", mesh_cells.nx2);

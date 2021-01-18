@@ -66,19 +66,19 @@ class Hydro
   TaskStatus NewTimeStep(Driver *d, int stage);
   TaskStatus HydroApplyPhysicalBCs(Driver* pdrive, int stage);
 
-  // functions to set physical BCs for Hydro conserved variables
-  void ReflectInnerX1();
-  void ReflectOuterX1();
-  void ReflectInnerX2();
-  void ReflectOuterX2();
-  void ReflectInnerX3();
-  void ReflectOuterX3();
-  void OutflowInnerX1();
-  void OutflowOuterX1();
-  void OutflowInnerX2();
-  void OutflowOuterX2();
-  void OutflowInnerX3();
-  void OutflowOuterX3();
+  // functions to set physical BCs for Hydro conserved variables, applied to single MB 
+  void ReflectInnerX1(int m);
+  void ReflectOuterX1(int m);
+  void ReflectInnerX2(int m);
+  void ReflectOuterX2(int m);
+  void ReflectInnerX3(int m);
+  void ReflectOuterX3(int m);
+  void OutflowInnerX1(int m);
+  void OutflowOuterX1(int m);
+  void OutflowInnerX2(int m);
+  void OutflowOuterX2(int m);
+  void OutflowInnerX3(int m);
+  void OutflowOuterX3(int m);
 
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Hydro

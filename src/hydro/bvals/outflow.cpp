@@ -5,6 +5,7 @@
 //========================================================================================
 //! \file outflow.cpp
 //  \brief implementation of outflow BCs for Hydro conserved vars in each dimension
+//   BCs applied to a single MeshBlock specified by input integer index to each function
 
 // Athena++ headers
 #include "athena.hpp"
@@ -17,7 +18,7 @@ namespace hydro {
 //! \fn void Hydro::OutflowInnerX1(
 //  \brief OUTFLOW boundary conditions, inner x1 boundary
 
-void Hydro::OutflowInnerX1()
+void Hydro::OutflowInnerX1(int m)
 {
   auto ncells = pmy_pack->mb_cells;
   int ng = ncells.ng;
@@ -25,12 +26,11 @@ void Hydro::OutflowInnerX1()
   int n3 = (ncells.nx3 > 1)? (ncells.nx3 + 2*ng) : 1;
   int &is = ncells.is;
   int nvar = nhydro + nscalars;
-  int nmb = pmy_pack->nmb_thispack;
   auto &u0_ = u0;
 
   // project hydro variables in first active cell into ghost zones
-  par_for("outflow_ix1", DevExeSpace(),0,(nmb-1),0,(nvar-1),0,(n3-1),0,(n2-1),0,(ng-1),
-    KOKKOS_LAMBDA(int m, int n, int k, int j, int i)
+  par_for("outflow_ix1", DevExeSpace(),0,(nvar-1),0,(n3-1),0,(n2-1),0,(ng-1),
+    KOKKOS_LAMBDA(int n, int k, int j, int i)
     {
       u0_(m,n,k,j,is-i-1) = u0_(m,n,k,j,is);
     }
@@ -43,7 +43,7 @@ void Hydro::OutflowInnerX1()
 //! \fn void Hydro::OutflowOuterX1(
 //  \brief OUTFLOW boundary conditions, outer x1 boundary
 
-void Hydro::OutflowOuterX1()
+void Hydro::OutflowOuterX1(int m)
 {
   auto ncells = pmy_pack->mb_cells;
   int ng = ncells.ng;
@@ -51,12 +51,11 @@ void Hydro::OutflowOuterX1()
   int n3 = (ncells.nx3 > 1)? (ncells.nx3 + 2*ng) : 1;
   int &ie = ncells.ie;
   int nvar = nhydro + nscalars;
-  int nmb = pmy_pack->nmb_thispack;
   auto &u0_ = u0;
 
   // project hydro variables in first active cell into ghost zones
-  par_for("outflow_ox1", DevExeSpace(),0,(nmb-1),0,(nvar-1),0,(n3-1),0,(n2-1),0,(ng-1),
-    KOKKOS_LAMBDA(int m, int n, int k, int j, int i)
+  par_for("outflow_ox1", DevExeSpace(),0,(nvar-1),0,(n3-1),0,(n2-1),0,(ng-1),
+    KOKKOS_LAMBDA(int n, int k, int j, int i)
     {
       u0_(m,n,k,j,ie+i+1) = u0_(m,n,k,j,ie);
     }
@@ -69,7 +68,7 @@ void Hydro::OutflowOuterX1()
 //! \fn void Hydro::OutflowInnerX2(
 //  \brief OUTFLOW boundary conditions, inner x2 boundary
 
-void Hydro::OutflowInnerX2()
+void Hydro::OutflowInnerX2(int m)
 {
   auto ncells = pmy_pack->mb_cells;
   int ng = ncells.ng;
@@ -77,12 +76,11 @@ void Hydro::OutflowInnerX2()
   int n3 = (ncells.nx3 > 1)? (ncells.nx3 + 2*ng) : 1;
   int &js = ncells.js;
   int nvar = nhydro + nscalars;
-  int nmb = pmy_pack->nmb_thispack;
   auto &u0_ = u0;
 
   // project hydro variables in first active cell into ghost zones
-  par_for("outflow_ix2", DevExeSpace(),0,(nmb-1),0,(nvar-1),0,(n3-1),0,(ng-1),0,(n1-1),
-    KOKKOS_LAMBDA(int m, int n, int k, int j, int i)
+  par_for("outflow_ix2", DevExeSpace(),0,(nvar-1),0,(n3-1),0,(ng-1),0,(n1-1),
+    KOKKOS_LAMBDA(int n, int k, int j, int i)
     { 
       u0_(m,n,k,js-j-1,i) =  u0_(m,n,k,js,i);
     }
@@ -95,7 +93,7 @@ void Hydro::OutflowInnerX2()
 //! \fn void Hydro::OutflowOuterX2(
 //  \brief OUTFLOW boundary conditions, outer x2 boundary
 
-void Hydro::OutflowOuterX2()
+void Hydro::OutflowOuterX2(int m)
 {
   auto ncells = pmy_pack->mb_cells;
   int ng = ncells.ng;
@@ -103,12 +101,11 @@ void Hydro::OutflowOuterX2()
   int n3 = (ncells.nx3 > 1)? (ncells.nx3 + 2*ng) : 1;
   int &je = ncells.je;
   int nvar = nhydro + nscalars;
-  int nmb = pmy_pack->nmb_thispack;
   auto &u0_ = u0;
 
   // project hydro variables in first active cell into ghost zones
-  par_for("outflow_ox2", DevExeSpace(),0,(nmb-1),0,(nvar-1),0,(n3-1),0,(ng-1),0,(n1-1),
-    KOKKOS_LAMBDA(int m, int n, int k, int j, int i)
+  par_for("outflow_ox2", DevExeSpace(),0,(nvar-1),0,(n3-1),0,(ng-1),0,(n1-1),
+    KOKKOS_LAMBDA(int n, int k, int j, int i)
     { 
       u0_(m,n,k,je+j+1,i) =  u0_(m,n,k,je,i);
     }   
@@ -122,7 +119,7 @@ void Hydro::OutflowOuterX2()
 //! \fn void Hydro::OutflowInnerX3(
 //  \brief OUTFLOW boundary conditions, inner x3 boundary
 
-void Hydro::OutflowInnerX3()
+void Hydro::OutflowInnerX3(int m)
 {
   auto ncells = pmy_pack->mb_cells;
   int ng = ncells.ng;
@@ -130,12 +127,11 @@ void Hydro::OutflowInnerX3()
   int n2 = ncells.nx2 + 2*ng;
   int &ks = ncells.ks;
   int nvar = nhydro + nscalars;
-  int nmb = pmy_pack->nmb_thispack;
   auto &u0_ = u0;
 
   // project hydro variables in first active cell into ghost zones
-  par_for("outflow_ix3", DevExeSpace(),0,(nmb-1),0,(nvar-1),0,(ng-1),0,(n2-1),0,(n1-1),
-    KOKKOS_LAMBDA(int m, int n, int k, int j, int i)
+  par_for("outflow_ix3", DevExeSpace(),0,(nvar-1),0,(ng-1),0,(n2-1),0,(n1-1),
+    KOKKOS_LAMBDA(int n, int k, int j, int i)
     { 
       u0_(m,n,ks-k-1,j,i) =  u0_(m,n,ks,j,i);
     }   
@@ -148,7 +144,7 @@ void Hydro::OutflowInnerX3()
 //! \fn void Hydro::OutflowOuterX3(
 //  \brief OUTFLOW boundary conditions, outer x3 boundary
 
-void Hydro::OutflowOuterX3()
+void Hydro::OutflowOuterX3(int m)
 {
   auto ncells = pmy_pack->mb_cells;
   int ng = ncells.ng;
@@ -156,12 +152,11 @@ void Hydro::OutflowOuterX3()
   int n2 = ncells.nx2 + 2*ng;
   int &ke = ncells.ke;
   int nvar = nhydro + nscalars;
-  int nmb = pmy_pack->nmb_thispack;
   auto &u0_ = u0;
 
   // project hydro variables in first active cell into ghost zones
-  par_for("outflow_ox3", DevExeSpace(),0,(nmb-1),0,(nvar-1),0,(ng-1),0,(n2-1),0,(n1-1),
-    KOKKOS_LAMBDA(int m, int n, int k, int j, int i)
+  par_for("outflow_ox3", DevExeSpace(),0,(nvar-1),0,(ng-1),0,(n2-1),0,(n1-1),
+    KOKKOS_LAMBDA(int n, int k, int j, int i)
     {   
       u0_(m,n,ke+k+1,j,i) =  u0_(m,n,ke,j,i);
     }

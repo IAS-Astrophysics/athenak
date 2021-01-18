@@ -39,53 +39,51 @@ TaskStatus SendBuffers(AthenaArray5D<Real> &a,
   int &my_rank = global_variable::my_rank;
 
   // load buffers, using 3 levels of hierarchical parallelism
-  int scr_level = 0;
-  size_t scr_size = 16*sizeof(int);
-  par_for_outer("SendCC", DevExeSpace(), scr_size, scr_level, 0, (nmb-1), 0, (nnghbr-1),
-    KOKKOS_LAMBDA(TeamMember_t tmember, const int m, const int n)
-    {
-      const int il = send_buf[m][n].index(0);
-      const int iu = send_buf[m][n].index(1);
-      const int jl = send_buf[m][n].index(2);
-      const int ju = send_buf[m][n].index(3);
-      const int kl = send_buf[m][n].index(4);
-      const int ku = send_buf[m][n].index(5);
-      const int ni = iu - il + 1;
-      const int nj = ju - jl + 1;
-      const int nk = ku - kl + 1;
-      const int nkj  = nk*nj;
-      const int nvkj = nvar*nk*nj;
-      Kokkos::parallel_for(
-        Kokkos::TeamThreadRange<>(tmember, nvkj), [&](const int idx) {
-          int v = idx / nkj;
-          int k = (idx - v * nkj) / nj;
-          int j = idx - v * nkj - k * nj;
-          k += kl;
-          j += jl;
-  
-          // copy directly into recv buffer if MeshBlocks on same rank
-          if (mblocks[m].nghbr[n].rank == my_rank) {
-            int nn = mblocks[m].nghbr[n].destn; // index of recv'ing boundary buffer
-            // index of recv;ing MB: assumes MB IDs are stored sequentially in mblocks[]
-            int mm = mblocks[m].nghbr[n].gid - mblocks[0].mb_gid;
-            Kokkos::parallel_for(
-              Kokkos::ThreadVectorRange(tmember, il, iu + 1), [&](const int i) {
-                recv_buf[mm][nn].data(v, i-il + ni*(j-jl + nj*(k-kl))) = a(m, v, k, j, i);
-              }
-            );
+  int nmn = nmb*nnghbr;
+  Kokkos::TeamPolicy<> policy(DevExeSpace(), nmn, Kokkos::AUTO);
+  Kokkos::parallel_for("RecvBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember)
+  { 
+    const int m = tmember.league_rank()/nnghbr;
+    const int n = tmember.league_rank()%nnghbr;
+    const int il = send_buf[m][n].index(0);
+    const int iu = send_buf[m][n].index(1);
+    const int jl = send_buf[m][n].index(2);
+    const int ju = send_buf[m][n].index(3);
+    const int kl = send_buf[m][n].index(4);
+    const int ku = send_buf[m][n].index(5);
+    const int ni = iu - il + 1;
+    const int nj = ju - jl + 1;
+    const int nk = ku - kl + 1;
+    const int nkj  = nk*nj;
+    const int nvkj = nvar*nk*nj;
 
-          // else copy directly into send buffer for MPI communication below
-          } else {
-            Kokkos::parallel_for(
-              Kokkos::ThreadVectorRange(tmember, il, iu + 1), [&](const int i) {
-                send_buf[m][n].data(v, i-il + ni*(j-jl + nj*(k-kl))) = a(m, v, k, j, i);
-              }
-            );
-          }
-        }
-      );
-    }
-  ); // end par_for_outer
+    Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nvkj), [&](const int idx)
+    {
+      int v = idx / nkj;
+      int k = (idx - v * nkj) / nj;
+      int j = idx - v * nkj - k * nj;
+      k += kl;
+      j += jl;
+  
+      // copy directly into recv buffer if MeshBlocks on same rank
+      if (mblocks[m].nghbr[n].rank == my_rank) {
+        int nn = mblocks[m].nghbr[n].destn; // index of recv'ing boundary buffer
+        // index of recv;ing MB: assumes MB IDs are stored sequentially in mblocks[]
+        int mm = mblocks[m].nghbr[n].gid - mblocks[0].mb_gid;
+        Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu + 1), [&](const int i)
+        {
+          recv_buf[mm][nn].data(v, i-il + ni*(j-jl + nj*(k-kl))) = a(m, v, k, j, i);
+        });
+
+      // else copy directly into send buffer for MPI communication below
+      } else {
+        Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu + 1), [&](const int i)
+        {
+          send_buf[m][n].data(v, i-il + ni*(j-jl + nj*(k-kl))) = a(m, v, k, j, i);
+        });
+      }
+    });
+  }); // end par_for_outer
 
   // Send boundary buffer to neighboring MeshBlocks using MPI or Kokkos::deep_copy if
   // neighbor is on same MPI rank.
