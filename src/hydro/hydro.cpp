@@ -169,7 +169,8 @@ void Hydro::HydroStageRunTasks(TaskList &tl, TaskID start, std::vector<TaskID> &
   auto hydro_update  = tl.AddTask(&Hydro::HydroUpdate, this, hydro_divflux);
   auto hydro_send  = tl.AddTask(&Hydro::HydroSend, this, hydro_update);
   auto hydro_recv  = tl.AddTask(&Hydro::HydroReceive, this, hydro_send);
-  auto hydro_con2prim  = tl.AddTask(&Hydro::ConToPrim, this, hydro_recv);
+  auto hydro_phybcs  = tl.AddTask(&Hydro::HydroApplyPhysicalBCs, this, hydro_recv);
+  auto hydro_con2prim  = tl.AddTask(&Hydro::ConToPrim, this, hydro_phybcs);
   auto hydro_newdt  = tl.AddTask(&Hydro::NewTimeStep, this, hydro_con2prim);
 
   added.emplace_back(hydro_copycons);
@@ -177,6 +178,7 @@ void Hydro::HydroStageRunTasks(TaskList &tl, TaskID start, std::vector<TaskID> &
   added.emplace_back(hydro_update);
   added.emplace_back(hydro_send);
   added.emplace_back(hydro_recv);
+  added.emplace_back(hydro_phybcs);
   added.emplace_back(hydro_con2prim);
   added.emplace_back(hydro_newdt);
 

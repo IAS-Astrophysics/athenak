@@ -30,37 +30,36 @@ namespace hydro {
 
 TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
 {
-/***
-  MeshBlock *pmb = pmesh_->FindMeshBlock(my_mbgid_);
-  int is = pmb->mb_cells.is; int ie = pmb->mb_cells.ie;
-  int js = pmb->mb_cells.js; int je = pmb->mb_cells.je;
-  int ks = pmb->mb_cells.ks; int ke = pmb->mb_cells.ke;
+  int is = pmy_pack->mb_cells.is; int ie = pmy_pack->mb_cells.ie;
+  int js = pmy_pack->mb_cells.js; int je = pmy_pack->mb_cells.je;
+  int ks = pmy_pack->mb_cells.ks; int ke = pmy_pack->mb_cells.ke;
 
   // capture Hydro and EOS class variables used in kernel
-  int nhydro_ = nhydro;
-  int nvars_ = nhydro + nscalars;
+  int nhyd  = nhydro;
+  int nvars = nhydro + nscalars;
+  int nmb = pmy_pack->nmb_thispack;
   ReconstructionMethod &recon_method = recon_method_;
   Hydro_RSolver &rsolver_method = rsolver_method_;
-  EOS_Data &eos = pmb->phydro->peos->eos_data;
-  AthenaArray4D<Real> &w0_ = w0;
-  AthenaArray4D<Real> &divf_ = divf;
+  EOS_Data &eos = peos->eos_data;
+  AthenaArray5D<Real> &w0_ = w0;
+  AthenaArray5D<Real> &divf_ = divf;
+  auto &mblocks = pmy_pack->mblocks;
 
   //--------------------------------------------------------------------------------------
   // i-direction
 
-  int ncells1 = pmb->mb_cells.nx1 + 2*(pmb->mb_cells.ng);
+  int ncells1 = pmy_pack->mb_cells.nx1 + 2*(pmy_pack->mb_cells.ng);
   const int scr_level = 0;
-  size_t scr_size = AthenaScratch2D<Real>::shmem_size(nvars_, ncells1) * 2;
-  Real &dx1 = pmb->mb_cells.dx1;
+  size_t scr_size = AthenaScratch2D<Real>::shmem_size(nvars, ncells1) * 2;
 
-  par_for_outer("divflux_x1", pmb->exe_space, scr_size, scr_level, ks, ke, js, je,
-    KOKKOS_LAMBDA(TeamMember_t member, const int k, const int j)
+  par_for_outer("divflux_x1", DevExeSpace(), scr_size, scr_level,0,(nmb-1),ks,ke,js,je,
+    KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j)
     {
-      AthenaScratch2D<Real> wl(member.team_scratch(scr_level), nvars_, ncells1);
-      AthenaScratch2D<Real> wr(member.team_scratch(scr_level), nvars_, ncells1);
+      AthenaScratch2D<Real> wl(member.team_scratch(scr_level), nvars, ncells1);
+      AthenaScratch2D<Real> wr(member.team_scratch(scr_level), nvars, ncells1);
 
       // Reconstruction qR[i] and qL[i+1]
-      AthenaArray2DSlice<Real> qi = Kokkos::subview(w0_,Kokkos::ALL(),k,j,Kokkos::ALL());
+      AthenaArray2DSlice<Real> qi = Kokkos::subview(w0_,m,Kokkos::ALL(),k,j,Kokkos::ALL());
       switch (recon_method)
       {
         case ReconstructionMethod::dc:
@@ -98,8 +97,8 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
       member.team_barrier();
 
       // calculate fluxes of scalars
-      if (nvars_ > nhydro_) {
-        for (int n=nhydro_; n<nvars_; ++n) {
+      if (nvars > nhyd) {
+        for (int n=nhyd; n<nvars; ++n) {
           par_for_inner(member, is, ie+1, [&](const int i)
           {
             if (wl(IDN,i) >= 0.0) {
@@ -113,33 +112,32 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
       }
 
       // compute dF/dx1
-      for (int n=0; n<nvars_; ++n) {
+      for (int n=0; n<nvars; ++n) {
         par_for_inner(member, is, ie, [&](const int i)
         {
-          divf_(n,k,j,i) = (wl(n,i+1) - wl(n,i))/dx1;
+          divf_(m,n,k,j,i) = (wl(n,i+1) - wl(n,i))/mblocks[m].mb_size.dx1;
         });
       }
       member.team_barrier();
     }
   );
-  if (!(pmesh_->nx2gt1)) return TaskStatus::complete;
+  if (!(pmy_pack->pmesh->nx2gt1)) return TaskStatus::complete;
 
   //--------------------------------------------------------------------------------------
   // j-direction
 
   // capture variables used in kernel
-  int ncells2 = pmb->mb_cells.nx2 + 2*(pmb->mb_cells.ng);
-  scr_size = AthenaScratch2D<Real>::shmem_size(nvars_, ncells2) * 2;
-  Real &dx2 = pmb->mb_cells.dx2;
+  int ncells2 = pmy_pack->mb_cells.nx2 + 2*(pmy_pack->mb_cells.ng);
+  scr_size = AthenaScratch2D<Real>::shmem_size(nvars, ncells2) * 2;
 
-  par_for_outer("divflux_x2", pmb->exe_space, scr_size, scr_level, ks, ke, is, ie,
-    KOKKOS_LAMBDA(TeamMember_t member, const int k, const int i)
+  par_for_outer("divflux_x2", DevExeSpace(), scr_size, scr_level,0,(nmb-1),ks,ke,is,ie,
+    KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int i)
     {
-      AthenaScratch2D<Real> wl(member.team_scratch(scr_level), nvars_, ncells2);
-      AthenaScratch2D<Real> wr(member.team_scratch(scr_level), nvars_, ncells2);
+      AthenaScratch2D<Real> wl(member.team_scratch(scr_level), nvars, ncells2);
+      AthenaScratch2D<Real> wr(member.team_scratch(scr_level), nvars, ncells2);
 
       // Reconstruction qR[j] and qL[j+1]
-      AthenaArray2DSlice<Real> qj = Kokkos::subview(w0_,Kokkos::ALL(),k,Kokkos::ALL(),i);
+      AthenaArray2DSlice<Real> qj = Kokkos::subview(w0_,m,Kokkos::ALL(),k,Kokkos::ALL(),i);
       switch (recon_method)
       {
         case ReconstructionMethod::dc:
@@ -177,8 +175,8 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
       member.team_barrier();
 
       // calculate fluxes of scalars
-      if (nvars_ > nhydro_) {
-        for (int n=nhydro_; n<nvars_; ++n) {
+      if (nvars > nhyd) {
+        for (int n=nhyd; n<nvars; ++n) {
           par_for_inner(member, js, je+1, [&](const int j)
           {
             if (wl(IDN,j) >= 0.0) {
@@ -193,33 +191,32 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
 
       // Add dF/dx2
       // Fluxes must be summed together to symmetrize round-off error in each dir
-      for (int n=0; n<nvars_; ++n) {
+      for (int n=0; n<nvars; ++n) {
         par_for_inner(member, js, je, [&](const int j)
         {
-          divf_(n,k,j,i) += (wl(n,j+1) - wl(n,j))/dx2;
+          divf_(m,n,k,j,i) += (wl(n,j+1) - wl(n,j))/mblocks[m].mb_size.dx2;
         });
       }
       member.team_barrier();
     }
   );
-  if (!(pmesh_->nx3gt1)) return TaskStatus::complete;
+  if (!(pmy_pack->pmesh->nx3gt1)) return TaskStatus::complete;
 
   //--------------------------------------------------------------------------------------
   // k-direction. Note order of k,j loops switched
 
   // capture variables used in kernel
-  int ncells3 = pmb->mb_cells.nx3 + 2*(pmb->mb_cells.ng);
-  scr_size = AthenaScratch2D<Real>::shmem_size(nvars_, ncells3) * 2;
-  Real &dx3 = pmb->mb_cells.dx3;
+  int ncells3 = pmy_pack->mb_cells.nx3 + 2*(pmy_pack->mb_cells.ng);
+  scr_size = AthenaScratch2D<Real>::shmem_size(nvars, ncells3) * 2;
 
-  par_for_outer("divflux_x3", pmb->exe_space, scr_size, scr_level, js, je, is, ie,
-    KOKKOS_LAMBDA(TeamMember_t member, const int j, const int i)
+  par_for_outer("divflux_x3", DevExeSpace(), scr_size, scr_level,0,(nmb-1),js,je,is,ie,
+    KOKKOS_LAMBDA(TeamMember_t member, const int m, const int j, const int i)
     {
-      AthenaScratch2D<Real> wl(member.team_scratch(scr_level), nvars_, ncells3);
-      AthenaScratch2D<Real> wr(member.team_scratch(scr_level), nvars_, ncells3);
+      AthenaScratch2D<Real> wl(member.team_scratch(scr_level), nvars, ncells3);
+      AthenaScratch2D<Real> wr(member.team_scratch(scr_level), nvars, ncells3);
 
       // Reconstruction qR[k] and qL[k+1]
-      AthenaArray2DSlice<Real> qk = Kokkos::subview(w0_,Kokkos::ALL(),Kokkos::ALL(),j,i);
+      AthenaArray2DSlice<Real> qk = Kokkos::subview(w0_,m,Kokkos::ALL(),Kokkos::ALL(),j,i);
       switch (recon_method)
       {
         case ReconstructionMethod::dc:
@@ -257,8 +254,8 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
       member.team_barrier();
 
       // calculate fluxes of scalars
-      if (nvars_ > nhydro_) {
-        for (int n=nhydro_; n<nvars_; ++n) {
+      if (nvars > nhyd) {
+        for (int n=nhyd; n<nvars; ++n) {
           par_for_inner(member, ks, ke+1, [&](const int k)
           {
             if (wl(IDN,k) >= 0.0) {
@@ -274,17 +271,15 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
       // Add dF/dx2
       // Add dF/dx3
       // Fluxes must be summed together to symmetrize round-off error in each dir
-      for (int n=0; n<nvars_; ++n) {
+      for (int n=0; n<nvars; ++n) {
         par_for_inner(member, ks, ke, [&](const int k)
         { 
-          divf_(n,k,j,i) += (wl(n,k+1) - wl(n,k))/dx3;
+          divf_(m,n,k,j,i) += (wl(n,k+1) - wl(n,k))/mblocks[m].mb_size.dx3;
         });
       }
       member.team_barrier();
     }
   );
-****/
   return TaskStatus::complete;
 }
-
 } // namespace hydro

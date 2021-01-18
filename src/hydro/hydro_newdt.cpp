@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file hydro_newdt.cpp
-//  \brief function to computes timestep on given MeshBlock using CFL condition
+//  \brief function to compute hydro timestep across all MeshBlock(s) in a MeshBlockPack
 
 #include <limits>
 #include <math.h>
@@ -24,80 +24,67 @@ namespace hydro {
 
 TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage)
 {
-/***
-
-
-  if (stage != pdriver->nstages) return TaskStatus::complete; // only execute on last stage
+  if (stage != pdriver->nstages) return TaskStatus::complete; // only execute last stage
   
-  MeshBlock *pmb = pmesh_->FindMeshBlock(my_mbgid_);
-  int is = pmb->mb_cells.is; int nx1 = pmb->mb_cells.nx1;
-  int js = pmb->mb_cells.js; int nx2 = pmb->mb_cells.nx2;
-  int ks = pmb->mb_cells.ks; int nx3 = pmb->mb_cells.nx3;
-  auto &eos = pmb->phydro->peos->eos_data;
+  int is = pmy_pack->mb_cells.is; int nx1 = pmy_pack->mb_cells.nx1;
+  int js = pmy_pack->mb_cells.js; int nx2 = pmy_pack->mb_cells.nx2;
+  int ks = pmy_pack->mb_cells.ks; int nx3 = pmy_pack->mb_cells.nx3;
+  auto &eos = pmy_pack->phydro->peos->eos_data;
 
-  Real dv1 = std::numeric_limits<float>::min();
-  Real dv2 = std::numeric_limits<float>::min();
-  Real dv3 = std::numeric_limits<float>::min();
+  Real dt1 = std::numeric_limits<float>::max();
+  Real dt2 = std::numeric_limits<float>::max();
+  Real dt3 = std::numeric_limits<float>::max();
+
+  auto &w0_ = w0;
+  auto &mblocks = pmy_pack->mblocks;
+  const int nmkji = (pmy_pack->nmb_thispack)*nx3*nx2*nx1;
+  const int nkji = nx3*nx2*nx1;
+  const int nji  = nx2*nx1;
 
   if (pdriver->time_evolution == TimeEvolution::kinematic) {
-
-    // find largest (v) in each direction for advection problems
-    auto &w0_ = w0;
-    const int nkji = nx3*nx2*nx1;
-    const int nji  = nx2*nx1;
-    Kokkos::parallel_reduce("HydroNudt1",Kokkos::RangePolicy<>(pmb->exe_space, 0, nkji),
-      KOKKOS_LAMBDA(const int &idx, Real &max_dv1, Real &max_dv2, Real &max_dv3)
+    // find smallest (dx/v) in each direction for advection problems
+    Kokkos::parallel_reduce("HydroNudt1",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+      KOKKOS_LAMBDA(const int &idx, Real &min_dt1, Real &min_dt2, Real &min_dt3)
       {
-      // compute n,k,j,i indices of thread and call function
-      int k = (idx)/nji;
-      int j = (idx - k*nji)/nx1;
-      int i = (idx - k*nji - j*nx1) + is;
+      // compute m,k,j,i indices of thread and call function
+      int m = (idx)/nkji;
+      int k = (idx - m*nkji)/nji;
+      int j = (idx - m*nkji - k*nji)/nx1;
+      int i = (idx - m*nkji - k*nji - j*nx1) + is;
       k += ks;
       j += js;
-      max_dv1 = fmax(fabs(w0_(IVX,k,j,i)), max_dv1);
-      max_dv2 = fmax(fabs(w0_(IVY,k,j,i)), max_dv2);
-      max_dv3 = fmax(fabs(w0_(IVZ,k,j,i)), max_dv3);
-    }, Kokkos::Max<Real>(dv1), Kokkos::Max<Real>(dv2),Kokkos::Max<Real>(dv3));
+
+      min_dt1 = fmin((mblocks[m].mb_size.dx1/fabs(w0_(m,IVX,k,j,i))), min_dt1);
+      min_dt2 = fmin((mblocks[m].mb_size.dx2/fabs(w0_(m,IVY,k,j,i))), min_dt2);
+      min_dt3 = fmin((mblocks[m].mb_size.dx3/fabs(w0_(m,IVZ,k,j,i))), min_dt3);
+    }, Kokkos::Min<Real>(dt1), Kokkos::Min<Real>(dt2),Kokkos::Min<Real>(dt3));
  
   } else {
-    // find largest (v +/- C) in each dirn for hydrodynamic problems
-    auto &w0_ = w0;
-    const int nkji = nx3*nx2*nx1;
-    const int nji  = nx2*nx1;
-    Kokkos::parallel_reduce("HydroNudt2",Kokkos::RangePolicy<>(pmb->exe_space, 0, nkji),
-      KOKKOS_LAMBDA(const int &idx, Real &max_dv1, Real &max_dv2, Real &max_dv3)
+    // find smallest dx/(v +/- C) in each direction for hydrodynamic problems
+    Kokkos::parallel_reduce("HydroNudt2",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+      KOKKOS_LAMBDA(const int &idx, Real &min_dt1, Real &min_dt2, Real &min_dt3)
     { 
-      // compute n,k,j,i indices of thread and call function
-      int k = (idx)/nji;
-      int j = (idx - k*nji)/nx1;
-      int i = (idx - k*nji - j*nx1);
+      // compute m,k,j,i indices of thread and call function
+      int m = (idx)/nkji;
+      int k = (idx - m*nkji)/nji;
+      int j = (idx - m*nkji - k*nji)/nx1;
+      int i = (idx - m*nkji - k*nji - j*nx1) + is;
       k += ks;
       j += js;
-      i += is;
 
-      Real cs = eos.SoundSpeed(w0_(IPR,k,j,i),w0_(IDN,k,j,i));
-      max_dv1 = fmax((fabs(w0_(IVX,k,j,i)) + cs), max_dv1);
-      max_dv2 = fmax((fabs(w0_(IVY,k,j,i)) + cs), max_dv2);
-      max_dv3 = fmax((fabs(w0_(IVZ,k,j,i)) + cs), max_dv3);
-    }, Kokkos::Max<Real>(dv1), Kokkos::Max<Real>(dv2),Kokkos::Max<Real>(dv3));
+      Real cs = eos.SoundSpeed(w0_(m,IPR,k,j,i),w0_(m,IDN,k,j,i));
+      min_dt1 = fmin((mblocks[m].mb_size.dx1/(fabs(w0_(m,IVX,k,j,i)) + cs)), min_dt1);
+      min_dt2 = fmin((mblocks[m].mb_size.dx2/(fabs(w0_(m,IVY,k,j,i)) + cs)), min_dt2);
+      min_dt3 = fmin((mblocks[m].mb_size.dx3/(fabs(w0_(m,IVZ,k,j,i)) + cs)), min_dt3);
+    }, Kokkos::Min<Real>(dt1), Kokkos::Min<Real>(dt2),Kokkos::Min<Real>(dt3));
 
   }
 
-  // compute minimum of dx1/(max_speed)
-  dtnew = std::numeric_limits<float>::max();
-  dtnew = std::min(dtnew, (pmb->mb_cells.dx1/dv1));
+  // compute minimum of dt1/dt2/dt3 for 1D/2D/3D problems
+  dtnew = dt1;
+  if (pmy_pack->pmesh->nx2gt1) { dtnew = std::min(dtnew, dt2); }
+  if (pmy_pack->pmesh->nx3gt1) { dtnew = std::min(dtnew, dt3); }
 
-  // if grid is 2D/3D, compute minimum of dx2/(max_speed)
-  if (pmesh_->nx2gt1) {
-    dtnew = std::min(dtnew, (pmb->mb_cells.dx2/dv2));
-  }
-
-  // if grid is 3D, compute minimum of dx3/(max_speed)
-  if (pmesh_->nx3gt1) {
-    dtnew = std::min(dtnew, (pmb->mb_cells.dx3/dv3));
-  }
-
-****/
   return TaskStatus::complete;
 }
 } // namespace hydro

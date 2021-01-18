@@ -88,8 +88,9 @@ void HistoryOutput::LoadOutputData(Mesh *pm)
     int js = pm->pmb_pack->mb_cells.js; int nx2 = pm->pmb_pack->mb_cells.nx2;
     int ks = pm->pmb_pack->mb_cells.ks; int nx3 = pm->pmb_pack->mb_cells.nx3;
 
-  // loop over all MeshBlocks on this MPI rank
-  for (int m=0; m<(pm->nmb_thisrank); ++m) {
+  // loop over all MeshBlocks in this pack
+  // TODO: modify parallel kernel below to include m, rather than looping over m outside 
+  for (int m=0; m<(pm->pmb_pack->nmb_thispack); ++m) {
     
     auto &u0_ = pm->pmb_pack->phydro->u0;
     const int nkji = nx3*nx2*nx1;
