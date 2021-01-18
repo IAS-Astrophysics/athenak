@@ -295,7 +295,7 @@ inline void par_for_outer(const std::string &name, DevExeSpace exec_space,
   {
     int m = (tmember.league_rank())/nnkj;
     int n = (tmember.league_rank() - m*nnkj)/nkj;
-    int k = (tmember.league_rank() - m*nnkj - n*nkj);
+    int k = (tmember.league_rank() - m*nnkj - n*nkj)/nj;
     int j = (tmember.league_rank() - m*nnkj - n*nkj - k*nj) + jl;
     m += ml;
     n += nl;

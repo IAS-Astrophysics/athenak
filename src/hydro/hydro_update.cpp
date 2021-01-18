@@ -38,7 +38,6 @@ TaskStatus Hydro::HydroUpdate(Driver *pdrive, int stage)
   int scr_level = 0;
   size_t scr_size = 0;
 
-/***
   par_for_outer("hydro_update", DevExeSpace(), scr_size, scr_level,
     0, (nmb-1), 0, (nvars-1), ks, ke, js, je,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int n, const int k, const int j)
@@ -50,8 +49,8 @@ TaskStatus Hydro::HydroUpdate(Driver *pdrive, int stage)
       });
     }
   );
-***/
 
+/***
   par_for("hydro_update", DevExeSpace(),0,(nmb-1),0,(nvars-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(const int m, const int n, const int k, const int j, const int i)
     {
@@ -59,6 +58,7 @@ TaskStatus Hydro::HydroUpdate(Driver *pdrive, int stage)
               gam0*u0_(m,n,k,j,i) + gam1*u1_(m,n,k,j,i) - beta_dt*divf_(m,n,k,j,i);
     }
   );
+***/
 
   return TaskStatus::complete;
 }
