@@ -40,6 +40,8 @@ void ProblemGenerator::LWImplode_(MeshBlockPack *pmbp, ParameterInput *pin)
   int &nscalars = pmbp->phydro->nscalars;
   int &nhydro = pmbp->phydro->nhydro;
   auto &u0 = pmbp->phydro->u0;
+  Real x2min_mesh = pmbp->pmesh->mesh_size.x2min;
+  Real x2max_mesh = pmbp->pmesh->mesh_size.x2max;
 
 
   // Set initial conditions
@@ -48,7 +50,7 @@ void ProblemGenerator::LWImplode_(MeshBlockPack *pmbp, ParameterInput *pin)
     {
       auto size = pmbp->mblocks[m].mb_size;
       // to make ICs symmetric, set y0 to be in between cell center and face
-      Real y0 = 0.5*(size.x2max + size.x2min) + 0.25*(size.dx2);
+      Real y0 = 0.5*(x2max_mesh + x2min_mesh) + 0.25*(size.dx2);
 
       u0(m,IM1,k,j,i) = 0.0;
       u0(m,IM2,k,j,i) = 0.0;
