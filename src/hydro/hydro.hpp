@@ -40,7 +40,7 @@ class Hydro
   AthenaArray5D<Real> w0;   // primitive variables
 
   // following are vectors of length (#neighbors), stored as a vector of length (#MBs)
-  std::vector<std::vector<BoundaryBuffer>> send_buf, recv_buf;  // send/recv buffers
+  BoundaryValues *pbvals;
 
   // following only used for time-evolving flow
   AthenaArray5D<Real> u1;    // conserved variables at intermediate step 

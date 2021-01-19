@@ -457,7 +457,7 @@ void Mesh::BuildTree(ParameterInput *pin)
   nmb_thisrank = nmblist[global_variable::my_rank];
 
   pmb_pack = new MeshBlockPack(this, gids, gide, incells);
-  for (auto &mb : pmb_pack->mblocks) {mb.SetNeighbors(ptree, ranklist);}
+  pmb_pack->pmb->SetNeighbors(ptree, ranklist);
   
 /***
   // create MeshBlocks for this node, then set neighbors
@@ -472,14 +472,13 @@ void Mesh::BuildTree(ParameterInput *pin)
 ***/
 
 /*******/
-  for (auto it=pmb_pack->mblocks.begin(); it<pmb_pack->mblocks.end(); ++it) {
-    int nnghbr = it->nghbr.size();
-    std::cout << "******* Block=" << it->mb_gid << std::endl;
+  for (int m=0; m<pmb_pack->nmb_thispack; ++m) {
+    std::cout << "******* Block=" << pmb_pack->pmb->h_mbgid(m) << std::endl;
     for (int n=0; n<6; ++n) {
-      std::cout << "n=" << n << " bc_flag=" << GetBoundaryString(it->mb_bcs[n]) << std::endl;
+      std::cout << "n=" << n << " bc_flag=" << GetBoundaryString(static_cast<BoundaryFlag>(pmb_pack->pmb->mb_bcs(m,n))) << std::endl;
     }
-    for (int n=0; n<nnghbr; ++n) {
-      std::cout << "n=" << n << " gid=" << it->nghbr[n].gid << " level=" << it->nghbr[n].level << " rank=" << it->nghbr[n].rank << " destn=" << it->nghbr[n].destn << std::endl;
+    for (int n=0; n<pmb_pack->pmb->nnghbr; ++n) {
+      std::cout << "n=" << n << " gid=" << pmb_pack->pmb->h_mbnghbr(m,n,0) << " level=" << pmb_pack->pmb->h_mbnghbr(m,n,1) << " rank=" << pmb_pack->pmb->h_mbnghbr(m,n,2) << " destn=" << pmb_pack->pmb->h_mbnghbr(m,n,3) << std::endl;
     }
   }
 /**********/
@@ -584,11 +583,11 @@ void Mesh::WriteMeshStructure()
     std::exit(EXIT_FAILURE);
   }
 
+  MeshBlock mb(this,0,nmb_total);
+  auto &size = mb.h_mbsize;
   for (int i=root_level; i<=max_level; i++) {
   for (int j=0; j<nmb_total; j++) {
     if (loclist[j].level == i) {
-      MeshBlock mb(pmb_pack, j);
-      auto size = mb.mb_size;
       std::int32_t &lx1 = loclist[j].lx1;
       std::int32_t &lx2 = loclist[j].lx2;
       std::int32_t &lx3 = loclist[j].lx3;
@@ -598,31 +597,31 @@ void Mesh::WriteMeshStructure()
           fp,"#  Logical level %d, location = (%" PRId32 " %" PRId32 " %" PRId32")\n",
           loclist[j].level, lx1, lx2, lx3);
       if (nx2gt1 && !(nx3gt1)) { // 2D
-        std::fprintf(fp,"%g %g\n", size.x1min, size.x2min);
-        std::fprintf(fp,"%g %g\n", size.x1max, size.x2min);
-        std::fprintf(fp,"%g %g\n", size.x1max, size.x2max);
-        std::fprintf(fp,"%g %g\n", size.x1min, size.x2max);
-        std::fprintf(fp,"%g %g\n", size.x1min, size.x2min);
+        std::fprintf(fp,"%g %g\n", size(j,0), size(j,2));
+        std::fprintf(fp,"%g %g\n", size(j,1), size(j,2));
+        std::fprintf(fp,"%g %g\n", size(j,1), size(j,3));
+        std::fprintf(fp,"%g %g\n", size(j,0), size(j,3));
+        std::fprintf(fp,"%g %g\n", size(j,0), size(j,2));
         std::fprintf(fp,"\n\n");
       }
       if (nx3gt1) { // 3D
-        std::fprintf(fp,"%g %g %g\n", size.x1min, size.x2min, size.x3min);
-        std::fprintf(fp,"%g %g %g\n", size.x1max, size.x2min, size.x3min);
-        std::fprintf(fp,"%g %g %g\n", size.x1max, size.x2max, size.x3min);
-        std::fprintf(fp,"%g %g %g\n", size.x1min, size.x2max, size.x3min);
-        std::fprintf(fp,"%g %g %g\n", size.x1min, size.x2min, size.x3min);
-        std::fprintf(fp,"%g %g %g\n", size.x1min, size.x2min, size.x3max);
-        std::fprintf(fp,"%g %g %g\n", size.x1max, size.x2min, size.x3max);
-        std::fprintf(fp,"%g %g %g\n", size.x1max, size.x2min, size.x3min);
-        std::fprintf(fp,"%g %g %g\n", size.x1max, size.x2min, size.x3max);
-        std::fprintf(fp,"%g %g %g\n", size.x1max, size.x2max, size.x3max);
-        std::fprintf(fp,"%g %g %g\n", size.x1max, size.x2max, size.x3min);
-        std::fprintf(fp,"%g %g %g\n", size.x1max, size.x2max, size.x3max);
-        std::fprintf(fp,"%g %g %g\n", size.x1min, size.x2max, size.x3max);
-        std::fprintf(fp,"%g %g %g\n", size.x1min, size.x2max, size.x3min);
-        std::fprintf(fp,"%g %g %g\n", size.x1min, size.x2max, size.x3max);
-        std::fprintf(fp,"%g %g %g\n", size.x1min, size.x2min, size.x3max);
-        std::fprintf(fp,"%g %g %g\n", size.x1min, size.x2min, size.x3min);
+        std::fprintf(fp,"%g %g %g\n", size(j,0), size(j,2), size(j,4));
+        std::fprintf(fp,"%g %g %g\n", size(j,1), size(j,2), size(j,4));
+        std::fprintf(fp,"%g %g %g\n", size(j,1), size(j,3), size(j,4));
+        std::fprintf(fp,"%g %g %g\n", size(j,0), size(j,3), size(j,4));
+        std::fprintf(fp,"%g %g %g\n", size(j,0), size(j,2), size(j,4));
+        std::fprintf(fp,"%g %g %g\n", size(j,0), size(j,2), size(j,5));
+        std::fprintf(fp,"%g %g %g\n", size(j,1), size(j,2), size(j,5));
+        std::fprintf(fp,"%g %g %g\n", size(j,1), size(j,2), size(j,4));
+        std::fprintf(fp,"%g %g %g\n", size(j,1), size(j,2), size(j,5));
+        std::fprintf(fp,"%g %g %g\n", size(j,1), size(j,3), size(j,5));
+        std::fprintf(fp,"%g %g %g\n", size(j,1), size(j,3), size(j,4));
+        std::fprintf(fp,"%g %g %g\n", size(j,1), size(j,3), size(j,5));
+        std::fprintf(fp,"%g %g %g\n", size(j,0), size(j,3), size(j,5));
+        std::fprintf(fp,"%g %g %g\n", size(j,0), size(j,3), size(j,4));
+        std::fprintf(fp,"%g %g %g\n", size(j,0), size(j,3), size(j,5));
+        std::fprintf(fp,"%g %g %g\n", size(j,0), size(j,2), size(j,5));
+        std::fprintf(fp,"%g %g %g\n", size(j,0), size(j,2), size(j,4));
         std::fprintf(fp, "\n\n");
       }
     }

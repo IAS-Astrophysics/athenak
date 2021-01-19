@@ -114,20 +114,21 @@ void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
       int nout_mbs = static_cast<int>(out_data_.size());
       for (int m=0; m<nout_mbs; ++m) {
         auto cells = pm->pmb_pack->mb_cells;
-        MeshBlock* pmb = pm->FindMeshBlock(out_data_gid_[m]);
+        MeshBlock* pmb = pm->pmb_pack->pmb;
+        int idx = pm->FindMeshBlockIndex(out_data_gid_[m]);
         int &is = cells.is;
         int &js = cells.js;
         int &ks = cells.ks;
-        Real &x1min = pmb->mb_size.x1min, &x1max = pmb->mb_size.x1max;
-        Real &x2min = pmb->mb_size.x2min, &x2max = pmb->mb_size.x2max;
-        Real &x3min = pmb->mb_size.x3min, &x3max = pmb->mb_size.x3max;
+        Real &x1min = pmb->h_mbsize(idx,0), &x1max = pmb->h_mbsize(idx,1);
+        Real &x2min = pmb->h_mbsize(idx,2), &x2max = pmb->h_mbsize(idx,3);
+        Real &x3min = pmb->h_mbsize(idx,4), &x3max = pmb->h_mbsize(idx,5);
         int &nx1 = cells.nx1;
         int &nx2 = cells.nx2;
         int &nx3 = cells.nx3;
         for (int k=oks; k<=oke; ++k) {
           for (int j=ojs; j<=oje; ++j) {
             for (int i=ois; i<=oie; ++i) {
-              std::fprintf(pfile, "%05d", pmb->mb_gid);
+              std::fprintf(pfile, "%05d", pmb->h_mbgid(idx));
               // write x1, x2, x3 indices and coordinates
               if (oie != ois) {
                 std::fprintf(pfile, " %04d", i);  // note extra space for formatting

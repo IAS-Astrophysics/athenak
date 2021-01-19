@@ -130,17 +130,25 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
 
   // TODO: need to cycle through all physics modules/variables in this step
 
+std::cout << "driver init 0" << std::endl;
   TaskStatus tstatus;
   tstatus = pmesh->pmb_pack->phydro->HydroInitRecv(this, 0);
+std::cout << "driver init 1" << std::endl;
   tstatus = pmesh->pmb_pack->phydro->HydroSend(this, 0);
+std::cout << "driver init 2" << std::endl;
   tstatus = pmesh->pmb_pack->phydro->HydroClearSend(this, 0);
+std::cout << "driver init 3" << std::endl;
   tstatus = pmesh->pmb_pack->phydro->HydroClearRecv(this, 0);
+std::cout << "driver init 4" << std::endl;
   tstatus = pmesh->pmb_pack->phydro->HydroReceive(this, 0);
+std::cout << "driver init 5" << std::endl;
   pmesh->pmb_pack->phydro->HydroApplyPhysicalBCs(this, 0);
+std::cout << "driver init 6" << std::endl;
 
   // convert conserved to primitive over whole mesh
   tstatus = pmesh->pmb_pack->phydro->ConToPrim(this, 0);
 
+std::cout << "driver init 7" << std::endl;
   //---- Step 2.  Compute first time step (if problem involves time evolution
 
   // TODO: need to cycle through all physics modules/variables in this step
@@ -149,6 +157,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
     tstatus = pmesh->pmb_pack->phydro->NewTimeStep(this, nstages);
     pmesh->NewTimeStep(tlim);
   }
+std::cout << "driver init 8" << std::endl;
 
   //---- Step 3.  Cycle through output Types and load data / write files.
 
@@ -156,6 +165,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
     out->LoadOutputData(pmesh);
     out->WriteOutputFile(pmesh, pin);
   }
+std::cout << "driver init 9" << std::endl;
 
   //---- Step 4.  Initialize various counters, timers, etc.
 

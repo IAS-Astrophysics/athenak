@@ -79,63 +79,55 @@ namespace Kokkos { //reduction identity must be defined in Kokkos namespace
 
 void HistoryOutput::LoadOutputData(Mesh *pm)
 { 
-  // initialize sums over MeshBlocks on this rank to zero
-  for (int n=0; n<NHISTORY_VARIABLES; ++n) {
-    history_data[n] = 0.0;
-  }
-
-    int is = pm->pmb_pack->mb_cells.is; int nx1 = pm->pmb_pack->mb_cells.nx1;
-    int js = pm->pmb_pack->mb_cells.js; int nx2 = pm->pmb_pack->mb_cells.nx2;
-    int ks = pm->pmb_pack->mb_cells.ks; int nx3 = pm->pmb_pack->mb_cells.nx3;
+  int is = pm->pmb_pack->mb_cells.is; int nx1 = pm->pmb_pack->mb_cells.nx1;
+  int js = pm->pmb_pack->mb_cells.js; int nx2 = pm->pmb_pack->mb_cells.nx2;
+  int ks = pm->pmb_pack->mb_cells.ks; int nx3 = pm->pmb_pack->mb_cells.nx3;
 
   // loop over all MeshBlocks in this pack
-  // TODO: modify parallel kernel below to include m, rather than looping over m outside 
-  for (int m=0; m<(pm->pmb_pack->nmb_thispack); ++m) {
     
-    auto &u0_ = pm->pmb_pack->phydro->u0;
-    const int nkji = nx3*nx2*nx1;
-    const int nji  = nx2*nx1;
+  auto &u0_ = pm->pmb_pack->phydro->u0;
+  auto &size = pm->pmb_pack->pmb->d_mbsize;
+  const int nmkji = (pm->pmb_pack->nmb_thispack)*nx3*nx2*nx1;
+  const int nkji = nx3*nx2*nx1;
+  const int nji  = nx2*nx1;
 
-    hist_sum::GlobalSum sum_this_mb;         
-    Kokkos::parallel_reduce("HistSums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nkji),
-      KOKKOS_LAMBDA(const int &idx, hist_sum::GlobalSum &mb_sum)
-      {
-        // compute n,k,j,i indices of thread
-        int k = (idx)/nji;
-        int j = (idx - k*nji)/nx1;
-        int i = (idx - k*nji - j*nx1) + is;
-        k += ks;
-        j += js;
+  hist_sum::GlobalSum sum_this_mb;         
+  Kokkos::parallel_reduce("HistSums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+    KOKKOS_LAMBDA(const int &idx, hist_sum::GlobalSum &mb_sum)
+    {
+      // compute n,k,j,i indices of thread
+      int m = (idx)/nkji;
+      int k = (idx - m*nkji)/nji;
+      int j = (idx - m*nkji - k*nji)/nx1;
+      int i = (idx - m*nkji - k*nji - j*nx1) + is;
+      k += ks;
+      j += js;
 
-        // Hydro conserved variables:
-        hist_sum::GlobalSum hvars;
-        hvars.the_array[0] = u0_(m,hydro::IDN,k,j,i);
-        hvars.the_array[1] = u0_(m,hydro::IM1,k,j,i);
-        hvars.the_array[2] = u0_(m,hydro::IM2,k,j,i);
-        hvars.the_array[3] = u0_(m,hydro::IM3,k,j,i);
-        hvars.the_array[4] = u0_(m,hydro::IEN,k,j,i);
+      Real vol = size(m,6)*size(m,7)*size(m,8);
 
-        // Hydro KE
-        hvars.the_array[5] = 0.5*SQR(u0_(m,hydro::IM1,k,j,i))/u0_(m,hydro::IDN,k,j,i);
-        hvars.the_array[6] = 0.5*SQR(u0_(m,hydro::IM2,k,j,i))/u0_(m,hydro::IDN,k,j,i);
-        hvars.the_array[7] = 0.5*SQR(u0_(m,hydro::IM3,k,j,i))/u0_(m,hydro::IDN,k,j,i);
+      // Hydro conserved variables:
+      hist_sum::GlobalSum hvars;
+      hvars.the_array[0] = vol*u0_(m,hydro::IDN,k,j,i);
+      hvars.the_array[1] = vol*u0_(m,hydro::IM1,k,j,i);
+      hvars.the_array[2] = vol*u0_(m,hydro::IM2,k,j,i);
+      hvars.the_array[3] = vol*u0_(m,hydro::IM3,k,j,i);
+      hvars.the_array[4] = vol*u0_(m,hydro::IEN,k,j,i);
 
-        // sum into parallel reduce
-        mb_sum += hvars;
+      // Hydro KE
+      hvars.the_array[5] = vol*0.5*SQR(u0_(m,hydro::IM1,k,j,i))/u0_(m,hydro::IDN,k,j,i);
+      hvars.the_array[6] = vol*0.5*SQR(u0_(m,hydro::IM2,k,j,i))/u0_(m,hydro::IDN,k,j,i);
+      hvars.the_array[7] = vol*0.5*SQR(u0_(m,hydro::IM3,k,j,i))/u0_(m,hydro::IDN,k,j,i);
 
-      }, Kokkos::Sum<hist_sum::GlobalSum>(sum_this_mb)
-    );
+      // sum into parallel reduce
+      mb_sum += hvars;
 
-    // normalize sums by volume of this MeshBlock and sum into output array
-    MeshBlock *pmb = &(pm->pmb_pack->mblocks[m]);
-    Real volume = ((pmb->mb_size.x1max - pmb->mb_size.x1min)*
-      (pmb->mb_size.x2max - pmb->mb_size.x2min)*(pmb->mb_size.x3max - pmb->mb_size.x3min))
-      /static_cast<Real>(nx1*nx2*nx3);
-    for (int n=0; n<NHISTORY_VARIABLES; ++n) {
-      history_data[n] += volume*sum_this_mb.the_array[n];
-    }
+    }, Kokkos::Sum<hist_sum::GlobalSum>(sum_this_mb)
+  );
 
-  }  // end loop over MeshBlocks
+  for (int n=0; n<NHISTORY_VARIABLES; ++n) {
+    history_data[n] = sum_this_mb.the_array[n];
+  }
+
 
   return;
 }

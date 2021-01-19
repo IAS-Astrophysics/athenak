@@ -15,6 +15,20 @@
 #include "bvals.hpp"
 
 //----------------------------------------------------------------------------------------
+// BoundaryValues constructor:
+
+BoundaryValues::BoundaryValues(MeshBlockPack *pp, ParameterInput *pin) : ppack(pp)
+{
+} 
+  
+//----------------------------------------------------------------------------------------
+// BoundaryValues destructor
+  
+BoundaryValues::~BoundaryValues()
+{
+}
+
+//----------------------------------------------------------------------------------------
 // \!fn void AllocateBuffersCC
 // construct vector of BoundaryBuffers for cell-centered variables
 // NOTE: order of vector elements is crucial and cannot be changed.  It must match
@@ -23,7 +37,7 @@
 // TODO: do not allocate memory for send buffers when target on same MPI rank
 // TODO: with AMR, indices for buffers can be different on different MashBlocks
 
-void AllocateBuffersCCVars(const int nvar, const RegionCells ncells,
+void BoundaryValues::AllocateBuffersCCVars(const int nvar, const RegionCells ncells,
   std::vector<BoundaryBuffer> &send_buf, std::vector<BoundaryBuffer> &recv_buf)
 {
   const int &ng = ncells.ng;

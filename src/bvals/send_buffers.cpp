@@ -24,19 +24,18 @@
 // directly for periodic or block boundaries.
 //
 // Input array must be 5D Kokkos View dimensioned (nmb, nvar, nx3, nx2, nx1)
-//
-// TODO: with AMR, buffer indices can be different on different MeshBlocks
 
-TaskStatus SendBuffers(AthenaArray5D<Real> &a,
-  std::vector<std::vector<BoundaryBuffer>> &send_buf,
-  std::vector<std::vector<BoundaryBuffer>> &recv_buf, std::vector<MeshBlock> &mblocks)
+TaskStatus BoundaryValues::SendBuffers(AthenaArray5D<Real> &a)
 {
   // create local references for variables in kernel
-  int nmb  = mblocks.size();
+  int nmb = ppack->pmb->nmb;
   // TODO: following only works when all MBs have the same number of neighbors
-  int nnghbr = mblocks[0].nghbr.size();   
+  int nnghbr = ppack->pmb->nnghbr;
   int nvar = a.extent_int(1);  // 2nd index from L of input array must be NVAR
-  int &my_rank = global_variable::my_rank;
+
+  {int &my_rank = global_variable::my_rank;
+  auto &nghbr = ppack->pmb->d_mbnghbr;
+  auto &mbgid = ppack->pmb->d_mbgid;
 
   // load buffers, using 3 levels of hierarchical parallelism
   int nmn = nmb*nnghbr;
@@ -66,10 +65,10 @@ TaskStatus SendBuffers(AthenaArray5D<Real> &a,
       j += jl;
   
       // copy directly into recv buffer if MeshBlocks on same rank
-      if (mblocks[m].nghbr[n].rank == my_rank) {
-        int nn = mblocks[m].nghbr[n].destn; // index of recv'ing boundary buffer
+      if (nghbr(m,n,2) == my_rank) {
+        int nn = nghbr(m,n,3); // destination: index of recv'ing boundary buffer
         // index of recv;ing MB: assumes MB IDs are stored sequentially in mblocks[]
-        int mm = mblocks[m].nghbr[n].gid - mblocks[0].mb_gid;
+        int mm = nghbr(m,n,0) - mbgid(0);
         Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu + 1), [&](const int i)
         {
           recv_buf[mm][nn].data(v, i-il + ni*(j-jl + nj*(k-kl))) = a(m, v, k, j, i);
@@ -84,18 +83,23 @@ TaskStatus SendBuffers(AthenaArray5D<Real> &a,
       }
     });
   }); // end par_for_outer
+  }
 
   // Send boundary buffer to neighboring MeshBlocks using MPI or Kokkos::deep_copy if
   // neighbor is on same MPI rank.
   // Note send_buf[n] --> recv_buf[n + nghbr[n].dn]
 
+  {int &my_rank = global_variable::my_rank;
+  auto &nghbr = ppack->pmb->h_mbnghbr;
+  auto &mbgid = ppack->pmb->h_mbgid;
+
   using Kokkos::ALL;
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
-      if (mblocks[m].nghbr[n].gid >= 0) {  // not a physical boundary
-        if (mblocks[m].nghbr[n].rank == my_rank) {
-          int nn = mblocks[m].nghbr[n].destn;
-          int mm = mblocks[m].nghbr[n].gid - mblocks[0].mb_gid;
+      if (nghbr(m,n,0) >= 0) {  // index0=gid: not a physical boundary
+        if (nghbr(m,n,2) == my_rank) {  // index2 = rank
+          int nn = nghbr(m,n,3);        // index3 = destn
+          int mm = nghbr(m,n,0) - mbgid(0);
           recv_buf[mm][nn].bcomm_stat = BoundaryCommStatus::received;
 
 #if MPI_PARALLEL_ENABLED
@@ -110,7 +114,7 @@ TaskStatus SendBuffers(AthenaArray5D<Real> &a,
         }
       }
     }
-  }
+  }}
 
   return TaskStatus::complete;
 }

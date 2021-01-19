@@ -198,7 +198,6 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
     int nout_mbs = static_cast<int>(out_data_.size());
     for (int m=0; m<nout_mbs; ++m) {
       LogicalLocation loc = pm->loclist[out_data_gid_[m]];
-      MeshBlock* pmb = pm->FindMeshBlock(out_data_gid_[m]);
       int &mb_nx1 = cells.nx1;
       int &mb_nx2 = cells.nx2;
       int &mb_nx3 = cells.nx3;

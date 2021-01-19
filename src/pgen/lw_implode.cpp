@@ -40,6 +40,7 @@ void ProblemGenerator::LWImplode_(MeshBlockPack *pmbp, ParameterInput *pin)
   int &nscalars = pmbp->phydro->nscalars;
   int &nhydro = pmbp->phydro->nhydro;
   auto &u0 = pmbp->phydro->u0;
+  auto &size = pmbp->pmb->d_mbsize;
   Real x2min_mesh = pmbp->pmesh->mesh_size.x2min;
   Real x2max_mesh = pmbp->pmesh->mesh_size.x2max;
 
@@ -48,15 +49,14 @@ void ProblemGenerator::LWImplode_(MeshBlockPack *pmbp, ParameterInput *pin)
   par_for("pgen_lw_implode", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
-      auto size = pmbp->mblocks[m].mb_size;
       // to make ICs symmetric, set y0 to be in between cell center and face
-      Real y0 = 0.5*(x2max_mesh + x2min_mesh) + 0.25*(size.dx2);
+      Real y0 = 0.5*(x2max_mesh + x2min_mesh) + 0.25*(size(m,7));
 
       u0(m,IM1,k,j,i) = 0.0;
       u0(m,IM2,k,j,i) = 0.0;
       u0(m,IM3,k,j,i) = 0.0;
-      Real x1v = CellCenterX(i-is, nx1, size.x1min, size.x1max);
-      Real x2v = CellCenterX(j-js, nx2, size.x2min, size.x2max);
+      Real x1v = CellCenterX(i-is, nx1, size(m,0), size(m,1));
+      Real x2v = CellCenterX(j-js, nx2, size(m,2), size(m,3));
       if (x2v > (y0 - x1v)) {
         u0(m,IDN,k,j,i) = d_out;
         u0(m,IEN,k,j,i) = p_out/gm1;

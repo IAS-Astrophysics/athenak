@@ -70,20 +70,20 @@ void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
   int &js = pmbp->mb_cells.js, &je = pmbp->mb_cells.je;
   int &ks = pmbp->mb_cells.ks, &ke = pmbp->mb_cells.ke;
   auto &u0 = pmbp->phydro->u0;
+  auto &size = pmbp->pmb->d_mbsize;
 
   par_for("pgen_advect", DevExeSpace(), 0, (pmbp->nmb_thispack-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
-      auto size = pmbp->mblocks[m].mb_size;
       Real r; // coordinate that will span [0->1]
       if (flow_dir == 1) {
-        r = (CellCenterX(i-is, nx1, size.x1min, size.x1max) - x1min_mesh)
+        r = (CellCenterX(i-is, nx1, size(m,0), size(m,1)) - x1min_mesh)
             /length;
       } else if (flow_dir == 2) {
-        r = (CellCenterX(j-js, nx2, size.x2min, size.x2max) - x2min_mesh)
+        r = (CellCenterX(j-js, nx2, size(m,2), size(m,3)) - x2min_mesh)
             /length;
       } else {
-        r = (CellCenterX(k-ks, nx3, size.x3min, size.x3max) - x3min_mesh)
+        r = (CellCenterX(k-ks, nx3, size(m,4), size(m,5)) - x3min_mesh)
             /length;
       }
 

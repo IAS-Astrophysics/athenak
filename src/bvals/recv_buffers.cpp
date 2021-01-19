@@ -19,15 +19,17 @@
 // \!fn void RecvBuffers()
 // \brief Unpack boundary buffers
 
-TaskStatus RecvBuffers(AthenaArray5D<Real> &a,
-  std::vector<std::vector<BoundaryBuffer>> &send_buf,
-  std::vector<std::vector<BoundaryBuffer>> &recv_buf, std::vector<MeshBlock> &mblocks)
+TaskStatus BoundaryValues::RecvBuffers(AthenaArray5D<Real> &a)
 {
   // create local references for variables in kernel
-  int nmb  = mblocks.size();
+  int nmb = ppack->pmb->nmb;
   // TODO: following only works when all MBs have the same number of neighbors
-  int nnghbr = mblocks[0].nghbr.size();
+  int nnghbr = ppack->pmb->nnghbr;
   int nvar = a.extent_int(1);  // 2nd index from L of input array must be NVAR
+
+  bool bflag = false;
+  {auto &nghbr = ppack->pmb->h_mbnghbr;
+  auto &gid = ppack->pmb->h_mbgid;
 
 #if MPI_PARALLEL_ENABLED
   // probe MPI communications.  This is a bit of black magic that seems to promote
@@ -35,13 +37,12 @@ TaskStatus RecvBuffers(AthenaArray5D<Real> &a,
   int test;
   MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &test, MPI_STATUS_IGNORE);
 #endif
-  bool bflag = false;
 
   // check that recv boundary buffer communications have all completed
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
-      if (mblocks[m].nghbr[n].gid >= 0) { // ID != -1, so not a physical boundary
-        if (mblocks[m].nghbr[n].rank == global_variable::my_rank) {
+      if (nghbr(m,n,0) >= 0) { // ID != -1, so not a physical boundary
+        if (nghbr(m,n,2) == global_variable::my_rank) {
           if (recv_buf[m][n].bcomm_stat == BoundaryCommStatus::waiting) bflag = true;
 #if MPI_PARALLEL_ENABLED
         } else {
@@ -55,7 +56,7 @@ TaskStatus RecvBuffers(AthenaArray5D<Real> &a,
         }
       }
     }
-  }
+  }}
 
   // exit if recv boundary buffer communications have not completed
   if (bflag) {return TaskStatus::incomplete;}

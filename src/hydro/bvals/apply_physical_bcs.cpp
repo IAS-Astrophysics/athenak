@@ -28,11 +28,11 @@ TaskStatus Hydro::HydroApplyPhysicalBCs(Driver* pdrive, int stage)
 
   for (int m=0; m<nmb; ++m) {
     // apply physical boundaries to inner_x1
-    switch (pmy_pack->mblocks[m].mb_bcs[BoundaryFace::inner_x1]) {
-      case BoundaryFlag::reflect:
+    switch (pmy_pack->pmb->mb_bcs(m,BoundaryFace::inner_x1)) {
+      case static_cast<int>(BoundaryFlag::reflect):
         ReflectInnerX1(m);
         break;
-      case BoundaryFlag::outflow:
+      case static_cast<int>(BoundaryFlag::outflow):
         OutflowInnerX1(m);
         break;
       default:
@@ -40,11 +40,11 @@ TaskStatus Hydro::HydroApplyPhysicalBCs(Driver* pdrive, int stage)
     }
 
     // apply physical bounaries to outer_x1
-    switch (pmy_pack->mblocks[m].mb_bcs[BoundaryFace::outer_x1]) {
-      case BoundaryFlag::reflect:
+    switch (pmy_pack->pmb->mb_bcs(m,BoundaryFace::outer_x1)) {
+      case static_cast<int>(BoundaryFlag::reflect):
         ReflectOuterX1(m);
         break;
-      case BoundaryFlag::outflow:
+      case static_cast<int>(BoundaryFlag::outflow):
         OutflowOuterX1(m);
         break;
       default:
@@ -55,11 +55,11 @@ TaskStatus Hydro::HydroApplyPhysicalBCs(Driver* pdrive, int stage)
 
   for (int m=0; m<nmb; ++m) {
     // apply physical bounaries to inner_x2
-    switch (pmy_pack->mblocks[m].mb_bcs[BoundaryFace::inner_x2]) {
-      case BoundaryFlag::reflect:
+    switch (pmy_pack->pmb->mb_bcs(m,BoundaryFace::inner_x2)) {
+      case static_cast<int>(BoundaryFlag::reflect):
         ReflectInnerX2(m);
         break;
-      case BoundaryFlag::outflow:
+      case static_cast<int>(BoundaryFlag::outflow):
         OutflowInnerX2(m);
         break;
       default:
@@ -67,11 +67,11 @@ TaskStatus Hydro::HydroApplyPhysicalBCs(Driver* pdrive, int stage)
     }
 
     // apply physical bounaries to outer_x1
-    switch (pmy_pack->mblocks[m].mb_bcs[BoundaryFace::outer_x2]) {
-      case BoundaryFlag::reflect:
+    switch (pmy_pack->pmb->mb_bcs(m,BoundaryFace::outer_x2)) {
+      case static_cast<int>(BoundaryFlag::reflect):
         ReflectOuterX2(m);
         break;
-      case BoundaryFlag::outflow:
+      case static_cast<int>(BoundaryFlag::outflow):
         OutflowOuterX2(m);
         break;
       default:
@@ -82,11 +82,11 @@ TaskStatus Hydro::HydroApplyPhysicalBCs(Driver* pdrive, int stage)
 
   for (int m=0; m<nmb; ++m) {
     // apply physical bounaries to inner_x3
-    switch (pmy_pack->mblocks[m].mb_bcs[BoundaryFace::inner_x3]) {
-      case BoundaryFlag::reflect:
+    switch (pmy_pack->pmb->mb_bcs(m,BoundaryFace::inner_x3)) {
+      case static_cast<int>(BoundaryFlag::reflect):
         ReflectInnerX3(m);
         break;
-      case BoundaryFlag::outflow:
+      case static_cast<int>(BoundaryFlag::outflow):
         OutflowInnerX3(m);
         break;
       default:
@@ -94,11 +94,11 @@ TaskStatus Hydro::HydroApplyPhysicalBCs(Driver* pdrive, int stage)
     }
 
     // apply physical bounaries to outer_x3
-    switch (pmy_pack->mblocks[m].mb_bcs[BoundaryFace::outer_x3]) {
-      case BoundaryFlag::reflect:
+    switch (pmy_pack->pmb->mb_bcs(m,BoundaryFace::outer_x3)) {
+      case static_cast<int>(BoundaryFlag::reflect):
         ReflectOuterX3(m);
         break;
-      case BoundaryFlag::outflow:
+      case static_cast<int>(BoundaryFlag::outflow):
         OutflowOuterX3(m);
         break;
       default:

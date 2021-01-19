@@ -70,11 +70,7 @@ MeshBlockPack::MeshBlockPack(Mesh *pm, int igids, int igide, RegionCells icells)
   }
 
   // create MeshBlocks for this MeshBlockPack
-  // vector of MBs guaranteed to be stored in order gids->gide
-  for (int i=gids; i<=gide; i++) {
-    mblocks.emplace_back(this, i);
-  }
-
+  pmb = new MeshBlock(pm, gids, gide);
 }
 
 //----------------------------------------------------------------------------------------

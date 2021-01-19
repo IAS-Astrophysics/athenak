@@ -36,7 +36,7 @@ TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage)
   Real dt3 = std::numeric_limits<float>::max();
 
   auto &w0_ = w0;
-  auto &mblocks = pmy_pack->mblocks;
+  auto &size = pmy_pack->pmb->d_mbsize;
   const int nmkji = (pmy_pack->nmb_thispack)*nx3*nx2*nx1;
   const int nkji = nx3*nx2*nx1;
   const int nji  = nx2*nx1;
@@ -54,9 +54,9 @@ TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage)
       k += ks;
       j += js;
 
-      min_dt1 = fmin((mblocks[m].mb_size.dx1/fabs(w0_(m,IVX,k,j,i))), min_dt1);
-      min_dt2 = fmin((mblocks[m].mb_size.dx2/fabs(w0_(m,IVY,k,j,i))), min_dt2);
-      min_dt3 = fmin((mblocks[m].mb_size.dx3/fabs(w0_(m,IVZ,k,j,i))), min_dt3);
+      min_dt1 = fmin((size(m,6)/fabs(w0_(m,IVX,k,j,i))), min_dt1);
+      min_dt2 = fmin((size(m,7)/fabs(w0_(m,IVY,k,j,i))), min_dt2);
+      min_dt3 = fmin((size(m,8)/fabs(w0_(m,IVZ,k,j,i))), min_dt3);
     }, Kokkos::Min<Real>(dt1), Kokkos::Min<Real>(dt2),Kokkos::Min<Real>(dt3));
  
   } else {
@@ -73,9 +73,9 @@ TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage)
       j += js;
 
       Real cs = eos.SoundSpeed(w0_(m,IPR,k,j,i),w0_(m,IDN,k,j,i));
-      min_dt1 = fmin((mblocks[m].mb_size.dx1/(fabs(w0_(m,IVX,k,j,i)) + cs)), min_dt1);
-      min_dt2 = fmin((mblocks[m].mb_size.dx2/(fabs(w0_(m,IVY,k,j,i)) + cs)), min_dt2);
-      min_dt3 = fmin((mblocks[m].mb_size.dx3/(fabs(w0_(m,IVZ,k,j,i)) + cs)), min_dt3);
+      min_dt1 = fmin((size(m,6)/(fabs(w0_(m,IVX,k,j,i)) + cs)), min_dt1);
+      min_dt2 = fmin((size(m,7)/(fabs(w0_(m,IVY,k,j,i)) + cs)), min_dt2);
+      min_dt3 = fmin((size(m,8)/(fabs(w0_(m,IVZ,k,j,i)) + cs)), min_dt3);
     }, Kokkos::Min<Real>(dt1), Kokkos::Min<Real>(dt2),Kokkos::Min<Real>(dt3));
 
   }

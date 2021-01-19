@@ -147,33 +147,33 @@ void OutputType::LoadOutputData(Mesh *pm)
   int nmb = pmbp->nmb_thispack;
   for (int m=0; m<nmb; ++m) {
 
-    auto cells = pmbp->mb_cells;
-    auto size  = pmbp->mblocks[m].mb_size;
+    auto &cells = pmbp->mb_cells;
+    auto &size  = pmbp->pmb->h_mbsize;
     // check for slicing in each dimension
     if (out_params.slice1) {
       // skip if slice is out of range of this MB
-      if (out_params.slice_x1 <  size.x1min ||
-          out_params.slice_x1 >= size.x1max) { continue; }
+      if (out_params.slice_x1 <  size(m,0) ||
+          out_params.slice_x1 >= size(m,1)) { continue; }
       // set index of slice
-      ois = CellCenterIndex(out_params.slice_x1, cells.nx1, size.x1min, size.x1max);
+      ois = CellCenterIndex(out_params.slice_x1, cells.nx1, size(m,0), size(m,1));
       oie = ois;
     }
 
     if (out_params.slice2) {
       // skip if slice is out of range of this MB
-      if (out_params.slice_x2 <  size.x2min ||
-          out_params.slice_x2 >= size.x2max) { continue; }
+      if (out_params.slice_x2 <  size(m,2) ||
+          out_params.slice_x2 >= size(m,3)) { continue; }
       // set index of slice
-      ojs = CellCenterIndex(out_params.slice_x2, cells.nx2, size.x2min, size.x2max);
+      ojs = CellCenterIndex(out_params.slice_x2, cells.nx2, size(m,2), size(m,3));
       oje = ojs;
     }
 
     if (out_params.slice3) {
       // skip if slice is out of range of this MB
-      if (out_params.slice_x3 <  size.x3min ||
-          out_params.slice_x3 >= size.x3max) { continue; }
+      if (out_params.slice_x3 <  size(m,4) ||
+          out_params.slice_x3 >= size(m,5)) { continue; }
       // set index of slice
-      oks = CellCenterIndex(out_params.slice_x3, cells.nx3, size.x3min, size.x3max);
+      oks = CellCenterIndex(out_params.slice_x3, cells.nx3, size(m,4), size(m,5));
       oke = oks;
     }
 
@@ -256,6 +256,6 @@ void OutputType::LoadOutputData(Mesh *pm)
 
     // append variables on this MeshBlock to end of out_data_ vector
     out_data_.push_back(new_data);
-    out_data_gid_.push_back(pmbp->mblocks[m].mb_gid);
+    out_data_gid_.push_back(pmbp->pmb->h_mbgid(m));
   }
 }

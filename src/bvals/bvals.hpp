@@ -70,19 +70,29 @@ struct BoundaryBuffer
 };
 
 // Forward declarations
-class MeshBlock;
+class MeshBlockPack;
 
 //----------------------------------------------------------------------------------------
-// boundary function prototypes
+//! \class BoundaryBase
+//  \brief
 
-void AllocateBuffersCCVars(const int nvar, const RegionCells ncells,
+class BoundaryValues {
+ public:
+  BoundaryValues(MeshBlockPack *ppack, ParameterInput *pin);
+  ~BoundaryValues();
+
+  // data
+  std::vector<std::vector<BoundaryBuffer>> send_buf, recv_buf;
+
+  //functions
+  void AllocateBuffersCCVars(const int nvar, const RegionCells ncells,
     std::vector<BoundaryBuffer> &send_buf, std::vector<BoundaryBuffer> &recv_buf);
-int CreateMPITag(int lid, int buff_id, int phys_id);
-TaskStatus SendBuffers(AthenaArray5D<Real> &a, 
-  std::vector<std::vector<BoundaryBuffer>> &send_buf,
-  std::vector<std::vector<BoundaryBuffer>> &recv_buf, std::vector<MeshBlock> &mblocks);
-TaskStatus RecvBuffers(AthenaArray5D<Real> &a,
-  std::vector<std::vector<BoundaryBuffer>> &send_buf,
-  std::vector<std::vector<BoundaryBuffer>> &recv_buf, std::vector<MeshBlock> &mblocks);
+  int CreateMPITag(int lid, int buff_id, int phys_id);
+  TaskStatus SendBuffers(AthenaArray5D<Real> &a);
+  TaskStatus RecvBuffers(AthenaArray5D<Real> &a);
+
+ private:
+  MeshBlockPack *ppack;
+};
 
 #endif // BVALS_BVALS_HPP_

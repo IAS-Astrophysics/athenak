@@ -13,6 +13,7 @@
 #include "tasklist/task_list.hpp"
 #include "mesh/mesh.hpp"
 #include "hydro/eos/hydro_eos.hpp"
+#include "bvals/bvals.hpp"
 #include "hydro/hydro.hpp"
 
 namespace hydro {
@@ -59,11 +60,12 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   Kokkos::realloc(w0, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
 
   // allocate memory for boundary buffers
+  pbvals = new BoundaryValues(ppack, pin);
   for (int i=0; i<nmb; ++i) {
     std::vector<BoundaryBuffer> snd, rcv;
-    AllocateBuffersCCVars((nhydro+nscalars), ppack->mb_cells, snd, rcv);
-    send_buf.push_back(snd);
-    recv_buf.push_back(rcv);
+    pbvals->AllocateBuffersCCVars((nhydro+nscalars), ppack->mb_cells, snd, rcv);
+    pbvals->send_buf.push_back(snd);
+    pbvals->recv_buf.push_back(rcv);
   }
 
   // for time-evolving problems, continue to construct methods, allocate arrays
@@ -207,11 +209,11 @@ void Hydro::HydroStageEndTasks(TaskList &tl, TaskID start, std::vector<TaskID> &
 TaskStatus Hydro::HydroInitRecv(Driver *pdrive, int stage)
 {
   int nmb = pmy_pack->nmb_thispack;
+  int nnghbr = pmy_pack->pmb->nnghbr;
 
   for (int m=0; m<nmb; ++m) {
-    int nnghbr = pmy_pack->mblocks[m].nghbr.size();
     for (int n=0; n<nnghbr; ++n) {
-      if (pmy_pack->mblocks[m].nghbr[n].gid >= 0) {
+      if (pmy_pack->pmb->h_mbnghbr(m,n,0) >= 0) {   // index0=gid
 #if MPI_PARALLEL_ENABLED
         // post non-blocking receive if neighboring MeshBlock on a different rank 
         if (pbvals->nghbr_x1face[n].rank != global_variable::my_rank) {
@@ -224,7 +226,7 @@ TaskStatus Hydro::HydroInitRecv(Driver *pdrive, int stage)
             pbvals->nghbr_x1face[n].rank, tag, MPI_COMM_WORLD, &(bbuf.recv_rq_x1face[n]));
         }
 #endif
-        recv_buf[m][n].bcomm_stat = BoundaryCommStatus::waiting;
+        pbvals->recv_buf[m][n].bcomm_stat = BoundaryCommStatus::waiting;
       }
     }
   }
@@ -296,7 +298,7 @@ TaskStatus Hydro::HydroCopyCons(Driver *pdrive, int stage)
 
 TaskStatus Hydro::HydroSend(Driver *pdrive, int stage) 
 {
-  TaskStatus tstat = SendBuffers(u0, send_buf, recv_buf, pmy_pack->mblocks);
+  TaskStatus tstat = pbvals->SendBuffers(u0);
   return tstat;
 }
 
@@ -306,7 +308,7 @@ TaskStatus Hydro::HydroSend(Driver *pdrive, int stage)
 
 TaskStatus Hydro::HydroReceive(Driver *pdrive, int stage)
 {
-  TaskStatus tstat = RecvBuffers(u0, send_buf, recv_buf, pmy_pack->mblocks);
+  TaskStatus tstat = pbvals->RecvBuffers(u0);
   return tstat;
 }
 

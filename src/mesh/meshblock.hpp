@@ -28,21 +28,31 @@ class MeshBlock
  friend class MeshBlockTree;
 
  public:
-  MeshBlock(MeshBlockPack *pp, int igid);
+  MeshBlock(Mesh *pm, int igids, int igide);
   ~MeshBlock();
 
   // data
-  int mb_gid;             // grid ID, unique identifier for this MeshBlock
-  RegionSize  mb_size;    // physical size of this MeshBlock
-  BoundaryFlag mb_bcs[6]; // boundary conditions at 6 faces of MeshBlock
+  int nmb;   // # of MeshBlocks
+  int nnghbr;  // # of neighbors for each MB.  TODO: cannot be same for all MBs with AMR
 
-  std::vector<NeighborBlock> nghbr;  // vector storing data about all neighboring MBs
+  // AthenaDualArrays are used to store data used on both device and host 
+  // STL vector is used for data only accessed on host
+  // First dimension of each will be [# of MeshBlocks in this MeshBlockPack]
+
+  AthenaArray1D<int> d_mbgid;     // grid ID, unique identifier for each MeshBlock
+  HostArray1D<int> h_mbgid;     // grid ID, unique identifier for each MeshBlock
+  AthenaArray2D<Real> d_mbsize;   // physical size of each MeshBlock
+  HostArray2D<Real> h_mbsize;   // physical size of each MeshBlock
+  HostArray2D<int> mb_bcs;  // boundary conditions at 6 faces of each MeshBlock
+
+  AthenaArray3D<int> d_mbnghbr;  // vector storing data about all neighboring MBs
+  HostArray3D<int> h_mbnghbr;  // vector storing data about all neighboring MBs
 
 
  private:
   // data
-  MeshBlockPack* pmy_pack;
-  double lb_cost;  // cost of updating this MeshBlock for load balancing
+  Mesh* pmy_mesh;
+  HostArray1D<double> lb_cost;  // cost of updating each MeshBlock for load balancing
 
   // functions
   void SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklist);

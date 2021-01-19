@@ -9,6 +9,7 @@
 //  \brief contains Athena++ general purpose types, structures, enums, etc.
 
 #include <Kokkos_Core.hpp>
+#include <Kokkos_DualView.hpp>
 #include "config.hpp"
 #include "globals.hpp"
 
@@ -69,7 +70,10 @@ using HostMemSpace = Kokkos::HostSpace;
 using ScratchMemSpace = DevExeSpace::scratch_memory_space;
 using LayoutWrapper = Kokkos::LayoutRight;   // increments last index fastest
 
-// alias template declarations for construction of 1D...6D AthenaArrays as Kokkos::View
+//----------------------------------------------------------------------------------------
+// template declarations for AthenaArray types
+
+// alias template declarations for construction of Kokkos::View on device
 template <typename T>
 using AthenaArray1D = Kokkos::View<T *, LayoutWrapper, DevMemSpace>;
 template <typename T>
@@ -86,7 +90,7 @@ using AthenaArray6D = Kokkos::View<T ******, LayoutWrapper, DevMemSpace>;
 template <typename T>
 using AthenaArray2DSlice = Kokkos::View<T **, Kokkos::LayoutStride, DevMemSpace>;
 
-// alias template declarations for construction of HostArrays for, e.g. outputs
+// alias template declarations for construction of Kokkos::View on host
 template <typename T>
 using HostArray1D = Kokkos::View<T *, LayoutWrapper, HostMemSpace>;
 template <typename T>
@@ -95,6 +99,14 @@ template <typename T>
 using HostArray3D = Kokkos::View<T ***, LayoutWrapper, HostMemSpace>;
 template <typename T>
 using HostArray4D = Kokkos::View<T ****, LayoutWrapper, HostMemSpace>;
+
+// alias template declarations for construction of Kokkos::DualViews
+template <typename T>
+using DualArray1D = Kokkos::DualView<T *, LayoutWrapper, DevMemSpace>;
+template <typename T>
+using DualArray2D = Kokkos::DualView<T **, LayoutWrapper, DevMemSpace>;
+template <typename T>
+using DualArray3D = Kokkos::DualView<T ***, LayoutWrapper, DevMemSpace>;
 
 // alias template declarations for construction of 1D...2D scratch arrays as Kokkos::View
 template <typename T>

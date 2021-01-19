@@ -11,6 +11,7 @@
 //  (potentially on different levels) that tile the entire domain.
 
 #include <cstdint>  // int32_t
+#include "athena.hpp"
 
 // Define following structure before other "include" files to resolve declarations
 //----------------------------------------------------------------------------------------
@@ -65,6 +66,7 @@ struct LogicalLocation
 // Forward declarations
 class Mesh;
 
+#include "parameter_input.hpp"
 #include "meshblock_tree.hpp"
 #include "meshblock.hpp"
 #include "meshblock_pack.hpp"
@@ -86,10 +88,12 @@ class Mesh
   ~Mesh();
 
   // accessors
-  MeshBlock* FindMeshBlock(int tgid)
+  int FindMeshBlockIndex(int tgid)
   {
-//    assert (tgid >= gids && tgid <= gide);
-    return &(pmb_pack->mblocks[tgid - gids]);
+    for (int m=0; m<pmb_pack->pmb->nmb; ++m) {
+      if (pmb_pack->pmb->h_mbgid(m) == tgid) return m;
+    }
+    return -1;
   }
 
   // data

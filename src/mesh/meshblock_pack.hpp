@@ -14,7 +14,7 @@
 #include "tasklist/task_list.hpp"
 
 // Forward declarations
-class BoundaryValues;
+class MeshBlock;
 namespace hydro {class Hydro;}
 namespace mhd {class MHD;}
 
@@ -42,7 +42,7 @@ class MeshBlockPack
   RegionCells mb_cells;   // info about cells in MeshBlock(s) in this MeshBlockPack 
   RegionCells cmb_cells;  // info about cells on next coarser level MBs
 
-  std::vector<MeshBlock> mblocks;  // MeshBlocks in this MeshBlockPack
+  MeshBlock* pmb;         // MeshBlocks in this MeshBlockPack
 
   // physics modules (controlled by InitPhysicsModules)
   hydro::Hydro *phydro;
