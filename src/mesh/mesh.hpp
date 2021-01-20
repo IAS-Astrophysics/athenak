@@ -40,6 +40,17 @@ struct MeshBlockSize
 };
 
 //----------------------------------------------------------------------------------------
+//! \struct RegionCells
+//  \brief Number of cells and cell indexing in a Mesh or a MeshBlock
+
+struct RegionCells
+{
+  int ng;                   // number of ghost cells
+  int nx1, nx2, nx3;        // number of active cells (not including ghost zones)
+  int is,ie,js,je,ks,ke;    // indices of ACTIVE cells
+};
+
+//----------------------------------------------------------------------------------------
 //! \struct NeighborBlock
 //  \brief Information about neighboring MeshBlocks, stored in DualArrays of length
 //  (# of neighboring blocks).  Latter is 26 for a uniform grid in 3D.
@@ -57,17 +68,6 @@ struct NeighborBlock
     gid("nghbr_gid",1), lev("nghbr_lev",1),
     rank("nghbr_rank",1), destn("nghbr_dest",1) {}
 */
-};
-
-//----------------------------------------------------------------------------------------
-//! \struct RegionCells
-//  \brief Number of cells and cell indexing in a Mesh or a MeshBlock
-
-struct RegionCells
-{  
-  int ng;                   // number of ghost cells
-  int nx1, nx2, nx3;        // number of active cells (not including ghost zones)
-  int is,ie,js,je,ks,ke;    // indices of ACTIVE cells
 };
 
 //----------------------------------------------------------------------------------------

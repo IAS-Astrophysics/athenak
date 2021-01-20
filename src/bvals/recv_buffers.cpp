@@ -22,14 +22,14 @@
 TaskStatus BoundaryValues::RecvBuffers(AthenaArray5D<Real> &a)
 {
   // create local references for variables in kernel
-  int nmb = ppack->pmb->nmb;
+  int nmb = pmy_pack->pmb->nmb;
   // TODO: following only works when all MBs have the same number of neighbors
-  int nnghbr = ppack->pmb->nnghbr;
+  int nnghbr = pmy_pack->pmb->nnghbr;
   int nvar = a.extent_int(1);  // 2nd index from L of input array must be NVAR
 
   bool bflag = false;
-  {auto &nghbr = ppack->pmb->nghbr;
-  auto &gid = ppack->pmb->mbgid.h_view;
+  {auto &nghbr = pmy_pack->pmb->nghbr;
+  auto &gid = pmy_pack->pmb->mbgid.h_view;
 
 #if MPI_PARALLEL_ENABLED
   // probe MPI communications.  This is a bit of black magic that seems to promote
@@ -43,7 +43,7 @@ TaskStatus BoundaryValues::RecvBuffers(AthenaArray5D<Real> &a)
     for (int n=0; n<nnghbr; ++n) {
       if (nghbr[n].gid.h_view(m) >= 0) { // ID != -1, so not a physical boundary
         if (nghbr[n].rank.h_view(m) == global_variable::my_rank) {
-          if (recv_buf[m][n].bcomm_stat == BoundaryCommStatus::waiting) bflag = true;
+          if (recv_buf[n].bcomm_stat(m) == BoundaryCommStatus::waiting) bflag = true;
 #if MPI_PARALLEL_ENABLED
         } else {
           MPI_Test(&(pbb->recv_rq_x1face[n]), &test, MPI_STATUS_IGNORE);
@@ -68,12 +68,12 @@ TaskStatus BoundaryValues::RecvBuffers(AthenaArray5D<Real> &a)
   {
     const int m = tmember.league_rank()/nnghbr;
     const int n = tmember.league_rank()%nnghbr;
-    const int il = recv_buf[m][n].index(0);
-    const int iu = recv_buf[m][n].index(1);
-    const int jl = recv_buf[m][n].index(2);
-    const int ju = recv_buf[m][n].index(3);
-    const int kl = recv_buf[m][n].index(4);
-    const int ku = recv_buf[m][n].index(5);
+    const int il = recv_buf[n].index.d_view(0);
+    const int iu = recv_buf[n].index.d_view(1);
+    const int jl = recv_buf[n].index.d_view(2);
+    const int ju = recv_buf[n].index.d_view(3);
+    const int kl = recv_buf[n].index.d_view(4);
+    const int ku = recv_buf[n].index.d_view(5);
     const int ni = iu - il + 1;
     const int nj = ju - jl + 1;
     const int nk = ku - kl + 1;
@@ -90,7 +90,7 @@ TaskStatus BoundaryValues::RecvBuffers(AthenaArray5D<Real> &a)
          
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu + 1), [&](const int i)
       {
-        a(m,v,k,j,i) = recv_buf[m][n].data(v,i-il + ni*(j-jl + nj*(k-kl)));
+        a(m,v,k,j,i) = recv_buf[n].data(m,v,i-il + ni*(j-jl + nj*(k-kl)));
        });
     });
   }); // end par_for_outer

@@ -28,24 +28,22 @@ enum class BoundaryCommStatus {undef=-1, waiting, sent, received};
 
 struct BoundaryBuffer
 {
-  AthenaArray1D<int> index;
-  AthenaArray2D<Real> data;
-  BoundaryCommStatus bcomm_stat;
+  DualArray1D<int> index;
+  AthenaArray3D<Real> data;
+  HostArray1D<BoundaryCommStatus> bcomm_stat;
 #if MPI_PARALLEL_ENABLED
   MPI_Request comm_req;
 #endif
   // constructor
-  BoundaryBuffer(int nvar, int i0, int i1, int j0, int j1, int k0, int k1) :
-    index("bbuff_idx", 6),
-    data("bbuff", nvar, ((i1-i0+1)*(j1-j0+1)*(k1-k0+1)))
-  {
-    index(0) = i0;
-    index(1) = i1;
-    index(2) = j0;
-    index(3) = j1;
-    index(4) = k0;
-    index(5) = k1;
-    bcomm_stat = BoundaryCommStatus::undef;
+  BoundaryBuffer(){};
+  void InitIndices(int nmb, int nvar, int i0, int i1, int j0, int j1, int k0, int k1) {
+    index.h_view(0)=i0;
+    index.h_view(1)=i1;
+    index.h_view(2)=j0;
+    index.h_view(3)=j1;
+    index.h_view(4)=k0;
+    index.h_view(5)=k1;
+    Kokkos::realloc(data, nmb, nvar, (i1-i0+1)*(j1-j0+1)*(k1-k0+1));
   }
 };
 
@@ -62,17 +60,16 @@ class BoundaryValues {
   ~BoundaryValues();
 
   // data
-  std::vector<std::vector<BoundaryBuffer>> send_buf, recv_buf;
+  BoundaryBuffer send_buf[26], recv_buf[26];
 
   //functions
-  void AllocateBuffersCCVars(const int nvar, const RegionCells ncells,
-    std::vector<BoundaryBuffer> &send_buf, std::vector<BoundaryBuffer> &recv_buf);
+  void AllocateBuffersCC(const int nvar);
   int CreateMPITag(int lid, int buff_id, int phys_id);
   TaskStatus SendBuffers(AthenaArray5D<Real> &a);
   TaskStatus RecvBuffers(AthenaArray5D<Real> &a);
 
  private:
-  MeshBlockPack *ppack;
+  MeshBlockPack *pmy_pack;
 };
 
 #endif // BVALS_BVALS_HPP_

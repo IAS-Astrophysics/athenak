@@ -61,12 +61,16 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // allocate memory for boundary buffers
   pbvals = new BoundaryValues(ppack, pin);
+  pbvals->AllocateBuffersCC((nhydro+nscalars));
+
+/*
   for (int i=0; i<nmb; ++i) {
     std::vector<BoundaryBuffer> snd, rcv;
     pbvals->AllocateBuffersCCVars((nhydro+nscalars), ppack->mb_cells, snd, rcv);
     pbvals->send_buf.push_back(snd);
     pbvals->recv_buf.push_back(rcv);
   }
+*/
 
   // for time-evolving problems, continue to construct methods, allocate arrays
   if (evolution_t.compare("stationary") != 0) {
@@ -226,7 +230,7 @@ TaskStatus Hydro::HydroInitRecv(Driver *pdrive, int stage)
             pbvals->nghbr_x1face[n].rank, tag, MPI_COMM_WORLD, &(bbuf.recv_rq_x1face[n]));
         }
 #endif
-        pbvals->recv_buf[m][n].bcomm_stat = BoundaryCommStatus::waiting;
+        pbvals->recv_buf[n].bcomm_stat(m) = BoundaryCommStatus::waiting;
       }
     }
   }

@@ -28,14 +28,14 @@
 TaskStatus BoundaryValues::SendBuffers(AthenaArray5D<Real> &a)
 {
   // create local references for variables in kernel
-  int nmb = ppack->pmb->nmb;
+  int nmb = pmy_pack->pmb->nmb;
   // TODO: following only works when all MBs have the same number of neighbors
-  int nnghbr = ppack->pmb->nnghbr;
+  int nnghbr = pmy_pack->pmb->nnghbr;
   int nvar = a.extent_int(1);  // 2nd index from L of input array must be NVAR
 
   {int &my_rank = global_variable::my_rank;
-  auto &nghbr = ppack->pmb->nghbr;
-  auto &mbgid = ppack->pmb->mbgid;
+  auto &nghbr = pmy_pack->pmb->nghbr;
+  auto &mbgid = pmy_pack->pmb->mbgid;
 
   // load buffers, using 3 levels of hierarchical parallelism
   int nmn = nmb*nnghbr;
@@ -44,12 +44,12 @@ TaskStatus BoundaryValues::SendBuffers(AthenaArray5D<Real> &a)
   { 
     const int m = tmember.league_rank()/nnghbr;
     const int n = tmember.league_rank()%nnghbr;
-    const int il = send_buf[m][n].index(0);
-    const int iu = send_buf[m][n].index(1);
-    const int jl = send_buf[m][n].index(2);
-    const int ju = send_buf[m][n].index(3);
-    const int kl = send_buf[m][n].index(4);
-    const int ku = send_buf[m][n].index(5);
+    const int il = send_buf[n].index.d_view(0);
+    const int iu = send_buf[n].index.d_view(1);
+    const int jl = send_buf[n].index.d_view(2);
+    const int ju = send_buf[n].index.d_view(3);
+    const int kl = send_buf[n].index.d_view(4);
+    const int ku = send_buf[n].index.d_view(5);
     const int ni = iu - il + 1;
     const int nj = ju - jl + 1;
     const int nk = ku - kl + 1;
@@ -71,14 +71,14 @@ TaskStatus BoundaryValues::SendBuffers(AthenaArray5D<Real> &a)
         int mm = nghbr[n].gid.d_view(m) - mbgid.d_view(0);
         Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu + 1),[&](const int i)
         {
-          recv_buf[mm][nn].data(v, i-il + ni*(j-jl + nj*(k-kl))) = a(m, v, k, j, i);
+          recv_buf[nn].data(mm,v, i-il + ni*(j-jl + nj*(k-kl))) = a(m,v,k,j,i);
         });
 
       // else copy directly into send buffer for MPI communication below
       } else {
         Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu + 1),[&](const int i)
         {
-          send_buf[m][n].data(v, i-il + ni*(j-jl + nj*(k-kl))) = a(m, v, k, j, i);
+          send_buf[n].data(m, v, i-il + ni*(j-jl + nj*(k-kl))) = a(m,v,k,j,i);
         });
       }
     });
@@ -89,8 +89,8 @@ TaskStatus BoundaryValues::SendBuffers(AthenaArray5D<Real> &a)
   // neighbor is on same MPI rank.
 
   {int &my_rank = global_variable::my_rank;
-  auto &nghbr = ppack->pmb->nghbr;
-  auto &mbgid = ppack->pmb->mbgid;
+  auto &nghbr = pmy_pack->pmb->nghbr;
+  auto &mbgid = pmy_pack->pmb->mbgid;
 
   using Kokkos::ALL;
   for (int m=0; m<nmb; ++m) {
@@ -99,7 +99,7 @@ TaskStatus BoundaryValues::SendBuffers(AthenaArray5D<Real> &a)
         if (nghbr[n].rank.h_view(m) == my_rank) {
           int nn = nghbr[n].destn.h_view(m);
           int mm = nghbr[n].gid.h_view(m) - mbgid.h_view(0);
-          recv_buf[mm][nn].bcomm_stat = BoundaryCommStatus::received;
+          recv_buf[nn].bcomm_stat(mm) = BoundaryCommStatus::received;
 
 #if MPI_PARALLEL_ENABLED
         } else {
