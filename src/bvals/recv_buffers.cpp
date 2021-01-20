@@ -28,8 +28,8 @@ TaskStatus BoundaryValues::RecvBuffers(AthenaArray5D<Real> &a)
   int nvar = a.extent_int(1);  // 2nd index from L of input array must be NVAR
 
   bool bflag = false;
-  {auto &nghbr = ppack->pmb->h_mbnghbr;
-  auto &gid = ppack->pmb->h_mbgid;
+  {auto &nghbr = ppack->pmb->nghbr;
+  auto &gid = ppack->pmb->mbgid.h_view;
 
 #if MPI_PARALLEL_ENABLED
   // probe MPI communications.  This is a bit of black magic that seems to promote
@@ -41,8 +41,8 @@ TaskStatus BoundaryValues::RecvBuffers(AthenaArray5D<Real> &a)
   // check that recv boundary buffer communications have all completed
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
-      if (nghbr(m,n,0) >= 0) { // ID != -1, so not a physical boundary
-        if (nghbr(m,n,2) == global_variable::my_rank) {
+      if (nghbr[n].gid.h_view(m) >= 0) { // ID != -1, so not a physical boundary
+        if (nghbr[n].rank.h_view(m) == global_variable::my_rank) {
           if (recv_buf[m][n].bcomm_stat == BoundaryCommStatus::waiting) bflag = true;
 #if MPI_PARALLEL_ENABLED
         } else {

@@ -32,33 +32,20 @@
 
 MeshBlock::MeshBlock(Mesh* pm, int igids, int nmb) : 
   pmy_mesh(pm), nmb(nmb),
-  h_mbgid("h_mbgid",1),
-  d_mbgid("d_mbgid",1),
-
-//  h_mbsize("h_mbsize",1,1),
-//  d_mbsize("d_mbsize",1,1),
+  mbgid("mbgid",nmb),
   mbsize(nmb),
 
-  h_mbnghbr("h_nghbr",1,1,1),
-  d_mbnghbr("d_nghbr",1,1,1),
+//  nghbr(nmb){},
+//  h_mbnghbr("h_nghbr",1,1,1),
+//  d_mbnghbr("d_nghbr",1,1,1),
 
-  mb_bcs("mbbcs",1,1),
-  lb_cost("lbcost",1)
+  mb_bcs("mbbcs",nmb,6),
+  lb_cost("lbcost",nmb)
 {
-  // allocate memory for both host and device views
-  Kokkos::realloc(h_mbgid, nmb);
-//  Kokkos::realloc(h_mbsize, nmb, 9);  // 9 data elements stored for each MB
-
-  Kokkos::realloc(d_mbgid, nmb);
-//  Kokkos::realloc(d_mbsize, nmb, 9);  // 9 data elements stored for each MB
-
-  Kokkos::realloc(mb_bcs, nmb, 6);   // 6 BoundaryFlags stored for each MB
-  Kokkos::realloc(lb_cost, nmb);
-
   // initialize host arrays of gids, sizes, bcs over all MeshBlocks
   auto &msize = pm->mesh_size;
   for (int m=0; m<nmb; ++m) {
-    h_mbgid(m) = igids + m;
+    mbgid.h_view(m) = igids + m;
 
     std::int32_t &lx1 = pm->loclist[igids+m].lx1;
     std::int32_t &lev = pm->loclist[igids+m].level;
@@ -68,44 +55,44 @@ MeshBlock::MeshBlock(Mesh* pm, int igids, int nmb) :
     // x1min/max = 0,1;  x2min/max = 2,3;  x3min/max = 4,5;  dx1/2/3 = 6,7,8
     if (lx1 == 0) {
       mbsize.x1min.h_view(m) = msize.x1min;
-      mb_bcs(m,0) = static_cast<int>(pm->mesh_bcs[BoundaryFace::inner_x1]);
+      mb_bcs(m,0) = pm->mesh_bcs[BoundaryFace::inner_x1];
     } else {
       mbsize.x1min.h_view(m) = LeftEdgeX(lx1, nmbx1, msize.x1min, msize.x1max);
-      mb_bcs(m,0) = static_cast<int>(BoundaryFlag::block);
+      mb_bcs(m,0) = BoundaryFlag::block;
     }
 
     if (lx1 == nmbx1 - 1) {
       mbsize.x1max.h_view(m) = msize.x1max;
-      mb_bcs(m,1) = static_cast<int>(pm->mesh_bcs[BoundaryFace::outer_x1]);
+      mb_bcs(m,1) = pm->mesh_bcs[BoundaryFace::outer_x1];
     } else {
       mbsize.x1max.h_view(m) = LeftEdgeX(lx1+1, nmbx1, msize.x1min, msize.x1max);
-      mb_bcs(m,1) = static_cast<int>(BoundaryFlag::block);
+      mb_bcs(m,1) = BoundaryFlag::block;
     }
 
     // calculate physical size of MeshBlock in x2
     if (pm->mesh_cells.nx2 == 1) {
       mbsize.x2min.h_view(m) = msize.x2min;
       mbsize.x2max.h_view(m) = msize.x2max;
-      mb_bcs(m,2) = static_cast<int>(pm->mesh_bcs[BoundaryFace::inner_x2]);
-      mb_bcs(m,3) = static_cast<int>(pm->mesh_bcs[BoundaryFace::outer_x2]);
+      mb_bcs(m,2) = pm->mesh_bcs[BoundaryFace::inner_x2];
+      mb_bcs(m,3) = pm->mesh_bcs[BoundaryFace::outer_x2];
     } else {
 
       std::int32_t &lx2 = pm->loclist[igids+m].lx2;
       std::int32_t nmbx2 = pm->nmb_rootx2 << (lev - pm->root_level);
       if (lx2 == 0) {
         mbsize.x2min.h_view(m) = msize.x2min;
-        mb_bcs(m,2) = static_cast<int>(pm->mesh_bcs[BoundaryFace::inner_x2]);
+        mb_bcs(m,2) = pm->mesh_bcs[BoundaryFace::inner_x2];
       } else {
         mbsize.x2min.h_view(m) = LeftEdgeX(lx2, nmbx2, msize.x2min, msize.x2max);
-        mb_bcs(m,2) = static_cast<int>(BoundaryFlag::block);
+        mb_bcs(m,2) = BoundaryFlag::block;
       }
 
       if (lx2 == (nmbx2) - 1) {
         mbsize.x2max.h_view(m) = msize.x2max;
-        mb_bcs(m,3) = static_cast<int>(pm->mesh_bcs[BoundaryFace::outer_x2]);
+        mb_bcs(m,3) = pm->mesh_bcs[BoundaryFace::outer_x2];
       } else {
         mbsize.x2max.h_view(m) = LeftEdgeX(lx2+1, nmbx2, msize.x2min, msize.x2max);
-        mb_bcs(m,3) = static_cast<int>(BoundaryFlag::block);
+        mb_bcs(m,3) = BoundaryFlag::block;
       }
 
     }
@@ -114,24 +101,24 @@ MeshBlock::MeshBlock(Mesh* pm, int igids, int nmb) :
     if (pm->mesh_cells.nx3 == 1) {
       mbsize.x3min.h_view(m) = msize.x3min;
       mbsize.x3max.h_view(m) = msize.x3max;
-      mb_bcs(m,4) = static_cast<int>(pm->mesh_bcs[BoundaryFace::inner_x3]);
-      mb_bcs(m,5) = static_cast<int>(pm->mesh_bcs[BoundaryFace::outer_x3]);
+      mb_bcs(m,4) = pm->mesh_bcs[BoundaryFace::inner_x3];
+      mb_bcs(m,5) = pm->mesh_bcs[BoundaryFace::outer_x3];
     } else {
       std::int32_t &lx3 = pm->loclist[igids+m].lx3;
       std::int32_t nmbx3 = pm->nmb_rootx3 << (lev - pm->root_level);
       if (lx3 == 0) {
         mbsize.x3min.h_view(m) = msize.x3min;
-        mb_bcs(m,4) = static_cast<int>(pm->mesh_bcs[BoundaryFace::inner_x3]);
+        mb_bcs(m,4) = pm->mesh_bcs[BoundaryFace::inner_x3];
       } else {
         mbsize.x3min.h_view(m) = LeftEdgeX(lx3, nmbx3, msize.x3min, msize.x3max);
-        mb_bcs(m,4) = static_cast<int>(BoundaryFlag::block);
+        mb_bcs(m,4) = BoundaryFlag::block;
       }
       if (lx3 == (nmbx3) - 1) {
         mbsize.x3max.h_view(m) = msize.x3max;
-        mb_bcs(m,5) = static_cast<int>(pm->mesh_bcs[BoundaryFace::outer_x3]);
+        mb_bcs(m,5) = pm->mesh_bcs[BoundaryFace::outer_x3];
       } else {
         mbsize.x3max.h_view(m) = LeftEdgeX(lx3+1, nmbx3, msize.x3min, msize.x3max);
-        mb_bcs(m,5) = static_cast<int>(BoundaryFlag::block);
+        mb_bcs(m,5) = BoundaryFlag::block;
       }
     }
     // grid spacing at this level.  Ensure all MeshBlocks at same level have same dx
@@ -140,12 +127,8 @@ MeshBlock::MeshBlock(Mesh* pm, int igids, int nmb) :
     mbsize.dx3.h_view(m) = msize.dx3*static_cast<Real>(1<<(lev - pm->root_level));
   }
 
-  // copy host arrays to device arrays
-  auto t_mbgid = Kokkos::create_mirror_view(d_mbgid);
-  Kokkos::deep_copy(t_mbgid,h_mbgid);
-  Kokkos::deep_copy(d_mbgid,t_mbgid);
-
-  // For DualArrays: mark host views as modified, and then sync to device array
+  // For each DualArray: mark host views as modified, and then sync to device array
+  mbgid.template modify<HostMemSpace>();
   mbsize.x1min.template modify<HostMemSpace>();
   mbsize.x1max.template modify<HostMemSpace>();
   mbsize.x2min.template modify<HostMemSpace>();
@@ -156,6 +139,7 @@ MeshBlock::MeshBlock(Mesh* pm, int igids, int nmb) :
   mbsize.dx2.template modify<HostMemSpace>();
   mbsize.dx3.template modify<HostMemSpace>();
 
+  mbgid.template sync<DevExeSpace>();
   mbsize.x1min.template sync<DevExeSpace>();
   mbsize.x1max.template sync<DevExeSpace>();
   mbsize.x2min.template sync<DevExeSpace>();
@@ -194,30 +178,36 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
   if (pmy_mesh->nx2gt1) {nnghbr = 8;}   // 2D problem
   if (pmy_mesh->nx3gt1) {nnghbr = 26;}  // 3D problem
 
-  Kokkos::realloc(d_mbnghbr, nmb, nnghbr, 4);
-  Kokkos::realloc(h_mbnghbr, nmb, nnghbr, 4);
+  // allocate size of DualArrays
+  for (int n=0; n<nnghbr; ++n) {
+    Kokkos::realloc(nghbr[n].gid, nmb);
+    Kokkos::realloc(nghbr[n].lev, nmb);
+    Kokkos::realloc(nghbr[n].rank, nmb);
+    Kokkos::realloc(nghbr[n].destn, nmb);
+  }
 
-  // Initialize host array elements
-  for (int m=0; m<nmb; ++m) {
-    for (int n=0; n<nnghbr; ++n) {
-      for (int i=0; i<4; ++i) {
-        h_mbnghbr(m,n,i) = -1;
-      }
+  // Initialize host view elements of DualViews
+  for (int n=0; n<nnghbr; ++n) {
+    for (int m=0; m<nmb; ++m) {
+      nghbr[n].gid.h_view(m) = -1;
+      nghbr[n].lev.h_view(m) = -1;
+      nghbr[n].rank.h_view(m) = -1;
+      nghbr[n].destn.h_view(m) = -1;
     }
   }
 
   // Search MeshBlock tree and find neighbors
   for (int b=0; b<nmb; ++b) {
-    LogicalLocation loc = pmy_mesh->loclist[h_mbgid(b)];
+    LogicalLocation loc = pmy_mesh->loclist[mbgid.h_view(b)];
 
     // neighbors on x1face
     for (int n=-1; n<=1; n+=2) {
       nt = ptree->FindNeighbor(loc, n, 0, 0);
       if (nt != nullptr) {
-        h_mbnghbr(b,(1+n)/2,0) = nt->gid_;
-        h_mbnghbr(b,(1+n)/2,1) = nt->loc_.level;
-        h_mbnghbr(b,(1+n)/2,2) = ranklist[nt->gid_];
-        h_mbnghbr(b,(1+n)/2,3) = (1-n)/2;
+        nghbr[(1+n)/2].gid.h_view(b) = nt->gid_;
+        nghbr[(1+n)/2].lev.h_view(b) = nt->loc_.level;
+        nghbr[(1+n)/2].rank.h_view(b) = ranklist[nt->gid_];
+        nghbr[(1+n)/2].destn.h_view(b) = (1-n)/2;
       }
     }
 
@@ -226,20 +216,20 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
       for (int m=-1; m<=1; m+=2) {
         nt = ptree->FindNeighbor(loc, 0, m, 0);
         if (nt != nullptr) {
-          h_mbnghbr(b,2+(1+m)/2,0) = nt->gid_;
-          h_mbnghbr(b,2+(1+m)/2,1) = nt->loc_.level;
-          h_mbnghbr(b,2+(1+m)/2,2) = ranklist[nt->gid_];
-          h_mbnghbr(b,2+(1+m)/2,3) = 2+(1-m)/2;
+          nghbr[2+(1+m)/2].gid.h_view(b) = nt->gid_;
+          nghbr[2+(1+m)/2].lev.h_view(b) = nt->loc_.level;
+          nghbr[2+(1+m)/2].rank.h_view(b) = ranklist[nt->gid_];
+          nghbr[2+(1+m)/2].destn.h_view(b) = 2+(1-m)/2;
         }
       }
       for (int m=-1; m<=1; m+=2) {
         for (int n=-1; n<=1; n+=2) {
           nt = ptree->FindNeighbor(loc, n, m, 0);
           if (nt != nullptr) {
-            h_mbnghbr(b,4+(1+m)+(1+n)/2,0) = nt->gid_;
-            h_mbnghbr(b,4+(1+m)+(1+n)/2,1) = nt->loc_.level;
-            h_mbnghbr(b,4+(1+m)+(1+n)/2,2) = ranklist[nt->gid_];
-            h_mbnghbr(b,4+(1+m)+(1+n)/2,3) = 4+(1-m)+(1-n)/2;
+            nghbr[4+(1+m)+(1+n)/2].gid.h_view(b) = nt->gid_;
+            nghbr[4+(1+m)+(1+n)/2].lev.h_view(b) = nt->loc_.level;
+            nghbr[4+(1+m)+(1+n)/2].rank.h_view(b) = ranklist[nt->gid_];
+            nghbr[4+(1+m)+(1+n)/2].destn.h_view(b) = 4+(1-m)+(1-n)/2;
           }
         }
       }
@@ -250,20 +240,20 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
       for (int l=-1; l<=1; l+=2) {
         nt = ptree->FindNeighbor(loc, 0, 0, l);
         if (nt != nullptr) {
-          h_mbnghbr(b,8+(1+l)/2,0) = nt->gid_;
-          h_mbnghbr(b,8+(1+l)/2,1) = nt->loc_.level;
-          h_mbnghbr(b,8+(1+l)/2,2) = ranklist[nt->gid_];
-          h_mbnghbr(b,8+(1+l)/2,3) = 8+(1-l)/2;
+          nghbr[8+(1+l)/2].gid.h_view(b) = nt->gid_;
+          nghbr[8+(1+l)/2].lev.h_view(b) = nt->loc_.level;
+          nghbr[8+(1+l)/2].rank.h_view(b) = ranklist[nt->gid_];
+          nghbr[8+(1+l)/2].destn.h_view(b) = 8+(1-l)/2;
         }
       }
       for (int l=-1; l<=1; l+=2) {
         for (int n=-1; n<=1; n+=2) {
           nt = ptree->FindNeighbor(loc, n, 0, l);
           if (nt != nullptr) {
-            h_mbnghbr(b,10+(1+l)+(1+n)/2,0) = nt->gid_;
-            h_mbnghbr(b,10+(1+l)+(1+n)/2,1) = nt->loc_.level;
-            h_mbnghbr(b,10+(1+l)+(1+n)/2,2) = ranklist[nt->gid_];
-            h_mbnghbr(b,10+(1+l)+(1+n)/2,3) = 10+(1-l)+(1-n)/2;
+            nghbr[10+(1+l)+(1+n)/2].gid.h_view(b) = nt->gid_;
+            nghbr[10+(1+l)+(1+n)/2].lev.h_view(b) = nt->loc_.level;
+            nghbr[10+(1+l)+(1+n)/2].rank.h_view(b) = ranklist[nt->gid_];
+            nghbr[10+(1+l)+(1+n)/2].destn.h_view(b) = 10+(1-l)+(1-n)/2;
           }
         }
       }
@@ -271,10 +261,10 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
         for (int m=-1; m<=1; m+=2) {
           nt = ptree->FindNeighbor(loc, 0, m, l);
           if (nt != nullptr) {
-            h_mbnghbr(b,14+(1+l)+(1+m)/2,0) = nt->gid_;
-            h_mbnghbr(b,14+(1+l)+(1+m)/2,1) = nt->loc_.level;
-            h_mbnghbr(b,14+(1+l)+(1+m)/2,2) = ranklist[nt->gid_];
-            h_mbnghbr(b,14+(1+l)+(1+m)/2,3) = 14+(1-l)+(1-m)/2;
+            nghbr[14+(1+l)+(1+m)/2].gid.h_view(b) = nt->gid_;
+            nghbr[14+(1+l)+(1+m)/2].lev.h_view(b) = nt->loc_.level;
+            nghbr[14+(1+l)+(1+m)/2].rank.h_view(b) = ranklist[nt->gid_];
+            nghbr[14+(1+l)+(1+m)/2].destn.h_view(b) = 14+(1-l)+(1-m)/2;
           }
         }
       }
@@ -283,10 +273,10 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
           for (int n=-1; n<=1; n+=2) {
             nt = ptree->FindNeighbor(loc, n, m, l);
             if (nt != nullptr) {
-              h_mbnghbr(b,18+2*(1-l)+(1+m)+(1+n)/2,0) = nt->gid_;
-              h_mbnghbr(b,18+2*(1-l)+(1+m)+(1+n)/2,1) = nt->loc_.level;
-              h_mbnghbr(b,18+2*(1-l)+(1+m)+(1+n)/2,2) = ranklist[nt->gid_];
-              h_mbnghbr(b,18+2*(1-l)+(1+m)+(1+n)/2,3) = 18+2*(1-l)+(1-m)+(1-n)/2;
+              nghbr[18+2*(1+l)+(1+m)+(1+n)/2].gid.h_view(b) = nt->gid_;
+              nghbr[18+2*(1+l)+(1+m)+(1+n)/2].lev.h_view(b) = nt->loc_.level;
+              nghbr[18+2*(1+l)+(1+m)+(1+n)/2].rank.h_view(b) = ranklist[nt->gid_];
+              nghbr[18+2*(1+l)+(1+m)+(1+n)/2].destn.h_view(b) = 18+2*(1-l)+(1-m)+(1-n)/2;
             }
           }
         }
@@ -294,10 +284,18 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
     }
   }
 
-  // copy host array to device array
-  auto t_mbnghbr = Kokkos::create_mirror_view(d_mbnghbr);
-  Kokkos::deep_copy(t_mbnghbr,h_mbnghbr);
-  Kokkos::deep_copy(d_mbnghbr,t_mbnghbr);
+  // For each DualArray: mark host views as modified, and then sync to device array
+  for (int n=0; n<nnghbr; ++n) {
+    nghbr[n].gid.template modify<HostMemSpace>();
+    nghbr[n].lev.template modify<HostMemSpace>();
+    nghbr[n].rank.template modify<HostMemSpace>();
+    nghbr[n].destn.template modify<HostMemSpace>();
+
+    nghbr[n].gid.template sync<DevExeSpace>();
+    nghbr[n].lev.template sync<DevExeSpace>();
+    nghbr[n].rank.template sync<DevExeSpace>();
+    nghbr[n].destn.template sync<DevExeSpace>();
+  }
 
   return;
 }

@@ -31,11 +31,32 @@ struct MeshBlockSize
   DualArray1D<Real> x1min, x2min, x3min;
   DualArray1D<Real> x1max, x2max, x3max;
   DualArray1D<Real> dx1, dx2, dx3;       // (uniform) grid spacing
+  // constructor
   MeshBlockSize(int nmb) :
     x1min("x1min",nmb), x1max("x1max",nmb),
     x2min("x2min",nmb), x2max("x2max",nmb),
     x3min("x3min",nmb), x3max("x3max",nmb),
     dx1("dx1",nmb), dx2("dx2",nmb), dx3("dx3",nmb) {}
+};
+
+//----------------------------------------------------------------------------------------
+//! \struct NeighborBlock
+//  \brief Information about neighboring MeshBlocks, stored in DualArrays of length
+//  (# of neighboring blocks).  Latter is 26 for a uniform grid in 3D.
+
+struct NeighborBlock
+{
+  DualArray1D<int> gid;      // global ID
+  DualArray1D<int> lev;      // logical level
+  DualArray1D<int> rank;    // MPI rank     
+  DualArray1D<int> destn;   // index of recv buffer in target vector of NeighborBlocks
+  // constructor
+  NeighborBlock(){};
+/*
+  NeighborBlock() :
+    gid("nghbr_gid",1), lev("nghbr_lev",1),
+    rank("nghbr_rank",1), destn("nghbr_dest",1) {}
+*/
 };
 
 //----------------------------------------------------------------------------------------
@@ -104,7 +125,7 @@ class Mesh
   int FindMeshBlockIndex(int tgid)
   {
     for (int m=0; m<pmb_pack->pmb->nmb; ++m) {
-      if (pmb_pack->pmb->h_mbgid(m) == tgid) return m;
+      if (pmb_pack->pmb->mbgid.h_view(m) == tgid) return m;
     }
     return -1;
   }

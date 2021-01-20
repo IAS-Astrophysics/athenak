@@ -259,6 +259,6 @@ void OutputType::LoadOutputData(Mesh *pm)
 
     // append variables on this MeshBlock to end of out_data_ vector
     out_data_.push_back(new_data);
-    out_data_gid_.push_back(pmbp->pmb->h_mbgid(m));
+    out_data_gid_.push_back(pmbp->pmb->mbgid.h_view(m));
   }
 }

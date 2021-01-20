@@ -473,12 +473,12 @@ void Mesh::BuildTree(ParameterInput *pin)
 
 /*******/
   for (int m=0; m<pmb_pack->nmb_thispack; ++m) {
-    std::cout << "******* Block=" << pmb_pack->pmb->h_mbgid(m) << std::endl;
+    std::cout << "******* Block=" << pmb_pack->pmb->mbgid.h_view(m) << std::endl;
     for (int n=0; n<6; ++n) {
-      std::cout << "n=" << n << " bc_flag=" << GetBoundaryString(static_cast<BoundaryFlag>(pmb_pack->pmb->mb_bcs(m,n))) << std::endl;
+      std::cout << "n=" << n << " bc_flag=" << GetBoundaryString(pmb_pack->pmb->mb_bcs(m,n)) << std::endl;
     }
     for (int n=0; n<pmb_pack->pmb->nnghbr; ++n) {
-      std::cout << "n=" << n << " gid=" << pmb_pack->pmb->h_mbnghbr(m,n,0) << " level=" << pmb_pack->pmb->h_mbnghbr(m,n,1) << " rank=" << pmb_pack->pmb->h_mbnghbr(m,n,2) << " destn=" << pmb_pack->pmb->h_mbnghbr(m,n,3) << std::endl;
+      std::cout << "n=" << n << " gid=" << pmb_pack->pmb->nghbr[n].gid.h_view(m) << " level=" << pmb_pack->pmb->nghbr[n].lev.h_view(m) << " rank=" << pmb_pack->pmb->nghbr[n].rank.h_view(m) << " destn=" << pmb_pack->pmb->nghbr[n].destn.h_view(m) << std::endl;
     }
   }
 /**********/

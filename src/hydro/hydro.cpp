@@ -213,7 +213,7 @@ TaskStatus Hydro::HydroInitRecv(Driver *pdrive, int stage)
 
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
-      if (pmy_pack->pmb->h_mbnghbr(m,n,0) >= 0) {   // index0=gid
+      if (pmy_pack->pmb->nghbr[n].gid.h_view(m) >= 0) {
 #if MPI_PARALLEL_ENABLED
         // post non-blocking receive if neighboring MeshBlock on a different rank 
         if (pbvals->nghbr_x1face[n].rank != global_variable::my_rank) {

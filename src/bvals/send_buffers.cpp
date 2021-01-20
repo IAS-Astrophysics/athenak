@@ -34,8 +34,8 @@ TaskStatus BoundaryValues::SendBuffers(AthenaArray5D<Real> &a)
   int nvar = a.extent_int(1);  // 2nd index from L of input array must be NVAR
 
   {int &my_rank = global_variable::my_rank;
-  auto &nghbr = ppack->pmb->d_mbnghbr;
-  auto &mbgid = ppack->pmb->d_mbgid;
+  auto &nghbr = ppack->pmb->nghbr;
+  auto &mbgid = ppack->pmb->mbgid;
 
   // load buffers, using 3 levels of hierarchical parallelism
   int nmn = nmb*nnghbr;
@@ -65,18 +65,18 @@ TaskStatus BoundaryValues::SendBuffers(AthenaArray5D<Real> &a)
       j += jl;
   
       // copy directly into recv buffer if MeshBlocks on same rank
-      if (nghbr(m,n,2) == my_rank) {
-        int nn = nghbr(m,n,3); // destination: index of recv'ing boundary buffer
+      if (nghbr[n].rank.d_view(m) == my_rank) {
+        int nn = nghbr[n].destn.d_view(m); // index of recv'ing boundary buffer
         // index of recv;ing MB: assumes MB IDs are stored sequentially in mblocks[]
-        int mm = nghbr(m,n,0) - mbgid(0);
-        Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu + 1), [&](const int i)
+        int mm = nghbr[n].gid.d_view(m) - mbgid.d_view(0);
+        Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu + 1),[&](const int i)
         {
           recv_buf[mm][nn].data(v, i-il + ni*(j-jl + nj*(k-kl))) = a(m, v, k, j, i);
         });
 
       // else copy directly into send buffer for MPI communication below
       } else {
-        Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu + 1), [&](const int i)
+        Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu + 1),[&](const int i)
         {
           send_buf[m][n].data(v, i-il + ni*(j-jl + nj*(k-kl))) = a(m, v, k, j, i);
         });
@@ -87,19 +87,18 @@ TaskStatus BoundaryValues::SendBuffers(AthenaArray5D<Real> &a)
 
   // Send boundary buffer to neighboring MeshBlocks using MPI or Kokkos::deep_copy if
   // neighbor is on same MPI rank.
-  // Note send_buf[n] --> recv_buf[n + nghbr[n].dn]
 
   {int &my_rank = global_variable::my_rank;
-  auto &nghbr = ppack->pmb->h_mbnghbr;
-  auto &mbgid = ppack->pmb->h_mbgid;
+  auto &nghbr = ppack->pmb->nghbr;
+  auto &mbgid = ppack->pmb->mbgid;
 
   using Kokkos::ALL;
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
-      if (nghbr(m,n,0) >= 0) {  // index0=gid: not a physical boundary
-        if (nghbr(m,n,2) == my_rank) {  // index2 = rank
-          int nn = nghbr(m,n,3);        // index3 = destn
-          int mm = nghbr(m,n,0) - mbgid(0);
+      if (nghbr[n].gid.h_view(m) >= 0) {  // not a physical boundary
+        if (nghbr[n].rank.h_view(m) == my_rank) {
+          int nn = nghbr[n].destn.h_view(m);
+          int mm = nghbr[n].gid.h_view(m) - mbgid.h_view(0);
           recv_buf[mm][nn].bcomm_stat = BoundaryCommStatus::received;
 
 #if MPI_PARALLEL_ENABLED

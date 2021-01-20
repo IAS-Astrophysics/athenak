@@ -131,7 +131,7 @@ void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
         for (int k=oks; k<=oke; ++k) {
           for (int j=ojs; j<=oje; ++j) {
             for (int i=ois; i<=oie; ++i) {
-              std::fprintf(pfile, "%05d", pmb->h_mbgid(idx));
+              std::fprintf(pfile, "%05d", pmb->mbgid.h_view(idx));
               // write x1, x2, x3 indices and coordinates
               if (oie != ois) {
                 std::fprintf(pfile, " %04d", i);  // note extra space for formatting
