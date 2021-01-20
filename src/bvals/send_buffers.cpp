@@ -36,20 +36,22 @@ TaskStatus BoundaryValues::SendBuffers(AthenaArray5D<Real> &a)
   {int &my_rank = global_variable::my_rank;
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &mbgid = pmy_pack->pmb->mbgid;
+  auto &sbuf = send_buf;
+  auto &rbuf = recv_buf;
 
   // load buffers, using 3 levels of hierarchical parallelism
   int nmn = nmb*nnghbr;
   Kokkos::TeamPolicy<> policy(DevExeSpace(), nmn, Kokkos::AUTO);
-  Kokkos::parallel_for("RecvBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember)
+  Kokkos::parallel_for("SendBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember)
   { 
     const int m = tmember.league_rank()/nnghbr;
     const int n = tmember.league_rank()%nnghbr;
-    const int il = send_buf[n].index.d_view(0);
-    const int iu = send_buf[n].index.d_view(1);
-    const int jl = send_buf[n].index.d_view(2);
-    const int ju = send_buf[n].index.d_view(3);
-    const int kl = send_buf[n].index.d_view(4);
-    const int ku = send_buf[n].index.d_view(5);
+    const int il = sbuf[n].index.d_view(0);
+    const int iu = sbuf[n].index.d_view(1);
+    const int jl = sbuf[n].index.d_view(2);
+    const int ju = sbuf[n].index.d_view(3);
+    const int kl = sbuf[n].index.d_view(4);
+    const int ku = sbuf[n].index.d_view(5);
     const int ni = iu - il + 1;
     const int nj = ju - jl + 1;
     const int nk = ku - kl + 1;
@@ -71,14 +73,14 @@ TaskStatus BoundaryValues::SendBuffers(AthenaArray5D<Real> &a)
         int mm = nghbr[n].gid.d_view(m) - mbgid.d_view(0);
         Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu + 1),[&](const int i)
         {
-          recv_buf[nn].data(mm,v, i-il + ni*(j-jl + nj*(k-kl))) = a(m,v,k,j,i);
+          rbuf[nn].data(mm,v, i-il + ni*(j-jl + nj*(k-kl))) = a(m,v,k,j,i);
         });
 
       // else copy directly into send buffer for MPI communication below
       } else {
         Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu + 1),[&](const int i)
         {
-          send_buf[n].data(m, v, i-il + ni*(j-jl + nj*(k-kl))) = a(m,v,k,j,i);
+          sbuf[n].data(m, v, i-il + ni*(j-jl + nj*(k-kl))) = a(m,v,k,j,i);
         });
       }
     });
@@ -91,6 +93,7 @@ TaskStatus BoundaryValues::SendBuffers(AthenaArray5D<Real> &a)
   {int &my_rank = global_variable::my_rank;
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &mbgid = pmy_pack->pmb->mbgid;
+  auto &rbuf = recv_buf;
 
   using Kokkos::ALL;
   for (int m=0; m<nmb; ++m) {
@@ -99,7 +102,7 @@ TaskStatus BoundaryValues::SendBuffers(AthenaArray5D<Real> &a)
         if (nghbr[n].rank.h_view(m) == my_rank) {
           int nn = nghbr[n].destn.h_view(m);
           int mm = nghbr[n].gid.h_view(m) - mbgid.h_view(0);
-          recv_buf[nn].bcomm_stat(mm) = BoundaryCommStatus::received;
+          rbuf[nn].bcomm_stat(mm) = BoundaryCommStatus::received;
 
 #if MPI_PARALLEL_ENABLED
         } else {

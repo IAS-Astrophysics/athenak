@@ -19,7 +19,7 @@
 // include inlined Riemann solvers (double yuck...)
 #include "hydro/rsolver/advect.cpp"
 #include "hydro/rsolver/llf.cpp"
-#include "hydro/rsolver/hllc.cpp"
+//#include "hydro/rsolver/hllc.cpp"
 //#include "hydro/rsolver/roe.cpp"
 
 namespace hydro {
@@ -85,9 +85,9 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
         case Hydro_RSolver::llf:
           LLF(member, eos, is, ie+1, IVX, wl, wr, wl);
           break;
-        case Hydro_RSolver::hllc:
-          HLLC(member, eos, is, ie+1, IVX, wl, wr, wl);
-          break;
+//        case Hydro_RSolver::hllc:
+//          HLLC(member, eos, is, ie+1, IVX, wl, wr, wl);
+//          break;
 //        case Hydro_RSolver::roe:
 //          Roe(member, eos, is, ie+1, IVX, wl, wr, wl);
 //          break;
@@ -163,9 +163,9 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
         case Hydro_RSolver::llf:
           LLF(member, eos, js, je+1, IVY, wl, wr, wl);
           break;
-        case Hydro_RSolver::hllc:
-          HLLC(member, eos, js, je+1, IVY, wl, wr, wl);
-          break;
+//        case Hydro_RSolver::hllc:
+//          HLLC(member, eos, js, je+1, IVY, wl, wr, wl);
+//          break;
 //        case Hydro_RSolver::roe:
 //          Roe(member, eos, js, je+1, IVY, wl, wr, wl);
 //          break;
@@ -242,9 +242,9 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
         case Hydro_RSolver::llf:
           LLF(member, eos, ks, ke+1, IVZ, wl, wr, wl);
           break;
-        case Hydro_RSolver::hllc:
-          HLLC(member, eos, ks, ke+1, IVZ, wl, wr, wl);
-          break;
+//        case Hydro_RSolver::hllc:
+//          HLLC(member, eos, ks, ke+1, IVZ, wl, wr, wl);
+//          break;
 //        case Hydro_RSolver::roe:
 //          Roe(member, eos, ks, ke+1, IVZ, wl, wr, wl);
 //          break;
