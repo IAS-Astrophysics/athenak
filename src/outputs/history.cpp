@@ -86,7 +86,7 @@ void HistoryOutput::LoadOutputData(Mesh *pm)
   // loop over all MeshBlocks in this pack
     
   auto &u0_ = pm->pmb_pack->phydro->u0;
-  auto &size = pm->pmb_pack->pmb->d_mbsize;
+  auto &size = pm->pmb_pack->pmb->mbsize;
   const int nmkji = (pm->pmb_pack->nmb_thispack)*nx3*nx2*nx1;
   const int nkji = nx3*nx2*nx1;
   const int nji  = nx2*nx1;
@@ -103,7 +103,7 @@ void HistoryOutput::LoadOutputData(Mesh *pm)
       k += ks;
       j += js;
 
-      Real vol = size(m,6)*size(m,7)*size(m,8);
+      Real vol = size.dx1.d_view(m)*size.dx2.d_view(m)*size.dx3.d_view(m);
 
       // Hydro conserved variables:
       hist_sum::GlobalSum hvars;

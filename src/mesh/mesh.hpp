@@ -18,11 +18,24 @@
 //! \struct RegionSize
 //  \brief physical size in a Mesh or a MeshBlock
 
-struct RegionSize
+struct MeshSize
 {
   Real x1min, x2min, x3min;
   Real x1max, x2max, x3max;
   Real dx1, dx2, dx3;       // (uniform) grid spacing
+};
+
+// size data stored as Views to enable loops over all MeshBlocks in a single kernel
+struct MeshBlockSize
+{
+  DualArray1D<Real> x1min, x2min, x3min;
+  DualArray1D<Real> x1max, x2max, x3max;
+  DualArray1D<Real> dx1, dx2, dx3;       // (uniform) grid spacing
+  MeshBlockSize(int nmb) :
+    x1min("x1min",nmb), x1max("x1max",nmb),
+    x2min("x2min",nmb), x2max("x2max",nmb),
+    x3min("x3min",nmb), x3max("x3max",nmb),
+    dx1("dx1",nmb), dx2("dx2",nmb), dx3("dx3",nmb) {}
 };
 
 //----------------------------------------------------------------------------------------
@@ -97,7 +110,7 @@ class Mesh
   }
 
   // data
-  RegionSize  mesh_size;      // physical size of mesh (physical root level)
+  MeshSize  mesh_size;        // physical size of mesh (physical root level)
   RegionCells mesh_cells;     // number of cells in mesh (physical root level)
   BoundaryFlag mesh_bcs[6];   // physical boundary conditions at 6 faces of mesh
   bool nx2gt1, nx3gt1;        // flags to indictate 2D/3D calculations

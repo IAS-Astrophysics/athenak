@@ -43,7 +43,7 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
   EOS_Data &eos = peos->eos_data;
   AthenaArray5D<Real> &w0_ = w0;
   AthenaArray5D<Real> &divf_ = divf;
-  auto &mbsize = pmy_pack->pmb->d_mbsize;
+  auto &mbsize = pmy_pack->pmb->mbsize;
 
   //--------------------------------------------------------------------------------------
   // i-direction
@@ -115,7 +115,7 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
       for (int n=0; n<nvars; ++n) {
         par_for_inner(member, is, ie, [&](const int i)
         {
-          divf_(m,n,k,j,i) = (wl(n,i+1) - wl(n,i))/mbsize(m,6);
+          divf_(m,n,k,j,i) = (wl(n,i+1) - wl(n,i))/mbsize.dx1.d_view(m);
         });
       }
       member.team_barrier();
@@ -194,7 +194,7 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
       for (int n=0; n<nvars; ++n) {
         par_for_inner(member, js, je, [&](const int j)
         {
-          divf_(m,n,k,j,i) += (wl(n,j+1) - wl(n,j))/mbsize(m,7);
+          divf_(m,n,k,j,i) += (wl(n,j+1) - wl(n,j))/mbsize.dx2.d_view(m);
         });
       }
       member.team_barrier();
@@ -274,7 +274,7 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
       for (int n=0; n<nvars; ++n) {
         par_for_inner(member, ks, ke, [&](const int k)
         { 
-          divf_(m,n,k,j,i) += (wl(n,k+1) - wl(n,k))/mbsize(m,8);
+          divf_(m,n,k,j,i) += (wl(n,k+1) - wl(n,k))/mbsize.dx3.d_view(m);
         });
       }
       member.team_barrier();

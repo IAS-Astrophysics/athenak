@@ -79,7 +79,7 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
   int &nx2 = pmbp->mb_cells.nx2;
   int &nx3 = pmbp->mb_cells.nx3;
   auto &u0 = pmbp->phydro->u0;
-  auto size = pmbp->pmb->d_mbsize;
+  auto size = pmbp->pmb->mbsize;
 
   switch(shk_dir) {
 
@@ -88,7 +88,7 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
       par_for("pgen_shock1", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
         KOKKOS_LAMBDA(int m,int k, int j, int i)
         {
-          Real x1 = CellCenterX(i-is, nx1, size(m,0), size(m,1));
+          Real x1 = CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
           if (x1 < xshock) {
             u0(m,IDN,k,j,i) = wl[IDN];
             u0(m,IM1,k,j,i) = wl[IVX]*wl[IDN];
@@ -113,7 +113,7 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
       par_for("pgen_shock2", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
         KOKKOS_LAMBDA(int m,int k, int j, int i)
         {
-          Real x2 = CellCenterX(j-js, nx2, size(m,2), size(m,3));
+          Real x2 = CellCenterX(j-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
           if (x2 < xshock) {
             u0(m,IDN,k,j,i) = wl[IDN];
             u0(m,IM2,k,j,i) = wl[IVX]*wl[IDN];
@@ -138,7 +138,7 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
       par_for("pgen_shock3", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
         KOKKOS_LAMBDA(int m,int k, int j, int i)
         {
-          Real x3 = CellCenterX(k-ks, nx3, size(m,4), size(m,5));
+          Real x3 = CellCenterX(k-ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
           if (x3 < xshock) {
             u0(m,IDN,k,j,i) = wl[IDN];
             u0(m,IM3,k,j,i) = wl[IVX]*wl[IDN];

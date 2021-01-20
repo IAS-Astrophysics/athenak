@@ -119,9 +119,12 @@ void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
         int &is = cells.is;
         int &js = cells.js;
         int &ks = cells.ks;
-        Real &x1min = pmb->h_mbsize(idx,0), &x1max = pmb->h_mbsize(idx,1);
-        Real &x2min = pmb->h_mbsize(idx,2), &x2max = pmb->h_mbsize(idx,3);
-        Real &x3min = pmb->h_mbsize(idx,4), &x3max = pmb->h_mbsize(idx,5);
+        Real &x1min = pmb->mbsize.x1min.h_view(idx);
+        Real &x1max = pmb->mbsize.x1max.h_view(idx);
+        Real &x2min = pmb->mbsize.x2min.h_view(idx);
+        Real &x2max = pmb->mbsize.x2max.h_view(idx);
+        Real &x3min = pmb->mbsize.x3min.h_view(idx);
+        Real &x3max = pmb->mbsize.x3max.h_view(idx);
         int &nx1 = cells.nx1;
         int &nx2 = cells.nx2;
         int &nx3 = cells.nx3;

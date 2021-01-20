@@ -148,32 +148,35 @@ void OutputType::LoadOutputData(Mesh *pm)
   for (int m=0; m<nmb; ++m) {
 
     auto &cells = pmbp->mb_cells;
-    auto &size  = pmbp->pmb->h_mbsize;
+    auto &size  = pmbp->pmb->mbsize;
     // check for slicing in each dimension
     if (out_params.slice1) {
       // skip if slice is out of range of this MB
-      if (out_params.slice_x1 <  size(m,0) ||
-          out_params.slice_x1 >= size(m,1)) { continue; }
+      if (out_params.slice_x1 <  size.x1min.h_view(m) ||
+          out_params.slice_x1 >= size.x1max.h_view(m)) { continue; }
       // set index of slice
-      ois = CellCenterIndex(out_params.slice_x1, cells.nx1, size(m,0), size(m,1));
+      ois = CellCenterIndex(out_params.slice_x1, cells.nx1,
+                            size.x1min.h_view(m), size.x1max.h_view(m));
       oie = ois;
     }
 
     if (out_params.slice2) {
       // skip if slice is out of range of this MB
-      if (out_params.slice_x2 <  size(m,2) ||
-          out_params.slice_x2 >= size(m,3)) { continue; }
+      if (out_params.slice_x2 <  size.x2min.h_view(m) ||
+          out_params.slice_x2 >= size.x2max.h_view(m)) { continue; }
       // set index of slice
-      ojs = CellCenterIndex(out_params.slice_x2, cells.nx2, size(m,2), size(m,3));
+      ojs = CellCenterIndex(out_params.slice_x2, cells.nx2,
+                            size.x2min.h_view(m), size.x2max.h_view(m));
       oje = ojs;
     }
 
     if (out_params.slice3) {
       // skip if slice is out of range of this MB
-      if (out_params.slice_x3 <  size(m,4) ||
-          out_params.slice_x3 >= size(m,5)) { continue; }
+      if (out_params.slice_x3 <  size.x3min.h_view(m) ||
+          out_params.slice_x3 >= size.x3max.h_view(m)) { continue; }
       // set index of slice
-      oks = CellCenterIndex(out_params.slice_x3, cells.nx3, size(m,4), size(m,5));
+      oks = CellCenterIndex(out_params.slice_x3, cells.nx3,
+                            size.x3min.h_view(m), size.x3max.h_view(m));
       oke = oks;
     }
 

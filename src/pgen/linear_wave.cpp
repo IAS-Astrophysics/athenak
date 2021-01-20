@@ -131,14 +131,14 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
   int &js = pmbp->mb_cells.js, &je = pmbp->mb_cells.je;
   int &ks = pmbp->mb_cells.ks, &ke = pmbp->mb_cells.ke;
   auto &u0 = pmbp->phydro->u0; 
-  auto &size = pmbp->pmb->d_mbsize;
+  auto &size = pmbp->pmb->mbsize;
 
   par_for("pgen_linwave", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
-      Real x1 = CellCenterX(i-is, nx1, size(m,0), size(m,1));
-      Real x2 = CellCenterX(j-js, nx2, size(m,2), size(m,3));
-      Real x3 = CellCenterX(k-ks, nx3, size(m,4), size(m,5));
+      Real x1 = CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
+      Real x2 = CellCenterX(j-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
+      Real x3 = CellCenterX(k-ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
       Real x = cos_a2*(x1*cos_a3 + x2*sin_a3) + x3*sin_a2;
       Real sn = std::sin(k_par*x);
       Real mx = d0*vflow + amp*sn*rem[1][wave_flag];

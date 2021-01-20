@@ -70,7 +70,7 @@ MeshBlockPack::MeshBlockPack(Mesh *pm, int igids, int igide, RegionCells icells)
   }
 
   // create MeshBlocks for this MeshBlockPack
-  pmb = new MeshBlock(pm, gids, gide);
+  pmb = new MeshBlock(pm, gids, nmb_thispack);
 }
 
 //----------------------------------------------------------------------------------------

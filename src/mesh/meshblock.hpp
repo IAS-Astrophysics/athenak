@@ -28,7 +28,7 @@ class MeshBlock
  friend class MeshBlockTree;
 
  public:
-  MeshBlock(Mesh *pm, int igids, int igide);
+  MeshBlock(Mesh *pm, int igids, int nmb);
   ~MeshBlock();
 
   // data
@@ -41,8 +41,12 @@ class MeshBlock
 
   AthenaArray1D<int> d_mbgid;     // grid ID, unique identifier for each MeshBlock
   HostArray1D<int> h_mbgid;     // grid ID, unique identifier for each MeshBlock
+
+  MeshBlockSize mbsize;  // struct containing DualArrays for sizes of MBs
+/**
   AthenaArray2D<Real> d_mbsize;   // physical size of each MeshBlock
   HostArray2D<Real> h_mbsize;   // physical size of each MeshBlock
+**/
   HostArray2D<int> mb_bcs;  // boundary conditions at 6 faces of each MeshBlock
 
   AthenaArray3D<int> d_mbnghbr;  // vector storing data about all neighboring MBs
