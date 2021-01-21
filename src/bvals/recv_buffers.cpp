@@ -63,13 +63,16 @@ TaskStatus BoundaryValues::RecvBuffers(AthenaArray5D<Real> &a)
   if (bflag) {return TaskStatus::incomplete;}
 
   // buffers have all completed, so unpack
-  {int nmn = nmb*nnghbr;
+  {int nmnv = nmb*nnghbr*nvar;
   auto &rbuf = recv_buf;
-  Kokkos::TeamPolicy<> policy(DevExeSpace(), nmn, Kokkos::AUTO);
+
+  // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
+  Kokkos::TeamPolicy<> policy(DevExeSpace(), nmnv, Kokkos::AUTO);
   Kokkos::parallel_for("RecvBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember)
   {
-    const int m = tmember.league_rank()/nnghbr;
-    const int n = tmember.league_rank()%nnghbr;
+    const int m = (tmember.league_rank())/(nnghbr*nvar);
+    const int n = (tmember.league_rank() - m*(nnghbr*nvar))/nvar;
+    const int v = (tmember.league_rank() - m*(nnghbr*nvar) - n*nvar);
     const int il = rbuf[n].index.d_view(0);
     const int iu = rbuf[n].index.d_view(1);
     const int jl = rbuf[n].index.d_view(2);
@@ -80,16 +83,15 @@ TaskStatus BoundaryValues::RecvBuffers(AthenaArray5D<Real> &a)
     const int nj = ju - jl + 1;
     const int nk = ku - kl + 1;
     const int nkj  = nk*nj;
-    const int nvkj = nvar*nk*nj;
 
-    Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nvkj), [&](const int idx)
+    // Middle loop over k,j
+    Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx)
     {
-      int v = idx / nkj;
-      int k = (idx - v * nkj) / nj;
-      int j = idx - v * nkj - k * nj;
+      int k = idx / nj;
+      int j = (idx - k * nj) + jl;
       k += kl;
-      j += jl;
          
+      // Inner (vector) loop over i
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu + 1), [&](const int i)
       {
         a(m,v,k,j,i) = rbuf[n].data(m,v,i-il + ni*(j-jl + nj*(k-kl)));
