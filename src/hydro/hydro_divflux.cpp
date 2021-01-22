@@ -3,19 +3,19 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file hydro_divflux.cpp
-//  \brief
+//! \file calculate_divflux.cpp
+//  \brief Calculate divergence of the fluxes for hydro only, no mesh refinement
 
 #include <iostream>
 
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
-#include "hydro/eos/hydro_eos.hpp"
 #include "hydro.hpp"
+#include "hydro/eos/hydro_eos.hpp"
 // include inlined reconstruction methods (yuck...)
 #include "reconstruct/dc.cpp"
 #include "reconstruct/plm.cpp"
-#include "reconstruct/ppm.cpp"
+//#include "reconstruct/ppm.cpp"
 // include inlined Riemann solvers (double yuck...)
 #include "hydro/rsolver/advect.cpp"
 #include "hydro/rsolver/llf.cpp"
@@ -24,98 +24,81 @@
 
 namespace hydro {
 //----------------------------------------------------------------------------------------
-//! \fn  void Hydro::HydroDivFlux
-//  \brief Function that computes 3D array of divergence of fluxes, by reconstructing L/R
-//  states, solving Riemann problem to compute fluxes, then summing into div(F) array
+//! \fn  void Hydro::CalculateDivFlux
+//  \brief Calculate divergence of the fluxes for hydro only, no mesh refinement
 
 TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
 {
   int is = pmy_pack->mb_cells.is; int ie = pmy_pack->mb_cells.ie;
   int js = pmy_pack->mb_cells.js; int je = pmy_pack->mb_cells.je;
   int ks = pmy_pack->mb_cells.ks; int ke = pmy_pack->mb_cells.ke;
+  int ncells1 = pmy_pack->mb_cells.nx1 + 2*(pmy_pack->mb_cells.ng);
 
-  // capture Hydro and EOS class variables used in kernel
-  int nhyd  = nhydro;
-  int nvars = nhydro + nscalars;
+  int nhydro_ = nhydro;
   int nmb = pmy_pack->nmb_thispack;
-  ReconstructionMethod &recon_method = recon_method_;
-  Hydro_RSolver &rsolver_method = rsolver_method_;
-  EOS_Data &eos = peos->eos_data;
-  AthenaArray5D<Real> &w0_ = w0;
-  AthenaArray5D<Real> &divf_ = divf;
+  auto recon_method = recon_method_;
+  auto rsolver_method = rsolver_method_;
+  auto &eos = peos->eos_data;
+  auto &w0_ = w0;
+  auto &divf_ = divf;
   auto &mbsize = pmy_pack->pmb->mbsize;
 
   //--------------------------------------------------------------------------------------
   // i-direction
 
-  int ncells1 = pmy_pack->mb_cells.nx1 + 2*(pmy_pack->mb_cells.ng);
-  const int scr_level = 0;
-  size_t scr_size = AthenaScratch2D<Real>::shmem_size(nvars, ncells1) * 2;
+  size_t scr_size = AthenaScratch2D<Real>::shmem_size(nhydro, ncells1) * 3;
+  int scr_level = 0;
 
-  par_for_outer("divflux_x1", DevExeSpace(), scr_size, scr_level,0,(nmb-1),ks,ke,js,je,
+  par_for_outer("divflux_x1", DevExeSpace(), scr_size, scr_level,0,(nmb-1), ks, ke, js, je,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j)
     {
-      AthenaScratch2D<Real> wl(member.team_scratch(scr_level), nvars, ncells1);
-      AthenaScratch2D<Real> wr(member.team_scratch(scr_level), nvars, ncells1);
+      AthenaScratch2D<Real> wl(member.team_scratch(scr_level), nhydro_, ncells1);
+      AthenaScratch2D<Real> wr(member.team_scratch(scr_level), nhydro_, ncells1);
+      AthenaScratch2D<Real> uflux(member.team_scratch(scr_level), nhydro_, ncells1);
 
       // Reconstruction qR[i] and qL[i+1]
-      AthenaArray2DSlice<Real> qi = Kokkos::subview(w0_,m,Kokkos::ALL(),k,j,Kokkos::ALL());
       switch (recon_method)
       {
         case ReconstructionMethod::dc:
-          DonorCell(member, is-1, ie+1, qi, wl, wr);
+          DonorCellX1(member, m, k, j, is-1, ie+1, w0_, wl, wr);
           break;
         case ReconstructionMethod::plm:
-          PiecewiseLinear(member, is-1, ie+1, qi, wl, wr);
+          PiecewiseLinearX1(member, m, k, j, is-1, ie+1, w0_, wl, wr);
           break;
-        case ReconstructionMethod::ppm:
-          PiecewiseParabolic(member, is-1, ie+1, qi, wl, wr);
+//        case ReconstructionMethod::ppm:
+//          PiecewiseParabolicX1(member, m, k, j, is-1, ie+1, w0_, wl, wr);
           break;
         default:
           break;
       }
+      // Sync all threads in the team so that scratch memory is consistent
       member.team_barrier();
 
-      // compute hydro fluxes over [is,ie+1]
+      // compute fluxes over [is,ie+1]
       switch (rsolver_method)
       {
         case Hydro_RSolver::advect:
-          Advect(member, eos, is, ie+1, IVX, wl, wr, wl);
+          Advect(member, eos, is, ie+1, IVX, wl, wr, uflux);
           break;
         case Hydro_RSolver::llf:
-          LLF(member, eos, is, ie+1, IVX, wl, wr, wl);
+          LLF(member, eos, is, ie+1, IVX, wl, wr, uflux);
           break;
 //        case Hydro_RSolver::hllc:
-//          HLLC(member, eos, is, ie+1, IVX, wl, wr, wl);
+//          HLLC(member, eos, is, ie+1, IVX, wl, wr, uflux);
 //          break;
 //        case Hydro_RSolver::roe:
-//          Roe(member, eos, is, ie+1, IVX, wl, wr, wl);
+//          Roe(member, eos, is, ie+1, IVX, wl, wr, uflux);
 //          break;
         default:
           break;
       }
       member.team_barrier();
 
-      // calculate fluxes of scalars
-      if (nvars > nhyd) {
-        for (int n=nhyd; n<nvars; ++n) {
-          par_for_inner(member, is, ie+1, [&](const int i)
-          {
-            if (wl(IDN,i) >= 0.0) {
-              wl(n,i) = wl(IDN,i)*wl(n,i);
-            } else {
-              wl(n,i) = wl(IDN,i)*wr(n,i);
-            }
-          });
-        }
-        member.team_barrier();
-      }
-
       // compute dF/dx1
-      for (int n=0; n<nvars; ++n) {
+      for (int n=0; n<nhydro_; ++n) {
         par_for_inner(member, is, ie, [&](const int i)
         {
-          divf_(m,n,k,j,i) = (wl(n,i+1) - wl(n,i))/mbsize.dx1.d_view(m);
+          divf_(m,n,k,j,i) = (uflux(n,i+1) - uflux(n,i))/mbsize.dx1.d_view(m);
         });
       }
       member.team_barrier();
@@ -126,78 +109,78 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
   //--------------------------------------------------------------------------------------
   // j-direction
 
-  // capture variables used in kernel
-  int ncells2 = pmy_pack->mb_cells.nx2 + 2*(pmy_pack->mb_cells.ng);
-  scr_size = AthenaScratch2D<Real>::shmem_size(nvars, ncells2) * 2;
+  scr_size = AthenaScratch2D<Real>::shmem_size(nhydro, ncells1) * 4;
 
-  par_for_outer("divflux_x2", DevExeSpace(), scr_size, scr_level,0,(nmb-1),ks,ke,is,ie,
-    KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int i)
+  par_for_outer("divflux_x2", DevExeSpace(), scr_size, scr_level,0,(nmb-1), ks, ke,
+    KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k)
     {
-      AthenaScratch2D<Real> wl(member.team_scratch(scr_level), nvars, ncells2);
-      AthenaScratch2D<Real> wr(member.team_scratch(scr_level), nvars, ncells2);
+      AthenaScratch2D<Real> wl_flx(member.team_scratch(scr_level), nhydro_, ncells1);
+      AthenaScratch2D<Real> wr(member.team_scratch(scr_level), nhydro_, ncells1);
+      AthenaScratch2D<Real> wl_jp1(member.team_scratch(scr_level), nhydro_, ncells1);
+      AthenaScratch2D<Real> uflux_jm1(member.team_scratch(scr_level), nhydro_, ncells1);
 
-      // Reconstruction qR[j] and qL[j+1]
-      AthenaArray2DSlice<Real> qj = Kokkos::subview(w0_,m,Kokkos::ALL(),k,Kokkos::ALL(),i);
-      switch (recon_method)
-      {
-        case ReconstructionMethod::dc:
-          DonorCell(member, js-1, je+1, qj, wl, wr);
-          break;
-        case ReconstructionMethod::plm:
-          PiecewiseLinear(member, js-1, je+1, qj, wl, wr);
-          break;
-        case ReconstructionMethod::ppm:
-          PiecewiseParabolic(member, js-1, je+1, qj, wl, wr);
-          break;
-        default:
-          break;
-      }
-      member.team_barrier();
+      for (int j=js-1; j<=je+1; ++j) {
+        // copy Wl from last iteration of j (unless this is the first time through)
+        if (j>(js-1)) {
+          wl_flx = wl_jp1;
+        }
 
-      // compute hydro fluxes over [js,je+1]
-      switch (rsolver_method)
-      {
-        case Hydro_RSolver::advect:
-          Advect(member, eos, js, je+1, IVY, wl, wr, wl);
-          break;
-        case Hydro_RSolver::llf:
-          LLF(member, eos, js, je+1, IVY, wl, wr, wl);
-          break;
-//        case Hydro_RSolver::hllc:
-//          HLLC(member, eos, js, je+1, IVY, wl, wr, wl);
-//          break;
-//        case Hydro_RSolver::roe:
-//          Roe(member, eos, js, je+1, IVY, wl, wr, wl);
-//          break;
-        default:
-          break;
-      }
-      member.team_barrier();
-
-      // calculate fluxes of scalars
-      if (nvars > nhyd) {
-        for (int n=nhyd; n<nvars; ++n) {
-          par_for_inner(member, js, je+1, [&](const int j)
-          {
-            if (wl(IDN,j) >= 0.0) {
-              wl(n,j) = wl(IDN,j)*wl(n,j);
-            } else {
-              wl(n,j) = wl(IDN,j)*wr(n,j);
-            }
-          });
+        // Reconstruction qR[j] and qL[j+1]
+        switch (recon_method)
+        {
+          case ReconstructionMethod::dc:
+            DonorCellX2(member, m, k, j, is, ie, w0_, wl_jp1, wr);
+            break;
+          case ReconstructionMethod::plm:
+            PiecewiseLinearX2(member, m, k, j, is, ie, w0_, wl_jp1, wr);
+            break;
+//          case ReconstructionMethod::ppm:
+//            PiecewiseParabolicX2(member, m, k, j, is, ie, w0_, wl_jp1, wr);
+            break;
+          default:
+            break;
         }
         member.team_barrier();
-      }
 
-      // Add dF/dx2
-      // Fluxes must be summed together to symmetrize round-off error in each dir
-      for (int n=0; n<nvars; ++n) {
-        par_for_inner(member, js, je, [&](const int j)
-        {
-          divf_(m,n,k,j,i) += (wl(n,j+1) - wl(n,j))/mbsize.dx2.d_view(m);
-        });
-      }
-      member.team_barrier();
+        // compute fluxes over [js,je+1]
+        if (j>(js-1)) {
+          switch (rsolver_method)
+          {
+            case Hydro_RSolver::advect:
+              Advect(member, eos, is, ie, IVY, wl_flx, wr, wl_flx);
+              break;
+            case Hydro_RSolver::llf:
+              LLF(member, eos, is, ie, IVY, wl_flx, wr, wl_flx);
+              break;
+//            case Hydro_RSolver::hllc:
+//              HLLC(member, eos, is, ie, IVY, wl_flx, wr, wl_flx);
+//              break;
+//            case Hydro_RSolver::roe:
+//              Roe(member, eos, is, ie, IVY, wl_flx, wr, wl_flx);
+//              break;
+            default:
+              break;
+          }
+        }
+        member.team_barrier();
+
+        // Add dF/dx2
+        // Fluxes must be summed together to symmetrize round-off error in each dir
+        if (j>js) {
+          for (int n=0; n<nhydro_; ++n) {
+            par_for_inner(member, is, ie, [&](const int i)
+            {
+              divf_(m,n,k,j-1,i) += (wl_flx(n,i) - uflux_jm1(n,i))/mbsize.dx2.d_view(m);
+            });
+          }
+        }
+        member.team_barrier();
+  
+        // copy flux for use in next iteration
+        if (j>(js-1) && j<(je+1)) {
+          uflux_jm1 = wl_flx;
+        }
+      } // end of loop over j
     }
   );
   if (!(pmy_pack->pmesh->nx3gt1)) return TaskStatus::complete;
@@ -205,81 +188,80 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
   //--------------------------------------------------------------------------------------
   // k-direction. Note order of k,j loops switched
 
-  // capture variables used in kernel
-  int ncells3 = pmy_pack->mb_cells.nx3 + 2*(pmy_pack->mb_cells.ng);
-  scr_size = AthenaScratch2D<Real>::shmem_size(nvars, ncells3) * 2;
+  scr_size = AthenaScratch2D<Real>::shmem_size(nhydro, ncells1) * 4;
 
-  par_for_outer("divflux_x3", DevExeSpace(), scr_size, scr_level,0,(nmb-1),js,je,is,ie,
-    KOKKOS_LAMBDA(TeamMember_t member, const int m, const int j, const int i)
+  par_for_outer("divflux_x3", DevExeSpace(), scr_size, scr_level,0,(nmb-1), js, je,
+    KOKKOS_LAMBDA(TeamMember_t member, const int m, const int j)
     {
-      AthenaScratch2D<Real> wl(member.team_scratch(scr_level), nvars, ncells3);
-      AthenaScratch2D<Real> wr(member.team_scratch(scr_level), nvars, ncells3);
+      AthenaScratch2D<Real> wl_flx(member.team_scratch(scr_level), nhydro_, ncells1);
+      AthenaScratch2D<Real> wr(member.team_scratch(scr_level), nhydro_, ncells1);
+      AthenaScratch2D<Real> wl_kp1(member.team_scratch(scr_level), nhydro_, ncells1);
+      AthenaScratch2D<Real> uflux_km1(member.team_scratch(scr_level), nhydro_, ncells1);
 
-      // Reconstruction qR[k] and qL[k+1]
-      AthenaArray2DSlice<Real> qk = Kokkos::subview(w0_,m,Kokkos::ALL(),Kokkos::ALL(),j,i);
-      switch (recon_method)
-      {
-        case ReconstructionMethod::dc:
-          DonorCell(member, ks-1, ke+1, qk, wl, wr);
-          break;
-        case ReconstructionMethod::plm:
-          PiecewiseLinear(member, ks-1, ke+1, qk, wl, wr);
-          break;
-        case ReconstructionMethod::ppm:
-          PiecewiseParabolic(member, ks-1, ke+1, qk, wl, wr);
-          break;
-        default:
-          break;
-      }
-      member.team_barrier();
+      for (int k=ks-1; k<=ke+1; ++k) {
+        // copy Wl from last iteration of k (unless this is the first time through)
+        if (k>(ks-1)) { 
+          wl_flx = wl_kp1;
+        }
 
-      // compute hydro fluxes over [ks,ke+1]
-      switch (rsolver_method)
-      {
-        case Hydro_RSolver::advect:
-          Advect(member, eos, ks, ke+1, IVZ, wl, wr, wl);
-          break;
-        case Hydro_RSolver::llf:
-          LLF(member, eos, ks, ke+1, IVZ, wl, wr, wl);
-          break;
-//        case Hydro_RSolver::hllc:
-//          HLLC(member, eos, ks, ke+1, IVZ, wl, wr, wl);
-//          break;
-//        case Hydro_RSolver::roe:
-//          Roe(member, eos, ks, ke+1, IVZ, wl, wr, wl);
-//          break;
-        default:
-          break;
-      }
-      member.team_barrier();
-
-      // calculate fluxes of scalars
-      if (nvars > nhyd) {
-        for (int n=nhyd; n<nvars; ++n) {
-          par_for_inner(member, ks, ke+1, [&](const int k)
-          {
-            if (wl(IDN,k) >= 0.0) {
-              wl(n,k) = wl(IDN,k)*wl(n,k);
-            } else {
-              wl(n,k) = wl(IDN,k)*wr(n,k);
-            }
-          });
+        switch (recon_method)
+        {
+          case ReconstructionMethod::dc:
+            DonorCellX3(member, m, k, j, is, ie, w0_, wl_kp1, wr);
+            break;
+          case ReconstructionMethod::plm:
+            PiecewiseLinearX3(member, m, k, j, is, ie, w0_, wl_kp1, wr);
+            break;
+//          case ReconstructionMethod::ppm:
+//            PiecewiseParabolicX3(member, m, k, j, is, ie, w0_, wl_kp1, wr);
+            break;
+          default:
+            break;
         }
         member.team_barrier();
-      }
 
-      // Add dF/dx2
-      // Add dF/dx3
-      // Fluxes must be summed together to symmetrize round-off error in each dir
-      for (int n=0; n<nvars; ++n) {
-        par_for_inner(member, ks, ke, [&](const int k)
-        { 
-          divf_(m,n,k,j,i) += (wl(n,k+1) - wl(n,k))/mbsize.dx3.d_view(m);
-        });
-      }
-      member.team_barrier();
+        // compute fluxes over [ks,ke+1]
+        if (k>(ks-1)) {
+          switch (rsolver_method)
+          {
+            case Hydro_RSolver::advect:
+              Advect(member, eos, is, ie, IVZ, wl_flx, wr, wl_flx);
+              break;
+            case Hydro_RSolver::llf:
+              LLF(member, eos, is, ie, IVZ, wl_flx, wr, wl_flx);
+              break;
+//            case Hydro_RSolver::hllc:
+//              HLLC(member, eos, is, ie, IVZ, wl_flx, wr, wl_flx);
+//              break;
+//            case Hydro_RSolver::roe:
+//              Roe(member, eos, is, ie, IVZ, wl_flx, wr, wl_flx);
+//              break;
+            default:
+              break;
+          }
+        }
+        member.team_barrier();
+
+        // Add dF/dx3
+        // Fluxes must be summed together to symmetrize round-off error in each dir
+        if (k>ks) {
+          for (int n=0; n<nhydro_; ++n) {
+            par_for_inner(member, is, ie, [&](const int i)
+            { 
+              divf_(m,n,k-1,j,i) += (wl_flx(n,i) - uflux_km1(n,i))/mbsize.dx3.d_view(m);
+            });
+          }
+        }
+        member.team_barrier();
+
+        // copy flux for use in next iteration
+        if (k>(ks-1) && k<(ke+1)) {
+          uflux_km1 = wl_flx;
+        }
+      } // end loop over k
     }
   );
   return TaskStatus::complete;
 }
+
 } // namespace hydro
