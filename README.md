@@ -22,17 +22,25 @@ The code uses cmake to manage builds.  In-source builds are not allowed; you mus
 
 Then run cmake (version 3.0 or later) for the specific target architecture in the build subdirectory as follows:
 
-### Build for cpu
+### Default build for cpu
 
-   $ cmake3 -D Kokkos_ARCH_BDW=On ../
+   $ cmake3 ../
 
-### Build for cpu with Intel C++ compiler and GCC C compiler 
+### Default build for cpu with MPI
+
+   $ cmake3 -D Athena_ENABLE_MPI=ON ../
+
+### Default build for Intel Broadwell cpu with Intel C++ compiler and GCC C compiler 
 
    $ cmake3 -DCMAKE_CXX_COMPILER=icpc -D Kokkos_ARCH_BDW=On -D Kokkos_ENABLE_OPENMP=ON \
    -D CMAKE_CXX_FLAGS="-O3 -inline-forceinline -qopenmp-simd -qopt-prefetch=4 -diag-disable 3180 " \
    -D CMAKE_C_FLAGS="-O3 -finline-functions" ../
 
-### Build for NVidia V100
+### Default build for NVidia V100 (requires gcc and cudatoolkit)
 
    $  cmake3 -DKokkos_ENABLE_CUDA=On -DKokkos_ARCH_VOLTA70=On -DCMAKE_CXX_COMPILER=${path_to_code}/athenaK/kokkos/bin/nvcc_wrapper ../
 
+
+### Debug build for NVidia V100 (requires gcc and cudatoolkit)
+
+   $  cmake3 -DKokkos_ENABLE_CUDA=On -DKokkos_ARCH_VOLTA70=On -DCMAKE_CXX_COMPILER=${path_to_code}/athenaK/kokkos/bin/nvcc_wrapper -D CMAKE_BUILD_TYPE=DEBUG ../

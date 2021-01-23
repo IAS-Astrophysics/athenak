@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file send_buffers.cpp
-//  \brief packs and sends boundary buffers between MeshBlocks
+//  \brief function to pack and send boundary buffers between MeshBlocks.
 
 #include <cstdlib>
 #include <iostream>
@@ -25,7 +25,7 @@
 //
 // Input array must be 5D Kokkos View dimensioned (nmb, nvar, nx3, nx2, nx1)
 
-TaskStatus BoundaryValues::SendBuffers(AthenaArray5D<Real> &a)
+TaskStatus BoundaryValues::SendBuffers(AthenaArray5D<Real> &a, int key)
 {
   // create local references for variables in kernel
   int nmb = pmy_pack->pmb->nmb;
@@ -95,24 +95,27 @@ TaskStatus BoundaryValues::SendBuffers(AthenaArray5D<Real> &a)
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &mbgid = pmy_pack->pmb->mbgid;
   auto &rbuf = recv_buf;
+  auto &sbuf = send_buf;
 
   using Kokkos::ALL;
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
       if (nghbr[n].gid.h_view(m) >= 0) {  // not a physical boundary
+        // compute indices of destination MeshBlock and Neighbor 
+        int nn = nghbr[n].destn.h_view(m);
         if (nghbr[n].rank.h_view(m) == my_rank) {
-          int nn = nghbr[n].destn.h_view(m);
-          int mm = nghbr[n].gid.h_view(m) - mbgid.h_view(0);
+          int mm = nghbr[n].gid.h_view(m) - pmy_pack->gids;
           rbuf[nn].bcomm_stat(mm) = BoundaryCommStatus::received;
 
 #if MPI_PARALLEL_ENABLED
         } else {
           // create tag using local ID and buffer index of *receiving* MeshBlock
-          int lid = nghbr_x1face[n].gid - pmesh_->gidslist[nghbr_x1face[n].rank];
-          int tag = CreateMPItag(lid, (1-n), key);
-          void* send_ptr = sendbuf.data();
-          int ierr = MPI_Isend(send_ptr, sendbuf.size(), MPI_ATHENA_REAL,
-            nghbr_x1face[n].rank, tag, MPI_COMM_WORLD, &(pbb->send_rq_x1face[n]));
+          int lid = nghbr[n].gid.h_view(m) -
+                    pmy_pack->pmesh->gidslist[nghbr[n].rank.h_view(m)];
+          int tag = CreateMPITag(lid, nn, key);
+          void* send_ptr = sbuf[n].data.data();
+          int ierr = MPI_Isend(send_ptr, sbuf[n].data.size(), MPI_ATHENA_REAL,
+            nghbr[n].rank.h_view(m), tag, MPI_COMM_WORLD, &(sbuf[n].comm_req[m]));
 #endif
         }
       }

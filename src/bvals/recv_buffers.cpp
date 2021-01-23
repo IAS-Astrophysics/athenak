@@ -47,9 +47,9 @@ TaskStatus BoundaryValues::RecvBuffers(AthenaArray5D<Real> &a)
           if (rbuf[n].bcomm_stat(m) == BoundaryCommStatus::waiting) bflag = true;
 #if MPI_PARALLEL_ENABLED
         } else {
-          MPI_Test(&(pbb->recv_rq_x1face[n]), &test, MPI_STATUS_IGNORE);
+          MPI_Test(&(rbuf[n].comm_req[m]), &test, MPI_STATUS_IGNORE);
           if (static_cast<bool>(test)) {
-            pbb->bstat_x1face[n] = BoundaryCommStatus::completed;
+            rbuf[n].bcomm_stat(m) = BoundaryCommStatus::received;
           } else {
             bflag = true;
           }

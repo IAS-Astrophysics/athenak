@@ -47,12 +47,20 @@ void BoundaryValues::AllocateBuffersCC(const int nvar)
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
 
-  // allocate size of (some) Views
   for (int n=0; n<nnghbr; ++n) {
+  // allocate size of (some) Views
     Kokkos::realloc(send_buf[n].index, 6);
     Kokkos::realloc(recv_buf[n].index, 6);
     Kokkos::realloc(send_buf[n].bcomm_stat, nmb);
     Kokkos::realloc(recv_buf[n].bcomm_stat, nmb);
+#if MPI_PARALLEL_ENABLED
+    // cannot creat Kokkos::View of type MPI_Request so construct STL vector instead
+    for (int m=0; m<nmb; ++m) {
+      MPI_Request send_req, recv_req;
+      send_buf[n].comm_req.push_back(send_req);
+      recv_buf[n].comm_req.push_back(recv_req);
+    }
+#endif
   }
 
   // initialize buffers for x1 faces
@@ -158,7 +166,7 @@ void BoundaryValues::AllocateBuffersCC(const int nvar)
 // overflows from built-in types and MPI_TAG_UB).  Note, the MPI standard requires signed
 // int tag, with MPI_TAG_UB>= 2^15-1 = 32,767 (inclusive)
 
-int CreateMPITag(int lid, int bufid, int phys)
+int BoundaryValues::CreateMPITag(int lid, int bufid, int phys)
 {
   return (lid<<10) | (bufid<<4) | phys;
 }

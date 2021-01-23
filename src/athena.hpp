@@ -50,11 +50,6 @@ namespace mhd {
 enum BFldIndex {IBX=0, IBY=1, IBZ=2};
 } // namespace mhd
 
-
-// integer constants to specify physics module (maximum of 16 set by number of bits used
-// to encode ID in BoundaryValues::CreateMPItag)
-enum PhysicsID {Hydro_ID, Scalars_ID, MHD_ID};
-
 // integer constants to specify reconstruction methods
 enum ReconstructionMethod {dc, plm, ppm};
 

@@ -18,6 +18,10 @@ enum class BoundaryFlag {undef=-1, block, reflect, outflow, user, periodic};
 // identifiers for status of MPI boundary communications
 enum class BoundaryCommStatus {undef=-1, waiting, sent, received};
 
+// integer constants to specify physics modules (maximum of 16 set by number of bits used
+// to encode ID in BoundaryValues::CreateMPItag)
+enum PhysicsID {Hydro_ID, MHD_ID};
+
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
 #include "tasklist/task_list.hpp"
@@ -32,7 +36,8 @@ struct BoundaryBuffer
   AthenaArray3D<Real> data;
   HostArray1D<BoundaryCommStatus> bcomm_stat;
 #if MPI_PARALLEL_ENABLED
-  MPI_Request comm_req;
+  // only accessed from host, so can use STL vector
+  std::vector<MPI_Request> comm_req;
 #endif
   // constructor
   BoundaryBuffer(){};
@@ -65,7 +70,7 @@ class BoundaryValues {
   //functions
   void AllocateBuffersCC(const int nvar);
   int CreateMPITag(int lid, int buff_id, int phys_id);
-  TaskStatus SendBuffers(AthenaArray5D<Real> &a);
+  TaskStatus SendBuffers(AthenaArray5D<Real> &a, int key);
   TaskStatus RecvBuffers(AthenaArray5D<Real> &a);
 
  private:

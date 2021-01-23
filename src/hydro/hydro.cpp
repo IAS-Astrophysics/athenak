@@ -207,30 +207,33 @@ void Hydro::HydroStageEndTasks(TaskList &tl, TaskID start, std::vector<TaskID> &
 
 //----------------------------------------------------------------------------------------
 //! \fn  void Hydro::HydroInitRecv
-//  \brief
-// initialize all boundary receive status flags to waiting, post non-blocking receives
+//  \brief function to post non-blocking receives (with MPI), and initialize all boundary
+//  receive status flags to waiting (with or ithout MPI), at the start of every 
+//  communication of Hydro boundary values (ghost zones)
 
 TaskStatus Hydro::HydroInitRecv(Driver *pdrive, int stage)
 {
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
+  auto nghbr = pmy_pack->pmb->nghbr;
+  auto &rbuf = pbvals->recv_buf;
 
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
-      if (pmy_pack->pmb->nghbr[n].gid.h_view(m) >= 0) {
+      if (nghbr[n].gid.h_view(m) >= 0) {
 #if MPI_PARALLEL_ENABLED
         // post non-blocking receive if neighboring MeshBlock on a different rank 
-        if (pbvals->nghbr_x1face[n].rank != global_variable::my_rank) {
+        if (nghbr[n].rank.h_view(m) != global_variable::my_rank) {
           using Kokkos::ALL;
           // create tag using local ID and buffer index of *receiving* MeshBlock
-          int tag = pbvals->CreateMPItag(lid, n, PhysicsID::Hydro_ID);
-          auto recvbuf = Kokkos::subview(bbuf.recv_x1face,n,ALL,ALL,ALL,ALL);
-          void* recv_ptr = recvbuf.data();
-          int ierr = MPI_Irecv(recv_ptr, recvbuf.size(), MPI_ATHENA_REAL,
-            pbvals->nghbr_x1face[n].rank, tag, MPI_COMM_WORLD, &(bbuf.recv_rq_x1face[n]));
+          int tag = pbvals->CreateMPITag(m, n, PhysicsID::Hydro_ID);
+          void* recv_ptr = rbuf[n].data.data();
+          int ierr = MPI_Irecv(recv_ptr, rbuf[n].data.size(), MPI_ATHENA_REAL,
+            nghbr[n].rank.h_view(m), tag, MPI_COMM_WORLD, &(rbuf[n].comm_req[m]));
         }
 #endif
-        pbvals->recv_buf[n].bcomm_stat(m) = BoundaryCommStatus::waiting;
+        // initialize boundary receive status flag
+        rbuf[n].bcomm_stat(m) = BoundaryCommStatus::waiting;
       }
     }
   }
@@ -240,22 +243,25 @@ TaskStatus Hydro::HydroInitRecv(Driver *pdrive, int stage)
 
 //----------------------------------------------------------------------------------------
 //! \fn  void Hydro::HydroClearRecv
-//  \brief
+//  \brief Waits for all MPI receives to complete before allowing execution to continue
 
 TaskStatus Hydro::HydroClearRecv(Driver *pdrive, int stage)
 {
 #if MPI_PARALLEL_ENABLED
-  // wait for all non-blocking receives to finish before continuing 
-  BoundaryValues* pbvals = pmesh_->FindMeshBlock(my_mbgid_)->pbvals;
+  int nmb = pmy_pack->nmb_thispack;
+  int nnghbr = pmy_pack->pmb->nnghbr;
+  auto nghbr = pmy_pack->pmb->nghbr;
 
-  for (int n=0; n<nnghbr; ++n) {
-    if (pbvals->nghbr_x1face[n].gid >= 0) {
-      if (pbvals->nghbr_x1face[n].rank != global_variable::my_rank) {
-        MPI_Wait(&(bbuf.recv_rq_x1face[n]), MPI_STATUS_IGNORE);
+  // wait for all non-blocking receives to finish before continuing 
+  for (int m=0; m<nmb; ++m) {
+    for (int n=0; n<nnghbr; ++n) {
+      if (nghbr[n].gid.h_view(m) >= 0) {
+        if (nghbr[n].rank.h_view(m) != global_variable::my_rank) {
+          MPI_Wait(&(pbvals->recv_buf[n].comm_req[m]), MPI_STATUS_IGNORE);
+        }
       }
     }
   }
-
 #endif
   return TaskStatus::complete;
 }
@@ -263,22 +269,25 @@ TaskStatus Hydro::HydroClearRecv(Driver *pdrive, int stage)
 
 //----------------------------------------------------------------------------------------
 //! \fn  void Hydro::HydroClearSend
-//  \brief
+//  \brief Waits for all MPI sends to complete before allowing execution to continue
 
 TaskStatus Hydro::HydroClearSend(Driver *pdrive, int stage)
 {
 #if MPI_PARALLEL_ENABLED
-  // wait for all non-blocking sends to finish before continuing 
-  BoundaryValues* pbvals = pmesh_->FindMeshBlock(my_mbgid_)->pbvals;
+  int nmb = pmy_pack->nmb_thispack;
+  int nnghbr = pmy_pack->pmb->nnghbr;
+  auto nghbr = pmy_pack->pmb->nghbr;
 
-  for (int n=0; n<nnghbr; ++n) {
-    if (pbvals->nghbr_x1face[n].gid >= 0) {
-      if (pbvals->nghbr_x1face[n].rank != global_variable::my_rank) {
-        MPI_Wait(&(bbuf.send_rq_x1face[n]), MPI_STATUS_IGNORE);
+  // wait for all non-blocking sends to finish before continuing 
+  for (int m=0; m<nmb; ++m) {
+    for (int n=0; n<nnghbr; ++n) {
+      if (nghbr[n].gid.h_view(m) >= 0) {
+        if (nghbr[n].rank.h_view(m) != global_variable::my_rank) {
+          MPI_Wait(&(pbvals->send_buf[n].comm_req[m]), MPI_STATUS_IGNORE);
+        }
       }
     }
   }
-
 #endif
   return TaskStatus::complete;
 }
@@ -302,7 +311,7 @@ TaskStatus Hydro::HydroCopyCons(Driver *pdrive, int stage)
 
 TaskStatus Hydro::HydroSend(Driver *pdrive, int stage) 
 {
-  TaskStatus tstat = pbvals->SendBuffers(u0);
+  TaskStatus tstat = pbvals->SendBuffers(u0, PhysicsID::Hydro_ID);
   return tstat;
 }
 
