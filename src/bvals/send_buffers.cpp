@@ -97,7 +97,6 @@ TaskStatus BoundaryValues::SendBuffers(DvceArray5D<Real> &a, int key)
   auto &rbuf = recv_buf;
   auto &sbuf = send_buf;
 
-  using Kokkos::ALL;
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
       if (nghbr[n].gid.h_view(m) >= 0) {  // not a physical boundary
@@ -113,8 +112,9 @@ TaskStatus BoundaryValues::SendBuffers(DvceArray5D<Real> &a, int key)
           int lid = nghbr[n].gid.h_view(m) -
                     pmy_pack->pmesh->gidslist[nghbr[n].rank.h_view(m)];
           int tag = CreateMPITag(lid, nn, key);
-          void* send_ptr = sbuf[n].data.data();
-          int ierr = MPI_Isend(send_ptr, sbuf[n].data.size(), MPI_ATHENA_REAL,
+          auto send_data = Kokkos::subview(sbuf[n].data, m, Kokkos::ALL, Kokkos::ALL);
+          void* send_ptr = send_data.data();
+          int ierr = MPI_Isend(send_ptr, send_data.size(), MPI_ATHENA_REAL,
             nghbr[n].rank.h_view(m), tag, MPI_COMM_WORLD, &(sbuf[n].comm_req[m]));
 #endif
         }

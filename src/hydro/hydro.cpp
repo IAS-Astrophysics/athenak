@@ -227,8 +227,9 @@ TaskStatus Hydro::HydroInitRecv(Driver *pdrive, int stage)
           using Kokkos::ALL;
           // create tag using local ID and buffer index of *receiving* MeshBlock
           int tag = pbvals->CreateMPITag(m, n, PhysicsID::Hydro_ID);
-          void* recv_ptr = rbuf[n].data.data();
-          int ierr = MPI_Irecv(recv_ptr, rbuf[n].data.size(), MPI_ATHENA_REAL,
+          auto recv_data = Kokkos::subview(rbuf[n].data, m, Kokkos::ALL, Kokkos::ALL);
+          void* recv_ptr = recv_data.data();
+          int ierr = MPI_Irecv(recv_ptr, recv_data.size(), MPI_ATHENA_REAL,
             nghbr[n].rank.h_view(m), tag, MPI_COMM_WORLD, &(rbuf[n].comm_req[m]));
         }
 #endif
