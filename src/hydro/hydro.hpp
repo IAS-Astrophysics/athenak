@@ -39,7 +39,7 @@ class Hydro
   DvceArray5D<Real> u0;   // conserved variables
   DvceArray5D<Real> w0;   // primitive variables
 
-  // following are vectors of length (#neighbors), stored as a vector of length (#MBs)
+  // Object containing boundary communication buffers and routines
   BoundaryValues *pbvals;
 
   // following only used for time-evolving flow
@@ -66,7 +66,8 @@ class Hydro
   TaskStatus NewTimeStep(Driver *d, int stage);
   TaskStatus HydroApplyPhysicalBCs(Driver* pdrive, int stage);
 
-  // functions to set physical BCs for Hydro conserved variables, applied to single MB 
+  // functions to set physical BCs for Hydro conserved variables, applied to single MB
+  // specified by argument 'm'. 
   void ReflectInnerX1(int m);
   void ReflectOuterX1(int m);
   void ReflectInnerX2(int m);

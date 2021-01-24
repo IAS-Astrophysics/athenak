@@ -61,13 +61,8 @@ struct NeighborBlock
   DualArray1D<int> lev;      // logical level
   DualArray1D<int> rank;    // MPI rank     
   DualArray1D<int> destn;   // index of recv buffer in target vector of NeighborBlocks
-  // constructor
+  // default constructor
   NeighborBlock(){};
-/*
-  NeighborBlock() :
-    gid("nghbr_gid",1), lev("nghbr_lev",1),
-    rank("nghbr_rank",1), destn("nghbr_dest",1) {}
-*/
 };
 
 //----------------------------------------------------------------------------------------

@@ -54,7 +54,7 @@ void BoundaryValues::AllocateBuffersCC(const int nvar)
     Kokkos::realloc(send_buf[n].bcomm_stat, nmb);
     Kokkos::realloc(recv_buf[n].bcomm_stat, nmb);
 #if MPI_PARALLEL_ENABLED
-    // cannot creat Kokkos::View of type MPI_Request so construct STL vector instead
+    // cannot create Kokkos::View of type MPI_Request so construct STL vector instead
     for (int m=0; m<nmb; ++m) {
       MPI_Request send_req, recv_req;
       send_buf[n].comm_req.push_back(send_req);

@@ -6,8 +6,8 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file bvals.hpp
-//  \brief defines structures and provides prototypes of functions used for boundary
-//  communication.  These are not part of any class, but are general utility functions.
+//  \brief definea BoundaryValues class, which contains structures and functions used for
+//  boundary communication.
 
 // identifiers for all 6 faces of a MeshBlock
 enum BoundaryFace {undef=-1, inner_x1, outer_x1, inner_x2, outer_x2, inner_x3, outer_x3};
@@ -56,8 +56,9 @@ struct BoundaryBuffer
 class MeshBlockPack;
 
 //----------------------------------------------------------------------------------------
-//! \class BoundaryBase
-//  \brief
+//! \class BoundaryValues
+//  \brief Lightweight boundary values class.
+//  TODO: extend for AMR boundaries
 
 class BoundaryValues {
  public:

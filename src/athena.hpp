@@ -63,7 +63,8 @@ using DevExeSpace = Kokkos::DefaultExecutionSpace;
 using DevMemSpace = Kokkos::DefaultExecutionSpace::memory_space;
 using HostMemSpace = Kokkos::HostSpace;
 using ScratchMemSpace = DevExeSpace::scratch_memory_space;
-using LayoutWrapper = Kokkos::LayoutRight;   // increments last index fastest
+using LayoutWrapper = Kokkos::LayoutRight;                // increments last index fastest
+using TeamMember_t = Kokkos::TeamPolicy<>::member_type;   // for Kokkos thread teams
 
 //----------------------------------------------------------------------------------------
 // alias template declarations for various array types (formerly AthenaArrays)
@@ -108,9 +109,6 @@ template <typename T>
 using ScrArray2D = Kokkos::View<T **, LayoutWrapper, ScratchMemSpace,
                                      Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
 
-// type alias for Kokkos thread teams
-using TeamMember_t = Kokkos::TeamPolicy<>::member_type;
-
 //----------------------------------------------------------------------------------------
 // struct for storing face-, edge-, and corner centered variables
 // (currently only face-centered fields implemented)
@@ -132,6 +130,7 @@ struct FaceArray3D {
 // and Parthenon indicate that 1D-range policy is generally faster than multidimensional
 // MD-range policy, so the latter is not used.
 
+//------------------------------
 // 3D loop using Kokkos 1D Range
 template <typename Function>
 inline void par_for(const std::string &name, DevExeSpace exec_space,
@@ -157,6 +156,7 @@ inline void par_for(const std::string &name, DevExeSpace exec_space,
   });
 }
 
+//------------------------------
 // 4D loop using Kokkos 1D Range
 template <typename Function>
 inline void par_for(const std::string &name, DevExeSpace exec_space,
@@ -186,6 +186,7 @@ inline void par_for(const std::string &name, DevExeSpace exec_space,
   });
 }
 
+//------------------------------
 // 5D loop using Kokkos 1D Range
 template <typename Function>
 inline void par_for(const std::string &name, DevExeSpace exec_space,
@@ -220,13 +221,14 @@ inline void par_for(const std::string &name, DevExeSpace exec_space,
   });
 }
 
+//------------------------------------------
 // 1D outer parallel loop using Kokkos Teams
 template <typename Function>
 inline void par_for_outer(const std::string &name, DevExeSpace exec_space,
                           size_t scr_size, const int scr_level,
                           const int kl, const int ku, const Function &function)
 {
-  const int nk = ku + 1 - kl;
+  const int nk = ku - kl + 1;
   Kokkos::TeamPolicy<> policy(exec_space, nk, Kokkos::AUTO);
   Kokkos::parallel_for(name, policy.set_scratch_size(scr_level,Kokkos::PerTeam(scr_size)),
                        KOKKOS_LAMBDA(TeamMember_t tmember)
@@ -236,6 +238,7 @@ inline void par_for_outer(const std::string &name, DevExeSpace exec_space,
   });
 }
 
+//------------------------------------------
 // 2D outer parallel loop using Kokkos Teams
 template <typename Function>
 inline void par_for_outer(const std::string &name, DevExeSpace exec_space,
@@ -256,6 +259,7 @@ inline void par_for_outer(const std::string &name, DevExeSpace exec_space,
   });
 }
 
+//------------------------------------------
 // 3D outer parallel loop using Kokkos Teams
 template <typename Function>
 inline void par_for_outer(const std::string &name, DevExeSpace exec_space,
@@ -281,6 +285,7 @@ inline void par_for_outer(const std::string &name, DevExeSpace exec_space,
   });
 }
 
+//------------------------------------------
 // 4D outer parallel loop using Kokkos Teams
 template <typename Function>
 inline void par_for_outer(const std::string &name, DevExeSpace exec_space,
@@ -310,6 +315,7 @@ inline void par_for_outer(const std::string &name, DevExeSpace exec_space,
   });
 }
 
+//---------------------------------------------
 // 1D inner parallel loop using TeamVectorRange
 template <typename Function>
 KOKKOS_INLINE_FUNCTION void par_for_inner(TeamMember_t tmember, const int il,const int iu,

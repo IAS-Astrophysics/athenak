@@ -459,18 +459,6 @@ void Mesh::BuildTree(ParameterInput *pin)
   pmb_pack = new MeshBlockPack(this, gids, gide, incells);
   pmb_pack->pmb->SetNeighbors(ptree, ranklist);
   
-/***
-  // create MeshBlocks for this node, then set neighbors
-  for (int i=gids; i<=gide; i++) {
-    RegionSize insize;
-    BoundaryFlag inbcs[6];
-    SetBlockSizeAndBoundaries(loclist[i], insize, incells, inbcs);
-    // vector of MBs guaranteed to be stored in order gids->gide
-    mblocks.emplace_back(MeshBlock(this, pin, i, insize, incells, inbcs));
-  }
-  for (auto &mb : mblocks) {mb.SetNeighbors(ptree, ranklist);}
-***/
-
 /*******/
   for (int m=0; m<pmb_pack->nmb_thispack; ++m) {
     std::cout << "******* Block=" << pmb_pack->pmb->mbgid.h_view(m) << std::endl;
@@ -497,7 +485,8 @@ void Mesh::BuildTree(ParameterInput *pin)
 
 //----------------------------------------------------------------------------------------
 //! \fn void Mesh::PrintMeshDiagnostics()
-//  \brief prints information about mesh structure
+//  \brief prints information about mesh structure, always called at start of every
+//  calculation at end of BuildTree
 
 void Mesh::PrintMeshDiagnostics()
 {
@@ -570,7 +559,8 @@ void Mesh::PrintMeshDiagnostics()
 //----------------------------------------------------------------------------------------
 //! \fn void Mesh::WriteMeshStructure(int ndim)
 //  \brief writes file containing MeshBlock positions and sizes that can be used to create
-//  plots using 'plot_mesh.py' script.  Only works for 2D/3D data. 
+//  plots using 'plot_mesh.py' script.  Only works for 2D/3D data.  Called from main if
+//  '-m' option is given on command line. 
 
 void Mesh::WriteMeshStructure()
 {

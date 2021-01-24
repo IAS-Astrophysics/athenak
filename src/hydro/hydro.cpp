@@ -63,15 +63,6 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   pbvals = new BoundaryValues(ppack, pin);
   pbvals->AllocateBuffersCC((nhydro+nscalars));
 
-/*
-  for (int i=0; i<nmb; ++i) {
-    std::vector<BoundaryBuffer> snd, rcv;
-    pbvals->AllocateBuffersCCVars((nhydro+nscalars), ppack->mb_cells, snd, rcv);
-    pbvals->send_buf.push_back(snd);
-    pbvals->recv_buf.push_back(rcv);
-  }
-*/
-
   // for time-evolving problems, continue to construct methods, allocate arrays
   if (evolution_t.compare("stationary") != 0) {
 

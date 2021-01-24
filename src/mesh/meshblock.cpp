@@ -17,28 +17,11 @@
 //----------------------------------------------------------------------------------------
 // MeshBlock constructor:
 //
-// Data for each MB are stored in Views of dimension [# of MBs]. Views can only store
-// basic data types (int, float, double), not objects, so elements of arrays are:
-//  mbsize(m,0) = x1min   mb_bcs(m,0) = inner_x1
-//  mbsize(m,1) = x1max   mb_bcs(m,1) = outer_x1
-//  mbsize(m,2) = x2min   mb_bcs(m,2) = inner_x2
-//  mbsize(m,3) = x2max   mb_bcs(m,3) = outer_x2
-//  mbsize(m,4) = x3min   mb_bcs(m,4) = inner_x3
-//  mbsize(m,5) = x3max   mb_bcs(m,5) = outer_x3
-//  mbsize(m,6) = dx1
-//  mbsize(m,7) = dx2
-//  mbsize(m,8) = dx3
-// 
 
 MeshBlock::MeshBlock(Mesh* pm, int igids, int nmb) : 
   pmy_mesh(pm), nmb(nmb),
   mbgid("mbgid",nmb),
   mbsize(nmb),
-
-//  nghbr(nmb){},
-//  h_mbnghbr("h_nghbr",1,1,1),
-//  d_mbnghbr("d_nghbr",1,1,1),
-
   mb_bcs("mbbcs",nmb,6),
   lb_cost("lbcost",nmb)
 {
