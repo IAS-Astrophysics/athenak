@@ -44,7 +44,7 @@ class EquationOfState
   EOS_Data eos_data;
 
   // pure virtual function to convert cons to prim, overwritten in each derived class
-  virtual void ConsToPrim(const AthenaArray5D<Real> &cons, AthenaArray5D<Real> &prim) = 0;
+  virtual void ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) = 0;
 
  private:
 };
@@ -57,7 +57,7 @@ class AdiabaticHydro : public EquationOfState
 {
  public:
   AdiabaticHydro(MeshBlockPack *pp, ParameterInput *pin);
-  void ConsToPrim(const AthenaArray5D<Real> &cons, AthenaArray5D<Real> &prim) override;
+  void ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
 };
 
 //----------------------------------------------------------------------------------------
@@ -68,7 +68,7 @@ class IsothermalHydro : public EquationOfState
 { 
  public:
   IsothermalHydro(MeshBlockPack *pp, ParameterInput *pin);
-  void ConsToPrim(const AthenaArray5D<Real> &cons, AthenaArray5D<Real> &prim) override;
+  void ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
 };
 
 

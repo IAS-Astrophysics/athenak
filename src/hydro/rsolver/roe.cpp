@@ -38,8 +38,8 @@ void RoeFluxIso(const Real wroe[], const Real du[], const Real wli[],
 
 KOKKOS_INLINE_FUNCTION
 void Roe(TeamMember_t const &member, const EOS_Data &eos, const int il, const int iu,
-     const int ivx, const AthenaScratch2D<Real> &wl, const AthenaScratch2D<Real> &wr,
-     AthenaScratch2D<Real> &flx)
+     const int ivx, const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr,
+     ScrArray2D<Real> &flx)
 {
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;

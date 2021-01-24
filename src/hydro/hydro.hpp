@@ -34,20 +34,20 @@ class Hydro
   // data
   EquationOfState *peos;    // object that implements chosen EOS
 
-  int nhydro;               // number of hydro variables (5/4 for adiabatic/isothermal)
-  int nscalars;             // number of passive scalars
-  AthenaArray5D<Real> u0;   // conserved variables
-  AthenaArray5D<Real> w0;   // primitive variables
+  int nhydro;             // number of hydro variables (5/4 for adiabatic/isothermal)
+  int nscalars;           // number of passive scalars
+  DvceArray5D<Real> u0;   // conserved variables
+  DvceArray5D<Real> w0;   // primitive variables
 
   // following are vectors of length (#neighbors), stored as a vector of length (#MBs)
   BoundaryValues *pbvals;
 
   // following only used for time-evolving flow
-  AthenaArray5D<Real> u1;    // conserved variables at intermediate step 
-  AthenaArray5D<Real> divf;   // divergence of fluxes
-  AthenaArray3D<Real> uflx_x1face;  // fluxes on x1-faces
-  AthenaArray3D<Real> uflx_x2face;  // fluxes on x2-faces
-  AthenaArray3D<Real> uflx_x3face;  // fluxes on x3-faces
+  DvceArray5D<Real> u1;           // conserved variables at intermediate step 
+  DvceArray5D<Real> divf;         // divergence of fluxes
+  DvceArray3D<Real> uflx_x1face;  // fluxes on x1-faces
+  DvceArray3D<Real> uflx_x2face;  // fluxes on x2-faces
+  DvceArray3D<Real> uflx_x3face;  // fluxes on x3-faces
   Real dtnew;
 
   // functions

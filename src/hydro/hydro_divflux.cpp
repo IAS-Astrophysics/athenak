@@ -48,15 +48,15 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
   //--------------------------------------------------------------------------------------
   // i-direction
 
-  size_t scr_size = AthenaScratch2D<Real>::shmem_size(nvars, ncells1) * 3;
+  size_t scr_size = ScrArray2D<Real>::shmem_size(nvars, ncells1) * 3;
   int scr_level = 0;
 
   par_for_outer("divflux_x1",DevExeSpace(), scr_size, scr_level,0,(nmb-1), ks, ke, js, je,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j)
     {
-      AthenaScratch2D<Real> wl(member.team_scratch(scr_level), nvars, ncells1);
-      AthenaScratch2D<Real> wr(member.team_scratch(scr_level), nvars, ncells1);
-      AthenaScratch2D<Real> uflux(member.team_scratch(scr_level), nvars, ncells1);
+      ScrArray2D<Real> wl(member.team_scratch(scr_level), nvars, ncells1);
+      ScrArray2D<Real> wr(member.team_scratch(scr_level), nvars, ncells1);
+      ScrArray2D<Real> uflux(member.team_scratch(scr_level), nvars, ncells1);
 
       // Reconstruct qR[i] and qL[i+1]
       switch (recon_method)
@@ -126,15 +126,15 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
   //--------------------------------------------------------------------------------------
   // j-direction
 
-  scr_size = AthenaScratch2D<Real>::shmem_size(nvars, ncells1) * 4;
+  scr_size = ScrArray2D<Real>::shmem_size(nvars, ncells1) * 4;
 
   par_for_outer("divflux_x2",DevExeSpace(), scr_size, scr_level, 0, (nmb-1), ks, ke,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k)
     {
-      AthenaScratch2D<Real> scr1(member.team_scratch(scr_level), nvars, ncells1);
-      AthenaScratch2D<Real> scr2(member.team_scratch(scr_level), nvars, ncells1);
-      AthenaScratch2D<Real> scr3(member.team_scratch(scr_level), nvars, ncells1);
-      AthenaScratch2D<Real> scr4(member.team_scratch(scr_level), nvars, ncells1);
+      ScrArray2D<Real> scr1(member.team_scratch(scr_level), nvars, ncells1);
+      ScrArray2D<Real> scr2(member.team_scratch(scr_level), nvars, ncells1);
+      ScrArray2D<Real> scr3(member.team_scratch(scr_level), nvars, ncells1);
+      ScrArray2D<Real> scr4(member.team_scratch(scr_level), nvars, ncells1);
 
       for (int j=js-1; j<=je+1; ++j) {
         // Permute scratch arrays.
@@ -226,15 +226,15 @@ TaskStatus Hydro::HydroDivFlux(Driver *pdrive, int stage)
   //--------------------------------------------------------------------------------------
   // k-direction. Note order of k,j loops switched
 
-  scr_size = AthenaScratch2D<Real>::shmem_size(nvars, ncells1) * 4;
+  scr_size = ScrArray2D<Real>::shmem_size(nvars, ncells1) * 4;
 
   par_for_outer("divflux_x3",DevExeSpace(), scr_size, scr_level, 0, (nmb-1), js, je,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int j)
     {
-      AthenaScratch2D<Real> scr1(member.team_scratch(scr_level), nvars, ncells1);
-      AthenaScratch2D<Real> scr2(member.team_scratch(scr_level), nvars, ncells1);
-      AthenaScratch2D<Real> scr3(member.team_scratch(scr_level), nvars, ncells1);
-      AthenaScratch2D<Real> scr4(member.team_scratch(scr_level), nvars, ncells1);
+      ScrArray2D<Real> scr1(member.team_scratch(scr_level), nvars, ncells1);
+      ScrArray2D<Real> scr2(member.team_scratch(scr_level), nvars, ncells1);
+      ScrArray2D<Real> scr3(member.team_scratch(scr_level), nvars, ncells1);
+      ScrArray2D<Real> scr4(member.team_scratch(scr_level), nvars, ncells1);
 
       for (int k=ks-1; k<=ke+1; ++k) {
         // Permute scratch arrays.

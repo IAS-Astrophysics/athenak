@@ -38,8 +38,8 @@
 
 KOKKOS_INLINE_FUNCTION
 void PiecewiseParabolicX1(TeamMember_t const &member,const int m,const int k,const int j,
-     const int il, const int iu, const AthenaArray5D<Real> &q,
-     AthenaScratch2D<Real> &ql, AthenaScratch2D<Real> &qr)
+     const int il, const int iu, const DvceArray5D<Real> &q,
+     ScrArray2D<Real> &ql, ScrArray2D<Real> &qr)
 {
   int nvar = q.extent_int(1);
   for (int n=0; n<nvar; ++n) {
@@ -143,8 +143,8 @@ void PiecewiseParabolicX1(TeamMember_t const &member,const int m,const int k,con
 
 KOKKOS_INLINE_FUNCTION
 void PiecewiseParabolicX2(TeamMember_t const &member,const int m,const int k,const int j,
-     const int il, const int iu, const AthenaArray5D<Real> &q,
-     AthenaScratch2D<Real> &ql_jp1, AthenaScratch2D<Real> &qr_j)
+     const int il, const int iu, const DvceArray5D<Real> &q,
+     ScrArray2D<Real> &ql_jp1, ScrArray2D<Real> &qr_j)
 {
   int nvar = q.extent_int(1);
   for (int n=0; n<nvar; ++n) {
@@ -248,8 +248,8 @@ void PiecewiseParabolicX2(TeamMember_t const &member,const int m,const int k,con
 
 KOKKOS_INLINE_FUNCTION
 void PiecewiseParabolicX3(TeamMember_t const &member,const int m,const int k,const int j,
-     const int il, const int iu, const AthenaArray5D<Real> &q,
-     AthenaScratch2D<Real> &ql_kp1, AthenaScratch2D<Real> &qr_k)
+     const int il, const int iu, const DvceArray5D<Real> &q,
+     ScrArray2D<Real> &ql_kp1, ScrArray2D<Real> &qr_k)
 {
   int nvar = q.extent_int(1);
   for (int n=0; n<nvar; ++n) {

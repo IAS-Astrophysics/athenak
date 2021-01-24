@@ -19,7 +19,7 @@
 // \!fn void RecvBuffers()
 // \brief Unpack boundary buffers
 
-TaskStatus BoundaryValues::RecvBuffers(AthenaArray5D<Real> &a)
+TaskStatus BoundaryValues::RecvBuffers(DvceArray5D<Real> &a)
 {
   // create local references for variables in kernel
   int nmb = pmy_pack->pmb->nmb;

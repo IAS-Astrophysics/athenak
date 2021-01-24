@@ -66,26 +66,23 @@ using ScratchMemSpace = DevExeSpace::scratch_memory_space;
 using LayoutWrapper = Kokkos::LayoutRight;   // increments last index fastest
 
 //----------------------------------------------------------------------------------------
-// template declarations for AthenaArray types
+// alias template declarations for various array types (formerly AthenaArrays)
 
-// alias template declarations for construction of Kokkos::View on device
+// template declarations for construction of Kokkos::View on device
 template <typename T>
-using AthenaArray1D = Kokkos::View<T *, LayoutWrapper, DevMemSpace>;
+using DvceArray1D = Kokkos::View<T *, LayoutWrapper, DevMemSpace>;
 template <typename T>
-using AthenaArray2D = Kokkos::View<T **, LayoutWrapper, DevMemSpace>;
+using DvceArray2D = Kokkos::View<T **, LayoutWrapper, DevMemSpace>;
 template <typename T>
-using AthenaArray3D = Kokkos::View<T ***, LayoutWrapper, DevMemSpace>;
+using DvceArray3D = Kokkos::View<T ***, LayoutWrapper, DevMemSpace>;
 template <typename T>
-using AthenaArray4D = Kokkos::View<T ****, LayoutWrapper, DevMemSpace>;
+using DvceArray4D = Kokkos::View<T ****, LayoutWrapper, DevMemSpace>;
 template <typename T>
-using AthenaArray5D = Kokkos::View<T *****, LayoutWrapper, DevMemSpace>;
+using DvceArray5D = Kokkos::View<T *****, LayoutWrapper, DevMemSpace>;
 template <typename T>
-using AthenaArray6D = Kokkos::View<T ******, LayoutWrapper, DevMemSpace>;
+using DvceArray6D = Kokkos::View<T ******, LayoutWrapper, DevMemSpace>;
 
-template <typename T>
-using AthenaArray2DSlice = Kokkos::View<T **, Kokkos::LayoutStride, DevMemSpace>;
-
-// alias template declarations for construction of Kokkos::View on host
+// template declarations for construction of Kokkos::View on host
 template <typename T>
 using HostArray1D = Kokkos::View<T *, LayoutWrapper, HostMemSpace>;
 template <typename T>
@@ -95,7 +92,7 @@ using HostArray3D = Kokkos::View<T ***, LayoutWrapper, HostMemSpace>;
 template <typename T>
 using HostArray4D = Kokkos::View<T ****, LayoutWrapper, HostMemSpace>;
 
-// alias template declarations for construction of Kokkos::DualViews
+// template declarations for construction of Kokkos::DualViews
 template <typename T>
 using DualArray1D = Kokkos::DualView<T *, LayoutWrapper, DevMemSpace>;
 template <typename T>
@@ -103,12 +100,12 @@ using DualArray2D = Kokkos::DualView<T **, LayoutWrapper, DevMemSpace>;
 template <typename T>
 using DualArray3D = Kokkos::DualView<T ***, LayoutWrapper, DevMemSpace>;
 
-// alias template declarations for construction of 1D...2D scratch arrays as Kokkos::View
+// template declarations for construction of Kokkos::View in scratch memory
 template <typename T>
-using AthenaScratch1D = Kokkos::View<T *, LayoutWrapper, ScratchMemSpace,
+using ScrArray1D = Kokkos::View<T *, LayoutWrapper, ScratchMemSpace,
                                      Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
 template <typename T>
-using AthenaScratch2D = Kokkos::View<T **, LayoutWrapper, ScratchMemSpace,
+using ScrArray2D = Kokkos::View<T **, LayoutWrapper, ScratchMemSpace,
                                      Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
 
 // type alias for Kokkos thread teams
@@ -120,7 +117,7 @@ using TeamMember_t = Kokkos::TeamPolicy<>::member_type;
 
 template <typename T>
 struct FaceArray3D {
-  AthenaArray3D<T> x1f, x2f, x3f;
+  DvceArray3D<T> x1f, x2f, x3f;
   FaceArray3D(const std::string &label, int n3, int n2, int n1) :
     x1f(label + ".x1f", n3, n2, n1),
     x2f(label + ".x2f", n3, n2, n1),
@@ -130,8 +127,10 @@ struct FaceArray3D {
 
 //----------------------------------------------------------------------------------------
 // wrappers for Kokkos::parallel_for
-// Currently these wrappers all implement a 1D range policy, since experiments in
-// K-Athena and Parthenon indicate these, in general, are faster then MD range policy.
+// These wrappers implement a variety of parallel execution strategies, including
+// 1D-range, and thread teams for use with inner vector threads. Experiments in K-Athena
+// and Parthenon indicate that 1D-range policy is generally faster than multidimensional
+// MD-range policy, so the latter is not used.
 
 // 3D loop using Kokkos 1D Range
 template <typename Function>
@@ -310,8 +309,6 @@ inline void par_for_outer(const std::string &name, DevExeSpace exec_space,
     function(tmember, m, n, k, j);
   });
 }
-
-
 
 // 1D inner parallel loop using TeamVectorRange
 template <typename Function>

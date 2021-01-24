@@ -183,7 +183,7 @@ void OutputType::LoadOutputData(Mesh *pm)
     // load all the output variables on this MeshBlock
     HostArray4D<Real> new_data("out",nvar,(oke-oks+1),(oje-ojs+1),(oie-ois+1));
     for (int n=0; n<nvar; ++n) {
-      AthenaArray3D<Real> dev_buff("dev_buff",(oke-oks+1),(oje-ojs+1),(oie-ois+1));
+      DvceArray3D<Real> dev_buff("dev_buff",(oke-oks+1),(oje-ojs+1),(oie-ois+1));
       if (out_data_label_[n].compare("Dens")  == 0) {
         // Note capital "D" used to distinguish conserved from primitive mass density
         // (important for relativistic dynamics)
@@ -251,7 +251,7 @@ void OutputType::LoadOutputData(Mesh *pm)
       }
 
       // copy to host mirror array, and then to 4D host View containing all variables
-      AthenaArray3D<Real>::HostMirror hst_buff = Kokkos::create_mirror(dev_buff);
+      DvceArray3D<Real>::HostMirror hst_buff = Kokkos::create_mirror(dev_buff);
       Kokkos::deep_copy(hst_buff,dev_buff);
       auto hst_slice = Kokkos::subview(new_data,n,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
       Kokkos::deep_copy(hst_slice,hst_buff);

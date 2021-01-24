@@ -33,7 +33,7 @@ enum PhysicsID {Hydro_ID, MHD_ID};
 struct BoundaryBuffer
 {
   DualArray1D<int> index;
-  AthenaArray3D<Real> data;
+  DvceArray3D<Real> data;
   HostArray1D<BoundaryCommStatus> bcomm_stat;
 #if MPI_PARALLEL_ENABLED
   // only accessed from host, so can use STL vector
@@ -70,8 +70,8 @@ class BoundaryValues {
   //functions
   void AllocateBuffersCC(const int nvar);
   int CreateMPITag(int lid, int buff_id, int phys_id);
-  TaskStatus SendBuffers(AthenaArray5D<Real> &a, int key);
-  TaskStatus RecvBuffers(AthenaArray5D<Real> &a);
+  TaskStatus SendBuffers(DvceArray5D<Real> &a, int key);
+  TaskStatus RecvBuffers(DvceArray5D<Real> &a);
 
  private:
   MeshBlockPack *pmy_pack;

@@ -25,7 +25,7 @@
 //
 // Input array must be 5D Kokkos View dimensioned (nmb, nvar, nx3, nx2, nx1)
 
-TaskStatus BoundaryValues::SendBuffers(AthenaArray5D<Real> &a, int key)
+TaskStatus BoundaryValues::SendBuffers(DvceArray5D<Real> &a, int key)
 {
   // create local references for variables in kernel
   int nmb = pmy_pack->pmb->nmb;
