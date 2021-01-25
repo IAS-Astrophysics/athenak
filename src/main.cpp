@@ -230,7 +230,7 @@ int main(int argc, char *argv[])
 
   //  If code was run with -m option, write mesh structure to file and quit.
   if (marg_flag) {
-    if (global_variable::my_rank == 0) mesh0.WriteMeshStructure();
+    if (global_variable::my_rank == 0) {mesh0.WriteMeshStructure();}
     Kokkos::finalize();
 #if MPI_PARALLEL_ENABLED
     MPI_Finalize();

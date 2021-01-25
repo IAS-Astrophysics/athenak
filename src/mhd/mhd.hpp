@@ -28,27 +28,28 @@ namespace mhd {
 class MHD
 {
  public:
-  MHD(Mesh *pm, ParameterInput *pin, int gid);
+  MHD(MeshBlockPack *ppack, ParameterInput *pin);
   ~MHD();
 
   // data
   EquationOfState *peos;    // object that implements chosen EOS
 
-  int nhydro;               // number of hydro variables (5/4 for adiabatic/isothermal)
-  int nscalars;             // number of passive scalars
-  AthenaArray4D<Real> u0;   // conserved variables
-  AthenaArray4D<Real> w0;   // primitive variables
-  FaceArray3D<Real>   b0;   // face-centered magnetic fields
+  int nhydro;             // number of hydro variables (5/4 for adiabatic/isothermal)
+  int nscalars;           // number of passive scalars
+  DvceArray5D<Real> u0;   // conserved variables
+  DvceArray5D<Real> w0;   // primitive variables
+  FaceArray4D<Real> b0;   // face-centered magnetic fields
 
-  std::vector<BoundaryBuffer> send_buf, recv_buf;   // send/recv buffers for MHD comms.
+  // Object containing boundary communication buffers and routines
+  BoundaryValues *pbvals;
 
   // following only used for time-evolving flow
-  AthenaArray4D<Real> u1;     // conserved variables at intermediate step 
-  AthenaArray4D<Real> divf;   // divergence of fluxes
-  FaceArray3D<Real>   b1;     // face-centered magnetic fields at intermediate step
-  AthenaArray3D<Real> uflx_x1face;  // fluxes on x1-faces
-  AthenaArray3D<Real> uflx_x2face;  // fluxes on x2-faces
-  AthenaArray3D<Real> uflx_x3face;  // fluxes on x3-faces
+  DvceArray5D<Real> u1;           // conserved variables at intermediate step 
+  DvceArray5D<Real> divf;         // divergence of fluxes
+  FaceArray4D<Real> b1;           // face-centered magnetic fields at intermediate step
+  DvceArray3D<Real> uflx_x1face;  // fluxes on x1-faces
+  DvceArray3D<Real> uflx_x2face;  // fluxes on x2-faces
+  DvceArray3D<Real> uflx_x3face;  // fluxes on x3-faces
   Real dtnew;
 
   // functions
@@ -65,10 +66,25 @@ class MHD
   TaskStatus MHDReceive(Driver *d, int stage); 
   TaskStatus ConToPrim(Driver *d, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
+  TaskStatus MHDApplyPhysicalBCs(Driver* pdrive, int stage);
+
+  // functions to set physical BCs for Hydro conserved variables, applied to single MB
+  // specified by argument 'm'. 
+  void ReflectInnerX1(int m);
+  void ReflectOuterX1(int m);
+  void ReflectInnerX2(int m);
+  void ReflectOuterX2(int m);
+  void ReflectInnerX3(int m);
+  void ReflectOuterX3(int m);
+  void OutflowInnerX1(int m);
+  void OutflowOuterX1(int m);
+  void OutflowInnerX2(int m);
+  void OutflowOuterX2(int m);
+  void OutflowInnerX3(int m);
+  void OutflowOuterX3(int m);
 
  private:
-  Mesh* pmesh_;   // ptr to Mesh containing this MHD
-  int my_mbgid_;  // GridID of MeshBlock contianing this MHD
+  MeshBlockPack* pmy_pack;   // ptr to MeshBlockPack containing this MHD
   ReconstructionMethod recon_method_;
   MHD_RSolver rsolver_method_;
 };
