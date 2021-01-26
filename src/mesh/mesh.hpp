@@ -12,6 +12,7 @@
 
 #include <cstdint>  // int32_t
 #include "athena.hpp"
+#include <memory>
 
 // Define following structure before other "include" files to resolve declarations
 //----------------------------------------------------------------------------------------
