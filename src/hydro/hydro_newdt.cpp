@@ -13,7 +13,7 @@
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
 #include "driver/driver.hpp"
-#include "hydro/eos/hydro_eos.hpp"
+#include "eos/eos.hpp"
 #include "hydro.hpp"
 
 namespace hydro {

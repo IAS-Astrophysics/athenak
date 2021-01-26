@@ -1,5 +1,5 @@
-#ifndef HYDRO_EOS_EOS_HPP_
-#define HYDRO_EOS_EOS_HPP_
+#ifndef EOS_EOS_HPP_
+#define EOS_EOS_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
@@ -43,8 +43,10 @@ class EquationOfState
   MeshBlockPack* pmy_pack;
   EOS_Data eos_data;
 
-  // pure virtual function to convert cons to prim, overwritten in each derived class
-  virtual void ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) = 0;
+  // virtual functions to convert cons to prim, overwritten in derived eos classes
+  virtual void ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim);
+  virtual void ConsToPrim(const DvceArray5D<Real> &cons, const FaceArray4D<Real> &b,
+                          DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc);
 
  private:
 };
@@ -71,5 +73,30 @@ class IsothermalHydro : public EquationOfState
   void ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
 };
 
+//----------------------------------------------------------------------------------------
+//! \class AdibaticMHD
+//  \brief Derived class for MHD adiabatic EOS
 
-#endif // HYDRO_EOS_EOS_HPP_
+class AdiabaticMHD : public EquationOfState
+{
+ public:
+  AdiabaticMHD(MeshBlockPack *pp, ParameterInput *pin);
+  void ConsToPrim(const DvceArray5D<Real> &cons, const FaceArray4D<Real> &b,
+                  DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc) override;
+};
+
+//----------------------------------------------------------------------------------------
+//! \class IsothermalMHD
+//  \brief Derived class for MHD isothermal EOS
+
+class IsothermalMHD : public EquationOfState
+{
+ public:
+  IsothermalMHD(MeshBlockPack *pp, ParameterInput *pin);
+  void ConsToPrim(const DvceArray5D<Real> &cons, const FaceArray4D<Real> &b,
+                  DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc) override;
+};
+
+
+
+#endif // EOS_EOS_HPP_

@@ -10,7 +10,7 @@
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
 #include "hydro/hydro.hpp"
-#include "hydro_eos.hpp"
+#include "eos/eos.hpp"
 
 //----------------------------------------------------------------------------------------
 // ctor: also calls EOS base class constructor

@@ -12,7 +12,7 @@
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
 #include "mesh/mesh.hpp"
-#include "hydro/eos/hydro_eos.hpp"
+#include "eos/eos.hpp"
 #include "bvals/bvals.hpp"
 #include "hydro/hydro.hpp"
 

@@ -4,7 +4,8 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file adiabatic_mhd.cpp
-//  \brief implements EOS functions in derived class for nonrelativistic adiabatic MHD
+//  \brief defines derived class that implements EOS functions for nonrelativistic
+//   adiabatic mhd
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
@@ -13,40 +14,52 @@
 #include "eos.hpp"
 
 //----------------------------------------------------------------------------------------
+// ctor: also calls EOS base class constructor
+
+AdiabaticMHD::AdiabaticMHD(MeshBlockPack *pp, ParameterInput *pin)
+  : EquationOfState(pp, pin)
+{
+  eos_data.is_adiabatic = true;
+  eos_data.gamma = pin->GetReal("eos","gamma");
+  eos_data.iso_cs = 0.0;
+}
+
+//----------------------------------------------------------------------------------------
 // \!fn void ConservedToPrimitive()
 // \brief Converts conserved into primitive variables in nonrelativistic adiabatic MHD
 // Nate that the primitive variables contain the cell-centered magnetic fields, so that
-// W contains (nhydro+3+nscalars) elements, while U contains (nhydro+nscalars)
+// W contains (nmhd+3+nscalars) elements, while U contains (nmhd+nscalars)
 
-void EquationOfState::ConsToPrimAdiMHD(const AthenaArray4D<Real> &cons,
-  AthenaArray4D<Real> &prim, const FaceArray3D<Real> &bfc, AthenaArray4D<Real> &bcc)
+void AdiabaticMHD::ConsToPrim(const DvceArray5D<Real> &cons,const FaceArray4D<Real> &b,
+                              DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc)
 {
-  MeshBlock* pmb = pmesh_->FindMeshBlock(my_mbgid_);
-  int ng = pmb->mb_cells.ng;
-  int ncells1 = pmb->mb_cells.nx1 + 2*ng;
-  int ncells2 = (pmb->mb_cells.nx2 > 1)? (pmb->mb_cells.nx2 + 2*ng) : 1;
-  int ncells3 = (pmb->mb_cells.nx3 > 1)? (pmb->mb_cells.nx3 + 2*ng) : 1;
-  int &nhydro = pmb->pmhd->nhydro;
-  int &nscalars = pmb->pmhd->nscalars;
+  auto ncells = pmy_pack->mb_cells;
+  int ng = ncells.ng;
+  int n1 = ncells.nx1 + 2*ng;
+  int n2 = (ncells.nx2 > 1)? (ncells.nx2 + 2*ng) : 1;
+  int n3 = (ncells.nx3 > 1)? (ncells.nx3 + 2*ng) : 1;
+  int &nmhd  = pmy_pack->pmhd->nmhd;
+  int &nscal = pmy_pack->pmhd->nscalars;
+  int &nmb = pmy_pack->nmb_thispack;
   Real gm1 = eos_data.gamma - 1.0;
 
   Real &dfloor_ = eos_data.density_floor;
   Real &pfloor_ = eos_data.pressure_floor;
 
-  par_for("mhd_con2prim", pmb->exe_space, 0, (ncells3-1), 0, (ncells2-1), 0, (ncells1-1),
-    KOKKOS_LAMBDA(int k, int j, int i)
+  par_for("mhd_con2prim", DevExeSpace(), 0, (nmb-1), 0, (n3-1), 0, (n2-1), 0, (n1-1),
+    KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
-      Real& u_d  = cons(hydro::IDN,k,j,i);
-      Real& u_m1 = cons(hydro::IVX,k,j,i);
-      Real& u_m2 = cons(hydro::IVY,k,j,i);
-      Real& u_m3 = cons(hydro::IVZ,k,j,i);
-      Real& u_e  = cons(hydro::IEN,k,j,i);
+      Real& u_d  = cons(m,hydro::IDN,k,j,i);
+      Real& u_m1 = cons(m,hydro::IVX,k,j,i);
+      Real& u_m2 = cons(m,hydro::IVY,k,j,i);
+      Real& u_m3 = cons(m,hydro::IVZ,k,j,i);
+      Real& u_e  = cons(m,hydro::IEN,k,j,i);
 
-      Real& w_d  = prim(hydro::IDN,k,j,i);
-      Real& w_vx = prim(hydro::IVX,k,j,i);
-      Real& w_vy = prim(hydro::IVY,k,j,i);
-      Real& w_vz = prim(hydro::IVZ,k,j,i);
-      Real& w_p  = prim(hydro::IPR,k,j,i);
+      Real& w_d  = prim(m,hydro::IDN,k,j,i);
+      Real& w_vx = prim(m,hydro::IVX,k,j,i);
+      Real& w_vy = prim(m,hydro::IVY,k,j,i);
+      Real& w_vz = prim(m,hydro::IVZ,k,j,i);
+      Real& w_p  = prim(m,hydro::IPR,k,j,i);
 
       // apply density floor, without changing momentum or energy
       u_d = (u_d > dfloor_) ?  u_d : dfloor_;
@@ -57,16 +70,18 @@ void EquationOfState::ConsToPrimAdiMHD(const AthenaArray4D<Real> &cons,
       w_vy = u_m2*di;
       w_vz = u_m3*di;
 
-      Real& w_bx = bcc(mhd::IBX,k,j,i);
-      Real& w_by = bcc(mhd::IBY,k,j,i);
-      Real& w_bz = bcc(mhd::IBZ,k,j,i);
-      w_bx = 0.5*(bfc.x1f(k,j,i) + bfc.x1f(k,j,i+1));  
-      w_by = 0.5*(bfc.x2f(k,j,i) + bfc.x2f(k,j+1,i));
-      w_bz = 0.5*(bfc.x3f(k,j,i) + bfc.x3f(k+1,j,i));
+      // cell-centered fields are simple linear average of face-centered fields
+      Real& w_bx = bcc(m,mhd::IBX,k,j,i);
+      Real& w_by = bcc(m,mhd::IBY,k,j,i);
+      Real& w_bz = bcc(m,mhd::IBZ,k,j,i);
+      w_bx = 0.5*(b.x1f(m,k,j,i) + b.x1f(m,k,j,i+1));  
+      w_by = 0.5*(b.x2f(m,k,j,i) + b.x2f(m,k,j+1,i));
+      w_bz = 0.5*(b.x3f(m,k,j,i) + b.x3f(m,k+1,j,i));
 
-      Real pb = 0.25*(( SQR(bfc.x1f(k,j,i)) + SQR(bfc.x1f(k,j,i+1)) )
-                   +  ( SQR(bfc.x2f(k,j,i)) + SQR(bfc.x2f(k,j+1,i)) )
-                   +  ( SQR(bfc.x3f(k,j,i)) + SQR(bfc.x3f(k+1,j,i)) ));
+      // pressure computed from linear average of magnetic energy of face-centered fields
+      Real pb = 0.25*(( SQR(b.x1f(m,k,j,i)) + SQR(b.x1f(m,k,j,i+1)) )
+                   +  ( SQR(b.x2f(m,k,j,i)) + SQR(b.x2f(m,k,j+1,i)) )
+                   +  ( SQR(b.x3f(m,k,j,i)) + SQR(b.x3f(m,k+1,j,i)) ));
 
       Real e_k = 0.5*di*(SQR(u_m1) + SQR(u_m2) + SQR(u_m3));
       w_p = gm1*(u_e - e_k - pb);
@@ -76,8 +91,8 @@ void EquationOfState::ConsToPrimAdiMHD(const AthenaArray4D<Real> &cons,
       w_p = (w_p > pfloor_) ?  w_p : pfloor_;
 
       // convert scalars (if any), always stored at end of cons and prim arrays.
-      for (int n=nhydro; n<(nhydro+nscalars); ++n) {
-        prim(n,k,j,i) = cons(n,k,j,i)/u_d;
+      for (int n=nmhd; n<(nmhd+nscal); ++n) {
+        prim(m,n,k,j,i) = cons(m,n,k,j,i)/u_d;
       }
     }
   );

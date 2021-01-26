@@ -34,19 +34,21 @@ class MHD
   // data
   EquationOfState *peos;    // object that implements chosen EOS
 
-  int nhydro;             // number of hydro variables (5/4 for adiabatic/isothermal)
+  int nmhd;               // number of cons variables (5/4 for adiabatic/isothermal)
   int nscalars;           // number of passive scalars
   DvceArray5D<Real> u0;   // conserved variables
   DvceArray5D<Real> w0;   // primitive variables
   FaceArray4D<Real> b0;   // face-centered magnetic fields
+  DvceArray5D<Real> bcc0; // cell-centered magnetic fields`
 
   // Object containing boundary communication buffers and routines
   BoundaryValues *pbvals;
 
   // following only used for time-evolving flow
-  DvceArray5D<Real> u1;           // conserved variables at intermediate step 
+  DvceArray5D<Real> u1;           // conserved variables, second register
+  FaceArray4D<Real> b1;           // face-centered magnetic fields, second register
+  DvceArray5D<Real> bcc1;         // cell-centered magnetic fields, second register
   DvceArray5D<Real> divf;         // divergence of fluxes
-  FaceArray4D<Real> b1;           // face-centered magnetic fields at intermediate step
   DvceArray3D<Real> uflx_x1face;  // fluxes on x1-faces
   DvceArray3D<Real> uflx_x2face;  // fluxes on x2-faces
   DvceArray3D<Real> uflx_x3face;  // fluxes on x3-faces

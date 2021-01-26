@@ -11,7 +11,7 @@
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
 #include "hydro.hpp"
-#include "hydro/eos/hydro_eos.hpp"
+#include "eos/eos.hpp"
 // include inlined reconstruction methods (yuck...)
 #include "reconstruct/dc.cpp"
 #include "reconstruct/plm.cpp"

@@ -110,17 +110,16 @@ using ScrArray2D = Kokkos::View<T **, LayoutWrapper, ScratchMemSpace,
                                      Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
 
 //----------------------------------------------------------------------------------------
-// struct for storing face-, edge-, and corner centered variables
-// (currently only face-centered fields implemented)
+// struct for storing face-centered variables
 
 template <typename T>
-struct FaceArray3D {
-  DvceArray3D<T> x1f, x2f, x3f;
-  FaceArray3D(const std::string &label, int n3, int n2, int n1) :
-    x1f(label + ".x1f", n3, n2, n1),
-    x2f(label + ".x2f", n3, n2, n1),
-    x3f(label + ".x3f", n3, n2, n1) {}
-  ~FaceArray3D() = default;
+struct FaceArray4D {
+  DvceArray4D<T> x1f, x2f, x3f;
+  FaceArray4D(const std::string &label, int nmb, int n3, int n2, int n1) :
+    x1f(label + ".x1f", nmb, n3, n2, n1+1),
+    x2f(label + ".x2f", nmb, n3, n2+1, n1),
+    x3f(label + ".x3f", nmb, n3+1, n2, n1) {}
+  ~FaceArray4D() = default;
 };
 
 //----------------------------------------------------------------------------------------
