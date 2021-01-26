@@ -38,7 +38,7 @@ class EquationOfState
 {
  public:
   EquationOfState(MeshBlockPack *pp, ParameterInput *pin);
-  ~EquationOfState() = default;
+  virtual ~EquationOfState() = default;
 
   MeshBlockPack* pmy_pack;
   EOS_Data eos_data;

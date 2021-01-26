@@ -139,6 +139,15 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
 }
 
 //----------------------------------------------------------------------------------------
+// destructor
+  
+Hydro::~Hydro()
+{
+  delete peos;
+  delete pbvals;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn  void Hydro::HydroStageStartTasks
 //  \brief adds Hydro tasks to stage start TaskList
 //  These are taks that must be cmpleted (such as posting MPI receives, setting 

@@ -12,6 +12,7 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh.hpp"
+#include "hydro/hydro.hpp"
 
 //----------------------------------------------------------------------------------------
 // MeshBlockPack constructor:
@@ -81,4 +82,7 @@ MeshBlockPack::MeshBlockPack(Mesh *pm, int igids, int igide, RegionCells icells)
 
 MeshBlockPack::~MeshBlockPack()
 {
+  delete pmb;
+  if (phydro != nullptr) {delete phydro;}
+//  if (pmhd   != nullptr) {delete pmhd;}
 }
