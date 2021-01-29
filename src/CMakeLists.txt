@@ -11,9 +11,8 @@ add_executable(
         globals.cpp
         parameter_input.cpp
 
-        bvals/bvals.cpp
-        bvals/send_buffers.cpp
-        bvals/recv_buffers.cpp
+        bvals/bvals_cc.cpp
+        bvals/bvals_fc.cpp
 
         eos/eos.cpp
         eos/adiabatic_hydro.cpp
@@ -37,6 +36,8 @@ add_executable(
         mesh/meshblock.cpp
         mesh/meshblock_pack.cpp
         mesh/meshblock_tree.cpp
+
+        mhd/mhd.cpp
 
         outputs/io_wrapper.cpp
         outputs/outputs.cpp

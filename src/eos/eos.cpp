@@ -32,7 +32,7 @@ void EquationOfState::ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real
 {
 }
 
-void EquationOfState::ConsToPrim(const DvceArray5D<Real> &cons,const FaceArray4D<Real> &b,
-                                 DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc)
+void EquationOfState::ConsToPrim(const DvceArray5D<Real> &cons,
+         const DvceFaceFld4D<Real> &b, DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc)
 {
 }

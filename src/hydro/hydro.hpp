@@ -18,7 +18,7 @@ class Driver;
 class EquationOfState;
 
 // constants that enumerate Hydro Riemann Solver options
-enum Hydro_RSolver {advect, llf, hllc, roe};
+enum class Hydro_RSolver {advect, llf, hllc, roe};
 
 namespace hydro {
 
@@ -39,8 +39,8 @@ class Hydro
   DvceArray5D<Real> u0;   // conserved variables
   DvceArray5D<Real> w0;   // primitive variables
 
-  // Object containing boundary communication buffers and routines
-  BoundaryValues *pbvals;
+  // Object containing boundary communication buffers and routines for u
+  BoundaryValueCC *pbval_u;
 
   // following only used for time-evolving flow
   DvceArray5D<Real> u1;           // conserved variables at intermediate step 
@@ -60,8 +60,8 @@ class Hydro
   TaskStatus HydroCopyCons(Driver *d, int stage);
   TaskStatus HydroDivFlux(Driver *d, int stage);
   TaskStatus HydroUpdate(Driver *d, int stage);
-  TaskStatus HydroSend(Driver *d, int stage); 
-  TaskStatus HydroReceive(Driver *d, int stage); 
+  TaskStatus HydroSendU(Driver *d, int stage); 
+  TaskStatus HydroRecvU(Driver *d, int stage); 
   TaskStatus ConToPrim(Driver *d, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
   TaskStatus HydroApplyPhysicalBCs(Driver* pdrive, int stage);

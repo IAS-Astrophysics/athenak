@@ -11,6 +11,7 @@
 #include "parameter_input.hpp"
 #include "mesh.hpp"
 #include "hydro/hydro.hpp"
+#include "mhd/mhd.hpp"
 
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>
@@ -29,6 +30,13 @@ void MeshBlockPack::AddPhysicsModules(ParameterInput *pin)
     phydro = new hydro::Hydro(this, pin);   // construct new Hydro object
   } else {
     phydro = nullptr;
+  }
+
+  // MHD physics module
+  if (pin->DoesBlockExist("mhd")) {
+    pmhd = new mhd::MHD(this, pin);   // construct new MHD object
+  } else {
+    pmhd = nullptr;
   }
 
   // build task lists

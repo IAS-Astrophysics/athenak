@@ -45,7 +45,7 @@ class EquationOfState
 
   // virtual functions to convert cons to prim, overwritten in derived eos classes
   virtual void ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim);
-  virtual void ConsToPrim(const DvceArray5D<Real> &cons, const FaceArray4D<Real> &b,
+  virtual void ConsToPrim(const DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
                           DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc);
 
  private:
@@ -81,7 +81,7 @@ class AdiabaticMHD : public EquationOfState
 {
  public:
   AdiabaticMHD(MeshBlockPack *pp, ParameterInput *pin);
-  void ConsToPrim(const DvceArray5D<Real> &cons, const FaceArray4D<Real> &b,
+  void ConsToPrim(const DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
                   DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc) override;
 };
 
@@ -93,7 +93,7 @@ class IsothermalMHD : public EquationOfState
 {
  public:
   IsothermalMHD(MeshBlockPack *pp, ParameterInput *pin);
-  void ConsToPrim(const DvceArray5D<Real> &cons, const FaceArray4D<Real> &b,
+  void ConsToPrim(const DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
                   DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc) override;
 };
 

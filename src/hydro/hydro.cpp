@@ -59,9 +59,9 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   Kokkos::realloc(u0, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
   Kokkos::realloc(w0, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
 
-  // allocate memory for boundary buffers
-  pbvals = new BoundaryValues(ppack, pin);
-  pbvals->AllocateBuffersCC((nhydro+nscalars));
+  // allocate boundary buffers for conserved (cell-centered) variables
+  pbval_u = new BoundaryValueCC(ppack, pin);
+  pbval_u->AllocateBuffersCC((nhydro+nscalars));
 
   // for time-evolving problems, continue to construct methods, allocate arrays
   if (evolution_t.compare("stationary") != 0) {
@@ -144,7 +144,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
 Hydro::~Hydro()
 {
   delete peos;
-  delete pbvals;
+  delete pbval_u;
 }
 
 //----------------------------------------------------------------------------------------
@@ -173,8 +173,8 @@ void Hydro::HydroStageRunTasks(TaskList &tl, TaskID start, std::vector<TaskID> &
   auto hydro_copycons = tl.AddTask(&Hydro::HydroCopyCons, this, start);
   auto hydro_divflux  = tl.AddTask(&Hydro::HydroDivFlux, this, hydro_copycons);
   auto hydro_update  = tl.AddTask(&Hydro::HydroUpdate, this, hydro_divflux);
-  auto hydro_send  = tl.AddTask(&Hydro::HydroSend, this, hydro_update);
-  auto hydro_recv  = tl.AddTask(&Hydro::HydroReceive, this, hydro_send);
+  auto hydro_send  = tl.AddTask(&Hydro::HydroSendU, this, hydro_update);
+  auto hydro_recv  = tl.AddTask(&Hydro::HydroRecvU, this, hydro_send);
   auto hydro_phybcs  = tl.AddTask(&Hydro::HydroApplyPhysicalBCs, this, hydro_recv);
   auto hydro_con2prim  = tl.AddTask(&Hydro::ConToPrim, this, hydro_phybcs);
   auto hydro_newdt  = tl.AddTask(&Hydro::NewTimeStep, this, hydro_con2prim);
@@ -208,16 +208,16 @@ void Hydro::HydroStageEndTasks(TaskList &tl, TaskID start, std::vector<TaskID> &
 //----------------------------------------------------------------------------------------
 //! \fn  void Hydro::HydroInitRecv
 //  \brief function to post non-blocking receives (with MPI), and initialize all boundary
-//  receive status flags to waiting (with or ithout MPI), at the start of every 
-//  communication of Hydro boundary values (ghost zones)
+//  receive status flags to waiting (with or without MPI).
 
 TaskStatus Hydro::HydroInitRecv(Driver *pdrive, int stage)
 {
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
   auto nghbr = pmy_pack->pmb->nghbr;
-  auto &rbuf = pbvals->recv_buf;
 
+  // Initialize communications for cell-centered conserved variables
+  auto &rbufu = pbval_u->recv_buf;
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
       if (nghbr[n].gid.h_view(m) >= 0) {
@@ -226,15 +226,15 @@ TaskStatus Hydro::HydroInitRecv(Driver *pdrive, int stage)
         if (nghbr[n].rank.h_view(m) != global_variable::my_rank) {
           using Kokkos::ALL;
           // create tag using local ID and buffer index of *receiving* MeshBlock
-          int tag = pbvals->CreateMPITag(m, n, PhysicsID::Hydro_ID);
-          auto recv_data = Kokkos::subview(rbuf[n].data, m, Kokkos::ALL, Kokkos::ALL);
+          int tag = pbval_u->CreateMPITag(m, n, PhysicsID::FluidCons_ID);
+          auto recv_data = Kokkos::subview(rbufu[n].data, m, Kokkos::ALL, Kokkos::ALL);
           void* recv_ptr = recv_data.data();
           int ierr = MPI_Irecv(recv_ptr, recv_data.size(), MPI_ATHENA_REAL,
-            nghbr[n].rank.h_view(m), tag, MPI_COMM_WORLD, &(rbuf[n].comm_req[m]));
+            nghbr[n].rank.h_view(m), tag, MPI_COMM_WORLD, &(rbufu[n].comm_req[m]));
         }
 #endif
         // initialize boundary receive status flag
-        rbuf[n].bcomm_stat(m) = BoundaryCommStatus::waiting;
+        rbufu[n].bcomm_stat(m) = BoundaryCommStatus::waiting;
       }
     }
   }
@@ -253,12 +253,12 @@ TaskStatus Hydro::HydroClearRecv(Driver *pdrive, int stage)
   int nnghbr = pmy_pack->pmb->nnghbr;
   auto nghbr = pmy_pack->pmb->nghbr;
 
-  // wait for all non-blocking receives to finish before continuing 
+  // wait for all non-blocking receives for U to finish before continuing 
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
       if (nghbr[n].gid.h_view(m) >= 0) {
         if (nghbr[n].rank.h_view(m) != global_variable::my_rank) {
-          MPI_Wait(&(pbvals->recv_buf[n].comm_req[m]), MPI_STATUS_IGNORE);
+          MPI_Wait(&(pbval_u->recv_buf[n].comm_req[m]), MPI_STATUS_IGNORE);
         }
       }
     }
@@ -279,12 +279,12 @@ TaskStatus Hydro::HydroClearSend(Driver *pdrive, int stage)
   int nnghbr = pmy_pack->pmb->nnghbr;
   auto nghbr = pmy_pack->pmb->nghbr;
 
-  // wait for all non-blocking sends to finish before continuing 
+  // wait for all non-blocking sends for U to finish before continuing 
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
       if (nghbr[n].gid.h_view(m) >= 0) {
         if (nghbr[n].rank.h_view(m) != global_variable::my_rank) {
-          MPI_Wait(&(pbvals->send_buf[n].comm_req[m]), MPI_STATUS_IGNORE);
+          MPI_Wait(&(pbval_u->send_buf[n].comm_req[m]), MPI_STATUS_IGNORE);
         }
       }
     }
@@ -307,22 +307,22 @@ TaskStatus Hydro::HydroCopyCons(Driver *pdrive, int stage)
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn  void Hydro::HydroSend
-//  \brief
+//! \fn  void Hydro::HydroSendU
+//  \brief sends cell-centered conserved variables
 
-TaskStatus Hydro::HydroSend(Driver *pdrive, int stage) 
+TaskStatus Hydro::HydroSendU(Driver *pdrive, int stage) 
 {
-  TaskStatus tstat = pbvals->SendBuffers(u0, PhysicsID::Hydro_ID);
+  TaskStatus tstat = pbval_u->SendBuffersCC(u0, PhysicsID::FluidCons_ID);
   return tstat;
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn  void Hydro::HydroReceive
-//  \brief
+//! \fn  void Hydro::HydroRecvU
+//  \brief receives cell-centered conserved variables
 
-TaskStatus Hydro::HydroReceive(Driver *pdrive, int stage)
+TaskStatus Hydro::HydroRecvU(Driver *pdrive, int stage)
 {
-  TaskStatus tstat = pbvals->RecvBuffers(u0);
+  TaskStatus tstat = pbval_u->RecvBuffersCC(u0);
   return tstat;
 }
 

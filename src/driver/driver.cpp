@@ -132,10 +132,10 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
 
   TaskStatus tstatus;
   tstatus = pmesh->pmb_pack->phydro->HydroInitRecv(this, 0);
-  tstatus = pmesh->pmb_pack->phydro->HydroSend(this, 0);
+  tstatus = pmesh->pmb_pack->phydro->HydroSendU(this, 0);
   tstatus = pmesh->pmb_pack->phydro->HydroClearSend(this, 0);
   tstatus = pmesh->pmb_pack->phydro->HydroClearRecv(this, 0);
-  tstatus = pmesh->pmb_pack->phydro->HydroReceive(this, 0);
+  tstatus = pmesh->pmb_pack->phydro->HydroRecvU(this, 0);
   pmesh->pmb_pack->phydro->HydroApplyPhysicalBCs(this, 0);
 
   // convert conserved to primitive over whole mesh

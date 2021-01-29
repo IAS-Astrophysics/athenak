@@ -18,7 +18,7 @@ class Driver;
 class EquationOfState;
 
 // constants that enumerate MHD Riemann Solver options
-enum MHD_RSolver {advect, llf, hlld, roe};
+enum class MHD_RSolver {advect, llf, hlld, roe};
 
 namespace mhd {
 
@@ -38,15 +38,16 @@ class MHD
   int nscalars;           // number of passive scalars
   DvceArray5D<Real> u0;   // conserved variables
   DvceArray5D<Real> w0;   // primitive variables
-  FaceArray4D<Real> b0;   // face-centered magnetic fields
+  DvceFaceFld4D<Real> b0;   // face-centered magnetic fields
   DvceArray5D<Real> bcc0; // cell-centered magnetic fields`
 
-  // Object containing boundary communication buffers and routines
-  BoundaryValues *pbvals;
+  // Objects containing boundary communication buffers and routines for u and b
+  BoundaryValueCC *pbval_u;
+  BoundaryValueFC *pbval_b;
 
   // following only used for time-evolving flow
   DvceArray5D<Real> u1;           // conserved variables, second register
-  FaceArray4D<Real> b1;           // face-centered magnetic fields, second register
+  DvceFaceFld4D<Real> b1;         // face-centered magnetic fields, second register
   DvceArray5D<Real> bcc1;         // cell-centered magnetic fields, second register
   DvceArray5D<Real> divf;         // divergence of fluxes
   DvceArray3D<Real> uflx_x1face;  // fluxes on x1-faces
@@ -64,8 +65,10 @@ class MHD
   TaskStatus MHDCopyCons(Driver *d, int stage);
   TaskStatus MHDDivFlux(Driver *d, int stage);
   TaskStatus MHDUpdate(Driver *d, int stage);
-  TaskStatus MHDSend(Driver *d, int stage); 
-  TaskStatus MHDReceive(Driver *d, int stage); 
+  TaskStatus MHDSendU(Driver *d, int stage); 
+  TaskStatus MHDRecvU(Driver *d, int stage); 
+  TaskStatus MHDSendB(Driver *d, int stage); 
+  TaskStatus MHDRecvB(Driver *d, int stage); 
   TaskStatus ConToPrim(Driver *d, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
   TaskStatus MHDApplyPhysicalBCs(Driver* pdrive, int stage);
