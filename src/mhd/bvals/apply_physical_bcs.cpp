@@ -12,16 +12,19 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
-#include "hydro/hydro.hpp"
+#include "mhd/mhd.hpp"
 
-namespace hydro {
+namespace mhd {
 
 //----------------------------------------------------------------------------------------
-// \!fn void Hydro::ApplyPhysicalBCsHydro()
-// \brief Apply physical boundary conditions for all Hydro variables at faces of MB which
+// \!fn void MHD::MHDApplyPhysicalBCs()
+// \brief Apply physical boundary conditions for all MHD variables at faces of MB which
 //  are at the edge of the computational domain
+//
+//  Note this function is idential to Hydro version
+//  TODO: can Hydro and MHD versions be combined?
 
-TaskStatus Hydro::HydroApplyPhysicalBCs(Driver* pdrive, int stage)
+TaskStatus MHD::MHDApplyPhysicalBCs(Driver* pdrive, int stage)
 {
   // loop over all MeshBlocks in this MeshBlockPack
   int nmb = pmy_pack->nmb_thispack;
@@ -107,4 +110,4 @@ TaskStatus Hydro::HydroApplyPhysicalBCs(Driver* pdrive, int stage)
   }
   return TaskStatus::complete;
 }
-} // namespace hydro
+} // namespace mhd

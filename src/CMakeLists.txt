@@ -27,8 +27,8 @@ add_executable(
         hydro/hydro_newdt.cpp
         hydro/hydro_update.cpp
         hydro/bvals/apply_physical_bcs.cpp
-        hydro/bvals/outflow.cpp
-        hydro/bvals/reflect.cpp
+        hydro/bvals/outflow_hydro.cpp
+        hydro/bvals/reflect_hydro.cpp
 
         mesh/mesh_physics.cpp
         mesh/load_balance.cpp
@@ -38,6 +38,9 @@ add_executable(
         mesh/meshblock_tree.cpp
 
         mhd/mhd.cpp
+        mhd/bvals/apply_physical_bcs.cpp
+        mhd/bvals/outflow_mhd.cpp
+        mhd/bvals/reflect_mhd.cpp
 
         outputs/io_wrapper.cpp
         outputs/outputs.cpp

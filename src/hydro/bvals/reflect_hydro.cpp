@@ -3,8 +3,8 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file outflow.cpp
-//  \brief implementation of outflow BCs for Hydro conserved vars in each dimension
+//! \file reflect_hydro.cpp
+//  \brief implementation of reflecting BCs for Hydro conserved vars in each dimension
 //   BCs applied to a single MeshBlock specified by input integer index to each function
 
 // Athena++ headers
@@ -15,10 +15,10 @@
 namespace hydro {
 
 //----------------------------------------------------------------------------------------
-//! \fn void Hydro::OutflowInnerX1(
-//  \brief OUTFLOW boundary conditions, inner x1 boundary
+//! \fn void Hydro::ReflectInnerX1(
+//  \brief REFLECTING boundary conditions, inner x1 boundary
 
-void Hydro::OutflowInnerX1(int m)
+void Hydro::ReflectInnerX1(int m)
 {
   auto ncells = pmy_pack->mb_cells;
   int ng = ncells.ng;
@@ -28,11 +28,15 @@ void Hydro::OutflowInnerX1(int m)
   int nvar = nhydro + nscalars;
   auto &u0_ = u0;
 
-  // project hydro variables in first active cell into ghost zones
-  par_for("outflow_ix1", DevExeSpace(),0,(nvar-1),0,(n3-1),0,(n2-1),0,(ng-1),
+  // copy hydro variables into ghost zones, reflecting v1
+  par_for("reflect_ix1", DevExeSpace(),0,(nvar-1),0,(n3-1),0,(n2-1),0,(ng-1),
     KOKKOS_LAMBDA(int n, int k, int j, int i)
     {
-      u0_(m,n,k,j,is-i-1) = u0_(m,n,k,j,is);
+      if (n == (hydro::IVX)) {  // reflect 1-velocity
+        u0_(m,n,k,j,is-i-1) = -u0_(m,n,k,j,is+i);
+      } else {
+        u0_(m,n,k,j,is-i-1) =  u0_(m,n,k,j,is+i);
+      }
     }
   );
 
@@ -40,10 +44,10 @@ void Hydro::OutflowInnerX1(int m)
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void Hydro::OutflowOuterX1(
-//  \brief OUTFLOW boundary conditions, outer x1 boundary
+//! \fn void Hydro::ReflectOuterX1(
+//  \brief REFLECTING boundary conditions, outer x1 boundary
 
-void Hydro::OutflowOuterX1(int m)
+void Hydro::ReflectOuterX1(int m)
 {
   auto ncells = pmy_pack->mb_cells;
   int ng = ncells.ng;
@@ -53,11 +57,15 @@ void Hydro::OutflowOuterX1(int m)
   int nvar = nhydro + nscalars;
   auto &u0_ = u0;
 
-  // project hydro variables in first active cell into ghost zones
-  par_for("outflow_ox1", DevExeSpace(),0,(nvar-1),0,(n3-1),0,(n2-1),0,(ng-1),
+  // copy hydro variables into ghost zones, reflecting v1
+  par_for("reflect_ox1", DevExeSpace(),0,(nvar-1),0,(n3-1),0,(n2-1),0,(ng-1),
     KOKKOS_LAMBDA(int n, int k, int j, int i)
     {
-      u0_(m,n,k,j,ie+i+1) = u0_(m,n,k,j,ie);
+      if (n == (hydro::IVX)) {  // reflect 1-velocity
+        u0_(m,n,k,j,ie+i+1) = -u0_(m,n,k,j,ie-i);
+      } else {
+        u0_(m,n,k,j,ie+i+1) =  u0_(m,n,k,j,ie-i);
+      }
     }
   );
 
@@ -65,10 +73,10 @@ void Hydro::OutflowOuterX1(int m)
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void Hydro::OutflowInnerX2(
-//  \brief OUTFLOW boundary conditions, inner x2 boundary
+//! \fn void Hydro::ReflectInnerX2(
+//  \brief REFLECTING boundary conditions, inner x2 boundary
 
-void Hydro::OutflowInnerX2(int m)
+void Hydro::ReflectInnerX2(int m)
 {
   auto ncells = pmy_pack->mb_cells;
   int ng = ncells.ng;
@@ -78,11 +86,15 @@ void Hydro::OutflowInnerX2(int m)
   int nvar = nhydro + nscalars;
   auto &u0_ = u0;
 
-  // project hydro variables in first active cell into ghost zones
-  par_for("outflow_ix2", DevExeSpace(),0,(nvar-1),0,(n3-1),0,(ng-1),0,(n1-1),
+  // copy hydro variables into ghost zones, reflecting v2
+  par_for("reflect_ix2", DevExeSpace(),0,(nvar-1),0,(n3-1),0,(ng-1),0,(n1-1),
     KOKKOS_LAMBDA(int n, int k, int j, int i)
     { 
-      u0_(m,n,k,js-j-1,i) =  u0_(m,n,k,js,i);
+      if (n == (hydro::IVY)) {  // reflect 2-velocity
+        u0_(m,n,k,js-j-1,i) = -u0_(m,n,k,js+j,i);
+      } else {
+        u0_(m,n,k,js-j-1,i) =  u0_(m,n,k,js+j,i);
+      }
     }
   );
 
@@ -90,10 +102,10 @@ void Hydro::OutflowInnerX2(int m)
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void Hydro::OutflowOuterX2(
-//  \brief OUTFLOW boundary conditions, outer x2 boundary
+//! \fn void Hydro::ReflectOuterX2(
+//  \brief REFLECTING boundary conditions, outer x2 boundary
 
-void Hydro::OutflowOuterX2(int m)
+void Hydro::ReflectOuterX2(int m)
 {
   auto ncells = pmy_pack->mb_cells;
   int ng = ncells.ng;
@@ -103,11 +115,15 @@ void Hydro::OutflowOuterX2(int m)
   int nvar = nhydro + nscalars;
   auto &u0_ = u0;
 
-  // project hydro variables in first active cell into ghost zones
-  par_for("outflow_ox2", DevExeSpace(),0,(nvar-1),0,(n3-1),0,(ng-1),0,(n1-1),
+  // copy hydro variables into ghost zones, reflecting v2
+  par_for("reflect_ox2", DevExeSpace(),0,(nvar-1),0,(n3-1),0,(ng-1),0,(n1-1),
     KOKKOS_LAMBDA(int n, int k, int j, int i)
     { 
-      u0_(m,n,k,je+j+1,i) =  u0_(m,n,k,je,i);
+      if (n == (hydro::IVY)) {  // reflect 2-velocity
+        u0_(m,n,k,je+j+1,i) = -u0_(m,n,k,je-j,i);
+      } else {
+        u0_(m,n,k,je+j+1,i) =  u0_(m,n,k,je-j,i);
+      }   
     }   
   );
 
@@ -116,10 +132,10 @@ void Hydro::OutflowOuterX2(int m)
 
 
 //----------------------------------------------------------------------------------------
-//! \fn void Hydro::OutflowInnerX3(
-//  \brief OUTFLOW boundary conditions, inner x3 boundary
+//! \fn void Hydro::ReflectInnerX3(
+//  \brief REFLECTING boundary conditions, inner x3 boundary
 
-void Hydro::OutflowInnerX3(int m)
+void Hydro::ReflectInnerX3(int m)
 {
   auto ncells = pmy_pack->mb_cells;
   int ng = ncells.ng;
@@ -129,11 +145,15 @@ void Hydro::OutflowInnerX3(int m)
   int nvar = nhydro + nscalars;
   auto &u0_ = u0;
 
-  // project hydro variables in first active cell into ghost zones
-  par_for("outflow_ix3", DevExeSpace(),0,(nvar-1),0,(ng-1),0,(n2-1),0,(n1-1),
+  // copy hydro variables into ghost zones, reflecting v3
+  par_for("reflect_ix3", DevExeSpace(),0,(nvar-1),0,(ng-1),0,(n2-1),0,(n1-1),
     KOKKOS_LAMBDA(int n, int k, int j, int i)
     { 
-      u0_(m,n,ks-k-1,j,i) =  u0_(m,n,ks,j,i);
+      if (n == (hydro::IVZ)) {  // reflect 3-velocity
+        u0_(m,n,ks-k-1,j,i) = -u0_(m,n,ks+k,j,i);
+      } else {
+        u0_(m,n,ks-k-1,j,i) =  u0_(m,n,ks+k,j,i);
+      }   
     }   
   );
 
@@ -141,10 +161,10 @@ void Hydro::OutflowInnerX3(int m)
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void Hydro::OutflowOuterX3(
-//  \brief OUTFLOW boundary conditions, outer x3 boundary
+//! \fn void Hydro::ReflectOuterX3(
+//  \brief REFLECTING boundary conditions, outer x3 boundary
 
-void Hydro::OutflowOuterX3(int m)
+void Hydro::ReflectOuterX3(int m)
 {
   auto ncells = pmy_pack->mb_cells;
   int ng = ncells.ng;
@@ -154,11 +174,15 @@ void Hydro::OutflowOuterX3(int m)
   int nvar = nhydro + nscalars;
   auto &u0_ = u0;
 
-  // project hydro variables in first active cell into ghost zones
-  par_for("outflow_ox3", DevExeSpace(),0,(nvar-1),0,(ng-1),0,(n2-1),0,(n1-1),
+  // copy hydro variables into ghost zones, reflecting v3
+  par_for("reflect_ox3", DevExeSpace(),0,(nvar-1),0,(ng-1),0,(n2-1),0,(n1-1),
     KOKKOS_LAMBDA(int n, int k, int j, int i)
     {   
-      u0_(m,n,ke+k+1,j,i) =  u0_(m,n,ke,j,i);
+      if (n == (hydro::IVZ)) {  // reflect 3-velocity
+        u0_(m,n,ke+k+1,j,i) = -u0_(m,n,ke-k,j,i);
+      } else {
+        u0_(m,n,ke+k+1,j,i) =  u0_(m,n,ke-k,j,i);
+      }
     }
   );
 

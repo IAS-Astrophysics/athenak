@@ -189,23 +189,35 @@ void MHD::MHDStageRunTasks(TaskList &tl, TaskID start, std::vector<TaskID> &adde
   // WARNING: If number or order of MHD tasks below is changed then index of mhd_recv
   // in Mesh::InitPhysicsModules may need to be changed 
 
+//  auto mhd_copycons = tl.AddTask(&MHD::MHDCopyCons, this, start);
+//  auto mhd_divflux  = tl.AddTask(&MHD::MHDDivFlux, this, mhd_copycons);
+//  auto mhd_update  = tl.AddTask(&MHD::MHDUpdate, this, mhd_divflux);
+//  auto mhd_send  = tl.AddTask(&MHD::MHDSendU, this, mhd_update);
+//  auto mhd_recv  = tl.AddTask(&MHD::MHDRecvU, this, mhd_send);
+//  auto mhd_phybcs  = tl.AddTask(&MHD::MHDApplyPhysicalBCs, this, mhd_recv);
+//  auto mhd_con2prim  = tl.AddTask(&MHD::ConToPrim, this, mhd_phybcs);
+//  auto mhd_newdt  = tl.AddTask(&MHD::NewTimeStep, this, mhd_con2prim);
+//
+//  added.emplace_back(mhd_copycons);
+//  added.emplace_back(mhd_divflux);
+//  added.emplace_back(mhd_update);
+//  added.emplace_back(mhd_send);
+//  added.emplace_back(mhd_recv);
+//  added.emplace_back(mhd_phybcs);
+//  added.emplace_back(mhd_con2prim);
+//  added.emplace_back(mhd_newdt);
+
   auto mhd_copycons = tl.AddTask(&MHD::MHDCopyCons, this, start);
-  auto mhd_divflux  = tl.AddTask(&MHD::MHDDivFlux, this, mhd_copycons);
-  auto mhd_update  = tl.AddTask(&MHD::MHDUpdate, this, mhd_divflux);
-  auto mhd_send  = tl.AddTask(&MHD::MHDSendU, this, mhd_update);
+  auto mhd_send  = tl.AddTask(&MHD::MHDSendU, this, mhd_copycons);
   auto mhd_recv  = tl.AddTask(&MHD::MHDRecvU, this, mhd_send);
   auto mhd_phybcs  = tl.AddTask(&MHD::MHDApplyPhysicalBCs, this, mhd_recv);
   auto mhd_con2prim  = tl.AddTask(&MHD::ConToPrim, this, mhd_phybcs);
-  auto mhd_newdt  = tl.AddTask(&MHD::NewTimeStep, this, mhd_con2prim);
 
   added.emplace_back(mhd_copycons);
-  added.emplace_back(mhd_divflux);
-  added.emplace_back(mhd_update);
   added.emplace_back(mhd_send);
   added.emplace_back(mhd_recv);
   added.emplace_back(mhd_phybcs);
   added.emplace_back(mhd_con2prim);
-  added.emplace_back(mhd_newdt);
 
   return;
 }
