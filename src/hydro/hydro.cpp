@@ -153,11 +153,9 @@ Hydro::~Hydro()
 //  These are taks that must be cmpleted (such as posting MPI receives, setting 
 //  BoundaryCommStatus flags, etc) over all MeshBlocks before stage can be run.
 
-void Hydro::HydroStageStartTasks(TaskList &tl, TaskID start, std::vector<TaskID> &added)
+void Hydro::HydroStageStartTasks(TaskList &tl, TaskID start)
 {
   auto hydro_init = tl.AddTask(&Hydro::HydroInitRecv, this, start);
-  added.emplace_back(hydro_init);
-
   return;
 }
 
@@ -165,11 +163,8 @@ void Hydro::HydroStageStartTasks(TaskList &tl, TaskID start, std::vector<TaskID>
 //! \fn  void Hydro::HydroStageRunTasks
 //  \brief adds Hydro tasks to stage run TaskList
 
-void Hydro::HydroStageRunTasks(TaskList &tl, TaskID start, std::vector<TaskID> &added)
+void Hydro::HydroStageRunTasks(TaskList &tl, TaskID start)
 {
-  // WARNING: If number or order of Hydro tasks below is changed then index of hydro_recv
-  // in Mesh::InitPhysicsModules may need to be changed 
-
   auto hydro_copycons = tl.AddTask(&Hydro::HydroCopyCons, this, start);
   auto hydro_divflux  = tl.AddTask(&Hydro::HydroDivFlux, this, hydro_copycons);
   auto hydro_update  = tl.AddTask(&Hydro::HydroUpdate, this, hydro_divflux);
@@ -178,15 +173,6 @@ void Hydro::HydroStageRunTasks(TaskList &tl, TaskID start, std::vector<TaskID> &
   auto hydro_phybcs  = tl.AddTask(&Hydro::HydroApplyPhysicalBCs, this, hydro_recv);
   auto hydro_con2prim  = tl.AddTask(&Hydro::ConToPrim, this, hydro_phybcs);
   auto hydro_newdt  = tl.AddTask(&Hydro::NewTimeStep, this, hydro_con2prim);
-
-  added.emplace_back(hydro_copycons);
-  added.emplace_back(hydro_divflux);
-  added.emplace_back(hydro_update);
-  added.emplace_back(hydro_send);
-  added.emplace_back(hydro_recv);
-  added.emplace_back(hydro_phybcs);
-  added.emplace_back(hydro_con2prim);
-  added.emplace_back(hydro_newdt);
 
   return;
 }
@@ -197,11 +183,9 @@ void Hydro::HydroStageRunTasks(TaskList &tl, TaskID start, std::vector<TaskID> &
 //  These are tasks that can only be cmpleted after all the stage run tasks are finished
 //  over all MeshBlocks, such as clearing all MPI non-blocking sends, etc.
 
-void Hydro::HydroStageEndTasks(TaskList &tl, TaskID start, std::vector<TaskID> &added)
+void Hydro::HydroStageEndTasks(TaskList &tl, TaskID start)
 {
   auto hydro_clear = tl.AddTask(&Hydro::HydroClearSend, this, start);
-  added.emplace_back(hydro_clear);
-
   return;
 }
 

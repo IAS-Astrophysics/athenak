@@ -51,9 +51,9 @@ class Hydro
   Real dtnew;
 
   // functions
-  void HydroStageStartTasks(TaskList &tl, TaskID start, std::vector<TaskID> &added);
-  void HydroStageRunTasks(TaskList &tl, TaskID start, std::vector<TaskID> &added);
-  void HydroStageEndTasks(TaskList &tl, TaskID start, std::vector<TaskID> &added);
+  void HydroStageStartTasks(TaskList &tl, TaskID start);
+  void HydroStageRunTasks(TaskList &tl, TaskID start);
+  void HydroStageEndTasks(TaskList &tl, TaskID start);
   TaskStatus HydroInitRecv(Driver *d, int stage);
   TaskStatus HydroClearRecv(Driver *d, int stage);
   TaskStatus HydroClearSend(Driver *d, int stage);

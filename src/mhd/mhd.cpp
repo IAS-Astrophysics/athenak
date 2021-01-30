@@ -172,11 +172,9 @@ MHD::~MHD()
 //  These are taks that must be cmpleted (such as posting MPI receives, setting 
 //  BoundaryCommStatus flags, etc) over all MeshBlocks before stage can be run.
 
-void MHD::MHDStageStartTasks(TaskList &tl, TaskID start, std::vector<TaskID> &added)
+void MHD::MHDStageStartTasks(TaskList &tl, TaskID start)
 {
   auto mhd_init = tl.AddTask(&MHD::MHDInitRecv, this, start);
-  added.emplace_back(mhd_init);
-
   return;
 }
 
@@ -184,7 +182,7 @@ void MHD::MHDStageStartTasks(TaskList &tl, TaskID start, std::vector<TaskID> &ad
 //! \fn  void MHD::MHDStageRunTasks
 //  \brief adds MHD tasks to stage run TaskList
 
-void MHD::MHDStageRunTasks(TaskList &tl, TaskID start, std::vector<TaskID> &added)
+void MHD::MHDStageRunTasks(TaskList &tl, TaskID start)
 {
   // WARNING: If number or order of MHD tasks below is changed then index of mhd_recv
   // in Mesh::InitPhysicsModules may need to be changed 
@@ -197,27 +195,12 @@ void MHD::MHDStageRunTasks(TaskList &tl, TaskID start, std::vector<TaskID> &adde
 //  auto mhd_phybcs  = tl.AddTask(&MHD::MHDApplyPhysicalBCs, this, mhd_recv);
 //  auto mhd_con2prim  = tl.AddTask(&MHD::ConToPrim, this, mhd_phybcs);
 //  auto mhd_newdt  = tl.AddTask(&MHD::NewTimeStep, this, mhd_con2prim);
-//
-//  added.emplace_back(mhd_copycons);
-//  added.emplace_back(mhd_divflux);
-//  added.emplace_back(mhd_update);
-//  added.emplace_back(mhd_send);
-//  added.emplace_back(mhd_recv);
-//  added.emplace_back(mhd_phybcs);
-//  added.emplace_back(mhd_con2prim);
-//  added.emplace_back(mhd_newdt);
 
   auto mhd_copycons = tl.AddTask(&MHD::MHDCopyCons, this, start);
   auto mhd_send  = tl.AddTask(&MHD::MHDSendU, this, mhd_copycons);
   auto mhd_recv  = tl.AddTask(&MHD::MHDRecvU, this, mhd_send);
   auto mhd_phybcs  = tl.AddTask(&MHD::MHDApplyPhysicalBCs, this, mhd_recv);
   auto mhd_con2prim  = tl.AddTask(&MHD::ConToPrim, this, mhd_phybcs);
-
-  added.emplace_back(mhd_copycons);
-  added.emplace_back(mhd_send);
-  added.emplace_back(mhd_recv);
-  added.emplace_back(mhd_phybcs);
-  added.emplace_back(mhd_con2prim);
 
   return;
 }
@@ -228,11 +211,9 @@ void MHD::MHDStageRunTasks(TaskList &tl, TaskID start, std::vector<TaskID> &adde
 //  These are tasks that can only be cmpleted after all the stage run tasks are finished
 //  over all MeshBlocks, such as clearing all MPI non-blocking sends, etc.
 
-void MHD::MHDStageEndTasks(TaskList &tl, TaskID start, std::vector<TaskID> &added)
+void MHD::MHDStageEndTasks(TaskList &tl, TaskID start)
 {
   auto mhd_clear = tl.AddTask(&MHD::MHDClearSend, this, start);
-  added.emplace_back(mhd_clear);
-
   return;
 }
 

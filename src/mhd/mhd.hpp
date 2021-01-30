@@ -56,9 +56,9 @@ class MHD
   Real dtnew;
 
   // functions
-  void MHDStageStartTasks(TaskList &tl, TaskID start, std::vector<TaskID> &added);
-  void MHDStageRunTasks(TaskList &tl, TaskID start, std::vector<TaskID> &added);
-  void MHDStageEndTasks(TaskList &tl, TaskID start, std::vector<TaskID> &added);
+  void MHDStageStartTasks(TaskList &tl, TaskID start);
+  void MHDStageRunTasks(TaskList &tl, TaskID start);
+  void MHDStageEndTasks(TaskList &tl, TaskID start);
   TaskStatus MHDInitRecv(Driver *d, int stage);
   TaskStatus MHDClearRecv(Driver *d, int stage);
   TaskStatus MHDClearSend(Driver *d, int stage);

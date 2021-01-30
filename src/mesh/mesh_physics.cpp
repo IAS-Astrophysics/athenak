@@ -19,35 +19,56 @@
 
 //----------------------------------------------------------------------------------------
 // \fn Mesh::SelectPhysics()
+// \brief construct physics modules and tasks lists in this MeshBlockPack, based on which
+// <blocks> are present in the input file.
 
 void MeshBlockPack::AddPhysicsModules(ParameterInput *pin)
 {
-  // construct physics modules and tasks lists in this MeshBlockPack
-  // physics modules
-
-  // Hydro physics module
+  // Create Hydro physics module if <hydro> block exists in input file
   if (pin->DoesBlockExist("hydro")) {
     phydro = new hydro::Hydro(this, pin);   // construct new Hydro object
   } else {
     phydro = nullptr;
   }
 
-  // MHD physics module
+  // Create MHD physics module if <mhd> block exists in input file
   if (pin->DoesBlockExist("mhd")) {
     pmhd = new mhd::MHD(this, pin);   // construct new MHD object
   } else {
     pmhd = nullptr;
   }
 
-  // build task lists
-  TaskID none(0);
-  std::vector<TaskID> hydro_start_tasks, hydro_run_tasks, hydro_end_tasks;
-
+  // Create TaskLists for Start, Run, and End of each stage of integrator
   // add Hydro tasks
+  TaskID none(0);
   if (phydro != nullptr) {
-    phydro->HydroStageStartTasks(tl_stagestart, none, hydro_start_tasks);
-    phydro->HydroStageRunTasks(tl_stagerun, none, hydro_run_tasks);
-    phydro->HydroStageEndTasks(tl_stageend, none, hydro_end_tasks);
+    phydro->HydroStageStartTasks(tl_stagestart, none);
+    phydro->HydroStageRunTasks(tl_stagerun, none);
+    phydro->HydroStageEndTasks(tl_stageend, none);
+  }
+
+  // add MHD tasks to end of Hydro tasks (if any have been added)
+  if (pmhd != nullptr) {
+    if (tl_stagestart.Empty()) {
+      pmhd->MHDStageStartTasks(tl_stagestart, none);
+    } else {
+      TaskID last = tl_stagestart.GetIDLastTask();
+      pmhd->MHDStageStartTasks(tl_stagestart, last);
+    }
+
+    if (tl_stagerun.Empty()) {
+      pmhd->MHDStageRunTasks(tl_stagerun, none);
+    } else {
+      TaskID last = tl_stagerun.GetIDLastTask();
+      pmhd->MHDStageRunTasks(tl_stagerun, last);
+    }
+
+    if (tl_stageend.Empty()) {
+      pmhd->MHDStageEndTasks(tl_stageend, none);
+    } else {
+      TaskID last = tl_stageend.GetIDLastTask();
+      pmhd->MHDStageEndTasks(tl_stageend, last);
+    }
   }
 
   return;
