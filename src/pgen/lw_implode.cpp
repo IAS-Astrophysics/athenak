@@ -23,7 +23,12 @@
 
 void ProblemGenerator::LWImplode_(MeshBlockPack *pmbp, ParameterInput *pin)
 {
-  using namespace hydro;
+  if (pmbp->phydro != nullptr) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "LW Implosion test can only be run in Hydro, but no <hydro> block "
+              << "in input file" << std::endl;
+    exit(EXIT_FAILURE);
+  }
   Real d_in = pin->GetReal("problem","d_in");
   Real p_in = pin->GetReal("problem","p_in");
 
@@ -46,6 +51,7 @@ void ProblemGenerator::LWImplode_(MeshBlockPack *pmbp, ParameterInput *pin)
 
 
   // Set initial conditions
+  using namespace hydro;
   par_for("pgen_lw_implode", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
