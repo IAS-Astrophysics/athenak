@@ -270,6 +270,7 @@ TaskStatus MHD::MHDInitRecv(Driver *pdrive, int stage)
 //----------------------------------------------------------------------------------------
 //! \fn  void MHD::MHDClearRecv
 //  \brief Waits for all MPI receives to complete before allowing execution to continue
+//  With MHD, clears both receives of U and B
 
 TaskStatus MHD::MHDClearRecv(Driver *pdrive, int stage)
 {
@@ -297,6 +298,7 @@ TaskStatus MHD::MHDClearRecv(Driver *pdrive, int stage)
 //----------------------------------------------------------------------------------------
 //! \fn  void MHD::MHDClearSend
 //  \brief Waits for all MPI sends to complete before allowing execution to continue
+//  With MHD, clears both sends of U and B
 
 TaskStatus MHD::MHDClearSend(Driver *pdrive, int stage)
 {
@@ -382,7 +384,7 @@ TaskStatus MHD::MHDRecvB(Driver *pdrive, int stage)
 
 TaskStatus MHD::ConToPrim(Driver *pdrive, int stage)
 {
-  peos->ConsToPrim(u0, w0);
+  peos->ConsToPrim(u0, b0, w0, bcc0);
   return TaskStatus::complete;
 }
 

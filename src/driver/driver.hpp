@@ -7,11 +7,17 @@
 //========================================================================================
 //! \file driver.hpp
 //  \brief definitions for Driver class
+//
+// Note ProblemGenerator object is stored in Driver and is called in Initialize(). If the
+// pgen class contains analysis routines that are run at end of execution, they can be
+// called in Finalize().
 
 #include <ctime>
+#include <memory>
 
 #include "parameter_input.hpp"
 #include "outputs/outputs.hpp"
+#include "pgen/pgen.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \class Driver
@@ -23,6 +29,7 @@ class Driver {
 
   // data
   TimeEvolution time_evolution;
+  std::unique_ptr<ProblemGenerator> pgen;  // sets ICs, constr'd in Initialize() func
 
   // folowing data only relevant for runs involving time evolution
   Real tlim;      // stopping time

@@ -31,7 +31,6 @@
 #include "utils/utils.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
-#include "pgen/pgen.hpp"
 #include "outputs/outputs.hpp"
 #include "driver/driver.hpp"
 
@@ -245,26 +244,24 @@ int main(int argc, char *argv[])
   mesh0.pmb_pack->AddPhysicsModules(&par_input);
 
   //--- Step 6. --------------------------------------------------------------------------
-  // Set initial conditions by calling problem generator, or reading restart file
+  // Construct Outputs. Actual outputs (including initial conditions) are made in Driver
 
-  auto pgen = std::make_unique<ProblemGenerator>(&par_input, &mesh0);
-
-  //--- Step 7. --------------------------------------------------------------------------
-  // Construct Outputs. Output of initial conditions is made in Driver (if needed)
-
+  ChangeRunDir(run_dir);
   Outputs out_types(&par_input, &mesh0);
 
-  //--- Step 8. --------------------------------------------------------------------------
-  // Construct and Execute Driver
+  //--- Step 7. --------------------------------------------------------------------------
+  // Construct and Execute Driver.
+  //    1. Initial conditions set in Driver::Initialize()
+  //    2. TaskList(s) executed in Driver::Execute()
+  //    3. Any final analysis or diagnostics run in Driver::Finalize()
 
   auto pdrive = std::make_unique<Driver>(&par_input, &mesh0);
 
-  ChangeRunDir(run_dir);
   pdrive->Initialize(&mesh0, &par_input,  &out_types);
   pdrive->Execute(&mesh0, &par_input,  &out_types);
   pdrive->Finalize(&mesh0, &par_input,  &out_types);
 
-  //--- Step 9. -------------------------------------------------------------------------
+  //--- Step 8. -------------------------------------------------------------------------
   // clean up, and terminate
 
   Kokkos::finalize();

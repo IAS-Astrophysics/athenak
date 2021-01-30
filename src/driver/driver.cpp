@@ -14,10 +14,12 @@
 #include "mesh/mesh.hpp"
 #include "outputs/outputs.hpp"
 #include "hydro/hydro.hpp"
+#include "mhd/mhd.hpp"
 #include "driver.hpp"
 
 //----------------------------------------------------------------------------------------
 // constructor, initializes data structures and parameters
+//
 // First, define each time-integrator by setting weights for each step of the algorithm
 // and the CFL number stability limit when coupled to the single-stage spatial operator.
 // Currently, the explicit, multistage time-integrators must be expressed as 2S-type
@@ -120,44 +122,69 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh) :
 
 //----------------------------------------------------------------------------------------
 // Driver::Initialize()
-// Tasks to be performed before execution of Driver, such as computing initial time step,
-// setting boundary conditions, and outputing ICs
+// Tasks to be performed before execution of Driver, such as executing ProblemGenerator
+// to set ICs, setting ghost zones (BCs), outputting ICs, and computing initial time step
 
 void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
 {
-  //---- Step 1.  Set Boundary Conditions on conserved variables in all physics
-  // Note sends on ALL MBs must be complete before receives execute
+  //---- Step 1.  Set ICs by constructing Problem Generator
 
-  // TODO: need to cycle through all physics modules/variables in this step
+  pgen = std::make_unique<ProblemGenerator>(pin, pmesh);
 
-  TaskStatus tstatus;
-  tstatus = pmesh->pmb_pack->phydro->HydroInitRecv(this, 0);
-  tstatus = pmesh->pmb_pack->phydro->HydroSendU(this, 0);
-  tstatus = pmesh->pmb_pack->phydro->HydroClearSend(this, 0);
-  tstatus = pmesh->pmb_pack->phydro->HydroClearRecv(this, 0);
-  tstatus = pmesh->pmb_pack->phydro->HydroRecvU(this, 0);
-  pmesh->pmb_pack->phydro->HydroApplyPhysicalBCs(this, 0);
+  //---- Step 2.  Set conserved variables in ghost zones for all physics
+  // Note: with MPI, sends on ALL MBs must be complete before receives execute
 
-  // convert conserved to primitive over whole mesh
-  tstatus = pmesh->pmb_pack->phydro->ConToPrim(this, 0);
+  // Initialize HYDRO: ghost zones and primitive variables (everywhere)
+  hydro::Hydro *phydro = pmesh->pmb_pack->phydro;
+  if (phydro != nullptr) {
+    TaskStatus tstatus;
+    tstatus = phydro->HydroInitRecv(this, 0);
+    tstatus = phydro->HydroSendU(this, 0);
+    tstatus = phydro->HydroClearSend(this, 0);
+    tstatus = phydro->HydroClearRecv(this, 0);
+    tstatus = phydro->HydroRecvU(this, 0);
+    tstatus = phydro->HydroApplyPhysicalBCs(this, 0);
 
-  //---- Step 2.  Compute first time step (if problem involves time evolution
+    // Set primitive variables in initial conditions everywhere
+    tstatus = phydro->ConToPrim(this, 0);
+  }
+
+  // Initialize MHD: ghost zones and primitive variables (everywhere)
+  // Note this requires communicating BOTH u and B
+  mhd::MHD *pmhd = pmesh->pmb_pack->pmhd;
+  if (pmhd != nullptr) {
+    TaskStatus tstatus;
+    tstatus = pmhd->MHDInitRecv(this, 0);
+    tstatus = pmhd->MHDSendU(this, 0);
+    tstatus = pmhd->MHDSendB(this, 0);
+    tstatus = pmhd->MHDClearSend(this, 0);
+    tstatus = pmhd->MHDClearRecv(this, 0);
+    tstatus = pmhd->MHDRecvU(this, 0);
+    tstatus = pmhd->MHDRecvB(this, 0);
+    tstatus = pmhd->MHDApplyPhysicalBCs(this, 0);
+
+    // Set primitive variables in initial conditions everywhere 
+    tstatus = pmhd->ConToPrim(this, 0);
+  }
+
+  //---- Step 3.  Compute first time step (if problem involves time evolution
 
   // TODO: need to cycle through all physics modules/variables in this step
 
   if (time_evolution != TimeEvolution::stationary) {
+    TaskStatus tstatus;
     tstatus = pmesh->pmb_pack->phydro->NewTimeStep(this, nstages);
     pmesh->NewTimeStep(tlim);
   }
 
-  //---- Step 3.  Cycle through output Types and load data / write files.
+  //---- Step 4.  Cycle through output Types and load data / write files.
 
   for (auto &out : pout->pout_list_) {
     out->LoadOutputData(pmesh);
     out->WriteOutputFile(pmesh, pin);
   }
 
-  //---- Step 4.  Initialize various counters, timers, etc.
+  //---- Step 5.  Initialize various counters, timers, etc.
 
   run_time_.reset();
   nmb_updated_ = 0;
