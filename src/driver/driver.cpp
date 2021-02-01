@@ -179,7 +179,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
 
   //---- Step 4.  Cycle through output Types and load data / write files.
 
-  for (auto &out : pout->pout_list_) {
+  for (auto &out : pout->pout_list) {
     out->LoadOutputData(pmesh);
     out->WriteOutputFile(pmesh, pin);
   }
@@ -275,7 +275,7 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
       pmesh->NewTimeStep(tlim);
 
       // Make outputs during execution
-      for (auto &out : pout->pout_list_) {
+      for (auto &out : pout->pout_list) {
         // compare at floating point (32-bit) precision to reduce effect of round off
         float time_32 = static_cast<float>(pmesh->time);
         float next_32 = static_cast<float>(out->out_params.last_time+out->out_params.dt);
@@ -302,7 +302,7 @@ void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
 {
   // cycle through output Types and load data / write files
   //  This design allows for asynchronous outputs to implemented in the future.
-  for (auto &out : pout->pout_list_) {
+  for (auto &out : pout->pout_list) {
     out->LoadOutputData(pmesh);
     out->WriteOutputFile(pmesh, pin);
   }

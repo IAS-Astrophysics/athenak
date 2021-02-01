@@ -87,9 +87,9 @@ void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
     if (!(out_params.slice2)) std::fprintf(pfile, " j       x2v     ");
     if (!(out_params.slice3)) std::fprintf(pfile, " k       x3v     ");
 
-    // write data col headers from out_data_label_ vector
-    for (auto it : out_data_label_) {
-      std::fprintf(pfile, "    %s     ", it.c_str());
+    // write data col headers from outvars vector
+    for (auto it : outvars) {
+      std::fprintf(pfile, "    %s     ", it.label.c_str());
     }
     std::fprintf(pfile, "\n"); // terminate line
     std::fclose(pfile);   // don't forget to close the output file
@@ -111,14 +111,21 @@ void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
     // where .tab files are expected to be used very much.
     if (r == global_variable::my_rank) {
       // loop over output MeshBlocks, output all data
-      int nout_mbs = static_cast<int>(out_data_.size());
+      int nout_vars = outvars.size();
+      int nout_mbs = (outmbs.size());
       for (int m=0; m<nout_mbs; ++m) {
         auto cells = pm->pmb_pack->mb_cells;
         MeshBlock* pmb = pm->pmb_pack->pmb;
-        int idx = pm->FindMeshBlockIndex(out_data_gid_[m]);
+        int idx = pm->FindMeshBlockIndex(outmbs[m].mb_gid);
         int &is = cells.is;
         int &js = cells.js;
         int &ks = cells.ks;
+        int &ois = outmbs[m].ois;
+        int &oie = outmbs[m].oie;
+        int &ojs = outmbs[m].ojs;
+        int &oje = outmbs[m].oje;
+        int &oks = outmbs[m].oks;
+        int &oke = outmbs[m].oke;
         Real &x1min = pmb->mbsize.x1min.h_view(idx);
         Real &x1max = pmb->mbsize.x1max.h_view(idx);
         Real &x2min = pmb->mbsize.x2min.h_view(idx);
@@ -150,9 +157,9 @@ void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
               }
 
               // write each output variable on same line
-              for (int n=0; n<nvar; ++n) {
+              for (int n=0; n<nout_vars; ++n) {
                 std::fprintf(pfile, out_params.data_format.c_str(),
-                             out_data_[m](n,k-oks,j-ojs,i-ois));
+                             outdata(n,m,k-oks,j-ojs,i-ois));
               }
               std::fprintf(pfile,"\n"); // terminate line
             }

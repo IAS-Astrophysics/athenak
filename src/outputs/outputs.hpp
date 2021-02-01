@@ -16,9 +16,19 @@
 
 #define NHISTORY_VARIABLES 8
 
-// forward declarations
+// identifiers for output variables
+enum class OutputVariable {undef=-1,
+  hydro_u_d, hydro_u_m1, hydro_u_m2, hydro_u_m3, hydro_u_e, hydro_u,
+  hydro_w_d, hydro_w_vx, hydro_w_vy, hydro_w_vz, hydro_w_p, hydro_w,
+  mhd_u_d,   mhd_u_m1,   mhd_u_m2,   mhd_u_m3,   mhd_u_e,   mhd_u,
+  mhd_w_d,   mhd_w_vx,   mhd_w_vy,   mhd_w_vz,   mhd_w_p,   mhd_w,
+  mhd_bcc1,  mhd_bcc2,   mhd_bcc3,   mhd_bcc,    mhd_b_x1f, mhd_b_x2f, mhd_b_x3f};
+
+// forward declarations, and two utility function prototypes
 class Mesh;
 class ParameterInput;
+OutputVariable GetOutputVariable(const std::string& input_string);
+std::string GetOutputVariableString(OutputVariable input_flag);
 
 //----------------------------------------------------------------------------------------
 //! \struct OutputParameters
@@ -31,7 +41,7 @@ struct OutputParameters
   std::string file_basename;
   std::string file_id;
   std::string file_type;
-  std::string variable;
+  OutputVariable variable;
   std::string data_format;
   Real last_time, dt;
   int file_number;
@@ -39,6 +49,34 @@ struct OutputParameters
   bool slice1, slice2, slice3;
   Real slice_x1, slice_x2, slice_x3;
 };
+
+//----------------------------------------------------------------------------------------
+//! \struct OutputVariableInfo
+//  \brief  container for various properties of each output variable
+
+struct OutputVariableInfo
+{
+  std::string label;             // "name" of variable
+  int data_index;                // index of variable in device array
+  DvceArray5D<Real> *data_ptr;   // ptr to device array containing variable
+  // constructor
+  OutputVariableInfo(std::string lab, int indx, DvceArray5D<Real> *ptr) :
+    label(lab), data_index(indx), data_ptr(ptr) {}
+};
+
+//----------------------------------------------------------------------------------------
+//! \struct OutputMeshBlockInfo
+//  \brief  container for various properties of each output MeshBlock
+
+struct OutputMeshBlockInfo
+{ 
+  int mb_gid;                        // gid of output MB
+  int ois, oie, ojs, oje, oks, oke;  // start/end indices of data to be output on MB
+  // constructor
+  OutputMeshBlockInfo(int id, int is, int ie, int js, int je, int ks, int ke) :
+    mb_gid(id), ois(is), oie(ie), ojs(js), oje(je), oks(ks), oke(ke) {}
+};
+
 
 //----------------------------------------------------------------------------------------
 // \brief abstract base class for different output types (modes/formats); node in
@@ -57,21 +95,21 @@ class OutputType
   OutputType& operator=(OutputType&&) = default;
 
   // data
-  int nvar;
-  int ois, oie, ojs, oje, oks, oke;     // starting indices of data to be output
-  OutputParameters out_params;          // data read from <output> block for this type
+  OutputParameters out_params;    // data read from <output> block for this type
 
-  // virtual functions over-ridden in derived classes
+  // virtual functions may be over-ridden in derived classes
   virtual void LoadOutputData(Mesh *pm);
   virtual void WriteOutputFile(Mesh *pm, ParameterInput *pin) = 0;
+  void ErrHydroOutput(std::string block);
+  void ErrMHDOutput(std::string block);
 
  protected:
-  // Following vectors are of length (# output MBs)
-  // With slicing this may be different than nmbthisrank since not all MBs produce output
-  std::vector<HostArray4D<Real>> out_data_;
-  std::vector<int> out_data_gid_;              // gids of MeshBlocks producing output
-  // Following vector is of length (# of output variables)
-  std::vector<std::string> out_data_label_;   // labels of output data
+  HostArray5D<Real> outdata;       // container for data on host with dims (n,m,k,j,i)
+  // Following vector will be of length (# output MeshBlocks)
+  // With slicing, this may not be same as # of MeshBlocks in calculation
+  std::vector<OutputMeshBlockInfo> outmbs; 
+  // Following vector will be of length (# output variables)
+  std::vector<OutputVariableInfo> outvars;
 };
 
 //----------------------------------------------------------------------------------------
@@ -121,7 +159,7 @@ class Outputs
   ~Outputs();
 
   // use vector of pointers to OutputTypes since it is an abstract base class 
-  std::vector<OutputType*> pout_list_;  
+  std::vector<OutputType*> pout_list;  
 };
 
 #endif // OUTPUTS_OUTPUTS_HPP_

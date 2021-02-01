@@ -92,6 +92,8 @@ template <typename T>
 using HostArray3D = Kokkos::View<T ***, LayoutWrapper, HostMemSpace>;
 template <typename T>
 using HostArray4D = Kokkos::View<T ****, LayoutWrapper, HostMemSpace>;
+template <typename T>
+using HostArray5D = Kokkos::View<T *****, LayoutWrapper, HostMemSpace>;
 
 // template declarations for construction of Kokkos::DualViews
 template <typename T>

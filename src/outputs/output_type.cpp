@@ -20,12 +20,13 @@
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "hydro/hydro.hpp"
+#include "mhd/mhd.hpp"
 #include "utils/grid_locations.hpp"
 #include "outputs.hpp"
 
 //----------------------------------------------------------------------------------------
 // OutputType base class constructor
-// Sets parameters like size and indices of output arrays
+// Creates vector of output variable data
 
 OutputType::OutputType(OutputParameters opar, Mesh *pm) :
    out_params(opar)
@@ -33,99 +34,150 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
   // exit for history files
   if (out_params.file_type.compare("hst") == 0) {return;}
 
-  // set size & starting indices of output arrays, adjusted accordingly if gz included 
-  // Since all MeshBlocks the same, only need to compute values from first MB
-  auto ncells = pm->pmb_pack->mb_cells;
-  if (out_params.include_gzs) {
-    int nout1 = ncells.nx1 + 2*(ncells.ng);
-    int nout2 = (ncells.nx2 > 1)? (ncells.nx2 + 2*(ncells.ng)) : 1;
-    int nout3 = (ncells.nx3 > 1)? (ncells.nx3 + 2*(ncells.ng)) : 1;
-    ois = 0; oie = nout1-1;
-    ojs = 0; oje = nout2-1;
-    oks = 0; oke = nout3-1;
-  } else {
-    ois = ncells.is; oie = ncells.ie;
-    ojs = ncells.js; oje = ncells.je;
-    oks = ncells.ks; oke = ncells.ke;
-  }
+  outvars.clear();
+  switch (out_params.variable) {
+    // Load hydro conserved variables
+    case OutputVariable::hydro_u_d:
+      if (pm->pmb_pack->phydro == nullptr) ErrHydroOutput(out_params.block_name);
+      outvars.emplace_back("dens",0,&(pm->pmb_pack->phydro->u0));
+      break;
+    case OutputVariable::hydro_u_m1:
+      if (pm->pmb_pack->phydro == nullptr) ErrHydroOutput(out_params.block_name);
+      outvars.emplace_back("mom1",1,&(pm->pmb_pack->phydro->u0));
+      break;
+    case OutputVariable::hydro_u_m2:
+      if (pm->pmb_pack->phydro == nullptr) ErrHydroOutput(out_params.block_name);
+      outvars.emplace_back("mom2",2,&(pm->pmb_pack->phydro->u0));
+      break;
+    case OutputVariable::hydro_u_m3:
+      if (pm->pmb_pack->phydro == nullptr) ErrHydroOutput(out_params.block_name);
+      outvars.emplace_back("mom3",3,&(pm->pmb_pack->phydro->u0));
+      break;
+    case OutputVariable::hydro_u_e:
+      if (pm->pmb_pack->phydro == nullptr) ErrHydroOutput(out_params.block_name);
+      outvars.emplace_back("ener",4,&(pm->pmb_pack->phydro->u0));
+      break;
+    case OutputVariable::hydro_u:
+      if (pm->pmb_pack->phydro == nullptr) ErrHydroOutput(out_params.block_name);
+      outvars.emplace_back("dens",0,&(pm->pmb_pack->phydro->u0));
+      outvars.emplace_back("mom1",1,&(pm->pmb_pack->phydro->u0));
+      outvars.emplace_back("mom2",2,&(pm->pmb_pack->phydro->u0));
+      outvars.emplace_back("mom3",3,&(pm->pmb_pack->phydro->u0));
+      outvars.emplace_back("ener",4,&(pm->pmb_pack->phydro->u0));
+      break;
 
-  // parse list of variables for each physics and flag variables to be output
-  // TODO: get this working for multiple physics
-  nvar = 0; int var_cnt=0;
-  if (out_params.variable.compare("D") == 0 ||
-      out_params.variable.compare("cons") == 0) {
-    out_data_label_.push_back("Dens");
-    nvar++; var_cnt++;
-  }
-  if (out_params.variable.compare("E") == 0 ||
-      out_params.variable.compare("cons") == 0) {
-    out_data_label_.push_back("Ener");
-    nvar++; var_cnt++;
-  }
-  if (out_params.variable.compare("M1") == 0 ||
-      out_params.variable.compare("mom") == 0 ||
-      out_params.variable.compare("cons") == 0) {
-    out_data_label_.push_back("Mom1");
-    nvar++; var_cnt++;
-  }
-  if (out_params.variable.compare("M2") == 0 ||
-      out_params.variable.compare("mom") == 0 ||
-      out_params.variable.compare("cons") == 0) {
-    out_data_label_.push_back("Mom2");
-    nvar++; var_cnt++;
-  }
-  if (out_params.variable.compare("M3") == 0 ||
-      out_params.variable.compare("mom") == 0 ||
-      out_params.variable.compare("cons") == 0) {
-    out_data_label_.push_back("Mom3");
-    nvar++; var_cnt++;
-  }
-  // TODO: get working for multiple scalars
-  if (out_params.variable.compare("S") == 0) {
-    out_data_label_.push_back("S0");
-    nvar++; var_cnt++;
-  }
-  if (out_params.variable.compare("d") == 0 ||
-      out_params.variable.compare("prim") == 0) {
-    out_data_label_.push_back("dens");
-    nvar++; var_cnt++;
-  }
-  if (out_params.variable.compare("p") == 0 ||
-      out_params.variable.compare("prim") == 0) {
-    out_data_label_.push_back("pres");
-    nvar++; var_cnt++;
-  }
-  if (out_params.variable.compare("vx") == 0 ||
-      out_params.variable.compare("vel") == 0 ||
-      out_params.variable.compare("prim") == 0) {
-    out_data_label_.push_back("velx");
-    nvar++; var_cnt++;
-  }
-  if (out_params.variable.compare("vy") == 0 ||
-      out_params.variable.compare("vel") == 0 ||
-      out_params.variable.compare("prim") == 0) {
-    out_data_label_.push_back("vely");
-    nvar++; var_cnt++;
-  }
-  if (out_params.variable.compare("vz") == 0 ||
-      out_params.variable.compare("vel") == 0 ||
-      out_params.variable.compare("prim") == 0) {
-    out_data_label_.push_back("velz");
-    nvar++; var_cnt++;
-  }
-  // TODO: get working for multiple scalars
-  if (out_params.variable.compare("r") == 0) {
-    out_data_label_.push_back("r0");
-    nvar++; var_cnt++;
-  }
+    // Load hydro primitive variables
+    case OutputVariable::hydro_w_d:
+      if (pm->pmb_pack->phydro == nullptr) ErrHydroOutput(out_params.block_name);
+      outvars.emplace_back("dens",0,&(pm->pmb_pack->phydro->w0));
+      break;
+    case OutputVariable::hydro_w_vx:
+      if (pm->pmb_pack->phydro == nullptr) ErrHydroOutput(out_params.block_name);
+      outvars.emplace_back("velx",1,&(pm->pmb_pack->phydro->w0));
+      break;
+    case OutputVariable::hydro_w_vy:
+      if (pm->pmb_pack->phydro == nullptr) ErrHydroOutput(out_params.block_name);
+      outvars.emplace_back("vely",2,&(pm->pmb_pack->phydro->w0));
+      break;
+    case OutputVariable::hydro_w_vz:
+      if (pm->pmb_pack->phydro == nullptr) ErrHydroOutput(out_params.block_name);
+      outvars.emplace_back("velz",3,&(pm->pmb_pack->phydro->w0));
+      break;
+    case OutputVariable::hydro_w_p:
+      if (pm->pmb_pack->phydro == nullptr) ErrHydroOutput(out_params.block_name);
+      outvars.emplace_back("pres",4,&(pm->pmb_pack->phydro->w0));
+      break;
+    case OutputVariable::hydro_w:
+      if (pm->pmb_pack->phydro == nullptr) ErrHydroOutput(out_params.block_name);
+      outvars.emplace_back("dens",0,&(pm->pmb_pack->phydro->w0));
+      outvars.emplace_back("velx",1,&(pm->pmb_pack->phydro->w0));
+      outvars.emplace_back("vely",2,&(pm->pmb_pack->phydro->w0));
+      outvars.emplace_back("velz",3,&(pm->pmb_pack->phydro->w0));
+      outvars.emplace_back("pres",4,&(pm->pmb_pack->phydro->w0));
+      break;
 
-  // check for valid output variable in <input> block
-  if (var_cnt == 0) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-       << "Output variable '" << out_params.variable << "' not implemented" << std::endl
-       << "Allowed hydro variables: cons,D,E,mom,M1,M2,M3,S,prim,d,p,vel,vx,vy,vz,r"
-       << std::endl;
-    exit(EXIT_FAILURE);
+    // Load mhd conserved variables
+    case OutputVariable::mhd_u_d:
+      if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
+      outvars.emplace_back("dens",0,&(pm->pmb_pack->pmhd->u0));
+      break;
+    case OutputVariable::mhd_u_m1:
+      if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
+      outvars.emplace_back("mom1",1,&(pm->pmb_pack->pmhd->u0));
+      break;
+    case OutputVariable::mhd_u_m2:
+      if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
+      outvars.emplace_back("mom2",2,&(pm->pmb_pack->pmhd->u0));
+      break;
+    case OutputVariable::mhd_u_m3:
+      if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
+      outvars.emplace_back("mom3",3,&(pm->pmb_pack->pmhd->u0));
+      break;
+    case OutputVariable::mhd_u_e:
+      if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
+      outvars.emplace_back("ener",4,&(pm->pmb_pack->pmhd->u0));
+      break;
+    case OutputVariable::mhd_u:
+      if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
+      outvars.emplace_back("dens",0,&(pm->pmb_pack->pmhd->u0));
+      outvars.emplace_back("mom1",1,&(pm->pmb_pack->pmhd->u0));
+      outvars.emplace_back("mom2",2,&(pm->pmb_pack->pmhd->u0));
+      outvars.emplace_back("mom3",3,&(pm->pmb_pack->pmhd->u0));
+      outvars.emplace_back("ener",4,&(pm->pmb_pack->pmhd->u0));
+      break;
+
+    // Load mhd primitive variables
+    case OutputVariable::mhd_w_d:
+      if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
+      outvars.emplace_back("dens",0,&(pm->pmb_pack->pmhd->w0));
+      break;
+    case OutputVariable::mhd_w_vx:
+      if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
+      outvars.emplace_back("velx",1,&(pm->pmb_pack->pmhd->w0));
+      break;
+    case OutputVariable::mhd_w_vy:
+      if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
+      outvars.emplace_back("vely",2,&(pm->pmb_pack->pmhd->w0));
+      break;
+    case OutputVariable::mhd_w_vz:
+      if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
+      outvars.emplace_back("velz",3,&(pm->pmb_pack->pmhd->w0));
+      break;
+    case OutputVariable::mhd_w_p:
+      if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
+      outvars.emplace_back("pres",4,&(pm->pmb_pack->pmhd->w0));
+      break;
+    case OutputVariable::mhd_w:
+      if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
+      outvars.emplace_back("dens",0,&(pm->pmb_pack->pmhd->w0));
+      outvars.emplace_back("velx",1,&(pm->pmb_pack->pmhd->w0));
+      outvars.emplace_back("vely",2,&(pm->pmb_pack->pmhd->w0));
+      outvars.emplace_back("velz",3,&(pm->pmb_pack->pmhd->w0));
+      outvars.emplace_back("pres",4,&(pm->pmb_pack->pmhd->w0));
+      break;
+
+    // Load mhd cell-centered magnetic fields
+    case OutputVariable::mhd_bcc1:
+      if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
+      outvars.emplace_back("bcc1",0,&(pm->pmb_pack->pmhd->bcc0));
+      break;
+    case OutputVariable::mhd_bcc2:
+      if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
+      outvars.emplace_back("bcc2",1,&(pm->pmb_pack->pmhd->bcc0));
+      break;
+    case OutputVariable::mhd_bcc3:
+      if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
+      outvars.emplace_back("bcc3",2,&(pm->pmb_pack->pmhd->bcc0));
+      break;
+    case OutputVariable::mhd_bcc:
+      if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
+      outvars.emplace_back("bcc1",0,&(pm->pmb_pack->pmhd->bcc0));
+      outvars.emplace_back("bcc2",1,&(pm->pmb_pack->pmhd->bcc0));
+      outvars.emplace_back("bcc3",2,&(pm->pmb_pack->pmhd->bcc0));
+      break;
+
+    default:
+      break;
   }
 }
 
@@ -136,22 +188,37 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
 
 void OutputType::LoadOutputData(Mesh *pm)
 {
-  out_data_.clear();  // start with a clean list
-
   // out_data_ vector (indexed over # of output MBs) stores 4D array of variables
   // so start iteration over number of MeshBlocks
   // TODO: get this working for multiple physics, which may be either defined/undef
 
-  // loop over all MeshBlocks
-  MeshBlockPack* pmbp = pm->pmb_pack;;
-  int nmb = pmbp->nmb_thispack;
-  for (int m=0; m<nmb; ++m) {
+  // With AMR, number and location of output MBs can change between output times.
+  // So start with clean vector of output MeshBlock info, and re-compute
+  outmbs.clear();
 
-    auto &cells = pmbp->mb_cells;
-    auto &size  = pmbp->pmb->mbsize;
-    // check for slicing in each dimension
+  // loop over all MeshBlocks
+  // set size & starting indices of output arrays, adjusted accordingly if gz included 
+  auto &cells = pm->pmb_pack->mb_cells;
+  auto &size  = pm->pmb_pack->pmb->mbsize;
+  for (int m=0; m<(pm->pmb_pack->nmb_thispack); ++m) {
+
+    int ois,oie,ojs,oje,oks,oke;
+    if (out_params.include_gzs) {
+      int nout1 = cells.nx1 + 2*(cells.ng);
+      int nout2 = (cells.nx2 > 1)? (cells.nx2 + 2*(cells.ng)) : 1;
+      int nout3 = (cells.nx3 > 1)? (cells.nx3 + 2*(cells.ng)) : 1;
+      ois = 0; oie = nout1-1;
+      ojs = 0; oje = nout2-1;
+      oks = 0; oke = nout3-1;
+    } else {
+      ois = cells.is; oie = cells.ie;
+      ojs = cells.js; oje = cells.je;
+      oks = cells.ks; oke = cells.ke;
+    }
+
+    // check for slicing in each dimension, adjust start/end indices accordingly
     if (out_params.slice1) {
-      // skip if slice is out of range of this MB
+      // skip this MB if slice is out of range
       if (out_params.slice_x1 <  size.x1min.h_view(m) ||
           out_params.slice_x1 >= size.x1max.h_view(m)) { continue; }
       // set index of slice
@@ -161,7 +228,7 @@ void OutputType::LoadOutputData(Mesh *pm)
     }
 
     if (out_params.slice2) {
-      // skip if slice is out of range of this MB
+      // skip this MB if slice is out of range
       if (out_params.slice_x2 <  size.x2min.h_view(m) ||
           out_params.slice_x2 >= size.x2max.h_view(m)) { continue; }
       // set index of slice
@@ -171,7 +238,7 @@ void OutputType::LoadOutputData(Mesh *pm)
     }
 
     if (out_params.slice3) {
-      // skip if slice is out of range of this MB
+      // skip this MB if slice is out of range
       if (out_params.slice_x3 <  size.x3min.h_view(m) ||
           out_params.slice_x3 >= size.x3max.h_view(m)) { continue; }
       // set index of slice
@@ -179,86 +246,70 @@ void OutputType::LoadOutputData(Mesh *pm)
                             size.x3min.h_view(m), size.x3max.h_view(m));
       oke = oks;
     }
+    int id = pm->pmb_pack->pmb->mbgid.h_view(m);
+    outmbs.emplace_back(id,ois,oie,ojs,oje,oks,oke);
+  }
 
-    // load all the output variables on this MeshBlock
-    HostArray4D<Real> new_data("out",nvar,(oke-oks+1),(oje-ojs+1),(oie-ois+1));
-    for (int n=0; n<nvar; ++n) {
+  // get number of output vars and MBs, then realloc HostArray
+  int nout_vars = outvars.size();
+  int nout_mbs = outmbs.size();
+  // note that while ois,oie,etc. can be different on each MB, the number of cells output
+  // on each MeshBlock, i.e. (ois-ois+1), etc. is the same. 
+  int nout1 = (outmbs[0].oie - outmbs[0].ois + 1);
+  int nout2 = (outmbs[0].oje - outmbs[0].ojs + 1);
+  int nout3 = (outmbs[0].oke - outmbs[0].oks + 1);
+  Kokkos::realloc(outdata, nout_vars, nout_mbs, nout3, nout2, nout1);
+
+  // Now load data over all variables and MeshBlocks
+  for (int n=0; n<nout_vars; ++n) {
+    for (int m=0; m<nout_mbs; ++m) {
+      int &ois = outmbs[m].ois;
+      int &oie = outmbs[m].oie;
+      int &ojs = outmbs[m].ojs;
+      int &oje = outmbs[m].oje;
+      int &oks = outmbs[m].oks;
+      int &oke = outmbs[m].oke;
+      int mbi = pm->FindMeshBlockIndex(outmbs[m].mb_gid);
+
+      // load an output variable on this output MeshBlock
       DvceArray3D<Real> dev_buff("dev_buff",(oke-oks+1),(oje-ojs+1),(oie-ois+1));
-      if (out_data_label_[n].compare("Dens")  == 0) {
-        // Note capital "D" used to distinguish conserved from primitive mass density
-        // (important for relativistic dynamics)
-        auto dev_slice = Kokkos::subview(pmbp->phydro->u0, m,static_cast<int>(hydro::IDN),
-          std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
-        Kokkos::deep_copy(dev_buff,dev_slice);
-      }
-      if (out_data_label_[n].compare("Mom1")  == 0) {
-        auto dev_slice = Kokkos::subview(pmbp->phydro->u0, m,static_cast<int>(hydro::IM1),
-          std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
-        Kokkos::deep_copy(dev_buff,dev_slice);
-      }
-      if (out_data_label_[n].compare("Mom2")  == 0) {
-        auto dev_slice = Kokkos::subview(pmbp->phydro->u0, m,static_cast<int>(hydro::IM2),
-          std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
-        Kokkos::deep_copy(dev_buff,dev_slice);
-      }
-      if (out_data_label_[n].compare("Mom3")  == 0) {
-        auto dev_slice = Kokkos::subview(pmbp->phydro->u0, m,static_cast<int>(hydro::IM3),
-          std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
-        Kokkos::deep_copy(dev_buff,dev_slice);
-      }
-      if (out_data_label_[n].compare("Ener")  == 0) {
-        auto dev_slice = Kokkos::subview(pmbp->phydro->u0, m,static_cast<int>(hydro::IEN),
-          std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
-        Kokkos::deep_copy(dev_buff,dev_slice);
-      }
-      if (out_data_label_[n].compare("dens")  == 0) {
-        auto dev_slice = Kokkos::subview(pmbp->phydro->w0, m,static_cast<int>(hydro::IDN),
-          std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
-        Kokkos::deep_copy(dev_buff,dev_slice);
-      }
-      if (out_data_label_[n].compare("velx")  == 0) {
-        auto dev_slice = Kokkos::subview(pmbp->phydro->w0, m,static_cast<int>(hydro::IVX),
-          std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
-        Kokkos::deep_copy(dev_buff,dev_slice);
-      }
-      if (out_data_label_[n].compare("vely")  == 0) {
-        auto dev_slice = Kokkos::subview(pmbp->phydro->w0, m,static_cast<int>(hydro::IVY),
-          std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
-        Kokkos::deep_copy(dev_buff,dev_slice);
-      }
-      if (out_data_label_[n].compare("velz")  == 0) {
-        auto dev_slice = Kokkos::subview(pmbp->phydro->w0, m,static_cast<int>(hydro::IVZ),
-          std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
-        Kokkos::deep_copy(dev_buff,dev_slice);
-      }
-      if (out_data_label_[n].compare("pres")  == 0) {
-        auto dev_slice = Kokkos::subview(pmbp->phydro->w0, m,static_cast<int>(hydro::IPR),
-          std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
-        Kokkos::deep_copy(dev_buff,dev_slice);
-      }
-      // TODO get this working for multiple scalars
-      if (out_data_label_[n].compare("S0")  == 0) {
-        int nhyd = pmbp->phydro->nhydro;
-        auto dev_slice = Kokkos::subview(pmbp->phydro->u0, m, static_cast<int>(nhyd),
-          std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
-        Kokkos::deep_copy(dev_buff,dev_slice);
-      }
-      if (out_data_label_[n].compare("r0")  == 0) {
-        int nhyd = pmbp->phydro->nhydro;
-        auto dev_slice = Kokkos::subview(pmbp->phydro->w0, m, static_cast<int>(nhyd),
-          std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
-        Kokkos::deep_copy(dev_buff,dev_slice);
-      }
+      auto dev_slice = Kokkos::subview(*(outvars[n].data_ptr), mbi, outvars[n].data_index,
+        std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
+      Kokkos::deep_copy(dev_buff,dev_slice);
 
-      // copy to host mirror array, and then to 4D host View containing all variables
+      // copy to host mirror array, and then to 5D host View containing all variables
       DvceArray3D<Real>::HostMirror hst_buff = Kokkos::create_mirror(dev_buff);
       Kokkos::deep_copy(hst_buff,dev_buff);
-      auto hst_slice = Kokkos::subview(new_data,n,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+      auto hst_slice = Kokkos::subview(outdata,n,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
       Kokkos::deep_copy(hst_slice,hst_buff);
     }
-
-    // append variables on this MeshBlock to end of out_data_ vector
-    out_data_.push_back(new_data);
-    out_data_gid_.push_back(pmbp->pmb->mbgid.h_view(m));
   }
+}
+
+//----------------------------------------------------------------------------------------
+// OutputType::ErrHydroOutput()
+// Print error message when output of Hydro variable requested but Hydro object not
+// constructed, and then quit
+
+void OutputType::ErrHydroOutput(std::string block)
+{
+  std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+            << "Output of Hydro variable requested in <output> block '" << block
+            << "' but no Hydro object " << std::endl << "has been constructed." 
+            << " Input file is likely missing a <hydro> block" << std::endl;
+  exit(EXIT_FAILURE);
+}
+
+//----------------------------------------------------------------------------------------
+// OutputType::ErrMHDOutput()
+// Print error message when output of Hydro variable requested but Hydro object not
+// constructed, and then quit
+
+void OutputType::ErrMHDOutput(std::string block)
+{
+  std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+            << "Output of MHD variable requested in <output> block '" << block
+            << "' but no MHD object " << std::endl << "has been constructed."
+            << " Input file is likely missing a <mhd> block" << std::endl;
+  exit(EXIT_FAILURE);
 }

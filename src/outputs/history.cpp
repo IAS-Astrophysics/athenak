@@ -152,7 +152,7 @@ void HistoryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   // only the master rank writes the file
   if (global_variable::my_rank == 0) {
 
-    // create filename: "file_basename" + ".hst".  There is no file number.
+    // create filename: "file_basename" + ".hst".  There is no file number or id.
     std::string fname;
     fname.assign(out_params.file_basename);
     fname.append(".hst");

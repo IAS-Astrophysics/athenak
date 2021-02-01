@@ -101,8 +101,8 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   msg << "# vtk DataFile Version 2.0" << std::endl
       << "# Athena++ data at time=" << pm->time
       << "  cycle=" << pm->ncycle
-      << "  variables=" << out_params.variable.c_str() << std::endl
-      << "BINARY" << std::endl
+      << "  variables=" << GetOutputVariableString(out_params.variable).c_str()
+      << std::endl << "BINARY" << std::endl
       << "DATASET RECTILINEAR_GRID" << std::endl
       << "DIMENSIONS " << ncoord1 << " " << ncoord2 << " " << ncoord3 << std::endl;
   vtkfile.Write(msg.str().c_str(),sizeof(char),msg.str().size());
@@ -184,30 +184,37 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   vtkfile.Write(msg.str().c_str(),sizeof(char),msg.str().size());
   header_offset += msg.str().size();}
 
-  // Loop over elements of out_data_ vector (variables)
-  for (int n=0; n<nvar; ++n) {
+  // Loop over variables
+  int nout_vars = outvars.size();
+  int nout_mbs = (outmbs.size());
+  for (int n=0; n<nout_vars; ++n) {
     // write data type (SCALARS or VECTORS) and name
     {std::stringstream msg;
-    msg << std::endl << "SCALARS " << out_data_label_[n].c_str() << " float" << std::endl
+    msg << std::endl << "SCALARS " << outvars[n].label.c_str() << " float" << std::endl
         << "LOOKUP_TABLE default" << std::endl;
     vtkfile.Write_at_all(msg.str().c_str(),sizeof(char),msg.str().size(),header_offset);
     header_offset += msg.str().size();}
 
     // Loop over MeshBlocks
-    auto cells = pm->pmb_pack->mb_cells;
-    int nout_mbs = static_cast<int>(out_data_.size());
     for (int m=0; m<nout_mbs; ++m) {
-      LogicalLocation loc = pm->loclist[out_data_gid_[m]];
+      auto cells = pm->pmb_pack->mb_cells;
+      LogicalLocation loc = pm->loclist[outmbs[m].mb_gid];
       int &mb_nx1 = cells.nx1;
       int &mb_nx2 = cells.nx2;
       int &mb_nx3 = cells.nx3;
+      int &ois = outmbs[m].ois;
+      int &oie = outmbs[m].oie;
+      int &ojs = outmbs[m].ojs;
+      int &oje = outmbs[m].oje;
+      int &oks = outmbs[m].oks;
+      int &oke = outmbs[m].oke;
       size_t data_offset = (loc.lx1*mb_nx1 + loc.lx2*(mb_nx2*nout1) +
         loc.lx3*(mb_nx3*nout1*nout2))*sizeof(float);
 
       for (int k=oks; k<=oke; ++k) {
         for (int j=ojs; j<=oje; ++j) {
           for (int i=ois; i<=oie; ++i) {
-            data[i-ois] = static_cast<float>(out_data_[m](n,k-oks,j-ojs,i-ois));
+            data[i-ois] = static_cast<float>(outdata(n,m,k-oks,j-ojs,i-ois));
           }
 
           // write data in big endian order

@@ -77,12 +77,9 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
 
       if (opar.dt <= 0.0) continue;  // only add output if dt>0
 
-      // set file number, basename, id, and format
+      // set file number, basename, and format
       opar.file_number = pin->GetOrAddInteger(opar.block_name,"file_number",0);
       opar.file_basename = pin->GetString("job","problem_id");
-      char did[10];
-      std::snprintf(did, sizeof(did), "out%d", opar.block_number);  // default id="outN"
-      opar.file_id = pin->GetOrAddString(opar.block_name,"id",did);
       opar.file_type = pin->GetString(opar.block_name,"file_type");
 
       // read slicing options.  Check that slice is within mesh
@@ -134,10 +131,14 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
       // read ghost cell option
       opar.include_gzs = pin->GetOrAddBoolean(opar.block_name, "ghost_zones", false);
 
-      // set output variable and optional data format string used in formatted writes
+      // set output variable and optional file id (default is output variable name)
       if (opar.file_type.compare("hst") != 0 && opar.file_type.compare("rst") != 0) {
-        opar.variable = pin->GetString(opar.block_name, "variable");
+        opar.variable = GetOutputVariable(pin->GetString(opar.block_name, "variable"));
+        opar.file_id = pin->GetOrAddString(
+                       opar.block_name,"id",pin->GetString(opar.block_name, "variable"));
       }
+
+      // set optional data format string used in formatted writes
       opar.data_format = pin->GetOrAddString(opar.block_name, "data_format", "%12.5e");
       opar.data_format.insert(0, " "); // prepend with blank to separate columns
 
@@ -146,14 +147,14 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
       OutputType *pnode;
       if (opar.file_type.compare("tab") == 0) {
         pnode = new FormattedTableOutput(opar,pm);
-        pout_list_.insert(pout_list_.begin(),pnode);
+        pout_list.insert(pout_list.begin(),pnode);
       } else if (opar.file_type.compare("hst") == 0) {
         pnode = new HistoryOutput(opar,pm);
-        pout_list_.insert(pout_list_.begin(),pnode);
+        pout_list.insert(pout_list.begin(),pnode);
         num_hst++;
       } else if (opar.file_type.compare("vtk") == 0) {
         pnode = new VTKOutput(opar,pm);
-        pout_list_.insert(pout_list_.begin(),pnode);
+        pout_list.insert(pout_list.begin(),pnode);
 //      } else if (op.file_type.compare("rst") == 0) {
 //    // Move restarts to the tail end of the OutputType list, so file counters for other
 //    // output types are up-to-date in restart file
@@ -182,4 +183,178 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
 // destructor - iterates through singly linked list of OutputTypes and deletes nodes
 
 Outputs::~Outputs() {
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn GetOutputVariable(std::string input_string)
+//  \brief Parses input string to return scoped enumerator flag specifying output var.
+//  Generally output utility function, not part of any outputs class
+
+OutputVariable GetOutputVariable(const std::string& input_string)
+{ 
+  // hydro conserved variables
+  if (input_string == "hydro_u_d") {
+    return OutputVariable::hydro_u_d;
+  } else if (input_string == "hydro_u_m1") {
+    return OutputVariable::hydro_u_m1;
+  } else if (input_string == "hydro_u_m2") {
+    return OutputVariable::hydro_u_m2;
+  } else if (input_string == "hydro_u_m3") {
+    return OutputVariable::hydro_u_m3;
+  } else if (input_string == "hydro_u_e") {
+    return OutputVariable::hydro_u_e;
+  } else if (input_string == "hydro_u") {
+    return OutputVariable::hydro_u;
+
+  // hydro primitive variables
+  } else if (input_string == "hydro_w_d") {
+    return OutputVariable::hydro_w_d;
+  } else if (input_string == "hydro_w_vx") {
+    return OutputVariable::hydro_w_vx;
+  } else if (input_string == "hydro_w_vy") {
+    return OutputVariable::hydro_w_vy;
+  } else if (input_string == "hydro_w_vz") {
+    return OutputVariable::hydro_w_vz;
+  } else if (input_string == "hydro_w_p") {
+    return OutputVariable::hydro_w_p;
+  } else if (input_string == "hydro_w") {
+    return OutputVariable::hydro_w;
+
+  // mhd conserved variables
+  } else if (input_string == "mhd_u_d") {
+    return OutputVariable::mhd_u_d;
+  } else if (input_string == "mhd_u_m1") {
+    return OutputVariable::mhd_u_m1;
+  } else if (input_string == "mhd_u_m2") {
+    return OutputVariable::mhd_u_m2;
+  } else if (input_string == "mhd_u_m3") {
+    return OutputVariable::mhd_u_m3;
+  } else if (input_string == "mhd_u_e") {
+    return OutputVariable::mhd_u_e;
+  } else if (input_string == "mhd_u") {
+    return OutputVariable::mhd_u;
+
+  // mhd primitive variables
+  } else if (input_string == "mhd_w_d") {
+    return OutputVariable::mhd_w_d;
+  } else if (input_string == "mhd_w_vx") {
+    return OutputVariable::mhd_w_vx;
+  } else if (input_string == "mhd_w_vy") {
+    return OutputVariable::mhd_w_vy;
+  } else if (input_string == "mhd_w_vz") {
+    return OutputVariable::mhd_w_vz;
+  } else if (input_string == "mhd_w_p") {
+    return OutputVariable::mhd_w_p;
+  } else if (input_string == "mhd_w") {
+    return OutputVariable::mhd_w;
+
+  // cell-centered magnetic fields in mhd
+  } else if (input_string == "mhd_bcc1") {
+    return OutputVariable::mhd_bcc1;
+  } else if (input_string == "mhd_bcc2") {
+    return OutputVariable::mhd_bcc2;
+  } else if (input_string == "mhd_bcc3") {
+    return OutputVariable::mhd_bcc3;
+  } else if (input_string == "mhd_bcc") {
+    return OutputVariable::mhd_bcc;
+
+  // invalid variable requested
+  } else {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+       << "Input string = '" << input_string << "' is not a valid output variable"
+       << std::endl << "See the enum class OutputVariable defined in "
+       << "src/outputs/outputs.hpp for a complete list" << std::endl
+       << "of valid output variables" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn GetOutputVariableString(BoundaryFlag input_flag)
+//  \brief Parses enumerated type OutputVariable internal integer representation to return
+//  string describing the output variable. Typically used to format descriptive errors
+//  or diagnostics. Inverse of GetOutputVariable().
+//
+//  Generally output utility function, not part of any outputs class
+
+std::string GetOutputVariableString(OutputVariable input_flag)
+{
+  switch (input_flag) {
+
+    // hydro conserved variables
+    case OutputVariable::hydro_u_d:  // 0
+      return "hydro_u_d";
+    case OutputVariable::hydro_u_m1:
+      return "hydro_u_m1";
+    case OutputVariable::hydro_u_m2:
+      return "hydro_u_m2";
+    case OutputVariable::hydro_u_m3:
+      return "hydro_u_m3";
+    case OutputVariable::hydro_u_e:
+      return "hydro_u_e";
+    case OutputVariable::hydro_u:
+      return "hydro_u";
+
+    // hydro primitive variables
+    case OutputVariable::hydro_w_d:
+      return "hydro_w_d";
+    case OutputVariable::hydro_w_vx:
+      return "hydro_w_vx";
+    case OutputVariable::hydro_w_vy:
+      return "hydro_w_vy";
+    case OutputVariable::hydro_w_vz:
+      return "hydro_w_vz";
+    case OutputVariable::hydro_w_p:
+      return "hydro_w_p";
+    case OutputVariable::hydro_w:
+      return "hydro_w";
+
+    // mhd conserved variables
+    case OutputVariable::mhd_u_d:
+      return "mhd_u_d";
+    case OutputVariable::mhd_u_m1:
+      return "mhd_u_m1";
+    case OutputVariable::mhd_u_m2:
+      return "mhd_u_m2";
+    case OutputVariable::mhd_u_m3:
+      return "mhd_u_m3";
+    case OutputVariable::mhd_u_e:
+      return "mhd_u_e";
+    case OutputVariable::mhd_u:
+      return "mhd_u";
+
+    // mhd primitive variables
+    case OutputVariable::mhd_w_d:
+      return "mhd_w_d";
+    case OutputVariable::mhd_w_vx:
+      return "mhd_w_vx";
+    case OutputVariable::mhd_w_vy:
+      return "mhd_w_vy";
+    case OutputVariable::mhd_w_vz:
+      return "mhd_w_vz";
+    case OutputVariable::mhd_w_p:
+      return "mhd_w_p";
+    case OutputVariable::mhd_w:
+      return "mhd_w";
+
+    // cell-centered magnetic fields in mhd
+    case OutputVariable::mhd_bcc1:
+      return "mhd_bcc1";
+    case OutputVariable::mhd_bcc2:
+      return "mhd_bcc2";
+    case OutputVariable::mhd_bcc3:
+      return "mhd_bcc3";
+    case OutputVariable::mhd_bcc:
+      return "mhd_bcc";
+
+    // undefined or unknown variable names
+    case OutputVariable::undef:
+      return "undef";
+    default:
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+         << std::endl << "Input enum OutputVariable=" << static_cast<int>(input_flag)
+         << " is an invalid output variable" << std::endl;
+      std::exit(EXIT_FAILURE);
+      break;
+  }
 }
