@@ -7,8 +7,6 @@
 //  \brief Riemann solver for pure advection problems (v = constant).  Simply computes the
 //  upwind flux of each vriable.
 
-#include <algorithm>  // max(), min()
-
 namespace hydro {
 
 //----------------------------------------------------------------------------------------

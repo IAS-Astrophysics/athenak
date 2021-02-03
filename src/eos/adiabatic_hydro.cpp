@@ -45,17 +45,17 @@ void AdiabaticHydro::ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real>
   par_for("hyd_con2prim", DevExeSpace(), 0, (nmb-1), 0, (n3-1), 0, (n2-1), 0, (n1-1),
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
-      Real& u_d  = cons(m,hydro::IDN,k,j,i);
-      Real& u_m1 = cons(m,hydro::IM1,k,j,i);
-      Real& u_m2 = cons(m,hydro::IM2,k,j,i);
-      Real& u_m3 = cons(m,hydro::IM3,k,j,i);
-      Real& u_e  = cons(m,hydro::IEN,k,j,i);
+      Real& u_d  = cons(m,IDN,k,j,i);
+      Real& u_m1 = cons(m,IM1,k,j,i);
+      Real& u_m2 = cons(m,IM2,k,j,i);
+      Real& u_m3 = cons(m,IM3,k,j,i);
+      Real& u_e  = cons(m,IEN,k,j,i);
 
-      Real& w_d  = prim(m,hydro::IDN,k,j,i);
-      Real& w_vx = prim(m,hydro::IVX,k,j,i);
-      Real& w_vy = prim(m,hydro::IVY,k,j,i);
-      Real& w_vz = prim(m,hydro::IVZ,k,j,i);
-      Real& w_p  = prim(m,hydro::IPR,k,j,i);
+      Real& w_d  = prim(m,IDN,k,j,i);
+      Real& w_vx = prim(m,IVX,k,j,i);
+      Real& w_vy = prim(m,IVY,k,j,i);
+      Real& w_vz = prim(m,IVZ,k,j,i);
+      Real& w_p  = prim(m,IPR,k,j,i);
 
       // apply density floor, without changing momentum or energy
       u_d = (u_d > dfloor_) ?  u_d : dfloor_;

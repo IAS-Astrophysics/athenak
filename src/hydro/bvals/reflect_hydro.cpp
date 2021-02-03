@@ -32,7 +32,7 @@ void Hydro::ReflectInnerX1(int m)
   par_for("reflect_ix1", DevExeSpace(),0,(nvar-1),0,(n3-1),0,(n2-1),0,(ng-1),
     KOKKOS_LAMBDA(int n, int k, int j, int i)
     {
-      if (n == (hydro::IVX)) {  // reflect 1-velocity
+      if (n == (IVX)) {  // reflect 1-velocity
         u0_(m,n,k,j,is-i-1) = -u0_(m,n,k,j,is+i);
       } else {
         u0_(m,n,k,j,is-i-1) =  u0_(m,n,k,j,is+i);
@@ -61,7 +61,7 @@ void Hydro::ReflectOuterX1(int m)
   par_for("reflect_ox1", DevExeSpace(),0,(nvar-1),0,(n3-1),0,(n2-1),0,(ng-1),
     KOKKOS_LAMBDA(int n, int k, int j, int i)
     {
-      if (n == (hydro::IVX)) {  // reflect 1-velocity
+      if (n == (IVX)) {  // reflect 1-velocity
         u0_(m,n,k,j,ie+i+1) = -u0_(m,n,k,j,ie-i);
       } else {
         u0_(m,n,k,j,ie+i+1) =  u0_(m,n,k,j,ie-i);
@@ -90,7 +90,7 @@ void Hydro::ReflectInnerX2(int m)
   par_for("reflect_ix2", DevExeSpace(),0,(nvar-1),0,(n3-1),0,(ng-1),0,(n1-1),
     KOKKOS_LAMBDA(int n, int k, int j, int i)
     { 
-      if (n == (hydro::IVY)) {  // reflect 2-velocity
+      if (n == (IVY)) {  // reflect 2-velocity
         u0_(m,n,k,js-j-1,i) = -u0_(m,n,k,js+j,i);
       } else {
         u0_(m,n,k,js-j-1,i) =  u0_(m,n,k,js+j,i);
@@ -119,7 +119,7 @@ void Hydro::ReflectOuterX2(int m)
   par_for("reflect_ox2", DevExeSpace(),0,(nvar-1),0,(n3-1),0,(ng-1),0,(n1-1),
     KOKKOS_LAMBDA(int n, int k, int j, int i)
     { 
-      if (n == (hydro::IVY)) {  // reflect 2-velocity
+      if (n == (IVY)) {  // reflect 2-velocity
         u0_(m,n,k,je+j+1,i) = -u0_(m,n,k,je-j,i);
       } else {
         u0_(m,n,k,je+j+1,i) =  u0_(m,n,k,je-j,i);
@@ -149,7 +149,7 @@ void Hydro::ReflectInnerX3(int m)
   par_for("reflect_ix3", DevExeSpace(),0,(nvar-1),0,(ng-1),0,(n2-1),0,(n1-1),
     KOKKOS_LAMBDA(int n, int k, int j, int i)
     { 
-      if (n == (hydro::IVZ)) {  // reflect 3-velocity
+      if (n == (IVZ)) {  // reflect 3-velocity
         u0_(m,n,ks-k-1,j,i) = -u0_(m,n,ks+k,j,i);
       } else {
         u0_(m,n,ks-k-1,j,i) =  u0_(m,n,ks+k,j,i);
@@ -178,7 +178,7 @@ void Hydro::ReflectOuterX3(int m)
   par_for("reflect_ox3", DevExeSpace(),0,(nvar-1),0,(ng-1),0,(n2-1),0,(n1-1),
     KOKKOS_LAMBDA(int n, int k, int j, int i)
     {   
-      if (n == (hydro::IVZ)) {  // reflect 3-velocity
+      if (n == (IVZ)) {  // reflect 3-velocity
         u0_(m,n,ke+k+1,j,i) = -u0_(m,n,ke-k,j,i);
       } else {
         u0_(m,n,ke+k+1,j,i) =  u0_(m,n,ke-k,j,i);

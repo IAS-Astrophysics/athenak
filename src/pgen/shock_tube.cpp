@@ -37,8 +37,8 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
   }
   // set indices of parallel and perpendicular velocities
   int ivx = shk_dir;
-  int ivy = hydro::IVX + ((ivx - hydro::IVX) + 1)%3;
-  int ivz = hydro::IVX + ((ivx - hydro::IVX) + 2)%3;
+  int ivy = IVX + ((ivx - IVX) + 1)%3;
+  int ivz = IVX + ((ivx - IVX) + 2)%3;
 
   // parse shock location (must be inside grid)
   Real xshock = pin->GetReal("problem","xshock");

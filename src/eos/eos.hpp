@@ -27,7 +27,27 @@ struct EOS_Data
   Real density_floor, pressure_floor;
   // sound speed function for adiabatic EOS 
   KOKKOS_INLINE_FUNCTION
-  Real SoundSpeed(Real p, Real d) const {return std::sqrt(gamma*p/d);}
+  Real SoundSpeed(Real p, Real d) const {
+   return std::sqrt(gamma*p/d);
+  }
+  // fast magnetosonic speed function for adiabatic EOS 
+  KOKKOS_INLINE_FUNCTION
+  Real FastMagnetosonicSpeed(Real d, Real p, Real bx, Real by, Real bz) const {
+    Real asq = gamma*p;
+    Real ct2 = by*by + bz*bz;
+    Real qsq = bx*bx + ct2 + asq;
+    Real tmp = bx*bx + ct2 - asq;
+    return std::sqrt(0.5*(qsq + std::sqrt(tmp*tmp + 4.0*asq*ct2))/d);
+  }
+  // fast magnetosonic speed function for isothermal EOS 
+  KOKKOS_INLINE_FUNCTION
+  Real FastMagnetosonicSpeed(Real d, Real bx, Real by, Real bz) const {
+    Real asq = (iso_cs*iso_cs)*d;
+    Real ct2 = by*by + bz*bz;
+    Real qsq = bx*bx + ct2 + asq;
+    Real tmp = bx*bx + ct2 - asq;
+    return std::sqrt(0.5*(qsq + std::sqrt(tmp*tmp + 4.0*asq*ct2))/d);
+  }
 };
 
 //----------------------------------------------------------------------------------------

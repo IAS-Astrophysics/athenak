@@ -17,10 +17,10 @@
 #include "reconstruct/plm.cpp"
 #include "reconstruct/ppm.cpp"
 // include inlined Riemann solvers (double yuck...)
-#include "hydro/rsolver/advect.cpp"
-#include "hydro/rsolver/llf.cpp"
-//#include "hydro/rsolver/hllc.cpp"
-//#include "hydro/rsolver/roe.cpp"
+#include "hydro/rsolvers/advect.cpp"
+#include "hydro/rsolvers/llf.cpp"
+//#include "hydro/rsolvers/hllc.cpp"
+//#include "hydro/rsolvers/roe.cpp"
 
 namespace hydro {
 //----------------------------------------------------------------------------------------

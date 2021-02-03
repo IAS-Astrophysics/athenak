@@ -47,15 +47,15 @@ void IsothermalMHD::ConsToPrim(const DvceArray5D<Real> &cons,const DvceFaceFld4D
   par_for("mhd_con2prim", DevExeSpace(), 0, (nmb-1), 0, (n3-1), 0, (n2-1), 0, (n1-1),
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
-      Real& u_d  = cons(m,hydro::IDN,k,j,i);
-      Real& u_m1 = cons(m,hydro::IVX,k,j,i);
-      Real& u_m2 = cons(m,hydro::IVY,k,j,i);
-      Real& u_m3 = cons(m,hydro::IVZ,k,j,i);
+      Real& u_d  = cons(m,IDN,k,j,i);
+      Real& u_m1 = cons(m,IVX,k,j,i);
+      Real& u_m2 = cons(m,IVY,k,j,i);
+      Real& u_m3 = cons(m,IVZ,k,j,i);
 
-      Real& w_d  = prim(m,hydro::IDN,k,j,i);
-      Real& w_vx = prim(m,hydro::IVX,k,j,i);
-      Real& w_vy = prim(m,hydro::IVY,k,j,i);
-      Real& w_vz = prim(m,hydro::IVZ,k,j,i);
+      Real& w_d  = prim(m,IDN,k,j,i);
+      Real& w_vx = prim(m,IVX,k,j,i);
+      Real& w_vy = prim(m,IVY,k,j,i);
+      Real& w_vz = prim(m,IVZ,k,j,i);
 
       // apply density floor, without changing momentum or energy
       u_d = (u_d > dfloor_) ?  u_d : dfloor_;
@@ -66,9 +66,9 @@ void IsothermalMHD::ConsToPrim(const DvceArray5D<Real> &cons,const DvceFaceFld4D
       w_vy = u_m2*di;
       w_vz = u_m3*di;
 
-      Real& w_bx = bcc(m,mhd::IBX,k,j,i);
-      Real& w_by = bcc(m,mhd::IBY,k,j,i);
-      Real& w_bz = bcc(m,mhd::IBZ,k,j,i);
+      Real& w_bx = bcc(m,IBX,k,j,i);
+      Real& w_by = bcc(m,IBY,k,j,i);
+      Real& w_bz = bcc(m,IBZ,k,j,i);
       w_bx = 0.5*(b.x1f(m,k,j,i) + b.x1f(m,k,j,i+1));  
       w_by = 0.5*(b.x2f(m,k,j,i) + b.x2f(m,k,j+1,i));
       w_bz = 0.5*(b.x3f(m,k,j,i) + b.x3f(m,k+1,j,i));

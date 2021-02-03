@@ -48,7 +48,7 @@ void MHD::ReflectInnerX1(int m)
         if (k == n3-1) {b0_.x3f(m,k+1,j,is-i-1) = b0_.x3f(m,k+1,j,is+i);}
 
       // reflect 1-velocity
-      } else if (n == (hydro::IVX)) {
+      } else if (n == (IVX)) {
         u0_(m,n,k,j,is-i-1) = -u0_(m,n,k,j,is+i);
 
       // copy everything else
@@ -95,7 +95,7 @@ void MHD::ReflectOuterX1(int m)
         if (k == n3-1) {b0_.x3f(m,k+1,j,ie+i+1) = b0_.x3f(m,k+1,j,ie-i);}
 
       // reflect 1-velocity
-      } else if (n == (hydro::IVX)) {  
+      } else if (n == (IVX)) {  
         u0_(m,n,k,j,ie+i+1) = -u0_(m,n,k,j,ie-i);
 
       // copy everything else
@@ -142,7 +142,7 @@ void MHD::ReflectInnerX2(int m)
         if (k == n3-1) {b0_.x3f(m,k+1,js-j-1,i) = b0_.x3f(m,k+1,js+j,i);}
 
       // reflect 2-velocity
-      } else if (n == (hydro::IVY)) {  
+      } else if (n == (IVY)) {  
         u0_(m,n,k,js-j-1,i) = -u0_(m,n,k,js+j,i);
 
       // copy everything else
@@ -189,7 +189,7 @@ void MHD::ReflectOuterX2(int m)
         if (k == n3-1) {b0_.x3f(m,k+1,je+j+1,i) = b0_.x3f(m,k+1,je-j,i);}
 
       // reflect 2-velocity
-      } else if (n == (hydro::IVY)) {
+      } else if (n == (IVY)) {
         u0_(m,n,k,je+j+1,i) = -u0_(m,n,k,je-j,i);
 
       // copy everything else
@@ -236,7 +236,7 @@ void MHD::ReflectInnerX3(int m)
         b0_.x3f(m,ks-k-1,j,i) = -b0_.x3f(m,ks+k+1,j,i);
 
       // reflect 3-velocity
-      } else if (n == (hydro::IVZ)) {
+      } else if (n == (IVZ)) {
         u0_(m,n,ks-k-1,j,i) = -u0_(m,n,ks+k,j,i);
 
       // copy everything else
@@ -283,7 +283,7 @@ void MHD::ReflectOuterX3(int m)
         b0_.x3f(m,ke+k+2,j,i) = -b0_.x3f(m,ke-k,j,i);
 
       // reflect 3-velocity
-      } else if (n == (hydro::IVZ)) {
+      } else if (n == (IVZ)) {
         u0_(m,n,ke+k+1,j,i) = -u0_(m,n,ke-k,j,i);
 
       // copy everything else

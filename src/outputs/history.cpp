@@ -107,16 +107,16 @@ void HistoryOutput::LoadOutputData(Mesh *pm)
 
       // Hydro conserved variables:
       hist_sum::GlobalSum hvars;
-      hvars.the_array[0] = vol*u0_(m,hydro::IDN,k,j,i);
-      hvars.the_array[1] = vol*u0_(m,hydro::IM1,k,j,i);
-      hvars.the_array[2] = vol*u0_(m,hydro::IM2,k,j,i);
-      hvars.the_array[3] = vol*u0_(m,hydro::IM3,k,j,i);
-      hvars.the_array[4] = vol*u0_(m,hydro::IEN,k,j,i);
+      hvars.the_array[0] = vol*u0_(m,IDN,k,j,i);
+      hvars.the_array[1] = vol*u0_(m,IM1,k,j,i);
+      hvars.the_array[2] = vol*u0_(m,IM2,k,j,i);
+      hvars.the_array[3] = vol*u0_(m,IM3,k,j,i);
+      hvars.the_array[4] = vol*u0_(m,IEN,k,j,i);
 
       // Hydro KE
-      hvars.the_array[5] = vol*0.5*SQR(u0_(m,hydro::IM1,k,j,i))/u0_(m,hydro::IDN,k,j,i);
-      hvars.the_array[6] = vol*0.5*SQR(u0_(m,hydro::IM2,k,j,i))/u0_(m,hydro::IDN,k,j,i);
-      hvars.the_array[7] = vol*0.5*SQR(u0_(m,hydro::IM3,k,j,i))/u0_(m,hydro::IDN,k,j,i);
+      hvars.the_array[5] = vol*0.5*SQR(u0_(m,IM1,k,j,i))/u0_(m,IDN,k,j,i);
+      hvars.the_array[6] = vol*0.5*SQR(u0_(m,IM2,k,j,i))/u0_(m,IDN,k,j,i);
+      hvars.the_array[7] = vol*0.5*SQR(u0_(m,IM3,k,j,i))/u0_(m,IDN,k,j,i);
 
       // sum into parallel reduce
       mb_sum += hvars;

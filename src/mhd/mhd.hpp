@@ -32,27 +32,29 @@ class MHD
   ~MHD();
 
   // data
-  EquationOfState *peos;    // object that implements chosen EOS
+  EquationOfState *peos;   // object that implements chosen EOS
 
-  int nmhd;               // number of cons variables (5/4 for adiabatic/isothermal)
-  int nscalars;           // number of passive scalars
-  DvceArray5D<Real> u0;   // conserved variables
-  DvceArray5D<Real> w0;   // primitive variables
-  DvceFaceFld4D<Real> b0;   // face-centered magnetic fields
-  DvceArray5D<Real> bcc0; // cell-centered magnetic fields`
+  int nmhd;                // number of cons variables (5/4 for adiabatic/isothermal)
+  int nscalars;            // number of passive scalars
+  DvceArray5D<Real> u0;    // conserved variables
+  DvceArray5D<Real> w0;    // primitive variables
+  DvceFaceFld4D<Real> b0;  // face-centered magnetic fields
+  DvceArray5D<Real> bcc0;  // cell-centered magnetic fields`
 
   // Objects containing boundary communication buffers and routines for u and b
   BoundaryValueCC *pbval_u;
   BoundaryValueFC *pbval_b;
 
   // following only used for time-evolving flow
-  DvceArray5D<Real> u1;           // conserved variables, second register
-  DvceFaceFld4D<Real> b1;         // face-centered magnetic fields, second register
-  DvceArray5D<Real> bcc1;         // cell-centered magnetic fields, second register
-  DvceArray5D<Real> divf;         // divergence of fluxes
-  DvceArray3D<Real> uflx_x1face;  // fluxes on x1-faces
-  DvceArray3D<Real> uflx_x2face;  // fluxes on x2-faces
-  DvceArray3D<Real> uflx_x3face;  // fluxes on x3-faces
+  DvceArray5D<Real> u1;       // conserved variables, second register
+  DvceFaceFld4D<Real> b1;     // face-centered magnetic fields, second register
+  DvceArray5D<Real> bcc1;     // cell-centered magnetic fields, second register
+  DvceArray5D<Real> flux1;    // flux of conserved quantities in 1-direction
+  DvceArray5D<Real> flux2;    // flux of conserved quantities in 2-direction
+  DvceArray5D<Real> flux3;    // flux of conserved quantities in 3-direction
+  DvceArray5D<Real> emf_x1;   // two componenents of face-averaged E-field on x1-faces
+  DvceArray5D<Real> emf_x2;   // two componenents of face-averaged E-field on x2-faces
+  DvceArray5D<Real> emf_x3;   // two componenents of face-averaged E-field on x3-faces
   Real dtnew;
 
   // functions
@@ -63,7 +65,7 @@ class MHD
   TaskStatus MHDClearRecv(Driver *d, int stage);
   TaskStatus MHDClearSend(Driver *d, int stage);
   TaskStatus MHDCopyCons(Driver *d, int stage);
-  TaskStatus MHDDivFlux(Driver *d, int stage);
+  TaskStatus MHDCalcFlux(Driver *d, int stage);
   TaskStatus MHDUpdate(Driver *d, int stage);
   TaskStatus MHDSendU(Driver *d, int stage); 
   TaskStatus MHDRecvU(Driver *d, int stage); 

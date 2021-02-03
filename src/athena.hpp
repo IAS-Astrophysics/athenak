@@ -40,15 +40,10 @@ using Real = double;
 
 // data types only used in physics modules (defined here to avoid recursive dependencies)
 
-namespace hydro {
-// constants that determine array index of Hydro variables
+// constants that determine array index of Hydro/MHD variables
 enum ConsIndex {IDN=0, IM1=1, IM2=2, IM3=3, IEN=4};
 enum PrimIndex {IVX=1, IVY=2, IVZ=3, IPR=4};
-} // namespace hydro
-namespace mhd {
-// constants that determine array index of cell-centered magnetic field components
 enum BFldIndex {IBX=0, IBY=1, IBZ=2};
-} // namespace mhd
 
 // integer constants to specify reconstruction methods
 enum ReconstructionMethod {dc, plm, ppm};

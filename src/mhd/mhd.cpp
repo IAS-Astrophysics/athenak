@@ -29,10 +29,12 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   u1("cons1",1,1,1,1,1),
   b1("B_fc1",1,1,1,1),
   bcc1("B_cc1",1,1,1,1),
-  divf("divF",1,1,1,1,1),
-  uflx_x1face("uflx_x1face",1,1,1),
-  uflx_x2face("uflx_x2face",1,1,1),
-  uflx_x3face("uflx_x3face",1,1,1)
+  flux1("flx1",1,1,1,1,1),
+  flux2("flx1",1,1,1,1,1),
+  flux3("flx1",1,1,1,1,1),
+  emf_x1("e_x1",1,1,1,1,1),
+  emf_x2("e_x1",1,1,1,1,1),
+  emf_x3("e_x1",1,1,1,1,1)
 {
   // construct EOS object (no default)
   std::string eqn_of_state = pin->GetString("mhd","eos");
@@ -147,12 +149,17 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 
     // allocate registers, flux divergence, scratch arrays for time-dep probs
     Kokkos::realloc(u1,     nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
-    Kokkos::realloc(divf,   nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
-
     Kokkos::realloc(bcc1,   nmb, 3, ncells3, ncells2, ncells1);
     Kokkos::realloc(b1.x1f, nmb, ncells3, ncells2, ncells1);
     Kokkos::realloc(b1.x2f, nmb, ncells3, ncells2, ncells1);
     Kokkos::realloc(b1.x3f, nmb, ncells3, ncells2, ncells1);
+
+    Kokkos::realloc(flux1,  nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
+    Kokkos::realloc(flux2,  nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
+    Kokkos::realloc(flux3,  nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
+    Kokkos::realloc(emf_x1, nmb, 2, ncells3, ncells2, ncells1);
+    Kokkos::realloc(emf_x2, nmb, 2, ncells3, ncells2, ncells1);
+    Kokkos::realloc(emf_x3, nmb, 2, ncells3, ncells2, ncells1);
   }
 }
 
