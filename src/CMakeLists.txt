@@ -39,6 +39,7 @@ add_executable(
 
         mhd/mhd.cpp
         mhd/mhd_calc_fluxes.cpp
+        mhd/mhd_update.cpp
         mhd/bvals/apply_physical_bcs.cpp
         mhd/bvals/outflow_mhd.cpp
         mhd/bvals/reflect_mhd.cpp
