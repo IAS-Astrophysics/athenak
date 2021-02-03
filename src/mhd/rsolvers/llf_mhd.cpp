@@ -29,7 +29,7 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos,
      const int m, const int k, const int j,  const int il, const int iu,
      const int ivx, const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr,
      const ScrArray2D<Real> &bl, const ScrArray2D<Real> &br, const DvceArray4D<Real> &bx,
-     const DvceArray5D<Real> flx, DvceArray5D<Real> emf)
+     const DvceArray5D<Real> flx, DvceArray4D<Real> ey, DvceArray4D<Real> ez)
 {
   int ivy = IVX + ((ivx-IVX) + 1)%3;
   int ivz = IVX + ((ivx-IVX) + 2)%3;
@@ -128,8 +128,8 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos,
     if (eos.is_adiabatic) {
       flx(m,IEN,k,j,i) = 0.5*(fl[IEN] + fr[IEN]) - a*(er - el);
     }
-    emf(m,iby,k,j,i) = 0.5*(fl[5  ] + fr[5  ]) - a*du[5  ];
-    emf(m,ibz,k,j,i) = 0.5*(fl[6  ] + fr[6  ]) - a*du[6  ];
+    ey(m,k,j,i) = 0.5*(fl[5  ] + fr[5  ]) - a*du[5  ];
+    ez(m,k,j,i) = 0.5*(fl[6  ] + fr[6  ]) - a*du[6  ];
   });
 
   return;

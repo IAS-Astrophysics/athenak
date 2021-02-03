@@ -4,7 +4,8 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file mhd_calc_fluxes.cpp
-//  \brief Calculate fluxes of the conserved variables, and electro-motive EMFs, for mhd
+//  \brief Calculate fluxes of the conserved variables, and area-averaged EMFs, on
+//   cell faces for mhd
 
 #include <iostream>
 
@@ -50,8 +51,9 @@ TaskStatus MHD::MHDCalcFlux(Driver *pdrive, int stage)
   size_t scr_size = (ScrArray2D<Real>::shmem_size(nvars, ncells1) +
                      ScrArray2D<Real>::shmem_size(3, ncells1)) * 2;
   int scr_level = 0;
-  auto flx1 = flux1;
-  auto emf1 = emf_x1;
+  auto flx1 = uflx.x1f;
+  auto e3x1 = e3x1_;
+  auto e2x1 = e2x1_;
   auto bx = b0.x1f;
 
   par_for_outer("mhd_flux_x1",DevExeSpace(),scr_size,scr_level,0,(nmb-1), ks, ke, js, je,
@@ -84,13 +86,15 @@ TaskStatus MHD::MHDCalcFlux(Driver *pdrive, int stage)
       member.team_barrier();
 
       // compute fluxes over [is,ie+1]
+      // flx1(IBY) = (v1*b2 - v2*b1) = -EMFZ
+      // flx1(IBZ) = (v1*b3 - v3*b1) =  EMFY
       switch (rsolver_method)
       {
         case MHD_RSolver::advect:
-          Advect(member, eos, m, k, j, is, ie+1, IVX, wl, wr, bl, br, bx, flx1, emf1);
+          Advect(member,eos,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e3x1,e2x1);
           break;
         case MHD_RSolver::llf:
-          LLF(member, eos, m, k, j, is, ie+1, IVX, wl, wr, bl, br, bx, flx1, emf1);
+          LLF(member,eos,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e3x1,e2x1);
           break;
 //        case MHD_RSolver::hllc:
 //          HLLC(member, eos, is, ie+1, IVX, wl, wr, uflux);
@@ -111,9 +115,10 @@ TaskStatus MHD::MHDCalcFlux(Driver *pdrive, int stage)
 
   scr_size = (ScrArray2D<Real>::shmem_size(nvars, ncells1) +
               ScrArray2D<Real>::shmem_size(3, ncells1)) * 3;
-  auto flx2 = flux2;
-  auto emf2 = emf_x2;
+  auto flx2 = uflx.x2f;
   auto by = b0.x2f;
+  auto e1x2 = e1x2_;
+  auto e3x2 = e3x2_;
 
   par_for_outer("mhd_flux2",DevExeSpace(),scr_size,scr_level,0,(nmb-1), ks, ke,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k)
@@ -144,16 +149,16 @@ TaskStatus MHD::MHDCalcFlux(Driver *pdrive, int stage)
         switch (recon_method)
         {
           case ReconstructionMethod::dc:
-            DonorCellX2(member, m,k,j,is-1,ie+1, w0_, wl_jp1, wr);
-            DonorCellX2(member, m,k,j,is-1,ie+1, b0_, bl_jp1, br);
+            DonorCellX2(member, m, k, j, is-1, ie+1, w0_, wl_jp1, wr);
+            DonorCellX2(member, m, k, j, is-1, ie+1, b0_, bl_jp1, br);
             break;
           case ReconstructionMethod::plm:
-            PiecewiseLinearX2(member, m,k,j,is-1,ie+1, w0_, wl_jp1, wr);
-            PiecewiseLinearX2(member, m,k,j,is-1,ie+1, b0_, bl_jp1, br);
+            PiecewiseLinearX2(member, m, k, j, is-1, ie+1, w0_, wl_jp1, wr);
+            PiecewiseLinearX2(member, m, k, j, is-1, ie+1, b0_, bl_jp1, br);
             break;
           case ReconstructionMethod::ppm:
-            PiecewiseParabolicX2(member, m,k,j,is-1,ie+1, w0_, wl_jp1, wr);
-            PiecewiseParabolicX2(member, m,k,j,is-1,ie+1, b0_, bl_jp1, br);
+            PiecewiseParabolicX2(member, m, k, j, is-1, ie+1, w0_, wl_jp1, wr);
+            PiecewiseParabolicX2(member, m, k, j, is-1, ie+1, b0_, bl_jp1, br);
             break;
           default:
             break;
@@ -161,14 +166,16 @@ TaskStatus MHD::MHDCalcFlux(Driver *pdrive, int stage)
         member.team_barrier();
 
         // compute fluxes over [js,je+1].
+        // flx2(IBY) = (v2*b3 - v3*b2) = -EMFX
+        // flx2(IBZ) = (v2*b1 - v1*b2) =  EMFZ
         if (j>(js-1)) {
           switch (rsolver_method)
           {
             case MHD_RSolver::advect:
-              Advect(member, eos, m,k,j,is-1,ie+1, IVY, wl, wr, bl, br, by, flx2, emf2);
+              Advect(member,eos,m,k,j,is-1,ie+1,IVY,wl,wr,bl,br,by,flx2,e1x2,e3x2);
               break;
             case MHD_RSolver::llf:
-              LLF(member, eos, m,k,j,is-1,ie+1, IVY, wl, wr, bl, br, by, flx2, emf2);
+              LLF(member,eos,m,k,j,is-1,ie+1,IVY,wl,wr,bl,br,by,flx2,e1x2,e3x2);
               break;
 //            case MHD_RSolver::hllc:
 //              HLLC(member, eos, is, ie, IVY, wl, wr, uf);
@@ -191,9 +198,10 @@ TaskStatus MHD::MHDCalcFlux(Driver *pdrive, int stage)
 
   scr_size = (ScrArray2D<Real>::shmem_size(nvars, ncells1) +
               ScrArray2D<Real>::shmem_size(3, ncells1)) * 3;
-  auto flx3 = flux3;
-  auto emf3 = emf_x3;
+  auto flx3 = uflx.x3f;
   auto bz = b0.x3f;
+  auto e2x3 = e2x3_;
+  auto e1x3 = e1x3_;
 
   par_for_outer("divflux_x3",DevExeSpace(), scr_size, scr_level, 0, (nmb-1), js, je,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int j)
@@ -224,12 +232,12 @@ TaskStatus MHD::MHDCalcFlux(Driver *pdrive, int stage)
         switch (recon_method)
         {
           case ReconstructionMethod::dc:
-            DonorCellX3(member, m,k,j,is-1,ie+1, w0_, wl_kp1, wr);
-            DonorCellX3(member, m,k,j,is-1,ie+1, b0_, bl_kp1, br);
+            DonorCellX3(member, m, k, j, is-1, ie+1, w0_, wl_kp1, wr);
+            DonorCellX3(member, m, k, j, is-1, ie+1, b0_, bl_kp1, br);
             break;
           case ReconstructionMethod::plm:
-            PiecewiseLinearX3(member, m,k,j,is-1,ie+1, w0_, wl_kp1, wr);
-            PiecewiseLinearX3(member, m,k,j,is-1,ie+1, b0_, bl_kp1, br);
+            PiecewiseLinearX3(member, m, k, j, is-1, ie+1, w0_, wl_kp1, wr);
+            PiecewiseLinearX3(member, m, k, j, is-1, ie+1, b0_, bl_kp1, br);
             break;
           case ReconstructionMethod::ppm:
             PiecewiseParabolicX3(member, m, k, j, is-1, ie+1, w0_, wl_kp1, wr);
@@ -240,15 +248,17 @@ TaskStatus MHD::MHDCalcFlux(Driver *pdrive, int stage)
         }
         member.team_barrier();
 
-        // compute fluxes over [ks,ke+1].  RS returns flux in input wr array
+        // compute fluxes over [ks,ke+1].
+        // flx3(IBY) = (v3*b1 - v1*b3) = -EMFY
+        // flx3(IBZ) = (v3*b2 - v2*b3) =  EMFX
         if (k>(ks-1)) {
           switch (rsolver_method)
           {
             case MHD_RSolver::advect:
-              Advect(member, eos, m,k,j,is-1,ie+1, IVZ, wl, wr, bl, br, bz, flx3, emf3);
+              Advect(member,eos,m,k,j,is-1,ie+1,IVZ,wl,wr,bl,br,bz,flx3,e2x3,e1x3);
               break;
             case MHD_RSolver::llf:
-              LLF(member, eos, m,k,j,is-1,ie+1, IVZ, wl, wr, bl, br, bz, flx3, emf3);
+              LLF(member,eos,m,k,j,is-1,ie+1,IVZ,wl,wr,bl,br,bz,flx3,e2x3,e1x3);
               break;
 //            case MHD_RSolver::hllc:
 //              HLLC(member, eos, is, ie, IVZ, wl, wr, uf);

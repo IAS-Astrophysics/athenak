@@ -25,16 +25,11 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   u0("cons",1,1,1,1,1),
   w0("prim",1,1,1,1,1),
   b0("B_fc",1,1,1,1),
-  bcc0("B_cc",1,1,1,1),
+  bcc0("B_cc",1,1,1,1,1),
   u1("cons1",1,1,1,1,1),
   b1("B_fc1",1,1,1,1),
-  bcc1("B_cc1",1,1,1,1),
-  flux1("flx1",1,1,1,1,1),
-  flux2("flx1",1,1,1,1,1),
-  flux3("flx1",1,1,1,1,1),
-  emf_x1("e_x1",1,1,1,1,1),
-  emf_x2("e_x1",1,1,1,1,1),
-  emf_x3("e_x1",1,1,1,1,1)
+  uflx("uflx",1,1,1,1,1),
+  efld("efld",1,1,1,1)
 {
   // construct EOS object (no default)
   std::string eqn_of_state = pin->GetString("mhd","eos");
@@ -65,6 +60,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   Kokkos::realloc(u0,   nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
   Kokkos::realloc(w0,   nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
 
+  // allocate memory for face-centered and cell-centered magnetic fields
   Kokkos::realloc(bcc0,   nmb, 3, ncells3, ncells2, ncells1);
   Kokkos::realloc(b0.x1f, nmb, ncells3, ncells2, ncells1);
   Kokkos::realloc(b0.x2f, nmb, ncells3, ncells2, ncells1);
@@ -147,19 +143,19 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
       std::exit(EXIT_FAILURE); 
     }}
 
-    // allocate registers, flux divergence, scratch arrays for time-dep probs
+    // allocate second registers
     Kokkos::realloc(u1,     nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
-    Kokkos::realloc(bcc1,   nmb, 3, ncells3, ncells2, ncells1);
     Kokkos::realloc(b1.x1f, nmb, ncells3, ncells2, ncells1);
     Kokkos::realloc(b1.x2f, nmb, ncells3, ncells2, ncells1);
     Kokkos::realloc(b1.x3f, nmb, ncells3, ncells2, ncells1);
 
-    Kokkos::realloc(flux1,  nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
-    Kokkos::realloc(flux2,  nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
-    Kokkos::realloc(flux3,  nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
-    Kokkos::realloc(emf_x1, nmb, 2, ncells3, ncells2, ncells1);
-    Kokkos::realloc(emf_x2, nmb, 2, ncells3, ncells2, ncells1);
-    Kokkos::realloc(emf_x3, nmb, 2, ncells3, ncells2, ncells1);
+    // allocate fluxes, electric fields
+    Kokkos::realloc(uflx.x1f, nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
+    Kokkos::realloc(uflx.x2f, nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
+    Kokkos::realloc(uflx.x3f, nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
+    Kokkos::realloc(efld.x1e, nmb, ncells3, ncells2, ncells1);
+    Kokkos::realloc(efld.x2e, nmb, ncells3, ncells2, ncells1);
+    Kokkos::realloc(efld.x3e, nmb, ncells3, ncells2, ncells1);
   }
 }
 

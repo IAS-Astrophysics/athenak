@@ -63,6 +63,7 @@ using TeamMember_t = Kokkos::TeamPolicy<>::member_type;   // for Kokkos thread t
 
 //----------------------------------------------------------------------------------------
 // alias template declarations for various array types (formerly AthenaArrays)
+// mostly used to store cell-centered variables (volume averaged)
 
 // template declarations for construction of Kokkos::View on device
 template <typename T>
@@ -107,16 +108,39 @@ using ScrArray2D = Kokkos::View<T **, LayoutWrapper, ScratchMemSpace,
                                      Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
 
 //----------------------------------------------------------------------------------------
-// struct for storing face-centered variables
+// struct for storing face-centered (area-averaged) variables, e.g. magnetic field
 
 template <typename T>
 struct DvceFaceFld4D {
-  DvceArray4D<T> x1f, x2f, x3f;
+  DvceArray4D<T> x1f, x2f, x3f;  // name indicates both direction and location
   DvceFaceFld4D(const std::string &label, int nmb, int n3, int n2, int n1) :
     x1f(label + ".x1f", nmb, n3, n2, n1+1),
     x2f(label + ".x2f", nmb, n3, n2+1, n1),
     x3f(label + ".x3f", nmb, n3+1, n2, n1) {}
   ~DvceFaceFld4D() = default;
+};
+
+template <typename T>
+struct DvceFaceFld5D {
+  DvceArray5D<T> x1f, x2f, x3f;  // name indicates both direction and location
+  DvceFaceFld5D(const std::string &label, int nmb, int nvar, int n3, int n2, int n1) :
+    x1f(label + ".x1f", nmb, nvar, n3, n2, n1+1),
+    x2f(label + ".x2f", nmb, nvar, n3, n2+1, n1),
+    x3f(label + ".x3f", nmb, nvar, n3+1, n2, n1) {}
+  ~DvceFaceFld5D() = default;
+};
+
+//----------------------------------------------------------------------------------------
+// struct for storing edge-centered (line-averaged) variables, e.g. EMF
+
+template <typename T>
+struct DvceEdgeFld4D {
+  DvceArray4D<T> x1e, x2e, x3e;   // name refers to direction NOT location
+  DvceEdgeFld4D(const std::string &label, int nmb, int n3, int n2, int n1) :
+    x1e(label + ".x1e", nmb, n3+1, n2+1, n1),
+    x2e(label + ".x2e", nmb, n3+1, n2, n1+1),
+    x3e(label + ".x3e", nmb, n3, n2+1, n1+1) {}
+  ~DvceEdgeFld4D() = default;
 };
 
 //----------------------------------------------------------------------------------------

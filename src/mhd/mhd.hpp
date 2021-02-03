@@ -48,13 +48,8 @@ class MHD
   // following only used for time-evolving flow
   DvceArray5D<Real> u1;       // conserved variables, second register
   DvceFaceFld4D<Real> b1;     // face-centered magnetic fields, second register
-  DvceArray5D<Real> bcc1;     // cell-centered magnetic fields, second register
-  DvceArray5D<Real> flux1;    // flux of conserved quantities in 1-direction
-  DvceArray5D<Real> flux2;    // flux of conserved quantities in 2-direction
-  DvceArray5D<Real> flux3;    // flux of conserved quantities in 3-direction
-  DvceArray5D<Real> emf_x1;   // two componenents of face-averaged E-field on x1-faces
-  DvceArray5D<Real> emf_x2;   // two componenents of face-averaged E-field on x2-faces
-  DvceArray5D<Real> emf_x3;   // two componenents of face-averaged E-field on x3-faces
+  DvceFaceFld5D<Real> uflx;   // fluxes of conserved quantities on cell faces
+  DvceEdgeFld4D<Real> efld;   // edge-centered electric fields (fluxes of B)
   Real dtnew;
 
   // functions
@@ -94,6 +89,10 @@ class MHD
   MeshBlockPack* pmy_pack;   // ptr to MeshBlockPack containing this MHD
   ReconstructionMethod recon_method_;
   MHD_RSolver rsolver_method_;
+  // temporary variables used to store face-centered electric fields returned by RS
+  DvceArray4D<Real> e3x1_, e2x1_;
+  DvceArray4D<Real> e1x2_, e3x2_;
+  DvceArray4D<Real> e2x3_, e1x3_;
 };
 
 } // namespace mhd

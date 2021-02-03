@@ -33,9 +33,9 @@ TaskStatus MHD::MHDUpdate(Driver *pdrive, int stage)
   int nv1 = nmhd + nscalars - 1;
   auto u0_ = u0;
   auto u1_ = u1;
-  auto flx1 = flux1;
-  auto flx2 = flux2;
-  auto flx3 = flux3;
+  auto flx1 = uflx.x1f;
+  auto flx2 = uflx.x2f;
+  auto flx3 = uflx.x3f;
   auto &mbsize = pmy_pack->pmb->mbsize;
 
   // hierarchical parallel loop that updates conserved variables to intermediate step
@@ -52,7 +52,7 @@ TaskStatus MHD::MHDUpdate(Driver *pdrive, int stage)
       // compute dF1/dx1
       par_for_inner(member, is, ie, [&](const int i)
       {
-        divf(i) = (flux1(m,n,k,j,i+1) - flux1(m,n,k,j,i))/mbsize.dx1.d_view(m);
+        divf(i) = (flx1(m,n,k,j,i+1) - flx1(m,n,k,j,i))/mbsize.dx1.d_view(m);
       });
       member.team_barrier();
 
@@ -61,7 +61,7 @@ TaskStatus MHD::MHDUpdate(Driver *pdrive, int stage)
       if (two_d) {
         par_for_inner(member, is, ie, [&](const int i)
         {
-          divf(i) += (flux2(m,n,k,j+1,i) - flux2(m,n,k,j,i))/mbsize.dx2.d_view(m);
+          divf(i) += (flx2(m,n,k,j+1,i) - flx2(m,n,k,j,i))/mbsize.dx2.d_view(m);
         });
         member.team_barrier();
       }
@@ -71,7 +71,7 @@ TaskStatus MHD::MHDUpdate(Driver *pdrive, int stage)
       if (three_d) {
         par_for_inner(member, is, ie, [&](const int i)
         {
-          divf(i) += (flux3(m,n,k+1,j,i) - flux3(m,n,k,j,i))/mbsize.dx3.d_view(m);
+          divf(i) += (flx3(m,n,k+1,j,i) - flx3(m,n,k,j,i))/mbsize.dx3.d_view(m);
         });
         member.team_barrier();
       }
