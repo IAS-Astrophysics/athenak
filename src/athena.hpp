@@ -49,7 +49,7 @@ enum BFldIndex {IBX=0, IBY=1, IBZ=2};
 enum ReconstructionMethod {dc, plm, ppm};
 
 // constants that enumerate time evolution options
-enum TimeEvolution {stationary, kinematic, dynamic};
+enum TimeEvolution {tstatic, kinematic, dynamic};
 
 //----------------------------------------------------------------------------------------
 // define default Kokkos execution and memory spaces

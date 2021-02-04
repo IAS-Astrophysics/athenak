@@ -44,8 +44,8 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   // Initialize number of scalars
   nscalars = pin->GetOrAddInteger("hydro","nscalars",0);
 
-  // set time-evolution option (default=dynamic) [error checked in driver constructor]
-  std::string evolution_t = pin->GetOrAddString("hydro","evolution","dynamic");
+  // read time-evolution option [already error checked in driver constructor]
+  std::string evolution_t = pin->GetString("time","evolution");
 
   // allocate memory for conserved and primitive variables
   int nmb = ppack->nmb_thispack;

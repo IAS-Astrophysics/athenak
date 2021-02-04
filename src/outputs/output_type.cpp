@@ -19,6 +19,7 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
+#include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "utils/grid_locations.hpp"
@@ -63,7 +64,9 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
       outvars.emplace_back("mom1",1,&(pm->pmb_pack->phydro->u0));
       outvars.emplace_back("mom2",2,&(pm->pmb_pack->phydro->u0));
       outvars.emplace_back("mom3",3,&(pm->pmb_pack->phydro->u0));
-      outvars.emplace_back("ener",4,&(pm->pmb_pack->phydro->u0));
+      if (pm->pmb_pack->phydro->peos->eos_data.is_adiabatic) {
+        outvars.emplace_back("ener",4,&(pm->pmb_pack->phydro->u0));
+      }
       break;
 
     // Load hydro primitive variables
@@ -93,7 +96,9 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
       outvars.emplace_back("velx",1,&(pm->pmb_pack->phydro->w0));
       outvars.emplace_back("vely",2,&(pm->pmb_pack->phydro->w0));
       outvars.emplace_back("velz",3,&(pm->pmb_pack->phydro->w0));
-      outvars.emplace_back("pres",4,&(pm->pmb_pack->phydro->w0));
+      if (pm->pmb_pack->phydro->peos->eos_data.is_adiabatic) {
+        outvars.emplace_back("pres",4,&(pm->pmb_pack->phydro->w0));
+      }
       break;
 
     // Load mhd conserved variables
@@ -123,7 +128,9 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
       outvars.emplace_back("mom1",1,&(pm->pmb_pack->pmhd->u0));
       outvars.emplace_back("mom2",2,&(pm->pmb_pack->pmhd->u0));
       outvars.emplace_back("mom3",3,&(pm->pmb_pack->pmhd->u0));
-      outvars.emplace_back("ener",4,&(pm->pmb_pack->pmhd->u0));
+      if (pm->pmb_pack->pmhd->peos->eos_data.is_adiabatic) {
+        outvars.emplace_back("ener",4,&(pm->pmb_pack->pmhd->u0));
+      }
       break;
 
     // Load mhd primitive variables
@@ -153,7 +160,9 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
       outvars.emplace_back("velx",1,&(pm->pmb_pack->pmhd->w0));
       outvars.emplace_back("vely",2,&(pm->pmb_pack->pmhd->w0));
       outvars.emplace_back("velz",3,&(pm->pmb_pack->pmhd->w0));
-      outvars.emplace_back("pres",4,&(pm->pmb_pack->pmhd->w0));
+      if (pm->pmb_pack->pmhd->peos->eos_data.is_adiabatic) {
+        outvars.emplace_back("pres",4,&(pm->pmb_pack->pmhd->w0));
+      }
       break;
 
     // Load mhd cell-centered magnetic fields

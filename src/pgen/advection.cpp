@@ -38,7 +38,6 @@ void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
   int iprob = pin->GetInteger("problem","iproblem");
   Real vel = pin->GetOrAddReal("problem","velocity",1.0);
   Real amp = pin->GetOrAddReal("problem","amplitude",0.1);
-  Real gm1 = pmbp->phydro->peos->eos_data.gamma - 1.0;
 
   // get size of overall domain
   Real length;
@@ -75,7 +74,12 @@ void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
 
   // Initialize Hydro variables -------------------------------
   if (pmbp->phydro != nullptr) {
-    using namespace hydro;
+    if (pmbp->phydro->peos->eos_data.is_adiabatic) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+         << std::endl << "Only isothermal EOS allowed for advection tests" << std::endl;
+      exit(EXIT_FAILURE);
+    }
+    Real gm1 = pmbp->phydro->peos->eos_data.gamma - 1.0;
     int &nhydro = pmbp->phydro->nhydro;
     int &nscalars = pmbp->phydro->nscalars;
     auto &u0 = pmbp->phydro->u0;
@@ -135,7 +139,12 @@ void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
 
   // Initialize MHD variables ----------------------------------
   if (pmbp->pmhd != nullptr) {
-    using namespace hydro;
+    if (pmbp->pmhd->peos->eos_data.is_adiabatic) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+         << std::endl << "Only isothermal EOS allowed for advection tests" << std::endl;
+      exit(EXIT_FAILURE);
+    }
+    Real gm1 = pmbp->phydro->peos->eos_data.gamma - 1.0;
     int &nmhd = pmbp->pmhd->nmhd;
     int &nscalars = pmbp->pmhd->nscalars;
     auto &u0 = pmbp->pmhd->u0;

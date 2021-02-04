@@ -48,10 +48,10 @@
 Driver::Driver(ParameterInput *pin, Mesh *pmesh) :
   tlim(-1.0), nlim(-1), ndiag(1)
 {
-  // set time-evolution option (default=dynamic)
-  {std::string evolution_t = pin->GetOrAddString("time","evolution","dynamic");
-  if (evolution_t.compare("stationary") == 0) {
-    time_evolution = TimeEvolution::stationary;
+  // set time-evolution option (no default)
+  {std::string evolution_t = pin->GetString("time","evolution");
+  if (evolution_t.compare("static") == 0) {
+    time_evolution = TimeEvolution::tstatic;  // cannot use 'static' (keyword);
 
   } else if (evolution_t.compare("kinematic") == 0) {
     time_evolution = TimeEvolution::kinematic;
@@ -67,7 +67,7 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh) :
   }} // extra brace to limit scope of string
 
   // read <time> parameters controlling driver if run requires time-evolution
-  if (time_evolution != TimeEvolution::stationary) {
+  if (time_evolution != TimeEvolution::tstatic) {
     integrator = pin->GetOrAddString("time", "integrator", "rk2");
     tlim = pin->GetReal("time", "tlim");
     nlim = pin->GetOrAddInteger("time", "nlim", -1);
@@ -171,7 +171,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
 
   // TODO: need to cycle through all physics modules/variables in this step
 
-  if (time_evolution != TimeEvolution::stationary) {
+  if (time_evolution != TimeEvolution::tstatic) {
     TaskStatus tstatus;
     tstatus = pmesh->pmb_pack->phydro->NewTimeStep(this, nstages);
     pmesh->NewTimeStep(tlim);
@@ -204,7 +204,7 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
 
   while ((pmesh->time < tlim) && (pmesh->ncycle < nlim || nlim < 0)) {
 
-    if (time_evolution != TimeEvolution::stationary) {
+    if (time_evolution != TimeEvolution::tstatic) {
       if (global_variable::my_rank == 0) {OutputCycleDiagnostics(pmesh);}
 
       // Do multi-stage time evolution TaskLists
@@ -309,7 +309,7 @@ void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
     
   float exe_time = run_time_.seconds();
 
-  if (time_evolution != TimeEvolution::stationary) { 
+  if (time_evolution != TimeEvolution::tstatic) { 
     if (global_variable::my_rank == 0) {
       // Print diagnostic messages related to the end of the simulation
       OutputCycleDiagnostics(pmesh);

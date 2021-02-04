@@ -238,30 +238,33 @@ int main(int argc, char *argv[])
   }
 
   //--- Step 5. --------------------------------------------------------------------------
-  // Add physics modules to MeshBlockPack.  Note this occurs after Mesh (MeshBlocks and
-  // MeshBlockPack) are fully contructed.
+  // Construct Driver
+
+  auto pdrive = std::make_unique<Driver>(&par_input, &mesh0);
+
+  //--- Step 6. --------------------------------------------------------------------------
+  // Add physics modules to MeshBlockPack.  Note this must occur after Mesh (MeshBlocks and
+  // MeshBlockPack) and Driver are fully constructed.
 
   mesh0.pmb_pack->AddPhysicsModules(&par_input);
 
-  //--- Step 6. --------------------------------------------------------------------------
+  //--- Step 7. --------------------------------------------------------------------------
   // Construct Outputs. Actual outputs (including initial conditions) are made in Driver
 
   ChangeRunDir(run_dir);
   Outputs out_types(&par_input, &mesh0);
 
-  //--- Step 7. --------------------------------------------------------------------------
-  // Construct and Execute Driver.
+  //--- Step 8. --------------------------------------------------------------------------
+  // Execute Driver.
   //    1. Initial conditions set in Driver::Initialize()
   //    2. TaskList(s) executed in Driver::Execute()
   //    3. Any final analysis or diagnostics run in Driver::Finalize()
-
-  auto pdrive = std::make_unique<Driver>(&par_input, &mesh0);
 
   pdrive->Initialize(&mesh0, &par_input,  &out_types);
   pdrive->Execute(&mesh0, &par_input,  &out_types);
   pdrive->Finalize(&mesh0, &par_input,  &out_types);
 
-  //--- Step 8. -------------------------------------------------------------------------
+  //--- Step 9. -------------------------------------------------------------------------
   // clean up, and terminate
 
   Kokkos::finalize();
