@@ -17,7 +17,7 @@ namespace mhd {
 //! \fn  void MHD::MHDUpdate
 //  \brief Update conserved variables 
 
-TaskStatus MHD::MHDUpdate(Driver *pdrive, int stage)
+TaskStatus MHD::MHDUpdate(Driver *pdriver, int stage)
 {
   int is = pmy_pack->mb_cells.is; int ie = pmy_pack->mb_cells.ie;
   int js = pmy_pack->mb_cells.js; int je = pmy_pack->mb_cells.je;
@@ -26,9 +26,9 @@ TaskStatus MHD::MHDUpdate(Driver *pdrive, int stage)
   bool &two_d   = pmy_pack->pmesh->nx2gt1;
   bool &three_d = pmy_pack->pmesh->nx3gt1;
 
-  Real &gam0 = pdrive->gam0[stage-1];
-  Real &gam1 = pdrive->gam1[stage-1];
-  Real beta_dt = (pdrive->beta[stage-1])*(pmy_pack->pmesh->dt);
+  Real &gam0 = pdriver->gam0[stage-1];
+  Real &gam1 = pdriver->gam1[stage-1];
+  Real beta_dt = (pdriver->beta[stage-1])*(pmy_pack->pmesh->dt);
   int nmb1 = pmy_pack->nmb_thispack - 1;
   int nv1 = nmhd + nscalars - 1;
   auto u0_ = u0;
@@ -44,7 +44,7 @@ TaskStatus MHD::MHDUpdate(Driver *pdrive, int stage)
   int scr_level = 0;
   size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1);
 
-  par_for_outer("mhd_update",DevExeSpace(),scr_size,scr_level,0,nmb1,0,nv1, ks, ke, js, je,
+  par_for_outer("mhd_update",DevExeSpace(),scr_size,scr_level,0,nmb1,0,nv1,ks,ke,js,je,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int n, const int k, const int j)
     {
       ScrArray1D<Real> divf(member.team_scratch(scr_level), ncells1);

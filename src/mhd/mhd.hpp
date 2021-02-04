@@ -61,6 +61,8 @@ class MHD
   TaskStatus MHDClearSend(Driver *d, int stage);
   TaskStatus MHDCopyCons(Driver *d, int stage);
   TaskStatus MHDCalcFlux(Driver *d, int stage);
+  TaskStatus MHDCornerE(Driver *d, int stage);
+  TaskStatus MHD_CT(Driver *d, int stage);
   TaskStatus MHDUpdate(Driver *d, int stage);
   TaskStatus MHDSendU(Driver *d, int stage); 
   TaskStatus MHDRecvU(Driver *d, int stage); 
@@ -93,6 +95,7 @@ class MHD
   DvceArray4D<Real> e3x1_, e2x1_;
   DvceArray4D<Real> e1x2_, e3x2_;
   DvceArray4D<Real> e2x3_, e1x3_;
+  DvceArray4D<Real> e1_cc_, e2_cc_, e3_cc_;
 };
 
 } // namespace mhd

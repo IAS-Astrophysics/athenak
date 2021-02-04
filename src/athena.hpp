@@ -151,6 +151,28 @@ struct DvceEdgeFld4D {
 // MD-range policy, so the latter is not used.
 
 //------------------------------
+// 2D loop using Kokkos 1D Range
+template <typename Function>
+inline void par_for(const std::string &name, DevExeSpace exec_space,
+                    const int &jl, const int &ju,
+                    const int &il, const int &iu, const Function &function)
+{
+  // compute total number of elements and call Kokkos::parallel_for()
+  const int nj = ju - jl + 1;
+  const int ni = iu - il + 1;
+  const int nji  = nj * ni;
+  Kokkos::parallel_for(name, Kokkos::RangePolicy<>(exec_space, 0, nji),
+                       KOKKOS_LAMBDA(const int &idx)
+  {
+    // compute j,i indices of thread and call function
+    int j = (idx)/nji;
+    int i = (idx - j*ni) + il;
+    j += jl;
+    function(j, i);
+  });
+}
+
+//------------------------------
 // 3D loop using Kokkos 1D Range
 template <typename Function>
 inline void par_for(const std::string &name, DevExeSpace exec_space,
@@ -166,7 +188,7 @@ inline void par_for(const std::string &name, DevExeSpace exec_space,
   Kokkos::parallel_for(name, Kokkos::RangePolicy<>(exec_space, 0, nkji),
                        KOKKOS_LAMBDA(const int &idx)
   { 
-    // compute n,k,j,i indices of thread and call function
+    // compute k,j,i indices of thread and call function
     int k = (idx)/nji;
     int j = (idx - k*nji)/ni;
     int i = (idx - k*nji - j*ni) + il;
@@ -227,7 +249,7 @@ inline void par_for(const std::string &name, DevExeSpace exec_space,
   Kokkos::parallel_for(name, Kokkos::RangePolicy<>(exec_space, 0, nmnkji),
                        KOKKOS_LAMBDA(const int &idx)
   {
-    // compute n,k,j,i indices of thread and call function
+    // compute m,n,k,j,i indices of thread and call function
     int m = (idx)/nnkji;
     int n = (idx - m*nnkji)/nkji;
     int k = (idx - m*nnkji - n*nkji)/nji;

@@ -38,7 +38,9 @@ add_executable(
         mesh/meshblock_tree.cpp
 
         mhd/mhd.cpp
-        mhd/mhd_calc_fluxes.cpp
+        mhd/mhd_corner_e.cpp
+        mhd/mhd_ct.cpp
+        mhd/mhd_fluxes.cpp
         mhd/mhd_update.cpp
         mhd/mhd_newdt.cpp
         mhd/bvals/apply_physical_bcs.cpp

@@ -3,7 +3,7 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file mhd_calc_fluxes.cpp
+//! \file mhd_fluxes.cpp
 //  \brief Calculate fluxes of the conserved variables, and area-averaged EMFs, on
 //   cell faces for mhd
 
@@ -29,7 +29,7 @@ namespace mhd {
 //  \brief Calculate fluxes of conserved variables, and face-centered area-averaged EMFs
 //  for evolution of magnetic field
 
-TaskStatus MHD::MHDCalcFlux(Driver *pdrive, int stage)
+TaskStatus MHD::MHDCalcFlux(Driver *pdriver, int stage)
 {
   int is = pmy_pack->mb_cells.is; int ie = pmy_pack->mb_cells.ie;
   int js = pmy_pack->mb_cells.js; int je = pmy_pack->mb_cells.je;
