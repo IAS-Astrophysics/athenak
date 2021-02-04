@@ -23,7 +23,7 @@ add_executable(
         driver/driver.cpp
 
         hydro/hydro.cpp
-        hydro/hydro_divflux.cpp
+        hydro/hydro_fluxes.cpp
         hydro/hydro_newdt.cpp
         hydro/hydro_update.cpp
         hydro/bvals/apply_physical_bcs.cpp

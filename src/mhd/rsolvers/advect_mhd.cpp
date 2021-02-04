@@ -11,7 +11,7 @@ namespace mhd {
 
 //----------------------------------------------------------------------------------------
 //! \fn void Advection
-//  \brief An advection Riemann solver for MHD (both adiabatic and isothermal)
+//  \brief An advection Riemann solver for MHD (isothermal)
 
 KOKKOS_INLINE_FUNCTION
 void Advect(TeamMember_t const &member, const EOS_Data eos,

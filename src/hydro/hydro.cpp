@@ -25,10 +25,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   u0("cons",1,1,1,1,1),
   w0("prim",1,1,1,1,1),
   u1("cons1",1,1,1,1,1),
-  divf("divF",1,1,1,1,1),
-  uflx_x1face("uflx_x1face",1,1,1),
-  uflx_x2face("uflx_x2face",1,1,1),
-  uflx_x3face("uflx_x3face",1,1,1)
+  uflx("uflx",1,1,1,1,1)
 {
   // construct EOS object (no default)
   std::string eqn_of_state = pin->GetString("hydro","eos");
@@ -132,9 +129,11 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
       std::exit(EXIT_FAILURE); 
     }}
 
-    // allocate registers, flux divergence, scratch arrays for time-dep probs
-    Kokkos::realloc(u1,   nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
-    Kokkos::realloc(divf, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
+    // allocate second registers, fluxes
+    Kokkos::realloc(u1,       nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
+    Kokkos::realloc(uflx.x1f, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
+    Kokkos::realloc(uflx.x2f, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
+    Kokkos::realloc(uflx.x3f, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
   }
 }
 
@@ -166,8 +165,8 @@ void Hydro::HydroStageStartTasks(TaskList &tl, TaskID start)
 void Hydro::HydroStageRunTasks(TaskList &tl, TaskID start)
 {
   auto hydro_copycons = tl.AddTask(&Hydro::HydroCopyCons, this, start);
-  auto hydro_divflux  = tl.AddTask(&Hydro::HydroDivFlux, this, hydro_copycons);
-  auto hydro_update  = tl.AddTask(&Hydro::HydroUpdate, this, hydro_divflux);
+  auto hydro_divflux  = tl.AddTask(&Hydro::CalcFluxes, this, hydro_copycons);
+  auto hydro_update  = tl.AddTask(&Hydro::Update, this, hydro_divflux);
   auto hydro_send  = tl.AddTask(&Hydro::HydroSendU, this, hydro_update);
   auto hydro_recv  = tl.AddTask(&Hydro::HydroRecvU, this, hydro_send);
   auto hydro_phybcs  = tl.AddTask(&Hydro::HydroApplyPhysicalBCs, this, hydro_recv);

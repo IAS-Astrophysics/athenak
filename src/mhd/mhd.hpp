@@ -60,7 +60,7 @@ class MHD
   TaskStatus MHDClearRecv(Driver *d, int stage);
   TaskStatus MHDClearSend(Driver *d, int stage);
   TaskStatus MHDCopyCons(Driver *d, int stage);
-  TaskStatus MHDCalcFlux(Driver *d, int stage);
+  TaskStatus MHDCalcFluxes(Driver *d, int stage);
   TaskStatus MHDCornerE(Driver *d, int stage);
   TaskStatus MHD_CT(Driver *d, int stage);
   TaskStatus MHDUpdate(Driver *d, int stage);

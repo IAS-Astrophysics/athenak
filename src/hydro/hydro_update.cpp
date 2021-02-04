@@ -14,51 +14,74 @@
 
 namespace hydro {
 //----------------------------------------------------------------------------------------
-//! \fn  void Hydro::HydroUpdate
+//! \fn  void Hydro::Update
 //  \brief Update conserved variables 
 
-TaskStatus Hydro::HydroUpdate(Driver *pdrive, int stage)
+TaskStatus Hydro::Update(Driver *pdriver, int stage)
 {
   int is = pmy_pack->mb_cells.is; int ie = pmy_pack->mb_cells.ie;
   int js = pmy_pack->mb_cells.js; int je = pmy_pack->mb_cells.je;
   int ks = pmy_pack->mb_cells.ks; int ke = pmy_pack->mb_cells.ke;
+  int ncells1 = pmy_pack->mb_cells.nx1 + 2*(pmy_pack->mb_cells.ng);
+  bool &two_d   = pmy_pack->pmesh->nx2gt1;
+  bool &three_d = pmy_pack->pmesh->nx3gt1;
 
-  Real &gam0 = pdrive->gam0[stage-1];
-  Real &gam1 = pdrive->gam1[stage-1];
-  Real beta_dt = (pdrive->beta[stage-1])*(pmy_pack->pmesh->dt);
-  int nvars = nhydro + nscalars;
+  Real &gam0 = pdriver->gam0[stage-1];
+  Real &gam1 = pdriver->gam1[stage-1];
+  Real beta_dt = (pdriver->beta[stage-1])*(pmy_pack->pmesh->dt);
+  int nmb1 = pmy_pack->nmb_thispack - 1;
+  int nvar = nhydro + nscalars;
   auto u0_ = u0;
   auto u1_ = u1;
-  auto divf_ = divf;
+  auto flx1 = uflx.x1f;
+  auto flx2 = uflx.x2f;
+  auto flx3 = uflx.x3f;
+  auto &mbsize = pmy_pack->pmb->mbsize;
 
   // hierarchical parallel loop that updates conserved variables to intermediate step
-  // using weights and fractional time step appropriate to stages of time-integrator used
+  // using weights and fractional time step appropriate to stages of time-integrator.
   // Important to use vector inner loop for good performance on cpus
-  int nmb = pmy_pack->nmb_thispack;
   int scr_level = 0;
-  size_t scr_size = 0;
+  size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1);
 
-  par_for_outer("hydro_update", DevExeSpace(), scr_size, scr_level,
-    0, (nmb-1), 0, (nvars-1), ks, ke, js, je,
+  par_for_outer("hydro_update",DevExeSpace(),scr_size,scr_level,0,nmb1,0,nvar-1,ks,ke,js,je,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int n, const int k, const int j)
     {
+      ScrArray1D<Real> divf(member.team_scratch(scr_level), ncells1);
+
+      // compute dF1/dx1
       par_for_inner(member, is, ie, [&](const int i)
       {
-        u0_(m,n,k,j,i) =
-              gam0*u0_(m,n,k,j,i) + gam1*u1_(m,n,k,j,i) - beta_dt*divf_(m,n,k,j,i);
+        divf(i) = (flx1(m,n,k,j,i+1) - flx1(m,n,k,j,i))/mbsize.dx1.d_view(m);
+      });
+      member.team_barrier();
+
+      // Add dF2/dx2
+      // Fluxes must be summed in pairs to symmetrize round-off error in each dir
+      if (two_d) {
+        par_for_inner(member, is, ie, [&](const int i)
+        {
+          divf(i) += (flx2(m,n,k,j+1,i) - flx2(m,n,k,j,i))/mbsize.dx2.d_view(m);
+        });
+        member.team_barrier();
+      }
+
+      // Add dF3/dx3
+      // Fluxes must be summed in pairs to symmetrize round-off error in each dir
+      if (three_d) {
+        par_for_inner(member, is, ie, [&](const int i)
+        {
+          divf(i) += (flx3(m,n,k+1,j,i) - flx3(m,n,k,j,i))/mbsize.dx3.d_view(m);
+        });
+        member.team_barrier();
+      }
+
+      par_for_inner(member, is, ie, [&](const int i)
+      {
+        u0_(m,n,k,j,i) = gam0*u0_(m,n,k,j,i) + gam1*u1_(m,n,k,j,i) - beta_dt*divf(i);
       });
     }
   );
-
-/***
-  par_for("hydro_update", DevExeSpace(),0,(nmb-1),0,(nvars-1),ks,ke,js,je,is,ie,
-    KOKKOS_LAMBDA(const int m, const int n, const int k, const int j, const int i)
-    {
-      u0_(m,n,k,j,i) =
-              gam0*u0_(m,n,k,j,i) + gam1*u1_(m,n,k,j,i) - beta_dt*divf_(m,n,k,j,i);
-    }
-  );
-***/
 
   return TaskStatus::complete;
 }

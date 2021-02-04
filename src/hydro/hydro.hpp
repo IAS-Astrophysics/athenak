@@ -43,11 +43,8 @@ class Hydro
   BoundaryValueCC *pbval_u;
 
   // following only used for time-evolving flow
-  DvceArray5D<Real> u1;           // conserved variables at intermediate step 
-  DvceArray5D<Real> divf;         // divergence of fluxes
-  DvceArray3D<Real> uflx_x1face;  // fluxes on x1-faces
-  DvceArray3D<Real> uflx_x2face;  // fluxes on x2-faces
-  DvceArray3D<Real> uflx_x3face;  // fluxes on x3-faces
+  DvceArray5D<Real> u1;       // conserved variables at intermediate step 
+  DvceFaceFld5D<Real> uflx;   // fluxes of conserved quantities on cell faces
   Real dtnew;
 
   // functions
@@ -58,8 +55,8 @@ class Hydro
   TaskStatus HydroClearRecv(Driver *d, int stage);
   TaskStatus HydroClearSend(Driver *d, int stage);
   TaskStatus HydroCopyCons(Driver *d, int stage);
-  TaskStatus HydroDivFlux(Driver *d, int stage);
-  TaskStatus HydroUpdate(Driver *d, int stage);
+  TaskStatus CalcFluxes(Driver *d, int stage);
+  TaskStatus Update(Driver *d, int stage);
   TaskStatus HydroSendU(Driver *d, int stage); 
   TaskStatus HydroRecvU(Driver *d, int stage); 
   TaskStatus ConToPrim(Driver *d, int stage);

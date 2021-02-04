@@ -25,9 +25,10 @@ namespace hydro {
 //  \brief The LLF Riemann solver for hydrodynamics (both adiabatic and isothermal)
 
 KOKKOS_INLINE_FUNCTION
-void LLF(TeamMember_t const &member, const EOS_Data &eos, const int il, const int iu,
+void LLF(TeamMember_t const &member, const EOS_Data &eos,
+     const int m, const int k, const int j, const int il, const int iu,
      const int ivx, const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr,
-     ScrArray2D<Real> &flx)
+     DvceArray5D<Real> flx)
 {
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
@@ -100,11 +101,11 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos, const int il, const in
 
     //--- Step 5. Store results into 3D array of fluxes
 
-    flx(IDN,i) = 0.5*(fl[IDN] + fr[IDN]) - a*du[IDN];
-    flx(ivx,i) = 0.5*(fl[IVX] + fr[IVX]) - a*du[IVX];
-    flx(ivy,i) = 0.5*(fl[IVY] + fr[IVY]) - a*du[IVY];
-    flx(ivz,i) = 0.5*(fl[IVZ] + fr[IVZ]) - a*du[IVZ];
-    if (eos.is_adiabatic) {flx(IEN,i) = 0.5*(fl[IEN] + fr[IEN]) - a*du[IEN];}
+    flx(m,IDN,k,j,i) = 0.5*(fl[IDN] + fr[IDN]) - a*du[IDN];
+    flx(m,ivx,k,j,i) = 0.5*(fl[IVX] + fr[IVX]) - a*du[IVX];
+    flx(m,ivy,k,j,i) = 0.5*(fl[IVY] + fr[IVY]) - a*du[IVY];
+    flx(m,ivz,k,j,i) = 0.5*(fl[IVZ] + fr[IVZ]) - a*du[IVZ];
+    if (eos.is_adiabatic) {flx(m,IEN,k,j,i) = 0.5*(fl[IEN] + fr[IEN]) - a*du[IEN];}
 
   });
   return;

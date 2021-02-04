@@ -29,16 +29,16 @@ namespace mhd {
 //  \brief Calculate fluxes of conserved variables, and face-centered area-averaged EMFs
 //  for evolution of magnetic field
 
-TaskStatus MHD::MHDCalcFlux(Driver *pdriver, int stage)
+TaskStatus MHD::MHDCalcFluxes(Driver *pdriver, int stage)
 {
   int is = pmy_pack->mb_cells.is; int ie = pmy_pack->mb_cells.ie;
   int js = pmy_pack->mb_cells.js; int je = pmy_pack->mb_cells.je;
   int ks = pmy_pack->mb_cells.ks; int ke = pmy_pack->mb_cells.ke;
   int ncells1 = pmy_pack->mb_cells.nx1 + 2*(pmy_pack->mb_cells.ng);
 
-  int nmhd = nmhd;
+  int nmhd  = nmhd;
   int nvars = nmhd + nscalars;
-  int nmb = pmy_pack->nmb_thispack;
+  int nmb1 = pmy_pack->nmb_thispack - 1;
   auto recon_method = recon_method_;
   auto rsolver_method = rsolver_method_;
   auto &w0_ = w0;
@@ -56,7 +56,7 @@ TaskStatus MHD::MHDCalcFlux(Driver *pdriver, int stage)
   auto e2x1 = e2x1_;
   auto bx = b0.x1f;
 
-  par_for_outer("mhd_flux_x1",DevExeSpace(),scr_size,scr_level,0,(nmb-1), ks, ke, js, je,
+  par_for_outer("mhdflux_x1",DevExeSpace(), scr_size, scr_level, 0, nmb1, ks, ke, js, je,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j)
     {
       ScrArray2D<Real> wl(member.team_scratch(scr_level), nvars, ncells1);
@@ -105,6 +105,21 @@ TaskStatus MHD::MHDCalcFlux(Driver *pdriver, int stage)
         default:
           break;
       }
+      member.team_barrier();
+
+      // calculate fluxes of scalars (if any)
+      if (nvars > nmhd) {
+        for (int n=nmhd; n<nvars; ++n) {
+          par_for_inner(member, is, ie+1, [&](const int i)
+          {
+            if (flx1(m,IDN,k,j,i) >= 0.0) {
+              flx1(m,n,k,j,i) = flx1(m,IDN,k,j,i)*wl(n,i);
+            } else {
+              flx1(m,n,k,j,i) = flx1(m,IDN,k,j,i)*wr(n,i);
+            }
+          });
+        }
+      }
 
     }
   );
@@ -120,7 +135,7 @@ TaskStatus MHD::MHDCalcFlux(Driver *pdriver, int stage)
   auto e1x2 = e1x2_;
   auto e3x2 = e3x2_;
 
-  par_for_outer("mhd_flux2",DevExeSpace(),scr_size,scr_level,0,(nmb-1), ks, ke,
+  par_for_outer("mhd_flux2",DevExeSpace(),scr_size,scr_level,0,nmb1, ks, ke,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k)
     {
       ScrArray2D<Real> scr1(member.team_scratch(scr_level), nvars, ncells1);
@@ -186,6 +201,21 @@ TaskStatus MHD::MHDCalcFlux(Driver *pdriver, int stage)
             default:
               break;
           }
+          member.team_barrier();
+        }
+
+        // calculate fluxes of scalars (if any)
+        if (nvars > nmhd) {
+          for (int n=nmhd; n<nvars; ++n) {
+            par_for_inner(member, is, ie, [&](const int i)
+            {
+              if (flx2(m,IDN,k,j,i) >= 0.0) {
+                flx2(m,n,k,j,i) = flx2(m,IDN,k,j,i)*wl(n,i);
+              } else {
+                flx2(m,n,k,j,i) = flx2(m,IDN,k,j,i)*wr(n,i);
+              }
+            });
+          }
         }
 
       } // end of loop over j
@@ -203,7 +233,7 @@ TaskStatus MHD::MHDCalcFlux(Driver *pdriver, int stage)
   auto e2x3 = e2x3_;
   auto e1x3 = e1x3_;
 
-  par_for_outer("divflux_x3",DevExeSpace(), scr_size, scr_level, 0, (nmb-1), js, je,
+  par_for_outer("divflux_x3",DevExeSpace(), scr_size, scr_level, 0, nmb1, js, je,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int j)
     {
       ScrArray2D<Real> scr1(member.team_scratch(scr_level), nvars, ncells1);
@@ -271,6 +301,21 @@ TaskStatus MHD::MHDCalcFlux(Driver *pdriver, int stage)
           }
           member.team_barrier();
         }
+
+        // calculate fluxes of scalars (if any)
+        if (nvars > nmhd) {
+          for (int n=nmhd; n<nvars; ++n) {
+            par_for_inner(member, is, ie, [&](const int i)
+            {
+              if (flx3(m,IDN,k,j,i) >= 0.0) {
+                flx3(m,n,k,j,i) = flx3(m,IDN,k,j,i)*wl(n,i);
+              } else {
+                flx3(m,n,k,j,i) = flx3(m,IDN,k,j,i)*wr(n,i);
+              }
+            });
+          }
+        }
+
       } // end loop over k
     }
   );
