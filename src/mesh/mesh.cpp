@@ -564,7 +564,11 @@ void Mesh::PrintMeshDiagnostics()
 
 void Mesh::WriteMeshStructure()
 {
-  if (!nx2gt1) return;
+  if (!nx2gt1) {
+    std::cout << "WARNING in " << __FILE__ << " at line " << __LINE__ 
+      << std::endl << "Mesh only 1D, so no 'mesh_structure.dat' file produced" << std::endl;
+    return;
+  }
 
   FILE *fp = nullptr;
   if ((fp = std::fopen("mesh_structure.dat","wb")) == nullptr) {

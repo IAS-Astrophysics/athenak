@@ -13,6 +13,7 @@
 #include "parameter_input.hpp"
 #include "mesh.hpp"
 #include "hydro/hydro.hpp"
+#include "mhd/mhd.hpp"
 
 //----------------------------------------------------------------------------------------
 // MeshBlockPack constructor:
@@ -84,5 +85,5 @@ MeshBlockPack::~MeshBlockPack()
 {
   delete pmb;
   if (phydro != nullptr) {delete phydro;}
-//  if (pmhd   != nullptr) {delete pmhd;}
+  if (pmhd   != nullptr) {delete pmhd;}
 }

@@ -46,8 +46,8 @@ void BoundaryValueFC::AllocateBuffersFC()
   int js = ncells.js, je = ncells.je;
   int ks = ncells.ks, ke = ncells.ke;
   int ng1 = ng-1;
-  int nmb = pmy_pack->nmb_thispack;
-  int nnghbr = pmy_pack->pmb->nnghbr;
+  int &nmb = pmy_pack->nmb_thispack;
+  int &nnghbr = pmy_pack->pmb->nnghbr;
 
   // allocate size of (some) Views
   for (int n=0; n<nnghbr; ++n) {

@@ -80,9 +80,15 @@ void MeshBlockPack::AddPhysicsModules(ParameterInput *pin)
 void Mesh::NewTimeStep(const Real tlim)
 {
   // cycle over all MeshBlocks on this rank and find minimum dt
+  // Requires at least ONE of the physics modules to be defined.
   // limit increase in timestep to 2x old value
   dt = 2.0*dt;
-  dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->dtnew) );
+  if (pmb_pack->phydro != nullptr) {
+    dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->dtnew) );
+  }
+  if (pmb_pack->pmhd != nullptr) {
+    dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->dtnew) );
+  }
 
 #if MPI_PARALLEL_ENABLED
   // get minimum dt over all MPI ranks

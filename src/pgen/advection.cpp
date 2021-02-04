@@ -84,7 +84,7 @@ void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
     int &nscalars = pmbp->phydro->nscalars;
     auto &u0 = pmbp->phydro->u0;
 
-    par_for("pgen_advect", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
+    par_for("hydro_advect", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i)
       {
         Real r; // coordinate that will span [0->1]
@@ -100,7 +100,6 @@ void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
         }
   
         Real f; // value for advected quantity, depending on problem type
-
 
         // iprob=1: sine wave
         if (iprob == 1) {
@@ -127,8 +126,6 @@ void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
           u0(m,IM2,k,j,i) = f;
           u0(m,IM3,k,j,i) = vel;
         } 
-        u0(m,IEN,k,j,i) = 1.0/gm1 + 0.5*(SQR(u0(m,IM1,k,j,i)) + SQR(u0(m,IM2,k,j,i)) +
-                                         SQR(u0(m,IM3,k,j,i)))/u0(m,IDN,k,j,i);
         // add passive scalars
         for (int n=nhydro; n<(nhydro+nscalars); ++n) {
           u0(m,n,k,j,i) = f;
@@ -144,13 +141,13 @@ void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
          << std::endl << "Only isothermal EOS allowed for advection tests" << std::endl;
       exit(EXIT_FAILURE);
     }
-    Real gm1 = pmbp->phydro->peos->eos_data.gamma - 1.0;
+    Real gm1 = pmbp->pmhd->peos->eos_data.gamma - 1.0;
     int &nmhd = pmbp->pmhd->nmhd;
     int &nscalars = pmbp->pmhd->nscalars;
     auto &u0 = pmbp->pmhd->u0;
     auto &b0 = pmbp->pmhd->b0;
         
-    par_for("pgen_advect", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
+    par_for("mhd_advect", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i)
       { 
         Real r; // coordinate that will span [0->1]
@@ -166,7 +163,6 @@ void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
         }
         
         Real f; // value for advected quantity, depending on problem type
-
 
         // iprob=1: sine wave
         if (iprob == 1) {               
@@ -188,8 +184,10 @@ void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
           u0(m,IM3,k,j,i) = f;
 
           // initialize By/Bz
+          b0.x1f(m,k,j,i) = 0.0;
           b0.x2f(m,k,j,i) = f;
           b0.x3f(m,k,j,i) = f;
+          if (i==ie) {b0.x1f(m,k,j,i+1) = 0.0;}
           if (j==je) {b0.x2f(m,k,j+1,i) = f;}
           if (k==ke) {b0.x3f(m,k+1,j,i) = f;}
 
@@ -201,8 +199,10 @@ void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
 
           // initialize Bx/Bz
           b0.x1f(m,k,j,i) = f;
+          b0.x2f(m,k,j,i) = 0.0;
           b0.x3f(m,k,j,i) = f;
           if (i==ie) {b0.x1f(m,k,j,i+1) = f;}
+          if (j==je) {b0.x2f(m,k,j+1,i) = 0.0;}
           if (k==ke) {b0.x3f(m,k+1,j,i) = f;}
 
         // Flow in x3-direction
@@ -214,15 +214,11 @@ void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
           // initialize Bx/By
           b0.x1f(m,k,j,i) = f;
           b0.x2f(m,k,j,i) = f;
-          if (j==je) {b0.x1f(m,k,j,i+1) = f;}
-          if (k==ke) {b0.x2f(m,k,j+1,i) = f;}
+          b0.x3f(m,k,j,i) = 0.0;
+          if (i==ie) {b0.x1f(m,k,j,i+1) = f;}
+          if (j==je) {b0.x2f(m,k,j+1,i) = f;}
+          if (k==ke) {b0.x3f(m,k+1,j,i) = 0.0;}
         }
-        u0(m,IEN,k,j,i) = 1.0/gm1 + 0.5*(SQR(u0(m,IM1,k,j,i)) + SQR(u0(m,IM2,k,j,i)) +
-                                         SQR(u0(m,IM3,k,j,i)))/ u0(m,IDN,k,j,i);
-        Real b1sq = 0.5*(SQR(b0.x1f(m,k,j,i)) + SQR(b0.x1f(m,k,j,i+1)));
-        Real b2sq = 0.5*(SQR(b0.x2f(m,k,j,i)) + SQR(b0.x2f(m,k,j+1,i)));
-        Real b3sq = 0.5*(SQR(b0.x3f(m,k,j,i)) + SQR(b0.x3f(m,k+1,j,i)));
-        u0(m,IEN,k,j,i) += 0.5*(b1sq + b2sq + b3sq);
 
         // add passive scalars
         for (int n=nmhd; n<(nmhd+nscalars); ++n) {

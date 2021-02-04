@@ -173,7 +173,12 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
 
   if (time_evolution != TimeEvolution::tstatic) {
     TaskStatus tstatus;
-    tstatus = pmesh->pmb_pack->phydro->NewTimeStep(this, nstages);
+    if (phydro != nullptr) {
+      tstatus = pmesh->pmb_pack->phydro->NewTimeStep(this, nstages);
+    }
+    if (pmhd != nullptr) {
+      tstatus = pmesh->pmb_pack->pmhd->NewTimeStep(this, nstages);
+    }
     pmesh->NewTimeStep(tlim);
   }
 

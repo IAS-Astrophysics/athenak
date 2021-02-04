@@ -62,9 +62,9 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // allocate memory for face-centered and cell-centered magnetic fields
   Kokkos::realloc(bcc0,   nmb, 3, ncells3, ncells2, ncells1);
-  Kokkos::realloc(b0.x1f, nmb, ncells3, ncells2, ncells1);
-  Kokkos::realloc(b0.x2f, nmb, ncells3, ncells2, ncells1);
-  Kokkos::realloc(b0.x3f, nmb, ncells3, ncells2, ncells1);
+  Kokkos::realloc(b0.x1f, nmb, ncells3, ncells2, ncells1+1);
+  Kokkos::realloc(b0.x2f, nmb, ncells3, ncells2+1, ncells1);
+  Kokkos::realloc(b0.x3f, nmb, ncells3+1, ncells2, ncells1);
   
   // allocate boundary buffers for conserved (cell-centered) variables
   pbval_u = new BoundaryValueCC(ppack, pin);
@@ -145,17 +145,17 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 
     // allocate second registers
     Kokkos::realloc(u1,     nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
-    Kokkos::realloc(b1.x1f, nmb, ncells3, ncells2, ncells1);
-    Kokkos::realloc(b1.x2f, nmb, ncells3, ncells2, ncells1);
-    Kokkos::realloc(b1.x3f, nmb, ncells3, ncells2, ncells1);
+    Kokkos::realloc(b1.x1f, nmb, ncells3, ncells2, ncells1+1);
+    Kokkos::realloc(b1.x2f, nmb, ncells3, ncells2+1, ncells1);
+    Kokkos::realloc(b1.x3f, nmb, ncells3+1, ncells2, ncells1);
 
     // allocate fluxes, electric fields
-    Kokkos::realloc(uflx.x1f, nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
-    Kokkos::realloc(uflx.x2f, nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
-    Kokkos::realloc(uflx.x3f, nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
-    Kokkos::realloc(efld.x1e, nmb, ncells3, ncells2, ncells1);
-    Kokkos::realloc(efld.x2e, nmb, ncells3, ncells2, ncells1);
-    Kokkos::realloc(efld.x3e, nmb, ncells3, ncells2, ncells1);
+    Kokkos::realloc(uflx.x1f, nmb, (nmhd+nscalars), ncells3, ncells2, ncells1+1);
+    Kokkos::realloc(uflx.x2f, nmb, (nmhd+nscalars), ncells3, ncells2+1, ncells1);
+    Kokkos::realloc(uflx.x3f, nmb, (nmhd+nscalars), ncells3+1, ncells2, ncells1);
+    Kokkos::realloc(efld.x1e, nmb, ncells3+1, ncells2+1, ncells1);
+    Kokkos::realloc(efld.x2e, nmb, ncells3+1, ncells2, ncells1+1);
+    Kokkos::realloc(efld.x3e, nmb, ncells3, ncells2+1, ncells1+1);
   }
 }
 
@@ -228,8 +228,8 @@ void MHD::MHDStageEndTasks(TaskList &tl, TaskID start)
 
 TaskStatus MHD::MHDInitRecv(Driver *pdrive, int stage)
 {
-  int nmb = pmy_pack->nmb_thispack;
-  int nnghbr = pmy_pack->pmb->nnghbr;
+  int &nmb = pmy_pack->pmb->nmb;
+  int &nnghbr = pmy_pack->pmb->nnghbr;
   auto nghbr = pmy_pack->pmb->nghbr;
 
   // Initialize communications for both cell-centered conserved variables and 
