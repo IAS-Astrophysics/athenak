@@ -52,8 +52,8 @@ void BoundaryValueFC::AllocateBuffersFC()
   // allocate size of (some) Views
   for (int n=0; n<nnghbr; ++n) {
     // 18 values of index array stores loop bounds for each field component in bbuf
-    Kokkos::realloc(send_buf[n].index, 18);
-    Kokkos::realloc(recv_buf[n].index, 18);
+    Kokkos::realloc(send_buf[n].index, 3, 6);
+    Kokkos::realloc(recv_buf[n].index, 3, 6);
     Kokkos::realloc(send_buf[n].bcomm_stat, nmb);
     Kokkos::realloc(recv_buf[n].bcomm_stat, nmb);
 #if MPI_PARALLEL_ENABLED
