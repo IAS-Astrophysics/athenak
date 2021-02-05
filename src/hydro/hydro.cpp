@@ -165,13 +165,13 @@ void Hydro::HydroStageStartTasks(TaskList &tl, TaskID start)
 void Hydro::HydroStageRunTasks(TaskList &tl, TaskID start)
 {
   auto hydro_copycons = tl.AddTask(&Hydro::HydroCopyCons, this, start);
-  auto hydro_divflux  = tl.AddTask(&Hydro::CalcFluxes, this, hydro_copycons);
-  auto hydro_update  = tl.AddTask(&Hydro::Update, this, hydro_divflux);
-  auto hydro_send  = tl.AddTask(&Hydro::HydroSendU, this, hydro_update);
-  auto hydro_recv  = tl.AddTask(&Hydro::HydroRecvU, this, hydro_send);
-  auto hydro_phybcs  = tl.AddTask(&Hydro::HydroApplyPhysicalBCs, this, hydro_recv);
-  auto hydro_con2prim  = tl.AddTask(&Hydro::ConToPrim, this, hydro_phybcs);
-  auto hydro_newdt  = tl.AddTask(&Hydro::NewTimeStep, this, hydro_con2prim);
+  auto hydro_fluxes = tl.AddTask(&Hydro::CalcFluxes, this, hydro_copycons);
+  auto hydro_update = tl.AddTask(&Hydro::Update, this, hydro_fluxes);
+  auto hydro_send = tl.AddTask(&Hydro::HydroSendU, this, hydro_update);
+  auto hydro_recv = tl.AddTask(&Hydro::HydroRecvU, this, hydro_send);
+  auto hydro_phybcs = tl.AddTask(&Hydro::HydroApplyPhysicalBCs, this, hydro_recv);
+  auto hydro_con2prim = tl.AddTask(&Hydro::ConToPrim, this, hydro_phybcs);
+  auto hydro_newdt = tl.AddTask(&Hydro::NewTimeStep, this, hydro_con2prim);
 
   return;
 }

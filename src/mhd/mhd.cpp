@@ -29,7 +29,13 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   u1("cons1",1,1,1,1,1),
   b1("B_fc1",1,1,1,1),
   uflx("uflx",1,1,1,1,1),
-  efld("efld",1,1,1,1)
+  efld("efld",1,1,1,1),
+  e3x1_("e3x1",1,1,1,1),
+  e2x1_("e2x1",1,1,1,1),
+  e1x2_("e1x2",1,1,1,1),
+  e3x2_("e3x2",1,1,1,1),
+  e2x3_("e2x3",1,1,1,1),
+  e1x3_("e1x3",1,1,1,1)
 {
   // construct EOS object (no default)
   std::string eqn_of_state = pin->GetString("mhd","eos");
@@ -156,6 +162,17 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     Kokkos::realloc(efld.x1e, nmb, ncells3+1, ncells2+1, ncells1);
     Kokkos::realloc(efld.x2e, nmb, ncells3+1, ncells2, ncells1+1);
     Kokkos::realloc(efld.x3e, nmb, ncells3, ncells2+1, ncells1+1);
+
+    // allocate scratch arrays for face- and cell-centered E used in CornerE
+    Kokkos::realloc(e3x1_, nmb, ncells3, ncells2, ncells1);
+    Kokkos::realloc(e2x1_, nmb, ncells3, ncells2, ncells1);
+    Kokkos::realloc(e1x2_, nmb, ncells3, ncells2, ncells1);
+    Kokkos::realloc(e3x2_, nmb, ncells3, ncells2, ncells1);
+    Kokkos::realloc(e2x3_, nmb, ncells3, ncells2, ncells1);
+    Kokkos::realloc(e1x3_, nmb, ncells3, ncells2, ncells1);
+    Kokkos::realloc(e1_cc_, nmb, ncells3, ncells2, ncells1);
+    Kokkos::realloc(e2_cc_, nmb, ncells3, ncells2, ncells1);
+    Kokkos::realloc(e3_cc_, nmb, ncells3, ncells2, ncells1);
   }
 }
 
@@ -187,23 +204,18 @@ void MHD::MHDStageStartTasks(TaskList &tl, TaskID start)
 
 void MHD::MHDStageRunTasks(TaskList &tl, TaskID start)
 {
-  // WARNING: If number or order of MHD tasks below is changed then index of mhd_recv
-  // in Mesh::InitPhysicsModules may need to be changed 
-
-//  auto mhd_copycons = tl.AddTask(&MHD::MHDCopyCons, this, start);
-//  auto mhd_divflux  = tl.AddTask(&MHD::MHDDivFlux, this, mhd_copycons);
-//  auto mhd_update  = tl.AddTask(&MHD::MHDUpdate, this, mhd_divflux);
-//  auto mhd_send  = tl.AddTask(&MHD::MHDSendU, this, mhd_update);
-//  auto mhd_recv  = tl.AddTask(&MHD::MHDRecvU, this, mhd_send);
-//  auto mhd_phybcs  = tl.AddTask(&MHD::MHDApplyPhysicalBCs, this, mhd_recv);
-//  auto mhd_con2prim  = tl.AddTask(&MHD::ConToPrim, this, mhd_phybcs);
-//  auto mhd_newdt  = tl.AddTask(&MHD::NewTimeStep, this, mhd_con2prim);
-
   auto mhd_copycons = tl.AddTask(&MHD::MHDCopyCons, this, start);
-  auto mhd_send  = tl.AddTask(&MHD::MHDSendU, this, mhd_copycons);
-  auto mhd_recv  = tl.AddTask(&MHD::MHDRecvU, this, mhd_send);
-  auto mhd_phybcs  = tl.AddTask(&MHD::MHDApplyPhysicalBCs, this, mhd_recv);
-  auto mhd_con2prim  = tl.AddTask(&MHD::ConToPrim, this, mhd_phybcs);
+  auto mhd_fluxes = tl.AddTask(&MHD::CalcFluxes, this, mhd_copycons);
+  auto mhd_update = tl.AddTask(&MHD::Update, this, mhd_fluxes);
+  auto mhd_sendu = tl.AddTask(&MHD::MHDSendU, this, mhd_update);
+  auto mhd_recvu = tl.AddTask(&MHD::MHDRecvU, this, mhd_sendu);
+  auto mhd_emf = tl.AddTask(&MHD::CornerE, this, mhd_recvu);
+  auto mhd_ct = tl.AddTask(&MHD::CT, this, mhd_emf);
+  auto mhd_sendb = tl.AddTask(&MHD::MHDSendB, this, mhd_ct);
+  auto mhd_recvb = tl.AddTask(&MHD::MHDRecvB, this, mhd_sendb);
+  auto mhd_phybcs = tl.AddTask(&MHD::MHDApplyPhysicalBCs, this, mhd_recvb);
+  auto mhd_con2prim = tl.AddTask(&MHD::ConToPrim, this, mhd_phybcs);
+  auto mhd_newdt = tl.AddTask(&MHD::NewTimeStep, this, mhd_con2prim);
 
   return;
 }

@@ -24,9 +24,14 @@
 
 void MeshBlockPack::AddPhysicsModules(ParameterInput *pin)
 {
+  // Cycle through available physics modules, and construct those requested in input file.
+  // Also check that at least ONE is requested and initialized.
+
+  int nphysics = 0;
   // Create Hydro physics module if <hydro> block exists in input file
   if (pin->DoesBlockExist("hydro")) {
     phydro = new hydro::Hydro(this, pin);   // construct new Hydro object
+    nphysics++;
   } else {
     phydro = nullptr;
   }
@@ -34,8 +39,16 @@ void MeshBlockPack::AddPhysicsModules(ParameterInput *pin)
   // Create MHD physics module if <mhd> block exists in input file
   if (pin->DoesBlockExist("mhd")) {
     pmhd = new mhd::MHD(this, pin);   // construct new MHD object
+    nphysics++;
   } else {
     pmhd = nullptr;
+  }
+
+  // Error if there are no physics blocks in the input file.
+  if (nphysics == 0) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+        << "At least one physics module must be specified in input file." << std::endl;
+    std::exit(EXIT_FAILURE);
   }
 
   // Create TaskLists for Start, Run, and End of each stage of integrator

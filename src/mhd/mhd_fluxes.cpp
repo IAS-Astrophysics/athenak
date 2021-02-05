@@ -29,14 +29,14 @@ namespace mhd {
 //  \brief Calculate fluxes of conserved variables, and face-centered area-averaged EMFs
 //  for evolution of magnetic field
 
-TaskStatus MHD::MHDCalcFluxes(Driver *pdriver, int stage)
+TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
 {
   int is = pmy_pack->mb_cells.is; int ie = pmy_pack->mb_cells.ie;
   int js = pmy_pack->mb_cells.js; int je = pmy_pack->mb_cells.je;
   int ks = pmy_pack->mb_cells.ks; int ke = pmy_pack->mb_cells.ke;
   int ncells1 = pmy_pack->mb_cells.nx1 + 2*(pmy_pack->mb_cells.ng);
 
-  int nmhd  = nmhd;
+  int &nmhd_  = nmhd;
   int nvars = nmhd + nscalars;
   int nmb1 = pmy_pack->nmb_thispack - 1;
   auto recon_method = recon_method_;
@@ -54,7 +54,7 @@ TaskStatus MHD::MHDCalcFluxes(Driver *pdriver, int stage)
   auto flx1 = uflx.x1f;
   auto e3x1 = e3x1_;
   auto e2x1 = e2x1_;
-  auto bx = b0.x1f;
+  auto &bx = b0.x1f;
 
   par_for_outer("mhdflux_x1",DevExeSpace(), scr_size, scr_level, 0, nmb1, ks, ke, js, je,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j)
@@ -108,8 +108,8 @@ TaskStatus MHD::MHDCalcFluxes(Driver *pdriver, int stage)
       member.team_barrier();
 
       // calculate fluxes of scalars (if any)
-      if (nvars > nmhd) {
-        for (int n=nmhd; n<nvars; ++n) {
+      if (nvars > nmhd_) {
+        for (int n=nmhd_; n<nvars; ++n) {
           par_for_inner(member, is, ie+1, [&](const int i)
           {
             if (flx1(m,IDN,k,j,i) >= 0.0) {
@@ -131,7 +131,7 @@ TaskStatus MHD::MHDCalcFluxes(Driver *pdriver, int stage)
   scr_size = (ScrArray2D<Real>::shmem_size(nvars, ncells1) +
               ScrArray2D<Real>::shmem_size(3, ncells1)) * 3;
   auto flx2 = uflx.x2f;
-  auto by = b0.x2f;
+  auto &by = b0.x2f;
   auto e1x2 = e1x2_;
   auto e3x2 = e3x2_;
 
@@ -205,8 +205,8 @@ TaskStatus MHD::MHDCalcFluxes(Driver *pdriver, int stage)
         }
 
         // calculate fluxes of scalars (if any)
-        if (nvars > nmhd) {
-          for (int n=nmhd; n<nvars; ++n) {
+        if (nvars > nmhd_) {
+          for (int n=nmhd_; n<nvars; ++n) {
             par_for_inner(member, is, ie, [&](const int i)
             {
               if (flx2(m,IDN,k,j,i) >= 0.0) {
@@ -229,7 +229,7 @@ TaskStatus MHD::MHDCalcFluxes(Driver *pdriver, int stage)
   scr_size = (ScrArray2D<Real>::shmem_size(nvars, ncells1) +
               ScrArray2D<Real>::shmem_size(3, ncells1)) * 3;
   auto flx3 = uflx.x3f;
-  auto bz = b0.x3f;
+  auto &bz = b0.x3f;
   auto e2x3 = e2x3_;
   auto e1x3 = e1x3_;
 
@@ -303,8 +303,8 @@ TaskStatus MHD::MHDCalcFluxes(Driver *pdriver, int stage)
         }
 
         // calculate fluxes of scalars (if any)
-        if (nvars > nmhd) {
-          for (int n=nmhd; n<nvars; ++n) {
+        if (nvars > nmhd_) {
+          for (int n=nmhd_; n<nvars; ++n) {
             par_for_inner(member, is, ie, [&](const int i)
             {
               if (flx3(m,IDN,k,j,i) >= 0.0) {

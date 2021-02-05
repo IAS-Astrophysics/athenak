@@ -18,7 +18,8 @@ namespace mhd {
 //  \brief Constrained Transport implementation of dB/dt = -Curl(E), where E=-(v X B)
 //  Temporal update uses multistep SSP integrators, e.g. RK2, RK3
 
-TaskStatus MHD::MHD_CT(Driver *pdriver, int stage) {
+TaskStatus MHD::CT(Driver *pdriver, int stage) 
+{
   int is = pmy_pack->mb_cells.is; int ie = pmy_pack->mb_cells.ie;
   int js = pmy_pack->mb_cells.js; int je = pmy_pack->mb_cells.je;
   int ks = pmy_pack->mb_cells.ks; int ke = pmy_pack->mb_cells.ke;

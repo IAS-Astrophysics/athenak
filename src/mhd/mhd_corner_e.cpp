@@ -16,7 +16,8 @@ namespace mhd {
 //! \fn  void MHD::CornerE
 //  \brief calculate the corner EMFs
 
-TaskStatus MHD::MHDCornerE(Driver *pdriver, int stage) {
+TaskStatus MHD::CornerE(Driver *pdriver, int stage)
+{
   int is = pmy_pack->mb_cells.is; int ie = pmy_pack->mb_cells.ie;
   int js = pmy_pack->mb_cells.js; int je = pmy_pack->mb_cells.je;
   int ks = pmy_pack->mb_cells.ks; int ke = pmy_pack->mb_cells.ke;
