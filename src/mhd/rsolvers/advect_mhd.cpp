@@ -23,7 +23,7 @@ void Advect(TeamMember_t const &member, const EOS_Data eos,
   int ivy = IVX + ((ivx-IVX) + 1)%3;
   int ivz = IVX + ((ivx-IVX) + 2)%3;
   int iby = ((ivx-IVX) + 1)%3;
-  int ibz = ((ivx-IVX) + 1)%3;
+  int ibz = ((ivx-IVX) + 2)%3;
   Real gm1 = eos.gamma - 1.0;
 
   par_for_inner(member, il, iu, [&](const int i)
@@ -35,16 +35,16 @@ void Advect(TeamMember_t const &member, const EOS_Data eos,
       flx(m,ivx,k,j,i) = mxl*wl(ivx,i);
       flx(m,ivy,k,j,i) = mxl*wl(ivy,i);
       flx(m,ivz,k,j,i) = mxl*wl(ivz,i);
-      ey(m,k,j,i) = bl(iby,i)*wl(ivx,i);
-      ez(m,k,j,i) = bl(ibz,i)*wl(ivx,i);
+      ey(m,k,j,i) = -bl(iby,i)*wl(ivx,i) + bx(m,k,j,i)*wl(ivy,i);
+      ez(m,k,j,i) =  bl(ibz,i)*wl(ivx,i) - bx(m,k,j,i)*wl(ivz,i);
     } else {
       Real mxr = wr(IDN,i)*wr(ivx,i);
       flx(m,IDN,k,j,i) = mxr;
       flx(m,ivx,k,j,i) = mxr*wr(ivx,i);
       flx(m,ivy,k,j,i) = mxr*wr(ivy,i);
       flx(m,ivz,k,j,i) = mxr*wr(ivz,i);
-      ey(m,k,j,i) = br(iby,i)*wr(ivx,i);
-      ez(m,k,j,i) = br(ibz,i)*wr(ivx,i);
+      ey(m,k,j,i) = -br(iby,i)*wr(ivx,i) + bx(m,k,j,i)*wr(ivy,i);
+      ez(m,k,j,i) =  br(ibz,i)*wr(ivx,i) - bx(m,k,j,i)*wr(ivz,i);
     }
   });
 

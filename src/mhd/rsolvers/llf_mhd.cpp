@@ -128,7 +128,7 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos,
     if (eos.is_adiabatic) {
       flx(m,IEN,k,j,i) = 0.5*(fl[IEN] + fr[IEN]) - a*(er - el);
     }
-    ey(m,k,j,i) = 0.5*(fl[5  ] + fr[5  ]) - a*du[5  ];
+    ey(m,k,j,i) = -0.5*(fl[5  ] + fr[5  ]) + a*du[5  ];
     ez(m,k,j,i) = 0.5*(fl[6  ] + fr[6  ]) - a*du[6  ];
   });
 

@@ -85,24 +85,24 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage)
 
         Real e3_l1, e3_l2, e3_r1, e3_r2;
         if (flx1(m,IDN,ks,j-1,i) >= 0.0) {
-          e3_l2 = e3x2(m,ks,j,i  ) - e3_cc_(m,ks,j-1,i  );
-        } else {
           e3_l2 = e3x2(m,ks,j,i-1) - e3_cc_(m,ks,j-1,i-1);
+        } else {
+          e3_l2 = e3x2(m,ks,j,i  ) - e3_cc_(m,ks,j-1,i  );
         }
         if (flx1(m,IDN,ks,j,i) >= 0.0) {
-          e3_r2 = e3x2(m,ks,j,i  ) - e3_cc_(m,ks,j  ,i  );
-        } else {
           e3_r2 = e3x2(m,ks,j,i-1) - e3_cc_(m,ks,j  ,i-1);
+        } else {
+          e3_r2 = e3x2(m,ks,j,i  ) - e3_cc_(m,ks,j  ,i  );
         }
         if (flx2(m,IDN,ks,j,i-1) >= 0.0) {
-          e3_l1 = e3x1(m,ks,j  ,i) - e3_cc_(m,ks,j  ,i-1);
-        } else {
           e3_l1 = e3x1(m,ks,j-1,i) - e3_cc_(m,ks,j-1,i-1);
+        } else {
+          e3_l1 = e3x1(m,ks,j  ,i) - e3_cc_(m,ks,j  ,i-1);
         }
         if (flx2(m,IDN,ks,j,i) >= 0.0) {
-          e3_r1 = e3x1(m,ks,j  ,i) - e3_cc_(m,ks,j  ,i  );
-        } else {
           e3_r1 = e3x1(m,ks,j-1,i) - e3_cc_(m,ks,j-1,i  );
+        } else {
+          e3_r1 = e3x1(m,ks,j  ,i) - e3_cc_(m,ks,j  ,i  );
         }
         e3(m,ks,j,i) = 0.25*(e3_l1 + e3_r1 + e3_l2 + e3_r2 +
                e3x2(m,ks,j,i-1) + e3x2(m,ks,j,i) + e3x1(m,ks,j-1,i) + e3x1(m,ks,j,i));
@@ -121,9 +121,9 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage)
   par_for("e_cc_2d", DevExeSpace(), 0, nmb1, ks-1, ke+1, js-1, je+1, is-1, ie+1,
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
-      e1_cc_(m,k,j,i) = w0_(m,IVZ,k,j,i)*b0_(m,IBY,k,j,i)-w0_(m,IVY,k,j,i)*b0_(m,IBZ,k,j,i);
-      e2_cc_(m,k,j,i) = w0_(m,IVX,k,j,i)*b0_(m,IBZ,k,j,i)-w0_(m,IVZ,k,j,i)*b0_(m,IBX,k,j,i);
-      e3_cc_(m,k,j,i) = w0_(m,IVY,k,j,i)*b0_(m,IBX,k,j,i)-w0_(m,IVX,k,j,i)*b0_(m,IBY,k,j,i);
+      e1_cc_(m,k,j,i)=w0_(m,IVZ,k,j,i)*b0_(m,IBY,k,j,i)-w0_(m,IVY,k,j,i)*b0_(m,IBZ,k,j,i);
+      e2_cc_(m,k,j,i)=w0_(m,IVX,k,j,i)*b0_(m,IBZ,k,j,i)-w0_(m,IVZ,k,j,i)*b0_(m,IBX,k,j,i);
+      e3_cc_(m,k,j,i)=w0_(m,IVY,k,j,i)*b0_(m,IBX,k,j,i)-w0_(m,IVX,k,j,i)*b0_(m,IBY,k,j,i);
     }
   );
 

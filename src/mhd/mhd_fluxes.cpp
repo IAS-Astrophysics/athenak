@@ -56,7 +56,19 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
   auto e2x1 = e2x1_;
   auto &bx = b0.x1f;
 
-  par_for_outer("mhdflux_x1",DevExeSpace(), scr_size, scr_level, 0, nmb1, ks, ke, js, je,
+  // set the loop limits for 1D/2D/3D problems
+  int jl,ju,kl,ku;
+  if (pmy_pack->pmesh->nx2gt1) {
+    if (pmy_pack->pmesh->nx3gt1) { // 3D
+      jl = js-1, ju = je+1, kl = ks-1, ku = ke+1;
+    } else { // 2D
+      jl = js-1, ju = je+1, kl = ks, ku = ke;
+    }
+  } else { // 1D
+    jl = js, ju = je, kl = ks, ku = ke;
+  }
+
+  par_for_outer("mhdflux_x1",DevExeSpace(), scr_size, scr_level, 0, nmb1, kl, ku, jl, ju,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j)
     {
       ScrArray2D<Real> wl(member.team_scratch(scr_level), nvars, ncells1);
@@ -135,7 +147,14 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
   auto e1x2 = e1x2_;
   auto e3x2 = e3x2_;
 
-  par_for_outer("mhd_flux2",DevExeSpace(),scr_size,scr_level,0,nmb1, ks, ke,
+  // set the loop limits for 2D/3D problems
+  if (pmy_pack->pmesh->nx3gt1) { // 3D
+    kl = ks-1, ku = ke+1;
+  } else { // 2D
+    kl = ks, ku = ke;
+  }
+
+  par_for_outer("mhd_flux2",DevExeSpace(),scr_size,scr_level,0,nmb1, kl, ku,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k)
     {
       ScrArray2D<Real> scr1(member.team_scratch(scr_level), nvars, ncells1);
@@ -233,7 +252,7 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
   auto e2x3 = e2x3_;
   auto e1x3 = e1x3_;
 
-  par_for_outer("divflux_x3",DevExeSpace(), scr_size, scr_level, 0, nmb1, js, je,
+  par_for_outer("divflux_x3",DevExeSpace(), scr_size, scr_level, 0, nmb1, js-1, je+1,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int j)
     {
       ScrArray2D<Real> scr1(member.team_scratch(scr_level), nvars, ncells1);
