@@ -83,7 +83,7 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage)
         e1(m,ks  ,j,i) = e1x2(m,ks,j,i);
         e1(m,ke+1,j,i) = e1x2(m,ks,j,i);
 
-        Real e3_l1, e3_l2, e3_r1, e3_r2;
+        Real e3_l2, e3_r2, e3_l1, e3_r1;
         if (flx1(m,IDN,ks,j-1,i) >= 0.0) {
           e3_l2 = e3x2(m,ks,j,i-1) - e3_cc_(m,ks,j-1,i-1);
         } else {
@@ -140,24 +140,24 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage)
       // integrate E1 to corner using SG07
       Real e1_l3, e1_r3, e1_l2, e1_r2;
       if (flx2(m,IDN,k-1,j,i) >= 0.0) {
-        e1_l3 = e1x3(m,k,j  ,i) - e1_cc_(m,k-1,j  ,i);
-      } else {
         e1_l3 = e1x3(m,k,j-1,i) - e1_cc_(m,k-1,j-1,i);
+      } else {
+        e1_l3 = e1x3(m,k,j  ,i) - e1_cc_(m,k-1,j  ,i);
       }
       if (flx2(m,IDN,k,j,i) >= 0.0) {
-        e1_r3 = e1x3(m,k,j  ,i) - e1_cc_(m,k  ,j  ,i);
-      } else {
         e1_r3 = e1x3(m,k,j-1,i) - e1_cc_(m,k  ,j-1,i);
+      } else {
+        e1_r3 = e1x3(m,k,j  ,i) - e1_cc_(m,k  ,j  ,i);
       }
       if (flx3(m,IDN,k,j-1,i) >= 0.0) {
-        e1_l2 = e1x2(m,k  ,j,i) - e1_cc_(m,k  ,j-1,i);
-      } else {
         e1_l2 = e1x2(m,k-1,j,i) - e1_cc_(m,k-1,j-1,i);
+      } else {
+        e1_l2 = e1x2(m,k  ,j,i) - e1_cc_(m,k  ,j-1,i);
       }
       if (flx3(m,IDN,k,j,i) >= 0.0) {
-        e1_r2 = e1x2(m,k  ,j,i) - e1_cc_(m,k  ,j  ,i);
-      } else {
         e1_r2 = e1x2(m,k-1,j,i) - e1_cc_(m,k-1,j  ,i);
+      } else {
+        e1_r2 = e1x2(m,k  ,j,i) - e1_cc_(m,k  ,j  ,i);
       }
       e1(m,k,j,i) = 0.25*(e1_l3 + e1_r3 + e1_l2 + e1_r2 +
                     e1x2(m,k-1,j,i) + e1x2(m,k,j,i) + e1x3(m,k,j-1,i) + e1x3(m,k,j,i));
@@ -165,24 +165,24 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage)
       // integrate E2 to corner using SG07
       Real e2_l3, e2_r3, e2_l1, e2_r1;
       if (flx1(m,IDN,k-1,j,i) >= 0.0) {
-        e2_l3 = e2x3(m,k,j,i  ) - e2_cc_(m,k-1,j,i  );
-      } else {
         e2_l3 = e2x3(m,k,j,i-1) - e2_cc_(m,k-1,j,i-1);
+      } else {
+        e2_l3 = e2x3(m,k,j,i  ) - e2_cc_(m,k-1,j,i  );
       }
       if (flx1(m,IDN,k,j,i) >= 0.0) {
-        e2_r3 = e2x3(m,k,j,i  ) - e2_cc_(m,k  ,j,i  );
-      } else {
         e2_r3 = e2x3(m,k,j,i-1) - e2_cc_(m,k  ,j,i-1);
+      } else {
+        e2_r3 = e2x3(m,k,j,i  ) - e2_cc_(m,k  ,j,i  );
       }
       if (flx3(m,IDN,k,j,i-1) >= 0.0) {
-        e2_l1 = e2x1(m,k  ,j,i) - e2_cc_(m,k  ,j,i-1);
-      } else {
         e2_l1 = e2x1(m,k-1,j,i) - e2_cc_(m,k-1,j,i-1);
+      } else {
+        e2_l1 = e2x1(m,k  ,j,i) - e2_cc_(m,k  ,j,i-1);
       }
       if (flx3(m,IDN,k,j,i) >= 0.0) {
-        e2_r1 = e2x1(m,k  ,j,i) - e2_cc_(m,k  ,j,i  );
-      } else {
         e2_r1 = e2x1(m,k-1,j,i) - e2_cc_(m,k-1,j,i  );
+      } else {
+        e2_r1 = e2x1(m,k  ,j,i) - e2_cc_(m,k  ,j,i  );
       }
       e2(m,k,j,i) = 0.25*(e2_l3 + e2_r3 + e2_l1 + e2_r1 +
                     e2x3(m,k,j,i-1) + e2x3(m,k,j,i) + e2x1(m,k-1,j,i) + e2x1(m,k,j,i));
@@ -190,24 +190,24 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage)
       // integrate E3 to corner using SG07
       Real e3_l2, e3_r2, e3_l1, e3_r1;
       if (flx1(m,IDN,k,j-1,i) >= 0.0) {
-        e3_l2 = e3x2(m,k,j,i  ) - e3_cc_(m,k,j-1,i  );
-      } else {
         e3_l2 = e3x2(m,k,j,i-1) - e3_cc_(m,k,j-1,i-1);
+      } else {
+        e3_l2 = e3x2(m,k,j,i  ) - e3_cc_(m,k,j-1,i  );
       }
       if (flx1(m,IDN,k,j,i) >= 0.0) {
-        e3_r2 = e3x2(m,k,j,i  ) - e3_cc_(m,k,j  ,i  );
-      } else {
         e3_r2 = e3x2(m,k,j,i-1) - e3_cc_(m,k,j  ,i-1);
+      } else {
+        e3_r2 = e3x2(m,k,j,i  ) - e3_cc_(m,k,j  ,i  );
       }
       if (flx2(m,IDN,k,j,i-1) >= 0.0) {
-        e3_l1 = e3x1(m,k,j  ,i) - e3_cc_(m,k,j  ,i-1);
-      } else {
         e3_l1 = e3x1(m,k,j-1,i) - e3_cc_(m,k,j-1,i-1);
+      } else {
+        e3_l1 = e3x1(m,k,j  ,i) - e3_cc_(m,k,j  ,i-1);
       }
       if (flx2(m,IDN,k,j,i) >= 0.0) {
-        e3_r1 = e3x1(m,k,j  ,i) - e3_cc_(m,k,j  ,i  );
-      } else {
         e3_r1 = e3x1(m,k,j-1,i) - e3_cc_(m,k,j-1,i  );
+      } else {
+        e3_r1 = e3x1(m,k,j  ,i) - e3_cc_(m,k,j  ,i  );
       }
       e3(m,k,j,i) = 0.25*(e3_l1 + e3_r1 + e3_l2 + e3_r2 +
                     e3x2(m,k,j,i-1) + e3x2(m,k,j,i) + e3x1(m,k,j-1,i) + e3x1(m,k,j,i));
