@@ -257,7 +257,7 @@ TaskStatus MHD::MHDInitRecv(Driver *pdrive, int stage)
           using Kokkos::ALL;
           // Receive requests for U
           // create tag using local ID and buffer index of *receiving* MeshBlock
-          int tag = pbval_u->CreateMPITag(m, n, PhysicsID::FluidCons_ID);
+          int tag = pbval_u->CreateMPITag(m, n, VariablesID::FluidCons_ID);
           auto recv_data = Kokkos::subview(rbufu[n].data, m, Kokkos::ALL, Kokkos::ALL);
           void* recv_ptr = recv_data.data();
           int ierr = MPI_Irecv(recv_ptr, recv_data.size(), MPI_ATHENA_REAL,
@@ -265,7 +265,7 @@ TaskStatus MHD::MHDInitRecv(Driver *pdrive, int stage)
 
           // Receive requests for B
           // create tag using local ID and buffer index of *receiving* MeshBlock
-          int tag = pbval_b->CreateMPITag(m, n, PhysicsID::BField_ID);
+          int tag = pbval_b->CreateMPITag(m, n, VariablesID::BField_ID);
           auto recv_data = Kokkos::subview(rbufb[n].data, m, Kokkos::ALL, Kokkos::ALL);
           void* recv_ptr = recv_data.data();
           int ierr = MPI_Irecv(recv_ptr, recv_data.size(), MPI_ATHENA_REAL,
@@ -359,7 +359,7 @@ TaskStatus MHD::MHDCopyCons(Driver *pdrive, int stage)
 
 TaskStatus MHD::MHDSendU(Driver *pdrive, int stage) 
 {
-  TaskStatus tstat = pbval_u->SendBuffersCC(u0, PhysicsID::FluidCons_ID);
+  TaskStatus tstat = pbval_u->SendBuffersCC(u0, VariablesID::FluidCons_ID);
   return tstat;
 }
 
@@ -369,7 +369,7 @@ TaskStatus MHD::MHDSendU(Driver *pdrive, int stage)
 
 TaskStatus MHD::MHDSendB(Driver *pdrive, int stage)
 {
-  TaskStatus tstat = pbval_b->SendBuffersFC(b0, PhysicsID::BField_ID);
+  TaskStatus tstat = pbval_b->SendBuffersFC(b0, VariablesID::BField_ID);
   return tstat;
 }
 

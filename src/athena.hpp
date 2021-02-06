@@ -51,6 +51,9 @@ enum ReconstructionMethod {dc, plm, ppm};
 // constants that enumerate time evolution options
 enum TimeEvolution {tstatic, kinematic, dynamic};
 
+// constants that enumerate Physics Modules implemented in code
+enum PhysicsModule {HydroDynamics, MagnetoHydroDynamics};
+
 //----------------------------------------------------------------------------------------
 // define default Kokkos execution and memory spaces
 

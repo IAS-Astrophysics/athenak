@@ -18,9 +18,9 @@ enum class BoundaryFlag {undef=-1, block, reflect, outflow, user, periodic};
 // identifiers for status of MPI boundary communications
 enum class BoundaryCommStatus {undef=-1, waiting, sent, received};
 
-// integer constants to specify physics modules (maximum of 16 set by number of bits used
-// to encode ID in CreateMPItag function in src/utils)
-enum PhysicsID {FluidCons_ID, BField_ID};
+// integer constants to specify variables communicated in MPI calls (maximum of 16 set by
+// number of bits used to encode ID in CreateMPItag function in src/utils)
+enum VariablesID {FluidCons_ID, BField_ID};
 
 #include "athena.hpp"
 #include "mesh/mesh.hpp"

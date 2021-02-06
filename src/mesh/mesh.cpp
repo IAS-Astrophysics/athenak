@@ -212,7 +212,8 @@ void Mesh::BuildTree(ParameterInput *pin)
       || mesh_cells.nx2 % incells.nx2 != 0
       || mesh_cells.nx3 % incells.nx3 != 0) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "Mesh must be evenly divisible by MeshBlocks" << std::endl;
+              << "Mesh must be evenly divisible by MeshBlocks" << std::endl
+              << "Check Mesh and MeshBlock dimensions in input file" << std::endl;
     std::exit(EXIT_FAILURE);
   }
   if ( incells.nx1 < 4 ||

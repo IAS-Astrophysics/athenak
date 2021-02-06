@@ -209,7 +209,7 @@ TaskStatus Hydro::HydroInitRecv(Driver *pdrive, int stage)
         if (nghbr[n].rank.h_view(m) != global_variable::my_rank) {
           using Kokkos::ALL;
           // create tag using local ID and buffer index of *receiving* MeshBlock
-          int tag = pbval_u->CreateMPITag(m, n, PhysicsID::FluidCons_ID);
+          int tag = pbval_u->CreateMPITag(m, n, VariablesID::FluidCons_ID);
           auto recv_data = Kokkos::subview(rbufu[n].data, m, Kokkos::ALL, Kokkos::ALL);
           void* recv_ptr = recv_data.data();
           int ierr = MPI_Irecv(recv_ptr, recv_data.size(), MPI_ATHENA_REAL,
@@ -295,7 +295,7 @@ TaskStatus Hydro::HydroCopyCons(Driver *pdrive, int stage)
 
 TaskStatus Hydro::HydroSendU(Driver *pdrive, int stage) 
 {
-  TaskStatus tstat = pbval_u->SendBuffersCC(u0, PhysicsID::FluidCons_ID);
+  TaskStatus tstat = pbval_u->SendBuffersCC(u0, VariablesID::FluidCons_ID);
   return tstat;
 }
 

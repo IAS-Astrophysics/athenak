@@ -14,7 +14,7 @@
 #include "athena.hpp"
 #include "io_wrapper.hpp"
 
-#define NHISTORY_VARIABLES 8
+#define NHISTORY_VARIABLES 12
 
 // identifiers for output variables
 enum class OutputVariable {undef=-1,
@@ -77,6 +77,20 @@ struct OutputMeshBlockInfo
     mb_gid(id), ois(is), oie(ie), ojs(js), oje(je), oks(ks), oke(ke) {}
 };
 
+//----------------------------------------------------------------------------------------
+//! \struct HistoryData
+//  \brief  container for history data for different physics modules
+
+struct HistoryData
+{
+  int nhist;
+  PhysicsModule physics;
+  std::string label[NHISTORY_VARIABLES];
+  Real hdata[NHISTORY_VARIABLES];
+  bool header_written;
+  // constructor
+  HistoryData(PhysicsModule name) : physics(name), header_written(false) {}
+};
 
 //----------------------------------------------------------------------------------------
 // \brief abstract base class for different output types (modes/formats); node in
@@ -130,9 +144,14 @@ class FormattedTableOutput : public OutputType
 class HistoryOutput : public OutputType
 {   
  public:
-  Real history_data[NHISTORY_VARIABLES];  // vector to store history data
   HistoryOutput(OutputParameters oparams, Mesh *pm);
+
+  // vector of length [# of physics modules] containing hdata arrays
+  std::vector<HistoryData> hist_data;
+
   void LoadOutputData(Mesh *pm) override;
+  void LoadHydroHistoryData(HistoryData *pdata, Mesh *pm);
+  void LoadMHDHistoryData(HistoryData *pdata, Mesh *pm);
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
 };  
 
@@ -144,6 +163,7 @@ class VTKOutput : public OutputType
 {
  public:
   VTKOutput(OutputParameters oparams, Mesh *pm);
+
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
 };
 
