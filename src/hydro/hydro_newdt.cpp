@@ -72,7 +72,12 @@ TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage)
       k += ks;
       j += js;
 
-      Real cs = eos.SoundSpeed(w0_(m,IPR,k,j,i),w0_(m,IDN,k,j,i));
+      Real cs;
+      if (eos.is_adiabatic) {
+        cs = eos.SoundSpeed(w0_(m,IPR,k,j,i),w0_(m,IDN,k,j,i));
+      } else {
+        cs = eos.iso_cs;
+      }
       min_dt1 = fmin((mbsize.dx1.d_view(m)/(fabs(w0_(m,IVX,k,j,i)) + cs)), min_dt1);
       min_dt2 = fmin((mbsize.dx2.d_view(m)/(fabs(w0_(m,IVY,k,j,i)) + cs)), min_dt2);
       min_dt3 = fmin((mbsize.dx3.d_view(m)/(fabs(w0_(m,IVZ,k,j,i)) + cs)), min_dt3);

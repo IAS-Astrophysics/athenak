@@ -92,7 +92,7 @@ void AdiabaticMHD::ConsToPrim(const DvceArray5D<Real> &cons,const DvceFaceFld4D<
 
       // convert scalars (if any), always stored at end of cons and prim arrays.
       for (int n=nmhd; n<(nmhd+nscal); ++n) {
-        prim(m,n,k,j,i) = cons(m,n,k,j,i)/u_d;
+        prim(m,n,k,j,i) = cons(m,n,k,j,i)*di;
       }
     }
   );

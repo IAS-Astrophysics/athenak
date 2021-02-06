@@ -15,8 +15,8 @@
 #include <cstdio>     // fopen(), fprintf(), freopen()
 #include <iostream>   // endl
 #include <sstream>    // stringstream
-#include <stdexcept>  // runtime_error
 #include <string>     // c_str()
+#include <limits>
 
 // Athena++ headers
 #include "athena.hpp"
@@ -28,16 +28,64 @@
 #include "utils/grid_locations.hpp"
 #include "pgen.hpp"
 
+// global variables shared with vector potential and error functions
+Real d0, p0, v1_0, b1_0, b2_0, b3_0, dby, dbz, k_par;
+Real cos_a2, cos_a3, sin_a2, sin_a3;
+
 // function to compute eigenvectors of linear waves in hydrodynamics
 void HydroEigensystem(const Real d, const Real p, const Real v1, const Real v2,
                       const Real v3, const EOS_Data &eos, Real right_eigenmatrix[5][5]);
 // function to compute eigenvectors of linear waves in mhd
-void MHDEigensystem(const Real d, const Real p, const Real v1, const Real v2,
-                    const Real v3, const EOS_Data &eos, Real right_eigenmatrix[5][5]);
+void MHDEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
+                    const Real p, const Real b1, const Real b2, const Real b3,
+                    const Real x, const Real y,
+                    const EOS_Data &eos, Real right_eigenmatrix[7][7]);
+
+//----------------------------------------------------------------------------------------
+//! \fn Real A1(const Real x1,const Real x2,const Real x3)
+//  \brief A1: 1-component of vector potential, using a gauge such that Ax = 0, and Ay,
+//  Az are functions of x and y alone.
+
+KOKKOS_INLINE_FUNCTION
+Real A1(const Real x1, const Real x2, const Real x3) {
+  Real x =  x1*cos_a2*cos_a3 + x2*cos_a2*sin_a3 + x3*sin_a2;
+  Real y = -x1*sin_a3        + x2*cos_a3;
+  Real Ay =  b3_0*x - (dbz/k_par)*std::cos(k_par*(x));
+  Real Az = -b2_0*x + (dby/k_par)*std::cos(k_par*(x)) + b1_0*y;
+
+  return -Ay*sin_a3 - Az*sin_a2*cos_a3;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn Real A2(const Real x1,const Real x2,const Real x3)
+//  \brief A2: 2-component of vector potential
+  
+KOKKOS_INLINE_FUNCTION
+Real A2(const Real x1, const Real x2, const Real x3) {
+  Real x =  x1*cos_a2*cos_a3 + x2*cos_a2*sin_a3 + x3*sin_a2;
+  Real y = -x1*sin_a3        + x2*cos_a3;
+  Real Ay =  b3_0*x - (dbz/k_par)*std::cos(k_par*(x));
+  Real Az = -b2_0*x + (dby/k_par)*std::cos(k_par*(x)) + b1_0*y;
+
+  return Ay*cos_a3 - Az*sin_a2*sin_a3;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn Real A3(const Real x1,const Real x2,const Real x3)
+//  \brief A3: 3-component of vector potential
+
+KOKKOS_INLINE_FUNCTION
+Real A3(const Real x1, const Real x2, const Real x3) {
+  Real x =  x1*cos_a2*cos_a3 + x2*cos_a2*sin_a3 + x3*sin_a2;
+  Real y = -x1*sin_a3        + x2*cos_a3;
+  Real Az = -b2_0*x + (dby/k_par)*std::cos(k_par*(x)) + b1_0*y;
+
+  return Az*cos_a2;
+}
 
 //----------------------------------------------------------------------------------------
 //! \fn void MeshBlock::ProblemGenerator(ParameterInput *pin)
-//  \brief Problem Generator for linear wave tests
+//  \brief Sets initial conditions for linear wave tests
 
 void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
 {
@@ -72,10 +120,10 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
   Real x3size = pmesh_->mesh_size.x3max - pmesh_->mesh_size.x3min;
 
   // start with wavevector along x1 axis
-  Real cos_a3 = 1.0;
-  Real sin_a3 = 0.0;
-  Real cos_a2 = 1.0;
-  Real sin_a2 = 0.0;
+  cos_a3 = 1.0;
+  sin_a3 = 0.0;
+  cos_a2 = 1.0;
+  sin_a2 = 0.0;
   if (pmesh_->nx2gt1 && !(along_x1)) {
     Real ang_3 = std::atan(x1size/x2size);
     sin_a3 = std::sin(ang_3);
@@ -110,13 +158,17 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
   if (sin_a2 > 0.0) lambda = std::min(lambda, x3size*sin_a2);
 
   // Initialize k_parallel
-  Real k_par = 2.0*(M_PI)/lambda;
+  k_par = 2.0*(M_PI)/lambda;
 
-  // Set background state: u0 is parallel to the wavevector, and v0/w0 are perpendicular
-  Real d0 = 1.0;
-  Real v1_0 = vflow;
-  Real v2_0 = 0.0;
-  Real v3_0 = 0.0;
+  // Set background state: v1_0 is parallel to wavevector.
+  // Similarly, for MHD:   b1_0 is parallel to wavevector, b2_0/b3_0 are perpendicular
+  d0 = 1.0;
+  v1_0 = vflow;
+  b1_0 = 1.0;
+  b2_0 = std::sqrt(2.0);
+  b3_0 = 0.5;
+  Real xfact = 0.0;
+  Real yfact = 1.0;
 
   // capture variables for kernel
   int &nx1 = pmbp->mb_cells.nx1;
@@ -127,28 +179,30 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
   int &ks = pmbp->mb_cells.ks, &ke = pmbp->mb_cells.ke;
   auto &size = pmbp->pmb->mbsize;
 
-  // initialize Hydro variables --------------------------------
+  // initialize Hydro variables ----------------------------------------------------------
   if (pmbp->phydro != nullptr) {
-    using namespace hydro;
     EOS_Data &eos = pmbp->phydro->peos->eos_data;
     Real gm1 = eos.gamma - 1.0;
     Real p0 = 1.0/eos.gamma;
     auto &u0 = pmbp->phydro->u0; 
     Real rem[5][5];
+
     // Compute eigenvectors in hydrodynamics
-    HydroEigensystem(d0, p0, v1_0, v2_0, v3_0, eos, rem);
-    par_for("pgen_linwave", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
+    HydroEigensystem(d0, v1_0, 0.0, 0.0, p0, eos, rem);
+
+    par_for("pgen_linwave1", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i)
       {
-        Real x1 = CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
-        Real x2 = CellCenterX(j-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
-        Real x3 = CellCenterX(k-ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
-        Real x = cos_a2*(x1*cos_a3 + x2*sin_a3) + x3*sin_a2;
+        Real x1v = CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
+        Real x2v = CellCenterX(j-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
+        Real x3v = CellCenterX(k-ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
+        Real x = cos_a2*(x1v*cos_a3 + x2v*sin_a3) + x3v*sin_a2;
         Real sn = std::sin(k_par*x);
         Real mx = d0*vflow + amp*sn*rem[1][wave_flag];
         Real my = amp*sn*rem[2][wave_flag];
         Real mz = amp*sn*rem[3][wave_flag];
   
+        // compute cell-centered conserved variables
         u0(m,IDN,k,j,i) = d0 + amp*sn*rem[0][wave_flag];
         u0(m,IM1,k,j,i) = mx*cos_a2*cos_a3 - my*sin_a3 - mz*sin_a2*cos_a3;
         u0(m,IM2,k,j,i) = mx*cos_a2*sin_a3 + my*cos_a3 - mz*sin_a2*sin_a3;
@@ -161,36 +215,74 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
     );
   }  // End initialization Hydro variables
 
-  // initialize MHD variables --------------------------------
+  // initialize MHD variables ------------------------------------------------------------
   if (pmbp->pmhd != nullptr) {
-    using namespace hydro;
     EOS_Data &eos = pmbp->pmhd->peos->eos_data;
+    int nmhd_ = pmbp->pmhd->nmhd;
     Real gm1 = eos.gamma - 1.0;
     Real p0 = 1.0/eos.gamma;
     auto &u0 = pmbp->pmhd->u0;
     auto &b0 = pmbp->pmhd->b0;
-    Real rem[5][5];
+    Real rem[7][7];
+
     // Compute eigenvectors in mhd
-    MHDEigensystem(d0, p0, v1_0, v2_0, v3_0, eos, rem);
-    par_for("pgen_linwave", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
+    MHDEigensystem(d0, v1_0, 0.0, 0.0, p0, b1_0, b2_0, b3_0, xfact, yfact, eos, rem);
+    dby = amp*rem[nmhd_  ][wave_flag];
+    dbz = amp*rem[nmhd_+1][wave_flag];
+
+    par_for("pgen_linwave2", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i)
       {
-        Real x1 = CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
-        Real x2 = CellCenterX(j-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
-        Real x3 = CellCenterX(k-ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
-        Real x = cos_a2*(x1*cos_a3 + x2*sin_a3) + x3*sin_a2;
+        Real x1v = CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
+        Real x2v = CellCenterX(j-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
+        Real x3v = CellCenterX(k-ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
+        Real x = cos_a2*(x1v*cos_a3 + x2v*sin_a3) + x3v*sin_a2;
         Real sn = std::sin(k_par*x);
         Real mx = d0*vflow + amp*sn*rem[1][wave_flag];
         Real my = amp*sn*rem[2][wave_flag];
         Real mz = amp*sn*rem[3][wave_flag];
  
+        // compute cell-centered conserved variables
         u0(m,IDN,k,j,i) = d0 + amp*sn*rem[0][wave_flag];
         u0(m,IM1,k,j,i) = mx*cos_a2*cos_a3 - my*sin_a3 - mz*sin_a2*cos_a3;
         u0(m,IM2,k,j,i) = mx*cos_a2*sin_a3 + my*cos_a3 - mz*sin_a2*sin_a3;
         u0(m,IM3,k,j,i) = mx*sin_a2                    + mz*cos_a2;
 
         if (eos.is_adiabatic) {
-          u0(m,IEN,k,j,i) = p0/gm1 + 0.5*d0*v1_0*v1_0 + amp*sn*rem[4][wave_flag];
+          u0(m,IEN,k,j,i) = p0/gm1 + 0.5*d0*v1_0*v1_0 + amp*sn*rem[4][wave_flag] +
+                            0.5*(b1_0*b1_0 + b2_0*b2_0 + b3_0*b3_0);
+        }
+
+        // Compute face-centered fields from curl(A).
+        Real x1f   = LeftEdgeX(i  -is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
+        Real x1fp1 = LeftEdgeX(i+1-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
+        Real x2f   = LeftEdgeX(j  -js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
+        Real x2fp1 = LeftEdgeX(j+1-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
+        Real x3f   = LeftEdgeX(k  -ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
+        Real x3fp1 = LeftEdgeX(k+1-ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
+        Real dx1 = size.dx1.d_view(m);
+        Real dx2 = size.dx2.d_view(m);
+        Real dx3 = size.dx3.d_view(m);
+
+        b0.x1f(m,k,j,i) = (A3(x1f,  x2fp1,x3v  ) - A3(x1f,x2f,x3v))/dx2 -
+                          (A2(x1f,  x2v,  x3fp1) - A2(x1f,x2v,x3f))/dx3;
+        b0.x2f(m,k,j,i) = (A1(x1v,  x2f,  x3fp1) - A1(x1v,x2f,x3f))/dx3 -
+                          (A3(x1fp1,x2f,  x3v  ) - A3(x1f,x2f,x3v))/dx1;
+        b0.x3f(m,k,j,i) = (A2(x1fp1,x2v,  x3f  ) - A2(x1f,x2v,x3f))/dx1 -
+                          (A1(x1v,  x2fp1,x3f  ) - A1(x1v,x2f,x3f))/dx2;
+
+        // Include extra face-component at edge of block in each direction
+        if (i==ie) {
+          b0.x1f(m,k,j,i+1) = (A3(x1fp1,x2fp1,x3v  ) - A3(x1fp1,x2f,x3v))/dx2 -
+                              (A2(x1fp1,x2v,  x3fp1) - A2(x1fp1,x2v,x3f))/dx3;
+        }
+        if (j==je) {
+          b0.x2f(m,k,j+1,i) = (A1(x1v,  x2fp1,x3fp1) - A1(x1v,x2fp1,x3f))/dx3 -
+                              (A3(x1fp1,x2fp1,x3v  ) - A3(x1f,x2fp1,x3v))/dx1;
+        }
+        if (k==ke) {
+          b0.x3f(m,k+1,j,i) = (A2(x1fp1,x2v,  x3fp1) - A2(x1f,x2v,x3fp1))/dx1 -
+                              (A1(x1v,  x2fp1,x3fp1) - A1(x1v,x2f,x3fp1))/dx2;
         }
       }
     );
@@ -203,13 +295,13 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
 //! \fn void HydroEigensystem()
 //  \brief computes eigenvectors of linear waves in adiabatic/isothermal hydrodynamics
 
-void HydroEigensystem(const Real d, const Real p, const Real v1, const Real v2,
-                      const Real v3, const EOS_Data &eos, Real right_eigenmatrix[5][5])
+void HydroEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
+                      const Real p, const EOS_Data &eos, Real right_eigenmatrix[5][5])
 {
   //--- Adiabatic Hydrodynamics ---
   if (eos.is_adiabatic) {
     Real vsq = v1*v1 + v2*v2 + v3*v3;
-    Real h = ((p/(eos.gamma - 1.0) + 0.5*d*(v1*v1 + v2*v2+v3*v3)) + p)/d;
+    Real h = (p/(eos.gamma - 1.0) + 0.5*d*vsq + p)/d;
     Real a = std::sqrt(eos.gamma*p/d);
 
     // Right-eigenvectors, stored as COLUMNS (eq. B3)
@@ -272,8 +364,237 @@ void HydroEigensystem(const Real d, const Real p, const Real v1, const Real v2,
 //! \fn void MHDEigensystem()
 //  \brief computes eigenvectors of linear waves in adiabatic/isothermal mhd
 
-void MHDEigensystem(const Real d, const Real p, const Real v1, const Real v2,
-                      const Real v3, const EOS_Data &eos, Real right_eigenmatrix[5][5])
+void MHDEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
+                    const Real p, const Real b1, const Real b2, const Real b3,
+                    const Real x, const Real y, 
+                    const EOS_Data &eos, Real right_eigenmatrix[7][7])
 {
+  // common factors for both adiabatic and isothermal eigenvectors
+  Real btsq = b2*b2 + b3*b3;
+  Real bt = std::sqrt(btsq);
+  // beta's (eqs. A17, B28, B40)
+  Real bet2,bet3;
+  if (bt == 0.0) {
+    bet2 = 1.0;
+    bet3 = 0.0;
+  } else {
+    bet2 = b2/bt;
+    bet3 = b3/bt;
+  }
+
+  //--- Adiabatic MHD ---
+  if (eos.is_adiabatic) {
+    Real vsq = v1*v1 + v2*v2 + v3*v3;
+    Real gm1 = eos.gamma - 1.0;
+    Real h = (p/gm1 + 0.5*d*vsq + p + b1*b1 + btsq)/d;
+    Real bt_starsq = (gm1 - (gm1 - 1.0)*y)*btsq;
+    Real vaxsq = b1*b1/d;
+    Real hp = h - (vaxsq + btsq/d);
+    Real twid_asq = std::max( (gm1*(hp-0.5*vsq) - (gm1-1.0)*x),
+                              static_cast<Real>(std::numeric_limits<float>::min()) );
+
+    // Compute fast- and slow-magnetosonic speeds (eq. B18)
+    Real ct2 = bt_starsq/d;
+    Real tsum = vaxsq + ct2 + twid_asq;
+    Real tdif = vaxsq + ct2 - twid_asq;
+    Real cf2_cs2 = std::sqrt(tdif*tdif + 4.0*twid_asq*ct2);
+
+    Real cfsq = 0.5*(tsum + cf2_cs2);
+    Real cf = std::sqrt(cfsq);
+
+    Real cssq = twid_asq*vaxsq/cfsq;
+    Real cs = std::sqrt(cssq);
+
+    // Compute beta(s) (eqs. A17, B20, B28)
+    Real bt_star = std::sqrt(bt_starsq);
+    Real bet2_star = bet2/std::sqrt(gm1 - (gm1-1.0)*y);
+    Real bet3_star = bet3/std::sqrt(gm1 - (gm1-1.0)*y);
+    Real bet_starsq = bet2_star*bet2_star + bet3_star*bet3_star;
+    Real vbet = v2*bet2_star + v3*bet3_star;
+
+    // Compute alpha(s) (eq. A16)
+    Real alpha_f,alpha_s;
+    if ((cfsq - cssq) == 0.0) {
+      alpha_f = 1.0;
+      alpha_s = 0.0;
+    } else if ( (twid_asq - cssq) <= 0.0) {
+      alpha_f = 0.0;
+      alpha_s = 1.0;
+    } else if ( (cfsq - twid_asq) <= 0.0) {
+      alpha_f = 1.0;
+      alpha_s = 0.0;
+    } else {
+      alpha_f = std::sqrt((twid_asq - cssq)/(cfsq - cssq));
+      alpha_s = std::sqrt((cfsq - twid_asq)/(cfsq - cssq));
+    }
+
+    // Compute Q(s) and A(s) (eq. A14-15), etc.
+    Real sqrtd = std::sqrt(d);
+    Real s = SIGN(b1);
+    Real twid_a = std::sqrt(twid_asq);
+    Real qf = cf*alpha_f*s;
+    Real qs = cs*alpha_s*s;
+    Real af_prime = twid_a*alpha_f/sqrtd;
+    Real as_prime = twid_a*alpha_s/sqrtd;
+    Real afpbb = af_prime*bt_star*bet_starsq;
+    Real aspbb = as_prime*bt_star*bet_starsq;
+
+    // Right-eigenvectors, stored as COLUMNS (eq. B21) */
+    right_eigenmatrix[0][0] = alpha_f;
+    right_eigenmatrix[0][1] = 0.0;
+    right_eigenmatrix[0][2] = alpha_s;
+    right_eigenmatrix[0][3] = 1.0;
+    right_eigenmatrix[0][4] = alpha_s;
+    right_eigenmatrix[0][5] = 0.0;
+    right_eigenmatrix[0][6] = alpha_f;
+
+    right_eigenmatrix[1][0] = alpha_f*(v1 - cf);
+    right_eigenmatrix[1][1] = 0.0;
+    right_eigenmatrix[1][2] = alpha_s*(v1 - cs);
+    right_eigenmatrix[1][3] = v1;
+    right_eigenmatrix[1][4] = alpha_s*(v1 + cs);
+    right_eigenmatrix[1][5] = 0.0;
+    right_eigenmatrix[1][6] = alpha_f*(v1 + cf);
+
+    Real qa = alpha_f*v2;
+    Real qb = alpha_s*v2;
+    Real qc = qs*bet2_star;
+    Real qd = qf*bet2_star;
+    right_eigenmatrix[2][0] = qa + qc;
+    right_eigenmatrix[2][1] = -bet3;
+    right_eigenmatrix[2][2] = qb - qd;
+    right_eigenmatrix[2][3] = v2;
+    right_eigenmatrix[2][4] = qb + qd;
+    right_eigenmatrix[2][5] = bet3;
+    right_eigenmatrix[2][6] = qa - qc;
+
+    qa = alpha_f*v3;
+    qb = alpha_s*v3;
+    qc = qs*bet3_star;
+    qd = qf*bet3_star;
+    right_eigenmatrix[3][0] = qa + qc;
+    right_eigenmatrix[3][1] = bet2;
+    right_eigenmatrix[3][2] = qb - qd;
+    right_eigenmatrix[3][3] = v3;
+    right_eigenmatrix[3][4] = qb + qd;
+    right_eigenmatrix[3][5] = -bet2;
+    right_eigenmatrix[3][6] = qa - qc;
+
+    right_eigenmatrix[4][0] = alpha_f*(hp - v1*cf) + qs*vbet + aspbb;
+    right_eigenmatrix[4][1] = -(v2*bet3 - v3*bet2);
+    right_eigenmatrix[4][2] = alpha_s*(hp - v1*cs) - qf*vbet - afpbb;
+    right_eigenmatrix[4][3] = 0.5*vsq + (gm1-1.0)*x/gm1;
+    right_eigenmatrix[4][4] = alpha_s*(hp + v1*cs) + qf*vbet - afpbb;
+    right_eigenmatrix[4][5] = -right_eigenmatrix[4][1];
+    right_eigenmatrix[4][6] = alpha_f*(hp + v1*cf) - qs*vbet + aspbb;
+
+    right_eigenmatrix[5][0] = as_prime*bet2_star;
+    right_eigenmatrix[5][1] = -bet3*s/sqrtd;
+    right_eigenmatrix[5][2] = -af_prime*bet2_star;
+    right_eigenmatrix[5][3] = 0.0;
+    right_eigenmatrix[5][4] = right_eigenmatrix[5][2];
+    right_eigenmatrix[5][5] = right_eigenmatrix[5][1];
+    right_eigenmatrix[5][6] = right_eigenmatrix[5][0];
+
+    right_eigenmatrix[6][0] = as_prime*bet3_star;
+    right_eigenmatrix[6][1] = bet2*s/sqrtd;
+    right_eigenmatrix[6][2] = -af_prime*bet3_star;
+    right_eigenmatrix[6][3] = 0.0;
+    right_eigenmatrix[6][4] = right_eigenmatrix[6][2];
+    right_eigenmatrix[6][5] = right_eigenmatrix[6][1];
+    right_eigenmatrix[6][6] = right_eigenmatrix[6][0];
+
+  //--- Isothermal MHD ---
+  } else {
+
+    Real bt_starsq = btsq*y;
+    Real vaxsq = b1*b1/d;
+    Real twid_csq = (eos.iso_cs*eos.iso_cs) + x;
+
+    // Compute fast- and slow-magnetosonic speeds (eq. B39)
+    Real ct2 = bt_starsq/d;
+    Real tsum = vaxsq + ct2 + twid_csq;
+    Real tdif = vaxsq + ct2 - twid_csq;
+    Real cf2_cs2 = std::sqrt(tdif*tdif + 4.0*twid_csq*ct2);
+
+    Real cfsq = 0.5*(tsum + cf2_cs2);
+    Real cf = std::sqrt(cfsq);
+
+    Real cssq = twid_csq*vaxsq/cfsq;
+    Real cs = std::sqrt(cssq);
+
+    Real bet2_star = bet2/std::sqrt(y);
+    Real bet3_star = bet3/std::sqrt(y);
+    Real bet_starsq = bet2_star*bet2_star + bet3_star*bet3_star;
+
+    // Compute alpha's (eq. A16)
+    Real alpha_f,alpha_s;
+    if ((cfsq-cssq) == 0.0) {
+      alpha_f = 1.0;
+      alpha_s = 0.0;
+    } else if ((twid_csq - cssq) <= 0.0) {
+      alpha_f = 0.0;
+      alpha_s = 1.0;
+    } else if ((cfsq - twid_csq) <= 0.0) {
+      alpha_f = 1.0;
+      alpha_s = 0.0;
+    } else {
+      alpha_f = std::sqrt((twid_csq - cssq)/(cfsq - cssq));
+      alpha_s = std::sqrt((cfsq - twid_csq)/(cfsq - cssq));
+    }
+
+    // Compute Q's (eq. A14-15), etc.
+    Real sqrtd = std::sqrt(d);
+    Real s = SIGN(b1);
+    Real twid_c = std::sqrt(twid_csq);
+    Real qf = cf*alpha_f*s;
+    Real qs = cs*alpha_s*s;
+    Real af_prime = twid_c*alpha_f/sqrtd;
+    Real as_prime = twid_c*alpha_s/sqrtd;
+
+    // Right-eigenvectors, stored as COLUMNS (eq. B21)
+    right_eigenmatrix[0][0] = alpha_f;
+    right_eigenmatrix[1][0] = alpha_f*(v1 - cf);
+    right_eigenmatrix[2][0] = alpha_f*v2 + qs*bet2_star;
+    right_eigenmatrix[3][0] = alpha_f*v3 + qs*bet3_star;
+    right_eigenmatrix[4][0] = as_prime*bet2_star;
+    right_eigenmatrix[5][0] = as_prime*bet3_star;
+
+    right_eigenmatrix[0][1] = 0.0;
+    right_eigenmatrix[1][1] = 0.0;
+    right_eigenmatrix[2][1] = -bet3;
+    right_eigenmatrix[3][1] = bet2;
+    right_eigenmatrix[4][1] = -bet3*s/sqrtd;
+    right_eigenmatrix[5][1] = bet2*s/sqrtd;
+
+    right_eigenmatrix[0][2] = alpha_s;
+    right_eigenmatrix[1][2] = alpha_s*(v1 - cs);
+    right_eigenmatrix[2][2] = alpha_s*v2 - qf*bet2_star;
+    right_eigenmatrix[3][2] = alpha_s*v3 - qf*bet3_star;
+    right_eigenmatrix[4][2] = -af_prime*bet2_star;
+    right_eigenmatrix[5][2] = -af_prime*bet3_star;
+
+    right_eigenmatrix[0][3] = alpha_s;
+    right_eigenmatrix[1][3] = alpha_s*(v1 + cs);
+    right_eigenmatrix[2][3] = alpha_s*v2 + qf*bet2_star;
+    right_eigenmatrix[3][3] = alpha_s*v3 + qf*bet3_star;
+    right_eigenmatrix[4][3] = right_eigenmatrix[4][2];
+    right_eigenmatrix[5][3] = right_eigenmatrix[5][2];
+
+    right_eigenmatrix[0][4] = 0.0;
+    right_eigenmatrix[1][4] = 0.0;
+    right_eigenmatrix[2][4] = bet3;
+    right_eigenmatrix[3][4] = -bet2;
+    right_eigenmatrix[4][4] = right_eigenmatrix[4][1];
+    right_eigenmatrix[5][4] = right_eigenmatrix[5][1];
+
+    right_eigenmatrix[0][5] = alpha_f;
+    right_eigenmatrix[1][5] = alpha_f*(v1 + cf);
+    right_eigenmatrix[2][5] = alpha_f*v2 - qs*bet2_star;
+    right_eigenmatrix[3][5] = alpha_f*v3 - qs*bet3_star;
+    right_eigenmatrix[4][5] = right_eigenmatrix[4][0];
+    right_eigenmatrix[5][5] = right_eigenmatrix[5][0];
+  }
+  return;
 }
 
