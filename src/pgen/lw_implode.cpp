@@ -23,7 +23,7 @@
 
 void ProblemGenerator::LWImplode_(MeshBlockPack *pmbp, ParameterInput *pin)
 {
-  if (pmbp->phydro != nullptr) {
+  if (pmbp->phydro == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "LW Implosion test can only be run in Hydro, but no <hydro> block "
               << "in input file" << std::endl;
