@@ -52,8 +52,8 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
                      ScrArray2D<Real>::shmem_size(3, ncells1)) * 2;
   int scr_level = 0;
   auto flx1 = uflx.x1f;
-  auto e3x1 = e3x1_;
-  auto e2x1 = e2x1_;
+  auto e3x1_ = e3x1;
+  auto e2x1_ = e2x1;
   auto &bx = b0.x1f;
 
   // set the loop limits for 1D/2D/3D problems
@@ -103,10 +103,10 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
       switch (rsolver_method)
       {
         case MHD_RSolver::advect:
-          Advect(member,eos,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e3x1,e2x1);
+          Advect(member,eos,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e3x1_,e2x1_);
           break;
         case MHD_RSolver::llf:
-          LLF(member,eos,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e3x1,e2x1);
+          LLF(member,eos,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e3x1_,e2x1_);
           break;
 //        case MHD_RSolver::hllc:
 //          HLLC(member, eos, is, ie+1, IVX, wl, wr, uflux);
@@ -144,8 +144,8 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
               ScrArray2D<Real>::shmem_size(3, ncells1)) * 3;
   auto flx2 = uflx.x2f;
   auto &by = b0.x2f;
-  auto e1x2 = e1x2_;
-  auto e3x2 = e3x2_;
+  auto e1x2_ = e1x2;
+  auto e3x2_ = e3x2;
 
   // set the loop limits for 2D/3D problems
   if (pmy_pack->pmesh->nx3gt1) { // 3D
@@ -206,10 +206,10 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
           switch (rsolver_method)
           {
             case MHD_RSolver::advect:
-              Advect(member,eos,m,k,j,is-1,ie+1,IVY,wl,wr,bl,br,by,flx2,e1x2,e3x2);
+              Advect(member,eos,m,k,j,is-1,ie+1,IVY,wl,wr,bl,br,by,flx2,e1x2_,e3x2_);
               break;
             case MHD_RSolver::llf:
-              LLF(member,eos,m,k,j,is-1,ie+1,IVY,wl,wr,bl,br,by,flx2,e1x2,e3x2);
+              LLF(member,eos,m,k,j,is-1,ie+1,IVY,wl,wr,bl,br,by,flx2,e1x2_,e3x2_);
               break;
 //            case MHD_RSolver::hllc:
 //              HLLC(member, eos, is, ie, IVY, wl, wr, uf);
@@ -249,8 +249,8 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
               ScrArray2D<Real>::shmem_size(3, ncells1)) * 3;
   auto flx3 = uflx.x3f;
   auto &bz = b0.x3f;
-  auto e2x3 = e2x3_;
-  auto e1x3 = e1x3_;
+  auto e2x3_ = e2x3;
+  auto e1x3_ = e1x3;
 
   par_for_outer("divflux_x3",DevExeSpace(), scr_size, scr_level, 0, nmb1, js-1, je+1,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int j)
@@ -304,10 +304,10 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
           switch (rsolver_method)
           {
             case MHD_RSolver::advect:
-              Advect(member,eos,m,k,j,is-1,ie+1,IVZ,wl,wr,bl,br,bz,flx3,e2x3,e1x3);
+              Advect(member,eos,m,k,j,is-1,ie+1,IVZ,wl,wr,bl,br,bz,flx3,e2x3_,e1x3_);
               break;
             case MHD_RSolver::llf:
-              LLF(member,eos,m,k,j,is-1,ie+1,IVZ,wl,wr,bl,br,bz,flx3,e2x3,e1x3);
+              LLF(member,eos,m,k,j,is-1,ie+1,IVZ,wl,wr,bl,br,bz,flx3,e2x3_,e1x3_);
               break;
 //            case MHD_RSolver::hllc:
 //              HLLC(member, eos, is, ie, IVZ, wl, wr, uf);

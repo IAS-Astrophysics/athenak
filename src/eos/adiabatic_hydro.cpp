@@ -25,6 +25,15 @@ AdiabaticHydro::AdiabaticHydro(MeshBlockPack *pp, ParameterInput *pin)
 
 //----------------------------------------------------------------------------------------
 // \!fn void ConservedToPrimitive()
+// \brief No-Op version of MHD cons to prim functions.  Never used in Hydro.
+
+void EquationOfState::ConsToPrim(const DvceArray5D<Real> &cons,
+         const DvceFaceFld4D<Real> &b, DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc)
+{
+}
+
+//----------------------------------------------------------------------------------------
+// \!fn void ConservedToPrimitive()
 // \brief Converts conserved into primitive variables in nonrelativistic adiabatic hydro
 
 void AdiabaticHydro::ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)

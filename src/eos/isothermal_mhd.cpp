@@ -26,6 +26,14 @@ IsothermalMHD::IsothermalMHD(MeshBlockPack *pp, ParameterInput *pin)
 
 //----------------------------------------------------------------------------------------
 // \!fn void ConservedToPrimitive()
+// \brief No-Op version of hydro cons to prim functions.  Never used in MHD.
+
+void EquationOfState::ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
+{
+}
+
+//----------------------------------------------------------------------------------------
+// \!fn void ConservedToPrimitive()
 // \brief Converts conserved into primitive variables in nonrelativistic isothermal MHD
 // Nate that the primitive variables contain the cell-centered magnetic fields, so that
 // W contains (nmhd+3+nscalars) elements, while U contains (nmhd+nscalars)

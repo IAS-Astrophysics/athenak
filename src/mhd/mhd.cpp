@@ -31,12 +31,16 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   b1("B_fc1",1,1,1,1),
   uflx("uflx",1,1,1,1,1),
   efld("efld",1,1,1,1),
-  e3x1_("e3x1",1,1,1,1),
-  e2x1_("e2x1",1,1,1,1),
-  e1x2_("e1x2",1,1,1,1),
-  e3x2_("e3x2",1,1,1,1),
-  e2x3_("e2x3",1,1,1,1),
-  e1x3_("e1x3",1,1,1,1)
+  e3x1("e3x1",1,1,1,1),
+  e2x1("e2x1",1,1,1,1),
+  e1x2("e1x2",1,1,1,1),
+  e3x2("e3x2",1,1,1,1),
+  e2x3("e2x3",1,1,1,1),
+  e1x3("e1x3",1,1,1,1),
+  e1_cc("e1_cc",1,1,1,1),
+  e2_cc("e2_cc",1,1,1,1),
+  e3_cc("e3_cc",1,1,1,1)
+
 {
   // construct EOS object (no default)
   std::string eqn_of_state = pin->GetString("mhd","eos");
@@ -165,15 +169,15 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     Kokkos::realloc(efld.x3e, nmb, ncells3, ncells2+1, ncells1+1);
 
     // allocate scratch arrays for face- and cell-centered E used in CornerE
-    Kokkos::realloc(e3x1_, nmb, ncells3, ncells2, ncells1);
-    Kokkos::realloc(e2x1_, nmb, ncells3, ncells2, ncells1);
-    Kokkos::realloc(e1x2_, nmb, ncells3, ncells2, ncells1);
-    Kokkos::realloc(e3x2_, nmb, ncells3, ncells2, ncells1);
-    Kokkos::realloc(e2x3_, nmb, ncells3, ncells2, ncells1);
-    Kokkos::realloc(e1x3_, nmb, ncells3, ncells2, ncells1);
-    Kokkos::realloc(e1_cc_, nmb, ncells3, ncells2, ncells1);
-    Kokkos::realloc(e2_cc_, nmb, ncells3, ncells2, ncells1);
-    Kokkos::realloc(e3_cc_, nmb, ncells3, ncells2, ncells1);
+    Kokkos::realloc(e3x1, nmb, ncells3, ncells2, ncells1);
+    Kokkos::realloc(e2x1, nmb, ncells3, ncells2, ncells1);
+    Kokkos::realloc(e1x2, nmb, ncells3, ncells2, ncells1);
+    Kokkos::realloc(e3x2, nmb, ncells3, ncells2, ncells1);
+    Kokkos::realloc(e2x3, nmb, ncells3, ncells2, ncells1);
+    Kokkos::realloc(e1x3, nmb, ncells3, ncells2, ncells1);
+    Kokkos::realloc(e1_cc, nmb, ncells3, ncells2, ncells1);
+    Kokkos::realloc(e2_cc, nmb, ncells3, ncells2, ncells1);
+    Kokkos::realloc(e3_cc, nmb, ncells3, ncells2, ncells1);
   }
 }
 
