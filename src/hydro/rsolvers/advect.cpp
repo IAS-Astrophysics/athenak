@@ -21,7 +21,6 @@ void Advect(TeamMember_t const &member, const EOS_Data eos,
 {
   int ivy = IVX + ((ivx-IVX) + 1)%3;
   int ivz = IVX + ((ivx-IVX) + 2)%3;
-  Real gm1 = eos.gamma - 1.0;
 
   par_for_inner(member, il, iu, [&](const int i)
   {

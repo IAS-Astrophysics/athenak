@@ -137,47 +137,45 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
   // Initialize HYDRO: ghost zones and primitive variables (everywhere)
   hydro::Hydro *phydro = pmesh->pmb_pack->phydro;
   if (phydro != nullptr) {
-    TaskStatus tstatus;
-    tstatus = phydro->HydroInitRecv(this, 0);
-    tstatus = phydro->HydroSendU(this, 0);
-    tstatus = phydro->HydroClearSend(this, 0);
-    tstatus = phydro->HydroClearRecv(this, 0);
-    tstatus = phydro->HydroRecvU(this, 0);
-    tstatus = phydro->HydroApplyPhysicalBCs(this, 0);
+    // following functions return a TaskStatus, but it is ignored so cast to (void)
+    (void) phydro->HydroInitRecv(this, 0);
+    (void) phydro->HydroSendU(this, 0);
+    (void) phydro->HydroClearSend(this, 0);
+    (void) phydro->HydroClearRecv(this, 0);
+    (void) phydro->HydroRecvU(this, 0);
+    (void) phydro->HydroApplyPhysicalBCs(this, 0);
 
     // Set primitive variables in initial conditions everywhere
-    tstatus = phydro->ConToPrim(this, 0);
+    (void) phydro->ConToPrim(this, 0);
   }
 
   // Initialize MHD: ghost zones and primitive variables (everywhere)
   // Note this requires communicating BOTH u and B
   mhd::MHD *pmhd = pmesh->pmb_pack->pmhd;
   if (pmhd != nullptr) {
-    TaskStatus tstatus;
-    tstatus = pmhd->MHDInitRecv(this, 0);
-    tstatus = pmhd->MHDSendU(this, 0);
-    tstatus = pmhd->MHDSendB(this, 0);
-    tstatus = pmhd->MHDClearSend(this, 0);
-    tstatus = pmhd->MHDClearRecv(this, 0);
-    tstatus = pmhd->MHDRecvU(this, 0);
-    tstatus = pmhd->MHDRecvB(this, 0);
-    tstatus = pmhd->MHDApplyPhysicalBCs(this, 0);
+    // following functions return a TaskStatus, but it is ignored so cast to (void)
+    (void) pmhd->MHDInitRecv(this, 0);
+    (void) pmhd->MHDInitRecv(this, 0);
+    (void) pmhd->MHDSendU(this, 0);
+    (void) pmhd->MHDSendB(this, 0);
+    (void) pmhd->MHDClearSend(this, 0);
+    (void) pmhd->MHDClearRecv(this, 0);
+    (void) pmhd->MHDRecvU(this, 0);
+    (void) pmhd->MHDRecvB(this, 0);
+    (void) pmhd->MHDApplyPhysicalBCs(this, 0);
 
     // Set primitive variables in initial conditions everywhere 
-    tstatus = pmhd->ConToPrim(this, 0);
+    (void) pmhd->ConToPrim(this, 0);
   }
 
   //---- Step 3.  Compute first time step (if problem involves time evolution
 
-  // TODO: need to cycle through all physics modules/variables in this step
-
   if (time_evolution != TimeEvolution::tstatic) {
-    TaskStatus tstatus;
     if (phydro != nullptr) {
-      tstatus = pmesh->pmb_pack->phydro->NewTimeStep(this, nstages);
+      (void) pmesh->pmb_pack->phydro->NewTimeStep(this, nstages);
     }
     if (pmhd != nullptr) {
-      tstatus = pmesh->pmb_pack->pmhd->NewTimeStep(this, nstages);
+      (void) pmesh->pmb_pack->pmhd->NewTimeStep(this, nstages);
     }
     pmesh->NewTimeStep(tlim);
   }

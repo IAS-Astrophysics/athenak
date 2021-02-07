@@ -36,7 +36,6 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage)
 
   if (pdriver->time_evolution == TimeEvolution::kinematic) {
     auto &w0_ = w0;
-    auto &eos = pmy_pack->pmhd->peos->eos_data;
     auto &mbsize = pmy_pack->pmb->mbsize;
     const int nmkji = (pmy_pack->nmb_thispack)*nx3*nx2*nx1;
     const int nkji = nx3*nx2*nx1;

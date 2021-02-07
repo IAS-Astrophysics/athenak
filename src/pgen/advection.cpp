@@ -77,7 +77,6 @@ void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
          << std::endl << "Only isothermal EOS allowed for advection tests" << std::endl;
       exit(EXIT_FAILURE);
     }
-    Real gm1 = pmbp->phydro->peos->eos_data.gamma - 1.0;
     int &nhydro = pmbp->phydro->nhydro;
     int &nscalars = pmbp->phydro->nscalars;
     auto &u0 = pmbp->phydro->u0;
@@ -139,7 +138,6 @@ void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
          << std::endl << "Only isothermal EOS allowed for advection tests" << std::endl;
       exit(EXIT_FAILURE);
     }
-    Real gm1 = pmbp->pmhd->peos->eos_data.gamma - 1.0;
     int &nmhd = pmbp->pmhd->nmhd;
     int &nscalars = pmbp->pmhd->nscalars;
     auto &u0 = pmbp->pmhd->u0;

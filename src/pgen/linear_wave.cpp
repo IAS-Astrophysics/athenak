@@ -538,7 +538,6 @@ void MHDEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
 
     Real bet2_star = bet2/std::sqrt(y);
     Real bet3_star = bet3/std::sqrt(y);
-    Real bet_starsq = bet2_star*bet2_star + bet3_star*bet3_star;
 
     // Compute alpha's (eq. A16)
     Real alpha_f,alpha_s;

@@ -240,9 +240,10 @@ TaskStatus BoundaryValueCC::SendBuffersCC(DvceArray5D<Real> &a, int key)
 
   {int &my_rank = global_variable::my_rank;
   auto &nghbr = pmy_pack->pmb->nghbr;
-  auto &mbgid = pmy_pack->pmb->mbgid;
   auto &rbuf = recv_buf;
+#if MPI_PARALLEL_ENABLED
   auto &sbuf = send_buf;
+#endif
 
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
@@ -286,7 +287,6 @@ TaskStatus BoundaryValueCC::RecvBuffersCC(DvceArray5D<Real> &a)
 
   bool bflag = false;
   {auto &nghbr = pmy_pack->pmb->nghbr;
-  auto &gid = pmy_pack->pmb->mbgid.h_view;
   auto &rbuf = recv_buf;
 
 #if MPI_PARALLEL_ENABLED
