@@ -24,15 +24,12 @@
 #include "utils/grid_locations.hpp"
 #include "pgen.hpp"
 
-// global varibale shared with vector potential function
-Real B0;
-
 //----------------------------------------------------------------------------------------
 //! \fn Real A3(const Real x1,const Real x2,const Real x3)
 //  \brief A3: 3-component of vector potential
 
 KOKKOS_INLINE_FUNCTION
-Real A3(const Real x1, const Real x2) {
+Real A3(const Real x1, const Real x2, const Real B0) {
   return (B0/(4.0*M_PI))*(std::cos(4.0*M_PI*x1) - 2.0*std::cos(2.0*M_PI*x2));
 }
 
@@ -51,7 +48,7 @@ void ProblemGenerator::OrszagTang_(MeshBlockPack *pmbp, ParameterInput *pin)
     exit(EXIT_FAILURE);
   }
 
-  B0 = 1.0/std::sqrt(4.0*M_PI);  // defined as global variable shared with A3() function
+  Real B0 = 1.0/std::sqrt(4.0*M_PI);
   Real d0 = 25.0/(36.0*M_PI);
   Real v0 = 1.0;
   Real p0 = 5.0/(12.0*M_PI);
@@ -89,16 +86,16 @@ void ProblemGenerator::OrszagTang_(MeshBlockPack *pmbp, ParameterInput *pin)
       Real dx1 = size.dx1.d_view(m);
       Real dx2 = size.dx2.d_view(m);
 
-      b0.x1f(m,k,j,i) =  (A3(x1f,  x2fp1) - A3(x1f,x2f))/dx2;
-      b0.x2f(m,k,j,i) = -(A3(x1fp1,x2f  ) - A3(x1f,x2f))/dx1;
+      b0.x1f(m,k,j,i) =  (A3(x1f,  x2fp1,B0) - A3(x1f,x2f,B0))/dx2;
+      b0.x2f(m,k,j,i) = -(A3(x1fp1,x2f  ,B0) - A3(x1f,x2f,B0))/dx1;
       b0.x3f(m,k,j,i) = 0.0;
 
       // Include extra face-component at edge of block in each direction
       if (i==ie) {
-        b0.x1f(m,k,j,i+1) =  (A3(x1fp1,x2fp1) - A3(x1fp1,x2f))/dx2;
+        b0.x1f(m,k,j,i+1) =  (A3(x1fp1,x2fp1,B0) - A3(x1fp1,x2f,B0))/dx2;
       }
       if (j==je) {
-        b0.x2f(m,k,j+1,i) = -(A3(x1fp1,x2fp1) - A3(x1f,x2fp1))/dx1;
+        b0.x2f(m,k,j+1,i) = -(A3(x1fp1,x2fp1,B0) - A3(x1f,x2fp1,B0))/dx1;
       }
       if (k==ke) {
         b0.x3f(m,k+1,j,i) = 0.0;

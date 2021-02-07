@@ -28,10 +28,6 @@
 #include "utils/grid_locations.hpp"
 #include "pgen.hpp"
 
-// global variables shared with vector potential and error functions
-Real d0, p0, v1_0, b1_0, b2_0, b3_0, dby, dbz, k_par;
-Real cos_a2, cos_a3, sin_a2, sin_a3;
-
 // function to compute eigenvectors of linear waves in hydrodynamics
 void HydroEigensystem(const Real d, const Real p, const Real v1, const Real v2,
                       const Real v3, const EOS_Data &eos, Real right_eigenmatrix[5][5]);
@@ -42,18 +38,28 @@ void MHDEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
                     const EOS_Data &eos, Real right_eigenmatrix[7][7]);
 
 //----------------------------------------------------------------------------------------
+//! \struct LinWaveVariables
+//  \brief container for variables shared with vector potential and error functions
+
+struct LinWaveVariables
+{
+  Real d0, p0, v1_0, b1_0, b2_0, b3_0, dby, dbz, k_par;
+  Real cos_a2, cos_a3, sin_a2, sin_a3;
+};
+
+//----------------------------------------------------------------------------------------
 //! \fn Real A1(const Real x1,const Real x2,const Real x3)
 //  \brief A1: 1-component of vector potential, using a gauge such that Ax = 0, and Ay,
 //  Az are functions of x and y alone.
 
 KOKKOS_INLINE_FUNCTION
-Real A1(const Real x1, const Real x2, const Real x3) {
-  Real x =  x1*cos_a2*cos_a3 + x2*cos_a2*sin_a3 + x3*sin_a2;
-  Real y = -x1*sin_a3        + x2*cos_a3;
-  Real Ay =  b3_0*x - (dbz/k_par)*std::cos(k_par*(x));
-  Real Az = -b2_0*x + (dby/k_par)*std::cos(k_par*(x)) + b1_0*y;
+Real A1(const Real x1, const Real x2, const Real x3, const LinWaveVariables lw) {
+  Real x =  x1*lw.cos_a2*lw.cos_a3 + x2*lw.cos_a2*lw.sin_a3 + x3*lw.sin_a2;
+  Real y = -x1*lw.sin_a3           + x2*lw.cos_a3;
+  Real Ay =  lw.b3_0*x - (lw.dbz/lw.k_par)*std::cos(lw.k_par*(x));
+  Real Az = -lw.b2_0*x + (lw.dby/lw.k_par)*std::cos(lw.k_par*(x)) + lw.b1_0*y;
 
-  return -Ay*sin_a3 - Az*sin_a2*cos_a3;
+  return -Ay*lw.sin_a3 - Az*lw.sin_a2*lw.cos_a3;
 }
 
 //----------------------------------------------------------------------------------------
@@ -61,13 +67,13 @@ Real A1(const Real x1, const Real x2, const Real x3) {
 //  \brief A2: 2-component of vector potential
   
 KOKKOS_INLINE_FUNCTION
-Real A2(const Real x1, const Real x2, const Real x3) {
-  Real x =  x1*cos_a2*cos_a3 + x2*cos_a2*sin_a3 + x3*sin_a2;
-  Real y = -x1*sin_a3        + x2*cos_a3;
-  Real Ay =  b3_0*x - (dbz/k_par)*std::cos(k_par*(x));
-  Real Az = -b2_0*x + (dby/k_par)*std::cos(k_par*(x)) + b1_0*y;
+Real A2(const Real x1, const Real x2, const Real x3, const LinWaveVariables lw) {
+  Real x =  x1*lw.cos_a2*lw.cos_a3 + x2*lw.cos_a2*lw.sin_a3 + x3*lw.sin_a2;
+  Real y = -x1*lw.sin_a3           + x2*lw.cos_a3;
+  Real Ay =  lw.b3_0*x - (lw.dbz/lw.k_par)*std::cos(lw.k_par*(x));
+  Real Az = -lw.b2_0*x + (lw.dby/lw.k_par)*std::cos(lw.k_par*(x)) + lw.b1_0*y;
 
-  return Ay*cos_a3 - Az*sin_a2*sin_a3;
+  return Ay*lw.cos_a3 - Az*lw.sin_a2*lw.sin_a3;
 }
 
 //----------------------------------------------------------------------------------------
@@ -75,12 +81,12 @@ Real A2(const Real x1, const Real x2, const Real x3) {
 //  \brief A3: 3-component of vector potential
 
 KOKKOS_INLINE_FUNCTION
-Real A3(const Real x1, const Real x2, const Real x3) {
-  Real x =  x1*cos_a2*cos_a3 + x2*cos_a2*sin_a3 + x3*sin_a2;
-  Real y = -x1*sin_a3        + x2*cos_a3;
-  Real Az = -b2_0*x + (dby/k_par)*std::cos(k_par*(x)) + b1_0*y;
+Real A3(const Real x1, const Real x2, const Real x3, const LinWaveVariables lw) {
+  Real x =  x1*lw.cos_a2*lw.cos_a3 + x2*lw.cos_a2*lw.sin_a3 + x3*lw.sin_a2;
+  Real y = -x1*lw.sin_a3           + x2*lw.cos_a3;
+  Real Az = -lw.b2_0*x + (lw.dby/lw.k_par)*std::cos(lw.k_par*(x)) + lw.b1_0*y;
 
-  return Az*cos_a2;
+  return Az*lw.cos_a2;
 }
 
 //----------------------------------------------------------------------------------------
@@ -120,53 +126,58 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
   Real x3size = pmesh_->mesh_size.x3max - pmesh_->mesh_size.x3min;
 
   // start with wavevector along x1 axis
-  cos_a3 = 1.0;
-  sin_a3 = 0.0;
-  cos_a2 = 1.0;
-  sin_a2 = 0.0;
+  LinWaveVariables lwv;
+  lwv.cos_a3 = 1.0;
+  lwv.sin_a3 = 0.0;
+  lwv.cos_a2 = 1.0;
+  lwv.sin_a2 = 0.0;
   if (pmesh_->nx2gt1 && !(along_x1)) {
     Real ang_3 = std::atan(x1size/x2size);
-    sin_a3 = std::sin(ang_3);
-    cos_a3 = std::cos(ang_3);
+    lwv.sin_a3 = std::sin(ang_3);
+    lwv.cos_a3 = std::cos(ang_3);
   }
   if (pmesh_->nx3gt1 && !(along_x1)) {
-    Real ang_2 = std::atan(0.5*(x1size*cos_a3 + x2size*sin_a3)/x3size);
-    sin_a2 = std::sin(ang_2);
-    cos_a2 = std::cos(ang_2);
+    Real ang_2 = std::atan(0.5*(x1size*lwv.cos_a3 + x2size*lwv.sin_a3)/x3size);
+    lwv.sin_a2 = std::sin(ang_2);
+    lwv.cos_a2 = std::cos(ang_2);
   }
 
   // hardcode wavevector along x2 axis, override ang_2, ang_3
   if (along_x2) {
-    cos_a3 = 0.0;
-    sin_a3 = 1.0;
-    cos_a2 = 1.0;
-    sin_a2 = 0.0;
+    lwv.cos_a3 = 0.0;
+    lwv.sin_a3 = 1.0;
+    lwv.cos_a2 = 1.0;
+    lwv.sin_a2 = 0.0;
   }
 
   // hardcode wavevector along x3 axis, override ang_2, ang_3
   if (along_x3) {
-    cos_a3 = 0.0;
-    sin_a3 = 1.0;
-    cos_a2 = 0.0;
-    sin_a2 = 1.0;
+    lwv.cos_a3 = 0.0;
+    lwv.sin_a3 = 1.0;
+    lwv.cos_a2 = 0.0;
+    lwv.sin_a2 = 1.0;
   }
 
   // choose the smallest projection of the wavelength in each direction that is > 0
   Real lambda = std::numeric_limits<float>::max();
-  if (cos_a2*cos_a3 > 0.0) lambda = std::min(lambda, x1size*cos_a2*cos_a3);
-  if (cos_a2*sin_a3 > 0.0) lambda = std::min(lambda, x2size*cos_a2*sin_a3);
-  if (sin_a2 > 0.0) lambda = std::min(lambda, x3size*sin_a2);
+  if (lwv.cos_a2*lwv.cos_a3 > 0.0) {
+    lambda = std::min(lambda, x1size*lwv.cos_a2*lwv.cos_a3);
+  }
+  if (lwv.cos_a2*lwv.sin_a3 > 0.0) {
+    lambda = std::min(lambda, x2size*lwv.cos_a2*lwv.sin_a3);
+  }
+  if (lwv.sin_a2 > 0.0) lambda = std::min(lambda, x3size*lwv.sin_a2);
 
   // Initialize k_parallel
-  k_par = 2.0*(M_PI)/lambda;
+  lwv.k_par = 2.0*(M_PI)/lambda;
 
   // Set background state: v1_0 is parallel to wavevector.
   // Similarly, for MHD:   b1_0 is parallel to wavevector, b2_0/b3_0 are perpendicular
-  d0 = 1.0;
-  v1_0 = vflow;
-  b1_0 = 1.0;
-  b2_0 = std::sqrt(2.0);
-  b3_0 = 0.5;
+  lwv.d0 = 1.0;
+  lwv.v1_0 = vflow;
+  lwv.b1_0 = 1.0;
+  lwv.b2_0 = std::sqrt(2.0);
+  lwv.b3_0 = 0.5;
   Real xfact = 0.0;
   Real yfact = 1.0;
 
@@ -188,7 +199,7 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
     Real rem[5][5];
 
     // Compute eigenvectors in hydrodynamics
-    HydroEigensystem(d0, v1_0, 0.0, 0.0, p0, eos, rem);
+    HydroEigensystem(lwv.d0, lwv.v1_0, 0.0, 0.0, p0, eos, rem);
 
     par_for("pgen_linwave1", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i)
@@ -196,20 +207,21 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
         Real x1v = CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
         Real x2v = CellCenterX(j-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
         Real x3v = CellCenterX(k-ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
-        Real x = cos_a2*(x1v*cos_a3 + x2v*sin_a3) + x3v*sin_a2;
-        Real sn = std::sin(k_par*x);
-        Real mx = d0*vflow + amp*sn*rem[1][wave_flag];
+        Real x = lwv.cos_a2*(x1v*lwv.cos_a3 + x2v*lwv.sin_a3) + x3v*lwv.sin_a2;
+        Real sn = std::sin(lwv.k_par*x);
+        Real mx = lwv.d0*vflow + amp*sn*rem[1][wave_flag];
         Real my = amp*sn*rem[2][wave_flag];
         Real mz = amp*sn*rem[3][wave_flag];
   
         // compute cell-centered conserved variables
-        u0(m,IDN,k,j,i) = d0 + amp*sn*rem[0][wave_flag];
-        u0(m,IM1,k,j,i) = mx*cos_a2*cos_a3 - my*sin_a3 - mz*sin_a2*cos_a3;
-        u0(m,IM2,k,j,i) = mx*cos_a2*sin_a3 + my*cos_a3 - mz*sin_a2*sin_a3;
-        u0(m,IM3,k,j,i) = mx*sin_a2                    + mz*cos_a2;
+        u0(m,IDN,k,j,i)=lwv.d0 + amp*sn*rem[0][wave_flag];
+        u0(m,IM1,k,j,i)=mx*lwv.cos_a2*lwv.cos_a3 -my*lwv.sin_a3 -mz*lwv.sin_a2*lwv.cos_a3;
+        u0(m,IM2,k,j,i)=mx*lwv.cos_a2*lwv.sin_a3 +my*lwv.cos_a3 -mz*lwv.sin_a2*lwv.sin_a3;
+        u0(m,IM3,k,j,i)=mx*lwv.sin_a2                           +mz*lwv.cos_a2;
 
         if (eos.is_adiabatic) {
-          u0(m,IEN,k,j,i) = p0/gm1 + 0.5*d0*v1_0*v1_0 + amp*sn*rem[4][wave_flag];
+          u0(m,IEN,k,j,i) = p0/gm1 + 0.5*lwv.d0*(lwv.v1_0)*(lwv.v1_0) +
+                          amp*sn*rem[4][wave_flag];
         }
       }
     );
@@ -226,9 +238,10 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
     Real rem[7][7];
 
     // Compute eigenvectors in mhd
-    MHDEigensystem(d0, v1_0, 0.0, 0.0, p0, b1_0, b2_0, b3_0, xfact, yfact, eos, rem);
-    dby = amp*rem[nmhd_  ][wave_flag];
-    dbz = amp*rem[nmhd_+1][wave_flag];
+    MHDEigensystem(lwv.d0, lwv.v1_0, 0.0, 0.0, p0, lwv.b1_0, lwv.b2_0, lwv.b3_0,
+                   xfact, yfact, eos, rem);
+    lwv.dby = amp*rem[nmhd_  ][wave_flag];
+    lwv.dbz = amp*rem[nmhd_+1][wave_flag];
 
     par_for("pgen_linwave2", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i)
@@ -236,21 +249,21 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
         Real x1v = CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
         Real x2v = CellCenterX(j-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
         Real x3v = CellCenterX(k-ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
-        Real x = cos_a2*(x1v*cos_a3 + x2v*sin_a3) + x3v*sin_a2;
-        Real sn = std::sin(k_par*x);
-        Real mx = d0*vflow + amp*sn*rem[1][wave_flag];
+        Real x = lwv.cos_a2*(x1v*lwv.cos_a3 + x2v*lwv.sin_a3) + x3v*lwv.sin_a2;
+        Real sn = std::sin(lwv.k_par*x);
+        Real mx = lwv.d0*vflow + amp*sn*rem[1][wave_flag];
         Real my = amp*sn*rem[2][wave_flag];
         Real mz = amp*sn*rem[3][wave_flag];
  
         // compute cell-centered conserved variables
-        u0(m,IDN,k,j,i) = d0 + amp*sn*rem[0][wave_flag];
-        u0(m,IM1,k,j,i) = mx*cos_a2*cos_a3 - my*sin_a3 - mz*sin_a2*cos_a3;
-        u0(m,IM2,k,j,i) = mx*cos_a2*sin_a3 + my*cos_a3 - mz*sin_a2*sin_a3;
-        u0(m,IM3,k,j,i) = mx*sin_a2                    + mz*cos_a2;
+        u0(m,IDN,k,j,i)=lwv.d0 + amp*sn*rem[0][wave_flag];
+        u0(m,IM1,k,j,i)=mx*lwv.cos_a2*lwv.cos_a3 -my*lwv.sin_a3 -mz*lwv.sin_a2*lwv.cos_a3;
+        u0(m,IM2,k,j,i)=mx*lwv.cos_a2*lwv.sin_a3 +my*lwv.cos_a3 -mz*lwv.sin_a2*lwv.sin_a3;
+        u0(m,IM3,k,j,i)=mx*lwv.sin_a2                           +mz*lwv.cos_a2;
 
         if (eos.is_adiabatic) {
-          u0(m,IEN,k,j,i) = p0/gm1 + 0.5*d0*v1_0*v1_0 + amp*sn*rem[4][wave_flag] +
-                            0.5*(b1_0*b1_0 + b2_0*b2_0 + b3_0*b3_0);
+          u0(m,IEN,k,j,i) = p0/gm1 + 0.5*lwv.d0*SQR(lwv.v1_0) +
+           amp*sn*rem[4][wave_flag] + 0.5*(SQR(lwv.b1_0) + SQR(lwv.b2_0) + SQR(lwv.b3_0));
         }
 
         // Compute face-centered fields from curl(A).
@@ -264,25 +277,25 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
         Real dx2 = size.dx2.d_view(m);
         Real dx3 = size.dx3.d_view(m);
 
-        b0.x1f(m,k,j,i) = (A3(x1f,  x2fp1,x3v  ) - A3(x1f,x2f,x3v))/dx2 -
-                          (A2(x1f,  x2v,  x3fp1) - A2(x1f,x2v,x3f))/dx3;
-        b0.x2f(m,k,j,i) = (A1(x1v,  x2f,  x3fp1) - A1(x1v,x2f,x3f))/dx3 -
-                          (A3(x1fp1,x2f,  x3v  ) - A3(x1f,x2f,x3v))/dx1;
-        b0.x3f(m,k,j,i) = (A2(x1fp1,x2v,  x3f  ) - A2(x1f,x2v,x3f))/dx1 -
-                          (A1(x1v,  x2fp1,x3f  ) - A1(x1v,x2f,x3f))/dx2;
+        b0.x1f(m,k,j,i) = (A3(x1f,  x2fp1,x3v  ,lwv) - A3(x1f,x2f,x3v,lwv))/dx2 -
+                          (A2(x1f,  x2v,  x3fp1,lwv) - A2(x1f,x2v,x3f,lwv))/dx3;
+        b0.x2f(m,k,j,i) = (A1(x1v,  x2f,  x3fp1,lwv) - A1(x1v,x2f,x3f,lwv))/dx3 -
+                          (A3(x1fp1,x2f,  x3v  ,lwv) - A3(x1f,x2f,x3v,lwv))/dx1;
+        b0.x3f(m,k,j,i) = (A2(x1fp1,x2v,  x3f  ,lwv) - A2(x1f,x2v,x3f,lwv))/dx1 -
+                          (A1(x1v,  x2fp1,x3f  ,lwv) - A1(x1v,x2f,x3f,lwv))/dx2;
 
         // Include extra face-component at edge of block in each direction
         if (i==ie) {
-          b0.x1f(m,k,j,i+1) = (A3(x1fp1,x2fp1,x3v  ) - A3(x1fp1,x2f,x3v))/dx2 -
-                              (A2(x1fp1,x2v,  x3fp1) - A2(x1fp1,x2v,x3f))/dx3;
+          b0.x1f(m,k,j,i+1) = (A3(x1fp1,x2fp1,x3v  ,lwv) - A3(x1fp1,x2f,x3v,lwv))/dx2 -
+                              (A2(x1fp1,x2v,  x3fp1,lwv) - A2(x1fp1,x2v,x3f,lwv))/dx3;
         }
         if (j==je) {
-          b0.x2f(m,k,j+1,i) = (A1(x1v,  x2fp1,x3fp1) - A1(x1v,x2fp1,x3f))/dx3 -
-                              (A3(x1fp1,x2fp1,x3v  ) - A3(x1f,x2fp1,x3v))/dx1;
+          b0.x2f(m,k,j+1,i) = (A1(x1v,  x2fp1,x3fp1,lwv) - A1(x1v,x2fp1,x3f,lwv))/dx3 -
+                              (A3(x1fp1,x2fp1,x3v  ,lwv) - A3(x1f,x2fp1,x3v,lwv))/dx1;
         }
         if (k==ke) {
-          b0.x3f(m,k+1,j,i) = (A2(x1fp1,x2v,  x3fp1) - A2(x1f,x2v,x3fp1))/dx1 -
-                              (A1(x1v,  x2fp1,x3fp1) - A1(x1v,x2f,x3fp1))/dx2;
+          b0.x3f(m,k+1,j,i) = (A2(x1fp1,x2v,  x3fp1,lwv) - A2(x1f,x2v,x3fp1,lwv))/dx1 -
+                              (A1(x1v,  x2fp1,x3fp1,lwv) - A1(x1v,x2f,x3fp1,lwv))/dx2;
         }
       }
     );
