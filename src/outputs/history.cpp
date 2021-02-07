@@ -296,10 +296,10 @@ void HistoryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
     // first, perform in-place sum over all MPI ranks
 #if MPI_PARALLEL_ENABLED
     if (global_variable::my_rank == 0) {
-      MPI_Reduce(MPI_IN_PLACE, &(history_data[0]), NHISTORY_VARIABLES, MPI_ATHENA_REAL,
+      MPI_Reduce(MPI_IN_PLACE, &(data.hdata[0]), data.nhist, MPI_ATHENA_REAL,
          MPI_SUM, 0, MPI_COMM_WORLD);
     } else {
-      MPI_Reduce(&(history_data[0]), &(history_data[0]), NHISTORY_VARIABLES,
+      MPI_Reduce(&(data.hdata[0]), &(data.hdata[0]), data.nhist,
          MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
     }
 #endif

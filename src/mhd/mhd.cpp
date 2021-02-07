@@ -15,6 +15,7 @@
 #include "eos/eos.hpp"
 #include "bvals/bvals.hpp"
 #include "mhd/mhd.hpp"
+#include "utils/create_mpitag.hpp"
 
 namespace mhd {
 //----------------------------------------------------------------------------------------
@@ -254,22 +255,25 @@ TaskStatus MHD::MHDInitRecv(Driver *pdrive, int stage)
 #if MPI_PARALLEL_ENABLED
         // post non-blocking receive if neighboring MeshBlock on a different rank 
         if (nghbr[n].rank.h_view(m) != global_variable::my_rank) {
-          using Kokkos::ALL;
+          {
           // Receive requests for U
           // create tag using local ID and buffer index of *receiving* MeshBlock
-          int tag = pbval_u->CreateMPITag(m, n, VariablesID::FluidCons_ID);
+          int tag = CreateMPITag(m, n, VariablesID::FluidCons_ID);
           auto recv_data = Kokkos::subview(rbufu[n].data, m, Kokkos::ALL, Kokkos::ALL);
           void* recv_ptr = recv_data.data();
           int ierr = MPI_Irecv(recv_ptr, recv_data.size(), MPI_ATHENA_REAL,
             nghbr[n].rank.h_view(m), tag, MPI_COMM_WORLD, &(rbufu[n].comm_req[m]));
+          }
 
+          {
           // Receive requests for B
           // create tag using local ID and buffer index of *receiving* MeshBlock
-          int tag = pbval_b->CreateMPITag(m, n, VariablesID::BField_ID);
+          int tag = CreateMPITag(m, n, VariablesID::BField_ID);
           auto recv_data = Kokkos::subview(rbufb[n].data, m, Kokkos::ALL, Kokkos::ALL);
           void* recv_ptr = recv_data.data();
           int ierr = MPI_Irecv(recv_ptr, recv_data.size(), MPI_ATHENA_REAL,
             nghbr[n].rank.h_view(m), tag, MPI_COMM_WORLD, &(rbufb[n].comm_req[m]));
+          }
         }
 #endif
         // initialize boundary receive status flag

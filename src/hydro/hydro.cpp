@@ -15,6 +15,7 @@
 #include "eos/eos.hpp"
 #include "bvals/bvals.hpp"
 #include "hydro/hydro.hpp"
+#include "utils/create_mpitag.hpp"
 
 namespace hydro {
 //----------------------------------------------------------------------------------------
@@ -207,9 +208,8 @@ TaskStatus Hydro::HydroInitRecv(Driver *pdrive, int stage)
 #if MPI_PARALLEL_ENABLED
         // post non-blocking receive if neighboring MeshBlock on a different rank 
         if (nghbr[n].rank.h_view(m) != global_variable::my_rank) {
-          using Kokkos::ALL;
           // create tag using local ID and buffer index of *receiving* MeshBlock
-          int tag = pbval_u->CreateMPITag(m, n, VariablesID::FluidCons_ID);
+          int tag = CreateMPITag(m, n, VariablesID::FluidCons_ID);
           auto recv_data = Kokkos::subview(rbufu[n].data, m, Kokkos::ALL, Kokkos::ALL);
           void* recv_ptr = recv_data.data();
           int ierr = MPI_Irecv(recv_ptr, recv_data.size(), MPI_ATHENA_REAL,
