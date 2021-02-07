@@ -29,8 +29,8 @@ TaskStatus MHD::CT(Driver *pdriver, int stage)
   Real &gam0 = pdriver->gam0[stage-1];
   Real &gam1 = pdriver->gam1[stage-1];
   Real beta_dt = (pdriver->beta[stage-1])*(pmy_pack->pmesh->dt);
-  auto &nx3gt1 = pmy_pack->pmesh->nx3gt1;
-  auto &nx2gt1 = pmy_pack->pmesh->nx2gt1;
+  bool &nx3gt1 = pmy_pack->pmesh->nx3gt1;
+  bool &nx2gt1 = pmy_pack->pmesh->nx2gt1;
   auto e1 = efld.x1e;
   auto e2 = efld.x2e;
   auto e3 = efld.x3e;

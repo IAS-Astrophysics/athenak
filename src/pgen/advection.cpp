@@ -3,11 +3,8 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file advection.c
-//  \brief Problem generator for advection problems.  Use with evolve=advect
-//
-// Input parameters are:
-//    - problem/u0   = flow speed
+//! \file advection.cpp
+//  \brief Problem generator for advection problems.  Use with evolution=kinematic
 
 #include <cmath>
 #include <iostream>
@@ -74,6 +71,7 @@ void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
 
   // Initialize Hydro variables -------------------------------
   if (pmbp->phydro != nullptr) {
+
     if (pmbp->phydro->peos->eos_data.is_adiabatic) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
          << std::endl << "Only isothermal EOS allowed for advection tests" << std::endl;

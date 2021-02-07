@@ -24,9 +24,9 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage)
   int nmb1 = pmy_pack->nmb_thispack - 1;
 
   // capture class variables for the kernels
-  auto e1 = efld.x1e;
-  auto e2 = efld.x2e;
-  auto e3 = efld.x3e;
+  auto &e1 = efld.x1e;
+  auto &e2 = efld.x2e;
+  auto &e3 = efld.x3e;
   auto e2x1 = e2x1_;
   auto e3x1 = e3x1_;
   auto e1x2 = e1x2_;

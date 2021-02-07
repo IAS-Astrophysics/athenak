@@ -41,21 +41,20 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos,
 
   par_for_inner(member, il, iu, [&](const int i)
   {
-    using namespace hydro;   // to simplify references to var indices (IDN, etc)
     //--- Step 1.  Create local references for L/R states
     Real &wl_idn=wl(IDN,i);
     Real &wl_ivx=wl(ivx,i);
     Real &wl_ivy=wl(ivy,i);
     Real &wl_ivz=wl(ivz,i);
-    Real &wl_iby=wl(iby,i);
-    Real &wl_ibz=wl(ibz,i);
+    Real &wl_iby=bl(iby,i);
+    Real &wl_ibz=bl(ibz,i);
 
     Real &wr_idn=wr(IDN,i);
     Real &wr_ivx=wr(ivx,i);
     Real &wr_ivy=wr(ivy,i);
     Real &wr_ivz=wr(ivz,i);
-    Real &wr_iby=wr(iby,i);
-    Real &wr_ibz=wr(ibz,i);
+    Real &wr_iby=br(iby,i);
+    Real &wr_ibz=br(ibz,i);
 
     Real &bxi = bx(m,k,j,i);
 
