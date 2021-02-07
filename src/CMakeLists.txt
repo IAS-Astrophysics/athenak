@@ -58,6 +58,7 @@ add_executable(
         pgen/advection.cpp
         pgen/linear_wave.cpp
         pgen/lw_implode.cpp
+        pgen/orszag_tang.cpp
         pgen/shock_tube.cpp
 
         utils/change_rundir.cpp

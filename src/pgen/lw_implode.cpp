@@ -19,7 +19,7 @@
 
 //----------------------------------------------------------------------------------------
 //! \fn void MeshBlock::ProblemGenerator(ParameterInput *pin)
-//  \brief Problem Generator for advection problems
+//  \brief Problem Generator for LW Implosion test
 
 void ProblemGenerator::LWImplode_(MeshBlockPack *pmbp, ParameterInput *pin)
 {

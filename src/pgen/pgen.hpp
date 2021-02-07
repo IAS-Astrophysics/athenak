@@ -26,6 +26,7 @@ class ProblemGenerator {
   void Advection_(MeshBlockPack *pmbp, ParameterInput *pin);
   void LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin);
   void LWImplode_(MeshBlockPack *pmbp, ParameterInput *pin);
+  void OrszagTang_(MeshBlockPack *pmbp, ParameterInput *pin);
 
  private:
   Mesh* pmesh_;
