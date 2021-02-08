@@ -30,6 +30,22 @@ struct EOS_Data
   Real SoundSpeed(Real p, Real d) const {
    return std::sqrt(gamma*p/d);
   }
+
+  KOKKOS_INLINE_FUNCTION
+  void SoundSpeed_SR(Real rho_h, Real pgas, Real vx, Real gamma_lorentz_sq, Real& plambda_plus, Real& plambda_minus)
+    const {
+      Real cs2 = gamma * pgas / rho_h;  // (MB 4)
+      Real v2 = 1. - 1./gamma_lorentz_sq;
+      auto const tmp = sqrt( 
+	  cs2 * (1. - (vx + (v2 - vx*vx) * cs2))/gamma_lorentz_sq
+	  );
+
+      auto const p1 = vx * (1. - cs2);
+      auto const invden =1./ (1. - v2 * cs2);
+
+      plambda_plus = (p1 + tmp) * invden;
+      plambda_minus = (p1 - tmp) * invden;
+    }
   // fast magnetosonic speed function for adiabatic EOS 
   KOKKOS_INLINE_FUNCTION
   Real FastMagnetosonicSpeed(Real d, Real p, Real bx, Real by, Real bz) const {
@@ -79,6 +95,21 @@ class AdiabaticHydro : public EquationOfState
 {
  public:
   AdiabaticHydro(MeshBlockPack *pp, ParameterInput *pin);
+  // prototype for Hydro conversion function
+  void ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
+  // prototype for MHD conversion function (never used)
+  void ConsToPrim(const DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
+                  DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc) override;
+};
+
+//----------------------------------------------------------------------------------------
+//! \class AdibaticHydroRel
+//  \brief Derived class for relativistic Hydro adiabatic EOS 
+
+class AdiabaticHydroRel : public EquationOfState
+{
+ public:
+  AdiabaticHydroRel(MeshBlockPack *pp, ParameterInput *pin);
   // prototype for Hydro conversion function
   void ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
   // prototype for MHD conversion function (never used)

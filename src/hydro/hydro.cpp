@@ -31,7 +31,12 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   // construct EOS object (no default)
   std::string eqn_of_state = pin->GetString("hydro","eos");
   if (eqn_of_state.compare("adiabatic") == 0) {
-    peos = new AdiabaticHydro(ppack, pin);
+
+    if (rsolver.compare("llf_rel") == 0)
+    	peos = new AdiabaticHydroRel(ppack, pin);
+    else
+    	peos = new AdiabaticHydro(ppack, pin);
+
     nhydro = 5;
   } else if (eqn_of_state.compare("isothermal") == 0) {
     peos = new IsothermalHydro(ppack, pin);
@@ -107,8 +112,10 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
                 << "' cannot be used with non-hydrodynamic problems" << std::endl;
       std::exit(EXIT_FAILURE);
 
+    } else if (rsolver.compare("llf_rel") == 0) {
+      	rsolver_method_ = Hydro_RSolver::llf_rel;
     } else if (rsolver.compare("llf") == 0) {
-      rsolver_method_ = Hydro_RSolver::llf;
+      	rsolver_method_ = Hydro_RSolver::llf;
 
 //    } else if (rsolver.compare("hllc") == 0) {
 //      if (peos->eos_data.is_adiabatic) {

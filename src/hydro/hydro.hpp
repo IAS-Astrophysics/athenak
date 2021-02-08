@@ -18,7 +18,7 @@ class Driver;
 class EquationOfState;
 
 // constants that enumerate Hydro Riemann Solver options
-enum class Hydro_RSolver {advect, llf, hllc, roe};
+enum class Hydro_RSolver {advect, llf, hllc, roe, llf_rel};
 
 namespace hydro {
 
