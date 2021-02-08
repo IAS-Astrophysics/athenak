@@ -19,7 +19,7 @@
 // include inlined Riemann solvers (double yuck...)
 #include "hydro/rsolvers/advect.cpp"
 #include "hydro/rsolvers/llf.cpp"
-#include "hydro/rsolver/llf_rel.cpp"
+#include "hydro/rsolvers/llf_rel.cpp"
 //#include "hydro/rsolvers/hllc.cpp"
 //#include "hydro/rsolvers/roe.cpp"
 

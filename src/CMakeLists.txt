@@ -16,6 +16,7 @@ add_executable(
 
         eos/eos.cpp
         eos/adiabatic_hydro.cpp
+        eos/adiabatic_hydro_rel.cpp
         eos/adiabatic_mhd.cpp
         eos/isothermal_hydro.cpp
         eos/isothermal_mhd.cpp
@@ -60,6 +61,7 @@ add_executable(
         pgen/lw_implode.cpp
         pgen/orszag_tang.cpp
         pgen/shock_tube.cpp
+        pgen/shock_tube_rel.cpp
 
         utils/change_rundir.cpp
         utils/show_config.cpp

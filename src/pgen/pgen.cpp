@@ -32,6 +32,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm)
 
   if (pgen_fun_name.compare("shock_tube") == 0) {
     pgen_func_ = &ProblemGenerator::ShockTube_; 
+  } else if (pgen_fun_name.compare("shock_tube_rel") == 0) {
+    pgen_func_ = &ProblemGenerator::ShockTube_Rel_; 
   } else if (pgen_fun_name.compare("advection") == 0) {
     pgen_func_ = &ProblemGenerator::Advection_;
   } else if (pgen_fun_name.compare("linear_wave") == 0) {

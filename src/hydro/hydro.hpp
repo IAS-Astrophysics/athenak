@@ -34,6 +34,7 @@ class Hydro
   // data
   EquationOfState *peos;    // object that implements chosen EOS
 
+  bool relativistic = false;
   int nhydro;             // number of hydro variables (5/4 for adiabatic/isothermal)
   int nscalars;           // number of passive scalars
   DvceArray5D<Real> u0;   // conserved variables

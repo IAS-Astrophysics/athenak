@@ -31,11 +31,17 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   // construct EOS object (no default)
   std::string eqn_of_state = pin->GetString("hydro","eos");
   if (eqn_of_state.compare("adiabatic") == 0) {
+    
 
-    if (rsolver.compare("llf_rel") == 0)
+    // FIXME : Should this only be switched via the riemann solver flag?
+    std::string rsolver = pin->GetString("hydro","rsolver");
+    if (rsolver.compare("llf_rel") == 0){
+        relativistic = true;
     	peos = new AdiabaticHydroRel(ppack, pin);
-    else
+    }
+    else{
     	peos = new AdiabaticHydro(ppack, pin);
+    }
 
     nhydro = 5;
   } else if (eqn_of_state.compare("isothermal") == 0) {

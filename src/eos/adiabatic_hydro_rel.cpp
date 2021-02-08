@@ -27,7 +27,7 @@ AdiabaticHydroRel::AdiabaticHydroRel(MeshBlockPack *pp, ParameterInput *pin)
 // \!fn void ConservedToPrimitive()
 // \brief No-Op version of MHD cons to prim functions.  Never used in Hydro.
 
-void AdiabaticHydroRel::ConsToPrimRel(const DvceArray5D<Real> &cons,
+void AdiabaticHydroRel::ConsToPrim(const DvceArray5D<Real> &cons,
          const DvceFaceFld4D<Real> &b, DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc)
 {
 }
@@ -68,17 +68,17 @@ void AdiabaticHydroRel::ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Re
   par_for("hyd_con2prim", DevExeSpace(), 0, (nmb-1), 0, (n3-1), 0, (n2-1), 0, (n1-1),
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
-      Real& u_d  = cons(m, hydro::IDN,k,j,i);
-      Real& u_m1 = cons(m, hydro::IM1,k,j,i);
-      Real& u_m2 = cons(m, hydro::IM2,k,j,i);
-      Real& u_m3 = cons(m, hydro::IM3,k,j,i);
-      Real& u_e  = cons(m, hydro::IEN,k,j,i);
+      Real& u_d  = cons(m, IDN,k,j,i);
+      Real& u_m1 = cons(m, IM1,k,j,i);
+      Real& u_m2 = cons(m, IM2,k,j,i);
+      Real& u_m3 = cons(m, IM3,k,j,i);
+      Real& u_e  = cons(m, IEN,k,j,i);
 
-      Real& w_d  = prim(m, hydro::IDN,k,j,i);
-      Real& w_vx = prim(m, hydro::IVX,k,j,i);
-      Real& w_vy = prim(m, hydro::IVY,k,j,i);
-      Real& w_vz = prim(m, hydro::IVZ,k,j,i);
-      Real& w_p  = prim(m, hydro::IPR,k,j,i);
+      Real& w_d  = prim(m, IDN,k,j,i);
+      Real& w_vx = prim(m, IVX,k,j,i);
+      Real& w_vy = prim(m, IVY,k,j,i);
+      Real& w_vz = prim(m, IVZ,k,j,i);
+      Real& w_p  = prim(m, IPR,k,j,i);
 
       // apply density floor, without changing momentum or energy
 ///      u_d = (u_d > dfloor_) ?  u_d : dfloor_;
@@ -90,7 +90,7 @@ void AdiabaticHydroRel::ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Re
 
       Real ee = u_d + u_e;
 
-      Real m2 = SQR(cons(m, hydro::IM1,k,j,i)) + SQR(cons(m, hydro::IM2,k,j,i)) + SQR(cons(m, hydro::IM3,k,j,i));
+      Real m2 = SQR(cons(m, IM1,k,j,i)) + SQR(cons(m, IM2,k,j,i)) + SQR(cons(m, IM3,k,j,i));
 
       Real m2_max = mm_sq_ee_sq_max * SQR(ee);
       if( m2 > m2_max){
@@ -194,16 +194,16 @@ void AdiabaticHydroRel::ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Re
 	//FIXME ERM: Only ideal fluid for now
         Real wgas = w_d + gamma_adi / gm1 *w_p;
 	
-        cons(m,hydro::IDN,k,j,i) = w_d * gamma;
-        cons(m,hydro::IEN,k,j,i) = wgas*gamma*gamma - w_p - w_d * gamma; //rho_eps * gamma_sq + (w_p + cons(IDN,k,j,i)/(gamma+1.))*(v_sq*gamma_sq);
-        cons(m,hydro::IM1,k,j,i) = wgas * gamma * w_vx;
-        cons(m,hydro::IM2,k,j,i) = wgas * gamma * w_vy;
-        cons(m,hydro::IM3,k,j,i) = wgas * gamma * w_vz;
+        cons(m,IDN,k,j,i) = w_d * gamma;
+        cons(m,IEN,k,j,i) = wgas*gamma*gamma - w_p - w_d * gamma; //rho_eps * gamma_sq + (w_p + cons(IDN,k,j,i)/(gamma+1.))*(v_sq*gamma_sq);
+        cons(m,IM1,k,j,i) = wgas * gamma * w_vx;
+        cons(m,IM2,k,j,i) = wgas * gamma * w_vy;
+        cons(m,IM3,k,j,i) = wgas * gamma * w_vz;
       }
 
       // convert scalars (if any)
-      for (int n=nhydro; n<(nhydro+nscalars); ++n) {
-        prim(m, n,k,j,i) = cons(m, n,k,j,i)/u_d;
+      for (int n=nhyd; n<(nhyd+nscal); ++n) {
+        prim(m,n,k,j,i) = cons(m,n,k,j,i)/u_d;
       }
     }
   );
