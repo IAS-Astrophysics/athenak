@@ -14,7 +14,7 @@
 
 namespace mhd {
 //----------------------------------------------------------------------------------------
-//! \fn  void MHD::MHDUpdate
+//! \fn  void MHD::Update
 //  \brief Update conserved variables 
 
 TaskStatus MHD::Update(Driver *pdriver, int stage)

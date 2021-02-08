@@ -3,8 +3,8 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file calculate_divflux.cpp
-//  \brief Calculate divergence of the fluxes for hydro only, no mesh refinement
+//! \file hydro_fluxes.cpp
+//  \brief Calculate 3D fluxes for hydro
 
 #include <iostream>
 
@@ -24,8 +24,8 @@
 
 namespace hydro {
 //----------------------------------------------------------------------------------------
-//! \fn  void Hydro::CalculateDivFlux
-//  \brief Calculate divergence of the fluxes for hydro only, no mesh refinement
+//! \fn  void Hydro::CalcFluxes
+//  \brief Calls reconstruction and Riemann solver functions to compute hydro fluxes
 
 TaskStatus Hydro::CalcFluxes(Driver *pdriver, int stage)
 {
@@ -49,7 +49,7 @@ TaskStatus Hydro::CalcFluxes(Driver *pdriver, int stage)
   int scr_level = 0;
   auto flx1 = uflx.x1f;
 
-  par_for_outer("hydroflux_x1",DevExeSpace(), scr_size, scr_level, 0, nmb1, ks, ke, js, je,
+  par_for_outer("hflux_x1",DevExeSpace(), scr_size, scr_level, 0, nmb1, ks, ke, js, je,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j)
     {
       ScrArray2D<Real> wl(member.team_scratch(scr_level), nvars, ncells1);
@@ -117,7 +117,7 @@ TaskStatus Hydro::CalcFluxes(Driver *pdriver, int stage)
   scr_size = ScrArray2D<Real>::shmem_size(nvars, ncells1) * 3;
   auto flx2 = uflx.x2f;
 
-  par_for_outer("hydroflux_x2",DevExeSpace(), scr_size, scr_level, 0, nmb1, ks, ke,
+  par_for_outer("hflux_x2",DevExeSpace(), scr_size, scr_level, 0, nmb1, ks, ke,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k)
     {
       ScrArray2D<Real> scr1(member.team_scratch(scr_level), nvars, ncells1);
@@ -198,7 +198,7 @@ TaskStatus Hydro::CalcFluxes(Driver *pdriver, int stage)
   scr_size = ScrArray2D<Real>::shmem_size(nvars, ncells1) * 3;
   auto flx3 = uflx.x3f;
 
-  par_for_outer("hydroflux_x3",DevExeSpace(), scr_size, scr_level, 0, nmb1, js, je,
+  par_for_outer("hflux_x3",DevExeSpace(), scr_size, scr_level, 0, nmb1, js, je,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int j)
     {
       ScrArray2D<Real> scr1(member.team_scratch(scr_level), nvars, ncells1);

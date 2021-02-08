@@ -29,8 +29,8 @@
 #include "pgen.hpp"
 
 // function to compute eigenvectors of linear waves in hydrodynamics
-void HydroEigensystem(const Real d, const Real p, const Real v1, const Real v2,
-                      const Real v3, const EOS_Data &eos, Real right_eigenmatrix[5][5]);
+void HydroEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
+                      const Real p, const EOS_Data &eos, Real right_eigenmatrix[5][5]);
 // function to compute eigenvectors of linear waves in mhd
 void MHDEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
                     const Real p, const Real b1, const Real b2, const Real b3,

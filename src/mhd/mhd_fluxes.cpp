@@ -25,7 +25,7 @@
 
 namespace mhd {
 //----------------------------------------------------------------------------------------
-//! \fn  void MHD::MHDCalcFlux
+//! \fn  void MHD::CalcFlux
 //  \brief Calculate fluxes of conserved variables, and face-centered area-averaged EMFs
 //  for evolution of magnetic field
 
@@ -68,7 +68,7 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
     jl = js, ju = je, kl = ks, ku = ke;
   }
 
-  par_for_outer("mhdflux_x1",DevExeSpace(), scr_size, scr_level, 0, nmb1, kl, ku, jl, ju,
+  par_for_outer("mhd_flux1",DevExeSpace(), scr_size, scr_level, 0, nmb1, kl, ku, jl, ju,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j)
     {
       ScrArray2D<Real> wl(member.team_scratch(scr_level), nvars, ncells1);
@@ -252,7 +252,7 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
   auto e2x3_ = e2x3;
   auto e1x3_ = e1x3;
 
-  par_for_outer("divflux_x3",DevExeSpace(), scr_size, scr_level, 0, nmb1, js-1, je+1,
+  par_for_outer("mhd_flux3",DevExeSpace(), scr_size, scr_level, 0, nmb1, js-1, je+1,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int j)
     {
       ScrArray2D<Real> scr1(member.team_scratch(scr_level), nvars, ncells1);
