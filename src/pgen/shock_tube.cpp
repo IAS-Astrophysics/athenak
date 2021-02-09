@@ -22,7 +22,7 @@
 #include "pgen.hpp"
 
 //----------------------------------------------------------------------------------------
-//! \fn
+//! \fn ProblemGenerator::ShockTube_()
 //  \brief Problem Generator for the shock tube (Riemann problem) tests
 
 void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
