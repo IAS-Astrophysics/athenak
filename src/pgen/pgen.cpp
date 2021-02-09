@@ -19,16 +19,13 @@
 ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm)
  : pmesh_(pm) 
 {
+#if USER_PROBLEM_ENABLED
+  // call user-defined problem generator
+  UserProblem(pm->pmb_pack, pin);
+#else
 
+  // else read name of built-in pgen from <problem> block in input file, and call
   std::string pgen_fun_name = pin->GetOrAddString("problem", "pgen_name", "none");
-
-  // Set problem generator function to name specied on cmake command line
-  //  TODO add custom pgens
-
-  // else, set pgen function to name read from <problem> block in input file
-  // only predefined names of functions in pgen.hpp allowed
-
-  // TODO make internal pgens a dictionary or map with input key
 
   if (pgen_fun_name.compare("shock_tube") == 0) {
     pgen_func_ = &ProblemGenerator::ShockTube_; 
@@ -45,14 +42,15 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm)
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
         << "Problem generator name could not be found in <problem> block in input file"
-        << std::endl << "and it was not set by -DPROBLEM option on command line to cmake."
-        << std::endl << "Rerun cmake with -DPROBLEM=name to enable custom problem "
-        << "generator names" << std::endl;;
+        << std::endl << "and it was not set by -D PROBLEM option on command line to cmake."
+        << std::endl << "Rerun cmake with -D PROBLEM=file to specify custom problem "
+        << "generator file" << std::endl;;
     std::exit(EXIT_FAILURE);
   }
 
   // now call appropriate pgen function
   (this->*pgen_func_)(pm->pmb_pack, pin);
+#endif
 }
 
 //----------------------------------------------------------------------------------------

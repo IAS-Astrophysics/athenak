@@ -65,5 +65,16 @@ add_executable(
         utils/show_config.cpp
 )
 
+# custom problem generator to be included in compile
+# specify on command line using '-D PROBLEM=file' where 'file' is name of file in
+# pgen/ directory (not including .cpp extension)
+
+if (NOT ${PROBLEM} STREQUAL "built_in_pgens")
+  target_sources(athena
+      PRIVATE
+          pgen/${PROBLEM}.cpp
+  )
+endif()
+
 # enable include of header files with /src/ as root of path
 target_include_directories(athena PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

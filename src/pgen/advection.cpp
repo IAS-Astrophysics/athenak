@@ -20,7 +20,7 @@
 #include "pgen.hpp"
 
 //----------------------------------------------------------------------------------------
-//! \fn void MeshBlock::ProblemGenerator(ParameterInput *pin)
+//! \fn void MeshBlock::ProblemGenerator()
 //  \brief Problem Generator for advection problems
 //  For Hydro: initializes profiles of transverse components of velocity and scalars
 //  For MHD: initializes profiles of transverse components of velocity, B, and scalars

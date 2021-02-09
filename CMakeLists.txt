@@ -8,7 +8,7 @@ project(athena VERSION 0.1 LANGUAGES C CXX)
 
 # Disable in-source builds to prevent source tree corruption.
 if( "${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}" )
-  message( FATAL_ERROR "FATAL: In-source builds disabled. Please create a separate build directory in which to run cmake, e.g. mkdir build; cd build; cmake ../" )
+  message(FATAL_ERROR "FATAL: In-source builds disabled. Please create a separate build directory in which to run cmake, e.g. mkdir build; cd build; cmake ../" )
 endif()
 
 # AthenaNike (and Kokkos) require C++14 standard as minimum
@@ -75,6 +75,14 @@ else()
   set(OPENMP_PARALLEL_ENABLED 0)
 endif()
 
+#set user problem generaotr flag
+if (NOT ${PROBLEM} STREQUAL "built_in_pgens")
+  message(STATUS "Including user-specified problem generator file: ${PROBLEM}")
+  set(USER_PROBLEM_ENABLED 1)
+else()
+  set(USER_PROBLEM_ENABLED 0)
+endif()
+
 # ----- set various Kokkos option --------------------------------------------------------
 
 # Tell Kokkos to vectorize aggressively
@@ -99,7 +107,7 @@ endif()
 
 # ----- create configuration header file from template in /src directory -----------------
 
-configure_file(config.hpp.in config.hpp)
+# configure_file(config.hpp.in config.hpp)
 
 # add subdirectories for source code and include files
 add_subdirectory(src)
@@ -119,3 +127,5 @@ target_include_directories(athena PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_CURRENT_BINARY_DIR}
 )
+
+configure_file(config.hpp.in config.hpp)

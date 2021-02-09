@@ -28,6 +28,9 @@ class ProblemGenerator {
   void LWImplode_(MeshBlockPack *pmbp, ParameterInput *pin);
   void OrszagTang_(MeshBlockPack *pmbp, ParameterInput *pin);
 
+  // template for user-specified problem generator
+  void UserProblem(MeshBlockPack *pmbp, ParameterInput *pin);
+
  private:
   Mesh* pmesh_;
 };
