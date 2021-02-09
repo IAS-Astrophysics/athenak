@@ -18,7 +18,7 @@
 #include "pgen.hpp"
 
 //----------------------------------------------------------------------------------------
-//! \fn void MeshBlock::ProblemGenerator()
+//! \fn void MeshBlock::LWImplode_()
 //  \brief Problem Generator for LW Implosion test
 
 void ProblemGenerator::LWImplode_(MeshBlockPack *pmbp, ParameterInput *pin)

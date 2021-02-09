@@ -28,15 +28,15 @@ void Advect(TeamMember_t const &member, const EOS_Data eos,
     if (wl(ivx,i) >= 0.0) {
       Real mxl = wl(IDN,i)*wl(ivx,i);
       flx(m,IDN,k,j,i) = mxl;
-      flx(m,ivx,k,j,i) = mxl*wl(ivx,i);
-      flx(m,ivy,k,j,i) = mxl*wl(ivy,i);
-      flx(m,ivz,k,j,i) = mxl*wl(ivz,i);
+//      flx(m,ivx,k,j,i) = mxl*wl(ivx,i);
+//      flx(m,ivy,k,j,i) = mxl*wl(ivy,i);
+//      flx(m,ivz,k,j,i) = mxl*wl(ivz,i);
     } else {
       Real mxr = wr(IDN,i)*wr(ivx,i);
       flx(m,IDN,k,j,i) = mxr;
-      flx(m,ivx,k,j,i) = mxr*wr(ivx,i);
-      flx(m,ivy,k,j,i) = mxr*wr(ivy,i);
-      flx(m,ivz,k,j,i) = mxr*wr(ivz,i);
+//      flx(m,ivx,k,j,i) = mxr*wr(ivx,i);
+//      flx(m,ivy,k,j,i) = mxr*wr(ivy,i);
+//      flx(m,ivz,k,j,i) = mxr*wr(ivz,i);
     }
   });
 

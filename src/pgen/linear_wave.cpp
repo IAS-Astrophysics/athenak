@@ -90,7 +90,7 @@ Real A3(const Real x1, const Real x2, const Real x3, const LinWaveVariables lw) 
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MeshBlock::ProblemGenerator(ParameterInput *pin)
+//! \fn void MeshBlock::LinearWave_(ParameterInput *pin)
 //  \brief Sets initial conditions for linear wave tests
 
 void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
