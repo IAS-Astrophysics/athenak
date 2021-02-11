@@ -370,4 +370,52 @@ KOKKOS_INLINE_FUNCTION void par_for_inner(TeamMember_t tmember, const int il,con
   Kokkos::parallel_for(Kokkos::TeamVectorRange(tmember, il, iu+1), function);
 }
 
+#define NREDUCTION_VARIABLES 20
+//----------------------------------------------------------------------------------------
+//! \struct summed_array_type
+// Following code is copied from Kokkos wiki pages on building custom reducers.  It allows
+// an arbitrary number (set by the compile time constant NREDUCTION_VARIABLES above) of
+// sum reductions to be computed simultaneously.  Used for history outputs, etc.
+
+namespace array_sum {  // namespace helps with name resolution in reduction identity 
+  template< class ScalarType, int N >
+  struct array_type {
+    ScalarType the_array[N];
+
+    KOKKOS_INLINE_FUNCTION   // Default constructor - Initialize to 0's
+    array_type() {
+      for (int i = 0; i < N; i++ ) { the_array[i] = 0; }
+    }
+    KOKKOS_INLINE_FUNCTION   // Copy Constructor
+    array_type(const array_type & rhs) {
+       for (int i = 0; i < N; i++ ){
+          the_array[i] = rhs.the_array[i];
+       }
+    }
+    KOKKOS_INLINE_FUNCTION   // add operator
+    array_type& operator += (const array_type& src) {
+      for ( int i = 0; i < N; i++ ) {
+         the_array[i]+=src.the_array[i];
+      }
+      return *this;
+    }
+    KOKKOS_INLINE_FUNCTION   // volatile add operator 
+    void operator += (const volatile array_type& src) volatile {
+      for ( int i = 0; i < N; i++ ) {
+        the_array[i]+=src.the_array[i];
+      }
+    }
+  };
+  // Number of reductions templated by (NHISTORY_VARIABLES)
+  typedef array_type<Real,(NREDUCTION_VARIABLES)> GlobalSum;  // simplifies code below
+}
+namespace Kokkos { //reduction identity must be defined in Kokkos namespace
+  template<>
+  struct reduction_identity< array_sum::GlobalSum > {
+    KOKKOS_FORCEINLINE_FUNCTION static array_sum::GlobalSum sum() {
+      return array_sum::GlobalSum();
+    }
+  };
+}
+
 #endif // ATHENA_HPP_

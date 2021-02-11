@@ -39,53 +39,6 @@ HistoryOutput::HistoryOutput(OutputParameters op, Mesh *pm) : OutputType(op, pm)
 }
 
 //----------------------------------------------------------------------------------------
-//! \struct array_type
-// Following code is copied from Kokkos wiki pages on building custom reducers.  It allows
-// arbitrary number of sum reductions to be computed simultaneously, as required for
-// history outputs.  This value is set by the compile time constant NHISTORY_VARIABLES
-
-namespace hist_sum {  // namespace helps with name resolution in reduction identity 
-  template< class ScalarType, int N >
-  struct array_type {
-    ScalarType the_array[N];
-  
-    KOKKOS_INLINE_FUNCTION   // Default constructor - Initialize to 0's
-    array_type() { 
-      for (int i = 0; i < N; i++ ) { the_array[i] = 0; }
-    }
-    KOKKOS_INLINE_FUNCTION   // Copy Constructor
-    array_type(const array_type & rhs) { 
-       for (int i = 0; i < N; i++ ){
-          the_array[i] = rhs.the_array[i];
-       }
-    }
-    KOKKOS_INLINE_FUNCTION   // add operator
-    array_type& operator += (const array_type& src) {
-      for ( int i = 0; i < N; i++ ) {
-         the_array[i]+=src.the_array[i];
-      }
-      return *this;
-    } 
-    KOKKOS_INLINE_FUNCTION   // volatile add operator 
-    void operator += (const volatile array_type& src) volatile {
-      for ( int i = 0; i < N; i++ ) {
-        the_array[i]+=src.the_array[i];
-      }
-    }
-  };
-  // Number of reductions templated by (NHISTORY_VARIABLES)
-  typedef array_type<Real,(NHISTORY_VARIABLES)> GlobalSum;  // used to simplify code below
-}
-namespace Kokkos { //reduction identity must be defined in Kokkos namespace
-  template<>
-  struct reduction_identity< hist_sum::GlobalSum > {
-    KOKKOS_FORCEINLINE_FUNCTION static hist_sum::GlobalSum sum() {
-      return hist_sum::GlobalSum();
-    }
-  };
-}
-
-//----------------------------------------------------------------------------------------
 //! \fn void HistoryOutput::LoadOutputData()
 //  \brief Wrapper function that cycles through hist_data vector and calls
 //  appropriate LoadXXXData() function for that physics
@@ -140,9 +93,9 @@ void HistoryOutput::LoadHydroHistoryData(HistoryData *pdata, Mesh *pm)
   const int nmkji = (pm->pmb_pack->nmb_thispack)*nx3*nx2*nx1;
   const int nkji = nx3*nx2*nx1;
   const int nji  = nx2*nx1;
-  hist_sum::GlobalSum sum_this_mb;         
+  array_sum::GlobalSum sum_this_mb;         
   Kokkos::parallel_reduce("HistSums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-    KOKKOS_LAMBDA(const int &idx, hist_sum::GlobalSum &mb_sum)
+    KOKKOS_LAMBDA(const int &idx, array_sum::GlobalSum &mb_sum)
     {
       // compute n,k,j,i indices of thread
       int m = (idx)/nkji;
@@ -155,7 +108,7 @@ void HistoryOutput::LoadHydroHistoryData(HistoryData *pdata, Mesh *pm)
       Real vol = size.dx1.d_view(m)*size.dx2.d_view(m)*size.dx3.d_view(m);
 
       // Hydro conserved variables:
-      hist_sum::GlobalSum hvars;
+      array_sum::GlobalSum hvars;
       hvars.the_array[IDN] = vol*u0_(m,IDN,k,j,i);
       hvars.the_array[IM1] = vol*u0_(m,IM1,k,j,i);
       hvars.the_array[IM2] = vol*u0_(m,IM2,k,j,i);
@@ -177,7 +130,7 @@ void HistoryOutput::LoadHydroHistoryData(HistoryData *pdata, Mesh *pm)
       // sum into parallel reduce
       mb_sum += hvars;
 
-    }, Kokkos::Sum<hist_sum::GlobalSum>(sum_this_mb)
+    }, Kokkos::Sum<array_sum::GlobalSum>(sum_this_mb)
   );
 
   // store data into hdata array
@@ -233,9 +186,9 @@ void HistoryOutput::LoadMHDHistoryData(HistoryData *pdata, Mesh *pm)
   const int nmkji = (pm->pmb_pack->nmb_thispack)*nx3*nx2*nx1;
   const int nkji = nx3*nx2*nx1;
   const int nji  = nx2*nx1;
-  hist_sum::GlobalSum sum_this_mb;         
+  array_sum::GlobalSum sum_this_mb;         
   Kokkos::parallel_reduce("HistSums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-    KOKKOS_LAMBDA(const int &idx, hist_sum::GlobalSum &mb_sum)
+    KOKKOS_LAMBDA(const int &idx, array_sum::GlobalSum &mb_sum)
     {
       // compute n,k,j,i indices of thread
       int m = (idx)/nkji;
@@ -248,7 +201,7 @@ void HistoryOutput::LoadMHDHistoryData(HistoryData *pdata, Mesh *pm)
       Real vol = size.dx1.d_view(m)*size.dx2.d_view(m)*size.dx3.d_view(m);
 
       // MHD conserved variables:
-      hist_sum::GlobalSum hvars;
+      array_sum::GlobalSum hvars;
       hvars.the_array[IDN] = vol*u0_(m,IDN,k,j,i);
       hvars.the_array[IM1] = vol*u0_(m,IM1,k,j,i);
       hvars.the_array[IM2] = vol*u0_(m,IM2,k,j,i);
@@ -275,7 +228,7 @@ void HistoryOutput::LoadMHDHistoryData(HistoryData *pdata, Mesh *pm)
       // sum into parallel reduce
       mb_sum += hvars;
 
-    }, Kokkos::Sum<hist_sum::GlobalSum>(sum_this_mb)
+    }, Kokkos::Sum<array_sum::GlobalSum>(sum_this_mb)
   );
 
   // store data into hdata array

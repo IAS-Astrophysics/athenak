@@ -11,13 +11,14 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
+#include "driver/driver.hpp"
 #include "pgen.hpp"
 
 //----------------------------------------------------------------------------------------
 // constructor, initializes data structures and parameters
 
-ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm)
- : pmesh_(pm) 
+ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, Driver *pd)
+ : pmesh_(pm), pmy_driver_(pd) 
 {
 #if USER_PROBLEM_ENABLED
   // call user-defined problem generator
@@ -42,7 +43,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm)
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
         << "Problem generator name could not be found in <problem> block in input file"
-        << std::endl << "and it was not set by -D PROBLEM option on command line to cmake."
+        << std::endl << "and it was not set by -D PROBLEM option on command line to cmake"
         << std::endl << "Rerun cmake with -D PROBLEM=file to specify custom problem "
         << "generator file" << std::endl;;
     std::exit(EXIT_FAILURE);
@@ -58,3 +59,17 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm)
 
 //ProblemGenerator::~ProblemGenerator() {
 //}
+
+//----------------------------------------------------------------------------------------
+//! \fn ProblemGenerator::ProblemGeneratorFinalize()
+//  \brief calls any final work to be done after execution of main loop, for example
+//  compute errors in linear wave test
+
+void ProblemGenerator::ProblemGeneratorFinalize(ParameterInput *pin, Mesh *pm)
+{
+  std::string pgen_fun_name = pin->GetString("problem", "pgen_name");
+  if (pgen_fun_name.compare("linear_wave") == 0) {
+    LinearWaveErrors_(pm->pmb_pack, pin);
+  }
+  return;
+}

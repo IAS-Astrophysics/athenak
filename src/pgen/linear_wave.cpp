@@ -25,17 +25,22 @@
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "driver/driver.hpp"
 #include "utils/grid_locations.hpp"
 #include "pgen.hpp"
 
+// global variable to control computation of initial conditions versus errors
+bool set_initial_conditions = true;
+
 // function to compute eigenvectors of linear waves in hydrodynamics
 void HydroEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
-                      const Real p, const EOS_Data &eos, Real right_eigenmatrix[5][5]);
+                      const Real p, const EOS_Data &eos,
+                      Real eigenvalues[5], Real right_eigenmatrix[5][5]);
 // function to compute eigenvectors of linear waves in mhd
 void MHDEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
                     const Real p, const Real b1, const Real b2, const Real b3,
-                    const Real x, const Real y,
-                    const EOS_Data &eos, Real right_eigenmatrix[7][7]);
+                    const Real x, const Real y, const EOS_Data &eos,
+                    Real eigenvalues[7], Real right_eigenmatrix[7][7]);
 
 //----------------------------------------------------------------------------------------
 //! \struct LinWaveVariables
@@ -90,7 +95,7 @@ Real A3(const Real x1, const Real x2, const Real x3, const LinWaveVariables lw) 
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MeshBlock::LinearWave_(ParameterInput *pin)
+//! \fn void ProblemGenerator::LinearWave_()
 //  \brief Sets initial conditions for linear wave tests
 
 void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
@@ -195,11 +200,19 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
     EOS_Data &eos = pmbp->phydro->peos->eos_data;
     Real gm1 = eos.gamma - 1.0;
     Real p0 = 1.0/eos.gamma;
-    auto &u0 = pmbp->phydro->u0; 
-    Real rem[5][5];
+
+    // compute solution in u1 register.  If setting initial conditions, copy u1 -> u0.
+    auto u1 = pmbp->phydro->u1; 
+    if (set_initial_conditions) u1 = pmbp->phydro->u0;
 
     // Compute eigenvectors in hydrodynamics
-    HydroEigensystem(lwv.d0, lwv.v1_0, 0.0, 0.0, p0, eos, rem);
+    Real rem[5][5];
+    Real ev[5];
+    HydroEigensystem(lwv.d0, lwv.v1_0, 0.0, 0.0, p0, eos, ev, rem);
+
+    // set new time limit based on wave speed of selected mode
+    // input tlim is treated as number of wave periods for evolution
+    pmy_driver_->tlim *= std::abs(lambda/ev[wave_flag]);
 
     par_for("pgen_linwave1", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i)
@@ -214,13 +227,13 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
         Real mz = amp*sn*rem[3][wave_flag];
   
         // compute cell-centered conserved variables
-        u0(m,IDN,k,j,i)=lwv.d0 + amp*sn*rem[0][wave_flag];
-        u0(m,IM1,k,j,i)=mx*lwv.cos_a2*lwv.cos_a3 -my*lwv.sin_a3 -mz*lwv.sin_a2*lwv.cos_a3;
-        u0(m,IM2,k,j,i)=mx*lwv.cos_a2*lwv.sin_a3 +my*lwv.cos_a3 -mz*lwv.sin_a2*lwv.sin_a3;
-        u0(m,IM3,k,j,i)=mx*lwv.sin_a2                           +mz*lwv.cos_a2;
+        u1(m,IDN,k,j,i)=lwv.d0 + amp*sn*rem[0][wave_flag];
+        u1(m,IM1,k,j,i)=mx*lwv.cos_a2*lwv.cos_a3 -my*lwv.sin_a3 -mz*lwv.sin_a2*lwv.cos_a3;
+        u1(m,IM2,k,j,i)=mx*lwv.cos_a2*lwv.sin_a3 +my*lwv.cos_a3 -mz*lwv.sin_a2*lwv.sin_a3;
+        u1(m,IM3,k,j,i)=mx*lwv.sin_a2                           +mz*lwv.cos_a2;
 
         if (eos.is_adiabatic) {
-          u0(m,IEN,k,j,i) = p0/gm1 + 0.5*lwv.d0*(lwv.v1_0)*(lwv.v1_0) +
+          u1(m,IEN,k,j,i) = p0/gm1 + 0.5*lwv.d0*(lwv.v1_0)*(lwv.v1_0) +
                           amp*sn*rem[4][wave_flag];
         }
       }
@@ -235,13 +248,18 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
     Real p0 = 1.0/eos.gamma;
     auto &u0 = pmbp->pmhd->u0;
     auto &b0 = pmbp->pmhd->b0;
-    Real rem[7][7];
 
     // Compute eigenvectors in mhd
+    Real rem[7][7];
+    Real ev[7];
     MHDEigensystem(lwv.d0, lwv.v1_0, 0.0, 0.0, p0, lwv.b1_0, lwv.b2_0, lwv.b3_0,
-                   xfact, yfact, eos, rem);
+                   xfact, yfact, eos, ev, rem);
     lwv.dby = amp*rem[nmhd_  ][wave_flag];
     lwv.dbz = amp*rem[nmhd_+1][wave_flag];
+
+    // set new time limit based on wave speed of selected mode
+    // input tlim is treated as number of wave periods for evolution
+    pmy_driver_->tlim *= std::abs(lambda/ev[wave_flag]);
 
     par_for("pgen_linwave2", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i)
@@ -309,13 +327,21 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
 //  \brief computes eigenvectors of linear waves in adiabatic/isothermal hydrodynamics
 
 void HydroEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
-                      const Real p, const EOS_Data &eos, Real right_eigenmatrix[5][5])
+                      const Real p, const EOS_Data &eos,
+                      Real eigenvalues[5], Real right_eigenmatrix[5][5])
 {
   //--- Adiabatic Hydrodynamics ---
   if (eos.is_adiabatic) {
     Real vsq = v1*v1 + v2*v2 + v3*v3;
     Real h = (p/(eos.gamma - 1.0) + 0.5*d*vsq + p)/d;
     Real a = std::sqrt(eos.gamma*p/d);
+
+    // Compute eigenvalues (eq. B2)
+    eigenvalues[0] = v1 - a;
+    eigenvalues[1] = v1;
+    eigenvalues[2] = v1;
+    eigenvalues[3] = v1;
+    eigenvalues[4] = v1 + a;
 
     // Right-eigenvectors, stored as COLUMNS (eq. B3)
     right_eigenmatrix[0][0] = 1.0;
@@ -350,6 +376,12 @@ void HydroEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
 
   //--- Isothermal Hydrodynamics ---
   } else {
+    // Compute eigenvalues (eq. B6)
+    eigenvalues[0] = v1 - eos.iso_cs;
+    eigenvalues[1] = v1;
+    eigenvalues[2] = v1;
+    eigenvalues[3] = v1 + eos.iso_cs;
+
     // Right-eigenvectors, stored as COLUMNS (eq. B3)
     right_eigenmatrix[0][0] = 1.0;
     right_eigenmatrix[1][0] = v1 - eos.iso_cs;
@@ -379,8 +411,8 @@ void HydroEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
 
 void MHDEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
                     const Real p, const Real b1, const Real b2, const Real b3,
-                    const Real x, const Real y, 
-                    const EOS_Data &eos, Real right_eigenmatrix[7][7])
+                    const Real x, const Real y, const EOS_Data &eos,
+                    Real eigenvalues[7], Real right_eigenmatrix[7][7])
 {
   // common factors for both adiabatic and isothermal eigenvectors
   Real btsq = b2*b2 + b3*b3;
@@ -451,6 +483,16 @@ void MHDEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
     Real as_prime = twid_a*alpha_s/sqrtd;
     Real afpbb = af_prime*bt_star*bet_starsq;
     Real aspbb = as_prime*bt_star*bet_starsq;
+
+    // Compute eigenvalues (eq. B17)
+    Real vax = std::sqrt(vaxsq);
+    eigenvalues[0] = v1 - cf;
+    eigenvalues[1] = v1 - vax;
+    eigenvalues[2] = v1 - cs;
+    eigenvalues[3] = v1;
+    eigenvalues[4] = v1 + cs;
+    eigenvalues[5] = v1 + vax;
+    eigenvalues[6] = v1 + cf;
 
     // Right-eigenvectors, stored as COLUMNS (eq. B21) */
     right_eigenmatrix[0][0] = alpha_f;
@@ -564,6 +606,15 @@ void MHDEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
     Real af_prime = twid_c*alpha_f/sqrtd;
     Real as_prime = twid_c*alpha_s/sqrtd;
 
+    // Compute eigenvalues (eq. B38)
+    Real vax  = std::sqrt(vaxsq);
+    eigenvalues[0] = v1 - cf;
+    eigenvalues[1] = v1 - vax;
+    eigenvalues[2] = v1 - cs;
+    eigenvalues[3] = v1 + cs;
+    eigenvalues[4] = v1 + vax;
+    eigenvalues[5] = v1 + cf;
+
     // Right-eigenvectors, stored as COLUMNS (eq. B21)
     right_eigenmatrix[0][0] = alpha_f;
     right_eigenmatrix[1][0] = alpha_f*(v1 - cf);
@@ -607,6 +658,136 @@ void MHDEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
     right_eigenmatrix[4][5] = right_eigenmatrix[4][0];
     right_eigenmatrix[5][5] = right_eigenmatrix[5][0];
   }
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void ProblemGenerator::LinearWaveErrors_()
+//  \brief Computes errors in linear wave solution and outputs to file.
+
+void ProblemGenerator::LinearWaveErrors_(MeshBlockPack *pmbp, ParameterInput *pin)
+{
+  // calculate reference solution by calling pgen again.  Solution stored in second
+  // register u1/b1 when flag is false.
+  set_initial_conditions = false;
+  LinearWave_(pmbp, pin);
+
+  Real l1_err[8];
+  int nvars;
+
+  // capture class variables for kernel  
+  int &nx1 = pmbp->mb_cells.nx1;
+  int &nx2 = pmbp->mb_cells.nx2;
+  int &nx3 = pmbp->mb_cells.nx3;
+  int &is = pmbp->mb_cells.is, &ie = pmbp->mb_cells.ie;
+  int &js = pmbp->mb_cells.js, &je = pmbp->mb_cells.je;
+  int &ks = pmbp->mb_cells.ks, &ke = pmbp->mb_cells.ke;
+  auto &size = pmbp->pmb->mbsize;
+
+  // compute errors for Hydro  ----------------------------------------------------------
+  if (pmbp->phydro != nullptr) {
+    nvars = pmbp->phydro->nhydro;
+
+    EOS_Data &eos = pmbp->phydro->peos->eos_data;
+    auto &u0_ = pmbp->phydro->u0;
+    auto &u1_ = pmbp->phydro->u1;
+
+    const int nmkji = (pmbp->nmb_thispack)*nx3*nx2*nx1;
+    const int nkji = nx3*nx2*nx1;
+    const int nji  = nx2*nx1;
+    array_sum::GlobalSum sum_this_mb;
+    Kokkos::parallel_reduce("LW-err-Sums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+      KOKKOS_LAMBDA(const int &idx, array_sum::GlobalSum &mb_sum)
+      {
+        // compute n,k,j,i indices of thread
+        int m = (idx)/nkji;
+        int k = (idx - m*nkji)/nji;
+        int j = (idx - m*nkji - k*nji)/nx1;
+        int i = (idx - m*nkji - k*nji - j*nx1) + is;
+        k += ks;
+        j += js;
+
+        Real vol = size.dx1.d_view(m)*size.dx2.d_view(m)*size.dx3.d_view(m);
+
+        // Hydro conserved variables:
+        array_sum::GlobalSum evars;
+        evars.the_array[IDN] = vol*fabs(u0_(m,IDN,k,j,i) - u1_(m,IDN,k,j,i));
+        evars.the_array[IM1] = vol*fabs(u0_(m,IM1,k,j,i) - u1_(m,IM1,k,j,i));
+        evars.the_array[IM2] = vol*fabs(u0_(m,IM2,k,j,i) - u1_(m,IM2,k,j,i));
+        evars.the_array[IM3] = vol*fabs(u0_(m,IM3,k,j,i) - u1_(m,IM3,k,j,i));
+        if (eos.is_adiabatic) {
+          evars.the_array[IEN] = vol*fabs(u0_(m,IEN,k,j,i) - u1_(m,IEN,k,j,i));
+        }
+  
+        // fill rest of the_array with zeros, if narray < NREDUCTION_VARIABLES
+        for (int n=nvars; n<NREDUCTION_VARIABLES; ++n) {
+          evars.the_array[n] = 0.0;
+        }
+
+        // sum into parallel reduce
+        mb_sum += evars;
+
+      }, Kokkos::Sum<array_sum::GlobalSum>(sum_this_mb)
+    );
+
+    // store data into l1_err array
+    for (int n=0; n<nvars; ++n) {
+      l1_err[n] = sum_this_mb.the_array[n];
+    }
+  }
+
+  // normalize errors by number of cells
+  Real vol=  (pmbp->pmesh->mesh_size.x1max - pmbp->pmesh->mesh_size.x1min)
+            *(pmbp->pmesh->mesh_size.x2max - pmbp->pmesh->mesh_size.x2min)
+            *(pmbp->pmesh->mesh_size.x3max - pmbp->pmesh->mesh_size.x3min);
+  for (int i=0; i<nvars; ++i) l1_err[i] = l1_err[i]/vol;
+
+  // compute rms error
+  Real rms_err = 0.0;
+  for (int i=0; i<nvars; ++i) {
+    rms_err += SQR(l1_err[i]);
+  }
+  rms_err = std::sqrt(rms_err);
+
+  // open output file and write out errors
+  std::string fname;
+  fname.assign(pin->GetString("job","basename"));
+  fname.append("-errs.dat");
+  FILE *pfile;
+
+  // The file exists -- reopen the file in append mode
+  if ((pfile = std::fopen(fname.c_str(), "r")) != nullptr) {
+    if ((pfile = std::freopen(fname.c_str(), "a", pfile)) == nullptr) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Error output file could not be opened" <<std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+
+  // The file does not exist -- open the file in write mode and add headers
+  } else {
+    if ((pfile = std::fopen(fname.c_str(), "w")) == nullptr) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Error output file could not be opened" <<std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    std::fprintf(pfile, "# Nx1  Nx2  Nx3   Ncycle  RMS-L1-err       ");
+    if (pmbp->phydro != nullptr) {
+      std::fprintf(pfile, "d_L1         M1_L1         M2_L1         M3_L1         E_L1 ");
+    }
+    std::fprintf(pfile, "\n");
+  }
+
+  // write errors
+  std::fprintf(pfile, "%04d", pmbp->pmesh->mesh_cells.nx1);
+  std::fprintf(pfile, "  %04d", pmbp->pmesh->mesh_cells.nx2);
+  std::fprintf(pfile, "  %04d", pmbp->pmesh->mesh_cells.nx3);
+  std::fprintf(pfile, "  %05d  %e", pmbp->pmesh->ncycle, rms_err);
+  for (int i=0; i<nvars; ++i) {
+    std::fprintf(pfile, "  %e", l1_err[i]);
+  }
+  std::fprintf(pfile, "\n");
+  std::fclose(pfile);
+
   return;
 }
 

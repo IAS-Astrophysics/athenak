@@ -129,7 +129,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
 {
   //---- Step 1.  Set ICs by constructing Problem Generator
 
-  pgen = std::make_unique<ProblemGenerator>(pin, pmesh);
+  pgen = std::make_unique<ProblemGenerator>(pin, pmesh, this);
 
   //---- Step 2.  Set conserved variables in ghost zones for all physics
   // Note: with MPI, sends on ALL MBs must be complete before receives execute
@@ -308,6 +308,9 @@ void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
     out->LoadOutputData(pmesh);
     out->WriteOutputFile(pmesh, pin);
   }
+
+  // call any problem specific functions to do work after main loop
+  pgen->ProblemGeneratorFinalize(pin, pmesh);
     
   float exe_time = run_time_.seconds();
 
