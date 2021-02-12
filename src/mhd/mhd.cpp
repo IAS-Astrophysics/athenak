@@ -106,6 +106,16 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
       }                
       recon_method_ = ReconstructionMethod::ppm;
 
+    } else if (xorder.compare("wenoz") == 0) {
+      // check that nghost > 2
+      if (ncells.ng < 3) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+            << std::endl << "WENOZ reconstruction requires at least 3 ghost zones, "
+            << "but <mesh>/nghost=" << ncells.ng << std::endl;
+        std::exit(EXIT_FAILURE); 
+      }                
+      recon_method_ = ReconstructionMethod::wenoz;
+
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "<mhd>/recon = '" << xorder << "' not implemented"

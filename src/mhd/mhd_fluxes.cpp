@@ -17,6 +17,7 @@
 #include "reconstruct/dc.cpp"
 #include "reconstruct/plm.cpp"
 #include "reconstruct/ppm.cpp"
+#include "reconstruct/wenoz.cpp"
 // include inlined Riemann solvers (double yuck...)
 #include "mhd/rsolvers/advect_mhd.cpp"
 #include "mhd/rsolvers/llf_mhd.cpp"
@@ -90,6 +91,10 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
         case ReconstructionMethod::ppm:
           PiecewiseParabolicX1(member, m, k, j, is-1, ie+1, w0_, wl, wr);
           PiecewiseParabolicX1(member, m, k, j, is-1, ie+1, b0_, bl, br);
+          break;
+        case ReconstructionMethod::wenoz:
+          WENOZX1(member, m, k, j, is-1, ie+1, w0_, wl, wr);
+          WENOZX1(member, m, k, j, is-1, ie+1, b0_, bl, br);
           break;
         default:
           break;
@@ -194,6 +199,10 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
             PiecewiseParabolicX2(member, m, k, j, is-1, ie+1, w0_, wl_jp1, wr);
             PiecewiseParabolicX2(member, m, k, j, is-1, ie+1, b0_, bl_jp1, br);
             break;
+          case ReconstructionMethod::wenoz:
+            WENOZX2(member, m, k, j, is-1, ie+1, w0_, wl_jp1, wr);
+            WENOZX2(member, m, k, j, is-1, ie+1, b0_, bl_jp1, br);
+            break;
           default:
             break;
         }
@@ -291,6 +300,10 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
           case ReconstructionMethod::ppm:
             PiecewiseParabolicX3(member, m, k, j, is-1, ie+1, w0_, wl_kp1, wr);
             PiecewiseParabolicX3(member, m, k, j, is-1, ie+1, b0_, bl_kp1, br);
+            break;
+          case ReconstructionMethod::wenoz:
+            WENOZX3(member, m, k, j, is-1, ie+1, w0_, wl_kp1, wr);
+            WENOZX3(member, m, k, j, is-1, ie+1, b0_, bl_kp1, br);
             break;
           default:
             break;
