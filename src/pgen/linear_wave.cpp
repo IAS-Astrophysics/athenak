@@ -203,7 +203,7 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
 
     // compute solution in u1 register.  If setting initial conditions, copy u1 -> u0.
     auto u1 = pmbp->phydro->u1; 
-    if (set_initial_conditions) u1 = pmbp->phydro->u0;
+    if (set_initial_conditions) {u1 = pmbp->phydro->u0;}
 
     // Compute eigenvectors in hydrodynamics
     Real rem[5][5];
@@ -212,7 +212,7 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
 
     // set new time limit based on wave speed of selected mode
     // input tlim is treated as number of wave periods for evolution
-    pmy_driver_->tlim *= std::abs(lambda/ev[wave_flag]);
+    if (set_initial_conditions) {pmy_driver_->tlim *= std::abs(lambda/ev[wave_flag]);}
 
     par_for("pgen_linwave1", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i)
