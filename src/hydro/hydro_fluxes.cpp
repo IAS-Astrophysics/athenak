@@ -16,6 +16,7 @@
 #include "reconstruct/dc.cpp"
 #include "reconstruct/plm.cpp"
 #include "reconstruct/ppm.cpp"
+#include "reconstruct/wenoz.cpp"
 // include inlined Riemann solvers (double yuck...)
 #include "hydro/rsolvers/advect.cpp"
 #include "hydro/rsolvers/llf.cpp"
@@ -66,6 +67,9 @@ TaskStatus Hydro::CalcFluxes(Driver *pdriver, int stage)
           break;
         case ReconstructionMethod::ppm:
           PiecewiseParabolicX1(member, m, k, j, is-1, ie+1, w0_, wl, wr);
+          break;
+        case ReconstructionMethod::wenoz:
+          WENOZX1(member, m, k, j, is-1, ie+1, w0_, wl, wr);
           break;
         default:
           break;
@@ -145,6 +149,9 @@ TaskStatus Hydro::CalcFluxes(Driver *pdriver, int stage)
             break;
           case ReconstructionMethod::ppm:
             PiecewiseParabolicX2(member, m, k, j, is, ie, w0_, wl_jp1, wr);
+            break;
+          case ReconstructionMethod::wenoz:
+            WENOZX2(member, m, k, j, is-1, ie+1, w0_, wl_jp1, wr);
             break;
           default:
             break;
@@ -226,6 +233,9 @@ TaskStatus Hydro::CalcFluxes(Driver *pdriver, int stage)
             break;
           case ReconstructionMethod::ppm:
             PiecewiseParabolicX3(member, m, k, j, is, ie, w0_, wl_kp1, wr);
+            break;
+          case ReconstructionMethod::wenoz:
+            WENOZX3(member, m, k, j, is-1, ie+1, w0_, wl_kp1, wr);
             break;
           default:
             break;

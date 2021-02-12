@@ -46,7 +46,7 @@ enum PrimIndex {IVX=1, IVY=2, IVZ=3, IPR=4};
 enum BFldIndex {IBX=0, IBY=1, IBZ=2};
 
 // integer constants to specify reconstruction methods
-enum ReconstructionMethod {dc, plm, ppm};
+enum ReconstructionMethod {dc, plm, ppm, wenoz};
 
 // constants that enumerate time evolution options
 enum TimeEvolution {tstatic, kinematic, dynamic};
