@@ -124,7 +124,7 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
     data[0] = static_cast<float>(out_params.slice_x1);
   } else {
     for (int i=0; i<ncoord1; ++i) {
-      data[i] = static_cast<float>(CellCenterX(i-is,nx1,x1min,x1max));
+      data[i] = static_cast<float>(CellCenterX(i,nx1,x1min,x1max));
     }
   }
   if (!big_end) {for (int i=0; i<ncoord1; ++i) swap_functions::Swap4Bytes(&data[i]);}
@@ -147,7 +147,7 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
     data[0] = static_cast<float>(out_params.slice_x2);
   } else {
     for (int j=0; j<ncoord2; ++j) {
-      data[j] = static_cast<float>(CellCenterX(j-js,nx2,x2min,x2max));
+      data[j] = static_cast<float>(CellCenterX(j,nx2,x2min,x2max));
     } 
   } 
   if (!big_end) {for (int i=0; i<ncoord2; ++i) swap_functions::Swap4Bytes(&data[i]);}
@@ -170,7 +170,7 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
     data[0] = static_cast<float>(out_params.slice_x3);
   } else {
     for (int k=0; k<ncoord3; ++k) {
-      data[k] = static_cast<float>(CellCenterX(k-ks,nx3,x3min,x3max));
+      data[k] = static_cast<float>(CellCenterX(k,nx3,x3min,x3max));
     } 
   } 
   if (!big_end) {for (int i=0; i<ncoord3; ++i) swap_functions::Swap4Bytes(&data[i]);}
