@@ -32,7 +32,7 @@
 
 //----------------------------------------------------------------------------------------
 //! \fn PPM()
-//  \brief Reconstructs linear slope in cell i to compute ql(i+1) and qr(i). Works for
+//  \brief Reconstructs parabolic slope in cell i to compute ql(i+1) and qr(i). Works for
 //  reconstruction in any dimension by passing in the appropriate q_im2,...,q _ip2.
 
 KOKKOS_INLINE_FUNCTION

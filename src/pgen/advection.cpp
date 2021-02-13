@@ -109,10 +109,11 @@ void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
           if (r >= 0.25 && r <= 0.5) { f += amp; }
         } else if (iprob == 3) {
           f = 1.0;
-          if (r <= 0.5) { f += amp*exp((SQR(r-0.25))/-0.005); }
-          if (r >= 0.5 && r <= 0.7) { f += amp; }
-          if (r >= 0.8 && r <= 0.9) { f += amp*(10.0*r-8.0); }
-          if (r >= 0.9) { f += amp*(10.0-10.0*r); }
+          if (r <= 0.45) { f += amp*exp((SQR(r-0.2))/-0.005); }
+          if (r >= 0.45 && r <= 0.65) { f += amp; }
+          if (r >= 0.75 && r <= 0.85) { f += amp*(10.0*r-7.5); }
+          if (r >= 0.85 && r <= 0.95) { f += amp*(9.5-10.0*r); }
+          if (r >= 0.95) { f += amp*exp((SQR(r-1.2))/-0.005); }
         }
 
         // now compute density  momenta, total energy
@@ -181,10 +182,11 @@ void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
           if (r >= 0.25 && r <= 0.5) { f += amp; }
         } else if (iprob == 3) {
           f = 1.0;
-          if (r <= 0.5) { f += amp*exp((SQR(r-0.25))/-0.0025); }
-          if (r >= 0.5 && r <= 0.7) { f += amp; }
-          if (r >= 0.8 && r <= 0.9) { f += amp*(10.0*r-8.0); }
-          if (r >= 0.9) { f += amp*(10.0-10.0*r); }
+          if (r <= 0.45) { f += amp*exp((SQR(r-0.2))/-0.005); }
+          if (r >= 0.45 && r <= 0.65) { f += amp; }
+          if (r >= 0.75 && r <= 0.85) { f += amp*(10.0*r-7.5); }
+          if (r >= 0.85 && r <= 0.95) { f += amp*(9.5-10.0*r); }
+          if (r >= 0.95) { f += amp*exp((SQR(r-1.2))/-0.005); }
         }
         
         // now compute density  momenta, total energy
