@@ -673,7 +673,7 @@ void ProblemGenerator::LinearWaveErrors_(MeshBlockPack *pmbp, ParameterInput *pi
   LinearWave_(pmbp, pin);
 
   Real l1_err[8];
-  int nvars;
+  int nvars=0;
 
   // capture class variables for kernel  
   int &nx1 = pmbp->mb_cells.nx1;

@@ -49,6 +49,7 @@ void WENOZ(const Real &q_im2, const Real &q_im1, const Real &q_i, const Real &q_
   indicator[2] = tau_5 / (beta[2] + epsL);
 
   // compute qL_ip1
+  // Factor of 1/6 in coefficients of f[] array applied to alpha_sum to reduce divisions
   Real f[3];
   f[0] = ( 2.0*q_im2 - 7.0*q_im1 + 11.0*q_i  );
   f[1] = (-1.0*q_im1 + 5.0*q_i   + 2.0 *q_ip1);
@@ -58,11 +59,12 @@ void WENOZ(const Real &q_im2, const Real &q_im1, const Real &q_i, const Real &q_
   alpha[0] = 0.1*(1.0 + SQR(indicator[0]));
   alpha[1] = 0.6*(1.0 + SQR(indicator[1]));
   alpha[2] = 0.3*(1.0 + SQR(indicator[2]));
-  Real alpha_sum = alpha[0] + alpha[1] + alpha[2];
+  Real alpha_sum = 6.0*(alpha[0] + alpha[1] + alpha[2]);
 
-  ql_ip1 = (f[0]*alpha[0] + f[1]*alpha[1] + f[2]*alpha[2])/(6.0*alpha_sum);
+  ql_ip1 = (f[0]*alpha[0] + f[1]*alpha[1] + f[2]*alpha[2])/alpha_sum;
 
   // compute qR_i
+  // Factor of 1/6 in coefficients of f[] array applied to alpha_sum to reduce divisions
   f[0] = ( 2.0*q_ip2 - 7.0*q_ip1 + 11.0*q_i  );
   f[1] = (-1.0*q_ip1 + 5.0*q_i   + 2.0 *q_im1);
   f[2] = ( 2.0*q_i   + 5.0*q_im1 -      q_im2);
@@ -70,9 +72,9 @@ void WENOZ(const Real &q_im2, const Real &q_im1, const Real &q_i, const Real &q_
   alpha[0] = 0.1*(1.0 + SQR(indicator[2]));
   alpha[1] = 0.6*(1.0 + SQR(indicator[1]));
   alpha[2] = 0.3*(1.0 + SQR(indicator[0]));
-  alpha_sum = alpha[0] + alpha[1] + alpha[2];
+  alpha_sum = 6.0*(alpha[0] + alpha[1] + alpha[2]);
 
-  qr_i = (f[0]*alpha[0] + f[1]*alpha[1] + f[2]*alpha[2])/(6.0*alpha_sum);
+  qr_i = (f[0]*alpha[0] + f[1]*alpha[1] + f[2]*alpha[2])/alpha_sum;
 
   return;
 }

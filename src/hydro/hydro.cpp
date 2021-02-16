@@ -120,15 +120,15 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
     } else if (rsolver.compare("llf") == 0) {
       rsolver_method_ = Hydro_RSolver::llf;
 
-//    } else if (rsolver.compare("hllc") == 0) {
-//      if (peos->eos_data.is_adiabatic) {
-//        rsolver_method_ = Hydro_RSolver::hllc;
-//      } else { 
-//        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-//                  << std::endl << "<hydro>/rsolver = '" << rsolver
-//                  << "' cannot be used with isothermal EOS" << std::endl;
-//        std::exit(EXIT_FAILURE); 
-//        }  
+    } else if (rsolver.compare("hllc") == 0) {
+      if (peos->eos_data.is_adiabatic) {
+        rsolver_method_ = Hydro_RSolver::hllc;
+      } else { 
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "<hydro>/rsolver = '" << rsolver
+                  << "' cannot be used with isothermal EOS" << std::endl;
+        std::exit(EXIT_FAILURE); 
+      }  
 
 //    } else if (rsolver.compare("roe") == 0) {
 //      rsolver_method_ = Hydro_RSolver::roe;
