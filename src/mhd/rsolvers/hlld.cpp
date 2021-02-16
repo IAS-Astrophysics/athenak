@@ -10,10 +10,6 @@
 // - T. Miyoshi & K. Kusano, "A multi-state HLL approximate Riemann solver for ideal
 //   MHD", JCP, 208, 315 (2005)
 
-// C++ headers
-#include <algorithm>  // max(), min()
-#include <cmath>      // sqrt()
-
 namespace mhd {
 
 // container to store (density, momentum, total energy, tranverse magnetic field)
@@ -36,8 +32,9 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
 {
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
-  Real flxi[7];             // temporary variable to store flux
-  Real spd[5];                    // signal speeds, left to right
+  int iby = ((ivx-IVX) + 1)%3;
+  int ibz = ((ivx-IVX) + 2)%3;
+  Real spd[5];         // signal speeds, left to right
 
   Real igm1 = 1.0/((eos.gamma) - 1.0);
 
@@ -45,7 +42,7 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
   {
     Cons1D ul,ur;                   // L/R states, conserved variables (computed)
     Cons1D ulst,uldst,urdst,urst;   // Conserved variable for all states
-    Cons1D fl,fr;                   // Fluxes for left & right states
+    Cons1D fl,fr,flxi;                   // Fluxes for left & right states
 
     //--- Step 1.  Load L/R states into local variables
 
@@ -54,16 +51,16 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
     Real &wl_ivy=wl(ivy,i);
     Real &wl_ivz=wl(ivz,i);
     Real &wl_ipr=wl(IPR,i);
-    Real &wl_iby=wl(IBY,i);
-    Real &wl_ibz=wl(IBZ,i);
+    Real &wl_iby=bl(iby,i);
+    Real &wl_ibz=bl(ibz,i);
 
     Real &wr_idn=wr(IDN,i);
     Real &wr_ivx=wr(ivx,i);
     Real &wr_ivy=wr(ivy,i);
     Real &wr_ivz=wr(ivz,i);
     Real &wr_ipr=wr(IPR,i);
-    Real &wr_iby=wr(IBY,i);
-    Real &wr_ibz=wr(IBZ,i);
+    Real &wr_iby=br(iby,i);
+    Real &wr_ibz=br(ibz,i);
 
     Real &bxi = bx(m,k,j,i);
 
@@ -96,8 +93,8 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
     Real cfl = eos.FastMagnetosonicSpeed(wl_idn,wl_ipr,bxi,wl_iby,wl_ibz);
     Real cfr = eos.FastMagnetosonicSpeed(wr_idn,wr_ipr,bxi,wr_iby,wr_ibz);
 
-    spd[0] = std::min( wl_ivx-cfl, wr_ivx-cfr );
-    spd[4] = std::max( wl_ivx+cfl, wr_ivx+cfr );
+    spd[0] = fmin( wl_ivx-cfl, wr_ivx-cfr );
+    spd[4] = fmax( wl_ivx+cfl, wr_ivx+cfr );
 
     // Real cfmax = std::max(cfl,cfr);
     // if (wl_ivx <= wr_ivx) {
@@ -147,8 +144,8 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
     urst.d = ur.d * sdr * sdmr_inv;
     Real ulst_d_inv = 1.0/ulst.d;
     Real urst_d_inv = 1.0/urst.d;
-    Real sqrtdl = std::sqrt(ulst.d);
-    Real sqrtdr = std::sqrt(urst.d);
+    Real sqrtdl = sqrt(ulst.d);
+    Real sqrtdr = sqrt(urst.d);
 
     // eqn (51) of Miyoshi & Kusano
     spd[1] = spd[2] - std::abs(bxi)/sqrtdl;
@@ -295,67 +292,67 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
 
     if (spd[0] >= 0.0) {
       // return Fl if flow is supersonic
-      flxi[IDN] = fl.d;
-      flxi[IVX] = fl.mx;
-      flxi[IVY] = fl.my;
-      flxi[IVZ] = fl.mz;
-      flxi[IEN] = fl.e;
-      flxi[IBY] = fl.by;
-      flxi[IBZ] = fl.bz;
+      flxi.d = fl.d;
+      flxi.mx = fl.mx;
+      flxi.my = fl.my;
+      flxi.mz = fl.mz;
+      flxi.e  = fl.e;
+      flxi.by = fl.by;
+      flxi.bz = fl.bz;
     } else if (spd[4] <= 0.0) {
       // return Fr if flow is supersonic
-      flxi[IDN] = fr.d;
-      flxi[IVX] = fr.mx;
-      flxi[IVY] = fr.my;
-      flxi[IVZ] = fr.mz;
-      flxi[IEN] = fr.e;
-      flxi[IBY] = fr.by;
-      flxi[IBZ] = fr.bz;
+      flxi.d = fr.d;
+      flxi.mx = fr.mx;
+      flxi.my = fr.my;
+      flxi.mz = fr.mz;
+      flxi.e  = fr.e;
+      flxi.by = fr.by;
+      flxi.bz = fr.bz;
     } else if (spd[1] >= 0.0) {
       // return Fl*
-      flxi[IDN] = fl.d  + ulst.d;
-      flxi[IVX] = fl.mx + ulst.mx;
-      flxi[IVY] = fl.my + ulst.my;
-      flxi[IVZ] = fl.mz + ulst.mz;
-      flxi[IEN] = fl.e  + ulst.e;
-      flxi[IBY] = fl.by + ulst.by;
-      flxi[IBZ] = fl.bz + ulst.bz;
+      flxi.d = fl.d  + ulst.d;
+      flxi.mx = fl.mx + ulst.mx;
+      flxi.my = fl.my + ulst.my;
+      flxi.mz = fl.mz + ulst.mz;
+      flxi.e  = fl.e  + ulst.e;
+      flxi.by = fl.by + ulst.by;
+      flxi.bz = fl.bz + ulst.bz;
     } else if (spd[2] >= 0.0) {
       // return Fl**
-      flxi[IDN] = fl.d  + ulst.d + uldst.d;
-      flxi[IVX] = fl.mx + ulst.mx + uldst.mx;
-      flxi[IVY] = fl.my + ulst.my + uldst.my;
-      flxi[IVZ] = fl.mz + ulst.mz + uldst.mz;
-      flxi[IEN] = fl.e  + ulst.e + uldst.e;
-      flxi[IBY] = fl.by + ulst.by + uldst.by;
-      flxi[IBZ] = fl.bz + ulst.bz + uldst.bz;
+      flxi.d = fl.d  + ulst.d + uldst.d;
+      flxi.mx = fl.mx + ulst.mx + uldst.mx;
+      flxi.my = fl.my + ulst.my + uldst.my;
+      flxi.mz = fl.mz + ulst.mz + uldst.mz;
+      flxi.e  = fl.e  + ulst.e + uldst.e;
+      flxi.by = fl.by + ulst.by + uldst.by;
+      flxi.bz = fl.bz + ulst.bz + uldst.bz;
     } else if (spd[3] > 0.0) {
       // return Fr**
-      flxi[IDN] = fr.d + urst.d + urdst.d;
-      flxi[IVX] = fr.mx + urst.mx + urdst.mx;
-      flxi[IVY] = fr.my + urst.my + urdst.my;
-      flxi[IVZ] = fr.mz + urst.mz + urdst.mz;
-      flxi[IEN] = fr.e + urst.e + urdst.e;
-      flxi[IBY] = fr.by + urst.by + urdst.by;
-      flxi[IBZ] = fr.bz + urst.bz + urdst.bz;
+      flxi.d = fr.d + urst.d + urdst.d;
+      flxi.mx = fr.mx + urst.mx + urdst.mx;
+      flxi.my = fr.my + urst.my + urdst.my;
+      flxi.mz = fr.mz + urst.mz + urdst.mz;
+      flxi.e  = fr.e + urst.e + urdst.e;
+      flxi.by = fr.by + urst.by + urdst.by;
+      flxi.bz = fr.bz + urst.bz + urdst.bz;
     } else {
       // return Fr*
-      flxi[IDN] = fr.d  + urst.d;
-      flxi[IVX] = fr.mx + urst.mx;
-      flxi[IVY] = fr.my + urst.my;
-      flxi[IVZ] = fr.mz + urst.mz;
-      flxi[IEN] = fr.e  + urst.e;
-      flxi[IBY] = fr.by + urst.by;
-      flxi[IBZ] = fr.bz + urst.bz;
+      flxi.d = fr.d  + urst.d;
+      flxi.mx = fr.mx + urst.mx;
+      flxi.my = fr.my + urst.my;
+      flxi.mz = fr.mz + urst.mz;
+      flxi.e  = fr.e  + urst.e;
+      flxi.by = fr.by + urst.by;
+      flxi.bz = fr.bz + urst.bz;
     }
 
-    flx(m,IDN,k,j,i) = flxi[IDN];
-    flx(m,ivx,k,j,i) = flxi[IVX];
-    flx(m,ivy,k,j,i) = flxi[IVY];
-    flx(m,ivz,k,j,i) = flxi[IVZ];
-    flx(m,IEN,k,j,i) = flxi[IEN];
-    ey(m,k,j,i) = -flxi[IBY];
-    ez(m,k,j,i) =  flxi[IBZ];
+    flx(m,IDN,k,j,i) = flxi.d;
+    flx(m,ivx,k,j,i) = flxi.mx;
+    flx(m,ivy,k,j,i) = flxi.my;
+    flx(m,ivz,k,j,i) = flxi.mz;
+    flx(m,IEN,k,j,i) = flxi.e ;
+    ey(m,k,j,i) = -flxi.by;
+    ez(m,k,j,i) =  flxi.bz;
   });
   return;
 }

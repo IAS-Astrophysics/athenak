@@ -36,7 +36,7 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos,
   int iby = ((ivx-IVX) + 1)%3;
   int ibz = ((ivx-IVX) + 2)%3;
   Real du[7],fl[7],fr[7];
-  Real gm1 = eos.gamma - 1.0;
+  Real igm1 = 1.0/(eos.gamma - 1.0);
   Real iso_cs = eos.iso_cs;
 
   par_for_inner(member, il, iu, [&](const int i)
@@ -96,8 +96,8 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos,
     if (eos.is_adiabatic) {
       Real &wl_ipr=wl(IPR,i);
       Real &wr_ipr=wr(IPR,i);
-      el = wl_ipr/gm1 + 0.5*wl_idn*(SQR(wl_ivx)+SQR(wl_ivy)+SQR(wl_ivz)) + pbl;
-      er = wr_ipr/gm1 + 0.5*wr_idn*(SQR(wr_ivx)+SQR(wr_ivy)+SQR(wr_ivz)) + pbr;
+      el = wl_ipr*igm1 + 0.5*wl_idn*(SQR(wl_ivx)+SQR(wl_ivy)+SQR(wl_ivz)) + pbl;
+      er = wr_ipr*igm1 + 0.5*wr_idn*(SQR(wr_ivx)+SQR(wr_ivy)+SQR(wr_ivz)) + pbr;
       fl[IVX] += wl_ipr;
       fr[IVX] += wr_ipr;
       fl[IEN] = (el + wl_ipr + pbl - bxi*bxi)*wl_ivx;

@@ -144,15 +144,15 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     } else if (rsolver.compare("llf") == 0) {
       rsolver_method_ = MHD_RSolver::llf;
 
-//    } else if (rsolver.compare("hlld") == 0) {
-//      if (peos->eos_data.is_adiabatic) {
-//        rsolver_method_ = MHD_RSolver::hlld;
-//      } else { 
-//        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-//                  << std::endl << "<mhd>/rsolver = '" << rsolver
-//                  << "' cannot be used with isothermal EOS" << std::endl;
-//        std::exit(EXIT_FAILURE); 
-//        }  
+    } else if (rsolver.compare("hlld") == 0) {
+      if (peos->eos_data.is_adiabatic) {
+        rsolver_method_ = MHD_RSolver::hlld;
+      } else { 
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "<mhd>/rsolver = '" << rsolver
+                  << "' cannot be used with isothermal EOS" << std::endl;
+        std::exit(EXIT_FAILURE); 
+      }  
 
 //    } else if (rsolver.compare("roe") == 0) {
 //      rsolver_method_ = MHD_RSolver::roe;
