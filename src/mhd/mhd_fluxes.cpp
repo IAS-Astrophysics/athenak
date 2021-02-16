@@ -21,7 +21,7 @@
 // include inlined Riemann solvers (double yuck...)
 #include "mhd/rsolvers/advect_mhd.cpp"
 #include "mhd/rsolvers/llf_mhd.cpp"
-//#include "mhd/rsolvers/hlld.cpp"
+#include "mhd/rsolvers/hlld.cpp"
 //#include "mhd/rsolvers/roe_mhd.cpp"
 
 namespace mhd {
