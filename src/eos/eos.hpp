@@ -6,8 +6,9 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file eos.hpp
-//  \brief Contains data and functions that implement conserved<->primitive
-//  variable conversion for various EOS, e.g. adiabatic, isothermal, etc.
+//  \brief Contains data and functions that implement conserved->primitive variable
+//  conversion for various EOS (e.g. adiabatic, isothermal, etc.), for various fluids
+//  (Hydro, MHD, etc.), and for non-relativistic and relativistic flows.
 
 #include <cmath> 
 

@@ -14,13 +14,16 @@ add_executable(
         bvals/bvals_cc.cpp
         bvals/bvals_fc.cpp
 
+        diffusion/resistivity.cpp
+        diffusion/ohmic.cpp
+
+        driver/driver.cpp
+
         eos/eos.cpp
         eos/adiabatic_hydro.cpp
         eos/adiabatic_mhd.cpp
         eos/isothermal_hydro.cpp
         eos/isothermal_mhd.cpp
-
-        driver/driver.cpp
 
         hydro/hydro.cpp
         hydro/hydro_fluxes.cpp
