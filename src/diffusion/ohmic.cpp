@@ -10,7 +10,6 @@
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
 #include "parameter_input.hpp"
-#include "mhd/mhd.hpp"
 #include "resistivity.hpp"
 #include "current_density.hpp"
 

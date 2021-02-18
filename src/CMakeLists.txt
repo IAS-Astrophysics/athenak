@@ -16,6 +16,8 @@ add_executable(
 
         diffusion/resistivity.cpp
         diffusion/ohmic.cpp
+        diffusion/viscosity.cpp
+        diffusion/newtonian.cpp
 
         driver/driver.cpp
 

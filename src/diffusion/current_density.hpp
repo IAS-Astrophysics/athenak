@@ -41,8 +41,6 @@ void CurrentDensity(TeamMember_t const &member, const int m, const int k, const 
       j1(i) -= (b.x2f(m,k,j,i) - b.x2f(m,k-1,j,i))/size.dx3.d_view(m);
       j2(i) += (b.x1f(m,k,j,i) - b.x1f(m,k-1,j,i))/size.dx3.d_view(m);
     });
-    member.team_barrier();
   }
-
   return;
 }

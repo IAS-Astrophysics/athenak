@@ -18,7 +18,7 @@
 
 //----------------------------------------------------------------------------------------
 //! \class Resistivity
-//  \brief Abstract base class for 
+//  \brief Abstract base class for resistive physics
 
 class Resistivity
 {
@@ -36,8 +36,8 @@ class Resistivity
 };
 
 //----------------------------------------------------------------------------------------
-//! \class AdibaticHydro
-//  \brief Derived class for Hydro adiabatic EOS
+//! \class Ohmic
+//  \brief Derived class for Ohmic resistivity
 
 class Ohmic : public Resistivity
 {
