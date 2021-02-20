@@ -243,7 +243,7 @@ int main(int argc, char *argv[])
   auto pdrive = std::make_unique<Driver>(&par_input, &mesh0);
 
   //--- Step 6. --------------------------------------------------------------------------
-  // Add physics modules to MeshBlockPack.  Note this must occur after Mesh (MeshBlocks and
+  // Add physics modules to MeshBlockPack. Note this must occur after Mesh (MeshBlocks and
   // MeshBlockPack) and Driver are fully constructed.
 
   mesh0.pmb_pack->AddPhysicsModules(&par_input);

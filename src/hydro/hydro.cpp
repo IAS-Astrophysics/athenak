@@ -13,6 +13,7 @@
 #include "tasklist/task_list.hpp"
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
+#include "diffusion/viscosity.hpp"
 #include "bvals/bvals.hpp"
 #include "hydro/hydro.hpp"
 #include "utils/create_mpitag.hpp"
@@ -28,8 +29,10 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   u1("cons1",1,1,1,1,1),
   uflx("uflx",1,1,1,1,1)
 {
+  // (1) Start by selecting physics for this Hydro:
+
   // construct EOS object (no default)
-  std::string eqn_of_state = pin->GetString("hydro","eos");
+  {std::string eqn_of_state = pin->GetString("hydro","eos");
   if (eqn_of_state.compare("adiabatic") == 0) {
     peos = new AdiabaticHydro(ppack, pin);
     nhydro = 5;
@@ -40,13 +43,26 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "<hydro> eos = '" << eqn_of_state << "' not implemented" << std::endl;
     std::exit(EXIT_FAILURE);
-  }
+  }}
 
   // Initialize number of scalars
   nscalars = pin->GetOrAddInteger("hydro","nscalars",0);
 
+  // Add viscosity (if needed; default none)
+  {std::string visc = pin->GetOrAddString("hydro","viscosity","none");
+  if (visc.compare("isotropic") == 0) {
+    Real nu = pin->GetReal("hydro","nu_iso");
+    pvisc = new IsoViscosity(ppack, pin, nu);
+  } else if (visc.compare("none") != 0) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "<hydro> viscosity = '" << visc << "' not implemented" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }}
+
   // read time-evolution option [already error checked in driver constructor]
   std::string evolution_t = pin->GetString("time","evolution");
+
+  // (2) Now initialize memory/algorithms
 
   // allocate memory for conserved and primitive variables
   int nmb = ppack->nmb_thispack;
@@ -101,7 +117,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
 
     // select Riemann solver (no default).  Test for compatibility of options
     {std::string rsolver = pin->GetString("hydro","rsolver");
-    if (rsolver.compare("advection") == 0) {
+    if (rsolver.compare("advect") == 0) {
       if (evolution_t.compare("dynamic") == 0) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                   << std::endl << "<hydro>/rsolver = '" << rsolver
@@ -177,7 +193,8 @@ void Hydro::HydroStageRunTasks(TaskList &tl, TaskID start)
 {
   auto hydro_copycons = tl.AddTask(&Hydro::HydroCopyCons, this, start);
   auto hydro_fluxes = tl.AddTask(&Hydro::CalcFluxes, this, hydro_copycons);
-  auto hydro_update = tl.AddTask(&Hydro::Update, this, hydro_fluxes);
+  auto visc_fluxes = tl.AddTask(&Hydro::ViscousFluxes, this, hydro_fluxes);
+  auto hydro_update = tl.AddTask(&Hydro::Update, this, visc_fluxes);
   auto hydro_send = tl.AddTask(&Hydro::HydroSendU, this, hydro_update);
   auto hydro_recv = tl.AddTask(&Hydro::HydroRecvU, this, hydro_send);
   auto hydro_phybcs = tl.AddTask(&Hydro::HydroApplyPhysicalBCs, this, hydro_recv);
@@ -326,6 +343,16 @@ TaskStatus Hydro::HydroRecvU(Driver *pdrive, int stage)
 TaskStatus Hydro::ConToPrim(Driver *pdrive, int stage)
 {
   peos->ConsToPrim(u0, w0);
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void Hydro::ViscousFluxes
+//  \brief
+
+TaskStatus Hydro::ViscousFluxes(Driver *pdrive, int stage)
+{
+  if (pvisc != nullptr) pvisc->AddViscousFlux(u0, uflx);
   return TaskStatus::complete;
 }
 

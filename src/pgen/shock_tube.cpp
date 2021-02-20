@@ -105,16 +105,16 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
 
         if (x < xshock) {
           u0(m,IDN,k,j,i) = wl[IDN];
-          u0(m,ivx,k,j,i) = wl[ivx]*wl[IDN];
-          u0(m,ivy,k,j,i) = wl[ivy]*wl[IDN];
-          u0(m,ivz,k,j,i) = wl[ivz]*wl[IDN];
+          u0(m,ivx,k,j,i) = wl[IVX]*wl[IDN];
+          u0(m,ivy,k,j,i) = wl[IVY]*wl[IDN];
+          u0(m,ivz,k,j,i) = wl[IVZ]*wl[IDN];
           u0(m,IEN,k,j,i) = wl[IPR]/gm1 +
              0.5*wl[IDN]*(SQR(wl[IVX]) + SQR(wl[IVY]) + SQR(wl[IVZ]));
         } else {
           u0(m,IDN,k,j,i) = wr[IDN];
-          u0(m,ivx,k,j,i) = wr[ivx]*wr[IDN];
-          u0(m,ivy,k,j,i) = wr[ivy]*wr[IDN];
-          u0(m,ivz,k,j,i) = wr[ivz]*wr[IDN];
+          u0(m,ivx,k,j,i) = wr[IVX]*wr[IDN];
+          u0(m,ivy,k,j,i) = wr[IVY]*wr[IDN];
+          u0(m,ivz,k,j,i) = wr[IVZ]*wr[IDN];
           u0(m,IEN,k,j,i) = wr[IPR]/gm1 +
              0.5*wr[IDN]*(SQR(wr[IVX]) + SQR(wr[IVY]) + SQR(wr[IVZ]));
         }
@@ -171,9 +171,9 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
           
         if (x < xshock) {
           u0(m,IDN,k,j,i) = wl[IDN]; 
-          u0(m,ivx,k,j,i) = wl[ivx]*wl[IDN];
-          u0(m,ivy,k,j,i) = wl[ivy]*wl[IDN];
-          u0(m,ivz,k,j,i) = wl[ivz]*wl[IDN];
+          u0(m,ivx,k,j,i) = wl[IVX]*wl[IDN];
+          u0(m,ivy,k,j,i) = wl[IVY]*wl[IDN];
+          u0(m,ivz,k,j,i) = wl[IVZ]*wl[IDN];
           u0(m,IEN,k,j,i) = wl[IPR]/gm1 +
              0.5*wl[IDN]*(SQR(wl[IVX]) + SQR(wl[IVY]) + SQR(wl[IVZ])) +
              0.5*(SQR(wl[nmhd]) + SQR(wl[nmhd+1]) + SQR(wl[nmhd+2]));
@@ -185,9 +185,9 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
           if (k==ke) {b0.x3f(m,k+1,j,i) = bzl;}
         } else {
           u0(m,IDN,k,j,i) = wr[IDN];
-          u0(m,ivx,k,j,i) = wr[ivx]*wr[IDN];
-          u0(m,ivy,k,j,i) = wr[ivy]*wr[IDN];
-          u0(m,ivz,k,j,i) = wr[ivz]*wr[IDN];
+          u0(m,ivx,k,j,i) = wr[IVX]*wr[IDN];
+          u0(m,ivy,k,j,i) = wr[IVY]*wr[IDN];
+          u0(m,ivz,k,j,i) = wr[IVZ]*wr[IDN];
           u0(m,IEN,k,j,i) = wr[IPR]/gm1 +
              0.5*wr[IDN]*(SQR(wr[IVX]) + SQR(wr[IVY]) + SQR(wr[IVZ])) +
              0.5*(SQR(wr[nmhd]) + SQR(wr[nmhd+1]) + SQR(wr[nmhd+2]));

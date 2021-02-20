@@ -26,28 +26,30 @@ class Viscosity
   Viscosity(MeshBlockPack *pp, ParameterInput *pin);
   virtual ~Viscosity() = default;
 
+  // data
+  Real dtnew;
   MeshBlockPack* pmy_pack;
 
   // pure virtual function to add viscous fluxes to 
-  virtual TaskStatus AddViscousFlux(const DvceArray5D<Real> &w, DvceFaceFld5D<Real> &f)=0;
+  virtual void AddViscousFlux(const DvceArray5D<Real> &w, DvceFaceFld5D<Real> &f) = 0;
 
  private:
 };
 
 //----------------------------------------------------------------------------------------
-//! \class Newtonian
-//  \brief Derived class for isotropic viscosity in a Newtonian fluid
+//! \class IsoViscosity
+//  \brief Derived class for isotropic viscosity for a Newtonian fluid
 
-class Newtonian : public Viscosity
+class IsoViscosity : public Viscosity
 {
  public:
-  Newtonian(MeshBlockPack *pp, ParameterInput *pin);
+  IsoViscosity(MeshBlockPack *pp, ParameterInput *pin, Real nu);
 
   // data
   Real nu_iso;
 
   // overrides of pure virtual functions in base class
-  TaskStatus AddViscousFlux(const DvceArray5D<Real> &w, DvceFaceFld5D<Real> &f) override;
+  void AddViscousFlux(const DvceArray5D<Real> &w, DvceFaceFld5D<Real> &f) override;
 };
 
 #endif // DIFFUSION_VISCOSITY_HPP_

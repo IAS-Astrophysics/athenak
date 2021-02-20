@@ -6,6 +6,8 @@
 //! \file viscosity.cpp
 //  \brief implements ctor and fns for Viscosity abstract base class
 
+#include <limits>
+
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
 #include "parameter_input.hpp"
@@ -17,4 +19,5 @@
 Viscosity::Viscosity(MeshBlockPack* pp, ParameterInput *pin)
    : pmy_pack(pp)
 {
+  dtnew = std::numeric_limits<float>::max();
 }
