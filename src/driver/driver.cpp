@@ -152,6 +152,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
   // Initialize MHD: ghost zones and primitive variables (everywhere)
   // Note this requires communicating BOTH u and B
   mhd::MHD *pmhd = pmesh->pmb_pack->pmhd;
+std::cout << "construct mhd" << std::endl;
   if (pmhd != nullptr) {
     // following functions return a TaskStatus, but it is ignored so cast to (void)
     (void) pmhd->MHDInitRecv(this, 0);

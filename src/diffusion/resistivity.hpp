@@ -26,11 +26,13 @@ class Resistivity
   Resistivity(MeshBlockPack *pp, ParameterInput *pin);
   virtual ~Resistivity() = default;
 
+  // data
+  Real dtnew;
   MeshBlockPack* pmy_pack;
 
   // pure virtual functions to compute resistive EMF and Poynting (energy) flux
-  virtual TaskStatus AddResistiveEMF(const DvceFaceFld4D<Real> &b0,
-                                     DvceEdgeFld4D<Real> &efld) = 0;
+  virtual void AddResistiveEMF(const DvceFaceFld4D<Real> &b0,
+                               DvceEdgeFld4D<Real> &efld) = 0;
 
  private:
 };
@@ -42,14 +44,13 @@ class Resistivity
 class Ohmic : public Resistivity
 {
  public:
-  Ohmic(MeshBlockPack *pp, ParameterInput *pin);
+  Ohmic(MeshBlockPack *pp, ParameterInput *pin, Real eta);
 
   // data
   Real eta_ohm;
 
   // overrides of pure virtual functions in base class
-  TaskStatus AddResistiveEMF(const DvceFaceFld4D<Real> &b0,
-                             DvceEdgeFld4D<Real> &efld) override;
+  void AddResistiveEMF(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &efld) override;
 };
 
 #endif // DIFFUSION_RESISTIVITY_HPP_

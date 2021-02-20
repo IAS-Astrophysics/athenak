@@ -34,7 +34,7 @@ class Hydro
 
   // data
   EquationOfState *peos;  // chosen EOS
-  Viscosity *pvisc;       // (optional) viscosity 
+  Viscosity *pvisc=nullptr;       // (optional) viscosity 
 
   int nhydro;             // number of hydro variables (5/4 for adiabatic/isothermal)
   int nscalars;           // number of passive scalars

@@ -43,8 +43,8 @@ class MeshBlockPack
   MeshBlock* pmb;         // MeshBlocks in this MeshBlockPack
 
   // physics modules (controlled by InitPhysicsModules)
-  hydro::Hydro *phydro;
-  mhd::MHD *pmhd;
+  hydro::Hydro *phydro=nullptr;
+  mhd::MHD *pmhd=nullptr;
 
   // task lists for MeshBlocks in this MeshBlockPack
   TaskList tl_stagestart;

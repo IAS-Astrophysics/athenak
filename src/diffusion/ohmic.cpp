@@ -6,6 +6,8 @@
 //! \file ohmic.cpp
 //  \brief Derived class for Ohmic resistivity
 
+#include <iostream>
+
 // Athena++ headers
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
@@ -16,17 +18,31 @@
 //----------------------------------------------------------------------------------------
 // ctor: also calls Resistivity base class constructor
     
-Ohmic::Ohmic(MeshBlockPack *pp, ParameterInput *pin)
-  : Resistivity(pp, pin)
-{      
-  eta_ohm = pin->GetReal("mhd","eta_ohm");
+Ohmic::Ohmic(MeshBlockPack *pp, ParameterInput *pin, Real eta)
+  : Resistivity(pp, pin), eta_ohm(eta)
+{
+  // resistive timestep on MeshBlock(s) in this pack
+  auto size = pmy_pack->pmb->mbsize;
+  Real fac;
+  if (pp->pmesh->nx3gt1) {
+    fac = 1.0/6.0;
+  } else if (pp->pmesh->nx2gt1) {
+    fac = 0.25;
+  } else {
+    fac = 0.5;
+  }
+  for (int m=0; m<(pp->nmb_thispack); ++m) {
+    dtnew = std::min(dtnew, fac*SQR(size.dx1.h_view(m))/eta_ohm);
+    if (pp->pmesh->nx2gt1) {dtnew = std::min(dtnew, fac*SQR(size.dx2.h_view(m))/eta_ohm);}
+    if (pp->pmesh->nx3gt1) {dtnew = std::min(dtnew, fac*SQR(size.dx3.h_view(m))/eta_ohm);}
+  }
 }
 
 //--------------------------------------------------------------------------------------
 //! \fn AddResistiveEMF()
 //  \brief Adds electric field from Ohmic resistivity to corner-centered electric field
 
-TaskStatus Ohmic::AddResistiveEMF(const DvceFaceFld4D<Real> &b0,DvceEdgeFld4D<Real> &efld)
+void Ohmic::AddResistiveEMF(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &efld)
 {
   int is = pmy_pack->mb_cells.is; int ie = pmy_pack->mb_cells.ie;
   int js = pmy_pack->mb_cells.js; int je = pmy_pack->mb_cells.je;
@@ -67,7 +83,7 @@ TaskStatus Ohmic::AddResistiveEMF(const DvceFaceFld4D<Real> &b0,DvceEdgeFld4D<Re
         });
       }
     );
-    return TaskStatus::complete;
+    return;
   }
 
   //---- 2-D problem:
@@ -101,7 +117,7 @@ TaskStatus Ohmic::AddResistiveEMF(const DvceFaceFld4D<Real> &b0,DvceEdgeFld4D<Re
         });
       } 
     );  
-    return TaskStatus::complete;
+    return;
   }
 
   //---- 3-D problem:
@@ -133,7 +149,7 @@ TaskStatus Ohmic::AddResistiveEMF(const DvceFaceFld4D<Real> &b0,DvceEdgeFld4D<Re
     }
   );
 
-  return TaskStatus::complete;
+  return;
 }
 
 //--------------------------------------------------------------------------------------

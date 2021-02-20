@@ -13,6 +13,7 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "diffusion/viscosity.hpp"
+#include "diffusion/resistivity.hpp"
 
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>
@@ -108,6 +109,14 @@ void Mesh::NewTimeStep(const Real tlim)
   if (pmb_pack->pmhd != nullptr) {
     // MHD timestep
     dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->dtnew) );
+    if (pmb_pack->pmhd->pvisc != nullptr) {
+      // MHD viscosity timestep
+      dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->pvisc->dtnew) );
+    }
+    if (pmb_pack->pmhd->presist != nullptr) {
+      // MHD resistivity timestep
+      dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->presist->dtnew) );
+    }
   }
 
 #if MPI_PARALLEL_ENABLED
