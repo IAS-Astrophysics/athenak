@@ -27,6 +27,7 @@ class ProblemGenerator {
   void LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin);
   void LWImplode_(MeshBlockPack *pmbp, ParameterInput *pin);
   void OrszagTang_(MeshBlockPack *pmbp, ParameterInput *pin);
+  void Turb_(MeshBlockPack *pmbp, ParameterInput *pin);
 
   // function called after main loop contianing any final problem-specific work
   // error functions in predefine problem generator
