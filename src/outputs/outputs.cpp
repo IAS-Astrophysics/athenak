@@ -258,6 +258,9 @@ OutputVariable GetOutputVariable(const std::string& input_string)
   } else if (input_string == "mhd_bcc") {
     return OutputVariable::mhd_bcc;
 
+  } else if (input_string == "hydro_force") {
+    return OutputVariable::hydro_force;
+
   // invalid variable requested
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
@@ -346,6 +349,9 @@ std::string GetOutputVariableString(OutputVariable input_flag)
       return "mhd_bcc3";
     case OutputVariable::mhd_bcc:
       return "mhd_bcc";
+
+    case OutputVariable::hydro_force:
+      return "hydro_force";
 
     // undefined or unknown variable names
     case OutputVariable::undef:
