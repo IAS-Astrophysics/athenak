@@ -24,10 +24,58 @@ enum class Hydro_RSolver {advect, llf, hllc, roe};
 namespace hydro {
 
 //----------------------------------------------------------------------------------------
+//! \class HydroSourceTerm
+
+class HydroSourceTerm
+{
+ public:
+  HydroSourceTerm(Hydro *pmy_hydro, ParameterInput *pin);
+  ~HydroSourceTerm();
+
+  // objects for external forcing
+  DvceArray5D<Real> force;  // forcing for driving hydro variables
+
+  DvceArray3D<Real> x1sin;   // array for pre-computed sin(k x)
+  DvceArray3D<Real> x1cos;   // array for pre-computed cos(k x)
+  DvceArray3D<Real> x2sin;   // array for pre-computed sin(k y)
+  DvceArray3D<Real> x2cos;   // array for pre-computed cos(k y)
+  DvceArray3D<Real> x3sin;   // array for pre-computed sin(k z)
+  DvceArray3D<Real> x3cos;   // array for pre-computed cos(k z)
+
+  DvceArray3D<Real> amp1;
+  DvceArray3D<Real> amp2;
+  DvceArray3D<Real> amp3;
+  // amplitudes for OU process
+  DvceArray3D<Real> amp1_tmp;
+  DvceArray3D<Real> amp2_tmp;
+  DvceArray3D<Real> amp3_tmp;
+
+  DvceArray2D<int64_t> seeds; // random seeds
+
+  bool first_time_;
+  int nlow,nhigh,ntot,nwave;
+  Real tcorr,dedt;
+  Real expo,exp_prl,exp_prp;
+  std::string forcing_type;
+  int forcing;
+
+  void ApplyForcing();
+  void ApplySourceTerms(Driver *d, int stage);
+  KOKKOS_INLINE_FUNCTION Real RanGaussian(int64_t *idum);
+  KOKKOS_INLINE_FUNCTION Real Ran2(int64_t *idum);
+
+ private:
+  Hydro* pmy_hydro;  // ptr to MeshBlockPack containing this Hydro
+};
+
+
+
+//----------------------------------------------------------------------------------------
 //! \class Hydro
 
 class Hydro
 {
+ friend class HydroSourceTerm; // might be not necessary
  public:
   Hydro(MeshBlockPack *ppack, ParameterInput *pin);
   ~Hydro();
@@ -49,6 +97,9 @@ class Hydro
   DvceFaceFld5D<Real> uflx;   // fluxes of conserved quantities on cell faces
   Real dtnew;
 
+  // source terms
+  HydroSourceTerm *hsrc;
+
   // functions
   void HydroStageStartTasks(TaskList &tl, TaskID start);
   void HydroStageRunTasks(TaskList &tl, TaskID start);
@@ -65,6 +116,7 @@ class Hydro
   TaskStatus ViscousFluxes(Driver *d, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
   TaskStatus HydroApplyPhysicalBCs(Driver* pdrive, int stage);
+  TaskStatus ApplySourceTerms(Driver *d, int stage);
 
   // functions to set physical BCs for Hydro conserved variables, applied to single MB
   // specified by argument 'm'. 

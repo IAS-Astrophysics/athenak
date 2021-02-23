@@ -162,6 +162,8 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
     Kokkos::realloc(uflx.x2f, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
     Kokkos::realloc(uflx.x3f, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
   }
+
+  hsrc = new HydroSourceTerm(this, pin);
 }
 
 //----------------------------------------------------------------------------------------
@@ -171,6 +173,7 @@ Hydro::~Hydro()
 {
   delete peos;
   delete pbval_u;
+  delete hsrc;
 }
 
 //----------------------------------------------------------------------------------------
@@ -195,7 +198,8 @@ void Hydro::HydroStageRunTasks(TaskList &tl, TaskID start)
   auto hydro_fluxes = tl.AddTask(&Hydro::CalcFluxes, this, hydro_copycons);
   auto visc_fluxes = tl.AddTask(&Hydro::ViscousFluxes, this, hydro_fluxes);
   auto hydro_update = tl.AddTask(&Hydro::Update, this, visc_fluxes);
-  auto hydro_send = tl.AddTask(&Hydro::HydroSendU, this, hydro_update);
+  auto hydro_src = tl.AddTask(&Hydro::ApplySourceTerms, this, hydro_update);
+  auto hydro_send = tl.AddTask(&Hydro::HydroSendU, this, hydro_src); // hydro_update);
   auto hydro_recv = tl.AddTask(&Hydro::HydroRecvU, this, hydro_send);
   auto hydro_phybcs = tl.AddTask(&Hydro::HydroApplyPhysicalBCs, this, hydro_recv);
   auto hydro_con2prim = tl.AddTask(&Hydro::ConToPrim, this, hydro_phybcs);
@@ -353,6 +357,16 @@ TaskStatus Hydro::ConToPrim(Driver *pdrive, int stage)
 TaskStatus Hydro::ViscousFluxes(Driver *pdrive, int stage)
 {
   if (pvisc != nullptr) pvisc->AddViscousFlux(u0, uflx);
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void Hydro::ApplySourceTerms
+//  \brief
+
+TaskStatus Hydro::ApplySourceTerms(Driver *pdrive, int stage)
+{
+  hsrc->ApplySourceTerms(pdrive, stage);
   return TaskStatus::complete;
 }
 
