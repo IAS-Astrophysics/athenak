@@ -43,7 +43,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   e2_cc("e2_cc",1,1,1,1),
   e3_cc("e3_cc",1,1,1,1)
 {
-  // (1) Start by selecting physics for this Hydro:
+  // (1) Start by selecting physics for this MHD:
 
   // construct EOS object (no default)
   {std::string eqn_of_state = pin->GetString("mhd","eos");
@@ -67,7 +67,9 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   if (visc.compare("isotropic") == 0) {
     Real nu = pin->GetReal("mhd","nu_iso");
     pvisc = new IsoViscosity(ppack, pin, nu);
-  } else if (visc.compare("none") != 0) {
+  } else if (visc.compare("none") == 0) {
+    pvisc = nullptr;
+  } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "<mhd> viscosity = '" << visc << "' not implemented" << std::endl;
     std::exit(EXIT_FAILURE);
@@ -78,7 +80,9 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   if (resist.compare("ohmic") == 0) {
     Real eta = pin->GetReal("mhd","eta_ohm");
     presist = new Ohmic(ppack, pin, eta);
-  } else if (resist.compare("none") != 0) {
+  } else if (resist.compare("none") == 0) {
+    presist = nullptr;
+  } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "<mhd> resistivity = '" << resist << "' not implemented" << std::endl;
     std::exit(EXIT_FAILURE);
@@ -224,6 +228,8 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 MHD::~MHD()
 {
   delete peos;
+  delete pvisc;
+  delete presist;
   delete pbval_u;
   delete pbval_b;
 }

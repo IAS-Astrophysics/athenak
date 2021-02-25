@@ -61,6 +61,7 @@ void Ohmic::AddResistiveEMF(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &
     auto e2 = efld.x2e;
     auto e3 = efld.x3e;
     auto &mbsize = pmy_pack->pmb->mbsize;
+    auto eta_o = eta_ohm;
 
     int scr_level = 0;
     size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1) * 3;
@@ -76,10 +77,10 @@ void Ohmic::AddResistiveEMF(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &
 
         par_for_inner(member, is, ie+1, [&](const int i)
         {
-          e2(m,ks,  js  ,i) += eta_ohm*j2(i);
-          e2(m,ke+1,js  ,i) += eta_ohm*j2(i);
-          e3(m,ks  ,js  ,i) += eta_ohm*j3(i);
-          e3(m,ks  ,je+1,i) += eta_ohm*j3(i);
+          e2(m,ks,  js  ,i) += eta_o*j2(i);
+          e2(m,ke+1,js  ,i) += eta_o*j2(i);
+          e3(m,ks  ,js  ,i) += eta_o*j3(i);
+          e3(m,ks  ,je+1,i) += eta_o*j3(i);
         });
       }
     );
@@ -94,6 +95,7 @@ void Ohmic::AddResistiveEMF(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &
     auto e2 = efld.x2e;
     auto e3 = efld.x3e;
     auto &mbsize = pmy_pack->pmb->mbsize;
+    auto eta_o = eta_ohm;
 
     int scr_level = 0;
     size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1) * 3;
@@ -109,11 +111,11 @@ void Ohmic::AddResistiveEMF(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &
     
         par_for_inner(member, is, ie+1, [&](const int i)
         {
-          e1(m,ks,  j,i) += eta_ohm*j1(i);
-          e1(m,ke+1,j,i) += eta_ohm*j1(i);
-          e2(m,ks,  j,i) += eta_ohm*j2(i);
-          e2(m,ke+1,j,i) += eta_ohm*j2(i);
-          e3(m,ks  ,j,i) += eta_ohm*j3(i);
+          e1(m,ks,  j,i) += eta_o*j1(i);
+          e1(m,ke+1,j,i) += eta_o*j1(i);
+          e2(m,ks,  j,i) += eta_o*j2(i);
+          e2(m,ke+1,j,i) += eta_o*j2(i);
+          e3(m,ks  ,j,i) += eta_o*j3(i);
         });
       } 
     );  
@@ -127,6 +129,7 @@ void Ohmic::AddResistiveEMF(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &
   auto e2 = efld.x2e;
   auto e3 = efld.x3e;
   auto &mbsize = pmy_pack->pmb->mbsize;
+  auto eta_o = eta_ohm;
 
   int scr_level = 0;
   size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1) * 3;
@@ -142,9 +145,9 @@ void Ohmic::AddResistiveEMF(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &
 
       par_for_inner(member, is, ie+1, [&](const int i)
       {
-        e1(m,k,j,i) += eta_ohm*j1(i);
-        e2(m,k,j,i) += eta_ohm*j2(i);
-        e3(m,k,j,i) += eta_ohm*j3(i);
+        e1(m,k,j,i) += eta_o*j1(i);
+        e2(m,k,j,i) += eta_o*j2(i);
+        e3(m,k,j,i) += eta_o*j3(i);
       });
     }
   );

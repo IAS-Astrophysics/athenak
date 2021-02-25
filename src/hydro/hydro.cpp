@@ -53,7 +53,9 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   if (visc.compare("isotropic") == 0) {
     Real nu = pin->GetReal("hydro","nu_iso");
     pvisc = new IsoViscosity(ppack, pin, nu);
-  } else if (visc.compare("none") != 0) {
+  } else if (visc.compare("none") == 0) {
+    pvisc = nullptr;
+  } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "<hydro> viscosity = '" << visc << "' not implemented" << std::endl;
     std::exit(EXIT_FAILURE);
@@ -170,6 +172,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
 Hydro::~Hydro()
 {
   delete peos;
+  delete pvisc;
   delete pbval_u;
 }
 
