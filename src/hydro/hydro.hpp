@@ -19,7 +19,7 @@ class Viscosity;
 class Driver;
 
 // constants that enumerate Hydro Riemann Solver options
-enum class Hydro_RSolver {advect, llf, hllc, roe, llf_rel};
+enum class Hydro_RSolver {advect, llf, hllc, roe, llf_rel,hllc_rel};
 
 namespace hydro {
 

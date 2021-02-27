@@ -22,6 +22,7 @@
 #include "hydro/rsolvers/llf.cpp"
 #include "hydro/rsolvers/llf_rel.cpp"
 #include "hydro/rsolvers/hllc.cpp"
+#include "hydro/rsolvers/hllc_rel.cpp"
 //#include "hydro/rsolvers/roe.cpp"
 
 namespace hydro {
@@ -95,6 +96,9 @@ TaskStatus Hydro::CalcFluxes(Driver *pdriver, int stage)
 //          break;
         case Hydro_RSolver::llf_rel:
           LLF_rel(member, eos, m, k, j, is, ie+1, IVX, wl, wr, flx1);
+          break;
+        case Hydro_RSolver::hllc_rel:
+          HLLC_rel(member, eos, m, k, j, is, ie+1, IVX, wl, wr, flx1);
           break;
         default:
           break;
@@ -180,6 +184,9 @@ TaskStatus Hydro::CalcFluxes(Driver *pdriver, int stage)
 //              break;
             case Hydro_RSolver::llf_rel:
               LLF_rel(member, eos, m, k, j, is, ie, IVY, wl, wr, flx2);
+              break;
+            case Hydro_RSolver::hllc_rel:
+              HLLC_rel(member, eos, m, k, j, is, ie, IVY, wl, wr, flx2);
               break;
             default:
               break;
@@ -267,6 +274,9 @@ TaskStatus Hydro::CalcFluxes(Driver *pdriver, int stage)
 //              break;
             case Hydro_RSolver::llf_rel:
               LLF_rel(member, eos, m, k, j, is, ie, IVZ, wl, wr, flx3);
+              break;
+            case Hydro_RSolver::hllc_rel:
+              HLLC_rel(member, eos, m, k, j, is, ie, IVZ, wl, wr, flx3);
               break;
             default:
               break;

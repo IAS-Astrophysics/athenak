@@ -38,7 +38,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
 
     // FIXME : Should this only be switched via the riemann solver flag?
     std::string rsolver = pin->GetString("hydro","rsolver");
-    if (rsolver.compare("llf_rel") == 0){
+    if (rsolver.compare("llf_rel") == 0 || rsolver.compare("hllc_rel") == 0){
         relativistic = true;
     	peos = new AdiabaticHydroRel(ppack, pin);
     }
@@ -147,9 +147,26 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
       std::exit(EXIT_FAILURE);
 
     } else if (rsolver.compare("llf_rel") == 0) {
-      	rsolver_method_ = Hydro_RSolver::llf_rel;
+      if (peos->eos_data.is_adiabatic) {
+        rsolver_method_ = Hydro_RSolver::llf_rel;
+      } else { 
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "<hydro>/rsolver = '" << rsolver
+                  << "' cannot be used with isothermal EOS" << std::endl;
+        std::exit(EXIT_FAILURE); 
+      }  
     } else if (rsolver.compare("llf") == 0) {
       	rsolver_method_ = Hydro_RSolver::llf;
+
+    } else if (rsolver.compare("hllc_rel") == 0) {
+      if (peos->eos_data.is_adiabatic) {
+        rsolver_method_ = Hydro_RSolver::hllc_rel;
+      } else { 
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "<hydro>/rsolver = '" << rsolver
+                  << "' cannot be used with isothermal EOS" << std::endl;
+        std::exit(EXIT_FAILURE); 
+      }  
 
     } else if (rsolver.compare("hllc") == 0) {
       if (peos->eos_data.is_adiabatic) {
