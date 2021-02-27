@@ -22,9 +22,10 @@ namespace hydro {
 //! \brief The HLLC Riemann solver for adiabatic hydrodynamics (use HLLE for isothermal)
 
 KOKKOS_INLINE_FUNCTION
-void HLLC(TeamMember_t const &member, const EOS_Data &eos, const int il, const int iu,
+void HLLC(TeamMember_t const &member, const EOS_Data &eos,
+     const int m, const int k, const int j, const int il, const int iu,
      const int ivx, const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr,
-     ScrArray2D<Real> &flx)
+     DvceArray5D<Real> flx)
 {
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
@@ -92,23 +93,23 @@ void HLLC(TeamMember_t const &member, const EOS_Data &eos, const int il, const i
 
     //--- Step 6. Compute L/R fluxes along the line bm (qb), bp (qa)
 
-    qe = wli[IVX] - qb;
-    qf = wri[IVX] - qa;
+    qe = wli[IDN]*(wli[IVX] - qb);
+    qf = wri[IDN]*(wri[IVX] - qa);
 
-    fl[IDN] = wli[IDN]*qe;
-    fr[IDN] = wri[IDN]*qf;
+    fl[IDN] = qe;
+    fr[IDN] = qf;
 
-    fl[IVX] = wli[IDN]*wli[IVX]*qe + wli[IPR];
-    fr[IVX] = wri[IDN]*wri[IVX]*qf + wri[IPR];
+    fl[IVX] = qe*wli[IVX] + wli[IPR];
+    fr[IVX] = qf*wri[IVX] + wri[IPR];
 
-    fl[IVY] = wli[IDN]*wli[IVY]*qe;
-    fr[IVY] = wri[IDN]*wri[IVY]*qf;
+    fl[IVY] = qe*wli[IVY];
+    fr[IVY] = qf*wri[IVY];
 
-    fl[IVZ] = wli[IDN]*wli[IVZ]*qe;
-    fr[IVZ] = wri[IDN]*wri[IVZ]*qf;
+    fl[IVZ] = qe*wli[IVZ];
+    fr[IVZ] = qf*wri[IVZ];
 
-    fl[IEN] = el*qe + wli[IPR]*wli[IVX];
-    fr[IEN] = er*qf + wri[IPR]*wri[IVX];
+    fl[IEN] = el*(wli[IVX] - qb) + wli[IPR]*wli[IVX];
+    fr[IEN] = er*(wri[IVX] - qa) + wri[IPR]*wri[IVX];
 
     //--- Step 8. Compute flux weights or scales
 
@@ -125,11 +126,11 @@ void HLLC(TeamMember_t const &member, const EOS_Data &eos, const int il, const i
     //--- Step 9. Compute the HLLC flux at interface, including weighted contribution
     // of the flux along the contact
 
-    flx(IDN,i) = qc*fl[IDN] + qd*fr[IDN];
-    flx(ivx,i) = qc*fl[IVX] + qd*fr[IVX] + qe*cp;
-    flx(ivy,i) = qc*fl[IVY] + qd*fr[IVY];
-    flx(ivz,i) = qc*fl[IVZ] + qd*fr[IVZ];
-    flx(IEN,i) = qc*fl[IEN] + qd*fr[IEN] + qe*cp*am;
+    flx(m,IDN,k,j,i) = qc*fl[IDN] + qd*fr[IDN];
+    flx(m,ivx,k,j,i) = qc*fl[IVX] + qd*fr[IVX] + qe*cp;
+    flx(m,ivy,k,j,i) = qc*fl[IVY] + qd*fr[IVY];
+    flx(m,ivz,k,j,i) = qc*fl[IVZ] + qd*fr[IVZ];
+    flx(m,IEN,k,j,i) = qc*fl[IEN] + qd*fr[IEN] + qe*cp*am;
   });
   return;
 }

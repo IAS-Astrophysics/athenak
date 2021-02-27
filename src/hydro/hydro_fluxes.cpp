@@ -16,11 +16,12 @@
 #include "reconstruct/dc.cpp"
 #include "reconstruct/plm.cpp"
 #include "reconstruct/ppm.cpp"
+#include "reconstruct/wenoz.cpp"
 // include inlined Riemann solvers (double yuck...)
 #include "hydro/rsolvers/advect.cpp"
 #include "hydro/rsolvers/llf.cpp"
 #include "hydro/rsolvers/llf_rel.cpp"
-//#include "hydro/rsolvers/hllc.cpp"
+#include "hydro/rsolvers/hllc.cpp"
 //#include "hydro/rsolvers/roe.cpp"
 
 namespace hydro {
@@ -38,8 +39,8 @@ TaskStatus Hydro::CalcFluxes(Driver *pdriver, int stage)
   int nhyd  = nhydro;
   int nvars = nhydro + nscalars;
   int nmb1 = pmy_pack->nmb_thispack - 1;
-  auto recon_method = recon_method_;
-  auto rsolver_method = rsolver_method_;
+  const auto recon_method = recon_method_;
+  const auto rsolver_method = rsolver_method_;
   auto &w0_ = w0;
   auto &eos = peos->eos_data;
 
@@ -68,6 +69,9 @@ TaskStatus Hydro::CalcFluxes(Driver *pdriver, int stage)
         case ReconstructionMethod::ppm:
           PiecewiseParabolicX1(member, m, k, j, is-1, ie+1, w0_, wl, wr);
           break;
+        case ReconstructionMethod::wenoz:
+          WENOZX1(member, m, k, j, is-1, ie+1, w0_, wl, wr);
+          break;
         default:
           break;
       }
@@ -83,9 +87,9 @@ TaskStatus Hydro::CalcFluxes(Driver *pdriver, int stage)
         case Hydro_RSolver::llf:
           LLF(member, eos, m, k, j, is, ie+1, IVX, wl, wr, flx1);
           break;
-//        case Hydro_RSolver::hllc:
-//          HLLC(member, eos, m, k, j, is, ie+1, IVX, wl, wr, flx1);
-//          break;
+        case Hydro_RSolver::hllc:
+          HLLC(member, eos, m, k, j, is, ie+1, IVX, wl, wr, flx1);
+          break;
 //        case Hydro_RSolver::roe:
 //          Roe(member, eos, m, k, j, is, ie+1, IVX, wl, wr, flx1);
 //          break;
@@ -150,6 +154,9 @@ TaskStatus Hydro::CalcFluxes(Driver *pdriver, int stage)
           case ReconstructionMethod::ppm:
             PiecewiseParabolicX2(member, m, k, j, is, ie, w0_, wl_jp1, wr);
             break;
+          case ReconstructionMethod::wenoz:
+            WENOZX2(member, m, k, j, is-1, ie+1, w0_, wl_jp1, wr);
+            break;
           default:
             break;
         }
@@ -165,9 +172,9 @@ TaskStatus Hydro::CalcFluxes(Driver *pdriver, int stage)
             case Hydro_RSolver::llf:
               LLF(member, eos, m, k, j, is, ie, IVY, wl, wr, flx2);
               break;
-//            case Hydro_RSolver::hllc:
-//              HLLC(member, eos, m, k, j, is, ie, IVY, wl, wr, flx2);
-//              break;
+            case Hydro_RSolver::hllc:
+              HLLC(member, eos, m, k, j, is, ie, IVY, wl, wr, flx2);
+              break;
 //            case Hydro_RSolver::roe:
 //              Roe(member, eos, m, k, j, is, ie, IVY, wl, wr, flx2);
 //              break;
@@ -234,6 +241,9 @@ TaskStatus Hydro::CalcFluxes(Driver *pdriver, int stage)
           case ReconstructionMethod::ppm:
             PiecewiseParabolicX3(member, m, k, j, is, ie, w0_, wl_kp1, wr);
             break;
+          case ReconstructionMethod::wenoz:
+            WENOZX3(member, m, k, j, is-1, ie+1, w0_, wl_kp1, wr);
+            break;
           default:
             break;
         }
@@ -249,9 +259,9 @@ TaskStatus Hydro::CalcFluxes(Driver *pdriver, int stage)
             case Hydro_RSolver::llf:
               LLF(member, eos, m, k, j, is, ie, IVZ, wl, wr, flx3);
               break;
-//            case Hydro_RSolver::hllc:
-//              HLLC(member, eos, m, k, j, is, ie, IVZ, wl, wr, flx3);
-//              break;
+            case Hydro_RSolver::hllc:
+              HLLC(member, eos, m, k, j, is, ie, IVZ, wl, wr, flx3);
+              break;
 //            case Hydro_RSolver::roe:
 //              Roe(member, eos, m, k, j, is, ie, IVZ, wl, wr, flx3);
 //              break;

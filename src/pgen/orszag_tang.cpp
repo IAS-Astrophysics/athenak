@@ -34,7 +34,7 @@ Real A3(const Real x1, const Real x2, const Real B0) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MeshBlock::ProblemGenerator(ParameterInput *pin)
+//! \fn void MeshBlock::OrszagTang_(ParameterInput *pin)
 //  \brief Problem Generator for the Orszag-Tang test.  The initial conditions are
 //  constructed assuming the domain extends over [-0.5x0.5, -0.5x0.5], so that exact
 //  symmetry can be enforced across x=0 and y=0.

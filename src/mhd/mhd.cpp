@@ -13,6 +13,8 @@
 #include "tasklist/task_list.hpp"
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
+#include "diffusion/viscosity.hpp"
+#include "diffusion/resistivity.hpp"
 #include "bvals/bvals.hpp"
 #include "mhd/mhd.hpp"
 #include "utils/create_mpitag.hpp"
@@ -40,10 +42,11 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   e1_cc("e1_cc",1,1,1,1),
   e2_cc("e2_cc",1,1,1,1),
   e3_cc("e3_cc",1,1,1,1)
-
 {
+  // (1) Start by selecting physics for this MHD:
+
   // construct EOS object (no default)
-  std::string eqn_of_state = pin->GetString("mhd","eos");
+  {std::string eqn_of_state = pin->GetString("mhd","eos");
   if (eqn_of_state.compare("adiabatic") == 0) {
     peos = new AdiabaticMHD(ppack, pin);
     nmhd = 5;
@@ -54,13 +57,41 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "<mhd> eos = '" << eqn_of_state << "' not implemented" << std::endl;
     std::exit(EXIT_FAILURE);
-  }
+  }}
 
   // Initialize number of scalars
   nscalars = pin->GetOrAddInteger("mhd","nscalars",0);
 
+  // Add viscosity (if needed; default none)
+  {std::string visc = pin->GetOrAddString("mhd","viscosity","none");
+  if (visc.compare("isotropic") == 0) {
+    Real nu = pin->GetReal("mhd","nu_iso");
+    pvisc = new IsoViscosity(ppack, pin, nu);
+  } else if (visc.compare("none") == 0) {
+    pvisc = nullptr;
+  } else {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "<mhd> viscosity = '" << visc << "' not implemented" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }}
+
+  // Add resistity (if needed; default none)
+  {std::string resist = pin->GetOrAddString("mhd","resistivity","none");
+  if (resist.compare("ohmic") == 0) {
+    Real eta = pin->GetReal("mhd","eta_ohm");
+    presist = new Ohmic(ppack, pin, eta);
+  } else if (resist.compare("none") == 0) {
+    presist = nullptr;
+  } else {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "<mhd> resistivity = '" << resist << "' not implemented" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }}
+
   // read time-evolution option [already error checked in driver constructor]
   std::string evolution_t = pin->GetString("time","evolution");
+
+  // (2) Now initialize memory/algorithms
 
   // allocate memory for conserved and primitive variables
   int nmb = ppack->nmb_thispack;
@@ -106,6 +137,16 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
       }                
       recon_method_ = ReconstructionMethod::ppm;
 
+    } else if (xorder.compare("wenoz") == 0) {
+      // check that nghost > 2
+      if (ncells.ng < 3) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+            << std::endl << "WENOZ reconstruction requires at least 3 ghost zones, "
+            << "but <mesh>/nghost=" << ncells.ng << std::endl;
+        std::exit(EXIT_FAILURE); 
+      }                
+      recon_method_ = ReconstructionMethod::wenoz;
+
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "<mhd>/recon = '" << xorder << "' not implemented"
@@ -115,7 +156,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 
     // select Riemann solver (no default).  Test for compatibility of options
     {std::string rsolver = pin->GetString("mhd","rsolver");
-    if (rsolver.compare("advection") == 0) {
+    if (rsolver.compare("advect") == 0) {
       if (evolution_t.compare("dynamic") == 0) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                   << std::endl << "<mhd>/rsolver = '" << rsolver
@@ -134,15 +175,15 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     } else if (rsolver.compare("llf") == 0) {
       rsolver_method_ = MHD_RSolver::llf;
 
-//    } else if (rsolver.compare("hlld") == 0) {
-//      if (peos->eos_data.is_adiabatic) {
-//        rsolver_method_ = MHD_RSolver::hlld;
-//      } else { 
-//        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-//                  << std::endl << "<mhd>/rsolver = '" << rsolver
-//                  << "' cannot be used with isothermal EOS" << std::endl;
-//        std::exit(EXIT_FAILURE); 
-//        }  
+    } else if (rsolver.compare("hlld") == 0) {
+      if (peos->eos_data.is_adiabatic) {
+        rsolver_method_ = MHD_RSolver::hlld;
+      } else { 
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "<mhd>/rsolver = '" << rsolver
+                  << "' cannot be used with isothermal EOS" << std::endl;
+        std::exit(EXIT_FAILURE); 
+      }  
 
 //    } else if (rsolver.compare("roe") == 0) {
 //      rsolver_method_ = MHD_RSolver::roe;
@@ -187,6 +228,8 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 MHD::~MHD()
 {
   delete peos;
+  delete pvisc;
+  delete presist;
   delete pbval_u;
   delete pbval_b;
 }
@@ -211,11 +254,13 @@ void MHD::MHDStageRunTasks(TaskList &tl, TaskID start)
 {
   auto mhd_copycons = tl.AddTask(&MHD::MHDCopyCons, this, start);
   auto mhd_fluxes = tl.AddTask(&MHD::CalcFluxes, this, mhd_copycons);
-  auto mhd_update = tl.AddTask(&MHD::Update, this, mhd_fluxes);
+  auto visc_fluxes = tl.AddTask(&MHD::ViscousFluxes, this, mhd_fluxes);
+  auto mhd_update = tl.AddTask(&MHD::Update, this, visc_fluxes);
   auto mhd_sendu = tl.AddTask(&MHD::MHDSendU, this, mhd_update);
   auto mhd_recvu = tl.AddTask(&MHD::MHDRecvU, this, mhd_sendu);
   auto mhd_emf = tl.AddTask(&MHD::CornerE, this, mhd_recvu);
-  auto mhd_ct = tl.AddTask(&MHD::CT, this, mhd_emf);
+  auto resist_emf = tl.AddTask(&MHD::ResistEMF, this, mhd_emf);
+  auto mhd_ct = tl.AddTask(&MHD::CT, this, resist_emf);
   auto mhd_sendb = tl.AddTask(&MHD::MHDSendB, this, mhd_ct);
   auto mhd_recvb = tl.AddTask(&MHD::MHDRecvB, this, mhd_sendb);
   auto mhd_phybcs = tl.AddTask(&MHD::MHDApplyPhysicalBCs, this, mhd_recvb);
@@ -408,6 +453,26 @@ TaskStatus MHD::MHDRecvB(Driver *pdrive, int stage)
 TaskStatus MHD::ConToPrim(Driver *pdrive, int stage)
 {
   peos->ConsToPrim(u0, b0, w0, bcc0);
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void MHD::ViscousFluxes
+//  \brief
+
+TaskStatus MHD::ViscousFluxes(Driver *pdrive, int stage)
+{
+  if (pvisc != nullptr) pvisc->AddViscousFlux(u0, uflx);
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void MHD::ResistEMF
+//  \brief
+
+TaskStatus MHD::ResistEMF(Driver *pdrive, int stage)
+{
+  if (presist != nullptr) presist->AddResistiveEMF(b0, efld);
   return TaskStatus::complete;
 }
 

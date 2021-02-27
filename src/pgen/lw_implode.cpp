@@ -18,7 +18,7 @@
 #include "pgen.hpp"
 
 //----------------------------------------------------------------------------------------
-//! \fn void MeshBlock::ProblemGenerator(ParameterInput *pin)
+//! \fn void MeshBlock::LWImplode_()
 //  \brief Problem Generator for LW Implosion test
 
 void ProblemGenerator::LWImplode_(MeshBlockPack *pmbp, ParameterInput *pin)
@@ -51,7 +51,6 @@ void ProblemGenerator::LWImplode_(MeshBlockPack *pmbp, ParameterInput *pin)
 
 
   // Set initial conditions
-  using namespace hydro;
   par_for("pgen_lw_implode", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {

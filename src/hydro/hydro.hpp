@@ -14,8 +14,9 @@
 #include "bvals/bvals.hpp"
 
 // forward declarations
-class Driver;
 class EquationOfState;
+class Viscosity;
+class Driver;
 
 // constants that enumerate Hydro Riemann Solver options
 enum class Hydro_RSolver {advect, llf, hllc, roe, llf_rel};
@@ -32,7 +33,8 @@ class Hydro
   ~Hydro();
 
   // data
-  EquationOfState *peos;    // object that implements chosen EOS
+  EquationOfState *peos;  // chosen EOS
+  Viscosity *pvisc=nullptr;       // (optional) viscosity 
 
   bool relativistic = false;
   int nhydro;             // number of hydro variables (5/4 for adiabatic/isothermal)
@@ -61,6 +63,7 @@ class Hydro
   TaskStatus HydroSendU(Driver *d, int stage); 
   TaskStatus HydroRecvU(Driver *d, int stage); 
   TaskStatus ConToPrim(Driver *d, int stage);
+  TaskStatus ViscousFluxes(Driver *d, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
   TaskStatus HydroApplyPhysicalBCs(Driver* pdrive, int stage);
 

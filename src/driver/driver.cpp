@@ -129,7 +129,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
 {
   //---- Step 1.  Set ICs by constructing Problem Generator
 
-  pgen = std::make_unique<ProblemGenerator>(pin, pmesh);
+  pgen = std::make_unique<ProblemGenerator>(pin, pmesh, this);
 
   //---- Step 2.  Set conserved variables in ghost zones for all physics
   // Note: with MPI, sends on ALL MBs must be complete before receives execute
@@ -152,6 +152,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
   // Initialize MHD: ghost zones and primitive variables (everywhere)
   // Note this requires communicating BOTH u and B
   mhd::MHD *pmhd = pmesh->pmb_pack->pmhd;
+std::cout << "construct mhd" << std::endl;
   if (pmhd != nullptr) {
     // following functions return a TaskStatus, but it is ignored so cast to (void)
     (void) pmhd->MHDInitRecv(this, 0);
@@ -308,6 +309,9 @@ void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
     out->LoadOutputData(pmesh);
     out->WriteOutputFile(pmesh, pin);
   }
+
+  // call any problem specific functions to do work after main loop
+  pgen->ProblemGeneratorFinalize(pin, pmesh);
     
   float exe_time = run_time_.seconds();
 

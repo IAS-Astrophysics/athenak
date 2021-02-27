@@ -14,14 +14,19 @@ add_executable(
         bvals/bvals_cc.cpp
         bvals/bvals_fc.cpp
 
+        diffusion/resistivity.cpp
+        diffusion/ohmic.cpp
+        diffusion/viscosity.cpp
+        diffusion/iso_visc.cpp
+
+        driver/driver.cpp
+
         eos/eos.cpp
         eos/adiabatic_hydro.cpp
         eos/adiabatic_hydro_rel.cpp
         eos/adiabatic_mhd.cpp
         eos/isothermal_hydro.cpp
         eos/isothermal_mhd.cpp
-
-        driver/driver.cpp
 
         hydro/hydro.cpp
         hydro/hydro_fluxes.cpp
@@ -67,6 +72,17 @@ add_executable(
         utils/change_rundir.cpp
         utils/show_config.cpp
 )
+
+# custom problem generator to be included in compile
+# specify on command line using '-D PROBLEM=file' where 'file' is name of file in
+# pgen/ directory (not including .cpp extension)
+
+if (NOT ${PROBLEM} STREQUAL "built_in_pgens")
+  target_sources(athena
+      PRIVATE
+          pgen/${PROBLEM}.cpp
+  )
+endif()
 
 # enable include of header files with /src/ as root of path
 target_include_directories(athena PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

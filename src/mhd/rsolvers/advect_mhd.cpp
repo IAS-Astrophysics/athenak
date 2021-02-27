@@ -29,19 +29,17 @@ void Advect(TeamMember_t const &member, const EOS_Data eos,
   {
     //  Compute upwind fluxes
     if (wl(ivx,i) >= 0.0) {
-      Real mxl = wl(IDN,i)*wl(ivx,i);
-      flx(m,IDN,k,j,i) = mxl;
-      flx(m,ivx,k,j,i) = mxl*wl(ivx,i);
-      flx(m,ivy,k,j,i) = mxl*wl(ivy,i);
-      flx(m,ivz,k,j,i) = mxl*wl(ivz,i);
+      flx(m,IDN,k,j,i) = wl(IDN,i)*wl(ivx,i);
+      flx(m,ivx,k,j,i) = 0.0;
+      flx(m,ivy,k,j,i) = 0.0;
+      flx(m,ivz,k,j,i) = 0.0;
       ey(m,k,j,i) = -bl(iby,i)*wl(ivx,i) + bx(m,k,j,i)*wl(ivy,i);
       ez(m,k,j,i) =  bl(ibz,i)*wl(ivx,i) - bx(m,k,j,i)*wl(ivz,i);
     } else {
-      Real mxr = wr(IDN,i)*wr(ivx,i);
-      flx(m,IDN,k,j,i) = mxr;
-      flx(m,ivx,k,j,i) = mxr*wr(ivx,i);
-      flx(m,ivy,k,j,i) = mxr*wr(ivy,i);
-      flx(m,ivz,k,j,i) = mxr*wr(ivz,i);
+      flx(m,IDN,k,j,i) = wr(IDN,i)*wr(ivx,i);
+      flx(m,ivx,k,j,i) = 0.0;
+      flx(m,ivy,k,j,i) = 0.0;
+      flx(m,ivz,k,j,i) = 0.0;
       ey(m,k,j,i) = -br(iby,i)*wr(ivx,i) + bx(m,k,j,i)*wr(ivy,i);
       ez(m,k,j,i) =  br(ibz,i)*wr(ivx,i) - bx(m,k,j,i)*wr(ivz,i);
     }

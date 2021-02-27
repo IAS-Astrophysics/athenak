@@ -20,13 +20,13 @@
 #include "pgen.hpp"
 
 //----------------------------------------------------------------------------------------
-//! \fn void MeshBlock::ProblemGenerator(ParameterInput *pin)
-//  \brief Problem Generator for advection problems
-//  For Hydro: initializes profiles of transverse components of velocity and scalars
-//  For MHD: initializes profiles of transverse components of velocity, B, and scalars
+//! \fn void MeshBlock::Advection_()
+//  \brief Problem Generator for advection problems. By default, initializes profiles
+//  only in passive scalars (and B for MHD).  Can also set profiles in density by setting
+//  input flag advect_dens=true 
 //   iprob=1: sine wave
 //   iprob=2: square wave
-
+//   iprob=2: Gaussian, square, and triangle
 
 void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
 {
@@ -35,6 +35,7 @@ void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
   int iprob = pin->GetInteger("problem","iproblem");
   Real vel = pin->GetOrAddReal("problem","velocity",1.0);
   Real amp = pin->GetOrAddReal("problem","amplitude",0.1);
+  bool advect_dens = pin->GetOrAddBoolean("problem","advect_dens",false);
 
   // get size of overall domain
   Real length;
@@ -51,7 +52,7 @@ void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
   }
 
   // check for valid problem flag
-  if (iprob <= 0 || iprob > 2) {
+  if (iprob <= 0 || iprob > 3) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
        << std::endl << "problem/iproblem=" << iprob << " not supported" << std::endl;
     exit(EXIT_FAILURE);
@@ -106,21 +107,32 @@ void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
         } else if (iprob == 2) {
           f = 1.0;
           if (r >= 0.25 && r <= 0.5) { f += amp; }
+        } else if (iprob == 3) {
+          f = 1.0;
+          if (r <= 0.45) { f += amp*exp((SQR(r-0.2))/-0.005); }
+          if (r >= 0.45 && r <= 0.65) { f += amp; }
+          if (r >= 0.75 && r <= 0.85) { f += amp*(10.0*r-7.5); }
+          if (r >= 0.85 && r <= 0.95) { f += amp*(9.5-10.0*r); }
+          if (r >= 0.95) { f += amp*exp((SQR(r-1.2))/-0.005); }
         }
 
         // now compute density  momenta, total energy
-        u0(m,IDN,k,j,i) = 1.0;
+        if (advect_dens) {
+          u0(m,IDN,k,j,i) = f;
+        } else {
+          u0(m,IDN,k,j,i) = 1.0;
+        }
         if (flow_dir == 1) {
           u0(m,IM1,k,j,i) = vel;
-          u0(m,IM2,k,j,i) = f;
-          u0(m,IM3,k,j,i) = f;
+          u0(m,IM2,k,j,i) = 0.0;
+          u0(m,IM3,k,j,i) = 0.0;
         } else if (flow_dir == 2) {
-          u0(m,IM1,k,j,i) = f;
+          u0(m,IM1,k,j,i) = 0.0;
           u0(m,IM2,k,j,i) = vel;
-          u0(m,IM3,k,j,i) = f;
+          u0(m,IM3,k,j,i) = 0.0;
           } else {
-          u0(m,IM1,k,j,i) = f;
-          u0(m,IM2,k,j,i) = f;
+          u0(m,IM1,k,j,i) = 0.0;
+          u0(m,IM2,k,j,i) = 0.0;
           u0(m,IM3,k,j,i) = vel;
         } 
         // add passive scalars
@@ -168,16 +180,27 @@ void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
         } else if (iprob == 2) {        
           f = 1.0;
           if (r >= 0.25 && r <= 0.5) { f += amp; }
+        } else if (iprob == 3) {
+          f = 1.0;
+          if (r <= 0.45) { f += amp*exp((SQR(r-0.2))/-0.005); }
+          if (r >= 0.45 && r <= 0.65) { f += amp; }
+          if (r >= 0.75 && r <= 0.85) { f += amp*(10.0*r-7.5); }
+          if (r >= 0.85 && r <= 0.95) { f += amp*(9.5-10.0*r); }
+          if (r >= 0.95) { f += amp*exp((SQR(r-1.2))/-0.005); }
         }
         
         // now compute density  momenta, total energy
-        u0(m,IDN,k,j,i) = 1.0;
+        if (advect_dens) {
+          u0(m,IDN,k,j,i) = f;
+        } else {
+          u0(m,IDN,k,j,i) = 1.0;
+        }
 
         // Flow in x1-direction
         if (flow_dir == 1) {
           u0(m,IM1,k,j,i) = vel;
-          u0(m,IM2,k,j,i) = f;
-          u0(m,IM3,k,j,i) = f;
+          u0(m,IM2,k,j,i) = 1.0;
+          u0(m,IM3,k,j,i) = 1.0;
 
           // initialize By/Bz
           b0.x1f(m,k,j,i) = 0.0;
@@ -189,9 +212,9 @@ void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
 
         // Flow in x2-direction
         } else if (flow_dir == 2) {
-          u0(m,IM1,k,j,i) = f;
+          u0(m,IM1,k,j,i) = 1.0;
           u0(m,IM2,k,j,i) = vel;
-          u0(m,IM3,k,j,i) = f;
+          u0(m,IM3,k,j,i) = 1.0;
 
           // initialize Bx/Bz
           b0.x1f(m,k,j,i) = f;
@@ -203,8 +226,8 @@ void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
 
         // Flow in x3-direction
         } else {
-          u0(m,IM1,k,j,i) = f;
-          u0(m,IM2,k,j,i) = f;
+          u0(m,IM1,k,j,i) = 1.0;
+          u0(m,IM2,k,j,i) = 1.0;
           u0(m,IM3,k,j,i) = vel;
 
           // initialize Bx/By

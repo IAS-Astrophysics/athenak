@@ -14,8 +14,10 @@
 #include "bvals/bvals.hpp"
 
 // forward declarations
-class Driver;
 class EquationOfState;
+class Viscosity;
+class Resistivity;
+class Driver;
 
 // constants that enumerate MHD Riemann Solver options
 enum class MHD_RSolver {advect, llf, hlld, roe};
@@ -32,7 +34,9 @@ class MHD
   ~MHD();
 
   // data
-  EquationOfState *peos;   // object that implements chosen EOS
+  EquationOfState *peos;   // chosen EOS
+  Viscosity *pvisc=nullptr;        // (optional) viscosity
+  Resistivity *presist=nullptr;    // (optional) resistivity
 
   int nmhd;                // number of cons variables (5/4 for adiabatic/isothermal)
   int nscalars;            // number of passive scalars
@@ -69,6 +73,8 @@ class MHD
   TaskStatus MHDSendB(Driver *d, int stage); 
   TaskStatus MHDRecvB(Driver *d, int stage); 
   TaskStatus ConToPrim(Driver *d, int stage);
+  TaskStatus ViscousFluxes(Driver *d, int stage);
+  TaskStatus ResistEMF(Driver *d, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
   TaskStatus MHDApplyPhysicalBCs(Driver* pdrive, int stage);
 

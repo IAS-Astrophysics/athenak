@@ -12,15 +12,17 @@
 #include "mesh.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "diffusion/viscosity.hpp"
+#include "diffusion/resistivity.hpp"
 
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>
 #endif
 
 //----------------------------------------------------------------------------------------
-// \fn Mesh::SelectPhysics()
+// \fn MeshBlockPack::AddPhysicsModules()
 // \brief construct physics modules and tasks lists in this MeshBlockPack, based on which
-// <blocks> are present in the input file.
+// <blocks> are present in the input file.  Called from main().
 
 void MeshBlockPack::AddPhysicsModules(ParameterInput *pin)
 {
@@ -97,10 +99,24 @@ void Mesh::NewTimeStep(const Real tlim)
   // limit increase in timestep to 2x old value
   dt = 2.0*dt;
   if (pmb_pack->phydro != nullptr) {
+    // Hydro timestep
     dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->dtnew) );
+    if (pmb_pack->phydro->pvisc != nullptr) {
+      // Hydro viscosity timestep
+      dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->pvisc->dtnew) );
+    }
   }
   if (pmb_pack->pmhd != nullptr) {
+    // MHD timestep
     dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->dtnew) );
+    if (pmb_pack->pmhd->pvisc != nullptr) {
+      // MHD viscosity timestep
+      dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->pvisc->dtnew) );
+    }
+    if (pmb_pack->pmhd->presist != nullptr) {
+      // MHD resistivity timestep
+      dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->presist->dtnew) );
+    }
   }
 
 #if MPI_PARALLEL_ENABLED
