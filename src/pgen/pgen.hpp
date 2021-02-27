@@ -13,7 +13,7 @@
 
 class ProblemGenerator {
  public:
-  ProblemGenerator(ParameterInput *pin, Mesh *pmesh);
+  ProblemGenerator(ParameterInput *pin, Mesh *pmesh, Driver *pd);
   ~ProblemGenerator() = default;
 
   // data
@@ -24,13 +24,23 @@ class ProblemGenerator {
   // predefined problem generator functions
   void ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin);
   void ShockTube_Rel_(MeshBlockPack *pmbp, ParameterInput *pin);
+  void KH_Rel_(MeshBlockPack *pmbp, ParameterInput *pin);
   void Advection_(MeshBlockPack *pmbp, ParameterInput *pin);
   void LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin);
   void LWImplode_(MeshBlockPack *pmbp, ParameterInput *pin);
   void OrszagTang_(MeshBlockPack *pmbp, ParameterInput *pin);
 
+  // function called after main loop contianing any final problem-specific work
+  // error functions in predefine problem generator
+  void ProblemGeneratorFinalize(ParameterInput *pin, Mesh *pmesh);
+  void LinearWaveErrors_(MeshBlockPack *pmbp, ParameterInput *pin);
+
+  // template for user-specified problem generator
+  void UserProblem(MeshBlockPack *pmbp, ParameterInput *pin);
+
  private:
   Mesh* pmesh_;
+  Driver *pmy_driver_;
 };
 
 #endif // PGEN_PGEN_HPP_

@@ -62,6 +62,7 @@ add_executable(
         pgen/orszag_tang.cpp
         pgen/shock_tube.cpp
         pgen/shock_tube_rel.cpp
+        pgen/kh_sr.cpp
 
         utils/change_rundir.cpp
         utils/show_config.cpp

@@ -54,15 +54,14 @@ void AdiabaticHydroRel::ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Re
   Real &pfloor_ = eos_data.pressure_floor;
   Real ee_min = pfloor_/gm1;
 
-  Real mm_sq_ee_sq_max = 1.0 - 1.0e-12;  // max. of squared momentum over energy
-
     // Parameters
-    int const max_iterations = 15;
+    int const max_iterations = 25;
     Real const tol = 1.0e-12;
-    Real const pgas_uniform_min = 1.0e-12;
-    Real const a_min = 1.0e-12;
     Real const v_sq_max = 1.0 - 1.0e-12;
-    Real const rr_max = 1.0 - 1.0e-12;
+
+
+    // Primitive inversion following Wolfgang Kastaun's algorithm
+    // This references https://arxiv.org/pdf/1306.4953.pdf
 
 
   par_for("hyd_con2prim", DevExeSpace(), 0, (nmb-1), 0, (n3-1), 0, (n2-1), 0, (n1-1),
@@ -81,108 +80,115 @@ void AdiabaticHydroRel::ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Re
       Real& w_p  = prim(m, IPR,k,j,i);
 
       // apply density floor, without changing momentum or energy
-///      u_d = (u_d > dfloor_) ?  u_d : dfloor_;
-//      w_d = u_d;
+      u_d = (u_d > dfloor_) ?  u_d : dfloor_;
+      w_d = u_d;
 
       // apply energy floor
-//      u_e = (u_e > ee_min) ?  u_e : ee_min;
-//      w_p = pfloor_;
+      u_e = (u_e > ee_min) ?  u_e : ee_min;
 
-      Real ee = u_d + u_e;
 
-      Real m2 = SQR(cons(m, IM1,k,j,i)) + SQR(cons(m, IM2,k,j,i)) + SQR(cons(m, IM3,k,j,i));
+      // Recasting all variables
 
-      Real m2_max = mm_sq_ee_sq_max * SQR(ee);
-      if( m2 > m2_max){
-	Real factor = std::sqrt(m2_max/m2);
-	u_m1*= factor;
-	u_m2*= factor;
-	u_m3*= factor;
+      auto q = u_e/u_d; // (C2)
+
+      auto r = sqrt(SQR(cons(m, IM1,k,j,i))    // (C2)
+	          + SQR(cons(m, IM2,k,j,i)) 
+		  + SQR(cons(m, IM3,k,j,i)))/u_d;
+
+      auto kk = r/(1.+q);  // (C2)
+
+      // Enforce lower velocity bound
+      // Obeying this bound combined with a floor on 
+      // p will guarantuee "some" result of the inversion
+
+      kk = fmin(2.* sqrt(v_sq_max)/(1.+v_sq_max), kk); // (C13)
+
+      // Compute bracket
+      auto zm = 0.5*kk/sqrt(1. - 0.25*kk*kk); // (C23)
+      auto zp = k/sqrt(1-kk*kk);             // (C23)
+
+      // Evaluate master function
+      Real fm,fp;      
+      {
+	auto &z = zm;
+	auto &f = fm;
+
+	auto const W = sqrt(1. + z*z); // (C15)
+
+	w_d = u_d/W; // (C15)
+
+	auto eps = W*q - z*r + z*z / (1.+W); // (C16)
+
+	//NOTE: The following generalizes to ANY equation of state
+	eps = fmax(pfloor_/w_d/gm1, eps); // (C18)
+	w_p = w_d*gm1*eps;
+	auto const h = (1. + eps) * ( 1. +  w_p/(w_d*(1.+eps))); // (C1) & (C21)
+
+	f = z - r/h; // (C22)
       }
 
-    bool failed= false;
+      {
+	auto &z = zp;
+	auto &f = fp;
 
+	auto const W = sqrt(1. + z*z); // (C15)
 
+	w_d = u_d/W; // (C15)
 
-    // Calculate functions of conserved quantities
-    Real pgas_min = -ee;
-    pgas_min = fmax(pfloor_, pgas_uniform_min);
+	auto eps = W*q - z*r + z*z / (1.+W); // (C16)
 
-    // Iterate until convergence
-    Real pgas[3];
-    pgas[0] =  pgas_min; // Do we have a previous step
-    int n;
-    for (n = 0; n < max_iterations; ++n) {
-      // Step 1: Calculate cubic coefficients
-      Real a;
-      if (n%3 != 2) {
-	a = ee + pgas[n%3];      // (NH 5.7)
-	a = fmax(a, a_min);
+	//NOTE: The following generalizes to ANY equation of state
+	eps = fmax(pfloor_/w_d/gm1, eps); // (C18)
+	w_p = w_d*gm1*eps;
+	auto const h = (1. + eps) * ( 1. +  w_p/(w_d*(1.+eps))); // (C1) & (C21)
+
+	f = z - r/h; // (C22)
       }
 
-      // Step 2: Calculate correct root of cubic equation
-      Real v_sq;
-      if (n%3 != 2) {
-	v_sq = m2 / SQR(a);                                     // (NH 5.2)
-	v_sq = fmin(fmax(v_sq, 0.0), v_sq_max);
-	Real gamma_sq = 1.0/(1.0-v_sq);                            // (NH 3.1)
-	Real gamma = sqrt(gamma_sq);                          // (NH 3.1)
-	Real wgas = a/gamma_sq;                                    // (NH 5.1)
-	Real rho = u_d/gamma;                                       // (NH 4.5)
-	pgas[(n+1)%3] = gm1/(gm1+1.) * (wgas - rho);  // (NH 4.1)
-	pgas[(n+1)%3] = fmax(pgas[(n+1)%3], pgas_min);
-      }
+      //For simplicity on the GPU, use the false position method
 
-      // Step 3: Check for convergence
-      if (n%3 != 2) {
-	if (pgas[(n+1)%3] > pgas_min && fabs(pgas[(n+1)%3]-pgas[n%3]) < tol) {
-	  break;
+
+      Real z,h;
+      for(int ii=0; ii< max_iterations; ++ii){
+
+	z =  (zm*fp - zp*fm)/(fp-fm);
+
+	auto const W = sqrt(1. + z*z); // (C15)
+
+	w_d = u_d/W; // (C15)
+
+	auto eps = W*q - z*r + z*z / (1.+W); // (C16)
+
+	//NOTE: The following generalizes to ANY equation of state
+	eps = fmax(pfloor_/w_d/gm1, eps); // (C18)
+	w_p = w_d*gm1*eps;
+	h = (1. + eps) * ( 1. +  w_p/(w_d*(1.+eps))); // (C1) & (C21)
+
+	auto f = z - r/h; // (C22)
+
+	// NOTE: both z and f are of order unity
+	if((fabs(zm-zp) < tol ) || (fabs(f) < tol )){
+	    break;
 	}
+
+	if(f * fp < 0.){
+	   zm = zp;
+	   fm = fp;
+	   zp = z;
+	   fp = f;
+	}
+	else{
+	   fm = 0.5*fm;
+	   zp = z;
+	   fp = f;
+	}
+
       }
 
-      // Step 4: Calculate Aitken accelerant and check for convergence
-      if (n%3 == 2) {
-	Real rr = (pgas[2] - pgas[1]) / (pgas[1] - pgas[0]);  // (NH 7.1)
-	if ((rr!=rr) || fabs(rr) > rr_max) {
-	  continue;
-	}
-	pgas[0] = pgas[1] + (pgas[2] - pgas[1]) / (1.0 - rr);  // (NH 7.2)
-	pgas[0] = fmax(pgas[0], pgas_min);
-	if (pgas[0] > pgas_min && fabs(pgas[0]-pgas[2]) < tol) {
-	  break;
-	}
-      }
-    }
-
-    // Step 5: Set primitives
-    if (n == max_iterations) {
-      failed = true;
-    }
-    w_p = pgas[(n+1)%3];
-//    if (!std::isfinite(w_p)) {
-//      failed=true;
-//    }
-    Real a = ee + w_p;                   // (NH 5.7)
-    a = fmax(a, a_min);
-    Real v_sq = m2 / SQR(a);                      // (NH 5.2)
-    v_sq = fmin(fmax(v_sq, 0.0), v_sq_max);
-    Real gamma_sq = 1.0/(1.0-v_sq);                  // (NH 3.1)
-    Real gamma = std::sqrt(gamma_sq);                // (NH 3.1)
-    w_d = u_d/gamma;                      // (NH 4.5)
-//    if (!std::isfinite(w_d)) {
-//      failed=true;
-//    }
-    w_vx = gamma * u_m1 / a;           // (NH 4.6)
-    w_vy = gamma * u_m2 / a;           // (NH 4.6)
-    w_vz = gamma * u_m3 / a;           // (NH 4.6)
-
-//    if (!std::isfinite(w_vx) || !std::isfinite(w_vy) || !std::isfinite(w_vz)) {
-//      failed = true;
-//    }
-
-      // apply pressure floor, correct total energy
-//      u_e = (w_p > pfloor_) ?  u_e : ((pfloor_/gm1) + e_k);
-//      w_p = (w_p > pfloor_) ?  w_p : pfloor_;
+    auto const conv = 1./(sqrt(1. + z*z)*h*u_d); // (C26)
+    w_vx = conv * u_m1;           // (C26)
+    w_vy = conv * u_m2;           // (C26)
+    w_vz = conv * u_m3;           // (C26)
 
 
     // TODO error handling
@@ -194,6 +200,7 @@ void AdiabaticHydroRel::ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Re
 	//FIXME ERM: Only ideal fluid for now
         Real wgas = w_d + gamma_adi / gm1 *w_p;
 	
+	auto gamma = sqrt(1. +z*z);
         cons(m,IDN,k,j,i) = w_d * gamma;
         cons(m,IEN,k,j,i) = wgas*gamma*gamma - w_p - w_d * gamma; //rho_eps * gamma_sq + (w_p + cons(IDN,k,j,i)/(gamma+1.))*(v_sq*gamma_sq);
         cons(m,IM1,k,j,i) = wgas * gamma * w_vx;
