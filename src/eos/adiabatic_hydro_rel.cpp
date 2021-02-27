@@ -185,7 +185,7 @@ void AdiabaticHydroRel::ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Re
 
       }
 
-    auto const conv = 1./(sqrt(1. + z*z)*h*u_d); // (C26)
+    auto const conv = 1./(h*u_d); // (C26)
     w_vx = conv * u_m1;           // (C26)
     w_vy = conv * u_m2;           // (C26)
     w_vz = conv * u_m3;           // (C26)
