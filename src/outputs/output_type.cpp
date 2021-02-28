@@ -234,12 +234,14 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
       break;
 
     // Load hydro forcing
+/****
     case OutputVariable::hydro_force:
       if (pm->pmb_pack->phydro == nullptr) ErrHydroOutput(out_params.block_name);
       outvars.emplace_back("force1",0,&(pm->pmb_pack->phydro->hsrc->force));
       outvars.emplace_back("force2",1,&(pm->pmb_pack->phydro->hsrc->force));
       outvars.emplace_back("force3",2,&(pm->pmb_pack->phydro->hsrc->force));
       break;
+*****/
 
     default:
       break;

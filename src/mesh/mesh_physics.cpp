@@ -57,9 +57,9 @@ void MeshBlockPack::AddPhysicsModules(ParameterInput *pin)
   // add Hydro tasks
   TaskID none(0);
   if (phydro != nullptr) {
-    phydro->HydroStageStartTasks(tl_stagestart, none);
-    phydro->HydroStageRunTasks(tl_stagerun, none);
-    phydro->HydroStageEndTasks(tl_stageend, none);
+    phydro->AssembleStageStartTasks(tl_stagestart, none);
+    phydro->AssembleStageRunTasks(tl_stagerun, none);
+    phydro->AssembleStageEndTasks(tl_stageend, none);
   }
 
   // add MHD tasks to end of Hydro tasks (if any have been added)

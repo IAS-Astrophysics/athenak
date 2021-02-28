@@ -13,7 +13,7 @@
 //  Design is based on EOS class
 
 #include "athena.hpp"
-#include "mesh/meshblock.hpp"
+#include "mesh/mesh.hpp"
 #include "parameter_input.hpp"
 
 //----------------------------------------------------------------------------------------

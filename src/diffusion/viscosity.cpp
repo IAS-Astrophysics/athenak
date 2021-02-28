@@ -9,8 +9,6 @@
 #include <limits>
 
 #include "athena.hpp"
-#include "mesh/mesh.hpp"
-#include "parameter_input.hpp"
 #include "viscosity.hpp"
 
 //----------------------------------------------------------------------------------------

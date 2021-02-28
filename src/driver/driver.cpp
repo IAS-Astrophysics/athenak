@@ -138,12 +138,12 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
   hydro::Hydro *phydro = pmesh->pmb_pack->phydro;
   if (phydro != nullptr) {
     // following functions return a TaskStatus, but it is ignored so cast to (void)
-    (void) phydro->HydroInitRecv(this, 0);
-    (void) phydro->HydroSendU(this, 0);
-    (void) phydro->HydroClearSend(this, 0);
-    (void) phydro->HydroClearRecv(this, 0);
-    (void) phydro->HydroRecvU(this, 0);
-    (void) phydro->HydroApplyPhysicalBCs(this, 0);
+    (void) phydro->InitRecv(this, 0);
+    (void) phydro->SendU(this, 0);
+    (void) phydro->ClearSend(this, 0);
+    (void) phydro->ClearRecv(this, 0);
+    (void) phydro->RecvU(this, 0);
+    (void) phydro->ApplyPhysicalBCs(this, 0);
 
     // Set primitive variables in initial conditions everywhere
     (void) phydro->ConToPrim(this, 0);

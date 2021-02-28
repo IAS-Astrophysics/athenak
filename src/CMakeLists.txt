@@ -30,11 +30,12 @@ add_executable(
         hydro/hydro.cpp
         hydro/hydro_fluxes.cpp
         hydro/hydro_newdt.cpp
+        hydro/hydro_tasks.cpp
         hydro/hydro_update.cpp
-        hydro/hydro_source_terms.cpp
         hydro/bvals/apply_physical_bcs.cpp
         hydro/bvals/outflow_hydro.cpp
         hydro/bvals/reflect_hydro.cpp
+        hydro/srcterms/hydro_srcterms.cpp
 
         mesh/mesh_physics.cpp
         mesh/load_balance.cpp
@@ -66,7 +67,6 @@ add_executable(
         pgen/lw_implode.cpp
         pgen/orszag_tang.cpp
         pgen/shock_tube.cpp
-        pgen/turb.cpp
 
         utils/change_rundir.cpp
         utils/show_config.cpp

@@ -38,8 +38,6 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, Driver *pd)
     pgen_func_ = &ProblemGenerator::LWImplode_;
   } else if (pgen_fun_name.compare("orszag_tang") == 0) {
     pgen_func_ = &ProblemGenerator::OrszagTang_;
-  } else if (pgen_fun_name.compare("turb") == 0) {
-    pgen_func_ = &ProblemGenerator::Turb_;
 
   // else, name not set on command line or input file, print warning and quit
   } else {
