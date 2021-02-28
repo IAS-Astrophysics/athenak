@@ -44,7 +44,7 @@ void Hydro::AssembleStageRunTasks(TaskList &tl, TaskID start)
   auto visc_fluxes = tl.AddTask(&Hydro::ViscousFluxes, this, hydro_fluxes);
   auto hydro_update = tl.AddTask(&Hydro::Update, this, visc_fluxes);
   auto hydro_src = tl.AddTask(&Hydro::ApplyUnsplitSourceTerms, this, hydro_update);
-  auto hydro_send = tl.AddTask(&Hydro::SendU, this, hydro_src); // hydro_update);
+  auto hydro_send = tl.AddTask(&Hydro::SendU, this, hydro_src);
   auto hydro_recv = tl.AddTask(&Hydro::RecvU, this, hydro_send);
   auto hydro_phybcs = tl.AddTask(&Hydro::ApplyPhysicalBCs, this, hydro_recv);
   auto hydro_con2prim = tl.AddTask(&Hydro::ConToPrim, this, hydro_phybcs);

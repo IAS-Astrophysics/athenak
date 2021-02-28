@@ -26,64 +26,55 @@
 
 void MeshBlockPack::AddPhysicsModules(ParameterInput *pin)
 {
-  // Cycle through available physics modules, and construct those requested in input file.
-  // Also check that at least ONE is requested and initialized.
-
   int nphysics = 0;
-  // Create Hydro physics module if <hydro> block exists in input file
+  TaskID none(0);
+
+  // Create Hydro physics module and Tasks if <hydro> block exists in input file
   if (pin->DoesBlockExist("hydro")) {
     phydro = new hydro::Hydro(this, pin);   // construct new Hydro object
+    phydro->AssembleStageStartTasks(tl_stagestart, none);
+    phydro->AssembleStageRunTasks(tl_stagerun, none);
+    phydro->AssembleStageEndTasks(tl_stageend, none);
     nphysics++;
   } else {
     phydro = nullptr;
   }
 
-  // Create MHD physics module if <mhd> block exists in input file
+  // Create MHD physics module and Tasks if <mhd> block exists in input file
   if (pin->DoesBlockExist("mhd")) {
     pmhd = new mhd::MHD(this, pin);   // construct new MHD object
     nphysics++;
+
+    if (tl_stagestart.Empty()) {
+      pmhd->AssembleStageStartTasks(tl_stagestart, none);
+    } else {
+      TaskID last = tl_stagestart.GetIDLastTask();
+      pmhd->AssembleStageStartTasks(tl_stagestart, last);
+    }
+
+    if (tl_stagerun.Empty()) {
+      pmhd->AssembleStageRunTasks(tl_stagerun, none);
+    } else {
+      TaskID last = tl_stagerun.GetIDLastTask();
+      pmhd->AssembleStageRunTasks(tl_stagerun, last);
+    }
+
+    if (tl_stageend.Empty()) {
+      pmhd->AssembleStageEndTasks(tl_stageend, none);
+    } else {
+      TaskID last = tl_stageend.GetIDLastTask();
+      pmhd->AssembleStageEndTasks(tl_stageend, last);
+    }
   } else {
     pmhd = nullptr;
   }
 
+  // Check that at least ONE is requested and initialized.
   // Error if there are no physics blocks in the input file.
   if (nphysics == 0) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
         << "At least one physics module must be specified in input file." << std::endl;
     std::exit(EXIT_FAILURE);
-  }
-
-  // Create TaskLists for Start, Run, and End of each stage of integrator
-  // add Hydro tasks
-  TaskID none(0);
-  if (phydro != nullptr) {
-    phydro->AssembleStageStartTasks(tl_stagestart, none);
-    phydro->AssembleStageRunTasks(tl_stagerun, none);
-    phydro->AssembleStageEndTasks(tl_stageend, none);
-  }
-
-  // add MHD tasks to end of Hydro tasks (if any have been added)
-  if (pmhd != nullptr) {
-    if (tl_stagestart.Empty()) {
-      pmhd->MHDStageStartTasks(tl_stagestart, none);
-    } else {
-      TaskID last = tl_stagestart.GetIDLastTask();
-      pmhd->MHDStageStartTasks(tl_stagestart, last);
-    }
-
-    if (tl_stagerun.Empty()) {
-      pmhd->MHDStageRunTasks(tl_stagerun, none);
-    } else {
-      TaskID last = tl_stagerun.GetIDLastTask();
-      pmhd->MHDStageRunTasks(tl_stagerun, last);
-    }
-
-    if (tl_stageend.Empty()) {
-      pmhd->MHDStageEndTasks(tl_stageend, none);
-    } else {
-      TaskID last = tl_stageend.GetIDLastTask();
-      pmhd->MHDStageEndTasks(tl_stageend, last);
-    }
   }
 
   return;

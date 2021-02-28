@@ -152,18 +152,17 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
   // Initialize MHD: ghost zones and primitive variables (everywhere)
   // Note this requires communicating BOTH u and B
   mhd::MHD *pmhd = pmesh->pmb_pack->pmhd;
-std::cout << "construct mhd" << std::endl;
   if (pmhd != nullptr) {
     // following functions return a TaskStatus, but it is ignored so cast to (void)
-    (void) pmhd->MHDInitRecv(this, 0);
-    (void) pmhd->MHDInitRecv(this, 0);
-    (void) pmhd->MHDSendU(this, 0);
-    (void) pmhd->MHDSendB(this, 0);
-    (void) pmhd->MHDClearSend(this, 0);
-    (void) pmhd->MHDClearRecv(this, 0);
-    (void) pmhd->MHDRecvU(this, 0);
-    (void) pmhd->MHDRecvB(this, 0);
-    (void) pmhd->MHDApplyPhysicalBCs(this, 0);
+    (void) pmhd->InitRecv(this, 0);
+    (void) pmhd->InitRecv(this, 0);
+    (void) pmhd->SendU(this, 0);
+    (void) pmhd->SendB(this, 0);
+    (void) pmhd->ClearSend(this, 0);
+    (void) pmhd->ClearRecv(this, 0);
+    (void) pmhd->RecvU(this, 0);
+    (void) pmhd->RecvB(this, 0);
+    (void) pmhd->ApplyPhysicalBCs(this, 0);
 
     // Set primitive variables in initial conditions everywhere 
     (void) pmhd->ConToPrim(this, 0);
@@ -360,5 +359,3 @@ void Driver::OutputCycleDiagnostics(Mesh *pm)
   }
   return;
 }
-
-

@@ -29,7 +29,6 @@ namespace hydro {
 
 class Hydro
 {
- friend class HydroSourceTerm; // might be not necessary
  public:
   Hydro(MeshBlockPack *ppack, ParameterInput *pin);
   ~Hydro();

@@ -48,11 +48,13 @@ add_executable(
         mhd/mhd_corner_e.cpp
         mhd/mhd_ct.cpp
         mhd/mhd_fluxes.cpp
-        mhd/mhd_update.cpp
         mhd/mhd_newdt.cpp
+        mhd/mhd_tasks.cpp
+        mhd/mhd_update.cpp
         mhd/bvals/apply_physical_bcs.cpp
         mhd/bvals/outflow_mhd.cpp
         mhd/bvals/reflect_mhd.cpp
+        mhd/srcterms/mhd_srcterms.cpp
 
         outputs/io_wrapper.cpp
         outputs/outputs.cpp

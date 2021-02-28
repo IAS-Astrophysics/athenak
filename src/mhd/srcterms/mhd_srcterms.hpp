@@ -1,31 +1,31 @@
-#ifndef HYDRO_SRCTERMS_HYDRO_SRCTERMS_HPP_
-#define HYDRO_SRCTERMS_HYDRO_SRCTERMS_HPP_
+#ifndef MHD_SRCTERMS_MHD_SRCTERMS_HPP_
+#define MHD_SRCTERMS_MHD_SRCTERMS_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file hydro_srcterms.hpp
-//! \brief defines class HydroSourceTerms
+//! \file mhd_srcterms.hpp
+//! \brief defines class MHDSourceTerms
 //!
-//! Contains data and functions that implement various physical source terms in Hydro
+//! Contains data and functions that implement various physical source terms in MHD
 //! equations of motion.
 
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
 #include "parameter_input.hpp"
 
-namespace hydro {
+namespace mhd {
 
 //----------------------------------------------------------------------------------------
-//! \class HydroSourceTerms
-//! \brief data and functions for physical source terms in hydro
+//! \class MHDSourceTerms
+//! \brief data and functions for physical source terms in mhd
 
-class HydroSourceTerms
+class MHDSourceTerms
 {
  public:
-  HydroSourceTerms(MeshBlockPack *pp, ParameterInput *pin);
-  ~HydroSourceTerms();
+  MHDSourceTerms(MeshBlockPack *pp, ParameterInput *pin);
+  ~MHDSourceTerms();
 
   // accessors
 
@@ -39,5 +39,5 @@ class HydroSourceTerms
   MeshBlockPack* pmy_pack;
 };
 
-} // namespace hydro
-#endif // HYDRO_SRCTERMS_HYDRO_SRCTERMS_HPP_
+} // namespace mhd
+#endif // MHD_SRCTERMS_MHD_SRCTERMS_HPP_
