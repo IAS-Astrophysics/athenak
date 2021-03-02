@@ -68,6 +68,7 @@ add_executable(
         pgen/orszag_tang.cpp
         pgen/shock_tube.cpp
         pgen/turb.cpp
+        pgen/current_sheet.cpp
 
         srcterms/srcterms.cpp
         srcterms/turb_driver.cpp
