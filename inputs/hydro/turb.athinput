@@ -70,5 +70,5 @@ dt         = 10          # time increment between outputs
 
 <output3>
 file_type  = vtk         # legacy VTK output
-variable   = hydro_force # variables to be output
+variable   = turb_force # variables to be output
 dt         = 10          # time increment between outputs
