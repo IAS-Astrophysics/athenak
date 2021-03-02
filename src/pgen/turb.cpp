@@ -5,8 +5,6 @@
 //========================================================================================
 //! \file turb.cpp
 //  \brief Problem generator for turbulence
-//
-//========================================================================================
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
@@ -20,12 +18,12 @@
 //! \fn void MeshBlock::Turb_()
 //  \brief Problem Generator for turbulence
 
-void ProblemGenerator::Turb_(MeshBlockPack *pmbp, ParameterInput *pin)
+void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
 {
-  if (pmbp->phydro == nullptr) {
+  if (pmbp->phydro == nullptr and pmbp->pmhd == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "Turbulence problem generator can only be run in Hydro, but no <hydro> block "
-              << "in input file" << std::endl;
+       << "Turbulence problem generator can only be run with Hydro and/or MHD, but no "
+       << "<hydro> or <mhd> block in input file" << std::endl;
     exit(EXIT_FAILURE);
   }
 
@@ -35,7 +33,6 @@ void ProblemGenerator::Turb_(MeshBlockPack *pmbp, ParameterInput *pin)
   int &js = pmbp->mb_cells.js, &je = pmbp->mb_cells.je;
   int &ks = pmbp->mb_cells.ks, &ke = pmbp->mb_cells.ke;
   auto &u0 = pmbp->phydro->u0;
-
 
   // Set initial conditions
   par_for("pgen_turb", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
@@ -48,8 +45,6 @@ void ProblemGenerator::Turb_(MeshBlockPack *pmbp, ParameterInput *pin)
       u0(m,IEN,k,j,i) = 1.0/gm1;
     }
   );
-
-  pmbp->phydro->hsrc->first_time_ = true;
 
   return;
 }

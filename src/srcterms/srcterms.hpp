@@ -29,7 +29,7 @@ class SourceTerms
   // accessors
 
   // data
-  bool no_unsplit_terms, no_split_terms;   // flags as to whether source terms exist
+  bool operatorsplit_terms, stagerun_terms;   // flags as to whether source terms exist
 
   // functions
   void ApplySrcTermsStageRunTL(DvceArray5D<Real> &u);

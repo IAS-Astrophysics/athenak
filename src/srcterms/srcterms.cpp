@@ -16,10 +16,10 @@
 // constructor, parses input file and initializes data structures and parameters
 
 SourceTerms::SourceTerms(MeshBlockPack *pp, ParameterInput *pin) :
-  pmy_pack(pp), no_unsplit_terms(true), no_split_terms(true)
+  pmy_pack(pp), operatorsplit_terms(false), stagerun_terms(false)
 {
   if (pp->pturb_driver != nullptr) {
-    no_unsplit_terms = false;
+    operatorsplit_terms = true;
   }
 }
 

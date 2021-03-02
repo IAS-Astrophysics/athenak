@@ -26,7 +26,7 @@ enum class OutputVariable {undef=-1,
   mhd_u_d,   mhd_u_m1,   mhd_u_m2,   mhd_u_m3,   mhd_u_e,   mhd_u,
   mhd_w_d,   mhd_w_vx,   mhd_w_vy,   mhd_w_vz,   mhd_w_p,   mhd_w,
   mhd_bcc1,  mhd_bcc2,   mhd_bcc3,   mhd_bcc,    mhd_b_x1f, mhd_b_x2f, mhd_b_x3f,
-  hydro_force};
+  turb_force};
 
 // forward declarations, and two utility function prototypes
 class Mesh;
@@ -120,6 +120,7 @@ class OutputType
   virtual void WriteOutputFile(Mesh *pm, ParameterInput *pin) = 0;
   void ErrHydroOutput(std::string block);
   void ErrMHDOutput(std::string block);
+  void ErrForceOutput(std::string block);
 
  protected:
   HostArray5D<Real> outdata;       // container for data on host with dims (n,m,k,j,i)

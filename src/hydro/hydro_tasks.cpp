@@ -75,7 +75,7 @@ void Hydro::AssembleStageEndTasks(TaskList &tl, TaskID start)
   
 void Hydro::AssembleOperatorSplitTasks(TaskList &tl, TaskID start)
 { 
-  if (psrc->no_split_terms) {return;}
+  if (not (psrc->operatorsplit_terms)) {return;}
   auto split_srcterms = tl.AddTask(&Hydro::UpdateOperatorSplitSourceTerms, this, start);
   return;
 }
@@ -229,7 +229,7 @@ TaskStatus Hydro::ViscousFluxes(Driver *pdrive, int stage)
 TaskStatus Hydro::UpdateUnsplitSourceTerms(Driver *pdrive, int stage)
 {
   // return if no source terms included
-  if (psrc->no_unsplit_terms) {return TaskStatus::complete;}
+  if (not (psrc->stagerun_terms)) {return TaskStatus::complete;}
 
   // apply source terms update to conserved variables
   psrc->ApplySrcTermsStageRunTL(u0);

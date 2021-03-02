@@ -258,8 +258,8 @@ OutputVariable GetOutputVariable(const std::string& input_string)
   } else if (input_string == "mhd_bcc") {
     return OutputVariable::mhd_bcc;
 
-  } else if (input_string == "hydro_force") {
-    return OutputVariable::hydro_force;
+  } else if (input_string == "turb_force") {
+    return OutputVariable::turb_force;
 
   // invalid variable requested
   } else {
@@ -350,8 +350,9 @@ std::string GetOutputVariableString(OutputVariable input_flag)
     case OutputVariable::mhd_bcc:
       return "mhd_bcc";
 
-    case OutputVariable::hydro_force:
-      return "hydro_force";
+    // cell centered forcing added in turbulent driving problems
+    case OutputVariable::turb_force:
+      return "turb_force";
 
     // undefined or unknown variable names
     case OutputVariable::undef:

@@ -81,7 +81,7 @@ void MHD::AssembleStageEndTasks(TaskList &tl, TaskID start)
 
 void MHD::AssembleOperatorSplitTasks(TaskList &tl, TaskID start)
 {
-  if (psrc->no_split_terms) {return;}
+  if (not (psrc->operatorsplit_terms)) {return;}
   auto split_srcterms = tl.AddTask(&MHD::UpdateOperatorSplitSourceTerms, this, start);
   return;
 }
@@ -290,7 +290,7 @@ TaskStatus MHD::ResistEMF(Driver *pdrive, int stage)
 TaskStatus MHD::UpdateUnsplitSourceTerms(Driver *pdrive, int stage)
 {
   // return if no source terms included
-  if (psrc->no_unsplit_terms) {return TaskStatus::complete;}
+  if (not (psrc->stagerun_terms)) {return TaskStatus::complete;}
 
   // apply source terms update to conserved variables
   psrc->ApplySrcTermsStageRunTL(u0);
