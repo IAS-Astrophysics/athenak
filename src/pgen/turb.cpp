@@ -18,7 +18,7 @@
 //! \fn void MeshBlock::Turb_()
 //  \brief Problem Generator for turbulence
 
-void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
+void ProblemGenerator::Turb_(MeshBlockPack *pmbp, ParameterInput *pin)
 {
   if (pmbp->phydro == nullptr and pmbp->pmhd == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl

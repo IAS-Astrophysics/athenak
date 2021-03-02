@@ -22,6 +22,7 @@
 TurbulenceDriver::TurbulenceDriver(MeshBlockPack *pp, ParameterInput *pin) :
   pmy_pack(pp),
   force("force",1,1,1,1,1),
+  force_tmp("force_tmp",1,1,1,1,1),
   x1sin("x1sin",1,1,1),
   x1cos("x1cos",1,1,1),
   x2sin("x2sin",1,1,1),
@@ -31,9 +32,6 @@ TurbulenceDriver::TurbulenceDriver(MeshBlockPack *pp, ParameterInput *pin) :
   amp1("amp1",1,1,1),
   amp2("amp2",1,1,1),
   amp3("amp3",1,1,1),
-  amp1_tmp("amp1_tmp",1,1,1),
-  amp2_tmp("amp2_tmp",1,1,1),
-  amp3_tmp("amp3_tmp",1,1,1),
   seeds("seeds",1,1)
 {
   // allocate memory for force array
@@ -44,6 +42,7 @@ TurbulenceDriver::TurbulenceDriver(MeshBlockPack *pp, ParameterInput *pin) :
   int ncells3 = (ncells.nx3 > 1)? (ncells.nx3 + 2*(ncells.ng)) : 1;
 
   Kokkos::realloc(force, nmb, 3, ncells3, ncells2, ncells1);
+  Kokkos::realloc(force_tmp, nmb, 3, ncells3, ncells2, ncells1);
 
   // cut-off wavenumbers, kmin and kmax
   nlow = pin->GetOrAddInteger("forcing","nlow",1);
@@ -78,13 +77,17 @@ TurbulenceDriver::TurbulenceDriver(MeshBlockPack *pp, ParameterInput *pin) :
   Kokkos::realloc(amp1, nmb, ntot, nwave);
   Kokkos::realloc(amp2, nmb, ntot, nwave);
   Kokkos::realloc(amp3, nmb, ntot, nwave);
-  Kokkos::realloc(amp1_tmp, nmb, ntot, nwave);
-  Kokkos::realloc(amp2_tmp, nmb, ntot, nwave);
-  Kokkos::realloc(amp3_tmp, nmb, ntot, nwave);
 
   Kokkos::realloc(seeds, nmb, ntot);
 
   // initialize amp to zero, and seeds
+  par_for("force_init", DevExeSpace(), 0, nmb-1, 0, 2, 0, ncells3-1, 0, ncells2-1, 
+    0, ncells1-1, KOKKOS_LAMBDA(int m, int n, int k, int j, int i)
+    {
+      force(m,n,k,j,i) = 0.0;
+      force_tmp(m,n,k,j,i) = 0.0;
+    }
+  );
   par_for("amp_init", DevExeSpace(), 0, nmb-1, 0, ntot-1, 0, nwave-1,
     KOKKOS_LAMBDA(int m, int n, int nw)
     {
@@ -129,8 +132,15 @@ TurbulenceDriver::TurbulenceDriver(MeshBlockPack *pp, ParameterInput *pin) :
       int nk2 = (n - nk1*nw23)/nw2;
       int nk3 = n - nk1*nw23 - nk2*nw2;
       Real kx = nk1*dkx;
-        
-      Real x1v = CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
+      Real x1vs = CellCenterX(0, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
+      Real x1v;
+      if (ncells1 > 1) {
+        Real dx1 = CellCenterX(1, nx1, size.x1min.d_view(m), size.x1max.d_view(m)) - x1vs;
+        x1v = (i-is)*dx1;
+      } else {
+        x1v = x1vs;
+      }
+      
       x1sin(m,n,i) = sin(kx*x1v);
       x1cos(m,n,i) = cos(kx*x1v);
     }
@@ -145,8 +155,15 @@ TurbulenceDriver::TurbulenceDriver(MeshBlockPack *pp, ParameterInput *pin) :
       int nk2 = (n - nk1*nw23)/nw2;
       int nk3 = n - nk1*nw23 - nk2*nw2;
       Real ky = nk2*dky;
-        
-      Real x2v = CellCenterX(j-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
+      Real x2vs = CellCenterX(0, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
+      Real x2v;
+      if (ncells2 > 1) {
+        Real dx2 = CellCenterX(1, nx2, size.x2min.d_view(m), size.x2max.d_view(m)) - x2vs;
+        x2v = (j-js)*dx2;
+      } else {
+        x2v = x2vs;
+      }       
+
       x2sin(m,n,j) = sin(ky*x2v);
       x2cos(m,n,j) = cos(ky*x2v);
     }
@@ -161,8 +178,15 @@ TurbulenceDriver::TurbulenceDriver(MeshBlockPack *pp, ParameterInput *pin) :
       int nk2 = (n - nk1*nw23)/nw2;
       int nk3 = n - nk1*nw23 - nk2*nw2;
       Real kz = nk3*dkz;
-        
-      Real x3v = CellCenterX(k-ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
+      Real x3vs = CellCenterX(0, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
+      Real x3v;
+      if (ncells3 > 1) {
+        Real dx3 = CellCenterX(1, nx3, size.x3min.d_view(m), size.x3max.d_view(m)) - x3vs;
+        x3v = (k-ks)*dx3;
+      } else {
+        x3v = x3vs;
+      }      
+  
       x3sin(m,n,k) = sin(kz*x3v);
       x3cos(m,n,k) = cos(kz*x3v);
     }
@@ -188,6 +212,7 @@ void TurbulenceDriver::ApplyForcing(DvceArray5D<Real> &u)
   int &nx2 = pmy_pack->mb_cells.nx2;
   int &nx3 = pmy_pack->mb_cells.nx3;
   auto &ncells = pmy_pack->mb_cells;
+  int ncells1 = ncells.nx1 + 2*(ncells.ng);
   int ncells2 = (ncells.nx2 > 1)? (ncells.nx2 + 2*(ncells.ng)) : 1;
   int ncells3 = (ncells.nx3 > 1)? (ncells.nx3 + 2*(ncells.ng)) : 1;
 
@@ -199,25 +224,18 @@ void TurbulenceDriver::ApplyForcing(DvceArray5D<Real> &u)
   Real dkz = 2.0*M_PI/lz;
 
   int &nmb = pmy_pack->nmb_thispack;
-  auto amp1_tmp_ = amp1_tmp;
-  auto amp2_tmp_ = amp2_tmp;
-  auto amp3_tmp_ = amp3_tmp;
-  par_for("amp_tmp_init", DevExeSpace(), 0, nmb-1, 0, ntot-1, 0, nwave-1,
-    KOKKOS_LAMBDA(int m, int n, int nw)
-    {
-      amp1_tmp_(m,n,nw) = 0.0;
-      amp2_tmp_(m,n,nw) = 0.0;
-      amp3_tmp_(m,n,nw) = 0.0;
-    }
-  );
 
-  auto force_ = force;
-  par_for("forcing_init", DevExeSpace(), 0, nmb-1, ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i)
+  auto amp1_ = amp1;
+  auto amp2_ = amp2;
+  auto amp3_ = amp3;
+
+  auto force_tmp_ = force_tmp;
+  par_for("forcing_init", DevExeSpace(), 0, nmb-1, 0, ncells3-1, 0, ncells2-1, 
+    0, ncells1-1, KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
-      force_(m,0,k,j,i) = 0.0;
-      force_(m,1,k,j,i) = 0.0;
-      force_(m,2,k,j,i) = 0.0;
+      force_tmp_(m,0,k,j,i) = 0.0;
+      force_tmp_(m,1,k,j,i) = 0.0;
+      force_tmp_(m,2,k,j,i) = 0.0;
     }
   );
 
@@ -265,141 +283,122 @@ void TurbulenceDriver::ApplyForcing(DvceArray5D<Real> &u)
         if(nk3 != 0){
           ikz = 1.0/(dkz*((Real) nk3));
 
-          amp1_tmp_(m,n,0) = RanGaussian(&(seeds_(m,n)));
-          amp1_tmp_(m,n,1) = RanGaussian(&(seeds_(m,n)));
-          amp1_tmp_(m,n,2) = (nk2 == 0)             ? 0.0 :RanGaussian(&(seeds_(m,n)));
-          amp1_tmp_(m,n,3) = (nk2 == 0)             ? 0.0 :RanGaussian(&(seeds_(m,n)));
-          amp1_tmp_(m,n,4) = (nk1 == 0)             ? 0.0 :RanGaussian(&(seeds_(m,n)));
-          amp1_tmp_(m,n,5) = (nk1 == 0)             ? 0.0 :RanGaussian(&(seeds_(m,n)));
-          amp1_tmp_(m,n,6) = (nk1 == 0 || nk2 == 0) ? 0.0 :RanGaussian(&(seeds_(m,n)));
-          amp1_tmp_(m,n,7) = (nk1 == 0 || nk2 == 0) ? 0.0 :RanGaussian(&(seeds_(m,n)));
+          amp1_(m,n,0) = RanGaussian(&(seeds_(m,n)));
+          amp1_(m,n,1) = RanGaussian(&(seeds_(m,n)));
+          amp1_(m,n,2) = (nk2 == 0)             ? 0.0 :RanGaussian(&(seeds_(m,n)));
+          amp1_(m,n,3) = (nk2 == 0)             ? 0.0 :RanGaussian(&(seeds_(m,n)));
+          amp1_(m,n,4) = (nk1 == 0)             ? 0.0 :RanGaussian(&(seeds_(m,n)));
+          amp1_(m,n,5) = (nk1 == 0)             ? 0.0 :RanGaussian(&(seeds_(m,n)));
+          amp1_(m,n,6) = (nk1 == 0 || nk2 == 0) ? 0.0 :RanGaussian(&(seeds_(m,n)));
+          amp1_(m,n,7) = (nk1 == 0 || nk2 == 0) ? 0.0 :RanGaussian(&(seeds_(m,n)));
 
-          amp2_tmp_(m,n,0) = RanGaussian(&(seeds_(m,n)));
-          amp2_tmp_(m,n,1) = RanGaussian(&(seeds_(m,n)));
-          amp2_tmp_(m,n,2) = (nk2 == 0)             ? 0.0 :RanGaussian(&(seeds_(m,n)));
-          amp2_tmp_(m,n,3) = (nk2 == 0)             ? 0.0 :RanGaussian(&(seeds_(m,n)));
-          amp2_tmp_(m,n,4) = (nk1 == 0)             ? 0.0 :RanGaussian(&(seeds_(m,n)));
-          amp2_tmp_(m,n,5) = (nk1 == 0)             ? 0.0 :RanGaussian(&(seeds_(m,n)));
-          amp2_tmp_(m,n,6) = (nk1 == 0 || nk2 == 0) ? 0.0 :RanGaussian(&(seeds_(m,n)));
-          amp2_tmp_(m,n,7) = (nk1 == 0 || nk2 == 0) ? 0.0 :RanGaussian(&(seeds_(m,n)));
+          amp2_(m,n,0) = RanGaussian(&(seeds_(m,n)));
+          amp2_(m,n,1) = RanGaussian(&(seeds_(m,n)));
+          amp2_(m,n,2) = (nk2 == 0)             ? 0.0 :RanGaussian(&(seeds_(m,n)));
+          amp2_(m,n,3) = (nk2 == 0)             ? 0.0 :RanGaussian(&(seeds_(m,n)));
+          amp2_(m,n,4) = (nk1 == 0)             ? 0.0 :RanGaussian(&(seeds_(m,n)));
+          amp2_(m,n,5) = (nk1 == 0)             ? 0.0 :RanGaussian(&(seeds_(m,n)));
+          amp2_(m,n,6) = (nk1 == 0 || nk2 == 0) ? 0.0 :RanGaussian(&(seeds_(m,n)));
+          amp2_(m,n,7) = (nk1 == 0 || nk2 == 0) ? 0.0 :RanGaussian(&(seeds_(m,n)));
 
           // incompressibility
-          amp3_tmp_(m,n,0) =  ikz*( kx*amp1_tmp_(m,n,5) + ky*amp2_tmp_(m,n,3));
-          amp3_tmp_(m,n,1) = -ikz*( kx*amp1_tmp_(m,n,4) + ky*amp2_tmp_(m,n,2));
-          amp3_tmp_(m,n,2) =  ikz*( kx*amp1_tmp_(m,n,7) - ky*amp2_tmp_(m,n,1));
-          amp3_tmp_(m,n,3) =  ikz*(-kx*amp1_tmp_(m,n,6) + ky*amp2_tmp_(m,n,0));
-          amp3_tmp_(m,n,4) =  ikz*(-kx*amp1_tmp_(m,n,1) + ky*amp2_tmp_(m,n,7));
-          amp3_tmp_(m,n,5) =  ikz*( kx*amp1_tmp_(m,n,0) - ky*amp2_tmp_(m,n,6));
-          amp3_tmp_(m,n,6) = -ikz*( kx*amp1_tmp_(m,n,3) + ky*amp2_tmp_(m,n,5));
-          amp3_tmp_(m,n,7) =  ikz*( kx*amp1_tmp_(m,n,2) + ky*amp2_tmp_(m,n,4));
+          amp3_(m,n,0) =  ikz*( kx*amp1_(m,n,5) + ky*amp2_(m,n,3));
+          amp3_(m,n,1) = -ikz*( kx*amp1_(m,n,4) + ky*amp2_(m,n,2));
+          amp3_(m,n,2) =  ikz*( kx*amp1_(m,n,7) - ky*amp2_(m,n,1));
+          amp3_(m,n,3) =  ikz*(-kx*amp1_(m,n,6) + ky*amp2_(m,n,0));
+          amp3_(m,n,4) =  ikz*(-kx*amp1_(m,n,1) + ky*amp2_(m,n,7));
+          amp3_(m,n,5) =  ikz*( kx*amp1_(m,n,0) - ky*amp2_(m,n,6));
+          amp3_(m,n,6) = -ikz*( kx*amp1_(m,n,3) + ky*amp2_(m,n,5));
+          amp3_(m,n,7) =  ikz*( kx*amp1_(m,n,2) + ky*amp2_(m,n,4));
 
         } else if(nk2 != 0){ // kz == 0
           iky = 1.0/(dky*((Real) nk2));
 
-          amp1_tmp_(m,n,0) = RanGaussian(&(seeds_(m,n)));
-          amp1_tmp_(m,n,2) = RanGaussian(&(seeds_(m,n)));
-          amp1_tmp_(m,n,4) = (nk1 == 0) ? 0.0 :RanGaussian(&(seeds_(m,n)));
-          amp1_tmp_(m,n,6) = (nk1 == 0) ? 0.0 :RanGaussian(&(seeds_(m,n)));
-          amp1_tmp_(m,n,1) = 0.0;
-          amp1_tmp_(m,n,3) = 0.0;
-          amp1_tmp_(m,n,5) = 0.0;
-          amp1_tmp_(m,n,7) = 0.0;
+          amp1_(m,n,0) = RanGaussian(&(seeds_(m,n)));
+          amp1_(m,n,2) = RanGaussian(&(seeds_(m,n)));
+          amp1_(m,n,4) = (nk1 == 0) ? 0.0 :RanGaussian(&(seeds_(m,n)));
+          amp1_(m,n,6) = (nk1 == 0) ? 0.0 :RanGaussian(&(seeds_(m,n)));
+          amp1_(m,n,1) = 0.0;
+          amp1_(m,n,3) = 0.0;
+          amp1_(m,n,5) = 0.0;
+          amp1_(m,n,7) = 0.0;
 
-          amp3_tmp_(m,n,0) = RanGaussian(&(seeds_(m,n)));
-          amp3_tmp_(m,n,2) = RanGaussian(&(seeds_(m,n)));
-          amp3_tmp_(m,n,4) = (nk1 == 0) ? 0.0 : RanGaussian(&(seeds_(m,n)));
-          amp3_tmp_(m,n,6) = (nk1 == 0) ? 0.0 : RanGaussian(&(seeds_(m,n)));
-          amp3_tmp_(m,n,1) = 0.0;
-          amp3_tmp_(m,n,3) = 0.0;
-          amp3_tmp_(m,n,5) = 0.0;
-          amp3_tmp_(m,n,7) = 0.0;
+          amp3_(m,n,0) = RanGaussian(&(seeds_(m,n)));
+          amp3_(m,n,2) = RanGaussian(&(seeds_(m,n)));
+          amp3_(m,n,4) = (nk1 == 0) ? 0.0 : RanGaussian(&(seeds_(m,n)));
+          amp3_(m,n,6) = (nk1 == 0) ? 0.0 : RanGaussian(&(seeds_(m,n)));
+          amp3_(m,n,1) = 0.0;
+          amp3_(m,n,3) = 0.0;
+          amp3_(m,n,5) = 0.0;
+          amp3_(m,n,7) = 0.0;
 
           // incompressibility
-          amp2_tmp_(m,n,0) =  iky*kx*amp1_tmp_(m,n,6);
-          amp2_tmp_(m,n,2) = -iky*kx*amp1_tmp_(m,n,4);
-          amp2_tmp_(m,n,4) = -iky*kx*amp1_tmp_(m,n,2);
-          amp2_tmp_(m,n,6) =  iky*kx*amp1_tmp_(m,n,0);
-          amp2_tmp_(m,n,1) = 0.0;
-          amp2_tmp_(m,n,3) = 0.0;
-          amp2_tmp_(m,n,5) = 0.0;
-          amp2_tmp_(m,n,7) = 0.0;
+          amp2_(m,n,0) =  iky*kx*amp1_(m,n,6);
+          amp2_(m,n,2) = -iky*kx*amp1_(m,n,4);
+          amp2_(m,n,4) = -iky*kx*amp1_(m,n,2);
+          amp2_(m,n,6) =  iky*kx*amp1_(m,n,0);
+          amp2_(m,n,1) = 0.0;
+          amp2_(m,n,3) = 0.0;
+          amp2_(m,n,5) = 0.0;
+          amp2_(m,n,7) = 0.0;
 
         } else {// kz == ky == 0, kx != 0 by initial if statement
-          amp3_tmp_(m,n,0) = RanGaussian(&(seeds_(m,n)));
-          amp3_tmp_(m,n,4) = RanGaussian(&(seeds_(m,n)));
-          amp3_tmp_(m,n,1) = 0.0;
-          amp3_tmp_(m,n,2) = 0.0;
-          amp3_tmp_(m,n,3) = 0.0;
-          amp3_tmp_(m,n,5) = 0.0;
-          amp3_tmp_(m,n,6) = 0.0;
-          amp3_tmp_(m,n,7) = 0.0;
+          amp3_(m,n,0) = RanGaussian(&(seeds_(m,n)));
+          amp3_(m,n,4) = RanGaussian(&(seeds_(m,n)));
+          amp3_(m,n,1) = 0.0;
+          amp3_(m,n,2) = 0.0;
+          amp3_(m,n,3) = 0.0;
+          amp3_(m,n,5) = 0.0;
+          amp3_(m,n,6) = 0.0;
+          amp3_(m,n,7) = 0.0;
 
-          amp2_tmp_(m,n,0) = RanGaussian(&(seeds_(m,n)));
-          amp2_tmp_(m,n,4) = RanGaussian(&(seeds_(m,n)));
-          amp2_tmp_(m,n,1) = 0.0;
-          amp2_tmp_(m,n,2) = 0.0;
-          amp2_tmp_(m,n,3) = 0.0;
-          amp2_tmp_(m,n,5) = 0.0;
-          amp2_tmp_(m,n,6) = 0.0;
-          amp2_tmp_(m,n,7) = 0.0;
+          amp2_(m,n,0) = RanGaussian(&(seeds_(m,n)));
+          amp2_(m,n,4) = RanGaussian(&(seeds_(m,n)));
+          amp2_(m,n,1) = 0.0;
+          amp2_(m,n,2) = 0.0;
+          amp2_(m,n,3) = 0.0;
+          amp2_(m,n,5) = 0.0;
+          amp2_(m,n,6) = 0.0;
+          amp2_(m,n,7) = 0.0;
 
           // incompressibility
-          amp1_tmp_(m,n,0) = 0.0;
-          amp1_tmp_(m,n,4) = 0.0;
-          amp1_tmp_(m,n,1) = 0.0;
-          amp1_tmp_(m,n,2) = 0.0;
-          amp1_tmp_(m,n,3) = 0.0;
-          amp1_tmp_(m,n,5) = 0.0;
-          amp1_tmp_(m,n,6) = 0.0;
-          amp1_tmp_(m,n,7) = 0.0;
+          amp1_(m,n,0) = 0.0;
+          amp1_(m,n,4) = 0.0;
+          amp1_(m,n,1) = 0.0;
+          amp1_(m,n,2) = 0.0;
+          amp1_(m,n,3) = 0.0;
+          amp1_(m,n,5) = 0.0;
+          amp1_(m,n,6) = 0.0;
+          amp1_(m,n,7) = 0.0;
         }
 
-        amp1_tmp_(m,n,0) *= norm;
-        amp1_tmp_(m,n,4) *= norm;
-        amp1_tmp_(m,n,1) *= norm;
-        amp1_tmp_(m,n,2) *= norm;
-        amp1_tmp_(m,n,3) *= norm;
-        amp1_tmp_(m,n,5) *= norm;
-        amp1_tmp_(m,n,6) *= norm;
-        amp1_tmp_(m,n,7) *= norm;
+        amp1_(m,n,0) *= norm;
+        amp1_(m,n,4) *= norm;
+        amp1_(m,n,1) *= norm;
+        amp1_(m,n,2) *= norm;
+        amp1_(m,n,3) *= norm;
+        amp1_(m,n,5) *= norm;
+        amp1_(m,n,6) *= norm;
+        amp1_(m,n,7) *= norm;
 
-        amp2_tmp_(m,n,0) *= norm;
-        amp2_tmp_(m,n,4) *= norm;
-        amp2_tmp_(m,n,1) *= norm;
-        amp2_tmp_(m,n,2) *= norm;
-        amp2_tmp_(m,n,3) *= norm;
-        amp2_tmp_(m,n,5) *= norm;
-        amp2_tmp_(m,n,6) *= norm;
-        amp2_tmp_(m,n,7) *= norm;
+        amp2_(m,n,0) *= norm;
+        amp2_(m,n,4) *= norm;
+        amp2_(m,n,1) *= norm;
+        amp2_(m,n,2) *= norm;
+        amp2_(m,n,3) *= norm;
+        amp2_(m,n,5) *= norm;
+        amp2_(m,n,6) *= norm;
+        amp2_(m,n,7) *= norm;
 
-        amp3_tmp_(m,n,0) *= norm;
-        amp3_tmp_(m,n,4) *= norm;
-        amp3_tmp_(m,n,1) *= norm;
-        amp3_tmp_(m,n,2) *= norm;
-        amp3_tmp_(m,n,3) *= norm;
-        amp3_tmp_(m,n,5) *= norm;
-        amp3_tmp_(m,n,6) *= norm;
-        amp3_tmp_(m,n,7) *= norm;
+        amp3_(m,n,0) *= norm;
+        amp3_(m,n,4) *= norm;
+        amp3_(m,n,1) *= norm;
+        amp3_(m,n,2) *= norm;
+        amp3_(m,n,3) *= norm;
+        amp3_(m,n,5) *= norm;
+        amp3_(m,n,6) *= norm;
+        amp3_(m,n,7) *= norm;
       } 
-    }
-  );
-
-  Real fcorr=0.0;
-  Real gcorr=1.0;
-  if ((pmy_pack->pmesh->time > 0.0) and (tcorr > 0.0)) {
-    fcorr=exp(-((pmy_pack->pmesh->dt)/tcorr));
-    gcorr=sqrt(1.0-fcorr*fcorr);
-  }
-
-  auto amp1_ = amp1;
-  auto amp2_ = amp2;
-  auto amp3_ = amp3;
-  par_for("OU_process", DevExeSpace(), 0, nmb-1, 0, ntot-1, 0, nwave-1,
-    KOKKOS_LAMBDA(int m, int n, int nw)
-    {
-      amp1_(m,n,nw) = fcorr*amp1_(m,n,nw) + gcorr*amp1_tmp_(m,n,nw);
-      amp2_(m,n,nw) = fcorr*amp2_(m,n,nw) + gcorr*amp2_tmp_(m,n,nw);
-      amp3_(m,n,nw) = fcorr*amp3_(m,n,nw) + gcorr*amp3_tmp_(m,n,nw);
     }
   );
 
@@ -410,8 +409,8 @@ void TurbulenceDriver::ApplyForcing(DvceArray5D<Real> &u)
   auto x2sin_ = x2sin;
   auto x3cos_ = x3cos;
   auto x3sin_ = x3sin;
-  par_for("force_array", DevExeSpace(), 0, nmb-1, ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i)
+  par_for("force_array", DevExeSpace(), 0, nmb-1, 0, ncells3-1, 0, ncells2-1, 
+    0, ncells1-1, KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
       for (int n=0; n<nt; n++) {
         int n1 = n/nw23;
@@ -420,30 +419,30 @@ void TurbulenceDriver::ApplyForcing(DvceArray5D<Real> &u)
         int nsqr = n1*n1 + n2*n2 + n3*n3;
 
         if (nsqr >= nlow_sq && nsqr <= nhigh_sq) {
-          force_(m,0,k,j,i) += amp1_(m,n,0)*x1cos_(m,n,i)*x2cos_(m,n,j)*x3cos_(m,n,k)+
-                               amp1_(m,n,1)*x1cos_(m,n,i)*x2cos_(m,n,j)*x3sin_(m,n,k)+
-                               amp1_(m,n,2)*x1cos_(m,n,i)*x2sin_(m,n,j)*x3cos_(m,n,k)+
-                               amp1_(m,n,3)*x1cos_(m,n,i)*x2sin_(m,n,j)*x3sin_(m,n,k)+
-                               amp1_(m,n,4)*x1sin_(m,n,i)*x2cos_(m,n,j)*x3cos_(m,n,k)+
-                               amp1_(m,n,5)*x1sin_(m,n,i)*x2cos_(m,n,j)*x3sin_(m,n,k)+
-                               amp1_(m,n,6)*x1sin_(m,n,i)*x2sin_(m,n,j)*x3cos_(m,n,k)+
-                               amp1_(m,n,7)*x1sin_(m,n,i)*x2sin_(m,n,j)*x3sin_(m,n,k);
-          force_(m,1,k,j,i) += amp2_(m,n,0)*x1cos_(m,n,i)*x2cos_(m,n,j)*x3cos_(m,n,k)+
-                               amp2_(m,n,1)*x1cos_(m,n,i)*x2cos_(m,n,j)*x3sin_(m,n,k)+
-                               amp2_(m,n,2)*x1cos_(m,n,i)*x2sin_(m,n,j)*x3cos_(m,n,k)+
-                               amp2_(m,n,3)*x1cos_(m,n,i)*x2sin_(m,n,j)*x3sin_(m,n,k)+
-                               amp2_(m,n,4)*x1sin_(m,n,i)*x2cos_(m,n,j)*x3cos_(m,n,k)+
-                               amp2_(m,n,5)*x1sin_(m,n,i)*x2cos_(m,n,j)*x3sin_(m,n,k)+
-                               amp2_(m,n,6)*x1sin_(m,n,i)*x2sin_(m,n,j)*x3cos_(m,n,k)+
-                               amp2_(m,n,7)*x1sin_(m,n,i)*x2sin_(m,n,j)*x3sin_(m,n,k);
-          force_(m,2,k,j,i) += amp3_(m,n,0)*x1cos_(m,n,i)*x2cos_(m,n,j)*x3cos_(m,n,k)+
-                               amp3_(m,n,1)*x1cos_(m,n,i)*x2cos_(m,n,j)*x3sin_(m,n,k)+
-                               amp3_(m,n,2)*x1cos_(m,n,i)*x2sin_(m,n,j)*x3cos_(m,n,k)+
-                               amp3_(m,n,3)*x1cos_(m,n,i)*x2sin_(m,n,j)*x3sin_(m,n,k)+
-                               amp3_(m,n,4)*x1sin_(m,n,i)*x2cos_(m,n,j)*x3cos_(m,n,k)+
-                               amp3_(m,n,5)*x1sin_(m,n,i)*x2cos_(m,n,j)*x3sin_(m,n,k)+
-                               amp3_(m,n,6)*x1sin_(m,n,i)*x2sin_(m,n,j)*x3cos_(m,n,k)+
-                               amp3_(m,n,7)*x1sin_(m,n,i)*x2sin_(m,n,j)*x3sin_(m,n,k);
+          force_tmp_(m,0,k,j,i) += amp1_(m,n,0)*x1cos_(m,n,i)*x2cos_(m,n,j)*x3cos_(m,n,k)+
+                                   amp1_(m,n,1)*x1cos_(m,n,i)*x2cos_(m,n,j)*x3sin_(m,n,k)+
+                                   amp1_(m,n,2)*x1cos_(m,n,i)*x2sin_(m,n,j)*x3cos_(m,n,k)+
+                                   amp1_(m,n,3)*x1cos_(m,n,i)*x2sin_(m,n,j)*x3sin_(m,n,k)+
+                                   amp1_(m,n,4)*x1sin_(m,n,i)*x2cos_(m,n,j)*x3cos_(m,n,k)+
+                                   amp1_(m,n,5)*x1sin_(m,n,i)*x2cos_(m,n,j)*x3sin_(m,n,k)+
+                                   amp1_(m,n,6)*x1sin_(m,n,i)*x2sin_(m,n,j)*x3cos_(m,n,k)+
+                                   amp1_(m,n,7)*x1sin_(m,n,i)*x2sin_(m,n,j)*x3sin_(m,n,k);
+          force_tmp_(m,1,k,j,i) += amp2_(m,n,0)*x1cos_(m,n,i)*x2cos_(m,n,j)*x3cos_(m,n,k)+
+                                   amp2_(m,n,1)*x1cos_(m,n,i)*x2cos_(m,n,j)*x3sin_(m,n,k)+
+                                   amp2_(m,n,2)*x1cos_(m,n,i)*x2sin_(m,n,j)*x3cos_(m,n,k)+
+                                   amp2_(m,n,3)*x1cos_(m,n,i)*x2sin_(m,n,j)*x3sin_(m,n,k)+
+                                   amp2_(m,n,4)*x1sin_(m,n,i)*x2cos_(m,n,j)*x3cos_(m,n,k)+
+                                   amp2_(m,n,5)*x1sin_(m,n,i)*x2cos_(m,n,j)*x3sin_(m,n,k)+
+                                   amp2_(m,n,6)*x1sin_(m,n,i)*x2sin_(m,n,j)*x3cos_(m,n,k)+
+                                   amp2_(m,n,7)*x1sin_(m,n,i)*x2sin_(m,n,j)*x3sin_(m,n,k);
+          force_tmp_(m,2,k,j,i) += amp3_(m,n,0)*x1cos_(m,n,i)*x2cos_(m,n,j)*x3cos_(m,n,k)+
+                                   amp3_(m,n,1)*x1cos_(m,n,i)*x2cos_(m,n,j)*x3sin_(m,n,k)+
+                                   amp3_(m,n,2)*x1cos_(m,n,i)*x2sin_(m,n,j)*x3cos_(m,n,k)+
+                                   amp3_(m,n,3)*x1cos_(m,n,i)*x2sin_(m,n,j)*x3sin_(m,n,k)+
+                                   amp3_(m,n,4)*x1sin_(m,n,i)*x2cos_(m,n,j)*x3cos_(m,n,k)+
+                                   amp3_(m,n,5)*x1sin_(m,n,i)*x2cos_(m,n,j)*x3sin_(m,n,k)+
+                                   amp3_(m,n,6)*x1sin_(m,n,i)*x2sin_(m,n,j)*x3cos_(m,n,k)+
+                                   amp3_(m,n,7)*x1sin_(m,n,i)*x2sin_(m,n,j)*x3sin_(m,n,k);
         }
       }
     }
@@ -468,9 +467,9 @@ void TurbulenceDriver::ApplyForcing(DvceArray5D<Real> &u)
 
       array_sum::GlobalSum fsum;
       fsum.the_array[IDN] = 1.0;
-      fsum.the_array[IM1] = force_(m,0,k,j,i);
-      fsum.the_array[IM2] = force_(m,1,k,j,i);
-      fsum.the_array[IM3] = force_(m,2,k,j,i);
+      fsum.the_array[IM1] = force_tmp_(m,0,k,j,i);
+      fsum.the_array[IM2] = force_tmp_(m,1,k,j,i);
+      fsum.the_array[IM3] = force_tmp_(m,2,k,j,i);
 
       mb_sum += fsum;
     }, Kokkos::Sum<array_sum::GlobalSum>(sum_this_mb)
@@ -488,9 +487,9 @@ void TurbulenceDriver::ApplyForcing(DvceArray5D<Real> &u)
   par_for("net_mom_2", DevExeSpace(), 0, nmb-1, ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
-      force_(m,0,k,j,i) -= m1/m0;
-      force_(m,1,k,j,i) -= m2/m0;
-      force_(m,2,k,j,i) -= m3/m0;
+      force_tmp_(m,0,k,j,i) -= m1/m0;
+      force_tmp_(m,1,k,j,i) -= m2/m0;
+      force_tmp_(m,2,k,j,i) -= m3/m0;
     }
   );
 
@@ -506,9 +505,9 @@ void TurbulenceDriver::ApplyForcing(DvceArray5D<Real> &u)
       k += ks;
       j += js;
 
-      Real v1 = force_(m,0,k,j,i);
-      Real v2 = force_(m,1,k,j,i);
-      Real v3 = force_(m,2,k,j,i);
+      Real v1 = force_tmp_(m,0,k,j,i);
+      Real v2 = force_tmp_(m,1,k,j,i);
+      Real v3 = force_tmp_(m,2,k,j,i);
 
       /* two options here
       Real u1 = u(m,IM1,k,j,i)/u(m,IDN,k,j,i);
@@ -563,15 +562,30 @@ void TurbulenceDriver::ApplyForcing(DvceArray5D<Real> &u)
     s = m1/2./m0 + sqrt(m1*m1/4./m0/m0 + dedt/m0);
   }
 
+  Real fcorr=0.0;
+  Real gcorr=1.0;
+  if ((pmy_pack->pmesh->time > 0.0) and (tcorr > 0.0)) {
+    fcorr=exp(-((pmy_pack->pmesh->dt)/tcorr));
+    gcorr=sqrt(1.0-fcorr*fcorr);
+  }
+
+  auto force_ = force;
+  par_for("OU_process", DevExeSpace(), 0, nmb-1, 0, 2, 0, ncells3-1, 0, ncells2-1,
+    0, ncells1-1, KOKKOS_LAMBDA(int m, int n, int k, int j, int i)
+    {
+      force_(m,n,k,j,i) = fcorr*force_(m,n,k,j,i) + gcorr*s*force_tmp_(m,n,k,j,i);
+    }
+  );
+
   // modify conserved variables
   Real &dt = pmy_pack->pmesh->dt;
   par_for("push", DevExeSpace(),0,(pmy_pack->nmb_thispack-1),
     ks,ke,js,je,is,ie,KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
       Real den = u(m,IDN,k,j,i);
-      Real v1 = force_(m,0,k,j,i)*s*dt;
-      Real v2 = force_(m,1,k,j,i)*s*dt;
-      Real v3 = force_(m,2,k,j,i)*s*dt;
+      Real v1 = force_(m,0,k,j,i)*dt;
+      Real v2 = force_(m,1,k,j,i)*dt;
+      Real v3 = force_(m,2,k,j,i)*dt;
       Real m1 = u(m,IM1,k,j,i);
       Real m2 = u(m,IM2,k,j,i);
       Real m3 = u(m,IM3,k,j,i);
