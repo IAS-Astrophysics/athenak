@@ -10,6 +10,7 @@
 
 #include "parameter_input.hpp"
 #include "mesh.hpp"
+#include "srcterms/turb_driver.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "diffusion/viscosity.hpp"
@@ -29,41 +30,58 @@ void MeshBlockPack::AddPhysicsModules(ParameterInput *pin)
   int nphysics = 0;
   TaskID none(0);
 
-  // Create Hydro physics module and Tasks if <hydro> block exists in input file
+  // (1) TURBULENT FORCING
+  if (pin->DoesBlockExist("forcing")) {
+    pturb_driver = new TurbulenceDriver(this, pin);  // construct new turbulence driver
+  } else {
+    pturb_driver = nullptr;
+  }
+
+  // (2) HYDRODYNAMICS
+  // Create both Hydro physics module and Tasks (TaskLists stored in MeshBlockPack)
   if (pin->DoesBlockExist("hydro")) {
     phydro = new hydro::Hydro(this, pin);   // construct new Hydro object
-    phydro->AssembleStageStartTasks(tl_stagestart, none);
-    phydro->AssembleStageRunTasks(tl_stagerun, none);
-    phydro->AssembleStageEndTasks(tl_stageend, none);
     nphysics++;
+    phydro->AssembleOperatorSplitTasks(operator_split_tl, none);
+    phydro->AssembleStageStartTasks(stage_start_tl, none);
+    phydro->AssembleStageRunTasks(stage_run_tl, none);
+    phydro->AssembleStageEndTasks(stage_end_tl, none);
   } else {
     phydro = nullptr;
   }
 
-  // Create MHD physics module and Tasks if <mhd> block exists in input file
+  // (3) MHD
+  // Create both MHD physics module and Tasks (TaskLists stored in MeshBlockPack)
   if (pin->DoesBlockExist("mhd")) {
     pmhd = new mhd::MHD(this, pin);   // construct new MHD object
     nphysics++;
 
-    if (tl_stagestart.Empty()) {
-      pmhd->AssembleStageStartTasks(tl_stagestart, none);
+    if (operator_split_tl.Empty()) {
+      pmhd->AssembleOperatorSplitTasks(operator_split_tl, none);
     } else {
-      TaskID last = tl_stagestart.GetIDLastTask();
-      pmhd->AssembleStageStartTasks(tl_stagestart, last);
+      TaskID last = operator_split_tl.GetIDLastTask();
+      pmhd->AssembleOperatorSplitTasks(operator_split_tl, last);
     }
 
-    if (tl_stagerun.Empty()) {
-      pmhd->AssembleStageRunTasks(tl_stagerun, none);
+    if (stage_start_tl.Empty()) {
+      pmhd->AssembleStageStartTasks(stage_start_tl, none);
     } else {
-      TaskID last = tl_stagerun.GetIDLastTask();
-      pmhd->AssembleStageRunTasks(tl_stagerun, last);
+      TaskID last = stage_start_tl.GetIDLastTask();
+      pmhd->AssembleStageStartTasks(stage_start_tl, last);
     }
 
-    if (tl_stageend.Empty()) {
-      pmhd->AssembleStageEndTasks(tl_stageend, none);
+    if (stage_run_tl.Empty()) {
+      pmhd->AssembleStageRunTasks(stage_run_tl, none);
     } else {
-      TaskID last = tl_stageend.GetIDLastTask();
-      pmhd->AssembleStageEndTasks(tl_stageend, last);
+      TaskID last = stage_run_tl.GetIDLastTask();
+      pmhd->AssembleStageRunTasks(stage_run_tl, last);
+    }
+
+    if (stage_end_tl.Empty()) {
+      pmhd->AssembleStageEndTasks(stage_end_tl, none);
+    } else {
+      TaskID last = stage_end_tl.GetIDLastTask();
+      pmhd->AssembleStageEndTasks(stage_end_tl, last);
     }
   } else {
     pmhd = nullptr;

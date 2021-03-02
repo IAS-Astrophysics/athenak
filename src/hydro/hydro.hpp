@@ -16,7 +16,7 @@
 // forward declarations
 class EquationOfState;
 class Viscosity;
-class HydroSourceTerms;
+class SourceTerms;
 class Driver;
 
 // constants that enumerate Hydro Riemann Solver options
@@ -36,7 +36,7 @@ class Hydro
   // data
   EquationOfState *peos;      // chosen EOS
   Viscosity *pvisc=nullptr;   // (optional) viscosity 
-  HydroSourceTerms *psrc;     // source terms (both operator split and unsplit)
+  SourceTerms *psrc;          // source terms (both operator split and unsplit)
 
   int nhydro;             // number of hydro variables (5/4 for adiabatic/isothermal)
   int nscalars;           // number of passive scalars
@@ -50,8 +50,6 @@ class Hydro
   DvceArray5D<Real> u1;       // conserved variables at intermediate step 
   DvceFaceFld5D<Real> uflx;   // fluxes of conserved quantities on cell faces
   Real dtnew;
-
-  // source terms
 
   // functions
   void AssembleStageStartTasks(TaskList &tl, TaskID start);
@@ -70,8 +68,8 @@ class Hydro
   TaskStatus ViscousFluxes(Driver *d, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
   TaskStatus ApplyPhysicalBCs(Driver* pdrive, int stage);  // in file in hydro/bvals dir
-  TaskStatus ApplyUnsplitSourceTerms(Driver *d, int stage);
-  TaskStatus ApplyOperatorSplitSourceTerms(Driver *d, int stage);
+  TaskStatus UpdateUnsplitSourceTerms(Driver *d, int stage);
+  TaskStatus UpdateOperatorSplitSourceTerms(Driver *d, int stage);
 
   // functions to set physical BCs for Hydro conserved variables, applied to single MB
   // specified by argument 'm'. 

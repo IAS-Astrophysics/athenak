@@ -13,7 +13,7 @@
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
 #include "diffusion/viscosity.hpp"
-#include "hydro/srcterms/hydro_srcterms.hpp"
+#include "srcterms/srcterms.hpp"
 #include "bvals/bvals.hpp"
 #include "hydro/hydro.hpp"
 
@@ -58,9 +58,9 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
     std::exit(EXIT_FAILURE);
   }}
 
-  // Add source terms (if any).  HydroSourceTerms constructor parses input file to 
+  // Add source terms (if any).  SourceTerms constructor parses input file to 
   // check for terms to be added 
-  psrc = new HydroSourceTerms(ppack, pin);
+  psrc = new SourceTerms(ppack, pin);
 
   // read time-evolution option [already error checked in driver constructor]
   std::string evolution_t = pin->GetString("time","evolution");

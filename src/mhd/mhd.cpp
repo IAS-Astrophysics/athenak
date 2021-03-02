@@ -14,7 +14,7 @@
 #include "eos/eos.hpp"
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
-#include "mhd/srcterms/mhd_srcterms.hpp"
+#include "srcterms/srcterms.hpp"
 #include "bvals/bvals.hpp"
 #include "mhd/mhd.hpp"
 
@@ -83,9 +83,9 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     std::exit(EXIT_FAILURE);
   }}
 
-  // Add source terms (if any).  MHDSourceTerms constructor parses input file to 
+  // Add source terms (if any).  SourceTerms constructor parses input file to 
   // check for terms to be added 
-  psrc = new MHDSourceTerms(ppack, pin);
+  psrc = new SourceTerms(ppack, pin);
 
   // read time-evolution option [already error checked in driver constructor]
   std::string evolution_t = pin->GetString("time","evolution");

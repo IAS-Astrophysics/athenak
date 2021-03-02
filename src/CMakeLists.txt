@@ -35,7 +35,6 @@ add_executable(
         hydro/bvals/apply_physical_bcs.cpp
         hydro/bvals/outflow_hydro.cpp
         hydro/bvals/reflect_hydro.cpp
-        hydro/srcterms/hydro_srcterms.cpp
 
         mesh/mesh_physics.cpp
         mesh/load_balance.cpp
@@ -54,7 +53,6 @@ add_executable(
         mhd/bvals/apply_physical_bcs.cpp
         mhd/bvals/outflow_mhd.cpp
         mhd/bvals/reflect_mhd.cpp
-        mhd/srcterms/mhd_srcterms.cpp
 
         outputs/io_wrapper.cpp
         outputs/outputs.cpp
@@ -69,6 +67,9 @@ add_executable(
         pgen/lw_implode.cpp
         pgen/orszag_tang.cpp
         pgen/shock_tube.cpp
+
+        srcterms/srcterms.cpp
+        srcterms/turb_driver.cpp
 
         utils/change_rundir.cpp
         utils/show_config.cpp

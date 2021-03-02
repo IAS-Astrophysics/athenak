@@ -18,8 +18,9 @@
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
 #include "bvals/bvals.hpp"
-#include "mhd/mhd.hpp"
 #include "utils/create_mpitag.hpp"
+#include "srcterms/srcterms.hpp"
+#include "mhd/mhd.hpp"
 
 namespace mhd {
 //----------------------------------------------------------------------------------------
@@ -27,6 +28,7 @@ namespace mhd {
 //  \brief adds MHD tasks to stage start TaskList
 //  These are taks that must be cmpleted (such as posting MPI receives, setting 
 //  BoundaryCommStatus flags, etc) over all MeshBlocks before stage can be run.
+//  Called by MeshBlockPack::AddPhysicsModules() function directly after MHD constrctr
 
 void MHD::AssembleStageStartTasks(TaskList &tl, TaskID start)
 {
@@ -37,6 +39,7 @@ void MHD::AssembleStageStartTasks(TaskList &tl, TaskID start)
 //----------------------------------------------------------------------------------------
 //! \fn  void MHD::AssembleStageRunTasks
 //  \brief adds MHD tasks to stage run TaskList
+//  Called by MeshBlockPack::AddPhysicsModules() function directly after MHD constrctr
 
 void MHD::AssembleStageRunTasks(TaskList &tl, TaskID start)
 {
@@ -44,7 +47,7 @@ void MHD::AssembleStageRunTasks(TaskList &tl, TaskID start)
   auto mhd_fluxes = tl.AddTask(&MHD::CalcFluxes, this, mhd_copycons);
   auto visc_fluxes = tl.AddTask(&MHD::ViscousFluxes, this, mhd_fluxes);
   auto mhd_update = tl.AddTask(&MHD::Update, this, visc_fluxes);
-  auto mhd_src = tl.AddTask(&MHD::ApplyUnsplitSourceTerms, this, mhd_update);
+  auto mhd_src = tl.AddTask(&MHD::UpdateUnsplitSourceTerms, this, mhd_update);
   auto mhd_sendu = tl.AddTask(&MHD::SendU, this, mhd_src);
   auto mhd_recvu = tl.AddTask(&MHD::RecvU, this, mhd_sendu);
   auto mhd_emf = tl.AddTask(&MHD::CornerE, this, mhd_recvu);
@@ -63,6 +66,7 @@ void MHD::AssembleStageRunTasks(TaskList &tl, TaskID start)
 //  \brief adds MHD tasks to stage end TaskList
 //  These are tasks that can only be cmpleted after all the stage run tasks are finished
 //  over all MeshBlocks, such as clearing all MPI non-blocking sends, etc.
+//  Called by MeshBlockPack::AddPhysicsModules() function directly after MHD constrctr
 
 void MHD::AssembleStageEndTasks(TaskList &tl, TaskID start)
 {
@@ -73,9 +77,12 @@ void MHD::AssembleStageEndTasks(TaskList &tl, TaskID start)
 //----------------------------------------------------------------------------------------
 //! \fn  void MHD::AssmebleOperatorSplitTasks
 //  \brief adds MHD tasks to operator split TaskList
+//  Called by MeshBlockPack::AddPhysicsModules() function directly after MHD constrctr
 
 void MHD::AssembleOperatorSplitTasks(TaskList &tl, TaskID start)
 {
+  if (psrc->no_split_terms) {return;}
+  auto split_srcterms = tl.AddTask(&MHD::UpdateOperatorSplitSourceTerms, this, start);
   return;
 }
 
@@ -274,22 +281,33 @@ TaskStatus MHD::ResistEMF(Driver *pdrive, int stage)
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn  void MHD::ApplyUnsplitSourceTerms
+//! \fn  void MHD::UpdateUnsplitSourceTerms
 //  \brief adds source terms to MHD variables in EACH stage of stage run task list.
 //  These are source terms that will be included as an unsplit algorithm.
+//  This task is always included in the StageRun tasklist (see AssembleStageRunTasks()
+//  function above), so a return test is needed in the case of no source terms.
 
-TaskStatus MHD::ApplyUnsplitSourceTerms(Driver *pdrive, int stage)
+TaskStatus MHD::UpdateUnsplitSourceTerms(Driver *pdrive, int stage)
 {
+  // return if no source terms included
+  if (psrc->no_unsplit_terms) {return TaskStatus::complete;}
+
+  // apply source terms update to conserved variables
+  psrc->ApplySrcTermsStageRunTL(u0);
   return TaskStatus::complete;
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn  void MHD::ApplyOperatorSplitSourceTerms
+//! \fn  void MHD::UpdateOperatorSplitSourceTerms
 //  \brief adds source terms to MHD variables in operator split task list.
 //  These are source terms that will be included as an operator split algorithm.
+//  This task is not included in the OperatorSplit tasklist if there are no operator split
+//  source terms to be inlcuded (see AssembleOperatorSplitTasks() function above), so no
+//  return test is needed in the case of no source terms.
 
-TaskStatus MHD::ApplyOperatorSplitSourceTerms(Driver *pdrive, int stage)
+TaskStatus MHD::UpdateOperatorSplitSourceTerms(Driver *pdrive, int stage)
 {
+  psrc->ApplySrcTermsOperatorSplitTL(u0);
   return TaskStatus::complete;
 }
 

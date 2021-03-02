@@ -17,7 +17,7 @@
 class EquationOfState;
 class Viscosity;
 class Resistivity;
-class MHDSourceTerms;
+class SourceTerms;
 class Driver;
 
 // constants that enumerate MHD Riemann Solver options
@@ -38,7 +38,7 @@ class MHD
   EquationOfState *peos;          // chosen EOS
   Viscosity *pvisc=nullptr;       // (optional) viscosity
   Resistivity *presist=nullptr;   // (optional) resistivity
-  MHDSourceTerms *psrc;           // source terms (both operator split and unsplit)
+  SourceTerms *psrc;              // source terms (both operator split and unsplit)
 
   int nmhd;                // number of cons variables (5/4 for adiabatic/isothermal)
   int nscalars;            // number of passive scalars
@@ -80,8 +80,8 @@ class MHD
   TaskStatus ResistEMF(Driver *d, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
   TaskStatus ApplyPhysicalBCs(Driver* pdrive, int stage); // in file mhd/bvals dir
-  TaskStatus ApplyUnsplitSourceTerms(Driver *d, int stage);
-  TaskStatus ApplyOperatorSplitSourceTerms(Driver *d, int stage);
+  TaskStatus UpdateUnsplitSourceTerms(Driver *d, int stage);
+  TaskStatus UpdateOperatorSplitSourceTerms(Driver *d, int stage);
 
   // functions to set physical BCs for Hydro conserved variables, applied to single MB
   // specified by argument 'm'. 
