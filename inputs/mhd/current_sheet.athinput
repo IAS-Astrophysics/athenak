@@ -51,8 +51,6 @@ gamma           = 1.4   # gamma = C_p/C_v
 iso_sound_speed = 1.0   # isothermal sound speed
 
 <problem>
-pgen_name = current_sheet  # problem generator name
-
 d0 = 50.0                  # Amplitude of sheet density (should be b0^2/2)
 ng = 10.0                  # background density
 b0 = 10.0                  # Amplitude of reconnecting field

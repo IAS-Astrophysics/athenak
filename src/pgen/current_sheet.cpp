@@ -32,7 +32,7 @@
 //! \fn void ProblemGenerator::CurrentSheet_()
 //  \brief Sets initial conditions for double Harris current sheet
 
-void ProblemGenerator::CurrentSheet_(MeshBlockPack *pmbp, ParameterInput *pin)
+void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
 {
   // read global parameters
   Real d0 = pin->GetOrAddReal("problem", "d0", 1.0);

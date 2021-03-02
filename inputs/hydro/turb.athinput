@@ -49,8 +49,6 @@ gamma           = 1.4   # gamma = C_p/C_v
 iso_sound_speed = 1.0   # isothermal sound speed
 
 <problem>
-pgen_name = turb  # problem generator name
-
 
 <forcing>
 type = hydro
