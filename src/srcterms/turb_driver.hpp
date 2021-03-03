@@ -50,6 +50,8 @@ class TurbulenceDriver
   KOKKOS_INLINE_FUNCTION Real RanGaussian(int64_t *idum);
   KOKKOS_INLINE_FUNCTION Real Ran2(int64_t *idum);
 
+  bool first_time_;
+
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this TurbulenceDriver
 };
