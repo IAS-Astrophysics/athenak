@@ -24,7 +24,7 @@ namespace mhd {
 //  Note this function is idential to Hydro version
 //  TODO: can Hydro and MHD versions be combined?
 
-TaskStatus MHD::MHDApplyPhysicalBCs(Driver* pdrive, int stage)
+TaskStatus MHD::ApplyPhysicalBCs(Driver* pdrive, int stage)
 {
   // loop over all MeshBlocks in this MeshBlockPack
   int nmb = pmy_pack->nmb_thispack;

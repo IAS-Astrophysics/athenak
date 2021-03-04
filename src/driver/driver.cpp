@@ -138,12 +138,12 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
   hydro::Hydro *phydro = pmesh->pmb_pack->phydro;
   if (phydro != nullptr) {
     // following functions return a TaskStatus, but it is ignored so cast to (void)
-    (void) phydro->HydroInitRecv(this, 0);
-    (void) phydro->HydroSendU(this, 0);
-    (void) phydro->HydroClearSend(this, 0);
-    (void) phydro->HydroClearRecv(this, 0);
-    (void) phydro->HydroRecvU(this, 0);
-    (void) phydro->HydroApplyPhysicalBCs(this, 0);
+    (void) phydro->InitRecv(this, 0);
+    (void) phydro->SendU(this, 0);
+    (void) phydro->ClearSend(this, 0);
+    (void) phydro->ClearRecv(this, 0);
+    (void) phydro->RecvU(this, 0);
+    (void) phydro->ApplyPhysicalBCs(this, 0);
 
     // Set primitive variables in initial conditions everywhere
     (void) phydro->ConToPrim(this, 0);
@@ -152,18 +152,17 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
   // Initialize MHD: ghost zones and primitive variables (everywhere)
   // Note this requires communicating BOTH u and B
   mhd::MHD *pmhd = pmesh->pmb_pack->pmhd;
-std::cout << "construct mhd" << std::endl;
   if (pmhd != nullptr) {
     // following functions return a TaskStatus, but it is ignored so cast to (void)
-    (void) pmhd->MHDInitRecv(this, 0);
-    (void) pmhd->MHDInitRecv(this, 0);
-    (void) pmhd->MHDSendU(this, 0);
-    (void) pmhd->MHDSendB(this, 0);
-    (void) pmhd->MHDClearSend(this, 0);
-    (void) pmhd->MHDClearRecv(this, 0);
-    (void) pmhd->MHDRecvU(this, 0);
-    (void) pmhd->MHDRecvB(this, 0);
-    (void) pmhd->MHDApplyPhysicalBCs(this, 0);
+    (void) pmhd->InitRecv(this, 0);
+    (void) pmhd->InitRecv(this, 0);
+    (void) pmhd->SendU(this, 0);
+    (void) pmhd->SendB(this, 0);
+    (void) pmhd->ClearSend(this, 0);
+    (void) pmhd->ClearRecv(this, 0);
+    (void) pmhd->RecvU(this, 0);
+    (void) pmhd->RecvB(this, 0);
+    (void) pmhd->ApplyPhysicalBCs(this, 0);
 
     // Set primitive variables in initial conditions everywhere 
     (void) pmhd->ConToPrim(this, 0);
@@ -206,62 +205,81 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
     std::cout << "\nSetup complete, executing task list...\n" << std::endl;
   }
 
-  while ((pmesh->time < tlim) && (pmesh->ncycle < nlim || nlim < 0)) {
+  if (time_evolution == TimeEvolution::tstatic) {
+    // TODO: add work for time static problems here
+  } else {
 
-    if (time_evolution != TimeEvolution::tstatic) {
+    while ((pmesh->time < tlim) && (pmesh->ncycle < nlim || nlim < 0)) {
       if (global_variable::my_rank == 0) {OutputCycleDiagnostics(pmesh);}
-
-      // Do multi-stage time evolution TaskLists
-      int npacks = 1;
+      int npacks = 1;  // TODO: extend for multiple MeshBlockPacks
       MeshBlockPack* pmbp = pmesh->pmb_pack;
+
+      // (1) Do ***operator split*** TaskList
+      {for (int p=0; p<npacks; ++p) {
+        if (!(pmbp->operator_split_tl.Empty())) {pmbp->operator_split_tl.Reset();}
+      }
+      int npack_left = npacks;
+      while (npack_left > 0) {
+        if (pmbp->operator_split_tl.Empty()) {
+          npack_left--;
+        } else {
+          if (!pmbp->operator_split_tl.IsComplete()) {
+            // note 2nd argument to DoAvailable (stage) is not used, set to 0 
+            auto status = pmbp->operator_split_tl.DoAvailable(this,0);
+            if (status == TaskListStatus::complete) { npack_left--; }
+          }
+        }
+      }} // extra brace to enclose scope
+
+      // (2) Do ***multi-stage time evolution*** TaskLists
       for (int stage=1; stage<=nstages; ++stage) {
 
-        // StageStart Tasks ---
+        // (2a) StageStart Tasks ---
         // tasks that must be completed over all MBPacks before start of each stage
         {for (int p=0; p<npacks; ++p) {
-          if (!(pmbp->tl_stagestart.Empty())) {pmbp->tl_stagestart.Reset();}
+          if (!(pmbp->stage_start_tl.Empty())) {pmbp->stage_start_tl.Reset();}
         }
         int npack_left = npacks;
         while (npack_left > 0) {
-          if (pmbp->tl_stagestart.Empty()) {
+          if (pmbp->stage_start_tl.Empty()) {
             npack_left--; 
           } else {
-            if (!pmbp->tl_stagestart.IsComplete()) {
-              auto status = pmbp->tl_stagestart.DoAvailable(this,stage);
+            if (!pmbp->stage_start_tl.IsComplete()) {
+              auto status = pmbp->stage_start_tl.DoAvailable(this,stage);
               if (status == TaskListStatus::complete) { npack_left--; }
             }
           }
         }} // extra brace to enclose scope
 
-        // StageRun Tasks ---
+        // (2b) StageRun Tasks ---
         // tasks in each stage
         {for (int p=0; p<npacks; ++p) {
-          if (!(pmbp->tl_stagerun.Empty())) {pmbp->tl_stagerun.Reset();}
+          if (!(pmbp->stage_run_tl.Empty())) {pmbp->stage_run_tl.Reset();}
         }
         int npack_left = npacks;
         while (npack_left > 0) {
-          if (pmbp->tl_stagerun.Empty()) {
+          if (pmbp->stage_run_tl.Empty()) {
             npack_left--; 
           } else {
-            if (!pmbp->tl_stagerun.IsComplete()) {
-              auto status = pmbp->tl_stagerun.DoAvailable(this,stage);
+            if (!pmbp->stage_run_tl.IsComplete()) {
+              auto status = pmbp->stage_run_tl.DoAvailable(this,stage);
               if (status == TaskListStatus::complete) { npack_left--; }
             }
           }
         }} // extra brace to enclose scope
 
-        // StageEnd Tasks ---
+        // (2c) StageEnd Tasks ---
         // tasks that must be completed over all MBs at the end of each stage
         {for (int p=0; p<npacks; ++p) {
-          if (!(pmbp->tl_stageend.Empty())) {pmbp->tl_stageend.Reset();}
+          if (!(pmbp->stage_end_tl.Empty())) {pmbp->stage_end_tl.Reset();}
         }
         int npack_left = npacks;
         while (npack_left > 0) {
-          if (pmbp->tl_stageend.Empty()) {
+          if (pmbp->stage_end_tl.Empty()) {
             npack_left--; 
           } else {
-            if (!pmbp->tl_stageend.IsComplete()) {
-              auto status = pmbp->tl_stageend.DoAvailable(this,stage);
+            if (!pmbp->stage_end_tl.IsComplete()) {
+              auto status = pmbp->stage_end_tl.DoAvailable(this,stage);
               if (status == TaskListStatus::complete) { npack_left--; }
             }
           }
@@ -269,7 +287,7 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
 
       } // end of loop over stages
 
-      // Add STS TaskLists, etc here....
+      // (3) Add STS TaskLists, etc here....
 
       // increment time, ncycle, etc.
       // Compute new timestep
@@ -291,7 +309,8 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
       }
 
     }
-  }
+
+  }  // end of (time_evolution != tstatic) clause 
 
   return;
 }
@@ -360,5 +379,3 @@ void Driver::OutputCycleDiagnostics(Mesh *pm)
   }
   return;
 }
-
-

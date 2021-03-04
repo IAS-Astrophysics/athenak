@@ -21,7 +21,7 @@ namespace hydro {
 // \brief Apply physical boundary conditions for all Hydro variables at faces of MB which
 //  are at the edge of the computational domain
 
-TaskStatus Hydro::HydroApplyPhysicalBCs(Driver* pdrive, int stage)
+TaskStatus Hydro::ApplyPhysicalBCs(Driver* pdrive, int stage)
 {
   // loop over all MeshBlocks in this MeshBlockPack
   int nmb = pmy_pack->nmb_thispack;

@@ -17,6 +17,7 @@
 class EquationOfState;
 class Viscosity;
 class Resistivity;
+class SourceTerms;
 class Driver;
 
 // constants that enumerate MHD Riemann Solver options
@@ -34,9 +35,10 @@ class MHD
   ~MHD();
 
   // data
-  EquationOfState *peos;   // chosen EOS
-  Viscosity *pvisc=nullptr;        // (optional) viscosity
-  Resistivity *presist=nullptr;    // (optional) resistivity
+  EquationOfState *peos;          // chosen EOS
+  Viscosity *pvisc=nullptr;       // (optional) viscosity
+  Resistivity *presist=nullptr;   // (optional) resistivity
+  SourceTerms *psrc;              // source terms (both operator split and unsplit)
 
   int nmhd;                // number of cons variables (5/4 for adiabatic/isothermal)
   int nscalars;            // number of passive scalars
@@ -57,26 +59,29 @@ class MHD
   Real dtnew;
 
   // functions
-  void MHDStageStartTasks(TaskList &tl, TaskID start);
-  void MHDStageRunTasks(TaskList &tl, TaskID start);
-  void MHDStageEndTasks(TaskList &tl, TaskID start);
-  TaskStatus MHDInitRecv(Driver *d, int stage);
-  TaskStatus MHDClearRecv(Driver *d, int stage);
-  TaskStatus MHDClearSend(Driver *d, int stage);
-  TaskStatus MHDCopyCons(Driver *d, int stage);
+  void AssembleStageStartTasks(TaskList &tl, TaskID start);
+  void AssembleStageRunTasks(TaskList &tl, TaskID start);
+  void AssembleStageEndTasks(TaskList &tl, TaskID start);
+  void AssembleOperatorSplitTasks(TaskList &tl, TaskID start);
+  TaskStatus InitRecv(Driver *d, int stage);
+  TaskStatus ClearRecv(Driver *d, int stage);
+  TaskStatus ClearSend(Driver *d, int stage);
+  TaskStatus CopyCons(Driver *d, int stage);
   TaskStatus CalcFluxes(Driver *d, int stage);
   TaskStatus CornerE(Driver *d, int stage);
   TaskStatus CT(Driver *d, int stage);
   TaskStatus Update(Driver *d, int stage);
-  TaskStatus MHDSendU(Driver *d, int stage); 
-  TaskStatus MHDRecvU(Driver *d, int stage); 
-  TaskStatus MHDSendB(Driver *d, int stage); 
-  TaskStatus MHDRecvB(Driver *d, int stage); 
+  TaskStatus SendU(Driver *d, int stage); 
+  TaskStatus RecvU(Driver *d, int stage); 
+  TaskStatus SendB(Driver *d, int stage); 
+  TaskStatus RecvB(Driver *d, int stage); 
   TaskStatus ConToPrim(Driver *d, int stage);
   TaskStatus ViscousFluxes(Driver *d, int stage);
   TaskStatus ResistEMF(Driver *d, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
-  TaskStatus MHDApplyPhysicalBCs(Driver* pdrive, int stage);
+  TaskStatus ApplyPhysicalBCs(Driver* pdrive, int stage); // in file mhd/bvals dir
+  TaskStatus UpdateUnsplitSourceTerms(Driver *d, int stage);
+  TaskStatus UpdateOperatorSplitSourceTerms(Driver *d, int stage);
 
   // functions to set physical BCs for Hydro conserved variables, applied to single MB
   // specified by argument 'm'. 
