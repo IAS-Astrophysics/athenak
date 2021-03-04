@@ -1,4 +1,4 @@
-//========================================================================================
+//=======================================================================================r
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
@@ -22,6 +22,7 @@
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "srcterms/turb_driver.hpp"
 #include "utils/grid_locations.hpp"
 #include "outputs.hpp"
 
@@ -233,6 +234,14 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
       outvars.emplace_back("bcc3",2,&(pm->pmb_pack->pmhd->bcc0));
       break;
 
+    // Load turbulent forcing
+    case OutputVariable::turb_force:
+      if (pm->pmb_pack->pturb_driver == nullptr) ErrForceOutput(out_params.block_name);
+      outvars.emplace_back("force1",0,&(pm->pmb_pack->pturb_driver->force));
+      outvars.emplace_back("force2",1,&(pm->pmb_pack->pturb_driver->force));
+      outvars.emplace_back("force3",2,&(pm->pmb_pack->pturb_driver->force));
+      break;
+
     default:
       break;
   }
@@ -359,7 +368,7 @@ void OutputType::ErrHydroOutput(std::string block)
 
 //----------------------------------------------------------------------------------------
 // OutputType::ErrMHDOutput()
-// Print error message when output of Hydro variable requested but Hydro object not
+// Print error message when output of MHD variable requested but MHD object not
 // constructed, and then quit
 
 void OutputType::ErrMHDOutput(std::string block)
@@ -368,5 +377,19 @@ void OutputType::ErrMHDOutput(std::string block)
             << "Output of MHD variable requested in <output> block '" << block
             << "' but no MHD object " << std::endl << "has been constructed."
             << " Input file is likely missing a <mhd> block" << std::endl;
+  exit(EXIT_FAILURE);
+}
+
+//----------------------------------------------------------------------------------------
+// OutputType::ErrForceOutput()
+// Print error message when output of Force variable requested but Force object not
+// constructed, and then quit
+
+void OutputType::ErrForceOutput(std::string block)
+{
+  std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+            << "Output of Force variable requested in <output> block '" << block
+            << "' but no Force object " << std::endl << "has been constructed."
+            << " Input file is likely missing a <forcing> block" << std::endl;
   exit(EXIT_FAILURE);
 }

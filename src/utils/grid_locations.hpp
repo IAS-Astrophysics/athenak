@@ -13,7 +13,8 @@
 
 //----------------------------------------------------------------------------------------
 //! \fn void LeftEdgeX()
-// returns x-posn of left edge of i^th cell of N in range xmin->xmax
+// returns x-posn of left edge of i^th cell where index range [0,N] maps to [xmin,xmax]
+// Works for ghost cells if i outside range [0,N] (e.g. i=-1 is x-posn of first ghost cell)
 // Averages of linear interpolation from each side used to symmetrize r.o. error
 
 KOKKOS_INLINE_FUNCTION
@@ -25,7 +26,8 @@ static Real LeftEdgeX(int ith, int n, Real xmin, Real xmax)
 
 //----------------------------------------------------------------------------------------
 //! \fn void CellCenterX()
-// returns cell center position of i^th cell of N in range xmin->xmax
+// returns cell-center posn of i^th cell where index range [0,N] maps to [xmin,xmax]
+// Works for ghost cells if i outside range [0,N] (e.g. i=-1 is cc-posn of first ghost cell)
 // Averages of linear interpolation from each side used to symmetrize r.o. error
 
 KOKKOS_INLINE_FUNCTION

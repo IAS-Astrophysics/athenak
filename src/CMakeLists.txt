@@ -30,6 +30,7 @@ add_executable(
         hydro/hydro.cpp
         hydro/hydro_fluxes.cpp
         hydro/hydro_newdt.cpp
+        hydro/hydro_tasks.cpp
         hydro/hydro_update.cpp
         hydro/bvals/apply_physical_bcs.cpp
         hydro/bvals/outflow_hydro.cpp
@@ -46,8 +47,9 @@ add_executable(
         mhd/mhd_corner_e.cpp
         mhd/mhd_ct.cpp
         mhd/mhd_fluxes.cpp
-        mhd/mhd_update.cpp
         mhd/mhd_newdt.cpp
+        mhd/mhd_tasks.cpp
+        mhd/mhd_update.cpp
         mhd/bvals/apply_physical_bcs.cpp
         mhd/bvals/outflow_mhd.cpp
         mhd/bvals/reflect_mhd.cpp
@@ -65,6 +67,9 @@ add_executable(
         pgen/lw_implode.cpp
         pgen/orszag_tang.cpp
         pgen/shock_tube.cpp
+
+        srcterms/srcterms.cpp
+        srcterms/turb_driver.cpp
 
         utils/change_rundir.cpp
         utils/show_config.cpp

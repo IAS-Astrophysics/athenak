@@ -15,6 +15,7 @@
 class MeshBlock;
 namespace hydro {class Hydro;}
 namespace mhd {class MHD;}
+class TurbulenceDriver;
 
 //----------------------------------------------------------------------------------------
 //! \class MeshBlock
@@ -42,14 +43,16 @@ class MeshBlockPack
 
   MeshBlock* pmb;         // MeshBlocks in this MeshBlockPack
 
-  // physics modules (controlled by InitPhysicsModules)
+  // physics modules (controlled by AddPhysicsModules)
   hydro::Hydro *phydro=nullptr;
   mhd::MHD *pmhd=nullptr;
+  TurbulenceDriver *pturb_driver=nullptr;
 
   // task lists for MeshBlocks in this MeshBlockPack
-  TaskList tl_stagestart;
-  TaskList tl_stagerun;
-  TaskList tl_stageend;
+  TaskList stage_start_tl;
+  TaskList stage_run_tl;
+  TaskList stage_end_tl;
+  TaskList operator_split_tl;
 
   // functions
   void AddPhysicsModules(ParameterInput *pin);

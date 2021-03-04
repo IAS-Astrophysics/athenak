@@ -16,6 +16,7 @@
 // forward declarations
 class EquationOfState;
 class Viscosity;
+class SourceTerms;
 class Driver;
 
 // constants that enumerate Hydro Riemann Solver options
@@ -33,8 +34,9 @@ class Hydro
   ~Hydro();
 
   // data
-  EquationOfState *peos;  // chosen EOS
-  Viscosity *pvisc=nullptr;       // (optional) viscosity 
+  EquationOfState *peos;      // chosen EOS
+  Viscosity *pvisc=nullptr;   // (optional) viscosity 
+  SourceTerms *psrc;          // source terms (both operator split and unsplit)
 
   int nhydro;             // number of hydro variables (5/4 for adiabatic/isothermal)
   int nscalars;           // number of passive scalars
@@ -50,21 +52,24 @@ class Hydro
   Real dtnew;
 
   // functions
-  void HydroStageStartTasks(TaskList &tl, TaskID start);
-  void HydroStageRunTasks(TaskList &tl, TaskID start);
-  void HydroStageEndTasks(TaskList &tl, TaskID start);
-  TaskStatus HydroInitRecv(Driver *d, int stage);
-  TaskStatus HydroClearRecv(Driver *d, int stage);
-  TaskStatus HydroClearSend(Driver *d, int stage);
-  TaskStatus HydroCopyCons(Driver *d, int stage);
+  void AssembleStageStartTasks(TaskList &tl, TaskID start);
+  void AssembleStageRunTasks(TaskList &tl, TaskID start);
+  void AssembleStageEndTasks(TaskList &tl, TaskID start);
+  void AssembleOperatorSplitTasks(TaskList &tl, TaskID start);
+  TaskStatus InitRecv(Driver *d, int stage);
+  TaskStatus ClearRecv(Driver *d, int stage);
+  TaskStatus ClearSend(Driver *d, int stage);
+  TaskStatus CopyCons(Driver *d, int stage);
   TaskStatus CalcFluxes(Driver *d, int stage);
   TaskStatus Update(Driver *d, int stage);
-  TaskStatus HydroSendU(Driver *d, int stage); 
-  TaskStatus HydroRecvU(Driver *d, int stage); 
+  TaskStatus SendU(Driver *d, int stage); 
+  TaskStatus RecvU(Driver *d, int stage); 
   TaskStatus ConToPrim(Driver *d, int stage);
   TaskStatus ViscousFluxes(Driver *d, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
-  TaskStatus HydroApplyPhysicalBCs(Driver* pdrive, int stage);
+  TaskStatus ApplyPhysicalBCs(Driver* pdrive, int stage);  // in file in hydro/bvals dir
+  TaskStatus UpdateUnsplitSourceTerms(Driver *d, int stage);
+  TaskStatus UpdateOperatorSplitSourceTerms(Driver *d, int stage);
 
   // functions to set physical BCs for Hydro conserved variables, applied to single MB
   // specified by argument 'm'. 

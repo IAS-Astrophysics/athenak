@@ -10,6 +10,7 @@
 
 #include "parameter_input.hpp"
 #include "mesh.hpp"
+#include "srcterms/turb_driver.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "diffusion/viscosity.hpp"
@@ -26,64 +27,72 @@
 
 void MeshBlockPack::AddPhysicsModules(ParameterInput *pin)
 {
-  // Cycle through available physics modules, and construct those requested in input file.
-  // Also check that at least ONE is requested and initialized.
-
   int nphysics = 0;
-  // Create Hydro physics module if <hydro> block exists in input file
+  TaskID none(0);
+
+  // (1) TURBULENT FORCING
+  if (pin->DoesBlockExist("forcing")) {
+    pturb_driver = new TurbulenceDriver(this, pin);  // construct new turbulence driver
+  } else {
+    pturb_driver = nullptr;
+  }
+
+  // (2) HYDRODYNAMICS
+  // Create both Hydro physics module and Tasks (TaskLists stored in MeshBlockPack)
   if (pin->DoesBlockExist("hydro")) {
     phydro = new hydro::Hydro(this, pin);   // construct new Hydro object
     nphysics++;
+    phydro->AssembleOperatorSplitTasks(operator_split_tl, none);
+    phydro->AssembleStageStartTasks(stage_start_tl, none);
+    phydro->AssembleStageRunTasks(stage_run_tl, none);
+    phydro->AssembleStageEndTasks(stage_end_tl, none);
   } else {
     phydro = nullptr;
   }
 
-  // Create MHD physics module if <mhd> block exists in input file
+  // (3) MHD
+  // Create both MHD physics module and Tasks (TaskLists stored in MeshBlockPack)
   if (pin->DoesBlockExist("mhd")) {
     pmhd = new mhd::MHD(this, pin);   // construct new MHD object
     nphysics++;
+
+    if (operator_split_tl.Empty()) {
+      pmhd->AssembleOperatorSplitTasks(operator_split_tl, none);
+    } else {
+      TaskID last = operator_split_tl.GetIDLastTask();
+      pmhd->AssembleOperatorSplitTasks(operator_split_tl, last);
+    }
+
+    if (stage_start_tl.Empty()) {
+      pmhd->AssembleStageStartTasks(stage_start_tl, none);
+    } else {
+      TaskID last = stage_start_tl.GetIDLastTask();
+      pmhd->AssembleStageStartTasks(stage_start_tl, last);
+    }
+
+    if (stage_run_tl.Empty()) {
+      pmhd->AssembleStageRunTasks(stage_run_tl, none);
+    } else {
+      TaskID last = stage_run_tl.GetIDLastTask();
+      pmhd->AssembleStageRunTasks(stage_run_tl, last);
+    }
+
+    if (stage_end_tl.Empty()) {
+      pmhd->AssembleStageEndTasks(stage_end_tl, none);
+    } else {
+      TaskID last = stage_end_tl.GetIDLastTask();
+      pmhd->AssembleStageEndTasks(stage_end_tl, last);
+    }
   } else {
     pmhd = nullptr;
   }
 
+  // Check that at least ONE is requested and initialized.
   // Error if there are no physics blocks in the input file.
   if (nphysics == 0) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
         << "At least one physics module must be specified in input file." << std::endl;
     std::exit(EXIT_FAILURE);
-  }
-
-  // Create TaskLists for Start, Run, and End of each stage of integrator
-  // add Hydro tasks
-  TaskID none(0);
-  if (phydro != nullptr) {
-    phydro->HydroStageStartTasks(tl_stagestart, none);
-    phydro->HydroStageRunTasks(tl_stagerun, none);
-    phydro->HydroStageEndTasks(tl_stageend, none);
-  }
-
-  // add MHD tasks to end of Hydro tasks (if any have been added)
-  if (pmhd != nullptr) {
-    if (tl_stagestart.Empty()) {
-      pmhd->MHDStageStartTasks(tl_stagestart, none);
-    } else {
-      TaskID last = tl_stagestart.GetIDLastTask();
-      pmhd->MHDStageStartTasks(tl_stagestart, last);
-    }
-
-    if (tl_stagerun.Empty()) {
-      pmhd->MHDStageRunTasks(tl_stagerun, none);
-    } else {
-      TaskID last = tl_stagerun.GetIDLastTask();
-      pmhd->MHDStageRunTasks(tl_stagerun, last);
-    }
-
-    if (tl_stageend.Empty()) {
-      pmhd->MHDStageEndTasks(tl_stageend, none);
-    } else {
-      TaskID last = tl_stageend.GetIDLastTask();
-      pmhd->MHDStageEndTasks(tl_stageend, last);
-    }
   }
 
   return;

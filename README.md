@@ -26,6 +26,10 @@ Then run cmake (version 3.0 or later) for the specific target architecture in th
 
    $ cmake3 ../
 
+### Build for cpu with custom problem generator (located in /src/pgen/name.cpp)
+
+   $ cmake3 -D PROBLEM=name ../
+
 ### Default build for cpu with MPI
 
    $ cmake3 -D Athena_ENABLE_MPI=ON ../
