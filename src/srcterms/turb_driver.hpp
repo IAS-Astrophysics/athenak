@@ -22,10 +22,9 @@ class TurbulenceDriver
   TurbulenceDriver(MeshBlockPack *pp, ParameterInput *pin);
   ~TurbulenceDriver();
 
-  // objects for external forcing
-  DvceArray5D<Real> force;  // forcing for driving hydro variables
-  // amplitudes for OU process
-  DvceArray5D<Real> force_tmp;
+  // data
+  DvceArray5D<Real> force;        // forcing for driving hydro variables
+  DvceArray5D<Real> force_tmp;    // second force register for OU evolution
 
   DvceArray3D<Real> x1sin;   // array for pre-computed sin(k x)
   DvceArray3D<Real> x1cos;   // array for pre-computed cos(k x)
@@ -43,17 +42,14 @@ class TurbulenceDriver
   // parameters of driving
   int nlow,nhigh,ntot,nwave;
   Real tcorr,dedt;
-  Real expo,exp_prl,exp_prp;
+  Real expo;
 
-  // functions to compute/apply forcing
+  // function to compute/apply forcing
   void ApplyForcing(DvceArray5D<Real> &u);
-  KOKKOS_INLINE_FUNCTION Real RanGaussian(int64_t *idum);
-  KOKKOS_INLINE_FUNCTION Real Ran2(int64_t *idum);
-
-  bool first_time_;
 
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this TurbulenceDriver
+  bool first_time_;
 };
 
 

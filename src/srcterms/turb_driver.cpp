@@ -14,13 +14,14 @@
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "utils/grid_locations.hpp"
+#include "utils/random.hpp"
 #include "turb_driver.hpp"
 
 //----------------------------------------------------------------------------------------
 // constructor, initializes data structures and parameters
 
 TurbulenceDriver::TurbulenceDriver(MeshBlockPack *pp, ParameterInput *pin) :
-  pmy_pack(pp),
+  pmy_pack(pp), first_time_(true),
   force("force",1,1,1,1,1),
   force_tmp("force_tmp",1,1,1,1,1),
   x1sin("x1sin",1,1,1),
@@ -34,7 +35,7 @@ TurbulenceDriver::TurbulenceDriver(MeshBlockPack *pp, ParameterInput *pin) :
   amp3("amp3",1,1,1),
   seeds("seeds",1,1)
 {
-  // allocate memory for force array
+  // allocate memory for force registers
   int nmb = pmy_pack->nmb_thispack;
   auto &ncells = pmy_pack->mb_cells;
   int ncells1 = ncells.nx1 + 2*(ncells.ng);
@@ -44,7 +45,7 @@ TurbulenceDriver::TurbulenceDriver(MeshBlockPack *pp, ParameterInput *pin) :
   Kokkos::realloc(force, nmb, 3, ncells3, ncells2, ncells1);
   Kokkos::realloc(force_tmp, nmb, 3, ncells3, ncells2, ncells1);
 
-  // cut-off wavenumbers, kmin and kmax
+  // range of modes including, corresponding to kmin and kmax
   nlow = pin->GetOrAddInteger("forcing","nlow",1);
   nhigh = pin->GetOrAddInteger("forcing","nhigh",2);
   if (ncells3>1) { // 3D
@@ -59,9 +60,6 @@ TurbulenceDriver::TurbulenceDriver(MeshBlockPack *pp, ParameterInput *pin) :
   }
   // power-law exponent for isotropic driving
   expo = pin->GetOrAddReal("forcing","expo",5.0/3.0);
-  // power-law exponents for anisotropic driving
-  exp_prl = pin->GetOrAddReal("forcing","exp_prl",0.0);
-  exp_prp = pin->GetOrAddReal("forcing","exp_prp",5.0/3.0);
   // energy injection rate
   dedt = pin->GetOrAddReal("forcing","dedt",0.0);
   // correlation time
@@ -79,141 +77,6 @@ TurbulenceDriver::TurbulenceDriver(MeshBlockPack *pp, ParameterInput *pin) :
   Kokkos::realloc(amp3, nmb, ntot, nwave);
 
   Kokkos::realloc(seeds, nmb, ntot);
-
-  first_time_ = true;
-
-// the following code doesn't compile on GPUs. temprary moved to ApplyForcing
-/*
-  auto force_ = force;
-  auto force_tmp_ = force_tmp;
-
-  // initialize amp to zero, and seeds
-  par_for("force_init", DevExeSpace(), 0, nmb-1, 0, 2, 0, ncells3-1, 0, ncells2-1, 
-    0, ncells1-1, KOKKOS_LAMBDA(int m, int n, int k, int j, int i)
-    {
-      force_(m,n,k,j,i) = 0.0;
-      force_tmp_(m,n,k,j,i) = 0.0;
-    }
-  );
-
-  auto amp1_ = amp1;
-  auto amp2_ = amp2;
-  auto amp3_ = amp3;
-
-  par_for("amp_init", DevExeSpace(), 0, nmb-1, 0, ntot-1, 0, nwave-1,
-    KOKKOS_LAMBDA(int m, int n, int nw)
-    {
-      amp1_(m,n,nw) = 0.0;
-      amp2_(m,n,nw) = 0.0;
-      amp3_(m,n,nw) = 0.0;
-    }
-  );
-
-  auto seeds_ = seeds;
-
-  par_for("seeds_init", DevExeSpace(), 0, nmb-1, 0, ntot-1,
-    KOKKOS_LAMBDA(int m, int n)
-    {
-      seeds_(m,n) = n + n*n + n*n*n; // make sure seed is different for each harmonic
-    }
-  );
-
-  Real lx = pmy_pack->pmesh->mesh_size.x1max - pmy_pack->pmesh->mesh_size.x1min;
-  Real ly = pmy_pack->pmesh->mesh_size.x2max - pmy_pack->pmesh->mesh_size.x2min;
-  Real lz = pmy_pack->pmesh->mesh_size.x3max - pmy_pack->pmesh->mesh_size.x3min;
-  Real dkx = 2.0*M_PI/lx;
-  Real dky = 2.0*M_PI/ly;
-  Real dkz = 2.0*M_PI/lz;
-
-
-  int nw2 = 1;
-  int nw3 = 1;
-  if (ncells2>1) {
-    nw2 = nhigh+1;
-  }
-  if (ncells3>1) {
-    nw3 = nhigh+1;
-  }
-  int nw23 = nw3*nw2;
-
-  auto x1sin_ = x1sin;
-  auto x1cos_ = x1cos;
-
-  // Initialize sin and cos arrays
-  // bad design: requires saving sin/cos during restarts
-  int &is = pmy_pack->mb_cells.is, &ie = pmy_pack->mb_cells.ie;
-  int &nx1 = pmy_pack->mb_cells.nx1;
-  auto &size = pmy_pack->pmb->mbsize;
-  par_for("kx_loop", DevExeSpace(), 0, nmb-1, 0, ntot-1, is, ie,
-    KOKKOS_LAMBDA(int m, int n, int i)
-    { 
-      int nk1 = n/nw23;
-      Real kx = nk1*dkx;
-      Real x1vs = CellCenterX(0, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
-      Real x1v;
-      if (ncells1 > 1) {
-        Real dx1 = CellCenterX(1, nx1, size.x1min.d_view(m), size.x1max.d_view(m)) - x1vs;
-        x1v = (i-is)*dx1;
-      } else {
-        x1v = x1vs;
-      }
-      
-      x1sin_(m,n,i) = sin(kx*x1v);
-      x1cos_(m,n,i) = cos(kx*x1v);
-    }
-  );
-
-  auto x2sin_ = x2sin;
-  auto x2cos_ = x2cos;
-
-  int &js = pmy_pack->mb_cells.js, &je = pmy_pack->mb_cells.je;
-  int &nx2 = pmy_pack->mb_cells.nx2;
-  par_for("ky_loop", DevExeSpace(), 0, nmb-1, 0, ntot-1, js, je,
-    KOKKOS_LAMBDA(int m, int n, int j)
-    { 
-      int nk1 = n/nw23;
-      int nk2 = (n - nk1*nw23)/nw2;
-      Real ky = nk2*dky;
-      Real x2vs = CellCenterX(0, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
-      Real x2v;
-      if (ncells2 > 1) {
-        Real dx2 = CellCenterX(1, nx2, size.x2min.d_view(m), size.x2max.d_view(m)) - x2vs;
-        x2v = (j-js)*dx2;
-      } else {
-        x2v = x2vs;
-      }       
-
-      x2sin_(m,n,j) = sin(ky*x2v);
-      x2cos_(m,n,j) = cos(ky*x2v);
-    }
-  );
-
-  auto x3sin_ = x3sin;
-  auto x3cos_ = x3cos;
-
-  int &ks = pmy_pack->mb_cells.ks, &ke = pmy_pack->mb_cells.ke;
-  int &nx3 = pmy_pack->mb_cells.nx3;
-  par_for("kz_loop", DevExeSpace(), 0, nmb-1, 0, ntot-1, ks, ke,
-    KOKKOS_LAMBDA(int m, int n, int k)
-    { 
-      int nk1 = n/nw23;
-      int nk2 = (n - nk1*nw23)/nw2;
-      int nk3 = n - nk1*nw23 - nk2*nw2;
-      Real kz = nk3*dkz;
-      Real x3vs = CellCenterX(0, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
-      Real x3v;
-      if (ncells3 > 1) {
-        Real dx3 = CellCenterX(1, nx3, size.x3min.d_view(m), size.x3max.d_view(m)) - x3vs;
-        x3v = (k-ks)*dx3;
-      } else {
-        x3v = x3vs;
-      }      
-  
-      x3sin_(m,n,k) = sin(kz*x3v);
-      x3cos_(m,n,k) = cos(kz*x3v);
-    }
-  );
-*/
 }
 
 //----------------------------------------------------------------------------------------
@@ -251,11 +114,13 @@ void TurbulenceDriver::ApplyForcing(DvceArray5D<Real> &u)
 
   int &nmb = pmy_pack->nmb_thispack;
 
+  // Following code initializes driving, and so is only executed once at start of calc.
+  // Cannot be included in constructor since (it seems) Kokkos::par_for not allowed in cons.
   if (first_time_) {
+
+    // initialize force registers/amps to zero
     auto force_ = force;
     auto force_tmp_ = force_tmp;
-
-    // initialize amp to zero, and seeds
     par_for("force_init", DevExeSpace(), 0, nmb-1, 0, 2, 0, ncells3-1, 0, ncells2-1, 
       0, ncells1-1, KOKKOS_LAMBDA(int m, int n, int k, int j, int i)
       {
@@ -267,7 +132,6 @@ void TurbulenceDriver::ApplyForcing(DvceArray5D<Real> &u)
     auto amp1_ = amp1;
     auto amp2_ = amp2;
     auto amp3_ = amp3;
-
     par_for("amp_init", DevExeSpace(), 0, nmb-1, 0, nt-1, 0, nw-1,
       KOKKOS_LAMBDA(int m, int n, int nw)
       {
@@ -277,8 +141,8 @@ void TurbulenceDriver::ApplyForcing(DvceArray5D<Real> &u)
       }
     );
 
+    // initalize seeds
     auto seeds_ = seeds;
-
     par_for("seeds_init", DevExeSpace(), 0, nmb-1, 0, nt-1,
       KOKKOS_LAMBDA(int m, int n)
       {
@@ -308,14 +172,7 @@ void TurbulenceDriver::ApplyForcing(DvceArray5D<Real> &u)
       { 
         int nk1 = n/nw23;
         Real kx = nk1*dkx;
-        Real x1vs = CellCenterX(0, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
-        Real x1v;
-        if (ncells1 > 1) {
-          Real dx1 = CellCenterX(1, nx1, size.x1min.d_view(m), size.x1max.d_view(m)) - x1vs;
-          x1v = (i-is)*dx1;
-        } else {
-          x1v = x1vs;
-        }
+        Real x1v = CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
       
         x1sin_(m,n,i) = sin(kx*x1v);
         x1cos_(m,n,i) = cos(kx*x1v);
@@ -324,7 +181,6 @@ void TurbulenceDriver::ApplyForcing(DvceArray5D<Real> &u)
 
     auto x2sin_ = x2sin;
     auto x2cos_ = x2cos;
-
     int &nx2 = pmy_pack->mb_cells.nx2;
     par_for("ky_loop", DevExeSpace(), 0, nmb-1, 0, nt-1, 0, ncells2-1,
       KOKKOS_LAMBDA(int m, int n, int j)
@@ -332,14 +188,7 @@ void TurbulenceDriver::ApplyForcing(DvceArray5D<Real> &u)
         int nk1 = n/nw23;
         int nk2 = (n - nk1*nw23)/nw2;
         Real ky = nk2*dky;
-        Real x2vs = CellCenterX(0, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
-        Real x2v;
-        if (ncells2 > 1) {
-          Real dx2 = CellCenterX(1, nx2, size.x2min.d_view(m), size.x2max.d_view(m)) - x2vs;
-          x2v = (j-js)*dx2;
-        } else {
-          x2v = x2vs;
-        }       
+        Real x2v = CellCenterX(j-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
 
         x2sin_(m,n,j) = sin(ky*x2v);
         x2cos_(m,n,j) = cos(ky*x2v);
@@ -348,7 +197,6 @@ void TurbulenceDriver::ApplyForcing(DvceArray5D<Real> &u)
 
     auto x3sin_ = x3sin;
     auto x3cos_ = x3cos;
-
     int &nx3 = pmy_pack->mb_cells.nx3;
     par_for("kz_loop", DevExeSpace(), 0, nmb-1, 0, nt-1, 0, ncells3-1,
       KOKKOS_LAMBDA(int m, int n, int k)
@@ -357,14 +205,7 @@ void TurbulenceDriver::ApplyForcing(DvceArray5D<Real> &u)
         int nk2 = (n - nk1*nw23)/nw2;
         int nk3 = n - nk1*nw23 - nk2*nw2;
         Real kz = nk3*dkz;
-        Real x3vs = CellCenterX(0, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
-        Real x3v;
-        if (ncells3 > 1) {
-          Real dx3 = CellCenterX(1, nx3, size.x3min.d_view(m), size.x3max.d_view(m)) - x3vs;
-          x3v = (k-ks)*dx3;
-        } else {
-          x3v = x3vs;
-        }      
+        Real x3v = CellCenterX(k-ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
   
         x3sin_(m,n,k) = sin(kz*x3v);
         x3cos_(m,n,k) = cos(kz*x3v);
@@ -372,8 +213,9 @@ void TurbulenceDriver::ApplyForcing(DvceArray5D<Real> &u)
     );
 
     first_time_ = false;
-  }
+  }  // end of initialization
 
+  // Followed code executed every time
   auto force_tmp_ = force_tmp;
   par_for("forcing_init", DevExeSpace(), 0, nmb-1, 0, ncells3-1, 0, ncells2-1, 
     0, ncells1-1, KOKKOS_LAMBDA(int m, int k, int j, int i)
@@ -402,8 +244,6 @@ void TurbulenceDriver::ApplyForcing(DvceArray5D<Real> &u)
   auto amp1_ = amp1;
   auto amp2_ = amp2;
   auto amp3_ = amp3;
-
-  // there is a compiler warning in this loop on GPUs, but the code runs
   par_for ("generate_amplitudes", DevExeSpace(), 0, nmb-1, 0, nt-1,
     KOKKOS_LAMBDA (int m, int n) 
     {
@@ -748,111 +588,3 @@ void TurbulenceDriver::ApplyForcing(DvceArray5D<Real> &u)
 
   return;
 }
-
-//----------------------------------------------------------------------------------------
-//! \fn RanGaussian
-
-KOKKOS_INLINE_FUNCTION 
-Real TurbulenceDriver::RanGaussian(int64_t *idum)
-{
-  static int32_t iset = 0;
-  static Real gset;
-  Real fac, rsq, v1, v2;
-  if (*idum < 0) iset = 0;
-  if (iset == 0) {
-    do {
-      v1 = 2.0 * Ran2(idum) - 1.0;
-      v2 = 2.0 * Ran2(idum) - 1.0;
-      rsq = v1 * v1 + v2 * v2;
-    } while (rsq >=1.0 || rsq == 0.0);
-    fac = sqrt(-2.0*log(rsq)/rsq);
-    gset = v1 * fac;
-    iset = 1;
-    return v2*fac;
-  } else {
-    iset = 0;
-    return gset;
-  }
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn Ran2
-//! \brief  Extracted from the Numerical Recipes in C (version 2) code. Modified
-//!  to use doubles instead of floats. -- T. A. Gardiner -- Aug. 12, 2003
-//!
-//! Long period (> 2 x 10^{18}) random number generator of L'Ecuyer with Bays-Durham
-//! shuffle and added safeguards.  Returns a uniform random deviate between 0.0 and 1.0
-//! (exclusive of the endpoint values).  Call with idum = a negative integer to
-//! initialize; thereafter, do not alter idum between successive deviates in a sequence.
-//! RNMX should appriximate the largest floating-point value that is less than 1.
-
-#define IMR1 2147483563
-#define IMR2 2147483399
-#define AM (1.0/IMR1)
-#define IMM1 (IMR1-1)
-#define IA1 40014
-#define IA2 40692
-#define IQ1 53668
-#define IQ2 52774
-#define IR1 12211
-#define IR2 3791
-#define NDIV (1+IMM1/NTAB)
-#define RNMX (1.0-DBL_EPSILON)
-#define NTAB 32
-
-KOKKOS_INLINE_FUNCTION 
-Real TurbulenceDriver::Ran2(int64_t *idum)
-{
-  int j;
-  int64_t k;
-  static int64_t idum2=123456789;
-  static int64_t iy=0;
-  static int64_t iv[NTAB];
-
-  Real temp;
-
-  if (*idum <= 0) { // Initialize
-    if (-(*idum) < 1)
-      *idum=1; // Be sure to prevent idum = 0
-    else
-      *idum = -(*idum);
-    idum2=(*idum);
-    for (j=NTAB+7; j>=0; j--) { // Load the shuffle table (after 8 warm-ups)
-      k=(*idum)/IQ1;
-      *idum=IA1*(*idum-k*IQ1)-k*IR1;
-      if (*idum < 0) *idum += IMR1;
-      if (j < NTAB) iv[j] = *idum;
-    }
-    iy=iv[0];
-  }
-  k=(*idum)/IQ1;                 // Start here when not initializing
-  *idum=IA1*(*idum-k*IQ1)-k*IR1; // Compute idum=(IA1*idum) % IMR1 without
-  if (*idum < 0) *idum += IMR1;   // overflows by Schrage's method
-  k=idum2/IQ2;
-  idum2=IA2*(idum2-k*IQ2)-k*IR2; // Compute idum2=(IA2*idum) % IMR2 likewise
-  if (idum2 < 0) idum2 += IMR2;
-  j=static_cast<int>(iy/NDIV);              // Will be in the range 0...NTAB-1
-  iy=iv[j]-idum2;                // Here idum is shuffled, idum and idum2
-  iv[j] = *idum;                 // are combined to generate output
-  if (iy < 1)
-    iy += IMM1;
-
-  if ((temp=AM*iy) > RNMX)
-    return RNMX; // No endpoint values
-  else
-    return temp;
-}
-
-#undef NTAB
-#undef IMR1
-#undef IMR2
-#undef AM
-#undef IMM1
-#undef IA1
-#undef IA2
-#undef IQ1
-#undef IQ2
-#undef IR1
-#undef IR2
-#undef NDIV
-#undef RNMX
