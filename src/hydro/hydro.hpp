@@ -8,6 +8,7 @@
 //! \file hydro.hpp
 //  \brief definitions for Hydro class
 
+#include <map>
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
@@ -21,6 +22,10 @@ class Driver;
 
 // constants that enumerate Hydro Riemann Solver options
 enum class Hydro_RSolver {advect, llf, hllc, roe};
+
+// constants that enumerate Hydro tasks
+enum class HydroTaskName {undef=0, init_recv, copy_cons, calc_flux, visc_flux, update,
+  srcterms, send_u, recv_u, phys_bcs, cons2prim, newdt, clear_send};
 
 namespace hydro {
 
@@ -50,6 +55,9 @@ class Hydro
   DvceArray5D<Real> u1;       // conserved variables at intermediate step 
   DvceFaceFld5D<Real> uflx;   // fluxes of conserved quantities on cell faces
   Real dtnew;
+
+  // map for associating HydroTaskName with TaskID
+  std::map<HydroTaskName, TaskID> hydro_tasks;
 
   // functions
   void AssembleStageStartTasks(TaskList &tl, TaskID start);
