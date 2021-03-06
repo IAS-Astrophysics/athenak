@@ -17,7 +17,7 @@ namespace hydro {class Hydro;}
 namespace mhd {class MHD;}
 class Viscosity;
 class Resistivity;
-class TurbulenceDriver;
+class SourceTerms;
 
 //----------------------------------------------------------------------------------------
 //! \class MeshBlock
@@ -50,7 +50,7 @@ class MeshBlockPack
   mhd::MHD *pmhd=nullptr;
   Viscosity *pvisc=nullptr;        // (optional) viscosity
   Resistivity *presist=nullptr;    // (optional) resistivity
-  TurbulenceDriver *pturb_driver=nullptr;
+  SourceTerms *psrc=nullptr;
 
   // task lists for MeshBlocks in this MeshBlockPack
   TaskList stage_start_tl;

@@ -50,11 +50,6 @@ void MHD::AssembleStageRunTasks(TaskList &tl, TaskID start)
   id = tl.AddTask(&MHD::Update, this, mhd_tasks[MHDTaskName::calc_flux]);
   mhd_tasks.emplace(MHDTaskName::update, id);
   
-/****
-  id = tl.AddTask(&MHD::UpdateUnsplitSourceTerms, this, mhd_tasks[MHDTaskName::update]);
-  mhd_tasks.emplace(MHDTaskName::srcterms, id);
-***/
-  
   id = tl.AddTask(&MHD::SendU, this, mhd_tasks[MHDTaskName::update]);
   mhd_tasks.emplace(MHDTaskName::send_u, id);
   
@@ -95,18 +90,6 @@ void MHD::AssembleStageRunTasks(TaskList &tl, TaskID start)
 void MHD::AssembleStageEndTasks(TaskList &tl, TaskID start)
 {
   auto mhd_clear = tl.AddTask(&MHD::ClearSend, this, start);
-  return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn  void MHD::AssmebleOperatorSplitTasks
-//  \brief adds MHD tasks to operator split TaskList
-//  Called by MeshBlockPack::AddPhysicsModules() function directly after MHD constrctr
-
-void MHD::AssembleOperatorSplitTasks(TaskList &tl, TaskID start)
-{
-  if (not (psrc->operatorsplit_terms)) {return;}
-  auto split_srcterms = tl.AddTask(&MHD::UpdateOperatorSplitSourceTerms, this, start);
   return;
 }
 
@@ -281,37 +264,6 @@ TaskStatus MHD::RecvB(Driver *pdrive, int stage)
 TaskStatus MHD::ConToPrim(Driver *pdrive, int stage)
 {
   peos->ConsToPrim(u0, b0, w0, bcc0);
-  return TaskStatus::complete;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn  void MHD::UpdateUnsplitSourceTerms
-//  \brief adds source terms to MHD variables in EACH stage of stage run task list.
-//  These are source terms that will be included as an unsplit algorithm.
-//  This task is always included in the StageRun tasklist (see AssembleStageRunTasks()
-//  function above), so a return test is needed in the case of no source terms.
-
-TaskStatus MHD::UpdateUnsplitSourceTerms(Driver *pdrive, int stage)
-{
-  // return if no source terms included
-  if (not (psrc->stagerun_terms)) {return TaskStatus::complete;}
-
-  // apply source terms update to conserved variables
-  psrc->ApplySrcTermsStageRunTL(u0);
-  return TaskStatus::complete;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn  void MHD::UpdateOperatorSplitSourceTerms
-//  \brief adds source terms to MHD variables in operator split task list.
-//  These are source terms that will be included as an operator split algorithm.
-//  This task is not included in the OperatorSplit tasklist if there are no operator split
-//  source terms to be inlcuded (see AssembleOperatorSplitTasks() function above), so no
-//  return test is needed in the case of no source terms.
-
-TaskStatus MHD::UpdateOperatorSplitSourceTerms(Driver *pdrive, int stage)
-{
-  psrc->ApplySrcTermsOperatorSplitTL(u0);
   return TaskStatus::complete;
 }
 

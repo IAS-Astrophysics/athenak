@@ -10,11 +10,11 @@
 
 #include "parameter_input.hpp"
 #include "mesh.hpp"
-#include "srcterms/turb_driver.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
+#include "srcterms/srcterms.hpp"
 
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>
@@ -30,19 +30,11 @@ void MeshBlockPack::AddPhysicsModules(ParameterInput *pin)
   int nphysics = 0;
   TaskID none(0);
 
-  // (1) TURBULENT FORCING
-  if (pin->DoesBlockExist("forcing")) {
-    pturb_driver = new TurbulenceDriver(this, pin);  // construct new turbulence driver
-  } else {
-    pturb_driver = nullptr;
-  }
-
-  // (2) HYDRODYNAMICS
+  // (1) HYDRODYNAMICS
   // Create both Hydro physics module and Tasks (TaskLists stored in MeshBlockPack)
   if (pin->DoesBlockExist("hydro")) {
     phydro = new hydro::Hydro(this, pin);   // construct new Hydro object
     nphysics++;
-    phydro->AssembleOperatorSplitTasks(operator_split_tl, none);
     phydro->AssembleStageStartTasks(stage_start_tl, none);
     phydro->AssembleStageRunTasks(stage_run_tl, none);
     phydro->AssembleStageEndTasks(stage_end_tl, none);
@@ -50,18 +42,11 @@ void MeshBlockPack::AddPhysicsModules(ParameterInput *pin)
     phydro = nullptr;
   }
 
-  // (3) MHD
+  // (2) MHD
   // Create both MHD physics module and Tasks (TaskLists stored in MeshBlockPack)
   if (pin->DoesBlockExist("mhd")) {
     pmhd = new mhd::MHD(this, pin);   // construct new MHD object
     nphysics++;
-
-    if (operator_split_tl.Empty()) {
-      pmhd->AssembleOperatorSplitTasks(operator_split_tl, none);
-    } else {
-      TaskID last = operator_split_tl.GetIDLastTask();
-      pmhd->AssembleOperatorSplitTasks(operator_split_tl, last);
-    }
 
     if (stage_start_tl.Empty()) {
       pmhd->AssembleStageStartTasks(stage_start_tl, none);
@@ -87,7 +72,7 @@ void MeshBlockPack::AddPhysicsModules(ParameterInput *pin)
     pmhd = nullptr;
   }
 
-  // (4) VISCOSITY
+  // (3) VISCOSITY
   if (pin->DoesBlockExist("viscosity")) {
     pvisc = new Viscosity(this, pin);
     pvisc->AssembleStageRunTasks(stage_run_tl, none);
@@ -95,13 +80,21 @@ void MeshBlockPack::AddPhysicsModules(ParameterInput *pin)
     pvisc = nullptr;
   }
 
-  // (5) RESISTIVITY
+  // (4) RESISTIVITY
   if (pin->DoesBlockExist("resistivity")) {
     presist = new Resistivity(this, pin);
     presist->AssembleStageRunTasks(stage_run_tl, none);
   } else {
     presist = nullptr;
   }
+
+  // (5) SOURCE TERMS
+  // Source terms can be specified by many different <blocks> in the input file.  Thus,
+  // SourceTerms constructor parses input file to see if any source terms are enrolled.
+  // If not, functions below do not do anything
+  psrc = new SourceTerms(this, pin);
+  psrc->IncludeSplitSrcTermTasks(operator_split_tl, none);
+  psrc->IncludeUnsplitSrcTermTasks(stage_run_tl, none);
 
   // Check that at least ONE is requested and initialized.
   // Error if there are no physics blocks in the input file.

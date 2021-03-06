@@ -35,7 +35,7 @@ class Resistivity
   // map for associating ResistivityTaskName with TaskID
   std::map<ResistivityTaskName, TaskID> resist_tasks;
 
-  // functions to add viscous fluxes to Hydro and/or MHD fluxes  
+  // functions to add resistive EMF to MHD, and energy flux to Hydro
   void AssembleStageRunTasks(TaskList &tl, TaskID start);
   TaskStatus AddResistiveEMFs(Driver *pdrive, int stage);
   void AddOhmicEMF(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &efld);

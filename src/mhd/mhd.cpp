@@ -12,7 +12,6 @@
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
-#include "srcterms/srcterms.hpp"
 #include "bvals/bvals.hpp"
 #include "mhd/mhd.hpp"
 
@@ -58,10 +57,6 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // Initialize number of scalars
   nscalars = pin->GetOrAddInteger("mhd","nscalars",0);
-
-  // Add source terms (if any).  SourceTerms constructor parses input file to 
-  // check for terms to be added 
-  psrc = new SourceTerms(ppack, pin);
 
   // read time-evolution option [already error checked in driver constructor]
   std::string evolution_t = pin->GetString("time","evolution");

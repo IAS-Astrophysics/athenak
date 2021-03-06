@@ -4,11 +4,14 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file srcterms.cpp
-//  \brief implementation of source terms in equations of motion
+//  \brief Implementation of functions for source terms in equations of motion
 
 #include <iostream>
 
 #include "athena.hpp"
+#include "parameter_input.hpp"
+#include "mesh/mesh.hpp"
+#include "driver/driver.hpp"
 #include "turb_driver.hpp"
 #include "srcterms.hpp"
 
@@ -16,11 +19,19 @@
 // constructor, parses input file and initializes data structures and parameters
 
 SourceTerms::SourceTerms(MeshBlockPack *pp, ParameterInput *pin) :
-  pmy_pack(pp), operatorsplit_terms(false), stagerun_terms(false)
+  pmy_pack(pp), random_forcing(false)
 {
-  if (pp->pturb_driver != nullptr) {
-    operatorsplit_terms = true;
+  // Parse input file to see if any source terms are specified
+
+  // (1) Random forcing to drive turbulence
+  if (pin->DoesBlockExist("forcing")) {
+    pturb = new TurbulenceDriver(pp, pin);
+    pturb->InitializeModes();
+    random_forcing = true;
+  } else {
+    pturb = nullptr;
   }
+
 }
 
 //----------------------------------------------------------------------------------------
@@ -28,25 +39,30 @@ SourceTerms::SourceTerms(MeshBlockPack *pp, ParameterInput *pin) :
   
 SourceTerms::~SourceTerms()
 {
+  if (pturb != nullptr) delete pturb;
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn ApplySrcTermsStageRunTL()
-// apply unsplit source terms added in EACH stage of the stage run task list
+//! \fn  void IncludeSplitSrcTermTasks
+//  \brief includes tasks for source terms into operator split task list
+//  Called by MeshBlockPack::AddPhysicsModules() function directly after SourceTerms cons
 
-void SourceTerms::ApplySrcTermsStageRunTL(DvceArray5D<Real> &u)
+void SourceTerms::IncludeSplitSrcTermTasks(TaskList &tl, TaskID start)
 {
-  return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn ApplySrcTermsStageRunTL()
-// apply operator split source terms added in the operator split task list
-
-void SourceTerms::ApplySrcTermsOperatorSplitTL(DvceArray5D<Real> &u)
-{
-  if (pmy_pack->pturb_driver != nullptr) {
-    pmy_pack->pturb_driver->ApplyForcing(u);
+  if (random_forcing) {
+    auto id = tl.AddTask(&SourceTerms::ApplyRandomForcing, this, start);
+    split_tasks.emplace(SplitSrcTermTaskName::random_forcing, id);
   }
+
   return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void IncludeUnsplitSrcTermTasks
+//  \brief includes tasks for source terms into time integrator task list
+//  Called by MeshBlockPack::AddPhysicsModules() function directly after SourceTerms cons
+
+void SourceTerms::IncludeUnsplitSrcTermTasks(TaskList &tl, TaskID start)
+{   
+  return; 
 }

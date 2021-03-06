@@ -16,7 +16,6 @@
 
 // forward declarations
 class EquationOfState;
-class SourceTerms;
 class Driver;
 
 // constants that enumerate Hydro Riemann Solver options
@@ -24,7 +23,7 @@ enum class Hydro_RSolver {advect, llf, hllc, roe};
 
 // constants that enumerate Hydro tasks
 enum class HydroTaskName {undef=0, init_recv, copy_cons, calc_flux, update,
-  srcterms, send_u, recv_u, phys_bcs, cons2prim, newdt, clear_send};
+  send_u, recv_u, phys_bcs, cons2prim, newdt, clear_send};
 
 namespace hydro {
 
@@ -38,8 +37,7 @@ class Hydro
   ~Hydro();
 
   // data
-  EquationOfState *peos;      // chosen EOS
-  SourceTerms *psrc;          // source terms (both operator split and unsplit)
+  EquationOfState *peos;  // chosen EOS
 
   int nhydro;             // number of hydro variables (5/4 for adiabatic/isothermal)
   int nscalars;           // number of passive scalars
@@ -61,7 +59,6 @@ class Hydro
   void AssembleStageStartTasks(TaskList &tl, TaskID start);
   void AssembleStageRunTasks(TaskList &tl, TaskID start);
   void AssembleStageEndTasks(TaskList &tl, TaskID start);
-  void AssembleOperatorSplitTasks(TaskList &tl, TaskID start);
   TaskStatus InitRecv(Driver *d, int stage);
   TaskStatus ClearRecv(Driver *d, int stage);
   TaskStatus ClearSend(Driver *d, int stage);
@@ -73,8 +70,6 @@ class Hydro
   TaskStatus ConToPrim(Driver *d, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
   TaskStatus ApplyPhysicalBCs(Driver* pdrive, int stage);  // in file in hydro/bvals dir
-  TaskStatus UpdateUnsplitSourceTerms(Driver *d, int stage);
-  TaskStatus UpdateOperatorSplitSourceTerms(Driver *d, int stage);
 
   // functions to set physical BCs for Hydro conserved variables, applied to single MB
   // specified by argument 'm'. 

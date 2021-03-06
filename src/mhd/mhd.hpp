@@ -16,7 +16,6 @@
 
 // forward declarations
 class EquationOfState;
-class SourceTerms;
 class Driver;
 
 // constants that enumerate MHD Riemann Solver options
@@ -24,7 +23,7 @@ enum class MHD_RSolver {advect, llf, hlld, roe};
 
 // constants that enumerate Hydro tasks
 enum class MHDTaskName {undef=0, init_recv, copy_cons, calc_flux, update,
-  srcterms, send_u, recv_u, corner_emf, ct, send_b, recv_b, phys_bcs, cons2prim, newdt,
+  send_u, recv_u, corner_emf, ct, send_b, recv_b, phys_bcs, cons2prim, newdt,
   clear_send};
 
 
@@ -40,8 +39,7 @@ class MHD
   ~MHD();
 
   // data
-  EquationOfState *peos;          // chosen EOS
-  SourceTerms *psrc;              // source terms (both operator split and unsplit)
+  EquationOfState *peos;   // chosen EOS
 
   int nmhd;                // number of cons variables (5/4 for adiabatic/isothermal)
   int nscalars;            // number of passive scalars
@@ -68,7 +66,6 @@ class MHD
   void AssembleStageStartTasks(TaskList &tl, TaskID start);
   void AssembleStageRunTasks(TaskList &tl, TaskID start);
   void AssembleStageEndTasks(TaskList &tl, TaskID start);
-  void AssembleOperatorSplitTasks(TaskList &tl, TaskID start);
   TaskStatus InitRecv(Driver *d, int stage);
   TaskStatus ClearRecv(Driver *d, int stage);
   TaskStatus ClearSend(Driver *d, int stage);
@@ -84,8 +81,6 @@ class MHD
   TaskStatus ConToPrim(Driver *d, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
   TaskStatus ApplyPhysicalBCs(Driver* pdrive, int stage); // in file mhd/bvals dir
-  TaskStatus UpdateUnsplitSourceTerms(Driver *d, int stage);
-  TaskStatus UpdateOperatorSplitSourceTerms(Driver *d, int stage);
 
   // functions to set physical BCs for Hydro conserved variables, applied to single MB
   // specified by argument 'm'. 
