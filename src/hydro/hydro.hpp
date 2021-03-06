@@ -16,7 +16,6 @@
 
 // forward declarations
 class EquationOfState;
-class Viscosity;
 class SourceTerms;
 class Driver;
 
@@ -40,7 +39,6 @@ class Hydro
 
   // data
   EquationOfState *peos;      // chosen EOS
-  Viscosity *pvisc=nullptr;   // (optional) viscosity 
   SourceTerms *psrc;          // source terms (both operator split and unsplit)
 
   int nhydro;             // number of hydro variables (5/4 for adiabatic/isothermal)

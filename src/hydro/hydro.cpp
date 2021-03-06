@@ -47,6 +47,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   // Initialize number of scalars
   nscalars = pin->GetOrAddInteger("hydro","nscalars",0);
 
+/****
   // Add viscosity (if needed; default none)
   {std::string visc = pin->GetOrAddString("hydro","viscosity","none");
   if (visc.compare("isotropic") == 0) {
@@ -59,6 +60,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
               << "<hydro> viscosity = '" << visc << "' not implemented" << std::endl;
     std::exit(EXIT_FAILURE);
   }}
+*****/
 
   // Add source terms (if any).  SourceTerms constructor parses input file to 
   // check for terms to be added 
@@ -176,7 +178,6 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
 Hydro::~Hydro()
 {
   delete peos;
-  delete pvisc;
   delete pbval_u;
   delete psrc;
 }

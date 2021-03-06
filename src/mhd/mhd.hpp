@@ -36,7 +36,7 @@ class MHD
 
   // data
   EquationOfState *peos;          // chosen EOS
-  Viscosity *pvisc=nullptr;       // (optional) viscosity
+//  Viscosity *pvisc=nullptr;       // (optional) viscosity
   Resistivity *presist=nullptr;   // (optional) resistivity
   SourceTerms *psrc;              // source terms (both operator split and unsplit)
 

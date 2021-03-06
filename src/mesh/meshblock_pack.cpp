@@ -86,4 +86,5 @@ MeshBlockPack::~MeshBlockPack()
   delete pmb;
   if (phydro != nullptr) {delete phydro;}
   if (pmhd   != nullptr) {delete pmhd;}
+  if (pvisc  != nullptr) {delete pvisc;}
 }

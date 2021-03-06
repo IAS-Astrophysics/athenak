@@ -45,8 +45,8 @@ void MHD::AssembleStageRunTasks(TaskList &tl, TaskID start)
 {
   auto mhd_copycons = tl.AddTask(&MHD::CopyCons, this, start);
   auto mhd_fluxes = tl.AddTask(&MHD::CalcFluxes, this, mhd_copycons);
-  auto visc_fluxes = tl.AddTask(&MHD::ViscousFluxes, this, mhd_fluxes);
-  auto mhd_update = tl.AddTask(&MHD::Update, this, visc_fluxes);
+//  auto visc_fluxes = tl.AddTask(&MHD::ViscousFluxes, this, mhd_fluxes);
+  auto mhd_update = tl.AddTask(&MHD::Update, this, mhd_fluxes);
   auto mhd_src = tl.AddTask(&MHD::UpdateUnsplitSourceTerms, this, mhd_update);
   auto mhd_sendu = tl.AddTask(&MHD::SendU, this, mhd_src);
   auto mhd_recvu = tl.AddTask(&MHD::RecvU, this, mhd_sendu);
@@ -260,6 +260,7 @@ TaskStatus MHD::ConToPrim(Driver *pdrive, int stage)
   return TaskStatus::complete;
 }
 
+/***
 //----------------------------------------------------------------------------------------
 //! \fn  void MHD::ViscousFluxes
 //  \brief
@@ -269,6 +270,7 @@ TaskStatus MHD::ViscousFluxes(Driver *pdrive, int stage)
   if (pvisc != nullptr) pvisc->AddViscousFlux(u0, uflx);
   return TaskStatus::complete;
 }
+****/
 
 //----------------------------------------------------------------------------------------
 //! \fn  void MHD::ResistEMF

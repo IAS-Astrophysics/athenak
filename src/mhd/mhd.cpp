@@ -61,6 +61,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   // Initialize number of scalars
   nscalars = pin->GetOrAddInteger("mhd","nscalars",0);
 
+/***
   // Add viscosity (if needed; default none)
   {std::string visc = pin->GetOrAddString("mhd","viscosity","none");
   if (visc.compare("isotropic") == 0) {
@@ -73,6 +74,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
               << "<mhd> viscosity = '" << visc << "' not implemented" << std::endl;
     std::exit(EXIT_FAILURE);
   }}
+****/
 
   // Add resistity (if needed; default none)
   {std::string resist = pin->GetOrAddString("mhd","resistivity","none");
@@ -231,7 +233,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 MHD::~MHD()
 {
   delete peos;
-  delete pvisc;
+//  delete pvisc;
   delete presist;
   delete pbval_u;
   delete pbval_b;

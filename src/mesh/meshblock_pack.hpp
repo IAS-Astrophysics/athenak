@@ -15,6 +15,7 @@
 class MeshBlock;
 namespace hydro {class Hydro;}
 namespace mhd {class MHD;}
+class Viscosity;
 class TurbulenceDriver;
 
 //----------------------------------------------------------------------------------------
@@ -43,9 +44,10 @@ class MeshBlockPack
 
   MeshBlock* pmb;         // MeshBlocks in this MeshBlockPack
 
-  // physics modules (controlled by AddPhysicsModules)
+  // physics modules (controlled by AddPhysicsModules function in mesh_physics.cpp)
   hydro::Hydro *phydro=nullptr;
   mhd::MHD *pmhd=nullptr;
+  Viscosity *pvisc=nullptr;   // (optional) viscosity
   TurbulenceDriver *pturb_driver=nullptr;
 
   // task lists for MeshBlocks in this MeshBlockPack

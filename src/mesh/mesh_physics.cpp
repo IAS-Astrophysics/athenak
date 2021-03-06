@@ -87,6 +87,14 @@ void MeshBlockPack::AddPhysicsModules(ParameterInput *pin)
     pmhd = nullptr;
   }
 
+  // (4) VISCOSITY
+  if (pin->DoesBlockExist("viscosity")) {
+    pvisc = new Viscosity(this, pin);
+    pvisc->AssembleStageRunTasks(stage_run_tl, none);
+  } else {
+    pvisc = nullptr;
+  }
+
   // Check that at least ONE is requested and initialized.
   // Error if there are no physics blocks in the input file.
   if (nphysics == 0) {
@@ -107,26 +115,25 @@ void Mesh::NewTimeStep(const Real tlim)
   // Requires at least ONE of the physics modules to be defined.
   // limit increase in timestep to 2x old value
   dt = 2.0*dt;
+
+  // Hydro timestep
   if (pmb_pack->phydro != nullptr) {
-    // Hydro timestep
     dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->dtnew) );
-    if (pmb_pack->phydro->pvisc != nullptr) {
-      // Hydro viscosity timestep
-      dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->pvisc->dtnew) );
-    }
   }
+  // MHD timestep
   if (pmb_pack->pmhd != nullptr) {
-    // MHD timestep
     dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->dtnew) );
-    if (pmb_pack->pmhd->pvisc != nullptr) {
-      // MHD viscosity timestep
-      dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->pvisc->dtnew) );
-    }
-    if (pmb_pack->pmhd->presist != nullptr) {
-      // MHD resistivity timestep
-      dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->presist->dtnew) );
-    }
   }
+  // viscosity timestep
+  if (pmb_pack->pvisc != nullptr) {
+    dt = std::min(dt, (cfl_no)*(pmb_pack->pvisc->dtnew) );
+  }
+/***
+  // resistivity timestep
+  if (pmb_pack->presist != nullptr) {
+    dt = std::min(dt, (cfl_no)*(pmb_pack->presist->dtnew) );
+  }
+***/
 
 #if MPI_PARALLEL_ENABLED
   // get minimum dt over all MPI ranks

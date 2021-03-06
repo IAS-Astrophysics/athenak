@@ -233,6 +233,7 @@ TaskStatus Hydro::ConToPrim(Driver *pdrive, int stage)
   return TaskStatus::complete;
 }
 
+/****
 //----------------------------------------------------------------------------------------
 //! \fn  void Hydro::ViscousFluxes
 //  \brief
@@ -242,6 +243,7 @@ TaskStatus Hydro::ViscousFluxes(Driver *pdrive, int stage)
   if (pvisc != nullptr) pvisc->AddViscousFlux(u0, uflx);
   return TaskStatus::complete;
 }
+****/
 
 //----------------------------------------------------------------------------------------
 //! \fn  void Hydro::UpdateUnsplitSourceTerms
