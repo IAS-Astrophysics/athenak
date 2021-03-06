@@ -12,7 +12,6 @@
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
-#include "diffusion/resistivity.hpp"
 #include "srcterms/srcterms.hpp"
 #include "bvals/bvals.hpp"
 #include "mhd/mhd.hpp"
@@ -59,19 +58,6 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // Initialize number of scalars
   nscalars = pin->GetOrAddInteger("mhd","nscalars",0);
-
-  // Add resistity (if needed; default none)
-  {std::string resist = pin->GetOrAddString("mhd","resistivity","none");
-  if (resist.compare("ohmic") == 0) {
-    Real eta = pin->GetReal("mhd","eta_ohm");
-    presist = new Ohmic(ppack, pin, eta);
-  } else if (resist.compare("none") == 0) {
-    presist = nullptr;
-  } else {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "<mhd> resistivity = '" << resist << "' not implemented" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }}
 
   // Add source terms (if any).  SourceTerms constructor parses input file to 
   // check for terms to be added 
@@ -217,7 +203,6 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 MHD::~MHD()
 {
   delete peos;
-  delete presist;
   delete pbval_u;
   delete pbval_b;
 }

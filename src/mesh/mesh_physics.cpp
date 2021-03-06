@@ -95,6 +95,14 @@ void MeshBlockPack::AddPhysicsModules(ParameterInput *pin)
     pvisc = nullptr;
   }
 
+  // (5) RESISTIVITY
+  if (pin->DoesBlockExist("resistivity")) {
+    presist = new Resistivity(this, pin);
+    presist->AssembleStageRunTasks(stage_run_tl, none);
+  } else {
+    presist = nullptr;
+  }
+
   // Check that at least ONE is requested and initialized.
   // Error if there are no physics blocks in the input file.
   if (nphysics == 0) {
@@ -128,12 +136,10 @@ void Mesh::NewTimeStep(const Real tlim)
   if (pmb_pack->pvisc != nullptr) {
     dt = std::min(dt, (cfl_no)*(pmb_pack->pvisc->dtnew) );
   }
-/***
   // resistivity timestep
   if (pmb_pack->presist != nullptr) {
     dt = std::min(dt, (cfl_no)*(pmb_pack->presist->dtnew) );
   }
-***/
 
 #if MPI_PARALLEL_ENABLED
   // get minimum dt over all MPI ranks

@@ -15,8 +15,6 @@
 #include "tasklist/task_list.hpp"
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
-#include "diffusion/viscosity.hpp"
-#include "diffusion/resistivity.hpp"
 #include "bvals/bvals.hpp"
 #include "utils/create_mpitag.hpp"
 #include "srcterms/srcterms.hpp"
@@ -84,22 +82,6 @@ void MHD::AssembleStageRunTasks(TaskList &tl, TaskID start)
   id = tl.AddTask(&MHD::NewTimeStep, this, mhd_tasks[MHDTaskName::cons2prim]);
   mhd_tasks.emplace(MHDTaskName::newdt, id);
 
-
-/****
-  auto mhd_fluxes = tl.AddTask(&MHD::CalcFluxes, this, mhd_copycons);
-  auto mhd_update = tl.AddTask(&MHD::Update, this, mhd_fluxes);
-  auto mhd_src = tl.AddTask(&MHD::UpdateUnsplitSourceTerms, this, mhd_update);
-  auto mhd_sendu = tl.AddTask(&MHD::SendU, this, mhd_src);
-  auto mhd_recvu = tl.AddTask(&MHD::RecvU, this, mhd_sendu);
-  auto mhd_emf = tl.AddTask(&MHD::CornerE, this, mhd_recvu);
-  auto resist_emf = tl.AddTask(&MHD::ResistEMF, this, mhd_emf);
-  auto mhd_ct = tl.AddTask(&MHD::CT, this, resist_emf);
-  auto mhd_sendb = tl.AddTask(&MHD::SendB, this, mhd_ct);
-  auto mhd_recvb = tl.AddTask(&MHD::RecvB, this, mhd_sendb);
-  auto mhd_phybcs = tl.AddTask(&MHD::ApplyPhysicalBCs, this, mhd_recvb);
-  auto mhd_con2prim = tl.AddTask(&MHD::ConToPrim, this, mhd_phybcs);
-  auto mhd_newdt = tl.AddTask(&MHD::NewTimeStep, this, mhd_con2prim);
-****/
   return;
 }
 
@@ -299,28 +281,6 @@ TaskStatus MHD::RecvB(Driver *pdrive, int stage)
 TaskStatus MHD::ConToPrim(Driver *pdrive, int stage)
 {
   peos->ConsToPrim(u0, b0, w0, bcc0);
-  return TaskStatus::complete;
-}
-
-/***
-//----------------------------------------------------------------------------------------
-//! \fn  void MHD::ViscousFluxes
-//  \brief
-
-TaskStatus MHD::ViscousFluxes(Driver *pdrive, int stage)
-{
-  if (pvisc != nullptr) pvisc->AddViscousFlux(u0, uflx);
-  return TaskStatus::complete;
-}
-****/
-
-//----------------------------------------------------------------------------------------
-//! \fn  void MHD::ResistEMF
-//  \brief
-
-TaskStatus MHD::ResistEMF(Driver *pdrive, int stage)
-{
-  if (presist != nullptr) presist->AddResistiveEMF(b0, efld);
   return TaskStatus::complete;
 }
 

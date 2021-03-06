@@ -16,7 +16,6 @@
 
 // forward declarations
 class EquationOfState;
-class Resistivity;
 class SourceTerms;
 class Driver;
 
@@ -42,7 +41,6 @@ class MHD
 
   // data
   EquationOfState *peos;          // chosen EOS
-  Resistivity *presist=nullptr;   // (optional) resistivity
   SourceTerms *psrc;              // source terms (both operator split and unsplit)
 
   int nmhd;                // number of cons variables (5/4 for adiabatic/isothermal)
@@ -84,7 +82,6 @@ class MHD
   TaskStatus SendB(Driver *d, int stage); 
   TaskStatus RecvB(Driver *d, int stage); 
   TaskStatus ConToPrim(Driver *d, int stage);
-  TaskStatus ResistEMF(Driver *d, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
   TaskStatus ApplyPhysicalBCs(Driver* pdrive, int stage); // in file mhd/bvals dir
   TaskStatus UpdateUnsplitSourceTerms(Driver *d, int stage);

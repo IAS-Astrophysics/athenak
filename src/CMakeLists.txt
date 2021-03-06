@@ -15,7 +15,6 @@ add_executable(
         bvals/bvals_fc.cpp
 
         diffusion/resistivity.cpp
-        diffusion/ohmic.cpp
         diffusion/viscosity.cpp
 
         driver/driver.cpp
