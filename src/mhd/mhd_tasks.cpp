@@ -43,9 +43,50 @@ void MHD::AssembleStageStartTasks(TaskList &tl, TaskID start)
 
 void MHD::AssembleStageRunTasks(TaskList &tl, TaskID start)
 {
-  auto mhd_copycons = tl.AddTask(&MHD::CopyCons, this, start);
+  auto id = tl.AddTask(&MHD::CopyCons, this, start);
+  mhd_tasks.emplace(MHDTaskName::copy_cons, id);
+
+  id = tl.AddTask(&MHD::CalcFluxes, this, mhd_tasks[MHDTaskName::copy_cons]);
+  mhd_tasks.emplace(MHDTaskName::calc_flux, id);
+  
+  id = tl.AddTask(&MHD::Update, this, mhd_tasks[MHDTaskName::calc_flux]);
+  mhd_tasks.emplace(MHDTaskName::update, id);
+  
+/****
+  id = tl.AddTask(&MHD::UpdateUnsplitSourceTerms, this, mhd_tasks[MHDTaskName::update]);
+  mhd_tasks.emplace(MHDTaskName::srcterms, id);
+***/
+  
+  id = tl.AddTask(&MHD::SendU, this, mhd_tasks[MHDTaskName::update]);
+  mhd_tasks.emplace(MHDTaskName::send_u, id);
+  
+  id = tl.AddTask(&MHD::RecvU, this, mhd_tasks[MHDTaskName::send_u]);
+  mhd_tasks.emplace(MHDTaskName::recv_u, id);
+  
+  id = tl.AddTask(&MHD::CornerE, this, mhd_tasks[MHDTaskName::recv_u]);
+  mhd_tasks.emplace(MHDTaskName::corner_emf, id);
+  
+  id = tl.AddTask(&MHD::CT, this, mhd_tasks[MHDTaskName::corner_emf]);
+  mhd_tasks.emplace(MHDTaskName::ct, id);
+  
+  id = tl.AddTask(&MHD::SendB, this, mhd_tasks[MHDTaskName::ct]);
+  mhd_tasks.emplace(MHDTaskName::send_b, id);
+  
+  id = tl.AddTask(&MHD::RecvB, this, mhd_tasks[MHDTaskName::send_b]);
+  mhd_tasks.emplace(MHDTaskName::recv_b, id);
+  
+  id = tl.AddTask(&MHD::ApplyPhysicalBCs, this, mhd_tasks[MHDTaskName::recv_b]);
+  mhd_tasks.emplace(MHDTaskName::phys_bcs, id);
+  
+  id = tl.AddTask(&MHD::ConToPrim, this, mhd_tasks[MHDTaskName::phys_bcs]);
+  mhd_tasks.emplace(MHDTaskName::cons2prim, id);
+  
+  id = tl.AddTask(&MHD::NewTimeStep, this, mhd_tasks[MHDTaskName::cons2prim]);
+  mhd_tasks.emplace(MHDTaskName::newdt, id);
+
+
+/****
   auto mhd_fluxes = tl.AddTask(&MHD::CalcFluxes, this, mhd_copycons);
-//  auto visc_fluxes = tl.AddTask(&MHD::ViscousFluxes, this, mhd_fluxes);
   auto mhd_update = tl.AddTask(&MHD::Update, this, mhd_fluxes);
   auto mhd_src = tl.AddTask(&MHD::UpdateUnsplitSourceTerms, this, mhd_update);
   auto mhd_sendu = tl.AddTask(&MHD::SendU, this, mhd_src);
@@ -58,6 +99,7 @@ void MHD::AssembleStageRunTasks(TaskList &tl, TaskID start)
   auto mhd_phybcs = tl.AddTask(&MHD::ApplyPhysicalBCs, this, mhd_recvb);
   auto mhd_con2prim = tl.AddTask(&MHD::ConToPrim, this, mhd_phybcs);
   auto mhd_newdt = tl.AddTask(&MHD::NewTimeStep, this, mhd_con2prim);
+****/
   return;
 }
 

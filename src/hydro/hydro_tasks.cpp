@@ -48,11 +48,6 @@ void Hydro::AssembleStageRunTasks(TaskList &tl, TaskID start)
   id = tl.AddTask(&Hydro::CalcFluxes, this, hydro_tasks[HydroTaskName::copy_cons]);
   hydro_tasks.emplace(HydroTaskName::calc_flux, id);
 
-/*****
-  id = tl.AddTask(&Hydro::ViscousFluxes, this, hydro_tasks[HydroTaskName::calc_flux]);
-  hydro_tasks.emplace(HydroTaskName::visc_flux, id);
-***/
-
   id = tl.AddTask(&Hydro::Update, this, hydro_tasks[HydroTaskName::calc_flux]);
   hydro_tasks.emplace(HydroTaskName::update, id);
 
@@ -232,18 +227,6 @@ TaskStatus Hydro::ConToPrim(Driver *pdrive, int stage)
   peos->ConsToPrim(u0, w0);
   return TaskStatus::complete;
 }
-
-/****
-//----------------------------------------------------------------------------------------
-//! \fn  void Hydro::ViscousFluxes
-//  \brief
-
-TaskStatus Hydro::ViscousFluxes(Driver *pdrive, int stage)
-{
-  if (pvisc != nullptr) pvisc->AddViscousFlux(u0, uflx);
-  return TaskStatus::complete;
-}
-****/
 
 //----------------------------------------------------------------------------------------
 //! \fn  void Hydro::UpdateUnsplitSourceTerms

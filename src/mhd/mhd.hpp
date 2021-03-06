@@ -8,6 +8,7 @@
 //! \file mhd.hpp
 //  \brief definitions for MHD class
 
+#include <map>
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
@@ -15,13 +16,18 @@
 
 // forward declarations
 class EquationOfState;
-class Viscosity;
 class Resistivity;
 class SourceTerms;
 class Driver;
 
 // constants that enumerate MHD Riemann Solver options
 enum class MHD_RSolver {advect, llf, hlld, roe};
+
+// constants that enumerate Hydro tasks
+enum class MHDTaskName {undef=0, init_recv, copy_cons, calc_flux, update,
+  srcterms, send_u, recv_u, corner_emf, ct, send_b, recv_b, phys_bcs, cons2prim, newdt,
+  clear_send};
+
 
 namespace mhd {
 
@@ -36,7 +42,6 @@ class MHD
 
   // data
   EquationOfState *peos;          // chosen EOS
-//  Viscosity *pvisc=nullptr;       // (optional) viscosity
   Resistivity *presist=nullptr;   // (optional) resistivity
   SourceTerms *psrc;              // source terms (both operator split and unsplit)
 
@@ -58,6 +63,9 @@ class MHD
   DvceEdgeFld4D<Real> efld;   // edge-centered electric fields (fluxes of B)
   Real dtnew;
 
+  // map for associating MHDTaskName with TaskID
+  std::map<MHDTaskName, TaskID> mhd_tasks;
+
   // functions
   void AssembleStageStartTasks(TaskList &tl, TaskID start);
   void AssembleStageRunTasks(TaskList &tl, TaskID start);
@@ -76,7 +84,6 @@ class MHD
   TaskStatus SendB(Driver *d, int stage); 
   TaskStatus RecvB(Driver *d, int stage); 
   TaskStatus ConToPrim(Driver *d, int stage);
-  TaskStatus ViscousFluxes(Driver *d, int stage);
   TaskStatus ResistEMF(Driver *d, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
   TaskStatus ApplyPhysicalBCs(Driver* pdrive, int stage); // in file mhd/bvals dir

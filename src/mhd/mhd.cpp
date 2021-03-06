@@ -12,7 +12,6 @@
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
-#include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
 #include "srcterms/srcterms.hpp"
 #include "bvals/bvals.hpp"
@@ -60,21 +59,6 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // Initialize number of scalars
   nscalars = pin->GetOrAddInteger("mhd","nscalars",0);
-
-/***
-  // Add viscosity (if needed; default none)
-  {std::string visc = pin->GetOrAddString("mhd","viscosity","none");
-  if (visc.compare("isotropic") == 0) {
-    Real nu = pin->GetReal("mhd","nu_iso");
-    pvisc = new IsoViscosity(ppack, pin, nu);
-  } else if (visc.compare("none") == 0) {
-    pvisc = nullptr;
-  } else {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "<mhd> viscosity = '" << visc << "' not implemented" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }}
-****/
 
   // Add resistity (if needed; default none)
   {std::string resist = pin->GetOrAddString("mhd","resistivity","none");
@@ -233,7 +217,6 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 MHD::~MHD()
 {
   delete peos;
-//  delete pvisc;
   delete presist;
   delete pbval_u;
   delete pbval_b;

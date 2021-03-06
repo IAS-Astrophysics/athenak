@@ -23,7 +23,7 @@ class Driver;
 enum class Hydro_RSolver {advect, llf, hllc, roe};
 
 // constants that enumerate Hydro tasks
-enum class HydroTaskName {undef=0, init_recv, copy_cons, calc_flux, visc_flux, update,
+enum class HydroTaskName {undef=0, init_recv, copy_cons, calc_flux, update,
   srcterms, send_u, recv_u, phys_bcs, cons2prim, newdt, clear_send};
 
 namespace hydro {
@@ -71,7 +71,6 @@ class Hydro
   TaskStatus SendU(Driver *d, int stage); 
   TaskStatus RecvU(Driver *d, int stage); 
   TaskStatus ConToPrim(Driver *d, int stage);
-  TaskStatus ViscousFluxes(Driver *d, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
   TaskStatus ApplyPhysicalBCs(Driver* pdrive, int stage);  // in file in hydro/bvals dir
   TaskStatus UpdateUnsplitSourceTerms(Driver *d, int stage);

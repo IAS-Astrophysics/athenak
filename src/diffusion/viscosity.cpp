@@ -70,6 +70,13 @@ Viscosity::Viscosity(MeshBlockPack *pp, ParameterInput *pin)
 }
 
 //----------------------------------------------------------------------------------------
+// Viscosity destructor
+
+Viscosity::~Viscosity()
+{
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn  void Viscosity::AssembleStageRunTasks
 //  \brief inserts Viscosity tasks into stage run TaskList
 //  Called by MeshBlockPack::AddPhysicsModules() function directly after Viscosity cons
@@ -82,14 +89,13 @@ void Viscosity::AssembleStageRunTasks(TaskList &tl, TaskID start)
                        pmy_pack->phydro->hydro_tasks[HydroTaskName::update]);
     visc_tasks.emplace(ViscosityTaskName::hydro_vflux, id);
   }
-/**  MHD here
-  if (hydro_nu_iso != 0.0) {
-    id = tl.InsertTask(&Viscosity::AddViscosityHydro, this, 
-                       pmy_pack->phydro->hydro_tasks[HydroTaskName::calc_flux],
-                       visc_tasks[ViscosityTaskName::hydro_vflux]);
+
+  if (mhd_nu_iso != 0.0) {
+    auto id = tl.InsertTask(&Viscosity::AddViscosityMHD, this, 
+                       pmy_pack->pmhd->mhd_tasks[MHDTaskName::calc_flux],
+                       pmy_pack->pmhd->mhd_tasks[MHDTaskName::update]);
     visc_tasks.emplace(ViscosityTaskName::hydro_vflux, id);
   }
-**/
 
 /*****/
 std::cout << std::endl;

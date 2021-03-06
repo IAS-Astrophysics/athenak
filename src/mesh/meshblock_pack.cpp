@@ -14,6 +14,7 @@
 #include "mesh.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "diffusion/viscosity.hpp"
 
 //----------------------------------------------------------------------------------------
 // MeshBlockPack constructor:
