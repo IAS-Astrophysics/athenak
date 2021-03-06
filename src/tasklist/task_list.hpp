@@ -95,7 +95,7 @@ class Task {
   void SetComplete() {complete_ = true;}
   void SetIncomplete() {complete_ = false;}
   bool IsComplete() {return complete_;}
-  // If this Task depends on id, change dependency to 'newdep'
+  // If this Task depends on id, change that dependency to 'newdep'
   void ChangeDependency(TaskID id, TaskID newdep) {
     if ((dep_ & id) == id) {dep_ = ((dep_ ^ id) | newdep);}
   }

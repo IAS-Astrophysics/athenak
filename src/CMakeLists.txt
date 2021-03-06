@@ -67,6 +67,8 @@ add_executable(
         pgen/shock_tube.cpp
 
         srcterms/srcterms.cpp
+        srcterms/constant_acc.cpp
+        srcterms/shearing_box.cpp
         srcterms/turb_driver.cpp
 
         utils/change_rundir.cpp
