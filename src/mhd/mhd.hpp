@@ -96,6 +96,8 @@ class MHD
   void OutflowOuterX2(int m);
   void OutflowInnerX3(int m);
   void OutflowOuterX3(int m);
+  void ShearInnerX1(int m);
+  void ShearOuterX1(int m);
 
  private:
   MeshBlockPack* pmy_pack;   // ptr to MeshBlockPack containing this MHD

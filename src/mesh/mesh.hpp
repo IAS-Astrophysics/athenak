@@ -131,6 +131,7 @@ class Mesh
   RegionCells mesh_cells;     // number of cells in mesh (physical root level)
   BoundaryFlag mesh_bcs[6];   // physical boundary conditions at 6 faces of mesh
   bool nx2gt1, nx3gt1;        // flags to indictate 2D/3D calculations
+  bool shearing_periodic;     // flag to indicate periodic x1/x2 boundaries are sheared
   bool adaptive, multilevel;
 
   int nmb_rootx1, nmb_rootx2, nmb_rootx3; // # of MeshBlocks at root level in each dir

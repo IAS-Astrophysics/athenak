@@ -71,7 +71,8 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
   int &ks = pmbp->mb_cells.ks, &ke = pmbp->mb_cells.ke;
   auto &size = pmbp->pmb->mbsize;
 
-  // Initialize magnetic field.  For 2D shearing box
+  // Initialize magnetic field first, so entire arrays are initialized before adding 
+  // magnetic energy to conserved variables in next loop.  For 2D shearing box
   // B1=Bx, B2=Bz, B3=By
   // ifield = 1 - Bz=B0 sin(kx*xav1) field with zero-net-flux [default]
   // ifield = 2 - uniform Bz
@@ -99,6 +100,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
     }
   );
 
+  // Initialize conserved variables
   Real qshear = pin->GetReal("shearing_box","qshear");
   Real omega0 = pin->GetReal("shearing_box","omega0");
   auto &mbgid = pmbp->pmb->mbgid;

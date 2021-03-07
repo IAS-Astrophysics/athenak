@@ -25,7 +25,8 @@
 // function, so that they can store a pointer to the Mesh which can be reliably referenced
 // only after the Mesh constructor has finished
 
-Mesh::Mesh(ParameterInput *pin)
+Mesh::Mesh(ParameterInput *pin) :
+shearing_periodic(false)
 {
   // Set physical size and number of cells in mesh (root level)
   mesh_size.x1min = pin->GetReal("mesh", "x1min");
@@ -53,6 +54,11 @@ Mesh::Mesh(ParameterInput *pin)
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
         << "Both inner and outer x1 bcs must be periodic" << std::endl;
     std::exit(EXIT_FAILURE);
+  }
+  // Check if x1 boundaries are shearing periodic. When flag set to true, shearing BCs
+  // will be called in ApplyPhysicalBCs() in Hydro and/or MHD.
+  if (mesh_bcs[BoundaryFace::inner_x1] == BoundaryFlag::periodic) {
+    shearing_periodic = pin->GetOrAddBoolean("mesh","speriodic","false");
   }
 
   // Set BC flags for ix2/ox2 boundaries and error check

@@ -35,6 +35,9 @@ TaskStatus Hydro::ApplyPhysicalBCs(Driver* pdrive, int stage)
       case BoundaryFlag::outflow:
         OutflowInnerX1(m);
         break;
+      case BoundaryFlag::periodic:
+        if (pmy_pack->pmesh->shearing_periodic) ShearInnerX1(m);
+        break;
       default:
         break;
     }
@@ -46,6 +49,9 @@ TaskStatus Hydro::ApplyPhysicalBCs(Driver* pdrive, int stage)
         break;
       case BoundaryFlag::outflow:
         OutflowOuterX1(m);
+        break;
+      case BoundaryFlag::periodic:
+        if (pmy_pack->pmesh->shearing_periodic) ShearOuterX1(m);
         break;
       default:
         break;
