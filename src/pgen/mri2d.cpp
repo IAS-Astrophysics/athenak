@@ -14,6 +14,8 @@
 //! - ifield = 1 - Bz=B0 sin(x1) field with zero-net-flux [default]
 //! - ifield = 2 - uniform Bz
 
+#include <Kokkos_Random.hpp>
+
 // C++ headers
 #include <cmath>      // sqrt()
 #include <iostream>   // cout, endl
@@ -28,7 +30,6 @@
 #include "eos/eos.hpp"
 #include "mhd/mhd.hpp"
 #include "srcterms/srcterms.hpp"
-#include "utils/random.hpp" // ran2()
 #include "utils/grid_locations.hpp"
 #include "pgen.hpp"
 
@@ -98,20 +99,19 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
     }
   );
 
-  int64_t iseed = -1; // Initialize with unique seed on each MB
-//  int64_t iseed = -1 + mbgid.d_view(m); // Initialize with unique seed on each MB
   Real qshear = pin->GetReal("shearing_box","qshear");
   Real omega0 = pin->GetReal("shearing_box","omega0");
   auto &mbgid = pmbp->pmb->mbgid;
   auto u0 = pmbp->pmhd->u0;
-      int64_t &iseed_ = iseed;
+  Kokkos::Random_XorShift64_Pool<> rand_pool64(5374857);
   par_for("mri2d-u", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
       Real x1v = CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
       Real rd = d0;
       Real rp = p0;
-      Real rval = 1.0 + amp*(Ran2(&iseed_) - 0.5);
+      auto rand_gen = rand_pool64.get_state();  // get random number state this thread
+      Real rval = 1.0 + amp*(rand_gen.frand() - 0.5);
       if (eos.is_adiabatic) {
         rp = rval*p0;
         rd = d0;
@@ -127,6 +127,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
         u0(m,IEN,k,j,i) = rp/gm1 + 0.5*SQR(u0(m,IM3,k,j,i))/rd
           + 0.5*SQR(0.5*(b0.x2f(m,k,j,i) + b0.x2f(m,k,j+1,i)));
       }
+      rand_pool64.free_state(rand_gen);  // free state for use by other threads
     }
   );
 
