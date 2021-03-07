@@ -21,7 +21,7 @@ TaskStatus SourceTerms::HydroConstantAccel(Driver *pdrive, int stage)
 {
   Real beta_dt = (pdrive->beta[stage-1])*(pmy_pack->pmesh->dt);
   auto &eos = pmy_pack->phydro->peos->eos_data;
-  ConstantAccel(pmy_pack->phydro->u0, pmy_pack->phydro->u0, eos, beta_dt);
+  ConstantAccel(pmy_pack->phydro->u0, pmy_pack->phydro->w0, eos, beta_dt);
   return TaskStatus::complete;
 }
 
@@ -32,7 +32,7 @@ TaskStatus SourceTerms::MHDConstantAccel(Driver *pdrive, int stage)
 {
   Real beta_dt = (pdrive->beta[stage-1])*(pmy_pack->pmesh->dt);
   auto &eos = pmy_pack->pmhd->peos->eos_data;
-  ConstantAccel(pmy_pack->pmhd->u0, pmy_pack->pmhd->u0, eos, beta_dt);
+  ConstantAccel(pmy_pack->pmhd->u0, pmy_pack->pmhd->w0, eos, beta_dt);
   return TaskStatus::complete;
 }
 
