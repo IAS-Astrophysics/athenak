@@ -113,12 +113,12 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
               << "Can only specify one of along_x1/2/3 to be true" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((along_x2 || along_x3) && !(pmesh_->nx2gt1)) {
+  if ((along_x2 || along_x3) && !(pmy_mesh_->nx2gt1)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "Cannot specify waves along x2 or x3 axis in 1D" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if (along_x3 && !(pmesh_->nx2gt1)) {
+  if (along_x3 && !(pmy_mesh_->nx2gt1)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "Cannot specify waves along x3 axis in 2D" << std::endl;
     exit(EXIT_FAILURE);
@@ -126,9 +126,9 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
 
   // Code below will automatically calculate wavevector along grid diagonal, imposing the
   // conditions of periodicity and exactly one wavelength along each grid direction
-  Real x1size = pmesh_->mesh_size.x1max - pmesh_->mesh_size.x1min;
-  Real x2size = pmesh_->mesh_size.x2max - pmesh_->mesh_size.x2min;
-  Real x3size = pmesh_->mesh_size.x3max - pmesh_->mesh_size.x3min;
+  Real x1size = pmy_mesh_->mesh_size.x1max - pmy_mesh_->mesh_size.x1min;
+  Real x2size = pmy_mesh_->mesh_size.x2max - pmy_mesh_->mesh_size.x2min;
+  Real x3size = pmy_mesh_->mesh_size.x3max - pmy_mesh_->mesh_size.x3min;
 
   // start with wavevector along x1 axis
   LinWaveVariables lwv;
@@ -136,12 +136,12 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
   lwv.sin_a3 = 0.0;
   lwv.cos_a2 = 1.0;
   lwv.sin_a2 = 0.0;
-  if (pmesh_->nx2gt1 && !(along_x1)) {
+  if (pmy_mesh_->nx2gt1 && !(along_x1)) {
     Real ang_3 = std::atan(x1size/x2size);
     lwv.sin_a3 = std::sin(ang_3);
     lwv.cos_a3 = std::cos(ang_3);
   }
-  if (pmesh_->nx3gt1 && !(along_x1)) {
+  if (pmy_mesh_->nx3gt1 && !(along_x1)) {
     Real ang_2 = std::atan(0.5*(x1size*lwv.cos_a3 + x2size*lwv.sin_a3)/x3size);
     lwv.sin_a2 = std::sin(ang_2);
     lwv.cos_a2 = std::cos(ang_2);

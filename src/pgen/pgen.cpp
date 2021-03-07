@@ -18,7 +18,7 @@
 // constructor, initializes data structures and parameters
 
 ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, Driver *pd)
- : pmesh_(pm), pmy_driver_(pd) 
+ : pmy_mesh_(pm), pmy_driver_(pd) 
 {
 #if USER_PROBLEM_ENABLED
   // call user-defined problem generator

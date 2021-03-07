@@ -51,9 +51,9 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
 {
   int64_t iseed = -1;
 
-  Real kx = 2.0*(M_PI)/(pmesh_->mesh_size.x1max - pmesh_->mesh_size.x1min);
-  Real ky = 2.0*(M_PI)/(pmesh_->mesh_size.x2max - pmesh_->mesh_size.x2min);
-  Real kz = 2.0*(M_PI)/(pmesh_->mesh_size.x3max - pmesh_->mesh_size.x3min);
+  Real kx = 2.0*(M_PI)/(pmy_mesh_->mesh_size.x1max - pmy_mesh_->mesh_size.x1min);
+  Real ky = 2.0*(M_PI)/(pmy_mesh_->mesh_size.x2max - pmy_mesh_->mesh_size.x2min);
+  Real kz = 2.0*(M_PI)/(pmy_mesh_->mesh_size.x3max - pmy_mesh_->mesh_size.x3min);
 
   // Read perturbation amplitude, problem switch, density ratio
   Real amp = pin->GetReal("problem","amp");

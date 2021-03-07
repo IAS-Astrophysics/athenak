@@ -42,20 +42,20 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
 
   // parse shock location (must be inside grid)
   Real xshock = pin->GetReal("problem","xshock");
-  if (shk_dir == 1 && (xshock < pmesh_->mesh_size.x1min ||
-                       xshock > pmesh_->mesh_size.x1max)) {
+  if (shk_dir == 1 && (xshock < pmy_mesh_->mesh_size.x1min ||
+                       xshock > pmy_mesh_->mesh_size.x1max)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "xshock=" << xshock << " lies outside x1 domain" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if (shk_dir == 2 && (xshock < pmesh_->mesh_size.x2min ||
-                       xshock > pmesh_->mesh_size.x2max)) {
+  if (shk_dir == 2 && (xshock < pmy_mesh_->mesh_size.x2min ||
+                       xshock > pmy_mesh_->mesh_size.x2max)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "xshock=" << xshock << " lies outside x2 domain" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if (shk_dir == 3 && (xshock < pmesh_->mesh_size.x3min ||
-                       xshock > pmesh_->mesh_size.x3max)) {
+  if (shk_dir == 3 && (xshock < pmy_mesh_->mesh_size.x3min ||
+                       xshock > pmy_mesh_->mesh_size.x3max)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "xshock=" << xshock << " lies outside x3 domain" << std::endl;
     exit(EXIT_FAILURE);

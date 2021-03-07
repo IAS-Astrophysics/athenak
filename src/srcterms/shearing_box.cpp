@@ -66,7 +66,7 @@ void SourceTerms::ShearingBox(DvceArray5D<Real> &u, DvceArray5D<Real> &w,
         Real mom3 = den*w(m,IVZ,k,j,i);
         u(m,IM1,k,j,i) += 2.0*bdt*(omega0_*mom3 + qo2*den*x1v);
         u(m,IM3,k,j,i) -= 2.0*bdt*omega0_*mom1;
-        if (eos.is_adiabatic) {u(m,IEN,ks,j,i) += 2.0*bdt*qo2*mom1*x1v;}
+        if (eos.is_adiabatic) {u(m,IEN,k,j,i) += 2.0*bdt*qo2*mom1*x1v;}
       });
     }
   );

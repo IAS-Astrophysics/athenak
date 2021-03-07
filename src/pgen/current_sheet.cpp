@@ -45,9 +45,9 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
   Real epsv = pin->GetOrAddReal("problem", "epsv", 0.0);
   Real kval = pin->GetOrAddReal("problem", "kval", 1.0);
 
-  Real x1size = pmesh_->mesh_size.x1max - pmesh_->mesh_size.x1min;
-  Real x2size = pmesh_->mesh_size.x2max - pmesh_->mesh_size.x2min;
-  Real x3size = pmesh_->mesh_size.x3max - pmesh_->mesh_size.x3min;
+  Real x1size = pmy_mesh_->mesh_size.x1max - pmy_mesh_->mesh_size.x1min;
+  Real x2size = pmy_mesh_->mesh_size.x2max - pmy_mesh_->mesh_size.x2min;
+  Real x3size = pmy_mesh_->mesh_size.x3max - pmy_mesh_->mesh_size.x3min;
 
   // capture variables for kernel
   int &nx1 = pmbp->mb_cells.nx1;
