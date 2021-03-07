@@ -48,6 +48,13 @@ SourceTerms::SourceTerms(MeshBlockPack *pp, ParameterInput *pin) :
     }
   }
 
+  // (3) shearing box
+  if (pin->DoesBlockExist("shearing_box")) {
+    qshear = pin->GetReal("shearing_box","qshear");
+    omega0 = pin->GetReal("shearing_box","omega0");
+    shearing_box = true;
+  }
+
 }
 
 //----------------------------------------------------------------------------------------
