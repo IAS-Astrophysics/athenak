@@ -81,19 +81,19 @@ void AdiabaticHydroRel::ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Re
 
       // apply density floor, without changing momentum or energy
       u_d = (u_d > dfloor_) ?  u_d : dfloor_;
-      w_d = u_d;
+//      w_d = u_d;
 
       // apply energy floor
-      u_e = (u_e > ee_min) ?  u_e : ee_min;
+//      u_e = (u_e > ee_min) ?  u_e : ee_min;
 
 
       // Recasting all variables
 
       auto q = u_e/u_d; // (C2)
 
-      auto r = sqrt(SQR(cons(m, IM1,k,j,i))    // (C2)
-	          + SQR(cons(m, IM2,k,j,i)) 
-		  + SQR(cons(m, IM3,k,j,i)))/u_d;
+      auto r = sqrt(SQR(u_m1)    // (C2)
+	          + SQR(u_m2) 
+		  + SQR(u_m3))/u_d;
 
       auto kk = r/(1.+q);  // (C2)
 
@@ -146,10 +146,16 @@ void AdiabaticHydroRel::ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Re
       }
 
       //For simplicity on the GPU, use the false position method
+	int iterations = max_iterations;
+	if((fabs(zm-zp) < tol ) || ((fabs(fm) + fabs(fp)) < 2.*tol )){
+	    iterations = -1;
+	}
 
 
       Real z,h;
-      for(int ii=0; ii< max_iterations; ++ii){
+      z=0.5*(zm+zp);
+
+      for(int ii=0; ii< iterations; ++ii){
 
 	z =  (zm*fp - zp*fm)/(fp-fm);
 
@@ -185,10 +191,23 @@ void AdiabaticHydroRel::ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Re
 
       }
 
+{
+    auto const W = sqrt(1. + z*z); // (C15)
+
+    w_d = u_d/W; // (C15)
+
+    auto eps = W*q - z*r + z*z / (1.+W); // (C16)
+
+	//NOTE: The following generalizes to ANY equation of state
+    eps = fmax(pfloor_/w_d/gm1, eps); // (C18)
+    w_p = w_d*gm1*eps;
+    h = (1. + eps) * ( 1. +  w_p/(w_d*(1.+eps))); // (C1) & (C21)
+
     auto const conv = 1./(h*u_d); // (C26)
     w_vx = conv * u_m1;           // (C26)
     w_vy = conv * u_m2;           // (C26)
     w_vz = conv * u_m3;           // (C26)
+}
 
 
     // TODO error handling
