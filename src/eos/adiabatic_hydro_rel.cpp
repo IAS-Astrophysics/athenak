@@ -105,7 +105,7 @@ void AdiabaticHydroRel::ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Re
 
       // Compute bracket
       auto zm = 0.5*kk/sqrt(1. - 0.25*kk*kk); // (C23)
-      auto zp = k/sqrt(1-kk*kk);             // (C23)
+      auto zp = kk/sqrt(1-kk*kk);             // (C23)
 
       // Evaluate master function
       Real fm,fp;      
