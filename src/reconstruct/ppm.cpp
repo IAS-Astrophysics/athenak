@@ -60,8 +60,10 @@ void PPM(const Real &q_im2, const Real &q_im1, const Real &q_i, const Real &q_ip
   if (d2qc < 0.0 && d2ql < 0.0 && d2qr < 0.0) {
     d2qlim = SIGN(d2qc)*fmin(1.25*lim_slope,fabs(d2qc));
   } 
-  // compute limited value for qlv (PH 3.34)
-  qlv = 0.5*(q_i + q_im1) - d2qlim/6.0;
+  // compute limited value for qlv (PH 3.33 and 3.34)
+  if (((q_im1 - qlv)*(q_i - qlv)) > 0.0) {
+    qlv = 0.5*(q_i + q_im1) - d2qlim/6.0;
+  }
 
   // approximate second derivatives at i+1/2 (PH 3.35) 
   d2qc = 3.0*(q_i - 2.0*qrv + q_ip1);
@@ -77,8 +79,10 @@ void PPM(const Real &q_im2, const Real &q_im1, const Real &q_i, const Real &q_ip
   if (d2qc < 0.0 && d2ql < 0.0 && d2qr < 0.0) {
     d2qlim = SIGN(d2qc)*fmin(1.25*lim_slope,fabs(d2qc));
   }
-  // compute limited value for qrv (PH 3.33)
-  qrv = 0.5*(q_i + q_ip1) - d2qlim/6.0;
+  // compute limited value for qrv (PH 3.33 and 3.34)
+  if (((q_i - qrv)*(q_ip1 - qrv)) > 0.0) {
+    qrv = 0.5*(q_i + q_ip1) - d2qlim/6.0;
+  }
 
   //---- identify extrema, use smooth extremum limiter ----
   // CS 20 (missing "OR"), and PH 3.31
@@ -92,8 +96,8 @@ void PPM(const Real &q_im2, const Real &q_im1, const Real &q_i, const Real &q_ip
     Real d2qr = (q_i   - 2.0*q_ip1 + q_ip2);
 
     // limit second derivatives (PH 3.38)
-    Real d2qlim = 0.0;
-    Real lim_slope = fmin(fabs(d2ql),fabs(d2qr));
+    d2qlim = 0.0;
+    lim_slope = fmin(fabs(d2ql),fabs(d2qr));
     lim_slope = fmin(fabs(d2qc),lim_slope);
     if (d2qc > 0.0 && d2ql > 0.0 && d2qr > 0.0 && d2q > 0.0) {
       d2qlim = SIGN(d2q)*fmin(1.25*lim_slope,fabs(d2q));
