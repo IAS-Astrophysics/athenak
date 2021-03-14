@@ -39,7 +39,7 @@ class ProblemGenerator {
   void UserProblem(MeshBlockPack *pmbp, ParameterInput *pin);
 
  private:
-  Mesh* pmesh_;
+  Mesh* pmy_mesh_;
   Driver *pmy_driver_;
 };
 

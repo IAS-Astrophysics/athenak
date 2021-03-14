@@ -13,15 +13,18 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
+#include "hydro/hydro.hpp"
+#include "mhd/mhd.hpp"
 #include "utils/grid_locations.hpp"
 #include "utils/random.hpp"
 #include "turb_driver.hpp"
+#include "srcterms.hpp"
 
 //----------------------------------------------------------------------------------------
 // constructor, initializes data structures and parameters
 
 TurbulenceDriver::TurbulenceDriver(MeshBlockPack *pp, ParameterInput *pin) :
-  pmy_pack(pp), first_time_(true),
+  pmy_pack(pp),
   force("force",1,1,1,1,1),
   force_tmp("force_tmp",1,1,1,1,1),
   x1sin("x1sin",1,1,1),
@@ -87,9 +90,11 @@ TurbulenceDriver::~TurbulenceDriver()
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn  apply forcing
+//! \fn InitializeModes()
+// \brief Initializes driving, and so is only executed once at start of calc.
+// Cannot be included in constructor since (it seems) Kokkos::par_for not allowed in cons.
 
-void TurbulenceDriver::ApplyForcing(DvceArray5D<Real> &u)
+void TurbulenceDriver::InitializeModes()
 {
   int &is = pmy_pack->mb_cells.is, &ie = pmy_pack->mb_cells.ie;
   int &js = pmy_pack->mb_cells.js, &je = pmy_pack->mb_cells.je;
@@ -114,120 +119,37 @@ void TurbulenceDriver::ApplyForcing(DvceArray5D<Real> &u)
 
   int &nmb = pmy_pack->nmb_thispack;
 
-  // Following code initializes driving, and so is only executed once at start of calc.
-  // Cannot be included in constructor since (it seems) Kokkos::par_for not allowed in cons.
-  if (first_time_) {
-
-    // initialize force registers/amps to zero
-    auto force_ = force;
-    auto force_tmp_ = force_tmp;
-    par_for("force_init", DevExeSpace(), 0, nmb-1, 0, 2, 0, ncells3-1, 0, ncells2-1, 
-      0, ncells1-1, KOKKOS_LAMBDA(int m, int n, int k, int j, int i)
-      {
-        force_(m,n,k,j,i) = 0.0;
-        force_tmp_(m,n,k,j,i) = 0.0;
-      }
-    );
-
-    auto amp1_ = amp1;
-    auto amp2_ = amp2;
-    auto amp3_ = amp3;
-    par_for("amp_init", DevExeSpace(), 0, nmb-1, 0, nt-1, 0, nw-1,
-      KOKKOS_LAMBDA(int m, int n, int nw)
-      {
-        amp1_(m,n,nw) = 0.0;
-        amp2_(m,n,nw) = 0.0;
-        amp3_(m,n,nw) = 0.0;
-      }
-    );
-
-    // initalize seeds
-    auto seeds_ = seeds;
-    par_for("seeds_init", DevExeSpace(), 0, nmb-1, 0, nt-1,
-      KOKKOS_LAMBDA(int m, int n)
-      {
-        seeds_(m,n) = n + n*n + n*n*n; // make sure seed is different for each harmonic
-      }
-    );
-
-    int nw2 = 1;
-    int nw3 = 1;
-    if (ncells2>1) {
-      nw2 = nhigh+1;
-    }
-    if (ncells3>1) {
-      nw3 = nhigh+1;
-    }
-    int nw23 = nw3*nw2;
-
-    auto x1sin_ = x1sin;
-    auto x1cos_ = x1cos;
-
-    // Initialize sin and cos arrays
-    // bad design: requires saving sin/cos during restarts
-    int &nx1 = pmy_pack->mb_cells.nx1;
-    auto &size = pmy_pack->pmb->mbsize;
-    par_for("kx_loop", DevExeSpace(), 0, nmb-1, 0, nt-1, 0, ncells1-1,
-      KOKKOS_LAMBDA(int m, int n, int i)
-      { 
-        int nk1 = n/nw23;
-        Real kx = nk1*dkx;
-        Real x1v = CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
-      
-        x1sin_(m,n,i) = sin(kx*x1v);
-        x1cos_(m,n,i) = cos(kx*x1v);
-      }
-    );
-
-    auto x2sin_ = x2sin;
-    auto x2cos_ = x2cos;
-    int &nx2 = pmy_pack->mb_cells.nx2;
-    par_for("ky_loop", DevExeSpace(), 0, nmb-1, 0, nt-1, 0, ncells2-1,
-      KOKKOS_LAMBDA(int m, int n, int j)
-      { 
-        int nk1 = n/nw23;
-        int nk2 = (n - nk1*nw23)/nw2;
-        Real ky = nk2*dky;
-        Real x2v = CellCenterX(j-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
-
-        x2sin_(m,n,j) = sin(ky*x2v);
-        x2cos_(m,n,j) = cos(ky*x2v);
-      }
-    );
-
-    auto x3sin_ = x3sin;
-    auto x3cos_ = x3cos;
-    int &nx3 = pmy_pack->mb_cells.nx3;
-    par_for("kz_loop", DevExeSpace(), 0, nmb-1, 0, nt-1, 0, ncells3-1,
-      KOKKOS_LAMBDA(int m, int n, int k)
-      { 
-        int nk1 = n/nw23;
-        int nk2 = (n - nk1*nw23)/nw2;
-        int nk3 = n - nk1*nw23 - nk2*nw2;
-        Real kz = nk3*dkz;
-        Real x3v = CellCenterX(k-ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
-  
-        x3sin_(m,n,k) = sin(kz*x3v);
-        x3cos_(m,n,k) = cos(kz*x3v);
-      }
-    );
-
-    first_time_ = false;
-  }  // end of initialization
-
-  // Followed code executed every time
+  // initialize force registers/amps to zero
+  auto force_ = force;
   auto force_tmp_ = force_tmp;
-  par_for("forcing_init", DevExeSpace(), 0, nmb-1, 0, ncells3-1, 0, ncells2-1, 
-    0, ncells1-1, KOKKOS_LAMBDA(int m, int k, int j, int i)
+  par_for("force_init", DevExeSpace(), 0, nmb-1, 0, 2, 0, ncells3-1, 0, ncells2-1, 
+    0, ncells1-1, KOKKOS_LAMBDA(int m, int n, int k, int j, int i)
     {
-      force_tmp_(m,0,k,j,i) = 0.0;
-      force_tmp_(m,1,k,j,i) = 0.0;
-      force_tmp_(m,2,k,j,i) = 0.0;
+      force_(m,n,k,j,i) = 0.0;
+      force_tmp_(m,n,k,j,i) = 0.0;
     }
   );
 
-  int nlow_sq  = nlow*nlow;
-  int nhigh_sq = nhigh*nhigh;
+  auto amp1_ = amp1;
+  auto amp2_ = amp2;
+  auto amp3_ = amp3;
+  par_for("amp_init", DevExeSpace(), 0, nmb-1, 0, nt-1, 0, nw-1,
+    KOKKOS_LAMBDA(int m, int n, int nw)
+    {
+      amp1_(m,n,nw) = 0.0;
+      amp2_(m,n,nw) = 0.0;
+      amp3_(m,n,nw) = 0.0;
+    }
+  );
+
+  // initalize seeds
+  auto seeds_ = seeds;
+  par_for("seeds_init", DevExeSpace(), 0, nmb-1, 0, nt-1,
+    KOKKOS_LAMBDA(int m, int n)
+    {
+      seeds_(m,n) = n + n*n + n*n*n; // make sure seed is different for each harmonic
+    }
+  );
 
   int nw2 = 1;
   int nw3 = 1;
@@ -239,11 +161,115 @@ void TurbulenceDriver::ApplyForcing(DvceArray5D<Real> &u)
   }
   int nw23 = nw3*nw2;
 
-  Real &ex = expo;
-  auto seeds_ = seeds;
-  auto amp1_ = amp1;
-  auto amp2_ = amp2;
-  auto amp3_ = amp3;
+  auto x1sin_ = x1sin;
+  auto x1cos_ = x1cos;
+
+  // Initialize sin and cos arrays
+  // bad design: requires saving sin/cos during restarts
+  auto &size = pmy_pack->pmb->mbsize;
+  par_for("kx_loop", DevExeSpace(), 0, nmb-1, 0, nt-1, 0, ncells1-1,
+    KOKKOS_LAMBDA(int m, int n, int i)
+    { 
+      int nk1 = n/nw23;
+      Real kx = nk1*dkx;
+      Real x1v = CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
+    
+      x1sin_(m,n,i) = sin(kx*x1v);
+      x1cos_(m,n,i) = cos(kx*x1v);
+    }
+  );
+
+  auto x2sin_ = x2sin;
+  auto x2cos_ = x2cos;
+  par_for("ky_loop", DevExeSpace(), 0, nmb-1, 0, nt-1, 0, ncells2-1,
+    KOKKOS_LAMBDA(int m, int n, int j)
+    { 
+      int nk1 = n/nw23;
+      int nk2 = (n - nk1*nw23)/nw2;
+      Real ky = nk2*dky;
+      Real x2v = CellCenterX(j-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
+
+      x2sin_(m,n,j) = sin(ky*x2v);
+      x2cos_(m,n,j) = cos(ky*x2v);
+    }
+  );
+
+  auto x3sin_ = x3sin;
+  auto x3cos_ = x3cos;
+  par_for("kz_loop", DevExeSpace(), 0, nmb-1, 0, nt-1, 0, ncells3-1,
+    KOKKOS_LAMBDA(int m, int n, int k)
+    { 
+      int nk1 = n/nw23;
+      int nk2 = (n - nk1*nw23)/nw2;
+      int nk3 = n - nk1*nw23 - nk2*nw2;
+      Real kz = nk3*dkz;
+      Real x3v = CellCenterX(k-ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
+
+      x3sin_(m,n,k) = sin(kz*x3v);
+      x3cos_(m,n,k) = cos(kz*x3v);
+    }
+  );
+
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  apply forcing
+
+TaskStatus SourceTerms::ApplyRandomForcing(Driver *pdrive, int stage)
+{
+  int &is = pmy_pack->mb_cells.is, &ie = pmy_pack->mb_cells.ie;
+  int &js = pmy_pack->mb_cells.js, &je = pmy_pack->mb_cells.je;
+  int &ks = pmy_pack->mb_cells.ks, &ke = pmy_pack->mb_cells.ke;
+  int &nx1 = pmy_pack->mb_cells.nx1;
+  int &nx2 = pmy_pack->mb_cells.nx2;
+  int &nx3 = pmy_pack->mb_cells.nx3;
+  auto &ncells = pmy_pack->mb_cells;
+  int ncells1 = ncells.nx1 + 2*(ncells.ng);
+  int ncells2 = (ncells.nx2 > 1)? (ncells.nx2 + 2*(ncells.ng)) : 1;
+  int ncells3 = (ncells.nx3 > 1)? (ncells.nx3 + 2*(ncells.ng)) : 1;
+
+  Real lx = pmy_pack->pmesh->mesh_size.x1max - pmy_pack->pmesh->mesh_size.x1min;
+  Real ly = pmy_pack->pmesh->mesh_size.x2max - pmy_pack->pmesh->mesh_size.x2min;
+  Real lz = pmy_pack->pmesh->mesh_size.x3max - pmy_pack->pmesh->mesh_size.x3min;
+  Real dkx = 2.0*M_PI/lx;
+  Real dky = 2.0*M_PI/ly;
+  Real dkz = 2.0*M_PI/lz;
+
+  int &nt = pturb->ntot;
+  int &nw = pturb->nwave;
+
+  int &nmb = pmy_pack->nmb_thispack;
+
+  // Zero out temporary arrays
+  auto force_tmp_ = pturb->force_tmp;
+  par_for("forcing_init", DevExeSpace(), 0, nmb-1, 0, ncells3-1, 0, ncells2-1, 
+    0, ncells1-1, KOKKOS_LAMBDA(int m, int k, int j, int i)
+    {
+      force_tmp_(m,0,k,j,i) = 0.0;
+      force_tmp_(m,1,k,j,i) = 0.0;
+      force_tmp_(m,2,k,j,i) = 0.0;
+    }
+  );
+
+  int nlow_sq  = SQR(pturb->nlow);
+  int nhigh_sq = SQR(pturb->nhigh);
+
+  int nw2 = 1;
+  int nw3 = 1;
+  if (ncells2>1) {
+    nw2 = pturb->nhigh+1;
+  }
+  if (ncells3>1) {
+    nw3 = pturb->nhigh+1;
+  }
+  int nw23 = nw3*nw2;
+
+  Real &ex = pturb->expo;
+  auto seeds_ = pturb->seeds;
+  auto amp1_ = pturb->amp1;
+  auto amp2_ = pturb->amp2;
+  auto amp3_ = pturb->amp3;
   par_for ("generate_amplitudes", DevExeSpace(), 0, nmb-1, 0, nt-1,
     KOKKOS_LAMBDA (int m, int n) 
     {
@@ -392,12 +418,12 @@ void TurbulenceDriver::ApplyForcing(DvceArray5D<Real> &u)
     }
   );
 
-  auto x1cos_ = x1cos;
-  auto x1sin_ = x1sin;
-  auto x2cos_ = x2cos;
-  auto x2sin_ = x2sin;
-  auto x3cos_ = x3cos;
-  auto x3sin_ = x3sin;
+  auto x1cos_ = pturb->x1cos;
+  auto x1sin_ = pturb->x1sin;
+  auto x2cos_ = pturb->x2cos;
+  auto x2sin_ = pturb->x2sin;
+  auto x3cos_ = pturb->x3cos;
+  auto x3sin_ = pturb->x3sin;
   par_for("force_array", DevExeSpace(), 0, nmb-1, 0, ncells3-1, 0, ncells2-1, 
     0, ncells1-1, KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
@@ -482,6 +508,10 @@ void TurbulenceDriver::ApplyForcing(DvceArray5D<Real> &u)
     }
   );
 
+  DvceArray5D<Real> u;
+  if (pmy_pack->phydro != nullptr) u = (pmy_pack->phydro->u0);
+  if (pmy_pack->pmhd != nullptr) u = (pmy_pack->pmhd->u0);
+
   array_sum::GlobalSum sum_this_mb_en;
   Kokkos::parallel_reduce("forcing_norm", Kokkos::RangePolicy<>(DevExeSpace(),0,nmkji),
     KOKKOS_LAMBDA(const int &idx, array_sum::GlobalSum &mb_sum)
@@ -546,19 +576,19 @@ void TurbulenceDriver::ApplyForcing(DvceArray5D<Real> &u)
 
   Real s;
   if (m1 >= 0) {
-    s = -m1/2./m0 + sqrt(m1*m1/4./m0/m0 + dedt/m0);
+    s = -m1/2./m0 + sqrt(m1*m1/4./m0/m0 + pturb->dedt/m0);
   } else {
-    s = m1/2./m0 + sqrt(m1*m1/4./m0/m0 + dedt/m0);
+    s = m1/2./m0 + sqrt(m1*m1/4./m0/m0 + pturb->dedt/m0);
   }
 
   Real fcorr=0.0;
   Real gcorr=1.0;
-  if ((pmy_pack->pmesh->time > 0.0) and (tcorr > 0.0)) {
-    fcorr=exp(-((pmy_pack->pmesh->dt)/tcorr));
+  if ((pmy_pack->pmesh->time > 0.0) and (pturb->tcorr > 0.0)) {
+    fcorr=exp(-((pmy_pack->pmesh->dt)/pturb->tcorr));
     gcorr=sqrt(1.0-fcorr*fcorr);
   }
 
-  auto force_ = force;
+  auto force_ = pturb->force;
   par_for("OU_process", DevExeSpace(), 0, nmb-1, 0, 2, 0, ncells3-1, 0, ncells2-1,
     0, ncells1-1, KOKKOS_LAMBDA(int m, int n, int k, int j, int i)
     {
@@ -586,5 +616,5 @@ void TurbulenceDriver::ApplyForcing(DvceArray5D<Real> &u)
     }
   );
 
-  return;
+  return TaskStatus::complete;
 }

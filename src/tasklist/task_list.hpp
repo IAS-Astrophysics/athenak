@@ -10,7 +10,8 @@
 //           currently everything is implemented in this single header file
 //
 // The original idea and implementation of TaskLists was by Kengo Tomida
-// This version includes improvements due to Josh Dolence and the Parthenon dev team
+// This version includes improvements due to Josh Dolence and the Parthenon dev team, and
+// extensions by J.M.Stone.
 
 #include <iostream>
 #include <bitset>
@@ -30,7 +31,7 @@ enum class TaskListStatus {running, stuck, complete, nothing_to_do};
 
 //----------------------------------------------------------------------------------------
 //! \class TaskID
-//  \brief generalization of bit fields for Task IDs, status, and dependencies.
+//  \brief container class for bit fields (used to encode Task IDs) and access functions
 
 class TaskID {
  public:
@@ -40,7 +41,7 @@ class TaskID {
     if (id == 0) {
       bitfld_.reset();      // set all bits to zero
     } else {
-      bitfld_.set((id--));  // set [id-1] bit to one
+      bitfld_.set((--id));  // set [id-1] bit to one
     }
   }
 
@@ -57,6 +58,7 @@ class TaskID {
 
   // overload some operators
   bool operator== (const TaskID &rhs) const {return (bitfld_ == rhs.bitfld_); }
+  bool operator!= (const TaskID &rhs) const {return (bitfld_ != rhs.bitfld_); }
   TaskID operator| (const TaskID &rhs) const {
     TaskID ret;
     ret.bitfld_ = (bitfld_ | rhs.bitfld_);
@@ -87,12 +89,13 @@ class Task {
   Task(TaskID id, TaskID dep, std::function<TaskStatus(Driver*, int)> func)
       : myid_(id), dep_(dep), func_(func) {}
   // overloaded operator() calls task function
-  TaskStatus operator()(Driver *d, int s) { return func_(d,s); }
-  TaskID GetID() { return myid_; }
-  TaskID GetDependency() { return dep_; }
-  void SetComplete() { complete_ = true; }
-  void SetIncomplete() { complete_ = false; }
-  bool IsComplete() { return complete_; }
+  TaskStatus operator()(Driver *d, int s) {return func_(d,s);}
+  TaskID GetID() {return myid_;}
+  TaskID GetDependency() {return dep_;}
+  void SetComplete() {complete_ = true;}
+  void SetIncomplete() {complete_ = false;}
+  bool IsComplete() {return complete_;}
+  // If this Task depends on id, change that dependency to 'newdep'
   void ChangeDependency(TaskID id, TaskID newdep) {
     if ((dep_ & id) == id) {dep_ = ((dep_ ^ id) | newdep);}
   }
@@ -125,8 +128,8 @@ class TaskList {
     // everything is done
     return true;
   }
-  int Size() { return task_list_.size(); }
-  bool Empty() { return task_list_.empty(); }
+  int Size() {return task_list_.size();}
+  bool Empty() {return task_list_.empty();}
   void MarkTaskComplete(TaskID id) { tasks_completed_.SetComplete(id); }
   TaskID GetIDLastTask() {return task_list_.back().GetID();}
   // output diagnostics (useful for debugging)
@@ -155,44 +158,56 @@ class TaskList {
     return TaskListStatus::running;
   }
 
-  // Add new Task to end of task list with new ID, given dependencies, and a pointer to a
-  // static or non-member function. Function must have arguments (Driver*, int). Usage:
-  //     auto taskid = tl.AddTask(DoSomething, dependencies);
+  // ADD new Task with ID, given dependency, and a pointer to a static or non-member
+  // function to the end of task list.  Returns ID of new task. Task function must have
+  // arguments (Driver*, int). Usage:
+  //     taskid = tl.AddTask(DoSomething, dependency, name);
   template <class F>
   TaskID AddTask(F func, TaskID &dep) {
     auto size = task_list_.size();
-    TaskID id(size + 1);
+    TaskID id(size+1);
     task_list_.push_back(
-      Task(id, dep, [=](Driver *d, int s) mutable -> TaskStatus { return func(d,s); }));
+      Task(id, dep, [=](Driver *d, int s) mutable -> TaskStatus {return func(d,s);}));
     return id;
   }
 
-  // Add new Task to end of task list with new ID, given dependencies, and a pointer to a
-  // member functions of class T.  Usage:
-  //     auto taskid = tl.AddTask(&T::DoSomething, T, dependencies);
+  // ADD new Task with ID, given dependency, and a pointer to a member function of
+  // class T to the end of task list.  Returns ID of new task. Task function must have
+  // arguments (Driver*, int).  Usage:
+  //     taskid = tl.AddTask(&T::DoSomething, T, dependency);
   template <class F, class T>
   TaskID AddTask(F func, T *obj, TaskID &dep) {
     auto size = task_list_.size();
-    TaskID id(size + 1);
+    TaskID id(size+1);
     task_list_.push_back( Task(id, dep,
-       [=](Driver *d, int s) mutable -> TaskStatus { return (obj->*func)(d,s); }) );
+       [=](Driver *d, int s) mutable -> TaskStatus {return (obj->*func)(d,s);}) );
     return id;
   }
 
-  // Append new Task to end of task list
-  // member functions of class T.  Usage:
-  //     auto taskid = tl.AddTask(&T::DoSomething, T, dependencies);
+  // INSERT new Task with ID, given dependency, and a pointer to a member function of
+  // class T in a position BEFORE the task with ID 'location'.  Returns ID of new task,
+  // or taskID(0) if location not found. Usage:
+  //     taskid = tl.InsertTask(&T::DoSomething, T, dependency, location);
   template <class F, class T>
-  TaskID InsertTask(F func, T *obj, TaskID &dep) {
-    auto size = task_list_.size();
-    TaskID id(size + 1);
-    task_list_.push_back( Task(id, dep,
-       [=](Driver *d, int s) mutable -> TaskStatus { return (obj->*func)(d,s); }) );
-    // new change dependencies for all but this newly added Task
-    for (auto it=task_list_.begin(); it!=std::prev(task_list_.end()); ++it) {
-      it->ChangeDependency(dep, id);
+  TaskID InsertTask(F func, T *obj, TaskID &dep, TaskID &loc) {
+    std::list<Task>::iterator it;
+    for (it=task_list_.begin(); it!=task_list_.end(); ++it) {
+      if (it->GetID() == loc) {
+        auto size = task_list_.size();
+        TaskID id(size+1);
+        auto old_dep = it->GetDependency();
+        task_list_.insert(it, Task(id, dep,
+           [=](Driver *d, int s) mutable -> TaskStatus {return (obj->*func)(d,s); }));
+        // now change dependencies for all but this newly added Task
+        for (auto it2=task_list_.begin(); it2!=task_list_.end(); ++it2) {
+          if (it2->GetID() != id) {
+            it2->ChangeDependency(old_dep, id);
+          }
+        }
+        return id;
+      }
     }
-    return id;
+    return TaskID(0);
   }
 
  protected:

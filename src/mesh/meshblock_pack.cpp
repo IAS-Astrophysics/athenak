@@ -14,6 +14,8 @@
 #include "mesh.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "diffusion/viscosity.hpp"
+#include "diffusion/resistivity.hpp"
 
 //----------------------------------------------------------------------------------------
 // MeshBlockPack constructor:
@@ -86,4 +88,6 @@ MeshBlockPack::~MeshBlockPack()
   delete pmb;
   if (phydro != nullptr) {delete phydro;}
   if (pmhd   != nullptr) {delete pmhd;}
+  if (pvisc  != nullptr) {delete pvisc;}
+  if (presist!= nullptr) {delete presist;}
 }

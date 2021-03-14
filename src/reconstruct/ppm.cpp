@@ -47,9 +47,10 @@ void PPM(const Real &q_im2, const Real &q_im1, const Real &q_i, const Real &q_ip
 
   //---- Apply CS monotonicity limiters to qrv and qlv ----
   // approximate second derivatives at i-1/2 (PH 3.35) 
-  Real d2qc = 3.0*(q_im1 - 2.0*qlv + q_i);
-  Real d2ql = (q_im2 - 2.0*q_im1 + q_i  );
-  Real d2qr = (q_im1 - 2.0*q_i   + q_ip1);
+  // KGF: add the off-center quantities first to preserve FP symmetry
+  Real d2qc = 3.0*((q_im1 + q_i) - 2.0*qlv);
+  Real d2ql = (q_im2 + q_i  ) - 2.0*q_im1;
+  Real d2qr = (q_im1 + q_ip1) - 2.0*q_i  ;
     
   // limit second derivative (PH 3.36)
   Real d2qlim = 0.0;
@@ -60,13 +61,16 @@ void PPM(const Real &q_im2, const Real &q_im1, const Real &q_i, const Real &q_ip
   if (d2qc < 0.0 && d2ql < 0.0 && d2qr < 0.0) {
     d2qlim = SIGN(d2qc)*fmin(1.25*lim_slope,fabs(d2qc));
   } 
-  // compute limited value for qlv (PH 3.34)
-  qlv = 0.5*(q_i + q_im1) - d2qlim/6.0;
+  // compute limited value for qlv (PH 3.33 and 3.34)
+  if (((q_im1 - qlv)*(q_i - qlv)) > 0.0) {
+    qlv = 0.5*(q_i + q_im1) - d2qlim/6.0;
+  }
 
   // approximate second derivatives at i+1/2 (PH 3.35) 
-  d2qc = 3.0*(q_i - 2.0*qrv + q_ip1);
+  // KGF: add the off-center quantities first to preserve FP symmetry
+  d2qc = 3.0*((q_i + q_ip1) - 2.0*qrv);
   d2ql = d2qr;
-  d2qr = (q_i - 2.0*q_ip1 + q_ip2);
+  d2qr = (q_i + q_ip2) - 2.0*q_ip1;
 
   // limit second derivative (PH 3.36)
   d2qlim = 0.0;
@@ -77,8 +81,10 @@ void PPM(const Real &q_im2, const Real &q_im1, const Real &q_i, const Real &q_ip
   if (d2qc < 0.0 && d2ql < 0.0 && d2qr < 0.0) {
     d2qlim = SIGN(d2qc)*fmin(1.25*lim_slope,fabs(d2qc));
   }
-  // compute limited value for qrv (PH 3.33)
-  qrv = 0.5*(q_i + q_ip1) - d2qlim/6.0;
+  // compute limited value for qrv (PH 3.33 and 3.34)
+  if (((q_i - qrv)*(q_ip1 - qrv)) > 0.0) {
+    qrv = 0.5*(q_i + q_ip1) - d2qlim/6.0;
+  }
 
   //---- identify extrema, use smooth extremum limiter ----
   // CS 20 (missing "OR"), and PH 3.31
@@ -86,14 +92,15 @@ void PPM(const Real &q_im2, const Real &q_im1, const Real &q_i, const Real &q_ip
   Real qb = (q_im1 - q_i)*(q_i - q_ip1);
   if (qa <= 0.0 || qb <= 0.0) {
     // approximate secnd derivates (PH 3.37)
-    Real d2q  = 6.0*(qlv - 2.0*q_i + qrv);
-    Real d2qc = (q_im1 - 2.0*q_i   + q_ip1);
-    Real d2ql = (q_im2 - 2.0*q_im1 + q_i  );
-    Real d2qr = (q_i   - 2.0*q_ip1 + q_ip2);
+    // KGF: add the off-center quantities first to preserve FP symmetry
+    Real d2q  = 6.0*(qlv + qrv - 2.0*q_i);
+    Real d2qc = (q_im1 + q_ip1) - 2.0*q_i;
+    Real d2ql = (q_im2 + q_i  ) - 2.0*q_im1;
+    Real d2qr = (q_i   + q_ip2) - 2.0*q_ip1;
 
     // limit second derivatives (PH 3.38)
-    Real d2qlim = 0.0;
-    Real lim_slope = fmin(fabs(d2ql),fabs(d2qr));
+    d2qlim = 0.0;
+    lim_slope = fmin(fabs(d2ql),fabs(d2qr));
     lim_slope = fmin(fabs(d2qc),lim_slope);
     if (d2qc > 0.0 && d2ql > 0.0 && d2qr > 0.0 && d2q > 0.0) {
       d2qlim = SIGN(d2q)*fmin(1.25*lim_slope,fabs(d2q));
@@ -103,13 +110,13 @@ void PPM(const Real &q_im2, const Real &q_im1, const Real &q_i, const Real &q_ip
     }
 
     // limit L/R states at extrema (PH 3.39)
-    if (d2q == 0.0) {  // revert to donor cell
-      qlv = q_i;
-      qrv = q_i;
-    } else {  // add limited slope (PH 3.39)
-      qlv = q_i + (qlv - q_i)*d2qlim/d2q;
-      qrv = q_i + (qrv - q_i)*d2qlim/d2q;
+    Real rho = 0.0;
+    if ( fabs(d2q) > (1.0e-12)*fmax( fabs(q_im1), fmax(fabs(q_i),fabs(q_ip1))) ) {
+      // Limiter is not sensitive to round-off error.  Use limited slope
+      rho = d2qlim/d2q;
     }
+    qlv = q_i + (qlv - q_i)*rho;
+    qrv = q_i + (qrv - q_i)*rho;
   } else {
     // Monotonize again, away from extrema (CW eqn 1.10, PH 3.32)
     Real qc = qrv - q_i;

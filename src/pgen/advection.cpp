@@ -40,11 +40,11 @@ void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
   // get size of overall domain
   Real length;
   if (flow_dir == 1) {
-    length = pmesh_->mesh_size.x1max - pmesh_->mesh_size.x1min;
+    length = pmy_mesh_->mesh_size.x1max - pmy_mesh_->mesh_size.x1min;
   } else if (flow_dir == 2) {
-    length = pmesh_->mesh_size.x2max - pmesh_->mesh_size.x2min;
+    length = pmy_mesh_->mesh_size.x2max - pmy_mesh_->mesh_size.x2min;
   } else if (flow_dir == 3) {
-    length = pmesh_->mesh_size.x3max - pmesh_->mesh_size.x3min;
+    length = pmy_mesh_->mesh_size.x3max - pmy_mesh_->mesh_size.x3min;
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "flow_dir=" << flow_dir << " must be either 1,2, or 3" << std::endl;
@@ -59,9 +59,9 @@ void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
   }
 
   // capture variables for kernel
-  Real &x1mesh = pmesh_->mesh_size.x1min;
-  Real &x2mesh = pmesh_->mesh_size.x2min;
-  Real &x3mesh = pmesh_->mesh_size.x3min;
+  Real &x1mesh = pmy_mesh_->mesh_size.x1min;
+  Real &x2mesh = pmy_mesh_->mesh_size.x2min;
+  Real &x3mesh = pmy_mesh_->mesh_size.x3min;
   int &nx1 = pmbp->mb_cells.nx1;
   int &nx2 = pmbp->mb_cells.nx2;
   int &nx3 = pmbp->mb_cells.nx3;

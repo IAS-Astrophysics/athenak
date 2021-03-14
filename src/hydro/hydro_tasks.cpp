@@ -42,16 +42,30 @@ void Hydro::AssembleStageStartTasks(TaskList &tl, TaskID start)
 
 void Hydro::AssembleStageRunTasks(TaskList &tl, TaskID start)
 {
-  auto hydro_copycons = tl.AddTask(&Hydro::CopyCons, this, start);
-  auto hydro_fluxes = tl.AddTask(&Hydro::CalcFluxes, this, hydro_copycons);
-  auto visc_fluxes = tl.AddTask(&Hydro::ViscousFluxes, this, hydro_fluxes);
-  auto hydro_update = tl.AddTask(&Hydro::Update, this, visc_fluxes);
-  auto hydro_src = tl.AddTask(&Hydro::UpdateUnsplitSourceTerms, this, hydro_update);
-  auto hydro_send = tl.AddTask(&Hydro::SendU, this, hydro_src);
-  auto hydro_recv = tl.AddTask(&Hydro::RecvU, this, hydro_send);
-  auto hydro_phybcs = tl.AddTask(&Hydro::ApplyPhysicalBCs, this, hydro_recv);
-  auto hydro_con2prim = tl.AddTask(&Hydro::ConToPrim, this, hydro_phybcs);
-  auto hydro_newdt = tl.AddTask(&Hydro::NewTimeStep, this, hydro_con2prim);
+  auto id = tl.AddTask(&Hydro::CopyCons, this, start);
+  hydro_tasks.emplace(HydroTaskName::copy_cons, id);
+
+  id = tl.AddTask(&Hydro::CalcFluxes, this, hydro_tasks[HydroTaskName::copy_cons]);
+  hydro_tasks.emplace(HydroTaskName::calc_flux, id);
+
+  id = tl.AddTask(&Hydro::Update, this, hydro_tasks[HydroTaskName::calc_flux]);
+  hydro_tasks.emplace(HydroTaskName::update, id);
+
+  id = tl.AddTask(&Hydro::SendU, this, hydro_tasks[HydroTaskName::update]);
+  hydro_tasks.emplace(HydroTaskName::send_u, id);
+
+  id = tl.AddTask(&Hydro::RecvU, this, hydro_tasks[HydroTaskName::send_u]);
+  hydro_tasks.emplace(HydroTaskName::recv_u, id);
+
+  id = tl.AddTask(&Hydro::ApplyPhysicalBCs, this, hydro_tasks[HydroTaskName::recv_u]);
+  hydro_tasks.emplace(HydroTaskName::phys_bcs, id);
+
+  id = tl.AddTask(&Hydro::ConToPrim, this, hydro_tasks[HydroTaskName::phys_bcs]);
+  hydro_tasks.emplace(HydroTaskName::cons2prim, id);
+
+  id = tl.AddTask(&Hydro::NewTimeStep, this, hydro_tasks[HydroTaskName::cons2prim]);
+  hydro_tasks.emplace(HydroTaskName::newdt, id);
+
   return;
 }
 
@@ -65,18 +79,6 @@ void Hydro::AssembleStageRunTasks(TaskList &tl, TaskID start)
 void Hydro::AssembleStageEndTasks(TaskList &tl, TaskID start)
 {
   auto hydro_clear = tl.AddTask(&Hydro::ClearSend, this, start);
-  return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn  void Hydro::AssembleOperatorSplitTasks
-//  \brief adds Hydro tasks to operator split TaskList
-//  Called by MeshBlockPack::AddPhysicsModules() function directly after Hydro constrctr
-  
-void Hydro::AssembleOperatorSplitTasks(TaskList &tl, TaskID start)
-{ 
-  if (not (psrc->operatorsplit_terms)) {return;}
-  auto split_srcterms = tl.AddTask(&Hydro::UpdateOperatorSplitSourceTerms, this, start);
   return;
 }
 
@@ -206,47 +208,6 @@ TaskStatus Hydro::RecvU(Driver *pdrive, int stage)
 TaskStatus Hydro::ConToPrim(Driver *pdrive, int stage)
 {
   peos->ConsToPrim(u0, w0);
-  return TaskStatus::complete;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn  void Hydro::ViscousFluxes
-//  \brief
-
-TaskStatus Hydro::ViscousFluxes(Driver *pdrive, int stage)
-{
-  if (pvisc != nullptr) pvisc->AddViscousFlux(u0, uflx);
-  return TaskStatus::complete;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn  void Hydro::UpdateUnsplitSourceTerms
-//  \brief adds source terms to hydro variables in EACH stage of stage run task list.
-//  These are source terms that will be included as an unsplit algorithm.
-//  This task is always included in the StageRun tasklist (see AssembleStageRunTasks()
-//  function above), so a return test is needed in the case of no source terms.
-
-TaskStatus Hydro::UpdateUnsplitSourceTerms(Driver *pdrive, int stage)
-{
-  // return if no source terms included
-  if (not (psrc->stagerun_terms)) {return TaskStatus::complete;}
-
-  // apply source terms update to conserved variables
-  psrc->ApplySrcTermsStageRunTL(u0);
-  return TaskStatus::complete;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn  void Hydro::UpdateOperatorSplitSourceTerms
-//  \brief adds source terms to hydro variables in operator split task list.
-//  These are source terms that will be included as an operator split algorithm.
-//  This task is not included in the OperatorSplit tasklist if there are no operator split
-//  source terms to be inlcuded (see AssembleOperatorSplitTasks() function above), so no
-//  return test is needed in the case of no source terms.
-
-TaskStatus Hydro::UpdateOperatorSplitSourceTerms(Driver *pdrive, int stage)
-{
-  psrc->ApplySrcTermsOperatorSplitTL(u0);
   return TaskStatus::complete;
 }
 

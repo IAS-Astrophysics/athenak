@@ -44,12 +44,11 @@ class TurbulenceDriver
   Real tcorr,dedt;
   Real expo;
 
-  // function to compute/apply forcing
-  void ApplyForcing(DvceArray5D<Real> &u);
+  // functions
+  void InitializeModes();
 
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this TurbulenceDriver
-  bool first_time_;
 };
 
 

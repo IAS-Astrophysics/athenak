@@ -15,9 +15,7 @@ add_executable(
         bvals/bvals_fc.cpp
 
         diffusion/resistivity.cpp
-        diffusion/ohmic.cpp
         diffusion/viscosity.cpp
-        diffusion/iso_visc.cpp
 
         driver/driver.cpp
 
@@ -36,6 +34,7 @@ add_executable(
         hydro/bvals/apply_physical_bcs.cpp
         hydro/bvals/outflow_hydro.cpp
         hydro/bvals/reflect_hydro.cpp
+        hydro/bvals/shear_hydro.cpp
 
         mesh/mesh_physics.cpp
         mesh/load_balance.cpp
@@ -54,6 +53,7 @@ add_executable(
         mhd/bvals/apply_physical_bcs.cpp
         mhd/bvals/outflow_mhd.cpp
         mhd/bvals/reflect_mhd.cpp
+        mhd/bvals/shear_mhd.cpp
 
         outputs/io_wrapper.cpp
         outputs/outputs.cpp
@@ -72,6 +72,8 @@ add_executable(
         pgen/kh_sr.cpp
 
         srcterms/srcterms.cpp
+        srcterms/constant_acc.cpp
+        srcterms/shearing_box.cpp
         srcterms/turb_driver.cpp
 
         utils/change_rundir.cpp

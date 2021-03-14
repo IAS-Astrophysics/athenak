@@ -8,6 +8,7 @@
 //! \file mhd.hpp
 //  \brief definitions for MHD class
 
+#include <map>
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
@@ -15,13 +16,16 @@
 
 // forward declarations
 class EquationOfState;
-class Viscosity;
-class Resistivity;
-class SourceTerms;
 class Driver;
 
 // constants that enumerate MHD Riemann Solver options
 enum class MHD_RSolver {advect, llf, hlld, roe};
+
+// constants that enumerate Hydro tasks
+enum class MHDTaskName {undef=0, init_recv, copy_cons, calc_flux, update,
+  send_u, recv_u, corner_emf, ct, send_b, recv_b, phys_bcs, cons2prim, newdt,
+  clear_send};
+
 
 namespace mhd {
 
@@ -35,10 +39,7 @@ class MHD
   ~MHD();
 
   // data
-  EquationOfState *peos;          // chosen EOS
-  Viscosity *pvisc=nullptr;       // (optional) viscosity
-  Resistivity *presist=nullptr;   // (optional) resistivity
-  SourceTerms *psrc;              // source terms (both operator split and unsplit)
+  EquationOfState *peos;   // chosen EOS
 
   int nmhd;                // number of cons variables (5/4 for adiabatic/isothermal)
   int nscalars;            // number of passive scalars
@@ -58,11 +59,13 @@ class MHD
   DvceEdgeFld4D<Real> efld;   // edge-centered electric fields (fluxes of B)
   Real dtnew;
 
+  // map for associating MHDTaskName with TaskID
+  std::map<MHDTaskName, TaskID> mhd_tasks;
+
   // functions
   void AssembleStageStartTasks(TaskList &tl, TaskID start);
   void AssembleStageRunTasks(TaskList &tl, TaskID start);
   void AssembleStageEndTasks(TaskList &tl, TaskID start);
-  void AssembleOperatorSplitTasks(TaskList &tl, TaskID start);
   TaskStatus InitRecv(Driver *d, int stage);
   TaskStatus ClearRecv(Driver *d, int stage);
   TaskStatus ClearSend(Driver *d, int stage);
@@ -76,12 +79,8 @@ class MHD
   TaskStatus SendB(Driver *d, int stage); 
   TaskStatus RecvB(Driver *d, int stage); 
   TaskStatus ConToPrim(Driver *d, int stage);
-  TaskStatus ViscousFluxes(Driver *d, int stage);
-  TaskStatus ResistEMF(Driver *d, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
   TaskStatus ApplyPhysicalBCs(Driver* pdrive, int stage); // in file mhd/bvals dir
-  TaskStatus UpdateUnsplitSourceTerms(Driver *d, int stage);
-  TaskStatus UpdateOperatorSplitSourceTerms(Driver *d, int stage);
 
   // functions to set physical BCs for Hydro conserved variables, applied to single MB
   // specified by argument 'm'. 
@@ -97,6 +96,8 @@ class MHD
   void OutflowOuterX2(int m);
   void OutflowInnerX3(int m);
   void OutflowOuterX3(int m);
+  void ShearInnerX1(int m);
+  void ShearOuterX1(int m);
 
  private:
   MeshBlockPack* pmy_pack;   // ptr to MeshBlockPack containing this MHD

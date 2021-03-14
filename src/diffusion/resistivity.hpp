@@ -9,48 +9,39 @@
 //  \brief Contains data and functions that implement various non-ideal MHD (resistive) 
 //  processes, such as Ohmic diffusion.
 //  TODO: add ambipolar diffusion, Hall effect
-//
-//  Design is based on EOS class
 
+#include <map>
 #include "athena.hpp"
-#include "mesh/meshblock.hpp"
 #include "parameter_input.hpp"
+#include "mesh/meshblock.hpp"
+
+// constants that enumerate Resistivity tasks
+enum class ResistivityTaskName {undef=0, ohmic_emf};
 
 //----------------------------------------------------------------------------------------
 //! \class Resistivity
-//  \brief Abstract base class for resistive physics
+//  \brief data and functions that implement various resistive physics
 
 class Resistivity
 {
  public:
   Resistivity(MeshBlockPack *pp, ParameterInput *pin);
-  virtual ~Resistivity() = default;
+  ~Resistivity();
 
   // data
   Real dtnew;
-  MeshBlockPack* pmy_pack;
-
-  // pure virtual functions to compute resistive EMF and Poynting (energy) flux
-  virtual void AddResistiveEMF(const DvceFaceFld4D<Real> &b0,
-                               DvceEdgeFld4D<Real> &efld) = 0;
-
- private:
-};
-
-//----------------------------------------------------------------------------------------
-//! \class Ohmic
-//  \brief Derived class for Ohmic resistivity
-
-class Ohmic : public Resistivity
-{
- public:
-  Ohmic(MeshBlockPack *pp, ParameterInput *pin, Real eta);
-
-  // data
   Real eta_ohm;
 
-  // overrides of pure virtual functions in base class
-  void AddResistiveEMF(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &efld) override;
+  // map for associating ResistivityTaskName with TaskID
+  std::map<ResistivityTaskName, TaskID> resist_tasks;
+
+  // functions to add resistive EMF to MHD, and energy flux to Hydro
+  void AssembleStageRunTasks(TaskList &tl, TaskID start);
+  TaskStatus AddResistiveEMFs(Driver *pdrive, int stage);
+  void AddOhmicEMF(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &efld);
+
+ private:
+  MeshBlockPack* pmy_pack;
 };
 
 #endif // DIFFUSION_RESISTIVITY_HPP_
