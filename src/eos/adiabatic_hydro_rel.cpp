@@ -221,7 +221,7 @@ void AdiabaticHydroRel::ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Re
 	
 	auto gamma = sqrt(1. +z*z);
         cons(m,IDN,k,j,i) = w_d * gamma;
-        cons(m,IEN,k,j,i) = wgas*gamma*gamma - w_p - w_d * gamma; //rho_eps * gamma_sq + (w_p + cons(IDN,k,j,i)/(gamma+1.))*(v_sq*gamma_sq);
+        cons(m,IEN,k,j,i) = wgas*gamma*gamma - w_p - w_d * gamma; 
         cons(m,IM1,k,j,i) = wgas * gamma * w_vx;
         cons(m,IM2,k,j,i) = wgas * gamma * w_vy;
         cons(m,IM3,k,j,i) = wgas * gamma * w_vz;

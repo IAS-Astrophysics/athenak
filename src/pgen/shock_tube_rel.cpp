@@ -124,7 +124,7 @@ void ProblemGenerator::ShockTube_Rel_(MeshBlockPack *pmbp, ParameterInput *pin)
             u0(m,IM1,k,j,i) = wgas * gamma_sq * wl[IVX];
             u0(m,IM2,k,j,i) = wgas * gamma_sq * wl[IVY];
             u0(m,IM3,k,j,i) = wgas * gamma_sq * wl[IVZ];
-            u0(m,IEN,k,j,i) = wgas * gamma_sq  - pgas - rho*gamma; //rho_eps * gamma_sq + (pgas + rho*gamma/(gamma+1.))*(v_sq*gamma_sq);
+            u0(m,IEN,k,j,i) = wgas * gamma_sq  - pgas - rho*gamma; 
           } else {
 	    Real v_sq = SQR(wr[IVX]) + SQR(wr[IVY]) + SQR(wr[IVZ]);
 	    Real gamma_sq = 1./(1.-v_sq);
@@ -141,7 +141,7 @@ void ProblemGenerator::ShockTube_Rel_(MeshBlockPack *pmbp, ParameterInput *pin)
             u0(m,IM1,k,j,i) = wgas * gamma_sq * wr[IVX];
             u0(m,IM2,k,j,i) = wgas * gamma_sq * wr[IVY];
             u0(m,IM3,k,j,i) = wgas * gamma_sq * wr[IVZ];
-            u0(m,IEN,k,j,i) = wgas * gamma_sq  - pgas - rho*gamma; //rho_eps * gamma_sq + (pgas + rho*gamma/(gamma+1.))*(v_sq*gamma_sq);
+            u0(m,IEN,k,j,i) = wgas * gamma_sq  - pgas - rho*gamma; 
           }
         }
       );

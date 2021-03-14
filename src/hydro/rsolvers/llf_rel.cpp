@@ -79,12 +79,9 @@ void LLF_rel(TeamMember_t const &member, const EOS_Data &eos,
     eos.SoundSpeed_SR(wgas_l, wli[IPR], wli[IVX]/u0l, 1.+u2l, lp, lm);
     eos.SoundSpeed_SR(wgas_r, wri[IPR], wri[IVX]/u0r, 1.+u2r, qb,qa);
 
-    //FIXME ERM: Check this
+    //Include factor 0.5 to match LLF
     qa = fmax(-fmin(lm,qa), 0.);
-    Real a = fmax(fmax(lp,qb), qa);
-
-//    a= 0.5;
-
+    Real a = 0.5*fmax(fmax(lp,qb), qa);
 
     //--- Step 3.  Compute L/R fluxes
 

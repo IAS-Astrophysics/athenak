@@ -88,7 +88,7 @@ void ProblemGenerator::KH_Rel_(MeshBlockPack *pmbp, ParameterInput *pin)
             u0(m,IM1,k,j,i) = wgas * gamma_sq * w[IVX];
             u0(m,IM2,k,j,i) = wgas * gamma_sq * w[IVY];
             u0(m,IM3,k,j,i) = wgas * gamma_sq * w[IVZ];
-            u0(m,IEN,k,j,i) = wgas * gamma_sq  - pgas - rho*gamma; //rho_eps * gamma_sq + (pgas + rho*gamma/(gamma+1.))*(v_sq*gamma_sq);
+            u0(m,IEN,k,j,i) = wgas * gamma_sq  - pgas - rho*gamma; 
 
 	}
       );
