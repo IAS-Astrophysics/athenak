@@ -101,6 +101,9 @@ TaskStatus Resistivity::AddResistiveEMFs(Driver *pdrive, int stage)
 //--------------------------------------------------------------------------------------
 //! \fn AddResistiveEMF()
 //  \brief Adds electric field from Ohmic resistivity to corner-centered electric field
+//  Using Ohm's Law to compute the electric field:  E + (v x B) = \eta J, then
+//    E_{inductive} = - (v x B)  [computed in the MHD Riemann solver]
+//    E_{resistive} = \eta J     [computed in this function]
 
 void Resistivity::AddOhmicEMF(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &efld)
 {
@@ -135,6 +138,7 @@ void Resistivity::AddOhmicEMF(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real>
 
         CurrentDensity(member, m, ks, js, is, ie+1, b0, mbsize, j1, j2, j3);
 
+        // Add E_{resistive} = \eta J to corner-centered electric fields
         par_for_inner(member, is, ie+1, [&](const int i)
         {
           e2(m,ks,  js  ,i) += eta_o*j2(i);
@@ -169,6 +173,7 @@ void Resistivity::AddOhmicEMF(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real>
         
         CurrentDensity(member, m, ks, j, is, ie+1, b0, mbsize, j1, j2, j3);
     
+        // Add E_{resistive} = \eta J to corner-centered electric fields
         par_for_inner(member, is, ie+1, [&](const int i)
         {
           e1(m,ks,  j,i) += eta_o*j1(i);
@@ -203,6 +208,7 @@ void Resistivity::AddOhmicEMF(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real>
 
       CurrentDensity(member, m, k, j, is, ie+1, b0, mbsize, j1, j2, j3);
 
+      // Add E_{resistive} = \eta J to corner-centered electric fields
       par_for_inner(member, is, ie+1, [&](const int i)
       {
         e1(m,k,j,i) += eta_o*j1(i);

@@ -4,7 +4,11 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file srcterms.cpp
-//  \brief Implementation of functions for source terms in equations of motion
+//  \brief Implementation of functions for source terms in equations of motion.  Functions
+//  implememnted in this file are the SourceTerms constructor/destructor, and functions
+//  that insert tasks for various source terms in the time-integrator or operator-split
+//  TaskLists. Implementation of the source terms themselves are in other files, generally
+//  in this directory.
 
 #include <iostream>
 
@@ -93,7 +97,7 @@ void SourceTerms::IncludeUnsplitSrcTermTasks(TaskList &tl, TaskID start)
 
     // add constant (gravitational?) acceleration to Hydro fluid
     if (const_accel) {
-      auto id = tl.InsertTask(&SourceTerms::HydroConstantAccel, this, 
+      auto id = tl.InsertTask(&SourceTerms::AddConstantAccelHydro, this, 
                          pmy_pack->phydro->hydro_tasks[HydroTaskName::calc_flux],
                          pmy_pack->phydro->hydro_tasks[HydroTaskName::update]);
       unsplit_tasks.emplace(UnsplitSrcTermTaskName::hydro_acc, id);
@@ -101,7 +105,7 @@ void SourceTerms::IncludeUnsplitSrcTermTasks(TaskList &tl, TaskID start)
  
     // add shearing box source terms to Hydro fluid
     if (shearing_box) {
-      auto id = tl.InsertTask(&SourceTerms::HydroShearingBox, this,
+      auto id = tl.InsertTask(&SourceTerms::AddSBoxMomentumHydro, this,
                          pmy_pack->phydro->hydro_tasks[HydroTaskName::calc_flux],
                          pmy_pack->phydro->hydro_tasks[HydroTaskName::update]);
       unsplit_tasks.emplace(UnsplitSrcTermTaskName::hydro_sbox, id);
@@ -113,18 +117,22 @@ void SourceTerms::IncludeUnsplitSrcTermTasks(TaskList &tl, TaskID start)
   if (pmy_pack->pmhd != nullptr) {
     // add constant (gravitational?) acceleration to MHD fluid
     if (const_accel) {
-      auto id = tl.InsertTask(&SourceTerms::MHDConstantAccel, this, 
+      auto id = tl.InsertTask(&SourceTerms::AddConstantAccelMHD, this, 
                          pmy_pack->pmhd->mhd_tasks[MHDTaskName::calc_flux],
                          pmy_pack->pmhd->mhd_tasks[MHDTaskName::update]);
       unsplit_tasks.emplace(UnsplitSrcTermTaskName::mhd_acc, id);
     }
 
-    // add shearing box source terms to MHD fluid
+    // add shearing box source terms to MHD fluid AND shearing box EMF
     if (shearing_box) {
-      auto id = tl.InsertTask(&SourceTerms::MHDShearingBox, this,
+      auto id = tl.InsertTask(&SourceTerms::AddSBoxMomentumMHD, this,
                          pmy_pack->pmhd->mhd_tasks[MHDTaskName::calc_flux],
                          pmy_pack->pmhd->mhd_tasks[MHDTaskName::update]);
       unsplit_tasks.emplace(UnsplitSrcTermTaskName::mhd_sbox, id);
+      id = tl.InsertTask(&SourceTerms::AddSBoxEMF, this,
+                         pmy_pack->pmhd->mhd_tasks[MHDTaskName::corner_emf],
+                         pmy_pack->pmhd->mhd_tasks[MHDTaskName::ct]);
+      unsplit_tasks.emplace(UnsplitSrcTermTaskName::mhd_sbox_emf, id);
     }
   }
 
@@ -133,11 +141,11 @@ void SourceTerms::IncludeUnsplitSrcTermTasks(TaskList &tl, TaskID start)
   // and BEFORE either cons2prim call. 
   if (pmy_pack->phydro != nullptr and pmy_pack->pmhd != nullptr) {
     if (twofluid_mhd) {
-      auto id = tl.InsertTask(&SourceTerms::HydroTwoFluidDrag, this,
+      auto id = tl.InsertTask(&SourceTerms::AddTwoFluidDragHydro, this,
                          pmy_pack->pmhd->mhd_tasks[MHDTaskName::calc_flux],
                          pmy_pack->pmhd->mhd_tasks[MHDTaskName::update]);
       unsplit_tasks.emplace(UnsplitSrcTermTaskName::hydro_drag, id);
-      id = tl.InsertTask(&SourceTerms::MHDTwoFluidDrag, this,
+      id = tl.InsertTask(&SourceTerms::AddTwoFluidDragMHD, this,
                          pmy_pack->pmhd->mhd_tasks[MHDTaskName::calc_flux],
                          pmy_pack->pmhd->mhd_tasks[MHDTaskName::update]);
       unsplit_tasks.emplace(UnsplitSrcTermTaskName::mhd_drag, id);
@@ -150,7 +158,7 @@ void SourceTerms::IncludeUnsplitSrcTermTasks(TaskList &tl, TaskID start)
 //----------------------------------------------------------------------------------------
 //! \fn
 
-TaskStatus SourceTerms::HydroTwoFluidDrag(Driver *pdrive, int stage)
+TaskStatus SourceTerms::AddTwoFluidDragHydro(Driver *pdrive, int stage)
 {
   auto &u = pmy_pack->phydro->u0;
   return TaskStatus::complete;
@@ -159,7 +167,7 @@ TaskStatus SourceTerms::HydroTwoFluidDrag(Driver *pdrive, int stage)
 //----------------------------------------------------------------------------------------
 //! \fn
 
-TaskStatus SourceTerms::MHDTwoFluidDrag(Driver *pdrive, int stage)
+TaskStatus SourceTerms::AddTwoFluidDragMHD(Driver *pdrive, int stage)
 {
   return TaskStatus::complete;
 }

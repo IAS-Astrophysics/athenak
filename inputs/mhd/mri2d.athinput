@@ -12,8 +12,8 @@ nghost    = 3         # Number of ghost cells
 nx1       = 64        # Number of zones in X1-direction
 x1min     = -0.5      # minimum value of X1
 x1max     = 0.5       # maximum value of X1
-ix1_bc    = reflecting  # Inner-X1 boundary condition flag
-ox1_bc    = reflecting  # Outer-X1 boundary condition flag
+ix1_bc    = periodic  # Inner-X1 boundary condition flag
+ox1_bc    = periodic  # Outer-X1 boundary condition flag
 
 nx2       = 64        # Number of zones in X2-direction
 x2min     = -0.5      # minimum value of X2
@@ -37,17 +37,17 @@ evolution  = dynamic   # dynamic/kinematic/static
 integrator = rk3       # time integration algorithm
 cfl_number = 0.4       # The Courant, Friedrichs, & Lewy (CFL) Number
 nlim       = -1        # cycle limit
-tlim       = 62.83     # time limit (10 orbits)
+tlim       = 60.       # time limit (almost 10 orbits = 20\pi)
 ndiag      = 1         # cycles between diagostic output
 
 <mhd>
-eos         = adiabatic   # EOS type
-reconstruct = wenoz       # spatial reconstruction method
-rsolver     = hlld        # Riemann-solver to be used
+eos         = adiabatic  # EOS type
+reconstruct = ppm        # spatial reconstruction method
+rsolver     = hlld       # Riemann-solver to be used
 
 <eos>
 gamma = 1.6666666666666667 # gamma = C_p/C_v
-iso_sound_speed = 0.00408  # isothermal sound speed
+iso_sound_speed = 1.0      # isothermal sound speed
 
 <shearing_box>
 qshear     = 1.5       # shear rate
@@ -60,16 +60,16 @@ ifield     = 1         # 1 for zero-net-flux Bz, 2 for constant Bz
 nwx        = 1         # wavenumber in x1
 
 <output1>
-file_type   = hst       # History data dump
-dt          = 0.01      # time increment between outputs
-data_format = %12.5e    # Optional data format string
+file_type   = hst      # History data dump
+dt          = 0.1      # time increment between outputs
+data_format = %12.5e   # Optional data format string
 
 <output2>
-file_type   = vtk       # Binary data dump
-variable    = mhd_w     # variables to be output
-dt          = 0.1       # time increment between outputs
+file_type   = vtk      # Binary data dump
+variable    = mhd_w    # variables to be output
+dt          = 0.5      # time increment between outputs
 
 <output3>
-file_type   = vtk       # Binary data dump
-variable    = mhd_bcc   # variables to be output
-dt          = 0.1       # time increment between outputs
+file_type   = vtk      # Binary data dump
+variable    = mhd_bcc  # variables to be output
+dt          = 0.5      # time increment between outputs

@@ -58,7 +58,7 @@ shearing_periodic(false)
   // Check if x1 boundaries are shearing periodic. When flag set to true, shearing BCs
   // will be called in ApplyPhysicalBCs() in Hydro and/or MHD.
   if (mesh_bcs[BoundaryFace::inner_x1] == BoundaryFlag::periodic) {
-    shearing_periodic = pin->GetOrAddBoolean("mesh","speriodic","false");
+    shearing_periodic = pin->GetOrAddBoolean("mesh","speriodic",false);
   }
 
   // Set BC flags for ix2/ox2 boundaries and error check

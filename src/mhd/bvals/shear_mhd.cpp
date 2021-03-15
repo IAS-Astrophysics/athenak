@@ -33,13 +33,17 @@ void MHD::ShearInnerX1(int m)
 
   // Add shear offset to v3
   Real qomega = (pmy_pack->psrc->qshear)*(pmy_pack->psrc->omega0);
+  auto &eos = peos->eos_data;
   auto &u0_ = u0;
   par_for("shear_ix1", DevExeSpace(),0,(n3-1),0,(n2-1),0,(ng-1),
     KOKKOS_LAMBDA(int k, int j, int i)
     {
-      u0_(m,IEN,k,j,is-i-1) -= 0.5*SQR(u0_(m,IM3,k,j,is-i-1))/u0_(m,IDN,k,j,is-i-1);
-      u0_(m,IM3,k,j,is-i-1) += u0_(m,IDN,k,j,is-i-1)*qomega*x1size;
-      u0_(m,IEN,k,j,is-i-1) += 0.5*SQR(u0_(m,IM3,k,j,is-i-1))/u0_(m,IDN,k,j,is-i-1);
+      Real deltam = u0_(m,IDN,k,j,is-i-1)*qomega*x1size;
+      u0_(m,IM3,k,j,is-i-1) += deltam;
+      if (eos.is_adiabatic) {
+        u0_(m,IEN,k,j,is-i-1) += deltam*(2.0*u0_(m,IM3,k,j,is-i-1) - deltam)/
+                                         (2.0*u0_(m,IDN,k,j,is-i-1));
+      }
     }
   );
 
@@ -61,13 +65,17 @@ void MHD::ShearOuterX1(int m)
 
   // Add shear offset to v3
   Real qomega = (pmy_pack->psrc->qshear)*(pmy_pack->psrc->omega0);
+  auto &eos = peos->eos_data;
   auto &u0_ = u0;
   par_for("shear_ox1", DevExeSpace(),0,(n3-1),0,(n2-1),0,(ng-1),
     KOKKOS_LAMBDA(int k, int j, int i)
     {
-      u0_(m,IEN,k,j,ie+i+1) -= 0.5*SQR(u0_(m,IM3,k,j,ie+i+1))/u0_(m,IDN,k,j,ie+i+1);
-      u0_(m,IM3,k,j,ie+i+1) -= u0_(m,IDN,k,j,ie+i+1)*qomega*x1size;
-      u0_(m,IEN,k,j,ie+i+1) += 0.5*SQR(u0_(m,IM3,k,j,ie+i+1))/u0_(m,IDN,k,j,ie+i+1);
+      Real deltam = -u0_(m,IDN,k,j,ie+i+1)*qomega*x1size;
+      u0_(m,IM3,k,j,ie+i+1) += deltam;
+      if (eos.is_adiabatic) {
+        u0_(m,IEN,k,j,ie+i+1) += deltam*(2.0*u0_(m,IM3,k,j,ie+i+1) - deltam)/
+                                         (2.0*u0_(m,IDN,k,j,ie+i+1));
+      }
     }
   );
 

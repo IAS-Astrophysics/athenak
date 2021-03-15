@@ -8,7 +8,9 @@
 //! \file srcterms.hpp
 //! \brief Data, functions, and classes to implement various source terms in the hydro 
 //! and/or MHD equations of motion.  Currently implemented:
-//!  (1) random forcing to drive turbulence - implemented in TurbulenceDriver class
+//!  (1) constant (gravitational) acceleration - for RTI
+//!  (2) shearing box in 2D (x-z), for both hydro and MHD
+//!  (3) random forcing to drive turbulence - implemented in TurbulenceDriver class
 
 #include <map>
 #include "athena.hpp"
@@ -19,7 +21,7 @@
 // constants that enumerate operator split and unsplit source terms
 enum class SplitSrcTermTaskName {undef=0, hydro_forcing, mhd_forcing};
 enum class UnsplitSrcTermTaskName {undef=0, hydro_acc, hydro_sbox, hydro_drag, mhd_acc,
-  mhd_sbox, mhd_drag};
+  mhd_sbox, mhd_sbox_emf, mhd_drag};
 
 // forward declarations
 class TurbulenceDriver;
@@ -56,16 +58,22 @@ class SourceTerms
   void IncludeSplitSrcTermTasks(TaskList &tl, TaskID start);
   void IncludeUnsplitSrcTermTasks(TaskList &tl, TaskID start);
   TaskStatus ApplyRandomForcing(Driver *pdrive, int stage);
-  TaskStatus HydroConstantAccel(Driver *pdrive, int stage);
-  TaskStatus HydroShearingBox(Driver *pdrive, int stage);
-  TaskStatus HydroTwoFluidDrag(Driver *pdrive, int stage);
-  TaskStatus MHDConstantAccel(Driver *pdrive, int stage);
-  TaskStatus MHDShearingBox(Driver *pdrive, int stage);
-  TaskStatus MHDTwoFluidDrag(Driver *pdrive, int stage);
+  TaskStatus AddConstantAccelHydro(Driver *pdrive, int stage);
+  TaskStatus AddConstantAccelMHD(Driver *pdrive, int stage);
+  TaskStatus AddSBoxMomentumHydro(Driver *pdrive, int stage);
+  TaskStatus AddSBoxMomentumMHD(Driver *pdrive, int stage);
+  TaskStatus AddSBoxEMF(Driver *pdrive, int stage);
+  TaskStatus AddTwoFluidDragHydro(Driver *pdrive, int stage);
+  TaskStatus AddTwoFluidDragMHD(Driver *pdrive, int stage);
   void ConstantAccel(DvceArray5D<Real> &u, DvceArray5D<Real> &w,
                      const EOS_Data &eos, Real bdt);
-  void ShearingBox(DvceArray5D<Real> &u, DvceArray5D<Real> &w,
-                   const EOS_Data &eos, Real bdt);
+  // shearing box terms for hydro
+  void SBoxMomentumTerms(DvceArray5D<Real> &u, DvceArray5D<Real> &w, 
+                         const EOS_Data &eos, Real bdt);
+  // shearing box terms for MHD (face-centered B included in arguments)
+  void SBoxMomentumTerms(DvceArray5D<Real> &u, DvceArray5D<Real> &w, 
+                         DvceFaceFld4D<Real> &b, const EOS_Data &eos, Real bdt);
+  void SBoxEMF(const DvceFaceFld4D<Real> &b, DvceEdgeFld4D<Real> &efld);
 
  private:
   MeshBlockPack* pmy_pack;

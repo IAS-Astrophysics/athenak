@@ -4,8 +4,11 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file mhd_fluxes.cpp
-//  \brief Calculate fluxes of the conserved variables, and area-averaged EMFs, on
-//   cell faces for mhd
+//  \brief Calculate fluxes of the conserved variables, and area-averaged electric fields
+//  E = - (v X B) on cell faces for mhd.  Fluxes are stored in face-centered vector
+//  'uflx', while electric fields are stored in individual arrays: e2x1,e3x1 on x1-faces;
+//  e1x2,e3x2 on x2-faces; e1x3,e2x3 on x3-faces.
+//
 
 #include <iostream>
 
@@ -102,9 +105,9 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
       // Sync all threads in the team so that scratch memory is consistent
       member.team_barrier();
 
-      // compute fluxes over [is,ie+1]
-      // flx1(IBY) = (v1*b2 - v2*b1) = -EMFZ
-      // flx1(IBZ) = (v1*b3 - v3*b1) =  EMFY
+      // compute fluxes over [is,ie+1].  MHD RS also computes electric fields, where 
+      // (IBY) component of flx = E_{z} = -(v x B)_{z} = -(v1*b2 - v2*b1)
+      // (IBZ) component of flx = E_{y} = -(v x B)_{y} =  (v1*b3 - v3*b1)
       switch (rsolver_method)
       {
         case MHD_RSolver::advect:
@@ -208,9 +211,9 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
         }
         member.team_barrier();
 
-        // compute fluxes over [js,je+1].
-        // flx2(IBY) = (v2*b3 - v3*b2) = -EMFX
-        // flx2(IBZ) = (v2*b1 - v1*b2) =  EMFZ
+        // compute fluxes over [js,je+1].  MHD RS also computes electric fields, where 
+        // (IBY) component of flx = E_{x} = -(v x B)_{x} = -(v2*b3 - v3*b2)
+        // (IBZ) component of flx = E_{z} = -(v x B)_{z} =  (v2*b1 - v1*b2)
         if (j>(js-1)) {
           switch (rsolver_method)
           {
@@ -310,9 +313,9 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
         }
         member.team_barrier();
 
-        // compute fluxes over [ks,ke+1].
-        // flx3(IBY) = (v3*b1 - v1*b3) = -EMFY
-        // flx3(IBZ) = (v3*b2 - v2*b3) =  EMFX
+        // compute fluxes over [ks,ke+1].  MHD RS also computes electric fields, where 
+        // (IBY) component of flx = E_{y} = -(v x B)_{y} = -(v3*b1 - v1*b3)
+        // (IBZ) component of flx = E_{x} = -(v x B)_{x} =  (v3*b2 - v2*b3)
         if (k>(ks-1)) {
           switch (rsolver_method)
           {
