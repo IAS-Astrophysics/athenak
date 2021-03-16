@@ -53,15 +53,12 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
   int ifield = pin->GetOrAddInteger("problem","ifield",1);
   int iprob  = pin->GetOrAddInteger("problem","iprob",2);
 
+  // background density, pressure, and magnetic field
   Real d0 = 1.0;
   Real p0 = 1.0;
   Real B0 = std::sqrt(2.0*p0/beta);
 
-
   Real x1size = pmy_mesh_->mesh_size.x1max - pmy_mesh_->mesh_size.x1min;
-  Real x2size = pmy_mesh_->mesh_size.x2max - pmy_mesh_->mesh_size.x2min;
-  Real x3size = pmy_mesh_->mesh_size.x3max - pmy_mesh_->mesh_size.x3min;
-
   Real kx = 2.0*(M_PI/x1size)*(static_cast<Real>(nwx));
 
   // capture variables for kernel
