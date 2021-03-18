@@ -60,28 +60,78 @@ TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage)
     }, Kokkos::Min<Real>(dt1), Kokkos::Min<Real>(dt2),Kokkos::Min<Real>(dt3));
  
   } else {
-    // find smallest dx/(v +/- C) in each direction for hydrodynamic problems
-    Kokkos::parallel_reduce("HydroNudt2",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-      KOKKOS_LAMBDA(const int &idx, Real &min_dt1, Real &min_dt2, Real &min_dt3)
-    { 
-      // compute m,k,j,i indices of thread and call function
-      int m = (idx)/nkji;
-      int k = (idx - m*nkji)/nji;
-      int j = (idx - m*nkji - k*nji)/nx1;
-      int i = (idx - m*nkji - k*nji - j*nx1) + is;
-      k += ks;
-      j += js;
 
-      Real cs;
-      if (eos.is_adiabatic) {
-        cs = eos.SoundSpeed(w0_(m,IPR,k,j,i),w0_(m,IDN,k,j,i));
-      } else {
-        cs = eos.iso_cs;
-      }
-      min_dt1 = fmin((mbsize.dx1.d_view(m)/(fabs(w0_(m,IVX,k,j,i)) + cs)), min_dt1);
-      min_dt2 = fmin((mbsize.dx2.d_view(m)/(fabs(w0_(m,IVY,k,j,i)) + cs)), min_dt2);
-      min_dt3 = fmin((mbsize.dx3.d_view(m)/(fabs(w0_(m,IVZ,k,j,i)) + cs)), min_dt3);
-    }, Kokkos::Min<Real>(dt1), Kokkos::Min<Real>(dt2),Kokkos::Min<Real>(dt3));
+    if (!relativistic) {
+      // find smallest dx/(v +/- C) in each direction for hydrodynamic problems
+      Kokkos::parallel_reduce("HydroNudt2",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+	KOKKOS_LAMBDA(const int &idx, Real &min_dt1, Real &min_dt2, Real &min_dt3)
+      { 
+	// compute m,k,j,i indices of thread and call function
+	int m = (idx)/nkji;
+	int k = (idx - m*nkji)/nji;
+	int j = (idx - m*nkji - k*nji)/nx1;
+	int i = (idx - m*nkji - k*nji - j*nx1) + is;
+	k += ks;
+	j += js;
+
+	Real cs;
+	if (eos.is_adiabatic) {
+	  cs = eos.SoundSpeed(w0_(m,IPR,k,j,i),w0_(m,IDN,k,j,i));
+	} else {
+	  cs = eos.iso_cs;
+	}
+	min_dt1 = fmin((mbsize.dx1.d_view(m)/(fabs(w0_(m,IVX,k,j,i)) + cs)), min_dt1);
+	min_dt2 = fmin((mbsize.dx2.d_view(m)/(fabs(w0_(m,IVY,k,j,i)) + cs)), min_dt2);
+	min_dt3 = fmin((mbsize.dx3.d_view(m)/(fabs(w0_(m,IVZ,k,j,i)) + cs)), min_dt3);
+      }, Kokkos::Min<Real>(dt1), Kokkos::Min<Real>(dt2),Kokkos::Min<Real>(dt3));
+
+
+    }else{ // end non-relativistic
+
+      // find largest (v +/- C) in each dirn for hydrodynamic problems
+      Kokkos::parallel_reduce("RelHydroNudt2",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+	KOKKOS_LAMBDA(const int &idx, Real &min_dt1, Real &min_dt2, Real &min_dt3)
+      { 
+	// compute m,k,j,i indices of thread and call function
+	int m = (idx)/nkji;
+	int k = (idx - m*nkji)/nji;
+	int j = (idx - m*nkji - k*nji)/nx1;
+	int i = (idx - m*nkji - k*nji - j*nx1) + is;
+	k += ks;
+	j += js;
+
+	Real u2 = SQR(w0_(m,IVX,k,j,i)) + SQR(w0_(m,IVY,k,j,i)) + SQR(w0_(m,IVZ,k,j,i));
+	
+	Real u0  = sqrt(1. + u2);
+
+	// FIXME ERM: Ideal fluid for now
+	Real wgas = w0_(m,IDN,k,j,i) + (eos.gamma/(eos.gamma-1.)) * w0_(m,IPR,k,j,i);
+
+	Real lm,lp;
+	Real max_dv1 =0.;
+	eos.SoundSpeed_SR(wgas, w0_(m,IPR,k,j,i), w0_(m,IVX,k,j,i)/u0, u0*u0, lp, lm);
+	lm = fmax(-lm, 0.);
+	lp = fmax( lp, lm);
+	max_dv1 = fmax(lp, max_dv1);
+
+	Real max_dv2 =0.;
+	eos.SoundSpeed_SR(wgas, w0_(m,IPR,k,j,i), w0_(m,IVY,k,j,i)/u0, u0*u0, lp, lm);
+	lm = fmax(-lm, 0.);
+	lp = fmax( lp, lm);
+	max_dv2 = fmax(lp, max_dv2);
+
+	Real max_dv3 =0.;
+	eos.SoundSpeed_SR(wgas, w0_(m,IPR,k,j,i), w0_(m,IVZ,k,j,i)/u0, u0*u0, lp, lm);
+	lm = fmax(-lm, 0.);
+	lp = fmax( lp, lm);
+	max_dv3 = fmax(lp, max_dv3);
+
+	min_dt1 = fmin((mbsize.dx1.d_view(m)/max_dv1), min_dt1);
+	min_dt2 = fmin((mbsize.dx2.d_view(m)/max_dv2), min_dt2);
+	min_dt3 = fmin((mbsize.dx3.d_view(m)/max_dv3), min_dt3);
+      }, Kokkos::Min<Real>(dt1), Kokkos::Min<Real>(dt2),Kokkos::Min<Real>(dt3));
+ 
+   }
 
   }
 

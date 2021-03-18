@@ -19,7 +19,7 @@ class EquationOfState;
 class Driver;
 
 // constants that enumerate Hydro Riemann Solver options
-enum class Hydro_RSolver {advect, llf, hllc, roe};
+enum class Hydro_RSolver {advect, llf, hllc, roe, llf_rel,hllc_rel};
 
 // constants that enumerate Hydro tasks
 enum class HydroTaskName {undef=0, init_recv, copy_cons, calc_flux, update,
@@ -39,6 +39,7 @@ class Hydro
   // data
   EquationOfState *peos;  // chosen EOS
 
+  bool relativistic = false;
   int nhydro;             // number of hydro variables (5/4 for adiabatic/isothermal)
   int nscalars;           // number of passive scalars
   DvceArray5D<Real> u0;   // conserved variables

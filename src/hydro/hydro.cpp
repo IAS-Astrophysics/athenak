@@ -31,7 +31,18 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   // construct EOS object (no default)
   {std::string eqn_of_state = pin->GetString("hydro","eos");
   if (eqn_of_state.compare("adiabatic") == 0) {
-    peos = new AdiabaticHydro(ppack, pin);
+    
+
+    // FIXME : Should this only be switched via the riemann solver flag?
+    std::string rsolver = pin->GetString("hydro","rsolver");
+    if (rsolver.compare("llf_rel") == 0 || rsolver.compare("hllc_rel") == 0){
+        relativistic = true;
+    	peos = new AdiabaticHydroRel(ppack, pin);
+    }
+    else{
+    	peos = new AdiabaticHydro(ppack, pin);
+    }
+
     nhydro = 5;
   } else if (eqn_of_state.compare("isothermal") == 0) {
     peos = new IsothermalHydro(ppack, pin);
@@ -119,8 +130,27 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
                 << "' cannot be used with non-hydrodynamic problems" << std::endl;
       std::exit(EXIT_FAILURE);
 
+    } else if (rsolver.compare("llf_rel") == 0) {
+      if (peos->eos_data.is_adiabatic) {
+        rsolver_method_ = Hydro_RSolver::llf_rel;
+      } else { 
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "<hydro>/rsolver = '" << rsolver
+                  << "' cannot be used with isothermal EOS" << std::endl;
+        std::exit(EXIT_FAILURE); 
+      }  
     } else if (rsolver.compare("llf") == 0) {
-      rsolver_method_ = Hydro_RSolver::llf;
+      	rsolver_method_ = Hydro_RSolver::llf;
+
+    } else if (rsolver.compare("hllc_rel") == 0) {
+      if (peos->eos_data.is_adiabatic) {
+        rsolver_method_ = Hydro_RSolver::hllc_rel;
+      } else { 
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "<hydro>/rsolver = '" << rsolver
+                  << "' cannot be used with isothermal EOS" << std::endl;
+        std::exit(EXIT_FAILURE); 
+      }  
 
     } else if (rsolver.compare("hllc") == 0) {
       if (peos->eos_data.is_adiabatic) {
