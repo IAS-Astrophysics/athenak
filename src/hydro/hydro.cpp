@@ -28,25 +28,34 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
 {
   // (1) Start by selecting physics for this Hydro:
 
+  // Check for relativistic dynamics
+  is_special_relativistic = pin->GetOrAddBoolean("hydro","special_rel",false);
+  is_general_relativistic = pin->GetOrAddBoolean("hydro","general_rel",false);
+
   // construct EOS object (no default)
   {std::string eqn_of_state = pin->GetString("hydro","eos");
+  // adiabatic EOS
   if (eqn_of_state.compare("adiabatic") == 0) {
-    
-
-    // FIXME : Should this only be switched via the riemann solver flag?
-    std::string rsolver = pin->GetString("hydro","rsolver");
-    if (rsolver.compare("llf_rel") == 0 || rsolver.compare("hllc_rel") == 0){
-        relativistic = true;
-    	peos = new AdiabaticHydroRel(ppack, pin);
+    if (is_special_relativistic){
+      peos = new AdiabaticHydroSR(ppack, pin);
+    } else {
+      peos = new AdiabaticHydro(ppack, pin);
     }
-    else{
-    	peos = new AdiabaticHydro(ppack, pin);
-    }
-
     nhydro = 5;
+
+  // isothermal EOS
   } else if (eqn_of_state.compare("isothermal") == 0) {
-    peos = new IsothermalHydro(ppack, pin);
-    nhydro = 4;
+    if (is_special_relativistic){
+      std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
+                << "<hydro> eos = isothermal cannot be used with special relativity"
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    } else {
+      peos = new IsothermalHydro(ppack, pin);
+      nhydro = 4;
+    }
+
+  // other EOS not implemented
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "<hydro> eos = '" << eqn_of_state << "' not implemented" << std::endl;
@@ -114,6 +123,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
 
     // select Riemann solver (no default).  Test for compatibility of options
     {std::string rsolver = pin->GetString("hydro","rsolver");
+    // Advect solver
     if (rsolver.compare("advect") == 0) {
       if (evolution_t.compare("dynamic") == 0) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -124,37 +134,29 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
         rsolver_method_ = Hydro_RSolver::advect;
       }
 
+    // only advect RS can be used with non-dynamic problems; print error otherwise
     } else  if (evolution_t.compare("dynamic") != 0) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "<hydro>/rsolver = '" << rsolver
                 << "' cannot be used with non-hydrodynamic problems" << std::endl;
       std::exit(EXIT_FAILURE);
 
-    } else if (rsolver.compare("llf_rel") == 0) {
-      if (peos->eos_data.is_adiabatic) {
+    // LLF solver
+    } else if (rsolver.compare("llf") == 0) {
+      if (is_special_relativistic) {
         rsolver_method_ = Hydro_RSolver::llf_rel;
       } else { 
-        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                  << std::endl << "<hydro>/rsolver = '" << rsolver
-                  << "' cannot be used with isothermal EOS" << std::endl;
-        std::exit(EXIT_FAILURE); 
-      }  
-    } else if (rsolver.compare("llf") == 0) {
       	rsolver_method_ = Hydro_RSolver::llf;
-
-    } else if (rsolver.compare("hllc_rel") == 0) {
-      if (peos->eos_data.is_adiabatic) {
-        rsolver_method_ = Hydro_RSolver::hllc_rel;
-      } else { 
-        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                  << std::endl << "<hydro>/rsolver = '" << rsolver
-                  << "' cannot be used with isothermal EOS" << std::endl;
-        std::exit(EXIT_FAILURE); 
       }  
 
+    // HLLC solver
     } else if (rsolver.compare("hllc") == 0) {
       if (peos->eos_data.is_adiabatic) {
-        rsolver_method_ = Hydro_RSolver::hllc;
+        if (is_special_relativistic) {
+          rsolver_method_ = Hydro_RSolver::hllc_rel;
+        } else { 
+          rsolver_method_ = Hydro_RSolver::hllc;
+        }
       } else { 
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                   << std::endl << "<hydro>/rsolver = '" << rsolver
@@ -162,6 +164,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
         std::exit(EXIT_FAILURE); 
       }  
 
+      // Roe solver
 //    } else if (rsolver.compare("roe") == 0) {
 //      rsolver_method_ = Hydro_RSolver::roe;
 

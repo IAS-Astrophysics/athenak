@@ -21,6 +21,42 @@
 #include "utils/grid_locations.hpp"
 #include "pgen.hpp"
 
+// Define some containers to hold Hydro conserved/primitive variables
+struct Cons1D {
+  Real d, m1, m2, m3, e;
+};
+struct Prim1D {
+  Real d, vx, vy, vz, p;
+};
+
+// Define a function to compute prim->cons for either Newtonian or SR dynamics
+// TODO: Currently this pgen is the only function that needs Prim->Cons transorms. If
+// such a functions is needed in more places (e.g. AMR prolongation) then it should
+// be moved to EOS class.
+void PrimToConsHydro(Prim1D &w, Cons1D &u, Real gam_eos, bool is_sr)
+{
+  if (is_sr) {
+    Real v_sq = SQR(w.vx) + SQR(w.vy) + SQR(w.vz);
+    Real gamma_sq = 1.0/(1.0 - v_sq);
+    Real gamma = sqrt(gamma_sq);
+    //FIXME: Only ideal fluid for now
+    Real wgas = w.d + (gam_eos/(gam_eos - 1.))*w.p;
+
+    u.d  = gamma * w.d;
+    u.m1 = wgas * gamma_sq * w.vx;
+    u.m2 = wgas * gamma_sq * w.vy;
+    u.m3 = wgas * gamma_sq * w.vz;
+    u.e  = wgas * gamma_sq - w.p - gamma * w.d; 
+  } else {
+    u.d  = w.d;
+    u.m1 = w.vx*w.d;
+    u.m2 = w.vy*w.d;
+    u.m3 = w.vz*w.d;
+    u.e  = w.p/(gam_eos - 1.0) + 0.5*w.d*(SQR(w.vx) + SQR(w.vy) + SQR(w.vz)); 
+  }
+  return;
+}
+
 //----------------------------------------------------------------------------------------
 //! \fn ProblemGenerator::ShockTube_()
 //  \brief Problem Generator for the shock tube (Riemann problem) tests
@@ -74,22 +110,24 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
   if (pmbp->phydro != nullptr) {
 
     // Parse left state read from input file: dl,ul,vl,wl,[pl]
-    Real wl[5];
-    wl[IDN] = pin->GetReal("problem","dl");
-    wl[IVX] = pin->GetReal("problem","ul");
-    wl[IVY] = pin->GetReal("problem","vl");
-    wl[IVZ] = pin->GetReal("problem","wl");
-    wl[IPR] = pin->GetReal("problem","pl");
+    Prim1D wl,wr;
+    Cons1D ul,ur;
+    wl.d  = pin->GetReal("problem","dl");
+    wl.vx = pin->GetReal("problem","ul");
+    wl.vy = pin->GetReal("problem","vl");
+    wl.vz = pin->GetReal("problem","wl");
+    wl.p  = pin->GetReal("problem","pl");
+    Real gam = pmbp->phydro->peos->eos_data.gamma;
+    PrimToConsHydro(wl,ul,gam,pmbp->phydro->is_special_relativistic);
   
     // Parse right state read from input file: dr,ur,vr,wr,[pr]
-    Real wr[5];
-    wr[IDN] = pin->GetReal("problem","dr");
-    wr[IVX] = pin->GetReal("problem","ur");
-    wr[IVY] = pin->GetReal("problem","vr");
-    wr[IVZ] = pin->GetReal("problem","wr");
-    wr[IPR] = pin->GetReal("problem","pr");
+    wr.d  = pin->GetReal("problem","dr");
+    wr.vx = pin->GetReal("problem","ur");
+    wr.vy = pin->GetReal("problem","vr");
+    wr.vz = pin->GetReal("problem","wr");
+    wr.p  = pin->GetReal("problem","pr");
+    PrimToConsHydro(wr,ur,gam,pmbp->phydro->is_special_relativistic);
 
-    Real gm1 = pmbp->phydro->peos->eos_data.gamma - 1.0;
     auto &u0 = pmbp->phydro->u0;
     par_for("pgen_shock1", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m,int k, int j, int i)
@@ -104,19 +142,17 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
         }
 
         if (x < xshock) {
-          u0(m,IDN,k,j,i) = wl[IDN];
-          u0(m,ivx,k,j,i) = wl[IVX]*wl[IDN];
-          u0(m,ivy,k,j,i) = wl[IVY]*wl[IDN];
-          u0(m,ivz,k,j,i) = wl[IVZ]*wl[IDN];
-          u0(m,IEN,k,j,i) = wl[IPR]/gm1 +
-             0.5*wl[IDN]*(SQR(wl[IVX]) + SQR(wl[IVY]) + SQR(wl[IVZ]));
+          u0(m,IDN,k,j,i) = ul.d;
+          u0(m,ivx,k,j,i) = ul.m1;
+          u0(m,ivy,k,j,i) = ul.m2;
+          u0(m,ivz,k,j,i) = ul.m3;
+          u0(m,IEN,k,j,i) = ul.e;
         } else {
-          u0(m,IDN,k,j,i) = wr[IDN];
-          u0(m,ivx,k,j,i) = wr[IVX]*wr[IDN];
-          u0(m,ivy,k,j,i) = wr[IVY]*wr[IDN];
-          u0(m,ivz,k,j,i) = wr[IVZ]*wr[IDN];
-          u0(m,IEN,k,j,i) = wr[IPR]/gm1 +
-             0.5*wr[IDN]*(SQR(wr[IVX]) + SQR(wr[IVY]) + SQR(wr[IVZ]));
+          u0(m,IDN,k,j,i) = ur.d;
+          u0(m,ivx,k,j,i) = ur.m1;
+          u0(m,ivy,k,j,i) = ur.m2;
+          u0(m,ivz,k,j,i) = ur.m3;
+          u0(m,IEN,k,j,i) = ur.e;
         }
       }
     );

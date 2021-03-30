@@ -3,28 +3,29 @@ problem   = SR hydro shocktube problem 2
 reference = Mignone & Bodo 2005, MNRAS 364 126
 
 <job>
-basename  = srshock       # problem ID: basename of output filenames
+basename  = MB2       # problem ID: basename of output filenames
 
 <hydro>
+special_rel = true
 eos         = adiabatic
 reconstruct = ppm
-rsolver     = llf_rel
+rsolver     = hllc
 
 <eos>
 gamma  = 1.6666666666666667  # ratio of specific heats Gamma
-iso_sound_speed = 1.0   # isothermal sound speed
+iso_sound_speed = 1.0        # isothermal sound speed
 
 <time>
-evolution  = dynamic   # dynamic/kinematic/static
+evolution  = dynamic    # dynamic/kinematic/static
 integrator  = rk3       # time integration algorithm
 cfl_number  = 0.4       # The Courant, Friedrichs, & Lewy (CFL) Number
 nlim        = -1        # cycle limit
-tlim        = 0.4      # time limit
+tlim        = 0.4       # time limit
 ndiag       = 1         # cycles between diagostic output
 
 <mesh>
 nghost      = 3
-nx1         = 1600       # Number of zones in X1-direction
+nx1         = 1600      # Number of zones in X1-direction
 x1min       = -0.5      # minimum value of X1
 x1max       = 0.5       # maximum value of X1
 ix1_bc      = outflow   # Inner-X1 boundary condition flag
@@ -48,18 +49,18 @@ nx2 = 1
 nx3 = 1
 
 <problem>
-pgen_name  = shock_tube_rel
+pgen_name  = shock_tube
 shock_dir  = 1          # Shock Direction -- (1,2,3) = (x1,x2,x3)
 xshock     = 0.0        # position of initial interface
 
 dl = 1.0                # density on left
-pl = 10.0                # pressure
+pl = 10.0               # pressure
 ul =-0.6                # X-velocity 
 vl = 0.0                # Y-velocity
 wl = 0.0                # Z-velocity
 
-dr = 10.0              # density on right
-pr = 20.0                # pressure
+dr = 10.0               # density on right
+pr = 20.0               # pressure
 ur = 0.5                # X-velocity
 vr = 0.0                # Y-velocity
 wr = 0.0                # Z-velocity

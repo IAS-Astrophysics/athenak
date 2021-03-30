@@ -23,7 +23,6 @@ class ProblemGenerator {
 
   // predefined problem generator functions
   void ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin);
-  void ShockTube_Rel_(MeshBlockPack *pmbp, ParameterInput *pin);
   void KH_Rel_(MeshBlockPack *pmbp, ParameterInput *pin);
   void Advection_(MeshBlockPack *pmbp, ParameterInput *pin);
   void LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin);

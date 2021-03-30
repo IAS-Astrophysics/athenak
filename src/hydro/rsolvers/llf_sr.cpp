@@ -1,11 +1,10 @@
-
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file llf.cpp
-//  \brief Local Lax Friedrichs (LLF) Riemann solver for hydrodynamics
+//! \file llf_sr.cpp
+//  \brief Local Lax Friedrichs (LLF) Riemann solver for special relativistic hydro
 //
 //  Computes 1D fluxes using the LLF Riemann solver, also known as Rusanov's method.
 //  This flux is very diffusive, even more diffusive than HLLE, and so it is not
@@ -26,19 +25,16 @@ namespace hydro {
 //  \brief The LLF Riemann solver for hydrodynamics (both adiabatic and isothermal)
 
 KOKKOS_INLINE_FUNCTION
-void LLF_rel(TeamMember_t const &member, const EOS_Data &eos,
+void LLF_SR(TeamMember_t const &member, const EOS_Data &eos,
      const int m, const int k, const int j, const int il, const int iu,
      const int ivx, const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr,
      DvceArray5D<Real> flx)
 {
-
-
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
   Real wli[5],wri[5],du[5];
   Real fl[5],fr[5];
   Real gm1 = eos.gamma - 1.0;
-//  Real iso_cs = eos.iso_cs;
 
   par_for_inner(member, il, iu, [&](const int i)
   {
@@ -108,7 +104,7 @@ void LLF_rel(TeamMember_t const &member, const EOS_Data &eos,
 //    fl[IEN] = (((wli[IPR] / gm1) + wli[IPR]) * u0l + (wli[IDN]/(1.+ u0l)*u2l))*wli[IVX];
 //    fr[IEN] = (((wri[IPR] / gm1) + wri[IPR]) * u0r + (wri[IDN]/(1.+ u0r)*u2r))*wri[IVX];
 
-    du[IDN] = wri[IDN]*u0r          - wli[IDN] * u0l;
+    du[IDN] =        u0r*wri[IDN] -        u0l*wli[IDN];
     du[IVX] = wgas_r*u0r*wri[IVX] - wgas_l*u0l*wli[IVX];
     du[IVY] = wgas_r*u0r*wri[IVY] - wgas_l*u0l*wli[IVY];
     du[IVZ] = wgas_r*u0r*wri[IVZ] - wgas_l*u0l*wli[IVZ];

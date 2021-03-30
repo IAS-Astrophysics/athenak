@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 import matplotlib.widgets
 from matplotlib.animation import FuncAnimation
 import mpl_toolkits.axes_grid1
+matplotlib.rcParams['animation.embed_limit'] = 2**32
 
 # Athena++ modules
 import athena_read
@@ -33,8 +34,8 @@ class Player(FuncAnimation):
         self.func = func
         self.setup(pos)
         FuncAnimation.__init__(self,self.fig, self.update, frames=self.play(),
-                               init_func=init_func, fargs=fargs, save_count=save_count,
-                               interval=200, **kwargs )
+                               init_func=init_func, fargs=None, save_count=None,
+                               interval=200, cache_frame_data=False, **kwargs )
 
     # version that stops when reaching end of plot list
     #def play(self):
@@ -156,7 +157,7 @@ def main(**kwargs):
 
     fprefix = input_file[:-9]
     fnumber = int(input_file[-9:-4])
-    fnames=[fprefix+str(i).zfill(5)+'.tab' for i in range(nfiles)]
+    fnames=[fprefix+str(fnumber+i).zfill(5)+'.tab' for i in range(nfiles)]
     data = []
     for n in range(nfiles):
         data.append(athena_read.tab(fnames[n]))
@@ -200,7 +201,7 @@ def main(**kwargs):
         ax = fig.add_subplot(1,1,1)
         def update_func(i):
             ax.clear()
-            ax.plot(data[i][xvar], data[i][yvar], '.')
+            ax.plot(x_vals[i], y_vals[i], '.')
             #if xlim != (None,None):
             #    ax.set_xlim(xlim)
             #if ylim != (None,None):

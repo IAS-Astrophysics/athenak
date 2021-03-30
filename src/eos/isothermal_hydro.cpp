@@ -25,15 +25,6 @@ IsothermalHydro::IsothermalHydro(MeshBlockPack *pp, ParameterInput *pin)
 }
 
 //----------------------------------------------------------------------------------------
-// \!fn void ConservedToPrimitive()
-// \brief No-Op version of MHD cons to prim functions.  Never used in Hydro.
-
-void IsothermalHydro::ConsToPrim(const DvceArray5D<Real> &cons,
-         const DvceFaceFld4D<Real> &b, DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc)
-{
-}
-
-//----------------------------------------------------------------------------------------
 // \!fn void ConsToPrim()
 // \brief Converts conserved into primitive variables in nonrelativistic isothermal hydro
 

@@ -22,3 +22,22 @@ EquationOfState::EquationOfState(MeshBlockPack* pp, ParameterInput *pin)
   eos_data.density_floor = pin->GetOrAddReal("eos","density_floor",(FLT_MIN));
   eos_data.pressure_floor = pin->GetOrAddReal("eos","pressure_floor",(FLT_MIN));
 }
+
+//----------------------------------------------------------------------------------------
+// \!fn void ConsToPrim()
+// \brief No-Op version of hydro cons to prim function. This version is never used in MHD,
+// and is overwritten in Hydro
+
+void EquationOfState::ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
+{        
+}
+
+//----------------------------------------------------------------------------------------
+// \!fn void ConsToPrim()
+// \brief No-Op version of MHD cons to prim function. This version is never used in Hydro,
+// and is overwritten in MHD.
+
+void EquationOfState::ConsToPrim(const DvceArray5D<Real> &cons,
+         const DvceFaceFld4D<Real> &b, DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc)
+{
+}

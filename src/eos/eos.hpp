@@ -26,32 +26,38 @@ struct EOS_Data
   Real iso_cs;
   bool is_adiabatic;
   Real density_floor, pressure_floor;
+
   // sound speed function for adiabatic EOS 
   KOKKOS_INLINE_FUNCTION
   Real SoundSpeed(Real p, Real d) const {
-   return std::sqrt(gamma*p/d);
+    return std::sqrt(gamma*p/d);
   }
 
+  // sound speed function for special relativistic adiabatic EOS 
+  // Inputs:
+  //   h: enthalpy per unit volume
+  //   p: gas pressure
+  //   vx: 3-velocity component v^x
+  //   lor_sq: Lorentz factor \gamma^2
+  // Outputs:
+  //   l_p: value set to most positive wavespeed
+  //   l_m: value set to most negative wavespeed
+  // References:
+  //   Del Zanna & Bucciantini, A&A 390, 1177 (2002)
+  //   Mignone & Bodo 2005, MNRAS 364 126 (MB).
+  //   Del Zanna et al, A&A 473, 11 (2007) (eq. 76)
   KOKKOS_INLINE_FUNCTION
-  void SoundSpeed_SR(Real rho_h, Real pgas, Real vx, Real gamma_lorentz_sq,
-      Real& plambda_plus, Real& plambda_minus) const {
+  void SoundSpeed_SR(Real h, Real p, Real vx, Real lor_sq, Real& l_p, Real& l_m) const {
+    Real cs2 = gamma * p / h;  // (MB 4)
+    Real v2 = 1. - 1./lor_sq;
+    auto const p1 = vx * (1. - cs2);
+    auto const tmp = sqrt( cs2 * ((1.-v2*cs2) - p1*vx)/lor_sq );
+    auto const invden = 1./ (1. - v2 * cs2);
 
-      // arXiv:0704.3206 (Del Zanna et al. 2007)
-      // Eq. (76)
+    l_p = (p1 + tmp) * invden;
+    l_m = (p1 - tmp) * invden;
+  }
 
-      Real cs2 = gamma * pgas / rho_h;  // (MB 4)
-      Real v2 = 1. - 1./gamma_lorentz_sq;
-
-      auto const p1 = vx * (1. - cs2);
-      auto const tmp = sqrt( 
-	  cs2 * ((1.-v2*cs2) - p1*vx)/gamma_lorentz_sq
-	  );
-
-      auto const invden =1./ (1. - v2 * cs2);
-
-      plambda_plus = (p1 + tmp) * invden;
-      plambda_minus = (p1 - tmp) * invden;
-}
   // fast magnetosonic speed function for adiabatic EOS 
   KOKKOS_INLINE_FUNCTION
   Real FastMagnetosonicSpeed(Real d, Real p, Real bx, Real by, Real bz) const {
@@ -61,6 +67,7 @@ struct EOS_Data
     Real tmp = bx*bx + ct2 - asq;
     return std::sqrt(0.5*(qsq + std::sqrt(tmp*tmp + 4.0*asq*ct2))/d);
   }
+
   // fast magnetosonic speed function for isothermal EOS 
   KOKKOS_INLINE_FUNCTION
   Real FastMagnetosonicSpeed(Real d, Real bx, Real by, Real bz) const {
@@ -85,42 +92,34 @@ class EquationOfState
   MeshBlockPack* pmy_pack;
   EOS_Data eos_data;
 
-  // pure virtual functions to convert cons to prim, overwritten in derived eos classes
-  virtual void ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) = 0;
+  // virtual functions to convert cons to prim, overwritten in derived eos classes
+  virtual void ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim);
   virtual void ConsToPrim(const DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
-                          DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc) = 0;
+                          DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc);
 
  private:
 };
 
 //----------------------------------------------------------------------------------------
-//! \class AdibaticHydro
+//! \class AdiabaticHydro
 //  \brief Derived class for Hydro adiabatic EOS
 
 class AdiabaticHydro : public EquationOfState
 {
  public:
   AdiabaticHydro(MeshBlockPack *pp, ParameterInput *pin);
-  // prototype for Hydro conversion function
   void ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
-  // prototype for MHD conversion function (never used)
-  void ConsToPrim(const DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
-                  DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc) override;
 };
 
 //----------------------------------------------------------------------------------------
-//! \class AdibaticHydroRel
-//  \brief Derived class for relativistic Hydro adiabatic EOS 
+//! \class AdiabaticHydroSR
+//  \brief Derived class for special relativistic Hydro adiabatic EOS 
 
-class AdiabaticHydroRel : public EquationOfState
+class AdiabaticHydroSR : public EquationOfState
 {
  public:
-  AdiabaticHydroRel(MeshBlockPack *pp, ParameterInput *pin);
-  // prototype for Hydro conversion function
+  AdiabaticHydroSR(MeshBlockPack *pp, ParameterInput *pin);
   void ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
-  // prototype for MHD conversion function (never used)
-  void ConsToPrim(const DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
-                  DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc) override;
 };
 
 //----------------------------------------------------------------------------------------
@@ -131,11 +130,7 @@ class IsothermalHydro : public EquationOfState
 { 
  public:
   IsothermalHydro(MeshBlockPack *pp, ParameterInput *pin);
-  // prototype for Hydro conversion function
   void ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
-  // prototype for MHD conversion function (never used)
-  void ConsToPrim(const DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
-                  DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc) override;
 };
 
 //----------------------------------------------------------------------------------------
@@ -146,9 +141,6 @@ class AdiabaticMHD : public EquationOfState
 {
  public:
   AdiabaticMHD(MeshBlockPack *pp, ParameterInput *pin);
-  // prototype for Hydro conversion function (never used)
-  void ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
-  // prototype for MHD conversion function
   void ConsToPrim(const DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
                   DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc) override;
 };
@@ -161,9 +153,6 @@ class IsothermalMHD : public EquationOfState
 {
  public:
   IsothermalMHD(MeshBlockPack *pp, ParameterInput *pin);
-  // prototype for Hydro conversion function (never used)
-  void ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
-  // prototype for MHD conversion function
   void ConsToPrim(const DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
                   DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc) override;
 };

@@ -3,13 +3,9 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file hllc_rel.cpp
-//  \brief Implements HLLC Riemann solver for relativistic hydrodynamics.
-//
+//! \file hllc_sr.cpp
+//  \brief Implements HLLC Riemann solver for special relativistic hydrodynamics.
 //  Computes 1D fluxes using the HLLC Riemann solver.
-//  This flux is very diffusive, even more diffusive than HLLE, and so it is not
-//  recommended for use in applications.  However, it is useful for testing, or for
-//  problems where other Riemann solvers fail.
 //
 // REFERENCES:
 // - E.F. Toro, "Riemann Solvers and numerical methods for fluid dynamics", 2nd ed.,
@@ -21,22 +17,19 @@
 namespace hydro {
 
 //----------------------------------------------------------------------------------------
-//! \fn void LLF
-//  \brief The LLF Riemann solver for hydrodynamics (both adiabatic and isothermal)
+//! \fn void HLLC
+//  \brief The HLLC Riemann solver for hydrodynamics (both adiabatic and isothermal)
 
 KOKKOS_INLINE_FUNCTION
-void HLLC_rel(TeamMember_t const &member, const EOS_Data &eos,
+void HLLC_SR(TeamMember_t const &member, const EOS_Data &eos,
      const int m, const int k, const int j, const int il, const int iu,
      const int ivx, const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr,
      DvceArray5D<Real> flx)
 {
-
-
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
   Real wli[5],wri[5];
   Real gm1 = eos.gamma - 1.0;
-//  Real iso_cs = eos.iso_cs;
 
   par_for_inner(member, il, iu, [&](const int i)
   {
