@@ -18,7 +18,7 @@
 
 //----------------------------------------------------------------------------------------
 //! \struct EOSData
-//  \brief container for variables associated with EOS
+//  \brief container for variables associated with EOS, and in-lined wave speed functions
 
 struct EOS_Data
 {
@@ -33,26 +33,25 @@ struct EOS_Data
     return std::sqrt(gamma*p/d);
   }
 
-  // sound speed function for special relativistic adiabatic EOS 
+  // function to compute maximal wave speeds for special relativistic adiabatic EOS 
   // Inputs:
   //   h: enthalpy per unit volume
   //   p: gas pressure
   //   vx: 3-velocity component v^x
   //   lor_sq: Lorentz factor \gamma^2
   // Outputs:
-  //   l_p: value set to most positive wavespeed
-  //   l_m: value set to most negative wavespeed
+  //   l_p/m: most positive/negative wavespeed
   // References:
   //   Del Zanna & Bucciantini, A&A 390, 1177 (2002)
   //   Mignone & Bodo 2005, MNRAS 364 126 (MB).
   //   Del Zanna et al, A&A 473, 11 (2007) (eq. 76)
   KOKKOS_INLINE_FUNCTION
-  void SoundSpeed_SR(Real h, Real p, Real vx, Real lor_sq, Real& l_p, Real& l_m) const {
+  void WaveSpeeds_SR(Real h, Real p, Real vx, Real lor_sq, Real& l_p, Real& l_m) const {
     Real cs2 = gamma * p / h;  // (MB 4)
-    Real v2 = 1. - 1./lor_sq;
-    auto const p1 = vx * (1. - cs2);
-    auto const tmp = sqrt( cs2 * ((1.-v2*cs2) - p1*vx)/lor_sq );
-    auto const invden = 1./ (1. - v2 * cs2);
+    Real v2 = 1.0 - 1.0/lor_sq;
+    auto const p1 = vx * (1.0 - cs2);
+    auto const tmp = sqrt(cs2 * ((1.0-v2*cs2) - p1*vx) / lor_sq);
+    auto const invden = 1.0/(1.0 - v2*cs2);
 
     l_p = (p1 + tmp) * invden;
     l_m = (p1 - tmp) * invden;

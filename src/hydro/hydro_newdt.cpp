@@ -84,13 +84,13 @@ TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage)
         Real h = w0_(m,IDN,k,j,i) + (eos.gamma/(eos.gamma-1.)) * w0_(m,IPR,k,j,i);
         Real lm, lp;
 
-        eos.SoundSpeed_SR(h, w0_(m,IPR,k,j,i), w0_(m,IVX,k,j,i)/lf, lf*lf, lp, lm);
+        eos.WaveSpeeds_SR(h, w0_(m,IPR,k,j,i), w0_(m,IVX,k,j,i)/lf, lf*lf, lp, lm);
         max_dv1 = fmax(fabs(lm), lp);
 
-        eos.SoundSpeed_SR(h, w0_(m,IPR,k,j,i), w0_(m,IVX,k,j,i)/lf, lf*lf, lp, lm);
+        eos.WaveSpeeds_SR(h, w0_(m,IPR,k,j,i), w0_(m,IVX,k,j,i)/lf, lf*lf, lp, lm);
         max_dv2 = fmax(fabs(lm), lp);
 
-        eos.SoundSpeed_SR(h, w0_(m,IPR,k,j,i), w0_(m,IVZ,k,j,i)/lf, lf*lf, lp, lm);
+        eos.WaveSpeeds_SR(h, w0_(m,IPR,k,j,i), w0_(m,IVZ,k,j,i)/lf, lf*lf, lp, lm);
         max_dv3 = fmax(fabs(lm), lp);
 
       } else {
