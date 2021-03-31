@@ -14,11 +14,6 @@
 #include "hydro/hydro.hpp"
 #include "eos.hpp"
 
-// anonymous namespace to hold variables shared with inlined function(s) in this file
-namespace {
-Real q, r, pfloor_, gm1;
-}
-
 //----------------------------------------------------------------------------------------
 // ctor: also calls EOS base class constructor
     
@@ -36,14 +31,14 @@ AdiabaticHydroSR::AdiabaticHydroSR(MeshBlockPack *pp, ParameterInput *pin)
 // The ConsToPRim algorithms finds the root of this function f(z)=0
 
 KOKKOS_INLINE_FUNCTION
-Real EquationC22(Real z, Real &u_d)
+Real EquationC22(Real z, Real &u_d, Real q, Real r, Real gm1, Real pfloor)
 {
   Real const w = sqrt(1.0 + z*z);         // (C15)
   Real const wd = u_d/w;                  // (C15)
   Real eps = w*q - z*r + (z*z)/(1.0 + w); // (C16)
 
   //NOTE: The following generalizes to ANY equation of state
-  eps = fmax(pfloor_/(wd*gm1), eps);                          // (C18)
+  eps = fmax(pfloor/(wd*gm1), eps);                          // (C18)
   Real const h = (1.0 + eps) * (1.0 + (gm1*eps)/(1.0+eps));   // (C1) & (C21)
 
   return (z - r/h); // (C22)
@@ -66,10 +61,9 @@ void AdiabaticHydroSR::ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Rea
   int &nhyd  = pmy_pack->phydro->nhydro;
   int &nscal = pmy_pack->phydro->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
-  gm1 = eos_data.gamma - 1.0;        // Defined in anonymous namspace: global to this file
-  pfloor_ = eos_data.pressure_floor; // Defined in anonymous namspace: global to this file
+  Real gm1 = eos_data.gamma - 1.0; 
+  Real pfloor_ = eos_data.pressure_floor;
   Real &dfloor_ = eos_data.density_floor;
-  Real ee_min = pfloor_/gm1;
 
   // Parameters
   int const max_iterations = 25;
@@ -95,13 +89,14 @@ void AdiabaticHydroSR::ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Rea
       u_d = (u_d > dfloor_) ?  u_d : dfloor_;
 
       // apply energy floor
+//      Real ee_min = pfloor_/gm1;
 //      u_e = (u_e > ee_min) ?  u_e : ee_min;
 
 
       // Recast all variables (eq C2)
       // Variables q and r defined in anonymous namspace: global this file
-      q = u_e/u_d;
-      r = sqrt(SQR(u_m1) + SQR(u_m2) + SQR(u_m3))/u_d;
+      Real q = u_e/u_d;
+      Real r = sqrt(SQR(u_m1) + SQR(u_m2) + SQR(u_m3))/u_d;
       Real kk = r/(1.+q);
 
       // Enforce lower velocity bound (eq. C13). This bound combined with a floor on
@@ -113,8 +108,8 @@ void AdiabaticHydroSR::ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Rea
       auto zp = kk/sqrt(1.0 - kk*kk);
 
       // Evaluate master function (eq C22) at bracket values
-      Real fm = EquationC22(zm, u_d);
-      Real fp = EquationC22(zp, u_d);
+      Real fm = EquationC22(zm, u_d, q, r, gm1, pfloor_);
+      Real fp = EquationC22(zp, u_d, q, r, gm1, pfloor_);
 
       // For simplicity on the GPU, find roots using the false position method
       int iterations = max_iterations;
@@ -126,7 +121,7 @@ void AdiabaticHydroSR::ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Rea
 
       for (int ii=0; ii < iterations; ++ii) {
 	z =  (zm*fp - zp*fm)/(fp-fm);  // linear interpolation to point f(z)=0
-        Real f = EquationC22(z, u_d);
+        Real f = EquationC22(z, u_d, q, r, gm1, pfloor_);
 
         // Quit if convergence reached
 	// NOTE: both z and f are of order unity
