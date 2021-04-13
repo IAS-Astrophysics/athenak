@@ -4,8 +4,8 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file viscosity.cpp
-//  \brief Implements functions for Viscosity class. This includes isotropic viscosity in
-//  a Newtonian fluid (in which stress is proportional to shear).
+//  \brief Implements functions for Viscosity class. This includes isotropic shear
+//  viscosity in a Newtonian fluid (in which stress is proportional to shear).
 
 #include <limits>
 #include <iostream>
@@ -19,35 +19,13 @@
 #include "viscosity.hpp"
 
 //----------------------------------------------------------------------------------------
-// ctor: also calls Viscosity base class constructor
+// ctor:
 
-Viscosity::Viscosity(MeshBlockPack *pp, ParameterInput *pin)
+Viscosity::Viscosity(std::string block, MeshBlockPack *pp, ParameterInput *pin)
   : pmy_pack(pp)
 {
-  // Read parameters for Hydro viscosity (if any)
-  hydro_nu_iso = pin->GetOrAddReal("viscosity","hydro_nu_iso",0.0);
-  if (pp->phydro == nullptr && hydro_nu_iso != 0.0) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "<viscosity>/hydro_nu_iso = " << hydro_nu_iso
-              << " but no <hydro> block in the input file" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-
-  // Read parameters for MHD viscosity (if any)
-  mhd_nu_iso = pin->GetOrAddReal("viscosity","mhd_nu_iso",0.0);
-  if (pp->pmhd == nullptr && mhd_nu_iso != 0.0) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "<viscosity>/mhd_nu_iso = " << mhd_nu_iso 
-              << " but no <mhd> block in the input file" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-
-  if (hydro_nu_iso == 0.0 && mhd_nu_iso == 0.0) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "<viscosity> block defined in input file, but coefficients of viscosity" 
-              << " all zero" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
+  // Read coefficient of isotropic kinematic shear viscosity (must be present)
+  nu = pin->GetReal(block,"viscosity");
 
   // viscous timestep on MeshBlock(s) in this pack
   dtnew = std::numeric_limits<float>::max();
@@ -60,11 +38,10 @@ Viscosity::Viscosity(MeshBlockPack *pp, ParameterInput *pin)
   } else {
     fac = 0.5;
   }
-  Real nu_iso = std::max(hydro_nu_iso, mhd_nu_iso);
   for (int m=0; m<(pp->nmb_thispack); ++m) {
-    dtnew = std::min(dtnew, fac*SQR(size.dx1.h_view(m))/nu_iso);
-    if (pp->pmesh->nx2gt1) {dtnew = std::min(dtnew, fac*SQR(size.dx2.h_view(m))/nu_iso);}
-    if (pp->pmesh->nx3gt1) {dtnew = std::min(dtnew, fac*SQR(size.dx3.h_view(m))/nu_iso);}
+    dtnew = std::min(dtnew, fac*SQR(size.dx1.h_view(m))/nu);
+    if (pp->pmesh->nx2gt1) {dtnew = std::min(dtnew, fac*SQR(size.dx2.h_view(m))/nu);}
+    if (pp->pmesh->nx3gt1) {dtnew = std::min(dtnew, fac*SQR(size.dx3.h_view(m))/nu);}
   }
 
 }
@@ -77,62 +54,11 @@ Viscosity::~Viscosity()
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn  void Viscosity::AssembleStageRunTasks
-//  \brief inserts Viscosity tasks into stage run TaskList
-//  Called by MeshBlockPack::AddPhysicsModules() function directly after Viscosity cons
-
-void Viscosity::AssembleStageRunTasks(TaskList &tl, TaskID start)
-{
-  if (hydro_nu_iso != 0.0) {
-    auto id = tl.InsertTask(&Viscosity::AddViscosityHydro, this, 
-                       pmy_pack->phydro->hydro_tasks[HydroTaskName::calc_flux],
-                       pmy_pack->phydro->hydro_tasks[HydroTaskName::update]);
-    visc_tasks.emplace(ViscosityTaskName::hydro_vflux, id);
-  }
-
-  if (mhd_nu_iso != 0.0) {
-    auto id = tl.InsertTask(&Viscosity::AddViscosityMHD, this, 
-                       pmy_pack->pmhd->mhd_tasks[MHDTaskName::calc_flux],
-                       pmy_pack->pmhd->mhd_tasks[MHDTaskName::update]);
-    visc_tasks.emplace(ViscosityTaskName::hydro_vflux, id);
-  }
-
-/*****/
-std::cout << std::endl;
-tl.PrintIDs();
-std::cout << std::endl;
-tl.PrintDependencies();
-std::cout << std::endl;
-/*****/
-  return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn  void Viscosity::AddViscosityHydro
-//  \brief
-
-TaskStatus Viscosity::AddViscosityHydro(Driver *pdrive, int stage)
-{
-  AddIsoViscousFlux(pmy_pack->phydro->u0, pmy_pack->phydro->uflx, hydro_nu_iso);
-  return TaskStatus::complete;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn  void Viscosity::AddViscosityMHD
-//  \brief
-
-TaskStatus Viscosity::AddViscosityMHD(Driver *pdrive, int stage)
-{
-  AddIsoViscousFlux(pmy_pack->pmhd->u0, pmy_pack->pmhd->uflx, mhd_nu_iso);
-  return TaskStatus::complete;
-}
-
-//----------------------------------------------------------------------------------------
 //! \fn void AddIsoViscousFlux
 //  \brief Adds viscous fluxes to face-centered fluxes of conserved variables
 
-void Viscosity::AddIsoViscousFlux(const DvceArray5D<Real> &w0, DvceFaceFld5D<Real> &flx,
-                                  const Real nu_iso)
+void Viscosity::IsotropicViscousFlux(
+     const DvceArray5D<Real> &w0, DvceFaceFld5D<Real> &flx, const Real nu)
 {
   int is = pmy_pack->mb_cells.is; int ie = pmy_pack->mb_cells.ie;
   int js = pmy_pack->mb_cells.js; int je = pmy_pack->mb_cells.je;
@@ -190,7 +116,7 @@ void Viscosity::AddIsoViscousFlux(const DvceArray5D<Real> &w0, DvceFaceFld5D<Rea
       // Sum viscous fluxes into fluxes of conserved variables; including energy fluxes
       par_for_inner(member, is, ie+1, [&](const int i)
       {
-        Real nud = 0.5*nu_iso*(w0(m,IDN,k,j,i) + w0(m,IDN,k,j,i-1));
+        Real nud = 0.5*nu*(w0(m,IDN,k,j,i) + w0(m,IDN,k,j,i-1));
         flx1(m,IVX,k,j,i) -= nud*fvx(i);
         flx1(m,IVY,k,j,i) -= nud*fvy(i);
         flx1(m,IVZ,k,j,i) -= nud*fvz(i);
@@ -242,7 +168,7 @@ void Viscosity::AddIsoViscousFlux(const DvceArray5D<Real> &w0, DvceFaceFld5D<Rea
       // Sum viscous fluxes into fluxes of conserved variables; including energy fluxes
       par_for_inner(member, is, ie, [&](const int i)
       {
-        Real nud = 0.5*nu_iso*(w0(m,IDN,k,j,i) + w0(m,IDN,k,j-1,i));
+        Real nud = 0.5*nu*(w0(m,IDN,k,j,i) + w0(m,IDN,k,j-1,i));
         flx2(m,IVX,k,j,i) -= nud*fvx(i);
         flx2(m,IVY,k,j,i) -= nud*fvy(i);
         flx2(m,IVZ,k,j,i) -= nud*fvz(i);
@@ -287,7 +213,7 @@ void Viscosity::AddIsoViscousFlux(const DvceArray5D<Real> &w0, DvceFaceFld5D<Rea
       // Sum viscous fluxes into fluxes of conserved variables; including energy fluxes
       par_for_inner(member, is, ie, [&](const int i)
       {
-        Real nud = 0.5*nu_iso*(w0(m,IDN,k,j,i) + w0(m,IDN,k-1,j,i));
+        Real nud = 0.5*nu*(w0(m,IDN,k,j,i) + w0(m,IDN,k-1,j,i));
         flx3(m,IVX,k,j,i) -= nud*fvx(i);
         flx3(m,IVY,k,j,i) -= nud*fvy(i);
         flx3(m,IVZ,k,j,i) -= nud*fvz(i);

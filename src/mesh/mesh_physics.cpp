@@ -72,14 +72,6 @@ void MeshBlockPack::AddPhysicsModules(ParameterInput *pin)
     pmhd = nullptr;
   }
 
-  // (3) VISCOSITY
-  if (pin->DoesBlockExist("viscosity")) {
-    pvisc = new Viscosity(this, pin);
-    pvisc->AssembleStageRunTasks(stage_run_tl, none);
-  } else {
-    pvisc = nullptr;
-  }
-
   // (4) RESISTIVITY
   if (pin->DoesBlockExist("resistivity")) {
     presist = new Resistivity(this, pin);
@@ -120,14 +112,14 @@ void Mesh::NewTimeStep(const Real tlim)
   // Hydro timestep
   if (pmb_pack->phydro != nullptr) {
     dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->dtnew) );
+    // viscosity timestep
+    if (pmb_pack->phydro->pvisc != nullptr) {
+      dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->pvisc->dtnew) );
+    }
   }
   // MHD timestep
   if (pmb_pack->pmhd != nullptr) {
     dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->dtnew) );
-  }
-  // viscosity timestep
-  if (pmb_pack->pvisc != nullptr) {
-    dt = std::min(dt, (cfl_no)*(pmb_pack->pvisc->dtnew) );
   }
   // resistivity timestep
   if (pmb_pack->presist != nullptr) {
