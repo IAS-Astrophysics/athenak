@@ -16,13 +16,14 @@
 
 // forward declarations
 class EquationOfState;
+class Viscosity;
 class Driver;
 
 // constants that enumerate Hydro Riemann Solver options
 enum class Hydro_RSolver {advect, llf, hllc, roe, llf_rel,hllc_rel};
 
 // constants that enumerate Hydro tasks
-enum class HydroTaskName {undef=0, init_recv, copy_cons, calc_flux, update,
+enum class HydroTaskName {undef=0, init_recv, copy_cons, calc_flux, visc_flux, update,
   send_u, recv_u, phys_bcs, cons2prim, newdt, clear_send};
 
 namespace hydro {
@@ -51,6 +52,9 @@ class Hydro
   // Object containing boundary communication buffers and routines for u
   BoundaryValueCC *pbval_u;
 
+  // Object(s) for extra physics (viscosity, srcterms)
+  Viscosity *pvisc = nullptr;
+
   // following only used for time-evolving flow
   DvceArray5D<Real> u1;       // conserved variables at intermediate step 
   DvceFaceFld5D<Real> uflx;   // fluxes of conserved quantities on cell faces
@@ -68,6 +72,7 @@ class Hydro
   TaskStatus ClearSend(Driver *d, int stage);
   TaskStatus CopyCons(Driver *d, int stage);
   TaskStatus CalcFluxes(Driver *d, int stage);
+  TaskStatus ViscFluxes(Driver *d, int stage);
   TaskStatus Update(Driver *d, int stage);
   TaskStatus SendU(Driver *d, int stage); 
   TaskStatus RecvU(Driver *d, int stage); 

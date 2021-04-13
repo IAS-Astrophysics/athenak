@@ -12,6 +12,7 @@
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
+#include "diffusion/viscosity.hpp"
 #include "bvals/bvals.hpp"
 #include "hydro/hydro.hpp"
 
@@ -55,7 +56,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
       nhydro = 4;
     }
 
-  // other EOS not implemented
+  // other EOSs not implemented
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "<hydro> eos = '" << eqn_of_state << "' not implemented" << std::endl;
@@ -64,6 +65,13 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // Initialize number of scalars
   nscalars = pin->GetOrAddInteger("hydro","nscalars",0);
+
+  // Viscosity
+  if (pin->DoesParameterExist("hydro","viscosity")) {
+    pvisc = new Viscosity("hydro", ppack, pin);
+  } else {
+    pvisc = nullptr;
+  }
 
   // read time-evolution option [already error checked in driver constructor]
   std::string evolution_t = pin->GetString("time","evolution");
@@ -191,6 +199,7 @@ Hydro::~Hydro()
 {
   delete peos;
   delete pbval_u;
+  if (pvisc  != nullptr) {delete pvisc;}
 }
 
 } // namespace hydro
