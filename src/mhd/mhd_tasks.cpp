@@ -15,6 +15,7 @@
 #include "tasklist/task_list.hpp"
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
+#include "diffusion/viscosity.hpp"
 #include "bvals/bvals.hpp"
 #include "utils/create_mpitag.hpp"
 #include "srcterms/srcterms.hpp"
@@ -46,8 +47,11 @@ void MHD::AssembleStageRunTasks(TaskList &tl, TaskID start)
 
   id = tl.AddTask(&MHD::CalcFluxes, this, mhd_tasks[MHDTaskName::copy_cons]);
   mhd_tasks.emplace(MHDTaskName::calc_flux, id);
+
+  id = tl.AddTask(&MHD::ViscFluxes, this, mhd_tasks[MHDTaskName::calc_flux]);
+  mhd_tasks.emplace(MHDTaskName::visc_flux, id);
   
-  id = tl.AddTask(&MHD::Update, this, mhd_tasks[MHDTaskName::calc_flux]);
+  id = tl.AddTask(&MHD::Update, this, mhd_tasks[MHDTaskName::visc_flux]);
   mhd_tasks.emplace(MHDTaskName::update, id);
   
   id = tl.AddTask(&MHD::SendU, this, mhd_tasks[MHDTaskName::update]);
@@ -213,6 +217,18 @@ TaskStatus MHD::CopyCons(Driver *pdrive, int stage)
     Kokkos::deep_copy(DevExeSpace(), b1.x1f, b0.x1f);
     Kokkos::deep_copy(DevExeSpace(), b1.x2f, b0.x2f);
     Kokkos::deep_copy(DevExeSpace(), b1.x3f, b0.x3f);
+  }
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void MHD::ViscFluxes
+//  \brief
+
+TaskStatus MHD::ViscFluxes(Driver *pdrive, int stage)
+{
+  if (pvisc != nullptr) {
+    pvisc->IsotropicViscousFlux(u0, uflx, pvisc->nu);
   }
   return TaskStatus::complete;
 }

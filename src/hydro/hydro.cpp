@@ -43,23 +43,21 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
       peos = new AdiabaticHydro(ppack, pin);
     }
     nhydro = 5;
-
   // isothermal EOS
   } else if (eqn_of_state.compare("isothermal") == 0) {
     if (is_special_relativistic){
       std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
-                << "<hydro> eos = isothermal cannot be used with special relativity"
+                << "<hydro>/eos = isothermal cannot be used with special relativity"
                 << std::endl;
       std::exit(EXIT_FAILURE);
     } else {
       peos = new IsothermalHydro(ppack, pin);
       nhydro = 4;
     }
-
   // other EOSs not implemented
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "<hydro> eos = '" << eqn_of_state << "' not implemented" << std::endl;
+              << "<hydro>/eos = '" << eqn_of_state << "' not implemented" << std::endl;
     std::exit(EXIT_FAILURE);
   }}
 
@@ -199,7 +197,7 @@ Hydro::~Hydro()
 {
   delete peos;
   delete pbval_u;
-  if (pvisc  != nullptr) {delete pvisc;}
+  if (pvisc != nullptr) {delete pvisc;}
 }
 
 } // namespace hydro

@@ -16,13 +16,14 @@
 
 // forward declarations
 class EquationOfState;
+class Viscosity;
 class Driver;
 
 // constants that enumerate MHD Riemann Solver options
 enum class MHD_RSolver {advect, llf, hlld, roe};
 
 // constants that enumerate Hydro tasks
-enum class MHDTaskName {undef=0, init_recv, copy_cons, calc_flux, update,
+enum class MHDTaskName {undef=0, init_recv, copy_cons, calc_flux, visc_flux, update,
   send_u, recv_u, corner_emf, ct, send_b, recv_b, phys_bcs, cons2prim, newdt,
   clear_send};
 
@@ -52,6 +53,9 @@ class MHD
   BoundaryValueCC *pbval_u;
   BoundaryValueFC *pbval_b;
 
+  // Object(s) for extra physics (viscosity, resistivity, srcterms)
+  Viscosity *pvisc = nullptr;
+
   // following only used for time-evolving flow
   DvceArray5D<Real> u1;       // conserved variables, second register
   DvceFaceFld4D<Real> b1;     // face-centered magnetic fields, second register
@@ -71,6 +75,7 @@ class MHD
   TaskStatus ClearSend(Driver *d, int stage);
   TaskStatus CopyCons(Driver *d, int stage);
   TaskStatus CalcFluxes(Driver *d, int stage);
+  TaskStatus ViscFluxes(Driver *d, int stage);
   TaskStatus CornerE(Driver *d, int stage);
   TaskStatus CT(Driver *d, int stage);
   TaskStatus Update(Driver *d, int stage);

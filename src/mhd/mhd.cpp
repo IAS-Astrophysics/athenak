@@ -12,6 +12,7 @@
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
+#include "diffusion/viscosity.hpp"
 #include "bvals/bvals.hpp"
 #include "mhd/mhd.hpp"
 
@@ -57,6 +58,13 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // Initialize number of scalars
   nscalars = pin->GetOrAddInteger("mhd","nscalars",0);
+
+  // Viscosity
+  if (pin->DoesParameterExist("mhd","viscosity")) {
+    pvisc = new Viscosity("mhd", ppack, pin);
+  } else {
+    pvisc = nullptr;
+  }
 
   // read time-evolution option [already error checked in driver constructor]
   std::string evolution_t = pin->GetString("time","evolution");
@@ -200,6 +208,7 @@ MHD::~MHD()
   delete peos;
   delete pbval_u;
   delete pbval_b;
+  if (pvisc != nullptr) {delete pvisc;}
 }
 
 } // namespace mhd
