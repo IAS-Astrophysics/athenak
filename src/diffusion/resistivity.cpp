@@ -12,7 +12,6 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
-#include "mhd/mhd.hpp"
 #include "resistivity.hpp"
 #include "current_density.hpp"
 
@@ -23,20 +22,7 @@ Resistivity::Resistivity(MeshBlockPack *pp, ParameterInput *pin)
   : pmy_pack(pp)
 {
   // Read parameters for Ohmic diffusion (if any)
-  eta_ohm = pin->GetOrAddReal("resistivity","eta_ohm",0.0);
-  if (pp->pmhd == nullptr && eta_ohm != 0.0) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "<resistivity>/eta_ohm = " << eta_ohm
-              << " but no <mhd> block in the input file" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-
-  if (eta_ohm == 0.0) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "<resistivity> block defined in input file, but coefficients of "
-              << " resistivity all zero" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
+  eta_ohm = pin->GetReal("mhd","ohmic_resistivity");
 
   // resistive timestep on MeshBlock(s) in this pack
   dtnew = std::numeric_limits<float>::max();
@@ -63,49 +49,14 @@ Resistivity::~Resistivity()
 {
 }
 
-//----------------------------------------------------------------------------------------
-//! \fn  void Resistivity::AssembleStageRunTasks
-//  \brief inserts Resistivity tasks into stage run TaskList
-//  Called by MeshBlockPack::AddPhysicsModules() function directly after Resistivity cons
-
-void Resistivity::AssembleStageRunTasks(TaskList &tl, TaskID start)
-{
-  if (eta_ohm != 0.0) {
-    auto id = tl.InsertTask(&Resistivity::AddResistiveEMFs, this, 
-                       pmy_pack->pmhd->mhd_tasks[MHDTaskName::corner_emf],
-                       pmy_pack->pmhd->mhd_tasks[MHDTaskName::ct]);
-    resist_tasks.emplace(ResistivityTaskName::ohmic_emf, id);
-  }
-
-/*****/
-std::cout << std::endl;
-tl.PrintIDs();
-std::cout << std::endl;
-tl.PrintDependencies();
-std::cout << std::endl;
-/*****/
-  return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn  void Resistivity::AddResistiveEMF
-//  \brief
-
-TaskStatus Resistivity::AddResistiveEMFs(Driver *pdrive, int stage)
-{
-  AddOhmicEMF(pmy_pack->pmhd->b0, pmy_pack->pmhd->efld);
-  return TaskStatus::complete;
-}
-
-
 //--------------------------------------------------------------------------------------
-//! \fn AddResistiveEMF()
+//! \fn OhmicEField()
 //  \brief Adds electric field from Ohmic resistivity to corner-centered electric field
 //  Using Ohm's Law to compute the electric field:  E + (v x B) = \eta J, then
 //    E_{inductive} = - (v x B)  [computed in the MHD Riemann solver]
 //    E_{resistive} = \eta J     [computed in this function]
 
-void Resistivity::AddOhmicEMF(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &efld)
+void Resistivity::OhmicEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &efld)
 {
   int is = pmy_pack->mb_cells.is; int ie = pmy_pack->mb_cells.ie;
   int js = pmy_pack->mb_cells.js; int je = pmy_pack->mb_cells.je;

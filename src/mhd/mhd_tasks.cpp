@@ -16,6 +16,7 @@
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
 #include "diffusion/viscosity.hpp"
+#include "diffusion/resistivity.hpp"
 #include "bvals/bvals.hpp"
 #include "utils/create_mpitag.hpp"
 #include "srcterms/srcterms.hpp"
@@ -61,9 +62,12 @@ void MHD::AssembleStageRunTasks(TaskList &tl, TaskID start)
   mhd_tasks.emplace(MHDTaskName::recv_u, id);
   
   id = tl.AddTask(&MHD::CornerE, this, mhd_tasks[MHDTaskName::recv_u]);
-  mhd_tasks.emplace(MHDTaskName::corner_emf, id);
+  mhd_tasks.emplace(MHDTaskName::corner_e, id);
   
-  id = tl.AddTask(&MHD::CT, this, mhd_tasks[MHDTaskName::corner_emf]);
+  id = tl.AddTask(&MHD::ResistiveE, this, mhd_tasks[MHDTaskName::corner_e]);
+  mhd_tasks.emplace(MHDTaskName::resistive_e, id);
+  
+  id = tl.AddTask(&MHD::CT, this, mhd_tasks[MHDTaskName::resistive_e]);
   mhd_tasks.emplace(MHDTaskName::ct, id);
   
   id = tl.AddTask(&MHD::SendB, this, mhd_tasks[MHDTaskName::ct]);
@@ -244,22 +248,37 @@ TaskStatus MHD::SendU(Driver *pdrive, int stage)
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn  void MHD::SendB
-//  \brief sends face-centered magnetic fields
-
-TaskStatus MHD::SendB(Driver *pdrive, int stage)
-{
-  TaskStatus tstat = pbval_b->SendBuffersFC(b0, VariablesID::BField_ID);
-  return tstat;
-}
-
-//----------------------------------------------------------------------------------------
 //! \fn  void MHD::RecvU
 //  \brief receives cell-centered conserved variables
 
 TaskStatus MHD::RecvU(Driver *pdrive, int stage)
 {
   TaskStatus tstat = pbval_u->RecvBuffersCC(u0);
+  return tstat;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void MHD::ResistiveE
+//  \brief
+
+TaskStatus MHD::ResistiveE(Driver *pdrive, int stage)
+{
+  if (presist != nullptr) {
+    if (presist->eta_ohm > 0.0) {
+      presist->OhmicEField(b0, efld);
+    }
+    // TODO: Add more resistive effects here
+  }
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void MHD::SendB
+//  \brief sends face-centered magnetic fields
+
+TaskStatus MHD::SendB(Driver *pdrive, int stage)
+{
+  TaskStatus tstat = pbval_b->SendBuffersFC(b0, VariablesID::BField_ID);
   return tstat;
 }
 

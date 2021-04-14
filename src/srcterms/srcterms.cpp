@@ -130,7 +130,7 @@ void SourceTerms::IncludeUnsplitSrcTermTasks(TaskList &tl, TaskID start)
                          pmy_pack->pmhd->mhd_tasks[MHDTaskName::update]);
       unsplit_tasks.emplace(UnsplitSrcTermTaskName::mhd_sbox, id);
       id = tl.InsertTask(&SourceTerms::AddSBoxEMF, this,
-                         pmy_pack->pmhd->mhd_tasks[MHDTaskName::corner_emf],
+                         pmy_pack->pmhd->mhd_tasks[MHDTaskName::corner_e],
                          pmy_pack->pmhd->mhd_tasks[MHDTaskName::ct]);
       unsplit_tasks.emplace(UnsplitSrcTermTaskName::mhd_sbox_emf, id);
     }

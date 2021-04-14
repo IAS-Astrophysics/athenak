@@ -13,6 +13,7 @@
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
 #include "diffusion/viscosity.hpp"
+#include "diffusion/resistivity.hpp"
 #include "bvals/bvals.hpp"
 #include "mhd/mhd.hpp"
 
@@ -64,6 +65,13 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     pvisc = new Viscosity("mhd", ppack, pin);
   } else {
     pvisc = nullptr;
+  }
+
+  // Resistivity
+  if (pin->DoesParameterExist("mhd","ohmic_resistivity")) {
+    presist = new Resistivity(ppack, pin);
+  } else {
+    presist = nullptr;
   }
 
   // read time-evolution option [already error checked in driver constructor]
@@ -209,6 +217,7 @@ MHD::~MHD()
   delete pbval_u;
   delete pbval_b;
   if (pvisc != nullptr) {delete pvisc;}
+  if (presist!= nullptr) {delete presist;}
 }
 
 } // namespace mhd

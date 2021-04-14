@@ -48,7 +48,6 @@ class MeshBlockPack
   // physics modules (controlled by AddPhysicsModules function in mesh_physics.cpp)
   hydro::Hydro *phydro=nullptr;
   mhd::MHD *pmhd=nullptr;
-  Resistivity *presist=nullptr;    // (optional) resistivity
   SourceTerms *psrc=nullptr;
 
   // task lists for MeshBlocks in this MeshBlockPack
