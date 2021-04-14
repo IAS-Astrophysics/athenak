@@ -7,7 +7,7 @@
 //========================================================================================
 //! \file viscosity.hpp
 //  \brief Contains data and functions that implement various formulations for viscosity.
-//  Currently only Navier-Stokes (uniform, isotropic) viscosity implemented
+//  Currently only Navier-Stokes (uniform, isotropic) shear viscosity implemented
 //  TODO: add Braginskii viscosity
 
 #include "athena.hpp"

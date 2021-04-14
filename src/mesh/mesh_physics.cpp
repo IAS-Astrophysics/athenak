@@ -72,14 +72,6 @@ void MeshBlockPack::AddPhysicsModules(ParameterInput *pin)
     pmhd = nullptr;
   }
 
-  // (4) RESISTIVITY
-  if (pin->DoesBlockExist("resistivity")) {
-    presist = new Resistivity(this, pin);
-    presist->AssembleStageRunTasks(stage_run_tl, none);
-  } else {
-    presist = nullptr;
-  }
-
   // (5) SOURCE TERMS
   // Source terms can be specified by many different <blocks> in the input file.  Thus,
   // SourceTerms constructor parses input file to see if any source terms are enrolled.
@@ -124,10 +116,10 @@ void Mesh::NewTimeStep(const Real tlim)
     if (pmb_pack->pmhd->pvisc != nullptr) {
       dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->pvisc->dtnew) );
     }
-  }
-  // resistivity timestep
-  if (pmb_pack->presist != nullptr) {
-    dt = std::min(dt, (cfl_no)*(pmb_pack->presist->dtnew) );
+    // resistivity timestep
+    if (pmb_pack->pmhd->presist != nullptr) {
+      dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->presist->dtnew) );
+    }
   }
 
 #if MPI_PARALLEL_ENABLED

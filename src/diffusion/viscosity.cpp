@@ -14,8 +14,6 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
-#include "hydro/hydro.hpp"
-#include "mhd/mhd.hpp"
 #include "viscosity.hpp"
 
 //----------------------------------------------------------------------------------------

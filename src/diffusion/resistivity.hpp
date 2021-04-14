@@ -10,13 +10,9 @@
 //  processes, such as Ohmic diffusion.
 //  TODO: add ambipolar diffusion, Hall effect
 
-#include <map>
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh/meshblock.hpp"
-
-// constants that enumerate Resistivity tasks
-enum class ResistivityTaskName {undef=0, ohmic_emf};
 
 //----------------------------------------------------------------------------------------
 //! \class Resistivity
@@ -32,13 +28,8 @@ class Resistivity
   Real dtnew;
   Real eta_ohm;
 
-  // map for associating ResistivityTaskName with TaskID
-  std::map<ResistivityTaskName, TaskID> resist_tasks;
-
   // functions to add resistive EMF to MHD, and energy flux to Hydro
-  void AssembleStageRunTasks(TaskList &tl, TaskID start);
-  TaskStatus AddResistiveEMFs(Driver *pdrive, int stage);
-  void AddOhmicEMF(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &efld);
+  void OhmicEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &efld);
 
  private:
   MeshBlockPack* pmy_pack;
