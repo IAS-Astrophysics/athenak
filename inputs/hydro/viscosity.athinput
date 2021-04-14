@@ -1,4 +1,5 @@
 # AthenaXXX input file for diffusion of shear layer (viscosity test)
+# Runs kinematic test for both Hydro and MHD simultaneously
 
 <comment>
 problem   = shear layer with viscosity
@@ -41,8 +42,13 @@ ndiag      = 1         # cycles between diagostic output
 
 <hydro>
 eos         = adiabatic   # EOS type
-viscosity   = isotropic   # isotropic viscosity
-nu_iso      = 1.0e-3      # coefficient of isotropic viscosity
+viscosity   = 1.0e-3      # coefficient of isotropic shear viscosity
+reconstruct = plm         # spatial reconstruction method
+rsolver     = advect      # Riemann-solver to be used
+
+<mhd>
+eos         = adiabatic   # EOS type
+viscosity   = 1.0e-3      # coefficient ofisotropic shear viscosity
 reconstruct = plm         # spatial reconstruction method
 rsolver     = advect      # Riemann-solver to be used
 
@@ -60,12 +66,18 @@ pl = 1.0                # pressure
 ul = 0.0                # X-velocity 
 vl = 1.0                # Y-velocity
 wl = 1.0                # Z-velocity
+bxl = 0.0
+byl = 0.0
+bzl = 0.0
 
 dr = 1.0                # density on right
 pr = 1.0                # pressure
 ur = 0.0                # X-velocity
 vr = -1.0               # Y-velocity
 wr = -1.0               # Z-velocity
+bxr = 0.0
+byr = 0.0
+bzr = 0.0
 
 <output1>
 file_type   = tab       # Tabular data dump
@@ -75,7 +87,15 @@ dt          = 0.01      # time increment between outputs
 slice_x2    = 0.0       # slice in x2
 slice_x3    = 0.0       # slice in x3
 
-<output2>
+<output2>   
+file_type   = tab       # Tabular data dump
+variable    = mhd_w     # variables to be output
+data_format = %12.5e    # Optional data format string
+dt          = 0.01      # time increment between outputs
+slice_x2    = 0.0       # slice in x2
+slice_x3    = 0.0       # slice in x3
+
+<output3>
 file_type   = hst       # history data dump
 data_format = %12.5e    # Optional data format string
 dt          = 0.01      # time increment between outputs
