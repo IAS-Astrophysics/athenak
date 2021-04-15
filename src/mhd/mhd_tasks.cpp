@@ -52,7 +52,10 @@ void MHD::AssembleStageRunTasks(TaskList &tl, TaskID start)
   id = tl.AddTask(&MHD::ViscFluxes, this, mhd_tasks[MHDTaskName::calc_flux]);
   mhd_tasks.emplace(MHDTaskName::visc_flux, id);
   
-  id = tl.AddTask(&MHD::Update, this, mhd_tasks[MHDTaskName::visc_flux]);
+  id = tl.AddTask(&MHD::ResistFluxes, this, mhd_tasks[MHDTaskName::visc_flux]);
+  mhd_tasks.emplace(MHDTaskName::resist_flux, id);
+  
+  id = tl.AddTask(&MHD::Update, this, mhd_tasks[MHDTaskName::resist_flux]);
   mhd_tasks.emplace(MHDTaskName::update, id);
   
   id = tl.AddTask(&MHD::SendU, this, mhd_tasks[MHDTaskName::update]);
@@ -233,6 +236,18 @@ TaskStatus MHD::ViscFluxes(Driver *pdrive, int stage)
 {
   if (pvisc != nullptr) {
     pvisc->IsotropicViscousFlux(u0, uflx, pvisc->nu);
+  }
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void MHD::ResistFluxes
+//  \brief
+
+TaskStatus MHD::ResistFluxes(Driver *pdrive, int stage)
+{
+  if ((presist != nullptr) && (peos->eos_data.is_adiabatic)) {
+    presist->OhmicEnergyFlux(b0, uflx);
   }
   return TaskStatus::complete;
 }
