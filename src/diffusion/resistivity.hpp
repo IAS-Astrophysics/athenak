@@ -28,8 +28,9 @@ class Resistivity
   Real dtnew;
   Real eta_ohm;
 
-  // functions to add resistive EMF to MHD, and energy flux to Hydro
+  // functions to add resistive E-Field and energy flux
   void OhmicEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &efld);
+  void OhmicEnergyFlux(const DvceFaceFld4D<Real> &b, DvceFaceFld5D<Real> &flx);
 
  private:
   MeshBlockPack* pmy_pack;

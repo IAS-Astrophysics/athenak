@@ -24,9 +24,9 @@ class Driver;
 enum class MHD_RSolver {advect, llf, hlld, roe};
 
 // constants that enumerate Hydro tasks
-enum class MHDTaskName {undef=0, init_recv, copy_cons, calc_flux, visc_flux, update,
-  send_u, recv_u, corner_e, resistive_e, ct, send_b, recv_b, phys_bcs, cons2prim, newdt,
-  clear_send};
+enum class MHDTaskName {undef=0, init_recv, copy_cons, calc_flux, visc_flux, resist_flux,
+  update, send_u, recv_u, corner_e, resistive_e, ct, send_b, recv_b, phys_bcs, cons2prim,
+  newdt, clear_send};
 
 
 namespace mhd {
@@ -78,6 +78,7 @@ class MHD
   TaskStatus CopyCons(Driver *d, int stage);
   TaskStatus CalcFluxes(Driver *d, int stage);
   TaskStatus ViscFluxes(Driver *d, int stage);
+  TaskStatus ResistFluxes(Driver *d, int stage);
   TaskStatus CornerE(Driver *d, int stage);
   TaskStatus ResistiveE(Driver *d, int stage);
   TaskStatus CT(Driver *d, int stage);

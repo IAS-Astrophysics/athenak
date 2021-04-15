@@ -38,7 +38,7 @@ TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage)
   // capture class variables for kernel
   auto &w0_ = w0;
   auto &mbsize = pmy_pack->pmb->mbsize;
-  auto is_special_relativistic_ = &is_special_relativistic;
+  auto &is_special_relativistic_ = is_special_relativistic;
   const int nmkji = (pmy_pack->nmb_thispack)*nx3*nx2*nx1;
   const int nkji = nx3*nx2*nx1;
   const int nji  = nx2*nx1;

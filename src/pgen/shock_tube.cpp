@@ -33,6 +33,8 @@ struct Prim1D {
 // TODO: Currently this pgen is the only function that needs Prim->Cons transorms. If
 // such a functions is needed in more places (e.g. AMR prolongation) then it should
 // be moved to EOS class.
+
+// TODO: need to add MHD PrimToCons when add SR MHD
 void PrimToConsHydro(Prim1D &w, Cons1D &u, Real gam_eos, bool is_sr)
 {
   if (is_sr) {
@@ -212,7 +214,7 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
           u0(m,ivz,k,j,i) = wl[IVZ]*wl[IDN];
           u0(m,IEN,k,j,i) = wl[IPR]/gm1 +
              0.5*wl[IDN]*(SQR(wl[IVX]) + SQR(wl[IVY]) + SQR(wl[IVZ])) +
-             0.5*(SQR(wl[nmhd]) + SQR(wl[nmhd+1]) + SQR(wl[nmhd+2]));
+             0.5*(SQR(bxl) + SQR(byl) + SQR(bzl));
           b0.x1f(m,k,j,i) = bxl;
           b0.x2f(m,k,j,i) = byl;
           b0.x3f(m,k,j,i) = bzl;
@@ -226,7 +228,7 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
           u0(m,ivz,k,j,i) = wr[IVZ]*wr[IDN];
           u0(m,IEN,k,j,i) = wr[IPR]/gm1 +
              0.5*wr[IDN]*(SQR(wr[IVX]) + SQR(wr[IVY]) + SQR(wr[IVZ])) +
-             0.5*(SQR(wr[nmhd]) + SQR(wr[nmhd+1]) + SQR(wr[nmhd+2]));
+             0.5*(SQR(bxr) + SQR(byr) + SQR(bzr));
           b0.x1f(m,k,j,i) = bxr;
           b0.x2f(m,k,j,i) = byr;
           b0.x3f(m,k,j,i) = bzr;
