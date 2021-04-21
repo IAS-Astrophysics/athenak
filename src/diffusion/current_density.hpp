@@ -13,16 +13,16 @@
 //! \fn CurrentDensity()
 //  \brief Calculates the three components of the current density at cell edges
 //  Each component of J is centered identically to the edge-electric-field
-//          _____________
-//          |\           \
-//          | \           \
-//          |  \___________\
-//          |   |           |
-//          \   |           |
-//         J2*  *J3         |
-//            \ |           |
-//             \|_____*_____|
-//                   J1
+//               _____________
+//               |\           \
+//               | \           \
+//               |  \___________\
+//               |   |           |
+//               \   |           |
+//              J2*  *J3         |
+//   x2 x3         \ |           |
+//    \ |           \|_____*_____|
+//     \|__x1             J1
 
 KOKKOS_INLINE_FUNCTION
 void CurrentDensity(TeamMember_t const &member, const int m, const int k, const int j,
