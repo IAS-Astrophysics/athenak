@@ -19,6 +19,8 @@
 //----------------------------------------------------------------------------------------
 //! \struct EOSData
 //  \brief container for variables associated with EOS, and in-lined wave speed functions
+//  Storing everything in a container makes it easier to capture EOS variables and
+//  functions in kernels elsewhere in the code.
 
 struct EOS_Data
 {
