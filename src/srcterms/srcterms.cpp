@@ -117,7 +117,6 @@ void SourceTerms::AddShearingBox(DvceArray5D<Real> &u0, const DvceArray5D<Real> 
     }
   );
 
-  return;
 }
 
 //----------------------------------------------------------------------------------------

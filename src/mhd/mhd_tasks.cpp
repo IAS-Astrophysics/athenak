@@ -17,7 +17,6 @@
 #include "eos/eos.hpp"
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
-#include "srcterms/srcterms.hpp"
 #include "bvals/bvals.hpp"
 #include "utils/create_mpitag.hpp"
 #include "srcterms/srcterms.hpp"
@@ -55,6 +54,9 @@ void MHD::AssembleStageRunTasks(TaskList &tl, TaskID start)
   
   id = tl.AddTask(&MHD::ResistFluxes, this, mhd_tasks[MHDTaskName::visc_flux]);
   mhd_tasks.emplace(MHDTaskName::resist_flux, id);
+  
+  id = tl.AddTask(&MHD::Update, this, mhd_tasks[MHDTaskName::resist_flux]);
+  mhd_tasks.emplace(MHDTaskName::update, id);
   
   id = tl.AddTask(&MHD::Update, this, mhd_tasks[MHDTaskName::resist_flux]);
   mhd_tasks.emplace(MHDTaskName::update, id);
