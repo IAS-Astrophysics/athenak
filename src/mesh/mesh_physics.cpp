@@ -72,14 +72,6 @@ void MeshBlockPack::AddPhysicsModules(ParameterInput *pin)
     pmhd = nullptr;
   }
 
-  // (5) SOURCE TERMS
-  // Source terms can be specified by many different <blocks> in the input file.  Thus,
-  // SourceTerms constructor parses input file to see if any source terms are enrolled.
-  // If not, functions below do not do anything
-  psrc = new SourceTerms(this, pin);
-  psrc->IncludeSplitSrcTermTasks(operator_split_tl, none);
-  psrc->IncludeUnsplitSrcTermTasks(stage_run_tl, none);
-
   // Check that at least ONE is requested and initialized.
   // Error if there are no physics blocks in the input file.
   if (nphysics == 0) {

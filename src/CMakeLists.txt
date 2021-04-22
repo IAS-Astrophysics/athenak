@@ -71,9 +71,6 @@ add_executable(
         pgen/kh_sr.cpp
 
         srcterms/srcterms.cpp
-        srcterms/constant_acc.cpp
-        srcterms/shearing_box.cpp
-        srcterms/turb_driver.cpp
 
         utils/change_rundir.cpp
         utils/show_config.cpp

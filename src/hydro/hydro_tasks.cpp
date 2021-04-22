@@ -18,7 +18,7 @@
 #include "diffusion/viscosity.hpp"
 #include "bvals/bvals.hpp"
 #include "utils/create_mpitag.hpp"
-#include "srcterms/srcterms.hpp"
+#include "driver/driver.hpp"
 #include "hydro/hydro.hpp"
 
 namespace hydro {

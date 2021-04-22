@@ -32,7 +32,7 @@ void MHD::ShearInnerX1(int m)
   Real x1size = pmy_pack->pmesh->mesh_size.x1max - pmy_pack->pmesh->mesh_size.x1min;
 
   // Add shear offset to v3
-  Real qomega = (pmy_pack->psrc->qshear)*(pmy_pack->psrc->omega0);
+  Real qomega = (psrc->qshear)*(psrc->omega0);
   auto &eos = peos->eos_data;
   auto &u0_ = u0;
   par_for("shear_ix1", DevExeSpace(),0,(n3-1),0,(n2-1),0,(ng-1),
@@ -64,7 +64,7 @@ void MHD::ShearOuterX1(int m)
   Real x1size = pmy_pack->pmesh->mesh_size.x1max - pmy_pack->pmesh->mesh_size.x1min;
 
   // Add shear offset to v3
-  Real qomega = (pmy_pack->psrc->qshear)*(pmy_pack->psrc->omega0);
+  Real qomega = (psrc->qshear)*(psrc->omega0);
   auto &eos = peos->eos_data;
   auto &u0_ = u0;
   par_for("shear_ox1", DevExeSpace(),0,(n3-1),0,(n2-1),0,(ng-1),

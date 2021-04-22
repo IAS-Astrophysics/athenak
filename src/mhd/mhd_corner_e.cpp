@@ -5,16 +5,19 @@
 //========================================================================================
 //! \file mhd_corner_e.cpp
 //  \brief
+//  Also includes contributions to electric field from "source terms" such as the
+//  shearing box.
 
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
 #include "driver/driver.hpp"
+#include "srcterms/srcterms.hpp"
 #include "mhd.hpp"
 
 namespace mhd {
 //----------------------------------------------------------------------------------------
 //! \fn  void MHD::CornerE
-//  \brief calculate the corner EMFs
+//  \brief calculate the corner electric fields.
 
 TaskStatus MHD::CornerE(Driver *pdriver, int stage)
 {
@@ -234,6 +237,9 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage)
 
     }
   );
+
+  // Add shearing box electric field (if needed)
+  if (psrc->shearing_box) psrc->AddSBoxEField(b0, efld);
 
   return TaskStatus::complete;
 }

@@ -4,18 +4,20 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file hydro_update.cpp
-//  \brief Updates hydro conserved variables, using weighted average and partial time
+//  \brief Updates hydro conserved variables (u0), using weighted average and partial time
 //  step appropriate for various SSP RK integrators (e.g. RK1, RK2, RK3)
+//  Both the flux divergence and physical source terms are included in the update.
 
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
 #include "driver/driver.hpp"
+#include "srcterms/srcterms.hpp"
 #include "hydro.hpp"
 
 namespace hydro {
 //----------------------------------------------------------------------------------------
 //! \fn  void Hydro::Update
-//  \brief Update conserved variables 
+//  \brief Explicit RK update of flux divergence and physical source terms
 
 TaskStatus Hydro::Update(Driver *pdriver, int stage)
 {
@@ -82,6 +84,12 @@ TaskStatus Hydro::Update(Driver *pdriver, int stage)
       });
     }
   );
+
+  // Add physical source terms.
+  // Note source terms must be computed using only primitives (w0), as the conserved 
+  // variables (u0) have already been partially updated.
+  if (psrc->const_accel)  psrc->AddConstantAccel(u0, w0, beta_dt);
+  if (psrc->shearing_box) psrc->AddShearingBox(u0, w0, beta_dt);
 
   return TaskStatus::complete;
 }

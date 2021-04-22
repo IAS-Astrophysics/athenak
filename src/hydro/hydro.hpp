@@ -17,6 +17,7 @@
 // forward declarations
 class EquationOfState;
 class Viscosity;
+class SourceTerms;
 class Driver;
 
 // constants that enumerate Hydro Riemann Solver options
@@ -54,6 +55,7 @@ class Hydro
 
   // Object(s) for extra physics (viscosity, srcterms)
   Viscosity *pvisc = nullptr;
+  SourceTerms *psrc = nullptr;
 
   // following only used for time-evolving flow
   DvceArray5D<Real> u1;       // conserved variables at intermediate step 

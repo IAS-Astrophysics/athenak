@@ -6,6 +6,7 @@
 //! \file viscosity.cpp
 //  \brief Implements functions for Viscosity class. This includes isotropic shear
 //  viscosity in a Newtonian fluid (in which stress is proportional to shear).
+//  Viscosity may be added to Hydro and/or MHD independently.
 
 #include <limits>
 #include <iostream>
@@ -18,6 +19,9 @@
 
 //----------------------------------------------------------------------------------------
 // ctor:
+// Note first argument passes string ("hydro" or "mhd") denoting in wihch class this
+// object is being constructed, and therefore which <block> in the input file from which
+// the parameters are read.
 
 Viscosity::Viscosity(std::string block, MeshBlockPack *pp, ParameterInput *pin)
   : pmy_pack(pp)

@@ -13,6 +13,7 @@
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
 #include "diffusion/viscosity.hpp"
+#include "srcterms/srcterms.hpp"
 #include "bvals/bvals.hpp"
 #include "hydro/hydro.hpp"
 
@@ -69,6 +70,14 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
     pvisc = new Viscosity("hydro", ppack, pin);
   } else {
     pvisc = nullptr;
+  }
+
+  // Source terms
+  if (pin->DoesParameterExist("hydro","const_accel") ||
+      pin->DoesParameterExist("hydro","shearing_box")) {
+    psrc = new SourceTerms("hydro", ppack, pin);
+  } else {
+    psrc = nullptr;
   }
 
   // read time-evolution option [already error checked in driver constructor]
@@ -198,6 +207,7 @@ Hydro::~Hydro()
   delete peos;
   delete pbval_u;
   if (pvisc != nullptr) {delete pvisc;}
+  if (psrc != nullptr) {delete psrc;}
 }
 
 } // namespace hydro

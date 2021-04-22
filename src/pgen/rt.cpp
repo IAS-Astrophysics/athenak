@@ -59,6 +59,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
   Real amp = pin->GetReal("problem","amp");
   int iprob = pin->GetInteger("problem","iprob");
   Real drat = pin->GetOrAddReal("problem","drat",3.0);
+  Real grav_acc = pin->GetReal("hydro","const_accel_val");
 
   // capture variables for kernel
   int &nx1 = pmbp->mb_cells.nx1;
@@ -78,8 +79,6 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
     // 2D PROBLEM
 
     if (not pmbp->pmesh->nx3gt1) {
-      Real grav_acc = pin->GetReal("gravity","const_acc2");
-
       auto u0 = pmbp->phydro->u0;
       par_for("rt2d", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
         KOKKOS_LAMBDA(int m, int k, int j, int i)
@@ -106,8 +105,6 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
     // 3D PROBLEM ----------------------------------------------------------------
 
     } else {
-      Real grav_acc = pin->GetReal("gravity","const_acc3");
-
       auto u0 = pmbp->phydro->u0;
       par_for("rt2d", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
         KOKKOS_LAMBDA(int m, int k, int j, int i)

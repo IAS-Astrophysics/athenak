@@ -45,9 +45,11 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, Driver *pd)
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
         << "Problem generator name could not be found in <problem> block in input file"
-        << std::endl << "and it was not set by -D PROBLEM option on command line to cmake"
-        << std::endl << "Rerun cmake with -D PROBLEM=file to specify custom problem "
-        << "generator file" << std::endl;;
+        << std::endl 
+        << "and it was not set by -D PROBLEM option on cmake command line during build"
+        << std::endl
+        << "Rerun cmake with -D PROBLEM=file to specify custom problem generator file"
+        << std::endl;;
     std::exit(EXIT_FAILURE);
   }
 

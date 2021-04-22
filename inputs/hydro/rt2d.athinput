@@ -33,17 +33,20 @@ nx2       = 200         # Number of cells in each MeshBlock, X2-dir
 nx3       = 1           # Number of cells in each MeshBlock, X3-dir
 
 <time>
-evolution  = dynamic   # dynamic/kinematic/static
-integrator = rk3       # time integration algorithm
+evolution  = dynamic     # dynamic/kinematic/static
+integrator = rk3         # time integration algorithm
 cfl_number = 0.4         # The Courant, Friedrichs, & Lewy (CFL) Number
 nlim       = 100000      # cycle limit
 tlim       = 8.5         # time limit
-ndiag      = 1         # cycles between diagostic output
+ndiag      = 1           # cycles between diagostic output
 
 <hydro>
-eos         = adiabatic   # EOS type
-reconstruct = wenoz       # spatial reconstruction method
-rsolver     = hllc        # Riemann-solver to be used
+eos             = adiabatic  # EOS type
+reconstruct     = ppm        # spatial reconstruction method
+rsolver         = hllc       # Riemann-solver to be used
+const_accel     = true       # add constant accleration source term
+const_accel_val = -0.1       # value of constant acceleration
+const_accel_dir = 2          # direction of constant acceleration
 
 <eos>
 gamma      = 1.4         # gamma = C_p/C_v

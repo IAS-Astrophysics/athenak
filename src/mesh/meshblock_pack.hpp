@@ -48,7 +48,6 @@ class MeshBlockPack
   // physics modules (controlled by AddPhysicsModules function in mesh_physics.cpp)
   hydro::Hydro *phydro=nullptr;
   mhd::MHD *pmhd=nullptr;
-  SourceTerms *psrc=nullptr;
 
   // task lists for MeshBlocks in this MeshBlockPack
   TaskList stage_start_tl;

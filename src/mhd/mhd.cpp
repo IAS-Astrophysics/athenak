@@ -14,6 +14,7 @@
 #include "eos/eos.hpp"
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
+#include "srcterms/srcterms.hpp"
 #include "bvals/bvals.hpp"
 #include "mhd/mhd.hpp"
 
@@ -72,6 +73,14 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     presist = new Resistivity(ppack, pin);
   } else {
     presist = nullptr;
+  }
+
+  // Source terms
+  if (pin->DoesParameterExist("mhd","const_accel") ||
+      pin->DoesParameterExist("mhd","shearing_box")) {
+    psrc = new SourceTerms("mhd", ppack, pin);
+  } else {
+    psrc = nullptr;
   }
 
   // read time-evolution option [already error checked in driver constructor]
@@ -218,6 +227,7 @@ MHD::~MHD()
   delete pbval_b;
   if (pvisc != nullptr) {delete pvisc;}
   if (presist!= nullptr) {delete presist;}
+  if (psrc!= nullptr) {delete psrc;}
 }
 
 } // namespace mhd
