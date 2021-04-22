@@ -69,6 +69,18 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
   auto &size = pmbp->pmb->mbsize;
 
   if (pmbp->pmhd != nullptr) {
+    // First, do some error checks
+    if (pmbp->pmhd->psrc == nullptr) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl
+                << "Shearing box source terms not enabled for mri2d problem" << std::endl;
+      exit(EXIT_FAILURE);
+    } else if (!(pmbp->pmhd->psrc->shearing_box)) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl
+                << "Shearing box source terms not enabled for mri2d problem" << std::endl;
+      exit(EXIT_FAILURE);
+    }
     // Initialize magnetic field first, so entire arrays are initialized before adding 
     // magnetic energy to conserved variables in next loop.  For 2D shearing box
     // B1=Bx, B2=Bz, B3=By
@@ -99,13 +111,24 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
     );
   }
 
-  Real qshear = pin->GetReal("shearing_box","qshear");
-  Real omega0 = pin->GetReal("shearing_box","omega0");
-  auto &mbgid = pmbp->pmb->mbgid;
 
   // Initialize conserved variables in Hydro
   // Only sets up uniform motion in x1-direction -- epicycle test
   if (pmbp->phydro != nullptr) {
+    // First, do some error checks
+    if (pmbp->phydro->psrc == nullptr) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl
+                << "Shearing box source terms not enabled for mri2d problem" << std::endl;
+      exit(EXIT_FAILURE);
+    } else if (!(pmbp->phydro->psrc->shearing_box)) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl
+                << "Shearing box source terms not enabled for mri2d problem" << std::endl;
+      exit(EXIT_FAILURE);
+    }
+    Real qshear = pin->GetReal("hydro","qshear");
+    Real omega0 = pin->GetReal("hydro","omega0");
     EOS_Data &eos = pmbp->phydro->peos->eos_data;
     Real gm1 = eos.gamma - 1.0;
     auto u0 = pmbp->phydro->u0;
@@ -124,6 +147,8 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
   // Initialize conserved variables in MHD
   // Only sets up random perturbations in pressure to seed MRI
   if (pmbp->pmhd != nullptr) {
+    Real qshear = pin->GetReal("mhd","qshear");
+    Real omega0 = pin->GetReal("mhd","omega0");
     EOS_Data &eos = pmbp->pmhd->peos->eos_data;
     Real gm1 = eos.gamma - 1.0;
     auto b0 = pmbp->pmhd->b0;
