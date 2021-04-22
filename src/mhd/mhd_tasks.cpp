@@ -55,12 +55,9 @@ void MHD::AssembleStageRunTasks(TaskList &tl, TaskID start)
   id = tl.AddTask(&MHD::ResistFluxes, this, mhd_tasks[MHDTaskName::visc_flux]);
   mhd_tasks.emplace(MHDTaskName::resist_flux, id);
   
-  id = tl.AddTask(&MHD::Update, this, mhd_tasks[MHDTaskName::resist_flux]);
+  id = tl.AddTask(&MHD::ExRKUpdate, this, mhd_tasks[MHDTaskName::resist_flux]);
   mhd_tasks.emplace(MHDTaskName::update, id);
   
-  id = tl.AddTask(&MHD::Update, this, mhd_tasks[MHDTaskName::resist_flux]);
-  mhd_tasks.emplace(MHDTaskName::update, id);
-
   id = tl.AddTask(&MHD::SendU, this, mhd_tasks[MHDTaskName::update]);
   mhd_tasks.emplace(MHDTaskName::send_u, id);
   

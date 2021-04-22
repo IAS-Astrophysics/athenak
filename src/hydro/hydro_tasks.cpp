@@ -51,7 +51,7 @@ void Hydro::AssembleStageRunTasks(TaskList &tl, TaskID start)
   id = tl.AddTask(&Hydro::ViscFluxes, this, hydro_tasks[HydroTaskName::calc_flux]);
   hydro_tasks.emplace(HydroTaskName::visc_flux, id);
 
-  id = tl.AddTask(&Hydro::Update, this, hydro_tasks[HydroTaskName::visc_flux]);
+  id = tl.AddTask(&Hydro::ExRKUpdate, this, hydro_tasks[HydroTaskName::visc_flux]);
   hydro_tasks.emplace(HydroTaskName::update, id);
 
   id = tl.AddTask(&Hydro::SendU, this, hydro_tasks[HydroTaskName::update]);

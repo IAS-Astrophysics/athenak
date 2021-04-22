@@ -4,8 +4,9 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file hydro_update.cpp
-//  \brief Updates hydro conserved variables (u0), using weighted average and partial time
-//  step appropriate for various SSP RK integrators (e.g. RK1, RK2, RK3)
+//  \brief Performs update of Hydro conserved variables (u0) for each stage of explicit
+//  SSP RK integrators (e.g. RK1, RK2, RK3). Update uses weighted average and partial time
+//  step appropriate to stage.
 //  Both the flux divergence and physical source terms are included in the update.
 
 #include "athena.hpp"
@@ -19,7 +20,7 @@ namespace hydro {
 //! \fn  void Hydro::Update
 //  \brief Explicit RK update of flux divergence and physical source terms
 
-TaskStatus Hydro::Update(Driver *pdriver, int stage)
+TaskStatus Hydro::ExRKUpdate(Driver *pdriver, int stage)
 {
   int is = pmy_pack->mb_cells.is; int ie = pmy_pack->mb_cells.ie;
   int js = pmy_pack->mb_cells.js; int je = pmy_pack->mb_cells.je;

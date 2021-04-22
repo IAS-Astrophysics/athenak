@@ -84,7 +84,7 @@ class MHD
   TaskStatus CornerE(Driver *d, int stage);
   TaskStatus ResistiveE(Driver *d, int stage);
   TaskStatus CT(Driver *d, int stage);
-  TaskStatus Update(Driver *d, int stage);
+  TaskStatus ExRKUpdate(Driver *d, int stage);
   TaskStatus SendU(Driver *d, int stage); 
   TaskStatus RecvU(Driver *d, int stage); 
   TaskStatus SendB(Driver *d, int stage); 
