@@ -313,7 +313,7 @@ TaskStatus MHD::RecvB(Driver *pdrive, int stage)
 
 TaskStatus MHD::ConToPrim(Driver *pdrive, int stage)
 {
-  peos->ConsToPrim(u0, b0, w0, bcc0);
+  peos->ConsToPrimMHD(u0, b0, w0, bcc0);
   return TaskStatus::complete;
 }
 

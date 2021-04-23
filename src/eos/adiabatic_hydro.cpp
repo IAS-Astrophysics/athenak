@@ -27,7 +27,8 @@ AdiabaticHydro::AdiabaticHydro(MeshBlockPack *pp, ParameterInput *pin)
 // \!fn void ConsToPrim()
 // \brief Converts conserved into primitive variables in nonrelativistic adiabatic hydro
 
-void AdiabaticHydro::ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
+void AdiabaticHydro::ConsToPrimHydro(const DvceArray5D<Real> &cons,
+                                     DvceArray5D<Real> &prim)
 {
   auto ncells = pmy_pack->mb_cells;
   int ng = ncells.ng;

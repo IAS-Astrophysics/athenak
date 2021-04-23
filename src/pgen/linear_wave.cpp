@@ -679,9 +679,9 @@ void ProblemGenerator::LinearWaveErrors_(MeshBlockPack *pmbp, ParameterInput *pi
   int &nx1 = pmbp->mb_cells.nx1;
   int &nx2 = pmbp->mb_cells.nx2;
   int &nx3 = pmbp->mb_cells.nx3;
-  int &is = pmbp->mb_cells.is, &ie = pmbp->mb_cells.ie;
-  int &js = pmbp->mb_cells.js, &je = pmbp->mb_cells.je;
-  int &ks = pmbp->mb_cells.ks, &ke = pmbp->mb_cells.ke;
+  int &is = pmbp->mb_cells.is;
+  int &js = pmbp->mb_cells.js;
+  int &ks = pmbp->mb_cells.ks;
   auto &size = pmbp->pmb->mbsize;
 
   // compute errors for Hydro  ----------------------------------------------------------

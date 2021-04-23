@@ -94,9 +94,9 @@ class EquationOfState
   EOS_Data eos_data;
 
   // virtual functions to convert cons to prim, overwritten in derived eos classes
-  virtual void ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim);
-  virtual void ConsToPrim(const DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
-                          DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc);
+  virtual void ConsToPrimHydro(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim);
+  virtual void ConsToPrimMHD(const DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
+                             DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc);
 
  private:
 };
@@ -109,7 +109,7 @@ class AdiabaticHydro : public EquationOfState
 {
  public:
   AdiabaticHydro(MeshBlockPack *pp, ParameterInput *pin);
-  void ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
+  void ConsToPrimHydro(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
 };
 
 //----------------------------------------------------------------------------------------
@@ -120,7 +120,7 @@ class AdiabaticHydroSR : public EquationOfState
 {
  public:
   AdiabaticHydroSR(MeshBlockPack *pp, ParameterInput *pin);
-  void ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
+  void ConsToPrimHydro(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
 };
 
 //----------------------------------------------------------------------------------------
@@ -131,7 +131,7 @@ class IsothermalHydro : public EquationOfState
 { 
  public:
   IsothermalHydro(MeshBlockPack *pp, ParameterInput *pin);
-  void ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
+  void ConsToPrimHydro(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
 };
 
 //----------------------------------------------------------------------------------------
@@ -142,7 +142,7 @@ class AdiabaticMHD : public EquationOfState
 {
  public:
   AdiabaticMHD(MeshBlockPack *pp, ParameterInput *pin);
-  void ConsToPrim(const DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
+  void ConsToPrimMHD(const DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
                   DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc) override;
 };
 
@@ -154,7 +154,7 @@ class IsothermalMHD : public EquationOfState
 {
  public:
   IsothermalMHD(MeshBlockPack *pp, ParameterInput *pin);
-  void ConsToPrim(const DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
+  void ConsToPrimMHD(const DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
                   DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc) override;
 };
 

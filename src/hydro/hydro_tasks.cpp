@@ -222,7 +222,7 @@ TaskStatus Hydro::RecvU(Driver *pdrive, int stage)
 
 TaskStatus Hydro::ConToPrim(Driver *pdrive, int stage)
 {
-  peos->ConsToPrim(u0, w0);
+  peos->ConsToPrimHydro(u0, w0);
   return TaskStatus::complete;
 }
 
