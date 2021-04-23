@@ -14,7 +14,7 @@
 #include "mhd/mhd.hpp"
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
-#include "srcterms/srcterms.hpp"
+#include "srcterms/turb_driver.hpp"
 
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>
@@ -70,6 +70,20 @@ void MeshBlockPack::AddPhysicsModules(ParameterInput *pin)
     }
   } else {
     pmhd = nullptr;
+  }
+
+  // (3) TURBULENCE DRIVER
+  // This is a special module to drive turbulence in hydro, MHD, or both. Cannot be
+  // included as a source term since it requires evolving force array via O-U process.
+  // Instead, TurbulenceDriver object is stored in MeshBlockPack and tasks for evolving
+  // force and adding force to fluid are included in operator_split and stage_run
+  // task lists respectively.
+  if (pin->DoesBlockExist("turb_driving")) {
+    pturb = new TurbulenceDriver(this, pin);
+    pturb->IncludeInitializeModesTask(operator_split_tl, none);
+    pturb->IncludeAddForcingTask(stage_run_tl, none);
+  } else {
+    pturb = nullptr;
   }
 
   // Check that at least ONE is requested and initialized.

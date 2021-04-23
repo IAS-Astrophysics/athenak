@@ -117,7 +117,9 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage)
     );
 
     // Add shearing box electric field in 2D (if needed)
-    if (psrc->shearing_box) psrc->AddSBoxEField(b0, efld);
+    if (psrc != nullptr) {
+      if (psrc->shearing_box) psrc->AddSBoxEField(b0, efld);
+    }
 
     return TaskStatus::complete;
   }

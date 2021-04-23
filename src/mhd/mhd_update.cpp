@@ -90,8 +90,10 @@ TaskStatus MHD::ExRKUpdate(Driver *pdriver, int stage)
   // Add physical source terms.
   // Note source terms must be computed using only primitives (w0), as the conserved 
   // variables (u0) have already been partially updated.
-  if (psrc->const_accel)  psrc->AddConstantAccel(u0, w0, beta_dt);
-  if (psrc->shearing_box) psrc->AddShearingBox(u0, w0, bcc0, beta_dt);
+  if (psrc != nullptr) {
+    if (psrc->const_accel)  psrc->AddConstantAccel(u0, w0, beta_dt);
+    if (psrc->shearing_box) psrc->AddShearingBox(u0, w0, bcc0, beta_dt);
+  }
 
   return TaskStatus::complete;
 }

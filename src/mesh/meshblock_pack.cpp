@@ -14,8 +14,7 @@
 #include "mesh.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
-#include "diffusion/viscosity.hpp"
-#include "diffusion/resistivity.hpp"
+#include "srcterms/turb_driver.hpp"
 
 //----------------------------------------------------------------------------------------
 // MeshBlockPack constructor:
@@ -88,4 +87,5 @@ MeshBlockPack::~MeshBlockPack()
   delete pmb;
   if (phydro != nullptr) {delete phydro;}
   if (pmhd   != nullptr) {delete pmhd;}
+  if (pturb  != nullptr) {delete pturb;}
 }

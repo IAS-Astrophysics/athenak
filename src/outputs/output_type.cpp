@@ -235,15 +235,13 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
       outvars.emplace_back("bcc3",2,&(pm->pmb_pack->pmhd->bcc0));
       break;
 
-/***
     // Load turbulent forcing
     case OutputVariable::turb_force:
-      if (pm->pmb_pack->psrc->pturb == nullptr) ErrForceOutput(out_params.block_name);
-      outvars.emplace_back("force1",0,&(pm->pmb_pack->psrc->pturb->force));
-      outvars.emplace_back("force2",1,&(pm->pmb_pack->psrc->pturb->force));
-      outvars.emplace_back("force3",2,&(pm->pmb_pack->psrc->pturb->force));
+      if (pm->pmb_pack->pturb == nullptr) ErrForceOutput(out_params.block_name);
+      outvars.emplace_back("force1",0,&(pm->pmb_pack->pturb->force));
+      outvars.emplace_back("force2",1,&(pm->pmb_pack->pturb->force));
+      outvars.emplace_back("force3",2,&(pm->pmb_pack->pturb->force));
       break;
-***/
 
     default:
       break;

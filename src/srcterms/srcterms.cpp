@@ -4,6 +4,10 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file srcterms.cpp
+//  Implements various (physics) source terms to be added to the Hydro or MHD equations.
+//  Currently [constant_acceleration, shearing_box] are implemented.
+//  Source terms objects are stored in the respective fluid class, and are instantiated
+//  according to boolean flags set in the <hydro> or <mhd> blocks in the input file.
 
 #include <iostream>
 
@@ -25,9 +29,11 @@ SourceTerms::SourceTerms(std::string block, MeshBlockPack *pp, ParameterInput *p
   shearing_box(false)
 {
   // This constructor only called if source terms were requested in input file.
-  // Parse input file to see which source terms are specified
+  // See hydro.cpp or mhd.cpp to see how new SourceTerms object constructed.
 
-  // (1) gravitational accelerations
+  // Constructor parses input file to read parameters for source terms
+
+  // (1) (constant) gravitational acceleration
   if (pin->DoesParameterExist(block,"const_accel")) {
     const_accel = pin->GetBoolean(block,"const_accel");
     if (const_accel) {
@@ -41,7 +47,7 @@ SourceTerms::SourceTerms(std::string block, MeshBlockPack *pp, ParameterInput *p
     }
   }
 
-  // (2) shearing box
+  // (2) shearing box (hydro and MHD)
   if (pin->DoesParameterExist(block,"shearing_box")) {
     shearing_box = pin->GetBoolean(block,"shearing_box");
     if (shearing_box) {

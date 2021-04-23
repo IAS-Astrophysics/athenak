@@ -15,10 +15,10 @@
 #include "mesh/mesh.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "driver/driver.hpp"
 #include "utils/grid_locations.hpp"
 #include "utils/random.hpp"
 #include "turb_driver.hpp"
-#include "srcterms.hpp"
 
 //----------------------------------------------------------------------------------------
 // constructor, initializes data structures and parameters
@@ -26,7 +26,7 @@
 TurbulenceDriver::TurbulenceDriver(MeshBlockPack *pp, ParameterInput *pin) :
   pmy_pack(pp),
   force("force",1,1,1,1,1),
-  force_tmp("force_tmp",1,1,1,1,1),
+  force_new("force_new",1,1,1,1,1),
   x1sin("x1sin",1,1,1),
   x1cos("x1cos",1,1,1),
   x2sin("x2sin",1,1,1),
@@ -46,11 +46,11 @@ TurbulenceDriver::TurbulenceDriver(MeshBlockPack *pp, ParameterInput *pin) :
   int ncells3 = (ncells.nx3 > 1)? (ncells.nx3 + 2*(ncells.ng)) : 1;
 
   Kokkos::realloc(force, nmb, 3, ncells3, ncells2, ncells1);
-  Kokkos::realloc(force_tmp, nmb, 3, ncells3, ncells2, ncells1);
+  Kokkos::realloc(force_new, nmb, 3, ncells3, ncells2, ncells1);
 
   // range of modes including, corresponding to kmin and kmax
-  nlow = pin->GetOrAddInteger("forcing","nlow",1);
-  nhigh = pin->GetOrAddInteger("forcing","nhigh",2);
+  nlow = pin->GetOrAddInteger("turb_driving","nlow",1);
+  nhigh = pin->GetOrAddInteger("turb_driving","nhigh",2);
   if (ncells3>1) { // 3D
     ntot = (nhigh+1)*(nhigh+1)*(nhigh+1);
     nwave = 8;
@@ -62,11 +62,11 @@ TurbulenceDriver::TurbulenceDriver(MeshBlockPack *pp, ParameterInput *pin) :
     nwave = 2;
   }
   // power-law exponent for isotropic driving
-  expo = pin->GetOrAddReal("forcing","expo",5.0/3.0);
+  expo = pin->GetOrAddReal("turb_driving","expo",5.0/3.0);
   // energy injection rate
-  dedt = pin->GetOrAddReal("forcing","dedt",0.0);
+  dedt = pin->GetOrAddReal("turb_driving","dedt",0.0);
   // correlation time
-  tcorr = pin->GetOrAddReal("forcing","tcorr",0.0); 
+  tcorr = pin->GetOrAddReal("turb_driving","tcorr",0.0); 
 
   Kokkos::realloc(x1sin, nmb, ntot, ncells1);
   Kokkos::realloc(x1cos, nmb, ntot, ncells1);
@@ -90,11 +90,46 @@ TurbulenceDriver::~TurbulenceDriver()
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn  void IncludeModeEvolutionTasks
+//  \brief Includes task in the operator split task list that constructs new modes with
+//  random amplitudes and phases that can be used to evolve the force via an O-U process
+//  Called by MeshBlockPack::AddPhysicsModules() function
+
+void TurbulenceDriver::IncludeInitializeModesTask(TaskList &tl, TaskID start)
+{
+  auto id = tl.AddTask(&TurbulenceDriver::InitializeModes, this, start);
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void IncludeAddForcingTask
+//  \brief includes task in the stage_run task list for adding random forcing to fluid
+//  as an explicit source terms in each stage of integrator
+//  Called by MeshBlockPack::AddPhysicsModules() function
+
+void TurbulenceDriver::IncludeAddForcingTask(TaskList &tl, TaskID start)
+{   
+  // These must be inserted after update task, but before send_u
+  if (pmy_pack->phydro != nullptr) {
+    auto id = tl.InsertTask(&TurbulenceDriver::AddForcing, this, 
+                       pmy_pack->phydro->hydro_tasks[HydroTaskName::visc_flux],
+                       pmy_pack->phydro->hydro_tasks[HydroTaskName::update]);
+  }
+  if (pmy_pack->pmhd != nullptr) {
+    auto id = tl.InsertTask(&TurbulenceDriver::AddForcing, this, 
+                       pmy_pack->pmhd->mhd_tasks[MHDTaskName::resist_flux],
+                       pmy_pack->pmhd->mhd_tasks[MHDTaskName::update]);
+  }
+
+  return;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn InitializeModes()
 // \brief Initializes driving, and so is only executed once at start of calc.
 // Cannot be included in constructor since (it seems) Kokkos::par_for not allowed in cons.
 
-void TurbulenceDriver::InitializeModes()
+TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage)
 {
   int &is = pmy_pack->mb_cells.is, &ie = pmy_pack->mb_cells.ie;
   int &js = pmy_pack->mb_cells.js, &je = pmy_pack->mb_cells.je;
@@ -114,45 +149,7 @@ void TurbulenceDriver::InitializeModes()
   Real dky = 2.0*M_PI/ly;
   Real dkz = 2.0*M_PI/lz;
 
-  int &nt = ntot;
-  int &nw = nwave;
-
-  int &nmb = pmy_pack->nmb_thispack;
-
-  // initialize force registers/amps to zero
-  auto force_ = force;
-  auto force_tmp_ = force_tmp;
-  par_for("force_init", DevExeSpace(), 0, nmb-1, 0, 2, 0, ncells3-1, 0, ncells2-1, 
-    0, ncells1-1, KOKKOS_LAMBDA(int m, int n, int k, int j, int i)
-    {
-      force_(m,n,k,j,i) = 0.0;
-      force_tmp_(m,n,k,j,i) = 0.0;
-    }
-  );
-
-  auto amp1_ = amp1;
-  auto amp2_ = amp2;
-  auto amp3_ = amp3;
-  par_for("amp_init", DevExeSpace(), 0, nmb-1, 0, nt-1, 0, nw-1,
-    KOKKOS_LAMBDA(int m, int n, int nw)
-    {
-      amp1_(m,n,nw) = 0.0;
-      amp2_(m,n,nw) = 0.0;
-      amp3_(m,n,nw) = 0.0;
-    }
-  );
-
-  // initalize seeds
-  auto seeds_ = seeds;
-  par_for("seeds_init", DevExeSpace(), 0, nmb-1, 0, nt-1,
-    KOKKOS_LAMBDA(int m, int n)
-    {
-      seeds_(m,n) = n + n*n + n*n*n; // make sure seed is different for each harmonic
-    }
-  );
-
-  int nw2 = 1;
-  int nw3 = 1;
+  int nw2 = 1; int nw3 = 1;
   if (ncells2>1) {
     nw2 = nhigh+1;
   }
@@ -161,133 +158,137 @@ void TurbulenceDriver::InitializeModes()
   }
   int nw23 = nw3*nw2;
 
-  auto x1sin_ = x1sin;
-  auto x1cos_ = x1cos;
+  // On first call to this function, initialize seeds, sin/cos arrays
+  if (first_time) {
 
-  // Initialize sin and cos arrays
-  // bad design: requires saving sin/cos during restarts
-  auto &size = pmy_pack->pmb->mbsize;
-  par_for("kx_loop", DevExeSpace(), 0, nmb-1, 0, nt-1, 0, ncells1-1,
-    KOKKOS_LAMBDA(int m, int n, int i)
-    { 
-      int nk1 = n/nw23;
-      Real kx = nk1*dkx;
-      Real x1v = CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
-    
-      x1sin_(m,n,i) = sin(kx*x1v);
-      x1cos_(m,n,i) = cos(kx*x1v);
-    }
-  );
+    // initialize force to zero
+    int &nmb = pmy_pack->nmb_thispack;
+    auto force_ = force;
+    par_for("force_init", DevExeSpace(),0,nmb-1,0,2,0,ncells3-1,0,ncells2-1,0,ncells1-1,
+      KOKKOS_LAMBDA(int m, int n, int k, int j, int i)
+      {
+        force_(m,n,k,j,i) = 0.0;
+      }
+    );
 
-  auto x2sin_ = x2sin;
-  auto x2cos_ = x2cos;
-  par_for("ky_loop", DevExeSpace(), 0, nmb-1, 0, nt-1, 0, ncells2-1,
-    KOKKOS_LAMBDA(int m, int n, int j)
-    { 
-      int nk1 = n/nw23;
-      int nk2 = (n - nk1*nw23)/nw2;
-      Real ky = nk2*dky;
-      Real x2v = CellCenterX(j-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
+    // initalize seeds
+    int &nt = ntot;
+    auto seeds_ = seeds;
+    par_for("seeds_init", DevExeSpace(), 0, nmb-1, 0, nt-1,
+      KOKKOS_LAMBDA(int m, int n)
+      {
+        seeds_(m,n) = n + n*n + n*n*n; // make sure seed is different for each harmonic
+      }
+    );
 
-      x2sin_(m,n,j) = sin(ky*x2v);
-      x2cos_(m,n,j) = cos(ky*x2v);
-    }
-  );
+    // Initialize sin and cos arrays
+    // bad design: requires saving sin/cos during restarts
+    auto &size = pmy_pack->pmb->mbsize;
+    auto x1sin_ = x1sin;
+    auto x1cos_ = x1cos;
+    par_for("kx_loop", DevExeSpace(), 0, nmb-1, 0, nt-1, 0, ncells1-1,
+      KOKKOS_LAMBDA(int m, int n, int i)
+      { 
+        int nk1 = n/nw23;
+        Real kx = nk1*dkx;
+        Real x1v = CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
+      
+        x1sin_(m,n,i) = sin(kx*x1v);
+        x1cos_(m,n,i) = cos(kx*x1v);
+      }
+    );
 
-  auto x3sin_ = x3sin;
-  auto x3cos_ = x3cos;
-  par_for("kz_loop", DevExeSpace(), 0, nmb-1, 0, nt-1, 0, ncells3-1,
-    KOKKOS_LAMBDA(int m, int n, int k)
-    { 
-      int nk1 = n/nw23;
-      int nk2 = (n - nk1*nw23)/nw2;
-      int nk3 = n - nk1*nw23 - nk2*nw2;
-      Real kz = nk3*dkz;
-      Real x3v = CellCenterX(k-ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
+    auto x2sin_ = x2sin;
+    auto x2cos_ = x2cos;
+    par_for("ky_loop", DevExeSpace(), 0, nmb-1, 0, nt-1, 0, ncells2-1,
+      KOKKOS_LAMBDA(int m, int n, int j)
+      { 
+        int nk1 = n/nw23;
+        int nk2 = (n - nk1*nw23)/nw2;
+        Real ky = nk2*dky;
+        Real x2v = CellCenterX(j-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
 
-      x3sin_(m,n,k) = sin(kz*x3v);
-      x3cos_(m,n,k) = cos(kz*x3v);
-    }
-  );
+        x2sin_(m,n,j) = sin(ky*x2v);
+        x2cos_(m,n,j) = cos(ky*x2v);
+      }
+    );
 
-  return;
-}
+    auto x3sin_ = x3sin;
+    auto x3cos_ = x3cos;
+    par_for("kz_loop", DevExeSpace(), 0, nmb-1, 0, nt-1, 0, ncells3-1,
+      KOKKOS_LAMBDA(int m, int n, int k)
+      { 
+        int nk1 = n/nw23;
+        int nk2 = (n - nk1*nw23)/nw2;
+        int nk3 = n - nk1*nw23 - nk2*nw2;
+        Real kz = nk3*dkz;
+        Real x3v = CellCenterX(k-ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
 
-//----------------------------------------------------------------------------------------
-//! \fn  apply forcing
+        x3sin_(m,n,k) = sin(kz*x3v);
+        x3cos_(m,n,k) = cos(kz*x3v);
+      }
+    );
+    first_time = false;
 
-TaskStatus SourceTerms::ApplyRandomForcing(Driver *pdrive, int stage)
-{
-  int &is = pmy_pack->mb_cells.is, &ie = pmy_pack->mb_cells.ie;
-  int &js = pmy_pack->mb_cells.js, &je = pmy_pack->mb_cells.je;
-  int &ks = pmy_pack->mb_cells.ks, &ke = pmy_pack->mb_cells.ke;
-  int &nx1 = pmy_pack->mb_cells.nx1;
-  int &nx2 = pmy_pack->mb_cells.nx2;
-  int &nx3 = pmy_pack->mb_cells.nx3;
-  auto &ncells = pmy_pack->mb_cells;
-  int ncells1 = ncells.nx1 + 2*(ncells.ng);
-  int ncells2 = (ncells.nx2 > 1)? (ncells.nx2 + 2*(ncells.ng)) : 1;
-  int ncells3 = (ncells.nx3 > 1)? (ncells.nx3 + 2*(ncells.ng)) : 1;
+  // if this is NOT the first call, evolve force according to O-U process, using "new"
+  // force computed last time step and still stored in "force_new" array
+  } else {
+    Real fcorr=0.0;
+    Real gcorr=1.0;
+    if ((pmy_pack->pmesh->time > 0.0) and (tcorr > 0.0)) { 
+      fcorr=exp(-(last_dt/tcorr));
+      gcorr=sqrt(1.0-fcorr*fcorr);
+    } 
+  
+    auto force_ = force;
+    auto force_new_ = force_new;
+    int &nmb = pmy_pack->nmb_thispack;
+    par_for("OU_process", DevExeSpace(),0,nmb-1,0,2,0,ncells3-1,0,ncells2-1,0,ncells1-1,
+      KOKKOS_LAMBDA(int m, int n, int k, int j, int i)
+      {
+        force_(m,n,k,j,i) = fcorr*force_(m,n,k,j,i) + gcorr*force_new_(m,n,k,j,i);
+      }
+    );
+    last_dt = pmy_pack->pmesh->dt;  // store this dt for call to this fn next timestep
+  }
 
-  Real lx = pmy_pack->pmesh->mesh_size.x1max - pmy_pack->pmesh->mesh_size.x1min;
-  Real ly = pmy_pack->pmesh->mesh_size.x2max - pmy_pack->pmesh->mesh_size.x2min;
-  Real lz = pmy_pack->pmesh->mesh_size.x3max - pmy_pack->pmesh->mesh_size.x3min;
-  Real dkx = 2.0*M_PI/lx;
-  Real dky = 2.0*M_PI/ly;
-  Real dkz = 2.0*M_PI/lz;
+  // Now compute new force using new random amplitudes and phases
 
-  int &nt = pturb->ntot;
-  int &nw = pturb->nwave;
-
+  // Zero out new force array
+  auto force_new_ = force_new;
   int &nmb = pmy_pack->nmb_thispack;
-
-  // Zero out temporary arrays
-  auto force_tmp_ = pturb->force_tmp;
-  par_for("forcing_init", DevExeSpace(), 0, nmb-1, 0, ncells3-1, 0, ncells2-1, 
-    0, ncells1-1, KOKKOS_LAMBDA(int m, int k, int j, int i)
+  par_for("forcing_init", DevExeSpace(),0,nmb-1,0,ncells3-1,0,ncells2-1,0,ncells1-1,
+    KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
-      force_tmp_(m,0,k,j,i) = 0.0;
-      force_tmp_(m,1,k,j,i) = 0.0;
-      force_tmp_(m,2,k,j,i) = 0.0;
+      force_new_(m,0,k,j,i) = 0.0;
+      force_new_(m,1,k,j,i) = 0.0;
+      force_new_(m,2,k,j,i) = 0.0;
     }
   );
 
-  int nlow_sq  = SQR(pturb->nlow);
-  int nhigh_sq = SQR(pturb->nhigh);
+  int nlow_sq  = SQR(nlow);
+  int nhigh_sq = SQR(nhigh);
 
-  int nw2 = 1;
-  int nw3 = 1;
-  if (ncells2>1) {
-    nw2 = pturb->nhigh+1;
-  }
-  if (ncells3>1) {
-    nw3 = pturb->nhigh+1;
-  }
-  int nw23 = nw3*nw2;
-
-  Real &ex = pturb->expo;
-  auto seeds_ = pturb->seeds;
-  auto amp1_ = pturb->amp1;
-  auto amp2_ = pturb->amp2;
-  auto amp3_ = pturb->amp3;
+  int &nt = ntot;
+  Real &ex = expo;
+  auto seeds_ = seeds;
+  auto amp1_ = amp1;
+  auto amp2_ = amp2;
+  auto amp3_ = amp3;
   par_for ("generate_amplitudes", DevExeSpace(), 0, nmb-1, 0, nt-1,
     KOKKOS_LAMBDA (int m, int n) 
     {
-      int nk1, nk2, nk3, nsq;
-      Real kx, ky, kz, norm, kmag;
-      Real iky, ikz;
+      int nk1 = n/nw23;
+      int nk2 = (n - nk1*nw23)/nw2;
+      int nk3 = n - nk1*nw23 - nk2*nw2;
+      Real kx = nk1*dkx;
+      Real ky = nk2*dky;
+      Real kz = nk3*dkz;
 
-      nk1 = n/nw23;
-      nk2 = (n - nk1*nw23)/nw2;
-      nk3 = n - nk1*nw23 - nk2*nw2;
-      kx = nk1*dkx;
-      ky = nk2*dky;
-      kz = nk3*dkz;
+      int nsq = nk1*nk1 + nk2*nk2 + nk3*nk3;
 
-      nsq = nk1*nk1 + nk2*nk2 + nk3*nk3;
-
-      kmag = sqrt(kx*kx + ky*ky + kz*kz);
-      norm = 1.0/pow(kmag,(ex+2.0)/2.0); 
+      Real kmag = sqrt(kx*kx + ky*ky + kz*kz);
+      Real norm = 1.0/pow(kmag,(ex+2.0)/2.0); 
 
       // TODO(leva): check whether those coefficients are needed
       //if(nk1 > 0) norm *= 0.5;
@@ -297,7 +298,7 @@ TaskStatus SourceTerms::ApplyRandomForcing(Driver *pdrive, int stage)
       if (nsq >= nlow_sq && nsq <= nhigh_sq) {
         //Generate Fourier amplitudes
         if(nk3 != 0){
-          ikz = 1.0/(dkz*((Real) nk3));
+          Real ikz = 1.0/(dkz*((Real) nk3));
 
           amp1_(m,n,0) = RanGaussian(&(seeds_(m,n)));
           amp1_(m,n,1) = RanGaussian(&(seeds_(m,n)));
@@ -328,7 +329,7 @@ TaskStatus SourceTerms::ApplyRandomForcing(Driver *pdrive, int stage)
           amp3_(m,n,7) =  ikz*( kx*amp1_(m,n,2) + ky*amp2_(m,n,4));
 
         } else if(nk2 != 0){ // kz == 0
-          iky = 1.0/(dky*((Real) nk2));
+          Real iky = 1.0/(dky*((Real) nk2));
 
           amp1_(m,n,0) = RanGaussian(&(seeds_(m,n)));
           amp1_(m,n,2) = RanGaussian(&(seeds_(m,n)));
@@ -418,14 +419,15 @@ TaskStatus SourceTerms::ApplyRandomForcing(Driver *pdrive, int stage)
     }
   );
 
-  auto x1cos_ = pturb->x1cos;
-  auto x1sin_ = pturb->x1sin;
-  auto x2cos_ = pturb->x2cos;
-  auto x2sin_ = pturb->x2sin;
-  auto x3cos_ = pturb->x3cos;
-  auto x3sin_ = pturb->x3sin;
-  par_for("force_array", DevExeSpace(), 0, nmb-1, 0, ncells3-1, 0, ncells2-1, 
-    0, ncells1-1, KOKKOS_LAMBDA(int m, int k, int j, int i)
+  // Compute new force array (force_new)
+  auto x1cos_ = x1cos;
+  auto x1sin_ = x1sin;
+  auto x2cos_ = x2cos;
+  auto x2sin_ = x2sin;
+  auto x3cos_ = x3cos;
+  auto x3sin_ = x3sin;
+  par_for("force_array",DevExeSpace(),0,nmb-1,0,ncells3-1,0,ncells2-1,0,ncells1-1,
+    KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
       for (int n=0; n<nt; n++) {
         int n1 = n/nw23;
@@ -434,7 +436,7 @@ TaskStatus SourceTerms::ApplyRandomForcing(Driver *pdrive, int stage)
         int nsqr = n1*n1 + n2*n2 + n3*n3;
 
         if (nsqr >= nlow_sq && nsqr <= nhigh_sq) {
-          force_tmp_(m,0,k,j,i) += amp1_(m,n,0)*x1cos_(m,n,i)*x2cos_(m,n,j)*x3cos_(m,n,k)+
+          force_new_(m,0,k,j,i) += amp1_(m,n,0)*x1cos_(m,n,i)*x2cos_(m,n,j)*x3cos_(m,n,k)+
                                    amp1_(m,n,1)*x1cos_(m,n,i)*x2cos_(m,n,j)*x3sin_(m,n,k)+
                                    amp1_(m,n,2)*x1cos_(m,n,i)*x2sin_(m,n,j)*x3cos_(m,n,k)+
                                    amp1_(m,n,3)*x1cos_(m,n,i)*x2sin_(m,n,j)*x3sin_(m,n,k)+
@@ -442,7 +444,7 @@ TaskStatus SourceTerms::ApplyRandomForcing(Driver *pdrive, int stage)
                                    amp1_(m,n,5)*x1sin_(m,n,i)*x2cos_(m,n,j)*x3sin_(m,n,k)+
                                    amp1_(m,n,6)*x1sin_(m,n,i)*x2sin_(m,n,j)*x3cos_(m,n,k)+
                                    amp1_(m,n,7)*x1sin_(m,n,i)*x2sin_(m,n,j)*x3sin_(m,n,k);
-          force_tmp_(m,1,k,j,i) += amp2_(m,n,0)*x1cos_(m,n,i)*x2cos_(m,n,j)*x3cos_(m,n,k)+
+          force_new_(m,1,k,j,i) += amp2_(m,n,0)*x1cos_(m,n,i)*x2cos_(m,n,j)*x3cos_(m,n,k)+
                                    amp2_(m,n,1)*x1cos_(m,n,i)*x2cos_(m,n,j)*x3sin_(m,n,k)+
                                    amp2_(m,n,2)*x1cos_(m,n,i)*x2sin_(m,n,j)*x3cos_(m,n,k)+
                                    amp2_(m,n,3)*x1cos_(m,n,i)*x2sin_(m,n,j)*x3sin_(m,n,k)+
@@ -450,7 +452,7 @@ TaskStatus SourceTerms::ApplyRandomForcing(Driver *pdrive, int stage)
                                    amp2_(m,n,5)*x1sin_(m,n,i)*x2cos_(m,n,j)*x3sin_(m,n,k)+
                                    amp2_(m,n,6)*x1sin_(m,n,i)*x2sin_(m,n,j)*x3cos_(m,n,k)+
                                    amp2_(m,n,7)*x1sin_(m,n,i)*x2sin_(m,n,j)*x3sin_(m,n,k);
-          force_tmp_(m,2,k,j,i) += amp3_(m,n,0)*x1cos_(m,n,i)*x2cos_(m,n,j)*x3cos_(m,n,k)+
+          force_new_(m,2,k,j,i) += amp3_(m,n,0)*x1cos_(m,n,i)*x2cos_(m,n,j)*x3cos_(m,n,k)+
                                    amp3_(m,n,1)*x1cos_(m,n,i)*x2cos_(m,n,j)*x3sin_(m,n,k)+
                                    amp3_(m,n,2)*x1cos_(m,n,i)*x2sin_(m,n,j)*x3cos_(m,n,k)+
                                    amp3_(m,n,3)*x1cos_(m,n,i)*x2sin_(m,n,j)*x3sin_(m,n,k)+
@@ -463,14 +465,16 @@ TaskStatus SourceTerms::ApplyRandomForcing(Driver *pdrive, int stage)
     }
   );
 
+  // Subtract any global mean from new force array (force_new)
 
   const int nmkji = (pmy_pack->nmb_thispack)*nx3*nx2*nx1;
   const int nkji = nx3*nx2*nx1;
   const int nji  = nx2*nx1;
 
-  array_sum::GlobalSum sum_this_mb;
+  Real m0 = static_cast<Real>(nmkji);
+  Real m1 = 0.0, m2 = 0.0, m3 = 0.0;
   Kokkos::parallel_reduce("net_mom_1", Kokkos::RangePolicy<>(DevExeSpace(),0,nmkji),
-    KOKKOS_LAMBDA(const int &idx, array_sum::GlobalSum &mb_sum)
+    KOKKOS_LAMBDA(const int &idx, Real &sum_m1, Real &sum_m2, Real &sum_m3)
     {
       // compute n,k,j,i indices of thread
       int m = (idx)/nkji;
@@ -480,41 +484,32 @@ TaskStatus SourceTerms::ApplyRandomForcing(Driver *pdrive, int stage)
       k += ks;
       j += js;
 
-      array_sum::GlobalSum fsum;
-      fsum.the_array[IDN] = 1.0;
-      fsum.the_array[IM1] = force_tmp_(m,0,k,j,i);
-      fsum.the_array[IM2] = force_tmp_(m,1,k,j,i);
-      fsum.the_array[IM3] = force_tmp_(m,2,k,j,i);
-
-      mb_sum += fsum;
-    }, Kokkos::Sum<array_sum::GlobalSum>(sum_this_mb)
+      sum_m1 += force_new_(m,0,k,j,i);
+      sum_m2 += force_new_(m,1,k,j,i);
+      sum_m3 += force_new_(m,2,k,j,i);
+    }, Kokkos::Sum<Real>(m1), Kokkos::Sum<Real>(m2), Kokkos::Sum<Real>(m3)
   );
-
-  Real m0 = sum_this_mb.the_array[IDN];
-  Real m1 = sum_this_mb.the_array[IM1];
-  Real m2 = sum_this_mb.the_array[IM2];
-  Real m3 = sum_this_mb.the_array[IM3];
-
-  m0 = std::max(m0, static_cast<Real>(std::numeric_limits<float>::min()) );
 
   // TODO(leva): add MPI call for gm[]
 
   par_for("net_mom_2", DevExeSpace(), 0, nmb-1, ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
-      force_tmp_(m,0,k,j,i) -= m1/m0;
-      force_tmp_(m,1,k,j,i) -= m2/m0;
-      force_tmp_(m,2,k,j,i) -= m3/m0;
+      force_new_(m,0,k,j,i) -= m1/m0;
+      force_new_(m,1,k,j,i) -= m2/m0;
+      force_new_(m,2,k,j,i) -= m3/m0;
     }
   );
+
+  // Calculate normalization of new force array so that energy input rate ~ dedt
 
   DvceArray5D<Real> u;
   if (pmy_pack->phydro != nullptr) u = (pmy_pack->phydro->u0);
   if (pmy_pack->pmhd != nullptr) u = (pmy_pack->pmhd->u0);
 
-  array_sum::GlobalSum sum_this_mb_en;
+  m0 = 0.0, m1 = 0.0;
   Kokkos::parallel_reduce("forcing_norm", Kokkos::RangePolicy<>(DevExeSpace(),0,nmkji),
-    KOKKOS_LAMBDA(const int &idx, array_sum::GlobalSum &mb_sum)
+    KOKKOS_LAMBDA(const int &idx, Real &sum_m0, Real &sum_m1)
     { 
        // compute n,k,j,i indices of thread
       int m = (idx)/nkji;
@@ -524,9 +519,9 @@ TaskStatus SourceTerms::ApplyRandomForcing(Driver *pdrive, int stage)
       k += ks;
       j += js;
 
-      Real v1 = force_tmp_(m,0,k,j,i);
-      Real v2 = force_tmp_(m,1,k,j,i);
-      Real v3 = force_tmp_(m,2,k,j,i);
+      Real v1 = force_new_(m,0,k,j,i);
+      Real v2 = force_new_(m,1,k,j,i);
+      Real v3 = force_new_(m,2,k,j,i);
 
       /* two options here
       Real u1 = u(m,IM1,k,j,i)/u(m,IDN,k,j,i);
@@ -543,18 +538,11 @@ TaskStatus SourceTerms::ApplyRandomForcing(Driver *pdrive, int stage)
       Real u2 = u(m,IM2,k,j,i);
       Real u3 = u(m,IM3,k,j,i);      
 
-
       array_sum::GlobalSum fsum;
-      fsum.the_array[IDN] = u(m,IDN,k,j,i)*(v1*v1+v2*v2+v3*v3);
-      fsum.the_array[IM1] = u1*v1 + u2*v2 + u3*v3;
-        
-      mb_sum += fsum;
-    }, Kokkos::Sum<array_sum::GlobalSum>(sum_this_mb_en)
+      sum_m0 += u(m,IDN,k,j,i)*(v1*v1+v2*v2+v3*v3);
+      sum_m1 += u1*v1 + u2*v2 + u3*v3;
+    }, Kokkos::Sum<Real>(m0), Kokkos::Sum<Real>(m1)
   );
-
-  m0 = sum_this_mb_en.the_array[IDN];
-  m1 = sum_this_mb_en.the_array[IM1];
-
   m0 = std::max(m0, static_cast<Real>(std::numeric_limits<float>::min()) );
 
 /* old normalization
@@ -576,40 +564,73 @@ TaskStatus SourceTerms::ApplyRandomForcing(Driver *pdrive, int stage)
 
   Real s;
   if (m1 >= 0) {
-    s = -m1/2./m0 + sqrt(m1*m1/4./m0/m0 + pturb->dedt/m0);
+    s = -m1/2./m0 + sqrt(m1*m1/4./m0/m0 + dedt/m0);
   } else {
-    s = m1/2./m0 + sqrt(m1*m1/4./m0/m0 + pturb->dedt/m0);
+    s = m1/2./m0 + sqrt(m1*m1/4./m0/m0 + dedt/m0);
   }
 
-  Real fcorr=0.0;
-  Real gcorr=1.0;
-  if ((pmy_pack->pmesh->time > 0.0) and (pturb->tcorr > 0.0)) {
-    fcorr=exp(-((pmy_pack->pmesh->dt)/pturb->tcorr));
-    gcorr=sqrt(1.0-fcorr*fcorr);
-  }
-
-  auto force_ = pturb->force;
-  par_for("OU_process", DevExeSpace(), 0, nmb-1, 0, 2, 0, ncells3-1, 0, ncells2-1,
-    0, ncells1-1, KOKKOS_LAMBDA(int m, int n, int k, int j, int i)
+  // Now normalize new force array
+  par_for("OU_process", DevExeSpace(),0,nmb-1,0,2,0,ncells3-1,0,ncells2-1,0,ncells1-1,
+    KOKKOS_LAMBDA(int m, int n, int k, int j, int i)
     {
-      force_(m,n,k,j,i) = fcorr*force_(m,n,k,j,i) + gcorr*s*force_tmp_(m,n,k,j,i);
+      force_new_(m,n,k,j,i) *= s;
     }
   );
 
-  // modify conserved variables
-  Real &dt = pmy_pack->pmesh->dt;
-  par_for("push", DevExeSpace(),0,(pmy_pack->nmb_thispack-1),
-    ks,ke,js,je,is,ie,KOKKOS_LAMBDA(int m, int k, int j, int i)
-    {
-      Real den = u(m,IDN,k,j,i);
-      Real v1 = force_(m,0,k,j,i)*dt;
-      Real v2 = force_(m,1,k,j,i)*dt;
-      Real v3 = force_(m,2,k,j,i)*dt;
-      Real m1 = u(m,IM1,k,j,i);
-      Real m2 = u(m,IM2,k,j,i);
-      Real m3 = u(m,IM3,k,j,i);
+  return TaskStatus::complete;
+}
 
-      u(m,IEN,k,j,i) += m1*v1 + m2*v2 + m3*v3 + 0.5*den*(v1*v1+v2*v2+v3*v3);
+//----------------------------------------------------------------------------------------
+//! \fn  apply forcing
+
+TaskStatus TurbulenceDriver::AddForcing(Driver *pdrive, int stage)
+{
+  int &is = pmy_pack->mb_cells.is, &ie = pmy_pack->mb_cells.ie;
+  int &js = pmy_pack->mb_cells.js, &je = pmy_pack->mb_cells.je;
+  int &ks = pmy_pack->mb_cells.ks, &ke = pmy_pack->mb_cells.ke;
+  int &nx1 = pmy_pack->mb_cells.nx1;
+  int &nx2 = pmy_pack->mb_cells.nx2;
+  int &nx3 = pmy_pack->mb_cells.nx3;
+  auto &ncells = pmy_pack->mb_cells;
+  int ncells1 = ncells.nx1 + 2*(ncells.ng);
+  int ncells2 = (ncells.nx2 > 1)? (ncells.nx2 + 2*(ncells.ng)) : 1;
+  int ncells3 = (ncells.nx3 > 1)? (ncells.nx3 + 2*(ncells.ng)) : 1;
+
+  Real beta_dt = (pdrive->beta[stage-1])*(pmy_pack->pmesh->dt);
+  Real fcorr=0.0;
+  Real gcorr=1.0;
+  if ((pmy_pack->pmesh->time > 0.0) and (tcorr > 0.0)) {
+    fcorr=exp(-((beta_dt)/tcorr));
+    gcorr=sqrt(1.0-fcorr*fcorr);
+  }
+
+  // modify conserved variables
+  DvceArray5D<Real> u,w;
+  if (pmy_pack->phydro != nullptr) {
+    u = (pmy_pack->phydro->u0);
+    w = (pmy_pack->phydro->w0);
+  }
+  if (pmy_pack->pmhd != nullptr) {
+    u = (pmy_pack->pmhd->u0);
+    w = (pmy_pack->pmhd->w0);
+  }
+
+  int &nmb = pmy_pack->nmb_thispack;
+  auto force_ = force;
+  auto force_new_ = force_new;
+  par_for("push", DevExeSpace(),0,(pmy_pack->nmb_thispack-1),ks,ke,js,je,is,ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i)
+    {
+      Real den = w(m,IDN,k,j,i);
+      Real v1 = (fcorr*force_(m,0,k,j,i) + gcorr*force_new_(m,0,k,j,i))*beta_dt;
+      Real v2 = (fcorr*force_(m,1,k,j,i) + gcorr*force_new_(m,1,k,j,i))*beta_dt;
+      Real v3 = (fcorr*force_(m,2,k,j,i) + gcorr*force_new_(m,2,k,j,i))*beta_dt;
+      Real m1 = den*w(m,IVX,k,j,i);
+      Real m2 = den*w(m,IVY,k,j,i);
+      Real m3 = den*w(m,IVZ,k,j,i);
+
+//      u(m,IEN,k,j,i) += m1*v1 + m2*v2 + m3*v3 + 0.5*den*(v1*v1+v2*v2+v3*v3);
+      u(m,IEN,k,j,i) += m1*v1 + m2*v2 + m3*v3;
       u(m,IM1,k,j,i) += den*v1;
       u(m,IM2,k,j,i) += den*v2;
       u(m,IM3,k,j,i) += den*v3;
