@@ -26,6 +26,10 @@
 // only after the Mesh constructor has finished
 
 Mesh::Mesh(ParameterInput *pin) :
+one_d(false), 
+two_d(false),
+three_d(false),
+multi_d(false),
 shearing_periodic(false)
 {
   // Set physical size and number of cells in mesh (root level)
@@ -41,9 +45,16 @@ shearing_periodic(false)
   mesh_cells.nx2 = pin->GetInteger("mesh", "nx2");
   mesh_cells.nx3 = pin->GetInteger("mesh", "nx3");
 
-  // define some useful variables that indicate 2D/3D calculations
-  nx2gt1 = (mesh_cells.nx2 > 1) ? true : false;
-  nx3gt1 = (mesh_cells.nx3 > 1) ? true : false;
+  // define some useful flags that indicate 1D/2D/3D calculations
+  if (mesh_cells.nx3 > 1) {
+    three_d = true;
+    multi_d = true;
+  } else if (mesh_cells.nx2 > 1) {
+    two_d = true;
+    multi_d = true;
+  } else {
+    one_d = true;
+  }
 
   // Set BC flags for ix1/ox1 boundaries and error check
   mesh_bcs[BoundaryFace::inner_x1] = GetBoundaryFlag(pin->GetString("mesh", "ix1_bc"));
@@ -62,7 +73,7 @@ shearing_periodic(false)
   }
 
   // Set BC flags for ix2/ox2 boundaries and error check
-  if (nx2gt1) {
+  if (multi_d) {
     mesh_bcs[BoundaryFace::inner_x2] = GetBoundaryFlag(pin->GetString("mesh", "ix2_bc"));
     mesh_bcs[BoundaryFace::outer_x2] = GetBoundaryFlag(pin->GetString("mesh", "ox2_bc"));
     if ((mesh_bcs[BoundaryFace::inner_x2] == BoundaryFlag::periodic ||
@@ -79,7 +90,7 @@ shearing_periodic(false)
   }
 
   // Set BC flags for ix3/ox3 boundaries and error check
-  if (nx3gt1) {
+  if (three_d) {
     mesh_bcs[BoundaryFace::inner_x3] = GetBoundaryFlag(pin->GetString("mesh", "ix3_bc"));
     mesh_bcs[BoundaryFace::outer_x3] = GetBoundaryFlag(pin->GetString("mesh", "ox3_bc"));
     if ((mesh_bcs[BoundaryFace::inner_x3] == BoundaryFlag::periodic ||
@@ -202,12 +213,12 @@ void Mesh::BuildTree(ParameterInput *pin)
   RegionCells incells;
   incells.ng  = mesh_cells.ng;
   incells.nx1 = pin->GetOrAddInteger("meshblock", "nx1", mesh_cells.nx1);
-  if (nx2gt1) {
+  if (multi_d) {
     incells.nx2 = pin->GetOrAddInteger("meshblock", "nx2", mesh_cells.nx2);
   } else {
     incells.nx2 = mesh_cells.nx2;
   }
-  if (nx3gt1) {
+  if (three_d) {
     incells.nx3 = pin->GetOrAddInteger("meshblock", "nx3", mesh_cells.nx3);
   } else {
     incells.nx3 = mesh_cells.nx3;
@@ -223,8 +234,8 @@ void Mesh::BuildTree(ParameterInput *pin)
     std::exit(EXIT_FAILURE);
   }
   if ( incells.nx1 < 4 ||
-      (incells.nx2 < 4 && nx2gt1) ||
-      (incells.nx3 < 4 && nx3gt1) ) {
+      (incells.nx2 < 4 && multi_d) ||
+      (incells.nx3 < 4 && three_d) ) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "MeshBlock must be >= 4 cells in each active dimension" << std::endl;
     std::exit(EXIT_FAILURE);
@@ -266,8 +277,8 @@ void Mesh::BuildTree(ParameterInput *pin)
   if (multilevel) {
     // error check that number of cells in MeshBlock divisible by two
     if (incells.nx1 % 2 != 0 || 
-       (incells.nx2 % 2 != 0 && nx2gt1) ||
-       (incells.nx3 % 2 != 0 && nx3gt1)) {
+       (incells.nx2 % 2 != 0 && multi_d) ||
+       (incells.nx3 % 2 != 0 && three_d)) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Number of cells in MeshBlock must be divisible by 2 "
                 << "with SMR or AMR." << std::endl;
@@ -281,14 +292,14 @@ void Mesh::BuildTree(ParameterInput *pin)
         MeshSize ref_size;
         ref_size.x1min = pin->GetReal(it->block_name, "x1min");
         ref_size.x1max = pin->GetReal(it->block_name, "x1max");
-        if (nx2gt1) {
+        if (multi_d) {
           ref_size.x2min = pin->GetReal(it->block_name, "x2min");
           ref_size.x2max = pin->GetReal(it->block_name, "x2max");
         } else {
           ref_size.x2min = mesh_size.x2min;
           ref_size.x2max = mesh_size.x2max;
         }
-        if (nx3gt1) { 
+        if (three_d) { 
           ref_size.x3min = pin->GetReal(it->block_name, "x3min");
           ref_size.x3max = pin->GetReal(it->block_name, "x3max");
         } else {
@@ -350,7 +361,7 @@ void Mesh::BuildTree(ParameterInput *pin)
         if (lx1max % 2 == 0) lx1max++;
 
         // Find range of x2-indices of such MeshBlocks that cover the refinement region
-        if (nx2gt1) { // 2D or 3D
+        if (multi_d) { // 2D or 3D
           lxmax = nmb_rootx2*(1<<phy_ref_lev);
           for (lx2min=0; lx2min<lxmax; lx2min++) {
             if (LeftEdgeX(lx2min+1, lxmax, mesh_size.x2min, mesh_size.x2max) >
@@ -367,7 +378,7 @@ void Mesh::BuildTree(ParameterInput *pin)
         }
 
         // Find range of x3-indices of such MeshBlocks that cover the refinement region
-        if (nx3gt1) { // 3D
+        if (three_d) { // 3D
           lxmax = nmb_rootx3*(1<<phy_ref_lev);
           for (lx3min=0; lx3min<lxmax; lx3min++) {
             if (LeftEdgeX(lx3min+1, lxmax, mesh_size.x3min, mesh_size.x3max) >
@@ -384,7 +395,7 @@ void Mesh::BuildTree(ParameterInput *pin)
         }
 
         // Now add nodes to the MeshBlockTree corresponding to these MeshBlocks
-        if ( !(nx2gt1) && !(nx3gt1)) {  // 1D
+        if (one_d) {  // 1D
           for (std::int32_t i=lx1min; i<lx1max; i+=2) {
             LogicalLocation nloc;
             nloc.level=log_ref_lev, nloc.lx1=i, nloc.lx2=0, nloc.lx3=0;
@@ -392,7 +403,7 @@ void Mesh::BuildTree(ParameterInput *pin)
             ptree->AddNode(nloc, nnew);
           }
         }
-        if (nx2gt1 && !(nx3gt1)) {  // 2D
+        if (two_d) {  // 2D
           for (std::int32_t j=lx2min; j<lx2max; j+=2) {
             for (std::int32_t i=lx1min; i<lx1max; i+=2) {
               LogicalLocation nloc;
@@ -402,7 +413,7 @@ void Mesh::BuildTree(ParameterInput *pin)
             }
           }
         }
-        if (nx2gt1 && nx3gt1) {  // 3D
+        if (three_d) {  // 3D
           for (std::int32_t k=lx3min; k<lx3max; k+=2) {
             for (std::int32_t j=lx2min; j<lx2max; j+=2) {
               for (std::int32_t i=lx1min; i<lx1max; i+=2) {
@@ -571,9 +582,9 @@ void Mesh::PrintMeshDiagnostics()
 
 void Mesh::WriteMeshStructure()
 {
-  if (!nx2gt1) {
-    std::cout << "WARNING in " << __FILE__ << " at line " << __LINE__ 
-      << std::endl << "Mesh only 1D, so no 'mesh_structure.dat' file produced" << std::endl;
+  if (one_d) {
+    std::cout << "WARNING in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "Mesh only 1D, so no 'mesh_structure.dat' file produced" << std::endl;
     return;
   }
 
@@ -597,7 +608,7 @@ void Mesh::WriteMeshStructure()
       std::fprintf(
           fp,"#  Logical level %d, location = (%" PRId32 " %" PRId32 " %" PRId32")\n",
           loclist[j].level, lx1, lx2, lx3);
-      if (nx2gt1 && !(nx3gt1)) { // 2D
+      if (two_d) { // 2D
         std::fprintf(fp,"%g %g\n", size.x1min.h_view(j), size.x2min.h_view(j));
         std::fprintf(fp,"%g %g\n", size.x1max.h_view(j), size.x2min.h_view(j));
         std::fprintf(fp,"%g %g\n", size.x1max.h_view(j), size.x2max.h_view(j));
@@ -605,7 +616,7 @@ void Mesh::WriteMeshStructure()
         std::fprintf(fp,"%g %g\n", size.x1min.h_view(j), size.x2min.h_view(j));
         std::fprintf(fp,"\n\n");
       }
-      if (nx3gt1) { // 3D
+      if (three_d) { // 3D
         Real &x1min = size.x1min.h_view(j), &x1max = size.x1max.h_view(j);
         Real &x2min = size.x2min.h_view(j), &x2max = size.x2max.h_view(j);
         Real &x3min = size.x3min.h_view(j), &x3max = size.x3max.h_view(j);

@@ -113,12 +113,12 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
               << "Can only specify one of along_x1/2/3 to be true" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((along_x2 || along_x3) && !(pmy_mesh_->nx2gt1)) {
+  if ((along_x2 || along_x3) && pmy_mesh_->one_d) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "Cannot specify waves along x2 or x3 axis in 1D" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if (along_x3 && !(pmy_mesh_->nx2gt1)) {
+  if (along_x3 && pmy_mesh_->two_d) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "Cannot specify waves along x3 axis in 2D" << std::endl;
     exit(EXIT_FAILURE);
@@ -136,12 +136,12 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
   lwv.sin_a3 = 0.0;
   lwv.cos_a2 = 1.0;
   lwv.sin_a2 = 0.0;
-  if (pmy_mesh_->nx2gt1 && !(along_x1)) {
+  if (pmy_mesh_->multi_d && !(along_x1)) {
     Real ang_3 = std::atan(x1size/x2size);
     lwv.sin_a3 = std::sin(ang_3);
     lwv.cos_a3 = std::cos(ang_3);
   }
-  if (pmy_mesh_->nx3gt1 && !(along_x1)) {
+  if (pmy_mesh_->three_d && !(along_x1)) {
     Real ang_2 = std::atan(0.5*(x1size*lwv.cos_a3 + x2size*lwv.sin_a3)/x3size);
     lwv.sin_a2 = std::sin(ang_2);
     lwv.cos_a2 = std::cos(ang_2);

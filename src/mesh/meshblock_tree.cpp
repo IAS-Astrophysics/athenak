@@ -66,9 +66,9 @@ void MeshBlockTree::CreateRootGrid()
 {
   if (loc_.level == 0) {  // initialize base properties of tree (logical level = 0)
     proot_ = this;
-    nleaf_ = 2;
-    if (pmesh_->nx2gt1) nleaf_ = 4;
-    if (pmesh_->nx3gt1) nleaf_ = 8;
+    if (pmesh_->one_d)   nleaf_ = 2;
+    if (pmesh_->two_d)   nleaf_ = 4;
+    if (pmesh_->three_d) nleaf_ = 8;
   }
   // do not create any nodes beyond the logical level of root grid (which corresponds to
   // logical level = 0 only in the case of a grid containing a single MeshBlock)
@@ -179,12 +179,12 @@ void MeshBlockTree::Refine(int &nnew)
   ozmin = 0;
   ozmax = 0;
   nzmax = 1;
-  if (pmesh_->nx2gt1) {
+  if (pmesh_->multi_d) {
     oymin = -1;
     oymax = 1;
     nymax = (pmesh_->nmb_rootx2<<(loc_.level - pmesh_->root_level));
   }
-  if (pmesh_->nx3gt1) { // 3D
+  if (pmesh_->three_d) { // 3D
     ozmin = -1;
     ozmax = 1;
     nzmax = (pmesh_->nmb_rootx3<<(loc_.level - pmesh_->root_level));
@@ -259,8 +259,8 @@ void MeshBlockTree::Refine(int &nnew)
 void MeshBlockTree::Derefine(int &ndel)
 {
   int s2=0, e2=0, s3=0, e3=0;
-  if (pmesh_->nx2gt1) s2=-1, e2=1;
-  if (pmesh_->nx3gt1) s3=-1, e3=1;
+  if (pmesh_->multi_d) s2=-1, e2=1;
+  if (pmesh_->three_d) s3=-1, e3=1;
   for (int ox3=s3; ox3<=e3; ox3++) {
     for (int ox2=s2; ox2<=e2; ox2++) {
       for (int ox1=-1; ox1<=1; ox1++) {
@@ -271,14 +271,14 @@ void MeshBlockTree::Derefine(int &ndel)
             if (ox1==-1)       lis=lie=1;
             else if (ox1==1)   lis=lie=0;
             else              lis=0, lie=1;
-            if (pmesh_->nx2gt1) {
+            if (pmesh_->multi_d) {
               if (ox2==-1)     ljs=lje=1;
               else if (ox2==1) ljs=lje=0;
               else            ljs=0, lje=1;
             } else {
               ljs=lje=0;
             }
-            if (pmesh_->nx3gt1) {
+            if (pmesh_->three_d) {
               if (ox3==-1)     lks=lke=1;
               else if (ox3==1) lks=lke=0;
               else            lks=0, lke=1;

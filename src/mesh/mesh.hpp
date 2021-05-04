@@ -130,7 +130,8 @@ class Mesh
   MeshSize  mesh_size;        // physical size of mesh (physical root level)
   RegionCells mesh_cells;     // number of cells in mesh (physical root level)
   BoundaryFlag mesh_bcs[6];   // physical boundary conditions at 6 faces of mesh
-  bool nx2gt1, nx3gt1;        // flags to indictate 2D/3D calculations
+  bool one_d, two_d, three_d; // flags to indicate 1D or 2D or 3D calculations
+  bool multi_d;               // flag to indicate 2D and 3D calculations
   bool shearing_periodic;     // flag to indicate periodic x1/x2 boundaries are sheared
   bool adaptive, multilevel;
 

@@ -26,8 +26,8 @@ TaskStatus Hydro::ExRKUpdate(Driver *pdriver, int stage)
   int js = pmy_pack->mb_cells.js; int je = pmy_pack->mb_cells.je;
   int ks = pmy_pack->mb_cells.ks; int ke = pmy_pack->mb_cells.ke;
   int ncells1 = pmy_pack->mb_cells.nx1 + 2*(pmy_pack->mb_cells.ng);
-  bool &two_d   = pmy_pack->pmesh->nx2gt1;
-  bool &three_d = pmy_pack->pmesh->nx3gt1;
+  bool &multi_d = pmy_pack->pmesh->multi_d;
+  bool &three_d = pmy_pack->pmesh->three_d;
 
   Real &gam0 = pdriver->gam0[stage-1];
   Real &gam1 = pdriver->gam1[stage-1];
@@ -61,7 +61,7 @@ TaskStatus Hydro::ExRKUpdate(Driver *pdriver, int stage)
 
       // Add dF2/dx2
       // Fluxes must be summed in pairs to symmetrize round-off error in each dir
-      if (two_d) {
+      if (multi_d) {
         par_for_inner(member, is, ie, [&](const int i)
         {
           divf(i) += (flx2(m,n,k,j+1,i) - flx2(m,n,k,j,i))/mbsize.dx2.d_view(m);

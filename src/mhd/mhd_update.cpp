@@ -26,8 +26,8 @@ TaskStatus MHD::ExRKUpdate(Driver *pdriver, int stage)
   int js = pmy_pack->mb_cells.js; int je = pmy_pack->mb_cells.je;
   int ks = pmy_pack->mb_cells.ks; int ke = pmy_pack->mb_cells.ke;
   int ncells1 = pmy_pack->mb_cells.nx1 + 2*(pmy_pack->mb_cells.ng);
-  bool &nx2gt1 = pmy_pack->pmesh->nx2gt1;
-  bool &nx3gt1 = pmy_pack->pmesh->nx3gt1;
+  bool &multi_d = pmy_pack->pmesh->multi_d;
+  bool &three_d = pmy_pack->pmesh->three_d;
 
   Real &gam0 = pdriver->gam0[stage-1];
   Real &gam1 = pdriver->gam1[stage-1];
@@ -61,7 +61,7 @@ TaskStatus MHD::ExRKUpdate(Driver *pdriver, int stage)
 
       // Add dF2/dx2
       // Fluxes must be summed in pairs to symmetrize round-off error in each dir
-      if (nx2gt1) {
+      if (multi_d) {
         par_for_inner(member, is, ie, [&](const int i)
         {
           divf(i) += (flx2(m,n,k,j+1,i) - flx2(m,n,k,j,i))/mbsize.dx2.d_view(m);
@@ -71,7 +71,7 @@ TaskStatus MHD::ExRKUpdate(Driver *pdriver, int stage)
 
       // Add dF3/dx3
       // Fluxes must be summed in pairs to symmetrize round-off error in each dir
-      if (nx3gt1) {
+      if (three_d) {
         par_for_inner(member, is, ie, [&](const int i)
         {
           divf(i) += (flx3(m,n,k+1,j,i) - flx3(m,n,k,j,i))/mbsize.dx3.d_view(m);

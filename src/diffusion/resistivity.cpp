@@ -28,17 +28,17 @@ Resistivity::Resistivity(MeshBlockPack *pp, ParameterInput *pin)
   dtnew = std::numeric_limits<float>::max();
   auto size = pmy_pack->pmb->mbsize;
   Real fac;
-  if (pp->pmesh->nx3gt1) {
+  if (pp->pmesh->three_d) {
     fac = 1.0/6.0;
-  } else if (pp->pmesh->nx2gt1) {
+  } else if (pp->pmesh->two_d) {
     fac = 0.25;
   } else {
     fac = 0.5;
   }
   for (int m=0; m<(pp->nmb_thispack); ++m) {
     dtnew = std::min(dtnew, fac*SQR(size.dx1.h_view(m))/eta_ohm);
-    if (pp->pmesh->nx2gt1) {dtnew = std::min(dtnew, fac*SQR(size.dx2.h_view(m))/eta_ohm);}
-    if (pp->pmesh->nx3gt1) {dtnew = std::min(dtnew, fac*SQR(size.dx3.h_view(m))/eta_ohm);}
+    if (pp->pmesh->multi_d){dtnew = std::min(dtnew, fac*SQR(size.dx2.h_view(m))/eta_ohm);}
+    if (pp->pmesh->three_d){dtnew = std::min(dtnew, fac*SQR(size.dx3.h_view(m))/eta_ohm);}
   }
 }
 
@@ -69,7 +69,7 @@ void Resistivity::OhmicEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real>
   //  Note e2[is:ie+1,js:je,  ks:ke+1]
   //       e3[is:ie+1,js:je+1,ks:ke  ]
 
-  if (!(pmy_pack->pmesh->nx2gt1)) {
+  if (pmy_pack->pmesh->one_d) {
 
     // capture class variables for the kernels
     auto e2 = efld.x2e;
@@ -103,7 +103,7 @@ void Resistivity::OhmicEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real>
   }
 
   //---- 2-D problem:
-  if (!(pmy_pack->pmesh->nx3gt1)) {
+  if (pmy_pack->pmesh->two_d) {
 
     // capture class variables for the kernels
     auto e1 = efld.x1e;
@@ -185,8 +185,8 @@ void Resistivity::OhmicEnergyFlux(const DvceFaceFld4D<Real> &b, DvceFaceFld5D<Re
   int ks = pmy_pack->mb_cells.ks; int ke = pmy_pack->mb_cells.ke;
   int nmb1 = pmy_pack->nmb_thispack - 1;
   auto size = pmy_pack->pmb->mbsize;
-  bool &nx2gt1 = pmy_pack->pmesh->nx2gt1;
-  bool &nx3gt1 = pmy_pack->pmesh->nx3gt1;
+  bool &multi_d = pmy_pack->pmesh->multi_d;
+  bool &three_d = pmy_pack->pmesh->three_d;
   Real qa = 0.25*eta_ohm;
 
   //------------------------------
@@ -202,11 +202,11 @@ void Resistivity::OhmicEnergyFlux(const DvceFaceFld4D<Real> &b, DvceFaceFld5D<Re
       Real j3j   = (b.x2f(m,k,j  ,i) - b.x2f(m,k,j  ,i-1))/size.dx1.d_view(m);
       Real j3jp1 = (b.x2f(m,k,j+1,i) - b.x2f(m,k,j+1,i-1))/size.dx1.d_view(m);
 
-      if (nx2gt1) {
+      if (multi_d) {
         j3j   -= (b.x1f(m,k,j  ,i) - b.x1f(m,k,j-1,i))/size.dx2.d_view(m);
         j3jp1 -= (b.x1f(m,k,j+1,i) - b.x1f(m,k,j  ,i))/size.dx2.d_view(m);
       }
-      if (nx3gt1) {
+      if (three_d) {
         j2k   += (b.x1f(m,k  ,j,i) - b.x1f(m,k-1,j,i))/size.dx3.d_view(m);
         j2kp1 += (b.x1f(m,k+1,j,i) - b.x1f(m,k  ,j,i))/size.dx3.d_view(m);
       }
@@ -218,7 +218,7 @@ void Resistivity::OhmicEnergyFlux(const DvceFaceFld4D<Real> &b, DvceFaceFld5D<Re
                                j3jp1*(b.x2f(m,k  ,j+1,i) + b.x2f(m,k  ,j+1,i-1)));
     }
   ); 
-  if (!(nx2gt1)) {return;}
+  if (pmy_pack->pmesh->one_d) {return;}
 
   //------------------------------
   // energy fluxes in x2-direction
@@ -235,7 +235,7 @@ void Resistivity::OhmicEnergyFlux(const DvceFaceFld4D<Real> &b, DvceFaceFld5D<Re
       Real j3ip1 = (b.x2f(m,k,j,i+1) - b.x2f(m,k,j  ,i  ))/size.dx1.d_view(m)
                  - (b.x1f(m,k,j,i+1) - b.x1f(m,k,j-1,i+1))/size.dx2.d_view(m);
 
-      if (nx3gt1) {
+      if (three_d) {
         j1k   -= (b.x2f(m,k  ,j,i) - b.x2f(m,k-1,j,i))/size.dx3.d_view(m);
         j1kp1 -= (b.x2f(m,k+1,j,i) - b.x2f(m,k  ,j,i))/size.dx3.d_view(m);
       }
@@ -247,7 +247,7 @@ void Resistivity::OhmicEnergyFlux(const DvceFaceFld4D<Real> &b, DvceFaceFld5D<Re
                                j1kp1*(b.x3f(m,k+1,j,i  ) + b.x3f(m,k+1,j-1,i  )));
     } 
   );  
-  if (!(nx3gt1)) {return;}
+  if (pmy_pack->pmesh->two_d) {return;}
 
   //------------------------------
   // energy fluxes in x3-direction

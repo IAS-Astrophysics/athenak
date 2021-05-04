@@ -114,8 +114,8 @@ TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage)
 
   // compute minimum of dt1/dt2/dt3 for 1D/2D/3D problems
   dtnew = dt1;
-  if (pmy_pack->pmesh->nx2gt1) { dtnew = std::min(dtnew, dt2); }
-  if (pmy_pack->pmesh->nx3gt1) { dtnew = std::min(dtnew, dt3); }
+  if (pmy_pack->pmesh->multi_d) { dtnew = std::min(dtnew, dt2); }
+  if (pmy_pack->pmesh->three_d) { dtnew = std::min(dtnew, dt3); }
 
   return TaskStatus::complete;
 }

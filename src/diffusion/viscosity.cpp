@@ -33,17 +33,17 @@ Viscosity::Viscosity(std::string block, MeshBlockPack *pp, ParameterInput *pin)
   dtnew = std::numeric_limits<float>::max();
   auto size = pmy_pack->pmb->mbsize;
   Real fac;
-  if (pp->pmesh->nx3gt1) {
+  if (pp->pmesh->three_d) {
     fac = 1.0/6.0;
-  } else if (pp->pmesh->nx2gt1) {
+  } else if (pp->pmesh->two_d) {
     fac = 0.25;
   } else {
     fac = 0.5;
   }
   for (int m=0; m<(pp->nmb_thispack); ++m) {
     dtnew = std::min(dtnew, fac*SQR(size.dx1.h_view(m))/nu);
-    if (pp->pmesh->nx2gt1) {dtnew = std::min(dtnew, fac*SQR(size.dx2.h_view(m))/nu);}
-    if (pp->pmesh->nx3gt1) {dtnew = std::min(dtnew, fac*SQR(size.dx3.h_view(m))/nu);}
+    if (pp->pmesh->multi_d) {dtnew = std::min(dtnew, fac*SQR(size.dx2.h_view(m))/nu);}
+    if (pp->pmesh->three_d) {dtnew = std::min(dtnew, fac*SQR(size.dx3.h_view(m))/nu);}
   }
 
 }
@@ -68,8 +68,8 @@ void Viscosity::IsotropicViscousFlux(
   int ncells1 = pmy_pack->mb_cells.nx1 + 2*(pmy_pack->mb_cells.ng);
   int nmb1 = pmy_pack->nmb_thispack - 1;
   auto size = pmy_pack->pmb->mbsize;
-  bool &nx2gt1 = pmy_pack->pmesh->nx2gt1;
-  bool &nx3gt1 = pmy_pack->pmesh->nx3gt1;
+  bool &multi_d = pmy_pack->pmesh->multi_d;
+  bool &three_d = pmy_pack->pmesh->three_d;
 
   //--------------------------------------------------------------------------------------
   // fluxes in x1-direction
@@ -94,7 +94,7 @@ void Viscosity::IsotropicViscousFlux(
       });
 
       // In 2D/3D Add [(-2/3)dVy/dy, dVx/dy, 0]
-      if (nx2gt1) {
+      if (multi_d) {
         par_for_inner(member, is, ie+1, [&](const int i)
         {
           fvx(i) -= ((w0(m,IVY,k,j+1,i) + w0(m,IVY,k,j+1,i-1)) -
@@ -105,7 +105,7 @@ void Viscosity::IsotropicViscousFlux(
       }
 
       // In 3D Add [(-2/3)dVz/dz, 0,  dVx/dz]
-      if (nx3gt1) {
+      if (three_d) {
         par_for_inner(member, is, ie+1, [&](const int i)
         {
           fvx(i) -= ((w0(m,IVZ,k+1,j,i) + w0(m,IVZ,k+1,j,i-1)) -
@@ -130,7 +130,7 @@ void Viscosity::IsotropicViscousFlux(
       });
     }
   );
-  if (!(nx2gt1)) {return;}
+  if (pmy_pack->pmesh->one_d) {return;}
 
   //--------------------------------------------------------------------------------------
   // fluxes in x2-direction
@@ -157,7 +157,7 @@ void Viscosity::IsotropicViscousFlux(
       });
 
       // In 3D Add [0, (-2/3)dVz/dz, dVy/dz]
-      if (nx3gt1) {
+      if (three_d) {
         par_for_inner(member, is, ie, [&](const int i)
         {
           fvy(i) -= ((w0(m,IVZ,k+1,j,i) + w0(m,IVZ,k+1,j-1,i)) -
@@ -182,7 +182,7 @@ void Viscosity::IsotropicViscousFlux(
       });
     }
   );
-  if (!(nx3gt1)) {return;}
+  if (pmy_pack->pmesh->two_d) {return;}
 
   //--------------------------------------------------------------------------------------
   // fluxes in x3-direction

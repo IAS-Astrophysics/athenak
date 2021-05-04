@@ -157,9 +157,9 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
 {
   MeshBlockTree* nt;
 
-  nnghbr = 2; // 1D problem
-  if (pmy_mesh->nx2gt1) {nnghbr = 8;}   // 2D problem
-  if (pmy_mesh->nx3gt1) {nnghbr = 26;}  // 3D problem
+  if (pmy_mesh->one_d) {nnghbr = 2;}
+  if (pmy_mesh->two_d) {nnghbr = 8;}
+  if (pmy_mesh->three_d) {nnghbr = 26;}
 
   // allocate size of DualArrays
   for (int n=0; n<nnghbr; ++n) {
@@ -195,7 +195,7 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
     }
 
     // neighbors on x2face and x1x2 edges
-    if (pmy_mesh->nx2gt1) {
+    if (pmy_mesh->multi_d) {
       for (int m=-1; m<=1; m+=2) {
         nt = ptree->FindNeighbor(loc, 0, m, 0);
         if (nt != nullptr) {
@@ -219,7 +219,7 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
     }
 
     // neighbors on x3face, x3x1 and x2x3 edges, and corners
-    if (pmy_mesh->nx3gt1) {
+    if (pmy_mesh->three_d) {
       for (int l=-1; l<=1; l+=2) {
         nt = ptree->FindNeighbor(loc, 0, 0, l);
         if (nt != nullptr) {

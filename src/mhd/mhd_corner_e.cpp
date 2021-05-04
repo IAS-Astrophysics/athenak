@@ -31,7 +31,7 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage)
   //  Note e2[is:ie+1,js:je,  ks:ke+1]
   //       e3[is:ie+1,js:je+1,ks:ke  ]
 
-  if (!(pmy_pack->pmesh->nx2gt1)) {
+  if (pmy_pack->pmesh->one_d) {
 
     // capture class variables for the kernels
     auto e2 = efld.x2e;
@@ -53,7 +53,7 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage)
   //---- 2-D problem:
   // Copy face-centered E1 and E2 to edges, use GS07 algorithm to compute E3
 
-  if (!(pmy_pack->pmesh->nx3gt1)) {
+  if (pmy_pack->pmesh->two_d) {
 
     // Compute cell-centered E3 = -(v X B) = VyBx-VxBy
     auto w0_ = w0;

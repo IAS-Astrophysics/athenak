@@ -28,7 +28,7 @@ FormattedTableOutput::FormattedTableOutput(OutputParameters op, Mesh *pm)
   : OutputType(op, pm)
 {
   // check that 1D slice specified, otherwise issue warning and quit
-  if (pm->nx2gt1) {
+  if (pm->multi_d) {
     if (!(out_params.slice1) && !(out_params.slice2)) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Formatted table outputs can only contain 1D slices"
@@ -36,7 +36,7 @@ FormattedTableOutput::FormattedTableOutput(OutputParameters op, Mesh *pm)
       exit(EXIT_FAILURE);
     }
   }
-  if (pm->nx3gt1) {
+  if (pm->three_d) {
     if ((!(out_params.slice2) && !(out_params.slice3)) ||
         (!(out_params.slice1) && !(out_params.slice3))) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__

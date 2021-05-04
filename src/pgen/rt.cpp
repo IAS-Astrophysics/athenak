@@ -49,6 +49,11 @@
 
 void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
 {
+  if (pmbp->pmesh->one_d) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "rti problem generator only works in 2D/3D" << std::endl;
+    exit(EXIT_FAILURE);
+  }
   int64_t iseed = -1;
 
   Real kx = 2.0*(M_PI)/(pmy_mesh_->mesh_size.x1max - pmy_mesh_->mesh_size.x1min);
@@ -78,7 +83,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
    
     // 2D PROBLEM
 
-    if (not pmbp->pmesh->nx3gt1) {
+    if (pmbp->pmesh->two_d) {
       auto u0 = pmbp->phydro->u0;
       par_for("rt2d", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
         KOKKOS_LAMBDA(int m, int k, int j, int i)

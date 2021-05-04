@@ -40,7 +40,7 @@
 
 void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
 {
-  if (pmbp->pmesh->nx3gt1) {
+  if (pmbp->pmesh->three_d) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "mri2d problem generator only works in 2D (nx3=1)" << std::endl;
     exit(EXIT_FAILURE);

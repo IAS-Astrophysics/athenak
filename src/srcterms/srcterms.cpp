@@ -184,7 +184,7 @@ void SourceTerms::AddSBoxEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Rea
   // electric field E = - (v_{K} x B), where v_{K} is in the z-direction.  Thus
   // E_{x} = -(v x B)_{x} = -(vy*bz - vz*by) = +v_{K}by --> E1 = -(q\Omega x)b2
   // E_{y} = -(v x B)_{y} =  (vx*bz - vz*bx) = -v_{K}bx --> E2 = +(q\Omega x)b1
-  if (!(pmy_pack->pmesh->nx3gt1)) {
+  if (pmy_pack->pmesh->two_d) {
     auto &size = pmy_pack->pmb->mbsize;
     auto e1 = efld.x1e;
     auto e2 = efld.x2e;
@@ -205,6 +205,7 @@ void SourceTerms::AddSBoxEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Rea
       }
     );
   }
+  // TODO: add 3D shearing box
 
   return;
 }

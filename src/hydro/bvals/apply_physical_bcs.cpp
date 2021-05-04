@@ -57,7 +57,7 @@ TaskStatus Hydro::ApplyPhysicalBCs(Driver* pdrive, int stage)
         break;
     }
   }
-  if (!(pmy_pack->pmesh->nx2gt1)) return TaskStatus::complete;
+  if (pmy_pack->pmesh->one_d) return TaskStatus::complete;
 
   for (int m=0; m<nmb; ++m) {
     // apply physical bounaries to inner_x2
@@ -84,7 +84,7 @@ TaskStatus Hydro::ApplyPhysicalBCs(Driver* pdrive, int stage)
         break;
     }
   }
-  if (!(pmy_pack->pmesh->nx3gt1)) return TaskStatus::complete;
+  if (pmy_pack->pmesh->two_d) return TaskStatus::complete;
 
   for (int m=0; m<nmb; ++m) {
     // apply physical bounaries to inner_x3
