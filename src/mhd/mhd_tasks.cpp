@@ -15,8 +15,6 @@
 #include "tasklist/task_list.hpp"
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
-#include "diffusion/viscosity.hpp"
-#include "diffusion/resistivity.hpp"
 #include "bvals/bvals.hpp"
 #include "utils/create_mpitag.hpp"
 #include "srcterms/srcterms.hpp"
@@ -49,13 +47,7 @@ void MHD::AssembleStageRunTasks(TaskList &tl, TaskID start)
   id = tl.AddTask(&MHD::CalcFluxes, this, mhd_tasks[MHDTaskName::copy_cons]);
   mhd_tasks.emplace(MHDTaskName::calc_flux, id);
 
-  id = tl.AddTask(&MHD::ViscFluxes, this, mhd_tasks[MHDTaskName::calc_flux]);
-  mhd_tasks.emplace(MHDTaskName::visc_flux, id);
-  
-  id = tl.AddTask(&MHD::ResistFluxes, this, mhd_tasks[MHDTaskName::visc_flux]);
-  mhd_tasks.emplace(MHDTaskName::resist_flux, id);
-  
-  id = tl.AddTask(&MHD::ExRKUpdate, this, mhd_tasks[MHDTaskName::resist_flux]);
+  id = tl.AddTask(&MHD::ExRKUpdate, this, mhd_tasks[MHDTaskName::calc_flux]);
   mhd_tasks.emplace(MHDTaskName::update, id);
   
   id = tl.AddTask(&MHD::SendU, this, mhd_tasks[MHDTaskName::update]);
@@ -67,10 +59,7 @@ void MHD::AssembleStageRunTasks(TaskList &tl, TaskID start)
   id = tl.AddTask(&MHD::CornerE, this, mhd_tasks[MHDTaskName::recv_u]);
   mhd_tasks.emplace(MHDTaskName::corner_e, id);
   
-  id = tl.AddTask(&MHD::ResistiveE, this, mhd_tasks[MHDTaskName::corner_e]);
-  mhd_tasks.emplace(MHDTaskName::resistive_e, id);
-  
-  id = tl.AddTask(&MHD::CT, this, mhd_tasks[MHDTaskName::resistive_e]);
+  id = tl.AddTask(&MHD::CT, this, mhd_tasks[MHDTaskName::corner_e]);
   mhd_tasks.emplace(MHDTaskName::ct, id);
   
   id = tl.AddTask(&MHD::SendB, this, mhd_tasks[MHDTaskName::ct]);
@@ -229,30 +218,6 @@ TaskStatus MHD::CopyCons(Driver *pdrive, int stage)
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn  void MHD::ViscFluxes
-//  \brief
-
-TaskStatus MHD::ViscFluxes(Driver *pdrive, int stage)
-{
-  if (pvisc != nullptr) {
-    pvisc->IsotropicViscousFlux(u0, uflx, pvisc->nu);
-  }
-  return TaskStatus::complete;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn  void MHD::ResistFluxes
-//  \brief
-
-TaskStatus MHD::ResistFluxes(Driver *pdrive, int stage)
-{
-  if ((presist != nullptr) && (peos->eos_data.is_adiabatic)) {
-    presist->OhmicEnergyFlux(b0, uflx);
-  }
-  return TaskStatus::complete;
-}
-
-//----------------------------------------------------------------------------------------
 //! \fn  void MHD::SendU
 //  \brief sends cell-centered conserved variables
 
@@ -270,21 +235,6 @@ TaskStatus MHD::RecvU(Driver *pdrive, int stage)
 {
   TaskStatus tstat = pbval_u->RecvBuffersCC(u0);
   return tstat;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn  void MHD::ResistiveE
-//  \brief
-
-TaskStatus MHD::ResistiveE(Driver *pdrive, int stage)
-{
-  if (presist != nullptr) {
-    if (presist->eta_ohm > 0.0) {
-      presist->OhmicEField(b0, efld);
-    }
-    // TODO: Add more resistive effects here
-  }
-  return TaskStatus::complete;
 }
 
 //----------------------------------------------------------------------------------------

@@ -12,6 +12,7 @@
 #include "mesh/mesh.hpp"
 #include "hydro.hpp"
 #include "eos/eos.hpp"
+#include "diffusion/viscosity.hpp"
 // include inlined reconstruction methods (yuck...)
 #include "reconstruct/dc.cpp"
 #include "reconstruct/plm.cpp"
@@ -302,6 +303,11 @@ TaskStatus Hydro::CalcFluxes(Driver *pdriver, int stage)
         } // end loop over k
       }
     );
+  }
+
+  // Add viscous, resistive, heat-flux, etc fluxes
+  if (pvisc != nullptr) {
+    pvisc->IsotropicViscousFlux(u0, uflx, pvisc->nu);
   }
 
   return TaskStatus::complete;

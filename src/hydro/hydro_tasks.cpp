@@ -15,7 +15,6 @@
 #include "tasklist/task_list.hpp"
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
-#include "diffusion/viscosity.hpp"
 #include "bvals/bvals.hpp"
 #include "utils/create_mpitag.hpp"
 #include "driver/driver.hpp"
@@ -48,10 +47,7 @@ void Hydro::AssembleStageRunTasks(TaskList &tl, TaskID start)
   id = tl.AddTask(&Hydro::CalcFluxes, this, hydro_tasks[HydroTaskName::copy_cons]);
   hydro_tasks.emplace(HydroTaskName::calc_flux, id);
 
-  id = tl.AddTask(&Hydro::ViscFluxes, this, hydro_tasks[HydroTaskName::calc_flux]);
-  hydro_tasks.emplace(HydroTaskName::visc_flux, id);
-
-  id = tl.AddTask(&Hydro::ExRKUpdate, this, hydro_tasks[HydroTaskName::visc_flux]);
+  id = tl.AddTask(&Hydro::ExRKUpdate, this, hydro_tasks[HydroTaskName::calc_flux]);
   hydro_tasks.emplace(HydroTaskName::update, id);
 
   id = tl.AddTask(&Hydro::SendU, this, hydro_tasks[HydroTaskName::update]);
@@ -180,18 +176,6 @@ TaskStatus Hydro::CopyCons(Driver *pdrive, int stage)
 {
   if (stage == 1) {
     Kokkos::deep_copy(DevExeSpace(), u1, u0);
-  }
-  return TaskStatus::complete;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn  void Hydro::ViscFluxes
-//  \brief
-
-TaskStatus Hydro::ViscFluxes(Driver *pdrive, int stage)
-{
-  if (pvisc != nullptr) {
-    pvisc->IsotropicViscousFlux(u0, uflx, pvisc->nu);
   }
   return TaskStatus::complete;
 }

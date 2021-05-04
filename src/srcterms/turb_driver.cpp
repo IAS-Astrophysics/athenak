@@ -109,12 +109,12 @@ void TurbulenceDriver::IncludeAddForcingTask(TaskList &tl, TaskID start)
   // These must be inserted after update task, but before send_u
   if (pmy_pack->phydro != nullptr) {
     auto id = tl.InsertTask(&TurbulenceDriver::AddForcing, this, 
-                       pmy_pack->phydro->hydro_tasks[HydroTaskName::visc_flux],
+                       pmy_pack->phydro->hydro_tasks[HydroTaskName::calc_flux],
                        pmy_pack->phydro->hydro_tasks[HydroTaskName::update]);
   }
   if (pmy_pack->pmhd != nullptr) {
     auto id = tl.InsertTask(&TurbulenceDriver::AddForcing, this, 
-                       pmy_pack->pmhd->mhd_tasks[MHDTaskName::resist_flux],
+                       pmy_pack->pmhd->mhd_tasks[MHDTaskName::calc_flux],
                        pmy_pack->pmhd->mhd_tasks[MHDTaskName::update]);
   }
 

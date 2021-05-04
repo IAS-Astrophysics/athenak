@@ -16,6 +16,8 @@
 #include "mesh/mesh.hpp"
 #include "mhd.hpp"
 #include "eos/eos.hpp"
+#include "diffusion/viscosity.hpp"
+#include "diffusion/resistivity.hpp"
 // include inlined reconstruction methods (yuck...)
 #include "reconstruct/dc.cpp"
 #include "reconstruct/plm.cpp"
@@ -353,6 +355,14 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
         } // end loop over k
       }
     );
+  }
+
+  // Add viscous, resistive, heat-flux, etc fluxes
+  if (pvisc != nullptr) {
+    pvisc->IsotropicViscousFlux(u0, uflx, pvisc->nu);
+  }
+  if ((presist != nullptr) && (peos->eos_data.is_adiabatic)) {
+    presist->OhmicEnergyFlux(b0, uflx);
   }
 
   return TaskStatus::complete;
