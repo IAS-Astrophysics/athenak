@@ -33,16 +33,14 @@ class TurbulenceDriver
   DvceArray3D<Real> x3sin;   // array for pre-computed sin(k z)
   DvceArray3D<Real> x3cos;   // array for pre-computed cos(k z)
 
-  DvceArray3D<Real> amp1, amp2, amp3;
-
-  DvceArray2D<int64_t> seeds; // random seeds
+  DualArray2D<Real> amp1, amp2, amp3;
 
   // parameters of driving
   int nlow,nhigh,ntot,nwave;
   Real tcorr,dedt;
   Real expo;
   Real last_dt;
-
+  int64_t seed; // for generating amp1,amp2,amp3 arrays
 
   // functions
   void IncludeInitializeModesTask(TaskList &tl, TaskID start);
