@@ -34,10 +34,8 @@ void MeshBlockPack::AddPhysicsModules(ParameterInput *pin)
   // Create both Hydro physics module and Tasks (TaskLists stored in MeshBlockPack)
   if (pin->DoesBlockExist("hydro")) {
     phydro = new hydro::Hydro(this, pin);   // construct new Hydro object
+    phydro->AssembleHydroTasks(stage_start_tl, stage_run_tl, stage_end_tl);
     nphysics++;
-    phydro->AssembleStageStartTasks(stage_start_tl, none);
-    phydro->AssembleStageRunTasks(stage_run_tl, none);
-    phydro->AssembleStageEndTasks(stage_end_tl, none);
   } else {
     phydro = nullptr;
   }
@@ -46,28 +44,8 @@ void MeshBlockPack::AddPhysicsModules(ParameterInput *pin)
   // Create both MHD physics module and Tasks (TaskLists stored in MeshBlockPack)
   if (pin->DoesBlockExist("mhd")) {
     pmhd = new mhd::MHD(this, pin);   // construct new MHD object
+    pmhd->AssembleMHDTasks(stage_start_tl, stage_run_tl, stage_end_tl);
     nphysics++;
-
-    if (stage_start_tl.Empty()) {
-      pmhd->AssembleStageStartTasks(stage_start_tl, none);
-    } else {
-      TaskID last = stage_start_tl.GetIDLastTask();
-      pmhd->AssembleStageStartTasks(stage_start_tl, last);
-    }
-
-    if (stage_run_tl.Empty()) {
-      pmhd->AssembleStageRunTasks(stage_run_tl, none);
-    } else {
-      TaskID last = stage_run_tl.GetIDLastTask();
-      pmhd->AssembleStageRunTasks(stage_run_tl, last);
-    }
-
-    if (stage_end_tl.Empty()) {
-      pmhd->AssembleStageEndTasks(stage_end_tl, none);
-    } else {
-      TaskID last = stage_end_tl.GetIDLastTask();
-      pmhd->AssembleStageEndTasks(stage_end_tl, last);
-    }
   } else {
     pmhd = nullptr;
   }

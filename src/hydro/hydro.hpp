@@ -8,7 +8,6 @@
 //! \file hydro.hpp
 //  \brief definitions for Hydro class
 
-#include <map>
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
@@ -23,9 +22,23 @@ class Driver;
 // constants that enumerate Hydro Riemann Solver options
 enum class Hydro_RSolver {advect, llf, hllc, roe, llf_rel,hllc_rel};
 
-// constants that enumerate Hydro tasks
-enum class HydroTaskName {undef=0, init_recv, copy_cons, calc_flux, update,
-  send_u, recv_u, phys_bcs, cons2prim, newdt, clear_send};
+//----------------------------------------------------------------------------------------
+//! \struct HydroTaskIDs
+//  \brief container to hold TaskIDs of all hydro tasks
+  
+struct HydroTaskIDs
+{   
+  TaskID init_recv;
+  TaskID copy_cons;
+  TaskID calc_flux;
+  TaskID update;
+  TaskID sendu;
+  TaskID recvu;
+  TaskID phys_bcs;
+  TaskID cons2prim;
+  TaskID newdt;
+  TaskID clear_send;
+};
 
 namespace hydro {
 
@@ -62,13 +75,11 @@ class Hydro
   DvceFaceFld5D<Real> uflx;   // fluxes of conserved quantities on cell faces
   Real dtnew;
 
-  // map for associating HydroTaskName with TaskID
-  std::map<HydroTaskName, TaskID> hydro_tasks;
+  // container to hold names of TaskIDs
+  HydroTaskIDs id;
 
   // functions
-  void AssembleStageStartTasks(TaskList &tl, TaskID start);
-  void AssembleStageRunTasks(TaskList &tl, TaskID start);
-  void AssembleStageEndTasks(TaskList &tl, TaskID start);
+  void AssembleHydroTasks(TaskList &start, TaskList &run, TaskList &end);
   TaskStatus InitRecv(Driver *d, int stage);
   TaskStatus ClearRecv(Driver *d, int stage);
   TaskStatus ClearSend(Driver *d, int stage);

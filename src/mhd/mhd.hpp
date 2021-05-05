@@ -8,7 +8,6 @@
 //! \file mhd.hpp
 //  \brief definitions for MHD class
 
-#include <map>
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
@@ -24,11 +23,27 @@ class Driver;
 // constants that enumerate MHD Riemann Solver options
 enum class MHD_RSolver {advect, llf, hlld, roe};
 
-// constants that enumerate Hydro tasks
-enum class MHDTaskName {undef=0, init_recv, copy_cons, calc_flux,
-  update, send_u, recv_u, corner_e, ct, send_b, recv_b, phys_bcs,
-  cons2prim, newdt, clear_send};
+//----------------------------------------------------------------------------------------
+//! \struct MHDTaskIDs
+//  \brief container to hold TaskIDs of all mhd tasks
 
+struct MHDTaskIDs
+{
+  TaskID init_recv;
+  TaskID copy_cons;
+  TaskID calc_flux;
+  TaskID update;
+  TaskID sendu;
+  TaskID recvu;
+  TaskID corner_e;
+  TaskID ct;
+  TaskID sendb;
+  TaskID recvb;
+  TaskID phys_bcs;
+  TaskID cons2prim;
+  TaskID newdt;
+  TaskID clear_send;
+};
 
 namespace mhd {
 
@@ -67,13 +82,11 @@ class MHD
   DvceEdgeFld4D<Real> efld;   // edge-centered electric fields (fluxes of B)
   Real dtnew;
 
-  // map for associating MHDTaskName with TaskID
-  std::map<MHDTaskName, TaskID> mhd_tasks;
+  // container to hold names of TaskIDs
+  MHDTaskIDs id;
 
   // functions
-  void AssembleStageStartTasks(TaskList &tl, TaskID start);
-  void AssembleStageRunTasks(TaskList &tl, TaskID start);
-  void AssembleStageEndTasks(TaskList &tl, TaskID start);
+  void AssembleMHDTasks(TaskList &start, TaskList &run, TaskList &end);
   TaskStatus InitRecv(Driver *d, int stage);
   TaskStatus ClearRecv(Driver *d, int stage);
   TaskStatus ClearSend(Driver *d, int stage);

@@ -17,79 +17,35 @@
 #include "eos/eos.hpp"
 #include "bvals/bvals.hpp"
 #include "utils/create_mpitag.hpp"
-#include "srcterms/srcterms.hpp"
 #include "mhd/mhd.hpp"
 
 namespace mhd {
 //----------------------------------------------------------------------------------------
-//! \fn  void MHD::AssembleStageStartTasks
-//  \brief adds MHD tasks to stage start TaskList
-//  These are taks that must be cmpleted (such as posting MPI receives, setting 
-//  BoundaryCommStatus flags, etc) over all MeshBlocks before stage can be run.
+//! \fn  void MHD::AssembleMHDTasks
+//  \brief Adds mhd tasks to stage start/run/end task lists
 //  Called by MeshBlockPack::AddPhysicsModules() function directly after MHD constrctr
+  
+void MHD::AssembleMHDTasks(TaskList &start, TaskList &run, TaskList &end)
+{ 
+  TaskID none(0);
+  
+  id.init_recv = start.AddTask(&MHD::InitRecv, this, none);
 
-void MHD::AssembleStageStartTasks(TaskList &tl, TaskID start)
-{
-  auto mhd_init = tl.AddTask(&MHD::InitRecv, this, start);
-  return;
-}
+  id.copy_cons = run.AddTask(&MHD::CopyCons, this, none);
+  id.calc_flux = run.AddTask(&MHD::CalcFluxes, this, id.copy_cons);
+  id.update = run.AddTask(&MHD::ExRKUpdate, this, id.calc_flux);
+  id.sendu = run.AddTask(&MHD::SendU, this, id.update);
+  id.recvu = run.AddTask(&MHD::RecvU, this, id.sendu);
+  id.corner_e = run.AddTask(&MHD::CornerE, this, id.recvu);
+  id.ct = run.AddTask(&MHD::CT, this, id.corner_e);
+  id.sendb = run.AddTask(&MHD::SendB, this, id.ct);
+  id.recvb = run.AddTask(&MHD::RecvB, this, id.sendb);
+  id.phys_bcs = run.AddTask(&MHD::ApplyPhysicalBCs, this, id.recvb);
+  id.cons2prim = run.AddTask(&MHD::ConToPrim, this, id.phys_bcs);
+  id.newdt = run.AddTask(&MHD::NewTimeStep, this, id.cons2prim);
 
-//----------------------------------------------------------------------------------------
-//! \fn  void MHD::AssembleStageRunTasks
-//  \brief adds MHD tasks to stage run TaskList
-//  Called by MeshBlockPack::AddPhysicsModules() function directly after MHD constrctr
+  id.clear_send = end.AddTask(&MHD::ClearSend, this, none);
 
-void MHD::AssembleStageRunTasks(TaskList &tl, TaskID start)
-{
-  auto id = tl.AddTask(&MHD::CopyCons, this, start);
-  mhd_tasks.emplace(MHDTaskName::copy_cons, id);
-
-  id = tl.AddTask(&MHD::CalcFluxes, this, mhd_tasks[MHDTaskName::copy_cons]);
-  mhd_tasks.emplace(MHDTaskName::calc_flux, id);
-
-  id = tl.AddTask(&MHD::ExRKUpdate, this, mhd_tasks[MHDTaskName::calc_flux]);
-  mhd_tasks.emplace(MHDTaskName::update, id);
-  
-  id = tl.AddTask(&MHD::SendU, this, mhd_tasks[MHDTaskName::update]);
-  mhd_tasks.emplace(MHDTaskName::send_u, id);
-  
-  id = tl.AddTask(&MHD::RecvU, this, mhd_tasks[MHDTaskName::send_u]);
-  mhd_tasks.emplace(MHDTaskName::recv_u, id);
-  
-  id = tl.AddTask(&MHD::CornerE, this, mhd_tasks[MHDTaskName::recv_u]);
-  mhd_tasks.emplace(MHDTaskName::corner_e, id);
-  
-  id = tl.AddTask(&MHD::CT, this, mhd_tasks[MHDTaskName::corner_e]);
-  mhd_tasks.emplace(MHDTaskName::ct, id);
-  
-  id = tl.AddTask(&MHD::SendB, this, mhd_tasks[MHDTaskName::ct]);
-  mhd_tasks.emplace(MHDTaskName::send_b, id);
-  
-  id = tl.AddTask(&MHD::RecvB, this, mhd_tasks[MHDTaskName::send_b]);
-  mhd_tasks.emplace(MHDTaskName::recv_b, id);
-  
-  id = tl.AddTask(&MHD::ApplyPhysicalBCs, this, mhd_tasks[MHDTaskName::recv_b]);
-  mhd_tasks.emplace(MHDTaskName::phys_bcs, id);
-  
-  id = tl.AddTask(&MHD::ConToPrim, this, mhd_tasks[MHDTaskName::phys_bcs]);
-  mhd_tasks.emplace(MHDTaskName::cons2prim, id);
-  
-  id = tl.AddTask(&MHD::NewTimeStep, this, mhd_tasks[MHDTaskName::cons2prim]);
-  mhd_tasks.emplace(MHDTaskName::newdt, id);
-
-  return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn  void MHD::AssembleStageEndTasks
-//  \brief adds MHD tasks to stage end TaskList
-//  These are tasks that can only be cmpleted after all the stage run tasks are finished
-//  over all MeshBlocks, such as clearing all MPI non-blocking sends, etc.
-//  Called by MeshBlockPack::AddPhysicsModules() function directly after MHD constrctr
-
-void MHD::AssembleStageEndTasks(TaskList &tl, TaskID start)
-{
-  auto mhd_clear = tl.AddTask(&MHD::ClearSend, this, start);
   return;
 }
 

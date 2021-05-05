@@ -17,67 +17,40 @@
 #include "eos/eos.hpp"
 #include "bvals/bvals.hpp"
 #include "utils/create_mpitag.hpp"
-#include "driver/driver.hpp"
 #include "hydro/hydro.hpp"
 
 namespace hydro {
 //----------------------------------------------------------------------------------------
-//! \fn  void Hydro::AssembleStageStartTasks
-//  \brief adds Hydro tasks to stage start TaskList
-//  These are tasks that must be cmpleted (such as posting MPI receives, setting 
-//  BoundaryCommStatus flags, etc) over all MeshBlocks before EACH stage can be run.
+//! \fn  void Hydro::AssembleHydroTasks
+//  \brief Adds hydro tasks to stage start/run/end task lists
 //  Called by MeshBlockPack::AddPhysicsModules() function directly after Hydro constrctr
+//
+//  Stage start tasks are those that must be cmpleted over all MeshBlocks before EACH
+//  stage can be run (such as posting MPI receives, setting BoundaryCommStatus flags, etc)
+//
+//  Stage run tasks are those performed in EACH stage
+//
+//  Stage end tasks are those that can only be cmpleted after all the stage run tasks are
+//  finished over all MeshBlocks for EACH stage, such as clearing all MPI non-blocking
+//  sends, etc.
 
-void Hydro::AssembleStageStartTasks(TaskList &tl, TaskID start)
+void Hydro::AssembleHydroTasks(TaskList &start, TaskList &run, TaskList &end)
 {
-  auto hydro_init = tl.AddTask(&Hydro::InitRecv, this, start);
-  return;
-}
+  TaskID none(0);
 
-//----------------------------------------------------------------------------------------
-//! \fn  void Hydro::AssembleStageRunTasks
-//  \brief adds Hydro tasks to stage run TaskList
-//  Called by MeshBlockPack::AddPhysicsModules() function directly after Hydro constrctr
+  id.init_recv = start.AddTask(&Hydro::InitRecv, this, none);
 
-void Hydro::AssembleStageRunTasks(TaskList &tl, TaskID start)
-{
-  auto id = tl.AddTask(&Hydro::CopyCons, this, start);
-  hydro_tasks.emplace(HydroTaskName::copy_cons, id);
+  id.copy_cons = run.AddTask(&Hydro::CopyCons, this, none);
+  id.calc_flux = run.AddTask(&Hydro::CalcFluxes, this, id.copy_cons);
+  id.update = run.AddTask(&Hydro::ExRKUpdate, this, id.calc_flux);
+  id.sendu = run.AddTask(&Hydro::SendU, this, id.update);
+  id.recvu = run.AddTask(&Hydro::RecvU, this, id.sendu);
+  id.phys_bcs = run.AddTask(&Hydro::ApplyPhysicalBCs, this, id.recvu);
+  id.cons2prim = run.AddTask(&Hydro::ConToPrim, this, id.phys_bcs);
+  id.newdt = run.AddTask(&Hydro::NewTimeStep, this, id.cons2prim);
 
-  id = tl.AddTask(&Hydro::CalcFluxes, this, hydro_tasks[HydroTaskName::copy_cons]);
-  hydro_tasks.emplace(HydroTaskName::calc_flux, id);
+  id.clear_send = end.AddTask(&Hydro::ClearSend, this, none);
 
-  id = tl.AddTask(&Hydro::ExRKUpdate, this, hydro_tasks[HydroTaskName::calc_flux]);
-  hydro_tasks.emplace(HydroTaskName::update, id);
-
-  id = tl.AddTask(&Hydro::SendU, this, hydro_tasks[HydroTaskName::update]);
-  hydro_tasks.emplace(HydroTaskName::send_u, id);
-
-  id = tl.AddTask(&Hydro::RecvU, this, hydro_tasks[HydroTaskName::send_u]);
-  hydro_tasks.emplace(HydroTaskName::recv_u, id);
-
-  id = tl.AddTask(&Hydro::ApplyPhysicalBCs, this, hydro_tasks[HydroTaskName::recv_u]);
-  hydro_tasks.emplace(HydroTaskName::phys_bcs, id);
-
-  id = tl.AddTask(&Hydro::ConToPrim, this, hydro_tasks[HydroTaskName::phys_bcs]);
-  hydro_tasks.emplace(HydroTaskName::cons2prim, id);
-
-  id = tl.AddTask(&Hydro::NewTimeStep, this, hydro_tasks[HydroTaskName::cons2prim]);
-  hydro_tasks.emplace(HydroTaskName::newdt, id);
-
-  return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn  void Hydro::AssembleStageEndTasks
-//  \brief adds Hydro tasks to stage end TaskList
-//  These are tasks that can only be cmpleted after all the stage run tasks are finished
-//  over all MeshBlocks for EACH stage, such as clearing all MPI non-blocking sends, etc.
-//  Called by MeshBlockPack::AddPhysicsModules() function directly after Hydro constrctr
-
-void Hydro::AssembleStageEndTasks(TaskList &tl, TaskID start)
-{
-  auto hydro_clear = tl.AddTask(&Hydro::ClearSend, this, start);
   return;
 }
 
