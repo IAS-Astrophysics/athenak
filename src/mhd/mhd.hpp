@@ -94,7 +94,7 @@ class MHD
   TaskStatus CalcFluxes(Driver *d, int stage);
   TaskStatus CornerE(Driver *d, int stage);
   TaskStatus CT(Driver *d, int stage);
-  TaskStatus ExRKUpdate(Driver *d, int stage);
+  TaskStatus ExpRKUpdate(Driver *d, int stage);
   TaskStatus SendU(Driver *d, int stage); 
   TaskStatus RecvU(Driver *d, int stage); 
   TaskStatus SendB(Driver *d, int stage); 

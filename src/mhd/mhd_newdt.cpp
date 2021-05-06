@@ -24,7 +24,9 @@ namespace mhd {
 
 TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage)
 {
-  if (stage != pdriver->nstages) return TaskStatus::complete; // only execute last stage
+  if (stage != (pdriver->nexp_stages)) {
+    return TaskStatus::complete; // only execute last stage
+  }
   
   int is = pmy_pack->mb_cells.is; int nx1 = pmy_pack->mb_cells.nx1;
   int js = pmy_pack->mb_cells.js; int nx2 = pmy_pack->mb_cells.nx2;

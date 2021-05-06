@@ -75,15 +75,18 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh) :
 
     if (integrator == "rk1") {
       // RK1: first-order Runge-Kutta / the forward Euler (FE) method
-      nstages = 1;
+      nimp_stages = 0;
+      nexp_stages = 1;
       cfl_limit = 1.0;
       gam0[0] = 0.0;
       gam1[0] = 1.0;
       beta[0] = 1.0;
+
     } else if (integrator == "rk2") {
       // Heun's method / SSPRK (2,2): Gottlieb (2009) equation 3.1
       // Optimal (in error bounds) explicit two-stage, second-order SSPRK
-      nstages = 2;
+      nimp_stages = 0;
+      nexp_stages = 2;
       cfl_limit = 1.0;  // c_eff = c/nstages = 1/2 (Gottlieb (2009), pg 271)
       gam0[0] = 0.0;
       gam1[0] = 1.0;
@@ -92,10 +95,12 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh) :
       gam0[1] = 0.5;
       gam1[1] = 0.5;
       beta[1] = 0.5;
+
     } else if (integrator == "rk3") {
       // SSPRK (3,3): Gottlieb (2009) equation 3.2
       // Optimal (in error bounds) explicit three-stage, third-order SSPRK
-      nstages = 3;
+      nimp_stages = 0;
+      nexp_stages = 3;
       cfl_limit = 1.0;  // c_eff = c/nstages = 1/3 (Gottlieb (2009), pg 271)
       gam0[0] = 0.0;
       gam1[0] = 1.0;
@@ -108,9 +113,83 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh) :
       gam0[2] = 2.0/3.0;
       gam1[2] = 1.0/3.0;
       beta[2] = 2.0/3.0;
+
+    } else if (integrator == "imex2") {
+      // IMEX-SSP2(3,2,2): Pareschi & Russo (2005) Table III.
+      // two-stage explicit, three-stage implicit, second-order ImEx
+      // Note explicit steps identical to RK2
+      nimp_stages = 3;
+      nexp_stages = 2;
+      cfl_limit = 1.0;
+      gam0[0] = 0.0;
+      gam1[0] = 1.0;
+      beta[0] = 1.0;
+
+      gam0[1] = 0.5;
+      gam1[1] = 0.5;
+      beta[1] = 0.5;
+
+      a_twid[0][0] = -1.0;
+      a_twid[0][1] = 0.0;
+      a_twid[0][2] = 0.0;
+
+      a_twid[1][0] = 0.5;
+      a_twid[1][1] = 0.0;
+      a_twid[1][2] = 0.0;
+
+      a_twid[2][0] = 0.0;
+      a_twid[2][1] = 0.25;
+      a_twid[2][2] = 0.25;
+      a_impl = 0.5;
+
+    } else if (integrator == "imex3") {
+      // IMEX-SSP3(4,3,3): Pareschi & Russo (2005) Table VI.
+      // three-stage explicit, four-stage implicit, third-order ImEx
+      // Note explicit steps identical to RK3
+      nimp_stages = 4;
+      nexp_stages = 3;
+      cfl_limit = 1.0;
+      gam0[0] = 0.0;
+      gam1[0] = 1.0;
+      beta[0] = 1.0;
+
+      gam0[1] = 0.25;
+      gam1[1] = 0.75;
+      beta[1] = 0.25;
+
+      gam0[2] = 2.0/3.0;
+      gam1[2] = 1.0/3.0;
+      beta[2] = 2.0/3.0;
+
+      Real a = 0.24169426078821;
+      Real b = 0.06042356519705;
+      Real e = 0.12915286960590; 
+      a_twid[0][0] = -2.0*a;
+      a_twid[0][1] = 0.0;
+      a_twid[0][2] = 0.0;
+      a_twid[0][3] = 0.0; 
+
+      a_twid[1][0] = a;
+      a_twid[1][1] = 1.0 - 2.0*a;
+      a_twid[1][2] = 0.0;
+      a_twid[1][3] = 0.0;
+
+      a_twid[2][0] = b;
+      a_twid[2][1] = e - ((1.0-a)/4.0);
+      a_twid[2][2] = 0.5 - b - e - 0.75*a;
+      a_twid[2][3] = 0.0;
+
+      a_twid[3][0] = (-2.0/3.0)*b;
+      a_twid[3][1] = (1.0 - 4.0*e)/6.0;
+      a_twid[3][2] = b + e + a - (1.0/6.0);
+      a_twid[3][3] = (2.0/3.0)*(1.0 - a);
+      a_impl = a;
+
+    // Error, unrecognized integrator name.
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-         << std::endl << "integrator=" << integrator << " not implemented" << std::endl;
+         << std::endl << "integrator=" << integrator << " not implemented. "
+         << "Valid choices are [rk1,rk2,rk3,imex2,imex3]." << std::endl;
       exit(EXIT_FAILURE);
     }
   }
@@ -172,10 +251,10 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
 
   if (time_evolution != TimeEvolution::tstatic) {
     if (phydro != nullptr) {
-      (void) pmesh->pmb_pack->phydro->NewTimeStep(this, nstages);
+      (void) pmesh->pmb_pack->phydro->NewTimeStep(this, nexp_stages);
     }
     if (pmhd != nullptr) {
-      (void) pmesh->pmb_pack->pmhd->NewTimeStep(this, nstages);
+      (void) pmesh->pmb_pack->pmhd->NewTimeStep(this, nexp_stages);
     }
     pmesh->NewTimeStep(tlim);
   }
@@ -198,6 +277,14 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
 
 //----------------------------------------------------------------------------------------
 // Driver::Execute()
+// \brief Executes all relevant task lists over all MeshBlockPacks.  For static 
+// (non-evolving) problems, currently implemented task lists are:
+//  (1) TODO
+// For dynamic (time-evolving) problems, currently implemented task lists are:
+//  (1) operator split physics (operator_split_tl)
+//  (2) each stage of both explicit and ImEx RK integrators (start_tl, run_tl, end_tl)
+//  [Note for ImEx integrators, the first two fully implicit updates should be performed
+//  at the start of the first stage.]
 
 void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
 {
@@ -214,7 +301,8 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
       int npacks = 1;  // TODO: extend for multiple MeshBlockPacks
       MeshBlockPack* pmbp = pmesh->pmb_pack;
 
-      // (1) Do ***operator split*** TaskList
+      //---------------------------------------
+      // (1) Do *** operator split *** TaskList
       {for (int p=0; p<npacks; ++p) {
         if (!(pmbp->operator_split_tl.Empty())) {pmbp->operator_split_tl.Reset();}
       }
@@ -225,61 +313,62 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
         } else {
           if (!pmbp->operator_split_tl.IsComplete()) {
             // note 2nd argument to DoAvailable (stage) is not used, set to 0 
-            auto status = pmbp->operator_split_tl.DoAvailable(this,0);
+            auto status = pmbp->operator_split_tl.DoAvailable(this, 0);
             if (status == TaskListStatus::complete) { npack_left--; }
           }
         }
       }} // extra brace to enclose scope
 
-      // (2) Do ***multi-stage time evolution*** TaskLists
-      for (int stage=1; stage<=nstages; ++stage) {
+      //--------------------------------------------------------------
+      // (2) Do *** explicit and ImEx RK time-integrator *** TaskLists
+      for (int stage=1; stage<=(nexp_stages); ++stage) {
 
-        // (2a) StageStart Tasks ---
-        // tasks that must be completed over all MBPacks before start of each stage
+        // (2a) StageStart Tasks
+        // tasks that must be completed over all MBPacks at start of each explicit stage
         {for (int p=0; p<npacks; ++p) {
-          if (!(pmbp->stage_start_tl.Empty())) {pmbp->stage_start_tl.Reset();}
+          if (!(pmbp->start_tl.Empty())) {pmbp->start_tl.Reset();}
         }
         int npack_left = npacks;
         while (npack_left > 0) {
-          if (pmbp->stage_start_tl.Empty()) {
+          if (pmbp->start_tl.Empty()) {
             npack_left--; 
           } else {
-            if (!pmbp->stage_start_tl.IsComplete()) {
-              auto status = pmbp->stage_start_tl.DoAvailable(this,stage);
+            if (!pmbp->start_tl.IsComplete()) {
+              auto status = pmbp->start_tl.DoAvailable(this, stage);
               if (status == TaskListStatus::complete) { npack_left--; }
             }
           }
         }} // extra brace to enclose scope
 
-        // (2b) StageRun Tasks ---
-        // tasks in each stage
+        // (2b) StageRun Tasks
+        // tasks in each explicit stage
         {for (int p=0; p<npacks; ++p) {
-          if (!(pmbp->stage_run_tl.Empty())) {pmbp->stage_run_tl.Reset();}
+          if (!(pmbp->run_tl.Empty())) {pmbp->run_tl.Reset();}
         }
         int npack_left = npacks;
         while (npack_left > 0) {
-          if (pmbp->stage_run_tl.Empty()) {
+          if (pmbp->run_tl.Empty()) {
             npack_left--; 
           } else {
-            if (!pmbp->stage_run_tl.IsComplete()) {
-              auto status = pmbp->stage_run_tl.DoAvailable(this,stage);
+            if (!pmbp->run_tl.IsComplete()) {
+              auto status = pmbp->run_tl.DoAvailable(this, stage);
               if (status == TaskListStatus::complete) { npack_left--; }
             }
           }
         }} // extra brace to enclose scope
 
-        // (2c) StageEnd Tasks ---
-        // tasks that must be completed over all MBs at the end of each stage
+        // (2c) StageEnd Tasks
+        // tasks that must be completed over all MBs at end of each explicit stage
         {for (int p=0; p<npacks; ++p) {
-          if (!(pmbp->stage_end_tl.Empty())) {pmbp->stage_end_tl.Reset();}
+          if (!(pmbp->end_tl.Empty())) {pmbp->end_tl.Reset();}
         }
         int npack_left = npacks;
         while (npack_left > 0) {
-          if (pmbp->stage_end_tl.Empty()) {
+          if (pmbp->end_tl.Empty()) {
             npack_left--; 
           } else {
-            if (!pmbp->stage_end_tl.IsComplete()) {
-              auto status = pmbp->stage_end_tl.DoAvailable(this,stage);
+            if (!pmbp->end_tl.IsComplete()) {
+              auto status = pmbp->end_tl.DoAvailable(this, stage);
               if (status == TaskListStatus::complete) { npack_left--; }
             }
           }
@@ -287,16 +376,15 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
 
       } // end of loop over stages
 
-      // (3) Add STS TaskLists, etc here....
-
-      // increment time, ncycle, etc.
-      // Compute new timestep
+      //-------------------------------
+      // (3) Work outside of TaskLists:
+      // increment time, ncycle, etc. Compute new timestep, make outputs
       pmesh->time = pmesh->time + pmesh->dt;
       pmesh->ncycle++;
       nmb_updated_ += pmesh->nmb_total;
       pmesh->NewTimeStep(tlim);
 
-      // Make outputs during execution
+      // Test for/make outputs
       for (auto &out : pout->pout_list) {
         // compare at floating point (32-bit) precision to reduce effect of round off
         float time_32 = static_cast<float>(pmesh->time);

@@ -85,7 +85,7 @@ class Hydro
   TaskStatus ClearSend(Driver *d, int stage);
   TaskStatus CopyCons(Driver *d, int stage);
   TaskStatus CalcFluxes(Driver *d, int stage);
-  TaskStatus ExRKUpdate(Driver *d, int stage);
+  TaskStatus ExpRKUpdate(Driver *d, int stage);
   TaskStatus SendU(Driver *d, int stage); 
   TaskStatus RecvU(Driver *d, int stage); 
   TaskStatus ConToPrim(Driver *d, int stage);

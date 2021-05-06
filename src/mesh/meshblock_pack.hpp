@@ -9,6 +9,7 @@
 //  \brief defines MeshBlockPack class, a container for MeshBlocks
 
 #include "parameter_input.hpp"
+#include "driver/driver.hpp"
 #include "tasklist/task_list.hpp"
 
 // Forward declarations
@@ -48,14 +49,12 @@ class MeshBlockPack
   mhd::MHD *pmhd=nullptr;
   TurbulenceDriver *pturb=nullptr;
 
-  // task lists for MeshBlocks in this MeshBlockPack
-  TaskList stage_start_tl;
-  TaskList stage_run_tl;
-  TaskList stage_end_tl;
-  TaskList operator_split_tl;
+  // task lists for all MeshBlocks in this MeshBlockPack
+  TaskList operator_split_tl;            // operator-split physics
+  TaskList start_tl, run_tl, end_tl;     // each stage of RK integrators
 
   // functions
-  void AddPhysicsModules(ParameterInput *pin);
+  void AddPhysicsModules(ParameterInput *pin, Driver *pdrive);
   int NumberOfMeshBlockCells() { return mb_cells.nx1 * mb_cells.nx2 * mb_cells.nx3; }
   int NumberOfCoarseMeshBlockCells() {return cmb_cells.nx1 *cmb_cells.nx2 *cmb_cells.nx3;}
 

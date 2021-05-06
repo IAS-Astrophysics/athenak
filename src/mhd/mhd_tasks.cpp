@@ -33,7 +33,7 @@ void MHD::AssembleMHDTasks(TaskList &start, TaskList &run, TaskList &end)
 
   id.copy_cons = run.AddTask(&MHD::CopyCons, this, none);
   id.calc_flux = run.AddTask(&MHD::CalcFluxes, this, id.copy_cons);
-  id.update = run.AddTask(&MHD::ExRKUpdate, this, id.calc_flux);
+  id.update = run.AddTask(&MHD::ExpRKUpdate, this, id.calc_flux);
   id.sendu = run.AddTask(&MHD::SendU, this, id.update);
   id.recvu = run.AddTask(&MHD::RecvU, this, id.sendu);
   id.corner_e = run.AddTask(&MHD::CornerE, this, id.recvu);

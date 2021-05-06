@@ -240,13 +240,13 @@ int main(int argc, char *argv[])
   //--- Step 5. --------------------------------------------------------------------------
   // Construct Driver
 
-  auto pdrive = std::make_unique<Driver>(&par_input, &mesh0);
+  Driver driver(&par_input, &mesh0);
 
   //--- Step 6. --------------------------------------------------------------------------
   // Add physics modules to MeshBlockPack. Note this must occur after Mesh (MeshBlocks and
   // MeshBlockPack) and Driver are fully constructed.
 
-  mesh0.pmb_pack->AddPhysicsModules(&par_input);
+  mesh0.pmb_pack->AddPhysicsModules(&par_input, &driver);
 
   //--- Step 7. --------------------------------------------------------------------------
   // Construct Outputs. Actual outputs (including initial conditions) are made in Driver
@@ -260,9 +260,9 @@ int main(int argc, char *argv[])
   //    2. TaskList(s) executed in Driver::Execute()
   //    3. Any final analysis or diagnostics run in Driver::Finalize()
 
-  pdrive->Initialize(&mesh0, &par_input,  &out_types);
-  pdrive->Execute(&mesh0, &par_input,  &out_types);
-  pdrive->Finalize(&mesh0, &par_input,  &out_types);
+  driver.Initialize(&mesh0, &par_input,  &out_types);
+  driver.Execute(&mesh0, &par_input,  &out_types);
+  driver.Finalize(&mesh0, &par_input,  &out_types);
 
   //--- Step 9. -------------------------------------------------------------------------
   // clean up, and terminate

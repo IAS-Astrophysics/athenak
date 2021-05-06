@@ -36,6 +36,8 @@ add_executable(
         hydro/bvals/reflect_hydro.cpp
         hydro/bvals/shear_hydro.cpp
 
+	ion-neutral/ion_neutral.cpp
+
         mesh/mesh_physics.cpp
         mesh/load_balance.cpp
         mesh/mesh.cpp

@@ -10,6 +10,7 @@
 
 #include "parameter_input.hpp"
 #include "mesh.hpp"
+#include "driver/driver.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "diffusion/viscosity.hpp"
@@ -25,7 +26,7 @@
 // \brief construct physics modules and tasks lists in this MeshBlockPack, based on which
 // <blocks> are present in the input file.  Called from main().
 
-void MeshBlockPack::AddPhysicsModules(ParameterInput *pin)
+void MeshBlockPack::AddPhysicsModules(ParameterInput *pin, Driver *pdrive)
 {
   int nphysics = 0;
   TaskID none(0);
@@ -34,7 +35,7 @@ void MeshBlockPack::AddPhysicsModules(ParameterInput *pin)
   // Create both Hydro physics module and Tasks (TaskLists stored in MeshBlockPack)
   if (pin->DoesBlockExist("hydro")) {
     phydro = new hydro::Hydro(this, pin);   // construct new Hydro object
-    phydro->AssembleHydroTasks(stage_start_tl, stage_run_tl, stage_end_tl);
+    phydro->AssembleHydroTasks(start_tl, run_tl, end_tl);
     nphysics++;
   } else {
     phydro = nullptr;
@@ -44,7 +45,7 @@ void MeshBlockPack::AddPhysicsModules(ParameterInput *pin)
   // Create both MHD physics module and Tasks (TaskLists stored in MeshBlockPack)
   if (pin->DoesBlockExist("mhd")) {
     pmhd = new mhd::MHD(this, pin);   // construct new MHD object
-    pmhd->AssembleMHDTasks(stage_start_tl, stage_run_tl, stage_end_tl);
+    pmhd->AssembleMHDTasks(start_tl, run_tl, end_tl);
     nphysics++;
   } else {
     pmhd = nullptr;
@@ -59,7 +60,7 @@ void MeshBlockPack::AddPhysicsModules(ParameterInput *pin)
   if (pin->DoesBlockExist("turb_driving")) {
     pturb = new TurbulenceDriver(this, pin);
     pturb->IncludeInitializeModesTask(operator_split_tl, none);
-    pturb->IncludeAddForcingTask(stage_run_tl, none);
+    pturb->IncludeAddForcingTask(run_tl, none);
   } else {
     pturb = nullptr;
   }

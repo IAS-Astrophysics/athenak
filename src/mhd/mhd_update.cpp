@@ -20,7 +20,7 @@ namespace mhd {
 //! \fn  void MHD::Update
 //  \brief Explicit RK update of flux divergence and physical source terms
 
-TaskStatus MHD::ExRKUpdate(Driver *pdriver, int stage)
+TaskStatus MHD::ExpRKUpdate(Driver *pdriver, int stage)
 {
   int is = pmy_pack->mb_cells.is; int ie = pmy_pack->mb_cells.ie;
   int js = pmy_pack->mb_cells.js; int je = pmy_pack->mb_cells.je;

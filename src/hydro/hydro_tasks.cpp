@@ -42,7 +42,7 @@ void Hydro::AssembleHydroTasks(TaskList &start, TaskList &run, TaskList &end)
 
   id.copy_cons = run.AddTask(&Hydro::CopyCons, this, none);
   id.calc_flux = run.AddTask(&Hydro::CalcFluxes, this, id.copy_cons);
-  id.update = run.AddTask(&Hydro::ExRKUpdate, this, id.calc_flux);
+  id.update = run.AddTask(&Hydro::ExpRKUpdate, this, id.calc_flux);
   id.sendu = run.AddTask(&Hydro::SendU, this, id.update);
   id.recvu = run.AddTask(&Hydro::RecvU, this, id.sendu);
   id.phys_bcs = run.AddTask(&Hydro::ApplyPhysicalBCs, this, id.recvu);
