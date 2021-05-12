@@ -45,8 +45,8 @@ IonNeutral::IonNeutral(MeshBlockPack *pp, ParameterInput *pin, Driver *pdrive) :
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn  void MHD::AssembleMHDTasks
-//  \brief Adds mhd tasks to stage start/run/end task lists
+//! \fn  void IonNeutral::AssembleIonNeutralTasks
+//  \brief Adds tasks for ion-neutral (two-fluid) mhd to stage start/run/end task lists
 //  Called by MeshBlockPack::AddPhysicsModules() function directly after MHD constrctr
   
 void IonNeutral::AssembleIonNeutralTasks(TaskList &start, TaskList &run, TaskList &end)
@@ -91,8 +91,9 @@ void IonNeutral::AssembleIonNeutralTasks(TaskList &start, TaskList &run, TaskLis
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn  
-//  \brief
+//! \fn IonNeutral::FirstTwoImpRK 
+//  \brief Executes first two implicit stages of the ImEx integrator for ion-neutral
+//  drag term.  Should be the first task called in TaskList.
 
 TaskStatus IonNeutral::FirstTwoImpRK(Driver *pdrive, int stage)
 {
@@ -108,13 +109,13 @@ TaskStatus IonNeutral::FirstTwoImpRK(Driver *pdrive, int stage)
   Kokkos::deep_copy(DevExeSpace(), pmhd->b1.x2f, pmhd->b0.x2f);
   Kokkos::deep_copy(DevExeSpace(), pmhd->b1.x3f, pmhd->b0.x3f);
 
-  // Solve implicit equations first time
+  // Solve implicit equations first time (nexp_stage = -1)
   auto status = ImpRKUpdate(pdrive, -1);
 
-  // Solve implicit equations second time
+  // Solve implicit equations second time (nexp_stage = 0)
   status = ImpRKUpdate(pdrive, 0);
 
-  // update primitive variables both hydro and MHD
+  // update primitive variables for both hydro and MHD
   phyd->peos->ConsToPrimHydro(phyd->u0, phyd->w0);
   pmhd->peos->ConsToPrimMHD(pmhd->u0, pmhd->b0, pmhd->w0, pmhd->bcc0);
 
@@ -124,6 +125,17 @@ TaskStatus IonNeutral::FirstTwoImpRK(Driver *pdrive, int stage)
 //----------------------------------------------------------------------------------------
 //! \fn  void IonNeutral::ImpRKUpdate
 //  \brief Implicit RK update of ion-neutral drag term. Used as part of ImEx RK integrator
+//  This function should be added AFTER the explicit updates in the task list, so that
+//  source terms are evaluated using partially updated values (including explicit terms
+//  such as flux divergence).  This means soure terms must only be evaluated using
+//  conserved variables (u0), as primitives (w0) are not updated until end of TaskList.
+//
+//  Note indices of source term array correspond to:
+//     ru(0) -> ui(IM1)     ru(3) -> un(IM1)
+//     ru(1) -> ui(IM2)     ru(4) -> un(IM2)
+//     ru(2) -> ui(IM3)     ru(5) -> un(IM3)
+//  where ui=pmhd->u0 and un=phydro->u0
+
 
 TaskStatus IonNeutral::ImpRKUpdate(Driver *pdriver, int estage)
 {
@@ -153,14 +165,15 @@ TaskStatus IonNeutral::ImpRKUpdate(Driver *pdriver, int estage)
       KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j)
       {
         for (int s=0; s<=(istage-2); ++s) {
+          Real adt = a_twid[istage-2][s]*dt;
           par_for_inner(member, 0, (n1-1), [&](const int i)
           {
-            ui(m,IM1,k,j,i) += a_twid[istage-2][s]*dt*ru(s,m,0,k,j,i);
-            ui(m,IM2,k,j,i) += a_twid[istage-2][s]*dt*ru(s,m,1,k,j,i);
-            ui(m,IM3,k,j,i) += a_twid[istage-2][s]*dt*ru(s,m,2,k,j,i);
-            un(m,IM1,k,j,i) += a_twid[istage-2][s]*dt*ru(s,m,3,k,j,i);
-            un(m,IM2,k,j,i) += a_twid[istage-2][s]*dt*ru(s,m,4,k,j,i);
-            un(m,IM3,k,j,i) += a_twid[istage-2][s]*dt*ru(s,m,5,k,j,i);
+            ui(m,IM1,k,j,i) += adt*ru(s,m,0,k,j,i);
+            ui(m,IM2,k,j,i) += adt*ru(s,m,1,k,j,i);
+            ui(m,IM3,k,j,i) += adt*ru(s,m,2,k,j,i);
+            un(m,IM1,k,j,i) += adt*ru(s,m,3,k,j,i);
+            un(m,IM2,k,j,i) += adt*ru(s,m,4,k,j,i);
+            un(m,IM3,k,j,i) += adt*ru(s,m,5,k,j,i);
           });
         }
       }
@@ -178,18 +191,20 @@ TaskStatus IonNeutral::ImpRKUpdate(Driver *pdriver, int estage)
       KOKKOS_LAMBDA(const int m, const int k, const int j, const int i)
       {
         Real denom = 1.0 + adt*(ui(m,IDN,k,j,i) + un(m,IDN,k,j,i));
-        Real sum = (ui(m,IM1,k,j,i) + un(m,IM1,k,j,i));
         // compute new ion/neutral momenta in x1
+        Real sum = (ui(m,IM1,k,j,i) + un(m,IM1,k,j,i));
         Real u_i = (ui(m,IM1,k,j,i) + adt*ui(m,IDN,k,j,i)*sum)/denom;
         Real u_n = (un(m,IM1,k,j,i) + adt*un(m,IDN,k,j,i)*sum)/denom;
         ui(m,IM1,k,j,i) = u_i;
         un(m,IM1,k,j,i) = u_n;
         // compute new ion/neutral momenta in x2
+        sum = (ui(m,IM2,k,j,i) + un(m,IM2,k,j,i));
         u_i = (ui(m,IM2,k,j,i) + adt*ui(m,IDN,k,j,i)*sum)/denom;
         u_n = (un(m,IM2,k,j,i) + adt*un(m,IDN,k,j,i)*sum)/denom;
         ui(m,IM2,k,j,i) = u_i;
         un(m,IM2,k,j,i) = u_n;
         // compute new ion/neutral momenta in x3
+        sum = (ui(m,IM3,k,j,i) + un(m,IM3,k,j,i));
         u_i = (ui(m,IM3,k,j,i) + adt*ui(m,IDN,k,j,i)*sum)/denom;
         u_n = (un(m,IM3,k,j,i) + adt*un(m,IDN,k,j,i)*sum)/denom;
         ui(m,IM3,k,j,i) = u_i;
@@ -208,12 +223,24 @@ TaskStatus IonNeutral::ImpRKUpdate(Driver *pdriver, int estage)
     par_for("imex_rup",DevExeSpace(),0,(nmb1-1),0,(n3-1),0,(n2-1),0,(n1-1),
       KOKKOS_LAMBDA(const int m, const int k, const int j, const int i)
       {
-        ru(s,m,0,k,j,i) = drag*ui(m,IDN,k,j,i)*(un(m,IM1,k,j,i) - ui(m,IM1,k,j,i));
-        ru(s,m,1,k,j,i) = drag*ui(m,IDN,k,j,i)*(un(m,IM2,k,j,i) - ui(m,IM2,k,j,i));
-        ru(s,m,2,k,j,i) = drag*ui(m,IDN,k,j,i)*(un(m,IM3,k,j,i) - ui(m,IM3,k,j,i));
-        ru(s,m,3,k,j,i) = drag*un(m,IDN,k,j,i)*(ui(m,IM1,k,j,i) - un(m,IM1,k,j,i));
-        ru(s,m,4,k,j,i) = drag*un(m,IDN,k,j,i)*(ui(m,IM2,k,j,i) - un(m,IM2,k,j,i));
-        ru(s,m,5,k,j,i) = drag*un(m,IDN,k,j,i)*(ui(m,IM3,k,j,i) - un(m,IM3,k,j,i));
+        // drag term in IM1 component of ion momentum
+        ru(s,m,0,k,j,i) = drag*(ui(m,IDN,k,j,i)*un(m,IM1,k,j,i) -
+                                un(m,IDN,k,j,i)*ui(m,IM1,k,j,i));
+        // drag term in IM2 component of ion momentum
+        ru(s,m,1,k,j,i) = drag*(ui(m,IDN,k,j,i)*un(m,IM2,k,j,i) -
+                                un(m,IDN,k,j,i)*ui(m,IM2,k,j,i));
+        // drag term in IM3 component of ion momentum
+        ru(s,m,2,k,j,i) = drag*(ui(m,IDN,k,j,i)*un(m,IM3,k,j,i) -
+                                un(m,IDN,k,j,i)*ui(m,IM3,k,j,i));
+        // drag term in IM1 component of neutral momentum
+        ru(s,m,3,k,j,i) = drag*(un(m,IDN,k,j,i)*ui(m,IM1,k,j,i) -
+                                ui(m,IDN,k,j,i)*un(m,IM1,k,j,i));
+        // drag term in IM2 component of neutral momentum
+        ru(s,m,4,k,j,i) = drag*(un(m,IDN,k,j,i)*ui(m,IM2,k,j,i) -
+                                ui(m,IDN,k,j,i)*un(m,IM2,k,j,i));
+        // drag term in IM3 component of neutral momentum
+        ru(s,m,5,k,j,i) = drag*(un(m,IDN,k,j,i)*ui(m,IM3,k,j,i) -
+                                ui(m,IDN,k,j,i)*un(m,IM3,k,j,i));
       }
     );
   }
