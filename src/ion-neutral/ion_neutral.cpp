@@ -187,7 +187,7 @@ TaskStatus IonNeutral::ImpRKUpdate(Driver *pdriver, int estage)
     Real adt = drag_coeff*(pdriver->a_impl)*(pmy_pack->pmesh->dt);
     auto ui = pmhd->u0;
     auto un = phyd->u0;
-    par_for("imex_imp",DevExeSpace(),0,(nmb1-1),0,(n3-1),0,(n2-1),0,(n1-1),
+    par_for("imex_imp",DevExeSpace(),0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
       KOKKOS_LAMBDA(const int m, const int k, const int j, const int i)
       {
         Real denom = 1.0 + adt*(ui(m,IDN,k,j,i) + un(m,IDN,k,j,i));
@@ -220,7 +220,7 @@ TaskStatus IonNeutral::ImpRKUpdate(Driver *pdriver, int estage)
     auto ui = pmhd->u0;
     auto un = phyd->u0;
     auto drag = drag_coeff;
-    par_for("imex_rup",DevExeSpace(),0,(nmb1-1),0,(n3-1),0,(n2-1),0,(n1-1),
+    par_for("imex_rup",DevExeSpace(),0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
       KOKKOS_LAMBDA(const int m, const int k, const int j, const int i)
       {
         // drag term in IM1 component of ion momentum

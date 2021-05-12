@@ -655,7 +655,7 @@ void Mesh::WriteMeshStructure()
 
 BoundaryFlag Mesh::GetBoundaryFlag(const std::string& input_string) 
 {
-  if (input_string == "reflecting") {
+  if (input_string == "reflect") {
     return BoundaryFlag::reflect;
   } else if (input_string == "outflow") {
     return BoundaryFlag::outflow;
@@ -685,7 +685,7 @@ std::string Mesh::GetBoundaryString(BoundaryFlag input_flag)
     case BoundaryFlag::block:  // 0
       return "block";
     case BoundaryFlag::reflect:
-      return "reflecting";
+      return "reflect";
     case BoundaryFlag::outflow:
       return "outflow";
     case BoundaryFlag::user:

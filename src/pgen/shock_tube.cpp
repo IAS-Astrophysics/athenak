@@ -78,7 +78,8 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
   int ivy = IVX + ((ivx - IVX) + 1)%3;
   int ivz = IVX + ((ivx - IVX) + 2)%3;
 
-  // parse shock location (must be inside grid)
+  // parse shock location (must be inside grid; set L/R states equal to each other to
+  // initialize uniform initial conditions))
   Real xshock = pin->GetReal("problem","xshock");
   if (shk_dir == 1 && (xshock < pmy_mesh_->mesh_size.x1min ||
                        xshock > pmy_mesh_->mesh_size.x1max)) {
@@ -111,23 +112,23 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
   // Initialize Hydro variables -------------------------------
   if (pmbp->phydro != nullptr) {
 
-    // Parse left state read from input file: dl,ul,vl,wl,[pl]
+    // Parse left state read from input file: d,vx,vy,vz,[P]
     Prim1D wl,wr;
     Cons1D ul,ur;
-    wl.d  = pin->GetReal("problem","dl");
-    wl.vx = pin->GetReal("problem","ul");
-    wl.vy = pin->GetReal("problem","vl");
-    wl.vz = pin->GetReal("problem","wl");
-    wl.p  = pin->GetReal("problem","pl");
+    wl.d  = pin->GetReal("problem","dn_l");
+    wl.vx = pin->GetReal("problem","un_l");
+    wl.vy = pin->GetReal("problem","vn_l");
+    wl.vz = pin->GetReal("problem","wn_l");
+    wl.p  = pin->GetReal("problem","pn_l");
     Real gam = pmbp->phydro->peos->eos_data.gamma;
     PrimToConsHydro(wl,ul,gam,pmbp->phydro->is_special_relativistic);
   
-    // Parse right state read from input file: dr,ur,vr,wr,[pr]
-    wr.d  = pin->GetReal("problem","dr");
-    wr.vx = pin->GetReal("problem","ur");
-    wr.vy = pin->GetReal("problem","vr");
-    wr.vz = pin->GetReal("problem","wr");
-    wr.p  = pin->GetReal("problem","pr");
+    // Parse right state read from input file: d,vx,vy,vz,[P]
+    wr.d  = pin->GetReal("problem","dn_r");
+    wr.vx = pin->GetReal("problem","un_r");
+    wr.vy = pin->GetReal("problem","vn_r");
+    wr.vz = pin->GetReal("problem","wn_r");
+    wr.p  = pin->GetReal("problem","pn_r");
     PrimToConsHydro(wr,ur,gam,pmbp->phydro->is_special_relativistic);
 
     auto &u0 = pmbp->phydro->u0;
@@ -164,24 +165,24 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
   if (pmbp->pmhd != nullptr) {
     int &nmhd = pmbp->pmhd->nmhd;
   
-    // Parse left state read from input file: dl,ul,vl,wl,[pl]
+    // Parse left state read from input file: d,vx,vy,vz,[P]
     Real wl[5];
-    wl[IDN] = pin->GetReal("problem","dl");
-    wl[IVX] = pin->GetReal("problem","ul");
-    wl[IVY] = pin->GetReal("problem","vl");
-    wl[IVZ] = pin->GetReal("problem","wl");
-    wl[IPR] = pin->GetReal("problem","pl");
+    wl[IDN] = pin->GetReal("problem","di_l");
+    wl[IVX] = pin->GetReal("problem","ui_l");
+    wl[IVY] = pin->GetReal("problem","vi_l");
+    wl[IVZ] = pin->GetReal("problem","wi_l");
+    wl[IPR] = pin->GetReal("problem","pi_l");
     Real wl_bx = pin->GetReal("problem","bxl");
     Real wl_by = pin->GetReal("problem","byl");
     Real wl_bz = pin->GetReal("problem","bzl");
     
-    // Parse right state read from input file: dr,ur,vr,wr,[pr]
+    // Parse right state read from input file: d,vx,vy,vz,[P]
     Real wr[5];
-    wr[IDN] = pin->GetReal("problem","dr");
-    wr[IVX] = pin->GetReal("problem","ur");
-    wr[IVY] = pin->GetReal("problem","vr");
-    wr[IVZ] = pin->GetReal("problem","wr");
-    wr[IPR] = pin->GetReal("problem","pr");
+    wr[IDN] = pin->GetReal("problem","di_r");
+    wr[IVX] = pin->GetReal("problem","ui_r");
+    wr[IVY] = pin->GetReal("problem","vi_r");
+    wr[IVZ] = pin->GetReal("problem","wi_r");
+    wr[IPR] = pin->GetReal("problem","pi_r");
     Real wr_bx = pin->GetReal("problem","bxr");
     Real wr_by = pin->GetReal("problem","byr");
     Real wr_bz = pin->GetReal("problem","bzr");
