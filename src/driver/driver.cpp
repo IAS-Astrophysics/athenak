@@ -176,7 +176,7 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh) :
 
       a_twid[2][0] = b;
       a_twid[2][1] = e - ((1.0-a)/4.0);
-      a_twid[2][2] = 0.5 - b - e - 0.75*a;
+      a_twid[2][2] = 0.5 - b - e - 1.25*a;
       a_twid[2][3] = 0.0;
 
       a_twid[3][0] = (-2.0/3.0)*b;
