@@ -61,27 +61,22 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   // Initialize number of scalars
   nscalars = pin->GetOrAddInteger("mhd","nscalars",0);
 
-  // Viscosity
+  // Viscosity (only constructed if needed)
   if (pin->DoesParameterExist("mhd","viscosity")) {
     pvisc = new Viscosity("mhd", ppack, pin);
   } else {
     pvisc = nullptr;
   }
 
-  // Resistivity
+  // Resistivity (only constructed if needed)
   if (pin->DoesParameterExist("mhd","ohmic_resistivity")) {
     presist = new Resistivity(ppack, pin);
   } else {
     presist = nullptr;
   }
 
-  // Source terms
-  if (pin->DoesParameterExist("mhd","const_accel") ||
-      pin->DoesParameterExist("mhd","shearing_box")) {
-    psrc = new SourceTerms("mhd", ppack, pin);
-  } else {
-    psrc = nullptr;
-  }
+  // Source terms (constructor parses input file to initialize only srcterms needed)
+  psrc = new SourceTerms("mhd", ppack, pin);
 
   // read time-evolution option [already error checked in driver constructor]
   std::string evolution_t = pin->GetString("time","evolution");

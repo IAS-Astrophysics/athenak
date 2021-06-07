@@ -14,6 +14,7 @@
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
 #include "mhd/mhd.hpp"
+#include "eos/eos.hpp"
 #include "srcterms/srcterms.hpp"
 
 namespace mhd {

@@ -65,20 +65,15 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   // Initialize number of scalars
   nscalars = pin->GetOrAddInteger("hydro","nscalars",0);
 
-  // Viscosity
+  // Viscosity (only constructed if needed)
   if (pin->DoesParameterExist("hydro","viscosity")) {
     pvisc = new Viscosity("hydro", ppack, pin);
   } else {
     pvisc = nullptr;
   }
 
-  // Source terms
-  if (pin->DoesParameterExist("hydro","const_accel") ||
-      pin->DoesParameterExist("hydro","shearing_box")) {
-    psrc = new SourceTerms("hydro", ppack, pin);
-  } else {
-    psrc = nullptr;
-  }
+  // Source terms (constructor parses input file to initialize only srcterms needed)
+  psrc = new SourceTerms("hydro", ppack, pin);
 
   // read time-evolution option [already error checked in driver constructor]
   std::string evolution_t = pin->GetString("time","evolution");

@@ -16,7 +16,6 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
-#include "eos/eos.hpp"
 
 // forward declarations
 class TurbulenceDriver;
@@ -34,13 +33,20 @@ class SourceTerms
 
   // data
   // flags for various source terms
+  bool source_terms_enabled;   // true if any srcterm included
   bool const_accel;
   bool shearing_box;
+  bool ism_cooling;
 
-  // constants/coefficients for various terms
+  // magnitude and direction of constant accel
   Real const_accel_val;
   int  const_accel_dir;
+
+  // Orbital frequency and shear rate for shearing box
   Real omega0, qshear;
+
+  // physical constants and heating rate used with ISM cooling
+  Real mbar, kboltz, hrate;
 
   // functions
   void AddConstantAccel(DvceArray5D<Real> &u0,const DvceArray5D<Real> &w0,const Real dt);

@@ -6,8 +6,8 @@
 //! \file srcterms.cpp
 //  Implements various (physics) source terms to be added to the Hydro or MHD equations.
 //  Currently [constant_acceleration, shearing_box] are implemented.
-//  Source terms objects are stored in the respective fluid class, and are instantiated
-//  according to boolean flags set in the <hydro> or <mhd> blocks in the input file.
+//  Source terms objects are stored in the respective fluid class, so that Hydro/MHD can
+//  have different source terms
 
 #include <iostream>
 
@@ -22,40 +22,43 @@
 
 //----------------------------------------------------------------------------------------
 // constructor, parses input file and initializes data structures and parameters
+// Only source terms specified in input file are initialized.  If none requested,
+// 'source_terms_enabled' flag is false.
 
 SourceTerms::SourceTerms(std::string block, MeshBlockPack *pp, ParameterInput *pin) :
   pmy_pack(pp),
-  const_accel(false),
-  shearing_box(false)
+  source_terms_enabled(false)
 {
-  // This constructor only called if source terms were requested in input file.
-  // See hydro.cpp or mhd.cpp to see how new SourceTerms object constructed.
-
-  // Constructor parses input file to read parameters for source terms
-
   // (1) (constant) gravitational acceleration
-  if (pin->DoesParameterExist(block,"const_accel")) {
-    const_accel = pin->GetBoolean(block,"const_accel");
-    if (const_accel) {
-      const_accel_val = pin->GetReal(block,"const_accel_val");
-      const_accel_dir = pin->GetInteger(block,"const_accel_dir");
-      if (const_accel_dir < 1 || const_accel_dir > 3) {
-        std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__
-           << std::endl << "const_accle_dir must be 1,2, or 3" << std::endl;
-        std::exit(EXIT_FAILURE);
-      }
+  const_accel = pin->GetOrAddBoolean(block,"const_accel",false);
+  if (const_accel) {
+    source_terms_enabled = true;
+    const_accel_val = pin->GetReal(block,"const_accel_val");
+    const_accel_dir = pin->GetInteger(block,"const_accel_dir");
+    if (const_accel_dir < 1 || const_accel_dir > 3) {
+      std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
+                << "const_accle_dir must be 1,2, or 3" << std::endl;
+      std::exit(EXIT_FAILURE);
     }
   }
 
   // (2) shearing box (hydro and MHD)
-  if (pin->DoesParameterExist(block,"shearing_box")) {
-    shearing_box = pin->GetBoolean(block,"shearing_box");
-    if (shearing_box) {
-      qshear = pin->GetReal(block,"qshear");
-      omega0 = pin->GetReal(block,"omega0");
-    }
+  shearing_box = pin->GetOrAddBoolean(block,"shearing_box",false);
+  if (shearing_box) {
+    source_terms_enabled = true;
+    qshear = pin->GetReal(block,"qshear");
+    omega0 = pin->GetReal(block,"omega0");
   }
 
+  // TODO: finish implementing cooling
+  // (3) Optically thin (ISM) cooling
+  ism_cooling = pin->GetOrAddBoolean(block,"ism_cooling",false);
+  if (ism_cooling) {
+    source_terms_enabled = true;
+    mbar   = pin->GetReal(block,"mbar");
+    kboltz = pin->GetReal(block,"kboltz");
+    hrate  = pin->GetReal(block,"heating_rate");
+  }
 }
 
 //----------------------------------------------------------------------------------------
