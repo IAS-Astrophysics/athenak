@@ -33,6 +33,8 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
   int &js = pmbp->mb_cells.js, &je = pmbp->mb_cells.je;
   int &ks = pmbp->mb_cells.ks, &ke = pmbp->mb_cells.ke;
 
+  Real cs = pin->GetOrAddReal("eos","iso_sound_speed",1.0);
+  Real beta = pin->GetOrAddReal("problem","beta",1.0);
 
   // Initialize Hydro variables -------------------------------
   if (pmbp->phydro != nullptr) {
@@ -58,6 +60,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
 
   // Initialize MHD variables ---------------------------------
   if (pmbp->pmhd != nullptr) {
+    Real B0 = cs*std::sqrt(2.0/beta);
     auto &u0 = pmbp->pmhd->u0;
     auto &b0 = pmbp->pmhd->b0;
     EOS_Data &eos = pmbp->pmhd->peos->eos_data;
@@ -74,10 +77,10 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
         u0(m,IM3,k,j,i) = 0.0;
 
         // initialize B
-        b0.x1f(m,k,j,i) = 1.0;
+        b0.x1f(m,k,j,i) = B0;
         b0.x2f(m,k,j,i) = 0.0;
         b0.x3f(m,k,j,i) = 0.0;
-        if (i==ie) {b0.x1f(m,k,j,i+1) = 1.0;}
+        if (i==ie) {b0.x1f(m,k,j,i+1) = B0;}
         if (j==je) {b0.x2f(m,k,j+1,i) = 0.0;}
         if (k==ke) {b0.x3f(m,k+1,j,i) = 0.0;}
 
@@ -93,6 +96,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
 
     Real d_i = pin->GetOrAddReal("problem","d_i",1.0);
     Real d_n = pin->GetOrAddReal("problem","d_n",1.0);
+    Real B0 = cs*std::sqrt(2.0*(d_i+d_n)/beta);
 
     // MHD
     auto &u0 = pmbp->pmhd->u0;
@@ -111,10 +115,10 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
         u0(m,IM3,k,j,i) = 0.0;
 
         // initialize B
-        b0.x1f(m,k,j,i) = 1.0;
+        b0.x1f(m,k,j,i) = B0;
         b0.x2f(m,k,j,i) = 0.0;
         b0.x3f(m,k,j,i) = 0.0;
-        if (i==ie) {b0.x1f(m,k,j,i+1) = 1.0;}
+        if (i==ie) {b0.x1f(m,k,j,i+1) = B0;}
         if (j==je) {b0.x2f(m,k,j+1,i) = 0.0;}
         if (k==ke) {b0.x3f(m,k+1,j,i) = 0.0;}
 
