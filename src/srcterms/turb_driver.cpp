@@ -15,6 +15,7 @@
 #include "mesh/mesh.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "ion-neutral/ion_neutral.hpp"
 #include "driver/driver.hpp"
 #include "utils/grid_locations.hpp"
 #include "utils/random.hpp"
@@ -107,13 +108,18 @@ void TurbulenceDriver::IncludeInitializeModesTask(TaskList &tl, TaskID start)
 void TurbulenceDriver::IncludeAddForcingTask(TaskList &tl, TaskID start)
 {   
   // These must be inserted after update task, but before send_u
-  if (pmy_pack->phydro != nullptr) {
-    auto id = tl.InsertTask(&TurbulenceDriver::AddForcing, this, 
-                       pmy_pack->phydro->id.calc_flux, pmy_pack->phydro->id.update);
-  }
-  if (pmy_pack->pmhd != nullptr) {
-    auto id = tl.InsertTask(&TurbulenceDriver::AddForcing, this, 
-                       pmy_pack->pmhd->id.calc_flux, pmy_pack->pmhd->id.update);
+  if (pmy_pack->pionn == nullptr) {
+    if (pmy_pack->phydro != nullptr) {
+      auto id = tl.InsertTask(&TurbulenceDriver::AddForcing, this, 
+                         pmy_pack->phydro->id.calc_flux, pmy_pack->phydro->id.update);
+    }
+    if (pmy_pack->pmhd != nullptr) {
+      auto id = tl.InsertTask(&TurbulenceDriver::AddForcing, this, 
+                         pmy_pack->pmhd->id.calc_flux, pmy_pack->pmhd->id.update);
+    }
+  } else {
+    auto id = tl.InsertTask(&TurbulenceDriver::AddForcing, this,
+                       pmy_pack->pionn->id.n_calc_flux, pmy_pack->pionn->id.n_exp_update);
   }
 
   return;
@@ -513,6 +519,8 @@ TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage)
   DvceArray5D<Real> u;
   if (pmy_pack->phydro != nullptr) u = (pmy_pack->phydro->u0);
   if (pmy_pack->pmhd != nullptr) u = (pmy_pack->pmhd->u0);
+  if (pmy_pack->pionn != nullptr) u = (pmy_pack->phydro->u0); // assume neutral density
+                                                              //     >> ionized density
 
   m0 = 0.0, m1 = 0.0;
   Kokkos::parallel_reduce("forcing_norm", Kokkos::RangePolicy<>(DevExeSpace(),0,nmkji),
@@ -619,38 +627,86 @@ TaskStatus TurbulenceDriver::AddForcing(Driver *pdrive, int stage)
     gcorr=sqrt(1.0-fcorr*fcorr);
   }
 
-  // modify conserved variables
-  DvceArray5D<Real> u,w;
-  if (pmy_pack->phydro != nullptr) {
-    u = (pmy_pack->phydro->u0);
-    w = (pmy_pack->phydro->w0);
-  }
-  if (pmy_pack->pmhd != nullptr) {
+  if (pmy_pack->pionn == nullptr) {
+
+    // modify conserved variables
+    DvceArray5D<Real> u,w;
+    if (pmy_pack->phydro != nullptr) {
+      u = (pmy_pack->phydro->u0);
+      w = (pmy_pack->phydro->w0);
+    }
+    if (pmy_pack->pmhd != nullptr) {
+      u = (pmy_pack->pmhd->u0);
+      w = (pmy_pack->pmhd->w0);
+    }
+
+    int &nmb = pmy_pack->nmb_thispack;
+    auto force_ = force;
+    auto force_new_ = force_new;
+    par_for("push", DevExeSpace(),0,(pmy_pack->nmb_thispack-1),ks,ke,js,je,is,ie,
+      KOKKOS_LAMBDA(int m, int k, int j, int i)
+      {
+        Real den = w(m,IDN,k,j,i);
+        Real v1 = (fcorr*force_(m,0,k,j,i) + gcorr*force_new_(m,0,k,j,i))*beta_dt;
+        Real v2 = (fcorr*force_(m,1,k,j,i) + gcorr*force_new_(m,1,k,j,i))*beta_dt;
+        Real v3 = (fcorr*force_(m,2,k,j,i) + gcorr*force_new_(m,2,k,j,i))*beta_dt;
+        Real m1 = den*w(m,IVX,k,j,i);
+        Real m2 = den*w(m,IVY,k,j,i);
+        Real m3 = den*w(m,IVZ,k,j,i);
+
+  //      u(m,IEN,k,j,i) += m1*v1 + m2*v2 + m3*v3 + 0.5*den*(v1*v1+v2*v2+v3*v3);
+        u(m,IEN,k,j,i) += m1*v1 + m2*v2 + m3*v3;
+        u(m,IM1,k,j,i) += den*v1;
+        u(m,IM2,k,j,i) += den*v2;
+        u(m,IM3,k,j,i) += den*v3;
+      }
+    );
+  } else {
+
+    // modify conserved variables
+    DvceArray5D<Real> u,w,u_,w_;
     u = (pmy_pack->pmhd->u0);
     w = (pmy_pack->pmhd->w0);
+    u_ = (pmy_pack->phydro->u0);
+    w_ = (pmy_pack->phydro->w0);
+
+    int &nmb = pmy_pack->nmb_thispack;
+    auto force_ = force;
+    auto force_new_ = force_new;
+    par_for("push", DevExeSpace(),0,(pmy_pack->nmb_thispack-1),ks,ke,js,je,is,ie,
+      KOKKOS_LAMBDA(int m, int k, int j, int i)
+      {
+        // TODO:need to rescale forcing depending on ionization fraction
+
+        Real v1 = (fcorr*force_(m,0,k,j,i) + gcorr*force_new_(m,0,k,j,i))*beta_dt;
+        Real v2 = (fcorr*force_(m,1,k,j,i) + gcorr*force_new_(m,1,k,j,i))*beta_dt;
+        Real v3 = (fcorr*force_(m,2,k,j,i) + gcorr*force_new_(m,2,k,j,i))*beta_dt;
+
+        Real den = w(m,IDN,k,j,i);
+        Real m1 = den*w(m,IVX,k,j,i);
+        Real m2 = den*w(m,IVY,k,j,i);
+        Real m3 = den*w(m,IVZ,k,j,i);
+
+  //      u(m,IEN,k,j,i) += m1*v1 + m2*v2 + m3*v3 + 0.5*den*(v1*v1+v2*v2+v3*v3);
+        u(m,IEN,k,j,i) += m1*v1 + m2*v2 + m3*v3;
+        u(m,IM1,k,j,i) += den*v1;
+        u(m,IM2,k,j,i) += den*v2;
+        u(m,IM3,k,j,i) += den*v3;
+
+
+        Real den_ = w_(m,IDN,k,j,i);
+        Real m1_ = den_*w_(m,IVX,k,j,i);
+        Real m2_ = den_*w_(m,IVY,k,j,i);
+        Real m3_ = den_*w_(m,IVZ,k,j,i);
+
+  //      u_(m,IEN,k,j,i) += m1_*v1 + m2_*v2 + m3_*v3 + 0.5*den*(v1*v1+v2*v2+v3*v3);
+        u_(m,IEN,k,j,i) += m1_*v1 + m2_*v2 + m3_*v3;
+        u_(m,IM1,k,j,i) += den_*v1;
+        u_(m,IM2,k,j,i) += den_*v2;
+        u_(m,IM3,k,j,i) += den_*v3;
+      }
+    );
   }
-
-  int &nmb = pmy_pack->nmb_thispack;
-  auto force_ = force;
-  auto force_new_ = force_new;
-  par_for("push", DevExeSpace(),0,(pmy_pack->nmb_thispack-1),ks,ke,js,je,is,ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i)
-    {
-      Real den = w(m,IDN,k,j,i);
-      Real v1 = (fcorr*force_(m,0,k,j,i) + gcorr*force_new_(m,0,k,j,i))*beta_dt;
-      Real v2 = (fcorr*force_(m,1,k,j,i) + gcorr*force_new_(m,1,k,j,i))*beta_dt;
-      Real v3 = (fcorr*force_(m,2,k,j,i) + gcorr*force_new_(m,2,k,j,i))*beta_dt;
-      Real m1 = den*w(m,IVX,k,j,i);
-      Real m2 = den*w(m,IVY,k,j,i);
-      Real m3 = den*w(m,IVZ,k,j,i);
-
-//      u(m,IEN,k,j,i) += m1*v1 + m2*v2 + m3*v3 + 0.5*den*(v1*v1+v2*v2+v3*v3);
-      u(m,IEN,k,j,i) += m1*v1 + m2*v2 + m3*v3;
-      u(m,IM1,k,j,i) += den*v1;
-      u(m,IM2,k,j,i) += den*v2;
-      u(m,IM3,k,j,i) += den*v3;
-    }
-  );
 
   return TaskStatus::complete;
 }

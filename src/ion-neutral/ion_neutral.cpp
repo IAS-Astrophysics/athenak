@@ -161,6 +161,7 @@ TaskStatus IonNeutral::ImpRKUpdate(Driver *pdriver, int estage)
     auto un = phyd->u0;
     auto &a_twid = pdriver->a_twid;
     Real dt = pmy_pack->pmesh->dt;
+    auto ru_ = ru;
     par_for_outer("imex_exp",DevExeSpace(),scr_size,scr_level,0,nmb1,0,(n3-1),0,(n2-1),
       KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j)
       {
@@ -168,12 +169,12 @@ TaskStatus IonNeutral::ImpRKUpdate(Driver *pdriver, int estage)
           Real adt = a_twid[istage-2][s]*dt;
           par_for_inner(member, 0, (n1-1), [&](const int i)
           {
-            ui(m,IM1,k,j,i) += adt*ru(s,m,0,k,j,i);
-            ui(m,IM2,k,j,i) += adt*ru(s,m,1,k,j,i);
-            ui(m,IM3,k,j,i) += adt*ru(s,m,2,k,j,i);
-            un(m,IM1,k,j,i) += adt*ru(s,m,3,k,j,i);
-            un(m,IM2,k,j,i) += adt*ru(s,m,4,k,j,i);
-            un(m,IM3,k,j,i) += adt*ru(s,m,5,k,j,i);
+            ui(m,IM1,k,j,i) += adt*ru_(s,m,0,k,j,i);
+            ui(m,IM2,k,j,i) += adt*ru_(s,m,1,k,j,i);
+            ui(m,IM3,k,j,i) += adt*ru_(s,m,2,k,j,i);
+            un(m,IM1,k,j,i) += adt*ru_(s,m,3,k,j,i);
+            un(m,IM2,k,j,i) += adt*ru_(s,m,4,k,j,i);
+            un(m,IM3,k,j,i) += adt*ru_(s,m,5,k,j,i);
           });
         }
       }
@@ -220,27 +221,28 @@ TaskStatus IonNeutral::ImpRKUpdate(Driver *pdriver, int estage)
     auto ui = pmhd->u0;
     auto un = phyd->u0;
     auto drag = drag_coeff;
+    auto ru_ = ru;
     par_for("imex_rup",DevExeSpace(),0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
       KOKKOS_LAMBDA(const int m, const int k, const int j, const int i)
       {
         // drag term in IM1 component of ion momentum
-        ru(s,m,0,k,j,i) = drag*(ui(m,IDN,k,j,i)*un(m,IM1,k,j,i) -
-                                un(m,IDN,k,j,i)*ui(m,IM1,k,j,i));
+        ru_(s,m,0,k,j,i) = drag*(ui(m,IDN,k,j,i)*un(m,IM1,k,j,i) -
+                                 un(m,IDN,k,j,i)*ui(m,IM1,k,j,i));
         // drag term in IM2 component of ion momentum
-        ru(s,m,1,k,j,i) = drag*(ui(m,IDN,k,j,i)*un(m,IM2,k,j,i) -
-                                un(m,IDN,k,j,i)*ui(m,IM2,k,j,i));
+        ru_(s,m,1,k,j,i) = drag*(ui(m,IDN,k,j,i)*un(m,IM2,k,j,i) -
+                                 un(m,IDN,k,j,i)*ui(m,IM2,k,j,i));
         // drag term in IM3 component of ion momentum
-        ru(s,m,2,k,j,i) = drag*(ui(m,IDN,k,j,i)*un(m,IM3,k,j,i) -
-                                un(m,IDN,k,j,i)*ui(m,IM3,k,j,i));
+        ru_(s,m,2,k,j,i) = drag*(ui(m,IDN,k,j,i)*un(m,IM3,k,j,i) -
+                                 un(m,IDN,k,j,i)*ui(m,IM3,k,j,i));
         // drag term in IM1 component of neutral momentum
-        ru(s,m,3,k,j,i) = drag*(un(m,IDN,k,j,i)*ui(m,IM1,k,j,i) -
-                                ui(m,IDN,k,j,i)*un(m,IM1,k,j,i));
+        ru_(s,m,3,k,j,i) = drag*(un(m,IDN,k,j,i)*ui(m,IM1,k,j,i) -
+                                 ui(m,IDN,k,j,i)*un(m,IM1,k,j,i));
         // drag term in IM2 component of neutral momentum
-        ru(s,m,4,k,j,i) = drag*(un(m,IDN,k,j,i)*ui(m,IM2,k,j,i) -
-                                ui(m,IDN,k,j,i)*un(m,IM2,k,j,i));
+        ru_(s,m,4,k,j,i) = drag*(un(m,IDN,k,j,i)*ui(m,IM2,k,j,i) -
+                                 ui(m,IDN,k,j,i)*un(m,IM2,k,j,i));
         // drag term in IM3 component of neutral momentum
-        ru(s,m,5,k,j,i) = drag*(un(m,IDN,k,j,i)*ui(m,IM3,k,j,i) -
-                                ui(m,IDN,k,j,i)*un(m,IM3,k,j,i));
+        ru_(s,m,5,k,j,i) = drag*(un(m,IDN,k,j,i)*ui(m,IM3,k,j,i) -
+                                 ui(m,IDN,k,j,i)*un(m,IM3,k,j,i));
       }
     );
   }
