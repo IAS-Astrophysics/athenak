@@ -32,66 +32,75 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos,
 {
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
-  Real wli[5],wri[5],fave[5];
+  Real fsum[5],du[5];
   Real igm1 = 1.0/(eos.gamma - 1.0);
   Real iso_cs = eos.iso_cs;
 
   par_for_inner(member, il, iu, [&](const int i)
   {
-    //--- Step 1.  Load L/R states into local variables
-    wli[IDN]=wl(IDN,i);
-    wli[IVX]=wl(ivx,i);
-    wli[IVY]=wl(ivy,i);
-    wli[IVZ]=wl(ivz,i);
-    if (eos.is_adiabatic) {wli[IPR]=wl(IPR,i);}
+    //--- Step 1.  Create local references for L/R states (helps compiler vectorize)
 
-    wri[IDN]=wr(IDN,i);
-    wri[IVX]=wr(ivx,i);
-    wri[IVY]=wr(ivy,i);
-    wri[IVZ]=wr(ivz,i);
-    if (eos.is_adiabatic) {wri[IPR]=wr(IPR,i);}
+    Real &wli_idn = wl(IDN,i);
+    Real &wli_ivx = wl(ivx,i);
+    Real &wli_ivy = wl(ivy,i);
+    Real &wli_ivz = wl(ivz,i);
+    Real &wli_ipr = wl(IPR,i);  // should never be referenced for adiabatic EOS
 
-    //--- Step 2.  Compute wave speeds in L,R states (see Toro eq. 10.43)
+    Real &wri_idn = wr(IDN,i);
+    Real &wri_ivx = wr(ivx,i);
+    Real &wri_ivy = wr(ivy,i);
+    Real &wri_ivz = wr(ivz,i);
+    Real &wri_ipr = wr(IPR,i);  // should never be referenced for adiabatic EOS
 
-    Real qa,qb;
+    //--- Step 2.  Compute sum of L/R fluxes
+
+    Real qa = wli_idn*wli_ivx;
+    Real qb = wri_idn*wri_ivx;
+
+    fsum[IDN] = qa         + qb;
+    fsum[IVX] = qa*wli_ivx + qb*wri_ivx;
+    fsum[IVY] = qa*wli_ivy + qb*wri_ivy;
+    fsum[IVZ] = qa*wli_ivz + qb*wri_ivz;
+
+    Real el,er;
     if (eos.is_adiabatic) {
-      qa = eos.SoundSpeed(wli[IPR],wli[IDN]);
-      qb = eos.SoundSpeed(wri[IPR],wri[IDN]);
+      el = wli_ipr*igm1 + 0.5*wli_idn*(SQR(wli_ivx) + SQR(wli_ivy) + SQR(wli_ivz));
+      er = wri_ipr*igm1 + 0.5*wri_idn*(SQR(wri_ivx) + SQR(wri_ivy) + SQR(wri_ivz));
+      fsum[IVX] += (wli_ipr + wri_ipr);
+      fsum[IEN] = (el + wli_ipr)*wli_ivx + (er + wri_ipr)*wri_ivx;
+    } else {
+      fsum[IVX] += (iso_cs*iso_cs)*(wli_idn + wri_idn);
+    }
+
+    //--- Step 3.  Compute max wave speed in L,R states (see Toro eq. 10.43)
+
+    if (eos.is_adiabatic) {
+      qa = eos.SoundSpeed(wli_ipr,wli_idn);
+      qb = eos.SoundSpeed(wri_ipr,wri_idn);
     } else {
       qa = iso_cs;
       qb = iso_cs;
     }
-    Real a  = 0.5*fmax( (fabs(wli[IVX]) + qa), (fabs(wri[IVX]) + qb) );
+    Real a = fmax( (fabs(wli_ivx) + qa), (fabs(wri_ivx) + qb) );
 
-    //--- Step 3.  Compute average of L/R fluxes
+    //--- Step 4.  Compute difference in L/R states dU, multiplied by max wave speed
 
-    qa = wli[IDN]*wli[IVX];
-    qb = wri[IDN]*wri[IVX];
+    du[IDN] = a*(wri_idn         - wli_idn);
+    du[IVX] = a*(wri_idn*wri_ivx - wli_idn*wli_ivx);
+    du[IVY] = a*(wri_idn*wri_ivy - wli_idn*wli_ivy);
+    du[IVZ] = a*(wri_idn*wri_ivz - wli_idn*wli_ivz);
+    if (eos.is_adiabatic) du[IEN] = a*(er - el);
 
-    fave[IDN] = qa          + qb;
-    fave[IVX] = qa*wli[IVX] + qb*wri[IVX];
-    fave[IVY] = qa*wli[IVY] + qb*wri[IVY];
-    fave[IVZ] = qa*wli[IVZ] + qb*wri[IVZ];
+    //--- Step 5. Compute the LLF flux at interface (see Toro eq. 10.42).
 
-    Real el,er;
-    if (eos.is_adiabatic) {
-      el = wli[IPR]*igm1 + 0.5*wli[IDN]*(SQR(wli[IVX]) + SQR(wli[IVY]) + SQR(wli[IVZ]));
-      er = wri[IPR]*igm1 + 0.5*wri[IDN]*(SQR(wri[IVX]) + SQR(wri[IVY]) + SQR(wri[IVZ]));
-      fave[IVX] += (wli[IPR] + wri[IPR]);
-      fave[IEN] = (el + wli[IPR])*wli[IVX] + (er + wri[IPR])*wri[IVX];
-    } else {
-      fave[IVX] += (iso_cs*iso_cs)*(wli[IDN] + wri[IDN]);
-    }
-
-    //--- Step 4. Store results into 3D array of fluxes
-
-    flx(m,IDN,k,j,i) = 0.5*(fave[IDN]) - a*(wri[IDN]          - wli[IDN]);
-    flx(m,ivx,k,j,i) = 0.5*(fave[IVX]) - a*(wri[IDN]*wri[IVX] - wli[IDN]*wli[IVX]);
-    flx(m,ivy,k,j,i) = 0.5*(fave[IVY]) - a*(wri[IDN]*wri[IVY] - wli[IDN]*wli[IVY]);
-    flx(m,ivz,k,j,i) = 0.5*(fave[IVZ]) - a*(wri[IDN]*wri[IVZ] - wli[IDN]*wli[IVZ]);
-    if (eos.is_adiabatic) {flx(m,IEN,k,j,i) = 0.5*(fave[IEN]) - a*(er - el);}
+    flx(m,IDN,k,j,i) = 0.5*(fsum[IDN] - du[IDN]);
+    flx(m,ivx,k,j,i) = 0.5*(fsum[IVX] - du[IVX]);
+    flx(m,ivy,k,j,i) = 0.5*(fsum[IVY] - du[IVY]);
+    flx(m,ivz,k,j,i) = 0.5*(fsum[IVZ] - du[IVZ]);
+    if (eos.is_adiabatic) {flx(m,IEN,k,j,i) = 0.5*(fsum[IEN] - du[IEN]);}
 
   });
+
   return;
 }
 
