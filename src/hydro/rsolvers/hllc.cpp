@@ -23,67 +23,66 @@ namespace hydro {
 
 KOKKOS_INLINE_FUNCTION
 void HLLC(TeamMember_t const &member, const EOS_Data &eos,
-     const int m, const int k, const int j, const int il, const int iu,
-     const int ivx, const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr,
-     DvceArray5D<Real> flx)
+     const int m, const int k, const int j, const int il, const int iu, const int ivx,
+     const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr, DvceArray5D<Real> flx)
 {
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
-  Real wli[5],wri[5];
-  Real fl[5],fr[5];
 
   Real igm1 = 1.0/((eos.gamma) - 1.0);
   Real alpha = ((eos.gamma) + 1.0)/sqrt(2.0*(eos.gamma));
 
   par_for_inner(member, il, iu, [&](const int i)
   {
-    //--- Step 1.  Load L/R states into local variables
-    wli[IDN]=wl(IDN,i);
-    wli[IVX]=wl(ivx,i);
-    wli[IVY]=wl(ivy,i);
-    wli[IVZ]=wl(ivz,i);
-    wli[IPR]=wl(IPR,i);
+    //--- Step 1.  Create local references for L/R states (helps compiler vectorize)
 
-    wri[IDN]=wr(IDN,i);
-    wri[IVX]=wr(ivx,i);
-    wri[IVY]=wr(ivy,i);
-    wri[IVZ]=wr(ivz,i);
-    wri[IPR]=wr(IPR,i);
+    Real &wl_idn = wl(IDN,i);
+    Real &wl_ivx = wl(ivx,i);
+    Real &wl_ivy = wl(ivy,i);
+    Real &wl_ivz = wl(ivz,i);
+    Real &wl_ipr = wl(IPR,i);
+
+    Real &wr_idn = wr(IDN,i);
+    Real &wr_ivx = wr(ivx,i);
+    Real &wr_ivy = wr(ivy,i);
+    Real &wr_ivz = wr(ivz,i);
+    Real &wr_ipr = wr(IPR,i);
 
     //--- Step 2.  Compute middle state estimates with PVRS (Toro 10.5.2)
 
     // define 6 registers used below
     Real qa,qb,qc,qd,qe,qf;
-    qa = eos.SoundSpeed(wli[IPR],wli[IDN]);
-    qb = eos.SoundSpeed(wri[IPR],wri[IDN]);
-    Real el = wli[IPR]*igm1 + 0.5*wli[IDN]*(SQR(wli[IVX])+SQR(wli[IVY])+SQR(wli[IVZ]));
-    Real er = wri[IPR]*igm1 + 0.5*wri[IDN]*(SQR(wri[IVX])+SQR(wri[IVY])+SQR(wri[IVZ]));
-    qc = 0.25*(wli[IDN] + wri[IDN])*(qa + qb);  // average density * average sound speed
-    qd = 0.5 * (wli[IPR] + wri[IPR] + (wli[IVX]-wri[IVX]) * qc);  // P_mid
+    qa = eos.SoundSpeed(wl_ipr,wl_idn);
+    qb = eos.SoundSpeed(wr_ipr,wr_idn);
+    Real el = wl_ipr*igm1 + 0.5*wl_idn*(SQR(wl_ivx) + SQR(wl_ivy) + SQR(wl_ivz));
+    Real er = wr_ipr*igm1 + 0.5*wr_idn*(SQR(wr_ivx) + SQR(wr_ivy) + SQR(wr_ivz));
+    qc = 0.25*(wl_idn + wr_idn)*(qa + qb);  // average density * average sound speed
+    qd = 0.5 * (wl_ipr + wr_ipr + (wl_ivx - wr_ivx) * qc);  // P_mid
 
     //--- Step 3.  Compute sound speed in L,R
 
-    qe = (qd <= wli[IPR]) ? 1.0 : (1.0 + alpha * ((qd / wli[IPR]) - 1.0));
-    qf = (qd <= wri[IPR]) ? 1.0 : (1.0 + alpha * ((qd / wri[IPR]) - 1.0));
+    qe = (qd <= wl_ipr) ? 1.0 : (1.0 + alpha * ((qd / wl_ipr) - 1.0));
+    qf = (qd <= wr_ipr) ? 1.0 : (1.0 + alpha * ((qd / wr_ipr) - 1.0));
 
     //--- Step 4.  Compute the max/min wave speeds based on L/R
 
-    qc = wli[IVX] - qa*qe;  // ql
-    qd = wri[IVX] + qb*qf;  // qr
+    qc = wl_ivx - qa*qe;  // ql
+    qd = wr_ivx + qb*qf;  // qr
 
-    qa = qd > 0.0 ? qd : 0.0;
-    qb = qc < 0.0 ? qc : 0.0;
+    // following min/max set to TINY_NUMBER to fix bug found in converging supersonic flow
+    qa = qd > 0.0 ? qd : 1.0e-20;   // bp
+    qb = qc < 0.0 ? qc : -1.0e-20;  // bm
 
     //--- Step 5. Compute the contact wave speed and pressure
 
-    qe = wli[IVX] - qc;
-    qf = wri[IVX] - qd;
+    qe = wl_ivx - qc;
+    qf = wr_ivx - qd;
 
-    qc = wli[IPR] + qe*wli[IDN]*wli[IVX];  // tl
-    qd = wri[IPR] + qf*wri[IDN]*wri[IVX];  // tr
+    qc = wl_ipr + qe*wl_idn*wl_ivx;  // tl
+    qd = wr_ipr + qf*wr_idn*wr_ivx;  // tr
 
-    Real ml =   wli[IDN]*qe;
-    Real mr = -(wri[IDN]*qf);
+    Real ml =   wl_idn*qe;
+    Real mr = -(wr_idn*qf);
 
     // Determine the contact wave speed...
     Real am = (qc - qd)/(ml + mr);
@@ -93,23 +92,24 @@ void HLLC(TeamMember_t const &member, const EOS_Data &eos,
 
     //--- Step 6. Compute L/R fluxes along the line bm (qb), bp (qa)
 
-    qe = wli[IDN]*(wli[IVX] - qb);
-    qf = wri[IDN]*(wri[IVX] - qa);
+    qe = wl_idn*(wl_ivx - qb);
+    qf = wr_idn*(wr_ivx - qa);
 
-    fl[IDN] = qe;
-    fr[IDN] = qf;
+    HydCons1D fl, fr;
+    fl.d  = qe;
+    fr.d  = qf;
 
-    fl[IVX] = qe*wli[IVX] + wli[IPR];
-    fr[IVX] = qf*wri[IVX] + wri[IPR];
+    fl.mx = qe*wl_ivx + wl_ipr;
+    fr.mx = qf*wr_ivx + wr_ipr;
 
-    fl[IVY] = qe*wli[IVY];
-    fr[IVY] = qf*wri[IVY];
+    fl.my = qe*wl_ivy;
+    fr.my = qf*wr_ivy;
 
-    fl[IVZ] = qe*wli[IVZ];
-    fr[IVZ] = qf*wri[IVZ];
+    fl.mz = qe*wl_ivz;
+    fr.mz = qf*wr_ivz;
 
-    fl[IEN] = el*(wli[IVX] - qb) + wli[IPR]*wli[IVX];
-    fr[IEN] = er*(wri[IVX] - qa) + wri[IPR]*wri[IVX];
+    fl.e  = el*(wl_ivx - qb) + wl_ipr*wl_ivx;
+    fr.e  = er*(wr_ivx - qa) + wr_ipr*wr_ivx;
 
     //--- Step 8. Compute flux weights or scales
 
@@ -126,11 +126,11 @@ void HLLC(TeamMember_t const &member, const EOS_Data &eos,
     //--- Step 9. Compute the HLLC flux at interface, including weighted contribution
     // of the flux along the contact
 
-    flx(m,IDN,k,j,i) = qc*fl[IDN] + qd*fr[IDN];
-    flx(m,ivx,k,j,i) = qc*fl[IVX] + qd*fr[IVX] + qe*cp;
-    flx(m,ivy,k,j,i) = qc*fl[IVY] + qd*fr[IVY];
-    flx(m,ivz,k,j,i) = qc*fl[IVZ] + qd*fr[IVZ];
-    flx(m,IEN,k,j,i) = qc*fl[IEN] + qd*fr[IEN] + qe*cp*am;
+    flx(m,IDN,k,j,i) = qc*fl.d  + qd*fr.d ;
+    flx(m,ivx,k,j,i) = qc*fl.mx + qd*fr.mx + qe*cp;
+    flx(m,ivy,k,j,i) = qc*fl.my + qd*fr.my;
+    flx(m,ivz,k,j,i) = qc*fl.mz + qd*fr.mz;
+    flx(m,IEN,k,j,i) = qc*fl.e  + qd*fr.e  + qe*cp*am;
   });
   return;
 }
