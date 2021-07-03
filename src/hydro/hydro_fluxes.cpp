@@ -87,9 +87,12 @@ TaskStatus Hydro::CalcFluxes(Driver *pdriver, int stage)
         case Hydro_RSolver::advect:
           Advect(member, eos, m, k, j, is, ie+1, IVX, wl, wr, flx1);
           break;
-        case Hydro_RSolver::hlle:
-          HLLE(member, eos, m, k, j, is, ie+1, IVX, wl, wr, flx1);
+        case Hydro_RSolver::llf:
+          LLF(member, eos, m, k, j, is, ie+1, IVX, wl, wr, flx1);
           break;
+//        case Hydro_RSolver::hlle:
+//          HLLE(member, eos, m, k, j, is, ie+1, IVX, wl, wr, flx1);
+//          break;
         case Hydro_RSolver::hllc:
           HLLC(member, eos, m, k, j, is, ie+1, IVX, wl, wr, flx1);
           break;
@@ -175,9 +178,12 @@ TaskStatus Hydro::CalcFluxes(Driver *pdriver, int stage)
               case Hydro_RSolver::advect:
                 Advect(member, eos, m, k, j, is, ie, IVY, wl, wr, flx2);
                 break;
-              case Hydro_RSolver::hlle:
-                HLLE(member, eos, m, k, j, is, ie, IVY, wl, wr, flx2);
+              case Hydro_RSolver::llf:
+                LLF(member, eos, m, k, j, is, ie, IVY, wl, wr, flx2);
                 break;
+//              case Hydro_RSolver::hlle:
+//                HLLE(member, eos, m, k, j, is, ie, IVY, wl, wr, flx2);
+//                break;
               case Hydro_RSolver::hllc:
                 HLLC(member, eos, m, k, j, is, ie, IVY, wl, wr, flx2);
                 break;
@@ -266,9 +272,12 @@ TaskStatus Hydro::CalcFluxes(Driver *pdriver, int stage)
               case Hydro_RSolver::advect:
                 Advect(member, eos, m, k, j, is, ie, IVZ, wl, wr, flx3);
                 break;
-              case Hydro_RSolver::hlle:
-                HLLE(member, eos, m, k, j, is, ie, IVZ, wl, wr, flx3);
+              case Hydro_RSolver::llf:
+                LLF(member, eos, m, k, j, is, ie, IVZ, wl, wr, flx3);
                 break;
+//              case Hydro_RSolver::hlle:
+//                HLLE(member, eos, m, k, j, is, ie, IVZ, wl, wr, flx3);
+//                break;
               case Hydro_RSolver::hllc:
                 HLLC(member, eos, m, k, j, is, ie, IVZ, wl, wr, flx3);
                 break;

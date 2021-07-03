@@ -152,12 +152,20 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
       std::exit(EXIT_FAILURE);
 
     // LLF solver
-    } else if (rsolver.compare("hlle") == 0) {
+    } else if (rsolver.compare("llf") == 0) {
       if (is_special_relativistic) {
         rsolver_method_ = Hydro_RSolver::llf_rel;
       } else { 
-      	rsolver_method_ = Hydro_RSolver::hlle;
-      }  
+      	rsolver_method_ = Hydro_RSolver::llf;
+      }
+
+    // HLLE solver
+    } else if (rsolver.compare("hlle") == 0) {
+//      if (is_special_relativistic) {
+//        rsolver_method_ = Hydro_RSolver::llf_rel;
+//      } else {
+        rsolver_method_ = Hydro_RSolver::hlle;
+//      }
 
     // HLLC solver
     } else if (rsolver.compare("hllc") == 0) {
