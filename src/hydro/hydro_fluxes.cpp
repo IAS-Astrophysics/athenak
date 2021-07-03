@@ -22,9 +22,9 @@
 #include "hydro/rsolvers/advect_hyd.cpp"
 #include "hydro/rsolvers/hlle_hyd.cpp"
 #include "hydro/rsolvers/llf_hyd.cpp"
-#include "hydro/rsolvers/llf_sr.cpp"
-#include "hydro/rsolvers/hllc.cpp"
-#include "hydro/rsolvers/hllc_sr.cpp"
+#include "hydro/rsolvers/llf_srhyd.cpp"
+#include "hydro/rsolvers/hllc_hyd.cpp"
+#include "hydro/rsolvers/hllc_srhyd.cpp"
 //#include "hydro/rsolvers/roe_hyd.cpp"
 
 namespace hydro {
