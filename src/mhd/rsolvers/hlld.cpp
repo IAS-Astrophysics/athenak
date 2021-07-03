@@ -36,7 +36,7 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
     par_for_inner(member, il, iu, [&](const int i)
     {
 
-      //--- Step 1.  Load L/R states into local variables
+      //--- Step 1.  Create local references for L/R states (helps compiler vectorize)
 
       Real &wl_idn=wl(IDN,i);
       Real &wl_ivx=wl(ivx,i);

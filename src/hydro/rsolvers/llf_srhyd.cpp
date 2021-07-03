@@ -22,103 +22,87 @@ namespace hydro {
 
 //----------------------------------------------------------------------------------------
 //! \fn void LLF
-//  \brief The LLF Riemann solver for hydrodynamics (both adiabatic and isothermal)
+//  \brief The LLF Riemann solver for SR hydrodynamics
 
 KOKKOS_INLINE_FUNCTION
 void LLF_SR(TeamMember_t const &member, const EOS_Data &eos,
-     const int m, const int k, const int j, const int il, const int iu,
-     const int ivx, const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr,
-     DvceArray5D<Real> flx)
+     const int m, const int k, const int j, const int il, const int iu, const int ivx,
+     const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr, DvceArray5D<Real> flx)
 {
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
-  Real wli[5],wri[5],du[5];
-  Real fl[5],fr[5];
   Real gm1 = eos.gamma - 1.0;
 
   par_for_inner(member, il, iu, [&](const int i)
   {
-    //--- Step 1.  Load L/R states into local variables
-    wli[IDN]=wl(IDN,i);
-    wli[IVX]=wl(ivx,i);
-    wli[IVY]=wl(ivy,i);
-    wli[IVZ]=wl(ivz,i);
-    wli[IPR]=wl(IPR,i);
+    //--- Step 1.  Create local references for L/R states (helps compiler vectorize)
 
-    wri[IDN]=wr(IDN,i);
-    wri[IVX]=wr(ivx,i);
-    wri[IVY]=wr(ivy,i);
-    wri[IVZ]=wr(ivz,i);
-    wri[IPR]=wr(IPR,i);
+    Real &wl_idn=wl(IDN,i);
+    Real &wl_ivx=wl(ivx,i);
+    Real &wl_ivy=wl(ivy,i);
+    Real &wl_ivz=wl(ivz,i);
+    Real &wl_ipr=wl(IPR,i);
 
-    Real u2l = SQR(wli[IVZ]) + SQR(wli[IVY]) + SQR(wli[IVX]);
-    Real u2r = SQR(wri[IVZ]) + SQR(wri[IVY]) + SQR(wri[IVX]);
+    Real &wr_idn=wr(IDN,i);
+    Real &wr_ivx=wr(ivx,i);
+    Real &wr_ivy=wr(ivy,i);
+    Real &wr_ivz=wr(ivz,i);
+    Real &wr_ipr=wr(IPR,i);
+
+    Real u2l = SQR(wl_ivz) + SQR(wl_ivy) + SQR(wl_ivx);
+    Real u2r = SQR(wr_ivz) + SQR(wr_ivy) + SQR(wr_ivx);
     
     Real u0l  = sqrt(1. + u2l);
     Real u0r  = sqrt(1. + u2r);
 
     // FIXME ERM: Ideal fluid for now
-    Real wgas_l = wli[IDN] + (eos.gamma/gm1) * wli[IPR];
-    Real wgas_r = wri[IDN] + (eos.gamma/gm1) * wri[IPR];
-
-//    wri[IVX] /= gammar;
-//    wri[IVY] /= gammar;
-//    wri[IVZ] /= gammar;
-
-//    wli[IVX] /= gammal;
-//    wli[IVY] /= gammal;
-//    wli[IVZ] /= gammal;
-
-    //--- Step 2.  Compute wave speeds in L,R states (see Toro eq. 10.43)
-
-    Real lm,lp,qa,qb;
-    eos.WaveSpeeds_SR(wgas_l, wli[IPR], wli[IVX]/u0l, 1.+u2l, lp, lm);
-    eos.WaveSpeeds_SR(wgas_r, wri[IPR], wri[IVX]/u0r, 1.+u2r, qb,qa);
-
-    //Include factor 0.5 to match LLF
-    qa = fmax(-fmin(lm,qa), 0.);
-    Real a = 0.5*fmax(fmax(lp,qb), qa);
-
-    //--- Step 3.  Compute L/R fluxes
-
-    fl[IDN] = wli[IDN] * wli[IVX];
-    qa = wgas_l * wli[IVX];
-    fl[IVX] = qa*wli[IVX] + wli[IPR];
-    fl[IVY] = qa*wli[IVY];
-    fl[IVZ] = qa*wli[IVZ];
-
-    fr[IDN] = wri[IDN] * wri[IVX];
-    qa = wgas_r * wri[IVX];
-    fr[IVX] = qa*wri[IVX] + wri[IPR];
-    fr[IVY] = qa*wri[IVY];
-    fr[IVZ] = qa*wri[IVZ];
+    Real wgas_l = wl_idn + (eos.gamma/gm1) * wl_ipr;
+    Real wgas_r = wr_idn + (eos.gamma/gm1) * wr_ipr;
 
 
-    Real el = wgas_l*u0l*u0l - wli[IPR] - wli[IDN]*u0l;
-    Real er = wgas_r*u0r*u0r - wri[IPR] - wri[IDN]*u0r;
-    fr[IEN] = (er + wri[IPR])*wri[IVX]/u0r;
-    fl[IEN] = (el + wli[IPR])*wli[IVX]/u0l;
+    //--- Step 2.  Compute sum of L/R fluxes
 
-//    fl[IEN] = (((wli[IPR] / gm1) + wli[IPR]) * u0l + (wli[IDN]/(1.+ u0l)*u2l))*wli[IVX];
-//    fr[IEN] = (((wri[IPR] / gm1) + wri[IPR]) * u0r + (wri[IDN]/(1.+ u0r)*u2r))*wri[IVX];
-//    fl[IEN] = (((wli[IPR] / gm1) + wli[IPR]) * u0l + (wli[IDN]/(1.+ u0l)*u2l))*wli[IVX];
-//    fr[IEN] = (((wri[IPR] / gm1) + wri[IPR]) * u0r + (wri[IDN]/(1.+ u0r)*u2r))*wri[IVX];
+    Real qa = wgas_l * wl_ivx;
+    Real qb = wgas_r * wr_ivx;
 
-    du[IDN] =        u0r*wri[IDN] -        u0l*wli[IDN];
-    du[IVX] = wgas_r*u0r*wri[IVX] - wgas_l*u0l*wli[IVX];
-    du[IVY] = wgas_r*u0r*wri[IVY] - wgas_l*u0l*wli[IVY];
-    du[IVZ] = wgas_r*u0r*wri[IVZ] - wgas_l*u0l*wli[IVZ];
-//    du[IEN] = (wri[IPR] / gm1) * u0r*u0r + ( wri[IPR] + wri[IDN]*u0r / (1.+ u0r))*u2r;
-//    du[IEN]-= (wli[IPR] / gm1) * u0l*u0l + ( wli[IPR] + wli[IDN]*u0l / (1.+ u0l))*u2l;
-    du[IEN] = er - el;
+    HydCons1D fsum;
+    fsum.d  = wl_idn * wl_ivx + wr_idn * wr_ivx;
+    fsum.mx = qa*wl_ivx + qb*wr_ivx + (wl_ipr +  wr_ipr);
+    fsum.my = qa*wl_ivy + qb*wr_ivy;
+    fsum.mz = qa*wl_ivz + qb*wr_ivz;
+
+
+    Real el = wgas_l*u0l*u0l - wl_ipr - wl_idn*u0l;
+    Real er = wgas_r*u0r*u0r - wr_ipr - wr_idn*u0r;
+    fsum.e  = (er + wr_ipr)*wr_ivx/u0r + (el + wl_ipr)*wl_ivx/u0l;
+
+    //--- Step 3.  Compute wave speeds in L,R states (see Toro eq. 10.43)
+
+    Real lm,lp;
+    eos.WaveSpeeds_SR(wgas_l, wl_ipr, wl_ivx/u0l, (1.0 + u2l), lp, lm);
+    eos.WaveSpeeds_SR(wgas_r, wr_ipr, wr_ivx/u0r, (1.0 + u2r), qb,qa);
+
+    qa = fmax(-fmin(lm,qa), 0.0);
+    Real a = fmax(fmax(lp,qb), qa);
+    
+    //--- Step 4.  Compute difference in L/R states dU, multiplied by max wave speed
+
+    HydCons1D du;
+    qa = wgas_r*u0r;
+    qb = wgas_l*u0l;
+    du.d  = a*(u0r*wr_idn - u0l*wl_idn);
+    du.mx = a*( qa*wr_ivx -  qb*wl_ivx);
+    du.my = a*( qa*wr_ivy -  qb*wl_ivy);
+    du.mz = a*( qa*wr_ivz -  qb*wl_ivz);
+    du.e  = a*(er - el);
 
     //--- Step 5. Store results into 3D array of fluxes
 
-    flx(m,IDN,k,j,i) = 0.5*(fl[IDN] + fr[IDN]) - a*du[IDN];
-    flx(m,ivx,k,j,i) = 0.5*(fl[IVX] + fr[IVX]) - a*du[IVX];
-    flx(m,ivy,k,j,i) = 0.5*(fl[IVY] + fr[IVY]) - a*du[IVY];
-    flx(m,ivz,k,j,i) = 0.5*(fl[IVZ] + fr[IVZ]) - a*du[IVZ];
-    flx(m,IEN,k,j,i) = 0.5*(fl[IEN] + fr[IEN]) - a*du[IEN];
+    flx(m,IDN,k,j,i) = 0.5*(fsum.d  - du.d );
+    flx(m,ivx,k,j,i) = 0.5*(fsum.mx - du.mx);
+    flx(m,ivy,k,j,i) = 0.5*(fsum.my - du.my);
+    flx(m,ivz,k,j,i) = 0.5*(fsum.mz - du.mz);
+    flx(m,IEN,k,j,i) = 0.5*(fsum.e  - du.e );
 
   });
   return;
