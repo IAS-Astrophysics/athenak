@@ -18,17 +18,15 @@ namespace hydro {
 
 //----------------------------------------------------------------------------------------
 //! \fn void HLLC
-//  \brief The HLLC Riemann solver for hydrodynamics (both adiabatic and isothermal)
+//  \brief The HLLC Riemann solver for SR hydrodynamics
 
 KOKKOS_INLINE_FUNCTION
 void HLLC_SR(TeamMember_t const &member, const EOS_Data &eos,
-     const int m, const int k, const int j, const int il, const int iu,
-     const int ivx, const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr,
-     DvceArray5D<Real> flx)
+     const int m, const int k, const int j, const int il, const int iu, const int ivx,
+     const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr, DvceArray5D<Real> flx)
 {
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
-  Real wli[5],wri[5];
   Real gm1 = eos.gamma - 1.0;
 
   par_for_inner(member, il, iu, [&](const int i)
