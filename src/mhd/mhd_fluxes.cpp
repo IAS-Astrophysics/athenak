@@ -26,6 +26,7 @@
 // include inlined Riemann solvers (double yuck...)
 #include "mhd/rsolvers/advect_mhd.cpp"
 #include "mhd/rsolvers/llf_mhd.cpp"
+#include "mhd/rsolvers/hlle_mhd.cpp"
 #include "mhd/rsolvers/hlld.cpp"
 //#include "mhd/rsolvers/roe_mhd.cpp"
 
@@ -115,6 +116,9 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
           break;
         case MHD_RSolver::llf:
           LLF(member,eos,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e3x1_,e2x1_);
+          break;
+        case MHD_RSolver::hlle:
+          HLLE(member,eos,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e3x1_,e2x1_);
           break;
         case MHD_RSolver::hlld:
           HLLD(member,eos,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e3x1_,e2x1_);
@@ -223,6 +227,9 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
               case MHD_RSolver::llf:
                 LLF(member,eos,m,k,j,is-1,ie+1,IVY,wl,wr,bl,br,by,flx2,e1x2_,e3x2_);
                 break;
+              case MHD_RSolver::hlle:
+                HLLE(member,eos,m,k,j,is-1,ie+1,IVY,wl,wr,bl,br,by,flx2,e1x2_,e3x2_);
+                break;
               case MHD_RSolver::hlld:
                 HLLD(member,eos,m,k,j,is-1,ie+1,IVY,wl,wr,bl,br,by,flx2,e1x2_,e3x2_);
                 break;
@@ -325,6 +332,9 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
                 break;
               case MHD_RSolver::llf:
                 LLF(member,eos,m,k,j,is-1,ie+1,IVZ,wl,wr,bl,br,bz,flx3,e2x3_,e1x3_);
+                break;
+              case MHD_RSolver::hlle:
+                HLLE(member,eos,m,k,j,is-1,ie+1,IVZ,wl,wr,bl,br,bz,flx3,e2x3_,e1x3_);
                 break;
               case MHD_RSolver::hlld:
                 HLLD(member,eos,m,k,j,is-1,ie+1,IVZ,wl,wr,bl,br,bz,flx3,e2x3_,e1x3_);

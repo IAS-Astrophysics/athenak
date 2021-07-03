@@ -15,8 +15,8 @@ namespace mhd {
 
 KOKKOS_INLINE_FUNCTION
 void Advect(TeamMember_t const &member, const EOS_Data eos,
-     const int m, const int k, const int j, const int il, const int iu,
-     const int ivx, const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr,
+     const int m, const int k, const int j, const int il, const int iu, const int ivx,
+     const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr,
      const ScrArray2D<Real> &bl, const ScrArray2D<Real> &br, const DvceArray4D<Real> &bx,
      DvceArray5D<Real> flx, DvceArray4D<Real> ey, DvceArray4D<Real> ez)
 {

@@ -12,12 +12,6 @@
 
 namespace mhd {
 
-// container to store (density, momentum, total energy, tranverse magnetic field)
-// minimizes changes required to adopt athena4.2 version of this solver
-struct Cons1D {
-  Real d, mx, my, mz, e, by, bz;
-};
-
 #define SMALL_NUMBER 1.0e-8
 
 //----------------------------------------------------------------------------------------
@@ -40,9 +34,6 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
 
   par_for_inner(member, il, iu, [&](const int i)
   {
-    Cons1D ul,ur;                   // L/R states, conserved variables (computed)
-    Cons1D ulst,uldst,urdst,urst;   // Conserved variable for all states
-    Cons1D fl,fr,flxi;                   // Fluxes for left & right states
 
     //--- Step 1.  Load L/R states into local variables
 
@@ -72,6 +63,7 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
     Real kel = 0.5*wl_idn*(SQR(wl_ivx) + (SQR(wl_ivy) + SQR(wl_ivz)));
     Real ker = 0.5*wr_idn*(SQR(wr_ivx) + (SQR(wr_ivy) + SQR(wr_ivz)));
 
+    MHDCons1D ul,ur;  // L/R states, conserved variables (computed)
     ul.d  = wl_idn;
     ul.mx = wl_ivx*ul.d;
     ul.my = wl_ivy*ul.d;
@@ -110,6 +102,7 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
     Real ptl = wl_ipr + pbl; // total pressures L,R
     Real ptr = wr_ipr + pbr;
 
+    MHDCons1D fl,fr,flxi;           // Fluxes for left & right states
     fl.d  = ul.mx;
     fl.mx = ul.mx*wl_ivx + ptl - bxsq;
     fl.my = ul.my*wl_ivx - bxi*ul.by;
@@ -139,6 +132,8 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
     Real sdmr   = spd[4] - spd[2];
     Real sdml_inv = 1.0/sdml;
     Real sdmr_inv = 1.0/sdmr;
+
+    MHDCons1D ulst,uldst,urdst,urst;   // intermadiate states for conserved variables
     // eqn (43) of Miyoshi & Kusano
     ulst.d = ul.d * sdl * sdml_inv;
     urst.d = ur.d * sdr * sdmr_inv;
