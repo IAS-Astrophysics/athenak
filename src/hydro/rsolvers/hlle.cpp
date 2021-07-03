@@ -99,8 +99,9 @@ void HLLE(TeamMember_t const &member, const EOS_Data &eos,
     Real al = fmin((wroe_ivx - a),(wl_ivx - qa));
     Real ar = fmax((wroe_ivx + a),(wr_ivx + qb));
 
-    Real bp = (ar > 0.0) ? ar : 0.0;
-    Real bm = (al < 0.0) ? al : 0.0;
+    // following min/max set to TINY_NUMBER to fix bug found in converging supersonic flow
+    Real bp = (ar > 0.0) ? ar : 1.0-20;
+    Real bm = (al < 0.0) ? al : -1.0e-20;
 
     //-- Step 5. Compute L/R fluxes along lines bm/bp: F_L - (S_L)U_L; F_R - (S_R)U_R
 

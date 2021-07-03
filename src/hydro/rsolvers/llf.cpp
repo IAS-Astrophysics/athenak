@@ -38,57 +38,57 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos,
   {
     //--- Step 1.  Create local references for L/R states (helps compiler vectorize)
 
-    Real &wli_idn = wl(IDN,i);
-    Real &wli_ivx = wl(ivx,i);
-    Real &wli_ivy = wl(ivy,i);
-    Real &wli_ivz = wl(ivz,i);
-    Real &wli_ipr = wl(IPR,i);  // should never be referenced for adiabatic EOS
+    Real &wl_idn = wl(IDN,i);
+    Real &wl_ivx = wl(ivx,i);
+    Real &wl_ivy = wl(ivy,i);
+    Real &wl_ivz = wl(ivz,i);
+    Real &wl_ipr = wl(IPR,i);  // should never be referenced for adiabatic EOS
 
-    Real &wri_idn = wr(IDN,i);
-    Real &wri_ivx = wr(ivx,i);
-    Real &wri_ivy = wr(ivy,i);
-    Real &wri_ivz = wr(ivz,i);
-    Real &wri_ipr = wr(IPR,i);  // should never be referenced for adiabatic EOS
+    Real &wr_idn = wr(IDN,i);
+    Real &wr_ivx = wr(ivx,i);
+    Real &wr_ivy = wr(ivy,i);
+    Real &wr_ivz = wr(ivz,i);
+    Real &wr_ipr = wr(IPR,i);  // should never be referenced for adiabatic EOS
 
     //--- Step 2.  Compute sum of L/R fluxes
 
-    Real qa = wli_idn*wli_ivx;
-    Real qb = wri_idn*wri_ivx;
+    Real qa = wl_idn*wl_ivx;
+    Real qb = wr_idn*wr_ivx;
 
     HydCons1D fsum;
     fsum.d  = qa         + qb;
-    fsum.mx = qa*wli_ivx + qb*wri_ivx;
-    fsum.my = qa*wli_ivy + qb*wri_ivy;
-    fsum.mz = qa*wli_ivz + qb*wri_ivz;
+    fsum.mx = qa*wl_ivx + qb*wr_ivx;
+    fsum.my = qa*wl_ivy + qb*wr_ivy;
+    fsum.mz = qa*wl_ivz + qb*wr_ivz;
 
     Real el,er;
     if (eos.is_adiabatic) {
-      el = wli_ipr*igm1 + 0.5*wli_idn*(SQR(wli_ivx) + SQR(wli_ivy) + SQR(wli_ivz));
-      er = wri_ipr*igm1 + 0.5*wri_idn*(SQR(wri_ivx) + SQR(wri_ivy) + SQR(wri_ivz));
-      fsum.mx += (wli_ipr + wri_ipr);
-      fsum.e  = (el + wli_ipr)*wli_ivx + (er + wri_ipr)*wri_ivx;
+      el = wl_ipr*igm1 + 0.5*wl_idn*(SQR(wl_ivx) + SQR(wl_ivy) + SQR(wl_ivz));
+      er = wr_ipr*igm1 + 0.5*wr_idn*(SQR(wr_ivx) + SQR(wr_ivy) + SQR(wr_ivz));
+      fsum.mx += (wl_ipr + wr_ipr);
+      fsum.e  = (el + wl_ipr)*wl_ivx + (er + wr_ipr)*wr_ivx;
     } else {
-      fsum.mx += (iso_cs*iso_cs)*(wli_idn + wri_idn);
+      fsum.mx += (iso_cs*iso_cs)*(wl_idn + wr_idn);
     }
 
     //--- Step 3.  Compute max wave speed in L,R states (see Toro eq. 10.43)
 
     if (eos.is_adiabatic) {
-      qa = eos.SoundSpeed(wli_ipr,wli_idn);
-      qb = eos.SoundSpeed(wri_ipr,wri_idn);
+      qa = eos.SoundSpeed(wl_ipr,wl_idn);
+      qb = eos.SoundSpeed(wr_ipr,wr_idn);
     } else {
       qa = iso_cs;
       qb = iso_cs;
     }
-    Real a = fmax( (fabs(wli_ivx) + qa), (fabs(wri_ivx) + qb) );
+    Real a = fmax( (fabs(wl_ivx) + qa), (fabs(wr_ivx) + qb) );
 
     //--- Step 4.  Compute difference in L/R states dU, multiplied by max wave speed
 
     HydCons1D du;
-    du.d  = a*(wri_idn         - wli_idn);
-    du.mx = a*(wri_idn*wri_ivx - wli_idn*wli_ivx);
-    du.my = a*(wri_idn*wri_ivy - wli_idn*wli_ivy);
-    du.mz = a*(wri_idn*wri_ivz - wli_idn*wli_ivz);
+    du.d  = a*(wr_idn         - wl_idn);
+    du.mx = a*(wr_idn*wr_ivx - wl_idn*wl_ivx);
+    du.my = a*(wr_idn*wr_ivy - wl_idn*wl_ivy);
+    du.mz = a*(wr_idn*wr_ivz - wl_idn*wl_ivz);
     if (eos.is_adiabatic) du.e = a*(er - el);
 
     //--- Step 5. Compute the LLF flux at interface (see Toro eq. 10.42).
