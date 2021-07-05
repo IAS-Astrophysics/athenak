@@ -98,7 +98,7 @@ void HLLE_SR(TeamMember_t const &member, const EOS_Data &eos,
     fr.d  = wr_idn * wr_ivx;
     fr.mx = qa * wr_ivx + wr_ipr;
     fr.my = qa * wr_ivy;
-    fr,mz = qa * wr_ivz;
+    fr.mz = qa * wr_ivz;
     fr.e  = qa * u0r;
 
     // Calculate fluxes in HLL region (MB 11), store into 3D arrays
