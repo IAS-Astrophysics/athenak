@@ -3,7 +3,7 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file hllc_sr.cpp
+//! \file hllc_srhyd.cpp
 //  \brief Implements HLLC Riemann solver for special relativistic hydrodynamics.
 //  Computes 1D fluxes using the HLLC Riemann solver.
 //

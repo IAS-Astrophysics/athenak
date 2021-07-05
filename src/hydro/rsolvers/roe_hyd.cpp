@@ -3,7 +3,7 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file  roe.cpp
+//! \file  roe_hyd.cpp
 //  \brief Roe's linearized Riemann solver.
 //
 // Computes 1D fluxes using Roe's linearization.  When Roe's method fails because of

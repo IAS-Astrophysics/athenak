@@ -3,7 +3,7 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file llf_sr.cpp
+//! \file llf_srhyd.cpp
 //  \brief Local Lax Friedrichs (LLF) Riemann solver for special relativistic hydro
 //
 //  Computes 1D fluxes using the LLF Riemann solver, also known as Rusanov's method.
@@ -31,7 +31,7 @@ void LLF_SR(TeamMember_t const &member, const EOS_Data &eos,
 {
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
-  Real gm1 = eos.gamma - 1.0;
+  const Real gamma_prime = eos.gamma/(eos.gamma - 1.0);
 
   par_for_inner(member, il, iu, [&](const int i)
   {
@@ -56,8 +56,8 @@ void LLF_SR(TeamMember_t const &member, const EOS_Data &eos,
     Real u0r  = sqrt(1. + u2r);
 
     // FIXME ERM: Ideal fluid for now
-    Real wgas_l = wl_idn + (eos.gamma/gm1) * wl_ipr;
-    Real wgas_r = wr_idn + (eos.gamma/gm1) * wr_ipr;
+    Real wgas_l = wl_idn + gamma_prime * wl_ipr;
+    Real wgas_r = wr_idn + gamma_prime * wr_ipr;
 
 
     //--- Step 2.  Compute sum of L/R fluxes
@@ -85,7 +85,7 @@ void LLF_SR(TeamMember_t const &member, const EOS_Data &eos,
     qa = fmax(-fmin(lm,qa), 0.0);
     Real a = fmax(fmax(lp,qb), qa);
     
-    //--- Step 4.  Compute difference in L/R states dU, multiplied by max wave speed
+    //--- Step 4.  Compute difference dU = U_R - U_L multiplied by max wave speed
 
     HydCons1D du;
     qa = wgas_r*u0r;

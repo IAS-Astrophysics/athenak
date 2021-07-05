@@ -3,7 +3,7 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file advect.cpp
+//! \file advect_hyd.cpp
 //  \brief Riemann solver for pure advection problems (v = constant).  Simply computes the
 //  upwind flux of each variable.  Can only be used for isothermal EOS.
 

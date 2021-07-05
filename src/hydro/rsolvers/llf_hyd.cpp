@@ -3,7 +3,7 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file llf.cpp
+//! \file llf_hyd.cpp
 //  \brief Local Lax Friedrichs (LLF) Riemann solver for hydrodynamics
 //
 //  Computes 1D fluxes using the LLF Riemann solver, also known as Rusanov's method.

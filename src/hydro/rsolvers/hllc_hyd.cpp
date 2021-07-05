@@ -1,7 +1,7 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file hllc.cpp
+//! \file hllc_hyd.cpp
 //  \brief HLLC Riemann solver for hydrodynamics, an extension of the HLLE fluxes to
 //  include the contact wave.  Only works for adiabatic hydrodynamics.
 //

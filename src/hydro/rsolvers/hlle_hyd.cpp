@@ -3,8 +3,8 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file hlle.cpp
-//  \brief HLLE Riemann solver for hydrodynamics
+//! \file hlle_hyd.cpp
+//  \brief Contains HLLE Riemann solver for hydrodynamics
 //
 //  Computes fluxes using the Harten-Lax-vanLeer-Einfeldt (HLLE) Riemann solver.  This
 //  flux is very diffusive, especially for contacts, and so it is not recommended for

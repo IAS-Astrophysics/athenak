@@ -30,7 +30,7 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
   int ibz = ((ivx-IVX) + 2)%3;
   Real spd[5];         // signal speeds, left to right
 
-  //------------------------- ADIABATIC HLLD solver ---------------------------------------
+  //------------------------ ADIABATIC HLLD solver ---------------------------------------
   if (eos.is_adiabatic) {
     Real igm1 = 1.0/((eos.gamma) - 1.0);
     par_for_inner(member, il, iu, [&](const int i)
@@ -58,7 +58,7 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
 
       // Compute L/R states for selected conserved variables
       Real bxsq = bxi*bxi;
-      // (KGF): group transverse vector components for floating-point associativity symmetry
+      // (KGF): group transverse components for floating-point associativity symmetry
       Real pbl = 0.5*(bxsq + (SQR(wl_iby) + SQR(wl_ibz)));  // magnetic pressure (l/r)
       Real pbr = 0.5*(bxsq + (SQR(wr_iby) + SQR(wr_ibz)));
       Real kel = 0.5*wl_idn*(SQR(wl_ivx) + (SQR(wl_ivy) + SQR(wl_ivz)));
@@ -152,7 +152,7 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
       // TODO(felker): place an assertion that ptstl==ptstr
       Real ptstl = ptl + ul.d*sdl*(spd[2]-wl_ivx);
       Real ptstr = ptr + ur.d*sdr*(spd[2]-wr_ivx);
-      // Real ptstl = ptl + ul.d*sdl*(sdl-sdml); // these equations had issues when averaged
+      // Real ptstl = ptl + ul.d*sdl*(sdl-sdml); // these eqns had issues when averaged
       // Real ptstr = ptr + ur.d*sdr*(sdr-sdmr);
       Real ptst = 0.5*(ptstr + ptstl);  // total pressure (star state)
 
@@ -351,7 +351,7 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
       ez(m,k,j,i) =  flxi.bz;
     });
 
-  //------------------------- ISOTHERMAL HLLD solver ---------------------------------------
+  //------------------------- ISOTHERMAL HLLD solver -------------------------------------
   } else {
 
     auto &dfloor_ = eos.density_floor;
