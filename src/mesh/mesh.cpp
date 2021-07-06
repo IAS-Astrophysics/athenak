@@ -10,6 +10,7 @@
 #include <cinttypes>
 
 #include "athena.hpp"
+#include "globals.hpp"
 #include "parameter_input.hpp"
 #include "outputs/io_wrapper.hpp"
 #include "mesh.hpp"

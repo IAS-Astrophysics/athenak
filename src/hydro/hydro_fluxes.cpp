@@ -25,6 +25,7 @@
 #include "hydro/rsolvers/llf_srhyd.cpp"
 #include "hydro/rsolvers/hllc_hyd.cpp"
 #include "hydro/rsolvers/hllc_srhyd.cpp"
+#include "hydro/rsolvers/hlle_grhyd.cpp"
 //#include "hydro/rsolvers/roe_hyd.cpp"
 
 namespace hydro {

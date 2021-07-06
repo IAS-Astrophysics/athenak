@@ -62,8 +62,8 @@ void HLLC_SR(TeamMember_t const &member, const EOS_Data &eos,
     //--- Step 2.  Compute wave speeds in L,R states (see Toro eq. 10.43)
 
     Real lm,lp,qa,qb;
-    eos.WaveSpeeds_SR(wgas_l, pgas_l, u_l[1]/u_l[0], u_l[0]*u_l[0], lp, lm);
-    eos.WaveSpeeds_SR(wgas_r, pgas_r, u_r[1]/u_r[0], u_r[0]*u_r[0], qb,qa);
+    eos.WaveSpeedsSR(wgas_l, pgas_l, u_l[1]/u_l[0], u_l[0]*u_l[0], lp, lm);
+    eos.WaveSpeedsSR(wgas_r, pgas_r, u_r[1]/u_r[0], u_r[0]*u_r[0], qb,qa);
 
     // Calculate extremal wavespeeds
     Real lambda_l = fmin(lm, qa);

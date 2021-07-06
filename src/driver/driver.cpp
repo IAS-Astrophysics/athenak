@@ -10,6 +10,7 @@
 #include <iomanip>    // std::setprecision()
 
 #include "athena.hpp"
+#include "globals.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "outputs/outputs.hpp"

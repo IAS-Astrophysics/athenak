@@ -31,11 +31,34 @@ struct EOS_Data
 
   // sound speed function for adiabatic EOS 
   KOKKOS_INLINE_FUNCTION
-  Real SoundSpeed(Real p, Real d) const {
+  Real SoundSpeed(Real p, Real d)
+  const {
     return std::sqrt(gamma*p/d);
   }
 
-  // function to compute maximal wave speeds for special relativistic adiabatic EOS 
+  // fast magnetosonic speed function for adiabatic EOS 
+  KOKKOS_INLINE_FUNCTION
+  Real FastMagnetosonicSpeed(Real d, Real p, Real bx, Real by, Real bz)
+  const {
+    Real asq = gamma*p;
+    Real ct2 = by*by + bz*bz;
+    Real qsq = bx*bx + ct2 + asq;
+    Real tmp = bx*bx + ct2 - asq;
+    return std::sqrt(0.5*(qsq + std::sqrt(tmp*tmp + 4.0*asq*ct2))/d);
+  }
+
+  // fast magnetosonic speed function for isothermal EOS 
+  KOKKOS_INLINE_FUNCTION
+  Real FastMagnetosonicSpeed(Real d, Real bx, Real by, Real bz)
+  const {
+    Real asq = (iso_cs*iso_cs)*d;
+    Real ct2 = by*by + bz*bz;
+    Real qsq = bx*bx + ct2 + asq;
+    Real tmp = bx*bx + ct2 - asq;
+    return std::sqrt(0.5*(qsq + std::sqrt(tmp*tmp + 4.0*asq*ct2))/d);
+  }
+
+  // maximal wave speeds for special relativistic adiabatic EOS 
   // Inputs:
   //   h: enthalpy per unit volume
   //   p: gas pressure
@@ -48,7 +71,8 @@ struct EOS_Data
   //   Mignone & Bodo 2005, MNRAS 364 126 (MB).
   //   Del Zanna et al, A&A 473, 11 (2007) (eq. 76)
   KOKKOS_INLINE_FUNCTION
-  void WaveSpeeds_SR(Real h, Real p, Real vx, Real lor_sq, Real& l_p, Real& l_m) const {
+  void WaveSpeedsSR(Real h, Real p, Real vx, Real lor_sq, Real& l_p, Real& l_m)
+  const {
     Real cs2 = gamma * p / h;  // (MB 4)
     Real v2 = 1.0 - 1.0/lor_sq;
     auto const p1 = vx * (1.0 - cs2);
@@ -59,24 +83,45 @@ struct EOS_Data
     l_m = (p1 - tmp) * invden;
   }
 
-  // fast magnetosonic speed function for adiabatic EOS 
+  // maximal wave speeds for general relativistic adiabatic EOS in arbitrary coordinates
+  // Inputs:
+  //  - h: enthalpy per unit volume
+  //  - p: gas pressure
+  //  - u0,u1: 4-velocity components u^0, u^1
+  //  - g00,g01,g11: metric components g^00, g^01, g^11
+  // Outputs:
+  //  - l_p/l_m: most positive/negative wavespeed
+  // Notes:
+  //  - Follows same general procedure as vchar() in phys.c in Harm.
+  //  - Variables are named as though 1 is normal direction.
   KOKKOS_INLINE_FUNCTION
-  Real FastMagnetosonicSpeed(Real d, Real p, Real bx, Real by, Real bz) const {
-    Real asq = gamma*p;
-    Real ct2 = by*by + bz*bz;
-    Real qsq = bx*bx + ct2 + asq;
-    Real tmp = bx*bx + ct2 - asq;
-    return std::sqrt(0.5*(qsq + std::sqrt(tmp*tmp + 4.0*asq*ct2))/d);
-  }
+  void WaveSpeedsGR(Real h, Real p, Real u0, Real u1, Real g00, Real g01, Real g11,
+                     Real& l_p, Real& l_m)
+  const {
+    // Parameters and constants
+    const Real discriminant_tol = -1.0e-10;  // values between this and 0 are considered 0
 
-  // fast magnetosonic speed function for isothermal EOS 
-  KOKKOS_INLINE_FUNCTION
-  Real FastMagnetosonicSpeed(Real d, Real bx, Real by, Real bz) const {
-    Real asq = (iso_cs*iso_cs)*d;
-    Real ct2 = by*by + bz*bz;
-    Real qsq = bx*bx + ct2 + asq;
-    Real tmp = bx*bx + ct2 - asq;
-    return std::sqrt(0.5*(qsq + std::sqrt(tmp*tmp + 4.0*asq*ct2))/d);
+    // Calculate comoving sound speed
+    Real cs_sq = gamma * p / h;
+
+    // Set sound speeds in appropriate coordinates
+    Real a = SQR(u0) - (g00 + SQR(u0)) * cs_sq;
+    Real b = -2.0 * (u0*u1 - (g01 + u0*u1) * cs_sq);
+    Real c = SQR(u1) - (g11 + SQR(u1)) * cs_sq;
+    Real d = SQR(b) - 4.0*a*c;
+    if (d < 0.0 && d > discriminant_tol) {
+      d = 0.0;
+    }
+    Real d_sqrt = sqrt(d);
+    Real root_1 = (-b + d_sqrt) / (2.0*a);
+    Real root_2 = (-b - d_sqrt) / (2.0*a);
+    if (root_1 > root_2) {
+      l_p = root_1;
+      l_m = root_2;
+    } else {
+      l_p = root_2;
+      l_m = root_1;
+    }
   }
 };
 

@@ -79,8 +79,8 @@ void LLF_SR(TeamMember_t const &member, const EOS_Data &eos,
     //--- Step 3.  Compute wave speeds in L,R states (see Toro eq. 10.43)
 
     Real lm,lp;
-    eos.WaveSpeeds_SR(wgas_l, wl_ipr, wl_ivx/u0l, (1.0 + u2l), lp, lm);
-    eos.WaveSpeeds_SR(wgas_r, wr_ipr, wr_ivx/u0r, (1.0 + u2r), qb,qa);
+    eos.WaveSpeedsSR(wgas_l, wl_ipr, wl_ivx/u0l, (1.0 + u2l), lp, lm);
+    eos.WaveSpeedsSR(wgas_r, wr_ipr, wr_ivx/u0r, (1.0 + u2r), qb,qa);
 
     qa = fmax(-fmin(lm,qa), 0.0);
     Real a = fmax(fmax(lp,qb), qa);

@@ -61,11 +61,11 @@ void HLLE_SR(TeamMember_t const &member, const EOS_Data &eos,
 
     // Calculate wavespeeds in left state (MB 23)
     Real lp_l, lm_l;
-    eos.WaveSpeeds_SR(wgas_l, wl_ipr, wl_ivx/u0l, (1.0 + u2l), lp_l, lm_l);
+    eos.WaveSpeedsSR(wgas_l, wl_ipr, wl_ivx/u0l, (1.0 + u2l), lp_l, lm_l);
 
     // Calculate wavespeeds in right state (MB 23)
     Real lp_r, lm_r;
-    eos.WaveSpeeds_SR(wgas_r, wr_ipr, wr_ivx/u0r, (1.0 + u2r), lp_r, lm_r);
+    eos.WaveSpeedsSR(wgas_r, wr_ipr, wr_ivx/u0r, (1.0 + u2r), lp_r, lm_r);
 
     // Calculate extremal wavespeeds
     Real lambda_l = fmin(lm_l, lm_r);

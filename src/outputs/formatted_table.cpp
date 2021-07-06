@@ -17,6 +17,7 @@
 #include <string>
 
 #include "athena.hpp"
+#include "globals.hpp"
 #include "mesh/mesh.hpp"
 #include "utils/grid_locations.hpp"
 #include "outputs.hpp"
