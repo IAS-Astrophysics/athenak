@@ -12,6 +12,22 @@
 #include "utils/grid_locations.hpp"
 #include "cartesian_ks.hpp"
 #include "coordinates.hpp"
+
+//----------------------------------------------------------------------------------------
+// constructor, parses input file and initializes data structures and parameters
+
+Coordinates::Coordinates(std::string block, MeshBlockPack *pp, ParameterInput *pin) :
+  pmy_pack(pp)
+{
+  bh_spin = pin->GetReal("coord","a");
+}
+
+//----------------------------------------------------------------------------------------
+// destructor
+
+Coordinates::~Coordinates()
+{
+}
   
 //----------------------------------------------------------------------------------------
 // Coordinate (geometric) source term function

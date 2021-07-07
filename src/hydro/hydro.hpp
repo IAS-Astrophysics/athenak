@@ -15,12 +15,14 @@
 
 // forward declarations
 class EquationOfState;
+class Coordinates;
 class Viscosity;
 class SourceTerms;
 class Driver;
 
 // constants that enumerate Hydro Riemann Solver options
-enum class Hydro_RSolver {advect, llf, hlle, hllc, roe, llf_rel, hllc_rel};
+enum class Hydro_RSolver {advect, llf, hlle, hllc, roe, llf_sr, hlle_sr, hllc_sr,
+                          hlle_gr};
 
 //----------------------------------------------------------------------------------------
 //! \struct HydroTaskIDs
@@ -65,6 +67,9 @@ class Hydro
 
   // Object containing boundary communication buffers and routines for u
   BoundaryValueCC *pbval_u;
+
+  // Object for coordinates in GR (only Cartesian Jerr-Schild for now)
+  Coordinates *pcoord;
 
   // Object(s) for extra physics (viscosity, srcterms)
   Viscosity *pvisc = nullptr;

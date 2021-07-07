@@ -100,10 +100,10 @@ TaskStatus Hydro::CalcFluxes(Driver *pdriver, int stage)
 //        case Hydro_RSolver::roe:
 //          Roe(member, eos, m, k, j, is, ie+1, IVX, wl, wr, flx1);
 //          break;
-        case Hydro_RSolver::llf_rel:
+        case Hydro_RSolver::llf_sr:
           LLF_SR(member, eos, m, k, j, is, ie+1, IVX, wl, wr, flx1);
           break;
-        case Hydro_RSolver::hllc_rel:
+        case Hydro_RSolver::hllc_sr:
           HLLC_SR(member, eos, m, k, j, is, ie+1, IVX, wl, wr, flx1);
           break;
         default:
@@ -191,10 +191,10 @@ TaskStatus Hydro::CalcFluxes(Driver *pdriver, int stage)
 //              case Hydro_RSolver::roe:
 //                Roe(member, eos, m, k, j, is, ie, IVY, wl, wr, flx2);
 //                break;
-              case Hydro_RSolver::llf_rel:
+              case Hydro_RSolver::llf_sr:
                 LLF_SR(member, eos, m, k, j, is, ie, IVY, wl, wr, flx2);
                 break;
-              case Hydro_RSolver::hllc_rel:
+              case Hydro_RSolver::hllc_sr:
                 HLLC_SR(member, eos, m, k, j, is, ie, IVY, wl, wr, flx2);
                 break;
               default:
@@ -285,10 +285,10 @@ TaskStatus Hydro::CalcFluxes(Driver *pdriver, int stage)
 //              case Hydro_RSolver::roe:
 //                Roe(member, eos, m, k, j, is, ie, IVZ, wl, wr, flx3);
 //                break;
-              case Hydro_RSolver::llf_rel:
+              case Hydro_RSolver::llf_sr:
                 LLF_SR(member, eos, m, k, j, is, ie, IVZ, wl, wr, flx3);
                 break;
-              case Hydro_RSolver::hllc_rel:
+              case Hydro_RSolver::hllc_sr:
                 HLLC_SR(member, eos, m, k, j, is, ie, IVZ, wl, wr, flx3);
                 break;
               default:
