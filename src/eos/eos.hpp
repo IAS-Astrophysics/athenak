@@ -58,7 +58,7 @@ struct EOS_Data
     return std::sqrt(0.5*(qsq + std::sqrt(tmp*tmp + 4.0*asq*ct2))/d);
   }
 
-  // maximal wave speeds for special relativistic adiabatic EOS 
+  // maximal wave speeds for adiabatic SR hydro
   // Inputs:
   //   h: enthalpy per unit volume
   //   p: gas pressure
@@ -83,7 +83,7 @@ struct EOS_Data
     l_m = (p1 - tmp) * invden;
   }
 
-  // maximal wave speeds for general relativistic adiabatic EOS in arbitrary coordinates
+  // maximal wave speeds for adiabatic GR hydro in arbitrary coordinates
   // Inputs:
   //  - h: enthalpy per unit volume
   //  - p: gas pressure
@@ -122,6 +122,42 @@ struct EOS_Data
       l_p = root_2;
       l_m = root_1;
     }
+  }
+
+  // maximal fast magnetosonic wave speeds for adiabatic GRMHD in arbitrary coordinates
+// Inputs:
+//   wgas: gas enthalpy
+//   pgas: gas pressure
+//   u0, u1: contravariant components of 4-velocity
+//   b_sq: b_\mu b^\mu
+//   g00, g01, g11: contravariant components of metric (-1, 0, 1 in SR)
+// Outputs:
+//   p_lambda_plus: value set to most positive wavespeed
+//   p_lambda_minus: value set to most negative wavespeed
+// Notes:
+//   Follows same general procedure as vchar() in phys.c in Harm.
+//   Variables are named as though 1 is normal direction.
+//   Same function as in adiabatic_mhd_sr.cpp.
+
+  KOKKOS_INLINE_FUNCTION
+  void FastSpeedsGR(Real h, Real p, Real u0, Real u1, Real b_sq,
+                    Real g00, Real g01, Real g11, Real& l_p, Real& l_m)
+  const {
+    // Calculate comoving fast magnetosonic speed
+    Real cs_sq = gamma * p / h;
+    Real va_sq = b_sq / (b_sq + h);
+    Real cms_sq = cs_sq + va_sq - cs_sq * va_sq;
+
+    // Set fast magnetosonic speeds in appropriate coordinates
+    Real a = SQR(u0) - (g00 + SQR(u0)) * cms_sq;
+    Real b = -2.0 * (u0 * u1 - (g01 + u0 * u1) * cms_sq);
+    Real c = SQR(u1) - (g11 + SQR(u1)) * cms_sq;
+    Real a1 = b / a;
+    Real a0 = c / a;
+    Real s = fmax(SQR(a1) - 4.0 * a0, 0.0);
+    s = sqrt(s);
+    l_p = (a1 >= 0.0) ? -2.0 * a0 / (a1 + s) : (-a1 + s) / 2.0;
+    l_m = (a1 >= 0.0) ? (-a1 - s) / 2.0 : -2.0 * a0 / (a1 - s);
   }
 };
 

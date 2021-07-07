@@ -27,6 +27,7 @@
 #include "mhd/rsolvers/advect_mhd.cpp"
 #include "mhd/rsolvers/llf_mhd.cpp"
 #include "mhd/rsolvers/hlle_mhd.cpp"
+#include "mhd/rsolvers/hlle_grmhd.cpp"
 #include "mhd/rsolvers/hlld.cpp"
 //#include "mhd/rsolvers/roe_mhd.cpp"
 
