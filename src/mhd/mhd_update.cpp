@@ -12,6 +12,7 @@
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
 #include "driver/driver.hpp"
+#include "coordinates/coordinates.hpp"
 #include "srcterms/srcterms.hpp"
 #include "mhd.hpp"
 
@@ -95,6 +96,11 @@ TaskStatus MHD::ExpRKUpdate(Driver *pdriver, int stage)
     if (psrc->shearing_box) psrc->AddShearingBox(u0, w0, bcc0, beta_dt);
   }
 
+  // Add coordinate source terms in GR.  Again, must be computed with only primitives.
+  if (is_general_relativistic) {
+    pcoord->AddCoordTerms(w0, bcc0, peos->eos_data, beta_dt, u0);
+  }
+
   return TaskStatus::complete;
 }
-} // namespace hydro
+} // namespace mhd

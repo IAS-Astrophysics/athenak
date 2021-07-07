@@ -29,6 +29,8 @@ class Coordinates
   // functions
   void AddCoordTerms(const DvceArray5D<Real> &w0, const EOS_Data &eos, const Real dt,
                      DvceArray5D<Real> &u0);
+  void AddCoordTerms(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc,
+                     const EOS_Data &eos, const Real dt, DvceArray5D<Real> &u0);
 
  private:
   MeshBlockPack* pmy_pack;

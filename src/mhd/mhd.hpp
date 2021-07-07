@@ -15,6 +15,7 @@
 
 // forward declarations
 class EquationOfState;
+class Coordinates;
 class Viscosity;
 class Resistivity;
 class SourceTerms;
@@ -59,6 +60,10 @@ class MHD
   // data
   EquationOfState *peos;   // chosen EOS
 
+  // flags to denote relativistic dynamics
+  bool is_special_relativistic = false;
+  bool is_general_relativistic = false;
+
   int nmhd;                // number of cons variables (5/4 for adiabatic/isothermal)
   int nscalars;            // number of passive scalars
   DvceArray5D<Real> u0;    // conserved variables
@@ -69,6 +74,9 @@ class MHD
   // Objects containing boundary communication buffers and routines for u and b
   BoundaryValueCC *pbval_u;
   BoundaryValueFC *pbval_b;
+
+  // Object for coordinates in GR (only Cartesian Jerr-Schild for now)
+  Coordinates *pcoord;
 
   // Object(s) for extra physics (viscosity, resistivity, srcterms)
   Viscosity *pvisc = nullptr;

@@ -12,6 +12,7 @@
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
+#include "coordinates/coordinates.hpp"
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
 #include "srcterms/srcterms.hpp"
@@ -44,6 +45,15 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 {
   // (1) Start by selecting physics for this MHD:
 
+  // Check for relativistic dynamics
+  is_special_relativistic = pin->GetOrAddBoolean("mhd","special_rel",false);
+  is_general_relativistic = pin->GetOrAddBoolean("mhd","general_rel",false);
+  if (is_special_relativistic && is_general_relativistic) {
+    std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
+              << "Cannot specify both SR and GR at same time" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
   // construct EOS object (no default)
   {std::string eqn_of_state = pin->GetString("mhd","eos");
   if (eqn_of_state.compare("adiabatic") == 0) {
@@ -60,6 +70,13 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // Initialize number of scalars
   nscalars = pin->GetOrAddInteger("mhd","nscalars",0);
+
+  // Initialize coordinates for GR
+  if (is_general_relativistic) {
+    pcoord = new Coordinates("hydro", ppack, pin);
+  } else {
+    pcoord = nullptr; 
+  }
 
   // Viscosity (only constructed if needed)
   if (pin->DoesParameterExist("mhd","viscosity")) {
@@ -216,6 +233,7 @@ MHD::~MHD()
   delete peos;
   delete pbval_u;
   delete pbval_b;
+  if (pcoord != nullptr) {delete pcoord;}
   if (pvisc != nullptr) {delete pvisc;}
   if (presist!= nullptr) {delete presist;}
   if (psrc!= nullptr) {delete psrc;}
