@@ -16,16 +16,18 @@
 //! \class Coordinates
 //! \brief data and functions for coordinates
 
-class SourceTerms
+class Coordinates
 {
  public:
   Coordinates(std::string block, MeshBlockPack *pp, ParameterInput *pin);
   ~Coordinates();
 
   // data
+  Real bh_spin;
 
   // functions
-  void AddCoordTerms(DvceArray5D<Real> &u0,const DvceArray5D<Real> &w0,const Real dt);
+  void AddCoordTerms(const DvceArray5D<Real> &w0, const EOS_Data &eos, const Real dt,
+                     DvceArray5D<Real> &u0);
 
  private:
   MeshBlockPack* pmy_pack;

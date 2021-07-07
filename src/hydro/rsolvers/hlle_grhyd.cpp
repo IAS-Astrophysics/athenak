@@ -14,7 +14,6 @@
 #include <cmath>      // sqrt()
 
 #include "athena.hpp"
-#include "globals.hpp"
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
 #include "coordinates/cartesian_ks.hpp"
@@ -27,7 +26,7 @@
 KOKKOS_INLINE_FUNCTION
 void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos,
      const int m, const int k, const int j, const int il, const int iu, const int ivx,
-     const ScrArray1D<Real> &x1, Real x2, Real x3,
+     const ScrArray1D<Real> &x1, Real x2, Real x3, Real spin,
      const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr, DvceArray5D<Real> flx)
 {
   int ivy = IVX + ((ivx-IVX)+1)%3;
@@ -38,7 +37,7 @@ void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos,
   {
     // Extract components of metric
     Real g_[NMETRIC], gi_[NMETRIC];
-    ComputeMetricAndInverse(x1(i), x2, x3, g_, gi_);
+    ComputeMetricAndInverse(x1(i), x2, x3, spin, g_, gi_);
     const Real
       &g_00 = g_[I00], &g_01 = g_[I01], &g_02 = g_[I02], &g_03 = g_[I03],
       &g_10 = g_[I01], &g_11 = g_[I11], &g_12 = g_[I12], &g_13 = g_[I13],

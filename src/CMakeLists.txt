@@ -14,6 +14,8 @@ add_executable(
         bvals/bvals_cc.cpp
         bvals/bvals_fc.cpp
 
+        coordinates/coordinates.cpp
+
         diffusion/resistivity.cpp
         diffusion/viscosity.cpp
 

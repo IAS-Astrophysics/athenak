@@ -7,8 +7,11 @@
 //! \brief 
 
 #include "athena.hpp"
-#include "eos/eos.hpp"
 #include "mesh/mesh.hpp"
+#include "eos/eos.hpp"
+#include "utils/grid_locations.hpp"
+#include "cartesian_ks.hpp"
+#include "coordinates.hpp"
   
 //----------------------------------------------------------------------------------------
 // Coordinate (geometric) source term function
@@ -20,22 +23,31 @@
 // Outputs:
 //   cons: source terms added to 3D array of conserved variables
 
-void Coordinates::AddCoordTerms(const DvceArray5D<Real> &w, const EOS_Data &eos,
-                                const Real dt, DvceArray5D<Real> *u)
+void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim, const EOS_Data &eos,
+                                const Real dt, DvceArray5D<Real> &cons)
 {
+  // capture variables for kernel
+  int &nx1 = pmy_pack->mb_cells.nx1;
+  int &nx2 = pmy_pack->mb_cells.nx2;
+  int &nx3 = pmy_pack->mb_cells.nx3;
   int is = pmy_pack->mb_cells.is; int ie = pmy_pack->mb_cells.ie;
   int js = pmy_pack->mb_cells.js; int je = pmy_pack->mb_cells.je;
   int ks = pmy_pack->mb_cells.ks; int ke = pmy_pack->mb_cells.ke;
+  auto &size = pmy_pack->pmb->mbsize;
   int nmb1 = pmy_pack->nmb_thispack - 1;
+  Real &spin = bh_spin;
 
   Real gamma_prime = eos.gamma / (eos.gamma - 1.0);
 
-  par_for("sbox", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
+  par_for("coord_src", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i)
     {
       // Extract components of metric
+      Real x1v = CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
+      Real x2v = CellCenterX(j-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
+      Real x3v = CellCenterX(k-ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
       Real g_[NMETRIC], gi_[NMETRIC];
-      ComputeMetricAndInverse(x1(i), x2, x3, g_, gi_);
+      ComputeMetricAndInverse(x1v, x2v, x3v, spin, g_, gi_);
       const Real
         &g_00 = g_[I00], &g_01 = g_[I01], &g_02 = g_[I02], &g_03 = g_[I03],
         &g_10 = g_[I01], &g_11 = g_[I11], &g_12 = g_[I12], &g_13 = g_[I13],
@@ -49,11 +61,11 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &w, const EOS_Data &eos,
       Real alpha = std::sqrt(-1.0/g00);
 
       // Extract primitives
-      const Real &rho  = w(m,IDN,k,j,i);
-      const Real &pgas = w(m,IEN,k,j,i);
-      const Real &uu1  = w(m,IVX,k,j,i);
-      const Real &uu2  = w(m,IVY,k,j,i);
-      const Real &uu3  = w(m,IVZ,k,j,i);
+      const Real &rho  = prim(m,IDN,k,j,i);
+      const Real &pgas = prim(m,IEN,k,j,i);
+      const Real &uu1  = prim(m,IVX,k,j,i);
+      const Real &uu2  = prim(m,IVY,k,j,i);
+      const Real &uu3  = prim(m,IVZ,k,j,i);
 
       // Calculate 4-velocity
       Real uu_sq = g_11*uu1*uu1 + 2.0*g_12*uu1*uu2 + 2.0*g_13*uu1*uu3
@@ -81,8 +93,8 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &w, const EOS_Data &eos,
       tt[I33] = wtot * u3 * u3 + ptot * g33;
 
       // Calculate source terms
-      Real df_dx1[NMETRIC], dg_dx2[NMETRIC], dg_dx3[NMETRIC];
-      ComputeMetricDerivatives(x1,x2,x3, dg_dx1, dg_dx2, dg_dx3);
+      Real dg_dx1[NMETRIC], dg_dx2[NMETRIC], dg_dx3[NMETRIC];
+      ComputeMetricDerivatives(x1v, x2v, x3v, spin, dg_dx1, dg_dx2, dg_dx3);
       Real s_1 = 0.0, s_2 = 0.0, s_3 = 0.0;
       s_1 += dg_dx1[I00] * tt[I00];
       s_1 += dg_dx1[I01] * tt[I01];
@@ -131,9 +143,9 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &w, const EOS_Data &eos,
                   + dg_dx3[I33] * tt[I33]);
 
       // Add source terms to conserved quantities
-      u(m,IM1,k,j,i) += dt * s_1;
-      u(m,IM2,k,j,i) += dt * s_2;
-      u(m,IM3,k,j,i) += dt * s_3;
+      cons(m,IM1,k,j,i) += dt * s_1;
+      cons(m,IM2,k,j,i) += dt * s_2;
+      cons(m,IM3,k,j,i) += dt * s_3;
     }
   );
 
