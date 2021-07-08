@@ -204,6 +204,13 @@ class AdiabaticHydroSR : public EquationOfState
   void ConsToPrimHydro(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
 };
 
+class AdiabaticHydroGR : public EquationOfState
+{
+ public:
+  AdiabaticHydroGR(MeshBlockPack *pp, ParameterInput *pin);
+  void ConsToPrimHydro(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
+};
+
 //----------------------------------------------------------------------------------------
 //! \class IsothermalHydro
 //  \brief Derived class for Hydro isothermal EOS
