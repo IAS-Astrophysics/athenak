@@ -126,6 +126,11 @@ void AdiabaticHydroGR::ConsToPrimHydro(const DvceArray5D<Real> &cons,
       // This is only true if sqrt{-g}=1!
       u_e *= (-1./g00); // Multiply by alpha^2
 
+      // Need to multiply the conserved density by alpha, so that it
+      // contains a lorentz factor
+      
+      u_d *= alpha;
+
       // Subtract density for consistency with the rest of the algorithm
       u_e -= u_d;            
 
