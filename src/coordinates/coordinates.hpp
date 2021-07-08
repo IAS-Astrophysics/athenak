@@ -24,7 +24,7 @@ class Coordinates
   ~Coordinates();
 
   // data
-  Real bh_spin;
+  Real bh_mass, bh_spin;
 
   // functions
   void AddCoordTerms(const DvceArray5D<Real> &w0, const EOS_Data &eos, const Real dt,

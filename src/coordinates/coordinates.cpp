@@ -19,6 +19,7 @@
 Coordinates::Coordinates(std::string block, MeshBlockPack *pp, ParameterInput *pin) :
   pmy_pack(pp)
 {
+  bh_mass = pin->GetReal("coord","m");
   bh_spin = pin->GetReal("coord","a");
 }
 
