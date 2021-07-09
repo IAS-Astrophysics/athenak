@@ -22,7 +22,9 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
+#include "mesh/mesh_positions.hpp"
 #include "coordinates/coordinates.hpp"
+#include "coordinates/cartesian_ks.hpp"
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 
@@ -256,9 +258,9 @@ static Real LogHAux(Real r, Real sin_theta)
   Real exp_2nu = sigma * delta / aa;                         // \exp(2\nu) (FM 3.5)
   Real exp_2psi = aa / sigma * sin_sq_theta;                 // \exp(2\psi) (FM 3.5)
   Real exp_neg2chi = exp_2nu / exp_2psi;                     // \exp(-2\chi) (cf. FM 2.15)
-  Real omega = 2.0*m*spin*r/aa;                              // \omega (FM 3.5)
-  Real var_a = std::sqrt(1.0 + 4.0*SQR(l_peak)*exp_neg2chi);
-  Real var_b = 0.5 * std::log((1.0+var_a) / (sigma*delta/aa));
+  Real omega = 2.0*mass*spin*r/aa;                              // \omega (FM 3.5)
+  Real var_a = sqrt(1.0 + 4.0*SQR(l_peak)*exp_neg2chi);
+  Real var_b = 0.5 * log((1.0+var_a) / (sigma*delta/aa));
   Real var_c = -0.5 * var_a;
   Real var_d = -l_peak * omega;
   return var_b + var_c + var_d;                              // (FM 3.4)
@@ -372,9 +374,9 @@ static void CalculateVelocityInTorus(Real r, Real sin_theta, Real *pu0, Real *pu
 {
   Real sin_sq_theta = SQR(sin_theta);
   Real cos_sq_theta = 1.0 - sin_sq_theta;
-  Real delta = SQR(r) - 2.0*m*r + SQR(a);                    // \Delta
-  Real sigma = SQR(r) + SQR(a)*cos_sq_theta;                 // \Sigma
-  Real aa = SQR(SQR(r)+SQR(a)) - delta*SQR(a)*sin_sq_theta;  // A
+  Real delta = SQR(r) - 2.0*mass*r + SQR(spin);                    // \Delta
+  Real sigma = SQR(r) + SQR(spin)*cos_sq_theta;                    // \Sigma
+  Real aa = SQR(SQR(r)+SQR(spin)) - delta*SQR(spin)*sin_sq_theta;  // A
   Real exp_2nu = sigma * delta / aa;                         // \exp(2\nu) (FM 3.5)
   Real exp_2psi = aa / sigma * sin_sq_theta;                 // \exp(2\psi) (FM 3.5)
   Real exp_neg2chi = exp_2nu / exp_2psi;                     // \exp(-2\chi) (cf. FM 2.15)
@@ -382,15 +384,14 @@ static void CalculateVelocityInTorus(Real r, Real sin_theta, Real *pu0, Real *pu
   Real u_phi_proj_b = -1.0 + std::sqrt(u_phi_proj_a);
   Real u_phi_proj = std::sqrt(0.5 * u_phi_proj_b);           // (FM 3.3)
   Real u3_a = (1.0+SQR(u_phi_proj)) / (aa*sigma*delta);
-  Real u3_b = 2.0*m*a*r * std::sqrt(u3_a);
-  Real u3_c = std::sqrt(sigma/aa) / sin_theta;
+  Real u3_b = 2.0*mass*spin*r * sqrt(u3_a);
+  Real u3_c = sqrt(sigma/aa) / sin_theta;
   Real u3 = u3_b + u3_c * u_phi_proj;
-  Real g_00 = -(1.0 - 2.0*m*r/sigma);
-  Real g_03 = -2.0*m*a*r/sigma * sin_sq_theta;
-  Real g_33 = (sigma + (1.0 + 2.0*m*r/sigma) * SQR(a)
-      * sin_sq_theta) * sin_sq_theta;
+  Real g_00 = -(1.0 - 2.0*mass*r/sigma);
+  Real g_03 = -2.0*mass*spin*r/sigma * sin_sq_theta;
+  Real g_33 = (sigma + (1.0 + 2.0*mass*r/sigma)*SQR(spin) * sin_sq_theta) * sin_sq_theta;
   Real u0_a = (SQR(g_03) - g_00*g_33) * SQR(u3);
-  Real u0_b = std::sqrt(u0_a - g_00);
+  Real u0_b = sqrt(u0_a - g_00);
   Real u0 = -1.0/g_00 * (g_03*u3 + u0_b);
   *pu0 = u0;
   *pu3 = u3;
@@ -416,17 +417,17 @@ static void TransformVector(Real a0_bl, Real a1_bl, Real a2_bl, Real a3_bl, Real
   Real z = x3;
 
   Real R = sqrt( SQR(x) + SQR(y) + SQR(z) );
-  Real r = sqrt( SQR(R) - SQR(a) + sqrt( SQR(SQR(R) - SQR(a)) + 4.0*SQR(a)*SQR(z) )  )/
-           sqrt(2.0);
-  Real delta = SQR(r) - 2.0*m*r + SQR(a);
+  Real r = sqrt( SQR(R) - SQR(spin) + sqrt( SQR(SQR(R) - SQR(spin)) 
+               + 4.0*SQR(spin)*SQR(z) ) )/ sqrt(2.0);
+  Real delta = SQR(r) - 2.0*mass*r + SQR(spin);
   *pa0 = a0_bl + 2.0*r/delta * a1_bl;
-  *pa1 = a1_bl * ( (r*x+a*y)/(SQR(r) + SQR(a)) - y*a/delta) + 
-         a2_bl * x*z/r * sqrt((SQR(r) + SQR(a))/(SQR(x) + SQR(y))) - 
+  *pa1 = a1_bl * ( (r*x+spin*y)/(SQR(r) + SQR(spin)) - y*spin/delta) + 
+         a2_bl * x*z/r * sqrt((SQR(r) + SQR(spin))/(SQR(x) + SQR(y))) - 
          a3_bl * y; 
-  *pa2 = a1_bl * ( (r*y-a*x)/(SQR(r) + SQR(a)) + x*a/delta) + 
-         a2_bl * y*z/r * sqrt((SQR(r) + SQR(a))/(SQR(x) + SQR(y))) + 
+  *pa2 = a1_bl * ( (r*y-spin*x)/(SQR(r) + SQR(spin)) + x*spin/delta) + 
+         a2_bl * y*z/r * sqrt((SQR(r) + SQR(spin))/(SQR(x) + SQR(y))) + 
          a3_bl * x;
   *pa3 = a1_bl * z/r - 
-         a2_bl * r * qrt((SQR(x) + SQR(y))/(SQR(r) + SQR(a)));
+         a2_bl * r * sqrt((SQR(x) + SQR(y))/(SQR(r) + SQR(spin)));
   return;
 }

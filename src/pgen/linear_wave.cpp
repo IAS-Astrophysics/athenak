@@ -22,11 +22,11 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
+#include "mesh/mesh_positions.hpp"
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "driver/driver.hpp"
-#include "utils/grid_locations.hpp"
 #include "pgen.hpp"
 
 // global variable to control computation of initial conditions versus errors

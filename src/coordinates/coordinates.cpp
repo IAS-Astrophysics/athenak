@@ -8,8 +8,8 @@
 
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
+#include "mesh/mesh_positions.hpp"
 #include "eos/eos.hpp"
-#include "utils/grid_locations.hpp"
 #include "cartesian_ks.hpp"
 #include "coordinates.hpp"
 

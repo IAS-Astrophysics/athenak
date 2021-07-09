@@ -15,10 +15,10 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
+#include "mesh/mesh_positions.hpp"
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
-#include "utils/grid_locations.hpp"
 #include "pgen.hpp"
 
 // Define some containers to hold Hydro conserved/primitive variables

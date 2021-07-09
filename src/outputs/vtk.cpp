@@ -19,8 +19,8 @@
 
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
+#include "mesh/mesh_positions.hpp"
 #include "hydro/hydro.hpp"
-#include "utils/grid_locations.hpp"
 #include "outputs.hpp"
 
 //----------------------------------------------------------------------------------------

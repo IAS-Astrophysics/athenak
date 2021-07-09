@@ -13,11 +13,11 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
+#include "mesh/mesh_positions.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "ion-neutral/ion_neutral.hpp"
 #include "driver/driver.hpp"
-#include "utils/grid_locations.hpp"
 #include "utils/random.hpp"
 #include "turb_driver.hpp"
 

@@ -19,7 +19,7 @@
 #include "athena.hpp"
 #include "globals.hpp"
 #include "mesh/mesh.hpp"
-#include "utils/grid_locations.hpp"
+#include "mesh/mesh_positions.hpp"
 #include "outputs.hpp"
 
 //----------------------------------------------------------------------------------------

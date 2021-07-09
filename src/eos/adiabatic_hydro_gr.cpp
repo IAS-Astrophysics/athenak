@@ -11,12 +11,12 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
+#include "mesh/mesh_positions.hpp"
 #include "hydro/hydro.hpp"
 #include "eos.hpp"
 
 #include "coordinates/coordinates.hpp"
 #include "coordinates/cartesian_ks.hpp"
-#include "utils/grid_locations.hpp"
 
 //----------------------------------------------------------------------------------------
 // ctor: also calls EOS base class constructor

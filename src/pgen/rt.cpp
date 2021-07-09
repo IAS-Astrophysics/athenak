@@ -36,10 +36,10 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
+#include "mesh/mesh_positions.hpp"
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 #include "srcterms/srcterms.hpp"
-#include "utils/grid_locations.hpp"
 #include "utils/random.hpp"
 #include "pgen.hpp"
 

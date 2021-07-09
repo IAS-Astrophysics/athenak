@@ -14,10 +14,10 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
+#include "mesh/mesh_positions.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "turb_driver.hpp"
-#include "utils/grid_locations.hpp"
 #include "srcterms.hpp"
 
 //----------------------------------------------------------------------------------------
