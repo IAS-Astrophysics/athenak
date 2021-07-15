@@ -37,8 +37,8 @@ KOKKOS_INLINE_FUNCTION
 static Real LogHAux(Real r, Real sin_theta);
 
 KOKKOS_INLINE_FUNCTION
-static void GetBoyerLindquistCoordinates(Real x1, Real x2, Real x3, Real *pr,
-                                         Real *ptheta, Real *pphi);
+static void GetBoyerLindquistCoordinates(Real x1, Real x2, Real x3,
+                                         Real *pr, Real *ptheta, Real *pphi);
 
 KOKKOS_INLINE_FUNCTION
 static void CalculateVelocityInTiltedTorus(Real r, Real theta, Real phi, Real *pu0,
@@ -48,8 +48,9 @@ KOKKOS_INLINE_FUNCTION
 static void CalculateVelocityInTorus(Real r, Real sin_theta, Real *pu0, Real *pu3);
 
 KOKKOS_INLINE_FUNCTION
-static void TransformVector(Real a0_bl, Real a1_bl, Real a2_bl, Real a3_bl, Real r,
-                     Real theta, Real phi, Real *pa0, Real *pa1, Real *pa2, Real *pa3);
+static void TransformVector(Real a0_bl, Real a1_bl, Real a2_bl, Real a3_bl,
+                            Real x1, Real x2, Real x3,
+                            Real *pa0, Real *pa1, Real *pa2, Real *pa3);
 
 // Global variables
 static Real mass, spin;                            // black hole parameters
@@ -71,8 +72,9 @@ static Real dfloor,pfloor;                         // density and pressure floor
 
 
 //----------------------------------------------------------------------------------------
-//! \fn void ProblemGenerator::Torus_()
+//! \fn void ProblemGenerator::UserProblem()
 //  \brief Sets initial conditions for Fishbone-Moncrief torus in GR
+//  Compile with '-D PROBLEM=gr_torus' to enroll as user-specific problem generator 
 //   references Fishbone & Moncrief 1976, ApJ 207 962 (FM)
 //              Fishbone 1977, ApJ 215 323 (F)
 //   assumes x3 is axisymmetric direction
@@ -110,10 +112,10 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
   int ks = pmbp->mb_cells.ks; int ke = pmbp->mb_cells.ke;
   auto &size = pmbp->pmb->mbsize;
   int nmb1 = pmbp->nmb_thispack - 1;
-  auto w0_ = pmbp->phydro->w0;
 
   // initialize Hydro primitive variables ------------------------------------------------
   if (pmbp->phydro != nullptr) {
+    auto w0_ = pmbp->phydro->w0;
     EOS_Data &eos = pmbp->phydro->peos->eos_data;
     Real gm1 = eos.gamma - 1.0;
 
@@ -188,6 +190,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
           // Transform to preferred coordinates
           Real u0, u1, u2, u3;
           TransformVector(u0_bl, 0.0, u2_bl, u3_bl, x1v, x2v, x3v, &u0, &u1, &u2, &u3);
+
           Real g_[NMETRIC], gi_[NMETRIC];
           ComputeMetricAndInverse(x1v, x2v, x3v, spin, g_, gi_);
           uu1 = u1 - gi_[I01]/gi_[I00] * u0;
@@ -272,12 +275,10 @@ static Real LogHAux(Real r, Real sin_theta)
 //   x1,x2,x3: global coordinates to be converted
 // Outputs:
 //   pr,ptheta,pphi: variables pointed to set to Boyer-Lindquist coordinates
-// Notes:
-//   conversion is trivial in all currently implemented coordinate systems
 
 KOKKOS_INLINE_FUNCTION
-static void GetBoyerLindquistCoordinates(Real x1, Real x2, Real x3, Real *pr,
-                                         Real *ptheta, Real *pphi) 
+static void GetBoyerLindquistCoordinates(Real x1, Real x2, Real x3,
+                                         Real *pr, Real *ptheta, Real *pphi) 
 {
     Real R = sqrt(SQR(x1) + SQR(x2) + SQR(x3));
     Real r = sqrt( SQR(R) - SQR(spin) + sqrt(SQR(SQR(R)-SQR(spin))
@@ -402,15 +403,16 @@ static void CalculateVelocityInTorus(Real r, Real sin_theta, Real *pu0, Real *pu
 // Function for transforming 4-vector from Boyer-Lindquist to desired coordinates
 // Inputs:
 //   a0_bl,a1_bl,a2_bl,a3_bl: upper 4-vector components in Boyer-Lindquist coordinates
-//   r,theta,phi: Boyer-Lindquist coordinates of point
+//   x1,x2,x3: Cartesian Kerr-Schild coordinates of point
 // Outputs:
 //   pa0,pa1,pa2,pa3: pointers to upper 4-vector components in desired coordinates
 // Notes:
 //   Schwarzschild coordinates match Boyer-Lindquist when a = 0
 
 KOKKOS_INLINE_FUNCTION
-static void TransformVector(Real a0_bl, Real a1_bl, Real a2_bl, Real a3_bl, Real x1,
-                     Real x2, Real x3, Real *pa0, Real *pa1, Real *pa2, Real *pa3) 
+static void TransformVector(Real a0_bl, Real a1_bl, Real a2_bl, Real a3_bl,
+                            Real x1, Real x2, Real x3,
+                            Real *pa0, Real *pa1, Real *pa2, Real *pa3) 
 {
   Real x = x1;
   Real y = x2;
