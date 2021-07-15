@@ -28,7 +28,7 @@ EquationOfState::EquationOfState(MeshBlockPack* pp, ParameterInput *pin)
 // \brief No-Op version of hydro cons to prim function. This version is never used in MHD,
 // and is overwritten in Hydro
 
-void EquationOfState::ConsToPrimHydro(const DvceArray5D<Real> &c, DvceArray5D<Real> &p)
+void EquationOfState::ConsToPrim(const DvceArray5D<Real> &c, DvceArray5D<Real> &p)
 {        
 }
 
@@ -37,7 +37,7 @@ void EquationOfState::ConsToPrimHydro(const DvceArray5D<Real> &c, DvceArray5D<Re
 // \brief No-Op version of MHD cons to prim function. This version is never used in Hydro,
 // and is overwritten in MHD.
 
-void EquationOfState::ConsToPrimMHD(const DvceArray5D<Real> &c,
+void EquationOfState::ConsToPrim(const DvceArray5D<Real> &c,
       const DvceFaceFld4D<Real> &b, DvceArray5D<Real> &p, DvceArray5D<Real> &bcc)
 {
 }

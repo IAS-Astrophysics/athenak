@@ -32,7 +32,7 @@ AdiabaticHydroGR::AdiabaticHydroGR(MeshBlockPack *pp, ParameterInput *pin)
 //----------------------------------------------------------------------------------------
 // \!fn Real EquationC22()
 // \brief Inline function to compute function f(z) defined in eq. C22 of Galeazzi et al.
-// The ConsToPRim algorithms finds the root of this function f(z)=0
+// The ConsToPrim algorithms finds the root of this function f(z)=0
 
 KOKKOS_INLINE_FUNCTION
 Real EquationC22(Real z, Real &u_d, Real q, Real r, Real gm1, Real pfloor)
@@ -55,8 +55,7 @@ Real EquationC22(Real z, Real &u_d, Real q, Real r, Real gm1, Real pfloor)
 // Galeazzi et al., PhysRevD, 88, 064009 (2013).  Roots of "master function" (eq. C22) 
 // found by false position method.
 
-void AdiabaticHydroGR::ConsToPrimHydro(const DvceArray5D<Real> &cons,
-                                       DvceArray5D<Real> &prim)
+void AdiabaticHydroGR::ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
 {
   auto ncells = pmy_pack->mb_cells;
   int ng = ncells.ng;

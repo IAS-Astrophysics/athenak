@@ -116,8 +116,8 @@ TaskStatus IonNeutral::FirstTwoImpRK(Driver *pdrive, int stage)
   status = ImpRKUpdate(pdrive, 0);
 
   // update primitive variables for both hydro and MHD
-  phyd->peos->ConsToPrimHydro(phyd->u0, phyd->w0);
-  pmhd->peos->ConsToPrimMHD(pmhd->u0, pmhd->b0, pmhd->w0, pmhd->bcc0);
+  phyd->peos->ConsToPrim(phyd->u0, phyd->w0);
+  pmhd->peos->ConsToPrim(pmhd->u0, pmhd->b0, pmhd->w0, pmhd->bcc0);
 
   return TaskStatus::complete;
 }

@@ -29,14 +29,14 @@ struct EOS_Data
   bool is_adiabatic;
   Real density_floor, pressure_floor;
 
-  // sound speed function for adiabatic EOS 
+  // inlined sound speed function for adiabatic EOS 
   KOKKOS_INLINE_FUNCTION
   Real SoundSpeed(Real p, Real d)
   const {
     return std::sqrt(gamma*p/d);
   }
 
-  // fast magnetosonic speed function for adiabatic EOS 
+  // inlined fast magnetosonic speed function for adiabatic EOS 
   KOKKOS_INLINE_FUNCTION
   Real FastMagnetosonicSpeed(Real d, Real p, Real bx, Real by, Real bz)
   const {
@@ -47,7 +47,7 @@ struct EOS_Data
     return std::sqrt(0.5*(qsq + std::sqrt(tmp*tmp + 4.0*asq*ct2))/d);
   }
 
-  // fast magnetosonic speed function for isothermal EOS 
+  // inlined fast magnetosonic speed function for isothermal EOS 
   KOKKOS_INLINE_FUNCTION
   Real FastMagnetosonicSpeed(Real d, Real bx, Real by, Real bz)
   const {
@@ -58,7 +58,7 @@ struct EOS_Data
     return std::sqrt(0.5*(qsq + std::sqrt(tmp*tmp + 4.0*asq*ct2))/d);
   }
 
-  // maximal wave speeds for adiabatic SR hydro
+  // inlined maximal wave speeds function for adiabatic SR hydro
   // Inputs:
   //   h: enthalpy per unit volume
   //   p: gas pressure
@@ -83,7 +83,7 @@ struct EOS_Data
     l_m = (p1 - tmp) * invden;
   }
 
-  // maximal wave speeds for adiabatic GR hydro in arbitrary coordinates
+  // inlined maximal wave speeds function for adiabatic GR hydro
   // Inputs:
   //  - h: enthalpy per unit volume
   //  - p: gas pressure
@@ -124,20 +124,18 @@ struct EOS_Data
     }
   }
 
-  // maximal fast magnetosonic wave speeds for adiabatic GRMHD in arbitrary coordinates
-// Inputs:
-//   wgas: gas enthalpy
-//   pgas: gas pressure
-//   u0, u1: contravariant components of 4-velocity
-//   b_sq: b_\mu b^\mu
-//   g00, g01, g11: contravariant components of metric (-1, 0, 1 in SR)
-// Outputs:
-//   p_lambda_plus: value set to most positive wavespeed
-//   p_lambda_minus: value set to most negative wavespeed
-// Notes:
-//   Follows same general procedure as vchar() in phys.c in Harm.
-//   Variables are named as though 1 is normal direction.
-//   Same function as in adiabatic_mhd_sr.cpp.
+  // inlined maximal fast magnetosonic wave speeds function for adiabatic GRMHD
+  // Inputs:
+  //  - h: enthalpy per unit volume
+  //  - p: gas pressure
+  //  - u0, u1: contravariant components of 4-velocity
+  //  - b_sq: b_\mu b^\mu
+  //  - g00, g01, g11: contravariant components of metric (-1, 0, 1 in SR)
+  // Outputs:
+  //  - l_p/l_m: most positive/negative wavespeed
+  // Notes:
+  //  - Follows same general procedure as vchar() in phys.c in Harm.
+  //  - Variables are named as though 1 is normal direction.
 
   KOKKOS_INLINE_FUNCTION
   void FastSpeedsGR(Real h, Real p, Real u0, Real u1, Real b_sq,
@@ -174,41 +172,13 @@ class EquationOfState
   MeshBlockPack* pmy_pack;
   EOS_Data eos_data;
 
-  // virtual functions to convert cons to prim, overwritten in derived eos classes
-  virtual void ConsToPrimHydro(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim);
-  virtual void ConsToPrimMHD(const DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
-                             DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc);
+  // virtual functions to convert cons to prim in either Hydro or MHD (depending on
+  // arguments), overwritten in derived eos classes
+  virtual void ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim);
+  virtual void ConsToPrim(const DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
+                          DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc);
 
  private:
-};
-
-//----------------------------------------------------------------------------------------
-//! \class AdiabaticHydro
-//  \brief Derived class for Hydro adiabatic EOS
-
-class AdiabaticHydro : public EquationOfState
-{
- public:
-  AdiabaticHydro(MeshBlockPack *pp, ParameterInput *pin);
-  void ConsToPrimHydro(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
-};
-
-//----------------------------------------------------------------------------------------
-//! \class AdiabaticHydroSR
-//  \brief Derived class for special relativistic Hydro adiabatic EOS 
-
-class AdiabaticHydroSR : public EquationOfState
-{
- public:
-  AdiabaticHydroSR(MeshBlockPack *pp, ParameterInput *pin);
-  void ConsToPrimHydro(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
-};
-
-class AdiabaticHydroGR : public EquationOfState
-{
- public:
-  AdiabaticHydroGR(MeshBlockPack *pp, ParameterInput *pin);
-  void ConsToPrimHydro(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
 };
 
 //----------------------------------------------------------------------------------------
@@ -218,20 +188,45 @@ class AdiabaticHydroGR : public EquationOfState
 class IsothermalHydro : public EquationOfState
 { 
  public:
+  using EquationOfState::ConsToPrim;  // prevents warnings that MHD version not overridden
   IsothermalHydro(MeshBlockPack *pp, ParameterInput *pin);
-  void ConsToPrimHydro(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
+  void ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
 };
 
 //----------------------------------------------------------------------------------------
-//! \class AdibaticMHD
-//  \brief Derived class for MHD adiabatic EOS
+//! \class AdiabaticHydro
+//  \brief Derived class for Hydro adiabatic EOS
 
-class AdiabaticMHD : public EquationOfState
+class AdiabaticHydro : public EquationOfState
 {
  public:
-  AdiabaticMHD(MeshBlockPack *pp, ParameterInput *pin);
-  void ConsToPrimMHD(const DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
-                  DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc) override;
+  using EquationOfState::ConsToPrim;  // prevents warnings that MHD version not overridden
+  AdiabaticHydro(MeshBlockPack *pp, ParameterInput *pin);
+  void ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
+};
+
+//----------------------------------------------------------------------------------------
+//! \class AdiabaticHydroSR
+//  \brief Derived class for special relativistic Hydro adiabatic EOS 
+
+class AdiabaticHydroSR : public EquationOfState
+{
+ public:
+  using EquationOfState::ConsToPrim;  // prevents warnings that MHD version not overridden
+  AdiabaticHydroSR(MeshBlockPack *pp, ParameterInput *pin);
+  void ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
+};
+
+//----------------------------------------------------------------------------------------
+//! \class AdiabaticHydroGR
+//  \brief Derived class for general relativistic Hydro adiabatic EOS 
+
+class AdiabaticHydroGR : public EquationOfState
+{
+ public:
+  using EquationOfState::ConsToPrim;  // prevents warnings that MHD version not overridden
+  AdiabaticHydroGR(MeshBlockPack *pp, ParameterInput *pin);
+  void ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
 };
 
 //----------------------------------------------------------------------------------------
@@ -241,8 +236,22 @@ class AdiabaticMHD : public EquationOfState
 class IsothermalMHD : public EquationOfState
 {
  public:
+  using EquationOfState::ConsToPrim;  // prevents warnings that hyd version not overridden
   IsothermalMHD(MeshBlockPack *pp, ParameterInput *pin);
-  void ConsToPrimMHD(const DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
+  void ConsToPrim(const DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
+                  DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc) override;
+};
+
+//----------------------------------------------------------------------------------------
+//! \class AdiabaticMHD
+//  \brief Derived class for MHD adiabatic EOS
+
+class AdiabaticMHD : public EquationOfState
+{
+ public:
+  using EquationOfState::ConsToPrim;  // prevents warnings that hyd version not overridden
+  AdiabaticMHD(MeshBlockPack *pp, ParameterInput *pin);
+  void ConsToPrim(const DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
                   DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc) override;
 };
 

@@ -28,8 +28,7 @@ IsothermalHydro::IsothermalHydro(MeshBlockPack *pp, ParameterInput *pin)
 // \!fn void ConsToPrim()
 // \brief Converts conserved into primitive variables in nonrelativistic isothermal hydro
 
-void IsothermalHydro::ConsToPrimHydro(const DvceArray5D<Real> &cons,
-                                      DvceArray5D<Real> &prim)
+void IsothermalHydro::ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
 {
   auto ncells = pmy_pack->mb_cells;
   int ng = ncells.ng;

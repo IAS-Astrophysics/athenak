@@ -51,8 +51,7 @@ Real EquationC22(Real z, Real &u_d, Real q, Real r, Real gm1, Real pfloor)
 // Galeazzi et al., PhysRevD, 88, 064009 (2013).  Roots of "master function" (eq. C22) 
 // found by false position method.
 
-void AdiabaticHydroSR::ConsToPrimHydro(const DvceArray5D<Real> &cons,
-                                       DvceArray5D<Real> &prim)
+void AdiabaticHydroSR::ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
 {
   auto ncells = pmy_pack->mb_cells;
   int ng = ncells.ng;

@@ -30,8 +30,8 @@ AdiabaticMHD::AdiabaticMHD(MeshBlockPack *pp, ParameterInput *pin)
 // Note that the primitive variables contain the cell-centered magnetic fields, so that
 // W contains (nmhd+3+nscalars) elements, while U contains (nmhd+nscalars)
 
-void AdiabaticMHD::ConsToPrimMHD(const DvceArray5D<Real> &cons,
-      const DvceFaceFld4D<Real> &b, DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc)
+void AdiabaticMHD::ConsToPrim(const DvceArray5D<Real> &cons,
+     const DvceFaceFld4D<Real> &b, DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc)
 {
   auto ncells = pmy_pack->mb_cells;
   int ng = ncells.ng;
