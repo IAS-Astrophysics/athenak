@@ -174,8 +174,8 @@ class EquationOfState
 
   // virtual functions to convert cons to prim in either Hydro or MHD (depending on
   // arguments), overwritten in derived eos classes
-  virtual void ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim);
-  virtual void ConsToPrim(const DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
+  virtual void ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim);
+  virtual void ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
                           DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc);
 
  private:
@@ -190,7 +190,7 @@ class IsothermalHydro : public EquationOfState
  public:
   using EquationOfState::ConsToPrim;  // prevents warnings that MHD version not overridden
   IsothermalHydro(MeshBlockPack *pp, ParameterInput *pin);
-  void ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
+  void ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
 };
 
 //----------------------------------------------------------------------------------------
@@ -202,7 +202,7 @@ class AdiabaticHydro : public EquationOfState
  public:
   using EquationOfState::ConsToPrim;  // prevents warnings that MHD version not overridden
   AdiabaticHydro(MeshBlockPack *pp, ParameterInput *pin);
-  void ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
+  void ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
 };
 
 //----------------------------------------------------------------------------------------
@@ -214,7 +214,7 @@ class AdiabaticHydroSR : public EquationOfState
  public:
   using EquationOfState::ConsToPrim;  // prevents warnings that MHD version not overridden
   AdiabaticHydroSR(MeshBlockPack *pp, ParameterInput *pin);
-  void ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
+  void ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
 };
 
 //----------------------------------------------------------------------------------------
@@ -226,7 +226,7 @@ class AdiabaticHydroGR : public EquationOfState
  public:
   using EquationOfState::ConsToPrim;  // prevents warnings that MHD version not overridden
   AdiabaticHydroGR(MeshBlockPack *pp, ParameterInput *pin);
-  void ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
+  void ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
 };
 
 //----------------------------------------------------------------------------------------
@@ -238,7 +238,7 @@ class IsothermalMHD : public EquationOfState
  public:
   using EquationOfState::ConsToPrim;  // prevents warnings that hyd version not overridden
   IsothermalMHD(MeshBlockPack *pp, ParameterInput *pin);
-  void ConsToPrim(const DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
+  void ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
                   DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc) override;
 };
 
@@ -251,7 +251,7 @@ class AdiabaticMHD : public EquationOfState
  public:
   using EquationOfState::ConsToPrim;  // prevents warnings that hyd version not overridden
   AdiabaticMHD(MeshBlockPack *pp, ParameterInput *pin);
-  void ConsToPrim(const DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
+  void ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
                   DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc) override;
 };
 

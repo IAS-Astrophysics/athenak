@@ -50,8 +50,9 @@ Real EquationC22(Real z, Real &u_d, Real q, Real r, Real gm1, Real pfloor)
 // Implementation follows Wolfgang Kastaun's algorithm described in Appendix C of
 // Galeazzi et al., PhysRevD, 88, 064009 (2013).  Roots of "master function" (eq. C22) 
 // found by false position method.
+// Operates over entire MeshBlock, including ghost cells.  
 
-void AdiabaticHydroSR::ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
+void AdiabaticHydroSR::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
 {
   auto ncells = pmy_pack->mb_cells;
   int ng = ncells.ng;
@@ -74,16 +75,16 @@ void AdiabaticHydroSR::ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Rea
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
       Real& u_d  = cons(m, IDN,k,j,i);
-      Real& u_m1 = cons(m, IM1,k,j,i);
-      Real& u_m2 = cons(m, IM2,k,j,i);
-      Real& u_m3 = cons(m, IM3,k,j,i);
       Real& u_e  = cons(m, IEN,k,j,i);
+      const Real& u_m1 = cons(m, IM1,k,j,i);
+      const Real& u_m2 = cons(m, IM2,k,j,i);
+      const Real& u_m3 = cons(m, IM3,k,j,i);
 
       Real& w_d  = prim(m, IDN,k,j,i);
+      Real& w_p  = prim(m, IPR,k,j,i);
       Real& w_vx = prim(m, IVX,k,j,i);
       Real& w_vy = prim(m, IVY,k,j,i);
       Real& w_vz = prim(m, IVZ,k,j,i);
-      Real& w_p  = prim(m, IPR,k,j,i);
 
       // apply density floor, without changing momentum or energy
       u_d = (u_d > dfloor_) ?  u_d : dfloor_;

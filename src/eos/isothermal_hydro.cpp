@@ -26,12 +26,13 @@ IsothermalHydro::IsothermalHydro(MeshBlockPack *pp, ParameterInput *pin)
 
 //----------------------------------------------------------------------------------------
 // \!fn void ConsToPrim()
-// \brief Converts conserved into primitive variables in nonrelativistic isothermal hydro
+// \brief Converts conserved into primitive variables.  Operates over entire MeshBlock,
+//  including ghost cells.  
 
-void IsothermalHydro::ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
+void IsothermalHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
 {
   auto ncells = pmy_pack->mb_cells;
-  int ng = ncells.ng;
+  int &ng = ncells.ng;
   int n1 = ncells.nx1 + 2*ng;
   int n2 = (ncells.nx2 > 1)? (ncells.nx2 + 2*ng) : 1;
   int n3 = (ncells.nx3 > 1)? (ncells.nx3 + 2*ng) : 1;
@@ -45,9 +46,9 @@ void IsothermalHydro::ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
       Real& u_d  = cons(m,IDN,k,j,i);
-      Real& u_m1 = cons(m,IM1,k,j,i);
-      Real& u_m2 = cons(m,IM2,k,j,i);
-      Real& u_m3 = cons(m,IM3,k,j,i);
+      const Real& u_m1 = cons(m,IM1,k,j,i);
+      const Real& u_m2 = cons(m,IM2,k,j,i);
+      const Real& u_m3 = cons(m,IM3,k,j,i);
 
       Real& w_d  = prim(m,IDN,k,j,i);
       Real& w_vx = prim(m,IVX,k,j,i);

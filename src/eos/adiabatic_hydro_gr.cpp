@@ -3,10 +3,8 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file adiabatic_hydro_sr.cpp
-//  \brief implements EOS functions in derived class for special relativistic ad. hydro
-// Conserved to primitive variable inversion implements algorithm described in Appendix C
-// of Galeazzi et al., PhysRevD, 88, 064009 (2013). Equation references are to this paper.
+//! \file adiabatic_hydro_gr.cpp
+//  \brief implements EOS functions in derived class for general relativistic ad. hydro
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
@@ -50,12 +48,10 @@ Real EquationC22(Real z, Real &u_d, Real q, Real r, Real gm1, Real pfloor)
 
 //----------------------------------------------------------------------------------------
 // \!fn void ConsToPrim()
-// \brief Converts conserved into primitive variables in nonrelativistic adiabatic hydro.
-// Implementation follows Wolfgang Kastaun's algorithm described in Appendix C of
-// Galeazzi et al., PhysRevD, 88, 064009 (2013).  Roots of "master function" (eq. C22) 
-// found by false position method.
+// \brief Converts conserved into primitive variables.
+// Operates over entire MeshBlock, including ghost cells.  
 
-void AdiabaticHydroGR::ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
+void AdiabaticHydroGR::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
 {
   auto ncells = pmy_pack->mb_cells;
   int ng = ncells.ng;
@@ -81,16 +77,16 @@ void AdiabaticHydroGR::ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Rea
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
       Real u_d  = cons(m, IDN,k,j,i);
+      Real u_e  = cons(m, IEN,k,j,i);
       Real u_m1 = cons(m, IM1,k,j,i);
       Real u_m2 = cons(m, IM2,k,j,i);
       Real u_m3 = cons(m, IM3,k,j,i);
-      Real u_e  = cons(m, IEN,k,j,i);
 
       Real& w_d  = prim(m, IDN,k,j,i);
+      Real& w_p  = prim(m, IPR,k,j,i);
       Real& w_vx = prim(m, IVX,k,j,i);
       Real& w_vy = prim(m, IVY,k,j,i);
       Real& w_vz = prim(m, IVZ,k,j,i);
-      Real& w_p  = prim(m, IPR,k,j,i);
 
       Real x1 = CellCenterX(i, n1, size.x1min.d_view(m), size.x1max.d_view(m));
       Real x2 = CellCenterX(j, n2, size.x2min.d_view(m), size.x2max.d_view(m));

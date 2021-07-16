@@ -25,9 +25,10 @@ AdiabaticHydro::AdiabaticHydro(MeshBlockPack *pp, ParameterInput *pin)
 
 //----------------------------------------------------------------------------------------
 // \!fn void ConsToPrim()
-// \brief Converts conserved into primitive variables in nonrelativistic adiabatic hydro
+// \brief Converts conserved into primitive variables. Operates over entire MeshBlock,
+//  including ghost cells.  
 
-void AdiabaticHydro::ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
+void AdiabaticHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
 {
   auto ncells = pmy_pack->mb_cells;
   int ng = ncells.ng;
@@ -46,16 +47,16 @@ void AdiabaticHydro::ConsToPrim(const DvceArray5D<Real> &cons, DvceArray5D<Real>
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
       Real& u_d  = cons(m,IDN,k,j,i);
-      Real& u_m1 = cons(m,IM1,k,j,i);
-      Real& u_m2 = cons(m,IM2,k,j,i);
-      Real& u_m3 = cons(m,IM3,k,j,i);
       Real& u_e  = cons(m,IEN,k,j,i);
+      const Real& u_m1 = cons(m,IM1,k,j,i);
+      const Real& u_m2 = cons(m,IM2,k,j,i);
+      const Real& u_m3 = cons(m,IM3,k,j,i);
 
       Real& w_d  = prim(m,IDN,k,j,i);
+      Real& w_p  = prim(m,IPR,k,j,i);
       Real& w_vx = prim(m,IVX,k,j,i);
       Real& w_vy = prim(m,IVY,k,j,i);
       Real& w_vz = prim(m,IVZ,k,j,i);
-      Real& w_p  = prim(m,IPR,k,j,i);
 
       // apply density floor, without changing momentum or energy
       u_d = (u_d > dfloor_) ?  u_d : dfloor_;

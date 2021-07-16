@@ -26,12 +26,13 @@ IsothermalMHD::IsothermalMHD(MeshBlockPack *pp, ParameterInput *pin)
 
 //----------------------------------------------------------------------------------------
 // \!fn void ConsToPrim()
-// \brief Converts conserved into primitive variables in nonrelativistic isothermal MHD
+// \brief Converts conserved into primitive variables.  Operates over entire MeshBlock,
+//  including ghost cells.  
 // Note that the primitive variables contain the cell-centered magnetic fields, so that
 // W contains (nmhd+3+nscalars) elements, while U contains (nmhd+nscalars)
 
-void IsothermalMHD::ConsToPrim(const DvceArray5D<Real> &cons,
-     const DvceFaceFld4D<Real> &b, DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc)
+void IsothermalMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
+                               DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc)
 {
   auto ncells = pmy_pack->mb_cells;
   int ng = ncells.ng;
@@ -48,9 +49,9 @@ void IsothermalMHD::ConsToPrim(const DvceArray5D<Real> &cons,
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
       Real& u_d  = cons(m,IDN,k,j,i);
-      Real& u_m1 = cons(m,IVX,k,j,i);
-      Real& u_m2 = cons(m,IVY,k,j,i);
-      Real& u_m3 = cons(m,IVZ,k,j,i);
+      const Real& u_m1 = cons(m,IVX,k,j,i);
+      const Real& u_m2 = cons(m,IVY,k,j,i);
+      const Real& u_m3 = cons(m,IVZ,k,j,i);
 
       Real& w_d  = prim(m,IDN,k,j,i);
       Real& w_vx = prim(m,IVX,k,j,i);
