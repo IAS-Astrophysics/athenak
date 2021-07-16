@@ -275,3 +275,78 @@ std::cout << "|zm-zp|=" <<fabs(zm-zp)<<" |f|="<< fabs(f) << "for i=" <<  ii << s
 
   return;
 }
+
+//----------------------------------------------------------------------------------------
+// \!fn void PrimToCons()
+// \brief Converts primitive into conserved variables.  Operates only over active cells.
+
+void AdiabaticHydroGR::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons)
+{
+  auto ncells = pmy_pack->mb_cells;
+  int &nx1 = ncells.nx1;
+  int &nx2 = ncells.nx2;
+  int &nx3 = ncells.nx3;
+  int is = pmy_pack->mb_cells.is;
+  int js = pmy_pack->mb_cells.js;
+  int ks = pmy_pack->mb_cells.ks;
+  auto size = pmy_pack->pmb->mbsize;
+  int &nhyd  = pmy_pack->phydro->nhydro;
+  int &nscal = pmy_pack->phydro->nscalars;
+  int &nmb = pmy_pack->nmb_thispack;
+  Real gamma_prime = eos_data.gamma/(eos_data.gamma - 1.0);
+  Real &spin = pmy_pack->phydro->pcoord->bh_spin;
+
+  par_for("hyd_prim2cons", DevExeSpace(), 0, (nmb-1), 0, (nx3-1), 0, (nx2-1), 0, (nx1-1),
+    KOKKOS_LAMBDA(int m, int k, int j, int i)
+    {
+      // Extract components of metric
+      Real x1v = CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
+      Real x2v = CellCenterX(j-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
+      Real x3v = CellCenterX(k-ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
+      Real g_[NMETRIC], gi_[NMETRIC];
+      ComputeMetricAndInverse(x1v, x2v, x3v, spin, g_, gi_);
+      const Real
+        &g_00 = g_[I00], &g_01 = g_[I01], &g_02 = g_[I02], &g_03 = g_[I03],
+        &g_10 = g_[I01], &g_11 = g_[I11], &g_12 = g_[I12], &g_13 = g_[I13],
+        &g_20 = g_[I02], &g_21 = g_[I12], &g_22 = g_[I22], &g_23 = g_[I23],
+        &g_30 = g_[I03], &g_31 = g_[I13], &g_32 = g_[I23], &g_33 = g_[I33];
+
+      const Real& w_d  = prim(m,IDN,k,j,i);
+      const Real& w_p  = prim(m,IPR,k,j,i);
+      const Real& w_vx = prim(m,IVX,k,j,i);
+      const Real& w_vy = prim(m,IVY,k,j,i);
+      const Real& w_vz = prim(m,IVZ,k,j,i);
+
+      // Calculate 4-velocity
+      Real alpha = sqrt(-1.0/gi_[I00]);
+      Real tmp = g_[I11]*w_vx*w_vx + 2.0*g_[I12]*w_vx*w_vy + 2.0*g_[I13]*w_vx*w_vz
+               + g_[I22]*w_vy*w_vy + 2.0*g_[I23]*w_vy*w_vz
+               + g_[I33]*w_vz*w_vz;
+      Real gamma = sqrt(1.0 + tmp);
+      Real u0 = gamma/alpha;
+      Real u1 = w_vx - alpha * gamma * gi_[I01];
+      Real u2 = w_vy - alpha * gamma * gi_[I02];
+      Real u3 = w_vz - alpha * gamma * gi_[I03];
+      Real u_0 = g_00*u0 + g_01*u1 + g_02*u2 + g_03*u3;
+      Real u_1 = g_10*u0 + g_11*u1 + g_12*u2 + g_13*u3;
+      Real u_2 = g_20*u0 + g_21*u1 + g_22*u2 + g_23*u3;
+      Real u_3 = g_30*u0 + g_31*u1 + g_32*u2 + g_33*u3;
+
+      // Set conserved quantities
+      Real& u_d  = cons(m,IDN,k,j,i);
+      Real& u_e  = cons(m,IEN,k,j,i);
+      Real& u_m1 = cons(m,IM1,k,j,i);
+      Real& u_m2 = cons(m,IM2,k,j,i);
+      Real& u_m3 = cons(m,IM3,k,j,i);
+
+      Real wgas_u0 = (w_d + gamma_prime * w_p) * u0;
+      u_d  = w_d * u0;
+      u_e  = wgas_u0 * u_0 + w_p;
+      u_m1 = wgas_u0 * u_1;
+      u_m2 = wgas_u0 * u_2;
+      u_m3 = wgas_u0 * u_3;
+    }
+  );
+
+  return;
+}

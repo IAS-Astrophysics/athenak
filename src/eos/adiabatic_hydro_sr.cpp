@@ -55,7 +55,7 @@ Real EquationC22(Real z, Real &u_d, Real q, Real r, Real gm1, Real pfloor)
 void AdiabaticHydroSR::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
 {
   auto ncells = pmy_pack->mb_cells;
-  int ng = ncells.ng;
+  int &ng = ncells.ng;
   int n1 = ncells.nx1 + 2*ng;
   int n2 = (ncells.nx2 > 1)? (ncells.nx2 + 2*ng) : 1;
   int n3 = (ncells.nx3 > 1)? (ncells.nx3 + 2*ng) : 1;
@@ -185,6 +185,52 @@ std::cout << "|zm-zp|=" <<fabs(zm-zp)<<" |f|="<< fabs(f) << "for i=" <<  ii << s
 //        cons(m,IM3,k,j,i) = wgas * gamma * w_vz;
 //      }
 
+    }
+  );
+
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+// \!fn void PrimToCons()
+// \brief Converts primitive into conserved variables.  Operates only over active cells.
+
+void AdiabaticHydroSR::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons)
+{
+  auto ncells = pmy_pack->mb_cells;
+  int &n1 = ncells.nx1;
+  int &n2 = ncells.nx2;
+  int &n3 = ncells.nx3;
+  int &nhyd  = pmy_pack->phydro->nhydro;
+  int &nscal = pmy_pack->phydro->nscalars;
+  int &nmb = pmy_pack->nmb_thispack;
+  Real gamma_prime = eos_data.gamma/(eos_data.gamma - 1.0); 
+
+  par_for("hyd_prim2cons", DevExeSpace(), 0, (nmb-1), 0, (n3-1), 0, (n2-1), 0, (n1-1),
+    KOKKOS_LAMBDA(int m, int k, int j, int i)
+    {
+      Real& u_d  = cons(m, IDN,k,j,i);
+      Real& u_e  = cons(m, IEN,k,j,i);
+      Real& u_m1 = cons(m, IM1,k,j,i);
+      Real& u_m2 = cons(m, IM2,k,j,i);
+      Real& u_m3 = cons(m, IM3,k,j,i);
+
+      const Real& w_d  = prim(m, IDN,k,j,i);
+      const Real& w_p  = prim(m, IPR,k,j,i);
+      const Real& w_vx = prim(m, IVX,k,j,i);
+      const Real& w_vy = prim(m, IVY,k,j,i);
+      const Real& w_vz = prim(m, IVZ,k,j,i);
+
+      // Calculate Lorentz factor
+      Real u0 = sqrt(1.0 + SQR(w_vx) + SQR(w_vy) + SQR(w_vz));
+      Real wgas_u0 = (w_d + gamma_prime * w_p) * u0;
+
+      // Set conserved quantities
+      u_d  = w_d * u0;
+      u_e  = wgas_u0 * u0 - w_p;
+      u_m1 = wgas_u0 * w_vx;
+      u_m2 = wgas_u0 * w_vy;
+      u_m3 = wgas_u0 * w_vz;
     }
   );
 
