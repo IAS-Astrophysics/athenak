@@ -56,7 +56,7 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos,
     Real qb = wr_idn*wr_ivx;
 
     HydCons1D fsum;
-    fsum.d  = qa         + qb;
+    fsum.d  = qa        + qb;
     fsum.mx = qa*wl_ivx + qb*wr_ivx;
     fsum.my = qa*wl_ivy + qb*wr_ivy;
     fsum.mz = qa*wl_ivz + qb*wr_ivz;
@@ -85,7 +85,7 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos,
     //--- Step 4.  Compute difference in L/R states dU, multiplied by max wave speed
 
     HydCons1D du;
-    du.d  = a*(wr_idn         - wl_idn);
+    du.d  = a*(wr_idn        - wl_idn);
     du.mx = a*(wr_idn*wr_ivx - wl_idn*wl_ivx);
     du.my = a*(wr_idn*wr_ivy - wl_idn*wl_ivy);
     du.mz = a*(wr_idn*wr_ivz - wl_idn*wl_ivz);

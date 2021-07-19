@@ -67,7 +67,7 @@ void LLF_SR(TeamMember_t const &member, const EOS_Data &eos,
 
     HydCons1D fsum;
     fsum.d  = wl_idn * wl_ivx + wr_idn * wr_ivx;
-    fsum.mx = qa*wl_ivx + qb*wr_ivx + (wl_ipr +  wr_ipr);
+    fsum.mx = qa*wl_ivx + qb*wr_ivx + (wl_ipr + wr_ipr);
     fsum.my = qa*wl_ivy + qb*wr_ivy;
     fsum.mz = qa*wl_ivz + qb*wr_ivz;
 

@@ -27,11 +27,12 @@ void HLLC_SR(TeamMember_t const &member, const EOS_Data &eos,
 {
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
+  const Real gamma_prime = eos.gamma/(eos.gamma - 1.0);
   Real gm1 = eos.gamma - 1.0;
 
   par_for_inner(member, il, iu, [&](const int i)
   {
-    //--- Step 1.  Load L/R states into local variables
+    //--- Step 1. Create local references for L/R states (helps compiler vectorize)
 
     Real &rho_l  = wl(IDN,i);
     Real &pgas_l = wl(IPR,i);
@@ -56,8 +57,8 @@ void HLLC_SR(TeamMember_t const &member, const EOS_Data &eos,
     u_r[2] = uy_r;
     u_r[3] = uz_r;
 
-    Real wgas_l = rho_l + (gm1 +1.)/gm1 * pgas_l;
-    Real wgas_r = rho_r + (gm1 +1.)/gm1 * pgas_r;
+    Real wgas_l = rho_l + gamma_prime * pgas_l;
+    Real wgas_r = rho_r + gamma_prime * pgas_r;
 
     //--- Step 2.  Compute wave speeds in L,R states (see Toro eq. 10.43)
 
@@ -173,18 +174,14 @@ void HLLC_SR(TeamMember_t const &member, const EOS_Data &eos,
     Real const v_interface = 0.0;
 
     // Determine region of wavefan
-    Real *cons_interface, *flux_interface;
+    Real *flux_interface;
     if (lambda_l >= v_interface) {  // L region
-      cons_interface = cons_l;
       flux_interface = flux_l;
     } else if (lambda_r <= v_interface) { // R region
-      cons_interface = cons_r;
       flux_interface = flux_r;
     } else if (lambda_star >= v_interface) {  // aL region
-      cons_interface = cons_lstar;
       flux_interface = flux_lstar;
     } else {  // c region
-      cons_interface = cons_rstar;
       flux_interface = flux_rstar;
     }
 
