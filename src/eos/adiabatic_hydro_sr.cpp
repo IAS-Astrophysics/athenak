@@ -227,7 +227,7 @@ void AdiabaticHydroSR::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Rea
 
       // Set conserved quantities
       u_d  = w_d * u0;
-      u_e  = wgas_u0 * u0 - w_p;
+      u_e  = wgas_u0 * u0 - w_p -u_d; // SR implementation subtracts rest mass density
       u_m1 = wgas_u0 * w_vx;
       u_m2 = wgas_u0 * w_vy;
       u_m3 = wgas_u0 * w_vz;
