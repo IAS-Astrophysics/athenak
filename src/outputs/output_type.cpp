@@ -266,7 +266,7 @@ void OutputType::LoadOutputData(Mesh *pm)
   // loop over all MeshBlocks
   // set size & starting indices of output arrays, adjusted accordingly if gz included 
   auto &indcs = pm->pmb_pack->coord.coord_data.mb_indcs;
-  auto &size  = pm->pmb_pack->pmb->mbsize;
+  auto &size  = pm->pmb_pack->coord.coord_data.mb_size;
   for (int m=0; m<(pm->pmb_pack->nmb_thispack); ++m) {
 
     int ois,oie,ojs,oje,oks,oke;
@@ -286,31 +286,31 @@ void OutputType::LoadOutputData(Mesh *pm)
     // check for slicing in each dimension, adjust start/end indices accordingly
     if (out_params.slice1) {
       // skip this MB if slice is out of range
-      if (out_params.slice_x1 <  size.x1min.h_view(m) ||
-          out_params.slice_x1 >= size.x1max.h_view(m)) { continue; }
+      if (out_params.slice_x1 <  size.h_view(m).x1min ||
+          out_params.slice_x1 >= size.h_view(m).x1max) { continue; }
       // set index of slice
       ois = CellCenterIndex(out_params.slice_x1, indcs.nx1,
-                            size.x1min.h_view(m), size.x1max.h_view(m));
+                            size.h_view(m).x1min, size.h_view(m).x1max);
       oie = ois;
     }
 
     if (out_params.slice2) {
       // skip this MB if slice is out of range
-      if (out_params.slice_x2 <  size.x2min.h_view(m) ||
-          out_params.slice_x2 >= size.x2max.h_view(m)) { continue; }
+      if (out_params.slice_x2 <  size.h_view(m).x2min ||
+          out_params.slice_x2 >= size.h_view(m).x2max) { continue; }
       // set index of slice
       ojs = CellCenterIndex(out_params.slice_x2, indcs.nx2,
-                            size.x2min.h_view(m), size.x2max.h_view(m));
+                            size.h_view(m).x2min, size.h_view(m).x2max);
       oje = ojs;
     }
 
     if (out_params.slice3) {
       // skip this MB if slice is out of range
-      if (out_params.slice_x3 <  size.x3min.h_view(m) ||
-          out_params.slice_x3 >= size.x3max.h_view(m)) { continue; }
+      if (out_params.slice_x3 <  size.h_view(m).x3min ||
+          out_params.slice_x3 >= size.h_view(m).x3max) { continue; }
       // set index of slice
       oks = CellCenterIndex(out_params.slice_x3, indcs.nx3,
-                            size.x3min.h_view(m), size.x3max.h_view(m));
+                            size.h_view(m).x3min, size.h_view(m).x3max);
       oke = oks;
     }
     int id = pm->pmb_pack->pmb->mbgid.h_view(m);

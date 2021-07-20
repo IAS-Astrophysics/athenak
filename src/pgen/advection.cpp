@@ -69,7 +69,7 @@ void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
-  auto &size = pmbp->pmb->mbsize;
+  auto &size = pmbp->coord.coord_data.mb_size;
 
   // Initialize Hydro variables -------------------------------
   if (pmbp->phydro != nullptr) {
@@ -88,13 +88,13 @@ void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
       {
         Real r; // coordinate that will span [0->1]
         if (flow_dir == 1) {
-          r = (CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m))
+          r = (CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max)
               - x1mesh)/length;
         } else if (flow_dir == 2) {
-          r = (CellCenterX(j-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m))
+          r = (CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max)
               - x2mesh)/length;
         } else {
-          r = (CellCenterX(k-ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m))
+          r = (CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max)
               - x3mesh)/length;
         }
   
@@ -161,13 +161,13 @@ void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
       { 
         Real r; // coordinate that will span [0->1]
         if (flow_dir == 1) {
-          r = (CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m)) 
+          r = (CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max) 
               - x1mesh)/length;
         } else if (flow_dir == 2) {
-          r = (CellCenterX(j-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m)) 
+          r = (CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max) 
               - x2mesh)/length;
         } else {
-          r = (CellCenterX(k-ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m)) 
+          r = (CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max) 
               - x3mesh)/length;
         }
         

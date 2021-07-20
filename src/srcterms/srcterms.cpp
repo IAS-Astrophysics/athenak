@@ -192,7 +192,7 @@ void SourceTerms::AddSBoxEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Rea
   // E_{x} = -(v x B)_{x} = -(vy*bz - vz*by) = +v_{K}by --> E1 = -(q\Omega x)b2
   // E_{y} = -(v x B)_{y} =  (vx*bz - vz*bx) = -v_{K}bx --> E2 = +(q\Omega x)b1
   if (pmy_pack->pmesh->two_d) {
-    auto &size = pmy_pack->pmb->mbsize;
+    auto &size = pmy_pack->coord.coord_data.mb_size;
     auto e1 = efld.x1e;
     auto e2 = efld.x2e;
     auto b1 = b0.x1f;
@@ -202,10 +202,10 @@ void SourceTerms::AddSBoxEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Rea
       {
         par_for_inner(member, is, ie+1, [&](const int i)
         {
-          Real x1v = CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
+          Real x1v = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
           e1(m,ks,  j,i) -= qomega*x1v*b2(m,ks,j,i);
           e1(m,ke+1,j,i) -= qomega*x1v*b2(m,ks,j,i);
-          Real x1f = LeftEdgeX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
+          Real x1f = LeftEdgeX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
           e2(m,ks  ,j,i) += qomega*x1f*b1(m,ks,j,i);
           e2(m,ke+1,j,i) += qomega*x1f*b1(m,ks,j,i);
         });

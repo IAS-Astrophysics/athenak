@@ -148,7 +148,7 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim, const EOS_Data &e
   int is = indcs.is; int ie = indcs.ie;
   int js = indcs.js; int je = indcs.je;
   int ks = indcs.ks; int ke = indcs.ke;
-  auto &size = pmy_mesh->pmb_pack->pmb->mbsize;
+  auto &size = coord_data.mb_size;
   int nmb1 = pmy_mesh->pmb_pack->nmb_thispack - 1;
   Real &spin = coord_data.bh_spin;
 
@@ -158,9 +158,9 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim, const EOS_Data &e
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i)
     {
       // Extract components of metric
-      Real x1v = CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
-      Real x2v = CellCenterX(j-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
-      Real x3v = CellCenterX(k-ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
+      Real x1v = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
+      Real x2v = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
+      Real x3v = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
       Real g_[NMETRIC], gi_[NMETRIC];
       ComputeMetricAndInverse(x1v, x2v, x3v, spin, g_, gi_);
       const Real
@@ -288,7 +288,7 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim,
   int is = indcs.is; int ie = indcs.ie;
   int js = indcs.js; int je = indcs.je;
   int ks = indcs.ks; int ke = indcs.ke;
-  auto &size = pmy_mesh->pmb_pack->pmb->mbsize;
+  auto &size = coord_data.mb_size;
   int nmb1 = pmy_mesh->pmb_pack->nmb_thispack - 1;
   Real &spin = coord_data.bh_spin;
 
@@ -298,9 +298,9 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim,
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i)
     {
       // Extract components of metric
-      Real x1v = CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
-      Real x2v = CellCenterX(j-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
-      Real x3v = CellCenterX(k-ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
+      Real x1v = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
+      Real x2v = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
+      Real x3v = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
       Real g_[NMETRIC], gi_[NMETRIC];
       ComputeMetricAndInverse(x1v, x2v, x3v, spin, g_, gi_);
       const Real

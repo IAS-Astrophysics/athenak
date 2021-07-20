@@ -178,7 +178,7 @@ TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage)
 
     // Initialize sin and cos arrays
     // bad design: requires saving sin/cos during restarts
-    auto &size = pmy_pack->pmb->mbsize;
+    auto &size = pmy_pack->coord.coord_data.mb_size;
     auto x1sin_ = x1sin;
     auto x1cos_ = x1cos;
     par_for("kx_loop", DevExeSpace(), 0, nmb-1, 0, nt-1, 0, ncells1-1,
@@ -186,7 +186,7 @@ TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage)
       { 
         int nk1 = n/nw23;
         Real kx = nk1*dkx;
-        Real x1v = CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
+        Real x1v = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
       
         x1sin_(m,n,i) = sin(kx*x1v);
         x1cos_(m,n,i) = cos(kx*x1v);
@@ -201,7 +201,7 @@ TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage)
         int nk1 = n/nw23;
         int nk2 = (n - nk1*nw23)/nw2;
         Real ky = nk2*dky;
-        Real x2v = CellCenterX(j-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
+        Real x2v = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
 
         x2sin_(m,n,j) = sin(ky*x2v);
         x2cos_(m,n,j) = cos(ky*x2v);
@@ -217,7 +217,7 @@ TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage)
         int nk2 = (n - nk1*nw23)/nw2;
         int nk3 = n - nk1*nw23 - nk2*nw2;
         Real kz = nk3*dkz;
-        Real x3v = CellCenterX(k-ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
+        Real x3v = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
 
         x3sin_(m,n,k) = sin(kz*x3v);
         x3cos_(m,n,k) = cos(kz*x3v);

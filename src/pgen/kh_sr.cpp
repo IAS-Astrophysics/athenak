@@ -50,14 +50,14 @@ void ProblemGenerator::KH_Rel_(MeshBlockPack *pmbp, ParameterInput *pin)
   EOS_Data &eos = pmbp->phydro->peos->eos_data;
   Real gm1 = eos.gamma - 1.0;
   auto &u0 = pmbp->phydro->u0;
-  auto &size = pmbp->pmb->mbsize;
+  auto &size = pmbp->coord.coord_data.mb_size;
 
 
   par_for("pgen_ot1", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
-      Real x1 = CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
-      Real x2 = CellCenterX(j-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
+      Real x1 = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
+      Real x2 = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
 
       Real w[5];
 

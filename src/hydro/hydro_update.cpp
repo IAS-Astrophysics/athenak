@@ -41,7 +41,7 @@ TaskStatus Hydro::ExpRKUpdate(Driver *pdriver, int stage)
   auto flx1 = uflx.x1f;
   auto flx2 = uflx.x2f;
   auto flx3 = uflx.x3f;
-  auto &mbsize = pmy_pack->pmb->mbsize;
+  auto &mbsize = pmy_pack->coord.coord_data.mb_size;
 
   // hierarchical parallel loop that updates conserved variables to intermediate step
   // using weights and fractional time step appropriate to stages of time-integrator.
@@ -57,7 +57,7 @@ TaskStatus Hydro::ExpRKUpdate(Driver *pdriver, int stage)
       // compute dF1/dx1
       par_for_inner(member, is, ie, [&](const int i)
       {
-        divf(i) = (flx1(m,n,k,j,i+1) - flx1(m,n,k,j,i))/mbsize.dx1.d_view(m);
+        divf(i) = (flx1(m,n,k,j,i+1) - flx1(m,n,k,j,i))/mbsize.d_view(m).dx1;
       });
       member.team_barrier();
 
@@ -66,7 +66,7 @@ TaskStatus Hydro::ExpRKUpdate(Driver *pdriver, int stage)
       if (multi_d) {
         par_for_inner(member, is, ie, [&](const int i)
         {
-          divf(i) += (flx2(m,n,k,j+1,i) - flx2(m,n,k,j,i))/mbsize.dx2.d_view(m);
+          divf(i) += (flx2(m,n,k,j+1,i) - flx2(m,n,k,j,i))/mbsize.d_view(m).dx2;
         });
         member.team_barrier();
       }
@@ -76,7 +76,7 @@ TaskStatus Hydro::ExpRKUpdate(Driver *pdriver, int stage)
       if (three_d) {
         par_for_inner(member, is, ie, [&](const int i)
         {
-          divf(i) += (flx3(m,n,k+1,j,i) - flx3(m,n,k,j,i))/mbsize.dx3.d_view(m);
+          divf(i) += (flx3(m,n,k+1,j,i) - flx3(m,n,k,j,i))/mbsize.d_view(m).dx3;
         });
         member.team_barrier();
       }

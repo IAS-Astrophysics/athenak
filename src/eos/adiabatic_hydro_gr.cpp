@@ -61,7 +61,7 @@ void AdiabaticHydroGR::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &pr
   int &nhyd  = pmy_pack->phydro->nhydro;
   int &nscal = pmy_pack->phydro->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
-  auto size = pmy_pack->pmb->mbsize;
+  auto size = pmy_pack->coord.coord_data.mb_size;
   Real gm1 = eos_data.gamma - 1.0; 
   Real pfloor_ = eos_data.pressure_floor;
   Real &dfloor_ = eos_data.density_floor;
@@ -88,9 +88,9 @@ void AdiabaticHydroGR::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &pr
       Real& w_vy = prim(m, IVY,k,j,i);
       Real& w_vz = prim(m, IVZ,k,j,i);
 
-      Real x1 = CellCenterX(i, n1, size.x1min.d_view(m), size.x1max.d_view(m));
-      Real x2 = CellCenterX(j, n2, size.x2min.d_view(m), size.x2max.d_view(m));
-      Real x3 = CellCenterX(k, n3, size.x3min.d_view(m), size.x3max.d_view(m));
+      Real x1 = CellCenterX(i, n1, size.d_view(m).x1min, size.d_view(m).x1max);
+      Real x2 = CellCenterX(j, n2, size.d_view(m).x2min, size.d_view(m).x2max);
+      Real x3 = CellCenterX(k, n3, size.d_view(m).x3min, size.d_view(m).x3max);
 
       // Extract components of metric
       Real g_[NMETRIC], gi_[NMETRIC];
@@ -289,7 +289,7 @@ void AdiabaticHydroGR::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Rea
   int is = indcs.is;
   int js = indcs.js;
   int ks = indcs.ks;
-  auto size = pmy_pack->pmb->mbsize;
+  auto size = pmy_pack->coord.coord_data.mb_size;
   int &nhyd  = pmy_pack->phydro->nhydro;
   int &nscal = pmy_pack->phydro->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
@@ -300,9 +300,9 @@ void AdiabaticHydroGR::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Rea
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
       // Extract components of metric
-      Real x1v = CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
-      Real x2v = CellCenterX(j-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
-      Real x3v = CellCenterX(k-ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
+      Real x1v = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
+      Real x2v = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
+      Real x3v = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
       Real g_[NMETRIC], gi_[NMETRIC];
       ComputeMetricAndInverse(x1v, x2v, x3v, spin, g_, gi_);
       const Real

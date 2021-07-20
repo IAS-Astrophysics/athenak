@@ -40,7 +40,7 @@ TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage)
 
   // capture class variables for kernel
   auto &w0_ = w0;
-  auto &mbsize = pmy_pack->pmb->mbsize;
+  auto &mbsize = pmy_pack->coord.coord_data.mb_size;
   auto &is_special_relativistic_ = is_special_relativistic;
   const int nmkji = (pmy_pack->nmb_thispack)*nx3*nx2*nx1;
   const int nkji = nx3*nx2*nx1;
@@ -59,9 +59,9 @@ TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage)
       k += ks;
       j += js;
 
-      min_dt1 = fmin((mbsize.dx1.d_view(m)/fabs(w0_(m,IVX,k,j,i))), min_dt1);
-      min_dt2 = fmin((mbsize.dx2.d_view(m)/fabs(w0_(m,IVY,k,j,i))), min_dt2);
-      min_dt3 = fmin((mbsize.dx3.d_view(m)/fabs(w0_(m,IVZ,k,j,i))), min_dt3);
+      min_dt1 = fmin((mbsize.d_view(m).dx1/fabs(w0_(m,IVX,k,j,i))), min_dt1);
+      min_dt2 = fmin((mbsize.d_view(m).dx2/fabs(w0_(m,IVY,k,j,i))), min_dt2);
+      min_dt3 = fmin((mbsize.d_view(m).dx3/fabs(w0_(m,IVZ,k,j,i))), min_dt3);
     }, Kokkos::Min<Real>(dt1), Kokkos::Min<Real>(dt2),Kokkos::Min<Real>(dt3));
  
   } else {
@@ -108,9 +108,9 @@ TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage)
         max_dv3 = fabs(w0_(m,IVZ,k,j,i)) + cs;
       }
 
-      min_dt1 = fmin((mbsize.dx1.d_view(m)/max_dv1), min_dt1);
-      min_dt2 = fmin((mbsize.dx2.d_view(m)/max_dv2), min_dt2);
-      min_dt3 = fmin((mbsize.dx3.d_view(m)/max_dv3), min_dt3);
+      min_dt1 = fmin((mbsize.d_view(m).dx1/max_dv1), min_dt1);
+      min_dt2 = fmin((mbsize.d_view(m).dx2/max_dv2), min_dt2);
+      min_dt3 = fmin((mbsize.d_view(m).dx3/max_dv3), min_dt3);
     }, Kokkos::Min<Real>(dt1), Kokkos::Min<Real>(dt2),Kokkos::Min<Real>(dt3));
  
   }

@@ -108,7 +108,7 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
-  auto size = pmbp->pmb->mbsize;
+  auto size = pmbp->coord.coord_data.mb_size;
 
   // Initialize Hydro variables -------------------------------
   if (pmbp->phydro != nullptr) {
@@ -138,11 +138,11 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
       {
         Real x;
         if (shk_dir == 1) {
-          x = CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
+          x = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
         } else if (shk_dir == 2) {
-          x = CellCenterX(j-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
+          x = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
         } else {
-          x = CellCenterX(k-ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
+          x = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
         }
 
         if (x < xshock) {
@@ -196,15 +196,15 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
       {
         Real x,bxl,byl,bzl,bxr,byr,bzr;
         if (shk_dir == 1) {
-          x = CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
+          x = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
           bxl = wl_bx; byl = wl_by; bzl = wl_bz;
           bxr = wr_bx; byr = wr_by; bzr = wr_bz;
         } else if (shk_dir == 2) {
-          x = CellCenterX(j-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
+          x = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
           bxl = wl_bz; byl = wl_bx; bzl = wl_by;
           bxr = wr_bz; byr = wr_bx; bzr = wr_by;
         } else {
-          x = CellCenterX(k-ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
+          x = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
           bxl = wl_by; byl = wl_bz; bzl = wl_bx;
           bxr = wr_by; byr = wr_bz; bzr = wr_bx;
         } 

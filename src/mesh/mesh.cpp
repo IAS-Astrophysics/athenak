@@ -596,8 +596,7 @@ void Mesh::WriteMeshStructure()
     std::exit(EXIT_FAILURE);
   }
 
-  MeshBlock mb(this,0,nmb_total);
-  auto &size = mb.mbsize;
+  auto &size = this->pmb_pack->coord.coord_data.mb_size;
   for (int i=root_level; i<=max_level; i++) {
   for (int j=0; j<nmb_total; j++) {
     if (loclist[j].level == i) {
@@ -610,17 +609,17 @@ void Mesh::WriteMeshStructure()
           fp,"#  Logical level %d, location = (%" PRId32 " %" PRId32 " %" PRId32")\n",
           loclist[j].level, lx1, lx2, lx3);
       if (two_d) { // 2D
-        std::fprintf(fp,"%g %g\n", size.x1min.h_view(j), size.x2min.h_view(j));
-        std::fprintf(fp,"%g %g\n", size.x1max.h_view(j), size.x2min.h_view(j));
-        std::fprintf(fp,"%g %g\n", size.x1max.h_view(j), size.x2max.h_view(j));
-        std::fprintf(fp,"%g %g\n", size.x1min.h_view(j), size.x2max.h_view(j));
-        std::fprintf(fp,"%g %g\n", size.x1min.h_view(j), size.x2min.h_view(j));
+        std::fprintf(fp,"%g %g\n", size.h_view(j).x1min, size.h_view(j).x2min);
+        std::fprintf(fp,"%g %g\n", size.h_view(j).x1max, size.h_view(j).x2min);
+        std::fprintf(fp,"%g %g\n", size.h_view(j).x1max, size.h_view(j).x2max);
+        std::fprintf(fp,"%g %g\n", size.h_view(j).x1min, size.h_view(j).x2max);
+        std::fprintf(fp,"%g %g\n", size.h_view(j).x1min, size.h_view(j).x2min);
         std::fprintf(fp,"\n\n");
       }
       if (three_d) { // 3D
-        Real &x1min = size.x1min.h_view(j), &x1max = size.x1max.h_view(j);
-        Real &x2min = size.x2min.h_view(j), &x2max = size.x2max.h_view(j);
-        Real &x3min = size.x3min.h_view(j), &x3max = size.x3max.h_view(j);
+        Real &x1min = size.h_view(j).x1min, &x1max = size.h_view(j).x1max;
+        Real &x2min = size.h_view(j).x2min, &x2max = size.h_view(j).x2max;
+        Real &x3min = size.h_view(j).x3min, &x3max = size.h_view(j).x3max;
         std::fprintf(fp,"%g %g %g\n", x1min, x2min, x3min);
         std::fprintf(fp,"%g %g %g\n", x1max, x2min, x3min);
         std::fprintf(fp,"%g %g %g\n", x1max, x2max, x3min);
