@@ -26,10 +26,10 @@
 
 struct CoordinatesData
 {
-  Real bh_mass;                      // needed for GR metric
-  Real bh_spin;                      // needed for GR metric
-  RegionIndcs mb_indcs;              // indices are the same for all MeshBlocks
-  DualArray1D<RegionSize> mb_size;   // array of length (# of MeshBlocks)
+  Real bh_mass;                     // needed for GR metric
+  Real bh_spin;                     // needed for GR metric
+  RegionIndcs mb_indcs;             // indices are the same for all MeshBlocks
+  DualArray1D<RegionSize> mb_size;  // array of length (# of MeshBlocks)
   // constructor
   CoordinatesData(int nmb) : mb_size("size",nmb) {}
 };
@@ -41,7 +41,7 @@ struct CoordinatesData
 class Coordinates
 {
 public:
-  Coordinates(Mesh *pm, ParameterInput *pin, RegionIndcs indcs, int nmb);
+  Coordinates(Mesh *pm, ParameterInput *pin, RegionIndcs indcs, int gids, int nmb);
   ~Coordinates() {};
 
   CoordinatesData coord_data;

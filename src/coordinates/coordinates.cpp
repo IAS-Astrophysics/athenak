@@ -16,10 +16,12 @@
 //----------------------------------------------------------------------------------------
 // constructor, parses input file and initializes data structures and parameters
 
-Coordinates::Coordinates(Mesh *pm, ParameterInput *pin, RegionIndcs indcs, int nmb)
+Coordinates::Coordinates(Mesh *pm, ParameterInput *pin, RegionIndcs indcs,
+                         int igids, int nmb)
   : pmy_mesh(pm),
     coord_data(nmb)
 {
+  // Read mass and spin, with GR
   coord_data.bh_mass = pin->GetOrAddReal("coord","m",0.0);
   coord_data.bh_spin = pin->GetOrAddReal("coord","a",0.0);
 
@@ -48,10 +50,87 @@ Coordinates::Coordinates(Mesh *pm, ParameterInput *pin, RegionIndcs indcs, int n
     coord_data.mb_indcs.ke = 0;
   } 
 
+  // calculate physical size of MeshBlocks.  Note only host array is initialized
+  auto &msize = pm->mesh_size;
+  auto &mb_size = coord_data.mb_size;
+  for (int m=0; m<nmb; ++m) {
+
+    // x1-direction
+    std::int32_t &lx1 = pm->loclist[igids+m].lx1;
+    std::int32_t &lev = pm->loclist[igids+m].level;
+    std::int32_t nmbx1 = pm->nmb_rootx1 << (lev - pm->root_level);
+    if (lx1 == 0) {
+      mb_size.h_view(m).x1min = msize.x1min;
+    } else {
+      mb_size.h_view(m).x1min = LeftEdgeX(lx1, nmbx1, msize.x1min, msize.x1max);
+    }
+
+    if (lx1 == nmbx1 - 1) {
+      mb_size.h_view(m).x1max = msize.x1max;
+    } else {
+      mb_size.h_view(m).x1max = LeftEdgeX(lx1+1, nmbx1, msize.x1min, msize.x1max);
+    }
+
+    // x2-direction
+    if (pm->mesh_indcs.nx2 == 1) {
+      mb_size.h_view(m).x2min = msize.x2min;
+      mb_size.h_view(m).x2max = msize.x2max;
+    } else {
+
+      std::int32_t &lx2 = pm->loclist[igids+m].lx2;
+      std::int32_t nmbx2 = pm->nmb_rootx2 << (lev - pm->root_level);
+      if (lx2 == 0) {
+        mb_size.h_view(m).x2min = msize.x2min;
+      } else {
+        mb_size.h_view(m).x2min = LeftEdgeX(lx2, nmbx2, msize.x2min, msize.x2max);
+      }
+
+      if (lx2 == (nmbx2) - 1) {
+        mb_size.h_view(m).x2max = msize.x2max;
+      } else {
+        mb_size.h_view(m).x2max = LeftEdgeX(lx2+1, nmbx2, msize.x2min, msize.x2max);
+      }
+
+    }
+
+    // x3-direction
+    if (pm->mesh_indcs.nx3 == 1) {
+      mb_size.h_view(m).x3min = msize.x3min;
+      mb_size.h_view(m).x3max = msize.x3max;
+    } else {
+      std::int32_t &lx3 = pm->loclist[igids+m].lx3;
+      std::int32_t nmbx3 = pm->nmb_rootx3 << (lev - pm->root_level);
+      if (lx3 == 0) {
+        mb_size.h_view(m).x3min = msize.x3min;
+      } else {
+        mb_size.h_view(m).x3min = LeftEdgeX(lx3, nmbx3, msize.x3min, msize.x3max);
+      }
+      if (lx3 == (nmbx3) - 1) {
+        mb_size.h_view(m).x3max = msize.x3max;
+      } else {
+        mb_size.h_view(m).x3max = LeftEdgeX(lx3+1, nmbx3, msize.x3min, msize.x3max);
+      }
+    }
+
+    // grid spacing at this level.  Ensure all MeshBlocks at same level have same dx
+    mb_size.h_view(m).dx1 = msize.dx1*static_cast<Real>(1<<(lev - pm->root_level));
+    mb_size.h_view(m).dx2 = msize.dx2*static_cast<Real>(1<<(lev - pm->root_level));
+    mb_size.h_view(m).dx3 = msize.dx3*static_cast<Real>(1<<(lev - pm->root_level));
+  }
+
+  // mark DualArray as modified, and then sync device with host
+  mb_size.template modify<HostMemSpace>();
+  mb_size.template sync<DevExeSpace>();
+
 std::cout << coord_data.mb_indcs.ng <<"  "<< coord_data.mb_indcs.nx1 <<"  "<< coord_data.mb_indcs.nx2 <<"  "<< coord_data.mb_indcs.nx3 << std::endl;
 std::cout << coord_data.mb_indcs.is <<"  "<< coord_data.mb_indcs.ie << std::endl;
 std::cout << coord_data.mb_indcs.js <<"  "<< coord_data.mb_indcs.je << std::endl;
 std::cout << coord_data.mb_indcs.ks <<"  "<< coord_data.mb_indcs.ke << std::endl;
+
+for (int m=0; m<nmb; ++m) {
+std::cout << "m=" << m <<"  dx1/dx2/dx3=" << mb_size.h_view(m).dx1 << "  " << mb_size.h_view(m).dx2 << "  " << mb_size.h_view(m).dx3 << "  "  << std::endl;
+}
+
 }
 
 //----------------------------------------------------------------------------------------
