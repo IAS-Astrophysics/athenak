@@ -114,12 +114,12 @@ void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
       int nout_vars = outvars.size();
       int nout_mbs = (outmbs.size());
       for (int m=0; m<nout_mbs; ++m) {
-        auto cells = pm->pmb_pack->mb_cells;
+        auto &indcs = pm->pmb_pack->coord.coord_data.mb_indcs;
         MeshBlock* pmb = pm->pmb_pack->pmb;
         int idx = pm->FindMeshBlockIndex(outmbs[m].mb_gid);
-        int &is = cells.is;
-        int &js = cells.js;
-        int &ks = cells.ks;
+        int &is = indcs.is;
+        int &js = indcs.js;
+        int &ks = indcs.ks;
         int &ois = outmbs[m].ois;
         int &oie = outmbs[m].oie;
         int &ojs = outmbs[m].ojs;
@@ -132,9 +132,9 @@ void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
         Real &x2max = pmb->mbsize.x2max.h_view(idx);
         Real &x3min = pmb->mbsize.x3min.h_view(idx);
         Real &x3max = pmb->mbsize.x3max.h_view(idx);
-        int &nx1 = cells.nx1;
-        int &nx2 = cells.nx2;
-        int &nx3 = cells.nx3;
+        int &nx1 = indcs.nx1;
+        int &nx2 = indcs.nx2;
+        int &nx3 = indcs.nx3;
         for (int k=oks; k<=oke; ++k) {
           for (int j=ojs; j<=oje; ++j) {
             for (int i=ois; i<=oie; ++i) {

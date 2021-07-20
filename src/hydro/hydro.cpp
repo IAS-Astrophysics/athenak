@@ -89,10 +89,10 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // allocate memory for conserved and primitive variables
   int nmb = ppack->nmb_thispack;
-  auto &ncells = ppack->mb_cells;
-  int ncells1 = ncells.nx1 + 2*(ncells.ng);
-  int ncells2 = (ncells.nx2 > 1)? (ncells.nx2 + 2*(ncells.ng)) : 1;
-  int ncells3 = (ncells.nx3 > 1)? (ncells.nx3 + 2*(ncells.ng)) : 1;
+  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  int ncells1 = indcs.nx1 + 2*(indcs.ng);
+  int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
+  int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
   Kokkos::realloc(u0, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
   Kokkos::realloc(w0, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
 
@@ -113,20 +113,20 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
 
     } else if (xorder.compare("ppm") == 0) {
       // check that nghost > 2
-      if (ncells.ng < 3) {
+      if (indcs.ng < 3) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
             << std::endl << "PPM reconstruction requires at least 3 ghost zones, "
-            << "but <mesh>/nghost=" << ncells.ng << std::endl;
+            << "but <mesh>/nghost=" << indcs.ng << std::endl;
         std::exit(EXIT_FAILURE); 
       }                
       recon_method_ = ReconstructionMethod::ppm;
 
     } else if (xorder.compare("wenoz") == 0) {
       // check that nghost > 2
-      if (ncells.ng < 3) {
+      if (indcs.ng < 3) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
             << std::endl << "WENOZ reconstruction requires at least 3 ghost zones, "
-            << "but <mesh>/nghost=" << ncells.ng << std::endl;
+            << "but <mesh>/nghost=" << indcs.ng << std::endl;
         std::exit(EXIT_FAILURE); 
       }                
       recon_method_ = ReconstructionMethod::wenoz;

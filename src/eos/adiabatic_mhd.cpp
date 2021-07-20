@@ -34,11 +34,11 @@ AdiabaticMHD::AdiabaticMHD(MeshBlockPack *pp, ParameterInput *pin)
 void AdiabaticMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
                               DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc)
 {
-  auto ncells = pmy_pack->mb_cells;
-  int &ng = ncells.ng;
-  int n1 = ncells.nx1 + 2*ng;
-  int n2 = (ncells.nx2 > 1)? (ncells.nx2 + 2*ng) : 1;
-  int n3 = (ncells.nx3 > 1)? (ncells.nx3 + 2*ng) : 1;
+  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  int &ng = indcs.ng;
+  int n1 = indcs.nx1 + 2*ng;
+  int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
+  int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
   int &nmhd  = pmy_pack->pmhd->nmhd;
   int &nscal = pmy_pack->pmhd->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
@@ -109,10 +109,10 @@ void AdiabaticMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real>
 void AdiabaticMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,
                               DvceArray5D<Real> &cons)
 {
-  auto ncells = pmy_pack->mb_cells;
-  int &n1 = ncells.nx1;
-  int &n2 = ncells.nx2;
-  int &n3 = ncells.nx3;
+  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  int n1 = indcs.nx1;
+  int n2 = indcs.nx2;
+  int n3 = indcs.nx3;
   int &nmhd  = pmy_pack->pmhd->nmhd;
   int &nscal = pmy_pack->pmhd->nscalars;
   int &nmb = pmy_pack->nmb_thispack;

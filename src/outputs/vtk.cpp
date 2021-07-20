@@ -197,11 +197,11 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
 
     // Loop over MeshBlocks
     for (int m=0; m<nout_mbs; ++m) {
-      auto cells = pm->pmb_pack->mb_cells;
+      auto &indcs = pm->pmb_pack->coord.coord_data.mb_indcs;
       LogicalLocation loc = pm->loclist[outmbs[m].mb_gid];
-      int &mb_nx1 = cells.nx1;
-      int &mb_nx2 = cells.nx2;
-      int &mb_nx3 = cells.nx3;
+      int &mb_nx1 = indcs.nx1;
+      int &mb_nx2 = indcs.nx2;
+      int &mb_nx3 = indcs.nx3;
       int &ois = outmbs[m].ois;
       int &oie = outmbs[m].oie;
       int &ojs = outmbs[m].ojs;

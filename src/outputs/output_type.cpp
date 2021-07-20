@@ -265,22 +265,22 @@ void OutputType::LoadOutputData(Mesh *pm)
 
   // loop over all MeshBlocks
   // set size & starting indices of output arrays, adjusted accordingly if gz included 
-  auto &cells = pm->pmb_pack->mb_cells;
+  auto &indcs = pm->pmb_pack->coord.coord_data.mb_indcs;
   auto &size  = pm->pmb_pack->pmb->mbsize;
   for (int m=0; m<(pm->pmb_pack->nmb_thispack); ++m) {
 
     int ois,oie,ojs,oje,oks,oke;
     if (out_params.include_gzs) {
-      int nout1 = cells.nx1 + 2*(cells.ng);
-      int nout2 = (cells.nx2 > 1)? (cells.nx2 + 2*(cells.ng)) : 1;
-      int nout3 = (cells.nx3 > 1)? (cells.nx3 + 2*(cells.ng)) : 1;
+      int nout1 = indcs.nx1 + 2*(indcs.ng);
+      int nout2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
+      int nout3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
       ois = 0; oie = nout1-1;
       ojs = 0; oje = nout2-1;
       oks = 0; oke = nout3-1;
     } else {
-      ois = cells.is; oie = cells.ie;
-      ojs = cells.js; oje = cells.je;
-      oks = cells.ks; oke = cells.ke;
+      ois = indcs.is; oie = indcs.ie;
+      ojs = indcs.js; oje = indcs.je;
+      oks = indcs.ks; oke = indcs.ke;
     }
 
     // check for slicing in each dimension, adjust start/end indices accordingly
@@ -289,7 +289,7 @@ void OutputType::LoadOutputData(Mesh *pm)
       if (out_params.slice_x1 <  size.x1min.h_view(m) ||
           out_params.slice_x1 >= size.x1max.h_view(m)) { continue; }
       // set index of slice
-      ois = CellCenterIndex(out_params.slice_x1, cells.nx1,
+      ois = CellCenterIndex(out_params.slice_x1, indcs.nx1,
                             size.x1min.h_view(m), size.x1max.h_view(m));
       oie = ois;
     }
@@ -299,7 +299,7 @@ void OutputType::LoadOutputData(Mesh *pm)
       if (out_params.slice_x2 <  size.x2min.h_view(m) ||
           out_params.slice_x2 >= size.x2max.h_view(m)) { continue; }
       // set index of slice
-      ojs = CellCenterIndex(out_params.slice_x2, cells.nx2,
+      ojs = CellCenterIndex(out_params.slice_x2, indcs.nx2,
                             size.x2min.h_view(m), size.x2max.h_view(m));
       oje = ojs;
     }
@@ -309,7 +309,7 @@ void OutputType::LoadOutputData(Mesh *pm)
       if (out_params.slice_x3 <  size.x3min.h_view(m) ||
           out_params.slice_x3 >= size.x3max.h_view(m)) { continue; }
       // set index of slice
-      oks = CellCenterIndex(out_params.slice_x3, cells.nx3,
+      oks = CellCenterIndex(out_params.slice_x3, indcs.nx3,
                             size.x3min.h_view(m), size.x3max.h_view(m));
       oke = oks;
     }

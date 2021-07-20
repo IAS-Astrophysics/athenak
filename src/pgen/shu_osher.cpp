@@ -44,10 +44,11 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
 
   // capture variables for kernel
   Real gm1 = pmbp->phydro->peos->eos_data.gamma - 1.0;
-  int &is = pmbp->mb_cells.is, &ie = pmbp->mb_cells.ie;
-  int &js = pmbp->mb_cells.js, &je = pmbp->mb_cells.je;
-  int &ks = pmbp->mb_cells.ks, &ke = pmbp->mb_cells.ke;
-  int &nx1 = pmbp->mb_cells.nx1;
+  auto &indcs = pmbp->coord.coord_data.mb_indcs;
+  int &nx1 = indcs.nx1;
+  int &is = indcs.is; int &ie = indcs.ie;
+  int &js = indcs.js; int &je = indcs.je;
+  int &ks = indcs.ks; int &ke = indcs.ke;
   auto &u0 = pmbp->phydro->u0;
   auto &size = pmbp->pmb->mbsize;
 

@@ -88,9 +88,10 @@ void HistoryOutput::LoadHydroHistoryData(HistoryData *pdata, Mesh *pm)
   int &nhist_ = pdata->nhist;
 
   // loop over all MeshBlocks in this pack
-  int is = pm->pmb_pack->mb_cells.is; int nx1 = pm->pmb_pack->mb_cells.nx1;
-  int js = pm->pmb_pack->mb_cells.js; int nx2 = pm->pmb_pack->mb_cells.nx2;
-  int ks = pm->pmb_pack->mb_cells.ks; int nx3 = pm->pmb_pack->mb_cells.nx3;
+  auto &indcs = pm->pmb_pack->coord.coord_data.mb_indcs;
+  int is = indcs.is; int nx1 = indcs.nx1;
+  int js = indcs.js; int nx2 = indcs.nx2;
+  int ks = indcs.ks; int nx3 = indcs.nx3;
   const int nmkji = (pm->pmb_pack->nmb_thispack)*nx3*nx2*nx1;
   const int nkji = nx3*nx2*nx1;
   const int nji  = nx2*nx1;
@@ -181,9 +182,10 @@ void HistoryOutput::LoadMHDHistoryData(HistoryData *pdata, Mesh *pm)
   int &nhist_ = pdata->nhist;
 
   // loop over all MeshBlocks in this pack
-  int is = pm->pmb_pack->mb_cells.is; int nx1 = pm->pmb_pack->mb_cells.nx1;
-  int js = pm->pmb_pack->mb_cells.js; int nx2 = pm->pmb_pack->mb_cells.nx2;
-  int ks = pm->pmb_pack->mb_cells.ks; int nx3 = pm->pmb_pack->mb_cells.nx3;
+  auto &indcs = pm->pmb_pack->coord.coord_data.mb_indcs;
+  int is = indcs.is; int nx1 = indcs.nx1;
+  int js = indcs.js; int nx2 = indcs.nx2;
+  int ks = indcs.ks; int nx3 = indcs.nx3;
   const int nmkji = (pm->pmb_pack->nmb_thispack)*nx3*nx2*nx1;
   const int nkji = nx3*nx2*nx1;
   const int nji  = nx2*nx1;

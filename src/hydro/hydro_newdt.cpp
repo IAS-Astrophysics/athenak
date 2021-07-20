@@ -28,9 +28,10 @@ TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage)
     return TaskStatus::complete; // only execute last stage
   }
   
-  int is = pmy_pack->mb_cells.is; int nx1 = pmy_pack->mb_cells.nx1;
-  int js = pmy_pack->mb_cells.js; int nx2 = pmy_pack->mb_cells.nx2;
-  int ks = pmy_pack->mb_cells.ks; int nx3 = pmy_pack->mb_cells.nx3;
+  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  int is = indcs.is, nx1 = indcs.nx1;
+  int js = indcs.js, nx2 = indcs.nx2;
+  int ks = indcs.ks, nx3 = indcs.nx3;
   auto &eos = pmy_pack->phydro->peos->eos_data;
 
   Real dt1 = std::numeric_limits<float>::max();

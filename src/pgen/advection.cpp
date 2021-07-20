@@ -62,12 +62,13 @@ void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
   Real &x1mesh = pmy_mesh_->mesh_size.x1min;
   Real &x2mesh = pmy_mesh_->mesh_size.x2min;
   Real &x3mesh = pmy_mesh_->mesh_size.x3min;
-  int &nx1 = pmbp->mb_cells.nx1;
-  int &nx2 = pmbp->mb_cells.nx2;
-  int &nx3 = pmbp->mb_cells.nx3;
-  int &is = pmbp->mb_cells.is, &ie = pmbp->mb_cells.ie;
-  int &js = pmbp->mb_cells.js, &je = pmbp->mb_cells.je;
-  int &ks = pmbp->mb_cells.ks, &ke = pmbp->mb_cells.ke;
+  auto &indcs = pmbp->coord.coord_data.mb_indcs;
+  int &nx1 = indcs.nx1;
+  int &nx2 = indcs.nx2;
+  int &nx3 = indcs.nx3;
+  int &is = indcs.is; int &ie = indcs.ie;
+  int &js = indcs.js; int &je = indcs.je;
+  int &ks = indcs.ks; int &ke = indcs.ke;
   auto &size = pmbp->pmb->mbsize;
 
   // Initialize Hydro variables -------------------------------

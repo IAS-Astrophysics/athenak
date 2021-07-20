@@ -187,12 +187,13 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
   Real yfact = 1.0;
 
   // capture variables for kernel
-  int &nx1 = pmbp->mb_cells.nx1;
-  int &nx2 = pmbp->mb_cells.nx2;
-  int &nx3 = pmbp->mb_cells.nx3;
-  int &is = pmbp->mb_cells.is, &ie = pmbp->mb_cells.ie;
-  int &js = pmbp->mb_cells.js, &je = pmbp->mb_cells.je;
-  int &ks = pmbp->mb_cells.ks, &ke = pmbp->mb_cells.ke;
+  auto &indcs = pmbp->coord.coord_data.mb_indcs;
+  int &nx1 = indcs.nx1;
+  int &nx2 = indcs.nx2;
+  int &nx3 = indcs.nx3;
+  int &is = indcs.is; int &ie = indcs.ie;
+  int &js = indcs.js; int &je = indcs.je;
+  int &ks = indcs.ks; int &ke = indcs.ke;
   auto &size = pmbp->pmb->mbsize;
 
   // initialize Hydro variables ----------------------------------------------------------
@@ -676,12 +677,13 @@ void ProblemGenerator::LinearWaveErrors_(MeshBlockPack *pmbp, ParameterInput *pi
   int nvars=0;
 
   // capture class variables for kernel  
-  int &nx1 = pmbp->mb_cells.nx1;
-  int &nx2 = pmbp->mb_cells.nx2;
-  int &nx3 = pmbp->mb_cells.nx3;
-  int &is = pmbp->mb_cells.is;
-  int &js = pmbp->mb_cells.js;
-  int &ks = pmbp->mb_cells.ks;
+  auto &indcs = pmbp->coord.coord_data.mb_indcs;
+  int &nx1 = indcs.nx1;
+  int &nx2 = indcs.nx2;
+  int &nx3 = indcs.nx3;
+  int &is = indcs.is;
+  int &js = indcs.js;
+  int &ks = indcs.ks;
   auto &size = pmbp->pmb->mbsize;
 
   // compute errors for Hydro  ----------------------------------------------------------

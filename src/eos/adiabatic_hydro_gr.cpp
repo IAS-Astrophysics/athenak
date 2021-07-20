@@ -53,11 +53,11 @@ Real EquationC22(Real z, Real &u_d, Real q, Real r, Real gm1, Real pfloor)
 
 void AdiabaticHydroGR::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
 {
-  auto ncells = pmy_pack->mb_cells;
-  int ng = ncells.ng;
-  int n1 = ncells.nx1 + 2*ng;
-  int n2 = (ncells.nx2 > 1)? (ncells.nx2 + 2*ng) : 1;
-  int n3 = (ncells.nx3 > 1)? (ncells.nx3 + 2*ng) : 1;
+  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  int &ng = indcs.ng;
+  int n1 = indcs.nx1 + 2*ng;
+  int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
+  int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
   int &nhyd  = pmy_pack->phydro->nhydro;
   int &nscal = pmy_pack->phydro->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
@@ -282,13 +282,13 @@ std::cout << "|zm-zp|=" <<fabs(zm-zp)<<" |f|="<< fabs(f) << "for i=" <<  ii << s
 
 void AdiabaticHydroGR::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons)
 {
-  auto ncells = pmy_pack->mb_cells;
-  int &nx1 = ncells.nx1;
-  int &nx2 = ncells.nx2;
-  int &nx3 = ncells.nx3;
-  int is = pmy_pack->mb_cells.is;
-  int js = pmy_pack->mb_cells.js;
-  int ks = pmy_pack->mb_cells.ks;
+  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  int nx1 = indcs.nx1;
+  int nx2 = indcs.nx2;
+  int nx3 = indcs.nx3;
+  int is = indcs.is;
+  int js = indcs.js;
+  int ks = indcs.ks;
   auto size = pmy_pack->pmb->mbsize;
   int &nhyd  = pmy_pack->phydro->nhydro;
   int &nscal = pmy_pack->phydro->nscalars;

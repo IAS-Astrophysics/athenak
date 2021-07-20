@@ -62,12 +62,13 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim, const EOS_Data &e
                                 const Real dt, DvceArray5D<Real> &cons)
 {
   // capture variables for kernel
-  int &nx1 = pmy_mesh->pmb_pack->mb_cells.nx1;
-  int &nx2 = pmy_mesh->pmb_pack->mb_cells.nx2;
-  int &nx3 = pmy_mesh->pmb_pack->mb_cells.nx3;
-  int is = pmy_mesh->pmb_pack->mb_cells.is; int ie = pmy_mesh->pmb_pack->mb_cells.ie;
-  int js = pmy_mesh->pmb_pack->mb_cells.js; int je = pmy_mesh->pmb_pack->mb_cells.je;
-  int ks = pmy_mesh->pmb_pack->mb_cells.ks; int ke = pmy_mesh->pmb_pack->mb_cells.ke;
+  auto &indcs = coord_data.mb_indcs;
+  int &nx1 = indcs.nx1;
+  int &nx2 = indcs.nx2;
+  int &nx3 = indcs.nx3;
+  int is = indcs.is; int ie = indcs.ie;
+  int js = indcs.js; int je = indcs.je;
+  int ks = indcs.ks; int ke = indcs.ke;
   auto &size = pmy_mesh->pmb_pack->pmb->mbsize;
   int nmb1 = pmy_mesh->pmb_pack->nmb_thispack - 1;
   Real &spin = coord_data.bh_spin;
@@ -201,12 +202,13 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim,
                                 const Real dt, DvceArray5D<Real> &cons)
 {
   // capture variables for kernel
-  int &nx1 = pmy_mesh->pmb_pack->mb_cells.nx1;
-  int &nx2 = pmy_mesh->pmb_pack->mb_cells.nx2;
-  int &nx3 = pmy_mesh->pmb_pack->mb_cells.nx3;
-  int is = pmy_mesh->pmb_pack->mb_cells.is; int ie = pmy_mesh->pmb_pack->mb_cells.ie;
-  int js = pmy_mesh->pmb_pack->mb_cells.js; int je = pmy_mesh->pmb_pack->mb_cells.je;
-  int ks = pmy_mesh->pmb_pack->mb_cells.ks; int ke = pmy_mesh->pmb_pack->mb_cells.ke;
+  auto &indcs = coord_data.mb_indcs;
+  int &nx1 = indcs.nx1;
+  int &nx2 = indcs.nx2;
+  int &nx3 = indcs.nx3;
+  int is = indcs.is; int ie = indcs.ie;
+  int js = indcs.js; int je = indcs.je;
+  int ks = indcs.ks; int ke = indcs.ke;
   auto &size = pmy_mesh->pmb_pack->pmb->mbsize;
   int nmb1 = pmy_mesh->pmb_pack->nmb_thispack - 1;
   Real &spin = coord_data.bh_spin;
