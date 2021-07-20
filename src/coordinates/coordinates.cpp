@@ -8,7 +8,6 @@
 
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
-#include "mesh/mesh_positions.hpp"
 #include "eos/eos.hpp"
 #include "cartesian_ks.hpp"
 #include "coordinates.hpp"
@@ -51,7 +50,7 @@ Coordinates::Coordinates(Mesh *pm, ParameterInput *pin, RegionIndcs indcs,
   } 
 
   // calculate physical size of MeshBlocks.  Note only host array is initialized
-  auto &msize = pm->mesh_size;
+  auto &ms = pm->mesh_size;
   auto &mb_size = coord_data.mb_size;
   for (int m=0; m<nmb; ++m) {
 
@@ -60,62 +59,62 @@ Coordinates::Coordinates(Mesh *pm, ParameterInput *pin, RegionIndcs indcs,
     std::int32_t &lev = pm->loclist[igids+m].level;
     std::int32_t nmbx1 = pm->nmb_rootx1 << (lev - pm->root_level);
     if (lx1 == 0) {
-      mb_size.h_view(m).x1min = msize.x1min;
+      mb_size.h_view(m).x1min = ms.x1min;
     } else {
-      mb_size.h_view(m).x1min = LeftEdgeX(lx1, nmbx1, msize.x1min, msize.x1max);
+      mb_size.h_view(m).x1min = coord_data.LeftEdgeX(lx1, nmbx1, ms.x1min, ms.x1max);
     }
 
     if (lx1 == nmbx1 - 1) {
-      mb_size.h_view(m).x1max = msize.x1max;
+      mb_size.h_view(m).x1max = ms.x1max;
     } else {
-      mb_size.h_view(m).x1max = LeftEdgeX(lx1+1, nmbx1, msize.x1min, msize.x1max);
+      mb_size.h_view(m).x1max = coord_data.LeftEdgeX(lx1+1, nmbx1, ms.x1min, ms.x1max);
     }
 
     // x2-direction
     if (pm->mesh_indcs.nx2 == 1) {
-      mb_size.h_view(m).x2min = msize.x2min;
-      mb_size.h_view(m).x2max = msize.x2max;
+      mb_size.h_view(m).x2min = ms.x2min;
+      mb_size.h_view(m).x2max = ms.x2max;
     } else {
 
       std::int32_t &lx2 = pm->loclist[igids+m].lx2;
       std::int32_t nmbx2 = pm->nmb_rootx2 << (lev - pm->root_level);
       if (lx2 == 0) {
-        mb_size.h_view(m).x2min = msize.x2min;
+        mb_size.h_view(m).x2min = ms.x2min;
       } else {
-        mb_size.h_view(m).x2min = LeftEdgeX(lx2, nmbx2, msize.x2min, msize.x2max);
+        mb_size.h_view(m).x2min = coord_data.LeftEdgeX(lx2, nmbx2, ms.x2min, ms.x2max);
       }
 
       if (lx2 == (nmbx2) - 1) {
-        mb_size.h_view(m).x2max = msize.x2max;
+        mb_size.h_view(m).x2max = ms.x2max;
       } else {
-        mb_size.h_view(m).x2max = LeftEdgeX(lx2+1, nmbx2, msize.x2min, msize.x2max);
+        mb_size.h_view(m).x2max = coord_data.LeftEdgeX(lx2+1, nmbx2, ms.x2min, ms.x2max);
       }
 
     }
 
     // x3-direction
     if (pm->mesh_indcs.nx3 == 1) {
-      mb_size.h_view(m).x3min = msize.x3min;
-      mb_size.h_view(m).x3max = msize.x3max;
+      mb_size.h_view(m).x3min = ms.x3min;
+      mb_size.h_view(m).x3max = ms.x3max;
     } else {
       std::int32_t &lx3 = pm->loclist[igids+m].lx3;
       std::int32_t nmbx3 = pm->nmb_rootx3 << (lev - pm->root_level);
       if (lx3 == 0) {
-        mb_size.h_view(m).x3min = msize.x3min;
+        mb_size.h_view(m).x3min = ms.x3min;
       } else {
-        mb_size.h_view(m).x3min = LeftEdgeX(lx3, nmbx3, msize.x3min, msize.x3max);
+        mb_size.h_view(m).x3min = coord_data.LeftEdgeX(lx3, nmbx3, ms.x3min, ms.x3max);
       }
       if (lx3 == (nmbx3) - 1) {
-        mb_size.h_view(m).x3max = msize.x3max;
+        mb_size.h_view(m).x3max = ms.x3max;
       } else {
-        mb_size.h_view(m).x3max = LeftEdgeX(lx3+1, nmbx3, msize.x3min, msize.x3max);
+        mb_size.h_view(m).x3max = coord_data.LeftEdgeX(lx3+1, nmbx3, ms.x3min, ms.x3max);
       }
     }
 
     // grid spacing at this level.  Ensure all MeshBlocks at same level have same dx
-    mb_size.h_view(m).dx1 = msize.dx1*static_cast<Real>(1<<(lev - pm->root_level));
-    mb_size.h_view(m).dx2 = msize.dx2*static_cast<Real>(1<<(lev - pm->root_level));
-    mb_size.h_view(m).dx3 = msize.dx3*static_cast<Real>(1<<(lev - pm->root_level));
+    mb_size.h_view(m).dx1 = ms.dx1*static_cast<Real>(1<<(lev - pm->root_level));
+    mb_size.h_view(m).dx2 = ms.dx2*static_cast<Real>(1<<(lev - pm->root_level));
+    mb_size.h_view(m).dx3 = ms.dx3*static_cast<Real>(1<<(lev - pm->root_level));
   }
 
   // mark DualArray as modified, and then sync device with host
@@ -142,15 +141,11 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim, const EOS_Data &e
 {
   // capture variables for kernel
   auto &indcs = coord_data.mb_indcs;
-  int &nx1 = indcs.nx1;
-  int &nx2 = indcs.nx2;
-  int &nx3 = indcs.nx3;
   int is = indcs.is; int ie = indcs.ie;
   int js = indcs.js; int je = indcs.je;
   int ks = indcs.ks; int ke = indcs.ke;
-  auto &size = coord_data.mb_size;
+  auto &coord = coord_data;
   int nmb1 = pmy_mesh->pmb_pack->nmb_thispack - 1;
-  Real &spin = coord_data.bh_spin;
 
   Real gamma_prime = eos.gamma / (eos.gamma - 1.0);
 
@@ -158,11 +153,24 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim, const EOS_Data &e
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i)
     {
       // Extract components of metric
-      Real x1v = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
-      Real x2v = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
-      Real x3v = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
+      Real &x1min = coord.mb_size.d_view(m).x1min;
+      Real &x1max = coord.mb_size.d_view(m).x1max;
+      int nx1 = coord.mb_indcs.nx1;
+      Real x1v = coord.CellCenterX(i-is, nx1, x1min, x1max);
+
+      Real &x2min = coord.mb_size.d_view(m).x2min;
+      Real &x2max = coord.mb_size.d_view(m).x2max;
+      int nx2 = coord.mb_indcs.nx2;
+      Real x2v = coord.CellCenterX(j-js, nx2, x2min, x2max);
+
+      Real &x3min = coord.mb_size.d_view(m).x3min;
+      Real &x3max = coord.mb_size.d_view(m).x3max;
+      int nx3 = coord.mb_indcs.nx3;
+      Real x3v = coord.CellCenterX(k-ks, nx3, x3min, x3max);
+
       Real g_[NMETRIC], gi_[NMETRIC];
-      ComputeMetricAndInverse(x1v, x2v, x3v, spin, g_, gi_);
+      ComputeMetricAndInverse(x1v, x2v, x3v, coord.bh_spin, g_, gi_);
+
       const Real
         &g_00 = g_[I00], &g_01 = g_[I01], &g_02 = g_[I02], &g_03 = g_[I03],
         &g_10 = g_[I01], &g_11 = g_[I11], &g_12 = g_[I12], &g_13 = g_[I13],
@@ -209,7 +217,8 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim, const EOS_Data &e
 
       // Calculate source terms
       Real dg_dx1[NMETRIC], dg_dx2[NMETRIC], dg_dx3[NMETRIC];
-      ComputeMetricDerivatives(x1v, x2v, x3v, spin, dg_dx1, dg_dx2, dg_dx3);
+      ComputeMetricDerivatives(x1v, x2v, x3v, coord.bh_spin, dg_dx1, dg_dx2, dg_dx3);
+
       Real s_1 = 0.0, s_2 = 0.0, s_3 = 0.0;
       s_1 += dg_dx1[I00] * tt[I00];
       s_1 += dg_dx1[I01] * tt[I01];
@@ -282,15 +291,11 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim,
 {
   // capture variables for kernel
   auto &indcs = coord_data.mb_indcs;
-  int &nx1 = indcs.nx1;
-  int &nx2 = indcs.nx2;
-  int &nx3 = indcs.nx3;
   int is = indcs.is; int ie = indcs.ie;
   int js = indcs.js; int je = indcs.je;
   int ks = indcs.ks; int ke = indcs.ke;
-  auto &size = coord_data.mb_size;
+  auto &coord = coord_data;
   int nmb1 = pmy_mesh->pmb_pack->nmb_thispack - 1;
-  Real &spin = coord_data.bh_spin;
 
   Real gamma_prime = eos.gamma / (eos.gamma - 1.0);
 
@@ -298,11 +303,24 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim,
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i)
     {
       // Extract components of metric
-      Real x1v = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
-      Real x2v = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
-      Real x3v = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
+      Real &x1min = coord.mb_size.d_view(m).x1min;
+      Real &x1max = coord.mb_size.d_view(m).x1max;
+      int nx1 = coord.mb_indcs.nx1;
+      Real x1v = coord.CellCenterX(i-is, nx1, x1min, x1max);
+
+      Real &x2min = coord.mb_size.d_view(m).x2min;
+      Real &x2max = coord.mb_size.d_view(m).x2max;
+      int nx2 = coord.mb_indcs.nx2;
+      Real x2v = coord.CellCenterX(j-js, nx2, x2min, x2max);
+
+      Real &x3min = coord.mb_size.d_view(m).x3min;
+      Real &x3max = coord.mb_size.d_view(m).x3max;
+      int nx3 = coord.mb_indcs.nx3;
+      Real x3v = coord.CellCenterX(k-ks, nx3, x3min, x3max);
+
       Real g_[NMETRIC], gi_[NMETRIC];
-      ComputeMetricAndInverse(x1v, x2v, x3v, spin, g_, gi_);
+      ComputeMetricAndInverse(x1v, x2v, x3v, coord.bh_spin, g_, gi_);
+
       const Real
         &g_00 = g_[I00], &g_01 = g_[I01], &g_02 = g_[I02], &g_03 = g_[I03],
         &g_10 = g_[I01], &g_11 = g_[I11], &g_12 = g_[I12], &g_13 = g_[I13],
@@ -366,7 +384,8 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim,
 
       // Calculate source terms
       Real dg_dx1[NMETRIC], dg_dx2[NMETRIC], dg_dx3[NMETRIC];
-      ComputeMetricDerivatives(x1v, x2v, x3v, spin, dg_dx1, dg_dx2, dg_dx3);
+      ComputeMetricDerivatives(x1v, x2v, x3v, coord.bh_spin, dg_dx1, dg_dx2, dg_dx3);
+
       Real s_1 = 0.0, s_2 = 0.0, s_3 = 0.0;
       s_1 += dg_dx1[I00] * tt[I00];
       s_1 += dg_dx1[I01] * tt[I01];
