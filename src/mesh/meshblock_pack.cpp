@@ -19,7 +19,7 @@
 //----------------------------------------------------------------------------------------
 // MeshBlockPack constructor:
 
-MeshBlockPack::MeshBlockPack(Mesh *pm, int igids, int igide, RegionCells icells) :
+MeshBlockPack::MeshBlockPack(Mesh *pm, int igids, int igide, RegionIndcs icells) :
    pmesh(pm), gids(igids), gide(igide), mb_cells(icells)
 {
   nmb_thispack = gide - gids + 1;

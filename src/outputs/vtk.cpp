@@ -63,9 +63,9 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   int big_end = swap_functions::IsBigEndian(); // =1 on big endian machine
 
   // numbers of cells in entire grid
-  int nout1 = (out_params.slice1)? 1 : (pm->mesh_cells.nx1);
-  int nout2 = (out_params.slice2)? 1 : (pm->mesh_cells.nx2);
-  int nout3 = (out_params.slice3)? 1 : (pm->mesh_cells.nx3);
+  int nout1 = (out_params.slice1)? 1 : (pm->mesh_indcs.nx1);
+  int nout2 = (out_params.slice2)? 1 : (pm->mesh_indcs.nx2);
+  int nout3 = (out_params.slice3)? 1 : (pm->mesh_indcs.nx3);
   int ncoord1 = (nout1 > 1)? nout1+1 : nout1;
   int ncoord2 = (nout2 > 1)? nout2+1 : nout2;
   int ncoord3 = (nout3 > 1)? nout3+1 : nout3;
@@ -116,9 +116,9 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   vtkfile.Write(msg.str().c_str(),sizeof(char),msg.str().size());
   header_offset += msg.str().size();}
 
-  int &is = pm->mesh_cells.is;
+  int &is = pm->mesh_indcs.is;
   Real &x1min = pm->mesh_size.x1min, &x1max = pm->mesh_size.x1max;
-  int &nx1 = pm->mesh_cells.nx1;
+  int &nx1 = pm->mesh_indcs.nx1;
 
   if (nout1 == 1) {
     data[0] = static_cast<float>(out_params.slice_x1);
@@ -139,9 +139,9 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   vtkfile.Write(msg.str().c_str(),sizeof(char),msg.str().size());
   header_offset += msg.str().size();} 
   
-  int &js = pm->mesh_cells.js;
+  int &js = pm->mesh_indcs.js;
   Real &x2min = pm->mesh_size.x2min, &x2max = pm->mesh_size.x2max;
-  int &nx2 = pm->mesh_cells.nx2;
+  int &nx2 = pm->mesh_indcs.nx2;
   
   if (nout2 == 1) {
     data[0] = static_cast<float>(out_params.slice_x2);
@@ -162,9 +162,9 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   vtkfile.Write(msg.str().c_str(),sizeof(char),msg.str().size());
   header_offset += msg.str().size();} 
   
-  int &ks = pm->mesh_cells.ks;
+  int &ks = pm->mesh_indcs.ks;
   Real &x3min = pm->mesh_size.x3min, &x3max = pm->mesh_size.x3max;
-  int &nx3 = pm->mesh_cells.nx3;
+  int &nx3 = pm->mesh_indcs.nx3;
   
   if (nout3 == 1) {
     data[0] = static_cast<float>(out_params.slice_x3);

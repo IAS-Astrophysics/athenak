@@ -31,7 +31,7 @@ class MeshBlockPack
  friend class MeshBlockTree;
 
  public:
-  MeshBlockPack(Mesh *pm, int igids, int igide, RegionCells icells);
+  MeshBlockPack(Mesh *pm, int igids, int igide, RegionIndcs icells);
   ~MeshBlockPack();
 
   // data
@@ -40,8 +40,8 @@ class MeshBlockPack
   int nmb_thispack;       // number of MBs in this pack
   // since all MeshBlocks are the same size, following data can be stored in the
   // MeshBlockPack container, and not the individual MeshBlocks themselves
-  RegionCells mb_cells;   // info about cells in MeshBlock(s) in this MeshBlockPack 
-  RegionCells cmb_cells;  // info about cells on next coarser level MBs
+  RegionIndcs mb_cells;   // info about cells in MeshBlock(s) in this MeshBlockPack 
+  RegionIndcs cmb_cells;  // info about cells on next coarser level MBs
 
   MeshBlock* pmb;         // MeshBlocks in this MeshBlockPack
 

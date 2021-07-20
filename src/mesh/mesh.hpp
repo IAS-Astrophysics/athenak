@@ -7,19 +7,21 @@
 //========================================================================================
 //! \file mesh.hpp
 //  \brief defines Mesh class.
-//  The Mesh is the overall grid structure, and MeshBlocks are local patches of data
-//  (potentially on different levels) that tile the entire domain.
+//  The Mesh is the overall grid structure, which is divided into local patches called
+//  MeshBlocks (potentially on different levels) that tile the entire domain.  MeshBlocks
+//  are grouped together into MeshBlockPacks for better performance on GPUs.
 
 #include <cstdint>  // int32_t
-#include "athena.hpp"
 #include <memory>
+
+#include "athena.hpp"
 
 // Define following structure before other "include" files to resolve declarations
 //----------------------------------------------------------------------------------------
 //! \struct RegionSize
 //  \brief physical size in a Mesh or a MeshBlock
 
-struct MeshSize
+struct RegionSize
 {
   Real x1min, x2min, x3min;
   Real x1max, x2max, x3max;
@@ -33,18 +35,18 @@ struct MeshBlockSize
   DualArray1D<Real> x1max, x2max, x3max;
   DualArray1D<Real> dx1, dx2, dx3;       // (uniform) grid spacing
   // constructor
-  MeshBlockSize(int nmb) :
-    x1min("x1min",nmb), x1max("x1max",nmb),
-    x2min("x2min",nmb), x2max("x2max",nmb),
-    x3min("x3min",nmb), x3max("x3max",nmb),
-    dx1("dx1",nmb), dx2("dx2",nmb), dx3("dx3",nmb) {}
+  MeshBlockSize(int nmb)
+    : x1min("x1min",nmb), x1max("x1max",nmb),
+      x2min("x2min",nmb), x2max("x2max",nmb),
+      x3min("x3min",nmb), x3max("x3max",nmb),
+      dx1("dx1",nmb), dx2("dx2",nmb), dx3("dx3",nmb) {}
 };
 
 //----------------------------------------------------------------------------------------
-//! \struct RegionCells
-//  \brief Number of cells and cell indexing in a Mesh or a MeshBlock
+//! \struct RegionIndcs
+//  \brief Cell indices and number of active and ghost cells in a Mesh or a MeshBlock
 
-struct RegionCells
+struct RegionIndcs
 {
   int ng;                   // number of ghost cells
   int nx1, nx2, nx3;        // number of active cells (not including ghost zones)
@@ -107,12 +109,12 @@ class Mesh;
 
 class Mesh
 {
- // mesh classes (Mesh, MeshBlock, MeshBlockPack, MeshBlockTree) like to play together
- friend class MeshBlock;
- friend class MeshBlockPack;
- friend class MeshBlockTree;
+  // mesh classes (Mesh, MeshBlock, MeshBlockPack, MeshBlockTree) like to play together
+  friend class MeshBlock;
+  friend class MeshBlockPack;
+  friend class MeshBlockTree;
 
- public:
+public:
   explicit Mesh(ParameterInput *pin);
   Mesh(ParameterInput *pin, IOWrapper &resfile);  // ctor for restarts
   ~Mesh();
@@ -127,8 +129,8 @@ class Mesh
   }
 
   // data
-  MeshSize  mesh_size;        // physical size of mesh (physical root level)
-  RegionCells mesh_cells;     // number of cells in mesh (physical root level)
+  RegionSize  mesh_size;      // (physical) size of mesh (physical root level)
+  RegionIndcs mesh_indcs;     // indices of cells in mesh (physical root level)
   BoundaryFlag mesh_bcs[6];   // physical boundary conditions at 6 faces of mesh
   bool one_d, two_d, three_d; // flags to indicate 1D or 2D or 3D calculations
   bool multi_d;               // flag to indicate 2D and 3D calculations
@@ -173,7 +175,7 @@ class Mesh
   BoundaryFlag GetBoundaryFlag(const std::string& input_string);
   std::string GetBoundaryString(BoundaryFlag input_flag);
 
- private:
+private:
   // variables for load balancing control
   bool lb_flag_;
   bool lb_automatic_, lb_manual_;

@@ -778,9 +778,9 @@ void ProblemGenerator::LinearWaveErrors_(MeshBlockPack *pmbp, ParameterInput *pi
   }
 
   // write errors
-  std::fprintf(pfile, "%04d", pmbp->pmesh->mesh_cells.nx1);
-  std::fprintf(pfile, "  %04d", pmbp->pmesh->mesh_cells.nx2);
-  std::fprintf(pfile, "  %04d", pmbp->pmesh->mesh_cells.nx3);
+  std::fprintf(pfile, "%04d", pmbp->pmesh->mesh_indcs.nx1);
+  std::fprintf(pfile, "  %04d", pmbp->pmesh->mesh_indcs.nx2);
+  std::fprintf(pfile, "  %04d", pmbp->pmesh->mesh_indcs.nx3);
   std::fprintf(pfile, "  %05d  %e", pmbp->pmesh->ncycle, rms_err);
   for (int i=0; i<nvars; ++i) {
     std::fprintf(pfile, "  %e", l1_err[i]);

@@ -30,12 +30,11 @@ MeshBlock::MeshBlock(Mesh* pm, int igids, int nmb) :
   for (int m=0; m<nmb; ++m) {
     mbgid.h_view(m) = igids + m;
 
+    // calculate physical size and set BCs of MeshBlock in x1, depending on whether there
+    // are one or more MeshBlocks in this direction.
     std::int32_t &lx1 = pm->loclist[igids+m].lx1;
     std::int32_t &lev = pm->loclist[igids+m].level;
     std::int32_t nmbx1 = pm->nmb_rootx1 << (lev - pm->root_level);
-
-    // calculate physical size of MeshBlock in x1.  Second index of mbsize represents:
-    // x1min/max = 0,1;  x2min/max = 2,3;  x3min/max = 4,5;  dx1/2/3 = 6,7,8
     if (lx1 == 0) {
       mbsize.x1min.h_view(m) = msize.x1min;
       mb_bcs(m,0) = pm->mesh_bcs[BoundaryFace::inner_x1];
@@ -52,8 +51,9 @@ MeshBlock::MeshBlock(Mesh* pm, int igids, int nmb) :
       mb_bcs(m,1) = BoundaryFlag::block;
     }
 
-    // calculate physical size of MeshBlock in x2
-    if (pm->mesh_cells.nx2 == 1) {
+    // calculate physical size and set BCs of MeshBlock in x2, dependng on whether there
+    // are none (1D), one, or more MeshBlocks in this direction
+    if (pm->mesh_indcs.nx2 == 1) {
       mbsize.x2min.h_view(m) = msize.x2min;
       mbsize.x2max.h_view(m) = msize.x2max;
       mb_bcs(m,2) = pm->mesh_bcs[BoundaryFace::inner_x2];
@@ -80,8 +80,9 @@ MeshBlock::MeshBlock(Mesh* pm, int igids, int nmb) :
 
     }
 
-    // calculate physical size of MeshBlock in x3
-    if (pm->mesh_cells.nx3 == 1) {
+    // calculate physical size and set BCs of MeshBlock in x3, dependng on whether there
+    // are none (1D/2D), one, or more MeshBlocks in this direction
+    if (pm->mesh_indcs.nx3 == 1) {
       mbsize.x3min.h_view(m) = msize.x3min;
       mbsize.x3max.h_view(m) = msize.x3max;
       mb_bcs(m,4) = pm->mesh_bcs[BoundaryFace::inner_x3];
@@ -104,6 +105,7 @@ MeshBlock::MeshBlock(Mesh* pm, int igids, int nmb) :
         mb_bcs(m,5) = BoundaryFlag::block;
       }
     }
+
     // grid spacing at this level.  Ensure all MeshBlocks at same level have same dx
     mbsize.dx1.h_view(m) = msize.dx1*static_cast<Real>(1<<(lev - pm->root_level));
     mbsize.dx2.h_view(m) = msize.dx2*static_cast<Real>(1<<(lev - pm->root_level));
