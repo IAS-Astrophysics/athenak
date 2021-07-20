@@ -18,8 +18,8 @@
 // Athena++ headers
 #include "athena.hpp"
 #include "parameter_input.hpp"
+#include "coordinates/cell_locations.hpp"
 #include "mesh/mesh.hpp"
-#include "mesh/mesh_positions.hpp"
 #include "eos/eos.hpp"
 #include "mhd/mhd.hpp"
 #include "pgen.hpp"
@@ -55,8 +55,6 @@ void ProblemGenerator::OrszagTang_(MeshBlockPack *pmbp, ParameterInput *pin)
 
   // capture variables for kernel
   auto &indcs = pmbp->coord.coord_data.mb_indcs;
-  int &nx1 = indcs.nx1;
-  int &nx2 = indcs.nx2;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
@@ -65,13 +63,20 @@ void ProblemGenerator::OrszagTang_(MeshBlockPack *pmbp, ParameterInput *pin)
   Real gm1 = eos.gamma - 1.0;
   auto &u0 = pmbp->pmhd->u0;
   auto &b0 = pmbp->pmhd->b0;
-  auto &size = pmbp->coord.coord_data.mb_size;
+  auto &coord = pmbp->coord.coord_data;
 
   par_for("pgen_ot1", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
-      Real x1v = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
-      Real x2v = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
+      Real &x1min = coord.mb_size.d_view(m).x1min;
+      Real &x1max = coord.mb_size.d_view(m).x1max;
+      int nx1 = coord.mb_indcs.nx1;
+      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+
+      Real &x2min = coord.mb_size.d_view(m).x2min;
+      Real &x2max = coord.mb_size.d_view(m).x2max;
+      int nx2 = coord.mb_indcs.nx2;
+      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
       // compute cell-centered conserved variables
       u0(m,IDN,k,j,i) = d0;
@@ -80,12 +85,12 @@ void ProblemGenerator::OrszagTang_(MeshBlockPack *pmbp, ParameterInput *pin)
       u0(m,IM3,k,j,i) = 0.0;
 
       // Compute face-centered fields from curl(A).
-      Real x1f   = LeftEdgeX(i  -is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
-      Real x1fp1 = LeftEdgeX(i+1-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
-      Real x2f   = LeftEdgeX(j  -js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
-      Real x2fp1 = LeftEdgeX(j+1-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
-      Real dx1 = size.d_view(m).dx1;
-      Real dx2 = size.d_view(m).dx2;
+      Real x1f   = LeftEdgeX(i  -is, nx1, x1min, x1max);
+      Real x1fp1 = LeftEdgeX(i+1-is, nx1, x1min, x1max);
+      Real x2f   = LeftEdgeX(j  -js, nx2, x2min, x2max);
+      Real x2fp1 = LeftEdgeX(j+1-js, nx2, x2min, x2max);
+      Real dx1 = coord.mb_size.d_view(m).dx1;
+      Real dx2 = coord.mb_size.d_view(m).dx2;
 
       b0.x1f(m,k,j,i) =  (A3(x1f,  x2fp1,B0) - A3(x1f,x2f,B0))/dx2;
       b0.x2f(m,k,j,i) = -(A3(x1fp1,x2f  ,B0) - A3(x1f,x2f,B0))/dx1;

@@ -21,6 +21,7 @@
 // Athena++ headers
 #include "athena.hpp"
 #include "parameter_input.hpp"
+#include "coordinates/cell_locations.hpp"
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
@@ -217,17 +218,17 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
         Real &x1min = coord.mb_size.d_view(m).x1min;
         Real &x1max = coord.mb_size.d_view(m).x1max;
         int nx1 = coord.mb_indcs.nx1;
-        Real x1v = coord.CellCenterX(i-is, nx1, x1min, x1max);
+        Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
         Real &x2min = coord.mb_size.d_view(m).x2min;
         Real &x2max = coord.mb_size.d_view(m).x2max;
         int nx2 = coord.mb_indcs.nx2;
-        Real x2v = coord.CellCenterX(j-js, nx2, x2min, x2max);
+        Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
         Real &x3min = coord.mb_size.d_view(m).x3min;
         Real &x3max = coord.mb_size.d_view(m).x3max;
         int nx3 = coord.mb_indcs.nx3;
-        Real x3v = coord.CellCenterX(k-ks, nx3, x3min, x3max);
+        Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
         Real x = lwv.cos_a2*(x1v*lwv.cos_a3 + x2v*lwv.sin_a3) + x3v*lwv.sin_a2;
         Real sn = std::sin(lwv.k_par*x);
@@ -276,17 +277,17 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
         Real &x1min = coord.mb_size.d_view(m).x1min;
         Real &x1max = coord.mb_size.d_view(m).x1max;
         int nx1 = coord.mb_indcs.nx1;
-        Real x1v = coord.CellCenterX(i-is, nx1, x1min, x1max);
+        Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
         Real &x2min = coord.mb_size.d_view(m).x2min;
         Real &x2max = coord.mb_size.d_view(m).x2max;
         int nx2 = coord.mb_indcs.nx2;
-        Real x2v = coord.CellCenterX(j-js, nx2, x2min, x2max);
+        Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
         Real &x3min = coord.mb_size.d_view(m).x3min;
         Real &x3max = coord.mb_size.d_view(m).x3max;
         int nx3 = coord.mb_indcs.nx3;
-        Real x3v = coord.CellCenterX(k-ks, nx3, x3min, x3max);
+        Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
         Real x = lwv.cos_a2*(x1v*lwv.cos_a3 + x2v*lwv.sin_a3) + x3v*lwv.sin_a2;
         Real sn = std::sin(lwv.k_par*x);
@@ -306,12 +307,12 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
         }
 
         // Compute face-centered fields from curl(A).
-        Real x1f   = coord.LeftEdgeX(i  -is, nx1, x1min, x1max);
-        Real x1fp1 = coord.LeftEdgeX(i+1-is, nx1, x1min, x1max);
-        Real x2f   = coord.LeftEdgeX(j  -js, nx2, x2min, x2max);
-        Real x2fp1 = coord.LeftEdgeX(j+1-js, nx2, x2min, x2max);
-        Real x3f   = coord.LeftEdgeX(k  -ks, nx3, x3min, x3max);
-        Real x3fp1 = coord.LeftEdgeX(k+1-ks, nx3, x3min, x3max);
+        Real x1f   = LeftEdgeX(i  -is, nx1, x1min, x1max);
+        Real x1fp1 = LeftEdgeX(i+1-is, nx1, x1min, x1max);
+        Real x2f   = LeftEdgeX(j  -js, nx2, x2min, x2max);
+        Real x2fp1 = LeftEdgeX(j+1-js, nx2, x2min, x2max);
+        Real x3f   = LeftEdgeX(k  -ks, nx3, x3min, x3max);
+        Real x3fp1 = LeftEdgeX(k+1-ks, nx3, x3min, x3max);
         Real dx1 = coord.mb_size.d_view(m).dx1;
         Real dx2 = coord.mb_size.d_view(m).dx2;
         Real dx3 = coord.mb_size.d_view(m).dx3;

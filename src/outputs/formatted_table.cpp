@@ -18,8 +18,8 @@
 
 #include "athena.hpp"
 #include "globals.hpp"
+#include "coordinates/cell_locations.hpp"
 #include "mesh/mesh.hpp"
-#include "mesh/mesh_positions.hpp"
 #include "outputs.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -115,6 +115,7 @@ void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
       int nout_mbs = (outmbs.size());
       for (int m=0; m<nout_mbs; ++m) {
         auto &indcs = pm->pmb_pack->coord.coord_data.mb_indcs;
+        auto &coord = pm->pmb_pack->coord.coord_data;
         MeshBlock* pmb = pm->pmb_pack->pmb;
         int idx = pm->FindMeshBlockIndex(outmbs[m].mb_gid);
         int &is = indcs.is;
@@ -126,12 +127,12 @@ void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
         int &oje = outmbs[m].oje;
         int &oks = outmbs[m].oks;
         int &oke = outmbs[m].oke;
-        Real &x1min = pm->pmb_pack->coord.coord_data.mb_size.h_view(idx).x1min;
-        Real &x1max = pm->pmb_pack->coord.coord_data.mb_size.h_view(idx).x1max;
-        Real &x2min = pm->pmb_pack->coord.coord_data.mb_size.h_view(idx).x2min;
-        Real &x2max = pm->pmb_pack->coord.coord_data.mb_size.h_view(idx).x2max;
-        Real &x3min = pm->pmb_pack->coord.coord_data.mb_size.h_view(idx).x3min;
-        Real &x3max = pm->pmb_pack->coord.coord_data.mb_size.h_view(idx).x3max;
+        Real &x1min = coord.mb_size.h_view(idx).x1min;
+        Real &x1max = coord.mb_size.h_view(idx).x1max;
+        Real &x2min = coord.mb_size.h_view(idx).x2min;
+        Real &x2max = coord.mb_size.h_view(idx).x2max;
+        Real &x3min = coord.mb_size.h_view(idx).x3min;
+        Real &x3max = coord.mb_size.h_view(idx).x3max;
         int &nx1 = indcs.nx1;
         int &nx2 = indcs.nx2;
         int &nx3 = indcs.nx3;

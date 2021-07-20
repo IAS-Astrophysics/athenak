@@ -14,8 +14,8 @@
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
+#include "coordinates/cell_locations.hpp"
 #include "mesh/mesh.hpp"
-#include "mesh/mesh_positions.hpp"
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
@@ -102,13 +102,10 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
 
  // capture variables for the kernel
   auto &indcs = pmbp->coord.coord_data.mb_indcs;
-  int &nx1 = indcs.nx1;
-  int &nx2 = indcs.nx2;
-  int &nx3 = indcs.nx3;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
-  auto size = pmbp->coord.coord_data.mb_size;
+  auto coord = pmbp->coord.coord_data;
 
   // Initialize Hydro variables -------------------------------
   if (pmbp->phydro != nullptr) {
@@ -138,11 +135,20 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
       {
         Real x;
         if (shk_dir == 1) {
-          x = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
+          Real &x1min = coord.mb_size.d_view(m).x1min;
+          Real &x1max = coord.mb_size.d_view(m).x1max;
+          int nx1 = coord.mb_indcs.nx1;
+          x = CellCenterX(i-is, nx1, x1min, x1max);
         } else if (shk_dir == 2) {
-          x = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
+          Real &x2min = coord.mb_size.d_view(m).x2min;
+          Real &x2max = coord.mb_size.d_view(m).x2max;
+          int nx2 = coord.mb_indcs.nx2;
+          x = CellCenterX(j-js, nx2, x2min, x2max);
         } else {
-          x = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
+          Real &x3min = coord.mb_size.d_view(m).x3min;
+          Real &x3max = coord.mb_size.d_view(m).x3max;
+          int nx3 = coord.mb_indcs.nx3;
+          x = CellCenterX(k-ks, nx3, x3min, x3max);
         }
 
         if (x < xshock) {
@@ -196,15 +202,24 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
       {
         Real x,bxl,byl,bzl,bxr,byr,bzr;
         if (shk_dir == 1) {
-          x = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
+          Real &x1min = coord.mb_size.d_view(m).x1min;
+          Real &x1max = coord.mb_size.d_view(m).x1max;
+          int nx1 = coord.mb_indcs.nx1;
+          x = CellCenterX(i-is, nx1, x1min, x1max);
           bxl = wl_bx; byl = wl_by; bzl = wl_bz;
           bxr = wr_bx; byr = wr_by; bzr = wr_bz;
         } else if (shk_dir == 2) {
-          x = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
+          Real &x2min = coord.mb_size.d_view(m).x2min;
+          Real &x2max = coord.mb_size.d_view(m).x2max;
+          int nx2 = coord.mb_indcs.nx2;
+          x = CellCenterX(j-js, nx2, x2min, x2max);
           bxl = wl_bz; byl = wl_bx; bzl = wl_by;
           bxr = wr_bz; byr = wr_bx; bzr = wr_by;
         } else {
-          x = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
+          Real &x3min = coord.mb_size.d_view(m).x3min;
+          Real &x3max = coord.mb_size.d_view(m).x3max;
+          int nx3 = coord.mb_indcs.nx3;
+          x = CellCenterX(k-ks, nx3, x3min, x3max);
           bxl = wl_by; byl = wl_bz; bzl = wl_bx;
           bxr = wr_by; byr = wr_bz; bzr = wr_bx;
         } 

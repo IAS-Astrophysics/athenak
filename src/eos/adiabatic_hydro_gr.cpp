@@ -9,12 +9,12 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
-#include "mesh/mesh_positions.hpp"
 #include "hydro/hydro.hpp"
 #include "eos.hpp"
 
 #include "coordinates/coordinates.hpp"
 #include "coordinates/cartesian_ks.hpp"
+#include "coordinates/cell_locations.hpp"
 
 //----------------------------------------------------------------------------------------
 // ctor: also calls EOS base class constructor
@@ -58,10 +58,13 @@ void AdiabaticHydroGR::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &pr
   int n1 = indcs.nx1 + 2*ng;
   int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
   int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
+  int &is = indcs.is;
+  int &js = indcs.js;
+  int &ks = indcs.ks;
   int &nhyd  = pmy_pack->phydro->nhydro;
   int &nscal = pmy_pack->phydro->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
-  auto size = pmy_pack->coord.coord_data.mb_size;
+  auto coord = pmy_pack->coord.coord_data;
   Real gm1 = eos_data.gamma - 1.0; 
   Real pfloor_ = eos_data.pressure_floor;
   Real &dfloor_ = eos_data.density_floor;
@@ -70,8 +73,6 @@ void AdiabaticHydroGR::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &pr
   int const max_iterations = 25;
   Real const tol = 1.0e-12;
   Real const v_sq_max = 1.0 - tol;
-
-  Real const spin= pmy_pack->coord.coord_data.bh_spin;
 
   par_for("hyd_con2prim", DevExeSpace(), 0, (nmb-1), 0, (n3-1), 0, (n2-1), 0, (n1-1),
     KOKKOS_LAMBDA(int m, int k, int j, int i)
@@ -88,13 +89,24 @@ void AdiabaticHydroGR::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &pr
       Real& w_vy = prim(m, IVY,k,j,i);
       Real& w_vz = prim(m, IVZ,k,j,i);
 
-      Real x1 = CellCenterX(i, n1, size.d_view(m).x1min, size.d_view(m).x1max);
-      Real x2 = CellCenterX(j, n2, size.d_view(m).x2min, size.d_view(m).x2max);
-      Real x3 = CellCenterX(k, n3, size.d_view(m).x3min, size.d_view(m).x3max);
+      Real &x1min = coord.mb_size.d_view(m).x1min;
+      Real &x1max = coord.mb_size.d_view(m).x1max;
+      int nx1 = coord.mb_indcs.nx1;
+      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+
+      Real &x2min = coord.mb_size.d_view(m).x2min;
+      Real &x2max = coord.mb_size.d_view(m).x2max;
+      int nx2 = coord.mb_indcs.nx2;
+      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+
+      Real &x3min = coord.mb_size.d_view(m).x3min;
+      Real &x3max = coord.mb_size.d_view(m).x3max;
+      int nx3 = coord.mb_indcs.nx3;
+      Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
       // Extract components of metric
       Real g_[NMETRIC], gi_[NMETRIC];
-      ComputeMetricAndInverse(x1, x2, x3, spin, g_, gi_);
+      ComputeMetricAndInverse(x1v, x2v, x3v, coord.bh_spin, g_, gi_);
 
       const Real
 	&g_00 = g_[I00], &g_01 = g_[I01], &g_02 = g_[I02], &g_03 = g_[I03],
@@ -283,28 +295,37 @@ std::cout << "|zm-zp|=" <<fabs(zm-zp)<<" |f|="<< fabs(f) << "for i=" <<  ii << s
 void AdiabaticHydroGR::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons)
 {
   auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
-  int nx1 = indcs.nx1;
-  int nx2 = indcs.nx2;
-  int nx3 = indcs.nx3;
-  int is = indcs.is;
-  int js = indcs.js;
-  int ks = indcs.ks;
-  auto size = pmy_pack->coord.coord_data.mb_size;
+  int is = indcs.is; int ie = indcs.ie;
+  int js = indcs.js; int je = indcs.je;
+  int ks = indcs.ks; int ke = indcs.ke;
+  auto coord = pmy_pack->coord.coord_data;
   int &nhyd  = pmy_pack->phydro->nhydro;
   int &nscal = pmy_pack->phydro->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
   Real gamma_prime = eos_data.gamma/(eos_data.gamma - 1.0);
-  Real &spin = pmy_pack->coord.coord_data.bh_spin;
 
-  par_for("hyd_prim2cons", DevExeSpace(), 0, (nmb-1), 0, (nx3-1), 0, (nx2-1), 0, (nx1-1),
+  par_for("hyd_prim2cons", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
       // Extract components of metric
-      Real x1v = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
-      Real x2v = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
-      Real x3v = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
+      Real &x1min = coord.mb_size.d_view(m).x1min;
+      Real &x1max = coord.mb_size.d_view(m).x1max;
+      int nx1 = indcs.nx1;
+      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+
+      Real &x2min = coord.mb_size.d_view(m).x2min;
+      Real &x2max = coord.mb_size.d_view(m).x2max;
+      int nx2 = indcs.nx2;
+      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+
+      Real &x3min = coord.mb_size.d_view(m).x3min;
+      Real &x3max = coord.mb_size.d_view(m).x3max;
+      int nx3 = indcs.nx3;
+      Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+
       Real g_[NMETRIC], gi_[NMETRIC];
-      ComputeMetricAndInverse(x1v, x2v, x3v, spin, g_, gi_);
+      ComputeMetricAndInverse(x1v, x2v, x3v, coord.bh_spin, g_, gi_);
+
       const Real
         &g_00 = g_[I00], &g_01 = g_[I01], &g_02 = g_[I02], &g_03 = g_[I03],
         &g_10 = g_[I01], &g_11 = g_[I11], &g_12 = g_[I12], &g_13 = g_[I13],
@@ -345,6 +366,11 @@ void AdiabaticHydroGR::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Rea
       u_m1 = wgas_u0 * u_1;
       u_m2 = wgas_u0 * u_2;
       u_m3 = wgas_u0 * u_3;
+
+      // convert scalars (if any)
+      for (int n=nhyd; n<(nhyd+nscal); ++n) {
+        cons(m,n,k,j,i) = prim(m,n,k,j,i)*u_d;
+      }
     }
   );
 

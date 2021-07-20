@@ -14,8 +14,8 @@
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
+#include "coordinates/cell_locations.hpp"
 #include "mesh/mesh.hpp"
-#include "mesh/mesh_positions.hpp"
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 #include "pgen.hpp"
@@ -40,9 +40,6 @@ void ProblemGenerator::KH_Rel_(MeshBlockPack *pmbp, ParameterInput *pin)
 
   // capture variables for kernel
   auto &indcs = pmbp->coord.coord_data.mb_indcs;
-  int &nx1 = indcs.nx1;
-  int &nx2 = indcs.nx2;
-  int &nx3 = indcs.nx3;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
@@ -50,29 +47,36 @@ void ProblemGenerator::KH_Rel_(MeshBlockPack *pmbp, ParameterInput *pin)
   EOS_Data &eos = pmbp->phydro->peos->eos_data;
   Real gm1 = eos.gamma - 1.0;
   auto &u0 = pmbp->phydro->u0;
-  auto &size = pmbp->coord.coord_data.mb_size;
+  auto &coord = pmbp->coord.coord_data;
 
 
   par_for("pgen_ot1", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
-      Real x1 = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
-      Real x2 = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
+      Real &x1min = coord.mb_size.d_view(m).x1min;
+      Real &x1max = coord.mb_size.d_view(m).x1max;
+      int nx1 = coord.mb_indcs.nx1;
+      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+
+      Real &x2min = coord.mb_size.d_view(m).x2min;
+      Real &x2max = coord.mb_size.d_view(m).x2max;
+      int nx2 = coord.mb_indcs.nx2;
+      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
       Real w[5];
 
 	   w[IPR] = 1.;
 	   w[IVZ] = 0.;
 
-	  if( x2 <=0.){
-	     w[IDN] = rho0 - rho1*std::tanh((x2+0.5)/a);
-	     w[IVX] = -Vshear*std::tanh((x2+0.5)/a);
-	     w[IVY] = -A*Vshear*std::sin(2.*M_PI*x1)*std::exp(-(x2+0.5)*(x2+0.5)/sigma/sigma);
+	  if( x2v <=0.){
+	     w[IDN] = rho0 - rho1*std::tanh((x2v+0.5)/a);
+	     w[IVX] = -Vshear*std::tanh((x2v+0.5)/a);
+	     w[IVY] = -A*Vshear*std::sin(2.*M_PI*x1v)*std::exp(-(x2v+0.5)*(x2v+0.5)/sigma/sigma);
 	   }
 	   else{
-	     w[IDN] = rho0 + rho1*std::tanh((x2-0.5)/a);
-	     w[IVX] =  Vshear*std::tanh((x2-0.5)/a);
-	     w[IVY] =  A*Vshear*std::sin(2.*M_PI*x1)*std::exp(-(x2-0.5)*(x2-0.5)/sigma/sigma);
+	     w[IDN] = rho0 + rho1*std::tanh((x2v-0.5)/a);
+	     w[IVX] =  Vshear*std::tanh((x2v-0.5)/a);
+	     w[IVY] =  A*Vshear*std::sin(2.*M_PI*x1v)*std::exp(-(x2v-0.5)*(x2v-0.5)/sigma/sigma);
 	   }
 
 	    Real v_sq = SQR(w[IVX]) + SQR(w[IVY]) + SQR(w[IVZ]);

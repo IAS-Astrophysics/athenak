@@ -11,6 +11,7 @@
 #include "eos/eos.hpp"
 #include "cartesian_ks.hpp"
 #include "coordinates.hpp"
+#include "cell_locations.hpp"
 
 //----------------------------------------------------------------------------------------
 // constructor, parses input file and initializes data structures and parameters
@@ -61,13 +62,13 @@ Coordinates::Coordinates(Mesh *pm, ParameterInput *pin, RegionIndcs indcs,
     if (lx1 == 0) {
       mb_size.h_view(m).x1min = ms.x1min;
     } else {
-      mb_size.h_view(m).x1min = coord_data.LeftEdgeX(lx1, nmbx1, ms.x1min, ms.x1max);
+      mb_size.h_view(m).x1min = LeftEdgeX(lx1, nmbx1, ms.x1min, ms.x1max);
     }
 
     if (lx1 == nmbx1 - 1) {
       mb_size.h_view(m).x1max = ms.x1max;
     } else {
-      mb_size.h_view(m).x1max = coord_data.LeftEdgeX(lx1+1, nmbx1, ms.x1min, ms.x1max);
+      mb_size.h_view(m).x1max = LeftEdgeX(lx1+1, nmbx1, ms.x1min, ms.x1max);
     }
 
     // x2-direction
@@ -81,13 +82,13 @@ Coordinates::Coordinates(Mesh *pm, ParameterInput *pin, RegionIndcs indcs,
       if (lx2 == 0) {
         mb_size.h_view(m).x2min = ms.x2min;
       } else {
-        mb_size.h_view(m).x2min = coord_data.LeftEdgeX(lx2, nmbx2, ms.x2min, ms.x2max);
+        mb_size.h_view(m).x2min = LeftEdgeX(lx2, nmbx2, ms.x2min, ms.x2max);
       }
 
       if (lx2 == (nmbx2) - 1) {
         mb_size.h_view(m).x2max = ms.x2max;
       } else {
-        mb_size.h_view(m).x2max = coord_data.LeftEdgeX(lx2+1, nmbx2, ms.x2min, ms.x2max);
+        mb_size.h_view(m).x2max = LeftEdgeX(lx2+1, nmbx2, ms.x2min, ms.x2max);
       }
 
     }
@@ -102,12 +103,12 @@ Coordinates::Coordinates(Mesh *pm, ParameterInput *pin, RegionIndcs indcs,
       if (lx3 == 0) {
         mb_size.h_view(m).x3min = ms.x3min;
       } else {
-        mb_size.h_view(m).x3min = coord_data.LeftEdgeX(lx3, nmbx3, ms.x3min, ms.x3max);
+        mb_size.h_view(m).x3min = LeftEdgeX(lx3, nmbx3, ms.x3min, ms.x3max);
       }
       if (lx3 == (nmbx3) - 1) {
         mb_size.h_view(m).x3max = ms.x3max;
       } else {
-        mb_size.h_view(m).x3max = coord_data.LeftEdgeX(lx3+1, nmbx3, ms.x3min, ms.x3max);
+        mb_size.h_view(m).x3max = LeftEdgeX(lx3+1, nmbx3, ms.x3min, ms.x3max);
       }
     }
 
@@ -156,17 +157,17 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim, const EOS_Data &e
       Real &x1min = coord.mb_size.d_view(m).x1min;
       Real &x1max = coord.mb_size.d_view(m).x1max;
       int nx1 = coord.mb_indcs.nx1;
-      Real x1v = coord.CellCenterX(i-is, nx1, x1min, x1max);
+      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
       Real &x2min = coord.mb_size.d_view(m).x2min;
       Real &x2max = coord.mb_size.d_view(m).x2max;
       int nx2 = coord.mb_indcs.nx2;
-      Real x2v = coord.CellCenterX(j-js, nx2, x2min, x2max);
+      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
       Real &x3min = coord.mb_size.d_view(m).x3min;
       Real &x3max = coord.mb_size.d_view(m).x3max;
       int nx3 = coord.mb_indcs.nx3;
-      Real x3v = coord.CellCenterX(k-ks, nx3, x3min, x3max);
+      Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
       Real g_[NMETRIC], gi_[NMETRIC];
       ComputeMetricAndInverse(x1v, x2v, x3v, coord.bh_spin, g_, gi_);
@@ -306,17 +307,17 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim,
       Real &x1min = coord.mb_size.d_view(m).x1min;
       Real &x1max = coord.mb_size.d_view(m).x1max;
       int nx1 = coord.mb_indcs.nx1;
-      Real x1v = coord.CellCenterX(i-is, nx1, x1min, x1max);
+      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
       Real &x2min = coord.mb_size.d_view(m).x2min;
       Real &x2max = coord.mb_size.d_view(m).x2max;
       int nx2 = coord.mb_indcs.nx2;
-      Real x2v = coord.CellCenterX(j-js, nx2, x2min, x2max);
+      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
       Real &x3min = coord.mb_size.d_view(m).x3min;
       Real &x3max = coord.mb_size.d_view(m).x3max;
       int nx3 = coord.mb_indcs.nx3;
-      Real x3v = coord.CellCenterX(k-ks, nx3, x3min, x3max);
+      Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
       Real g_[NMETRIC], gi_[NMETRIC];
       ComputeMetricAndInverse(x1v, x2v, x3v, coord.bh_spin, g_, gi_);

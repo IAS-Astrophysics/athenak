@@ -19,8 +19,8 @@
 // Athena++ headers
 #include "athena.hpp"
 #include "parameter_input.hpp"
+#include "coordinates/cell_locations.hpp"
 #include "mesh/mesh.hpp"
-#include "mesh/mesh_positions.hpp"
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
@@ -51,13 +51,10 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
 
   // capture variables for kernel
   auto &indcs = pmbp->coord.coord_data.mb_indcs;
-  int &nx1 = indcs.nx1;
-  int &nx2 = indcs.nx2;
-  int &nx3 = indcs.nx3;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
-  auto &size = pmbp->coord.coord_data.mb_size;
+  auto &coord = pmbp->coord.coord_data;
 
   // initialize Hydro variables ----------------------------------------------------------
   if (pmbp->phydro != nullptr) {
@@ -70,10 +67,21 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
     par_for("pgen_cs_hydro", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i)
       {
-        Real x1v = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
-        Real x2v = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
-        Real x3v = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
-  
+        Real &x1min = coord.mb_size.d_view(m).x1min;
+        Real &x1max = coord.mb_size.d_view(m).x1max;
+        int nx1 = coord.mb_indcs.nx1;
+        Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+
+        Real &x2min = coord.mb_size.d_view(m).x2min;
+        Real &x2max = coord.mb_size.d_view(m).x2max;
+        int nx2 = coord.mb_indcs.nx2;
+        Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+
+        Real &x3min = coord.mb_size.d_view(m).x3min;
+        Real &x3max = coord.mb_size.d_view(m).x3max;
+        int nx3 = coord.mb_indcs.nx3;
+        Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+
         // compute cell-centered conserved variables
         u0(m,IDN,k,j,i) = d0/(pow(cosh((x1v+x01)/a0),2.0))+ d0/(pow(cosh((x1v-x01)/a0),2.0))+ng;
         u0(m,IM1,k,j,i) = epsv*sin(kval*x2v)*(exp(-1.0*pow((x1v+x01)/a0,2.0))+exp(-1.0*pow((x1v-x01)/a0,2.0))); 
@@ -98,9 +106,20 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
     par_for("pgen_mhd", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i)
       {
-        Real x1v = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
-        Real x2v = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
-        Real x3v = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
+        Real &x1min = coord.mb_size.d_view(m).x1min;
+        Real &x1max = coord.mb_size.d_view(m).x1max;
+        int nx1 = coord.mb_indcs.nx1;
+        Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+
+        Real &x2min = coord.mb_size.d_view(m).x2min;
+        Real &x2max = coord.mb_size.d_view(m).x2max;
+        int nx2 = coord.mb_indcs.nx2;
+        Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+
+        Real &x3min = coord.mb_size.d_view(m).x3min;
+        Real &x3max = coord.mb_size.d_view(m).x3max;
+        int nx3 = coord.mb_indcs.nx3;
+        Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
         // compute cell-centered conserved variables
         u0(m,IDN,k,j,i) = d0/(pow(cosh((x1v+x01)/a0),2.0))+ d0/(pow(cosh((x1v-x01)/a0),2.0))+ng;

@@ -18,8 +18,8 @@
 #include <string>
 
 #include "athena.hpp"
+#include "coordinates/cell_locations.hpp"
 #include "mesh/mesh.hpp"
-#include "mesh/mesh_positions.hpp"
 #include "hydro/hydro.hpp"
 #include "outputs.hpp"
 
@@ -117,8 +117,10 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   header_offset += msg.str().size();}
 
   int &is = pm->mesh_indcs.is;
-  Real &x1min = pm->mesh_size.x1min, &x1max = pm->mesh_size.x1max;
+  Real &x1min = pm->mesh_size.x1min;
+  Real &x1max = pm->mesh_size.x1max;
   int &nx1 = pm->mesh_indcs.nx1;
+  auto &coord = pm->pmb_pack->coord.coord_data;
 
   if (nout1 == 1) {
     data[0] = static_cast<float>(out_params.slice_x1);
@@ -140,7 +142,8 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   header_offset += msg.str().size();} 
   
   int &js = pm->mesh_indcs.js;
-  Real &x2min = pm->mesh_size.x2min, &x2max = pm->mesh_size.x2max;
+  Real &x2min = pm->mesh_size.x2min;
+  Real &x2max = pm->mesh_size.x2max;
   int &nx2 = pm->mesh_indcs.nx2;
   
   if (nout2 == 1) {
@@ -163,7 +166,8 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   header_offset += msg.str().size();} 
   
   int &ks = pm->mesh_indcs.ks;
-  Real &x3min = pm->mesh_size.x3min, &x3max = pm->mesh_size.x3max;
+  Real &x3min = pm->mesh_size.x3min;
+  Real &x3max = pm->mesh_size.x3max;
   int &nx3 = pm->mesh_indcs.nx3;
   
   if (nout3 == 1) {

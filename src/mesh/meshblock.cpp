@@ -12,7 +12,6 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh.hpp"
-#include "mesh_positions.hpp"
 
 //----------------------------------------------------------------------------------------
 // MeshBlock constructor:
