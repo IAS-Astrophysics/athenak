@@ -75,9 +75,6 @@ class MHD
   BoundaryValueCC *pbval_u;
   BoundaryValueFC *pbval_b;
 
-  // Object for coordinates in GR (only Cartesian Jerr-Schild for now)
-  Coordinates *pcoord;
-
   // Object(s) for extra physics (viscosity, resistivity, srcterms)
   Viscosity *pvisc = nullptr;
   Resistivity *presist = nullptr;

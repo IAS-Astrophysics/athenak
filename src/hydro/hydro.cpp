@@ -12,7 +12,6 @@
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
-#include "coordinates/coordinates.hpp"
 #include "diffusion/viscosity.hpp"
 #include "srcterms/srcterms.hpp"
 #include "bvals/bvals.hpp"
@@ -72,13 +71,6 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // Initialize number of scalars
   nscalars = pin->GetOrAddInteger("hydro","nscalars",0);
-
-  // Initialize coordinates for GR
-  if (is_general_relativistic) {
-    pcoord = new Coordinates("hydro", ppack, pin);
-  } else {
-    pcoord = nullptr;
-  }
 
   // Viscosity (only constructed if needed)
   if (pin->DoesParameterExist("hydro","viscosity")) {
@@ -237,7 +229,6 @@ Hydro::~Hydro()
 {
   delete peos;
   delete pbval_u;
-  if (pcoord != nullptr) {delete pcoord;}
   if (pvisc != nullptr) {delete pvisc;}
   if (psrc != nullptr) {delete psrc;}
 }

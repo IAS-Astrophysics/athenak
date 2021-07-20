@@ -98,7 +98,7 @@ TaskStatus MHD::ExpRKUpdate(Driver *pdriver, int stage)
 
   // Add coordinate source terms in GR.  Again, must be computed with only primitives.
   if (is_general_relativistic) {
-    pcoord->AddCoordTerms(w0, bcc0, peos->eos_data, beta_dt, u0);
+    pmy_pack->coord.AddCoordTerms(w0, bcc0, peos->eos_data, beta_dt, u0);
   }
 
   return TaskStatus::complete;

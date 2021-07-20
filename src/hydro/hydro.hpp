@@ -68,9 +68,6 @@ class Hydro
   // Object containing boundary communication buffers and routines for u
   BoundaryValueCC *pbval_u;
 
-  // Object for coordinates in GR (only Cartesian Jerr-Schild for now)
-  Coordinates *pcoord;
-
   // Object(s) for extra physics (viscosity, srcterms)
   Viscosity *pvisc = nullptr;
   SourceTerms *psrc = nullptr;

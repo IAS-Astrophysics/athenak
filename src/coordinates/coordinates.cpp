@@ -16,20 +16,44 @@
 //----------------------------------------------------------------------------------------
 // constructor, parses input file and initializes data structures and parameters
 
-Coordinates::Coordinates(std::string block, MeshBlockPack *pp, ParameterInput *pin) :
-  pmy_pack(pp)
+Coordinates::Coordinates(Mesh *pm, ParameterInput *pin, RegionIndcs indcs, int nmb)
+  : pmy_mesh(pm),
+    coord_data(nmb)
 {
-  bh_mass = pin->GetReal("coord","m");
-  bh_spin = pin->GetReal("coord","a");
+  coord_data.bh_mass = pin->GetOrAddReal("coord","m",0.0);
+  coord_data.bh_spin = pin->GetOrAddReal("coord","a",0.0);
+
+  // initialize MeshBlock cell indices
+  coord_data.mb_indcs.ng  = indcs.ng;
+  coord_data.mb_indcs.nx1 = indcs.nx1;
+  coord_data.mb_indcs.nx2 = indcs.nx2;
+  coord_data.mb_indcs.nx3 = indcs.nx3;
+
+  coord_data.mb_indcs.is = coord_data.mb_indcs.ng;
+  coord_data.mb_indcs.ie = coord_data.mb_indcs.is + coord_data.mb_indcs.nx1 - 1;
+    
+  if (coord_data.mb_indcs.nx2 > 1) {
+    coord_data.mb_indcs.js = coord_data.mb_indcs.ng;
+    coord_data.mb_indcs.je = coord_data.mb_indcs.js + coord_data.mb_indcs.nx2 - 1; 
+  } else {
+    coord_data.mb_indcs.js = 0;
+    coord_data.mb_indcs.je = 0;
+  } 
+      
+  if (coord_data.mb_indcs.nx3 > 1) {
+    coord_data.mb_indcs.ks = coord_data.mb_indcs.ng;
+    coord_data.mb_indcs.ke = coord_data.mb_indcs.ks + coord_data.mb_indcs.nx3 - 1;
+  } else {
+    coord_data.mb_indcs.ks = 0;
+    coord_data.mb_indcs.ke = 0;
+  } 
+
+std::cout << coord_data.mb_indcs.ng <<"  "<< coord_data.mb_indcs.nx1 <<"  "<< coord_data.mb_indcs.nx2 <<"  "<< coord_data.mb_indcs.nx3 << std::endl;
+std::cout << coord_data.mb_indcs.is <<"  "<< coord_data.mb_indcs.ie << std::endl;
+std::cout << coord_data.mb_indcs.js <<"  "<< coord_data.mb_indcs.je << std::endl;
+std::cout << coord_data.mb_indcs.ks <<"  "<< coord_data.mb_indcs.ke << std::endl;
 }
 
-//----------------------------------------------------------------------------------------
-// destructor
-
-Coordinates::~Coordinates()
-{
-}
-  
 //----------------------------------------------------------------------------------------
 //! \fn
 // Coordinate (geometric) source term function for GR hydrodynamics
@@ -38,15 +62,15 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim, const EOS_Data &e
                                 const Real dt, DvceArray5D<Real> &cons)
 {
   // capture variables for kernel
-  int &nx1 = pmy_pack->mb_cells.nx1;
-  int &nx2 = pmy_pack->mb_cells.nx2;
-  int &nx3 = pmy_pack->mb_cells.nx3;
-  int is = pmy_pack->mb_cells.is; int ie = pmy_pack->mb_cells.ie;
-  int js = pmy_pack->mb_cells.js; int je = pmy_pack->mb_cells.je;
-  int ks = pmy_pack->mb_cells.ks; int ke = pmy_pack->mb_cells.ke;
-  auto &size = pmy_pack->pmb->mbsize;
-  int nmb1 = pmy_pack->nmb_thispack - 1;
-  Real &spin = bh_spin;
+  int &nx1 = pmy_mesh->pmb_pack->mb_cells.nx1;
+  int &nx2 = pmy_mesh->pmb_pack->mb_cells.nx2;
+  int &nx3 = pmy_mesh->pmb_pack->mb_cells.nx3;
+  int is = pmy_mesh->pmb_pack->mb_cells.is; int ie = pmy_mesh->pmb_pack->mb_cells.ie;
+  int js = pmy_mesh->pmb_pack->mb_cells.js; int je = pmy_mesh->pmb_pack->mb_cells.je;
+  int ks = pmy_mesh->pmb_pack->mb_cells.ks; int ke = pmy_mesh->pmb_pack->mb_cells.ke;
+  auto &size = pmy_mesh->pmb_pack->pmb->mbsize;
+  int nmb1 = pmy_mesh->pmb_pack->nmb_thispack - 1;
+  Real &spin = coord_data.bh_spin;
 
   Real gamma_prime = eos.gamma / (eos.gamma - 1.0);
 
@@ -177,15 +201,15 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim,
                                 const Real dt, DvceArray5D<Real> &cons)
 {
   // capture variables for kernel
-  int &nx1 = pmy_pack->mb_cells.nx1;
-  int &nx2 = pmy_pack->mb_cells.nx2;
-  int &nx3 = pmy_pack->mb_cells.nx3;
-  int is = pmy_pack->mb_cells.is; int ie = pmy_pack->mb_cells.ie;
-  int js = pmy_pack->mb_cells.js; int je = pmy_pack->mb_cells.je;
-  int ks = pmy_pack->mb_cells.ks; int ke = pmy_pack->mb_cells.ke;
-  auto &size = pmy_pack->pmb->mbsize;
-  int nmb1 = pmy_pack->nmb_thispack - 1;
-  Real &spin = bh_spin;
+  int &nx1 = pmy_mesh->pmb_pack->mb_cells.nx1;
+  int &nx2 = pmy_mesh->pmb_pack->mb_cells.nx2;
+  int &nx3 = pmy_mesh->pmb_pack->mb_cells.nx3;
+  int is = pmy_mesh->pmb_pack->mb_cells.is; int ie = pmy_mesh->pmb_pack->mb_cells.ie;
+  int js = pmy_mesh->pmb_pack->mb_cells.js; int je = pmy_mesh->pmb_pack->mb_cells.je;
+  int ks = pmy_mesh->pmb_pack->mb_cells.ks; int ke = pmy_mesh->pmb_pack->mb_cells.ke;
+  auto &size = pmy_mesh->pmb_pack->pmb->mbsize;
+  int nmb1 = pmy_mesh->pmb_pack->nmb_thispack - 1;
+  Real &spin = coord_data.bh_spin;
 
   Real gamma_prime = eos.gamma / (eos.gamma - 1.0);
 

@@ -9,6 +9,7 @@
 //  \brief defines MeshBlockPack class, a container for MeshBlocks
 
 #include "parameter_input.hpp"
+#include "coordinates/coordinates.hpp"
 #include "driver/driver.hpp"
 #include "tasklist/task_list.hpp"
 
@@ -31,7 +32,7 @@ class MeshBlockPack
  friend class MeshBlockTree;
 
  public:
-  MeshBlockPack(Mesh *pm, int igids, int igide, RegionIndcs icells);
+  MeshBlockPack(Mesh *pm, ParameterInput *pin, int igids, int igide, RegionIndcs indcs);
   ~MeshBlockPack();
 
   // data
@@ -44,6 +45,7 @@ class MeshBlockPack
   RegionIndcs cmb_cells;  // info about cells on next coarser level MBs
 
   MeshBlock* pmb;         // MeshBlocks in this MeshBlockPack
+  Coordinates coord;
 
   // physics modules (controlled by AddPhysicsModules function in mesh_physics.cpp)
   hydro::Hydro *phydro=nullptr;

@@ -211,41 +211,41 @@ Mesh::~Mesh()
 void Mesh::BuildTree(ParameterInput *pin)
 {
   // Calculate # of cells in MeshBlock read from input parameters, error check
-  RegionIndcs indices;
-  indices.ng  = mesh_indcs.ng;
-  indices.nx1 = pin->GetOrAddInteger("meshblock", "nx1", mesh_indcs.nx1);
+  RegionIndcs mb_indices;
+  mb_indices.ng  = mesh_indcs.ng;
+  mb_indices.nx1 = pin->GetOrAddInteger("meshblock", "nx1", mesh_indcs.nx1);
   if (multi_d) {
-    indices.nx2 = pin->GetOrAddInteger("meshblock", "nx2", mesh_indcs.nx2);
+    mb_indices.nx2 = pin->GetOrAddInteger("meshblock", "nx2", mesh_indcs.nx2);
   } else {
-    indices.nx2 = mesh_indcs.nx2;
+    mb_indices.nx2 = mesh_indcs.nx2;
   }
   if (three_d) {
-    indices.nx3 = pin->GetOrAddInteger("meshblock", "nx3", mesh_indcs.nx3);
+    mb_indices.nx3 = pin->GetOrAddInteger("meshblock", "nx3", mesh_indcs.nx3);
   } else {
-    indices.nx3 = mesh_indcs.nx3;
+    mb_indices.nx3 = mesh_indcs.nx3;
   }
 
   // error check consistency of the block and mesh
-  if (   mesh_indcs.nx1 % indices.nx1 != 0
-      || mesh_indcs.nx2 % indices.nx2 != 0
-      || mesh_indcs.nx3 % indices.nx3 != 0) {
+  if (   mesh_indcs.nx1 % mb_indices.nx1 != 0
+      || mesh_indcs.nx2 % mb_indices.nx2 != 0
+      || mesh_indcs.nx3 % mb_indices.nx3 != 0) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "Mesh must be evenly divisible by MeshBlocks" << std::endl
               << "Check Mesh and MeshBlock dimensions in input file" << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  if ( indices.nx1 < 4 ||
-      (indices.nx2 < 4 && multi_d) ||
-      (indices.nx3 < 4 && three_d) ) {
+  if ( mb_indices.nx1 < 4 ||
+      (mb_indices.nx2 < 4 && multi_d) ||
+      (mb_indices.nx3 < 4 && three_d) ) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "MeshBlock must be >= 4 cells in each active dimension" << std::endl;
     std::exit(EXIT_FAILURE);
   }
 
   // calculate the number of MeshBlocks at root level in each dir
-  nmb_rootx1 = mesh_indcs.nx1/indices.nx1;
-  nmb_rootx2 = mesh_indcs.nx2/indices.nx2;
-  nmb_rootx3 = mesh_indcs.nx3/indices.nx3;
+  nmb_rootx1 = mesh_indcs.nx1/mb_indices.nx1;
+  nmb_rootx2 = mesh_indcs.nx2/mb_indices.nx2;
+  nmb_rootx3 = mesh_indcs.nx3/mb_indices.nx3;
 
   // find maximum number of MeshBlocks at root level in any dir
   int nmbmax = (nmb_rootx1 > nmb_rootx2) ? nmb_rootx1 : nmb_rootx2;
@@ -277,9 +277,9 @@ void Mesh::BuildTree(ParameterInput *pin)
 
   if (multilevel) {
     // error check that number of cells in MeshBlock divisible by two
-    if (indices.nx1 % 2 != 0 || 
-       (indices.nx2 % 2 != 0 && multi_d) ||
-       (indices.nx3 % 2 != 0 && three_d)) {
+    if (mb_indices.nx1 % 2 != 0 || 
+       (mb_indices.nx2 % 2 != 0 && multi_d) ||
+       (mb_indices.nx3 % 2 != 0 && three_d)) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Number of cells in MeshBlock must be divisible by 2 "
                 << "with SMR or AMR." << std::endl;
@@ -475,7 +475,7 @@ void Mesh::BuildTree(ParameterInput *pin)
   gide = gids + nmblist[global_variable::my_rank] - 1;
   nmb_thisrank = nmblist[global_variable::my_rank];
 
-  pmb_pack = new MeshBlockPack(this, gids, gide, indices);
+  pmb_pack = new MeshBlockPack(this, pin, gids, gide, mb_indices);
   pmb_pack->pmb->SetNeighbors(ptree, ranklist);
   
 /*******/

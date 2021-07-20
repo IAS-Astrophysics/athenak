@@ -19,10 +19,15 @@
 //----------------------------------------------------------------------------------------
 // MeshBlockPack constructor:
 
-MeshBlockPack::MeshBlockPack(Mesh *pm, int igids, int igide, RegionIndcs icells) :
-   pmesh(pm), gids(igids), gide(igide), mb_cells(icells)
+MeshBlockPack::MeshBlockPack(Mesh *pm, ParameterInput *pin, int igids, int igide,
+                             RegionIndcs indcs)
+  : pmesh(pm),
+    gids(igids),
+    gide(igide),
+    coord(pm, pin, indcs, (igide-igids+1)),
+    mb_cells(indcs)
 {
-  nmb_thispack = gide - gids + 1;
+  nmb_thispack = igide - igids + 1;
 
   // initialize MeshBlock cell indices
   mb_cells.is = mb_cells.ng;

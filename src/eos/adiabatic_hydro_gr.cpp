@@ -71,7 +71,7 @@ void AdiabaticHydroGR::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &pr
   Real const tol = 1.0e-12;
   Real const v_sq_max = 1.0 - tol;
 
-  Real const spin= pmy_pack->phydro->pcoord->bh_spin;
+  Real const spin= pmy_pack->coord.coord_data.bh_spin;
 
   par_for("hyd_con2prim", DevExeSpace(), 0, (nmb-1), 0, (n3-1), 0, (n2-1), 0, (n1-1),
     KOKKOS_LAMBDA(int m, int k, int j, int i)
@@ -294,7 +294,7 @@ void AdiabaticHydroGR::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Rea
   int &nscal = pmy_pack->phydro->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
   Real gamma_prime = eos_data.gamma/(eos_data.gamma - 1.0);
-  Real &spin = pmy_pack->phydro->pcoord->bh_spin;
+  Real &spin = pmy_pack->coord.coord_data.bh_spin;
 
   par_for("hyd_prim2cons", DevExeSpace(), 0, (nmb-1), 0, (nx3-1), 0, (nx2-1), 0, (nx1-1),
     KOKKOS_LAMBDA(int m, int k, int j, int i)
