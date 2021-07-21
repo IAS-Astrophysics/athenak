@@ -115,7 +115,7 @@ void TurbulenceDriver::IncludeAddForcingTask(TaskList &tl, TaskID start)
     }
     if (pmy_pack->pmhd != nullptr) {
       auto id = tl.InsertTask(&TurbulenceDriver::AddForcing, this, 
-                         pmy_pack->pmhd->id.calc_flux, pmy_pack->pmhd->id.update);
+                         pmy_pack->pmhd->id.flux, pmy_pack->pmhd->id.expl);
     }
   } else {
     auto id = tl.InsertTask(&TurbulenceDriver::AddForcing, this,

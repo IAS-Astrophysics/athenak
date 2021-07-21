@@ -49,7 +49,7 @@ namespace hydro {
 
 class Hydro
 {
- public:
+public:
   Hydro(MeshBlockPack *ppack, ParameterInput *pin);
   ~Hydro();
 
@@ -116,7 +116,7 @@ class Hydro
   void ShearInnerX1(int m);
   void ShearOuterX1(int m);
 
- private:
+private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Hydro
 };
 

@@ -121,10 +121,10 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     // select reconstruction method (default PLM)
     {std::string xorder = pin->GetOrAddString("mhd","reconstruct","plm");
     if (xorder.compare("dc") == 0) {
-      recon_method_ = ReconstructionMethod::dc;
+      recon_method = ReconstructionMethod::dc;
 
     } else if (xorder.compare("plm") == 0) {
-      recon_method_ = ReconstructionMethod::plm;
+      recon_method = ReconstructionMethod::plm;
 
     } else if (xorder.compare("ppm") == 0) {
       // check that nghost > 2
@@ -134,7 +134,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
             << "but <mesh>/nghost=" << indcs.ng << std::endl;
         std::exit(EXIT_FAILURE); 
       }                
-      recon_method_ = ReconstructionMethod::ppm;
+      recon_method = ReconstructionMethod::ppm;
 
     } else if (xorder.compare("wenoz") == 0) {
       // check that nghost > 2
@@ -144,7 +144,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
             << "but <mesh>/nghost=" << indcs.ng << std::endl;
         std::exit(EXIT_FAILURE); 
       }                
-      recon_method_ = ReconstructionMethod::wenoz;
+      recon_method = ReconstructionMethod::wenoz;
 
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -162,7 +162,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
                   << "' cannot be used with dynamic problems" << std::endl;
         std::exit(EXIT_FAILURE);
       } else {
-        rsolver_method_ = MHD_RSolver::advect;
+        rsolver_method = MHD_RSolver::advect;
       }
 
     } else  if (evolution_t.compare("dynamic") != 0) {
@@ -172,16 +172,16 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
       std::exit(EXIT_FAILURE);
 
     } else if (rsolver.compare("llf") == 0) {
-      rsolver_method_ = MHD_RSolver::llf;
+      rsolver_method = MHD_RSolver::llf;
 
     } else if (rsolver.compare("hlle") == 0) {
-      rsolver_method_ = MHD_RSolver::hlle;
+      rsolver_method = MHD_RSolver::hlle;
 
     } else if (rsolver.compare("hlld") == 0) {
-        rsolver_method_ = MHD_RSolver::hlld;
+        rsolver_method = MHD_RSolver::hlld;
 
 //    } else if (rsolver.compare("roe") == 0) {
-//      rsolver_method_ = MHD_RSolver::roe;
+//      rsolver_method = MHD_RSolver::roe;
 
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__

@@ -30,20 +30,20 @@ enum class MHD_RSolver {advect, llf, hlle, hlld, roe};
 
 struct MHDTaskIDs
 {
-  TaskID init_recv;
-  TaskID copy_cons;
-  TaskID calc_flux;
-  TaskID update;
+  TaskID irecv;
+  TaskID copyu;
+  TaskID flux;
+  TaskID expl;
   TaskID sendu;
   TaskID recvu;
-  TaskID corner_e;
+  TaskID efld;
   TaskID ct;
   TaskID sendb;
   TaskID recvb;
-  TaskID phys_bcs;
-  TaskID cons2prim;
+  TaskID bcs;
+  TaskID c2p;
   TaskID newdt;
-  TaskID clear_send;
+  TaskID clear;
 };
 
 namespace mhd {
@@ -53,11 +53,13 @@ namespace mhd {
 
 class MHD
 {
- public:
+public:
   MHD(MeshBlockPack *ppack, ParameterInput *pin);
   ~MHD();
 
   // data
+  ReconstructionMethod recon_method;
+  MHD_RSolver rsolver_method;
   EquationOfState *peos;   // chosen EOS
 
   // flags to denote relativistic dynamics
@@ -96,7 +98,6 @@ class MHD
   TaskStatus ClearRecv(Driver *d, int stage);
   TaskStatus ClearSend(Driver *d, int stage);
   TaskStatus CopyCons(Driver *d, int stage);
-  TaskStatus CalcFluxes(Driver *d, int stage);
   TaskStatus CornerE(Driver *d, int stage);
   TaskStatus CT(Driver *d, int stage);
   TaskStatus ExpRKUpdate(Driver *d, int stage);
@@ -108,7 +109,11 @@ class MHD
   TaskStatus NewTimeStep(Driver *d, int stage);
   TaskStatus ApplyPhysicalBCs(Driver* pdrive, int stage); // in file mhd/bvals dir
 
-  // functions to set physical BCs for Hydro conserved variables, applied to single MB
+  // CalculateFluxes function templated over Riemann Solvers
+  template <MHD_RSolver T>
+  TaskStatus CalcFluxes(Driver *d, int stage);
+
+  // functions to set physical BCs for MHD conserved variables, applied to single MB
   // specified by argument 'm'. 
   void ReflectInnerX1(int m);
   void ReflectOuterX1(int m);
@@ -125,10 +130,8 @@ class MHD
   void ShearInnerX1(int m);
   void ShearOuterX1(int m);
 
- private:
+private:
   MeshBlockPack* pmy_pack;   // ptr to MeshBlockPack containing this MHD
-  ReconstructionMethod recon_method_;
-  MHD_RSolver rsolver_method_;
   // temporary variables used to store face-centered electric fields returned by RS
   DvceArray4D<Real> e3x1, e2x1;
   DvceArray4D<Real> e1x2, e3x2;

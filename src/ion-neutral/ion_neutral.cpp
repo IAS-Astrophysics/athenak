@@ -64,9 +64,19 @@ void IonNeutral::AssembleIonNeutralTasks(TaskList &start, TaskList &run, TaskLis
   // run task list
   id.impl_2x = run.AddTask(&IonNeutral::FirstTwoImpRK, this, none);
 
-  id.i_flux = run.AddTask(&MHD::CalcFluxes, pmhd, id.impl_2x);
+  // select which calculate_flux function to add based on MHD rsolver_method
+  if (pmhd->rsolver_method == MHD_RSolver::advect) {
+    id.i_flux = run.AddTask(&MHD::CalcFluxes<MHD_RSolver::advect>,pmhd,id.impl_2x);
+  } else if (pmhd->rsolver_method == MHD_RSolver::llf) {
+    id.i_flux = run.AddTask(&MHD::CalcFluxes<MHD_RSolver::llf>,pmhd,id.impl_2x);
+  } else if (pmhd->rsolver_method == MHD_RSolver::hlle) {
+    id.i_flux = run.AddTask(&MHD::CalcFluxes<MHD_RSolver::hlle>,pmhd,id.impl_2x);
+  } else if (pmhd->rsolver_method == MHD_RSolver::hlld) {
+    id.i_flux = run.AddTask(&MHD::CalcFluxes<MHD_RSolver::hlld>,pmhd,id.impl_2x);
+  }
   id.i_expl = run.AddTask(&MHD::ExpRKUpdate, pmhd, id.i_flux);
-//  id.n_flux = run.AddTask(&Hydro::CalcFluxes, phyd, id.i_expl);
+
+  // select which calculate_flux function to add based on Hydro rsolver_method
   if (phyd->rsolver_method == Hydro_RSolver::advect) {
     id.n_flux = run.AddTask(&Hydro::CalcFluxes<Hydro_RSolver::advect>,phyd,id.i_expl);
   } else if (phyd->rsolver_method == Hydro_RSolver::llf) {

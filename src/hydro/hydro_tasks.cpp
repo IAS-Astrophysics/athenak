@@ -5,8 +5,7 @@
 //========================================================================================
 //! \file hydro_tasks.cpp
 //  \brief implementation of functions that control Hydro tasks in the four task lists:
-//  stagestart_tl, stagerun_tl, stageend_tl
-//  operatorsplit_tl
+//  stagestart_tl, stagerun_tl, stageend_tl, operatorsplit_tl (currently not used)
 
 #include <iostream>
 
@@ -44,7 +43,7 @@ void Hydro::AssembleHydroTasks(TaskList &start, TaskList &run, TaskList &end)
 
   // run task list
   id.copyu = run.AddTask(&Hydro::CopyCons, this, none);
-  // select which calculate_flux function to add based on rsolver_method_ 
+  // select which calculate_flux function to add based on rsolver_method
   if (rsolver_method == Hydro_RSolver::advect) {
     id.flux = run.AddTask(&Hydro::CalcFluxes<Hydro_RSolver::advect>,this,id.copyu);
   } else if (rsolver_method == Hydro_RSolver::llf) {
