@@ -54,7 +54,7 @@ void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos,
       &g10 = gi_[I01], &g11 = gi_[I11], &g12 = gi_[I12], &g13 = gi_[I13],
       &g20 = gi_[I02], &g21 = gi_[I12], &g22 = gi_[I22], &g23 = gi_[I23],
       &g30 = gi_[I03], &g31 = gi_[I13], &g32 = gi_[I23], &g33 = gi_[I33];
-    Real alpha = std::sqrt(-1.0/g00);
+    Real alpha = sqrt(-1.0/g00);
     Real gii, g0i;
     switch (ivx) {
       case IVX:
@@ -166,8 +166,8 @@ void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos,
                      g00, g0i, gii, lp_r, lm_r);
 
     // Calculate extremal wavespeeds
-    Real lambda_l = std::min(lm_l, lm_r);
-    Real lambda_r = std::max(lp_l, lp_r);
+    Real lambda_l = min(lm_l, lm_r);
+    Real lambda_r = max(lp_l, lp_r);
 
     // Calculate difference du =  U_R - U_l in conserved quantities (rho u^0 and T^0_\mu)
     MHDCons1D du;
