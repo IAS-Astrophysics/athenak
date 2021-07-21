@@ -39,18 +39,30 @@ void Hydro::AssembleHydroTasks(TaskList &start, TaskList &run, TaskList &end)
 {
   TaskID none(0);
 
-  id.init_recv = start.AddTask(&Hydro::InitRecv, this, none);
+  // start task list
+  id.irecv = start.AddTask(&Hydro::InitRecv, this, none);
 
-  id.copy_cons = run.AddTask(&Hydro::CopyCons, this, none);
-  id.calc_flux = run.AddTask(&Hydro::CalcFluxes, this, id.copy_cons);
-  id.update = run.AddTask(&Hydro::ExpRKUpdate, this, id.calc_flux);
-  id.sendu = run.AddTask(&Hydro::SendU, this, id.update);
+  // run task list
+  id.copyu = run.AddTask(&Hydro::CopyCons, this, none);
+  // select which calculate_flux function to add based on rsolver_method_ 
+  if (rsolver_method == Hydro_RSolver::advect) {
+    id.flux = run.AddTask(&Hydro::CalcFluxes<Hydro_RSolver::advect>,this,id.copyu);
+  } else if (rsolver_method == Hydro_RSolver::llf) {
+    id.flux = run.AddTask(&Hydro::CalcFluxes<Hydro_RSolver::llf>,this,id.copyu);
+  } else if (rsolver_method == Hydro_RSolver::hlle) {
+    id.flux = run.AddTask(&Hydro::CalcFluxes<Hydro_RSolver::hlle>,this,id.copyu);
+  } else if (rsolver_method == Hydro_RSolver::hllc) {
+    id.flux = run.AddTask(&Hydro::CalcFluxes<Hydro_RSolver::hllc>,this,id.copyu);
+  }
+  id.expl  = run.AddTask(&Hydro::ExpRKUpdate, this, id.flux);
+  id.sendu = run.AddTask(&Hydro::SendU, this, id.expl);
   id.recvu = run.AddTask(&Hydro::RecvU, this, id.sendu);
-  id.phys_bcs = run.AddTask(&Hydro::ApplyPhysicalBCs, this, id.recvu);
-  id.cons2prim = run.AddTask(&Hydro::ConToPrim, this, id.phys_bcs);
-  id.newdt = run.AddTask(&Hydro::NewTimeStep, this, id.cons2prim);
+  id.bcs   = run.AddTask(&Hydro::ApplyPhysicalBCs, this, id.recvu);
+  id.c2p   = run.AddTask(&Hydro::ConToPrim, this, id.bcs);
+  id.newdt = run.AddTask(&Hydro::NewTimeStep, this, id.c2p);
 
-  id.clear_send = end.AddTask(&Hydro::ClearSend, this, none);
+  // end task list
+  id.clear = end.AddTask(&Hydro::ClearSend, this, none);
 
   return;
 }

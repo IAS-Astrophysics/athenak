@@ -111,7 +111,7 @@ void TurbulenceDriver::IncludeAddForcingTask(TaskList &tl, TaskID start)
   if (pmy_pack->pionn == nullptr) {
     if (pmy_pack->phydro != nullptr) {
       auto id = tl.InsertTask(&TurbulenceDriver::AddForcing, this, 
-                         pmy_pack->phydro->id.calc_flux, pmy_pack->phydro->id.update);
+                         pmy_pack->phydro->id.flux, pmy_pack->phydro->id.expl);
     }
     if (pmy_pack->pmhd != nullptr) {
       auto id = tl.InsertTask(&TurbulenceDriver::AddForcing, this, 
@@ -119,7 +119,7 @@ void TurbulenceDriver::IncludeAddForcingTask(TaskList &tl, TaskID start)
     }
   } else {
     auto id = tl.InsertTask(&TurbulenceDriver::AddForcing, this,
-                       pmy_pack->pionn->id.n_calc_flux, pmy_pack->pionn->id.n_exp_update);
+                       pmy_pack->pionn->id.n_flux, pmy_pack->pionn->id.n_expl);
   }
 
   return;

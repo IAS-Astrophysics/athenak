@@ -52,40 +52,54 @@ IonNeutral::IonNeutral(MeshBlockPack *pp, ParameterInput *pin, Driver *pdrive) :
 void IonNeutral::AssembleIonNeutralTasks(TaskList &start, TaskList &run, TaskList &end)
 { 
   TaskID none(0);
-  mhd::MHD *pmhd = pmy_pack->pmhd;
-  hydro::Hydro *phyd = pmy_pack->phydro;
+  using namespace hydro;
+  using namespace mhd;
+  MHD *pmhd = pmy_pack->pmhd;
+  Hydro *phyd = pmy_pack->phydro;
   
-  id.i_init_recv = start.AddTask(&mhd::MHD::InitRecv, pmhd, none);
-  id.n_init_recv = start.AddTask(&hydro::Hydro::InitRecv, phyd, none);
+  // start task list
+  id.i_irecv = start.AddTask(&MHD::InitRecv, pmhd, none);
+  id.n_irecv = start.AddTask(&Hydro::InitRecv, phyd, none);
 
-  id.first2_imp_update = run.AddTask(&IonNeutral::FirstTwoImpRK, this, none);
+  // run task list
+  id.impl_2x = run.AddTask(&IonNeutral::FirstTwoImpRK, this, none);
 
-  id.i_calc_flux = run.AddTask(&mhd::MHD::CalcFluxes, pmhd, id.first2_imp_update);
-  id.i_exp_update = run.AddTask(&mhd::MHD::ExpRKUpdate, pmhd, id.i_calc_flux);
-  id.n_calc_flux = run.AddTask(&hydro::Hydro::CalcFluxes, phyd, id.i_exp_update);
-  id.n_exp_update = run.AddTask(&hydro::Hydro::ExpRKUpdate, phyd, id.n_calc_flux);
+  id.i_flux = run.AddTask(&MHD::CalcFluxes, pmhd, id.impl_2x);
+  id.i_expl = run.AddTask(&MHD::ExpRKUpdate, pmhd, id.i_flux);
+//  id.n_flux = run.AddTask(&Hydro::CalcFluxes, phyd, id.i_expl);
+  if (phyd->rsolver_method == Hydro_RSolver::advect) {
+    id.n_flux = run.AddTask(&Hydro::CalcFluxes<Hydro_RSolver::advect>,phyd,id.i_expl);
+  } else if (phyd->rsolver_method == Hydro_RSolver::llf) {
+    id.n_flux = run.AddTask(&Hydro::CalcFluxes<Hydro_RSolver::llf>,phyd,id.i_expl);
+  } else if (phyd->rsolver_method == Hydro_RSolver::hlle) {
+    id.n_flux = run.AddTask(&Hydro::CalcFluxes<Hydro_RSolver::hlle>,phyd,id.i_expl);
+  } else if (phyd->rsolver_method == Hydro_RSolver::hllc) {
+    id.n_flux = run.AddTask(&Hydro::CalcFluxes<Hydro_RSolver::hllc>,phyd,id.i_expl);
+  }
+  id.n_expl = run.AddTask(&Hydro::ExpRKUpdate, phyd, id.n_flux);
 
-  id.imp_update = run.AddTask(&IonNeutral::ImpRKUpdate, this, id.n_exp_update);
+  id.impl = run.AddTask(&IonNeutral::ImpRKUpdate, this, id.n_expl);
 
-  id.i_sendu = run.AddTask(&mhd::MHD::SendU, pmhd, id.imp_update);
-  id.n_sendu = run.AddTask(&hydro::Hydro::SendU, phyd, id.imp_update);
-  id.i_recvu = run.AddTask(&mhd::MHD::RecvU, pmhd, id.i_sendu);
-  id.n_recvu = run.AddTask(&hydro::Hydro::RecvU, phyd, id.n_sendu);
+  id.i_sendu = run.AddTask(&MHD::SendU, pmhd, id.impl);
+  id.n_sendu = run.AddTask(&Hydro::SendU, phyd, id.impl);
+  id.i_recvu = run.AddTask(&MHD::RecvU, pmhd, id.i_sendu);
+  id.n_recvu = run.AddTask(&Hydro::RecvU, phyd, id.n_sendu);
 
-  id.corner_e = run.AddTask(&mhd::MHD::CornerE, pmhd, id.i_recvu);
-  id.ct = run.AddTask(&mhd::MHD::CT, pmhd, id.corner_e);
-  id.sendb = run.AddTask(&mhd::MHD::SendB, pmhd, id.ct);
-  id.recvb = run.AddTask(&mhd::MHD::RecvB, pmhd, id.sendb);
+  id.efld  = run.AddTask(&MHD::CornerE, pmhd, id.i_recvu);
+  id.ct    = run.AddTask(&MHD::CT, pmhd, id.efld);
+  id.sendb = run.AddTask(&MHD::SendB, pmhd, id.ct);
+  id.recvb  = run.AddTask(&MHD::RecvB, pmhd, id.sendb);
 
-  id.i_phys_bcs = run.AddTask(&mhd::MHD::ApplyPhysicalBCs, pmhd, id.recvb);
-  id.n_phys_bcs = run.AddTask(&hydro::Hydro::ApplyPhysicalBCs, phyd, id.n_recvu);
-  id.i_cons2prim = run.AddTask(&mhd::MHD::ConToPrim, pmhd, id.i_phys_bcs);
-  id.n_cons2prim = run.AddTask(&hydro::Hydro::ConToPrim, phyd, id.n_phys_bcs);
-  id.i_newdt = run.AddTask(&mhd::MHD::NewTimeStep, pmhd, id.i_cons2prim);
-  id.n_newdt = run.AddTask(&hydro::Hydro::NewTimeStep, phyd, id.n_cons2prim);
+  id.i_bcs   = run.AddTask(&MHD::ApplyPhysicalBCs, pmhd, id.recvb);
+  id.n_bcs   = run.AddTask(&Hydro::ApplyPhysicalBCs, phyd, id.n_recvu);
+  id.i_c2p   = run.AddTask(&MHD::ConToPrim, pmhd, id.i_bcs);
+  id.n_c2p   = run.AddTask(&Hydro::ConToPrim, phyd, id.n_bcs);
+  id.i_newdt = run.AddTask(&MHD::NewTimeStep, pmhd, id.i_c2p);
+  id.n_newdt = run.AddTask(&Hydro::NewTimeStep, phyd, id.n_c2p);
 
-  id.i_clear_send = end.AddTask(&mhd::MHD::ClearSend, pmhd, none);
-  id.n_clear_send = end.AddTask(&hydro::Hydro::ClearSend, phyd, none);
+  // end task list
+  id.i_clear = end.AddTask(&MHD::ClearSend, pmhd, none);
+  id.n_clear = end.AddTask(&Hydro::ClearSend, phyd, none);
 
   return;
 }

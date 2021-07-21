@@ -106,10 +106,10 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
     // select reconstruction method (default PLM)
     {std::string xorder = pin->GetOrAddString("hydro","reconstruct","plm");
     if (xorder.compare("dc") == 0) {
-      recon_method_ = ReconstructionMethod::dc;
+      recon_method = ReconstructionMethod::dc;
 
     } else if (xorder.compare("plm") == 0) {
-      recon_method_ = ReconstructionMethod::plm;
+      recon_method = ReconstructionMethod::plm;
 
     } else if (xorder.compare("ppm") == 0) {
       // check that nghost > 2
@@ -119,7 +119,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
             << "but <mesh>/nghost=" << indcs.ng << std::endl;
         std::exit(EXIT_FAILURE); 
       }                
-      recon_method_ = ReconstructionMethod::ppm;
+      recon_method = ReconstructionMethod::ppm;
 
     } else if (xorder.compare("wenoz") == 0) {
       // check that nghost > 2
@@ -129,7 +129,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
             << "but <mesh>/nghost=" << indcs.ng << std::endl;
         std::exit(EXIT_FAILURE); 
       }                
-      recon_method_ = ReconstructionMethod::wenoz;
+      recon_method = ReconstructionMethod::wenoz;
 
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -149,7 +149,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
                   << "' cannot be used with hydrodynamic problems" << std::endl;
         std::exit(EXIT_FAILURE);
       } else {
-        rsolver_method_ = Hydro_RSolver::advect;
+        rsolver_method = Hydro_RSolver::advect;
       }
 
     // only advect RS can be used with non-dynamic problems; print error otherwise
@@ -162,38 +162,38 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
     // LLF solver
     } else if (rsolver.compare("llf") == 0) {
       if (is_special_relativistic) {
-        rsolver_method_ = Hydro_RSolver::llf_sr;
+        rsolver_method = Hydro_RSolver::llf_sr;
       } else if (is_general_relativistic) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                   << std::endl << "<hydro>/rsolver = llf cannot be used with GR"
                   << std::endl;
         std::exit(EXIT_FAILURE); 
       } else { 
-      	rsolver_method_ = Hydro_RSolver::llf;
+      	rsolver_method = Hydro_RSolver::llf;
       }
 
     // HLLE solver
     } else if (rsolver.compare("hlle") == 0) {
       if (is_special_relativistic) {
-        rsolver_method_ = Hydro_RSolver::hlle_sr;
+        rsolver_method = Hydro_RSolver::hlle_sr;
       } else if (is_general_relativistic) {
-        rsolver_method_ = Hydro_RSolver::hlle_gr;
+        rsolver_method = Hydro_RSolver::hlle_gr;
       } else {
-        rsolver_method_ = Hydro_RSolver::hlle;
+        rsolver_method = Hydro_RSolver::hlle;
       }
 
     // HLLC solver
     } else if (rsolver.compare("hllc") == 0) {
       if (peos->eos_data.is_adiabatic) {
         if (is_special_relativistic) {
-          rsolver_method_ = Hydro_RSolver::hllc_sr;
+          rsolver_method = Hydro_RSolver::hllc_sr;
         } else if (is_general_relativistic) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "<hydro>/rsolver = hllc cannot be used with GR"
                     << std::endl;
           std::exit(EXIT_FAILURE); 
         } else { 
-          rsolver_method_ = Hydro_RSolver::hllc;
+          rsolver_method = Hydro_RSolver::hllc;
         }
       } else { 
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -204,7 +204,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
 
       // Roe solver
 //    } else if (rsolver.compare("roe") == 0) {
-//      rsolver_method_ = Hydro_RSolver::roe;
+//      rsolver_method = Hydro_RSolver::roe;
 
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__

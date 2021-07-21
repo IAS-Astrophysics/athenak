@@ -11,9 +11,11 @@ if( "${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}" )
   message(FATAL_ERROR "FATAL: In-source builds disabled. Please create a separate build directory in which to run cmake, e.g. mkdir build; cd build; cmake ../" )
 endif()
 
-# AthenaNike (and Kokkos) require C++14 standard as minimum
-set(CMAKE_CXX_STANDARD 14)
+# Athena++ (and Kokkos) require C++17 standard as minimum
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# Ensure correct flag is used as deprecated c++1z is not supported by nvcc.
+set(CMAKE_CXX17_STANDARD_COMPILE_OPTION "-std=c++17")
 
 # Kokkos recommends NOT using default compiler extensions
 set(CMAKE_CXX_EXTENSIONS OFF)
