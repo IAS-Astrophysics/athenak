@@ -108,34 +108,21 @@ void AdiabaticHydroGR::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &pr
       Real g_[NMETRIC], gi_[NMETRIC];
       ComputeMetricAndInverse(x1v, x2v, x3v, coord.bh_spin, g_, gi_);
 
-      const Real
-	&g_00 = g_[I00], &g_01 = g_[I01], &g_02 = g_[I02], &g_03 = g_[I03],
-	&g_10 = g_[I01], &g_11 = g_[I11], &g_12 = g_[I12], &g_13 = g_[I13],
-	&g_20 = g_[I02], &g_21 = g_[I12], &g_22 = g_[I22], &g_23 = g_[I23],
-	&g_30 = g_[I03], &g_31 = g_[I13], &g_32 = g_[I23], &g_33 = g_[I33];
-      const Real
-	&g00 = gi_[I00], &g01 = gi_[I01], &g02 = gi_[I02], &g03 = gi_[I03],
-	&g10 = gi_[I01], &g11 = gi_[I11], &g12 = gi_[I12], &g13 = gi_[I13],
-	&g20 = gi_[I02], &g21 = gi_[I12], &g22 = gi_[I22], &g23 = gi_[I23],
-	&g30 = gi_[I03], &g31 = gi_[I13], &g32 = gi_[I23], &g33 = gi_[I33];
-      Real alpha = std::sqrt(-1.0/g00);
-
-
       // Need to convert the conservatives
-      
 
       // We are evolving T^t_t, but the SR C2P algorithm is only consistent
       // with alpha^2 T^{tt}
       // compute T^{tt} = g^0\mu T^t_\mu
       
-      u_e = g00 * u_e + g01 * u_m1 + g02 * u_m2 + g03 * u_m3;
+      u_e = gi_[I00] * u_e + gi_[I01] * u_m1 + gi_[I02] * u_m2 + gi_[I03] * u_m3;
 
       // This is only true if sqrt{-g}=1!
-      u_e *= (-1./g00); // Multiply by alpha^2
+      u_e *= (-1./gi_[I00]); // Multiply by alpha^2
 
       // Need to multiply the conserved density by alpha, so that it
       // contains a lorentz factor
       
+      Real alpha = sqrt(-1.0/gi_[I00]);
       u_d *= alpha;
 
       // Subtract density for consistency with the rest of the algorithm
@@ -163,9 +150,9 @@ void AdiabaticHydroGR::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &pr
       Real q = u_e/u_d;
 //      Real r = sqrt(SQR(u_m1) + SQR(u_m2) + SQR(u_m3))/u_d;
 
-      Real r   = g_11*SQR(u_m1) + 2.0*g_12*u_m1*u_m2 + 2.0*g_13*u_m1*u_m3
-               + g_22*SQR(u_m1) + 2.0*g_23*u_m1*u_m3
-               + g_33*SQR(u_m1);
+      Real r   = g_[I11]*SQR(u_m1) + 2.0*g_[I12]*u_m1*u_m2 + 2.0*g_[I13]*u_m1*u_m3
+               + g_[I22]*SQR(u_m1) + 2.0*g_[I23]*u_m1*u_m3
+               + g_[I33]*SQR(u_m1);
 
       r = sqrt(r)/u_d;
 
@@ -241,17 +228,17 @@ std::cout << "|zm-zp|=" <<fabs(zm-zp)<<" |f|="<< fabs(f) << "for i=" <<  ii << s
       // 		   g^00 = -1/ alpha^2
       // Hence gamma^ij =  g^ij - g^0i g^0j/g^00
       
-      w_vx = conv *((g11 - g01*g01/g00) * u_m1 + 
-		    (g12 - g01*g02/g00) * u_m2 + 
-		    (g13 - g01*g03/g00) * u_m3);           // (C26)
+      w_vx = conv *((gi_[I11] - gi_[I01]*gi_[I01]/gi_[I00]) * u_m1 + 
+		    (gi_[I12] - gi_[I01]*gi_[I02]/gi_[I00]) * u_m2 + 
+		    (gi_[I13] - gi_[I01]*gi_[I03]/gi_[I00]) * u_m3);           // (C26)
 
-      w_vy = conv *((g12 - g01*g02/g00) * u_m1 + 
-		    (g22 - g02*g02/g00) * u_m2 + 
-		    (g23 - g02*g03/g00) * u_m3);           // (C26)
+      w_vy = conv *((gi_[I12] - gi_[I01]*gi_[I02]/gi_[I00]) * u_m1 + 
+		    (gi_[I22] - gi_[I02]*gi_[I02]/gi_[I00]) * u_m2 + 
+		    (gi_[I23] - gi_[I02]*gi_[I03]/gi_[I00]) * u_m3);           // (C26)
 
-      w_vz = conv *((g13 - g01*g03/g00) * u_m1 + 
-		    (g23 - g02*g03/g00) * u_m2 + 
-		    (g33 - g03*g03/g00) * u_m3);           // (C26)
+      w_vz = conv *((gi_[I13] - gi_[I01]*gi_[I03]/gi_[I00]) * u_m1 + 
+		    (gi_[I23] - gi_[I02]*gi_[I03]/gi_[I00]) * u_m2 + 
+		    (gi_[I33] - gi_[I03]*gi_[I03]/gi_[I00]) * u_m3);           // (C26)
 
 
       // These are the covariant velocities: W v_i

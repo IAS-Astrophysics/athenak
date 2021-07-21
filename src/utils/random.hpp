@@ -35,7 +35,7 @@
 #define RNMX (1.0-DBL_EPSILON)
 #define NTAB 32
 
-//KOKKOS_INLINE_FUNCTION
+KOKKOS_INLINE_FUNCTION
 static Real Ran2(int64_t *idum)
 {
   int j;

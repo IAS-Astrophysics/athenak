@@ -172,18 +172,6 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim, const EOS_Data &e
       Real g_[NMETRIC], gi_[NMETRIC];
       ComputeMetricAndInverse(x1v, x2v, x3v, coord.bh_spin, g_, gi_);
 
-      const Real
-        &g_00 = g_[I00], &g_01 = g_[I01], &g_02 = g_[I02], &g_03 = g_[I03],
-        &g_10 = g_[I01], &g_11 = g_[I11], &g_12 = g_[I12], &g_13 = g_[I13],
-        &g_20 = g_[I02], &g_21 = g_[I12], &g_22 = g_[I22], &g_23 = g_[I23],
-        &g_30 = g_[I03], &g_31 = g_[I13], &g_32 = g_[I23], &g_33 = g_[I33];
-      const Real
-        &g00 = gi_[I00], &g01 = gi_[I01], &g02 = gi_[I02], &g03 = gi_[I03],
-        &g10 = gi_[I01], &g11 = gi_[I11], &g12 = gi_[I12], &g13 = gi_[I13],
-        &g20 = gi_[I02], &g21 = gi_[I12], &g22 = gi_[I22], &g23 = gi_[I23],
-        &g30 = gi_[I03], &g31 = gi_[I13], &g32 = gi_[I23], &g33 = gi_[I33];
-      Real alpha = std::sqrt(-1.0/g00);
-
       // Extract primitives
       const Real &rho  = prim(m,IDN,k,j,i);
       const Real &pgas = prim(m,IEN,k,j,i);
@@ -192,29 +180,30 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim, const EOS_Data &e
       const Real &uu3  = prim(m,IVZ,k,j,i);
 
       // Calculate 4-velocity
-      Real uu_sq = g_11*uu1*uu1 + 2.0*g_12*uu1*uu2 + 2.0*g_13*uu1*uu3
-                 + g_22*uu2*uu2 + 2.0*g_23*uu2*uu3
-                 + g_33*uu3*uu3;
-      Real gamma = std::sqrt(1.0 + uu_sq);
+      Real uu_sq = g_[I11]*uu1*uu1 + 2.0*g_[I12]*uu1*uu2 + 2.0*g_[I13]*uu1*uu3
+                 + g_[I22]*uu2*uu2 + 2.0*g_[I23]*uu2*uu3
+                 + g_[I33]*uu3*uu3;
+      Real alpha = sqrt(-1.0/gi_[I00]);
+      Real gamma = sqrt(1.0 + uu_sq);
       Real u0 = gamma / alpha;
-      Real u1 = uu1 - alpha * gamma * g01;
-      Real u2 = uu2 - alpha * gamma * g02;
-      Real u3 = uu3 - alpha * gamma * g03;
+      Real u1 = uu1 - alpha * gamma * gi_[I01];
+      Real u2 = uu2 - alpha * gamma * gi_[I02];
+      Real u3 = uu3 - alpha * gamma * gi_[I03];
 
       // Calculate stress-energy tensor
       Real wtot = rho + gamma_prime * pgas;
       Real ptot = pgas;
       Real tt[NMETRIC];
-      tt[I00] = wtot * u0 * u0 + ptot * g00;
-      tt[I01] = wtot * u0 * u1 + ptot * g01;
-      tt[I02] = wtot * u0 * u2 + ptot * g02;
-      tt[I03] = wtot * u0 * u3 + ptot * g03;
-      tt[I11] = wtot * u1 * u1 + ptot * g11;
-      tt[I12] = wtot * u1 * u2 + ptot * g12;
-      tt[I13] = wtot * u1 * u3 + ptot * g13;
-      tt[I22] = wtot * u2 * u2 + ptot * g22;
-      tt[I23] = wtot * u2 * u3 + ptot * g23;
-      tt[I33] = wtot * u3 * u3 + ptot * g33;
+      tt[I00] = wtot * u0 * u0 + ptot * gi_[I00];
+      tt[I01] = wtot * u0 * u1 + ptot * gi_[I01];
+      tt[I02] = wtot * u0 * u2 + ptot * gi_[I02];
+      tt[I03] = wtot * u0 * u3 + ptot * gi_[I03];
+      tt[I11] = wtot * u1 * u1 + ptot * gi_[I11];
+      tt[I12] = wtot * u1 * u2 + ptot * gi_[I12];
+      tt[I13] = wtot * u1 * u3 + ptot * gi_[I13];
+      tt[I22] = wtot * u2 * u2 + ptot * gi_[I22];
+      tt[I23] = wtot * u2 * u3 + ptot * gi_[I23];
+      tt[I33] = wtot * u3 * u3 + ptot * gi_[I33];
 
       // Calculate source terms
       Real dg_dx1[NMETRIC], dg_dx2[NMETRIC], dg_dx3[NMETRIC];
@@ -322,17 +311,18 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim,
       Real g_[NMETRIC], gi_[NMETRIC];
       ComputeMetricAndInverse(x1v, x2v, x3v, coord.bh_spin, g_, gi_);
 
+      // create references to components of metric; formatting reflects structure
       const Real
         &g_00 = g_[I00], &g_01 = g_[I01], &g_02 = g_[I02], &g_03 = g_[I03],
-        &g_10 = g_[I01], &g_11 = g_[I11], &g_12 = g_[I12], &g_13 = g_[I13],
-        &g_20 = g_[I02], &g_21 = g_[I12], &g_22 = g_[I22], &g_23 = g_[I23],
-        &g_30 = g_[I03], &g_31 = g_[I13], &g_32 = g_[I23], &g_33 = g_[I33];
+                         &g_11 = g_[I11], &g_12 = g_[I12], &g_13 = g_[I13],
+                                          &g_22 = g_[I22], &g_23 = g_[I23],
+                                                           &g_33 = g_[I33];
       const Real
         &g00 = gi_[I00], &g01 = gi_[I01], &g02 = gi_[I02], &g03 = gi_[I03],
-        &g10 = gi_[I01], &g11 = gi_[I11], &g12 = gi_[I12], &g13 = gi_[I13],
-        &g20 = gi_[I02], &g21 = gi_[I12], &g22 = gi_[I22], &g23 = gi_[I23],
-        &g30 = gi_[I03], &g31 = gi_[I13], &g32 = gi_[I23], &g33 = gi_[I33];
-      Real alpha = std::sqrt(-1.0/g00);
+                         &g11 = gi_[I11], &g12 = gi_[I12], &g13 = gi_[I13],
+                                          &g22 = gi_[I22], &g23 = gi_[I23],
+                                                           &g33 = gi_[I33];
+      Real alpha = sqrt(-1.0/g00);
 
       // Extract primitives
       const Real &rho  = prim(m,IDN,k,j,i);
@@ -345,7 +335,7 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim,
       Real uu_sq = g_11*uu1*uu1 + 2.0*g_12*uu1*uu2 + 2.0*g_13*uu1*uu3
                  + g_22*uu2*uu2 + 2.0*g_23*uu2*uu3
                  + g_33*uu3*uu3;
-      Real gamma = std::sqrt(1.0 + uu_sq);
+      Real gamma = sqrt(1.0 + uu_sq);
       Real u0 = gamma / alpha;
       Real u1 = uu1 - alpha * gamma * g01;
       Real u2 = uu2 - alpha * gamma * g02;

@@ -63,7 +63,6 @@ void Viscosity::IsotropicViscousFlux(
      const DvceArray5D<Real> &w0, DvceFaceFld5D<Real> &flx, const Real nu)
 {
   auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
-  int ng = indcs.ng;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;

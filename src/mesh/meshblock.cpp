@@ -24,7 +24,6 @@ MeshBlock::MeshBlock(Mesh* pm, int igids, int nmb) :
   lb_cost("lbcost",nmb)
 {
   // initialize host arrays of gids, sizes, bcs over all MeshBlocks
-  auto &msize = pm->mesh_size;
   for (int m=0; m<nmb; ++m) {
     mbgid.h_view(m) = igids + m;
 

@@ -170,7 +170,6 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
 
   // Initialize MHD variables -------------------------------
   if (pmbp->pmhd != nullptr) {
-    int &nmhd = pmbp->pmhd->nmhd;
   
     // Parse left state read from input file: d,vx,vy,vz,[P]
     Real wl[5];

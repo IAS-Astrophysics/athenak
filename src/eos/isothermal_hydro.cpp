@@ -88,8 +88,6 @@ void IsothermalHydro::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real
   int &nscal = pmy_pack->phydro->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
 
-  Real &dfloor_ = eos_data.density_floor;
-
   par_for("hyd_prim2con", DevExeSpace(), 0, (nmb-1), 0, (n3-1), 0, (n2-1), 0, (n1-1),
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {

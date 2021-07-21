@@ -231,6 +231,12 @@ void AdiabaticHydroSR::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Rea
       u_m1 = wgas_u0 * w_vx;
       u_m2 = wgas_u0 * w_vy;
       u_m3 = wgas_u0 * w_vz;
+
+      // convert scalars (if any)
+      for (int n=nhyd; n<(nhyd+nscal); ++n) {
+        cons(m,n,k,j,i) = prim(m,n,k,j,i)*u_d;
+      }
+
     }
   );
 

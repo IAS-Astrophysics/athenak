@@ -618,12 +618,6 @@ TaskStatus TurbulenceDriver::AddForcing(Driver *pdrive, int stage)
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
-  int &nx1 = indcs.nx1;
-  int &nx2 = indcs.nx2;
-  int &nx3 = indcs.nx3;
-  int ncells1 = indcs.nx1 + 2*(indcs.ng);
-  int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
-  int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
 
   Real beta_dt = (pdrive->beta[stage-1])*(pmy_pack->pmesh->dt);
   Real fcorr=0.0;
@@ -646,7 +640,6 @@ TaskStatus TurbulenceDriver::AddForcing(Driver *pdrive, int stage)
       w = (pmy_pack->pmhd->w0);
     }
 
-    int &nmb = pmy_pack->nmb_thispack;
     auto force_ = force;
     auto force_new_ = force_new;
     par_for("push", DevExeSpace(),0,(pmy_pack->nmb_thispack-1),ks,ke,js,je,is,ie,
@@ -676,7 +669,6 @@ TaskStatus TurbulenceDriver::AddForcing(Driver *pdrive, int stage)
     u_ = (pmy_pack->phydro->u0);
     w_ = (pmy_pack->phydro->w0);
 
-    int &nmb = pmy_pack->nmb_thispack;
     auto force_ = force;
     auto force_new_ = force_new;
     par_for("push", DevExeSpace(),0,(pmy_pack->nmb_thispack-1),ks,ke,js,je,is,ie,

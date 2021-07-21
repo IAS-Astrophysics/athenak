@@ -116,11 +116,9 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   vtkfile.Write(msg.str().c_str(),sizeof(char),msg.str().size());
   header_offset += msg.str().size();}
 
-  int &is = pm->mesh_indcs.is;
   Real &x1min = pm->mesh_size.x1min;
   Real &x1max = pm->mesh_size.x1max;
   int &nx1 = pm->mesh_indcs.nx1;
-  auto &coord = pm->pmb_pack->coord.coord_data;
 
   if (nout1 == 1) {
     data[0] = static_cast<float>(out_params.slice_x1);
@@ -141,7 +139,6 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   vtkfile.Write(msg.str().c_str(),sizeof(char),msg.str().size());
   header_offset += msg.str().size();} 
   
-  int &js = pm->mesh_indcs.js;
   Real &x2min = pm->mesh_size.x2min;
   Real &x2max = pm->mesh_size.x2max;
   int &nx2 = pm->mesh_indcs.nx2;
@@ -165,7 +162,6 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   vtkfile.Write(msg.str().c_str(),sizeof(char),msg.str().size());
   header_offset += msg.str().size();} 
   
-  int &ks = pm->mesh_indcs.ks;
   Real &x3min = pm->mesh_size.x3min;
   Real &x3max = pm->mesh_size.x3max;
   int &nx3 = pm->mesh_indcs.nx3;
