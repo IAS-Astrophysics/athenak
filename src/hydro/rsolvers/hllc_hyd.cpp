@@ -30,7 +30,7 @@ void HLLC(TeamMember_t const &member, const EOS_Data &eos,
   int ivz = IVX + ((ivx-IVX)+2)%3;
 
   Real igm1 = 1.0/((eos.gamma) - 1.0);
-  Real alpha = ((eos.gamma) + 1.0)/sqrt(2.0*(eos.gamma));
+  Real alpha = ((eos.gamma) + 1.0)/(2.0*(eos.gamma));
 
   par_for_inner(member, il, iu, [&](const int i)
   {
@@ -61,13 +61,13 @@ void HLLC(TeamMember_t const &member, const EOS_Data &eos,
 
     //--- Step 3.  Compute sound speed in L,R
 
-    qe = (qd <= wl_ipr) ? 1.0 : (1.0 + alpha * ((qd / wl_ipr) - 1.0));
-    qf = (qd <= wr_ipr) ? 1.0 : (1.0 + alpha * ((qd / wr_ipr) - 1.0));
+    qe = (qd <= wl_ipr) ? 1.0 : sqrt(1.0 + alpha * ((qd / wl_ipr) - 1.0));  // ql
+    qf = (qd <= wr_ipr) ? 1.0 : sqrt(1.0 + alpha * ((qd / wr_ipr) - 1.0));  // qr
 
     //--- Step 4.  Compute the max/min wave speeds based on L/R
 
-    qc = wl_ivx - qa*qe;  // ql
-    qd = wr_ivx + qb*qf;  // qr
+    qc = wl_ivx - qa*qe;  // al
+    qd = wr_ivx + qb*qf;  // ar
 
     // following min/max set to TINY_NUMBER to fix bug found in converging supersonic flow
     qa = qd > 0.0 ? qd : 1.0e-20;   // bp
@@ -75,8 +75,8 @@ void HLLC(TeamMember_t const &member, const EOS_Data &eos,
 
     //--- Step 5. Compute the contact wave speed and pressure
 
-    qe = wl_ivx - qc;
-    qf = wr_ivx - qd;
+    qe = wl_ivx - qc; // vxl
+    qf = wr_ivx - qd; // vxr
 
     qc = wl_ipr + qe*wl_idn*wl_ivx;  // tl
     qd = wr_ipr + qf*wr_idn*wr_ivx;  // tr
