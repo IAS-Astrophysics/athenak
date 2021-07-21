@@ -136,7 +136,6 @@ struct EOS_Data
   // Notes:
   //  - Follows same general procedure as vchar() in phys.c in Harm.
   //  - Variables are named as though 1 is normal direction.
-
   KOKKOS_INLINE_FUNCTION
   void FastSpeedsGR(Real h, Real p, Real u0, Real u1, Real b_sq,
                     Real g00, Real g01, Real g11, Real& l_p, Real& l_m)
@@ -165,7 +164,7 @@ struct EOS_Data
 
 class EquationOfState
 {
- public:
+public:
   EquationOfState(MeshBlockPack *pp, ParameterInput *pin);
   virtual ~EquationOfState() = default;
 
@@ -184,8 +183,6 @@ class EquationOfState
   virtual void PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons);
   virtual void PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,
                           DvceArray5D<Real> &cons);
-
- private:
 };
 
 //----------------------------------------------------------------------------------------
@@ -194,8 +191,11 @@ class EquationOfState
 
 class IsothermalHydro : public EquationOfState
 { 
- public:
-  using EquationOfState::ConsToPrim;  // prevents warnings that MHD version not overridden
+public:
+  // Following suppress warnings that MHD versions are not over-ridden
+  using EquationOfState::ConsToPrim;
+  using EquationOfState::PrimToCons;
+
   IsothermalHydro(MeshBlockPack *pp, ParameterInput *pin);
   void ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
   void PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons) override;
@@ -207,8 +207,11 @@ class IsothermalHydro : public EquationOfState
 
 class AdiabaticHydro : public EquationOfState
 {
- public:
-  using EquationOfState::ConsToPrim;  // prevents warnings that MHD version not overridden
+public:
+  // Following suppress warnings that MHD versions are not over-ridden
+  using EquationOfState::ConsToPrim;
+  using EquationOfState::PrimToCons;
+
   AdiabaticHydro(MeshBlockPack *pp, ParameterInput *pin);
   void ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
   void PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons) override;
@@ -220,8 +223,11 @@ class AdiabaticHydro : public EquationOfState
 
 class AdiabaticHydroSR : public EquationOfState
 {
- public:
-  using EquationOfState::ConsToPrim;  // prevents warnings that MHD version not overridden
+public:
+  // Following suppress warnings that MHD versions are not over-ridden
+  using EquationOfState::ConsToPrim;
+  using EquationOfState::PrimToCons;
+
   AdiabaticHydroSR(MeshBlockPack *pp, ParameterInput *pin);
   void ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
   void PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons) override;
@@ -233,8 +239,11 @@ class AdiabaticHydroSR : public EquationOfState
 
 class AdiabaticHydroGR : public EquationOfState
 {
- public:
-  using EquationOfState::ConsToPrim;  // prevents warnings that MHD version not overridden
+public:
+  // Following suppress warnings that MHD versions are not over-ridden
+  using EquationOfState::ConsToPrim;
+  using EquationOfState::PrimToCons;
+
   AdiabaticHydroGR(MeshBlockPack *pp, ParameterInput *pin);
   void ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
   void PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons) override;
@@ -246,8 +255,11 @@ class AdiabaticHydroGR : public EquationOfState
 
 class IsothermalMHD : public EquationOfState
 {
- public:
-  using EquationOfState::ConsToPrim;  // prevents warnings that hyd version not overridden
+public:
+  // Following suppress warnings that Hydro versions are not over-ridden
+  using EquationOfState::ConsToPrim; 
+  using EquationOfState::PrimToCons;
+
   IsothermalMHD(MeshBlockPack *pp, ParameterInput *pin);
   void ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
                   DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc) override;
@@ -261,8 +273,11 @@ class IsothermalMHD : public EquationOfState
 
 class AdiabaticMHD : public EquationOfState
 {
- public:
-  using EquationOfState::ConsToPrim;  // prevents warnings that hyd version not overridden
+public:
+  // Following suppress warnings that Hydro versions are not over-ridden
+  using EquationOfState::ConsToPrim;
+  using EquationOfState::PrimToCons;
+
   AdiabaticMHD(MeshBlockPack *pp, ParameterInput *pin);
   void ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
                   DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc) override;
