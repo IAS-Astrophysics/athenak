@@ -37,9 +37,9 @@ void RoeFluxIso(const Real wroe[], const Real du[], const Real wli[],
 //  \brief The Roe Riemann solver for hydrodynamics (both adiabatic and isothermal)
 
 KOKKOS_INLINE_FUNCTION
-void Roe(TeamMember_t const &member, const EOS_Data &eos, const int il, const int iu,
-     const int ivx, const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr,
-     ScrArray2D<Real> &flx)
+void Roe(TeamMember_t const &member, const EOS_Data &eos,
+     const int m, const int k, const int j, const int il, const int iu, const int ivx,
+     const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr, DvceArray5D<Real> flx)
 {
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
@@ -180,11 +180,11 @@ void Roe(TeamMember_t const &member, const EOS_Data &eos, const int il, const in
 
     //--- Step 7. Store results into 3D array of fluxes
 
-    flx(IDN,i) = flxi[IDN];
-    flx(ivx,i) = flxi[IVX];
-    flx(ivy,i) = flxi[IVY];
-    flx(ivz,i) = flxi[IVZ];
-    if (eos.is_adiabatic) flx(IEN,i) = flxi[IEN];
+    flx(m,IDN,k,j,i) = flxi[IDN];
+    flx(m,ivx,k,j,i) = flxi[IVX];
+    flx(m,ivy,k,j,i) = flxi[IVY];
+    flx(m,ivz,k,j,i) = flxi[IVZ];
+    if (eos.is_adiabatic) flx(m,IEN,k,j,i) = flxi[IEN];
   });
   return;
 }

@@ -52,6 +52,8 @@ void Hydro::AssembleHydroTasks(TaskList &start, TaskList &run, TaskList &end)
     id.flux = run.AddTask(&Hydro::CalcFluxes<Hydro_RSolver::hlle>,this,id.copyu);
   } else if (rsolver_method == Hydro_RSolver::hllc) {
     id.flux = run.AddTask(&Hydro::CalcFluxes<Hydro_RSolver::hllc>,this,id.copyu);
+  } else if (rsolver_method == Hydro_RSolver::roe) {
+    id.flux = run.AddTask(&Hydro::CalcFluxes<Hydro_RSolver::roe>,this,id.copyu);
   }
   id.expl  = run.AddTask(&Hydro::ExpRKUpdate, this, id.flux);
   id.sendu = run.AddTask(&Hydro::SendU, this, id.expl);

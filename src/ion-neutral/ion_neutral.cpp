@@ -85,6 +85,8 @@ void IonNeutral::AssembleIonNeutralTasks(TaskList &start, TaskList &run, TaskLis
     id.n_flux = run.AddTask(&Hydro::CalcFluxes<Hydro_RSolver::hlle>,phyd,id.i_expl);
   } else if (phyd->rsolver_method == Hydro_RSolver::hllc) {
     id.n_flux = run.AddTask(&Hydro::CalcFluxes<Hydro_RSolver::hllc>,phyd,id.i_expl);
+  } else if (phyd->rsolver_method == Hydro_RSolver::roe) {
+    id.n_flux = run.AddTask(&Hydro::CalcFluxes<Hydro_RSolver::roe>,phyd,id.i_expl);
   }
   id.n_expl = run.AddTask(&Hydro::ExpRKUpdate, phyd, id.n_flux);
 

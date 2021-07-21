@@ -202,9 +202,9 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
         std::exit(EXIT_FAILURE); 
       }  
 
-      // Roe solver
-//    } else if (rsolver.compare("roe") == 0) {
-//      rsolver_method = Hydro_RSolver::roe;
+    // Roe solver
+    } else if (rsolver.compare("roe") == 0) {
+      rsolver_method = Hydro_RSolver::roe;
 
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
