@@ -24,7 +24,7 @@
 //! Storing everything in a container makes it easier to capture coord variables and
 //! functions in kernels elsewhere in the code.
 
-struct CoordinatesData
+struct CoordData
 {
   Real bh_mass;                     // needed for GR metric
   Real bh_spin;                     // needed for GR metric
@@ -32,7 +32,7 @@ struct CoordinatesData
   DualArray1D<RegionSize> mb_size;  // array of length (# of MeshBlocks)
 
   // constructor
-  CoordinatesData(int nmb) : mb_size("size",nmb) {}
+  CoordData(int nmb) : mb_size("size",nmb) {}
 };
 
 //----------------------------------------------------------------------------------------
@@ -45,7 +45,7 @@ public:
   Coordinates(Mesh *pm, ParameterInput *pin, RegionIndcs indcs, int gids, int nmb);
   ~Coordinates() {};
 
-  CoordinatesData coord_data;
+  CoordData coord_data;
 
   // functions
   void AddCoordTerms(const DvceArray5D<Real> &w0, const EOS_Data &eos, const Real dt,

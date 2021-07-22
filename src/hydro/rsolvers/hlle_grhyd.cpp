@@ -13,10 +13,8 @@
 #include <algorithm>  // max(), min()
 #include <cmath>      // sqrt()
 
-#include "athena.hpp"
-#include "mesh/mesh.hpp"
-#include "eos/eos.hpp"
 #include "coordinates/cartesian_ks.hpp"
+#include "coordinates/cell_locations.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \fn void HLLE_GR
@@ -24,20 +22,47 @@
 //
 
 KOKKOS_INLINE_FUNCTION
-void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos,
+void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coord,
      const int m, const int k, const int j, const int il, const int iu, const int ivx,
-     const ScrArray1D<Real> &x1, Real x2, Real x3, Real spin,
      const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr, DvceArray5D<Real> flx)
 {
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
   const Real gamma_prime = eos.gamma/(eos.gamma - 1.0);
 
+  int is = coord.mb_indcs.is;
+  int js = coord.mb_indcs.js;
+  int ks = coord.mb_indcs.ks;
   par_for_inner(member, il, iu, [&](const int i)
   {
     // Extract components of metric
+    Real &x1min = coord.mb_size.d_view(m).x1min;
+    Real &x1max = coord.mb_size.d_view(m).x1max;
+    Real &x2min = coord.mb_size.d_view(m).x2min;
+    Real &x2max = coord.mb_size.d_view(m).x2max;
+    Real &x3min = coord.mb_size.d_view(m).x3min;
+    Real &x3max = coord.mb_size.d_view(m).x3max;
+    int nx1 = coord.mb_indcs.nx1;
+    int nx2 = coord.mb_indcs.nx2;
+    int nx3 = coord.mb_indcs.nx3;
+    Real x1v,x2v,x3v;
+    if (ivx == IVX) {
+      x1v = LeftEdgeX  (i-is, nx1, x1min, x1max);
+      x2v = CellCenterX(j-js, nx2, x2min, x2max);
+      x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+    } else if (ivx == IVY) {
+      x1v = CellCenterX(i-is, nx1, x1min, x1max);
+      x2v = LeftEdgeX  (j-js, nx2, x2min, x2max);
+      x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+    } else {
+      x1v = CellCenterX(i-is, nx1, x1min, x1max);
+      x2v = CellCenterX(j-js, nx2, x2min, x2max);
+      x3v = LeftEdgeX  (k-ks, nx3, x3min, x3max);
+    }
+
     Real g_[NMETRIC], gi_[NMETRIC];
-    ComputeMetricAndInverse(x1(i), x2, x3, spin, g_, gi_);
+    ComputeMetricAndInverse(x1v, x2v, x3v, coord.bh_spin, g_, gi_);
+
     const Real
       &g_00 = g_[I00], &g_01 = g_[I01], &g_02 = g_[I02], &g_03 = g_[I03],
       &g_10 = g_[I01], &g_11 = g_[I11], &g_12 = g_[I12], &g_13 = g_[I13],
@@ -50,19 +75,15 @@ void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos,
       &g30 = gi_[I03], &g31 = gi_[I13], &g32 = gi_[I23], &g33 = gi_[I33];
     Real alpha = std::sqrt(-1.0/g00);
     Real gii, g0i;
-    switch (ivx) {
-      case IVX:
-        gii = g11;
-        g0i = g01;
-        break;
-      case IVY:
-        gii = g22;
-        g0i = g02;
-        break;
-      case IVZ:
-        gii = g33;
-        g0i = g03;
-        break;
+    if (ivx == IVX) {
+      gii = g11;
+      g0i = g01;
+    } else if (ivx == IVY) {
+      gii = g22;
+      g0i = g02;
+    } else {
+      gii = g33;
+      g0i = g03;
     }
 
     // Extract left primitives
