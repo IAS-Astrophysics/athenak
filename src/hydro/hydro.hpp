@@ -21,8 +21,9 @@ class SourceTerms;
 class Driver;
 
 // constants that enumerate Hydro Riemann Solver options
-enum class Hydro_RSolver {advect, llf, hlle, hllc, roe, llf_sr, hlle_sr, hllc_sr,
-                          hlle_gr};
+enum class Hydro_RSolver {advect, llf, hlle, hllc, roe,    // non-relativistic
+                          llf_sr, hlle_sr, hllc_sr,        // SR
+                          hlle_gr};                        // GR
 
 //----------------------------------------------------------------------------------------
 //! \struct HydroTaskIDs
@@ -54,13 +55,13 @@ public:
   ~Hydro();
 
   // data
-  ReconstructionMethod recon_method;
-  Hydro_RSolver rsolver_method;
-  EquationOfState *peos;  // chosen EOS
-
   // flags to denote relativistic dynamics
   bool is_special_relativistic = false;
   bool is_general_relativistic = false;
+
+  ReconstructionMethod recon_method;
+  Hydro_RSolver rsolver_method;
+  EquationOfState *peos;  // chosen EOS
 
   int nhydro;             // number of hydro variables (5/4 for adiabatic/isothermal)
   int nscalars;           // number of passive scalars

@@ -19,7 +19,7 @@
 // Define following structure before other "include" files to resolve declarations
 //----------------------------------------------------------------------------------------
 //! \struct RegionSize
-//  \brief physical size in a Mesh or a MeshBlock
+//! \brief physical size in a Mesh or a MeshBlock
 
 struct RegionSize
 {
@@ -28,23 +28,9 @@ struct RegionSize
   Real dx1, dx2, dx3;       // (uniform) grid spacing
 };
 
-// size data stored as Views to enable loops over all MeshBlocks in a single kernel
-struct MeshBlockSize
-{
-  DualArray1D<Real> x1min, x2min, x3min;
-  DualArray1D<Real> x1max, x2max, x3max;
-  DualArray1D<Real> dx1, dx2, dx3;       // (uniform) grid spacing
-  // constructor
-  MeshBlockSize(int nmb)
-    : x1min("x1min",nmb), x1max("x1max",nmb),
-      x2min("x2min",nmb), x2max("x2max",nmb),
-      x3min("x3min",nmb), x3max("x3max",nmb),
-      dx1("dx1",nmb), dx2("dx2",nmb), dx3("dx3",nmb) {}
-};
-
 //----------------------------------------------------------------------------------------
 //! \struct RegionIndcs
-//  \brief Cell indices and number of active and ghost cells in a Mesh or a MeshBlock
+//! \brief Cell indices and number of active and ghost cells in a Mesh or a MeshBlock
 
 struct RegionIndcs
 {
@@ -70,11 +56,11 @@ struct NeighborBlock
 
 //----------------------------------------------------------------------------------------
 //! \struct LogicalLocation
-//  \brief stores logical location and level of MeshBlock
-//  lx1/2/3 = logical location in x1/2/3 = index in array of nodes at current level
-// WARNING: values of lx? can exceed the range of std::int32_t with >30 levels
-// of AMR, even if the root grid consists of a single MeshBlock, since the corresponding
-// max index = 1*2^31 > INT_MAX = 2^31 -1 for most 32-bit signed integer types
+//! \brief stores logical location and level of MeshBlock
+//! lx1/2/3 = logical location in x1/2/3 = index in array of nodes at current level
+//! WARNING: values of lx? can exceed the range of std::int32_t with >30 levels
+//! of AMR, even if the root grid consists of a single MeshBlock, since the corresponding
+//! max index = 1*2^31 > INT_MAX = 2^31 -1 for most 32-bit signed integer types
 
 struct LogicalLocation
 {
@@ -105,7 +91,7 @@ class Mesh;
 
 //----------------------------------------------------------------------------------------
 //! \class Mesh
-//  \brief data/functions associated with the overall mesh
+//! \brief data/functions associated with the overall mesh
 
 class Mesh
 {
