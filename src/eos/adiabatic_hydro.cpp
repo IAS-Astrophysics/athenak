@@ -92,15 +92,15 @@ void AdiabaticHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim
 void AdiabaticHydro::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons)
 {
   auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
-  int n1 = indcs.nx1;
-  int n2 = indcs.nx2;
-  int n3 = indcs.nx3;
+  int &is = indcs.is; int &ie = indcs.ie;
+  int &js = indcs.js; int &je = indcs.je;
+  int &ks = indcs.ks; int &ke = indcs.ke;
   int &nhyd  = pmy_pack->phydro->nhydro;
   int &nscal = pmy_pack->phydro->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
   Real igm1 = 1.0/(eos_data.gamma - 1.0);
 
-  par_for("hyd_prim2con", DevExeSpace(), 0, (nmb-1), 0, (n3-1), 0, (n2-1), 0, (n1-1),
+  par_for("hyd_prim2con", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
       Real& u_d  = cons(m,IDN,k,j,i);

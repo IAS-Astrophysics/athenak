@@ -111,6 +111,10 @@ void HLLE_SR(TeamMember_t const &member, const EOS_Data &eos,
     flx(m,ivz,k,j,i) = (lambda_r*fl.mz - lambda_l*fr.mz + qa*du.mz)*lambda_diff_inv;
     flx(m,IEN,k,j,i) = (lambda_r*fl.e  - lambda_l*fr.e  + qa*du.e )*lambda_diff_inv;
 
+    // We evolve tau = U - D
+
+    flx(m,IEN,k,j,i) -= flx(m,IDN,k,j,i);
+
   });
 
   return;
