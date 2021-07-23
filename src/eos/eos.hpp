@@ -221,14 +221,14 @@ public:
 //! \class AdiabaticHydroSR
 //  \brief Derived class for special relativistic Hydro adiabatic EOS 
 
-class AdiabaticHydroSR : public EquationOfState
+class AdiabaticSRHydro : public EquationOfState
 {
 public:
   // Following suppress warnings that MHD versions are not over-ridden
   using EquationOfState::ConsToPrim;
   using EquationOfState::PrimToCons;
 
-  AdiabaticHydroSR(MeshBlockPack *pp, ParameterInput *pin);
+  AdiabaticSRHydro(MeshBlockPack *pp, ParameterInput *pin);
   void ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
   void PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons) override;
 };
@@ -237,14 +237,14 @@ public:
 //! \class AdiabaticHydroGR
 //  \brief Derived class for general relativistic Hydro adiabatic EOS 
 
-class AdiabaticHydroGR : public EquationOfState
+class AdiabaticGRHydro : public EquationOfState
 {
 public:
   // Following suppress warnings that MHD versions are not over-ridden
   using EquationOfState::ConsToPrim;
   using EquationOfState::PrimToCons;
 
-  AdiabaticHydroGR(MeshBlockPack *pp, ParameterInput *pin);
+  AdiabaticGRHydro(MeshBlockPack *pp, ParameterInput *pin);
   void ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
   void PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons) override;
 };

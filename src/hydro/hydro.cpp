@@ -45,9 +45,9 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   // adiabatic EOS
   if (eqn_of_state.compare("adiabatic") == 0) {
     if (is_special_relativistic){
-      peos = new AdiabaticHydroSR(ppack, pin);
+      peos = new AdiabaticSRHydro(ppack, pin);
     } else if (is_general_relativistic){
-      peos = new AdiabaticHydroGR(ppack, pin);
+      peos = new AdiabaticGRHydro(ppack, pin);
     } else {
       peos = new AdiabaticHydro(ppack, pin);
     }
