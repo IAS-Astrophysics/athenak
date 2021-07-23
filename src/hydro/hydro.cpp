@@ -208,7 +208,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "<hydro> rsolver = '" << rsolver << "' not implemented"
-                << " for SR dynamics" << std::endl;
+                << " for GR dynamics" << std::endl;
       std::exit(EXIT_FAILURE); 
     }
   }}

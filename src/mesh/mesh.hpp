@@ -118,6 +118,8 @@ public:
   RegionSize  mesh_size;      // (physical) size of mesh (physical root level)
   RegionIndcs mesh_indcs;     // indices of cells in mesh (physical root level)
   BoundaryFlag mesh_bcs[6];   // physical boundary conditions at 6 faces of mesh
+  BoundaryFnPtr BoundaryFunc[6];
+
   bool one_d, two_d, three_d; // flags to indicate 1D or 2D or 3D calculations
   bool multi_d;               // flag to indicate 2D and 3D calculations
   bool shearing_periodic;     // flag to indicate periodic x1/x2 boundaries are sheared
@@ -160,6 +162,8 @@ public:
   void WriteMeshStructure();
   BoundaryFlag GetBoundaryFlag(const std::string& input_string);
   std::string GetBoundaryString(BoundaryFlag input_flag);
+  void EnrollBoundaryFunction(BoundaryFace dir, BoundaryFnPtr my_bc); 
+  void CheckUserBoundaries();
 
 private:
   // variables for load balancing control

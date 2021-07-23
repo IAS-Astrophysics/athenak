@@ -702,3 +702,43 @@ std::string Mesh::GetBoundaryString(BoundaryFlag input_flag)
       break;
   }
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn EnrollBoundaryFunction(BoundaryFace dir, BValFunc my_bc)
+//! \brief Enroll a user-defined boundary function
+
+void Mesh::EnrollBoundaryFunction(BoundaryFace dir, BoundaryFnPtr my_bc) {
+  if (dir < 0 || dir > 5) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+        << "EnrollBoundaryFunction called on bndry=" << dir << " not valid" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (mesh_bcs[dir] != BoundaryFlag::user) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+        << "Boundary condition flag must be set to 'user' in the <mesh> block in input"
+        << " file to use user-enrolled BCs on bndry=" << dir << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  BoundaryFunc[static_cast<int>(dir)]=my_bc;
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn CheckUserBoundaries()
+//! \brief checks if user boundary functions are correctly enrolled
+//! This compatibility check is performed in the Driver after calling ProblemGenerator()
+
+void Mesh::CheckUserBoundaries() {
+  for (int i=0; i<6; i++) {
+    if (mesh_bcs[i] == BoundaryFlag::user) {
+      if (BoundaryFunc[i] == nullptr) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "User-defined boundary function is specified in input "
+                  << " file but boundary function not enrolled; bndry=" << i << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+    }
+  }
+  return;
+}
+

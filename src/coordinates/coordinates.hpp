@@ -14,7 +14,9 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
-#include "eos/eos.hpp"
+
+// forward declarations
+struct EOS_Data;
 
 //----------------------------------------------------------------------------------------
 //! \struct CoordinatesData

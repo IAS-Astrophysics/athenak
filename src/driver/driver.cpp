@@ -207,9 +207,11 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh) :
 
 void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
 {
-  //---- Step 1.  Set ICs by constructing Problem Generator
+  //---- Step 1.  Set ICs by constructing Problem Generator, check user-defined BCs
+  // enrolled (if required).
 
   pgen = std::make_unique<ProblemGenerator>(pin, pmesh, this);
+  pmesh->CheckUserBoundaries();
 
   //---- Step 2.  Set conserved variables in ghost zones for all physics
   // Note: with MPI, sends on ALL MBs must be complete before receives execute

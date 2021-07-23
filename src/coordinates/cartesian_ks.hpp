@@ -38,6 +38,9 @@ void ComputeMetricAndInverse(Real x, Real y, Real z, Real a, Real g[], Real ginv
   
   // g_nm = f*l_n*l_m + eta_nm, where eta_nm is Minkowski metric
   Real f = 2.0 * SQR(r)*r / (SQR(SQR(r)) + SQR(a)*SQR(z));
+/*** HACK FOR MINKOWSKI 
+  f=0.0;
+***/
   g[I00] = f * l_lower[0]*l_lower[0] - 1.0;
   g[I01] = f * l_lower[0]*l_lower[1];
   g[I02] = f * l_lower[0]*l_lower[2];
@@ -116,6 +119,13 @@ void ComputeMetricDerivatives(Real x, Real y, Real z, Real a,
   Real dl0_dx1 = 0.0;
   Real dl0_dx2 = 0.0;
   Real dl0_dx3 = 0.0;
+
+/*** HACK FOR MINKOWSKI
+  f=0.0;
+  df_dx1=0.0;
+  df_dx2=0.0;
+  df_dx3=0.0;
+***/
 
   // Set x-derivatives of covariant components
   dg_dx1[I00] = df_dx1*llower[0]*llower[0] + f*dl0_dx1*llower[0] + f*llower[0]*dl0_dx1;

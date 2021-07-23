@@ -13,6 +13,7 @@
 #include "mesh/mesh.hpp"
 #include "driver/driver.hpp"
 #include "coordinates/coordinates.hpp"
+#include "eos/eos.hpp"
 #include "srcterms/srcterms.hpp"
 #include "hydro.hpp"
 
