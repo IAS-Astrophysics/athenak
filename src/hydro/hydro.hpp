@@ -100,9 +100,6 @@ public:
   template <Hydro_RSolver T>
   TaskStatus CalcFluxes(Driver *d, int stage);
 
-private:
-  MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Hydro
-
   // functions to set physical BCs for Hydro conserved variables, applied to single MB
   // specified by argument 'm'. 
   void ReflectInnerX1(int m);
@@ -119,6 +116,9 @@ private:
   void OutflowOuterX3(int m);
   void ShearInnerX1(int m);
   void ShearOuterX1(int m);
+
+private:
+  MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Hydro
 };
 
 } // namespace hydro

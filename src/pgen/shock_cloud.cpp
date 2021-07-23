@@ -27,7 +27,7 @@
 
 // postshock flow variables are shared with IIB function
 namespace {
-Real dl, ml, el;
+Real shock_d, shock_m, shock_e;
 } // namespace
 
 // fixes BCs on L-x1 (left edge) of grid to postshock flow.
@@ -50,17 +50,21 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
 
   // Set paramters in ambient medium ("R-state" for shock)
   Real dr = 1.0;
-  Real mr = 0.0;
-  Real er = 1.0/(gm*gm1);
+  Real pr = 1.0/gm;
+  Real ur = 0.0;
 
   // Uses Rankine Hugoniot relations for adiabatic gas to initialize problem
   Real jump1 = (gm + 1.0)/(gm1 + 2.0/(mach*mach));
   Real jump2 = (2.0*gm*mach*mach - gm1)/(gm + 1.0);
   Real jump3 = 2.0*(1.0 - 1.0/(mach*mach))/(gm + 1.0);
 
-  dl = dr*jump1;
-  ml = dl*(jump3*mach);  // cs in ambient medium hardwired to be one, so 
-  el = er*jump2 + 0.5*ml*ml/dl;
+  Real dl = dr*jump1;
+  Real pl = pr*jump2;
+  Real ul = ur + jump3*mach*std::sqrt(gm*pr/dr);
+
+  shock_d = dl;
+  shock_m = dl*ul;
+  shock_e = pl/gm1 + 0.5*dl*(ul*ul);
 
   // capture variables for the kernel
   auto &indcs = pmbp->coord.coord_data.mb_indcs;
@@ -94,28 +98,28 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
         // postshock flow
         if (x1v < xshock) {
           u0(m,IDN,k,j,i) = dl;
-          u0(m,IM1,k,j,i) = ml;
+          u0(m,IM1,k,j,i) = ul*dl;
           u0(m,IM2,k,j,i) = 0.0;
           u0(m,IM3,k,j,i) = 0.0;
-          u0(m,IEN,k,j,i) = el;
+          u0(m,IEN,k,j,i) = pl/gm1 + 0.5*dl*(ul*ul);
 
           // preshock ambient gas
         } else {
           u0(m,IDN,k,j,i) = dr;
-          u0(m,IM1,k,j,i) = mr;
+          u0(m,IM1,k,j,i) = ur*dr;
           u0(m,IM2,k,j,i) = 0.0;
           u0(m,IM3,k,j,i) = 0.0;
-          u0(m,IEN,k,j,i) = er;
+          u0(m,IEN,k,j,i) = pr/gm1 + 0.5*dr*(ur*ur);
         }
 
         // cloud interior
         Real diag = sqrt(SQR(x1v) + SQR(x2v) + SQR(x3v));
         if (diag < rad) {
           u0(m,IDN,k,j,i) = dr*drat;
-          u0(m,IM1,k,j,i) = mr*drat;
+          u0(m,IM1,k,j,i) = ur*dr*drat;
           u0(m,IM2,k,j,i) = 0.0;
           u0(m,IM3,k,j,i) = 0.0;
-          u0(m,IEN,k,j,i) = er;
+          u0(m,IEN,k,j,i) = pr/gm1 + 0.5*dr*drat*(ur*ur);
         }
       }
     );
@@ -140,14 +144,18 @@ void ShockCloudInnerX1(int m, CoordData &coord, DvceArray5D<Real> &u)
   int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
   int &is = indcs.is;
 
+  Real &shock_d_ = shock_d;
+  Real &shock_m_ = shock_m;
+  Real &shock_e_ = shock_e;
+
   par_for("outflow_ix1", DevExeSpace(),0,(n3-1),0,(n2-1),0,(ng-1),
     KOKKOS_LAMBDA(int k, int j, int i)
     {
-      u(m,IDN,k,j,is-i-1) = dl;
-      u(m,IM1,k,j,is-i-1) = ml;
+      u(m,IDN,k,j,is-i-1) = shock_d_;
+      u(m,IM1,k,j,is-i-1) = shock_m_;
       u(m,IM2,k,j,is-i-1) = 0.0;
       u(m,IM3,k,j,is-i-1) = 0.0;
-      u(m,IEN,k,j,is-i-1) = el;
+      u(m,IEN,k,j,is-i-1) = shock_e_;
     }
   );
   return;
