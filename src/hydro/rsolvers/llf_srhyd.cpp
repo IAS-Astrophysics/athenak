@@ -36,6 +36,9 @@ void LLF_SR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &co
   par_for_inner(member, il, iu, [&](const int i)
   {
     //--- Step 1.  Create local references for L/R states (helps compiler vectorize)
+    // Recall is SR the primitive variables are (\rho, u^i, P_gas), where \rho is the
+    // mass density in the comoving/fluid frame, u^i = \gamma v^i are the spatial
+    // components of the 4-velocity (v^i is the 3-velocity), and P_gas is the pressure.
 
     Real &wl_idn=wl(IDN,i);
     Real &wl_ivx=wl(ivx,i);
@@ -49,16 +52,15 @@ void LLF_SR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &co
     Real &wr_ivz=wr(ivz,i);
     Real &wr_ipr=wr(IPR,i);
 
-    Real u2l = SQR(wl_ivz) + SQR(wl_ivy) + SQR(wl_ivx);
-    Real u2r = SQR(wr_ivz) + SQR(wr_ivy) + SQR(wr_ivx);
+    Real u2l = SQR(wl_ivz) + SQR(wl_ivy) + SQR(wl_ivx);   // Lorentz factor in L-state
+    Real u2r = SQR(wr_ivz) + SQR(wr_ivy) + SQR(wr_ivx);   // Lorentz factor in R-state
     
     Real u0l  = sqrt(1. + u2l);
     Real u0r  = sqrt(1. + u2r);
 
     // FIXME ERM: Ideal fluid for now
-    Real wgas_l = wl_idn + gamma_prime * wl_ipr;
-    Real wgas_r = wr_idn + gamma_prime * wr_ipr;
-
+    Real wgas_l = wl_idn + gamma_prime * wl_ipr;  // total enthalpy in L-state
+    Real wgas_r = wr_idn + gamma_prime * wr_ipr;  // total enthalpy in R-state
 
     //--- Step 2.  Compute sum of L/R fluxes
 
@@ -70,11 +72,11 @@ void LLF_SR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &co
     fsum.mx = qa*wl_ivx + qb*wr_ivx + (wl_ipr + wr_ipr);
     fsum.my = qa*wl_ivy + qb*wr_ivy;
     fsum.mz = qa*wl_ivz + qb*wr_ivz;
+    fsum.e  = qa*u0r + qb*u0l;
 
-
-    Real el = wgas_l*u0l*u0l - wl_ipr - wl_idn*u0l;
-    Real er = wgas_r*u0r*u0r - wr_ipr - wr_idn*u0r;
-    fsum.e  = (er + wr_ipr)*wr_ivx/u0r + (el + wl_ipr)*wl_ivx/u0l;
+//    Real el = wgas_l*u0l*u0l - wl_ipr - wl_idn*u0l;
+//    Real er = wgas_r*u0r*u0r - wr_ipr - wr_idn*u0r;
+//    fsum.e  = (er + wr_ipr)*wr_ivx/u0r + (el + wl_ipr)*wl_ivx/u0l;
 
     //--- Step 3.  Compute wave speeds in L,R states (see Toro eq. 10.43)
 
@@ -90,6 +92,8 @@ void LLF_SR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &co
     HydCons1D du;
     qa = wgas_r*u0r;
     qb = wgas_l*u0l;
+    Real er = qa*u0r - wr_ipr - wr_idn*u0r;
+    Real el = qb*u0l - wl_ipr - wl_idn*u0l;
     du.d  = a*(u0r*wr_idn - u0l*wl_idn);
     du.mx = a*( qa*wr_ivx -  qb*wl_ivx);
     du.my = a*( qa*wr_ivy -  qb*wl_ivy);

@@ -1,11 +1,11 @@
-# AthenaXXX input file for SR hydrodynamic shocktube, test #2 from Mignone & Bodo
+# AthenaXXX input file for SR hydrodynamic shocktube, test #4 from Mignone & Bodo
 
 <comment>
-problem   = SR hydro shocktube problem 2
+problem   = SR hydro shocktube problem 4
 reference = Mignone & Bodo 2005, MNRAS 364 126
 
 <job>
-basename  = MB2       # problem ID: basename of output filenames
+basename  = MB4       # problem ID: basename of output filenames
 
 <mesh>
 nghost    = 3
@@ -55,15 +55,15 @@ pgen_name  = shock_tube
 shock_dir  = 1          # Shock Direction -- (1,2,3) = (x1,x2,x3)
 xshock     = 0.0        # position of initial interface
 
-dl =  1.0               # density on left
-pl =  10.0              # pressure
-ul = -0.6               # X-velocity 
-vl =  0.0               # Y-velocity
-wl =  0.0               # Z-velocity
+dl = 1.0                # density on left
+pl = 1000.0             # pressure
+ul = 0.0                # X-velocity 
+vl = 0.0                # Y-velocity
+wl = 0.0                # Z-velocity
 
-dr = 10.0               # density on right
-pr = 20.0               # pressure
-ur = 0.5                # X-velocity
+dr = 1.0                # density on right
+pr = 0.01               # pressure
+ur = 0.0                # X-velocity
 vr = 0.0                # Y-velocity
 wr = 0.0                # Z-velocity
 

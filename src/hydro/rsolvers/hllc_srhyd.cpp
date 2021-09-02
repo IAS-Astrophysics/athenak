@@ -5,11 +5,12 @@
 //========================================================================================
 //! \file hllc_srhyd.cpp
 //  \brief Implements HLLC Riemann solver for special relativistic hydrodynamics.
-//  Computes 1D fluxes using the HLLC Riemann solver.
 //
 // REFERENCES:
-// - E.F. Toro, "Riemann Solvers and numerical methods for fluid dynamics", 2nd ed.,
-//   Springer-Verlag, Berlin, (1999) chpt. 10.
+//  - E.F. Toro, "Riemann Solvers and numerical methods for fluid dynamics", 2nd ed.,
+//    Springer-Verlag, Berlin, (1999) chpt. 10.
+//  - Mignone & Bodo 2005, MNRAS 364 126 (MB2005)
+//  - Mignone & Bodo 2006, MNRAS 368 1040 (MB2006)
 
 #include <algorithm>  // max(), min()
 #include <cmath>      // sqrt()
@@ -18,7 +19,8 @@ namespace hydro {
 
 //----------------------------------------------------------------------------------------
 //! \fn void HLLC
-//  \brief The HLLC Riemann solver for SR hydrodynamics
+//  \brief The HLLC Riemann solver for SR hydrodynamics.  Based on HLLCTransforming()
+//  function in Athena++
 
 KOKKOS_INLINE_FUNCTION
 void HLLC_SR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coord,
@@ -32,15 +34,17 @@ void HLLC_SR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &c
 
   par_for_inner(member, il, iu, [&](const int i)
   {
-    //--- Step 1. Create local references for L/R states (helps compiler vectorize)
-
+    // Create local references for L/R states (helps compiler vectorize)
+    // Recall is SR the primitive variables are (\rho, u^i, P_gas), where \rho is the
+    // mass density in the comoving/fluid frame, u^i = \gamma v^i are the spatial
+    // components of the 4-velocity (v^i is the 3-velocity), and P_gas is the pressure.
     Real &rho_l  = wl(IDN,i);
     Real &pgas_l = wl(IPR,i);
     Real &ux_l   = wl(ivx,i);
     Real &uy_l   = wl(ivy,i);
     Real &uz_l   = wl(ivz,i);
     Real u_l[4];
-    u_l[0] = sqrt(1.0 + SQR(ux_l) + SQR(uy_l) + SQR(uz_l));
+    u_l[0] = sqrt(1.0 + SQR(ux_l) + SQR(uy_l) + SQR(uz_l));  // Lorentz factor in L-state
     u_l[1] = ux_l;
     u_l[2] = uy_l;
     u_l[3] = uz_l;
@@ -52,15 +56,15 @@ void HLLC_SR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &c
     Real &uy_r   = wr(ivy,i);
     Real &uz_r   = wr(ivz,i);
     Real u_r[4];
-    u_r[0] = sqrt(1.0 + SQR(ux_r) + SQR(uy_r) + SQR(uz_r));
+    u_r[0] = sqrt(1.0 + SQR(ux_r) + SQR(uy_r) + SQR(uz_r));  // Lorentz factor in R-state
     u_r[1] = ux_r;
     u_r[2] = uy_r;
     u_r[3] = uz_r;
 
-    Real wgas_l = rho_l + gamma_prime * pgas_l;
-    Real wgas_r = rho_r + gamma_prime * pgas_r;
+    Real wgas_l = rho_l + gamma_prime * pgas_l;  // total enthalpy in L-state
+    Real wgas_r = rho_r + gamma_prime * pgas_r;  // total enthalpy in R-state
 
-    //--- Step 2.  Compute wave speeds in L,R states (see Toro eq. 10.43)
+    // Compute wave speeds in L,R states (see Toro eq. 10.43)
 
     Real lm,lp,qa,qb;
     eos.WaveSpeedsSR(wgas_l, pgas_l, u_l[1]/u_l[0], u_l[0]*u_l[0], lp, lm);

@@ -21,7 +21,7 @@ namespace hydro {
 
 //----------------------------------------------------------------------------------------
 //! \fn void HLLE
-//! \brief HLLE implementation for SR. Based on HLLETransforming function in Athena++
+//! \brief HLLE implementation for SR. Based on HLLETransforming() function in Athena++
 //
 
 KOKKOS_INLINE_FUNCTION
@@ -36,6 +36,9 @@ void HLLE_SR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &c
   par_for_inner(member, il, iu, [&](const int i)
   {
     // References to left primitives
+    // Recall is SR the primitive variables are (\rho, u^i, P_gas), where \rho is the
+    // mass density in the comoving/fluid frame, u^i = \gamma v^i are the spatial
+    // components of the 4-velocity (v^i is the 3-velocity), and P_gas is the pressure.
     Real &wl_idn=wl(IDN,i);
     Real &wl_ivx=wl(ivx,i);
     Real &wl_ivy=wl(ivy,i);
@@ -52,12 +55,12 @@ void HLLE_SR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &c
     Real u2l = SQR(wl_ivz) + SQR(wl_ivy) + SQR(wl_ivx);
     Real u2r = SQR(wr_ivz) + SQR(wr_ivy) + SQR(wr_ivx);
 
-    Real u0l  = sqrt(1. + u2l);
-    Real u0r  = sqrt(1. + u2r);
+    Real u0l  = sqrt(1. + u2l);  // Lorentz factor in L-state
+    Real u0r  = sqrt(1. + u2r);  // Lorentz factor in R-state
 
     // FIXME ERM: Ideal fluid for now
-    Real wgas_l = wl_idn + gamma_prime * wl_ipr;
-    Real wgas_r = wr_idn + gamma_prime * wr_ipr;
+    Real wgas_l = wl_idn + gamma_prime * wl_ipr;  // total enthalpy in L-state
+    Real wgas_r = wr_idn + gamma_prime * wr_ipr;  // total enthalpy in R-state
 
     // Calculate wavespeeds in left state (MB 23)
     Real lp_l, lm_l;

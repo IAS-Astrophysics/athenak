@@ -79,6 +79,11 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
     wl.vy = pin->GetReal("problem","vl");
     wl.vz = pin->GetReal("problem","wl");
     wl.p  = pin->GetReal("problem","pl");
+    // compute Lorentz factor (needed for SR)
+    Real u0l = 1.0;
+    if (pmbp->phydro->is_special_relativistic) {
+      u0l = 1.0/sqrt( 1.0 - (SQR(wl.vx) + SQR(wl.vy) + SQR(wl.vz)) );
+    }
   
     // Parse right state read from input file: d,vx,vy,vz,[P]
     wr.d  = pin->GetReal("problem","dr");
@@ -86,6 +91,11 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
     wr.vy = pin->GetReal("problem","vr");
     wr.vz = pin->GetReal("problem","wr");
     wr.p  = pin->GetReal("problem","pr");
+    // compute Lorentz factor (needed for SR)
+    Real u0r = 1.0;
+    if (pmbp->phydro->is_special_relativistic) {
+      u0r = 1.0/sqrt( 1.0 - (SQR(wr.vx) + SQR(wr.vy) + SQR(wr.vz)) );
+    }
 
     auto &w0 = pmbp->phydro->w0;
     par_for("pgen_shock1", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
@@ -109,17 +119,18 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
           x = CellCenterX(k-ks, nx3, x3min, x3max);
         }
 
+        // in SR, primitive variables use spatial components of 4-vel u^i = gamma * v^i
         if (x < xshock) {
           w0(m,IDN,k,j,i) = wl.d;
-          w0(m,ivx,k,j,i) = wl.vx;
-          w0(m,ivy,k,j,i) = wl.vy;
-          w0(m,ivz,k,j,i) = wl.vz;
+          w0(m,ivx,k,j,i) = u0l*wl.vx;
+          w0(m,ivy,k,j,i) = u0l*wl.vy;
+          w0(m,ivz,k,j,i) = u0l*wl.vz;
           w0(m,IPR,k,j,i) = wl.p;
         } else {
           w0(m,IDN,k,j,i) = wr.d;
-          w0(m,ivx,k,j,i) = wr.vx;
-          w0(m,ivy,k,j,i) = wr.vy;
-          w0(m,ivz,k,j,i) = wr.vz;
+          w0(m,ivx,k,j,i) = u0r*wr.vx;
+          w0(m,ivy,k,j,i) = u0r*wr.vy;
+          w0(m,ivz,k,j,i) = u0r*wr.vz;
           w0(m,IPR,k,j,i) = wr.p;
         }
       }
