@@ -194,8 +194,7 @@ void HLLC_SR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &c
       flx(m,n,k,j,i) = flux_interface[n];
     }
 
-    // We evolve tau = U - D
-
+    // We evolve tau = E - D
     flx(m,IEN,k,j,i) -= flx(m,IDN,k,j,i);
 
   });

@@ -1,5 +1,4 @@
-//========================================================================================
-// AthenaXXX astrophysical plasma code
+//======================================================================================== // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
@@ -52,19 +51,30 @@ void LLF_SR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &co
     Real &wr_ivz=wr(ivz,i);
     Real &wr_ipr=wr(IPR,i);
 
-    Real u2l = SQR(wl_ivz) + SQR(wl_ivy) + SQR(wl_ivx);   // Lorentz factor in L-state
-    Real u2r = SQR(wr_ivz) + SQR(wr_ivy) + SQR(wr_ivx);   // Lorentz factor in R-state
+    Real u2l = SQR(wl_ivz) + SQR(wl_ivy) + SQR(wl_ivx);
+    Real u2r = SQR(wr_ivz) + SQR(wr_ivy) + SQR(wr_ivx);
     
-    Real u0l  = sqrt(1. + u2l);
-    Real u0r  = sqrt(1. + u2r);
+    Real u0l  = sqrt(1. + u2l); // Lorentz factor in L-state
+    Real u0r  = sqrt(1. + u2r); // Lorentz factor in R-state
 
     // FIXME ERM: Ideal fluid for now
     Real wgas_l = wl_idn + gamma_prime * wl_ipr;  // total enthalpy in L-state
     Real wgas_r = wr_idn + gamma_prime * wr_ipr;  // total enthalpy in R-state
 
-    //--- Step 2.  Compute sum of L/R fluxes
+    //--- Step 2.  Compute wave speeds in L,R states (see Toro eq. 10.43)
 
-    Real qa = wgas_l * wl_ivx;
+    Real lp_l, lm_l;
+    eos.WaveSpeedsSR(wgas_l, wl_ipr, wl_ivx/u0l, (1.0 + u2l), lp_l, lm_l);
+
+    Real lp_r, lm_r;
+    eos.WaveSpeedsSR(wgas_r, wr_ipr, wr_ivx/u0r, (1.0 + u2r), lp_r, lm_r);
+
+    Real qa = fmax(-fmin(lm_l,lm_r), 0.0);
+    Real a = fmax(fmax(lp_l,lp_r), qa);
+    
+    //--- Step 3.  Compute sum of L/R fluxes
+
+    qa = wgas_l * wl_ivx;
     Real qb = wgas_r * wr_ivx;
 
     HydCons1D fsum;
@@ -72,28 +82,19 @@ void LLF_SR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &co
     fsum.mx = qa*wl_ivx + qb*wr_ivx + (wl_ipr + wr_ipr);
     fsum.my = qa*wl_ivy + qb*wr_ivy;
     fsum.mz = qa*wl_ivz + qb*wr_ivz;
-    fsum.e  = qa*u0r + qb*u0l;
+    fsum.e  = qa*u0l + qb*u0r;
 
 //    Real el = wgas_l*u0l*u0l - wl_ipr - wl_idn*u0l;
 //    Real er = wgas_r*u0r*u0r - wr_ipr - wr_idn*u0r;
 //    fsum.e  = (er + wr_ipr)*wr_ivx/u0r + (el + wl_ipr)*wl_ivx/u0l;
 
-    //--- Step 3.  Compute wave speeds in L,R states (see Toro eq. 10.43)
-
-    Real lm,lp;
-    eos.WaveSpeedsSR(wgas_l, wl_ipr, wl_ivx/u0l, (1.0 + u2l), lp, lm);
-    eos.WaveSpeedsSR(wgas_r, wr_ipr, wr_ivx/u0r, (1.0 + u2r), qb,qa);
-
-    qa = fmax(-fmin(lm,qa), 0.0);
-    Real a = fmax(fmax(lp,qb), qa);
-    
     //--- Step 4.  Compute difference dU = U_R - U_L multiplied by max wave speed
 
     HydCons1D du;
     qa = wgas_r*u0r;
     qb = wgas_l*u0l;
-    Real er = qa*u0r - wr_ipr - wr_idn*u0r;
-    Real el = qb*u0l - wl_ipr - wl_idn*u0l;
+    Real er = qa*u0r - wr_ipr;
+    Real el = qb*u0l - wl_ipr;
     du.d  = a*(u0r*wr_idn - u0l*wl_idn);
     du.mx = a*( qa*wr_ivx -  qb*wl_ivx);
     du.my = a*( qa*wr_ivy -  qb*wl_ivy);
@@ -107,6 +108,9 @@ void LLF_SR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &co
     flx(m,ivy,k,j,i) = 0.5*(fsum.my - du.my);
     flx(m,ivz,k,j,i) = 0.5*(fsum.mz - du.mz);
     flx(m,IEN,k,j,i) = 0.5*(fsum.e  - du.e );
+
+    // We evolve tau = E - D
+    flx(m,IEN,k,j,i) -= flx(m,IDN,k,j,i);
 
   });
   return;

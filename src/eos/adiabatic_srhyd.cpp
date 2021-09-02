@@ -50,7 +50,18 @@ Real EquationC22(Real z, Real &u_d, Real q, Real r, Real gm1, Real pfloor)
 // Implementation follows Wolfgang Kastaun's algorithm described in Appendix C of
 // Galeazzi et al., PhysRevD, 88, 064009 (2013).  Roots of "master function" (eq. C22) 
 // found by false position method.
-// Operates over entire MeshBlock, including ghost cells.  
+//
+// In SR hydrodynamics, the conserved variables are: (D, E - D, m^i),
+// where D = \gamma \rho is the density in the lab frame, \gamma = (1 + u^2)^{1/2} is the//  Lorentz factor, u^i = \gamma v^i are the spatial components of the 4-velocity (v^i is
+// the 3-velocity), \rho is the comoving/fluid/rest frame mass density, 
+// E = \gamma^2 w - P_gas is the total energy, w = \rho + [\Gamma / (\Gamma - 1)] P_gas
+// is the total enthalpy, \Gamma is the adiabatic index, P_gas is the gas pressure, and
+// m^i = \gamma w u^i are components of the momentum in the lab frame.
+//
+// The primitive variables are: (\rho, P_gas, u^i).
+// Note we store components of the 4-velocity (not 3-velocity) in the primitive variables.
+//
+// This function operates over entire MeshBlock, including ghost cells.  
 
 void AdiabaticSRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
 {
@@ -194,6 +205,8 @@ std::cout << "|zm-zp|=" <<fabs(zm-zp)<<" |f|="<< fabs(f) << "for i=" <<  ii << s
 //----------------------------------------------------------------------------------------
 // \!fn void PrimToCons()
 // \brief Converts primitive into conserved variables.  Operates only over active cells.
+//  Recall in SR hydrodynamics the conserved variables are: (D, E-D, m^i), and the
+//  primitive variables are: (\rho, P_gas, u^i).
 
 void AdiabaticSRHydro::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons)
 {
@@ -227,8 +240,8 @@ void AdiabaticSRHydro::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Rea
 
       // Set conserved quantities
       u_d  = w_d * u0;
-      u_e  = wgas_u0 * u0 - w_p -u_d; // SR implementation subtracts rest mass density
-      u_m1 = wgas_u0 * w_vx;
+      u_e  = wgas_u0 * u0 - w_p - u_d; // In SR, evolve E - D
+      u_m1 = wgas_u0 * w_vx;           // In SR, w_vx/y/z are 4-velocity
       u_m2 = wgas_u0 * w_vy;
       u_m3 = wgas_u0 * w_vz;
 

@@ -78,8 +78,8 @@ void HLLE_SR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &c
     HydCons1D du;
     Real qa = wgas_r*u0r;
     Real qb = wgas_l*u0l;
-    Real er = qa*u0r - wr_ipr - wr_idn*u0r;
-    Real el = qb*u0l - wl_ipr - wl_idn*u0l;
+    Real er = qa*u0r - wr_ipr;
+    Real el = qb*u0l - wl_ipr;
 
     du.d  = wr_idn*u0r - wl_idn*u0l;
     du.mx = wr_ivx*qa  - wl_ivx*qb;
@@ -104,18 +104,34 @@ void HLLE_SR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &c
     fr.mz = qa * wr_ivz;
     fr.e  = qa * u0r;
 
-    // Calculate fluxes in HLL region (MB 11), store into 3D arrays
-    qa = lambda_l*lambda_r;
-    Real lambda_diff_inv = 1.0 / (lambda_r-lambda_l);
+    // Calculate fluxes in HLL region (MB 11)
+    HydCons1D flux_hll;
+    qa = lambda_r*lambda_l;
+    qb = lambda_r - lambda_l;
+    flux_hll.d  = (lambda_r*fl.d  - lambda_l*fr.d  + qa*du.d ) / qb;
+    flux_hll.mx = (lambda_r*fl.mx - lambda_l*fr.mx + qa*du.mx) / qb;
+    flux_hll.my = (lambda_r*fl.my - lambda_l*fr.my + qa*du.my) / qb;
+    flux_hll.mz = (lambda_r*fl.mz - lambda_l*fr.mz + qa*du.mz) / qb;
+    flux_hll.e  = (lambda_r*fl.e  - lambda_l*fr.e  + qa*du.e ) / qb;
 
-    flx(m,IDN,k,j,i) = (lambda_r*fl.d  - lambda_l*fr.d  + qa*du.d )*lambda_diff_inv;
-    flx(m,ivx,k,j,i) = (lambda_r*fl.mx - lambda_l*fr.mx + qa*du.mx)*lambda_diff_inv;
-    flx(m,ivy,k,j,i) = (lambda_r*fl.my - lambda_l*fr.my + qa*du.my)*lambda_diff_inv;
-    flx(m,ivz,k,j,i) = (lambda_r*fl.mz - lambda_l*fr.mz + qa*du.mz)*lambda_diff_inv;
-    flx(m,IEN,k,j,i) = (lambda_r*fl.e  - lambda_l*fr.e  + qa*du.e )*lambda_diff_inv;
+    // Determine region of wavefan
+    HydCons1D *flux_interface;
+    if (lambda_l >= 0.0) {  // L region
+      flux_interface = &fl;
+    } else if (lambda_r <= 0.0) { // R region
+      flux_interface = &fr;
+    } else {  // HLL region
+      flux_interface = &flux_hll;
+    }
 
-    // We evolve tau = U - D
+    // Set fluxes
+    flx(m,IDN,k,j,i) = flux_interface->d;
+    flx(m,IVX,k,j,i) = flux_interface->mx;
+    flx(m,IVY,k,j,i) = flux_interface->my;
+    flx(m,IVZ,k,j,i) = flux_interface->mz;
+    flx(m,IEN,k,j,i) = flux_interface->e;
 
+    // We evolve tau = E - D
     flx(m,IEN,k,j,i) -= flx(m,IDN,k,j,i);
 
   });
