@@ -36,7 +36,7 @@ void HLLE_SR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &c
   par_for_inner(member, il, iu, [&](const int i)
   {
     // References to left primitives
-    // Recall is SR the primitive variables are (\rho, u^i, P_gas), where \rho is the
+    // Recall in SR the primitive variables are (\rho, u^i, P_gas), where \rho is the
     // mass density in the comoving/fluid frame, u^i = \gamma v^i are the spatial
     // components of the 4-velocity (v^i is the 3-velocity), and P_gas is the pressure.
     Real &wl_idn=wl(IDN,i);
@@ -126,9 +126,9 @@ void HLLE_SR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &c
 
     // Set fluxes
     flx(m,IDN,k,j,i) = flux_interface->d;
-    flx(m,IVX,k,j,i) = flux_interface->mx;
-    flx(m,IVY,k,j,i) = flux_interface->my;
-    flx(m,IVZ,k,j,i) = flux_interface->mz;
+    flx(m,ivx,k,j,i) = flux_interface->mx;
+    flx(m,ivy,k,j,i) = flux_interface->my;
+    flx(m,ivz,k,j,i) = flux_interface->mz;
     flx(m,IEN,k,j,i) = flux_interface->e;
 
     // We evolve tau = E - D

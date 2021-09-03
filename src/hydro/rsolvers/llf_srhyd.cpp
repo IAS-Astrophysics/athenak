@@ -35,7 +35,7 @@ void LLF_SR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &co
   par_for_inner(member, il, iu, [&](const int i)
   {
     //--- Step 1.  Create local references for L/R states (helps compiler vectorize)
-    // Recall is SR the primitive variables are (\rho, u^i, P_gas), where \rho is the
+    // Recall in SR the primitive variables are (\rho, u^i, P_gas), where \rho is the
     // mass density in the comoving/fluid frame, u^i = \gamma v^i are the spatial
     // components of the 4-velocity (v^i is the 3-velocity), and P_gas is the pressure.
 
