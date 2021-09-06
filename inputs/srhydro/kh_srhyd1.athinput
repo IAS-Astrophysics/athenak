@@ -5,7 +5,7 @@ problem   = Kelvin-Helmholtz instability
 reference = Mignone et al.
 
 <job>
-basename  = kh         # problem ID: basename of output filenames
+basename  = KH         # problem ID: basename of output filenames
 
 <mesh>
 nghost    = 3
@@ -45,6 +45,7 @@ special_rel = true
 eos         = adiabatic  # EOS type
 reconstruct = ppm        # spatial reconstruction method
 rsolver     = hllc       # Riemann-solver to be used
+nscalars    = 1          # number of passive scalars in hydro
 
 <eos>
 gamma       = 1.3333333  # gamma = C_p/C_v

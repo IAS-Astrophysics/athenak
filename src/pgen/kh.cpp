@@ -44,6 +44,13 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
   Real gm1 = eos.gamma - 1.0;
   auto &w0 = pmbp->phydro->w0;
   auto &coord = pmbp->coord.coord_data;
+  int &nhydro = pmbp->phydro->nhydro;
+  int &nscalars = pmbp->phydro->nscalars;
+  if (nscalars == 0) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "KH test requires nscalars != 0" << std::endl;
+    exit(EXIT_FAILURE);
+  }
 
   // initialize primitive variables
   par_for("pgen_kh1", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
@@ -66,7 +73,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
       Real u00 = 1.0;
       auto is_sr = pmbp->phydro->is_special_relativistic;
 
-      Real dens,pres,vx,vy,vz;
+      Real dens,pres,vx,vy,vz,scal;
 
       if (iprob == 1) {
         pres = 20.0;
@@ -74,6 +81,8 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
         vx = -vshear*tanh(x2v/sigma);
         vy = -amp*vshear*sin(2.*M_PI*x1v)*exp( -SQR(x2v/sigma) );
         vz = 0.0;
+        scal = 0.0;
+        if (x2v > 0.0) scal = 1.0;
       } else if (iprob == 2) {
         pres = 1.0;
         vz = 0.0;
@@ -84,6 +93,8 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
           if (is_sr) {
             u00 = 1.0/sqrt(1.0 - vx*vx - vy*vy);
           }
+          scal = 0.0;
+          if (x2v < 0.5) scal = 1.0;
         } else {
           dens = rho0 + rho1*tanh((x2v-0.5)/sigma);
           vx = vshear*tanh((x2v-0.5)/sigma);
@@ -91,6 +102,8 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
           if (is_sr) {
             u00 = 1.0/sqrt(1.0 - vx*vx - vy*vy);
           }
+          scal = 0.0;
+          if (x2v > 0.5) scal = 1.0;
         }
       }
 
@@ -100,6 +113,10 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
       w0(m,IVX,k,j,i) = u00*vx;
       w0(m,IVY,k,j,i) = u00*vy;
       w0(m,IVZ,k,j,i) = u00*vz;
+      // add passive scalars
+      for (int n=nhydro; n<(nhydro+nscalars); ++n) {
+        w0(m,n,k,j,i) = scal;
+      }
     }
   );
 
