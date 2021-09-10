@@ -42,33 +42,33 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
     // Load hydro conserved variables
     case OutputVariable::hydro_u_d:
       if (pm->pmb_pack->phydro == nullptr) ErrHydroOutput(out_params.block_name);
-      outvars.emplace_back("dens",0,&(pm->pmb_pack->phydro->u0));
+      outvars.emplace_back("density",0,&(pm->pmb_pack->phydro->u0));
       break;
     case OutputVariable::hydro_u_m1:
       if (pm->pmb_pack->phydro == nullptr) ErrHydroOutput(out_params.block_name);
-      outvars.emplace_back("mom1",1,&(pm->pmb_pack->phydro->u0));
+      outvars.emplace_back("momentum1",1,&(pm->pmb_pack->phydro->u0));
       break;
     case OutputVariable::hydro_u_m2:
       if (pm->pmb_pack->phydro == nullptr) ErrHydroOutput(out_params.block_name);
-      outvars.emplace_back("mom2",2,&(pm->pmb_pack->phydro->u0));
+      outvars.emplace_back("momentum2",2,&(pm->pmb_pack->phydro->u0));
       break;
     case OutputVariable::hydro_u_m3:
       if (pm->pmb_pack->phydro == nullptr) ErrHydroOutput(out_params.block_name);
-      outvars.emplace_back("mom3",3,&(pm->pmb_pack->phydro->u0));
+      outvars.emplace_back("momentum3",3,&(pm->pmb_pack->phydro->u0));
       break;
     case OutputVariable::hydro_u_e:
       if (pm->pmb_pack->phydro == nullptr) ErrHydroOutput(out_params.block_name);
-      outvars.emplace_back("ener",4,&(pm->pmb_pack->phydro->u0));
+      outvars.emplace_back("total_energy",4,&(pm->pmb_pack->phydro->u0));
       break;
     case OutputVariable::hydro_u:
       {
       if (pm->pmb_pack->phydro == nullptr) ErrHydroOutput(out_params.block_name);
-      outvars.emplace_back("dens",0,&(pm->pmb_pack->phydro->u0));
-      outvars.emplace_back("mom1",1,&(pm->pmb_pack->phydro->u0));
-      outvars.emplace_back("mom2",2,&(pm->pmb_pack->phydro->u0));
-      outvars.emplace_back("mom3",3,&(pm->pmb_pack->phydro->u0));
+      outvars.emplace_back("density",0,&(pm->pmb_pack->phydro->u0));
+      outvars.emplace_back("momentum1",1,&(pm->pmb_pack->phydro->u0));
+      outvars.emplace_back("momentum2",2,&(pm->pmb_pack->phydro->u0));
+      outvars.emplace_back("momentum3",3,&(pm->pmb_pack->phydro->u0));
       if (pm->pmb_pack->phydro->peos->eos_data.is_adiabatic) {
-        outvars.emplace_back("ener",4,&(pm->pmb_pack->phydro->u0));
+        outvars.emplace_back("total_energy",4,&(pm->pmb_pack->phydro->u0));
       }
       int nhyd = pm->pmb_pack->phydro->nhydro;
       int nvars = nhyd + pm->pmb_pack->phydro->nscalars;
@@ -86,33 +86,33 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
     // Load hydro primitive variables
     case OutputVariable::hydro_w_d:
       if (pm->pmb_pack->phydro == nullptr) ErrHydroOutput(out_params.block_name);
-      outvars.emplace_back("dens",0,&(pm->pmb_pack->phydro->w0));
+      outvars.emplace_back("density",0,&(pm->pmb_pack->phydro->w0));
       break;
     case OutputVariable::hydro_w_vx:
       if (pm->pmb_pack->phydro == nullptr) ErrHydroOutput(out_params.block_name);
-      outvars.emplace_back("velx",1,&(pm->pmb_pack->phydro->w0));
+      outvars.emplace_back("velocity_x",1,&(pm->pmb_pack->phydro->w0));
       break;
     case OutputVariable::hydro_w_vy:
       if (pm->pmb_pack->phydro == nullptr) ErrHydroOutput(out_params.block_name);
-      outvars.emplace_back("vely",2,&(pm->pmb_pack->phydro->w0));
+      outvars.emplace_back("velocity_y",2,&(pm->pmb_pack->phydro->w0));
       break;
     case OutputVariable::hydro_w_vz:
       if (pm->pmb_pack->phydro == nullptr) ErrHydroOutput(out_params.block_name);
-      outvars.emplace_back("velz",3,&(pm->pmb_pack->phydro->w0));
+      outvars.emplace_back("velocity_z",3,&(pm->pmb_pack->phydro->w0));
       break;
     case OutputVariable::hydro_w_p:
       if (pm->pmb_pack->phydro == nullptr) ErrHydroOutput(out_params.block_name);
-      outvars.emplace_back("pres",4,&(pm->pmb_pack->phydro->w0));
+      outvars.emplace_back("pressure",4,&(pm->pmb_pack->phydro->w0));
       break;
     case OutputVariable::hydro_w:
       {
       if (pm->pmb_pack->phydro == nullptr) ErrHydroOutput(out_params.block_name);
-      outvars.emplace_back("dens",0,&(pm->pmb_pack->phydro->w0));
-      outvars.emplace_back("velx",1,&(pm->pmb_pack->phydro->w0));
-      outvars.emplace_back("vely",2,&(pm->pmb_pack->phydro->w0));
-      outvars.emplace_back("velz",3,&(pm->pmb_pack->phydro->w0));
+      outvars.emplace_back("density",0,&(pm->pmb_pack->phydro->w0));
+      outvars.emplace_back("velocity_x",1,&(pm->pmb_pack->phydro->w0));
+      outvars.emplace_back("velocity_y",2,&(pm->pmb_pack->phydro->w0));
+      outvars.emplace_back("velocity_z",3,&(pm->pmb_pack->phydro->w0));
       if (pm->pmb_pack->phydro->peos->eos_data.is_adiabatic) {
-        outvars.emplace_back("pres",4,&(pm->pmb_pack->phydro->w0));
+        outvars.emplace_back("pressure",4,&(pm->pmb_pack->phydro->w0));
       }
       int nhyd = pm->pmb_pack->phydro->nhydro;
       int nvars = nhyd + pm->pmb_pack->phydro->nscalars;
@@ -130,33 +130,33 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
     // Load mhd conserved variables
     case OutputVariable::mhd_u_d:
       if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
-      outvars.emplace_back("dens",0,&(pm->pmb_pack->pmhd->u0));
+      outvars.emplace_back("density",0,&(pm->pmb_pack->pmhd->u0));
       break;
     case OutputVariable::mhd_u_m1:
       if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
-      outvars.emplace_back("mom1",1,&(pm->pmb_pack->pmhd->u0));
+      outvars.emplace_back("momentum1",1,&(pm->pmb_pack->pmhd->u0));
       break;
     case OutputVariable::mhd_u_m2:
       if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
-      outvars.emplace_back("mom2",2,&(pm->pmb_pack->pmhd->u0));
+      outvars.emplace_back("momentum2",2,&(pm->pmb_pack->pmhd->u0));
       break;
     case OutputVariable::mhd_u_m3:
       if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
-      outvars.emplace_back("mom3",3,&(pm->pmb_pack->pmhd->u0));
+      outvars.emplace_back("momentum3",3,&(pm->pmb_pack->pmhd->u0));
       break;
     case OutputVariable::mhd_u_e:
       if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
-      outvars.emplace_back("ener",4,&(pm->pmb_pack->pmhd->u0));
+      outvars.emplace_back("total_energy",4,&(pm->pmb_pack->pmhd->u0));
       break;
     case OutputVariable::mhd_u:
       {
       if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
-      outvars.emplace_back("dens",0,&(pm->pmb_pack->pmhd->u0));
-      outvars.emplace_back("mom1",1,&(pm->pmb_pack->pmhd->u0));
-      outvars.emplace_back("mom2",2,&(pm->pmb_pack->pmhd->u0));
-      outvars.emplace_back("mom3",3,&(pm->pmb_pack->pmhd->u0));
+      outvars.emplace_back("density",0,&(pm->pmb_pack->pmhd->u0));
+      outvars.emplace_back("momentum1",1,&(pm->pmb_pack->pmhd->u0));
+      outvars.emplace_back("momentum2",2,&(pm->pmb_pack->pmhd->u0));
+      outvars.emplace_back("momentum3",3,&(pm->pmb_pack->pmhd->u0));
       if (pm->pmb_pack->pmhd->peos->eos_data.is_adiabatic) {
-        outvars.emplace_back("ener",4,&(pm->pmb_pack->pmhd->u0));
+        outvars.emplace_back("total_energy",4,&(pm->pmb_pack->pmhd->u0));
       }
       int nmhd_ =  pm->pmb_pack->pmhd->nmhd;
       int nvars = nmhd_ + pm->pmb_pack->pmhd->nscalars;
@@ -174,33 +174,33 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
     // Load mhd primitive variables
     case OutputVariable::mhd_w_d:
       if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
-      outvars.emplace_back("dens",0,&(pm->pmb_pack->pmhd->w0));
+      outvars.emplace_back("density",0,&(pm->pmb_pack->pmhd->w0));
       break;
     case OutputVariable::mhd_w_vx:
       if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
-      outvars.emplace_back("velx",1,&(pm->pmb_pack->pmhd->w0));
+      outvars.emplace_back("velocity_x",1,&(pm->pmb_pack->pmhd->w0));
       break;
     case OutputVariable::mhd_w_vy:
       if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
-      outvars.emplace_back("vely",2,&(pm->pmb_pack->pmhd->w0));
+      outvars.emplace_back("velocity_y",2,&(pm->pmb_pack->pmhd->w0));
       break;
     case OutputVariable::mhd_w_vz:
       if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
-      outvars.emplace_back("velz",3,&(pm->pmb_pack->pmhd->w0));
+      outvars.emplace_back("velocity_z",3,&(pm->pmb_pack->pmhd->w0));
       break;
     case OutputVariable::mhd_w_p:
       if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
-      outvars.emplace_back("pres",4,&(pm->pmb_pack->pmhd->w0));
+      outvars.emplace_back("pressure",4,&(pm->pmb_pack->pmhd->w0));
       break;
     case OutputVariable::mhd_w:
       {
       if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
-      outvars.emplace_back("dens",0,&(pm->pmb_pack->pmhd->w0));
-      outvars.emplace_back("velx",1,&(pm->pmb_pack->pmhd->w0));
-      outvars.emplace_back("vely",2,&(pm->pmb_pack->pmhd->w0));
-      outvars.emplace_back("velz",3,&(pm->pmb_pack->pmhd->w0));
+      outvars.emplace_back("density",0,&(pm->pmb_pack->pmhd->w0));
+      outvars.emplace_back("velocity_x",1,&(pm->pmb_pack->pmhd->w0));
+      outvars.emplace_back("velocity_y",2,&(pm->pmb_pack->pmhd->w0));
+      outvars.emplace_back("velocity_z",3,&(pm->pmb_pack->pmhd->w0));
       if (pm->pmb_pack->pmhd->peos->eos_data.is_adiabatic) {
-        outvars.emplace_back("pres",4,&(pm->pmb_pack->pmhd->w0));
+        outvars.emplace_back("pressure",4,&(pm->pmb_pack->pmhd->w0));
       }
       int nmhd_ =  pm->pmb_pack->pmhd->nmhd;
       int nvars = nmhd_ + pm->pmb_pack->pmhd->nscalars;
@@ -218,21 +218,72 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
     // Load mhd cell-centered magnetic fields
     case OutputVariable::mhd_bcc1:
       if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
-      outvars.emplace_back("bcc1",0,&(pm->pmb_pack->pmhd->bcc0));
+      outvars.emplace_back("cell_centered_B_x",0,&(pm->pmb_pack->pmhd->bcc0));
       break;
     case OutputVariable::mhd_bcc2:
       if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
-      outvars.emplace_back("bcc2",1,&(pm->pmb_pack->pmhd->bcc0));
+      outvars.emplace_back("cell_centered_B_y",1,&(pm->pmb_pack->pmhd->bcc0));
       break;
     case OutputVariable::mhd_bcc3:
       if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
-      outvars.emplace_back("bcc3",2,&(pm->pmb_pack->pmhd->bcc0));
+      outvars.emplace_back("cell_centered_B_z",2,&(pm->pmb_pack->pmhd->bcc0));
       break;
     case OutputVariable::mhd_bcc:
       if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
-      outvars.emplace_back("bcc1",0,&(pm->pmb_pack->pmhd->bcc0));
-      outvars.emplace_back("bcc2",1,&(pm->pmb_pack->pmhd->bcc0));
-      outvars.emplace_back("bcc3",2,&(pm->pmb_pack->pmhd->bcc0));
+      outvars.emplace_back("cell_centered_B_x",0,&(pm->pmb_pack->pmhd->bcc0));
+      outvars.emplace_back("cell_centered_B_y",1,&(pm->pmb_pack->pmhd->bcc0));
+      outvars.emplace_back("cell_centered_B_z",2,&(pm->pmb_pack->pmhd->bcc0));
+      break;
+
+    case OutputVariable::mhd_uall:
+      {
+      if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
+      outvars.emplace_back("density",0,&(pm->pmb_pack->pmhd->u0));
+      outvars.emplace_back("momentum1",1,&(pm->pmb_pack->pmhd->u0));
+      outvars.emplace_back("momentum2",2,&(pm->pmb_pack->pmhd->u0));
+      outvars.emplace_back("momentum3",3,&(pm->pmb_pack->pmhd->u0));
+      if (pm->pmb_pack->pmhd->peos->eos_data.is_adiabatic) {
+        outvars.emplace_back("total_energy",4,&(pm->pmb_pack->pmhd->u0));
+      }
+      outvars.emplace_back("cell_centered_B_x",0,&(pm->pmb_pack->pmhd->bcc0));
+      outvars.emplace_back("cell_centered_B_y",1,&(pm->pmb_pack->pmhd->bcc0));
+      outvars.emplace_back("cell_centered_B_z",2,&(pm->pmb_pack->pmhd->bcc0));
+      int nmhd_ =  pm->pmb_pack->pmhd->nmhd;
+      int nvars = nmhd_ + pm->pmb_pack->pmhd->nscalars;
+      for (int n=nmhd_; n<nvars; ++n) {
+        char number[2];
+        std::snprintf(number,sizeof(number),"%02d",(n - nmhd_));
+        std::string vname;
+        vname.assign("scal");
+        vname.append(number);
+        outvars.emplace_back(vname,n,&(pm->pmb_pack->pmhd->w0));
+      }
+      }
+      break;
+    case OutputVariable::mhd_wall:
+      {
+      if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
+      outvars.emplace_back("density",0,&(pm->pmb_pack->pmhd->w0));
+      outvars.emplace_back("velocity_x",1,&(pm->pmb_pack->pmhd->w0));
+      outvars.emplace_back("velocity_y",2,&(pm->pmb_pack->pmhd->w0));
+      outvars.emplace_back("velocity_z",3,&(pm->pmb_pack->pmhd->w0));
+      if (pm->pmb_pack->pmhd->peos->eos_data.is_adiabatic) {
+        outvars.emplace_back("pressure",4,&(pm->pmb_pack->pmhd->w0));
+      }
+      int nmhd_ =  pm->pmb_pack->pmhd->nmhd;
+      outvars.emplace_back("cell_centered_B_x",0,&(pm->pmb_pack->pmhd->bcc0));
+      outvars.emplace_back("cell_centered_B_y",1,&(pm->pmb_pack->pmhd->bcc0));
+      outvars.emplace_back("cell_centered_B_z",2,&(pm->pmb_pack->pmhd->bcc0));
+      int nvars = nmhd_ + pm->pmb_pack->pmhd->nscalars;
+      for (int n=nmhd_; n<nvars; ++n) {
+        char number[2];
+        std::snprintf(number,sizeof(number),"%02d",(n - nmhd_));
+        std::string vname;
+        vname.assign("scal");
+        vname.append(number);
+        outvars.emplace_back(vname,n,&(pm->pmb_pack->pmhd->w0));
+      }
+      }
       break;
 
     // Load turbulent forcing
