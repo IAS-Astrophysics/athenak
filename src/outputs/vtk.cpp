@@ -13,6 +13,7 @@
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -111,7 +112,8 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   header_offset = msg.str().size();}
 
   {std::stringstream msg;
-  msg << "ORIGIN " << pm->mesh_size.x1min << " "
+  msg << std::scientific << std::setprecision(std::numeric_limits<Real>::max_digits10 - 1)
+      << "ORIGIN " << pm->mesh_size.x1min << " "
                    << pm->mesh_size.x2min << " "
                    << pm->mesh_size.x3min << " " <<  std::endl
       << "SPACING " << pm->mesh_size.dx1 << " "
