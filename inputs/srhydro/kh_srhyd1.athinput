@@ -1,4 +1,4 @@
-# Athena++ (Kokkos version) input file for SR hydro KH test
+# Athena++ (Kokkos version) input file for SR hydro KH test, iprob=1
 
 <comment>
 problem   = Kelvin-Helmholtz instability

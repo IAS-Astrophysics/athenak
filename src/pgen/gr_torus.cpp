@@ -22,9 +22,9 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
-#include "mesh/mesh_positions.hpp"
 #include "coordinates/coordinates.hpp"
 #include "coordinates/cartesian_ks.hpp"
+#include "coordinates/cell_locations.hpp"
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 
@@ -104,24 +104,22 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
   
 
   // capture variables for kernel
-  int &nx1 = pmbp->mb_cells.nx1;
-  int &nx2 = pmbp->mb_cells.nx2;
-  int &nx3 = pmbp->mb_cells.nx3;
-  int is = pmbp->mb_cells.is; int ie = pmbp->mb_cells.ie;
-  int js = pmbp->mb_cells.js; int je = pmbp->mb_cells.je;
-  int ks = pmbp->mb_cells.ks; int ke = pmbp->mb_cells.ke;
-  auto &size = pmbp->pmb->mbsize;
+  auto &indcs = pmbp->coord.coord_data.mb_indcs;
+  int &is = indcs.is; int &ie = indcs.ie;
+  int &js = indcs.js; int &je = indcs.je;
+  int &ks = indcs.ks; int &ke = indcs.ke;
   int nmb1 = pmbp->nmb_thispack - 1;
 
   // initialize Hydro primitive variables ------------------------------------------------
   if (pmbp->phydro != nullptr) {
     auto w0_ = pmbp->phydro->w0;
     EOS_Data &eos = pmbp->phydro->peos->eos_data;
+    auto &coord = pmbp->coord.coord_data;
     Real gm1 = eos.gamma - 1.0;
 
     // Get mass and spin of black hole
-    mass = pmbp->phydro->pcoord->bh_mass;
-    spin = pmbp->phydro->pcoord->bh_spin;
+    mass = coord.bh_mass;
+    spin = coord.bh_spin;
 
     // compute angular momentum give radius of pressure maximum
     l_peak = CalculateLFromRPeak(r_peak);
@@ -132,13 +130,24 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
     Real pgas_over_rho_peak = gm1/eos.gamma * (exp(log_h_peak)-1.0);
     Real rho_peak = pow(pgas_over_rho_peak/k_adi, 1.0/gm1) / rho_max;
 
-   Kokkos::Random_XorShift64_Pool<> rand_pool64(5374857);
+    Kokkos::Random_XorShift64_Pool<> rand_pool64(5374857);
     par_for("pgen_torus1", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i)
       {
-        Real x1v = CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
-        Real x2v = CellCenterX(j-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
-        Real x3v = CellCenterX(k-ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
+        Real &x1min = coord.mb_size.d_view(m).x1min;
+        Real &x1max = coord.mb_size.d_view(m).x1max;
+        int nx1 = coord.mb_indcs.nx1;
+        Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+
+        Real &x2min = coord.mb_size.d_view(m).x2min;
+        Real &x2max = coord.mb_size.d_view(m).x2max;
+        int nx2 = coord.mb_indcs.nx2;
+        Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+
+        Real &x3min = coord.mb_size.d_view(m).x3min;
+        Real &x3max = coord.mb_size.d_view(m).x3max;
+        int nx3 = coord.mb_indcs.nx3;
+        Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
         // Calculate Boyer-Lindquist coordinates of cell
         Real r, theta, phi;
@@ -207,8 +216,9 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
       }
     );
 
-    // Initialize conserved values
-    peos->PrimitiveToConserved(phydro->w, bb, phydro->u, pcoord, il, iu, jl, ju, kl, ku);
+    // Convert primitives to conserved
+    auto &u0 = pmbp->phydro->u0;
+    pmbp->phydro->peos->PrimToCons(w0_, u0);
 
   } // end hydro initialization
 
