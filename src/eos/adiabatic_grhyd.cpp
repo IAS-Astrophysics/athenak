@@ -18,14 +18,14 @@
 
 //----------------------------------------------------------------------------------------
 // ctor: also calls EOS base class constructor
-    
+
 AdiabaticGRHydro::AdiabaticGRHydro(MeshBlockPack *pp, ParameterInput *pin)
   : EquationOfState(pp, pin)
-{      
+{
   eos_data.is_adiabatic = true;
   eos_data.gamma = pin->GetReal("eos","gamma");
   eos_data.iso_cs = 0.0;
-}  
+}
 
 //----------------------------------------------------------------------------------------
 // \!fn Real EquationC22()
@@ -35,13 +35,13 @@ AdiabaticGRHydro::AdiabaticGRHydro(MeshBlockPack *pp, ParameterInput *pin)
 KOKKOS_INLINE_FUNCTION
 Real EquationC22(Real z, Real &u_d, Real q, Real r, Real gm1, Real pfloor)
 {
-  Real const w = sqrt(1.0 + z*z);         // (C15)
-  Real const wd = u_d/w;                  // (C15)
-  Real eps = w*q - z*r + (z*z)/(1.0 + w); // (C16)
+  Real const w = sqrt(1.0 + z*z);  // (C15)
+  Real const wd = u_d/w;  // (C15)
+  Real eps = w*q - z*r + (z*z)/(1.0 + w);  // (C16)
 
   //NOTE: The following generalizes to ANY equation of state
-  eps = fmax(pfloor/(wd*gm1), eps);                          // (C18)
-  Real const h = (1.0 + eps) * (1.0 + (gm1*eps)/(1.0+eps));   // (C1) & (C21)
+  eps = fmax(pfloor/(wd*gm1), eps);  // (C18)
+  Real const h = (1.0 + eps) * (1.0 + (gm1*eps)/(1.0+eps));  // (C1) & (C21)
 
   return (z - r/h); // (C22)
 }
@@ -49,7 +49,7 @@ Real EquationC22(Real z, Real &u_d, Real q, Real r, Real gm1, Real pfloor)
 //----------------------------------------------------------------------------------------
 // \!fn void ConsToPrim()
 // \brief Converts conserved into primitive variables.
-// Operates over entire MeshBlock, including ghost cells.  
+// Operates over entire MeshBlock, including ghost cells.
 
 void AdiabaticGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
 {
@@ -65,7 +65,7 @@ void AdiabaticGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &pr
   int &nscal = pmy_pack->phydro->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
   auto coord = pmy_pack->coord.coord_data;
-  Real gm1 = eos_data.gamma - 1.0; 
+  Real gm1 = eos_data.gamma - 1.0;
   Real pfloor_ = eos_data.pressure_floor;
   Real &dfloor_ = eos_data.density_floor;
 
@@ -77,17 +77,17 @@ void AdiabaticGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &pr
   par_for("hyd_con2prim", DevExeSpace(), 0, (nmb-1), 0, (n3-1), 0, (n2-1), 0, (n1-1),
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
-      Real u_d  = cons(m, IDN,k,j,i);
-      Real u_e  = cons(m, IEN,k,j,i);
-      Real u_m1 = cons(m, IM1,k,j,i);
-      Real u_m2 = cons(m, IM2,k,j,i);
-      Real u_m3 = cons(m, IM3,k,j,i);
+      Real u_d  = cons(m,IDN,k,j,i);
+      Real u_e  = cons(m,IEN,k,j,i);
+      Real u_m1 = cons(m,IM1,k,j,i);
+      Real u_m2 = cons(m,IM2,k,j,i);
+      Real u_m3 = cons(m,IM3,k,j,i);
 
-      Real& w_d  = prim(m, IDN,k,j,i);
-      Real& w_p  = prim(m, IPR,k,j,i);
-      Real& w_vx = prim(m, IVX,k,j,i);
-      Real& w_vy = prim(m, IVY,k,j,i);
-      Real& w_vz = prim(m, IVZ,k,j,i);
+      Real& w_d  = prim(m,IDN,k,j,i);
+      Real& w_p  = prim(m,IPR,k,j,i);
+      Real& w_vx = prim(m,IVX,k,j,i);
+      Real& w_vy = prim(m,IVY,k,j,i);
+      Real& w_vz = prim(m,IVZ,k,j,i);
 
       Real &x1min = coord.mb_size.d_view(m).x1min;
       Real &x1max = coord.mb_size.d_view(m).x1max;
@@ -107,60 +107,61 @@ void AdiabaticGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &pr
       // Extract components of metric
       Real g_[NMETRIC], gi_[NMETRIC];
       ComputeMetricAndInverse(x1v, x2v, x3v, coord.bh_spin, g_, gi_);
-
-      // Need to convert the conservatives
-
       // We are evolving T^t_t, but the SR C2P algorithm is only consistent
       // with alpha^2 T^{tt}
       // compute T^{tt} = g^0\mu T^t_\mu
-      
-      u_e = gi_[I00] * u_e + gi_[I01] * u_m1 + gi_[I02] * u_m2 + gi_[I03] * u_m3;
+      u_e = gi_[I00]*u_e + gi_[I01]*u_m1 + gi_[I02]*u_m2 + gi_[I03]*u_m3;
 
       // This is only true if sqrt{-g}=1!
-      u_e *= (-1./gi_[I00]); // Multiply by alpha^2
+      u_e *= (-1./gi_[I00]);  // Multiply by alpha^2
 
       // Need to multiply the conserved density by alpha, so that it
       // contains a lorentz factor
-      
       Real alpha = sqrt(-1.0/gi_[I00]);
       u_d *= alpha;
 
       // Subtract density for consistency with the rest of the algorithm
-      u_e -= u_d;            
-
+      u_e -= u_d;
 
       // Need to treat the conserved momenta. Also they lack an alpha
       // This is only true if sqrt{-g}=1!
-      
       u_m1 *= alpha;
       u_m2 *= alpha;
       u_m3 *= alpha;
-
 
       // apply density floor, without changing momentum or energy
       u_d = (u_d > dfloor_) ?  u_d : dfloor_;
 
       // apply energy floor
-//      Real ee_min = pfloor_/gm1;
-//      u_e = (u_e > ee_min) ?  u_e : ee_min;
-
+      Real ee_min = pfloor_/gm1;
+      u_e = (u_e > ee_min) ?  u_e : ee_min;
 
       // Recast all variables (eq C2)
-      // Variables q and r defined in anonymous namspace: global this file
+      // Need to raise indices on u_m1, which transforms using the spatial
+      // 3-metric.  This is slightly more involved
+      //
+      // Gourghoulon says: g^ij = gamma^ij - beta^i beta^j/alpha^2
+      //       g^0i = beta^i/alpha^2
+      //       g^00 = -1/ alpha^2
+      // Hence gamma^ij =  g^ij - g^0i g^0j/g^00
+      Real m1u = ((gi_[I11] - gi_[I01]*gi_[I01]/gi_[I00])*u_m1 +
+                  (gi_[I12] - gi_[I01]*gi_[I02]/gi_[I00])*u_m2 +
+                  (gi_[I13] - gi_[I01]*gi_[I03]/gi_[I00])*u_m3);  // (C26)
+
+      Real m2u = ((gi_[I12] - gi_[I01]*gi_[I02]/gi_[I00])*u_m1 +
+                  (gi_[I22] - gi_[I02]*gi_[I02]/gi_[I00])*u_m2 +
+                  (gi_[I23] - gi_[I02]*gi_[I03]/gi_[I00])*u_m3);  // (C26)
+
+      Real m3u = ((gi_[I13] - gi_[I01]*gi_[I03]/gi_[I00])*u_m1 +
+                  (gi_[I23] - gi_[I02]*gi_[I03]/gi_[I00])*u_m2 +
+                  (gi_[I33] - gi_[I03]*gi_[I03]/gi_[I00])*u_m3);  // (C26)
+
       Real q = u_e/u_d;
-//      Real r = sqrt(SQR(u_m1) + SQR(u_m2) + SQR(u_m3))/u_d;
-
-      Real r   = g_[I11]*SQR(u_m1) + 2.0*g_[I12]*u_m1*u_m2 + 2.0*g_[I13]*u_m1*u_m3
-               + g_[I22]*SQR(u_m1) + 2.0*g_[I23]*u_m1*u_m3
-               + g_[I33]*SQR(u_m1);
-
-      r = sqrt(r)/u_d;
-
-      Real kk = r/(1.+q);
+      Real r = sqrt(u_m1*m1u + u_m2*m2u + u_m3*m3u)/u_d;
 
       // Enforce lower velocity bound (eq. C13). This bound combined with a floor on
       // the value of p will guarantee "some" result of the inversion
-      kk = fmin(2.* sqrt(v_sq_max)/(1.0 + v_sq_max), kk);
+      Real kk = fmin(2.* sqrt(v_sq_max)/(1.0 + v_sq_max) - tol, r/(1.+q));
 
       // Compute bracket (C23)
       auto zm = 0.5*kk/sqrt(1.0 - 0.25*kk*kk);
@@ -179,96 +180,43 @@ void AdiabaticGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &pr
       Real z = 0.5*(zm + zp);
 
       for (int ii=0; ii < iterations; ++ii) {
-	z =  (zm*fp - zp*fm)/(fp-fm);  // linear interpolation to point f(z)=0
+        z =  (zm*fp - zp*fm)/(fp-fm);  // linear interpolation to point f(z)=0
         Real f = EquationC22(z, u_d, q, r, gm1, pfloor_);
 
         // Quit if convergence reached
-	// NOTE: both z and f are of order unity
-	if ((fabs(zm-zp) < tol ) || (fabs(f) < tol )){
-/**
-std::cout << "|zm-zp|=" <<fabs(zm-zp)<<" |f|="<< fabs(f) << "for i=" <<  ii << std::endl;
-**/
-	    break;
-	}
+        // NOTE: both z and f are of order unity
+        if ((fabs(zm-zp) < tol ) || (fabs(f) < tol )) {
+          break;
+        }
 
-        // assign zm-->zp if root bracketed by [z,zp]
-	if (f * fp < 0.0) {
-	   zm = zp;
-	   fm = fp;
-	   zp = z;
-	   fp = f;
-
-        // assign zp-->z if root bracketed by [zm,z]
-	} else {
-	   fm = 0.5*fm; // 1/2 comes from "Illinois algorithm" to accelerate convergence
-	   zp = z;
-	   fp = f;
-	}
+        if (f*fp < 0.0) {  // assign zm-->zp if root bracketed by [z,zp]
+           zm = zp;
+           fm = fp;
+           zp = z;
+           fp = f;
+        } else {  // assign zp-->z if root bracketed by [zm,z]
+           fm = 0.5*fm;  // 1/2 comes from "Illinois algorithm" to accelerate convergence
+           zp = z;
+           fp = f;
+        }
       }
 
       // iterations ended, compute primitives from resulting value of z
-      Real const w = sqrt(1.0 + z*z); // (C15)
-      w_d = u_d/w;                    // (C15)
-
-      //NOTE: The following generalizes to ANY equation of state
-      Real eps = w*q - z*r + (z*z)/(1.0 + w); // (C16)
-      eps = fmax(pfloor_/w_d/gm1, eps);                 // (C18)
-      Real h = (1. + eps) * (1.0 + (gm1*eps)/(1.+eps)); // (C1) & (C21)
+      Real const w = sqrt(1.0 + z*z);  // (C15)
+      w_d = u_d/w;  // (C15)
+      Real eps = w*q - z*r + (z*z)/(1.0 + w);  // (C16)
+      eps = fmax(pfloor_/w_d/gm1, eps);  // (C18)
+      Real h = (1.0 + eps) * (1.0 + (gm1*eps)/(1.0+eps)); // (C1) & (C21)
       w_p = w_d*gm1*eps;
-
       Real const conv = 1.0/(h*u_d); // (C26)
-
-
-      // Need to raise indices on u_m1, which transforms using the spatial
-      // 3-metric.
-      // This is slightly more involved
-      //
-      // Gourghoulon says: g^ij = gamma^ij - beta^i beta^j/alpha^2
-      // 		   g^0i = beta^i/alpha^2
-      // 		   g^00 = -1/ alpha^2
-      // Hence gamma^ij =  g^ij - g^0i g^0j/g^00
-      
-      w_vx = conv *((gi_[I11] - gi_[I01]*gi_[I01]/gi_[I00]) * u_m1 + 
-		    (gi_[I12] - gi_[I01]*gi_[I02]/gi_[I00]) * u_m2 + 
-		    (gi_[I13] - gi_[I01]*gi_[I03]/gi_[I00]) * u_m3);           // (C26)
-
-      w_vy = conv *((gi_[I12] - gi_[I01]*gi_[I02]/gi_[I00]) * u_m1 + 
-		    (gi_[I22] - gi_[I02]*gi_[I02]/gi_[I00]) * u_m2 + 
-		    (gi_[I23] - gi_[I02]*gi_[I03]/gi_[I00]) * u_m3);           // (C26)
-
-      w_vz = conv *((gi_[I13] - gi_[I01]*gi_[I03]/gi_[I00]) * u_m1 + 
-		    (gi_[I23] - gi_[I02]*gi_[I03]/gi_[I00]) * u_m2 + 
-		    (gi_[I33] - gi_[I03]*gi_[I03]/gi_[I00]) * u_m3);           // (C26)
-
-
-      // These are the covariant velocities: W v_i
-      // Need to raise them using the three metric.
-      
-
+      w_vx = conv*m1u;  // (C26)
+      w_vy = conv*m2u;  // (C26)
+      w_vz = conv*m3u;  // (C26)
 
       // convert scalars (if any)
       for (int n=nhyd; n<(nhyd+nscal); ++n) {
         prim(m,n,k,j,i) = cons(m,n,k,j,i)/u_d;
       }
-
-      // TODO error handling
-      // The expressions below are not correct for GR
-//
-//      if (false)
-//      {
-//	Real gamma_adi = gm1+1.;
-//	Real rho_eps = w_p / gm1;
-//	//FIXME ERM: Only ideal fluid for now
-//        Real wgas = w_d + gamma_adi / gm1 *w_p;
-//	
-//	auto gamma = sqrt(1. +z*z);
-//        cons(m,IDN,k,j,i) = w_d * gamma;
-//        cons(m,IEN,k,j,i) = wgas*gamma*gamma - w_p - w_d * gamma; 
-//        cons(m,IM1,k,j,i) = wgas * gamma * w_vx;
-//        cons(m,IM2,k,j,i) = wgas * gamma * w_vy;
-//        cons(m,IM3,k,j,i) = wgas * gamma * w_vz;
-//      }
-
     }
   );
 
