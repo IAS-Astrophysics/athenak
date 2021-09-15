@@ -28,14 +28,12 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, Driver *pd)
   // else read name of built-in pgen from <problem> block in input file, and call
   std::string pgen_fun_name = pin->GetOrAddString("problem", "pgen_name", "none");
 
-  if (pgen_fun_name.compare("shock_tube") == 0) {
-    pgen_func_ = &ProblemGenerator::ShockTube_; 
-  } else if (pgen_fun_name.compare("kh_rel") == 0) {
-    pgen_func_ = &ProblemGenerator::KH_Rel_; 
-  } else if (pgen_fun_name.compare("advection") == 0) {
+  if (pgen_fun_name.compare("advection") == 0) {
     pgen_func_ = &ProblemGenerator::Advection_;
   } else if (pgen_fun_name.compare("linear_wave") == 0) {
     pgen_func_ = &ProblemGenerator::LinearWave_;
+  } else if (pgen_fun_name.compare("shock_tube") == 0) {
+    pgen_func_ = &ProblemGenerator::ShockTube_; 
   } else if (pgen_fun_name.compare("implode") == 0) {
     pgen_func_ = &ProblemGenerator::LWImplode_;
   } else if (pgen_fun_name.compare("orszag_tang") == 0) {

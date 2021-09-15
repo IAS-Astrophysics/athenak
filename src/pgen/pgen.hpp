@@ -22,10 +22,9 @@ class ProblemGenerator {
   void (ProblemGenerator::*pgen_func_) (MeshBlockPack*, ParameterInput*);
 
   // predefined problem generator functions
-  void ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin);
-  void KH_Rel_(MeshBlockPack *pmbp, ParameterInput *pin);
   void Advection_(MeshBlockPack *pmbp, ParameterInput *pin);
   void LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin);
+  void ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin);
   void LWImplode_(MeshBlockPack *pmbp, ParameterInput *pin);
   void OrszagTang_(MeshBlockPack *pmbp, ParameterInput *pin);
 
