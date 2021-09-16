@@ -14,17 +14,12 @@
 #include "cell_locations.hpp"
 
 //----------------------------------------------------------------------------------------
-// constructor, parses input file and initializes data structures and parameters
+// constructor, initializes data structures describing MeshBlocks
 
-Coordinates::Coordinates(Mesh *pm, ParameterInput *pin, RegionIndcs indcs,
-                         int igids, int nmb)
+Coordinates::Coordinates(Mesh *pm, RegionIndcs indcs, int igids, int nmb)
   : pmy_mesh(pm),
     coord_data(nmb)
 {
-  // Read mass and spin, with GR
-  coord_data.bh_mass = pin->GetOrAddReal("coord","m",0.0);
-  coord_data.bh_spin = pin->GetOrAddReal("coord","a",0.0);
-
   // initialize MeshBlock cell indices
   coord_data.mb_indcs.ng  = indcs.ng;
   coord_data.mb_indcs.nx1 = indcs.nx1;
@@ -135,6 +130,18 @@ std::cout << "m=" << m <<"  dx1/dx2/dx3=" << mb_size.h_view(m).dx1 << "  " << mb
 
 //----------------------------------------------------------------------------------------
 //! \fn
+// Read properties of metric from input file for GR.  This function called from Hydro
+// and MHD constructors, but only when GR is specified
+
+void Coordinates::InitMetric(ParameterInput *pin)
+{
+  coord_data.is_minkowski = pin->GetOrAddBoolean("coord","minkowski",false);
+  coord_data.bh_mass = pin->GetReal("coord","m");
+  coord_data.bh_spin = pin->GetReal("coord","a");
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn
 // Coordinate (geometric) source term function for GR hydrodynamics
 
 void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim, const EOS_Data &eos,
@@ -170,7 +177,7 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim, const EOS_Data &e
       Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
       Real g_[NMETRIC], gi_[NMETRIC];
-      ComputeMetricAndInverse(x1v, x2v, x3v, coord.bh_spin, g_, gi_);
+      ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, coord.bh_spin, g_, gi_);
 
       // Extract primitives
       const Real &rho  = prim(m,IDN,k,j,i);
@@ -207,7 +214,8 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim, const EOS_Data &e
 
       // Calculate source terms
       Real dg_dx1[NMETRIC], dg_dx2[NMETRIC], dg_dx3[NMETRIC];
-      ComputeMetricDerivatives(x1v, x2v, x3v, coord.bh_spin, dg_dx1, dg_dx2, dg_dx3);
+      ComputeMetricDerivatives(x1v, x2v, x3v, coord.is_minkowski, coord.bh_spin,
+                               dg_dx1, dg_dx2, dg_dx3);
 
       Real s_1 = 0.0, s_2 = 0.0, s_3 = 0.0;
       s_1 += dg_dx1[I00] * tt[I00];
@@ -309,7 +317,7 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim,
       Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
       Real g_[NMETRIC], gi_[NMETRIC];
-      ComputeMetricAndInverse(x1v, x2v, x3v, coord.bh_spin, g_, gi_);
+      ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, coord.bh_spin, g_, gi_);
 
       // create references to components of metric; formatting reflects structure
       const Real
@@ -375,7 +383,8 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim,
 
       // Calculate source terms
       Real dg_dx1[NMETRIC], dg_dx2[NMETRIC], dg_dx3[NMETRIC];
-      ComputeMetricDerivatives(x1v, x2v, x3v, coord.bh_spin, dg_dx1, dg_dx2, dg_dx3);
+      ComputeMetricDerivatives(x1v, x2v, x3v, coord.is_minkowski, coord.bh_spin,
+                               dg_dx1, dg_dx2, dg_dx3);
 
       Real s_1 = 0.0, s_2 = 0.0, s_3 = 0.0;
       s_1 += dg_dx1[I00] * tt[I00];

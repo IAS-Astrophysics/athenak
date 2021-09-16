@@ -106,7 +106,7 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
 
       // Extract components of metric
       Real g_[NMETRIC], gi_[NMETRIC];
-      ComputeMetricAndInverse(x1v, x2v, x3v, coord.bh_spin, g_, gi_);
+      ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, coord.bh_spin, g_, gi_);
       // We are evolving T^t_t, but the SR C2P algorithm is only consistent
       // with alpha^2 T^{tt}
       // compute T^{tt} = g^0\mu T^t_\mu
@@ -259,7 +259,7 @@ void IdealGRHydro::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &
       Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
       Real g_[NMETRIC], gi_[NMETRIC];
-      ComputeMetricAndInverse(x1v, x2v, x3v, coord.bh_spin, g_, gi_);
+      ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, coord.bh_spin, g_, gi_);
 
       const Real
         &g_00 = g_[I00], &g_01 = g_[I01], &g_02 = g_[I02], &g_03 = g_[I03],

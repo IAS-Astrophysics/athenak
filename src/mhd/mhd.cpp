@@ -53,7 +53,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     std::exit(EXIT_FAILURE);
   }
 
-  // construct EOS object (no default)
+  // (2) construct EOS object (no default)
   {std::string eqn_of_state = pin->GetString("mhd","eos");
 
   // ideal gas EOS
@@ -73,7 +73,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     std::exit(EXIT_FAILURE);
   }}
 
-  // Initialize number of scalars
+  // (3) Initialize scalars, diffusion, source terms
   nscalars = pin->GetOrAddInteger("mhd","nscalars",0);
 
   // Viscosity (only constructed if needed)
@@ -93,10 +93,9 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   // Source terms (constructor parses input file to initialize only srcterms needed)
   psrc = new SourceTerms("mhd", ppack, pin);
 
-  // read time-evolution option [already error checked in driver constructor]
+  // (4) read time-evolution option [already error checked in driver constructor]
+  // Then initialize memory and algorithms for reconstruction and Riemann solvers
   std::string evolution_t = pin->GetString("time","evolution");
-
-  // (2) Now initialize memory/algorithms
 
   // allocate memory for conserved and primitive variables
   int nmb = ppack->nmb_thispack;
@@ -221,6 +220,9 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     Kokkos::realloc(e2_cc, nmb, ncells3, ncells2, ncells1);
     Kokkos::realloc(e3_cc, nmb, ncells3, ncells2, ncells1);
   }
+
+  // (5) initialize metric (GR only)
+  if (is_general_relativistic) {pmy_pack->coord.InitMetric(pin);}
 }
 
 //----------------------------------------------------------------------------------------

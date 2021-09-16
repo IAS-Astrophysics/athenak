@@ -28,10 +28,13 @@ struct EOS_Data;
 
 struct CoordData
 {
+  RegionIndcs mb_indcs;             // indices (same for all MeshBlocks)
+  DualArray1D<RegionSize> mb_size;  // physical size (array of length [# of MBs])
+
+  // following data is only used in GR calculations to compute metric
+  bool is_minkowski;                // flag to specify Minkowski (flat) space
   Real bh_mass;                     // needed for GR metric
   Real bh_spin;                     // needed for GR metric
-  RegionIndcs mb_indcs;             // indices are the same for all MeshBlocks
-  DualArray1D<RegionSize> mb_size;  // array of length (# of MeshBlocks)
 
   // constructor
   CoordData(int nmb) : mb_size("size",nmb) {}
@@ -44,12 +47,13 @@ struct CoordData
 class Coordinates
 {
 public:
-  Coordinates(Mesh *pm, ParameterInput *pin, RegionIndcs indcs, int gids, int nmb);
+  Coordinates(Mesh *pm, RegionIndcs indcs, int gids, int nmb);
   ~Coordinates() {};
 
   CoordData coord_data;
 
   // functions
+  void InitMetric(ParameterInput *pin);
   void AddCoordTerms(const DvceArray5D<Real> &w0, const EOS_Data &eos, const Real dt,
                      DvceArray5D<Real> &u0);
   void AddCoordTerms(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc,

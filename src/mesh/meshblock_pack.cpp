@@ -24,7 +24,7 @@ MeshBlockPack::MeshBlockPack(Mesh *pm, ParameterInput *pin, int igids, int igide
   : pmesh(pm),
     gids(igids),
     gide(igide),
-    coord(pm, pin, indcs, igids, (igide-igids+1))
+    coord(pm, indcs, igids, (igide-igids+1))
 {
   nmb_thispack = igide - igids + 1;
 
