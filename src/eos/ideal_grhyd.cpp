@@ -66,6 +66,7 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
   int &nmb = pmy_pack->nmb_thispack;
   auto coord = pmy_pack->coord.coord_data;
   Real gm1 = eos_data.gamma - 1.0;
+  Real gamma_prime = eos_data.gamma/gm1;
   Real pfloor_ = eos_data.pressure_floor;
   Real &dfloor_ = eos_data.density_floor;
 
@@ -104,118 +105,157 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
       int nx3 = coord.mb_indcs.nx3;
       Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
+      Real R = sqrt(SQR(x1v) + SQR(x2v) + SQR(x3v));
+
       // Extract components of metric
       Real g_[NMETRIC], gi_[NMETRIC];
       ComputeMetricAndInverse(x1v, x2v, x3v, coord.bh_spin, g_, gi_);
-      // We are evolving T^t_t, but the SR C2P algorithm is only consistent
-      // with alpha^2 T^{tt}
-      // compute T^{tt} = g^0\mu T^t_\mu
-      u_e = gi_[I00]*u_e + gi_[I01]*u_m1 + gi_[I02]*u_m2 + gi_[I03]*u_m3;
 
-      // This is only true if sqrt{-g}=1!
-      u_e *= (-1./gi_[I00]);  // Multiply by alpha^2
+      if (R > coord.bh_Rmin) {
+        // We are evolving T^t_t, but the SR C2P algorithm is only consistent
+        // with alpha^2 T^{tt}
+        // compute T^{tt} = g^0\mu T^t_\mu
+        u_e = gi_[I00]*u_e + gi_[I01]*u_m1 + gi_[I02]*u_m2 + gi_[I03]*u_m3;
 
-      // Need to multiply the conserved density by alpha, so that it
-      // contains a lorentz factor
-      Real alpha = sqrt(-1.0/gi_[I00]);
-      u_d *= alpha;
+        // This is only true if sqrt{-g}=1!
+        u_e *= (-1./gi_[I00]);  // Multiply by alpha^2
 
-      // Subtract density for consistency with the rest of the algorithm
-      u_e -= u_d;
+        // Need to multiply the conserved density by alpha, so that it
+        // contains a lorentz factor
+        Real alpha = sqrt(-1.0/gi_[I00]);
+        u_d *= alpha;
 
-      // Need to treat the conserved momenta. Also they lack an alpha
-      // This is only true if sqrt{-g}=1!
-      u_m1 *= alpha;
-      u_m2 *= alpha;
-      u_m3 *= alpha;
+        // Subtract density for consistency with the rest of the algorithm
+        u_e -= u_d;
 
-      // apply density floor, without changing momentum or energy
-      u_d = (u_d > dfloor_) ?  u_d : dfloor_;
+        // Need to treat the conserved momenta. Also they lack an alpha
+        // This is only true if sqrt{-g}=1!
+        u_m1 *= alpha;
+        u_m2 *= alpha;
+        u_m3 *= alpha;
 
-      // apply energy floor
-      Real ee_min = pfloor_/gm1;
-      u_e = (u_e > ee_min) ?  u_e : ee_min;
+        // apply density floor, without changing momentum or energy
+        u_d = (u_d > dfloor_) ?  u_d : dfloor_;
 
-      // Recast all variables (eq C2)
-      // Need to raise indices on u_m1, which transforms using the spatial
-      // 3-metric.  This is slightly more involved
-      //
-      // Gourghoulon says: g^ij = gamma^ij - beta^i beta^j/alpha^2
-      //       g^0i = beta^i/alpha^2
-      //       g^00 = -1/ alpha^2
-      // Hence gamma^ij =  g^ij - g^0i g^0j/g^00
-      Real m1u = ((gi_[I11] - gi_[I01]*gi_[I01]/gi_[I00])*u_m1 +
-                  (gi_[I12] - gi_[I01]*gi_[I02]/gi_[I00])*u_m2 +
-                  (gi_[I13] - gi_[I01]*gi_[I03]/gi_[I00])*u_m3);  // (C26)
+        // apply energy floor
+        Real ee_min = pfloor_/gm1;
+        u_e = (u_e > ee_min) ?  u_e : ee_min;
 
-      Real m2u = ((gi_[I12] - gi_[I01]*gi_[I02]/gi_[I00])*u_m1 +
-                  (gi_[I22] - gi_[I02]*gi_[I02]/gi_[I00])*u_m2 +
-                  (gi_[I23] - gi_[I02]*gi_[I03]/gi_[I00])*u_m3);  // (C26)
+        // Recast all variables (eq C2)
+        // Need to raise indices on u_m1, which transforms using the spatial
+        // 3-metric.  This is slightly more involved
+        //
+        // Gourghoulon says: g^ij = gamma^ij - beta^i beta^j/alpha^2
+        //       g^0i = beta^i/alpha^2
+        //       g^00 = -1/ alpha^2
+        // Hence gamma^ij =  g^ij - g^0i g^0j/g^00
+        Real m1u = ((gi_[I11] - gi_[I01]*gi_[I01]/gi_[I00])*u_m1 +
+                    (gi_[I12] - gi_[I01]*gi_[I02]/gi_[I00])*u_m2 +
+                    (gi_[I13] - gi_[I01]*gi_[I03]/gi_[I00])*u_m3);  // (C26)
 
-      Real m3u = ((gi_[I13] - gi_[I01]*gi_[I03]/gi_[I00])*u_m1 +
-                  (gi_[I23] - gi_[I02]*gi_[I03]/gi_[I00])*u_m2 +
-                  (gi_[I33] - gi_[I03]*gi_[I03]/gi_[I00])*u_m3);  // (C26)
+        Real m2u = ((gi_[I12] - gi_[I01]*gi_[I02]/gi_[I00])*u_m1 +
+                    (gi_[I22] - gi_[I02]*gi_[I02]/gi_[I00])*u_m2 +
+                    (gi_[I23] - gi_[I02]*gi_[I03]/gi_[I00])*u_m3);  // (C26)
 
-      Real q = u_e/u_d;
-      Real r = sqrt(u_m1*m1u + u_m2*m2u + u_m3*m3u)/u_d;
+        Real m3u = ((gi_[I13] - gi_[I01]*gi_[I03]/gi_[I00])*u_m1 +
+                    (gi_[I23] - gi_[I02]*gi_[I03]/gi_[I00])*u_m2 +
+                    (gi_[I33] - gi_[I03]*gi_[I03]/gi_[I00])*u_m3);  // (C26)
 
-      // Enforce lower velocity bound (eq. C13). This bound combined with a floor on
-      // the value of p will guarantee "some" result of the inversion
-      Real kk = fmin(2.* sqrt(v_sq_max)/(1.0 + v_sq_max) - tol, r/(1.+q));
+        Real q = u_e/u_d;
+        Real r = sqrt(u_m1*m1u + u_m2*m2u + u_m3*m3u)/u_d;
 
-      // Compute bracket (C23)
-      auto zm = 0.5*kk/sqrt(1.0 - 0.25*kk*kk);
-      auto zp = kk/sqrt(1.0 - kk*kk);
+        // Enforce lower velocity bound (eq. C13). This bound combined with a floor on
+        // the value of p will guarantee "some" result of the inversion
+        Real kk = fmin(2.* sqrt(v_sq_max)/(1.0 + v_sq_max) - tol, r/(1.+q));
 
-      // Evaluate master function (eq C22) at bracket values
-      Real fm = EquationC22(zm, u_d, q, r, gm1, pfloor_);
-      Real fp = EquationC22(zp, u_d, q, r, gm1, pfloor_);
+        // Compute bracket (C23)
+        auto zm = 0.5*kk/sqrt(1.0 - 0.25*kk*kk);
+        auto zp = kk/sqrt(1.0 - kk*kk);
 
-      // For simplicity on the GPU, find roots using the false position method
-      int iterations = max_iterations;
-      // If bracket within tolerances, don't bother doing any iterations
-      if ((fabs(zm-zp) < tol) || ((fabs(fm) + fabs(fp)) < 2.0*tol)) {
-        iterations = -1;
-      }
-      Real z = 0.5*(zm + zp);
+        // Evaluate master function (eq C22) at bracket values
+        Real fm = EquationC22(zm, u_d, q, r, gm1, pfloor_);
+        Real fp = EquationC22(zp, u_d, q, r, gm1, pfloor_);
 
-      for (int ii=0; ii < iterations; ++ii) {
-        z =  (zm*fp - zp*fm)/(fp-fm);  // linear interpolation to point f(z)=0
-        Real f = EquationC22(z, u_d, q, r, gm1, pfloor_);
+        // For simplicity on the GPU, find roots using the false position method
+        int iterations = max_iterations;
+        // If bracket within tolerances, don't bother doing any iterations
+        if ((fabs(zm-zp) < tol) || ((fabs(fm) + fabs(fp)) < 2.0*tol)) {
+          iterations = -1;
+        }
+        Real z = 0.5*(zm + zp);
 
-        // Quit if convergence reached
-        // NOTE: both z and f are of order unity
-        if ((fabs(zm-zp) < tol ) || (fabs(f) < tol )) {
-          break;
+        for (int ii=0; ii < iterations; ++ii) {
+          z =  (zm*fp - zp*fm)/(fp-fm);  // linear interpolation to point f(z)=0
+          Real f = EquationC22(z, u_d, q, r, gm1, pfloor_);
+
+          // Quit if convergence reached
+          // NOTE: both z and f are of order unity
+          if ((fabs(zm-zp) < tol ) || (fabs(f) < tol )) {
+            break;
+          }
+
+          if (f*fp < 0.0) {  // assign zm-->zp if root bracketed by [z,zp]
+             zm = zp;
+             fm = fp;
+             zp = z;
+             fp = f;
+          } else {  // assign zp-->z if root bracketed by [zm,z]
+             fm = 0.5*fm;  // 1/2 comes from "Illinois algorithm" to accelerate convergence
+             zp = z;
+             fp = f;
+          }
         }
 
-        if (f*fp < 0.0) {  // assign zm-->zp if root bracketed by [z,zp]
-           zm = zp;
-           fm = fp;
-           zp = z;
-           fp = f;
-        } else {  // assign zp-->z if root bracketed by [zm,z]
-           fm = 0.5*fm;  // 1/2 comes from "Illinois algorithm" to accelerate convergence
-           zp = z;
-           fp = f;
+        // iterations ended, compute primitives from resulting value of z
+        Real const w = sqrt(1.0 + z*z);  // (C15)
+        w_d = u_d/w;  // (C15)
+        Real eps = w*q - z*r + (z*z)/(1.0 + w);  // (C16)
+        eps = fmax(pfloor_/w_d/gm1, eps);  // (C18)
+        Real h = (1.0 + eps) * (1.0 + (gm1*eps)/(1.0+eps)); // (C1) & (C21)
+        w_p = w_d*gm1*eps;
+        Real const conv = 1.0/(h*u_d); // (C26)
+        w_vx = conv*m1u;  // (C26)
+        w_vy = conv*m2u;  // (C26)
+        w_vz = conv*m3u;  // (C26)
+
+        // convert scalars (if any)
+        for (int n=nhyd; n<(nhyd+nscal); ++n) {
+          prim(m,n,k,j,i) = cons(m,n,k,j,i)/u_d;
         }
-      }
+      } else {
+        const Real
+          &g_00 = g_[I00], &g_01 = g_[I01], &g_02 = g_[I02], &g_03 = g_[I03],
+          &g_10 = g_[I01], &g_11 = g_[I11], &g_12 = g_[I12], &g_13 = g_[I13],
+          &g_20 = g_[I02], &g_21 = g_[I12], &g_22 = g_[I22], &g_23 = g_[I23],
+          &g_30 = g_[I03], &g_31 = g_[I13], &g_32 = g_[I23], &g_33 = g_[I33];
 
-      // iterations ended, compute primitives from resulting value of z
-      Real const w = sqrt(1.0 + z*z);  // (C15)
-      w_d = u_d/w;  // (C15)
-      Real eps = w*q - z*r + (z*z)/(1.0 + w);  // (C16)
-      eps = fmax(pfloor_/w_d/gm1, eps);  // (C18)
-      Real h = (1.0 + eps) * (1.0 + (gm1*eps)/(1.0+eps)); // (C1) & (C21)
-      w_p = w_d*gm1*eps;
-      Real const conv = 1.0/(h*u_d); // (C26)
-      w_vx = conv*m1u;  // (C26)
-      w_vy = conv*m2u;  // (C26)
-      w_vz = conv*m3u;  // (C26)
+        // Calculate 4-velocity
+        Real alpha = sqrt(-1.0/gi_[I00]);
+        Real tmp = g_[I11]*w_vx*w_vx + 2.0*g_[I12]*w_vx*w_vy + 2.0*g_[I13]*w_vx*w_vz
+                 + g_[I22]*w_vy*w_vy + 2.0*g_[I23]*w_vy*w_vz
+                 + g_[I33]*w_vz*w_vz;
+        Real gamma = sqrt(1.0 + tmp);
+        Real u0 = gamma/alpha;
+        Real u1 = w_vx - alpha * gamma * gi_[I01];
+        Real u2 = w_vy - alpha * gamma * gi_[I02];
+        Real u3 = w_vz - alpha * gamma * gi_[I03];
+        Real u_0 = g_00*u0 + g_01*u1 + g_02*u2 + g_03*u3;
+        Real u_1 = g_10*u0 + g_11*u1 + g_12*u2 + g_13*u3;
+        Real u_2 = g_20*u0 + g_21*u1 + g_22*u2 + g_23*u3;
+        Real u_3 = g_30*u0 + g_31*u1 + g_32*u2 + g_33*u3;
 
-      // convert scalars (if any)
-      for (int n=nhyd; n<(nhyd+nscal); ++n) {
-        prim(m,n,k,j,i) = cons(m,n,k,j,i)/u_d;
+        // Set conserved quantities
+        Real wgas_u0 = (w_d + gamma_prime * w_p) * u0;
+        cons(m,IDN,k,j,i) = w_d * u0;
+        cons(m,IEN,k,j,i) = wgas_u0 * u_0 + w_p;
+        cons(m,IM1,k,j,i) = wgas_u0 * u_1;
+        cons(m,IM2,k,j,i) = wgas_u0 * u_2;
+        cons(m,IM3,k,j,i) = wgas_u0 * u_3;
+
+        // convert scalars (if any)
+        for (int n=nhyd; n<(nhyd+nscal); ++n) {
+          cons(m,n,k,j,i) = prim(m,n,k,j,i)*u_d;
+        }
       }
     }
   );

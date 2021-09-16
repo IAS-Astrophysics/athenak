@@ -21,9 +21,10 @@ Coordinates::Coordinates(Mesh *pm, ParameterInput *pin, RegionIndcs indcs,
   : pmy_mesh(pm),
     coord_data(nmb)
 {
-  // Read mass and spin, with GR
+  // Read mass, spin, and excision radius with GR
   coord_data.bh_mass = pin->GetOrAddReal("coord","m",0.0);
   coord_data.bh_spin = pin->GetOrAddReal("coord","a",0.0);
+  coord_data.bh_Rmin = pin->GetOrAddReal("coord","Rmin",0.0);
 
   // initialize MeshBlock cell indices
   coord_data.mb_indcs.ng  = indcs.ng;

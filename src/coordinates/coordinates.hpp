@@ -30,6 +30,7 @@ struct CoordData
 {
   Real bh_mass;                     // needed for GR metric
   Real bh_spin;                     // needed for GR metric
+  Real bh_Rmin;                     // needed for GR cons2prim
   RegionIndcs mb_indcs;             // indices are the same for all MeshBlocks
   DualArray1D<RegionSize> mb_size;  // array of length (# of MeshBlocks)
 
