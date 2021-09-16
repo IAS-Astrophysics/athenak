@@ -71,7 +71,10 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
 
       // Lorentz factor (needed to initializve 4-velocity in SR)
       Real u00 = 1.0;
-      auto is_sr = pmbp->phydro->is_special_relativistic;
+      bool is_relativistic = false;
+      if (pmbp->phydro->is_special_relativistic || pmbp->phydro->is_general_relativistic){
+        is_relativistic = true;
+      }
 
       Real dens,pres,vx,vy,vz,scal;
 
@@ -90,7 +93,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
           dens = rho0 - rho1*tanh((x2v-0.5)/sigma);
           vx = -vshear*tanh((x2v-0.5)/sigma);
           vy = -amp*vshear*sin(2.*M_PI*x1v)*exp( -SQR((x2v-0.5)/sigma) );
-          if (is_sr) {
+          if (is_relativistic) {
             u00 = 1.0/sqrt(1.0 - vx*vx - vy*vy);
           }
           scal = 0.0;
@@ -99,7 +102,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
           dens = rho0 + rho1*tanh((x2v-0.5)/sigma);
           vx = vshear*tanh((x2v-0.5)/sigma);
           vy = amp*vshear*sin(2.*M_PI*x1v)*exp( -SQR((x2v-0.5)/sigma) );
-          if (is_sr) {
+          if (is_relativistic) {
             u00 = 1.0/sqrt(1.0 - vx*vx - vy*vy);
           }
           scal = 0.0;
