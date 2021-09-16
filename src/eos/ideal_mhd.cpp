@@ -3,9 +3,8 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file adiabatic_mhd.cpp
-//  \brief defines derived class that implements EOS functions for nonrelativistic
-//   adiabatic mhd
+//! \file ideal_mhd.cpp
+//  \brief derived class that implements ideal gas EOS in nonrelativistic mhd
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
@@ -16,10 +15,10 @@
 //----------------------------------------------------------------------------------------
 // ctor: also calls EOS base class constructor
 
-AdiabaticMHD::AdiabaticMHD(MeshBlockPack *pp, ParameterInput *pin)
+IdealMHD::IdealMHD(MeshBlockPack *pp, ParameterInput *pin)
   : EquationOfState(pp, pin)
 {
-  eos_data.is_adiabatic = true;
+  eos_data.is_ideal = true;
   eos_data.gamma = pin->GetReal("eos","gamma");
   eos_data.iso_cs = 0.0;
 }
@@ -31,7 +30,7 @@ AdiabaticMHD::AdiabaticMHD(MeshBlockPack *pp, ParameterInput *pin)
 // Note that the primitive variables contain the cell-centered magnetic fields, so that
 // W contains (nmhd+3+nscalars) elements, while U contains (nmhd+nscalars)
 
-void AdiabaticMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
+void IdealMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
                               DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc)
 {
   auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
@@ -106,7 +105,7 @@ void AdiabaticMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real>
 // \brief Converts conserved into primitive variables.  Operates over only active cells.
 //  Does not change cell- or face-centered magnetic fields.
 
-void AdiabaticMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,
+void IdealMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,
                               DvceArray5D<Real> &cons)
 {
   auto &indcs = pmy_pack->coord.coord_data.mb_indcs;

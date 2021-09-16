@@ -45,11 +45,11 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   // adiabatic EOS
   if (eqn_of_state.compare("adiabatic") == 0) {
     if (is_special_relativistic){
-      peos = new AdiabaticSRHydro(ppack, pin);
+      peos = new IdealSRHydro(ppack, pin);
     } else if (is_general_relativistic){
-      peos = new AdiabaticGRHydro(ppack, pin);
+      peos = new IdealGRHydro(ppack, pin);
     } else {
-      peos = new AdiabaticHydro(ppack, pin);
+      peos = new IdealHydro(ppack, pin);
     }
     nhydro = 5;
 
@@ -165,7 +165,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
       rsolver_method = Hydro_RSolver::hlle;
     // HLLC solver
     } else if (rsolver.compare("hllc") == 0) {
-      if (peos->eos_data.is_adiabatic) {
+      if (peos->eos_data.is_ideal) {
         rsolver_method = Hydro_RSolver::hllc;
       } else { 
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__

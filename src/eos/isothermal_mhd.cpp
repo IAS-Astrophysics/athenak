@@ -4,8 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file isothermal_mhd.cpp
-//  \brief defines derived class that implements EOS functions for nonrelativistic
-//   isothermal mhd
+//  \brief derived class that implements isothermal EOS for nonrelativistic mhd
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
@@ -19,7 +18,7 @@
 IsothermalMHD::IsothermalMHD(MeshBlockPack *pp, ParameterInput *pin)
   : EquationOfState(pp, pin)
 {
-    eos_data.is_adiabatic = false;
+    eos_data.is_ideal = false;
     eos_data.iso_cs = pin->GetReal("eos","iso_sound_speed");
     eos_data.gamma = 0.0;
 }

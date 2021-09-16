@@ -62,7 +62,7 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coord
     fsum.mz = qa*wl_ivz + qb*wr_ivz;
 
     Real el,er;
-    if (eos.is_adiabatic) {
+    if (eos.is_ideal) {
       el = wl_ipr*igm1 + 0.5*wl_idn*(SQR(wl_ivx) + SQR(wl_ivy) + SQR(wl_ivz));
       er = wr_ipr*igm1 + 0.5*wr_idn*(SQR(wr_ivx) + SQR(wr_ivy) + SQR(wr_ivz));
       fsum.mx += (wl_ipr + wr_ipr);
@@ -73,7 +73,7 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coord
 
     //--- Step 3.  Compute max wave speed in L,R states (see Toro eq. 10.43)
 
-    if (eos.is_adiabatic) {
+    if (eos.is_ideal) {
       qa = eos.SoundSpeed(wl_ipr,wl_idn);
       qb = eos.SoundSpeed(wr_ipr,wr_idn);
     } else {
@@ -89,7 +89,7 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coord
     du.mx = a*(wr_idn*wr_ivx - wl_idn*wl_ivx);
     du.my = a*(wr_idn*wr_ivy - wl_idn*wl_ivy);
     du.mz = a*(wr_idn*wr_ivz - wl_idn*wl_ivz);
-    if (eos.is_adiabatic) du.e = a*(er - el);
+    if (eos.is_ideal) du.e = a*(er - el);
 
     //--- Step 5. Compute the LLF flux at interface (see Toro eq. 10.42).
 
@@ -97,7 +97,7 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coord
     flx(m,ivx,k,j,i) = 0.5*(fsum.mx - du.mx);
     flx(m,ivy,k,j,i) = 0.5*(fsum.my - du.my);
     flx(m,ivz,k,j,i) = 0.5*(fsum.mz - du.mz);
-    if (eos.is_adiabatic) {flx(m,IEN,k,j,i) = 0.5*(fsum.e - du.e);}
+    if (eos.is_ideal) {flx(m,IEN,k,j,i) = 0.5*(fsum.e - du.e);}
   });
 
   return;

@@ -71,7 +71,7 @@ void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
   // Initialize Hydro variables -------------------------------
   if (pmbp->phydro != nullptr) {
 
-    if (pmbp->phydro->peos->eos_data.is_adiabatic) {
+    if (pmbp->phydro->peos->eos_data.is_ideal) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
          << std::endl << "Only isothermal EOS allowed for advection tests" << std::endl;
       exit(EXIT_FAILURE);
@@ -149,7 +149,7 @@ void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
 
   // Initialize MHD variables ----------------------------------
   if (pmbp->pmhd != nullptr) {
-    if (pmbp->pmhd->peos->eos_data.is_adiabatic) {
+    if (pmbp->pmhd->peos->eos_data.is_ideal) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
          << std::endl << "Only isothermal EOS allowed for advection tests" << std::endl;
       exit(EXIT_FAILURE);

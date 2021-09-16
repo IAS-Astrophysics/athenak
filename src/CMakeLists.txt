@@ -22,12 +22,12 @@ add_executable(
         driver/driver.cpp
 
         eos/eos.cpp
-        eos/adiabatic_hyd.cpp
-        eos/adiabatic_mhd.cpp
+        eos/ideal_hyd.cpp
+        eos/ideal_mhd.cpp
         eos/isothermal_hyd.cpp
         eos/isothermal_mhd.cpp
-        eos/adiabatic_srhyd.cpp
-        eos/adiabatic_grhyd.cpp
+        eos/ideal_srhyd.cpp
+        eos/ideal_grhyd.cpp
 
         hydro/hydro.cpp
         hydro/hydro_fluxes.cpp

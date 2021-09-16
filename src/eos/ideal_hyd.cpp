@@ -3,9 +3,8 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file adiabatic_hyd.cpp
-//  \brief defines derived class that implements EOS functions for nonrelativistic
-//   adiabatic hydro
+//! \file ideal_hyd.cpp
+//  \brief derived class that implements ideal gas EOS in nonrelativistic hydro
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
@@ -16,10 +15,10 @@
 //----------------------------------------------------------------------------------------
 // ctor: also calls EOS base class constructor
     
-AdiabaticHydro::AdiabaticHydro(MeshBlockPack *pp, ParameterInput *pin)
+IdealHydro::IdealHydro(MeshBlockPack *pp, ParameterInput *pin)
   : EquationOfState(pp, pin)
 {      
-  eos_data.is_adiabatic = true;
+  eos_data.is_ideal = true;
   eos_data.gamma = pin->GetReal("eos","gamma");
   eos_data.iso_cs = 0.0;
 }  
@@ -29,7 +28,7 @@ AdiabaticHydro::AdiabaticHydro(MeshBlockPack *pp, ParameterInput *pin)
 // \brief Converts conserved into primitive variables. Operates over entire MeshBlock,
 //  including ghost cells.  
 
-void AdiabaticHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
+void IdealHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
 {
   auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
   int &ng = indcs.ng;
@@ -89,7 +88,7 @@ void AdiabaticHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim
 // \!fn void PrimToCons()
 // \brief Converts conserved into primitive variables. Operates over only active cells.
 
-void AdiabaticHydro::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons)
+void IdealHydro::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons)
 {
   auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
   int &is = indcs.is; int &ie = indcs.ie;

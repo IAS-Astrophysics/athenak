@@ -76,7 +76,7 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos,
     fsum.bz = wl_ibz*wl_ivx + wr_ibz*wr_ivx - bxi*(wl_ivz + wr_ivz);
 
     Real el,er;
-    if (eos.is_adiabatic) {
+    if (eos.is_ideal) {
       el = wl_ipr*igm1 + 0.5*wl_idn*(SQR(wl_ivx)+SQR(wl_ivy)+SQR(wl_ivz)) + qc + SQR(bxi);
       er = wr_ipr*igm1 + 0.5*wr_idn*(SQR(wr_ivx)+SQR(wr_ivy)+SQR(wr_ivz)) + qd + SQR(bxi);
       fsum.mx += (wl_ipr + wr_ipr);
@@ -89,7 +89,7 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos,
 
     //--- Step 3.  Compute max wave speed in L,R states (see Toro eq. 10.43)
 
-    if (eos.is_adiabatic) {
+    if (eos.is_ideal) {
       qa = eos.FastMagnetosonicSpeed(wl_idn, wl_ipr, bxi, wl_iby, wl_ibz);
       qb = eos.FastMagnetosonicSpeed(wr_idn, wr_ipr, bxi, wr_iby, wr_ibz);
     } else {
@@ -105,7 +105,7 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos,
     du.mx = a*(wr_idn*wr_ivx - wl_idn*wl_ivx);
     du.my = a*(wr_idn*wr_ivy - wl_idn*wl_ivy);
     du.mz = a*(wr_idn*wr_ivz - wl_idn*wl_ivz);
-    if (eos.is_adiabatic) du.e = a*(er - el);
+    if (eos.is_ideal) du.e = a*(er - el);
     du.by = a*(wr_iby - wl_iby);
     du.bz = a*(wr_ibz - wl_ibz);
 
@@ -115,7 +115,7 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos,
     flx(m,ivx,k,j,i) = 0.5*(fsum.mx - du.mx);
     flx(m,ivy,k,j,i) = 0.5*(fsum.my - du.my);
     flx(m,ivz,k,j,i) = 0.5*(fsum.mz - du.mz);
-    if (eos.is_adiabatic) {flx(m,IEN,k,j,i) = 0.5*(fsum.e  - du.e);}
+    if (eos.is_ideal) {flx(m,IEN,k,j,i) = 0.5*(fsum.e  - du.e);}
     ey(m,k,j,i) = -0.5*(fsum.by - du.by);
     ez(m,k,j,i) =  0.5*(fsum.bz - du.bz);
   });

@@ -31,7 +31,7 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
   Real spd[5];         // signal speeds, left to right
 
   //------------------------ ADIABATIC HLLD solver ---------------------------------------
-  if (eos.is_adiabatic) {
+  if (eos.is_ideal) {
     Real igm1 = 1.0/((eos.gamma) - 1.0);
     par_for_inner(member, il, iu, [&](const int i)
     {

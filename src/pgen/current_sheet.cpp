@@ -88,7 +88,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
         u0(m,IM2,k,j,i) = epsv*-2.0*cos(kval*x2v)*( exp(-1.0*pow((x1v+x01)/a0,2.0))*(x1v +x01)+exp(-1.0*std::pow((x1v-x01)/a0,2.0))*(x1v-x01)  )/(kval*a0*a0);
         u0(m,IM3,k,j,i) = 0.0;
 
-        if (eos.is_adiabatic) {
+        if (eos.is_ideal) {
           u0(m,IEN,k,j,i) = p0/gm1 * u0(m,IDN,k,j,i); 
         }
       }
@@ -127,7 +127,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
         u0(m,IM2,k,j,i) = epsv*-2.0*cos(kval*x2v)*( exp(-1.0*pow((x1v+x01)/a0,2.0))*(x1v +x01)+exp(-1.0*std::pow((x1v-x01)/a0,2.0))*(x1v-x01)  )/(kval*a0*a0);
         u0(m,IM3,k,j,i) = 0.0;
 
-        if (eos.is_adiabatic) {
+        if (eos.is_ideal) {
           u0(m,IEN,k,j,i) = p0/gm1 * u0(m,IDN,k,j,i);
         }
  

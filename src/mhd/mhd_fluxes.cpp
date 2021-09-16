@@ -350,7 +350,7 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
   if (pvisc != nullptr) {
     pvisc->IsotropicViscousFlux(u0, uflx, pvisc->nu);
   }
-  if ((presist != nullptr) && (peos->eos_data.is_adiabatic)) {
+  if ((presist != nullptr) && (peos->eos_data.is_ideal)) {
     presist->OhmicEnergyFlux(b0, uflx);
   }
 

@@ -242,7 +242,7 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
         u1(m,IM2,k,j,i)=mx*lwv.cos_a2*lwv.sin_a3 +my*lwv.cos_a3 -mz*lwv.sin_a2*lwv.sin_a3;
         u1(m,IM3,k,j,i)=mx*lwv.sin_a2                           +mz*lwv.cos_a2;
 
-        if (eos.is_adiabatic) {
+        if (eos.is_ideal) {
           u1(m,IEN,k,j,i) = p0/gm1 + 0.5*lwv.d0*(lwv.v1_0)*(lwv.v1_0) +
                           amp*sn*rem[4][wave_flag];
         }
@@ -301,7 +301,7 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
         u0(m,IM2,k,j,i)=mx*lwv.cos_a2*lwv.sin_a3 +my*lwv.cos_a3 -mz*lwv.sin_a2*lwv.sin_a3;
         u0(m,IM3,k,j,i)=mx*lwv.sin_a2                           +mz*lwv.cos_a2;
 
-        if (eos.is_adiabatic) {
+        if (eos.is_ideal) {
           u0(m,IEN,k,j,i) = p0/gm1 + 0.5*lwv.d0*SQR(lwv.v1_0) +
            amp*sn*rem[4][wave_flag] + 0.5*(SQR(lwv.b1_0) + SQR(lwv.b2_0) + SQR(lwv.b3_0));
         }
@@ -353,7 +353,7 @@ void HydroEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
                       Real eigenvalues[5], Real right_eigenmatrix[5][5])
 {
   //--- Adiabatic Hydrodynamics ---
-  if (eos.is_adiabatic) {
+  if (eos.is_ideal) {
     Real vsq = v1*v1 + v2*v2 + v3*v3;
     Real h = (p/(eos.gamma - 1.0) + 0.5*d*vsq + p)/d;
     Real a = std::sqrt(eos.gamma*p/d);
@@ -450,7 +450,7 @@ void MHDEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
   }
 
   //--- Adiabatic MHD ---
-  if (eos.is_adiabatic) {
+  if (eos.is_ideal) {
     Real vsq = v1*v1 + v2*v2 + v3*v3;
     Real gm1 = eos.gamma - 1.0;
     Real h = (p/gm1 + 0.5*d*vsq + p + b1*b1 + btsq)/d;
@@ -738,7 +738,7 @@ void ProblemGenerator::LinearWaveErrors_(MeshBlockPack *pmbp, ParameterInput *pi
         evars.the_array[IM1] = vol*fabs(u0_(m,IM1,k,j,i) - u1_(m,IM1,k,j,i));
         evars.the_array[IM2] = vol*fabs(u0_(m,IM2,k,j,i) - u1_(m,IM2,k,j,i));
         evars.the_array[IM3] = vol*fabs(u0_(m,IM3,k,j,i) - u1_(m,IM3,k,j,i));
-        if (eos.is_adiabatic) {
+        if (eos.is_ideal) {
           evars.the_array[IEN] = vol*fabs(u0_(m,IEN,k,j,i) - u1_(m,IEN,k,j,i));
         }
   

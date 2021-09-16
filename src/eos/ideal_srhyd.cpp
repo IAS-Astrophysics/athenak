@@ -3,8 +3,8 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file adiabatic_srhyd.cpp
-//  \brief implements EOS functions in derived class for special relativistic ad. hydro
+//! \file ideal_srhyd.cpp
+//  \brief derived class that implements ideal gas EOS in special relativistic hydro
 // Conserved to primitive variable inversion implements algorithm described in Appendix C
 // of Galeazzi et al., PhysRevD, 88, 064009 (2013). Equation references are to this paper.
 
@@ -17,10 +17,10 @@
 //----------------------------------------------------------------------------------------
 // ctor: also calls EOS base class constructor
     
-AdiabaticSRHydro::AdiabaticSRHydro(MeshBlockPack *pp, ParameterInput *pin)
+IdealSRHydro::IdealSRHydro(MeshBlockPack *pp, ParameterInput *pin)
   : EquationOfState(pp, pin)
 {      
-  eos_data.is_adiabatic = true;
+  eos_data.is_ideal = true;
   eos_data.gamma = pin->GetReal("eos","gamma");
   eos_data.iso_cs = 0.0;
 }  
@@ -46,7 +46,8 @@ Real EquationC22(Real z, Real &u_d, Real q, Real r, Real gm1, Real pfloor)
 
 //----------------------------------------------------------------------------------------
 // \!fn void ConsToPrim()
-// \brief Converts conserved into primitive variables in nonrelativistic adiabatic hydro.
+// \brief Converts conserved into primitive variables for an ideal gas in nonrelativistic
+// hydro.
 // Implementation follows Wolfgang Kastaun's algorithm described in Appendix C of
 // Galeazzi et al., PhysRevD, 88, 064009 (2013).  Roots of "master function" (eq. C22) 
 // found by false position method.
@@ -63,7 +64,7 @@ Real EquationC22(Real z, Real &u_d, Real q, Real r, Real gm1, Real pfloor)
 //
 // This function operates over entire MeshBlock, including ghost cells.  
 
-void AdiabaticSRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
+void IdealSRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
 {
   auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
   int &ng = indcs.ng;
@@ -208,7 +209,7 @@ std::cout << "|zm-zp|=" <<fabs(zm-zp)<<" |f|="<< fabs(f) << "for i=" <<  ii << s
 //  Recall in SR hydrodynamics the conserved variables are: (D, E-D, m^i), and the
 //  primitive variables are: (\rho, P_gas, u^i).
 
-void AdiabaticSRHydro::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons)
+void IdealSRHydro::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons)
 {
   auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
   int &is = indcs.is; int &ie = indcs.ie;

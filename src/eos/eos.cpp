@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file eos.cpp
-//  \brief implements ctor and fns for EquationOfState abstract base class
+//  \brief implements constructor and some fns for EquationOfState abstract base class
 
 #include <float.h>
 

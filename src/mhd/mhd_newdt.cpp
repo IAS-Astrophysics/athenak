@@ -89,7 +89,7 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage)
       Real w_by = bcc0_(m,IBY,k,j,i);
       Real w_bz = bcc0_(m,IBZ,k,j,i);
       Real cf;
-      if (eos.is_adiabatic) { 
+      if (eos.is_ideal) { 
         Real &w_p = w0_(m,IPR,k,j,i);
         cf = eos.FastMagnetosonicSpeed(w_d,w_p,w_bx,w_by,w_bz);
       } else {
@@ -100,7 +100,7 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage)
       w_bx = b0_.x2f(m,k,j,i);
       w_by = bcc0_(m,IBZ,k,j,i);
       w_bz = bcc0_(m,IBX,k,j,i);
-      if (eos.is_adiabatic) { 
+      if (eos.is_ideal) { 
         Real &w_p = w0_(m,IPR,k,j,i);
         cf = eos.FastMagnetosonicSpeed(w_d,w_p,w_bx,w_by,w_bz);
       } else {
@@ -111,7 +111,7 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage)
       w_bx = b0_.x3f(m,k,j,i);
       w_by = bcc0_(m,IBX,k,j,i);
       w_bz = bcc0_(m,IBY,k,j,i);
-      if (eos.is_adiabatic) { 
+      if (eos.is_ideal) { 
         Real &w_p = w0_(m,IPR,k,j,i);
         cf = eos.FastMagnetosonicSpeed(w_d,w_p,w_bx,w_by,w_bz);
       } else {

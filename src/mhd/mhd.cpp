@@ -56,7 +56,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   // construct EOS object (no default)
   {std::string eqn_of_state = pin->GetString("mhd","eos");
   if (eqn_of_state.compare("adiabatic") == 0) {
-    peos = new AdiabaticMHD(ppack, pin);
+    peos = new IdealMHD(ppack, pin);
     nmhd = 5;
   } else if (eqn_of_state.compare("isothermal") == 0) {
     peos = new IsothermalMHD(ppack, pin);

@@ -41,7 +41,7 @@ void MHD::ShearInnerX1(int m)
     {
       Real deltam = u0_(m,IDN,k,j,is-i-1)*qomega*x1size;
       u0_(m,IM3,k,j,is-i-1) += deltam;
-      if (eos.is_adiabatic) {
+      if (eos.is_ideal) {
         u0_(m,IEN,k,j,is-i-1) += deltam*(2.0*u0_(m,IM3,k,j,is-i-1) - deltam)/
                                          (2.0*u0_(m,IDN,k,j,is-i-1));
       }
@@ -73,7 +73,7 @@ void MHD::ShearOuterX1(int m)
     {
       Real deltam = -u0_(m,IDN,k,j,ie+i+1)*qomega*x1size;
       u0_(m,IM3,k,j,ie+i+1) += deltam;
-      if (eos.is_adiabatic) {
+      if (eos.is_ideal) {
         u0_(m,IEN,k,j,ie+i+1) += deltam*(2.0*u0_(m,IM3,k,j,ie+i+1) - deltam)/
                                          (2.0*u0_(m,IDN,k,j,ie+i+1));
       }

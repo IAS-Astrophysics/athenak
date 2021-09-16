@@ -98,7 +98,7 @@ TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage)
 
       } else {
         Real cs;
-        if (eos.is_adiabatic) {
+        if (eos.is_ideal) {
           cs = eos.SoundSpeed(w0_(m,IPR,k,j,i),w0_(m,IDN,k,j,i));
         } else         {
           cs = eos.iso_cs;

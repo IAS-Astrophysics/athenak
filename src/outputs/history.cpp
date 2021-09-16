@@ -66,7 +66,7 @@ void HistoryOutput::LoadHydroHistoryData(HistoryData *pdata, Mesh *pm)
   int &nhydro_ = pm->pmb_pack->phydro->nhydro;
 
   // set number of and names of history variables for hydro
-  if (eos_data.is_adiabatic) {
+  if (eos_data.is_ideal) {
     pdata->nhist = 8;
   } else {
     pdata->nhist = 7;
@@ -75,7 +75,7 @@ void HistoryOutput::LoadHydroHistoryData(HistoryData *pdata, Mesh *pm)
   pdata->label[IM1] = "1-mom";
   pdata->label[IM2] = "2-mom";
   pdata->label[IM3] = "3-mom";
-  if (eos_data.is_adiabatic) {
+  if (eos_data.is_ideal) {
     pdata->label[IEN] = "tot-E";
   }
   pdata->label[nhydro_  ] = "1-KE";
@@ -115,7 +115,7 @@ void HistoryOutput::LoadHydroHistoryData(HistoryData *pdata, Mesh *pm)
       hvars.the_array[IM1] = vol*u0_(m,IM1,k,j,i);
       hvars.the_array[IM2] = vol*u0_(m,IM2,k,j,i);
       hvars.the_array[IM3] = vol*u0_(m,IM3,k,j,i);
-      if (eos_data.is_adiabatic) {
+      if (eos_data.is_ideal) {
         hvars.the_array[IEN] = vol*u0_(m,IEN,k,j,i);
       }
 
@@ -154,7 +154,7 @@ void HistoryOutput::LoadMHDHistoryData(HistoryData *pdata, Mesh *pm)
   int &nmhd_ = pm->pmb_pack->pmhd->nmhd;
 
   // set number of and names of history variables for mhd
-  if (eos_data.is_adiabatic) {
+  if (eos_data.is_ideal) {
     pdata->nhist = 11;
   } else {
     pdata->nhist = 10;
@@ -163,7 +163,7 @@ void HistoryOutput::LoadMHDHistoryData(HistoryData *pdata, Mesh *pm)
   pdata->label[IM1] = "1-mom";
   pdata->label[IM2] = "2-mom";
   pdata->label[IM3] = "3-mom";
-  if (eos_data.is_adiabatic) {
+  if (eos_data.is_ideal) {
     pdata->label[IEN] = "tot-E";
   }
   pdata->label[nmhd_  ] = "1-KE";
@@ -209,7 +209,7 @@ void HistoryOutput::LoadMHDHistoryData(HistoryData *pdata, Mesh *pm)
       hvars.the_array[IM1] = vol*u0_(m,IM1,k,j,i);
       hvars.the_array[IM2] = vol*u0_(m,IM2,k,j,i);
       hvars.the_array[IM3] = vol*u0_(m,IM3,k,j,i);
-      if (eos_data.is_adiabatic) {
+      if (eos_data.is_ideal) {
         hvars.the_array[IEN] = vol*u0_(m,IEN,k,j,i);
       }
 

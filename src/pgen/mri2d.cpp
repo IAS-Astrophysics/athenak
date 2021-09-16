@@ -143,7 +143,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
         u0(m,IM1,k,j,i) = d0*amp;
         u0(m,IM2,k,j,i) = 0.0;
         u0(m,IM3,k,j,i) = 0.0;
-        if (eos.is_adiabatic) { u0(m,IEN,k,j,i) = p0/gm1 + 0.5*d0*amp*amp; }
+        if (eos.is_ideal) { u0(m,IEN,k,j,i) = p0/gm1 + 0.5*d0*amp*amp; }
       }
     );
   }
@@ -165,7 +165,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
         Real rp = p0;
         auto rand_gen = rand_pool64.get_state();  // get random number state this thread
         Real rval = 1.0 + amp*(rand_gen.frand() - 0.5);
-        if (eos.is_adiabatic) {
+        if (eos.is_ideal) {
           rp = rval*p0;
         } else {
           rd = rval*d0;
@@ -174,7 +174,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
         u0(m,IM1,k,j,i) = 0.0;
         u0(m,IM2,k,j,i) = 0.0;
         u0(m,IM3,k,j,i) = 0.0;
-        if (eos.is_adiabatic) {
+        if (eos.is_ideal) {
           u0(m,IEN,k,j,i) = rp/gm1 + 0.5*SQR(0.5*(b0.x2f(m,k,j,i) + b0.x2f(m,k,j+1,i)));
         }
         rand_pool64.free_state(rand_gen);  // free state for use by other threads
