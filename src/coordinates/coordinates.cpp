@@ -138,6 +138,7 @@ void Coordinates::InitMetric(ParameterInput *pin)
   coord_data.is_minkowski = pin->GetOrAddBoolean("coord","minkowski",false);
   coord_data.bh_mass = pin->GetReal("coord","m");
   coord_data.bh_spin = pin->GetReal("coord","a");
+  coord_data.bh_rmin = pin->GetOrAddReal("coord","rmin",0.0);
 }
 
 //----------------------------------------------------------------------------------------

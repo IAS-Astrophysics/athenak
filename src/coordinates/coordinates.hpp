@@ -35,6 +35,7 @@ struct CoordData
   bool is_minkowski;                // flag to specify Minkowski (flat) space
   Real bh_mass;                     // needed for GR metric
   Real bh_spin;                     // needed for GR metric
+  Real bh_rmin;                     // needed for GR cons2prim
 
   // constructor
   CoordData(int nmb) : mb_size("size",nmb) {}
