@@ -22,7 +22,7 @@ namespace hydro {
 
 //----------------------------------------------------------------------------------------
 //! \fn void LLF
-//  \brief The LLF Riemann solver for hydrodynamics (both adiabatic and isothermal)
+//  \brief The LLF Riemann solver for hydrodynamics (both ideal gas and isothermal)
 
 KOKKOS_INLINE_FUNCTION
 void LLF(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coord,
@@ -42,13 +42,13 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coord
     Real &wl_ivx = wl(ivx,i);
     Real &wl_ivy = wl(ivy,i);
     Real &wl_ivz = wl(ivz,i);
-    Real &wl_ipr = wl(IPR,i);  // should never be referenced for adiabatic EOS
+    Real &wl_ipr = wl(IPR,i);  // should never be referenced for ideal gas EOS
 
     Real &wr_idn = wr(IDN,i);
     Real &wr_ivx = wr(ivx,i);
     Real &wr_ivy = wr(ivy,i);
     Real &wr_ivz = wr(ivz,i);
-    Real &wr_ipr = wr(IPR,i);  // should never be referenced for adiabatic EOS
+    Real &wr_ipr = wr(IPR,i);  // should never be referenced for ideal gas EOS
 
     //--- Step 2.  Compute sum of L/R fluxes
 

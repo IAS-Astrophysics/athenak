@@ -53,7 +53,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
   Real pr = 1.0/gm;
   Real ur = 0.0;
 
-  // Uses Rankine Hugoniot relations for adiabatic gas to initialize problem
+  // Uses Rankine Hugoniot relations for ideal gas to initialize problem
   Real jump1 = (gm + 1.0)/(gm1 + 2.0/(mach*mach));
   Real jump2 = (2.0*gm*mach*mach - gm1)/(gm + 1.0);
   Real jump3 = 2.0*(1.0 - 1.0/(mach*mach))/(gm + 1.0);

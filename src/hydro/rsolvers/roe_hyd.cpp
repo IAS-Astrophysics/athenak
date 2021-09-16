@@ -34,7 +34,7 @@ void RoeFluxIso(const Real wroe[], const Real du[], const Real wli[],
 
 //----------------------------------------------------------------------------------------
 //! \fn void Roe
-//  \brief The Roe Riemann solver for hydrodynamics (both adiabatic and isothermal)
+//  \brief The Roe Riemann solver for hydrodynamics (both ideal gas and isothermal)
 
 KOKKOS_INLINE_FUNCTION
 void Roe(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coord,
@@ -75,7 +75,7 @@ void Roe(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coord
     wroe[IVY] = (sqrtdl*wli[IVY] + sqrtdr*wri[IVY])*isdlpdr;
     wroe[IVZ] = (sqrtdl*wli[IVZ] + sqrtdr*wri[IVZ])*isdlpdr;
 
-    // Following Roe(1981), the enthalpy H=(E+P)/d is averaged for adiabatic flows,
+    // Following Roe(1981), the enthalpy H=(E+P)/d is averaged for ideal gas EOS,
     // rather than E or P directly.  sqrtdl*hl = sqrtdl*(el+pl)/dl = (el+pl)/sqrtdl
     Real el,er;
     if (eos.is_ideal) {

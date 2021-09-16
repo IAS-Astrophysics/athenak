@@ -302,7 +302,7 @@ TaskStatus Hydro::CalcFluxes(Driver *pdriver, int stage)
 
   // Add viscous, resistive, heat-flux, etc fluxes
   if (pvisc != nullptr) {
-    pvisc->IsotropicViscousFlux(u0, uflx, pvisc->nu);
+    pvisc->IsotropicViscousFlux(u0, pvisc->nu, eos, uflx);
   }
 
   return TaskStatus::complete;

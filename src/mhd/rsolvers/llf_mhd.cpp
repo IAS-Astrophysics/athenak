@@ -22,7 +22,7 @@ namespace mhd {
 
 //----------------------------------------------------------------------------------------
 //! \fn void LLF
-//  \brief The LLF Riemann solver for MHD (both adiabatic and isothermal)
+//  \brief The LLF Riemann solver for MHD (both ideal gas and isothermal)
 
 KOKKOS_INLINE_FUNCTION
 void LLF(TeamMember_t const &member, const EOS_Data &eos,
@@ -46,7 +46,7 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos,
     Real &wl_ivx = wl(ivx,i);
     Real &wl_ivy = wl(ivy,i);
     Real &wl_ivz = wl(ivz,i);
-    Real &wl_ipr = wl(IPR,i); // should never be referenced for adiabatic EOS
+    Real &wl_ipr = wl(IPR,i); // should never be referenced for ideal gas EOS
     Real &wl_iby = bl(iby,i);
     Real &wl_ibz = bl(ibz,i);
 
@@ -54,7 +54,7 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos,
     Real &wr_ivx = wr(ivx,i);
     Real &wr_ivy = wr(ivy,i);
     Real &wr_ivz = wr(ivz,i);
-    Real &wr_ipr = wr(IPR,i); // should never be referenced for adiabatic EOS
+    Real &wr_ipr = wr(IPR,i); // should never be referenced for ideal gas EOS
     Real &wr_iby = br(iby,i);
     Real &wr_ibz = br(ibz,i);
 

@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file hlld.cpp
-//  \brief HLLD Riemann solver for adiabatic MHD.
+//  \brief HLLD Riemann solver for ideal gas EOS in MHD.
 //
 // REFERENCES:
 // - T. Miyoshi & K. Kusano, "A multi-state HLL approximate Riemann solver for ideal
@@ -553,7 +553,7 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
       ez(m,k,j,i) =  flxi.bz;
     });
 
-  } // end adiabatic/isothermal solvers
+  } // end ideal gas/isothermal solvers
 
   return;
 }

@@ -42,8 +42,8 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   // construct EOS object (no default)
   {std::string eqn_of_state = pin->GetString("hydro","eos");
 
-  // adiabatic EOS
-  if (eqn_of_state.compare("adiabatic") == 0) {
+  // ideal gas EOS
+  if (eqn_of_state.compare("ideal_gas") == 0) {
     if (is_special_relativistic){
       peos = new IdealSRHydro(ppack, pin);
     } else if (is_general_relativistic){
@@ -64,7 +64,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
       nhydro = 4;
     }
 
-  // other EOSs not implemented
+  // EOS string not recognized
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "<hydro>/eos = '" << eqn_of_state << "' not implemented" << std::endl;

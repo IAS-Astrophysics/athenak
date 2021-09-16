@@ -3,7 +3,7 @@
 //========================================================================================
 //! \file hllc_hyd.cpp
 //  \brief HLLC Riemann solver for hydrodynamics, an extension of the HLLE fluxes to
-//  include the contact wave.  Only works for adiabatic hydrodynamics.
+//  include the contact wave.  Only works for ideal gas EOS in hydrodynamics.
 //
 // REFERENCES:
 // - E.F. Toro, "Riemann Solvers and numerical methods for fluid dynamics", 2nd ed.,
@@ -19,7 +19,7 @@ namespace hydro {
 
 //----------------------------------------------------------------------------------------
 //! \fn void HLLC
-//! \brief The HLLC Riemann solver for adiabatic hydrodynamics (use HLLE for isothermal)
+//! \brief The HLLC Riemann solver for ideal gas hydrodynamics (use HLLE for isothermal)
 
 KOKKOS_INLINE_FUNCTION
 void HLLC(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coord,

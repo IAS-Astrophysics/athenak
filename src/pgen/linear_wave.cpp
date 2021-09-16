@@ -346,13 +346,13 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
 
 //----------------------------------------------------------------------------------------
 //! \fn void HydroEigensystem()
-//  \brief computes eigenvectors of linear waves in adiabatic/isothermal hydrodynamics
+//  \brief computes eigenvectors of linear waves in ideal gas/isothermal hydrodynamics
 
 void HydroEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
                       const Real p, const EOS_Data &eos,
                       Real eigenvalues[5], Real right_eigenmatrix[5][5])
 {
-  //--- Adiabatic Hydrodynamics ---
+  //--- Ideal Gas Hydrodynamics ---
   if (eos.is_ideal) {
     Real vsq = v1*v1 + v2*v2 + v3*v3;
     Real h = (p/(eos.gamma - 1.0) + 0.5*d*vsq + p)/d;
@@ -429,14 +429,14 @@ void HydroEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
 
 //----------------------------------------------------------------------------------------
 //! \fn void MHDEigensystem()
-//  \brief computes eigenvectors of linear waves in adiabatic/isothermal mhd
+//  \brief computes eigenvectors of linear waves in ideal gas/isothermal mhd
 
 void MHDEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
                     const Real p, const Real b1, const Real b2, const Real b3,
                     const Real x, const Real y, const EOS_Data &eos,
                     Real eigenvalues[7], Real right_eigenmatrix[7][7])
 {
-  // common factors for both adiabatic and isothermal eigenvectors
+  // common factors for both ideal gas and isothermal eigenvectors
   Real btsq = b2*b2 + b3*b3;
   Real bt = std::sqrt(btsq);
   // beta's (eqs. A17, B28, B40)
@@ -449,7 +449,7 @@ void MHDEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
     bet3 = b3/bt;
   }
 
-  //--- Adiabatic MHD ---
+  //--- Ideal Gas MHD ---
   if (eos.is_ideal) {
     Real vsq = v1*v1 + v2*v2 + v3*v3;
     Real gm1 = eos.gamma - 1.0;

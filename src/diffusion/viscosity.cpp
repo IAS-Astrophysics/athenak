@@ -15,6 +15,7 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
+#include "eos/eos.hpp"
 #include "viscosity.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -59,8 +60,8 @@ Viscosity::~Viscosity()
 //! \fn void AddIsoViscousFlux
 //  \brief Adds viscous fluxes to face-centered fluxes of conserved variables
 
-void Viscosity::IsotropicViscousFlux(
-     const DvceArray5D<Real> &w0, DvceFaceFld5D<Real> &flx, const Real nu)
+void Viscosity::IsotropicViscousFlux(const DvceArray5D<Real> &w0, const Real nu,
+  const EOS_Data &eos, DvceFaceFld5D<Real> &flx)
 {
   auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
   int is = indcs.is, ie = indcs.ie;
@@ -123,7 +124,7 @@ void Viscosity::IsotropicViscousFlux(
         flx1(m,IVX,k,j,i) -= nud*fvx(i);
         flx1(m,IVY,k,j,i) -= nud*fvy(i);
         flx1(m,IVZ,k,j,i) -= nud*fvz(i);
-        if (flx1.extent_int(1) == static_cast<int>(IEN)) {   // proxy for eos.is_adiabatic
+        if (eos.is_ideal) {
           flx1(m,IEN,k,j,i) -= 0.5*nud*((w0(m,IVX,k,j,i-1) + w0(m,IVX,k,j,i))*fvx(i) +
                                         (w0(m,IVY,k,j,i-1) + w0(m,IVY,k,j,i))*fvy(i) +
                                         (w0(m,IVZ,k,j,i-1) + w0(m,IVZ,k,j,i))*fvz(i));
@@ -175,7 +176,7 @@ void Viscosity::IsotropicViscousFlux(
         flx2(m,IVX,k,j,i) -= nud*fvx(i);
         flx2(m,IVY,k,j,i) -= nud*fvy(i);
         flx2(m,IVZ,k,j,i) -= nud*fvz(i);
-        if (flx2.extent_int(1) == static_cast<int>(IEN)) {   // proxy for eos.is_adiabatic
+        if (eos.is_ideal) {
           flx2(m,IEN,k,j,i) -= 0.5*nud*((w0(m,IVX,k,j-1,i) + w0(m,IVX,k,j,i))*fvx(i) +
                                         (w0(m,IVY,k,j-1,i) + w0(m,IVY,k,j,i))*fvy(i) +
                                         (w0(m,IVZ,k,j-1,i) + w0(m,IVZ,k,j,i))*fvz(i));
@@ -220,7 +221,7 @@ void Viscosity::IsotropicViscousFlux(
         flx3(m,IVX,k,j,i) -= nud*fvx(i);
         flx3(m,IVY,k,j,i) -= nud*fvy(i);
         flx3(m,IVZ,k,j,i) -= nud*fvz(i);
-        if (flx3.extent_int(1) == static_cast<int>(IEN)) {   // proxy for eos.is_adiabatic
+        if (eos.is_ideal) {
           flx3(m,IEN,k,j,i) -= 0.5*nud*((w0(m,IVX,k-1,j,i) + w0(m,IVX,k,j,i))*fvx(i) +
                                         (w0(m,IVY,k-1,j,i) + w0(m,IVY,k,j,i))*fvy(i) +
                                         (w0(m,IVZ,k-1,j,i) + w0(m,IVZ,k,j,i))*fvz(i));

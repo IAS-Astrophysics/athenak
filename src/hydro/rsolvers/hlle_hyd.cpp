@@ -32,7 +32,7 @@ namespace hydro {
 
 //----------------------------------------------------------------------------------------
 //! \fn void HLLE
-//  \brief The HLLE Riemann solver for hydrodynamics (both adiabatic and isothermal)
+//  \brief The HLLE Riemann solver for hydrodynamics (both ideal gas and isothermal)
 
 KOKKOS_INLINE_FUNCTION
 void HLLE(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coord,
@@ -53,13 +53,13 @@ void HLLE(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coor
     Real &wl_ivx = wl(ivx,i);
     Real &wl_ivy = wl(ivy,i);
     Real &wl_ivz = wl(ivz,i);
-    Real &wl_ipr = wl(IPR,i);  // should never be referenced for adiabatic EOS
+    Real &wl_ipr = wl(IPR,i);  // should never be referenced for ideal gas EOS
 
     Real &wr_idn = wr(IDN,i);
     Real &wr_ivx = wr(ivx,i);
     Real &wr_ivy = wr(ivy,i);
     Real &wr_ivz = wr(ivz,i);
-    Real &wr_ipr = wr(IPR,i);  // should never be referenced for adiabatic EOS
+    Real &wr_ipr = wr(IPR,i);  // should never be referenced for ideal gas EOS
 
     //--- Step 2.  Compute Roe-averaged state
 
@@ -71,7 +71,7 @@ void HLLE(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coor
     Real wroe_ivy = (sqrtdl*wl_ivy + sqrtdr*wr_ivy)*isdlpdr;
     Real wroe_ivz = (sqrtdl*wl_ivz + sqrtdr*wr_ivz)*isdlpdr;
 
-    // Following Roe(1981), the enthalpy H=(E+P)/d is averaged for adiabatic flows,
+    // Following Roe(1981), the enthalpy H=(E+P)/d is averaged for ideal gas EOS,
     // rather than E or P directly.  sqrtdl*hl = sqrtdl*(el+pl)/dl = (el+pl)/sqrtdl
     Real el,er,hroe;
     if (eos.is_ideal) {
