@@ -42,7 +42,7 @@ ndiag       = 1       # cycles between diagostic output
 
 <hydro>
 special_rel = true
-eos         = adiabatic
+eos         = ideal
 reconstruct = ppm
 rsolver     = hllc
 

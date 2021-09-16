@@ -41,16 +41,16 @@ tlim       = 1.0       # time limit
 ndiag      = 1         # cycles between diagostic output
 
 <hydro>
-eos         = adiabatic   # EOS type
-viscosity   = 1.0e-3      # coefficient of isotropic shear viscosity
-reconstruct = plm         # spatial reconstruction method
-rsolver     = advect      # Riemann-solver to be used
+eos         = ideal    # EOS type
+viscosity   = 1.0e-3   # coefficient of isotropic shear viscosity
+reconstruct = plm      # spatial reconstruction method
+rsolver     = advect   # Riemann-solver to be used
 
 <mhd>
-eos         = adiabatic   # EOS type
-viscosity   = 1.0e-3      # coefficient ofisotropic shear viscosity
-reconstruct = plm         # spatial reconstruction method
-rsolver     = advect      # Riemann-solver to be used
+eos         = ideal    # EOS type
+viscosity   = 1.0e-3   # coefficient ofisotropic shear viscosity
+reconstruct = plm      # spatial reconstruction method
+rsolver     = advect   # Riemann-solver to be used
 
 <eos>
 gamma           = 1.4   # gamma = C_p/C_v

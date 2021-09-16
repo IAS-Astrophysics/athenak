@@ -57,7 +57,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   {std::string eqn_of_state = pin->GetString("mhd","eos");
 
   // ideal gas EOS
-  if (eqn_of_state.compare("ideal_gas") == 0) {
+  if (eqn_of_state.compare("ideal") == 0) {
     peos = new IdealMHD(ppack, pin);
     nmhd = 5;
 

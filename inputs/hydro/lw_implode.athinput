@@ -12,14 +12,14 @@ nghost    = 2           # Number of ghost cells
 nx1       = 200         # Number of zones in X1-direction
 x1min     = 0.0         # minimum value of X1
 x1max     = 0.3         # maximum value of X1
-ix1_bc    = reflecting  # inner-X1 boundary flag
-ox1_bc    = reflecting  # outer-X1 boundary flag
+ix1_bc    = reflect     # inner-X1 boundary flag
+ox1_bc    = reflect     # outer-X1 boundary flag
 
 nx2       = 200         # Number of zones in X2irection
 x2min     = 0.0         # minimum value of X2
 x2max     = 0.3         # maximum value of X2
-ix2_bc    = reflecting  # inner-X2 boundary flag
-ox2_bc    = reflecting  # outer-X2 boundary flag
+ix2_bc    = reflect     # inner-X2 boundary flag
+ox2_bc    = reflect     # outer-X2 boundary flag
 
 nx3       = 1           # Number of zones in X3-direction
 x3min     = -0.5        # minimum value of X3
@@ -41,9 +41,9 @@ tlim       = 2.5       # time limit
 ndiag      = 1         # cycles between diagostic output
 
 <hydro>
-eos         = adiabatic   # EOS type
-reconstruct = plm         # spatial reconstruction method
-rsolver     = llf         # Riemann-solver to be used
+eos         = ideal    # EOS type
+reconstruct = plm      # spatial reconstruction method
+rsolver     = llf      # Riemann-solver to be used
 
 <eos>
 gamma       = 1.4         # gamma = C_p/C_v

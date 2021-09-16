@@ -43,7 +43,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   {std::string eqn_of_state = pin->GetString("hydro","eos");
 
   // ideal gas EOS
-  if (eqn_of_state.compare("ideal_gas") == 0) {
+  if (eqn_of_state.compare("ideal") == 0) {
     if (is_special_relativistic){
       peos = new IdealSRHydro(ppack, pin);
     } else if (is_general_relativistic){

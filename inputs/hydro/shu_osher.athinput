@@ -36,9 +36,9 @@ tlim       = 0.47     # time limit
 ndiag      = 1        # interval for stdout summary info
 
 <hydro>
-eos         = adiabatic   # EOS type
-reconstruct = ppm         # spatial reconstruction method
-rsolver     = llf         # Riemann-solver to be used
+eos         = ideal   # EOS type
+reconstruct = ppm     # spatial reconstruction method
+rsolver     = llf     # Riemann-solver to be used
 
 <eos>
 gamma       = 1.4         # gamma = C_p/C_v
