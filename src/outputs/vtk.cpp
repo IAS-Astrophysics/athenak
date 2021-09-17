@@ -13,6 +13,7 @@
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -99,83 +100,28 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   //  4. Dataset structure, including type and dimensions of data, and coordinates.
   {std::stringstream msg;
   msg << "# vtk DataFile Version 2.0" << std::endl
-      << "# Athena++ data at time=" << pm->time
+      << "# Athena++ data at time= " << pm->time
+      << "  level= 0"  // assuming uniform mesh
+      << "  nranks= " << global_variable::nranks 
       << "  cycle=" << pm->ncycle
       << "  variables=" << GetOutputVariableString(out_params.variable).c_str()
       << std::endl << "BINARY" << std::endl
-      << "DATASET RECTILINEAR_GRID" << std::endl
+      << "DATASET STRUCTURED_POINTS" << std::endl
       << "DIMENSIONS " << ncoord1 << " " << ncoord2 << " " << ncoord3 << std::endl;
   vtkfile.Write(msg.str().c_str(),sizeof(char),msg.str().size());
   header_offset = msg.str().size();}
 
-  // write x1-coordinates of entire root mesh as binary float in big endian order
-  //  If N>1, then write N+1 cell faces as binary floats.
-  //  If N=1, then write 1 cell center position.
+  // Specify the uniform Cartesian mesh with grid minima and spacings
   {std::stringstream msg;
-  msg << "X_COORDINATES " << ncoord1 << " float" << std::endl;
+  msg << std::scientific << std::setprecision(std::numeric_limits<Real>::max_digits10 - 1)
+      << "ORIGIN " << pm->mesh_size.x1min << " "
+                   << pm->mesh_size.x2min << " "
+                   << pm->mesh_size.x3min << " " <<  std::endl
+      << "SPACING " << pm->mesh_size.dx1 << " "
+                    << pm->mesh_size.dx2 << " "
+                    << pm->mesh_size.dx3 << " " <<  std::endl;
   vtkfile.Write(msg.str().c_str(),sizeof(char),msg.str().size());
   header_offset += msg.str().size();}
-
-  int &is = pm->mesh_cells.is;
-  Real &x1min = pm->mesh_size.x1min, &x1max = pm->mesh_size.x1max;
-  int &nx1 = pm->mesh_cells.nx1;
-
-  if (nout1 == 1) {
-    data[0] = static_cast<float>(out_params.slice_x1);
-  } else {
-    for (int i=0; i<ncoord1; ++i) {
-      data[i] = static_cast<float>(CellCenterX(i,nx1,x1min,x1max));
-    }
-  }
-  if (!big_end) {for (int i=0; i<ncoord1; ++i) swap_functions::Swap4Bytes(&data[i]);}
-  vtkfile.Write(&(data[0]),sizeof(float),ncoord1);
-  header_offset += ncoord1*sizeof(float);
-
-  // write x2-coordinates of entire root mesh as binary float in big endian order
-  //  If N>1, then write N+1 cell faces as binary floats.
-  //  If N=1, then write 1 cell center position.
-  {std::stringstream msg;
-  msg << std::endl << "Y_COORDINATES " << ncoord2 << " float" << std::endl;
-  vtkfile.Write(msg.str().c_str(),sizeof(char),msg.str().size());
-  header_offset += msg.str().size();} 
-  
-  int &js = pm->mesh_cells.js;
-  Real &x2min = pm->mesh_size.x2min, &x2max = pm->mesh_size.x2max;
-  int &nx2 = pm->mesh_cells.nx2;
-  
-  if (nout2 == 1) {
-    data[0] = static_cast<float>(out_params.slice_x2);
-  } else {
-    for (int j=0; j<ncoord2; ++j) {
-      data[j] = static_cast<float>(CellCenterX(j,nx2,x2min,x2max));
-    } 
-  } 
-  if (!big_end) {for (int i=0; i<ncoord2; ++i) swap_functions::Swap4Bytes(&data[i]);}
-  vtkfile.Write(&(data[0]),sizeof(float),ncoord2);
-  header_offset += ncoord2*sizeof(float);
-
-  // write x3-coordinates of entire root mesh as binary float in big endian order
-  //  If N>1, then write N+1 cell faces as binary floats.
-  //  If N=1, then write 1 cell center position.
-  {std::stringstream msg;
-  msg << std::endl << "Z_COORDINATES " << ncoord3 << " float" << std::endl;
-  vtkfile.Write(msg.str().c_str(),sizeof(char),msg.str().size());
-  header_offset += msg.str().size();} 
-  
-  int &ks = pm->mesh_cells.ks;
-  Real &x3min = pm->mesh_size.x3min, &x3max = pm->mesh_size.x3max;
-  int &nx3 = pm->mesh_cells.nx3;
-  
-  if (nout3 == 1) {
-    data[0] = static_cast<float>(out_params.slice_x3);
-  } else {
-    for (int k=0; k<ncoord3; ++k) {
-      data[k] = static_cast<float>(CellCenterX(k,nx3,x3min,x3max));
-    } 
-  } 
-  if (!big_end) {for (int i=0; i<ncoord3; ++i) swap_functions::Swap4Bytes(&data[i]);}
-  vtkfile.Write(&(data[0]),sizeof(float),ncoord3);
-  header_offset += ncoord3*sizeof(float);
 
   //  5. Data.  An arbitrary number of scalars and vectors can be written (every node
   //  in the OutputData doubly linked lists), all in binary floats format
