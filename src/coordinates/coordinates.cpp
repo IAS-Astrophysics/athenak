@@ -117,15 +117,6 @@ Coordinates::Coordinates(Mesh *pm, RegionIndcs indcs, int igids, int nmb)
   mb_size.template modify<HostMemSpace>();
   mb_size.template sync<DevExeSpace>();
 
-std::cout << coord_data.mb_indcs.ng <<"  "<< coord_data.mb_indcs.nx1 <<"  "<< coord_data.mb_indcs.nx2 <<"  "<< coord_data.mb_indcs.nx3 << std::endl;
-std::cout << coord_data.mb_indcs.is <<"  "<< coord_data.mb_indcs.ie << std::endl;
-std::cout << coord_data.mb_indcs.js <<"  "<< coord_data.mb_indcs.je << std::endl;
-std::cout << coord_data.mb_indcs.ks <<"  "<< coord_data.mb_indcs.ke << std::endl;
-
-for (int m=0; m<nmb; ++m) {
-std::cout << "m=" << m <<"  dx1/dx2/dx3=" << mb_size.h_view(m).dx1 << "  " << mb_size.h_view(m).dx2 << "  " << mb_size.h_view(m).dx3 << "  "  << std::endl;
-}
-
 }
 
 //----------------------------------------------------------------------------------------
@@ -178,7 +169,8 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim, const EOS_Data &e
       Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
       Real g_[NMETRIC], gi_[NMETRIC];
-      ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, coord.bh_spin, g_, gi_);
+      ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, false,
+                              coord.bh_spin, g_, gi_);
 
       // Extract primitives
       const Real &rho  = prim(m,IDN,k,j,i);
@@ -318,7 +310,8 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim,
       Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
       Real g_[NMETRIC], gi_[NMETRIC];
-      ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, coord.bh_spin, g_, gi_);
+      ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, false,
+                              coord.bh_spin, g_, gi_);
 
       // create references to components of metric; formatting reflects structure
       const Real

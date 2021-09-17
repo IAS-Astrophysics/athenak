@@ -201,7 +201,8 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
           TransformVector(u0_bl, 0.0, u2_bl, u3_bl, x1v, x2v, x3v, &u0, &u1, &u2, &u3);
 
           Real g_[NMETRIC], gi_[NMETRIC];
-          ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, spin, g_, gi_);
+          ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, true,
+                                  coord.bh_spin, coord.bh_rmin, g_, gi_);
           uu1 = u1 - gi_[I01]/gi_[I00] * u0;
           uu2 = u2 - gi_[I02]/gi_[I00] * u0;
           uu3 = u3 - gi_[I03]/gi_[I00] * u0;
@@ -290,8 +291,8 @@ KOKKOS_INLINE_FUNCTION
 static void GetBoyerLindquistCoordinates(Real x1, Real x2, Real x3,
                                          Real *pr, Real *ptheta, Real *pphi) 
 {
-    Real R = sqrt(SQR(x1) + SQR(x2) + SQR(x3));
-    Real r = sqrt( SQR(R) - SQR(spin) + sqrt(SQR(SQR(R)-SQR(spin))
+    Real rad = sqrt(SQR(x1) + SQR(x2) + SQR(x3));
+    Real r = sqrt( SQR(rad) - SQR(spin) + sqrt(SQR(SQR(rad)-SQR(spin))
                    + 4.0*SQR(spin)*SQR(x3)) ) / sqrt(2.0);
     *pr = r;
     *ptheta = acos(x3/r);
@@ -428,8 +429,8 @@ static void TransformVector(Real a0_bl, Real a1_bl, Real a2_bl, Real a3_bl,
   Real y = x2;
   Real z = x3;
 
-  Real R = sqrt( SQR(x) + SQR(y) + SQR(z) );
-  Real r = sqrt( SQR(R) - SQR(spin) + sqrt( SQR(SQR(R) - SQR(spin)) 
+  Real rad = sqrt( SQR(x) + SQR(y) + SQR(z) );
+  Real r = sqrt( SQR(rad) - SQR(spin) + sqrt( SQR(SQR(rad) - SQR(spin))
                + 4.0*SQR(spin)*SQR(z) ) )/ sqrt(2.0);
   Real delta = SQR(r) - 2.0*mass*r + SQR(spin);
   *pa0 = a0_bl + 2.0*r/delta * a1_bl;

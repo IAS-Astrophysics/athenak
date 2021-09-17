@@ -243,7 +243,7 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
       outvars.emplace_back("mom1",1,&(pm->pmb_pack->pmhd->u0));
       outvars.emplace_back("mom2",2,&(pm->pmb_pack->pmhd->u0));
       outvars.emplace_back("mom3",3,&(pm->pmb_pack->pmhd->u0));
-      if (pm->pmb_pack->pmhd->peos->eos_data.is_adiabatic) {
+      if (pm->pmb_pack->pmhd->peos->eos_data.is_ideal) {
         outvars.emplace_back("ener",4,&(pm->pmb_pack->pmhd->u0));
       }
       outvars.emplace_back("bcc1",0,&(pm->pmb_pack->pmhd->bcc0));
@@ -270,7 +270,7 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
       outvars.emplace_back("velx",1,&(pm->pmb_pack->pmhd->w0));
       outvars.emplace_back("vely",2,&(pm->pmb_pack->pmhd->w0));
       outvars.emplace_back("velz",3,&(pm->pmb_pack->pmhd->w0));
-      if (pm->pmb_pack->pmhd->peos->eos_data.is_adiabatic) {
+      if (pm->pmb_pack->pmhd->peos->eos_data.is_ideal) {
         outvars.emplace_back("pres",4,&(pm->pmb_pack->pmhd->w0));
       }
       int nmhd_ =  pm->pmb_pack->pmhd->nmhd;

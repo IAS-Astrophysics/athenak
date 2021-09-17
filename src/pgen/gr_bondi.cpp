@@ -12,9 +12,9 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
-#include "mesh/mesh_positions.hpp"
 #include "coordinates/coordinates.hpp"
 #include "coordinates/cartesian_ks.hpp"
+#include "coordinates/cell_locations.hpp"
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 
@@ -29,19 +29,24 @@ static void TransformVector(Real a0_bl, Real a1_bl, Real a2_bl, Real a3_bl,
                             Real x1, Real x2, Real x3, 
                             Real *pa0, Real *pa1, Real *pa2, Real *pa3);
 
-namespace {
+KOKKOS_INLINE_FUNCTION
 void CalculatePrimitives(Real r, Real temp_min, Real temp_max, Real *prho,
                          Real *ppgas, Real *put, Real *pur);
+
+KOKKOS_INLINE_FUNCTION
 Real TemperatureMin(Real r, Real t_min, Real t_max);
+
+KOKKOS_INLINE_FUNCTION
 Real TemperatureBisect(Real r, Real t_min, Real t_max);
+
+KOKKOS_INLINE_FUNCTION
 Real TemperatureResidual(Real t, Real r);
 
 // Global variables
-Real mass, spin;     // black hole mass and spin
-Real n_adi, k_adi;   // hydro EOS parameters
-Real r_crit;         // sonic point radius
-Real c1, c2;         // useful constants
-} // namespace
+Real mass, spin;        // black hole mass and spin
+Real n_adi, k_adi, gm;  // hydro EOS parameters
+Real r_crit;            // sonic point radius
+Real c1, c2;            // useful constants
 
 //----------------------------------------------------------------------------------------
 //! \fn void ProblemGenerator::UserProblem()
@@ -53,19 +58,20 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
 {
   // Read problem-specific parameters from input file
   // global parameters
-  k_adi = pin->GetReal("hydro", "k_adi");
+  k_adi = pin->GetReal("problem", "k_adi");
   r_crit = pin->GetReal("problem", "r_crit");
+  gm = pin->GetReal("eos", "gamma");
 
   // Parameters
   const Real temp_min = 1.0e-2;  // lesser temperature root must be greater than this
   const Real temp_max = 1.0e1;   // greater temperature root must be less than this
 
   // Get mass and spin of black hole
-  mass = pmbp->phydro->pcoord->bh_mass;
-  spin = pmbp->phydro->pcoord->bh_spin;
+  mass = pmbp->coord.coord_data.bh_mass;
+  spin = pmbp->coord.coord_data.bh_spin;
 
   // Get ratio of specific heats
-  n_adi = 1.0/(pmbp->phydro->peos->eos_data.gamma - 1.0);
+  n_adi = 1.0/(gm - 1.0);
 
   // Prepare various constants for determining primitives
   Real u_crit_sq = mass/(2.0*r_crit);                                       // (HSW 71)
@@ -74,25 +80,32 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
   c1 = pow(t_crit, n_adi) * u_crit * SQR(r_crit);                           // (HSW 68)
   c2 = SQR(1.0 + (n_adi+1.0) * t_crit) * (1.0 - 3.0*mass/(2.0*r_crit));     // (HSW 69)
 
-  // capture variables for kernel
-  int &nx1 = pmbp->mb_cells.nx1;
-  int &nx2 = pmbp->mb_cells.nx2;
-  int &nx3 = pmbp->mb_cells.nx3;
-  int is = pmbp->mb_cells.is; int ie = pmbp->mb_cells.ie;
-  int js = pmbp->mb_cells.js; int je = pmbp->mb_cells.je;
-  int ks = pmbp->mb_cells.ks; int ke = pmbp->mb_cells.ke;
-  auto &size = pmbp->pmb->mbsize;
-  int nmb1 = pmbp->nmb_thispack - 1;
+  // capture variables for the kernel
+  auto &indcs = pmbp->coord.coord_data.mb_indcs;
+  int &is = indcs.is; int &ie = indcs.ie;
+  int &js = indcs.js; int &je = indcs.je;
+  int &ks = indcs.ks; int &ke = indcs.ke;
+  auto coord = pmbp->coord.coord_data;
   auto w0_ = pmbp->phydro->w0;
-
 
   // Initialize primitive values (HYDRO ONLY)
   par_for("pgen_bondi", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
-      Real x1v = CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
-      Real x2v = CellCenterX(j-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
-      Real x3v = CellCenterX(k-ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
+      Real &x1min = coord.mb_size.d_view(m).x1min;
+      Real &x1max = coord.mb_size.d_view(m).x1max;
+      int nx1 = coord.mb_indcs.nx1;
+      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+
+      Real &x2min = coord.mb_size.d_view(m).x2min;
+      Real &x2max = coord.mb_size.d_view(m).x2max;
+      int nx2 = coord.mb_indcs.nx2;
+      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+
+      Real &x3min = coord.mb_size.d_view(m).x3min;
+      Real &x3max = coord.mb_size.d_view(m).x3max;
+      int nx3 = coord.mb_indcs.nx3;
+      Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
       // Calculate Boyer-Lindquist coordinates of cell
       Real r, theta, phi;
@@ -102,10 +115,11 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
       Real rho, pgas, ut, ur;
       CalculatePrimitives(r, temp_min, temp_max, &rho, &pgas, &ut, &ur);
       Real u0(0.0), u1(0.0), u2(0.0), u3(0.0);
-      TransformVector(ut, ur, 0.0, 0.0, r, theta, phi, &u0, &u1, &u2, &u3);
+      TransformVector(ut, ur, 0.0, 0.0, x1v, x2v, x3v, &u0, &u1, &u2, &u3);
 
       Real g_[NMETRIC], gi_[NMETRIC];
-      ComputeMetricAndInverse(x1v, x2v, x3v, spin, g_, gi_);
+      ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, true,
+                              coord.bh_spin, g_, gi_);
       Real uu1 = u1 - gi_[I01]/gi_[I00] * u0;
       Real uu2 = u2 - gi_[I02]/gi_[I00] * u0;
       Real uu3 = u3 - gi_[I03]/gi_[I00] * u0;
@@ -117,9 +131,9 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
     }
   );
 
-  // Initialize conserved variables
-  peos->PrimitiveToConserved(phydro->w, pfield->bcc, phydro->u, pcoord, il, iu, jl, ju,
-                             kl, ku);
+  // Convert primitives to conserved
+  auto &u0_ = pmbp->phydro->u0;
+  pmbp->phydro->peos->PrimToCons(w0_, u0_);
 
   return;
 }
@@ -135,8 +149,8 @@ KOKKOS_INLINE_FUNCTION
 static void GetBoyerLindquistCoordinates(Real x1, Real x2, Real x3, 
                                          Real *pr, Real *ptheta, Real *pphi)
 {
-    Real R = sqrt(SQR(x1) + SQR(x2) + SQR(x3));
-    Real r = sqrt( SQR(R) - SQR(spin) + sqrt(SQR(SQR(R)-SQR(spin))
+    Real rad = sqrt(SQR(x1) + SQR(x2) + SQR(x3));
+    Real r = sqrt( SQR(rad) - SQR(spin) + sqrt(SQR(SQR(rad)-SQR(spin))
                    + 4.0*SQR(spin)*SQR(x3)) ) / sqrt(2.0);
     *pr = r;
     *ptheta = acos(x3/r);
@@ -159,23 +173,19 @@ static void TransformVector(Real a0_bl, Real a1_bl, Real a2_bl, Real a3_bl,
                             Real x1, Real x2, Real x3,
                             Real *pa0, Real *pa1, Real *pa2, Real *pa3)
 { 
-  Real x = x1;
-  Real y = x2;
-  Real z = x3;
-  
-  Real R = sqrt( SQR(x) + SQR(y) + SQR(z) );
-  Real r = sqrt( SQR(R) - SQR(spin) + sqrt( SQR(SQR(R) - SQR(spin))
-               + 4.0*SQR(spin)*SQR(z) ) )/ sqrt(2.0);
+  Real rad = sqrt( SQR(x1) + SQR(x2) + SQR(x3) );
+  Real r = sqrt( SQR(rad) - SQR(spin) + sqrt( SQR(SQR(rad) - SQR(spin))
+               + 4.0*SQR(spin)*SQR(x3) ) )/ sqrt(2.0);
   Real delta = SQR(r) - 2.0*mass*r + SQR(spin);
   *pa0 = a0_bl + 2.0*r/delta * a1_bl;
-  *pa1 = a1_bl * ( (r*x+spin*y)/(SQR(r) + SQR(spin)) - y*spin/delta) + 
-         a2_bl * x*z/r * sqrt((SQR(r) + SQR(spin))/(SQR(x) + SQR(y))) -
-         a3_bl * y; 
-  *pa2 = a1_bl * ( (r*y-spin*x)/(SQR(r) + SQR(spin)) + x*spin/delta) + 
-         a2_bl * y*z/r * sqrt((SQR(r) + SQR(spin))/(SQR(x) + SQR(y))) +
-         a3_bl * x;
-  *pa3 = a1_bl * z/r - 
-         a2_bl * r * sqrt((SQR(x) + SQR(y))/(SQR(r) + SQR(spin)));
+  *pa1 = a1_bl * ( (r*x1+spin*x2)/(SQR(r) + SQR(spin)) - x2*spin/delta) +
+         a2_bl * x1*x3/r * sqrt((SQR(r) + SQR(spin))/(SQR(x1) + SQR(x2))) -
+         a3_bl * x2;
+  *pa2 = a1_bl * ( (r*x2-spin*x1)/(SQR(r) + SQR(spin)) + x1*spin/delta) +
+         a2_bl * x2*x3/r * sqrt((SQR(r) + SQR(spin))/(SQR(x1) + SQR(x2))) +
+         a3_bl * x1;
+  *pa3 = a1_bl * x3/r -
+         a2_bl * r * sqrt((SQR(x1) + SQR(x2))/(SQR(r) + SQR(spin)));
   return;
 }
 
@@ -192,6 +202,7 @@ static void TransformVector(Real a0_bl, Real a1_bl, Real a2_bl, Real a3_bl,
 // Notes:
 //   references Hawley, Smarr, & Wilson 1984, ApJ 277 296 (HSW)
 
+KOKKOS_INLINE_FUNCTION
 void CalculatePrimitives(Real r, Real temp_min, Real temp_max,
                          Real *prho, Real *ppgas, Real *put, Real *pur)
 {
@@ -229,6 +240,7 @@ void CalculatePrimitives(Real r, Real temp_min, Real temp_max,
 //   references Hawley, Smarr, & Wilson 1984, ApJ 277 296 (HSW)
 //   performs golden section search (cf. Numerical Recipes, 3rd ed., 10.2)
 
+KOKKOS_INLINE_FUNCTION
 Real TemperatureMin(Real r, Real t_min, Real t_max) {
   // Parameters
   const Real ratio = 0.3819660112501051;  // (3+\sqrt{5})/2
@@ -283,6 +295,7 @@ Real TemperatureMin(Real r, Real t_min, Real t_max) {
 //   references Hawley, Smarr, & Wilson 1984, ApJ 277 296 (HSW)
 //   performs bisection search
 
+KOKKOS_INLINE_FUNCTION
 Real TemperatureBisect(Real r, Real t_min, Real t_max) {
   // Parameters
   const int max_iterations = 20;
@@ -334,8 +347,8 @@ Real TemperatureBisect(Real r, Real t_min, Real t_max) {
 // Notes:
 //   implements (76) from Hawley, Smarr, & Wilson 1984, ApJ 277 296
 
+KOKKOS_INLINE_FUNCTION
 Real TemperatureResidual(Real t, Real r) {
   return SQR(1.0 + (n_adi+1.0) * t)
       * (1.0 - 2.0*mass/r + SQR(c1) / (SQR(SQR(r)) * pow(t, 2.0*n_adi))) - c2;
 }
-} // namespace

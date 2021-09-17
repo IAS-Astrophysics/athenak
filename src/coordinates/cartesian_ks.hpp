@@ -21,12 +21,13 @@
 //!  Cartesian Kerr-Schild coordinates
 
 KOKKOS_INLINE_FUNCTION
-void ComputeMetricAndInverse(Real x, Real y, Real z, bool minkowski, Real a,
-                             Real g[], Real ginv[])
+void ComputeMetricAndInverse(Real x, Real y, Real z, bool minkowski, bool ic,
+                             Real a, Real g[], Real ginv[])
 {
   if (fabs(z) < (SMALL_NUMBER)) z = (SMALL_NUMBER);
-  Real R = fmax(sqrt(SQR(x) + SQR(y) + SQR(z)),1.0); // avoid singularity for R<1
-  Real r = SQR(R)-SQR(a) + sqrt( SQR(SQR(R)-SQR(a))+4.0*SQR(a)*SQR(z) );
+  Real rad = fmax(sqrt(SQR(x) + SQR(y) + SQR(z)),1.0);  // avoid singularity for rad<1
+  if (ic) {rad=sqrt(SQR(x) + SQR(y) + SQR(z));}  // unless you are trying to set ic
+  Real r = SQR(rad)-SQR(a) + sqrt( SQR(SQR(rad)-SQR(a))+4.0*SQR(a)*SQR(z) );
   r = sqrt(r/2.0);
   
   // Set covariant components
@@ -80,12 +81,12 @@ void ComputeMetricAndInverse(Real x, Real y, Real z, bool minkowski, Real a,
 //!  used to compute the coordinate source terms in the equations of motion.
 
 KOKKOS_INLINE_FUNCTION
-void ComputeMetricDerivatives(Real x, Real y, Real z, bool minkowski, Real a,
-                              Real dg_dx1[], Real dg_dx2[], Real dg_dx3[])
+void ComputeMetricDerivatives(Real x, Real y, Real z, bool minkowski,
+                              Real a, Real dg_dx1[], Real dg_dx2[], Real dg_dx3[])
 {
   if (fabs(z) < (SMALL_NUMBER)) z = (SMALL_NUMBER);
-  Real R = fmax(sqrt(SQR(x) + SQR(y) + SQR(z)),1.0); // avoid singularity for R<1
-  Real r = SQR(R)-SQR(a) + sqrt( SQR(SQR(R)-SQR(a))+4.0*SQR(a)*SQR(z) );
+  Real rad = fmax(sqrt(SQR(x) + SQR(y) + SQR(z)),1.0);  // avoid singularity for rad<1
+  Real r = SQR(rad)-SQR(a) + sqrt( SQR(SQR(rad)-SQR(a))+4.0*SQR(a)*SQR(z) );
   r = sqrt(r/2.0);
 
   Real llower[4];
@@ -94,7 +95,7 @@ void ComputeMetricDerivatives(Real x, Real y, Real z, bool minkowski, Real a,
   llower[2] = (r*y - a * x)/( SQR(r) + SQR(a) );
   llower[3] = z/r;
 
-  Real qa = 2.0*SQR(r) - SQR(R) + SQR(a);
+  Real qa = 2.0*SQR(r) - SQR(rad) + SQR(a);
   Real qb = SQR(r) + SQR(a);
   Real qc = 3.0*SQR(a * z)-SQR(r)*SQR(r);
   Real f = 2.0 * SQR(r)*r / (SQR(SQR(r)) + SQR(a)*SQR(z));

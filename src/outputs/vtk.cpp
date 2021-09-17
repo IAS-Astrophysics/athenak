@@ -20,6 +20,7 @@
 
 #include "athena.hpp"
 #include "coordinates/cell_locations.hpp"
+#include "globals.hpp"
 #include "mesh/mesh.hpp"
 #include "hydro/hydro.hpp"
 #include "outputs.hpp"
