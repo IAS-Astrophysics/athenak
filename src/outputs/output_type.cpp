@@ -235,6 +235,60 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
       outvars.emplace_back("bcc3",2,&(pm->pmb_pack->pmhd->bcc0));
       break;
 
+    // Load mhd conserved variables and cell-centered magnetic fields
+    case OutputVariable::mhd_u_bcc:
+      {
+      if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
+      outvars.emplace_back("dens",0,&(pm->pmb_pack->pmhd->u0));
+      outvars.emplace_back("mom1",1,&(pm->pmb_pack->pmhd->u0));
+      outvars.emplace_back("mom2",2,&(pm->pmb_pack->pmhd->u0));
+      outvars.emplace_back("mom3",3,&(pm->pmb_pack->pmhd->u0));
+      if (pm->pmb_pack->pmhd->peos->eos_data.is_adiabatic) {
+        outvars.emplace_back("ener",4,&(pm->pmb_pack->pmhd->u0));
+      }
+      outvars.emplace_back("bcc1",0,&(pm->pmb_pack->pmhd->bcc0));
+      outvars.emplace_back("bcc2",1,&(pm->pmb_pack->pmhd->bcc0));
+      outvars.emplace_back("bcc3",2,&(pm->pmb_pack->pmhd->bcc0));
+      int nmhd_ =  pm->pmb_pack->pmhd->nmhd;
+      int nvars = nmhd_ + pm->pmb_pack->pmhd->nscalars;
+      for (int n=nmhd_; n<nvars; ++n) {
+        char number[2];
+        std::snprintf(number,sizeof(number),"%02d",(n - nmhd_));
+        std::string vname;
+        vname.assign("scal");
+        vname.append(number);
+        outvars.emplace_back(vname,n,&(pm->pmb_pack->pmhd->w0));
+      }
+      }
+      break;
+
+    // Load mhd primitive variables and cell-centered magnetic fields
+    case OutputVariable::mhd_w_bcc:
+      {
+      if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
+      outvars.emplace_back("dens",0,&(pm->pmb_pack->pmhd->w0));
+      outvars.emplace_back("velx",1,&(pm->pmb_pack->pmhd->w0));
+      outvars.emplace_back("vely",2,&(pm->pmb_pack->pmhd->w0));
+      outvars.emplace_back("velz",3,&(pm->pmb_pack->pmhd->w0));
+      if (pm->pmb_pack->pmhd->peos->eos_data.is_adiabatic) {
+        outvars.emplace_back("pres",4,&(pm->pmb_pack->pmhd->w0));
+      }
+      int nmhd_ =  pm->pmb_pack->pmhd->nmhd;
+      outvars.emplace_back("bcc1",0,&(pm->pmb_pack->pmhd->bcc0));
+      outvars.emplace_back("bcc2",1,&(pm->pmb_pack->pmhd->bcc0));
+      outvars.emplace_back("bcc3",2,&(pm->pmb_pack->pmhd->bcc0));
+      int nvars = nmhd_ + pm->pmb_pack->pmhd->nscalars;
+      for (int n=nmhd_; n<nvars; ++n) {
+        char number[2];
+        std::snprintf(number,sizeof(number),"%02d",(n - nmhd_));
+        std::string vname;
+        vname.assign("scal");
+        vname.append(number);
+        outvars.emplace_back(vname,n,&(pm->pmb_pack->pmhd->w0));
+      }
+      }
+      break;
+
     // Load turbulent forcing
     case OutputVariable::turb_force:
       if (pm->pmb_pack->pturb == nullptr) ErrForceOutput(out_params.block_name);

@@ -24,9 +24,9 @@ enum class OutputVariable {undef=-1,
   hydro_u_d, hydro_u_m1, hydro_u_m2, hydro_u_m3, hydro_u_e, hydro_u,
   hydro_w_d, hydro_w_vx, hydro_w_vy, hydro_w_vz, hydro_w_p, hydro_w,
   mhd_u_d,   mhd_u_m1,   mhd_u_m2,   mhd_u_m3,   mhd_u_e,   mhd_u,
-  mhd_w_d,   mhd_w_vx,   mhd_w_vy,   mhd_w_vz,   mhd_w_p,   mhd_w,
+  mhd_w_d,   mhd_w_vx,   mhd_w_vy,   mhd_w_vz,   mhd_w_p,   mhd_w, 
   mhd_bcc1,  mhd_bcc2,   mhd_bcc3,   mhd_bcc,    mhd_b_x1f, mhd_b_x2f, mhd_b_x3f,
-  turb_force};
+  mhd_u_bcc, mhd_w_bcc,  turb_force};
 
 // forward declarations, and two utility function prototypes
 class Mesh;
