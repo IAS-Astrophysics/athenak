@@ -44,21 +44,36 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 {
   // (1) Start by selecting physics for this MHD:
 
-  // construct EOS object (no default)
+  // Check for relativistic dynamics
+  is_special_relativistic = pin->GetOrAddBoolean("mhd","special_rel",false);
+  is_general_relativistic = pin->GetOrAddBoolean("mhd","general_rel",false);
+  if (is_special_relativistic && is_general_relativistic) {
+    std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
+              << "Cannot specify both SR and GR at same time" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
+  // (2) construct EOS object (no default)
   {std::string eqn_of_state = pin->GetString("mhd","eos");
-  if (eqn_of_state.compare("adiabatic") == 0) {
-    peos = new AdiabaticMHD(ppack, pin);
+
+  // ideal gas EOS
+  if (eqn_of_state.compare("ideal") == 0) {
+    peos = new IdealMHD(ppack, pin);
     nmhd = 5;
+
+  // isothermal EOS
   } else if (eqn_of_state.compare("isothermal") == 0) {
     peos = new IsothermalMHD(ppack, pin);
     nmhd = 4;
+
+  // EOS string not recognized
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "<mhd> eos = '" << eqn_of_state << "' not implemented" << std::endl;
     std::exit(EXIT_FAILURE);
   }}
 
-  // Initialize number of scalars
+  // (3) Initialize scalars, diffusion, source terms
   nscalars = pin->GetOrAddInteger("mhd","nscalars",0);
 
   // Viscosity (only constructed if needed)
@@ -78,17 +93,16 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   // Source terms (constructor parses input file to initialize only srcterms needed)
   psrc = new SourceTerms("mhd", ppack, pin);
 
-  // read time-evolution option [already error checked in driver constructor]
+  // (4) read time-evolution option [already error checked in driver constructor]
+  // Then initialize memory and algorithms for reconstruction and Riemann solvers
   std::string evolution_t = pin->GetString("time","evolution");
-
-  // (2) Now initialize memory/algorithms
 
   // allocate memory for conserved and primitive variables
   int nmb = ppack->nmb_thispack;
-  auto &ncells = ppack->mb_cells;
-  int ncells1 = ncells.nx1 + 2*(ncells.ng);
-  int ncells2 = (ncells.nx2 > 1)? (ncells.nx2 + 2*(ncells.ng)) : 1;
-  int ncells3 = (ncells.nx3 > 1)? (ncells.nx3 + 2*(ncells.ng)) : 1;
+  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  int ncells1 = indcs.nx1 + 2*(indcs.ng);
+  int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
+  int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
   Kokkos::realloc(u0,   nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
   Kokkos::realloc(w0,   nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
 
@@ -112,30 +126,30 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     // select reconstruction method (default PLM)
     {std::string xorder = pin->GetOrAddString("mhd","reconstruct","plm");
     if (xorder.compare("dc") == 0) {
-      recon_method_ = ReconstructionMethod::dc;
+      recon_method = ReconstructionMethod::dc;
 
     } else if (xorder.compare("plm") == 0) {
-      recon_method_ = ReconstructionMethod::plm;
+      recon_method = ReconstructionMethod::plm;
 
     } else if (xorder.compare("ppm") == 0) {
       // check that nghost > 2
-      if (ncells.ng < 3) {
+      if (indcs.ng < 3) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
             << std::endl << "PPM reconstruction requires at least 3 ghost zones, "
-            << "but <mesh>/nghost=" << ncells.ng << std::endl;
+            << "but <mesh>/nghost=" << indcs.ng << std::endl;
         std::exit(EXIT_FAILURE); 
       }                
-      recon_method_ = ReconstructionMethod::ppm;
+      recon_method = ReconstructionMethod::ppm;
 
     } else if (xorder.compare("wenoz") == 0) {
       // check that nghost > 2
-      if (ncells.ng < 3) {
+      if (indcs.ng < 3) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
             << std::endl << "WENOZ reconstruction requires at least 3 ghost zones, "
-            << "but <mesh>/nghost=" << ncells.ng << std::endl;
+            << "but <mesh>/nghost=" << indcs.ng << std::endl;
         std::exit(EXIT_FAILURE); 
       }                
-      recon_method_ = ReconstructionMethod::wenoz;
+      recon_method = ReconstructionMethod::wenoz;
 
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -153,7 +167,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
                   << "' cannot be used with dynamic problems" << std::endl;
         std::exit(EXIT_FAILURE);
       } else {
-        rsolver_method_ = MHD_RSolver::advect;
+        rsolver_method = MHD_RSolver::advect;
       }
 
     } else  if (evolution_t.compare("dynamic") != 0) {
@@ -163,16 +177,16 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
       std::exit(EXIT_FAILURE);
 
     } else if (rsolver.compare("llf") == 0) {
-      rsolver_method_ = MHD_RSolver::llf;
+      rsolver_method = MHD_RSolver::llf;
 
     } else if (rsolver.compare("hlle") == 0) {
-      rsolver_method_ = MHD_RSolver::hlle;
+      rsolver_method = MHD_RSolver::hlle;
 
     } else if (rsolver.compare("hlld") == 0) {
-        rsolver_method_ = MHD_RSolver::hlld;
+        rsolver_method = MHD_RSolver::hlld;
 
 //    } else if (rsolver.compare("roe") == 0) {
-//      rsolver_method_ = MHD_RSolver::roe;
+//      rsolver_method = MHD_RSolver::roe;
 
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -206,6 +220,9 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     Kokkos::realloc(e2_cc, nmb, ncells3, ncells2, ncells1);
     Kokkos::realloc(e3_cc, nmb, ncells3, ncells2, ncells1);
   }
+
+  // (5) initialize metric (GR only)
+  if (is_general_relativistic) {pmy_pack->coord.InitMetric(pin);}
 }
 
 //----------------------------------------------------------------------------------------

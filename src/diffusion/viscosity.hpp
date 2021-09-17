@@ -29,7 +29,8 @@ class Viscosity
   Real nu;     // coefficient of isotropic kinematic shear viscosity
 
   // function to add viscous fluxes to Hydro and/or MHD fluxes  
-  void IsotropicViscousFlux(const DvceArray5D<Real> &w, DvceFaceFld5D<Real> &f, Real nu);
+  void IsotropicViscousFlux(const DvceArray5D<Real> &w, const Real nu,
+                            const EOS_Data &eos, DvceFaceFld5D<Real> &f);
 
  private:
   MeshBlockPack* pmy_pack;

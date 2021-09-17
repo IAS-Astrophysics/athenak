@@ -21,12 +21,12 @@
 // Athena++ headers
 #include "athena.hpp"
 #include "parameter_input.hpp"
+#include "coordinates/cell_locations.hpp"
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "driver/driver.hpp"
-#include "utils/grid_locations.hpp"
 #include "pgen.hpp"
 
 // global variable to control computation of initial conditions versus errors
@@ -187,13 +187,11 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
   Real yfact = 1.0;
 
   // capture variables for kernel
-  int &nx1 = pmbp->mb_cells.nx1;
-  int &nx2 = pmbp->mb_cells.nx2;
-  int &nx3 = pmbp->mb_cells.nx3;
-  int &is = pmbp->mb_cells.is, &ie = pmbp->mb_cells.ie;
-  int &js = pmbp->mb_cells.js, &je = pmbp->mb_cells.je;
-  int &ks = pmbp->mb_cells.ks, &ke = pmbp->mb_cells.ke;
-  auto &size = pmbp->pmb->mbsize;
+  auto &indcs = pmbp->coord.coord_data.mb_indcs;
+  int &is = indcs.is; int &ie = indcs.ie;
+  int &js = indcs.js; int &je = indcs.je;
+  int &ks = indcs.ks; int &ke = indcs.ke;
+  auto &coord = pmbp->coord.coord_data;
 
   // initialize Hydro variables ----------------------------------------------------------
   if (pmbp->phydro != nullptr) {
@@ -217,9 +215,21 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
     par_for("pgen_linwave1", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i)
       {
-        Real x1v = CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
-        Real x2v = CellCenterX(j-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
-        Real x3v = CellCenterX(k-ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
+        Real &x1min = coord.mb_size.d_view(m).x1min;
+        Real &x1max = coord.mb_size.d_view(m).x1max;
+        int nx1 = coord.mb_indcs.nx1;
+        Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+
+        Real &x2min = coord.mb_size.d_view(m).x2min;
+        Real &x2max = coord.mb_size.d_view(m).x2max;
+        int nx2 = coord.mb_indcs.nx2;
+        Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+
+        Real &x3min = coord.mb_size.d_view(m).x3min;
+        Real &x3max = coord.mb_size.d_view(m).x3max;
+        int nx3 = coord.mb_indcs.nx3;
+        Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+
         Real x = lwv.cos_a2*(x1v*lwv.cos_a3 + x2v*lwv.sin_a3) + x3v*lwv.sin_a2;
         Real sn = std::sin(lwv.k_par*x);
         Real mx = lwv.d0*vflow + amp*sn*rem[1][wave_flag];
@@ -232,7 +242,7 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
         u1(m,IM2,k,j,i)=mx*lwv.cos_a2*lwv.sin_a3 +my*lwv.cos_a3 -mz*lwv.sin_a2*lwv.sin_a3;
         u1(m,IM3,k,j,i)=mx*lwv.sin_a2                           +mz*lwv.cos_a2;
 
-        if (eos.is_adiabatic) {
+        if (eos.is_ideal) {
           u1(m,IEN,k,j,i) = p0/gm1 + 0.5*lwv.d0*(lwv.v1_0)*(lwv.v1_0) +
                           amp*sn*rem[4][wave_flag];
         }
@@ -264,9 +274,21 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
     par_for("pgen_linwave2", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i)
       {
-        Real x1v = CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
-        Real x2v = CellCenterX(j-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
-        Real x3v = CellCenterX(k-ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
+        Real &x1min = coord.mb_size.d_view(m).x1min;
+        Real &x1max = coord.mb_size.d_view(m).x1max;
+        int nx1 = coord.mb_indcs.nx1;
+        Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+
+        Real &x2min = coord.mb_size.d_view(m).x2min;
+        Real &x2max = coord.mb_size.d_view(m).x2max;
+        int nx2 = coord.mb_indcs.nx2;
+        Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+
+        Real &x3min = coord.mb_size.d_view(m).x3min;
+        Real &x3max = coord.mb_size.d_view(m).x3max;
+        int nx3 = coord.mb_indcs.nx3;
+        Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+
         Real x = lwv.cos_a2*(x1v*lwv.cos_a3 + x2v*lwv.sin_a3) + x3v*lwv.sin_a2;
         Real sn = std::sin(lwv.k_par*x);
         Real mx = lwv.d0*vflow + amp*sn*rem[1][wave_flag];
@@ -279,21 +301,21 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
         u0(m,IM2,k,j,i)=mx*lwv.cos_a2*lwv.sin_a3 +my*lwv.cos_a3 -mz*lwv.sin_a2*lwv.sin_a3;
         u0(m,IM3,k,j,i)=mx*lwv.sin_a2                           +mz*lwv.cos_a2;
 
-        if (eos.is_adiabatic) {
+        if (eos.is_ideal) {
           u0(m,IEN,k,j,i) = p0/gm1 + 0.5*lwv.d0*SQR(lwv.v1_0) +
            amp*sn*rem[4][wave_flag] + 0.5*(SQR(lwv.b1_0) + SQR(lwv.b2_0) + SQR(lwv.b3_0));
         }
 
         // Compute face-centered fields from curl(A).
-        Real x1f   = LeftEdgeX(i  -is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
-        Real x1fp1 = LeftEdgeX(i+1-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
-        Real x2f   = LeftEdgeX(j  -js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
-        Real x2fp1 = LeftEdgeX(j+1-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
-        Real x3f   = LeftEdgeX(k  -ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
-        Real x3fp1 = LeftEdgeX(k+1-ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
-        Real dx1 = size.dx1.d_view(m);
-        Real dx2 = size.dx2.d_view(m);
-        Real dx3 = size.dx3.d_view(m);
+        Real x1f   = LeftEdgeX(i  -is, nx1, x1min, x1max);
+        Real x1fp1 = LeftEdgeX(i+1-is, nx1, x1min, x1max);
+        Real x2f   = LeftEdgeX(j  -js, nx2, x2min, x2max);
+        Real x2fp1 = LeftEdgeX(j+1-js, nx2, x2min, x2max);
+        Real x3f   = LeftEdgeX(k  -ks, nx3, x3min, x3max);
+        Real x3fp1 = LeftEdgeX(k+1-ks, nx3, x3min, x3max);
+        Real dx1 = coord.mb_size.d_view(m).dx1;
+        Real dx2 = coord.mb_size.d_view(m).dx2;
+        Real dx3 = coord.mb_size.d_view(m).dx3;
 
         b0.x1f(m,k,j,i) = (A3(x1f,  x2fp1,x3v  ,lwv) - A3(x1f,x2f,x3v,lwv))/dx2 -
                           (A2(x1f,  x2v,  x3fp1,lwv) - A2(x1f,x2v,x3f,lwv))/dx3;
@@ -324,14 +346,14 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
 
 //----------------------------------------------------------------------------------------
 //! \fn void HydroEigensystem()
-//  \brief computes eigenvectors of linear waves in adiabatic/isothermal hydrodynamics
+//  \brief computes eigenvectors of linear waves in ideal gas/isothermal hydrodynamics
 
 void HydroEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
                       const Real p, const EOS_Data &eos,
                       Real eigenvalues[5], Real right_eigenmatrix[5][5])
 {
-  //--- Adiabatic Hydrodynamics ---
-  if (eos.is_adiabatic) {
+  //--- Ideal Gas Hydrodynamics ---
+  if (eos.is_ideal) {
     Real vsq = v1*v1 + v2*v2 + v3*v3;
     Real h = (p/(eos.gamma - 1.0) + 0.5*d*vsq + p)/d;
     Real a = std::sqrt(eos.gamma*p/d);
@@ -407,14 +429,14 @@ void HydroEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
 
 //----------------------------------------------------------------------------------------
 //! \fn void MHDEigensystem()
-//  \brief computes eigenvectors of linear waves in adiabatic/isothermal mhd
+//  \brief computes eigenvectors of linear waves in ideal gas/isothermal mhd
 
 void MHDEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
                     const Real p, const Real b1, const Real b2, const Real b3,
                     const Real x, const Real y, const EOS_Data &eos,
                     Real eigenvalues[7], Real right_eigenmatrix[7][7])
 {
-  // common factors for both adiabatic and isothermal eigenvectors
+  // common factors for both ideal gas and isothermal eigenvectors
   Real btsq = b2*b2 + b3*b3;
   Real bt = std::sqrt(btsq);
   // beta's (eqs. A17, B28, B40)
@@ -427,8 +449,8 @@ void MHDEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
     bet3 = b3/bt;
   }
 
-  //--- Adiabatic MHD ---
-  if (eos.is_adiabatic) {
+  //--- Ideal Gas MHD ---
+  if (eos.is_ideal) {
     Real vsq = v1*v1 + v2*v2 + v3*v3;
     Real gm1 = eos.gamma - 1.0;
     Real h = (p/gm1 + 0.5*d*vsq + p + b1*b1 + btsq)/d;
@@ -676,13 +698,14 @@ void ProblemGenerator::LinearWaveErrors_(MeshBlockPack *pmbp, ParameterInput *pi
   int nvars=0;
 
   // capture class variables for kernel  
-  int &nx1 = pmbp->mb_cells.nx1;
-  int &nx2 = pmbp->mb_cells.nx2;
-  int &nx3 = pmbp->mb_cells.nx3;
-  int &is = pmbp->mb_cells.is;
-  int &js = pmbp->mb_cells.js;
-  int &ks = pmbp->mb_cells.ks;
-  auto &size = pmbp->pmb->mbsize;
+  auto &indcs = pmbp->coord.coord_data.mb_indcs;
+  int &nx1 = indcs.nx1;
+  int &nx2 = indcs.nx2;
+  int &nx3 = indcs.nx3;
+  int &is = indcs.is;
+  int &js = indcs.js;
+  int &ks = indcs.ks;
+  auto &size = pmbp->coord.coord_data.mb_size;
 
   // compute errors for Hydro  ----------------------------------------------------------
   if (pmbp->phydro != nullptr) {
@@ -707,7 +730,7 @@ void ProblemGenerator::LinearWaveErrors_(MeshBlockPack *pmbp, ParameterInput *pi
         k += ks;
         j += js;
 
-        Real vol = size.dx1.d_view(m)*size.dx2.d_view(m)*size.dx3.d_view(m);
+        Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
 
         // Hydro conserved variables:
         array_sum::GlobalSum evars;
@@ -715,7 +738,7 @@ void ProblemGenerator::LinearWaveErrors_(MeshBlockPack *pmbp, ParameterInput *pi
         evars.the_array[IM1] = vol*fabs(u0_(m,IM1,k,j,i) - u1_(m,IM1,k,j,i));
         evars.the_array[IM2] = vol*fabs(u0_(m,IM2,k,j,i) - u1_(m,IM2,k,j,i));
         evars.the_array[IM3] = vol*fabs(u0_(m,IM3,k,j,i) - u1_(m,IM3,k,j,i));
-        if (eos.is_adiabatic) {
+        if (eos.is_ideal) {
           evars.the_array[IEN] = vol*fabs(u0_(m,IEN,k,j,i) - u1_(m,IEN,k,j,i));
         }
   
@@ -778,9 +801,9 @@ void ProblemGenerator::LinearWaveErrors_(MeshBlockPack *pmbp, ParameterInput *pi
   }
 
   // write errors
-  std::fprintf(pfile, "%04d", pmbp->pmesh->mesh_cells.nx1);
-  std::fprintf(pfile, "  %04d", pmbp->pmesh->mesh_cells.nx2);
-  std::fprintf(pfile, "  %04d", pmbp->pmesh->mesh_cells.nx3);
+  std::fprintf(pfile, "%04d", pmbp->pmesh->mesh_indcs.nx1);
+  std::fprintf(pfile, "  %04d", pmbp->pmesh->mesh_indcs.nx2);
+  std::fprintf(pfile, "  %04d", pmbp->pmesh->mesh_indcs.nx3);
   std::fprintf(pfile, "  %05d  %e", pmbp->pmesh->ncycle, rms_err);
   for (int i=0; i<nvars; ++i) {
     std::fprintf(pfile, "  %e", l1_err[i]);

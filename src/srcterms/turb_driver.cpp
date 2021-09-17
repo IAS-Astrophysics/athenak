@@ -12,12 +12,12 @@
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
+#include "coordinates/cell_locations.hpp"
 #include "mesh/mesh.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "ion-neutral/ion_neutral.hpp"
 #include "driver/driver.hpp"
-#include "utils/grid_locations.hpp"
 #include "utils/random.hpp"
 #include "turb_driver.hpp"
 
@@ -40,10 +40,10 @@ TurbulenceDriver::TurbulenceDriver(MeshBlockPack *pp, ParameterInput *pin) :
 {
   // allocate memory for force registers
   int nmb = pmy_pack->nmb_thispack;
-  auto &ncells = pmy_pack->mb_cells;
-  int ncells1 = ncells.nx1 + 2*(ncells.ng);
-  int ncells2 = (ncells.nx2 > 1)? (ncells.nx2 + 2*(ncells.ng)) : 1;
-  int ncells3 = (ncells.nx3 > 1)? (ncells.nx3 + 2*(ncells.ng)) : 1;
+  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  int ncells1 = indcs.nx1 + 2*(indcs.ng);
+  int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
+  int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
 
   Kokkos::realloc(force, nmb, 3, ncells3, ncells2, ncells1);
   Kokkos::realloc(force_new, nmb, 3, ncells3, ncells2, ncells1);
@@ -111,15 +111,15 @@ void TurbulenceDriver::IncludeAddForcingTask(TaskList &tl, TaskID start)
   if (pmy_pack->pionn == nullptr) {
     if (pmy_pack->phydro != nullptr) {
       auto id = tl.InsertTask(&TurbulenceDriver::AddForcing, this, 
-                         pmy_pack->phydro->id.calc_flux, pmy_pack->phydro->id.update);
+                         pmy_pack->phydro->id.flux, pmy_pack->phydro->id.expl);
     }
     if (pmy_pack->pmhd != nullptr) {
       auto id = tl.InsertTask(&TurbulenceDriver::AddForcing, this, 
-                         pmy_pack->pmhd->id.calc_flux, pmy_pack->pmhd->id.update);
+                         pmy_pack->pmhd->id.flux, pmy_pack->pmhd->id.expl);
     }
   } else {
     auto id = tl.InsertTask(&TurbulenceDriver::AddForcing, this,
-                       pmy_pack->pionn->id.n_calc_flux, pmy_pack->pionn->id.n_exp_update);
+                       pmy_pack->pionn->id.n_flux, pmy_pack->pionn->id.n_expl);
   }
 
   return;
@@ -132,16 +132,16 @@ void TurbulenceDriver::IncludeAddForcingTask(TaskList &tl, TaskID start)
 
 TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage)
 {
-  int &is = pmy_pack->mb_cells.is, &ie = pmy_pack->mb_cells.ie;
-  int &js = pmy_pack->mb_cells.js, &je = pmy_pack->mb_cells.je;
-  int &ks = pmy_pack->mb_cells.ks, &ke = pmy_pack->mb_cells.ke;
-  int &nx1 = pmy_pack->mb_cells.nx1;
-  int &nx2 = pmy_pack->mb_cells.nx2;
-  int &nx3 = pmy_pack->mb_cells.nx3;
-  auto &ncells = pmy_pack->mb_cells;
-  int ncells1 = ncells.nx1 + 2*(ncells.ng);
-  int ncells2 = (ncells.nx2 > 1)? (ncells.nx2 + 2*(ncells.ng)) : 1;
-  int ncells3 = (ncells.nx3 > 1)? (ncells.nx3 + 2*(ncells.ng)) : 1;
+  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  int is = indcs.is, ie = indcs.ie;
+  int js = indcs.js, je = indcs.je;
+  int ks = indcs.ks, ke = indcs.ke;
+  int &nx1 = indcs.nx1;
+  int &nx2 = indcs.nx2;
+  int &nx3 = indcs.nx3;
+  int ncells1 = indcs.nx1 + 2*(indcs.ng);
+  int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
+  int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
 
   Real lx = pmy_pack->pmesh->mesh_size.x1max - pmy_pack->pmesh->mesh_size.x1min;
   Real ly = pmy_pack->pmesh->mesh_size.x2max - pmy_pack->pmesh->mesh_size.x2min;
@@ -178,7 +178,7 @@ TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage)
 
     // Initialize sin and cos arrays
     // bad design: requires saving sin/cos during restarts
-    auto &size = pmy_pack->pmb->mbsize;
+    auto &coord = pmy_pack->coord.coord_data;
     auto x1sin_ = x1sin;
     auto x1cos_ = x1cos;
     par_for("kx_loop", DevExeSpace(), 0, nmb-1, 0, nt-1, 0, ncells1-1,
@@ -186,7 +186,9 @@ TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage)
       { 
         int nk1 = n/nw23;
         Real kx = nk1*dkx;
-        Real x1v = CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
+        Real &x1min = coord.mb_size.d_view(m).x1min;
+        Real &x1max = coord.mb_size.d_view(m).x1max;
+        Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
       
         x1sin_(m,n,i) = sin(kx*x1v);
         x1cos_(m,n,i) = cos(kx*x1v);
@@ -201,7 +203,9 @@ TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage)
         int nk1 = n/nw23;
         int nk2 = (n - nk1*nw23)/nw2;
         Real ky = nk2*dky;
-        Real x2v = CellCenterX(j-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
+        Real &x2min = coord.mb_size.d_view(m).x2min;
+        Real &x2max = coord.mb_size.d_view(m).x2max;
+        Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
         x2sin_(m,n,j) = sin(ky*x2v);
         x2cos_(m,n,j) = cos(ky*x2v);
@@ -217,7 +221,9 @@ TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage)
         int nk2 = (n - nk1*nw23)/nw2;
         int nk3 = n - nk1*nw23 - nk2*nw2;
         Real kz = nk3*dkz;
-        Real x3v = CellCenterX(k-ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
+        Real &x3min = coord.mb_size.d_view(m).x3min;
+        Real &x3max = coord.mb_size.d_view(m).x3max;
+        Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
         x3sin_(m,n,k) = sin(kz*x3v);
         x3cos_(m,n,k) = cos(kz*x3v);
@@ -608,16 +614,10 @@ TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage)
 
 TaskStatus TurbulenceDriver::AddForcing(Driver *pdrive, int stage)
 {
-  int &is = pmy_pack->mb_cells.is, &ie = pmy_pack->mb_cells.ie;
-  int &js = pmy_pack->mb_cells.js, &je = pmy_pack->mb_cells.je;
-  int &ks = pmy_pack->mb_cells.ks, &ke = pmy_pack->mb_cells.ke;
-  int &nx1 = pmy_pack->mb_cells.nx1;
-  int &nx2 = pmy_pack->mb_cells.nx2;
-  int &nx3 = pmy_pack->mb_cells.nx3;
-  auto &ncells = pmy_pack->mb_cells;
-  int ncells1 = ncells.nx1 + 2*(ncells.ng);
-  int ncells2 = (ncells.nx2 > 1)? (ncells.nx2 + 2*(ncells.ng)) : 1;
-  int ncells3 = (ncells.nx3 > 1)? (ncells.nx3 + 2*(ncells.ng)) : 1;
+  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  int is = indcs.is, ie = indcs.ie;
+  int js = indcs.js, je = indcs.je;
+  int ks = indcs.ks, ke = indcs.ke;
 
   Real beta_dt = (pdrive->beta[stage-1])*(pmy_pack->pmesh->dt);
   Real fcorr=0.0;
@@ -640,7 +640,6 @@ TaskStatus TurbulenceDriver::AddForcing(Driver *pdrive, int stage)
       w = (pmy_pack->pmhd->w0);
     }
 
-    int &nmb = pmy_pack->nmb_thispack;
     auto force_ = force;
     auto force_new_ = force_new;
     par_for("push", DevExeSpace(),0,(pmy_pack->nmb_thispack-1),ks,ke,js,je,is,ie,
@@ -670,7 +669,6 @@ TaskStatus TurbulenceDriver::AddForcing(Driver *pdrive, int stage)
     u_ = (pmy_pack->phydro->u0);
     w_ = (pmy_pack->phydro->w0);
 
-    int &nmb = pmy_pack->nmb_thispack;
     auto force_ = force;
     auto force_new_ = force_new;
     par_for("push", DevExeSpace(),0,(pmy_pack->nmb_thispack-1),ks,ke,js,je,is,ie,

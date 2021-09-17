@@ -12,7 +12,6 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh.hpp"
-#include "utils/grid_locations.hpp"
 
 //----------------------------------------------------------------------------------------
 // MeshBlock constructor:
@@ -21,41 +20,33 @@
 MeshBlock::MeshBlock(Mesh* pm, int igids, int nmb) : 
   pmy_mesh(pm), nmb(nmb),
   mbgid("mbgid",nmb),
-  mbsize(nmb),
   mb_bcs("mbbcs",nmb,6),
   lb_cost("lbcost",nmb)
 {
   // initialize host arrays of gids, sizes, bcs over all MeshBlocks
-  auto &msize = pm->mesh_size;
   for (int m=0; m<nmb; ++m) {
     mbgid.h_view(m) = igids + m;
 
+    // calculate physical size and set BCs of MeshBlock in x1, depending on whether there
+    // are one or more MeshBlocks in this direction.
     std::int32_t &lx1 = pm->loclist[igids+m].lx1;
     std::int32_t &lev = pm->loclist[igids+m].level;
     std::int32_t nmbx1 = pm->nmb_rootx1 << (lev - pm->root_level);
-
-    // calculate physical size of MeshBlock in x1.  Second index of mbsize represents:
-    // x1min/max = 0,1;  x2min/max = 2,3;  x3min/max = 4,5;  dx1/2/3 = 6,7,8
     if (lx1 == 0) {
-      mbsize.x1min.h_view(m) = msize.x1min;
       mb_bcs(m,0) = pm->mesh_bcs[BoundaryFace::inner_x1];
     } else {
-      mbsize.x1min.h_view(m) = LeftEdgeX(lx1, nmbx1, msize.x1min, msize.x1max);
       mb_bcs(m,0) = BoundaryFlag::block;
     }
 
     if (lx1 == nmbx1 - 1) {
-      mbsize.x1max.h_view(m) = msize.x1max;
       mb_bcs(m,1) = pm->mesh_bcs[BoundaryFace::outer_x1];
     } else {
-      mbsize.x1max.h_view(m) = LeftEdgeX(lx1+1, nmbx1, msize.x1min, msize.x1max);
       mb_bcs(m,1) = BoundaryFlag::block;
     }
 
-    // calculate physical size of MeshBlock in x2
-    if (pm->mesh_cells.nx2 == 1) {
-      mbsize.x2min.h_view(m) = msize.x2min;
-      mbsize.x2max.h_view(m) = msize.x2max;
+    // calculate physical size and set BCs of MeshBlock in x2, dependng on whether there
+    // are none (1D), one, or more MeshBlocks in this direction
+    if (pm->mesh_indcs.nx2 == 1) {
       mb_bcs(m,2) = pm->mesh_bcs[BoundaryFace::inner_x2];
       mb_bcs(m,3) = pm->mesh_bcs[BoundaryFace::outer_x2];
     } else {
@@ -63,75 +54,45 @@ MeshBlock::MeshBlock(Mesh* pm, int igids, int nmb) :
       std::int32_t &lx2 = pm->loclist[igids+m].lx2;
       std::int32_t nmbx2 = pm->nmb_rootx2 << (lev - pm->root_level);
       if (lx2 == 0) {
-        mbsize.x2min.h_view(m) = msize.x2min;
         mb_bcs(m,2) = pm->mesh_bcs[BoundaryFace::inner_x2];
       } else {
-        mbsize.x2min.h_view(m) = LeftEdgeX(lx2, nmbx2, msize.x2min, msize.x2max);
         mb_bcs(m,2) = BoundaryFlag::block;
       }
 
       if (lx2 == (nmbx2) - 1) {
-        mbsize.x2max.h_view(m) = msize.x2max;
         mb_bcs(m,3) = pm->mesh_bcs[BoundaryFace::outer_x2];
       } else {
-        mbsize.x2max.h_view(m) = LeftEdgeX(lx2+1, nmbx2, msize.x2min, msize.x2max);
         mb_bcs(m,3) = BoundaryFlag::block;
       }
 
     }
 
-    // calculate physical size of MeshBlock in x3
-    if (pm->mesh_cells.nx3 == 1) {
-      mbsize.x3min.h_view(m) = msize.x3min;
-      mbsize.x3max.h_view(m) = msize.x3max;
+    // calculate physical size and set BCs of MeshBlock in x3, dependng on whether there
+    // are none (1D/2D), one, or more MeshBlocks in this direction
+    if (pm->mesh_indcs.nx3 == 1) {
       mb_bcs(m,4) = pm->mesh_bcs[BoundaryFace::inner_x3];
       mb_bcs(m,5) = pm->mesh_bcs[BoundaryFace::outer_x3];
     } else {
       std::int32_t &lx3 = pm->loclist[igids+m].lx3;
       std::int32_t nmbx3 = pm->nmb_rootx3 << (lev - pm->root_level);
       if (lx3 == 0) {
-        mbsize.x3min.h_view(m) = msize.x3min;
         mb_bcs(m,4) = pm->mesh_bcs[BoundaryFace::inner_x3];
       } else {
-        mbsize.x3min.h_view(m) = LeftEdgeX(lx3, nmbx3, msize.x3min, msize.x3max);
         mb_bcs(m,4) = BoundaryFlag::block;
       }
       if (lx3 == (nmbx3) - 1) {
-        mbsize.x3max.h_view(m) = msize.x3max;
         mb_bcs(m,5) = pm->mesh_bcs[BoundaryFace::outer_x3];
       } else {
-        mbsize.x3max.h_view(m) = LeftEdgeX(lx3+1, nmbx3, msize.x3min, msize.x3max);
         mb_bcs(m,5) = BoundaryFlag::block;
       }
     }
-    // grid spacing at this level.  Ensure all MeshBlocks at same level have same dx
-    mbsize.dx1.h_view(m) = msize.dx1*static_cast<Real>(1<<(lev - pm->root_level));
-    mbsize.dx2.h_view(m) = msize.dx2*static_cast<Real>(1<<(lev - pm->root_level));
-    mbsize.dx3.h_view(m) = msize.dx3*static_cast<Real>(1<<(lev - pm->root_level));
+
   }
 
   // For each DualArray: mark host views as modified, and then sync to device array
   mbgid.template modify<HostMemSpace>();
-  mbsize.x1min.template modify<HostMemSpace>();
-  mbsize.x1max.template modify<HostMemSpace>();
-  mbsize.x2min.template modify<HostMemSpace>();
-  mbsize.x2max.template modify<HostMemSpace>();
-  mbsize.x3min.template modify<HostMemSpace>();
-  mbsize.x3max.template modify<HostMemSpace>();
-  mbsize.dx1.template modify<HostMemSpace>();
-  mbsize.dx2.template modify<HostMemSpace>();
-  mbsize.dx3.template modify<HostMemSpace>();
 
   mbgid.template sync<DevExeSpace>();
-  mbsize.x1min.template sync<DevExeSpace>();
-  mbsize.x1max.template sync<DevExeSpace>();
-  mbsize.x2min.template sync<DevExeSpace>();
-  mbsize.x2max.template sync<DevExeSpace>();
-  mbsize.x3min.template sync<DevExeSpace>();
-  mbsize.x3max.template sync<DevExeSpace>();
-  mbsize.dx1.template sync<DevExeSpace>();
-  mbsize.dx2.template sync<DevExeSpace>();
-  mbsize.dx3.template sync<DevExeSpace>();
 }
 
 //----------------------------------------------------------------------------------------

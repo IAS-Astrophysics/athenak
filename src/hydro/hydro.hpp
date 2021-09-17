@@ -15,12 +15,15 @@
 
 // forward declarations
 class EquationOfState;
+class Coordinates;
 class Viscosity;
 class SourceTerms;
 class Driver;
 
 // constants that enumerate Hydro Riemann Solver options
-enum class Hydro_RSolver {advect, llf, hlle, hllc, roe, llf_rel, hllc_rel};
+enum class Hydro_RSolver {advect, llf, hlle, hllc, roe,    // non-relativistic
+                          llf_sr, hlle_sr, hllc_sr,        // SR
+                          hlle_gr};                        // GR
 
 //----------------------------------------------------------------------------------------
 //! \struct HydroTaskIDs
@@ -28,16 +31,16 @@ enum class Hydro_RSolver {advect, llf, hlle, hllc, roe, llf_rel, hllc_rel};
   
 struct HydroTaskIDs
 {   
-  TaskID init_recv;
-  TaskID copy_cons;
-  TaskID calc_flux;
-  TaskID update;
+  TaskID irecv;
+  TaskID copyu;
+  TaskID flux;
+  TaskID expl;
   TaskID sendu;
   TaskID recvu;
-  TaskID phys_bcs;
-  TaskID cons2prim;
+  TaskID bcs;
+  TaskID c2p;
   TaskID newdt;
-  TaskID clear_send;
+  TaskID clear;
 };
 
 namespace hydro {
@@ -47,16 +50,18 @@ namespace hydro {
 
 class Hydro
 {
- public:
+public:
   Hydro(MeshBlockPack *ppack, ParameterInput *pin);
   ~Hydro();
 
   // data
-  EquationOfState *peos;  // chosen EOS
-
   // flags to denote relativistic dynamics
   bool is_special_relativistic = false;
   bool is_general_relativistic = false;
+
+  ReconstructionMethod recon_method;
+  Hydro_RSolver rsolver_method;
+  EquationOfState *peos;  // chosen EOS
 
   int nhydro;             // number of hydro variables (5/4 for adiabatic/isothermal)
   int nscalars;           // number of passive scalars
@@ -84,13 +89,16 @@ class Hydro
   TaskStatus ClearRecv(Driver *d, int stage);
   TaskStatus ClearSend(Driver *d, int stage);
   TaskStatus CopyCons(Driver *d, int stage);
-  TaskStatus CalcFluxes(Driver *d, int stage);
   TaskStatus ExpRKUpdate(Driver *d, int stage);
   TaskStatus SendU(Driver *d, int stage); 
   TaskStatus RecvU(Driver *d, int stage); 
   TaskStatus ConToPrim(Driver *d, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
   TaskStatus ApplyPhysicalBCs(Driver* pdrive, int stage);  // in file in hydro/bvals dir
+
+  // CalculateFluxes function templated over Riemann Solvers
+  template <Hydro_RSolver T>
+  TaskStatus CalcFluxes(Driver *d, int stage);
 
   // functions to set physical BCs for Hydro conserved variables, applied to single MB
   // specified by argument 'm'. 
@@ -109,10 +117,8 @@ class Hydro
   void ShearInnerX1(int m);
   void ShearOuterX1(int m);
 
- private:
+private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Hydro
-  ReconstructionMethod recon_method_;
-  Hydro_RSolver rsolver_method_;
 };
 
 } // namespace hydro

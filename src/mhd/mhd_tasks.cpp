@@ -5,12 +5,12 @@
 //========================================================================================
 //! \file mhd_tasks.cpp
 //  \brief implementation of functions that control MHD tasks in the four task lists:
-//  stagestart_tl, stagerun_tl, stageend_tl
-//  operatorsplit_tl
+//  stagestart_tl, stagerun_tl, stageend_tl, operatorsplit_tl (currently not used)
 
 #include <iostream>
 
 #include "athena.hpp"
+#include "globals.hpp"
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
 #include "mesh/mesh.hpp"
@@ -29,22 +29,34 @@ void MHD::AssembleMHDTasks(TaskList &start, TaskList &run, TaskList &end)
 { 
   TaskID none(0);
   
-  id.init_recv = start.AddTask(&MHD::InitRecv, this, none);
+  // start task list
+  id.irecv = start.AddTask(&MHD::InitRecv, this, none);
 
-  id.copy_cons = run.AddTask(&MHD::CopyCons, this, none);
-  id.calc_flux = run.AddTask(&MHD::CalcFluxes, this, id.copy_cons);
-  id.update = run.AddTask(&MHD::ExpRKUpdate, this, id.calc_flux);
-  id.sendu = run.AddTask(&MHD::SendU, this, id.update);
+  // run task list
+  id.copyu = run.AddTask(&MHD::CopyCons, this, none);
+  // select which calculate_flux function to add based on rsolver_method
+  if (rsolver_method == MHD_RSolver::advect) {
+    id.flux = run.AddTask(&MHD::CalcFluxes<MHD_RSolver::advect>, this, id.copyu);
+  } else if (rsolver_method == MHD_RSolver::llf) {
+    id.flux = run.AddTask(&MHD::CalcFluxes<MHD_RSolver::llf>, this, id.copyu);
+  } else if (rsolver_method == MHD_RSolver::hlle) {
+    id.flux = run.AddTask(&MHD::CalcFluxes<MHD_RSolver::hlle>, this, id.copyu);
+  } else if (rsolver_method == MHD_RSolver::hlld) {
+    id.flux = run.AddTask(&MHD::CalcFluxes<MHD_RSolver::hlld>, this, id.copyu);
+  }
+  id.expl = run.AddTask(&MHD::ExpRKUpdate, this, id.flux);
+  id.sendu = run.AddTask(&MHD::SendU, this, id.expl);
   id.recvu = run.AddTask(&MHD::RecvU, this, id.sendu);
-  id.corner_e = run.AddTask(&MHD::CornerE, this, id.recvu);
-  id.ct = run.AddTask(&MHD::CT, this, id.corner_e);
+  id.efld = run.AddTask(&MHD::CornerE, this, id.recvu);
+  id.ct = run.AddTask(&MHD::CT, this, id.efld);
   id.sendb = run.AddTask(&MHD::SendB, this, id.ct);
   id.recvb = run.AddTask(&MHD::RecvB, this, id.sendb);
-  id.phys_bcs = run.AddTask(&MHD::ApplyPhysicalBCs, this, id.recvb);
-  id.cons2prim = run.AddTask(&MHD::ConToPrim, this, id.phys_bcs);
-  id.newdt = run.AddTask(&MHD::NewTimeStep, this, id.cons2prim);
+  id.bcs = run.AddTask(&MHD::ApplyPhysicalBCs, this, id.recvb);
+  id.c2p = run.AddTask(&MHD::ConToPrim, this, id.bcs);
+  id.newdt = run.AddTask(&MHD::NewTimeStep, this, id.c2p);
 
-  id.clear_send = end.AddTask(&MHD::ClearSend, this, none);
+  // end task list
+  id.clear = end.AddTask(&MHD::ClearSend, this, none);
 
   return;
 }
@@ -219,7 +231,7 @@ TaskStatus MHD::RecvB(Driver *pdrive, int stage)
 
 TaskStatus MHD::ConToPrim(Driver *pdrive, int stage)
 {
-  peos->ConsToPrimMHD(u0, b0, w0, bcc0);
+  peos->ConsToPrim(u0, b0, w0, bcc0);
   return TaskStatus::complete;
 }
 

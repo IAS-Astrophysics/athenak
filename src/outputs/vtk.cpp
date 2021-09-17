@@ -19,9 +19,10 @@
 #include <string>
 
 #include "athena.hpp"
+#include "coordinates/cell_locations.hpp"
+#include "globals.hpp"
 #include "mesh/mesh.hpp"
 #include "hydro/hydro.hpp"
-#include "utils/grid_locations.hpp"
 #include "outputs.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -64,9 +65,9 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   int big_end = swap_functions::IsBigEndian(); // =1 on big endian machine
 
   // numbers of cells in entire grid
-  int nout1 = (out_params.slice1)? 1 : (pm->mesh_cells.nx1);
-  int nout2 = (out_params.slice2)? 1 : (pm->mesh_cells.nx2);
-  int nout3 = (out_params.slice3)? 1 : (pm->mesh_cells.nx3);
+  int nout1 = (out_params.slice1)? 1 : (pm->mesh_indcs.nx1);
+  int nout2 = (out_params.slice2)? 1 : (pm->mesh_indcs.nx2);
+  int nout3 = (out_params.slice3)? 1 : (pm->mesh_indcs.nx3);
   int ncoord1 = (nout1 > 1)? nout1+1 : nout1;
   int ncoord2 = (nout2 > 1)? nout2+1 : nout2;
   int ncoord3 = (nout3 > 1)? nout3+1 : nout3;
@@ -102,7 +103,7 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   msg << "# vtk DataFile Version 2.0" << std::endl
       << "# Athena++ data at time= " << pm->time
       << "  level= 0"  // assuming uniform mesh
-      << "  nranks= " << global_variable::nranks 
+      << "  nranks= " << global_variable::nranks
       << "  cycle=" << pm->ncycle
       << "  variables=" << GetOutputVariableString(out_params.variable).c_str()
       << std::endl << "BINARY" << std::endl
@@ -143,11 +144,11 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
 
     // Loop over MeshBlocks
     for (int m=0; m<nout_mbs; ++m) {
-      auto cells = pm->pmb_pack->mb_cells;
+      auto &indcs = pm->pmb_pack->coord.coord_data.mb_indcs;
       LogicalLocation loc = pm->loclist[outmbs[m].mb_gid];
-      int &mb_nx1 = cells.nx1;
-      int &mb_nx2 = cells.nx2;
-      int &mb_nx3 = cells.nx3;
+      int &mb_nx1 = indcs.nx1;
+      int &mb_nx2 = indcs.nx2;
+      int &mb_nx3 = indcs.nx3;
       int &ois = outmbs[m].ois;
       int &oie = outmbs[m].oie;
       int &ojs = outmbs[m].ojs;

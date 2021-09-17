@@ -32,10 +32,10 @@ namespace hydro {
 
 //----------------------------------------------------------------------------------------
 //! \fn void HLLE
-//  \brief The HLLE Riemann solver for hydrodynamics (both adiabatic and isothermal)
+//  \brief The HLLE Riemann solver for hydrodynamics (both ideal gas and isothermal)
 
 KOKKOS_INLINE_FUNCTION
-void HLLE(TeamMember_t const &member, const EOS_Data &eos,
+void HLLE(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coord,
      const int m, const int k, const int j, const int il, const int iu, const int ivx,
      const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr, DvceArray5D<Real> flx)
 {
@@ -53,13 +53,13 @@ void HLLE(TeamMember_t const &member, const EOS_Data &eos,
     Real &wl_ivx = wl(ivx,i);
     Real &wl_ivy = wl(ivy,i);
     Real &wl_ivz = wl(ivz,i);
-    Real &wl_ipr = wl(IPR,i);  // should never be referenced for adiabatic EOS
+    Real &wl_ipr = wl(IPR,i);  // should never be referenced for ideal gas EOS
 
     Real &wr_idn = wr(IDN,i);
     Real &wr_ivx = wr(ivx,i);
     Real &wr_ivy = wr(ivy,i);
     Real &wr_ivz = wr(ivz,i);
-    Real &wr_ipr = wr(IPR,i);  // should never be referenced for adiabatic EOS
+    Real &wr_ipr = wr(IPR,i);  // should never be referenced for ideal gas EOS
 
     //--- Step 2.  Compute Roe-averaged state
 
@@ -71,10 +71,10 @@ void HLLE(TeamMember_t const &member, const EOS_Data &eos,
     Real wroe_ivy = (sqrtdl*wl_ivy + sqrtdr*wr_ivy)*isdlpdr;
     Real wroe_ivz = (sqrtdl*wl_ivz + sqrtdr*wr_ivz)*isdlpdr;
 
-    // Following Roe(1981), the enthalpy H=(E+P)/d is averaged for adiabatic flows,
+    // Following Roe(1981), the enthalpy H=(E+P)/d is averaged for ideal gas EOS,
     // rather than E or P directly.  sqrtdl*hl = sqrtdl*(el+pl)/dl = (el+pl)/sqrtdl
     Real el,er,hroe;
-    if (eos.is_adiabatic) {
+    if (eos.is_ideal) {
       el = wl_ipr*igm1 + 0.5*wl_idn*(SQR(wl_ivx) + SQR(wl_ivy) + SQR(wl_ivz));
       er = wr_ipr*igm1 + 0.5*wr_idn*(SQR(wr_ivx) + SQR(wr_ivy) + SQR(wr_ivz));
       hroe = ((el + wl_ipr)/sqrtdl + (er + wr_ipr)/sqrtdr)*isdlpdr;
@@ -84,7 +84,7 @@ void HLLE(TeamMember_t const &member, const EOS_Data &eos,
 
     Real qa,qb;
     Real a  = iso_cs;
-    if (eos.is_adiabatic) {
+    if (eos.is_ideal) {
       qa = eos.SoundSpeed(wl_ipr,wl_idn);
       qb = eos.SoundSpeed(wr_ipr,wr_idn);
       a = hroe - 0.5*(SQR(wroe_ivx) + SQR(wroe_ivy) + SQR(wroe_ivz));
@@ -121,7 +121,7 @@ void HLLE(TeamMember_t const &member, const EOS_Data &eos,
     fl.mz = wl_idn*wl_ivz*qa;
     fr.mz = wr_idn*wr_ivz*qb;
 
-    if (eos.is_adiabatic) {
+    if (eos.is_ideal) {
       fl.mx += wl_ipr;
       fr.mx += wr_ipr;
       fl.e  = el*qa + wl_ipr*wl_ivx;
@@ -141,7 +141,7 @@ void HLLE(TeamMember_t const &member, const EOS_Data &eos,
     flx(m,ivx,k,j,i) = 0.5*(fl.mx + fr.mx) + qa*(fl.mx - fr.mx);
     flx(m,ivy,k,j,i) = 0.5*(fl.my + fr.my) + qa*(fl.my - fr.my);
     flx(m,ivz,k,j,i) = 0.5*(fl.mz + fr.mz) + qa*(fl.mz - fr.mz);
-    if (eos.is_adiabatic) flx(m,IEN,k,j,i) = 0.5*(fl.e + fr.e) + qa*(fl.e - fr.e);
+    if (eos.is_ideal) flx(m,IEN,k,j,i) = 0.5*(fl.e + fr.e) + qa*(fl.e - fr.e);
   });
 
   return;

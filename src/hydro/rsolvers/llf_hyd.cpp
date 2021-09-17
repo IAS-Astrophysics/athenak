@@ -22,10 +22,10 @@ namespace hydro {
 
 //----------------------------------------------------------------------------------------
 //! \fn void LLF
-//  \brief The LLF Riemann solver for hydrodynamics (both adiabatic and isothermal)
+//  \brief The LLF Riemann solver for hydrodynamics (both ideal gas and isothermal)
 
 KOKKOS_INLINE_FUNCTION
-void LLF(TeamMember_t const &member, const EOS_Data &eos,
+void LLF(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coord,
      const int m, const int k, const int j, const int il, const int iu, const int ivx,
      const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr, DvceArray5D<Real> flx)
 {
@@ -42,13 +42,13 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos,
     Real &wl_ivx = wl(ivx,i);
     Real &wl_ivy = wl(ivy,i);
     Real &wl_ivz = wl(ivz,i);
-    Real &wl_ipr = wl(IPR,i);  // should never be referenced for adiabatic EOS
+    Real &wl_ipr = wl(IPR,i);  // should never be referenced for ideal gas EOS
 
     Real &wr_idn = wr(IDN,i);
     Real &wr_ivx = wr(ivx,i);
     Real &wr_ivy = wr(ivy,i);
     Real &wr_ivz = wr(ivz,i);
-    Real &wr_ipr = wr(IPR,i);  // should never be referenced for adiabatic EOS
+    Real &wr_ipr = wr(IPR,i);  // should never be referenced for ideal gas EOS
 
     //--- Step 2.  Compute sum of L/R fluxes
 
@@ -56,13 +56,13 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos,
     Real qb = wr_idn*wr_ivx;
 
     HydCons1D fsum;
-    fsum.d  = qa         + qb;
+    fsum.d  = qa        + qb;
     fsum.mx = qa*wl_ivx + qb*wr_ivx;
     fsum.my = qa*wl_ivy + qb*wr_ivy;
     fsum.mz = qa*wl_ivz + qb*wr_ivz;
 
     Real el,er;
-    if (eos.is_adiabatic) {
+    if (eos.is_ideal) {
       el = wl_ipr*igm1 + 0.5*wl_idn*(SQR(wl_ivx) + SQR(wl_ivy) + SQR(wl_ivz));
       er = wr_ipr*igm1 + 0.5*wr_idn*(SQR(wr_ivx) + SQR(wr_ivy) + SQR(wr_ivz));
       fsum.mx += (wl_ipr + wr_ipr);
@@ -73,7 +73,7 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos,
 
     //--- Step 3.  Compute max wave speed in L,R states (see Toro eq. 10.43)
 
-    if (eos.is_adiabatic) {
+    if (eos.is_ideal) {
       qa = eos.SoundSpeed(wl_ipr,wl_idn);
       qb = eos.SoundSpeed(wr_ipr,wr_idn);
     } else {
@@ -85,11 +85,11 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos,
     //--- Step 4.  Compute difference in L/R states dU, multiplied by max wave speed
 
     HydCons1D du;
-    du.d  = a*(wr_idn         - wl_idn);
+    du.d  = a*(wr_idn        - wl_idn);
     du.mx = a*(wr_idn*wr_ivx - wl_idn*wl_ivx);
     du.my = a*(wr_idn*wr_ivy - wl_idn*wl_ivy);
     du.mz = a*(wr_idn*wr_ivz - wl_idn*wl_ivz);
-    if (eos.is_adiabatic) du.e = a*(er - el);
+    if (eos.is_ideal) du.e = a*(er - el);
 
     //--- Step 5. Compute the LLF flux at interface (see Toro eq. 10.42).
 
@@ -97,7 +97,7 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos,
     flx(m,ivx,k,j,i) = 0.5*(fsum.mx - du.mx);
     flx(m,ivy,k,j,i) = 0.5*(fsum.my - du.my);
     flx(m,ivz,k,j,i) = 0.5*(fsum.mz - du.mz);
-    if (eos.is_adiabatic) {flx(m,IEN,k,j,i) = 0.5*(fsum.e - du.e);}
+    if (eos.is_ideal) {flx(m,IEN,k,j,i) = 0.5*(fsum.e - du.e);}
   });
 
   return;

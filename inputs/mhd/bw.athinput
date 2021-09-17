@@ -41,9 +41,9 @@ tlim       = 0.1       # time limit
 ndiag      = 1         # cycles between diagostic output
 
 <mhd>
-eos         = adiabatic   # EOS type
-reconstruct = plm         # spatial reconstruction method
-rsolver     = llf         # Riemann-solver to be used
+eos         = ideal    # EOS type
+reconstruct = plm      # spatial reconstruction method
+rsolver     = llf      # Riemann-solver to be used
 
 <eos>
 gamma           = 2.0   # gamma = C_p/C_v
@@ -54,20 +54,20 @@ pgen_name = shock_tube  # problem generator name
 shock_dir = 1           # Shock Direction -- (1,2,3) = (x1,x2,x3)
 xshock    = 0.0         # position of initial interface
 
-di_l = 1.0              # density on left
-pi_l = 1.0              # pressure
-ui_l = 0.0              # X-velocity
-vi_l = 0.0              # Y-velocity
-wi_l = 0.0              # Z-velocity
+dl = 1.0              # density on left
+pl = 1.0              # pressure
+ul = 0.0              # X-velocity
+vl = 0.0              # Y-velocity
+wl = 0.0              # Z-velocity
 bxl = 0.75              # X-magnetic-field
 byl = 1.0               # Y-magnetic-field
 bzl = 0.0               # Z-magnetic-field
 
-di_r = 0.125            # density on right
-pi_r = 0.1              # pressure
-ui_r = 0.0              # X-velocity
-vi_r = 0.0              # Y-velocity
-wi_r = 0.0              # Z-velocity
+dr = 0.125            # density on right
+pr = 0.1              # pressure
+ur = 0.0              # X-velocity
+vr = 0.0              # Y-velocity
+wr = 0.0              # Z-velocity
 bxr = 0.75              # X-magnetic-field
 byr = -1.0              # Y-magnetic-field
 bzr = 0.0               # Z-magnetic-field

@@ -4,64 +4,26 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file shock_tube.cpp
-//  \brief Problem generator for shock tube (1-D Riemann) problems in both hydro and MHD.
-//
-// Initializes plane-parallel shock along x1 (in 1D, 2D, 3D), along x2 (in 2D, 3D),
-// and along x3 (in 3D).
+//! \brief Problem generator for shock tube (1-D Riemann) problems in both hydro and MHD.
+//! Works for both non-relativistic and relativistic dynamics
+//! Initializes plane-parallel shock along x1 (in 1D, 2D, 3D), along x2 (in 2D, 3D),
+//! and along x3 (in 3D).
 
 #include <iostream>
 #include <sstream>
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
+#include "coordinates/cell_locations.hpp"
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
-#include "utils/grid_locations.hpp"
 #include "pgen.hpp"
-
-// Define some containers to hold Hydro conserved/primitive variables
-struct Cons1D {
-  Real d, m1, m2, m3, e;
-};
-struct Prim1D {
-  Real d, vx, vy, vz, p;
-};
-
-// Define a function to compute prim->cons for either Newtonian or SR dynamics
-// TODO: Currently this pgen is the only function that needs Prim->Cons transorms. If
-// such a functions is needed in more places (e.g. AMR prolongation) then it should
-// be moved to EOS class.
-
-// TODO: need to add MHD PrimToCons when add SR MHD
-void PrimToConsHydro(Prim1D &w, Cons1D &u, Real gam_eos, bool is_sr)
-{
-  if (is_sr) {
-    Real v_sq = SQR(w.vx) + SQR(w.vy) + SQR(w.vz);
-    Real gamma_sq = 1.0/(1.0 - v_sq);
-    Real gamma = sqrt(gamma_sq);
-    //FIXME: Only ideal fluid for now
-    Real wgas = w.d + (gam_eos/(gam_eos - 1.))*w.p;
-
-    u.d  = gamma * w.d;
-    u.m1 = wgas * gamma_sq * w.vx;
-    u.m2 = wgas * gamma_sq * w.vy;
-    u.m3 = wgas * gamma_sq * w.vz;
-    u.e  = wgas * gamma_sq - w.p - gamma * w.d; 
-  } else {
-    u.d  = w.d;
-    u.m1 = w.vx*w.d;
-    u.m2 = w.vy*w.d;
-    u.m3 = w.vz*w.d;
-    u.e  = w.p/(gam_eos - 1.0) + 0.5*w.d*(SQR(w.vx) + SQR(w.vy) + SQR(w.vz)); 
-  }
-  return;
-}
 
 //----------------------------------------------------------------------------------------
 //! \fn ProblemGenerator::ShockTube_()
-//  \brief Problem Generator for the shock tube (Riemann problem) tests
+//! \brief Problem Generator for the shock tube (Riemann problem) tests
 
 void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
 {
@@ -100,145 +62,177 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
     exit(EXIT_FAILURE);
   }
 
- // capture variables for the kernel
-  int &is = pmbp->mb_cells.is, &ie = pmbp->mb_cells.ie;
-  int &js = pmbp->mb_cells.js, &je = pmbp->mb_cells.je;
-  int &ks = pmbp->mb_cells.ks, &ke = pmbp->mb_cells.ke;
-  int &nx1 = pmbp->mb_cells.nx1;
-  int &nx2 = pmbp->mb_cells.nx2;
-  int &nx3 = pmbp->mb_cells.nx3;
-  auto size = pmbp->pmb->mbsize;
+  // capture variables for the kernel
+  auto &indcs = pmbp->coord.coord_data.mb_indcs;
+  int &is = indcs.is; int &ie = indcs.ie;
+  int &js = indcs.js; int &je = indcs.je;
+  int &ks = indcs.ks; int &ke = indcs.ke;
+  auto coord = pmbp->coord.coord_data;
 
   // Initialize Hydro variables -------------------------------
   if (pmbp->phydro != nullptr) {
 
     // Parse left state read from input file: d,vx,vy,vz,[P]
-    Prim1D wl,wr;
-    Cons1D ul,ur;
-    wl.d  = pin->GetReal("problem","dn_l");
-    wl.vx = pin->GetReal("problem","un_l");
-    wl.vy = pin->GetReal("problem","vn_l");
-    wl.vz = pin->GetReal("problem","wn_l");
-    wl.p  = pin->GetReal("problem","pn_l");
-    Real gam = pmbp->phydro->peos->eos_data.gamma;
-    PrimToConsHydro(wl,ul,gam,pmbp->phydro->is_special_relativistic);
+    HydPrim1D wl,wr;
+    wl.d  = pin->GetReal("problem","dl");
+    wl.vx = pin->GetReal("problem","ul");
+    wl.vy = pin->GetReal("problem","vl");
+    wl.vz = pin->GetReal("problem","wl");
+    wl.p  = pin->GetReal("problem","pl");
+    // compute Lorentz factor (needed for SR)
+    Real u0l = 1.0;
+    if (pmbp->phydro->is_special_relativistic || pmbp->phydro->is_general_relativistic) {
+      u0l = 1.0/sqrt( 1.0 - (SQR(wl.vx) + SQR(wl.vy) + SQR(wl.vz)) );
+    }
   
     // Parse right state read from input file: d,vx,vy,vz,[P]
-    wr.d  = pin->GetReal("problem","dn_r");
-    wr.vx = pin->GetReal("problem","un_r");
-    wr.vy = pin->GetReal("problem","vn_r");
-    wr.vz = pin->GetReal("problem","wn_r");
-    wr.p  = pin->GetReal("problem","pn_r");
-    PrimToConsHydro(wr,ur,gam,pmbp->phydro->is_special_relativistic);
+    wr.d  = pin->GetReal("problem","dr");
+    wr.vx = pin->GetReal("problem","ur");
+    wr.vy = pin->GetReal("problem","vr");
+    wr.vz = pin->GetReal("problem","wr");
+    wr.p  = pin->GetReal("problem","pr");
+    // compute Lorentz factor (needed for SR)
+    Real u0r = 1.0;
+    if (pmbp->phydro->is_special_relativistic || pmbp->phydro->is_general_relativistic) {
+      u0r = 1.0/sqrt( 1.0 - (SQR(wr.vx) + SQR(wr.vy) + SQR(wr.vz)) );
+    }
 
-    auto &u0 = pmbp->phydro->u0;
+    auto &w0 = pmbp->phydro->w0;
     par_for("pgen_shock1", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m,int k, int j, int i)
       {
         Real x;
         if (shk_dir == 1) {
-          x = CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
+          Real &x1min = coord.mb_size.d_view(m).x1min;
+          Real &x1max = coord.mb_size.d_view(m).x1max;
+          int nx1 = coord.mb_indcs.nx1;
+          x = CellCenterX(i-is, nx1, x1min, x1max);
         } else if (shk_dir == 2) {
-          x = CellCenterX(j-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
+          Real &x2min = coord.mb_size.d_view(m).x2min;
+          Real &x2max = coord.mb_size.d_view(m).x2max;
+          int nx2 = coord.mb_indcs.nx2;
+          x = CellCenterX(j-js, nx2, x2min, x2max);
         } else {
-          x = CellCenterX(k-ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
+          Real &x3min = coord.mb_size.d_view(m).x3min;
+          Real &x3max = coord.mb_size.d_view(m).x3max;
+          int nx3 = coord.mb_indcs.nx3;
+          x = CellCenterX(k-ks, nx3, x3min, x3max);
         }
 
+        // in SR, primitive variables use spatial components of 4-vel u^i = gamma * v^i
         if (x < xshock) {
-          u0(m,IDN,k,j,i) = ul.d;
-          u0(m,ivx,k,j,i) = ul.m1;
-          u0(m,ivy,k,j,i) = ul.m2;
-          u0(m,ivz,k,j,i) = ul.m3;
-          u0(m,IEN,k,j,i) = ul.e;
+          w0(m,IDN,k,j,i) = wl.d;
+          w0(m,ivx,k,j,i) = u0l*wl.vx;
+          w0(m,ivy,k,j,i) = u0l*wl.vy;
+          w0(m,ivz,k,j,i) = u0l*wl.vz;
+          w0(m,IPR,k,j,i) = wl.p;
         } else {
-          u0(m,IDN,k,j,i) = ur.d;
-          u0(m,ivx,k,j,i) = ur.m1;
-          u0(m,ivy,k,j,i) = ur.m2;
-          u0(m,ivz,k,j,i) = ur.m3;
-          u0(m,IEN,k,j,i) = ur.e;
+          w0(m,IDN,k,j,i) = wr.d;
+          w0(m,ivx,k,j,i) = u0r*wr.vx;
+          w0(m,ivy,k,j,i) = u0r*wr.vy;
+          w0(m,ivz,k,j,i) = u0r*wr.vz;
+          w0(m,IPR,k,j,i) = wr.p;
         }
       }
     );
+
+    // Convert primitives to conserved
+    auto &u0 = pmbp->phydro->u0;
+    pmbp->phydro->peos->PrimToCons(w0, u0);
+
   } // End initialization of Hydro variables
 
   // Initialize MHD variables -------------------------------
   if (pmbp->pmhd != nullptr) {
-    int &nmhd = pmbp->pmhd->nmhd;
   
     // Parse left state read from input file: d,vx,vy,vz,[P]
-    Real wl[5];
-    wl[IDN] = pin->GetReal("problem","di_l");
-    wl[IVX] = pin->GetReal("problem","ui_l");
-    wl[IVY] = pin->GetReal("problem","vi_l");
-    wl[IVZ] = pin->GetReal("problem","wi_l");
-    wl[IPR] = pin->GetReal("problem","pi_l");
-    Real wl_bx = pin->GetReal("problem","bxl");
-    Real wl_by = pin->GetReal("problem","byl");
-    Real wl_bz = pin->GetReal("problem","bzl");
+    MHDPrim1D wl,wr;
+    wl.d  = pin->GetReal("problem","dl");
+    wl.vx = pin->GetReal("problem","ul");
+    wl.vy = pin->GetReal("problem","vl");
+    wl.vz = pin->GetReal("problem","wl");
+    wl.p  = pin->GetReal("problem","pl");
+    wl.by = pin->GetReal("problem","byl");
+    wl.bz = pin->GetReal("problem","bzl");
+    Real bx_l = pin->GetReal("problem","bxl");
     
     // Parse right state read from input file: d,vx,vy,vz,[P]
-    Real wr[5];
-    wr[IDN] = pin->GetReal("problem","di_r");
-    wr[IVX] = pin->GetReal("problem","ui_r");
-    wr[IVY] = pin->GetReal("problem","vi_r");
-    wr[IVZ] = pin->GetReal("problem","wi_r");
-    wr[IPR] = pin->GetReal("problem","pi_r");
-    Real wr_bx = pin->GetReal("problem","bxr");
-    Real wr_by = pin->GetReal("problem","byr");
-    Real wr_bz = pin->GetReal("problem","bzr");
+    wr.d  = pin->GetReal("problem","dr");
+    wr.vx = pin->GetReal("problem","ur");
+    wr.vy = pin->GetReal("problem","vr");
+    wr.vz = pin->GetReal("problem","wr");
+    wr.p  = pin->GetReal("problem","pr");
+    wr.by = pin->GetReal("problem","byr");
+    wr.bz = pin->GetReal("problem","bzr");
+    Real bx_r = pin->GetReal("problem","bxr");
     
-    Real gm1 = pmbp->pmhd->peos->eos_data.gamma - 1.0;
-    auto &u0 = pmbp->pmhd->u0;
+    auto &w0 = pmbp->pmhd->w0;
     auto &b0 = pmbp->pmhd->b0;
+    auto &bcc0 = pmbp->pmhd->bcc0;
     par_for("pgen_shock1", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m,int k, int j, int i)
       {
         Real x,bxl,byl,bzl,bxr,byr,bzr;
         if (shk_dir == 1) {
-          x = CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
-          bxl = wl_bx; byl = wl_by; bzl = wl_bz;
-          bxr = wr_bx; byr = wr_by; bzr = wr_bz;
+          Real &x1min = coord.mb_size.d_view(m).x1min;
+          Real &x1max = coord.mb_size.d_view(m).x1max;
+          int nx1 = coord.mb_indcs.nx1;
+          x = CellCenterX(i-is, nx1, x1min, x1max);
+          bxl = bx_l; byl = wl.by; bzl = wl.bz;
+          bxr = bx_r; byr = wr.by; bzr = wr.bz;
         } else if (shk_dir == 2) {
-          x = CellCenterX(j-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
-          bxl = wl_bz; byl = wl_bx; bzl = wl_by;
-          bxr = wr_bz; byr = wr_bx; bzr = wr_by;
+          Real &x2min = coord.mb_size.d_view(m).x2min;
+          Real &x2max = coord.mb_size.d_view(m).x2max;
+          int nx2 = coord.mb_indcs.nx2;
+          x = CellCenterX(j-js, nx2, x2min, x2max);
+          bxl = wl.bz; byl = bx_l; bzl = wl.by;
+          bxr = wr.bz; byr = bx_r; bzr = wr.by;
         } else {
-          x = CellCenterX(k-ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
-          bxl = wl_by; byl = wl_bz; bzl = wl_bx;
-          bxr = wr_by; byr = wr_bz; bzr = wr_bx;
+          Real &x3min = coord.mb_size.d_view(m).x3min;
+          Real &x3max = coord.mb_size.d_view(m).x3max;
+          int nx3 = coord.mb_indcs.nx3;
+          x = CellCenterX(k-ks, nx3, x3min, x3max);
+          bxl = wl.by; byl = wl.bz; bzl = bx_l;
+          bxr = wr.by; byr = wr.bz; bzr = bx_r;
         } 
           
         if (x < xshock) {
-          u0(m,IDN,k,j,i) = wl[IDN]; 
-          u0(m,ivx,k,j,i) = wl[IVX]*wl[IDN];
-          u0(m,ivy,k,j,i) = wl[IVY]*wl[IDN];
-          u0(m,ivz,k,j,i) = wl[IVZ]*wl[IDN];
-          u0(m,IEN,k,j,i) = wl[IPR]/gm1 +
-             0.5*wl[IDN]*(SQR(wl[IVX]) + SQR(wl[IVY]) + SQR(wl[IVZ])) +
-             0.5*(SQR(bxl) + SQR(byl) + SQR(bzl));
+          w0(m,IDN,k,j,i) = wl.d; 
+          w0(m,ivx,k,j,i) = wl.vx;
+          w0(m,ivy,k,j,i) = wl.vy;
+          w0(m,ivz,k,j,i) = wl.vz;
+          w0(m,IPR,k,j,i) = wl.p;
           b0.x1f(m,k,j,i) = bxl;
           b0.x2f(m,k,j,i) = byl;
           b0.x3f(m,k,j,i) = bzl;
           if (i==ie) {b0.x1f(m,k,j,i+1) = bxl;}
           if (j==je) {b0.x2f(m,k,j+1,i) = byl;}
           if (k==ke) {b0.x3f(m,k+1,j,i) = bzl;}
+          bcc0(m,IBX,k,j,i) = bxl;
+          bcc0(m,IBY,k,j,i) = byl;
+          bcc0(m,IBZ,k,j,i) = bzl;
         } else {
-          u0(m,IDN,k,j,i) = wr[IDN];
-          u0(m,ivx,k,j,i) = wr[IVX]*wr[IDN];
-          u0(m,ivy,k,j,i) = wr[IVY]*wr[IDN];
-          u0(m,ivz,k,j,i) = wr[IVZ]*wr[IDN];
-          u0(m,IEN,k,j,i) = wr[IPR]/gm1 +
-             0.5*wr[IDN]*(SQR(wr[IVX]) + SQR(wr[IVY]) + SQR(wr[IVZ])) +
-             0.5*(SQR(bxr) + SQR(byr) + SQR(bzr));
+          w0(m,IDN,k,j,i) = wr.d;
+          w0(m,ivx,k,j,i) = wr.vx;
+          w0(m,ivy,k,j,i) = wr.vy;
+          w0(m,ivz,k,j,i) = wr.vz;
+          w0(m,IPR,k,j,i) = wr.p;
           b0.x1f(m,k,j,i) = bxr;
           b0.x2f(m,k,j,i) = byr;
           b0.x3f(m,k,j,i) = bzr;
           if (i==ie) {b0.x1f(m,k,j,i+1) = bxr;}
           if (j==je) {b0.x2f(m,k,j+1,i) = byr;}
           if (k==ke) {b0.x3f(m,k+1,j,i) = bzr;}
+          bcc0(m,IBX,k,j,i) = bxr;
+          bcc0(m,IBY,k,j,i) = byr;
+          bcc0(m,IBZ,k,j,i) = bzr;
         }
       }
     );
+    // Convert primitives to conserved
+    auto &u0 = pmbp->pmhd->u0;
+    pmbp->pmhd->peos->PrimToCons(w0, bcc0, u0);
+
   } // End initialization of MHD variables
 
   return;

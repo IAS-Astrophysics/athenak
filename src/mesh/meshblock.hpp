@@ -39,7 +39,6 @@ class MeshBlock
   // First dimension of each array will be [# of MeshBlocks in this MeshBlockPack]
 
   DualArray1D<int> mbgid;            // grid ID, unique identifier for each MeshBlock
-  MeshBlockSize mbsize;              // struct containing DualArrays for sizes of MBs
   HostArray2D<BoundaryFlag> mb_bcs;  // boundary conditions at 6 faces of each MeshBlock
 
   NeighborBlock nghbr[26];           // data on neighbors stored in fixed-length array

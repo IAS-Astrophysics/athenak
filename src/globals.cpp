@@ -13,7 +13,6 @@
 #include "athena.hpp"
 
 namespace global_variable {
-// all of these global variables are set at the start of main():
-int my_rank;         // MPI rank of this process
-int nranks;          // total number of MPI ranks
+int my_rank;   // MPI rank of this process; set at start of main();
+int nranks;    // total number of MPI ranks; set at start of main();
 }

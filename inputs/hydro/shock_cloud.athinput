@@ -1,0 +1,62 @@
+# AthenaXXX input file for shock cloud problem
+
+<comment>
+problem   = shock cloud interaction
+reference = Shin,M.-S., Snyder, G., & Stone, J.M.
+
+<job>
+basename  = Cloud     # problem ID: basename of output filenames
+
+<mesh>
+nghost    = 2         # Number of ghost cells
+nx1       = 160       # Number of zones in X1-direction
+x1min     = -3.0      # minimum value of X1
+x1max     = 7.0       # maximum value of X1
+ix1_bc    = user      # inner-X1 boundary flag
+ox1_bc    = outflow   # outer-X1 boundary flag
+
+nx2       = 80        # Number of zones in X2-direction
+x2min     = -2.5      # minimum value of X2
+x2max     = 2.5       # maximum value of X2
+ix2_bc    = outflow   # inner-X2 boundary flag
+ox2_bc    = outflow   # outer-X2 boundary flag
+
+nx3       = 1         # Number of zones in X3-direction
+x3min     = -2.5      # minimum value of X3
+x3max     = 2.5       # maximum value of X3
+ix3_bc    = outflow   # inner-X3 boundary flag 
+ox3_bc    = outflow   # outer-X3 boundary flag
+
+<meshblock>
+nx1       = 160       # Number of cells in each MeshBlock, X1-dir
+nx2       = 80        # Number of cells in each MeshBlock, X2-dir
+nx3       = 1         # Number of cells in each MeshBlock, X3-dir
+
+<time>
+evolution  = dynamic  # dynamic/kinematic/static
+integrator = rk2      # time integration algorithm
+cfl_number = 0.4      # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = 100000   # cycle limit
+tlim       = 1.5      # time limit
+ndiag      = 1        # cycles between diagostic output
+
+<hydro>
+eos         = ideal   # EOS type
+reconstruct = plm     # spatial reconstruction method
+rsolver     = hllc    # Riemann-solver to be used
+
+<eos>
+gamma       = 1.66667    # gamma = C_p/C_v
+
+<problem>
+Mach       = 10.0       # Mach number of shock
+drat       = 10.0       # density ratio of cloud
+
+<output1>
+file_type  = hst        # History data dump
+dt         = 0.01       # time increment between outputs
+
+<output2>
+file_type  = vtk        # legacy VTK output
+variable   = hydro_w    # variables to be output
+dt         = 0.01       # time increment between outputs

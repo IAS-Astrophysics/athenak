@@ -25,11 +25,11 @@ namespace mhd {
 
 void MHD::ShearInnerX1(int m)
 {
-  auto ncells = pmy_pack->mb_cells;
-  int ng = ncells.ng;
-  int n2 = (ncells.nx2 > 1)? (ncells.nx2 + 2*ng) : 1;
-  int n3 = (ncells.nx3 > 1)? (ncells.nx3 + 2*ng) : 1;
-  int &is = ncells.is;
+  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  int &ng = indcs.ng;
+  int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
+  int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
+  int &is = indcs.is;
   Real x1size = pmy_pack->pmesh->mesh_size.x1max - pmy_pack->pmesh->mesh_size.x1min;
 
   // Add shear offset to v3
@@ -41,7 +41,7 @@ void MHD::ShearInnerX1(int m)
     {
       Real deltam = u0_(m,IDN,k,j,is-i-1)*qomega*x1size;
       u0_(m,IM3,k,j,is-i-1) += deltam;
-      if (eos.is_adiabatic) {
+      if (eos.is_ideal) {
         u0_(m,IEN,k,j,is-i-1) += deltam*(2.0*u0_(m,IM3,k,j,is-i-1) - deltam)/
                                          (2.0*u0_(m,IDN,k,j,is-i-1));
       }
@@ -57,11 +57,11 @@ void MHD::ShearInnerX1(int m)
 
 void MHD::ShearOuterX1(int m)
 {
-  auto ncells = pmy_pack->mb_cells;
-  int ng = ncells.ng;
-  int n2 = (ncells.nx2 > 1)? (ncells.nx2 + 2*ng) : 1;
-  int n3 = (ncells.nx3 > 1)? (ncells.nx3 + 2*ng) : 1;
-  int &ie = ncells.ie;
+  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  int &ng = indcs.ng;
+  int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
+  int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
+  int &ie = indcs.ie;
   Real x1size = pmy_pack->pmesh->mesh_size.x1max - pmy_pack->pmesh->mesh_size.x1min;
 
   // Add shear offset to v3
@@ -73,7 +73,7 @@ void MHD::ShearOuterX1(int m)
     {
       Real deltam = -u0_(m,IDN,k,j,ie+i+1)*qomega*x1size;
       u0_(m,IM3,k,j,ie+i+1) += deltam;
-      if (eos.is_adiabatic) {
+      if (eos.is_ideal) {
         u0_(m,IEN,k,j,ie+i+1) += deltam*(2.0*u0_(m,IM3,k,j,ie+i+1) - deltam)/
                                          (2.0*u0_(m,IDN,k,j,ie+i+1));
       }

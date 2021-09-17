@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file eos.cpp
-//  \brief implements ctor and fns for EquationOfState abstract base class
+//  \brief implements constructor and some fns for EquationOfState abstract base class
 
 #include <float.h>
 
@@ -25,19 +25,25 @@ EquationOfState::EquationOfState(MeshBlockPack* pp, ParameterInput *pin)
 
 //----------------------------------------------------------------------------------------
 // \!fn void ConsToPrim()
-// \brief No-Op version of hydro cons to prim function. This version is never used in MHD,
-// and is overwritten in Hydro
+// \brief No-Op versions of hydro and MHD cons to prim functions.
 
-void EquationOfState::ConsToPrimHydro(const DvceArray5D<Real> &c, DvceArray5D<Real> &p)
+void EquationOfState::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
 {        
 }
 
-//----------------------------------------------------------------------------------------
-// \!fn void ConsToPrim()
-// \brief No-Op version of MHD cons to prim function. This version is never used in Hydro,
-// and is overwritten in MHD.
-
-void EquationOfState::ConsToPrimMHD(const DvceArray5D<Real> &c,
-      const DvceFaceFld4D<Real> &b, DvceArray5D<Real> &p, DvceArray5D<Real> &bcc)
+void EquationOfState::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
+                                 DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc)
 {
+}
+
+//----------------------------------------------------------------------------------------
+// \!fn void PrimToCon()
+// \brief No-Op versions of hydro and MHD prim to cons functions.
+
+void EquationOfState::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons)
+{       
+}
+void EquationOfState::PrimToCons(const DvceArray5D<Real> &prim,
+                                 const DvceArray5D<Real> &bcc, DvceArray5D<Real> &cons)
+{       
 }

@@ -9,6 +9,7 @@
 //  \brief defines MeshBlockPack class, a container for MeshBlocks
 
 #include "parameter_input.hpp"
+#include "coordinates/coordinates.hpp"
 #include "driver/driver.hpp"
 #include "tasklist/task_list.hpp"
 
@@ -25,25 +26,22 @@ class TurbulenceDriver;
 
 class MeshBlockPack
 {
- // mesh classes (Mesh, MeshBlock, MeshBlockPack, MeshBlockTree) like to play together
- friend class Mesh;
- friend class MeshBlock;
- friend class MeshBlockTree;
+  // mesh classes (Mesh, MeshBlock, MeshBlockPack, MeshBlockTree) like to play together
+  friend class Mesh;
+  friend class MeshBlock;
+  friend class MeshBlockTree;
 
- public:
-  MeshBlockPack(Mesh *pm, int igids, int igide, RegionCells icells);
+public:
+  MeshBlockPack(Mesh *pm, ParameterInput *pin, int igids, int igide, RegionIndcs indcs);
   ~MeshBlockPack();
 
   // data
   Mesh *pmesh;            // ptr to Mesh containing this MeshBlockPack
   int gids, gide;         // start/end of global IDs in this MeshBlockPack
   int nmb_thispack;       // number of MBs in this pack
-  // since all MeshBlocks are the same size, following data can be stored in the
-  // MeshBlockPack container, and not the individual MeshBlocks themselves
-  RegionCells mb_cells;   // info about cells in MeshBlock(s) in this MeshBlockPack 
-  RegionCells cmb_cells;  // info about cells on next coarser level MBs
 
   MeshBlock* pmb;         // MeshBlocks in this MeshBlockPack
+  Coordinates coord;
 
   // physics modules (controlled by AddPhysicsModules function in mesh_physics.cpp)
   hydro::Hydro *phydro=nullptr;
@@ -57,10 +55,13 @@ class MeshBlockPack
 
   // functions
   void AddPhysicsModules(ParameterInput *pin, Driver *pdrive);
-  int NumberOfMeshBlockCells() { return mb_cells.nx1 * mb_cells.nx2 * mb_cells.nx3; }
-  int NumberOfCoarseMeshBlockCells() {return cmb_cells.nx1 *cmb_cells.nx2 *cmb_cells.nx3;}
+  int NumberOfMeshBlockCells() const {
+    return coord.coord_data.mb_indcs.nx1 *
+           coord.coord_data.mb_indcs.nx2 *
+           coord.coord_data.mb_indcs.nx3;
+  }
 
- private:
+private:
   // data
 
   // functions

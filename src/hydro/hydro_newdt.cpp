@@ -28,9 +28,10 @@ TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage)
     return TaskStatus::complete; // only execute last stage
   }
   
-  int is = pmy_pack->mb_cells.is; int nx1 = pmy_pack->mb_cells.nx1;
-  int js = pmy_pack->mb_cells.js; int nx2 = pmy_pack->mb_cells.nx2;
-  int ks = pmy_pack->mb_cells.ks; int nx3 = pmy_pack->mb_cells.nx3;
+  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  int is = indcs.is, nx1 = indcs.nx1;
+  int js = indcs.js, nx2 = indcs.nx2;
+  int ks = indcs.ks, nx3 = indcs.nx3;
   auto &eos = pmy_pack->phydro->peos->eos_data;
 
   Real dt1 = std::numeric_limits<float>::max();
@@ -39,8 +40,9 @@ TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage)
 
   // capture class variables for kernel
   auto &w0_ = w0;
-  auto &mbsize = pmy_pack->pmb->mbsize;
+  auto &mbsize = pmy_pack->coord.coord_data.mb_size;
   auto &is_special_relativistic_ = is_special_relativistic;
+  auto &is_general_relativistic_ = is_general_relativistic;
   const int nmkji = (pmy_pack->nmb_thispack)*nx3*nx2*nx1;
   const int nkji = nx3*nx2*nx1;
   const int nji  = nx2*nx1;
@@ -58,9 +60,9 @@ TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage)
       k += ks;
       j += js;
 
-      min_dt1 = fmin((mbsize.dx1.d_view(m)/fabs(w0_(m,IVX,k,j,i))), min_dt1);
-      min_dt2 = fmin((mbsize.dx2.d_view(m)/fabs(w0_(m,IVY,k,j,i))), min_dt2);
-      min_dt3 = fmin((mbsize.dx3.d_view(m)/fabs(w0_(m,IVZ,k,j,i))), min_dt3);
+      min_dt1 = fmin((mbsize.d_view(m).dx1/fabs(w0_(m,IVX,k,j,i))), min_dt1);
+      min_dt2 = fmin((mbsize.d_view(m).dx2/fabs(w0_(m,IVY,k,j,i))), min_dt2);
+      min_dt3 = fmin((mbsize.d_view(m).dx3/fabs(w0_(m,IVZ,k,j,i))), min_dt3);
     }, Kokkos::Min<Real>(dt1), Kokkos::Min<Real>(dt2),Kokkos::Min<Real>(dt3));
  
   } else {
@@ -79,25 +81,29 @@ TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage)
 
       Real max_dv1 = 0.0, max_dv2 = 0.0, max_dv3 = 0.0;
 
-      if (is_special_relativistic_) {
+      if (is_general_relativistic_) {
+        max_dv1 = 1.0;
+        max_dv2 = 1.0;
+        max_dv3 = 1.0;
+      } else if (is_special_relativistic_) {
         Real v2 = SQR(w0_(m,IVX,k,j,i)) + SQR(w0_(m,IVY,k,j,i)) + SQR(w0_(m,IVZ,k,j,i));
         Real lf = sqrt(1.0 + v2);
         // FIXME ERM: Ideal fluid for now
         Real h = w0_(m,IDN,k,j,i) + (eos.gamma/(eos.gamma-1.)) * w0_(m,IPR,k,j,i);
         Real lm, lp;
 
-        eos.WaveSpeeds_SR(h, w0_(m,IPR,k,j,i), w0_(m,IVX,k,j,i)/lf, lf*lf, lp, lm);
+        eos.WaveSpeedsSR(h, w0_(m,IPR,k,j,i), w0_(m,IVX,k,j,i)/lf, lf*lf, lp, lm);
         max_dv1 = fmax(fabs(lm), lp);
 
-        eos.WaveSpeeds_SR(h, w0_(m,IPR,k,j,i), w0_(m,IVX,k,j,i)/lf, lf*lf, lp, lm);
+        eos.WaveSpeedsSR(h, w0_(m,IPR,k,j,i), w0_(m,IVX,k,j,i)/lf, lf*lf, lp, lm);
         max_dv2 = fmax(fabs(lm), lp);
 
-        eos.WaveSpeeds_SR(h, w0_(m,IPR,k,j,i), w0_(m,IVZ,k,j,i)/lf, lf*lf, lp, lm);
+        eos.WaveSpeedsSR(h, w0_(m,IPR,k,j,i), w0_(m,IVZ,k,j,i)/lf, lf*lf, lp, lm);
         max_dv3 = fmax(fabs(lm), lp);
 
       } else {
         Real cs;
-        if (eos.is_adiabatic) {
+        if (eos.is_ideal) {
           cs = eos.SoundSpeed(w0_(m,IPR,k,j,i),w0_(m,IDN,k,j,i));
         } else         {
           cs = eos.iso_cs;
@@ -107,9 +113,9 @@ TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage)
         max_dv3 = fabs(w0_(m,IVZ,k,j,i)) + cs;
       }
 
-      min_dt1 = fmin((mbsize.dx1.d_view(m)/max_dv1), min_dt1);
-      min_dt2 = fmin((mbsize.dx2.d_view(m)/max_dv2), min_dt2);
-      min_dt3 = fmin((mbsize.dx3.d_view(m)/max_dv3), min_dt3);
+      min_dt1 = fmin((mbsize.d_view(m).dx1/max_dv1), min_dt1);
+      min_dt2 = fmin((mbsize.d_view(m).dx2/max_dv2), min_dt2);
+      min_dt3 = fmin((mbsize.d_view(m).dx3/max_dv3), min_dt3);
     }, Kokkos::Min<Real>(dt1), Kokkos::Min<Real>(dt2),Kokkos::Min<Real>(dt3));
  
   }

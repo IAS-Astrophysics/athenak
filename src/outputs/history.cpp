@@ -15,6 +15,7 @@
 #include <string>
 
 #include "athena.hpp"
+#include "globals.hpp"
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
@@ -65,7 +66,7 @@ void HistoryOutput::LoadHydroHistoryData(HistoryData *pdata, Mesh *pm)
   int &nhydro_ = pm->pmb_pack->phydro->nhydro;
 
   // set number of and names of history variables for hydro
-  if (eos_data.is_adiabatic) {
+  if (eos_data.is_ideal) {
     pdata->nhist = 8;
   } else {
     pdata->nhist = 7;
@@ -74,7 +75,7 @@ void HistoryOutput::LoadHydroHistoryData(HistoryData *pdata, Mesh *pm)
   pdata->label[IM1] = "1-mom";
   pdata->label[IM2] = "2-mom";
   pdata->label[IM3] = "3-mom";
-  if (eos_data.is_adiabatic) {
+  if (eos_data.is_ideal) {
     pdata->label[IEN] = "tot-E";
   }
   pdata->label[nhydro_  ] = "1-KE";
@@ -83,13 +84,14 @@ void HistoryOutput::LoadHydroHistoryData(HistoryData *pdata, Mesh *pm)
 
   // capture class variabels for kernel  
   auto &u0_ = pm->pmb_pack->phydro->u0;
-  auto &size = pm->pmb_pack->pmb->mbsize;
+  auto &size = pm->pmb_pack->coord.coord_data.mb_size;
   int &nhist_ = pdata->nhist;
 
   // loop over all MeshBlocks in this pack
-  int is = pm->pmb_pack->mb_cells.is; int nx1 = pm->pmb_pack->mb_cells.nx1;
-  int js = pm->pmb_pack->mb_cells.js; int nx2 = pm->pmb_pack->mb_cells.nx2;
-  int ks = pm->pmb_pack->mb_cells.ks; int nx3 = pm->pmb_pack->mb_cells.nx3;
+  auto &indcs = pm->pmb_pack->coord.coord_data.mb_indcs;
+  int is = indcs.is; int nx1 = indcs.nx1;
+  int js = indcs.js; int nx2 = indcs.nx2;
+  int ks = indcs.ks; int nx3 = indcs.nx3;
   const int nmkji = (pm->pmb_pack->nmb_thispack)*nx3*nx2*nx1;
   const int nkji = nx3*nx2*nx1;
   const int nji  = nx2*nx1;
@@ -105,7 +107,7 @@ void HistoryOutput::LoadHydroHistoryData(HistoryData *pdata, Mesh *pm)
       k += ks;
       j += js;
 
-      Real vol = size.dx1.d_view(m)*size.dx2.d_view(m)*size.dx3.d_view(m);
+      Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
 
       // Hydro conserved variables:
       array_sum::GlobalSum hvars;
@@ -113,7 +115,7 @@ void HistoryOutput::LoadHydroHistoryData(HistoryData *pdata, Mesh *pm)
       hvars.the_array[IM1] = vol*u0_(m,IM1,k,j,i);
       hvars.the_array[IM2] = vol*u0_(m,IM2,k,j,i);
       hvars.the_array[IM3] = vol*u0_(m,IM3,k,j,i);
-      if (eos_data.is_adiabatic) {
+      if (eos_data.is_ideal) {
         hvars.the_array[IEN] = vol*u0_(m,IEN,k,j,i);
       }
 
@@ -152,7 +154,7 @@ void HistoryOutput::LoadMHDHistoryData(HistoryData *pdata, Mesh *pm)
   int &nmhd_ = pm->pmb_pack->pmhd->nmhd;
 
   // set number of and names of history variables for mhd
-  if (eos_data.is_adiabatic) {
+  if (eos_data.is_ideal) {
     pdata->nhist = 11;
   } else {
     pdata->nhist = 10;
@@ -161,7 +163,7 @@ void HistoryOutput::LoadMHDHistoryData(HistoryData *pdata, Mesh *pm)
   pdata->label[IM1] = "1-mom";
   pdata->label[IM2] = "2-mom";
   pdata->label[IM3] = "3-mom";
-  if (eos_data.is_adiabatic) {
+  if (eos_data.is_ideal) {
     pdata->label[IEN] = "tot-E";
   }
   pdata->label[nmhd_  ] = "1-KE";
@@ -176,13 +178,14 @@ void HistoryOutput::LoadMHDHistoryData(HistoryData *pdata, Mesh *pm)
   auto &bx1f = pm->pmb_pack->pmhd->b0.x1f;
   auto &bx2f = pm->pmb_pack->pmhd->b0.x2f;
   auto &bx3f = pm->pmb_pack->pmhd->b0.x3f;
-  auto &size = pm->pmb_pack->pmb->mbsize;
+  auto &size = pm->pmb_pack->coord.coord_data.mb_size;
   int &nhist_ = pdata->nhist;
 
   // loop over all MeshBlocks in this pack
-  int is = pm->pmb_pack->mb_cells.is; int nx1 = pm->pmb_pack->mb_cells.nx1;
-  int js = pm->pmb_pack->mb_cells.js; int nx2 = pm->pmb_pack->mb_cells.nx2;
-  int ks = pm->pmb_pack->mb_cells.ks; int nx3 = pm->pmb_pack->mb_cells.nx3;
+  auto &indcs = pm->pmb_pack->coord.coord_data.mb_indcs;
+  int is = indcs.is; int nx1 = indcs.nx1;
+  int js = indcs.js; int nx2 = indcs.nx2;
+  int ks = indcs.ks; int nx3 = indcs.nx3;
   const int nmkji = (pm->pmb_pack->nmb_thispack)*nx3*nx2*nx1;
   const int nkji = nx3*nx2*nx1;
   const int nji  = nx2*nx1;
@@ -198,7 +201,7 @@ void HistoryOutput::LoadMHDHistoryData(HistoryData *pdata, Mesh *pm)
       k += ks;
       j += js;
 
-      Real vol = size.dx1.d_view(m)*size.dx2.d_view(m)*size.dx3.d_view(m);
+      Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
 
       // MHD conserved variables:
       array_sum::GlobalSum hvars;
@@ -206,7 +209,7 @@ void HistoryOutput::LoadMHDHistoryData(HistoryData *pdata, Mesh *pm)
       hvars.the_array[IM1] = vol*u0_(m,IM1,k,j,i);
       hvars.the_array[IM2] = vol*u0_(m,IM2,k,j,i);
       hvars.the_array[IM3] = vol*u0_(m,IM3,k,j,i);
-      if (eos_data.is_adiabatic) {
+      if (eos_data.is_ideal) {
         hvars.the_array[IEN] = vol*u0_(m,IEN,k,j,i);
       }
 

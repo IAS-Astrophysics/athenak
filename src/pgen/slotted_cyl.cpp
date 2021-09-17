@@ -16,10 +16,11 @@
 // Athena++ headers
 #include "athena.hpp"
 #include "parameter_input.hpp"
+#include "coordinates/cell_locations.hpp"
 #include "mesh/mesh.hpp"
+#include "mesh/mesh_positions.hpp"
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
-#include "utils/grid_locations.hpp"
 #include "pgen.hpp"
 
 // Parameters which define initial solution -- made global so that they can be shared
@@ -82,22 +83,28 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
   s_height = pin->GetOrAddReal("problem", "s_height", 0.25);
 
   // capture variables for kernel
-  int &is = pmbp->mb_cells.is, &ie = pmbp->mb_cells.ie;
-  int &js = pmbp->mb_cells.js, &je = pmbp->mb_cells.je;
-  int &ks = pmbp->mb_cells.ks, &ke = pmbp->mb_cells.ke;
-  int &nx1 = pmbp->mb_cells.nx1;
-  int &nx2 = pmbp->mb_cells.nx2;
+  auto &indcs = pmbp->coord.coord_data.mb_indcs;
+  int &is = indcs.is; int &ie = indcs.ie;
+  int &js = indcs.js; int &je = indcs.je;
+  int &ks = indcs.ks; int &ke = indcs.ke;
   int &nscalars = pmbp->phydro->nscalars;
   int &nhydro = pmbp->phydro->nhydro;
   auto &u0 = pmbp->phydro->u0; 
-  auto &size = pmbp->pmb->mbsize;
+  auto &coord = pmbp->coord.coord_data;
 
   // Set initial conditions
   par_for("pgen_slot_cyl", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
-      Real x1v = CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
-      Real x2v = CellCenterX(j-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
+      Real &x1min = coord.mb_size.d_view(m).x1min;
+      Real &x1max = coord.mb_size.d_view(m).x1max;
+      int nx1 = coord.mb_indcs.nx1;
+      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+
+      Real &x2min = coord.mb_size.d_view(m).x2min;
+      Real &x2max = coord.mb_size.d_view(m).x2max;
+      int nx2 = coord.mb_indcs.nx2;
+      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
       // background fluid:
       u0(m,IDN,k,j,i) = d0;

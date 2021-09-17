@@ -12,6 +12,8 @@
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
 #include "driver/driver.hpp"
+#include "coordinates/coordinates.hpp"
+#include "eos/eos.hpp"
 #include "srcterms/srcterms.hpp"
 #include "mhd.hpp"
 
@@ -22,10 +24,11 @@ namespace mhd {
 
 TaskStatus MHD::ExpRKUpdate(Driver *pdriver, int stage)
 {
-  int is = pmy_pack->mb_cells.is; int ie = pmy_pack->mb_cells.ie;
-  int js = pmy_pack->mb_cells.js; int je = pmy_pack->mb_cells.je;
-  int ks = pmy_pack->mb_cells.ks; int ke = pmy_pack->mb_cells.ke;
-  int ncells1 = pmy_pack->mb_cells.nx1 + 2*(pmy_pack->mb_cells.ng);
+  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  int is = indcs.is, ie = indcs.ie;
+  int js = indcs.js, je = indcs.je;
+  int ks = indcs.ks, ke = indcs.ke;
+  int ncells1 = indcs.nx1 + 2*(indcs.ng);
   bool &multi_d = pmy_pack->pmesh->multi_d;
   bool &three_d = pmy_pack->pmesh->three_d;
 
@@ -39,7 +42,7 @@ TaskStatus MHD::ExpRKUpdate(Driver *pdriver, int stage)
   auto flx1 = uflx.x1f;
   auto flx2 = uflx.x2f;
   auto flx3 = uflx.x3f;
-  auto &mbsize = pmy_pack->pmb->mbsize;
+  auto &mbsize = pmy_pack->coord.coord_data.mb_size;
 
   // hierarchical parallel loop that updates conserved variables to intermediate step
   // using weights and fractional time step appropriate to stages of time-integrator used
@@ -55,7 +58,7 @@ TaskStatus MHD::ExpRKUpdate(Driver *pdriver, int stage)
       // compute dF1/dx1
       par_for_inner(member, is, ie, [&](const int i)
       {
-        divf(i) = (flx1(m,n,k,j,i+1) - flx1(m,n,k,j,i))/mbsize.dx1.d_view(m);
+        divf(i) = (flx1(m,n,k,j,i+1) - flx1(m,n,k,j,i))/mbsize.d_view(m).dx1;
       });
       member.team_barrier();
 
@@ -64,7 +67,7 @@ TaskStatus MHD::ExpRKUpdate(Driver *pdriver, int stage)
       if (multi_d) {
         par_for_inner(member, is, ie, [&](const int i)
         {
-          divf(i) += (flx2(m,n,k,j+1,i) - flx2(m,n,k,j,i))/mbsize.dx2.d_view(m);
+          divf(i) += (flx2(m,n,k,j+1,i) - flx2(m,n,k,j,i))/mbsize.d_view(m).dx2;
         });
         member.team_barrier();
       }
@@ -74,7 +77,7 @@ TaskStatus MHD::ExpRKUpdate(Driver *pdriver, int stage)
       if (three_d) {
         par_for_inner(member, is, ie, [&](const int i)
         {
-          divf(i) += (flx3(m,n,k+1,j,i) - flx3(m,n,k,j,i))/mbsize.dx3.d_view(m);
+          divf(i) += (flx3(m,n,k+1,j,i) - flx3(m,n,k,j,i))/mbsize.d_view(m).dx3;
         });
         member.team_barrier();
       }
@@ -95,6 +98,11 @@ TaskStatus MHD::ExpRKUpdate(Driver *pdriver, int stage)
     if (psrc->shearing_box) psrc->AddShearingBox(u0, w0, bcc0, beta_dt);
   }
 
+  // Add coordinate source terms in GR.  Again, must be computed with only primitives.
+  if (is_general_relativistic) {
+    pmy_pack->coord.AddCoordTerms(w0, bcc0, peos->eos_data, beta_dt, u0);
+  }
+
   return TaskStatus::complete;
 }
-} // namespace hydro
+} // namespace mhd

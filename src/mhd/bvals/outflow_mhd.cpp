@@ -20,11 +20,11 @@ namespace mhd {
 
 void MHD::OutflowInnerX1(int m)
 {
-  auto ncells = pmy_pack->mb_cells;
-  int ng = ncells.ng;
-  int n2 = (ncells.nx2 > 1)? (ncells.nx2 + 2*ng) : 1;
-  int n3 = (ncells.nx3 > 1)? (ncells.nx3 + 2*ng) : 1;
-  int &is = ncells.is;
+  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  int &ng = indcs.ng;
+  int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
+  int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
+  int &is = indcs.is;
   int nvar = nmhd + nscalars + 3;
   auto &u0_ = u0;
   auto &b0_ = b0;
@@ -63,11 +63,11 @@ void MHD::OutflowInnerX1(int m)
 
 void MHD::OutflowOuterX1(int m)
 {
-  auto ncells = pmy_pack->mb_cells;
-  int ng = ncells.ng;
-  int n2 = (ncells.nx2 > 1)? (ncells.nx2 + 2*ng) : 1;
-  int n3 = (ncells.nx3 > 1)? (ncells.nx3 + 2*ng) : 1;
-  int &ie = ncells.ie;
+  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  int &ng = indcs.ng;
+  int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
+  int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
+  int &ie = indcs.ie;
   int nvar = nmhd + nscalars + 3;
   auto &u0_ = u0;
   auto &b0_ = b0;
@@ -106,11 +106,11 @@ void MHD::OutflowOuterX1(int m)
 
 void MHD::OutflowInnerX2(int m)
 {
-  auto ncells = pmy_pack->mb_cells;
-  int ng = ncells.ng;
-  int n1 = ncells.nx1 + 2*ng;
-  int n3 = (ncells.nx3 > 1)? (ncells.nx3 + 2*ng) : 1;
-  int &js = ncells.js;
+  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  int &ng = indcs.ng;
+  int n1 = indcs.nx1 + 2*ng;
+  int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
+  int &js = indcs.js;
   int nvar = nmhd + nscalars + 3;
   auto &u0_ = u0;
   auto &b0_ = b0;
@@ -149,11 +149,11 @@ void MHD::OutflowInnerX2(int m)
 
 void MHD::OutflowOuterX2(int m)
 {
-  auto ncells = pmy_pack->mb_cells;
-  int ng = ncells.ng;
-  int n1 = ncells.nx1 + 2*ng;
-  int n3 = (ncells.nx3 > 1)? (ncells.nx3 + 2*ng) : 1;
-  int &je = ncells.je;
+  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  int &ng = indcs.ng;
+  int n1 = indcs.nx1 + 2*ng;
+  int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
+  int &je = indcs.je;
   int nvar = nmhd + nscalars + 3;
   auto &u0_ = u0;
   auto &b0_ = b0;
@@ -193,11 +193,11 @@ void MHD::OutflowOuterX2(int m)
 
 void MHD::OutflowInnerX3(int m)
 {
-  auto ncells = pmy_pack->mb_cells;
-  int ng = ncells.ng;
-  int n1 = ncells.nx1 + 2*ng;
-  int n2 = ncells.nx2 + 2*ng;
-  int &ks = ncells.ks;
+  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  int &ng = indcs.ng;
+  int n1 = indcs.nx1 + 2*ng;
+  int n2 = indcs.nx2 + 2*ng;
+  int &ks = indcs.ks;
   int nvar = nmhd + nscalars + 3;
   auto &u0_ = u0;
   auto &b0_ = b0;
@@ -236,11 +236,11 @@ void MHD::OutflowInnerX3(int m)
 
 void MHD::OutflowOuterX3(int m)
 {
-  auto ncells = pmy_pack->mb_cells;
-  int ng = ncells.ng;
-  int n1 = ncells.nx1 + 2*ng;
-  int n2 = ncells.nx2 + 2*ng;
-  int &ke = ncells.ke;
+  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  int &ng = indcs.ng;
+  int n1 = indcs.nx1 + 2*ng;
+  int n2 = indcs.nx2 + 2*ng;
+  int &ke = indcs.ke;
   int nvar = nmhd + nscalars + 3;
   auto &u0_ = u0;
   auto &b0_ = b0;

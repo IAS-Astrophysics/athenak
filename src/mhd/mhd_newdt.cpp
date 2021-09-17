@@ -27,10 +27,11 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage)
   if (stage != (pdriver->nexp_stages)) {
     return TaskStatus::complete; // only execute last stage
   }
-  
-  int is = pmy_pack->mb_cells.is; int nx1 = pmy_pack->mb_cells.nx1;
-  int js = pmy_pack->mb_cells.js; int nx2 = pmy_pack->mb_cells.nx2;
-  int ks = pmy_pack->mb_cells.ks; int nx3 = pmy_pack->mb_cells.nx3;
+
+  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  int is = indcs.is, nx1 = indcs.nx1;
+  int js = indcs.js, nx2 = indcs.nx2;
+  int ks = indcs.ks, nx3 = indcs.nx3;
 
   Real dt1 = std::numeric_limits<float>::max();
   Real dt2 = std::numeric_limits<float>::max();
@@ -38,7 +39,7 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage)
 
   if (pdriver->time_evolution == TimeEvolution::kinematic) {
     auto &w0_ = w0;
-    auto &mbsize = pmy_pack->pmb->mbsize;
+    auto &mbsize = pmy_pack->coord.coord_data.mb_size;
     const int nmkji = (pmy_pack->nmb_thispack)*nx3*nx2*nx1;
     const int nkji = nx3*nx2*nx1;
     const int nji  = nx2*nx1;
@@ -55,9 +56,9 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage)
       k += ks;
       j += js;
 
-      min_dt1 = fmin((mbsize.dx1.d_view(m)/fabs(w0_(m,IVX,k,j,i))), min_dt1);
-      min_dt2 = fmin((mbsize.dx2.d_view(m)/fabs(w0_(m,IVY,k,j,i))), min_dt2);
-      min_dt3 = fmin((mbsize.dx3.d_view(m)/fabs(w0_(m,IVZ,k,j,i))), min_dt3);
+      min_dt1 = fmin((mbsize.d_view(m).dx1/fabs(w0_(m,IVX,k,j,i))), min_dt1);
+      min_dt2 = fmin((mbsize.d_view(m).dx2/fabs(w0_(m,IVY,k,j,i))), min_dt2);
+      min_dt3 = fmin((mbsize.d_view(m).dx3/fabs(w0_(m,IVZ,k,j,i))), min_dt3);
     }, Kokkos::Min<Real>(dt1), Kokkos::Min<Real>(dt2),Kokkos::Min<Real>(dt3));
  
   } else {
@@ -65,7 +66,7 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage)
     auto &b0_ = b0;
     auto &bcc0_ = bcc0;
     auto &eos = pmy_pack->pmhd->peos->eos_data;
-    auto &mbsize = pmy_pack->pmb->mbsize;
+    auto &mbsize = pmy_pack->coord.coord_data.mb_size;
     const int nmkji = (pmy_pack->nmb_thispack)*nx3*nx2*nx1;
     const int nkji = nx3*nx2*nx1;
     const int nji  = nx2*nx1;
@@ -88,35 +89,35 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage)
       Real w_by = bcc0_(m,IBY,k,j,i);
       Real w_bz = bcc0_(m,IBZ,k,j,i);
       Real cf;
-      if (eos.is_adiabatic) { 
+      if (eos.is_ideal) { 
         Real &w_p = w0_(m,IPR,k,j,i);
         cf = eos.FastMagnetosonicSpeed(w_d,w_p,w_bx,w_by,w_bz);
       } else {
         cf = eos.FastMagnetosonicSpeed(w_d,w_bx,w_by,w_bz);
       }
-      min_dt1 = fmin((mbsize.dx1.d_view(m)/(fabs(w0_(m,IVX,k,j,i)) + cf)), min_dt1);
+      min_dt1 = fmin((mbsize.d_view(m).dx1/(fabs(w0_(m,IVX,k,j,i)) + cf)), min_dt1);
 
       w_bx = b0_.x2f(m,k,j,i);
       w_by = bcc0_(m,IBZ,k,j,i);
       w_bz = bcc0_(m,IBX,k,j,i);
-      if (eos.is_adiabatic) { 
+      if (eos.is_ideal) { 
         Real &w_p = w0_(m,IPR,k,j,i);
         cf = eos.FastMagnetosonicSpeed(w_d,w_p,w_bx,w_by,w_bz);
       } else {
         cf = eos.FastMagnetosonicSpeed(w_d,w_bx,w_by,w_bz);
       }
-      min_dt2 = fmin((mbsize.dx2.d_view(m)/(fabs(w0_(m,IVY,k,j,i)) + cf)), min_dt2);
+      min_dt2 = fmin((mbsize.d_view(m).dx2/(fabs(w0_(m,IVY,k,j,i)) + cf)), min_dt2);
 
       w_bx = b0_.x3f(m,k,j,i);
       w_by = bcc0_(m,IBX,k,j,i);
       w_bz = bcc0_(m,IBY,k,j,i);
-      if (eos.is_adiabatic) { 
+      if (eos.is_ideal) { 
         Real &w_p = w0_(m,IPR,k,j,i);
         cf = eos.FastMagnetosonicSpeed(w_d,w_p,w_bx,w_by,w_bz);
       } else {
         cf = eos.FastMagnetosonicSpeed(w_d,w_bx,w_by,w_bz);
       }
-      min_dt3 = fmin((mbsize.dx3.d_view(m)/(fabs(w0_(m,IVZ,k,j,i)) + cf)), min_dt3);
+      min_dt3 = fmin((mbsize.d_view(m).dx3/(fabs(w0_(m,IVZ,k,j,i)) + cf)), min_dt3);
 
     }, Kokkos::Min<Real>(dt1), Kokkos::Min<Real>(dt2),Kokkos::Min<Real>(dt3));
 

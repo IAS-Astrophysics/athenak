@@ -19,30 +19,30 @@
   
 struct IonNeutralTaskIDs
 {   
-  TaskID i_init_recv;
-  TaskID n_init_recv;
-  TaskID first2_imp_update;
-  TaskID i_calc_flux;
-  TaskID n_calc_flux;
-  TaskID i_exp_update;
-  TaskID n_exp_update;
-  TaskID imp_update;
+  TaskID i_irecv;
+  TaskID n_irecv;
+  TaskID impl_2x;
+  TaskID i_flux;
+  TaskID n_flux;
+  TaskID i_expl;
+  TaskID n_expl;
+  TaskID impl;
   TaskID i_sendu;
   TaskID n_sendu;
   TaskID i_recvu;
   TaskID n_recvu;
-  TaskID corner_e;
+  TaskID efld;
   TaskID ct;
   TaskID sendb;
   TaskID recvb;
-  TaskID i_phys_bcs;
-  TaskID n_phys_bcs;
-  TaskID i_cons2prim;
-  TaskID n_cons2prim;
+  TaskID i_bcs;
+  TaskID n_bcs;
+  TaskID i_c2p;
+  TaskID n_c2p;
   TaskID i_newdt;
   TaskID n_newdt;
-  TaskID i_clear_send;
-  TaskID n_clear_send;
+  TaskID i_clear;
+  TaskID n_clear;
 };
 
 //----------------------------------------------------------------------------------------

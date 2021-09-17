@@ -1,0 +1,69 @@
+# Athena++ (Kokkos version) input file for SR hydro KH test, iprob=1
+
+<comment>
+problem   = Kelvin-Helmholtz instability
+reference = Mignone et al.
+
+<job>
+basename  = KH         # problem ID: basename of output filenames
+
+<mesh>
+nghost    = 3
+nx1       = 256         # Number of zones in X1-direction
+x1min     = -0.5        # minimum value of X1
+x1max     =  0.5        # maximum value of X1
+ix1_bc    = periodic    # inner-X1 boundary flag
+ox1_bc    = periodic    # inner-X1 boundary flag
+
+nx2       = 128          # Number of zones in X2-direction
+x2min     = -0.25        # minimum value of X2
+x2max     = 0.25         # maximum value of X2
+ix2_bc    = reflect      # inner-X2 boundary flag
+ox2_bc    = reflect     # inner-X2 boundary flag
+
+nx3       = 1           # Number of zones in X3-direction
+x3min     = -0.5        # minimum value of X3
+x3max     = 0.5         # maximum value of X3
+ix3_bc    = periodic    # inner-X3 boundary flag
+ox3_bc    = periodic    # inner-X3 boundary flag
+
+<meshblock>
+nx1       = 256         # Number of cells in each MeshBlock, X1-dir
+nx2       = 128         # Number of cells in each MeshBlock, X2-dir
+nx3       = 1           # Number of cells in each MeshBlock, X3-dir
+
+<time>
+evolution  = dynamic    # dynamic/kinematic/static
+integrator = rk3        # time integration algorithm
+cfl_number = 0.4        # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = 100000     # cycle limit
+tlim       = 5.0        # time limit
+ndiag      = 1          # cycles between diagostic output
+
+<hydro>
+special_rel = true
+eos         = ideal     # EOS type
+reconstruct = ppm       # spatial reconstruction method
+rsolver     = hllc      # Riemann-solver to be used
+nscalars    = 1         # number of passive scalars in hydro
+
+<eos>
+gamma       = 1.3333333  # gamma = C_p/C_v
+
+<problem>
+iprob = 1        # flag to select test
+amp   = 0.01     # amplitude of sinusoidal perturbation
+sigma = 0.01     # width of tanh profile
+vshear = 0.25    # 1/2 of shear velocity
+rho0   = 1.0     # density in L-going-state
+rho1   = 1.0     # density in R-going-state
+
+<output1>
+file_type  = hst       # History data dump
+dt         = 0.01      # time increment between outputs
+
+<output2>
+file_type  = vtk       # Binary data dump
+variable   = hydro_w   # variables to be output
+dt         = 0.1       # time increment between outputs
+

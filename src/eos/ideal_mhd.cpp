@@ -3,9 +3,8 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file adiabatic_mhd.cpp
-//  \brief defines derived class that implements EOS functions for nonrelativistic
-//   adiabatic mhd
+//! \file ideal_mhd.cpp
+//  \brief derived class that implements ideal gas EOS in nonrelativistic mhd
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
@@ -16,28 +15,29 @@
 //----------------------------------------------------------------------------------------
 // ctor: also calls EOS base class constructor
 
-AdiabaticMHD::AdiabaticMHD(MeshBlockPack *pp, ParameterInput *pin)
+IdealMHD::IdealMHD(MeshBlockPack *pp, ParameterInput *pin)
   : EquationOfState(pp, pin)
 {
-  eos_data.is_adiabatic = true;
+  eos_data.is_ideal = true;
   eos_data.gamma = pin->GetReal("eos","gamma");
   eos_data.iso_cs = 0.0;
 }
 
 //----------------------------------------------------------------------------------------
 // \!fn void ConsToPrim()
-// \brief Converts conserved into primitive variables in nonrelativistic adiabatic MHD
+// \brief Converts conserved into primitive variables.  Operates over entire MeshBlock,
+//  including ghost cells.  
 // Note that the primitive variables contain the cell-centered magnetic fields, so that
 // W contains (nmhd+3+nscalars) elements, while U contains (nmhd+nscalars)
 
-void AdiabaticMHD::ConsToPrimMHD(const DvceArray5D<Real> &cons,
-      const DvceFaceFld4D<Real> &b, DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc)
+void IdealMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
+                              DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc)
 {
-  auto ncells = pmy_pack->mb_cells;
-  int ng = ncells.ng;
-  int n1 = ncells.nx1 + 2*ng;
-  int n2 = (ncells.nx2 > 1)? (ncells.nx2 + 2*ng) : 1;
-  int n3 = (ncells.nx3 > 1)? (ncells.nx3 + 2*ng) : 1;
+  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  int &ng = indcs.ng;
+  int n1 = indcs.nx1 + 2*ng;
+  int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
+  int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
   int &nmhd  = pmy_pack->pmhd->nmhd;
   int &nscal = pmy_pack->pmhd->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
@@ -50,16 +50,16 @@ void AdiabaticMHD::ConsToPrimMHD(const DvceArray5D<Real> &cons,
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
       Real& u_d  = cons(m,IDN,k,j,i);
-      Real& u_m1 = cons(m,IVX,k,j,i);
-      Real& u_m2 = cons(m,IVY,k,j,i);
-      Real& u_m3 = cons(m,IVZ,k,j,i);
       Real& u_e  = cons(m,IEN,k,j,i);
+      const Real& u_m1 = cons(m,IVX,k,j,i);
+      const Real& u_m2 = cons(m,IVY,k,j,i);
+      const Real& u_m3 = cons(m,IVZ,k,j,i);
 
       Real& w_d  = prim(m,IDN,k,j,i);
+      Real& w_p  = prim(m,IPR,k,j,i);
       Real& w_vx = prim(m,IVX,k,j,i);
       Real& w_vy = prim(m,IVY,k,j,i);
       Real& w_vz = prim(m,IVZ,k,j,i);
-      Real& w_p  = prim(m,IPR,k,j,i);
 
       // apply density floor, without changing momentum or energy
       u_d = (u_d > dfloor_) ?  u_d : dfloor_;
@@ -95,6 +95,59 @@ void AdiabaticMHD::ConsToPrimMHD(const DvceArray5D<Real> &cons,
         prim(m,n,k,j,i) = cons(m,n,k,j,i)*di;
       }
     }
+  );
+
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+// \!fn void PrimToCons()
+// \brief Converts conserved into primitive variables.  Operates over only active cells.
+//  Does not change cell- or face-centered magnetic fields.
+
+void IdealMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,
+                              DvceArray5D<Real> &cons)
+{
+  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  int &is = indcs.is; int &ie = indcs.ie;
+  int &js = indcs.js; int &je = indcs.je;
+  int &ks = indcs.ks; int &ke = indcs.ke;
+  int &nmhd  = pmy_pack->pmhd->nmhd;
+  int &nscal = pmy_pack->pmhd->nscalars;
+  int &nmb = pmy_pack->nmb_thispack;
+  Real igm1 = 1.0/(eos_data.gamma - 1.0);
+  
+  par_for("mhd_prim2con", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i)
+    { 
+      Real& u_d  = cons(m,IDN,k,j,i);
+      Real& u_e  = cons(m,IEN,k,j,i);
+      Real& u_m1 = cons(m,IVX,k,j,i);
+      Real& u_m2 = cons(m,IVY,k,j,i);
+      Real& u_m3 = cons(m,IVZ,k,j,i);
+      
+      const Real& w_d  = prim(m,IDN,k,j,i);
+      const Real& w_p  = prim(m,IPR,k,j,i);
+      const Real& w_vx = prim(m,IVX,k,j,i);
+      const Real& w_vy = prim(m,IVY,k,j,i);
+      const Real& w_vz = prim(m,IVZ,k,j,i);
+
+      const Real& bcc1 = bcc(m,IBX,k,j,i);
+      const Real& bcc2 = bcc(m,IBY,k,j,i);
+      const Real& bcc3 = bcc(m,IBZ,k,j,i);
+
+      u_d = w_d;
+      u_m1 = w_vx*w_d;
+      u_m2 = w_vy*w_d;
+      u_m3 = w_vz*w_d;
+      u_e = w_p*igm1 + 0.5*(w_d*(SQR(w_vx) + SQR(w_vy) + SQR(w_vz))
+                              + (SQR(bcc1) + SQR(bcc2) + SQR(bcc3)));
+      
+      // convert scalars (if any), always stored at end of cons and prim arrays.
+      for (int n=nmhd; n<(nmhd+nscal); ++n) {
+        cons(m,n,k,j,i) = prim(m,n,k,j,i)*w_d;
+      }
+    } 
   );
 
   return;

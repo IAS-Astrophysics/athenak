@@ -16,7 +16,7 @@
 
 //----------------------------------------------------------------------------------------
 //! \fn void HLLE
-//  \brief The HLLE Riemann solver for hydrodynamics (both adiabatic and isothermal)
+//  \brief The HLLE Riemann solver for hydrodynamics (both ideal gas and isothermal)
 
 KOKKOS_INLINE_FUNCTION
 void HLLE(TeamMember_t const &member, const EOS_Data &eos,
@@ -41,7 +41,7 @@ void HLLE(TeamMember_t const &member, const EOS_Data &eos,
     Real &wl_ivx = wl(ivx,i);
     Real &wl_ivy = wl(ivy,i);
     Real &wl_ivz = wl(ivz,i);
-    Real &wl_ipr = wl(IPR,i); // should never be referenced for adiabatic EOS
+    Real &wl_ipr = wl(IPR,i); // should never be referenced for ideal gas EOS
     Real &wl_iby = bl(iby,i);
     Real &wl_ibz = bl(ibz,i);
 
@@ -49,7 +49,7 @@ void HLLE(TeamMember_t const &member, const EOS_Data &eos,
     Real &wr_ivx = wr(ivx,i);
     Real &wr_ivy = wr(ivy,i);
     Real &wr_ivz = wr(ivz,i);
-    Real &wr_ipr = wr(IPR,i); // should never be referenced for adiabatic EOS
+    Real &wr_ipr = wr(IPR,i); // should never be referenced for ideal gas EOS
     Real &wr_iby = br(iby,i);
     Real &wr_ibz = br(ibz,i);
 
@@ -71,12 +71,12 @@ void HLLE(TeamMember_t const &member, const EOS_Data &eos,
     Real x = 0.5*(SQR(wl_iby-wr_iby) + SQR(wl_ibz-wr_ibz))/(SQR(sqrtdl+sqrtdr));
     Real y = 0.5*(wl_idn + wr_idn)/wroe_idn;
 
-    // Following Roe(1981), the enthalpy H=(E+P)/d is averaged for adiabatic flows,
+    // Following Roe(1981), the enthalpy H=(E+P)/d is averaged for ideal gas EOS,
     // rather than E or P directly. sqrtdl*hl = sqrtdl*(el+pl)/dl = (el+pl)/sqrtdl
     Real pbl = 0.5*(bxi*bxi + SQR(wl_iby) + SQR(wl_ibz));
     Real pbr = 0.5*(bxi*bxi + SQR(wr_iby) + SQR(wr_ibz));
     Real el,er,hroe;
-    if (eos.is_adiabatic) {
+    if (eos.is_ideal) {
       el = wl_ipr/gm1 + 0.5*wl_idn*(SQR(wl_ivx)+SQR(wl_ivy)+SQR(wl_ivz)) + pbl;
       er = wr_ipr/gm1 + 0.5*wr_idn*(SQR(wr_ivx)+SQR(wr_ivy)+SQR(wr_ivz)) + pbr;
       hroe = ((el + wl_ipr + pbl)/sqrtdl + (er + wr_ipr + pbr)/sqrtdr)*isdlpdr;
@@ -87,11 +87,11 @@ void HLLE(TeamMember_t const &member, const EOS_Data &eos,
     Real cl = eos.FastMagnetosonicSpeed(wl_idn, wl_ipr, bxi, wl_iby, wl_ibz);
     Real cr = eos.FastMagnetosonicSpeed(wr_idn, wr_ipr, bxi, wr_iby, wr_ibz);
 
-    // Compute Roe-averaged Cf using eq. B18 (adiabatic) or B39 (isothermal)
+    // Compute Roe-averaged Cf using eq. B18 (ideal gas) or B39 (isothermal)
     Real btsq = SQR(wroe_iby) + SQR(wroe_ibz);
     Real vaxsq = bxi*bxi/wroe_idn;
     Real bt_starsq, twid_asq;
-    if (eos.is_adiabatic) {
+    if (eos.is_ideal) {
       bt_starsq = (gm1 - (gm1 - 1.0)*y)*btsq;
       Real hp = hroe - (vaxsq + btsq/wroe_idn);
       Real vsq = SQR(wroe_ivx) + SQR(wroe_ivy) + SQR(wroe_ivz);
@@ -135,7 +135,7 @@ void HLLE(TeamMember_t const &member, const EOS_Data &eos,
     fl.mz = wl_idn*wl_ivz*vxl - bxi*wl_ibz;
     fr.mz = wr_idn*wr_ivz*vxr - bxi*wr_ibz;
 
-    if (eos.is_adiabatic) {
+    if (eos.is_ideal) {
       fl.mx += wl_ipr;
       fr.mx += wr_ipr;
       fl.e   = el*vxl + wl_ivx*(wl_ipr + pbl - bxi*bxi);
@@ -162,7 +162,7 @@ void HLLE(TeamMember_t const &member, const EOS_Data &eos,
     flx(m,ivx,k,j,i) = 0.5*(fl.mx + fr.mx) + (fl.mx - fr.mx)*tmp;
     flx(m,ivy,k,j,i) = 0.5*(fl.my + fr.my) + (fl.my - fr.my)*tmp;
     flx(m,ivz,k,j,i) = 0.5*(fl.mz + fr.mz) + (fl.mz - fr.mz)*tmp;
-    if (eos.is_adiabatic) flx(m,IEN,k,j,i) = 0.5*(fl.e + fr.e ) + (fl.e - fr.e)*tmp;
+    if (eos.is_ideal) flx(m,IEN,k,j,i) = 0.5*(fl.e + fr.e ) + (fl.e - fr.e)*tmp;
     ey(m,k,j,i) = -0.5*(fl.by + fr.by) - (fl.by - fr.by)*tmp;
     ez(m,k,j,i) =  0.5*(fl.bz + fr.bz) + (fl.bz - fr.bz)*tmp;
   });

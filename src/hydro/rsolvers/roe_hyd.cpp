@@ -34,12 +34,12 @@ void RoeFluxIso(const Real wroe[], const Real du[], const Real wli[],
 
 //----------------------------------------------------------------------------------------
 //! \fn void Roe
-//  \brief The Roe Riemann solver for hydrodynamics (both adiabatic and isothermal)
+//  \brief The Roe Riemann solver for hydrodynamics (both ideal gas and isothermal)
 
 KOKKOS_INLINE_FUNCTION
-void Roe(TeamMember_t const &member, const EOS_Data &eos, const int il, const int iu,
-     const int ivx, const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr,
-     ScrArray2D<Real> &flx)
+void Roe(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coord,
+     const int m, const int k, const int j, const int il, const int iu, const int ivx,
+     const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr, DvceArray5D<Real> flx)
 {
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
@@ -56,13 +56,13 @@ void Roe(TeamMember_t const &member, const EOS_Data &eos, const int il, const in
     wli[IVX]=wl(ivx,i);
     wli[IVY]=wl(ivy,i);
     wli[IVZ]=wl(ivz,i);
-    if (eos.is_adiabatic) wli[IPR]=wl(IPR,i);
+    if (eos.is_ideal) wli[IPR]=wl(IPR,i);
 
     wri[IDN]=wr(IDN,i);
     wri[IVX]=wr(ivx,i);
     wri[IVY]=wr(ivy,i);
     wri[IVZ]=wr(ivz,i);
-    if (eos.is_adiabatic) wri[IPR]=wr(IPR,i);
+    if (eos.is_ideal) wri[IPR]=wr(IPR,i);
 
     //--- Step 2.  Compute Roe-averaged data from left- and right-states
 
@@ -75,10 +75,10 @@ void Roe(TeamMember_t const &member, const EOS_Data &eos, const int il, const in
     wroe[IVY] = (sqrtdl*wli[IVY] + sqrtdr*wri[IVY])*isdlpdr;
     wroe[IVZ] = (sqrtdl*wli[IVZ] + sqrtdr*wri[IVZ])*isdlpdr;
 
-    // Following Roe(1981), the enthalpy H=(E+P)/d is averaged for adiabatic flows,
+    // Following Roe(1981), the enthalpy H=(E+P)/d is averaged for ideal gas EOS,
     // rather than E or P directly.  sqrtdl*hl = sqrtdl*(el+pl)/dl = (el+pl)/sqrtdl
     Real el,er;
-    if (eos.is_adiabatic) {
+    if (eos.is_ideal) {
       el = wli[IPR]/gm1 + 0.5*wli[IDN]*(SQR(wli[IVX])+SQR(wli[IVY])+SQR(wli[IVZ]));
       er = wri[IPR]/gm1 + 0.5*wri[IDN]*(SQR(wri[IVX])+SQR(wri[IVY])+SQR(wri[IVZ]));
       wroe[IPR] = ((el + wli[IPR])/sqrtdl + (er + wri[IPR])/sqrtdr)*isdlpdr;
@@ -101,7 +101,7 @@ void Roe(TeamMember_t const &member, const EOS_Data &eos, const int il, const in
     fl[IVZ] = mxl*wli[IVZ];
     fr[IVZ] = mxr*wri[IVZ];
 
-    if (eos.is_adiabatic) {
+    if (eos.is_ideal) {
       fl[IVX] += wli[IPR];
       fr[IVX] += wri[IPR];
       fl[IEN] = (el + wli[IPR])*wli[IVX];
@@ -117,16 +117,16 @@ void Roe(TeamMember_t const &member, const EOS_Data &eos, const int il, const in
     du[IVX] = wri[IDN]*wri[IVX] - wli[IDN]*wli[IVX];
     du[IVY] = wri[IDN]*wri[IVY] - wli[IDN]*wli[IVY];
     du[IVZ] = wri[IDN]*wri[IVZ] - wli[IDN]*wli[IVZ];
-    if (eos.is_adiabatic) du[IEN] = er - el;
+    if (eos.is_ideal) du[IEN] = er - el;
 
     flxi[IDN] = 0.5*(fl[IDN] + fr[IDN]);
     flxi[IVX] = 0.5*(fl[IVX] + fr[IVX]);
     flxi[IVY] = 0.5*(fl[IVY] + fr[IVY]);
     flxi[IVZ] = 0.5*(fl[IVZ] + fr[IVZ]);
-    if (eos.is_adiabatic) flxi[IEN] = 0.5*(fl[IEN] + fr[IEN]);
+    if (eos.is_ideal) flxi[IEN] = 0.5*(fl[IEN] + fr[IEN]);
 
     int llf_flag = 0;
-    if (eos.is_adiabatic) {
+    if (eos.is_ideal) {
       roe::RoeFluxAdb(wroe,du,wli,gm1,flxi,ev,llf_flag);
     } else {
       roe::RoeFluxIso(wroe,du,wli,iso_cs,flxi,ev,llf_flag);
@@ -139,9 +139,9 @@ void Roe(TeamMember_t const &member, const EOS_Data &eos, const int il, const in
       flxi[IVX] = fl[IVX];
       flxi[IVY] = fl[IVY];
       flxi[IVZ] = fl[IVZ];
-      if (eos.is_adiabatic) flxi[IEN] = fl[IEN];
+      if (eos.is_ideal) flxi[IEN] = fl[IEN];
     }
-    if (eos.is_adiabatic) {
+    if (eos.is_ideal) {
       if (ev[4] <= 0.0) {
         flxi[IDN] = fr[IDN];
         flxi[IVX] = fr[IVX];
@@ -162,7 +162,7 @@ void Roe(TeamMember_t const &member, const EOS_Data &eos, const int il, const in
 
     if (llf_flag != 0) {
       Real cl,cr;
-      if (eos.is_adiabatic) {
+      if (eos.is_ideal) {
         cl = eos.SoundSpeed(wli[IPR],wli[IDN]);
         cr = eos.SoundSpeed(wri[IPR],wri[IDN]);
       } else {
@@ -175,16 +175,16 @@ void Roe(TeamMember_t const &member, const EOS_Data &eos, const int il, const in
       flxi[IVX] = 0.5*(fl[IVX] + fr[IVX]) - a*du[IVX];
       flxi[IVY] = 0.5*(fl[IVY] + fr[IVY]) - a*du[IVY];
       flxi[IVZ] = 0.5*(fl[IVZ] + fr[IVZ]) - a*du[IVZ];
-      if (eos.is_adiabatic) {flxi[IEN] = 0.5*(fl[IEN] + fr[IEN]) - a*du[IEN];}
+      if (eos.is_ideal) {flxi[IEN] = 0.5*(fl[IEN] + fr[IEN]) - a*du[IEN];}
     }
 
     //--- Step 7. Store results into 3D array of fluxes
 
-    flx(IDN,i) = flxi[IDN];
-    flx(ivx,i) = flxi[IVX];
-    flx(ivy,i) = flxi[IVY];
-    flx(ivz,i) = flxi[IVZ];
-    if (eos.is_adiabatic) flx(IEN,i) = flxi[IEN];
+    flx(m,IDN,k,j,i) = flxi[IDN];
+    flx(m,ivx,k,j,i) = flxi[IVX];
+    flx(m,ivy,k,j,i) = flxi[IVY];
+    flx(m,ivz,k,j,i) = flxi[IVZ];
+    if (eos.is_ideal) flx(m,IEN,k,j,i) = flxi[IEN];
   });
   return;
 }

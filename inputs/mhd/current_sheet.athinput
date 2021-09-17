@@ -8,13 +8,13 @@ basename  = CS  # problem ID: basename of output filenames
 
 <mesh>
 nghost    = 2         # Number of ghost cells
-nx1       = 512        # Number of zones in X1-direction
+nx1       = 512       # Number of zones in X1-direction
 x1min     = -3.0      # minimum value of X1
 x1max     = 3.0       # maximum value of X1
 ix1_bc    = outflow   # Inner-X1 boundary condition flag
 ox1_bc    = outflow   # Outer-X1 boundary condition flag
 
-nx2       = 512        # Number of zones in X2-direction
+nx2       = 512       # Number of zones in X2-direction
 x2min     = -3.0      # minimum value of X2
 x2max     = 3.0       # maximum value of X2
 ix2_bc    = periodic  # Inner-X2 boundary condition flag
@@ -28,47 +28,47 @@ ox3_bc    = periodic  # Outer-X3 boundary condition flag
 
 <meshblock>
 nx1       = 128       # Number of cells in each MeshBlock, X1-dir
-nx2       = 128         # Number of cells in each MeshBlock, X2-dir
+nx2       = 128       # Number of cells in each MeshBlock, X2-dir
 nx3       = 1         # Number of cells in each MeshBlock, X3-dir
 
 <time>
-evolution  = dynamic # dynamic/kinematic/static
+evolution  = dynamic   # dynamic/kinematic/static
 integrator = rk2       # time integration algorithm
 cfl_number = 0.4       # The Courant, Friedrichs, & Lewy (CFL) Number
 nlim       = -1        # cycle limit
-tlim       = 10000.0       # time limit
+tlim       = 10000.0   # time limit
 ndiag      = 1         # cycles between diagostic output
 
 <mhd>
-eos         = adiabatic   # EOS type
-resistivity = ohmic       # Ohmic resistivity
-eta_ohm     = 1.0e-4      # coefficient of Ohmic resistivity
-reconstruct = plm         # spatial reconstruction method
-rsolver     = hlld        # Riemann-solver to be used
+eos         = ideal    # EOS type
+resistivity = ohmic    # Ohmic resistivity
+eta_ohm     = 1.0e-4   # coefficient of Ohmic resistivity
+reconstruct = plm      # spatial reconstruction method
+rsolver     = hlld     # Riemann-solver to be used
 
 <eos>
 gamma           = 1.4   # gamma = C_p/C_v
 iso_sound_speed = 1.0   # isothermal sound speed
 
 <problem>
-d0 = 50.0                  # Amplitude of sheet density (should be b0^2/2)
-ng = 10.0                  # background density
-b0 = 10.0                  # Amplitude of reconnecting field
-a0 = 0.05                   # Width of current sheet
-bg = 0.0                   # guide field strength
-x01 = 1.5                  # distance of each sheet from zero
+d0 = 50.0                 # Amplitude of sheet density (should be b0^2/2)
+ng = 10.0                 # background density
+b0 = 10.0                 # Amplitude of reconnecting field
+a0 = 0.05                 # Width of current sheet
+bg = 0.0                  # guide field strength
+x01 = 1.5                 # distance of each sheet from zero
 epsb = 0.00               # amount of b kick
-epsv = 0.001               # amount of v kick
-kval = 1.0                 # wave vector in y direction
+epsv = 0.001              # amount of v kick
+kval = 1.0                # wave vector in y direction
 
 <output1>
 file_type   = vtk       # Tabular data dump
 variable    = mhd_w     # variables to be output
 data_format = %12.5e    # Optional data format string
-dt          = 1      # time increment between outputs
+dt          = 1         # time increment between outputs
 
 <output2>
 file_type   = vtk       # Tabular data dump
-variable    = mhd_bcc     # variables to be output
+variable    = mhd_bcc   # variables to be output
 data_format = %12.5e    # Optional data format string
-dt          = 1      # time increment between outputs
+dt          = 1         # time increment between outputs

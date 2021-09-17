@@ -19,12 +19,12 @@
 // Athena++ headers
 #include "athena.hpp"
 #include "parameter_input.hpp"
+#include "coordinates/cell_locations.hpp"
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "driver/driver.hpp"
-#include "utils/grid_locations.hpp"
 #include "pgen.hpp"
 
 
@@ -50,13 +50,11 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
   Real x3size = pmy_mesh_->mesh_size.x3max - pmy_mesh_->mesh_size.x3min;
 
   // capture variables for kernel
-  int &nx1 = pmbp->mb_cells.nx1;
-  int &nx2 = pmbp->mb_cells.nx2;
-  int &nx3 = pmbp->mb_cells.nx3;
-  int &is = pmbp->mb_cells.is, &ie = pmbp->mb_cells.ie;
-  int &js = pmbp->mb_cells.js, &je = pmbp->mb_cells.je;
-  int &ks = pmbp->mb_cells.ks, &ke = pmbp->mb_cells.ke;
-  auto &size = pmbp->pmb->mbsize;
+  auto &indcs = pmbp->coord.coord_data.mb_indcs;
+  int &is = indcs.is; int &ie = indcs.ie;
+  int &js = indcs.js; int &je = indcs.je;
+  int &ks = indcs.ks; int &ke = indcs.ke;
+  auto &coord = pmbp->coord.coord_data;
 
   // initialize Hydro variables ----------------------------------------------------------
   if (pmbp->phydro != nullptr) {
@@ -69,17 +67,28 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
     par_for("pgen_cs_hydro", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i)
       {
-        Real x1v = CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
-        Real x2v = CellCenterX(j-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
-        Real x3v = CellCenterX(k-ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
-  
+        Real &x1min = coord.mb_size.d_view(m).x1min;
+        Real &x1max = coord.mb_size.d_view(m).x1max;
+        int nx1 = coord.mb_indcs.nx1;
+        Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+
+        Real &x2min = coord.mb_size.d_view(m).x2min;
+        Real &x2max = coord.mb_size.d_view(m).x2max;
+        int nx2 = coord.mb_indcs.nx2;
+        Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+
+        Real &x3min = coord.mb_size.d_view(m).x3min;
+        Real &x3max = coord.mb_size.d_view(m).x3max;
+        int nx3 = coord.mb_indcs.nx3;
+        Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+
         // compute cell-centered conserved variables
         u0(m,IDN,k,j,i) = d0/(pow(cosh((x1v+x01)/a0),2.0))+ d0/(pow(cosh((x1v-x01)/a0),2.0))+ng;
         u0(m,IM1,k,j,i) = epsv*sin(kval*x2v)*(exp(-1.0*pow((x1v+x01)/a0,2.0))+exp(-1.0*pow((x1v-x01)/a0,2.0))); 
         u0(m,IM2,k,j,i) = epsv*-2.0*cos(kval*x2v)*( exp(-1.0*pow((x1v+x01)/a0,2.0))*(x1v +x01)+exp(-1.0*std::pow((x1v-x01)/a0,2.0))*(x1v-x01)  )/(kval*a0*a0);
         u0(m,IM3,k,j,i) = 0.0;
 
-        if (eos.is_adiabatic) {
+        if (eos.is_ideal) {
           u0(m,IEN,k,j,i) = p0/gm1 * u0(m,IDN,k,j,i); 
         }
       }
@@ -97,9 +106,20 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
     par_for("pgen_mhd", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i)
       {
-        Real x1v = CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
-        Real x2v = CellCenterX(j-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
-        Real x3v = CellCenterX(k-ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
+        Real &x1min = coord.mb_size.d_view(m).x1min;
+        Real &x1max = coord.mb_size.d_view(m).x1max;
+        int nx1 = coord.mb_indcs.nx1;
+        Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+
+        Real &x2min = coord.mb_size.d_view(m).x2min;
+        Real &x2max = coord.mb_size.d_view(m).x2max;
+        int nx2 = coord.mb_indcs.nx2;
+        Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+
+        Real &x3min = coord.mb_size.d_view(m).x3min;
+        Real &x3max = coord.mb_size.d_view(m).x3max;
+        int nx3 = coord.mb_indcs.nx3;
+        Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
         // compute cell-centered conserved variables
         u0(m,IDN,k,j,i) = d0/(pow(cosh((x1v+x01)/a0),2.0))+ d0/(pow(cosh((x1v-x01)/a0),2.0))+ng;
@@ -107,17 +127,17 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
         u0(m,IM2,k,j,i) = epsv*-2.0*cos(kval*x2v)*( exp(-1.0*pow((x1v+x01)/a0,2.0))*(x1v +x01)+exp(-1.0*std::pow((x1v-x01)/a0,2.0))*(x1v-x01)  )/(kval*a0*a0);
         u0(m,IM3,k,j,i) = 0.0;
 
-        if (eos.is_adiabatic) {
+        if (eos.is_ideal) {
           u0(m,IEN,k,j,i) = p0/gm1 * u0(m,IDN,k,j,i);
         }
  
         // Compute face-centered fields
-        Real x1f   = LeftEdgeX(i  -is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
-        Real x1fp1 = LeftEdgeX(i+1-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
-        Real x2f   = LeftEdgeX(j  -js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
-        Real x2fp1 = LeftEdgeX(j+1-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
-        Real x3f   = LeftEdgeX(k  -ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
-        Real x3fp1 = LeftEdgeX(k+1-ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
+        Real x1f   = LeftEdgeX(i  -is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
+        Real x1fp1 = LeftEdgeX(i+1-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
+        Real x2f   = LeftEdgeX(j  -js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
+        Real x2fp1 = LeftEdgeX(j+1-js, nx2, size.d_view(m).x2min, size.d_view(m.x2max));
+        Real x3f   = LeftEdgeX(k  -ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
+        Real x3fp1 = LeftEdgeX(k+1-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
 
         b0.x1f(m,k,j,i) = bb0*epsb*sin(kval*x2v)*(exp(-1.0*pow((x1f+x01)/a0,2.0))+exp(-1.0*pow((x1f-x01)/a0,2.0)));
         b0.x2f(m,k,j,i) = bb0*(tanh((x1v+x01)/a0))- bb0*(tanh((x1v-x01)/a0))-bb0-bb0*epsb*2.0*cos(kval*x2f)*( exp(-1.0*pow((x1v+x01)/a0,2.0))*(x1v+x01)+exp(-1.0*pow((x1v-x01)/a0,2.0))*(x1v-x01) )/(kval*a0*a0); 

@@ -1,0 +1,80 @@
+# Athena++ (Kokkos version) input file for Hydro GR torus
+
+<comment>
+problem   = Fishbone-Moncrief equilibrium torus
+reference = Fishbone & Moncrief 1976, ApJ 207 962
+
+<job>
+basename  = torus
+
+<mesh>
+nghost = 2        # Number of ghost cells
+nx1    = 128      # number of cells in x1-direction
+x1min  = -50.0    # minimum x1
+x1max  = 50.0     # maximum x1
+ix1_bc = outflow  # inner boundary
+ox1_bc = outflow  # outer boundary
+
+nx2    = 128      # number of cells in x2-direction
+x2min  = -50.0    # minimum x2
+x2max  = 50.0     # maximum x2
+ix2_bc = outflow  # inner boundary
+ox2_bc = outflow  # outer boundary
+
+nx3    = 128      # number of cells in x3-direction
+x3min  = -50.0    # minimum x3
+x3max  = 50.0     # maximum x3
+ix3_bc = outflow  # inner boundary
+ox3_bc = outflow  # outer boundary
+
+<meshblock>
+nx1  = 128        # Number of cells in each MeshBlock, X1-dir
+nx2  = 128        # Number of cells in each MeshBlock, X2-dir
+nx3  = 128        # Number of cells in each MeshBlock, X3-dir
+
+<time>
+evolution  = dynamic    # dynamic/kinematic/static
+integrator = rk2        # time integration algorithm
+cfl_number = 0.3
+nlim       = -1
+tlim       = 10000.0
+ndiag      = 1          # cycles between diagostic output
+
+<coord>
+m = 1.0     # black hole mass M
+a = 0.9375  # black hole spin a (0 <= a/M < 1)
+rmin = 3.0  # excision radius
+
+<hydro>
+general_rel = true
+eos         = ideal    # EOS type
+reconstruct = plm      # spatial reconstruction method
+rsolver     = hlle     # Riemann-solver to be used
+dfloor      = 1.0e-6   # floor on density rho
+pfloor      = 1.0e-8   # floor on gas pressure p_gas
+
+<eos>
+gamma     = 1.3333333333333333  # ratio of specific heats Gamma
+
+<problem>
+rho_min   = 1.0e-5              # floor on rho given by rho_min ...
+rho_pow   = -1.5                # ... * r^rho_pow
+pgas_min  = 0.333e-7              # floor on p_gas given by pgas_min ...
+pgas_pow  = -2.5                # ... * r^pgas_pow
+rho_max    = 1.0   # if greater than 0, rescale density to have this peak, and rescale
+                   # pressure by same factor
+k_adi      = 1.0   # adiabat K, p_gas = K * rho^Gamma
+r_edge     = 6.0   # radius of inner edge of disk
+r_peak     = 12.0  # radius of pressure maximum; use l instead if negative
+l          = 0.0   # constant ang. mom. per unit mass u^t u_phi; only used if r_peak < 0
+tilt_angle = 0.0   # angle (degrees) at which to incline disk spin axis relative to BH
+                   # spin axis (z-axis) in direction of x-axis (theta = pi/2, phi = 0)
+
+<output1>
+file_type  = hst        # History data dump
+dt         = 1.0        # time increment between outputs
+
+<output2>
+file_type  = vtk        # Binary data dump
+variable   = hydro_w    # variables to be output
+dt         = 10.0       # time increment between outputs

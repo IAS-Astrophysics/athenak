@@ -26,7 +26,7 @@ Resistivity::Resistivity(MeshBlockPack *pp, ParameterInput *pin)
 
   // resistive timestep on MeshBlock(s) in this pack
   dtnew = std::numeric_limits<float>::max();
-  auto size = pmy_pack->pmb->mbsize;
+  auto size = pmy_pack->coord.coord_data.mb_size;
   Real fac;
   if (pp->pmesh->three_d) {
     fac = 1.0/6.0;
@@ -36,9 +36,9 @@ Resistivity::Resistivity(MeshBlockPack *pp, ParameterInput *pin)
     fac = 0.5;
   }
   for (int m=0; m<(pp->nmb_thispack); ++m) {
-    dtnew = std::min(dtnew, fac*SQR(size.dx1.h_view(m))/eta_ohm);
-    if (pp->pmesh->multi_d){dtnew = std::min(dtnew, fac*SQR(size.dx2.h_view(m))/eta_ohm);}
-    if (pp->pmesh->three_d){dtnew = std::min(dtnew, fac*SQR(size.dx3.h_view(m))/eta_ohm);}
+    dtnew = std::min(dtnew, fac*SQR(size.h_view(m).dx1)/eta_ohm);
+    if (pp->pmesh->multi_d){dtnew = std::min(dtnew, fac*SQR(size.h_view(m).dx2)/eta_ohm);}
+    if (pp->pmesh->three_d){dtnew = std::min(dtnew, fac*SQR(size.h_view(m).dx3)/eta_ohm);}
   }
 }
 
@@ -58,10 +58,11 @@ Resistivity::~Resistivity()
 
 void Resistivity::OhmicEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &efld)
 {
-  int is = pmy_pack->mb_cells.is; int ie = pmy_pack->mb_cells.ie;
-  int js = pmy_pack->mb_cells.js; int je = pmy_pack->mb_cells.je;
-  int ks = pmy_pack->mb_cells.ks; int ke = pmy_pack->mb_cells.ke;
-  int ncells1 = pmy_pack->mb_cells.nx1 + 2*(pmy_pack->mb_cells.ng);
+  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  int is = indcs.is, ie = indcs.ie;
+  int js = indcs.js, je = indcs.je;
+  int ks = indcs.ks, ke = indcs.ke;
+  int ncells1 = indcs.nx1 + 2*(indcs.ng);
   int nmb1 = pmy_pack->nmb_thispack - 1;
 
   //---- 1-D problem:
@@ -74,7 +75,7 @@ void Resistivity::OhmicEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real>
     // capture class variables for the kernels
     auto e2 = efld.x2e;
     auto e3 = efld.x3e;
-    auto &mbsize = pmy_pack->pmb->mbsize;
+    auto &mbsize = pmy_pack->coord.coord_data.mb_size;
     auto eta_o = eta_ohm;
 
     int scr_level = 0;
@@ -87,7 +88,7 @@ void Resistivity::OhmicEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real>
         ScrArray1D<Real> j2(member.team_scratch(scr_level), ncells1);
         ScrArray1D<Real> j3(member.team_scratch(scr_level), ncells1);
 
-        CurrentDensity(member, m, ks, js, is, ie+1, b0, mbsize, j1, j2, j3);
+        CurrentDensity(member, m, ks, js, is, ie+1, b0, mbsize.d_view(m), j1, j2, j3);
 
         // Add E_{resistive} = \eta J to corner-centered electric fields
         par_for_inner(member, is, ie+1, [&](const int i)
@@ -109,7 +110,7 @@ void Resistivity::OhmicEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real>
     auto e1 = efld.x1e;
     auto e2 = efld.x2e;
     auto e3 = efld.x3e;
-    auto &mbsize = pmy_pack->pmb->mbsize;
+    auto &mbsize = pmy_pack->coord.coord_data.mb_size;
     auto eta_o = eta_ohm;
 
     int scr_level = 0;
@@ -122,7 +123,7 @@ void Resistivity::OhmicEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real>
         ScrArray1D<Real> j2(member.team_scratch(scr_level), ncells1);
         ScrArray1D<Real> j3(member.team_scratch(scr_level), ncells1);
         
-        CurrentDensity(member, m, ks, j, is, ie+1, b0, mbsize, j1, j2, j3);
+        CurrentDensity(member, m, ks, j, is, ie+1, b0, mbsize.d_view(m), j1, j2, j3);
     
         // Add E_{resistive} = \eta J to corner-centered electric fields
         par_for_inner(member, is, ie+1, [&](const int i)
@@ -144,7 +145,7 @@ void Resistivity::OhmicEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real>
   auto e1 = efld.x1e;
   auto e2 = efld.x2e;
   auto e3 = efld.x3e;
-  auto &mbsize = pmy_pack->pmb->mbsize;
+  auto &mbsize = pmy_pack->coord.coord_data.mb_size;
   auto eta_o = eta_ohm;
 
   int scr_level = 0;
@@ -157,7 +158,7 @@ void Resistivity::OhmicEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real>
       ScrArray1D<Real> j2(member.team_scratch(scr_level), ncells1);
       ScrArray1D<Real> j3(member.team_scratch(scr_level), ncells1);
 
-      CurrentDensity(member, m, k, j, is, ie+1, b0, mbsize, j1, j2, j3);
+      CurrentDensity(member, m, k, j, is, ie+1, b0, mbsize.d_view(m), j1, j2, j3);
 
       // Add E_{resistive} = \eta J to corner-centered electric fields
       par_for_inner(member, is, ie+1, [&](const int i)
@@ -180,11 +181,12 @@ void Resistivity::OhmicEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real>
 
 void Resistivity::OhmicEnergyFlux(const DvceFaceFld4D<Real> &b, DvceFaceFld5D<Real> &flx) 
 {
-  int is = pmy_pack->mb_cells.is; int ie = pmy_pack->mb_cells.ie;
-  int js = pmy_pack->mb_cells.js; int je = pmy_pack->mb_cells.je;
-  int ks = pmy_pack->mb_cells.ks; int ke = pmy_pack->mb_cells.ke;
+  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  int is = indcs.is, ie = indcs.ie;
+  int js = indcs.js, je = indcs.je;
+  int ks = indcs.ks, ke = indcs.ke;
   int nmb1 = pmy_pack->nmb_thispack - 1;
-  auto size = pmy_pack->pmb->mbsize;
+  auto size = pmy_pack->coord.coord_data.mb_size;
   bool &multi_d = pmy_pack->pmesh->multi_d;
   bool &three_d = pmy_pack->pmesh->three_d;
   Real qa = 0.25*eta_ohm;
@@ -196,19 +198,19 @@ void Resistivity::OhmicEnergyFlux(const DvceFaceFld4D<Real> &b, DvceFaceFld5D<Re
   par_for("ohm_heat1", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie+1,
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i)
     {
-      Real j2k   = -(b.x3f(m,k  ,j,i) - b.x3f(m,k  ,j,i-1))/size.dx1.d_view(m);
-      Real j2kp1 = -(b.x3f(m,k+1,j,i) - b.x3f(m,k+1,j,i-1))/size.dx1.d_view(m);
+      Real j2k   = -(b.x3f(m,k  ,j,i) - b.x3f(m,k  ,j,i-1))/size.d_view(m).dx1;
+      Real j2kp1 = -(b.x3f(m,k+1,j,i) - b.x3f(m,k+1,j,i-1))/size.d_view(m).dx1;
 
-      Real j3j   = (b.x2f(m,k,j  ,i) - b.x2f(m,k,j  ,i-1))/size.dx1.d_view(m);
-      Real j3jp1 = (b.x2f(m,k,j+1,i) - b.x2f(m,k,j+1,i-1))/size.dx1.d_view(m);
+      Real j3j   = (b.x2f(m,k,j  ,i) - b.x2f(m,k,j  ,i-1))/size.d_view(m).dx1;
+      Real j3jp1 = (b.x2f(m,k,j+1,i) - b.x2f(m,k,j+1,i-1))/size.d_view(m).dx1;
 
       if (multi_d) {
-        j3j   -= (b.x1f(m,k,j  ,i) - b.x1f(m,k,j-1,i))/size.dx2.d_view(m);
-        j3jp1 -= (b.x1f(m,k,j+1,i) - b.x1f(m,k,j  ,i))/size.dx2.d_view(m);
+        j3j   -= (b.x1f(m,k,j  ,i) - b.x1f(m,k,j-1,i))/size.d_view(m).dx2;
+        j3jp1 -= (b.x1f(m,k,j+1,i) - b.x1f(m,k,j  ,i))/size.d_view(m).dx2;
       }
       if (three_d) {
-        j2k   += (b.x1f(m,k  ,j,i) - b.x1f(m,k-1,j,i))/size.dx3.d_view(m);
-        j2kp1 += (b.x1f(m,k+1,j,i) - b.x1f(m,k  ,j,i))/size.dx3.d_view(m);
+        j2k   += (b.x1f(m,k  ,j,i) - b.x1f(m,k-1,j,i))/size.d_view(m).dx3;
+        j2kp1 += (b.x1f(m,k+1,j,i) - b.x1f(m,k  ,j,i))/size.d_view(m).dx3;
       }
 
       // flx1 = (E X B)_{1} =  ((\eta J) X B)_{1} = \eta (J2*B3 - J3*B2) 
@@ -227,17 +229,17 @@ void Resistivity::OhmicEnergyFlux(const DvceFaceFld4D<Real> &b, DvceFaceFld5D<Re
   par_for("ohm_heat2", DevExeSpace(), 0, nmb1, ks, ke, js, je+1, is, ie,
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i)
     { 
-      Real j1k   = (b.x3f(m,k  ,j,i) - b.x3f(m,k  ,j-1,i))/size.dx2.d_view(m);
-      Real j1kp1 = (b.x3f(m,k+1,j,i) - b.x3f(m,k+1,j-1,i))/size.dx2.d_view(m);
+      Real j1k   = (b.x3f(m,k  ,j,i) - b.x3f(m,k  ,j-1,i))/size.d_view(m).dx2;
+      Real j1kp1 = (b.x3f(m,k+1,j,i) - b.x3f(m,k+1,j-1,i))/size.d_view(m).dx2;
 
-      Real j3i   = (b.x2f(m,k,j,i  ) - b.x2f(m,k,j  ,i-1))/size.dx1.d_view(m)
-                 - (b.x1f(m,k,j,i  ) - b.x1f(m,k,j-1,i  ))/size.dx2.d_view(m);
-      Real j3ip1 = (b.x2f(m,k,j,i+1) - b.x2f(m,k,j  ,i  ))/size.dx1.d_view(m)
-                 - (b.x1f(m,k,j,i+1) - b.x1f(m,k,j-1,i+1))/size.dx2.d_view(m);
+      Real j3i   = (b.x2f(m,k,j,i  ) - b.x2f(m,k,j  ,i-1))/size.d_view(m).dx1
+                 - (b.x1f(m,k,j,i  ) - b.x1f(m,k,j-1,i  ))/size.d_view(m).dx2;
+      Real j3ip1 = (b.x2f(m,k,j,i+1) - b.x2f(m,k,j  ,i  ))/size.d_view(m).dx1
+                 - (b.x1f(m,k,j,i+1) - b.x1f(m,k,j-1,i+1))/size.d_view(m).dx2;
 
       if (three_d) {
-        j1k   -= (b.x2f(m,k  ,j,i) - b.x2f(m,k-1,j,i))/size.dx3.d_view(m);
-        j1kp1 -= (b.x2f(m,k+1,j,i) - b.x2f(m,k  ,j,i))/size.dx3.d_view(m);
+        j1k   -= (b.x2f(m,k  ,j,i) - b.x2f(m,k-1,j,i))/size.d_view(m).dx3;
+        j1kp1 -= (b.x2f(m,k+1,j,i) - b.x2f(m,k  ,j,i))/size.d_view(m).dx3;
       }
                                 
       // E2 = \eta (J X B)_{2} = \eta (J3*B1 - J1*B3) 
@@ -256,15 +258,15 @@ void Resistivity::OhmicEnergyFlux(const DvceFaceFld4D<Real> &b, DvceFaceFld5D<Re
   par_for("ohm_heat3", DevExeSpace(), 0, nmb1, ks, ke+1, js, je, is, ie,
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i)
     {
-      Real j1j   = (b.x3f(m,k,j  ,i) - b.x3f(m,k  ,j-1,i))/size.dx2.d_view(m)
-                 - (b.x2f(m,k,j  ,i) - b.x2f(m,k-1,j  ,i))/size.dx3.d_view(m);
-      Real j1jp1 = (b.x3f(m,k,j+1,i) - b.x3f(m,k  ,j  ,i))/size.dx2.d_view(m)
-                 - (b.x2f(m,k,j+1,i) - b.x2f(m,k-1,j+1,i))/size.dx3.d_view(m);
+      Real j1j   = (b.x3f(m,k,j  ,i) - b.x3f(m,k  ,j-1,i))/size.d_view(m).dx2
+                 - (b.x2f(m,k,j  ,i) - b.x2f(m,k-1,j  ,i))/size.d_view(m).dx3;
+      Real j1jp1 = (b.x3f(m,k,j+1,i) - b.x3f(m,k  ,j  ,i))/size.d_view(m).dx2
+                 - (b.x2f(m,k,j+1,i) - b.x2f(m,k-1,j+1,i))/size.d_view(m).dx3;
 
-      Real j2i   = -(b.x3f(m,k,j,i  ) - b.x3f(m,k  ,j,i-1))/size.dx1.d_view(m)
-                  + (b.x1f(m,k,j,i  ) - b.x1f(m,k-1,j,i  ))/size.dx3.d_view(m);
-      Real j2ip1 = -(b.x3f(m,k,j,i+1) - b.x3f(m,k  ,j,i  ))/size.dx1.d_view(m)
-                  + (b.x1f(m,k,j,i+1) - b.x1f(m,k-1,j,i+1))/size.dx3.d_view(m);
+      Real j2i   = -(b.x3f(m,k,j,i  ) - b.x3f(m,k  ,j,i-1))/size.d_view(m).dx1
+                  + (b.x1f(m,k,j,i  ) - b.x1f(m,k-1,j,i  ))/size.d_view(m).dx3;
+      Real j2ip1 = -(b.x3f(m,k,j,i+1) - b.x3f(m,k  ,j,i  ))/size.d_view(m).dx1
+                  + (b.x1f(m,k,j,i+1) - b.x1f(m,k-1,j,i+1))/size.d_view(m).dx3;
 
       // E2 = \eta (J X B)_{2} = \eta (J1*B2 - J2*B1) 
       flx3(m,IEN,k,j,i) += qa*(j1j  *(b.x2f(m,k,j  ,i  ) + b.x2f(m,k-1,j  ,i  )) +

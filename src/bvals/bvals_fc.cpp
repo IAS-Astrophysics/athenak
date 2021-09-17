@@ -10,6 +10,7 @@
 #include <iostream>
 
 #include "athena.hpp"
+#include "globals.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "bvals.hpp"
@@ -41,11 +42,11 @@ BoundaryValueFC::~BoundaryValueFC()
 
 void BoundaryValueFC::AllocateBuffersFC()
 {
-  auto &ncells = pmy_pack->mb_cells;
-  int ng = ncells.ng;
-  int is = ncells.is, ie = ncells.ie;
-  int js = ncells.js, je = ncells.je;
-  int ks = ncells.ks, ke = ncells.ke;
+  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  int ng = indcs.ng;
+  int is = indcs.is, ie = indcs.ie;
+  int js = indcs.js, je = indcs.je;
+  int ks = indcs.ks, ke = indcs.ke;
   int ng1 = ng-1;
   int &nmb = pmy_pack->nmb_thispack;
   int &nnghbr = pmy_pack->pmb->nnghbr;

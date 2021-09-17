@@ -11,7 +11,6 @@
 #include <Kokkos_Core.hpp>
 #include <Kokkos_DualView.hpp>
 #include "config.hpp"
-#include "globals.hpp"
 
 //----------------------------------------------------------------------------------------
 // type alias that allows code to run with either floats or doubles
@@ -41,9 +40,15 @@ using Real = double;
 // data types only used in physics modules (defined here to avoid recursive dependencies)
 
 // constants that determine array index of Hydro/MHD variables
+// array indices for conserved: density, momemtum, total energy
 enum ConsIndex {IDN=0, IM1=1, IM2=2, IM3=3, IEN=4};
+// array indices for primitives: velocity, pressure
 enum PrimIndex {IVX=1, IVY=2, IVZ=3, IPR=4};
+// array indices for components of magnetic field
 enum BFldIndex {IBX=0, IBY=1, IBZ=2};
+// array indices for metric matrices in GR
+enum MetricIndex {I00=0, I01=1, I02=2, I03=3, I11=4, I12=5, I13=6, I22=7, I23=8, I33=9,
+                  NMETRIC=10};
 
 // integer constants to specify reconstruction methods
 enum ReconstructionMethod {dc, plm, ppm, wenoz};
@@ -54,10 +59,16 @@ enum TimeEvolution {tstatic, kinematic, dynamic};
 // constants that enumerate Physics Modules implemented in code
 enum PhysicsModule {HydroDynamics, MagnetoHydroDynamics};
 
-// structs to store conserved variables in one-dimension
-// (density, momentum, total energy, [transverse magnetic field])
+// structs to store primitive/conserved variables in one-dimension
+// (density, velocity/momentum, pressure/(total energy), [transverse magnetic field])
+struct HydPrim1D {
+  Real d, vx, vy, vz, p;
+};
 struct HydCons1D {
   Real d, mx, my, mz, e;
+};
+struct MHDPrim1D {
+  Real d, vx, vy, vz, p, by, bz;
 };
 struct MHDCons1D {
   Real d, mx, my, mz, e, by, bz;

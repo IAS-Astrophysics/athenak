@@ -10,6 +10,7 @@
 
 namespace global_variable {
 extern int my_rank, nranks;
+extern Real bh_spin;
 }
 
 #endif // GLOBALS_HPP_

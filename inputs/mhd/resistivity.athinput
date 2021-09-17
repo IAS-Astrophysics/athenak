@@ -40,10 +40,10 @@ tlim       = 1.0       # time limit
 ndiag      = 1         # cycles between diagostic output
 
 <mhd>
-eos               = adiabatic   # EOS type
-ohmic_resistivity = 1.0e-3      # coefficient of Ohmic resistivity
-reconstruct       = plm         # spatial reconstruction method
-rsolver           = advect      # Riemann-solver to be used
+eos               = ideal    # EOS type
+ohmic_resistivity = 1.0e-3   # coefficient of Ohmic resistivity
+reconstruct       = plm      # spatial reconstruction method
+rsolver           = advect   # Riemann-solver to be used
 
 <eos>
 gamma           = 1.4   # gamma = C_p/C_v

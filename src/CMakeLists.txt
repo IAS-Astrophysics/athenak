@@ -14,17 +14,20 @@ add_executable(
         bvals/bvals_cc.cpp
         bvals/bvals_fc.cpp
 
+        coordinates/coordinates.cpp
+
         diffusion/resistivity.cpp
         diffusion/viscosity.cpp
 
         driver/driver.cpp
 
         eos/eos.cpp
-        eos/adiabatic_hydro.cpp
-        eos/adiabatic_hydro_sr.cpp
-        eos/adiabatic_mhd.cpp
-        eos/isothermal_hydro.cpp
+        eos/ideal_hyd.cpp
+        eos/ideal_mhd.cpp
+        eos/isothermal_hyd.cpp
         eos/isothermal_mhd.cpp
+        eos/ideal_srhyd.cpp
+        eos/ideal_grhyd.cpp
 
         hydro/hydro.cpp
         hydro/hydro_fluxes.cpp
@@ -70,7 +73,6 @@ add_executable(
         pgen/lw_implode.cpp
         pgen/orszag_tang.cpp
         pgen/shock_tube.cpp
-        pgen/kh_sr.cpp
 
         srcterms/srcterms.cpp
         srcterms/turb_driver.cpp

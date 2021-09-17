@@ -10,10 +10,11 @@
 #include <cinttypes>
 
 #include "athena.hpp"
+#include "globals.hpp"
 #include "parameter_input.hpp"
 #include "outputs/io_wrapper.hpp"
 #include "mesh.hpp"
-#include "utils/grid_locations.hpp"
+#include "coordinates/cell_locations.hpp"
 
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>
@@ -25,12 +26,12 @@
 // function, so that they can store a pointer to the Mesh which can be reliably referenced
 // only after the Mesh constructor has finished
 
-Mesh::Mesh(ParameterInput *pin) :
-one_d(false), 
-two_d(false),
-three_d(false),
-multi_d(false),
-shearing_periodic(false)
+Mesh::Mesh(ParameterInput *pin)
+  : one_d(false), 
+    two_d(false),
+    three_d(false),
+    multi_d(false),
+    shearing_periodic(false)
 {
   // Set physical size and number of cells in mesh (root level)
   mesh_size.x1min = pin->GetReal("mesh", "x1min");
@@ -40,16 +41,16 @@ shearing_periodic(false)
   mesh_size.x3min = pin->GetReal("mesh", "x3min");
   mesh_size.x3max = pin->GetReal("mesh", "x3max");
 
-  mesh_cells.ng  = pin->GetOrAddReal("mesh", "nghost", 2);
-  mesh_cells.nx1 = pin->GetInteger("mesh", "nx1");
-  mesh_cells.nx2 = pin->GetInteger("mesh", "nx2");
-  mesh_cells.nx3 = pin->GetInteger("mesh", "nx3");
+  mesh_indcs.ng  = pin->GetOrAddReal("mesh", "nghost", 2);
+  mesh_indcs.nx1 = pin->GetInteger("mesh", "nx1");
+  mesh_indcs.nx2 = pin->GetInteger("mesh", "nx2");
+  mesh_indcs.nx3 = pin->GetInteger("mesh", "nx3");
 
   // define some useful flags that indicate 1D/2D/3D calculations
-  if (mesh_cells.nx3 > 1) {
+  if (mesh_indcs.nx3 > 1) {
     three_d = true;
     multi_d = true;
-  } else if (mesh_cells.nx2 > 1) {
+  } else if (mesh_indcs.nx2 > 1) {
     two_d = true;
     multi_d = true;
   } else {
@@ -134,48 +135,48 @@ shearing_periodic(false)
   }
 
   // error check requested number of grid cells for entire root domain
-  if (mesh_cells.nx1 < 4) {
+  if (mesh_indcs.nx1 < 4) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "In mesh block in input file nx1 must be >= 4, but nx1=" << mesh_cells.nx1
+        << "In mesh block in input file nx1 must be >= 4, but nx1=" << mesh_indcs.nx1
         << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  if (mesh_cells.nx2 < 1) {
+  if (mesh_indcs.nx2 < 1) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "In mesh block in input file nx2 must be >= 1, but nx2=" << mesh_cells.nx2
+        << "In mesh block in input file nx2 must be >= 1, but nx2=" << mesh_indcs.nx2
         << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  if (mesh_cells.nx3 < 1) {
+  if (mesh_indcs.nx3 < 1) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "In mesh block in input file nx3 must be >= 1, but nx3=" << mesh_cells.nx3
+        << "In mesh block in input file nx3 must be >= 1, but nx3=" << mesh_indcs.nx3
         << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  if (mesh_cells.nx2 == 1 && mesh_cells.nx3 > 1) {
+  if (mesh_indcs.nx2 == 1 && mesh_indcs.nx3 > 1) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "In mesh block in input file: nx2=1, nx3=" << mesh_cells.nx3 
+        << "In mesh block in input file: nx2=1, nx3=" << mesh_indcs.nx3 
         << ", but 2D problems in x1-x3 plane not supported" << std::endl;
     std::exit(EXIT_FAILURE);
   }
 
   // error check number of ghost zones
-  if (mesh_cells.ng < 2) {
+  if (mesh_indcs.ng < 2) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-      << "More than 2 ghost zones required, but nghost=" <<mesh_cells.ng << std::endl;
+      << "More than 2 ghost zones required, but nghost=" <<mesh_indcs.ng << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  if ((multilevel) && (mesh_cells.ng % 2 != 0)) {
+  if ((multilevel) && (mesh_indcs.ng % 2 != 0)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
       << "Number of ghost zones must be divisible by two for SMR/AMR calculations, "
-      << "but nghost=" << mesh_cells.ng << std::endl;
+      << "but nghost=" << mesh_indcs.ng << std::endl;
     std::exit(EXIT_FAILURE);
   }
 
   // passed error checks, compute grid spacing in (virtual) mesh grid
-  mesh_size.dx1 = (mesh_size.x1max-mesh_size.x1min)/static_cast<Real>(mesh_cells.nx1);
-  mesh_size.dx2 = (mesh_size.x2max-mesh_size.x2min)/static_cast<Real>(mesh_cells.nx2);
-  mesh_size.dx3 = (mesh_size.x3max-mesh_size.x3min)/static_cast<Real>(mesh_cells.nx3);
+  mesh_size.dx1 = (mesh_size.x1max-mesh_size.x1min)/static_cast<Real>(mesh_indcs.nx1);
+  mesh_size.dx2 = (mesh_size.x2max-mesh_size.x2min)/static_cast<Real>(mesh_indcs.nx2);
+  mesh_size.dx3 = (mesh_size.x3max-mesh_size.x3min)/static_cast<Real>(mesh_indcs.nx3);
 }
 
 //----------------------------------------------------------------------------------------
@@ -210,41 +211,41 @@ Mesh::~Mesh()
 void Mesh::BuildTree(ParameterInput *pin)
 {
   // Calculate # of cells in MeshBlock read from input parameters, error check
-  RegionCells incells;
-  incells.ng  = mesh_cells.ng;
-  incells.nx1 = pin->GetOrAddInteger("meshblock", "nx1", mesh_cells.nx1);
+  RegionIndcs mb_indices;
+  mb_indices.ng  = mesh_indcs.ng;
+  mb_indices.nx1 = pin->GetOrAddInteger("meshblock", "nx1", mesh_indcs.nx1);
   if (multi_d) {
-    incells.nx2 = pin->GetOrAddInteger("meshblock", "nx2", mesh_cells.nx2);
+    mb_indices.nx2 = pin->GetOrAddInteger("meshblock", "nx2", mesh_indcs.nx2);
   } else {
-    incells.nx2 = mesh_cells.nx2;
+    mb_indices.nx2 = mesh_indcs.nx2;
   }
   if (three_d) {
-    incells.nx3 = pin->GetOrAddInteger("meshblock", "nx3", mesh_cells.nx3);
+    mb_indices.nx3 = pin->GetOrAddInteger("meshblock", "nx3", mesh_indcs.nx3);
   } else {
-    incells.nx3 = mesh_cells.nx3;
+    mb_indices.nx3 = mesh_indcs.nx3;
   }
 
   // error check consistency of the block and mesh
-  if (   mesh_cells.nx1 % incells.nx1 != 0
-      || mesh_cells.nx2 % incells.nx2 != 0
-      || mesh_cells.nx3 % incells.nx3 != 0) {
+  if (   mesh_indcs.nx1 % mb_indices.nx1 != 0
+      || mesh_indcs.nx2 % mb_indices.nx2 != 0
+      || mesh_indcs.nx3 % mb_indices.nx3 != 0) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "Mesh must be evenly divisible by MeshBlocks" << std::endl
               << "Check Mesh and MeshBlock dimensions in input file" << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  if ( incells.nx1 < 4 ||
-      (incells.nx2 < 4 && multi_d) ||
-      (incells.nx3 < 4 && three_d) ) {
+  if ( mb_indices.nx1 < 4 ||
+      (mb_indices.nx2 < 4 && multi_d) ||
+      (mb_indices.nx3 < 4 && three_d) ) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "MeshBlock must be >= 4 cells in each active dimension" << std::endl;
     std::exit(EXIT_FAILURE);
   }
 
   // calculate the number of MeshBlocks at root level in each dir
-  nmb_rootx1 = mesh_cells.nx1/incells.nx1;
-  nmb_rootx2 = mesh_cells.nx2/incells.nx2;
-  nmb_rootx3 = mesh_cells.nx3/incells.nx3;
+  nmb_rootx1 = mesh_indcs.nx1/mb_indices.nx1;
+  nmb_rootx2 = mesh_indcs.nx2/mb_indices.nx2;
+  nmb_rootx3 = mesh_indcs.nx3/mb_indices.nx3;
 
   // find maximum number of MeshBlocks at root level in any dir
   int nmbmax = (nmb_rootx1 > nmb_rootx2) ? nmb_rootx1 : nmb_rootx2;
@@ -276,9 +277,9 @@ void Mesh::BuildTree(ParameterInput *pin)
 
   if (multilevel) {
     // error check that number of cells in MeshBlock divisible by two
-    if (incells.nx1 % 2 != 0 || 
-       (incells.nx2 % 2 != 0 && multi_d) ||
-       (incells.nx3 % 2 != 0 && three_d)) {
+    if (mb_indices.nx1 % 2 != 0 || 
+       (mb_indices.nx2 % 2 != 0 && multi_d) ||
+       (mb_indices.nx3 % 2 != 0 && three_d)) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Number of cells in MeshBlock must be divisible by 2 "
                 << "with SMR or AMR." << std::endl;
@@ -289,7 +290,7 @@ void Mesh::BuildTree(ParameterInput *pin)
     // Expand MeshBlockTree to include "refinement" regions specified in input file:
     for (auto it = pin->block.begin(); it != pin->block.end(); ++it) {
       if (it->block_name.compare(0, 10, "refinement") == 0) {
-        MeshSize ref_size;
+        RegionSize ref_size;
         ref_size.x1min = pin->GetReal(it->block_name, "x1min");
         ref_size.x1max = pin->GetReal(it->block_name, "x1max");
         if (multi_d) {
@@ -474,7 +475,7 @@ void Mesh::BuildTree(ParameterInput *pin)
   gide = gids + nmblist[global_variable::my_rank] - 1;
   nmb_thisrank = nmblist[global_variable::my_rank];
 
-  pmb_pack = new MeshBlockPack(this, gids, gide, incells);
+  pmb_pack = new MeshBlockPack(this, pin, gids, gide, mb_indices);
   pmb_pack->pmb->SetNeighbors(ptree, ranklist);
   
 /*******/
@@ -595,8 +596,7 @@ void Mesh::WriteMeshStructure()
     std::exit(EXIT_FAILURE);
   }
 
-  MeshBlock mb(this,0,nmb_total);
-  auto &size = mb.mbsize;
+  auto &size = this->pmb_pack->coord.coord_data.mb_size;
   for (int i=root_level; i<=max_level; i++) {
   for (int j=0; j<nmb_total; j++) {
     if (loclist[j].level == i) {
@@ -609,17 +609,17 @@ void Mesh::WriteMeshStructure()
           fp,"#  Logical level %d, location = (%" PRId32 " %" PRId32 " %" PRId32")\n",
           loclist[j].level, lx1, lx2, lx3);
       if (two_d) { // 2D
-        std::fprintf(fp,"%g %g\n", size.x1min.h_view(j), size.x2min.h_view(j));
-        std::fprintf(fp,"%g %g\n", size.x1max.h_view(j), size.x2min.h_view(j));
-        std::fprintf(fp,"%g %g\n", size.x1max.h_view(j), size.x2max.h_view(j));
-        std::fprintf(fp,"%g %g\n", size.x1min.h_view(j), size.x2max.h_view(j));
-        std::fprintf(fp,"%g %g\n", size.x1min.h_view(j), size.x2min.h_view(j));
+        std::fprintf(fp,"%g %g\n", size.h_view(j).x1min, size.h_view(j).x2min);
+        std::fprintf(fp,"%g %g\n", size.h_view(j).x1max, size.h_view(j).x2min);
+        std::fprintf(fp,"%g %g\n", size.h_view(j).x1max, size.h_view(j).x2max);
+        std::fprintf(fp,"%g %g\n", size.h_view(j).x1min, size.h_view(j).x2max);
+        std::fprintf(fp,"%g %g\n", size.h_view(j).x1min, size.h_view(j).x2min);
         std::fprintf(fp,"\n\n");
       }
       if (three_d) { // 3D
-        Real &x1min = size.x1min.h_view(j), &x1max = size.x1max.h_view(j);
-        Real &x2min = size.x2min.h_view(j), &x2max = size.x2max.h_view(j);
-        Real &x3min = size.x3min.h_view(j), &x3max = size.x3max.h_view(j);
+        Real &x1min = size.h_view(j).x1min, &x1max = size.h_view(j).x1max;
+        Real &x2min = size.h_view(j).x2min, &x2max = size.h_view(j).x2max;
+        Real &x3min = size.h_view(j).x3min, &x3max = size.h_view(j).x3max;
         std::fprintf(fp,"%g %g %g\n", x1min, x2min, x3min);
         std::fprintf(fp,"%g %g %g\n", x1max, x2min, x3min);
         std::fprintf(fp,"%g %g %g\n", x1max, x2max, x3min);
@@ -702,3 +702,43 @@ std::string Mesh::GetBoundaryString(BoundaryFlag input_flag)
       break;
   }
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn EnrollBoundaryFunction(BoundaryFace dir, BValFunc my_bc)
+//! \brief Enroll a user-defined boundary function
+
+void Mesh::EnrollBoundaryFunction(BoundaryFace dir, BoundaryFnPtr my_bc) {
+  if (dir < 0 || dir > 5) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+        << "EnrollBoundaryFunction called on bndry=" << dir << " not valid" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (mesh_bcs[dir] != BoundaryFlag::user) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+        << "Boundary condition flag must be set to 'user' in the <mesh> block in input"
+        << " file to use user-enrolled BCs on bndry=" << dir << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  BoundaryFunc[static_cast<int>(dir)]=my_bc;
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn CheckUserBoundaries()
+//! \brief checks if user boundary functions are correctly enrolled
+//! This compatibility check is performed in the Driver after calling ProblemGenerator()
+
+void Mesh::CheckUserBoundaries() {
+  for (int i=0; i<6; i++) {
+    if (mesh_bcs[i] == BoundaryFlag::user) {
+      if (BoundaryFunc[i] == nullptr) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "User-defined boundary function is specified in input "
+                  << " file but boundary function not enrolled; bndry=" << i << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+    }
+  }
+  return;
+}
+

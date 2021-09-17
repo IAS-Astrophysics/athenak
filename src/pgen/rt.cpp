@@ -35,11 +35,12 @@
 // Athena++ headers
 #include "athena.hpp"
 #include "parameter_input.hpp"
+#include "coordinates/cell_locations.hpp"
 #include "mesh/mesh.hpp"
+#include "mesh/mesh_positions.hpp"
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 #include "srcterms/srcterms.hpp"
-#include "utils/grid_locations.hpp"
 #include "utils/random.hpp"
 #include "pgen.hpp"
 
@@ -67,13 +68,11 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
   Real grav_acc = pin->GetReal("hydro","const_accel_val");
 
   // capture variables for kernel
-  int &nx1 = pmbp->mb_cells.nx1;
-  int &nx2 = pmbp->mb_cells.nx2;
-  int &nx3 = pmbp->mb_cells.nx3;
-  int &is = pmbp->mb_cells.is, &ie = pmbp->mb_cells.ie;
-  int &js = pmbp->mb_cells.js, &je = pmbp->mb_cells.je;
-  int &ks = pmbp->mb_cells.ks, &ke = pmbp->mb_cells.ke;
-  auto &size = pmbp->pmb->mbsize;
+  auto &indcs = pmbp->coord.coord_data.mb_indcs;
+  int &is = indcs.is; int &ie = indcs.ie;
+  int &js = indcs.js; int &je = indcs.je;
+  int &ks = indcs.ks; int &ke = indcs.ke;
+  auto &coord = pmbp->coord.coord_data;
 
   // initialize Hydro variables ----------------------------------------------------------
   if (pmbp->phydro != nullptr) {
@@ -88,9 +87,17 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
       par_for("rt2d", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
         KOKKOS_LAMBDA(int m, int k, int j, int i)
         {
+          Real &x1min = coord.mb_size.d_view(m).x1min;
+          Real &x1max = coord.mb_size.d_view(m).x1max;
+          int nx1 = coord.mb_indcs.nx1;
+          Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+
+          Real &x2min = coord.mb_size.d_view(m).x2min;
+          Real &x2max = coord.mb_size.d_view(m).x2max;
+          int nx2 = coord.mb_indcs.nx2;
+          Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+
           Real den=1.0;
-          Real x1v = CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
-          Real x2v = CellCenterX(j-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
           if (x2v > 0.0) den *= drat;
 
           if (iprob == 1) {
@@ -114,11 +121,22 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
       par_for("rt2d", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
         KOKKOS_LAMBDA(int m, int k, int j, int i)
         {
-          Real den=1.0;
-          Real x1v = CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
-          Real x2v = CellCenterX(j-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m));
-          Real x3v = CellCenterX(k-ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m));
+          Real &x1min = coord.mb_size.d_view(m).x1min;
+          Real &x1max = coord.mb_size.d_view(m).x1max;
+          int nx1 = coord.mb_indcs.nx1;
+          Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
+          Real &x2min = coord.mb_size.d_view(m).x2min;
+          Real &x2max = coord.mb_size.d_view(m).x2max;
+          int nx2 = coord.mb_indcs.nx2;
+          Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+
+          Real &x3min = coord.mb_size.d_view(m).x3min;
+          Real &x3max = coord.mb_size.d_view(m).x3max;
+          int nx3 = coord.mb_indcs.nx3;
+          Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+
+          Real den=1.0;
           if (x3v > 0.0) den *= drat;
 
           if (iprob == 1) {

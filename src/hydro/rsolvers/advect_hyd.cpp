@@ -14,7 +14,7 @@ namespace hydro {
 //  \brief An advection Riemann solver for hydrodynamics (isothermal)
 
 KOKKOS_INLINE_FUNCTION
-void Advect(TeamMember_t const &member, const EOS_Data eos,
+void Advect(TeamMember_t const &member, const EOS_Data eos, const CoordData &coord, 
      const int m, const int k, const int j,  const int il, const int iu, const int ivx,
      const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr, DvceArray5D<Real> flx)
 {

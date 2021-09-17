@@ -12,11 +12,11 @@
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
+#include "coordinates/cell_locations.hpp"
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
-#include "utils/grid_locations.hpp"
 #include "pgen.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -62,18 +62,16 @@ void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
   Real &x1mesh = pmy_mesh_->mesh_size.x1min;
   Real &x2mesh = pmy_mesh_->mesh_size.x2min;
   Real &x3mesh = pmy_mesh_->mesh_size.x3min;
-  int &nx1 = pmbp->mb_cells.nx1;
-  int &nx2 = pmbp->mb_cells.nx2;
-  int &nx3 = pmbp->mb_cells.nx3;
-  int &is = pmbp->mb_cells.is, &ie = pmbp->mb_cells.ie;
-  int &js = pmbp->mb_cells.js, &je = pmbp->mb_cells.je;
-  int &ks = pmbp->mb_cells.ks, &ke = pmbp->mb_cells.ke;
-  auto &size = pmbp->pmb->mbsize;
+  auto &indcs = pmbp->coord.coord_data.mb_indcs;
+  int &is = indcs.is; int &ie = indcs.ie;
+  int &js = indcs.js; int &je = indcs.je;
+  int &ks = indcs.ks; int &ke = indcs.ke;
+  auto &coord = pmbp->coord.coord_data;
 
   // Initialize Hydro variables -------------------------------
   if (pmbp->phydro != nullptr) {
 
-    if (pmbp->phydro->peos->eos_data.is_adiabatic) {
+    if (pmbp->phydro->peos->eos_data.is_ideal) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
          << std::endl << "Only isothermal EOS allowed for advection tests" << std::endl;
       exit(EXIT_FAILURE);
@@ -87,14 +85,20 @@ void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
       {
         Real r; // coordinate that will span [0->1]
         if (flow_dir == 1) {
-          r = (CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m))
-              - x1mesh)/length;
+          Real &x1min = coord.mb_size.d_view(m).x1min;
+          Real &x1max = coord.mb_size.d_view(m).x1max;
+          int nx1 = coord.mb_indcs.nx1;
+          r = (CellCenterX(i-is, nx1, x1min, x1max) - x1mesh)/length;
         } else if (flow_dir == 2) {
-          r = (CellCenterX(j-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m))
-              - x2mesh)/length;
+          Real &x2min = coord.mb_size.d_view(m).x2min;
+          Real &x2max = coord.mb_size.d_view(m).x2max;
+          int nx2 = coord.mb_indcs.nx2;
+          r = (CellCenterX(j-js, nx2, x2min, x2max) - x2mesh)/length;
         } else {
-          r = (CellCenterX(k-ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m))
-              - x3mesh)/length;
+          Real &x3min = coord.mb_size.d_view(m).x3min;
+          Real &x3max = coord.mb_size.d_view(m).x3max;
+          int nx3 = coord.mb_indcs.nx3;
+          r = (CellCenterX(k-ks, nx3, x3min, x3max) - x3mesh)/length;
         }
   
         Real f; // value for advected quantity, depending on problem type
@@ -145,7 +149,7 @@ void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
 
   // Initialize MHD variables ----------------------------------
   if (pmbp->pmhd != nullptr) {
-    if (pmbp->pmhd->peos->eos_data.is_adiabatic) {
+    if (pmbp->pmhd->peos->eos_data.is_ideal) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
          << std::endl << "Only isothermal EOS allowed for advection tests" << std::endl;
       exit(EXIT_FAILURE);
@@ -160,14 +164,20 @@ void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
       { 
         Real r; // coordinate that will span [0->1]
         if (flow_dir == 1) {
-          r = (CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m)) 
-              - x1mesh)/length;
+          Real &x1min = coord.mb_size.d_view(m).x1min;
+          Real &x1max = coord.mb_size.d_view(m).x1max;
+          int nx1 = coord.mb_indcs.nx1;
+          r = (CellCenterX(i-is, nx1, x1min, x1max) - x1mesh)/length;
         } else if (flow_dir == 2) {
-          r = (CellCenterX(j-js, nx2, size.x2min.d_view(m), size.x2max.d_view(m)) 
-              - x2mesh)/length;
+          Real &x2min = coord.mb_size.d_view(m).x2min;
+          Real &x2max = coord.mb_size.d_view(m).x2max;
+          int nx2 = coord.mb_indcs.nx2;
+          r = (CellCenterX(j-js, nx2, x2min, x2max) - x2mesh)/length;
         } else {
-          r = (CellCenterX(k-ks, nx3, size.x3min.d_view(m), size.x3max.d_view(m)) 
-              - x3mesh)/length;
+          Real &x3min = coord.mb_size.d_view(m).x3min;
+          Real &x3max = coord.mb_size.d_view(m).x3max;
+          int nx3 = coord.mb_indcs.nx3;
+          r = (CellCenterX(k-ks, nx3, x3min, x3max) - x3mesh)/length;
         }
         
         Real f; // value for advected quantity, depending on problem type

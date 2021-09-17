@@ -3,8 +3,8 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file adiabatic_hydro_sr.cpp
-//  \brief implements EOS functions in derived class for special relativistic ad. hydro
+//! \file ideal_srhyd.cpp
+//  \brief derived class that implements ideal gas EOS in special relativistic hydro
 // Conserved to primitive variable inversion implements algorithm described in Appendix C
 // of Galeazzi et al., PhysRevD, 88, 064009 (2013). Equation references are to this paper.
 
@@ -17,10 +17,10 @@
 //----------------------------------------------------------------------------------------
 // ctor: also calls EOS base class constructor
     
-AdiabaticHydroSR::AdiabaticHydroSR(MeshBlockPack *pp, ParameterInput *pin)
+IdealSRHydro::IdealSRHydro(MeshBlockPack *pp, ParameterInput *pin)
   : EquationOfState(pp, pin)
 {      
-  eos_data.is_adiabatic = true;
+  eos_data.is_ideal = true;
   eos_data.gamma = pin->GetReal("eos","gamma");
   eos_data.iso_cs = 0.0;
 }  
@@ -46,19 +46,31 @@ Real EquationC22(Real z, Real &u_d, Real q, Real r, Real gm1, Real pfloor)
 
 //----------------------------------------------------------------------------------------
 // \!fn void ConsToPrim()
-// \brief Converts conserved into primitive variables in nonrelativistic adiabatic hydro.
+// \brief Converts conserved into primitive variables for an ideal gas in nonrelativistic
+// hydro.
 // Implementation follows Wolfgang Kastaun's algorithm described in Appendix C of
 // Galeazzi et al., PhysRevD, 88, 064009 (2013).  Roots of "master function" (eq. C22) 
 // found by false position method.
+//
+// In SR hydrodynamics, the conserved variables are: (D, E - D, m^i),
+// where D = \gamma \rho is the density in the lab frame, \gamma = (1 + u^2)^{1/2} is the//  Lorentz factor, u^i = \gamma v^i are the spatial components of the 4-velocity (v^i is
+// the 3-velocity), \rho is the comoving/fluid/rest frame mass density, 
+// E = \gamma^2 w - P_gas is the total energy, w = \rho + [\Gamma / (\Gamma - 1)] P_gas
+// is the total enthalpy, \Gamma is the adiabatic index, P_gas is the gas pressure, and
+// m^i = \gamma w u^i are components of the momentum in the lab frame.
+//
+// The primitive variables are: (\rho, P_gas, u^i).
+// Note we store components of the 4-velocity (not 3-velocity) in the primitive variables.
+//
+// This function operates over entire MeshBlock, including ghost cells.  
 
-void AdiabaticHydroSR::ConsToPrimHydro(const DvceArray5D<Real> &cons,
-                                       DvceArray5D<Real> &prim)
+void IdealSRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
 {
-  auto ncells = pmy_pack->mb_cells;
-  int ng = ncells.ng;
-  int n1 = ncells.nx1 + 2*ng;
-  int n2 = (ncells.nx2 > 1)? (ncells.nx2 + 2*ng) : 1;
-  int n3 = (ncells.nx3 > 1)? (ncells.nx3 + 2*ng) : 1;
+  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  int &ng = indcs.ng;
+  int n1 = indcs.nx1 + 2*ng;
+  int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
+  int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
   int &nhyd  = pmy_pack->phydro->nhydro;
   int &nscal = pmy_pack->phydro->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
@@ -75,16 +87,16 @@ void AdiabaticHydroSR::ConsToPrimHydro(const DvceArray5D<Real> &cons,
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
       Real& u_d  = cons(m, IDN,k,j,i);
-      Real& u_m1 = cons(m, IM1,k,j,i);
-      Real& u_m2 = cons(m, IM2,k,j,i);
-      Real& u_m3 = cons(m, IM3,k,j,i);
       Real& u_e  = cons(m, IEN,k,j,i);
+      const Real& u_m1 = cons(m, IM1,k,j,i);
+      const Real& u_m2 = cons(m, IM2,k,j,i);
+      const Real& u_m3 = cons(m, IM3,k,j,i);
 
       Real& w_d  = prim(m, IDN,k,j,i);
+      Real& w_p  = prim(m, IPR,k,j,i);
       Real& w_vx = prim(m, IVX,k,j,i);
       Real& w_vy = prim(m, IVY,k,j,i);
       Real& w_vz = prim(m, IVZ,k,j,i);
-      Real& w_p  = prim(m, IPR,k,j,i);
 
       // apply density floor, without changing momentum or energy
       u_d = (u_d > dfloor_) ?  u_d : dfloor_;
@@ -184,6 +196,60 @@ std::cout << "|zm-zp|=" <<fabs(zm-zp)<<" |f|="<< fabs(f) << "for i=" <<  ii << s
 //        cons(m,IM2,k,j,i) = wgas * gamma * w_vy;
 //        cons(m,IM3,k,j,i) = wgas * gamma * w_vz;
 //      }
+
+    }
+  );
+
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+// \!fn void PrimToCons()
+// \brief Converts primitive into conserved variables.  Operates only over active cells.
+//  Recall in SR hydrodynamics the conserved variables are: (D, E-D, m^i), and the
+//  primitive variables are: (\rho, P_gas, u^i).
+
+void IdealSRHydro::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons)
+{
+  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  int &is = indcs.is; int &ie = indcs.ie;
+  int &js = indcs.js; int &je = indcs.je;
+  int &ks = indcs.ks; int &ke = indcs.ke;
+  int &nhyd  = pmy_pack->phydro->nhydro;
+  int &nscal = pmy_pack->phydro->nscalars;
+  int &nmb = pmy_pack->nmb_thispack;
+  Real gamma_prime = eos_data.gamma/(eos_data.gamma - 1.0); 
+
+  par_for("hyd_prim2cons", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i)
+    {
+      Real& u_d  = cons(m, IDN,k,j,i);
+      Real& u_e  = cons(m, IEN,k,j,i);
+      Real& u_m1 = cons(m, IM1,k,j,i);
+      Real& u_m2 = cons(m, IM2,k,j,i);
+      Real& u_m3 = cons(m, IM3,k,j,i);
+
+      const Real& w_d  = prim(m, IDN,k,j,i);
+      const Real& w_p  = prim(m, IPR,k,j,i);
+      const Real& w_vx = prim(m, IVX,k,j,i);
+      const Real& w_vy = prim(m, IVY,k,j,i);
+      const Real& w_vz = prim(m, IVZ,k,j,i);
+
+      // Calculate Lorentz factor
+      Real u0 = sqrt(1.0 + SQR(w_vx) + SQR(w_vy) + SQR(w_vz));
+      Real wgas_u0 = (w_d + gamma_prime * w_p) * u0;
+
+      // Set conserved quantities
+      u_d  = w_d * u0;
+      u_e  = wgas_u0 * u0 - w_p - u_d; // In SR, evolve E - D
+      u_m1 = wgas_u0 * w_vx;           // In SR, w_vx/y/z are 4-velocity
+      u_m2 = wgas_u0 * w_vy;
+      u_m3 = wgas_u0 * w_vz;
+
+      // convert scalars (if any)
+      for (int n=nhyd; n<(nhyd+nscal); ++n) {
+        cons(m,n,k,j,i) = prim(m,n,k,j,i)*u_d;
+      }
 
     }
   );

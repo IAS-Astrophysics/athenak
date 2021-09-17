@@ -41,12 +41,12 @@ tlim       = 60.       # time limit (almost 10 orbits = 20\pi)
 ndiag      = 1         # cycles between diagostic output
 
 <mhd>
-eos          = adiabatic  # EOS type
-reconstruct  = ppm        # spatial reconstruction method
-rsolver      = hlld       # Riemann-solver to be used
-shearing_box = true       # enroll shearing box source terms
-qshear       = 1.5        # shear rate
-omega0       = 1.0        # angular velocity of the system
+eos          = ideal   # EOS type
+reconstruct  = ppm     # spatial reconstruction method
+rsolver      = hlld    # Riemann-solver to be used
+shearing_box = true    # enroll shearing box source terms
+qshear       = 1.5     # shear rate
+omega0       = 1.0     # angular velocity of the system
 
 <eos>
 gamma = 1.6666666666666667 # gamma = C_p/C_v

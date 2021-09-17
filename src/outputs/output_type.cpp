@@ -18,13 +18,13 @@
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
+#include "coordinates/cell_locations.hpp"
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "srcterms/srcterms.hpp"
 #include "srcterms/turb_driver.hpp"
-#include "utils/grid_locations.hpp"
 #include "outputs.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -67,7 +67,7 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
       outvars.emplace_back("mom1",1,&(pm->pmb_pack->phydro->u0));
       outvars.emplace_back("mom2",2,&(pm->pmb_pack->phydro->u0));
       outvars.emplace_back("mom3",3,&(pm->pmb_pack->phydro->u0));
-      if (pm->pmb_pack->phydro->peos->eos_data.is_adiabatic) {
+      if (pm->pmb_pack->phydro->peos->eos_data.is_ideal) {
         outvars.emplace_back("ener",4,&(pm->pmb_pack->phydro->u0));
       }
       int nhyd = pm->pmb_pack->phydro->nhydro;
@@ -111,7 +111,7 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
       outvars.emplace_back("velx",1,&(pm->pmb_pack->phydro->w0));
       outvars.emplace_back("vely",2,&(pm->pmb_pack->phydro->w0));
       outvars.emplace_back("velz",3,&(pm->pmb_pack->phydro->w0));
-      if (pm->pmb_pack->phydro->peos->eos_data.is_adiabatic) {
+      if (pm->pmb_pack->phydro->peos->eos_data.is_ideal) {
         outvars.emplace_back("pres",4,&(pm->pmb_pack->phydro->w0));
       }
       int nhyd = pm->pmb_pack->phydro->nhydro;
@@ -155,7 +155,7 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
       outvars.emplace_back("mom1",1,&(pm->pmb_pack->pmhd->u0));
       outvars.emplace_back("mom2",2,&(pm->pmb_pack->pmhd->u0));
       outvars.emplace_back("mom3",3,&(pm->pmb_pack->pmhd->u0));
-      if (pm->pmb_pack->pmhd->peos->eos_data.is_adiabatic) {
+      if (pm->pmb_pack->pmhd->peos->eos_data.is_ideal) {
         outvars.emplace_back("ener",4,&(pm->pmb_pack->pmhd->u0));
       }
       int nmhd_ =  pm->pmb_pack->pmhd->nmhd;
@@ -199,7 +199,7 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
       outvars.emplace_back("velx",1,&(pm->pmb_pack->pmhd->w0));
       outvars.emplace_back("vely",2,&(pm->pmb_pack->pmhd->w0));
       outvars.emplace_back("velz",3,&(pm->pmb_pack->pmhd->w0));
-      if (pm->pmb_pack->pmhd->peos->eos_data.is_adiabatic) {
+      if (pm->pmb_pack->pmhd->peos->eos_data.is_ideal) {
         outvars.emplace_back("pres",4,&(pm->pmb_pack->pmhd->w0));
       }
       int nmhd_ =  pm->pmb_pack->pmhd->nmhd;
@@ -243,7 +243,7 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
       outvars.emplace_back("mom1",1,&(pm->pmb_pack->pmhd->u0));
       outvars.emplace_back("mom2",2,&(pm->pmb_pack->pmhd->u0));
       outvars.emplace_back("mom3",3,&(pm->pmb_pack->pmhd->u0));
-      if (pm->pmb_pack->pmhd->peos->eos_data.is_adiabatic) {
+      if (pm->pmb_pack->pmhd->peos->eos_data.is_ideal) {
         outvars.emplace_back("ener",4,&(pm->pmb_pack->pmhd->u0));
       }
       outvars.emplace_back("bcc1",0,&(pm->pmb_pack->pmhd->bcc0));
@@ -270,7 +270,7 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
       outvars.emplace_back("velx",1,&(pm->pmb_pack->pmhd->w0));
       outvars.emplace_back("vely",2,&(pm->pmb_pack->pmhd->w0));
       outvars.emplace_back("velz",3,&(pm->pmb_pack->pmhd->w0));
-      if (pm->pmb_pack->pmhd->peos->eos_data.is_adiabatic) {
+      if (pm->pmb_pack->pmhd->peos->eos_data.is_ideal) {
         outvars.emplace_back("pres",4,&(pm->pmb_pack->pmhd->w0));
       }
       int nmhd_ =  pm->pmb_pack->pmhd->nmhd;
@@ -319,52 +319,52 @@ void OutputType::LoadOutputData(Mesh *pm)
 
   // loop over all MeshBlocks
   // set size & starting indices of output arrays, adjusted accordingly if gz included 
-  auto &cells = pm->pmb_pack->mb_cells;
-  auto &size  = pm->pmb_pack->pmb->mbsize;
+  auto &indcs = pm->pmb_pack->coord.coord_data.mb_indcs;
+  auto &size  = pm->pmb_pack->coord.coord_data.mb_size;
   for (int m=0; m<(pm->pmb_pack->nmb_thispack); ++m) {
 
     int ois,oie,ojs,oje,oks,oke;
     if (out_params.include_gzs) {
-      int nout1 = cells.nx1 + 2*(cells.ng);
-      int nout2 = (cells.nx2 > 1)? (cells.nx2 + 2*(cells.ng)) : 1;
-      int nout3 = (cells.nx3 > 1)? (cells.nx3 + 2*(cells.ng)) : 1;
+      int nout1 = indcs.nx1 + 2*(indcs.ng);
+      int nout2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
+      int nout3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
       ois = 0; oie = nout1-1;
       ojs = 0; oje = nout2-1;
       oks = 0; oke = nout3-1;
     } else {
-      ois = cells.is; oie = cells.ie;
-      ojs = cells.js; oje = cells.je;
-      oks = cells.ks; oke = cells.ke;
+      ois = indcs.is; oie = indcs.ie;
+      ojs = indcs.js; oje = indcs.je;
+      oks = indcs.ks; oke = indcs.ke;
     }
 
     // check for slicing in each dimension, adjust start/end indices accordingly
     if (out_params.slice1) {
       // skip this MB if slice is out of range
-      if (out_params.slice_x1 <  size.x1min.h_view(m) ||
-          out_params.slice_x1 >= size.x1max.h_view(m)) { continue; }
+      if (out_params.slice_x1 <  size.h_view(m).x1min ||
+          out_params.slice_x1 >= size.h_view(m).x1max) { continue; }
       // set index of slice
-      ois = CellCenterIndex(out_params.slice_x1, cells.nx1,
-                            size.x1min.h_view(m), size.x1max.h_view(m));
+      ois = CellCenterIndex(out_params.slice_x1, indcs.nx1,
+                            size.h_view(m).x1min, size.h_view(m).x1max);
       oie = ois;
     }
 
     if (out_params.slice2) {
       // skip this MB if slice is out of range
-      if (out_params.slice_x2 <  size.x2min.h_view(m) ||
-          out_params.slice_x2 >= size.x2max.h_view(m)) { continue; }
+      if (out_params.slice_x2 <  size.h_view(m).x2min ||
+          out_params.slice_x2 >= size.h_view(m).x2max) { continue; }
       // set index of slice
-      ojs = CellCenterIndex(out_params.slice_x2, cells.nx2,
-                            size.x2min.h_view(m), size.x2max.h_view(m));
+      ojs = CellCenterIndex(out_params.slice_x2, indcs.nx2,
+                            size.h_view(m).x2min, size.h_view(m).x2max);
       oje = ojs;
     }
 
     if (out_params.slice3) {
       // skip this MB if slice is out of range
-      if (out_params.slice_x3 <  size.x3min.h_view(m) ||
-          out_params.slice_x3 >= size.x3max.h_view(m)) { continue; }
+      if (out_params.slice_x3 <  size.h_view(m).x3min ||
+          out_params.slice_x3 >= size.h_view(m).x3max) { continue; }
       // set index of slice
-      oks = CellCenterIndex(out_params.slice_x3, cells.nx3,
-                            size.x3min.h_view(m), size.x3max.h_view(m));
+      oks = CellCenterIndex(out_params.slice_x3, indcs.nx3,
+                            size.h_view(m).x3min, size.h_view(m).x3max);
       oke = oks;
     }
     int id = pm->pmb_pack->pmb->mbgid.h_view(m);

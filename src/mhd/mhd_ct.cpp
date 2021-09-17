@@ -21,9 +21,10 @@ namespace mhd {
 
 TaskStatus MHD::CT(Driver *pdriver, int stage) 
 {
-  int is = pmy_pack->mb_cells.is; int ie = pmy_pack->mb_cells.ie;
-  int js = pmy_pack->mb_cells.js; int je = pmy_pack->mb_cells.je;
-  int ks = pmy_pack->mb_cells.ks; int ke = pmy_pack->mb_cells.ke;
+  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  int is = indcs.is, ie = indcs.ie;
+  int js = indcs.js, je = indcs.je;
+  int ks = indcs.ks, ke = indcs.ke;
   int nmb1 = pmy_pack->nmb_thispack - 1;
 
   // capture class variables for the kernels
@@ -35,7 +36,7 @@ TaskStatus MHD::CT(Driver *pdriver, int stage)
   auto e1 = efld.x1e;
   auto e2 = efld.x2e;
   auto e3 = efld.x3e;
-  auto &mbsize = pmy_pack->pmb->mbsize;
+  auto &mbsize = pmy_pack->coord.coord_data.mb_size;
 
   //---- update B1 (only for 2D/3D problems)
   if (multi_d) {
@@ -45,9 +46,9 @@ TaskStatus MHD::CT(Driver *pdriver, int stage)
       KOKKOS_LAMBDA(int m, int k, int j, int i)
       {
         bx1f(m,k,j,i) = gam0*bx1f(m,k,j,i) + gam1*bx1f_old(m,k,j,i);
-        bx1f(m,k,j,i) -= beta_dt*(e3(m,k,j+1,i) - e3(m,k,j,i))/mbsize.dx2.d_view(m);
+        bx1f(m,k,j,i) -= beta_dt*(e3(m,k,j+1,i) - e3(m,k,j,i))/mbsize.d_view(m).dx2;
         if (three_d) {
-          bx1f(m,k,j,i) += beta_dt*(e2(m,k+1,j,i) - e2(m,k,j,i))/mbsize.dx3.d_view(m);
+          bx1f(m,k,j,i) += beta_dt*(e2(m,k+1,j,i) - e2(m,k,j,i))/mbsize.d_view(m).dx3;
         }
       }
     );
@@ -60,9 +61,9 @@ TaskStatus MHD::CT(Driver *pdriver, int stage)
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
       bx2f(m,k,j,i) = gam0*bx2f(m,k,j,i) + gam1*bx2f_old(m,k,j,i);
-      bx2f(m,k,j,i) += beta_dt*(e3(m,k,j,i+1) - e3(m,k,j,i))/mbsize.dx1.d_view(m);
+      bx2f(m,k,j,i) += beta_dt*(e3(m,k,j,i+1) - e3(m,k,j,i))/mbsize.d_view(m).dx1;
       if (three_d) {
-        bx2f(m,k,j,i) -= beta_dt*(e1(m,k+1,j,i) - e1(m,k,j,i))/mbsize.dx3.d_view(m);
+        bx2f(m,k,j,i) -= beta_dt*(e1(m,k+1,j,i) - e1(m,k,j,i))/mbsize.d_view(m).dx3;
       }
     }
   );
@@ -74,9 +75,9 @@ TaskStatus MHD::CT(Driver *pdriver, int stage)
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
       bx3f(m,k,j,i) = gam0*bx3f(m,k,j,i) + gam1*bx3f_old(m,k,j,i);
-      bx3f(m,k,j,i) -= beta_dt*(e2(m,k,j,i+1) - e2(m,k,j,i))/mbsize.dx1.d_view(m);
+      bx3f(m,k,j,i) -= beta_dt*(e2(m,k,j,i+1) - e2(m,k,j,i))/mbsize.d_view(m).dx1;
       if (multi_d) {
-        bx3f(m,k,j,i) += beta_dt*(e1(m,k,j+1,i) - e1(m,k,j,i))/mbsize.dx2.d_view(m);
+        bx3f(m,k,j,i) += beta_dt*(e1(m,k,j+1,i) - e1(m,k,j,i))/mbsize.d_view(m).dx2;
       }
     }
   );

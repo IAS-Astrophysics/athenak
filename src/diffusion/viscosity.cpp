@@ -15,6 +15,7 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
+#include "eos/eos.hpp"
 #include "viscosity.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -31,7 +32,7 @@ Viscosity::Viscosity(std::string block, MeshBlockPack *pp, ParameterInput *pin)
 
   // viscous timestep on MeshBlock(s) in this pack
   dtnew = std::numeric_limits<float>::max();
-  auto size = pmy_pack->pmb->mbsize;
+  auto size = pmy_pack->coord.coord_data.mb_size;
   Real fac;
   if (pp->pmesh->three_d) {
     fac = 1.0/6.0;
@@ -41,9 +42,9 @@ Viscosity::Viscosity(std::string block, MeshBlockPack *pp, ParameterInput *pin)
     fac = 0.5;
   }
   for (int m=0; m<(pp->nmb_thispack); ++m) {
-    dtnew = std::min(dtnew, fac*SQR(size.dx1.h_view(m))/nu);
-    if (pp->pmesh->multi_d) {dtnew = std::min(dtnew, fac*SQR(size.dx2.h_view(m))/nu);}
-    if (pp->pmesh->three_d) {dtnew = std::min(dtnew, fac*SQR(size.dx3.h_view(m))/nu);}
+    dtnew = std::min(dtnew, fac*SQR(size.h_view(m).dx1)/nu);
+    if (pp->pmesh->multi_d) {dtnew = std::min(dtnew, fac*SQR(size.h_view(m).dx2)/nu);}
+    if (pp->pmesh->three_d) {dtnew = std::min(dtnew, fac*SQR(size.h_view(m).dx3)/nu);}
   }
 
 }
@@ -59,15 +60,16 @@ Viscosity::~Viscosity()
 //! \fn void AddIsoViscousFlux
 //  \brief Adds viscous fluxes to face-centered fluxes of conserved variables
 
-void Viscosity::IsotropicViscousFlux(
-     const DvceArray5D<Real> &w0, DvceFaceFld5D<Real> &flx, const Real nu)
+void Viscosity::IsotropicViscousFlux(const DvceArray5D<Real> &w0, const Real nu,
+  const EOS_Data &eos, DvceFaceFld5D<Real> &flx)
 {
-  int is = pmy_pack->mb_cells.is; int ie = pmy_pack->mb_cells.ie;
-  int js = pmy_pack->mb_cells.js; int je = pmy_pack->mb_cells.je;
-  int ks = pmy_pack->mb_cells.ks; int ke = pmy_pack->mb_cells.ke;
-  int ncells1 = pmy_pack->mb_cells.nx1 + 2*(pmy_pack->mb_cells.ng);
+  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  int is = indcs.is, ie = indcs.ie;
+  int js = indcs.js, je = indcs.je;
+  int ks = indcs.ks, ke = indcs.ke;
+  int ncells1 = indcs.nx1 + 2*(indcs.ng);
   int nmb1 = pmy_pack->nmb_thispack - 1;
-  auto size = pmy_pack->pmb->mbsize;
+  auto size = pmy_pack->coord.coord_data.mb_size;
   bool &multi_d = pmy_pack->pmesh->multi_d;
   bool &three_d = pmy_pack->pmesh->three_d;
 
@@ -88,9 +90,9 @@ void Viscosity::IsotropicViscousFlux(
       // Add [2(dVx/dx)-(2/3)dVx/dx, dVy/dx, dVz/dx]
       par_for_inner(member, is, ie+1, [&](const int i)
       {
-        fvx(i) = 4.0*(w0(m,IVX,k,j,i) - w0(m,IVX,k,j,i-1))/(3.0*size.dx1.d_view(m));
-        fvy(i) =     (w0(m,IVY,k,j,i) - w0(m,IVY,k,j,i-1))/size.dx1.d_view(m);
-        fvz(i) =     (w0(m,IVZ,k,j,i) - w0(m,IVZ,k,j,i-1))/size.dx1.d_view(m);
+        fvx(i) = 4.0*(w0(m,IVX,k,j,i) - w0(m,IVX,k,j,i-1))/(3.0*size.d_view(m).dx1);
+        fvy(i) =     (w0(m,IVY,k,j,i) - w0(m,IVY,k,j,i-1))/size.d_view(m).dx1;
+        fvz(i) =     (w0(m,IVZ,k,j,i) - w0(m,IVZ,k,j,i-1))/size.d_view(m).dx1;
       });
 
       // In 2D/3D Add [(-2/3)dVy/dy, dVx/dy, 0]
@@ -98,9 +100,9 @@ void Viscosity::IsotropicViscousFlux(
         par_for_inner(member, is, ie+1, [&](const int i)
         {
           fvx(i) -= ((w0(m,IVY,k,j+1,i) + w0(m,IVY,k,j+1,i-1)) -
-                     (w0(m,IVY,k,j-1,i) + w0(m,IVY,k,j-1,i-1)))/(6.0*size.dx2.d_view(m));
+                     (w0(m,IVY,k,j-1,i) + w0(m,IVY,k,j-1,i-1)))/(6.0*size.d_view(m).dx2);
           fvy(i) += ((w0(m,IVX,k,j+1,i) + w0(m,IVX,k,j+1,i-1)) -
-                     (w0(m,IVX,k,j-1,i) + w0(m,IVX,k,j-1,i-1)))/(4.0*size.dx2.d_view(m));
+                     (w0(m,IVX,k,j-1,i) + w0(m,IVX,k,j-1,i-1)))/(4.0*size.d_view(m).dx2);
         });
       }
 
@@ -109,9 +111,9 @@ void Viscosity::IsotropicViscousFlux(
         par_for_inner(member, is, ie+1, [&](const int i)
         {
           fvx(i) -= ((w0(m,IVZ,k+1,j,i) + w0(m,IVZ,k+1,j,i-1)) -
-                     (w0(m,IVZ,k-1,j,i) + w0(m,IVZ,k-1,j,i-1)))/(6.0*size.dx3.d_view(m));
+                     (w0(m,IVZ,k-1,j,i) + w0(m,IVZ,k-1,j,i-1)))/(6.0*size.d_view(m).dx3);
           fvz(i) += ((w0(m,IVX,k+1,j,i) + w0(m,IVX,k+1,j,i-1)) -
-                     (w0(m,IVX,k-1,j,i) + w0(m,IVX,k-1,j,i-1)))/(4.0*size.dx3.d_view(m));
+                     (w0(m,IVX,k-1,j,i) + w0(m,IVX,k-1,j,i-1)))/(4.0*size.d_view(m).dx3);
         });
      }
 
@@ -122,7 +124,7 @@ void Viscosity::IsotropicViscousFlux(
         flx1(m,IVX,k,j,i) -= nud*fvx(i);
         flx1(m,IVY,k,j,i) -= nud*fvy(i);
         flx1(m,IVZ,k,j,i) -= nud*fvz(i);
-        if (flx1.extent_int(1) == static_cast<int>(IEN)) {   // proxy for eos.is_adiabatic
+        if (eos.is_ideal) {
           flx1(m,IEN,k,j,i) -= 0.5*nud*((w0(m,IVX,k,j,i-1) + w0(m,IVX,k,j,i))*fvx(i) +
                                         (w0(m,IVY,k,j,i-1) + w0(m,IVY,k,j,i))*fvy(i) +
                                         (w0(m,IVZ,k,j,i-1) + w0(m,IVZ,k,j,i))*fvz(i));
@@ -147,13 +149,13 @@ void Viscosity::IsotropicViscousFlux(
       // Add [(dVx/dy+dVy/dx), 2(dVy/dy)-(2/3)(dVx/dx+dVy/dy), dVz/dy]
       par_for_inner(member, is, ie, [&](const int i)
       {
-        fvx(i) = (w0(m,IVX,k,j,i  ) - w0(m,IVX,k,j-1,i  ))/size.dx2.d_view(m) +
+        fvx(i) = (w0(m,IVX,k,j,i  ) - w0(m,IVX,k,j-1,i  ))/size.d_view(m).dx2 +
                 ((w0(m,IVY,k,j,i+1) + w0(m,IVY,k,j-1,i+1)) -
-                 (w0(m,IVY,k,j,i-1) + w0(m,IVY,k,j-1,i-1)))/(4.0*size.dx1.d_view(m));
-        fvy(i) = (w0(m,IVY,k,j,i) - w0(m,IVY,k,j-1,i))*4.0/(3.0*size.dx2.d_view(m)) -
+                 (w0(m,IVY,k,j,i-1) + w0(m,IVY,k,j-1,i-1)))/(4.0*size.d_view(m).dx1);
+        fvy(i) = (w0(m,IVY,k,j,i) - w0(m,IVY,k,j-1,i))*4.0/(3.0*size.d_view(m).dx2) -
                 ((w0(m,IVX,k,j,i+1) + w0(m,IVX,k,j-1,i+1)) -
-                 (w0(m,IVX,k,j,i-1) + w0(m,IVX,k,j-1,i-1)))/(6.0*size.dx1.d_view(m));
-        fvz(i) = (w0(m,IVZ,k,j,i  ) - w0(m,IVZ,k,j-1,i  ))/size.dx2.d_view(m);
+                 (w0(m,IVX,k,j,i-1) + w0(m,IVX,k,j-1,i-1)))/(6.0*size.d_view(m).dx1);
+        fvz(i) = (w0(m,IVZ,k,j,i  ) - w0(m,IVZ,k,j-1,i  ))/size.d_view(m).dx2;
       });
 
       // In 3D Add [0, (-2/3)dVz/dz, dVy/dz]
@@ -161,9 +163,9 @@ void Viscosity::IsotropicViscousFlux(
         par_for_inner(member, is, ie, [&](const int i)
         {
           fvy(i) -= ((w0(m,IVZ,k+1,j,i) + w0(m,IVZ,k+1,j-1,i)) -
-                     (w0(m,IVZ,k-1,j,i) + w0(m,IVZ,k-1,j-1,i)))/(6.0*size.dx3.d_view(m));
+                     (w0(m,IVZ,k-1,j,i) + w0(m,IVZ,k-1,j-1,i)))/(6.0*size.d_view(m).dx3);
           fvz(i) += ((w0(m,IVY,k+1,j,i) + w0(m,IVY,k+1,j-1,i)) -
-                     (w0(m,IVY,k-1,j,i) + w0(m,IVY,k-1,j-1,i)))/(4.0*size.dx3.d_view(m));
+                     (w0(m,IVY,k-1,j,i) + w0(m,IVY,k-1,j-1,i)))/(4.0*size.d_view(m).dx3);
         });
      }
 
@@ -174,7 +176,7 @@ void Viscosity::IsotropicViscousFlux(
         flx2(m,IVX,k,j,i) -= nud*fvx(i);
         flx2(m,IVY,k,j,i) -= nud*fvy(i);
         flx2(m,IVZ,k,j,i) -= nud*fvz(i);
-        if (flx2.extent_int(1) == static_cast<int>(IEN)) {   // proxy for eos.is_adiabatic
+        if (eos.is_ideal) {
           flx2(m,IEN,k,j,i) -= 0.5*nud*((w0(m,IVX,k,j-1,i) + w0(m,IVX,k,j,i))*fvx(i) +
                                         (w0(m,IVY,k,j-1,i) + w0(m,IVY,k,j,i))*fvy(i) +
                                         (w0(m,IVZ,k,j-1,i) + w0(m,IVZ,k,j,i))*fvz(i));
@@ -199,17 +201,17 @@ void Viscosity::IsotropicViscousFlux(
       // Add [(dVx/dz+dVz/dx), (dVy/dz+dVz/dy), 2(dVz/dz)-(2/3)(dVx/dx+dVy/dy+dVz/dz)]
       par_for_inner(member, is, ie, [&](const int i)
       {
-        fvx(i) = (w0(m,IVX,k,j,i  ) - w0(m,IVX,k-1,j,i  ))/size.dx3.d_view(m) +
+        fvx(i) = (w0(m,IVX,k,j,i  ) - w0(m,IVX,k-1,j,i  ))/size.d_view(m).dx3 +
                 ((w0(m,IVZ,k,j,i+1) + w0(m,IVZ,k-1,j,i+1)) -
-                 (w0(m,IVZ,k,j,i-1) + w0(m,IVZ,k-1,j,i-1)))/(4.0*size.dx1.d_view(m));
-        fvy(i) = (w0(m,IVY,k,j,i  ) - w0(m,IVY,k-1,j,i  ))/size.dx3.d_view(m) +
+                 (w0(m,IVZ,k,j,i-1) + w0(m,IVZ,k-1,j,i-1)))/(4.0*size.d_view(m).dx1);
+        fvy(i) = (w0(m,IVY,k,j,i  ) - w0(m,IVY,k-1,j,i  ))/size.d_view(m).dx3 +
                 ((w0(m,IVZ,k,j+1,i) + w0(m,IVZ,k-1,j+1,i)) -
-                 (w0(m,IVZ,k,j-1,i) + w0(m,IVZ,k-1,j-1,i)))/(4.0*size.dx2.d_view(m));
-        fvz(i) = (w0(m,IVZ,k,j,i) - w0(m,IVZ,k-1,j,i))*4.0/(3.0*size.dx3.d_view(m)) -
+                 (w0(m,IVZ,k,j-1,i) + w0(m,IVZ,k-1,j-1,i)))/(4.0*size.d_view(m).dx2);
+        fvz(i) = (w0(m,IVZ,k,j,i) - w0(m,IVZ,k-1,j,i))*4.0/(3.0*size.d_view(m).dx3) -
                 ((w0(m,IVX,k,j,i+1) + w0(m,IVX,k-1,j,i+1)) -
-                 (w0(m,IVX,k,j,i-1) + w0(m,IVX,k-1,j,i-1)))/(6.0*size.dx1.d_view(m)) -
+                 (w0(m,IVX,k,j,i-1) + w0(m,IVX,k-1,j,i-1)))/(6.0*size.d_view(m).dx1) -
                 ((w0(m,IVY,k,j+1,i) + w0(m,IVY,k-1,j+1,i)) -
-                 (w0(m,IVY,k,j-1,i) + w0(m,IVY,k-1,j-1,i)))/(6.0*size.dx2.d_view(m));
+                 (w0(m,IVY,k,j-1,i) + w0(m,IVY,k-1,j-1,i)))/(6.0*size.d_view(m).dx2);
       });
 
       // Sum viscous fluxes into fluxes of conserved variables; including energy fluxes
@@ -219,7 +221,7 @@ void Viscosity::IsotropicViscousFlux(
         flx3(m,IVX,k,j,i) -= nud*fvx(i);
         flx3(m,IVY,k,j,i) -= nud*fvy(i);
         flx3(m,IVZ,k,j,i) -= nud*fvz(i);
-        if (flx3.extent_int(1) == static_cast<int>(IEN)) {   // proxy for eos.is_adiabatic
+        if (eos.is_ideal) {
           flx3(m,IEN,k,j,i) -= 0.5*nud*((w0(m,IVX,k-1,j,i) + w0(m,IVX,k,j,i))*fvx(i) +
                                         (w0(m,IVY,k-1,j,i) + w0(m,IVY,k,j,i))*fvy(i) +
                                         (w0(m,IVZ,k-1,j,i) + w0(m,IVZ,k,j,i))*fvz(i));

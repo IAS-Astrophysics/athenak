@@ -27,27 +27,30 @@
 #include "mhd/rsolvers/advect_mhd.cpp"
 #include "mhd/rsolvers/llf_mhd.cpp"
 #include "mhd/rsolvers/hlle_mhd.cpp"
+//#include "mhd/rsolvers/hlle_grmhd.cpp"
 #include "mhd/rsolvers/hlld.cpp"
 //#include "mhd/rsolvers/roe_mhd.cpp"
 
 namespace mhd {
 //----------------------------------------------------------------------------------------
 //! \fn  void MHD::CalcFlux
-//  \brief Calculate fluxes of conserved variables, and face-centered area-averaged EMFs
-//  for evolution of magnetic field
+//! \brief Calculate fluxes of conserved variables, and face-centered area-averaged EMFs
+//! for evolution of magnetic field
+//! Note this function is templated over RS for better performance on GPUs.
 
+template <MHD_RSolver rsolver_method_>
 TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
 {
-  int is = pmy_pack->mb_cells.is; int ie = pmy_pack->mb_cells.ie;
-  int js = pmy_pack->mb_cells.js; int je = pmy_pack->mb_cells.je;
-  int ks = pmy_pack->mb_cells.ks; int ke = pmy_pack->mb_cells.ke;
-  int ncells1 = pmy_pack->mb_cells.nx1 + 2*(pmy_pack->mb_cells.ng);
+  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  int is = indcs.is, ie = indcs.ie;
+  int js = indcs.js, je = indcs.je;
+  int ks = indcs.ks, ke = indcs.ke;
+  int ncells1 = indcs.nx1 + 2*(indcs.ng);
 
   int &nmhd_  = nmhd;
   int nvars = nmhd + nscalars;
   int nmb1 = pmy_pack->nmb_thispack - 1;
-  const auto recon_method = recon_method_;
-  const auto rsolver_method = rsolver_method_;
+  const auto recon_method_ = recon_method;
   auto &w0_ = w0;
   auto &b0_ = bcc0;
   auto &eos = peos->eos_data;
@@ -82,7 +85,7 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
       ScrArray2D<Real> br(member.team_scratch(scr_level), 3, ncells1);
 
       // Reconstruct qR[i] and qL[i+1], for both W and Bcc
-      switch (recon_method)
+      switch (recon_method_)
       {
         case ReconstructionMethod::dc:
           DonorCellX1(member, m, k, j, is-1, ie+1, w0_, wl, wr);
@@ -109,25 +112,17 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
       // compute fluxes over [is,ie+1].  MHD RS also computes electric fields, where 
       // (IBY) component of flx = E_{z} = -(v x B)_{z} = -(v1*b2 - v2*b1)
       // (IBZ) component of flx = E_{y} = -(v x B)_{y} =  (v1*b3 - v3*b1)
-      switch (rsolver_method)
-      {
-        case MHD_RSolver::advect:
-          Advect(member,eos,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e3x1_,e2x1_);
-          break;
-        case MHD_RSolver::llf:
-          LLF(member,eos,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e3x1_,e2x1_);
-          break;
-        case MHD_RSolver::hlle:
-          HLLE(member,eos,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e3x1_,e2x1_);
-          break;
-        case MHD_RSolver::hlld:
-          HLLD(member,eos,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e3x1_,e2x1_);
-          break;
+      if constexpr (rsolver_method_ == MHD_RSolver::advect) {
+        Advect(member,eos,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e3x1_,e2x1_);
+      } else if constexpr (rsolver_method_ == MHD_RSolver::llf) {
+        LLF(member,eos,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e3x1_,e2x1_);
+      } else if constexpr (rsolver_method_ == MHD_RSolver::hlle) {
+        HLLE(member,eos,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e3x1_,e2x1_);
+      } else if constexpr (rsolver_method_ == MHD_RSolver::hlld) {
+        HLLD(member,eos,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e3x1_,e2x1_);
 //        case MHD_RSolver::roe:
 //          Roe(member, eos, is, ie+1, IVX, wl, wr, uflux);
 //          break;
-        default:
-          break;
       }
       member.team_barrier();
 
@@ -192,7 +187,7 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
           }
 
           // Reconstruct qR[j] and qL[j+1], for both W and Bcc
-          switch (recon_method)
+          switch (recon_method_)
           {
             case ReconstructionMethod::dc:
               DonorCellX2(member, m, k, j, is-1, ie+1, w0_, wl_jp1, wr);
@@ -219,25 +214,17 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
           // (IBY) component of flx = E_{x} = -(v x B)_{x} = -(v2*b3 - v3*b2)
           // (IBZ) component of flx = E_{z} = -(v x B)_{z} =  (v2*b1 - v1*b2)
           if (j>(js-1)) {
-            switch (rsolver_method)
-            {
-              case MHD_RSolver::advect:
-                Advect(member,eos,m,k,j,is-1,ie+1,IVY,wl,wr,bl,br,by,flx2,e1x2_,e3x2_);
-                break;
-              case MHD_RSolver::llf:
-                LLF(member,eos,m,k,j,is-1,ie+1,IVY,wl,wr,bl,br,by,flx2,e1x2_,e3x2_);
-                break;
-              case MHD_RSolver::hlle:
-                HLLE(member,eos,m,k,j,is-1,ie+1,IVY,wl,wr,bl,br,by,flx2,e1x2_,e3x2_);
-                break;
-              case MHD_RSolver::hlld:
-                HLLD(member,eos,m,k,j,is-1,ie+1,IVY,wl,wr,bl,br,by,flx2,e1x2_,e3x2_);
-                break;
+            if constexpr (rsolver_method_ == MHD_RSolver::advect) {
+              Advect(member,eos,m,k,j,is-1,ie+1,IVY,wl,wr,bl,br,by,flx2,e1x2_,e3x2_);
+            } else if constexpr (rsolver_method_ == MHD_RSolver::llf) {
+              LLF(member,eos,m,k,j,is-1,ie+1,IVY,wl,wr,bl,br,by,flx2,e1x2_,e3x2_);
+            } else if constexpr (rsolver_method_ == MHD_RSolver::hlle) {
+              HLLE(member,eos,m,k,j,is-1,ie+1,IVY,wl,wr,bl,br,by,flx2,e1x2_,e3x2_);
+            } else if constexpr (rsolver_method_ == MHD_RSolver::hlld) {
+              HLLD(member,eos,m,k,j,is-1,ie+1,IVY,wl,wr,bl,br,by,flx2,e1x2_,e3x2_);
 //              case MHD_RSolver::roe:
 //                Roe(member, eos, is, ie, IVY, wl, wr, uf);
 //                break;
-              default:
-                break;
             }
             member.team_barrier();
           }
@@ -298,7 +285,7 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
           }
 
           // Reconstruct qR[k] and qL[k+1], for both W and Bcc
-          switch (recon_method)
+          switch (recon_method_)
           {
             case ReconstructionMethod::dc:
               DonorCellX3(member, m, k, j, is-1, ie+1, w0_, wl_kp1, wr);
@@ -325,25 +312,17 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
           // (IBY) component of flx = E_{y} = -(v x B)_{y} = -(v3*b1 - v1*b3)
           // (IBZ) component of flx = E_{x} = -(v x B)_{x} =  (v3*b2 - v2*b3)
           if (k>(ks-1)) {
-            switch (rsolver_method)
-            {
-              case MHD_RSolver::advect:
-                Advect(member,eos,m,k,j,is-1,ie+1,IVZ,wl,wr,bl,br,bz,flx3,e2x3_,e1x3_);
-                break;
-              case MHD_RSolver::llf:
-                LLF(member,eos,m,k,j,is-1,ie+1,IVZ,wl,wr,bl,br,bz,flx3,e2x3_,e1x3_);
-                break;
-              case MHD_RSolver::hlle:
-                HLLE(member,eos,m,k,j,is-1,ie+1,IVZ,wl,wr,bl,br,bz,flx3,e2x3_,e1x3_);
-                break;
-              case MHD_RSolver::hlld:
-                HLLD(member,eos,m,k,j,is-1,ie+1,IVZ,wl,wr,bl,br,bz,flx3,e2x3_,e1x3_);
-                break;
+            if constexpr (rsolver_method_ == MHD_RSolver::advect) {
+              Advect(member,eos,m,k,j,is-1,ie+1,IVZ,wl,wr,bl,br,bz,flx3,e2x3_,e1x3_);
+            } else if constexpr (rsolver_method_ == MHD_RSolver::llf) {
+              LLF(member,eos,m,k,j,is-1,ie+1,IVZ,wl,wr,bl,br,bz,flx3,e2x3_,e1x3_);
+            } else if constexpr (rsolver_method_ == MHD_RSolver::hlle) {
+              HLLE(member,eos,m,k,j,is-1,ie+1,IVZ,wl,wr,bl,br,bz,flx3,e2x3_,e1x3_);
+            } else if constexpr (rsolver_method_ == MHD_RSolver::hlld) {
+              HLLD(member,eos,m,k,j,is-1,ie+1,IVZ,wl,wr,bl,br,bz,flx3,e2x3_,e1x3_);
 //              case MHD_RSolver::roe:
 //                Roe(member, eos, is, ie, IVZ, wl, wr, uf);
 //                break;
-              default:
-                break;
             }
             member.team_barrier();
           }
@@ -369,13 +348,19 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
 
   // Add viscous, resistive, heat-flux, etc fluxes
   if (pvisc != nullptr) {
-    pvisc->IsotropicViscousFlux(u0, uflx, pvisc->nu);
+    pvisc->IsotropicViscousFlux(u0, pvisc->nu, eos, uflx);
   }
-  if ((presist != nullptr) && (peos->eos_data.is_adiabatic)) {
+  if ((presist != nullptr) && (peos->eos_data.is_ideal)) {
     presist->OhmicEnergyFlux(b0, uflx);
   }
 
   return TaskStatus::complete;
 }
+
+// function definitions for each template parameter
+template TaskStatus MHD::CalcFluxes<MHD_RSolver::advect>(Driver *pdriver, int stage);
+template TaskStatus MHD::CalcFluxes<MHD_RSolver::llf>(Driver *pdriver, int stage);
+template TaskStatus MHD::CalcFluxes<MHD_RSolver::hlle>(Driver *pdriver, int stage);
+template TaskStatus MHD::CalcFluxes<MHD_RSolver::hlld>(Driver *pdriver, int stage);
 
 } // namespace mhd

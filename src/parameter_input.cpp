@@ -35,14 +35,16 @@
 //   - Jan 2014:  Rewritten in C++ for the Athena++ code by J.M. Stone
 //========================================================================================
 
-#include "parameter_input.hpp"
-
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
 #include <sstream>
 #include <string>
+
+#include "athena.hpp"
+#include "globals.hpp"
+#include "parameter_input.hpp"
 
 #if OPENMP_PARALLEL_ENABLED
 #include <omp.h>

@@ -5,12 +5,12 @@
 //========================================================================================
 //! \file hydro_tasks.cpp
 //  \brief implementation of functions that control Hydro tasks in the four task lists:
-//  stagestart_tl, stagerun_tl, stageend_tl
-//  operatorsplit_tl
+//  stagestart_tl, stagerun_tl, stageend_tl, operatorsplit_tl (currently not used)
 
 #include <iostream>
 
 #include "athena.hpp"
+#include "globals.hpp"
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
 #include "mesh/mesh.hpp"
@@ -38,18 +38,40 @@ void Hydro::AssembleHydroTasks(TaskList &start, TaskList &run, TaskList &end)
 {
   TaskID none(0);
 
-  id.init_recv = start.AddTask(&Hydro::InitRecv, this, none);
+  // start task list
+  id.irecv = start.AddTask(&Hydro::InitRecv, this, none);
 
-  id.copy_cons = run.AddTask(&Hydro::CopyCons, this, none);
-  id.calc_flux = run.AddTask(&Hydro::CalcFluxes, this, id.copy_cons);
-  id.update = run.AddTask(&Hydro::ExpRKUpdate, this, id.calc_flux);
-  id.sendu = run.AddTask(&Hydro::SendU, this, id.update);
+  // run task list
+  id.copyu = run.AddTask(&Hydro::CopyCons, this, none);
+  // select which calculate_flux function to add based on rsolver_method
+  if (rsolver_method == Hydro_RSolver::advect) {
+    id.flux = run.AddTask(&Hydro::CalcFluxes<Hydro_RSolver::advect>,this,id.copyu);
+  } else if (rsolver_method == Hydro_RSolver::llf) {
+    id.flux = run.AddTask(&Hydro::CalcFluxes<Hydro_RSolver::llf>,this,id.copyu);
+  } else if (rsolver_method == Hydro_RSolver::hlle) {
+    id.flux = run.AddTask(&Hydro::CalcFluxes<Hydro_RSolver::hlle>,this,id.copyu);
+  } else if (rsolver_method == Hydro_RSolver::hllc) {
+    id.flux = run.AddTask(&Hydro::CalcFluxes<Hydro_RSolver::hllc>,this,id.copyu);
+  } else if (rsolver_method == Hydro_RSolver::roe) {
+    id.flux = run.AddTask(&Hydro::CalcFluxes<Hydro_RSolver::roe>,this,id.copyu);
+  } else if (rsolver_method == Hydro_RSolver::llf_sr) {
+    id.flux = run.AddTask(&Hydro::CalcFluxes<Hydro_RSolver::llf_sr>,this,id.copyu);
+  } else if (rsolver_method == Hydro_RSolver::hlle_sr) {
+    id.flux = run.AddTask(&Hydro::CalcFluxes<Hydro_RSolver::hlle_sr>,this,id.copyu);
+  } else if (rsolver_method == Hydro_RSolver::hllc_sr) {
+    id.flux = run.AddTask(&Hydro::CalcFluxes<Hydro_RSolver::hllc_sr>,this,id.copyu);
+  } else if (rsolver_method == Hydro_RSolver::hlle_gr) {
+    id.flux = run.AddTask(&Hydro::CalcFluxes<Hydro_RSolver::hlle_gr>,this,id.copyu);
+  }
+  id.expl  = run.AddTask(&Hydro::ExpRKUpdate, this, id.flux);
+  id.sendu = run.AddTask(&Hydro::SendU, this, id.expl);
   id.recvu = run.AddTask(&Hydro::RecvU, this, id.sendu);
-  id.phys_bcs = run.AddTask(&Hydro::ApplyPhysicalBCs, this, id.recvu);
-  id.cons2prim = run.AddTask(&Hydro::ConToPrim, this, id.phys_bcs);
-  id.newdt = run.AddTask(&Hydro::NewTimeStep, this, id.cons2prim);
+  id.bcs   = run.AddTask(&Hydro::ApplyPhysicalBCs, this, id.recvu);
+  id.c2p   = run.AddTask(&Hydro::ConToPrim, this, id.bcs);
+  id.newdt = run.AddTask(&Hydro::NewTimeStep, this, id.c2p);
 
-  id.clear_send = end.AddTask(&Hydro::ClearSend, this, none);
+  // end task list
+  id.clear = end.AddTask(&Hydro::ClearSend, this, none);
 
   return;
 }
@@ -179,7 +201,7 @@ TaskStatus Hydro::RecvU(Driver *pdrive, int stage)
 
 TaskStatus Hydro::ConToPrim(Driver *pdrive, int stage)
 {
-  peos->ConsToPrimHydro(u0, w0);
+  peos->ConsToPrim(u0, w0);
   return TaskStatus::complete;
 }
 

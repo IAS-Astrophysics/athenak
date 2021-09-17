@@ -13,11 +13,11 @@
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
+#include "coordinates/cell_locations.hpp"
 #include "mesh/mesh.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "turb_driver.hpp"
-#include "utils/grid_locations.hpp"
 #include "srcterms.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -76,9 +76,10 @@ SourceTerms::~SourceTerms()
 void SourceTerms::AddConstantAccel(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
                                    const Real bdt)
 {
-  int is = pmy_pack->mb_cells.is; int ie = pmy_pack->mb_cells.ie;
-  int js = pmy_pack->mb_cells.js; int je = pmy_pack->mb_cells.je;
-  int ks = pmy_pack->mb_cells.ks; int ke = pmy_pack->mb_cells.ke;
+  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  int is = indcs.is, ie = indcs.ie;
+  int js = indcs.js, je = indcs.je;
+  int ks = indcs.ks, ke = indcs.ke;
   int nmb1 = pmy_pack->nmb_thispack - 1;
 
   Real &g = const_accel_val;
@@ -103,9 +104,10 @@ void SourceTerms::AddConstantAccel(DvceArray5D<Real> &u0, const DvceArray5D<Real
 void SourceTerms::AddShearingBox(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
                                    const Real bdt)
 { 
-  int is = pmy_pack->mb_cells.is; int ie = pmy_pack->mb_cells.ie;
-  int js = pmy_pack->mb_cells.js; int je = pmy_pack->mb_cells.je;
-  int ks = pmy_pack->mb_cells.ks; int ke = pmy_pack->mb_cells.ke;
+  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  int is = indcs.is, ie = indcs.ie;
+  int js = indcs.js, je = indcs.je;
+  int ks = indcs.ks, ke = indcs.ke;
   int nmb1 = pmy_pack->nmb_thispack - 1;
 
   //  Terms are implemented with orbital advection, so that v3 represents the perturbation
@@ -136,9 +138,10 @@ void SourceTerms::AddShearingBox(DvceArray5D<Real> &u0, const DvceArray5D<Real> 
 void SourceTerms::AddShearingBox(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
                                  const DvceArray5D<Real> &bcc0, const Real bdt)
 { 
-  int is = pmy_pack->mb_cells.is; int ie = pmy_pack->mb_cells.ie;
-  int js = pmy_pack->mb_cells.js; int je = pmy_pack->mb_cells.je;
-  int ks = pmy_pack->mb_cells.ks; int ke = pmy_pack->mb_cells.ke;
+  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  int is = indcs.is, ie = indcs.ie;
+  int js = indcs.js, je = indcs.je;
+  int ks = indcs.ks, ke = indcs.ke;
   int nmb1 = pmy_pack->nmb_thispack - 1;
   
   //  Terms are implemented with orbital advection, so that v3 represents the perturbation
@@ -172,10 +175,10 @@ void SourceTerms::AddShearingBox(DvceArray5D<Real> &u0, const DvceArray5D<Real> 
 
 void SourceTerms::AddSBoxEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &efld)
 {
-  int is = pmy_pack->mb_cells.is; int ie = pmy_pack->mb_cells.ie;
-  int js = pmy_pack->mb_cells.js; int je = pmy_pack->mb_cells.je;
-  int ks = pmy_pack->mb_cells.ks; int ke = pmy_pack->mb_cells.ke;
-  int &nx1 = pmy_pack->mb_cells.nx1;
+  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  int is = indcs.is, ie = indcs.ie;
+  int js = indcs.js, je = indcs.je;
+  int ks = indcs.ks, ke = indcs.ke;
 
   Real qomega  = qshear*omega0;
 
@@ -188,7 +191,7 @@ void SourceTerms::AddSBoxEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Rea
   // E_{x} = -(v x B)_{x} = -(vy*bz - vz*by) = +v_{K}by --> E1 = -(q\Omega x)b2
   // E_{y} = -(v x B)_{y} =  (vx*bz - vz*bx) = -v_{K}bx --> E2 = +(q\Omega x)b1
   if (pmy_pack->pmesh->two_d) {
-    auto &size = pmy_pack->pmb->mbsize;
+    auto &coord = pmy_pack->coord.coord_data;
     auto e1 = efld.x1e;
     auto e2 = efld.x2e;
     auto b1 = b0.x1f;
@@ -198,10 +201,15 @@ void SourceTerms::AddSBoxEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Rea
       {
         par_for_inner(member, is, ie+1, [&](const int i)
         {
-          Real x1v = CellCenterX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
+          Real &x1min = coord.mb_size.d_view(m).x1min;
+          Real &x1max = coord.mb_size.d_view(m).x1max;
+          int nx1 = coord.mb_indcs.nx1;
+          Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+
           e1(m,ks,  j,i) -= qomega*x1v*b2(m,ks,j,i);
           e1(m,ke+1,j,i) -= qomega*x1v*b2(m,ks,j,i);
-          Real x1f = LeftEdgeX(i-is, nx1, size.x1min.d_view(m), size.x1max.d_view(m));
+
+          Real x1f = LeftEdgeX(i-is, nx1, x1min, x1max);
           e2(m,ks  ,j,i) += qomega*x1f*b1(m,ks,j,i);
           e2(m,ke+1,j,i) += qomega*x1f*b1(m,ks,j,i);
         });

@@ -21,11 +21,11 @@ namespace hydro {
 
 //----------------------------------------------------------------------------------------
 //! \fn void HLLE
-//! \brief HLLE implementation for SR. Based on HLLETransforming function in Athena++
+//! \brief HLLE implementation for SR. Based on HLLETransforming() function in Athena++
 //
 
 KOKKOS_INLINE_FUNCTION
-void HLLE_SR(TeamMember_t const &member, const EOS_Data &eos,
+void HLLE_SR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coord,
      const int m, const int k, const int j, const int il, const int iu, const int ivx,
      const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr, DvceArray5D<Real> flx)
 {
@@ -36,6 +36,9 @@ void HLLE_SR(TeamMember_t const &member, const EOS_Data &eos,
   par_for_inner(member, il, iu, [&](const int i)
   {
     // References to left primitives
+    // Recall in SR the primitive variables are (\rho, u^i, P_gas), where \rho is the
+    // mass density in the comoving/fluid frame, u^i = \gamma v^i are the spatial
+    // components of the 4-velocity (v^i is the 3-velocity), and P_gas is the pressure.
     Real &wl_idn=wl(IDN,i);
     Real &wl_ivx=wl(ivx,i);
     Real &wl_ivy=wl(ivy,i);
@@ -52,20 +55,20 @@ void HLLE_SR(TeamMember_t const &member, const EOS_Data &eos,
     Real u2l = SQR(wl_ivz) + SQR(wl_ivy) + SQR(wl_ivx);
     Real u2r = SQR(wr_ivz) + SQR(wr_ivy) + SQR(wr_ivx);
 
-    Real u0l  = sqrt(1. + u2l);
-    Real u0r  = sqrt(1. + u2r);
+    Real u0l  = sqrt(1. + u2l);  // Lorentz factor in L-state
+    Real u0r  = sqrt(1. + u2r);  // Lorentz factor in R-state
 
     // FIXME ERM: Ideal fluid for now
-    Real wgas_l = wl_idn + gamma_prime * wl_ipr;
-    Real wgas_r = wr_idn + gamma_prime * wr_ipr;
+    Real wgas_l = wl_idn + gamma_prime * wl_ipr;  // total enthalpy in L-state
+    Real wgas_r = wr_idn + gamma_prime * wr_ipr;  // total enthalpy in R-state
 
     // Calculate wavespeeds in left state (MB 23)
     Real lp_l, lm_l;
-    eos.WaveSpeeds_SR(wgas_l, wl_ipr, wl_ivx/u0l, (1.0 + u2l), lp_l, lm_l);
+    eos.WaveSpeedsSR(wgas_l, wl_ipr, wl_ivx/u0l, (1.0 + u2l), lp_l, lm_l);
 
     // Calculate wavespeeds in right state (MB 23)
     Real lp_r, lm_r;
-    eos.WaveSpeeds_SR(wgas_r, wr_ipr, wr_ivx/u0r, (1.0 + u2r), lp_r, lm_r);
+    eos.WaveSpeedsSR(wgas_r, wr_ipr, wr_ivx/u0r, (1.0 + u2r), lp_r, lm_r);
 
     // Calculate extremal wavespeeds
     Real lambda_l = fmin(lm_l, lm_r);
@@ -75,8 +78,8 @@ void HLLE_SR(TeamMember_t const &member, const EOS_Data &eos,
     HydCons1D du;
     Real qa = wgas_r*u0r;
     Real qb = wgas_l*u0l;
-    Real er = qa*u0r - wr_ipr - wr_idn*u0r;
-    Real el = qb*u0l - wl_ipr - wl_idn*u0l;
+    Real er = qa*u0r - wr_ipr;
+    Real el = qb*u0l - wl_ipr;
 
     du.d  = wr_idn*u0r - wl_idn*u0l;
     du.mx = wr_ivx*qa  - wl_ivx*qb;
@@ -101,15 +104,35 @@ void HLLE_SR(TeamMember_t const &member, const EOS_Data &eos,
     fr.mz = qa * wr_ivz;
     fr.e  = qa * u0r;
 
-    // Calculate fluxes in HLL region (MB 11), store into 3D arrays
-    qa = lambda_l*lambda_r;
-    Real lambda_diff_inv = 1.0 / (lambda_r-lambda_l);
+    // Calculate fluxes in HLL region (MB 11)
+    HydCons1D flux_hll;
+    qa = lambda_r*lambda_l;
+    qb = lambda_r - lambda_l;
+    flux_hll.d  = (lambda_r*fl.d  - lambda_l*fr.d  + qa*du.d ) / qb;
+    flux_hll.mx = (lambda_r*fl.mx - lambda_l*fr.mx + qa*du.mx) / qb;
+    flux_hll.my = (lambda_r*fl.my - lambda_l*fr.my + qa*du.my) / qb;
+    flux_hll.mz = (lambda_r*fl.mz - lambda_l*fr.mz + qa*du.mz) / qb;
+    flux_hll.e  = (lambda_r*fl.e  - lambda_l*fr.e  + qa*du.e ) / qb;
 
-    flx(m,IDN,k,j,i) = (lambda_r*fl.d  - lambda_l*fr.d  + qa*du.d )*lambda_diff_inv;
-    flx(m,ivx,k,j,i) = (lambda_r*fl.mx - lambda_l*fr.mx + qa*du.mx)*lambda_diff_inv;
-    flx(m,ivy,k,j,i) = (lambda_r*fl.my - lambda_l*fr.my + qa*du.my)*lambda_diff_inv;
-    flx(m,ivz,k,j,i) = (lambda_r*fl.mz - lambda_l*fr.mz + qa*du.mz)*lambda_diff_inv;
-    flx(m,IEN,k,j,i) = (lambda_r*fl.e  - lambda_l*fr.e  + qa*du.e )*lambda_diff_inv;
+    // Determine region of wavefan
+    HydCons1D *flux_interface;
+    if (lambda_l >= 0.0) {  // L region
+      flux_interface = &fl;
+    } else if (lambda_r <= 0.0) { // R region
+      flux_interface = &fr;
+    } else {  // HLL region
+      flux_interface = &flux_hll;
+    }
+
+    // Set fluxes
+    flx(m,IDN,k,j,i) = flux_interface->d;
+    flx(m,ivx,k,j,i) = flux_interface->mx;
+    flx(m,ivy,k,j,i) = flux_interface->my;
+    flx(m,ivz,k,j,i) = flux_interface->mz;
+    flx(m,IEN,k,j,i) = flux_interface->e;
+
+    // We evolve tau = E - D
+    flx(m,IEN,k,j,i) -= flx(m,IDN,k,j,i);
 
   });
 

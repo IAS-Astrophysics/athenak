@@ -9,10 +9,10 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
+#include "mesh/mesh_positions.hpp"
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
-#include "utils/grid_locations.hpp"
 #include "pgen.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -29,9 +29,10 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
   }
 
   // capture variables for kernel
-  int &is = pmbp->mb_cells.is, &ie = pmbp->mb_cells.ie;
-  int &js = pmbp->mb_cells.js, &je = pmbp->mb_cells.je;
-  int &ks = pmbp->mb_cells.ks, &ke = pmbp->mb_cells.ke;
+  auto &indcs = pmbp->coord.coord_data.mb_indcs;
+  int &is = indcs.is; int &ie = indcs.ie;
+  int &js = indcs.js; int &je = indcs.je;
+  int &ks = indcs.ks; int &ke = indcs.ke;
 
   Real cs = pin->GetOrAddReal("eos","iso_sound_speed",1.0);
   Real beta = pin->GetOrAddReal("problem","beta",1.0);
@@ -51,7 +52,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
         u0(m,IM1,k,j,i) = 0.0;
         u0(m,IM2,k,j,i) = 0.0;
         u0(m,IM3,k,j,i) = 0.0;
-        if (eos.is_adiabatic) {
+        if (eos.is_ideal) {
           u0(m,IEN,k,j,i) = p0/gm1;
         }
       }
@@ -84,7 +85,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
         if (j==je) {b0.x2f(m,k,j+1,i) = 0.0;}
         if (k==ke) {b0.x3f(m,k+1,j,i) = 0.0;}
 
-        if (eos.is_adiabatic) {
+        if (eos.is_ideal) {
           u0(m,IEN,k,j,i) = p0/gm1 + 0.5; // 0.5 comes from B^2/2 
         }
       }
@@ -122,7 +123,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
         if (j==je) {b0.x2f(m,k,j+1,i) = 0.0;}
         if (k==ke) {b0.x3f(m,k+1,j,i) = 0.0;}
 
-        if (eos.is_adiabatic) {
+        if (eos.is_ideal) {
           u0(m,IEN,k,j,i) = p0/gm1 + 0.5; // 0.5 comes from B^2/2 
         }
       }
@@ -141,7 +142,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
         u0_(m,IM1,k,j,i) = 0.0;
         u0_(m,IM2,k,j,i) = 0.0;
         u0_(m,IM3,k,j,i) = 0.0;
-        if (eos_.is_adiabatic) {
+        if (eos_.is_ideal) {
           u0_(m,IEN,k,j,i) = p0_/gm1_;
         }
       }
