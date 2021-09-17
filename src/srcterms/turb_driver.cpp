@@ -502,13 +502,13 @@ TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage)
   );
 
 #if MPI_PARALLEL_ENABLED
-    Real m[4] = {m0,m1,m2,m3};
-    Real gm[4];
-    MPI_Allreduce(m, gm, 4, MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
-    m0 = gm[0];
-    m1 = gm[1];
-    m2 = gm[2];
-    m3 = gm[3];
+    Real m_sum4[4] = {m0,m1,m2,m3};
+    Real gm_sum4[4];
+    MPI_Allreduce(m_sum4, gm_sum4, 4, MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
+    m0 = gm_sum4[0];
+    m1 = gm_sum4[1];
+    m2 = gm_sum4[2];
+    m3 = gm_sum4[3];
 #endif
 
   par_for("net_mom_2", DevExeSpace(), 0, nmb-1, ks, ke, js, je, is, ie,
@@ -567,11 +567,11 @@ TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage)
   m0 = std::max(m0, static_cast<Real>(std::numeric_limits<float>::min()) );
 
 #if MPI_PARALLEL_ENABLED
-    Real m[2] = {m0,m1};
-    Real gm[2];
-    MPI_Allreduce(m, gm, 2, MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
-    m0 = gm[0];
-    m1 = gm[1];
+    Real m_sum2[2] = {m0,m1};
+    Real gm_sum2[2];
+    MPI_Allreduce(m_sum2, gm_sum2, 2, MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
+    m0 = gm_sum2[0];
+    m1 = gm_sum2[1];
 #endif
 
 /* old normalization
