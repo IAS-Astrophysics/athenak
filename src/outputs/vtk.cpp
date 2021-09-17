@@ -111,6 +111,7 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   vtkfile.Write(msg.str().c_str(),sizeof(char),msg.str().size());
   header_offset = msg.str().size();}
 
+  // Specify the uniform Cartesian mesh with grid minima and spacings
   {std::stringstream msg;
   msg << std::scientific << std::setprecision(std::numeric_limits<Real>::max_digits10 - 1)
       << "ORIGIN " << pm->mesh_size.x1min << " "

@@ -236,7 +236,7 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
       break;
 
     // Load mhd conserved variables and cell-centered magnetic fields
-    case OutputVariable::mhd_uall:
+    case OutputVariable::mhd_u_bcc:
       {
       if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
       outvars.emplace_back("dens",0,&(pm->pmb_pack->pmhd->u0));
@@ -263,7 +263,7 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
       break;
 
     // Load mhd primitive variables and cell-centered magnetic fields
-    case OutputVariable::mhd_wall:
+    case OutputVariable::mhd_w_bcc:
       {
       if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
       outvars.emplace_back("dens",0,&(pm->pmb_pack->pmhd->w0));
