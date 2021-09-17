@@ -1,5 +1,4 @@
-# Athena++ (Kokkos version) input file for SR spherical blast problem
-# blast wave is always initialized at origin
+# Athena++ (Kokkos version) input file for Bondi accretion
 
 <comment>
 problem   = GR hydro accretion in radial direction
@@ -68,4 +67,3 @@ dt         = 1.0        # time increment between outputs
 file_type  = vtk        # Binary data dump
 variable   = hydro_u    # variables to be output
 dt         = 1.0        # time increment between outputs
-
