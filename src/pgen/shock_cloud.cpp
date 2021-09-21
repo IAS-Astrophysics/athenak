@@ -31,7 +31,7 @@ Real shock_d, shock_m, shock_e;
 } // namespace
 
 // fixes BCs on L-x1 (left edge) of grid to postshock flow.
-void ShockCloudInnerX1(int m, CoordData &coord, DvceArray5D<Real> &u);
+void ShockCloudInnerX1(int m, CoordData &coord, EOS_Data &eos, DvceArray5D<Real> &u);
 
 //----------------------------------------------------------------------------------------
 //! \fn ProblemGenerator::_()
@@ -136,7 +136,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
 //  \brief Sets boundary condition on left X boundary (iib)
 // Note quantities at this boundary are held fixed at the downstream state
 
-void ShockCloudInnerX1(int m, CoordData &coord, DvceArray5D<Real> &u)
+void ShockCloudInnerX1(int m, CoordData &coord, EOS_Data &eos, DvceArray5D<Real> &u)
 {
   auto &indcs = coord.mb_indcs;
   int &ng = indcs.ng;
