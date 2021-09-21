@@ -202,7 +202,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
 
           Real g_[NMETRIC], gi_[NMETRIC];
           ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, true,
-                                  coord.bh_spin, coord.bh_rmin, g_, gi_);
+                                  coord.bh_spin, g_, gi_);
           uu1 = u1 - gi_[I01]/gi_[I00] * u0;
           uu2 = u2 - gi_[I02]/gi_[I00] * u0;
           uu3 = u3 - gi_[I03]/gi_[I00] * u0;

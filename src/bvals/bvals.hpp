@@ -28,7 +28,8 @@ enum VariablesID {FluidCons_ID, BField_ID};
 #include "tasklist/task_list.hpp"
 
 // function ptr for user-defined boundary functions enrolled in problem generator 
-using BoundaryFnPtr = void (*)(int m, CoordData &coord, DvceArray5D<Real> &u);
+using BoundaryFnPtr = void (*)(int m, CoordData &coord, EOS_Data &eos,
+                               DvceArray5D<Real> &u);
 
 //----------------------------------------------------------------------------------------
 //! \struct BoundaryBufferCC

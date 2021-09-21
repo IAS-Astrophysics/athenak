@@ -73,5 +73,8 @@ void ProblemGenerator::ProblemGeneratorFinalize(ParameterInput *pin, Mesh *pm)
   if (pgen_fun_name.compare("linear_wave") == 0) {
     LinearWaveErrors_(pm->pmb_pack, pin);
   }
+  if (pgen_fun_name.compare("gr_bondi") == 0) {
+    BondiErrors_(pm->pmb_pack, pin);
+  }
   return;
 }
