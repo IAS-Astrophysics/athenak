@@ -13,6 +13,7 @@
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "hydro/hydro.hpp"
+#include "eos/eos.hpp"
 
 namespace hydro {
 
@@ -26,6 +27,7 @@ TaskStatus Hydro::ApplyPhysicalBCs(Driver* pdrive, int stage)
   // loop over all MeshBlocks in this MeshBlockPack
   int nmb = pmy_pack->nmb_thispack;
   auto &coord = pmy_pack->coord.coord_data;
+  auto &eos = peos->eos_data;
   auto u0_ = u0;
 
   for (int m=0; m<nmb; ++m) {
@@ -41,7 +43,7 @@ TaskStatus Hydro::ApplyPhysicalBCs(Driver* pdrive, int stage)
         if (pmy_pack->pmesh->shearing_periodic) ShearInnerX1(m);
         break;
       case BoundaryFlag::user:
-        pmy_pack->pmesh->BoundaryFunc[BoundaryFace::inner_x1](m, coord, u0_);
+        pmy_pack->pmesh->BoundaryFunc[BoundaryFace::inner_x1](m, coord, eos, u0_);
         break;
       default:
         break;
@@ -59,7 +61,7 @@ TaskStatus Hydro::ApplyPhysicalBCs(Driver* pdrive, int stage)
         if (pmy_pack->pmesh->shearing_periodic) ShearOuterX1(m);
         break;
       case BoundaryFlag::user:
-        pmy_pack->pmesh->BoundaryFunc[BoundaryFace::outer_x1](m, coord, u0_);
+        pmy_pack->pmesh->BoundaryFunc[BoundaryFace::outer_x1](m, coord, eos, u0_);
         break;
       default:
         break;
@@ -77,7 +79,7 @@ TaskStatus Hydro::ApplyPhysicalBCs(Driver* pdrive, int stage)
         OutflowInnerX2(m);
         break;
       case BoundaryFlag::user:
-        pmy_pack->pmesh->BoundaryFunc[BoundaryFace::inner_x2](m, coord, u0_);
+        pmy_pack->pmesh->BoundaryFunc[BoundaryFace::inner_x2](m, coord, eos, u0_);
         break;
       default:
         break;
@@ -92,7 +94,7 @@ TaskStatus Hydro::ApplyPhysicalBCs(Driver* pdrive, int stage)
         OutflowOuterX2(m);
         break;
       case BoundaryFlag::user:
-        pmy_pack->pmesh->BoundaryFunc[BoundaryFace::outer_x2](m, coord, u0_);
+        pmy_pack->pmesh->BoundaryFunc[BoundaryFace::outer_x2](m, coord, eos, u0_);
         break;
       default:
         break;
@@ -110,7 +112,7 @@ TaskStatus Hydro::ApplyPhysicalBCs(Driver* pdrive, int stage)
         OutflowInnerX3(m);
         break;
       case BoundaryFlag::user:
-        pmy_pack->pmesh->BoundaryFunc[BoundaryFace::inner_x3](m, coord, u0_);
+        pmy_pack->pmesh->BoundaryFunc[BoundaryFace::inner_x3](m, coord, eos, u0_);
         break;
       default:
         break;
@@ -125,7 +127,7 @@ TaskStatus Hydro::ApplyPhysicalBCs(Driver* pdrive, int stage)
         OutflowOuterX3(m);
         break;
       case BoundaryFlag::user:
-        pmy_pack->pmesh->BoundaryFunc[BoundaryFace::outer_x3](m, coord, u0_);
+        pmy_pack->pmesh->BoundaryFunc[BoundaryFace::outer_x3](m, coord, eos, u0_);
         break;
       default:
         break;

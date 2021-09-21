@@ -99,7 +99,7 @@ void IsothermalMHD::PrimToCons(const DvceArray5D<Real> &prim,const DvceArray5D<R
   int &nscal = pmy_pack->pmhd->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
         
-  par_for("mhd_prim2cons", DevExeSpace(), 0, (nmb-1), ks, ks, js, je, is, ie,
+  par_for("mhd_prim2cons", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
       Real& u_d  = cons(m,IDN,k,j,i);

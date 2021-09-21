@@ -32,6 +32,7 @@ class ProblemGenerator {
   // error functions in predefine problem generator
   void ProblemGeneratorFinalize(ParameterInput *pin, Mesh *pmesh);
   void LinearWaveErrors_(MeshBlockPack *pmbp, ParameterInput *pin);
+  void BondiErrors_(MeshBlockPack *pmbp, ParameterInput *pin);
 
   // template for user-specified problem generator
   void UserProblem(MeshBlockPack *pmbp, ParameterInput *pin);

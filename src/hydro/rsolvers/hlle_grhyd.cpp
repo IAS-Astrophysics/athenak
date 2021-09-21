@@ -142,8 +142,8 @@ void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &c
     eos.WaveSpeedsGR(wgas_r, pgas_r, ucon_r[0], ucon_r[ivx], g00, g0i, gii, lp_r, lm_r);
 
     // Calculate extremal wavespeeds
-    Real lambda_l = std::min(lm_l, lm_r);
-    Real lambda_r = std::max(lp_l, lp_r);
+    Real lambda_l = fmin(lm_l, lm_r);
+    Real lambda_r = fmax(lp_l, lp_r);
 
     // Calculate difference du =  U_R - U_l in conserved quantities (rho u^0 and T^0_\mu)
     Real du[5];
