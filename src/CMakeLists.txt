@@ -69,6 +69,7 @@ add_executable(
 
         pgen/pgen.cpp
         pgen/advection.cpp
+        pgen/gr_bondi.cpp
         pgen/linear_wave.cpp
         pgen/lw_implode.cpp
         pgen/orszag_tang.cpp

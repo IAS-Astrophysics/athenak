@@ -18,7 +18,8 @@
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 
-// function prototypes
+namespace {
+
 KOKKOS_INLINE_FUNCTION
 static void ComputePrimitiveSingle(int m, int k, int j, int i,
                                    CoordData coord, Real g_[], Real gi_[],
@@ -59,9 +60,9 @@ struct bondi_pgen {
   bool reset_ic = false;    // reset initial conditions after run
 };
 
-namespace {
   bondi_pgen bondi;
-}
+
+} // namespace
 
 void FixedInnerX1(int m, CoordData &coord, EOS_Data &eos, DvceArray5D<Real> &u);
 void FixedOuterX1(int m, CoordData &coord, EOS_Data &eos, DvceArray5D<Real> &u);
@@ -71,12 +72,12 @@ void FixedInnerX3(int m, CoordData &coord, EOS_Data &eos, DvceArray5D<Real> &u);
 void FixedOuterX3(int m, CoordData &coord, EOS_Data &eos, DvceArray5D<Real> &u);
 
 //----------------------------------------------------------------------------------------
-//! \fn void ProblemGenerator::UserProblem()
+//! \fn void ProblemGenerator::BondiAccretion_()
 //! \brief set initial conditions for Bondi accretion test
 //  Compile with '-D PROBLEM=gr_bondi' to enroll as user-specific problem generator 
 //    reference: Hawley, Smarr, & Wilson 1984, ApJ 277 296 (HSW)
 
-void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
+void ProblemGenerator::BondiAccretion_(MeshBlockPack *pmbp, ParameterInput *pin)
 {
   // Read problem-specific parameters from input file
   // global parameters
@@ -169,7 +170,7 @@ void ProblemGenerator::BondiErrors_(MeshBlockPack *pmbp, ParameterInput *pin)
   // calculate reference solution by calling pgen again.  Solution stored in second
   // register u1/b1 when flag is false.
   bondi.reset_ic=true;
-  UserProblem(pmbp, pin);
+  BondiAccretion_(pmbp, pin);
 
   Real l1_err[8];
   int nvars=0;
@@ -306,6 +307,7 @@ void ProblemGenerator::BondiErrors_(MeshBlockPack *pmbp, ParameterInput *pin)
   return;
 }
 
+namespace {
 
 //----------------------------------------------------------------------------------------
 // Function for returning corresponding Boyer-Lindquist coordinates of point
@@ -583,6 +585,8 @@ static Real TemperatureResidual(struct bondi_pgen pgen, Real t, Real r) {
       * (1.0 - 2.0*pgen.mass/r + SQR(pgen.c1)
          / (SQR(SQR(r)) * pow(t, 2.0*pgen.n_adi))) - pgen.c2;
 }
+
+} // namespace
 
 //----------------------------------------------------------------------------------------
 //! \fn FixedInnerX1
