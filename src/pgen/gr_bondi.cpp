@@ -57,7 +57,7 @@ struct bondi_pgen {
   Real r_crit;              // sonic point radius
   Real c1, c2;              // useful constants
   Real temp_min, temp_max;  // bounds for temperature root find
-  bool reset_ic = false;           // reset initial conditions after run
+  bool reset_ic = false;    // reset initial conditions after run
 };
 
   bondi_pgen bondi;
