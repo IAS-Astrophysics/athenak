@@ -43,7 +43,7 @@ ndiag      = 1          # cycles between diagostic output
 <coord>
 m = 1.0     # black hole mass M
 a = 0.9375  # black hole spin a (0 <= a/M < 1)
-rmin = 3.0  # excision radius
+rmin = 2.0  # excision radius
 
 <hydro>
 general_rel = true

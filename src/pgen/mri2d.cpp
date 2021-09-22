@@ -157,7 +157,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
     Real gm1 = eos.gamma - 1.0;
     auto b0 = pmbp->pmhd->b0;
     auto u0 = pmbp->pmhd->u0;
-    Kokkos::Random_XorShift64_Pool<> rand_pool64(5374857);
+    Kokkos::Random_XorShift64_Pool<> rand_pool64(pmbp->gids);
     par_for("mri2d-u", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i)
       {
