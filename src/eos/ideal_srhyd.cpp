@@ -1,12 +1,12 @@
 //========================================================================================
-// AthenaXXX astrophysical plasma code
+// Athena++ (Kokkos version) astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file ideal_srhyd.cpp
-//  \brief derived class that implements ideal gas EOS in special relativistic hydro
-// Conserved to primitive variable inversion implements algorithm described in Appendix C
-// of Galeazzi et al., PhysRevD, 88, 064009 (2013). Equation references are to this paper.
+//! \brief derived class that implements ideal gas EOS in special relativistic hydro
+//! Conserved to primitive variable inversion using algorithm described in Appendix C
+//! of Galeazzi et al., PhysRevD, 88, 064009 (2013). Equation refs are to this paper.
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
@@ -26,9 +26,9 @@ IdealSRHydro::IdealSRHydro(MeshBlockPack *pp, ParameterInput *pin)
 }  
 
 //----------------------------------------------------------------------------------------
-// \!fn Real EquationC22()
-// \brief Inline function to compute function f(z) defined in eq. C22 of Galeazzi et al.
-// The ConsToPRim algorithms finds the root of this function f(z)=0
+//! \fn Real EquationC22()
+//! \brief Inline function to compute function f(z) defined in eq. C22 of Galeazzi et al.
+//! The ConsToPrim algorithms finds the root of this function f(z)=0
 
 KOKKOS_INLINE_FUNCTION
 Real EquationC22(Real z, Real &u_d, Real q, Real r, Real gm1, Real pfloor)
@@ -45,24 +45,28 @@ Real EquationC22(Real z, Real &u_d, Real q, Real r, Real gm1, Real pfloor)
 }
 
 //----------------------------------------------------------------------------------------
-// \!fn void ConsToPrim()
-// \brief Converts conserved into primitive variables for an ideal gas in nonrelativistic
-// hydro.
-// Implementation follows Wolfgang Kastaun's algorithm described in Appendix C of
-// Galeazzi et al., PhysRevD, 88, 064009 (2013).  Roots of "master function" (eq. C22) 
-// found by false position method.
-//
-// In SR hydrodynamics, the conserved variables are: (D, E - D, m^i),
-// where D = \gamma \rho is the density in the lab frame, \gamma = (1 + u^2)^{1/2} is the//  Lorentz factor, u^i = \gamma v^i are the spatial components of the 4-velocity (v^i is
-// the 3-velocity), \rho is the comoving/fluid/rest frame mass density, 
-// E = \gamma^2 w - P_gas is the total energy, w = \rho + [\Gamma / (\Gamma - 1)] P_gas
-// is the total enthalpy, \Gamma is the adiabatic index, P_gas is the gas pressure, and
-// m^i = \gamma w u^i are components of the momentum in the lab frame.
-//
-// The primitive variables are: (\rho, P_gas, u^i).
-// Note we store components of the 4-velocity (not 3-velocity) in the primitive variables.
-//
-// This function operates over entire MeshBlock, including ghost cells.  
+//! \fn void ConsToPrim()
+//! \brief Converts conserved into primitive variables for an ideal gas in nonrelativistic
+//! hydro.  Implementation follows Wolfgang Kastaun's algorithm described in Appendix C of
+//! Galeazzi et al., PhysRevD, 88, 064009 (2013).  Roots of "master function" (eq. C22) 
+//! found by false position method.
+//!
+//! In SR hydrodynamics, the conserved variables are: (D, E - D, m^i), where
+//!    D = \gamma \rho is the density in the lab frame,
+//!    \gamma = (1 + u^2)^{1/2} = (1 - v^2)^{-1/2} is the Lorentz factor,
+//!    u^i = \gamma v^i are the spatial components of the 4-velocity (v^i is 3-vel),
+//!    \rho is the comoving/fluid frame mass density, 
+//!    E = \gamma^2 w - P_g is the total energy,
+//!    w = \rho + [\Gamma / (\Gamma - 1)] P_g is the total enthalpy,
+//!    \Gamma is the adiabatic index, P_g is the gas pressure
+//!    m^i = \gamma w u^i are components of the momentum in the lab frame.
+//! Note we evolve (E-D). This improves accuracy/stability in high-density regions.
+//!
+//! In SR hydrodynamics, the primitive variables are: (\rho, P_gas, u^i).
+//! Note components of the 4-velocity (not 3-velocity) are stored in the primitive
+//! variables because tests show it is better to reconstruct the 4-vel.
+//!
+//! This function operates over entire MeshBlock, including ghost cells.  
 
 void IdealSRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
 {
@@ -94,9 +98,9 @@ void IdealSRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
 
       Real& w_d  = prim(m, IDN,k,j,i);
       Real& w_p  = prim(m, IPR,k,j,i);
-      Real& w_vx = prim(m, IVX,k,j,i);
-      Real& w_vy = prim(m, IVY,k,j,i);
-      Real& w_vz = prim(m, IVZ,k,j,i);
+      Real& w_ux = prim(m, IVX,k,j,i);
+      Real& w_uy = prim(m, IVY,k,j,i);
+      Real& w_uz = prim(m, IVZ,k,j,i);
 
       // apply density floor, without changing momentum or energy
       u_d = (u_d > dfloor_) ?  u_d : dfloor_;
@@ -139,9 +143,6 @@ void IdealSRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
         // Quit if convergence reached
 	// NOTE: both z and f are of order unity
 	if ((fabs(zm-zp) < tol ) || (fabs(f) < tol )){
-/**
-std::cout << "|zm-zp|=" <<fabs(zm-zp)<<" |f|="<< fabs(f) << "for i=" <<  ii << std::endl;
-**/
 	    break;
 	}
 
@@ -171,9 +172,9 @@ std::cout << "|zm-zp|=" <<fabs(zm-zp)<<" |f|="<< fabs(f) << "for i=" <<  ii << s
       w_p = w_d*gm1*eps;
 
       Real const conv = 1.0/(h*u_d); // (C26)
-      w_vx = conv * u_m1;           // (C26)
-      w_vy = conv * u_m2;           // (C26)
-      w_vz = conv * u_m3;           // (C26)
+      w_ux = conv * u_m1;           // (C26)
+      w_uy = conv * u_m2;           // (C26)
+      w_uz = conv * u_m3;           // (C26)
 
       // convert scalars (if any)
       for (int n=nhyd; n<(nhyd+nscal); ++n) {
@@ -204,10 +205,11 @@ std::cout << "|zm-zp|=" <<fabs(zm-zp)<<" |f|="<< fabs(f) << "for i=" <<  ii << s
 }
 
 //----------------------------------------------------------------------------------------
-// \!fn void PrimToCons()
-// \brief Converts primitive into conserved variables.  Operates only over active cells.
-//  Recall in SR hydrodynamics the conserved variables are: (D, E-D, m^i), and the
-//  primitive variables are: (\rho, P_gas, u^i).
+//! \fn void PrimToCons()
+//! \brief Converts primitive into conserved variables for SR hydrodynamics. Operates
+//! only over active cells.
+//! Recall in SR hydrodynamics the conserved variables are: (D, E-D, m^i),
+//!                        and the primitive variables are: (\rho, P_gas, u^i).
 
 void IdealSRHydro::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons)
 {
@@ -231,20 +233,20 @@ void IdealSRHydro::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &
 
       const Real& w_d  = prim(m, IDN,k,j,i);
       const Real& w_p  = prim(m, IPR,k,j,i);
-      const Real& w_vx = prim(m, IVX,k,j,i);
-      const Real& w_vy = prim(m, IVY,k,j,i);
-      const Real& w_vz = prim(m, IVZ,k,j,i);
+      const Real& w_ux = prim(m, IVX,k,j,i);
+      const Real& w_uy = prim(m, IVY,k,j,i);
+      const Real& w_uz = prim(m, IVZ,k,j,i);
 
       // Calculate Lorentz factor
-      Real u0 = sqrt(1.0 + SQR(w_vx) + SQR(w_vy) + SQR(w_vz));
+      Real u0 = sqrt(1.0 + SQR(w_ux) + SQR(w_uy) + SQR(w_uz));
       Real wgas_u0 = (w_d + gamma_prime * w_p) * u0;
 
       // Set conserved quantities
       u_d  = w_d * u0;
-      u_e  = wgas_u0 * u0 - w_p - u_d; // In SR, evolve E - D
-      u_m1 = wgas_u0 * w_vx;           // In SR, w_vx/y/z are 4-velocity
-      u_m2 = wgas_u0 * w_vy;
-      u_m3 = wgas_u0 * w_vz;
+      u_e  = wgas_u0 * u0 - w_p - u_d;  // In SR, evolve E - D
+      u_m1 = wgas_u0 * w_ux;            // In SR, w_ux/y/z are 4-velocity
+      u_m2 = wgas_u0 * w_uy;
+      u_m3 = wgas_u0 * w_uz;
 
       // convert scalars (if any)
       for (int n=nhyd; n<(nhyd+nscal); ++n) {

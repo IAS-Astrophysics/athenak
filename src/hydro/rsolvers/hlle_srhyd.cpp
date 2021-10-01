@@ -1,13 +1,13 @@
 //========================================================================================
-// AthenaXXX astrophysical plasma code
+// Athena++ (Kokkos version) astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file hlle_srhyd.cpp
 //! \brief HLLE Riemann solver for special relativistic hydrodynamics.
-//
-// REFERENCES
-// - implements HLLE algorithm from Mignone & Bodo 2005, MNRAS 364 126 (MB)
+//!
+//! REFERENCES
+//! - implements HLLE algorithm from Mignone & Bodo 2005, MNRAS 364 126 (MB)
 
 #include <algorithm>  // max(), min()
 #include <cmath>      // sqrt()
@@ -22,7 +22,6 @@ namespace hydro {
 //----------------------------------------------------------------------------------------
 //! \fn void HLLE
 //! \brief HLLE implementation for SR. Based on HLLETransforming() function in Athena++
-//
 
 KOKKOS_INLINE_FUNCTION
 void HLLE_SR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coord,
@@ -36,9 +35,10 @@ void HLLE_SR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &c
   par_for_inner(member, il, iu, [&](const int i)
   {
     // References to left primitives
-    // Recall in SR the primitive variables are (\rho, u^i, P_gas), where \rho is the
-    // mass density in the comoving/fluid frame, u^i = \gamma v^i are the spatial
-    // components of the 4-velocity (v^i is the 3-velocity), and P_gas is the pressure.
+    // Recall in SR the primitive variables are (\rho, u^i, P_g), where
+    //   \rho is the mass density in the comoving/fluid frame,
+    //   u^i = \gamma v^i are the spatial components of the 4-velocity (v^i is the 3-vel),
+    //   P_g is the pressure.
     Real &wl_idn=wl(IDN,i);
     Real &wl_ivx=wl(ivx,i);
     Real &wl_ivy=wl(ivy,i);
@@ -55,8 +55,8 @@ void HLLE_SR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &c
     Real u2l = SQR(wl_ivz) + SQR(wl_ivy) + SQR(wl_ivx);
     Real u2r = SQR(wr_ivz) + SQR(wr_ivy) + SQR(wr_ivx);
 
-    Real u0l  = sqrt(1. + u2l);  // Lorentz factor in L-state
-    Real u0r  = sqrt(1. + u2r);  // Lorentz factor in R-state
+    Real u0l  = sqrt(1.0 + u2l);  // Lorentz factor in L-state
+    Real u0r  = sqrt(1.0 + u2r);  // Lorentz factor in R-state
 
     // FIXME ERM: Ideal fluid for now
     Real wgas_l = wl_idn + gamma_prime * wl_ipr;  // total enthalpy in L-state

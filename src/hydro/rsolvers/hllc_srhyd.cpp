@@ -1,16 +1,16 @@
 //========================================================================================
-// AthenaXXX astrophysical plasma code
+// Athena++ (Kokkos version) astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file hllc_srhyd.cpp
-//  \brief Implements HLLC Riemann solver for special relativistic hydrodynamics.
-//
-// REFERENCES:
-//  - E.F. Toro, "Riemann Solvers and numerical methods for fluid dynamics", 2nd ed.,
-//    Springer-Verlag, Berlin, (1999) chpt. 10.
-//  - Mignone & Bodo 2005, MNRAS 364 126 (MB2005)
-//  - Mignone & Bodo 2006, MNRAS 368 1040 (MB2006)
+//! \brief Implements HLLC Riemann solver for special relativistic hydrodynamics.
+//!
+//! REFERENCES:
+//!  - E.F. Toro, "Riemann Solvers and numerical methods for fluid dynamics", 2nd ed.,
+//!    Springer-Verlag, Berlin, (1999) chpt. 10.
+//!  - Mignone & Bodo 2005, MNRAS 364 126 (MB2005)
+//!  - Mignone & Bodo 2006, MNRAS 368 1040 (MB2006)
 
 #include <algorithm>  // max(), min()
 #include <cmath>      // sqrt()
@@ -19,8 +19,8 @@ namespace hydro {
 
 //----------------------------------------------------------------------------------------
 //! \fn void HLLC
-//  \brief The HLLC Riemann solver for SR hydrodynamics.  Based on HLLCTransforming()
-//  function in Athena++
+//! \brief The HLLC Riemann solver for SR hydrodynamics.  Based on HLLCTransforming()
+//! function in Athena++ (C++ version)
 
 KOKKOS_INLINE_FUNCTION
 void HLLC_SR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coord,

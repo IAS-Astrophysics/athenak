@@ -1,18 +1,19 @@
-//======================================================================================== // AthenaXXX astrophysical plasma code
+//========================================================================================
+// Athena++ (Kokkos version) astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file llf_srhyd.cpp
-//  \brief Local Lax Friedrichs (LLF) Riemann solver for special relativistic hydro
-//
-//  Computes 1D fluxes using the LLF Riemann solver, also known as Rusanov's method.
-//  This flux is very diffusive, even more diffusive than HLLE, and so it is not
-//  recommended for use in applications.  However, it is useful for testing, or for
-//  problems where other Riemann solvers fail.
-//
-// REFERENCES:
-// - E.F. Toro, "Riemann Solvers and numerical methods for fluid dynamics", 2nd ed.,
-//   Springer-Verlag, Berlin, (1999) chpt. 10.
+//! \brief Local Lax Friedrichs (LLF) Riemann solver for special relativistic hydro
+//!
+//! Computes 1D fluxes using the LLF Riemann solver, also known as Rusanov's method.
+//! This flux is very diffusive, even more diffusive than HLLE, and so it is not
+//! recommended for use in applications.  However, it is useful for testing, or for
+//! problems where other Riemann solvers fail.
+//!
+//! REFERENCES:
+//! - E.F. Toro, "Riemann Solvers and numerical methods for fluid dynamics", 2nd ed.,
+//!   Springer-Verlag, Berlin, (1999) chpt. 10.
 
 #include <algorithm>  // max(), min()
 #include <cmath>      // sqrt()
@@ -35,9 +36,10 @@ void LLF_SR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &co
   par_for_inner(member, il, iu, [&](const int i)
   {
     //--- Step 1.  Create local references for L/R states (helps compiler vectorize)
-    // Recall in SR the primitive variables are (\rho, u^i, P_gas), where \rho is the
-    // mass density in the comoving/fluid frame, u^i = \gamma v^i are the spatial
-    // components of the 4-velocity (v^i is the 3-velocity), and P_gas is the pressure.
+    // Recall in SR the primitive variables are (\rho, u^i, P_g), where
+    //  \rho is the mass density in the comoving/fluid frame,
+    //  u^i = \gamma v^i are the spatial components of the 4-velocity (v^i is the 3-vel),
+    //  P_g is the pressure.
 
     Real &wl_idn=wl(IDN,i);
     Real &wl_ivx=wl(ivx,i);
