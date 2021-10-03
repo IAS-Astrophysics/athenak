@@ -157,9 +157,9 @@ struct EOS_Data
     l_m = (a1 >= 0.0) ? (-a1 - s) / 2.0 : -2.0 * a0 / (a1 - s);
   }
 
-  //----------------------------------------------------------------------------------------
+  //--------------------------------------------------------------------------------------
   // \!fn void PrimToConsSingleGR()
-  // \brief Converts primitive into conserved variables.  Operates on only one active cell.
+  // \brief Converts primitive into conserved variables. Operates on only one active cell.
 
   KOKKOS_INLINE_FUNCTION
   void PrimToConsSingleGR(Real g_[], Real gi_[],
@@ -193,7 +193,7 @@ struct EOS_Data
 
     Real wgas_u0 = (wd + gamma_prime * wp) * u0;
     ud = wd * u0;
-    ue = wgas_u0 * u_0 + wp;
+    ue = wgas_u0 * u_0 + wp - ud;  // Evolve E-D as in SR
     um1 = wgas_u0 * u_1;
     um2 = wgas_u0 * u_2;
     um3 = wgas_u0 * u_3;

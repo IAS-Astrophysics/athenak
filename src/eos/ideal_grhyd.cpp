@@ -1,10 +1,10 @@
 //========================================================================================
-// AthenaXXX astrophysical plasma code
+// Athena++ (Kokkos version) astrophysical MHD code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file ideal_grhyd.cpp
-//  \brief derived class that implements ideal gas EOS in general relativistic hydro
+//! \brief derived class that implements ideal gas EOS in general relativistic hydro
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
@@ -28,9 +28,9 @@ IdealGRHydro::IdealGRHydro(MeshBlockPack *pp, ParameterInput *pin)
 }
 
 //----------------------------------------------------------------------------------------
-// \!fn Real EquationC22()
-// \brief Inline function to compute function f(z) defined in eq. C22 of Galeazzi et al.
-// The ConsToPrim algorithms finds the root of this function f(z)=0
+//! \fn Real EquationC22()
+//! \brief Inline function to compute function f(z) defined in eq. C22 of Galeazzi et al.
+//! The ConsToPrim algorithms finds the root of this function f(z)=0
 
 KOKKOS_INLINE_FUNCTION
 Real EquationC22(Real z, Real &u_d, Real q, Real r, Real gm1, Real pfloor)
@@ -47,9 +47,9 @@ Real EquationC22(Real z, Real &u_d, Real q, Real r, Real gm1, Real pfloor)
 }
 
 //----------------------------------------------------------------------------------------
-// \!fn void ConsToPrim()
-// \brief Converts conserved into primitive variables.
-// Operates over entire MeshBlock, including ghost cells.
+//! \fn void ConsToPrim()
+//! \brief Converts conserved into primitive variables.
+//! Operates over entire MeshBlock, including ghost cells.
 
 void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
 {
@@ -86,9 +86,9 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
 
       Real& w_d  = prim(m,IDN,k,j,i);
       Real& w_p  = prim(m,IPR,k,j,i);
-      Real& w_vx = prim(m,IVX,k,j,i);
-      Real& w_vy = prim(m,IVY,k,j,i);
-      Real& w_vz = prim(m,IVZ,k,j,i);
+      Real& w_ux = prim(m,IVX,k,j,i);
+      Real& w_uy = prim(m,IVY,k,j,i);
+      Real& w_uz = prim(m,IVZ,k,j,i);
 
       Real &x1min = coord.mb_size.d_view(m).x1min;
       Real &x1max = coord.mb_size.d_view(m).x1max;
@@ -116,10 +116,10 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
 
       // Only execute cons2prim if outside excised region
       if (rad > coord.bh_rmin) {
-        // We are evolving T^t_t, but the SR C2P algorithm is only consistent
-        // with alpha^2 T^{tt}
-        // compute T^{tt} = g^0\mu T^t_\mu
-        Real ue_tmp = gi_[I00]*u_e + gi_[I01]*u_m1 + gi_[I02]*u_m2 + gi_[I03]*u_m3;
+        // We are evolving T^t_t, but the SR C2P algorithm is only consistent with
+        // alpha^2 T^{tt}.J.  Therefore compute T^{tt} = g^0\mu T^t_\mu
+        // We are also evolving (E-D) as conserved variable, so must convert to E 
+        Real ue_tmp = gi_[I00]*(u_e+u_d) + gi_[I01]*u_m1 + gi_[I02]*u_m2 + gi_[I03]*u_m3;
 
         // This is only true if sqrt{-g}=1!
         ue_tmp *= (-1./gi_[I00]);  // Multiply by alpha^2
@@ -151,8 +151,8 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
         }
 
         // Recast all variables (eq C2)
-        // Need to raise indices on u_m1, which transforms using the spatial
-        // 3-metric.  This is slightly more involved
+        // Need to raise indices on u_m1, which transforms using the spatial 3-metric.
+        // This is slightly more involved
         //
         // Gourghoulon says: g^ij = gamma^ij - beta^i beta^j/alpha^2
         //       g^0i = beta^i/alpha^2
@@ -209,7 +209,7 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
              zp = z;
              fp = f;
           } else {  // assign zp-->z if root bracketed by [zm,z]
-             fm = 0.5*fm;  // 1/2 comes from "Illinois algorithm" to accelerate convergence
+             fm = 0.5*fm; // 1/2 comes from "Illinois algorithm" to accelerate convergence
              zp = z;
              fp = f;
           }
@@ -223,9 +223,9 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
         Real h = (1.0 + eps) * (1.0 + (gm1*eps)/(1.0+eps)); // (C1) & (C21)
         w_p = w_d*gm1*eps;
         Real const conv = 1.0/(h*ud_tmp); // (C26)
-        w_vx = conv*m1u;  // (C26)
-        w_vy = conv*m2u;  // (C26)
-        w_vz = conv*m3u;  // (C26)
+        w_ux = conv*m1u;  // (C26)
+        w_uy = conv*m2u;  // (C26)
+        w_uz = conv*m3u;  // (C26)
 
         // convert scalars (if any)
         for (int n=nhyd; n<(nhyd+nscal); ++n) {
@@ -235,7 +235,7 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
       // reset conserved variables inside excised regions or if floor is hit
       if (rad <= coord.bh_rmin || floor_hit) {
         Real ud, ue, um1, um2, um3;
-        eos.PrimToConsSingleGR(g_, gi_, w_d, w_p, w_vx, w_vy, w_vz,
+        eos.PrimToConsSingleGR(g_, gi_, w_d, w_p, w_ux, w_uy, w_uz,
                                ud, ue, um1, um2, um3);
         cons(m,IDN,k,j,i) = ud;
         cons(m,IEN,k,j,i) = ue;
@@ -254,8 +254,8 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
 }
 
 //----------------------------------------------------------------------------------------
-// \!fn void PrimToCons()
-// \brief Converts primitive into conserved variables.  Operates only over active cells.
+//! \fn void PrimToCons()
+//! \brief Converts primitive into conserved variables.  Operates only over active cells.
 
 void IdealGRHydro::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons)
 {
@@ -300,20 +300,20 @@ void IdealGRHydro::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &
 
       const Real& w_d  = prim(m,IDN,k,j,i);
       const Real& w_p  = prim(m,IPR,k,j,i);
-      const Real& w_vx = prim(m,IVX,k,j,i);
-      const Real& w_vy = prim(m,IVY,k,j,i);
-      const Real& w_vz = prim(m,IVZ,k,j,i);
+      const Real& w_ux = prim(m,IVX,k,j,i);
+      const Real& w_uy = prim(m,IVY,k,j,i);
+      const Real& w_uz = prim(m,IVZ,k,j,i);
 
       // Calculate 4-velocity
       Real alpha = sqrt(-1.0/gi_[I00]);
-      Real tmp = g_[I11]*w_vx*w_vx + 2.0*g_[I12]*w_vx*w_vy + 2.0*g_[I13]*w_vx*w_vz
-               + g_[I22]*w_vy*w_vy + 2.0*g_[I23]*w_vy*w_vz
-               + g_[I33]*w_vz*w_vz;
+      Real tmp = g_[I11]*w_ux*w_ux + 2.0*g_[I12]*w_ux*w_uy + 2.0*g_[I13]*w_ux*w_uz
+               + g_[I22]*w_uy*w_uy + 2.0*g_[I23]*w_uy*w_uz
+               + g_[I33]*w_uz*w_uz;
       Real gamma = sqrt(1.0 + tmp);
       Real u0 = gamma/alpha;
-      Real u1 = w_vx - alpha * gamma * gi_[I01];
-      Real u2 = w_vy - alpha * gamma * gi_[I02];
-      Real u3 = w_vz - alpha * gamma * gi_[I03];
+      Real u1 = w_ux - alpha * gamma * gi_[I01];
+      Real u2 = w_uy - alpha * gamma * gi_[I02];
+      Real u3 = w_uz - alpha * gamma * gi_[I03];
       Real u_0 = g_00*u0 + g_01*u1 + g_02*u2 + g_03*u3;
       Real u_1 = g_10*u0 + g_11*u1 + g_12*u2 + g_13*u3;
       Real u_2 = g_20*u0 + g_21*u1 + g_22*u2 + g_23*u3;
@@ -328,7 +328,7 @@ void IdealGRHydro::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &
 
       Real wgas_u0 = (w_d + gamma_prime * w_p) * u0;
       u_d  = w_d * u0;
-      u_e  = wgas_u0 * u_0 + w_p;
+      u_e  = wgas_u0 * u_0 + w_p - u_d;  // Evolve E-D, as in SR
       u_m1 = wgas_u0 * u_1;
       u_m2 = wgas_u0 * u_2;
       u_m3 = wgas_u0 * u_3;
