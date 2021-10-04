@@ -53,13 +53,22 @@ void HLLE(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coor
     Real &wl_ivx = wl(ivx,i);
     Real &wl_ivy = wl(ivy,i);
     Real &wl_ivz = wl(ivz,i);
-    Real &wl_ipr = wl(IPR,i);  // should never be referenced for ideal gas EOS
 
     Real &wr_idn = wr(IDN,i);
     Real &wr_ivx = wr(ivx,i);
     Real &wr_ivy = wr(ivy,i);
     Real &wr_ivz = wr(ivz,i);
-    Real &wr_ipr = wr(IPR,i);  // should never be referenced for ideal gas EOS
+
+    Real wl_ipr, wr_ipr;
+    if (eos.is_ideal) {
+      if (eos.use_e) {
+        wl_ipr = gm1*wl(IEN,i);
+        wr_ipr = gm1*wr(IEN,i);
+      } else {
+        wl_ipr = wl(IDN,i)*wl(ITM,i);
+        wr_ipr = wr(IDN,i)*wr(ITM,i);
+      }
+    }
 
     //--- Step 2.  Compute Roe-averaged state
 
@@ -85,8 +94,8 @@ void HLLE(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coor
     Real qa,qb;
     Real a  = iso_cs;
     if (eos.is_ideal) {
-      qa = eos.SoundSpeed(wl_ipr,wl_idn);
-      qb = eos.SoundSpeed(wr_ipr,wr_idn);
+      qa = eos.IdealHydroSoundSpeed(wl_idn, wl_ipr);
+      qb = eos.IdealHydroSoundSpeed(wr_idn, wr_ipr);
       a = hroe - 0.5*(SQR(wroe_ivx) + SQR(wroe_ivy) + SQR(wroe_ivz));
       a = (a < 0.0) ? 0.0 : sqrt(gm1*a);
     } else {

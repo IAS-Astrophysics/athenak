@@ -87,24 +87,35 @@ TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage)
         max_dv3 = 1.0;
       } else if (is_special_relativistic_) {
         Real v2 = SQR(w0_(m,IVX,k,j,i)) + SQR(w0_(m,IVY,k,j,i)) + SQR(w0_(m,IVZ,k,j,i));
-        Real lf = sqrt(1.0 + v2);
+        Real lor = sqrt(1.0 + v2);
         // FIXME ERM: Ideal fluid for now
-        Real h = w0_(m,IDN,k,j,i) + (eos.gamma/(eos.gamma-1.)) * w0_(m,IPR,k,j,i);
-        Real lm, lp;
+        Real p;
+        if (eos.use_e) {
+          p = (eos.gamma - 1.0)*w0_(m,IEN,k,j,i);
+        } else {
+          p = w0_(m,ITM,k,j,i)*w0_(m,IDN,k,j,i);
+        }
 
-        eos.WaveSpeedsSR(h, w0_(m,IPR,k,j,i), w0_(m,IVX,k,j,i)/lf, lf*lf, lp, lm);
+        Real lm, lp;
+        eos.IdealSRHydroSoundSpeeds(w0_(m,IDN,k,j,i), p, w0_(m,IVX,k,j,i), lor, lp, lm);
         max_dv1 = fmax(fabs(lm), lp);
 
-        eos.WaveSpeedsSR(h, w0_(m,IPR,k,j,i), w0_(m,IVX,k,j,i)/lf, lf*lf, lp, lm);
+        eos.IdealSRHydroSoundSpeeds(w0_(m,IDN,k,j,i), p, w0_(m,IVX,k,j,i), lor, lp, lm);
         max_dv2 = fmax(fabs(lm), lp);
 
-        eos.WaveSpeedsSR(h, w0_(m,IPR,k,j,i), w0_(m,IVZ,k,j,i)/lf, lf*lf, lp, lm);
+        eos.IdealSRHydroSoundSpeeds(w0_(m,IDN,k,j,i), p, w0_(m,IVZ,k,j,i), lor, lp, lm);
         max_dv3 = fmax(fabs(lm), lp);
 
       } else {
         Real cs;
         if (eos.is_ideal) {
-          cs = eos.SoundSpeed(w0_(m,IPR,k,j,i),w0_(m,IDN,k,j,i));
+          Real p;
+          if (eos.use_e) {
+            p = (eos.gamma - 1.0)*w0_(m,IEN,k,j,i);
+          } else {
+            p = w0_(m,ITM,k,j,i)*w0_(m,IDN,k,j,i);
+          }
+          cs = eos.IdealHydroSoundSpeed(w0_(m,IDN,k,j,i), p);
         } else         {
           cs = eos.iso_cs;
         }

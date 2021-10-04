@@ -39,7 +39,6 @@ void HLLC_SR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &c
     // mass density in the comoving/fluid frame, u^i = \gamma v^i are the spatial
     // components of the 4-velocity (v^i is the 3-velocity), and P_gas is the pressure.
     Real &rho_l  = wl(IDN,i);
-    Real &pgas_l = wl(IPR,i);
     Real &ux_l   = wl(ivx,i);
     Real &uy_l   = wl(ivy,i);
     Real &uz_l   = wl(ivz,i);
@@ -51,7 +50,6 @@ void HLLC_SR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &c
 
     // Extract right primitives
     Real &rho_r  = wr(IDN,i);
-    Real &pgas_r = wr(IPR,i);
     Real &ux_r   = wr(ivx,i);
     Real &uy_r   = wr(ivy,i);
     Real &uz_r   = wr(ivz,i);
@@ -61,14 +59,23 @@ void HLLC_SR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &c
     u_r[2] = uy_r;
     u_r[3] = uz_r;
 
+    Real pgas_l, pgas_r;
+    if (eos.use_e) {
+      pgas_l = gm1*wl(IEN,i);
+      pgas_r = gm1*wr(IEN,i);
+    } else {
+      pgas_l = wl(IDN,i)*wl(ITM,i);
+      pgas_r = wr(IDN,i)*wr(ITM,i);
+    }
+
     Real wgas_l = rho_l + gamma_prime * pgas_l;  // total enthalpy in L-state
     Real wgas_r = rho_r + gamma_prime * pgas_r;  // total enthalpy in R-state
 
     // Compute wave speeds in L,R states (see Toro eq. 10.43)
 
     Real lm,lp,qa,qb;
-    eos.WaveSpeedsSR(wgas_l, pgas_l, u_l[1]/u_l[0], u_l[0]*u_l[0], lp, lm);
-    eos.WaveSpeedsSR(wgas_r, pgas_r, u_r[1]/u_r[0], u_r[0]*u_r[0], qb,qa);
+    eos.IdealSRHydroSoundSpeeds(rho_l, pgas_l, u_l[1], u_l[0], lp, lm);
+    eos.IdealSRHydroSoundSpeeds(rho_r, pgas_r, u_r[1], u_r[0], qb, qa);
 
     // Calculate extremal wavespeeds
     Real lambda_l = fmin(lm, qa);

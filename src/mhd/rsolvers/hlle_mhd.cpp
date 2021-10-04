@@ -41,7 +41,6 @@ void HLLE(TeamMember_t const &member, const EOS_Data &eos,
     Real &wl_ivx = wl(ivx,i);
     Real &wl_ivy = wl(ivy,i);
     Real &wl_ivz = wl(ivz,i);
-    Real &wl_ipr = wl(IPR,i); // should never be referenced for ideal gas EOS
     Real &wl_iby = bl(iby,i);
     Real &wl_ibz = bl(ibz,i);
 
@@ -49,9 +48,19 @@ void HLLE(TeamMember_t const &member, const EOS_Data &eos,
     Real &wr_ivx = wr(ivx,i);
     Real &wr_ivy = wr(ivy,i);
     Real &wr_ivz = wr(ivz,i);
-    Real &wr_ipr = wr(IPR,i); // should never be referenced for ideal gas EOS
     Real &wr_iby = br(iby,i);
     Real &wr_ibz = br(ibz,i);
+
+    Real wl_ipr, wr_ipr;
+    if (eos.is_ideal) {
+      if (eos.use_e) {
+        wl_ipr = gm1*wl(IEN,i);
+        wr_ipr = gm1*wr(IEN,i);
+      } else { 
+        wl_ipr = wl(IDN,i)*wl(ITM,i);
+        wr_ipr = wr(IDN,i)*wr(ITM,i);
+      }
+    }
 
     Real bxi = bx(m,k,j,i);
 
@@ -75,17 +84,20 @@ void HLLE(TeamMember_t const &member, const EOS_Data &eos,
     // rather than E or P directly. sqrtdl*hl = sqrtdl*(el+pl)/dl = (el+pl)/sqrtdl
     Real pbl = 0.5*(bxi*bxi + SQR(wl_iby) + SQR(wl_ibz));
     Real pbr = 0.5*(bxi*bxi + SQR(wr_iby) + SQR(wr_ibz));
-    Real el,er,hroe;
+    Real el,er,hroe,cl,cr;
     if (eos.is_ideal) {
       el = wl_ipr/gm1 + 0.5*wl_idn*(SQR(wl_ivx)+SQR(wl_ivy)+SQR(wl_ivz)) + pbl;
       er = wr_ipr/gm1 + 0.5*wr_idn*(SQR(wr_ivx)+SQR(wr_ivy)+SQR(wr_ivz)) + pbr;
       hroe = ((el + wl_ipr + pbl)/sqrtdl + (er + wr_ipr + pbr)/sqrtdr)*isdlpdr;
+      cl = eos.IdealMHDFastSpeed(wl_idn, wl_ipr, bxi, wl_iby, wl_ibz);
+      cr = eos.IdealMHDFastSpeed(wr_idn, wr_ipr, bxi, wr_iby, wr_ibz);
+    } else {
+      cl = eos.IdealMHDFastSpeed(wl_idn, bxi, wl_iby, wl_ibz);
+      cr = eos.IdealMHDFastSpeed(wr_idn, bxi, wr_iby, wr_ibz);
     }
 
     //--- Step 3. Compute fast magnetosonic speed in L,R, and Roe-averaged states
 
-    Real cl = eos.FastMagnetosonicSpeed(wl_idn, wl_ipr, bxi, wl_iby, wl_ibz);
-    Real cr = eos.FastMagnetosonicSpeed(wr_idn, wr_ipr, bxi, wr_iby, wr_ibz);
 
     // Compute Roe-averaged Cf using eq. B18 (ideal gas) or B39 (isothermal)
     Real btsq = SQR(wroe_iby) + SQR(wroe_ibz);

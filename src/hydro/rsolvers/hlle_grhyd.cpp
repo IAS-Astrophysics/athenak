@@ -28,6 +28,7 @@ void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &c
 {
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
+  const Real gm1 = (eos.gamma - 1.0);
   const Real gamma_prime = eos.gamma/(eos.gamma - 1.0);
 
   int is = coord.mb_indcs.is;
@@ -89,17 +90,24 @@ void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &c
 
     // Extract left primitives
     const Real &rho_l  = wl(IDN,i);
-    const Real &pgas_l = wl(IPR,i);
     const Real &uu1_l  = wl(IVX,i);
     const Real &uu2_l  = wl(IVY,i);
     const Real &uu3_l  = wl(IVZ,i);
 
     // Extract right primitives
     const Real &rho_r  = wr(IDN,i);
-    const Real &pgas_r = wr(IPR,i);
     const Real &uu1_r  = wr(IVX,i);
     const Real &uu2_r  = wr(IVY,i);
     const Real &uu3_r  = wr(IVZ,i);
+
+    Real pgas_l, pgas_r;
+    if (eos.use_e) {
+      pgas_l = gm1*wl(IEN,i);
+      pgas_r = gm1*wr(IEN,i);
+    } else {
+      pgas_l = wl(IDN,i)*wl(ITM,i);
+      pgas_r = wr(IDN,i)*wr(ITM,i);
+    }
 
     // Calculate 4-velocity in left state
     Real ucon_l[4], ucov_l[4];
@@ -133,19 +141,19 @@ void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &c
 
     // Calculate wavespeeds in left state
     Real lp_l, lm_l;
-    Real wgas_l = rho_l + gamma_prime * pgas_l;
-    eos.WaveSpeedsGR(wgas_l, pgas_l, ucon_l[0], ucon_l[ivx], g00, g0i, gii, lp_l, lm_l);
+    eos.IdealGRHydroSoundSpeeds(rho_l,pgas_l,ucon_l[0],ucon_l[ivx],g00,g0i,gii,lp_l,lm_l);
 
     // Calculate wavespeeds in right state
     Real lp_r, lm_r;
-    Real wgas_r = rho_r + gamma_prime * pgas_r;
-    eos.WaveSpeedsGR(wgas_r, pgas_r, ucon_r[0], ucon_r[ivx], g00, g0i, gii, lp_r, lm_r);
+    eos.IdealGRHydroSoundSpeeds(rho_r,pgas_r,ucon_r[0],ucon_r[ivx],g00,g0i,gii,lp_r,lm_r);
 
     // Calculate extremal wavespeeds
     Real lambda_l = fmin(lm_l, lm_r);
     Real lambda_r = fmax(lp_l, lp_r);
 
     // Calculate difference du =  U_R - U_l in conserved quantities (rho u^0 and T^0_\mu)
+    Real wgas_l = rho_l + gamma_prime * pgas_l;
+    Real wgas_r = rho_r + gamma_prime * pgas_r;
     Real du[5];
     Real qa = wgas_r * ucon_r[0];
     Real qb = wgas_l * ucon_l[0];

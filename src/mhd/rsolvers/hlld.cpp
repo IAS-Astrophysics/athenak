@@ -32,7 +32,8 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
 
   //------------------------ ADIABATIC HLLD solver ---------------------------------------
   if (eos.is_ideal) {
-    Real igm1 = 1.0/((eos.gamma) - 1.0);
+    Real gm1 = eos.gamma - 1.0;
+    Real igm1 = 1.0/gm1;
     par_for_inner(member, il, iu, [&](const int i)
     {
 
@@ -42,7 +43,6 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
       Real &wl_ivx=wl(ivx,i);
       Real &wl_ivy=wl(ivy,i);
       Real &wl_ivz=wl(ivz,i);
-      Real &wl_ipr=wl(IPR,i);
       Real &wl_iby=bl(iby,i);
       Real &wl_ibz=bl(ibz,i);
 
@@ -50,9 +50,17 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
       Real &wr_ivx=wr(ivx,i);
       Real &wr_ivy=wr(ivy,i);
       Real &wr_ivz=wr(ivz,i);
-      Real &wr_ipr=wr(IPR,i);
       Real &wr_iby=br(iby,i);
       Real &wr_ibz=br(ibz,i);
+
+      Real wl_ipr, wr_ipr;
+      if (eos.use_e) {
+        wl_ipr = gm1*wl(IEN,i);
+        wr_ipr = gm1*wr(IEN,i);
+      } else { 
+        wl_ipr = wl(IDN,i)*wl(ITM,i);
+        wr_ipr = wr(IDN,i)*wr(ITM,i);
+      }
 
       Real &bxi = bx(m,k,j,i);
 
@@ -83,8 +91,8 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
 
       //--- Step 2.  Compute L & R wave speeds according to Miyoshi & Kusano, eqn. (67)
 
-      Real cfl = eos.FastMagnetosonicSpeed(wl_idn, wl_ipr, bxi, wl_iby, wl_ibz);
-      Real cfr = eos.FastMagnetosonicSpeed(wr_idn, wr_ipr, bxi, wr_iby, wr_ibz);
+      Real cfl = eos.IdealMHDFastSpeed(wl_idn, wl_ipr, bxi, wl_iby, wl_ibz);
+      Real cfr = eos.IdealMHDFastSpeed(wr_idn, wr_ipr, bxi, wr_iby, wr_ibz);
 
       spd[0] = fmin( wl_ivx-cfl, wr_ivx-cfr );
       spd[4] = fmax( wl_ivx+cfl, wr_ivx+cfr );
@@ -394,8 +402,8 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
 
       //--- Step 2.  Compute L & R wave speeds according to Miyoshi & Kusano, eqn. (67)
 
-      Real cfl = eos.FastMagnetosonicSpeed(wl_idn, bxi, wl_iby, wl_ibz);
-      Real cfr = eos.FastMagnetosonicSpeed(wr_idn, bxi, wr_iby, wr_ibz);
+      Real cfl = eos.IdealMHDFastSpeed(wl_idn, bxi, wl_iby, wl_ibz);
+      Real cfr = eos.IdealMHDFastSpeed(wr_idn, bxi, wr_iby, wr_ibz);
 
       spd[0] = fmin( wl_ivx-cfl, wr_ivx-cfr );
       spd[4] = fmax( wl_ivx+cfl, wr_ivx+cfr );

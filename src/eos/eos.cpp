@@ -21,6 +21,7 @@ EquationOfState::EquationOfState(MeshBlockPack* pp, ParameterInput *pin)
 {
   eos_data.density_floor = pin->GetOrAddReal("eos","density_floor",(FLT_MIN));
   eos_data.pressure_floor = pin->GetOrAddReal("eos","pressure_floor",(FLT_MIN));
+  eos_data.temperature_floor = pin->GetOrAddReal("eos","temperature_floor",(FLT_MIN));
 }
 
 //----------------------------------------------------------------------------------------

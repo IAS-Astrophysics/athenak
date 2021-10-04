@@ -29,7 +29,8 @@ void HLLC(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coor
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
 
-  Real igm1 = 1.0/((eos.gamma) - 1.0);
+  Real gm1 = eos.gamma - 1.0;
+  Real igm1 = 1.0/gm1;
   Real alpha = ((eos.gamma) + 1.0)/(2.0*(eos.gamma));
 
   par_for_inner(member, il, iu, [&](const int i)
@@ -40,20 +41,27 @@ void HLLC(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coor
     Real &wl_ivx = wl(ivx,i);
     Real &wl_ivy = wl(ivy,i);
     Real &wl_ivz = wl(ivz,i);
-    Real &wl_ipr = wl(IPR,i);
 
     Real &wr_idn = wr(IDN,i);
     Real &wr_ivx = wr(ivx,i);
     Real &wr_ivy = wr(ivy,i);
     Real &wr_ivz = wr(ivz,i);
-    Real &wr_ipr = wr(IPR,i);
+
+    Real wl_ipr, wr_ipr;
+    if (eos.use_e) {
+      wl_ipr = gm1*wl(IEN,i);
+      wr_ipr = gm1*wr(IEN,i);
+    } else {
+      wl_ipr = wl(IDN,i)*wl(ITM,i);
+      wr_ipr = wr(IDN,i)*wr(ITM,i);
+    }
 
     //--- Step 2.  Compute middle state estimates with PVRS (Toro 10.5.2)
 
     // define 6 registers used below
     Real qa,qb,qc,qd,qe,qf;
-    qa = eos.SoundSpeed(wl_ipr,wl_idn);
-    qb = eos.SoundSpeed(wr_ipr,wr_idn);
+    qa = eos.IdealHydroSoundSpeed(wl_idn, wl_ipr);
+    qb = eos.IdealHydroSoundSpeed(wr_idn, wr_ipr);
     Real el = wl_ipr*igm1 + 0.5*wl_idn*(SQR(wl_ivx) + SQR(wl_ivy) + SQR(wl_ivz));
     Real er = wr_ipr*igm1 + 0.5*wr_idn*(SQR(wr_ivx) + SQR(wr_ivy) + SQR(wr_ivz));
     qc = 0.25*(wl_idn + wr_idn)*(qa + qb);  // average density * average sound speed

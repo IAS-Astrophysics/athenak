@@ -66,7 +66,7 @@ public:
   bool is_special_relativistic = false;
   bool is_general_relativistic = false;
 
-  int nmhd;                // number of cons variables (5/4 for adiabatic/isothermal)
+  int nmhd;                // number of cons variables (5/4 for ideal/isothermal EOS)
   int nscalars;            // number of passive scalars
   DvceArray5D<Real> u0;    // conserved variables
   DvceArray5D<Real> w0;    // primitive variables

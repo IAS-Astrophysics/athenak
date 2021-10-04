@@ -63,7 +63,7 @@ public:
   Hydro_RSolver rsolver_method;
   EquationOfState *peos;  // chosen EOS
 
-  int nhydro;             // number of hydro variables (5/4 for adiabatic/isothermal)
+  int nhydro;             // number of hydro variables (5/4 for ideal/isothermal EOS)
   int nscalars;           // number of passive scalars
   DvceArray5D<Real> u0;   // conserved variables
   DvceArray5D<Real> w0;   // primitive variables

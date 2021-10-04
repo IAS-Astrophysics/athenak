@@ -35,7 +35,8 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos,
   int ivz = IVX + ((ivx-IVX) + 2)%3;
   int iby = ((ivx-IVX) + 1)%3;
   int ibz = ((ivx-IVX) + 2)%3;
-  Real igm1 = 1.0/(eos.gamma - 1.0);
+  Real gm1 = eos.gamma - 1.0;
+  Real igm1 = 1.0/gm1;
   Real iso_cs = eos.iso_cs;
 
   par_for_inner(member, il, iu, [&](const int i)
@@ -46,7 +47,6 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos,
     Real &wl_ivx = wl(ivx,i);
     Real &wl_ivy = wl(ivy,i);
     Real &wl_ivz = wl(ivz,i);
-    Real &wl_ipr = wl(IPR,i); // should never be referenced for ideal gas EOS
     Real &wl_iby = bl(iby,i);
     Real &wl_ibz = bl(ibz,i);
 
@@ -54,9 +54,19 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos,
     Real &wr_ivx = wr(ivx,i);
     Real &wr_ivy = wr(ivy,i);
     Real &wr_ivz = wr(ivz,i);
-    Real &wr_ipr = wr(IPR,i); // should never be referenced for ideal gas EOS
     Real &wr_iby = br(iby,i);
     Real &wr_ibz = br(ibz,i);
+
+    Real wl_ipr, wr_ipr;
+    if (eos.is_ideal) {
+      if (eos.use_e) {
+        wl_ipr = gm1*wl(IEN,i);
+        wr_ipr = gm1*wr(IEN,i);
+      } else { 
+        wl_ipr = wl(IDN,i)*wl(ITM,i);
+        wr_ipr = wr(IDN,i)*wr(ITM,i);
+      }
+    }
 
     Real &bxi = bx(m,k,j,i);
 
@@ -90,11 +100,11 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos,
     //--- Step 3.  Compute max wave speed in L,R states (see Toro eq. 10.43)
 
     if (eos.is_ideal) {
-      qa = eos.FastMagnetosonicSpeed(wl_idn, wl_ipr, bxi, wl_iby, wl_ibz);
-      qb = eos.FastMagnetosonicSpeed(wr_idn, wr_ipr, bxi, wr_iby, wr_ibz);
+      qa = eos.IdealMHDFastSpeed(wl_idn, wl_ipr, bxi, wl_iby, wl_ibz);
+      qb = eos.IdealMHDFastSpeed(wr_idn, wr_ipr, bxi, wr_iby, wr_ibz);
     } else {
-      qa = eos.FastMagnetosonicSpeed(wl_idn, bxi, wl_iby, wl_ibz);
-      qb = eos.FastMagnetosonicSpeed(wr_idn, bxi, wr_iby, wr_ibz);
+      qa = eos.IdealMHDFastSpeed(wl_idn, bxi, wl_iby, wl_ibz);
+      qb = eos.IdealMHDFastSpeed(wr_idn, bxi, wr_iby, wr_ibz);
     }
     Real a = fmax( (fabs(wl_ivx) + qa), (fabs(wr_ivx) + qb) );
 

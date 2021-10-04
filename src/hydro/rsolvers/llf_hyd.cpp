@@ -31,7 +31,8 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coord
 {
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
-  Real igm1 = 1.0/(eos.gamma - 1.0);
+  Real gm1 = eos.gamma - 1.0;
+  Real igm1 = 1.0/gm1;
   Real iso_cs = eos.iso_cs;
 
   par_for_inner(member, il, iu, [&](const int i)
@@ -42,13 +43,22 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coord
     Real &wl_ivx = wl(ivx,i);
     Real &wl_ivy = wl(ivy,i);
     Real &wl_ivz = wl(ivz,i);
-    Real &wl_ipr = wl(IPR,i);  // should never be referenced for ideal gas EOS
 
     Real &wr_idn = wr(IDN,i);
     Real &wr_ivx = wr(ivx,i);
     Real &wr_ivy = wr(ivy,i);
     Real &wr_ivz = wr(ivz,i);
-    Real &wr_ipr = wr(IPR,i);  // should never be referenced for ideal gas EOS
+
+    Real wl_ipr, wr_ipr;
+    if (eos.is_ideal) {
+      if (eos.use_e) {
+        wl_ipr = gm1*wl(IEN,i);
+        wr_ipr = gm1*wr(IEN,i);
+      } else {
+        wl_ipr = wl(IDN,i)*wl(ITM,i); 
+        wr_ipr = wr(IDN,i)*wr(ITM,i);
+      }
+    }
 
     //--- Step 2.  Compute sum of L/R fluxes
 
@@ -74,8 +84,8 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coord
     //--- Step 3.  Compute max wave speed in L,R states (see Toro eq. 10.43)
 
     if (eos.is_ideal) {
-      qa = eos.SoundSpeed(wl_ipr,wl_idn);
-      qb = eos.SoundSpeed(wr_ipr,wr_idn);
+      qa = eos.IdealHydroSoundSpeed(wl_idn, wl_ipr);
+      qb = eos.IdealHydroSoundSpeed(wr_idn, wr_ipr);
     } else {
       qa = iso_cs;
       qb = iso_cs;
