@@ -44,10 +44,7 @@ eos               = ideal    # EOS type
 ohmic_resistivity = 1.0e-3   # coefficient of Ohmic resistivity
 reconstruct       = plm      # spatial reconstruction method
 rsolver           = advect   # Riemann-solver to be used
-
-<eos>
-gamma           = 1.4   # gamma = C_p/C_v
-iso_sound_speed = 1.0   # isothermal sound speed
+gamma             = 1.4      # gamma = C_p/C_v
 
 <problem>
 pgen_name = shock_tube  # problem generator name

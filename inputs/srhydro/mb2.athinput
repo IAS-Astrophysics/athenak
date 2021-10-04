@@ -45,10 +45,7 @@ special_rel = true
 eos         = ideal
 reconstruct = ppm
 rsolver     = hllc
-
-<eos>
-gamma  = 1.6666666666666667  # ratio of specific heats Gamma
-iso_sound_speed = 1.0        # isothermal sound speed
+gamma       = 1.6666666666666667  # ratio of specific heats Gamma
 
 <problem>
 pgen_name  = shock_tube

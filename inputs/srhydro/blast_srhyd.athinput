@@ -46,9 +46,7 @@ special_rel = true
 eos         = ideal     # EOS type
 reconstruct = ppm       # spatial reconstruction method
 rsolver     = hllc      # Riemann-solver to be used
-
-<eos>
-gamma   = 1.3333333333333 # gamma = C_p/C_v
+gamma       = 1.3333333333333 # gamma = C_p/C_v
 
 <problem>
 pamb        = 5.0e-3    # ambient pressure

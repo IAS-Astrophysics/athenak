@@ -45,10 +45,7 @@ resistivity = ohmic    # Ohmic resistivity
 eta_ohm     = 1.0e-4   # coefficient of Ohmic resistivity
 reconstruct = plm      # spatial reconstruction method
 rsolver     = hlld     # Riemann-solver to be used
-
-<eos>
-gamma           = 1.4   # gamma = C_p/C_v
-iso_sound_speed = 1.0   # isothermal sound speed
+gamma       = 1.4      # gamma = C_p/C_v
 
 <problem>
 d0 = 50.0                 # Amplitude of sheet density (should be b0^2/2)

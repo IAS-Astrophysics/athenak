@@ -44,9 +44,7 @@ ndiag      = 1          # cycles between diagostic output
 eos         = ideal     # EOS type
 reconstruct = ppm       # spatial reconstruction method
 rsolver     = hllc      # Riemann-solver to be used
-
-<eos>
-gamma   = 1.666666666667 # gamma = C_p/C_v
+gamma       = 1.666666666667 # gamma = C_p/C_v
 
 <problem>
 pamb        = 0.1    # ambient pressure
