@@ -97,6 +97,17 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
       u0r = 1.0/sqrt( 1.0 - (SQR(wr.vx) + SQR(wr.vy) + SQR(wr.vz)) );
     }
 
+    // set either internal energy density or temparature as primitive
+    Real prim_l,prim_r;
+    auto &eos = pmbp->phydro->peos->eos_data;
+    if (eos.use_e) {
+      prim_l = wl.p/(eos.gamma - 1.0);
+      prim_r = wr.p/(eos.gamma - 1.0);
+    } else {
+      prim_l = wl.p/(wl.d);
+      prim_r = wr.p/(wr.d);
+    }
+
     auto &w0 = pmbp->phydro->w0;
     par_for("pgen_shock1", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m,int k, int j, int i)
@@ -125,13 +136,13 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
           w0(m,ivx,k,j,i) = u0l*wl.vx;
           w0(m,ivy,k,j,i) = u0l*wl.vy;
           w0(m,ivz,k,j,i) = u0l*wl.vz;
-          w0(m,IPR,k,j,i) = wl.p;
+          w0(m,IEN,k,j,i) = prim_l;
         } else {
           w0(m,IDN,k,j,i) = wr.d;
           w0(m,ivx,k,j,i) = u0r*wr.vx;
           w0(m,ivy,k,j,i) = u0r*wr.vy;
           w0(m,ivz,k,j,i) = u0r*wr.vz;
-          w0(m,IPR,k,j,i) = wr.p;
+          w0(m,IEN,k,j,i) = prim_r;
         }
       }
     );
@@ -165,6 +176,17 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
     wr.by = pin->GetReal("problem","byr");
     wr.bz = pin->GetReal("problem","bzr");
     Real bx_r = pin->GetReal("problem","bxr");
+
+    // set either internal energy density or temparature as primitive
+    Real prim_l,prim_r;
+    auto &eos = pmbp->phydro->peos->eos_data;
+    if (eos.use_e) {
+      prim_l = wl.p/(eos.gamma - 1.0);
+      prim_r = wr.p/(eos.gamma - 1.0);
+    } else {
+      prim_l = wl.p/(wl.d);
+      prim_r = wr.p/(wr.d);
+    }
     
     auto &w0 = pmbp->pmhd->w0;
     auto &b0 = pmbp->pmhd->b0;
@@ -201,7 +223,7 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
           w0(m,ivx,k,j,i) = wl.vx;
           w0(m,ivy,k,j,i) = wl.vy;
           w0(m,ivz,k,j,i) = wl.vz;
-          w0(m,IPR,k,j,i) = wl.p;
+          w0(m,IEN,k,j,i) = prim_l;
           b0.x1f(m,k,j,i) = bxl;
           b0.x2f(m,k,j,i) = byl;
           b0.x3f(m,k,j,i) = bzl;
@@ -216,7 +238,7 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
           w0(m,ivx,k,j,i) = wr.vx;
           w0(m,ivy,k,j,i) = wr.vy;
           w0(m,ivz,k,j,i) = wr.vz;
-          w0(m,IPR,k,j,i) = wr.p;
+          w0(m,IEN,k,j,i) = prim_r;
           b0.x1f(m,k,j,i) = bxr;
           b0.x2f(m,k,j,i) = byr;
           b0.x3f(m,k,j,i) = bzr;

@@ -194,7 +194,7 @@ void IdealSRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
         w_e = w_d*eps;
       } else {
         Real& w_t  = prim(m,ITM,k,j,i);
-        w_t = eps;  // TODO:  is this the correct expression?
+        w_t = gm1*eps;  // TODO:  is this the correct expression?
       }
 
       Real const conv = 1.0/(h*u_d); // (C26)
@@ -270,7 +270,7 @@ void IdealSRHydro::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &
         w_p = w_e*gm1;
       } else {
         const Real& w_t  = prim(m,ITM,k,j,i);
-        w_p = w_t*gm1*w_d;
+        w_p = w_t*w_d;
       }
 
       // Calculate Lorentz factor

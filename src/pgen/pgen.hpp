@@ -27,13 +27,11 @@ class ProblemGenerator {
   void ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin);
   void LWImplode_(MeshBlockPack *pmbp, ParameterInput *pin);
   void OrszagTang_(MeshBlockPack *pmbp, ParameterInput *pin);
-  void BondiAccretion_(MeshBlockPack *pmbp, ParameterInput *pin);
 
   // function called after main loop contianing any final problem-specific work
   // error functions in predefine problem generator
   void ProblemGeneratorFinalize(ParameterInput *pin, Mesh *pmesh);
   void LinearWaveErrors_(MeshBlockPack *pmbp, ParameterInput *pin);
-  void BondiErrors_(MeshBlockPack *pmbp, ParameterInput *pin);
 
   // template for user-specified problem generator
   void UserProblem(MeshBlockPack *pmbp, ParameterInput *pin);

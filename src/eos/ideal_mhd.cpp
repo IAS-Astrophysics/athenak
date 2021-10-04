@@ -62,7 +62,8 @@ void IdealMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
   int &nmhd  = pmy_pack->pmhd->nmhd;
   int &nscal = pmy_pack->pmhd->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
-  Real igm1 = 1.0/(eos_data.gamma - 1.0);
+  Real gm1 = (eos_data.gamma - 1.0);
+  Real igm1 = 1.0/(gm1);
 
   Real &dfloor_ = eos_data.density_floor;
   Real &pfloor_ = eos_data.pressure_floor;
@@ -114,9 +115,9 @@ void IdealMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
         w_e = (w_e > (pfloor_*igm1)) ?  w_e : (pfloor_*igm1);
       } else {  // temperature is primitive
         Real& w_t  = prim(m,ITM,k,j,i);
-        w_t = (u_e - e_k - pb)/u_d;
+        w_t = (gm1/u_d)*(u_e - e_k - pb);
         // apply temperature floor, correct total energy
-        u_e = (w_t > tfloor_) ?  u_e : ((u_d*tfloor_) + e_k + pb);
+        u_e = (w_t > tfloor_) ?  u_e : ((u_d*igm1*tfloor_) + e_k + pb);
         w_t = (w_t > tfloor_) ?  w_t : tfloor_;
       }
 
@@ -176,8 +177,8 @@ void IdealMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real>
                              (SQR(bcc1) + SQR(bcc2) + SQR(bcc3)));
       } else {  // temperature is primitive
         const Real& w_t  = prim(m,ITM,k,j,i);
-        u_e = w_t*u_d + 0.5*(w_d*(SQR(w_vx) + SQR(w_vy) + SQR(w_vz)) +
-                                 (SQR(bcc1) + SQR(bcc2) + SQR(bcc3)));
+        u_e = w_t*w_d*igm1 + 0.5*(w_d*(SQR(w_vx) + SQR(w_vy) + SQR(w_vz)) +
+                                      (SQR(bcc1) + SQR(bcc2) + SQR(bcc3)));
       }
 
       // convert scalars (if any), always stored at end of cons and prim arrays.

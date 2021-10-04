@@ -59,7 +59,8 @@ void IdealHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
   int &nhyd  = pmy_pack->phydro->nhydro;
   int &nscal = pmy_pack->phydro->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
-  Real igm1 = 1.0/(eos_data.gamma - 1.0);
+  Real gm1 = (eos_data.gamma - 1.0);
+  Real igm1 = 1.0/(gm1);
 
   Real &dfloor_ = eos_data.density_floor;
   Real &pfloor_ = eos_data.pressure_floor;
@@ -98,9 +99,9 @@ void IdealHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
         w_e = (w_e > (pfloor_*igm1)) ?  w_e : (pfloor_*igm1);
       } else {  // temperature is primitive
         Real& w_t  = prim(m,ITM,k,j,i);
-        w_t = (u_e - e_k)/u_d;
+        w_t = (gm1/u_d)*(u_e - e_k);
         // apply temperature floor, correct total energy
-        u_e = (w_t > tfloor_) ?  u_e : ((u_d*tfloor_) + e_k);
+        u_e = (w_t > tfloor_) ?  u_e : ((u_d*igm1*tfloor_) + e_k);
         w_t = (w_t > tfloor_) ?  w_t : tfloor_;
       }
 
@@ -128,6 +129,7 @@ void IdealHydro::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &co
   int &nscal = pmy_pack->phydro->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
   bool &use_e = eos_data.use_e;
+  Real igm1 = 1.0/(eos_data.gamma - 1.0);
 
   par_for("hyd_prim2con", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i)
@@ -152,7 +154,7 @@ void IdealHydro::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &co
         u_e = w_e + 0.5*w_d*(SQR(w_vx) + SQR(w_vy) + SQR(w_vz));
       } else {  // temperature is primitive
         const Real& w_t  = prim(m,ITM,k,j,i);
-        u_e = w_t*u_d + 0.5*w_d*(SQR(w_vx) + SQR(w_vy) + SQR(w_vz));
+        u_e = w_t*u_d*igm1 + 0.5*w_d*(SQR(w_vx) + SQR(w_vy) + SQR(w_vz));
       }
 
       // convert scalars (if any)
