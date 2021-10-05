@@ -278,6 +278,42 @@ public:
 };
 
 //----------------------------------------------------------------------------------------
+//! \class IdealSRMHD
+//  \brief Derived class for ideal gas EOS in special relativistic MHD
+
+class IdealSRMHD : public EquationOfState
+{
+public:
+  // Following suppress warnings that hydro versions are not over-ridden
+  using EquationOfState::ConsToPrim;
+  using EquationOfState::PrimToCons;
+
+  IdealSRMHD(MeshBlockPack *pp, ParameterInput *pin);
+  void ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
+                  DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc) override;
+  void PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,
+                  DvceArray5D<Real> &cons) override;
+};
+
+//----------------------------------------------------------------------------------------
+//! \class IdealGRMHD
+//  \brief Derived class for ideal gas EOS in general relativistic MHD
+
+class IdealGRMHD : public EquationOfState
+{
+public:
+  // Following suppress warnings that MHD versions are not over-ridden
+  using EquationOfState::ConsToPrim;
+  using EquationOfState::PrimToCons;
+
+  IdealGRMHD(MeshBlockPack *pp, ParameterInput *pin);
+  void ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
+                  DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc) override;
+  void PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,
+                  DvceArray5D<Real> &cons) override;
+};
+
+//----------------------------------------------------------------------------------------
 //! \class IdealHydroGR
 //  \brief Derived class for ideal gas EOS in general relativistic Hydro
 
