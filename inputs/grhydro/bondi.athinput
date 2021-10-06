@@ -49,9 +49,7 @@ general_rel = true   # w/ general relativity
 eos         = ideal  # EOS type
 reconstruct = plm    # spatial reconstruction method
 rsolver     = hlle   # Riemann-solver to be used
-
-<eos>
-gamma   = 1.3333333333333  # gamma = C_p/C_v
+gamma       = 1.3333333333333  # gamma = C_p/C_v
 
 <problem>
 pgen_name  = gr_bondi

@@ -47,10 +47,7 @@ rsolver      = hlld    # Riemann-solver to be used
 shearing_box = true    # enroll shearing box source terms
 qshear       = 1.5     # shear rate
 omega0       = 1.0     # angular velocity of the system
-
-<eos>
-gamma = 1.6666666666666667 # gamma = C_p/C_v
-iso_sound_speed = 1.0      # isothermal sound speed
+gamma        = 1.6666666666666667 # gamma = C_p/C_v
 
 <problem>
 beta       = 4000      # Plasma beta

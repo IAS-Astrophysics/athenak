@@ -44,10 +44,7 @@ ndiag      = 1         # cycles between diagostic output
 eos         = ideal    # EOS type
 reconstruct = plm      # spatial reconstruction method
 rsolver     = llf      # Riemann-solver to be used
-
-<eos>
-gamma           = 1.4   # gamma = C_p/C_v
-iso_sound_speed = 1.0   # isothermal sound speed
+gamma       = 1.4      # gamma = C_p/C_v
 
 <problem>
 pgen_name = shock_tube  # problem generator name

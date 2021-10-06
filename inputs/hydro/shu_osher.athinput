@@ -39,9 +39,7 @@ ndiag      = 1        # interval for stdout summary info
 eos         = ideal   # EOS type
 reconstruct = ppm     # spatial reconstruction method
 rsolver     = llf     # Riemann-solver to be used
-
-<eos>
-gamma       = 1.4         # gamma = C_p/C_v
+gamma       = 1.4     # gamma = C_p/C_v
 
 <output1>
 file_type   = tab       # Tabular data dump

@@ -102,7 +102,7 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
       break;
     case OutputVariable::hydro_w_p:
       if (pm->pmb_pack->phydro == nullptr) ErrHydroOutput(out_params.block_name);
-      outvars.emplace_back("pres",4,&(pm->pmb_pack->phydro->w0));
+      outvars.emplace_back("eint",4,&(pm->pmb_pack->phydro->w0));
       break;
     case OutputVariable::hydro_w:
       {
@@ -112,7 +112,7 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
       outvars.emplace_back("vely",2,&(pm->pmb_pack->phydro->w0));
       outvars.emplace_back("velz",3,&(pm->pmb_pack->phydro->w0));
       if (pm->pmb_pack->phydro->peos->eos_data.is_ideal) {
-        outvars.emplace_back("pres",4,&(pm->pmb_pack->phydro->w0));
+        outvars.emplace_back("eint",4,&(pm->pmb_pack->phydro->w0));
       }
       int nhyd = pm->pmb_pack->phydro->nhydro;
       int nvars = nhyd + pm->pmb_pack->phydro->nscalars;
@@ -190,7 +190,7 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
       break;
     case OutputVariable::mhd_w_p:
       if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
-      outvars.emplace_back("pres",4,&(pm->pmb_pack->pmhd->w0));
+      outvars.emplace_back("eint",4,&(pm->pmb_pack->pmhd->w0));
       break;
     case OutputVariable::mhd_w:
       {
@@ -200,7 +200,7 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
       outvars.emplace_back("vely",2,&(pm->pmb_pack->pmhd->w0));
       outvars.emplace_back("velz",3,&(pm->pmb_pack->pmhd->w0));
       if (pm->pmb_pack->pmhd->peos->eos_data.is_ideal) {
-        outvars.emplace_back("pres",4,&(pm->pmb_pack->pmhd->w0));
+        outvars.emplace_back("eint",4,&(pm->pmb_pack->pmhd->w0));
       }
       int nmhd_ =  pm->pmb_pack->pmhd->nmhd;
       int nvars = nmhd_ + pm->pmb_pack->pmhd->nscalars;
@@ -271,7 +271,7 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
       outvars.emplace_back("vely",2,&(pm->pmb_pack->pmhd->w0));
       outvars.emplace_back("velz",3,&(pm->pmb_pack->pmhd->w0));
       if (pm->pmb_pack->pmhd->peos->eos_data.is_ideal) {
-        outvars.emplace_back("pres",4,&(pm->pmb_pack->pmhd->w0));
+        outvars.emplace_back("eint",4,&(pm->pmb_pack->pmhd->w0));
       }
       int nmhd_ =  pm->pmb_pack->pmhd->nmhd;
       outvars.emplace_back("bcc1",0,&(pm->pmb_pack->pmhd->bcc0));

@@ -31,7 +31,8 @@ void LLF_SR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &co
 {
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
-  const Real gamma_prime = eos.gamma/(eos.gamma - 1.0);
+  const Real gm1 = (eos.gamma - 1.0);
+  const Real gamma_prime = eos.gamma/gm1;
 
   par_for_inner(member, il, iu, [&](const int i)
   {
@@ -45,13 +46,20 @@ void LLF_SR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &co
     Real &wl_ivx=wl(ivx,i);
     Real &wl_ivy=wl(ivy,i);
     Real &wl_ivz=wl(ivz,i);
-    Real &wl_ipr=wl(IPR,i);
 
     Real &wr_idn=wr(IDN,i);
     Real &wr_ivx=wr(ivx,i);
     Real &wr_ivy=wr(ivy,i);
     Real &wr_ivz=wr(ivz,i);
-    Real &wr_ipr=wr(IPR,i);
+
+    Real wl_ipr, wr_ipr;
+    if (eos.use_e) {
+      wl_ipr = gm1*wl(IEN,i);
+      wr_ipr = gm1*wr(IEN,i);
+    } else {
+      wl_ipr = wl(IDN,i)*wl(ITM,i);
+      wr_ipr = wr(IDN,i)*wr(ITM,i);
+    }
 
     Real u2l = SQR(wl_ivz) + SQR(wl_ivy) + SQR(wl_ivx);
     Real u2r = SQR(wr_ivz) + SQR(wr_ivy) + SQR(wr_ivx);
@@ -66,10 +74,10 @@ void LLF_SR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &co
     //--- Step 2.  Compute wave speeds in L,R states (see Toro eq. 10.43)
 
     Real lp_l, lm_l;
-    eos.WaveSpeedsSR(wgas_l, wl_ipr, wl_ivx/u0l, (1.0 + u2l), lp_l, lm_l);
+    eos.IdealSRHydroSoundSpeeds(wl_idn, wl_ipr, wl_ivx, u0l, lp_l, lm_l);
 
     Real lp_r, lm_r;
-    eos.WaveSpeedsSR(wgas_r, wr_ipr, wr_ivx/u0r, (1.0 + u2r), lp_r, lm_r);
+    eos.IdealSRHydroSoundSpeeds(wr_idn, wr_ipr, wr_ivx, u0r, lp_r, lm_r);
 
     Real qa = fmax(-fmin(lm_l,lm_r), 0.0);
     Real a = fmax(fmax(lp_l,lp_r), qa);

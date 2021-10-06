@@ -44,9 +44,7 @@ ndiag      = 1        # cycles between diagostic output
 eos         = ideal   # EOS type
 reconstruct = plm     # spatial reconstruction method
 rsolver     = hllc    # Riemann-solver to be used
-
-<eos>
-gamma       = 1.66667    # gamma = C_p/C_v
+gamma       = 1.66667 # gamma = C_p/C_v
 
 <problem>
 Mach       = 10.0       # Mach number of shock

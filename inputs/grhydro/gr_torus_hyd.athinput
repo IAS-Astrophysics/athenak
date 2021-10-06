@@ -52,9 +52,7 @@ reconstruct = plm      # spatial reconstruction method
 rsolver     = hlle     # Riemann-solver to be used
 dfloor      = 1.0e-6   # floor on density rho
 pfloor      = 1.0e-8   # floor on gas pressure p_gas
-
-<eos>
-gamma     = 1.3333333333333333  # ratio of specific heats Gamma
+gamma       = 1.3333333333333333  # ratio of specific heats Gamma
 
 <problem>
 rho_min   = 1.0e-5              # floor on rho given by rho_min ...

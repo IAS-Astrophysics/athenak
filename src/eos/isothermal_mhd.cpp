@@ -19,8 +19,10 @@ IsothermalMHD::IsothermalMHD(MeshBlockPack *pp, ParameterInput *pin)
   : EquationOfState(pp, pin)
 {
     eos_data.is_ideal = false;
-    eos_data.iso_cs = pin->GetReal("eos","iso_sound_speed");
+    eos_data.iso_cs = pin->GetReal("mhd","iso_sound_speed");
     eos_data.gamma = 0.0;
+    eos_data.use_e = false;
+    eos_data.use_t = false;
 }
 
 //----------------------------------------------------------------------------------------
@@ -125,4 +127,4 @@ void IsothermalMHD::PrimToCons(const DvceArray5D<Real> &prim,const DvceArray5D<R
   );  
       
   return;
-}     
+}

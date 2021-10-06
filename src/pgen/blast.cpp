@@ -43,6 +43,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
   // setup uniform ambient medium with spherical over-pressured region in Hydro
   if (pmbp->phydro != nullptr) {
 
+    auto &eos = pmbp->phydro->peos->eos_data;
     auto &w0 = pmbp->phydro->w0;
     par_for("pgen_cloud1", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m,int k, int j, int i)
@@ -79,11 +80,19 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
           }
         }
 
+        // set either internal energy density or temparature as primitive
+        Real prim,
+        if (eos.use_e) {
+          prim = pres/(eos.gamma - 1.0);
+        } else {
+          prim = pres/((eos.gamma - 1.0)*den);
+        }
+
         w0(m,IDN,k,j,i) = den;
         w0(m,IVX,k,j,i) = 0.0;
         w0(m,IVY,k,j,i) = 0.0;
         w0(m,IVZ,k,j,i) = 0.0;
-        w0(m,IPR,k,j,i) = pres;
+        w0(m,IEN,k,j,i) = prim;
       }
     );
 

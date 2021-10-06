@@ -47,9 +47,7 @@ rsolver         = hllc   # Riemann-solver to be used
 const_accel     = true   # add constant accleration source term
 const_accel_val = -0.1   # value of constant acceleration
 const_accel_dir = 2      # direction of constant acceleration
-
-<eos>
-gamma      = 1.4         # gamma = C_p/C_v
+gamma           = 1.4         # gamma = C_p/C_v
 
 <gravity>
 const_acc2  = -0.1

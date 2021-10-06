@@ -24,46 +24,48 @@
 
 struct EOS_Data
 {
-  Real gamma;
-  Real iso_cs;
-  bool is_ideal;
-  Real density_floor, pressure_floor;
+  Real gamma;        // ratio of specific heats for ideal gas
+  Real iso_cs;       // isothermal sound speed
+  bool is_ideal;     // flag to denote ideal gas EOS
+  bool use_e, use_t; // use internal energy density (e) or temperature (t) as primitive
+  Real density_floor, pressure_floor, temperature_floor;
 
   // inlined sound speed function for ideal gas EOS in nonrelativistic hydro 
   KOKKOS_INLINE_FUNCTION
-  Real SoundSpeed(Real p, Real d)
+  Real IdealHydroSoundSpeed(const Real d, const Real p)
   const {
-    return std::sqrt(gamma*p/d);
+    return sqrt(gamma*p/d);
   }
 
   // inlined fast magnetosonic speed function for ideal gas EOS in nonrelativistic mhd
   KOKKOS_INLINE_FUNCTION
-  Real FastMagnetosonicSpeed(Real d, Real p, Real bx, Real by, Real bz)
+  Real IdealMHDFastSpeed(const Real d, const Real p,
+                         const Real bx, const Real by, const Real bz)
   const {
     Real asq = gamma*p;
     Real ct2 = by*by + bz*bz;
     Real qsq = bx*bx + ct2 + asq;
     Real tmp = bx*bx + ct2 - asq;
-    return std::sqrt(0.5*(qsq + std::sqrt(tmp*tmp + 4.0*asq*ct2))/d);
+    return sqrt(0.5*(qsq + std::sqrt(tmp*tmp + 4.0*asq*ct2))/d);
   }
 
   // inlined fast magnetosonic speed function for isothermal EOS in nonrelativistic mhd
   KOKKOS_INLINE_FUNCTION
-  Real FastMagnetosonicSpeed(Real d, Real bx, Real by, Real bz)
+  Real IdealMHDFastSpeed(const Real d, const Real bx, const Real by, const Real bz)
   const {
     Real asq = (iso_cs*iso_cs)*d;
     Real ct2 = by*by + bz*bz;
     Real qsq = bx*bx + ct2 + asq;
     Real tmp = bx*bx + ct2 - asq;
-    return std::sqrt(0.5*(qsq + std::sqrt(tmp*tmp + 4.0*asq*ct2))/d);
+    return sqrt(0.5*(qsq + std::sqrt(tmp*tmp + 4.0*asq*ct2))/d);
   }
 
   // inlined maximal wave speeds function for ideal gas in SR hydro
   // Inputs:
-  //   h: enthalpy per unit volume
+  //   d: density in comoving frame 
   //   p: gas pressure
-  //   vx: 3-velocity component v^x
-  //   lor_sq: Lorentz factor \gamma^2
+  //   ux: x-component of 4-velocity u^x
+  //   lor: Lorentz factor \gamma
   // Outputs:
   //   l_p/m: most positive/negative wavespeed
   // References:
@@ -71,12 +73,13 @@ struct EOS_Data
   //   Mignone & Bodo 2005, MNRAS 364 126 (MB).
   //   Del Zanna et al, A&A 473, 11 (2007) (eq. 76)
   KOKKOS_INLINE_FUNCTION
-  void WaveSpeedsSR(Real h, Real p, Real vx, Real lor_sq, Real& l_p, Real& l_m)
+  void IdealSRHydroSoundSpeeds(const Real d, const Real p, const Real ux, const Real lor,
+                               Real& l_p, Real& l_m)
   const {
-    Real cs2 = gamma * p / h;  // (MB 4)
-    Real v2 = 1.0 - 1.0/lor_sq;
-    auto const p1 = vx * (1.0 - cs2);
-    auto const tmp = sqrt(cs2 * ((1.0-v2*cs2) - p1*vx) / lor_sq);
+    Real cs2 = gamma*p / (d + gamma*p/(gamma - 1.0));  // (MB 4)
+    Real v2 = 1.0 - 1.0/(lor*lor);
+    auto const p1 = (ux/lor) * (1.0 - cs2);
+    auto const tmp = sqrt(cs2 * ((1.0-v2*cs2) - p1*(ux/lor))) / lor;
     auto const invden = 1.0/(1.0 - v2*cs2);
 
     l_p = (p1 + tmp) * invden;
@@ -85,7 +88,7 @@ struct EOS_Data
 
   // inlined maximal wave speeds function for ideal gas in GR hydro
   // Inputs:
-  //  - h: enthalpy per unit volume
+  //  - d: density in comoving frame
   //  - p: gas pressure
   //  - u0,u1: 4-velocity components u^0, u^1
   //  - g00,g01,g11: metric components g^00, g^01, g^11
@@ -95,26 +98,27 @@ struct EOS_Data
   //  - Follows same general procedure as vchar() in phys.c in Harm.
   //  - Variables are named as though 1 is normal direction.
   KOKKOS_INLINE_FUNCTION
-  void WaveSpeedsGR(Real h, Real p, Real u0, Real u1, Real g00, Real g01, Real g11,
-                     Real& l_p, Real& l_m)
+  void IdealGRHydroSoundSpeeds(const Real d, const Real p, const Real u0, const Real u1,
+                               const Real g00, const Real g01, const Real g11,
+                               Real& l_p, Real& l_m)
   const {
     // Parameters and constants
     const Real discriminant_tol = -1.0e-10;  // values between this and 0 are considered 0
 
     // Calculate comoving sound speed
-    Real cs_sq = gamma * p / h;
+    Real cs_sq = gamma * p / (d + gamma*p/(gamma - 1.0));
 
     // Set sound speeds in appropriate coordinates
     Real a = SQR(u0) - (g00 + SQR(u0)) * cs_sq;
     Real b = -2.0 * (u0*u1 - (g01 + u0*u1) * cs_sq);
     Real c = SQR(u1) - (g11 + SQR(u1)) * cs_sq;
-    Real d = SQR(b) - 4.0*a*c;
-    if (d < 0.0 && d > discriminant_tol) {
-      d = 0.0;
+    Real dis = SQR(b) - 4.0*a*c;
+    if (dis < 0.0 && dis > discriminant_tol) {
+      dis = 0.0;
     }
-    Real d_sqrt = sqrt(d);
-    Real root_1 = (-b + d_sqrt) / (2.0*a);
-    Real root_2 = (-b - d_sqrt) / (2.0*a);
+    Real dis_sqrt = sqrt(dis);
+    Real root_1 = (-b + dis_sqrt) / (2.0*a);
+    Real root_2 = (-b - dis_sqrt) / (2.0*a);
     if (root_1 > root_2) {
       l_p = root_1;
       l_m = root_2;
@@ -137,7 +141,7 @@ struct EOS_Data
   //  - Follows same general procedure as vchar() in phys.c in Harm.
   //  - Variables are named as though 1 is normal direction.
   KOKKOS_INLINE_FUNCTION
-  void FastSpeedsGR(Real h, Real p, Real u0, Real u1, Real b_sq,
+  void IdealGRMHDFastSpeeds(Real h, Real p, Real u0, Real u1, Real b_sq,
                     Real g00, Real g01, Real g11, Real& l_p, Real& l_m)
   const {
     // Calculate comoving fast magnetosonic speed

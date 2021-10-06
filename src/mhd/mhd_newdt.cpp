@@ -88,12 +88,19 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage)
       Real w_bx = b0_.x1f(m,k,j,i);
       Real w_by = bcc0_(m,IBY,k,j,i);
       Real w_bz = bcc0_(m,IBZ,k,j,i);
-      Real cf;
+      Real cf,p;
       if (eos.is_ideal) { 
-        Real &w_p = w0_(m,IPR,k,j,i);
-        cf = eos.FastMagnetosonicSpeed(w_d,w_p,w_bx,w_by,w_bz);
+        if (eos.use_e) {
+          p = (eos.gamma - 1.0)*w0_(m,IEN,k,j,i);
+        } else {
+          p = w0_(m,ITM,k,j,i)*w0_(m,IDN,k,j,i);
+        }
+      }
+
+      if (eos.is_ideal) { 
+        cf = eos.IdealMHDFastSpeed(w_d, p, w_bx, w_by, w_bz);
       } else {
-        cf = eos.FastMagnetosonicSpeed(w_d,w_bx,w_by,w_bz);
+        cf = eos.IdealMHDFastSpeed(w_d, w_bx, w_by, w_bz);
       }
       min_dt1 = fmin((mbsize.d_view(m).dx1/(fabs(w0_(m,IVX,k,j,i)) + cf)), min_dt1);
 
@@ -101,10 +108,9 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage)
       w_by = bcc0_(m,IBZ,k,j,i);
       w_bz = bcc0_(m,IBX,k,j,i);
       if (eos.is_ideal) { 
-        Real &w_p = w0_(m,IPR,k,j,i);
-        cf = eos.FastMagnetosonicSpeed(w_d,w_p,w_bx,w_by,w_bz);
+        cf = eos.IdealMHDFastSpeed(w_d, p, w_bx, w_by, w_bz);
       } else {
-        cf = eos.FastMagnetosonicSpeed(w_d,w_bx,w_by,w_bz);
+        cf = eos.IdealMHDFastSpeed(w_d, w_bx, w_by, w_bz);
       }
       min_dt2 = fmin((mbsize.d_view(m).dx2/(fabs(w0_(m,IVY,k,j,i)) + cf)), min_dt2);
 
@@ -112,10 +118,9 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage)
       w_by = bcc0_(m,IBX,k,j,i);
       w_bz = bcc0_(m,IBY,k,j,i);
       if (eos.is_ideal) { 
-        Real &w_p = w0_(m,IPR,k,j,i);
-        cf = eos.FastMagnetosonicSpeed(w_d,w_p,w_bx,w_by,w_bz);
+        cf = eos.IdealMHDFastSpeed(w_d, p, w_bx, w_by, w_bz);
       } else {
-        cf = eos.FastMagnetosonicSpeed(w_d,w_bx,w_by,w_bz);
+        cf = eos.IdealMHDFastSpeed(w_d, w_bx, w_by, w_bz);
       }
       min_dt3 = fmin((mbsize.d_view(m).dx3/(fabs(w0_(m,IVZ,k,j,i)) + cf)), min_dt3);
 

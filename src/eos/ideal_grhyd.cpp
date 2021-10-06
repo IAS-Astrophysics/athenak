@@ -23,8 +23,29 @@ IdealGRHydro::IdealGRHydro(MeshBlockPack *pp, ParameterInput *pin)
   : EquationOfState(pp, pin)
 {
   eos_data.is_ideal = true;
-  eos_data.gamma = pin->GetReal("eos","gamma");
+  eos_data.gamma = pin->GetReal("hydro","gamma");
   eos_data.iso_cs = 0.0;
+
+  // Read flags specifying which variable to use in primitives
+  // if nothing set in input file, use e as default
+  if (!(pin->DoesParameterExist("hydro","use_e")) &&
+      !(pin->DoesParameterExist("hydro","use_t")) ) {
+    eos_data.use_e = true;
+    eos_data.use_t = false;
+  } else {
+    eos_data.use_e = pin->GetOrAddBoolean("hydro","use_e",false);
+    eos_data.use_t = pin->GetOrAddBoolean("hydro","use_t",false);
+  }
+  if (!(eos_data.use_e) && !(eos_data.use_t)) {
+    std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
+              << "Both use_e and use_t set to false" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (eos_data.use_e && eos_data.use_t) {
+    std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
+              << "Both use_e and use_t set to true" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -69,6 +90,7 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
   Real gm1 = eos_data.gamma - 1.0;
   Real &pfloor_ = eos_data.pressure_floor;
   Real &dfloor_ = eos_data.density_floor;
+  bool &use_e = eos_data.use_e;
 
   // Parameters
   int const max_iterations = 25;
@@ -85,7 +107,6 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
       Real& u_m3 = cons(m,IM3,k,j,i);
 
       Real& w_d  = prim(m,IDN,k,j,i);
-      Real& w_p  = prim(m,IPR,k,j,i);
       Real& w_ux = prim(m,IVX,k,j,i);
       Real& w_uy = prim(m,IVY,k,j,i);
       Real& w_uz = prim(m,IVZ,k,j,i);
@@ -221,7 +242,14 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
         Real eps = w*q - z*r + (z*z)/(1.0 + w);  // (C16)
         eps = fmax(pfloor_/w_d/gm1, eps);  // (C18)
         Real h = (1.0 + eps) * (1.0 + (gm1*eps)/(1.0+eps)); // (C1) & (C21)
-        w_p = w_d*gm1*eps;
+        if (use_e) {
+          Real& w_e  = prim(m,IEN,k,j,i);
+          w_e = w_d*eps;
+        } else {
+          Real& w_t  = prim(m,ITM,k,j,i);
+          w_t = gm1*eps;  // TODO:  is this the correct expression?
+        }
+
         Real const conv = 1.0/(h*ud_tmp); // (C26)
         w_ux = conv*m1u;  // (C26)
         w_uy = conv*m2u;  // (C26)
@@ -232,7 +260,16 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
           prim(m,n,k,j,i) = cons(m,n,k,j,i)/u_d;
         }
       }
+
       // reset conserved variables inside excised regions or if floor is hit
+      Real w_p;
+      if (use_e) {
+        const Real& w_e  = prim(m,IEN,k,j,i);
+        w_p = w_e*gm1;
+      } else {
+        const Real& w_t  = prim(m,ITM,k,j,i);
+        w_p = w_t*gm1*w_d;
+      }
       if (rad <= coord.bh_rmin || floor_hit) {
         Real ud, ue, um1, um2, um3;
         eos.PrimToConsSingleGR(g_, gi_, w_d, w_p, w_ux, w_uy, w_uz,
@@ -267,7 +304,9 @@ void IdealGRHydro::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &
   int &nhyd  = pmy_pack->phydro->nhydro;
   int &nscal = pmy_pack->phydro->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
+  Real gm1 = eos_data.gamma - 1.0;
   Real gamma_prime = eos_data.gamma/(eos_data.gamma - 1.0);
+  bool &use_e = eos_data.use_e;
 
   par_for("hyd_prim2cons", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i)
@@ -299,7 +338,6 @@ void IdealGRHydro::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &
         &g_30 = g_[I03], &g_31 = g_[I13], &g_32 = g_[I23], &g_33 = g_[I33];
 
       const Real& w_d  = prim(m,IDN,k,j,i);
-      const Real& w_p  = prim(m,IPR,k,j,i);
       const Real& w_ux = prim(m,IVX,k,j,i);
       const Real& w_uy = prim(m,IVY,k,j,i);
       const Real& w_uz = prim(m,IVZ,k,j,i);
@@ -325,6 +363,15 @@ void IdealGRHydro::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &
       Real& u_m1 = cons(m,IM1,k,j,i);
       Real& u_m2 = cons(m,IM2,k,j,i);
       Real& u_m3 = cons(m,IM3,k,j,i);
+
+      Real w_p;
+      if (use_e) {
+        const Real& w_e  = prim(m,IEN,k,j,i);
+        w_p = w_e*gm1;
+      } else {
+        const Real& w_t  = prim(m,ITM,k,j,i);
+        w_p = w_t*w_d;
+      }
 
       Real wgas_u0 = (w_d + gamma_prime * w_p) * u0;
       u_d  = w_d * u0;

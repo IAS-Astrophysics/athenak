@@ -44,8 +44,6 @@ ndiag      = 1         # cycles between diagostic output
 eos         = ideal    # EOS type
 reconstruct = plm      # spatial reconstruction method
 rsolver     = llf      # Riemann-solver to be used
-
-<eos>
 gamma       = 1.666666667     # gamma = C_p/C_v
 
 # Note: OT pgen does not read any parameters from input file

@@ -19,8 +19,29 @@ IdealMHD::IdealMHD(MeshBlockPack *pp, ParameterInput *pin)
   : EquationOfState(pp, pin)
 {
   eos_data.is_ideal = true;
-  eos_data.gamma = pin->GetReal("eos","gamma");
+  eos_data.gamma = pin->GetReal("mhd","gamma");
   eos_data.iso_cs = 0.0;
+
+  // Read flags specifying which variable to use in primitives
+  // if nothing set in input file, use e as default
+  if (!(pin->DoesParameterExist("mhd","use_e")) &&
+      !(pin->DoesParameterExist("mhd","use_t")) ) {
+    eos_data.use_e = true;
+    eos_data.use_t = false;
+  } else {
+    eos_data.use_e = pin->GetOrAddBoolean("mhd","use_e",false);
+    eos_data.use_t = pin->GetOrAddBoolean("mhd","use_t",false);
+  }
+  if (!(eos_data.use_e) && !(eos_data.use_t)) {
+    std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
+              << "Both use_e and use_t set to false" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (eos_data.use_e && eos_data.use_t) {
+    std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
+              << "Both use_e and use_t set to true" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -41,10 +62,13 @@ void IdealMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
   int &nmhd  = pmy_pack->pmhd->nmhd;
   int &nscal = pmy_pack->pmhd->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
-  Real gm1 = eos_data.gamma - 1.0;
+  Real gm1 = (eos_data.gamma - 1.0);
+  Real igm1 = 1.0/(gm1);
 
   Real &dfloor_ = eos_data.density_floor;
   Real &pfloor_ = eos_data.pressure_floor;
+  Real &tfloor_ = eos_data.temperature_floor;
+  bool &use_e = eos_data.use_e;
 
   par_for("mhd_con2prim", DevExeSpace(), 0, (nmb-1), 0, (n3-1), 0, (n2-1), 0, (n1-1),
     KOKKOS_LAMBDA(int m, int k, int j, int i)
@@ -56,7 +80,6 @@ void IdealMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
       const Real& u_m3 = cons(m,IVZ,k,j,i);
 
       Real& w_d  = prim(m,IDN,k,j,i);
-      Real& w_p  = prim(m,IPR,k,j,i);
       Real& w_vx = prim(m,IVX,k,j,i);
       Real& w_vy = prim(m,IVY,k,j,i);
       Real& w_vz = prim(m,IVZ,k,j,i);
@@ -84,11 +107,19 @@ void IdealMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
                    +  ( SQR(b.x3f(m,k,j,i)) + SQR(b.x3f(m,k+1,j,i)) ));
 
       Real e_k = 0.5*di*(SQR(u_m1) + SQR(u_m2) + SQR(u_m3));
-      w_p = gm1*(u_e - e_k - pb);
-
-      // apply pressure floor, correct total energy
-      u_e = (w_p > pfloor_) ?  u_e : ((pfloor_/gm1) + e_k + pb);
-      w_p = (w_p > pfloor_) ?  w_p : pfloor_;
+      if (use_e) {  // internal energy density is primitive
+        Real& w_e  = prim(m,IEN,k,j,i);
+        w_e = (u_e - e_k - pb);
+        // apply pressure floor, correct total energy
+        u_e = (w_e > (pfloor_*igm1)) ?  u_e : ((pfloor_*igm1) + e_k + pb);
+        w_e = (w_e > (pfloor_*igm1)) ?  w_e : (pfloor_*igm1);
+      } else {  // temperature is primitive
+        Real& w_t  = prim(m,ITM,k,j,i);
+        w_t = (gm1/u_d)*(u_e - e_k - pb);
+        // apply temperature floor, correct total energy
+        u_e = (w_t > tfloor_) ?  u_e : ((u_d*igm1*tfloor_) + e_k + pb);
+        w_t = (w_t > tfloor_) ?  w_t : tfloor_;
+      }
 
       // convert scalars (if any), always stored at end of cons and prim arrays.
       for (int n=nmhd; n<(nmhd+nscal); ++n) {
@@ -116,6 +147,7 @@ void IdealMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real>
   int &nscal = pmy_pack->pmhd->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
   Real igm1 = 1.0/(eos_data.gamma - 1.0);
+  bool &use_e = eos_data.use_e;
   
   par_for("mhd_prim2con", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i)
@@ -127,7 +159,6 @@ void IdealMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real>
       Real& u_m3 = cons(m,IVZ,k,j,i);
       
       const Real& w_d  = prim(m,IDN,k,j,i);
-      const Real& w_p  = prim(m,IPR,k,j,i);
       const Real& w_vx = prim(m,IVX,k,j,i);
       const Real& w_vy = prim(m,IVY,k,j,i);
       const Real& w_vz = prim(m,IVZ,k,j,i);
@@ -140,9 +171,16 @@ void IdealMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real>
       u_m1 = w_vx*w_d;
       u_m2 = w_vy*w_d;
       u_m3 = w_vz*w_d;
-      u_e = w_p*igm1 + 0.5*(w_d*(SQR(w_vx) + SQR(w_vy) + SQR(w_vz))
-                              + (SQR(bcc1) + SQR(bcc2) + SQR(bcc3)));
-      
+      if (use_e) {  // internal energy density is primitive
+        const Real& w_e  = prim(m,IEN,k,j,i);
+        u_e = w_e + 0.5*(w_d*(SQR(w_vx) + SQR(w_vy) + SQR(w_vz)) +
+                             (SQR(bcc1) + SQR(bcc2) + SQR(bcc3)));
+      } else {  // temperature is primitive
+        const Real& w_t  = prim(m,ITM,k,j,i);
+        u_e = w_t*w_d*igm1 + 0.5*(w_d*(SQR(w_vx) + SQR(w_vy) + SQR(w_vz)) +
+                                      (SQR(bcc1) + SQR(bcc2) + SQR(bcc3)));
+      }
+
       // convert scalars (if any), always stored at end of cons and prim arrays.
       for (int n=nmhd; n<(nmhd+nscal); ++n) {
         cons(m,n,k,j,i) = prim(m,n,k,j,i)*w_d;

@@ -56,13 +56,22 @@ void Roe(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coord
     wli[IVX]=wl(ivx,i);
     wli[IVY]=wl(ivy,i);
     wli[IVZ]=wl(ivz,i);
-    if (eos.is_ideal) wli[IPR]=wl(IPR,i);
 
     wri[IDN]=wr(IDN,i);
     wri[IVX]=wr(ivx,i);
     wri[IVY]=wr(ivy,i);
     wri[IVZ]=wr(ivz,i);
-    if (eos.is_ideal) wri[IPR]=wr(IPR,i);
+
+    // store pressure in L/R primitives
+    if (eos.is_ideal) {
+      if (eos.use_e) {
+        wli[IEN] = gm1*wl(IEN,i);
+        wri[IEN] = gm1*wr(IEN,i);
+      } else {
+        wli[IEN] = wl(IDN,i)*wl(ITM,i); 
+        wri[IEN] = wr(IDN,i)*wr(ITM,i);
+      }
+    }
 
     //--- Step 2.  Compute Roe-averaged data from left- and right-states
 
@@ -79,9 +88,9 @@ void Roe(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coord
     // rather than E or P directly.  sqrtdl*hl = sqrtdl*(el+pl)/dl = (el+pl)/sqrtdl
     Real el,er;
     if (eos.is_ideal) {
-      el = wli[IPR]/gm1 + 0.5*wli[IDN]*(SQR(wli[IVX])+SQR(wli[IVY])+SQR(wli[IVZ]));
-      er = wri[IPR]/gm1 + 0.5*wri[IDN]*(SQR(wri[IVX])+SQR(wri[IVY])+SQR(wri[IVZ]));
-      wroe[IPR] = ((el + wli[IPR])/sqrtdl + (er + wri[IPR])/sqrtdr)*isdlpdr;
+      el = wli[IEN]/gm1 + 0.5*wli[IDN]*(SQR(wli[IVX])+SQR(wli[IVY])+SQR(wli[IVZ]));
+      er = wri[IEN]/gm1 + 0.5*wri[IDN]*(SQR(wri[IVX])+SQR(wri[IVY])+SQR(wri[IVZ]));
+      wroe[IEN] = ((el + wli[IEN])/sqrtdl + (er + wri[IEN])/sqrtdr)*isdlpdr;
     }
 
     //--- Step 3.  Compute L/R fluxes
@@ -102,10 +111,10 @@ void Roe(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coord
     fr[IVZ] = mxr*wri[IVZ];
 
     if (eos.is_ideal) {
-      fl[IVX] += wli[IPR];
-      fr[IVX] += wri[IPR];
-      fl[IEN] = (el + wli[IPR])*wli[IVX];
-      fr[IEN] = (er + wri[IPR])*wri[IVX];
+      fl[IVX] += wli[IEN];
+      fr[IVX] += wri[IEN];
+      fl[IEN] = (el + wli[IEN])*wli[IVX];
+      fr[IEN] = (er + wri[IEN])*wri[IVX];
     } else {
       fl[IVX] += (iso_cs*iso_cs)*wli[IDN];
       fr[IVX] += (iso_cs*iso_cs)*wri[IDN];
@@ -163,8 +172,8 @@ void Roe(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coord
     if (llf_flag != 0) {
       Real cl,cr;
       if (eos.is_ideal) {
-        cl = eos.SoundSpeed(wli[IPR],wli[IDN]);
-        cr = eos.SoundSpeed(wri[IPR],wri[IDN]);
+        cl = eos.IdealHydroSoundSpeed(wli[IDN], wli[IEN]);
+        cr = eos.IdealHydroSoundSpeed(wri[IDN], wri[IEN]);
       } else {
         cl = iso_cs;
         cr = iso_cs;
@@ -210,7 +219,7 @@ namespace roe {
 //   llf_flag: flag set to 1 if d<0 in any intermediate state
 //
 //  The order of the components in the input vectors should be:
-//     (IDN,IVX,IVY,IVZ,[IPR])
+//     (IDN,IVX,IVY,IVZ,[IEN])
 //
 // REFERENCES:
 // - J. Stone, T. Gardiner, P. Teuben, J. Hawley, & J. Simon "Athena: A new code for
@@ -224,7 +233,7 @@ void RoeFluxAdb(const Real wroe[], const Real du[], const Real wli[], const Real
   Real v2 = wroe[IVY];
   Real v3 = wroe[IVZ];
 
-    Real h = wroe[IPR];
+    Real h = wroe[IEN];
     Real vsq = v1*v1 + v2*v2 + v3*v3;
     Real q = h - 0.5*vsq;
     Real cs_sq = (q < 0.0) ? (FLT_MIN) : gm1*q;
