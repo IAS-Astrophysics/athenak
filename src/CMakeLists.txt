@@ -28,6 +28,8 @@ add_executable(
         eos/isothermal_mhd.cpp
         eos/ideal_srhyd.cpp
         eos/ideal_grhyd.cpp
+        eos/ideal_srmhd.cpp
+        eos/ideal_grmhd.cpp
 
         hydro/hydro.cpp
         hydro/hydro_fluxes.cpp
