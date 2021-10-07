@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file mhd.cpp
-//  \brief implementation of MHD class constructor and assorted functions
+//! \brief implementation of MHD class constructor and assorted functions
 
 #include <iostream>
 
@@ -58,13 +58,25 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // ideal gas EOS
   if (eqn_of_state.compare("ideal") == 0) {
-    peos = new IdealMHD(ppack, pin);
+    if (is_special_relativistic){
+      peos = new IdealSRMHD(ppack, pin);
+    } else if (is_general_relativistic){
+      peos = new IdealGRMHD(ppack, pin);
+    } else {
+      peos = new IdealMHD(ppack, pin);
+    }
     nmhd = 5;
 
   // isothermal EOS
   } else if (eqn_of_state.compare("isothermal") == 0) {
-    peos = new IsothermalMHD(ppack, pin);
-    nmhd = 4;
+    if (is_special_relativistic || is_general_relativistic){
+      std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
+                << "<mhd> eos = isothermal cannot be used with SR/GR" << std::endl;
+      std::exit(EXIT_FAILURE);
+    } else {
+      peos = new IsothermalMHD(ppack, pin);
+      nmhd = 4;
+    }
 
   // EOS string not recognized
   } else {
@@ -127,10 +139,8 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     {std::string xorder = pin->GetOrAddString("mhd","reconstruct","plm");
     if (xorder.compare("dc") == 0) {
       recon_method = ReconstructionMethod::dc;
-
     } else if (xorder.compare("plm") == 0) {
       recon_method = ReconstructionMethod::plm;
-
     } else if (xorder.compare("ppm") == 0) {
       // check that nghost > 2
       if (indcs.ng < 3) {
@@ -140,7 +150,6 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
         std::exit(EXIT_FAILURE); 
       }                
       recon_method = ReconstructionMethod::ppm;
-
     } else if (xorder.compare("wenoz") == 0) {
       // check that nghost > 2
       if (indcs.ng < 3) {
@@ -150,7 +159,6 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
         std::exit(EXIT_FAILURE); 
       }                
       recon_method = ReconstructionMethod::wenoz;
-
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "<mhd>/recon = '" << xorder << "' not implemented"
@@ -160,39 +168,69 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 
     // select Riemann solver (no default).  Test for compatibility of options
     {std::string rsolver = pin->GetString("mhd","rsolver");
-    if (rsolver.compare("advect") == 0) {
-      if (evolution_t.compare("dynamic") == 0) {
-        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                  << std::endl << "<mhd>/rsolver = '" << rsolver
-                  << "' cannot be used with dynamic problems" << std::endl;
-        std::exit(EXIT_FAILURE);
+
+    // Special relativistic solvers
+    if (is_special_relativistic) {
+      if (rsolver.compare("llf") == 0) {
+        rsolver_method = MHD_RSolver::llf_sr;
+      } else if (rsolver.compare("hlle") == 0) {
+        rsolver_method = MHD_RSolver::hlle_sr;
+      // Error for anything else
       } else {
-        rsolver_method = MHD_RSolver::advect;
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "<mhd> rsolver = '" << rsolver << "' not implemented"
+                  << " for SR dynamics" << std::endl;
+        std::exit(EXIT_FAILURE);
       }
 
-    } else  if (evolution_t.compare("dynamic") != 0) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "<mhd>/rsolver = '" << rsolver
-                << "' cannot be used with non-dynamic problems" << std::endl;
-      std::exit(EXIT_FAILURE);
+    // General relativistic solvers
+    } else if (is_general_relativistic){
+      if (rsolver.compare("hlle") == 0) {
+        rsolver_method = MHD_RSolver::hlle_gr;
+      // Error for anything else
+      } else {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "<mhd> rsolver = '" << rsolver << "' not implemented"
+                  << " for GR dynamics" << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
 
-    } else if (rsolver.compare("llf") == 0) {
-      rsolver_method = MHD_RSolver::llf;
-
-    } else if (rsolver.compare("hlle") == 0) {
-      rsolver_method = MHD_RSolver::hlle;
-
-    } else if (rsolver.compare("hlld") == 0) {
-        rsolver_method = MHD_RSolver::hlld;
-
-//    } else if (rsolver.compare("roe") == 0) {
-//      rsolver_method = MHD_RSolver::roe;
-
+    // Non-relativistic solvers
     } else {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "<mhd>/rsolver = '" << rsolver << "' not implemented"
-                << std::endl;
-      std::exit(EXIT_FAILURE); 
+      // Advect solver
+      if (rsolver.compare("advect") == 0) {
+        if (evolution_t.compare("dynamic") == 0) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                    << std::endl << "<mhd>/rsolver = '" << rsolver
+                    << "' cannot be used with dynamic problems" << std::endl;
+          std::exit(EXIT_FAILURE);
+        } else {
+          rsolver_method = MHD_RSolver::advect;
+        }
+      // only advect RS can be used with non-dynamic problems; print error otherwise
+      } else  if (evolution_t.compare("dynamic") != 0) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "<mhd>/rsolver = '" << rsolver
+                  << "' cannot be used with non-dynamic problems" << std::endl;
+        std::exit(EXIT_FAILURE);
+      // LLF solver
+      } else if (rsolver.compare("llf") == 0) {
+        rsolver_method = MHD_RSolver::llf;
+      // HLLE solver
+      } else if (rsolver.compare("hlle") == 0) {
+        rsolver_method = MHD_RSolver::hlle;
+      // HLLD solver
+      } else if (rsolver.compare("hlld") == 0) {
+          rsolver_method = MHD_RSolver::hlld;
+      // Roe solver
+//      } else if (rsolver.compare("roe") == 0) {
+//        rsolver_method = MHD_RSolver::roe;
+      } else {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "<mhd>/rsolver = '" << rsolver << "' not implemented"
+                  << std::endl;
+        std::exit(EXIT_FAILURE); 
+      }
     }}
 
     // allocate second registers
