@@ -16,7 +16,7 @@ namespace mhd {
 //  \brief The HLLE Riemann solver for SR MHD
 
 KOKKOS_INLINE_FUNCTION
-void HLLE_SR(TeamMember_t const &member, const EOS_Data &eos,
+void HLLE_SR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coord,
      const int m, const int k, const int j,  const int il, const int iu, const int ivx,
      const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr,
      const ScrArray2D<Real> &bl, const ScrArray2D<Real> &br, const DvceArray4D<Real> &bx,
@@ -32,30 +32,30 @@ void HLLE_SR(TeamMember_t const &member, const EOS_Data &eos,
   par_for_inner(member, il, iu, [&](const int i)
   {
     // Extract left primitives
-    Real rho_l = prim_l(IDN,i);
-    Real ux_l = prim_l(ivx,i);
-    Real uy_l = prim_l(ivy,i);
-    Real uz_l = prim_l(ivz,i);
+    Real rho_l = wl(IDN,i);
+    Real ux_l = wl(ivx,i);
+    Real uy_l = wl(ivy,i);
+    Real uz_l = wl(ivz,i);
     Real u_l[4];
     u_l[0] = std::sqrt(1.0 + SQR(ux_l) + SQR(uy_l) + SQR(uz_l));
     u_l[1] = ux_l;
     u_l[2] = uy_l;
     u_l[3] = uz_l;
-    Real bb2_l = prim_l(IBY,i);
-    Real bb3_l = prim_l(IBZ,i);
+    Real bb2_l = bl(iby,i);
+    Real bb3_l = bl(ibz,i);
 
     // Extract right primitives
-    Real rho_r = prim_r(IDN,i);
-    Real ux_r = prim_r(ivx,i);
-    Real uy_r = prim_r(ivy,i);
-    Real uz_r = prim_r(ivz,i);
+    Real rho_r = wr(IDN,i);
+    Real ux_r = wr(ivx,i);
+    Real uy_r = wr(ivy,i);
+    Real uz_r = wr(ivz,i);
     Real u_r[4];
     u_r[0] = std::sqrt(1.0 + SQR(ux_r) + SQR(uy_r) + SQR(uz_r));
     u_r[1] = ux_r;
     u_r[2] = uy_r;
     u_r[3] = uz_r;
-    Real bb2_r = prim_r(IBY,i);
-    Real bb3_r = prim_r(IBZ,i);
+    Real bb2_r = br(iby,i);
+    Real bb3_r = br(ibz,i);
 
     Real pgas_l, pgas_r;
     if (eos.use_e) {
@@ -67,7 +67,7 @@ void HLLE_SR(TeamMember_t const &member, const EOS_Data &eos,
     }
 
     // Extract normal magnetic field
-    Real bb1 = bxi(m,k,j,i);
+    Real bb1 = bx(m,k,j,i);
 
     // Calculate 4-magnetic field in left state
     Real b_l[4];
@@ -87,11 +87,11 @@ void HLLE_SR(TeamMember_t const &member, const EOS_Data &eos,
 
     // Calculate left wavespeeds
     Real lm_l, lp_l;
-    eos.IdealSRMHDFastSpeeds(rho_l, pgas_l, u_l[1], u_l[0], b_sq_l, &lp_l, &lm_l);
+    eos.IdealSRMHDFastSpeeds(rho_l, pgas_l, u_l[1], u_l[0], b_sq_l, lp_l, lm_l);
 
     // Calculate right wavespeeds
     Real lm_r, lp_r;
-    eos.IdealSRMHDFastSpeeds(rho_r, pgas_r, u_r[1], u_r[0], b_sq_r, &lp_r, &lm_r);
+    eos.IdealSRMHDFastSpeeds(rho_r, pgas_r, u_r[1], u_r[0], b_sq_r, lp_r, lm_r);
 
     // Calculate extremal wavespeeds
     Real lambda_l = fmin(lm_l, lm_r);  // (MB 55)
@@ -145,8 +145,8 @@ void HLLE_SR(TeamMember_t const &member, const EOS_Data &eos,
 
     // Calculate fluxes in HLL region (MB2005 11)
     MHDCons1D flux_hll;
-    qa = lambda_r * lambda_l;
-    qb = 1.0/(lambda_r - lambda_l);
+    Real qa = lambda_r * lambda_l;
+    Real qb = 1.0/(lambda_r - lambda_l);
     flux_hll.d  = (lambda_r*fl.d  - lambda_l*fr.d  + qa*(consr.d  - consl.d )) * qb;
     flux_hll.mx = (lambda_r*fl.mx - lambda_l*fr.mx + qa*(consr.mx - consl.mx)) * qb;
     flux_hll.my = (lambda_r*fl.my - lambda_l*fr.my + qa*(consr.my - consl.my)) * qb;
@@ -157,12 +157,12 @@ void HLLE_SR(TeamMember_t const &member, const EOS_Data &eos,
 
     // Determine region of wavefan
     MHDCons1D *flux_interface;
-    if (lambda_l >= v_interface) {  // L region
-      flux_interface = flux_l;
-    } else if (lambda_r <= v_interface) { // R region
-      flux_interface = flux_r;
+    if (lambda_l >= 0.0) {  // L region
+      flux_interface = &fl;
+    } else if (lambda_r <= 0.0) { // R region
+      flux_interface = &fr;
     } else {  // HLL region
-      flux_interface = flux_hll;
+      flux_interface = &flux_hll;
     }
 
     // Set fluxes
@@ -172,8 +172,8 @@ void HLLE_SR(TeamMember_t const &member, const EOS_Data &eos,
     flx(m,ivz,k,j,i) = flux_interface->mz;
     flx(m,IEN,k,j,i) = flux_interface->e;
 
-    ey(k,j,i) = -flux_interface[IBY];
-    ez(k,j,i) = flux_interface[IBZ];
+    ey(m,k,j,i) = -flux_interface->by;
+    ez(m,k,j,i) =  flux_interface->bz;
 
     // We evolve tau = E - D
     flx(m,IEN,k,j,i) -= flx(m,IDN,k,j,i);

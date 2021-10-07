@@ -3,8 +3,8 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file adiabatic_hydro.cpp
-//  \brief implements EOS functions in derived class for nonrelativistic adiabatic hydro
+//! \file ideal_grmhd.cpp
+//! \brief derived class that implements ideal gas EOS in general relativistic mhd
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
@@ -25,45 +25,62 @@ IdealGRMHD::IdealGRMHD(MeshBlockPack *pp, ParameterInput *pin)
   eos_data.is_ideal = true;
   eos_data.gamma = pin->GetReal("eos","gamma");
   eos_data.iso_cs = 0.0;
+
+  // Read flags specifying which variable to use in primitives
+  // if nothing set in input file, use e as default
+  if (!(pin->DoesParameterExist("hydro","use_e")) &&
+      !(pin->DoesParameterExist("hydro","use_t")) ) {
+    eos_data.use_e = true;
+    eos_data.use_t = false;
+  } else {
+    eos_data.use_e = pin->GetOrAddBoolean("hydro","use_e",false);
+    eos_data.use_t = pin->GetOrAddBoolean("hydro","use_t",false);
+  }
+  if (!(eos_data.use_e) && !(eos_data.use_t)) {
+    std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
+              << "Both use_e and use_t set to false" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (eos_data.use_e && eos_data.use_t) {
+    std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
+              << "Both use_e and use_t set to true" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 }  
 
 //----------------------------------------------------------------------------------------
-// \!fn Real Equation49()
-// \brief Inline function to compute function fa(mu) defined in eq. 49 of Kastaun et al.
-// The root fa(mu)==0 of this function corresponds to the upper bracket for
-// solving Equation44
+//! \fn Real Equation49()
+//! \brief Inline function to compute function fa(mu) defined in eq. 49 of Kastaun et al.
+//! The root fa(mu)==0 of this function corresponds to the upper bracket for
+//! solving Equation44
 
 KOKKOS_INLINE_FUNCTION
-Real Equation49(Real mu, Real b2, Real rpar, Real r, Real q)
+Real Equation49(const Real mu, const Real b2, const Real rpar, const Real r, const Real q)
 {
-  Real const x = 1./(1.+mu*b2);           // (26)
-
+  Real const x = 1./(1.+mu*b2);                  // (26)
   Real rbar = (x*x*r*r + mu*x*(1.+x)*rpar*rpar); // (38)
 
   return mu*sqrt(1.+rbar) - 1.;
 }
 
 //----------------------------------------------------------------------------------------
-// \!fn Real Equation44()
-// \brief Inline function to compute function f(mu) defined in eq. 44 of Kastaun et al.
-// The ConsToPRim algorithms finds the root of this function f(mu)=0
+//! \fn Real Equation44()
+//! \brief Inline function to compute function f(mu) defined in eq. 44 of Kastaun et al.
+//! The ConsToPRim algorithms finds the root of this function f(mu)=0
 
 KOKKOS_INLINE_FUNCTION
-Real Equation44(Real mu, Real b2, Real rpar, Real r, Real q, Real ud, Real pfloor, Real gm1)
+Real Equation44(const Real mu, const Real b2, const Real rpar, const Real r, const Real q,
+                const Real ud, const Real pfloor, const Real gm1)
 {
-  Real const x = 1./(1.+mu*b2);           // (26)
-
+  Real const x = 1./(1.+mu*b2);                  // (26)
   Real rbar = (x*x*r*r + mu*x*(1.+x)*rpar*rpar); // (38)
   Real qbar = q - 0.5*b2 - 0.5*(mu*mu*(b2*rbar- rpar*rpar)); // (31)
-//  rbar = sqrt(rbar);
-
 
   Real z2 = (mu*mu*rbar/(abs(1.- SQR(mu)*rbar))); // (32)
   Real w = sqrt(1.+z2);
 
-  Real const wd = ud/w;                  // (34)
+  Real const wd = ud/w;                           // (34)
   Real eps = w*(qbar - mu*rbar)+  z2/(w+1.);
-
 
   //NOTE: The following generalizes to ANY equation of state
   eps = fmax(pfloor/(wd*gm1), eps);                          // 
@@ -73,8 +90,9 @@ Real Equation44(Real mu, Real b2, Real rpar, Real r, Real q, Real ud, Real pfloo
 }
 
 //----------------------------------------------------------------------------------------
-// \!fn void ConservedToPrimitive()
-// \brief No-Op version of MHD cons to prim functions.  Never used in MHD.
+//! \fn void ConsToPrim()
+//! \brief Converts conserved into primitive variables.
+//! Operates over entire MeshBlock, including ghost cells.
 
 void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons,
          const DvceFaceFld4D<Real> &b, DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc)
@@ -99,19 +117,19 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons,
   Real &dfloor_ = eos_data.density_floor;
   Real &pfloor_ = eos_data.pressure_floor;
   Real ee_min = pfloor_/gm1;
+  bool &use_e = eos_data.use_e;
 
   Real mm_sq_ee_sq_max = 1.0 - 1.0e-12;  // max. of squared momentum over energy
 
-    // Parameters
-    int const max_iterations = 15;
-    Real const tol = 1.0e-12;
-    Real const pgas_uniform_min = 1.0e-12;
-    Real const a_min = 1.0e-12;
-    Real const v_sq_max = 1.0 - 1.0e-12;
-    Real const rr_max = 1.0 - 1.0e-12;
+  // Parameters
+  int const max_iterations = 15;
+  Real const tol = 1.0e-12;
+  Real const pgas_uniform_min = 1.0e-12;
+  Real const a_min = 1.0e-12;
+  Real const v_sq_max = 1.0 - 1.0e-12;
+  Real const rr_max = 1.0 - 1.0e-12;
 
-
-  par_for("mhd_con2prim", DevExeSpace(), 0, (nmb-1), 0, (n3-1), 0, (n2-1), 0, (n1-1),
+  par_for("grmhd_con2prim", DevExeSpace(), 0, (nmb-1), 0, (n3-1), 0, (n2-1), 0, (n1-1),
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
       Real& u_d  = cons(m, IDN,k,j,i);
@@ -121,10 +139,9 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons,
       Real& u_e  = cons(m, IEN,k,j,i);
 
       Real& w_d  = prim(m, IDN,k,j,i);
-      Real& w_vx = prim(m, IVX,k,j,i);
-      Real& w_vy = prim(m, IVY,k,j,i);
-      Real& w_vz = prim(m, IVZ,k,j,i);
-      Real& w_p  = prim(m, IPR,k,j,i);
+      Real& w_ux = prim(m, IVX,k,j,i);
+      Real& w_uy = prim(m, IVY,k,j,i);
+      Real& w_uz = prim(m, IVZ,k,j,i);
 
       // cell-centered fields are simple linear average of face-centered fields
       Real& w_bx = bcc(m,IBX,k,j,i);
@@ -329,7 +346,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons,
 
 	Real rbar = (x*x*r*r + mu*x*(1.+x)*rpar*rpar); // (38)
 	Real qbar = q - 0.5*b2 - 0.5*(mu*mu*(b2*rbar- rpar*rpar)); // (31)
-      //  rbar = sqrt(rbar);
+        //  rbar = sqrt(rbar);
 
 
 	Real z2 = (mu*mu*rbar/(abs(1.- SQR(mu)*rbar))); // (32)
@@ -338,23 +355,27 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons,
 	Real const wd = u_d/w;                  // (34)
 	Real eps = w*(qbar - mu*rbar)+  z2/(w+1.);
 
-      //NOTE: The following generalizes to ANY equation of state
+        //NOTE: The following generalizes to ANY equation of state
 	eps = fmax(pfloor_/(wd*gm1), eps);                          // 
 	Real const h = (1.0 + eps) * (1.0 + (gm1*eps)/(1.0+eps));   // (43)
-	w_p = w_d*gm1*eps;
+        if (use_e) {
+          Real& w_e  = prim(m,IEN,k,j,i);
+          w_e = w_d*eps;
+        } else {
+          Real& w_t  = prim(m,ITM,k,j,i);
+          w_t = gm1*eps;  // TODO:  is this the correct expression?
+        }
 
 	Real const conv = w/(h*w + b2); // (C26)
-	w_vx = conv * ( m1u/u_d + bx * rpar/(h*w));           // (C26)
-	w_vy = conv * ( m2u/u_d + by * rpar/(h*w));           // (C26)
-	w_vz = conv * ( m3u/u_d + bz * rpar/(h*w));           // (C26)
+	w_ux = conv * ( m1u/u_d + bx * rpar/(h*w));           // (C26)
+	w_uy = conv * ( m2u/u_d + by * rpar/(h*w));           // (C26)
+	w_uz = conv * ( m3u/u_d + bz * rpar/(h*w));           // (C26)
 
 	// convert scalars (if any)
 	for (int n=nmhd; n<(nmhd+nscal); ++n) {
 	  prim(m,n,k,j,i) = cons(m,n,k,j,i)/u_d;
 	}
-    }
-
-      // FIXME ADD GRMHD PrimToCons
+      }
 
 //     // reset conserved variables inside excised regions or if floor is hit
 //     if (rad <= coord.bh_rmin || floor_hit) {
@@ -370,7 +391,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons,
 //       for (int n=nhyd; n<(nhyd+nscal); ++n) {
 //         cons(m,n,k,j,i) = prim(m,n,k,j,i)*cons(m,IDN,k,j,i);
 //       }
-     }
+    }
   );
 
   return;
@@ -383,11 +404,6 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons,
 void IdealGRMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc, 
    			    DvceArray5D<Real> &cons)
 {
-
-  // FIXME Remove when finishing the function
-  std::cout << "PrimToCons not implemented for GRMHD" << std::endl;
-  std::exit(EXIT_FAILURE);
-
   auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
   int is = indcs.is; int ie = indcs.ie;
   int js = indcs.js; int je = indcs.je;
@@ -396,9 +412,11 @@ void IdealGRMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Rea
   int &nmhd  = pmy_pack->pmhd->nmhd;
   int &nscal = pmy_pack->pmhd->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
-  Real gamma_prime = eos_data.gamma/(eos_data.gamma - 1.0);
+  Real gm1 = (eos_data.gamma - 1.0);
+  Real gamma_prime = eos_data.gamma/(gm1);
+  bool &use_e = eos_data.use_e;
 
-  par_for("hyd_prim2cons", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+  par_for("grmhd_prim2cons", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
       // Extract components of metric
@@ -427,11 +445,23 @@ void IdealGRMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Rea
         &g_20 = g_[I02], &g_21 = g_[I12], &g_22 = g_[I22], &g_23 = g_[I23],
         &g_30 = g_[I03], &g_31 = g_[I13], &g_32 = g_[I23], &g_33 = g_[I33];
 
+      // extrct primitives
       const Real& w_d  = prim(m,IDN,k,j,i);
-      const Real& w_p  = prim(m,IPR,k,j,i);
       const Real& w_ux = prim(m,IVX,k,j,i);
       const Real& w_uy = prim(m,IVY,k,j,i);
       const Real& w_uz = prim(m,IVZ,k,j,i);
+      const Real& bcc1 = bcc(m,IBX,k,j,i);
+      const Real& bcc2 = bcc(m,IBY,k,j,i);
+      const Real& bcc3 = bcc(m,IBZ,k,j,i);
+
+      Real w_p;
+      if (use_e) {
+        const Real& w_e  = prim(m,IEN,k,j,i);
+        w_p = w_e*gm1;
+      } else {
+        const Real& w_t  = prim(m,ITM,k,j,i);
+        w_p = w_t*w_d;
+      }
 
       // Calculate 4-velocity
       Real alpha = sqrt(-1.0/gi_[I00]);
@@ -443,26 +473,42 @@ void IdealGRMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Rea
       Real u1 = w_ux - alpha * gamma * gi_[I01];
       Real u2 = w_uy - alpha * gamma * gi_[I02];
       Real u3 = w_uz - alpha * gamma * gi_[I03];
+      // lower vector indices
       Real u_0 = g_00*u0 + g_01*u1 + g_02*u2 + g_03*u3;
       Real u_1 = g_10*u0 + g_11*u1 + g_12*u2 + g_13*u3;
       Real u_2 = g_20*u0 + g_21*u1 + g_22*u2 + g_23*u3;
       Real u_3 = g_30*u0 + g_31*u1 + g_32*u2 + g_33*u3;
 
-      // Set conserved quantities
-      Real& u_d  = cons(m,IDN,k,j,i);
-      Real& u_e  = cons(m,IEN,k,j,i);
-      Real& u_m1 = cons(m,IM1,k,j,i);
-      Real& u_m2 = cons(m,IM2,k,j,i);
-      Real& u_m3 = cons(m,IM3,k,j,i);
-      
-      // TODO NEED TO ADD MHD
+      // Calculate 4-magnetic field
+      Real b0 = g_[I01]*u0*bcc1 + g_[I02]*u0*bcc2 + g_[I03]*u0*bcc3
+              + g_[I11]*u1*bcc1 + g_[I12]*u1*bcc2 + g_[I13]*u1*bcc3
+              + g_[I12]*u2*bcc1 + g_[I22]*u2*bcc2 + g_[I23]*u2*bcc3
+              + g_[I13]*u3*bcc1 + g_[I23]*u3*bcc2 + g_[I33]*u3*bcc3;
+      Real b1 = (bcc1 + b0 * u1) / u0;
+      Real b2 = (bcc2 + b0 * u2) / u0;
+      Real b3 = (bcc3 + b0 * u3) / u0;
+      // lower vector indices
+      Real b_0 = g_00*b0 + g_01*b1 + g_02*b2 + g_03*b3;
+      Real b_1 = g_10*b0 + g_11*b1 + g_12*b2 + g_13*b3;
+      Real b_2 = g_20*b0 + g_21*b1 + g_22*b2 + g_23*b3;
+      Real b_3 = g_30*b0 + g_31*b1 + g_32*b2 + g_33*b3;
+      Real b_sq = b0*b_0 + b1*b_1 + b2*b_2 + b3*b_3;
 
-      Real wgas_u0 = (w_d + gamma_prime * w_p) * u0;
-      u_d  = w_d * u0;
-      u_e  = wgas_u0 * u_0 + w_p - u_d;  // Evolve E-D, as in SR
-      u_m1 = wgas_u0 * u_1;
-      u_m2 = wgas_u0 * u_2;
-      u_m3 = wgas_u0 * u_3;
+      // Extract conserved quantities
+      Real& u_d    = cons(m,IDN,k,j,i);
+      Real& u_t0_0 = cons(m,IEN,k,j,i);
+      Real& u_t0_1 = cons(m,IM1,k,j,i);
+      Real& u_t0_2 = cons(m,IM2,k,j,i);
+      Real& u_t0_3 = cons(m,IM3,k,j,i);
+      
+      // Set conserved quantities
+      Real wtot = w_d + gamma_prime * w_p + b_sq;
+      Real ptot = w_p + 0.5 * b_sq;
+      u_d    = w_d * u0;
+      u_t0_0 = wtot * u0 * u_0 - b0 * b_0 + ptot - u_d;  // evolve E-D, as in SR
+      u_t0_1 = wtot * u0 * u_1 - b0 * b_1;
+      u_t0_2 = wtot * u0 * u_2 - b0 * b_2;
+      u_t0_3 = wtot * u0 * u_3 - b0 * b_3;
 
       // convert scalars (if any)
       for (int n=nmhd; n<(nmhd+nscal); ++n) {

@@ -27,7 +27,7 @@
 #include "mhd/rsolvers/advect_mhd.cpp"
 #include "mhd/rsolvers/llf_mhd.cpp"
 #include "mhd/rsolvers/hlle_mhd.cpp"
-#include "mhd/rsolvers/hlld.cpp"
+#include "mhd/rsolvers/hlld_mhd.cpp"
 #include "mhd/rsolvers/llf_srmhd.cpp"
 #include "mhd/rsolvers/hlle_srmhd.cpp"
 #include "mhd/rsolvers/hlle_grmhd.cpp"
@@ -53,9 +53,10 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
   int nvars = nmhd + nscalars;
   int nmb1 = pmy_pack->nmb_thispack - 1;
   const auto recon_method_ = recon_method;
+  auto &eos = peos->eos_data;
+  auto &coord = pmy_pack->coord.coord_data;
   auto &w0_ = w0;
   auto &b0_ = bcc0;
-  auto &eos = peos->eos_data;
 
   //--------------------------------------------------------------------------------------
   // i-direction
@@ -64,8 +65,8 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
                      ScrArray2D<Real>::shmem_size(3, ncells1)) * 2;
   int scr_level = 0;
   auto flx1 = uflx.x1f;
-  auto e3x1_ = e3x1;
-  auto e2x1_ = e2x1;
+  auto e31 = e3x1;
+  auto e21 = e2x1;
   auto &bx = b0.x1f;
 
   // set the loop limits for 1D/2D/3D problems
@@ -115,19 +116,19 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
       // (IBY) component of flx = E_{z} = -(v x B)_{z} = -(v1*b2 - v2*b1)
       // (IBZ) component of flx = E_{y} = -(v x B)_{y} =  (v1*b3 - v3*b1)
       if constexpr (rsolver_method_ == MHD_RSolver::advect) {
-        Advect(member,eos,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e3x1_,e2x1_);
+        Advect(member,eos,coord,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e31,e21);
       } else if constexpr (rsolver_method_ == MHD_RSolver::llf) {
-        LLF(member,eos,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e3x1_,e2x1_);
+        LLF(member,eos,coord,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e31,e21);
       } else if constexpr (rsolver_method_ == MHD_RSolver::hlle) {
-        HLLE(member,eos,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e3x1_,e2x1_);
+        HLLE(member,eos,coord,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e31,e21);
       } else if constexpr (rsolver_method_ == MHD_RSolver::hlld) {
-        HLLD(member,eos,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e3x1_,e2x1_);
+        HLLD(member,eos,coord,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e31,e21);
       } else if constexpr (rsolver_method_ == MHD_RSolver::llf_sr) {
-        LLF_SR(member,eos,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e3x1_,e2x1_);
+        LLF_SR(member,eos,coord,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e31,e21);
       } else if constexpr (rsolver_method_ == MHD_RSolver::hlle_sr) {
-        HLLE_SR(member,eos,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e3x1_,e2x1_);
+        HLLE_SR(member,eos,coord,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e31,e21);
       } else if constexpr (rsolver_method_ == MHD_RSolver::hlle_gr) {
-        HLLE_GR(member,eos,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e3x1_,e2x1_);
+        HLLE_GR(member,eos,coord,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e31,e21);
       }
       member.team_barrier();
 
@@ -156,8 +157,8 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
                 ScrArray2D<Real>::shmem_size(3, ncells1)) * 3;
     auto flx2 = uflx.x2f;
     auto &by = b0.x2f;
-    auto e1x2_ = e1x2;
-    auto e3x2_ = e3x2;
+    auto e12 = e1x2;
+    auto e32 = e3x2;
 
     // set the loop limits for 2D/3D problems
     if (pmy_pack->pmesh->two_d) {
@@ -220,19 +221,19 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
           // (IBZ) component of flx = E_{z} = -(v x B)_{z} =  (v2*b1 - v1*b2)
           if (j>(js-1)) {
             if constexpr (rsolver_method_ == MHD_RSolver::advect) {
-              Advect(member,eos,m,k,j,is-1,ie+1,IVY,wl,wr,bl,br,by,flx2,e1x2_,e3x2_);
+              Advect(member,eos,coord,m,k,j,is-1,ie+1,IVY,wl,wr,bl,br,by,flx2,e12,e32);
             } else if constexpr (rsolver_method_ == MHD_RSolver::llf) {
-              LLF(member,eos,m,k,j,is-1,ie+1,IVY,wl,wr,bl,br,by,flx2,e1x2_,e3x2_);
+              LLF(member,eos,coord,m,k,j,is-1,ie+1,IVY,wl,wr,bl,br,by,flx2,e12,e32);
             } else if constexpr (rsolver_method_ == MHD_RSolver::hlle) {
-              HLLE(member,eos,m,k,j,is-1,ie+1,IVY,wl,wr,bl,br,by,flx2,e1x2_,e3x2_);
+              HLLE(member,eos,coord,m,k,j,is-1,ie+1,IVY,wl,wr,bl,br,by,flx2,e12,e32);
             } else if constexpr (rsolver_method_ == MHD_RSolver::hlld) {
-              HLLD(member,eos,m,k,j,is-1,ie+1,IVY,wl,wr,bl,br,by,flx2,e1x2_,e3x2_);
+              HLLD(member,eos,coord,m,k,j,is-1,ie+1,IVY,wl,wr,bl,br,by,flx2,e12,e32);
             } else if constexpr (rsolver_method_ == MHD_RSolver::llf_sr) {
-              LLF_SR(member,eos,m,k,j,is-1,ie+1,IVY,wl,wr,bl,br,by,flx2,e1x2_,e3x2_);
+              LLF_SR(member,eos,coord,m,k,j,is-1,ie+1,IVY,wl,wr,bl,br,by,flx2,e12,e32);
             } else if constexpr (rsolver_method_ == MHD_RSolver::hlle_sr) {
-              HLLE_SR(member,eos,m,k,j,is-1,ie+1,IVY,wl,wr,bl,br,by,flx2,e1x2_,e3x2_);
+              HLLE_SR(member,eos,coord,m,k,j,is-1,ie+1,IVY,wl,wr,bl,br,by,flx2,e12,e32);
             } else if constexpr (rsolver_method_ == MHD_RSolver::hlle_gr) {
-              HLLE_GR(member,eos,m,k,j,is-1,ie+1,IVY,wl,wr,bl,br,by,flx2,e1x2_,e3x2_);
+              HLLE_GR(member,eos,coord,m,k,j,is-1,ie+1,IVY,wl,wr,bl,br,by,flx2,e12,e32);
             }
             member.team_barrier();
           }
@@ -264,8 +265,8 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
                 ScrArray2D<Real>::shmem_size(3, ncells1)) * 3;
     auto flx3 = uflx.x3f;
     auto &bz = b0.x3f;
-    auto e2x3_ = e2x3;
-    auto e1x3_ = e1x3;
+    auto e23 = e2x3;
+    auto e13 = e1x3;
 
     par_for_outer("mhd_flux3",DevExeSpace(), scr_size, scr_level, 0, nmb1, js-1, je+1,
       KOKKOS_LAMBDA(TeamMember_t member, const int m, const int j)
@@ -321,19 +322,19 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
           // (IBZ) component of flx = E_{x} = -(v x B)_{x} =  (v3*b2 - v2*b3)
           if (k>(ks-1)) {
             if constexpr (rsolver_method_ == MHD_RSolver::advect) {
-              Advect(member,eos,m,k,j,is-1,ie+1,IVZ,wl,wr,bl,br,bz,flx3,e2x3_,e1x3_);
+              Advect(member,eos,coord,m,k,j,is-1,ie+1,IVZ,wl,wr,bl,br,bz,flx3,e23,e13);
             } else if constexpr (rsolver_method_ == MHD_RSolver::llf) {
-              LLF(member,eos,m,k,j,is-1,ie+1,IVZ,wl,wr,bl,br,bz,flx3,e2x3_,e1x3_);
+              LLF(member,eos,coord,m,k,j,is-1,ie+1,IVZ,wl,wr,bl,br,bz,flx3,e23,e13);
             } else if constexpr (rsolver_method_ == MHD_RSolver::hlle) {
-              HLLE(member,eos,m,k,j,is-1,ie+1,IVZ,wl,wr,bl,br,bz,flx3,e2x3_,e1x3_);
+              HLLE(member,eos,coord,m,k,j,is-1,ie+1,IVZ,wl,wr,bl,br,bz,flx3,e23,e13);
             } else if constexpr (rsolver_method_ == MHD_RSolver::hlld) {
-              HLLD(member,eos,m,k,j,is-1,ie+1,IVZ,wl,wr,bl,br,bz,flx3,e2x3_,e1x3_);
+              HLLD(member,eos,coord,m,k,j,is-1,ie+1,IVZ,wl,wr,bl,br,bz,flx3,e23,e13);
             } else if constexpr (rsolver_method_ == MHD_RSolver::llf_sr) {
-              LLF_SR(member,eos,m,k,j,is-1,ie+1,IVZ,wl,wr,bl,br,bz,flx3,e2x3_,e1x3_);
+              LLF_SR(member,eos,coord,m,k,j,is-1,ie+1,IVZ,wl,wr,bl,br,bz,flx3,e23,e13);
             } else if constexpr (rsolver_method_ == MHD_RSolver::hlle_sr) {
-              HLLE_SR(member,eos,m,k,j,is-1,ie+1,IVZ,wl,wr,bl,br,bz,flx3,e2x3_,e1x3_);
+              HLLE_SR(member,eos,coord,m,k,j,is-1,ie+1,IVZ,wl,wr,bl,br,bz,flx3,e23,e13);
             } else if constexpr (rsolver_method_ == MHD_RSolver::hlle_gr) {
-              HLLE_GR(member,eos,m,k,j,is-1,ie+1,IVZ,wl,wr,bl,br,bz,flx3,e2x3_,e1x3_);
+              HLLE_GR(member,eos,coord,m,k,j,is-1,ie+1,IVZ,wl,wr,bl,br,bz,flx3,e23,e13);
             }
             member.team_barrier();
           }

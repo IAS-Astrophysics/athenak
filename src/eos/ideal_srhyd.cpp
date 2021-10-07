@@ -67,8 +67,8 @@ Real EquationC22(Real z, Real &u_d, Real q, Real r, Real gm1, Real pfloor)
 
 //----------------------------------------------------------------------------------------
 //! \fn void ConsToPrim()
-//! \brief Converts conserved into primitive variables for an ideal gas in nonrelativistic
-//! hydro.  Implementation follows Wolfgang Kastaun's algorithm described in Appendix C of
+//! \brief Converts conserved into primitive variables for an ideal gas in SR hydro.
+//! Implementation follows Wolfgang Kastaun's algorithm described in Appendix C of
 //! Galeazzi et al., PhysRevD, 88, 064009 (2013).  Roots of "master function" (eq. C22) 
 //! found by false position method.
 //!
@@ -109,7 +109,7 @@ void IdealSRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
   Real const tol = 1.0e-12;
   Real const v_sq_max = 1.0 - tol;
 
-  par_for("hyd_con2prim", DevExeSpace(), 0, (nmb-1), 0, (n3-1), 0, (n2-1), 0, (n1-1),
+  par_for("srhyd_con2prim", DevExeSpace(), 0, (nmb-1), 0, (n3-1), 0, (n2-1), 0, (n1-1),
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
       Real& u_d  = cons(m, IDN,k,j,i);
@@ -250,7 +250,7 @@ void IdealSRHydro::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &
   Real gamma_prime = eos_data.gamma/(eos_data.gamma - 1.0); 
   bool &use_e = eos_data.use_e;
 
-  par_for("hyd_prim2cons", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+  par_for("srhyd_prim2cons", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
       Real& u_d  = cons(m, IDN,k,j,i);

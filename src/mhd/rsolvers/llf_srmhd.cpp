@@ -16,7 +16,7 @@ namespace mhd {
 //  \brief The LLF Riemann solver for SR MHD
 
 KOKKOS_INLINE_FUNCTION
-void LLF_SR(TeamMember_t const &member, const EOS_Data &eos,
+void LLF_SR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coord,
      const int m, const int k, const int j,  const int il, const int iu, const int ivx,
      const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr,
      const ScrArray2D<Real> &bl, const ScrArray2D<Real> &br, const DvceArray4D<Real> &bx,
@@ -67,7 +67,7 @@ void LLF_SR(TeamMember_t const &member, const EOS_Data &eos,
     }
 
     // Extract normal magnetic field
-    Real bb1 = bxi(m,k,j,i);
+    Real bb1 = bx(m,k,j,i);
 
     // Calculate 4-magnetic field in left state
     Real b_l[4];
@@ -87,11 +87,11 @@ void LLF_SR(TeamMember_t const &member, const EOS_Data &eos,
 
     // Calculate left wavespeeds
     Real lm_l, lp_l;
-    eos.IdealSRMHDFastSpeeds(rho_l, pgas_l, u_l[1], u_l[0], b_sq_l, &lp_l, &lm_l);
+    eos.IdealSRMHDFastSpeeds(rho_l, pgas_l, u_l[1], u_l[0], b_sq_l, lp_l, lm_l);
 
     // Calculate right wavespeeds
     Real lm_r, lp_r;
-    eos.IdealSRMHDFastSpeeds(rho_r, pgas_r, u_r[1], u_r[0], b_sq_r, &lp_r, &lm_r);
+    eos.IdealSRMHDFastSpeeds(rho_r, pgas_r, u_r[1], u_r[0], b_sq_r, lp_r, lm_r);
 
     // Calculate extremal wavespeeds
     Real lambda_l = fmin(lm_l, lm_r);  // (MB 55)
@@ -145,11 +145,11 @@ void LLF_SR(TeamMember_t const &member, const EOS_Data &eos,
     fr.bz = b_r[3] * u_r[1] - b_r[1] * u_r[3];
 
     // Store results in 3D array of fluxes
-    flx(m,IDN,,k,j,i) = 0.5 * (fl.d  + fl.d  - lambda * (consr.d  - consl.d ));
-    flx(m,IEN,,k,j,i) = 0.5 * (fl.e  + fl.e  - lambda * (consr.e  - consl.e ));
-    flx(m,ivx,,k,j,i) = 0.5 * (fl.mx + fl.mx - lambda * (consr.mx - consl.mx));
-    flx(m,ivy,,k,j,i) = 0.5 * (fl.my + fl.my - lambda * (consr.my - consl.my));
-    flx(m,ivz,,k,j,i) = 0.5 * (fl.mz + fl.mz - lambda * (consr.mz - consl.mz));
+    flx(m,IDN,k,j,i) = 0.5 * (fl.d  + fl.d  - lambda * (consr.d  - consl.d ));
+    flx(m,IEN,k,j,i) = 0.5 * (fl.e  + fl.e  - lambda * (consr.e  - consl.e ));
+    flx(m,ivx,k,j,i) = 0.5 * (fl.mx + fl.mx - lambda * (consr.mx - consl.mx));
+    flx(m,ivy,k,j,i) = 0.5 * (fl.my + fl.my - lambda * (consr.my - consl.my));
+    flx(m,ivz,k,j,i) = 0.5 * (fl.mz + fl.mz - lambda * (consr.mz - consl.mz));
 
     ey(m,k,j,i) = -0.5 * (fl.by + fr.by - lambda * (consr.by - consl.by));
     ez(m,k,j,i) =  0.5 * (fl.bz + fr.bz - lambda * (consr.bz - consl.bz));

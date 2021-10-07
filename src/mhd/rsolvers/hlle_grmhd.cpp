@@ -10,8 +10,10 @@
 //!  - implements HLLE algorithm similar to that of fluxcalc() in step_ch.c in Harm
 //!  - cf. HLLENonTransforming() in hlle_mhd_rel.cpp in Athena++
 
-#include <algorithm>  // max(), min()
 #include <cmath>      // sqrt()
+
+#include "coordinates/cartesian_ks.hpp"
+#include "coordinates/cell_locations.hpp"
 
 namespace mhd {
 
@@ -21,9 +23,8 @@ namespace mhd {
 //
 
 KOKKOS_INLINE_FUNCTION
-void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos,
+void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coord,
      const int m, const int k, const int j, const int il, const int iu, const int ivx,
-     const ScrArray1D<Real> &x1, Real x2, Real x3, Real spin,
      const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr,
      const ScrArray2D<Real> &bl, const ScrArray2D<Real> &br, const DvceArray4D<Real> &bx,
      DvceArray5D<Real> flx, DvceArray4D<Real> ey, DvceArray4D<Real> ez)
@@ -34,13 +35,42 @@ void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos,
   int iby = ((ivx-IVX) + 1)%3;
   int ibz = ((ivx-IVX) + 2)%3;
 
-  const Real gamma_prime = eos.gamma/(eos.gamma - 1.0);
+  const Real gm1 = (eos.gamma - 1.0);
+  const Real gamma_prime = eos.gamma/(gm1);
 
+  int is = coord.mb_indcs.is;
+  int js = coord.mb_indcs.js;
+  int ks = coord.mb_indcs.ks;
   par_for_inner(member, il, iu, [&](const int i)
   {
     // Extract components of metric
+    Real &x1min = coord.mb_size.d_view(m).x1min;
+    Real &x1max = coord.mb_size.d_view(m).x1max;
+    Real &x2min = coord.mb_size.d_view(m).x2min;
+    Real &x2max = coord.mb_size.d_view(m).x2max;
+    Real &x3min = coord.mb_size.d_view(m).x3min;
+    Real &x3max = coord.mb_size.d_view(m).x3max;
+    int nx1 = coord.mb_indcs.nx1;
+    int nx2 = coord.mb_indcs.nx2;
+    int nx3 = coord.mb_indcs.nx3;
+    Real x1v,x2v,x3v;
+    if (ivx == IVX) {
+      x1v = LeftEdgeX  (i-is, nx1, x1min, x1max);
+      x2v = CellCenterX(j-js, nx2, x2min, x2max);
+      x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+    } else if (ivx == IVY) {
+      x1v = CellCenterX(i-is, nx1, x1min, x1max);
+      x2v = LeftEdgeX  (j-js, nx2, x2min, x2max);
+      x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+    } else {
+      x1v = CellCenterX(i-is, nx1, x1min, x1max);
+      x2v = CellCenterX(j-js, nx2, x2min, x2max);
+      x3v = LeftEdgeX  (k-ks, nx3, x3min, x3max);
+    }
+
     Real g_[NMETRIC], gi_[NMETRIC];
-    ComputeMetricAndInverse(x1(i), x2, x3, spin, g_, gi_);
+    ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, false, 
+                            coord.bh_spin, g_, gi_);
     const Real
       &g_00 = g_[I00], &g_01 = g_[I01], &g_02 = g_[I02], &g_03 = g_[I03],
       &g_10 = g_[I01], &g_11 = g_[I11], &g_12 = g_[I12], &g_13 = g_[I13],
@@ -168,8 +198,8 @@ void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos,
                              lp_r, lm_r);
 
     // Calculate extremal wavespeeds
-    Real lambda_l = min(lm_l, lm_r);
-    Real lambda_r = max(lp_l, lp_r);
+    Real lambda_l = fmin(lm_l, lm_r);
+    Real lambda_r = fmax(lp_l, lp_r);
 
     // Calculate difference du =  U_R - U_l in conserved quantities (rho u^0 and T^0_\mu)
     MHDCons1D du;

@@ -12,15 +12,15 @@
 
 namespace mhd {
 
-#define SMALL_NUMBER 1.0e-8
+#define HLLD_SMALL_NUMBER 1.0e-8
 
 //----------------------------------------------------------------------------------------
 //! \fn
 
 KOKKOS_INLINE_FUNCTION
-void HLLD(TeamMember_t const &member, const EOS_Data &eos,
-     const int m, const int k, const int j,  const int il, const int iu,
-     const int ivx, const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr,
+void HLLD(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coord,
+     const int m, const int k, const int j,  const int il, const int iu, const int ivx,
+     const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr,
      const ScrArray2D<Real> &bl, const ScrArray2D<Real> &br, const DvceArray4D<Real> &bx,
      const DvceArray5D<Real> flx, DvceArray4D<Real> ey, DvceArray4D<Real> ez)
 {
@@ -166,7 +166,7 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
 
       // ul* - eqn (39) of M&K
       ulst.mx = ulst.d * spd[2];
-      if (fabs(ul.d*sdl*sdml-bxsq) < (SMALL_NUMBER)*ptst) {
+      if (fabs(ul.d*sdl*sdml-bxsq) < (HLLD_SMALL_NUMBER)*ptst) {
         // Degenerate case
         ulst.my = ulst.d * wl_ivy;
         ulst.mz = ulst.d * wl_ivz;
@@ -194,7 +194,7 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
 
       // ur* - eqn (39) of M&K
       urst.mx = urst.d * spd[2];
-      if (fabs(ur.d*sdr*sdmr - bxsq) < (SMALL_NUMBER)*ptst) {
+      if (fabs(ur.d*sdr*sdmr - bxsq) < (HLLD_SMALL_NUMBER)*ptst) {
         // Degenerate case
         urst.my = urst.d * wr_ivy;
         urst.mz = urst.d * wr_ivz;
@@ -220,7 +220,7 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
       urst.e = (sdr*ur.e - ptr*wr_ivx + ptst*spd[2] +
                 bxi*(wr_ivx*bxi + (wr_ivy*ur.by + wr_ivz*ur.bz) - vbstr))*sdmr_inv;
       // ul** and ur** - if Bx is near zero, same as *-states
-      if (0.5*bxsq < (SMALL_NUMBER)*ptst) {
+      if (0.5*bxsq < (HLLD_SMALL_NUMBER)*ptst) {
         uldst = ulst;
         urdst = urst;
       } else {
@@ -463,7 +463,7 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
       ulst.mx = mxhll; // eqn. (24) of Mignone
 
       Real tmp = (spd[0]-spd[1])*(spd[0]-spd[3]);
-      if (fabs(spd[0]-spd[1]) < (SMALL_NUMBER)*iso_cs) {
+      if (fabs(spd[0]-spd[1]) < (HLLD_SMALL_NUMBER)*iso_cs) {
         // degenerate case described below eqn. (39)
         ulst.my = ul.my;
         ulst.mz = ul.mz;
@@ -484,7 +484,7 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
       urst.mx = mxhll; // eqn. (24) of Mignone
 
       tmp = (spd[4]-spd[1])*(spd[4]-spd[3]);
-      if (fabs(spd[4]-spd[3]) < (SMALL_NUMBER)*iso_cs) {
+      if (fabs(spd[4]-spd[3]) < (HLLD_SMALL_NUMBER)*iso_cs) {
         // degenerate case described below eqn. (39)
         urst.my = ur.my;
         urst.mz = ur.mz;

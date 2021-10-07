@@ -97,7 +97,7 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
   Real const tol = 1.0e-12;
   Real const v_sq_max = 1.0 - tol;
 
-  par_for("hyd_con2prim", DevExeSpace(), 0, (nmb-1), 0, (n3-1), 0, (n2-1), 0, (n1-1),
+  par_for("grhyd_con2prim", DevExeSpace(), 0, (nmb-1), 0, (n3-1), 0, (n2-1), 0, (n1-1),
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
       Real& u_d  = cons(m,IDN,k,j,i);
@@ -308,7 +308,7 @@ void IdealGRHydro::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &
   Real gamma_prime = eos_data.gamma/(eos_data.gamma - 1.0);
   bool &use_e = eos_data.use_e;
 
-  par_for("hyd_prim2cons", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+  par_for("grhyd_prim2cons", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
       // Extract components of metric

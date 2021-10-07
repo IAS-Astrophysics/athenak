@@ -46,7 +46,7 @@ struct EOS_Data
     Real ct2 = by*by + bz*bz;
     Real qsq = bx*bx + ct2 + asq;
     Real tmp = bx*bx + ct2 - asq;
-    return sqrt(0.5*(qsq + std::sqrt(tmp*tmp + 4.0*asq*ct2))/d);
+    return sqrt(0.5*(qsq + sqrt(tmp*tmp + 4.0*asq*ct2))/d);
   }
 
   // inlined fast magnetosonic speed function for isothermal EOS in nonrelativistic mhd
@@ -57,7 +57,7 @@ struct EOS_Data
     Real ct2 = by*by + bz*bz;
     Real qsq = bx*bx + ct2 + asq;
     Real tmp = bx*bx + ct2 - asq;
-    return sqrt(0.5*(qsq + std::sqrt(tmp*tmp + 4.0*asq*ct2))/d);
+    return sqrt(0.5*(qsq + sqrt(tmp*tmp + 4.0*asq*ct2))/d);
   }
 
   // inlined maximal wave speeds function for ideal gas in SR hydro
@@ -68,15 +68,13 @@ struct EOS_Data
   //   lor: Lorentz factor \gamma
   // Outputs:
   //   l_p/m: most positive/negative wavespeed
-  // References:
-  //   Del Zanna & Bucciantini, A&A 390, 1177 (2002)
-  //   Mignone & Bodo 2005, MNRAS 364 126 (MB).
+  // Reference:
   //   Del Zanna et al, A&A 473, 11 (2007) (eq. 76)
   KOKKOS_INLINE_FUNCTION
   void IdealSRHydroSoundSpeeds(const Real d, const Real p, const Real ux, const Real lor,
                                Real& l_p, Real& l_m)
   const {
-    Real cs2 = gamma*p / (d + gamma*p/(gamma - 1.0));  // (MB 4)
+    Real cs2 = gamma*p / (d + gamma*p/(gamma - 1.0));  // (DZB 73)
     Real v2 = 1.0 - 1.0/(lor*lor);
     auto const p1 = (ux/lor) * (1.0 - cs2);
     auto const tmp = sqrt(cs2 * ((1.0-v2*cs2) - p1*(ux/lor))) / lor;
@@ -85,6 +83,30 @@ struct EOS_Data
     l_p = (p1 + tmp) * invden;
     l_m = (p1 - tmp) * invden;
   }
+
+  // inlined maximal wave speeds function for ideal gas in SR MHD
+  // arguments same or SR hydro version, with the addition of b_sq = b_\mu b_\mu
+  // Reference:
+  //   Del Zanna et al, A&A 473, 11 (2007) (eq. 76)
+  KOKKOS_INLINE_FUNCTION
+  void IdealSRMHDFastSpeeds(const Real d, const Real p, const Real ux, const Real lor,
+                            const Real b_sq, Real& l_p, Real& l_m)
+  const {
+    // Calculate comoving fast magnetosonic speed
+    Real w = d + gamma*p/(gamma - 1.0);
+    Real cs_sq = gamma*p/w;                            // (DZB 73)
+    Real va_sq = b_sq / (b_sq + w);                    // (DZB 73)
+    Real cms_sq = cs_sq + va_sq - cs_sq * va_sq;       // (DZB 72)
+
+    Real v2 = 1.0 - 1.0/(lor*lor);
+    auto const p1 = (ux/lor) * (1.0 - cms_sq);
+    auto const tmp = sqrt(cms_sq * ((1.0-v2*cms_sq) - p1*(ux/lor))) / lor;
+    auto const invden = 1.0/(1.0 - v2*cms_sq);
+
+    l_p = (p1 + tmp) * invden;
+    l_m = (p1 - tmp) * invden;
+  }
+
 
   // inlined maximal wave speeds function for ideal gas in GR hydro
   // Inputs:

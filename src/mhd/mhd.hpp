@@ -22,7 +22,9 @@ class SourceTerms;
 class Driver;
 
 // constants that enumerate MHD Riemann Solver options
-enum class MHD_RSolver {advect, llf, hlle, hlld, roe};
+enum class MHD_RSolver {advect, llf, hlle, hlld, roe,   // non-relativistic
+                        llf_sr, hlle_sr,                // SR
+                        hlle_gr};                       // GR
 
 //----------------------------------------------------------------------------------------
 //! \struct MHDTaskIDs
