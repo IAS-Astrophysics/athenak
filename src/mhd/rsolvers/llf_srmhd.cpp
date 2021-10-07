@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file llf_srmhd.cpp
-//! \brief Implements local Lax-Friedrichs Riemann solver for special relativistic MHD.
+//! \brief Local Lax-Friedrichs (LLF) Riemann solver for special relativistic MHD.
 
 #include <algorithm>  // max(), min()
 #include <cmath>      // sqrt()
@@ -16,7 +16,7 @@ namespace mhd {
 //  \brief The LLF Riemann solver for SR MHD
 
 KOKKOS_INLINE_FUNCTION
-void LLF(TeamMember_t const &member, const EOS_Data &eos,
+void LLF_SR(TeamMember_t const &member, const EOS_Data &eos,
      const int m, const int k, const int j,  const int il, const int iu, const int ivx,
      const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr,
      const ScrArray2D<Real> &bl, const ScrArray2D<Real> &br, const DvceArray4D<Real> &bx,
@@ -26,58 +26,48 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos,
   int ivz = IVX + ((ivx-IVX)+2)%3;
   int iby = ((ivx-IVX) + 1)%3;
   int ibz = ((ivx-IVX) + 2)%3;
-  Real igm1 = 1.0/(eos.gamma - 1.0);
-  Real iso_cs = eos.iso_cs;
-
+  const Real gm1 = (eos.gamma - 1.0);
+  const Real gamma_prime = eos.gamma/gm1;
 
   par_for_inner(member, il, iu, [&](const int i)
   {
-    //--- Step 1.  Create local references for L/R states (helps compiler vectorize)
-
-
-#pragma omp simd simdlen(SIMD_WIDTH)
-    for (int i=il; i<=iu; ++i) {
-      bb_normal(i) = bb(k,j,i);
-    }
-
-  // Calculate cyclic permutations of indices
-
-  // Extract ratio of specific heats
-  const Real gamma_adi = pmb->peos->GetGamma();
-
-  // Go through each interface
-#pragma omp simd simdlen(SIMD_WIDTH)
-  for (int i=il; i<=iu; ++i) {
     // Extract left primitives
-    Real rho_l = prim_l(IDN,i);
-    Real pgas_l = prim_l(IPR,i);
-    Real ux_l = prim_l(ivx,i);
-    Real uy_l = prim_l(ivy,i);
-    Real uz_l = prim_l(ivz,i);
+    Real rho_l = wl(IDN,i);
+    Real ux_l = wl(ivx,i);
+    Real uy_l = wl(ivy,i);
+    Real uz_l = wl(ivz,i);
     Real u_l[4];
-    u_l[0] = std::sqrt(1.0 + SQR(ux_l) + SQR(uy_l) + SQR(uz_l));
+    u_l[0] = sqrt(1.0 + SQR(ux_l) + SQR(uy_l) + SQR(uz_l));
     u_l[1] = ux_l;
     u_l[2] = uy_l;
     u_l[3] = uz_l;
-    Real bb2_l = prim_l(IBY,i);
-    Real bb3_l = prim_l(IBZ,i);
+    Real bb2_l = bl(iby,i);
+    Real bb3_l = bl(ibz,i);
 
     // Extract right primitives
-    Real rho_r = prim_r(IDN,i);
-    Real pgas_r = prim_r(IPR,i);
-    Real ux_r = prim_r(ivx,i);
-    Real uy_r = prim_r(ivy,i);
-    Real uz_r = prim_r(ivz,i);
+    Real rho_r = wr(IDN,i);
+    Real ux_r = wr(ivx,i);
+    Real uy_r = wr(ivy,i);
+    Real uz_r = wr(ivz,i);
     Real u_r[4];
-    u_r[0] = std::sqrt(1.0 + SQR(ux_r) + SQR(uy_r) + SQR(uz_r));
+    u_r[0] = sqrt(1.0 + SQR(ux_r) + SQR(uy_r) + SQR(uz_r));
     u_r[1] = ux_r;
     u_r[2] = uy_r;
     u_r[3] = uz_r;
-    Real bb2_r = prim_r(IBY,i);
-    Real bb3_r = prim_r(IBZ,i);
+    Real bb2_r = br(iby,i);
+    Real bb3_r = br(ibz,i);
+
+    Real pgas_l, pgas_r;
+    if (eos.use_e) {
+      pgas_l = gm1*wl(IEN,i);
+      pgas_r = gm1*wr(IEN,i);
+    } else {
+      pgas_l = wl(IDN,i)*wl(ITM,i);
+      pgas_r = wr(IDN,i)*wr(ITM,i);
+    }
 
     // Extract normal magnetic field
-    Real bb1 = bb_normal(i);
+    Real bb1 = bxi(m,k,j,i);
 
     // Calculate 4-magnetic field in left state
     Real b_l[4];
@@ -96,80 +86,77 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos,
     Real b_sq_r = -SQR(b_r[0]) + SQR(b_r[1]) + SQR(b_r[2]) + SQR(b_r[3]);
 
     // Calculate left wavespeeds
-    Real wgas_l = rho_l + gamma_adi / (gamma_adi - 1.0) * pgas_l;
-    Real lambda_m_l, lambda_p_l;
-    pmb->peos->FastMagnetosonicSpeedsGR(wgas_l, pgas_l, u_l[0], u_l[1], b_sq_l, -1.0, 0.0,
-                                        1.0, &lambda_p_l, &lambda_m_l);
+    Real lm_l, lp_l;
+    eos.IdealSRMHDFastSpeeds(rho_l, pgas_l, u_l[1], u_l[0], b_sq_l, &lp_l, &lm_l);
 
     // Calculate right wavespeeds
-    Real wgas_r = rho_r + gamma_adi / (gamma_adi - 1.0) * pgas_r;
-    Real lambda_m_r, lambda_p_r;
-    pmb->peos->FastMagnetosonicSpeedsGR(wgas_r, pgas_r, u_r[0], u_r[1], b_sq_r, -1.0, 0.0,
-                                        1.0, &lambda_p_r, &lambda_m_r);
+    Real lm_r, lp_r;
+    eos.IdealSRMHDFastSpeeds(rho_r, pgas_r, u_r[1], u_r[0], b_sq_r, &lp_r, &lm_r);
 
     // Calculate extremal wavespeeds
-    Real lambda_l = std::min(lambda_m_l, lambda_m_r);  // (MB 55)
-    Real lambda_r = std::max(lambda_p_l, lambda_p_r);  // (MB 55)
-    Real lambda = std::max(lambda_r, -lambda_l);
+    Real lambda_l = fmin(lm_l, lm_r);  // (MB 55)
+    Real lambda_r = fmax(lp_l, lp_r);  // (MB 55)
+    Real lambda = fmax(lambda_r, -lambda_l);
 
     // Calculate conserved quantities in L region (MUB 8)
-    Real cons_l[NWAVE];
+    MHDCons1D consl;
+    Real wgas_l = rho_l + gamma_prime * pgas_l;
     Real wtot_l = wgas_l + b_sq_l;
     Real ptot_l = pgas_l + 0.5*b_sq_l;
-    cons_l[IDN] = rho_l * u_l[0];
-    cons_l[IEN] = wtot_l * u_l[0] * u_l[0] - b_l[0] * b_l[0] - ptot_l;
-    cons_l[ivx] = wtot_l * u_l[1] * u_l[0] - b_l[1] * b_l[0];
-    cons_l[ivy] = wtot_l * u_l[2] * u_l[0] - b_l[2] * b_l[0];
-    cons_l[ivz] = wtot_l * u_l[3] * u_l[0] - b_l[3] * b_l[0];
-    cons_l[IBY] = b_l[2] * u_l[0] - b_l[0] * u_l[2];
-    cons_l[IBZ] = b_l[3] * u_l[0] - b_l[0] * u_l[3];
+    consl.d  = rho_l * u_l[0];
+    consl.e  = wtot_l * u_l[0] * u_l[0] - b_l[0] * b_l[0] - ptot_l;
+    consl.mx = wtot_l * u_l[1] * u_l[0] - b_l[1] * b_l[0];
+    consl.my = wtot_l * u_l[2] * u_l[0] - b_l[2] * b_l[0];
+    consl.mz = wtot_l * u_l[3] * u_l[0] - b_l[3] * b_l[0];
+    consl.by = b_l[2] * u_l[0] - b_l[0] * u_l[2];
+    consl.bz = b_l[3] * u_l[0] - b_l[0] * u_l[3];
 
     // Calculate fluxes in L region (MUB 15)
-    Real flux_l[NWAVE];
-    flux_l[IDN] = rho_l * u_l[1];
-    flux_l[IEN] = wtot_l * u_l[0] * u_l[1] - b_l[0] * b_l[1];
-    flux_l[ivx] = wtot_l * u_l[1] * u_l[1] - b_l[1] * b_l[1] + ptot_l;
-    flux_l[ivy] = wtot_l * u_l[2] * u_l[1] - b_l[2] * b_l[1];
-    flux_l[ivz] = wtot_l * u_l[3] * u_l[1] - b_l[3] * b_l[1];
-    flux_l[IBY] = b_l[2] * u_l[1] - b_l[1] * u_l[2];
-    flux_l[IBZ] = b_l[3] * u_l[1] - b_l[1] * u_l[3];
+    MHDCons1D fl;
+    fl.d  = rho_l * u_l[1];
+    fl.e  = wtot_l * u_l[0] * u_l[1] - b_l[0] * b_l[1];
+    fl.mx = wtot_l * u_l[1] * u_l[1] - b_l[1] * b_l[1] + ptot_l;
+    fl.my = wtot_l * u_l[2] * u_l[1] - b_l[2] * b_l[1];
+    fl.mz = wtot_l * u_l[3] * u_l[1] - b_l[3] * b_l[1];
+    fl.by = b_l[2] * u_l[1] - b_l[1] * u_l[2];
+    fl.bz = b_l[3] * u_l[1] - b_l[1] * u_l[3];
 
     // Calculate conserved quantities in R region (MUB 8)
-    Real cons_r[NWAVE];
+    MHDCons1D consr;
+    Real wgas_r = rho_r + gamma_prime * pgas_r;
     Real wtot_r = wgas_r + b_sq_r;
     Real ptot_r = pgas_r + 0.5*b_sq_r;
-    cons_r[IDN] = rho_r * u_r[0];
-    cons_r[IEN] = wtot_r * u_r[0] * u_r[0] - b_r[0] * b_r[0] - ptot_r;
-    cons_r[ivx] = wtot_r * u_r[1] * u_r[0] - b_r[1] * b_r[0];
-    cons_r[ivy] = wtot_r * u_r[2] * u_r[0] - b_r[2] * b_r[0];
-    cons_r[ivz] = wtot_r * u_r[3] * u_r[0] - b_r[3] * b_r[0];
-    cons_r[IBY] = b_r[2] * u_r[0] - b_r[0] * u_r[2];
-    cons_r[IBZ] = b_r[3] * u_r[0] - b_r[0] * u_r[3];
+    consr.d  = rho_r * u_r[0];
+    consr.e  = wtot_r * u_r[0] * u_r[0] - b_r[0] * b_r[0] - ptot_r;
+    consr.mx = wtot_r * u_r[1] * u_r[0] - b_r[1] * b_r[0];
+    consr.my = wtot_r * u_r[2] * u_r[0] - b_r[2] * b_r[0];
+    consr.mz = wtot_r * u_r[3] * u_r[0] - b_r[3] * b_r[0];
+    consr.by = b_r[2] * u_r[0] - b_r[0] * u_r[2];
+    consr.bz = b_r[3] * u_r[0] - b_r[0] * u_r[3];
 
     // Calculate fluxes in R region (MUB 15)
-    Real flux_r[NWAVE];
-    flux_r[IDN] = rho_r * u_r[1];
-    flux_r[IEN] = wtot_r * u_r[0] * u_r[1] - b_r[0] * b_r[1];
-    flux_r[ivx] = wtot_r * u_r[1] * u_r[1] - b_r[1] * b_r[1] + ptot_r;
-    flux_r[ivy] = wtot_r * u_r[2] * u_r[1] - b_r[2] * b_r[1];
-    flux_r[ivz] = wtot_r * u_r[3] * u_r[1] - b_r[3] * b_r[1];
-    flux_r[IBY] = b_r[2] * u_r[1] - b_r[1] * u_r[2];
-    flux_r[IBZ] = b_r[3] * u_r[1] - b_r[1] * u_r[3];
+    MHDCons1D fr;
+    fr.d  = rho_r * u_r[1];
+    fr.e  = wtot_r * u_r[0] * u_r[1] - b_r[0] * b_r[1];
+    fr.mx = wtot_r * u_r[1] * u_r[1] - b_r[1] * b_r[1] + ptot_r;
+    fr.my = wtot_r * u_r[2] * u_r[1] - b_r[2] * b_r[1];
+    fr.mz = wtot_r * u_r[3] * u_r[1] - b_r[3] * b_r[1];
+    fr.by = b_r[2] * u_r[1] - b_r[1] * u_r[2];
+    fr.bz = b_r[3] * u_r[1] - b_r[1] * u_r[3];
 
-    // Set conserved quantities in GR
-    if (GENERAL_RELATIVITY) {
-      for (int n = 0; n < NWAVE; ++n) {
-        cons(n,i) = 0.5 * (cons_r[n] + cons_l[n] + (flux_l[n] - flux_r[n]) / lambda);
-      }
-    }
+    // Store results in 3D array of fluxes
+    flx(m,IDN,,k,j,i) = 0.5 * (fl.d  + fl.d  - lambda * (consr.d  - consl.d ));
+    flx(m,IEN,,k,j,i) = 0.5 * (fl.e  + fl.e  - lambda * (consr.e  - consl.e ));
+    flx(m,ivx,,k,j,i) = 0.5 * (fl.mx + fl.mx - lambda * (consr.mx - consl.mx));
+    flx(m,ivy,,k,j,i) = 0.5 * (fl.my + fl.my - lambda * (consr.my - consl.my));
+    flx(m,ivz,,k,j,i) = 0.5 * (fl.mz + fl.mz - lambda * (consr.mz - consl.mz));
 
-    // Set fluxes
-    for (int n = 0; n < NHYDRO; ++n) {
-      flux(n,k,j,i) = 0.5 * (flux_l[n] + flux_r[n] - lambda * (cons_r[n] - cons_l[n]));
-    }
-    ey(k,j,i) = -0.5 * (flux_l[IBY] + flux_r[IBY] - lambda * (cons_r[IBY] - cons_l[IBY]));
-    ez(k,j,i) = 0.5 * (flux_l[IBZ] + flux_r[IBZ] - lambda * (cons_r[IBZ] - cons_l[IBZ]));
-  }
+    ey(m,k,j,i) = -0.5 * (fl.by + fr.by - lambda * (consr.by - consl.by));
+    ez(m,k,j,i) =  0.5 * (fl.bz + fr.bz - lambda * (consr.bz - consl.bz));
+
+    // We evolve tau = E - D
+    flx(m,IEN,k,j,i) -= flx(m,IDN,k,j,i);
+  });
 
   return;
 }

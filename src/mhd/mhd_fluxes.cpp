@@ -27,8 +27,10 @@
 #include "mhd/rsolvers/advect_mhd.cpp"
 #include "mhd/rsolvers/llf_mhd.cpp"
 #include "mhd/rsolvers/hlle_mhd.cpp"
-//#include "mhd/rsolvers/hlle_grmhd.cpp"
 #include "mhd/rsolvers/hlld.cpp"
+#include "mhd/rsolvers/llf_srmhd.cpp"
+#include "mhd/rsolvers/hlle_srmhd.cpp"
+#include "mhd/rsolvers/hlle_grmhd.cpp"
 //#include "mhd/rsolvers/roe_mhd.cpp"
 
 namespace mhd {
@@ -120,9 +122,12 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
         HLLE(member,eos,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e3x1_,e2x1_);
       } else if constexpr (rsolver_method_ == MHD_RSolver::hlld) {
         HLLD(member,eos,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e3x1_,e2x1_);
-//        case MHD_RSolver::roe:
-//          Roe(member, eos, is, ie+1, IVX, wl, wr, uflux);
-//          break;
+      } else if constexpr (rsolver_method_ == MHD_RSolver::llf_sr) {
+        LLF_SR(member,eos,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e3x1_,e2x1_);
+      } else if constexpr (rsolver_method_ == MHD_RSolver::hlle_sr) {
+        HLLE_SR(member,eos,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e3x1_,e2x1_);
+      } else if constexpr (rsolver_method_ == MHD_RSolver::hlle_gr) {
+        HLLE_GR(member,eos,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e3x1_,e2x1_);
       }
       member.team_barrier();
 
@@ -222,9 +227,12 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
               HLLE(member,eos,m,k,j,is-1,ie+1,IVY,wl,wr,bl,br,by,flx2,e1x2_,e3x2_);
             } else if constexpr (rsolver_method_ == MHD_RSolver::hlld) {
               HLLD(member,eos,m,k,j,is-1,ie+1,IVY,wl,wr,bl,br,by,flx2,e1x2_,e3x2_);
-//              case MHD_RSolver::roe:
-//                Roe(member, eos, is, ie, IVY, wl, wr, uf);
-//                break;
+            } else if constexpr (rsolver_method_ == MHD_RSolver::llf_sr) {
+              LLF_SR(member,eos,m,k,j,is-1,ie+1,IVY,wl,wr,bl,br,by,flx2,e1x2_,e3x2_);
+            } else if constexpr (rsolver_method_ == MHD_RSolver::hlle_sr) {
+              HLLE_SR(member,eos,m,k,j,is-1,ie+1,IVY,wl,wr,bl,br,by,flx2,e1x2_,e3x2_);
+            } else if constexpr (rsolver_method_ == MHD_RSolver::hlle_gr) {
+              HLLE_GR(member,eos,m,k,j,is-1,ie+1,IVY,wl,wr,bl,br,by,flx2,e1x2_,e3x2_);
             }
             member.team_barrier();
           }
@@ -320,9 +328,12 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage)
               HLLE(member,eos,m,k,j,is-1,ie+1,IVZ,wl,wr,bl,br,bz,flx3,e2x3_,e1x3_);
             } else if constexpr (rsolver_method_ == MHD_RSolver::hlld) {
               HLLD(member,eos,m,k,j,is-1,ie+1,IVZ,wl,wr,bl,br,bz,flx3,e2x3_,e1x3_);
-//              case MHD_RSolver::roe:
-//                Roe(member, eos, is, ie, IVZ, wl, wr, uf);
-//                break;
+            } else if constexpr (rsolver_method_ == MHD_RSolver::llf_sr) {
+              LLF_SR(member,eos,m,k,j,is-1,ie+1,IVZ,wl,wr,bl,br,bz,flx3,e2x3_,e1x3_);
+            } else if constexpr (rsolver_method_ == MHD_RSolver::hlle_sr) {
+              HLLE_SR(member,eos,m,k,j,is-1,ie+1,IVZ,wl,wr,bl,br,bz,flx3,e2x3_,e1x3_);
+            } else if constexpr (rsolver_method_ == MHD_RSolver::hlle_gr) {
+              HLLE_GR(member,eos,m,k,j,is-1,ie+1,IVZ,wl,wr,bl,br,bz,flx3,e2x3_,e1x3_);
             }
             member.team_barrier();
           }
@@ -362,5 +373,8 @@ template TaskStatus MHD::CalcFluxes<MHD_RSolver::advect>(Driver *pdriver, int st
 template TaskStatus MHD::CalcFluxes<MHD_RSolver::llf>(Driver *pdriver, int stage);
 template TaskStatus MHD::CalcFluxes<MHD_RSolver::hlle>(Driver *pdriver, int stage);
 template TaskStatus MHD::CalcFluxes<MHD_RSolver::hlld>(Driver *pdriver, int stage);
+template TaskStatus MHD::CalcFluxes<MHD_RSolver::llf_sr>(Driver *pdriver, int stage);
+template TaskStatus MHD::CalcFluxes<MHD_RSolver::hlle_sr>(Driver *pdriver, int stage);
+template TaskStatus MHD::CalcFluxes<MHD_RSolver::hlle_gr>(Driver *pdriver, int stage);
 
 } // namespace mhd

@@ -16,6 +16,8 @@
 #include "coordinates/cartesian_ks.hpp"
 #include "coordinates/cell_locations.hpp"
 
+namespace hydro {
+
 //----------------------------------------------------------------------------------------
 //! \fn void HLLE_GR
 //! \brief
@@ -216,3 +218,5 @@ void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &c
 
   return;
 }
+
+} // namespace hydro

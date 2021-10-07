@@ -14,6 +14,8 @@
 #include "eos/eos.hpp"
 #include "mhd/mhd.hpp"
 
+namespace mhd {
+
 //----------------------------------------------------------------------------------------
 //! \fn void HLLE
 //  \brief The HLLE Riemann solver for hydrodynamics (both ideal gas and isothermal)
@@ -181,3 +183,5 @@ void HLLE(TeamMember_t const &member, const EOS_Data &eos,
 
   return;
 }
+
+} // namespace mhd

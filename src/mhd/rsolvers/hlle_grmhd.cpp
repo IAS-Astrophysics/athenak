@@ -13,10 +13,7 @@
 #include <algorithm>  // max(), min()
 #include <cmath>      // sqrt()
 
-#include "athena.hpp"
-#include "mesh/mesh.hpp"
-#include "eos/eos.hpp"
-#include "coordinates/cartesian_ks.hpp"
+namespace mhd {
 
 //----------------------------------------------------------------------------------------
 //! \fn void HLLE_GR
@@ -73,7 +70,6 @@ void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos,
 
     // Extract left primitives
     const Real &rho_l  = wl(IDN,i);
-    const Real &pgas_l = wl(IPR,i);
     const Real &uu1_l  = wl(ivx,i);
     const Real &uu2_l  = wl(ivy,i);
     const Real &uu3_l  = wl(ivz,i);
@@ -83,13 +79,21 @@ void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos,
 
     // Extract right primitives
     const Real &rho_r  = wr(IDN,i);
-    const Real &pgas_r = wr(IPR,i);
     const Real &uu1_r  = wr(ivx,i);
     const Real &uu2_r  = wr(ivy,i);
     const Real &uu3_r  = wr(ivz,i);
     const Real &bb2_r  = bx(m,k,j,i);
     const Real &bb3_r  = br(iby,i);
     const Real &bb1_r  = br(ibz,i);
+
+    Real pgas_l, pgas_r;
+    if (eos.use_e) {
+      pgas_l = gm1*wl(IEN,i);
+      pgas_r = gm1*wr(IEN,i);
+    } else {
+      pgas_l = wl(IDN,i)*wl(ITM,i);
+      pgas_r = wr(IDN,i)*wr(ITM,i);
+    }
 
     // Calculate 4-velocity in left state
     Real ucon_l[4], ucov_l[4];
@@ -155,15 +159,13 @@ void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos,
 
     // Calculate wavespeeds in left state
     Real lp_l, lm_l;
-    Real wgas_l = rho_l + gamma_prime * pgas_l;
-    eos.FastSpeedsGR(wgas_l, pgas_l, ucon_l[0], ucon_l[IVX], b_sq_l,
-                     g00, g0i, gii, lp_l, lm_l);
+    eos.IdealGRMHDFastSpeeds(rho_l, pgas_l, ucon_l[1], ucon_l[0], b_sq_l, g00, g0i, gii,
+                             lp_l, lm_l);
 
     // Calculate wavespeeds in right state
     Real lp_r, lm_r;
-    Real wgas_r = rho_r + gamma_prime * pgas_r;
-    eos.FastSpeedsGR(wgas_r, pgas_r, ucon_r[0], ucon_r[IVX], b_sq_r,
-                     g00, g0i, gii, lp_r, lm_r);
+    eos.IdealGRMHDFastSpeeds(rho_r, pgas_r, ucon_r[1], ucon_r[0], b_sq_r, g00, g0i, gii,
+                             lp_r, lm_r);
 
     // Calculate extremal wavespeeds
     Real lambda_l = min(lm_l, lm_r);
@@ -171,6 +173,7 @@ void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos,
 
     // Calculate difference du =  U_R - U_l in conserved quantities (rho u^0 and T^0_\mu)
     MHDCons1D du;
+    Real wgas_r = rho_r + gamma_prime * pgas_r;
     Real wtot_r = wgas_r + b_sq_r;
     Real ptot_r = pgas_r + 0.5*b_sq_r;
     Real qa = wtot_r * ucon_r[0];
@@ -183,6 +186,7 @@ void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos,
     du.bz = bcon_r[IVZ] * ucon_r[0] - bcon_r[0] * ucon_r[IVZ];
 
 
+    Real wgas_l = rho_l + gamma_prime * pgas_l;
     Real wtot_l = wgas_l + b_sq_l;
     Real ptot_l = pgas_l + 0.5*b_sq_l;
     Real qb = wtot_l * ucon_l[0];
@@ -246,8 +250,13 @@ void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos,
     flx(m,IEN,k,j,i) = flux_interface->e;
 
     ey(m,k,j,i) = -flux_interface->by;
-    ez(m,k,j,i) = flux_interface->bz;
+    ez(m,k,j,i) =  flux_interface->bz;
+
+    // We evolve tau = E - D
+    flx(m,IEN,k,j,i) -= flx(m,IDN,k,j,i);
   });
 
   return;
 }
+
+} // namespace mhd

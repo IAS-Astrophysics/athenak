@@ -114,13 +114,13 @@ void HLLE_SR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &c
 
     // Calculate fluxes in HLL region (MB 11)
     HydCons1D flux_hll;
-    qa = lambda_r*lambda_l;
-    qb = lambda_r - lambda_l;
-    flux_hll.d  = (lambda_r*fl.d  - lambda_l*fr.d  + qa*du.d ) / qb;
-    flux_hll.mx = (lambda_r*fl.mx - lambda_l*fr.mx + qa*du.mx) / qb;
-    flux_hll.my = (lambda_r*fl.my - lambda_l*fr.my + qa*du.my) / qb;
-    flux_hll.mz = (lambda_r*fl.mz - lambda_l*fr.mz + qa*du.mz) / qb;
-    flux_hll.e  = (lambda_r*fl.e  - lambda_l*fr.e  + qa*du.e ) / qb;
+    qa = lambda_r * lambda_l;
+    qb = 1.0/(lambda_r - lambda_l);
+    flux_hll.d  = (lambda_r*fl.d  - lambda_l*fr.d  + qa*du.d ) * qb;
+    flux_hll.mx = (lambda_r*fl.mx - lambda_l*fr.mx + qa*du.mx) * qb;
+    flux_hll.my = (lambda_r*fl.my - lambda_l*fr.my + qa*du.my) * qb;
+    flux_hll.mz = (lambda_r*fl.mz - lambda_l*fr.mz + qa*du.mz) * qb;
+    flux_hll.e  = (lambda_r*fl.e  - lambda_l*fr.e  + qa*du.e ) * qb;
 
     // Determine region of wavefan
     HydCons1D *flux_interface;
