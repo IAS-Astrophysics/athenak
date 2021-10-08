@@ -13,7 +13,12 @@
 #include "driver/driver.hpp"
 #include "srcterms/srcterms.hpp"
 #include "diffusion/resistivity.hpp"
+#include "eos/eos.hpp"
 #include "mhd.hpp"
+
+#include "coordinates/coordinates.hpp"
+#include "coordinates/cartesian_ks.hpp"
+#include "coordinates/cell_locations.hpp"
 
 namespace mhd {
 //----------------------------------------------------------------------------------------
@@ -27,6 +32,8 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage)
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
   int nmb1 = pmy_pack->nmb_thispack - 1;
+  auto &eos = pmy_pack->pmhd->peos->eos_data;
+  auto coord = pmy_pack->coord.coord_data;
 
   //---- 1-D problem:
   //  copy face-centered E-fields to edges and return.
@@ -56,15 +63,82 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage)
   if (pmy_pack->pmesh->two_d) {
     // Compute cell-centered E3 = -(v X B) = VyBx-VxBy
     auto w0_ = w0;
-    auto b0_ = bcc0;
-    auto e3_cc_ = e3_cc;
-    par_for("e_cc_2d", DevExeSpace(), 0, nmb1, js-1, je+1, is-1, ie+1,
-      KOKKOS_LAMBDA(int m, int j, int i)
-      {
-        e3_cc_(m,ks,j,i) = w0_(m,IVY,ks,j,i)*b0_(m,IBX,ks,j,i) -
-                           w0_(m,IVX,ks,j,i)*b0_(m,IBY,ks,j,i);
-      }
-    );
+    auto bcc_ = bcc0;
+    auto e3cc_ = e3_cc;
+
+    // compute cell-centered EMF in GR MHD
+    if (is_general_relativistic) {
+      par_for("e_cc_2d", DevExeSpace(), 0, nmb1, js-1, je+1, is-1, ie+1,
+        KOKKOS_LAMBDA(int m, int j, int i)
+        {
+          // Extract components of metric
+          Real &x1min = coord.mb_size.d_view(m).x1min;
+          Real &x1max = coord.mb_size.d_view(m).x1max;
+          int nx1 = coord.mb_indcs.nx1;
+          Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+
+          Real &x2min = coord.mb_size.d_view(m).x2min;
+          Real &x2max = coord.mb_size.d_view(m).x2max;
+          int nx2 = coord.mb_indcs.nx2;
+          Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+
+          Real &x3min = coord.mb_size.d_view(m).x3min;
+          Real &x3max = coord.mb_size.d_view(m).x3max;
+          int nx3 = coord.mb_indcs.nx3;
+          Real x3v = CellCenterX(0, nx3, x3min, x3max);
+
+          Real g_[NMETRIC], gi_[NMETRIC];
+          ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, false,
+                              coord.bh_spin, g_, gi_);
+
+          const Real &ux = w0_(m,IVX,ks,j,i);
+          const Real &uy = w0_(m,IVY,ks,j,i);
+          const Real &uz = w0_(m,IVZ,ks,j,i);
+          const Real &bx = bcc_(m,IBX,ks,j,i);
+          const Real &by = bcc_(m,IBY,ks,j,i);
+          const Real &bz = bcc_(m,IBZ,ks,j,i);
+          Real alpha = sqrt(-1.0/gi_[I00]);
+          Real tmp = g_[I11]*SQR(ux) + 2.0*g_[I12]*ux*uy + 2.0*g_[I13]*ux*uz
+                   + g_[I22]*SQR(uy) + 2.0*g_[I23]*uy*uz
+                   + g_[I33]*SQR(uz);
+          Real gamma = std::sqrt(1.0 + tmp);
+          Real u0 = gamma / alpha;
+          Real u1 = ux - alpha * gamma * gi_[I01];
+          Real u2 = uy - alpha * gamma * gi_[I02];
+          Real u3 = uz - alpha * gamma * gi_[I03];
+          Real b0 = bx * (g_[I01]*u0 + g_[I11]*u1 + g_[I12]*u2 + g_[I13]*u3)
+                  + by * (g_[I02]*u0 + g_[I12]*u1 + g_[I22]*u2 + g_[I23]*u3)
+                  + bz * (g_[I03]*u0 + g_[I13]*u1 + g_[I23]*u2 + g_[I33]*u3);
+          Real b1 = (bx + b0 * u1) / u0;
+          Real b2 = (by + b0 * u2) / u0;
+          Real b3 = (bz + b0 * u3) / u0;
+          e3cc_(m,ks,j,i) = b1 * u2 - b2 * u1;
+        }
+      );
+
+    // compute cell-centered EMF in SR MHD
+    } else if (is_special_relativistic) {
+      par_for("e_cc_2d", DevExeSpace(), 0, nmb1, js-1, je+1, is-1, ie+1,
+        KOKKOS_LAMBDA(int m, int j, int i)
+        {
+          const Real &u1 = w0_(m,IVX,ks,j,i);
+          const Real &u2 = w0_(m,IVY,ks,j,i);
+          const Real &u3 = w0_(m,IVZ,ks,j,i);
+          Real u0 = sqrt(1.0 + SQR(u1) + SQR(u2) + SQR(u3));
+          e3cc_(m,ks,j,i) = (u2 * bcc_(m,IBX,ks,j,i) - u1 * bcc_(m,IBY,ks,j,i)) / u0;
+        }
+      );
+
+    // compute cell-centered EMF in Newtonian MHD
+    } else {
+      par_for("e_cc_2d", DevExeSpace(), 0, nmb1, js-1, je+1, is-1, ie+1,
+        KOKKOS_LAMBDA(int m, int j, int i)
+        {
+          e3cc_(m,ks,j,i) = w0_(m,IVY,ks,j,i)*bcc_(m,IBX,ks,j,i) -
+                            w0_(m,IVX,ks,j,i)*bcc_(m,IBY,ks,j,i);
+        }
+      );
+    }
 
     // capture class variables for the kernels
     auto e1 = efld.x1e;
@@ -91,24 +165,24 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage)
 
         Real e3_l2, e3_r2, e3_l1, e3_r1;
         if (flx1(m,IDN,ks,j-1,i) >= 0.0) {
-          e3_l2 = e3x2_(m,ks,j,i-1) - e3_cc_(m,ks,j-1,i-1);
+          e3_l2 = e3x2_(m,ks,j,i-1) - e3cc_(m,ks,j-1,i-1);
         } else {
-          e3_l2 = e3x2_(m,ks,j,i  ) - e3_cc_(m,ks,j-1,i  );
+          e3_l2 = e3x2_(m,ks,j,i  ) - e3cc_(m,ks,j-1,i  );
         }
         if (flx1(m,IDN,ks,j,i) >= 0.0) {
-          e3_r2 = e3x2_(m,ks,j,i-1) - e3_cc_(m,ks,j  ,i-1);
+          e3_r2 = e3x2_(m,ks,j,i-1) - e3cc_(m,ks,j  ,i-1);
         } else {
-          e3_r2 = e3x2_(m,ks,j,i  ) - e3_cc_(m,ks,j  ,i  );
+          e3_r2 = e3x2_(m,ks,j,i  ) - e3cc_(m,ks,j  ,i  );
         }
         if (flx2(m,IDN,ks,j,i-1) >= 0.0) {
-          e3_l1 = e3x1_(m,ks,j-1,i) - e3_cc_(m,ks,j-1,i-1);
+          e3_l1 = e3x1_(m,ks,j-1,i) - e3cc_(m,ks,j-1,i-1);
         } else {
-          e3_l1 = e3x1_(m,ks,j  ,i) - e3_cc_(m,ks,j  ,i-1);
+          e3_l1 = e3x1_(m,ks,j  ,i) - e3cc_(m,ks,j  ,i-1);
         }
         if (flx2(m,IDN,ks,j,i) >= 0.0) {
-          e3_r1 = e3x1_(m,ks,j-1,i) - e3_cc_(m,ks,j-1,i  );
+          e3_r1 = e3x1_(m,ks,j-1,i) - e3cc_(m,ks,j-1,i  );
         } else {
-          e3_r1 = e3x1_(m,ks,j  ,i) - e3_cc_(m,ks,j  ,i  );
+          e3_r1 = e3x1_(m,ks,j  ,i) - e3cc_(m,ks,j  ,i  );
         }
         e3(m,ks,j,i) = 0.25*(e3_l1 + e3_r1 + e3_l2 + e3_r2 +
                e3x2_(m,ks,j,i-1) + e3x2_(m,ks,j,i) + e3x1_(m,ks,j-1,i) + e3x1_(m,ks,j,i));
@@ -125,21 +199,93 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage)
     // E2=-(v X B)=VxBz-VzBx
     // E3=-(v X B)=VyBx-VxBy
     auto w0_ = w0;
-    auto b0_ = bcc0;
-    auto e1_cc_ = e1_cc;
-    auto e2_cc_ = e2_cc;
-    auto e3_cc_ = e3_cc;
-    par_for("e_cc_2d", DevExeSpace(), 0, nmb1, ks-1, ke+1, js-1, je+1, is-1, ie+1,
-      KOKKOS_LAMBDA(int m, int k, int j, int i)
-      {
-        e1_cc_(m,k,j,i) = w0_(m,IVZ,k,j,i)*b0_(m,IBY,k,j,i) -
-                          w0_(m,IVY,k,j,i)*b0_(m,IBZ,k,j,i);
-        e2_cc_(m,k,j,i) = w0_(m,IVX,k,j,i)*b0_(m,IBZ,k,j,i) -
-                          w0_(m,IVZ,k,j,i)*b0_(m,IBX,k,j,i);
-        e3_cc_(m,k,j,i) = w0_(m,IVY,k,j,i)*b0_(m,IBX,k,j,i) -
-                          w0_(m,IVX,k,j,i)*b0_(m,IBY,k,j,i);
-      }
-    );
+    auto bcc_ = bcc0;
+    auto e1cc_ = e1_cc;
+    auto e2cc_ = e2_cc;
+    auto e3cc_ = e3_cc;
+
+
+    // compute cell-centered EMFs in GR MHD
+    if (is_general_relativistic) {
+      par_for("e_cc_3d", DevExeSpace(), 0, nmb1, ks-1, ke+1, js-1, je+1, is-1, ie+1,
+        KOKKOS_LAMBDA(int m, int k, int j, int i)
+        { 
+          // Extract components of metric
+          Real &x1min = coord.mb_size.d_view(m).x1min;
+          Real &x1max = coord.mb_size.d_view(m).x1max;
+          int nx1 = coord.mb_indcs.nx1;
+          Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+          
+          Real &x2min = coord.mb_size.d_view(m).x2min;
+          Real &x2max = coord.mb_size.d_view(m).x2max;
+          int nx2 = coord.mb_indcs.nx2;
+          Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+          
+          Real &x3min = coord.mb_size.d_view(m).x3min;
+          Real &x3max = coord.mb_size.d_view(m).x3max;
+          int nx3 = coord.mb_indcs.nx3;
+          Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+          
+          Real g_[NMETRIC], gi_[NMETRIC];
+          ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, false,
+                              coord.bh_spin, g_, gi_);
+          
+          const Real &ux = w0_(m,IVX,k,j,i);
+          const Real &uy = w0_(m,IVY,k,j,i);
+          const Real &uz = w0_(m,IVZ,k,j,i);
+          const Real &bx = bcc_(m,IBX,k,j,i);
+          const Real &by = bcc_(m,IBY,k,j,i);
+          const Real &bz = bcc_(m,IBZ,k,j,i);
+          Real alpha = sqrt(-1.0/gi_[I00]);
+          Real tmp = g_[I11]*SQR(ux) + 2.0*g_[I12]*ux*uy + 2.0*g_[I13]*ux*uz
+                   + g_[I22]*SQR(uy) + 2.0*g_[I23]*uy*uz
+                   + g_[I33]*SQR(uz);
+          Real gamma = std::sqrt(1.0 + tmp);
+          Real u0 = gamma / alpha;
+          Real u1 = ux - alpha * gamma * gi_[I01];
+          Real u2 = uy - alpha * gamma * gi_[I02];
+          Real u3 = uz - alpha * gamma * gi_[I03];
+          Real b0 = bx * (g_[I01]*u0 + g_[I11]*u1 + g_[I12]*u2 + g_[I13]*u3)
+                  + by * (g_[I02]*u0 + g_[I12]*u1 + g_[I22]*u2 + g_[I23]*u3)
+                  + bz * (g_[I03]*u0 + g_[I13]*u1 + g_[I23]*u2 + g_[I33]*u3);
+          Real b1 = (bx + b0 * u1) / u0;
+          Real b2 = (by + b0 * u2) / u0;
+          Real b3 = (bz + b0 * u3) / u0; 
+          e1cc_(m,k,j,i) = b2 * u3 - b3 * u2;
+          e2cc_(m,k,j,i) = b3 * u1 - b1 * u3;
+          e3cc_(m,k,j,i) = b1 * u2 - b2 * u1;
+        }
+      );
+
+    // compute cell-centered EMFs in SR MHD
+    } else if (is_special_relativistic) {
+      par_for("e_cc_3d", DevExeSpace(), 0, nmb1, ks-1, ke+1, js-1, je+1, is-1, ie+1,
+        KOKKOS_LAMBDA(int m, int k, int j, int i)
+        { 
+          const Real &u1 = w0_(m,IVX,k,j,i);
+          const Real &u2 = w0_(m,IVY,k,j,i);
+          const Real &u3 = w0_(m,IVZ,k,j,i);
+          Real u0 = sqrt(1.0 + SQR(u1) + SQR(u2) + SQR(u3));
+          e1cc_(m,k,j,i) = (u3 * bcc_(m,IBY,k,j,i) - u2 * bcc_(m,IBZ,k,j,i)) / u0;
+          e2cc_(m,k,j,i) = (u1 * bcc_(m,IBZ,k,j,i) - u3 * bcc_(m,IBX,k,j,i)) / u0;
+          e3cc_(m,k,j,i) = (u2 * bcc_(m,IBX,k,j,i) - u1 * bcc_(m,IBY,k,j,i)) / u0;
+        }
+      );
+
+    // compute cell-centered EMFs in Newtonian MHD
+    } else {
+      par_for("e_cc_3d", DevExeSpace(), 0, nmb1, ks-1, ke+1, js-1, je+1, is-1, ie+1,
+        KOKKOS_LAMBDA(int m, int k, int j, int i)
+        {
+          e1cc_(m,k,j,i) = w0_(m,IVZ,k,j,i)*bcc_(m,IBY,k,j,i) -
+                           w0_(m,IVY,k,j,i)*bcc_(m,IBZ,k,j,i);
+          e2cc_(m,k,j,i) = w0_(m,IVX,k,j,i)*bcc_(m,IBZ,k,j,i) -
+                           w0_(m,IVZ,k,j,i)*bcc_(m,IBX,k,j,i);
+          e3cc_(m,k,j,i) = w0_(m,IVY,k,j,i)*bcc_(m,IBX,k,j,i) -
+                           w0_(m,IVX,k,j,i)*bcc_(m,IBY,k,j,i);
+        }
+      );
+    }
 
     // capture class variables for the kernels
     auto e1 = efld.x1e;
@@ -165,24 +311,24 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage)
         // integrate E1 to corner using SG07
         Real e1_l3, e1_r3, e1_l2, e1_r2;
         if (flx2(m,IDN,k-1,j,i) >= 0.0) {
-          e1_l3 = e1x3_(m,k,j-1,i) - e1_cc_(m,k-1,j-1,i);
+          e1_l3 = e1x3_(m,k,j-1,i) - e1cc_(m,k-1,j-1,i);
         } else {
-          e1_l3 = e1x3_(m,k,j  ,i) - e1_cc_(m,k-1,j  ,i);
+          e1_l3 = e1x3_(m,k,j  ,i) - e1cc_(m,k-1,j  ,i);
         }
         if (flx2(m,IDN,k,j,i) >= 0.0) {
-          e1_r3 = e1x3_(m,k,j-1,i) - e1_cc_(m,k  ,j-1,i);
+          e1_r3 = e1x3_(m,k,j-1,i) - e1cc_(m,k  ,j-1,i);
         } else {
-          e1_r3 = e1x3_(m,k,j  ,i) - e1_cc_(m,k  ,j  ,i);
+          e1_r3 = e1x3_(m,k,j  ,i) - e1cc_(m,k  ,j  ,i);
         }
         if (flx3(m,IDN,k,j-1,i) >= 0.0) {
-          e1_l2 = e1x2_(m,k-1,j,i) - e1_cc_(m,k-1,j-1,i);
+          e1_l2 = e1x2_(m,k-1,j,i) - e1cc_(m,k-1,j-1,i);
         } else {
-          e1_l2 = e1x2_(m,k  ,j,i) - e1_cc_(m,k  ,j-1,i);
+          e1_l2 = e1x2_(m,k  ,j,i) - e1cc_(m,k  ,j-1,i);
         }
         if (flx3(m,IDN,k,j,i) >= 0.0) {
-          e1_r2 = e1x2_(m,k-1,j,i) - e1_cc_(m,k-1,j  ,i);
+          e1_r2 = e1x2_(m,k-1,j,i) - e1cc_(m,k-1,j  ,i);
         } else {
-          e1_r2 = e1x2_(m,k  ,j,i) - e1_cc_(m,k  ,j  ,i);
+          e1_r2 = e1x2_(m,k  ,j,i) - e1cc_(m,k  ,j  ,i);
         }
         e1(m,k,j,i) = 0.25*(e1_l3 + e1_r3 + e1_l2 + e1_r2 +
                   e1x2_(m,k-1,j,i) + e1x2_(m,k,j,i) + e1x3_(m,k,j-1,i) + e1x3_(m,k,j,i));
@@ -190,24 +336,24 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage)
         // integrate E2 to corner using SG07
         Real e2_l3, e2_r3, e2_l1, e2_r1;
         if (flx1(m,IDN,k-1,j,i) >= 0.0) {
-          e2_l3 = e2x3_(m,k,j,i-1) - e2_cc_(m,k-1,j,i-1);
+          e2_l3 = e2x3_(m,k,j,i-1) - e2cc_(m,k-1,j,i-1);
         } else {
-          e2_l3 = e2x3_(m,k,j,i  ) - e2_cc_(m,k-1,j,i  );
+          e2_l3 = e2x3_(m,k,j,i  ) - e2cc_(m,k-1,j,i  );
         }
         if (flx1(m,IDN,k,j,i) >= 0.0) {
-          e2_r3 = e2x3_(m,k,j,i-1) - e2_cc_(m,k  ,j,i-1);
+          e2_r3 = e2x3_(m,k,j,i-1) - e2cc_(m,k  ,j,i-1);
         } else {
-          e2_r3 = e2x3_(m,k,j,i  ) - e2_cc_(m,k  ,j,i  );
+          e2_r3 = e2x3_(m,k,j,i  ) - e2cc_(m,k  ,j,i  );
         }
         if (flx3(m,IDN,k,j,i-1) >= 0.0) {
-          e2_l1 = e2x1_(m,k-1,j,i) - e2_cc_(m,k-1,j,i-1);
+          e2_l1 = e2x1_(m,k-1,j,i) - e2cc_(m,k-1,j,i-1);
         } else {
-          e2_l1 = e2x1_(m,k  ,j,i) - e2_cc_(m,k  ,j,i-1);
+          e2_l1 = e2x1_(m,k  ,j,i) - e2cc_(m,k  ,j,i-1);
         }
         if (flx3(m,IDN,k,j,i) >= 0.0) {
-          e2_r1 = e2x1_(m,k-1,j,i) - e2_cc_(m,k-1,j,i  );
+          e2_r1 = e2x1_(m,k-1,j,i) - e2cc_(m,k-1,j,i  );
         } else {
-          e2_r1 = e2x1_(m,k  ,j,i) - e2_cc_(m,k  ,j,i  );
+          e2_r1 = e2x1_(m,k  ,j,i) - e2cc_(m,k  ,j,i  );
         }
         e2(m,k,j,i) = 0.25*(e2_l3 + e2_r3 + e2_l1 + e2_r1 +
                   e2x3_(m,k,j,i-1) + e2x3_(m,k,j,i) + e2x1_(m,k-1,j,i) + e2x1_(m,k,j,i));
@@ -215,24 +361,24 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage)
         // integrate E3 to corner using SG07
         Real e3_l2, e3_r2, e3_l1, e3_r1;
         if (flx1(m,IDN,k,j-1,i) >= 0.0) {
-          e3_l2 = e3x2_(m,k,j,i-1) - e3_cc_(m,k,j-1,i-1);
+          e3_l2 = e3x2_(m,k,j,i-1) - e3cc_(m,k,j-1,i-1);
         } else {
-          e3_l2 = e3x2_(m,k,j,i  ) - e3_cc_(m,k,j-1,i  );
+          e3_l2 = e3x2_(m,k,j,i  ) - e3cc_(m,k,j-1,i  );
         }
         if (flx1(m,IDN,k,j,i) >= 0.0) {
-          e3_r2 = e3x2_(m,k,j,i-1) - e3_cc_(m,k,j  ,i-1);
+          e3_r2 = e3x2_(m,k,j,i-1) - e3cc_(m,k,j  ,i-1);
         } else {
-          e3_r2 = e3x2_(m,k,j,i  ) - e3_cc_(m,k,j  ,i  );
+          e3_r2 = e3x2_(m,k,j,i  ) - e3cc_(m,k,j  ,i  );
         }
         if (flx2(m,IDN,k,j,i-1) >= 0.0) {
-          e3_l1 = e3x1_(m,k,j-1,i) - e3_cc_(m,k,j-1,i-1);
+          e3_l1 = e3x1_(m,k,j-1,i) - e3cc_(m,k,j-1,i-1);
         } else {
-          e3_l1 = e3x1_(m,k,j  ,i) - e3_cc_(m,k,j  ,i-1);
+          e3_l1 = e3x1_(m,k,j  ,i) - e3cc_(m,k,j  ,i-1);
         }
         if (flx2(m,IDN,k,j,i) >= 0.0) {
-          e3_r1 = e3x1_(m,k,j-1,i) - e3_cc_(m,k,j-1,i  );
+          e3_r1 = e3x1_(m,k,j-1,i) - e3cc_(m,k,j-1,i  );
         } else {
-          e3_r1 = e3x1_(m,k,j  ,i) - e3_cc_(m,k,j  ,i  );
+          e3_r1 = e3x1_(m,k,j  ,i) - e3cc_(m,k,j  ,i  );
         }
         e3(m,k,j,i) = 0.25*(e3_l1 + e3_r1 + e3_l2 + e3_r2 +
                   e3x2_(m,k,j,i-1) + e3x2_(m,k,j,i) + e3x1_(m,k,j-1,i) + e3x1_(m,k,j,i));

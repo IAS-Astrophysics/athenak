@@ -156,6 +156,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons,
       int nx1 = coord.mb_indcs.nx1;
       Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
+      // Extract components of metric
       Real &x2min = coord.mb_size.d_view(m).x2min;
       Real &x2max = coord.mb_size.d_view(m).x2max;
       int nx2 = coord.mb_indcs.nx2;
@@ -166,15 +167,12 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons,
       int nx3 = coord.mb_indcs.nx3;
       Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
-      Real rad = sqrt(SQR(x1v) + SQR(x2v) + SQR(x3v));
-
-      bool floor_hit = false;
-
-      // Extract components of metric
       Real g_[NMETRIC], gi_[NMETRIC];
       ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, false,
                               coord.bh_spin, g_, gi_);
 
+      Real rad = sqrt(SQR(x1v) + SQR(x2v) + SQR(x3v));
+      bool floor_hit = false;
       // Only execute cons2prim if outside excised region
       if (rad > coord.bh_rmin) {
 
