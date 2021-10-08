@@ -72,7 +72,7 @@ void LLF_SR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &co
     // Calculate 4-magnetic field in left state
     Real b_l[4];
     b_l[0] = bb1*u_l[1] + bb2_l*u_l[2] + bb3_l*u_l[3];
-    b_l[1] = (bb1 + b_l[0] * u_l[1]) / u_l[0];
+    b_l[1] = (bb1   + b_l[0] * u_l[1]) / u_l[0];
     b_l[2] = (bb2_l + b_l[0] * u_l[2]) / u_l[0];
     b_l[3] = (bb3_l + b_l[0] * u_l[3]) / u_l[0];
     Real b_sq_l = -SQR(b_l[0]) + SQR(b_l[1]) + SQR(b_l[2]) + SQR(b_l[3]);

@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file hydro_newdt.cpp
-//  \brief function to compute hydro timestep across all MeshBlock(s) in a MeshBlockPack
+//! \brief function to compute hydro timestep across all MeshBlock(s) in a MeshBlockPack
 
 #include <limits>
 #include <math.h>
@@ -32,7 +32,6 @@ TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage)
   int is = indcs.is, nx1 = indcs.nx1;
   int js = indcs.js, nx2 = indcs.nx2;
   int ks = indcs.ks, nx3 = indcs.nx3;
-  auto &eos = pmy_pack->phydro->peos->eos_data;
 
   Real dt1 = std::numeric_limits<float>::max();
   Real dt2 = std::numeric_limits<float>::max();
@@ -40,6 +39,7 @@ TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage)
 
   // capture class variables for kernel
   auto &w0_ = w0;
+  auto &eos = pmy_pack->phydro->peos->eos_data;
   auto &mbsize = pmy_pack->coord.coord_data.mb_size;
   auto &is_special_relativistic_ = is_special_relativistic;
   auto &is_general_relativistic_ = is_general_relativistic;
@@ -67,7 +67,7 @@ TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage)
  
   } else {
 
-    // find smallest dx/(v +/- C) in each direction for hydrodynamic problems
+    // find smallest dx/(v +/- Cs) in each direction for hydrodynamic problems
     Kokkos::parallel_reduce("HydroNudt2",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
       KOKKOS_LAMBDA(const int &idx, Real &min_dt1, Real &min_dt2, Real &min_dt3)
       { 
@@ -100,7 +100,7 @@ TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage)
         eos.IdealSRHydroSoundSpeeds(w0_(m,IDN,k,j,i), p, w0_(m,IVX,k,j,i), lor, lp, lm);
         max_dv1 = fmax(fabs(lm), lp);
 
-        eos.IdealSRHydroSoundSpeeds(w0_(m,IDN,k,j,i), p, w0_(m,IVX,k,j,i), lor, lp, lm);
+        eos.IdealSRHydroSoundSpeeds(w0_(m,IDN,k,j,i), p, w0_(m,IVY,k,j,i), lor, lp, lm);
         max_dv2 = fmax(fabs(lm), lp);
 
         eos.IdealSRHydroSoundSpeeds(w0_(m,IDN,k,j,i), p, w0_(m,IVZ,k,j,i), lor, lp, lm);

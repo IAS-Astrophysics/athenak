@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file hydro.cpp
-//  \brief implementation of functions in class Hydro
+//! \brief implementation of Hydro class constructor and assorted other functions
 
 #include <iostream>
 
@@ -221,7 +221,6 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // (5) initialize metric (GR only)
   if (is_general_relativistic) {pmy_pack->coord.InitMetric(pin);}
-
 }
 
 //----------------------------------------------------------------------------------------
