@@ -23,18 +23,18 @@ IdealGRMHD::IdealGRMHD(MeshBlockPack *pp, ParameterInput *pin)
   : EquationOfState(pp, pin)
 {      
   eos_data.is_ideal = true;
-  eos_data.gamma = pin->GetReal("eos","gamma");
+  eos_data.gamma = pin->GetReal("mhd","gamma");
   eos_data.iso_cs = 0.0;
 
   // Read flags specifying which variable to use in primitives
   // if nothing set in input file, use e as default
-  if (!(pin->DoesParameterExist("hydro","use_e")) &&
-      !(pin->DoesParameterExist("hydro","use_t")) ) {
+  if (!(pin->DoesParameterExist("mhd","use_e")) &&
+      !(pin->DoesParameterExist("mhd","use_t")) ) {
     eos_data.use_e = true;
     eos_data.use_t = false;
   } else {
-    eos_data.use_e = pin->GetOrAddBoolean("hydro","use_e",false);
-    eos_data.use_t = pin->GetOrAddBoolean("hydro","use_t",false);
+    eos_data.use_e = pin->GetOrAddBoolean("mhd","use_e",false);
+    eos_data.use_t = pin->GetOrAddBoolean("mhd","use_t",false);
   }
   if (!(eos_data.use_e) && !(eos_data.use_t)) {
     std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl

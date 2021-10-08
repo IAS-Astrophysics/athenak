@@ -5,9 +5,12 @@
 //========================================================================================
 //! \file shock_tube.cpp
 //! \brief Problem generator for shock tube (1-D Riemann) problems in both hydro and MHD.
-//! Works for both non-relativistic and relativistic dynamics
-//! Initializes plane-parallel shock along x1 (in 1D, 2D, 3D), along x2 (in 2D, 3D),
-//! and along x3 (in 3D).
+//! Works for both non-relativistic and relativistic dynamics in flat (Minkowski)
+//! spacetimes.  Can be used to test GR, but metric must be Minkowski.
+//!
+//! Works by initializing plane-parallel shock along x1 (in 1D, 2D, 3D), along x2
+//! (in 2D, 3D), and along x3 (in 3D).  Shock must be along a coordinate directions,
+//! i.e. shocks propagating along an angle inclined to grid are not implemented.
 
 #include <iostream>
 #include <sstream>
@@ -79,7 +82,7 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
     wl.vy = pin->GetReal("problem","vl");
     wl.vz = pin->GetReal("problem","wl");
     wl.p  = pin->GetReal("problem","pl");
-    // compute Lorentz factor (needed for SR)
+    // compute Lorentz factor (needed for SR/GR)
     Real u0l = 1.0;
     if (pmbp->phydro->is_special_relativistic || pmbp->phydro->is_general_relativistic) {
       u0l = 1.0/sqrt( 1.0 - (SQR(wl.vx) + SQR(wl.vy) + SQR(wl.vz)) );
@@ -91,7 +94,7 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
     wr.vy = pin->GetReal("problem","vr");
     wr.vz = pin->GetReal("problem","wr");
     wr.p  = pin->GetReal("problem","pr");
-    // compute Lorentz factor (needed for SR)
+    // compute Lorentz factor (needed for SR/GR)
     Real u0r = 1.0;
     if (pmbp->phydro->is_special_relativistic || pmbp->phydro->is_general_relativistic) {
       u0r = 1.0/sqrt( 1.0 - (SQR(wr.vx) + SQR(wr.vy) + SQR(wr.vz)) );
@@ -130,18 +133,18 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
           x = CellCenterX(k-ks, nx3, x3min, x3max);
         }
 
-        // in SR, primitive variables use spatial components of 4-vel u^i = gamma * v^i
+        // in SR/GR, primitive variables use spatial components of 4-vel u^i = gamma * v^i
         if (x < xshock) {
           w0(m,IDN,k,j,i) = wl.d;
-          w0(m,ivx,k,j,i) = u0l*wl.vx;
-          w0(m,ivy,k,j,i) = u0l*wl.vy;
-          w0(m,ivz,k,j,i) = u0l*wl.vz;
+          w0(m,ivx,k,j,i) = wl.vx*u0l;
+          w0(m,ivy,k,j,i) = wl.vy*u0l;
+          w0(m,ivz,k,j,i) = wl.vz*u0l;
           w0(m,IEN,k,j,i) = prim_l;
         } else {
           w0(m,IDN,k,j,i) = wr.d;
-          w0(m,ivx,k,j,i) = u0r*wr.vx;
-          w0(m,ivy,k,j,i) = u0r*wr.vy;
-          w0(m,ivz,k,j,i) = u0r*wr.vz;
+          w0(m,ivx,k,j,i) = wr.vx*u0r;
+          w0(m,ivy,k,j,i) = wr.vy*u0r;
+          w0(m,ivz,k,j,i) = wr.vz*u0r;
           w0(m,IEN,k,j,i) = prim_r;
         }
       }
@@ -166,6 +169,11 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
     wl.by = pin->GetReal("problem","byl");
     wl.bz = pin->GetReal("problem","bzl");
     Real bx_l = pin->GetReal("problem","bxl");
+    // compute Lorentz factor (needed for SR/GR)
+    Real u0l = 1.0;
+    if (pmbp->pmhd->is_special_relativistic || pmbp->pmhd->is_general_relativistic) {
+      u0l = 1.0/sqrt( 1.0 - (SQR(wl.vx) + SQR(wl.vy) + SQR(wl.vz)) );
+    }
     
     // Parse right state read from input file: d,vx,vy,vz,[P]
     wr.d  = pin->GetReal("problem","dr");
@@ -176,10 +184,15 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
     wr.by = pin->GetReal("problem","byr");
     wr.bz = pin->GetReal("problem","bzr");
     Real bx_r = pin->GetReal("problem","bxr");
+    // compute Lorentz factor (needed for SR/GR)
+    Real u0r = 1.0;
+    if (pmbp->pmhd->is_special_relativistic || pmbp->pmhd->is_general_relativistic) {
+      u0r = 1.0/sqrt( 1.0 - (SQR(wr.vx) + SQR(wr.vy) + SQR(wr.vz)) );
+    }
 
     // set either internal energy density or temparature as primitive
     Real prim_l,prim_r;
-    auto &eos = pmbp->phydro->peos->eos_data;
+    auto &eos = pmbp->pmhd->peos->eos_data;
     if (eos.use_e) {
       prim_l = wl.p/(eos.gamma - 1.0);
       prim_r = wr.p/(eos.gamma - 1.0);
@@ -218,11 +231,12 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
           bxr = wr.by; byr = wr.bz; bzr = bx_r;
         } 
           
+        // in SR/GR, primitive variables use spatial components of 4-vel u^i = gamma * v^i
         if (x < xshock) {
           w0(m,IDN,k,j,i) = wl.d; 
-          w0(m,ivx,k,j,i) = wl.vx;
-          w0(m,ivy,k,j,i) = wl.vy;
-          w0(m,ivz,k,j,i) = wl.vz;
+          w0(m,ivx,k,j,i) = wl.vx*u0l;
+          w0(m,ivy,k,j,i) = wl.vy*u0l;
+          w0(m,ivz,k,j,i) = wl.vz*u0l;
           w0(m,IEN,k,j,i) = prim_l;
           b0.x1f(m,k,j,i) = bxl;
           b0.x2f(m,k,j,i) = byl;
@@ -235,9 +249,9 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
           bcc0(m,IBZ,k,j,i) = bzl;
         } else {
           w0(m,IDN,k,j,i) = wr.d;
-          w0(m,ivx,k,j,i) = wr.vx;
-          w0(m,ivy,k,j,i) = wr.vy;
-          w0(m,ivz,k,j,i) = wr.vz;
+          w0(m,ivx,k,j,i) = wr.vx*u0r;
+          w0(m,ivy,k,j,i) = wr.vy*u0r;
+          w0(m,ivz,k,j,i) = wr.vz*u0r;
           w0(m,IEN,k,j,i) = prim_r;
           b0.x1f(m,k,j,i) = bxr;
           b0.x2f(m,k,j,i) = byr;

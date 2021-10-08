@@ -20,7 +20,7 @@ namespace hydro {
 
 //----------------------------------------------------------------------------------------
 // \!fn void Hydro::NewTimeStep()
-// \brief calculate the minimum timestep within a MeshBlock for hydrodynamic problems
+// \brief calculate the minimum timestep within a MeshBlockPack for hydrodynamic problems
 
 TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage)
 {

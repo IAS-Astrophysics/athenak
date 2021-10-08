@@ -43,6 +43,12 @@ void MHD::AssembleMHDTasks(TaskList &start, TaskList &run, TaskList &end)
     id.flux = run.AddTask(&MHD::CalcFluxes<MHD_RSolver::hlle>, this, id.copyu);
   } else if (rsolver_method == MHD_RSolver::hlld) {
     id.flux = run.AddTask(&MHD::CalcFluxes<MHD_RSolver::hlld>, this, id.copyu);
+  } else if (rsolver_method == MHD_RSolver::llf_sr) {
+    id.flux = run.AddTask(&MHD::CalcFluxes<MHD_RSolver::llf_sr>, this, id.copyu);
+  } else if (rsolver_method == MHD_RSolver::hlle_sr) {
+    id.flux = run.AddTask(&MHD::CalcFluxes<MHD_RSolver::hlle_sr>, this, id.copyu);
+  } else if (rsolver_method == MHD_RSolver::hlle_gr) {
+    id.flux = run.AddTask(&MHD::CalcFluxes<MHD_RSolver::hlle_gr>, this, id.copyu);
   }
   id.expl = run.AddTask(&MHD::ExpRKUpdate, this, id.flux);
   id.sendu = run.AddTask(&MHD::SendU, this, id.expl);
