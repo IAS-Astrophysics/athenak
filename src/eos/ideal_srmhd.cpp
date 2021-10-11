@@ -72,7 +72,7 @@ Real Equation44(const Real mu, const Real b2, const Real rpar, const Real r, con
   Real rbar = (x*x*r*r + mu*x*(1.+x)*rpar*rpar); // (38)
   Real qbar = q - 0.5*b2 - 0.5*(mu*mu*(b2*rbar- rpar*rpar)); // (31)
 
-  Real z2 = (mu*mu*rbar/(abs(1.- SQR(mu)*rbar))); // (32)
+  Real z2 = (mu*mu*rbar/(fabs(1.- SQR(mu)*rbar))); // (32)
   Real w = sqrt(1.+z2);
 
   Real const wd = ud/w;                           // (34)
@@ -275,14 +275,14 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons,
       //  rbar = sqrt(rbar);
 
 
-      Real z2 = (mu*mu*rbar/(abs(1.- SQR(mu)*rbar))); // (32)
+      Real z2 = (mu*mu*rbar/(fabs(1.- SQR(mu)*rbar))); // (32)
       Real w = sqrt(1.+z2);
 
-      Real const wd = u_d/w;                  // (34)
+      w_d = u_d/w;                  // (34)
       Real eps = w*(qbar - mu*rbar)+  z2/(w+1.);
 
       //NOTE: The following generalizes to ANY equation of state
-      eps = fmax(pfloor_/(wd*gm1), eps);                          // 
+      eps = fmax(pfloor_/(w_d*gm1), eps);                          // 
       Real const h = (1.0 + eps) * (1.0 + (gm1*eps)/(1.0+eps));   // (43)
       if (use_e) {
         Real& w_e  = prim(m,IEN,k,j,i);
