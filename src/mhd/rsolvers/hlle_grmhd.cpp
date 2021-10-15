@@ -7,8 +7,7 @@
 //! \brief HLLE Riemann solver for general relativistic MHD.
 //
 //! Notes:
-//!  - implements HLLE algorithm similar to that of fluxcalc() in step_ch.c in Harm
-//!  - cf. HLLENonTransforming() in hlle_mhd_rel.cpp in Athena++
+//!  - cf. HLLE solver in hlle_mhd_rel_no_transform.cpp in Athena++
 
 #include <cmath>      // sqrt()
 
@@ -82,39 +81,18 @@ void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &c
       &g20 = gi_[I02], &g21 = gi_[I12], &g22 = gi_[I22], &g23 = gi_[I23],
       &g30 = gi_[I03], &g31 = gi_[I13], &g32 = gi_[I23], &g33 = gi_[I33];
     Real alpha = sqrt(-1.0/g00);
-    Real gii, g0i;
-    switch (ivx) {
-      case IVX:
-        gii = g11;
-        g0i = g01;
-        break;
-      case IVY:
-        gii = g22;
-        g0i = g02;
-        break;
-      case IVZ:
-        gii = g33;
-        g0i = g03;
-        break;
-    }
 
     // Extract left primitives
     const Real &rho_l  = wl(IDN,i);
-    const Real &uu1_l  = wl(ivx,i);
-    const Real &uu2_l  = wl(ivy,i);
-    const Real &uu3_l  = wl(ivz,i);
-    const Real &bb2_l  = bx(m,k,j,i);
-    const Real &bb3_l  = bl(iby,i);
-    const Real &bb1_l  = bl(ibz,i);
+    const Real &uu1_l  = wl(IVX,i);
+    const Real &uu2_l  = wl(IVY,i);
+    const Real &uu3_l  = wl(IVZ,i);
 
     // Extract right primitives
     const Real &rho_r  = wr(IDN,i);
-    const Real &uu1_r  = wr(ivx,i);
-    const Real &uu2_r  = wr(ivy,i);
-    const Real &uu3_r  = wr(ivz,i);
-    const Real &bb2_r  = bx(m,k,j,i);
-    const Real &bb3_r  = br(iby,i);
-    const Real &bb1_r  = br(ibz,i);
+    const Real &uu1_r  = wr(IVX,i);
+    const Real &uu2_r  = wr(IVY,i);
+    const Real &uu3_r  = wr(IVZ,i);
 
     Real pgas_l, pgas_r;
     if (eos.use_e) {
@@ -123,6 +101,38 @@ void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &c
     } else {
       pgas_l = wl(IDN,i)*wl(ITM,i);
       pgas_r = wr(IDN,i)*wr(ITM,i);
+    }
+
+    // permute magnetic field and metric according to direction of slice
+    Real gii, g0i;
+    Real bb1_l, bb2_l, bb3_l, bb1_r, bb2_r, bb3_r;
+    if (ivx == IVX) {
+      gii = g11;
+      g0i = g01;
+      bb1_l = bx(m,k,j,i);
+      bb2_l = wl(IBY,i);
+      bb3_l = wl(IBZ,i);
+      bb1_r = bx(m,k,j,i);
+      bb2_r = wr(IBY,i);
+      bb3_r = wr(IBZ,i);
+    } else if (ivx == IVY) {
+      gii = g22;
+      g0i = g02;
+      bb2_l = bx(m,k,j,i);
+      bb3_l = wl(IBY,i);
+      bb1_l = wl(IBZ,i);
+      bb2_r = bx(m,k,j,i);
+      bb3_r = wr(IBY,i);
+      bb1_r = wr(IBZ,i);
+    } else {
+      gii = g33;
+      g0i = g03;
+      bb3_l = bx(m,k,j,i);
+      bb1_l = wl(IBY,i);
+      bb2_l = wl(IBZ,i);
+      bb3_r = bx(m,k,j,i);
+      bb1_r = wr(IBY,i);
+      bb2_r = wr(IBZ,i);
     }
 
     // Calculate 4-velocity in left state
@@ -189,12 +199,12 @@ void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &c
 
     // Calculate wavespeeds in left state
     Real lp_l, lm_l;
-    eos.IdealGRMHDFastSpeeds(rho_l, pgas_l, ucon_l[1], ucon_l[0], b_sq_l, g00, g0i, gii,
+    eos.IdealGRMHDFastSpeeds(rho_l, pgas_l, ucon_l[0], ucon_l[ivx], b_sq_l, g00, g0i, gii,
                              lp_l, lm_l);
 
     // Calculate wavespeeds in right state
     Real lp_r, lm_r;
-    eos.IdealGRMHDFastSpeeds(rho_r, pgas_r, ucon_r[1], ucon_r[0], b_sq_r, g00, g0i, gii,
+    eos.IdealGRMHDFastSpeeds(rho_r, pgas_r, ucon_r[0], ucon_r[ivx], b_sq_r, g00, g0i, gii,
                              lp_r, lm_r);
 
     // Calculate extremal wavespeeds
@@ -202,85 +212,86 @@ void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &c
     Real lambda_r = fmax(lp_l, lp_r);
 
     // Calculate difference du =  U_R - U_l in conserved quantities (rho u^0 and T^0_\mu)
-    MHDCons1D du;
     Real wgas_r = rho_r + gamma_prime * pgas_r;
     Real wtot_r = wgas_r + b_sq_r;
     Real ptot_r = pgas_r + 0.5*b_sq_r;
+    Real du[7];
     Real qa = wtot_r * ucon_r[0];
-    du.d  = rho_r * ucon_r[0];
-    du.e  = qa * ucov_r[0] - bcon_r[0] * bcov_r[0] + ptot_r;
-    du.mx = qa * ucov_r[1] - bcon_r[0] * bcov_r[1];
-    du.my = qa * ucov_r[2] - bcon_r[0] * bcov_r[2];
-    du.mz = qa * ucov_r[3] - bcon_r[0] * bcov_r[3];
-    du.by = bcon_r[IVY] * ucon_r[0] - bcon_r[0] * ucon_r[IVY];
-    du.bz = bcon_r[IVZ] * ucon_r[0] - bcon_r[0] * ucon_r[IVZ];
-
+    du[IDN] = rho_r * ucon_r[0];
+    du[IEN] = qa * ucov_r[0] - bcon_r[0] * bcov_r[0] + ptot_r;
+    du[IVX] = qa * ucov_r[1] - bcon_r[0] * bcov_r[1];
+    du[IVY] = qa * ucov_r[2] - bcon_r[0] * bcov_r[2];
+    du[IVZ] = qa * ucov_r[3] - bcon_r[0] * bcov_r[3];
+    du[5]   = bcon_r[ivy] * ucon_r[0] - bcon_r[0] * ucon_r[ivy];
+    du[6]   = bcon_r[ivz] * ucon_r[0] - bcon_r[0] * ucon_r[ivz];
 
     Real wgas_l = rho_l + gamma_prime * pgas_l;
     Real wtot_l = wgas_l + b_sq_l;
     Real ptot_l = pgas_l + 0.5*b_sq_l;
     Real qb = wtot_l * ucon_l[0];
-    du.d  -= (rho_l * ucon_l[0]);
-    du.e  -= (qb * ucov_l[0] - bcon_l[0] * bcov_l[0] + ptot_l);
-    du.mx -= (qb * ucov_l[1] - bcon_l[0] * bcov_l[1]);
-    du.my -= (qb * ucov_l[2] - bcon_l[0] * bcov_l[2]);
-    du.mz -= (qb * ucov_l[3] - bcon_l[0] * bcov_l[3]);
-    du.by -= bcon_l[IVY] * ucon_l[0] - bcon_l[0] * ucon_l[IVY];
-    du.bz -= bcon_l[IVZ] * ucon_l[0] - bcon_l[0] * ucon_l[IVZ];
+    du[IDN] -= (rho_l * ucon_l[0]);
+    du[IEN] -= (qb * ucov_l[0] - bcon_l[0] * bcov_l[0] + ptot_l);
+    du[IVX] -= (qb * ucov_l[1] - bcon_l[0] * bcov_l[1]);
+    du[IVY] -= (qb * ucov_l[2] - bcon_l[0] * bcov_l[2]);
+    du[IVZ] -= (qb * ucov_l[3] - bcon_l[0] * bcov_l[3]);
+    du[5]   -= bcon_l[ivy] * ucon_l[0] - bcon_l[0] * ucon_l[ivy];
+    du[6]   -= bcon_l[ivz] * ucon_l[0] - bcon_l[0] * ucon_l[ivz];
 
     // Calculate fluxes in L region (rho u^i and T^i_\mu, where i = ivx)
-    MHDCons1D fl;
-    qa = wtot_l * ucon_l[IVX];
-    fl.d  = rho_l * ucon_l[IVX];
-    fl.e  = qa * ucov_l[0] - bcon_l[IVX] * bcov_l[0];
-    fl.mx = qa * ucov_l[1] - bcon_l[IVX] * bcov_l[1] + ptot_l;
-    fl.my = qa * ucov_l[2] - bcon_l[IVX] * bcov_l[2];
-    fl.mz = qa * ucov_l[3] - bcon_l[IVX] * bcov_l[3];
-    fl.by = bcon_l[IVY] * ucon_l[IVX] - bcon_l[IVX] * ucon_l[IVY];
-    fl.bz = bcon_l[IVZ] * ucon_l[IVX] - bcon_l[IVX] * ucon_l[IVZ];
+    Real flux_l[7];
+    qa = wtot_l * ucon_l[ivx];
+    flux_l[IDN] = rho_l * ucon_l[ivx];
+    flux_l[IEN] = qa * ucov_l[0] - bcon_l[ivx] * bcov_l[0];
+    flux_l[IVX] = qa * ucov_l[1] - bcon_l[ivx] * bcov_l[1];
+    flux_l[IVY] = qa * ucov_l[2] - bcon_l[ivx] * bcov_l[2];
+    flux_l[IVZ] = qa * ucov_l[3] - bcon_l[ivx] * bcov_l[3];
+    flux_l[ivx] += ptot_l;
+    flux_l[5]   = bcon_l[ivy] * ucon_l[ivx] - bcon_l[ivx] * ucon_l[ivy];
+    flux_l[6]   = bcon_l[ivz] * ucon_l[ivx] - bcon_l[ivx] * ucon_l[ivz];
 
     // Calculate fluxes in R region (rho u^i and T^i_\mu, where i = ivx)
-    MHDCons1D fr;
-    qa = wtot_r * ucon_r[IVX];
-    fr.d  = rho_r * ucon_r[IVX];
-    fr.e  = qa * ucov_r[0] - bcon_r[IVX] * bcov_r[0];
-    fr.mx = qa * ucov_r[1] - bcon_r[IVX] * bcov_r[1] + ptot_r;
-    fr.my = qa * ucov_r[2] - bcon_r[IVX] * bcov_r[2];
-    fr.mz = qa * ucov_r[3] - bcon_r[IVX] * bcov_r[3];
-    fr.by = bcon_r[IVY] * ucon_r[IVX] - bcon_r[IVX] * ucon_r[IVY];
-    fr.bz = bcon_r[IVZ] * ucon_r[IVX] - bcon_r[IVX] * ucon_r[IVZ];
+    Real flux_r[7];
+    qa = wtot_r * ucon_r[ivx];
+    flux_r[IDN] = rho_r * ucon_r[ivx];
+    flux_r[IEN] = qa * ucov_r[0] - bcon_r[ivx] * bcov_r[0];
+    flux_r[IVX] = qa * ucov_r[1] - bcon_r[ivx] * bcov_r[1];
+    flux_r[IVY] = qa * ucov_r[2] - bcon_r[ivx] * bcov_r[2];
+    flux_r[IVZ] = qa * ucov_r[3] - bcon_r[ivx] * bcov_r[3];
+    flux_r[ivx] += ptot_r;
+    flux_r[5]   = bcon_r[ivy] * ucon_r[ivx] - bcon_r[ivx] * ucon_r[ivy];
+    flux_r[6]   = bcon_r[ivz] * ucon_r[ivx] - bcon_r[ivx] * ucon_r[ivz];
 
     // Calculate fluxes in HLL region
-    MHDCons1D flux_hll;
+    Real flux_hll[7];
     qa = lambda_r*lambda_l;
     qb = lambda_r - lambda_l;
-    flux_hll.d  = (lambda_r*fl.d  - lambda_l*fr.d  + qa*du.d ) / qb;
-    flux_hll.e  = (lambda_r*fl.mx - lambda_l*fr.mx + qa*du.mx) / qb;
-    flux_hll.mx = (lambda_r*fl.my - lambda_l*fr.my + qa*du.my) / qb;
-    flux_hll.my = (lambda_r*fl.mz - lambda_l*fr.mz + qa*du.mz) / qb;
-    flux_hll.mz = (lambda_r*fl.e  - lambda_l*fr.e  + qa*du.e ) / qb;
-    flux_hll.by = (lambda_r*fl.by - lambda_l*fr.by + qa*du.by) / qb;
-    flux_hll.bz = (lambda_r*fl.bz - lambda_l*fr.bz + qa*du.bz) / qb;
+    flux_hll[IDN] = (lambda_r*flux_l[IDN] - lambda_l*flux_r[IDN] + qa*du[IDN]) / qb;
+    flux_hll[IVX] = (lambda_r*flux_l[IVX] - lambda_l*flux_r[IVX] + qa*du[IVX]) / qb;
+    flux_hll[IVY] = (lambda_r*flux_l[IVY] - lambda_l*flux_r[IVY] + qa*du[IVY]) / qb;
+    flux_hll[IVZ] = (lambda_r*flux_l[IVZ] - lambda_l*flux_r[IVZ] + qa*du[IVZ]) / qb;
+    flux_hll[IEN] = (lambda_r*flux_l[IEN] - lambda_l*flux_r[IEN] + qa*du[IEN]) / qb;
+    flux_hll[5]   = (lambda_r*flux_l[5]   - lambda_l*flux_r[5]   + qa*du[5]  ) / qb;
+    flux_hll[6]   = (lambda_r*flux_l[6]   - lambda_l*flux_r[6]   + qa*du[6]  ) / qb;
 
     // Determine region of wavefan
-    MHDCons1D *flux_interface;
+    Real *flux_interface;
     if (lambda_l >= 0.0) {  // L region
-      flux_interface = &fl;
+      flux_interface = flux_l;
     } else if (lambda_r <= 0.0) { // R region
-      flux_interface = &fr;
+      flux_interface = flux_r;
     } else {  // HLL region
-      flux_interface = &flux_hll;
+      flux_interface = flux_hll;
     }
 
     // Set fluxes
-    flx(m,IDN,k,j,i) = flux_interface->d;
-    flx(m,ivx,k,j,i) = flux_interface->mx;
-    flx(m,ivy,k,j,i) = flux_interface->my;
-    flx(m,ivz,k,j,i) = flux_interface->mz;
-    flx(m,IEN,k,j,i) = flux_interface->e;
+    flx(m,IDN,k,j,i) = flux_interface[IDN];
+    flx(m,IVX,k,j,i) = flux_interface[IVX];
+    flx(m,IVY,k,j,i) = flux_interface[IVY];
+    flx(m,IVZ,k,j,i) = flux_interface[IVZ];
+    flx(m,IEN,k,j,i) = flux_interface[IEN];
 
-    ey(m,k,j,i) = -flux_interface->by;
-    ez(m,k,j,i) =  flux_interface->bz;
+    ey(m,k,j,i) = -flux_interface[5];
+    ez(m,k,j,i) =  flux_interface[6];
 
     // We evolve tau = E - D
     flx(m,IEN,k,j,i) -= flx(m,IDN,k,j,i);

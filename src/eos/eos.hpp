@@ -30,14 +30,14 @@ struct EOS_Data
   bool use_e, use_t; // use internal energy density (e) or temperature (t) as primitive
   Real density_floor, pressure_floor, temperature_floor;
 
-  // inlined sound speed function for ideal gas EOS in nonrelativistic hydro 
+  // NON-RELATIVISTIC IDEAL GAS HYDRO: inlined sound speed function
   KOKKOS_INLINE_FUNCTION
   Real IdealHydroSoundSpeed(const Real d, const Real p)
   const {
     return sqrt(gamma*p/d);
   }
 
-  // inlined fast magnetosonic speed function for ideal gas EOS in nonrelativistic mhd
+  // NON-RELATIVISTIC IDEAL GAS MHD: inlined fast magnetosonic speed function
   KOKKOS_INLINE_FUNCTION
   Real IdealMHDFastSpeed(const Real d, const Real p,
                          const Real bx, const Real by, const Real bz)
@@ -49,7 +49,7 @@ struct EOS_Data
     return sqrt(0.5*(qsq + sqrt(tmp*tmp + 4.0*asq*ct2))/d);
   }
 
-  // inlined fast magnetosonic speed function for isothermal EOS in nonrelativistic mhd
+  // NON-RELATIVISTIC ISOTHERMAL MHD: inlined fast magnetosonic speed function
   KOKKOS_INLINE_FUNCTION
   Real IdealMHDFastSpeed(const Real d, const Real bx, const Real by, const Real bz)
   const {
@@ -60,7 +60,7 @@ struct EOS_Data
     return sqrt(0.5*(qsq + sqrt(tmp*tmp + 4.0*asq*ct2))/d);
   }
 
-  // inlined maximal wave speeds function for ideal gas in SR hydro
+  // SPECIAL RELATIVISTIC IDEAL GAS HYDRO: inlined maximal sound wave speeds function
   // Inputs:
   //   d: density in comoving frame 
   //   p: gas pressure
@@ -84,7 +84,7 @@ struct EOS_Data
     l_m = (p1 - tmp) * invden;
   }
 
-  // inlined maximal wave speeds function for ideal gas in SR MHD
+  // SPECIAL RELATIVISTIC IDEAL GAS MHD: inlined maximal fast magnetosonic wave speeds fn
   // arguments same or SR hydro version, with the addition of b_sq = b_\mu b_\mu
   // Reference:
   //   Del Zanna et al, A&A 473, 11 (2007) (eq. 76)
@@ -107,8 +107,7 @@ struct EOS_Data
     l_m = (p1 - tmp) * invden;
   }
 
-
-  // inlined maximal wave speeds function for ideal gas in GR hydro
+  // GENERAL RELATIVISTIC IDEAL GAS HYDRO: inlined maximal sound wave speeds fn
   // Inputs:
   //  - d: density in comoving frame
   //  - p: gas pressure
@@ -150,8 +149,9 @@ struct EOS_Data
     }
   }
 
-  // inlined maximal fast magnetosonic wave speeds function for ideal gas in GRMHD
+  // GENERAL RELATIVISTIC IDEAL GAS MHD: inlined maximal fast magnetosonic wave speeds fn
   // Inputs:
+  //  - d: density in comoving frame
   //  - h: enthalpy per unit volume
   //  - p: gas pressure
   //  - u0, u1: contravariant components of 4-velocity
@@ -163,12 +163,14 @@ struct EOS_Data
   //  - Follows same general procedure as vchar() in phys.c in Harm.
   //  - Variables are named as though 1 is normal direction.
   KOKKOS_INLINE_FUNCTION
-  void IdealGRMHDFastSpeeds(Real h, Real p, Real u0, Real u1, Real b_sq,
-                    Real g00, Real g01, Real g11, Real& l_p, Real& l_m)
+  void IdealGRMHDFastSpeeds(const Real d, const Real p, const Real u0, const Real u1,
+                            const Real b_sq, const Real g00, const Real g01,
+                            const Real g11, Real& l_p, Real& l_m)
   const {
     // Calculate comoving fast magnetosonic speed
-    Real cs_sq = gamma * p / h;
-    Real va_sq = b_sq / (b_sq + h);
+    Real w = d + gamma*p/(gamma - 1.0);
+    Real cs_sq = gamma * p / w;
+    Real va_sq = b_sq / (b_sq + w);
     Real cms_sq = cs_sq + va_sq - cs_sq * va_sq;
 
     // Set fast magnetosonic speeds in appropriate coordinates

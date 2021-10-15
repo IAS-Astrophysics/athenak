@@ -7,8 +7,7 @@
 //! \brief HLLE Riemann solver for general relativistic hydrodynamics.
 //
 //! Notes:
-//!  - implements HLLE algorithm similar to that of fluxcalc() in step_ch.c in Harm
-//!  - cf. HLLENonTransforming() in hlle_rel.cpp and hllc_rel.cpp in Athena++
+//!  - cf. HLLE solver in hlle_rel_no_transform.cpp in Athena++
 
 #include <algorithm>  // max(), min()
 #include <cmath>      // sqrt()
