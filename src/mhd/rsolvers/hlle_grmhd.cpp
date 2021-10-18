@@ -82,13 +82,13 @@ void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &c
       &g30 = gi_[I03], &g31 = gi_[I13], &g32 = gi_[I23], &g33 = gi_[I33];
     Real alpha = sqrt(-1.0/g00);
 
-    // Extract left primitives
-    const Real &rho_l  = wl(IDN,i);
-    const Real &uu1_l  = wl(IVX,i);
-    const Real &uu2_l  = wl(IVY,i);
-    const Real &uu3_l  = wl(IVZ,i);
+    // Extract left primitives.  Note 1/2/3 always refers to x1/2/3 dirs
+    const Real &rho_l = wl(IDN,i);
+    const Real &uu1_l = wl(IVX,i);
+    const Real &uu2_l = wl(IVY,i);
+    const Real &uu3_l = wl(IVZ,i);
 
-    // Extract right primitives
+    // Extract right primitives.  Note 1/2/3 always refers to x1/2/3 dirs
     const Real &rho_r  = wr(IDN,i);
     const Real &uu1_r  = wr(IVX,i);
     const Real &uu2_r  = wr(IVY,i);
@@ -103,36 +103,39 @@ void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &c
       pgas_r = wr(IDN,i)*wr(ITM,i);
     }
 
-    // permute magnetic field and metric according to direction of slice
+    // on input;
+    //   bx = face-centered field in direction of slice
+    //   bl/r contain bcc1, bcc2, bcc3 in IBX/IBY/IBZ components
+    // extract magnetic field and metric components according to direction of slice
     Real gii, g0i;
     Real bb1_l, bb2_l, bb3_l, bb1_r, bb2_r, bb3_r;
     if (ivx == IVX) {
       gii = g11;
       g0i = g01;
-      bb1_l = bx(m,k,j,i);
-      bb2_l = wl(IBY,i);
-      bb3_l = wl(IBZ,i);
       bb1_r = bx(m,k,j,i);
-      bb2_r = wr(IBY,i);
-      bb3_r = wr(IBZ,i);
+      bb2_r = br(IBY,i);
+      bb3_r = br(IBZ,i);
+      bb1_l = bx(m,k,j,i);
+      bb2_l = bl(IBY,i);
+      bb3_l = bl(IBZ,i);
     } else if (ivx == IVY) {
       gii = g22;
       g0i = g02;
+      bb1_l = bl(IBX,i);
       bb2_l = bx(m,k,j,i);
-      bb3_l = wl(IBY,i);
-      bb1_l = wl(IBZ,i);
+      bb3_l = bl(IBZ,i);
+      bb1_r = br(IBX,i);
       bb2_r = bx(m,k,j,i);
-      bb3_r = wr(IBY,i);
-      bb1_r = wr(IBZ,i);
+      bb3_r = br(IBZ,i);
     } else {
       gii = g33;
       g0i = g03;
+      bb1_l = bl(IBX,i);
+      bb2_l = bl(IBY,i);
       bb3_l = bx(m,k,j,i);
-      bb1_l = wl(IBY,i);
-      bb2_l = wl(IBZ,i);
+      bb1_r = br(IBX,i);
+      bb2_r = br(IBY,i);
       bb3_r = bx(m,k,j,i);
-      bb1_r = wr(IBY,i);
-      bb2_r = wr(IBZ,i);
     }
 
     // Calculate 4-velocity in left state
