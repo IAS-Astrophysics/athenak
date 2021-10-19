@@ -27,8 +27,10 @@
 #include "coordinates/cell_locations.hpp"
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
+#include "mhd/mhd.hpp"
 
 
+// prototypes for functions used internally to this pgen
 namespace {
 KOKKOS_INLINE_FUNCTION
 static Real CalculateLFromRPeak(struct torus_pgen pgen, Real r);
@@ -56,22 +58,26 @@ static void TransformVector(struct torus_pgen pgen,
                             Real x1, Real x2, Real x3,
                             Real *pa0, Real *pa1, Real *pa2, Real *pa3);
 
+KOKKOS_INLINE_FUNCTION
+Real A1(struct torus_pgen pgen, Real x1, Real x2, Real x3);
+KOKKOS_INLINE_FUNCTION
+Real A2(struct torus_pgen pgen, Real x1, Real x2, Real x3);
+KOKKOS_INLINE_FUNCTION
+Real A3(struct torus_pgen pgen, Real x1, Real x2, Real x3);
+
+// useful container for physical parameters of torus
 struct torus_pgen {
   Real mass, spin;                            // black hole parameters
+  Real gamma_adi, k_adi;                      // EOS parameters
+  Real r_edge, r_peak, l, rho_max;            // fixed torus parameters
   Real l_peak;                                // fixed torus parameters
+  Real log_h_edge, log_h_peak;                // calculated torus parameters
+  Real pgas_over_rho_peak, rho_peak;          // more calculated torus parameters
   Real psi, sin_psi, cos_psi;                 // tilt parameters
   Real rho_min, rho_pow, pgas_min, pgas_pow;  // background parameters
   Real potential_cutoff;                      // sets region of torus to magnetize
   Real potential_r_pow, potential_rho_pow;    // set how vector potential scales
-  Real beta_min;                              // min ratio of gas to mag pressure
-  int sample_n_r, sample_n_theta;             // number of cells in 2D sample grid
-  int sample_n_phi;                           // number of cells in 3D sample grid
-  Real sample_r_rat;                          // sample grid geom spacing ratio
-  Real sample_cutoff;                         // density cutoff for sample grid
-  Real x1_min, x1_max, x2_min, x2_max;        // 2D limits in chosen coordinates
-  Real x3_min, x3_max;                        // 3D limits in chosen coordinates
-  Real r_min, r_max, theta_min, theta_max;    // limits in r,theta for 2D samples
-  Real phi_min, phi_max;                      // limits in phi for 3D samples
+  Real b_norm;                                // min ratio of gas to mag pressure
   Real dfloor,pfloor;                         // density and pressure floors
 };
 
@@ -96,17 +102,18 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
   torus.pgas_min = pin->GetReal("problem", "pgas_min");
   torus.pgas_pow = pin->GetReal("problem", "pgas_pow");
   torus.psi = pin->GetOrAddReal("problem", "tilt_angle", 0.0) * (M_PI/180.0);
-  torus.sin_psi = std::sin(torus.psi);
-  torus.cos_psi = std::cos(torus.psi);
+  torus.sin_psi = sin(torus.psi);
+  torus.cos_psi = cos(torus.psi);
 
   torus.dfloor=pin->GetOrAddReal("hydro","dfloor",(1024*(FLT_MIN)));
   torus.pfloor=pin->GetOrAddReal("hydro","pfloor",(1024*(FLT_MIN)));
   
+  torus.rho_max = pin->GetReal("problem", "rho_max");
+  torus.k_adi = pin->GetReal("problem", "k_adi");
+  torus.r_edge = pin->GetReal("problem", "r_edge");
+  torus.r_peak = pin->GetReal("problem", "r_peak");
+
   // local parameters
-  Real rho_max = pin->GetReal("problem", "rho_max");
-  Real k_adi = pin->GetReal("problem", "k_adi");
-  Real r_edge = pin->GetReal("problem", "r_edge");
-  Real r_peak = pin->GetReal("problem", "r_peak");
   Real pert_amp = pin->GetOrAddReal("problem", "pert_amp", 0.0);
   
   // capture variables for kernel
@@ -115,125 +122,221 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
   int nmb1 = pmbp->nmb_thispack - 1;
+  auto &coord = pmbp->coord.coord_data;
 
-  // initialize Hydro primitive variables ------------------------------------------------
+  // Get ideal gas EOS data
+  Real gm1;
   if (pmbp->phydro != nullptr) {
-    auto w0_ = pmbp->phydro->w0;
-    EOS_Data &eos = pmbp->phydro->peos->eos_data;
-    auto &coord = pmbp->coord.coord_data;
-    Real gm1 = eos.gamma - 1.0;
+    torus.gamma_adi = pmbp->phydro->peos->eos_data.gamma;
+  } else if (pmbp->pmhd != nullptr) {
+    torus.gamma_adi = pmbp->pmhd->peos->eos_data.gamma;
+  }
+  gm1 = torus.gamma_adi - 1.0;
 
-    // Get mass and spin of black hole
-    torus.mass = coord.bh_mass;
-    torus.spin = coord.bh_spin;
+  // Get mass and spin of black hole
+  torus.mass = coord.bh_mass;
+  torus.spin = coord.bh_spin;
 
-    // compute angular momentum give radius of pressure maximum
-    torus.l_peak = CalculateLFromRPeak(torus, r_peak);
+  // compute angular momentum give radius of pressure maximum
+  torus.l_peak = CalculateLFromRPeak(torus, torus.r_peak);
 
-    // Prepare constants describing primitives
-    Real log_h_edge = LogHAux(torus, r_edge, 1.0);
-    Real log_h_peak = LogHAux(torus, r_peak, 1.0) - log_h_edge;
-    Real pgas_over_rho_peak = gm1/eos.gamma * (exp(log_h_peak)-1.0);
-    Real rho_peak = pow(pgas_over_rho_peak/k_adi, 1.0/gm1) / rho_max;
-    auto torus_ = torus;
+  // Prepare constants describing primitives
+  torus.log_h_edge = LogHAux(torus, torus.r_edge, 1.0);
+  torus.log_h_peak = LogHAux(torus, torus.r_peak, 1.0) - torus.log_h_edge;
+  torus.pgas_over_rho_peak = gm1/torus.gamma_adi * (exp(torus.log_h_peak)-1.0);
+  torus.rho_peak = pow(torus.pgas_over_rho_peak/torus.k_adi, 1.0/gm1) / torus.rho_max;
 
-    Kokkos::Random_XorShift64_Pool<> rand_pool64(pmbp->gids);
-    par_for("pgen_torus1", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
+  // Select either Hydro or MHD 
+  DvceArray5D<Real> u0_, w0_;
+  if (pmbp->phydro != nullptr) {
+    u0_ = pmbp->phydro->u0;
+    w0_ = pmbp->phydro->w0;
+  } else if (pmbp->pmhd != nullptr) {
+    u0_ = pmbp->pmhd->u0;
+    w0_ = pmbp->pmhd->w0;
+  }
+
+  // initialize primitive variables ---------------------------------------
+
+  auto trs = torus;
+  Kokkos::Random_XorShift64_Pool<> rand_pool64(pmbp->gids);
+  par_for("pgen_torus1", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i)
+    {
+      Real &x1min = coord.mb_size.d_view(m).x1min;
+      Real &x1max = coord.mb_size.d_view(m).x1max;
+      int nx1 = coord.mb_indcs.nx1;
+      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+
+      Real &x2min = coord.mb_size.d_view(m).x2min;
+      Real &x2max = coord.mb_size.d_view(m).x2max;
+      int nx2 = coord.mb_indcs.nx2;
+      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+
+      Real &x3min = coord.mb_size.d_view(m).x3min;
+      Real &x3max = coord.mb_size.d_view(m).x3max;
+      int nx3 = coord.mb_indcs.nx3;
+      Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+
+      // Calculate Boyer-Lindquist coordinates of cell
+      Real r, theta, phi;
+      GetBoyerLindquistCoordinates(trs, x1v, x2v, x3v, &r, &theta, &phi);
+      Real sin_theta = sin(theta);
+      Real cos_theta = cos(theta);
+      Real sin_phi = sin(phi);
+      Real cos_phi = cos(phi);
+
+      Real sin_vartheta = abs(sin_theta);
+      Real cos_vartheta = cos_theta;
+      Real varphi = (sin_theta < 0.0) ? (phi - M_PI) : phi;
+      Real sin_varphi = sin(varphi);
+      Real cos_varphi = cos(varphi);
+
+      // Determine if we are in the torus
+      Real log_h;
+      bool in_torus = false;
+      if (r >= trs.r_edge) {
+        log_h = LogHAux(trs, r, sin_vartheta) - trs.log_h_edge;  // (FM 3.6)
+        if (log_h >= 0.0) {
+          in_torus = true;
+        }
+      }
+
+      // Calculate background primitives
+      Real rho_bg = trs.rho_min * pow(r, trs.rho_pow);
+      Real pgas_bg = trs.pgas_min * pow(r, trs.pgas_pow);
+
+      Real rho = rho_bg;
+      Real pgas = pgas_bg;
+      Real uu1 = 0.0;
+      Real uu2 = 0.0;
+      Real uu3 = 0.0;
+      Real perturbation = 0.0;
+      // Overwrite primitives inside torus
+      if (in_torus) {
+        // Calculate perturbation
+        auto rand_gen = rand_pool64.get_state(); // get random number state this thread
+        perturbation = pert_amp*(rand_gen.frand() - 0.5);
+        rand_pool64.free_state(rand_gen);  // free state for use by other threads
+
+        // Calculate thermodynamic variables
+        Real pgas_over_rho = gm1/trs.gamma_adi * (exp(log_h) - 1.0);
+        rho = pow(pgas_over_rho/trs.k_adi, 1.0/gm1) / trs.rho_peak;
+        pgas = pgas_over_rho * rho;
+
+        // Calculate velocities in Boyer-Lindquist coordinates
+        Real u0_bl, u1_bl, u2_bl, u3_bl;
+        CalculateVelocityInTiltedTorus(trs, r, theta, phi,
+                                       &u0_bl, &u1_bl, &u2_bl, &u3_bl);
+
+        // Transform to preferred coordinates
+        Real u0, u1, u2, u3;
+        TransformVector(trs, u0_bl, 0.0, u2_bl, u3_bl,
+                        x1v, x2v, x3v, &u0, &u1, &u2, &u3);
+
+        Real g_[NMETRIC], gi_[NMETRIC];
+        ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, true,
+                                  coord.bh_spin, g_, gi_);
+        uu1 = u1 - gi_[I01]/gi_[I00] * u0;
+        uu2 = u2 - gi_[I02]/gi_[I00] * u0;
+        uu3 = u3 - gi_[I03]/gi_[I00] * u0;
+      }
+
+      // Set primitive values, including random perturbations to pressure
+      w0_(m,IDN,k,j,i) = fmax(rho, rho_bg);
+      w0_(m,IEN,k,j,i) = fmax(pgas, pgas_bg) * (1.0 + perturbation) / gm1;
+      w0_(m,IVX,k,j,i) = uu1;
+      w0_(m,IVY,k,j,i) = uu2;
+      w0_(m,IVZ,k,j,i) = uu3;
+    }
+  );
+
+  // initialize magnetic fields ---------------------------------------
+
+  if (pmbp->pmhd != nullptr) {
+
+    // parse some more parameters from input
+    torus.potential_cutoff = pin->GetReal("problem", "potential_cutoff");
+    torus.potential_r_pow = pin->GetReal("problem", "potential_r_pow");
+    torus.potential_rho_pow = pin->GetReal("problem", "potential_rho_pow");
+
+    auto &b0 = pmbp->pmhd->b0;
+    par_for("pgen_torus2", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i)
-      {
+      { 
         Real &x1min = coord.mb_size.d_view(m).x1min;
         Real &x1max = coord.mb_size.d_view(m).x1max;
         int nx1 = coord.mb_indcs.nx1;
         Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
-
+        
         Real &x2min = coord.mb_size.d_view(m).x2min;
         Real &x2max = coord.mb_size.d_view(m).x2max;
         int nx2 = coord.mb_indcs.nx2;
         Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
-
+        
         Real &x3min = coord.mb_size.d_view(m).x3min;
         Real &x3max = coord.mb_size.d_view(m).x3max;
         int nx3 = coord.mb_indcs.nx3;
         Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
-
-        // Calculate Boyer-Lindquist coordinates of cell
-        Real r, theta, phi;
-        GetBoyerLindquistCoordinates(torus_, x1v, x2v, x3v, &r, &theta, &phi);
-        Real sin_theta = sin(theta);
-        Real cos_theta = cos(theta);
-        Real sin_phi = sin(phi);
-        Real cos_phi = cos(phi);
-
-        Real sin_vartheta = abs(sin_theta);
-        Real cos_vartheta = cos_theta;
-        Real varphi = (sin_theta < 0.0) ? (phi - M_PI) : phi;
-        Real sin_varphi = sin(varphi);
-        Real cos_varphi = cos(varphi);
-
-        // Determine if we are in the torus
-        Real log_h;
-        bool in_torus = false;
-        if (r >= r_edge) {
-          log_h = LogHAux(torus_, r, sin_vartheta) - log_h_edge;  // (FM 3.6)
-          if (log_h >= 0.0) {
-            in_torus = true;
-          }
+        
+        // Compute face-centered fields from curl(A).
+        Real x1f   = LeftEdgeX(i  -is, nx1, x1min, x1max);
+        Real x1fp1 = LeftEdgeX(i+1-is, nx1, x1min, x1max);
+        Real x2f   = LeftEdgeX(j  -js, nx2, x2min, x2max);
+        Real x2fp1 = LeftEdgeX(j+1-js, nx2, x2min, x2max);
+        Real x3f   = LeftEdgeX(k  -ks, nx3, x3min, x3max);
+        Real x3fp1 = LeftEdgeX(k+1-ks, nx3, x3min, x3max);
+        Real dx1 = coord.mb_size.d_view(m).dx1;
+        Real dx2 = coord.mb_size.d_view(m).dx2;
+        Real dx3 = coord.mb_size.d_view(m).dx3;
+        
+        b0.x1f(m,k,j,i) = (A3(trs,x1f,  x2fp1,x3v  ) - A3(trs,x1f,x2f,x3v))/dx2 -
+                          (A2(trs,x1f,  x2v,  x3fp1) - A2(trs,x1f,x2v,x3f))/dx3;
+        b0.x2f(m,k,j,i) = (A1(trs,x1v,  x2f,  x3fp1) - A1(trs,x1v,x2f,x3f))/dx3 -
+                          (A3(trs,x1fp1,x2f,  x3v  ) - A3(trs,x1f,x2f,x3v))/dx1;
+        b0.x3f(m,k,j,i) = (A2(trs,x1fp1,x2v,  x3f  ) - A2(trs,x1f,x2v,x3f))/dx1 -
+                          (A1(trs,x1v,  x2fp1,x3f  ) - A1(trs,x1v,x2f,x3f))/dx2;
+        
+        // Include extra face-component at edge of block in each direction
+        if (i==ie) {
+          b0.x1f(m,k,j,i+1) = (A3(trs,x1fp1,x2fp1,x3v  ) - A3(trs,x1fp1,x2f,x3v))/dx2 -
+                              (A2(trs,x1fp1,x2v,  x3fp1) - A2(trs,x1fp1,x2v,x3f))/dx3;
         }
-
-        // Calculate background primitives
-        Real rho_bg = torus_.rho_min * pow(r, torus_.rho_pow);
-        Real pgas_bg = torus_.pgas_min * pow(r, torus_.pgas_pow);
-
-        Real rho = rho_bg;
-        Real pgas = pgas_bg;
-        Real uu1 = 0.0;
-        Real uu2 = 0.0;
-        Real uu3 = 0.0;
-        Real perturbation = 0.0;
-        // Overwrite primitives inside torus
-        if (in_torus) {
-          // Calculate perturbation
-          auto rand_gen = rand_pool64.get_state(); // get random number state this thread
-          perturbation = pert_amp*(rand_gen.frand() - 0.5);
-          rand_pool64.free_state(rand_gen);  // free state for use by other threads
-
-          // Calculate thermodynamic variables
-          Real pgas_over_rho = gm1/eos.gamma * (exp(log_h) - 1.0);
-          rho = std::pow(pgas_over_rho/k_adi, 1.0/gm1) / rho_peak;
-          pgas = pgas_over_rho * rho;
-
-          // Calculate velocities in Boyer-Lindquist coordinates
-          Real u0_bl, u1_bl, u2_bl, u3_bl;
-          CalculateVelocityInTiltedTorus(torus_, r, theta, phi,
-                                         &u0_bl, &u1_bl, &u2_bl, &u3_bl);
-
-          // Transform to preferred coordinates
-          Real u0, u1, u2, u3;
-          TransformVector(torus_, u0_bl, 0.0, u2_bl, u3_bl,
-                          x1v, x2v, x3v, &u0, &u1, &u2, &u3);
-
-          Real g_[NMETRIC], gi_[NMETRIC];
-          ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, true,
-                                  coord.bh_spin, g_, gi_);
-          uu1 = u1 - gi_[I01]/gi_[I00] * u0;
-          uu2 = u2 - gi_[I02]/gi_[I00] * u0;
-          uu3 = u3 - gi_[I03]/gi_[I00] * u0;
+        if (j==je) {
+          b0.x2f(m,k,j+1,i) = (A1(trs,x1v,  x2fp1,x3fp1) - A1(trs,x1v,x2fp1,x3f))/dx3 -
+                              (A3(trs,x1fp1,x2fp1,x3v  ) - A3(trs,x1f,x2fp1,x3v))/dx1;
         }
-
-        // Set primitive values, including random perturbations to pressure
-        w0_(m,IDN,k,j,i) = fmax(rho, rho_bg);
-        w0_(m,IPR,k,j,i) = fmax(pgas, pgas_bg) * (1.0 + perturbation);
-        w0_(m,IVX,k,j,i) = uu1;
-        w0_(m,IVY,k,j,i) = uu2;
-        w0_(m,IVZ,k,j,i) = uu3;
+        if (k==ke) {
+          b0.x3f(m,k+1,j,i) = (A2(trs,x1fp1,x2v,  x3fp1) - A2(trs,x1f,x2v,x3fp1))/dx1 -
+                              (A1(trs,x1v,  x2fp1,x3fp1) - A1(trs,x1v,x2f,x3fp1))/dx2;
+        }
       }
     );
 
-    // Convert primitives to conserved
-    auto &u0 = pmbp->phydro->u0;
-    pmbp->phydro->peos->PrimToCons(w0_, u0);
+    // Compute cell-centered fields
+    auto &bcc_ = pmbp->pmhd->bcc0;
+    par_for("pgen_torus2", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
+      KOKKOS_LAMBDA(int m, int k, int j, int i)
+      {
+        // cell-centered fields are simple linear average of face-centered fields
+        Real& w_bx = bcc_(m,IBX,k,j,i);
+        Real& w_by = bcc_(m,IBY,k,j,i);
+        Real& w_bz = bcc_(m,IBZ,k,j,i);
+        w_bx = 0.5*(b0.x1f(m,k,j,i) + b0.x1f(m,k,j,i+1));
+        w_by = 0.5*(b0.x2f(m,k,j,i) + b0.x2f(m,k,j+1,i));
+        w_bz = 0.5*(b0.x3f(m,k,j,i) + b0.x3f(m,k+1,j,i));
+      }
+    );
 
-  } // end hydro initialization
+  }
+
+  // Convert primitives to conserved
+  if (pmbp->phydro != nullptr) {
+    pmbp->phydro->peos->PrimToCons(w0_, u0_);
+  } else if (pmbp->pmhd != nullptr) {
+    auto &bcc0_ = pmbp->pmhd->bcc0;
+    pmbp->pmhd->peos->PrimToCons(w0_, bcc0_, u0_);
+  }
 
   return;
 }
@@ -334,10 +437,10 @@ static void CalculateVelocityInTiltedTorus(struct torus_pgen pgen,
                                            Real *pu1, Real *pu2, Real *pu3)
 {
   // Calculate corresponding location
-  Real sin_theta = std::sin(theta);
-  Real cos_theta = std::cos(theta);
-  Real sin_phi = std::sin(phi);
-  Real cos_phi = std::cos(phi);
+  Real sin_theta = sin(theta);
+  Real cos_theta = cos(theta);
+  Real sin_phi = sin(phi);
+  Real cos_phi = cos(phi);
   Real sin_vartheta, cos_vartheta, varphi;
   if (pgen.psi != 0.0) {
     Real x = sin_theta * cos_phi;
@@ -346,16 +449,16 @@ static void CalculateVelocityInTiltedTorus(struct torus_pgen pgen,
     Real varx = pgen.cos_psi * x - pgen.sin_psi * z;
     Real vary = y;
     Real varz = pgen.sin_psi * x + pgen.cos_psi * z;
-    sin_vartheta = std::sqrt(SQR(varx) + SQR(vary));
+    sin_vartheta = sqrt(SQR(varx) + SQR(vary));
     cos_vartheta = varz;
-    varphi = std::atan2(vary, varx);
+    varphi = atan2(vary, varx);
   } else {
-    sin_vartheta = std::abs(sin_theta);
+    sin_vartheta = fabs(sin_theta);
     cos_vartheta = cos_theta;
     varphi = (sin_theta < 0.0) ? (phi - M_PI) : phi;
   }
-  Real sin_varphi = std::sin(varphi);
-  Real cos_varphi = std::cos(varphi);
+  Real sin_varphi = sin(varphi);
+  Real cos_varphi = cos(varphi);
 
   // Calculate untilted velocity
   Real u0_tilt, u3_tilt;
@@ -412,8 +515,8 @@ static void CalculateVelocityInTorus(struct torus_pgen pgen,
   Real exp_2psi = aa / sigma * sin_sq_theta;                 // \exp(2\psi) (FM 3.5)
   Real exp_neg2chi = exp_2nu / exp_2psi;                     // \exp(-2\chi) (cf. FM 2.15)
   Real u_phi_proj_a = 1.0 + 4.0*SQR(pgen.l_peak)*exp_neg2chi;
-  Real u_phi_proj_b = -1.0 + std::sqrt(u_phi_proj_a);
-  Real u_phi_proj = std::sqrt(0.5 * u_phi_proj_b);           // (FM 3.3)
+  Real u_phi_proj_b = -1.0 + sqrt(u_phi_proj_a);
+  Real u_phi_proj = sqrt(0.5 * u_phi_proj_b);           // (FM 3.3)
   Real u3_a = (1.0+SQR(u_phi_proj)) / (aa*sigma*delta);
   Real u3_b = 2.0*pgen.mass*pgen.spin*r * sqrt(u3_a);
   Real u3_c = sqrt(sigma/aa) / sin_theta;
@@ -464,6 +567,97 @@ static void TransformVector(struct torus_pgen pgen,
   *pa3 = a1_bl * z/r - 
          a2_bl * r * sqrt((SQR(x) + SQR(y))/(SQR(r) + SQR(pgen.spin)));
   return;
+}
+
+//----------------------------------------------------------------------------------------
+// Function to compute 1-component of vector potential.  First computes phi-componenent
+// in BL coordinates, then transforms to Cartesian KS, assuming A_r = A_theta = 0
+// A_\mu (cks) = A_nu (ks)  dx^nu (ks)/dx^\mu (cks) = A_phi (ks) dphi (ks)/dx^\mu
+// phi_ks = arctan((r*y + a*x)/(r*x - a*y) ) 
+//
+
+KOKKOS_INLINE_FUNCTION
+Real A1(struct torus_pgen trs, Real x1, Real x2, Real x3)
+{
+  Real r, theta, phi;
+  Real aphi = 0.0;
+  GetBoyerLindquistCoordinates(trs, x1, x2, x3, &r, &theta, &phi);
+  if (r >= trs.r_edge) {
+    Real sin_vartheta = abs(sin(theta));
+    Real log_h = LogHAux(trs, r, sin_vartheta) - trs.log_h_edge;  // (FM 3.6)
+    if (log_h >= 0.0) {
+      Real pgas_over_rho = (trs.gamma_adi-1.0)/trs.gamma_adi * (exp(log_h)-1.0);
+      Real rho = pow(pgas_over_rho/trs.k_adi, 1.0/(trs.gamma_adi-1.0)) / trs.rho_peak;
+      Real rho_cutoff = fmax(rho - trs.potential_cutoff, static_cast<Real>(0.0));
+      aphi = pow(r, trs.potential_r_pow) * pow(rho_cutoff, trs.potential_rho_pow);
+    }
+  }
+
+  Real big_r = sqrt( SQR(x1) + SQR(x2) + SQR(x3) );
+  r = sqrt( SQR(big_r) - SQR(trs.spin) + sqrt(SQR(SQR(big_r) - SQR(trs.spin))
+         + 4.0*SQR(trs.spin)*SQR(x3)) ) / sqrt(2.0);
+  Real sqrt_term =  2.0*SQR(r) - SQR(big_r) + SQR(trs.spin);
+
+  //dphi/dx =  partial phi/partial x + partial phi/partial r partial r/partial x 
+  return aphi*(-x2/(SQR(x1)+SQR(x2)) + trs.spin*x1*r/((SQR(trs.spin)+SQR(r))*sqrt_term));
+}
+
+//----------------------------------------------------------------------------------------
+// Function to compute 2-component of vector potential. See comments for A1.
+
+KOKKOS_INLINE_FUNCTION
+Real A2(struct torus_pgen trs, Real x1, Real x2, Real x3)
+{
+  Real r, theta, phi;
+  Real aphi = 0.0;
+  GetBoyerLindquistCoordinates(trs, x1, x2, x3, &r, &theta, &phi);
+  if (r >= trs.r_edge) {
+    Real sin_vartheta = abs(sin(theta));
+    Real log_h = LogHAux(trs, r, sin_vartheta) - trs.log_h_edge;  // (FM 3.6)
+    if (log_h >= 0.0) {
+      Real pgas_over_rho = (trs.gamma_adi-1.0)/trs.gamma_adi * (exp(log_h)-1.0);
+      Real rho = pow(pgas_over_rho/trs.k_adi, 1.0/(trs.gamma_adi-1.0)) / trs.rho_peak;
+      Real rho_cutoff = fmax(rho - trs.potential_cutoff, static_cast<Real>(0.0));
+      aphi = pow(r, trs.potential_r_pow) * pow(rho_cutoff, trs.potential_rho_pow);
+    }
+  }
+  
+  Real big_r = sqrt( SQR(x1) + SQR(x2) + SQR(x3) );
+  r = sqrt( SQR(big_r) - SQR(trs.spin) + sqrt(SQR(SQR(big_r) - SQR(trs.spin))
+         + 4.0*SQR(trs.spin)*SQR(x3)) ) / sqrt(2.0);
+  Real sqrt_term =  2.0*SQR(r) - SQR(big_r) + SQR(trs.spin);
+
+  //dphi/dx =  partial phi/partial y + partial phi/partial r partial r/partial y 
+  return aphi*( x1/(SQR(x1)+SQR(x2)) + trs.spin*x2*r/((SQR(trs.spin)+SQR(r))*sqrt_term) );
+}
+
+//----------------------------------------------------------------------------------------
+// Function to compute 3-component of vector potential. See comments for A1.
+
+KOKKOS_INLINE_FUNCTION
+Real A3(struct torus_pgen trs, Real x1, Real x2, Real x3)
+{
+  Real r, theta, phi;
+  Real aphi = 0.0;
+  GetBoyerLindquistCoordinates(trs, x1, x2, x3, &r, &theta, &phi);
+  if (r >= trs.r_edge) {
+    Real sin_vartheta = abs(sin(theta));
+    Real log_h = LogHAux(trs, r, sin_vartheta) - trs.log_h_edge;  // (FM 3.6)
+    if (log_h >= 0.0) {
+      Real pgas_over_rho = (trs.gamma_adi-1.0)/trs.gamma_adi * (exp(log_h)-1.0);
+      Real rho = pow(pgas_over_rho/trs.k_adi, 1.0/(trs.gamma_adi-1.0)) / trs.rho_peak;
+      Real rho_cutoff = fmax(rho - trs.potential_cutoff, static_cast<Real>(0.0));
+      aphi = pow(r, trs.potential_r_pow) * pow(rho_cutoff, trs.potential_rho_pow);
+    }
+  }
+  
+  Real big_r = sqrt( SQR(x1) + SQR(x2) + SQR(x3) );
+  r = sqrt( SQR(big_r) - SQR(trs.spin) + sqrt(SQR(SQR(big_r) - SQR(trs.spin))
+         + 4.0*SQR(trs.spin)*SQR(x3)) ) / sqrt(2.0);
+  Real sqrt_term =  2.0*SQR(r) - SQR(big_r) + SQR(trs.spin);
+
+  //dphi/dx =   partial phi/partial r partial r/partial z 
+  return aphi * ( trs.spin*x3/(r*sqrt_term) );
 }
 
 } // namespace
