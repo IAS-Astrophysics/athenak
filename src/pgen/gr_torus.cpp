@@ -261,6 +261,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
     torus.potential_rho_pow = pin->GetReal("problem", "potential_rho_pow");
 
     auto &b0 = pmbp->pmhd->b0;
+    auto trs = torus;
     par_for("pgen_torus2", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i)
       { 
