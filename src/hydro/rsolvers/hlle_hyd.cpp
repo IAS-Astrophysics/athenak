@@ -61,13 +61,8 @@ void HLLE(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coor
 
     Real wl_ipr, wr_ipr;
     if (eos.is_ideal) {
-      if (eos.use_e) {
-        wl_ipr = gm1*wl(IEN,i);
-        wr_ipr = gm1*wr(IEN,i);
-      } else {
-        wl_ipr = wl(IDN,i)*wl(ITM,i);
-        wr_ipr = wr(IDN,i)*wr(ITM,i);
-      }
+      wl_ipr = eos.IdealGasPressure(wl_idn, wl(IEN,i));
+      wr_ipr = eos.IdealGasPressure(wr_idn, wr(IEN,i));
     }
 
     //--- Step 2.  Compute Roe-averaged state

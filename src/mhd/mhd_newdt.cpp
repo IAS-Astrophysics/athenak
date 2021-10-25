@@ -101,12 +101,7 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage)
         Real v2 = SQR(ux) + SQR(uy) + SQR(uz);
         Real lor = sqrt(1.0 + v2);
         // FIXME ERM: Ideal fluid for now
-        Real p;
-        if (eos.use_e) {
-          p = (eos.gamma - 1.0)*w0_(m,IEN,k,j,i);
-        } else {
-          p = wd*w0_(m,ITM,k,j,i);
-        }
+        Real p = eos.IdealGasPressure(w0_(m,IDN,k,j,i), w0_(m,IEN,k,j,i));
         // Calculate 4-magnetic field in left state
         Real b_0 = bcc1*ux + bcc2*uy + bcc3*uz;
         Real b_1 = (bcc1 + b_0 * ux) / lor;
@@ -130,15 +125,8 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage)
         Real &w_bx = bcc0_(m,IBX,k,j,i);
         Real &w_by = bcc0_(m,IBY,k,j,i);
         Real &w_bz = bcc0_(m,IBZ,k,j,i);
-        Real cf,p;
-        if (eos.is_ideal) { 
-          if (eos.use_e) {
-            p = (eos.gamma - 1.0)*w0_(m,IEN,k,j,i);
-          } else {
-            p = w_d*w0_(m,ITM,k,j,i);
-          }
-        }
-
+        Real cf;
+        Real p = eos.IdealGasPressure(w0_(m,IDN,k,j,i), w0_(m,IEN,k,j,i));
         if (eos.is_ideal) { 
           cf = eos.IdealMHDFastSpeed(w_d, p, w_bx, w_by, w_bz);
         } else {

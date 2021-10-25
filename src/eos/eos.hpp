@@ -30,6 +30,15 @@ struct EOS_Data
   bool use_e, use_t; // use internal energy density (e) or temperature (t) as primitive
   Real density_floor, pressure_floor, temperature_floor;
 
+  // IDEAL GAS PRESSURE: converts primitive variable (either internal energy density e
+  // or temperature e/d) into pressure.
+  KOKKOS_INLINE_FUNCTION
+  Real IdealGasPressure(const Real d, const Real prim)
+  const {
+    if (use_e) {return ((gamma-1.0)*prim);}
+    else {return (d*prim);}
+  }
+
   // NON-RELATIVISTIC IDEAL GAS HYDRO: inlined sound speed function
   KOKKOS_INLINE_FUNCTION
   Real IdealHydroSoundSpeed(const Real d, const Real p)

@@ -64,13 +64,8 @@ void Roe(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coord
 
     // store pressure in L/R primitives
     if (eos.is_ideal) {
-      if (eos.use_e) {
-        wli[IEN] = gm1*wl(IEN,i);
-        wri[IEN] = gm1*wr(IEN,i);
-      } else {
-        wli[IEN] = wl(IDN,i)*wl(ITM,i); 
-        wri[IEN] = wr(IDN,i)*wr(ITM,i);
-      }
+      wli[IEN] = eos.IdealGasPressure(wli[IDN], wl(IEN,i));
+      wri[IEN] = eos.IdealGasPressure(wri[IDN], wr(IEN,i));
     }
 
     //--- Step 2.  Compute Roe-averaged data from left- and right-states

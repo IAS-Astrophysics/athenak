@@ -89,12 +89,7 @@ TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage)
         Real v2 = SQR(w0_(m,IVX,k,j,i)) + SQR(w0_(m,IVY,k,j,i)) + SQR(w0_(m,IVZ,k,j,i));
         Real lor = sqrt(1.0 + v2);
         // FIXME ERM: Ideal fluid for now
-        Real p;
-        if (eos.use_e) {
-          p = (eos.gamma - 1.0)*w0_(m,IEN,k,j,i);
-        } else {
-          p = w0_(m,ITM,k,j,i)*w0_(m,IDN,k,j,i);
-        }
+        Real p = eos.IdealGasPressure(w0_(m,IDN,k,j,i), w0_(m,IEN,k,j,i));
 
         Real lm, lp;
         eos.IdealSRHydroSoundSpeeds(w0_(m,IDN,k,j,i), p, w0_(m,IVX,k,j,i), lor, lp, lm);
@@ -109,12 +104,7 @@ TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage)
       } else {
         Real cs;
         if (eos.is_ideal) {
-          Real p;
-          if (eos.use_e) {
-            p = (eos.gamma - 1.0)*w0_(m,IEN,k,j,i);
-          } else {
-            p = w0_(m,ITM,k,j,i)*w0_(m,IDN,k,j,i);
-          }
+          Real p = eos.IdealGasPressure(w0_(m,IDN,k,j,i), w0_(m,IEN,k,j,i));
           cs = eos.IdealHydroSoundSpeed(w0_(m,IDN,k,j,i), p);
         } else         {
           cs = eos.iso_cs;

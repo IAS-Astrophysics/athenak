@@ -54,13 +54,8 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coor
       Real &wr_ibz=br(ibz,i);
 
       Real wl_ipr, wr_ipr;
-      if (eos.use_e) {
-        wl_ipr = gm1*wl(IEN,i);
-        wr_ipr = gm1*wr(IEN,i);
-      } else { 
-        wl_ipr = wl(IDN,i)*wl(ITM,i);
-        wr_ipr = wr(IDN,i)*wr(ITM,i);
-      }
+      wl_ipr = eos.IdealGasPressure(wl_idn, wl(IEN,i));
+      wr_ipr = eos.IdealGasPressure(wr_idn, wr(IEN,i));
 
       Real &bxi = bx(m,k,j,i);
 
