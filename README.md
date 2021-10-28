@@ -46,7 +46,7 @@ Then run cmake (version 3.0 or later) for the specific target architecture in th
 
 ### Default build for NVidia V100 (requires gcc and cudatoolkit)
 
-   $  cmake3 -DKokkos_ENABLE_CUDA=On -DKokkos_ARCH_VOLTA70=On -DCMAKE_CXX_COMPILER=${path_to_code}/athenak/kokkos/bin/nvcc_wrapper ../
+   $  cmake3 -DKokkos_ENABLE_CUDA=On -DKokkos_ARCH_VOLTA70=On -DCMAKE_CXX_COMPILER=${path_to_code}/kokkos/bin/nvcc_wrapper ../
 
 
 ### Debug build for NVidia V100 (requires gcc and cudatoolkit)
