@@ -37,7 +37,7 @@ evolution  = dynamic   # dynamic/kinematic/static
 integrator = rk3       # time integration algorithm
 cfl_number = 0.4       # The Courant, Friedrichs, & Lewy (CFL) Number
 nlim       = -1        # cycle limit
-tlim       = 60.       # time limit (almost 10 orbits = 20\pi)
+tlim       = 50.0      # time limit (about 8 orbits = 16\pi)
 ndiag      = 1         # cycles between diagostic output
 
 <mhd>
