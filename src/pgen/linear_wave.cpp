@@ -187,11 +187,11 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
   Real yfact = 1.0;
 
   // capture variables for kernel
-  auto &indcs = pmbp->coord.coord_data.mb_indcs;
+  auto &indcs = pmbp->pcoord->mbdata.indcs;
+  auto &size = pmbp->pcoord->mbdata.size;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
-  auto &coord = pmbp->coord.coord_data;
 
   // initialize Hydro variables ----------------------------------------------------------
   if (pmbp->phydro != nullptr) {
@@ -215,19 +215,19 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
     par_for("pgen_linwave1", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i)
       {
-        Real &x1min = coord.mb_size.d_view(m).x1min;
-        Real &x1max = coord.mb_size.d_view(m).x1max;
-        int nx1 = coord.mb_indcs.nx1;
+        Real &x1min = size.d_view(m).x1min;
+        Real &x1max = size.d_view(m).x1max;
+        int nx1 = indcs.nx1;
         Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
-        Real &x2min = coord.mb_size.d_view(m).x2min;
-        Real &x2max = coord.mb_size.d_view(m).x2max;
-        int nx2 = coord.mb_indcs.nx2;
+        Real &x2min = size.d_view(m).x2min;
+        Real &x2max = size.d_view(m).x2max;
+        int nx2 = indcs.nx2;
         Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
-        Real &x3min = coord.mb_size.d_view(m).x3min;
-        Real &x3max = coord.mb_size.d_view(m).x3max;
-        int nx3 = coord.mb_indcs.nx3;
+        Real &x3min = size.d_view(m).x3min;
+        Real &x3max = size.d_view(m).x3max;
+        int nx3 = indcs.nx3;
         Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
         Real x = lwv.cos_a2*(x1v*lwv.cos_a3 + x2v*lwv.sin_a3) + x3v*lwv.sin_a2;
@@ -274,19 +274,19 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
     par_for("pgen_linwave2", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i)
       {
-        Real &x1min = coord.mb_size.d_view(m).x1min;
-        Real &x1max = coord.mb_size.d_view(m).x1max;
-        int nx1 = coord.mb_indcs.nx1;
+        Real &x1min = size.d_view(m).x1min;
+        Real &x1max = size.d_view(m).x1max;
+        int nx1 = indcs.nx1;
         Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
-        Real &x2min = coord.mb_size.d_view(m).x2min;
-        Real &x2max = coord.mb_size.d_view(m).x2max;
-        int nx2 = coord.mb_indcs.nx2;
+        Real &x2min = size.d_view(m).x2min;
+        Real &x2max = size.d_view(m).x2max;
+        int nx2 = indcs.nx2;
         Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
-        Real &x3min = coord.mb_size.d_view(m).x3min;
-        Real &x3max = coord.mb_size.d_view(m).x3max;
-        int nx3 = coord.mb_indcs.nx3;
+        Real &x3min = size.d_view(m).x3min;
+        Real &x3max = size.d_view(m).x3max;
+        int nx3 = indcs.nx3;
         Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
         Real x = lwv.cos_a2*(x1v*lwv.cos_a3 + x2v*lwv.sin_a3) + x3v*lwv.sin_a2;
@@ -313,9 +313,9 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
         Real x2fp1 = LeftEdgeX(j+1-js, nx2, x2min, x2max);
         Real x3f   = LeftEdgeX(k  -ks, nx3, x3min, x3max);
         Real x3fp1 = LeftEdgeX(k+1-ks, nx3, x3min, x3max);
-        Real dx1 = coord.mb_size.d_view(m).dx1;
-        Real dx2 = coord.mb_size.d_view(m).dx2;
-        Real dx3 = coord.mb_size.d_view(m).dx3;
+        Real dx1 = size.d_view(m).dx1;
+        Real dx2 = size.d_view(m).dx2;
+        Real dx3 = size.d_view(m).dx3;
 
         b0.x1f(m,k,j,i) = (A3(x1f,  x2fp1,x3v  ,lwv) - A3(x1f,x2f,x3v,lwv))/dx2 -
                           (A2(x1f,  x2v,  x3fp1,lwv) - A2(x1f,x2v,x3f,lwv))/dx3;
@@ -698,14 +698,14 @@ void ProblemGenerator::LinearWaveErrors_(MeshBlockPack *pmbp, ParameterInput *pi
   int nvars=0;
 
   // capture class variables for kernel  
-  auto &indcs = pmbp->coord.coord_data.mb_indcs;
+  auto &indcs = pmbp->pcoord->mbdata.indcs;
   int &nx1 = indcs.nx1;
   int &nx2 = indcs.nx2;
   int &nx3 = indcs.nx3;
   int &is = indcs.is;
   int &js = indcs.js;
   int &ks = indcs.ks;
-  auto &size = pmbp->coord.coord_data.mb_size;
+  auto &size = pmbp->pcoord->mbdata.size;
 
   // compute errors for Hydro  ----------------------------------------------------------
   if (pmbp->phydro != nullptr) {

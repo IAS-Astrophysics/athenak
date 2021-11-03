@@ -62,11 +62,11 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
   Real kx = 2.0*(M_PI/x1size)*(static_cast<Real>(nwx));
 
   // capture variables for kernel
-  auto &indcs = pmbp->coord.coord_data.mb_indcs;
+  auto &indcs = pmbp->pcoord->mbdata.indcs;
+  auto &size = pmbp->pcoord->mbdata.size;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
-  auto &coord = pmbp->coord.coord_data;
 
   if (pmbp->pmhd != nullptr) {
     // First, do some error checks
@@ -90,9 +90,9 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
     par_for("mri2d-b", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i)
       {
-        Real &x1min = coord.mb_size.d_view(m).x1min;
-        Real &x1max = coord.mb_size.d_view(m).x1max;
-        int nx1 = coord.mb_indcs.nx1;
+        Real &x1min = size.d_view(m).x1min;
+        Real &x1max = size.d_view(m).x1max;
+        int nx1 = indcs.nx1;
         Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
         if (ifield == 1) {

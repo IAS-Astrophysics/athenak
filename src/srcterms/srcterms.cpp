@@ -76,7 +76,7 @@ SourceTerms::~SourceTerms()
 void SourceTerms::AddConstantAccel(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
                                    const Real bdt)
 {
-  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
@@ -104,7 +104,7 @@ void SourceTerms::AddConstantAccel(DvceArray5D<Real> &u0, const DvceArray5D<Real
 void SourceTerms::AddShearingBox(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
                                    const Real bdt)
 { 
-  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
@@ -138,7 +138,7 @@ void SourceTerms::AddShearingBox(DvceArray5D<Real> &u0, const DvceArray5D<Real> 
 void SourceTerms::AddShearingBox(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
                                  const DvceArray5D<Real> &bcc0, const Real bdt)
 { 
-  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
@@ -175,7 +175,8 @@ void SourceTerms::AddShearingBox(DvceArray5D<Real> &u0, const DvceArray5D<Real> 
 
 void SourceTerms::AddSBoxEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &efld)
 {
-  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
+  auto &size = pmy_pack->pcoord->mbdata.size;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
@@ -191,7 +192,6 @@ void SourceTerms::AddSBoxEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Rea
   // E_{x} = -(v x B)_{x} = -(vy*bz - vz*by) = +v_{K}by --> E1 = -(q\Omega x)b2
   // E_{y} = -(v x B)_{y} =  (vx*bz - vz*bx) = -v_{K}bx --> E2 = +(q\Omega x)b1
   if (pmy_pack->pmesh->two_d) {
-    auto &coord = pmy_pack->coord.coord_data;
     auto e1 = efld.x1e;
     auto e2 = efld.x2e;
     auto b1 = b0.x1f;
@@ -201,9 +201,9 @@ void SourceTerms::AddSBoxEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Rea
       {
         par_for_inner(member, is, ie+1, [&](const int i)
         {
-          Real &x1min = coord.mb_size.d_view(m).x1min;
-          Real &x1max = coord.mb_size.d_view(m).x1max;
-          int nx1 = coord.mb_indcs.nx1;
+          Real &x1min = size.d_view(m).x1min;
+          Real &x1max = size.d_view(m).x1max;
+          int nx1 = indcs.nx1;
           Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
           e1(m,ks,  j,i) -= qomega*x1v*b2(m,ks,j,i);

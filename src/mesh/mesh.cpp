@@ -596,7 +596,7 @@ void Mesh::WriteMeshStructure()
     std::exit(EXIT_FAILURE);
   }
 
-  auto &size = this->pmb_pack->coord.coord_data.mb_size;
+  auto &size = this->pmb_pack->pcoord->mbdata.size;
   for (int i=root_level; i<=max_level; i++) {
   for (int j=0; j<nmb_total; j++) {
     if (loclist[j].level == i) {

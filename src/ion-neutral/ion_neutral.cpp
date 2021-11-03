@@ -37,7 +37,7 @@ IonNeutral::IonNeutral(MeshBlockPack *pp, ParameterInput *pin, Driver *pdrive) :
   }
 
   int nmb = pmy_pack->nmb_thispack;
-  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
   int ncells1 = indcs.nx1 + 2*(indcs.ng);
   int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
   int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
@@ -169,7 +169,7 @@ TaskStatus IonNeutral::ImpRKUpdate(Driver *pdriver, int estage)
   // estage <= 0 corresponds to first two fully implicit stages
   int istage = estage + 2;
 
-  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
   int n1 = indcs.nx1 + 2*indcs.ng;
   int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*indcs.ng) : 1;
   int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*indcs.ng) : 1;

@@ -24,12 +24,11 @@ MeshBlockPack::MeshBlockPack(Mesh *pm, ParameterInput *pin, int igids, int igide
   : pmesh(pm),
     gids(igids),
     gide(igide),
-    coord(pm, indcs, igids, (igide-igids+1))
+    nmb_thispack(igide - igids + 1)
 {
-  nmb_thispack = igide - igids + 1;
-
   // create MeshBlocks for this MeshBlockPack
   pmb = new MeshBlock(pm, gids, nmb_thispack);
+  pcoord = new Coordinates(pm, indcs, gids, nmb_thispack);
 }
 
 //----------------------------------------------------------------------------------------
@@ -41,6 +40,7 @@ MeshBlockPack::MeshBlockPack(Mesh *pm, ParameterInput *pin, int igids, int igide
 MeshBlockPack::~MeshBlockPack()
 {
   delete pmb;
+  delete pcoord;
   if (phydro != nullptr) {delete phydro;}
   if (pmhd   != nullptr) {delete pmhd;}
   if (pturb  != nullptr) {delete pturb;}

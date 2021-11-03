@@ -117,12 +117,12 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
   Real pert_amp = pin->GetOrAddReal("problem", "pert_amp", 0.0);
   
   // capture variables for kernel
-  auto &indcs = pmbp->coord.coord_data.mb_indcs;
+  auto &indcs = pmbp->pcoord->mbdata.indcs;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
   int nmb1 = pmbp->nmb_thispack - 1;
-  auto &coord = pmbp->coord.coord_data;
+  auto &mbd = pmbp->pcoord->mbdata;
 
   // Get ideal gas EOS data
   Real gm1;
@@ -134,8 +134,8 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
   gm1 = torus.gamma_adi - 1.0;
 
   // Get mass and spin of black hole
-  torus.mass = coord.bh_mass;
-  torus.spin = coord.bh_spin;
+  torus.mass = mbd.bh_mass;
+  torus.spin = mbd.bh_spin;
 
   // compute angular momentum give radius of pressure maximum
   torus.l_peak = CalculateLFromRPeak(torus, torus.r_peak);
@@ -163,19 +163,19 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
   par_for("pgen_torus1", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
-      Real &x1min = coord.mb_size.d_view(m).x1min;
-      Real &x1max = coord.mb_size.d_view(m).x1max;
-      int nx1 = coord.mb_indcs.nx1;
+      Real &x1min = mbd.size.d_view(m).x1min;
+      Real &x1max = mbd.size.d_view(m).x1max;
+      int nx1 = mbd.indcs.nx1;
       Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
-      Real &x2min = coord.mb_size.d_view(m).x2min;
-      Real &x2max = coord.mb_size.d_view(m).x2max;
-      int nx2 = coord.mb_indcs.nx2;
+      Real &x2min = mbd.size.d_view(m).x2min;
+      Real &x2max = mbd.size.d_view(m).x2max;
+      int nx2 = mbd.indcs.nx2;
       Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
-      Real &x3min = coord.mb_size.d_view(m).x3min;
-      Real &x3max = coord.mb_size.d_view(m).x3max;
-      int nx3 = coord.mb_indcs.nx3;
+      Real &x3min = mbd.size.d_view(m).x3min;
+      Real &x3max = mbd.size.d_view(m).x3max;
+      int nx3 = mbd.indcs.nx3;
       Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
       // Calculate Boyer-Lindquist coordinates of cell
@@ -235,8 +235,8 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
                         x1v, x2v, x3v, &u0, &u1, &u2, &u3);
 
         Real g_[NMETRIC], gi_[NMETRIC];
-        ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, true,
-                                  coord.bh_spin, g_, gi_);
+        ComputeMetricAndInverse(x1v, x2v, x3v, mbd.is_minkowski, true,
+                                  mbd.bh_spin, g_, gi_);
         uu1 = u1 - gi_[I01]/gi_[I00] * u0;
         uu2 = u2 - gi_[I02]/gi_[I00] * u0;
         uu3 = u3 - gi_[I03]/gi_[I00] * u0;
@@ -265,19 +265,19 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
     par_for("pgen_torus2", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i)
       { 
-        Real &x1min = coord.mb_size.d_view(m).x1min;
-        Real &x1max = coord.mb_size.d_view(m).x1max;
-        int nx1 = coord.mb_indcs.nx1;
+        Real &x1min = mbd.size.d_view(m).x1min;
+        Real &x1max = mbd.size.d_view(m).x1max;
+        int nx1 = mbd.indcs.nx1;
         Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
         
-        Real &x2min = coord.mb_size.d_view(m).x2min;
-        Real &x2max = coord.mb_size.d_view(m).x2max;
-        int nx2 = coord.mb_indcs.nx2;
+        Real &x2min = mbd.size.d_view(m).x2min;
+        Real &x2max = mbd.size.d_view(m).x2max;
+        int nx2 = mbd.indcs.nx2;
         Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
         
-        Real &x3min = coord.mb_size.d_view(m).x3min;
-        Real &x3max = coord.mb_size.d_view(m).x3max;
-        int nx3 = coord.mb_indcs.nx3;
+        Real &x3min = mbd.size.d_view(m).x3min;
+        Real &x3max = mbd.size.d_view(m).x3max;
+        int nx3 = mbd.indcs.nx3;
         Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
         
         // Compute face-centered fields from curl(A).
@@ -287,9 +287,9 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
         Real x2fp1 = LeftEdgeX(j+1-js, nx2, x2min, x2max);
         Real x3f   = LeftEdgeX(k  -ks, nx3, x3min, x3max);
         Real x3fp1 = LeftEdgeX(k+1-ks, nx3, x3min, x3max);
-        Real dx1 = coord.mb_size.d_view(m).dx1;
-        Real dx2 = coord.mb_size.d_view(m).dx2;
-        Real dx3 = coord.mb_size.d_view(m).dx3;
+        Real dx1 = mbd.size.d_view(m).dx1;
+        Real dx2 = mbd.size.d_view(m).dx2;
+        Real dx3 = mbd.size.d_view(m).dx3;
         
         b0.x1f(m,k,j,i) = (A3(trs,x1f,  x2fp1,x3v  ) - A3(trs,x1f,x2f,x3v))/dx2 -
                           (A2(trs,x1f,  x2v,  x3fp1) - A2(trs,x1f,x2v,x3f))/dx3;

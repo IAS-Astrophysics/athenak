@@ -42,7 +42,7 @@ BoundaryValueCC::~BoundaryValueCC()
 
 void BoundaryValueCC::AllocateBuffersCC(const int nvar)
 {
-  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
   int ng = indcs.ng;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;

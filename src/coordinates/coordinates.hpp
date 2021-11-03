@@ -19,17 +19,15 @@
 struct EOS_Data;
 
 //----------------------------------------------------------------------------------------
-//! \struct CoordinatesData
-//! \brief container for data and inline functions associated with Coordinates class.
-//! This includes cell indices, physical locations of MeshBlocks, and functions to compute
-//! positions and metric.
-//! Storing everything in a container makes it easier to capture coord variables and
-//! functions in kernels elsewhere in the code.
+//! \struct CoordData
+//! \brief container for Coordinate variables and functions needed inside kernels. Storing
+//! everything in a container makes them easier to capture, and pass to inline functions,
+//! inside kernels.
 
 struct CoordData
 {
-  RegionIndcs mb_indcs;             // indices (same for all MeshBlocks)
-  DualArray1D<RegionSize> mb_size;  // physical size (array of length [# of MBs])
+  RegionIndcs indcs;             // indices (same for all MeshBlocks)
+  DualArray1D<RegionSize> size;  // physical size (array of length [# of MBs])
 
   // following data is only used in GR calculations to compute metric
   bool is_minkowski;                // flag to specify Minkowski (flat) space
@@ -38,7 +36,7 @@ struct CoordData
   Real bh_rmin;                     // needed for GR cons2prim
 
   // constructor
-  CoordData(int nmb) : mb_size("size",nmb) {}
+  CoordData(int nmb) : size("size",nmb) {}
 };
 
 //----------------------------------------------------------------------------------------
@@ -51,7 +49,7 @@ public:
   Coordinates(Mesh *pm, RegionIndcs indcs, int gids, int nmb);
   ~Coordinates() {};
 
-  CoordData coord_data;
+  CoordData mbdata;
 
   // functions
   void InitMetric(ParameterInput *pin);

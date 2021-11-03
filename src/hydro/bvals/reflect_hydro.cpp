@@ -20,7 +20,7 @@ namespace hydro {
 
 void Hydro::ReflectInnerX1(int m)
 {
-  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
   int &ng = indcs.ng;
   int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
   int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
@@ -49,7 +49,7 @@ void Hydro::ReflectInnerX1(int m)
 
 void Hydro::ReflectOuterX1(int m)
 {
-  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
   int &ng = indcs.ng;
   int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
   int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
@@ -78,7 +78,7 @@ void Hydro::ReflectOuterX1(int m)
 
 void Hydro::ReflectInnerX2(int m)
 {
-  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
   int &ng = indcs.ng;
   int n1 = indcs.nx1 + 2*ng;
   int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
@@ -107,7 +107,7 @@ void Hydro::ReflectInnerX2(int m)
 
 void Hydro::ReflectOuterX2(int m)
 {
-  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
   int &ng = indcs.ng;
   int n1 = indcs.nx1 + 2*ng;
   int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
@@ -137,7 +137,7 @@ void Hydro::ReflectOuterX2(int m)
 
 void Hydro::ReflectInnerX3(int m)
 {
-  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
   int &ng = indcs.ng;
   int n1 = indcs.nx1 + 2*ng;
   int n2 = indcs.nx2 + 2*ng;
@@ -166,7 +166,7 @@ void Hydro::ReflectInnerX3(int m)
 
 void Hydro::ReflectOuterX3(int m)
 {
-  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
   int &ng = indcs.ng;
   int n1 = indcs.nx1 + 2*ng;
   int n2 = indcs.nx2 + 2*ng;

@@ -319,8 +319,8 @@ void OutputType::LoadOutputData(Mesh *pm)
 
   // loop over all MeshBlocks
   // set size & starting indices of output arrays, adjusted accordingly if gz included 
-  auto &indcs = pm->pmb_pack->coord.coord_data.mb_indcs;
-  auto &size  = pm->pmb_pack->coord.coord_data.mb_size;
+  auto &indcs = pm->pmb_pack->pcoord->mbdata.indcs;
+  auto &size  = pm->pmb_pack->pcoord->mbdata.size;
   for (int m=0; m<(pm->pmb_pack->nmb_thispack); ++m) {
 
     int ois,oie,ojs,oje,oks,oke;

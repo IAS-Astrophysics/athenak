@@ -28,7 +28,7 @@ TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage)
     return TaskStatus::complete; // only execute last stage
   }
   
-  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
   int is = indcs.is, nx1 = indcs.nx1;
   int js = indcs.js, nx2 = indcs.nx2;
   int ks = indcs.ks, nx3 = indcs.nx3;
@@ -40,7 +40,7 @@ TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage)
   // capture class variables for kernel
   auto &w0_ = w0;
   auto &eos = pmy_pack->phydro->peos->eos_data;
-  auto &mbsize = pmy_pack->coord.coord_data.mb_size;
+  auto &mbsize = pmy_pack->pcoord->mbdata.size;
   auto &is_special_relativistic_ = is_special_relativistic;
   auto &is_general_relativistic_ = is_general_relativistic;
   const int nmkji = (pmy_pack->nmb_thispack)*nx3*nx2*nx1;

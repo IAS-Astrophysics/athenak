@@ -90,7 +90,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // allocate memory for conserved and primitive variables
   int nmb = ppack->nmb_thispack;
-  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
   int ncells1 = indcs.nx1 + 2*(indcs.ng);
   int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
   int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
@@ -220,7 +220,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   }
 
   // (5) initialize metric (GR only)
-  if (is_general_relativistic) {pmy_pack->coord.InitMetric(pin);}
+  if (is_general_relativistic) {pmy_pack->pcoord->InitMetric(pin);}
 }
 
 //----------------------------------------------------------------------------------------

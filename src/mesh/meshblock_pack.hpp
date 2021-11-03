@@ -40,8 +40,11 @@ public:
   int gids, gide;         // start/end of global IDs in this MeshBlockPack
   int nmb_thispack;       // number of MBs in this pack
 
+  // following Grid/Physics objects are all pointers so they can be allocated after
+  // MeshBlockPack is constructed with pointer to my_pack. 
+
   MeshBlock* pmb;         // MeshBlocks in this MeshBlockPack
-  Coordinates coord;
+  Coordinates* pcoord;
 
   // physics modules (controlled by AddPhysicsModules function in mesh_physics.cpp)
   hydro::Hydro *phydro=nullptr;
@@ -56,9 +59,8 @@ public:
   // functions
   void AddPhysicsModules(ParameterInput *pin, Driver *pdrive);
   int NumberOfMeshBlockCells() const {
-    return coord.coord_data.mb_indcs.nx1 *
-           coord.coord_data.mb_indcs.nx2 *
-           coord.coord_data.mb_indcs.nx3;
+    return (pcoord->mbdata.indcs.nx1)*(pcoord->mbdata.indcs.nx2)*
+           (pcoord->mbdata.indcs.nx3);
   }
 
 private:
