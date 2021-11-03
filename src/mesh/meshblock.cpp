@@ -17,12 +17,13 @@
 // MeshBlock constructor:
 //
 
-MeshBlock::MeshBlock(Mesh* pm, int igids, int nmb) : 
-  pmy_mesh(pm), nmb(nmb),
+MeshBlock::MeshBlock(MeshBlockPack* ppack, int igids, int nmb) : 
+  pmy_pack(ppack), nmb(nmb),
   mbgid("mbgid",nmb),
   mb_bcs("mbbcs",nmb,6),
   lb_cost("lbcost",nmb)
 {
+  Mesh* pm = pmy_pack->pmesh;
   // initialize host arrays of gids, sizes, bcs over all MeshBlocks
   for (int m=0; m<nmb; ++m) {
     mbgid.h_view(m) = igids + m;
@@ -118,9 +119,9 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
 {
   MeshBlockTree* nt;
 
-  if (pmy_mesh->one_d) {nnghbr = 2;}
-  if (pmy_mesh->two_d) {nnghbr = 8;}
-  if (pmy_mesh->three_d) {nnghbr = 26;}
+  if (pmy_pack->pmesh->one_d) {nnghbr = 2;}
+  if (pmy_pack->pmesh->two_d) {nnghbr = 8;}
+  if (pmy_pack->pmesh->three_d) {nnghbr = 26;}
 
   // allocate size of DualArrays
   for (int n=0; n<nnghbr; ++n) {
@@ -142,7 +143,7 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
 
   // Search MeshBlock tree and find neighbors
   for (int b=0; b<nmb; ++b) {
-    LogicalLocation loc = pmy_mesh->loclist[mbgid.h_view(b)];
+    LogicalLocation loc = pmy_pack->pmesh->loclist[mbgid.h_view(b)];
 
     // neighbors on x1face
     for (int n=-1; n<=1; n+=2) {
@@ -156,7 +157,7 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
     }
 
     // neighbors on x2face and x1x2 edges
-    if (pmy_mesh->multi_d) {
+    if (pmy_pack->pmesh->multi_d) {
       for (int m=-1; m<=1; m+=2) {
         nt = ptree->FindNeighbor(loc, 0, m, 0);
         if (nt != nullptr) {
@@ -180,7 +181,7 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
     }
 
     // neighbors on x3face, x3x1 and x2x3 edges, and corners
-    if (pmy_mesh->three_d) {
+    if (pmy_pack->pmesh->three_d) {
       for (int l=-1; l<=1; l+=2) {
         nt = ptree->FindNeighbor(loc, 0, 0, l);
         if (nt != nullptr) {

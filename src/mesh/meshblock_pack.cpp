@@ -19,16 +19,12 @@
 //----------------------------------------------------------------------------------------
 // MeshBlockPack constructor:
 
-MeshBlockPack::MeshBlockPack(Mesh *pm, ParameterInput *pin, int igids, int igide,
-                             RegionIndcs indcs)
+MeshBlockPack::MeshBlockPack(Mesh *pm, int igids, int igide)
   : pmesh(pm),
     gids(igids),
     gide(igide),
     nmb_thispack(igide - igids + 1)
 {
-  // create MeshBlocks for this MeshBlockPack
-  pmb = new MeshBlock(pm, gids, nmb_thispack);
-  pcoord = new Coordinates(pm, indcs, gids, nmb_thispack);
 }
 
 //----------------------------------------------------------------------------------------
@@ -45,3 +41,13 @@ MeshBlockPack::~MeshBlockPack()
   if (pmhd   != nullptr) {delete pmhd;}
   if (pturb  != nullptr) {delete pturb;}
 }
+
+//----------------------------------------------------------------------------------------
+// \fn MeshBlockPack::AddMeshBlocksAndCoordinates()
+
+void MeshBlockPack::AddMeshBlocksAndCoordinates(ParameterInput *pin, RegionIndcs indcs)
+{
+  pmb = new MeshBlock(this, gids, nmb_thispack);
+  pcoord = new Coordinates(this, indcs, gids, nmb_thispack);
+}
+

@@ -81,13 +81,16 @@ struct LogicalLocation
   }
 };
 
-// Forward declarations
+// Forward declarations required due to recursive definitions amongst mesh classes
+class MeshBlock;
+class MeshBlockPack;
+class MeshBlockTree;
 class Mesh;
 
 #include "parameter_input.hpp"
-#include "meshblock_tree.hpp"
 #include "meshblock.hpp"
 #include "meshblock_pack.hpp"
+#include "meshblock_tree.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \class Mesh

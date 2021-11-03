@@ -16,8 +16,8 @@
 //----------------------------------------------------------------------------------------
 // constructor, initializes data structures describing MeshBlocks
 
-Coordinates::Coordinates(Mesh *pm, RegionIndcs indcs, int igids, int nmb)
-  : pmy_mesh(pm),
+Coordinates::Coordinates(MeshBlockPack *ppack, RegionIndcs indcs, int igids, int nmb)
+  : pmy_pack(ppack),
     mbdata(nmb)
 {
   // initialize MeshBlock cell indices
@@ -46,6 +46,7 @@ Coordinates::Coordinates(Mesh *pm, RegionIndcs indcs, int igids, int nmb)
   } 
 
   // calculate physical size of MeshBlocks.  Note only host array is initialized
+  Mesh* pm = pmy_pack->pmesh;
   auto &ms = pm->mesh_size;
   auto &size = mbdata.size;
   for (int m=0; m<nmb; ++m) {
@@ -145,7 +146,7 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim, const EOS_Data &e
   int js = indcs.js; int je = indcs.je;
   int ks = indcs.ks; int ke = indcs.ke;
   auto &mbd = mbdata;
-  int nmb1 = pmy_mesh->pmb_pack->nmb_thispack - 1;
+  int nmb1 = pmy_pack->nmb_thispack - 1;
 
   Real gamma_prime = eos.gamma / (eos.gamma - 1.0);
 
@@ -286,7 +287,7 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim,
   int js = indcs.js; int je = indcs.je;
   int ks = indcs.ks; int ke = indcs.ke;
   auto &mbd = mbdata;
-  int nmb1 = pmy_mesh->pmb_pack->nmb_thispack - 1;
+  int nmb1 = pmy_pack->nmb_thispack - 1;
 
   Real gamma_prime = eos.gamma / (eos.gamma - 1.0);
 

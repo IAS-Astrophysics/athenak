@@ -475,7 +475,8 @@ void Mesh::BuildTree(ParameterInput *pin)
   gide = gids + nmblist[global_variable::my_rank] - 1;
   nmb_thisrank = nmblist[global_variable::my_rank];
 
-  pmb_pack = new MeshBlockPack(this, pin, gids, gide, mb_indices);
+  pmb_pack = new MeshBlockPack(this, gids, gide);
+  pmb_pack->AddMeshBlocksAndCoordinates(pin, mb_indices);
   pmb_pack->pmb->SetNeighbors(ptree, ranklist);
   
 /*******/

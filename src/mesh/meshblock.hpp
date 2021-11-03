@@ -28,7 +28,7 @@ class MeshBlock
  friend class MeshBlockTree;
 
  public:
-  MeshBlock(Mesh *pm, int igids, int nmb);
+  MeshBlock(MeshBlockPack *ppack, int igids, int nmb);
   ~MeshBlock();
 
   // data
@@ -45,7 +45,7 @@ class MeshBlock
 
  private:
   // data
-  Mesh* pmy_mesh;
+  MeshBlockPack* pmy_pack;
   HostArray1D<double> lb_cost;  // cost of updating each MeshBlock for load balancing
 
   // functions

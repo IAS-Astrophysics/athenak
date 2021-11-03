@@ -32,7 +32,7 @@ class MeshBlockPack
   friend class MeshBlockTree;
 
 public:
-  MeshBlockPack(Mesh *pm, ParameterInput *pin, int igids, int igide, RegionIndcs indcs);
+  MeshBlockPack(Mesh *pm, int igids, int igide);
   ~MeshBlockPack();
 
   // data
@@ -58,6 +58,7 @@ public:
 
   // functions
   void AddPhysicsModules(ParameterInput *pin, Driver *pdrive);
+  void AddMeshBlocksAndCoordinates(ParameterInput *pin, RegionIndcs indcs);
   int NumberOfMeshBlockCells() const {
     return (pcoord->mbdata.indcs.nx1)*(pcoord->mbdata.indcs.nx2)*
            (pcoord->mbdata.indcs.nx3);
