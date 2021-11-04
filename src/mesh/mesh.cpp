@@ -12,9 +12,13 @@
 #include "athena.hpp"
 #include "globals.hpp"
 #include "parameter_input.hpp"
-#include "outputs/io_wrapper.hpp"
 #include "mesh.hpp"
 #include "coordinates/cell_locations.hpp"
+#include "hydro/hydro.hpp"
+#include "mhd/mhd.hpp"
+#include "diffusion/viscosity.hpp"
+#include "diffusion/resistivity.hpp"
+#include "outputs/io_wrapper.hpp"
 
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>
@@ -743,3 +747,44 @@ void Mesh::CheckUserBoundaries() {
   return;
 }
 
+//----------------------------------------------------------------------------------------
+// \fn Mesh::NewTimeStep()
+
+void Mesh::NewTimeStep(const Real tlim)
+{
+  // cycle over all MeshBlocks on this rank and find minimum dt
+  // Requires at least ONE of the physics modules to be defined.
+  // limit increase in timestep to 2x old value
+  dt = 2.0*dt;
+
+  // Hydro timestep
+  if (pmb_pack->phydro != nullptr) {
+    dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->dtnew) );
+    // viscosity timestep
+    if (pmb_pack->phydro->pvisc != nullptr) {
+      dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->pvisc->dtnew) );
+    }
+  }
+  // MHD timestep
+  if (pmb_pack->pmhd != nullptr) {
+    dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->dtnew) );
+    // viscosity timestep
+    if (pmb_pack->pmhd->pvisc != nullptr) {
+      dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->pvisc->dtnew) );
+    }
+    // resistivity timestep
+    if (pmb_pack->pmhd->presist != nullptr) {
+      dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->presist->dtnew) );
+    }
+  }
+
+#if MPI_PARALLEL_ENABLED
+  // get minimum dt over all MPI ranks
+  MPI_Allreduce(MPI_IN_PLACE, &dt, 1, MPI_ATHENA_REAL, MPI_MIN, MPI_COMM_WORLD);
+#endif
+
+  // limit last time step to stop at tlim *exactly*
+  if ( (time < tlim) && ((time + dt) > tlim) ) {dt = tlim - time;}
+
+  return;
+}

@@ -57,7 +57,7 @@ public:
   TaskList start_tl, run_tl, end_tl;     // each stage of RK integrators
 
   // functions
-  void AddPhysicsModules(ParameterInput *pin, Driver *pdrive);
+  void AddPhysics(ParameterInput *pin, Driver *pdrive);
   void AddMeshBlocksAndCoordinates(ParameterInput *pin, RegionIndcs indcs);
   int NumberOfMeshBlockCells() const {
     return (pcoord->mbdata.indcs.nx1)*(pcoord->mbdata.indcs.nx2)*

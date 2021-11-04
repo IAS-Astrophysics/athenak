@@ -43,7 +43,6 @@ add_executable(
 
 	ion-neutral/ion_neutral.cpp
 
-        mesh/mesh_physics.cpp
         mesh/load_balance.cpp
         mesh/mesh.cpp
         mesh/meshblock.cpp

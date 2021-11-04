@@ -247,7 +247,7 @@ int main(int argc, char *argv[])
   // Add physics modules to MeshBlockPack. Note this must occur after Mesh (MeshBlocks and
   // MeshBlockPack) and Driver are fully constructed.
 
-  mesh0.pmb_pack->AddPhysicsModules(&par_input, &driver);
+  mesh0.pmb_pack->AddPhysics(&par_input, &driver);
 
   //--- Step 7. --------------------------------------------------------------------------
   // Construct Outputs. Actual outputs (including initial conditions) are made in Driver
