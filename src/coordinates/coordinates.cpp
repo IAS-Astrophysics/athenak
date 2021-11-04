@@ -52,8 +52,8 @@ Coordinates::Coordinates(MeshBlockPack *ppack, RegionIndcs indcs, int igids, int
   for (int m=0; m<nmb; ++m) {
 
     // x1-direction
-    std::int32_t &lx1 = pm->loclist[igids+m].lx1;
-    std::int32_t &lev = pm->loclist[igids+m].level;
+    std::int32_t &lx1 = pm->lloclist[igids+m].lx1;
+    std::int32_t &lev = pm->lloclist[igids+m].level;
     std::int32_t nmbx1 = pm->nmb_rootx1 << (lev - pm->root_level);
     if (lx1 == 0) {
       size.h_view(m).x1min = ms.x1min;
@@ -73,7 +73,7 @@ Coordinates::Coordinates(MeshBlockPack *ppack, RegionIndcs indcs, int igids, int
       size.h_view(m).x2max = ms.x2max;
     } else {
 
-      std::int32_t &lx2 = pm->loclist[igids+m].lx2;
+      std::int32_t &lx2 = pm->lloclist[igids+m].lx2;
       std::int32_t nmbx2 = pm->nmb_rootx2 << (lev - pm->root_level);
       if (lx2 == 0) {
         size.h_view(m).x2min = ms.x2min;
@@ -94,7 +94,7 @@ Coordinates::Coordinates(MeshBlockPack *ppack, RegionIndcs indcs, int igids, int
       size.h_view(m).x3min = ms.x3min;
       size.h_view(m).x3max = ms.x3max;
     } else {
-      std::int32_t &lx3 = pm->loclist[igids+m].lx3;
+      std::int32_t &lx3 = pm->lloclist[igids+m].lx3;
       std::int32_t nmbx3 = pm->nmb_rootx3 << (lev - pm->root_level);
       if (lx3 == 0) {
         size.h_view(m).x3min = ms.x3min;

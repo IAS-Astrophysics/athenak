@@ -145,7 +145,7 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
     // Loop over MeshBlocks
     for (int m=0; m<nout_mbs; ++m) {
       auto &indcs = pm->pmb_pack->pcoord->mbdata.indcs;
-      LogicalLocation loc = pm->loclist[outmbs[m].mb_gid];
+      LogicalLocation lloc = pm->lloclist[outmbs[m].mb_gid];
       int &mb_nx1 = indcs.nx1;
       int &mb_nx2 = indcs.nx2;
       int &mb_nx3 = indcs.nx3;
@@ -155,8 +155,8 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
       int &oje = outmbs[m].oje;
       int &oks = outmbs[m].oks;
       int &oke = outmbs[m].oke;
-      size_t data_offset = (loc.lx1*mb_nx1 + loc.lx2*(mb_nx2*nout1) +
-        loc.lx3*(mb_nx3*nout1*nout2))*sizeof(float);
+      size_t data_offset = (lloc.lx1*mb_nx1 + lloc.lx2*(mb_nx2*nout1) +
+        lloc.lx3*(mb_nx3*nout1*nout2))*sizeof(float);
 
       for (int k=oks; k<=oke; ++k) {
         for (int j=ojs; j<=oje; ++j) {

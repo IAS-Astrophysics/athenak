@@ -30,8 +30,8 @@ MeshBlock::MeshBlock(MeshBlockPack* ppack, int igids, int nmb) :
 
     // calculate physical size and set BCs of MeshBlock in x1, depending on whether there
     // are one or more MeshBlocks in this direction.
-    std::int32_t &lx1 = pm->loclist[igids+m].lx1;
-    std::int32_t &lev = pm->loclist[igids+m].level;
+    std::int32_t &lx1 = pm->lloclist[igids+m].lx1;
+    std::int32_t &lev = pm->lloclist[igids+m].level;
     std::int32_t nmbx1 = pm->nmb_rootx1 << (lev - pm->root_level);
     if (lx1 == 0) {
       mb_bcs(m,0) = pm->mesh_bcs[BoundaryFace::inner_x1];
@@ -52,7 +52,7 @@ MeshBlock::MeshBlock(MeshBlockPack* ppack, int igids, int nmb) :
       mb_bcs(m,3) = pm->mesh_bcs[BoundaryFace::outer_x2];
     } else {
 
-      std::int32_t &lx2 = pm->loclist[igids+m].lx2;
+      std::int32_t &lx2 = pm->lloclist[igids+m].lx2;
       std::int32_t nmbx2 = pm->nmb_rootx2 << (lev - pm->root_level);
       if (lx2 == 0) {
         mb_bcs(m,2) = pm->mesh_bcs[BoundaryFace::inner_x2];
@@ -74,7 +74,7 @@ MeshBlock::MeshBlock(MeshBlockPack* ppack, int igids, int nmb) :
       mb_bcs(m,4) = pm->mesh_bcs[BoundaryFace::inner_x3];
       mb_bcs(m,5) = pm->mesh_bcs[BoundaryFace::outer_x3];
     } else {
-      std::int32_t &lx3 = pm->loclist[igids+m].lx3;
+      std::int32_t &lx3 = pm->lloclist[igids+m].lx3;
       std::int32_t nmbx3 = pm->nmb_rootx3 << (lev - pm->root_level);
       if (lx3 == 0) {
         mb_bcs(m,4) = pm->mesh_bcs[BoundaryFace::inner_x3];
@@ -143,7 +143,7 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
 
   // Search MeshBlock tree and find neighbors
   for (int b=0; b<nmb; ++b) {
-    LogicalLocation loc = pmy_pack->pmesh->loclist[mbgid.h_view(b)];
+    LogicalLocation loc = pmy_pack->pmesh->lloclist[mbgid.h_view(b)];
 
     // neighbors on x1face
     for (int n=-1; n<=1; n+=2) {

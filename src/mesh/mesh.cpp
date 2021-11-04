@@ -193,7 +193,7 @@ Mesh::~Mesh()
 {
   delete [] costlist;
   delete [] ranklist;
-  delete [] loclist;
+  delete [] lloclist;
   delete [] gidslist;
   delete [] nmblist;
   if (adaptive) { // deallocate arrays for AMR
@@ -403,7 +403,10 @@ void Mesh::BuildTree(ParameterInput *pin)
         if (one_d) {  // 1D
           for (std::int32_t i=lx1min; i<lx1max; i+=2) {
             LogicalLocation nloc;
-            nloc.level=log_ref_lev, nloc.lx1=i, nloc.lx2=0, nloc.lx3=0;
+            nloc.level = log_ref_lev;
+            nloc.lx1 = i;
+            nloc.lx2 = 0;
+            nloc.lx3 = 0;
             int nnew;
             ptree->AddNode(nloc, nnew);
           }
@@ -412,7 +415,10 @@ void Mesh::BuildTree(ParameterInput *pin)
           for (std::int32_t j=lx2min; j<lx2max; j+=2) {
             for (std::int32_t i=lx1min; i<lx1max; i+=2) {
               LogicalLocation nloc;
-              nloc.level=log_ref_lev, nloc.lx1=i, nloc.lx2=j, nloc.lx3=0;
+              nloc.level = log_ref_lev;
+              nloc.lx1 = i;
+              nloc.lx2 = j;
+              nloc.lx3 = 0;
               int nnew;
               ptree->AddNode(nloc, nnew);
             }
@@ -423,7 +429,10 @@ void Mesh::BuildTree(ParameterInput *pin)
             for (std::int32_t j=lx2min; j<lx2max; j+=2) {
               for (std::int32_t i=lx1min; i<lx1max; i+=2) {
                 LogicalLocation nloc;
-                nloc.level = log_ref_lev, nloc.lx1 = i, nloc.lx2 = j, nloc.lx3 = k;
+                nloc.level = log_ref_lev;
+                nloc.lx1 = i;
+                nloc.lx2 = j;
+                nloc.lx3 = k;
                 int nnew;
                 ptree->AddNode(nloc, nnew);
               }
@@ -442,7 +451,7 @@ void Mesh::BuildTree(ParameterInput *pin)
 
   costlist = new double[nmb_total];
   ranklist = new int[nmb_total];
-  loclist  = new LogicalLocation[nmb_total];
+  lloclist = new LogicalLocation[nmb_total];
 
   gidslist = new int[global_variable::nranks];
   nmblist  = new int[global_variable::nranks];
@@ -458,7 +467,7 @@ void Mesh::BuildTree(ParameterInput *pin)
   }
 
   // following returns LogicalLocation list sorted by Z-ordering
-  ptree->CreateMeshBlockList(loclist, nullptr, nmb_total);
+  ptree->CreateMeshBlockList(lloclist, nullptr, nmb_total);
 
 #if MPI_PARALLEL_ENABLED
   // check there is at least one MeshBlock per MPI rank
@@ -532,8 +541,8 @@ void Mesh::PrintMeshDiagnostics()
       cost_per_plevel[i] = 0.0;
     }
     for (int i=0; i<nmb_total; i++) {
-      nb_per_plevel[(loclist[i].level - root_level)]++;
-      cost_per_plevel[(loclist[i].level - root_level)] += costlist[i];
+      nb_per_plevel[(lloclist[i].level - root_level)]++;
+      cost_per_plevel[(lloclist[i].level - root_level)] += costlist[i];
     }
     for (int i=root_level; i<=max_level; i++) {
       if (nb_per_plevel[i-root_level] != 0) {
@@ -567,7 +576,7 @@ void Mesh::PrintMeshDiagnostics()
     double maxcost = 0.0, totalcost = 0.0;
     for (int i=root_level; i<=max_level; i++) {
       for (int j=0; j<nmb_total; j++) {
-        if (loclist[j].level == i) {
+        if (lloclist[j].level == i) {
           mincost = std::min(mincost,costlist[i]);
           maxcost = std::max(maxcost,costlist[i]);
           totalcost += costlist[i];
@@ -604,15 +613,15 @@ void Mesh::WriteMeshStructure()
   auto &size = this->pmb_pack->pcoord->mbdata.size;
   for (int i=root_level; i<=max_level; i++) {
   for (int j=0; j<nmb_total; j++) {
-    if (loclist[j].level == i) {
-      std::int32_t &lx1 = loclist[j].lx1;
-      std::int32_t &lx2 = loclist[j].lx2;
-      std::int32_t &lx3 = loclist[j].lx3;
+    if (lloclist[j].level == i) {
+      std::int32_t &lx1 = lloclist[j].lx1;
+      std::int32_t &lx2 = lloclist[j].lx2;
+      std::int32_t &lx3 = lloclist[j].lx3;
       std::fprintf(fp,"#MeshBlock %d on rank=%d with cost=%g\n", j, ranklist[j],
                    costlist[j]);
       std::fprintf(
           fp,"#  Logical level %d, location = (%" PRId32 " %" PRId32 " %" PRId32")\n",
-          loclist[j].level, lx1, lx2, lx3);
+          lloclist[j].level, lx1, lx2, lx3);
       if (two_d) { // 2D
         std::fprintf(fp,"%g %g\n", size.h_view(j).x1min, size.h_view(j).x2min);
         std::fprintf(fp,"%g %g\n", size.h_view(j).x1max, size.h_view(j).x2min);

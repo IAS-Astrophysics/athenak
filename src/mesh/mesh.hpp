@@ -126,7 +126,8 @@ public:
   bool one_d, two_d, three_d; // flags to indicate 1D or 2D or 3D calculations
   bool multi_d;               // flag to indicate 2D and 3D calculations
   bool shearing_periodic;     // flag to indicate periodic x1/x2 boundaries are sheared
-  bool adaptive, multilevel;
+  bool multilevel;            // true for SMR and AMR 
+  bool adaptive;              // true only for AMR
 
   int nmb_rootx1, nmb_rootx2, nmb_rootx3; // # of MeshBlocks at root level in each dir
   int nmb_total;                 // total number of MeshBlocks across all levels
@@ -139,9 +140,9 @@ public:
   int gids, gide; // start/end of global IDs on this MPI rank
 
   // following 2x arrays allocated with length [nmbtotal]
-  int *ranklist;             // rank of each MeshBlock
-  double *costlist;          // cost of each MeshBlock
-  LogicalLocation *loclist;  // LogicalLocations for each MeshBlocks
+  int *ranklist;              // rank of each MeshBlock
+  double *costlist;           // cost of each MeshBlock
+  LogicalLocation *lloclist;  // LogicalLocations for each MeshBlocks
 
   // following 2x arrays allocated with length [nranks]
   int *gidslist;        // starting global ID of MeshBlocks in each rank
