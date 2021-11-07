@@ -151,10 +151,19 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
     for (int n=-1; n<=1; n+=2) {
       MeshBlockTree* nt = ptree->FindNeighbor(loc, n, 0, 0);
       if (nt != nullptr) {
-        nghbr[(1+n)/2].gid.h_view(b) = nt->gid_;
-        nghbr[(1+n)/2].lev.h_view(b) = nt->loc_.level;
-        nghbr[(1+n)/2].rank.h_view(b) = ranklist[nt->gid_];
-        nghbr[(1+n)/2].destn.h_view(b) = (1-n)/2;
+        if (nt->pleaf_ != nullptr) {  // neighbor at finer level
+          int fface = 1 - (n + 1)/2; // 0 for BoundaryFace::outer_x1, 1 for inner_x1
+          MeshBlockTree* nf = nt->GetLeaf(fface, 0, 0);
+          nghbr[(1+n)/2].gid.h_view(b) = nf->gid_;
+          nghbr[(1+n)/2].lev.h_view(b) = nf->loc_.level;
+          nghbr[(1+n)/2].rank.h_view(b) = ranklist[nf->gid_];
+          nghbr[(1+n)/2].destn.h_view(b) = (1-n)/2;
+        } else {
+          nghbr[(1+n)/2].gid.h_view(b) = nt->gid_;
+          nghbr[(1+n)/2].lev.h_view(b) = nt->loc_.level;
+          nghbr[(1+n)/2].rank.h_view(b) = ranklist[nt->gid_];
+          nghbr[(1+n)/2].destn.h_view(b) = (1-n)/2;
+        }
       }
     }
 

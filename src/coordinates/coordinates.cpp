@@ -134,9 +134,10 @@ Coordinates::Coordinates(MeshBlockPack *ppack, RegionIndcs indcs, int igids, int
     }
 
     // grid spacing at this level.  Ensure all MeshBlocks at same level have same dx
-    size.h_view(m).dx1 = ms.dx1*static_cast<Real>(1<<(lev - pm->root_level));
-    size.h_view(m).dx2 = ms.dx2*static_cast<Real>(1<<(lev - pm->root_level));
-    size.h_view(m).dx3 = ms.dx3*static_cast<Real>(1<<(lev - pm->root_level));
+    size.h_view(m).dx1 = ms.dx1/static_cast<Real>(1<<(lev - pm->root_level));
+    size.h_view(m).dx2 = ms.dx2/static_cast<Real>(1<<(lev - pm->root_level));
+    size.h_view(m).dx3 = ms.dx3/static_cast<Real>(1<<(lev - pm->root_level));
+std::cout << "m=" << m << " dx1=" << size.h_view(m).dx1 << std::endl;
   }
 
   // mark DualArray as modified, and then sync device with host

@@ -391,12 +391,25 @@ TaskStatus BValCC::RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
     const int m = (tmember.league_rank())/(nnghbr*nvar);
     const int n = (tmember.league_rank() - m*(nnghbr*nvar))/nvar;
     const int v = (tmember.league_rank() - m*(nnghbr*nvar) - n*nvar);
-    const int il = rbuf[n].index.d_view(0);
-    const int iu = rbuf[n].index.d_view(1);
-    const int jl = rbuf[n].index.d_view(2);
-    const int ju = rbuf[n].index.d_view(3);
-    const int kl = rbuf[n].index.d_view(4);
-    const int ku = rbuf[n].index.d_view(5);
+    // if neighbor is at same or finer level, use indices for u0
+    // indices same for all variables, stored in (0,i) component
+    int il, iu, jl, ju, kl, ku;
+    if (nghbr[n].lev.d_view(m) >= mblev.d_view(m)) {
+      il = rbuf[n].index.d_view(0);
+      iu = rbuf[n].index.d_view(1);
+      jl = rbuf[n].index.d_view(2);
+      ju = rbuf[n].index.d_view(3);
+      kl = rbuf[n].index.d_view(4);
+      ku = rbuf[n].index.d_view(5);
+    // else if neighbor is at coarser level, use indices for coarse_u0
+    } else {
+      il = rbuf[n].cindex.d_view(0);
+      iu = rbuf[n].cindex.d_view(1);
+      jl = rbuf[n].cindex.d_view(2);
+      ju = rbuf[n].cindex.d_view(3);
+      kl = rbuf[n].cindex.d_view(4);
+      ku = rbuf[n].cindex.d_view(5);
+    }
     const int ni = iu - il + 1;
     const int nj = ju - jl + 1;
     const int nk = ku - kl + 1;
@@ -430,6 +443,8 @@ TaskStatus BValCC::RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
   }
 
   //----- STEP 3: Prolongate conserved variables when neighbor at coarser level
+  // Code here is based on MeshRefinement::RestrictCellCenteredValues() in
+  // mesh_refinement.cpp in Athena++
   if (pmy_pack->pmesh->multilevel) {
     int nvar = a.extent_int(1);  // TODO: 2nd index from L of input array must be NVAR
     int nmnv = nmb*nnghbr*nvar;
@@ -441,7 +456,8 @@ TaskStatus BValCC::RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
     if (pmy_pack->pmesh->one_d) {
       auto &cis = pmy_pack->pcoord->mbdata.cindcs.is;
       auto &cie = pmy_pack->pcoord->mbdata.cindcs.ie;
-      auto &fie = pmy_pack->pcoord->mbdata.indcs.ie;
+      auto &is = pmy_pack->pcoord->mbdata.indcs.is;
+      auto &ie = pmy_pack->pcoord->mbdata.indcs.ie;
       auto &js = pmy_pack->pcoord->mbdata.indcs.js;
       auto &ks = pmy_pack->pcoord->mbdata.indcs.ks;
       // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
@@ -451,22 +467,20 @@ TaskStatus BValCC::RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
         const int m = (tmember.league_rank())/(nnghbr*nvar);
         const int n = (tmember.league_rank() - m*(nnghbr*nvar))/nvar;
         const int v = (tmember.league_rank() - m*(nnghbr*nvar) - n*nvar);
+        // indices in loop below are on normal mesh
         const int il = rbuf[n].index.d_view(0);
         const int iu = rbuf[n].index.d_view(1);
-        const int ni = iu - il + 1;
 
         // if neighbor is at coarser level, prolongate.  Otherwise do nothing
         if (nghbr[n].lev.d_view(m) < mblev.d_view(m)) {
-          Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,0,ni-1), [&](const int i)
+          Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),[&](const int i)
           {
-            // calculate indices of fine and coarse array elements
-            int finei, coari;
-            if (il < cis) {
-              finei = i;
-              coari = (cis + i)/2;
+            // calculate indices of coarse array elements
+            int coari;
+            if (il < is) {
+              coari = (i-is-1)/2 + cis;
             } else {
-              finei = (fie+1) + i;
-              coari = (cie+1) + i/2;
+              coari = (i-ie+1)/2 + cie;
             }
 
             // calculate 1D gradient using the min-mod limiter
@@ -475,13 +489,42 @@ TaskStatus BValCC::RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
             Real dc = 0.5*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
 
             // interpolate to the finer grid
-            a(m,v,ks,js,finei  ) = ca(m,v,ks,js,coari) - 0.5*dc ;
-            a(m,v,ks,js,finei+1) = ca(m,v,ks,js,coari) + 0.5*dc ;
+              a(m,v,ks,js,i) = ca(m,v,ks,js,coari);
+/***
+            if (i%2 == 0) {
+              a(m,v,ks,js,i) = ca(m,v,ks,js,coari) + 0.25*dc ;
+            } else {
+              a(m,v,ks,js,i) = ca(m,v,ks,js,coari) - 0.25*dc ;
+            }
+***/
           });
         }
       }); // end par_for_outer
     }
   }
+
+/******
+  std::cout << std::endl << "u0 data" << std::endl;
+  for (int m=0; m<nmb; ++m) {
+    auto &js = pmy_pack->pcoord->mbdata.indcs.js;
+    auto &ks = pmy_pack->pcoord->mbdata.indcs.ks;
+    std::cout << "Block = " << m << "  level = " << pmy_pack->pmb->mblev.h_view(m) << std::endl;
+    for (int i=pmy_pack->pcoord->mbdata.indcs.is-2; i<=pmy_pack->pcoord->mbdata.indcs.ie+2; ++i) {
+      std::cout << "i=" << i << "  d=" << a(m,0,ks,js,i) << std::endl;
+    }
+  }
+
+  std::cout << std::endl << "coarse u0 data" << std::endl;
+  for (int m=0; m<nmb; ++m) {
+    auto &js = pmy_pack->pcoord->mbdata.cindcs.js;
+    auto &ks = pmy_pack->pcoord->mbdata.cindcs.ks;
+    std::cout << "Block = " << m << "  level = " << pmy_pack->pmb->mblev.h_view(m) << std::endl;
+    for (int i=pmy_pack->pcoord->mbdata.cindcs.is-2; i<=pmy_pack->pcoord->mbdata.cindcs.ie+2; ++i) {
+      std::cout << "i=" << i << "  d=" << ca(m,0,ks,js,i) << std::endl;
+    }
+  }
+
+*****/
 
   return TaskStatus::complete;
 }

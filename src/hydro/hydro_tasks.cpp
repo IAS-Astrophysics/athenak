@@ -213,14 +213,15 @@ TaskStatus Hydro::RestrictU(Driver *pdrive, int stage)
   // restrict in 1D
   if (pmy_pack->pmesh->one_d) {
     auto &cis = pmy_pack->pcoord->mbdata.cindcs.is;
-    int n1 = (pmy_pack->pcoord->mbdata.cindcs.nx1 - 1);
+    auto &cie = pmy_pack->pcoord->mbdata.cindcs.ie;
     auto &is = pmy_pack->pcoord->mbdata.indcs.is;
     auto &js = pmy_pack->pcoord->mbdata.indcs.js;
     auto &ks = pmy_pack->pcoord->mbdata.indcs.ks;
-    par_for("restrict1D",DevExeSpace(),0, nmb1, 0, nvar-1, 0, n1,
+    par_for("restrict1D",DevExeSpace(),0, nmb1, 0, nvar-1, cis, cie,
       KOKKOS_LAMBDA(const int m, const int n, const int i)
       {
-        cu0_(m,n,ks,js,cis+i) = 0.5*(u0_(m,n,ks,js,is+2*i) + u0_(m,n,ks,js,is+2*i+1)); 
+        int finei = 2*(i - cis) + is;
+        cu0_(m,n,ks,js,i) = 0.5*(u0_(m,n,ks,js,finei) + u0_(m,n,ks,js,finei+1)); 
       }
     );
   }
