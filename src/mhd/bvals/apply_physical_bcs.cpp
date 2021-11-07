@@ -31,7 +31,7 @@ TaskStatus MHD::ApplyPhysicalBCs(Driver* pdrive, int stage)
 
   for (int m=0; m<nmb; ++m) {
     // apply physical boundaries to inner_x1
-    switch (pmy_pack->pmb->mb_bcs(m,BoundaryFace::inner_x1)) {
+    switch (pmy_pack->pmb->mbbcs(m,BoundaryFace::inner_x1)) {
       case BoundaryFlag::reflect:
         ReflectInnerX1(m);
         break;
@@ -46,7 +46,7 @@ TaskStatus MHD::ApplyPhysicalBCs(Driver* pdrive, int stage)
     }
 
     // apply physical bounaries to outer_x1
-    switch (pmy_pack->pmb->mb_bcs(m,BoundaryFace::outer_x1)) {
+    switch (pmy_pack->pmb->mbbcs(m,BoundaryFace::outer_x1)) {
       case BoundaryFlag::reflect:
         ReflectOuterX1(m);
         break;
@@ -64,7 +64,7 @@ TaskStatus MHD::ApplyPhysicalBCs(Driver* pdrive, int stage)
 
   for (int m=0; m<nmb; ++m) {
     // apply physical bounaries to inner_x2
-    switch (pmy_pack->pmb->mb_bcs(m,BoundaryFace::inner_x2)) {
+    switch (pmy_pack->pmb->mbbcs(m,BoundaryFace::inner_x2)) {
       case BoundaryFlag::reflect:
         ReflectInnerX2(m);
         break;
@@ -76,7 +76,7 @@ TaskStatus MHD::ApplyPhysicalBCs(Driver* pdrive, int stage)
     }
 
     // apply physical bounaries to outer_x1
-    switch (pmy_pack->pmb->mb_bcs(m,BoundaryFace::outer_x2)) {
+    switch (pmy_pack->pmb->mbbcs(m,BoundaryFace::outer_x2)) {
       case BoundaryFlag::reflect:
         ReflectOuterX2(m);
         break;
@@ -91,7 +91,7 @@ TaskStatus MHD::ApplyPhysicalBCs(Driver* pdrive, int stage)
 
   for (int m=0; m<nmb; ++m) {
     // apply physical bounaries to inner_x3
-    switch (pmy_pack->pmb->mb_bcs(m,BoundaryFace::inner_x3)) {
+    switch (pmy_pack->pmb->mbbcs(m,BoundaryFace::inner_x3)) {
       case BoundaryFlag::reflect:
         ReflectInnerX3(m);
         break;
@@ -103,7 +103,7 @@ TaskStatus MHD::ApplyPhysicalBCs(Driver* pdrive, int stage)
     }
 
     // apply physical bounaries to outer_x3
-    switch (pmy_pack->pmb->mb_bcs(m,BoundaryFace::outer_x3)) {
+    switch (pmy_pack->pmb->mbbcs(m,BoundaryFace::outer_x3)) {
       case BoundaryFlag::reflect:
         ReflectOuterX3(m);
         break;

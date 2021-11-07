@@ -45,6 +45,31 @@ Coordinates::Coordinates(MeshBlockPack *ppack, RegionIndcs indcs, int igids, int
     mbdata.indcs.ke = 0;
   } 
 
+  // initialize MeshBlock coarse cell indices (only needed for SMR/AMR, but init always)
+  mbdata.cindcs.ng  = indcs.ng;
+  mbdata.cindcs.nx1 = indcs.nx1/2;
+  mbdata.cindcs.nx2 = indcs.nx2/2;
+  mbdata.cindcs.nx3 = indcs.nx3/2;
+
+  mbdata.cindcs.is = mbdata.cindcs.ng;
+  mbdata.cindcs.ie = mbdata.cindcs.is + mbdata.cindcs.nx1 - 1;
+
+  if (mbdata.cindcs.nx2 > 1) {
+    mbdata.cindcs.js = mbdata.cindcs.ng;
+    mbdata.cindcs.je = mbdata.cindcs.js + mbdata.cindcs.nx2 - 1;
+  } else {
+    mbdata.cindcs.js = 0;
+    mbdata.cindcs.je = 0;
+  }
+
+  if (mbdata.cindcs.nx3 > 1) {
+    mbdata.cindcs.ks = mbdata.cindcs.ng;
+    mbdata.cindcs.ke = mbdata.cindcs.ks + mbdata.cindcs.nx3 - 1;
+  } else {
+    mbdata.cindcs.ks = 0;
+    mbdata.cindcs.ke = 0;
+  }
+
   // calculate physical size of MeshBlocks.  Note only host array is initialized
   Mesh* pm = pmy_pack->pmesh;
   auto &ms = pm->mesh_size;

@@ -402,25 +402,25 @@ void Mesh::BuildTree(ParameterInput *pin)
         // Now add nodes to the MeshBlockTree corresponding to these MeshBlocks
         if (one_d) {  // 1D
           for (std::int32_t i=lx1min; i<lx1max; i+=2) {
-            LogicalLocation nloc;
-            nloc.level = log_ref_lev;
-            nloc.lx1 = i;
-            nloc.lx2 = 0;
-            nloc.lx3 = 0;
+            LogicalLocation nlloc;
+            nlloc.level = log_ref_lev;
+            nlloc.lx1 = i;
+            nlloc.lx2 = 0;
+            nlloc.lx3 = 0;
             int nnew;
-            ptree->AddNode(nloc, nnew);
+            ptree->AddNode(nlloc, nnew);
           }
         }
         if (two_d) {  // 2D
           for (std::int32_t j=lx2min; j<lx2max; j+=2) {
             for (std::int32_t i=lx1min; i<lx1max; i+=2) {
-              LogicalLocation nloc;
-              nloc.level = log_ref_lev;
-              nloc.lx1 = i;
-              nloc.lx2 = j;
-              nloc.lx3 = 0;
+              LogicalLocation nlloc;
+              nlloc.level = log_ref_lev;
+              nlloc.lx1 = i;
+              nlloc.lx2 = j;
+              nlloc.lx3 = 0;
               int nnew;
-              ptree->AddNode(nloc, nnew);
+              ptree->AddNode(nlloc, nnew);
             }
           }
         }
@@ -428,13 +428,13 @@ void Mesh::BuildTree(ParameterInput *pin)
           for (std::int32_t k=lx3min; k<lx3max; k+=2) {
             for (std::int32_t j=lx2min; j<lx2max; j+=2) {
               for (std::int32_t i=lx1min; i<lx1max; i+=2) {
-                LogicalLocation nloc;
-                nloc.level = log_ref_lev;
-                nloc.lx1 = i;
-                nloc.lx2 = j;
-                nloc.lx3 = k;
+                LogicalLocation nlloc;
+                nlloc.level = log_ref_lev;
+                nlloc.lx1 = i;
+                nlloc.lx2 = j;
+                nlloc.lx3 = k;
                 int nnew;
-                ptree->AddNode(nloc, nnew);
+                ptree->AddNode(nlloc, nnew);
               }
             }
           }
@@ -492,16 +492,16 @@ void Mesh::BuildTree(ParameterInput *pin)
   pmb_pack->AddMeshBlocksAndCoordinates(pin, mb_indices);
   pmb_pack->pmb->SetNeighbors(ptree, ranklist);
   
-/*******/
-//  for (int m=0; m<pmb_pack->nmb_thispack; ++m) {
-//    std::cout << "******* Block=" << pmb_pack->pmb->mbgid.h_view(m) << std::endl;
-//    for (int n=0; n<6; ++n) {
-//      std::cout << "n=" << n << " bc_flag=" << GetBoundaryString(pmb_pack->pmb->mb_bcs(m,n)) << std::endl;
-//    }
-//    for (int n=0; n<pmb_pack->pmb->nnghbr; ++n) {
-//      std::cout << "n=" << n << " gid=" << pmb_pack->pmb->nghbr[n].gid.h_view(m) << " level=" << pmb_pack->pmb->nghbr[n].lev.h_view(m) << " rank=" << pmb_pack->pmb->nghbr[n].rank.h_view(m) << " destn=" << pmb_pack->pmb->nghbr[n].destn.h_view(m) << std::endl;
-//    }
-//  }
+/**********/
+  for (int m=0; m<pmb_pack->nmb_thispack; ++m) {
+    std::cout << "******* Block=" << pmb_pack->pmb->mbgid.h_view(m) << std::endl;
+    for (int n=0; n<6; ++n) {
+      std::cout << "n=" << n << " bc_flag=" << GetBoundaryString(pmb_pack->pmb->mbbcs(m,n)) << std::endl;
+    }
+    for (int n=0; n<pmb_pack->pmb->nnghbr; ++n) {
+      std::cout << "n=" << n << " gid=" << pmb_pack->pmb->nghbr[n].gid.h_view(m) << " level=" << pmb_pack->pmb->nghbr[n].lev.h_view(m) << " rank=" << pmb_pack->pmb->nghbr[n].rank.h_view(m) << " destn=" << pmb_pack->pmb->nghbr[n].destn.h_view(m) << std::endl;
+    }
+  }
 /**********/
 
   ResetLoadBalanceCounters();

@@ -4,7 +4,8 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file bvals_cc.cpp
-//  \brief implementation of functions in BoundaryValueCC class
+//  \brief functions to pass boundary values for cell-centered variables as implemented in
+//  BValCC class.
 
 #include <cstdlib>
 #include <iostream>
@@ -17,22 +18,22 @@
 #include "utils/create_mpitag.hpp"
 
 //----------------------------------------------------------------------------------------
-// BoundaryValueCC constructor:
+// BValCC constructor:
 
-BoundaryValueCC::BoundaryValueCC(MeshBlockPack *pp, ParameterInput *pin) : pmy_pack(pp)
+BValCC::BValCC(MeshBlockPack *pp, ParameterInput *pin) : pmy_pack(pp)
 {
 } 
   
 //----------------------------------------------------------------------------------------
-// BoundaryValueCC destructor
+// BValCC destructor
   
-BoundaryValueCC::~BoundaryValueCC()
+BValCC::~BValCC()
 {
 }
 
 //----------------------------------------------------------------------------------------
-// \!fn void BoundaryValueCC::AllocateBuffersCC
-// initialize array of send/recv BoundaryBuffers for arbitrary number of cell-centered
+// \!fn void BValCC::AllocateBuffersCC
+// initialize array of send/recv BValBuffers for arbitrary number of cell-centered
 // variables, specified by input argument.
 //
 // NOTE: order of array elements is crucial and cannot be changed.  It must match
@@ -40,22 +41,31 @@ BoundaryValueCC::~BoundaryValueCC()
 
 // TODO: extend for AMR
 
-void BoundaryValueCC::AllocateBuffersCC(const int nvar)
+void BValCC::AllocateBuffersCC(const int nvar)
 {
   auto &indcs = pmy_pack->pcoord->mbdata.indcs;
   int ng = indcs.ng;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
+
+  auto &cindcs = pmy_pack->pcoord->mbdata.cindcs;
+  int cis = cindcs.is, cie = cindcs.ie;
+  int cjs = cindcs.js, cje = cindcs.je;
+  int cks = cindcs.ks, cke = cindcs.ke;
+
   int ng1 = ng-1;
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
 
   // allocate size of (some) Views
   for (int n=0; n<nnghbr; ++n) {
-    // 6 values of index array stores loop bounds for each bbuf: il, iu, jl, ju, kl, ku
+    // 6 values of index array stores loop bounds for each bbuf on both regular and coarse
+    // mesh.  Values [0-5] are: il, iu, jl, ju, kl, ku
     Kokkos::realloc(send_buf[n].index, 6);
     Kokkos::realloc(recv_buf[n].index, 6);
+    Kokkos::realloc(send_buf[n].cindex, 6);
+    Kokkos::realloc(recv_buf[n].cindex, 6);
     Kokkos::realloc(send_buf[n].bcomm_stat, nmb);
     Kokkos::realloc(recv_buf[n].bcomm_stat, nmb);
 #if MPI_PARALLEL_ENABLED
@@ -69,82 +79,91 @@ void BoundaryValueCC::AllocateBuffersCC(const int nvar)
   }
 
   // initialize buffers for x1 faces
-  send_buf[0].InitIndices(nmb, nvar, is,     is+ng1, js, je, ks, ke);
-  send_buf[1].InitIndices(nmb, nvar, ie-ng1, ie,     js, je, ks, ke);
+  send_buf[0].InitIndices(is,     is+ng1, js, je, ks, ke);
+  send_buf[1].InitIndices(ie-ng1, ie,     js, je, ks, ke);
+  recv_buf[0].InitIndices(is-ng,  is-1,   js, je, ks, ke);
+  recv_buf[1].InitIndices(ie+1,   ie+ng,  js, je, ks, ke);
 
-  recv_buf[0].InitIndices(nmb, nvar, is-ng, is-1,  js, je, ks, ke);
-  recv_buf[1].InitIndices(nmb, nvar, ie+1,  ie+ng, js, je, ks, ke);
+  send_buf[0].InitCoarseIndices(cis,     cis+ng1, cjs, cje, cks, cke);
+  send_buf[1].InitCoarseIndices(cie-ng1, cie,     cjs, cje, cks, cke);
+  recv_buf[0].InitCoarseIndices(cis-ng,  cis-1,   cjs, cje, cks, cke);
+  recv_buf[1].InitCoarseIndices(cie+1,   cie+ng,  cjs, cje, cks, cke);
+
+  for (int n=0; n<2; ++n) {
+    send_buf[n].AllocateDataView(nmb, nvar);
+    recv_buf[n].AllocateDataView(nmb, nvar);
+  }
 
   // add more buffers in 2D
   if (nnghbr > 2) {
     // initialize buffers for x2 faces
-    send_buf[2].InitIndices(nmb, nvar, is, ie, js,     js+ng1, ks, ke);
-    send_buf[3].InitIndices(nmb, nvar, is, ie, je-ng1, je,     ks, ke);
+    send_buf[2].InitIndices(is, ie, js,     js+ng1, ks, ke);
+    send_buf[3].InitIndices(is, ie, je-ng1, je,     ks, ke);
 
-    recv_buf[2].InitIndices(nmb, nvar, is, ie, js-ng, js-1,  ks, ke);
-    recv_buf[3].InitIndices(nmb, nvar, is, ie, je+1,  je+ng, ks, ke);
+    recv_buf[2].InitIndices(is, ie, js-ng, js-1,  ks, ke);
+    recv_buf[3].InitIndices(is, ie, je+1,  je+ng, ks, ke);
 
     // initialize buffers for x1x2 edges
-    send_buf[4].InitIndices(nmb, nvar, is,     is+ng1, js,     js+ng1, ks, ke);
-    send_buf[5].InitIndices(nmb, nvar, ie-ng1, ie,     js,     js+ng1, ks, ke);
-    send_buf[6].InitIndices(nmb, nvar, is,     is+ng1, je-ng1, je,     ks, ke);
-    send_buf[7].InitIndices(nmb, nvar, ie-ng1, ie,     je-ng1, je,     ks, ke);
+    send_buf[4].InitIndices(is,     is+ng1, js,     js+ng1, ks, ke);
+    send_buf[5].InitIndices(ie-ng1, ie,     js,     js+ng1, ks, ke);
+    send_buf[6].InitIndices(is,     is+ng1, je-ng1, je,     ks, ke);
+    send_buf[7].InitIndices(ie-ng1, ie,     je-ng1, je,     ks, ke);
 
-    recv_buf[4].InitIndices(nmb, nvar, is-ng, is-1,  js-ng, js-1,  ks, ke);
-    recv_buf[5].InitIndices(nmb, nvar, ie+1,  ie+ng, js-ng, js-1,  ks, ke);
-    recv_buf[6].InitIndices(nmb, nvar, is-ng, is-1,  je+1,  je+ng, ks, ke);
-    recv_buf[7].InitIndices(nmb, nvar, ie+1,  ie+ng, je+1,  je+ng, ks, ke);
+    recv_buf[4].InitIndices(is-ng, is-1,  js-ng, js-1,  ks, ke);
+    recv_buf[5].InitIndices(ie+1,  ie+ng, js-ng, js-1,  ks, ke);
+    recv_buf[6].InitIndices(is-ng, is-1,  je+1,  je+ng, ks, ke);
+    recv_buf[7].InitIndices(ie+1,  ie+ng, je+1,  je+ng, ks, ke);
 
     // add more buffers in 3D
     if (nnghbr > 8) {
 
       // initialize buffers for x3 faces
-      send_buf[8].InitIndices(nmb, nvar, is, ie, js, je, ks,     ks+ng1);
-      send_buf[9].InitIndices(nmb, nvar, is, ie, js, je, ke-ng1, ke    );
+      send_buf[8].InitIndices(is, ie, js, je, ks,     ks+ng1);
+      send_buf[9].InitIndices(is, ie, js, je, ke-ng1, ke    );
     
-      recv_buf[8].InitIndices(nmb, nvar, is, ie, js, je, ks-ng, ks-1 );
-      recv_buf[9].InitIndices(nmb, nvar, is, ie, js, je, ke+1,  ke+ng);
+      recv_buf[8].InitIndices(is, ie, js, je, ks-ng, ks-1 );
+      recv_buf[9].InitIndices(is, ie, js, je, ke+1,  ke+ng);
 
       // initialize buffers for x3x1 edges
-      send_buf[10].InitIndices(nmb, nvar, is,     is+ng1, js, je, ks,     ks+ng1);
-      send_buf[11].InitIndices(nmb, nvar, ie-ng1, ie,     js, je, ks,     ks+ng1);
-      send_buf[12].InitIndices(nmb, nvar, is,     is+ng1, js, je, ke-ng1, ke    );
-      send_buf[13].InitIndices(nmb, nvar, ie-ng1, ie,     js, je, ke-ng1, ke    );
+      send_buf[10].InitIndices(is,     is+ng1, js, je, ks,     ks+ng1);
+      send_buf[11].InitIndices(ie-ng1, ie,     js, je, ks,     ks+ng1);
+      send_buf[12].InitIndices(is,     is+ng1, js, je, ke-ng1, ke    );
+      send_buf[13].InitIndices(ie-ng1, ie,     js, je, ke-ng1, ke    );
     
-      recv_buf[10].InitIndices(nmb, nvar, is-ng, is-1,  js, je, ks-ng, ks-1 );
-      recv_buf[11].InitIndices(nmb, nvar, ie+1,  ie+ng, js, je, ks-ng, ks-1 );
-      recv_buf[12].InitIndices(nmb, nvar, is-ng, is-1,  js, je, ke+1,  ke+ng);
-      recv_buf[13].InitIndices(nmb, nvar, ie+1,  ie+ng, js, je, ke+1,  ke+ng);
+      recv_buf[10].InitIndices(is-ng, is-1,  js, je, ks-ng, ks-1 );
+      recv_buf[11].InitIndices(ie+1,  ie+ng, js, je, ks-ng, ks-1 );
+      recv_buf[12].InitIndices(is-ng, is-1,  js, je, ke+1,  ke+ng);
+      recv_buf[13].InitIndices(ie+1,  ie+ng, js, je, ke+1,  ke+ng);
 
       // initialize buffers for x2x3 edges
-      send_buf[14].InitIndices(nmb, nvar, is, ie, js,     js+ng1, ks,     ks+ng1);
-      send_buf[15].InitIndices(nmb, nvar, is, ie, je-ng1, je,     ks,     ks+ng1);
-      send_buf[16].InitIndices(nmb, nvar, is, ie, js,     js+ng1, ke-ng1, ke    );
-      send_buf[17].InitIndices(nmb, nvar, is, ie, je-ng1, je,     ke-ng1, ke    );
+      send_buf[14].InitIndices(is, ie, js,     js+ng1, ks,     ks+ng1);
+      send_buf[15].InitIndices(is, ie, je-ng1, je,     ks,     ks+ng1);
+      send_buf[16].InitIndices(is, ie, js,     js+ng1, ke-ng1, ke    );
+      send_buf[17].InitIndices(is, ie, je-ng1, je,     ke-ng1, ke    );
   
-      recv_buf[14].InitIndices(nmb, nvar, is, ie, js-ng, js-1,  ks-ng, ks-1 );
-      recv_buf[15].InitIndices(nmb, nvar, is, ie, je+1,  je+ng, ks-ng, ks-1 );
-      recv_buf[16].InitIndices(nmb, nvar, is, ie, js-ng, js-1,  ke+1,  ke+ng);
-      recv_buf[17].InitIndices(nmb, nvar, is, ie, je+1,  je+ng, ke+1,  ke+ng);
+      recv_buf[14].InitIndices(is, ie, js-ng, js-1,  ks-ng, ks-1 );
+      recv_buf[15].InitIndices(is, ie, je+1,  je+ng, ks-ng, ks-1 );
+      recv_buf[16].InitIndices(is, ie, js-ng, js-1,  ke+1,  ke+ng);
+      recv_buf[17].InitIndices(is, ie, je+1,  je+ng, ke+1,  ke+ng);
 
       // initialize buffers for corners
-      send_buf[18].InitIndices(nmb, nvar, is,     is+ng1, js,     js+ng1, ks,     ks+ng1);
-      send_buf[19].InitIndices(nmb, nvar, ie-ng1, ie,     js,     js+ng1, ks,     ks+ng1);
-      send_buf[20].InitIndices(nmb, nvar, is,     is+ng1, je-ng1, je,     ks,     ks+ng1);
-      send_buf[21].InitIndices(nmb, nvar, ie-ng1, ie,     je-ng1, je,     ks,     ks+ng1);
-      send_buf[22].InitIndices(nmb, nvar, is,     is+ng1, js,     js+ng1, ke-ng1, ke    );
-      send_buf[23].InitIndices(nmb, nvar, ie-ng1, ie,     js,     js+ng1, ke-ng1, ke    );
-      send_buf[24].InitIndices(nmb, nvar, is,     is+ng1, je-ng1, je,     ke-ng1, ke    );
-      send_buf[25].InitIndices(nmb, nvar, ie-ng1, ie,     je-ng1, je,     ke-ng1, ke    );
+      send_buf[18].InitIndices(is,     is+ng1, js,     js+ng1, ks,     ks+ng1);
+      send_buf[19].InitIndices(ie-ng1, ie,     js,     js+ng1, ks,     ks+ng1);
+      send_buf[20].InitIndices(is,     is+ng1, je-ng1, je,     ks,     ks+ng1);
+      send_buf[21].InitIndices(ie-ng1, ie,     je-ng1, je,     ks,     ks+ng1);
+      send_buf[22].InitIndices(is,     is+ng1, js,     js+ng1, ke-ng1, ke    );
+      send_buf[23].InitIndices(ie-ng1, ie,     js,     js+ng1, ke-ng1, ke    );
+      send_buf[24].InitIndices(is,     is+ng1, je-ng1, je,     ke-ng1, ke    );
+      send_buf[25].InitIndices(ie-ng1, ie,     je-ng1, je,     ke-ng1, ke    );
 
-      recv_buf[18].InitIndices(nmb, nvar, is-ng, is-1,  js-ng, js-1,  ks-ng, ks-1 );
-      recv_buf[19].InitIndices(nmb, nvar, ie+1,  ie+ng, js-ng, js-1,  ks-ng, ks-1 );
-      recv_buf[20].InitIndices(nmb, nvar, is-ng, is-1,  je+1,  je+ng, ks-ng, ks-1 );
-      recv_buf[21].InitIndices(nmb, nvar, ie+1,  ie+ng, je+1,  je+ng, ks-ng, ks-1 );
-      recv_buf[22].InitIndices(nmb, nvar, is-ng, is-1,  js-ng, js-1,  ke+1,  ke+ng);
-      recv_buf[23].InitIndices(nmb, nvar, ie+1,  ie+ng, js-ng, js-1,  ke+1,  ke+ng);
-      recv_buf[24].InitIndices(nmb, nvar, is-ng, is-1,  je+1,  je+ng, ke+1,  ke+ng);
-      recv_buf[25].InitIndices(nmb, nvar, ie+1,  ie+ng, je+1,  je+ng, ke+1,  ke+ng);
+      recv_buf[18].InitIndices(is-ng, is-1,  js-ng, js-1,  ks-ng, ks-1 );
+      recv_buf[19].InitIndices(ie+1,  ie+ng, js-ng, js-1,  ks-ng, ks-1 );
+      recv_buf[20].InitIndices(is-ng, is-1,  je+1,  je+ng, ks-ng, ks-1 );
+      recv_buf[21].InitIndices(ie+1,  ie+ng, je+1,  je+ng, ks-ng, ks-1 );
+      recv_buf[22].InitIndices(is-ng, is-1,  js-ng, js-1,  ke+1,  ke+ng);
+      recv_buf[23].InitIndices(ie+1,  ie+ng, js-ng, js-1,  ke+1,  ke+ng);
+      recv_buf[24].InitIndices(is-ng, is-1,  je+1,  je+ng, ke+1,  ke+ng);
+      recv_buf[25].InitIndices(ie+1,  ie+ng, je+1,  je+ng, ke+1,  ke+ng);
     }
   }
 
@@ -162,7 +181,7 @@ void BoundaryValueCC::AllocateBuffersCC(const int nvar)
 
 
 //----------------------------------------------------------------------------------------
-// \!fn void BoundaryValueCC::SendBuffersCC()
+// \!fn void BValCC::PackAndSendCC()
 // \brief Pack cell-centered variables into boundary buffers and send to neighbors.
 //
 // This routine packs ALL the buffers on ALL the faces, edges, and corners simultaneously,
@@ -170,19 +189,21 @@ void BoundaryValueCC::AllocateBuffersCC(const int nvar)
 // large number of MeshBlocks per MPI rank.  Buffer data are then sent (via MPI) or copied
 // directly for periodic or block boundaries.
 //
-// Input array must be 5D Kokkos View dimensioned (nmb, nvar, nx3, nx2, nx1)
+// Input arrays must be 5D Kokkos View dimensioned (nmb, nvar, nx3, nx2, nx1)
+// 5D Kokkos View of coarsened (restricted) array data also required with SMR/AMR 
 
-TaskStatus BoundaryValueCC::SendBuffersCC(DvceArray5D<Real> &a, int key)
+TaskStatus BValCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, int key)
 {
   // create local references for variables in kernel
   int nmb = pmy_pack->pmb->nmb;
   // TODO: following only works when all MBs have the same number of neighbors
   int nnghbr = pmy_pack->pmb->nnghbr;
-  int nvar = a.extent_int(1);  // 2nd index from L of input array must be NVAR
+  int nvar = a.extent_int(1);  // TODO: 2nd index from L of input array must be NVAR
 
   {int &my_rank = global_variable::my_rank;
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &mbgid = pmy_pack->pmb->mbgid;
+  auto &mblev = pmy_pack->pmb->mblev;
   auto &sbuf = send_buf;
   auto &rbuf = recv_buf;
 
@@ -195,13 +216,25 @@ TaskStatus BoundaryValueCC::SendBuffersCC(DvceArray5D<Real> &a, int key)
     const int m = (tmember.league_rank())/(nnghbr*nvar);
     const int n = (tmember.league_rank() - m*(nnghbr*nvar))/nvar;
     const int v = (tmember.league_rank() - m*(nnghbr*nvar) - n*nvar);
+    // if neighbor is at same or finer level, use indices for u0
     // indices same for all variables, stored in (0,i) component
-    const int il = sbuf[n].index.d_view(0);
-    const int iu = sbuf[n].index.d_view(1);
-    const int jl = sbuf[n].index.d_view(2);
-    const int ju = sbuf[n].index.d_view(3);
-    const int kl = sbuf[n].index.d_view(4);
-    const int ku = sbuf[n].index.d_view(5);
+    int il, iu, jl, ju, kl, ku;
+    if (nghbr[n].lev.d_view(m) >= mblev.d_view(m)) {
+      il = sbuf[n].index.d_view(0);
+      iu = sbuf[n].index.d_view(1);
+      jl = sbuf[n].index.d_view(2);
+      ju = sbuf[n].index.d_view(3);
+      kl = sbuf[n].index.d_view(4);
+      ku = sbuf[n].index.d_view(5);
+    // else if neighbor is at coarser level, use indices for coarse_u0
+    } else {
+      il = sbuf[n].cindex.d_view(0);
+      iu = sbuf[n].cindex.d_view(1);
+      jl = sbuf[n].cindex.d_view(2);
+      ju = sbuf[n].cindex.d_view(3);
+      kl = sbuf[n].cindex.d_view(4);
+      ku = sbuf[n].cindex.d_view(5);
+    }
     const int ni = iu - il + 1;
     const int nj = ju - jl + 1;
     const int nk = ku - kl + 1;
@@ -216,28 +249,50 @@ TaskStatus BoundaryValueCC::SendBuffersCC(DvceArray5D<Real> &a, int key)
   
       // Inner (vector) loop over i
       // copy directly into recv buffer if MeshBlocks on same rank
+
       if (nghbr[n].rank.d_view(m) == my_rank) {
         // indices of recv'ing MB and buffer: assumes MB IDs are stored sequentially
+        // in this MeshBlockPack, so array index equals (target_id - first_id)
         int mm = nghbr[n].gid.d_view(m) - mbgid.d_view(0);
         int nn = nghbr[n].destn.d_view(m);
-        Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu + 1),[&](const int i)
-        {
-          rbuf[nn].data(mm,v, i-il + ni*(j-jl + nj*(k-kl))) = a(m,v,k,j,i);
-        });
+        // if neighbor is at same or finer level, load data from u0
+        if (nghbr[n].lev.d_view(m) >= mblev.d_view(m)) {
+          Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),[&](const int i)
+          {
+            rbuf[nn].data(mm,v, i-il + ni*(j-jl + nj*(k-kl))) = a(m,v,k,j,i);
+          });
+        // if neighbor is at coarser level, load data from coarse_u0
+        } else {
+          Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),[&](const int i)
+          {
+            rbuf[nn].data(mm,v, i-il + ni*(j-jl + nj*(k-kl))) = ca(m,v,k,j,i);
+          });
+        }
 
       // else copy into send buffer for MPI communication below
+
       } else {
-        Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu + 1),[&](const int i)
-        {
-          sbuf[n].data(m, v, i-il + ni*(j-jl + nj*(k-kl))) = a(m,v,k,j,i);
-        });
+        // if neighbor is at same or finer level, load data from u0
+        if (nghbr[n].lev.d_view(m) >= mblev.d_view(m)) {
+          Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),[&](const int i)
+          {
+            sbuf[n].data(m, v, i-il + ni*(j-jl + nj*(k-kl))) = a(m,v,k,j,i);
+          });
+        // if neighbor is at coarser level, load data from coarse_u0
+        // Note in this case, sbuf[n].index values refer to coarse_u0
+        } else {
+          Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),[&](const int i)
+          {
+            sbuf[n].data(m, v, i-il + ni*(j-jl + nj*(k-kl))) = ca(m,v,k,j,i);
+          });
+        }
       }
     });
+
   }); // end par_for_outer
   }
 
-  // Send boundary buffer to neighboring MeshBlocks using MPI or Kokkos::deep_copy if
-  // neighbor is on same MPI rank.
+  // Send boundary buffer to neighboring MeshBlocks using MPI
 
   {int &my_rank = global_variable::my_rank;
   auto &nghbr = pmy_pack->pmb->nghbr;
@@ -251,11 +306,14 @@ TaskStatus BoundaryValueCC::SendBuffersCC(DvceArray5D<Real> &a, int key)
       if (nghbr[n].gid.h_view(m) >= 0) {  // not a physical boundary
         // compute indices of destination MeshBlock and Neighbor 
         int nn = nghbr[n].destn.h_view(m);
+        // if MeshBlocks are same rank, data already copied into receive buffer above
+        // So simply set communication status tag as received.
         if (nghbr[n].rank.h_view(m) == my_rank) {
           int mm = nghbr[n].gid.h_view(m) - pmy_pack->gids;
           rbuf[nn].bcomm_stat(mm) = BoundaryCommStatus::received;
 
 #if MPI_PARALLEL_ENABLED
+        // Send boundary data using MPI
         } else {
           // create tag using local ID and buffer index of *receiving* MeshBlock
           int lid = nghbr[n].gid.h_view(m) -
@@ -278,13 +336,12 @@ TaskStatus BoundaryValueCC::SendBuffersCC(DvceArray5D<Real> &a, int key)
 // \!fn void RecvBuffers()
 // \brief Unpack boundary buffers
 
-TaskStatus BoundaryValueCC::RecvBuffersCC(DvceArray5D<Real> &a)
+TaskStatus BValCC::RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
 {
   // create local references for variables in kernel
   int nmb = pmy_pack->pmb->nmb;
   // TODO: following only works when all MBs have the same number of neighbors
   int nnghbr = pmy_pack->pmb->nnghbr;
-  int nvar = a.extent_int(1);  // 2nd index from L of input array must be NVAR
 
   bool bflag = false;
   {auto &nghbr = pmy_pack->pmb->nghbr;
@@ -297,7 +354,7 @@ TaskStatus BoundaryValueCC::RecvBuffersCC(DvceArray5D<Real> &a)
   MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &test, MPI_STATUS_IGNORE);
 #endif
 
-  // check that recv boundary buffer communications have all completed
+  //----- STEP 1: check that recv boundary buffer communications have all completed
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
       if (nghbr[n].gid.h_view(m) >= 0) { // ID != -1, so not a physical boundary
@@ -320,8 +377,11 @@ TaskStatus BoundaryValueCC::RecvBuffersCC(DvceArray5D<Real> &a)
   // exit if recv boundary buffer communications have not completed
   if (bflag) {return TaskStatus::incomplete;}
 
-  // buffers have all completed, so unpack
-  {int nmnv = nmb*nnghbr*nvar;
+  //----- STEP 2: buffers have all completed, so unpack
+  {int nvar = a.extent_int(1);  // TODO: 2nd index from L of input array must be NVAR
+  int nmnv = nmb*nnghbr*nvar;
+  auto &nghbr = pmy_pack->pmb->nghbr;
+  auto &mblev = pmy_pack->pmb->mblev;
   auto &rbuf = recv_buf;
 
   // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
@@ -349,13 +409,78 @@ TaskStatus BoundaryValueCC::RecvBuffersCC(DvceArray5D<Real> &a)
       int j = (idx - k * nj) + jl;
       k += kl;
          
-      // Inner (vector) loop over i
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu + 1), [&](const int i)
-      {
-        a(m,v,k,j,i) = rbuf[n].data(m,v,i-il + ni*(j-jl + nj*(k-kl)));
-      });
+      // if neighbor is at same or finer level, load data directly into u0
+      if (nghbr[n].lev.d_view(m) >= mblev.d_view(m)) {
+        Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1), [&](const int i)
+        {
+          a(m,v,k,j,i) = rbuf[n].data(m,v,i-il + ni*(j-jl + nj*(k-kl)));
+        });
+
+      // if neighbor is at coarser level, load data into coarse_u0 (and prolongate below)
+      // Note in this case, rbuf[n].index values refer to coarse_u0
+      } else {
+        Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1), [&](const int i)
+        {
+          ca(m,v,k,j,i) = rbuf[n].data(m,v,i-il + ni*(j-jl + nj*(k-kl)));
+        });
+      }
+
     });
   }); // end par_for_outer
+  }
+
+  //----- STEP 3: Prolongate conserved variables when neighbor at coarser level
+  if (pmy_pack->pmesh->multilevel) {
+    int nvar = a.extent_int(1);  // TODO: 2nd index from L of input array must be NVAR
+    int nmnv = nmb*nnghbr*nvar;
+    auto &nghbr = pmy_pack->pmb->nghbr;
+    auto &mblev = pmy_pack->pmb->mblev;
+    auto &rbuf = recv_buf;
+
+    // Prolongation for 1D problem
+    if (pmy_pack->pmesh->one_d) {
+      auto &cis = pmy_pack->pcoord->mbdata.cindcs.is;
+      auto &cie = pmy_pack->pcoord->mbdata.cindcs.ie;
+      auto &fie = pmy_pack->pcoord->mbdata.indcs.ie;
+      auto &js = pmy_pack->pcoord->mbdata.indcs.js;
+      auto &ks = pmy_pack->pcoord->mbdata.indcs.ks;
+      // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
+      Kokkos::TeamPolicy<> policy(DevExeSpace(), nmnv, Kokkos::AUTO);
+      Kokkos::parallel_for("RecvBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember)
+      {
+        const int m = (tmember.league_rank())/(nnghbr*nvar);
+        const int n = (tmember.league_rank() - m*(nnghbr*nvar))/nvar;
+        const int v = (tmember.league_rank() - m*(nnghbr*nvar) - n*nvar);
+        const int il = rbuf[n].index.d_view(0);
+        const int iu = rbuf[n].index.d_view(1);
+        const int ni = iu - il + 1;
+
+        // if neighbor is at coarser level, prolongate.  Otherwise do nothing
+        if (nghbr[n].lev.d_view(m) < mblev.d_view(m)) {
+          Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,0,ni-1), [&](const int i)
+          {
+            // calculate indices of fine and coarse array elements
+            int finei, coari;
+            if (il < cis) {
+              finei = i;
+              coari = (cis + i)/2;
+            } else {
+              finei = (fie+1) + i;
+              coari = (cie+1) + i/2;
+            }
+
+            // calculate 1D gradient using the min-mod limiter
+            Real dl = ca(m,v,ks,js,coari  ) - ca(m,v,ks,js,coari-1);
+            Real dr = ca(m,v,ks,js,coari+1) - ca(m,v,ks,js,coari  );
+            Real dc = 0.5*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
+
+            // interpolate to the finer grid
+            a(m,v,ks,js,finei  ) = ca(m,v,ks,js,coari) - 0.5*dc ;
+            a(m,v,ks,js,finei+1) = ca(m,v,ks,js,coari) + 0.5*dc ;
+          });
+        }
+      }); // end par_for_outer
+    }
   }
 
   return TaskStatus::complete;

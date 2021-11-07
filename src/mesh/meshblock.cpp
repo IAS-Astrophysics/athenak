@@ -20,13 +20,15 @@
 MeshBlock::MeshBlock(MeshBlockPack* ppack, int igids, int nmb) : 
   pmy_pack(ppack), nmb(nmb),
   mbgid("mbgid",nmb),
-  mb_bcs("mbbcs",nmb,6),
-  lb_cost("lbcost",nmb)
+  mblev("mblev",nmb),
+  mbbcs("mbbcs",nmb,6),
+  mbcost("lbcost",nmb)
 {
   Mesh* pm = pmy_pack->pmesh;
   // initialize host arrays of gids, sizes, bcs over all MeshBlocks
   for (int m=0; m<nmb; ++m) {
     mbgid.h_view(m) = igids + m;
+    mblev.h_view(m) = pm->lloclist[igids+m].level;
 
     // calculate physical size and set BCs of MeshBlock in x1, depending on whether there
     // are one or more MeshBlocks in this direction.
@@ -34,36 +36,36 @@ MeshBlock::MeshBlock(MeshBlockPack* ppack, int igids, int nmb) :
     std::int32_t &lev = pm->lloclist[igids+m].level;
     std::int32_t nmbx1 = pm->nmb_rootx1 << (lev - pm->root_level);
     if (lx1 == 0) {
-      mb_bcs(m,0) = pm->mesh_bcs[BoundaryFace::inner_x1];
+      mbbcs(m,0) = pm->mesh_bcs[BoundaryFace::inner_x1];
     } else {
-      mb_bcs(m,0) = BoundaryFlag::block;
+      mbbcs(m,0) = BoundaryFlag::block;
     }
 
     if (lx1 == nmbx1 - 1) {
-      mb_bcs(m,1) = pm->mesh_bcs[BoundaryFace::outer_x1];
+      mbbcs(m,1) = pm->mesh_bcs[BoundaryFace::outer_x1];
     } else {
-      mb_bcs(m,1) = BoundaryFlag::block;
+      mbbcs(m,1) = BoundaryFlag::block;
     }
 
     // calculate physical size and set BCs of MeshBlock in x2, dependng on whether there
     // are none (1D), one, or more MeshBlocks in this direction
     if (pm->mesh_indcs.nx2 == 1) {
-      mb_bcs(m,2) = pm->mesh_bcs[BoundaryFace::inner_x2];
-      mb_bcs(m,3) = pm->mesh_bcs[BoundaryFace::outer_x2];
+      mbbcs(m,2) = pm->mesh_bcs[BoundaryFace::inner_x2];
+      mbbcs(m,3) = pm->mesh_bcs[BoundaryFace::outer_x2];
     } else {
 
       std::int32_t &lx2 = pm->lloclist[igids+m].lx2;
       std::int32_t nmbx2 = pm->nmb_rootx2 << (lev - pm->root_level);
       if (lx2 == 0) {
-        mb_bcs(m,2) = pm->mesh_bcs[BoundaryFace::inner_x2];
+        mbbcs(m,2) = pm->mesh_bcs[BoundaryFace::inner_x2];
       } else {
-        mb_bcs(m,2) = BoundaryFlag::block;
+        mbbcs(m,2) = BoundaryFlag::block;
       }
 
       if (lx2 == (nmbx2) - 1) {
-        mb_bcs(m,3) = pm->mesh_bcs[BoundaryFace::outer_x2];
+        mbbcs(m,3) = pm->mesh_bcs[BoundaryFace::outer_x2];
       } else {
-        mb_bcs(m,3) = BoundaryFlag::block;
+        mbbcs(m,3) = BoundaryFlag::block;
       }
 
     }
@@ -71,20 +73,20 @@ MeshBlock::MeshBlock(MeshBlockPack* ppack, int igids, int nmb) :
     // calculate physical size and set BCs of MeshBlock in x3, dependng on whether there
     // are none (1D/2D), one, or more MeshBlocks in this direction
     if (pm->mesh_indcs.nx3 == 1) {
-      mb_bcs(m,4) = pm->mesh_bcs[BoundaryFace::inner_x3];
-      mb_bcs(m,5) = pm->mesh_bcs[BoundaryFace::outer_x3];
+      mbbcs(m,4) = pm->mesh_bcs[BoundaryFace::inner_x3];
+      mbbcs(m,5) = pm->mesh_bcs[BoundaryFace::outer_x3];
     } else {
       std::int32_t &lx3 = pm->lloclist[igids+m].lx3;
       std::int32_t nmbx3 = pm->nmb_rootx3 << (lev - pm->root_level);
       if (lx3 == 0) {
-        mb_bcs(m,4) = pm->mesh_bcs[BoundaryFace::inner_x3];
+        mbbcs(m,4) = pm->mesh_bcs[BoundaryFace::inner_x3];
       } else {
-        mb_bcs(m,4) = BoundaryFlag::block;
+        mbbcs(m,4) = BoundaryFlag::block;
       }
       if (lx3 == (nmbx3) - 1) {
-        mb_bcs(m,5) = pm->mesh_bcs[BoundaryFace::outer_x3];
+        mbbcs(m,5) = pm->mesh_bcs[BoundaryFace::outer_x3];
       } else {
-        mb_bcs(m,5) = BoundaryFlag::block;
+        mbbcs(m,5) = BoundaryFlag::block;
       }
     }
 
@@ -92,8 +94,10 @@ MeshBlock::MeshBlock(MeshBlockPack* ppack, int igids, int nmb) :
 
   // For each DualArray: mark host views as modified, and then sync to device array
   mbgid.template modify<HostMemSpace>();
+  mblev.template modify<HostMemSpace>();
 
   mbgid.template sync<DevExeSpace>();
+  mblev.template sync<DevExeSpace>();
 }
 
 //----------------------------------------------------------------------------------------
@@ -117,8 +121,6 @@ MeshBlock::~MeshBlock()
 
 void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklist)
 {
-  MeshBlockTree* nt;
-
   if (pmy_pack->pmesh->one_d) {nnghbr = 2;}
   if (pmy_pack->pmesh->two_d) {nnghbr = 8;}
   if (pmy_pack->pmesh->three_d) {nnghbr = 26;}
@@ -147,7 +149,7 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
 
     // neighbors on x1face
     for (int n=-1; n<=1; n+=2) {
-      nt = ptree->FindNeighbor(loc, n, 0, 0);
+      MeshBlockTree* nt = ptree->FindNeighbor(loc, n, 0, 0);
       if (nt != nullptr) {
         nghbr[(1+n)/2].gid.h_view(b) = nt->gid_;
         nghbr[(1+n)/2].lev.h_view(b) = nt->loc_.level;
@@ -159,7 +161,7 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
     // neighbors on x2face and x1x2 edges
     if (pmy_pack->pmesh->multi_d) {
       for (int m=-1; m<=1; m+=2) {
-        nt = ptree->FindNeighbor(loc, 0, m, 0);
+        MeshBlockTree* nt = ptree->FindNeighbor(loc, 0, m, 0);
         if (nt != nullptr) {
           nghbr[2+(1+m)/2].gid.h_view(b) = nt->gid_;
           nghbr[2+(1+m)/2].lev.h_view(b) = nt->loc_.level;
@@ -169,7 +171,7 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
       }
       for (int m=-1; m<=1; m+=2) {
         for (int n=-1; n<=1; n+=2) {
-          nt = ptree->FindNeighbor(loc, n, m, 0);
+          MeshBlockTree* nt = ptree->FindNeighbor(loc, n, m, 0);
           if (nt != nullptr) {
             nghbr[4+(1+m)+(1+n)/2].gid.h_view(b) = nt->gid_;
             nghbr[4+(1+m)+(1+n)/2].lev.h_view(b) = nt->loc_.level;
@@ -183,7 +185,7 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
     // neighbors on x3face, x3x1 and x2x3 edges, and corners
     if (pmy_pack->pmesh->three_d) {
       for (int l=-1; l<=1; l+=2) {
-        nt = ptree->FindNeighbor(loc, 0, 0, l);
+        MeshBlockTree* nt = ptree->FindNeighbor(loc, 0, 0, l);
         if (nt != nullptr) {
           nghbr[8+(1+l)/2].gid.h_view(b) = nt->gid_;
           nghbr[8+(1+l)/2].lev.h_view(b) = nt->loc_.level;
@@ -193,7 +195,7 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
       }
       for (int l=-1; l<=1; l+=2) {
         for (int n=-1; n<=1; n+=2) {
-          nt = ptree->FindNeighbor(loc, n, 0, l);
+          MeshBlockTree* nt = ptree->FindNeighbor(loc, n, 0, l);
           if (nt != nullptr) {
             nghbr[10+(1+l)+(1+n)/2].gid.h_view(b) = nt->gid_;
             nghbr[10+(1+l)+(1+n)/2].lev.h_view(b) = nt->loc_.level;
@@ -204,7 +206,7 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
       }
       for (int l=-1; l<=1; l+=2) {
         for (int m=-1; m<=1; m+=2) {
-          nt = ptree->FindNeighbor(loc, 0, m, l);
+          MeshBlockTree* nt = ptree->FindNeighbor(loc, 0, m, l);
           if (nt != nullptr) {
             nghbr[14+(1+l)+(1+m)/2].gid.h_view(b) = nt->gid_;
             nghbr[14+(1+l)+(1+m)/2].lev.h_view(b) = nt->loc_.level;
@@ -216,7 +218,7 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
       for (int l=-1; l<=1; l+=2) {
         for (int m=-1; m<=1; m+=2) {
           for (int n=-1; n<=1; n+=2) {
-            nt = ptree->FindNeighbor(loc, n, m, l);
+            MeshBlockTree* nt = ptree->FindNeighbor(loc, n, m, l);
             if (nt != nullptr) {
               nghbr[18+2*(1+l)+(1+m)+(1+n)/2].gid.h_view(b) = nt->gid_;
               nghbr[18+2*(1+l)+(1+m)+(1+n)/2].lev.h_view(b) = nt->loc_.level;

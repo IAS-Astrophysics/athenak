@@ -27,6 +27,7 @@ struct EOS_Data;
 struct CoordData
 {
   RegionIndcs indcs;               // array indices (same for all MeshBlocks)
+  RegionIndcs cindcs;              // coarse array indices (same for all MeshBlocks)
   DualArray1D<RegionSize> size;    // physical size (array of length [# of MBs])
 
   // following data is only used in GR calculations to compute metric

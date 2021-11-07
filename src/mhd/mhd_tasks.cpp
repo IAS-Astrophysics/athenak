@@ -197,7 +197,7 @@ TaskStatus MHD::CopyCons(Driver *pdrive, int stage)
 
 TaskStatus MHD::SendU(Driver *pdrive, int stage) 
 {
-  TaskStatus tstat = pbval_u->SendBuffersCC(u0, VariablesID::FluidCons_ID);
+  TaskStatus tstat = pbval_u->PackAndSendCC(u0, coarse_u0, VariablesID::FluidCons_ID);
   return tstat;
 }
 
@@ -207,7 +207,7 @@ TaskStatus MHD::SendU(Driver *pdrive, int stage)
 
 TaskStatus MHD::RecvU(Driver *pdrive, int stage)
 {
-  TaskStatus tstat = pbval_u->RecvBuffersCC(u0);
+  TaskStatus tstat = pbval_u->RecvAndUnpackCC(u0, coarse_u0);
   return tstat;
 }
 
@@ -217,7 +217,7 @@ TaskStatus MHD::RecvU(Driver *pdrive, int stage)
 
 TaskStatus MHD::SendB(Driver *pdrive, int stage)
 {
-  TaskStatus tstat = pbval_b->SendBuffersFC(b0, VariablesID::BField_ID);
+  TaskStatus tstat = pbval_b->PackAndSendFC(b0, VariablesID::BField_ID);
   return tstat;
 }
 
@@ -227,7 +227,7 @@ TaskStatus MHD::SendB(Driver *pdrive, int stage)
 
 TaskStatus MHD::RecvB(Driver *pdrive, int stage)
 {
-  TaskStatus tstat = pbval_b->RecvBuffersFC(b0);
+  TaskStatus tstat = pbval_b->RecvAndUnpackFC(b0);
   return tstat;
 }
 

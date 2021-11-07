@@ -39,14 +39,15 @@ class MeshBlock
   // First dimension of each array will be [# of MeshBlocks in this MeshBlockPack]
 
   DualArray1D<int> mbgid;            // grid ID, unique identifier for each MeshBlock
-  HostArray2D<BoundaryFlag> mb_bcs;  // boundary conditions at 6 faces of each MeshBlock
+  DualArray1D<int> mblev;            // logical level of each MeshBlock
+  HostArray2D<BoundaryFlag> mbbcs;   // boundary conditions at 6 faces of each MeshBlock
 
   NeighborBlock nghbr[26];           // data on neighbors stored in fixed-length array
 
  private:
   // data
   MeshBlockPack* pmy_pack;
-  HostArray1D<double> lb_cost;  // cost of updating each MeshBlock for load balancing
+  HostArray1D<double> mbcost;  // cost of updating each MeshBlock for load balancing
 
   // functions
   void SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklist);

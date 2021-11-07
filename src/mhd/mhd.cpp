@@ -125,11 +125,11 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   Kokkos::realloc(b0.x3f, nmb, ncells3+1, ncells2, ncells1);
   
   // allocate boundary buffers for conserved (cell-centered) variables
-  pbval_u = new BoundaryValueCC(ppack, pin);
+  pbval_u = new BValCC(ppack, pin);
   pbval_u->AllocateBuffersCC((nmhd+nscalars));
 
   // allocate boundary buffers for face-centered magnetic field
-  pbval_b = new BoundaryValueFC(ppack, pin);
+  pbval_b = new BValFC(ppack, pin);
   pbval_b->AllocateBuffersFC();
 
   // for time-evolving problems, continue to construct methods, allocate arrays

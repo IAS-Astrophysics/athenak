@@ -25,6 +25,8 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   pmy_pack(ppack),
   u0("cons",1,1,1,1,1),
   w0("prim",1,1,1,1,1),
+  coarse_u0("ccons",1,1,1,1,1),
+  coarse_w0("cprim",1,1,1,1,1),
   u1("cons1",1,1,1,1,1),
   uflx("uflx",1,1,1,1,1)
 {
@@ -97,8 +99,18 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   Kokkos::realloc(u0, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
   Kokkos::realloc(w0, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
 
+  // allocate memory for conserved and primitive variables on coarse mesh
+  if (ppack->pmesh->multilevel) {
+    auto &cindcs = pmy_pack->pcoord->mbdata.cindcs;
+    int nccells1 = cindcs.nx1 + 2*(cindcs.ng);
+    int nccells2 = (cindcs.nx2 > 1)? (cindcs.nx2 + 2*(cindcs.ng)) : 1;
+    int nccells3 = (cindcs.nx3 > 1)? (cindcs.nx3 + 2*(cindcs.ng)) : 1;
+    Kokkos::realloc(coarse_u0, nmb, (nhydro+nscalars), nccells3, nccells2, nccells1);
+    Kokkos::realloc(coarse_w0, nmb, (nhydro+nscalars), nccells3, nccells2, nccells1);
+  }
+
   // allocate boundary buffers for conserved (cell-centered) variables
-  pbval_u = new BoundaryValueCC(ppack, pin);
+  pbval_u = new BValCC(ppack, pin);
   pbval_u->AllocateBuffersCC((nhydro+nscalars));
 
   // for time-evolving problems, continue to construct methods, allocate arrays

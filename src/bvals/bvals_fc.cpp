@@ -4,7 +4,8 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file bvals_fc.cpp
-//  \brief implementation of functions in BoundaryValueFC class
+//  \brief functions to pass boundary values for face-centered variables as implmented in
+//  BValFC class
 
 #include <cstdlib>
 #include <iostream>
@@ -17,22 +18,22 @@
 #include "utils/create_mpitag.hpp"
 
 //----------------------------------------------------------------------------------------
-// BoundaryValueFC constructor:
+// BValFC constructor:
 
-BoundaryValueFC::BoundaryValueFC(MeshBlockPack *pp, ParameterInput *pin) : pmy_pack(pp)
+BValFC::BValFC(MeshBlockPack *pp, ParameterInput *pin) : pmy_pack(pp)
 {
 } 
   
 //----------------------------------------------------------------------------------------
-// BoundaryValueFC destructor
+// BValFC destructor
   
-BoundaryValueFC::~BoundaryValueFC()
+BValFC::~BValFC()
 {
 }
 
 //----------------------------------------------------------------------------------------
-// \!fn void BoundaryValueFC::AllocateBuffersFC
-// initialize array of send/recv BoundaryBuffers for each of the three components of
+// \!fn void BValFC::AllocateBuffersFC
+// initialize array of send/recv BValBuffers for each of the three components of
 // face-centered variables (vectors), such as magnetic field.
 //
 // NOTE: order of array elements is crucial and cannot be changed.  It must match
@@ -40,7 +41,7 @@ BoundaryValueFC::~BoundaryValueFC()
 
 // TODO: extend for AMR
 
-void BoundaryValueFC::AllocateBuffersFC()
+void BValFC::AllocateBuffersFC()
 {
   auto &indcs = pmy_pack->pcoord->mbdata.indcs;
   int ng = indcs.ng;
@@ -268,12 +269,12 @@ void BoundaryValueFC::AllocateBuffersFC()
 }
 
 //----------------------------------------------------------------------------------------
-// \!fn void BoundaryValueFC::SendBuffersFC()
+// \!fn void BValFC::PackAndSendFC()
 // \brief Pack face-centered variables into boundary buffers and send to neighbors.
 //
 // Input array must be DvceFaceFld4D dimensioned (nmb, nx3, nx2, nx1)
 
-TaskStatus BoundaryValueFC::SendBuffersFC(DvceFaceFld4D<Real> &b, int key)
+TaskStatus BValFC::PackAndSendFC(DvceFaceFld4D<Real> &b, int key)
 {
   // create local references for variables in kernel
   int nmb = pmy_pack->pmb->nmb;
@@ -402,7 +403,7 @@ TaskStatus BoundaryValueFC::SendBuffersFC(DvceFaceFld4D<Real> &b, int key)
 // \!fn void RecvBuffers()
 // \brief Unpack boundary buffers
 
-TaskStatus BoundaryValueFC::RecvBuffersFC(DvceFaceFld4D<Real> &b)
+TaskStatus BValFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b)
 {
   // create local references for variables in kernel
   int nmb = pmy_pack->pmb->nmb;
