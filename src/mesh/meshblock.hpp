@@ -51,7 +51,7 @@ class MeshBlock
 
   // functions
   void SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklist);
-
+  int BufferID(int i, int j, int k, int n1, int n2);
 };
 
 #endif // MESH_MESHBLOCK_HPP_
