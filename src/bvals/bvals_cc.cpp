@@ -219,7 +219,7 @@ TaskStatus BValCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, in
     // if neighbor is at same or finer level, use indices for u0
     // indices same for all variables, stored in (0,i) component
     int il, iu, jl, ju, kl, ku;
-    if (nghbr[n].lev.d_view(m) >= mblev.d_view(m)) {
+    if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
       il = sbuf[n].index.d_view(0);
       iu = sbuf[n].index.d_view(1);
       jl = sbuf[n].index.d_view(2);
@@ -250,13 +250,13 @@ TaskStatus BValCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, in
       // Inner (vector) loop over i
       // copy directly into recv buffer if MeshBlocks on same rank
 
-      if (nghbr[n].rank.d_view(m) == my_rank) {
+      if (nghbr.d_view(m,n).rank == my_rank) {
         // indices of recv'ing MB and buffer: assumes MB IDs are stored sequentially
         // in this MeshBlockPack, so array index equals (target_id - first_id)
-        int mm = nghbr[n].gid.d_view(m) - mbgid.d_view(0);
-        int nn = nghbr[n].destn.d_view(m);
+        int mm = nghbr.d_view(m,n).gid - mbgid.d_view(0);
+        int nn = nghbr.d_view(m,n).destn;
         // if neighbor is at same or finer level, load data from u0
-        if (nghbr[n].lev.d_view(m) >= mblev.d_view(m)) {
+        if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
           Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),[&](const int i)
           {
             rbuf[nn].data(mm,v, i-il + ni*(j-jl + nj*(k-kl))) = a(m,v,k,j,i);
@@ -273,7 +273,7 @@ TaskStatus BValCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, in
 
       } else {
         // if neighbor is at same or finer level, load data from u0
-        if (nghbr[n].lev.d_view(m) >= mblev.d_view(m)) {
+        if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
           Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),[&](const int i)
           {
             sbuf[n].data(m, v, i-il + ni*(j-jl + nj*(k-kl))) = a(m,v,k,j,i);
@@ -303,26 +303,26 @@ TaskStatus BValCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, in
 
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
-      if (nghbr[n].gid.h_view(m) >= 0) {  // not a physical boundary
+      if (nghbr.h_view(m,n).gid >= 0) {  // not a physical boundary
         // compute indices of destination MeshBlock and Neighbor 
-        int nn = nghbr[n].destn.h_view(m);
+        int nn = nghbr.h_view(m,n).destn;
         // if MeshBlocks are same rank, data already copied into receive buffer above
         // So simply set communication status tag as received.
-        if (nghbr[n].rank.h_view(m) == my_rank) {
-          int mm = nghbr[n].gid.h_view(m) - pmy_pack->gids;
+        if (nghbr.h_view(m,n).rank == my_rank) {
+          int mm = nghbr.h_view(m,n).gid - pmy_pack->gids;
           rbuf[nn].bcomm_stat(mm) = BoundaryCommStatus::received;
 
 #if MPI_PARALLEL_ENABLED
         // Send boundary data using MPI
         } else {
           // create tag using local ID and buffer index of *receiving* MeshBlock
-          int lid = nghbr[n].gid.h_view(m) -
-                    pmy_pack->pmesh->gidslist[nghbr[n].rank.h_view(m)];
+          int lid = nghbr.h_view(m,n).gid -
+                    pmy_pack->pmesh->gidslist[nghbr.h_view(m,n).rank];
           int tag = CreateMPITag(lid, nn, key);
           auto send_data = Kokkos::subview(sbuf[n].data, m, Kokkos::ALL, Kokkos::ALL);
           void* send_ptr = send_data.data();
           int ierr = MPI_Isend(send_ptr, send_data.size(), MPI_ATHENA_REAL,
-            nghbr[n].rank.h_view(m), tag, MPI_COMM_WORLD, &(sbuf[n].comm_req[m]));
+            nghbr.h_view(m,n).rank, tag, MPI_COMM_WORLD, &(sbuf[n].comm_req[m]));
 #endif
         }
       }
@@ -357,8 +357,8 @@ TaskStatus BValCC::RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
   //----- STEP 1: check that recv boundary buffer communications have all completed
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
-      if (nghbr[n].gid.h_view(m) >= 0) { // ID != -1, so not a physical boundary
-        if (nghbr[n].rank.h_view(m) == global_variable::my_rank) {
+      if (nghbr.h_view(m,n).gid >= 0) { // ID != -1, so not a physical boundary
+        if (nghbr.h_view(m,n).rank == global_variable::my_rank) {
           if (rbuf[n].bcomm_stat(m) == BoundaryCommStatus::waiting) bflag = true;
 #if MPI_PARALLEL_ENABLED
         } else {
@@ -394,7 +394,7 @@ TaskStatus BValCC::RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
     // if neighbor is at same or finer level, use indices for u0
     // indices same for all variables, stored in (0,i) component
     int il, iu, jl, ju, kl, ku;
-    if (nghbr[n].lev.d_view(m) >= mblev.d_view(m)) {
+    if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
       il = rbuf[n].index.d_view(0);
       iu = rbuf[n].index.d_view(1);
       jl = rbuf[n].index.d_view(2);
@@ -423,7 +423,7 @@ TaskStatus BValCC::RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
       k += kl;
          
       // if neighbor is at same or finer level, load data directly into u0
-      if (nghbr[n].lev.d_view(m) >= mblev.d_view(m)) {
+      if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
         Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1), [&](const int i)
         {
           a(m,v,k,j,i) = rbuf[n].data(m,v,i-il + ni*(j-jl + nj*(k-kl)));
@@ -472,7 +472,7 @@ TaskStatus BValCC::RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
         const int iu = rbuf[n].index.d_view(1);
 
         // if neighbor is at coarser level, prolongate.  Otherwise do nothing
-        if (nghbr[n].lev.d_view(m) < mblev.d_view(m)) {
+        if (nghbr.d_view(m,n).lev < mblev.d_view(m)) {
           Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),[&](const int i)
           {
             // calculate indices of coarse array elements

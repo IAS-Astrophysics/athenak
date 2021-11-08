@@ -42,7 +42,7 @@ class MeshBlock
   DualArray1D<int> mblev;            // logical level of each MeshBlock
   HostArray2D<BoundaryFlag> mbbcs;   // boundary conditions at 6 faces of each MeshBlock
 
-  NeighborBlock nghbr[26];           // data on neighbors stored in fixed-length array
+  DualArray2D<NeighborBlock> nghbr;  // data on all (up to 56) neighbors for each MB
 
  private:
   // data

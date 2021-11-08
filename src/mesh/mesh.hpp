@@ -46,10 +46,10 @@ struct RegionIndcs
 
 struct NeighborBlock
 {
-  DualArray1D<int> gid;      // global ID
-  DualArray1D<int> lev;      // logical level
-  DualArray1D<int> rank;    // MPI rank     
-  DualArray1D<int> destn;   // index of recv buffer in target vector of NeighborBlocks
+  int gid;      // global ID
+  int lev;      // logical level
+  int rank;    // MPI rank     
+  int destn;   // index of recv buffer in target vector of NeighborBlocks
   // default constructor
   NeighborBlock(){};
 };

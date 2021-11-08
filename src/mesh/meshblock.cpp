@@ -126,20 +126,15 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
   if (pmy_pack->pmesh->three_d) {nnghbr = 26;}
 
   // allocate size of DualArrays
-  for (int n=0; n<nnghbr; ++n) {
-    Kokkos::realloc(nghbr[n].gid, nmb);
-    Kokkos::realloc(nghbr[n].lev, nmb);
-    Kokkos::realloc(nghbr[n].rank, nmb);
-    Kokkos::realloc(nghbr[n].destn, nmb);
-  }
+  Kokkos::realloc(nghbr, nmb, nnghbr);
 
   // Initialize host view elements of DualViews
   for (int n=0; n<nnghbr; ++n) {
     for (int m=0; m<nmb; ++m) {
-      nghbr[n].gid.h_view(m) = -1;
-      nghbr[n].lev.h_view(m) = -1;
-      nghbr[n].rank.h_view(m) = -1;
-      nghbr[n].destn.h_view(m) = -1;
+      nghbr.h_view(m,n).gid = -1;
+      nghbr.h_view(m,n).lev = -1;
+      nghbr.h_view(m,n).rank = -1;
+      nghbr.h_view(m,n).destn = -1;
     }
   }
 
@@ -154,15 +149,15 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
         if (nt->pleaf_ != nullptr) {  // neighbor at finer level
           int fface = 1 - (n + 1)/2; // 0 for BoundaryFace::outer_x1, 1 for inner_x1
           MeshBlockTree* nf = nt->GetLeaf(fface, 0, 0);
-          nghbr[(1+n)/2].gid.h_view(b) = nf->gid_;
-          nghbr[(1+n)/2].lev.h_view(b) = nf->loc_.level;
-          nghbr[(1+n)/2].rank.h_view(b) = ranklist[nf->gid_];
-          nghbr[(1+n)/2].destn.h_view(b) = (1-n)/2;
+          nghbr.h_view(b,(1+n)/2).gid = nf->gid_;
+          nghbr.h_view(b,(1+n)/2).lev = nf->loc_.level;
+          nghbr.h_view(b,(1+n)/2).rank = ranklist[nf->gid_];
+          nghbr.h_view(b,(1+n)/2).destn = (1-n)/2;
         } else {
-          nghbr[(1+n)/2].gid.h_view(b) = nt->gid_;
-          nghbr[(1+n)/2].lev.h_view(b) = nt->loc_.level;
-          nghbr[(1+n)/2].rank.h_view(b) = ranklist[nt->gid_];
-          nghbr[(1+n)/2].destn.h_view(b) = (1-n)/2;
+          nghbr.h_view(b,(1+n)/2).gid = nt->gid_;
+          nghbr.h_view(b,(1+n)/2).lev = nt->loc_.level;
+          nghbr.h_view(b,(1+n)/2).rank = ranklist[nt->gid_];
+          nghbr.h_view(b,(1+n)/2).destn = (1-n)/2;
         }
       }
     }
@@ -172,20 +167,20 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
       for (int m=-1; m<=1; m+=2) {
         MeshBlockTree* nt = ptree->FindNeighbor(loc, 0, m, 0);
         if (nt != nullptr) {
-          nghbr[2+(1+m)/2].gid.h_view(b) = nt->gid_;
-          nghbr[2+(1+m)/2].lev.h_view(b) = nt->loc_.level;
-          nghbr[2+(1+m)/2].rank.h_view(b) = ranklist[nt->gid_];
-          nghbr[2+(1+m)/2].destn.h_view(b) = 2+(1-m)/2;
+          nghbr.h_view(b,2+(1+m)/2).gid = nt->gid_;
+          nghbr.h_view(b,2+(1+m)/2).lev = nt->loc_.level;
+          nghbr.h_view(b,2+(1+m)/2).rank = ranklist[nt->gid_];
+          nghbr.h_view(b,2+(1+m)/2).destn = 2+(1-m)/2;
         }
       }
       for (int m=-1; m<=1; m+=2) {
         for (int n=-1; n<=1; n+=2) {
           MeshBlockTree* nt = ptree->FindNeighbor(loc, n, m, 0);
           if (nt != nullptr) {
-            nghbr[4+(1+m)+(1+n)/2].gid.h_view(b) = nt->gid_;
-            nghbr[4+(1+m)+(1+n)/2].lev.h_view(b) = nt->loc_.level;
-            nghbr[4+(1+m)+(1+n)/2].rank.h_view(b) = ranklist[nt->gid_];
-            nghbr[4+(1+m)+(1+n)/2].destn.h_view(b) = 4+(1-m)+(1-n)/2;
+            nghbr.h_view(b,4+(1+m)+(1+n)/2).gid = nt->gid_;
+            nghbr.h_view(b,4+(1+m)+(1+n)/2).lev = nt->loc_.level;
+            nghbr.h_view(b,4+(1+m)+(1+n)/2).rank = ranklist[nt->gid_];
+            nghbr.h_view(b,4+(1+m)+(1+n)/2).destn = 4+(1-m)+(1-n)/2;
           }
         }
       }
@@ -196,20 +191,20 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
       for (int l=-1; l<=1; l+=2) {
         MeshBlockTree* nt = ptree->FindNeighbor(loc, 0, 0, l);
         if (nt != nullptr) {
-          nghbr[8+(1+l)/2].gid.h_view(b) = nt->gid_;
-          nghbr[8+(1+l)/2].lev.h_view(b) = nt->loc_.level;
-          nghbr[8+(1+l)/2].rank.h_view(b) = ranklist[nt->gid_];
-          nghbr[8+(1+l)/2].destn.h_view(b) = 8+(1-l)/2;
+          nghbr.h_view(b,8+(1+l)/2).gid = nt->gid_;
+          nghbr.h_view(b,8+(1+l)/2).lev = nt->loc_.level;
+          nghbr.h_view(b,8+(1+l)/2).rank = ranklist[nt->gid_];
+          nghbr.h_view(b,8+(1+l)/2).destn = 8+(1-l)/2;
         }
       }
       for (int l=-1; l<=1; l+=2) {
         for (int n=-1; n<=1; n+=2) {
           MeshBlockTree* nt = ptree->FindNeighbor(loc, n, 0, l);
           if (nt != nullptr) {
-            nghbr[10+(1+l)+(1+n)/2].gid.h_view(b) = nt->gid_;
-            nghbr[10+(1+l)+(1+n)/2].lev.h_view(b) = nt->loc_.level;
-            nghbr[10+(1+l)+(1+n)/2].rank.h_view(b) = ranklist[nt->gid_];
-            nghbr[10+(1+l)+(1+n)/2].destn.h_view(b) = 10+(1-l)+(1-n)/2;
+            nghbr.h_view(b,10+(1+l)+(1+n)/2).gid = nt->gid_;
+            nghbr.h_view(b,10+(1+l)+(1+n)/2).lev = nt->loc_.level;
+            nghbr.h_view(b,10+(1+l)+(1+n)/2).rank = ranklist[nt->gid_];
+            nghbr.h_view(b,10+(1+l)+(1+n)/2).destn = 10+(1-l)+(1-n)/2;
           }
         }
       }
@@ -217,10 +212,10 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
         for (int m=-1; m<=1; m+=2) {
           MeshBlockTree* nt = ptree->FindNeighbor(loc, 0, m, l);
           if (nt != nullptr) {
-            nghbr[14+(1+l)+(1+m)/2].gid.h_view(b) = nt->gid_;
-            nghbr[14+(1+l)+(1+m)/2].lev.h_view(b) = nt->loc_.level;
-            nghbr[14+(1+l)+(1+m)/2].rank.h_view(b) = ranklist[nt->gid_];
-            nghbr[14+(1+l)+(1+m)/2].destn.h_view(b) = 14+(1-l)+(1-m)/2;
+            nghbr.h_view(b,14+(1+l)+(1+m)/2).gid = nt->gid_;
+            nghbr.h_view(b,14+(1+l)+(1+m)/2).lev = nt->loc_.level;
+            nghbr.h_view(b,14+(1+l)+(1+m)/2).rank = ranklist[nt->gid_];
+            nghbr.h_view(b,14+(1+l)+(1+m)/2).destn = 14+(1-l)+(1-m)/2;
           }
         }
       }
@@ -229,10 +224,10 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
           for (int n=-1; n<=1; n+=2) {
             MeshBlockTree* nt = ptree->FindNeighbor(loc, n, m, l);
             if (nt != nullptr) {
-              nghbr[18+2*(1+l)+(1+m)+(1+n)/2].gid.h_view(b) = nt->gid_;
-              nghbr[18+2*(1+l)+(1+m)+(1+n)/2].lev.h_view(b) = nt->loc_.level;
-              nghbr[18+2*(1+l)+(1+m)+(1+n)/2].rank.h_view(b) = ranklist[nt->gid_];
-              nghbr[18+2*(1+l)+(1+m)+(1+n)/2].destn.h_view(b) = 18+2*(1-l)+(1-m)+(1-n)/2;
+              nghbr.h_view(b,18+2*(1+l)+(1+m)+(1+n)/2).gid = nt->gid_;
+              nghbr.h_view(b,18+2*(1+l)+(1+m)+(1+n)/2).lev = nt->loc_.level;
+              nghbr.h_view(b,18+2*(1+l)+(1+m)+(1+n)/2).rank = ranklist[nt->gid_];
+              nghbr.h_view(b,18+2*(1+l)+(1+m)+(1+n)/2).destn = 18+2*(1-l)+(1-m)+(1-n)/2;
             }
           }
         }
@@ -241,17 +236,8 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
   }
 
   // For each DualArray: mark host views as modified, and then sync to device array
-  for (int n=0; n<nnghbr; ++n) {
-    nghbr[n].gid.template modify<HostMemSpace>();
-    nghbr[n].lev.template modify<HostMemSpace>();
-    nghbr[n].rank.template modify<HostMemSpace>();
-    nghbr[n].destn.template modify<HostMemSpace>();
-
-    nghbr[n].gid.template sync<DevExeSpace>();
-    nghbr[n].lev.template sync<DevExeSpace>();
-    nghbr[n].rank.template sync<DevExeSpace>();
-    nghbr[n].destn.template sync<DevExeSpace>();
-  }
+  nghbr.template modify<HostMemSpace>();
+  nghbr.template sync<DevExeSpace>();
 
   return;
 }
