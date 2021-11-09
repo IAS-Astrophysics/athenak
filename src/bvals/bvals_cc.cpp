@@ -60,12 +60,6 @@ void BValCC::AllocateBuffersCC(const int nvar)
 
   // allocate size of (some) Views
   for (int n=0; n<nnghbr; ++n) {
-    // 6 values of index array stores loop bounds for each bbuf on both regular and coarse
-    // mesh.  Values [0-5] are: il, iu, jl, ju, kl, ku
-    Kokkos::realloc(send_buf[n].index, 6);
-    Kokkos::realloc(recv_buf[n].index, 6);
-    Kokkos::realloc(send_buf[n].cindex, 6);
-    Kokkos::realloc(recv_buf[n].cindex, 6);
     Kokkos::realloc(send_buf[n].bcomm_stat, nmb);
     Kokkos::realloc(recv_buf[n].bcomm_stat, nmb);
 #if MPI_PARALLEL_ENABLED
@@ -167,15 +161,6 @@ void BValCC::AllocateBuffersCC(const int nvar)
     }
   }
 
-  // for index DualArray, mark host views as modified, and then sync to device array
-  for (int n=0; n<nnghbr; ++n) {
-    send_buf[n].index.template modify<HostMemSpace>();
-    recv_buf[n].index.template modify<HostMemSpace>();
-
-    send_buf[n].index.template sync<DevExeSpace>();
-    recv_buf[n].index.template sync<DevExeSpace>();
-  }
-
   return;
 }
 
@@ -220,20 +205,20 @@ TaskStatus BValCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, in
     // indices same for all variables, stored in (0,i) component
     int il, iu, jl, ju, kl, ku;
     if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
-      il = sbuf[n].index.d_view(0);
-      iu = sbuf[n].index.d_view(1);
-      jl = sbuf[n].index.d_view(2);
-      ju = sbuf[n].index.d_view(3);
-      kl = sbuf[n].index.d_view(4);
-      ku = sbuf[n].index.d_view(5);
+      il = sbuf[n].index.bis;
+      iu = sbuf[n].index.bie;
+      jl = sbuf[n].index.bjs;
+      ju = sbuf[n].index.bje;
+      kl = sbuf[n].index.bks;
+      ku = sbuf[n].index.bke;
     // else if neighbor is at coarser level, use indices for coarse_u0
     } else {
-      il = sbuf[n].cindex.d_view(0);
-      iu = sbuf[n].cindex.d_view(1);
-      jl = sbuf[n].cindex.d_view(2);
-      ju = sbuf[n].cindex.d_view(3);
-      kl = sbuf[n].cindex.d_view(4);
-      ku = sbuf[n].cindex.d_view(5);
+      il = sbuf[n].cindex.bis;
+      iu = sbuf[n].cindex.bie;
+      jl = sbuf[n].cindex.bjs;
+      ju = sbuf[n].cindex.bje;
+      kl = sbuf[n].cindex.bks;
+      ku = sbuf[n].cindex.bke;
     }
     const int ni = iu - il + 1;
     const int nj = ju - jl + 1;
@@ -395,20 +380,20 @@ TaskStatus BValCC::RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
     // indices same for all variables, stored in (0,i) component
     int il, iu, jl, ju, kl, ku;
     if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
-      il = rbuf[n].index.d_view(0);
-      iu = rbuf[n].index.d_view(1);
-      jl = rbuf[n].index.d_view(2);
-      ju = rbuf[n].index.d_view(3);
-      kl = rbuf[n].index.d_view(4);
-      ku = rbuf[n].index.d_view(5);
+      il = rbuf[n].index.bis;
+      iu = rbuf[n].index.bie;
+      jl = rbuf[n].index.bjs;
+      ju = rbuf[n].index.bje;
+      kl = rbuf[n].index.bks;
+      ku = rbuf[n].index.bke;
     // else if neighbor is at coarser level, use indices for coarse_u0
     } else {
-      il = rbuf[n].cindex.d_view(0);
-      iu = rbuf[n].cindex.d_view(1);
-      jl = rbuf[n].cindex.d_view(2);
-      ju = rbuf[n].cindex.d_view(3);
-      kl = rbuf[n].cindex.d_view(4);
-      ku = rbuf[n].cindex.d_view(5);
+      il = rbuf[n].cindex.bis;
+      iu = rbuf[n].cindex.bie;
+      jl = rbuf[n].cindex.bjs;
+      ju = rbuf[n].cindex.bje;
+      kl = rbuf[n].cindex.bks;
+      ku = rbuf[n].cindex.bke;
     }
     const int ni = iu - il + 1;
     const int nj = ju - jl + 1;
@@ -468,8 +453,8 @@ TaskStatus BValCC::RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
         const int n = (tmember.league_rank() - m*(nnghbr*nvar))/nvar;
         const int v = (tmember.league_rank() - m*(nnghbr*nvar) - n*nvar);
         // indices in loop below are on normal mesh
-        const int il = rbuf[n].index.d_view(0);
-        const int iu = rbuf[n].index.d_view(1);
+        const int il = rbuf[n].index.bis;
+        const int iu = rbuf[n].index.bie;
 
         // if neighbor is at coarser level, prolongate.  Otherwise do nothing
         if (nghbr.d_view(m,n).lev < mblev.d_view(m)) {

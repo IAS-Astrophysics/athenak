@@ -32,13 +32,22 @@ using BoundaryFnPtr = void (*)(int m, CoordData &coord, EOS_Data &eos,
                                DvceArray5D<Real> &u);
 
 //----------------------------------------------------------------------------------------
+//! \struct BufferIndcs
+//! \brief Cell indices for pack/unpack cells into BvalBuffer
+
+struct BufferIndcs
+{
+  int bis,bie,bjs,bje,bks,bke;  // start/end indices in each dir
+};
+
+//----------------------------------------------------------------------------------------
 //! \struct BValBufferCC
 //  \brief index ranges, storage, and flags for data passed at boundaries
 
 struct BValBufferCC
 {
-  DualArray1D<int> index;  // indices for pack/unpack into buffers
-  DualArray1D<int> cindex; // indices for pack/unpack into buffers with coarse mesh
+  BufferIndcs index;  // indices for pack/unpack into buffers
+  BufferIndcs cindex; // indices for pack/unpack into buffers with coarse mesh
   DvceArray3D<Real> data;
   HostArray1D<BoundaryCommStatus> bcomm_stat;
 #if MPI_PARALLEL_ENABLED
@@ -47,26 +56,26 @@ struct BValBufferCC
 #endif
 
   // function to initialize indices/data for CC variables
-  void InitIndices(int i0, int i1, int j0, int j1, int k0, int k1) {
-    index.h_view(0)=i0;
-    index.h_view(1)=i1;
-    index.h_view(2)=j0;
-    index.h_view(3)=j1;
-    index.h_view(4)=k0;
-    index.h_view(5)=k1;
+  void InitIndices(int is, int ie, int js, int je, int ks, int ke) {
+    index.bis = is;
+    index.bie = ie;
+    index.bjs = js;
+    index.bje = je;
+    index.bks = ks;
+    index.bke = ke;
   }
-  void InitCoarseIndices(int i0, int i1, int j0, int j1, int k0, int k1) {
-    cindex.h_view(0)=i0;
-    cindex.h_view(1)=i1;
-    cindex.h_view(2)=j0;
-    cindex.h_view(3)=j1;
-    cindex.h_view(4)=k0;
-    cindex.h_view(5)=k1;
+  void InitCoarseIndices(int is, int ie, int js, int je, int ks, int ke) {
+    cindex.bis = is;
+    cindex.bie = ie;
+    cindex.bjs = js;
+    cindex.bje = je;
+    cindex.bks = ks;
+    cindex.bke = ke;
   }
   void AllocateDataView(int nmb, int nvar) {
-    int ndat =  (index.h_view(1) - index.h_view(0) + 1);
-    ndat *= (index.h_view(3) - index.h_view(2) + 1);
-    ndat *= (index.h_view(5) - index.h_view(4) + 1);
+    int ndat = (index.bie - index.bis + 1) +
+               (index.bje - index.bjs + 1) +
+               (index.bke - index.bks + 1);
     Kokkos::realloc(data, nmb, nvar, ndat);
   }
 };
