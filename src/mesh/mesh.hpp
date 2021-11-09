@@ -41,15 +41,14 @@ struct RegionIndcs
 
 //----------------------------------------------------------------------------------------
 //! \struct NeighborBlock
-//  \brief Information about neighboring MeshBlocks, stored in DualArrays of length
-//  (# of neighboring blocks).  Latter is 26 for a uniform grid in 3D.
+//  \brief Information about neighboring MeshBlocks stored as 2D DualArray in MeshBlock
 
 struct NeighborBlock
 {
-  int gid;      // global ID
-  int lev;      // logical level
+  int gid;     // global ID
+  int lev;     // logical level
   int rank;    // MPI rank     
-  int destn;   // index of recv buffer in target vector of NeighborBlocks
+  int dest;    // index of recv buffer in target NeighborBlocks
   // default constructor
   NeighborBlock(){};
 };

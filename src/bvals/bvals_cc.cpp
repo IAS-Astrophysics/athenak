@@ -254,7 +254,7 @@ TaskStatus BValCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, in
         // indices of recv'ing MB and buffer: assumes MB IDs are stored sequentially
         // in this MeshBlockPack, so array index equals (target_id - first_id)
         int mm = nghbr.d_view(m,n).gid - mbgid.d_view(0);
-        int nn = nghbr.d_view(m,n).destn;
+        int nn = nghbr.d_view(m,n).dest;
         // if neighbor is at same or finer level, load data from u0
         if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
           Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),[&](const int i)
@@ -305,7 +305,7 @@ TaskStatus BValCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, in
     for (int n=0; n<nnghbr; ++n) {
       if (nghbr.h_view(m,n).gid >= 0) {  // not a physical boundary
         // compute indices of destination MeshBlock and Neighbor 
-        int nn = nghbr.h_view(m,n).destn;
+        int nn = nghbr.h_view(m,n).dest;
         // if MeshBlocks are same rank, data already copied into receive buffer above
         // So simply set communication status tag as received.
         if (nghbr.h_view(m,n).rank == my_rank) {

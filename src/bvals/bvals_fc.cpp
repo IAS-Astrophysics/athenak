@@ -320,7 +320,7 @@ TaskStatus BValFC::PackAndSendFC(DvceFaceFld4D<Real> &b, int key)
       if (nghbr.d_view(m,n).rank == my_rank) {
         // indices of recv'ing MB and buffer: assumes MB IDs are stored sequentially
         int mm = nghbr.d_view(m,n).gid - mbgid.d_view(0);
-        int nn = nghbr.d_view(m,n).destn;
+        int nn = nghbr.d_view(m,n).dest;
         if (v==0) {
           Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),[&](const int i)
           {
@@ -375,7 +375,7 @@ TaskStatus BValFC::PackAndSendFC(DvceFaceFld4D<Real> &b, int key)
     for (int n=0; n<nnghbr; ++n) {
       if (nghbr.h_view(m,n).gid >= 0) {  // not a physical boundary
         // compute indices of destination MeshBlock and Neighbor 
-        int nn = nghbr.h_view(m,n).destn;
+        int nn = nghbr.h_view(m,n).dest;
         if (nghbr.h_view(m,n).rank == my_rank) {
           int mm = nghbr.h_view(m,n).gid - pmy_pack->gids;
           rbuf[nn].bcomm_stat(mm) = BoundaryCommStatus::received;
