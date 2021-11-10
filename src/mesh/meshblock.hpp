@@ -29,7 +29,7 @@ class MeshBlock
 
  public:
   MeshBlock(MeshBlockPack *ppack, int igids, int nmb);
-  ~MeshBlock();
+  ~MeshBlock() {};  // only default destructor needed
 
   // data
   int nmb;     // # of MeshBlocks
