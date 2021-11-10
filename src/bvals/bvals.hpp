@@ -55,6 +55,8 @@ struct BValBufferCC
   std::vector<MPI_Request> comm_req;
 #endif
 
+  // constructor
+  BValBufferCC() : data("bbuf",1,1,1), bcomm_stat("bstat",1) {}
   // function to initialize indices/data for CC variables
   void InitIndices(int is, int ie, int js, int je, int ks, int ke) {
     index.bis = is;
@@ -73,8 +75,8 @@ struct BValBufferCC
     cindex.bke = ke;
   }
   void AllocateDataView(int nmb, int nvar) {
-    int ndat = (index.bie - index.bis + 1) +
-               (index.bje - index.bjs + 1) +
+    int ndat = (index.bie - index.bis + 1)*
+               (index.bje - index.bjs + 1)*
                (index.bke - index.bks + 1);
     Kokkos::realloc(data, nmb, nvar, ndat);
   }
@@ -140,7 +142,7 @@ class BValCC {
   ~BValCC();
 
   // data
-  BValBufferCC send_buf[26], recv_buf[26];
+  BValBufferCC send_buf[56], recv_buf[56];
 
   //functions
   void AllocateBuffersCC(const int nvar);
