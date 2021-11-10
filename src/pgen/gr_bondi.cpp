@@ -111,9 +111,6 @@ void ProblemGenerator::BondiAccretion_(MeshBlockPack *pmbp, ParameterInput *pin)
   int n1 = indcs.nx1 + 2*ng;
   int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
   int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
-  int &is = indcs.is;
-  int &js = indcs.js;
-  int &ks = indcs.ks;
   int nmb = pmbp->nmb_thispack;
   auto coord = pmbp->coord.coord_data;
   auto w0_ = pmbp->phydro->w0;

@@ -118,7 +118,6 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
   
   // capture variables for kernel
   auto &indcs = pmbp->coord.coord_data.mb_indcs;
-
   int &ng = indcs.ng;
   int n1 = indcs.nx1 + 2*ng;
   int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
