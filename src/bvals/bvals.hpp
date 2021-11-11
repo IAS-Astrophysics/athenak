@@ -46,8 +46,9 @@ struct BufferIndcs
 
 struct BValBufferCC
 {
-  BufferIndcs index;  // indices for pack/unpack into buffers
-  BufferIndcs cindex; // indices for pack/unpack into buffers with coarse mesh
+  BufferIndcs sindcs; // indices for pack/unpack when dest/src at same level ("s")
+  BufferIndcs cindcs; // indices for pack/unpack when dest/src at coarser level ("c")
+  BufferIndcs findcs; // indices for pack/unpack when dest/src at finer level ("f")
   DvceArray3D<Real> data;
   HostArray1D<BoundaryCommStatus> bcomm_stat;
 #if MPI_PARALLEL_ENABLED
@@ -57,27 +58,11 @@ struct BValBufferCC
 
   // constructor
   BValBufferCC() : data("bbuf",1,1,1), bcomm_stat("bstat",1) {}
-  // function to initialize indices/data for CC variables
-  void InitIndices(int is, int ie, int js, int je, int ks, int ke) {
-    index.bis = is;
-    index.bie = ie;
-    index.bjs = js;
-    index.bje = je;
-    index.bks = ks;
-    index.bke = ke;
-  }
-  void InitCoarseIndices(int is, int ie, int js, int je, int ks, int ke) {
-    cindex.bis = is;
-    cindex.bie = ie;
-    cindex.bjs = js;
-    cindex.bje = je;
-    cindex.bks = ks;
-    cindex.bke = ke;
-  }
+  // function to allocate memory for buffer data
   void AllocateDataView(int nmb, int nvar) {
-    int ndat = (index.bie - index.bis + 1)*
-               (index.bje - index.bjs + 1)*
-               (index.bke - index.bks + 1);
+    int ndat = (sindcs.bie - sindcs.bis + 1)*
+               (sindcs.bje - sindcs.bjs + 1)*
+               (sindcs.bke - sindcs.bks + 1);
     Kokkos::realloc(data, nmb, nvar, ndat);
   }
 };
@@ -139,12 +124,14 @@ class MeshBlockPack;
 class BValCC {
  public:
   BValCC(MeshBlockPack *ppack, ParameterInput *pin);
-  ~BValCC();
+  ~BValCC() {};  // only default destructor needed
 
   // data
   BValBufferCC send_buf[56], recv_buf[56];
 
   //functions
+  void InitSendIndices(BValBufferCC &buf, int ox1, int ox2, int ox3);
+  void InitRecvIndices(BValBufferCC &buf, int ox1, int ox2, int ox3);
   void AllocateBuffersCC(const int nvar);
   TaskStatus PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &c, int key);
   TaskStatus RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &c);

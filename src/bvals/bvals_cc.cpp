@@ -25,10 +25,69 @@ BValCC::BValCC(MeshBlockPack *pp, ParameterInput *pin) : pmy_pack(pp)
 } 
   
 //----------------------------------------------------------------------------------------
-// BValCC destructor
-  
-BValCC::~BValCC()
+//! \fn void BValCC::InitSendIndices
+//! \brief Calculates indices of cells in mesh used to pack buffers and send data.
+//! The arguments ox1/2/3 are integer (+/- 1) offsets in each dir that specifies buffer
+//! relative to center of MeshBlock (0,0,0)
+
+void BValCC::InitSendIndices(BValBufferCC &buf, int ox1, int ox2, int ox3)
 {
+  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
+
+  // set indices for sends to neighbors on SAME level
+  auto &sindcs = buf.sindcs;
+  sindcs.bis = (ox1 > 0) ? (indcs.ie - indcs.ng + 1) : indcs.is;
+  sindcs.bie = (ox1 < 0) ? (indcs.is + indcs.ng - 1) : indcs.ie;
+  sindcs.bjs = (ox2 > 0) ? (indcs.je - indcs.ng + 1) : indcs.js;
+  sindcs.bje = (ox2 < 0) ? (indcs.js + indcs.ng - 1) : indcs.je;
+  sindcs.bks = (ox3 > 0) ? (indcs.ke - indcs.ng + 1) : indcs.ks;
+  sindcs.bke = (ox3 < 0) ? (indcs.ks + indcs.ng - 1) : indcs.ke;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void BValCC::InitRecvIndices
+//! \brief Calculates indices of cells in mesh into which receive buffers are unpacked.
+//! The arguments ox1/2/3 are integer (+/- 1) offsets in each dir that specifies buffer
+//! relative to center of MeshBlock (0,0,0)
+
+void BValCC::InitRecvIndices(BValBufferCC &buf, int ox1, int ox2, int ox3)
+{ 
+  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
+
+  // set indices for receives from neighbors on SAME level
+  auto &sindcs = buf.sindcs;
+  if (ox1 == 0) {
+    sindcs.bis = indcs.is;
+    sindcs.bie = indcs.ie;
+  } else if (ox1 > 0) {
+    sindcs.bis = indcs.ie + 1,
+    sindcs.bie = indcs.ie + indcs.ng;
+  } else {
+    sindcs.bis = indcs.is - indcs.ng,
+    sindcs.bie = indcs.is - 1;
+  }
+
+  if (ox2 == 0) {
+    sindcs.bjs = indcs.js;
+    sindcs.bje = indcs.je;
+  } else if (ox2 > 0) {
+    sindcs.bjs = indcs.je + 1;
+    sindcs.bje = indcs.je + indcs.ng;
+  } else {
+    sindcs.bjs = indcs.js - indcs.ng;
+    sindcs.bje = indcs.js - 1;
+  }
+
+  if (ox3 == 0) {
+    sindcs.bks = indcs.ks;
+    sindcs.bke = indcs.ke;
+  } else if (ox3 > 0) {
+    sindcs.bks = indcs.ke + 1;
+    sindcs.bke = indcs.ke + indcs.ng;
+  } else {
+    sindcs.bks = indcs.ks - indcs.ng;
+    sindcs.bke = indcs.ks - 1;
+  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -75,10 +134,12 @@ void BValCC::AllocateBuffersCC(const int nvar)
   // initialize buffers used when neighbor at same or coarser level first
 
   // x1 faces; BufferID = [0,4]
-  send_buf[0].InitIndices(is,     is+ng1, js, je, ks, ke);
-  recv_buf[0].InitIndices(is-ng,  is-1,   js, je, ks, ke);
-  send_buf[4].InitIndices(ie-ng1, ie,     js, je, ks, ke);
-  recv_buf[4].InitIndices(ie+1,   ie+ng,  js, je, ks, ke);
+  InitSendIndices(send_buf[0],-1,0,0);
+  InitSendIndices(send_buf[4], 1,0,0);
+
+  InitRecvIndices(recv_buf[0],-1,0,0);
+  InitRecvIndices(recv_buf[4], 1,0,0);
+
   for (int n=0; n<=4; n+=4) {
     send_buf[n].AllocateDataView(nmb, nvar);
     recv_buf[n].AllocateDataView(nmb, nvar);
@@ -94,24 +155,28 @@ void BValCC::AllocateBuffersCC(const int nvar)
   // add more buffers in 2D
   if (pmy_pack->pmesh->multi_d) {
     // x2 faces; BufferID = [8,12]
-    send_buf[8 ].InitIndices(is, ie, js,     js+ng1, ks, ke);
-    recv_buf[8 ].InitIndices(is, ie, js-ng,  js-1,   ks, ke);
-    send_buf[12].InitIndices(is, ie, je-ng1, je,     ks, ke);
-    recv_buf[12].InitIndices(is, ie, je+1,   je+ng,  ks, ke);
+    InitSendIndices(send_buf[8 ],0,-1,0);
+    InitSendIndices(send_buf[12],0, 1,0);
+
+    InitRecvIndices(recv_buf[8 ],0,-1,0);
+    InitRecvIndices(recv_buf[12],0, 1,0);
+
     for (int n=8; n<=12; n+=4) {
       send_buf[n].AllocateDataView(nmb, nvar);
       recv_buf[n].AllocateDataView(nmb, nvar);
     }
 
     // x1x2 edges; BufferID = [16,18,20,22]
-    send_buf[16].InitIndices(is,     is+ng1, js,     js+ng1, ks, ke);
-    recv_buf[16].InitIndices(is-ng,  is-1,   js-ng,  js-1,   ks, ke);
-    send_buf[18].InitIndices(ie-ng1, ie,     js,     js+ng1, ks, ke);
-    recv_buf[18].InitIndices(ie+1,   ie+ng,  js-ng,  js-1,   ks, ke);
-    send_buf[20].InitIndices(is,     is+ng1, je-ng1, je,     ks, ke);
-    recv_buf[20].InitIndices(is-ng,  is-1,   je+1,   je+ng,  ks, ke);
-    send_buf[22].InitIndices(ie-ng1, ie,     je-ng1, je,     ks, ke);
-    recv_buf[22].InitIndices(ie+1,   ie+ng,  je+1,   je+ng,  ks, ke);
+    InitSendIndices(send_buf[16],-1,-1,0);
+    InitSendIndices(send_buf[18], 1,-1,0);
+    InitSendIndices(send_buf[20],-1, 1,0);
+    InitSendIndices(send_buf[22], 1, 1,0);
+
+    InitRecvIndices(recv_buf[16],-1,-1,0);
+    InitRecvIndices(recv_buf[18], 1,-1,0);
+    InitRecvIndices(recv_buf[20],-1, 1,0);
+    InitRecvIndices(recv_buf[22], 1, 1,0);
+
     for (int n=16; n<=22; n+=2) {
       send_buf[n].AllocateDataView(nmb, nvar);
       recv_buf[n].AllocateDataView(nmb, nvar);
@@ -121,60 +186,68 @@ void BValCC::AllocateBuffersCC(const int nvar)
     if (pmy_pack->pmesh->three_d) {
 
       // x3 faces; BufferID = [24,28]
-      send_buf[24].InitIndices(is, ie, js, je, ks,     ks+ng1);
-      recv_buf[24].InitIndices(is, ie, js, je, ks-ng,  ks-1 );
-      send_buf[28].InitIndices(is, ie, js, je, ke-ng1, ke    );
-      recv_buf[28].InitIndices(is, ie, js, je, ke+1,   ke+ng);
+      InitSendIndices(send_buf[24],0,0,-1);
+      InitSendIndices(send_buf[28],0,0, 1);
+
+      InitRecvIndices(recv_buf[24],0,0,-1);
+      InitRecvIndices(recv_buf[28],0,0, 1);
+
       for (int n=24; n<=28; n+=4) {
         send_buf[n].AllocateDataView(nmb, nvar);
         recv_buf[n].AllocateDataView(nmb, nvar);
       }
 
       // x3x1 edges; BufferID = [32,34,36,38]
-      send_buf[32].InitIndices(is,     is+ng1, js, je, ks,     ks+ng1);
-      recv_buf[32].InitIndices(is-ng,  is-1,   js, je, ks-ng,  ks-1  );
-      send_buf[34].InitIndices(ie-ng1, ie,     js, je, ks,     ks+ng1);
-      recv_buf[34].InitIndices(ie+1,   ie+ng,  js, je, ks-ng,  ks-1  );
-      send_buf[36].InitIndices(is,     is+ng1, js, je, ke-ng1, ke    );
-      recv_buf[36].InitIndices(is-ng,  is-1,   js, je, ke+1,   ke+ng );
-      send_buf[38].InitIndices(ie-ng1, ie,     js, je, ke-ng1, ke    );
-      recv_buf[38].InitIndices(ie+1,   ie+ng,  js, je, ke+1,   ke+ng );
+      InitSendIndices(send_buf[32],-1,0,-1);
+      InitSendIndices(send_buf[34], 1,0,-1);
+      InitSendIndices(send_buf[36],-1,0, 1);
+      InitSendIndices(send_buf[38], 1,0, 1);
+
+      InitRecvIndices(recv_buf[32],-1,0,-1);
+      InitRecvIndices(recv_buf[34], 1,0,-1);
+      InitRecvIndices(recv_buf[36],-1,0, 1);
+      InitRecvIndices(recv_buf[38], 1,0, 1);
+
       for (int n=32; n<=38; n+=2) {
         send_buf[n].AllocateDataView(nmb, nvar);
         recv_buf[n].AllocateDataView(nmb, nvar);
       }
 
       // x2x3 edges; BufferID = [40,42,44,46]
-      send_buf[40].InitIndices(is, ie, js,     js+ng1, ks,     ks+ng1);
-      recv_buf[40].InitIndices(is, ie, js-ng,  js-1,   ks-ng,  ks-1  );
-      send_buf[42].InitIndices(is, ie, je-ng1, je,     ks,     ks+ng1);
-      recv_buf[42].InitIndices(is, ie, je+1,   je+ng,  ks-ng,  ks-1  );
-      send_buf[44].InitIndices(is, ie, js,     js+ng1, ke-ng1, ke    );
-      recv_buf[44].InitIndices(is, ie, js-ng,  js-1,   ke+1,   ke+ng );
-      send_buf[46].InitIndices(is, ie, je-ng1, je,     ke-ng1, ke    );
-      recv_buf[46].InitIndices(is, ie, je+1,   je+ng,  ke+1,   ke+ng );
+      InitSendIndices(send_buf[40],0,-1,-1);
+      InitSendIndices(send_buf[42],0, 1,-1);
+      InitSendIndices(send_buf[44],0,-1, 1);
+      InitSendIndices(send_buf[46],0, 1, 1);
+
+      InitRecvIndices(recv_buf[40],0,-1,-1);
+      InitRecvIndices(recv_buf[42],0, 1,-1);
+      InitRecvIndices(recv_buf[44],0,-1, 1);
+      InitRecvIndices(recv_buf[46],0, 1, 1);
+
       for (int n=40; n<=46; n+=2) {
         send_buf[n].AllocateDataView(nmb, nvar);
         recv_buf[n].AllocateDataView(nmb, nvar);
       }
 
       // corners; BufferID = [48,...,55]
-      send_buf[48].InitIndices(is,     is+ng1, js,     js+ng1, ks,     ks+ng1);
-      recv_buf[48].InitIndices(is-ng,  is-1,   js-ng,  js-1,   ks-ng,  ks-1  );
-      send_buf[49].InitIndices(ie-ng1, ie,     js,     js+ng1, ks,     ks+ng1);
-      recv_buf[49].InitIndices(ie+1,   ie+ng,  js-ng,  js-1,   ks-ng,  ks-1  );
-      send_buf[50].InitIndices(is,     is+ng1, je-ng1, je,     ks,     ks+ng1);
-      recv_buf[50].InitIndices(is-ng,  is-1,   je+1,   je+ng,  ks-ng,  ks-1  );
-      send_buf[51].InitIndices(ie-ng1, ie,     je-ng1, je,     ks,     ks+ng1);
-      recv_buf[51].InitIndices(ie+1,   ie+ng,  je+1,   je+ng,  ks-ng,  ks-1  );
-      send_buf[52].InitIndices(is,     is+ng1, js,     js+ng1, ke-ng1, ke    );
-      recv_buf[52].InitIndices(is-ng,  is-1,   js-ng,  js-1,   ke+1,   ke+ng );
-      send_buf[53].InitIndices(ie-ng1, ie,     js,     js+ng1, ke-ng1, ke    );
-      recv_buf[53].InitIndices(ie+1,   ie+ng,  js-ng,  js-1,   ke+1,   ke+ng );
-      send_buf[54].InitIndices(is,     is+ng1, je-ng1, je,     ke-ng1, ke    );
-      recv_buf[54].InitIndices(is-ng,  is-1,   je+1,   je+ng,  ke+1,   ke+ng );
-      send_buf[55].InitIndices(ie-ng1, ie,     je-ng1, je,     ke-ng1, ke    );
-      recv_buf[55].InitIndices(ie+1,   ie+ng,  je+1,   je+ng,  ke+1,   ke+ng );
+      InitSendIndices(send_buf[48],-1,-1,-1);
+      InitSendIndices(send_buf[49], 1,-1,-1);
+      InitSendIndices(send_buf[50],-1, 1,-1);
+      InitSendIndices(send_buf[51], 1, 1,-1);
+      InitSendIndices(send_buf[52],-1,-1, 1);
+      InitSendIndices(send_buf[53], 1,-1, 1);
+      InitSendIndices(send_buf[54],-1, 1, 1);
+      InitSendIndices(send_buf[55], 1, 1, 1);
+
+      InitRecvIndices(recv_buf[48],-1,-1,-1);
+      InitRecvIndices(recv_buf[49], 1,-1,-1);
+      InitRecvIndices(recv_buf[50],-1, 1,-1);
+      InitRecvIndices(recv_buf[51], 1, 1,-1);
+      InitRecvIndices(recv_buf[52],-1,-1, 1);
+      InitRecvIndices(recv_buf[53], 1,-1, 1);
+      InitRecvIndices(recv_buf[54],-1, 1, 1);
+      InitRecvIndices(recv_buf[55], 1, 1, 1);
+
       for (int n=48; n<=55; n+=1) {
         send_buf[n].AllocateDataView(nmb, nvar);
         recv_buf[n].AllocateDataView(nmb, nvar);
@@ -230,20 +303,20 @@ TaskStatus BValCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, in
       // indices same for all variables, stored in (0,i) component
       int il, iu, jl, ju, kl, ku;
       if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
-        il = sbuf[n].index.bis;
-        iu = sbuf[n].index.bie;
-        jl = sbuf[n].index.bjs;
-        ju = sbuf[n].index.bje;
-        kl = sbuf[n].index.bks;
-        ku = sbuf[n].index.bke;
+        il = sbuf[n].sindcs.bis;
+        iu = sbuf[n].sindcs.bie;
+        jl = sbuf[n].sindcs.bjs;
+        ju = sbuf[n].sindcs.bje;
+        kl = sbuf[n].sindcs.bks;
+        ku = sbuf[n].sindcs.bke;
       // else if neighbor is at coarser level, use indices for coarse_u0
       } else {
-        il = sbuf[n].cindex.bis;
-        iu = sbuf[n].cindex.bie;
-        jl = sbuf[n].cindex.bjs;
-        ju = sbuf[n].cindex.bje;
-        kl = sbuf[n].cindex.bks;
-        ku = sbuf[n].cindex.bke;
+        il = sbuf[n].cindcs.bis;
+        iu = sbuf[n].cindcs.bie;
+        jl = sbuf[n].cindcs.bjs;
+        ju = sbuf[n].cindcs.bje;
+        kl = sbuf[n].cindcs.bks;
+        ku = sbuf[n].cindcs.bke;
       }
       const int ni = iu - il + 1;
       const int nj = ju - jl + 1;
@@ -289,7 +362,7 @@ TaskStatus BValCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, in
               sbuf[n].data(m, v, i-il + ni*(j-jl + nj*(k-kl))) = a(m,v,k,j,i);
             });
           // if neighbor is at coarser level, load data from coarse_u0
-          // Note in this case, sbuf[n].index values refer to coarse_u0
+          // Note in this case, sbuf[n].indcs values refer to coarse_u0
           } else {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),[&](const int i)
             {
@@ -410,20 +483,20 @@ TaskStatus BValCC::RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
       // indices same for all variables, stored in (0,i) component
       int il, iu, jl, ju, kl, ku;
       if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
-        il = rbuf[n].index.bis;
-        iu = rbuf[n].index.bie;
-        jl = rbuf[n].index.bjs;
-        ju = rbuf[n].index.bje;
-        kl = rbuf[n].index.bks;
-        ku = rbuf[n].index.bke;
+        il = rbuf[n].sindcs.bis;
+        iu = rbuf[n].sindcs.bie;
+        jl = rbuf[n].sindcs.bjs;
+        ju = rbuf[n].sindcs.bje;
+        kl = rbuf[n].sindcs.bks;
+        ku = rbuf[n].sindcs.bke;
       // else if neighbor is at coarser level, use indices for coarse_u0
       } else {
-        il = rbuf[n].cindex.bis;
-        iu = rbuf[n].cindex.bie;
-        jl = rbuf[n].cindex.bjs;
-        ju = rbuf[n].cindex.bje;
-        kl = rbuf[n].cindex.bks;
-        ku = rbuf[n].cindex.bke;
+        il = rbuf[n].cindcs.bis;
+        iu = rbuf[n].cindcs.bie;
+        jl = rbuf[n].cindcs.bjs;
+        ju = rbuf[n].cindcs.bje;
+        kl = rbuf[n].cindcs.bks;
+        ku = rbuf[n].cindcs.bke;
       }
       const int ni = iu - il + 1;
       const int nj = ju - jl + 1;
@@ -445,7 +518,7 @@ TaskStatus BValCC::RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
           });
 
         // if neighbor is at coarser level, load data into coarse_u0 (and prolongate below)
-        // Note in this case, rbuf[n].index values refer to coarse_u0
+        // Note in this case, rbuf[n].indcs values refer to coarse_u0
         } else {
           Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1), [&](const int i)
           {
@@ -484,8 +557,8 @@ TaskStatus BValCC::RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
         const int n = (tmember.league_rank() - m*(nnghbr*nvar))/nvar;
         const int v = (tmember.league_rank() - m*(nnghbr*nvar) - n*nvar);
         // indices in loop below are on normal mesh
-        const int il = rbuf[n].index.bis;
-        const int iu = rbuf[n].index.bie;
+        const int il = rbuf[n].sindcs.bis;
+        const int iu = rbuf[n].sindcs.bie;
 
         // if neighbor is at coarser level, prolongate.  Otherwise do nothing
         if (nghbr.d_view(m,n).lev < mblev.d_view(m)) {
@@ -522,10 +595,10 @@ TaskStatus BValCC::RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
 /******
   std::cout << std::endl << "u0 data" << std::endl;
   for (int m=0; m<nmb; ++m) {
-    auto &js = pmy_pack->pcoord->mbdata.indcs.js;
-    auto &ks = pmy_pack->pcoord->mbdata.indcs.ks;
+    auto &js = pmy_pack->pcoord->mbdata.sindcs.js;
+    auto &ks = pmy_pack->pcoord->mbdata.sindcs.ks;
     std::cout << "Block = " << m << "  level = " << pmy_pack->pmb->mblev.h_view(m) << std::endl;
-    for (int i=pmy_pack->pcoord->mbdata.indcs.is-2; i<=pmy_pack->pcoord->mbdata.indcs.ie+2; ++i) {
+    for (int i=pmy_pack->pcoord->mbdata.sindcs.is-2; i<=pmy_pack->pcoord->mbdata.sindcs.ie+2; ++i) {
       std::cout << "i=" << i << "  d=" << a(m,0,ks,js,i) << std::endl;
     }
   }
