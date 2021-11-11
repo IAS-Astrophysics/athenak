@@ -168,7 +168,7 @@ void BValCC::InitRecvIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f
   if (ox1 == 0) {
     cindcs.bis = mb_cindcs.is;
     cindcs.bie = mb_cindcs.ie;
-    if ((pmb->loc.lx1 & 1) == 0) {
+    if (f1 == 0) {
       cindcs.bie += mb_indcs.ng;
     } else {
       cindcs.bis -= mb_indcs.ng;
@@ -184,10 +184,18 @@ void BValCC::InitRecvIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f
     cindcs.bjs = mb_cindcs.js;
     cindcs.bje = mb_cindcs.je;
     if (mb_indcs.nx2 > 1) {
-      if ((pmb->loc.lx2 & 1) == 0) {
-        cindcs.bje += mb_indcs.ng;
+      if (ox1 != 0) {
+        if (f1 == 0) {
+          cindcs.bje += mb_indcs.ng;
+        } else {
+          cindcs.bjs -= mb_indcs.ng;
+        }
       } else {
-        cindcs.bjs -= mb_indcs.ng;
+        if (f2 == 0) {
+          cindcs.bje += mb_indcs.ng;
+        } else {
+          cindcs.bjs -= mb_indcs.ng;
+        }
       }
     }
   } else if (ox2 > 0) {
@@ -201,10 +209,18 @@ void BValCC::InitRecvIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f
     cindcs.bks = mb_cindcs.ks;
     cindcs.bke = mb_cindcs.ke;
     if (mb_indcs.nx3 > 1) {
-      if ((pmb->loc.lx3 & 1) == 0) {
-        cindcs.bke += mb_indcs.ng;
+      if (ox1 != 0 && ox2 != 0) {
+        if (f1 == 0) {
+          cindcs.bke += mb_indcs.ng;
+        } else {
+          cindcs.bks -= mb_indcs.ng;
+        }
       } else {
-        cindcs.bks -= mb_indcs.ng;
+        if (f2 == 0) {
+          cindcs.bke += mb_indcs.ng;
+        } else {
+          cindcs.bks -= mb_indcs.ng;
+        }
       }
     }
   } else if (ox3 > 0)  {
@@ -329,11 +345,11 @@ void BValCC::AllocateBuffersCC(const int nvar)
   // initialize buffers used when neighbor at same or coarser level first
 
   // x1 faces; BufferID = [0,4]
-  InitSendIndices(send_buf[0],-1,0,0);
-  InitSendIndices(send_buf[4], 1,0,0);
+  InitSendIndices(send_buf[0],-1, 0, 0, 0, 0);
+  InitSendIndices(send_buf[4], 1, 0, 0, 0, 0);
 
-  InitRecvIndices(recv_buf[0],-1,0,0);
-  InitRecvIndices(recv_buf[4], 1,0,0);
+  InitRecvIndices(recv_buf[0],-1, 0, 0, 0, 0);
+  InitRecvIndices(recv_buf[4], 1, 0, 0, 0, 0);
 
   for (int n=0; n<=4; n+=4) {
     send_buf[n].AllocateDataView(nmb, nvar);
@@ -350,11 +366,11 @@ void BValCC::AllocateBuffersCC(const int nvar)
   // add more buffers in 2D
   if (pmy_pack->pmesh->multi_d) {
     // x2 faces; BufferID = [8,12]
-    InitSendIndices(send_buf[8 ],0,-1,0);
-    InitSendIndices(send_buf[12],0, 1,0);
+    InitSendIndices(send_buf[8 ], 0,-1, 0, 0, 0);
+    InitSendIndices(send_buf[12], 0, 1, 0, 0, 0);
 
-    InitRecvIndices(recv_buf[8 ],0,-1,0);
-    InitRecvIndices(recv_buf[12],0, 1,0);
+    InitRecvIndices(recv_buf[8 ], 0,-1, 0, 0, 0);
+    InitRecvIndices(recv_buf[12], 0, 1, 0, 0, 0);
 
     for (int n=8; n<=12; n+=4) {
       send_buf[n].AllocateDataView(nmb, nvar);
@@ -362,15 +378,15 @@ void BValCC::AllocateBuffersCC(const int nvar)
     }
 
     // x1x2 edges; BufferID = [16,18,20,22]
-    InitSendIndices(send_buf[16],-1,-1,0);
-    InitSendIndices(send_buf[18], 1,-1,0);
-    InitSendIndices(send_buf[20],-1, 1,0);
-    InitSendIndices(send_buf[22], 1, 1,0);
+    InitSendIndices(send_buf[16],-1,-1, 0, 0, 0);
+    InitSendIndices(send_buf[18], 1,-1, 0, 0, 0);
+    InitSendIndices(send_buf[20],-1, 1, 0, 0, 0);
+    InitSendIndices(send_buf[22], 1, 1, 0, 0, 0);
 
-    InitRecvIndices(recv_buf[16],-1,-1,0);
-    InitRecvIndices(recv_buf[18], 1,-1,0);
-    InitRecvIndices(recv_buf[20],-1, 1,0);
-    InitRecvIndices(recv_buf[22], 1, 1,0);
+    InitRecvIndices(recv_buf[16],-1,-1, 0, 0, 0);
+    InitRecvIndices(recv_buf[18], 1,-1, 0, 0, 0);
+    InitRecvIndices(recv_buf[20],-1, 1, 0, 0, 0);
+    InitRecvIndices(recv_buf[22], 1, 1, 0, 0, 0);
 
     for (int n=16; n<=22; n+=2) {
       send_buf[n].AllocateDataView(nmb, nvar);
@@ -381,11 +397,11 @@ void BValCC::AllocateBuffersCC(const int nvar)
     if (pmy_pack->pmesh->three_d) {
 
       // x3 faces; BufferID = [24,28]
-      InitSendIndices(send_buf[24],0,0,-1);
-      InitSendIndices(send_buf[28],0,0, 1);
+      InitSendIndices(send_buf[24], 0, 0,-1, 0, 0);
+      InitSendIndices(send_buf[28], 0, 0, 1, 0, 0);
 
-      InitRecvIndices(recv_buf[24],0,0,-1);
-      InitRecvIndices(recv_buf[28],0,0, 1);
+      InitRecvIndices(recv_buf[24], 0, 0,-1, 0, 0);
+      InitRecvIndices(recv_buf[28], 0, 0, 1, 0, 0);
 
       for (int n=24; n<=28; n+=4) {
         send_buf[n].AllocateDataView(nmb, nvar);
@@ -393,15 +409,15 @@ void BValCC::AllocateBuffersCC(const int nvar)
       }
 
       // x3x1 edges; BufferID = [32,34,36,38]
-      InitSendIndices(send_buf[32],-1,0,-1);
-      InitSendIndices(send_buf[34], 1,0,-1);
-      InitSendIndices(send_buf[36],-1,0, 1);
-      InitSendIndices(send_buf[38], 1,0, 1);
+      InitSendIndices(send_buf[32],-1, 0,-1, 0, 0);
+      InitSendIndices(send_buf[34], 1, 0,-1, 0, 0);
+      InitSendIndices(send_buf[36],-1, 0, 1, 0, 0);
+      InitSendIndices(send_buf[38], 1, 0, 1, 0, 0);
 
-      InitRecvIndices(recv_buf[32],-1,0,-1);
-      InitRecvIndices(recv_buf[34], 1,0,-1);
-      InitRecvIndices(recv_buf[36],-1,0, 1);
-      InitRecvIndices(recv_buf[38], 1,0, 1);
+      InitRecvIndices(recv_buf[32],-1, 0,-1, 0, 0);
+      InitRecvIndices(recv_buf[34], 1, 0,-1, 0, 0);
+      InitRecvIndices(recv_buf[36],-1, 0, 1, 0, 0);
+      InitRecvIndices(recv_buf[38], 1, 0, 1, 0, 0);
 
       for (int n=32; n<=38; n+=2) {
         send_buf[n].AllocateDataView(nmb, nvar);
@@ -409,15 +425,15 @@ void BValCC::AllocateBuffersCC(const int nvar)
       }
 
       // x2x3 edges; BufferID = [40,42,44,46]
-      InitSendIndices(send_buf[40],0,-1,-1);
-      InitSendIndices(send_buf[42],0, 1,-1);
-      InitSendIndices(send_buf[44],0,-1, 1);
-      InitSendIndices(send_buf[46],0, 1, 1);
+      InitSendIndices(send_buf[40], 0,-1,-1, 0, 0);
+      InitSendIndices(send_buf[42], 0, 1,-1, 0, 0);
+      InitSendIndices(send_buf[44], 0,-1, 1, 0, 0);
+      InitSendIndices(send_buf[46], 0, 1, 1, 0, 0);
 
-      InitRecvIndices(recv_buf[40],0,-1,-1);
-      InitRecvIndices(recv_buf[42],0, 1,-1);
-      InitRecvIndices(recv_buf[44],0,-1, 1);
-      InitRecvIndices(recv_buf[46],0, 1, 1);
+      InitRecvIndices(recv_buf[40], 0,-1,-1, 0, 0);
+      InitRecvIndices(recv_buf[42], 0, 1,-1, 0, 0);
+      InitRecvIndices(recv_buf[44], 0,-1, 1, 0, 0);
+      InitRecvIndices(recv_buf[46], 0, 1, 1, 0, 0);
 
       for (int n=40; n<=46; n+=2) {
         send_buf[n].AllocateDataView(nmb, nvar);
@@ -425,23 +441,23 @@ void BValCC::AllocateBuffersCC(const int nvar)
       }
 
       // corners; BufferID = [48,...,55]
-      InitSendIndices(send_buf[48],-1,-1,-1);
-      InitSendIndices(send_buf[49], 1,-1,-1);
-      InitSendIndices(send_buf[50],-1, 1,-1);
-      InitSendIndices(send_buf[51], 1, 1,-1);
-      InitSendIndices(send_buf[52],-1,-1, 1);
-      InitSendIndices(send_buf[53], 1,-1, 1);
-      InitSendIndices(send_buf[54],-1, 1, 1);
-      InitSendIndices(send_buf[55], 1, 1, 1);
+      InitSendIndices(send_buf[48],-1,-1,-1, 0, 0);
+      InitSendIndices(send_buf[49], 1,-1,-1, 0, 0);
+      InitSendIndices(send_buf[50],-1, 1,-1, 0, 0);
+      InitSendIndices(send_buf[51], 1, 1,-1, 0, 0);
+      InitSendIndices(send_buf[52],-1,-1, 1, 0, 0);
+      InitSendIndices(send_buf[53], 1,-1, 1, 0, 0);
+      InitSendIndices(send_buf[54],-1, 1, 1, 0, 0);
+      InitSendIndices(send_buf[55], 1, 1, 1, 0, 0);
 
-      InitRecvIndices(recv_buf[48],-1,-1,-1);
-      InitRecvIndices(recv_buf[49], 1,-1,-1);
-      InitRecvIndices(recv_buf[50],-1, 1,-1);
-      InitRecvIndices(recv_buf[51], 1, 1,-1);
-      InitRecvIndices(recv_buf[52],-1,-1, 1);
-      InitRecvIndices(recv_buf[53], 1,-1, 1);
-      InitRecvIndices(recv_buf[54],-1, 1, 1);
-      InitRecvIndices(recv_buf[55], 1, 1, 1);
+      InitRecvIndices(recv_buf[48],-1,-1,-1, 0, 0);
+      InitRecvIndices(recv_buf[49], 1,-1,-1, 0, 0);
+      InitRecvIndices(recv_buf[50],-1, 1,-1, 0, 0);
+      InitRecvIndices(recv_buf[51], 1, 1,-1, 0, 0);
+      InitRecvIndices(recv_buf[52],-1,-1, 1, 0, 0);
+      InitRecvIndices(recv_buf[53], 1,-1, 1, 0, 0);
+      InitRecvIndices(recv_buf[54],-1, 1, 1, 0, 0);
+      InitRecvIndices(recv_buf[55], 1, 1, 1, 0, 0);
 
       for (int n=48; n<=55; n+=1) {
         send_buf[n].AllocateDataView(nmb, nvar);
