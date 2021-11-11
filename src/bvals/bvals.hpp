@@ -37,7 +37,8 @@ using BoundaryFnPtr = void (*)(int m, CoordData &coord, EOS_Data &eos,
 
 struct BufferIndcs
 {
-  int bis,bie,bjs,bje,bks,bke;  // start/end indices in each dir
+  int bis,bie,bjs,bje,bks,bke;  // start/end buffer ("b") indices in each dir
+  int ndat;                     // number of data elements
 };
 
 //----------------------------------------------------------------------------------------
@@ -130,8 +131,8 @@ class BValCC {
   BValBufferCC send_buf[56], recv_buf[56];
 
   //functions
-  void InitSendIndices(BValBufferCC &buf, int ox1, int ox2, int ox3);
-  void InitRecvIndices(BValBufferCC &buf, int ox1, int ox2, int ox3);
+  void InitSendIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f1, int f2);
+  void InitRecvIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f1, int f2);
   void AllocateBuffersCC(const int nvar);
   TaskStatus PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &c, int key);
   TaskStatus RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &c);

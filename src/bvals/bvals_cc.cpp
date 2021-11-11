@@ -28,20 +28,91 @@ BValCC::BValCC(MeshBlockPack *pp, ParameterInput *pin) : pmy_pack(pp)
 //! \fn void BValCC::InitSendIndices
 //! \brief Calculates indices of cells in mesh used to pack buffers and send data.
 //! The arguments ox1/2/3 are integer (+/- 1) offsets in each dir that specifies buffer
-//! relative to center of MeshBlock (0,0,0)
+//! relative to center of MeshBlock (0,0,0).  The arguments f1/2 are the coordinates
+//! of subblocks within faces/edges (only relevant with SMR/AMR)
 
-void BValCC::InitSendIndices(BValBufferCC &buf, int ox1, int ox2, int ox3)
+void BValCC::InitSendIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f1, int f2)
 {
-  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
+  auto &mb_indcs  = pmy_pack->pcoord->mbdata.indcs;
+  auto &mb_cindcs = pmy_pack->pcoord->mbdata.cindcs;
 
   // set indices for sends to neighbors on SAME level
+  // Formulae taken from LoadBoundaryBufferSameLevel()
   auto &sindcs = buf.sindcs;
-  sindcs.bis = (ox1 > 0) ? (indcs.ie - indcs.ng + 1) : indcs.is;
-  sindcs.bie = (ox1 < 0) ? (indcs.is + indcs.ng - 1) : indcs.ie;
-  sindcs.bjs = (ox2 > 0) ? (indcs.je - indcs.ng + 1) : indcs.js;
-  sindcs.bje = (ox2 < 0) ? (indcs.js + indcs.ng - 1) : indcs.je;
-  sindcs.bks = (ox3 > 0) ? (indcs.ke - indcs.ng + 1) : indcs.ks;
-  sindcs.bke = (ox3 < 0) ? (indcs.ks + indcs.ng - 1) : indcs.ke;
+  int ng1 = mb_indcs.ng - 1;
+  sindcs.bis = (ox1 > 0) ? (mb_indcs.ie - ng1) : mb_indcs.is;
+  sindcs.bie = (ox1 < 0) ? (mb_indcs.is + ng1) : mb_indcs.ie;
+  sindcs.bjs = (ox2 > 0) ? (mb_indcs.je - ng1) : mb_indcs.js;
+  sindcs.bje = (ox2 < 0) ? (mb_indcs.js + ng1) : mb_indcs.je;
+  sindcs.bks = (ox3 > 0) ? (mb_indcs.ke - ng1) : mb_indcs.ks;
+  sindcs.bke = (ox3 < 0) ? (mb_indcs.ks + ng1) : mb_indcs.ke;
+  sindcs.ndat = (sindcs.bie - sindcs.bis + 1)*(sindcs.bje - sindcs.bjs + 1)*
+                (sindcs.bke - sindcs.bks + 1);
+
+  // set indices for sends to neighbors on COARSER level
+  // Formulae taken from LoadBoundaryBufferToCoarser()
+  auto &cindcs = buf.cindcs;
+  cindcs.bis = (ox1 > 0) ? (mb_cindcs.ie - ng1) : mb_cindcs.is;
+  cindcs.bie = (ox1 < 0) ? (mb_cindcs.is + ng1) : mb_cindcs.ie;
+  cindcs.bjs = (ox2 > 0) ? (mb_cindcs.je - ng1) : mb_cindcs.js;
+  cindcs.bje = (ox2 < 0) ? (mb_cindcs.js + ng1) : mb_cindcs.je;
+  cindcs.bks = (ox3 > 0) ? (mb_cindcs.ke - ng1) : mb_cindcs.ks;
+  cindcs.bke = (ox3 < 0) ? (mb_cindcs.ks + ng1) : mb_cindcs.ke;
+  cindcs.ndat = (cindcs.bie - cindcs.bis + 1)*(cindcs.bje - cindcs.bjs + 1)*
+                (cindcs.bke - cindcs.bks + 1);
+
+  // set indices for sends to neighbors on FINER level
+  // Formulae taken from LoadBoundaryBufferToFiner()
+  auto &findcs = buf.findcs;
+  findcs.bis = (ox1 > 0) ? (mb_indcs.ie - ng1) : mb_indcs.is;
+  findcs.bie = (ox1 < 0) ? (mb_indcs.is + ng1) : mb_indcs.ie;
+  findcs.bjs = (ox2 > 0) ? (mb_indcs.je - ng1) : mb_indcs.js;
+  findcs.bje = (ox2 < 0) ? (mb_indcs.js + ng1) : mb_indcs.je;
+  findcs.bks = (ox3 > 0) ? (mb_indcs.ke - ng1) : mb_indcs.ks;
+  findcs.bke = (ox3 < 0) ? (mb_indcs.ks + ng1) : mb_indcs.ke;
+
+  // send the data first and later prolongate on the target block
+  // need to add edges for faces, add corners for edges
+  if (ox1 == 0) {
+    if (f1 == 1) {
+      findcs.bis += mb_indcs.nx1/2 - mb_cindcs.ng;
+    } else {
+      findcs.bie -= mb_indcs.nx1/2 - mb_cindcs.ng;
+    }
+  }
+  if (ox2 == 0 && mb_indcs.nx2 > 1) {
+    if (ox1 != 0) {
+      if (f1 == 1) {
+        findcs.bjs += mb_indcs.nx2/2 - mb_cindcs.ng;
+      } else {
+        findcs.bje -= mb_indcs.nx2/2 - mb_cindcs.ng;
+      }
+    } else {
+      if (f2 == 1) {
+        findcs.bjs += mb_indcs.nx2/2 - mb_cindcs.ng;
+      } else {
+        findcs.bje -= mb_indcs.nx2/2 - mb_cindcs.ng;
+      }
+    }
+  }
+  if (ox3 == 0 && mb_indcs.nx3 > 1) {
+    if (ox1 != 0 && ox2 != 0) {
+      if (f1 == 1) {
+        findcs.bks += mb_indcs.nx3/2 - mb_cindcs.ng;
+      } else {
+        findcs.bke -= mb_indcs.nx3/2 - mb_cindcs.ng;
+      }
+    } else {
+      if (f2 == 1) {
+        findcs.bks += mb_indcs.nx3/2 - mb_cindcs.ng;
+      } else {
+        findcs.bke -= mb_indcs.nx3/2 - mb_cindcs.ng;
+      }
+    }
+  }
+  findcs.ndat = (findcs.bie - findcs.bis + 1)*(findcs.bje - findcs.bjs + 1)*
+                (findcs.bke - findcs.bks + 1);
+
 }
 
 //----------------------------------------------------------------------------------------
@@ -50,43 +121,167 @@ void BValCC::InitSendIndices(BValBufferCC &buf, int ox1, int ox2, int ox3)
 //! The arguments ox1/2/3 are integer (+/- 1) offsets in each dir that specifies buffer
 //! relative to center of MeshBlock (0,0,0)
 
-void BValCC::InitRecvIndices(BValBufferCC &buf, int ox1, int ox2, int ox3)
+void BValCC::InitRecvIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f1, int f2)
 { 
-  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
+  auto &mb_indcs  = pmy_pack->pcoord->mbdata.indcs;
+  auto &mb_cindcs = pmy_pack->pcoord->mbdata.cindcs;
 
   // set indices for receives from neighbors on SAME level
-  auto &sindcs = buf.sindcs;
+  // Formulae taken from SetBoundarySameLevel()
+  auto &sindcs = buf.sindcs;   // indices of buffer at same level ("s")
   if (ox1 == 0) {
-    sindcs.bis = indcs.is;
-    sindcs.bie = indcs.ie;
+    sindcs.bis = mb_indcs.is;
+    sindcs.bie = mb_indcs.ie;
   } else if (ox1 > 0) {
-    sindcs.bis = indcs.ie + 1,
-    sindcs.bie = indcs.ie + indcs.ng;
+    sindcs.bis = mb_indcs.ie + 1,
+    sindcs.bie = mb_indcs.ie + mb_indcs.ng;
   } else {
-    sindcs.bis = indcs.is - indcs.ng,
-    sindcs.bie = indcs.is - 1;
+    sindcs.bis = mb_indcs.is - mb_indcs.ng;
+    sindcs.bie = mb_indcs.is - 1;
   }
 
   if (ox2 == 0) {
-    sindcs.bjs = indcs.js;
-    sindcs.bje = indcs.je;
+    sindcs.bjs = mb_indcs.js;
+    sindcs.bje = mb_indcs.je;
   } else if (ox2 > 0) {
-    sindcs.bjs = indcs.je + 1;
-    sindcs.bje = indcs.je + indcs.ng;
+    sindcs.bjs = mb_indcs.je + 1;
+    sindcs.bje = mb_indcs.je + mb_indcs.ng;
   } else {
-    sindcs.bjs = indcs.js - indcs.ng;
-    sindcs.bje = indcs.js - 1;
+    sindcs.bjs = mb_indcs.js - mb_indcs.ng;
+    sindcs.bje = mb_indcs.js - 1;
   }
 
   if (ox3 == 0) {
-    sindcs.bks = indcs.ks;
-    sindcs.bke = indcs.ke;
+    sindcs.bks = mb_indcs.ks;
+    sindcs.bke = mb_indcs.ke;
   } else if (ox3 > 0) {
-    sindcs.bks = indcs.ke + 1;
-    sindcs.bke = indcs.ke + indcs.ng;
+    sindcs.bks = mb_indcs.ke + 1;
+    sindcs.bke = mb_indcs.ke + mb_indcs.ng;
   } else {
-    sindcs.bks = indcs.ks - indcs.ng;
-    sindcs.bke = indcs.ks - 1;
+    sindcs.bks = mb_indcs.ks - mb_indcs.ng;
+    sindcs.bke = mb_indcs.ks - 1;
+  }
+
+  // set indices for receives from neighbors on COARSER level
+  // Formulae taken from SetBoundaryFromCoarser()
+  auto &cindcs = buf.cindcs;   // indices of course buffer ("c")
+  if (ox1 == 0) {
+    cindcs.bis = mb_cindcs.is;
+    cindcs.bie = mb_cindcs.ie;
+    if ((pmb->loc.lx1 & 1) == 0) {
+      cindcs.bie += mb_indcs.ng;
+    } else {
+      cindcs.bis -= mb_indcs.ng;
+    }
+  } else if (ox1 > 0)  {
+    cindcs.bis = mb_cindcs.ie + 1;
+    cindcs.bie = mb_cindcs.ie + mb_indcs.ng;
+  } else {
+    cindcs.bis = mb_cindcs.is - mb_indcs.ng;
+    cindcs.bie = mb_cindcs.is - 1;
+  }
+  if (ox2 == 0) {
+    cindcs.bjs = mb_cindcs.js;
+    cindcs.bje = mb_cindcs.je;
+    if (mb_indcs.nx2 > 1) {
+      if ((pmb->loc.lx2 & 1) == 0) {
+        cindcs.bje += mb_indcs.ng;
+      } else {
+        cindcs.bjs -= mb_indcs.ng;
+      }
+    }
+  } else if (ox2 > 0) {
+    cindcs.bjs = mb_cindcs.je + 1;
+    cindcs.bje = mb_cindcs.je + mb_indcs.ng;
+  } else {
+    cindcs.bjs = mb_cindcs.js - mb_indcs.ng;
+    cindcs.bje = mb_cindcs.js - 1;
+  }
+  if (ox3 == 0) {
+    cindcs.bks = mb_cindcs.ks;
+    cindcs.bke = mb_cindcs.ke;
+    if (mb_indcs.nx3 > 1) {
+      if ((pmb->loc.lx3 & 1) == 0) {
+        cindcs.bke += mb_indcs.ng;
+      } else {
+        cindcs.bks -= mb_indcs.ng;
+      }
+    }
+  } else if (ox3 > 0)  {
+    cindcs.bks = mb_cindcs.ke + 1;
+    cindcs.bke = mb_cindcs.ke + mb_indcs.ng;
+  } else {
+    cindcs.bks = mb_cindcs.ks - mb_indcs.ng;
+    cindcs.bke = mb_cindcs.ks - 1;
+  }
+
+  // set indices for receives from neighbors on FINER level
+  // Formulae taken from SetBoundaryFromFiner()
+  auto &findcs = buf.findcs;   // indices of fine buffer ("f")
+  if (ox1 == 0) {
+    findcs.bis = mb_indcs.is;
+    findcs.bie = mb_indcs.ie;
+    if (f1 == 1) {
+      findcs.bis += mb_indcs.nx1/2;
+    } else {
+      findcs.bie -= mb_indcs.nx1/2;
+    }
+  } else if (ox1 > 0) {
+    findcs.bis = mb_indcs.ie + 1;
+    findcs.bie = mb_indcs.ie + mb_indcs.ng;
+  } else {
+    findcs.bis = mb_indcs.is - mb_indcs.ng;
+    findcs.bie = mb_indcs.is - 1;
+  }
+  if (ox2 == 0) {
+    findcs.bjs = mb_indcs.js;
+    findcs.bje = mb_indcs.je;
+    if (mb_indcs.nx2 > 1) {
+      if (ox1 != 0) {
+        if (f1 == 1) {
+          findcs.bjs += mb_indcs.nx2/2;
+        } else { 
+          findcs.bje -= mb_indcs.nx2/2;
+        }
+      } else {
+        if (f2 == 1) {
+          findcs.bjs += mb_indcs.nx2/2;
+        } else {
+          findcs.bje -= mb_indcs.nx2/2;
+        }
+      }
+    }
+  } else if (ox2 > 0) {
+    findcs.bjs = mb_indcs.je + 1;
+    findcs.bje = mb_indcs.je + mb_indcs.ng;
+  } else {
+    findcs.bjs = mb_indcs.js - mb_indcs.ng;
+    findcs.bje = mb_indcs.js - 1;
+  }
+  if (ox3 == 0) {
+    findcs.bks = mb_indcs.ks;
+    findcs.bke = mb_indcs.ke;
+    if (mb_indcs.nx3 > 1) {
+      if (ox1 != 0 && ox2 != 0) {
+        if (f1 == 1) {
+          findcs.bks += mb_indcs.nx3/2;
+        } else {
+          findcs.bke -= mb_indcs.nx3/2;
+        }
+      } else {
+        if (f2 == 1) {
+          findcs.bks += mb_indcs.nx3/2;
+        } else {
+          findcs.bke -= mb_indcs.nx3/2;
+        }
+      }
+    }
+  } else if (ox3 > 0) {
+    findcs.bks = mb_indcs.ke + 1;
+    findcs.bke = mb_indcs.ke + mb_indcs.ng;
+  } else {
+    findcs.bks = mb_indcs.ks - mb_indcs.ng;
+    findcs.bke = mb_indcs.ks - 1;
   }
 }
 
