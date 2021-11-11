@@ -107,15 +107,17 @@ void ProblemGenerator::BondiAccretion_(MeshBlockPack *pmbp, ParameterInput *pin)
 
   // capture variables for the kernel
   auto &indcs = pmbp->coord.coord_data.mb_indcs;
-  int &is = indcs.is; int &ie = indcs.ie;
-  int &js = indcs.js; int &je = indcs.je;
-  int &ks = indcs.ks; int &ke = indcs.ke;
+  int &ng = indcs.ng;
+  int n1 = indcs.nx1 + 2*ng;
+  int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
+  int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
+  int nmb = pmbp->nmb_thispack;
   auto coord = pmbp->coord.coord_data;
   auto w0_ = pmbp->phydro->w0;
   auto bondi_ = bondi;
 
   // Initialize primitive values (HYDRO ONLY)
-  par_for("pgen_bondi", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
+  par_for("pgen_bondi", DevExeSpace(), 0,(nmb-1),0,(n3-1),0,(n2-1),0,(n1-1),
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
       Real rho, pgas, uu1, uu2, uu3, g_[NMETRIC], gi_[NMETRIC];
