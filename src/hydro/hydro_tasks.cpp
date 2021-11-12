@@ -214,14 +214,52 @@ TaskStatus Hydro::RestrictU(Driver *pdrive, int stage)
   if (pmy_pack->pmesh->one_d) {
     auto &cis = pmy_pack->pcoord->mbdata.cindcs.is;
     auto &cie = pmy_pack->pcoord->mbdata.cindcs.ie;
-    auto &is = pmy_pack->pcoord->mbdata.indcs.is;
     auto &js = pmy_pack->pcoord->mbdata.indcs.js;
     auto &ks = pmy_pack->pcoord->mbdata.indcs.ks;
-    par_for("restrict1D",DevExeSpace(),0, nmb1, 0, nvar-1, cis, cie,
+    par_for("restrict1D",DevExeSpace(),0, nmb1, 0, nvar-1, cis,cie,
       KOKKOS_LAMBDA(const int m, const int n, const int i)
       {
-        int finei = 2*(i - cis) + is;
+        int finei = 2*i - cis;  // correct when cis=is
         cu0_(m,n,ks,js,i) = 0.5*(u0_(m,n,ks,js,finei) + u0_(m,n,ks,js,finei+1)); 
+      }
+    );
+
+  // restrict in 2D
+  } else if (pmy_pack->pmesh->two_d) {
+    auto &cis = pmy_pack->pcoord->mbdata.cindcs.is;
+    auto &cie = pmy_pack->pcoord->mbdata.cindcs.ie;
+    auto &cjs = pmy_pack->pcoord->mbdata.cindcs.js;
+    auto &cje = pmy_pack->pcoord->mbdata.cindcs.je;
+    auto &ks = pmy_pack->pcoord->mbdata.indcs.ks;
+    par_for("restrict1D",DevExeSpace(),0, nmb1, 0, nvar-1, cjs,cje,cis,cie, 
+      KOKKOS_LAMBDA(const int m, const int n, const int j, const int i)
+      {
+        int finei = 2*i - cis;  // correct when cis=is
+        int finej = 2*j - cjs;  // correct when cij=ij
+        cu0_(m,n,ks,j,i) = 0.25*(u0_(m,n,ks,finej  ,finei) + u0_(m,n,ks,finej  ,finei+1))
+                              + (u0_(m,n,ks,finej+1,finei) + u0_(m,n,ks,finej+1,finei+1));
+      }
+    );
+
+  // restrict in 3D
+  } else {
+    auto &cis = pmy_pack->pcoord->mbdata.cindcs.is;
+    auto &cie = pmy_pack->pcoord->mbdata.cindcs.ie;
+    auto &cjs = pmy_pack->pcoord->mbdata.cindcs.js;
+    auto &cje = pmy_pack->pcoord->mbdata.cindcs.je;
+    auto &cks = pmy_pack->pcoord->mbdata.cindcs.ks;
+    auto &cke = pmy_pack->pcoord->mbdata.cindcs.ke;
+    par_for("restrict1D",DevExeSpace(),0, nmb1, 0, nvar-1, cks,cke,cjs,cje,cis,cie,
+      KOKKOS_LAMBDA(const int m, const int n, const int k, const int j, const int i)
+      {
+        int finei = 2*i - cis;  // correct when cis=is
+        int finej = 2*j - cjs;  // correct when cjs=js
+        int finek = 2*k - cks;  // correct when cks=ks
+        cu0_(m,n,k,j,i) =
+           0.5*(u0_(m,n,finek,  finej,  finei) + u0_(m,n,finek,  finej,  finei+1))
+             + (u0_(m,n,finek,  finej+1,finei) + u0_(m,n,finek,  finej+1,finei+1))
+             + (u0_(m,n,finek+1,finej,  finei) + u0_(m,n,finek+1,finej,  finei+1))
+             + (u0_(m,n,finek+1,finej+1,finei) + u0_(m,n,finek+1,finej+1,finei+1));
       }
     );
   }
