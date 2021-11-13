@@ -11,6 +11,7 @@ add_executable(
         globals.cpp
         parameter_input.cpp
 
+        bvals/buffs_cc.cpp
         bvals/bvals_cc.cpp
         bvals/bvals_fc.cpp
 
