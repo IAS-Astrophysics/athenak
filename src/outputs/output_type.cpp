@@ -323,6 +323,9 @@ void OutputType::LoadOutputData(Mesh *pm)
   auto &size  = pm->pmb_pack->pcoord->mbdata.size;
   for (int m=0; m<(pm->pmb_pack->nmb_thispack); ++m) {
 
+    // skip if MeshBlock ID is specified and not equal to this ID
+    if (out_params.gid >= 0 && m != out_params.gid) { continue; }
+
     int ois,oie,ojs,oje,oks,oke;
     if (out_params.include_gzs) {
       int nout1 = indcs.nx1 + 2*(indcs.ng);
