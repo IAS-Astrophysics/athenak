@@ -693,7 +693,6 @@ TaskStatus BValCC::RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
     if (nghbr.d_view(m,n).gid >= 0) {
 
       // if neighbor is at same or finer level, use indices for u0
-      // indices same for all variables, stored in (0,i) component
       int il, iu, jl, ju, kl, ku;
       if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
         il = rbuf[n].sindcs.bis;
@@ -745,73 +744,106 @@ TaskStatus BValCC::RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
   }
 
   //----- STEP 3: Prolongate conserved variables when neighbor at coarser level
-  // Code here is based on MeshRefinement::RestrictCellCenteredValues() in C++ version
+  // Code here is based on MeshRefinement::ProlongateCellCenteredValues() in C++ version
 
   // Only perform prolongation with SMR/AMR
   if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
 
-  int nmb1 = pmy_pack->nmb_thispack - 1;
   int nvar = a.extent_int(1);  // TODO: 2nd index from L of input array must be NVAR
+  int nmnv = nmb*nnghbr*nvar;
+  auto &nghbr = pmy_pack->pmb->nghbr;
+  auto &mblev = pmy_pack->pmb->mblev;
+  auto &rbuf = recv_buf;
   bool &multi_d = pmy_pack->pmesh->multi_d;
   bool &three_d = pmy_pack->pmesh->three_d;
+  auto &indcs  = pmy_pack->pcoord->mbdata.indcs;
+  auto &cindcs = pmy_pack->pcoord->mbdata.cindcs;
 
-  auto &cis = pmy_pack->pcoord->mbdata.cindcs.is;
-  auto &cie = pmy_pack->pcoord->mbdata.cindcs.ie;
-  auto &cjs = pmy_pack->pcoord->mbdata.cindcs.js;
-  auto &cje = pmy_pack->pcoord->mbdata.cindcs.je;
-  auto &cks = pmy_pack->pcoord->mbdata.cindcs.ks;
-  auto &cke = pmy_pack->pcoord->mbdata.cindcs.ke;
-  par_for("prolong",DevExeSpace(),0, nmb1, 0, nvar-1, cks,cke,cjs,cje,cis,cie,
-    KOKKOS_LAMBDA(const int m, const int n, const int k, const int j, const int i)
-    {
-      int finei = 2*i - cis;  // correct when cis=is
-      int finej = cjs;
-      int finek = cks;
-      if (multi_d) {
-        finej = 2*j - cjs;  // correct when cjs=js
-      }
-      if (three_d) {
-        finek = 2*k - cks;  // correct when cks=ks
-      }
+  // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
+  Kokkos::TeamPolicy<> policy(DevExeSpace(), nmnv, Kokkos::AUTO);
+  Kokkos::parallel_for("RecvBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember)
+  {
+    const int m = (tmember.league_rank())/(nnghbr*nvar);
+    const int n = (tmember.league_rank() - m*(nnghbr*nvar))/nvar;
+    const int v = (tmember.league_rank() - m*(nnghbr*nvar) - n*nvar);
 
-      // calculate x1-gradient using the min-mod limiter
-      Real dl = ca(m,n,k,j,i  ) - ca(m,n,k,j,i-1);
-      Real dr = ca(m,n,k,j,i+1) - ca(m,n,k,j,i  );
-      Real dvar1 = 0.25*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
+    // only prolongate when neighbor exists and is at coarser level
+    if ((nghbr.d_view(m,n).gid >= 0) && (nghbr.d_view(m,n).lev < mblev.d_view(m))) {
 
-      // calculate x2-gradient using the min-mod limiter
-      Real dvar2 = 0.0;
-      if (multi_d) {
-        dl = ca(m,n,k,j  ,i) - ca(m,n,k,j-1,i);
-        dr = ca(m,n,k,j+1,i) - ca(m,n,k,j  ,i);
-        dvar2 = 0.25*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
-      }
+      // loop over indices of regular mesh for this buffer
+      int il = rbuf[n].sindcs.bis;
+      int iu = rbuf[n].sindcs.bie;
+      int jl = rbuf[n].sindcs.bjs;
+      int ju = rbuf[n].sindcs.bje;
+      int kl = rbuf[n].sindcs.bks;
+      int ku = rbuf[n].sindcs.bke;
+      const int ni = iu - il + 1;
+      const int nj = ju - jl + 1;
+      const int nk = ku - kl + 1;
+      const int nkj  = nk*nj;
 
-      // calculate x1-gradient using the min-mod limiter
-      Real dvar3 = 0.0;
-      if (three_d) {
-        dl = ca(m,n,k  ,j,i) - ca(m,n,k-1,j,i);
-        dr = ca(m,n,k+1,j,i) - ca(m,n,k  ,j,i);
-        dvar3 = 0.25*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
-      }
+      // Middle loop over k,j
+      Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx)
+      {
+        int k = idx / nj;
+        int j = (idx - k * nj) + jl;
+        k += kl;
 
-      // interpolate to the finer grid
-      a(m,n,finek,finej,finei  ) = ca(m,n,k,j,i) - dvar1 - dvar2 - dvar3;
-      a(m,n,finek,finej,finei+1) = ca(m,n,k,j,i) + dvar1 - dvar2 - dvar3;
+        Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),[&](const int i)
+        {
+          // calculate indices of coarse array elements
+          int coari,coarj,coark;
+          if (il < indcs.is) {
+            coari = (i - indcs.is - 1)/2 + cindcs.is;
+          } else {
+            coari = (i - indcs.ie + 1)/2 + cindcs.ie;
+          }
+          if (multi_d) {
+            if (jl < indcs.js) {
+              coarj = (j - indcs.js - 1)/2 + cindcs.js;
+            } else {
+              coarj = (j - indcs.je + 1)/2 + cindcs.je;
+            }
+          }
+          if (three_d) {
+            if (kl < indcs.ks) {
+              coark = (k - indcs.ks - 1)/2 + cindcs.ks;
+            } else {
+              coark = (k - indcs.ke + 1)/2 + cindcs.ke;
+            }
+          }
 
-      if (multi_d) {
-        a(m,n,finek,finej+1,finei  ) = ca(m,n,k,j,i) - dvar1 + dvar2 - dvar3;
-        a(m,n,finek,finej+1,finei+1) = ca(m,n,k,j,i) + dvar1 + dvar2 - dvar3;
-      }
+          // calculate x1-gradient using the min-mod limiter
+          Real dl = ca(m,v,coark,coarj,coari  ) - ca(m,v,coark,coarj,coari-1);
+          Real dr = ca(m,v,coark,coarj,coari+1) - ca(m,v,coark,coarj,coari  );
+          Real dvar1 = 0.25*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
+          if (i%2 == 0) dvar1 *= -1.0;
 
-      if (three_d) {
-        a(m,n,finek+1,finej  ,finei  ) = ca(m,n,k,j,i) - dvar1 - dvar2 + dvar3;
-        a(m,n,finek+1,finej  ,finei+1) = ca(m,n,k,j,i) + dvar1 - dvar2 + dvar3;
-        a(m,n,finek+1,finej+1,finei  ) = ca(m,n,k,j,i) - dvar1 + dvar2 + dvar3;
-        a(m,n,finek+1,finej+1,finei+1) = ca(m,n,k,j,i) + dvar1 + dvar2 + dvar3;
-      }
+          // calculate x2-gradient using the min-mod limiter
+          Real dvar2 = 0.0;
+          if (multi_d) {
+            dl = ca(m,v,coark,coarj  ,coari) - ca(m,v,coark,coarj-1,coari);
+            dr = ca(m,v,coark,coarj+1,coari) - ca(m,v,coark,coarj  ,coari);
+            dvar2 = 0.25*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
+            if (j%2 == 0) dvar2 *= -1.0;
+          }
+
+          // calculate x1-gradient using the min-mod limiter
+          Real dvar3 = 0.0;
+          if (three_d) {
+            dl = ca(m,v,coark  ,coarj,coari) - ca(m,v,coark-1,coarj,coari);
+            dr = ca(m,v,coark+1,coarj,coari) - ca(m,v,coark  ,coarj,coari);
+            dvar3 = 0.25*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
+            if (k%2 == 0) dvar3 *= -1.0;
+          }
+
+          // interpolate to the finer grid
+          a(m,v,k,j,i) = ca(m,v,coark,coarj,coari) + dvar1 + dvar2 + dvar3;
+
+        });
+      });
     }
-  );
+  });
 
 /******
   std::cout << std::endl << "u0 data" << std::endl;
