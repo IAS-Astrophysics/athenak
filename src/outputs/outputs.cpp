@@ -46,6 +46,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>   // std::string, to_string()
+#include <sys/stat.h> // mkdir()
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
@@ -138,6 +139,14 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
                        opar.block_name,"id",pin->GetString(opar.block_name, "variable"));
       }
 
+      // create directories for outputs
+      // useful for mpiio-based outputs because on some supercomputers you may need to
+      // set different stripe counts depending on whether mpiio is used in order to 
+      // achieve the best performance and not to crash the filesystem
+      if (opar.file_type.compare("nbf") == 0 || opar.file_type.compare("binary") == 0) {
+        mkdir("mpiio",0775);
+      }
+
       // set optional data format string used in formatted writes
       opar.data_format = pin->GetOrAddString(opar.block_name, "data_format", "%12.5e");
       opar.data_format.insert(0, " "); // prepend with blank to separate columns
@@ -154,6 +163,10 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
         num_hst++;
       } else if (opar.file_type.compare("vtk") == 0) {
         pnode = new VTKOutput(opar,pm);
+        pout_list.insert(pout_list.begin(),pnode);
+      } else if (opar.file_type.compare("nbf") == 0 || 
+                 opar.file_type.compare("binary") == 0) {
+        pnode = new BinaryOutput(opar,pm);
         pout_list.insert(pout_list.begin(),pnode);
 //      } else if (op.file_type.compare("rst") == 0) {
 //    // Move restarts to the tail end of the OutputType list, so file counters for other

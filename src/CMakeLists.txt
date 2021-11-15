@@ -68,6 +68,7 @@ add_executable(
         outputs/formatted_table.cpp
         outputs/history.cpp
         outputs/vtk.cpp
+        outputs/binary.cpp
 
         pgen/pgen.cpp
         pgen/advection.cpp
