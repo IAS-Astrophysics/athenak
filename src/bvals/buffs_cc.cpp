@@ -62,9 +62,7 @@ void BValCC::InitSendIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f
   findcs.bje = (ox2 < 0) ? (mb_indcs.js + ng1) : mb_indcs.je;
   findcs.bks = (ox3 > 0) ? (mb_indcs.ke - ng1) : mb_indcs.ks;
   findcs.bke = (ox3 < 0) ? (mb_indcs.ks + ng1) : mb_indcs.ke;
-
-  // send the data first and later prolongate on the target block
-  // need to add edges for faces, add corners for edges
+  // need to add internal edges on faces, and internal corners on edges
   if (ox1 == 0) {
     if (f1 == 1) {
       findcs.bis += mb_indcs.nx1/2 - mb_cindcs.ng;
@@ -111,7 +109,8 @@ void BValCC::InitSendIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f
 //! \fn void BValCC::InitRecvIndices
 //! \brief Calculates indices of cells in mesh into which receive buffers are unpacked.
 //! The arguments ox1/2/3 are integer (+/- 1) offsets in each dir that specifies buffer
-//! relative to center of MeshBlock (0,0,0)
+//! relative to center of MeshBlock (0,0,0).  The arguments f1/2 are the coordinates
+//! of subblocks within faces/edges (only relevant with SMR/AMR)
 
 void BValCC::InitRecvIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f1, int f2)
 { 
@@ -365,14 +364,12 @@ void BValCC::InitRecvIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f
 }
 
 //----------------------------------------------------------------------------------------
-// \!fn void BValCC::AllocateBuffersCC
-// initialize array of send/recv BValBuffers for arbitrary number of cell-centered
-// variables, specified by input argument.
-//
-// NOTE: order of array elements is crucial and cannot be changed.  It must match
-// order of boundaries in nghbr vector
-
-// TODO: extend for AMR
+//! \fn void BValCC::AllocateBuffersCC
+//! \brief initialize vector of send/recv BValBuffers for arbitrary number of
+//!  cell-centered variables, specified by input argument.
+//!
+//! NOTE: order of vector elements is crucial and cannot be changed.  It must match
+//! order of boundaries in nghbr vector
 
 void BValCC::AllocateBuffersCC(const int nvar)
 {
@@ -396,7 +393,7 @@ void BValCC::AllocateBuffersCC(const int nvar)
     Kokkos::realloc(send_buf[n].bcomm_stat, nmb);
     Kokkos::realloc(recv_buf[n].bcomm_stat, nmb);
 #if MPI_PARALLEL_ENABLED
-    // cannot create Kokkos::View of type MPI_Request (not POD) so construct STL vector instead
+    // cannot create Kokkos::View of type MPI_Request (not POD) so construct STL vector
     for (int m=0; m<nmb; ++m) {
       MPI_Request send_req, recv_req;
       send_buf[n].comm_req.push_back(send_req);
@@ -405,136 +402,121 @@ void BValCC::AllocateBuffersCC(const int nvar)
 #endif
   }
 
-  // initialize buffers used for uniform grid calculations first
+  // initialize buffers used for uniform grid nd SMR/AMR calculations
+  // set number of subblocks in x2- and x3-dirs
+  int nfx = 1, nfy = 1, nfz = 1;
+  if (pmy_pack->pmesh->multilevel) {
+    nfx = 2;
+    if (pmy_pack->pmesh->multi_d) nfy = 2;
+    if (pmy_pack->pmesh->three_d) nfz = 2;
+  }
 
-  // x1 faces; BufferID = [0,4]
-  InitSendIndices(send_buf[0],-1, 0, 0, 0, 0);
-  InitSendIndices(send_buf[4], 1, 0, 0, 0, 0);
-  InitRecvIndices(recv_buf[0],-1, 0, 0, 0, 0);
-  InitRecvIndices(recv_buf[4], 1, 0, 0, 0, 0);
-  for (int n=0; n<=4; n+=4) {
-    send_buf[n].AllocateDataView(nmb, nvar);
-    recv_buf[n].AllocateDataView(nmb, nvar);
+  // x1 faces; NeighborIndex = [0,...,7]
+  for (int n=-1; n<=1; n+=2) {
+    for (int fz=0; fz<nfz; fz++) {
+      for (int fy = 0; fy<nfy; fy++) {
+        int indx = pmy_pack->pmb->NeighborIndx(n,0,0,fy,fz);
+        InitSendIndices(send_buf[indx],n, 0, 0, fy, fz);
+        InitRecvIndices(recv_buf[indx],n, 0, 0, fy, fz);
+        send_buf[indx].AllocateDataView(nmb, nvar);
+        recv_buf[indx].AllocateDataView(nmb, nvar);
+        indx++;
+      }
+    }
   }
 
   // add more buffers in 2D
   if (pmy_pack->pmesh->multi_d) {
-    // x2 faces; BufferID = [8,12]
-    InitSendIndices(send_buf[8 ], 0,-1, 0, 0, 0);
-    InitSendIndices(send_buf[12], 0, 1, 0, 0, 0);
-    InitRecvIndices(recv_buf[8 ], 0,-1, 0, 0, 0);
-    InitRecvIndices(recv_buf[12], 0, 1, 0, 0, 0);
-    for (int n=8; n<=12; n+=4) {
-      send_buf[n].AllocateDataView(nmb, nvar);
-      recv_buf[n].AllocateDataView(nmb, nvar);
+
+    // x2 faces; NeighborIndex = [8,...,15]
+    for (int m=-1; m<=1; m+=2) {
+      for (int fz=0; fz<nfz; fz++) {
+        for (int fx=0; fx<nfx; fx++) {
+          int indx = pmy_pack->pmb->NeighborIndx(0,m,0,fx,fz);
+          InitSendIndices(send_buf[indx],0, m, 0, fx, fz);
+          InitRecvIndices(recv_buf[indx],0, m, 0, fx, fz);
+          send_buf[indx].AllocateDataView(nmb, nvar);
+          recv_buf[indx].AllocateDataView(nmb, nvar);
+          indx++;
+        }
+      }
     }
 
-    // x1x2 edges; BufferID = [16,18,20,22]
-    InitSendIndices(send_buf[16],-1,-1, 0, 0, 0);
-    InitSendIndices(send_buf[18], 1,-1, 0, 0, 0);
-    InitSendIndices(send_buf[20],-1, 1, 0, 0, 0);
-    InitSendIndices(send_buf[22], 1, 1, 0, 0, 0);
-    InitRecvIndices(recv_buf[16],-1,-1, 0, 0, 0);
-    InitRecvIndices(recv_buf[18], 1,-1, 0, 0, 0);
-    InitRecvIndices(recv_buf[20],-1, 1, 0, 0, 0);
-    InitRecvIndices(recv_buf[22], 1, 1, 0, 0, 0);
-    for (int n=16; n<=22; n+=2) {
-      send_buf[n].AllocateDataView(nmb, nvar);
-      recv_buf[n].AllocateDataView(nmb, nvar);
+    // x1x2 edges; NeighborIndex = [16,...,23]
+    for (int m=-1; m<=1; m+=2) {
+      for (int n=-1; n<=1; n+=2) {
+        for (int fz=0; fz<nfz; fz++) {
+          int indx = pmy_pack->pmb->NeighborIndx(n,m,0,fz,0);
+          InitSendIndices(send_buf[indx],n, m, 0, fz, 0);
+          InitRecvIndices(recv_buf[indx],n, m, 0, fz, 0);
+          send_buf[indx].AllocateDataView(nmb, nvar);
+          recv_buf[indx].AllocateDataView(nmb, nvar);
+          indx++;
+        }
+      }
     }
   }
 
   // add more buffers in 3D
   if (pmy_pack->pmesh->three_d) {
-    // x3 faces; BufferID = [24,28]
-    InitSendIndices(send_buf[24], 0, 0,-1, 0, 0);
-    InitSendIndices(send_buf[28], 0, 0, 1, 0, 0);
-    InitRecvIndices(recv_buf[24], 0, 0,-1, 0, 0);
-    InitRecvIndices(recv_buf[28], 0, 0, 1, 0, 0);
-    for (int n=24; n<=28; n+=4) {
-      send_buf[n].AllocateDataView(nmb, nvar);
-      recv_buf[n].AllocateDataView(nmb, nvar);
+
+    // x3 faces; NeighborIndex = [24,...,31]
+    for (int l=-1; l<=1; l+=2) {
+      for (int fy=0; fy<nfy; fy++) { 
+        for (int fx=0; fx<nfx; fx++) {
+          int indx = pmy_pack->pmb->NeighborIndx(0,0,l,fx,fy);
+          InitSendIndices(send_buf[indx],0, 0, l, fx, fy);
+          InitRecvIndices(recv_buf[indx],0, 0, l, fx, fy);
+          send_buf[indx].AllocateDataView(nmb, nvar);
+          recv_buf[indx].AllocateDataView(nmb, nvar);
+          indx++;
+        }
+      }
     }
 
-    // x3x1 edges; BufferID = [32,34,36,38]
-    InitSendIndices(send_buf[32],-1, 0,-1, 0, 0);
-    InitSendIndices(send_buf[34], 1, 0,-1, 0, 0);
-    InitSendIndices(send_buf[36],-1, 0, 1, 0, 0);
-    InitSendIndices(send_buf[38], 1, 0, 1, 0, 0);
-    InitRecvIndices(recv_buf[32],-1, 0,-1, 0, 0);
-    InitRecvIndices(recv_buf[34], 1, 0,-1, 0, 0);
-    InitRecvIndices(recv_buf[36],-1, 0, 1, 0, 0);
-    InitRecvIndices(recv_buf[38], 1, 0, 1, 0, 0);
-    for (int n=32; n<=38; n+=2) {
-      send_buf[n].AllocateDataView(nmb, nvar);
-      recv_buf[n].AllocateDataView(nmb, nvar);
+    // x3x1 edges; NeighborIndex = [32,...,39]
+    for (int l=-1; l<=1; l+=2) {
+      for (int n=-1; n<=1; n+=2) {
+        for (int fy=0; fy<nfy; fy++) {
+          int indx = pmy_pack->pmb->NeighborIndx(n,0,l,fy,0);
+          InitSendIndices(send_buf[indx],n, 0, l, fy, 0);
+          InitRecvIndices(recv_buf[indx],n, 0, l, fy, 0);
+          send_buf[indx].AllocateDataView(nmb, nvar);
+          recv_buf[indx].AllocateDataView(nmb, nvar);
+          indx++;
+        }
+      }
     }
 
-    // x2x3 edges; BufferID = [40,42,44,46]
-    InitSendIndices(send_buf[40], 0,-1,-1, 0, 0);
-    InitSendIndices(send_buf[42], 0, 1,-1, 0, 0);
-    InitSendIndices(send_buf[44], 0,-1, 1, 0, 0);
-    InitSendIndices(send_buf[46], 0, 1, 1, 0, 0);
-    InitRecvIndices(recv_buf[40], 0,-1,-1, 0, 0);
-    InitRecvIndices(recv_buf[42], 0, 1,-1, 0, 0);
-    InitRecvIndices(recv_buf[44], 0,-1, 1, 0, 0);
-    InitRecvIndices(recv_buf[46], 0, 1, 1, 0, 0);
-    for (int n=40; n<=46; n+=2) {
-      send_buf[n].AllocateDataView(nmb, nvar);
-      recv_buf[n].AllocateDataView(nmb, nvar);
+    // x2x3 edges; NeighborIndex = [40,...,47]
+    for (int l=-1; l<=1; l+=2) {
+      for (int m=-1; m<=1; m+=2) {
+        for (int fx=0; fx<nfx; fx++) {
+          int indx = pmy_pack->pmb->NeighborIndx(0,m,l,fx,0);
+          InitSendIndices(send_buf[indx],0, m, l, fx, 0);
+          InitRecvIndices(recv_buf[indx],0, m, l, fx, 0);
+          send_buf[indx].AllocateDataView(nmb, nvar);
+          recv_buf[indx].AllocateDataView(nmb, nvar);
+          indx++;
+        }
+      }
     }
 
-    // corners; BufferID = [48,...,55]
-    InitSendIndices(send_buf[48],-1,-1,-1, 0, 0);
-    InitSendIndices(send_buf[49], 1,-1,-1, 0, 0);
-    InitSendIndices(send_buf[50],-1, 1,-1, 0, 0);
-    InitSendIndices(send_buf[51], 1, 1,-1, 0, 0);
-    InitSendIndices(send_buf[52],-1,-1, 1, 0, 0);
-    InitSendIndices(send_buf[53], 1,-1, 1, 0, 0);
-    InitSendIndices(send_buf[54],-1, 1, 1, 0, 0);
-    InitSendIndices(send_buf[55], 1, 1, 1, 0, 0);
-    InitRecvIndices(recv_buf[48],-1,-1,-1, 0, 0);
-    InitRecvIndices(recv_buf[49], 1,-1,-1, 0, 0);
-    InitRecvIndices(recv_buf[50],-1, 1,-1, 0, 0);
-    InitRecvIndices(recv_buf[51], 1, 1,-1, 0, 0);
-    InitRecvIndices(recv_buf[52],-1,-1, 1, 0, 0);
-    InitRecvIndices(recv_buf[53], 1,-1, 1, 0, 0);
-    InitRecvIndices(recv_buf[54],-1, 1, 1, 0, 0);
-    InitRecvIndices(recv_buf[55], 1, 1, 1, 0, 0);
-    for (int n=48; n<=55; n+=1) {
-      send_buf[n].AllocateDataView(nmb, nvar);
-      recv_buf[n].AllocateDataView(nmb, nvar);
-    }
-  }
-
-  // now initialize buffers used for SMR/AMR calculations
-
-  if (pmy_pack->pmesh->multilevel) {
-    // x1 faces; BufferID = [1,5]
-    InitSendIndices(send_buf[1],-1, 0, 0, 1, 0);
-    InitSendIndices(send_buf[5], 1, 0, 0, 1, 0);
-    InitRecvIndices(recv_buf[1],-1, 0, 0, 1, 0);
-    InitRecvIndices(recv_buf[5], 1, 0, 0, 1, 0);
-    for (int n=1; n<=5; n+=4) {
-      send_buf[n].AllocateDataView(nmb, nvar);
-      recv_buf[n].AllocateDataView(nmb, nvar);
-    }
-
-    // add more buffers in 2D
-    if (pmy_pack->pmesh->multi_d) {
-      // x2 faces; BufferID = [9,13]
-      InitSendIndices(send_buf[9 ], 0,-1, 0, 1, 0);
-      InitSendIndices(send_buf[13], 0, 1, 0, 1, 0);
-      InitRecvIndices(recv_buf[9 ], 0,-1, 0, 1, 0);
-      InitRecvIndices(recv_buf[13], 0, 1, 0, 1, 0);
-      for (int n=9; n<=13; n+=4) {
-        send_buf[n].AllocateDataView(nmb, nvar);
-        recv_buf[n].AllocateDataView(nmb, nvar);
+    // corners; NeighborIndex = [48,...,55]
+    for (int l=-1; l<=1; l+=2) {
+      for (int m=-1; m<=1; m+=2) {
+        for (int n=-1; n<=1; n+=2) {
+          int indx = pmy_pack->pmb->NeighborIndx(n,m,l,0,0);
+          InitSendIndices(send_buf[indx],n, m, l, 0, 0);
+          InitRecvIndices(recv_buf[indx],n, m, l, 0, 0);
+          send_buf[indx].AllocateDataView(nmb, nvar);
+          recv_buf[indx].AllocateDataView(nmb, nvar);
+        }
       }
     }
   }
 
-/***/
+/***
   for (int m=0; m<nmb; ++m) {
   for (int n=0; n<=55; ++n) {
 std::cout << std::endl << "MB= "<<m<<"  Buffer="<< n << std::endl;
@@ -560,8 +542,7 @@ std::cout <<"prol:" <<recv_buf[n].pindcs.bis<<"  "<<recv_buf[n].pindcs.bie<<
                 "  "<<recv_buf[n].pindcs.bjs<<"  "<<recv_buf[n].pindcs.bje<<
                 "  "<<recv_buf[n].pindcs.bks<<"  "<<recv_buf[n].pindcs.bke<< std::endl;
   }}
-/****/
-
+****/
 
   return;
 }

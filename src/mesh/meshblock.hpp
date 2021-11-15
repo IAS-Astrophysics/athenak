@@ -35,14 +35,16 @@ class MeshBlock
   int nmb;     // # of MeshBlocks
   int nnghbr;  // # of neighbors for each MB.  TODO: cannot be same for all MBs with AMR
 
-  // AthenaDualArrays are used to store data used on both device and host 
+  // DualArrays are used to store data used on both device and host 
   // First dimension of each array will be [# of MeshBlocks in this MeshBlockPack]
-
   DualArray1D<int> mbgid;            // grid ID, unique identifier for each MeshBlock
   DualArray1D<int> mblev;            // logical level of each MeshBlock
   HostArray2D<BoundaryFlag> mbbcs;   // boundary conditions at 6 faces of each MeshBlock
 
   DualArray2D<NeighborBlock> nghbr;  // data on all (up to 56) neighbors for each MB
+
+  // function to compute index of 56 neighbors
+  int NeighborIndx(int i, int j, int k, int n1, int n2);
 
  private:
   // data
@@ -51,7 +53,6 @@ class MeshBlock
 
   // functions
   void SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklist);
-  int BufferID(int i, int j, int k, int n1, int n2);
 };
 
 #endif // MESH_MESHBLOCK_HPP_

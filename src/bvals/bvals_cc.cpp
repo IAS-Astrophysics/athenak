@@ -25,8 +25,8 @@ BValCC::BValCC(MeshBlockPack *pp, ParameterInput *pin) : pmy_pack(pp)
 } 
   
 //----------------------------------------------------------------------------------------
-// \!fn void BValCC::PackAndSendCC()
-// \brief Pack cell-centered variables into boundary buffers and send to neighbors.
+//! \fn void BValCC::PackAndSendCC()
+//! \brief Pack cell-centered variables into boundary buffers and send to neighbors.
 //
 // This routine packs ALL the buffers on ALL the faces, edges, and corners simultaneously,
 // for ALL the MeshBlocks.  This reduces the number of kernel launches when there are a
@@ -40,7 +40,6 @@ TaskStatus BValCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, in
 {
   // create local references for variables in kernel
   int nmb = pmy_pack->pmb->nmb;
-  // TODO: following only works when all MBs have the same number of neighbors
   int nnghbr = pmy_pack->pmb->nnghbr;
   int nvar = a.extent_int(1);  // TODO: 2nd index from L of input array must be NVAR
 
@@ -200,7 +199,6 @@ TaskStatus BValCC::RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
 {
   // create local references for variables in kernel
   int nmb = pmy_pack->pmb->nmb;
-  // TODO: following only works when all MBs have the same number of neighbors
   int nnghbr = pmy_pack->pmb->nnghbr;
 
   bool bflag = false;
@@ -222,6 +220,9 @@ TaskStatus BValCC::RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
         if (nghbr.h_view(m,n).rank == global_variable::my_rank) {
           if (rbuf[n].bcomm_stat(m) == BoundaryCommStatus::waiting) {
             bflag = true;
+/***
+std::cout << "block=" << m << "  buffer=" << n << "  not received" << std::endl;
+***/
           }
 #if MPI_PARALLEL_ENABLED
         } else {

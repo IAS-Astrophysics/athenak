@@ -164,21 +164,22 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
           for (int fz=0; fz<nfz; fz++) {
             for (int fy = 0; fy<nfy; fy++) {
               MeshBlockTree* nf = nt->GetLeaf(ffx, fy, fz);
-              int inghbr = BufferID(n,0,0,fy,fz);
+              int inghbr = NeighborIndx(n,0,0,fy,fz);
               nghbr.h_view(b,inghbr).gid = nf->gid_;
               nghbr.h_view(b,inghbr).lev = nf->lloc_.level;
               nghbr.h_view(b,inghbr).rank = ranklist[nf->gid_];
-              nghbr.h_view(b,inghbr).dest = BufferID(-n,0,0,0,0);
+              nghbr.h_view(b,inghbr).dest = NeighborIndx(-n,0,0,fy,fz);
             }
           }
-        } else {   // neighbor at same or coarser level -- no subblocks
-          int idest;
-          if (nt->lloc_.level == lloc.level) { // neighbor at same level
-            idest = BufferID(-n,0,0,0,0);
+        } else {   // neighbor at same or coarser level
+          int idest, inghbr;
+          if (nt->lloc_.level == lloc.level) { // neighbor at same level -- no subblocks
+            inghbr = NeighborIndx(n,0,0,0,0);
+            idest = NeighborIndx(-n,0,0,0,0);
           } else {  // neighbor at coarser level, set destn to appropriate subblock
-            idest = BufferID(-n,0,0,myfx2,myfx3);
+            inghbr = NeighborIndx(n,0,0,myfx2,myfx3);
+            idest = NeighborIndx(-n,0,0,myfx2,myfx3);
           }
-          int inghbr = BufferID(n,0,0,0,0);
           nghbr.h_view(b,inghbr).gid = nt->gid_;
           nghbr.h_view(b,inghbr).lev = nt->lloc_.level;
           nghbr.h_view(b,inghbr).rank = ranklist[nt->gid_];
@@ -197,21 +198,22 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
             for (int fz=0; fz<nfz; fz++) {
               for (int fx = 0; fx<nfx; fx++) {
                 MeshBlockTree* nf = nt->GetLeaf(fx, ffy, fz);
-                int inghbr = BufferID(0,m,0,fx,fz);
+                int inghbr = NeighborIndx(0,m,0,fx,fz);
                 nghbr.h_view(b,inghbr).gid = nf->gid_;
                 nghbr.h_view(b,inghbr).lev = nf->lloc_.level;
                 nghbr.h_view(b,inghbr).rank = ranklist[nf->gid_];
-                nghbr.h_view(b,inghbr).dest = BufferID(0,-m,0,0,0);
+                nghbr.h_view(b,inghbr).dest = NeighborIndx(0,-m,0,fx,fz);
               }
             }
-          } else {   // neighbor at same or coarser level -- no subblocks
-            int idest;
-            if (nt->lloc_.level == lloc.level) { // neighbor at same level
-              idest = BufferID(0,-m,0,0,0);
+          } else {   // neighbor at same or coarser level
+            int idest,inghbr;
+            if (nt->lloc_.level == lloc.level) { // neighbor at same level -- no subblocks
+              inghbr = NeighborIndx(0,m,0,0,0);
+              idest = NeighborIndx(0,-m,0,0,0);
             } else {  // neighbor at coarser level, set destn to appropriate subblock
-              idest = BufferID(0,-m,0,myfx1,myfx3);
+              inghbr = NeighborIndx(0,m,0,myfx1,myfx3);
+              idest = NeighborIndx(0,-m,0,myfx1,myfx3);
             }
-            int inghbr = BufferID(0,m,0,0,0);
             nghbr.h_view(b,inghbr).gid = nt->gid_;
             nghbr.h_view(b,inghbr).lev = nt->lloc_.level;
             nghbr.h_view(b,inghbr).rank = ranklist[nt->gid_];
@@ -230,22 +232,23 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
               int ffy = 1 - (m + 1)/2; // 0 for BoundaryFace::outer_x2, 1 for inner_x2
               for (int fz=0; fz<nfz; fz++) {
                 MeshBlockTree* nf = nt->GetLeaf(ffx, ffy, fz);
-                int inghbr = BufferID(n,m,0,fz,0);
+                int inghbr = NeighborIndx(n,m,0,fz,0);
                 nghbr.h_view(b,inghbr).gid = nf->gid_;
                 nghbr.h_view(b,inghbr).lev = nf->lloc_.level;
                 nghbr.h_view(b,inghbr).rank = ranklist[nf->gid_];
-                nghbr.h_view(b,inghbr).dest = BufferID(-n,-m,0,0,0);
+                nghbr.h_view(b,inghbr).dest = NeighborIndx(-n,-m,0,fz,0);
               }
-            } else {   // neighbor at same or coarser level -- no subblocks
-              int idest;
-              if (nt->lloc_.level == lloc.level) { // neighbor at same level
-                idest = BufferID(-n,-m,0,0,0);
+            } else {   // neighbor at same or coarser level
+              int idest,inghbr;
+              if (nt->lloc_.level == lloc.level) { // same level -- no subblocks
+                inghbr = NeighborIndx(n,m,0,0,0);
+                idest = NeighborIndx(-n,-m,0,0,0);
               } else {  // neighbor at coarser level, set destn to appropriate subblock
-                idest = BufferID(-n,-m,0,myfx3,0);
+                inghbr = NeighborIndx(n,m,0,myfx3,0);
+                idest = NeighborIndx(-n,-m,0,myfx3,0);
               }
               // only set neighbor for exterior edges of coarser face
               if (nt->lloc_.level >= lloc.level || (myox1 == n && myox2 == m)) {
-                int inghbr = BufferID(n,m,0,0,0);
                 nghbr.h_view(b,inghbr).gid = nt->gid_;
                 nghbr.h_view(b,inghbr).lev = nt->lloc_.level;
                 nghbr.h_view(b,inghbr).rank = ranklist[nt->gid_];
@@ -267,21 +270,22 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
             for (int fy=0; fy<nfy; fy++) {
               for (int fx = 0; fx<nfx; fx++) {
                 MeshBlockTree* nf = nt->GetLeaf(fx, fy, ffz);
-                int inghbr = BufferID(0,0,l,fx,fy);
+                int inghbr = NeighborIndx(0,0,l,fx,fy);
                 nghbr.h_view(b,inghbr).gid = nf->gid_;
                 nghbr.h_view(b,inghbr).lev = nf->lloc_.level;
                 nghbr.h_view(b,inghbr).rank = ranklist[nf->gid_];
-                nghbr.h_view(b,inghbr).dest = BufferID(0,0,-l,0,0);
+                nghbr.h_view(b,inghbr).dest = NeighborIndx(0,0,-l,fx,fy);
               }
             }
           } else {   // neighbor at same or coarser level -- no subblocks
-            int idest;
+            int idest,inghbr;
             if (nt->lloc_.level == lloc.level) { // neighbor at same level
-              idest = BufferID(0,0,-l,0,0);
+              inghbr = NeighborIndx(0,0,l,0,0);
+              idest = NeighborIndx(0,0,-l,0,0);
             } else {  // neighbor at coarser level, set destn to appropriate subblock
-              idest = BufferID(0,0,-l,myfx1,myfx2);
+              inghbr = NeighborIndx(0,0,l,myfx1,myfx2);
+              idest = NeighborIndx(0,0,-l,myfx1,myfx2);
             }
-            int inghbr = BufferID(0,0,l,0,0);
             nghbr.h_view(b,inghbr).gid = nt->gid_;
             nghbr.h_view(b,inghbr).lev = nt->lloc_.level;
             nghbr.h_view(b,inghbr).rank = ranklist[nt->gid_];
@@ -300,22 +304,23 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
               int ffz = 1 - (l + 1)/2; // 0 for BoundaryFace::outer_x3, 1 for inner_x3
               for (int fy=0; fy<nfy; fy++) {
                 MeshBlockTree* nf = nt->GetLeaf(ffx, fy, ffz);
-                int inghbr = BufferID(n,0,l,fy,0);
+                int inghbr = NeighborIndx(n,0,l,fy,0);
                 nghbr.h_view(b,inghbr).gid = nf->gid_;
                 nghbr.h_view(b,inghbr).lev = nf->lloc_.level;
                 nghbr.h_view(b,inghbr).rank = ranklist[nf->gid_];
-                nghbr.h_view(b,inghbr).dest = BufferID(-n,0,-l,0,0);
+                nghbr.h_view(b,inghbr).dest = NeighborIndx(-n,0,-l,fy,0);
               }
             } else {   // neighbor at same or coarser level -- no subblocks
-              int idest;
+              int idest,inghbr;
               if (nt->lloc_.level == lloc.level) { // neighbor at same level
-                idest = BufferID(-n,0,-l,0,0);
+                inghbr = NeighborIndx(n,0,l,0,0);
+                idest = NeighborIndx(-n,0,-l,0,0);
               } else {  // neighbor at coarser level, set destn to appropriate subblock
-                idest = BufferID(-n,0,-l,myfx2,0);
+                inghbr = NeighborIndx(n,0,l,myfx2,0);
+                idest = NeighborIndx(-n,0,-l,myfx2,0);
               }
               // only set neighbor for exterior edges of coarser face
               if (nt->lloc_.level >= lloc.level || (myox1 == n && myox3 == l)) {
-                int inghbr = BufferID(n,0,l,0,0);
                 nghbr.h_view(b,inghbr).gid = nt->gid_;
                 nghbr.h_view(b,inghbr).lev = nt->lloc_.level;
                 nghbr.h_view(b,inghbr).rank = ranklist[nt->gid_];
@@ -336,22 +341,23 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
               int ffz = 1 - (l + 1)/2; // 0 for BoundaryFace::outer_x3, 1 for inner_x3
               for (int fx=0; fx<nfy; fx++) {
                 MeshBlockTree* nf = nt->GetLeaf(fx, ffy, ffz);
-                int inghbr = BufferID(0,m,l,fx,0);
+                int inghbr = NeighborIndx(0,m,l,fx,0);
                 nghbr.h_view(b,inghbr).gid = nf->gid_;
                 nghbr.h_view(b,inghbr).lev = nf->lloc_.level;
                 nghbr.h_view(b,inghbr).rank = ranklist[nf->gid_];
-                nghbr.h_view(b,inghbr).dest = BufferID(0,-m,-l,0,0);
+                nghbr.h_view(b,inghbr).dest = NeighborIndx(0,-m,-l,fx,0);
               }
             } else {   // neighbor at same or coarser level -- no subblocks
-              int idest;
+              int idest,inghbr;
               if (nt->lloc_.level == lloc.level) { // neighbor at same level
-                idest = BufferID(0,-m,-l,0,0);
+                inghbr = NeighborIndx(0,m,l,0,0);
+                idest = NeighborIndx(0,-m,-l,0,0);
               } else {  // neighbor at coarser level, set destn to appropriate subblock
-                idest = BufferID(0,-m,-l,myfx1,0);
+                inghbr = NeighborIndx(0,m,l,myfx1,0);
+                idest = NeighborIndx(0,-m,-l,myfx1,0);
               }
               // only set neighbor for exterior edges of coarser face
               if (nt->lloc_.level >= lloc.level || (myox2 == m && myox3 == l)) {
-                int inghbr = BufferID(0,m,l,0,0);
                 nghbr.h_view(b,inghbr).gid = nt->gid_;
                 nghbr.h_view(b,inghbr).lev = nt->lloc_.level;
                 nghbr.h_view(b,inghbr).rank = ranklist[nt->gid_];
@@ -377,11 +383,11 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
               int nlevel = nt->lloc_.level;
               // only set neighbor for exterior corners of coarser face
               if (nlevel >= lloc.level || (myox1 == n && myox2 == m && myox3 == l)) {
-                int inghbr = BufferID(n,m,l,0,0);
+                int inghbr = NeighborIndx(n,m,l,0,0);
                 nghbr.h_view(b,inghbr).gid = nt->gid_;
                 nghbr.h_view(b,inghbr).lev = nt->lloc_.level;
                 nghbr.h_view(b,inghbr).rank = ranklist[nt->gid_];
-                nghbr.h_view(b,inghbr).dest = BufferID(-n,-m,-l,0,0);
+                nghbr.h_view(b,inghbr).dest = NeighborIndx(-n,-m,-l,0,0);
               }
             }
           }
@@ -398,8 +404,8 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
 }
 
 //----------------------------------------------------------------------------------------
-// \!fn void MeshBlock::BufferID()
-// \brief Finds ID of buffer given input offsets.  The latter are measured relative
+// \!fn void MeshBlock::NeighborIndx()
+// \brief Finds ID of neighbor given input offsets.  The latter are measured relative
 // to the center of the MeshBlock (0,0,0).  Thus (-1,0,0) is the inner_x1 face, and
 // (0,0,1) the outer_x3 face.  Edges and corners are also specified in this way, e.g.
 // (0,1,-1) is the outer_x2-inner_x3 x2x3 edge, and (1,1,1) is the outer_x1/x2/x3 corner
@@ -409,7 +415,7 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
 // pairs (0,0),(1,0),(0,1),(1,1) respectively.  For edges only the FIRST argument n1 is
 // used to specify the two subblocks.
 //
-// The buffer indexing scheme is as follows:
+// The neighbor (boundary buffer) indexing scheme is as follows:
 //   x1faces:    [0-3],  [4-7] 
 //   x2faces:    [8-11], [12-15]
 //   x1x2edges:  [16-23]
@@ -418,7 +424,7 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
 //   x2x3edges:  [40-47]
 //   corners:    [48-55]
 
-int MeshBlock::BufferID(int ix, int iy, int iz, int n1, int n2)
+int MeshBlock::NeighborIndx(int ix, int iy, int iz, int n1, int n2)
 {
   // do some error checking on input parameters
   if ((std::abs(ix) + std::abs(iy) + std::abs(iz)) == 0) {return -1;}
