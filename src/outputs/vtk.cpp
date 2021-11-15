@@ -38,7 +38,7 @@ VTKOutput::VTKOutput(OutputParameters op, Mesh *pm)
               << " to output a single MeshBlock.  Please specify a gid." << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((pm->nmb_total) > 1 && op.include_gzs) {
+  if ((pm->nmb_total) > 1 && op.include_gzs && (op.gid < 0)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "Cannout output ghost cells with VTK legacy file format"
               << " and multiple MeshBlocks" << std::endl;
@@ -193,8 +193,11 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
       int &oje = outmbs[m].oje;
       int &oks = outmbs[m].oks;
       int &oke = outmbs[m].oke;
-      size_t data_offset = (lloc.lx1*mb_nx1 + lloc.lx2*(mb_nx2*nout1) +
+      size_t data_offset = 0;
+      if (nout_mbs > 1) {
+        data_offset = (lloc.lx1*mb_nx1 + lloc.lx2*(mb_nx2*nout1) +
         lloc.lx3*(mb_nx3*nout1*nout2))*sizeof(float);
+      }
 
       for (int k=oks; k<=oke; ++k) {
         for (int j=ojs; j<=oje; ++j) {

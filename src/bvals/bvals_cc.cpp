@@ -64,24 +64,31 @@ TaskStatus BValCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, in
     // only load buffers when neighbor exists
     if (nghbr.d_view(m,n).gid >= 0) {
 
-      // if neighbor is at same or finer level, use indices for u0
-      // indices same for all variables, stored in (0,i) component
+      // if neighbor is at coarser level, use cindices to pack buffer
       int il, iu, jl, ju, kl, ku;
-      if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
-        il = sbuf[n].sindcs.bis;
-        iu = sbuf[n].sindcs.bie;
-        jl = sbuf[n].sindcs.bjs;
-        ju = sbuf[n].sindcs.bje;
-        kl = sbuf[n].sindcs.bks;
-        ku = sbuf[n].sindcs.bke;
-      // else if neighbor is at coarser level, use indices for coarse_u0
-      } else {
+      if (nghbr.d_view(m,n).lev < mblev.d_view(m)) {
         il = sbuf[n].cindcs.bis;
         iu = sbuf[n].cindcs.bie;
         jl = sbuf[n].cindcs.bjs;
         ju = sbuf[n].cindcs.bje;
         kl = sbuf[n].cindcs.bks;
         ku = sbuf[n].cindcs.bke;
+      // if neighbor is at same level, use sindices to pack buffer
+      } else if (nghbr.d_view(m,n).lev == mblev.d_view(m)) {
+        il = sbuf[n].sindcs.bis;
+        iu = sbuf[n].sindcs.bie;
+        jl = sbuf[n].sindcs.bjs;
+        ju = sbuf[n].sindcs.bje;
+        kl = sbuf[n].sindcs.bks;
+        ku = sbuf[n].sindcs.bke;
+      // if neighbor is at finer level, use findices to pack buffer
+      } else {
+        il = sbuf[n].findcs.bis;
+        iu = sbuf[n].findcs.bie;
+        jl = sbuf[n].findcs.bjs;
+        ju = sbuf[n].findcs.bje;
+        kl = sbuf[n].findcs.bks;
+        ku = sbuf[n].findcs.bke;
       }
       const int ni = iu - il + 1;
       const int nj = ju - jl + 1;
@@ -252,23 +259,31 @@ TaskStatus BValCC::RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
     // only unpack buffers when neighbor exists
     if (nghbr.d_view(m,n).gid >= 0) {
 
-      // if neighbor is at same or finer level, use indices for u0
+      // if neighbor is at coarser level, use cindices to unpack buffer
       int il, iu, jl, ju, kl, ku;
-      if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
-        il = rbuf[n].sindcs.bis;
-        iu = rbuf[n].sindcs.bie;
-        jl = rbuf[n].sindcs.bjs;
-        ju = rbuf[n].sindcs.bje;
-        kl = rbuf[n].sindcs.bks;
-        ku = rbuf[n].sindcs.bke;
-      // else if neighbor is at coarser level, use indices for coarse_u0
-      } else {
+      if (nghbr.d_view(m,n).lev < mblev.d_view(m)) {
         il = rbuf[n].cindcs.bis;
         iu = rbuf[n].cindcs.bie;
         jl = rbuf[n].cindcs.bjs;
         ju = rbuf[n].cindcs.bje;
         kl = rbuf[n].cindcs.bks;
         ku = rbuf[n].cindcs.bke;
+      // if neighbor is at same level, use sindices to unpack buffer
+      } else if (nghbr.d_view(m,n).lev == mblev.d_view(m)) {
+        il = rbuf[n].sindcs.bis;
+        iu = rbuf[n].sindcs.bie;
+        jl = rbuf[n].sindcs.bjs;
+        ju = rbuf[n].sindcs.bje;
+        kl = rbuf[n].sindcs.bks;
+        ku = rbuf[n].sindcs.bke;
+      // if neighbor is at finer level, use findices to unpack buffer
+      } else {
+        il = rbuf[n].findcs.bis;
+        iu = rbuf[n].findcs.bie;
+        jl = rbuf[n].findcs.bjs;
+        ju = rbuf[n].findcs.bje;
+        kl = rbuf[n].findcs.bks;
+        ku = rbuf[n].findcs.bke;
       }
       const int ni = iu - il + 1;
       const int nj = ju - jl + 1;
@@ -330,13 +345,13 @@ TaskStatus BValCC::RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
     // only prolongate when neighbor exists and is at coarser level
     if ((nghbr.d_view(m,n).gid >= 0) && (nghbr.d_view(m,n).lev < mblev.d_view(m))) {
 
-      // loop over indices of regular mesh for this buffer
-      int il = rbuf[n].sindcs.bis;
-      int iu = rbuf[n].sindcs.bie;
-      int jl = rbuf[n].sindcs.bjs;
-      int ju = rbuf[n].sindcs.bje;
-      int kl = rbuf[n].sindcs.bks;
-      int ku = rbuf[n].sindcs.bke;
+      // loop over indices for prolongation on this buffer
+      int il = rbuf[n].pindcs.bis;
+      int iu = rbuf[n].pindcs.bie;
+      int jl = rbuf[n].pindcs.bjs;
+      int ju = rbuf[n].pindcs.bje;
+      int kl = rbuf[n].pindcs.bks;
+      int ku = rbuf[n].pindcs.bke;
       const int ni = iu - il + 1;
       const int nj = ju - jl + 1;
       const int nk = ku - kl + 1;
@@ -351,54 +366,52 @@ TaskStatus BValCC::RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
 
         Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),[&](const int i)
         {
-          // calculate indices of coarse array elements
-          int coari,coarj,coark;
-          if (il < indcs.is) {
-            coari = (i - indcs.is - 1)/2 + cindcs.is;
-          } else {
-            coari = (i - indcs.ie + 1)/2 + cindcs.ie;
-          }
-          if (multi_d) {
-            if (jl < indcs.js) {
-              coarj = (j - indcs.js - 1)/2 + cindcs.js;
-            } else {
-              coarj = (j - indcs.je + 1)/2 + cindcs.je;
-            }
-          }
-          if (three_d) {
-            if (kl < indcs.ks) {
-              coark = (k - indcs.ks - 1)/2 + cindcs.ks;
-            } else {
-              coark = (k - indcs.ke + 1)/2 + cindcs.ke;
-            }
-          }
+          // indices for prolongation (pindcs) refer to coarse array.  So must compute
+          // indices for fine array
+          int finei = (i - cindcs.is)*2 + indcs.is;
+          int finej = (j - cindcs.js)*2 + indcs.js;
+          int finek = (k - cindcs.ks)*2 + indcs.ks;
+
+/*
+std::cout << std::endl << "MB= "<<m<<"  Buffer="<< n << std::endl;
+std::cout <<il<<"  "<<iu<<"  "<<jl<<"  "<<ju<<"  "<<kl<<"  "<<ku<< std::endl;
+std::cout << "finei=" << finei << "  finej=" << finej << "  finek=" << finek << std::endl;
+*/
 
           // calculate x1-gradient using the min-mod limiter
-          Real dl = ca(m,v,coark,coarj,coari  ) - ca(m,v,coark,coarj,coari-1);
-          Real dr = ca(m,v,coark,coarj,coari+1) - ca(m,v,coark,coarj,coari  );
+          Real dl = ca(m,v,k,j,i  ) - ca(m,v,k,j,i-1);
+          Real dr = ca(m,v,k,j,i+1) - ca(m,v,k,j,i  );
           Real dvar1 = 0.25*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
-          if (i%2 == 0) dvar1 *= -1.0;
 
           // calculate x2-gradient using the min-mod limiter
           Real dvar2 = 0.0;
           if (multi_d) {
-            dl = ca(m,v,coark,coarj  ,coari) - ca(m,v,coark,coarj-1,coari);
-            dr = ca(m,v,coark,coarj+1,coari) - ca(m,v,coark,coarj  ,coari);
+            dl = ca(m,v,k,j  ,i) - ca(m,v,k,j-1,i);
+            dr = ca(m,v,k,j+1,i) - ca(m,v,k,j  ,i);
             dvar2 = 0.25*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
-            if (j%2 == 0) dvar2 *= -1.0;
           }
 
           // calculate x1-gradient using the min-mod limiter
           Real dvar3 = 0.0;
           if (three_d) {
-            dl = ca(m,v,coark  ,coarj,coari) - ca(m,v,coark-1,coarj,coari);
-            dr = ca(m,v,coark+1,coarj,coari) - ca(m,v,coark  ,coarj,coari);
+            dl = ca(m,v,k  ,j,i) - ca(m,v,k-1,j,i);
+            dr = ca(m,v,k+1,j,i) - ca(m,v,k  ,j,i);
             dvar3 = 0.25*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
-            if (k%2 == 0) dvar3 *= -1.0;
           }
 
           // interpolate to the finer grid
-          a(m,v,k,j,i) = ca(m,v,coark,coarj,coari) + dvar1 + dvar2 + dvar3;
+          a(m,v,finek,finej,finei  ) = ca(m,v,k,j,i) - dvar1 - dvar2 - dvar3;
+          a(m,v,finek,finej,finei+1) = ca(m,v,k,j,i) + dvar1 - dvar2 - dvar3;
+          if (multi_d) {
+            a(m,v,finek,finej+1,finei  ) = ca(m,v,k,j,i) - dvar1 + dvar2 - dvar3;
+            a(m,v,finek,finej+1,finei+1) = ca(m,v,k,j,i) + dvar1 + dvar2 - dvar3;
+          }
+          if (three_d) {
+            a(m,v,finek+1,finej  ,finei  ) = ca(m,v,k,j,i) - dvar1 - dvar2 + dvar3;
+            a(m,v,finek+1,finej  ,finei+1) = ca(m,v,k,j,i) + dvar1 - dvar2 + dvar3;
+            a(m,v,finek+1,finej+1,finei  ) = ca(m,v,k,j,i) - dvar1 + dvar2 + dvar3;
+            a(m,v,finek+1,finej+1,finei+1) = ca(m,v,k,j,i) + dvar1 + dvar2 + dvar3;
+          }
 
         });
       });

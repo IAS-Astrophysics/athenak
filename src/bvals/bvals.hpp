@@ -50,6 +50,7 @@ struct BValBufferCC
   BufferIndcs sindcs; // indices for pack/unpack when dest/src at same level ("s")
   BufferIndcs cindcs; // indices for pack/unpack when dest/src at coarser level ("c")
   BufferIndcs findcs; // indices for pack/unpack when dest/src at finer level ("f")
+  BufferIndcs pindcs; // indices for prolongation ("p")
   DvceArray3D<Real> data;
   HostArray1D<BoundaryCommStatus> bcomm_stat;
 #if MPI_PARALLEL_ENABLED
