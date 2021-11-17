@@ -374,22 +374,31 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons,
 	  prim(m,n,k,j,i) = cons(m,n,k,j,i)/u_d;
 	}
       }
-
-//     // reset conserved variables inside excised regions or if floor is hit
-//     if (rad <= coord.bh_rmin || floor_hit) {
-//       Real ud, ue, um1, um2, um3;
-//       eos.PrimToConsSingleGR(g_, gi_, w_d, w_p, w_ux, w_uy, w_uz,
-//                              ud, ue, um1, um2, um3);
-//       cons(m,IDN,k,j,i) = ud;
-//       cons(m,IEN,k,j,i) = ue;
-//       cons(m,IM1,k,j,i) = um1;
-//       cons(m,IM2,k,j,i) = um2;
-//       cons(m,IM3,k,j,i) = um3;
-//       // convert scalars (if any)
-//       for (int n=nhyd; n<(nhyd+nscal); ++n) {
-//         cons(m,n,k,j,i) = prim(m,n,k,j,i)*cons(m,IDN,k,j,i);
-//       }
-    }
+      // reset conserved variables inside excised regions or if floor is hit
+      Real w_p;
+      if (use_e) {
+        const Real& w_e  = prim(m,IEN,k,j,i);
+        w_p = w_e*gm1;
+      } else {
+        const Real& w_t  = prim(m,ITM,k,j,i);
+        w_p = w_t*gm1*w_d;
+      }
+      if (rad <= coord.bh_rmin || floor_hit) {
+        Real ud, ue, um1, um2, um3;
+        eos.PrimToConsSingleGRMHD(g_, gi_, w_d, w_p, w_ux, w_uy, w_uz,
+                                  w_bx, w_by, w_bz,
+                                  ud, ue, um1, um2, um3);
+        cons(m,IDN,k,j,i) = ud;
+        cons(m,IEN,k,j,i) = ue;
+        cons(m,IM1,k,j,i) = um1;
+        cons(m,IM2,k,j,i) = um2;
+        cons(m,IM3,k,j,i) = um3;
+        // convert scalars (if any)
+          for (int n=nmhd; n<(nmhd+nscal); ++n) {
+            cons(m,n,k,j,i) = prim(m,n,k,j,i)*cons(m,IDN,k,j,i);
+         }
+      }
+    }                                     
   );
 
   return;
