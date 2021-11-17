@@ -50,7 +50,7 @@ struct BValBufferCC
   BufferIndcs sindcs; // indices for pack/unpack when dest/src at same level ("s")
   BufferIndcs cindcs; // indices for pack/unpack when dest/src at coarser level ("c")
   BufferIndcs findcs; // indices for pack/unpack when dest/src at finer level ("f")
-  BufferIndcs pindcs; // indices for prolongation ("p")
+  BufferIndcs pindcs; // indices for prolongation ("p") (only used for receives)
   DvceArray3D<Real> data;
   HostArray1D<BoundaryCommStatus> bcomm_stat;
 #if MPI_PARALLEL_ENABLED
@@ -62,9 +62,7 @@ struct BValBufferCC
   BValBufferCC() : data("bbuf",1,1,1), bcomm_stat("bstat",1) {}
   // function to allocate memory for buffer data
   void AllocateDataView(int nmb, int nvar) {
-    int ndat = (sindcs.bie - sindcs.bis + 1)*
-               (sindcs.bje - sindcs.bjs + 1)*
-               (sindcs.bke - sindcs.bks + 1);
+    int ndat = sindcs.ndat;  // TODO: this may over-estimate memory needed for some buffs
     Kokkos::realloc(data, nmb, nvar, ndat);
   }
 };

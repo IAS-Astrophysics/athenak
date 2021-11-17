@@ -156,6 +156,7 @@ TaskStatus BValCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, in
   {int &my_rank = global_variable::my_rank;
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &rbuf = recv_buf;
+  auto &mblev = pmy_pack->pmb->mblev;
 #if MPI_PARALLEL_ENABLED
   auto &sbuf = send_buf;
 #endif
@@ -180,7 +181,18 @@ TaskStatus BValCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, in
           int tag = CreateMPITag(lid, nn, key);
           auto send_data = Kokkos::subview(sbuf[n].data, m, Kokkos::ALL, Kokkos::ALL);
           void* send_ptr = send_data.data();
-          int ierr = MPI_Isend(send_ptr, send_data.size(), MPI_ATHENA_REAL,
+          int data_size;
+          // if neighbor is at coarser level, use cindices size
+          if (nghbr.h_view(m,n).lev < mblev.h_view(m)) {
+            data_size = (sbuf[n].cindcs.ndat)*nvar;
+          // if neighbor is at same level, use sindices size
+          } else if (nghbr.h_view(m,n).lev == mblev.h_view(m)) {
+            data_size = (sbuf[n].sindcs.ndat)*nvar;
+          // if neighbor is at finer level, use findices size
+          } else {
+            data_size = (sbuf[n].findcs.ndat)*nvar;
+          }
+          int ierr = MPI_Isend(send_ptr, data_size, MPI_ATHENA_REAL,
             nghbr.h_view(m,n).rank, tag, MPI_COMM_WORLD, &(sbuf[n].comm_req[m]));
 #endif
         }

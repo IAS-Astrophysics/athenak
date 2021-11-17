@@ -27,11 +27,11 @@ void BValCC::InitSendIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f
 {
   auto &mb_indcs  = pmy_pack->pcoord->mbdata.indcs;
   auto &mb_cindcs = pmy_pack->pcoord->mbdata.cindcs;
+  int ng1 = mb_indcs.ng - 1;
 
   // set indices for sends to neighbors on SAME level
   // Formulae taken from LoadBoundaryBufferSameLevel() in src/bvals/cc/bvals_cc.cpp
-  auto &sindcs = buf.sindcs;
-  int ng1 = mb_indcs.ng - 1;
+  {auto &sindcs = buf.sindcs;
   sindcs.bis = (ox1 > 0) ? (mb_indcs.ie - ng1) : mb_indcs.is;
   sindcs.bie = (ox1 < 0) ? (mb_indcs.is + ng1) : mb_indcs.ie;
   sindcs.bjs = (ox2 > 0) ? (mb_indcs.je - ng1) : mb_indcs.js;
@@ -40,10 +40,11 @@ void BValCC::InitSendIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f
   sindcs.bke = (ox3 < 0) ? (mb_indcs.ks + ng1) : mb_indcs.ke;
   sindcs.ndat = (sindcs.bie - sindcs.bis + 1)*(sindcs.bje - sindcs.bjs + 1)*
                 (sindcs.bke - sindcs.bks + 1);
+  }
 
   // set indices for sends to neighbors on COARSER level
   // Formulae taken from LoadBoundaryBufferToCoarser() in src/bvals/cc/bvals_cc.cpp
-  auto &cindcs = buf.cindcs;
+  {auto &cindcs = buf.cindcs;
   cindcs.bis = (ox1 > 0) ? (mb_cindcs.ie - ng1) : mb_cindcs.is;
   cindcs.bie = (ox1 < 0) ? (mb_cindcs.is + ng1) : mb_cindcs.ie;
   cindcs.bjs = (ox2 > 0) ? (mb_cindcs.je - ng1) : mb_cindcs.js;
@@ -52,10 +53,11 @@ void BValCC::InitSendIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f
   cindcs.bke = (ox3 < 0) ? (mb_cindcs.ks + ng1) : mb_cindcs.ke;
   cindcs.ndat = (cindcs.bie - cindcs.bis + 1)*(cindcs.bje - cindcs.bjs + 1)*
                 (cindcs.bke - cindcs.bks + 1);
+  }
 
   // set indices for sends to neighbors on FINER level
   // Formulae taken from LoadBoundaryBufferToFiner() src/bvals/cc/bvals_cc.cpp
-  auto &findcs = buf.findcs;
+  {auto &findcs = buf.findcs;
   findcs.bis = (ox1 > 0) ? (mb_indcs.ie - ng1) : mb_indcs.is;
   findcs.bie = (ox1 < 0) ? (mb_indcs.is + ng1) : mb_indcs.ie;
   findcs.bjs = (ox2 > 0) ? (mb_indcs.je - ng1) : mb_indcs.js;
@@ -102,6 +104,15 @@ void BValCC::InitSendIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f
   }
   findcs.ndat = (findcs.bie - findcs.bis + 1)*(findcs.bje - findcs.bjs + 1)*
                 (findcs.bke - findcs.bks + 1);
+  }
+
+  // indices for PROLONGATION not needed for sends, just initialize to zero
+  {auto &pindcs = buf.pindcs;
+  pindcs.bis = 0; pindcs.bie = 0;
+  pindcs.bjs = 0; pindcs.bje = 0;
+  pindcs.bks = 0; pindcs.bke = 0;
+  pindcs.ndat = 1;
+  }
 
 }
 
@@ -151,7 +162,10 @@ void BValCC::InitRecvIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f
   } else {
     sindcs.bks = mb_indcs.ks - mb_indcs.ng;
     sindcs.bke = mb_indcs.ks - 1;
-  }}
+  }
+  sindcs.ndat = (sindcs.bie - sindcs.bis + 1)*(sindcs.bje - sindcs.bjs + 1)*
+                (sindcs.bke - sindcs.bks + 1);
+  }
 
   // set indices for receives from neighbors on COARSER level
   // Formulae taken from SetBoundaryFromCoarser() in src/bvals/cc/bvals_cc.cpp
@@ -220,7 +234,10 @@ void BValCC::InitRecvIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f
   } else {
     cindcs.bks = mb_cindcs.ks - mb_indcs.ng;
     cindcs.bke = mb_cindcs.ks - 1;
-  }}
+  }
+  cindcs.ndat = (cindcs.bie - cindcs.bis + 1)*(cindcs.bje - cindcs.bjs + 1)*
+                (cindcs.bke - cindcs.bks + 1);
+  }
 
   // set indices for receives from neighbors on FINER level
   // Formulae taken from SetBoundaryFromFiner() in src/bvals/cc/bvals_cc.cpp
@@ -289,7 +306,10 @@ void BValCC::InitRecvIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f
   } else {
     findcs.bks = mb_indcs.ks - mb_indcs.ng;
     findcs.bke = mb_indcs.ks - 1;
-  }}
+  }
+  findcs.ndat = (findcs.bie - findcs.bis + 1)*(findcs.bje - findcs.bjs + 1)*
+                (findcs.bke - findcs.bks + 1);
+  }
 
   // set indices for PROLONGATION in coarse cell buffers
   // Formulae taken from ProlongateBoundaries() in src/bvals/bvals_refine.cpp
@@ -360,7 +380,10 @@ void BValCC::InitRecvIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f
   } else {
     pindcs.bks = mb_cindcs.ks - cn;
     pindcs.bke = mb_cindcs.ks - 1;
-  }}
+  }
+  pindcs.ndat = (pindcs.bie - pindcs.bis + 1)*(pindcs.bje - pindcs.bjs + 1)*
+                (pindcs.bke - pindcs.bks + 1);
+  }
 }
 
 //----------------------------------------------------------------------------------------

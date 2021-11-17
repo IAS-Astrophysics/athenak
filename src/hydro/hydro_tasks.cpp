@@ -88,6 +88,8 @@ TaskStatus Hydro::InitRecv(Driver *pdrive, int stage)
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
   auto nghbr = pmy_pack->pmb->nghbr;
+  auto &mblev = pmy_pack->pmb->mblev;
+  int nvar = nhydro + nscalars;  // TODO: potential bug if more variables added
 
   // Initialize communications for cell-centered conserved variables
   auto &rbufu = pbval_u->recv_buf;
@@ -101,7 +103,18 @@ TaskStatus Hydro::InitRecv(Driver *pdrive, int stage)
           int tag = CreateMPITag(m, n, VariablesID::FluidCons_ID);
           auto recv_data = Kokkos::subview(rbufu[n].data, m, Kokkos::ALL, Kokkos::ALL);
           void* recv_ptr = recv_data.data();
-          int ierr = MPI_Irecv(recv_ptr, recv_data.size(), MPI_ATHENA_REAL,
+          int data_size;
+          // if neighbor is at coarser level, use cindices size
+          if (nghbr.h_view(m,n).lev < mblev.h_view(m)) {
+            data_size = (rbufu[n].cindcs.ndat)*nvar;
+          // if neighbor is at same level, use sindices size
+          } else if (nghbr.h_view(m,n).lev == mblev.h_view(m)) {
+            data_size = (rbufu[n].sindcs.ndat)*nvar;
+          // if neighbor is at finer level, use findices size
+          } else {
+            data_size = (rbufu[n].findcs.ndat)*nvar;
+          }
+          int ierr = MPI_Irecv(recv_ptr, data_size, MPI_ATHENA_REAL,
             nghbr.h_view(m,n).rank, tag, MPI_COMM_WORLD, &(rbufu[n].comm_req[m]));
         }
 #endif
