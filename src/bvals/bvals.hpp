@@ -57,9 +57,6 @@ struct BValBufferCC
   // only accessed from host, so can use STL vector
   std::vector<MPI_Request> comm_req;
 #endif
-
-  // constructor
-  BValBufferCC() : data("bbuf",1,1,1), bcomm_stat("bstat",1) {}
   // function to allocate memory for buffer data
   void AllocateDataView(int nmb, int nvar) {
     int ndat = sindcs.ndat;  // TODO: this may over-estimate memory needed for some buffs

@@ -49,8 +49,6 @@ struct NeighborBlock
   int lev;     // logical level
   int rank;    // MPI rank     
   int dest;    // index of recv buffer in target NeighborBlocks
-  // default constructor
-  NeighborBlock(){};
 };
 
 //----------------------------------------------------------------------------------------
