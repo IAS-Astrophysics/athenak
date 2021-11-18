@@ -195,11 +195,11 @@ struct EOS_Data
   }
 
   //--------------------------------------------------------------------------------------
-  // \!fn void PrimToConsSingleGR()
+  // \!fn void PrimToConsSingleGRHydro()
   // \brief Converts primitive into conserved variables. Operates on only one active cell.
 
   KOKKOS_INLINE_FUNCTION
-  void PrimToConsSingleGR(Real g_[], Real gi_[],
+  void PrimToConsSingleGRHydro(Real g_[], Real gi_[],
                           const Real wd, const Real wp,
                           const Real wvx, const Real wvy, const Real wvz,
                           Real& ud, Real& ue,

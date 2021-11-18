@@ -272,8 +272,8 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
       }
       if (rad <= coord.bh_rmin || floor_hit) {
         Real ud, ue, um1, um2, um3;
-        eos.PrimToConsSingleGR(g_, gi_, w_d, w_p, w_ux, w_uy, w_uz,
-                               ud, ue, um1, um2, um3);
+        eos.PrimToConsSingleGRHydro(g_, gi_, w_d, w_p, w_ux, w_uy, w_uz,
+                                    ud, ue, um1, um2, um3);
         cons(m,IDN,k,j,i) = ud;
         cons(m,IEN,k,j,i) = ue;
         cons(m,IM1,k,j,i) = um1;
