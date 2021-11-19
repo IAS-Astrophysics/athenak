@@ -62,11 +62,11 @@ void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
   Real &x1mesh = pmy_mesh_->mesh_size.x1min;
   Real &x2mesh = pmy_mesh_->mesh_size.x2min;
   Real &x3mesh = pmy_mesh_->mesh_size.x3min;
-  auto &indcs = pmbp->coord.coord_data.mb_indcs;
+  auto &indcs = pmbp->pcoord->mbdata.indcs;
+  auto &size = pmbp->pcoord->mbdata.size;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
-  auto &coord = pmbp->coord.coord_data;
 
   // Initialize Hydro variables -------------------------------
   if (pmbp->phydro != nullptr) {
@@ -85,19 +85,19 @@ void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
       {
         Real r; // coordinate that will span [0->1]
         if (flow_dir == 1) {
-          Real &x1min = coord.mb_size.d_view(m).x1min;
-          Real &x1max = coord.mb_size.d_view(m).x1max;
-          int nx1 = coord.mb_indcs.nx1;
+          Real &x1min = size.d_view(m).x1min;
+          Real &x1max = size.d_view(m).x1max;
+          int nx1 = indcs.nx1;
           r = (CellCenterX(i-is, nx1, x1min, x1max) - x1mesh)/length;
         } else if (flow_dir == 2) {
-          Real &x2min = coord.mb_size.d_view(m).x2min;
-          Real &x2max = coord.mb_size.d_view(m).x2max;
-          int nx2 = coord.mb_indcs.nx2;
+          Real &x2min = size.d_view(m).x2min;
+          Real &x2max = size.d_view(m).x2max;
+          int nx2 = indcs.nx2;
           r = (CellCenterX(j-js, nx2, x2min, x2max) - x2mesh)/length;
         } else {
-          Real &x3min = coord.mb_size.d_view(m).x3min;
-          Real &x3max = coord.mb_size.d_view(m).x3max;
-          int nx3 = coord.mb_indcs.nx3;
+          Real &x3min = size.d_view(m).x3min;
+          Real &x3max = size.d_view(m).x3max;
+          int nx3 = indcs.nx3;
           r = (CellCenterX(k-ks, nx3, x3min, x3max) - x3mesh)/length;
         }
   
@@ -164,19 +164,19 @@ void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
       { 
         Real r; // coordinate that will span [0->1]
         if (flow_dir == 1) {
-          Real &x1min = coord.mb_size.d_view(m).x1min;
-          Real &x1max = coord.mb_size.d_view(m).x1max;
-          int nx1 = coord.mb_indcs.nx1;
+          Real &x1min = size.d_view(m).x1min;
+          Real &x1max = size.d_view(m).x1max;
+          int nx1 = indcs.nx1;
           r = (CellCenterX(i-is, nx1, x1min, x1max) - x1mesh)/length;
         } else if (flow_dir == 2) {
-          Real &x2min = coord.mb_size.d_view(m).x2min;
-          Real &x2max = coord.mb_size.d_view(m).x2max;
-          int nx2 = coord.mb_indcs.nx2;
+          Real &x2min = size.d_view(m).x2min;
+          Real &x2max = size.d_view(m).x2max;
+          int nx2 = indcs.nx2;
           r = (CellCenterX(j-js, nx2, x2min, x2max) - x2mesh)/length;
         } else {
-          Real &x3min = coord.mb_size.d_view(m).x3min;
-          Real &x3max = coord.mb_size.d_view(m).x3max;
-          int nx3 = coord.mb_indcs.nx3;
+          Real &x3min = size.d_view(m).x3min;
+          Real &x3max = size.d_view(m).x3max;
+          int nx3 = indcs.nx3;
           r = (CellCenterX(k-ks, nx3, x3min, x3max) - x3mesh)/length;
         }
         

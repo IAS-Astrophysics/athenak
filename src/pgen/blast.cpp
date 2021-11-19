@@ -34,11 +34,11 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
   Real drat = pin->GetOrAddReal("problem", "drat", 1.0);
 
   // capture variables for the kernel
-  auto &indcs = pmbp->coord.coord_data.mb_indcs;
+  auto &indcs = pmbp->pcoord->mbdata.indcs;
+  auto &size = pmbp->pcoord->mbdata.size;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
-  auto coord = pmbp->coord.coord_data;
 
   // setup uniform ambient medium with spherical over-pressured region in Hydro
   if (pmbp->phydro != nullptr) {
@@ -48,19 +48,19 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
     par_for("pgen_cloud1", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m,int k, int j, int i)
       {
-        Real &x1min = coord.mb_size.d_view(m).x1min;
-        Real &x1max = coord.mb_size.d_view(m).x1max;
-        int nx1 = coord.mb_indcs.nx1;
+        Real &x1min = size.d_view(m).x1min;
+        Real &x1max = size.d_view(m).x1max;
+        int nx1 = indcs.nx1;
         Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
-        Real &x2min = coord.mb_size.d_view(m).x2min;
-        Real &x2max = coord.mb_size.d_view(m).x2max;
-        int nx2 = coord.mb_indcs.nx2;
+        Real &x2min = size.d_view(m).x2min;
+        Real &x2max = size.d_view(m).x2max;
+        int nx2 = indcs.nx2;
         Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
-        Real &x3min = coord.mb_size.d_view(m).x3min;
-        Real &x3max = coord.mb_size.d_view(m).x3max;
-        int nx3 = coord.mb_indcs.nx3;
+        Real &x3min = size.d_view(m).x3min;
+        Real &x3max = size.d_view(m).x3max;
+        int nx3 = indcs.nx3;
         Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
         Real rad = std::sqrt(SQR(x1v) + SQR(x2v) + SQR(x3v));

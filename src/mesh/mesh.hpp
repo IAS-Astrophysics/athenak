@@ -41,17 +41,14 @@ struct RegionIndcs
 
 //----------------------------------------------------------------------------------------
 //! \struct NeighborBlock
-//  \brief Information about neighboring MeshBlocks, stored in DualArrays of length
-//  (# of neighboring blocks).  Latter is 26 for a uniform grid in 3D.
+//  \brief Information about neighboring MeshBlocks stored as 2D DualArray in MeshBlock
 
 struct NeighborBlock
 {
-  DualArray1D<int> gid;      // global ID
-  DualArray1D<int> lev;      // logical level
-  DualArray1D<int> rank;    // MPI rank     
-  DualArray1D<int> destn;   // index of recv buffer in target vector of NeighborBlocks
-  // default constructor
-  NeighborBlock(){};
+  int gid;     // global ID
+  int lev;     // logical level
+  int rank;    // MPI rank     
+  int dest;    // index of recv buffer in target NeighborBlocks
 };
 
 //----------------------------------------------------------------------------------------
@@ -81,13 +78,16 @@ struct LogicalLocation
   }
 };
 
-// Forward declarations
+// Forward declarations required due to recursive definitions amongst mesh classes
+class MeshBlock;
+class MeshBlockPack;
+class MeshBlockTree;
 class Mesh;
 
 #include "parameter_input.hpp"
-#include "meshblock_tree.hpp"
 #include "meshblock.hpp"
 #include "meshblock_pack.hpp"
+#include "meshblock_tree.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \class Mesh
@@ -123,7 +123,8 @@ public:
   bool one_d, two_d, three_d; // flags to indicate 1D or 2D or 3D calculations
   bool multi_d;               // flag to indicate 2D and 3D calculations
   bool shearing_periodic;     // flag to indicate periodic x1/x2 boundaries are sheared
-  bool adaptive, multilevel;
+  bool multilevel;            // true for SMR and AMR 
+  bool adaptive;              // true only for AMR
 
   int nmb_rootx1, nmb_rootx2, nmb_rootx3; // # of MeshBlocks at root level in each dir
   int nmb_total;                 // total number of MeshBlocks across all levels
@@ -136,9 +137,9 @@ public:
   int gids, gide; // start/end of global IDs on this MPI rank
 
   // following 2x arrays allocated with length [nmbtotal]
-  int *ranklist;             // rank of each MeshBlock
-  double *costlist;          // cost of each MeshBlock
-  LogicalLocation *loclist;  // LogicalLocations for each MeshBlocks
+  int *ranklist;              // rank of each MeshBlock
+  double *costlist;           // cost of each MeshBlock
+  LogicalLocation *lloclist;  // LogicalLocations for each MeshBlocks
 
   // following 2x arrays allocated with length [nranks]
   int *gidslist;        // starting global ID of MeshBlocks in each rank

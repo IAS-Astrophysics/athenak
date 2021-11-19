@@ -35,7 +35,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
   Real rho1  = pin->GetReal("problem","rho1");
 
   // capture variables for kernel
-  auto &indcs = pmbp->coord.coord_data.mb_indcs;
+  auto &indcs = pmbp->pcoord->mbdata.indcs;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
@@ -43,7 +43,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
   EOS_Data &eos = pmbp->phydro->peos->eos_data;
   Real gm1 = eos.gamma - 1.0;
   auto &w0 = pmbp->phydro->w0;
-  auto &coord = pmbp->coord.coord_data;
+  auto &size = pmbp->pcoord->mbdata.size;
   int &nhydro = pmbp->phydro->nhydro;
   int &nscalars = pmbp->phydro->nscalars;
   if (nscalars == 0) {
@@ -56,14 +56,14 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
   par_for("pgen_kh1", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
-      Real &x1min = coord.mb_size.d_view(m).x1min;
-      Real &x1max = coord.mb_size.d_view(m).x1max;
-      int nx1 = coord.mb_indcs.nx1;
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      int nx1 = indcs.nx1;
       Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
-      Real &x2min = coord.mb_size.d_view(m).x2min;
-      Real &x2max = coord.mb_size.d_view(m).x2max;
-      int nx2 = coord.mb_indcs.nx2;
+      Real &x2min = size.d_view(m).x2min;
+      Real &x2max = size.d_view(m).x2max;
+      int nx2 = indcs.nx2;
       Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
       w0(m,IPR,k,j,i) = 20.0;

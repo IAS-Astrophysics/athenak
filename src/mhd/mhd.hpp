@@ -75,9 +75,12 @@ public:
   DvceFaceFld4D<Real> b0;  // face-centered magnetic fields
   DvceArray5D<Real> bcc0;  // cell-centered magnetic fields`
 
+  DvceArray5D<Real> coarse_u0;  // conserved variables on 2x coarser grid (for SMR/AMR)
+  DvceArray5D<Real> coarse_w0;  // primitive variables on 2x coarser grid (for SMR/AMR)
+
   // Objects containing boundary communication buffers and routines for u and b
-  BoundaryValueCC *pbval_u;
-  BoundaryValueFC *pbval_b;
+  BValCC *pbval_u;
+  BValFC *pbval_b;
 
   // Object(s) for extra physics (viscosity, resistivity, srcterms)
   Viscosity *pvisc = nullptr;

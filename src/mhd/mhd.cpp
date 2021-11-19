@@ -111,7 +111,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // allocate memory for conserved and primitive variables
   int nmb = ppack->nmb_thispack;
-  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
   int ncells1 = indcs.nx1 + 2*(indcs.ng);
   int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
   int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
@@ -125,11 +125,11 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   Kokkos::realloc(b0.x3f, nmb, ncells3+1, ncells2, ncells1);
   
   // allocate boundary buffers for conserved (cell-centered) variables
-  pbval_u = new BoundaryValueCC(ppack, pin);
+  pbval_u = new BValCC(ppack, pin);
   pbval_u->AllocateBuffersCC((nmhd+nscalars));
 
   // allocate boundary buffers for face-centered magnetic field
-  pbval_b = new BoundaryValueFC(ppack, pin);
+  pbval_b = new BValFC(ppack, pin);
   pbval_b->AllocateBuffersFC();
 
   // for time-evolving problems, continue to construct methods, allocate arrays
@@ -260,7 +260,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   }
 
   // (5) initialize metric (GR only)
-  if (is_general_relativistic) {pmy_pack->coord.InitMetric(pin);}
+  if (is_general_relativistic) {pmy_pack->pcoord->InitMetric(pin);}
 }
 
 //----------------------------------------------------------------------------------------

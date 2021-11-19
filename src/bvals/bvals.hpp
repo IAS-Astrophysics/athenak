@@ -32,37 +32,43 @@ using BoundaryFnPtr = void (*)(int m, CoordData &coord, EOS_Data &eos,
                                DvceArray5D<Real> &u);
 
 //----------------------------------------------------------------------------------------
-//! \struct BoundaryBufferCC
+//! \struct BufferIndcs
+//! \brief Cell indices for pack/unpack cells into BvalBuffer
+
+struct BufferIndcs
+{
+  int bis,bie,bjs,bje,bks,bke;  // start/end buffer ("b") indices in each dir
+  int ndat;                     // number of data elements
+};
+
+//----------------------------------------------------------------------------------------
+//! \struct BValBufferCC
 //  \brief index ranges, storage, and flags for data passed at boundaries
 
-struct BoundaryBufferCC
+struct BValBufferCC
 {
-  DualArray1D<int> index;
+  BufferIndcs sindcs; // indices for pack/unpack when dest/src at same level ("s")
+  BufferIndcs cindcs; // indices for pack/unpack when dest/src at coarser level ("c")
+  BufferIndcs findcs; // indices for pack/unpack when dest/src at finer level ("f")
+  BufferIndcs pindcs; // indices for prolongation ("p") (only used for receives)
   DvceArray3D<Real> data;
   HostArray1D<BoundaryCommStatus> bcomm_stat;
 #if MPI_PARALLEL_ENABLED
   // only accessed from host, so can use STL vector
   std::vector<MPI_Request> comm_req;
 #endif
-  // constructor
-  BoundaryBufferCC(){};
-  // function to initialize indices/data for CC variables
-  void InitIndices(int nmb, int nvar, int i0, int i1, int j0, int j1, int k0, int k1) {
-    index.h_view(0)=i0;
-    index.h_view(1)=i1;
-    index.h_view(2)=j0;
-    index.h_view(3)=j1;
-    index.h_view(4)=k0;
-    index.h_view(5)=k1;
-    Kokkos::realloc(data, nmb, nvar, (i1-i0+1)*(j1-j0+1)*(k1-k0+1));
+  // function to allocate memory for buffer data
+  void AllocateDataView(int nmb, int nvar) {
+    int ndat = sindcs.ndat;  // TODO: this may over-estimate memory needed for some buffs
+    Kokkos::realloc(data, nmb, nvar, ndat);
   }
 };
 
 //----------------------------------------------------------------------------------------
-//! \struct BoundaryBufferFC
+//! \struct BValBufferFC
 //  \brief index ranges, storage, and flags for data passed at boundaries
 
-struct BoundaryBufferFC
+struct BValBufferFC
 {
   DualArray2D<int> index;
   DvceArray3D<Real> data;
@@ -71,8 +77,7 @@ struct BoundaryBufferFC
   // only accessed from host, so can use STL vector
   std::vector<MPI_Request> comm_req;
 #endif
-  // constructor
-  BoundaryBufferFC(){};
+
   // function to initialize indices/data for FC variables
   void InitIndices(int nmb, int i0, int i1, int j0, int j1, int k0, int k1,
                             int i2, int i3, int j2, int j3, int k2, int k3,
@@ -109,44 +114,46 @@ struct BoundaryBufferFC
 class MeshBlockPack;
 
 //----------------------------------------------------------------------------------------
-//! \class BoundaryValueCC
+//! \class BValCC
 //  \brief Lightweight boundary values class for cell-centered variables
 //  TODO: extend for AMR boundaries
 
-class BoundaryValueCC {
+class BValCC {
  public:
-  BoundaryValueCC(MeshBlockPack *ppack, ParameterInput *pin);
-  ~BoundaryValueCC();
+  BValCC(MeshBlockPack *ppack, ParameterInput *pin);
+  ~BValCC() {};  // only default destructor needed
 
   // data
-  BoundaryBufferCC send_buf[26], recv_buf[26];
+  BValBufferCC send_buf[56], recv_buf[56];
 
   //functions
+  void InitSendIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f1, int f2);
+  void InitRecvIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f1, int f2);
   void AllocateBuffersCC(const int nvar);
-  TaskStatus SendBuffersCC(DvceArray5D<Real> &a, int key);
-  TaskStatus RecvBuffersCC(DvceArray5D<Real> &a);
+  TaskStatus PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &c, int key);
+  TaskStatus RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &c);
 
  private:
   MeshBlockPack *pmy_pack;
 };
 
 //----------------------------------------------------------------------------------------
-//! \class BoundaryValueFC
+//! \class BValFC
 //  \brief Lightweight boundary values class for face-centered vector fields
 //  TODO: extend for AMR boundaries
 
-class BoundaryValueFC {
+class BValFC {
  public:
-  BoundaryValueFC(MeshBlockPack *ppack, ParameterInput *pin);
-  ~BoundaryValueFC();
+  BValFC(MeshBlockPack *ppack, ParameterInput *pin);
+  ~BValFC();
 
   // data
-  BoundaryBufferFC send_buf[26], recv_buf[26];
+  BValBufferFC send_buf[26], recv_buf[26];
 
   //functions
   void AllocateBuffersFC();
-  TaskStatus SendBuffersFC(DvceFaceFld4D<Real> &b, int key);
-  TaskStatus RecvBuffersFC(DvceFaceFld4D<Real> &b);
+  TaskStatus PackAndSendFC(DvceFaceFld4D<Real> &b, int key);
+  TaskStatus RecvAndUnpackFC(DvceFaceFld4D<Real> &b);
 
  private:
   MeshBlockPack *pmy_pack;

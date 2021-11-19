@@ -90,8 +90,8 @@ void ProblemGenerator::BondiAccretion_(MeshBlockPack *pmbp, ParameterInput *pin)
   bondi.temp_max = 1.0e1;   // greater temperature root must be less than this
 
   // Get mass and spin of black hole
-  bondi.mass = pmbp->coord.coord_data.bh_mass;
-  bondi.spin = pmbp->coord.coord_data.bh_spin;
+  bondi.mass = pmbp->pcoord->mbdata.bh_mass;
+  bondi.spin = pmbp->pcoord->mbdata.bh_spin;
 
   // Get ratio of specific heats
   bondi.n_adi = 1.0/(bondi.gm - 1.0);
@@ -121,7 +121,7 @@ void ProblemGenerator::BondiAccretion_(MeshBlockPack *pmbp, ParameterInput *pin)
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
       Real rho, pgas, uu1, uu2, uu3, g_[NMETRIC], gi_[NMETRIC];
-      ComputePrimitiveSingle(m,k,j,i,coord,g_,gi_,bondi_,
+      ComputePrimitiveSingle(m,k,j,i,mbd,g_,gi_,bondi_,
                              rho,pgas,uu1,uu2,uu3);
       w0_(m,IDN,k,j,i) = rho;
       w0_(m,IPR,k,j,i) = pgas;
@@ -178,14 +178,14 @@ void ProblemGenerator::BondiErrors_(MeshBlockPack *pmbp, ParameterInput *pin)
   int nvars=0;
 
   // capture class variables for kernel
-  auto &indcs = pmbp->coord.coord_data.mb_indcs;
+  auto &indcs = pmbp->pcoord->mbdata.indcs;
   int &nx1 = indcs.nx1;
   int &nx2 = indcs.nx2;
   int &nx3 = indcs.nx3;
   int &is = indcs.is;
   int &js = indcs.js;
   int &ks = indcs.ks;
-  auto &size = pmbp->coord.coord_data.mb_size;
+  auto &size = pmbp->pcoord->mbdata.size;
 
   // compute errors for Hydro  -----------------------------------------------------------
   if (pmbp->phydro != nullptr) {
@@ -324,22 +324,22 @@ static void ComputePrimitiveSingle(int m, int k, int j, int i,
                                    struct bondi_pgen pgen,
                                    Real& rho, Real& pgas, Real& uu1, Real& uu2, Real& uu3)
 {
-  auto &indcs = coord.mb_indcs;
+  auto &indcs = coord.indcs;
   int &is = indcs.is; int &js = indcs.js; int &ks = indcs.ks;
 
-  Real &x1min = coord.mb_size.d_view(m).x1min;
-  Real &x1max = coord.mb_size.d_view(m).x1max;
-  int nx1 = coord.mb_indcs.nx1;
+  Real &x1min = coord.size.d_view(m).x1min;
+  Real &x1max = coord.size.d_view(m).x1max;
+  int nx1 = coord.indcs.nx1;
   Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
-  Real &x2min = coord.mb_size.d_view(m).x2min;
-  Real &x2max = coord.mb_size.d_view(m).x2max;
-  int nx2 = coord.mb_indcs.nx2;
+  Real &x2min = coord.size.d_view(m).x2min;
+  Real &x2max = coord.size.d_view(m).x2max;
+  int nx2 = coord.indcs.nx2;
   Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
-  Real &x3min = coord.mb_size.d_view(m).x3min;
-  Real &x3max = coord.mb_size.d_view(m).x3max;
-  int nx3 = coord.mb_indcs.nx3;
+  Real &x3min = coord.size.d_view(m).x3min;
+  Real &x3max = coord.size.d_view(m).x3max;
+  int nx3 = coord.indcs.nx3;
   Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
   // Calculate Boyer-Lindquist coordinates of cell
@@ -597,7 +597,7 @@ static Real TemperatureResidual(struct bondi_pgen pgen, Real t, Real r) {
 
 void FixedInnerX1(int m, CoordData &coord, EOS_Data &eos, DvceArray5D<Real> &u)
 {
-  auto &indcs = coord.mb_indcs;
+  auto &indcs = coord.indcs;
   int &ng = indcs.ng;
   int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
   int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
@@ -630,7 +630,7 @@ void FixedInnerX1(int m, CoordData &coord, EOS_Data &eos, DvceArray5D<Real> &u)
 
 void FixedOuterX1(int m, CoordData &coord, EOS_Data &eos, DvceArray5D<Real> &u)
 {
-  auto &indcs = coord.mb_indcs;
+  auto &indcs = coord.indcs;
   int &ng = indcs.ng;
   int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
   int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
@@ -663,7 +663,7 @@ void FixedOuterX1(int m, CoordData &coord, EOS_Data &eos, DvceArray5D<Real> &u)
 
 void FixedInnerX2(int m, CoordData &coord, EOS_Data &eos, DvceArray5D<Real> &u)
 {
-  auto &indcs = coord.mb_indcs;
+  auto &indcs = coord.indcs;
   int &ng = indcs.ng;
   int n1 = indcs.nx1 + 2*ng;
   int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
@@ -696,7 +696,7 @@ void FixedInnerX2(int m, CoordData &coord, EOS_Data &eos, DvceArray5D<Real> &u)
 
 void FixedOuterX2(int m, CoordData &coord, EOS_Data &eos, DvceArray5D<Real> &u)
 {
-  auto &indcs = coord.mb_indcs;
+  auto &indcs = coord.indcs;
   int &ng = indcs.ng;
   int n1 = indcs.nx1 + 2*ng;
   int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
@@ -729,7 +729,7 @@ void FixedOuterX2(int m, CoordData &coord, EOS_Data &eos, DvceArray5D<Real> &u)
 
 void FixedInnerX3(int m, CoordData &coord, EOS_Data &eos, DvceArray5D<Real> &u)
 {
-  auto &indcs = coord.mb_indcs;
+  auto &indcs = coord.indcs;
   int &ng = indcs.ng;
   int n1 = indcs.nx1 + 2*ng;
   int n2 = indcs.nx2 + 2*ng;
@@ -762,7 +762,7 @@ void FixedInnerX3(int m, CoordData &coord, EOS_Data &eos, DvceArray5D<Real> &u)
 
 void FixedOuterX3(int m, CoordData &coord, EOS_Data &eos, DvceArray5D<Real> &u)
 {
-  auto &indcs = coord.mb_indcs;
+  auto &indcs = coord.indcs;
   int &ng = indcs.ng;
   int n1 = indcs.nx1 + 2*ng;
   int n2 = indcs.nx2 + 2*ng;

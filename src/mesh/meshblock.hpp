@@ -28,29 +28,31 @@ class MeshBlock
  friend class MeshBlockTree;
 
  public:
-  MeshBlock(Mesh *pm, int igids, int nmb);
-  ~MeshBlock();
+  MeshBlock(MeshBlockPack *ppack, int igids, int nmb);
+  ~MeshBlock() {};  // only default destructor needed
 
   // data
   int nmb;     // # of MeshBlocks
   int nnghbr;  // # of neighbors for each MB.  TODO: cannot be same for all MBs with AMR
 
-  // AthenaDualArrays are used to store data used on both device and host 
+  // DualArrays are used to store data used on both device and host 
   // First dimension of each array will be [# of MeshBlocks in this MeshBlockPack]
-
   DualArray1D<int> mbgid;            // grid ID, unique identifier for each MeshBlock
-  HostArray2D<BoundaryFlag> mb_bcs;  // boundary conditions at 6 faces of each MeshBlock
+  DualArray1D<int> mblev;            // logical level of each MeshBlock
+  HostArray2D<BoundaryFlag> mbbcs;   // boundary conditions at 6 faces of each MeshBlock
 
-  NeighborBlock nghbr[26];           // data on neighbors stored in fixed-length array
+  DualArray2D<NeighborBlock> nghbr;  // data on all (up to 56) neighbors for each MB
+
+  // function to compute index of 56 neighbors
+  int NeighborIndx(int i, int j, int k, int n1, int n2);
 
  private:
   // data
-  Mesh* pmy_mesh;
-  HostArray1D<double> lb_cost;  // cost of updating each MeshBlock for load balancing
+  MeshBlockPack* pmy_pack;
+  HostArray1D<double> mbcost;  // cost of updating each MeshBlock for load balancing
 
   // functions
   void SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklist);
-
 };
 
 #endif // MESH_MESHBLOCK_HPP_

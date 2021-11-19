@@ -35,6 +35,7 @@ struct HydroTaskIDs
   TaskID copyu;
   TaskID flux;
   TaskID expl;
+  TaskID rstrict;
   TaskID sendu;
   TaskID recvu;
   TaskID bcs;
@@ -68,8 +69,11 @@ public:
   DvceArray5D<Real> u0;   // conserved variables
   DvceArray5D<Real> w0;   // primitive variables
 
+  DvceArray5D<Real> coarse_u0;  // conserved variables on 2x coarser grid (for SMR/AMR)
+  DvceArray5D<Real> coarse_w0;  // primitive variables on 2x coarser grid (for SMR/AMR)
+
   // Object containing boundary communication buffers and routines for u
-  BoundaryValueCC *pbval_u;
+  BValCC *pbval_u;
 
   // Object(s) for extra physics (viscosity, srcterms)
   Viscosity *pvisc = nullptr;
@@ -92,6 +96,7 @@ public:
   TaskStatus ExpRKUpdate(Driver *d, int stage);
   TaskStatus SendU(Driver *d, int stage); 
   TaskStatus RecvU(Driver *d, int stage); 
+  TaskStatus RestrictU(Driver *d, int stage); 
   TaskStatus ConToPrim(Driver *d, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
   TaskStatus ApplyPhysicalBCs(Driver* pdrive, int stage);  // in file in hydro/bvals dir

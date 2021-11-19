@@ -27,10 +27,10 @@ int MeshBlockTree::nleaf_;
 MeshBlockTree::MeshBlockTree(Mesh *pmesh) : pleaf_(nullptr), gid_(-1)
 {
   pmesh_ = pmesh;
-  loc_.lx1 = 0;
-  loc_.lx2 = 0;
-  loc_.lx3 = 0;
-  loc_.level = 0;
+  lloc_.lx1 = 0;
+  lloc_.lx2 = 0;
+  lloc_.lx3 = 0;
+  lloc_.level = 0;
 }
 
 //----------------------------------------------------------------------------------------
@@ -40,10 +40,10 @@ MeshBlockTree::MeshBlockTree(Mesh *pmesh) : pleaf_(nullptr), gid_(-1)
 MeshBlockTree::MeshBlockTree(MeshBlockTree *parent, int ox1, int ox2, int ox3)
                            : pleaf_(nullptr), gid_(parent->gid_)
 {
-  loc_.lx1 = (parent->loc_.lx1<<1) + ox1;
-  loc_.lx2 = (parent->loc_.lx2<<1) + ox2;
-  loc_.lx3 = (parent->loc_.lx3<<1) + ox3;
-  loc_.level = parent->loc_.level + 1;
+  lloc_.lx1 = (parent->lloc_.lx1<<1) + ox1;
+  lloc_.lx2 = (parent->lloc_.lx2<<1) + ox2;
+  lloc_.lx3 = (parent->lloc_.lx3<<1) + ox3;
+  lloc_.level = parent->lloc_.level + 1;
 }
 
 //----------------------------------------------------------------------------------------
@@ -64,7 +64,7 @@ MeshBlockTree::~MeshBlockTree()
 
 void MeshBlockTree::CreateRootGrid()
 {
-  if (loc_.level == 0) {  // initialize base properties of tree (logical level = 0)
+  if (lloc_.level == 0) {  // initialize base properties of tree (logical level = 0)
     proot_ = this;
     if (pmesh_->one_d)   nleaf_ = 2;
     if (pmesh_->two_d)   nleaf_ = 4;
@@ -72,20 +72,20 @@ void MeshBlockTree::CreateRootGrid()
   }
   // do not create any nodes beyond the logical level of root grid (which corresponds to
   // logical level = 0 only in the case of a grid containing a single MeshBlock)
-  if (loc_.level == pmesh_->root_level) return;
+  if (lloc_.level == pmesh_->root_level) return;
 
   // Otherwise create vector of leaf pointers
   pleaf_ = new MeshBlockTree*[nleaf_];
   for (int n=0; n<nleaf_; n++) {pleaf_[n] = nullptr;}
 
   // test if any of the leaves need to be refined further
-  std::int32_t levfac = 1<<(pmesh_->root_level - loc_.level-1);
+  std::int32_t levfac = 1<<(pmesh_->root_level - lloc_.level-1);
   for (int n=0; n<nleaf_; n++) {
     // i,j,k values are 1st/2nd/3rd bit from end in binary representation of n=0,..,7
     int i = n&1, j = (n>>1)&1, k = (n>>2)&1;
-    if ((loc_.lx3*2 + k)*levfac < pmesh_->nmb_rootx3
-     && (loc_.lx2*2 + j)*levfac < pmesh_->nmb_rootx2
-     && (loc_.lx1*2 + i)*levfac < pmesh_->nmb_rootx1) {
+    if ((lloc_.lx3*2 + k)*levfac < pmesh_->nmb_rootx3
+     && (lloc_.lx2*2 + j)*levfac < pmesh_->nmb_rootx2
+     && (lloc_.lx1*2 + i)*levfac < pmesh_->nmb_rootx1) {
       pleaf_[n] = new MeshBlockTree(this, i, j, k); // call leaf constructor
       pleaf_[n]->CreateRootGrid(); 
     }
@@ -99,14 +99,14 @@ void MeshBlockTree::CreateRootGrid()
 
 void MeshBlockTree::AddNode(LogicalLocation rloc, int &nnew)
 {
-  if (loc_.level == rloc.level) return; // done
+  if (lloc_.level == rloc.level) return; // done
 
   if (pleaf_ == nullptr) {
     Refine(nnew);             // leaf -> create the finer level
   }
 
   // get leaf index
-  int sh = rloc.level-loc_.level-1;
+  int sh = rloc.level-lloc_.level-1;
   int mx, my, mz;
   mx = ((rloc.lx1>>sh) & 1) == 1;
   my = ((rloc.lx2>>sh) & 1) == 1;
@@ -124,7 +124,7 @@ void MeshBlockTree::AddNode(LogicalLocation rloc, int &nnew)
 
 void MeshBlockTree::AddNodeWithoutRefinement(LogicalLocation rloc)
 {
-  if (loc_.level == rloc.level) // done
+  if (lloc_.level == rloc.level) // done
     return;
 
   if (pleaf_ == nullptr) {
@@ -135,7 +135,7 @@ void MeshBlockTree::AddNodeWithoutRefinement(LogicalLocation rloc)
   }
 
   // get leaf index
-  int sh = rloc.level-loc_.level-1;
+  int sh = rloc.level-lloc_.level-1;
   int mx, my, mz;
   mx = ((rloc.lx1>>sh) & 1) == 1;
   my = ((rloc.lx2>>sh) & 1) == 1;
@@ -168,11 +168,11 @@ void MeshBlockTree::Refine(int &nnew)
   std::int32_t nxmax,nymax,nzmax;
   std::int32_t oxmin, oxmax, oymin, oymax, ozmin, ozmax;
   LogicalLocation nloc;
-  nloc.level=loc_.level;
+  nloc.level=lloc_.level;
 
   oxmin = -1;
   oxmax = 1;
-  nxmax = (pmesh_->nmb_rootx1<<(loc_.level - pmesh_->root_level));
+  nxmax = (pmesh_->nmb_rootx1<<(lloc_.level - pmesh_->root_level));
   oymin = 0;
   oymax = 0;
   nymax = 1;
@@ -182,16 +182,16 @@ void MeshBlockTree::Refine(int &nnew)
   if (pmesh_->multi_d) {
     oymin = -1;
     oymax = 1;
-    nymax = (pmesh_->nmb_rootx2<<(loc_.level - pmesh_->root_level));
+    nymax = (pmesh_->nmb_rootx2<<(lloc_.level - pmesh_->root_level));
   }
   if (pmesh_->three_d) { // 3D
     ozmin = -1;
     ozmax = 1;
-    nzmax = (pmesh_->nmb_rootx3<<(loc_.level - pmesh_->root_level));
+    nzmax = (pmesh_->nmb_rootx3<<(lloc_.level - pmesh_->root_level));
   }
 
   for (std::int32_t oz=ozmin; oz<=ozmax; oz++) {
-    nloc.lx3 = loc_.lx3 + oz;
+    nloc.lx3 = lloc_.lx3 + oz;
     if (nloc.lx3<0) {
       if (pmesh_->mesh_bcs[BoundaryFace::inner_x3] != BoundaryFlag::periodic) {
         continue;
@@ -208,7 +208,7 @@ void MeshBlockTree::Refine(int &nnew)
     }
 
     for (std::int32_t oy=oymin; oy<=oymax; oy++) {
-      nloc.lx2=loc_.lx2+oy;
+      nloc.lx2=lloc_.lx2+oy;
       if (nloc.lx2<0) {
         if (pmesh_->mesh_bcs[BoundaryFace::inner_x2] != BoundaryFlag::periodic) {
           continue;
@@ -226,7 +226,7 @@ void MeshBlockTree::Refine(int &nnew)
 
       for (std::int32_t ox=oxmin; ox<=oxmax; ox++) {
         if (ox==0 && oy==0 && oz==0) continue;
-        nloc.lx1 = loc_.lx1 + ox;
+        nloc.lx1 = lloc_.lx1 + ox;
         if (nloc.lx1<0) {
           if (pmesh_->mesh_bcs[BoundaryFace::inner_x1] != BoundaryFlag::periodic) {
             continue;
@@ -264,7 +264,7 @@ void MeshBlockTree::Derefine(int &ndel)
   for (int ox3=s3; ox3<=e3; ox3++) {
     for (int ox2=s2; ox2<=e2; ox2++) {
       for (int ox1=-1; ox1<=1; ox1++) {
-        MeshBlockTree *bt = proot_->FindNeighbor(loc_, ox1, ox2, ox3, true);
+        MeshBlockTree *bt = proot_->FindNeighbor(lloc_, ox1, ox2, ox3, true);
         if (bt != nullptr) {
           if (bt->pleaf_ != nullptr) {
             int lis, lie, ljs, lje, lks, lke;
@@ -315,7 +315,7 @@ void MeshBlockTree::Derefine(int &ndel)
 
 void MeshBlockTree::CountMeshBlock(int& count)
 {
-  if (loc_.level == 0) count = 0;
+  if (lloc_.level == 0) count = 0;
 
   if (pleaf_ == nullptr) {
     count++;
@@ -334,10 +334,10 @@ void MeshBlockTree::CountMeshBlock(int& count)
 
 void MeshBlockTree::CreateMeshBlockList(LogicalLocation *list, int *pglist, int& count)
 {
-  if (loc_.level == 0) count=0;
+  if (lloc_.level == 0) count=0;
 
   if (pleaf_ == nullptr) {
-    list[count]=loc_;
+    list[count]=lloc_;
     if (pglist != nullptr) {pglist[count]=gid_;}
     gid_=count;
     count++;
@@ -464,10 +464,10 @@ MeshBlockTree* MeshBlockTree::FindNeighbor(LogicalLocation myloc,
 
 MeshBlockTree* MeshBlockTree::FindMeshBlock(LogicalLocation tloc)
 {
-  if (tloc.level == loc_.level) return this;
+  if (tloc.level == lloc_.level) return this;
   if (pleaf_ == nullptr) return nullptr;
   // get leaf index
-  int sh = tloc.level - loc_.level - 1;
+  int sh = tloc.level - lloc_.level - 1;
   int mx = (((tloc.lx1>>sh) & 1) == 1);
   int my = (((tloc.lx2>>sh) & 1) == 1);
   int mz = (((tloc.lx3>>sh) & 1) == 1);

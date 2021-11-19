@@ -27,10 +27,23 @@
 
 //----------------------------------------------------------------------------------------
 // ctor: also calls OutputType base class constructor
+// Checks compatibility options for VTK outputs
 
 VTKOutput::VTKOutput(OutputParameters op, Mesh *pm)
   : OutputType(op, pm)
 {
+  if (pm->multilevel && (op.gid < 0)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "VTK legacy file format cannot be used with SMR/AMR except"
+              << " to output a single MeshBlock.  Please specify a gid." << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  if ((pm->nmb_total) > 1 && op.include_gzs && (op.gid < 0)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Cannout output ghost cells with VTK legacy file format"
+              << " and multiple MeshBlocks" << std::endl;
+    exit(EXIT_FAILURE);
+  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -64,10 +77,17 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
 {
   int big_end = swap_functions::IsBigEndian(); // =1 on big endian machine
 
-  // numbers of cells in entire grid
-  int nout1 = (out_params.slice1)? 1 : (pm->mesh_indcs.nx1);
-  int nout2 = (out_params.slice2)? 1 : (pm->mesh_indcs.nx2);
-  int nout3 = (out_params.slice3)? 1 : (pm->mesh_indcs.nx3);
+  // output entire grid unless gid is specified
+  int nout1,nout2,nout3;
+  if ((pm->nmb_total > 1) && (out_params.gid < 0)) {
+    nout1 = (out_params.slice1)? 1 : (pm->mesh_indcs.nx1);
+    nout2 = (out_params.slice2)? 1 : (pm->mesh_indcs.nx2);
+    nout3 = (out_params.slice3)? 1 : (pm->mesh_indcs.nx3);
+  } else {
+    nout1 = outmbs[0].oie - outmbs[0].ois + 1;
+    nout2 = outmbs[0].oje - outmbs[0].ojs + 1;
+    nout3 = outmbs[0].oke - outmbs[0].oks + 1;
+  }
   int ncoord1 = (nout1 > 1)? nout1+1 : nout1;
   int ncoord2 = (nout2 > 1)? nout2+1 : nout2;
   int ncoord3 = (nout3 > 1)? nout3+1 : nout3;
@@ -114,13 +134,31 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
 
   // Specify the uniform Cartesian mesh with grid minima and spacings
   {std::stringstream msg;
+  // output physical dimensions of entire grid, unless gid is specified
+  Real x1min,x2min,x3min,dx1,dx2,dx3;
+  if (out_params.gid < 0) {
+    x1min = pm->mesh_size.x1min;
+    x2min = pm->mesh_size.x2min;
+    x3min = pm->mesh_size.x3min;
+    dx1 = pm->mesh_size.dx1;
+    dx2 = pm->mesh_size.dx2;
+    dx3 = pm->mesh_size.dx3;
+  } else {
+    x1min = pm->pmb_pack->pcoord->mbdata.size.h_view(out_params.gid).x1min;
+    x2min = pm->pmb_pack->pcoord->mbdata.size.h_view(out_params.gid).x2min;
+    x3min = pm->pmb_pack->pcoord->mbdata.size.h_view(out_params.gid).x3min;
+    dx1 = pm->pmb_pack->pcoord->mbdata.size.h_view(out_params.gid).dx1;
+    dx2 = pm->pmb_pack->pcoord->mbdata.size.h_view(out_params.gid).dx2;
+    dx3 = pm->pmb_pack->pcoord->mbdata.size.h_view(out_params.gid).dx3;
+  }
+  if (out_params.include_gzs) {
+    x1min -= (pm->pmb_pack->pcoord->mbdata.indcs.ng)*dx1;
+    x2min -= (pm->pmb_pack->pcoord->mbdata.indcs.ng)*dx2;
+    x3min -= (pm->pmb_pack->pcoord->mbdata.indcs.ng)*dx3;
+  }
   msg << std::scientific << std::setprecision(std::numeric_limits<Real>::max_digits10 - 1)
-      << "ORIGIN " << pm->mesh_size.x1min << " "
-                   << pm->mesh_size.x2min << " "
-                   << pm->mesh_size.x3min << " " <<  std::endl
-      << "SPACING " << pm->mesh_size.dx1 << " "
-                    << pm->mesh_size.dx2 << " "
-                    << pm->mesh_size.dx3 << " " <<  std::endl;
+      << "ORIGIN " << x1min << " " << x2min << " " << x3min << " " <<  std::endl
+      << "SPACING " << dx1  << " " << dx2   << " " << dx3   << " " <<  std::endl;
   vtkfile.Write(msg.str().c_str(),sizeof(char),msg.str().size());
   header_offset += msg.str().size();}
 
@@ -144,8 +182,8 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
 
     // Loop over MeshBlocks
     for (int m=0; m<nout_mbs; ++m) {
-      auto &indcs = pm->pmb_pack->coord.coord_data.mb_indcs;
-      LogicalLocation loc = pm->loclist[outmbs[m].mb_gid];
+      auto &indcs = pm->pmb_pack->pcoord->mbdata.indcs;
+      LogicalLocation lloc = pm->lloclist[outmbs[m].mb_gid];
       int &mb_nx1 = indcs.nx1;
       int &mb_nx2 = indcs.nx2;
       int &mb_nx3 = indcs.nx3;
@@ -155,8 +193,8 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
       int &oje = outmbs[m].oje;
       int &oks = outmbs[m].oks;
       int &oke = outmbs[m].oke;
-      size_t data_offset = (loc.lx1*mb_nx1 + loc.lx2*(mb_nx2*nout1) +
-        loc.lx3*(mb_nx3*nout1*nout2))*sizeof(float);
+      size_t data_offset = (lloc.lx1*mb_nx1 + lloc.lx2*(mb_nx2*nout1) +
+      lloc.lx3*(mb_nx3*nout1*nout2))*sizeof(float);
 
       for (int k=oks; k<=oke; ++k) {
         for (int j=ojs; j<=oje; ++j) {

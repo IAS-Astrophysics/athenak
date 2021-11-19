@@ -53,7 +53,7 @@ class MeshBlockTree
   // data: note private variable names have trailing underscore for this class
   MeshBlockTree **pleaf_;  // 1D vector of pointers to leafs
   int gid_;                // grid ID
-  LogicalLocation loc_;    // stores logical x1/x2/x3 location, level for node in tree
+  LogicalLocation lloc_;   // stores logical x1/x2/x3 location, level for node in tree
 
   static Mesh *pmesh_;           // pointer to Mesh containing Tree
   static MeshBlockTree *proot_;  // pointer to leaf at root level

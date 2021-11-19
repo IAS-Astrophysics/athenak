@@ -74,7 +74,7 @@ Real EquationC22(Real z, Real &u_d, Real q, Real r, Real gm1, Real pfloor)
 
 void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
 {
-  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
   int &ng = indcs.ng;
   int n1 = indcs.nx1 + 2*ng;
   int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
@@ -85,7 +85,7 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
   int &nhyd  = pmy_pack->phydro->nhydro;
   int &nscal = pmy_pack->phydro->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
-  auto coord = pmy_pack->coord.coord_data;
+  auto mbd = pmy_pack->pcoord->mbdata;
   auto eos = eos_data;
   Real gm1 = eos_data.gamma - 1.0;
   Real &pfloor_ = eos_data.pressure_floor;
@@ -111,19 +111,19 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
       Real& w_uy = prim(m,IVY,k,j,i);
       Real& w_uz = prim(m,IVZ,k,j,i);
 
-      Real &x1min = coord.mb_size.d_view(m).x1min;
-      Real &x1max = coord.mb_size.d_view(m).x1max;
-      int nx1 = coord.mb_indcs.nx1;
+      Real &x1min = mbd.size.d_view(m).x1min;
+      Real &x1max = mbd.size.d_view(m).x1max;
+      int nx1 = mbd.indcs.nx1;
       Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
-      Real &x2min = coord.mb_size.d_view(m).x2min;
-      Real &x2max = coord.mb_size.d_view(m).x2max;
-      int nx2 = coord.mb_indcs.nx2;
+      Real &x2min = mbd.size.d_view(m).x2min;
+      Real &x2max = mbd.size.d_view(m).x2max;
+      int nx2 = mbd.indcs.nx2;
       Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
-      Real &x3min = coord.mb_size.d_view(m).x3min;
-      Real &x3max = coord.mb_size.d_view(m).x3max;
-      int nx3 = coord.mb_indcs.nx3;
+      Real &x3min = mbd.size.d_view(m).x3min;
+      Real &x3max = mbd.size.d_view(m).x3max;
+      int nx3 = mbd.indcs.nx3;
       Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
       Real rad = sqrt(SQR(x1v) + SQR(x2v) + SQR(x3v));
@@ -132,11 +132,11 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
 
       // Extract components of metric
       Real g_[NMETRIC], gi_[NMETRIC];
-      ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, false,
-                              coord.bh_spin, g_, gi_);
+      ComputeMetricAndInverse(x1v, x2v, x3v, mbd.is_minkowski, false,
+                              mbd.bh_spin, g_, gi_);
 
       // Only execute cons2prim if outside excised region
-      if (rad > coord.bh_rmin) {
+      if (rad > mbd.bh_rmin) {
         // We are evolving T^t_t, but the SR C2P algorithm is only consistent with
         // alpha^2 T^{tt}.J.  Therefore compute T^{tt} = g^0\mu T^t_\mu
         // We are also evolving (E-D) as conserved variable, so must convert to E 
@@ -270,7 +270,7 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
         const Real& w_t  = prim(m,ITM,k,j,i);
         w_p = w_t*gm1*w_d;
       }
-      if (rad <= coord.bh_rmin || floor_hit) {
+      if (rad <= mbd.bh_rmin || floor_hit) {
         Real ud, ue, um1, um2, um3;
         eos.PrimToConsSingleGRHydro(g_, gi_, w_d, w_p, w_ux, w_uy, w_uz,
                                     ud, ue, um1, um2, um3);
@@ -296,11 +296,11 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
 
 void IdealGRHydro::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons)
 {
-  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
   int is = indcs.is; int ie = indcs.ie;
   int js = indcs.js; int je = indcs.je;
   int ks = indcs.ks; int ke = indcs.ke;
-  auto coord = pmy_pack->coord.coord_data;
+  auto mbd = pmy_pack->pcoord->mbdata;
   int &nhyd  = pmy_pack->phydro->nhydro;
   int &nscal = pmy_pack->phydro->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
@@ -312,24 +312,24 @@ void IdealGRHydro::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
       // Extract components of metric
-      Real &x1min = coord.mb_size.d_view(m).x1min;
-      Real &x1max = coord.mb_size.d_view(m).x1max;
+      Real &x1min = mbd.size.d_view(m).x1min;
+      Real &x1max = mbd.size.d_view(m).x1max;
       int nx1 = indcs.nx1;
       Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
-      Real &x2min = coord.mb_size.d_view(m).x2min;
-      Real &x2max = coord.mb_size.d_view(m).x2max;
+      Real &x2min = mbd.size.d_view(m).x2min;
+      Real &x2max = mbd.size.d_view(m).x2max;
       int nx2 = indcs.nx2;
       Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
-      Real &x3min = coord.mb_size.d_view(m).x3min;
-      Real &x3max = coord.mb_size.d_view(m).x3max;
+      Real &x3min = mbd.size.d_view(m).x3min;
+      Real &x3max = mbd.size.d_view(m).x3max;
       int nx3 = indcs.nx3;
       Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
       Real g_[NMETRIC], gi_[NMETRIC];
-      ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, false,
-                              coord.bh_spin, g_, gi_);
+      ComputeMetricAndInverse(x1v, x2v, x3v, mbd.is_minkowski, false,
+                              mbd.bh_spin, g_, gi_);
 
       const Real
         &g_00 = g_[I00], &g_01 = g_[I01], &g_02 = g_[I02], &g_03 = g_[I03],

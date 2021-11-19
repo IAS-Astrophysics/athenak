@@ -66,11 +66,11 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
   }
 
   // capture variables for the kernel
-  auto &indcs = pmbp->coord.coord_data.mb_indcs;
+  auto &indcs = pmbp->pcoord->mbdata.indcs;
+  auto &size = pmbp->pcoord->mbdata.size;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
-  auto coord = pmbp->coord.coord_data;
 
   // Initialize Hydro variables -------------------------------
   if (pmbp->phydro != nullptr) {
@@ -117,19 +117,19 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
       {
         Real x;
         if (shk_dir == 1) {
-          Real &x1min = coord.mb_size.d_view(m).x1min;
-          Real &x1max = coord.mb_size.d_view(m).x1max;
-          int nx1 = coord.mb_indcs.nx1;
+          Real &x1min = size.d_view(m).x1min;
+          Real &x1max = size.d_view(m).x1max;
+          int nx1 = indcs.nx1;
           x = CellCenterX(i-is, nx1, x1min, x1max);
         } else if (shk_dir == 2) {
-          Real &x2min = coord.mb_size.d_view(m).x2min;
-          Real &x2max = coord.mb_size.d_view(m).x2max;
-          int nx2 = coord.mb_indcs.nx2;
+          Real &x2min = size.d_view(m).x2min;
+          Real &x2max = size.d_view(m).x2max;
+          int nx2 = indcs.nx2;
           x = CellCenterX(j-js, nx2, x2min, x2max);
         } else {
-          Real &x3min = coord.mb_size.d_view(m).x3min;
-          Real &x3max = coord.mb_size.d_view(m).x3max;
-          int nx3 = coord.mb_indcs.nx3;
+          Real &x3min = size.d_view(m).x3min;
+          Real &x3max = size.d_view(m).x3max;
+          int nx3 = indcs.nx3;
           x = CellCenterX(k-ks, nx3, x3min, x3max);
         }
 
@@ -209,23 +209,23 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
       {
         Real x,bxl,byl,bzl,bxr,byr,bzr;
         if (shk_dir == 1) {
-          Real &x1min = coord.mb_size.d_view(m).x1min;
-          Real &x1max = coord.mb_size.d_view(m).x1max;
-          int nx1 = coord.mb_indcs.nx1;
+          Real &x1min = size.d_view(m).x1min;
+          Real &x1max = size.d_view(m).x1max;
+          int nx1 = indcs.nx1;
           x = CellCenterX(i-is, nx1, x1min, x1max);
           bxl = bx_l; byl = wl.by; bzl = wl.bz;
           bxr = bx_r; byr = wr.by; bzr = wr.bz;
         } else if (shk_dir == 2) {
-          Real &x2min = coord.mb_size.d_view(m).x2min;
-          Real &x2max = coord.mb_size.d_view(m).x2max;
-          int nx2 = coord.mb_indcs.nx2;
+          Real &x2min = size.d_view(m).x2min;
+          Real &x2max = size.d_view(m).x2max;
+          int nx2 = indcs.nx2;
           x = CellCenterX(j-js, nx2, x2min, x2max);
           bxl = wl.bz; byl = bx_l; bzl = wl.by;
           bxr = wr.bz; byr = bx_r; bzr = wr.by;
         } else {
-          Real &x3min = coord.mb_size.d_view(m).x3min;
-          Real &x3max = coord.mb_size.d_view(m).x3max;
-          int nx3 = coord.mb_indcs.nx3;
+          Real &x3min = size.d_view(m).x3min;
+          Real &x3max = size.d_view(m).x3max;
+          int nx3 = indcs.nx3;
           x = CellCenterX(k-ks, nx3, x3min, x3max);
           bxl = wl.by; byl = wl.bz; bzl = bx_l;
           bxr = wr.by; byr = wr.bz; bzr = bx_r;

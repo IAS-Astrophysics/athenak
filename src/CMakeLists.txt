@@ -11,6 +11,7 @@ add_executable(
         globals.cpp
         parameter_input.cpp
 
+        bvals/buffs_cc.cpp
         bvals/bvals_cc.cpp
         bvals/bvals_fc.cpp
 
@@ -43,7 +44,6 @@ add_executable(
 
 	ion-neutral/ion_neutral.cpp
 
-        mesh/mesh_physics.cpp
         mesh/load_balance.cpp
         mesh/mesh.cpp
         mesh/meshblock.cpp

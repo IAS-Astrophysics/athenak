@@ -24,7 +24,7 @@ namespace mhd {
 
 TaskStatus MHD::ExpRKUpdate(Driver *pdriver, int stage)
 {
-  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
@@ -42,7 +42,7 @@ TaskStatus MHD::ExpRKUpdate(Driver *pdriver, int stage)
   auto flx1 = uflx.x1f;
   auto flx2 = uflx.x2f;
   auto flx3 = uflx.x3f;
-  auto &mbsize = pmy_pack->coord.coord_data.mb_size;
+  auto &mbsize = pmy_pack->pcoord->mbdata.size;
 
   // hierarchical parallel loop that updates conserved variables to intermediate step
   // using weights and fractional time step appropriate to stages of time-integrator used
@@ -100,7 +100,7 @@ TaskStatus MHD::ExpRKUpdate(Driver *pdriver, int stage)
 
   // Add coordinate source terms in GR.  Again, must be computed with only primitives.
   if (is_general_relativistic) {
-    pmy_pack->coord.AddCoordTerms(w0, bcc0, peos->eos_data, beta_dt, u0);
+    pmy_pack->pcoord->AddCoordTerms(w0, bcc0, peos->eos_data, beta_dt, u0);
   }
 
   return TaskStatus::complete;

@@ -63,8 +63,10 @@ void Hydro::AssembleHydroTasks(TaskList &start, TaskList &run, TaskList &end)
   } else if (rsolver_method == Hydro_RSolver::hlle_gr) {
     id.flux = run.AddTask(&Hydro::CalcFluxes<Hydro_RSolver::hlle_gr>,this,id.copyu);
   }
-  id.expl  = run.AddTask(&Hydro::ExpRKUpdate, this, id.flux);
-  id.sendu = run.AddTask(&Hydro::SendU, this, id.expl);
+  // now the rest of the Hydro run tasks
+  id.expl    = run.AddTask(&Hydro::ExpRKUpdate, this, id.flux);
+  id.rstrict = run.AddTask(&Hydro::RestrictU, this, id.expl);
+  id.sendu = run.AddTask(&Hydro::SendU, this, id.rstrict);
   id.recvu = run.AddTask(&Hydro::RecvU, this, id.sendu);
   id.bcs   = run.AddTask(&Hydro::ApplyPhysicalBCs, this, id.recvu);
   id.c2p   = run.AddTask(&Hydro::ConToPrim, this, id.bcs);
@@ -86,21 +88,34 @@ TaskStatus Hydro::InitRecv(Driver *pdrive, int stage)
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
   auto nghbr = pmy_pack->pmb->nghbr;
+  auto &mblev = pmy_pack->pmb->mblev;
+  int nvar = nhydro + nscalars;  // TODO: potential bug if more variables added
 
   // Initialize communications for cell-centered conserved variables
   auto &rbufu = pbval_u->recv_buf;
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
-      if (nghbr[n].gid.h_view(m) >= 0) {
+      if (nghbr.h_view(m,n).gid >= 0) {
 #if MPI_PARALLEL_ENABLED
         // post non-blocking receive if neighboring MeshBlock on a different rank 
-        if (nghbr[n].rank.h_view(m) != global_variable::my_rank) {
+        if (nghbr.h_view(m,n).rank != global_variable::my_rank) {
           // create tag using local ID and buffer index of *receiving* MeshBlock
           int tag = CreateMPITag(m, n, VariablesID::FluidCons_ID);
           auto recv_data = Kokkos::subview(rbufu[n].data, m, Kokkos::ALL, Kokkos::ALL);
           void* recv_ptr = recv_data.data();
-          int ierr = MPI_Irecv(recv_ptr, recv_data.size(), MPI_ATHENA_REAL,
-            nghbr[n].rank.h_view(m), tag, MPI_COMM_WORLD, &(rbufu[n].comm_req[m]));
+          int data_size;
+          // if neighbor is at coarser level, use cindices size
+          if (nghbr.h_view(m,n).lev < mblev.h_view(m)) {
+            data_size = (rbufu[n].cindcs.ndat)*nvar;
+          // if neighbor is at same level, use sindices size
+          } else if (nghbr.h_view(m,n).lev == mblev.h_view(m)) {
+            data_size = (rbufu[n].sindcs.ndat)*nvar;
+          // if neighbor is at finer level, use findices size
+          } else {
+            data_size = (rbufu[n].findcs.ndat)*nvar;
+          }
+          int ierr = MPI_Irecv(recv_ptr, data_size, MPI_ATHENA_REAL,
+            nghbr.h_view(m,n).rank, tag, MPI_COMM_WORLD, &(rbufu[n].comm_req[m]));
         }
 #endif
         // initialize boundary receive status flag
@@ -126,8 +141,8 @@ TaskStatus Hydro::ClearRecv(Driver *pdrive, int stage)
   // wait for all non-blocking receives for U to finish before continuing 
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
-      if (nghbr[n].gid.h_view(m) >= 0) {
-        if (nghbr[n].rank.h_view(m) != global_variable::my_rank) {
+      if (nghbr.h_view(m,n).gid >= 0) {
+        if (nghbr.h_view(m,n).rank != global_variable::my_rank) {
           MPI_Wait(&(pbval_u->recv_buf[n].comm_req[m]), MPI_STATUS_IGNORE);
         }
       }
@@ -151,8 +166,8 @@ TaskStatus Hydro::ClearSend(Driver *pdrive, int stage)
   // wait for all non-blocking sends for U to finish before continuing 
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
-      if (nghbr[n].gid.h_view(m) >= 0) {
-        if (nghbr[n].rank.h_view(m) != global_variable::my_rank) {
+      if (nghbr.h_view(m,n).gid >= 0) {
+        if (nghbr.h_view(m,n).rank != global_variable::my_rank) {
           MPI_Wait(&(pbval_u->send_buf[n].comm_req[m]), MPI_STATUS_IGNORE);
         }
       }
@@ -161,7 +176,6 @@ TaskStatus Hydro::ClearSend(Driver *pdrive, int stage)
 #endif
   return TaskStatus::complete;
 }
-
 
 //----------------------------------------------------------------------------------------
 //! \fn  void Hydro::CopyCons
@@ -181,7 +195,7 @@ TaskStatus Hydro::CopyCons(Driver *pdrive, int stage)
 
 TaskStatus Hydro::SendU(Driver *pdrive, int stage) 
 {
-  TaskStatus tstat = pbval_u->SendBuffersCC(u0, VariablesID::FluidCons_ID);
+  TaskStatus tstat = pbval_u->PackAndSendCC(u0, coarse_u0, VariablesID::FluidCons_ID);
   return tstat;
 }
 
@@ -191,8 +205,69 @@ TaskStatus Hydro::SendU(Driver *pdrive, int stage)
 
 TaskStatus Hydro::RecvU(Driver *pdrive, int stage)
 {
-  TaskStatus tstat = pbval_u->RecvBuffersCC(u0);
+  TaskStatus tstat = pbval_u->RecvAndUnpackCC(u0, coarse_u0);
   return tstat;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void Hydro::RestrictU
+//  \brief 
+
+TaskStatus Hydro::RestrictU(Driver *pdrive, int stage)
+{
+  // Only execute this function with SMR/SMR
+  if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
+
+  int nmb1 = pmy_pack->nmb_thispack - 1;
+  int nvar = nhydro + nscalars;
+  auto u0_ = u0;
+  auto cu0_ = coarse_u0;
+  bool &multi_d = pmy_pack->pmesh->multi_d;
+  bool &three_d = pmy_pack->pmesh->three_d;
+
+  Real fact = 0.5;
+  if (multi_d) fact *= 0.5;
+  if (three_d) fact *= 0.5;
+  auto &cis = pmy_pack->pcoord->mbdata.cindcs.is;
+  auto &cie = pmy_pack->pcoord->mbdata.cindcs.ie;
+  auto &cjs = pmy_pack->pcoord->mbdata.cindcs.js;
+  auto &cje = pmy_pack->pcoord->mbdata.cindcs.je;
+  auto &cks = pmy_pack->pcoord->mbdata.cindcs.ks;
+  auto &cke = pmy_pack->pcoord->mbdata.cindcs.ke;
+  par_for("restrict3D",DevExeSpace(),0, nmb1, 0, nvar-1, cks,cke,cjs,cje,cis,cie,
+    KOKKOS_LAMBDA(const int m, const int n, const int k, const int j, const int i)
+    { 
+      int finei = 2*i - cis;  // correct when cis=is
+      int finej = cjs;
+      int finek = cks;
+      if (multi_d) {
+        finej = 2*j - cjs;  // correct when cjs=js
+      }
+      if (three_d) {
+        finek = 2*k - cks;  // correct when cks=ks
+      }
+      
+      // restrict in x1 direction
+      cu0_(m,n,k,j,i) = u0_(m,n,finek,finej,finei) + u0_(m,n,finek,finej,finei+1);
+      
+      // restrict in x2 direction (2D/3D problems)
+      if (multi_d) {
+        cu0_(m,n,k,j,i) += u0_(m,n,finek,finej+1,finei) + u0_(m,n,finek,finej+1,finei+1);
+      }
+
+      // restrict in x3 direction (3D problems)
+      if (three_d) {
+        cu0_(m,n,k,j,i) += 
+             (u0_(m,n,finek+1,finej,  finei) + u0_(m,n,finek+1,finej,  finei+1))
+           + (u0_(m,n,finek+1,finej+1,finei) + u0_(m,n,finek+1,finej+1,finei+1));
+      }
+
+      // normalize based in dimensions in problem
+      cu0_(m,n,k,j,i) *= fact;
+    }
+  );
+
+  return TaskStatus::complete;
 }
 
 //----------------------------------------------------------------------------------------
