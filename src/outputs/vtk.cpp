@@ -13,10 +13,9 @@
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
-#include <limits>
 #include <sstream>
-#include <stdexcept>
 #include <string>
+#include <sys/stat.h>  // mkdir
 
 #include "athena.hpp"
 #include "coordinates/cell_locations.hpp"
@@ -31,6 +30,8 @@
 VTKOutput::VTKOutput(OutputParameters op, Mesh *pm)
   : OutputType(op, pm)
 {
+  // create directories for outputs. Comments in binary.cpp constructor explain why
+  mkdir("vtk",0775);
 }
 
 //----------------------------------------------------------------------------------------
@@ -77,13 +78,14 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   int ndata = std::max(std::max(ncoord1, ncoord2), ncoord3);
   data = new float[ndata];
 
-  // create filename: "file_basename" + "." + "file_id" + "." + XXXXX + ".vtk"
+  // create filename: "vtk/file_basename" + "." + "file_id" + "." + XXXXX + ".vtk"
   // where XXXXX = 5-digit file_number
   std::string fname;
   char number[6];
   std::snprintf(number, sizeof(number), "%05d", out_params.file_number);
 
-  fname.assign(out_params.file_basename);
+  fname.assign("vtk/");
+  fname.append(out_params.file_basename);
   fname.append(".");
   fname.append(out_params.file_id);
   fname.append(".");

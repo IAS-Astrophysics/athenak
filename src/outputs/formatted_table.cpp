@@ -15,6 +15,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <sys/stat.h>  // mkdir
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -46,6 +47,8 @@ FormattedTableOutput::FormattedTableOutput(OutputParameters op, Mesh *pm)
       exit(EXIT_FAILURE);
     }
   }
+  // create directories for outputs. Comments in binary.cpp constructor explain why
+  mkdir("tab",0775);
 }
 
 //----------------------------------------------------------------------------------------
@@ -54,13 +57,14 @@ FormattedTableOutput::FormattedTableOutput(OutputParameters op, Mesh *pm)
 
 void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
 {
-  // create filename: "file_basename" + "." + "file_id" + "." + XXXXX + ".tab"
+  // create filename: "tab/file_basename" + "." + "file_id" + "." + XXXXX + ".tab"
   // where XXXXX = 5-digit file_number
   std::string fname;
   char number[6];
   std::snprintf(number, sizeof(number), "%05d", out_params.file_number);
 
-  fname.assign(out_params.file_basename);
+  fname.assign("tab/");
+  fname.append(out_params.file_basename);
   fname.append(".");
   fname.append(out_params.file_id);
   fname.append(".");

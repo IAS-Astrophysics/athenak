@@ -4,23 +4,21 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file binary.cpp
-//  \brief writes output data in binary format.
+//! \brief writes output data in binary format, which simply consists of each MeshBlock
+//! written contiguously in order of "gid" in binary format.
 
-#include <algorithm>
 #include <cstdio>      // fwrite(), fclose(), fopen(), fnprintf(), snprintf()
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
-#include <limits>
 #include <sstream>
-#include <stdexcept>
 #include <string>
+#include <sys/stat.h>  // mkdir
 
 #include "athena.hpp"
-#include "coordinates/cell_locations.hpp"
 #include "globals.hpp"
+#include "coordinates/cell_locations.hpp"
 #include "mesh/mesh.hpp"
-#include "hydro/hydro.hpp"
 #include "outputs.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -29,6 +27,11 @@
 BinaryOutput::BinaryOutput(OutputParameters op, Mesh *pm)
   : OutputType(op, pm)
 {
+  // create directories for outputs
+  // useful for mpiio-based outputs because on some supercomputers you may need to
+  // set different stripe counts depending on whether mpiio is used in order to 
+  // achieve the best performance and not to crash the filesystem
+  mkdir("bin",0775);
 }
 
 //----------------------------------------------------------------------------------------
@@ -38,19 +41,19 @@ BinaryOutput::BinaryOutput(OutputParameters op, Mesh *pm)
 
 void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
 {
-  // create filename: "mpiio/file_basename" + "." + "file_id" + "." + XXXXX + ".nbf"
+  // create filename: "bin/file_basename" + "." + "file_id" + "." + XXXXX + ".bin"
   // where XXXXX = 5-digit file_number
   std::string fname;
   char number[6];
   std::snprintf(number, sizeof(number), "%05d", out_params.file_number);
 
-  fname.assign("mpiio/");
+  fname.assign("bin/");
   fname.append(out_params.file_basename);
   fname.append(".");
   fname.append(out_params.file_id);
   fname.append(".");
   fname.append(number);
-  fname.append(".nbf");
+  fname.append(".bin");
 
   IOWrapper binfile;
   std::size_t header_offset=0;
