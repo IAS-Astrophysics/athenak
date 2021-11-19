@@ -106,16 +106,18 @@ void ProblemGenerator::BondiAccretion_(MeshBlockPack *pmbp, ParameterInput *pin)
               * (1.0 - 3.0*bondi.mass/(2.0*bondi.r_crit)));          // (HSW 69)
 
   // capture variables for the kernel
-  auto &indcs = pmbp->pcoord->mbdata.indcs;
-  int &is = indcs.is; int &ie = indcs.ie;
-  int &js = indcs.js; int &je = indcs.je;
-  int &ks = indcs.ks; int &ke = indcs.ke;
-  auto mbd = pmbp->pcoord->mbdata;
+  auto &indcs = pmbp->coord.coord_data.mb_indcs;
+  int &ng = indcs.ng;
+  int n1 = indcs.nx1 + 2*ng;
+  int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
+  int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
+  int nmb = pmbp->nmb_thispack;
+  auto coord = pmbp->coord.coord_data;
   auto w0_ = pmbp->phydro->w0;
   auto bondi_ = bondi;
 
   // Initialize primitive values (HYDRO ONLY)
-  par_for("pgen_bondi", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
+  par_for("pgen_bondi", DevExeSpace(), 0,(nmb-1),0,(n3-1),0,(n2-1),0,(n1-1),
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
       Real rho, pgas, uu1, uu2, uu3, g_[NMETRIC], gi_[NMETRIC];
@@ -609,8 +611,8 @@ void FixedInnerX1(int m, CoordData &coord, EOS_Data &eos, DvceArray5D<Real> &u)
       ComputePrimitiveSingle(m,k,j,(is-i-1),coord,g_,gi_,bondi_,
                              rho,pgas,uu1,uu2,uu3);
       Real ud, ue, um1, um2, um3;
-      eos.PrimToConsSingleGR(g_, gi_, rho, pgas, uu1, uu2, uu3,
-                             ud, ue, um1, um2, um3);
+      eos.PrimToConsSingleGRHydro(g_, gi_, rho, pgas, uu1, uu2, uu3,
+                                  ud, ue, um1, um2, um3);
       u(m,IDN,k,j,(is-i-1)) = ud;
       u(m,IEN,k,j,(is-i-1)) = ue;
       u(m,IM1,k,j,(is-i-1)) = um1;
@@ -642,8 +644,8 @@ void FixedOuterX1(int m, CoordData &coord, EOS_Data &eos, DvceArray5D<Real> &u)
       ComputePrimitiveSingle(m,k,j,(ie+i+1),coord,g_,gi_,bondi_,
                              rho,pgas,uu1,uu2,uu3);
       Real ud, ue, um1, um2, um3;
-      eos.PrimToConsSingleGR(g_, gi_, rho, pgas, uu1, uu2, uu3,
-                             ud, ue, um1, um2, um3);
+      eos.PrimToConsSingleGRHydro(g_, gi_, rho, pgas, uu1, uu2, uu3,
+                                  ud, ue, um1, um2, um3);
       u(m,IDN,k,j,(ie+i+1)) = ud;
       u(m,IEN,k,j,(ie+i+1)) = ue;
       u(m,IM1,k,j,(ie+i+1)) = um1;
@@ -675,8 +677,8 @@ void FixedInnerX2(int m, CoordData &coord, EOS_Data &eos, DvceArray5D<Real> &u)
       ComputePrimitiveSingle(m,k,(js-j-1),i,coord,g_,gi_,bondi_,
                              rho,pgas,uu1,uu2,uu3);
       Real ud, ue, um1, um2, um3;
-      eos.PrimToConsSingleGR(g_, gi_, rho, pgas, uu1, uu2, uu3,
-                             ud, ue, um1, um2, um3);
+      eos.PrimToConsSingleGRHydro(g_, gi_, rho, pgas, uu1, uu2, uu3,
+                                  ud, ue, um1, um2, um3);
       u(m,IDN,k,(js-j-1),i) = ud;
       u(m,IEN,k,(js-j-1),i) = ue;
       u(m,IM1,k,(js-j-1),i) = um1;
@@ -708,8 +710,8 @@ void FixedOuterX2(int m, CoordData &coord, EOS_Data &eos, DvceArray5D<Real> &u)
       ComputePrimitiveSingle(m,k,(je+j+1),i,coord,g_,gi_,bondi_,
                              rho,pgas,uu1,uu2,uu3);
       Real ud, ue, um1, um2, um3;
-      eos.PrimToConsSingleGR(g_, gi_, rho, pgas, uu1, uu2, uu3,
-                             ud, ue, um1, um2, um3);
+      eos.PrimToConsSingleGRHydro(g_, gi_, rho, pgas, uu1, uu2, uu3,
+                                  ud, ue, um1, um2, um3);
       u(m,IDN,k,(je+j+1),i) = ud;
       u(m,IEN,k,(je+j+1),i) = ue;
       u(m,IM1,k,(je+j+1),i) = um1;
@@ -741,8 +743,8 @@ void FixedInnerX3(int m, CoordData &coord, EOS_Data &eos, DvceArray5D<Real> &u)
       ComputePrimitiveSingle(m,(ks-k-1),j,i,coord,g_,gi_,bondi_,
                              rho,pgas,uu1,uu2,uu3);
       Real ud, ue, um1, um2, um3;
-      eos.PrimToConsSingleGR(g_, gi_, rho, pgas, uu1, uu2, uu3,
-                             ud, ue, um1, um2, um3);
+      eos.PrimToConsSingleGRHydro(g_, gi_, rho, pgas, uu1, uu2, uu3,
+                                  ud, ue, um1, um2, um3);
       u(m,IDN,(ks-k-1),j,i) = ud;
       u(m,IEN,(ks-k-1),j,i) = ue;
       u(m,IM1,(ks-k-1),j,i) = um1;
@@ -774,8 +776,8 @@ void FixedOuterX3(int m, CoordData &coord, EOS_Data &eos, DvceArray5D<Real> &u)
       ComputePrimitiveSingle(m,(ke+k+1),j,i,coord,g_,gi_,bondi_,
                              rho,pgas,uu1,uu2,uu3);
       Real ud, ue, um1, um2, um3;
-      eos.PrimToConsSingleGR(g_, gi_, rho, pgas, uu1, uu2, uu3,
-                             ud, ue, um1, um2, um3);
+      eos.PrimToConsSingleGRHydro(g_, gi_, rho, pgas, uu1, uu2, uu3,
+                                  ud, ue, um1, um2, um3);
       u(m,IDN,(ke+k+1),j,i) = ud;
       u(m,IEN,(ke+k+1),j,i) = ue;
       u(m,IM1,(ke+k+1),j,i) = um1;
