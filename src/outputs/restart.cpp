@@ -51,15 +51,12 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   fname.append(".rst");
 
   // increment counters now so values for *next* dump are stored in restart file
-  output_params.file_number++;
-  output_params.next_time += output_params.dt;
-  pin->SetInteger(output_params.block_name, "file_number", output_params.file_number);
-  pin->SetReal(output_params.block_name, "next_time", output_params.next_time);
+  out_params.file_number++;
+  out_params.last_time += out_params.dt;
+  pin->SetInteger(out_params.block_name, "file_number", out_params.file_number);
+  pin->SetReal(out_params.block_name, "last_time", out_params.last_time);
 
-  IOWrapper rstfile;
-  rstfile.Open(fname.c_str(), IOWrapper::FileMode::write);
-
-  // prepare the input parameters
+  // create string holding input parameters (copy of input file)
   std::stringstream ost;
   pin->ParameterDump(ost);
   std::string sbuf = ost.str();
@@ -67,21 +64,18 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   // calculate size of header
   IOWrapperSizeT headeroffset = sbuf.size()*sizeof(char) + 3*sizeof(int)+sizeof(RegionSize)
                  + 2*sizeof(Real)+sizeof(IOWrapperSizeT);
-  // the size of an element of the ID and cost list
-  listsize = sizeof(LogicalLocation)+sizeof(double);
   // the size of each MeshBlock
-  datasize = pm->my_blocks(0)->GetBlockSizeInBytes();
-  int nbtotal = pm->nbtotal;
-  int myns = pm->nslist[Globals::my_rank];
-  int mynb = pm->nblist[Globals::my_rank];
+  size_t datasize = pm->pmb_pack->GetMeshBlockPackArraySizeInBytes();
 
-  // write the header; this part is serial
-  if (Globals::my_rank == 0) {
-    // output the input parameters
+  // open file and  write the header; this part is serial
+  IOWrapper rstfile;
+  rstfile.Open(fname.c_str(), IOWrapper::FileMode::write);
+  if (global_variable::my_rank == 0) {
+    // output the input parameters (input file)
     rstfile.Write(sbuf.c_str(),sizeof(char),sbuf.size());
 
     // output Mesh information
-    rstfile.Write(&(pm->nbtotal), sizeof(int), 1);
+    rstfile.Write(&(pm->nmb_total), sizeof(int), 1);
     rstfile.Write(&(pm->root_level), sizeof(int), 1);
     rstfile.Write(&(pm->mesh_size), sizeof(RegionSize), 1);
     rstfile.Write(&(pm->time), sizeof(Real), 1);

@@ -173,11 +173,11 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
       } else if (opar.file_type.compare("bin") == 0) {
         pnode = new BinaryOutput(opar,pm);
         pout_list.insert(pout_list.begin(),pnode);
-      } else if (op.file_type.compare("rst") == 0) {
+      } else if (opar.file_type.compare("rst") == 0) {
       // Move restarts to the tail end of the OutputType list, so file counters for other
       // output types are up-to-date in restart file
         pnode = new RestartOutput(opar,pm);
-        pout_list.insert(pout_list.begin(),pnode);
+        pout_list.push_back(pnode);
         num_rst++;
       } else {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
