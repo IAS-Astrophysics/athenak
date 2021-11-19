@@ -1,5 +1,5 @@
 """
-Function to read binary (.nbf, .bin) grid outputs from AthenaK
+Function to read binary (.bin) grid outputs from AthenaK
 Originally written by Lev Arzamasskiy (leva@ias.edu) on 11/15/2021
 
 Returns dictionary with cell-centered quantities, grid coordinates and dimensions,
@@ -11,13 +11,13 @@ Current limitations:
 - native byte order is assumed, which is big-endian or little-endian depending
   on the system this script is run on, which might be different from endian of
   the machine that produced the output
-- most simulation parameters are not returned despite being in .nbf file
+- most simulation parameters are not returned despite being in .bin file
 """
 
 import numpy as np
 import struct
 
-def nbf(filename):
+def read_binary(filename):
   f = open(filename,'rb')
   line = f.readline() # line 1 -- code name and current time
   if (line.split()[0] != b"AthenaK"):
@@ -81,7 +81,7 @@ def nbf(filename):
       x3max = float(line.split()[2])
         
   if (Nx1<1 or Nx2<1 or Nx3<1 or nx1<1 or nx2<1 or nx3<1):
-    print("Error in nbf(): unexpected grid dimensions",Nx1,Nx2,Nx3,nx1,nx2,nx3)
+    print("Error in read_binary(): unexpected grid dimensions",Nx1,Nx2,Nx3,nx1,nx2,nx3)
     return
     
   x1fc = np.linspace(x1min,x1max,Nx1+1)
