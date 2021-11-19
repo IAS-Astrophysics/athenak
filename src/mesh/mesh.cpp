@@ -12,9 +12,13 @@
 #include "athena.hpp"
 #include "globals.hpp"
 #include "parameter_input.hpp"
-#include "outputs/io_wrapper.hpp"
 #include "mesh.hpp"
 #include "coordinates/cell_locations.hpp"
+#include "hydro/hydro.hpp"
+#include "mhd/mhd.hpp"
+#include "diffusion/viscosity.hpp"
+#include "diffusion/resistivity.hpp"
+#include "outputs/io_wrapper.hpp"
 
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>
@@ -189,7 +193,7 @@ Mesh::~Mesh()
 {
   delete [] costlist;
   delete [] ranklist;
-  delete [] loclist;
+  delete [] lloclist;
   delete [] gidslist;
   delete [] nmblist;
   if (adaptive) { // deallocate arrays for AMR
@@ -398,19 +402,25 @@ void Mesh::BuildTree(ParameterInput *pin)
         // Now add nodes to the MeshBlockTree corresponding to these MeshBlocks
         if (one_d) {  // 1D
           for (std::int32_t i=lx1min; i<lx1max; i+=2) {
-            LogicalLocation nloc;
-            nloc.level=log_ref_lev, nloc.lx1=i, nloc.lx2=0, nloc.lx3=0;
+            LogicalLocation nlloc;
+            nlloc.level = log_ref_lev;
+            nlloc.lx1 = i;
+            nlloc.lx2 = 0;
+            nlloc.lx3 = 0;
             int nnew;
-            ptree->AddNode(nloc, nnew);
+            ptree->AddNode(nlloc, nnew);
           }
         }
         if (two_d) {  // 2D
           for (std::int32_t j=lx2min; j<lx2max; j+=2) {
             for (std::int32_t i=lx1min; i<lx1max; i+=2) {
-              LogicalLocation nloc;
-              nloc.level=log_ref_lev, nloc.lx1=i, nloc.lx2=j, nloc.lx3=0;
+              LogicalLocation nlloc;
+              nlloc.level = log_ref_lev;
+              nlloc.lx1 = i;
+              nlloc.lx2 = j;
+              nlloc.lx3 = 0;
               int nnew;
-              ptree->AddNode(nloc, nnew);
+              ptree->AddNode(nlloc, nnew);
             }
           }
         }
@@ -418,10 +428,13 @@ void Mesh::BuildTree(ParameterInput *pin)
           for (std::int32_t k=lx3min; k<lx3max; k+=2) {
             for (std::int32_t j=lx2min; j<lx2max; j+=2) {
               for (std::int32_t i=lx1min; i<lx1max; i+=2) {
-                LogicalLocation nloc;
-                nloc.level = log_ref_lev, nloc.lx1 = i, nloc.lx2 = j, nloc.lx3 = k;
+                LogicalLocation nlloc;
+                nlloc.level = log_ref_lev;
+                nlloc.lx1 = i;
+                nlloc.lx2 = j;
+                nlloc.lx3 = k;
                 int nnew;
-                ptree->AddNode(nloc, nnew);
+                ptree->AddNode(nlloc, nnew);
               }
             }
           }
@@ -438,7 +451,7 @@ void Mesh::BuildTree(ParameterInput *pin)
 
   costlist = new double[nmb_total];
   ranklist = new int[nmb_total];
-  loclist  = new LogicalLocation[nmb_total];
+  lloclist = new LogicalLocation[nmb_total];
 
   gidslist = new int[global_variable::nranks];
   nmblist  = new int[global_variable::nranks];
@@ -454,7 +467,7 @@ void Mesh::BuildTree(ParameterInput *pin)
   }
 
   // following returns LogicalLocation list sorted by Z-ordering
-  ptree->CreateMeshBlockList(loclist, nullptr, nmb_total);
+  ptree->CreateMeshBlockList(lloclist, nullptr, nmb_total);
 
 #if MPI_PARALLEL_ENABLED
   // check there is at least one MeshBlock per MPI rank
@@ -475,20 +488,21 @@ void Mesh::BuildTree(ParameterInput *pin)
   gide = gids + nmblist[global_variable::my_rank] - 1;
   nmb_thisrank = nmblist[global_variable::my_rank];
 
-  pmb_pack = new MeshBlockPack(this, pin, gids, gide, mb_indices);
+  pmb_pack = new MeshBlockPack(this, gids, gide);
+  pmb_pack->AddMeshBlocksAndCoordinates(pin, mb_indices);
   pmb_pack->pmb->SetNeighbors(ptree, ranklist);
   
-/*******/
-//  for (int m=0; m<pmb_pack->nmb_thispack; ++m) {
-//    std::cout << "******* Block=" << pmb_pack->pmb->mbgid.h_view(m) << std::endl;
-//    for (int n=0; n<6; ++n) {
-//      std::cout << "n=" << n << " bc_flag=" << GetBoundaryString(pmb_pack->pmb->mb_bcs(m,n)) << std::endl;
-//    }
-//    for (int n=0; n<pmb_pack->pmb->nnghbr; ++n) {
-//      std::cout << "n=" << n << " gid=" << pmb_pack->pmb->nghbr[n].gid.h_view(m) << " level=" << pmb_pack->pmb->nghbr[n].lev.h_view(m) << " rank=" << pmb_pack->pmb->nghbr[n].rank.h_view(m) << " destn=" << pmb_pack->pmb->nghbr[n].destn.h_view(m) << std::endl;
-//    }
-//  }
-/**********/
+/**********
+  for (int m=0; m<pmb_pack->nmb_thispack; ++m) {
+    std::cout << "******* Block=" << pmb_pack->pmb->mbgid.h_view(m) << std::endl;
+    for (int n=0; n<6; ++n) {
+      std::cout << "n=" << n << " bc_flag=" << GetBoundaryString(pmb_pack->pmb->mbbcs(m,n)) << std::endl;
+    }
+    for (int n=0; n<pmb_pack->pmb->nnghbr; ++n) {
+      std::cout << "n=" << n << " gid=" << pmb_pack->pmb->nghbr.h_view(m,n).gid << " level=" << pmb_pack->pmb->nghbr.h_view(m,n).lev << " rank=" << pmb_pack->pmb->nghbr.h_view(m,n).rank << " dest=" << pmb_pack->pmb->nghbr.h_view(m,n).dest << std::endl;
+    }
+  }
+**********/
 
   ResetLoadBalanceCounters();
   if (global_variable::my_rank == 0) {PrintMeshDiagnostics();}
@@ -527,8 +541,8 @@ void Mesh::PrintMeshDiagnostics()
       cost_per_plevel[i] = 0.0;
     }
     for (int i=0; i<nmb_total; i++) {
-      nb_per_plevel[(loclist[i].level - root_level)]++;
-      cost_per_plevel[(loclist[i].level - root_level)] += costlist[i];
+      nb_per_plevel[(lloclist[i].level - root_level)]++;
+      cost_per_plevel[(lloclist[i].level - root_level)] += costlist[i];
     }
     for (int i=root_level; i<=max_level; i++) {
       if (nb_per_plevel[i-root_level] != 0) {
@@ -562,7 +576,7 @@ void Mesh::PrintMeshDiagnostics()
     double maxcost = 0.0, totalcost = 0.0;
     for (int i=root_level; i<=max_level; i++) {
       for (int j=0; j<nmb_total; j++) {
-        if (loclist[j].level == i) {
+        if (lloclist[j].level == i) {
           mincost = std::min(mincost,costlist[i]);
           maxcost = std::max(maxcost,costlist[i]);
           totalcost += costlist[i];
@@ -596,18 +610,18 @@ void Mesh::WriteMeshStructure()
     std::exit(EXIT_FAILURE);
   }
 
-  auto &size = this->pmb_pack->coord.coord_data.mb_size;
+  auto &size = this->pmb_pack->pcoord->mbdata.size;
   for (int i=root_level; i<=max_level; i++) {
   for (int j=0; j<nmb_total; j++) {
-    if (loclist[j].level == i) {
-      std::int32_t &lx1 = loclist[j].lx1;
-      std::int32_t &lx2 = loclist[j].lx2;
-      std::int32_t &lx3 = loclist[j].lx3;
+    if (lloclist[j].level == i) {
+      std::int32_t &lx1 = lloclist[j].lx1;
+      std::int32_t &lx2 = lloclist[j].lx2;
+      std::int32_t &lx3 = lloclist[j].lx3;
       std::fprintf(fp,"#MeshBlock %d on rank=%d with cost=%g\n", j, ranklist[j],
                    costlist[j]);
       std::fprintf(
           fp,"#  Logical level %d, location = (%" PRId32 " %" PRId32 " %" PRId32")\n",
-          loclist[j].level, lx1, lx2, lx3);
+          lloclist[j].level, lx1, lx2, lx3);
       if (two_d) { // 2D
         std::fprintf(fp,"%g %g\n", size.h_view(j).x1min, size.h_view(j).x2min);
         std::fprintf(fp,"%g %g\n", size.h_view(j).x1max, size.h_view(j).x2min);
@@ -742,3 +756,44 @@ void Mesh::CheckUserBoundaries() {
   return;
 }
 
+//----------------------------------------------------------------------------------------
+// \fn Mesh::NewTimeStep()
+
+void Mesh::NewTimeStep(const Real tlim)
+{
+  // cycle over all MeshBlocks on this rank and find minimum dt
+  // Requires at least ONE of the physics modules to be defined.
+  // limit increase in timestep to 2x old value
+  dt = 2.0*dt;
+
+  // Hydro timestep
+  if (pmb_pack->phydro != nullptr) {
+    dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->dtnew) );
+    // viscosity timestep
+    if (pmb_pack->phydro->pvisc != nullptr) {
+      dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->pvisc->dtnew) );
+    }
+  }
+  // MHD timestep
+  if (pmb_pack->pmhd != nullptr) {
+    dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->dtnew) );
+    // viscosity timestep
+    if (pmb_pack->pmhd->pvisc != nullptr) {
+      dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->pvisc->dtnew) );
+    }
+    // resistivity timestep
+    if (pmb_pack->pmhd->presist != nullptr) {
+      dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->presist->dtnew) );
+    }
+  }
+
+#if MPI_PARALLEL_ENABLED
+  // get minimum dt over all MPI ranks
+  MPI_Allreduce(MPI_IN_PLACE, &dt, 1, MPI_ATHENA_REAL, MPI_MIN, MPI_COMM_WORLD);
+#endif
+
+  // limit last time step to stop at tlim *exactly*
+  if ( (time < tlim) && ((time + dt) > tlim) ) {dt = tlim - time;}
+
+  return;
+}

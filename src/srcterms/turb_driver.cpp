@@ -40,7 +40,7 @@ TurbulenceDriver::TurbulenceDriver(MeshBlockPack *pp, ParameterInput *pin) :
 {
   // allocate memory for force registers
   int nmb = pmy_pack->nmb_thispack;
-  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
   int ncells1 = indcs.nx1 + 2*(indcs.ng);
   int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
   int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
@@ -132,7 +132,7 @@ void TurbulenceDriver::IncludeAddForcingTask(TaskList &tl, TaskID start)
 
 TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage)
 {
-  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
@@ -178,7 +178,7 @@ TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage)
 
     // Initialize sin and cos arrays
     // bad design: requires saving sin/cos during restarts
-    auto &coord = pmy_pack->coord.coord_data;
+    auto &size = pmy_pack->pcoord->mbdata.size;
     auto x1sin_ = x1sin;
     auto x1cos_ = x1cos;
     par_for("kx_loop", DevExeSpace(), 0, nmb-1, 0, nt-1, 0, ncells1-1,
@@ -186,8 +186,8 @@ TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage)
       { 
         int nk1 = n/nw23;
         Real kx = nk1*dkx;
-        Real &x1min = coord.mb_size.d_view(m).x1min;
-        Real &x1max = coord.mb_size.d_view(m).x1max;
+        Real &x1min = size.d_view(m).x1min;
+        Real &x1max = size.d_view(m).x1max;
         Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
       
         x1sin_(m,n,i) = sin(kx*x1v);
@@ -203,8 +203,8 @@ TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage)
         int nk1 = n/nw23;
         int nk2 = (n - nk1*nw23)/nw2;
         Real ky = nk2*dky;
-        Real &x2min = coord.mb_size.d_view(m).x2min;
-        Real &x2max = coord.mb_size.d_view(m).x2max;
+        Real &x2min = size.d_view(m).x2min;
+        Real &x2max = size.d_view(m).x2max;
         Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
         x2sin_(m,n,j) = sin(ky*x2v);
@@ -221,8 +221,8 @@ TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage)
         int nk2 = (n - nk1*nw23)/nw2;
         int nk3 = n - nk1*nw23 - nk2*nw2;
         Real kz = nk3*dkz;
-        Real &x3min = coord.mb_size.d_view(m).x3min;
-        Real &x3max = coord.mb_size.d_view(m).x3max;
+        Real &x3min = size.d_view(m).x3min;
+        Real &x3max = size.d_view(m).x3max;
         Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
         x3sin_(m,n,k) = sin(kz*x3v);
@@ -614,7 +614,7 @@ TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage)
 
 TaskStatus TurbulenceDriver::AddForcing(Driver *pdrive, int stage)
 {
-  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;

@@ -131,6 +131,21 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
       // read ghost cell option
       opar.include_gzs = pin->GetOrAddBoolean(opar.block_name, "ghost_zones", false);
 
+      // read MeshBlock ID (if specified)
+      opar.gid = pin->GetOrAddInteger(opar.block_name, "gid", -1);
+      if (opar.gid >= 0 && pm->nmb_total == 1) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+            << std::endl << "Cannot specify MeshBlock ID in output block '"
+            << opar.block_name << "' when there is only one" << std::endl;
+        exit(EXIT_FAILURE);
+      }
+      if (opar.gid > (pm->nmb_total-1)) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+            << std::endl << "MeshBlock gid=" << opar.gid << " in output block '"
+            << opar.block_name << "' exceeds total number of MeshBlocks" << std::endl;
+        exit(EXIT_FAILURE);
+      }
+
       // set output variable and optional file id (default is output variable name)
       if (opar.file_type.compare("hst") != 0 && opar.file_type.compare("rst") != 0) {
         opar.variable = GetOutputVariable(pin->GetString(opar.block_name, "variable"));

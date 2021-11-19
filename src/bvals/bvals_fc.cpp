@@ -4,7 +4,8 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file bvals_fc.cpp
-//  \brief implementation of functions in BoundaryValueFC class
+//  \brief functions to pass boundary values for face-centered variables as implmented in
+//  BValFC class
 
 #include <cstdlib>
 #include <iostream>
@@ -17,22 +18,22 @@
 #include "utils/create_mpitag.hpp"
 
 //----------------------------------------------------------------------------------------
-// BoundaryValueFC constructor:
+// BValFC constructor:
 
-BoundaryValueFC::BoundaryValueFC(MeshBlockPack *pp, ParameterInput *pin) : pmy_pack(pp)
+BValFC::BValFC(MeshBlockPack *pp, ParameterInput *pin) : pmy_pack(pp)
 {
 } 
   
 //----------------------------------------------------------------------------------------
-// BoundaryValueFC destructor
+// BValFC destructor
   
-BoundaryValueFC::~BoundaryValueFC()
+BValFC::~BValFC()
 {
 }
 
 //----------------------------------------------------------------------------------------
-// \!fn void BoundaryValueFC::AllocateBuffersFC
-// initialize array of send/recv BoundaryBuffers for each of the three components of
+// \!fn void BValFC::AllocateBuffersFC
+// initialize array of send/recv BValBuffers for each of the three components of
 // face-centered variables (vectors), such as magnetic field.
 //
 // NOTE: order of array elements is crucial and cannot be changed.  It must match
@@ -40,9 +41,9 @@ BoundaryValueFC::~BoundaryValueFC()
 
 // TODO: extend for AMR
 
-void BoundaryValueFC::AllocateBuffersFC()
+void BValFC::AllocateBuffersFC()
 {
-  auto &indcs = pmy_pack->coord.coord_data.mb_indcs;
+  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
   int ng = indcs.ng;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
@@ -268,12 +269,12 @@ void BoundaryValueFC::AllocateBuffersFC()
 }
 
 //----------------------------------------------------------------------------------------
-// \!fn void BoundaryValueFC::SendBuffersFC()
+// \!fn void BValFC::PackAndSendFC()
 // \brief Pack face-centered variables into boundary buffers and send to neighbors.
 //
 // Input array must be DvceFaceFld4D dimensioned (nmb, nx3, nx2, nx1)
 
-TaskStatus BoundaryValueFC::SendBuffersFC(DvceFaceFld4D<Real> &b, int key)
+TaskStatus BValFC::PackAndSendFC(DvceFaceFld4D<Real> &b, int key)
 {
   // create local references for variables in kernel
   int nmb = pmy_pack->pmb->nmb;
@@ -316,10 +317,10 @@ TaskStatus BoundaryValueFC::SendBuffersFC(DvceFaceFld4D<Real> &b, int key)
   
       // Inner (vector) loop over i
       // copy field components directly into recv buffer if MeshBlocks on same rank
-      if (nghbr[n].rank.d_view(m) == my_rank) {
+      if (nghbr.d_view(m,n).rank == my_rank) {
         // indices of recv'ing MB and buffer: assumes MB IDs are stored sequentially
-        int mm = nghbr[n].gid.d_view(m) - mbgid.d_view(0);
-        int nn = nghbr[n].destn.d_view(m);
+        int mm = nghbr.d_view(m,n).gid - mbgid.d_view(0);
+        int nn = nghbr.d_view(m,n).dest;
         if (v==0) {
           Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),[&](const int i)
           {
@@ -372,23 +373,23 @@ TaskStatus BoundaryValueFC::SendBuffersFC(DvceFaceFld4D<Real> &b, int key)
 
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
-      if (nghbr[n].gid.h_view(m) >= 0) {  // not a physical boundary
+      if (nghbr.h_view(m,n).gid >= 0) {  // not a physical boundary
         // compute indices of destination MeshBlock and Neighbor 
-        int nn = nghbr[n].destn.h_view(m);
-        if (nghbr[n].rank.h_view(m) == my_rank) {
-          int mm = nghbr[n].gid.h_view(m) - pmy_pack->gids;
+        int nn = nghbr.h_view(m,n).dest;
+        if (nghbr.h_view(m,n).rank == my_rank) {
+          int mm = nghbr.h_view(m,n).gid - pmy_pack->gids;
           rbuf[nn].bcomm_stat(mm) = BoundaryCommStatus::received;
 
 #if MPI_PARALLEL_ENABLED
         } else {
           // create tag using local ID and buffer index of *receiving* MeshBlock
-          int lid = nghbr[n].gid.h_view(m) -
-                    pmy_pack->pmesh->gidslist[nghbr[n].rank.h_view(m)];
+          int lid = nghbr.h_view(m,n).gid -
+                    pmy_pack->pmesh->gidslist[nghbr.h_view(m,n).rank];
           int tag = CreateMPITag(lid, nn, key);
           auto send_data = Kokkos::subview(sbuf[n].data, m, Kokkos::ALL, Kokkos::ALL);
           void* send_ptr = send_data.data();
           int ierr = MPI_Isend(send_ptr, send_data.size(), MPI_ATHENA_REAL,
-            nghbr[n].rank.h_view(m), tag, MPI_COMM_WORLD, &(sbuf[n].comm_req[m]));
+            nghbr.h_view(m,n).rank, tag, MPI_COMM_WORLD, &(sbuf[n].comm_req[m]));
 #endif
         }
       }
@@ -402,7 +403,7 @@ TaskStatus BoundaryValueFC::SendBuffersFC(DvceFaceFld4D<Real> &b, int key)
 // \!fn void RecvBuffers()
 // \brief Unpack boundary buffers
 
-TaskStatus BoundaryValueFC::RecvBuffersFC(DvceFaceFld4D<Real> &b)
+TaskStatus BValFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b)
 {
   // create local references for variables in kernel
   int nmb = pmy_pack->pmb->nmb;
@@ -423,8 +424,8 @@ TaskStatus BoundaryValueFC::RecvBuffersFC(DvceFaceFld4D<Real> &b)
   // check that recv boundary buffer communications have all completed
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
-      if (nghbr[n].gid.h_view(m) >= 0) { // ID != -1, so not a physical boundary
-        if (nghbr[n].rank.h_view(m) == global_variable::my_rank) {
+      if (nghbr.h_view(m,n).gid >= 0) { // ID != -1, so not a physical boundary
+        if (nghbr.h_view(m,n).rank == global_variable::my_rank) {
           if (rbuf[n].bcomm_stat(m) == BoundaryCommStatus::waiting) bflag = true;
 #if MPI_PARALLEL_ENABLED
         } else {

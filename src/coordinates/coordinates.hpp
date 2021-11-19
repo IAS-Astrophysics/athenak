@@ -19,26 +19,25 @@
 struct EOS_Data;
 
 //----------------------------------------------------------------------------------------
-//! \struct CoordinatesData
-//! \brief container for data and inline functions associated with Coordinates class.
-//! This includes cell indices, physical locations of MeshBlocks, and functions to compute
-//! positions and metric.
-//! Storing everything in a container makes it easier to capture coord variables and
-//! functions in kernels elsewhere in the code.
+//! \struct CoordData
+//! \brief container for Coordinate variables and functions needed inside kernels. Storing
+//! everything in a container makes them easier to capture, and pass to inline functions,
+//! inside kernels.
 
 struct CoordData
 {
-  RegionIndcs mb_indcs;             // indices (same for all MeshBlocks)
-  DualArray1D<RegionSize> mb_size;  // physical size (array of length [# of MBs])
+  RegionIndcs indcs;               // array indices (same for all MeshBlocks)
+  RegionIndcs cindcs;              // coarse array indices (same for all MeshBlocks)
+  DualArray1D<RegionSize> size;    // physical size (array of length [# of MBs])
 
   // following data is only used in GR calculations to compute metric
-  bool is_minkowski;                // flag to specify Minkowski (flat) space
-  Real bh_mass;                     // needed for GR metric
-  Real bh_spin;                     // needed for GR metric
-  Real bh_rmin;                     // needed for GR cons2prim
+  bool is_minkowski;               // flag to specify Minkowski (flat) space
+  Real bh_mass;                    // needed for GR metric
+  Real bh_spin;                    // needed for GR metric
+  Real bh_rmin;                    // needed for GR cons2prim
 
   // constructor
-  CoordData(int nmb) : mb_size("size",nmb) {}
+  CoordData(int nmb) : size("size",nmb) {}
 };
 
 //----------------------------------------------------------------------------------------
@@ -48,10 +47,10 @@ struct CoordData
 class Coordinates
 {
 public:
-  Coordinates(Mesh *pm, RegionIndcs indcs, int gids, int nmb);
+  Coordinates(MeshBlockPack *ppack, RegionIndcs indcs, int gids, int nmb);
   ~Coordinates() {};
 
-  CoordData coord_data;
+  CoordData mbdata;
 
   // functions
   void InitMetric(ParameterInput *pin);
@@ -61,7 +60,7 @@ public:
                      const EOS_Data &eos, const Real dt, DvceArray5D<Real> &u0);
 
 private:
-  Mesh* pmy_mesh;
+  MeshBlockPack* pmy_pack;
 };
 
 #endif // COORDINATES_COORDINATES_HPP_

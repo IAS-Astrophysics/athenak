@@ -37,21 +37,21 @@ void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &c
   const Real gm1 = (eos.gamma - 1.0);
   const Real gamma_prime = eos.gamma/(gm1);
 
-  int is = coord.mb_indcs.is;
-  int js = coord.mb_indcs.js;
-  int ks = coord.mb_indcs.ks;
+  int is = coord.indcs.is;
+  int js = coord.indcs.js;
+  int ks = coord.indcs.ks;
   par_for_inner(member, il, iu, [&](const int i)
   {
     // Extract components of metric
-    Real &x1min = coord.mb_size.d_view(m).x1min;
-    Real &x1max = coord.mb_size.d_view(m).x1max;
-    Real &x2min = coord.mb_size.d_view(m).x2min;
-    Real &x2max = coord.mb_size.d_view(m).x2max;
-    Real &x3min = coord.mb_size.d_view(m).x3min;
-    Real &x3max = coord.mb_size.d_view(m).x3max;
-    int nx1 = coord.mb_indcs.nx1;
-    int nx2 = coord.mb_indcs.nx2;
-    int nx3 = coord.mb_indcs.nx3;
+    Real &x1min = coord.size.d_view(m).x1min;
+    Real &x1max = coord.size.d_view(m).x1max;
+    Real &x2min = coord.size.d_view(m).x2min;
+    Real &x2max = coord.size.d_view(m).x2max;
+    Real &x3min = coord.size.d_view(m).x3min;
+    Real &x3max = coord.size.d_view(m).x3max;
+    int nx1 = coord.indcs.nx1;
+    int nx2 = coord.indcs.nx2;
+    int nx3 = coord.indcs.nx3;
     Real x1v,x2v,x3v;
     if (ivx == IVX) {
       x1v = LeftEdgeX  (i-is, nx1, x1min, x1max);

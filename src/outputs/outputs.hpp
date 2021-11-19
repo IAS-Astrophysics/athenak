@@ -49,6 +49,7 @@ struct OutputParameters
   std::string data_format;
   Real last_time, dt;
   int file_number;
+  int gid;
   bool include_gzs;
   bool slice1, slice2, slice3;
   Real slice_x1, slice_x2, slice_x3;
