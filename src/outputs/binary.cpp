@@ -94,7 +94,7 @@ void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   //  in the OutputData doubly linked lists), all in binary floats format
 
   int nout_vars = outvars.size();
-  auto &indcs = pm->pmb_pack->coord.coord_data.mb_indcs;
+  auto &indcs = pm->pmb_pack->pcoord->mbdata.indcs;
   int is = indcs.is; int &mb_nx1 = indcs.nx1;
   int js = indcs.js; int &mb_nx2 = indcs.nx2;
   int ks = indcs.ks; int &mb_nx3 = indcs.nx3;
@@ -112,7 +112,7 @@ void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   // Loop over MeshBlocks
   for (int m=0; m<nout_mbs; ++m) {
     char *pdata=&(data[m*data_size]);
-    LogicalLocation loc = pm->loclist[outmbs[m].mb_gid];
+    LogicalLocation loc = pm->lloclist[outmbs[m].mb_gid];
     int32_t nx;
     int &ois = outmbs[m].ois;
     int &oie = outmbs[m].oie;
