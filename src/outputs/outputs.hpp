@@ -174,6 +174,18 @@ class VTKOutput : public OutputType
 };
 
 //----------------------------------------------------------------------------------------
+//! \class BinaryOutput
+//  \brief derived OutputType class for binary grid data (nbf format in pegasus++)
+
+class BinaryOutput : public OutputType
+{
+ public:
+  BinaryOutput(OutputParameters oparams, Mesh *pm);
+
+  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+};
+
+//----------------------------------------------------------------------------------------
 //! \class Outputs
 //  \brief root class for all Athena++ outputs. Provides a std::vector of OutputTypes,
 //   with each element representing one mode/format of output to be made.

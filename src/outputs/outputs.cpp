@@ -4,41 +4,39 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file outputs.cpp
-//  \brief implements Outputs class constructor
-//
-// The number and types of outputs are all controlled by the number and values of
-// parameters specified in <output[n]> blocks in the input file.  Each output block must
-// be labelled by a unique integer "n".  Following the convention of the parser
-// implemented in the ParameterInput class, a second output block with the same integer
-// "n" of an earlier block will silently overwrite the values read by the first block. The
-// numbering of the output blocks does not need to be consecutive, and blocks may appear
-// in any order in the input file. A new output type will be created for each and every
-// <output[n]> block in the input file.
-//
-// Required parameters that must be specified in an <output[n]> block are:
-//   - variable     = cons,prim,D,d,E,e,m,m1,m2,m3,v,v1=vx,v2=vy,v3=vz,p,
-//                    bcc,bcc1,bcc2,bcc3,b,b1,b2,b3,phi,uov
-//   - file_type    = rst,tab,vtk,hst,hdf5
-//   - dt           = problem time between outputs
-//
-// EXAMPLE of an <output[n]> block for a TAB dump:
-//   <output3>
-//   file_type   = tab       # Tabular data dump
-//   variable    = prim      # variables to be output
-//   data_format = %12.5e    # Optional data format string
-//   dt          = 0.01      # time increment between outputs
-//   slice_x2    = 0.0       # slice at x2 
-//   slice_x3    = 0.0       # slice at x3
-//   ghost_zones = true      # will include ghost zones in output
-//   gid         = 3         # only output for MeshBlock with this ID
-//
-// Each <output[n]> block will result in a new node being created in a linked list of
-// OutputType stored in the Outputs class.  During a simulation, outputs are made when
-// the simulation time satisfies the criteria implemented in the Driver class.
-//
-// To implement a new output type, write a new OutputType derived class, and construct
-// an object of this class in the Outputs constructor at the location indicated by the
-// comment text: 'NEW_OUTPUT_TYPES'.
+//! \brief implements Outputs class constructor
+//!
+//! The number and types of outputs are all controlled by the number and values of
+//! parameters specified in <output[n]> blocks in the input file.  Each output block must
+//! be labelled by a unique integer "n".  Following the convention of the parser
+//! implemented in the ParameterInput class, a second output block with the same integer
+//! "n" of an earlier block will silently overwrite the values read by the first block.
+//! Numbering of output blocks does not need to be consecutive, and blocks may appear
+//! in any order in the input file. A new output type will be created for each and every
+//! <output[n]> block in the input file.
+//!
+//! Required parameters that must be specified in an <output[n]> block are:
+//!   - variable  = [see the enum class OutputVariable in outputs.hpp to see the list of
+//!                  currently strings for specifing output variables]
+//!   - file_type = tab,vtk,hst,bin,rst
+//!   - dt        = problem time between outputs
+//!
+//! EXAMPLE of an <output[n]> block for a TAB dump:
+//!   <output3>
+//!   file_type   = tab       # Tabular data dump
+//!   variable    = prim      # variables to be output
+//!   data_format = %12.5e    # Optional data format string
+//!   dt          = 0.01      # time increment between outputs
+//!   slice_x2    = 0.0       # slice at x2 
+//!   slice_x3    = 0.0       # slice at x3
+//!
+//! Each <output[n]> block will result in a new node being created in a linked list of
+//! OutputType stored in the Outputs class.  During a simulation, outputs are made when
+//! the simulation time satisfies the criteria implemented in the Driver class.
+//!
+//! To implement a new output type, write a new OutputType derived class, and construct
+//! an object of this class in the Outputs constructor at the location indicated by the
+//! comment text: 'NEW_OUTPUT_TYPES'.
 //========================================================================================
 
 #include <cstdio>
@@ -171,6 +169,9 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
         num_hst++;
       } else if (opar.file_type.compare("vtk") == 0) {
         pnode = new VTKOutput(opar,pm);
+        pout_list.insert(pout_list.begin(),pnode);
+      } else if (opar.file_type.compare("bin") == 0) {
+        pnode = new BinaryOutput(opar,pm);
         pout_list.insert(pout_list.begin(),pnode);
 //      } else if (op.file_type.compare("rst") == 0) {
 //    // Move restarts to the tail end of the OutputType list, so file counters for other

@@ -13,10 +13,9 @@
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
-#include <limits>
 #include <sstream>
-#include <stdexcept>
 #include <string>
+#include <sys/stat.h>  // mkdir
 
 #include "athena.hpp"
 #include "coordinates/cell_locations.hpp"
@@ -32,18 +31,8 @@
 VTKOutput::VTKOutput(OutputParameters op, Mesh *pm)
   : OutputType(op, pm)
 {
-  if (pm->multilevel && (op.gid < 0)) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "VTK legacy file format cannot be used with SMR/AMR except"
-              << " to output a single MeshBlock.  Please specify a gid." << std::endl;
-    exit(EXIT_FAILURE);
-  }
-  if ((pm->nmb_total) > 1 && op.include_gzs && (op.gid < 0)) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "Cannout output ghost cells with VTK legacy file format"
-              << " and multiple MeshBlocks" << std::endl;
-    exit(EXIT_FAILURE);
-  }
+  // create directories for outputs. Comments in binary.cpp constructor explain why
+  mkdir("vtk",0775);
 }
 
 //----------------------------------------------------------------------------------------
@@ -97,13 +86,14 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   int ndata = std::max(std::max(ncoord1, ncoord2), ncoord3);
   data = new float[ndata];
 
-  // create filename: "file_basename" + "." + "file_id" + "." + XXXXX + ".vtk"
+  // create filename: "vtk/file_basename" + "." + "file_id" + "." + XXXXX + ".vtk"
   // where XXXXX = 5-digit file_number
   std::string fname;
   char number[6];
   std::snprintf(number, sizeof(number), "%05d", out_params.file_number);
 
-  fname.assign(out_params.file_basename);
+  fname.assign("vtk/");
+  fname.append(out_params.file_basename);
   fname.append(".");
   fname.append(out_params.file_id);
   fname.append(".");
