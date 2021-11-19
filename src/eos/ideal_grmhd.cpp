@@ -383,7 +383,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons,
         const Real& w_t  = prim(m,ITM,k,j,i);
         w_p = w_t*gm1*w_d;
       }
-      if (rad <= coord.bh_rmin || floor_hit) {
+      if (rad <= mbd.bh_rmin || floor_hit) {
         Real ud, ue, um1, um2, um3;
         eos.PrimToConsSingleGRMHD(g_, gi_, w_d, w_p, w_ux, w_uy, w_uz,
                                   w_bx, w_by, w_bz,
