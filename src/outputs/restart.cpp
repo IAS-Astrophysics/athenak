@@ -52,7 +52,11 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
 
   // increment counters now so values for *next* dump are stored in restart file
   out_params.file_number++;
-  out_params.last_time += out_params.dt;
+  if (out_params.last_time < 0.0) {
+    out_params.last_time = pm->time;
+  } else {
+    out_params.last_time += out_params.dt;
+  }
   pin->SetInteger(out_params.block_name, "file_number", out_params.file_number);
   pin->SetReal(out_params.block_name, "last_time", out_params.last_time);
 
@@ -62,9 +66,9 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   std::string sbuf = ost.str();
 
   // calculate size of header
-  IOWrapperSizeT headeroffset = sbuf.size()*sizeof(char) + 3*sizeof(int)+sizeof(RegionSize)
-                 + 2*sizeof(Real)+sizeof(IOWrapperSizeT);
-  // the size of each MeshBlock
+  IOWrapperSizeT headeroffset = sbuf.size()*sizeof(char) +
+      3*sizeof(int)+sizeof(RegionSize) + 2*sizeof(Real)+sizeof(IOWrapperSizeT);
+  // the size of variables stored in each MeshBlockPack
   size_t datasize = pm->pmb_pack->GetMeshBlockPackArraySizeInBytes();
 
   // open file and  write the header; this part is serial
@@ -83,6 +87,27 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
     rstfile.Write(&(pm->ncycle), sizeof(int), 1);
     rstfile.Write(&(datasize), sizeof(IOWrapperSizeT), 1);
   }
+
+  // allocate memory for the ID list and the data
+  IOWrapperSizeT listsize = sizeof(LogicalLocation);
+  int mynmb = pm->nmblist[global_variable::my_rank];
+  char *idlist = new char[listsize*mynmb];
+
+  // Loop over MeshBlockPack and pack the meta data
+  int os=0;
+  for (int id=pm->pmb_pack->gids; id<pm->pmb_pack->gide; ++id) {
+    std::memcpy(&(idlist[os]), &(pm->lloclist[id]), sizeof(LogicalLocation));
+    os += sizeof(LogicalLocation);
+  }
+
+  // write the ID list collectively
+  int mygids = pm->gidslist[global_variable::my_rank];
+  IOWrapperSizeT myoffset = headeroffset + listsize*mygids;
+  rstfile.Write_at_all(idlist, listsize, mynmb, myoffset);
+
+  // deallocate the idlist array
+  delete [] idlist;
+
 
   rstfile.Close();
 
