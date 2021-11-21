@@ -67,7 +67,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
 
   // calculate size of header
   IOWrapperSizeT headeroffset = sbuf.size()*sizeof(char) +
-      3*sizeof(int)+sizeof(RegionSize) + 2*sizeof(Real)+sizeof(IOWrapperSizeT);
+      3*sizeof(int) + sizeof(RegionSize) + 2*sizeof(Real) + sizeof(IOWrapperSizeT);
   // the size of variables stored in each MeshBlockPack
   size_t datasize = pm->pmb_pack->GetMeshBlockPackArraySizeInBytes();
 

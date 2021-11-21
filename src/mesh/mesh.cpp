@@ -184,9 +184,6 @@ Mesh::Mesh(ParameterInput *pin)
 }
 
 //----------------------------------------------------------------------------------------
-// Mesh constructor for restarts. Load the restart file
-
-//----------------------------------------------------------------------------------------
 // destructor
 
 Mesh::~Mesh()
@@ -209,12 +206,15 @@ Mesh::~Mesh()
 }
 
 //----------------------------------------------------------------------------------------
-// BuildTree: constructs MeshBlockTree, MeshBlockPack (containing physics modules), and
-// MeshBlock(s).  Does initial load balance based on simple cost estimate.
+//! \fn void Mesh::BuildTreeFromScratch():
+//! Constructs MeshBlockTree, creates MeshBlockPack (containing the physics modules), and
+//! divides grid into MeshBlock(s) for new runs (starting from scratch), using parameters
+//! read from input file.  Also dDoes initial load balance based on simple cost estimate.
 
-void Mesh::BuildTree(ParameterInput *pin)
+void Mesh::BuildTreeFromScratch(ParameterInput *pin)
 {
-  // Calculate # of cells in MeshBlock read from input parameters, error check
+  // Read # of cells in MeshBlock from input parameters, error check
+  // Uses local struct for now, stored in Coordinates class when MBs created below
   RegionIndcs mb_indices;
   mb_indices.ng  = mesh_indcs.ng;
   mb_indices.nx1 = pin->GetOrAddInteger("meshblock", "nx1", mesh_indcs.nx1);
@@ -516,6 +516,75 @@ void Mesh::BuildTree(ParameterInput *pin)
   return;
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn void Mesh::BuildTreeFromRestart():
+//! Constructs MeshBlockTree, creates MeshBlockPack (containing the physics modules), and
+//! divides grid into MeshBlock(s) for restart runs, using parameters and data read from
+//! restart file.
+
+void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile)
+{
+  // following must be identical to headeroffset in restart.cpp
+  IOWrapperSizeT headersize = 3*sizeof(int) + 2*sizeof(Real)
+                              + sizeof(RegionSize) + sizeof(IOWrapperSizeT);
+  char *headerdata = new char[headersize];
+
+  // At this point, the restartfile is already open and the ParameterInput (input file)
+  // data has already been read in main(). Thus the file pointer is set to after <par_end>
+  IOWrapperSizeT headeroffset = resfile.GetPosition();
+  if (global_variable::my_rank == 0) { // the master process reads the header data
+    if (resfile.Read(headerdata, 1, headersize) != headersize) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Header size read from restart file is incorrect, "
+                << "restart file is broken." << std::endl;
+      exit(EXIT_FAILURE);
+    }
+  }
+
+#ifdef MPI_PARALLEL
+  // then broadcast the header data
+  MPI_Bcast(headerdata, headersize, MPI_BYTE, 0, MPI_COMM_WORLD);
+#endif
+
+  // set nmb_total, root_level, mesh_size, time, dt, ncycle, and size of data
+  IOWrapperSizeT hdos = 0;
+  std::memcpy(&nmb_total, &(headerdata[hdos]), sizeof(int));
+  hdos += sizeof(int);
+  std::memcpy(&root_level, &(headerdata[hdos]), sizeof(int));
+  hdos += sizeof(int);
+  std::memcpy(&mesh_size, &(headerdata[hdos]), sizeof(RegionSize));
+  hdos += sizeof(RegionSize);
+  std::memcpy(&time, &(headerdata[hdos]), sizeof(Real));
+  hdos += sizeof(Real);
+  std::memcpy(&dt, &(headerdata[hdos]), sizeof(Real));
+  hdos += sizeof(Real);
+  std::memcpy(&ncycle, &(headerdata[hdos]), sizeof(int));
+  hdos += sizeof(int);
+  IOWrapperSizeT datasize;
+  std::memcpy(&datasize, &(headerdata[hdos]), sizeof(IOWrapperSizeT));
+  hdos += sizeof(IOWrapperSizeT);   // (this updated value is never used)
+
+  // Read # of cells in MeshBlock from input parameters, no error check needed
+  // Uses local struct for now, stored in Coordinates class when MBs created below
+  RegionIndcs mb_indices;
+  mb_indices.ng  = mesh_indcs.ng;
+  mb_indices.nx1 = pin->GetOrAddInteger("meshblock", "nx1", mesh_indcs.nx1);
+  if (multi_d) {
+    mb_indices.nx2 = pin->GetOrAddInteger("meshblock", "nx2", mesh_indcs.nx2);
+  } else {
+    mb_indices.nx2 = mesh_indcs.nx2;
+  }
+  if (three_d) {
+    mb_indices.nx3 = pin->GetOrAddInteger("meshblock", "nx3", mesh_indcs.nx3);
+  } else {
+    mb_indices.nx3 = mesh_indcs.nx3;
+  }
+
+  // calculate the number of MeshBlocks at root level in each dir
+  nmb_rootx1 = mesh_indcs.nx1/mb_indices.nx1;
+  nmb_rootx2 = mesh_indcs.nx2/mb_indices.nx2;
+  nmb_rootx3 = mesh_indcs.nx3/mb_indices.nx3;
+}
 //----------------------------------------------------------------------------------------
 //! \fn void Mesh::PrintMeshDiagnostics()
 //  \brief prints information about mesh structure, always called at start of every

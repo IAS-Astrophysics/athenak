@@ -102,7 +102,6 @@ class Mesh
 
 public:
   explicit Mesh(ParameterInput *pin);
-  Mesh(ParameterInput *pin, IOWrapper &resfile);  // ctor for restarts
   ~Mesh();
 
   // accessors
@@ -157,7 +156,8 @@ public:
   MeshBlockPack* pmb_pack;  // container for MeshBlocks on this rank
 
   // functions
-  void BuildTree(ParameterInput *pin);
+  void BuildTreeFromScratch(ParameterInput *pin);
+  void BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile);
   void NewTimeStep(const Real tlim);
   void PrintMeshDiagnostics();
   void WriteMeshStructure();

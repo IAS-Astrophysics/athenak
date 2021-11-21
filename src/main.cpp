@@ -202,17 +202,29 @@ int main(int argc, char *argv[])
   }
 
   //--- Step 3. --------------------------------------------------------------------------
-  // Construct ParameterInput object and store smart pointer to it.
-  // Constructor reads input_file and stores block/parameter names.
+  // Construct ParameterInput object and load data either from restart or input file.
   // With MPI, the input is read by every rank in parallel using MPI-IO.
 
-  ParameterInput par_input(input_file);
-  par_input.ModifyFromCmdline(argc, argv);
+  ParameterInput* pinput = new ParameterInput;
+  IOWrapper infile, restartfile;
+  // read parameters from restart file
+  if (res_flag == 1) {
+    restartfile.Open(restart_file.c_str(), IOWrapper::FileMode::read);
+    pinput->LoadFromFile(restartfile);
+  }
+  // read parameters from input file.  If both -r and -i are specified, this will
+  // override parameters from the restart file
+  if (iarg_flag == 1) {
+    infile.Open(input_file.c_str(), IOWrapper::FileMode::read);
+    pinput->LoadFromFile(infile);
+    infile.Close();
+  }
+  pinput->ModifyFromCmdline(argc, argv);
 
   // Dump input parameters and quit if code was run with -n option.
   if (narg_flag) {
-    if (global_variable::my_rank == 0) par_input.ParameterDump(std::cout);
-//    if (res_flag == 1) restartfile.Close();
+    if (global_variable::my_rank == 0) pinput->ParameterDump(std::cout);
+    if (res_flag == 1) restartfile.Close();
     Kokkos::finalize();
 #if MPI_PARALLEL_ENABLED
     MPI_Finalize();
@@ -225,12 +237,18 @@ int main(int argc, char *argv[])
   // on this rank.  Latter cannot be performed in Mesh constructor since it requires
   // pointer to Mesh.
 
-  Mesh mesh0(&par_input);
-  mesh0.BuildTree(&par_input);
+  Mesh* pmesh;
+  pmesh = new Mesh(pinput);
+  if (res_flag == 0) {
+    pmesh->BuildTreeFromScratch(pinput);
+  } else {
+    pmesh->BuildTreeFromRestart(pinput, restartfile);
+  }
 
   //  If code was run with -m option, write mesh structure to file and quit.
   if (marg_flag) {
-    if (global_variable::my_rank == 0) {mesh0.WriteMeshStructure();}
+    if (global_variable::my_rank == 0) {pmesh->WriteMeshStructure();}
+    if (res_flag == 1) {restartfile.Close();}
     Kokkos::finalize();
 #if MPI_PARALLEL_ENABLED
     MPI_Finalize();
@@ -241,19 +259,23 @@ int main(int argc, char *argv[])
   //--- Step 5. --------------------------------------------------------------------------
   // Construct Driver
 
-  Driver driver(&par_input, &mesh0);
+  Driver driver(pinput, pmesh);
 
   //--- Step 6. --------------------------------------------------------------------------
   // Add physics modules to MeshBlockPack. Note this must occur after Mesh (MeshBlocks and
   // MeshBlockPack) and Driver are fully constructed.
 
-  mesh0.pmb_pack->AddPhysics(&par_input, &driver);
+  pmesh->pmb_pack->AddPhysics(pinput, &driver);
+
+/****/
+  if (res_flag == 1) restartfile.Close();
+/****/
 
   //--- Step 7. --------------------------------------------------------------------------
   // Construct Outputs. Actual outputs (including initial conditions) are made in Driver
 
   ChangeRunDir(run_dir);
-  Outputs out_types(&par_input, &mesh0);
+  Outputs out_types(pinput, pmesh);
 
   //--- Step 8. --------------------------------------------------------------------------
   // Execute Driver.
@@ -261,13 +283,15 @@ int main(int argc, char *argv[])
   //    2. TaskList(s) executed in Driver::Execute()
   //    3. Any final analysis or diagnostics run in Driver::Finalize()
 
-  driver.Initialize(&mesh0, &par_input,  &out_types);
-  driver.Execute(&mesh0, &par_input,  &out_types);
-  driver.Finalize(&mesh0, &par_input,  &out_types);
+  driver.Initialize(pmesh, pinput,  &out_types);
+  driver.Execute(pmesh, pinput,  &out_types);
+  driver.Finalize(pmesh, pinput,  &out_types);
 
   //--- Step 9. -------------------------------------------------------------------------
   // clean up, and terminate
 
+  delete pinput;
+  delete pmesh;
   Kokkos::finalize();
 #if MPI_PARALLEL_ENABLED
   MPI_Finalize();
