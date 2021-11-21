@@ -32,7 +32,7 @@ Viscosity::Viscosity(std::string block, MeshBlockPack *pp, ParameterInput *pin)
 
   // viscous timestep on MeshBlock(s) in this pack
   dtnew = std::numeric_limits<float>::max();
-  auto size = pmy_pack->pcoord->mbdata.size;
+  auto size = pmy_pack->pmb->mb_size;
   Real fac;
   if (pp->pmesh->three_d) {
     fac = 1.0/6.0;
@@ -63,13 +63,13 @@ Viscosity::~Viscosity()
 void Viscosity::IsotropicViscousFlux(const DvceArray5D<Real> &w0, const Real nu,
   const EOS_Data &eos, DvceFaceFld5D<Real> &flx)
 {
-  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
   int ncells1 = indcs.nx1 + 2*(indcs.ng);
   int nmb1 = pmy_pack->nmb_thispack - 1;
-  auto size = pmy_pack->pcoord->mbdata.size;
+  auto size = pmy_pack->pmb->mb_size;
   bool &multi_d = pmy_pack->pmesh->multi_d;
   bool &three_d = pmy_pack->pmesh->three_d;
 

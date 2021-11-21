@@ -35,7 +35,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
   Real rho1  = pin->GetReal("problem","rho1");
 
   // capture variables for kernel
-  auto &indcs = pmbp->pcoord->mbdata.indcs;
+  auto &indcs = pmbp->pmesh->mb_indcs;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
@@ -43,7 +43,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
   EOS_Data &eos = pmbp->phydro->peos->eos_data;
   Real gm1 = eos.gamma - 1.0;
   auto &w0 = pmbp->phydro->w0;
-  auto &size = pmbp->pcoord->mbdata.size;
+  auto &size = pmbp->pmb->mb_size;
   int &nhydro = pmbp->phydro->nhydro;
   int &nscalars = pmbp->phydro->nscalars;
   if (nscalars == 0) {

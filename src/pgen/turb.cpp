@@ -29,7 +29,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
   }
 
   // capture variables for kernel
-  auto &indcs = pmbp->pcoord->mbdata.indcs;
+  auto &indcs = pmbp->pmesh->mb_indcs;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;

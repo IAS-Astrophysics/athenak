@@ -43,7 +43,7 @@ BValFC::~BValFC()
 
 void BValFC::AllocateBuffersFC()
 {
-  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
   int ng = indcs.ng;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
@@ -283,7 +283,7 @@ TaskStatus BValFC::PackAndSendFC(DvceFaceFld4D<Real> &b, int key)
 
   {int &my_rank = global_variable::my_rank;
   auto &nghbr = pmy_pack->pmb->nghbr;
-  auto &mbgid = pmy_pack->pmb->mbgid;
+  auto &mbgid = pmy_pack->pmb->mb_gid;
   auto &sbuf = send_buf;
   auto &rbuf = recv_buf;
 

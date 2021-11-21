@@ -24,7 +24,7 @@ namespace mhd {
 
 TaskStatus MHD::ExpRKUpdate(Driver *pdriver, int stage)
 {
-  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
@@ -42,7 +42,7 @@ TaskStatus MHD::ExpRKUpdate(Driver *pdriver, int stage)
   auto flx1 = uflx.x1f;
   auto flx2 = uflx.x2f;
   auto flx3 = uflx.x3f;
-  auto &mbsize = pmy_pack->pcoord->mbdata.size;
+  auto &mbsize = pmy_pack->pmb->mb_size;
 
   // hierarchical parallel loop that updates conserved variables to intermediate step
   // using weights and fractional time step appropriate to stages of time-integrator used

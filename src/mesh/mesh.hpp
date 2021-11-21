@@ -104,20 +104,12 @@ public:
   explicit Mesh(ParameterInput *pin);
   ~Mesh();
 
-  // accessors
-  int FindMeshBlockIndex(int tgid)
-  {
-    for (int m=0; m<pmb_pack->pmb->nmb; ++m) {
-      if (pmb_pack->pmb->mbgid.h_view(m) == tgid) return m;
-    }
-    return -1;
-  }
-
   // data
   RegionSize  mesh_size;      // (physical) size of mesh (physical root level)
   RegionIndcs mesh_indcs;     // indices of cells in mesh (physical root level)
+  RegionIndcs mb_indcs;       // indices of cells in MeshBlocks (same for all MeshBlocks)
+  RegionIndcs mb_cindcs;      // indices of coarse array cells in MeshBlocks
   BoundaryFlag mesh_bcs[6];   // physical boundary conditions at 6 faces of mesh
-  BoundaryFnPtr BoundaryFunc[6];
 
   bool one_d, two_d, three_d; // flags to indicate 1D or 2D or 3D calculations
   bool multi_d;               // flag to indicate 2D and 3D calculations
@@ -163,8 +155,18 @@ public:
   void WriteMeshStructure();
   BoundaryFlag GetBoundaryFlag(const std::string& input_string);
   std::string GetBoundaryString(BoundaryFlag input_flag);
-  void EnrollBoundaryFunction(BoundaryFace dir, BoundaryFnPtr my_bc); 
-  void CheckUserBoundaries();
+
+  // accessors
+  int FindMeshBlockIndex(int tgid)
+  {
+    for (int m=0; m<pmb_pack->pmb->nmb; ++m) {
+      if (pmb_pack->pmb->mb_gid.h_view(m) == tgid) return m;
+    }
+    return -1;
+  }
+  int NumberOfMeshBlockCells() const {
+    return (mb_indcs.nx1)*(mb_indcs.nx2)*(mb_indcs.nx3);
+  }
 
 private:
   // variables for load balancing control

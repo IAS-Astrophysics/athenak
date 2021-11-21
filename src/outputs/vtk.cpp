@@ -134,17 +134,17 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
     dx2 = pm->mesh_size.dx2;
     dx3 = pm->mesh_size.dx3;
   } else {
-    x1min = pm->pmb_pack->pcoord->mbdata.size.h_view(out_params.gid).x1min;
-    x2min = pm->pmb_pack->pcoord->mbdata.size.h_view(out_params.gid).x2min;
-    x3min = pm->pmb_pack->pcoord->mbdata.size.h_view(out_params.gid).x3min;
-    dx1 = pm->pmb_pack->pcoord->mbdata.size.h_view(out_params.gid).dx1;
-    dx2 = pm->pmb_pack->pcoord->mbdata.size.h_view(out_params.gid).dx2;
-    dx3 = pm->pmb_pack->pcoord->mbdata.size.h_view(out_params.gid).dx3;
+    x1min = pm->pmb_pack->pmb->mb_size.h_view(out_params.gid).x1min;
+    x2min = pm->pmb_pack->pmb->mb_size.h_view(out_params.gid).x2min;
+    x3min = pm->pmb_pack->pmb->mb_size.h_view(out_params.gid).x3min;
+    dx1 = pm->pmb_pack->pmb->mb_size.h_view(out_params.gid).dx1;
+    dx2 = pm->pmb_pack->pmb->mb_size.h_view(out_params.gid).dx2;
+    dx3 = pm->pmb_pack->pmb->mb_size.h_view(out_params.gid).dx3;
   }
   if (out_params.include_gzs) {
-    x1min -= (pm->pmb_pack->pcoord->mbdata.indcs.ng)*dx1;
-    x2min -= (pm->pmb_pack->pcoord->mbdata.indcs.ng)*dx2;
-    x3min -= (pm->pmb_pack->pcoord->mbdata.indcs.ng)*dx3;
+    x1min -= (pm->pmb_pack->pmesh->mb_indcs.ng)*dx1;
+    x2min -= (pm->pmb_pack->pmesh->mb_indcs.ng)*dx2;
+    x3min -= (pm->pmb_pack->pmesh->mb_indcs.ng)*dx3;
   }
   msg << std::scientific << std::setprecision(std::numeric_limits<Real>::max_digits10 - 1)
       << "ORIGIN " << x1min << " " << x2min << " " << x3min << " " <<  std::endl
@@ -172,7 +172,7 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
 
     // Loop over MeshBlocks
     for (int m=0; m<nout_mbs; ++m) {
-      auto &indcs = pm->pmb_pack->pcoord->mbdata.indcs;
+      auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
       LogicalLocation lloc = pm->lloclist[outmbs[m].mb_gid];
       int &mb_nx1 = indcs.nx1;
       int &mb_nx2 = indcs.nx2;

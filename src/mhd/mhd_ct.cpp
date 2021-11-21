@@ -21,7 +21,7 @@ namespace mhd {
 
 TaskStatus MHD::CT(Driver *pdriver, int stage) 
 {
-  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
@@ -36,7 +36,7 @@ TaskStatus MHD::CT(Driver *pdriver, int stage)
   auto e1 = efld.x1e;
   auto e2 = efld.x2e;
   auto e3 = efld.x3e;
-  auto &mbsize = pmy_pack->pcoord->mbdata.size;
+  auto &mbsize = pmy_pack->pmb->mb_size;
 
   //---- update B1 (only for 2D/3D problems)
   if (multi_d) {

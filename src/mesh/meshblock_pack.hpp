@@ -59,10 +59,6 @@ public:
   // functions
   void AddPhysics(ParameterInput *pin, Driver *pdrive);
   void AddMeshBlocksAndCoordinates(ParameterInput *pin, RegionIndcs indcs);
-  int NumberOfMeshBlockCells() const {
-    return (pcoord->mbdata.indcs.nx1)*(pcoord->mbdata.indcs.nx2)*
-           (pcoord->mbdata.indcs.nx3);
-  }
   std::size_t GetMeshBlockPackArraySizeInBytes();
 
 private:

@@ -37,7 +37,7 @@ void RoeFluxIso(const Real wroe[], const Real du[], const Real wli[],
 //  \brief The Roe Riemann solver for hydrodynamics (both ideal gas and isothermal)
 
 KOKKOS_INLINE_FUNCTION
-void Roe(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coord,
+void Roe(TeamMember_t const &member, const EOS_Data &eos,
      const int m, const int k, const int j, const int il, const int iu, const int ivx,
      const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr, DvceArray5D<Real> flx)
 {

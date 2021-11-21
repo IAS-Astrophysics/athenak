@@ -207,11 +207,9 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh) :
 
 void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
 {
-  //---- Step 1.  Set ICs by constructing Problem Generator, check user-defined BCs
-  // enrolled (if required).
+  //---- Step 1.  Set ICs by constructing Problem Generator.
 
   pgen = std::make_unique<ProblemGenerator>(pin, pmesh, this);
-  pmesh->CheckUserBoundaries();
 
   //---- Step 2.  Set conserved variables in ghost zones for all physics
   // Note: with MPI, sends on ALL MBs must be complete before receives execute
@@ -219,6 +217,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
   // Initialize HYDRO: ghost zones and primitive variables (everywhere)
   hydro::Hydro *phydro = pmesh->pmb_pack->phydro;
   if (phydro != nullptr) {
+    phydro->CheckUserBoundaries();
     // following functions return a TaskStatus, but it is ignored so cast to (void)
     (void) phydro->RestrictU(this, 0);
     (void) phydro->InitRecv(this, 0);
@@ -236,6 +235,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
   // Note this requires communicating BOTH u and B
   mhd::MHD *pmhd = pmesh->pmb_pack->pmhd;
   if (pmhd != nullptr) {
+    pmhd->CheckUserBoundaries();
     // following functions return a TaskStatus, but it is ignored so cast to (void)
     (void) pmhd->InitRecv(this, 0);
     (void) pmhd->SendU(this, 0);
@@ -446,7 +446,7 @@ void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
   
       // Calculate and print the zone-cycles/exe-second and wall-second
       std::uint64_t zonecycles = nmb_updated_ *
-          static_cast<std::uint64_t>(pmesh->pmb_pack->NumberOfMeshBlockCells());
+          static_cast<std::uint64_t>(pmesh->NumberOfMeshBlockCells());
       float zcps = static_cast<float>(zonecycles) / exe_time;
 
       std::cout << std::endl << "zone-cycles = " << zonecycles << std::endl;

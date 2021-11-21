@@ -88,7 +88,7 @@ TaskStatus Hydro::InitRecv(Driver *pdrive, int stage)
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
   auto nghbr = pmy_pack->pmb->nghbr;
-  auto &mblev = pmy_pack->pmb->mblev;
+  auto &mblev = pmy_pack->pmb->mb_lev;
   int nvar = nhydro + nscalars;  // TODO: potential bug if more variables added
 
   // Initialize communications for cell-centered conserved variables
@@ -228,12 +228,12 @@ TaskStatus Hydro::RestrictU(Driver *pdrive, int stage)
   Real fact = 0.5;
   if (multi_d) fact *= 0.5;
   if (three_d) fact *= 0.5;
-  auto &cis = pmy_pack->pcoord->mbdata.cindcs.is;
-  auto &cie = pmy_pack->pcoord->mbdata.cindcs.ie;
-  auto &cjs = pmy_pack->pcoord->mbdata.cindcs.js;
-  auto &cje = pmy_pack->pcoord->mbdata.cindcs.je;
-  auto &cks = pmy_pack->pcoord->mbdata.cindcs.ks;
-  auto &cke = pmy_pack->pcoord->mbdata.cindcs.ke;
+  auto &cis = pmy_pack->pmesh->mb_cindcs.is;
+  auto &cie = pmy_pack->pmesh->mb_cindcs.ie;
+  auto &cjs = pmy_pack->pmesh->mb_cindcs.js;
+  auto &cje = pmy_pack->pmesh->mb_cindcs.je;
+  auto &cks = pmy_pack->pmesh->mb_cindcs.ks;
+  auto &cke = pmy_pack->pmesh->mb_cindcs.ke;
   par_for("restrict3D",DevExeSpace(),0, nmb1, 0, nvar-1, cks,cke,cjs,cje,cis,cie,
     KOKKOS_LAMBDA(const int m, const int n, const int k, const int j, const int i)
     { 

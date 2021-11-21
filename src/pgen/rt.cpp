@@ -68,8 +68,8 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
   Real grav_acc = pin->GetReal("hydro","const_accel_val");
 
   // capture variables for kernel
-  auto &indcs = pmbp->pcoord->mbdata.indcs;
-  auto &size = pmbp->pcoord->mbdata.size;
+  auto &indcs = pmbp->pmesh->mb_indcs;
+  auto &size = pmbp->pmb->mb_size;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;

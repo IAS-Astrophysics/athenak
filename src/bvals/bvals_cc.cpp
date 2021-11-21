@@ -45,8 +45,8 @@ TaskStatus BValCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, in
 
   {int &my_rank = global_variable::my_rank;
   auto &nghbr = pmy_pack->pmb->nghbr;
-  auto &mbgid = pmy_pack->pmb->mbgid;
-  auto &mblev = pmy_pack->pmb->mblev;
+  auto &mbgid = pmy_pack->pmb->mb_gid;
+  auto &mblev = pmy_pack->pmb->mb_lev;
   auto &sbuf = send_buf;
   auto &rbuf = recv_buf;
 
@@ -156,7 +156,7 @@ TaskStatus BValCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, in
   {int &my_rank = global_variable::my_rank;
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &rbuf = recv_buf;
-  auto &mblev = pmy_pack->pmb->mblev;
+  auto &mblev = pmy_pack->pmb->mb_lev;
 #if MPI_PARALLEL_ENABLED
   auto &sbuf = send_buf;
 #endif
@@ -258,7 +258,7 @@ std::cout << "block=" << m << "  buffer=" << n << "  not received" << std::endl;
   {int nvar = a.extent_int(1);  // TODO: 2nd index from L of input array must be NVAR
   int nmnv = nmb*nnghbr*nvar;
   auto &nghbr = pmy_pack->pmb->nghbr;
-  auto &mblev = pmy_pack->pmb->mblev;
+  auto &mblev = pmy_pack->pmb->mb_lev;
   auto &rbuf = recv_buf;
 
   // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
@@ -340,12 +340,12 @@ std::cout << "block=" << m << "  buffer=" << n << "  not received" << std::endl;
   int nvar = a.extent_int(1);  // TODO: 2nd index from L of input array must be NVAR
   int nmnv = nmb*nnghbr*nvar;
   auto &nghbr = pmy_pack->pmb->nghbr;
-  auto &mblev = pmy_pack->pmb->mblev;
+  auto &mblev = pmy_pack->pmb->mb_lev;
   auto &rbuf = recv_buf;
   bool &multi_d = pmy_pack->pmesh->multi_d;
   bool &three_d = pmy_pack->pmesh->three_d;
-  auto &indcs  = pmy_pack->pcoord->mbdata.indcs;
-  auto &cindcs = pmy_pack->pcoord->mbdata.cindcs;
+  auto &indcs  = pmy_pack->pmesh->mb_indcs;
+  auto &cindcs = pmy_pack->pmesh->mb_cindcs;
 
   // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
   Kokkos::TeamPolicy<> policy(DevExeSpace(), nmnv, Kokkos::AUTO);

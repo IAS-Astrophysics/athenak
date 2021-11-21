@@ -25,8 +25,8 @@
 
 void BValCC::InitSendIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f1, int f2)
 {
-  auto &mb_indcs  = pmy_pack->pcoord->mbdata.indcs;
-  auto &mb_cindcs = pmy_pack->pcoord->mbdata.cindcs;
+  auto &mb_indcs  = pmy_pack->pmesh->mb_indcs;
+  auto &mb_cindcs = pmy_pack->pmesh->mb_cindcs;
   int ng1 = mb_indcs.ng - 1;
 
   // set indices for sends to neighbors on SAME level
@@ -125,8 +125,8 @@ void BValCC::InitSendIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f
 
 void BValCC::InitRecvIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f1, int f2)
 { 
-  auto &mb_indcs  = pmy_pack->pcoord->mbdata.indcs;
-  auto &mb_cindcs = pmy_pack->pcoord->mbdata.cindcs;
+  auto &mb_indcs  = pmy_pack->pmesh->mb_indcs;
+  auto &mb_cindcs = pmy_pack->pmesh->mb_cindcs;
 
   // set indices for receives from neighbors on SAME level
   // Formulae taken from SetBoundarySameLevel() in src/bvals/cc/bvals_cc.cpp
@@ -396,13 +396,13 @@ void BValCC::InitRecvIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f
 
 void BValCC::AllocateBuffersCC(const int nvar)
 {
-  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
   int ng = indcs.ng;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
 
-  auto &cindcs = pmy_pack->pcoord->mbdata.cindcs;
+  auto &cindcs = pmy_pack->pmesh->mb_cindcs;
   int cis = cindcs.is, cie = cindcs.ie;
   int cjs = cindcs.js, cje = cindcs.je;
   int cks = cindcs.ks, cke = cindcs.ke;

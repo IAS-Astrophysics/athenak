@@ -54,7 +54,7 @@ void ProblemGenerator::OrszagTang_(MeshBlockPack *pmbp, ParameterInput *pin)
   Real p0 = 5.0/(12.0*M_PI);
 
   // capture variables for kernel
-  auto &indcs = pmbp->pcoord->mbdata.indcs;
+  auto &indcs = pmbp->pmesh->mb_indcs;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
@@ -63,7 +63,7 @@ void ProblemGenerator::OrszagTang_(MeshBlockPack *pmbp, ParameterInput *pin)
   Real gm1 = eos.gamma - 1.0;
   auto &u0 = pmbp->pmhd->u0;
   auto &b0 = pmbp->pmhd->b0;
-  auto &size = pmbp->pcoord->mbdata.size;
+  auto &size = pmbp->pmb->mb_size;
 
   par_for("pgen_ot1", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i)

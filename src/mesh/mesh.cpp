@@ -181,6 +181,88 @@ Mesh::Mesh(ParameterInput *pin)
   mesh_size.dx1 = (mesh_size.x1max-mesh_size.x1min)/static_cast<Real>(mesh_indcs.nx1);
   mesh_size.dx2 = (mesh_size.x2max-mesh_size.x2min)/static_cast<Real>(mesh_indcs.nx2);
   mesh_size.dx3 = (mesh_size.x3max-mesh_size.x3min)/static_cast<Real>(mesh_indcs.nx3);
+
+  // Read # of cells in MeshBlock from input parameters, error check
+  mb_indcs.ng  = mesh_indcs.ng;
+  mb_indcs.nx1 = pin->GetOrAddInteger("meshblock", "nx1", mesh_indcs.nx1);
+  if (multi_d) {
+    mb_indcs.nx2 = pin->GetOrAddInteger("meshblock", "nx2", mesh_indcs.nx2);
+  } else {
+    mb_indcs.nx2 = mesh_indcs.nx2;
+  }
+  if (three_d) {
+    mb_indcs.nx3 = pin->GetOrAddInteger("meshblock", "nx3", mesh_indcs.nx3);
+  } else {
+    mb_indcs.nx3 = mesh_indcs.nx3;
+  }
+
+  // error check consistency of the block and mesh
+  if (   mesh_indcs.nx1 % mb_indcs.nx1 != 0
+      || mesh_indcs.nx2 % mb_indcs.nx2 != 0
+      || mesh_indcs.nx3 % mb_indcs.nx3 != 0) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "Mesh must be evenly divisible by MeshBlocks" << std::endl
+              << "Check Mesh and MeshBlock dimensions in input file" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if ( mb_indcs.nx1 < 4 ||
+      (mb_indcs.nx2 < 4 && multi_d) ||
+      (mb_indcs.nx3 < 4 && three_d) ) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "MeshBlock must be >= 4 cells in each active dimension" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
+  // initialize indices for Mesh cells, MeshBlock cells, and MeshBlock coarse cells
+  mb_cindcs.ng  = mb_indcs.ng;
+  mb_cindcs.nx1 = mb_indcs.nx1/2;
+  mb_cindcs.nx2 = mb_indcs.nx2/2;
+  mb_cindcs.nx3 = mb_indcs.nx3/2;
+
+  mesh_indcs.is = mesh_indcs.ng;
+  mb_indcs.is   = mb_indcs.ng;
+  mb_cindcs.is  = mb_cindcs.ng;
+
+  mesh_indcs.ie = mesh_indcs.is + mesh_indcs.nx1 - 1;
+  mb_indcs.ie   = mb_indcs.is + mb_indcs.nx1 - 1;
+  mb_cindcs.ie  = mb_cindcs.is + mb_cindcs.nx1 - 1;
+
+  if (multi_d) {
+    mesh_indcs.js = mesh_indcs.ng;
+    mb_indcs.js   = mb_indcs.ng;
+    mb_cindcs.js  = mb_cindcs.ng;
+
+    mesh_indcs.je = mesh_indcs.js + mesh_indcs.nx2 - 1;
+    mb_indcs.je   = mb_indcs.js + mb_indcs.nx2 - 1;
+    mb_cindcs.je  = mb_cindcs.js + mb_cindcs.nx2 - 1;
+  } else {
+    mesh_indcs.js = 0;
+    mb_indcs.js   = 0;
+    mb_cindcs.js  = 0;
+
+    mesh_indcs.je = 0;
+    mb_indcs.je   = 0;
+    mb_cindcs.je  = 0;
+  }
+
+  if (three_d) {
+    mesh_indcs.ks = mesh_indcs.ng;
+    mb_indcs.ks   = mb_indcs.ng;
+    mb_cindcs.ks  = mb_cindcs.ng;
+
+    mesh_indcs.ke = mesh_indcs.ks + mesh_indcs.nx3 - 1;
+    mb_indcs.ke   = mb_indcs.ks + mb_indcs.nx3 - 1;
+    mb_cindcs.ke  = mb_cindcs.ks + mb_cindcs.nx3 - 1;
+  } else {
+    mesh_indcs.ks = 0;
+    mb_indcs.ks   = 0;
+    mb_cindcs.ks  = 0;
+
+    mesh_indcs.ke = 0;
+    mb_indcs.ke   = 0;
+    mb_cindcs.ke  = 0;
+  }
+
 }
 
 //----------------------------------------------------------------------------------------
@@ -213,43 +295,10 @@ Mesh::~Mesh()
 
 void Mesh::BuildTreeFromScratch(ParameterInput *pin)
 {
-  // Read # of cells in MeshBlock from input parameters, error check
-  // Uses local struct for now, stored in Coordinates class when MBs created below
-  RegionIndcs mb_indices;
-  mb_indices.ng  = mesh_indcs.ng;
-  mb_indices.nx1 = pin->GetOrAddInteger("meshblock", "nx1", mesh_indcs.nx1);
-  if (multi_d) {
-    mb_indices.nx2 = pin->GetOrAddInteger("meshblock", "nx2", mesh_indcs.nx2);
-  } else {
-    mb_indices.nx2 = mesh_indcs.nx2;
-  }
-  if (three_d) {
-    mb_indices.nx3 = pin->GetOrAddInteger("meshblock", "nx3", mesh_indcs.nx3);
-  } else {
-    mb_indices.nx3 = mesh_indcs.nx3;
-  }
-
-  // error check consistency of the block and mesh
-  if (   mesh_indcs.nx1 % mb_indices.nx1 != 0
-      || mesh_indcs.nx2 % mb_indices.nx2 != 0
-      || mesh_indcs.nx3 % mb_indices.nx3 != 0) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "Mesh must be evenly divisible by MeshBlocks" << std::endl
-              << "Check Mesh and MeshBlock dimensions in input file" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-  if ( mb_indices.nx1 < 4 ||
-      (mb_indices.nx2 < 4 && multi_d) ||
-      (mb_indices.nx3 < 4 && three_d) ) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "MeshBlock must be >= 4 cells in each active dimension" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-
   // calculate the number of MeshBlocks at root level in each dir
-  nmb_rootx1 = mesh_indcs.nx1/mb_indices.nx1;
-  nmb_rootx2 = mesh_indcs.nx2/mb_indices.nx2;
-  nmb_rootx3 = mesh_indcs.nx3/mb_indices.nx3;
+  nmb_rootx1 = mesh_indcs.nx1/mb_indcs.nx1;
+  nmb_rootx2 = mesh_indcs.nx2/mb_indcs.nx2;
+  nmb_rootx3 = mesh_indcs.nx3/mb_indcs.nx3;
 
   // find maximum number of MeshBlocks at root level in any dir
   int nmbmax = (nmb_rootx1 > nmb_rootx2) ? nmb_rootx1 : nmb_rootx2;
@@ -281,9 +330,9 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin)
 
   if (multilevel) {
     // error check that number of cells in MeshBlock divisible by two
-    if (mb_indices.nx1 % 2 != 0 || 
-       (mb_indices.nx2 % 2 != 0 && multi_d) ||
-       (mb_indices.nx3 % 2 != 0 && three_d)) {
+    if (mb_indcs.nx1 % 2 != 0 || 
+       (mb_indcs.nx2 % 2 != 0 && multi_d) ||
+       (mb_indcs.nx3 % 2 != 0 && three_d)) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Number of cells in MeshBlock must be divisible by 2 "
                 << "with SMR or AMR." << std::endl;
@@ -489,7 +538,7 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin)
   nmb_thisrank = nmblist[global_variable::my_rank];
 
   pmb_pack = new MeshBlockPack(this, gids, gide);
-  pmb_pack->AddMeshBlocksAndCoordinates(pin, mb_indices);
+  pmb_pack->AddMeshBlocksAndCoordinates(pin, mb_indcs);
   pmb_pack->pmb->SetNeighbors(ptree, ranklist);
   
 /**********
@@ -564,26 +613,11 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile)
   std::memcpy(&datasize, &(headerdata[hdos]), sizeof(IOWrapperSizeT));
   hdos += sizeof(IOWrapperSizeT);   // (this updated value is never used)
 
-  // Read # of cells in MeshBlock from input parameters, no error check needed
-  // Uses local struct for now, stored in Coordinates class when MBs created below
-  RegionIndcs mb_indices;
-  mb_indices.ng  = mesh_indcs.ng;
-  mb_indices.nx1 = pin->GetOrAddInteger("meshblock", "nx1", mesh_indcs.nx1);
-  if (multi_d) {
-    mb_indices.nx2 = pin->GetOrAddInteger("meshblock", "nx2", mesh_indcs.nx2);
-  } else {
-    mb_indices.nx2 = mesh_indcs.nx2;
-  }
-  if (three_d) {
-    mb_indices.nx3 = pin->GetOrAddInteger("meshblock", "nx3", mesh_indcs.nx3);
-  } else {
-    mb_indices.nx3 = mesh_indcs.nx3;
-  }
 
   // calculate the number of MeshBlocks at root level in each dir
-  nmb_rootx1 = mesh_indcs.nx1/mb_indices.nx1;
-  nmb_rootx2 = mesh_indcs.nx2/mb_indices.nx2;
-  nmb_rootx3 = mesh_indcs.nx3/mb_indices.nx3;
+  nmb_rootx1 = mesh_indcs.nx1/mb_indcs.nx1;
+  nmb_rootx2 = mesh_indcs.nx2/mb_indcs.nx2;
+  nmb_rootx3 = mesh_indcs.nx3/mb_indcs.nx3;
 }
 //----------------------------------------------------------------------------------------
 //! \fn void Mesh::PrintMeshDiagnostics()
@@ -679,7 +713,7 @@ void Mesh::WriteMeshStructure()
     std::exit(EXIT_FAILURE);
   }
 
-  auto &size = this->pmb_pack->pcoord->mbdata.size;
+  auto &size = this->pmb_pack->pmb->mb_size;
   for (int i=root_level; i<=max_level; i++) {
   for (int j=0; j<nmb_total; j++) {
     if (lloclist[j].level == i) {
@@ -784,45 +818,6 @@ std::string Mesh::GetBoundaryString(BoundaryFlag input_flag)
       std::exit(EXIT_FAILURE);
       break;
   }
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn EnrollBoundaryFunction(BoundaryFace dir, BValFunc my_bc)
-//! \brief Enroll a user-defined boundary function
-
-void Mesh::EnrollBoundaryFunction(BoundaryFace dir, BoundaryFnPtr my_bc) {
-  if (dir < 0 || dir > 5) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "EnrollBoundaryFunction called on bndry=" << dir << " not valid" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-  if (mesh_bcs[dir] != BoundaryFlag::user) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "Boundary condition flag must be set to 'user' in the <mesh> block in input"
-        << " file to use user-enrolled BCs on bndry=" << dir << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-  BoundaryFunc[static_cast<int>(dir)]=my_bc;
-  return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn CheckUserBoundaries()
-//! \brief checks if user boundary functions are correctly enrolled
-//! This compatibility check is performed in the Driver after calling ProblemGenerator()
-
-void Mesh::CheckUserBoundaries() {
-  for (int i=0; i<6; i++) {
-    if (mesh_bcs[i] == BoundaryFlag::user) {
-      if (BoundaryFunc[i] == nullptr) {
-        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                  << std::endl << "User-defined boundary function is specified in input "
-                  << " file but boundary function not enrolled; bndry=" << i << std::endl;
-        std::exit(EXIT_FAILURE);
-      }
-    }
-  }
-  return;
 }
 
 //----------------------------------------------------------------------------------------

@@ -94,7 +94,7 @@ void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   //  in the OutputData doubly linked lists), all in binary floats format
 
   int nout_vars = outvars.size();
-  auto &indcs = pm->pmb_pack->pcoord->mbdata.indcs;
+  auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
   int is = indcs.is; int &mb_nx1 = indcs.nx1;
   int js = indcs.js; int &mb_nx2 = indcs.nx2;
   int ks = indcs.ks; int &mb_nx3 = indcs.nx3;

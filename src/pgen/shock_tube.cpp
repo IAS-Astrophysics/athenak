@@ -66,8 +66,8 @@ void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
   }
 
   // capture variables for the kernel
-  auto &indcs = pmbp->pcoord->mbdata.indcs;
-  auto &size = pmbp->pcoord->mbdata.size;
+  auto &indcs = pmbp->pmesh->mb_indcs;
+  auto &size = pmbp->pmb->mb_size;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;

@@ -26,7 +26,7 @@ Resistivity::Resistivity(MeshBlockPack *pp, ParameterInput *pin)
 
   // resistive timestep on MeshBlock(s) in this pack
   dtnew = std::numeric_limits<float>::max();
-  auto size = pmy_pack->pcoord->mbdata.size;
+  auto size = pmy_pack->pmb->mb_size;
   Real fac;
   if (pp->pmesh->three_d) {
     fac = 1.0/6.0;
@@ -58,7 +58,7 @@ Resistivity::~Resistivity()
 
 void Resistivity::OhmicEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &efld)
 {
-  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
@@ -75,7 +75,7 @@ void Resistivity::OhmicEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real>
     // capture class variables for the kernels
     auto e2 = efld.x2e;
     auto e3 = efld.x3e;
-    auto &mbsize = pmy_pack->pcoord->mbdata.size;
+    auto &mbsize = pmy_pack->pmb->mb_size;
     auto eta_o = eta_ohm;
 
     int scr_level = 0;
@@ -110,7 +110,7 @@ void Resistivity::OhmicEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real>
     auto e1 = efld.x1e;
     auto e2 = efld.x2e;
     auto e3 = efld.x3e;
-    auto &mbsize = pmy_pack->pcoord->mbdata.size;
+    auto &mbsize = pmy_pack->pmb->mb_size;
     auto eta_o = eta_ohm;
 
     int scr_level = 0;
@@ -145,7 +145,7 @@ void Resistivity::OhmicEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real>
   auto e1 = efld.x1e;
   auto e2 = efld.x2e;
   auto e3 = efld.x3e;
-  auto &mbsize = pmy_pack->pcoord->mbdata.size;
+  auto &mbsize = pmy_pack->pmb->mb_size;
   auto eta_o = eta_ohm;
 
   int scr_level = 0;
@@ -181,12 +181,12 @@ void Resistivity::OhmicEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real>
 
 void Resistivity::OhmicEnergyFlux(const DvceFaceFld4D<Real> &b, DvceFaceFld5D<Real> &flx) 
 {
-  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
   int nmb1 = pmy_pack->nmb_thispack - 1;
-  auto size = pmy_pack->pcoord->mbdata.size;
+  auto size = pmy_pack->pmb->mb_size;
   bool &multi_d = pmy_pack->pmesh->multi_d;
   bool &three_d = pmy_pack->pmesh->three_d;
   Real qa = 0.25*eta_ohm;

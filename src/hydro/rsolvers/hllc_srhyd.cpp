@@ -23,7 +23,7 @@ namespace hydro {
 //! function in Athena++ (C++ version)
 
 KOKKOS_INLINE_FUNCTION
-void HLLC_SR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coord,
+void HLLC_SR(TeamMember_t const &member, const EOS_Data &eos,
      const int m, const int k, const int j, const int il, const int iu, const int ivx,
      const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr, DvceArray5D<Real> flx)
 {

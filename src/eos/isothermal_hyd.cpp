@@ -32,7 +32,7 @@ IsothermalHydro::IsothermalHydro(MeshBlockPack *pp, ParameterInput *pin)
 
 void IsothermalHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim)
 {
-  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
   int &ng = indcs.ng;
   int n1 = indcs.nx1 + 2*ng;
   int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
@@ -81,7 +81,7 @@ void IsothermalHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &pri
 
 void IsothermalHydro::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons)
 {
-  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;

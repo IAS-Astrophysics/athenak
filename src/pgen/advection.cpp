@@ -62,8 +62,8 @@ void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
   Real &x1mesh = pmy_mesh_->mesh_size.x1min;
   Real &x2mesh = pmy_mesh_->mesh_size.x2min;
   Real &x3mesh = pmy_mesh_->mesh_size.x3min;
-  auto &indcs = pmbp->pcoord->mbdata.indcs;
-  auto &size = pmbp->pcoord->mbdata.size;
+  auto &indcs = pmbp->pmesh->mb_indcs;
+  auto &size = pmbp->pmb->mb_size;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
