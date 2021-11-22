@@ -98,7 +98,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
 
   // Loop over MeshBlockPack and pack ID and cost lists
   int os=0;
-  for (int id=pm->pmb_pack->gids; id<pm->pmb_pack->gide; ++id) {
+  for (int id=(pm->pmb_pack->gids); id<=(pm->pmb_pack->gide); ++id) {
     std::memcpy(&(idlist[os]), &(pm->lloclist[id]), sizeof(LogicalLocation));
     os += sizeof(LogicalLocation);
     std::memcpy(&(idlist[os]), &(pm->costlist[id]), sizeof(double));
