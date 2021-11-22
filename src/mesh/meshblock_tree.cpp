@@ -328,7 +328,7 @@ void MeshBlockTree::CountMeshBlock(int& count)
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MeshBlockTree::GetMeshBlockList(LogicalLocation *list,
+//! \fn void MeshBlockTree::CreateMeshBlockList(LogicalLocation *list,
 //                                           int *pglist, int& count)
 //  \brief creates the Location list sorted by Z-ordering
 

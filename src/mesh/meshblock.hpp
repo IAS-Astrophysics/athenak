@@ -49,7 +49,6 @@ class MeshBlock
  private:
   // data
   MeshBlockPack* pmy_pack;
-  HostArray1D<double> mb_cost;  // cost of updating each MeshBlock for load balancing
 
   // functions
   void SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklist);

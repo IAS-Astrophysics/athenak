@@ -18,8 +18,7 @@
 #endif
 
 //----------------------------------------------------------------------------------------
-// \!fn void Mesh::CalculateLoadBalance(double *clist, int *rlist, int *slist,
-//                                      int *nlist, int nb)
+// \!fn void Mesh::LoadBalance(double *clist, int *rlist, int *slist, int *nlist, int nb)
 // \brief Calculate distribution of MeshBlocks based on the cost list
 // input: clist = cost of each MB (array of length nmbtotal)
 //        nb = number of MeshBlocks
@@ -90,7 +89,6 @@ void Mesh::ResetLoadBalanceCounters()
   if (lb_automatic_) {
     for (int m=0; m<pmb_pack->nmb_thispack; ++m) {
       costlist[pmb_pack->pmb->mb_gid.h_view(m)] = std::numeric_limits<double>::min();
-      pmb_pack->pmb->mb_cost(m) = std::numeric_limits<double>::min();
     }
   }
   lb_flag_ = false;

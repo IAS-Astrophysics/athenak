@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file restart.cpp
-//  \brief writes restart files
+//! \brief writes restart files
 
 #include <algorithm>
 #include <cstdio>      // fwrite(), fclose(), fopen(), fnprintf(), snprintf()
@@ -66,8 +66,8 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   std::string sbuf = ost.str();
 
   // calculate size of header
-  IOWrapperSizeT headeroffset = sbuf.size()*sizeof(char) +
-      3*sizeof(int) + sizeof(RegionSize) + 2*sizeof(Real) + sizeof(IOWrapperSizeT);
+  IOWrapperSizeT headeroffset = sbuf.size()*sizeof(char) + 3*sizeof(int) + 2*sizeof(Real)
+    + sizeof(RegionSize) + 3*sizeof(RegionIndcs) + sizeof(IOWrapperSizeT);
   // the size of variables stored in each MeshBlockPack
   size_t datasize = pm->pmb_pack->GetMeshBlockPackArraySizeInBytes();
 
@@ -82,22 +82,27 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
     rstfile.Write(&(pm->nmb_total), sizeof(int), 1);
     rstfile.Write(&(pm->root_level), sizeof(int), 1);
     rstfile.Write(&(pm->mesh_size), sizeof(RegionSize), 1);
+    rstfile.Write(&(pm->mesh_indcs), sizeof(RegionIndcs), 1);
+    rstfile.Write(&(pm->mb_indcs), sizeof(RegionIndcs), 1);
+    rstfile.Write(&(pm->mb_cindcs), sizeof(RegionIndcs), 1);
     rstfile.Write(&(pm->time), sizeof(Real), 1);
     rstfile.Write(&(pm->dt), sizeof(Real), 1);
     rstfile.Write(&(pm->ncycle), sizeof(int), 1);
     rstfile.Write(&(datasize), sizeof(IOWrapperSizeT), 1);
   }
 
-  // allocate memory for the ID list and the data
-  IOWrapperSizeT listsize = sizeof(LogicalLocation);
+  // allocate memory for the ID list
+  IOWrapperSizeT listsize = sizeof(LogicalLocation) + sizeof(Real);
   int mynmb = pm->nmblist[global_variable::my_rank];
   char *idlist = new char[listsize*mynmb];
 
-  // Loop over MeshBlockPack and pack the meta data
+  // Loop over MeshBlockPack and pack ID and cost lists
   int os=0;
   for (int id=pm->pmb_pack->gids; id<pm->pmb_pack->gide; ++id) {
     std::memcpy(&(idlist[os]), &(pm->lloclist[id]), sizeof(LogicalLocation));
     os += sizeof(LogicalLocation);
+    std::memcpy(&(idlist[os]), &(pm->costlist[id]), sizeof(double));
+    os += sizeof(double);
   }
 
   // write the ID list collectively
@@ -107,7 +112,6 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
 
   // deallocate the idlist array
   delete [] idlist;
-
 
   rstfile.Close();
 

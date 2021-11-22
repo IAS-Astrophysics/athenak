@@ -573,14 +573,16 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin)
 
 void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile)
 {
-  // following must be identical to headeroffset in restart.cpp
-  IOWrapperSizeT headersize = 3*sizeof(int) + 2*sizeof(Real)
-                              + sizeof(RegionSize) + sizeof(IOWrapperSizeT);
-  char *headerdata = new char[headersize];
-
   // At this point, the restartfile is already open and the ParameterInput (input file)
   // data has already been read in main(). Thus the file pointer is set to after <par_end>
   IOWrapperSizeT headeroffset = resfile.GetPosition();
+
+  // following must be identical to calculation of headeroffset (excluding size of 
+  // ParameterInput data) in restart.cpp
+  IOWrapperSizeT headersize = 3*sizeof(int) + 2*sizeof(Real)
+    + sizeof(RegionSize) + 3*sizeof(RegionIndcs) + sizeof(IOWrapperSizeT);
+  char *headerdata = new char[headersize];
+
   if (global_variable::my_rank == 0) { // the master process reads the header data
     if (resfile.Read(headerdata, 1, headersize) != headersize) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -595,7 +597,9 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile)
   MPI_Bcast(headerdata, headersize, MPI_BYTE, 0, MPI_COMM_WORLD);
 #endif
 
-  // set nmb_total, root_level, mesh_size, time, dt, ncycle, and size of data
+  // Now copy mesh data read from restart file into Mesh variables. Order of variables
+  // set by Write()'s in restart.cpp
+  // Note this overwrites size and indices initialized in Mesh constructor.
   IOWrapperSizeT hdos = 0;
   std::memcpy(&nmb_total, &(headerdata[hdos]), sizeof(int));
   hdos += sizeof(int);
@@ -603,6 +607,12 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile)
   hdos += sizeof(int);
   std::memcpy(&mesh_size, &(headerdata[hdos]), sizeof(RegionSize));
   hdos += sizeof(RegionSize);
+  std::memcpy(&mesh_indcs, &(headerdata[hdos]), sizeof(RegionIndcs));
+  hdos += sizeof(RegionIndcs);
+  std::memcpy(&mb_indcs, &(headerdata[hdos]), sizeof(RegionIndcs));
+  hdos += sizeof(RegionIndcs);
+  std::memcpy(&mb_cindcs, &(headerdata[hdos]), sizeof(RegionIndcs));
+  hdos += sizeof(RegionIndcs);
   std::memcpy(&time, &(headerdata[hdos]), sizeof(Real));
   hdos += sizeof(Real);
   std::memcpy(&dt, &(headerdata[hdos]), sizeof(Real));
@@ -612,13 +622,129 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile)
   IOWrapperSizeT datasize;
   std::memcpy(&datasize, &(headerdata[hdos]), sizeof(IOWrapperSizeT));
   hdos += sizeof(IOWrapperSizeT);   // (this updated value is never used)
-
+  delete [] headerdata;
 
   // calculate the number of MeshBlocks at root level in each dir
   nmb_rootx1 = mesh_indcs.nx1/mb_indcs.nx1;
   nmb_rootx2 = mesh_indcs.nx2/mb_indcs.nx2;
   nmb_rootx3 = mesh_indcs.nx3/mb_indcs.nx3;
+  int current_level = root_level; 
+
+  // Error check properties of input paraemters for SMR/AMR meshes.
+  if (adaptive) {
+    max_level = pin->GetOrAddInteger("mesh", "numlevel", 1) + root_level - 1;
+    if (max_level > 31) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Number of refinement levels must be smaller than "
+                << 31 - root_level + 1 << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  } else {
+    max_level = 31;
+  }
+
+  // allocate memory for lists read from restart
+  costlist = new double[nmb_total];
+  ranklist = new int[nmb_total];
+  lloclist = new LogicalLocation[nmb_total];
+
+  gidslist = new int[global_variable::nranks];
+  nmblist  = new int[global_variable::nranks];
+  if (adaptive) { // allocate arrays for AMR
+    nref = new int[global_variable::nranks];
+    nderef = new int[global_variable::nranks];
+    rdisp = new int[global_variable::nranks];
+    ddisp = new int[global_variable::nranks];
+    bnref = new int[global_variable::nranks];
+    bnderef = new int[global_variable::nranks];
+    brdisp = new int[global_variable::nranks];
+    bddisp = new int[global_variable::nranks];
+  }
+
+  // allocate idlist buffer and read the ID list
+  IOWrapperSizeT listsize = sizeof(LogicalLocation) + sizeof(Real);
+  char *idlist = new char[listsize*nmb_total];
+  if (global_variable::my_rank == 0) { // only the master process reads the ID list
+    if (resfile.Read(idlist,listsize,nmb_total) != static_cast<unsigned int>(nmb_total)) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Incorrect number of MeshBlocks in restart file; "
+                << "restart file is broken." << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
+#ifdef MPI_PARALLEL
+  // then broadcast the ID list
+  MPI_Bcast(idlist, listsize*nmb_total, MPI_BYTE, 0, MPI_COMM_WORLD);
+#endif
+
+  int os = 0;
+  for (int i=0; i<nmb_total; i++) {
+    std::memcpy(&(lloclist[i]), &(idlist[os]), sizeof(LogicalLocation));
+    os += sizeof(LogicalLocation);
+    std::memcpy(&(costlist[i]), &(idlist[os]), sizeof(double));
+    os += sizeof(double);
+    if (lloclist[i].level > current_level) current_level = lloclist[i].level;
+  }
+  delete [] idlist;
+
+  if (!adaptive) max_level = current_level;
+
+  // rebuild the MeshBlockTree
+  ptree = std::make_unique<MeshBlockTree>(this);
+  ptree->CreateRootGrid();
+  for (int i=0; i<nmb_total; i++) {ptree->AddNodeWithoutRefinement(lloclist[i]);}
+
+  // check the tree structure
+  int nnb;
+  ptree->CreateMeshBlockList(lloclist, nullptr, nnb);
+
+  if (nnb != nmb_total) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+        << "Tree reconstruction failed. Total number of blocks in reconstructed tree = "
+        << nnb << ", number in file = " << nmb_total << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
+#ifdef MPI_PARALLEL
+  // check there is at least one MeshBlock per MPI rank
+  if (nmb_total < global_variable::nranks) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+        << "Fewer MeshBlocks (nmb_total=" << nmb_total << ") than MPI ranks (nranks="
+        << global_variable::nranks << ")" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+#endif
+
+  LoadBalance(costlist, ranklist, gidslist, nmblist, nmb_total);
+
+  // create MeshBlockPack for this rank
+  gids = gidslist[global_variable::my_rank];
+  gide = gids + nmblist[global_variable::my_rank] - 1;
+  nmb_thisrank = nmblist[global_variable::my_rank];
+
+  pmb_pack = new MeshBlockPack(this, gids, gide);
+  pmb_pack->AddMeshBlocksAndCoordinates(pin, mb_indcs);
+  pmb_pack->pmb->SetNeighbors(ptree, ranklist);
+
+/**********
+  for (int m=0; m<pmb_pack->nmb_thispack; ++m) {
+    std::cout << "******* Block=" << pmb_pack->pmb->mbgid.h_view(m) << std::endl;
+    for (int n=0; n<6; ++n) {
+      std::cout << "n=" << n << " bc_flag=" << GetBoundaryString(pmb_pack->pmb->mbbcs(m,n)) << std::endl;
+    }
+    for (int n=0; n<pmb_pack->pmb->nnghbr; ++n) {
+      std::cout << "n=" << n << " gid=" << pmb_pack->pmb->nghbr.h_view(m,n).gid << " level=" << pmb_pack->pmb->nghbr.h_view(m,n).lev << " rank=" << pmb_pack->pmb->nghbr.h_view(m,n).rank << " dest=" << pmb_pack->pmb->nghbr.h_view(m,n).dest << std::endl;
+    }
+  }
+**********/
+
+  ResetLoadBalanceCounters();
+  if (global_variable::my_rank == 0) {PrintMeshDiagnostics();}
+
+  // set remaining parameters
+  cfl_no = pin->GetReal("time", "cfl_number");
 }
+
 //----------------------------------------------------------------------------------------
 //! \fn void Mesh::PrintMeshDiagnostics()
 //  \brief prints information about mesh structure, always called at start of every

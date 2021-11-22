@@ -23,8 +23,7 @@ MeshBlock::MeshBlock(MeshBlockPack* ppack, int igids, int nmb) :
   mb_gid("mb_gid",nmb),
   mb_lev("mb_lev",nmb),
   mb_size("mbsize",nmb),
-  mb_bcs("mbbcs",nmb,6),
-  mb_cost("lbcost",nmb)
+  mb_bcs("mbbcs",nmb,6)
 {
   Mesh* pm = pmy_pack->pmesh;
   auto &ms = pm->mesh_size;
