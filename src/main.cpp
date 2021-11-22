@@ -225,6 +225,7 @@ int main(int argc, char *argv[])
   if (narg_flag) {
     if (global_variable::my_rank == 0) pinput->ParameterDump(std::cout);
     if (res_flag == 1) restartfile.Close();
+    delete pinput;
     Kokkos::finalize();
 #if MPI_PARALLEL_ENABLED
     MPI_Finalize();
@@ -237,8 +238,7 @@ int main(int argc, char *argv[])
   // on this rank.  Latter cannot be performed in Mesh constructor since it requires
   // pointer to Mesh.
 
-  Mesh* pmesh;
-  pmesh = new Mesh(pinput);
+  Mesh* pmesh = new Mesh(pinput);
   if (res_flag == 0) {
     pmesh->BuildTreeFromScratch(pinput);
   } else {
@@ -249,6 +249,8 @@ int main(int argc, char *argv[])
   if (marg_flag) {
     if (global_variable::my_rank == 0) {pmesh->WriteMeshStructure();}
     if (res_flag == 1) {restartfile.Close();}
+    delete pmesh;
+    delete pinput;
     Kokkos::finalize();
 #if MPI_PARALLEL_ENABLED
     MPI_Finalize();
@@ -257,41 +259,46 @@ int main(int argc, char *argv[])
   }
 
   //--- Step 5. --------------------------------------------------------------------------
-  // Construct Driver
+  // Add physics modules to MeshBlockPack, and set initial conditions either by calling
+  // problem generator or by reading restart file. Note these steps must occur after Mesh
+  // (including MeshBlocks and MeshBlockPack) is fully constructed.
 
-  Driver driver(pinput, pmesh);
+  pmesh->pmb_pack->AddPhysics(pinput);
+  if (res_flag == 0) {
+    // set ICs for new problem by calling ProblemGenerator
+    pmesh->pgen = std::make_unique<ProblemGenerator>(pinput, pmesh);
+  } else {
+    // read ICs from restart file using ProblemGenerator constructor for restarts
+    pmesh->pgen = std::make_unique<ProblemGenerator>(pinput, pmesh, restartfile);
+    restartfile.Close();
+  }
 
   //--- Step 6. --------------------------------------------------------------------------
-  // Add physics modules to MeshBlockPack. Note this must occur after Mesh (MeshBlocks and
-  // MeshBlockPack) and Driver are fully constructed.
+  // Construct Driver and Outputs. Actual outputs (including initial conditions) are made
+  // in Driver.Initialize()
 
-  pmesh->pmb_pack->AddPhysics(pinput, &driver);
-
-/****/
-  if (res_flag == 1) restartfile.Close();
-/****/
+  Driver* pdriver = new Driver(pinput, pmesh);
+  ChangeRunDir(run_dir);
+  Outputs* pout = new Outputs(pinput, pmesh);
 
   //--- Step 7. --------------------------------------------------------------------------
-  // Construct Outputs. Actual outputs (including initial conditions) are made in Driver
-
-  ChangeRunDir(run_dir);
-  Outputs out_types(pinput, pmesh);
-
-  //--- Step 8. --------------------------------------------------------------------------
   // Execute Driver.
   //    1. Initial conditions set in Driver::Initialize()
   //    2. TaskList(s) executed in Driver::Execute()
   //    3. Any final analysis or diagnostics run in Driver::Finalize()
 
-  driver.Initialize(pmesh, pinput,  &out_types);
-  driver.Execute(pmesh, pinput,  &out_types);
-  driver.Finalize(pmesh, pinput,  &out_types);
+  pdriver->Initialize(pmesh, pinput, pout);
+  pdriver->Execute(pmesh, pinput, pout);
+  pdriver->Finalize(pmesh, pinput, pout);
 
-  //--- Step 9. -------------------------------------------------------------------------
+  //--- Step 8. -------------------------------------------------------------------------
   // clean up, and terminate
+  // Note anything containing a Kokkos::view must be deleted before Kokkos::finalize()
 
-  delete pinput;
+  delete pout;
+  delete pdriver;
   delete pmesh;
+  delete pinput;
   Kokkos::finalize();
 #if MPI_PARALLEL_ENABLED
   MPI_Finalize();

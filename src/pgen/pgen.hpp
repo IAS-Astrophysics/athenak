@@ -13,7 +13,10 @@
 
 class ProblemGenerator {
  public:
-  ProblemGenerator(ParameterInput *pin, Mesh *pmesh, Driver *pd);
+  // constructor for new problems
+  ProblemGenerator(ParameterInput *pin, Mesh *pmesh);
+  // constructor for restarts
+  ProblemGenerator(ParameterInput *pin, Mesh *pmesh, IOWrapper resfile);
   ~ProblemGenerator() = default;
 
   // data
@@ -38,7 +41,6 @@ class ProblemGenerator {
 
  private:
   Mesh* pmy_mesh_;
-  Driver *pmy_driver_;
 };
 
 #endif // PGEN_PGEN_HPP_

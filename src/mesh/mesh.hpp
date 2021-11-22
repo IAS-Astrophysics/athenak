@@ -133,7 +133,7 @@ public:
   LogicalLocation *lloclist;  // LogicalLocations for each MeshBlocks
 
   // following 2x arrays allocated with length [nranks]
-  int *gidslist;        // starting global ID of MeshBlocks in each rank
+  int *gidslist;       // starting global ID of MeshBlocks in each rank
   int *nmblist;        // number of MeshBlocks on each rank
 
   // following 8x arrays allocated with length [nranks] only with AMR
@@ -145,7 +145,8 @@ public:
   Real time, dt, cfl_no;           
   int ncycle;
 
-  MeshBlockPack* pmb_pack;  // container for MeshBlocks on this rank
+  MeshBlockPack* pmb_pack;                 // container for MeshBlocks on this rank
+  std::unique_ptr<ProblemGenerator> pgen;  // class containing functions to set ICs
 
   // functions
   void BuildTreeFromScratch(ParameterInput *pin);

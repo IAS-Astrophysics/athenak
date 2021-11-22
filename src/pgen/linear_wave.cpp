@@ -208,9 +208,13 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
     Real ev[5];
     HydroEigensystem(lwv.d0, lwv.v1_0, 0.0, 0.0, p0, eos, ev, rem);
 
-    // set new time limit based on wave speed of selected mode
-    // input tlim is treated as number of wave periods for evolution
-    if (set_initial_conditions) {pmy_driver_->tlim *= std::abs(lambda/ev[wave_flag]);}
+    // set new time limit in ParameterInput (to be read by Driver constructor) based on
+    // wave speed of selected mode.  
+    // input tlim is interpreted asnumber of wave periods for evolution
+    if (set_initial_conditions) {
+      Real tlim = pin->GetReal("time", "tlim");
+      pin->SetReal("time", "tlim", tlim*(std::abs(lambda/ev[wave_flag])));
+    }
 
     par_for("pgen_linwave1", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i)
@@ -267,9 +271,13 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
     lwv.dby = amp*rem[nmhd_  ][wave_flag];
     lwv.dbz = amp*rem[nmhd_+1][wave_flag];
 
-    // set new time limit based on wave speed of selected mode
-    // input tlim is treated as number of wave periods for evolution
-    pmy_driver_->tlim *= std::abs(lambda/ev[wave_flag]);
+    // set new time limit in ParameterInput (to be read by Driver constructor) based on
+    // wave speed of selected mode.  
+    // input tlim is interpreted asnumber of wave periods for evolution
+    if (set_initial_conditions) {
+      Real tlim = pin->GetReal("time", "tlim");
+      pin->SetReal("time", "tlim", tlim*(std::abs(lambda/ev[wave_flag])));
+    }
 
     par_for("pgen_linwave2", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i)

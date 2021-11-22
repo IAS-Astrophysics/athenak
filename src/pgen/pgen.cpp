@@ -17,8 +17,8 @@
 //----------------------------------------------------------------------------------------
 // constructor, initializes data structures and parameters
 
-ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, Driver *pd)
- : pmy_mesh_(pm), pmy_driver_(pd) 
+ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm)
+ : pmy_mesh_(pm)
 {
 #if USER_PROBLEM_ENABLED
   // call user-defined problem generator
@@ -54,6 +54,14 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, Driver *pd)
   // now call appropriate pgen function
   (this->*pgen_func_)(pm->pmb_pack, pin);
 #endif
+}
+
+//----------------------------------------------------------------------------------------
+// constructor for restarts
+
+ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resfile)
+ : pmy_mesh_(pm)
+{
 }
 
 //----------------------------------------------------------------------------------------
