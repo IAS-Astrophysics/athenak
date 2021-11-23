@@ -30,9 +30,9 @@ Then run cmake (version 3.0 or later) for the specific target architecture in th
 
    $ cmake3 -D PROBLEM=name ../
 
-### To build in DEBUG mode, add
+### To build in debug mode, add
 
-   $ cmake3 -D CMAKE_BUILD_TYPE=Debug ...
+   $ cmake3 -D CMAKE_BUILD_TYPE=Debug ../
 
 ### Default build for cpu with MPI
 
@@ -44,11 +44,10 @@ Then run cmake (version 3.0 or later) for the specific target architecture in th
    -D CMAKE_CXX_FLAGS="-O3 -inline-forceinline -qopenmp-simd -qopt-prefetch=4 -diag-disable 3180 " \
    -D CMAKE_C_FLAGS="-O3 -finline-functions" ../
 
-### Default build for NVidia V100 (requires gcc and cudatoolkit)
+### Default build for NVidia V100 gpu (e.g. cuda at IAS; requires gcc and cudatoolkit)
 
    $  cmake3 -DKokkos_ENABLE_CUDA=On -DKokkos_ARCH_VOLTA70=On -DCMAKE_CXX_COMPILER=${path_to_code}/kokkos/bin/nvcc_wrapper ../
 
+### Default build for NVidia A100 gpu (e.g. apollo at IAS; requires gcc and cudatoolkit)
 
-### Debug build for NVidia V100 (requires gcc and cudatoolkit)
-
-   $  cmake3 -DKokkos_ENABLE_CUDA=On -DKokkos_ARCH_VOLTA70=On -DCMAKE_CXX_COMPILER=${path_to_code}/athenak/kokkos/bin/nvcc_wrapper -D CMAKE_BUILD_TYPE=DEBUG ../
+   $  cmake3 -DKokkos_ENABLE_CUDA=On -DKokkos_ARCH_AMPERE80=On -DCMAKE_CXX_COMPILER=${path_to_code}/kokkos/bin/nvcc_wrapper ../
