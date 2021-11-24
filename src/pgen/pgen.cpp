@@ -9,9 +9,10 @@
 #include <iostream>
 
 #include "athena.hpp"
+#include "globals.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
-#include "driver/driver.hpp"
+#include "hydro/hydro.hpp"
 #include "pgen.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -62,36 +63,52 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm)
 ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resfile)
  : pmy_mesh_(pm)
 {
-/**
+  IOWrapperSizeT datasize;
   // Read size of data arrays from restart file
   if (global_variable::my_rank == 0) { // the master process reads the header data
-    if (resfile.Read(headerdata, 1, headersize) != headersize) {
+    if (resfile.Read(&datasize, 1, sizeof(IOWrapperSizeT)) != sizeof(IOWrapperSizeT)) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "Header size read from restart file is incorrect, "
+                << std::endl << "Data size read from restart file is corrupted, "
                 << "restart file is broken." << std::endl;
       exit(EXIT_FAILURE);
     }
   }
+  // get file offset for reading data arrays 
+  IOWrapperSizeT headeroffset = resfile.GetPosition();
 
-  IOWrapperSizeT datasize;
-  std::memcpy(&datasize, &(headerdata[hdos]), sizeof(IOWrapperSizeT));
+std::cout << "datasize = " << datasize << std::endl;
 
-  // allocate host array to hold data
-  nblocal = nblist[Globals::my_rank];
-  gids_ = nslist[Globals::my_rank];
-  gide_ = gids_ + nblocal - 1;
-  char *mbdata = new char[datasize*nblocal];
+  // get size of arrays, including ghost zones
+  auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
+  int nout1 = indcs.nx1 + 2*(indcs.ng);
+  int nout2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
+  int nout3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
+  int nmb = pm->pmb_pack->nmb_thispack;
 
-  my_blocks.NewAthenaArray(nblocal);
-  // load MeshBlocks (parallel)
-  if (resfile.Read_at_all(mbdata, datasize, nblocal, headeroffset+gids_*datasize) !=
-      static_cast<unsigned int>(nblocal)) {
-    msg << "### FATAL ERROR in Mesh constructor" << std::endl
-        << "The restart file is broken or input parameters are inconsistent."
-        << std::endl;
-    ATHENA_ERROR(msg);
+  // read Hydro arrays
+  hydro::Hydro* phydro = pm->pmb_pack->phydro;
+  if (phydro != nullptr) {
+    int nvar = phydro->nhydro + phydro->nscalars;
+    HostArray5D<Real> indata("restart-in", nmb, nvar, nout3, nout2, nout1);
+    if (indata.size()*sizeof(Real) != datasize) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Data size read from restart file not equal to size of "
+                << "Hydro array, restart file is broken." << std::endl;
+      exit(EXIT_FAILURE);
+    }
+
+    // now read Hydro restart data in parallel
+    int mygids = pm->gidslist[global_variable::my_rank];
+    IOWrapperSizeT myoffset = headeroffset + datasize*mygids;
+    if (resfile.Read_at_all(indata.data(), datasize, 1, myoffset) != 1) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Input hydro data not read correctly from restart file, "
+                << "restart file is broken." << std::endl;
+      exit(EXIT_FAILURE);
+    }
+    Kokkos::deep_copy(phydro->u0, indata);
   }
-**/
+
 }
 
 //----------------------------------------------------------------------------------------
