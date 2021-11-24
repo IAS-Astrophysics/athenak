@@ -62,6 +62,36 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm)
 ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resfile)
  : pmy_mesh_(pm)
 {
+/**
+  // Read size of data arrays from restart file
+  if (global_variable::my_rank == 0) { // the master process reads the header data
+    if (resfile.Read(headerdata, 1, headersize) != headersize) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Header size read from restart file is incorrect, "
+                << "restart file is broken." << std::endl;
+      exit(EXIT_FAILURE);
+    }
+  }
+
+  IOWrapperSizeT datasize;
+  std::memcpy(&datasize, &(headerdata[hdos]), sizeof(IOWrapperSizeT));
+
+  // allocate host array to hold data
+  nblocal = nblist[Globals::my_rank];
+  gids_ = nslist[Globals::my_rank];
+  gide_ = gids_ + nblocal - 1;
+  char *mbdata = new char[datasize*nblocal];
+
+  my_blocks.NewAthenaArray(nblocal);
+  // load MeshBlocks (parallel)
+  if (resfile.Read_at_all(mbdata, datasize, nblocal, headeroffset+gids_*datasize) !=
+      static_cast<unsigned int>(nblocal)) {
+    msg << "### FATAL ERROR in Mesh constructor" << std::endl
+        << "The restart file is broken or input parameters are inconsistent."
+        << std::endl;
+    ATHENA_ERROR(msg);
+  }
+**/
 }
 
 //----------------------------------------------------------------------------------------

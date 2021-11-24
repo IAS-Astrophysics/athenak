@@ -139,20 +139,3 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin)
 
   return;
 }
-
-//----------------------------------------------------------------------------------------
-//! \fn std::size_t MeshBlockPack::GetMeshBlockPackArraySizeInBytes()
-//! \brief Calculate the size of data arrays stored in each physics object in a
-//! MeshBlockPack.  These arrays store the physics variables, e.g. u0 for Hydro
-
-std::size_t MeshBlockPack::GetMeshBlockPackArraySizeInBytes() {
-  std::size_t size=0;
-  if (phydro != nullptr) {
-    size += (phydro->u0.size())*sizeof(Real);
-  }
-  if (pmhd != nullptr) {
-    size+=(pmhd->u0.size())*sizeof(Real);
-    size+=(pmhd->b0.x1f.size() + pmhd->b0.x2f.size() + pmhd->b0.x3f.size())*sizeof(Real);
-  }
-  return size;
-}

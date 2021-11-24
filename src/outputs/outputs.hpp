@@ -191,6 +191,7 @@ class RestartOutput : public OutputType
 {
  public:
   RestartOutput(OutputParameters oparams, Mesh *pm);
+  void LoadOutputData(Mesh *pm) override;
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
 };
 

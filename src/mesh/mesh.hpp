@@ -118,10 +118,10 @@ public:
   bool adaptive;              // true only for AMR
 
   int nmb_rootx1, nmb_rootx2, nmb_rootx3; // # of MeshBlocks at root level in each dir
-  int nmb_total;                 // total number of MeshBlocks across all levels
-  int nmb_thisrank;              // number of MeshBlocks on this MPI rank (local)
-  int nmb_created;               // number of MeshBlcoks created via AMR during run
-  int nmb_deleted;               // number of MeshBlcoks deleted via AMR during run
+  int nmb_total;           // total number of MeshBlocks across all levels/ranks
+  int nmb_thisrank;        // number of MeshBlocks on this MPI rank (local)
+  int nmb_created;         // number of MeshBlcoks created via AMR during run (per rank?)
+  int nmb_deleted;         // number of MeshBlcoks deleted via AMR during run (per rank?)
 
   int root_level; // logical level of root (physical) grid (e.g. Fig. 3 of method paper)
   int max_level;  // logical level of maximum refinement grid in Mesh
@@ -129,7 +129,7 @@ public:
 
   // following 2x arrays allocated with length [nmbtotal]
   int *ranklist;              // rank of each MeshBlock
-  double *costlist;           // cost of each MeshBlock
+  float *costlist;            // cost of each MeshBlock
   LogicalLocation *lloclist;  // LogicalLocations for each MeshBlocks
 
   // following 2x arrays allocated with length [nranks]
@@ -180,7 +180,7 @@ private:
   std::unique_ptr<MeshBlockTree> ptree;  // pointer to root node in binary/quad/oct-tree
 
   // functions
-  void LoadBalance(double *clist, int *rlist, int *slist, int *nlist, int nb);
+  void LoadBalance(float *clist, int *rlist, int *slist, int *nlist, int nb);
   void ResetLoadBalanceCounters();
 };
 

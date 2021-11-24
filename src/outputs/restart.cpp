@@ -33,6 +33,33 @@ RestartOutput::RestartOutput(OutputParameters op, Mesh *pm)
 }
 
 //----------------------------------------------------------------------------------------
+// RestartOutput::LoadOutputData()
+// overload of standard load data function specific to restarts.  Loads dependent
+// variables, including ghost zones.
+
+void RestartOutput::LoadOutputData(Mesh *pm)
+{ 
+  // get size of arrays, including ghost zones
+  auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
+  int nout1 = indcs.nx1 + 2*(indcs.ng);
+  int nout2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
+  int nout3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
+  int nmb = pm->pmb_pack->nmb_thispack;
+
+  // load Hydro data
+  hydro::Hydro* phydro = pm->pmb_pack->phydro;
+  if (phydro != nullptr) {
+    // resize host array to proper dimensions
+    int nvar = phydro->nhydro + phydro->nscalars; 
+    Kokkos::realloc(outdata, nmb, nvar, nout3, nout2, nout1);
+  
+    // Now copy data Hydro conserved variables to host, using device mirror
+//    DvceArray5D<Real>::HostMirror hst_data = Kokkos::create_mirror(u0_);
+    Kokkos::deep_copy(outdata,phydro->u0);
+  }
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn void RestartOutput:::WriteOutputFile(Mesh *pm)
 //  \brief Cycles over all MeshBlocks and writes everything to a single restart file
 
@@ -65,55 +92,57 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   pin->ParameterDump(ost);
   std::string sbuf = ost.str();
 
-  // calculate size of header
-  IOWrapperSizeT headeroffset = sbuf.size()*sizeof(char) + 3*sizeof(int) + 2*sizeof(Real)
-    + sizeof(RegionSize) + 3*sizeof(RegionIndcs) + sizeof(IOWrapperSizeT);
-  // the size of variables stored in each MeshBlockPack
-  size_t datasize = pm->pmb_pack->GetMeshBlockPackArraySizeInBytes();
+  //--- STEP 1.  Root process writes header data (input file, critical variables)
+  // Input file data is read by ParameterInput on restart, and the remaining header
+  // variables are read in Mesh::BuildTreeFromRestart()
 
   // open file and  write the header; this part is serial
-  IOWrapper rstfile;
-  rstfile.Open(fname.c_str(), IOWrapper::FileMode::write);
+  IOWrapper resfile;
+  resfile.Open(fname.c_str(), IOWrapper::FileMode::write);
   if (global_variable::my_rank == 0) {
     // output the input parameters (input file)
-    rstfile.Write(sbuf.c_str(),sizeof(char),sbuf.size());
+    resfile.Write(sbuf.c_str(),sizeof(char),sbuf.size());
 
     // output Mesh information
-    rstfile.Write(&(pm->nmb_total), sizeof(int), 1);
-    rstfile.Write(&(pm->root_level), sizeof(int), 1);
-    rstfile.Write(&(pm->mesh_size), sizeof(RegionSize), 1);
-    rstfile.Write(&(pm->mesh_indcs), sizeof(RegionIndcs), 1);
-    rstfile.Write(&(pm->mb_indcs), sizeof(RegionIndcs), 1);
-    rstfile.Write(&(pm->mb_cindcs), sizeof(RegionIndcs), 1);
-    rstfile.Write(&(pm->time), sizeof(Real), 1);
-    rstfile.Write(&(pm->dt), sizeof(Real), 1);
-    rstfile.Write(&(pm->ncycle), sizeof(int), 1);
-    rstfile.Write(&(datasize), sizeof(IOWrapperSizeT), 1);
+    resfile.Write(&(pm->nmb_total), sizeof(int), 1);
+    resfile.Write(&(pm->root_level), sizeof(int), 1);
+    resfile.Write(&(pm->mesh_size), sizeof(RegionSize), 1);
+    resfile.Write(&(pm->mesh_indcs), sizeof(RegionIndcs), 1);
+    resfile.Write(&(pm->mb_indcs), sizeof(RegionIndcs), 1);
+    resfile.Write(&(pm->mb_cindcs), sizeof(RegionIndcs), 1);
+    resfile.Write(&(pm->time), sizeof(Real), 1);
+    resfile.Write(&(pm->dt), sizeof(Real), 1);
+    resfile.Write(&(pm->ncycle), sizeof(int), 1);
   }
 
-  // allocate memory for the ID list
-  IOWrapperSizeT listsize = sizeof(LogicalLocation) + sizeof(Real);
-  int mynmb = pm->nmblist[global_variable::my_rank];
-  char *idlist = new char[listsize*mynmb];
+  //--- STEP 2.  Root process writes list of logical locations and cost of MeshBlocks
+  // This data read in Mesh::BuildTreeFromRestart()
 
-  // Loop over MeshBlockPack and pack ID and cost lists
-  int os=0;
-  for (int id=(pm->pmb_pack->gids); id<=(pm->pmb_pack->gide); ++id) {
-    std::memcpy(&(idlist[os]), &(pm->lloclist[id]), sizeof(LogicalLocation));
-    os += sizeof(LogicalLocation);
-    std::memcpy(&(idlist[os]), &(pm->costlist[id]), sizeof(double));
-    os += sizeof(double);
+  if (global_variable::my_rank == 0) {
+    resfile.Write(&(pm->lloclist[0]), (pm->nmb_total)*sizeof(LogicalLocation), 1);
+    resfile.Write(&(pm->costlist[0]), (pm->nmb_total)*sizeof(float), 1);
   }
 
-  // write the ID list collectively
+  //--- STEP 3.  All ranks write data over all MeshBlocks (5D arrays) in parallel
+  // This data read in ProblemGenerator constructor for restarts
+
+  // write the size of variables stored in each MeshBlockPack
+  IOWrapperSizeT datasize = outdata.size()*sizeof(Real);
+  if (global_variable::my_rank == 0) {
+    resfile.Write(&(datasize), sizeof(IOWrapperSizeT), 1);
+  }
+
+  // now write restart data in parallel
+  IOWrapperSizeT step1size = sbuf.size()*sizeof(char) + 3*sizeof(int) + 2*sizeof(Real) +
+                             sizeof(RegionSize) + 3*sizeof(RegionIndcs);
+  IOWrapperSizeT step2size = (pm->nmb_total)*(sizeof(LogicalLocation) + sizeof(float));
   int mygids = pm->gidslist[global_variable::my_rank];
-  IOWrapperSizeT myoffset = headeroffset + listsize*mygids;
-  rstfile.Write_at_all(idlist, listsize, mynmb, myoffset);
+  IOWrapperSizeT myoffset  = step1size + step2size + sizeof(IOWrapperSizeT) +
+                             datasize*(pm->gidslist[global_variable::my_rank]);
+  resfile.Write_at_all(outdata.data(), datasize, 1, myoffset);
 
-  // deallocate the idlist array
-  delete [] idlist;
-
-  rstfile.Close();
+  // close file, clean up
+  resfile.Close();
 
   return;
 }

@@ -26,10 +26,10 @@
 //         slist = 
 //         nlist = 
 
-void Mesh::LoadBalance(double *clist, int *rlist, int *slist, int *nlist, int nb)
+void Mesh::LoadBalance(float *clist, int *rlist, int *slist, int *nlist, int nb)
 {
-  double min_cost = std::numeric_limits<double>::max();
-  double max_cost = 0.0, totalcost = 0.0;
+  float min_cost = std::numeric_limits<float>::max();
+  float max_cost = 0.0, totalcost = 0.0;
 
   // find min/max and total cost in clist
   for (int i=0; i<nb; i++) {
@@ -39,8 +39,8 @@ void Mesh::LoadBalance(double *clist, int *rlist, int *slist, int *nlist, int nb
   }
 
   int j = (global_variable::nranks) - 1;
-  double targetcost = totalcost/global_variable::nranks;
-  double mycost = 0.0;
+  float targetcost = totalcost/global_variable::nranks;
+  float mycost = 0.0;
   // create rank list from the end: the master MPI rank should have less load
   for (int i=nb-1; i>=0; i--) {
     if (targetcost == 0.0) {

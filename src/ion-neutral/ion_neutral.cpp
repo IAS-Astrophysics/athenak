@@ -32,7 +32,7 @@ IonNeutral::IonNeutral(MeshBlockPack *pp, ParameterInput *pin) :
 //----------------------------------------------------------------------------------------
 //! \fn  void IonNeutral::AssembleIonNeutralTasks
 //  \brief Adds tasks for ion-neutral (two-fluid) mhd to stage start/run/end task lists
-//  Called by MeshBlockPack::AddPhysicsModules() function directly after MHD constrctr
+//  Called by MeshBlockPack::AddPhysics() function directly after MHD constrctr
   
 void IonNeutral::AssembleIonNeutralTasks(TaskList &start, TaskList &run, TaskList &end)
 { 

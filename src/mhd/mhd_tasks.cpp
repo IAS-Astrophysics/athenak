@@ -23,7 +23,7 @@ namespace mhd {
 //----------------------------------------------------------------------------------------
 //! \fn  void MHD::AssembleMHDTasks
 //  \brief Adds mhd tasks to stage start/run/end task lists
-//  Called by MeshBlockPack::AddPhysicsModules() function directly after MHD constrctr
+//  Called by MeshBlockPack::AddPhysics() function directly after MHD constrctr
   
 void MHD::AssembleMHDTasks(TaskList &start, TaskList &run, TaskList &end)
 { 

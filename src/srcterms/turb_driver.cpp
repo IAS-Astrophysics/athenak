@@ -91,7 +91,7 @@ TurbulenceDriver::~TurbulenceDriver()
 //! \fn  void IncludeModeEvolutionTasks
 //  \brief Includes task in the operator split task list that constructs new modes with
 //  random amplitudes and phases that can be used to evolve the force via an O-U process
-//  Called by MeshBlockPack::AddPhysicsModules() function
+//  Called by MeshBlockPack::AddPhysics() function
 
 void TurbulenceDriver::IncludeInitializeModesTask(TaskList &tl, TaskID start)
 {
@@ -103,7 +103,7 @@ void TurbulenceDriver::IncludeInitializeModesTask(TaskList &tl, TaskID start)
 //! \fn  void IncludeAddForcingTask
 //  \brief includes task in the stage_run task list for adding random forcing to fluid
 //  as an explicit source terms in each stage of integrator
-//  Called by MeshBlockPack::AddPhysicsModules() function
+//  Called by MeshBlockPack::AddPhysics() function
 
 void TurbulenceDriver::IncludeAddForcingTask(TaskList &tl, TaskID start)
 {   

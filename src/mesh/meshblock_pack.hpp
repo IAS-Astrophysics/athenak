@@ -46,7 +46,7 @@ public:
   MeshBlock* pmb;         // MeshBlocks in this MeshBlockPack
   Coordinates* pcoord;
 
-  // physics modules (controlled by AddPhysicsModules function in mesh_physics.cpp)
+  // physics (controlled by AddPhysics() function in meshblock_pack.cpp)
   hydro::Hydro *phydro=nullptr;
   mhd::MHD *pmhd=nullptr;
   ion_neutral::IonNeutral *pionn=nullptr;
@@ -59,7 +59,6 @@ public:
   // functions
   void AddPhysics(ParameterInput *pin);
   void AddMeshBlocksAndCoordinates(ParameterInput *pin, RegionIndcs indcs);
-  std::size_t GetMeshBlockPackArraySizeInBytes();
 
 private:
   // data

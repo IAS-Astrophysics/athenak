@@ -498,7 +498,7 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin)
   // initial mesh hierarchy construction is completed here
   ptree->CountMeshBlock(nmb_total);
 
-  costlist = new double[nmb_total];
+  costlist = new float[nmb_total];
   ranklist = new int[nmb_total];
   lloclist = new LogicalLocation[nmb_total];
 
@@ -580,7 +580,7 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile)
   // following must be identical to calculation of headeroffset (excluding size of 
   // ParameterInput data) in restart.cpp
   IOWrapperSizeT headersize = 3*sizeof(int) + 2*sizeof(Real)
-    + sizeof(RegionSize) + 3*sizeof(RegionIndcs) + sizeof(IOWrapperSizeT);
+    + sizeof(RegionSize) + 3*sizeof(RegionIndcs);
   char *headerdata = new char[headersize];
 
   if (global_variable::my_rank == 0) { // the master process reads the header data
@@ -618,10 +618,6 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile)
   std::memcpy(&dt, &(headerdata[hdos]), sizeof(Real));
   hdos += sizeof(Real);
   std::memcpy(&ncycle, &(headerdata[hdos]), sizeof(int));
-  hdos += sizeof(int);
-  IOWrapperSizeT datasize;
-  std::memcpy(&datasize, &(headerdata[hdos]), sizeof(IOWrapperSizeT));
-  hdos += sizeof(IOWrapperSizeT);   // (this updated value is never used)
   delete [] headerdata;
 
   // calculate the number of MeshBlocks at root level in each dir
@@ -644,7 +640,7 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile)
   }
 
   // allocate memory for lists read from restart
-  costlist = new double[nmb_total];
+  costlist = new float[nmb_total];
   ranklist = new int[nmb_total];
   lloclist = new LogicalLocation[nmb_total];
 
@@ -661,8 +657,8 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile)
     bddisp = new int[global_variable::nranks];
   }
 
-  // allocate idlist buffer and read the ID list
-  IOWrapperSizeT listsize = sizeof(LogicalLocation) + sizeof(Real);
+  // allocate idlist buffer and read list of logical locations and cost
+  IOWrapperSizeT listsize = sizeof(LogicalLocation) + sizeof(float);
   char *idlist = new char[listsize*nmb_total];
   if (global_variable::my_rank == 0) { // only the master process reads the ID list
     if (resfile.Read(idlist,listsize,nmb_total) != static_cast<unsigned int>(nmb_total)) {
@@ -677,16 +673,18 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile)
   MPI_Bcast(idlist, listsize*nmb_total, MPI_BYTE, 0, MPI_COMM_WORLD);
 #endif
 
+  // everyone sets the logical location and cost lists based on bradcasted data
   int os = 0;
   for (int i=0; i<nmb_total; i++) {
     std::memcpy(&(lloclist[i]), &(idlist[os]), sizeof(LogicalLocation));
     os += sizeof(LogicalLocation);
-    std::memcpy(&(costlist[i]), &(idlist[os]), sizeof(double));
-    os += sizeof(double);
+  }
+  for (int i=0; i<nmb_total; i++) {
+    std::memcpy(&(costlist[i]), &(idlist[os]), sizeof(float));
+    os += sizeof(float);
     if (lloclist[i].level > current_level) current_level = lloclist[i].level;
   }
   delete [] idlist;
-
   if (!adaptive) max_level = current_level;
 
   // rebuild the MeshBlockTree
@@ -801,8 +799,8 @@ void Mesh::PrintMeshDiagnostics()
     }
 
     // output total cost and load balancing info
-    double mincost = std::numeric_limits<double>::max();
-    double maxcost = 0.0, totalcost = 0.0;
+    float mincost = std::numeric_limits<float>::max();
+    float maxcost = 0.0, totalcost = 0.0;
     for (int i=root_level; i<=max_level; i++) {
       for (int j=0; j<nmb_total; j++) {
         if (lloclist[j].level == i) {

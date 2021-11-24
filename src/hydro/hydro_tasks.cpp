@@ -23,7 +23,7 @@ namespace hydro {
 //----------------------------------------------------------------------------------------
 //! \fn  void Hydro::AssembleHydroTasks
 //  \brief Adds hydro tasks to stage start/run/end task lists
-//  Called by MeshBlockPack::AddPhysicsModules() function directly after Hydro constrctr
+//  Called by MeshBlockPack::AddPhysics() function directly after Hydro constrctr
 //
 //  Stage start tasks are those that must be cmpleted over all MeshBlocks before EACH
 //  stage can be run (such as posting MPI receives, setting BoundaryCommStatus flags, etc)
