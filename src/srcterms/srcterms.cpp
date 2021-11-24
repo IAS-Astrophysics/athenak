@@ -76,7 +76,7 @@ SourceTerms::~SourceTerms()
 void SourceTerms::AddConstantAccel(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
                                    const Real bdt)
 {
-  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
@@ -104,7 +104,7 @@ void SourceTerms::AddConstantAccel(DvceArray5D<Real> &u0, const DvceArray5D<Real
 void SourceTerms::AddShearingBox(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
                                    const Real bdt)
 { 
-  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
@@ -138,7 +138,7 @@ void SourceTerms::AddShearingBox(DvceArray5D<Real> &u0, const DvceArray5D<Real> 
 void SourceTerms::AddShearingBox(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
                                  const DvceArray5D<Real> &bcc0, const Real bdt)
 { 
-  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
@@ -175,8 +175,8 @@ void SourceTerms::AddShearingBox(DvceArray5D<Real> &u0, const DvceArray5D<Real> 
 
 void SourceTerms::AddSBoxEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &efld)
 {
-  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
-  auto &size = pmy_pack->pcoord->mbdata.size;
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  auto &size = pmy_pack->pmb->mb_size;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;

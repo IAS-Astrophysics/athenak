@@ -20,7 +20,7 @@ namespace hydro {
 
 void Hydro::OutflowInnerX1(int m)
 {
-  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
   int &ng = indcs.ng;
   int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
   int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
@@ -45,7 +45,7 @@ void Hydro::OutflowInnerX1(int m)
 
 void Hydro::OutflowOuterX1(int m)
 {
-  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
   int &ng = indcs.ng;
   int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
   int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
@@ -70,7 +70,7 @@ void Hydro::OutflowOuterX1(int m)
 
 void Hydro::OutflowInnerX2(int m)
 {
-  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
   int &ng = indcs.ng;
   int n1 = indcs.nx1 + 2*ng;
   int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
@@ -95,7 +95,7 @@ void Hydro::OutflowInnerX2(int m)
 
 void Hydro::OutflowOuterX2(int m)
 {
-  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
   int &ng = indcs.ng;
   int n1 = indcs.nx1 + 2*ng;
   int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
@@ -121,7 +121,7 @@ void Hydro::OutflowOuterX2(int m)
 
 void Hydro::OutflowInnerX3(int m)
 {
-  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
   int &ng = indcs.ng;
   int n1 = indcs.nx1 + 2*ng;
   int n2 = indcs.nx2 + 2*ng;
@@ -146,7 +146,7 @@ void Hydro::OutflowInnerX3(int m)
 
 void Hydro::OutflowOuterX3(int m)
 {
-  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
   int &ng = indcs.ng;
   int n1 = indcs.nx1 + 2*ng;
   int n2 = indcs.nx2 + 2*ng;

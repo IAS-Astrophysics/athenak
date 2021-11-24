@@ -18,8 +18,7 @@
 #endif
 
 //----------------------------------------------------------------------------------------
-// \!fn void Mesh::CalculateLoadBalance(double *clist, int *rlist, int *slist,
-//                                      int *nlist, int nb)
+// \!fn void Mesh::LoadBalance(double *clist, int *rlist, int *slist, int *nlist, int nb)
 // \brief Calculate distribution of MeshBlocks based on the cost list
 // input: clist = cost of each MB (array of length nmbtotal)
 //        nb = number of MeshBlocks
@@ -27,10 +26,10 @@
 //         slist = 
 //         nlist = 
 
-void Mesh::LoadBalance(double *clist, int *rlist, int *slist, int *nlist, int nb)
+void Mesh::LoadBalance(float *clist, int *rlist, int *slist, int *nlist, int nb)
 {
-  double min_cost = std::numeric_limits<double>::max();
-  double max_cost = 0.0, totalcost = 0.0;
+  float min_cost = std::numeric_limits<float>::max();
+  float max_cost = 0.0, totalcost = 0.0;
 
   // find min/max and total cost in clist
   for (int i=0; i<nb; i++) {
@@ -40,8 +39,8 @@ void Mesh::LoadBalance(double *clist, int *rlist, int *slist, int *nlist, int nb
   }
 
   int j = (global_variable::nranks) - 1;
-  double targetcost = totalcost/global_variable::nranks;
-  double mycost = 0.0;
+  float targetcost = totalcost/global_variable::nranks;
+  float mycost = 0.0;
   // create rank list from the end: the master MPI rank should have less load
   for (int i=nb-1; i>=0; i--) {
     if (targetcost == 0.0) {
@@ -89,8 +88,7 @@ void Mesh::ResetLoadBalanceCounters()
 {
   if (lb_automatic_) {
     for (int m=0; m<pmb_pack->nmb_thispack; ++m) {
-      costlist[pmb_pack->pmb->mbgid.h_view(m)] = std::numeric_limits<double>::min();
-      pmb_pack->pmb->mbcost(m) = std::numeric_limits<double>::min();
+      costlist[pmb_pack->pmb->mb_gid.h_view(m)] = std::numeric_limits<double>::min();
     }
   }
   lb_flag_ = false;

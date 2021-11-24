@@ -20,6 +20,11 @@ class Viscosity;
 class SourceTerms;
 class Driver;
 
+// function ptr for user-defined boundary functions enrolled in problem generator 
+namespace hydro {
+using HydroBoundaryFnPtr = void (*)(int m, Mesh* pm, Hydro* phyd, DvceArray5D<Real> &u);
+}
+
 // constants that enumerate Hydro Riemann Solver options
 enum class Hydro_RSolver {advect, llf, hlle, hllc, roe,    // non-relativistic
                           llf_sr, hlle_sr, hllc_sr,        // SR
@@ -72,8 +77,9 @@ public:
   DvceArray5D<Real> coarse_u0;  // conserved variables on 2x coarser grid (for SMR/AMR)
   DvceArray5D<Real> coarse_w0;  // primitive variables on 2x coarser grid (for SMR/AMR)
 
-  // Object containing boundary communication buffers and routines for u
+  // Boundary communication buffers and routines for u, and user-defined boundary fn 
   BValCC *pbval_u;
+  HydroBoundaryFnPtr HydroBoundaryFunc[6];
 
   // Object(s) for extra physics (viscosity, srcterms)
   Viscosity *pvisc = nullptr;
@@ -107,6 +113,8 @@ public:
 
   // functions to set physical BCs for Hydro conserved variables, applied to single MB
   // specified by argument 'm'. 
+  void EnrollBoundaryFunction(BoundaryFace dir, HydroBoundaryFnPtr my_bcfunc);
+  void CheckUserBoundaries();
   void ReflectInnerX1(int m);
   void ReflectOuterX1(int m);
   void ReflectInnerX2(int m);

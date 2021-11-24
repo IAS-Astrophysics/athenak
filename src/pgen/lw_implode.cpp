@@ -37,8 +37,8 @@ void ProblemGenerator::LWImplode_(MeshBlockPack *pmbp, ParameterInput *pin)
 
   // capture variables for kernel
   Real gm1 = pmbp->phydro->peos->eos_data.gamma - 1.0;
-  auto &indcs = pmbp->pcoord->mbdata.indcs;
-  auto &size = pmbp->pcoord->mbdata.size;
+  auto &indcs = pmbp->pmesh->mb_indcs;
+  auto &size = pmbp->pmb->mb_size;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;

@@ -118,8 +118,8 @@ void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
       int nout_vars = outvars.size();
       int nout_mbs = (outmbs.size());
       for (int m=0; m<nout_mbs; ++m) {
-        auto &indcs = pm->pmb_pack->pcoord->mbdata.indcs;
-        auto &size  = pm->pmb_pack->pcoord->mbdata.size;
+        auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
+        auto &size  = pm->pmb_pack->pmb->mb_size;
         MeshBlock* pmb = pm->pmb_pack->pmb;
         int idx = pm->FindMeshBlockIndex(outmbs[m].mb_gid);
         int &is = indcs.is;
@@ -143,7 +143,7 @@ void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
         for (int k=oks; k<=oke; ++k) {
           for (int j=ojs; j<=oje; ++j) {
             for (int i=ois; i<=oie; ++i) {
-              std::fprintf(pfile, "%05d", pmb->mbgid.h_view(idx));
+              std::fprintf(pfile, "%05d", pmb->mb_gid.h_view(idx));
               // write x1, x2, x3 indices and coordinates
               if (oie != ois) {
                 std::fprintf(pfile, " %04d", i);  // note extra space for formatting

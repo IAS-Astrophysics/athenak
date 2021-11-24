@@ -102,23 +102,14 @@ class Mesh
 
 public:
   explicit Mesh(ParameterInput *pin);
-  Mesh(ParameterInput *pin, IOWrapper &resfile);  // ctor for restarts
   ~Mesh();
-
-  // accessors
-  int FindMeshBlockIndex(int tgid)
-  {
-    for (int m=0; m<pmb_pack->pmb->nmb; ++m) {
-      if (pmb_pack->pmb->mbgid.h_view(m) == tgid) return m;
-    }
-    return -1;
-  }
 
   // data
   RegionSize  mesh_size;      // (physical) size of mesh (physical root level)
   RegionIndcs mesh_indcs;     // indices of cells in mesh (physical root level)
+  RegionIndcs mb_indcs;       // indices of cells in MeshBlocks (same for all MeshBlocks)
+  RegionIndcs mb_cindcs;      // indices of coarse array cells in MeshBlocks
   BoundaryFlag mesh_bcs[6];   // physical boundary conditions at 6 faces of mesh
-  BoundaryFnPtr BoundaryFunc[6];
 
   bool one_d, two_d, three_d; // flags to indicate 1D or 2D or 3D calculations
   bool multi_d;               // flag to indicate 2D and 3D calculations
@@ -127,10 +118,10 @@ public:
   bool adaptive;              // true only for AMR
 
   int nmb_rootx1, nmb_rootx2, nmb_rootx3; // # of MeshBlocks at root level in each dir
-  int nmb_total;                 // total number of MeshBlocks across all levels
-  int nmb_thisrank;              // number of MeshBlocks on this MPI rank (local)
-  int nmb_created;               // number of MeshBlcoks created via AMR during run
-  int nmb_deleted;               // number of MeshBlcoks deleted via AMR during run
+  int nmb_total;           // total number of MeshBlocks across all levels/ranks
+  int nmb_thisrank;        // number of MeshBlocks on this MPI rank (local)
+  int nmb_created;         // number of MeshBlcoks created via AMR during run (per rank?)
+  int nmb_deleted;         // number of MeshBlcoks deleted via AMR during run (per rank?)
 
   int root_level; // logical level of root (physical) grid (e.g. Fig. 3 of method paper)
   int max_level;  // logical level of maximum refinement grid in Mesh
@@ -138,11 +129,11 @@ public:
 
   // following 2x arrays allocated with length [nmbtotal]
   int *ranklist;              // rank of each MeshBlock
-  double *costlist;           // cost of each MeshBlock
+  float *costlist;            // cost of each MeshBlock
   LogicalLocation *lloclist;  // LogicalLocations for each MeshBlocks
 
   // following 2x arrays allocated with length [nranks]
-  int *gidslist;        // starting global ID of MeshBlocks in each rank
+  int *gidslist;       // starting global ID of MeshBlocks in each rank
   int *nmblist;        // number of MeshBlocks on each rank
 
   // following 8x arrays allocated with length [nranks] only with AMR
@@ -154,17 +145,29 @@ public:
   Real time, dt, cfl_no;           
   int ncycle;
 
-  MeshBlockPack* pmb_pack;  // container for MeshBlocks on this rank
+  MeshBlockPack* pmb_pack;                 // container for MeshBlocks on this rank
+  std::unique_ptr<ProblemGenerator> pgen;  // class containing functions to set ICs
 
   // functions
-  void BuildTree(ParameterInput *pin);
+  void BuildTreeFromScratch(ParameterInput *pin);
+  void BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile);
   void NewTimeStep(const Real tlim);
   void PrintMeshDiagnostics();
   void WriteMeshStructure();
   BoundaryFlag GetBoundaryFlag(const std::string& input_string);
   std::string GetBoundaryString(BoundaryFlag input_flag);
-  void EnrollBoundaryFunction(BoundaryFace dir, BoundaryFnPtr my_bc); 
-  void CheckUserBoundaries();
+
+  // accessors
+  int FindMeshBlockIndex(int tgid)
+  {
+    for (int m=0; m<pmb_pack->pmb->nmb; ++m) {
+      if (pmb_pack->pmb->mb_gid.h_view(m) == tgid) return m;
+    }
+    return -1;
+  }
+  int NumberOfMeshBlockCells() const {
+    return (mb_indcs.nx1)*(mb_indcs.nx2)*(mb_indcs.nx3);
+  }
 
 private:
   // variables for load balancing control
@@ -177,7 +180,7 @@ private:
   std::unique_ptr<MeshBlockTree> ptree;  // pointer to root node in binary/quad/oct-tree
 
   // functions
-  void LoadBalance(double *clist, int *rlist, int *slist, int *nlist, int nb);
+  void LoadBalance(float *clist, int *rlist, int *slist, int *nlist, int nb);
   void ResetLoadBalanceCounters();
 };
 

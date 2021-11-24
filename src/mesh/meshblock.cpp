@@ -12,6 +12,7 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh.hpp"
+#include "coordinates/cell_locations.hpp"
 
 //----------------------------------------------------------------------------------------
 // MeshBlock constructor:
@@ -19,85 +20,108 @@
 
 MeshBlock::MeshBlock(MeshBlockPack* ppack, int igids, int nmb) : 
   pmy_pack(ppack), nmb(nmb),
-  mbgid("mbgid",nmb),
-  mblev("mblev",nmb),
-  mbbcs("mbbcs",nmb,6),
-  mbcost("lbcost",nmb)
+  mb_gid("mb_gid",nmb),
+  mb_lev("mb_lev",nmb),
+  mb_size("mbsize",nmb),
+  mb_bcs("mbbcs",nmb,6)
 {
   Mesh* pm = pmy_pack->pmesh;
-  // initialize host arrays of gids, sizes, bcs over all MeshBlocks
-  for (int m=0; m<nmb; ++m) {
-    mbgid.h_view(m) = igids + m;
-    mblev.h_view(m) = pm->lloclist[igids+m].level;
+  auto &ms = pm->mesh_size;
 
-    // calculate physical size and set BCs of MeshBlock in x1, depending on whether there
-    // are one or more MeshBlocks in this direction.
+  for (int m=0; m<nmb; ++m) {
+    // initialize host array elements of gids, levels
+    mb_gid.h_view(m) = igids + m;
+    mb_lev.h_view(m) = pm->lloclist[igids+m].level;
+
+    // calculate physical size and set BCs of each MeshBlock in x1
     std::int32_t &lx1 = pm->lloclist[igids+m].lx1;
     std::int32_t &lev = pm->lloclist[igids+m].level;
     std::int32_t nmbx1 = pm->nmb_rootx1 << (lev - pm->root_level);
     if (lx1 == 0) {
-      mbbcs(m,0) = pm->mesh_bcs[BoundaryFace::inner_x1];
+      mb_size.h_view(m).x1min = ms.x1min;
+      mb_bcs(m,0) = pm->mesh_bcs[BoundaryFace::inner_x1];
     } else {
-      mbbcs(m,0) = BoundaryFlag::block;
+      mb_size.h_view(m).x1min = LeftEdgeX(lx1, nmbx1, ms.x1min, ms.x1max);
+      mb_bcs(m,0) = BoundaryFlag::block;
     }
 
     if (lx1 == nmbx1 - 1) {
-      mbbcs(m,1) = pm->mesh_bcs[BoundaryFace::outer_x1];
+      mb_size.h_view(m).x1max = ms.x1max;
+      mb_bcs(m,1) = pm->mesh_bcs[BoundaryFace::outer_x1];
     } else {
-      mbbcs(m,1) = BoundaryFlag::block;
+      mb_size.h_view(m).x1max = LeftEdgeX(lx1+1, nmbx1, ms.x1min, ms.x1max);
+      mb_bcs(m,1) = BoundaryFlag::block;
     }
 
-    // calculate physical size and set BCs of MeshBlock in x2, dependng on whether there
-    // are none (1D), one, or more MeshBlocks in this direction
-    if (pm->mesh_indcs.nx2 == 1) {
-      mbbcs(m,2) = pm->mesh_bcs[BoundaryFace::inner_x2];
-      mbbcs(m,3) = pm->mesh_bcs[BoundaryFace::outer_x2];
+    // calculate physical size and set BCs of each MeshBlock in x2, dependng on whether
+    // there are none (1D), one, or more MeshBlocks in this direction
+    if (!(pm->multi_d)) {
+      mb_size.h_view(m).x2min = ms.x2min;
+      mb_size.h_view(m).x2max = ms.x2max;
+      mb_bcs(m,2) = pm->mesh_bcs[BoundaryFace::inner_x2];
+      mb_bcs(m,3) = pm->mesh_bcs[BoundaryFace::outer_x2];
     } else {
 
       std::int32_t &lx2 = pm->lloclist[igids+m].lx2;
       std::int32_t nmbx2 = pm->nmb_rootx2 << (lev - pm->root_level);
       if (lx2 == 0) {
-        mbbcs(m,2) = pm->mesh_bcs[BoundaryFace::inner_x2];
+        mb_size.h_view(m).x2min = ms.x2min;
+        mb_bcs(m,2) = pm->mesh_bcs[BoundaryFace::inner_x2];
       } else {
-        mbbcs(m,2) = BoundaryFlag::block;
+        mb_size.h_view(m).x2min = LeftEdgeX(lx2, nmbx2, ms.x2min, ms.x2max);
+        mb_bcs(m,2) = BoundaryFlag::block;
       }
 
       if (lx2 == (nmbx2) - 1) {
-        mbbcs(m,3) = pm->mesh_bcs[BoundaryFace::outer_x2];
+        mb_size.h_view(m).x2max = ms.x2max;
+        mb_bcs(m,3) = pm->mesh_bcs[BoundaryFace::outer_x2];
       } else {
-        mbbcs(m,3) = BoundaryFlag::block;
+        mb_size.h_view(m).x2max = LeftEdgeX(lx2+1, nmbx2, ms.x2min, ms.x2max);
+        mb_bcs(m,3) = BoundaryFlag::block;
       }
 
     }
 
-    // calculate physical size and set BCs of MeshBlock in x3, dependng on whether there
-    // are none (1D/2D), one, or more MeshBlocks in this direction
-    if (pm->mesh_indcs.nx3 == 1) {
-      mbbcs(m,4) = pm->mesh_bcs[BoundaryFace::inner_x3];
-      mbbcs(m,5) = pm->mesh_bcs[BoundaryFace::outer_x3];
+    // calculate physical size and set BCs of each MeshBlock in x1, dependng on whether
+    // there are none (1D/2D), one, or more MeshBlocks in this direction
+    if (!(pm->three_d)) {
+      mb_size.h_view(m).x3min = ms.x3min;
+      mb_size.h_view(m).x3max = ms.x3max;
+      mb_bcs(m,4) = pm->mesh_bcs[BoundaryFace::inner_x3];
+      mb_bcs(m,5) = pm->mesh_bcs[BoundaryFace::outer_x3];
     } else {
       std::int32_t &lx3 = pm->lloclist[igids+m].lx3;
       std::int32_t nmbx3 = pm->nmb_rootx3 << (lev - pm->root_level);
       if (lx3 == 0) {
-        mbbcs(m,4) = pm->mesh_bcs[BoundaryFace::inner_x3];
+        mb_size.h_view(m).x3min = ms.x3min;
+        mb_bcs(m,4) = pm->mesh_bcs[BoundaryFace::inner_x3];
       } else {
-        mbbcs(m,4) = BoundaryFlag::block;
+        mb_size.h_view(m).x3min = LeftEdgeX(lx3, nmbx3, ms.x3min, ms.x3max);
+        mb_bcs(m,4) = BoundaryFlag::block;
       }
       if (lx3 == (nmbx3) - 1) {
-        mbbcs(m,5) = pm->mesh_bcs[BoundaryFace::outer_x3];
+        mb_size.h_view(m).x3max = ms.x3max;
+        mb_bcs(m,5) = pm->mesh_bcs[BoundaryFace::outer_x3];
       } else {
-        mbbcs(m,5) = BoundaryFlag::block;
+        mb_size.h_view(m).x3max = LeftEdgeX(lx3+1, nmbx3, ms.x3min, ms.x3max);
+        mb_bcs(m,5) = BoundaryFlag::block;
       }
     }
 
+    // grid spacing at this level.  Ensure all MeshBlocks at same level have same dx
+    mb_size.h_view(m).dx1 = ms.dx1/static_cast<Real>(1<<(lev - pm->root_level));
+    mb_size.h_view(m).dx2 = ms.dx2/static_cast<Real>(1<<(lev - pm->root_level));
+    mb_size.h_view(m).dx3 = ms.dx3/static_cast<Real>(1<<(lev - pm->root_level));
   }
 
   // For each DualArray: mark host views as modified, and then sync to device array
-  mbgid.template modify<HostMemSpace>();
-  mblev.template modify<HostMemSpace>();
+  mb_gid.template modify<HostMemSpace>();
+  mb_lev.template modify<HostMemSpace>();
+  mb_size.template modify<HostMemSpace>();
 
-  mbgid.template sync<DevExeSpace>();
-  mblev.template sync<DevExeSpace>();
+  mb_gid.template sync<DevExeSpace>();
+  mb_lev.template sync<DevExeSpace>();
+  mb_size.template sync<DevExeSpace>();
 }
 
 //----------------------------------------------------------------------------------------
@@ -144,7 +168,7 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
 
   // Search MeshBlock tree and find neighbors
   for (int b=0; b<nmb; ++b) {
-    LogicalLocation lloc = pmy_pack->pmesh->lloclist[mbgid.h_view(b)];
+    LogicalLocation lloc = pmy_pack->pmesh->lloclist[mb_gid.h_view(b)];
 
     // find location of this MeshBlock relative to XXXX
     int myox1, myox2 = 0, myox3 = 0, myfx1, myfx2, myfx3;

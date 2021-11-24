@@ -84,11 +84,11 @@ void HistoryOutput::LoadHydroHistoryData(HistoryData *pdata, Mesh *pm)
 
   // capture class variabels for kernel  
   auto &u0_ = pm->pmb_pack->phydro->u0;
-  auto &size = pm->pmb_pack->pcoord->mbdata.size;
+  auto &size = pm->pmb_pack->pmb->mb_size;
   int &nhist_ = pdata->nhist;
 
   // loop over all MeshBlocks in this pack
-  auto &indcs = pm->pmb_pack->pcoord->mbdata.indcs;
+  auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
   int is = indcs.is; int nx1 = indcs.nx1;
   int js = indcs.js; int nx2 = indcs.nx2;
   int ks = indcs.ks; int nx3 = indcs.nx3;
@@ -178,11 +178,11 @@ void HistoryOutput::LoadMHDHistoryData(HistoryData *pdata, Mesh *pm)
   auto &bx1f = pm->pmb_pack->pmhd->b0.x1f;
   auto &bx2f = pm->pmb_pack->pmhd->b0.x2f;
   auto &bx3f = pm->pmb_pack->pmhd->b0.x3f;
-  auto &size = pm->pmb_pack->pcoord->mbdata.size;
+  auto &size = pm->pmb_pack->pmb->mb_size;
   int &nhist_ = pdata->nhist;
 
   // loop over all MeshBlocks in this pack
-  auto &indcs = pm->pmb_pack->pcoord->mbdata.indcs;
+  auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
   int is = indcs.is; int nx1 = indcs.nx1;
   int js = indcs.js; int nx2 = indcs.nx2;
   int ks = indcs.ks; int nx3 = indcs.nx3;

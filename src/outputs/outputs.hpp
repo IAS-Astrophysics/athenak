@@ -169,7 +169,6 @@ class VTKOutput : public OutputType
 {
  public:
   VTKOutput(OutputParameters oparams, Mesh *pm);
-
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
 };
 
@@ -181,7 +180,18 @@ class BinaryOutput : public OutputType
 {
  public:
   BinaryOutput(OutputParameters oparams, Mesh *pm);
+  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+};
 
+//----------------------------------------------------------------------------------------
+//! \class RestartOutput
+//  \brief derived OutputType class for restarts
+
+class RestartOutput : public OutputType
+{
+ public:
+  RestartOutput(OutputParameters oparams, Mesh *pm);
+  void LoadOutputData(Mesh *pm) override;
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
 };
 

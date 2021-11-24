@@ -40,7 +40,7 @@ TurbulenceDriver::TurbulenceDriver(MeshBlockPack *pp, ParameterInput *pin) :
 {
   // allocate memory for force registers
   int nmb = pmy_pack->nmb_thispack;
-  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
   int ncells1 = indcs.nx1 + 2*(indcs.ng);
   int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
   int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
@@ -91,7 +91,7 @@ TurbulenceDriver::~TurbulenceDriver()
 //! \fn  void IncludeModeEvolutionTasks
 //  \brief Includes task in the operator split task list that constructs new modes with
 //  random amplitudes and phases that can be used to evolve the force via an O-U process
-//  Called by MeshBlockPack::AddPhysicsModules() function
+//  Called by MeshBlockPack::AddPhysics() function
 
 void TurbulenceDriver::IncludeInitializeModesTask(TaskList &tl, TaskID start)
 {
@@ -103,7 +103,7 @@ void TurbulenceDriver::IncludeInitializeModesTask(TaskList &tl, TaskID start)
 //! \fn  void IncludeAddForcingTask
 //  \brief includes task in the stage_run task list for adding random forcing to fluid
 //  as an explicit source terms in each stage of integrator
-//  Called by MeshBlockPack::AddPhysicsModules() function
+//  Called by MeshBlockPack::AddPhysics() function
 
 void TurbulenceDriver::IncludeAddForcingTask(TaskList &tl, TaskID start)
 {   
@@ -132,7 +132,7 @@ void TurbulenceDriver::IncludeAddForcingTask(TaskList &tl, TaskID start)
 
 TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage)
 {
-  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
@@ -178,7 +178,7 @@ TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage)
 
     // Initialize sin and cos arrays
     // bad design: requires saving sin/cos during restarts
-    auto &size = pmy_pack->pcoord->mbdata.size;
+    auto &size = pmy_pack->pmb->mb_size;
     auto x1sin_ = x1sin;
     auto x1cos_ = x1cos;
     par_for("kx_loop", DevExeSpace(), 0, nmb-1, 0, nt-1, 0, ncells1-1,
@@ -614,7 +614,7 @@ TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage)
 
 TaskStatus TurbulenceDriver::AddForcing(Driver *pdrive, int stage)
 {
-  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;

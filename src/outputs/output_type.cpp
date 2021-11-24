@@ -319,8 +319,8 @@ void OutputType::LoadOutputData(Mesh *pm)
 
   // loop over all MeshBlocks
   // set size & starting indices of output arrays, adjusted accordingly if gz included 
-  auto &indcs = pm->pmb_pack->pcoord->mbdata.indcs;
-  auto &size  = pm->pmb_pack->pcoord->mbdata.size;
+  auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
+  auto &size  = pm->pmb_pack->pmb->mb_size;
   for (int m=0; m<(pm->pmb_pack->nmb_thispack); ++m) {
 
     // skip if MeshBlock ID is specified and not equal to this ID
@@ -370,7 +370,7 @@ void OutputType::LoadOutputData(Mesh *pm)
                             size.h_view(m).x3min, size.h_view(m).x3max);
       oke = oks;
     }
-    int id = pm->pmb_pack->pmb->mbgid.h_view(m);
+    int id = pm->pmb_pack->pmb->mb_gid.h_view(m);
     outmbs.emplace_back(id,ois,oie,ojs,oje,oks,oke);
   }
 

@@ -21,6 +21,11 @@ class Resistivity;
 class SourceTerms;
 class Driver;
 
+// function ptr for user-defined boundary functions enrolled in problem generator 
+namespace mhd {
+using MHDBoundaryFnPtr = void (*)(int m, Mesh* pm, MHD* pmhd, DvceArray5D<Real> &u);
+}
+
 // constants that enumerate MHD Riemann Solver options
 enum class MHD_RSolver {advect, llf, hlle, hlld, roe,   // non-relativistic
                         llf_sr, hlle_sr,                // SR
@@ -81,6 +86,7 @@ public:
   // Objects containing boundary communication buffers and routines for u and b
   BValCC *pbval_u;
   BValFC *pbval_b;
+  MHDBoundaryFnPtr MHDBoundaryFunc[6];
 
   // Object(s) for extra physics (viscosity, resistivity, srcterms)
   Viscosity *pvisc = nullptr;
@@ -120,6 +126,8 @@ public:
 
   // functions to set physical BCs for MHD conserved variables, applied to single MB
   // specified by argument 'm'. 
+  void EnrollBoundaryFunction(BoundaryFace dir, MHDBoundaryFnPtr my_bcfunc);
+  void CheckUserBoundaries();
   void ReflectInnerX1(int m);
   void ReflectOuterX1(int m);
   void ReflectInnerX2(int m);

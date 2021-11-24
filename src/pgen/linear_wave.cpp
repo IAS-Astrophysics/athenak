@@ -187,8 +187,8 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
   Real yfact = 1.0;
 
   // capture variables for kernel
-  auto &indcs = pmbp->pcoord->mbdata.indcs;
-  auto &size = pmbp->pcoord->mbdata.size;
+  auto &indcs = pmbp->pmesh->mb_indcs;
+  auto &size = pmbp->pmb->mb_size;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
@@ -208,9 +208,13 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
     Real ev[5];
     HydroEigensystem(lwv.d0, lwv.v1_0, 0.0, 0.0, p0, eos, ev, rem);
 
-    // set new time limit based on wave speed of selected mode
-    // input tlim is treated as number of wave periods for evolution
-    if (set_initial_conditions) {pmy_driver_->tlim *= std::abs(lambda/ev[wave_flag]);}
+    // set new time limit in ParameterInput (to be read by Driver constructor) based on
+    // wave speed of selected mode.  
+    // input tlim is interpreted asnumber of wave periods for evolution
+    if (set_initial_conditions) {
+      Real tlim = pin->GetReal("time", "tlim");
+      pin->SetReal("time", "tlim", tlim*(std::abs(lambda/ev[wave_flag])));
+    }
 
     par_for("pgen_linwave1", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i)
@@ -267,9 +271,13 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
     lwv.dby = amp*rem[nmhd_  ][wave_flag];
     lwv.dbz = amp*rem[nmhd_+1][wave_flag];
 
-    // set new time limit based on wave speed of selected mode
-    // input tlim is treated as number of wave periods for evolution
-    pmy_driver_->tlim *= std::abs(lambda/ev[wave_flag]);
+    // set new time limit in ParameterInput (to be read by Driver constructor) based on
+    // wave speed of selected mode.  
+    // input tlim is interpreted asnumber of wave periods for evolution
+    if (set_initial_conditions) {
+      Real tlim = pin->GetReal("time", "tlim");
+      pin->SetReal("time", "tlim", tlim*(std::abs(lambda/ev[wave_flag])));
+    }
 
     par_for("pgen_linwave2", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i)
@@ -698,14 +706,14 @@ void ProblemGenerator::LinearWaveErrors_(MeshBlockPack *pmbp, ParameterInput *pi
   int nvars=0;
 
   // capture class variables for kernel  
-  auto &indcs = pmbp->pcoord->mbdata.indcs;
+  auto &indcs = pmbp->pmesh->mb_indcs;
   int &nx1 = indcs.nx1;
   int &nx2 = indcs.nx2;
   int &nx3 = indcs.nx3;
   int &is = indcs.is;
   int &js = indcs.js;
   int &ks = indcs.ks;
-  auto &size = pmbp->pcoord->mbdata.size;
+  auto &size = pmbp->pmb->mb_size;
 
   // compute errors for Hydro  ----------------------------------------------------------
   if (pmbp->phydro != nullptr) {

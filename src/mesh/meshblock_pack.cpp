@@ -52,7 +52,7 @@ MeshBlockPack::~MeshBlockPack()
 void MeshBlockPack::AddMeshBlocksAndCoordinates(ParameterInput *pin, RegionIndcs indcs)
 {
   pmb = new MeshBlock(this, gids, nmb_thispack);
-  pcoord = new Coordinates(this, indcs, gids, nmb_thispack);
+  pcoord = new Coordinates(this);
 }
 
 //----------------------------------------------------------------------------------------
@@ -60,7 +60,7 @@ void MeshBlockPack::AddMeshBlocksAndCoordinates(ParameterInput *pin, RegionIndcs
 // \brief construct physics modules and tasks lists in this MeshBlockPack, based on which
 // <blocks> are present in the input file.  Called from main().
 
-void MeshBlockPack::AddPhysics(ParameterInput *pin, Driver *pdrive)
+void MeshBlockPack::AddPhysics(ParameterInput *pin)
 {
   int nphysics = 0;
   TaskID none(0);
@@ -94,7 +94,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin, Driver *pdrive)
   // Create Ion-Neutral physics module and TaskLists. Error if <hydro> and <mhd> are not
   // both defined as well.
   if (pin->DoesBlockExist("ion-neutral")) {
-    pionn = new IonNeutral(this, pin, pdrive);   // construct new MHD object
+    pionn = new ion_neutral::IonNeutral(this, pin);   // construct new MHD object
     if (pin->DoesBlockExist("hydro") and pin->DoesBlockExist("mhd")) {
       pionn->AssembleIonNeutralTasks(start_tl, run_tl, end_tl);
       nphysics++;

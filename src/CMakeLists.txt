@@ -65,10 +65,11 @@ add_executable(
         outputs/io_wrapper.cpp
         outputs/outputs.cpp
         outputs/output_type.cpp
+        outputs/binary.cpp
         outputs/formatted_table.cpp
         outputs/history.cpp
+        outputs/restart.cpp
         outputs/vtk.cpp
-        outputs/binary.cpp
 
         pgen/pgen.cpp
         pgen/advection.cpp

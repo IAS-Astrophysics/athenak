@@ -16,132 +16,9 @@
 //----------------------------------------------------------------------------------------
 // constructor, initializes data structures describing MeshBlocks
 
-Coordinates::Coordinates(MeshBlockPack *ppack, RegionIndcs indcs, int igids, int nmb)
-  : pmy_pack(ppack),
-    mbdata(nmb)
+Coordinates::Coordinates(MeshBlockPack *ppack)
+  : pmy_pack(ppack)
 {
-  // initialize MeshBlock cell indices
-  mbdata.indcs.ng  = indcs.ng;
-  mbdata.indcs.nx1 = indcs.nx1;
-  mbdata.indcs.nx2 = indcs.nx2;
-  mbdata.indcs.nx3 = indcs.nx3;
-
-  mbdata.indcs.is = mbdata.indcs.ng;
-  mbdata.indcs.ie = mbdata.indcs.is + mbdata.indcs.nx1 - 1;
-    
-  if (mbdata.indcs.nx2 > 1) {
-    mbdata.indcs.js = mbdata.indcs.ng;
-    mbdata.indcs.je = mbdata.indcs.js + mbdata.indcs.nx2 - 1; 
-  } else {
-    mbdata.indcs.js = 0;
-    mbdata.indcs.je = 0;
-  } 
-      
-  if (mbdata.indcs.nx3 > 1) {
-    mbdata.indcs.ks = mbdata.indcs.ng;
-    mbdata.indcs.ke = mbdata.indcs.ks + mbdata.indcs.nx3 - 1;
-  } else {
-    mbdata.indcs.ks = 0;
-    mbdata.indcs.ke = 0;
-  } 
-
-  // initialize MeshBlock coarse cell indices (only needed for SMR/AMR, but init always)
-  mbdata.cindcs.ng  = indcs.ng;
-  mbdata.cindcs.nx1 = indcs.nx1/2;
-  mbdata.cindcs.nx2 = indcs.nx2/2;
-  mbdata.cindcs.nx3 = indcs.nx3/2;
-
-  mbdata.cindcs.is = mbdata.cindcs.ng;
-  mbdata.cindcs.ie = mbdata.cindcs.is + mbdata.cindcs.nx1 - 1;
-
-  if (mbdata.cindcs.nx2 > 1) {
-    mbdata.cindcs.js = mbdata.cindcs.ng;
-    mbdata.cindcs.je = mbdata.cindcs.js + mbdata.cindcs.nx2 - 1;
-  } else {
-    mbdata.cindcs.js = 0;
-    mbdata.cindcs.je = 0;
-  }
-
-  if (mbdata.cindcs.nx3 > 1) {
-    mbdata.cindcs.ks = mbdata.cindcs.ng;
-    mbdata.cindcs.ke = mbdata.cindcs.ks + mbdata.cindcs.nx3 - 1;
-  } else {
-    mbdata.cindcs.ks = 0;
-    mbdata.cindcs.ke = 0;
-  }
-
-  // calculate physical size of MeshBlocks.  Note only host array is initialized
-  Mesh* pm = pmy_pack->pmesh;
-  auto &ms = pm->mesh_size;
-  auto &size = mbdata.size;
-  for (int m=0; m<nmb; ++m) {
-
-    // x1-direction
-    std::int32_t &lx1 = pm->lloclist[igids+m].lx1;
-    std::int32_t &lev = pm->lloclist[igids+m].level;
-    std::int32_t nmbx1 = pm->nmb_rootx1 << (lev - pm->root_level);
-    if (lx1 == 0) {
-      size.h_view(m).x1min = ms.x1min;
-    } else {
-      size.h_view(m).x1min = LeftEdgeX(lx1, nmbx1, ms.x1min, ms.x1max);
-    }
-
-    if (lx1 == nmbx1 - 1) {
-      size.h_view(m).x1max = ms.x1max;
-    } else {
-      size.h_view(m).x1max = LeftEdgeX(lx1+1, nmbx1, ms.x1min, ms.x1max);
-    }
-
-    // x2-direction
-    if (pm->mesh_indcs.nx2 == 1) {
-      size.h_view(m).x2min = ms.x2min;
-      size.h_view(m).x2max = ms.x2max;
-    } else {
-
-      std::int32_t &lx2 = pm->lloclist[igids+m].lx2;
-      std::int32_t nmbx2 = pm->nmb_rootx2 << (lev - pm->root_level);
-      if (lx2 == 0) {
-        size.h_view(m).x2min = ms.x2min;
-      } else {
-        size.h_view(m).x2min = LeftEdgeX(lx2, nmbx2, ms.x2min, ms.x2max);
-      }
-
-      if (lx2 == (nmbx2) - 1) {
-        size.h_view(m).x2max = ms.x2max;
-      } else {
-        size.h_view(m).x2max = LeftEdgeX(lx2+1, nmbx2, ms.x2min, ms.x2max);
-      }
-
-    }
-
-    // x3-direction
-    if (pm->mesh_indcs.nx3 == 1) {
-      size.h_view(m).x3min = ms.x3min;
-      size.h_view(m).x3max = ms.x3max;
-    } else {
-      std::int32_t &lx3 = pm->lloclist[igids+m].lx3;
-      std::int32_t nmbx3 = pm->nmb_rootx3 << (lev - pm->root_level);
-      if (lx3 == 0) {
-        size.h_view(m).x3min = ms.x3min;
-      } else {
-        size.h_view(m).x3min = LeftEdgeX(lx3, nmbx3, ms.x3min, ms.x3max);
-      }
-      if (lx3 == (nmbx3) - 1) {
-        size.h_view(m).x3max = ms.x3max;
-      } else {
-        size.h_view(m).x3max = LeftEdgeX(lx3+1, nmbx3, ms.x3min, ms.x3max);
-      }
-    }
-
-    // grid spacing at this level.  Ensure all MeshBlocks at same level have same dx
-    size.h_view(m).dx1 = ms.dx1/static_cast<Real>(1<<(lev - pm->root_level));
-    size.h_view(m).dx2 = ms.dx2/static_cast<Real>(1<<(lev - pm->root_level));
-    size.h_view(m).dx3 = ms.dx3/static_cast<Real>(1<<(lev - pm->root_level));
-  }
-
-  // mark DualArray as modified, and then sync device with host
-  size.template modify<HostMemSpace>();
-  size.template sync<DevExeSpace>();
 
 }
 
@@ -152,10 +29,10 @@ Coordinates::Coordinates(MeshBlockPack *ppack, RegionIndcs indcs, int igids, int
 
 void Coordinates::InitMetric(ParameterInput *pin)
 {
-  mbdata.is_minkowski = pin->GetOrAddBoolean("coord","minkowski",false);
-  mbdata.bh_mass = pin->GetReal("coord","m");
-  mbdata.bh_spin = pin->GetReal("coord","a");
-  mbdata.bh_rmin = pin->GetOrAddReal("coord","rmin",0.0);
+  coord_data.is_minkowski = pin->GetOrAddBoolean("coord","minkowski",false);
+  coord_data.bh_mass = pin->GetReal("coord","m");
+  coord_data.bh_spin = pin->GetReal("coord","a");
+  coord_data.bh_rmin = pin->GetOrAddReal("coord","rmin",0.0);
 }
 
 //----------------------------------------------------------------------------------------
@@ -166,37 +43,35 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim, const EOS_Data &e
                                 const Real dt, DvceArray5D<Real> &cons)
 {
   // capture variables for kernel
-  auto &indcs = mbdata.indcs;
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is; int ie = indcs.ie;
   int js = indcs.js; int je = indcs.je;
   int ks = indcs.ks; int ke = indcs.ke;
-  auto &mbd = mbdata;
-  int nmb1 = pmy_pack->nmb_thispack - 1;
+  auto &size = pmy_pack->pmb->mb_size;
+  auto &flat = coord_data.is_minkowski;
+  auto &spin = coord_data.bh_spin;
 
   Real gamma_prime = eos.gamma / (eos.gamma - 1.0);
 
+  int nmb1 = pmy_pack->nmb_thispack - 1;
   par_for("coord_src", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i)
     {
       // Extract components of metric
-      Real &x1min = mbd.size.d_view(m).x1min;
-      Real &x1max = mbd.size.d_view(m).x1max;
-      int nx1 = mbd.indcs.nx1;
-      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
 
-      Real &x2min = mbd.size.d_view(m).x2min;
-      Real &x2max = mbd.size.d_view(m).x2max;
-      int nx2 = mbd.indcs.nx2;
-      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+      Real &x2min = size.d_view(m).x2min;
+      Real &x2max = size.d_view(m).x2max;
+      Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
 
-      Real &x3min = mbd.size.d_view(m).x3min;
-      Real &x3max = mbd.size.d_view(m).x3max;
-      int nx3 = mbd.indcs.nx3;
-      Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+      Real &x3min = size.d_view(m).x3min;
+      Real &x3max = size.d_view(m).x3max;
+      Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
       Real g_[NMETRIC], gi_[NMETRIC];
-      ComputeMetricAndInverse(x1v, x2v, x3v, mbd.is_minkowski, false,
-                              mbd.bh_spin, g_, gi_);
+      ComputeMetricAndInverse(x1v, x2v, x3v, flat, false, spin, g_, gi_);
 
       // Extract primitives
       const Real &rho  = prim(m,IDN,k,j,i);
@@ -233,8 +108,7 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim, const EOS_Data &e
 
       // Calculate source terms
       Real dg_dx1[NMETRIC], dg_dx2[NMETRIC], dg_dx3[NMETRIC];
-      ComputeMetricDerivatives(x1v, x2v, x3v, mbd.is_minkowski, mbd.bh_spin,
-                               dg_dx1, dg_dx2, dg_dx3);
+      ComputeMetricDerivatives(x1v, x2v, x3v, flat, spin, dg_dx1, dg_dx2, dg_dx3);
 
       Real s_1 = 0.0, s_2 = 0.0, s_3 = 0.0;
       s_1 += dg_dx1[I00] * tt[I00];
@@ -307,37 +181,35 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim,
                                 const Real dt, DvceArray5D<Real> &cons)
 {
   // capture variables for kernel
-  auto &indcs = mbdata.indcs;
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is; int ie = indcs.ie;
   int js = indcs.js; int je = indcs.je;
   int ks = indcs.ks; int ke = indcs.ke;
-  auto &mbd = mbdata;
-  int nmb1 = pmy_pack->nmb_thispack - 1;
+  auto &size = pmy_pack->pmb->mb_size;
+  auto &flat = coord_data.is_minkowski;
+  auto &spin = coord_data.bh_spin;
 
   Real gamma_prime = eos.gamma / (eos.gamma - 1.0);
 
+  int nmb1 = pmy_pack->nmb_thispack - 1;
   par_for("coord_src", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i)
     {
       // Extract components of metric
-      Real &x1min = mbd.size.d_view(m).x1min;
-      Real &x1max = mbd.size.d_view(m).x1max;
-      int nx1 = mbd.indcs.nx1;
-      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
 
-      Real &x2min = mbd.size.d_view(m).x2min;
-      Real &x2max = mbd.size.d_view(m).x2max;
-      int nx2 = mbd.indcs.nx2;
-      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+      Real &x2min = size.d_view(m).x2min;
+      Real &x2max = size.d_view(m).x2max;
+      Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
 
-      Real &x3min = mbd.size.d_view(m).x3min;
-      Real &x3max = mbd.size.d_view(m).x3max;
-      int nx3 = mbd.indcs.nx3;
-      Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+      Real &x3min = size.d_view(m).x3min;
+      Real &x3max = size.d_view(m).x3max;
+      Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
       Real g_[NMETRIC], gi_[NMETRIC];
-      ComputeMetricAndInverse(x1v, x2v, x3v, mbd.is_minkowski, false,
-                              mbd.bh_spin, g_, gi_);
+      ComputeMetricAndInverse(x1v, x2v, x3v, flat, false, spin, g_, gi_);
 
       // create references to components of metric; formatting reflects structure
       const Real
@@ -403,8 +275,7 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim,
 
       // Calculate source terms
       Real dg_dx1[NMETRIC], dg_dx2[NMETRIC], dg_dx3[NMETRIC];
-      ComputeMetricDerivatives(x1v, x2v, x3v, mbd.is_minkowski, mbd.bh_spin,
-                               dg_dx1, dg_dx2, dg_dx3);
+      ComputeMetricDerivatives(x1v, x2v, x3v, flat, spin, dg_dx1, dg_dx2, dg_dx3);
 
       Real s_1 = 0.0, s_2 = 0.0, s_3 = 0.0;
       s_1 += dg_dx1[I00] * tt[I00];

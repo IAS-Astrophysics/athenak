@@ -98,7 +98,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons,
          const DvceFaceFld4D<Real> &b, DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc)
 {
 
-  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
   int &ng = indcs.ng;
   int n1 = indcs.nx1 + 2*ng;
   int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
@@ -106,6 +106,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons,
   int &is = indcs.is;
   int &js = indcs.js;
   int &ks = indcs.ks;
+  auto &size = pmy_pack->pmb->mb_size;
   int &nmhd  = pmy_pack->pmhd->nmhd;
   int &nscal = pmy_pack->pmhd->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
@@ -113,7 +114,9 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons,
   Real gm1 = eos_data.gamma - 1.0;
   Real gamma_adi = eos_data.gamma;
 
-  auto mbd = pmy_pack->pcoord->mbdata;
+  auto &flat = pmy_pack->pcoord->coord_data.is_minkowski;
+  auto &spin = pmy_pack->pcoord->coord_data.bh_spin;
+  auto &rmin = pmy_pack->pcoord->coord_data.bh_rmin;
   Real &dfloor_ = eos_data.density_floor;
   Real &pfloor_ = eos_data.pressure_floor;
   Real ee_min = pfloor_/gm1;
@@ -151,30 +154,26 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons,
       w_by = 0.5*(b.x2f(m,k,j,i) + b.x2f(m,k,j+1,i));
       w_bz = 0.5*(b.x3f(m,k,j,i) + b.x3f(m,k+1,j,i));
 
-      Real &x1min = mbd.size.d_view(m).x1min;
-      Real &x1max = mbd.size.d_view(m).x1max;
-      int nx1 = mbd.indcs.nx1;
-      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
 
       // Extract components of metric
-      Real &x2min = mbd.size.d_view(m).x2min;
-      Real &x2max = mbd.size.d_view(m).x2max;
-      int nx2 = mbd.indcs.nx2;
-      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+      Real &x2min = size.d_view(m).x2min;
+      Real &x2max = size.d_view(m).x2max;
+      Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
 
-      Real &x3min = mbd.size.d_view(m).x3min;
-      Real &x3max = mbd.size.d_view(m).x3max;
-      int nx3 = mbd.indcs.nx3;
-      Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+      Real &x3min = size.d_view(m).x3min;
+      Real &x3max = size.d_view(m).x3max;
+      Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
       Real g_[NMETRIC], gi_[NMETRIC];
-      ComputeMetricAndInverse(x1v, x2v, x3v, mbd.is_minkowski, false,
-                              mbd.bh_spin, g_, gi_);
+      ComputeMetricAndInverse(x1v, x2v, x3v, flat, false, spin, g_, gi_);
 
       Real rad = sqrt(SQR(x1v) + SQR(x2v) + SQR(x3v));
       bool floor_hit = false;
       // Only execute cons2prim if outside excised region
-      if (rad > mbd.bh_rmin) {
+      if (rad > rmin) {
 
         // We are evolving T^t_t, but the SR C2P algorithm is only consistent with
         // alpha^2 T^{tt}.  Therefore compute T^{tt} = g^0\mu T^t_\mu
@@ -383,7 +382,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons,
         const Real& w_t  = prim(m,ITM,k,j,i);
         w_p = w_t*gm1*w_d;
       }
-      if (rad <= mbd.bh_rmin || floor_hit) {
+      if (rad <= rmin || floor_hit) {
         Real ud, ue, um1, um2, um3;
         eos.PrimToConsSingleGRMHD(g_, gi_, w_d, w_p, w_ux, w_uy, w_uz,
                                   w_bx, w_by, w_bz,
@@ -411,11 +410,13 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons,
 void IdealGRMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc, 
    			    DvceArray5D<Real> &cons)
 {
-  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is; int ie = indcs.ie;
   int js = indcs.js; int je = indcs.je;
   int ks = indcs.ks; int ke = indcs.ke;
-  auto mbd = pmy_pack->pcoord->mbdata;
+  auto &size = pmy_pack->pmb->mb_size;
+  auto &flat = pmy_pack->pcoord->coord_data.is_minkowski;
+  auto &spin = pmy_pack->pcoord->coord_data.bh_spin;
   int &nmhd  = pmy_pack->pmhd->nmhd;
   int &nscal = pmy_pack->pmhd->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
@@ -427,24 +428,20 @@ void IdealGRMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Rea
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
       // Extract components of metric
-      Real &x1min = mbd.size.d_view(m).x1min;
-      Real &x1max = mbd.size.d_view(m).x1max;
-      int nx1 = indcs.nx1;
-      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
 
-      Real &x2min = mbd.size.d_view(m).x2min;
-      Real &x2max = mbd.size.d_view(m).x2max;
-      int nx2 = indcs.nx2;
-      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+      Real &x2min = size.d_view(m).x2min;
+      Real &x2max = size.d_view(m).x2max;
+      Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
 
-      Real &x3min = mbd.size.d_view(m).x3min;
-      Real &x3max = mbd.size.d_view(m).x3max;
-      int nx3 = indcs.nx3;
-      Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+      Real &x3min = size.d_view(m).x3min;
+      Real &x3max = size.d_view(m).x3max;
+      Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
       Real g_[NMETRIC], gi_[NMETRIC];
-      ComputeMetricAndInverse(x1v, x2v, x3v, mbd.is_minkowski, false,
-                              mbd.bh_spin, g_, gi_);
+      ComputeMetricAndInverse(x1v, x2v, x3v, flat, false, spin, g_, gi_);
 
       const Real
         &g_00 = g_[I00], &g_01 = g_[I01], &g_02 = g_[I02], &g_03 = g_[I03],

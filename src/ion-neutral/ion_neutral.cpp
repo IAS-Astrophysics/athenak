@@ -18,36 +18,21 @@
 #include "hydro/hydro.hpp"
 #include "ion_neutral.hpp"
 
+namespace ion_neutral {
 //----------------------------------------------------------------------------------------
 // constructor, parses input file and initializes data structures and parameters
 
-IonNeutral::IonNeutral(MeshBlockPack *pp, ParameterInput *pin, Driver *pdrive) :
-  pmy_pack(pp),
-  ru("ru",1,1,1,1,1,1)
+IonNeutral::IonNeutral(MeshBlockPack *pp, ParameterInput *pin) :
+  pmy_pack(pp)
 {
   // Read drag coeff
   drag_coeff = pin->GetReal("ion-neutral","drag_coeff");
-
-  // allocate memory for stiff source term R(U^n)
-  int nimp_stages = pdrive->nimp_stages;
-  if (nimp_stages == 0) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "IonNetral MHD can only be run with ImEx integrators." << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-
-  int nmb = pmy_pack->nmb_thispack;
-  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
-  int ncells1 = indcs.nx1 + 2*(indcs.ng);
-  int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
-  int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
-  Kokkos::realloc(ru, nimp_stages, nmb, 6, ncells3, ncells2, ncells1);
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn  void IonNeutral::AssembleIonNeutralTasks
 //  \brief Adds tasks for ion-neutral (two-fluid) mhd to stage start/run/end task lists
-//  Called by MeshBlockPack::AddPhysicsModules() function directly after MHD constrctr
+//  Called by MeshBlockPack::AddPhysics() function directly after MHD constrctr
   
 void IonNeutral::AssembleIonNeutralTasks(TaskList &start, TaskList &run, TaskList &end)
 { 
@@ -169,7 +154,7 @@ TaskStatus IonNeutral::ImpRKUpdate(Driver *pdriver, int estage)
   // estage <= 0 corresponds to first two fully implicit stages
   int istage = estage + 2;
 
-  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
   int n1 = indcs.nx1 + 2*indcs.ng;
   int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*indcs.ng) : 1;
   int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*indcs.ng) : 1;
@@ -275,3 +260,5 @@ TaskStatus IonNeutral::ImpRKUpdate(Driver *pdriver, int estage)
 
   return TaskStatus::complete;
 }
+
+} // namespace ion_neutral

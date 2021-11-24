@@ -24,7 +24,7 @@ namespace hydro {
 
 void Hydro::ShearInnerX1(int m)
 {
-  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
   int &ng = indcs.ng;
   int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
   int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
@@ -50,7 +50,7 @@ void Hydro::ShearInnerX1(int m)
 
 void Hydro::ShearOuterX1(int m)
 {
-  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
   int &ng = indcs.ng;
   int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
   int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;

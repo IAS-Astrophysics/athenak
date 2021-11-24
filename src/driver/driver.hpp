@@ -29,7 +29,7 @@ class Driver {
 
   // data
   TimeEvolution time_evolution;
-  std::unique_ptr<ProblemGenerator> pgen;  // sets ICs, constr'd in Initialize() func
+  DvceArray6D<Real> impl_src;  // stiff source terms used in ImEx integrators
 
   // folowing data only relevant for runs involving time evolution
   Real tlim;      // stopping time

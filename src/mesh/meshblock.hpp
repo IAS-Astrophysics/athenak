@@ -32,15 +32,15 @@ class MeshBlock
   ~MeshBlock() {};  // only default destructor needed
 
   // data
-  int nmb;     // # of MeshBlocks
-  int nnghbr;  // # of neighbors for each MB.  TODO: cannot be same for all MBs with AMR
+  int nmb;              // number of MeshBlocks
+  int nnghbr;           // maximum number of neighbors for each MeshBlock
 
   // DualArrays are used to store data used on both device and host 
   // First dimension of each array will be [# of MeshBlocks in this MeshBlockPack]
-  DualArray1D<int> mbgid;            // grid ID, unique identifier for each MeshBlock
-  DualArray1D<int> mblev;            // logical level of each MeshBlock
-  HostArray2D<BoundaryFlag> mbbcs;   // boundary conditions at 6 faces of each MeshBlock
-
+  DualArray1D<int> mb_gid;           // grid ID, unique identifier for each MeshBlock
+  DualArray1D<int> mb_lev;           // logical level of each MeshBlock
+  DualArray1D<RegionSize> mb_size;   // physical size of each MeshBlock
+  HostArray2D<BoundaryFlag> mb_bcs;  // boundary conditions at 6 faces of each MeshBlock
   DualArray2D<NeighborBlock> nghbr;  // data on all (up to 56) neighbors for each MB
 
   // function to compute index of 56 neighbors
@@ -49,7 +49,6 @@ class MeshBlock
  private:
   // data
   MeshBlockPack* pmy_pack;
-  HostArray1D<double> mbcost;  // cost of updating each MeshBlock for load balancing
 
   // functions
   void SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklist);

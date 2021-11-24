@@ -17,7 +17,7 @@
 class MeshBlock;
 namespace hydro {class Hydro;}
 namespace mhd {class MHD;}
-class IonNeutral;
+namespace ion_neutral {class IonNeutral;}
 class TurbulenceDriver;
 
 //----------------------------------------------------------------------------------------
@@ -46,10 +46,10 @@ public:
   MeshBlock* pmb;         // MeshBlocks in this MeshBlockPack
   Coordinates* pcoord;
 
-  // physics modules (controlled by AddPhysicsModules function in mesh_physics.cpp)
+  // physics (controlled by AddPhysics() function in meshblock_pack.cpp)
   hydro::Hydro *phydro=nullptr;
   mhd::MHD *pmhd=nullptr;
-  IonNeutral *pionn=nullptr;
+  ion_neutral::IonNeutral *pionn=nullptr;
   TurbulenceDriver *pturb=nullptr;
 
   // task lists for all MeshBlocks in this MeshBlockPack
@@ -57,12 +57,8 @@ public:
   TaskList start_tl, run_tl, end_tl;     // each stage of RK integrators
 
   // functions
-  void AddPhysics(ParameterInput *pin, Driver *pdrive);
+  void AddPhysics(ParameterInput *pin);
   void AddMeshBlocksAndCoordinates(ParameterInput *pin, RegionIndcs indcs);
-  int NumberOfMeshBlockCells() const {
-    return (pcoord->mbdata.indcs.nx1)*(pcoord->mbdata.indcs.nx2)*
-           (pcoord->mbdata.indcs.nx3);
-  }
 
 private:
   // data

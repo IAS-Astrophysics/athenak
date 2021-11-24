@@ -21,7 +21,7 @@ namespace mhd {
 //  \brief The HLLE Riemann solver for hydrodynamics (both ideal gas and isothermal)
 
 KOKKOS_INLINE_FUNCTION
-void HLLE(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coord,
+void HLLE(TeamMember_t const &member, const EOS_Data &eos,
      const int m, const int k, const int j,  const int il, const int iu, const int ivx,
      const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr,
      const ScrArray2D<Real> &bl, const ScrArray2D<Real> &br, const DvceArray4D<Real> &bx,

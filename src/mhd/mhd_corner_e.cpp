@@ -27,13 +27,15 @@ namespace mhd {
 
 TaskStatus MHD::CornerE(Driver *pdriver, int stage)
 {
-  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
   int nmb1 = pmy_pack->nmb_thispack - 1;
   auto &eos = pmy_pack->pmhd->peos->eos_data;
-  auto mbd = pmy_pack->pcoord->mbdata;
+  auto &size = pmy_pack->pmb->mb_size;
+  auto &flat = pmy_pack->pcoord->coord_data.is_minkowski;
+  auto &spin = pmy_pack->pcoord->coord_data.bh_spin;
 
   //---- 1-D problem:
   //  copy face-centered E-fields to edges and return.
@@ -72,24 +74,20 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage)
         KOKKOS_LAMBDA(int m, int j, int i)
         {
           // Extract components of metric
-          Real &x1min = mbd.size.d_view(m).x1min;
-          Real &x1max = mbd.size.d_view(m).x1max;
-          int nx1 = mbd.indcs.nx1;
-          Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+          Real &x1min = size.d_view(m).x1min;
+          Real &x1max = size.d_view(m).x1max;
+          Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
 
-          Real &x2min = mbd.size.d_view(m).x2min;
-          Real &x2max = mbd.size.d_view(m).x2max;
-          int nx2 = mbd.indcs.nx2;
-          Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+          Real &x2min = size.d_view(m).x2min;
+          Real &x2max = size.d_view(m).x2max;
+          Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
 
-          Real &x3min = mbd.size.d_view(m).x3min;
-          Real &x3max = mbd.size.d_view(m).x3max;
-          int nx3 = mbd.indcs.nx3;
-          Real x3v = CellCenterX(0, nx3, x3min, x3max);
+          Real &x3min = size.d_view(m).x3min;
+          Real &x3max = size.d_view(m).x3max;
+          Real x3v = CellCenterX(0, indcs.nx3, x3min, x3max);
 
           Real g_[NMETRIC], gi_[NMETRIC];
-          ComputeMetricAndInverse(x1v, x2v, x3v, mbd.is_minkowski, false,
-                              mbd.bh_spin, g_, gi_);
+          ComputeMetricAndInverse(x1v, x2v, x3v, flat, false, spin, g_, gi_);
 
           const Real &ux = w0_(m,IVX,ks,j,i);
           const Real &uy = w0_(m,IVY,ks,j,i);
@@ -211,24 +209,20 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage)
         KOKKOS_LAMBDA(int m, int k, int j, int i)
         { 
           // Extract components of metric
-          Real &x1min = mbd.size.d_view(m).x1min;
-          Real &x1max = mbd.size.d_view(m).x1max;
-          int nx1 = mbd.indcs.nx1;
-          Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+          Real &x1min = size.d_view(m).x1min;
+          Real &x1max = size.d_view(m).x1max;
+          Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
           
-          Real &x2min = mbd.size.d_view(m).x2min;
-          Real &x2max = mbd.size.d_view(m).x2max;
-          int nx2 = mbd.indcs.nx2;
-          Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+          Real &x2min = size.d_view(m).x2min;
+          Real &x2max = size.d_view(m).x2max;
+          Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
           
-          Real &x3min = mbd.size.d_view(m).x3min;
-          Real &x3max = mbd.size.d_view(m).x3max;
-          int nx3 = mbd.indcs.nx3;
-          Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+          Real &x3min = size.d_view(m).x3min;
+          Real &x3max = size.d_view(m).x3max;
+          Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
           
           Real g_[NMETRIC], gi_[NMETRIC];
-          ComputeMetricAndInverse(x1v, x2v, x3v, mbd.is_minkowski, false,
-                              mbd.bh_spin, g_, gi_);
+          ComputeMetricAndInverse(x1v, x2v, x3v, flat, false, spin, g_, gi_);
           
           const Real &ux = w0_(m,IVX,k,j,i);
           const Real &uy = w0_(m,IVY,k,j,i);

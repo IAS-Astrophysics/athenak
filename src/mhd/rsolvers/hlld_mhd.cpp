@@ -18,7 +18,7 @@ namespace mhd {
 //! \fn
 
 KOKKOS_INLINE_FUNCTION
-void HLLD(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coord,
+void HLLD(TeamMember_t const &member, const EOS_Data &eos,
      const int m, const int k, const int j,  const int il, const int iu, const int ivx,
      const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr,
      const ScrArray2D<Real> &bl, const ScrArray2D<Real> &br, const DvceArray4D<Real> &bx,

@@ -92,7 +92,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // allocate memory for conserved and primitive variables
   int nmb = ppack->nmb_thispack;
-  auto &indcs = pmy_pack->pcoord->mbdata.indcs;
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
   int ncells1 = indcs.nx1 + 2*(indcs.ng);
   int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
   int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
@@ -101,7 +101,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // allocate memory for conserved and primitive variables on coarse mesh
   if (ppack->pmesh->multilevel) {
-    auto &cindcs = pmy_pack->pcoord->mbdata.cindcs;
+    auto &cindcs = pmy_pack->pmesh->mb_cindcs;
     int nccells1 = cindcs.nx1 + 2*(cindcs.ng);
     int nccells2 = (cindcs.nx2 > 1)? (cindcs.nx2 + 2*(cindcs.ng)) : 1;
     int nccells3 = (cindcs.nx3 > 1)? (cindcs.nx3 + 2*(cindcs.ng)) : 1;
@@ -245,5 +245,45 @@ Hydro::~Hydro()
   if (pvisc != nullptr) {delete pvisc;}
   if (psrc != nullptr) {delete psrc;}
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn EnrollBoundaryFunction(BoundaryFace dir, BValFunc my_bc)
+//! \brief Enroll a user-defined boundary function
+
+void Hydro::EnrollBoundaryFunction(BoundaryFace dir, HydroBoundaryFnPtr my_bcfunc) {
+  if (dir < 0 || dir > 5) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+        << "EnrollBoundaryFunction called on bndry=" << dir << " not valid" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (pmy_pack->pmesh->mesh_bcs[dir] != BoundaryFlag::user) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+        << "Boundary condition flag must be set to 'user' in the <mesh> block in input"
+        << " file to use user-enrolled BCs on bndry=" << dir << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  HydroBoundaryFunc[static_cast<int>(dir)] = my_bcfunc;
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn CheckUserBoundaries()
+//! \brief checks if user boundary functions are correctly enrolled
+//! This compatibility check is performed in the Driver after calling ProblemGenerator()
+
+void Hydro::CheckUserBoundaries() {
+  for (int i=0; i<6; i++) {
+    if (pmy_pack->pmesh->mesh_bcs[i] == BoundaryFlag::user) {
+      if (HydroBoundaryFunc[i] == nullptr) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "User-defined boundary function is specified in input "
+                  << " file but boundary function not enrolled; bndry=" << i << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+    }
+  }
+  return;
+}
+
 
 } // namespace hydro

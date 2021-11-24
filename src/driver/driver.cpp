@@ -16,6 +16,7 @@
 #include "outputs/outputs.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "ion-neutral/ion_neutral.hpp"
 #include "driver.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -47,7 +48,8 @@
 // Driver::Execute() invokes the tasklist from stage=1 to stage=ptlist->nstages
 
 Driver::Driver(ParameterInput *pin, Mesh *pmesh) :
-  tlim(-1.0), nlim(-1), ndiag(1)
+  tlim(-1.0), nlim(-1), ndiag(1),
+  impl_src("ru",1,1,1,1,1,1)
 {
   // set time-evolution option (no default)
   {std::string evolution_t = pin->GetString("time","evolution");
@@ -198,27 +200,19 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh) :
 }
 
 //----------------------------------------------------------------------------------------
-// dtor
-
-//----------------------------------------------------------------------------------------
 // Driver::Initialize()
-// Tasks to be performed before execution of Driver, such as executing ProblemGenerator
-// to set ICs, setting ghost zones (BCs), outputting ICs, and computing initial time step
+// Tasks to be performed before execution of Driver, such as setting ghost zones (BCs),
+//  outputting ICs, and computing initial time step
 
 void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
 {
-  //---- Step 1.  Set ICs by constructing Problem Generator, check user-defined BCs
-  // enrolled (if required).
-
-  pgen = std::make_unique<ProblemGenerator>(pin, pmesh, this);
-  pmesh->CheckUserBoundaries();
-
-  //---- Step 2.  Set conserved variables in ghost zones for all physics
+  //---- Step 1.  Set conserved variables in ghost zones for all physics
   // Note: with MPI, sends on ALL MBs must be complete before receives execute
 
   // Initialize HYDRO: ghost zones and primitive variables (everywhere)
   hydro::Hydro *phydro = pmesh->pmb_pack->phydro;
   if (phydro != nullptr) {
+    phydro->CheckUserBoundaries();
     // following functions return a TaskStatus, but it is ignored so cast to (void)
     (void) phydro->RestrictU(this, 0);
     (void) phydro->InitRecv(this, 0);
@@ -236,6 +230,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
   // Note this requires communicating BOTH u and B
   mhd::MHD *pmhd = pmesh->pmb_pack->pmhd;
   if (pmhd != nullptr) {
+    pmhd->CheckUserBoundaries();
     // following functions return a TaskStatus, but it is ignored so cast to (void)
     (void) pmhd->InitRecv(this, 0);
     (void) pmhd->SendU(this, 0);
@@ -250,7 +245,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
     (void) pmhd->ConToPrim(this, 0);
   }
 
-  //---- Step 3.  Compute first time step (if problem involves time evolution
+  //---- Step 2.  Compute first time step (if problem involves time evolution
 
   if (time_evolution != TimeEvolution::tstatic) {
     if (phydro != nullptr) {
@@ -262,17 +257,35 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
     pmesh->NewTimeStep(tlim);
   }
 
-  //---- Step 4.  Cycle through output Types and load data / write files.
+  //---- Step 3.  Cycle through output Types and load data / write files.
 
   for (auto &out : pout->pout_list) {
     out->LoadOutputData(pmesh);
     out->WriteOutputFile(pmesh, pin);
   }
 
-  //---- Step 5.  Initialize various counters, timers, etc.
+  //---- Step 4.  Initialize various counters, timers, etc.
 
   run_time_.reset();
   nmb_updated_ = 0;
+
+  // allocate memory for stiff source terms with ImEx integrators
+  // only implemented for ion-neutral two fluid for now
+  ion_neutral::IonNeutral *pionn = pmesh->pmb_pack->pionn;
+  if (pionn != nullptr) {
+    if (nimp_stages == 0) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ 
+          << std::endl << "IonNetral MHD can only be run with ImEx integrators."
+          << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    int nmb = pmesh->pmb_pack->nmb_thispack;
+    auto &indcs = pmesh->mb_indcs;
+    int ncells1 = indcs.nx1 + 2*(indcs.ng);
+    int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
+    int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
+    Kokkos::realloc(impl_src, nimp_stages, nmb, 6, ncells3, ncells2, ncells1);
+  }
 
   return;
 }
@@ -421,7 +434,7 @@ void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
   }
 
   // call any problem specific functions to do work after main loop
-  pgen->ProblemGeneratorFinalize(pin, pmesh);
+  pmesh->pgen->ProblemGeneratorFinalize(pin, pmesh);
     
   float exe_time = run_time_.seconds();
 
@@ -446,7 +459,7 @@ void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
   
       // Calculate and print the zone-cycles/exe-second and wall-second
       std::uint64_t zonecycles = nmb_updated_ *
-          static_cast<std::uint64_t>(pmesh->pmb_pack->NumberOfMeshBlockCells());
+          static_cast<std::uint64_t>(pmesh->NumberOfMeshBlockCells());
       float zcps = static_cast<float>(zonecycles) / exe_time;
 
       std::cout << std::endl << "zone-cycles = " << zonecycles << std::endl;

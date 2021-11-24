@@ -45,13 +45,15 @@ struct IonNeutralTaskIDs
   TaskID n_clear;
 };
 
+namespace ion_neutral {
+
 //----------------------------------------------------------------------------------------
 //! \class IonNeutral
 
 class IonNeutral
 {
  public:
-  IonNeutral(MeshBlockPack *ppack, ParameterInput *pin, Driver *pdrive);
+  IonNeutral(MeshBlockPack *ppack, ParameterInput *pin);
   ~IonNeutral();
 
   Real drag_coeff;       // ion-neutral coupling coefficient
@@ -69,4 +71,5 @@ class IonNeutral
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Hydro
 };
 
+} // namespace ion_neutral
 #endif // ION_NEUTRAL_ION_NEUTRAL_HPP_

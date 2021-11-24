@@ -181,10 +181,89 @@ Mesh::Mesh(ParameterInput *pin)
   mesh_size.dx1 = (mesh_size.x1max-mesh_size.x1min)/static_cast<Real>(mesh_indcs.nx1);
   mesh_size.dx2 = (mesh_size.x2max-mesh_size.x2min)/static_cast<Real>(mesh_indcs.nx2);
   mesh_size.dx3 = (mesh_size.x3max-mesh_size.x3min)/static_cast<Real>(mesh_indcs.nx3);
-}
 
-//----------------------------------------------------------------------------------------
-// Mesh constructor for restarts. Load the restart file
+  // Read # of cells in MeshBlock from input parameters, error check
+  mb_indcs.ng  = mesh_indcs.ng;
+  mb_indcs.nx1 = pin->GetOrAddInteger("meshblock", "nx1", mesh_indcs.nx1);
+  if (multi_d) {
+    mb_indcs.nx2 = pin->GetOrAddInteger("meshblock", "nx2", mesh_indcs.nx2);
+  } else {
+    mb_indcs.nx2 = mesh_indcs.nx2;
+  }
+  if (three_d) {
+    mb_indcs.nx3 = pin->GetOrAddInteger("meshblock", "nx3", mesh_indcs.nx3);
+  } else {
+    mb_indcs.nx3 = mesh_indcs.nx3;
+  }
+
+  // error check consistency of the block and mesh
+  if (   mesh_indcs.nx1 % mb_indcs.nx1 != 0
+      || mesh_indcs.nx2 % mb_indcs.nx2 != 0
+      || mesh_indcs.nx3 % mb_indcs.nx3 != 0) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "Mesh must be evenly divisible by MeshBlocks" << std::endl
+              << "Check Mesh and MeshBlock dimensions in input file" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if ( mb_indcs.nx1 < 4 ||
+      (mb_indcs.nx2 < 4 && multi_d) ||
+      (mb_indcs.nx3 < 4 && three_d) ) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "MeshBlock must be >= 4 cells in each active dimension" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
+  // initialize indices for Mesh cells, MeshBlock cells, and MeshBlock coarse cells
+  mb_cindcs.ng  = mb_indcs.ng;
+  mb_cindcs.nx1 = mb_indcs.nx1/2;
+  mb_cindcs.nx2 = mb_indcs.nx2/2;
+  mb_cindcs.nx3 = mb_indcs.nx3/2;
+
+  mesh_indcs.is = mesh_indcs.ng;
+  mb_indcs.is   = mb_indcs.ng;
+  mb_cindcs.is  = mb_cindcs.ng;
+
+  mesh_indcs.ie = mesh_indcs.is + mesh_indcs.nx1 - 1;
+  mb_indcs.ie   = mb_indcs.is + mb_indcs.nx1 - 1;
+  mb_cindcs.ie  = mb_cindcs.is + mb_cindcs.nx1 - 1;
+
+  if (multi_d) {
+    mesh_indcs.js = mesh_indcs.ng;
+    mb_indcs.js   = mb_indcs.ng;
+    mb_cindcs.js  = mb_cindcs.ng;
+
+    mesh_indcs.je = mesh_indcs.js + mesh_indcs.nx2 - 1;
+    mb_indcs.je   = mb_indcs.js + mb_indcs.nx2 - 1;
+    mb_cindcs.je  = mb_cindcs.js + mb_cindcs.nx2 - 1;
+  } else {
+    mesh_indcs.js = 0;
+    mb_indcs.js   = 0;
+    mb_cindcs.js  = 0;
+
+    mesh_indcs.je = 0;
+    mb_indcs.je   = 0;
+    mb_cindcs.je  = 0;
+  }
+
+  if (three_d) {
+    mesh_indcs.ks = mesh_indcs.ng;
+    mb_indcs.ks   = mb_indcs.ng;
+    mb_cindcs.ks  = mb_cindcs.ng;
+
+    mesh_indcs.ke = mesh_indcs.ks + mesh_indcs.nx3 - 1;
+    mb_indcs.ke   = mb_indcs.ks + mb_indcs.nx3 - 1;
+    mb_cindcs.ke  = mb_cindcs.ks + mb_cindcs.nx3 - 1;
+  } else {
+    mesh_indcs.ks = 0;
+    mb_indcs.ks   = 0;
+    mb_cindcs.ks  = 0;
+
+    mesh_indcs.ke = 0;
+    mb_indcs.ke   = 0;
+    mb_cindcs.ke  = 0;
+  }
+
+}
 
 //----------------------------------------------------------------------------------------
 // destructor
@@ -209,47 +288,17 @@ Mesh::~Mesh()
 }
 
 //----------------------------------------------------------------------------------------
-// BuildTree: constructs MeshBlockTree, MeshBlockPack (containing physics modules), and
-// MeshBlock(s).  Does initial load balance based on simple cost estimate.
+//! \fn void Mesh::BuildTreeFromScratch():
+//! Constructs MeshBlockTree, creates MeshBlockPack (containing the physics modules), and
+//! divides grid into MeshBlock(s) for new runs (starting from scratch), using parameters
+//! read from input file.  Also dDoes initial load balance based on simple cost estimate.
 
-void Mesh::BuildTree(ParameterInput *pin)
+void Mesh::BuildTreeFromScratch(ParameterInput *pin)
 {
-  // Calculate # of cells in MeshBlock read from input parameters, error check
-  RegionIndcs mb_indices;
-  mb_indices.ng  = mesh_indcs.ng;
-  mb_indices.nx1 = pin->GetOrAddInteger("meshblock", "nx1", mesh_indcs.nx1);
-  if (multi_d) {
-    mb_indices.nx2 = pin->GetOrAddInteger("meshblock", "nx2", mesh_indcs.nx2);
-  } else {
-    mb_indices.nx2 = mesh_indcs.nx2;
-  }
-  if (three_d) {
-    mb_indices.nx3 = pin->GetOrAddInteger("meshblock", "nx3", mesh_indcs.nx3);
-  } else {
-    mb_indices.nx3 = mesh_indcs.nx3;
-  }
-
-  // error check consistency of the block and mesh
-  if (   mesh_indcs.nx1 % mb_indices.nx1 != 0
-      || mesh_indcs.nx2 % mb_indices.nx2 != 0
-      || mesh_indcs.nx3 % mb_indices.nx3 != 0) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "Mesh must be evenly divisible by MeshBlocks" << std::endl
-              << "Check Mesh and MeshBlock dimensions in input file" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-  if ( mb_indices.nx1 < 4 ||
-      (mb_indices.nx2 < 4 && multi_d) ||
-      (mb_indices.nx3 < 4 && three_d) ) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "MeshBlock must be >= 4 cells in each active dimension" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-
   // calculate the number of MeshBlocks at root level in each dir
-  nmb_rootx1 = mesh_indcs.nx1/mb_indices.nx1;
-  nmb_rootx2 = mesh_indcs.nx2/mb_indices.nx2;
-  nmb_rootx3 = mesh_indcs.nx3/mb_indices.nx3;
+  nmb_rootx1 = mesh_indcs.nx1/mb_indcs.nx1;
+  nmb_rootx2 = mesh_indcs.nx2/mb_indcs.nx2;
+  nmb_rootx3 = mesh_indcs.nx3/mb_indcs.nx3;
 
   // find maximum number of MeshBlocks at root level in any dir
   int nmbmax = (nmb_rootx1 > nmb_rootx2) ? nmb_rootx1 : nmb_rootx2;
@@ -281,9 +330,9 @@ void Mesh::BuildTree(ParameterInput *pin)
 
   if (multilevel) {
     // error check that number of cells in MeshBlock divisible by two
-    if (mb_indices.nx1 % 2 != 0 || 
-       (mb_indices.nx2 % 2 != 0 && multi_d) ||
-       (mb_indices.nx3 % 2 != 0 && three_d)) {
+    if (mb_indcs.nx1 % 2 != 0 || 
+       (mb_indcs.nx2 % 2 != 0 && multi_d) ||
+       (mb_indcs.nx3 % 2 != 0 && three_d)) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Number of cells in MeshBlock must be divisible by 2 "
                 << "with SMR or AMR." << std::endl;
@@ -449,7 +498,7 @@ void Mesh::BuildTree(ParameterInput *pin)
   // initial mesh hierarchy construction is completed here
   ptree->CountMeshBlock(nmb_total);
 
-  costlist = new double[nmb_total];
+  costlist = new float[nmb_total];
   ranklist = new int[nmb_total];
   lloclist = new LogicalLocation[nmb_total];
 
@@ -489,7 +538,7 @@ void Mesh::BuildTree(ParameterInput *pin)
   nmb_thisrank = nmblist[global_variable::my_rank];
 
   pmb_pack = new MeshBlockPack(this, gids, gide);
-  pmb_pack->AddMeshBlocksAndCoordinates(pin, mb_indices);
+  pmb_pack->AddMeshBlocksAndCoordinates(pin, mb_indcs);
   pmb_pack->pmb->SetNeighbors(ptree, ranklist);
   
 /**********
@@ -514,6 +563,184 @@ void Mesh::BuildTree(ParameterInput *pin)
   ncycle = 0;
   
   return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void Mesh::BuildTreeFromRestart():
+//! Constructs MeshBlockTree, creates MeshBlockPack (containing the physics modules), and
+//! divides grid into MeshBlock(s) for restart runs, using parameters and data read from
+//! restart file.
+
+void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile)
+{
+  // At this point, the restartfile is already open and the ParameterInput (input file)
+  // data has already been read in main(). Thus the file pointer is set to after <par_end>
+  IOWrapperSizeT headeroffset = resfile.GetPosition();
+
+  // following must be identical to calculation of headeroffset (excluding size of 
+  // ParameterInput data) in restart.cpp
+  IOWrapperSizeT headersize = 3*sizeof(int) + 2*sizeof(Real)
+    + sizeof(RegionSize) + 3*sizeof(RegionIndcs);
+  char *headerdata = new char[headersize];
+
+  if (global_variable::my_rank == 0) { // the master process reads the header data
+    if (resfile.Read(headerdata, 1, headersize) != headersize) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Header size read from restart file is incorrect, "
+                << "restart file is broken." << std::endl;
+      exit(EXIT_FAILURE);
+    }
+  }
+
+#ifdef MPI_PARALLEL
+  // then broadcast the header data
+  MPI_Bcast(headerdata, headersize, MPI_BYTE, 0, MPI_COMM_WORLD);
+#endif
+
+  // Now copy mesh data read from restart file into Mesh variables. Order of variables
+  // set by Write()'s in restart.cpp
+  // Note this overwrites size and indices initialized in Mesh constructor.
+  IOWrapperSizeT hdos = 0;
+  std::memcpy(&nmb_total, &(headerdata[hdos]), sizeof(int));
+  hdos += sizeof(int);
+  std::memcpy(&root_level, &(headerdata[hdos]), sizeof(int));
+  hdos += sizeof(int);
+  std::memcpy(&mesh_size, &(headerdata[hdos]), sizeof(RegionSize));
+  hdos += sizeof(RegionSize);
+  std::memcpy(&mesh_indcs, &(headerdata[hdos]), sizeof(RegionIndcs));
+  hdos += sizeof(RegionIndcs);
+  std::memcpy(&mb_indcs, &(headerdata[hdos]), sizeof(RegionIndcs));
+  hdos += sizeof(RegionIndcs);
+  std::memcpy(&mb_cindcs, &(headerdata[hdos]), sizeof(RegionIndcs));
+  hdos += sizeof(RegionIndcs);
+  std::memcpy(&time, &(headerdata[hdos]), sizeof(Real));
+  hdos += sizeof(Real);
+  std::memcpy(&dt, &(headerdata[hdos]), sizeof(Real));
+  hdos += sizeof(Real);
+  std::memcpy(&ncycle, &(headerdata[hdos]), sizeof(int));
+  delete [] headerdata;
+
+  // calculate the number of MeshBlocks at root level in each dir
+  nmb_rootx1 = mesh_indcs.nx1/mb_indcs.nx1;
+  nmb_rootx2 = mesh_indcs.nx2/mb_indcs.nx2;
+  nmb_rootx3 = mesh_indcs.nx3/mb_indcs.nx3;
+  int current_level = root_level; 
+
+  // Error check properties of input paraemters for SMR/AMR meshes.
+  if (adaptive) {
+    max_level = pin->GetOrAddInteger("mesh", "numlevel", 1) + root_level - 1;
+    if (max_level > 31) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Number of refinement levels must be smaller than "
+                << 31 - root_level + 1 << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  } else {
+    max_level = 31;
+  }
+
+  // allocate memory for lists read from restart
+  costlist = new float[nmb_total];
+  ranklist = new int[nmb_total];
+  lloclist = new LogicalLocation[nmb_total];
+
+  gidslist = new int[global_variable::nranks];
+  nmblist  = new int[global_variable::nranks];
+  if (adaptive) { // allocate arrays for AMR
+    nref = new int[global_variable::nranks];
+    nderef = new int[global_variable::nranks];
+    rdisp = new int[global_variable::nranks];
+    ddisp = new int[global_variable::nranks];
+    bnref = new int[global_variable::nranks];
+    bnderef = new int[global_variable::nranks];
+    brdisp = new int[global_variable::nranks];
+    bddisp = new int[global_variable::nranks];
+  }
+
+  // allocate idlist buffer and read list of logical locations and cost
+  IOWrapperSizeT listsize = sizeof(LogicalLocation) + sizeof(float);
+  char *idlist = new char[listsize*nmb_total];
+  if (global_variable::my_rank == 0) { // only the master process reads the ID list
+    if (resfile.Read(idlist,listsize,nmb_total) != static_cast<unsigned int>(nmb_total)) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Incorrect number of MeshBlocks in restart file; "
+                << "restart file is broken." << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
+#ifdef MPI_PARALLEL
+  // then broadcast the ID list
+  MPI_Bcast(idlist, listsize*nmb_total, MPI_BYTE, 0, MPI_COMM_WORLD);
+#endif
+
+  // everyone sets the logical location and cost lists based on bradcasted data
+  int os = 0;
+  for (int i=0; i<nmb_total; i++) {
+    std::memcpy(&(lloclist[i]), &(idlist[os]), sizeof(LogicalLocation));
+    os += sizeof(LogicalLocation);
+  }
+  for (int i=0; i<nmb_total; i++) {
+    std::memcpy(&(costlist[i]), &(idlist[os]), sizeof(float));
+    os += sizeof(float);
+    if (lloclist[i].level > current_level) current_level = lloclist[i].level;
+  }
+  delete [] idlist;
+  if (!adaptive) max_level = current_level;
+
+  // rebuild the MeshBlockTree
+  ptree = std::make_unique<MeshBlockTree>(this);
+  ptree->CreateRootGrid();
+  for (int i=0; i<nmb_total; i++) {ptree->AddNodeWithoutRefinement(lloclist[i]);}
+
+  // check the tree structure
+  int nnb;
+  ptree->CreateMeshBlockList(lloclist, nullptr, nnb);
+
+  if (nnb != nmb_total) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+        << "Tree reconstruction failed. Total number of blocks in reconstructed tree = "
+        << nnb << ", number in file = " << nmb_total << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
+#ifdef MPI_PARALLEL
+  // check there is at least one MeshBlock per MPI rank
+  if (nmb_total < global_variable::nranks) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+        << "Fewer MeshBlocks (nmb_total=" << nmb_total << ") than MPI ranks (nranks="
+        << global_variable::nranks << ")" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+#endif
+
+  LoadBalance(costlist, ranklist, gidslist, nmblist, nmb_total);
+
+  // create MeshBlockPack for this rank
+  gids = gidslist[global_variable::my_rank];
+  gide = gids + nmblist[global_variable::my_rank] - 1;
+  nmb_thisrank = nmblist[global_variable::my_rank];
+
+  pmb_pack = new MeshBlockPack(this, gids, gide);
+  pmb_pack->AddMeshBlocksAndCoordinates(pin, mb_indcs);
+  pmb_pack->pmb->SetNeighbors(ptree, ranklist);
+
+/**********
+  for (int m=0; m<pmb_pack->nmb_thispack; ++m) {
+    std::cout << "******* Block=" << pmb_pack->pmb->mbgid.h_view(m) << std::endl;
+    for (int n=0; n<6; ++n) {
+      std::cout << "n=" << n << " bc_flag=" << GetBoundaryString(pmb_pack->pmb->mbbcs(m,n)) << std::endl;
+    }
+    for (int n=0; n<pmb_pack->pmb->nnghbr; ++n) {
+      std::cout << "n=" << n << " gid=" << pmb_pack->pmb->nghbr.h_view(m,n).gid << " level=" << pmb_pack->pmb->nghbr.h_view(m,n).lev << " rank=" << pmb_pack->pmb->nghbr.h_view(m,n).rank << " dest=" << pmb_pack->pmb->nghbr.h_view(m,n).dest << std::endl;
+    }
+  }
+**********/
+
+  ResetLoadBalanceCounters();
+  if (global_variable::my_rank == 0) {PrintMeshDiagnostics();}
+
+  // set remaining parameters
+  cfl_no = pin->GetReal("time", "cfl_number");
 }
 
 //----------------------------------------------------------------------------------------
@@ -572,8 +799,8 @@ void Mesh::PrintMeshDiagnostics()
     }
 
     // output total cost and load balancing info
-    double mincost = std::numeric_limits<double>::max();
-    double maxcost = 0.0, totalcost = 0.0;
+    float mincost = std::numeric_limits<float>::max();
+    float maxcost = 0.0, totalcost = 0.0;
     for (int i=root_level; i<=max_level; i++) {
       for (int j=0; j<nmb_total; j++) {
         if (lloclist[j].level == i) {
@@ -610,7 +837,7 @@ void Mesh::WriteMeshStructure()
     std::exit(EXIT_FAILURE);
   }
 
-  auto &size = this->pmb_pack->pcoord->mbdata.size;
+  auto &size = this->pmb_pack->pmb->mb_size;
   for (int i=root_level; i<=max_level; i++) {
   for (int j=0; j<nmb_total; j++) {
     if (lloclist[j].level == i) {
@@ -715,45 +942,6 @@ std::string Mesh::GetBoundaryString(BoundaryFlag input_flag)
       std::exit(EXIT_FAILURE);
       break;
   }
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn EnrollBoundaryFunction(BoundaryFace dir, BValFunc my_bc)
-//! \brief Enroll a user-defined boundary function
-
-void Mesh::EnrollBoundaryFunction(BoundaryFace dir, BoundaryFnPtr my_bc) {
-  if (dir < 0 || dir > 5) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "EnrollBoundaryFunction called on bndry=" << dir << " not valid" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-  if (mesh_bcs[dir] != BoundaryFlag::user) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "Boundary condition flag must be set to 'user' in the <mesh> block in input"
-        << " file to use user-enrolled BCs on bndry=" << dir << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-  BoundaryFunc[static_cast<int>(dir)]=my_bc;
-  return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn CheckUserBoundaries()
-//! \brief checks if user boundary functions are correctly enrolled
-//! This compatibility check is performed in the Driver after calling ProblemGenerator()
-
-void Mesh::CheckUserBoundaries() {
-  for (int i=0; i<6; i++) {
-    if (mesh_bcs[i] == BoundaryFlag::user) {
-      if (BoundaryFunc[i] == nullptr) {
-        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                  << std::endl << "User-defined boundary function is specified in input "
-                  << " file but boundary function not enrolled; bndry=" << i << std::endl;
-        std::exit(EXIT_FAILURE);
-      }
-    }
-  }
-  return;
 }
 
 //----------------------------------------------------------------------------------------
