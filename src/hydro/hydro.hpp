@@ -75,7 +75,6 @@ public:
   DvceArray5D<Real> w0;   // primitive variables
 
   DvceArray5D<Real> coarse_u0;  // conserved variables on 2x coarser grid (for SMR/AMR)
-  DvceArray5D<Real> coarse_w0;  // primitive variables on 2x coarser grid (for SMR/AMR)
 
   // Boundary communication buffers and routines for u, and user-defined boundary fn 
   BValCC *pbval_u;

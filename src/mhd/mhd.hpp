@@ -41,6 +41,7 @@ struct MHDTaskIDs
   TaskID copyu;
   TaskID flux;
   TaskID expl;
+  TaskID rstrict;
   TaskID sendu;
   TaskID recvu;
   TaskID efld;
@@ -65,23 +66,23 @@ public:
   ~MHD();
 
   // data
-  ReconstructionMethod recon_method;
-  MHD_RSolver rsolver_method;
-  EquationOfState *peos;   // chosen EOS
-
   // flags to denote relativistic dynamics
   bool is_special_relativistic = false;
   bool is_general_relativistic = false;
 
-  int nmhd;                // number of cons variables (5/4 for ideal/isothermal EOS)
+  ReconstructionMethod recon_method;
+  MHD_RSolver rsolver_method;
+  EquationOfState *peos;   // chosen EOS
+
+  int nmhd;                // number of mhd variables (5/4 for ideal/isothermal EOS)
   int nscalars;            // number of passive scalars
   DvceArray5D<Real> u0;    // conserved variables
   DvceArray5D<Real> w0;    // primitive variables
   DvceFaceFld4D<Real> b0;  // face-centered magnetic fields
   DvceArray5D<Real> bcc0;  // cell-centered magnetic fields`
 
-  DvceArray5D<Real> coarse_u0;  // conserved variables on 2x coarser grid (for SMR/AMR)
-  DvceArray5D<Real> coarse_w0;  // primitive variables on 2x coarser grid (for SMR/AMR)
+  DvceArray5D<Real> coarse_u0;    // conserved variables on 2x coarser grid (for SMR/AMR)
+  DvceFaceFld4D<Real> coarse_b0;  // face-centered B-field on 2x coarser grid
 
   // Objects containing boundary communication buffers and routines for u and b
   BValCC *pbval_u;
@@ -114,6 +115,7 @@ public:
   TaskStatus ExpRKUpdate(Driver *d, int stage);
   TaskStatus SendU(Driver *d, int stage); 
   TaskStatus RecvU(Driver *d, int stage); 
+  TaskStatus RestrictU(Driver *d, int stage);
   TaskStatus SendB(Driver *d, int stage); 
   TaskStatus RecvB(Driver *d, int stage); 
   TaskStatus ConToPrim(Driver *d, int stage);
