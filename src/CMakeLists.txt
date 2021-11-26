@@ -44,11 +44,12 @@ add_executable(
 
 	ion-neutral/ion_neutral.cpp
 
-        mesh/load_balance.cpp
+        mesh/build_tree.cpp
         mesh/mesh.cpp
         mesh/meshblock.cpp
         mesh/meshblock_pack.cpp
         mesh/meshblock_tree.cpp
+        mesh/mesh_refinement.cpp
 
         mhd/mhd.cpp
         mhd/mhd_corner_e.cpp

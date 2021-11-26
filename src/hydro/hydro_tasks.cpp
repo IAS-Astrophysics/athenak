@@ -218,55 +218,7 @@ TaskStatus Hydro::RestrictU(Driver *pdrive, int stage)
   // Only execute this function with SMR/SMR
   if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
 
-  int nmb1 = pmy_pack->nmb_thispack - 1;
-  int nvar = nhydro + nscalars;
-  auto u0_ = u0;
-  auto cu0_ = coarse_u0;
-  bool &multi_d = pmy_pack->pmesh->multi_d;
-  bool &three_d = pmy_pack->pmesh->three_d;
-
-  Real fact = 0.5;
-  if (multi_d) fact *= 0.5;
-  if (three_d) fact *= 0.5;
-  auto &cis = pmy_pack->pmesh->mb_cindcs.is;
-  auto &cie = pmy_pack->pmesh->mb_cindcs.ie;
-  auto &cjs = pmy_pack->pmesh->mb_cindcs.js;
-  auto &cje = pmy_pack->pmesh->mb_cindcs.je;
-  auto &cks = pmy_pack->pmesh->mb_cindcs.ks;
-  auto &cke = pmy_pack->pmesh->mb_cindcs.ke;
-  par_for("restrict3D",DevExeSpace(),0, nmb1, 0, nvar-1, cks,cke,cjs,cje,cis,cie,
-    KOKKOS_LAMBDA(const int m, const int n, const int k, const int j, const int i)
-    { 
-      int finei = 2*i - cis;  // correct when cis=is
-      int finej = cjs;
-      int finek = cks;
-      if (multi_d) {
-        finej = 2*j - cjs;  // correct when cjs=js
-      }
-      if (three_d) {
-        finek = 2*k - cks;  // correct when cks=ks
-      }
-      
-      // restrict in x1 direction
-      cu0_(m,n,k,j,i) = u0_(m,n,finek,finej,finei) + u0_(m,n,finek,finej,finei+1);
-      
-      // restrict in x2 direction (2D/3D problems)
-      if (multi_d) {
-        cu0_(m,n,k,j,i) += u0_(m,n,finek,finej+1,finei) + u0_(m,n,finek,finej+1,finei+1);
-      }
-
-      // restrict in x3 direction (3D problems)
-      if (three_d) {
-        cu0_(m,n,k,j,i) += 
-             (u0_(m,n,finek+1,finej,  finei) + u0_(m,n,finek+1,finej,  finei+1))
-           + (u0_(m,n,finek+1,finej+1,finei) + u0_(m,n,finek+1,finej+1,finei+1));
-      }
-
-      // normalize based in dimensions in problem
-      cu0_(m,n,k,j,i) *= fact;
-    }
-  );
-
+  pmy_pack->pmesh->RestrictCC(u0, coarse_u0);
   return TaskStatus::complete;
 }
 

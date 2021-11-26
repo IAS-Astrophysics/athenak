@@ -41,11 +41,12 @@ struct MHDTaskIDs
   TaskID copyu;
   TaskID flux;
   TaskID expl;
-  TaskID rstrict;
+  TaskID restu;
   TaskID sendu;
   TaskID recvu;
   TaskID efld;
   TaskID ct;
+  TaskID restb;
   TaskID sendb;
   TaskID recvb;
   TaskID bcs;
@@ -110,17 +111,18 @@ public:
   TaskStatus ClearRecv(Driver *d, int stage);
   TaskStatus ClearSend(Driver *d, int stage);
   TaskStatus CopyCons(Driver *d, int stage);
+  TaskStatus SendU(Driver *d, int stage); 
+  TaskStatus RecvU(Driver *d, int stage); 
+  TaskStatus SendB(Driver *d, int stage); 
+  TaskStatus RecvB(Driver *d, int stage); 
+  TaskStatus RestrictU(Driver *d, int stage);
+  TaskStatus RestrictB(Driver *d, int stage);
+  TaskStatus ConToPrim(Driver *d, int stage);
   TaskStatus CornerE(Driver *d, int stage);
   TaskStatus CT(Driver *d, int stage);
   TaskStatus ExpRKUpdate(Driver *d, int stage);
-  TaskStatus SendU(Driver *d, int stage); 
-  TaskStatus RecvU(Driver *d, int stage); 
-  TaskStatus RestrictU(Driver *d, int stage);
-  TaskStatus SendB(Driver *d, int stage); 
-  TaskStatus RecvB(Driver *d, int stage); 
-  TaskStatus ConToPrim(Driver *d, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
-  TaskStatus ApplyPhysicalBCs(Driver* pdrive, int stage); // in file mhd/bvals dir
+  TaskStatus ApplyPhysicalBCs(Driver* pdrive, int stage); // file in mhd/bvals dir
 
   // CalculateFluxes function templated over Riemann Solvers
   template <MHD_RSolver T>
