@@ -132,7 +132,7 @@ void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
     memcpy(pdata,&(nx),sizeof(int32_t));
     pdata+=sizeof(int32_t);
 
-    int tmp_data;
+    float tmp_data;
     for (int n=0; n<nout_vars; n++) {
       int cnt=0;
       for (int k=oks; k<=oke; k++) {

@@ -95,7 +95,7 @@ def read_binary(filename):
   result = {}
   # add an entry for each variable
   for nv in range(nvars):
-    result[var_list[nv]] = np.zeros((Nx3,Nx2,Nx1))
+    result[(var_list[nv]).decode('ascii')] = np.zeros((Nx3,Nx2,Nx1))
   result['x1cc'] = x1cc
   result['x2cc'] = x2cc
   result['x3cc'] = x3cc
@@ -134,10 +134,12 @@ def read_binary(filename):
     ike = iks + nx3
     fmt = "@%df"%(nx1*nx2*nx3)
     for nv in range(nvars):
-      tmp = result[var_list[nv]]
+      tmp = result[(var_list[nv]).decode('ascii')]
       data = np.array(struct.unpack(fmt,f.read(4*nx1*nx2*nx3)))
       data = data.reshape(nx3,nx2,nx1)
       tmp[iks:ike,ijs:ije,iis:iie] = data
        
   # close the file
   f.close()
+
+  return result
