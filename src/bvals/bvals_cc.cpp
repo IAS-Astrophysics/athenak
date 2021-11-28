@@ -27,14 +27,14 @@ BValCC::BValCC(MeshBlockPack *pp, ParameterInput *pin) : pmy_pack(pp)
 //----------------------------------------------------------------------------------------
 //! \fn void BValCC::PackAndSendCC()
 //! \brief Pack cell-centered variables into boundary buffers and send to neighbors.
-//
-// This routine packs ALL the buffers on ALL the faces, edges, and corners simultaneously,
-// for ALL the MeshBlocks.  This reduces the number of kernel launches when there are a
-// large number of MeshBlocks per MPI rank.  Buffer data are then sent (via MPI) or copied
-// directly for periodic or block boundaries.
-//
-// Input arrays must be 5D Kokkos View dimensioned (nmb, nvar, nx3, nx2, nx1)
-// 5D Kokkos View of coarsened (restricted) array data also required with SMR/AMR 
+//!
+//! This routine packs ALL the buffers on ALL the faces, edges, and corners simultaneously
+//! for ALL the MeshBlocks. This reduces the number of kernel launches when there are a
+//! large number of MeshBlocks per MPI rank. Buffer data are then sent (via MPI) or copied
+//! directly for periodic or block boundaries.
+//!
+//! Input arrays must be 5D Kokkos View dimensioned (nmb, nvar, nx3, nx2, nx1)
+//! 5D Kokkos View of coarsened (restricted) array data also required with SMR/AMR 
 
 TaskStatus BValCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, int key)
 {
@@ -146,7 +146,7 @@ TaskStatus BValCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, in
           }
         }
       });
-    } // end if-block
+    } // end if-neighbor-exists block
 
   }); // end par_for_outer
   }
@@ -327,7 +327,7 @@ std::cout << "block=" << m << "  buffer=" << n << "  not received" << std::endl;
         }
 
       });
-    }  // end if-block
+    }  // end if-neighbor-exists block
   });  // end par_for_outer
   }
 

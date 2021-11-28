@@ -6,8 +6,8 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file bvals_cc.hpp
-//  \brief defines classes for handling boundary values for cell-centered, face-centered,
-//  variables
+//! \brief defines classes for handling boundary values for all types of variables.
+//! Currently methods for cell-centered and face-centered fields implemented.
 
 // identifiers for all 6 faces of a MeshBlock
 enum BoundaryFace {undef=-1, inner_x1, outer_x1, inner_x2, outer_x2, inner_x3, outer_x3};
@@ -29,7 +29,7 @@ enum VariablesID {FluidCons_ID, BField_ID};
 
 //----------------------------------------------------------------------------------------
 //! \struct BufferIndcs
-//! \brief Cell indices for pack/unpack cells into BvalBuffer
+//! \brief indices for range of cells packed/unpacked into boundary buffers
 
 struct BufferIndcs
 {
@@ -39,7 +39,7 @@ struct BufferIndcs
 
 //----------------------------------------------------------------------------------------
 //! \struct BValBufferCC
-//  \brief index ranges, storage, and flags for data passed at boundaries
+//! \brief container for index ranges, storage, and flags for boundary buffers for CC data
 
 struct BValBufferCC
 {
@@ -62,14 +62,17 @@ struct BValBufferCC
 
 //----------------------------------------------------------------------------------------
 //! \struct BValBufferFC
-//  \brief index ranges, storage, and flags for data passed at boundaries
+//! \brief container for index ranges, storage, and flags for boundary buffers for FC data
 
 struct BValBufferFC
 {
+  // Following fixed-length arrays store indices for each component of vector field (which
+  // can be different!);  [0,1,2] --> [x1f, x2f, x3f] 
   BufferIndcs sindcs[3]; // indices for pack/unpack when dest/src at same level ("s")
   BufferIndcs cindcs[3]; // indices for pack/unpack when dest/src at coarser level ("c")
   BufferIndcs findcs[3]; // indices for pack/unpack when dest/src at finer level ("f")
   BufferIndcs pindcs[3]; // indices for prolongation ("p") (only used for receives)
+
   DvceArray3D<Real> data;
   HostArray1D<BoundaryCommStatus> bcomm_stat;
 #if MPI_PARALLEL_ENABLED
@@ -77,10 +80,10 @@ struct BValBufferFC
   std::vector<MPI_Request> comm_req;
 #endif
   // function to allocate memory for buffer data
-  void AllocateDataView(int nmb, int nvar) {
+  void AllocateDataView(int nmb) {
     // TODO: this may over-estimate memory needed for some buffs
     int ndat = std::max( std::max(sindcs[0].ndat, sindcs[1].ndat), sindcs[2].ndat );
-    Kokkos::realloc(data, nmb, nvar, ndat);
+    Kokkos::realloc(data, nmb, 3, ndat);
   }
 };
 
@@ -89,13 +92,12 @@ class MeshBlockPack;
 
 //----------------------------------------------------------------------------------------
 //! \class BValCC
-//  \brief Lightweight boundary values class for cell-centered variables
-//  TODO: extend for AMR boundaries
+//  \brief Lightweight class for boundary values cell-centered variables
 
-class BValCC {
- public:
+class BValCC
+{
+public:
   BValCC(MeshBlockPack *ppack, ParameterInput *pin);
-  ~BValCC() {};
 
   // data for all 56 buffers in most general 3D case. Not all elements used in most cases.
   // However each BValBufferCC requires only 176 bytes, so the convenience of fixed array
@@ -103,37 +105,38 @@ class BValCC {
   BValBufferCC send_buf[56], recv_buf[56];
 
   //functions
-  void InitSendIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f1, int f2);
-  void InitRecvIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f1, int f2);
+  void InitSendIndices(BValBufferCC &buf, int o1, int o2, int o3, int f1, int f2);
+  void InitRecvIndices(BValBufferCC &buf, int o1, int o2, int o3, int f1, int f2);
   void AllocateBuffersCC(const int nvar);
   TaskStatus PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &c, int key);
   TaskStatus RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &c);
 
- private:
-  MeshBlockPack *pmy_pack;
+private:
+  MeshBlockPack* pmy_pack;
 };
 
 //----------------------------------------------------------------------------------------
 //! \class BValFC
-//  \brief Lightweight boundary values class for face-centered vector fields
-//  TODO: extend for AMR boundaries
+//  \brief Lightweight class for boundary values face-centered vector fields
 
-class BValFC {
- public:
+class BValFC
+{
+public:
   BValFC(MeshBlockPack *ppack, ParameterInput *pin);
-  ~BValFC();
 
   // Like BValCC case, not all 56 elements are used in most cases.  Now each BvalBufferFC
   // requires XXX bytes, so still economical to use fixed-length arrays.
   BValBufferFC send_buf[56], recv_buf[56];
 
   //functions
+  void InitSendIndices(BValBufferFC &buf, int o1, int o2, int o3, int f1, int f2);
+  void InitRecvIndices(BValBufferFC &buf, int o1, int o2, int o3, int f1, int f2);
   void AllocateBuffersFC();
   TaskStatus PackAndSendFC(DvceFaceFld4D<Real> &b, int key);
   TaskStatus RecvAndUnpackFC(DvceFaceFld4D<Real> &b);
 
- private:
-  MeshBlockPack *pmy_pack;
+private:
+  MeshBlockPack* pmy_pack;
 };
 
 #endif // BVALS_BVALS_HPP_

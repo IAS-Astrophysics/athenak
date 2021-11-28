@@ -396,18 +396,6 @@ void BValCC::InitRecvIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f
 
 void BValCC::AllocateBuffersCC(const int nvar)
 {
-  auto &indcs = pmy_pack->pmesh->mb_indcs;
-  int ng = indcs.ng;
-  int is = indcs.is, ie = indcs.ie;
-  int js = indcs.js, je = indcs.je;
-  int ks = indcs.ks, ke = indcs.ke;
-
-  auto &cindcs = pmy_pack->pmesh->mb_cindcs;
-  int cis = cindcs.is, cie = cindcs.ie;
-  int cjs = cindcs.js, cje = cindcs.je;
-  int cks = cindcs.ks, cke = cindcs.ke;
-
-  int ng1 = ng-1;
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
 

@@ -252,9 +252,10 @@ std::cout << "size of fc buffer = " << sizeof(BValBufferFC) << std::endl;
         findcs[1].bks += mb_indcs.nx3/2 - mb_cindcs.ng;
         findcs[2].bks += mb_indcs.nx3/2 - mb_cindcs.ng;
       } else {
-        findcs[0].bke -= mb_indcs.nx3/2 - mb_cindcs.ng;}
-        findcs[1].bke -= mb_indcs.nx3/2 - mb_cindcs.ng;}
-        findcs[2].bke -= mb_indcs.nx3/2 - mb_cindcs.ng;}
+        findcs[0].bke -= mb_indcs.nx3/2 - mb_cindcs.ng;
+        findcs[1].bke -= mb_indcs.nx3/2 - mb_cindcs.ng;
+        findcs[2].bke -= mb_indcs.nx3/2 - mb_cindcs.ng;
+      }
     }
   }
   for (int i=0; i<=2; ++i) {
@@ -420,18 +421,20 @@ void BValFC::InitRecvIndices(BValBufferFC &buf, int ox1, int ox2, int ox3, int f
           cindcs[1].bke += mb_indcs.ng;
           cindcs[2].bke += mb_indcs.ng;
         } else {
-          cindcs[0].bks -= mb_indcs.ng;}
-          cindcs[1].bks -= mb_indcs.ng;}
-          cindcs[2].bks -= mb_indcs.ng;}
+          cindcs[0].bks -= mb_indcs.ng;
+          cindcs[1].bks -= mb_indcs.ng;
+          cindcs[2].bks -= mb_indcs.ng;
+        }
       } else {
         if (f2 == 0) {
           cindcs[0].bke += mb_indcs.ng;
           cindcs[1].bke += mb_indcs.ng;
           cindcs[2].bke += mb_indcs.ng;
         } else {
-          cindcs[0].bks -= mb_indcs.ng;}
-          cindcs[1].bks -= mb_indcs.ng;}
-          cindcs[2].bks -= mb_indcs.ng;}
+          cindcs[0].bks -= mb_indcs.ng;
+          cindcs[1].bks -= mb_indcs.ng;
+          cindcs[2].bks -= mb_indcs.ng;
+        }
       }
     }
   } else if (ox3 > 0) {
@@ -566,9 +569,10 @@ void BValFC::InitRecvIndices(BValBufferFC &buf, int ox1, int ox2, int ox3, int f
       pindcs[1].bie += cn;
       pindcs[2].bie += cn;
     } else {
-      pindcs[0].bis -= cn;}
-      pindcs[1].bis -= cn;}
-      pindcs[2].bis -= cn;}
+      pindcs[0].bis -= cn;
+      pindcs[1].bis -= cn;
+      pindcs[2].bis -= cn;
+    }
   } else if (ox1 > 0)  {
     pindcs[0].bis = mb_cindcs.ie + 1;       pindcs[0].bie = mb_cindcs.ie + cn;
     pindcs[1].bis = mb_cindcs.ie + 1;       pindcs[1].bie = mb_cindcs.ie + cn;
@@ -659,25 +663,15 @@ void BValFC::InitRecvIndices(BValBufferFC &buf, int ox1, int ox2, int ox3, int f
 
 //----------------------------------------------------------------------------------------
 //! \fn void BValFC::AllocateBuffersFC
-//! \brief initialize vector of send/recv BValBuffers for face-centered fields. 
+//! \brief initialize vector of send/recv BValBuffers for face-centered fields. This 
+//! function is almost identical to AllocateBuffersCC, but could not find any elegant
+//! way to avoid duplicated code without increasing complexity.
 //!
 //! NOTE: order of vector elements is crucial and cannot be changed.  It must match
 //! order of boundaries in nghbr vector
 
-void BValFC::AllocateBuffersFC(const int nvar)
+void BValFC::AllocateBuffersFC()
 {
-  auto &indcs = pmy_pack->pmesh->mb_indcs;
-  int ng = indcs.ng;
-  int is = indcs.is, ie = indcs.ie;
-  int js = indcs.js, je = indcs.je;
-  int ks = indcs.ks, ke = indcs.ke;
-
-  auto &cindcs = pmy_pack->pmesh->mb_cindcs;
-  int cis = cindcs.is, cie = cindcs.ie;
-  int cjs = cindcs.js, cje = cindcs.je;
-  int cks = cindcs.ks, cke = cindcs.ke;
-
-  int ng1 = ng-1;
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
 
@@ -711,8 +705,8 @@ void BValFC::AllocateBuffersFC(const int nvar)
         int indx = pmy_pack->pmb->NeighborIndx(n,0,0,fy,fz);
         InitSendIndices(send_buf[indx],n, 0, 0, fy, fz);
         InitRecvIndices(recv_buf[indx],n, 0, 0, fy, fz);
-        send_buf[indx].AllocateDataView(nmb, nvar);
-        recv_buf[indx].AllocateDataView(nmb, nvar);
+        send_buf[indx].AllocateDataView(nmb);
+        recv_buf[indx].AllocateDataView(nmb);
         indx++;
       }
     }
@@ -728,8 +722,8 @@ void BValFC::AllocateBuffersFC(const int nvar)
           int indx = pmy_pack->pmb->NeighborIndx(0,m,0,fx,fz);
           InitSendIndices(send_buf[indx],0, m, 0, fx, fz);
           InitRecvIndices(recv_buf[indx],0, m, 0, fx, fz);
-          send_buf[indx].AllocateDataView(nmb, nvar);
-          recv_buf[indx].AllocateDataView(nmb, nvar);
+          send_buf[indx].AllocateDataView(nmb);
+          recv_buf[indx].AllocateDataView(nmb);
           indx++;
         }
       }
@@ -742,8 +736,8 @@ void BValFC::AllocateBuffersFC(const int nvar)
           int indx = pmy_pack->pmb->NeighborIndx(n,m,0,fz,0);
           InitSendIndices(send_buf[indx],n, m, 0, fz, 0);
           InitRecvIndices(recv_buf[indx],n, m, 0, fz, 0);
-          send_buf[indx].AllocateDataView(nmb, nvar);
-          recv_buf[indx].AllocateDataView(nmb, nvar);
+          send_buf[indx].AllocateDataView(nmb);
+          recv_buf[indx].AllocateDataView(nmb);
           indx++;
         }
       }
@@ -760,8 +754,8 @@ void BValFC::AllocateBuffersFC(const int nvar)
           int indx = pmy_pack->pmb->NeighborIndx(0,0,l,fx,fy);
           InitSendIndices(send_buf[indx],0, 0, l, fx, fy);
           InitRecvIndices(recv_buf[indx],0, 0, l, fx, fy);
-          send_buf[indx].AllocateDataView(nmb, nvar);
-          recv_buf[indx].AllocateDataView(nmb, nvar);
+          send_buf[indx].AllocateDataView(nmb);
+          recv_buf[indx].AllocateDataView(nmb);
           indx++;
         }
       }
@@ -774,8 +768,8 @@ void BValFC::AllocateBuffersFC(const int nvar)
           int indx = pmy_pack->pmb->NeighborIndx(n,0,l,fy,0);
           InitSendIndices(send_buf[indx],n, 0, l, fy, 0);
           InitRecvIndices(recv_buf[indx],n, 0, l, fy, 0);
-          send_buf[indx].AllocateDataView(nmb, nvar);
-          recv_buf[indx].AllocateDataView(nmb, nvar);
+          send_buf[indx].AllocateDataView(nmb);
+          recv_buf[indx].AllocateDataView(nmb);
           indx++;
         }
       }
@@ -788,8 +782,8 @@ void BValFC::AllocateBuffersFC(const int nvar)
           int indx = pmy_pack->pmb->NeighborIndx(0,m,l,fx,0);
           InitSendIndices(send_buf[indx],0, m, l, fx, 0);
           InitRecvIndices(recv_buf[indx],0, m, l, fx, 0);
-          send_buf[indx].AllocateDataView(nmb, nvar);
-          recv_buf[indx].AllocateDataView(nmb, nvar);
+          send_buf[indx].AllocateDataView(nmb);
+          recv_buf[indx].AllocateDataView(nmb);
           indx++;
         }
       }
@@ -802,8 +796,8 @@ void BValFC::AllocateBuffersFC(const int nvar)
           int indx = pmy_pack->pmb->NeighborIndx(n,m,l,0,0);
           InitSendIndices(send_buf[indx],n, m, l, 0, 0);
           InitRecvIndices(recv_buf[indx],n, m, l, 0, 0);
-          send_buf[indx].AllocateDataView(nmb, nvar);
-          recv_buf[indx].AllocateDataView(nmb, nvar);
+          send_buf[indx].AllocateDataView(nmb);
+          recv_buf[indx].AllocateDataView(nmb);
         }
       }
     }

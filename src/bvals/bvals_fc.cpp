@@ -20,7 +20,7 @@
 //----------------------------------------------------------------------------------------
 // BValFC constructor:
 
-BValFC::BValFC(MeshBlockPack *pp, ParameterInput *pin) : BoundaryValues(pp, pin)
+BValFC::BValFC(MeshBlockPack *pp, ParameterInput *pin) : pmy_pack(pp)
 {
 } 
   
