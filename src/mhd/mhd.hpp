@@ -21,7 +21,7 @@ class Resistivity;
 class SourceTerms;
 class Driver;
 
-// function ptr for user-defined boundary functions enrolled in problem generator 
+// function ptr for user-defined MHD boundary functions enrolled in problem generator 
 namespace mhd {
 using MHDBoundaryFnPtr = void (*)(int m, Mesh* pm, MHD* pmhd, DvceArray5D<Real> &u);
 }

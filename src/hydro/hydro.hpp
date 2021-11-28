@@ -20,7 +20,7 @@ class Viscosity;
 class SourceTerms;
 class Driver;
 
-// function ptr for user-defined boundary functions enrolled in problem generator 
+// function ptr for user-defined Hydro boundary functions enrolled in problem generator 
 namespace hydro {
 using HydroBoundaryFnPtr = void (*)(int m, Mesh* pm, Hydro* phyd, DvceArray5D<Real> &u);
 }
