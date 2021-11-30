@@ -18,7 +18,10 @@
 
 //----------------------------------------------------------------------------------------
 //! \fn void BValFC::InitSendIndices
-//! \brief Calculates indices of cells in mesh used to pack buffers and send FC data.
+//! \brief Calculates indices of cells used to pack buffers and send FC data for buffers
+//! on same/coarser and finer levels.  Three sets of indices are needed for each of the
+//! three components (x1f,x2f,x3f) of face-centered fields.
+//!
 //! The arguments ox1/2/3 are integer (+/- 1) offsets in each dir that specifies buffer
 //! relative to center of MeshBlock (0,0,0).  The arguments f1/2 are the coordinates
 //! of subblocks within faces/edges (only relevant with SMR/AMR)
@@ -26,11 +29,8 @@
 void BValFC::InitSendIndices(BValBufferFC &buf, int ox1, int ox2, int ox3, int f1, int f2)
 {
   auto &mb_indcs  = pmy_pack->pmesh->mb_indcs;
-  auto &mb_cindcs = pmy_pack->pmesh->mb_cindcs;
   int ng  = mb_indcs.ng;
   int ng1 = ng - 1;
-
-std::cout << "size of fc buffer = " << sizeof(BValBufferFC) << std::endl;
 
   // set indices for sends to neighbors on SAME level
   // Formulae taken from LoadBoundaryBufferSameLevel() in src/bvals/fc/bvals_fc.cpp
@@ -76,14 +76,17 @@ std::cout << "size of fc buffer = " << sizeof(BValBufferFC) << std::endl;
     sindcs[2].bks = mb_indcs.ks + 1,       sindcs[2].bke = mb_indcs.ks + ng;
   }
   // for SMR/AMR, always include the overlapping faces in edge and corner boundaries
+  // x1f component on x1-faces
   if (pmy_pack->pmesh->multilevel && (ox2 != 0 || ox3 != 0)) {
     if (ox1 > 0) {sindcs[0].bie++;}
     if (ox1 < 0) {sindcs[0].bis--;}
   }
+  // x2f component on x2-faces
   if (pmy_pack->pmesh->multilevel && (ox1 != 0 || ox3 != 0)) {
     if (ox2 > 0) {sindcs[1].bje++;}
     if (ox2 < 0) {sindcs[1].bjs--;}
   }
+  // x3f component on x3-faces
   if (pmy_pack->pmesh->multilevel && (ox1 != 0 || ox2 != 0)) {
     if (ox3 > 0) {sindcs[2].bke++;}
     if (ox3 < 0) {sindcs[2].bks--;}
@@ -96,45 +99,46 @@ std::cout << "size of fc buffer = " << sizeof(BValBufferFC) << std::endl;
 
   // set indices for sends to neighbors on COARSER level
   // Formulae taken from LoadBoundaryBufferToCoarser() in src/bvals/fc/bvals_fc.cpp
+  // Identical to send indices for same level replacing is,ie,.. with cis,cie,...
   {auto &cindcs = buf.cindcs;
   if (ox1 == 0) { 
-    cindcs[0].bis = mb_cindcs.is,          cindcs[0].bie = mb_cindcs.ie + 1;
-    cindcs[1].bis = mb_cindcs.is,          cindcs[1].bie = mb_cindcs.ie;
-    cindcs[2].bis = mb_cindcs.is,          cindcs[2].bie = mb_cindcs.ie;
+    cindcs[0].bis = mb_indcs.cis,          cindcs[0].bie = mb_indcs.cie + 1;
+    cindcs[1].bis = mb_indcs.cis,          cindcs[1].bie = mb_indcs.cie;
+    cindcs[2].bis = mb_indcs.cis,          cindcs[2].bie = mb_indcs.cie;
   } else if (ox1 > 0) {
-    cindcs[0].bis = mb_cindcs.ie - ng1,    cindcs[0].bie = mb_cindcs.ie;
-    cindcs[1].bis = mb_cindcs.ie - ng1,    cindcs[1].bie = mb_cindcs.ie;
-    cindcs[2].bis = mb_cindcs.ie - ng1,    cindcs[2].bie = mb_cindcs.ie;
+    cindcs[0].bis = mb_indcs.cie - ng1,    cindcs[0].bie = mb_indcs.cie;
+    cindcs[1].bis = mb_indcs.cie - ng1,    cindcs[1].bie = mb_indcs.cie;
+    cindcs[2].bis = mb_indcs.cie - ng1,    cindcs[2].bie = mb_indcs.cie;
   } else {
-    cindcs[0].bis = mb_cindcs.is + 1,      cindcs[0].bie = mb_cindcs.is + ng;
-    cindcs[1].bis = mb_cindcs.is,          cindcs[1].bie = mb_cindcs.is + ng1;
-    cindcs[2].bis = mb_cindcs.is,          cindcs[2].bie = mb_cindcs.is + ng1;
+    cindcs[0].bis = mb_indcs.cis + 1,      cindcs[0].bie = mb_indcs.cis + ng;
+    cindcs[1].bis = mb_indcs.cis,          cindcs[1].bie = mb_indcs.cis + ng1;
+    cindcs[2].bis = mb_indcs.cis,          cindcs[2].bie = mb_indcs.cis + ng1;
   }
   if (ox2 == 0) { 
-    cindcs[0].bjs = mb_cindcs.js,          cindcs[0].bje = mb_cindcs.je;
-    cindcs[1].bjs = mb_cindcs.js,          cindcs[1].bje = mb_cindcs.je + 1;
-    cindcs[2].bjs = mb_cindcs.js,          cindcs[2].bje = mb_cindcs.je;
+    cindcs[0].bjs = mb_indcs.cjs,          cindcs[0].bje = mb_indcs.cje;
+    cindcs[1].bjs = mb_indcs.cjs,          cindcs[1].bje = mb_indcs.cje + 1;
+    cindcs[2].bjs = mb_indcs.cjs,          cindcs[2].bje = mb_indcs.cje;
   } else if (ox2 > 0) {
-    cindcs[0].bjs = mb_cindcs.je - ng1,    cindcs[0].bje = mb_cindcs.je;
-    cindcs[1].bjs = mb_cindcs.je - ng1,    cindcs[1].bje = mb_cindcs.je;
-    cindcs[2].bjs = mb_cindcs.je - ng1,    cindcs[2].bje = mb_cindcs.je;
+    cindcs[0].bjs = mb_indcs.cje - ng1,    cindcs[0].bje = mb_indcs.cje;
+    cindcs[1].bjs = mb_indcs.cje - ng1,    cindcs[1].bje = mb_indcs.cje;
+    cindcs[2].bjs = mb_indcs.cje - ng1,    cindcs[2].bje = mb_indcs.cje;
   } else {
-    cindcs[0].bjs = mb_cindcs.js,          cindcs[0].bje = mb_cindcs.js + ng1;
-    cindcs[1].bjs = mb_cindcs.js + 1,      cindcs[1].bje = mb_cindcs.js + ng;
-    cindcs[2].bjs = mb_cindcs.js,          cindcs[2].bje = mb_cindcs.js + ng1;
+    cindcs[0].bjs = mb_indcs.cjs,          cindcs[0].bje = mb_indcs.cjs + ng1;
+    cindcs[1].bjs = mb_indcs.cjs + 1,      cindcs[1].bje = mb_indcs.cjs + ng;
+    cindcs[2].bjs = mb_indcs.cjs,          cindcs[2].bje = mb_indcs.cjs + ng1;
   }
   if (ox3 == 0) {
-    cindcs[0].bks = mb_cindcs.ks,          cindcs[0].bke = mb_cindcs.ke;
-    cindcs[1].bks = mb_cindcs.ks,          cindcs[1].bke = mb_cindcs.ke;
-    cindcs[2].bks = mb_cindcs.ks,          cindcs[2].bke = mb_cindcs.ke + 1;
+    cindcs[0].bks = mb_indcs.cks,          cindcs[0].bke = mb_indcs.cke;
+    cindcs[1].bks = mb_indcs.cks,          cindcs[1].bke = mb_indcs.cke;
+    cindcs[2].bks = mb_indcs.cks,          cindcs[2].bke = mb_indcs.cke + 1;
   } else if (ox3 > 0) {
-    cindcs[0].bks = mb_cindcs.ke - ng1,    cindcs[0].bke = mb_cindcs.ke;
-    cindcs[1].bks = mb_cindcs.ke - ng1,    cindcs[1].bke = mb_cindcs.ke;
-    cindcs[2].bks = mb_cindcs.ke - ng1,    cindcs[2].bke = mb_cindcs.ke;
+    cindcs[0].bks = mb_indcs.cke - ng1,    cindcs[0].bke = mb_indcs.cke;
+    cindcs[1].bks = mb_indcs.cke - ng1,    cindcs[1].bke = mb_indcs.cke;
+    cindcs[2].bks = mb_indcs.cke - ng1,    cindcs[2].bke = mb_indcs.cke;
   } else {              
-    cindcs[0].bks = mb_cindcs.ks,          cindcs[0].bke = mb_cindcs.ks + ng1;
-    cindcs[1].bks = mb_cindcs.ks,          cindcs[1].bke = mb_cindcs.ks + ng1;
-    cindcs[2].bks = mb_cindcs.ks + 1,      cindcs[2].bke = mb_cindcs.ks + ng;
+    cindcs[0].bks = mb_indcs.cks,          cindcs[0].bke = mb_indcs.cks + ng1;
+    cindcs[1].bks = mb_indcs.cks,          cindcs[1].bke = mb_indcs.cks + ng1;
+    cindcs[2].bks = mb_indcs.cks + 1,      cindcs[2].bke = mb_indcs.cks + ng;
   }
   // for SMR/AMR, always include the overlapping faces in edge and corner boundaries
   if (pmy_pack->pmesh->multilevel && (ox2 != 0 || ox3 != 0)) {
@@ -158,13 +162,19 @@ std::cout << "size of fc buffer = " << sizeof(BValBufferFC) << std::endl;
   // set indices for sends to neighbors on FINER level
   // Formulae taken from LoadBoundaryBufferToFiner() src/bvals/fc/bvals_fc.cpp
   {auto &findcs = buf.findcs;
-  int cnx1 = mb_indcs.nx1/2 - ng;
-  int cnx2 = mb_indcs.nx2/2 - ng;
-  int cnx3 = mb_indcs.nx3/2 - ng;
+  int cnx1mng = mb_indcs.cnx1 - ng;
+  int cnx2mng = mb_indcs.cnx2 - ng;
+  int cnx3mng = mb_indcs.cnx3 - ng;
   if (ox1 == 0) {
-    findcs[0].bis = mb_indcs.is,          findcs[0].bie = mb_indcs.ie + 1;
-    findcs[1].bis = mb_indcs.is,          findcs[1].bie = mb_indcs.ie;
-    findcs[2].bis = mb_indcs.is,          findcs[2].bie = mb_indcs.ie;
+    if (f1 == 1) {
+      findcs[0].bis = mb_indcs.is + cnx1mng,  findcs[0].bie = mb_indcs.ie + 1;
+      findcs[1].bis = mb_indcs.is + cnx1mng,  findcs[1].bie = mb_indcs.ie;
+      findcs[2].bis = mb_indcs.is + cnx1mng,  findcs[2].bie = mb_indcs.ie;
+    } else {
+      findcs[0].bis = mb_indcs.is,            findcs[0].bie = mb_indcs.ie + 1 - cnx1mng;
+      findcs[1].bis = mb_indcs.is,            findcs[1].bie = mb_indcs.ie - cnx1mng;
+      findcs[2].bis = mb_indcs.is,            findcs[2].bie = mb_indcs.ie - cnx1mng;
+    }
   } else if (ox1 > 0) {
     findcs[0].bis = mb_indcs.ie - ng1,    findcs[0].bie = mb_indcs.ie + 1;
     findcs[1].bis = mb_indcs.ie - ng1,    findcs[1].bie = mb_indcs.ie;
@@ -174,10 +184,34 @@ std::cout << "size of fc buffer = " << sizeof(BValBufferFC) << std::endl;
     findcs[1].bis = mb_indcs.is,          findcs[1].bie = mb_indcs.is + ng1;
     findcs[2].bis = mb_indcs.is,          findcs[2].bie = mb_indcs.is + ng1;
   }
+
   if (ox2 == 0) {
     findcs[0].bjs = mb_indcs.js,          findcs[0].bje = mb_indcs.je;
     findcs[1].bjs = mb_indcs.js,          findcs[1].bje = mb_indcs.je + 1;
     findcs[2].bjs = mb_indcs.js,          findcs[2].bje = mb_indcs.je;
+    if (mb_indcs.nx2 > 1) {
+      if (ox1 != 0) {
+        if (f1 == 1) {
+          findcs[0].bjs += cnx2mng;
+          findcs[1].bjs += cnx2mng;
+          findcs[2].bjs += cnx2mng;
+        } else {
+          findcs[0].bje -= cnx2mng;
+          findcs[1].bje -= cnx2mng;
+          findcs[2].bje -= cnx2mng;
+        }
+      } else {
+        if (f2 == 1) {
+          findcs[0].bjs += cnx2mng;
+          findcs[1].bjs += cnx2mng;
+          findcs[2].bjs += cnx2mng;
+        } else {
+          findcs[0].bje -= cnx2mng;
+          findcs[1].bje -= cnx2mng;
+          findcs[2].bje -= cnx2mng;
+        }
+      }
+    }
   } else if (ox2 > 0) {
     findcs[0].bjs = mb_indcs.je - ng1,    findcs[0].bje = mb_indcs.je;
     findcs[1].bjs = mb_indcs.je - ng1,    findcs[1].bje = mb_indcs.je + 1;
@@ -187,10 +221,34 @@ std::cout << "size of fc buffer = " << sizeof(BValBufferFC) << std::endl;
     findcs[1].bjs = mb_indcs.js,          findcs[1].bje = mb_indcs.js + ng;
     findcs[2].bjs = mb_indcs.js,          findcs[2].bje = mb_indcs.js + ng1;
   }
+
   if (ox3 == 0) {
     findcs[0].bks = mb_indcs.ks,          findcs[0].bke = mb_indcs.ke;
     findcs[1].bks = mb_indcs.ks,          findcs[1].bke = mb_indcs.ke;
     findcs[2].bks = mb_indcs.ks,          findcs[2].bke = mb_indcs.ke + 1;
+    if (mb_indcs.nx3 > 1) {
+      if (ox1 != 0 && ox2 != 0) {
+        if (f1 == 1) {
+          findcs[0].bks += cnx3mng;
+          findcs[1].bks += cnx3mng;
+          findcs[2].bks += cnx3mng;
+        } else {
+          findcs[0].bke -= cnx3mng;
+          findcs[1].bke -= cnx3mng;
+          findcs[2].bke -= cnx3mng;
+        }
+      } else {
+        if (f2 == 1) {
+          findcs[0].bks += cnx3mng;
+          findcs[1].bks += cnx3mng;
+          findcs[2].bks += cnx3mng;
+        } else {
+          findcs[0].bke -= cnx3mng;
+          findcs[1].bke -= cnx3mng;
+          findcs[2].bke -= cnx3mng;
+        }
+      }
+    }
   } else if (ox3 > 0) {
     findcs[0].bks = mb_indcs.ke - ng1,    findcs[0].bke = mb_indcs.ke;
     findcs[1].bks = mb_indcs.ke - ng1,    findcs[1].bke = mb_indcs.ke;
@@ -200,64 +258,7 @@ std::cout << "size of fc buffer = " << sizeof(BValBufferFC) << std::endl;
     findcs[1].bks = mb_indcs.ks,          findcs[1].bke = mb_indcs.ks + ng1;
     findcs[2].bks = mb_indcs.ks,          findcs[2].bke = mb_indcs.ks + ng;
   }
-  // need to add internal edges on faces, and internal corners on edges
-  if (ox1 == 0) {
-    if (f1 == 1) {
-      findcs[0].bis += mb_indcs.nx1/2 - mb_cindcs.ng;
-      findcs[1].bis += mb_indcs.nx1/2 - mb_cindcs.ng;
-      findcs[2].bis += mb_indcs.nx1/2 - mb_cindcs.ng;
-    } else {
-      findcs[0].bie -= mb_indcs.nx1/2 - mb_cindcs.ng;
-      findcs[1].bie -= mb_indcs.nx1/2 - mb_cindcs.ng;
-      findcs[2].bie -= mb_indcs.nx1/2 - mb_cindcs.ng;
-    }
-  }
-  if (ox2 == 0 && mb_indcs.nx2 > 1) {
-    if (ox1 != 0) {
-      if (f1 == 1) {
-        findcs[0].bjs += mb_indcs.nx2/2 - mb_cindcs.ng;
-        findcs[1].bjs += mb_indcs.nx2/2 - mb_cindcs.ng;
-        findcs[2].bjs += mb_indcs.nx2/2 - mb_cindcs.ng;
-      } else {
-        findcs[0].bje -= mb_indcs.nx2/2 - mb_cindcs.ng;
-        findcs[1].bje -= mb_indcs.nx2/2 - mb_cindcs.ng;
-        findcs[2].bje -= mb_indcs.nx2/2 - mb_cindcs.ng;
-      }
-    } else {
-      if (f2 == 1) {
-        findcs[0].bjs += mb_indcs.nx2/2 - mb_cindcs.ng;
-        findcs[1].bjs += mb_indcs.nx2/2 - mb_cindcs.ng;
-        findcs[2].bjs += mb_indcs.nx2/2 - mb_cindcs.ng;
-      } else {
-        findcs[0].bje -= mb_indcs.nx2/2 - mb_cindcs.ng;
-        findcs[1].bje -= mb_indcs.nx2/2 - mb_cindcs.ng;
-        findcs[2].bje -= mb_indcs.nx2/2 - mb_cindcs.ng;
-      }
-    }
-  }
-  if (ox3 == 0 && mb_indcs.nx3 > 1) {
-    if (ox1 != 0 && ox2 != 0) {
-      if (f1 == 1) {
-        findcs[0].bks += mb_indcs.nx3/2 - mb_cindcs.ng;
-        findcs[1].bks += mb_indcs.nx3/2 - mb_cindcs.ng;
-        findcs[2].bks += mb_indcs.nx3/2 - mb_cindcs.ng;
-      } else {
-        findcs[0].bke -= mb_indcs.nx3/2 - mb_cindcs.ng;
-        findcs[1].bke -= mb_indcs.nx3/2 - mb_cindcs.ng;
-        findcs[2].bke -= mb_indcs.nx3/2 - mb_cindcs.ng;
-      }
-    } else {
-      if (f2 == 1) {
-        findcs[0].bks += mb_indcs.nx3/2 - mb_cindcs.ng;
-        findcs[1].bks += mb_indcs.nx3/2 - mb_cindcs.ng;
-        findcs[2].bks += mb_indcs.nx3/2 - mb_cindcs.ng;
-      } else {
-        findcs[0].bke -= mb_indcs.nx3/2 - mb_cindcs.ng;
-        findcs[1].bke -= mb_indcs.nx3/2 - mb_cindcs.ng;
-        findcs[2].bke -= mb_indcs.nx3/2 - mb_cindcs.ng;
-      }
-    }
-  }
+
   for (int i=0; i<=2; ++i) {
     findcs[i].ndat = (findcs[i].bie - findcs[i].bis + 1)*
                      (findcs[i].bje - findcs[i].bjs + 1)*
@@ -273,11 +274,16 @@ std::cout << "size of fc buffer = " << sizeof(BValBufferFC) << std::endl;
     pindcs[i].ndat = 1;
   }}
 
+  return;
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn void BValFC::InitRecvIndices
 //! \brief Calculates indices of cells into which receive buffers are unpacked for FC data
+//! on same/coarser/finer levels, and for prolongation from coarse to fine.  Three sets of
+//! indices are needed for each of the three components (x1f,x2f,x3f) of face-centered
+//! fields.
+//!
 //! The arguments ox1/2/3 are integer (+/- 1) offsets in each dir that specifies buffer
 //! relative to center of MeshBlock (0,0,0).  The arguments f1/2 are the coordinates
 //! of subblocks within faces/edges (only relevant with SMR/AMR)
@@ -285,7 +291,6 @@ std::cout << "size of fc buffer = " << sizeof(BValBufferFC) << std::endl;
 void BValFC::InitRecvIndices(BValBufferFC &buf, int ox1, int ox2, int ox3, int f1, int f2)
 { 
   auto &mb_indcs  = pmy_pack->pmesh->mb_indcs;
-  auto &mb_cindcs = pmy_pack->pmesh->mb_cindcs;
   int ng = mb_indcs.ng;
 
   // set indices for receives from neighbors on SAME level
@@ -353,9 +358,9 @@ void BValFC::InitRecvIndices(BValBufferFC &buf, int ox1, int ox2, int ox3, int f
   // Formulae taken from SetBoundaryFromCoarser() in src/bvals/fc/bvals_fc.cpp
   {auto &cindcs = buf.cindcs;   // indices of course buffer ("c")
   if (ox1 == 0) {
-    cindcs[0].bis = mb_cindcs.is,         cindcs[0].bie = mb_cindcs.ie + 1;
-    cindcs[1].bis = mb_cindcs.is,         cindcs[1].bie = mb_cindcs.ie;
-    cindcs[2].bis = mb_cindcs.is,         cindcs[2].bie = mb_cindcs.ie;
+    cindcs[0].bis = mb_indcs.cis,         cindcs[0].bie = mb_indcs.cie + 1;
+    cindcs[1].bis = mb_indcs.cis,         cindcs[1].bie = mb_indcs.cie;
+    cindcs[2].bis = mb_indcs.cis,         cindcs[2].bie = mb_indcs.cie;
     if (f1 == 0) {
       cindcs[0].bie += mb_indcs.ng;
       cindcs[1].bie += mb_indcs.ng;
@@ -366,18 +371,18 @@ void BValFC::InitRecvIndices(BValBufferFC &buf, int ox1, int ox2, int ox3, int f
       cindcs[2].bis -= mb_indcs.ng;
     }
   } else if (ox1 > 0) {
-    cindcs[0].bis = mb_cindcs.ie + 2,     cindcs[0].bie = mb_cindcs.ie + ng + 1;
-    cindcs[1].bis = mb_cindcs.ie + 1,     cindcs[1].bie = mb_cindcs.ie + ng;
-    cindcs[2].bis = mb_cindcs.ie + 1,     cindcs[2].bie = mb_cindcs.ie + ng;
+    cindcs[0].bis = mb_indcs.cie + 2,     cindcs[0].bie = mb_indcs.cie + ng + 1;
+    cindcs[1].bis = mb_indcs.cie + 1,     cindcs[1].bie = mb_indcs.cie + ng;
+    cindcs[2].bis = mb_indcs.cie + 1,     cindcs[2].bie = mb_indcs.cie + ng;
   } else {
-    cindcs[0].bis = mb_cindcs.is - ng,    cindcs[0].bie = mb_cindcs.is - 1;
-    cindcs[1].bis = mb_cindcs.is - ng,    cindcs[1].bie = mb_cindcs.is - 1;
-    cindcs[2].bis = mb_cindcs.is - ng,    cindcs[2].bie = mb_cindcs.is - 1;
+    cindcs[0].bis = mb_indcs.cis - ng,    cindcs[0].bie = mb_indcs.cis - 1;
+    cindcs[1].bis = mb_indcs.cis - ng,    cindcs[1].bie = mb_indcs.cis - 1;
+    cindcs[2].bis = mb_indcs.cis - ng,    cindcs[2].bie = mb_indcs.cis - 1;
   }
   if (ox2 == 0) {
-    cindcs[0].bjs = mb_cindcs.js,          cindcs[0].bje = mb_cindcs.je;
-    cindcs[1].bjs = mb_cindcs.js,          cindcs[1].bje = mb_cindcs.je + 1;
-    cindcs[2].bjs = mb_cindcs.js,          cindcs[2].bje = mb_cindcs.je;
+    cindcs[0].bjs = mb_indcs.cjs,          cindcs[0].bje = mb_indcs.cje;
+    cindcs[1].bjs = mb_indcs.cjs,          cindcs[1].bje = mb_indcs.cje + 1;
+    cindcs[2].bjs = mb_indcs.cjs,          cindcs[2].bje = mb_indcs.cje;
     if (mb_indcs.nx2 > 1) {
       if (ox1 != 0) {
         if (f1 == 0) {
@@ -402,18 +407,18 @@ void BValFC::InitRecvIndices(BValBufferFC &buf, int ox1, int ox2, int ox3, int f
       }
     }
   } else if (ox2 > 0) {
-    cindcs[0].bjs = mb_cindcs.je + 1,      cindcs[0].bje = mb_cindcs.je + ng;
-    cindcs[1].bjs = mb_cindcs.je + 2,      cindcs[1].bje = mb_cindcs.je + ng + 1;
-    cindcs[2].bjs = mb_cindcs.je + 1,      cindcs[2].bje = mb_cindcs.je + ng;
+    cindcs[0].bjs = mb_indcs.cje + 1,      cindcs[0].bje = mb_indcs.cje + ng;
+    cindcs[1].bjs = mb_indcs.cje + 2,      cindcs[1].bje = mb_indcs.cje + ng + 1;
+    cindcs[2].bjs = mb_indcs.cje + 1,      cindcs[2].bje = mb_indcs.cje + ng;
   } else {
-    cindcs[0].bjs = mb_cindcs.js - ng,     cindcs[0].bje = mb_cindcs.js - 1;
-    cindcs[1].bjs = mb_cindcs.js - ng,     cindcs[1].bje = mb_cindcs.js - 1;
-    cindcs[2].bjs = mb_cindcs.js - ng,     cindcs[2].bje = mb_cindcs.js - 1;
+    cindcs[0].bjs = mb_indcs.cjs - ng,     cindcs[0].bje = mb_indcs.cjs - 1;
+    cindcs[1].bjs = mb_indcs.cjs - ng,     cindcs[1].bje = mb_indcs.cjs - 1;
+    cindcs[2].bjs = mb_indcs.cjs - ng,     cindcs[2].bje = mb_indcs.cjs - 1;
   }
   if (ox3 == 0) {
-    cindcs[0].bks = mb_cindcs.ks,          cindcs[0].bke = mb_cindcs.ke;
-    cindcs[1].bks = mb_cindcs.ks,          cindcs[1].bke = mb_cindcs.ke;
-    cindcs[2].bks = mb_cindcs.ks,          cindcs[2].bke = mb_cindcs.ke + 1;
+    cindcs[0].bks = mb_indcs.cks,          cindcs[0].bke = mb_indcs.cke;
+    cindcs[1].bks = mb_indcs.cks,          cindcs[1].bke = mb_indcs.cke;
+    cindcs[2].bks = mb_indcs.cks,          cindcs[2].bke = mb_indcs.cke + 1;
     if (mb_indcs.nx3 > 1) {
       if (ox1 != 0 && ox2 != 0) {
         if (f1 == 0) {
@@ -438,13 +443,13 @@ void BValFC::InitRecvIndices(BValBufferFC &buf, int ox1, int ox2, int ox3, int f
       }
     }
   } else if (ox3 > 0) {
-    cindcs[0].bks = mb_cindcs.ke + 1,      cindcs[0].bke = mb_cindcs.ke + ng;
-    cindcs[1].bks = mb_cindcs.ke + 1,      cindcs[1].bke = mb_cindcs.ke + ng;
-    cindcs[2].bks = mb_cindcs.ke + 2,      cindcs[2].bke = mb_cindcs.ke + ng + 1;
+    cindcs[0].bks = mb_indcs.cke + 1,      cindcs[0].bke = mb_indcs.cke + ng;
+    cindcs[1].bks = mb_indcs.cke + 1,      cindcs[1].bke = mb_indcs.cke + ng;
+    cindcs[2].bks = mb_indcs.cke + 2,      cindcs[2].bke = mb_indcs.cke + ng + 1;
   } else {
-    cindcs[0].bks = mb_cindcs.ks - ng,     cindcs[0].bke = mb_cindcs.ks - 1;
-    cindcs[1].bks = mb_cindcs.ks - ng,     cindcs[1].bke = mb_cindcs.ks - 1;
-    cindcs[2].bks = mb_cindcs.ks - ng,     cindcs[2].bke = mb_cindcs.ks - 1;
+    cindcs[0].bks = mb_indcs.cks - ng,     cindcs[0].bke = mb_indcs.cks - 1;
+    cindcs[1].bks = mb_indcs.cks - ng,     cindcs[1].bke = mb_indcs.cks - 1;
+    cindcs[2].bks = mb_indcs.cks - ng,     cindcs[2].bke = mb_indcs.cks - 1;
   }
   for (int i=0; i<=2; ++i) {
     cindcs[i].ndat = (cindcs[i].bie - cindcs[i].bis + 1)*
@@ -561,9 +566,9 @@ void BValFC::InitRecvIndices(BValBufferFC &buf, int ox1, int ox2, int ox3, int f
   {auto &pindcs = buf.pindcs;   // indices fpr prolongation ("p")
   int cn = mb_indcs.ng/2;       // nghost must be multiple of 2 with SMR/AMR
   if (ox1 == 0) {
-    pindcs[0].bis = mb_cindcs.is;          pindcs[0].bie = mb_cindcs.ie;
-    pindcs[1].bis = mb_cindcs.is;          pindcs[1].bie = mb_cindcs.ie;
-    pindcs[2].bis = mb_cindcs.is;          pindcs[2].bie = mb_cindcs.ie;
+    pindcs[0].bis = mb_indcs.cis;          pindcs[0].bie = mb_indcs.cie;
+    pindcs[1].bis = mb_indcs.cis;          pindcs[1].bie = mb_indcs.cie;
+    pindcs[2].bis = mb_indcs.cis;          pindcs[2].bie = mb_indcs.cie;
     if (f1 == 0) {
       pindcs[0].bie += cn;
       pindcs[1].bie += cn;
@@ -574,18 +579,18 @@ void BValFC::InitRecvIndices(BValBufferFC &buf, int ox1, int ox2, int ox3, int f
       pindcs[2].bis -= cn;
     }
   } else if (ox1 > 0)  {
-    pindcs[0].bis = mb_cindcs.ie + 1;       pindcs[0].bie = mb_cindcs.ie + cn;
-    pindcs[1].bis = mb_cindcs.ie + 1;       pindcs[1].bie = mb_cindcs.ie + cn;
-    pindcs[2].bis = mb_cindcs.ie + 1;       pindcs[2].bie = mb_cindcs.ie + cn;
+    pindcs[0].bis = mb_indcs.cie + 1;       pindcs[0].bie = mb_indcs.cie + cn;
+    pindcs[1].bis = mb_indcs.cie + 1;       pindcs[1].bie = mb_indcs.cie + cn;
+    pindcs[2].bis = mb_indcs.cie + 1;       pindcs[2].bie = mb_indcs.cie + cn;
   } else {
-    pindcs[0].bis = mb_cindcs.is - cn;      pindcs[0].bie = mb_cindcs.is - 1;
-    pindcs[1].bis = mb_cindcs.is - cn;      pindcs[1].bie = mb_cindcs.is - 1;
-    pindcs[2].bis = mb_cindcs.is - cn;      pindcs[2].bie = mb_cindcs.is - 1;
+    pindcs[0].bis = mb_indcs.cis - cn;      pindcs[0].bie = mb_indcs.cis - 1;
+    pindcs[1].bis = mb_indcs.cis - cn;      pindcs[1].bie = mb_indcs.cis - 1;
+    pindcs[2].bis = mb_indcs.cis - cn;      pindcs[2].bie = mb_indcs.cis - 1;
   }
   if (ox2 == 0) {
-    pindcs[0].bjs = mb_cindcs.js;           pindcs[0].bje = mb_cindcs.je;
-    pindcs[1].bjs = mb_cindcs.js;           pindcs[1].bje = mb_cindcs.je;
-    pindcs[2].bjs = mb_cindcs.js;           pindcs[2].bje = mb_cindcs.je;
+    pindcs[0].bjs = mb_indcs.cjs;           pindcs[0].bje = mb_indcs.cje;
+    pindcs[1].bjs = mb_indcs.cjs;           pindcs[1].bje = mb_indcs.cje;
+    pindcs[2].bjs = mb_indcs.cjs;           pindcs[2].bje = mb_indcs.cje;
     if (mb_indcs.nx2 > 1) {
       if (ox1 != 0) {
         if (f1 == 0) {
@@ -610,18 +615,18 @@ void BValFC::InitRecvIndices(BValBufferFC &buf, int ox1, int ox2, int ox3, int f
       }
     }
   } else if (ox2 > 0) {
-    pindcs[0].bjs = mb_cindcs.je + 1;        pindcs[0].bje = mb_cindcs.je + cn;
-    pindcs[1].bjs = mb_cindcs.je + 1;        pindcs[1].bje = mb_cindcs.je + cn;
-    pindcs[2].bjs = mb_cindcs.je + 1;        pindcs[2].bje = mb_cindcs.je + cn;
+    pindcs[0].bjs = mb_indcs.cje + 1;        pindcs[0].bje = mb_indcs.cje + cn;
+    pindcs[1].bjs = mb_indcs.cje + 1;        pindcs[1].bje = mb_indcs.cje + cn;
+    pindcs[2].bjs = mb_indcs.cje + 1;        pindcs[2].bje = mb_indcs.cje + cn;
   } else {
-    pindcs[0].bjs = mb_cindcs.js - cn;       pindcs[0].bje = mb_cindcs.js - 1;
-    pindcs[1].bjs = mb_cindcs.js - cn;       pindcs[1].bje = mb_cindcs.js - 1;
-    pindcs[2].bjs = mb_cindcs.js - cn;       pindcs[2].bje = mb_cindcs.js - 1;
+    pindcs[0].bjs = mb_indcs.cjs - cn;       pindcs[0].bje = mb_indcs.cjs - 1;
+    pindcs[1].bjs = mb_indcs.cjs - cn;       pindcs[1].bje = mb_indcs.cjs - 1;
+    pindcs[2].bjs = mb_indcs.cjs - cn;       pindcs[2].bje = mb_indcs.cjs - 1;
   }
   if (ox3 == 0) {
-    pindcs[0].bks = mb_cindcs.ks;            pindcs[0].bke = mb_cindcs.ke;
-    pindcs[1].bks = mb_cindcs.ks;            pindcs[1].bke = mb_cindcs.ke;
-    pindcs[2].bks = mb_cindcs.ks;            pindcs[2].bke = mb_cindcs.ke;
+    pindcs[0].bks = mb_indcs.cks;            pindcs[0].bke = mb_indcs.cke;
+    pindcs[1].bks = mb_indcs.cks;            pindcs[1].bke = mb_indcs.cke;
+    pindcs[2].bks = mb_indcs.cks;            pindcs[2].bke = mb_indcs.cke;
     if (mb_indcs.nx3 > 1) {
       if (ox1 != 0 && ox2 != 0) {
         if (f1 == 0) {
@@ -646,13 +651,13 @@ void BValFC::InitRecvIndices(BValBufferFC &buf, int ox1, int ox2, int ox3, int f
       }
     }
   } else if (ox3 > 0)  {
-    pindcs[0].bks = mb_cindcs.ke + 1;          pindcs[0].bke = mb_cindcs.ke + cn;
-    pindcs[1].bks = mb_cindcs.ke + 1;          pindcs[1].bke = mb_cindcs.ke + cn;
-    pindcs[2].bks = mb_cindcs.ke + 1;          pindcs[2].bke = mb_cindcs.ke + cn;
+    pindcs[0].bks = mb_indcs.cke + 1;          pindcs[0].bke = mb_indcs.cke + cn;
+    pindcs[1].bks = mb_indcs.cke + 1;          pindcs[1].bke = mb_indcs.cke + cn;
+    pindcs[2].bks = mb_indcs.cke + 1;          pindcs[2].bke = mb_indcs.cke + cn;
   } else {
-    pindcs[0].bks = mb_cindcs.ks - cn;         pindcs[0].bke = mb_cindcs.ks - 1;
-    pindcs[1].bks = mb_cindcs.ks - cn;         pindcs[1].bke = mb_cindcs.ks - 1;
-    pindcs[2].bks = mb_cindcs.ks - cn;         pindcs[2].bke = mb_cindcs.ks - 1;
+    pindcs[0].bks = mb_indcs.cks - cn;         pindcs[0].bke = mb_indcs.cks - 1;
+    pindcs[1].bks = mb_indcs.cks - cn;         pindcs[1].bke = mb_indcs.cks - 1;
+    pindcs[2].bks = mb_indcs.cks - cn;         pindcs[2].bke = mb_indcs.cks - 1;
   }
   for (int i=0; i<=2; ++i) {
     pindcs[i].ndat = (pindcs[i].bie - pindcs[i].bis + 1)*

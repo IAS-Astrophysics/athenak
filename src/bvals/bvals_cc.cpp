@@ -345,7 +345,6 @@ std::cout << "block=" << m << "  buffer=" << n << "  not received" << std::endl;
   bool &multi_d = pmy_pack->pmesh->multi_d;
   bool &three_d = pmy_pack->pmesh->three_d;
   auto &indcs  = pmy_pack->pmesh->mb_indcs;
-  auto &cindcs = pmy_pack->pmesh->mb_cindcs;
 
   // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
   Kokkos::TeamPolicy<> policy(DevExeSpace(), nmnv, Kokkos::AUTO);
@@ -381,9 +380,9 @@ std::cout << "block=" << m << "  buffer=" << n << "  not received" << std::endl;
         {
           // indices for prolongation (pindcs) refer to coarse array.  So must compute
           // indices for fine array
-          int finei = (i - cindcs.is)*2 + indcs.is;
-          int finej = (j - cindcs.js)*2 + indcs.js;
-          int finek = (k - cindcs.ks)*2 + indcs.ks;
+          int finei = (i - indcs.cis)*2 + indcs.is;
+          int finej = (j - indcs.cjs)*2 + indcs.js;
+          int finek = (k - indcs.cks)*2 + indcs.ks;
 
 /*
 std::cout << std::endl << "MB= "<<m<<"  Buffer="<< n << std::endl;
@@ -444,10 +443,10 @@ std::cout << "finei=" << finei << "  finej=" << finej << "  finek=" << finek << 
 
   std::cout << std::endl << "coarse u0 data" << std::endl;
   for (int m=0; m<nmb; ++m) {
-    auto &js = pmy_pack->pcoord->mbdata.cindcs.js;
-    auto &ks = pmy_pack->pcoord->mbdata.cindcs.ks;
+    auto &js = pmy_pack->pcoord->mbdata.indcs.cjs;
+    auto &ks = pmy_pack->pcoord->mbdata.indcs.cks;
     std::cout << "Block = " << m << "  level = " << pmy_pack->pmb->mblev.h_view(m) << std::endl;
-    for (int i=pmy_pack->pcoord->mbdata.cindcs.is-2; i<=pmy_pack->pcoord->mbdata.cindcs.ie+2; ++i) {
+    for (int i=pmy_pack->pcoord->mbdata.indcs.cis-2; i<=pmy_pack->pcoord->mbdata.indcs.cie+2; ++i) {
       std::cout << "i=" << i << "  d=" << ca(m,0,ks,js,i) << std::endl;
     }
   }

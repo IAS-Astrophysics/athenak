@@ -50,8 +50,7 @@ struct BValBufferCC
   DvceArray3D<Real> data;
   HostArray1D<BoundaryCommStatus> bcomm_stat;
 #if MPI_PARALLEL_ENABLED
-  // only accessed from host, so can use STL vector
-  std::vector<MPI_Request> comm_req;
+  std::vector<MPI_Request> comm_req;   // only accessed from host, so can use STL vector
 #endif
   // function to allocate memory for buffer data
   void AllocateDataView(int nmb, int nvar) {
@@ -76,8 +75,7 @@ struct BValBufferFC
   DvceArray3D<Real> data;
   HostArray1D<BoundaryCommStatus> bcomm_stat;
 #if MPI_PARALLEL_ENABLED
-  // only accessed from host, so can use STL vector
-  std::vector<MPI_Request> comm_req;
+  std::vector<MPI_Request> comm_req;   // only accessed from host, so can use STL vector
 #endif
   // function to allocate memory for buffer data
   void AllocateDataView(int nmb) {
@@ -92,7 +90,7 @@ class MeshBlockPack;
 
 //----------------------------------------------------------------------------------------
 //! \class BValCC
-//  \brief Lightweight class for boundary values cell-centered variables
+//  \brief Lightweight class for boundary values of cell-centered variables
 
 class BValCC
 {
@@ -117,7 +115,7 @@ private:
 
 //----------------------------------------------------------------------------------------
 //! \class BValFC
-//  \brief Lightweight class for boundary values face-centered vector fields
+//  \brief Lightweight class for boundary values of face-centered vector fields
 
 class BValFC
 {
@@ -125,7 +123,7 @@ public:
   BValFC(MeshBlockPack *ppack, ParameterInput *pin);
 
   // Like BValCC case, not all 56 elements are used in most cases.  Now each BvalBufferFC
-  // requires XXX bytes, so still economical to use fixed-length arrays.
+  // requires 400 bytes, but still economical to use fixed-length arrays.
   BValBufferFC send_buf[56], recv_buf[56];
 
   //functions

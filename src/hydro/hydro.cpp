@@ -102,10 +102,10 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // allocate memory for conserved variables on coarse mesh
   if (ppack->pmesh->multilevel) {
-    auto &cindcs = pmy_pack->pmesh->mb_cindcs;
-    int nccells1 = cindcs.nx1 + 2*(cindcs.ng);
-    int nccells2 = (cindcs.nx2 > 1)? (cindcs.nx2 + 2*(cindcs.ng)) : 1;
-    int nccells3 = (cindcs.nx3 > 1)? (cindcs.nx3 + 2*(cindcs.ng)) : 1;
+    auto &indcs = pmy_pack->pmesh->mb_indcs;
+    int nccells1 = indcs.cnx1 + 2*(indcs.ng);
+    int nccells2 = (indcs.cnx2 > 1)? (indcs.cnx2 + 2*(indcs.ng)) : 1;
+    int nccells3 = (indcs.cnx3 > 1)? (indcs.cnx3 + 2*(indcs.ng)) : 1;
     Kokkos::realloc(coarse_u0, nmb, (nhydro+nscalars), nccells3, nccells2, nccells1);
   }
 

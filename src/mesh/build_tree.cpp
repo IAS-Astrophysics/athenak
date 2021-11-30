@@ -313,7 +313,7 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile)
   // following must be identical to calculation of headeroffset (excluding size of 
   // ParameterInput data) in restart.cpp
   IOWrapperSizeT headersize = 3*sizeof(int) + 2*sizeof(Real)
-    + sizeof(RegionSize) + 3*sizeof(RegionIndcs);
+    + sizeof(RegionSize) + 2*sizeof(RegionIndcs);
   char *headerdata = new char[headersize];
 
   if (global_variable::my_rank == 0) { // the master process reads the header data
@@ -343,8 +343,6 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile)
   std::memcpy(&mesh_indcs, &(headerdata[hdos]), sizeof(RegionIndcs));
   hdos += sizeof(RegionIndcs);
   std::memcpy(&mb_indcs, &(headerdata[hdos]), sizeof(RegionIndcs));
-  hdos += sizeof(RegionIndcs);
-  std::memcpy(&mb_cindcs, &(headerdata[hdos]), sizeof(RegionIndcs));
   hdos += sizeof(RegionIndcs);
   std::memcpy(&time, &(headerdata[hdos]), sizeof(Real));
   hdos += sizeof(Real);

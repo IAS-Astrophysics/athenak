@@ -214,53 +214,52 @@ Mesh::Mesh(ParameterInput *pin)
   }
 
   // initialize indices for Mesh cells, MeshBlock cells, and MeshBlock coarse cells
-  mb_cindcs.ng  = mb_indcs.ng;
-  mb_cindcs.nx1 = mb_indcs.nx1/2;
-  mb_cindcs.nx2 = mb_indcs.nx2/2;
-  mb_cindcs.nx3 = mb_indcs.nx3/2;
+  mb_indcs.cnx1 = mb_indcs.nx1/2;
+  mb_indcs.cnx2 = mb_indcs.nx2/2;
+  mb_indcs.cnx3 = mb_indcs.nx3/2;
 
   mesh_indcs.is = mesh_indcs.ng;
   mb_indcs.is   = mb_indcs.ng;
-  mb_cindcs.is  = mb_cindcs.ng;
+  mb_indcs.cis  = mb_indcs.ng;
 
   mesh_indcs.ie = mesh_indcs.is + mesh_indcs.nx1 - 1;
   mb_indcs.ie   = mb_indcs.is + mb_indcs.nx1 - 1;
-  mb_cindcs.ie  = mb_cindcs.is + mb_cindcs.nx1 - 1;
+  mb_indcs.cie  = mb_indcs.cis + mb_indcs.cnx1 - 1;
 
   if (multi_d) {
     mesh_indcs.js = mesh_indcs.ng;
     mb_indcs.js   = mb_indcs.ng;
-    mb_cindcs.js  = mb_cindcs.ng;
+    mb_indcs.cjs  = mb_indcs.ng;
 
     mesh_indcs.je = mesh_indcs.js + mesh_indcs.nx2 - 1;
     mb_indcs.je   = mb_indcs.js + mb_indcs.nx2 - 1;
-    mb_cindcs.je  = mb_cindcs.js + mb_cindcs.nx2 - 1;
+    mb_indcs.cje  = mb_indcs.cjs + mb_indcs.cnx2 - 1;
   } else {
     mesh_indcs.js = 0;
     mb_indcs.js   = 0;
-    mb_cindcs.js  = 0;
+    mb_indcs.cjs  = 0;
 
     mesh_indcs.je = 0;
     mb_indcs.je   = 0;
-    mb_cindcs.je  = 0;
+    mb_indcs.cje  = 0;
   }
 
   if (three_d) {
     mesh_indcs.ks = mesh_indcs.ng;
     mb_indcs.ks   = mb_indcs.ng;
-    mb_cindcs.ks  = mb_cindcs.ng;
+    mb_indcs.cks  = mb_indcs.ng;
 
     mesh_indcs.ke = mesh_indcs.ks + mesh_indcs.nx3 - 1;
     mb_indcs.ke   = mb_indcs.ks + mb_indcs.nx3 - 1;
-    mb_cindcs.ke  = mb_cindcs.ks + mb_cindcs.nx3 - 1;
+    mb_indcs.cke  = mb_indcs.cks + mb_indcs.cnx3 - 1;
   } else {
     mesh_indcs.ks = 0;
     mb_indcs.ks   = 0;
-    mb_cindcs.ks  = 0;
+    mb_indcs.cks  = 0;
 
     mesh_indcs.ke = 0;
     mb_indcs.ke   = 0;
-    mb_cindcs.ke  = 0;
+    mb_indcs.cke  = 0;
   }
 
 }

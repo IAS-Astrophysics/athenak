@@ -26,12 +26,12 @@ void Mesh::RestrictCC(DvceArray5D<Real> u, DvceArray5D<Real> cu)
   int nmb  = u.extent_int(0);  // TODO: 1st index from L of input array must be NMB
   int nvar = u.extent_int(1);  // TODO: 2nd index from L of input array must be NVAR
 
-  auto &cis = mb_cindcs.is;
-  auto &cie = mb_cindcs.ie;
-  auto &cjs = mb_cindcs.js;
-  auto &cje = mb_cindcs.je;
-  auto &cks = mb_cindcs.ks;
-  auto &cke = mb_cindcs.ke;
+  auto &cis = mb_indcs.cis;
+  auto &cie = mb_indcs.cie;
+  auto &cjs = mb_indcs.cjs;
+  auto &cje = mb_indcs.cje;
+  auto &cks = mb_indcs.cks;
+  auto &cke = mb_indcs.cke;
 
   // restrict in 1D
   if (one_d) {
@@ -82,12 +82,12 @@ void Mesh::RestrictFC(DvceFaceFld4D<Real> b, DvceFaceFld4D<Real> cb)
 { 
   int nmb  = b.x1f.extent_int(0);  // TODO: 1st index from L of input array must be NMB
   
-  auto &cis = mb_cindcs.is;
-  auto &cie = mb_cindcs.ie;
-  auto &cjs = mb_cindcs.js;
-  auto &cje = mb_cindcs.je;
-  auto &cks = mb_cindcs.ks;
-  auto &cke = mb_cindcs.ke;
+  auto &cis = mb_indcs.cis;
+  auto &cie = mb_indcs.cie;
+  auto &cjs = mb_indcs.cjs;
+  auto &cje = mb_indcs.cje;
+  auto &cks = mb_indcs.cks;
+  auto &cke = mb_indcs.cke;
   
   // restrict in 1D
   if (one_d) {
