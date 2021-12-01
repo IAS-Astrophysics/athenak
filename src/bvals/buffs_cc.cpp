@@ -28,24 +28,32 @@
 void BValCC::InitSendIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f1, int f2)
 {
   auto &mb_indcs  = pmy_pack->pmesh->mb_indcs;
-  int ng1 = mb_indcs.ng - 1;
+  int ng  = mb_indcs.ng;
+  int ng1 = ng - 1;
 
   // set indices for sends to neighbors on SAME level
   // Formulae taken from LoadBoundaryBufferSameLevel() in src/bvals/cc/bvals_cc.cpp
-  {auto &sindcs = buf.sindcs;
-  sindcs.bis = (ox1 > 0) ? (mb_indcs.ie - ng1) : mb_indcs.is;
-  sindcs.bie = (ox1 < 0) ? (mb_indcs.is + ng1) : mb_indcs.ie;
-  sindcs.bjs = (ox2 > 0) ? (mb_indcs.je - ng1) : mb_indcs.js;
-  sindcs.bje = (ox2 < 0) ? (mb_indcs.js + ng1) : mb_indcs.je;
-  sindcs.bks = (ox3 > 0) ? (mb_indcs.ke - ng1) : mb_indcs.ks;
-  sindcs.bke = (ox3 < 0) ? (mb_indcs.ks + ng1) : mb_indcs.ke;
-  sindcs.ndat = (sindcs.bie - sindcs.bis + 1)*(sindcs.bje - sindcs.bjs + 1)*
-                (sindcs.bke - sindcs.bks + 1);
+  if ((f1 == 0) && (f2 == 0)) {  // this buffer used for same level (e.g. #0,4,8,12,...)
+    auto &sindcs = buf.sindcs;   // indices of buffer at same level ("s")
+    sindcs.bis = (ox1 > 0) ? (mb_indcs.ie - ng1) : mb_indcs.is;
+    sindcs.bie = (ox1 < 0) ? (mb_indcs.is + ng1) : mb_indcs.ie;
+    sindcs.bjs = (ox2 > 0) ? (mb_indcs.je - ng1) : mb_indcs.js;
+    sindcs.bje = (ox2 < 0) ? (mb_indcs.js + ng1) : mb_indcs.je;
+    sindcs.bks = (ox3 > 0) ? (mb_indcs.ke - ng1) : mb_indcs.ks;
+    sindcs.bke = (ox3 < 0) ? (mb_indcs.ks + ng1) : mb_indcs.ke;
+    sindcs.ndat = (sindcs.bie - sindcs.bis + 1)*(sindcs.bje - sindcs.bjs + 1)*
+                  (sindcs.bke - sindcs.bks + 1);
+  } else {  // this buffer only used with AMR (e.g. #1,2,3,5,6,7,...)
+    auto &sindcs = buf.sindcs;
+    sindcs.bis = 0; sindcs.bie = 0;
+    sindcs.bjs = 0; sindcs.bje = 0;
+    sindcs.bks = 0; sindcs.bke = 0;
+    sindcs.ndat = 1;
   }
 
-  // set indices for sends to neighbors on COARSER level
+  // set indices for sends to neighbors on COARSER level (matches recvs from FINER)
   // Formulae taken from LoadBoundaryBufferToCoarser() in src/bvals/cc/bvals_cc.cpp
-  {auto &cindcs = buf.cindcs;
+  {auto &cindcs = buf.cindcs;  // indices of coarse buffer ("c")
   cindcs.bis = (ox1 > 0) ? (mb_indcs.cie - ng1) : mb_indcs.cis;
   cindcs.bie = (ox1 < 0) ? (mb_indcs.cis + ng1) : mb_indcs.cie;
   cindcs.bjs = (ox2 > 0) ? (mb_indcs.cje - ng1) : mb_indcs.cjs;
@@ -56,9 +64,9 @@ void BValCC::InitSendIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f
                 (cindcs.bke - cindcs.bks + 1);
   }
 
-  // set indices for sends to neighbors on FINER level
+  // set indices for sends to neighbors on FINER level (matches recvs from COARSER)
   // Formulae taken from LoadBoundaryBufferToFiner() src/bvals/cc/bvals_cc.cpp
-  {auto &findcs = buf.findcs;
+  {auto &findcs = buf.findcs;  // indices of fine buffer ("f")
   findcs.bis = (ox1 > 0) ? (mb_indcs.ie - ng1) : mb_indcs.is;
   findcs.bie = (ox1 < 0) ? (mb_indcs.is + ng1) : mb_indcs.ie;
   findcs.bjs = (ox2 > 0) ? (mb_indcs.je - ng1) : mb_indcs.js;
@@ -68,38 +76,38 @@ void BValCC::InitSendIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f
   // need to add internal edges on faces, and internal corners on edges
   if (ox1 == 0) {
     if (f1 == 1) {
-      findcs.bis += mb_indcs.cnx1 - mb_indcs.ng;
+      findcs.bis += mb_indcs.cnx1 - ng;
     } else {
-      findcs.bie -= mb_indcs.cnx1 - mb_indcs.ng;
+      findcs.bie -= mb_indcs.cnx1 - ng;
     }
   }
   if (ox2 == 0 && mb_indcs.nx2 > 1) {
     if (ox1 != 0) {
       if (f1 == 1) {
-        findcs.bjs += mb_indcs.cnx2 - mb_indcs.ng;
+        findcs.bjs += mb_indcs.cnx2 - ng;
       } else {
-        findcs.bje -= mb_indcs.cnx2 - mb_indcs.ng;
+        findcs.bje -= mb_indcs.cnx2 - ng;
       }
     } else {
       if (f2 == 1) {
-        findcs.bjs += mb_indcs.cnx2 - mb_indcs.ng;
+        findcs.bjs += mb_indcs.cnx2 - ng;
       } else {
-        findcs.bje -= mb_indcs.cnx2 - mb_indcs.ng;
+        findcs.bje -= mb_indcs.cnx2 - ng;
       }
     }
   }
   if (ox3 == 0 && mb_indcs.nx3 > 1) {
     if (ox1 != 0 && ox2 != 0) {
       if (f1 == 1) {
-        findcs.bks += mb_indcs.cnx3 - mb_indcs.ng;
+        findcs.bks += mb_indcs.cnx3 - ng;
       } else {
-        findcs.bke -= mb_indcs.cnx3 - mb_indcs.ng;
+        findcs.bke -= mb_indcs.cnx3 - ng;
       }
     } else {
       if (f2 == 1) {
-        findcs.bks += mb_indcs.cnx3 - mb_indcs.ng;
+        findcs.bks += mb_indcs.cnx3 - ng;
       } else {
-        findcs.bke -= mb_indcs.cnx3 - mb_indcs.ng;
+        findcs.bke -= mb_indcs.cnx3 - ng;
       }
     }
   }
@@ -129,62 +137,70 @@ void BValCC::InitSendIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f
 void BValCC::InitRecvIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f1, int f2)
 { 
   auto &mb_indcs  = pmy_pack->pmesh->mb_indcs;
+  int ng = mb_indcs.ng;
 
   // set indices for receives from neighbors on SAME level
   // Formulae taken from SetBoundarySameLevel() in src/bvals/cc/bvals_cc.cpp
-  {auto &sindcs = buf.sindcs;   // indices of buffer at same level ("s")
-  if (ox1 == 0) {
-    sindcs.bis = mb_indcs.is;
-    sindcs.bie = mb_indcs.ie;
-  } else if (ox1 > 0) {
-    sindcs.bis = mb_indcs.ie + 1,
-    sindcs.bie = mb_indcs.ie + mb_indcs.ng;
-  } else {
-    sindcs.bis = mb_indcs.is - mb_indcs.ng;
-    sindcs.bie = mb_indcs.is - 1;
+  if ((f1 == 0) && (f2 == 0)) {  // this buffer used for same level (e.g. #0,4,8,12,...)
+    auto &sindcs = buf.sindcs;   // indices of buffer at same level ("s")
+    if (ox1 == 0) {
+      sindcs.bis = mb_indcs.is;
+      sindcs.bie = mb_indcs.ie;
+    } else if (ox1 > 0) {
+      sindcs.bis = mb_indcs.ie + 1,
+      sindcs.bie = mb_indcs.ie + ng;
+    } else {
+      sindcs.bis = mb_indcs.is - ng;
+      sindcs.bie = mb_indcs.is - 1;
+    }
+
+    if (ox2 == 0) {
+      sindcs.bjs = mb_indcs.js;
+      sindcs.bje = mb_indcs.je;
+    } else if (ox2 > 0) {
+      sindcs.bjs = mb_indcs.je + 1;
+      sindcs.bje = mb_indcs.je + ng;
+    } else {
+      sindcs.bjs = mb_indcs.js - ng;
+      sindcs.bje = mb_indcs.js - 1;
+    }
+
+    if (ox3 == 0) {
+      sindcs.bks = mb_indcs.ks;
+      sindcs.bke = mb_indcs.ke;
+    } else if (ox3 > 0) {
+      sindcs.bks = mb_indcs.ke + 1;
+      sindcs.bke = mb_indcs.ke + ng;
+    } else {
+      sindcs.bks = mb_indcs.ks - ng;
+      sindcs.bke = mb_indcs.ks - 1;
+    }
+    sindcs.ndat = (sindcs.bie - sindcs.bis + 1)*(sindcs.bje - sindcs.bjs + 1)*
+                  (sindcs.bke - sindcs.bks + 1);
+  } else {  // this buffer only used with AMR (e.g. #1,2,3,5,6,7,...)
+    auto &sindcs = buf.sindcs;
+    sindcs.bis = 0; sindcs.bie = 0;
+    sindcs.bjs = 0; sindcs.bje = 0;
+    sindcs.bks = 0; sindcs.bke = 0;
+    sindcs.ndat = 1;
   }
 
-  if (ox2 == 0) {
-    sindcs.bjs = mb_indcs.js;
-    sindcs.bje = mb_indcs.je;
-  } else if (ox2 > 0) {
-    sindcs.bjs = mb_indcs.je + 1;
-    sindcs.bje = mb_indcs.je + mb_indcs.ng;
-  } else {
-    sindcs.bjs = mb_indcs.js - mb_indcs.ng;
-    sindcs.bje = mb_indcs.js - 1;
-  }
-
-  if (ox3 == 0) {
-    sindcs.bks = mb_indcs.ks;
-    sindcs.bke = mb_indcs.ke;
-  } else if (ox3 > 0) {
-    sindcs.bks = mb_indcs.ke + 1;
-    sindcs.bke = mb_indcs.ke + mb_indcs.ng;
-  } else {
-    sindcs.bks = mb_indcs.ks - mb_indcs.ng;
-    sindcs.bke = mb_indcs.ks - 1;
-  }
-  sindcs.ndat = (sindcs.bie - sindcs.bis + 1)*(sindcs.bje - sindcs.bjs + 1)*
-                (sindcs.bke - sindcs.bks + 1);
-  }
-
-  // set indices for receives from neighbors on COARSER level
+  // set indices for receives from neighbors on COARSER level (matches send to FINER)
   // Formulae taken from SetBoundaryFromCoarser() in src/bvals/cc/bvals_cc.cpp
-  {auto &cindcs = buf.cindcs;   // indices of course buffer ("c")
+  {auto &cindcs = buf.cindcs;   // indices of coarse buffer ("c")
   if (ox1 == 0) {
     cindcs.bis = mb_indcs.cis;
     cindcs.bie = mb_indcs.cie;
     if (f1 == 0) {
-      cindcs.bie += mb_indcs.ng;
+      cindcs.bie += ng;
     } else {
-      cindcs.bis -= mb_indcs.ng;
+      cindcs.bis -= ng;
     }
   } else if (ox1 > 0)  {
     cindcs.bis = mb_indcs.cie + 1;
-    cindcs.bie = mb_indcs.cie + mb_indcs.ng;
+    cindcs.bie = mb_indcs.cie + ng;
   } else {
-    cindcs.bis = mb_indcs.cis - mb_indcs.ng;
+    cindcs.bis = mb_indcs.cis - ng;
     cindcs.bie = mb_indcs.cis - 1;
   }
   if (ox2 == 0) {
@@ -193,23 +209,23 @@ void BValCC::InitRecvIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f
     if (mb_indcs.nx2 > 1) {
       if (ox1 != 0) {
         if (f1 == 0) {
-          cindcs.bje += mb_indcs.ng;
+          cindcs.bje += ng;
         } else {
-          cindcs.bjs -= mb_indcs.ng;
+          cindcs.bjs -= ng;
         }
       } else {
         if (f2 == 0) {
-          cindcs.bje += mb_indcs.ng;
+          cindcs.bje += ng;
         } else {
-          cindcs.bjs -= mb_indcs.ng;
+          cindcs.bjs -= ng;
         }
       }
     }
   } else if (ox2 > 0) {
     cindcs.bjs = mb_indcs.cje + 1;
-    cindcs.bje = mb_indcs.cje + mb_indcs.ng;
+    cindcs.bje = mb_indcs.cje + ng;
   } else {
-    cindcs.bjs = mb_indcs.cjs - mb_indcs.ng;
+    cindcs.bjs = mb_indcs.cjs - ng;
     cindcs.bje = mb_indcs.cjs - 1;
   }
   if (ox3 == 0) {
@@ -218,30 +234,30 @@ void BValCC::InitRecvIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f
     if (mb_indcs.nx3 > 1) {
       if (ox1 != 0 && ox2 != 0) {
         if (f1 == 0) {
-          cindcs.bke += mb_indcs.ng;
+          cindcs.bke += ng;
         } else {
-          cindcs.bks -= mb_indcs.ng;
+          cindcs.bks -= ng;
         }
       } else {
         if (f2 == 0) {
-          cindcs.bke += mb_indcs.ng;
+          cindcs.bke += ng;
         } else {
-          cindcs.bks -= mb_indcs.ng;
+          cindcs.bks -= ng;
         }
       }
     }
   } else if (ox3 > 0)  {
     cindcs.bks = mb_indcs.cke + 1;
-    cindcs.bke = mb_indcs.cke + mb_indcs.ng;
+    cindcs.bke = mb_indcs.cke + ng;
   } else {
-    cindcs.bks = mb_indcs.cks - mb_indcs.ng;
+    cindcs.bks = mb_indcs.cks - ng;
     cindcs.bke = mb_indcs.cks - 1;
   }
   cindcs.ndat = (cindcs.bie - cindcs.bis + 1)*(cindcs.bje - cindcs.bjs + 1)*
                 (cindcs.bke - cindcs.bks + 1);
   }
 
-  // set indices for receives from neighbors on FINER level
+  // set indices for receives from neighbors on FINER level (matches send to COARSER)
   // Formulae taken from SetBoundaryFromFiner() in src/bvals/cc/bvals_cc.cpp
   {auto &findcs = buf.findcs;   // indices of fine buffer ("f")
   if (ox1 == 0) {
@@ -254,9 +270,9 @@ void BValCC::InitRecvIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f
     }
   } else if (ox1 > 0) {
     findcs.bis = mb_indcs.ie + 1;
-    findcs.bie = mb_indcs.ie + mb_indcs.ng;
+    findcs.bie = mb_indcs.ie + ng;
   } else {
-    findcs.bis = mb_indcs.is - mb_indcs.ng;
+    findcs.bis = mb_indcs.is - ng;
     findcs.bie = mb_indcs.is - 1;
   }
   if (ox2 == 0) {
@@ -279,9 +295,9 @@ void BValCC::InitRecvIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f
     }
   } else if (ox2 > 0) {
     findcs.bjs = mb_indcs.je + 1;
-    findcs.bje = mb_indcs.je + mb_indcs.ng;
+    findcs.bje = mb_indcs.je + ng;
   } else {
-    findcs.bjs = mb_indcs.js - mb_indcs.ng;
+    findcs.bjs = mb_indcs.js - ng;
     findcs.bje = mb_indcs.js - 1;
   }
   if (ox3 == 0) {
@@ -304,9 +320,9 @@ void BValCC::InitRecvIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f
     }
   } else if (ox3 > 0) {
     findcs.bks = mb_indcs.ke + 1;
-    findcs.bke = mb_indcs.ke + mb_indcs.ng;
+    findcs.bke = mb_indcs.ke + ng;
   } else {
-    findcs.bks = mb_indcs.ks - mb_indcs.ng;
+    findcs.bks = mb_indcs.ks - ng;
     findcs.bke = mb_indcs.ks - 1;
   }
   findcs.ndat = (findcs.bie - findcs.bis + 1)*(findcs.bje - findcs.bjs + 1)*
@@ -316,7 +332,7 @@ void BValCC::InitRecvIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f
   // set indices for PROLONGATION in coarse cell buffers
   // Formulae taken from ProlongateBoundaries() in src/bvals/bvals_refine.cpp
   // Identical to receives from coarser level, except ng --> ng/2
-  {auto &pindcs = buf.pindcs;   // indices fpr prolongation ("p")
+  {auto &pindcs = buf.pindcs;   // indices for prolongation ("p")
   int cn = mb_indcs.ng/2;       // nghost must be multiple of 2 with SMR/AMR
   if (ox1 == 0) {
     pindcs.bis = mb_indcs.cis;

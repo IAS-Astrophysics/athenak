@@ -54,8 +54,8 @@ struct BValBufferCC
 #endif
   // function to allocate memory for buffer data
   void AllocateDataView(int nmb, int nvar) {
-    int ndat = sindcs.ndat;  // TODO: this may over-estimate memory needed for some buffs
-    Kokkos::realloc(data, nmb, nvar, ndat);
+    int nmax = std::max( std::max(sindcs.ndat,cindcs.ndat), findcs.ndat);
+    Kokkos::realloc(data, nmb, nvar, nmax);
   }
 };
 
@@ -79,9 +79,11 @@ struct BValBufferFC
 #endif
   // function to allocate memory for buffer data
   void AllocateDataView(int nmb) {
-    // TODO: this may over-estimate memory needed for some buffs
-    int ndat = std::max( std::max(sindcs[0].ndat, sindcs[1].ndat), sindcs[2].ndat );
-    Kokkos::realloc(data, nmb, 3, ndat);
+    int smax = std::max( std::max(sindcs[0].ndat, sindcs[1].ndat), sindcs[2].ndat );
+    int cmax = std::max( std::max(cindcs[0].ndat, cindcs[1].ndat), cindcs[2].ndat );
+    int fmax = std::max( std::max(findcs[0].ndat, findcs[1].ndat), findcs[2].ndat );
+    int nmax = std::max( std::max(smax,cmax), fmax);
+    Kokkos::realloc(data, nmb, 3, nmax);
   }
 };
 

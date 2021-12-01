@@ -35,69 +35,79 @@ void BValFC::InitSendIndices(BValBufferFC &buf, int ox1, int ox2, int ox3, int f
   // set indices for sends to neighbors on SAME level
   // Formulae taken from LoadBoundaryBufferSameLevel() in src/bvals/fc/bvals_fc.cpp
   // for uniform grid: face-neighbors take care of the overlapping faces
-  {auto &sindcs = buf.sindcs;
-  if (ox1 == 0) {
-    sindcs[0].bis = mb_indcs.is,           sindcs[0].bie = mb_indcs.ie + 1;
-    sindcs[1].bis = mb_indcs.is,           sindcs[1].bie = mb_indcs.ie;
-    sindcs[2].bis = mb_indcs.is,           sindcs[2].bie = mb_indcs.ie;
-  } else if (ox1 > 0) {
-    sindcs[0].bis = mb_indcs.ie - ng1,     sindcs[0].bie = mb_indcs.ie;
-    sindcs[1].bis = mb_indcs.ie - ng1,     sindcs[1].bie = mb_indcs.ie;
-    sindcs[2].bis = mb_indcs.ie - ng1,     sindcs[2].bie = mb_indcs.ie;
-  } else {
-    sindcs[0].bis = mb_indcs.is + 1,       sindcs[0].bie = mb_indcs.is + ng;
-    sindcs[1].bis = mb_indcs.is,           sindcs[1].bie = mb_indcs.is + ng1;
-    sindcs[2].bis = mb_indcs.is,           sindcs[2].bie = mb_indcs.is + ng1;
+  if ((f1 == 0) && (f2 == 0)) {  // this buffer used for same level (e.g. #0,4,8,12,...)
+    auto &sindcs = buf.sindcs;
+    if (ox1 == 0) {
+      sindcs[0].bis = mb_indcs.is,           sindcs[0].bie = mb_indcs.ie + 1;
+      sindcs[1].bis = mb_indcs.is,           sindcs[1].bie = mb_indcs.ie;
+      sindcs[2].bis = mb_indcs.is,           sindcs[2].bie = mb_indcs.ie;
+    } else if (ox1 > 0) {
+      sindcs[0].bis = mb_indcs.ie - ng1,     sindcs[0].bie = mb_indcs.ie;
+      sindcs[1].bis = mb_indcs.ie - ng1,     sindcs[1].bie = mb_indcs.ie;
+      sindcs[2].bis = mb_indcs.ie - ng1,     sindcs[2].bie = mb_indcs.ie;
+    } else {
+      sindcs[0].bis = mb_indcs.is + 1,       sindcs[0].bie = mb_indcs.is + ng;
+      sindcs[1].bis = mb_indcs.is,           sindcs[1].bie = mb_indcs.is + ng1;
+      sindcs[2].bis = mb_indcs.is,           sindcs[2].bie = mb_indcs.is + ng1;
+    }
+    if (ox2 == 0) {
+      sindcs[0].bjs = mb_indcs.js,           sindcs[0].bje = mb_indcs.je;
+      sindcs[1].bjs = mb_indcs.js,           sindcs[1].bje = mb_indcs.je + 1;
+      sindcs[2].bjs = mb_indcs.js,           sindcs[2].bje = mb_indcs.je;
+    } else if (ox2 > 0) {
+      sindcs[0].bjs = mb_indcs.je - ng1,     sindcs[0].bje = mb_indcs.je;
+      sindcs[1].bjs = mb_indcs.je - ng1,     sindcs[1].bje = mb_indcs.je;
+      sindcs[2].bjs = mb_indcs.je - ng1,     sindcs[2].bje = mb_indcs.je;
+    } else {
+      sindcs[0].bjs = mb_indcs.js,           sindcs[0].bje = mb_indcs.js + ng1;
+      sindcs[1].bjs = mb_indcs.js + 1,       sindcs[1].bje = mb_indcs.js + ng;
+      sindcs[2].bjs = mb_indcs.js,           sindcs[2].bje = mb_indcs.js + ng1;
+    }
+    if (ox3 == 0) {
+      sindcs[0].bks = mb_indcs.ks,           sindcs[0].bke = mb_indcs.ke;
+      sindcs[1].bks = mb_indcs.ks,           sindcs[1].bke = mb_indcs.ke;
+      sindcs[2].bks = mb_indcs.ks,           sindcs[2].bke = mb_indcs.ke + 1;
+    } else if (ox3 > 0) {
+      sindcs[0].bks = mb_indcs.ke - ng1,     sindcs[0].bke = mb_indcs.ke;
+      sindcs[1].bks = mb_indcs.ke - ng1,     sindcs[1].bke = mb_indcs.ke;
+      sindcs[2].bks = mb_indcs.ke - ng1,     sindcs[2].bke = mb_indcs.ke;
+    } else {
+      sindcs[0].bks = mb_indcs.ks,           sindcs[0].bke = mb_indcs.ks + ng1;
+      sindcs[1].bks = mb_indcs.ks,           sindcs[1].bke = mb_indcs.ks + ng1;
+      sindcs[2].bks = mb_indcs.ks + 1,       sindcs[2].bke = mb_indcs.ks + ng;
+    }
+    // for SMR/AMR, always include the overlapping faces in edge and corner boundaries
+    // x1f component on x1-faces
+    if (pmy_pack->pmesh->multilevel && (ox2 != 0 || ox3 != 0)) {
+      if (ox1 > 0) {sindcs[0].bie++;}
+      if (ox1 < 0) {sindcs[0].bis--;}
+    }
+    // x2f component on x2-faces
+    if (pmy_pack->pmesh->multilevel && (ox1 != 0 || ox3 != 0)) {
+      if (ox2 > 0) {sindcs[1].bje++;}
+      if (ox2 < 0) {sindcs[1].bjs--;}
+    }
+    // x3f component on x3-faces
+    if (pmy_pack->pmesh->multilevel && (ox1 != 0 || ox2 != 0)) {
+      if (ox3 > 0) {sindcs[2].bke++;}
+      if (ox3 < 0) {sindcs[2].bks--;}
+    }
+    for (int i=0; i<=2; ++i) {
+      sindcs[i].ndat = (sindcs[i].bie - sindcs[i].bis + 1)*
+                       (sindcs[i].bje - sindcs[i].bjs + 1)*
+                       (sindcs[i].bke - sindcs[i].bks + 1);
+    }
+  } else {  // this buffer only used with AMR (e.g. #1,2,3,5,6,7,...)
+    auto &sindcs = buf.sindcs;
+    for (int i=0; i<=2; ++i) {
+      sindcs[i].bis = 0; sindcs[i].bie = 0;
+      sindcs[i].bjs = 0; sindcs[i].bje = 0;
+      sindcs[i].bks = 0; sindcs[i].bke = 0;
+      sindcs[i].ndat = 1;
+    }
   }
-  if (ox2 == 0) {
-    sindcs[0].bjs = mb_indcs.js,           sindcs[0].bje = mb_indcs.je;
-    sindcs[1].bjs = mb_indcs.js,           sindcs[1].bje = mb_indcs.je + 1;
-    sindcs[2].bjs = mb_indcs.js,           sindcs[2].bje = mb_indcs.je;
-  } else if (ox2 > 0) {
-    sindcs[0].bjs = mb_indcs.je - ng1,     sindcs[0].bje = mb_indcs.je;
-    sindcs[1].bjs = mb_indcs.je - ng1,     sindcs[1].bje = mb_indcs.je;
-    sindcs[2].bjs = mb_indcs.je - ng1,     sindcs[2].bje = mb_indcs.je;
-  } else {
-    sindcs[0].bjs = mb_indcs.js,           sindcs[0].bje = mb_indcs.js + ng1;
-    sindcs[1].bjs = mb_indcs.js + 1,       sindcs[1].bje = mb_indcs.js + ng;
-    sindcs[2].bjs = mb_indcs.js,           sindcs[2].bje = mb_indcs.js + ng1;
-  }
-  if (ox3 == 0) {
-    sindcs[0].bks = mb_indcs.ks,           sindcs[0].bke = mb_indcs.ke;
-    sindcs[1].bks = mb_indcs.ks,           sindcs[1].bke = mb_indcs.ke;
-    sindcs[2].bks = mb_indcs.ks,           sindcs[2].bke = mb_indcs.ke + 1;
-  } else if (ox3 > 0) {
-    sindcs[0].bks = mb_indcs.ke - ng1,     sindcs[0].bke = mb_indcs.ke;
-    sindcs[1].bks = mb_indcs.ke - ng1,     sindcs[1].bke = mb_indcs.ke;
-    sindcs[2].bks = mb_indcs.ke - ng1,     sindcs[2].bke = mb_indcs.ke;
-  } else {
-    sindcs[0].bks = mb_indcs.ks,           sindcs[0].bke = mb_indcs.ks + ng1;
-    sindcs[1].bks = mb_indcs.ks,           sindcs[1].bke = mb_indcs.ks + ng1;
-    sindcs[2].bks = mb_indcs.ks + 1,       sindcs[2].bke = mb_indcs.ks + ng;
-  }
-  // for SMR/AMR, always include the overlapping faces in edge and corner boundaries
-  // x1f component on x1-faces
-  if (pmy_pack->pmesh->multilevel && (ox2 != 0 || ox3 != 0)) {
-    if (ox1 > 0) {sindcs[0].bie++;}
-    if (ox1 < 0) {sindcs[0].bis--;}
-  }
-  // x2f component on x2-faces
-  if (pmy_pack->pmesh->multilevel && (ox1 != 0 || ox3 != 0)) {
-    if (ox2 > 0) {sindcs[1].bje++;}
-    if (ox2 < 0) {sindcs[1].bjs--;}
-  }
-  // x3f component on x3-faces
-  if (pmy_pack->pmesh->multilevel && (ox1 != 0 || ox2 != 0)) {
-    if (ox3 > 0) {sindcs[2].bke++;}
-    if (ox3 < 0) {sindcs[2].bks--;}
-  }
-  for (int i=0; i<=2; ++i) {
-    sindcs[i].ndat = (sindcs[i].bie - sindcs[i].bis + 1)*
-                     (sindcs[i].bje - sindcs[i].bjs + 1)*
-                     (sindcs[i].bke - sindcs[i].bks + 1);
-  }}
 
-  // set indices for sends to neighbors on COARSER level
+  // set indices for sends to neighbors on COARSER level (matches recv from FINER)
   // Formulae taken from LoadBoundaryBufferToCoarser() in src/bvals/fc/bvals_fc.cpp
   // Identical to send indices for same level replacing is,ie,.. with cis,cie,...
   {auto &cindcs = buf.cindcs;
@@ -159,7 +169,7 @@ void BValFC::InitSendIndices(BValBufferFC &buf, int ox1, int ox2, int ox3, int f
                      (cindcs[i].bke - cindcs[i].bks + 1);
   }}
 
-  // set indices for sends to neighbors on FINER level
+  // set indices for sends to neighbors on FINER level (matches recv from COARSER)
   // Formulae taken from LoadBoundaryBufferToFiner() src/bvals/fc/bvals_fc.cpp
   {auto &findcs = buf.findcs;
   int cnx1mng = mb_indcs.cnx1 - ng;
@@ -295,66 +305,79 @@ void BValFC::InitRecvIndices(BValBufferFC &buf, int ox1, int ox2, int ox3, int f
 
   // set indices for receives from neighbors on SAME level
   // Formulae taken from SetBoundarySameLevel() in src/bvals/fc/bvals_fc.cpp
-  {auto &sindcs = buf.sindcs;   // indices of buffer at same level ("s")
-  if (ox1 == 0) {
-    sindcs[0].bis = mb_indcs.is,         sindcs[0].bie = mb_indcs.ie + 1;
-    sindcs[1].bis = mb_indcs.is,         sindcs[1].bie = mb_indcs.ie;
-    sindcs[2].bis = mb_indcs.is,         sindcs[2].bie = mb_indcs.ie;
-  } else if (ox1 > 0) {
-    sindcs[0].bis = mb_indcs.ie + 2,     sindcs[0].bie = mb_indcs.ie + ng + 1;
-    sindcs[1].bis = mb_indcs.ie + 1,     sindcs[1].bie = mb_indcs.ie + ng;
-    sindcs[2].bis = mb_indcs.ie + 1,     sindcs[2].bie = mb_indcs.ie + ng;
-  } else {
-    sindcs[0].bis = mb_indcs.is - ng,    sindcs[0].bie = mb_indcs.is - 1;
-    sindcs[1].bis = mb_indcs.is - ng,    sindcs[1].bie = mb_indcs.is - 1;
-    sindcs[2].bis = mb_indcs.is - ng,    sindcs[2].bie = mb_indcs.is - 1;
+  if ((f1 == 0) && (f2 == 0)) {  // this buffer used for same level (e.g. #0,4,8,12,...)
+    auto &sindcs = buf.sindcs;   // indices of buffer at same level ("s")
+    if (ox1 == 0) {
+      sindcs[0].bis = mb_indcs.is,         sindcs[0].bie = mb_indcs.ie + 1;
+      sindcs[1].bis = mb_indcs.is,         sindcs[1].bie = mb_indcs.ie;
+      sindcs[2].bis = mb_indcs.is,         sindcs[2].bie = mb_indcs.ie;
+    } else if (ox1 > 0) {
+      sindcs[0].bis = mb_indcs.ie + 2,     sindcs[0].bie = mb_indcs.ie + ng + 1;
+      sindcs[1].bis = mb_indcs.ie + 1,     sindcs[1].bie = mb_indcs.ie + ng;
+      sindcs[2].bis = mb_indcs.ie + 1,     sindcs[2].bie = mb_indcs.ie + ng;
+    } else {
+      sindcs[0].bis = mb_indcs.is - ng,    sindcs[0].bie = mb_indcs.is - 1;
+      sindcs[1].bis = mb_indcs.is - ng,    sindcs[1].bie = mb_indcs.is - 1;
+      sindcs[2].bis = mb_indcs.is - ng,    sindcs[2].bie = mb_indcs.is - 1;
+    }
+    if (ox2 == 0) {
+      sindcs[0].bjs = mb_indcs.js,          sindcs[0].bje = mb_indcs.je;
+      sindcs[1].bjs = mb_indcs.js,          sindcs[1].bje = mb_indcs.je + 1;
+      sindcs[2].bjs = mb_indcs.js,          sindcs[2].bje = mb_indcs.je;
+    } else if (ox2 > 0) {
+      sindcs[0].bjs = mb_indcs.je + 1,      sindcs[0].bje = mb_indcs.je + ng;
+      sindcs[1].bjs = mb_indcs.je + 2,      sindcs[1].bje = mb_indcs.je + ng + 1;
+      sindcs[2].bjs = mb_indcs.je + 1,      sindcs[2].bje = mb_indcs.je + ng;
+    } else {
+      sindcs[0].bjs = mb_indcs.js - ng,     sindcs[0].bje = mb_indcs.js - 1;
+      sindcs[1].bjs = mb_indcs.js - ng,     sindcs[1].bje = mb_indcs.js - 1;
+      sindcs[2].bjs = mb_indcs.js - ng,     sindcs[2].bje = mb_indcs.js - 1;
+    }
+    if (ox3 == 0) {
+      sindcs[0].bks = mb_indcs.ks,          sindcs[0].bke = mb_indcs.ke;
+      sindcs[1].bks = mb_indcs.ks,          sindcs[1].bke = mb_indcs.ke;
+      sindcs[2].bks = mb_indcs.ks,          sindcs[2].bke = mb_indcs.ke + 1;
+    } else if (ox3 > 0) {
+      sindcs[0].bks = mb_indcs.ke + 1,      sindcs[0].bke = mb_indcs.ke + ng;
+      sindcs[1].bks = mb_indcs.ke + 1,      sindcs[1].bke = mb_indcs.ke + ng;
+      sindcs[2].bks = mb_indcs.ke + 2,      sindcs[2].bke = mb_indcs.ke + ng + 1;
+    } else {
+      sindcs[0].bks = mb_indcs.ks - ng,     sindcs[0].bke = mb_indcs.ks - 1;
+      sindcs[1].bks = mb_indcs.ks - ng,     sindcs[1].bke = mb_indcs.ks - 1;
+      sindcs[2].bks = mb_indcs.ks - ng,     sindcs[2].bke = mb_indcs.ks - 1;
+    }
+    // for SMR/AMR, always include the overlapping faces in edge and corner boundaries
+    // x1f component on x1-faces
+    if (pmy_pack->pmesh->multilevel && (ox2 != 0 || ox3 != 0)) {
+      if (ox1 > 0) {sindcs[0].bis--;}
+      if (ox1 < 0) {sindcs[0].bie++;}
+    }
+    // x2f component on x2-faces
+    if (pmy_pack->pmesh->multilevel && (ox1 != 0 || ox3 != 0)) {
+      if (ox2 > 0) {sindcs[1].bjs--;}
+      if (ox2 < 0) {sindcs[1].bje++;}
+    }
+    // x3f component on x3-faces
+    if (pmy_pack->pmesh->multilevel && (ox1 != 0 || ox2 != 0)) {
+      if (ox3 > 0) {sindcs[2].bks--;}
+      if (ox3 < 0) {sindcs[2].bke++;}
+    }
+    for (int i=0; i<=2; ++i) {
+      sindcs[i].ndat = (sindcs[i].bie - sindcs[i].bis + 1)*
+                       (sindcs[i].bje - sindcs[i].bjs + 1)*
+                       (sindcs[i].bke - sindcs[i].bks + 1);
+    }
+  } else {  // this buffer only used with AMR (e.g. #1,2,3,5,6,7,...)
+    auto &sindcs = buf.sindcs;
+    for (int i=0; i<=2; ++i) {
+      sindcs[i].bis = 0; sindcs[i].bie = 0;
+      sindcs[i].bjs = 0; sindcs[i].bje = 0;
+      sindcs[i].bks = 0; sindcs[i].bke = 0;
+      sindcs[i].ndat = 1;
+    }
   }
-  if (ox2 == 0) {
-    sindcs[0].bjs = mb_indcs.js,          sindcs[0].bje = mb_indcs.je;
-    sindcs[1].bjs = mb_indcs.js,          sindcs[1].bje = mb_indcs.je + 1;
-    sindcs[2].bjs = mb_indcs.js,          sindcs[2].bje = mb_indcs.je;
-  } else if (ox2 > 0) {
-    sindcs[0].bjs = mb_indcs.je + 1,      sindcs[0].bje = mb_indcs.je + ng;
-    sindcs[1].bjs = mb_indcs.je + 2,      sindcs[1].bje = mb_indcs.je + ng + 1;
-    sindcs[2].bjs = mb_indcs.je + 1,      sindcs[2].bje = mb_indcs.je + ng;
-  } else {
-    sindcs[0].bjs = mb_indcs.js - ng,     sindcs[0].bje = mb_indcs.js - 1;
-    sindcs[1].bjs = mb_indcs.js - ng,     sindcs[1].bje = mb_indcs.js - 1;
-    sindcs[2].bjs = mb_indcs.js - ng,     sindcs[2].bje = mb_indcs.js - 1;
-  }
-  if (ox3 == 0) {
-    sindcs[0].bks = mb_indcs.ks,          sindcs[0].bke = mb_indcs.ke;
-    sindcs[1].bks = mb_indcs.ks,          sindcs[1].bke = mb_indcs.ke;
-    sindcs[2].bks = mb_indcs.ks,          sindcs[2].bke = mb_indcs.ke + 1;
-  } else if (ox3 > 0) {
-    sindcs[0].bks = mb_indcs.ke + 1,      sindcs[0].bke = mb_indcs.ke + ng;
-    sindcs[1].bks = mb_indcs.ke + 1,      sindcs[1].bke = mb_indcs.ke + ng;
-    sindcs[2].bks = mb_indcs.ke + 2,      sindcs[2].bke = mb_indcs.ke + ng + 1;
-  } else {
-    sindcs[0].bks = mb_indcs.ks - ng,     sindcs[0].bke = mb_indcs.ks - 1;
-    sindcs[1].bks = mb_indcs.ks - ng,     sindcs[1].bke = mb_indcs.ks - 1;
-    sindcs[2].bks = mb_indcs.ks - ng,     sindcs[2].bke = mb_indcs.ks - 1;
-  }
-  // for SMR/AMR, always include the overlapping faces in edge and corner boundaries
-  if (pmy_pack->pmesh->multilevel && (ox2 != 0 || ox3 != 0)) {
-    if (ox1 > 0) {sindcs[0].bis--;}
-    if (ox1 < 0) {sindcs[0].bie++;}
-  }
-  if (pmy_pack->pmesh->multilevel && (ox1 != 0 || ox3 != 0)) {
-    if (ox2 > 0) {sindcs[1].bjs--;}
-    if (ox2 < 0) {sindcs[1].bje++;}
-  }
-  if (pmy_pack->pmesh->multilevel && (ox1 != 0 || ox2 != 0)) {
-    if (ox3 > 0) {sindcs[2].bks--;}
-    if (ox3 < 0) {sindcs[2].bke++;}
-  }
-  for (int i=0; i<=2; ++i) {
-    sindcs[i].ndat = (sindcs[i].bie - sindcs[i].bis + 1)*
-                     (sindcs[i].bje - sindcs[i].bjs + 1)*
-                     (sindcs[i].bke - sindcs[i].bks + 1);
-  }}
 
-  // set indices for receives from neighbors on COARSER level
+  // set indices for receives from neighbors on COARSER level (matches send to FINER)
   // Formulae taken from SetBoundaryFromCoarser() in src/bvals/fc/bvals_fc.cpp
   {auto &cindcs = buf.cindcs;   // indices of course buffer ("c")
   if (ox1 == 0) {
@@ -362,13 +385,13 @@ void BValFC::InitRecvIndices(BValBufferFC &buf, int ox1, int ox2, int ox3, int f
     cindcs[1].bis = mb_indcs.cis,         cindcs[1].bie = mb_indcs.cie;
     cindcs[2].bis = mb_indcs.cis,         cindcs[2].bie = mb_indcs.cie;
     if (f1 == 0) {
-      cindcs[0].bie += mb_indcs.ng;
-      cindcs[1].bie += mb_indcs.ng;
-      cindcs[2].bie += mb_indcs.ng;
+      cindcs[0].bie += ng;
+      cindcs[1].bie += ng;
+      cindcs[2].bie += ng;
     } else {
-      cindcs[0].bis -= mb_indcs.ng;
-      cindcs[1].bis -= mb_indcs.ng;
-      cindcs[2].bis -= mb_indcs.ng;
+      cindcs[0].bis -= ng;
+      cindcs[1].bis -= ng;
+      cindcs[2].bis -= ng;
     }
   } else if (ox1 > 0) {
     cindcs[0].bis = mb_indcs.cie + 2,     cindcs[0].bie = mb_indcs.cie + ng + 1;
@@ -386,23 +409,23 @@ void BValFC::InitRecvIndices(BValBufferFC &buf, int ox1, int ox2, int ox3, int f
     if (mb_indcs.nx2 > 1) {
       if (ox1 != 0) {
         if (f1 == 0) {
-          cindcs[0].bje += mb_indcs.ng;
-          cindcs[1].bje += mb_indcs.ng;
-          cindcs[2].bje += mb_indcs.ng;
+          cindcs[0].bje += ng;
+          cindcs[1].bje += ng;
+          cindcs[2].bje += ng;
         } else {
-          cindcs[0].bjs -= mb_indcs.ng;
-          cindcs[1].bjs -= mb_indcs.ng;
-          cindcs[2].bjs -= mb_indcs.ng;
+          cindcs[0].bjs -= ng;
+          cindcs[1].bjs -= ng;
+          cindcs[2].bjs -= ng;
         }
       } else {
         if (f2 == 0) {
-          cindcs[0].bje += mb_indcs.ng;
-          cindcs[1].bje += mb_indcs.ng;
-          cindcs[2].bje += mb_indcs.ng;
+          cindcs[0].bje += ng;
+          cindcs[1].bje += ng;
+          cindcs[2].bje += ng;
         } else {
-          cindcs[0].bjs -= mb_indcs.ng;
-          cindcs[1].bjs -= mb_indcs.ng;
-          cindcs[2].bjs -= mb_indcs.ng;
+          cindcs[0].bjs -= ng;
+          cindcs[1].bjs -= ng;
+          cindcs[2].bjs -= ng;
         }
       }
     }
@@ -422,23 +445,23 @@ void BValFC::InitRecvIndices(BValBufferFC &buf, int ox1, int ox2, int ox3, int f
     if (mb_indcs.nx3 > 1) {
       if (ox1 != 0 && ox2 != 0) {
         if (f1 == 0) {
-          cindcs[0].bke += mb_indcs.ng;
-          cindcs[1].bke += mb_indcs.ng;
-          cindcs[2].bke += mb_indcs.ng;
+          cindcs[0].bke += ng;
+          cindcs[1].bke += ng;
+          cindcs[2].bke += ng;
         } else {
-          cindcs[0].bks -= mb_indcs.ng;
-          cindcs[1].bks -= mb_indcs.ng;
-          cindcs[2].bks -= mb_indcs.ng;
+          cindcs[0].bks -= ng;
+          cindcs[1].bks -= ng;
+          cindcs[2].bks -= ng;
         }
       } else {
         if (f2 == 0) {
-          cindcs[0].bke += mb_indcs.ng;
-          cindcs[1].bke += mb_indcs.ng;
-          cindcs[2].bke += mb_indcs.ng;
+          cindcs[0].bke += ng;
+          cindcs[1].bke += ng;
+          cindcs[2].bke += ng;
         } else {
-          cindcs[0].bks -= mb_indcs.ng;
-          cindcs[1].bks -= mb_indcs.ng;
-          cindcs[2].bks -= mb_indcs.ng;
+          cindcs[0].bks -= ng;
+          cindcs[1].bks -= ng;
+          cindcs[2].bks -= ng;
         }
       }
     }
@@ -457,7 +480,7 @@ void BValFC::InitRecvIndices(BValBufferFC &buf, int ox1, int ox2, int ox3, int f
                      (cindcs[i].bke - cindcs[i].bks + 1);
   }}
 
-  // set indices for receives from neighbors on FINER level
+  // set indices for receives from neighbors on FINER level (matches send to COARSER)
   // Formulae taken from SetBoundaryFromFiner() in src/bvals/cc/bvals_cc.cpp
   {auto &findcs = buf.findcs;   // indices of fine buffer ("f")
   if (ox1 == 0) {
@@ -484,7 +507,7 @@ void BValFC::InitRecvIndices(BValBufferFC &buf, int ox1, int ox2, int ox3, int f
   }
   if (ox2 == 0) {
     findcs[0].bjs = mb_indcs.js;             findcs[0].bje = mb_indcs.je;
-    findcs[1].bjs = mb_indcs.js;             findcs[1].bje = mb_indcs.je;
+    findcs[1].bjs = mb_indcs.js;             findcs[1].bje = mb_indcs.je + 1;
     findcs[2].bjs = mb_indcs.js;             findcs[2].bje = mb_indcs.je;
     if (mb_indcs.nx2 > 1) {
       if (ox1 != 0) {
@@ -511,7 +534,7 @@ void BValFC::InitRecvIndices(BValBufferFC &buf, int ox1, int ox2, int ox3, int f
     }
   } else if (ox2 > 0) {
     findcs[0].bjs = mb_indcs.je + 1;          findcs[0].bje = mb_indcs.je + ng;
-    findcs[1].bjs = mb_indcs.je + 1;          findcs[1].bje = mb_indcs.je + ng;
+    findcs[1].bjs = mb_indcs.je + 2;          findcs[1].bje = mb_indcs.je + ng + 1;
     findcs[2].bjs = mb_indcs.je + 1;          findcs[2].bje = mb_indcs.je + ng;
   } else {
     findcs[0].bjs = mb_indcs.js - ng;         findcs[0].bje = mb_indcs.js - 1;
@@ -521,7 +544,7 @@ void BValFC::InitRecvIndices(BValBufferFC &buf, int ox1, int ox2, int ox3, int f
   if (ox3 == 0) {
     findcs[0].bks = mb_indcs.ks;              findcs[0].bke = mb_indcs.ke;
     findcs[1].bks = mb_indcs.ks;              findcs[1].bke = mb_indcs.ke;
-    findcs[2].bks = mb_indcs.ks;              findcs[2].bke = mb_indcs.ke;
+    findcs[2].bks = mb_indcs.ks;              findcs[2].bke = mb_indcs.ke + 1;
     if (mb_indcs.nx3 > 1) {
       if (ox1 != 0 && ox2 != 0) {
         if (f1 == 1) {
@@ -548,7 +571,7 @@ void BValFC::InitRecvIndices(BValBufferFC &buf, int ox1, int ox2, int ox3, int f
   } else if (ox3 > 0) {
     findcs[0].bks = mb_indcs.ke + 1;         findcs[0].bke = mb_indcs.ke + ng;
     findcs[1].bks = mb_indcs.ke + 1;         findcs[1].bke = mb_indcs.ke + ng;
-    findcs[2].bks = mb_indcs.ke + 1;         findcs[2].bke = mb_indcs.ke + ng;
+    findcs[2].bks = mb_indcs.ke + 2;         findcs[2].bke = mb_indcs.ke + ng + 1;
   } else {
     findcs[0].bks = mb_indcs.ks - ng;        findcs[0].bke = mb_indcs.ks - 1;
     findcs[1].bks = mb_indcs.ks - ng;        findcs[1].bke = mb_indcs.ks - 1;
