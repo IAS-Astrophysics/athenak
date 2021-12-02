@@ -398,7 +398,7 @@ void BValFC::InitRecvIndices(BValBufferFC &buf, int ox1, int ox2, int ox3, int f
     cindcs[1].bis = mb_indcs.cie + 1,     cindcs[1].bie = mb_indcs.cie + ng;
     cindcs[2].bis = mb_indcs.cie + 1,     cindcs[2].bie = mb_indcs.cie + ng;
   } else {
-    cindcs[0].bis = mb_indcs.cis - ng,    cindcs[0].bie = mb_indcs.cis - 1;
+    cindcs[0].bis = mb_indcs.cis - ng,    cindcs[0].bie = mb_indcs.cis;
     cindcs[1].bis = mb_indcs.cis - ng,    cindcs[1].bie = mb_indcs.cis - 1;
     cindcs[2].bis = mb_indcs.cis - ng,    cindcs[2].bie = mb_indcs.cis - 1;
   }
@@ -435,7 +435,7 @@ void BValFC::InitRecvIndices(BValBufferFC &buf, int ox1, int ox2, int ox3, int f
     cindcs[2].bjs = mb_indcs.cje + 1,      cindcs[2].bje = mb_indcs.cje + ng;
   } else {
     cindcs[0].bjs = mb_indcs.cjs - ng,     cindcs[0].bje = mb_indcs.cjs - 1;
-    cindcs[1].bjs = mb_indcs.cjs - ng,     cindcs[1].bje = mb_indcs.cjs - 1;
+    cindcs[1].bjs = mb_indcs.cjs - ng,     cindcs[1].bje = mb_indcs.cjs;
     cindcs[2].bjs = mb_indcs.cjs - ng,     cindcs[2].bje = mb_indcs.cjs - 1;
   }
   if (ox3 == 0) {
@@ -472,7 +472,7 @@ void BValFC::InitRecvIndices(BValBufferFC &buf, int ox1, int ox2, int ox3, int f
   } else {
     cindcs[0].bks = mb_indcs.cks - ng,     cindcs[0].bke = mb_indcs.cks - 1;
     cindcs[1].bks = mb_indcs.cks - ng,     cindcs[1].bke = mb_indcs.cks - 1;
-    cindcs[2].bks = mb_indcs.cks - ng,     cindcs[2].bke = mb_indcs.cks - 1;
+    cindcs[2].bks = mb_indcs.cks - ng,     cindcs[2].bke = mb_indcs.cks;
   }
   for (int i=0; i<=2; ++i) {
     cindcs[i].ndat = (cindcs[i].bie - cindcs[i].bis + 1)*
