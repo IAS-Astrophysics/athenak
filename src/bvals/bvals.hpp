@@ -132,7 +132,7 @@ public:
   void InitSendIndices(BValBufferFC &buf, int o1, int o2, int o3, int f1, int f2);
   void InitRecvIndices(BValBufferFC &buf, int o1, int o2, int o3, int f1, int f2);
   void AllocateBuffersFC();
-  TaskStatus PackAndSendFC(DvceFaceFld4D<Real> &b, int key);
+  TaskStatus PackAndSendFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &c, int key);
   TaskStatus RecvAndUnpackFC(DvceFaceFld4D<Real> &b);
 
 private:

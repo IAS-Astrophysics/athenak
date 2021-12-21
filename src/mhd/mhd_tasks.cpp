@@ -219,7 +219,7 @@ TaskStatus MHD::RecvU(Driver *pdrive, int stage)
 
 TaskStatus MHD::SendB(Driver *pdrive, int stage)
 {
-  TaskStatus tstat = pbval_b->PackAndSendFC(b0, VariablesID::BField_ID);
+  TaskStatus tstat = pbval_b->PackAndSendFC(b0, coarse_b0, VariablesID::BField_ID);
   return tstat;
 }
 
@@ -239,7 +239,7 @@ TaskStatus MHD::RecvB(Driver *pdrive, int stage)
 
 TaskStatus MHD::RestrictU(Driver *pdrive, int stage)
 {
-  // Only execute this function with SMR/SMR
+  // Skip if this calculation does not use SMR/AMR
   if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
 
   pmy_pack->pmesh->RestrictCC(u0, coarse_u0);
@@ -252,7 +252,7 @@ TaskStatus MHD::RestrictU(Driver *pdrive, int stage)
 
 TaskStatus MHD::RestrictB(Driver *pdrive, int stage)
 {
-  // Only execute this function with SMR/SMR
+  // Skip if this calculation does not use SMR/AMR
   if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
 
   pmy_pack->pmesh->RestrictFC(b0, coarse_b0);

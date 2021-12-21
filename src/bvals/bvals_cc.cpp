@@ -4,8 +4,8 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file bvals_cc.cpp
-//! \brief functions to pack/send and recv/unbpack boundary values for cell-centered
-//!  variables. This functionality is mplemented in BValCC class.
+//! \brief functions to pack/send and recv/unpack/prolongate boundary values for
+//! cell-centered variables, implemented as part of the BValCC class.
 
 #include <cstdlib>
 #include <iostream>
@@ -136,7 +136,6 @@ TaskStatus BValCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, in
               sbuf[n].data(m, v, i-il + ni*(j-jl + nj*(k-kl))) = a(m,v,k,j,i);
             });
           // if neighbor is at coarser level, load data from coarse_u0
-          // Note in this case, sbuf[n].indcs values refer to coarse_u0
           } else {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
             [&](const int i)
@@ -147,7 +146,6 @@ TaskStatus BValCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, in
         }
       });
     } // end if-neighbor-exists block
-
   }); // end par_for_outer
   }
 
@@ -166,7 +164,7 @@ TaskStatus BValCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, in
       if (nghbr.h_view(m,n).gid >= 0) {  // neighbor exists and not a physical boundary
         // compute indices of destination MeshBlock and Neighbor 
         int nn = nghbr.h_view(m,n).dest;
-        // if MeshBlocks are same rank, data already copied into receive buffer above
+        // if MeshBlocks are on same rank, data already copied into receive buffer above
         // So simply set communication status tag as received.
         if (nghbr.h_view(m,n).rank == my_rank) {
           int mm = nghbr.h_view(m,n).gid - pmy_pack->gids;

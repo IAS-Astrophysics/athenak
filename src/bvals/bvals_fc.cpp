@@ -4,8 +4,8 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file bvals_fc.cpp
-//  \brief functions to pass boundary values for face-centered variables as implmented in
-//  BValFC class
+//! \brief functions to pack/send and recv/unpack/prolongate boundary values for
+//! face-centered variables, implemented as part of the BValFC class.
 
 #include <cstdlib>
 #include <iostream>
@@ -28,17 +28,17 @@ BValFC::BValFC(MeshBlockPack *pp, ParameterInput *pin) : pmy_pack(pp)
 //! \!fn void BValFC::PackAndSendFC()
 //! \brief Pack face-centered variables into boundary buffers and send to neighbors.
 //!
-//! As for cell-centered data, this routine packs ALL the buffers for all three components
-//! of face-fields on ALL the MeshBlock faces, edges, and corners simultaneously for ALL
-//! the MeshBlocks.
+//! As for cell-centered data, this routine packs ALL the buffers on ALL the faces, edges,
+//! and corners simultaneously for all three components of face-fields on ALL the
+//! MeshBlocks.
 //!
 //! Input array must be DvceFaceFld4D dimensioned (nmb, nx3, nx2, nx1)
+//! DvceFaceFld4D of coarsened (restricted) fields also required with SMR/AMR
 
-TaskStatus BValFC::PackAndSendFC(DvceFaceFld4D<Real> &b, int key)
+TaskStatus BValFC::PackAndSendFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb, int key)
 {
   // create local references for variables in kernel
   int nmb = pmy_pack->pmb->nmb;
-  // TODO: following only works when all MBs have the same number of neighbors
   int nnghbr = pmy_pack->pmb->nnghbr;
 
   {int &my_rank = global_variable::my_rank;
@@ -62,6 +62,7 @@ TaskStatus BValFC::PackAndSendFC(DvceFaceFld4D<Real> &b, int key)
     if (nghbr.d_view(m,n).gid >= 0) {
 
       // if neighbor is at coarser level, use cindices to pack buffer
+      // Note indices can be different for each component of face-centered field.
       int il, iu, jl, ju, kl, ku;
       if (nghbr.d_view(m,n).lev < mblev.d_view(m)) {
         il = sbuf[n].cindcs[v].bis;
@@ -106,46 +107,95 @@ TaskStatus BValFC::PackAndSendFC(DvceFaceFld4D<Real> &b, int key)
           // indices of recv'ing MB and buffer: assumes MB IDs are stored sequentially
           int mm = nghbr.d_view(m,n).gid - mbgid.d_view(0);
           int nn = nghbr.d_view(m,n).dest;
-          if (v==0) {
-            Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-            [&](const int i)
-            {
-              rbuf[nn].data(mm, v, (i-il) + ni*(j-jl + nj*(k-kl))) = b.x1f(m,k,j,i);
-            });
-          } else if (v==1) {
-            Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-            [&](const int i)
-            {
-              rbuf[nn].data(mm, v, (i-il) + ni*(j-jl + nj*(k-kl))) = b.x2f(m,k,j,i);
-            });
+          // if neighbor is at same or finer level, load data from b0
+          if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
+            if (v==0) {
+              Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
+              [&](const int i)
+              {
+                rbuf[nn].data(mm, v, i-il + ni*(j-jl + nj*(k-kl))) = b.x1f(m,k,j,i);
+              });
+            } else if (v==1) {
+              Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
+              [&](const int i)
+              {
+                rbuf[nn].data(mm, v, i-il + ni*(j-jl + nj*(k-kl))) = b.x2f(m,k,j,i);
+              });
+            } else {
+              Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
+              [&](const int i)
+              {
+                rbuf[nn].data(mm, v, i-il + ni*(j-jl + nj*(k-kl))) = b.x3f(m,k,j,i);
+              });
+            }
+          // if neighbor is at coarser level, load data from coarse_b0
           } else {
-            Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-            [&](const int i)
-            {
-              rbuf[nn].data(mm, v, (i-il) + ni*(j-jl + nj*(k-kl))) = b.x3f(m,k,j,i);
-            });
+            if (v==0) {
+              Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
+              [&](const int i)
+              {
+                rbuf[nn].data(mm, v, i-il + ni*(j-jl + nj*(k-kl))) = cb.x1f(m,k,j,i);
+              });
+            } else if (v==1) {
+              Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
+              [&](const int i)
+              {
+                rbuf[nn].data(mm, v, i-il + ni*(j-jl + nj*(k-kl))) = cb.x2f(m,k,j,i);
+              });
+            } else {
+              Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
+              [&](const int i)
+              {
+                rbuf[nn].data(mm, v, i-il + ni*(j-jl + nj*(k-kl))) = cb.x3f(m,k,j,i);
+              });
+            }
           }
 
         // else copy field components into send buffer for MPI communication below
+
         } else {
-          if (v==0) {
-            Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-            [&](const int i)
-            {
-              sbuf[n].data(m, v, (i-il) + ni*(j-jl + nj*(k-kl))) = b.x1f(m,k,j,i);
-            });
-          } else if (v==1) {
-            Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-            [&](const int i)
-            {
-              sbuf[n].data(m, v, (i-il) + ni*(j-jl + nj*(k-kl))) = b.x2f(m,k,j,i);
-            });
+          // if neighbor is at same or finer level, load data from b0
+          if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
+            if (v==0) {
+              Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
+              [&](const int i)
+              {
+                sbuf[n].data(m, v, i-il + ni*(j-jl + nj*(k-kl))) = b.x1f(m,k,j,i);
+              });
+            } else if (v==1) {
+              Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
+              [&](const int i)
+              {
+                sbuf[n].data(m, v, i-il + ni*(j-jl + nj*(k-kl))) = b.x2f(m,k,j,i);
+              });
+            } else {
+              Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
+              [&](const int i)
+              {
+                sbuf[n].data(m, v, i-il + ni*(j-jl + nj*(k-kl))) = b.x3f(m,k,j,i);
+              });
+            }
+          // if neighbor is at coarser level, load data from coarse_b0
           } else {
-            Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-            [&](const int i)
-            {
-              sbuf[n].data(m, v, (i-il) + ni*(j-jl + nj*(k-kl))) = b.x3f(m,k,j,i);
-            });
+            if (v==0) {
+              Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
+              [&](const int i)
+              {
+                sbuf[n].data(m, v, i-il + ni*(j-jl + nj*(k-kl))) = cb.x1f(m,k,j,i);
+              });
+            } else if (v==1) {
+              Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
+              [&](const int i)
+              {
+                sbuf[n].data(m, v, i-il + ni*(j-jl + nj*(k-kl))) = cb.x2f(m,k,j,i);
+              });
+            } else {
+              Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
+              [&](const int i)
+              {
+                sbuf[n].data(m, v, i-il + ni*(j-jl + nj*(k-kl))) = cb.x3f(m,k,j,i);
+              });
+            }
           }
         }
       });
@@ -153,21 +203,23 @@ TaskStatus BValFC::PackAndSendFC(DvceFaceFld4D<Real> &b, int key)
   }); // end par_for_outer
   }
 
-  // Send boundary buffer to neighboring MeshBlocks using MPI or Kokkos::deep_copy if
-  // neighbor is on same MPI rank.
+  // Send boundary buffer to neighboring MeshBlocks using MPI
 
   {int &my_rank = global_variable::my_rank;
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &rbuf = recv_buf;
+  auto &mblev = pmy_pack->pmb->mb_lev;
 #if MPI_PARALLEL_ENABLED
   auto &sbuf = send_buf;
 #endif
 
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
-      if (nghbr.h_view(m,n).gid >= 0) {  // not a physical boundary
+      if (nghbr.h_view(m,n).gid >= 0) {  // neighbor exists and not a physical boundary
         // compute indices of destination MeshBlock and Neighbor 
         int nn = nghbr.h_view(m,n).dest;
+        // if MeshBlocks are on same rank, data already copied into receive buffer above
+        // So simply set communication status tag as received.
         if (nghbr.h_view(m,n).rank == my_rank) {
           int mm = nghbr.h_view(m,n).gid - pmy_pack->gids;
           rbuf[nn].bcomm_stat(mm) = BoundaryCommStatus::received;
@@ -180,7 +232,18 @@ TaskStatus BValFC::PackAndSendFC(DvceFaceFld4D<Real> &b, int key)
           int tag = CreateMPITag(lid, nn, key);
           auto send_data = Kokkos::subview(sbuf[n].data, m, Kokkos::ALL, Kokkos::ALL);
           void* send_ptr = send_data.data();
-          int ierr = MPI_Isend(send_ptr, send_data.size(), MPI_ATHENA_REAL,
+          int data_size=0;
+          // if neighbor is at coarser level, use cindices size
+          if (nghbr.h_view(m,n).lev < mblev.h_view(m)) {
+            for (int v=0; v<3; ++v) {data_size += sbuf[n].cindcs[v].ndat;}
+          // if neighbor is at same level, use sindices size
+          } else if (nghbr.h_view(m,n).lev == mblev.h_view(m)) {
+            for (int v=0; v<3; ++v) {data_size += sbuf[n].sindcs[v].ndat;}
+          // if neighbor is at finer level, use findices size
+          } else {
+            for (int v=0; v<3; ++v) {data_size += sbuf[n].findcs[v].ndat;}
+          }
+          int ierr = MPI_Isend(send_ptr, data_size, MPI_ATHENA_REAL,
             nghbr.h_view(m,n).rank, tag, MPI_COMM_WORLD, &(sbuf[n].comm_req[m]));
 #endif
         }
