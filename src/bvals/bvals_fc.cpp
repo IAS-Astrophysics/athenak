@@ -420,6 +420,7 @@ TaskStatus BValFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &
     int js = indcs.js;
     int ks = indcs.ks;
     auto &mblev = pmy_pack->pmb->mb_lev;
+    auto &rbuf = recv_buf;
 
     // Outer loop over (# of MeshBlocks)*(# of buffers)
     par_for_outer("ProlongFC-1d",DevExeSpace(), 0, 0, 0, (nmb-1), 0, (nnghbr-1),
