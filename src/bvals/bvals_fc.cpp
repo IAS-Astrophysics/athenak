@@ -413,5 +413,32 @@ TaskStatus BValFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &
   // Only perform prolongation with SMR/AMR
   if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
 
+  // In 1D set B1 at internal faces
+  if (pmy_pack->pmesh->one_d) {
+    auto &nghbr = pmy_pack->pmb->nghbr;
+    auto &indcs  = pmy_pack->pmesh->mb_indcs;
+    int js = indcs.js;
+    int ks = indcs.ks;
+    auto &mblev = pmy_pack->pmb->mb_lev;
+
+    // Outer loop over (# of MeshBlocks)*(# of buffers)
+    par_for_outer("ProlongFC-1d",DevExeSpace(), 0, 0, 0, (nmb-1), 0, (nnghbr-1),
+    KOKKOS_LAMBDA(TeamMember_t member, const int m, const int n)
+    {
+      // only prolongate when neighbor exists and is at coarser level
+      if ((nghbr.d_view(m,n).gid >= 0) && (nghbr.d_view(m,n).lev < mblev.d_view(m))) {
+        // loop over x1f (v=0) indices for prolongation on this buffer
+        int il = rbuf[n].pindcs[0].bis;
+        int iu = rbuf[n].pindcs[0].bie;
+
+        par_for_inner(member, il, iu, [&](const int i)
+        {
+          int finei = (i - indcs.cis)*2 + indcs.is;
+          b.x1f(m,ks,js,finei) = cb.x1f(m,ks,js,i);
+        });
+      }
+    });
+  }
+
   return TaskStatus::complete;
 }
