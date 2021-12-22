@@ -258,11 +258,10 @@ TaskStatus BValFC::PackAndSendFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb
 // \!fn void RecvBuffers()
 // \brief Unpack boundary buffers
 
-TaskStatus BValFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b)
+TaskStatus BValFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb)
 {
   // create local references for variables in kernel
   int nmb = pmy_pack->pmb->nmb;
-  // TODO: following only works when all MBs have the same number of neighbors
   int nnghbr = pmy_pack->pmb->nnghbr;
 
   bool bflag = false;
@@ -276,12 +275,13 @@ TaskStatus BValFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b)
   MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &test, MPI_STATUS_IGNORE);
 #endif
 
-  // check that recv boundary buffer communications have all completed
+  //----- STEP 1: check that recv boundary buffer communications have all completed
+
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
       if (nghbr.h_view(m,n).gid >= 0) { // ID != -1, so not a physical boundary
         if (nghbr.h_view(m,n).rank == global_variable::my_rank) {
-          if (rbuf[n].bcomm_stat(m) == BoundaryCommStatus::waiting) bflag = true;
+          if (rbuf[n].bcomm_stat(m) == BoundaryCommStatus::waiting) {bflag = true;}
 #if MPI_PARALLEL_ENABLED
         } else {
           MPI_Test(&(rbuf[n].comm_req[m]), &test, MPI_STATUS_IGNORE);
@@ -299,7 +299,8 @@ TaskStatus BValFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b)
   // exit if recv boundary buffer communications have not completed
   if (bflag) {return TaskStatus::incomplete;}
 
-  // buffers have all completed, so unpack 3-components of field
+  //----- STEP 2: buffers have all completed, so unpack 3-components of field
+
   {int nmnv = 3*nmb*nnghbr;
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &mblev = pmy_pack->pmb->mb_lev;
@@ -356,26 +357,61 @@ TaskStatus BValFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b)
          
         // Inner (vector) loop over i
         // copy contents of recv_buf into appropriate vector components
-        if (v==0) {
-          Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),[&](const int i)
-          {
-            b.x1f(m,k,j,i) = rbuf[n].data(m, v, i-il + ni*(j-jl + nj*(k-kl)));
-          });
-        } else if (v==1) {
-          Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),[&](const int i)
-          {
-            b.x2f(m,k,j,i) = rbuf[n].data(m, v, i-il + ni*(j-jl + nj*(k-kl)));
-          });
+
+        // if neighbor is at same or finer level, load data directly into b0
+        if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
+          if (v==0) {
+            Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
+            [&](const int i)
+            {
+              b.x1f(m,k,j,i) = rbuf[n].data(m, v, i-il + ni*(j-jl + nj*(k-kl)));
+            });
+          } else if (v==1) {
+            Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
+            [&](const int i)
+            {
+              b.x2f(m,k,j,i) = rbuf[n].data(m, v, i-il + ni*(j-jl + nj*(k-kl)));
+            });
+          } else {
+            Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
+            [&](const int i)
+            {
+              b.x3f(m,k,j,i) = rbuf[n].data(m, v, i-il + ni*(j-jl + nj*(k-kl)));
+            });
+          }
+        // if neighbor is at coarser level, load data into coarse_b0 (prolongate below)
         } else {
-          Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),[&](const int i)
-          {
-            b.x3f(m,k,j,i) = rbuf[n].data(m, v, i-il + ni*(j-jl + nj*(k-kl)));
-          });
+          if (v==0) {
+            Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
+            [&](const int i)
+            {
+              cb.x1f(m,k,j,i) = rbuf[n].data(m, v, i-il + ni*(j-jl + nj*(k-kl)));
+            });
+          } else if (v==1) {
+            Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
+            [&](const int i)
+            {
+              cb.x2f(m,k,j,i) = rbuf[n].data(m, v, i-il + ni*(j-jl + nj*(k-kl)));
+            });
+          } else {
+            Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
+            [&](const int i)
+            {
+              cb.x3f(m,k,j,i) = rbuf[n].data(m, v, i-il + ni*(j-jl + nj*(k-kl)));
+            });
+          }
         }
       });
     }  // end if-neighbor-exists block
   });  // end par_for_outer
   }
+
+  //----- STEP 3: Prolongate face-fields when neighbor at coarser level
+  // Code here is based on MeshRefinement::ProlongateSharedFieldX1/2/3() and
+  // MeshRefinement::ProlongateInternalField() in C++ version
+
+  // Only perform prolongation with SMR/AMR
+  if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
 
   return TaskStatus::complete;
 }

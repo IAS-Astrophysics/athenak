@@ -264,9 +264,9 @@ void BValCC::InitRecvIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f
     findcs.bis = mb_indcs.is;
     findcs.bie = mb_indcs.ie;
     if (f1 == 1) {
-      findcs.bis += mb_indcs.nx1/2;
+      findcs.bis += mb_indcs.cnx1;
     } else {
-      findcs.bie -= mb_indcs.nx1/2;
+      findcs.bie -= mb_indcs.cnx1;
     }
   } else if (ox1 > 0) {
     findcs.bis = mb_indcs.ie + 1;
@@ -281,15 +281,15 @@ void BValCC::InitRecvIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f
     if (mb_indcs.nx2 > 1) {
       if (ox1 != 0) {
         if (f1 == 1) {
-          findcs.bjs += mb_indcs.nx2/2;
+          findcs.bjs += mb_indcs.cnx2;
         } else { 
-          findcs.bje -= mb_indcs.nx2/2;
+          findcs.bje -= mb_indcs.cnx2;
         }
       } else {
         if (f2 == 1) {
-          findcs.bjs += mb_indcs.nx2/2;
+          findcs.bjs += mb_indcs.cnx2;
         } else {
-          findcs.bje -= mb_indcs.nx2/2;
+          findcs.bje -= mb_indcs.cnx2;
         }
       }
     }
@@ -306,15 +306,15 @@ void BValCC::InitRecvIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f
     if (mb_indcs.nx3 > 1) {
       if (ox1 != 0 && ox2 != 0) {
         if (f1 == 1) {
-          findcs.bks += mb_indcs.nx3/2;
+          findcs.bks += mb_indcs.cnx3;
         } else {
-          findcs.bke -= mb_indcs.nx3/2;
+          findcs.bke -= mb_indcs.cnx3;
         }
       } else {
         if (f2 == 1) {
-          findcs.bks += mb_indcs.nx3/2;
+          findcs.bks += mb_indcs.cnx3;
         } else {
-          findcs.bke -= mb_indcs.nx3/2;
+          findcs.bke -= mb_indcs.cnx3;
         }
       }
     }

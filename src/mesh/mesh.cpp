@@ -139,27 +139,21 @@ Mesh::Mesh(ParameterInput *pin)
   }
 
   // error check requested number of grid cells for entire root domain
-  if (mesh_indcs.nx1 < 4) {
+  if ( mesh_indcs.nx1 < 4 ||
+      (mesh_indcs.nx2 < 4 && multi_d) ||
+      (mesh_indcs.nx3 < 4 && three_d) ) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "In mesh block in input file nx1 must be >= 4, but nx1=" << mesh_indcs.nx1
-        << std::endl;
+              << "Mesh must be >= 4 cells in each active dimension" << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  if (mesh_indcs.nx2 < 1) {
+  if (mesh_indcs.nx2 < 1 || mesh_indcs.nx3 < 1) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "In mesh block in input file nx2 must be >= 1, but nx2=" << mesh_indcs.nx2
-        << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-  if (mesh_indcs.nx3 < 1) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "In mesh block in input file nx3 must be >= 1, but nx3=" << mesh_indcs.nx3
-        << std::endl;
+        << "In <mesh> block nx2 and nx3 must both be >= 1" << std::endl;
     std::exit(EXIT_FAILURE);
   }
   if (mesh_indcs.nx2 == 1 && mesh_indcs.nx3 > 1) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "In mesh block in input file: nx2=1, nx3=" << mesh_indcs.nx3 
+        << "In <mesh> block in input file: nx2=1, nx3=" << mesh_indcs.nx3 
         << ", but 2D problems in x1-x3 plane not supported" << std::endl;
     std::exit(EXIT_FAILURE);
   }
@@ -183,7 +177,6 @@ Mesh::Mesh(ParameterInput *pin)
   mesh_size.dx3 = (mesh_size.x3max-mesh_size.x3min)/static_cast<Real>(mesh_indcs.nx3);
 
   // Read # of cells in MeshBlock from input parameters, error check
-  mb_indcs.ng  = mesh_indcs.ng;
   mb_indcs.nx1 = pin->GetOrAddInteger("meshblock", "nx1", mesh_indcs.nx1);
   if (multi_d) {
     mb_indcs.nx2 = pin->GetOrAddInteger("meshblock", "nx2", mesh_indcs.nx2);
@@ -212,11 +205,19 @@ Mesh::Mesh(ParameterInput *pin)
               << "MeshBlock must be >= 4 cells in each active dimension" << std::endl;
     std::exit(EXIT_FAILURE);
   }
+  if ((multilevel) &&
+      (mb_indcs.nx1 %2 != 0 || mb_indcs.nx2 %2 != 0 || mb_indcs.nx3 %2 != 0) ) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+      << "Number of cells in MeshBlock must be divisible by two in each dimension for "
+      << "SMR/AMR calculations." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 
   // initialize indices for Mesh cells, MeshBlock cells, and MeshBlock coarse cells
+  mb_indcs.ng  = mesh_indcs.ng;
   mb_indcs.cnx1 = mb_indcs.nx1/2;
-  mb_indcs.cnx2 = mb_indcs.nx2/2;
-  mb_indcs.cnx3 = mb_indcs.nx3/2;
+  mb_indcs.cnx2 = std::max(1,(mb_indcs.nx2/2));
+  mb_indcs.cnx3 = std::max(1,(mb_indcs.nx3/2));
 
   mesh_indcs.is = mesh_indcs.ng;
   mb_indcs.is   = mb_indcs.ng;

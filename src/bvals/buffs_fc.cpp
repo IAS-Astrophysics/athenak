@@ -589,7 +589,7 @@ void BValFC::InitRecvIndices(BValBufferFC &buf, int ox1, int ox2, int ox3, int f
   {auto &pindcs = buf.pindcs;   // indices fpr prolongation ("p")
   int cn = mb_indcs.ng/2;       // nghost must be multiple of 2 with SMR/AMR
   if (ox1 == 0) {
-    pindcs[0].bis = mb_indcs.cis;          pindcs[0].bie = mb_indcs.cie;
+    pindcs[0].bis = mb_indcs.cis;          pindcs[0].bie = mb_indcs.cie + 1;
     pindcs[1].bis = mb_indcs.cis;          pindcs[1].bie = mb_indcs.cie;
     pindcs[2].bis = mb_indcs.cis;          pindcs[2].bie = mb_indcs.cie;
     if (f1 == 0) {
@@ -602,17 +602,17 @@ void BValFC::InitRecvIndices(BValBufferFC &buf, int ox1, int ox2, int ox3, int f
       pindcs[2].bis -= cn;
     }
   } else if (ox1 > 0)  {
-    pindcs[0].bis = mb_indcs.cie + 1;       pindcs[0].bie = mb_indcs.cie + cn;
+    pindcs[0].bis = mb_indcs.cie + 2;       pindcs[0].bie = mb_indcs.cie + cn + 1;
     pindcs[1].bis = mb_indcs.cie + 1;       pindcs[1].bie = mb_indcs.cie + cn;
     pindcs[2].bis = mb_indcs.cie + 1;       pindcs[2].bie = mb_indcs.cie + cn;
   } else {
-    pindcs[0].bis = mb_indcs.cis - cn;      pindcs[0].bie = mb_indcs.cis - 1;
+    pindcs[0].bis = mb_indcs.cis - cn;      pindcs[0].bie = mb_indcs.cis;
     pindcs[1].bis = mb_indcs.cis - cn;      pindcs[1].bie = mb_indcs.cis - 1;
     pindcs[2].bis = mb_indcs.cis - cn;      pindcs[2].bie = mb_indcs.cis - 1;
   }
   if (ox2 == 0) {
     pindcs[0].bjs = mb_indcs.cjs;           pindcs[0].bje = mb_indcs.cje;
-    pindcs[1].bjs = mb_indcs.cjs;           pindcs[1].bje = mb_indcs.cje;
+    pindcs[1].bjs = mb_indcs.cjs;           pindcs[1].bje = mb_indcs.cje + 1;
     pindcs[2].bjs = mb_indcs.cjs;           pindcs[2].bje = mb_indcs.cje;
     if (mb_indcs.nx2 > 1) {
       if (ox1 != 0) {
@@ -639,17 +639,17 @@ void BValFC::InitRecvIndices(BValBufferFC &buf, int ox1, int ox2, int ox3, int f
     }
   } else if (ox2 > 0) {
     pindcs[0].bjs = mb_indcs.cje + 1;        pindcs[0].bje = mb_indcs.cje + cn;
-    pindcs[1].bjs = mb_indcs.cje + 1;        pindcs[1].bje = mb_indcs.cje + cn;
+    pindcs[1].bjs = mb_indcs.cje + 2;        pindcs[1].bje = mb_indcs.cje + cn + 1;
     pindcs[2].bjs = mb_indcs.cje + 1;        pindcs[2].bje = mb_indcs.cje + cn;
   } else {
     pindcs[0].bjs = mb_indcs.cjs - cn;       pindcs[0].bje = mb_indcs.cjs - 1;
-    pindcs[1].bjs = mb_indcs.cjs - cn;       pindcs[1].bje = mb_indcs.cjs - 1;
+    pindcs[1].bjs = mb_indcs.cjs - cn;       pindcs[1].bje = mb_indcs.cjs;
     pindcs[2].bjs = mb_indcs.cjs - cn;       pindcs[2].bje = mb_indcs.cjs - 1;
   }
   if (ox3 == 0) {
     pindcs[0].bks = mb_indcs.cks;            pindcs[0].bke = mb_indcs.cke;
     pindcs[1].bks = mb_indcs.cks;            pindcs[1].bke = mb_indcs.cke;
-    pindcs[2].bks = mb_indcs.cks;            pindcs[2].bke = mb_indcs.cke;
+    pindcs[2].bks = mb_indcs.cks;            pindcs[2].bke = mb_indcs.cke + 1;
     if (mb_indcs.nx3 > 1) {
       if (ox1 != 0 && ox2 != 0) {
         if (f1 == 0) {
@@ -676,11 +676,11 @@ void BValFC::InitRecvIndices(BValBufferFC &buf, int ox1, int ox2, int ox3, int f
   } else if (ox3 > 0)  {
     pindcs[0].bks = mb_indcs.cke + 1;          pindcs[0].bke = mb_indcs.cke + cn;
     pindcs[1].bks = mb_indcs.cke + 1;          pindcs[1].bke = mb_indcs.cke + cn;
-    pindcs[2].bks = mb_indcs.cke + 1;          pindcs[2].bke = mb_indcs.cke + cn;
+    pindcs[2].bks = mb_indcs.cke + 2;          pindcs[2].bke = mb_indcs.cke + cn + 1;
   } else {
     pindcs[0].bks = mb_indcs.cks - cn;         pindcs[0].bke = mb_indcs.cks - 1;
     pindcs[1].bks = mb_indcs.cks - cn;         pindcs[1].bke = mb_indcs.cks - 1;
-    pindcs[2].bks = mb_indcs.cks - cn;         pindcs[2].bke = mb_indcs.cks - 1;
+    pindcs[2].bks = mb_indcs.cks - cn;         pindcs[2].bke = mb_indcs.cks;
   }
   for (int i=0; i<=2; ++i) {
     pindcs[i].ndat = (pindcs[i].bie - pindcs[i].bis + 1)*

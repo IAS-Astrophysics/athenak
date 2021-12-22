@@ -228,12 +228,7 @@ TaskStatus BValCC::RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
     for (int n=0; n<nnghbr; ++n) {
       if (nghbr.h_view(m,n).gid >= 0) { // neighbor exists and not a physical boundary
         if (nghbr.h_view(m,n).rank == global_variable::my_rank) {
-          if (rbuf[n].bcomm_stat(m) == BoundaryCommStatus::waiting) {
-            bflag = true;
-/***
-std::cout << "block=" << m << "  buffer=" << n << "  not received" << std::endl;
-***/
-          }
+          if (rbuf[n].bcomm_stat(m) == BoundaryCommStatus::waiting) {bflag = true;}
 #if MPI_PARALLEL_ENABLED
         } else {
           MPI_Test(&(rbuf[n].comm_req[m]), &test, MPI_STATUS_IGNORE);
@@ -316,7 +311,6 @@ std::cout << "block=" << m << "  buffer=" << n << "  not received" << std::endl;
           });
 
         // if neighbor is at coarser level, load data into coarse_u0 (prolongate below)
-        // Note in this case, rbuf[n].indcs values refer to coarse_u0
         } else {
           Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),[&](const int i)
           {

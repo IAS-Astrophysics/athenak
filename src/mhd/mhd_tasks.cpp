@@ -229,7 +229,7 @@ TaskStatus MHD::SendB(Driver *pdrive, int stage)
 
 TaskStatus MHD::RecvB(Driver *pdrive, int stage)
 {
-  TaskStatus tstat = pbval_b->RecvAndUnpackFC(b0);
+  TaskStatus tstat = pbval_b->RecvAndUnpackFC(b0, coarse_b0);
   return tstat;
 }
 
