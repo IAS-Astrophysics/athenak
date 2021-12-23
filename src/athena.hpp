@@ -205,7 +205,7 @@ inline void par_for(const std::string &name, DevExeSpace exec_space,
                        KOKKOS_LAMBDA(const int &idx)
   {
     // compute j,i indices of thread and call function
-    int j = (idx)/nji;
+    int j = (idx)/ni;
     int i = (idx - j*ni) + il;
     j += jl;
     function(j, i);

@@ -190,23 +190,25 @@ Mesh::Mesh(ParameterInput *pin)
   }
 
   // error check consistency of the block and mesh
-  if (   mesh_indcs.nx1 % mb_indcs.nx1 != 0
-      || mesh_indcs.nx2 % mb_indcs.nx2 != 0
-      || mesh_indcs.nx3 % mb_indcs.nx3 != 0) {
+  if (mesh_indcs.nx1 % mb_indcs.nx1 != 0 ||
+      mesh_indcs.nx2 % mb_indcs.nx2 != 0 ||
+      mesh_indcs.nx3 % mb_indcs.nx3 != 0) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "Mesh must be evenly divisible by MeshBlocks" << std::endl
               << "Check Mesh and MeshBlock dimensions in input file" << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  if ( mb_indcs.nx1 < 4 ||
+  if ((mb_indcs.nx1 < 4) ||
       (mb_indcs.nx2 < 4 && multi_d) ||
       (mb_indcs.nx3 < 4 && three_d) ) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "MeshBlock must be >= 4 cells in each active dimension" << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  if ((multilevel) &&
-      (mb_indcs.nx1 %2 != 0 || mb_indcs.nx2 %2 != 0 || mb_indcs.nx3 %2 != 0) ) {
+  if ( (multilevel) &&
+      ((mb_indcs.nx1 %2 != 0) ||
+       (mb_indcs.nx2 %2 != 0 && multi_d) ||
+       (mb_indcs.nx3 %2 != 0 && three_d)) ) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
       << "Number of cells in MeshBlock must be divisible by two in each dimension for "
       << "SMR/AMR calculations." << std::endl;

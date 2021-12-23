@@ -171,6 +171,10 @@ void BValFC::InitSendIndices(BValBufferFC &buf, int ox1, int ox2, int ox3, int f
 
   // set indices for sends to neighbors on FINER level (matches recv from COARSER)
   // Formulae taken from LoadBoundaryBufferToFiner() src/bvals/fc/bvals_fc.cpp
+  //
+  // Subtle issue: shared face fields on edges of MeshBlock (B1 at [is,ie+1],
+  // B2 at [js;je+1], B3 at [ks;ke+1]) are communicated, replacing values on coarse mesh
+  // in target MeshBlock, but these values will only be used for prolongation.
   {auto &findcs = buf.findcs;
   int cnx1mng = mb_indcs.cnx1 - ng;
   int cnx2mng = mb_indcs.cnx2 - ng;
@@ -394,7 +398,7 @@ void BValFC::InitRecvIndices(BValBufferFC &buf, int ox1, int ox2, int ox3, int f
       cindcs[2].bis -= ng;
     }
   } else if (ox1 > 0) {
-    cindcs[0].bis = mb_indcs.cie + 2,     cindcs[0].bie = mb_indcs.cie + ng + 1;
+    cindcs[0].bis = mb_indcs.cie + 1,     cindcs[0].bie = mb_indcs.cie + ng + 1;
     cindcs[1].bis = mb_indcs.cie + 1,     cindcs[1].bie = mb_indcs.cie + ng;
     cindcs[2].bis = mb_indcs.cie + 1,     cindcs[2].bie = mb_indcs.cie + ng;
   } else {
@@ -431,7 +435,7 @@ void BValFC::InitRecvIndices(BValBufferFC &buf, int ox1, int ox2, int ox3, int f
     }
   } else if (ox2 > 0) {
     cindcs[0].bjs = mb_indcs.cje + 1,      cindcs[0].bje = mb_indcs.cje + ng;
-    cindcs[1].bjs = mb_indcs.cje + 2,      cindcs[1].bje = mb_indcs.cje + ng + 1;
+    cindcs[1].bjs = mb_indcs.cje + 1,      cindcs[1].bje = mb_indcs.cje + ng + 1;
     cindcs[2].bjs = mb_indcs.cje + 1,      cindcs[2].bje = mb_indcs.cje + ng;
   } else {
     cindcs[0].bjs = mb_indcs.cjs - ng,     cindcs[0].bje = mb_indcs.cjs - 1;
@@ -468,7 +472,7 @@ void BValFC::InitRecvIndices(BValBufferFC &buf, int ox1, int ox2, int ox3, int f
   } else if (ox3 > 0) {
     cindcs[0].bks = mb_indcs.cke + 1,      cindcs[0].bke = mb_indcs.cke + ng;
     cindcs[1].bks = mb_indcs.cke + 1,      cindcs[1].bke = mb_indcs.cke + ng;
-    cindcs[2].bks = mb_indcs.cke + 2,      cindcs[2].bke = mb_indcs.cke + ng + 1;
+    cindcs[2].bks = mb_indcs.cke + 1,      cindcs[2].bke = mb_indcs.cke + ng + 1;
   } else {
     cindcs[0].bks = mb_indcs.cks - ng,     cindcs[0].bke = mb_indcs.cks - 1;
     cindcs[1].bks = mb_indcs.cks - ng,     cindcs[1].bke = mb_indcs.cks - 1;
@@ -583,9 +587,12 @@ void BValFC::InitRecvIndices(BValBufferFC &buf, int ox1, int ox2, int ox3, int f
                      (findcs[i].bke - findcs[i].bks + 1);
   }}
 
-  // set indices for PROLONGATION in coarse cell buffers
+  // set indices for PROLONGATION in coarse cell buffers. Indices refer to coarse cells.
   // Formulae taken from ProlongateBoundaries() in src/bvals/bvals_refine.cpp
-  // Identical to receives from coarser level, except ng --> ng/2
+  //
+  // Subtle issue: NOT the same as receives from coarser level (with ng --> ng/2) since
+  // latter sends face fields on edges of MeshBlock, but prolongation only occurs within
+  // ghost cells (and NOT for B1 at [is;ie+1], B2 at [js;je+1], B3 at [ke;ke+1])
   {auto &pindcs = buf.pindcs;   // indices fpr prolongation ("p")
   int cn = mb_indcs.ng/2;       // nghost must be multiple of 2 with SMR/AMR
   if (ox1 == 0) {
@@ -606,7 +613,7 @@ void BValFC::InitRecvIndices(BValBufferFC &buf, int ox1, int ox2, int ox3, int f
     pindcs[1].bis = mb_indcs.cie + 1;       pindcs[1].bie = mb_indcs.cie + cn;
     pindcs[2].bis = mb_indcs.cie + 1;       pindcs[2].bie = mb_indcs.cie + cn;
   } else {
-    pindcs[0].bis = mb_indcs.cis - cn;      pindcs[0].bie = mb_indcs.cis;
+    pindcs[0].bis = mb_indcs.cis - cn;      pindcs[0].bie = mb_indcs.cis - 1;
     pindcs[1].bis = mb_indcs.cis - cn;      pindcs[1].bie = mb_indcs.cis - 1;
     pindcs[2].bis = mb_indcs.cis - cn;      pindcs[2].bie = mb_indcs.cis - 1;
   }
@@ -643,7 +650,7 @@ void BValFC::InitRecvIndices(BValBufferFC &buf, int ox1, int ox2, int ox3, int f
     pindcs[2].bjs = mb_indcs.cje + 1;        pindcs[2].bje = mb_indcs.cje + cn;
   } else {
     pindcs[0].bjs = mb_indcs.cjs - cn;       pindcs[0].bje = mb_indcs.cjs - 1;
-    pindcs[1].bjs = mb_indcs.cjs - cn;       pindcs[1].bje = mb_indcs.cjs;
+    pindcs[1].bjs = mb_indcs.cjs - cn;       pindcs[1].bje = mb_indcs.cjs - 1;
     pindcs[2].bjs = mb_indcs.cjs - cn;       pindcs[2].bje = mb_indcs.cjs - 1;
   }
   if (ox3 == 0) {
@@ -680,7 +687,7 @@ void BValFC::InitRecvIndices(BValBufferFC &buf, int ox1, int ox2, int ox3, int f
   } else {
     pindcs[0].bks = mb_indcs.cks - cn;         pindcs[0].bke = mb_indcs.cks - 1;
     pindcs[1].bks = mb_indcs.cks - cn;         pindcs[1].bke = mb_indcs.cks - 1;
-    pindcs[2].bks = mb_indcs.cks - cn;         pindcs[2].bke = mb_indcs.cks;
+    pindcs[2].bks = mb_indcs.cks - cn;         pindcs[2].bke = mb_indcs.cks - 1;
   }
   for (int i=0; i<=2; ++i) {
     pindcs[i].ndat = (pindcs[i].bie - pindcs[i].bis + 1)*
@@ -831,33 +838,54 @@ void BValFC::AllocateBuffersFC()
     }
   }
 
-/***
   for (int m=0; m<nmb; ++m) {
-  for (int n=0; n<=55; ++n) {
-std::cout << std::endl << "MB= "<<m<<"  Buffer="<< n << std::endl;
-std::cout <<"same:" <<send_buf[n].sindcs.bis<<"  "<<send_buf[n].sindcs.bie<<
-                "  "<<send_buf[n].sindcs.bjs<<"  "<<send_buf[n].sindcs.bje<<
-                "  "<<send_buf[n].sindcs.bks<<"  "<<send_buf[n].sindcs.bke<< std::endl;
-std::cout <<"coar:" <<send_buf[n].cindcs.bis<<"  "<<send_buf[n].cindcs.bie<<
-                "  "<<send_buf[n].cindcs.bjs<<"  "<<send_buf[n].cindcs.bje<<
-                "  "<<send_buf[n].cindcs.bks<<"  "<<send_buf[n].cindcs.bke<< std::endl;
-std::cout <<"fine:" <<send_buf[n].findcs.bis<<"  "<<send_buf[n].findcs.bie<<
-                "  "<<send_buf[n].findcs.bjs<<"  "<<send_buf[n].findcs.bje<<
-                "  "<<send_buf[n].findcs.bks<<"  "<<send_buf[n].findcs.bke<< std::endl;
-std::cout <<"same:" <<recv_buf[n].sindcs.bis<<"  "<<recv_buf[n].sindcs.bie<<
-                "  "<<recv_buf[n].sindcs.bjs<<"  "<<recv_buf[n].sindcs.bje<<
-                "  "<<recv_buf[n].sindcs.bks<<"  "<<recv_buf[n].sindcs.bke<< std::endl;
-std::cout <<"coar:" <<recv_buf[n].cindcs.bis<<"  "<<recv_buf[n].cindcs.bie<<
-                "  "<<recv_buf[n].cindcs.bjs<<"  "<<recv_buf[n].cindcs.bje<<
-                "  "<<recv_buf[n].cindcs.bks<<"  "<<recv_buf[n].cindcs.bke<< std::endl;
-std::cout <<"fine:" <<recv_buf[n].findcs.bis<<"  "<<recv_buf[n].findcs.bie<<
-                "  "<<recv_buf[n].findcs.bjs<<"  "<<recv_buf[n].findcs.bje<<
-                "  "<<recv_buf[n].findcs.bks<<"  "<<recv_buf[n].findcs.bke<< std::endl;
-std::cout <<"prol:" <<recv_buf[n].pindcs.bis<<"  "<<recv_buf[n].pindcs.bie<<
-                "  "<<recv_buf[n].pindcs.bjs<<"  "<<recv_buf[n].pindcs.bje<<
-                "  "<<recv_buf[n].pindcs.bks<<"  "<<recv_buf[n].pindcs.bke<< std::endl;
-  }}
+  for (int n=0; n<=nnghbr; ++n) {
+std::cout << std::endl << "MB= "<<m<<"  FC Buffer="<< n << std::endl;
+/***
 ****/
+for (int v=0; v<3; ++v) {
+std::cout <<"send_same[" << v << "]:"
+                <<send_buf[n].sindcs[v].bis<<"  "<<send_buf[n].sindcs[v].bie<<
+            "  "<<send_buf[n].sindcs[v].bjs<<"  "<<send_buf[n].sindcs[v].bje<<
+            "  "<<send_buf[n].sindcs[v].bks<<"  "<<send_buf[n].sindcs[v].bke<< std::endl;
+}
+for (int v=0; v<3; ++v) {
+std::cout <<"send_coar[" << v << "]:"
+                <<send_buf[n].cindcs[v].bis<<"  "<<send_buf[n].cindcs[v].bie<<
+            "  "<<send_buf[n].cindcs[v].bjs<<"  "<<send_buf[n].cindcs[v].bje<<
+            "  "<<send_buf[n].cindcs[v].bks<<"  "<<send_buf[n].cindcs[v].bke<< std::endl;
+}
+for (int v=0; v<3; ++v) {
+std::cout <<"send_fine[" << v << "]:"
+                <<send_buf[n].findcs[v].bis<<"  "<<send_buf[n].findcs[v].bie<<
+            "  "<<send_buf[n].findcs[v].bjs<<"  "<<send_buf[n].findcs[v].bje<<
+            "  "<<send_buf[n].findcs[v].bks<<"  "<<send_buf[n].findcs[v].bke<< std::endl;
+}
+for (int v=0; v<3; ++v) {
+std::cout <<"recv_same[" << v << "]:"
+                <<recv_buf[n].sindcs[v].bis<<"  "<<recv_buf[n].sindcs[v].bie<<
+            "  "<<recv_buf[n].sindcs[v].bjs<<"  "<<recv_buf[n].sindcs[v].bje<<
+            "  "<<recv_buf[n].sindcs[v].bks<<"  "<<recv_buf[n].sindcs[v].bke<< std::endl;
+}
+for (int v=0; v<3; ++v) {
+std::cout <<"recv_coar[" << v << "]:"
+                <<recv_buf[n].cindcs[v].bis<<"  "<<recv_buf[n].cindcs[v].bie<<
+            "  "<<recv_buf[n].cindcs[v].bjs<<"  "<<recv_buf[n].cindcs[v].bje<<
+            "  "<<recv_buf[n].cindcs[v].bks<<"  "<<recv_buf[n].cindcs[v].bke<< std::endl;
+}
+for (int v=0; v<3; ++v) {
+std::cout <<"recv_fine[" << v << "]:"
+                <<recv_buf[n].findcs[v].bis<<"  "<<recv_buf[n].findcs[v].bie<<
+            "  "<<recv_buf[n].findcs[v].bjs<<"  "<<recv_buf[n].findcs[v].bje<<
+            "  "<<recv_buf[n].findcs[v].bks<<"  "<<recv_buf[n].findcs[v].bke<< std::endl;
+}
+for (int v=0; v<3; ++v) {
+std::cout <<"prol[" << v << "]:"
+                <<recv_buf[n].pindcs[v].bis<<"  "<<recv_buf[n].pindcs[v].bie<<
+            "  "<<recv_buf[n].pindcs[v].bjs<<"  "<<recv_buf[n].pindcs[v].bje<<
+            "  "<<recv_buf[n].pindcs[v].bks<<"  "<<recv_buf[n].pindcs[v].bke<< std::endl;
+}
+  }}
 
   return;
 }

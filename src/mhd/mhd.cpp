@@ -135,9 +135,9 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     int nccells2 = (indcs.cnx2 > 1)? (indcs.cnx2 + 2*(indcs.ng)) : 1;
     int nccells3 = (indcs.cnx3 > 1)? (indcs.cnx3 + 2*(indcs.ng)) : 1;
     Kokkos::realloc(coarse_u0, nmb, (nmhd+nscalars), nccells3, nccells2, nccells1);
-    Kokkos::realloc(b0.x1f, nmb, nccells3, nccells2, nccells1+1);
-    Kokkos::realloc(b0.x2f, nmb, nccells3, nccells2+1, nccells1);
-    Kokkos::realloc(b0.x3f, nmb, nccells3+1, nccells2, nccells1);
+    Kokkos::realloc(coarse_b0.x1f, nmb, nccells3, nccells2, nccells1+1);
+    Kokkos::realloc(coarse_b0.x2f, nmb, nccells3, nccells2+1, nccells1);
+    Kokkos::realloc(coarse_b0.x3f, nmb, nccells3+1, nccells2, nccells1);
   }
   
   // allocate boundary buffers for conserved (cell-centered) variables

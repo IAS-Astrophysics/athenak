@@ -232,6 +232,8 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
   if (pmhd != nullptr) {
     pmhd->CheckUserBoundaries();
     // following functions return a TaskStatus, but it is ignored so cast to (void)
+    (void) pmhd->RestrictU(this, 0);
+    (void) pmhd->RestrictB(this, 0);
     (void) pmhd->InitRecv(this, 0);
     (void) pmhd->SendU(this, 0);
     (void) pmhd->SendB(this, 0);

@@ -413,7 +413,7 @@ TaskStatus BValFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &
   // Only perform prolongation with SMR/AMR
   if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
 
-  // In 1D set B1 at internal faces
+  // 1D PROBLEM:
   if (pmy_pack->pmesh->one_d) {
     auto &nghbr = pmy_pack->pmb->nghbr;
     auto &indcs  = pmy_pack->pmesh->mb_indcs;
@@ -428,14 +428,55 @@ TaskStatus BValFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &
     {
       // only prolongate when neighbor exists and is at coarser level
       if ((nghbr.d_view(m,n).gid >= 0) && (nghbr.d_view(m,n).lev < mblev.d_view(m))) {
-        // loop over x1f (v=0) indices for prolongation on this buffer
+
+        // prolongate b.x1f (v=0)
         int il = rbuf[n].pindcs[0].bis;
         int iu = rbuf[n].pindcs[0].bie;
-
         par_for_inner(member, il, iu, [&](const int i)
         {
           int finei = (i - indcs.cis)*2 + indcs.is;
+          // prolongate B1 at shared coarse/fine cell edges
           b.x1f(m,ks,js,finei) = cb.x1f(m,ks,js,i);
+          // prolongate B1 at interior cell edges on fine mesh
+          if (finei > indcs.is) {
+            // oib: interior cell to left of shared edge
+            b.x1f(m,ks,js,finei-1) = cb.x1f(m,ks,js,i);
+          } else {
+            // iib: interior cell to left of shared edge
+            b.x1f(m,ks,js,finei+1) = cb.x1f(m,ks,js,i);
+          }
+        });
+
+        // prolongate b.x2f (v=1)
+        il = rbuf[n].pindcs[1].bis;
+        iu = rbuf[n].pindcs[1].bie;
+        par_for_inner(member, il, iu, [&](const int i)
+        {
+          int finei = (i - indcs.cis)*2 + indcs.is;
+          // interpolate B2 in x1 to fine cell locations
+          Real dl = cb.x2f(m,ks,js,i  ) - cb.x2f(m,ks,js,i-1);
+          Real dr = cb.x2f(m,ks,js,i+1) - cb.x2f(m,ks,js,i  );
+          Real dvar1 = 0.25*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
+          b.x2f(m,ks,js  ,finei  ) = cb.x2f(m,ks,js,i) - dvar1;
+          b.x2f(m,ks,js  ,finei+1) = cb.x2f(m,ks,js,i) + dvar1;
+          b.x2f(m,ks,js+1,finei  ) = cb.x2f(m,ks,js,i) - dvar1;
+          b.x2f(m,ks,js+1,finei+1) = cb.x2f(m,ks,js,i) + dvar1;
+        });
+
+        // prolongate b.x3f (v=2)
+        il = rbuf[n].pindcs[2].bis;
+        iu = rbuf[n].pindcs[2].bie;
+        par_for_inner(member, il, iu, [&](const int i)
+        {
+          int finei = (i - indcs.cis)*2 + indcs.is;
+          // interpolate B3 in x1 to fine cell locations
+          Real dl = cb.x3f(m,ks,js,i  ) - cb.x3f(m,ks,js,i-1);
+          Real dr = cb.x3f(m,ks,js,i+1) - cb.x3f(m,ks,js,i  );
+          Real dvar1 = 0.25*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
+          b.x3f(m,ks  ,js,finei  ) = cb.x3f(m,ks,js,i) - dvar1;
+          b.x3f(m,ks  ,js,finei+1) = cb.x3f(m,ks,js,i) + dvar1;
+          b.x3f(m,ks+1,js,finei  ) = cb.x3f(m,ks,js,i) - dvar1;
+          b.x3f(m,ks+1,js,finei+1) = cb.x3f(m,ks,js,i) + dvar1;
         });
       }
     });

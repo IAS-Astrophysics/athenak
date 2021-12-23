@@ -329,7 +329,7 @@ void BValCC::InitRecvIndices(BValBufferCC &buf, int ox1, int ox2, int ox3, int f
                 (findcs.bke - findcs.bks + 1);
   }
 
-  // set indices for PROLONGATION in coarse cell buffers
+  // set indices for PROLONGATION in coarse cell buffers. Indices refer to coarse cells.
   // Formulae taken from ProlongateBoundaries() in src/bvals/bvals_refine.cpp
   // Identical to receives from coarser level, except ng --> ng/2
   {auto &pindcs = buf.pindcs;   // indices for prolongation ("p")
@@ -545,33 +545,33 @@ void BValCC::AllocateBuffersCC(const int nvar)
     }
   }
 
-/***
   for (int m=0; m<nmb; ++m) {
-  for (int n=0; n<=55; ++n) {
-std::cout << std::endl << "MB= "<<m<<"  Buffer="<< n << std::endl;
-std::cout <<"same:" <<send_buf[n].sindcs.bis<<"  "<<send_buf[n].sindcs.bie<<
+  for (int n=0; n<=nnghbr; ++n) {
+std::cout << std::endl << "MB= "<<m<<"  CC Buffer="<< n << std::endl;
+std::cout <<"send_same:" <<send_buf[n].sindcs.bis<<"  "<<send_buf[n].sindcs.bie<<
                 "  "<<send_buf[n].sindcs.bjs<<"  "<<send_buf[n].sindcs.bje<<
                 "  "<<send_buf[n].sindcs.bks<<"  "<<send_buf[n].sindcs.bke<< std::endl;
-std::cout <<"coar:" <<send_buf[n].cindcs.bis<<"  "<<send_buf[n].cindcs.bie<<
+std::cout <<"send_coar:" <<send_buf[n].cindcs.bis<<"  "<<send_buf[n].cindcs.bie<<
                 "  "<<send_buf[n].cindcs.bjs<<"  "<<send_buf[n].cindcs.bje<<
                 "  "<<send_buf[n].cindcs.bks<<"  "<<send_buf[n].cindcs.bke<< std::endl;
-std::cout <<"fine:" <<send_buf[n].findcs.bis<<"  "<<send_buf[n].findcs.bie<<
+std::cout <<"send_fine:" <<send_buf[n].findcs.bis<<"  "<<send_buf[n].findcs.bie<<
                 "  "<<send_buf[n].findcs.bjs<<"  "<<send_buf[n].findcs.bje<<
                 "  "<<send_buf[n].findcs.bks<<"  "<<send_buf[n].findcs.bke<< std::endl;
-std::cout <<"same:" <<recv_buf[n].sindcs.bis<<"  "<<recv_buf[n].sindcs.bie<<
+std::cout <<"recv_same:" <<recv_buf[n].sindcs.bis<<"  "<<recv_buf[n].sindcs.bie<<
                 "  "<<recv_buf[n].sindcs.bjs<<"  "<<recv_buf[n].sindcs.bje<<
                 "  "<<recv_buf[n].sindcs.bks<<"  "<<recv_buf[n].sindcs.bke<< std::endl;
-std::cout <<"coar:" <<recv_buf[n].cindcs.bis<<"  "<<recv_buf[n].cindcs.bie<<
+std::cout <<"recv_coar:" <<recv_buf[n].cindcs.bis<<"  "<<recv_buf[n].cindcs.bie<<
                 "  "<<recv_buf[n].cindcs.bjs<<"  "<<recv_buf[n].cindcs.bje<<
                 "  "<<recv_buf[n].cindcs.bks<<"  "<<recv_buf[n].cindcs.bke<< std::endl;
-std::cout <<"fine:" <<recv_buf[n].findcs.bis<<"  "<<recv_buf[n].findcs.bie<<
+std::cout <<"recv_fine:" <<recv_buf[n].findcs.bis<<"  "<<recv_buf[n].findcs.bie<<
                 "  "<<recv_buf[n].findcs.bjs<<"  "<<recv_buf[n].findcs.bje<<
                 "  "<<recv_buf[n].findcs.bks<<"  "<<recv_buf[n].findcs.bke<< std::endl;
+/***
+****/
 std::cout <<"prol:" <<recv_buf[n].pindcs.bis<<"  "<<recv_buf[n].pindcs.bie<<
                 "  "<<recv_buf[n].pindcs.bjs<<"  "<<recv_buf[n].pindcs.bje<<
                 "  "<<recv_buf[n].pindcs.bks<<"  "<<recv_buf[n].pindcs.bke<< std::endl;
   }}
-****/
 
   return;
 }
