@@ -838,9 +838,8 @@ void BValFC::AllocateBuffersFC()
     }
   }
 
-  for (int m=0; m<nmb; ++m) {
   for (int n=0; n<=nnghbr; ++n) {
-std::cout << std::endl << "MB= "<<m<<"  FC Buffer="<< n << std::endl;
+std::cout << std::endl << "FC_Buffer="<< n << std::endl;
 /***
 ****/
 for (int v=0; v<3; ++v) {
@@ -885,7 +884,7 @@ std::cout <<"prol[" << v << "]:"
             "  "<<recv_buf[n].pindcs[v].bjs<<"  "<<recv_buf[n].pindcs[v].bje<<
             "  "<<recv_buf[n].pindcs[v].bks<<"  "<<recv_buf[n].pindcs[v].bke<< std::endl;
 }
-  }}
+  }
 
   return;
 }
