@@ -110,6 +110,7 @@ public:
   void AllocateBuffersCC(const int nvar);
   TaskStatus PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &c, int key);
   TaskStatus RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &c);
+  void ProlongCC(DvceArray5D<Real> &a, DvceArray5D<Real> &c);
 
 private:
   MeshBlockPack* pmy_pack;
@@ -134,6 +135,7 @@ public:
   void AllocateBuffersFC();
   TaskStatus PackAndSendFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &c, int key);
   TaskStatus RecvAndUnpackFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &c);
+  void ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &c);
 
 private:
   MeshBlockPack* pmy_pack;
