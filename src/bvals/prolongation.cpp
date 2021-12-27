@@ -75,23 +75,17 @@ void BValCC::ProlongCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
           int finej = (j - indcs.cjs)*2 + indcs.js;
           int finek = (k - indcs.cks)*2 + indcs.ks;
 
-/*
-std::cout << std::endl << "MB= "<<m<<"  Buffer="<< n << std::endl;
-std::cout <<il<<"  "<<iu<<"  "<<jl<<"  "<<ju<<"  "<<kl<<"  "<<ku<< std::endl;
-std::cout << "finei=" << finei << "  finej=" << finej << "  finek=" << finek << std::endl;
-*/
-
           // calculate x1-gradient using the min-mod limiter
           Real dl = ca(m,v,k,j,i  ) - ca(m,v,k,j,i-1);
           Real dr = ca(m,v,k,j,i+1) - ca(m,v,k,j,i  );
-          Real dvar1 = 0.25*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
+          Real dvar1 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
 
           // calculate x2-gradient using the min-mod limiter
           Real dvar2 = 0.0;
           if (multi_d) {
             dl = ca(m,v,k,j  ,i) - ca(m,v,k,j-1,i);
             dr = ca(m,v,k,j+1,i) - ca(m,v,k,j  ,i);
-            dvar2 = 0.25*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
+            dvar2 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
           }
 
           // calculate x1-gradient using the min-mod limiter
@@ -99,7 +93,7 @@ std::cout << "finei=" << finei << "  finej=" << finej << "  finek=" << finek << 
           if (three_d) {
             dl = ca(m,v,k  ,j,i) - ca(m,v,k-1,j,i);
             dr = ca(m,v,k+1,j,i) - ca(m,v,k  ,j,i);
-            dvar3 = 0.25*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
+            dvar3 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
           }
 
           // interpolate to the finer grid
@@ -184,7 +178,7 @@ void BValFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb)
           // equivalent to code for 1D in MeshRefinement::ProlongateSharedFieldX2()
           Real dl = cb.x2f(m,ks,js,i  ) - cb.x2f(m,ks,js,i-1);
           Real dr = cb.x2f(m,ks,js,i+1) - cb.x2f(m,ks,js,i  );
-          Real dvar1 = 0.25*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
+          Real dvar1 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
           b.x2f(m,ks,js  ,finei  ) = cb.x2f(m,ks,js,i) - dvar1;
           b.x2f(m,ks,js  ,finei+1) = cb.x2f(m,ks,js,i) + dvar1;
           b.x2f(m,ks,js+1,finei  ) = cb.x2f(m,ks,js,i) - dvar1;
@@ -201,7 +195,7 @@ void BValFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb)
           // equivalent to code for 1D in MeshRefinement::ProlongateSharedFieldX3()
           Real dl = cb.x3f(m,ks,js,i  ) - cb.x3f(m,ks,js,i-1);
           Real dr = cb.x3f(m,ks,js,i+1) - cb.x3f(m,ks,js,i  );
-          Real dvar1 = 0.25*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
+          Real dvar1 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
           b.x3f(m,ks  ,js,finei  ) = cb.x3f(m,ks,js,i) - dvar1;
           b.x3f(m,ks  ,js,finei+1) = cb.x3f(m,ks,js,i) + dvar1;
           b.x3f(m,ks+1,js,finei  ) = cb.x3f(m,ks,js,i) - dvar1;
@@ -258,9 +252,9 @@ void BValFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb)
               int fj = (j - indcs.cjs)*2 + indcs.js;  // fine j
               Real dl = cb.x1f(m,k,j  ,i) - cb.x1f(m,k,j-1,i);
               Real dr = cb.x1f(m,k,j+1,i) - cb.x1f(m,k,j  ,i);
-              Real dvar1 = 0.25*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
-              b.x1f(m,k,fj  ,fi) = cb.x1f(m,k,j,i) - dvar1;
-              b.x1f(m,k,fj+1,fi) = cb.x1f(m,k,j,i) + dvar1;
+              Real dvar2 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
+              b.x1f(m,k,fj  ,fi) = cb.x1f(m,k,j,i) - dvar2;
+              b.x1f(m,k,fj+1,fi) = cb.x1f(m,k,j,i) + dvar2;
             });
           });
 
@@ -280,7 +274,7 @@ void BValFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb)
               int fj = (j - indcs.cjs)*2 + indcs.js;  // fine j
               Real dl = cb.x2f(m,k,j,i  ) - cb.x2f(m,k,j,i-1);
               Real dr = cb.x2f(m,k,j,i+1) - cb.x2f(m,k,j,i  );
-              Real dvar1 = 0.25*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
+              Real dvar1 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
               b.x2f(m,k,fj,fi  ) = cb.x2f(m,k,j,i) - dvar1;
               b.x2f(m,k,fj,fi+1) = cb.x2f(m,k,j,i) + dvar1;
             }); 
@@ -302,10 +296,10 @@ void BValFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb)
               int fj = (j - indcs.cjs)*2 + indcs.js;  // fine j
               Real dl = cb.x3f(m,k,j,i  ) - cb.x3f(m,k,j,i-1);
               Real dr = cb.x3f(m,k,j,i+1) - cb.x3f(m,k,j,i  );
-              Real dvar1 = 0.25*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
+              Real dvar1 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
               dl = cb.x3f(m,k,j  ,i) - cb.x3f(m,k,j-1,i);
               dr = cb.x3f(m,k,j+1,i) - cb.x3f(m,k,j  ,i);
-              Real dvar2 = 0.25*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
+              Real dvar2 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
               b.x3f(m,k,fj  ,fi  ) = cb.x3f(m,k,j,i) - dvar1 - dvar2;
               b.x3f(m,k,fj  ,fi+1) = cb.x3f(m,k,j,i) + dvar1 - dvar2;
               b.x3f(m,k,fj+1,fi  ) = cb.x3f(m,k,j,i) - dvar1 + dvar2;
@@ -419,14 +413,14 @@ void BValFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb)
               int fk = (k - indcs.cks)*2 + indcs.ks;  // fine k
               Real dl = cb.x1f(m,k,j  ,i) - cb.x1f(m,k,j-1,i);
               Real dr = cb.x1f(m,k,j+1,i) - cb.x1f(m,k,j  ,i);
-              Real dvar1 = 0.25*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
+              Real dvar2 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
               dl = cb.x1f(m,k  ,j,i) - cb.x1f(m,k-1,j,i);
               dr = cb.x1f(m,k+1,j,i) - cb.x1f(m,k  ,j,i);
-              Real dvar3 = 0.25*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
-              b.x1f(m,fk  ,fj  ,fi) = cb.x1f(m,k,j,i) - dvar1 - dvar3;
-              b.x1f(m,fk  ,fj+1,fi) = cb.x1f(m,k,j,i) + dvar1 - dvar3;
-              b.x1f(m,fk+1,fj  ,fi) = cb.x1f(m,k,j,i) - dvar1 + dvar3;
-              b.x1f(m,fk+1,fj+1,fi) = cb.x1f(m,k,j,i) + dvar1 + dvar3;
+              Real dvar3 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
+              b.x1f(m,fk  ,fj  ,fi) = cb.x1f(m,k,j,i) - dvar2 - dvar3;
+              b.x1f(m,fk  ,fj+1,fi) = cb.x1f(m,k,j,i) + dvar2 - dvar3;
+              b.x1f(m,fk+1,fj  ,fi) = cb.x1f(m,k,j,i) - dvar2 + dvar3;
+              b.x1f(m,fk+1,fj+1,fi) = cb.x1f(m,k,j,i) + dvar2 + dvar3;
             });
           });
 
@@ -447,10 +441,10 @@ void BValFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb)
               int fk = (k - indcs.cks)*2 + indcs.ks;  // fine k
               Real dl = cb.x2f(m,k,j,i  ) - cb.x2f(m,k,j,i-1);
               Real dr = cb.x2f(m,k,j,i+1) - cb.x2f(m,k,j,i  );
-              Real dvar1 = 0.25*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
+              Real dvar1 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
               dl = cb.x2f(m,k  ,j,i) - cb.x2f(m,k-1,j,i);
               dr = cb.x2f(m,k+1,j,i) - cb.x2f(m,k  ,j,i);
-              Real dvar3 = 0.25*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
+              Real dvar3 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
               b.x2f(m,fk  ,fj,fi  ) = cb.x2f(m,k,j,i) - dvar1 - dvar3;
               b.x2f(m,fk  ,fj,fi+1) = cb.x2f(m,k,j,i) + dvar1 - dvar3;
               b.x2f(m,fk+1,fj,fi  ) = cb.x2f(m,k,j,i) - dvar1 + dvar3;
@@ -475,10 +469,10 @@ void BValFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb)
               int fk = (k - indcs.cks)*2 + indcs.ks;  // fine k
               Real dl = cb.x3f(m,k,j,i  ) - cb.x3f(m,k,j,i-1);
               Real dr = cb.x3f(m,k,j,i+1) - cb.x3f(m,k,j,i  );
-              Real dvar1 = 0.25*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
+              Real dvar1 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
               dl = cb.x3f(m,k,j  ,i) - cb.x3f(m,k,j-1,i);
               dr = cb.x3f(m,k,j+1,i) - cb.x3f(m,k,j  ,i);
-              Real dvar2 = 0.25*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
+              Real dvar2 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
               b.x3f(m,fk,fj  ,fi  ) = cb.x3f(m,k,j,i) - dvar1 - dvar2;
               b.x3f(m,fk,fj  ,fi+1) = cb.x3f(m,k,j,i) + dvar1 - dvar2;
               b.x3f(m,fk,fj+1,fi  ) = cb.x3f(m,k,j,i) - dvar1 + dvar2;
