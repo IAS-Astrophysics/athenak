@@ -108,10 +108,13 @@ MeshBlock::MeshBlock(MeshBlockPack* ppack, int igids, int nmb) :
       }
     }
 
-    // grid spacing at this level.  Ensure all MeshBlocks at same level have same dx
-    mb_size.h_view(m).dx1 = ms.dx1/static_cast<Real>(1<<(lev - pm->root_level));
-    mb_size.h_view(m).dx2 = ms.dx2/static_cast<Real>(1<<(lev - pm->root_level));
-    mb_size.h_view(m).dx3 = ms.dx3/static_cast<Real>(1<<(lev - pm->root_level));
+    // grid spacing at this level.
+    mb_size.h_view(m).dx1 = (mb_size.h_view(m).x1max - mb_size.h_view(m).x1min)/
+                            static_cast<Real>(pm->mb_indcs.nx1);
+    mb_size.h_view(m).dx2 = (mb_size.h_view(m).x2max - mb_size.h_view(m).x2min)/
+                            static_cast<Real>(pm->mb_indcs.nx2);
+    mb_size.h_view(m).dx3 = (mb_size.h_view(m).x3max - mb_size.h_view(m).x3min)/
+                            static_cast<Real>(pm->mb_indcs.nx3);
   }
 
   // For each DualArray: mark host views as modified, and then sync to device array

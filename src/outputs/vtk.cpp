@@ -173,19 +173,27 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
     // Loop over MeshBlocks
     for (int m=0; m<nout_mbs; ++m) {
       auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
+      // in 3D grid of output MeshBlocks, calculate integer position of this
       LogicalLocation lloc = pm->lloclist[outmbs[m].mb_gid];
+      int noutput_mb1=lloc.lx1;
+      int noutput_mb2=lloc.lx2;
+      int noutput_mb3=lloc.lx3;
+      if (out_params.slice1 || (out_params.gid >= 0)) {noutput_mb1=0;}
+      if (out_params.slice2 || (out_params.gid >= 0)) {noutput_mb2=0;}
+      if (out_params.slice3 || (out_params.gid >= 0)) {noutput_mb3=0;}
       int &mb_nx1 = indcs.nx1;
       int &mb_nx2 = indcs.nx2;
       int &mb_nx3 = indcs.nx3;
+      // use integer position of this output MeshBlock to compute data offset
+      size_t data_offset = (noutput_mb1*mb_nx1 + noutput_mb2*(mb_nx2*nout1) +
+      noutput_mb3*(mb_nx3*nout1*nout2))*sizeof(float);
+
       int &ois = outmbs[m].ois;
       int &oie = outmbs[m].oie;
       int &ojs = outmbs[m].ojs;
       int &oje = outmbs[m].oje;
       int &oks = outmbs[m].oks;
       int &oke = outmbs[m].oke;
-      size_t data_offset = (lloc.lx1*mb_nx1 + lloc.lx2*(mb_nx2*nout1) +
-      lloc.lx3*(mb_nx3*nout1*nout2))*sizeof(float);
-
       for (int k=oks; k<=oke; ++k) {
         for (int j=ojs; j<=oje; ++j) {
           for (int i=ois; i<=oie; ++i) {

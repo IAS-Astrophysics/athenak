@@ -11,9 +11,11 @@ add_executable(
         globals.cpp
         parameter_input.cpp
 
-        bvals/buffs_cc.cpp
         bvals/bvals_cc.cpp
         bvals/bvals_fc.cpp
+        bvals/buffs_cc.cpp
+        bvals/buffs_fc.cpp
+        bvals/prolongation.cpp
 
         coordinates/coordinates.cpp
 
@@ -44,11 +46,12 @@ add_executable(
 
 	ion-neutral/ion_neutral.cpp
 
-        mesh/load_balance.cpp
+        mesh/build_tree.cpp
         mesh/mesh.cpp
         mesh/meshblock.cpp
         mesh/meshblock_pack.cpp
         mesh/meshblock_tree.cpp
+        mesh/mesh_refinement.cpp
 
         mhd/mhd.cpp
         mhd/mhd_corner_e.cpp

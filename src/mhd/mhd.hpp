@@ -21,7 +21,7 @@ class Resistivity;
 class SourceTerms;
 class Driver;
 
-// function ptr for user-defined boundary functions enrolled in problem generator 
+// function ptr for user-defined MHD boundary functions enrolled in problem generator 
 namespace mhd {
 using MHDBoundaryFnPtr = void (*)(int m, Mesh* pm, MHD* pmhd, DvceArray5D<Real> &u);
 }
@@ -41,10 +41,12 @@ struct MHDTaskIDs
   TaskID copyu;
   TaskID flux;
   TaskID expl;
+  TaskID restu;
   TaskID sendu;
   TaskID recvu;
   TaskID efld;
   TaskID ct;
+  TaskID restb;
   TaskID sendb;
   TaskID recvb;
   TaskID bcs;
@@ -65,23 +67,23 @@ public:
   ~MHD();
 
   // data
-  ReconstructionMethod recon_method;
-  MHD_RSolver rsolver_method;
-  EquationOfState *peos;   // chosen EOS
-
   // flags to denote relativistic dynamics
   bool is_special_relativistic = false;
   bool is_general_relativistic = false;
 
-  int nmhd;                // number of cons variables (5/4 for ideal/isothermal EOS)
+  ReconstructionMethod recon_method;
+  MHD_RSolver rsolver_method;
+  EquationOfState *peos;   // chosen EOS
+
+  int nmhd;                // number of mhd variables (5/4 for ideal/isothermal EOS)
   int nscalars;            // number of passive scalars
   DvceArray5D<Real> u0;    // conserved variables
   DvceArray5D<Real> w0;    // primitive variables
   DvceFaceFld4D<Real> b0;  // face-centered magnetic fields
   DvceArray5D<Real> bcc0;  // cell-centered magnetic fields`
 
-  DvceArray5D<Real> coarse_u0;  // conserved variables on 2x coarser grid (for SMR/AMR)
-  DvceArray5D<Real> coarse_w0;  // primitive variables on 2x coarser grid (for SMR/AMR)
+  DvceArray5D<Real> coarse_u0;    // conserved variables on 2x coarser grid (for SMR/AMR)
+  DvceFaceFld4D<Real> coarse_b0;  // face-centered B-field on 2x coarser grid
 
   // Objects containing boundary communication buffers and routines for u and b
   BValCC *pbval_u;
@@ -109,16 +111,18 @@ public:
   TaskStatus ClearRecv(Driver *d, int stage);
   TaskStatus ClearSend(Driver *d, int stage);
   TaskStatus CopyCons(Driver *d, int stage);
-  TaskStatus CornerE(Driver *d, int stage);
-  TaskStatus CT(Driver *d, int stage);
-  TaskStatus ExpRKUpdate(Driver *d, int stage);
   TaskStatus SendU(Driver *d, int stage); 
   TaskStatus RecvU(Driver *d, int stage); 
   TaskStatus SendB(Driver *d, int stage); 
   TaskStatus RecvB(Driver *d, int stage); 
+  TaskStatus RestrictU(Driver *d, int stage);
+  TaskStatus RestrictB(Driver *d, int stage);
   TaskStatus ConToPrim(Driver *d, int stage);
+  TaskStatus CornerE(Driver *d, int stage);
+  TaskStatus CT(Driver *d, int stage);
+  TaskStatus ExpRKUpdate(Driver *d, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
-  TaskStatus ApplyPhysicalBCs(Driver* pdrive, int stage); // in file mhd/bvals dir
+  TaskStatus ApplyPhysicalBCs(Driver* pdrive, int stage); // file in mhd/bvals dir
 
   // CalculateFluxes function templated over Riemann Solvers
   template <MHD_RSolver T>

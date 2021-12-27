@@ -4,8 +4,8 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file bvals_cc.cpp
-//! \brief functions to pack/send and recv/unbpack boundary values for cell-centered
-//!  variables. This functionality is mplemented in BValCC class.
+//! \brief functions to pack/send and recv/unpack/prolongate boundary values for
+//! cell-centered variables, implemented as part of the BValCC class.
 
 #include <cstdlib>
 #include <iostream>
@@ -27,14 +27,14 @@ BValCC::BValCC(MeshBlockPack *pp, ParameterInput *pin) : pmy_pack(pp)
 //----------------------------------------------------------------------------------------
 //! \fn void BValCC::PackAndSendCC()
 //! \brief Pack cell-centered variables into boundary buffers and send to neighbors.
-//
-// This routine packs ALL the buffers on ALL the faces, edges, and corners simultaneously,
-// for ALL the MeshBlocks.  This reduces the number of kernel launches when there are a
-// large number of MeshBlocks per MPI rank.  Buffer data are then sent (via MPI) or copied
-// directly for periodic or block boundaries.
-//
-// Input arrays must be 5D Kokkos View dimensioned (nmb, nvar, nx3, nx2, nx1)
-// 5D Kokkos View of coarsened (restricted) array data also required with SMR/AMR 
+//!
+//! This routine packs ALL the buffers on ALL the faces, edges, and corners simultaneously
+//! for ALL the MeshBlocks. This reduces the number of kernel launches when there are a
+//! large number of MeshBlocks per MPI rank. Buffer data are then sent (via MPI) or copied
+//! directly for periodic or block boundaries.
+//!
+//! Input arrays must be 5D Kokkos View dimensioned (nmb, nvar, nx3, nx2, nx1)
+//! 5D Kokkos View of coarsened (restricted) array data also required with SMR/AMR 
 
 TaskStatus BValCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, int key)
 {
@@ -136,7 +136,6 @@ TaskStatus BValCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, in
               sbuf[n].data(m, v, i-il + ni*(j-jl + nj*(k-kl))) = a(m,v,k,j,i);
             });
           // if neighbor is at coarser level, load data from coarse_u0
-          // Note in this case, sbuf[n].indcs values refer to coarse_u0
           } else {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
             [&](const int i)
@@ -146,8 +145,7 @@ TaskStatus BValCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, in
           }
         }
       });
-    } // end if-block
-
+    } // end if-neighbor-exists block
   }); // end par_for_outer
   }
 
@@ -166,7 +164,7 @@ TaskStatus BValCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, in
       if (nghbr.h_view(m,n).gid >= 0) {  // neighbor exists and not a physical boundary
         // compute indices of destination MeshBlock and Neighbor 
         int nn = nghbr.h_view(m,n).dest;
-        // if MeshBlocks are same rank, data already copied into receive buffer above
+        // if MeshBlocks are on same rank, data already copied into receive buffer above
         // So simply set communication status tag as received.
         if (nghbr.h_view(m,n).rank == my_rank) {
           int mm = nghbr.h_view(m,n).gid - pmy_pack->gids;
@@ -230,12 +228,7 @@ TaskStatus BValCC::RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
     for (int n=0; n<nnghbr; ++n) {
       if (nghbr.h_view(m,n).gid >= 0) { // neighbor exists and not a physical boundary
         if (nghbr.h_view(m,n).rank == global_variable::my_rank) {
-          if (rbuf[n].bcomm_stat(m) == BoundaryCommStatus::waiting) {
-            bflag = true;
-/***
-std::cout << "block=" << m << "  buffer=" << n << "  not received" << std::endl;
-***/
-          }
+          if (rbuf[n].bcomm_stat(m) == BoundaryCommStatus::waiting) {bflag = true;}
 #if MPI_PARALLEL_ENABLED
         } else {
           MPI_Test(&(rbuf[n].comm_req[m]), &test, MPI_STATUS_IGNORE);
@@ -318,7 +311,6 @@ std::cout << "block=" << m << "  buffer=" << n << "  not received" << std::endl;
           });
 
         // if neighbor is at coarser level, load data into coarse_u0 (prolongate below)
-        // Note in this case, rbuf[n].indcs values refer to coarse_u0
         } else {
           Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),[&](const int i)
           {
@@ -327,132 +319,14 @@ std::cout << "block=" << m << "  buffer=" << n << "  not received" << std::endl;
         }
 
       });
-    }  // end if-block
+    }  // end if-neighbor-exists block
   });  // end par_for_outer
   }
 
   //----- STEP 3: Prolongate conserved variables when neighbor at coarser level
-  // Code here is based on MeshRefinement::ProlongateCellCenteredValues() in C++ version
 
   // Only perform prolongation with SMR/AMR
-  if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
-
-  int nvar = a.extent_int(1);  // TODO: 2nd index from L of input array must be NVAR
-  int nmnv = nmb*nnghbr*nvar;
-  auto &nghbr = pmy_pack->pmb->nghbr;
-  auto &mblev = pmy_pack->pmb->mb_lev;
-  auto &rbuf = recv_buf;
-  bool &multi_d = pmy_pack->pmesh->multi_d;
-  bool &three_d = pmy_pack->pmesh->three_d;
-  auto &indcs  = pmy_pack->pmesh->mb_indcs;
-  auto &cindcs = pmy_pack->pmesh->mb_cindcs;
-
-  // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
-  Kokkos::TeamPolicy<> policy(DevExeSpace(), nmnv, Kokkos::AUTO);
-  Kokkos::parallel_for("RecvBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember)
-  {
-    const int m = (tmember.league_rank())/(nnghbr*nvar);
-    const int n = (tmember.league_rank() - m*(nnghbr*nvar))/nvar;
-    const int v = (tmember.league_rank() - m*(nnghbr*nvar) - n*nvar);
-
-    // only prolongate when neighbor exists and is at coarser level
-    if ((nghbr.d_view(m,n).gid >= 0) && (nghbr.d_view(m,n).lev < mblev.d_view(m))) {
-
-      // loop over indices for prolongation on this buffer
-      int il = rbuf[n].pindcs.bis;
-      int iu = rbuf[n].pindcs.bie;
-      int jl = rbuf[n].pindcs.bjs;
-      int ju = rbuf[n].pindcs.bje;
-      int kl = rbuf[n].pindcs.bks;
-      int ku = rbuf[n].pindcs.bke;
-      const int ni = iu - il + 1;
-      const int nj = ju - jl + 1;
-      const int nk = ku - kl + 1;
-      const int nkj  = nk*nj;
-
-      // Middle loop over k,j
-      Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx)
-      {
-        int k = idx / nj;
-        int j = (idx - k * nj) + jl;
-        k += kl;
-
-        Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),[&](const int i)
-        {
-          // indices for prolongation (pindcs) refer to coarse array.  So must compute
-          // indices for fine array
-          int finei = (i - cindcs.is)*2 + indcs.is;
-          int finej = (j - cindcs.js)*2 + indcs.js;
-          int finek = (k - cindcs.ks)*2 + indcs.ks;
-
-/*
-std::cout << std::endl << "MB= "<<m<<"  Buffer="<< n << std::endl;
-std::cout <<il<<"  "<<iu<<"  "<<jl<<"  "<<ju<<"  "<<kl<<"  "<<ku<< std::endl;
-std::cout << "finei=" << finei << "  finej=" << finej << "  finek=" << finek << std::endl;
-*/
-
-          // calculate x1-gradient using the min-mod limiter
-          Real dl = ca(m,v,k,j,i  ) - ca(m,v,k,j,i-1);
-          Real dr = ca(m,v,k,j,i+1) - ca(m,v,k,j,i  );
-          Real dvar1 = 0.25*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
-
-          // calculate x2-gradient using the min-mod limiter
-          Real dvar2 = 0.0;
-          if (multi_d) {
-            dl = ca(m,v,k,j  ,i) - ca(m,v,k,j-1,i);
-            dr = ca(m,v,k,j+1,i) - ca(m,v,k,j  ,i);
-            dvar2 = 0.25*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
-          }
-
-          // calculate x1-gradient using the min-mod limiter
-          Real dvar3 = 0.0;
-          if (three_d) {
-            dl = ca(m,v,k  ,j,i) - ca(m,v,k-1,j,i);
-            dr = ca(m,v,k+1,j,i) - ca(m,v,k  ,j,i);
-            dvar3 = 0.25*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
-          }
-
-          // interpolate to the finer grid
-          a(m,v,finek,finej,finei  ) = ca(m,v,k,j,i) - dvar1 - dvar2 - dvar3;
-          a(m,v,finek,finej,finei+1) = ca(m,v,k,j,i) + dvar1 - dvar2 - dvar3;
-          if (multi_d) {
-            a(m,v,finek,finej+1,finei  ) = ca(m,v,k,j,i) - dvar1 + dvar2 - dvar3;
-            a(m,v,finek,finej+1,finei+1) = ca(m,v,k,j,i) + dvar1 + dvar2 - dvar3;
-          }
-          if (three_d) {
-            a(m,v,finek+1,finej  ,finei  ) = ca(m,v,k,j,i) - dvar1 - dvar2 + dvar3;
-            a(m,v,finek+1,finej  ,finei+1) = ca(m,v,k,j,i) + dvar1 - dvar2 + dvar3;
-            a(m,v,finek+1,finej+1,finei  ) = ca(m,v,k,j,i) - dvar1 + dvar2 + dvar3;
-            a(m,v,finek+1,finej+1,finei+1) = ca(m,v,k,j,i) + dvar1 + dvar2 + dvar3;
-          }
-
-        });
-      });
-    }
-  });
-
-/******
-  std::cout << std::endl << "u0 data" << std::endl;
-  for (int m=0; m<nmb; ++m) {
-    auto &js = pmy_pack->pcoord->mbdata.sindcs.js;
-    auto &ks = pmy_pack->pcoord->mbdata.sindcs.ks;
-    std::cout << "Block = " << m << "  level = " << pmy_pack->pmb->mblev.h_view(m) << std::endl;
-    for (int i=pmy_pack->pcoord->mbdata.sindcs.is-2; i<=pmy_pack->pcoord->mbdata.sindcs.ie+2; ++i) {
-      std::cout << "i=" << i << "  d=" << a(m,0,ks,js,i) << std::endl;
-    }
-  }
-
-  std::cout << std::endl << "coarse u0 data" << std::endl;
-  for (int m=0; m<nmb; ++m) {
-    auto &js = pmy_pack->pcoord->mbdata.cindcs.js;
-    auto &ks = pmy_pack->pcoord->mbdata.cindcs.ks;
-    std::cout << "Block = " << m << "  level = " << pmy_pack->pmb->mblev.h_view(m) << std::endl;
-    for (int i=pmy_pack->pcoord->mbdata.cindcs.is-2; i<=pmy_pack->pcoord->mbdata.cindcs.ie+2; ++i) {
-      std::cout << "i=" << i << "  d=" << ca(m,0,ks,js,i) << std::endl;
-    }
-  }
-
-*****/
+  if (pmy_pack->pmesh->multilevel) ProlongCC(a,ca);
 
   return TaskStatus::complete;
 }

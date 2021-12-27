@@ -20,7 +20,7 @@ class Viscosity;
 class SourceTerms;
 class Driver;
 
-// function ptr for user-defined boundary functions enrolled in problem generator 
+// function ptr for user-defined Hydro boundary functions enrolled in problem generator 
 namespace hydro {
 using HydroBoundaryFnPtr = void (*)(int m, Mesh* pm, Hydro* phyd, DvceArray5D<Real> &u);
 }
@@ -75,7 +75,6 @@ public:
   DvceArray5D<Real> w0;   // primitive variables
 
   DvceArray5D<Real> coarse_u0;  // conserved variables on 2x coarser grid (for SMR/AMR)
-  DvceArray5D<Real> coarse_w0;  // primitive variables on 2x coarser grid (for SMR/AMR)
 
   // Boundary communication buffers and routines for u, and user-defined boundary fn 
   BValCC *pbval_u;
@@ -99,13 +98,13 @@ public:
   TaskStatus ClearRecv(Driver *d, int stage);
   TaskStatus ClearSend(Driver *d, int stage);
   TaskStatus CopyCons(Driver *d, int stage);
-  TaskStatus ExpRKUpdate(Driver *d, int stage);
   TaskStatus SendU(Driver *d, int stage); 
   TaskStatus RecvU(Driver *d, int stage); 
   TaskStatus RestrictU(Driver *d, int stage); 
   TaskStatus ConToPrim(Driver *d, int stage);
+  TaskStatus ExpRKUpdate(Driver *d, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
-  TaskStatus ApplyPhysicalBCs(Driver* pdrive, int stage);  // in file in hydro/bvals dir
+  TaskStatus ApplyPhysicalBCs(Driver* pdrive, int stage);  // file in hydro/bvals dir
 
   // CalculateFluxes function templated over Riemann Solvers
   template <Hydro_RSolver T>

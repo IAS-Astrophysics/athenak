@@ -109,7 +109,6 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
     resfile.Write(&(pm->mesh_size), sizeof(RegionSize), 1);
     resfile.Write(&(pm->mesh_indcs), sizeof(RegionIndcs), 1);
     resfile.Write(&(pm->mb_indcs), sizeof(RegionIndcs), 1);
-    resfile.Write(&(pm->mb_cindcs), sizeof(RegionIndcs), 1);
     resfile.Write(&(pm->time), sizeof(Real), 1);
     resfile.Write(&(pm->dt), sizeof(Real), 1);
     resfile.Write(&(pm->ncycle), sizeof(int), 1);
@@ -134,7 +133,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
 
   // now write restart data in parallel
   IOWrapperSizeT step1size = sbuf.size()*sizeof(char) + 3*sizeof(int) + 2*sizeof(Real) +
-                             sizeof(RegionSize) + 3*sizeof(RegionIndcs);
+                             sizeof(RegionSize) + 2*sizeof(RegionIndcs);
   IOWrapperSizeT step2size = (pm->nmb_total)*(sizeof(LogicalLocation) + sizeof(float));
   int mygids = pm->gidslist[global_variable::my_rank];
   IOWrapperSizeT myoffset  = step1size + step2size + sizeof(IOWrapperSizeT) +

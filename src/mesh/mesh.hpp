@@ -37,6 +37,8 @@ struct RegionIndcs
   int ng;                   // number of ghost cells
   int nx1, nx2, nx3;        // number of active cells (not including ghost zones)
   int is,ie,js,je,ks,ke;    // indices of ACTIVE cells
+  int cnx1, cnx2, cnx3;         // number of active coarse cells (not including gzs)
+  int cis,cie,cjs,cje,cks,cke;  // indices of ACTIVE coarse cells
 };
 
 //----------------------------------------------------------------------------------------
@@ -108,7 +110,6 @@ public:
   RegionSize  mesh_size;      // (physical) size of mesh (physical root level)
   RegionIndcs mesh_indcs;     // indices of cells in mesh (physical root level)
   RegionIndcs mb_indcs;       // indices of cells in MeshBlocks (same for all MeshBlocks)
-  RegionIndcs mb_cindcs;      // indices of coarse array cells in MeshBlocks
   BoundaryFlag mesh_bcs[6];   // physical boundary conditions at 6 faces of mesh
 
   bool one_d, two_d, three_d; // flags to indicate 1D or 2D or 3D calculations
@@ -151,9 +152,11 @@ public:
   // functions
   void BuildTreeFromScratch(ParameterInput *pin);
   void BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile);
-  void NewTimeStep(const Real tlim);
   void PrintMeshDiagnostics();
   void WriteMeshStructure();
+  void NewTimeStep(const Real tlim);
+  void RestrictCC(DvceArray5D<Real> a, DvceArray5D<Real> ca);
+  void RestrictFC(DvceFaceFld4D<Real> a, DvceFaceFld4D<Real> ca);
   BoundaryFlag GetBoundaryFlag(const std::string& input_string);
   std::string GetBoundaryString(BoundaryFlag input_flag);
 

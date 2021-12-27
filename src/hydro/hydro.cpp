@@ -26,7 +26,6 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   u0("cons",1,1,1,1,1),
   w0("prim",1,1,1,1,1),
   coarse_u0("ccons",1,1,1,1,1),
-  coarse_w0("cprim",1,1,1,1,1),
   u1("cons1",1,1,1,1,1),
   uflx("uflx",1,1,1,1,1)
 {
@@ -93,20 +92,21 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   // allocate memory for conserved and primitive variables
   int nmb = ppack->nmb_thispack;
   auto &indcs = pmy_pack->pmesh->mb_indcs;
+  {
   int ncells1 = indcs.nx1 + 2*(indcs.ng);
   int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
   int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
   Kokkos::realloc(u0, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
   Kokkos::realloc(w0, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
+  }
 
-  // allocate memory for conserved and primitive variables on coarse mesh
+  // allocate memory for conserved variables on coarse mesh
   if (ppack->pmesh->multilevel) {
-    auto &cindcs = pmy_pack->pmesh->mb_cindcs;
-    int nccells1 = cindcs.nx1 + 2*(cindcs.ng);
-    int nccells2 = (cindcs.nx2 > 1)? (cindcs.nx2 + 2*(cindcs.ng)) : 1;
-    int nccells3 = (cindcs.nx3 > 1)? (cindcs.nx3 + 2*(cindcs.ng)) : 1;
+    auto &indcs = pmy_pack->pmesh->mb_indcs;
+    int nccells1 = indcs.cnx1 + 2*(indcs.ng);
+    int nccells2 = (indcs.cnx2 > 1)? (indcs.cnx2 + 2*(indcs.ng)) : 1;
+    int nccells3 = (indcs.cnx3 > 1)? (indcs.cnx3 + 2*(indcs.ng)) : 1;
     Kokkos::realloc(coarse_u0, nmb, (nhydro+nscalars), nccells3, nccells2, nccells1);
-    Kokkos::realloc(coarse_w0, nmb, (nhydro+nscalars), nccells3, nccells2, nccells1);
   }
 
   // allocate boundary buffers for conserved (cell-centered) variables
@@ -225,6 +225,9 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
     }}
 
     // allocate second registers, fluxes
+    int ncells1 = indcs.nx1 + 2*(indcs.ng);
+    int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
+    int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
     Kokkos::realloc(u1,       nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
     Kokkos::realloc(uflx.x1f, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
     Kokkos::realloc(uflx.x2f, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);

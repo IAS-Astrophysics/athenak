@@ -29,6 +29,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   b0("B_fc",1,1,1,1),
   bcc0("B_cc",1,1,1,1,1),
   coarse_u0("ccons",1,1,1,1,1),
+  coarse_b0("cB_fc",1,1,1,1),
   u1("cons1",1,1,1,1,1),
   b1("B_fc1",1,1,1,1),
   uflx("uflx",1,1,1,1,1),
@@ -113,6 +114,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   // allocate memory for conserved and primitive variables
   int nmb = ppack->nmb_thispack;
   auto &indcs = pmy_pack->pmesh->mb_indcs;
+  {
   int ncells1 = indcs.nx1 + 2*(indcs.ng);
   int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
   int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
@@ -124,6 +126,19 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   Kokkos::realloc(b0.x1f, nmb, ncells3, ncells2, ncells1+1);
   Kokkos::realloc(b0.x2f, nmb, ncells3, ncells2+1, ncells1);
   Kokkos::realloc(b0.x3f, nmb, ncells3+1, ncells2, ncells1);
+  }
+
+  // allocate memory for conserved variables on coarse mesh
+  if (ppack->pmesh->multilevel) {
+    auto &indcs = pmy_pack->pmesh->mb_indcs;
+    int nccells1 = indcs.cnx1 + 2*(indcs.ng);
+    int nccells2 = (indcs.cnx2 > 1)? (indcs.cnx2 + 2*(indcs.ng)) : 1;
+    int nccells3 = (indcs.cnx3 > 1)? (indcs.cnx3 + 2*(indcs.ng)) : 1;
+    Kokkos::realloc(coarse_u0, nmb, (nmhd+nscalars), nccells3, nccells2, nccells1);
+    Kokkos::realloc(coarse_b0.x1f, nmb, nccells3, nccells2, nccells1+1);
+    Kokkos::realloc(coarse_b0.x2f, nmb, nccells3, nccells2+1, nccells1);
+    Kokkos::realloc(coarse_b0.x3f, nmb, nccells3+1, nccells2, nccells1);
+  }
   
   // allocate boundary buffers for conserved (cell-centered) variables
   pbval_u = new BValCC(ppack, pin);
@@ -235,6 +250,9 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     }}
 
     // allocate second registers
+    int ncells1 = indcs.nx1 + 2*(indcs.ng);
+    int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
+    int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
     Kokkos::realloc(u1,     nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
     Kokkos::realloc(b1.x1f, nmb, ncells3, ncells2, ncells1+1);
     Kokkos::realloc(b1.x2f, nmb, ncells3, ncells2+1, ncells1);

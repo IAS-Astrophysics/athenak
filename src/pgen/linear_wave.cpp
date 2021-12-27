@@ -4,10 +4,11 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file linear_wave.c
-//  \brief Linear wave problem generator for 1D/2D/3D problems. Initializes both hydro and
-//  MHD problems. Direction of the wavevector is set to be along the x? axis by using the
-//  along_x? input flags, else it is automatically set along the grid diagonal in 2D/3D
-//
+//! \brief Linear wave problem generator for 1D/2D/3D problems. Initializes both hydro and
+//! MHD problems. Direction of the wavevector is set to be along the x? axis by using the
+//! along_x? input flags, else it is automatically set along the grid diagonal in 2D/3D
+//! This file also contains a function to compute L1 errors in solution, called in
+//! Driver::Finalize().
 
 // C/C++ headers
 #include <algorithm>  // min, max
@@ -44,7 +45,7 @@ void MHDEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
 
 //----------------------------------------------------------------------------------------
 //! \struct LinWaveVariables
-//  \brief container for variables shared with vector potential and error functions
+//! \brief container for variables shared with vector potential and error functions
 
 struct LinWaveVariables
 {
@@ -54,8 +55,8 @@ struct LinWaveVariables
 
 //----------------------------------------------------------------------------------------
 //! \fn Real A1(const Real x1,const Real x2,const Real x3)
-//  \brief A1: 1-component of vector potential, using a gauge such that Ax = 0, and Ay,
-//  Az are functions of x and y alone.
+//! \brief A1: 1-component of vector potential, using a gauge such that Ax = 0, and Ay,
+//! Az are functions of x and y alone.
 
 KOKKOS_INLINE_FUNCTION
 Real A1(const Real x1, const Real x2, const Real x3, const LinWaveVariables lw) {
@@ -69,7 +70,7 @@ Real A1(const Real x1, const Real x2, const Real x3, const LinWaveVariables lw) 
 
 //----------------------------------------------------------------------------------------
 //! \fn Real A2(const Real x1,const Real x2,const Real x3)
-//  \brief A2: 2-component of vector potential
+//! \brief A2: 2-component of vector potential
   
 KOKKOS_INLINE_FUNCTION
 Real A2(const Real x1, const Real x2, const Real x3, const LinWaveVariables lw) {
@@ -83,7 +84,7 @@ Real A2(const Real x1, const Real x2, const Real x3, const LinWaveVariables lw) 
 
 //----------------------------------------------------------------------------------------
 //! \fn Real A3(const Real x1,const Real x2,const Real x3)
-//  \brief A3: 3-component of vector potential
+//! \brief A3: 3-component of vector potential
 
 KOKKOS_INLINE_FUNCTION
 Real A3(const Real x1, const Real x2, const Real x3, const LinWaveVariables lw) {
@@ -96,7 +97,7 @@ Real A3(const Real x1, const Real x2, const Real x3, const LinWaveVariables lw) 
 
 //----------------------------------------------------------------------------------------
 //! \fn void ProblemGenerator::LinearWave_()
-//  \brief Sets initial conditions for linear wave tests
+//! \brief Sets initial conditions for linear wave tests
 
 void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
 {
@@ -199,7 +200,7 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
     Real gm1 = eos.gamma - 1.0;
     Real p0 = 1.0/eos.gamma;
 
-    // compute solution in u1 register.  If setting initial conditions, copy u1 -> u0.
+    // compute solution in u1 register. For initial conditions, set u1 -> u0.
     auto u1 = pmbp->phydro->u1; 
     if (set_initial_conditions) {u1 = pmbp->phydro->u0;}
 
@@ -263,6 +264,14 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
     auto &u0 = pmbp->pmhd->u0;
     auto &b0 = pmbp->pmhd->b0;
 
+    // compute solution in u1/b1 registers. For initial conditions, set u1/b1 -> u0/b0.
+    auto u1 = pmbp->pmhd->u1; 
+    auto b1 = pmbp->pmhd->b1;
+    if (set_initial_conditions) {
+      u1 = pmbp->pmhd->u0;
+      b1 = pmbp->pmhd->b0;
+    }
+
     // Compute eigenvectors in mhd
     Real rem[7][7];
     Real ev[7];
@@ -304,13 +313,13 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
         Real mz = amp*sn*rem[3][wave_flag];
  
         // compute cell-centered conserved variables
-        u0(m,IDN,k,j,i)=lwv.d0 + amp*sn*rem[0][wave_flag];
-        u0(m,IM1,k,j,i)=mx*lwv.cos_a2*lwv.cos_a3 -my*lwv.sin_a3 -mz*lwv.sin_a2*lwv.cos_a3;
-        u0(m,IM2,k,j,i)=mx*lwv.cos_a2*lwv.sin_a3 +my*lwv.cos_a3 -mz*lwv.sin_a2*lwv.sin_a3;
-        u0(m,IM3,k,j,i)=mx*lwv.sin_a2                           +mz*lwv.cos_a2;
+        u1(m,IDN,k,j,i)=lwv.d0 + amp*sn*rem[0][wave_flag];
+        u1(m,IM1,k,j,i)=mx*lwv.cos_a2*lwv.cos_a3 -my*lwv.sin_a3 -mz*lwv.sin_a2*lwv.cos_a3;
+        u1(m,IM2,k,j,i)=mx*lwv.cos_a2*lwv.sin_a3 +my*lwv.cos_a3 -mz*lwv.sin_a2*lwv.sin_a3;
+        u1(m,IM3,k,j,i)=mx*lwv.sin_a2                           +mz*lwv.cos_a2;
 
         if (eos.is_ideal) {
-          u0(m,IEN,k,j,i) = p0/gm1 + 0.5*lwv.d0*SQR(lwv.v1_0) +
+          u1(m,IEN,k,j,i) = p0/gm1 + 0.5*lwv.d0*SQR(lwv.v1_0) +
            amp*sn*rem[4][wave_flag] + 0.5*(SQR(lwv.b1_0) + SQR(lwv.b2_0) + SQR(lwv.b3_0));
         }
 
@@ -325,24 +334,24 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
         Real dx2 = size.d_view(m).dx2;
         Real dx3 = size.d_view(m).dx3;
 
-        b0.x1f(m,k,j,i) = (A3(x1f,  x2fp1,x3v  ,lwv) - A3(x1f,x2f,x3v,lwv))/dx2 -
+        b1.x1f(m,k,j,i) = (A3(x1f,  x2fp1,x3v  ,lwv) - A3(x1f,x2f,x3v,lwv))/dx2 -
                           (A2(x1f,  x2v,  x3fp1,lwv) - A2(x1f,x2v,x3f,lwv))/dx3;
-        b0.x2f(m,k,j,i) = (A1(x1v,  x2f,  x3fp1,lwv) - A1(x1v,x2f,x3f,lwv))/dx3 -
+        b1.x2f(m,k,j,i) = (A1(x1v,  x2f,  x3fp1,lwv) - A1(x1v,x2f,x3f,lwv))/dx3 -
                           (A3(x1fp1,x2f,  x3v  ,lwv) - A3(x1f,x2f,x3v,lwv))/dx1;
-        b0.x3f(m,k,j,i) = (A2(x1fp1,x2v,  x3f  ,lwv) - A2(x1f,x2v,x3f,lwv))/dx1 -
+        b1.x3f(m,k,j,i) = (A2(x1fp1,x2v,  x3f  ,lwv) - A2(x1f,x2v,x3f,lwv))/dx1 -
                           (A1(x1v,  x2fp1,x3f  ,lwv) - A1(x1v,x2f,x3f,lwv))/dx2;
 
         // Include extra face-component at edge of block in each direction
         if (i==ie) {
-          b0.x1f(m,k,j,i+1) = (A3(x1fp1,x2fp1,x3v  ,lwv) - A3(x1fp1,x2f,x3v,lwv))/dx2 -
+          b1.x1f(m,k,j,i+1) = (A3(x1fp1,x2fp1,x3v  ,lwv) - A3(x1fp1,x2f,x3v,lwv))/dx2 -
                               (A2(x1fp1,x2v,  x3fp1,lwv) - A2(x1fp1,x2v,x3f,lwv))/dx3;
         }
         if (j==je) {
-          b0.x2f(m,k,j+1,i) = (A1(x1v,  x2fp1,x3fp1,lwv) - A1(x1v,x2fp1,x3f,lwv))/dx3 -
+          b1.x2f(m,k,j+1,i) = (A1(x1v,  x2fp1,x3fp1,lwv) - A1(x1v,x2fp1,x3f,lwv))/dx3 -
                               (A3(x1fp1,x2fp1,x3v  ,lwv) - A3(x1f,x2fp1,x3v,lwv))/dx1;
         }
         if (k==ke) {
-          b0.x3f(m,k+1,j,i) = (A2(x1fp1,x2v,  x3fp1,lwv) - A2(x1f,x2v,x3fp1,lwv))/dx1 -
+          b1.x3f(m,k+1,j,i) = (A2(x1fp1,x2v,  x3fp1,lwv) - A2(x1f,x2v,x3fp1,lwv))/dx1 -
                               (A1(x1v,  x2fp1,x3fp1,lwv) - A1(x1v,x2f,x3fp1,lwv))/dx2;
         }
       }
@@ -354,7 +363,7 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
 
 //----------------------------------------------------------------------------------------
 //! \fn void HydroEigensystem()
-//  \brief computes eigenvectors of linear waves in ideal gas/isothermal hydrodynamics
+//! \brief computes eigenvectors of linear waves in ideal gas/isothermal hydrodynamics
 
 void HydroEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
                       const Real p, const EOS_Data &eos,
@@ -437,7 +446,7 @@ void HydroEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
 
 //----------------------------------------------------------------------------------------
 //! \fn void MHDEigensystem()
-//  \brief computes eigenvectors of linear waves in ideal gas/isothermal mhd
+//! \brief computes eigenvectors of linear waves in ideal gas/isothermal mhd
 
 void MHDEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
                     const Real p, const Real b1, const Real b2, const Real b3,
@@ -693,7 +702,9 @@ void MHDEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
 
 //----------------------------------------------------------------------------------------
 //! \fn void ProblemGenerator::LinearWaveErrors_()
-//  \brief Computes errors in linear wave solution and outputs to file.
+//! \brief Computes errors in linear wave solution by calling initialization function
+//! again to compute initial condictions, and subtracting current solution from ICs, and
+//! outputs errors to file. Problem must be run for an integer number of wave periods.
 
 void ProblemGenerator::LinearWaveErrors_(MeshBlockPack *pmbp, ParameterInput *pin)
 {
@@ -715,7 +726,7 @@ void ProblemGenerator::LinearWaveErrors_(MeshBlockPack *pmbp, ParameterInput *pi
   int &ks = indcs.ks;
   auto &size = pmbp->pmb->mb_size;
 
-  // compute errors for Hydro  ----------------------------------------------------------
+  // compute errors for Hydro  -----------------------------------------------------------
   if (pmbp->phydro != nullptr) {
     nvars = pmbp->phydro->nhydro;
 
@@ -740,7 +751,7 @@ void ProblemGenerator::LinearWaveErrors_(MeshBlockPack *pmbp, ParameterInput *pi
 
         Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
 
-        // Hydro conserved variables:
+        // conserved variables:
         array_sum::GlobalSum evars;
         evars.the_array[IDN] = vol*fabs(u0_(m,IDN,k,j,i) - u1_(m,IDN,k,j,i));
         evars.the_array[IM1] = vol*fabs(u0_(m,IM1,k,j,i) - u1_(m,IM1,k,j,i));
@@ -750,6 +761,73 @@ void ProblemGenerator::LinearWaveErrors_(MeshBlockPack *pmbp, ParameterInput *pi
           evars.the_array[IEN] = vol*fabs(u0_(m,IEN,k,j,i) - u1_(m,IEN,k,j,i));
         }
   
+        // fill rest of the_array with zeros, if narray < NREDUCTION_VARIABLES
+        for (int n=nvars; n<NREDUCTION_VARIABLES; ++n) {
+          evars.the_array[n] = 0.0;
+        }
+
+        // sum into parallel reduce
+        mb_sum += evars;
+
+      }, Kokkos::Sum<array_sum::GlobalSum>(sum_this_mb)
+    );
+
+    // store data into l1_err array
+    for (int n=0; n<nvars; ++n) {
+      l1_err[n] = sum_this_mb.the_array[n];
+    }
+  }
+
+  // compute errors for MHD  -------------------------------------------------------------
+  if (pmbp->pmhd != nullptr) {
+    nvars = pmbp->pmhd->nmhd + 3;  // include 3-compts of cell-centered B in errors
+
+    EOS_Data &eos = pmbp->pmhd->peos->eos_data;
+    auto &u0_ = pmbp->pmhd->u0;
+    auto &u1_ = pmbp->pmhd->u1;
+    auto &b0_ = pmbp->pmhd->b0;
+    auto &b1_ = pmbp->pmhd->b1;
+
+    const int nmkji = (pmbp->nmb_thispack)*nx3*nx2*nx1;
+    const int nkji = nx3*nx2*nx1;
+    const int nji  = nx2*nx1;
+    array_sum::GlobalSum sum_this_mb;
+    Kokkos::parallel_reduce("LW-err-Sums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+      KOKKOS_LAMBDA(const int &idx, array_sum::GlobalSum &mb_sum)
+      {
+        // compute n,k,j,i indices of thread
+        int m = (idx)/nkji;
+        int k = (idx - m*nkji)/nji;
+        int j = (idx - m*nkji - k*nji)/nx1;
+        int i = (idx - m*nkji - k*nji - j*nx1) + is;
+        k += ks;
+        j += js;
+
+        Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
+
+        // conserved variables:
+        array_sum::GlobalSum evars;
+        evars.the_array[IDN] = vol*fabs(u0_(m,IDN,k,j,i) - u1_(m,IDN,k,j,i));
+        evars.the_array[IM1] = vol*fabs(u0_(m,IM1,k,j,i) - u1_(m,IM1,k,j,i));
+        evars.the_array[IM2] = vol*fabs(u0_(m,IM2,k,j,i) - u1_(m,IM2,k,j,i));
+        evars.the_array[IM3] = vol*fabs(u0_(m,IM3,k,j,i) - u1_(m,IM3,k,j,i));
+        if (eos.is_ideal) {
+          evars.the_array[IEN] = vol*fabs(u0_(m,IEN,k,j,i) - u1_(m,IEN,k,j,i));
+        }
+
+        // cell-centered B
+        Real bcc0 = 0.5*(b0_.x1f(m,k,j,i) + b0_.x1f(m,k,j,i+1));
+        Real bcc1 = 0.5*(b1_.x1f(m,k,j,i) + b1_.x1f(m,k,j,i+1));
+        evars.the_array[IEN+1] = vol*fabs(bcc0 - bcc1);
+ 
+        bcc0 = 0.5*(b0_.x2f(m,k,j,i) + b0_.x2f(m,k,j+1,i));
+        bcc1 = 0.5*(b1_.x2f(m,k,j,i) + b1_.x2f(m,k,j+1,i));
+        evars.the_array[IEN+2] = vol*fabs(bcc0 - bcc1);
+
+        bcc0 = 0.5*(b0_.x3f(m,k,j,i) + b0_.x3f(m,k+1,j,i));
+        bcc1 = 0.5*(b1_.x3f(m,k,j,i) + b1_.x3f(m,k+1,j,i));
+        evars.the_array[IEN+3] = vol*fabs(bcc0 - bcc1);
+
         // fill rest of the_array with zeros, if narray < NREDUCTION_VARIABLES
         for (int n=nvars; n<NREDUCTION_VARIABLES; ++n) {
           evars.the_array[n] = 0.0;
@@ -805,6 +883,9 @@ void ProblemGenerator::LinearWaveErrors_(MeshBlockPack *pmbp, ParameterInput *pi
     if (pmbp->phydro != nullptr) {
       std::fprintf(pfile, "d_L1         M1_L1         M2_L1         M3_L1         E_L1 ");
     }
+    if (pmbp->pmhd != nullptr) {
+      std::fprintf(pfile, "d_L1         M1_L1         M2_L1         M3_L1         E_L1          B1_L1         B2_L1         B3_L1");
+    }
     std::fprintf(pfile, "\n");
   }
 
@@ -821,4 +902,3 @@ void ProblemGenerator::LinearWaveErrors_(MeshBlockPack *pmbp, ParameterInput *pi
 
   return;
 }
-

@@ -50,15 +50,17 @@ void MHD::AssembleMHDTasks(TaskList &start, TaskList &run, TaskList &end)
   } else if (rsolver_method == MHD_RSolver::hlle_gr) {
     id.flux = run.AddTask(&MHD::CalcFluxes<MHD_RSolver::hlle_gr>, this, id.copyu);
   }
-  id.expl = run.AddTask(&MHD::ExpRKUpdate, this, id.flux);
-  id.sendu = run.AddTask(&MHD::SendU, this, id.expl);
+  id.expl  = run.AddTask(&MHD::ExpRKUpdate, this, id.flux);
+  id.restu = run.AddTask(&MHD::RestrictU, this, id.expl);
+  id.sendu = run.AddTask(&MHD::SendU, this, id.restu);
   id.recvu = run.AddTask(&MHD::RecvU, this, id.sendu);
-  id.efld = run.AddTask(&MHD::CornerE, this, id.recvu);
-  id.ct = run.AddTask(&MHD::CT, this, id.efld);
-  id.sendb = run.AddTask(&MHD::SendB, this, id.ct);
+  id.efld  = run.AddTask(&MHD::CornerE, this, id.recvu);
+  id.ct    = run.AddTask(&MHD::CT, this, id.efld);
+  id.restb = run.AddTask(&MHD::RestrictB, this, id.ct);
+  id.sendb = run.AddTask(&MHD::SendB, this, id.restb);
   id.recvb = run.AddTask(&MHD::RecvB, this, id.sendb);
-  id.bcs = run.AddTask(&MHD::ApplyPhysicalBCs, this, id.recvb);
-  id.c2p = run.AddTask(&MHD::ConToPrim, this, id.bcs);
+  id.bcs   = run.AddTask(&MHD::ApplyPhysicalBCs, this, id.recvb);
+  id.c2p   = run.AddTask(&MHD::ConToPrim, this, id.bcs);
   id.newdt = run.AddTask(&MHD::NewTimeStep, this, id.c2p);
 
   // end task list
@@ -217,7 +219,7 @@ TaskStatus MHD::RecvU(Driver *pdrive, int stage)
 
 TaskStatus MHD::SendB(Driver *pdrive, int stage)
 {
-  TaskStatus tstat = pbval_b->PackAndSendFC(b0, VariablesID::BField_ID);
+  TaskStatus tstat = pbval_b->PackAndSendFC(b0, coarse_b0, VariablesID::BField_ID);
   return tstat;
 }
 
@@ -227,8 +229,34 @@ TaskStatus MHD::SendB(Driver *pdrive, int stage)
 
 TaskStatus MHD::RecvB(Driver *pdrive, int stage)
 {
-  TaskStatus tstat = pbval_b->RecvAndUnpackFC(b0);
+  TaskStatus tstat = pbval_b->RecvAndUnpackFC(b0, coarse_b0);
   return tstat;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void MHD::RestrictU
+//  \brief 
+
+TaskStatus MHD::RestrictU(Driver *pdrive, int stage)
+{
+  // Skip if this calculation does not use SMR/AMR
+  if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
+
+  pmy_pack->pmesh->RestrictCC(u0, coarse_u0);
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void MHD::RestrictB
+//  \brief 
+
+TaskStatus MHD::RestrictB(Driver *pdrive, int stage)
+{
+  // Skip if this calculation does not use SMR/AMR
+  if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
+
+  pmy_pack->pmesh->RestrictFC(b0, coarse_b0);
+  return TaskStatus::complete;
 }
 
 //----------------------------------------------------------------------------------------
