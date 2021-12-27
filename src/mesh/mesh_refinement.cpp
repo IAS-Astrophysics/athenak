@@ -4,7 +4,8 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file mesh_refinement.cpp
-//  \brief 
+//! \brief File containing various Mesh functions associated with SMR/AMR, including
+//! restriction and load_balancing.  Note prolongation is part of BVals classes. 
 
 #include <iostream>
 

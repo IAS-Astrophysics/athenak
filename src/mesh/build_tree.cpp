@@ -274,18 +274,6 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin)
   pmb_pack->AddMeshBlocksAndCoordinates(pin, mb_indcs);
   pmb_pack->pmb->SetNeighbors(ptree, ranklist);
   
-/**********
-  for (int m=0; m<pmb_pack->nmb_thispack; ++m) {
-    std::cout << "******* Block=" << pmb_pack->pmb->mbgid.h_view(m) << std::endl;
-    for (int n=0; n<6; ++n) {
-      std::cout << "n=" << n << " bc_flag=" << GetBoundaryString(pmb_pack->pmb->mbbcs(m,n)) << std::endl;
-    }
-    for (int n=0; n<pmb_pack->pmb->nnghbr; ++n) {
-      std::cout << "n=" << n << " gid=" << pmb_pack->pmb->nghbr.h_view(m,n).gid << " level=" << pmb_pack->pmb->nghbr.h_view(m,n).lev << " rank=" << pmb_pack->pmb->nghbr.h_view(m,n).rank << " dest=" << pmb_pack->pmb->nghbr.h_view(m,n).dest << std::endl;
-    }
-  }
-**********/
-
   ResetLoadBalanceCounters();
   if (global_variable::my_rank == 0) {PrintMeshDiagnostics();}
 
@@ -454,18 +442,6 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile)
   pmb_pack = new MeshBlockPack(this, gids, gide);
   pmb_pack->AddMeshBlocksAndCoordinates(pin, mb_indcs);
   pmb_pack->pmb->SetNeighbors(ptree, ranklist);
-
-/**********
-  for (int m=0; m<pmb_pack->nmb_thispack; ++m) {
-    std::cout << "******* Block=" << pmb_pack->pmb->mbgid.h_view(m) << std::endl;
-    for (int n=0; n<6; ++n) {
-      std::cout << "n=" << n << " bc_flag=" << GetBoundaryString(pmb_pack->pmb->mbbcs(m,n)) << std::endl;
-    }
-    for (int n=0; n<pmb_pack->pmb->nnghbr; ++n) {
-      std::cout << "n=" << n << " gid=" << pmb_pack->pmb->nghbr.h_view(m,n).gid << " level=" << pmb_pack->pmb->nghbr.h_view(m,n).lev << " rank=" << pmb_pack->pmb->nghbr.h_view(m,n).rank << " dest=" << pmb_pack->pmb->nghbr.h_view(m,n).dest << std::endl;
-    }
-  }
-**********/
 
   ResetLoadBalanceCounters();
   if (global_variable::my_rank == 0) {PrintMeshDiagnostics();}

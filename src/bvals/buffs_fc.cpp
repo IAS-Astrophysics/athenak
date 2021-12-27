@@ -838,53 +838,5 @@ void BValFC::AllocateBuffersFC()
     }
   }
 
-  for (int n=0; n<=nnghbr; ++n) {
-std::cout << std::endl << "FC_Buffer="<< n << std::endl;
-/***
-****/
-for (int v=0; v<3; ++v) {
-std::cout <<"send_same[" << v << "]:"
-                <<send_buf[n].sindcs[v].bis<<"  "<<send_buf[n].sindcs[v].bie<<
-            "  "<<send_buf[n].sindcs[v].bjs<<"  "<<send_buf[n].sindcs[v].bje<<
-            "  "<<send_buf[n].sindcs[v].bks<<"  "<<send_buf[n].sindcs[v].bke<< std::endl;
-}
-for (int v=0; v<3; ++v) {
-std::cout <<"send_coar[" << v << "]:"
-                <<send_buf[n].cindcs[v].bis<<"  "<<send_buf[n].cindcs[v].bie<<
-            "  "<<send_buf[n].cindcs[v].bjs<<"  "<<send_buf[n].cindcs[v].bje<<
-            "  "<<send_buf[n].cindcs[v].bks<<"  "<<send_buf[n].cindcs[v].bke<< std::endl;
-}
-for (int v=0; v<3; ++v) {
-std::cout <<"send_fine[" << v << "]:"
-                <<send_buf[n].findcs[v].bis<<"  "<<send_buf[n].findcs[v].bie<<
-            "  "<<send_buf[n].findcs[v].bjs<<"  "<<send_buf[n].findcs[v].bje<<
-            "  "<<send_buf[n].findcs[v].bks<<"  "<<send_buf[n].findcs[v].bke<< std::endl;
-}
-for (int v=0; v<3; ++v) {
-std::cout <<"recv_same[" << v << "]:"
-                <<recv_buf[n].sindcs[v].bis<<"  "<<recv_buf[n].sindcs[v].bie<<
-            "  "<<recv_buf[n].sindcs[v].bjs<<"  "<<recv_buf[n].sindcs[v].bje<<
-            "  "<<recv_buf[n].sindcs[v].bks<<"  "<<recv_buf[n].sindcs[v].bke<< std::endl;
-}
-for (int v=0; v<3; ++v) {
-std::cout <<"recv_coar[" << v << "]:"
-                <<recv_buf[n].cindcs[v].bis<<"  "<<recv_buf[n].cindcs[v].bie<<
-            "  "<<recv_buf[n].cindcs[v].bjs<<"  "<<recv_buf[n].cindcs[v].bje<<
-            "  "<<recv_buf[n].cindcs[v].bks<<"  "<<recv_buf[n].cindcs[v].bke<< std::endl;
-}
-for (int v=0; v<3; ++v) {
-std::cout <<"recv_fine[" << v << "]:"
-                <<recv_buf[n].findcs[v].bis<<"  "<<recv_buf[n].findcs[v].bie<<
-            "  "<<recv_buf[n].findcs[v].bjs<<"  "<<recv_buf[n].findcs[v].bje<<
-            "  "<<recv_buf[n].findcs[v].bks<<"  "<<recv_buf[n].findcs[v].bke<< std::endl;
-}
-for (int v=0; v<3; ++v) {
-std::cout <<"prol[" << v << "]:"
-                <<recv_buf[n].pindcs[v].bis<<"  "<<recv_buf[n].pindcs[v].bie<<
-            "  "<<recv_buf[n].pindcs[v].bjs<<"  "<<recv_buf[n].pindcs[v].bje<<
-            "  "<<recv_buf[n].pindcs[v].bks<<"  "<<recv_buf[n].pindcs[v].bke<< std::endl;
-}
-  }
-
   return;
 }
