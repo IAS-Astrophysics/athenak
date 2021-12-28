@@ -379,10 +379,12 @@ void OutputType::LoadOutputData(Mesh *pm)
   int nout_mbs = outmbs.size();
   // note that while ois,oie,etc. can be different on each MB, the number of cells output
   // on each MeshBlock, i.e. (ois-ois+1), etc. is the same. 
-  int nout1 = (outmbs[0].oie - outmbs[0].ois + 1);
-  int nout2 = (outmbs[0].oje - outmbs[0].ojs + 1);
-  int nout3 = (outmbs[0].oke - outmbs[0].oks + 1);
-  Kokkos::realloc(outdata, nout_vars, nout_mbs, nout3, nout2, nout1);
+  if (nout_mbs > 0) {
+    int nout1 = (outmbs[0].oie - outmbs[0].ois + 1);
+    int nout2 = (outmbs[0].oje - outmbs[0].ojs + 1);
+    int nout3 = (outmbs[0].oke - outmbs[0].oks + 1);
+    Kokkos::realloc(outdata, nout_vars, nout_mbs, nout3, nout2, nout1);
+  }
 
   // Now load data over all variables and MeshBlocks
   for (int n=0; n<nout_vars; ++n) {
