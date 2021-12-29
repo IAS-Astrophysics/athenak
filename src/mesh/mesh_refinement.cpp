@@ -240,6 +240,7 @@ void Mesh::LoadBalance(float *clist, int *rlist, int *slist, int *nlist, int nb)
               << "This will result in poor load balancing." << std::endl;
   }
 #endif
+
   return;
 }
 

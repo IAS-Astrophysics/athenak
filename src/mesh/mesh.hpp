@@ -173,10 +173,8 @@ public:
   }
 
 private:
-  // variables for load balancing control
-  bool lb_flag_;
-  bool lb_automatic_, lb_manual_;
-  double lb_tolerance_;
+  // variables for load balancing control (not yet implemented)
+  bool lb_flag_, lb_automatic_;
   int lb_cyc_interval_;
   int cyc_since_lb_;
 

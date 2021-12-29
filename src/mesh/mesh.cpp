@@ -35,7 +35,9 @@ Mesh::Mesh(ParameterInput *pin)
     two_d(false),
     three_d(false),
     multi_d(false),
-    shearing_periodic(false)
+    shearing_periodic(false),
+    lb_flag_(false), lb_automatic_(false),
+    lb_cyc_interval_(10),cyc_since_lb_(0)
 {
   // Set physical size and number of cells in mesh (root level)
   mesh_size.x1min = pin->GetReal("mesh", "x1min");
