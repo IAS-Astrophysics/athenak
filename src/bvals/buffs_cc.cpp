@@ -14,7 +14,6 @@
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "bvals.hpp"
-#include "utils/create_mpitag.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \fn void BValCC::InitSendIndices

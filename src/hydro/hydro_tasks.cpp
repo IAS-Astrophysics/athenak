@@ -16,7 +16,6 @@
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
 #include "bvals/bvals.hpp"
-#include "utils/create_mpitag.hpp"
 #include "hydro/hydro.hpp"
 
 namespace hydro {
@@ -85,46 +84,9 @@ void Hydro::AssembleHydroTasks(TaskList &start, TaskList &run, TaskList &end)
 
 TaskStatus Hydro::InitRecv(Driver *pdrive, int stage)
 {
-  int nmb = pmy_pack->nmb_thispack;
-  int nnghbr = pmy_pack->pmb->nnghbr;
-  auto nghbr = pmy_pack->pmb->nghbr;
-  auto &mblev = pmy_pack->pmb->mb_lev;
   int nvar = nhydro + nscalars;  // TODO: potential bug if more variables added
-
-  // Initialize communications for cell-centered conserved variables
-  auto &rbufu = pbval_u->recv_buf;
-  for (int m=0; m<nmb; ++m) {
-    for (int n=0; n<nnghbr; ++n) {
-      if (nghbr.h_view(m,n).gid >= 0) {
-#if MPI_PARALLEL_ENABLED
-        // post non-blocking receive if neighboring MeshBlock on a different rank 
-        if (nghbr.h_view(m,n).rank != global_variable::my_rank) {
-          // create tag using local ID and buffer index of *receiving* MeshBlock
-          int tag = CreateMPITag(m, n, VariablesID::FluidCons_ID);
-          auto recv_data = Kokkos::subview(rbufu[n].data, m, Kokkos::ALL, Kokkos::ALL);
-          void* recv_ptr = recv_data.data();
-          int data_size;
-          // if neighbor is at coarser level, use cindices size
-          if (nghbr.h_view(m,n).lev < mblev.h_view(m)) {
-            data_size = (rbufu[n].cindcs.ndat)*nvar;
-          // if neighbor is at same level, use sindices size
-          } else if (nghbr.h_view(m,n).lev == mblev.h_view(m)) {
-            data_size = (rbufu[n].sindcs.ndat)*nvar;
-          // if neighbor is at finer level, use findices size
-          } else {
-            data_size = (rbufu[n].findcs.ndat)*nvar;
-          }
-          int ierr = MPI_Irecv(recv_ptr, data_size, MPI_ATHENA_REAL,
-            nghbr.h_view(m,n).rank, tag, MPI_COMM_WORLD, &(rbufu[n].comm_req[m]));
-        }
-#endif
-        // initialize boundary receive status flag
-        rbufu[n].bcomm_stat(m) = BoundaryCommStatus::waiting;
-      }
-    }
-  }
-
-  return TaskStatus::complete;
+  TaskStatus tstat = pbval_u->InitRecv(nvar);
+  return tstat;
 }
 
 //----------------------------------------------------------------------------------------
@@ -133,23 +95,8 @@ TaskStatus Hydro::InitRecv(Driver *pdrive, int stage)
 
 TaskStatus Hydro::ClearRecv(Driver *pdrive, int stage)
 {
-#if MPI_PARALLEL_ENABLED
-  int nmb = pmy_pack->nmb_thispack;
-  int nnghbr = pmy_pack->pmb->nnghbr;
-  auto nghbr = pmy_pack->pmb->nghbr;
-
-  // wait for all non-blocking receives for U to finish before continuing 
-  for (int m=0; m<nmb; ++m) {
-    for (int n=0; n<nnghbr; ++n) {
-      if (nghbr.h_view(m,n).gid >= 0) {
-        if (nghbr.h_view(m,n).rank != global_variable::my_rank) {
-          MPI_Wait(&(pbval_u->recv_buf[n].comm_req[m]), MPI_STATUS_IGNORE);
-        }
-      }
-    }
-  }
-#endif
-  return TaskStatus::complete;
+  TaskStatus tstat = pbval_u->ClearRecv();
+  return tstat;
 }
 
 //----------------------------------------------------------------------------------------
@@ -158,23 +105,8 @@ TaskStatus Hydro::ClearRecv(Driver *pdrive, int stage)
 
 TaskStatus Hydro::ClearSend(Driver *pdrive, int stage)
 {
-#if MPI_PARALLEL_ENABLED
-  int nmb = pmy_pack->nmb_thispack;
-  int nnghbr = pmy_pack->pmb->nnghbr;
-  auto nghbr = pmy_pack->pmb->nghbr;
-
-  // wait for all non-blocking sends for U to finish before continuing 
-  for (int m=0; m<nmb; ++m) {
-    for (int n=0; n<nnghbr; ++n) {
-      if (nghbr.h_view(m,n).gid >= 0) {
-        if (nghbr.h_view(m,n).rank != global_variable::my_rank) {
-          MPI_Wait(&(pbval_u->send_buf[n].comm_req[m]), MPI_STATUS_IGNORE);
-        }
-      }
-    }
-  }
-#endif
-  return TaskStatus::complete;
+  TaskStatus tstat = pbval_u->ClearSend();
+  return tstat;
 }
 
 //----------------------------------------------------------------------------------------

@@ -15,7 +15,6 @@
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "bvals.hpp"
-#include "utils/create_mpitag.hpp"
 
 //----------------------------------------------------------------------------------------
 // BValFC constructor:
@@ -23,6 +22,103 @@
 BValFC::BValFC(MeshBlockPack *pp, ParameterInput *pin) : pmy_pack(pp)
 {
 } 
+
+//----------------------------------------------------------------------------------------
+//! \fn  void BVal::InitRecv
+//  \brief Posts non-blocking receives (with MPI), and initialize all boundary receive
+//  status flags to waiting (with or without MPI) for boundary communication of CC vars.
+
+TaskStatus BValFC::InitRecv(int nvar)
+{
+  int nmb = pmy_pack->nmb_thispack;
+  int nnghbr = pmy_pack->pmb->nnghbr;
+  auto &nghbr = pmy_pack->pmb->nghbr;
+  auto &mblev = pmy_pack->pmb->mb_lev;
+ 
+  // Initialize communications for cell-centered conserved variables
+  for (int m=0; m<nmb; ++m) {
+    for (int n=0; n<nnghbr; ++n) {
+      if (nghbr.h_view(m,n).gid >= 0) {
+#if MPI_PARALLEL_ENABLED
+        // post non-blocking receive if neighboring MeshBlock on a different rank 
+        if (nghbr.h_view(m,n).rank != global_variable::my_rank) {
+          // create tag using local ID and buffer index of *receiving* MeshBlock
+          int tag = CreateMPITag(m, n);
+          auto recv_data = Kokkos::subview(recv_buf[n].data, m, Kokkos::ALL, Kokkos::ALL);
+          void* recv_ptr = recv_data.data();
+          int data_size;
+          // get data size if neighbor is at coarser/same/fine level
+          if (nghbr.h_view(m,n).lev < mblev.h_view(m)) {
+            data_size = (recv_buf[n].coar.ndat)*nvar;
+          } else if (nghbr.h_view(m,n).lev == mblev.h_view(m)) {
+            data_size = (recv_buf[n].same.ndat)*nvar;
+          } else {
+            data_size = (recv_buf[n].fine.ndat)*nvar;
+          }
+          (void) MPI_Irecv(recv_ptr, data_size, MPI_ATHENA_REAL, nghbr.h_view(m,n).rank,
+                           tag, fcvar_comm, &(recv_buf[n].comm_req[m]));
+        }
+#endif
+        // initialize boundary receive status flag
+        recv_buf[n].bcomm_stat(m) = BoundaryCommStatus::waiting;
+      }
+    }
+  }
+ 
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void BValCC::ClearRecv
+//  \brief Waits for all MPI receives associated with boundary communcations of CC vars
+//  to complete before allowing execution to continue
+ 
+TaskStatus BValFC::ClearRecv()
+{
+#if MPI_PARALLEL_ENABLED
+  int nmb = pmy_pack->nmb_thispack;
+  int nnghbr = pmy_pack->pmb->nnghbr;
+  auto &nghbr = pmy_pack->pmb->nghbr;
+
+  // wait for all non-blocking receives for CC vars to finish before continuing 
+  for (int m=0; m<nmb; ++m) {
+    for (int n=0; n<nnghbr; ++n) {
+      if (nghbr.h_view(m,n).gid >= 0) {
+        if (nghbr.h_view(m,n).rank != global_variable::my_rank) {
+          MPI_Wait(&(recv_buf[n].comm_req[m]), MPI_STATUS_IGNORE);
+        }
+      }
+    }
+  }
+#endif
+  return TaskStatus::complete;
+} 
+  
+//----------------------------------------------------------------------------------------
+//! \fn  void BValCC::ClearSend
+//  \brief Waits for all MPI sends associated with boundary communcations of CC vars to
+//   complete before allowing execution to continue
+ 
+TaskStatus BValFC::ClearSend()
+{
+#if MPI_PARALLEL_ENABLED
+  int nmb = pmy_pack->nmb_thispack;
+  int nnghbr = pmy_pack->pmb->nnghbr;
+  auto &nghbr = pmy_pack->pmb->nghbr;
+
+  // wait for all non-blocking sends for CC vars to finish before continuing 
+  for (int m=0; m<nmb; ++m) {
+    for (int n=0; n<nnghbr; ++n) {
+      if (nghbr.h_view(m,n).gid >= 0) {
+        if (nghbr.h_view(m,n).rank != global_variable::my_rank) {
+          MPI_Wait(&(send_buf[n].comm_req[m]), MPI_STATUS_IGNORE);
+        }
+      }
+    }
+  }
+#endif
+  return TaskStatus::complete;
+}      
   
 //----------------------------------------------------------------------------------------
 //! \!fn void BValFC::PackAndSendFC()

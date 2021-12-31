@@ -22,6 +22,22 @@ enum class BoundaryCommStatus {undef=-1, waiting, sent, received};
 // number of bits used to encode ID in CreateMPItag function in src/utils)
 enum VariablesID {FluidCons_ID, BField_ID};
 
+//----------------------------------------------------------------------------------------
+//! \fn int CreateMPITag(int lid, int bufid)
+//  \brief calculate an MPI tag for boundary buffer communications
+//  MPI tag = lid (remaining bits) + bufid (6 bits)
+//  Note the convention in Athena++ is lid and bufid are both for the *receiving* process
+
+// WARNING (KGF): Generating unsigned integer bitfields from signed integer types and
+// converting output to signed integer tags (required by MPI) may lead to unsafe
+// conversions (and overflows from built-in types and MPI_TAG_UB).  Note, the MPI standard
+// requires signed int tag, with MPI_TAG_UB>= 2^15-1 = 32,767 (inclusive)
+
+static int CreateMPITag(int lid, int bufid)
+{
+  return (lid<<6) | bufid;
+}
+
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
 #include "coordinates/coordinates.hpp"
@@ -109,6 +125,9 @@ public:
   void InitSendIndices(BValBufferCC &buf, int o1, int o2, int o3, int f1, int f2);
   void InitRecvIndices(BValBufferCC &buf, int o1, int o2, int o3, int f1, int f2);
   void AllocateBuffersCC(const int nvar);
+  TaskStatus InitRecv(int nvar);
+  TaskStatus ClearRecv();
+  TaskStatus ClearSend();
   TaskStatus PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &c, int key);
   TaskStatus RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &c);
   void ProlongCC(DvceArray5D<Real> &a, DvceArray5D<Real> &c);
@@ -134,6 +153,9 @@ public:
   void InitSendIndices(BValBufferFC &buf, int o1, int o2, int o3, int f1, int f2);
   void InitRecvIndices(BValBufferFC &buf, int o1, int o2, int o3, int f1, int f2);
   void AllocateBuffersFC();
+  TaskStatus InitRecv(int nvar);
+  TaskStatus ClearRecv();
+  TaskStatus ClearSend();
   TaskStatus PackAndSendFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &c, int key);
   TaskStatus RecvAndUnpackFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &c);
   void ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &c);
