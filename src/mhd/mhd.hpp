@@ -86,8 +86,8 @@ public:
   DvceFaceFld4D<Real> coarse_b0;  // face-centered B-field on 2x coarser grid
 
   // Objects containing boundary communication buffers and routines for u and b
-  BValCC *pbval_u;
-  BValFC *pbval_b;
+  BoundaryValuesCC *pbval_u;
+  BoundaryValuesFC *pbval_b;
   MHDBoundaryFnPtr MHDBoundaryFunc[6];
 
   // Object(s) for extra physics (viscosity, resistivity, srcterms)

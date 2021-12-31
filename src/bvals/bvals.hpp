@@ -51,56 +51,40 @@ struct BufferIndcs
 {
   int bis,bie,bjs,bje,bks,bke;  // start/end buffer ("b") indices in each dir
   int ndat;                     // number of data elements
+  BufferIndcs() :
+   bis(0), bie(0), bjs(0), bje(0), bks(0), bke(0), ndat(1) {}
 };
 
 //----------------------------------------------------------------------------------------
-//! \struct BValBufferCC
-//! \brief container for index ranges, storage, and flags for boundary buffers for CC data
+//! \struct BoundaryBuffer
+//! \brief container for index ranges, storage, and flags for boundary buffers for FC data
 
-struct BValBufferCC
+struct BoundaryBuffer
 {
-  BufferIndcs same;   // indices for pack/unpack when dest/src at same level
-  BufferIndcs coar;   // indices for pack/unpack when dest/src at coarser level
-  BufferIndcs fine;   // indices for pack/unpack when dest/src at finer level
-  BufferIndcs prol;   // indices for prolongation (only used for receives)
-  BufferIndcs flux;   // indices for pack/unpack for flux correction
+  // fixed-length arrays used to store indices to allow different values for each
+  // component of a vector field ([0,1,2] --> [x1f, x2f, x3f]).  For cell centered data,
+  // only first [0] component is needed. 
+  BufferIndcs same[3];  // indices for pack/unpack when dest/src at same level
+  BufferIndcs coar[3];  // indices for pack/unpack when dest/src at coarser level
+  BufferIndcs fine[3];  // indices for pack/unpack when dest/src at finer level
+  BufferIndcs prol[3];  // indices for prolongation (only used for receives)
+  BufferIndcs flux[3];  // indices for pack/unpack for flux correction
   DvceArray3D<Real> data;
-  HostArray1D<BoundaryCommStatus> bcomm_stat;
+  // following two 1D arrays only accessed from host, so can use STL vector
+  std::vector<BoundaryCommStatus> bcomm_stat;
 #if MPI_PARALLEL_ENABLED
-  std::vector<MPI_Request> comm_req;   // only accessed from host, so can use STL vector
+  std::vector<MPI_Request> comm_req;
 #endif
   // function to allocate memory for buffer data
   void AllocateDataView(int nmb, int nvar) {
-    int nmax = std::max( std::max(same.ndat,coar.ndat), fine.ndat);
+    int nmax = 0;
+    for (int i=0; i<=2; ++i) {
+      nmax = std::max(nmax, same[i].ndat);
+      nmax = std::max(nmax, coar[i].ndat);
+      nmax = std::max(nmax, fine[i].ndat);
+      nmax = std::max(nmax, flux[i].ndat);
+    }
     Kokkos::realloc(data, nmb, nvar, nmax);
-  }
-};
-
-//----------------------------------------------------------------------------------------
-//! \struct BValBufferFC
-//! \brief container for index ranges, storage, and flags for boundary buffers for FC data
-
-struct BValBufferFC
-{
-  // Following fixed-length arrays store indices for each component of vector field (which
-  // can be different!);  [0,1,2] --> [x1f, x2f, x3f] 
-  BufferIndcs sindcs[3]; // indices for pack/unpack when dest/src at same level ("s")
-  BufferIndcs cindcs[3]; // indices for pack/unpack when dest/src at coarser level ("c")
-  BufferIndcs findcs[3]; // indices for pack/unpack when dest/src at finer level ("f")
-  BufferIndcs pindcs[3]; // indices for prolongation ("p") (only used for receives)
-
-  DvceArray3D<Real> data;
-  HostArray1D<BoundaryCommStatus> bcomm_stat;
-#if MPI_PARALLEL_ENABLED
-  std::vector<MPI_Request> comm_req;   // only accessed from host, so can use STL vector
-#endif
-  // function to allocate memory for buffer data
-  void AllocateDataView(int nmb) {
-    int smax = std::max( std::max(sindcs[0].ndat, sindcs[1].ndat), sindcs[2].ndat );
-    int cmax = std::max( std::max(cindcs[0].ndat, cindcs[1].ndat), cindcs[2].ndat );
-    int fmax = std::max( std::max(findcs[0].ndat, findcs[1].ndat), findcs[2].ndat );
-    int nmax = std::max( std::max(smax,cmax), fmax);
-    Kokkos::realloc(data, nmb, 3, nmax);
   }
 };
 
@@ -108,60 +92,63 @@ struct BValBufferFC
 class MeshBlockPack;
 
 //----------------------------------------------------------------------------------------
-//! \class BValCC
-//  \brief Lightweight class for boundary values of cell-centered variables
+//! \class BoundaryValues
+//  \brief Abstract base class for boundary values for different kinds of variables
 
-class BValCC
+class BoundaryValues
 {
 public:
-  BValCC(MeshBlockPack *ppack, ParameterInput *pin);
+  BoundaryValues(MeshBlockPack *ppack, ParameterInput *pin);
 
   // data for all 56 buffers in most general 3D case. Not all elements used in most cases.
-  // However each BValBufferCC requires only 176 bytes, so the convenience of fixed array
+  // However each BoundaryBuffer is lightweight, so the convenience of fixed array
   // sizes and index values for array elements outweighs cost of extra memory. 
-  BValBufferCC send_buf[56], recv_buf[56];
-
+  BoundaryBuffer send_buf[56], recv_buf[56];
+  
   //functions
-  void InitSendIndices(BValBufferCC &buf, int o1, int o2, int o3, int f1, int f2);
-  void InitRecvIndices(BValBufferCC &buf, int o1, int o2, int o3, int f1, int f2);
-  void AllocateBuffersCC(const int nvar);
+  virtual void InitSendIndices(BoundaryBuffer &buf, int x, int y, int z, int a, int b)=0;
+  virtual void InitRecvIndices(BoundaryBuffer &buf, int x, int y, int z, int a, int b)=0;
+  void AllocateBuffers(const int nvar);
   TaskStatus InitRecv(int nvar);
   TaskStatus ClearRecv();
   TaskStatus ClearSend();
-  TaskStatus PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &c, int key);
-  TaskStatus RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &c);
-  void ProlongCC(DvceArray5D<Real> &a, DvceArray5D<Real> &c);
 
-private:
+protected:
   MeshBlockPack* pmy_pack;
 };
 
 //----------------------------------------------------------------------------------------
-//! \class BValFC
-//  \brief Lightweight class for boundary values of face-centered vector fields
+//! \class BoundaryValuesCC
+//  \brief boundary values for cell-centered variables
 
-class BValFC
+class BoundaryValuesCC : public BoundaryValues
 {
 public:
-  BValFC(MeshBlockPack *ppack, ParameterInput *pin);
-
-  // Like BValCC case, not all 56 elements are used in most cases.  Now each BvalBufferFC
-  // requires 400 bytes, but still economical to use fixed-length arrays.
-  BValBufferFC send_buf[56], recv_buf[56];
+  BoundaryValuesCC(MeshBlockPack *ppack, ParameterInput *pin);
 
   //functions
-  void InitSendIndices(BValBufferFC &buf, int o1, int o2, int o3, int f1, int f2);
-  void InitRecvIndices(BValBufferFC &buf, int o1, int o2, int o3, int f1, int f2);
-  void AllocateBuffersFC();
-  TaskStatus InitRecv(int nvar);
-  TaskStatus ClearRecv();
-  TaskStatus ClearSend();
+  void InitSendIndices(BoundaryBuffer &buf, int o1, int o2,int o3,int f1,int f2) override;
+  void InitRecvIndices(BoundaryBuffer &buf, int o1, int o2,int o3,int f1,int f2) override;
+  TaskStatus PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &c, int key);
+  TaskStatus RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &c);
+  void ProlongCC(DvceArray5D<Real> &a, DvceArray5D<Real> &c);
+};
+
+//----------------------------------------------------------------------------------------
+//! \class BoundaryValuesFC
+//  \brief boundary values for face-centered vector fields
+
+class BoundaryValuesFC : public BoundaryValues
+{
+public:
+  BoundaryValuesFC(MeshBlockPack *ppack, ParameterInput *pin);
+
+  //functions
+  void InitSendIndices(BoundaryBuffer &buf, int o1, int o2,int o3,int f1,int f2) override;
+  void InitRecvIndices(BoundaryBuffer &buf, int o1, int o2,int o3,int f1,int f2) override;
   TaskStatus PackAndSendFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &c, int key);
   TaskStatus RecvAndUnpackFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &c);
   void ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &c);
-
-private:
-  MeshBlockPack* pmy_pack;
 };
 
 #endif // BVALS_BVALS_HPP_

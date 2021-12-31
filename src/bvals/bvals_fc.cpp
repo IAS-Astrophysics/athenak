@@ -19,109 +19,13 @@
 //----------------------------------------------------------------------------------------
 // BValFC constructor:
 
-BValFC::BValFC(MeshBlockPack *pp, ParameterInput *pin) : pmy_pack(pp)
+BoundaryValuesFC::BoundaryValuesFC(MeshBlockPack *pp, ParameterInput *pin)
+ : BoundaryValues(pp, pin)
 {
 } 
 
 //----------------------------------------------------------------------------------------
-//! \fn  void BVal::InitRecv
-//  \brief Posts non-blocking receives (with MPI), and initialize all boundary receive
-//  status flags to waiting (with or without MPI) for boundary communication of CC vars.
-
-TaskStatus BValFC::InitRecv(int nvar)
-{
-  int nmb = pmy_pack->nmb_thispack;
-  int nnghbr = pmy_pack->pmb->nnghbr;
-  auto &nghbr = pmy_pack->pmb->nghbr;
-  auto &mblev = pmy_pack->pmb->mb_lev;
- 
-  // Initialize communications for cell-centered conserved variables
-  for (int m=0; m<nmb; ++m) {
-    for (int n=0; n<nnghbr; ++n) {
-      if (nghbr.h_view(m,n).gid >= 0) {
-#if MPI_PARALLEL_ENABLED
-        // post non-blocking receive if neighboring MeshBlock on a different rank 
-        if (nghbr.h_view(m,n).rank != global_variable::my_rank) {
-          // create tag using local ID and buffer index of *receiving* MeshBlock
-          int tag = CreateMPITag(m, n);
-          auto recv_data = Kokkos::subview(recv_buf[n].data, m, Kokkos::ALL, Kokkos::ALL);
-          void* recv_ptr = recv_data.data();
-          int data_size;
-          // get data size if neighbor is at coarser/same/fine level
-          if (nghbr.h_view(m,n).lev < mblev.h_view(m)) {
-            data_size = (recv_buf[n].coar.ndat)*nvar;
-          } else if (nghbr.h_view(m,n).lev == mblev.h_view(m)) {
-            data_size = (recv_buf[n].same.ndat)*nvar;
-          } else {
-            data_size = (recv_buf[n].fine.ndat)*nvar;
-          }
-          (void) MPI_Irecv(recv_ptr, data_size, MPI_ATHENA_REAL, nghbr.h_view(m,n).rank,
-                           tag, fcvar_comm, &(recv_buf[n].comm_req[m]));
-        }
-#endif
-        // initialize boundary receive status flag
-        recv_buf[n].bcomm_stat(m) = BoundaryCommStatus::waiting;
-      }
-    }
-  }
- 
-  return TaskStatus::complete;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn  void BValCC::ClearRecv
-//  \brief Waits for all MPI receives associated with boundary communcations of CC vars
-//  to complete before allowing execution to continue
- 
-TaskStatus BValFC::ClearRecv()
-{
-#if MPI_PARALLEL_ENABLED
-  int nmb = pmy_pack->nmb_thispack;
-  int nnghbr = pmy_pack->pmb->nnghbr;
-  auto &nghbr = pmy_pack->pmb->nghbr;
-
-  // wait for all non-blocking receives for CC vars to finish before continuing 
-  for (int m=0; m<nmb; ++m) {
-    for (int n=0; n<nnghbr; ++n) {
-      if (nghbr.h_view(m,n).gid >= 0) {
-        if (nghbr.h_view(m,n).rank != global_variable::my_rank) {
-          MPI_Wait(&(recv_buf[n].comm_req[m]), MPI_STATUS_IGNORE);
-        }
-      }
-    }
-  }
-#endif
-  return TaskStatus::complete;
-} 
-  
-//----------------------------------------------------------------------------------------
-//! \fn  void BValCC::ClearSend
-//  \brief Waits for all MPI sends associated with boundary communcations of CC vars to
-//   complete before allowing execution to continue
- 
-TaskStatus BValFC::ClearSend()
-{
-#if MPI_PARALLEL_ENABLED
-  int nmb = pmy_pack->nmb_thispack;
-  int nnghbr = pmy_pack->pmb->nnghbr;
-  auto &nghbr = pmy_pack->pmb->nghbr;
-
-  // wait for all non-blocking sends for CC vars to finish before continuing 
-  for (int m=0; m<nmb; ++m) {
-    for (int n=0; n<nnghbr; ++n) {
-      if (nghbr.h_view(m,n).gid >= 0) {
-        if (nghbr.h_view(m,n).rank != global_variable::my_rank) {
-          MPI_Wait(&(send_buf[n].comm_req[m]), MPI_STATUS_IGNORE);
-        }
-      }
-    }
-  }
-#endif
-  return TaskStatus::complete;
-}      
-  
-//----------------------------------------------------------------------------------------
-//! \!fn void BValFC::PackAndSendFC()
+//! \!fn void BoundaryValuesFC::PackAndSendFC()
 //! \brief Pack face-centered variables into boundary buffers and send to neighbors.
 //!
 //! As for cell-centered data, this routine packs ALL the buffers on ALL the faces, edges,
@@ -131,7 +35,7 @@ TaskStatus BValFC::ClearSend()
 //! Input array must be DvceFaceFld4D dimensioned (nmb, nx3, nx2, nx1)
 //! DvceFaceFld4D of coarsened (restricted) fields also required with SMR/AMR
 
-TaskStatus BValFC::PackAndSendFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb, int key)
+TaskStatus BoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb, int key)
 {
   // create local references for variables in kernel
   int nmb = pmy_pack->pmb->nmb;
@@ -161,28 +65,28 @@ TaskStatus BValFC::PackAndSendFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb
       // Note indices can be different for each component of face-centered field.
       int il, iu, jl, ju, kl, ku;
       if (nghbr.d_view(m,n).lev < mblev.d_view(m)) {
-        il = sbuf[n].cindcs[v].bis;
-        iu = sbuf[n].cindcs[v].bie;
-        jl = sbuf[n].cindcs[v].bjs;
-        ju = sbuf[n].cindcs[v].bje;
-        kl = sbuf[n].cindcs[v].bks;
-        ku = sbuf[n].cindcs[v].bke;
+        il = sbuf[n].coar[v].bis;
+        iu = sbuf[n].coar[v].bie;
+        jl = sbuf[n].coar[v].bjs;
+        ju = sbuf[n].coar[v].bje;
+        kl = sbuf[n].coar[v].bks;
+        ku = sbuf[n].coar[v].bke;
       // if neighbor is at same level, use sindices to pack buffer
       } else if (nghbr.d_view(m,n).lev == mblev.d_view(m)) {
-        il = sbuf[n].sindcs[v].bis;
-        iu = sbuf[n].sindcs[v].bie;
-        jl = sbuf[n].sindcs[v].bjs;
-        ju = sbuf[n].sindcs[v].bje;
-        kl = sbuf[n].sindcs[v].bks;
-        ku = sbuf[n].sindcs[v].bke;
+        il = sbuf[n].same[v].bis;
+        iu = sbuf[n].same[v].bie;
+        jl = sbuf[n].same[v].bjs;
+        ju = sbuf[n].same[v].bje;
+        kl = sbuf[n].same[v].bks;
+        ku = sbuf[n].same[v].bke;
       // if neighbor is at finer level, use findices to pack buffer
       } else {
-        il = sbuf[n].findcs[v].bis;
-        iu = sbuf[n].findcs[v].bie;
-        jl = sbuf[n].findcs[v].bjs;
-        ju = sbuf[n].findcs[v].bje;
-        kl = sbuf[n].findcs[v].bks;
-        ku = sbuf[n].findcs[v].bke;
+        il = sbuf[n].fine[v].bis;
+        iu = sbuf[n].fine[v].bie;
+        jl = sbuf[n].fine[v].bjs;
+        ju = sbuf[n].fine[v].bje;
+        kl = sbuf[n].fine[v].bks;
+        ku = sbuf[n].fine[v].bke;
       }
       const int ni = iu - il + 1;
       const int nj = ju - jl + 1;
@@ -318,7 +222,7 @@ TaskStatus BValFC::PackAndSendFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb
         // So simply set communication status tag as received.
         if (nghbr.h_view(m,n).rank == my_rank) {
           int mm = nghbr.h_view(m,n).gid - pmy_pack->gids;
-          rbuf[nn].bcomm_stat(mm) = BoundaryCommStatus::received;
+          rbuf[nn].bcomm_stat[mm] = BoundaryCommStatus::received;
 
 #if MPI_PARALLEL_ENABLED
         } else {
@@ -354,7 +258,7 @@ TaskStatus BValFC::PackAndSendFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb
 // \!fn void RecvBuffers()
 // \brief Unpack boundary buffers
 
-TaskStatus BValFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb)
+TaskStatus BoundaryValuesFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb)
 {
   // create local references for variables in kernel
   int nmb = pmy_pack->pmb->nmb;
@@ -377,12 +281,12 @@ TaskStatus BValFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &
     for (int n=0; n<nnghbr; ++n) {
       if (nghbr.h_view(m,n).gid >= 0) { // ID != -1, so not a physical boundary
         if (nghbr.h_view(m,n).rank == global_variable::my_rank) {
-          if (rbuf[n].bcomm_stat(m) == BoundaryCommStatus::waiting) {bflag = true;}
+          if (rbuf[n].bcomm_stat[m] == BoundaryCommStatus::waiting) {bflag = true;}
 #if MPI_PARALLEL_ENABLED
         } else {
           MPI_Test(&(rbuf[n].comm_req[m]), &test, MPI_STATUS_IGNORE);
           if (static_cast<bool>(test)) {
-            rbuf[n].bcomm_stat(m) = BoundaryCommStatus::received;
+            rbuf[n].bcomm_stat[m] = BoundaryCommStatus::received;
           } else {
             bflag = true;
           }
@@ -416,28 +320,28 @@ TaskStatus BValFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &
       // if neighbor is at coarser level, use cindices to unpack buffer
       int il, iu, jl, ju, kl, ku; 
       if (nghbr.d_view(m,n).lev < mblev.d_view(m)) {
-        il = rbuf[n].cindcs[v].bis;
-        iu = rbuf[n].cindcs[v].bie;
-        jl = rbuf[n].cindcs[v].bjs;
-        ju = rbuf[n].cindcs[v].bje;
-        kl = rbuf[n].cindcs[v].bks;
-        ku = rbuf[n].cindcs[v].bke;
+        il = rbuf[n].coar[v].bis;
+        iu = rbuf[n].coar[v].bie;
+        jl = rbuf[n].coar[v].bjs;
+        ju = rbuf[n].coar[v].bje;
+        kl = rbuf[n].coar[v].bks;
+        ku = rbuf[n].coar[v].bke;
       // if neighbor is at same level, use sindices to unpack buffer
       } else if (nghbr.d_view(m,n).lev == mblev.d_view(m)) {
-        il = rbuf[n].sindcs[v].bis;
-        iu = rbuf[n].sindcs[v].bie;
-        jl = rbuf[n].sindcs[v].bjs;
-        ju = rbuf[n].sindcs[v].bje;
-        kl = rbuf[n].sindcs[v].bks;
-        ku = rbuf[n].sindcs[v].bke;
+        il = rbuf[n].same[v].bis;
+        iu = rbuf[n].same[v].bie;
+        jl = rbuf[n].same[v].bjs;
+        ju = rbuf[n].same[v].bje;
+        kl = rbuf[n].same[v].bks;
+        ku = rbuf[n].same[v].bke;
       // if neighbor is at finer level, use findices to unpack buffer
       } else {
-        il = rbuf[n].findcs[v].bis;
-        iu = rbuf[n].findcs[v].bie;
-        jl = rbuf[n].findcs[v].bjs;
-        ju = rbuf[n].findcs[v].bje;
-        kl = rbuf[n].findcs[v].bks;
-        ku = rbuf[n].findcs[v].bke;
+        il = rbuf[n].fine[v].bis;
+        iu = rbuf[n].fine[v].bie;
+        jl = rbuf[n].fine[v].bjs;
+        ju = rbuf[n].fine[v].bje;
+        kl = rbuf[n].fine[v].bks;
+        ku = rbuf[n].fine[v].bke;
       }
       const int ni = iu - il + 1;
       const int nj = ju - jl + 1;
