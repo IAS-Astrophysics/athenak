@@ -200,10 +200,6 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
     Real gm1 = eos.gamma - 1.0;
     Real p0 = 1.0/eos.gamma;
 
-    // compute solution in u1 register. For initial conditions, set u1 -> u0.
-    auto u1 = pmbp->phydro->u1; 
-    if (set_initial_conditions) {u1 = pmbp->phydro->u0;}
-
     // Compute eigenvectors in hydrodynamics
     Real rem[5][5];
     Real ev[5];
@@ -216,6 +212,9 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
       Real tlim = pin->GetReal("time", "tlim");
       pin->SetReal("time", "tlim", tlim*(std::abs(lambda/ev[wave_flag])));
     }
+
+    // compute solution in u1 register. For initial conditions, set u1 -> u0.
+    auto &u1 = (set_initial_conditions)? pmbp->phydro->u0 : pmbp->phydro->u1; 
 
     par_for("pgen_linwave1", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i)
@@ -264,14 +263,6 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
     auto &u0 = pmbp->pmhd->u0;
     auto &b0 = pmbp->pmhd->b0;
 
-    // compute solution in u1/b1 registers. For initial conditions, set u1/b1 -> u0/b0.
-    auto u1 = pmbp->pmhd->u1; 
-    auto b1 = pmbp->pmhd->b1;
-    if (set_initial_conditions) {
-      u1 = pmbp->pmhd->u0;
-      b1 = pmbp->pmhd->b0;
-    }
-
     // Compute eigenvectors in mhd
     Real rem[7][7];
     Real ev[7];
@@ -287,6 +278,10 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
       Real tlim = pin->GetReal("time", "tlim");
       pin->SetReal("time", "tlim", tlim*(std::abs(lambda/ev[wave_flag])));
     }
+
+    // compute solution in u1/b1 registers. For initial conditions, set u1/b1 -> u0/b0.
+    auto &u1 = (set_initial_conditions)? pmbp->pmhd->u0 : pmbp->pmhd->u1; 
+    auto &b1 = (set_initial_conditions)? pmbp->pmhd->b0 : pmbp->pmhd->b1;
 
     par_for("pgen_linwave2", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i)
