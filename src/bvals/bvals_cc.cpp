@@ -63,31 +63,31 @@ TaskStatus BValCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, in
     // only load buffers when neighbor exists
     if (nghbr.d_view(m,n).gid >= 0) {
 
-      // if neighbor is at coarser level, use cindices to pack buffer
+      // if neighbor is at coarser level, use coar indices to pack buffer
       int il, iu, jl, ju, kl, ku;
       if (nghbr.d_view(m,n).lev < mblev.d_view(m)) {
-        il = sbuf[n].cindcs.bis;
-        iu = sbuf[n].cindcs.bie;
-        jl = sbuf[n].cindcs.bjs;
-        ju = sbuf[n].cindcs.bje;
-        kl = sbuf[n].cindcs.bks;
-        ku = sbuf[n].cindcs.bke;
-      // if neighbor is at same level, use sindices to pack buffer
+        il = sbuf[n].coar.bis;
+        iu = sbuf[n].coar.bie;
+        jl = sbuf[n].coar.bjs;
+        ju = sbuf[n].coar.bje;
+        kl = sbuf[n].coar.bks;
+        ku = sbuf[n].coar.bke;
+      // if neighbor is at same level, use same indices to pack buffer
       } else if (nghbr.d_view(m,n).lev == mblev.d_view(m)) {
-        il = sbuf[n].sindcs.bis;
-        iu = sbuf[n].sindcs.bie;
-        jl = sbuf[n].sindcs.bjs;
-        ju = sbuf[n].sindcs.bje;
-        kl = sbuf[n].sindcs.bks;
-        ku = sbuf[n].sindcs.bke;
-      // if neighbor is at finer level, use findices to pack buffer
+        il = sbuf[n].same.bis;
+        iu = sbuf[n].same.bie;
+        jl = sbuf[n].same.bjs;
+        ju = sbuf[n].same.bje;
+        kl = sbuf[n].same.bks;
+        ku = sbuf[n].same.bke;
+      // if neighbor is at finer level, use fine indices to pack buffer
       } else {
-        il = sbuf[n].findcs.bis;
-        iu = sbuf[n].findcs.bie;
-        jl = sbuf[n].findcs.bjs;
-        ju = sbuf[n].findcs.bje;
-        kl = sbuf[n].findcs.bks;
-        ku = sbuf[n].findcs.bke;
+        il = sbuf[n].fine.bis;
+        iu = sbuf[n].fine.bie;
+        jl = sbuf[n].fine.bjs;
+        ju = sbuf[n].fine.bje;
+        kl = sbuf[n].fine.bks;
+        ku = sbuf[n].fine.bke;
       }
       const int ni = iu - il + 1;
       const int nj = ju - jl + 1;
@@ -180,15 +180,13 @@ TaskStatus BValCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, in
           auto send_data = Kokkos::subview(sbuf[n].data, m, Kokkos::ALL, Kokkos::ALL);
           void* send_ptr = send_data.data();
           int data_size;
-          // if neighbor is at coarser level, use cindices size
+          // get data size if neighbor is at coarser/same/fine level
           if (nghbr.h_view(m,n).lev < mblev.h_view(m)) {
-            data_size = (sbuf[n].cindcs.ndat)*nvar;
-          // if neighbor is at same level, use sindices size
+            data_size = (sbuf[n].coar.ndat)*nvar;
           } else if (nghbr.h_view(m,n).lev == mblev.h_view(m)) {
-            data_size = (sbuf[n].sindcs.ndat)*nvar;
-          // if neighbor is at finer level, use findices size
+            data_size = (sbuf[n].same.ndat)*nvar;
           } else {
-            data_size = (sbuf[n].findcs.ndat)*nvar;
+            data_size = (sbuf[n].fine.ndat)*nvar;
           }
           int ierr = MPI_Isend(send_ptr, data_size, MPI_ATHENA_REAL,
             nghbr.h_view(m,n).rank, tag, MPI_COMM_WORLD, &(sbuf[n].comm_req[m]));
@@ -265,31 +263,31 @@ TaskStatus BValCC::RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
     // only unpack buffers when neighbor exists
     if (nghbr.d_view(m,n).gid >= 0) {
 
-      // if neighbor is at coarser level, use cindices to unpack buffer
+      // if neighbor is at coarser level, use coar indices to unpack buffer
       int il, iu, jl, ju, kl, ku;
       if (nghbr.d_view(m,n).lev < mblev.d_view(m)) {
-        il = rbuf[n].cindcs.bis;
-        iu = rbuf[n].cindcs.bie;
-        jl = rbuf[n].cindcs.bjs;
-        ju = rbuf[n].cindcs.bje;
-        kl = rbuf[n].cindcs.bks;
-        ku = rbuf[n].cindcs.bke;
-      // if neighbor is at same level, use sindices to unpack buffer
+        il = rbuf[n].coar.bis;
+        iu = rbuf[n].coar.bie;
+        jl = rbuf[n].coar.bjs;
+        ju = rbuf[n].coar.bje;
+        kl = rbuf[n].coar.bks;
+        ku = rbuf[n].coar.bke;
+      // if neighbor is at same level, use same indices to unpack buffer
       } else if (nghbr.d_view(m,n).lev == mblev.d_view(m)) {
-        il = rbuf[n].sindcs.bis;
-        iu = rbuf[n].sindcs.bie;
-        jl = rbuf[n].sindcs.bjs;
-        ju = rbuf[n].sindcs.bje;
-        kl = rbuf[n].sindcs.bks;
-        ku = rbuf[n].sindcs.bke;
-      // if neighbor is at finer level, use findices to unpack buffer
+        il = rbuf[n].same.bis;
+        iu = rbuf[n].same.bie;
+        jl = rbuf[n].same.bjs;
+        ju = rbuf[n].same.bje;
+        kl = rbuf[n].same.bks;
+        ku = rbuf[n].same.bke;
+      // if neighbor is at finer level, use fine indices to unpack buffer
       } else {
-        il = rbuf[n].findcs.bis;
-        iu = rbuf[n].findcs.bie;
-        jl = rbuf[n].findcs.bjs;
-        ju = rbuf[n].findcs.bje;
-        kl = rbuf[n].findcs.bks;
-        ku = rbuf[n].findcs.bke;
+        il = rbuf[n].fine.bis;
+        iu = rbuf[n].fine.bie;
+        jl = rbuf[n].fine.bjs;
+        ju = rbuf[n].fine.bje;
+        kl = rbuf[n].fine.bks;
+        ku = rbuf[n].fine.bke;
       }
       const int ni = iu - il + 1;
       const int nj = ju - jl + 1;

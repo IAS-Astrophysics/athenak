@@ -49,12 +49,12 @@ void BValCC::ProlongCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
     if ((nghbr.d_view(m,n).gid >= 0) && (nghbr.d_view(m,n).lev < mblev.d_view(m))) {
 
       // loop over indices for prolongation on this buffer
-      int il = rbuf[n].pindcs.bis;
-      int iu = rbuf[n].pindcs.bie;
-      int jl = rbuf[n].pindcs.bjs;
-      int ju = rbuf[n].pindcs.bje;
-      int kl = rbuf[n].pindcs.bks;
-      int ku = rbuf[n].pindcs.bke;
+      int il = rbuf[n].prol.bis;
+      int iu = rbuf[n].prol.bie;
+      int jl = rbuf[n].prol.bjs;
+      int ju = rbuf[n].prol.bje;
+      int kl = rbuf[n].prol.bks;
+      int ku = rbuf[n].prol.bke;
       const int ni = iu - il + 1;
       const int nj = ju - jl + 1;
       const int nk = ku - kl + 1;
@@ -69,7 +69,7 @@ void BValCC::ProlongCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
 
         Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),[&](const int i)
         {
-          // indices for prolongation (pindcs) refer to coarse array.  So must compute
+          // indices for prolongation refer to coarse array.  So must compute
           // indices for fine array
           int finei = (i - indcs.cis)*2 + indcs.is;
           int finej = (j - indcs.cjs)*2 + indcs.js;
