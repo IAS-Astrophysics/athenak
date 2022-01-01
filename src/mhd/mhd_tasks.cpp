@@ -49,7 +49,8 @@ void MHD::AssembleMHDTasks(TaskList &start, TaskList &run, TaskList &end)
   } else if (rsolver_method == MHD_RSolver::hlle_gr) {
     id.flux = run.AddTask(&MHD::CalcFluxes<MHD_RSolver::hlle_gr>, this, id.copyu);
   }
-  id.expl  = run.AddTask(&MHD::ExpRKUpdate, this, id.flux);
+  id.sendf = run.AddTask(&MHD::SendFlux, this, id.flux);
+  id.expl  = run.AddTask(&MHD::ExpRKUpdate, this, id.sendf);
   id.restu = run.AddTask(&MHD::RestrictU, this, id.expl);
   id.sendu = run.AddTask(&MHD::SendU, this, id.restu);
   id.recvu = run.AddTask(&MHD::RecvU, this, id.sendu);
@@ -161,6 +162,19 @@ TaskStatus MHD::RecvB(Driver *pdrive, int stage)
 {
   TaskStatus tstat = pbval_b->RecvAndUnpackFC(b0, coarse_b0);
   return tstat;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void MHD::SendFlux
+//  \brief 
+
+TaskStatus MHD::SendFlux(Driver *pdrive, int stage)
+{
+  // Only execute this function with SMR/SMR
+  if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
+
+  pbval_u->PackAndSendFluxCC(uflx);
+  return TaskStatus::complete;
 }
 
 //----------------------------------------------------------------------------------------

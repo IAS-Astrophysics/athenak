@@ -63,9 +63,10 @@ void Hydro::AssembleHydroTasks(TaskList &start, TaskList &run, TaskList &end)
     id.flux = run.AddTask(&Hydro::CalcFluxes<Hydro_RSolver::hlle_gr>,this,id.copyu);
   }
   // now the rest of the Hydro run tasks
-  id.expl    = run.AddTask(&Hydro::ExpRKUpdate, this, id.flux);
-  id.rstrict = run.AddTask(&Hydro::RestrictU, this, id.expl);
-  id.sendu = run.AddTask(&Hydro::SendU, this, id.rstrict);
+  id.sendf = run.AddTask(&Hydro::SendFlux, this, id.flux);
+  id.expl  = run.AddTask(&Hydro::ExpRKUpdate, this, id.sendf);
+  id.restu = run.AddTask(&Hydro::RestrictU, this, id.expl);
+  id.sendu = run.AddTask(&Hydro::SendU, this, id.restu);
   id.recvu = run.AddTask(&Hydro::RecvU, this, id.sendu);
   id.bcs   = run.AddTask(&Hydro::ApplyPhysicalBCs, this, id.recvu);
   id.c2p   = run.AddTask(&Hydro::ConToPrim, this, id.bcs);
@@ -139,6 +140,19 @@ TaskStatus Hydro::RecvU(Driver *pdrive, int stage)
 {
   TaskStatus tstat = pbval_u->RecvAndUnpackCC(u0, coarse_u0);
   return tstat;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void Hydro::SendFlux
+//  \brief 
+
+TaskStatus Hydro::SendFlux(Driver *pdrive, int stage)
+{
+  // Only execute this function with SMR/SMR
+  if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
+
+  pbval_u->PackAndSendFluxCC(uflx);
+  return TaskStatus::complete;
 }
 
 //----------------------------------------------------------------------------------------

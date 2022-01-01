@@ -39,8 +39,9 @@ struct HydroTaskIDs
   TaskID irecv;
   TaskID copyu;
   TaskID flux;
+  TaskID sendf;
   TaskID expl;
-  TaskID rstrict;
+  TaskID restu;
   TaskID sendu;
   TaskID recvu;
   TaskID bcs;
@@ -100,6 +101,7 @@ public:
   TaskStatus CopyCons(Driver *d, int stage);
   TaskStatus SendU(Driver *d, int stage); 
   TaskStatus RecvU(Driver *d, int stage); 
+  TaskStatus SendFlux(Driver *d, int stage); 
   TaskStatus RestrictU(Driver *d, int stage); 
   TaskStatus ConToPrim(Driver *d, int stage);
   TaskStatus ExpRKUpdate(Driver *d, int stage);

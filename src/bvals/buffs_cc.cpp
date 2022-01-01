@@ -43,7 +43,7 @@ void BoundaryValuesCC::InitSendIndices(
     same.bks = (ox3 > 0) ? (mb_indcs.ke - ng1) : mb_indcs.ks;
     same.bke = (ox3 < 0) ? (mb_indcs.ks + ng1) : mb_indcs.ke;
     same.ndat = (same.bie - same.bis + 1)*(same.bje - same.bjs + 1)*
-                  (same.bke - same.bks + 1);
+                (same.bke - same.bks + 1);
   }
 
   // set indices for sends to neighbors on COARSER level (matches recvs from FINER)
@@ -108,6 +108,19 @@ void BoundaryValuesCC::InitSendIndices(
   }
   fine.ndat = (fine.bie - fine.bis + 1)*(fine.bje - fine.bjs + 1)*
               (fine.bke - fine.bks + 1);
+  }
+
+  // set indices for sends for FLUX CORRECTION (sends always fine to coarse)
+  if ((f1 == 0) && (f2 == 0)) {  // this buffer used for flux corr (e.g. #0,4,8,12,...)
+    auto &flux = buf.flux[0];    // indices of buffer for flux correction
+    flux.bis = (ox1 > 0) ? (mb_indcs.cie + 1) : mb_indcs.cis;
+    flux.bie = (ox1 < 0) ? (mb_indcs.cis    ) : mb_indcs.cie;
+    flux.bjs = (ox2 > 0) ? (mb_indcs.cje + 1) : mb_indcs.cjs;
+    flux.bje = (ox2 < 0) ? (mb_indcs.cjs    ) : mb_indcs.cje;
+    flux.bks = (ox3 > 0) ? (mb_indcs.cke + 1) : mb_indcs.cks;
+    flux.bke = (ox3 < 0) ? (mb_indcs.cks    ) : mb_indcs.cke;
+    flux.ndat = (flux.bie - flux.bis + 1)*(flux.bje - flux.bjs + 1)*
+                (flux.bke - flux.bks + 1);
   }
 }
 

@@ -16,6 +16,7 @@ add_executable(
         bvals/bvals_fc.cpp
         bvals/buffs_cc.cpp
         bvals/buffs_fc.cpp
+        bvals/flux_correct_cc.cpp
         bvals/prolongation.cpp
 
         coordinates/coordinates.cpp

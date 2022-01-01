@@ -132,6 +132,8 @@ public:
   TaskStatus PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &c, int key);
   TaskStatus RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &c);
   void ProlongCC(DvceArray5D<Real> &a, DvceArray5D<Real> &c);
+  TaskStatus PackAndSendFluxCC(DvceFaceFld5D<Real> &flx);
+  TaskStatus RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx);
 };
 
 //----------------------------------------------------------------------------------------
