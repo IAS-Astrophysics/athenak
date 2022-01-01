@@ -71,9 +71,9 @@ struct BoundaryBuffer
   BufferIndcs flux[3];  // indices for pack/unpack for flux correction
   DvceArray3D<Real> data;
   // following two 1D arrays only accessed from host, so can use STL vector
-  std::vector<BoundaryCommStatus> bcomm_stat;
+  std::vector<BoundaryCommStatus> var_stat, flx_stat;
 #if MPI_PARALLEL_ENABLED
-  std::vector<MPI_Request> comm_req;
+  std::vector<MPI_Request> var_req, flx_req;
 #endif
   // function to allocate memory for buffer data
   void AllocateDataView(int nmb, int nvar) {
@@ -108,7 +108,7 @@ public:
   //functions
   virtual void InitSendIndices(BoundaryBuffer &buf, int x, int y, int z, int a, int b)=0;
   virtual void InitRecvIndices(BoundaryBuffer &buf, int x, int y, int z, int a, int b)=0;
-  void AllocateBuffers(const int nvar);
+  void InitializeBuffers(const int nvar);
   TaskStatus InitRecv(int nvar);
   TaskStatus ClearRecv();
   TaskStatus ClearSend();

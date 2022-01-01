@@ -222,7 +222,7 @@ TaskStatus BoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D
         // So simply set communication status tag as received.
         if (nghbr.h_view(m,n).rank == my_rank) {
           int mm = nghbr.h_view(m,n).gid - pmy_pack->gids;
-          rbuf[nn].bcomm_stat[mm] = BoundaryCommStatus::received;
+          rbuf[nn].var_stat[mm] = BoundaryCommStatus::received;
 
 #if MPI_PARALLEL_ENABLED
         } else {
@@ -281,12 +281,12 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b, DvceFaceFld
     for (int n=0; n<nnghbr; ++n) {
       if (nghbr.h_view(m,n).gid >= 0) { // ID != -1, so not a physical boundary
         if (nghbr.h_view(m,n).rank == global_variable::my_rank) {
-          if (rbuf[n].bcomm_stat[m] == BoundaryCommStatus::waiting) {bflag = true;}
+          if (rbuf[n].var_stat[m] == BoundaryCommStatus::waiting) {bflag = true;}
 #if MPI_PARALLEL_ENABLED
         } else {
           MPI_Test(&(rbuf[n].comm_req[m]), &test, MPI_STATUS_IGNORE);
           if (static_cast<bool>(test)) {
-            rbuf[n].bcomm_stat[m] = BoundaryCommStatus::received;
+            rbuf[n].var_stat[m] = BoundaryCommStatus::received;
           } else {
             bflag = true;
           }

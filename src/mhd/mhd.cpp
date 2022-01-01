@@ -142,11 +142,11 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   
   // allocate boundary buffers for conserved (cell-centered) variables
   pbval_u = new BoundaryValuesCC(ppack, pin);
-  pbval_u->AllocateBuffers((nmhd+nscalars));
+  pbval_u->InitializeBuffers((nmhd+nscalars));
 
   // allocate boundary buffers for face-centered magnetic field
   pbval_b = new BoundaryValuesFC(ppack, pin);
-  pbval_b->AllocateBuffers(3);
+  pbval_b->InitializeBuffers(3);
 
   // for time-evolving problems, continue to construct methods, allocate arrays
   if (evolution_t.compare("stationary") != 0) {
