@@ -177,6 +177,21 @@ void BoundaryValues::InitializeBuffers(const int nvar)
     }
   }
 
+/***************/
+  int nnghbr = pmy_pack->pmb->nnghbr;
+  for (int n=0; n<=nnghbr; ++n) {
+std::cout << std::endl <<"CC_Buffer="<< n << std::endl;
+std::cout <<"send_flux:" <<send_buf[n].flux[0].bis<<"  "<<send_buf[n].flux[0].bie<<
+                "  "<<send_buf[n].flux[0].bjs<<"  "<<send_buf[n].flux[0].bje<<
+                "  "<<send_buf[n].flux[0].bks<<"  "<<send_buf[n].flux[0].bke<< std::endl;
+std::cout <<"recv_flux:" <<recv_buf[n].flux[0].bis<<"  "<<recv_buf[n].flux[0].bie<<
+                "  "<<recv_buf[n].flux[0].bjs<<"  "<<recv_buf[n].flux[0].bje<<
+                "  "<<recv_buf[n].flux[0].bks<<"  "<<recv_buf[n].flux[0].bke<< std::endl;
+  }
+/***************/
+
+
+
   return;
 }
 
