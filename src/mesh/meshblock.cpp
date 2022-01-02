@@ -154,10 +154,11 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
   // Initialize host view elements of DualViews
   for (int n=0; n<nnghbr; ++n) {
     for (int m=0; m<nmb; ++m) {
-      nghbr.h_view(m,n).gid = -1;
-      nghbr.h_view(m,n).lev = -1;
-      nghbr.h_view(m,n).rank = -1;
-      nghbr.h_view(m,n).dest = -1;
+      nghbr.h_view(m,n).gid   = -1;
+      nghbr.h_view(m,n).lev   = -1;
+      nghbr.h_view(m,n).rank  = -1;
+      nghbr.h_view(m,n).dest  = -1;
+      nghbr.h_view(m,n).ccflx = false;
     }
   }
 
@@ -203,9 +204,10 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
           if (nt->lloc_.level == lloc.level) { // neighbor at same level -- no subblocks
             inghbr = NeighborIndx(n,0,0,0,0);
             idest = NeighborIndx(-n,0,0,0,0);
-          } else {  // neighbor at coarser level, set destn to appropriate subblock
+          } else { // neighbor at coarser level, set index/destn to appropriate subblock
             inghbr = NeighborIndx(n,0,0,myfx2,myfx3);
             idest = NeighborIndx(-n,0,0,myfx2,myfx3);
+            nghbr.h_view(b,inghbr).ccflx = true;
           }
           nghbr.h_view(b,inghbr).gid = nt->gid_;
           nghbr.h_view(b,inghbr).lev = nt->lloc_.level;
@@ -237,9 +239,10 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
             if (nt->lloc_.level == lloc.level) { // neighbor at same level -- no subblocks
               inghbr = NeighborIndx(0,m,0,0,0);
               idest = NeighborIndx(0,-m,0,0,0);
-            } else {  // neighbor at coarser level, set destn to appropriate subblock
+            } else { // neighbor at coarser level, set index/destn to appropriate subblock
               inghbr = NeighborIndx(0,m,0,myfx1,myfx3);
               idest = NeighborIndx(0,-m,0,myfx1,myfx3);
+              nghbr.h_view(b,inghbr).ccflx = true;
             }
             nghbr.h_view(b,inghbr).gid = nt->gid_;
             nghbr.h_view(b,inghbr).lev = nt->lloc_.level;
@@ -270,7 +273,7 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
               if (nt->lloc_.level == lloc.level) { // same level -- no subblocks
                 inghbr = NeighborIndx(n,m,0,0,0);
                 idest = NeighborIndx(-n,-m,0,0,0);
-              } else {  // neighbor at coarser level, set destn to appropriate subblock
+              } else { // neighbor at coarser level, set indx/dest to appropriate subblock
                 inghbr = NeighborIndx(n,m,0,myfx3,0);
                 idest = NeighborIndx(-n,-m,0,myfx3,0);
               }
@@ -309,9 +312,10 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
             if (nt->lloc_.level == lloc.level) { // neighbor at same level
               inghbr = NeighborIndx(0,0,l,0,0);
               idest = NeighborIndx(0,0,-l,0,0);
-            } else {  // neighbor at coarser level, set destn to appropriate subblock
+            } else { // neighbor at coarser level, set index/destn to appropriate subblock
               inghbr = NeighborIndx(0,0,l,myfx1,myfx2);
               idest = NeighborIndx(0,0,-l,myfx1,myfx2);
+              nghbr.h_view(b,inghbr).ccflx = true;
             }
             nghbr.h_view(b,inghbr).gid = nt->gid_;
             nghbr.h_view(b,inghbr).lev = nt->lloc_.level;
@@ -342,7 +346,7 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
               if (nt->lloc_.level == lloc.level) { // neighbor at same level
                 inghbr = NeighborIndx(n,0,l,0,0);
                 idest = NeighborIndx(-n,0,-l,0,0);
-              } else {  // neighbor at coarser level, set destn to appropriate subblock
+              } else { // neighbor at coarser level, set indx/dest to appropriate subblock
                 inghbr = NeighborIndx(n,0,l,myfx2,0);
                 idest = NeighborIndx(-n,0,-l,myfx2,0);
               }
@@ -379,7 +383,7 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
               if (nt->lloc_.level == lloc.level) { // neighbor at same level
                 inghbr = NeighborIndx(0,m,l,0,0);
                 idest = NeighborIndx(0,-m,-l,0,0);
-              } else {  // neighbor at coarser level, set destn to appropriate subblock
+              } else { // neighbor at coarser level, set indx/dest to appropriate subblock
                 inghbr = NeighborIndx(0,m,l,myfx1,0);
                 idest = NeighborIndx(0,-m,-l,myfx1,0);
               }

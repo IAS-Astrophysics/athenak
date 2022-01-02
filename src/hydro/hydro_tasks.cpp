@@ -64,7 +64,8 @@ void Hydro::AssembleHydroTasks(TaskList &start, TaskList &run, TaskList &end)
   }
   // now the rest of the Hydro run tasks
   id.sendf = run.AddTask(&Hydro::SendFlux, this, id.flux);
-  id.expl  = run.AddTask(&Hydro::ExpRKUpdate, this, id.sendf);
+  id.recvf = run.AddTask(&Hydro::RecvFlux, this, id.sendf);
+  id.expl  = run.AddTask(&Hydro::ExpRKUpdate, this, id.recvf);
   id.restu = run.AddTask(&Hydro::RestrictU, this, id.expl);
   id.sendu = run.AddTask(&Hydro::SendU, this, id.restu);
   id.recvu = run.AddTask(&Hydro::RecvU, this, id.sendu);
@@ -152,6 +153,19 @@ TaskStatus Hydro::SendFlux(Driver *pdrive, int stage)
   if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
 
   pbval_u->PackAndSendFluxCC(uflx);
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void Hydro::RecvFlux
+//  \brief 
+
+TaskStatus Hydro::RecvFlux(Driver *pdrive, int stage)
+{
+  // Only execute this function with SMR/SMR
+  if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
+
+  pbval_u->RecvAndUnpackFluxCC(uflx);
   return TaskStatus::complete;
 }
 

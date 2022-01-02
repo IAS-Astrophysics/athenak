@@ -51,6 +51,7 @@ struct NeighborBlock
   int lev;     // logical level
   int rank;    // MPI rank     
   int dest;    // index of recv buffer in target NeighborBlocks
+  bool ccflx;  // correction for fluxes of cc vars needed? 
 };
 
 //----------------------------------------------------------------------------------------

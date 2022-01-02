@@ -110,18 +110,20 @@ void BoundaryValuesCC::InitSendIndices(
               (fine.bke - fine.bks + 1);
   }
 
-  // set indices for sends for FLUX CORRECTION (sends always fine to coarse)
-  if ((f1 == 0) && (f2 == 0)) {  // this buffer used for flux corr (e.g. #0,4,8,12,...)
-    auto &flux = buf.flux[0];    // indices of buffer for flux correction
-    flux.bis = (ox1 > 0) ? (mb_indcs.cie + 1) : mb_indcs.cis;
-    flux.bie = (ox1 < 0) ? (mb_indcs.cis    ) : mb_indcs.cie;
-    flux.bjs = (ox2 > 0) ? (mb_indcs.cje + 1) : mb_indcs.cjs;
-    flux.bje = (ox2 < 0) ? (mb_indcs.cjs    ) : mb_indcs.cje;
-    flux.bks = (ox3 > 0) ? (mb_indcs.cke + 1) : mb_indcs.cks;
-    flux.bke = (ox3 < 0) ? (mb_indcs.cks    ) : mb_indcs.cke;
-    flux.ndat = (flux.bie - flux.bis + 1)*(flux.bje - flux.bjs + 1)*
-                (flux.bke - flux.bks + 1);
-  }
+  // set indices for sends for FLUX CORRECTION (sends always to COARSER level)
+  // Almost same as coar indices, but only one component sent in x1f,x2f,x3f
+  auto &flux = buf.flux[0];    // indices of buffer for flux correction
+  flux.bis = (ox1 > 0) ? (mb_indcs.cie + 1) : mb_indcs.cis;
+  flux.bie = (ox1 < 0) ? (mb_indcs.cis    ) : mb_indcs.cie;
+  if (ox1 > 0) flux.bie++;
+  flux.bjs = (ox2 > 0) ? (mb_indcs.cje + 1) : mb_indcs.cjs;
+  flux.bje = (ox2 < 0) ? (mb_indcs.cjs    ) : mb_indcs.cje;
+  if (ox2 > 0) flux.bje++;
+  flux.bks = (ox3 > 0) ? (mb_indcs.cke + 1) : mb_indcs.cks;
+  flux.bke = (ox3 < 0) ? (mb_indcs.cks    ) : mb_indcs.cke;
+  if (ox3 > 0) flux.bke++;
+  flux.ndat = (flux.bie - flux.bis + 1)*(flux.bje - flux.bjs + 1)*
+              (flux.bke - flux.bks + 1);
 }
 
 //----------------------------------------------------------------------------------------
@@ -393,4 +395,75 @@ void BoundaryValuesCC::InitRecvIndices(
   }
   prol.ndat = (prol.bie - prol.bis+1)*(prol.bje - prol.bjs+1)* (prol.bke - prol.bks+1);
   }
+
+  // set indices for receives for flux-correction.  Similar to receive from FINER level
+  {auto &flux = buf.flux[0];   // indices of buffer for neighbor fluxr level
+  if (ox1 == 0) {
+    flux.bis = mb_indcs.is;
+    flux.bie = mb_indcs.ie;
+    if (f1 == 1) {
+      flux.bis += mb_indcs.cnx1;
+    } else {
+      flux.bie -= mb_indcs.cnx1;
+    }
+  } else if (ox1 > 0) {
+    flux.bis = mb_indcs.ie + 1;
+    flux.bie = mb_indcs.ie + 1;
+  } else {
+    flux.bis = mb_indcs.is;
+    flux.bie = mb_indcs.is;
+  }
+  if (ox2 == 0) {
+    flux.bjs = mb_indcs.js;
+    flux.bje = mb_indcs.je;
+    if (mb_indcs.nx2 > 1) {
+      if (ox1 != 0) {
+        if (f1 == 1) {
+          flux.bjs += mb_indcs.cnx2;
+        } else {
+          flux.bje -= mb_indcs.cnx2;
+        }
+      } else {
+        if (f2 == 1) {
+          flux.bjs += mb_indcs.cnx2;
+        } else {
+          flux.bje -= mb_indcs.cnx2;
+        }
+      }
+    }
+  } else if (ox2 > 0) {
+    flux.bjs = mb_indcs.je + 1;
+    flux.bje = mb_indcs.je + 1;
+  } else {
+    flux.bjs = mb_indcs.js;
+    flux.bje = mb_indcs.js;
+  }
+  if (ox3 == 0) {
+    flux.bks = mb_indcs.ks;
+    flux.bke = mb_indcs.ke;
+    if (mb_indcs.nx3 > 1) {
+      if (ox1 != 0 && ox2 != 0) {
+        if (f1 == 1) {
+          flux.bks += mb_indcs.cnx3;
+        } else {
+          flux.bke -= mb_indcs.cnx3;
+        }
+      } else {
+        if (f2 == 1) {
+          flux.bks += mb_indcs.cnx3;
+        } else {
+          flux.bke -= mb_indcs.cnx3;
+        }
+      }
+    }
+  } else if (ox3 > 0) {
+    flux.bks = mb_indcs.ke + 1;
+    flux.bke = mb_indcs.ke + 1;
+  } else {
+    flux.bks = mb_indcs.ks;
+    flux.bke = mb_indcs.ks;
+  }
+  flux.ndat = (flux.bie - flux.bis+1)*(flux.bje - flux.bjs+1)*(flux.bke - flux.bks+1);
+  }
+
 }

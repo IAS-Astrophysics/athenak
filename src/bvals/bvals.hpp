@@ -27,7 +27,7 @@ enum VariablesID {FluidCons_ID, BField_ID};
 //  \brief calculate an MPI tag for boundary buffer communications
 //  MPI tag = lid (remaining bits) + bufid (6 bits)
 //  Note the convention in Athena++ is lid and bufid are both for the *receiving* process
-
+//
 // WARNING (KGF): Generating unsigned integer bitfields from signed integer types and
 // converting output to signed integer tags (required by MPI) may lead to unsafe
 // conversions (and overflows from built-in types and MPI_TAG_UB).  Note, the MPI standard
@@ -57,13 +57,13 @@ struct BufferIndcs
 
 //----------------------------------------------------------------------------------------
 //! \struct BoundaryBuffer
-//! \brief container for index ranges, storage, and flags for boundary buffers for FC data
+//! \brief container for index ranges, storage, and flags for boundary buffers
 
 struct BoundaryBuffer
 {
-  // fixed-length arrays used to store indices to allow different values for each
-  // component of a vector field ([0,1,2] --> [x1f, x2f, x3f]).  For cell centered data,
-  // only first [0] component is needed. 
+  // fixed-length-3 arrays used to store indices of each buffer for cell-centered vars, or
+  // each component of a face-centered vector field ([0,1,2] --> [x1f, x2f, x3f]). For
+  // cell-centered variables only first [0] component of index arrays are needed. 
   BufferIndcs same[3];  // indices for pack/unpack when dest/src at same level
   BufferIndcs coar[3];  // indices for pack/unpack when dest/src at coarser level
   BufferIndcs fine[3];  // indices for pack/unpack when dest/src at finer level
