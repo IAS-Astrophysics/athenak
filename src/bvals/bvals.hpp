@@ -151,6 +151,8 @@ public:
   TaskStatus PackAndSendFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &c, int key);
   TaskStatus RecvAndUnpackFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &c);
   void ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &c);
+  TaskStatus PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx);
+  TaskStatus RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx);
 };
 
 #endif // BVALS_BVALS_HPP_
