@@ -51,13 +51,13 @@ BoundaryValues::BoundaryValues(MeshBlockPack *pp, ParameterInput *pin)
 } 
 
 //----------------------------------------------------------------------------------------
-//! \fn void BoundaryValues::AllocateBuffers
-//! \brief initialize components of send/recv BoundaryBuffers fixed-length arrays
+//! \fn void BoundaryValues::InitializeBuffers
+//! \brief initialize each element of send/recv BoundaryBuffers fixed-length arrays
 //!
 //! NOTE: order of vector elements is crucial and cannot be changed.  It must match
 //! order of boundaries in nghbr vector
 //! NOTE2: work here cannot be done in BoundaryValues constructor since it uses pure
-//! virtual functions that get overridden in the derived classes
+//! virtual functions that only get instantiated when the derived classes are constructed
 
 void BoundaryValues::InitializeBuffers(const int nvar)
 {

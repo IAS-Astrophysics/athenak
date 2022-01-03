@@ -25,7 +25,8 @@
 //! relative to center of MeshBlock (0,0,0).  The arguments f1/2 are the coordinates
 //! of subblocks within faces/edges (only relevant with SMR/AMR)
 
-void BoundaryValuesFC::InitSendIndices(BoundaryBuffer &buf, int ox1, int ox2, int ox3, int f1, int f2)
+void BoundaryValuesFC::InitSendIndices(
+     BoundaryBuffer &buf, int ox1, int ox2, int ox3, int f1, int f2)
 {
   auto &mb_indcs  = pmy_pack->pmesh->mb_indcs;
   int ng  = mb_indcs.ng;
@@ -35,7 +36,7 @@ void BoundaryValuesFC::InitSendIndices(BoundaryBuffer &buf, int ox1, int ox2, in
   // Formulae taken from LoadBoundaryBufferSameLevel() in src/bvals/fc/bvals_fc.cpp
   // for uniform grid: face-neighbors take care of the overlapping faces
   if ((f1 == 0) && (f2 == 0)) {  // this buffer used for same level (e.g. #0,4,8,12,...)
-    auto &same = buf.same;
+    auto &same = buf.same;       // indices of buffer for neighbor same level
     if (ox1 == 0) {
       same[0].bis = mb_indcs.is,           same[0].bie = mb_indcs.ie + 1;
       same[1].bis = mb_indcs.is,           same[1].bie = mb_indcs.ie;
@@ -101,7 +102,7 @@ void BoundaryValuesFC::InitSendIndices(BoundaryBuffer &buf, int ox1, int ox2, in
   // set indices for sends to neighbors on COARSER level (matches recv from FINER)
   // Formulae taken from LoadBoundaryBufferToCoarser() in src/bvals/fc/bvals_fc.cpp
   // Identical to send indices for same level replacing is,ie,.. with cis,cie,...
-  {auto &coar = buf.coar;
+  {auto &coar = buf.coar;   // indices of buffer for neighbor coarser level
   if (ox1 == 0) { 
     coar[0].bis = mb_indcs.cis,          coar[0].bie = mb_indcs.cie + 1;
     coar[1].bis = mb_indcs.cis,          coar[1].bie = mb_indcs.cie;
@@ -166,7 +167,7 @@ void BoundaryValuesFC::InitSendIndices(BoundaryBuffer &buf, int ox1, int ox2, in
   // Subtle issue: shared face fields on edges of MeshBlock (B1 at [is,ie+1],
   // B2 at [js;je+1], B3 at [ks;ke+1]) are communicated, replacing values on coarse mesh
   // in target MeshBlock, but these values will only be used for prolongation.
-  {auto &fine = buf.fine;
+  {auto &fine = buf.fine;    // indices of buffer for neighbor finer level
   int cnx1mng = mb_indcs.cnx1 - ng;
   int cnx2mng = mb_indcs.cnx2 - ng;
   int cnx3mng = mb_indcs.cnx3 - ng;
@@ -270,11 +271,52 @@ void BoundaryValuesFC::InitSendIndices(BoundaryBuffer &buf, int ox1, int ox2, in
                    (fine[i].bke - fine[i].bks + 1);
   }}
 
+  // set indices for sends for FLUX CORRECTION (sends always to COARSER level)
+  {auto &flux = buf.flux;    // indices of buffer for flux correction
+  if (ox1 == 0) {
+    flux[0].bis = mb_indcs.cis,          flux[0].bie = mb_indcs.cie;
+    flux[1].bis = mb_indcs.cis,          flux[1].bie = mb_indcs.cie + 1;
+    flux[2].bis = mb_indcs.cis,          flux[2].bie = mb_indcs.cie + 1;
+  } else if (ox1 > 0) {
+    flux[1].bis = mb_indcs.cie + 1;
+    flux[2].bis = mb_indcs.cie + 1;
+  } else {
+    flux[1].bie = mb_indcs.cis;
+    flux[2].bie = mb_indcs.cis;
+  }
+  if (ox2 == 0) {
+    flux[0].bjs = mb_indcs.cjs,          flux[0].bje = mb_indcs.cje + 1;
+    flux[1].bjs = mb_indcs.cjs,          flux[1].bje = mb_indcs.cje;
+    flux[2].bjs = mb_indcs.cjs,          flux[2].bje = mb_indcs.cje + 1;
+  } else if (ox2 > 0) {
+    flux[0].bjs = mb_indcs.cje + 1;
+    flux[2].bjs = mb_indcs.cje + 1;
+  } else {
+    flux[0].bje = mb_indcs.cjs;
+    flux[2].bje = mb_indcs.cjs;
+  }
+  if (ox3 == 0) {
+    flux[0].bks = mb_indcs.cks,          flux[0].bke = mb_indcs.cke + 1;
+    flux[1].bks = mb_indcs.cks,          flux[1].bke = mb_indcs.cke + 1;
+    flux[2].bks = mb_indcs.cks,          flux[2].bke = mb_indcs.cke;
+  } else if (ox3 > 0) {
+    flux[0].bks = mb_indcs.cke + 1;
+    flux[1].bks = mb_indcs.cke + 1;
+  } else {
+    flux[0].bke = mb_indcs.cks;
+    flux[1].bke = mb_indcs.cks;
+  }
+  for (int i=0; i<=2; ++i) {
+    flux[i].ndat = (flux[i].bie - flux[i].bis + 1)*
+                   (flux[i].bje - flux[i].bjs + 1)*
+                   (flux[i].bke - flux[i].bks + 1);
+  }}
+
   return;
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void BValFC::InitRecvIndices
+//! \fn void BoundaryValuesFC::InitRecvIndices
 //! \brief Calculates indices of cells into which receive buffers are unpacked for FC data
 //! on same/coarser/finer levels, and for prolongation from coarse to fine.  Three sets of
 //! indices are needed for each of the three components (x1f,x2f,x3f) of face-centered
@@ -284,7 +326,8 @@ void BoundaryValuesFC::InitSendIndices(BoundaryBuffer &buf, int ox1, int ox2, in
 //! relative to center of MeshBlock (0,0,0).  The arguments f1/2 are the coordinates
 //! of subblocks within faces/edges (only relevant with SMR/AMR)
 
-void BoundaryValuesFC::InitRecvIndices(BoundaryBuffer &buf, int ox1, int ox2, int ox3, int f1, int f2)
+void BoundaryValuesFC::InitRecvIndices(
+     BoundaryBuffer &buf, int ox1, int ox2, int ox3, int f1, int f2)
 { 
   auto &mb_indcs  = pmy_pack->pmesh->mb_indcs;
   int ng = mb_indcs.ng;
@@ -292,7 +335,7 @@ void BoundaryValuesFC::InitRecvIndices(BoundaryBuffer &buf, int ox1, int ox2, in
   // set indices for receives from neighbors on SAME level
   // Formulae taken from SetBoundarySameLevel() in src/bvals/fc/bvals_fc.cpp
   if ((f1 == 0) && (f2 == 0)) {  // this buffer used for same level (e.g. #0,4,8,12,...)
-    auto &same = buf.same;   // indices of buffer at same level ("s")
+    auto &same = buf.same;       // indices of buffer for neighbor same level
     if (ox1 == 0) {
       same[0].bis = mb_indcs.is,         same[0].bie = mb_indcs.ie + 1;
       same[1].bis = mb_indcs.is,         same[1].bie = mb_indcs.ie;
@@ -357,7 +400,7 @@ void BoundaryValuesFC::InitRecvIndices(BoundaryBuffer &buf, int ox1, int ox2, in
 
   // set indices for receives from neighbors on COARSER level (matches send to FINER)
   // Formulae taken from SetBoundaryFromCoarser() in src/bvals/fc/bvals_fc.cpp
-  {auto &coar = buf.coar;   // indices of course buffer ("c")
+  {auto &coar = buf.coar;   // indices of buffer for neighbor coarser level
   if (ox1 == 0) {
     coar[0].bis = mb_indcs.cis,         coar[0].bie = mb_indcs.cie + 1;
     coar[1].bis = mb_indcs.cis,         coar[1].bie = mb_indcs.cie;
@@ -460,19 +503,19 @@ void BoundaryValuesFC::InitRecvIndices(BoundaryBuffer &buf, int ox1, int ox2, in
 
   // set indices for receives from neighbors on FINER level (matches send to COARSER)
   // Formulae taken from SetBoundaryFromFiner() in src/bvals/cc/bvals_cc.cpp
-  {auto &fine = buf.fine;   // indices of fine buffer ("f")
+  {auto &fine = buf.fine;   // indices of buffer for neighbor finer level
   if (ox1 == 0) {
     fine[0].bis = mb_indcs.is;               fine[0].bie = mb_indcs.ie + 1;
     fine[1].bis = mb_indcs.is;               fine[1].bie = mb_indcs.ie;
     fine[2].bis = mb_indcs.is;               fine[2].bie = mb_indcs.ie;
     if (f1 == 1) {
-      fine[0].bis += mb_indcs.nx1/2;
-      fine[1].bis += mb_indcs.nx1/2;
-      fine[2].bis += mb_indcs.nx1/2;
+      fine[0].bis += mb_indcs.cnx1;
+      fine[1].bis += mb_indcs.cnx1;
+      fine[2].bis += mb_indcs.cnx1;
     } else {
-      fine[0].bie -= mb_indcs.nx1/2;
-      fine[1].bie -= mb_indcs.nx1/2;
-      fine[2].bie -= mb_indcs.nx1/2;
+      fine[0].bie -= mb_indcs.cnx1;
+      fine[1].bie -= mb_indcs.cnx1;
+      fine[2].bie -= mb_indcs.cnx1;
     }
   } else if (ox1 > 0) {
     fine[0].bis = mb_indcs.ie + 2;           fine[0].bie = mb_indcs.ie + ng + 1;
@@ -490,23 +533,23 @@ void BoundaryValuesFC::InitRecvIndices(BoundaryBuffer &buf, int ox1, int ox2, in
     if (mb_indcs.nx2 > 1) {
       if (ox1 != 0) {
         if (f1 == 1) {
-          fine[0].bjs += mb_indcs.nx2/2;
-          fine[1].bjs += mb_indcs.nx2/2;
-          fine[2].bjs += mb_indcs.nx2/2;
+          fine[0].bjs += mb_indcs.cnx2;
+          fine[1].bjs += mb_indcs.cnx2;
+          fine[2].bjs += mb_indcs.cnx2;
         } else {
-          fine[0].bje -= mb_indcs.nx2/2;
-          fine[1].bje -= mb_indcs.nx2/2;
-          fine[2].bje -= mb_indcs.nx2/2;
+          fine[0].bje -= mb_indcs.cnx2;
+          fine[1].bje -= mb_indcs.cnx2;
+          fine[2].bje -= mb_indcs.cnx2;
         }
       } else {
         if (f2 == 1) {
-          fine[0].bjs += mb_indcs.nx2/2;
-          fine[1].bjs += mb_indcs.nx2/2;
-          fine[2].bjs += mb_indcs.nx2/2;
+          fine[0].bjs += mb_indcs.cnx2;
+          fine[1].bjs += mb_indcs.cnx2;
+          fine[2].bjs += mb_indcs.cnx2;
         } else {
-          fine[0].bje -= mb_indcs.nx2/2;
-          fine[1].bje -= mb_indcs.nx2/2;
-          fine[2].bje -= mb_indcs.nx2/2;
+          fine[0].bje -= mb_indcs.cnx2;
+          fine[1].bje -= mb_indcs.cnx2;
+          fine[2].bje -= mb_indcs.cnx2;
         }
       }
     }
@@ -526,23 +569,23 @@ void BoundaryValuesFC::InitRecvIndices(BoundaryBuffer &buf, int ox1, int ox2, in
     if (mb_indcs.nx3 > 1) {
       if (ox1 != 0 && ox2 != 0) {
         if (f1 == 1) {
-          fine[0].bks += mb_indcs.nx3/2;
-          fine[1].bks += mb_indcs.nx3/2;
-          fine[2].bks += mb_indcs.nx3/2;
+          fine[0].bks += mb_indcs.cnx3;
+          fine[1].bks += mb_indcs.cnx3;
+          fine[2].bks += mb_indcs.cnx3;
         } else {
-          fine[0].bke -= mb_indcs.nx3/2;
-          fine[1].bke -= mb_indcs.nx3/2;
-          fine[2].bke -= mb_indcs.nx3/2;
+          fine[0].bke -= mb_indcs.cnx3;
+          fine[1].bke -= mb_indcs.cnx3;
+          fine[2].bke -= mb_indcs.cnx3;
         }
       } else {
         if (f2 == 1) {
-          fine[0].bks += mb_indcs.nx3/2;
-          fine[1].bks += mb_indcs.nx3/2;
-          fine[2].bks += mb_indcs.nx3/2;
+          fine[0].bks += mb_indcs.cnx3;
+          fine[1].bks += mb_indcs.cnx3;
+          fine[2].bks += mb_indcs.cnx3;
         } else {
-          fine[0].bke -= mb_indcs.nx3/2;
-          fine[1].bke -= mb_indcs.nx3/2;
-          fine[2].bke -= mb_indcs.nx3/2;
+          fine[0].bke -= mb_indcs.cnx3;
+          fine[1].bke -= mb_indcs.cnx3;
+          fine[2].bke -= mb_indcs.cnx3;
         }
       }
     }
@@ -567,8 +610,8 @@ void BoundaryValuesFC::InitRecvIndices(BoundaryBuffer &buf, int ox1, int ox2, in
   // Subtle issue: NOT the same as receives from coarser level (with ng --> ng/2) since
   // latter sends face fields on edges of MeshBlock, but prolongation only occurs within
   // ghost cells (and NOT for B1 at [is;ie+1], B2 at [js;je+1], B3 at [ke;ke+1])
-  {auto &prol = buf.prol;   // indices fpr prolongation ("p")
-  int cn = mb_indcs.ng/2;       // nghost must be multiple of 2 with SMR/AMR
+  {auto &prol = buf.prol;   // indices for prolongation
+  int cn = mb_indcs.ng/2;   // nghost must be multiple of 2 with SMR/AMR
   if (ox1 == 0) {
     prol[0].bis = mb_indcs.cis;          prol[0].bie = mb_indcs.cie + 1;
     prol[1].bis = mb_indcs.cis;          prol[1].bie = mb_indcs.cie;
@@ -668,4 +711,102 @@ void BoundaryValuesFC::InitRecvIndices(BoundaryBuffer &buf, int ox1, int ox2, in
                    (prol[i].bje - prol[i].bjs + 1)*
                    (prol[i].bke - prol[i].bks + 1);
   }}
+
+  // set indices for receives for flux-correction.  Similar to send, except data loaded
+  // into appropriate sub-block of coarse buffer (similar to receive from FINER level)
+  {auto &flux = buf.flux;   // indices of buffer for flux correction
+  if (ox1 == 0) {
+    flux[0].bis = mb_indcs.is;             flux[0].bie = mb_indcs.ie;
+    flux[1].bis = mb_indcs.is;             flux[1].bie = mb_indcs.ie + 1;
+    flux[2].bis = mb_indcs.is;             flux[2].bie = mb_indcs.ie + 1;
+    if (f1 == 1) {
+      flux[0].bis += mb_indcs.cnx1;
+      flux[1].bis += mb_indcs.cnx1;
+      flux[2].bis += mb_indcs.cnx1;
+    } else {
+      flux[0].bie -= mb_indcs.cnx1;
+      flux[1].bie -= mb_indcs.cnx1;
+      flux[2].bie -= mb_indcs.cnx1;
+    }
+  } else if (ox1 > 0) {
+    flux[1].bis = mb_indcs.ie + 1,         flux[1].bie = mb_indcs.ie + 1;
+    flux[2].bis = mb_indcs.ie + 1,         flux[2].bie = mb_indcs.ie + 1;
+  } else {
+    flux[1].bis = mb_indcs.is,             flux[1].bie = mb_indcs.is;
+    flux[2].bis = mb_indcs.is,             flux[2].bie = mb_indcs.is;
+  }
+  if (ox2 == 0) {
+    flux[0].bjs = mb_indcs.js;             flux[0].bje = mb_indcs.je + 1;
+    flux[1].bjs = mb_indcs.js;             flux[1].bje = mb_indcs.je;
+    flux[2].bjs = mb_indcs.js;             flux[2].bje = mb_indcs.je + 1;
+    if (mb_indcs.nx2 > 1) {
+      if (ox1 != 0) {
+        if (f1 == 1) {
+          flux[0].bjs += mb_indcs.cnx2;
+          flux[1].bjs += mb_indcs.cnx2;
+          flux[2].bjs += mb_indcs.cnx2;
+        } else {
+          flux[0].bje -= mb_indcs.cnx2;
+          flux[1].bje -= mb_indcs.cnx2;
+          flux[2].bje -= mb_indcs.cnx2;
+        }
+      } else {
+        if (f2 == 1) {
+          flux[0].bjs += mb_indcs.cnx2;
+          flux[1].bjs += mb_indcs.cnx2;
+          flux[2].bjs += mb_indcs.cnx2;
+        } else {
+          flux[0].bje -= mb_indcs.cnx2;
+          flux[1].bje -= mb_indcs.cnx2;
+          flux[2].bje -= mb_indcs.cnx2;
+        }
+      }
+    }
+  } else if (ox2 > 0) {
+    flux[0].bjs = mb_indcs.je + 1,         flux[0].bje = mb_indcs.je + 1;
+    flux[2].bjs = mb_indcs.je + 1,         flux[2].bje = mb_indcs.je + 1;
+  } else {
+    flux[0].bjs = mb_indcs.js,             flux[0].bje = mb_indcs.js;
+    flux[2].bjs = mb_indcs.js,             flux[2].bje = mb_indcs.js;
+  }
+  if (ox3 == 0) {
+    flux[0].bks = mb_indcs.ks;             flux[0].bke = mb_indcs.ke + 1;
+    flux[1].bks = mb_indcs.ks;             flux[1].bke = mb_indcs.ke + 1;
+    flux[2].bks = mb_indcs.ks;             flux[2].bke = mb_indcs.ke;
+    if (mb_indcs.nx3 > 1) {
+      if (ox1 != 0 && ox2 != 0) {
+        if (f1 == 1) {
+          flux[0].bks += mb_indcs.cnx3;
+          flux[1].bks += mb_indcs.cnx3;
+          flux[2].bks += mb_indcs.cnx3;
+        } else {
+          flux[0].bke -= mb_indcs.cnx3;
+          flux[1].bke -= mb_indcs.cnx3;
+          flux[2].bke -= mb_indcs.cnx3;
+        }
+      } else {
+        if (f2 == 1) {
+          flux[0].bks += mb_indcs.cnx3;
+          flux[1].bks += mb_indcs.cnx3;
+          flux[2].bks += mb_indcs.cnx3;
+        } else {
+          flux[0].bke -= mb_indcs.cnx3;
+          flux[1].bke -= mb_indcs.cnx3;
+          flux[2].bke -= mb_indcs.cnx3;
+        }
+      }
+    }
+  } else if (ox3 > 0) {
+    flux[0].bks = mb_indcs.ke + 1,      flux[0].bke = mb_indcs.ke + 1;
+    flux[1].bks = mb_indcs.ke + 1,      flux[1].bke = mb_indcs.ke + 1;
+  } else {
+    flux[0].bks = mb_indcs.ks,          flux[0].bke = mb_indcs.ks;
+    flux[1].bks = mb_indcs.ks,          flux[1].bke = mb_indcs.ks;
+  }
+  for (int i=0; i<=2; ++i) {
+    flux[i].ndat = (flux[i].bie - flux[i].bis + 1)*
+                   (flux[i].bje - flux[i].bjs + 1)*
+                   (flux[i].bke - flux[i].bks + 1);
+  }}
+
 }
