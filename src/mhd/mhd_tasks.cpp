@@ -153,6 +153,9 @@ TaskStatus MHD::RecvU(Driver *pdrive, int stage)
 
 TaskStatus MHD::SendE(Driver *pdrive, int stage)
 {
+  // Only execute this function with SMR/SMR
+  if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
+
   TaskStatus tstat = pbval_b->PackAndSendFluxFC(efld);
   return tstat;
 }
@@ -163,6 +166,9 @@ TaskStatus MHD::SendE(Driver *pdrive, int stage)
 
 TaskStatus MHD::RecvE(Driver *pdrive, int stage)
 {
+  // Only execute this function with SMR/SMR
+  if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
+
   TaskStatus tstat = pbval_b->RecvAndUnpackFluxFC(efld);
   return tstat;
 }
