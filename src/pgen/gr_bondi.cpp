@@ -8,6 +8,8 @@
 
 #include <cmath>   // abs(), NAN, pow(), sqrt()
 #include <cstring> // strcmp()
+#include <iostream>
+#include <sstream>
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
@@ -79,11 +81,20 @@ void FixedOuterX3(int m, CoordData &coord, EOS_Data &eos, DvceArray5D<Real> &u);
 
 void ProblemGenerator::BondiAccretion_(MeshBlockPack *pmbp, ParameterInput *pin)
 {
+  if (!(pmbp->phydro->peos->eos_data.use_e)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "gr_bondi test requires hydro/use_e=true" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+
   // Read problem-specific parameters from input file
   // global parameters
   bondi.k_adi = pin->GetReal("problem", "k_adi");
   bondi.r_crit = pin->GetReal("problem", "r_crit");
-  bondi.gm = pin->GetReal("eos", "gamma");
+
+  // Get ideal gas EOS data
+  bondi.gm = pmbp->phydro->peos->eos_data.gamma;
+  Real gm1 = bondi.gm - 1.0;
 
   // Parameters
   bondi.temp_min = 1.0e-2;  // lesser temperature root must be greater than this
@@ -124,7 +135,7 @@ void ProblemGenerator::BondiAccretion_(MeshBlockPack *pmbp, ParameterInput *pin)
       ComputePrimitiveSingle(m,k,j,i,mbd,g_,gi_,bondi_,
                              rho,pgas,uu1,uu2,uu3);
       w0_(m,IDN,k,j,i) = rho;
-      w0_(m,IPR,k,j,i) = pgas;
+      w0_(m,IEN,k,j,i) = pgas/gm1;
       w0_(m,IM1,k,j,i) = uu1;
       w0_(m,IM2,k,j,i) = uu2;
       w0_(m,IM3,k,j,i) = uu3;

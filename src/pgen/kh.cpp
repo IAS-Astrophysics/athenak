@@ -51,6 +51,11 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
               << "KH test requires nscalars != 0" << std::endl;
     exit(EXIT_FAILURE);
   }
+  if (!(eos.use_e)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "KH test requires hydro/use_e=true" << std::endl;
+    exit(EXIT_FAILURE);
+  }
 
   // initialize primitive variables
   par_for("pgen_kh1", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
@@ -66,7 +71,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
       int nx2 = indcs.nx2;
       Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
-      w0(m,IPR,k,j,i) = 20.0;
+      w0(m,IEN,k,j,i) = 20.0/gm1;
       w0(m,IVZ,k,j,i) = 0.0;
 
       // Lorentz factor (needed to initializve 4-velocity in SR)
@@ -112,7 +117,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
 
       // set primitives in both newtonian and SR hydro
       w0(m,IDN,k,j,i) = dens;
-      w0(m,IPR,k,j,i) = pres;
+      w0(m,IEN,k,j,i) = pres/gm1;
       w0(m,IVX,k,j,i) = u00*vx;
       w0(m,IVY,k,j,i) = u00*vy;
       w0(m,IVZ,k,j,i) = u00*vz;
