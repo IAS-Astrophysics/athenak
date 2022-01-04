@@ -278,33 +278,33 @@ void BoundaryValuesFC::InitSendIndices(
     flux[1].bis = mb_indcs.cis,          flux[1].bie = mb_indcs.cie + 1;
     flux[2].bis = mb_indcs.cis,          flux[2].bie = mb_indcs.cie + 1;
   } else if (ox1 > 0) {
-    flux[1].bis = mb_indcs.cie + 1;
-    flux[2].bis = mb_indcs.cie + 1;
+    flux[1].bis = mb_indcs.cie + 1;      flux[1].bie = mb_indcs.cie + 1;
+    flux[2].bis = mb_indcs.cie + 1;      flux[2].bie = mb_indcs.cie + 1;
   } else {
-    flux[1].bie = mb_indcs.cis;
-    flux[2].bie = mb_indcs.cis;
+    flux[1].bis = mb_indcs.cis;          flux[1].bie = mb_indcs.cis;
+    flux[2].bis = mb_indcs.cis;          flux[2].bie = mb_indcs.cis;
   }
   if (ox2 == 0) {
     flux[0].bjs = mb_indcs.cjs,          flux[0].bje = mb_indcs.cje + 1;
     flux[1].bjs = mb_indcs.cjs,          flux[1].bje = mb_indcs.cje;
     flux[2].bjs = mb_indcs.cjs,          flux[2].bje = mb_indcs.cje + 1;
   } else if (ox2 > 0) {
-    flux[0].bjs = mb_indcs.cje + 1;
-    flux[2].bjs = mb_indcs.cje + 1;
+    flux[0].bjs = mb_indcs.cje + 1;      flux[0].bje = mb_indcs.cje + 1;
+    flux[2].bjs = mb_indcs.cje + 1;      flux[2].bje = mb_indcs.cje + 1;
   } else {
-    flux[0].bje = mb_indcs.cjs;
-    flux[2].bje = mb_indcs.cjs;
+    flux[0].bjs = mb_indcs.cjs;          flux[0].bje = mb_indcs.cjs;
+    flux[2].bjs = mb_indcs.cjs;          flux[2].bje = mb_indcs.cjs;
   }
   if (ox3 == 0) {
     flux[0].bks = mb_indcs.cks,          flux[0].bke = mb_indcs.cke + 1;
     flux[1].bks = mb_indcs.cks,          flux[1].bke = mb_indcs.cke + 1;
     flux[2].bks = mb_indcs.cks,          flux[2].bke = mb_indcs.cke;
   } else if (ox3 > 0) {
-    flux[0].bks = mb_indcs.cke + 1;
-    flux[1].bks = mb_indcs.cke + 1;
+    flux[0].bks = mb_indcs.cke + 1;      flux[0].bke = mb_indcs.cke + 1;
+    flux[1].bks = mb_indcs.cke + 1;      flux[1].bke = mb_indcs.cke + 1;
   } else {
-    flux[0].bke = mb_indcs.cks;
-    flux[1].bke = mb_indcs.cks;
+    flux[0].bks = mb_indcs.cks;          flux[0].bke = mb_indcs.cks;
+    flux[1].bks = mb_indcs.cks;          flux[1].bke = mb_indcs.cks;
   }
   for (int i=0; i<=2; ++i) {
     flux[i].ndat = (flux[i].bie - flux[i].bis + 1)*

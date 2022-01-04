@@ -180,13 +180,17 @@ void BoundaryValues::InitializeBuffers(const int nvar)
 /***************/
   int nnghbr = pmy_pack->pmb->nnghbr;
   for (int n=0; n<=nnghbr; ++n) {
-std::cout << std::endl <<"CC_Buffer="<< n << std::endl;
-std::cout <<"send_flux:" <<send_buf[n].flux[0].bis<<"  "<<send_buf[n].flux[0].bie<<
-                "  "<<send_buf[n].flux[0].bjs<<"  "<<send_buf[n].flux[0].bje<<
-                "  "<<send_buf[n].flux[0].bks<<"  "<<send_buf[n].flux[0].bke<< std::endl;
-std::cout <<"recv_flux:" <<recv_buf[n].flux[0].bis<<"  "<<recv_buf[n].flux[0].bie<<
-                "  "<<recv_buf[n].flux[0].bjs<<"  "<<recv_buf[n].flux[0].bje<<
-                "  "<<recv_buf[n].flux[0].bks<<"  "<<recv_buf[n].flux[0].bke<< std::endl;
+std::cout << std::endl <<"Buffer="<< n << std::endl;
+for (int v=0; v<3; ++v) {
+std::cout <<"send_flux["<<v<<"]:" <<send_buf[n].flux[v].bis<<"  "<<send_buf[n].flux[v].bie<<
+                "  "<<send_buf[n].flux[v].bjs<<"  "<<send_buf[n].flux[v].bje<<
+                "  "<<send_buf[n].flux[v].bks<<"  "<<send_buf[n].flux[v].bke<< std::endl;
+}
+for (int v=0; v<3; ++v) {
+std::cout <<"recv_flux["<<v<<"]:" <<recv_buf[n].flux[v].bis<<"  "<<recv_buf[n].flux[v].bie<<
+                "  "<<recv_buf[n].flux[v].bjs<<"  "<<recv_buf[n].flux[v].bje<<
+                "  "<<recv_buf[n].flux[v].bks<<"  "<<recv_buf[n].flux[v].bke<< std::endl;
+}
   }
 /***************/
 

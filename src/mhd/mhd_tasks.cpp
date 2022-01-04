@@ -56,7 +56,9 @@ void MHD::AssembleMHDTasks(TaskList &start, TaskList &run, TaskList &end)
   id.sendu = run.AddTask(&MHD::SendU, this, id.restu);
   id.recvu = run.AddTask(&MHD::RecvU, this, id.sendu);
   id.efld  = run.AddTask(&MHD::CornerE, this, id.recvu);
-  id.ct    = run.AddTask(&MHD::CT, this, id.efld);
+  id.sende = run.AddTask(&MHD::SendE, this, id.efld);
+  id.recve = run.AddTask(&MHD::RecvE, this, id.sende);
+  id.ct    = run.AddTask(&MHD::CT, this, id.recve);
   id.restb = run.AddTask(&MHD::RestrictB, this, id.ct);
   id.sendb = run.AddTask(&MHD::SendB, this, id.restb);
   id.recvb = run.AddTask(&MHD::RecvB, this, id.sendb);
@@ -142,6 +144,26 @@ TaskStatus MHD::SendU(Driver *pdrive, int stage)
 TaskStatus MHD::RecvU(Driver *pdrive, int stage)
 {
   TaskStatus tstat = pbval_u->RecvAndUnpackCC(u0, coarse_u0);
+  return tstat;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void MHD::SendE
+//  \brief sends face-centered magnetic fields
+
+TaskStatus MHD::SendE(Driver *pdrive, int stage)
+{
+  TaskStatus tstat = pbval_b->PackAndSendFluxFC(efld);
+  return tstat;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void MHD::RecvE
+//  \brief receives face-centered magnetic fields
+
+TaskStatus MHD::RecvE(Driver *pdrive, int stage)
+{
+  TaskStatus tstat = pbval_b->RecvAndUnpackFluxFC(efld);
   return tstat;
 }
 

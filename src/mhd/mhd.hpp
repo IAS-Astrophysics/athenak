@@ -47,6 +47,8 @@ struct MHDTaskIDs
   TaskID sendu;
   TaskID recvu;
   TaskID efld;
+  TaskID sende;
+  TaskID recve;
   TaskID ct;
   TaskID restb;
   TaskID sendb;
@@ -115,6 +117,8 @@ public:
   TaskStatus CopyCons(Driver *d, int stage);
   TaskStatus SendU(Driver *d, int stage); 
   TaskStatus RecvU(Driver *d, int stage); 
+  TaskStatus SendE(Driver *d, int stage); 
+  TaskStatus RecvE(Driver *d, int stage); 
   TaskStatus SendB(Driver *d, int stage); 
   TaskStatus RecvB(Driver *d, int stage); 
   TaskStatus SendFlux(Driver *d, int stage);
