@@ -13,7 +13,7 @@
 enum BoundaryFace {undef=-1, inner_x1, outer_x1, inner_x2, outer_x2, inner_x3, outer_x3};
 
 // identifiers for boundary conditions
-enum class BoundaryFlag {undef=-1, block, reflect, outflow, user, periodic};
+enum class BoundaryFlag {undef=-1,block, reflect, inflow, outflow, diode, user, periodic};
 
 // identifiers for status of MPI boundary communications
 enum class BoundaryCommStatus {undef=-1, waiting, sent, received};
@@ -104,11 +104,15 @@ public:
   // However each BoundaryBuffer is lightweight, so the convenience of fixed array
   // sizes and index values for array elements outweighs cost of extra memory. 
   BoundaryBuffer send_buf[56], recv_buf[56];
+
+  // constant inflow states at each face
+  DvceArray2D<Real> u_in;
   
   //functions
   virtual void InitSendIndices(BoundaryBuffer &buf, int x, int y, int z, int a, int b)=0;
   virtual void InitRecvIndices(BoundaryBuffer &buf, int x, int y, int z, int a, int b)=0;
   void InitializeBuffers(const int nvar);
+  static void HydroBCs(MeshBlockPack *pp, DvceArray2D<Real> u_in, DvceArray5D<Real> u0);
   TaskStatus InitRecv(int nvar);
   TaskStatus ClearRecv();
   TaskStatus ClearSend();

@@ -36,6 +36,7 @@ Mesh::Mesh(ParameterInput *pin)
     three_d(false),
     multi_d(false),
     shearing_periodic(false),
+    strictly_periodic(true),
     lb_flag_(false), lb_automatic_(false),
     lb_cyc_interval_(10),cyc_since_lb_(0)
 {
@@ -73,6 +74,9 @@ Mesh::Mesh(ParameterInput *pin)
         << "Both inner and outer x1 bcs must be periodic" << std::endl;
     std::exit(EXIT_FAILURE);
   }
+  if (mesh_bcs[BoundaryFace::inner_x1] != BoundaryFlag::periodic) {
+    strictly_periodic = false;
+  }
   // Check if x1 boundaries are shearing periodic. When flag set to true, shearing BCs
   // will be called in ApplyPhysicalBCs() in Hydro and/or MHD.
   if (mesh_bcs[BoundaryFace::inner_x1] == BoundaryFlag::periodic) {
@@ -90,6 +94,9 @@ Mesh::Mesh(ParameterInput *pin)
           << std::endl << "Both inner and outer x2 bcs must be periodic" << std::endl;
       std::exit(EXIT_FAILURE);
     }
+    if (mesh_bcs[BoundaryFace::inner_x2] != BoundaryFlag::periodic) {
+      strictly_periodic = false;
+    }
   } else {
     // ix2/ox2 BC flags set to undef for 1D problems
     mesh_bcs[BoundaryFace::inner_x2] = BoundaryFlag::undef;
@@ -106,6 +113,9 @@ Mesh::Mesh(ParameterInput *pin)
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "Both inner and outer x3 bcs must be periodic" << std::endl;
       std::exit(EXIT_FAILURE);
+    }
+    if (mesh_bcs[BoundaryFace::inner_x3] != BoundaryFlag::periodic) {
+      strictly_periodic = false;
     }
   } else {
     // ix3/ox3 BC flags set to undef for 1D or 2D problems

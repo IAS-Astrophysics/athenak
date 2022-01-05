@@ -183,6 +183,19 @@ TaskStatus Hydro::RestrictU(Driver *pdrive, int stage)
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn  void Hydro::ApplyPhysicalBCs
+//  \brief 
+
+TaskStatus Hydro::ApplyPhysicalBCs(Driver *pdrive, int stage)
+{
+  // only apply BCs if domain is not strictly periodic
+  if (!(pmy_pack->pmesh->strictly_periodic)) {
+    pbval_u->HydroBCs((pmy_pack), (pbval_u->u_in), u0);
+  }
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn  void Hydro::ConToPrim
 //  \brief
 

@@ -20,7 +20,8 @@
 // BoundaryValues constructor:
 
 BoundaryValues::BoundaryValues(MeshBlockPack *pp, ParameterInput *pin)
- : pmy_pack(pp)
+ : pmy_pack(pp),
+   u_in("uin",1,1)
 {
   // allocate vector of status flags and MPI requests (if needed)
   int nmb = pmy_pack->nmb_thispack;
@@ -56,12 +57,15 @@ BoundaryValues::BoundaryValues(MeshBlockPack *pp, ParameterInput *pin)
 //!
 //! NOTE: order of vector elements is crucial and cannot be changed.  It must match
 //! order of boundaries in nghbr vector
-//! NOTE2: work here cannot be done in BoundaryValues constructor since it uses pure
+//! NOTE2: work here cannot be done in BoundaryValues constructor since it calls pure
 //! virtual functions that only get instantiated when the derived classes are constructed
 
 void BoundaryValues::InitializeBuffers(const int nvar)
 {
-  int nmb = pmy_pack->nmb_thispack;
+  // allocate memory for inflow BCs (but only if domain not strictly periodic)
+  if (!(pmy_pack->pmesh->strictly_periodic)) {
+    Kokkos::realloc(u_in, nvar, 6);
+  }
 
   // initialize buffers used for uniform grid nd SMR/AMR calculations
   // set number of subblocks in x2- and x3-dirs
@@ -73,6 +77,7 @@ void BoundaryValues::InitializeBuffers(const int nvar)
   }
 
   // x1 faces; NeighborIndex = [0,...,7]
+  int nmb = pmy_pack->nmb_thispack;
   for (int n=-1; n<=1; n+=2) {
     for (int fz=0; fz<nfz; fz++) {
       for (int fy = 0; fy<nfy; fy++) {

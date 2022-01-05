@@ -279,7 +279,7 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin)
   for (int m=0; m<pmb_pack->nmb_thispack; ++m) {
     std::cout << "******* Block=" << pmb_pack->pmb->mb_gid.h_view(m) << std::endl;
     for (int n=0; n<6; ++n) {
-      std::cout << "n=" << n << " bc_flag=" << GetBoundaryString(pmb_pack->pmb->mb_bcs(m,n)) << std::endl;
+      std::cout << "n=" << n << " bc_flag=" << GetBoundaryString(pmb_pack->pmb->mb_bcs.h_view(m,n)) << std::endl;
     }
     for (int n=0; n<pmb_pack->pmb->nnghbr; ++n) {
       std::cout << "n=" << n << " gid=" << pmb_pack->pmb->nghbr.h_view(m,n).gid << " level=" << pmb_pack->pmb->nghbr.h_view(m,n).lev << " rank=" << pmb_pack->pmb->nghbr.h_view(m,n).rank << " dest=" << pmb_pack->pmb->nghbr.h_view(m,n).dest << " cc_flx_correction?=" << pmb_pack->pmb->nghbr.h_view(m,n).ccflx << " fc_flx_correction?=" << pmb_pack->pmb->nghbr.h_view(m,n).fcflx << std::endl;

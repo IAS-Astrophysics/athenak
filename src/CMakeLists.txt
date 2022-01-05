@@ -19,6 +19,7 @@ add_executable(
         bvals/flux_correct_cc.cpp
         bvals/flux_correct_fc.cpp
         bvals/prolongation.cpp
+        bvals/physics/hydro_bcs.cpp
 
         coordinates/coordinates.cpp
 
@@ -42,10 +43,6 @@ add_executable(
         hydro/hydro_newdt.cpp
         hydro/hydro_tasks.cpp
         hydro/hydro_update.cpp
-        hydro/bvals/apply_physical_bcs.cpp
-        hydro/bvals/outflow_hydro.cpp
-        hydro/bvals/reflect_hydro.cpp
-        hydro/bvals/shear_hydro.cpp
 
 	ion-neutral/ion_neutral.cpp
 
