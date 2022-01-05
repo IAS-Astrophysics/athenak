@@ -21,7 +21,8 @@
 
 BoundaryValues::BoundaryValues(MeshBlockPack *pp, ParameterInput *pin)
  : pmy_pack(pp),
-   u_in("uin",1,1)
+   u_in("uin",1,1),
+   b_in("bin",1,1)
 {
   // allocate vector of status flags and MPI requests (if needed)
   int nmb = pmy_pack->nmb_thispack;
@@ -65,6 +66,7 @@ void BoundaryValues::InitializeBuffers(const int nvar)
   // allocate memory for inflow BCs (but only if domain not strictly periodic)
   if (!(pmy_pack->pmesh->strictly_periodic)) {
     Kokkos::realloc(u_in, nvar, 6);
+    Kokkos::realloc(b_in, 3, 6);   // always 3 components of face-fields
   }
 
   // initialize buffers used for uniform grid nd SMR/AMR calculations

@@ -246,6 +246,20 @@ TaskStatus MHD::RestrictB(Driver *pdrive, int stage)
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn  void MHD::ApplyPhysicalBCs
+//  \brief 
+
+TaskStatus MHD::ApplyPhysicalBCs(Driver *pdrive, int stage)
+{
+  // only apply BCs if domain is not strictly periodic
+  if (!(pmy_pack->pmesh->strictly_periodic)) {
+    pbval_u->HydroBCs((pmy_pack), (pbval_u->u_in), u0);
+    pbval_b->BFieldBCs((pmy_pack), (pbval_b->b_in), b0);
+  }
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn  void MHD::ConToPrim
 //  \brief
 

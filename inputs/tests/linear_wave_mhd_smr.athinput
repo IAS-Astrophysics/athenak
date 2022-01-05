@@ -22,7 +22,7 @@ x2max     = 1.5        # maximum value of X2
 ix2_bc    = periodic   # inner-X2 boundary flag
 ox2_bc    = periodic   # outer-X2 boundary flag
 
-nx3       = 1          # Number of zones in X3-direction
+nx3       = 32          # Number of zones in X3-direction
 x3min     = 0.0        # minimum value of X3
 x3max     = 1.5        # maximum value of X3
 ix3_bc    = periodic   # inner-X3 boundary flag
@@ -31,7 +31,7 @@ ox3_bc    = periodic   # outer-X3 boundary flag
 <meshblock>
 nx1       = 16         # Number of cells in each MeshBlock, X1-dir
 nx2       = 8          # Number of cells in each MeshBlock, X2-dir
-nx3       = 1          # Number of cells in each MeshBlock, X3-dir
+nx3       = 8          # Number of cells in each MeshBlock, X3-dir
 
 <refinement1>
 level = 1

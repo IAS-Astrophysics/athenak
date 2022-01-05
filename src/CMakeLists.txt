@@ -20,6 +20,7 @@ add_executable(
         bvals/flux_correct_fc.cpp
         bvals/prolongation.cpp
         bvals/physics/hydro_bcs.cpp
+        bvals/physics/bfield_bcs.cpp
 
         coordinates/coordinates.cpp
 
@@ -60,10 +61,6 @@ add_executable(
         mhd/mhd_newdt.cpp
         mhd/mhd_tasks.cpp
         mhd/mhd_update.cpp
-        mhd/bvals/apply_physical_bcs.cpp
-        mhd/bvals/outflow_mhd.cpp
-        mhd/bvals/reflect_mhd.cpp
-        mhd/bvals/shear_mhd.cpp
 
         outputs/io_wrapper.cpp
         outputs/outputs.cpp

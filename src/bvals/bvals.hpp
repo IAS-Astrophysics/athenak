@@ -106,13 +106,14 @@ public:
   BoundaryBuffer send_buf[56], recv_buf[56];
 
   // constant inflow states at each face
-  DvceArray2D<Real> u_in;
+  DvceArray2D<Real> u_in, b_in;
   
   //functions
   virtual void InitSendIndices(BoundaryBuffer &buf, int x, int y, int z, int a, int b)=0;
   virtual void InitRecvIndices(BoundaryBuffer &buf, int x, int y, int z, int a, int b)=0;
   void InitializeBuffers(const int nvar);
-  static void HydroBCs(MeshBlockPack *pp, DvceArray2D<Real> u_in, DvceArray5D<Real> u0);
+  static void HydroBCs(MeshBlockPack *pp, DvceArray2D<Real> uin, DvceArray5D<Real> u0);
+  static void BFieldBCs(MeshBlockPack *pp, DvceArray2D<Real> uin, DvceFaceFld4D<Real> b0);
   TaskStatus InitRecv(int nvar);
   TaskStatus ClearRecv();
   TaskStatus ClearSend();
