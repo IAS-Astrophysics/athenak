@@ -35,7 +35,8 @@ BoundaryValuesFC::BoundaryValuesFC(MeshBlockPack *pp, ParameterInput *pin)
 //! Input array must be DvceFaceFld4D dimensioned (nmb, nx3, nx2, nx1)
 //! DvceFaceFld4D of coarsened (restricted) fields also required with SMR/AMR
 
-TaskStatus BoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb, int key)
+TaskStatus BoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
+                                           DvceFaceFld4D<Real> &cb)
 {
   // create local references for variables in kernel
   int nmb = pmy_pack->pmb->nmb;

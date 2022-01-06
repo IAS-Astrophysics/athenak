@@ -129,7 +129,7 @@ TaskStatus Hydro::CopyCons(Driver *pdrive, int stage)
 
 TaskStatus Hydro::SendU(Driver *pdrive, int stage) 
 {
-  TaskStatus tstat = pbval_u->PackAndSendCC(u0, coarse_u0, VariablesID::FluidCons_ID);
+  TaskStatus tstat = pbval_u->PackAndSendCC(u0, coarse_u0);
   return tstat;
 }
 

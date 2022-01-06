@@ -36,7 +36,7 @@ BoundaryValuesCC::BoundaryValuesCC(MeshBlockPack *pp, ParameterInput *pin)
 //! Input arrays must be 5D Kokkos View dimensioned (nmb, nvar, nx3, nx2, nx1)
 //! 5D Kokkos View of coarsened (restricted) array data also required with SMR/AMR 
 
-TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, int key)
+TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
 {
   // create local references for variables in kernel
   int nmb = pmy_pack->pmb->nmb;
@@ -178,7 +178,9 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
         } else {
           // create tag using local ID and buffer index of *receiving* MeshBlock
           int lid = nghbr.h_view(m,n).gid - pmy_pack->pmesh->gidslist[drank];
-          int tag = CreateMPITag(lid, dn, key);
+          int tag = CreateMPITag(lid, dn);
+
+          // create subview of buffer containing required data
           auto send_data = Kokkos::subview(sbuf[n].data, m, Kokkos::ALL, Kokkos::ALL);
           void* send_ptr = send_data.data();
           int data_size;

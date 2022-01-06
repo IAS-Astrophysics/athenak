@@ -49,7 +49,22 @@ BoundaryValues::BoundaryValues(MeshBlockPack *pp, ParameterInput *pin)
       recv_buf[n].flux_req.push_back(recvflux_req);
 #endif
     }
+
+    // initialize data sizes in each send/recv buffer to zero
+    send_buf[n].isame_ndat = 0;
+    send_buf[n].icoar_ndat = 0;
+    send_buf[n].ifine_ndat = 0;
+    send_buf[n].iflux_ndat = 0;
+    recv_buf[n].isame_ndat = 0;
+    recv_buf[n].icoar_ndat = 0;
+    recv_buf[n].ifine_ndat = 0;
+    recv_buf[n].iflux_ndat = 0;
   }
+
+#if MPI_PARALLEL_ENABLED
+  // create unique communicator for this BoundaryValues object (if needed)
+  MPI_Comm_dup(MPI_COMM_WORLD, MPI_Comm &bvals_comm)
+#endif
 } 
 
 //----------------------------------------------------------------------------------------
@@ -204,10 +219,14 @@ std::cout <<"recv_flux["<<v<<"]:" <<recv_buf[n].flux[v].bis<<"  "<<recv_buf[n].f
   int nnghbr = pmy_pack->pmb->nnghbr;
   for (int n=0; n<nnghbr; ++n) {
 std::cout << std::endl <<"Buffer="<< n << std::endl;
-std::cout <<"send_same.ndat:" <<send_buf[n].isame[0].ndat <<"  "<<send_buf[n].isame[1].ndat <<"  "<<send_buf[n].isame[2].ndat <<std::endl;
-std::cout <<"send_coar.ndat:" <<send_buf[n].icoar[0].ndat <<"  "<<send_buf[n].icoar[1].ndat <<"  "<<send_buf[n].icoar[2].ndat << std::endl;
-std::cout <<"send_fine.ndat:" <<send_buf[n].ifine[0].ndat <<"  "<<send_buf[n].ifine[1].ndat <<"  "<<send_buf[n].ifine[2].ndat << std::endl;
-std::cout <<"send_flux.ndat:" <<send_buf[n].iflux[0].ndat <<"  "<<send_buf[n].iflux[1].ndat <<"  "<<send_buf[n].iflux[2].ndat << std::endl;
+std::cout <<"send_same.ndat:" <<send_buf[n].isame_ndat << std::endl;
+std::cout <<"send_coar.ndat:" <<send_buf[n].icoar_ndat << std::endl;
+std::cout <<"send_fine.ndat:" <<send_buf[n].ifine_ndat << std::endl;
+std::cout <<"send_flux.ndat:" <<send_buf[n].iflux_ndat << std::endl;
+std::cout <<"recv_same.ndat:" <<recv_buf[n].isame_ndat << std::endl;
+std::cout <<"recv_coar.ndat:" <<recv_buf[n].icoar_ndat << std::endl;
+std::cout <<"recv_fine.ndat:" <<recv_buf[n].ifine_ndat << std::endl;
+std::cout <<"recv_flux.ndat:" <<recv_buf[n].iflux_ndat << std::endl;
    }
  /***************/
 
@@ -237,6 +256,17 @@ TaskStatus BoundaryValues::InitRecv(int nvar)
         if (nghbr.h_view(m,n).rank != global_variable::my_rank) {
           // create tag using local ID and buffer index of *receiving* MeshBlock
           int tag = CreateMPITag(m, n);
+
+          // creat subview of recv buffer of correct size
+          std::pair data_range;
+          if (nghbr.h_view(m,n).lev < mblev.h_view(m)) {
+            data_range = std::make_pair(0,(recv_buf[n].coar.ndat)*nvar;
+          } else if (nghbr.h_view(m,n).lev == mblev.h_view(m)) {
+            data_range = (recv_buf[n].same.ndat)*nvar;
+          } else {
+            data_range = (recv_buf[n].fine.ndat)*nvar;
+          }
+
           auto recv_data = Kokkos::subview(recv_buf[n].data, m, Kokkos::ALL, Kokkos::ALL);
           void* recv_ptr = recv_data.data();
           int data_size;

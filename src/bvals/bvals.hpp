@@ -18,10 +18,6 @@ enum class BoundaryFlag {undef=-1,block, reflect, inflow, outflow, diode, user, 
 // identifiers for status of MPI boundary communications
 enum class BoundaryCommStatus {undef=-1, waiting, sent, received};
 
-// integer constants to specify variables communicated in MPI calls (maximum of 16 set by
-// number of bits used to encode ID in CreateMPItag function in src/utils)
-enum VariablesID {FluidCons_ID, BField_ID};
-
 //----------------------------------------------------------------------------------------
 //! \fn int CreateMPITag(int lid, int bufid)
 //  \brief calculate an MPI tag for boundary buffer communications
@@ -50,9 +46,8 @@ static int CreateMPITag(int lid, int bufid)
 struct BufferIndcs
 {
   int bis,bie,bjs,bje,bks,bke;  // start/end buffer ("b") indices in each dir
-  int ndat;                     // number of data elements
   BufferIndcs() :
-   bis(0), bie(0), bjs(0), bje(0), bks(0), bke(0), ndat(1) {}
+   bis(0), bie(0), bjs(0), bje(0), bks(0), bke(0) {}
 };
 
 //----------------------------------------------------------------------------------------
@@ -70,6 +65,9 @@ struct BoundaryBuffer
   BufferIndcs iprol[3];  // indices for prolongation (only used for receives)
   BufferIndcs iflux[3];  // indices for pack/unpack for flux correction
 
+  // Maximum number of data elements (bie-bis+1) across 3 components of above
+  int isame_ndat, icoar_ndat, ifine_ndat, iflux_ndat;
+
   // 3D Views that store buffer data on device
   DvceArray3D<Real> vars, flux;
 
@@ -80,19 +78,11 @@ struct BoundaryBuffer
 #endif
 
   // function to allocate memory for buffers for variables and their fluxes
+  // Must only be called after BufferIndcs above are initialized
   void AllocateBuffers(int nmb, int nvar) {
-    int nmax = 0;
-    for (int i=0; i<=2; ++i) {
-      nmax = std::max(nmax, isame[i].ndat);
-      nmax = std::max(nmax, icoar[i].ndat);
-      nmax = std::max(nmax, ifine[i].ndat);
-    }
+    int nmax = std::max(isame_ndat, std::max(icoar_ndat, ifine_ndat) );
     Kokkos::realloc(vars, nmb, nvar, nmax);
-    nmax = 0;
-    for (int i=0; i<=2; ++i) {
-      nmax = std::max(nmax, iflux[i].ndat);
-    }
-    Kokkos::realloc(flux, nmb, nvar, nmax);
+    Kokkos::realloc(flux, nmb, nvar, iflux_ndat);
   }
 };
 
@@ -115,6 +105,11 @@ public:
 
   // constant inflow states at each face
   DvceArray2D<Real> u_in, b_in;
+
+#if MPI_PARALLEL_ENABLED
+  // unique MPI communicator for this BoundaryValues object
+  MPI_Comm bvals_comm;
+#endif
   
   //functions
   virtual void InitSendIndices(BoundaryBuffer &buf, int x, int y, int z, int a, int b)=0;
@@ -144,9 +139,9 @@ public:
   //functions
   void InitSendIndices(BoundaryBuffer &buf, int o1, int o2,int o3,int f1,int f2) override;
   void InitRecvIndices(BoundaryBuffer &buf, int o1, int o2,int o3,int f1,int f2) override;
-  TaskStatus PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &c, int key);
-  TaskStatus RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &c);
-  void ProlongCC(DvceArray5D<Real> &a, DvceArray5D<Real> &c);
+  TaskStatus PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
+  TaskStatus RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
+  void ProlongCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
   TaskStatus PackAndSendFluxCC(DvceFaceFld5D<Real> &flx);
   TaskStatus RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx);
 };
@@ -163,9 +158,9 @@ public:
   //functions
   void InitSendIndices(BoundaryBuffer &buf, int o1, int o2,int o3,int f1,int f2) override;
   void InitRecvIndices(BoundaryBuffer &buf, int o1, int o2,int o3,int f1,int f2) override;
-  TaskStatus PackAndSendFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &c, int key);
-  TaskStatus RecvAndUnpackFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &c);
-  void ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &c);
+  TaskStatus PackAndSendFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
+  TaskStatus RecvAndUnpackFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
+  void ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
   TaskStatus PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx);
   TaskStatus RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx);
 };

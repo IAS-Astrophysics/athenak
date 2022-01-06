@@ -42,8 +42,8 @@ void BoundaryValuesCC::InitSendIndices(
     isame.bje = (ox2 < 0) ? (mb_indcs.js + ng1) : mb_indcs.je;
     isame.bks = (ox3 > 0) ? (mb_indcs.ke - ng1) : mb_indcs.ks;
     isame.bke = (ox3 < 0) ? (mb_indcs.ks + ng1) : mb_indcs.ke;
-    isame.ndat = (isame.bie - isame.bis + 1)*(isame.bje - isame.bjs + 1)*
-                 (isame.bke - isame.bks + 1);
+    buf.isame_ndat = (isame.bie - isame.bis + 1)*(isame.bje - isame.bjs + 1)*
+                     (isame.bke - isame.bks + 1);
   }
 
   // set indices for sends to neighbors on COARSER level (matches recvs from FINER)
@@ -55,8 +55,8 @@ void BoundaryValuesCC::InitSendIndices(
   icoar.bje = (ox2 < 0) ? (mb_indcs.cjs + ng1) : mb_indcs.cje;
   icoar.bks = (ox3 > 0) ? (mb_indcs.cke - ng1) : mb_indcs.cks;
   icoar.bke = (ox3 < 0) ? (mb_indcs.cks + ng1) : mb_indcs.cke;
-  icoar.ndat = (icoar.bie - icoar.bis + 1)*(icoar.bje - icoar.bjs + 1)*
-               (icoar.bke - icoar.bks + 1);
+  buf.icoar_ndat = (icoar.bie - icoar.bis + 1)*(icoar.bje - icoar.bjs + 1)*
+                   (icoar.bke - icoar.bks + 1);
   }
 
   // set indices for sends to neighbors on FINER level (matches recvs from COARSER)
@@ -106,8 +106,8 @@ void BoundaryValuesCC::InitSendIndices(
       }
     }
   }
-  ifine.ndat = (ifine.bie - ifine.bis + 1)*(ifine.bje - ifine.bjs + 1)*
-               (ifine.bke - ifine.bks + 1);
+  buf.ifine_ndat = (ifine.bie - ifine.bis + 1)*(ifine.bje - ifine.bjs + 1)*
+                   (ifine.bke - ifine.bks + 1);
   }
 
   // set indices for sends for FLUX CORRECTION (sends always to COARSER level)
@@ -133,8 +133,8 @@ void BoundaryValuesCC::InitSendIndices(
   } else {
     iflux.bks = mb_indcs.cks;           iflux.bke = mb_indcs.cks;
   }
-  iflux.ndat = (iflux.bie - iflux.bis + 1)*(iflux.bje - iflux.bjs + 1)*
-               (iflux.bke - iflux.bks + 1);
+  buf.iflux_ndat = (iflux.bie - iflux.bis + 1)*(iflux.bje - iflux.bjs + 1)*
+                   (iflux.bke - iflux.bks + 1);
   }
 }
 
@@ -181,8 +181,8 @@ void BoundaryValuesCC::InitRecvIndices(
     } else {
       isame.bks = mb_indcs.ks - ng;     isame.bke = mb_indcs.ks - 1;
     }
-    isame.ndat = (isame.bie - isame.bis + 1)*(isame.bje - isame.bjs + 1)*
-                 (isame.bke - isame.bks + 1);
+    buf.isame_ndat = (isame.bie - isame.bis + 1)*(isame.bje - isame.bjs + 1)*
+                     (isame.bke - isame.bks + 1);
   }
 
   // set indices for receives from neighbors on COARSER level (matches send to FINER)
@@ -244,8 +244,8 @@ void BoundaryValuesCC::InitRecvIndices(
   } else {
     icoar.bks = mb_indcs.cks - ng;     icoar.bke = mb_indcs.cks - 1;
   }
-  icoar.ndat = (icoar.bie - icoar.bis + 1)*(icoar.bje - icoar.bjs + 1)*
-               (icoar.bke - icoar.bks + 1);
+  buf.icoar_ndat = (icoar.bie - icoar.bis + 1)*(icoar.bje - icoar.bjs + 1)*
+                   (icoar.bke - icoar.bks + 1);
   }
 
   // set indices for receives from neighbors on FINER level (matches send to COARSER)
@@ -309,8 +309,8 @@ void BoundaryValuesCC::InitRecvIndices(
   } else {
     ifine.bks = mb_indcs.ks - ng;      ifine.bke = mb_indcs.ks - 1;
   }
-  ifine.ndat = (ifine.bie - ifine.bis + 1)*(ifine.bje - ifine.bjs + 1)*
-               (ifine.bke - ifine.bks + 1);
+  buf.ifine_ndat = (ifine.bie - ifine.bis + 1)*(ifine.bje - ifine.bjs + 1)*
+                   (ifine.bke - ifine.bks + 1);
   }
 
   // set indices for PROLONGATION in coarse cell buffers. Indices refer to coarse cells.
@@ -373,10 +373,7 @@ void BoundaryValuesCC::InitRecvIndices(
     iprol.bks = mb_indcs.cke + 1;      iprol.bke = mb_indcs.cke + cn;
   } else {
     iprol.bks = mb_indcs.cks - cn;     iprol.bke = mb_indcs.cks - 1;
-  }
-  iprol.ndat = (iprol.bie - iprol.bis + 1)*(iprol.bje - iprol.bjs + 1)*
-               (iprol.bke - iprol.bks + 1);
-  }
+  }}
 
   // set indices for receives for flux-correction.  Similar to send, except data loaded
   // into appropriate sub-block of coarse buffer (similar to receive from FINER level)
@@ -437,8 +434,8 @@ void BoundaryValuesCC::InitRecvIndices(
   } else {
     iflux.bks = mb_indcs.ks;           iflux.bke = mb_indcs.ks;
   }
-  iflux.ndat = (iflux.bie - iflux.bis + 1)*(iflux.bje - iflux.bjs + 1)*
-               (iflux.bke - iflux.bks + 1);
+  buf.iflux_ndat = (iflux.bie - iflux.bis + 1)*(iflux.bje - iflux.bjs + 1)*
+                   (iflux.bke - iflux.bks + 1);
   }
 
 }
