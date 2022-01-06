@@ -35,106 +35,106 @@ void BoundaryValuesCC::InitSendIndices(
   // set indices for sends to neighbors on SAME level
   // Formulae taken from LoadBoundaryBufferSameLevel() in src/bvals/cc/bvals_cc.cpp
   if ((f1 == 0) && (f2 == 0)) {  // this buffer used for same level (e.g. #0,4,8,12,...)
-    auto &same = buf.same[0];    // indices of buffer for neighbor same level
-    same.bis = (ox1 > 0) ? (mb_indcs.ie - ng1) : mb_indcs.is;
-    same.bie = (ox1 < 0) ? (mb_indcs.is + ng1) : mb_indcs.ie;
-    same.bjs = (ox2 > 0) ? (mb_indcs.je - ng1) : mb_indcs.js;
-    same.bje = (ox2 < 0) ? (mb_indcs.js + ng1) : mb_indcs.je;
-    same.bks = (ox3 > 0) ? (mb_indcs.ke - ng1) : mb_indcs.ks;
-    same.bke = (ox3 < 0) ? (mb_indcs.ks + ng1) : mb_indcs.ke;
-    same.ndat = (same.bie - same.bis + 1)*(same.bje - same.bjs + 1)*
-                (same.bke - same.bks + 1);
+    auto &isame = buf.isame[0];    // indices of buffer for neighbor same level
+    isame.bis = (ox1 > 0) ? (mb_indcs.ie - ng1) : mb_indcs.is;
+    isame.bie = (ox1 < 0) ? (mb_indcs.is + ng1) : mb_indcs.ie;
+    isame.bjs = (ox2 > 0) ? (mb_indcs.je - ng1) : mb_indcs.js;
+    isame.bje = (ox2 < 0) ? (mb_indcs.js + ng1) : mb_indcs.je;
+    isame.bks = (ox3 > 0) ? (mb_indcs.ke - ng1) : mb_indcs.ks;
+    isame.bke = (ox3 < 0) ? (mb_indcs.ks + ng1) : mb_indcs.ke;
+    isame.ndat = (isame.bie - isame.bis + 1)*(isame.bje - isame.bjs + 1)*
+                 (isame.bke - isame.bks + 1);
   }
 
   // set indices for sends to neighbors on COARSER level (matches recvs from FINER)
   // Formulae taken from LoadBoundaryBufferToCoarser() in src/bvals/cc/bvals_cc.cpp
-  {auto &coar = buf.coar[0];  // indices of buffer for neighbor coarser level
-  coar.bis = (ox1 > 0) ? (mb_indcs.cie - ng1) : mb_indcs.cis;
-  coar.bie = (ox1 < 0) ? (mb_indcs.cis + ng1) : mb_indcs.cie;
-  coar.bjs = (ox2 > 0) ? (mb_indcs.cje - ng1) : mb_indcs.cjs;
-  coar.bje = (ox2 < 0) ? (mb_indcs.cjs + ng1) : mb_indcs.cje;
-  coar.bks = (ox3 > 0) ? (mb_indcs.cke - ng1) : mb_indcs.cks;
-  coar.bke = (ox3 < 0) ? (mb_indcs.cks + ng1) : mb_indcs.cke;
-  coar.ndat = (coar.bie - coar.bis + 1)*(coar.bje - coar.bjs + 1)*
-              (coar.bke - coar.bks + 1);
+  {auto &icoar = buf.icoar[0];  // indices of buffer for neighbor coarser level
+  icoar.bis = (ox1 > 0) ? (mb_indcs.cie - ng1) : mb_indcs.cis;
+  icoar.bie = (ox1 < 0) ? (mb_indcs.cis + ng1) : mb_indcs.cie;
+  icoar.bjs = (ox2 > 0) ? (mb_indcs.cje - ng1) : mb_indcs.cjs;
+  icoar.bje = (ox2 < 0) ? (mb_indcs.cjs + ng1) : mb_indcs.cje;
+  icoar.bks = (ox3 > 0) ? (mb_indcs.cke - ng1) : mb_indcs.cks;
+  icoar.bke = (ox3 < 0) ? (mb_indcs.cks + ng1) : mb_indcs.cke;
+  icoar.ndat = (icoar.bie - icoar.bis + 1)*(icoar.bje - icoar.bjs + 1)*
+               (icoar.bke - icoar.bks + 1);
   }
 
   // set indices for sends to neighbors on FINER level (matches recvs from COARSER)
   // Formulae taken from LoadBoundaryBufferToFiner() src/bvals/cc/bvals_cc.cpp
-  {auto &fine = buf.fine[0];  // indices of buffer for neighbor finer level
-  fine.bis = (ox1 > 0) ? (mb_indcs.ie - ng1) : mb_indcs.is;
-  fine.bie = (ox1 < 0) ? (mb_indcs.is + ng1) : mb_indcs.ie;
-  fine.bjs = (ox2 > 0) ? (mb_indcs.je - ng1) : mb_indcs.js;
-  fine.bje = (ox2 < 0) ? (mb_indcs.js + ng1) : mb_indcs.je;
-  fine.bks = (ox3 > 0) ? (mb_indcs.ke - ng1) : mb_indcs.ks;
-  fine.bke = (ox3 < 0) ? (mb_indcs.ks + ng1) : mb_indcs.ke;
+  {auto &ifine = buf.ifine[0];  // indices of buffer for neighbor finer level
+  ifine.bis = (ox1 > 0) ? (mb_indcs.ie - ng1) : mb_indcs.is;
+  ifine.bie = (ox1 < 0) ? (mb_indcs.is + ng1) : mb_indcs.ie;
+  ifine.bjs = (ox2 > 0) ? (mb_indcs.je - ng1) : mb_indcs.js;
+  ifine.bje = (ox2 < 0) ? (mb_indcs.js + ng1) : mb_indcs.je;
+  ifine.bks = (ox3 > 0) ? (mb_indcs.ke - ng1) : mb_indcs.ks;
+  ifine.bke = (ox3 < 0) ? (mb_indcs.ks + ng1) : mb_indcs.ke;
   // need to add internal edges on faces, and internal corners on edges
   if (ox1 == 0) {
     if (f1 == 1) {
-      fine.bis += mb_indcs.cnx1 - ng;
+      ifine.bis += mb_indcs.cnx1 - ng;
     } else {
-      fine.bie -= mb_indcs.cnx1 - ng;
+      ifine.bie -= mb_indcs.cnx1 - ng;
     }
   }
   if (ox2 == 0 && mb_indcs.nx2 > 1) {
     if (ox1 != 0) {
       if (f1 == 1) {
-        fine.bjs += mb_indcs.cnx2 - ng;
+        ifine.bjs += mb_indcs.cnx2 - ng;
       } else {
-        fine.bje -= mb_indcs.cnx2 - ng;
+        ifine.bje -= mb_indcs.cnx2 - ng;
       }
     } else {
       if (f2 == 1) {
-        fine.bjs += mb_indcs.cnx2 - ng;
+        ifine.bjs += mb_indcs.cnx2 - ng;
       } else {
-        fine.bje -= mb_indcs.cnx2 - ng;
+        ifine.bje -= mb_indcs.cnx2 - ng;
       }
     }
   }
   if (ox3 == 0 && mb_indcs.nx3 > 1) {
     if (ox1 != 0 && ox2 != 0) {
       if (f1 == 1) {
-        fine.bks += mb_indcs.cnx3 - ng;
+        ifine.bks += mb_indcs.cnx3 - ng;
       } else {
-        fine.bke -= mb_indcs.cnx3 - ng;
+        ifine.bke -= mb_indcs.cnx3 - ng;
       }
     } else {
       if (f2 == 1) {
-        fine.bks += mb_indcs.cnx3 - ng;
+        ifine.bks += mb_indcs.cnx3 - ng;
       } else {
-        fine.bke -= mb_indcs.cnx3 - ng;
+        ifine.bke -= mb_indcs.cnx3 - ng;
       }
     }
   }
-  fine.ndat = (fine.bie - fine.bis + 1)*(fine.bje - fine.bjs + 1)*
-              (fine.bke - fine.bks + 1);
+  ifine.ndat = (ifine.bie - ifine.bis + 1)*(ifine.bje - ifine.bjs + 1)*
+               (ifine.bke - ifine.bks + 1);
   }
 
   // set indices for sends for FLUX CORRECTION (sends always to COARSER level)
-  {auto &flux = buf.flux[0];    // indices of buffer for flux correction
+  {auto &iflux = buf.iflux[0];    // indices of buffer for flux correction
   if (ox1 == 0) {
-    flux.bis = mb_indcs.cis;           flux.bie = mb_indcs.cie;
+    iflux.bis = mb_indcs.cis;           iflux.bie = mb_indcs.cie;
   } else if (ox1 > 0) {
-    flux.bis = mb_indcs.cie + 1;       flux.bie = mb_indcs.cie + 1;
+    iflux.bis = mb_indcs.cie + 1;       iflux.bie = mb_indcs.cie + 1;
   } else {
-    flux.bis = mb_indcs.cis;           flux.bie = mb_indcs.cis;
+    iflux.bis = mb_indcs.cis;           iflux.bie = mb_indcs.cis;
   }
   if (ox2 == 0) {
-    flux.bjs = mb_indcs.cjs;           flux.bje = mb_indcs.cje;
+    iflux.bjs = mb_indcs.cjs;           iflux.bje = mb_indcs.cje;
   } else if (ox2 > 0) {
-    flux.bjs = mb_indcs.cje + 1;       flux.bje = mb_indcs.cje + 1;
+    iflux.bjs = mb_indcs.cje + 1;       iflux.bje = mb_indcs.cje + 1;
   } else {
-    flux.bjs = mb_indcs.cjs;           flux.bje = mb_indcs.cjs;
+    iflux.bjs = mb_indcs.cjs;           iflux.bje = mb_indcs.cjs;
   }
   if (ox3 == 0) {
-    flux.bks = mb_indcs.cks;           flux.bke = mb_indcs.cke;
+    iflux.bks = mb_indcs.cks;           iflux.bke = mb_indcs.cke;
   } else if (ox3 > 0) {
-    flux.bks = mb_indcs.cke + 1;       flux.bke = mb_indcs.cke + 1;
+    iflux.bks = mb_indcs.cke + 1;       iflux.bke = mb_indcs.cke + 1;
   } else {
-    flux.bks = mb_indcs.cks;           flux.bke = mb_indcs.cks;
+    iflux.bks = mb_indcs.cks;           iflux.bke = mb_indcs.cks;
   }
-  flux.ndat = (flux.bie - flux.bis + 1)*(flux.bje - flux.bjs + 1)*
-              (flux.bke - flux.bks + 1);
+  iflux.ndat = (iflux.bie - iflux.bis + 1)*(iflux.bje - iflux.bjs + 1)*
+               (iflux.bke - iflux.bks + 1);
   }
 }
 
@@ -157,283 +157,288 @@ void BoundaryValuesCC::InitRecvIndices(
   // set indices for receives from neighbors on SAME level
   // Formulae taken from SetBoundarySameLevel() in src/bvals/cc/bvals_cc.cpp
   if ((f1 == 0) && (f2 == 0)) {  // this buffer used for same level (e.g. #0,4,8,12,...)
-    auto &same = buf.same[0];    // indices of buffer for neighbor same level
+    auto &isame = buf.isame[0];    // indices of buffer for neighbor same level
     if (ox1 == 0) {
-      same.bis = mb_indcs.is;          same.bie = mb_indcs.ie;
+      isame.bis = mb_indcs.is;          isame.bie = mb_indcs.ie;
     } else if (ox1 > 0) {
-      same.bis = mb_indcs.ie + 1;      same.bie = mb_indcs.ie + ng;
+      isame.bis = mb_indcs.ie + 1;      isame.bie = mb_indcs.ie + ng;
     } else {
-      same.bis = mb_indcs.is - ng;     same.bie = mb_indcs.is - 1;
+      isame.bis = mb_indcs.is - ng;     isame.bie = mb_indcs.is - 1;
     }
 
     if (ox2 == 0) {
-      same.bjs = mb_indcs.js;          same.bje = mb_indcs.je;
+      isame.bjs = mb_indcs.js;          isame.bje = mb_indcs.je;
     } else if (ox2 > 0) {
-      same.bjs = mb_indcs.je + 1;      same.bje = mb_indcs.je + ng;
+      isame.bjs = mb_indcs.je + 1;      isame.bje = mb_indcs.je + ng;
     } else {
-      same.bjs = mb_indcs.js - ng;     same.bje = mb_indcs.js - 1;
+      isame.bjs = mb_indcs.js - ng;     isame.bje = mb_indcs.js - 1;
     }
 
     if (ox3 == 0) {
-      same.bks = mb_indcs.ks;          same.bke = mb_indcs.ke;
+      isame.bks = mb_indcs.ks;          isame.bke = mb_indcs.ke;
     } else if (ox3 > 0) {
-      same.bks = mb_indcs.ke + 1;      same.bke = mb_indcs.ke + ng;
+      isame.bks = mb_indcs.ke + 1;      isame.bke = mb_indcs.ke + ng;
     } else {
-      same.bks = mb_indcs.ks - ng;     same.bke = mb_indcs.ks - 1;
+      isame.bks = mb_indcs.ks - ng;     isame.bke = mb_indcs.ks - 1;
     }
-    same.ndat = (same.bie - same.bis+1)*(same.bje - same.bjs+1)*(same.bke - same.bks+1);
+    isame.ndat = (isame.bie - isame.bis + 1)*(isame.bje - isame.bjs + 1)*
+                 (isame.bke - isame.bks + 1);
   }
 
   // set indices for receives from neighbors on COARSER level (matches send to FINER)
   // Formulae taken from SetBoundaryFromCoarser() in src/bvals/cc/bvals_cc.cpp
-  {auto &coar = buf.coar[0];   // indices of buffer for neighbor coarser level
+  {auto &icoar = buf.icoar[0];   // indices of buffer for neighbor coarser level
   if (ox1 == 0) {
-    coar.bis = mb_indcs.cis;          coar.bie = mb_indcs.cie;
+    icoar.bis = mb_indcs.cis;          icoar.bie = mb_indcs.cie;
     if (f1 == 0) {
-      coar.bie += ng;
+      icoar.bie += ng;
     } else {
-      coar.bis -= ng;
+      icoar.bis -= ng;
     }
   } else if (ox1 > 0)  {
-    coar.bis = mb_indcs.cie + 1;      coar.bie = mb_indcs.cie + ng;
+    icoar.bis = mb_indcs.cie + 1;      icoar.bie = mb_indcs.cie + ng;
   } else {
-    coar.bis = mb_indcs.cis - ng;     coar.bie = mb_indcs.cis - 1;
+    icoar.bis = mb_indcs.cis - ng;     icoar.bie = mb_indcs.cis - 1;
   }
   if (ox2 == 0) {
-    coar.bjs = mb_indcs.cjs;          coar.bje = mb_indcs.cje;
+    icoar.bjs = mb_indcs.cjs;          icoar.bje = mb_indcs.cje;
     if (mb_indcs.nx2 > 1) {
       if (ox1 != 0) {
         if (f1 == 0) {
-          coar.bje += ng;
+          icoar.bje += ng;
         } else {
-          coar.bjs -= ng;
+          icoar.bjs -= ng;
         }
       } else {
         if (f2 == 0) {
-          coar.bje += ng;
+          icoar.bje += ng;
         } else {
-          coar.bjs -= ng;
+          icoar.bjs -= ng;
         }
       }
     }
   } else if (ox2 > 0) {
-    coar.bjs = mb_indcs.cje + 1;      coar.bje = mb_indcs.cje + ng;
+    icoar.bjs = mb_indcs.cje + 1;      icoar.bje = mb_indcs.cje + ng;
   } else {
-    coar.bjs = mb_indcs.cjs - ng;     coar.bje = mb_indcs.cjs - 1;
+    icoar.bjs = mb_indcs.cjs - ng;     icoar.bje = mb_indcs.cjs - 1;
   }
   if (ox3 == 0) {
-    coar.bks = mb_indcs.cks;          coar.bke = mb_indcs.cke;
+    icoar.bks = mb_indcs.cks;          icoar.bke = mb_indcs.cke;
     if (mb_indcs.nx3 > 1) {
       if (ox1 != 0 && ox2 != 0) {
         if (f1 == 0) {
-          coar.bke += ng;
+          icoar.bke += ng;
         } else {
-          coar.bks -= ng;
+          icoar.bks -= ng;
         }
       } else {
         if (f2 == 0) {
-          coar.bke += ng;
+          icoar.bke += ng;
         } else {
-          coar.bks -= ng;
+          icoar.bks -= ng;
         }
       }
     }
   } else if (ox3 > 0)  {
-    coar.bks = mb_indcs.cke + 1;      coar.bke = mb_indcs.cke + ng;
+    icoar.bks = mb_indcs.cke + 1;      icoar.bke = mb_indcs.cke + ng;
   } else {
-    coar.bks = mb_indcs.cks - ng;     coar.bke = mb_indcs.cks - 1;
+    icoar.bks = mb_indcs.cks - ng;     icoar.bke = mb_indcs.cks - 1;
   }
-  coar.ndat = (coar.bie - coar.bis+1)*(coar.bje - coar.bjs+1)*(coar.bke - coar.bks+1);
+  icoar.ndat = (icoar.bie - icoar.bis + 1)*(icoar.bje - icoar.bjs + 1)*
+               (icoar.bke - icoar.bks + 1);
   }
 
   // set indices for receives from neighbors on FINER level (matches send to COARSER)
   // Formulae taken from SetBoundaryFromFiner() in src/bvals/cc/bvals_cc.cpp
-  {auto &fine = buf.fine[0];   // indices of buffer for neighbor finer level
+  {auto &ifine = buf.ifine[0];   // indices of buffer for neighbor finer level
   if (ox1 == 0) {
-    fine.bis = mb_indcs.is;           fine.bie = mb_indcs.ie;
+    ifine.bis = mb_indcs.is;           ifine.bie = mb_indcs.ie;
     if (f1 == 1) {
-      fine.bis += mb_indcs.cnx1;
+      ifine.bis += mb_indcs.cnx1;
     } else {
-      fine.bie -= mb_indcs.cnx1;
+      ifine.bie -= mb_indcs.cnx1;
     }
   } else if (ox1 > 0) {
-    fine.bis = mb_indcs.ie + 1;       fine.bie = mb_indcs.ie + ng;
+    ifine.bis = mb_indcs.ie + 1;       ifine.bie = mb_indcs.ie + ng;
   } else {
-    fine.bis = mb_indcs.is - ng;      fine.bie = mb_indcs.is - 1;
+    ifine.bis = mb_indcs.is - ng;      ifine.bie = mb_indcs.is - 1;
   }
   if (ox2 == 0) {
-    fine.bjs = mb_indcs.js;
-    fine.bje = mb_indcs.je;
+    ifine.bjs = mb_indcs.js;
+    ifine.bje = mb_indcs.je;
     if (mb_indcs.nx2 > 1) {
       if (ox1 != 0) {
         if (f1 == 1) {
-          fine.bjs += mb_indcs.cnx2;
+          ifine.bjs += mb_indcs.cnx2;
         } else { 
-          fine.bje -= mb_indcs.cnx2;
+          ifine.bje -= mb_indcs.cnx2;
         }
       } else {
         if (f2 == 1) {
-          fine.bjs += mb_indcs.cnx2;
+          ifine.bjs += mb_indcs.cnx2;
         } else {
-          fine.bje -= mb_indcs.cnx2;
+          ifine.bje -= mb_indcs.cnx2;
         }
       }
     }
   } else if (ox2 > 0) {
-    fine.bjs = mb_indcs.je + 1;       fine.bje = mb_indcs.je + ng;
+    ifine.bjs = mb_indcs.je + 1;       ifine.bje = mb_indcs.je + ng;
   } else {
-    fine.bjs = mb_indcs.js - ng;      fine.bje = mb_indcs.js - 1;
+    ifine.bjs = mb_indcs.js - ng;      ifine.bje = mb_indcs.js - 1;
   }
   if (ox3 == 0) {
-    fine.bks = mb_indcs.ks;
-    fine.bke = mb_indcs.ke;
+    ifine.bks = mb_indcs.ks;
+    ifine.bke = mb_indcs.ke;
     if (mb_indcs.nx3 > 1) {
       if (ox1 != 0 && ox2 != 0) {
         if (f1 == 1) {
-          fine.bks += mb_indcs.cnx3;
+          ifine.bks += mb_indcs.cnx3;
         } else {
-          fine.bke -= mb_indcs.cnx3;
+          ifine.bke -= mb_indcs.cnx3;
         }
       } else {
         if (f2 == 1) {
-          fine.bks += mb_indcs.cnx3;
+          ifine.bks += mb_indcs.cnx3;
         } else {
-          fine.bke -= mb_indcs.cnx3;
+          ifine.bke -= mb_indcs.cnx3;
         }
       }
     }
   } else if (ox3 > 0) {
-    fine.bks = mb_indcs.ke + 1;       fine.bke = mb_indcs.ke + ng;
+    ifine.bks = mb_indcs.ke + 1;       ifine.bke = mb_indcs.ke + ng;
   } else {
-    fine.bks = mb_indcs.ks - ng;      fine.bke = mb_indcs.ks - 1;
+    ifine.bks = mb_indcs.ks - ng;      ifine.bke = mb_indcs.ks - 1;
   }
-  fine.ndat = (fine.bie - fine.bis+1)*(fine.bje - fine.bjs+1)*(fine.bke - fine.bks+1);
+  ifine.ndat = (ifine.bie - ifine.bis + 1)*(ifine.bje - ifine.bjs + 1)*
+               (ifine.bke - ifine.bks + 1);
   }
 
   // set indices for PROLONGATION in coarse cell buffers. Indices refer to coarse cells.
   // Formulae taken from ProlongateBoundaries() in src/bvals/bvals_refine.cpp
   // Identical to receives from coarser level, except ng --> ng/2
-  {auto &prol = buf.prol[0];   // indices for prolongation
+  {auto &iprol = buf.iprol[0];   // indices for prolongation
   int cn = mb_indcs.ng/2;      // nghost must be multiple of 2 with SMR/AMR
   if (ox1 == 0) {
-    prol.bis = mb_indcs.cis;          prol.bie = mb_indcs.cie;
+    iprol.bis = mb_indcs.cis;          iprol.bie = mb_indcs.cie;
     if (f1 == 0) {
-      prol.bie += cn;
+      iprol.bie += cn;
     } else {
-      prol.bis -= cn;
+      iprol.bis -= cn;
     }
   } else if (ox1 > 0)  {
-    prol.bis = mb_indcs.cie + 1;      prol.bie = mb_indcs.cie + cn;
+    iprol.bis = mb_indcs.cie + 1;      iprol.bie = mb_indcs.cie + cn;
   } else {
-    prol.bis = mb_indcs.cis - cn;     prol.bie = mb_indcs.cis - 1;
+    iprol.bis = mb_indcs.cis - cn;     iprol.bie = mb_indcs.cis - 1;
   }
   if (ox2 == 0) {
-    prol.bjs = mb_indcs.cjs;          prol.bje = mb_indcs.cje;
+    iprol.bjs = mb_indcs.cjs;          iprol.bje = mb_indcs.cje;
     if (mb_indcs.nx2 > 1) {
       if (ox1 != 0) {
         if (f1 == 0) {
-          prol.bje += cn;
+          iprol.bje += cn;
         } else {
-          prol.bjs -= cn;
+          iprol.bjs -= cn;
         }
       } else {
         if (f2 == 0) {
-          prol.bje += cn;
+          iprol.bje += cn;
         } else {
-          prol.bjs -= cn;
+          iprol.bjs -= cn;
         }
       }
     }
   } else if (ox2 > 0) {
-    prol.bjs = mb_indcs.cje + 1;      prol.bje = mb_indcs.cje + cn;
+    iprol.bjs = mb_indcs.cje + 1;      iprol.bje = mb_indcs.cje + cn;
   } else {
-    prol.bjs = mb_indcs.cjs - cn;     prol.bje = mb_indcs.cjs - 1;
+    iprol.bjs = mb_indcs.cjs - cn;     iprol.bje = mb_indcs.cjs - 1;
   }
   if (ox3 == 0) {
-    prol.bks = mb_indcs.cks;          prol.bke = mb_indcs.cke;
+    iprol.bks = mb_indcs.cks;          iprol.bke = mb_indcs.cke;
     if (mb_indcs.nx3 > 1) {
       if (ox1 != 0 && ox2 != 0) {
         if (f1 == 0) {
-          prol.bke += cn;
+          iprol.bke += cn;
         } else {
-          prol.bks -= cn;
+          iprol.bks -= cn;
         }
       } else {
         if (f2 == 0) {
-          prol.bke += cn;
+          iprol.bke += cn;
         } else {
-          prol.bks -= cn;
+          iprol.bks -= cn;
         }
       }
     }
   } else if (ox3 > 0)  {
-    prol.bks = mb_indcs.cke + 1;      prol.bke = mb_indcs.cke + cn;
+    iprol.bks = mb_indcs.cke + 1;      iprol.bke = mb_indcs.cke + cn;
   } else {
-    prol.bks = mb_indcs.cks - cn;     prol.bke = mb_indcs.cks - 1;
+    iprol.bks = mb_indcs.cks - cn;     iprol.bke = mb_indcs.cks - 1;
   }
-  prol.ndat = (prol.bie - prol.bis+1)*(prol.bje - prol.bjs+1)* (prol.bke - prol.bks+1);
+  iprol.ndat = (iprol.bie - iprol.bis + 1)*(iprol.bje - iprol.bjs + 1)*
+               (iprol.bke - iprol.bks + 1);
   }
 
   // set indices for receives for flux-correction.  Similar to send, except data loaded
   // into appropriate sub-block of coarse buffer (similar to receive from FINER level)
-  {auto &flux = buf.flux[0];   // indices of buffer for flux correction
+  {auto &iflux = buf.iflux[0];   // indices of buffer for flux correction
   if (ox1 == 0) {
-    flux.bis = mb_indcs.is;           flux.bie = mb_indcs.ie;
+    iflux.bis = mb_indcs.is;           iflux.bie = mb_indcs.ie;
     if (f1 == 1) {
-      flux.bis += mb_indcs.cnx1;
+      iflux.bis += mb_indcs.cnx1;
     } else {
-      flux.bie -= mb_indcs.cnx1;
+      iflux.bie -= mb_indcs.cnx1;
     }
   } else if (ox1 > 0) {
-    flux.bis = mb_indcs.ie + 1;       flux.bie = mb_indcs.ie + 1;
+    iflux.bis = mb_indcs.ie + 1;       iflux.bie = mb_indcs.ie + 1;
   } else {
-    flux.bis = mb_indcs.is;           flux.bie = mb_indcs.is;
+    iflux.bis = mb_indcs.is;           iflux.bie = mb_indcs.is;
   }
   if (ox2 == 0) {
-    flux.bjs = mb_indcs.js;           flux.bje = mb_indcs.je;
+    iflux.bjs = mb_indcs.js;           iflux.bje = mb_indcs.je;
     if (mb_indcs.nx2 > 1) {
       if (ox1 != 0) {
         if (f1 == 1) {
-          flux.bjs += mb_indcs.cnx2;
+          iflux.bjs += mb_indcs.cnx2;
         } else {
-          flux.bje -= mb_indcs.cnx2;
+          iflux.bje -= mb_indcs.cnx2;
         }
       } else {
         if (f2 == 1) {
-          flux.bjs += mb_indcs.cnx2;
+          iflux.bjs += mb_indcs.cnx2;
         } else {
-          flux.bje -= mb_indcs.cnx2;
+          iflux.bje -= mb_indcs.cnx2;
         }
       }
     }
   } else if (ox2 > 0) {
-    flux.bjs = mb_indcs.je + 1;       flux.bje = mb_indcs.je + 1;
+    iflux.bjs = mb_indcs.je + 1;       iflux.bje = mb_indcs.je + 1;
   } else {
-    flux.bjs = mb_indcs.js;           flux.bje = mb_indcs.js;
+    iflux.bjs = mb_indcs.js;           iflux.bje = mb_indcs.js;
   }
   if (ox3 == 0) {
-    flux.bks = mb_indcs.ks;           flux.bke = mb_indcs.ke;
+    iflux.bks = mb_indcs.ks;           iflux.bke = mb_indcs.ke;
     if (mb_indcs.nx3 > 1) {
       if (ox1 != 0 && ox2 != 0) {
         if (f1 == 1) {
-          flux.bks += mb_indcs.cnx3;
+          iflux.bks += mb_indcs.cnx3;
         } else {
-          flux.bke -= mb_indcs.cnx3;
+          iflux.bke -= mb_indcs.cnx3;
         }
       } else {
         if (f2 == 1) {
-          flux.bks += mb_indcs.cnx3;
+          iflux.bks += mb_indcs.cnx3;
         } else {
-          flux.bke -= mb_indcs.cnx3;
+          iflux.bke -= mb_indcs.cnx3;
         }
       }
     }
   } else if (ox3 > 0) {
-    flux.bks = mb_indcs.ke + 1;       flux.bke = mb_indcs.ke + 1;
+    iflux.bks = mb_indcs.ke + 1;       iflux.bke = mb_indcs.ke + 1;
   } else {
-    flux.bks = mb_indcs.ks;           flux.bke = mb_indcs.ks;
+    iflux.bks = mb_indcs.ks;           iflux.bke = mb_indcs.ks;
   }
-  flux.ndat = (flux.bie - flux.bis+1)*(flux.bje - flux.bjs+1)*(flux.bke - flux.bks+1);
+  iflux.ndat = (iflux.bie - iflux.bis + 1)*(iflux.bje - iflux.bjs + 1)*
+               (iflux.bke - iflux.bks + 1);
   }
 
 }

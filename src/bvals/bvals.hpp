@@ -64,27 +64,35 @@ struct BoundaryBuffer
   // fixed-length-3 arrays used to store indices of each buffer for cell-centered vars, or
   // each component of a face-centered vector field ([0,1,2] --> [x1f, x2f, x3f]). For
   // cell-centered variables only first [0] component of index arrays are needed. 
-  BufferIndcs same[3];  // indices for pack/unpack when dest/src at same level
-  BufferIndcs coar[3];  // indices for pack/unpack when dest/src at coarser level
-  BufferIndcs fine[3];  // indices for pack/unpack when dest/src at finer level
-  BufferIndcs prol[3];  // indices for prolongation (only used for receives)
-  BufferIndcs flux[3];  // indices for pack/unpack for flux correction
-  DvceArray3D<Real> data;
+  BufferIndcs isame[3];  // indices for pack/unpack when dest/src at same level
+  BufferIndcs icoar[3];  // indices for pack/unpack when dest/src at coarser level
+  BufferIndcs ifine[3];  // indices for pack/unpack when dest/src at finer level
+  BufferIndcs iprol[3];  // indices for prolongation (only used for receives)
+  BufferIndcs iflux[3];  // indices for pack/unpack for flux correction
+
+  // 3D Views that store buffer data on device
+  DvceArray3D<Real> vars, flux;
+
   // following two 1D arrays only accessed from host, so can use STL vector
-  std::vector<BoundaryCommStatus> var_stat, flx_stat;
+  std::vector<BoundaryCommStatus> vars_stat, flux_stat;
 #if MPI_PARALLEL_ENABLED
-  std::vector<MPI_Request> var_req, flx_req;
+  std::vector<MPI_Request> vars_req, flux_req;
 #endif
-  // function to allocate memory for buffer data
-  void AllocateDataView(int nmb, int nvar) {
+
+  // function to allocate memory for buffers for variables and their fluxes
+  void AllocateBuffers(int nmb, int nvar) {
     int nmax = 0;
     for (int i=0; i<=2; ++i) {
-      nmax = std::max(nmax, same[i].ndat);
-      nmax = std::max(nmax, coar[i].ndat);
-      nmax = std::max(nmax, fine[i].ndat);
-      nmax = std::max(nmax, flux[i].ndat);
+      nmax = std::max(nmax, isame[i].ndat);
+      nmax = std::max(nmax, icoar[i].ndat);
+      nmax = std::max(nmax, ifine[i].ndat);
     }
-    Kokkos::realloc(data, nmb, nvar, nmax);
+    Kokkos::realloc(vars, nmb, nvar, nmax);
+    nmax = 0;
+    for (int i=0; i<=2; ++i) {
+      nmax = std::max(nmax, iflux[i].ndat);
+    }
+    Kokkos::realloc(flux, nmb, nvar, nmax);
   }
 };
 
@@ -112,11 +120,13 @@ public:
   virtual void InitSendIndices(BoundaryBuffer &buf, int x, int y, int z, int a, int b)=0;
   virtual void InitRecvIndices(BoundaryBuffer &buf, int x, int y, int z, int a, int b)=0;
   void InitializeBuffers(const int nvar);
-  static void HydroBCs(MeshBlockPack *pp, DvceArray2D<Real> uin, DvceArray5D<Real> u0);
-  static void BFieldBCs(MeshBlockPack *pp, DvceArray2D<Real> uin, DvceFaceFld4D<Real> b0);
   TaskStatus InitRecv(int nvar);
   TaskStatus ClearRecv();
   TaskStatus ClearSend();
+
+  // BCs associated with various physics modules
+  static void HydroBCs(MeshBlockPack *pp, DvceArray2D<Real> uin, DvceArray5D<Real> u0);
+  static void BFieldBCs(MeshBlockPack *pp, DvceArray2D<Real> uin, DvceFaceFld4D<Real> b0);
 
 protected:
   MeshBlockPack* pmy_pack;

@@ -12,10 +12,10 @@ add_executable(
         parameter_input.cpp
 
         bvals/bvals.cpp
-        bvals/bvals_cc.cpp
-        bvals/bvals_fc.cpp
         bvals/buffs_cc.cpp
         bvals/buffs_fc.cpp
+        bvals/bvals_cc.cpp
+        bvals/bvals_fc.cpp
         bvals/flux_correct_cc.cpp
         bvals/flux_correct_fc.cpp
         bvals/prolongation.cpp

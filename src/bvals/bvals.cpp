@@ -29,24 +29,24 @@ BoundaryValues::BoundaryValues(MeshBlockPack *pp, ParameterInput *pin)
   int nnghbr = pmy_pack->pmb->nnghbr;
   for (int n=0; n<nnghbr; ++n) {
     for (int m=0; m<nmb; ++m) {
-      BoundaryCommStatus varsend_stat = BoundaryCommStatus::undef;
-      BoundaryCommStatus varrecv_stat = BoundaryCommStatus::undef;
-      send_buf[n].var_stat.push_back(varsend_stat);
-      recv_buf[n].var_stat.push_back(varrecv_stat);
+      BoundaryCommStatus sendvars_stat = BoundaryCommStatus::undef;
+      BoundaryCommStatus recvvars_stat = BoundaryCommStatus::undef;
+      send_buf[n].vars_stat.push_back(sendvars_stat);
+      recv_buf[n].vars_stat.push_back(recvvars_stat);
 
-      BoundaryCommStatus flxsend_stat = BoundaryCommStatus::undef;
-      BoundaryCommStatus flxrecv_stat = BoundaryCommStatus::undef;
-      send_buf[n].flx_stat.push_back(flxsend_stat);
-      recv_buf[n].flx_stat.push_back(flxrecv_stat);
+      BoundaryCommStatus sendflux_stat = BoundaryCommStatus::undef;
+      BoundaryCommStatus recvflux_stat = BoundaryCommStatus::undef;
+      send_buf[n].flux_stat.push_back(sendflux_stat);
+      recv_buf[n].flux_stat.push_back(recvflux_stat);
 #if MPI_PARALLEL_ENABLED
       // cannot create Kokkos::View of type MPI_Request (not POD) so use STL vector
-      MPI_Request varsend_req, varrecv_req;
-      send_buf[n].var_req.push_back(varsend_req);
-      recv_buf[n].var_req.push_back(varrecv_req);
+      MPI_Request sendvars_req, recvvars_req;
+      send_buf[n].vars_req.push_back(sendvars_req);
+      recv_buf[n].vars_req.push_back(recvvars_req);
 
-      MPI_Request flxsend_req, flxrecv_req;
-      send_buf[n].flx_req.push_back(flxsend_req);
-      recv_buf[n].flx_req.push_back(flxrecv_req);
+      MPI_Request sendflux_req, recvflux_req;
+      send_buf[n].flux_req.push_back(sendflux_req);
+      recv_buf[n].flux_req.push_back(recvflux_req);
 #endif
     }
   }
@@ -86,8 +86,8 @@ void BoundaryValues::InitializeBuffers(const int nvar)
         int indx = pmy_pack->pmb->NeighborIndx(n,0,0,fy,fz);
         InitSendIndices(send_buf[indx],n, 0, 0, fy, fz);
         InitRecvIndices(recv_buf[indx],n, 0, 0, fy, fz);
-        send_buf[indx].AllocateDataView(nmb, nvar);
-        recv_buf[indx].AllocateDataView(nmb, nvar);
+        send_buf[indx].AllocateBuffers(nmb, nvar);
+        recv_buf[indx].AllocateBuffers(nmb, nvar);
         indx++;
       }
     }
@@ -103,8 +103,8 @@ void BoundaryValues::InitializeBuffers(const int nvar)
           int indx = pmy_pack->pmb->NeighborIndx(0,m,0,fx,fz);
           InitSendIndices(send_buf[indx],0, m, 0, fx, fz);
           InitRecvIndices(recv_buf[indx],0, m, 0, fx, fz);
-          send_buf[indx].AllocateDataView(nmb, nvar);
-          recv_buf[indx].AllocateDataView(nmb, nvar);
+          send_buf[indx].AllocateBuffers(nmb, nvar);
+          recv_buf[indx].AllocateBuffers(nmb, nvar);
           indx++;
         }
       }
@@ -117,8 +117,8 @@ void BoundaryValues::InitializeBuffers(const int nvar)
           int indx = pmy_pack->pmb->NeighborIndx(n,m,0,fz,0);
           InitSendIndices(send_buf[indx],n, m, 0, fz, 0);
           InitRecvIndices(recv_buf[indx],n, m, 0, fz, 0);
-          send_buf[indx].AllocateDataView(nmb, nvar);
-          recv_buf[indx].AllocateDataView(nmb, nvar);
+          send_buf[indx].AllocateBuffers(nmb, nvar);
+          recv_buf[indx].AllocateBuffers(nmb, nvar);
           indx++;
         }
       }
@@ -135,8 +135,8 @@ void BoundaryValues::InitializeBuffers(const int nvar)
           int indx = pmy_pack->pmb->NeighborIndx(0,0,l,fx,fy);
           InitSendIndices(send_buf[indx],0, 0, l, fx, fy);
           InitRecvIndices(recv_buf[indx],0, 0, l, fx, fy);
-          send_buf[indx].AllocateDataView(nmb, nvar);
-          recv_buf[indx].AllocateDataView(nmb, nvar);
+          send_buf[indx].AllocateBuffers(nmb, nvar);
+          recv_buf[indx].AllocateBuffers(nmb, nvar);
           indx++;
         }
       }
@@ -149,8 +149,8 @@ void BoundaryValues::InitializeBuffers(const int nvar)
           int indx = pmy_pack->pmb->NeighborIndx(n,0,l,fy,0);
           InitSendIndices(send_buf[indx],n, 0, l, fy, 0);
           InitRecvIndices(recv_buf[indx],n, 0, l, fy, 0);
-          send_buf[indx].AllocateDataView(nmb, nvar);
-          recv_buf[indx].AllocateDataView(nmb, nvar);
+          send_buf[indx].AllocateBuffers(nmb, nvar);
+          recv_buf[indx].AllocateBuffers(nmb, nvar);
           indx++;
         }
       }
@@ -163,8 +163,8 @@ void BoundaryValues::InitializeBuffers(const int nvar)
           int indx = pmy_pack->pmb->NeighborIndx(0,m,l,fx,0);
           InitSendIndices(send_buf[indx],0, m, l, fx, 0);
           InitRecvIndices(recv_buf[indx],0, m, l, fx, 0);
-          send_buf[indx].AllocateDataView(nmb, nvar);
-          recv_buf[indx].AllocateDataView(nmb, nvar);
+          send_buf[indx].AllocateBuffers(nmb, nvar);
+          recv_buf[indx].AllocateBuffers(nmb, nvar);
           indx++;
         }
       }
@@ -177,16 +177,16 @@ void BoundaryValues::InitializeBuffers(const int nvar)
           int indx = pmy_pack->pmb->NeighborIndx(n,m,l,0,0);
           InitSendIndices(send_buf[indx],n, m, l, 0, 0);
           InitRecvIndices(recv_buf[indx],n, m, l, 0, 0);
-          send_buf[indx].AllocateDataView(nmb, nvar);
-          recv_buf[indx].AllocateDataView(nmb, nvar);
+          send_buf[indx].AllocateBuffers(nmb, nvar);
+          recv_buf[indx].AllocateBuffers(nmb, nvar);
         }
       }
     }
   }
 
-/***************/
+/***************
   int nnghbr = pmy_pack->pmb->nnghbr;
-  for (int n=0; n<=nnghbr; ++n) {
+  for (int n=0; n<nnghbr; ++n) {
 std::cout << std::endl <<"Buffer="<< n << std::endl;
 for (int v=0; v<3; ++v) {
 std::cout <<"send_flux["<<v<<"]:" <<send_buf[n].flux[v].bis<<"  "<<send_buf[n].flux[v].bie<<
@@ -199,7 +199,17 @@ std::cout <<"recv_flux["<<v<<"]:" <<recv_buf[n].flux[v].bis<<"  "<<recv_buf[n].f
                 "  "<<recv_buf[n].flux[v].bks<<"  "<<recv_buf[n].flux[v].bke<< std::endl;
 }
   }
+***************/
 /***************/
+  int nnghbr = pmy_pack->pmb->nnghbr;
+  for (int n=0; n<nnghbr; ++n) {
+std::cout << std::endl <<"Buffer="<< n << std::endl;
+std::cout <<"send_same.ndat:" <<send_buf[n].isame[0].ndat <<"  "<<send_buf[n].isame[1].ndat <<"  "<<send_buf[n].isame[2].ndat <<std::endl;
+std::cout <<"send_coar.ndat:" <<send_buf[n].icoar[0].ndat <<"  "<<send_buf[n].icoar[1].ndat <<"  "<<send_buf[n].icoar[2].ndat << std::endl;
+std::cout <<"send_fine.ndat:" <<send_buf[n].ifine[0].ndat <<"  "<<send_buf[n].ifine[1].ndat <<"  "<<send_buf[n].ifine[2].ndat << std::endl;
+std::cout <<"send_flux.ndat:" <<send_buf[n].iflux[0].ndat <<"  "<<send_buf[n].iflux[1].ndat <<"  "<<send_buf[n].iflux[2].ndat << std::endl;
+   }
+ /***************/
 
 
 
@@ -243,8 +253,8 @@ TaskStatus BoundaryValues::InitRecv(int nvar)
         }
 #endif  
         // initialize boundary receive status flags
-        recv_buf[n].var_stat[m] = BoundaryCommStatus::waiting;
-        recv_buf[n].flx_stat[m] = BoundaryCommStatus::waiting;
+        recv_buf[n].vars_stat[m] = BoundaryCommStatus::waiting;
+        recv_buf[n].flux_stat[m] = BoundaryCommStatus::waiting;
       }
     }
   }

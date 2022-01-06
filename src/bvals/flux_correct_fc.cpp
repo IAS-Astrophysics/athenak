@@ -54,21 +54,21 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx)
     // only pack buffers for faces when neighbor is at coarser level
     if (nghbr.d_view(m,n).fcflx && (nghbr.d_view(m,n).lev < mblev.d_view(m))) {
       // Note send buffer flux indices are for the coarse mesh
-      int il = sbuf[n].flux[v].bis;
-      int iu = sbuf[n].flux[v].bie;
-      int jl = sbuf[n].flux[v].bjs;
-      int ju = sbuf[n].flux[v].bje;
-      int kl = sbuf[n].flux[v].bks;
-      int ku = sbuf[n].flux[v].bke;
+      int il = sbuf[n].iflux[v].bis;
+      int iu = sbuf[n].iflux[v].bie;
+      int jl = sbuf[n].iflux[v].bjs;
+      int ju = sbuf[n].iflux[v].bje;
+      int kl = sbuf[n].iflux[v].bks;
+      int ku = sbuf[n].iflux[v].bke;
       const int ni = iu - il + 1;
       const int nj = ju - jl + 1;
       const int nk = ku - kl + 1;
       const int nkj  = nk*nj;
 
-      // indices of recv'ing MB and buffer: assumes MB IDs are stored sequentially
-      // in this MeshBlockPack, so array index equals (target_id - first_id)
-      int mm = nghbr.d_view(m,n).gid - mbgid.d_view(0);
-      int nn = nghbr.d_view(m,n).dest;
+      // indices of recv'ing (destination) MB and buffer: MB IDs are stored sequentially
+      // in MeshBlockPacks, so array index equals (target_id - first_id)
+      int dm = nghbr.d_view(m,n).gid - mbgid.d_view(0);
+      int dn = nghbr.d_view(m,n).dest;
 
       // Middle loop over k,j
       Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
@@ -104,10 +104,10 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx)
               }
               // copy directly into recv buffer if MeshBlocks on same rank
               if (nghbr.d_view(m,n).rank == my_rank) {
-                rbuf[nn].data(mm, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
+                rbuf[dn].flux(dm, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
               // else copy into send buffer for MPI communication below
               } else {
-                sbuf[n].data(m, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
+                sbuf[n].flux(m, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
               }
             });
           }
@@ -133,9 +133,9 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx)
                 }
               }
               if (nghbr.d_view(m,n).rank == my_rank) { 
-                rbuf[nn].data(mm, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
+                rbuf[dn].flux(dm, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
               } else {
-                sbuf[n].data(m, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
+                sbuf[n].flux(m, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
               }
             });
           }
@@ -153,9 +153,9 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx)
                 rflx = 0.5*(flx.x3e(m,fk,fj,fi) + flx.x3e(m,fk+1,fj,fi));
               }
               if (nghbr.d_view(m,n).rank == my_rank) {
-                rbuf[nn].data(mm, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
+                rbuf[dn].flux(dm, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
               } else {
-                sbuf[n].data(m, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
+                sbuf[n].flux(m, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
               }
             });
           }
@@ -173,9 +173,9 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx)
                 rflx = 0.5*(flx.x2e(m,fk,fj,fi) + flx.x2e(m,fk,fj+1,fi));
               }
               if (nghbr.d_view(m,n).rank == my_rank) {
-                rbuf[nn].data(mm, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
+                rbuf[dn].flux(dm, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
               } else {
-                sbuf[n].data(m, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
+                sbuf[n].flux(m, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
               }
             });
           }
@@ -188,9 +188,9 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx)
               int fi = 2*i - cis;
               Real rflx = 0.5*(flx.x2e(m,fk,fj,fi) + flx.x2e(m,fk,fj+1,fi));
               if (nghbr.d_view(m,n).rank == my_rank) {
-                rbuf[nn].data(mm, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
+                rbuf[dn].flux(dm, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
               } else {
-                sbuf[n].data(m, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
+                sbuf[n].flux(m, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
               }
             });
           }
@@ -203,9 +203,9 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx)
               int fi = 2*i - cis;
               Real rflx = 0.5*(flx.x1e(m,fk,fj,fi) + flx.x1e(m,fk,fj,fi+1));
               if (nghbr.d_view(m,n).rank == my_rank) {
-                rbuf[nn].data(mm, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
+                rbuf[dn].flux(dm, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
               } else {
-                sbuf[n].data(m, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
+                sbuf[n].flux(m, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
               }
             });
           }
@@ -228,26 +228,27 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx)
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
       if (nghbr.h_view(m,n).gid >= 0) {  // neighbor exists and not a physical boundary
-        // compute indices of destination MeshBlock and Neighbor 
-        int nn = nghbr.h_view(m,n).dest;
+        // index and rank of destination Neighbor 
+        int dn = nghbr.h_view(m,n).dest;
+        int drank = nghbr.h_view(m,n).rank;
+
         // if MeshBlocks are on same rank, data already copied into receive buffer above
         // So simply set communication status tag as received.
-        if (nghbr.h_view(m,n).rank == my_rank) {
-          int mm = nghbr.h_view(m,n).gid - pmy_pack->gids;
-          rbuf[nn].flx_stat[mm] = BoundaryCommStatus::received;
+        if (drank == my_rank) {
+          int dm = nghbr.h_view(m,n).gid - pmy_pack->gids;
+          rbuf[dn].flux_stat[dm] = BoundaryCommStatus::received;
 
 #if MPI_PARALLEL_ENABLED
         // Send boundary data using MPI
         } else {
           // create tag using local ID and buffer index of *receiving* MeshBlock
-          int lid = nghbr.h_view(m,n).gid -
-                    pmy_pack->pmesh->gidslist[nghbr.h_view(m,n).rank];
+          int lid = nghbr.h_view(m,n).gid - pmy_pack->pmesh->gidslist[drank];
           int tag = CreateMPITag(lid, nn, key);
           auto send_data = Kokkos::subview(sbuf[n].data, m, Kokkos::ALL, Kokkos::ALL);
           void* send_ptr = send_data.data();
           int data_size = (sbuf[n].flux[0].ndat)*nvar;
-          int ierr = MPI_Isend(send_ptr, data_size, MPI_ATHENA_REAL,
-            nghbr.h_view(m,n).rank, tag, MPI_COMM_WORLD, &(sbuf[n].flx_req[m]));
+          int ierr = MPI_Isend(send_ptr, data_size, MPI_ATHENA_REAL, drank, tag,
+                               MPI_COMM_WORLD, &(sbuf[n].flx_req[m]));
 #endif
         }
       }
@@ -284,7 +285,7 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx)
     for (int n=0; n<nnghbr; ++n) {
       if (nghbr.h_view(m,n).gid >= 0) { // neighbor exists and not a physical boundary
         if (nghbr.h_view(m,n).rank == global_variable::my_rank) {
-          if (rbuf[n].flx_stat[m] == BoundaryCommStatus::waiting) {bflag = true;}
+          if (rbuf[n].flux_stat[m] == BoundaryCommStatus::waiting) {bflag = true;}
 #if MPI_PARALLEL_ENABLED
         } else {
           MPI_Test(&(rbuf[n].flx_req[m]), &test, MPI_STATUS_IGNORE);
@@ -316,12 +317,12 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx)
     // only unpack buffers for faces when neighbor is at finer level
     if (nghbr.d_view(m,n).fcflx && (nghbr.d_view(m,n).lev > mblev.d_view(m))) {
       // Recv buffer flux indices are for the regular mesh
-      int il = rbuf[n].flux[v].bis;
-      int iu = rbuf[n].flux[v].bie;
-      int jl = rbuf[n].flux[v].bjs;
-      int ju = rbuf[n].flux[v].bje;
-      int kl = rbuf[n].flux[v].bks;
-      int ku = rbuf[n].flux[v].bke;
+      int il = rbuf[n].iflux[v].bis;
+      int iu = rbuf[n].iflux[v].bie;
+      int jl = rbuf[n].iflux[v].bjs;
+      int ju = rbuf[n].iflux[v].bje;
+      int kl = rbuf[n].iflux[v].bks;
+      int ku = rbuf[n].iflux[v].bke;
       const int ni = iu - il + 1;
       const int nj = ju - jl + 1;
       const int nk = ku - kl + 1;
@@ -338,12 +339,12 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx)
           if (v==1) {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
             [&](const int i) {
-              flx.x2e(m,k,j,i) = rbuf[n].data(m,v,i-il + ni*(j-jl + nj*(k-kl)));
+              flx.x2e(m,k,j,i) = rbuf[n].flux(m,v,i-il + ni*(j-jl + nj*(k-kl)));
             });
           } else if (v==2) {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
             [&](const int i) {
-              flx.x3e(m,k,j,i) = rbuf[n].data(m,v,i-il + ni*(j-jl + nj*(k-kl)));
+              flx.x3e(m,k,j,i) = rbuf[n].flux(m,v,i-il + ni*(j-jl + nj*(k-kl)));
             });
           }
 
@@ -352,12 +353,12 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx)
           if (v==0) {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
             [&](const int i) {
-              flx.x1e(m,k,j,i) = rbuf[n].data(m,v,i-il + ni*(j-jl + nj*(k-kl)));
+              flx.x1e(m,k,j,i) = rbuf[n].flux(m,v,i-il + ni*(j-jl + nj*(k-kl)));
             });
           } else if (v==2) {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
             [&](const int i) {
-              flx.x3e(m,k,j,i) = rbuf[n].data(m,v,i-il + ni*(j-jl + nj*(k-kl)));
+              flx.x3e(m,k,j,i) = rbuf[n].flux(m,v,i-il + ni*(j-jl + nj*(k-kl)));
             });
           }
 
@@ -366,7 +367,7 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx)
           if (v==2) {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
             [&](const int i) { 
-              flx.x3e(m,k,j,i) = rbuf[n].data(m,v,i-il + ni*(j-jl + nj*(k-kl)));
+              flx.x3e(m,k,j,i) = rbuf[n].flux(m,v,i-il + ni*(j-jl + nj*(k-kl)));
             });
           }
 
@@ -375,12 +376,12 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx)
           if (v==0) {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
             [&](const int i) {
-              flx.x1e(m,k,j,i) = rbuf[n].data(m,v,i-il + ni*(j-jl + nj*(k-kl)));
+              flx.x1e(m,k,j,i) = rbuf[n].flux(m,v,i-il + ni*(j-jl + nj*(k-kl)));
             });
           } else if (v==1) {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
             [&](const int i) {
-              flx.x2e(m,k,j,i) = rbuf[n].data(m,v,i-il + ni*(j-jl + nj*(k-kl)));
+              flx.x2e(m,k,j,i) = rbuf[n].flux(m,v,i-il + ni*(j-jl + nj*(k-kl)));
             });
           }
 
@@ -389,7 +390,7 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx)
           if (v==1) {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
             [&](const int i) {
-              flx.x2e(m,k,j,i) = rbuf[n].data(m,v,i-il + ni*(j-jl + nj*(k-kl)));
+              flx.x2e(m,k,j,i) = rbuf[n].flux(m,v,i-il + ni*(j-jl + nj*(k-kl)));
             });
           } 
 
@@ -398,7 +399,7 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx)
           if (v==0) {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
             [&](const int i) {
-              flx.x1e(m,k,j,i) = rbuf[n].data(m,v,i-il + ni*(j-jl + nj*(k-kl)));
+              flx.x1e(m,k,j,i) = rbuf[n].flux(m,v,i-il + ni*(j-jl + nj*(k-kl)));
             });
           } 
         }
