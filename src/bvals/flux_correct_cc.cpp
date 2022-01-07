@@ -19,7 +19,8 @@
 //----------------------------------------------------------------------------------------
 //! \fn void BoundaryValuesCC::PackAndSendFlux()
 //! \brief Pack restricted fluxes of cell-centered variables at fine/coarse boundaries
-//! into boundary buffers and send to neighbors for flux-correction step.
+//! into boundary buffers and send to neighbors for flux-correction step.  These fluxes
+//! (e.g. for the conserved hydro variables) live at cell faces.
 //!
 //! This routine packs ALL the buffers on ALL the faces simultaneously for ALL the
 //! MeshBlocks. Buffer data are then sent (via MPI) or copied directly for periodic or
@@ -45,7 +46,7 @@ TaskStatus BoundaryValuesCC::PackAndSendFluxCC(DvceFaceFld5D<Real> &flx)
   auto &one_d = pmy_pack->pmesh->one_d;
   auto &two_d = pmy_pack->pmesh->two_d;
 
-  // Outer loop over (# of MeshBlocks)*(# of variables)
+  // Outer loop over (# of MeshBlocks)*(# of neighbors)*(# of variables)
   Kokkos::TeamPolicy<> policy(DevExeSpace(), (nmb*nnghbr*nvar), Kokkos::AUTO);
   Kokkos::parallel_for("RecvBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
     const int m = (tmember.league_rank())/(nnghbr*nvar);
@@ -69,7 +70,7 @@ TaskStatus BoundaryValuesCC::PackAndSendFluxCC(DvceFaceFld5D<Real> &flx)
     int dm = nghbr.d_view(m,n).gid - mbgid.d_view(0);
     int dn = nghbr.d_view(m,n).dest;
 
-    // only pack buffers for faces when neighbor is at coarser level
+    // only pack buffers when neighbor is at coarser level
     if ((nghbr.d_view(m,n).gid >=0) && (nghbr.d_view(m,n).lev < mblev.d_view(m))) {
 
       // x1faces
@@ -259,7 +260,7 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx)
 
   int nvar = flx.x1f.extent_int(1); // TODO: 2nd index from L of input array must be NVAR
 
-  // Outer loop over (# of MeshBlocks)*(# of variables)
+  // Outer loop over (# of MeshBlocks)*(# of neighbors)*(# of variables)
   Kokkos::TeamPolicy<> policy(DevExeSpace(), (nmb*nnghbr*nvar), Kokkos::AUTO);
   Kokkos::parallel_for("RecvBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
     const int m = (tmember.league_rank())/(nnghbr*nvar);
