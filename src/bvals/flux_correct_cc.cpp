@@ -52,35 +52,34 @@ TaskStatus BoundaryValuesCC::PackAndSendFluxCC(DvceFaceFld5D<Real> &flx)
     const int n = (tmember.league_rank() - m*(nnghbr*nvar))/nvar;
     const int v = (tmember.league_rank() - m*(nnghbr*nvar) - n*nvar);
 
+    // Note send buffer flux indices are for the coarse mesh
+    int il = sbuf[n].iflux[0].bis;
+    int iu = sbuf[n].iflux[0].bie;
+    int jl = sbuf[n].iflux[0].bjs;
+    int ju = sbuf[n].iflux[0].bje;
+    int kl = sbuf[n].iflux[0].bks;
+    int ku = sbuf[n].iflux[0].bke;
+    const int ni = iu - il + 1;
+    const int nj = ju - jl + 1;
+    const int nk = ku - kl + 1;
+    const int nkj  = nk*nj;
+
+    // indices of recv'ing (destination) MB and buffer: MB IDs are stored sequentially
+    // in MeshBlockPacks, so array index equals (target_id - first_id)
+    int dm = nghbr.d_view(m,n).gid - mbgid.d_view(0);
+    int dn = nghbr.d_view(m,n).dest;
+
     // only pack buffers for faces when neighbor is at coarser level
-    if (nghbr.d_view(m,n).ccflx && (nghbr.d_view(m,n).lev < mblev.d_view(m))) {
-      // Note send buffer flux indices are for the coarse mesh
-      int il = sbuf[n].iflux[0].bis;
-      int iu = sbuf[n].iflux[0].bie;
-      int jl = sbuf[n].iflux[0].bjs;
-      int ju = sbuf[n].iflux[0].bje;
-      int kl = sbuf[n].iflux[0].bks;
-      int ku = sbuf[n].iflux[0].bke;
-      const int ni = iu - il + 1;
-      const int nj = ju - jl + 1;
-      const int nk = ku - kl + 1;
-      const int nkj  = nk*nj;
+    if ((nghbr.d_view(m,n).gid >=0) && (nghbr.d_view(m,n).lev < mblev.d_view(m))) {
 
-      // indices of recv'ing (destination) MB and buffer: MB IDs are stored sequentially
-      // in MeshBlockPacks, so array index equals (target_id - first_id)
-      int dm = nghbr.d_view(m,n).gid - mbgid.d_view(0);
-      int dn = nghbr.d_view(m,n).dest;
-
-      // Middle loop over k,j
-      Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
-        int k = idx / nj;
-        int j = (idx - k * nj) + jl;
-        k += kl;
-        int fj = 2*j - cjs;
-        int fk = 2*k - cks;
-
-        // x1faces
-        if (n<8) {
+      // x1faces
+      if (n<8) {
+        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
+          int k = idx / nj;
+          int j = (idx - k * nj) + jl;
+          k += kl;
+          int fj = 2*j - cjs;
+          int fk = 2*k - cks;
           Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
           [&](const int i) {
             int fi = 2*i - cis;
@@ -104,9 +103,16 @@ TaskStatus BoundaryValuesCC::PackAndSendFluxCC(DvceFaceFld5D<Real> &flx)
 std::cout << "x1send (m,n)="<<m<<","<<n<<"  (i,j,k)="<<fi<<","<<fj<<","<<fk << std::endl;
 *****/
           });
+        });
 
-        // x2faces
-        } else if (n<16) {
+      // x2faces
+      } else if (n<16) {
+        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
+          int k = idx / nj;
+          int j = (idx - k * nj) + jl;
+          k += kl;
+          int fj = 2*j - cjs;
+          int fk = 2*k - cks;
           Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
           [&](const int i) {
             int fi = 2*i - cis;
@@ -128,9 +134,16 @@ std::cout << "x1send (m,n)="<<m<<","<<n<<"  (i,j,k)="<<fi<<","<<fj<<","<<fk << s
 std::cout << "x2send (m,n)="<<m<<","<<n<<"  (i,j,k)="<<fi<<","<<fj<<","<<fk << std::endl;
 *****/
           });
+        });
 
-        // x3faces
-        } else {
+      // x3faces
+      } else if ((n>=24) && (n<32)) {
+        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
+          int k = idx / nj;
+          int j = (idx - k * nj) + jl;
+          k += kl;
+          int fj = 2*j - cjs;
+          int fk = 2*k - cks;
           Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
           [&](const int i) {
             int fi = 2*i - cis;
@@ -144,12 +157,13 @@ std::cout << "x2send (m,n)="<<m<<","<<n<<"  (i,j,k)="<<fi<<","<<fj<<","<<fk << s
               sbuf[n].flux(m, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
             }
           });
-        }
-      });
+        });
+      }
     }  // end if-neighbor-exists block
   });  // end par_for_outer
 
   // Send boundary buffer to neighboring MeshBlocks using MPI
+  // Sends only occur to neighbors on faces at a COARSER level
 
   {int &my_rank = global_variable::my_rank;
   auto &nghbr = pmy_pack->pmb->nghbr;
@@ -161,7 +175,8 @@ std::cout << "x2send (m,n)="<<m<<","<<n<<"  (i,j,k)="<<fi<<","<<fj<<","<<fk << s
 
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
-      if (nghbr.h_view(m,n).gid >= 0) {  // neighbor exists and not a physical boundary
+      if ( (nghbr.d_view(m,n).gid >=0) && (nghbr.d_view(m,n).lev < mblev.d_view(m)) &&
+           ((n<16) || ((n>=24) && (n<32))) ) {
         // index and rank of destination Neighbor 
         int dn = nghbr.h_view(m,n).dest;
         int drank = nghbr.h_view(m,n).rank;
@@ -205,6 +220,7 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx)
   bool bflag = false;
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &rbuf = recv_buf;
+  auto &mblev = pmy_pack->pmb->mb_lev;
 
 #if MPI_PARALLEL_ENABLED
   // probe MPI communications.  This is a bit of black magic that seems to promote
@@ -214,10 +230,12 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx)
 #endif
 
   //----- STEP 1: check that recv boundary buffer communications have all completed
+  // receives only occur for neighbors on faces at a FINER level
 
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
-      if (nghbr.h_view(m,n).gid >= 0) { // neighbor exists and not a physical boundary
+      if ( (nghbr.d_view(m,n).gid >=0) && (nghbr.d_view(m,n).lev > mblev.d_view(m)) &&
+           ((n<16) || ((n>=24) && (n<32))) ) {
         if (nghbr.h_view(m,n).rank == global_variable::my_rank) {
           if (rbuf[n].flux_stat[m] == BoundaryCommStatus::waiting) {bflag = true;}
 #if MPI_PARALLEL_ENABLED
@@ -240,7 +258,6 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx)
   //----- STEP 2: buffers have all completed, so unpack
 
   int nvar = flx.x1f.extent_int(1); // TODO: 2nd index from L of input array must be NVAR
-  auto &mblev = pmy_pack->pmb->mb_lev;
 
   // Outer loop over (# of MeshBlocks)*(# of variables)
   Kokkos::TeamPolicy<> policy(DevExeSpace(), (nmb*nnghbr*nvar), Kokkos::AUTO);
@@ -249,28 +266,27 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx)
     const int n = (tmember.league_rank() - m*(nnghbr*nvar))/nvar;
     const int v = (tmember.league_rank() - m*(nnghbr*nvar) - n*nvar);
 
-    // only unpack buffers for faces when neighbor is at finer level
-    if (nghbr.d_view(m,n).ccflx && (nghbr.d_view(m,n).lev > mblev.d_view(m))) {
-      // Recv buffer flux indices are for the regular mesh
-      int il = rbuf[n].iflux[0].bis;
-      int iu = rbuf[n].iflux[0].bie;
-      int jl = rbuf[n].iflux[0].bjs;
-      int ju = rbuf[n].iflux[0].bje;
-      int kl = rbuf[n].iflux[0].bks;
-      int ku = rbuf[n].iflux[0].bke;
-      const int ni = iu - il + 1;
-      const int nj = ju - jl + 1;
-      const int nk = ku - kl + 1;
-      const int nkj  = nk*nj;
+    // Recv buffer flux indices are for the regular mesh
+    int il = rbuf[n].iflux[0].bis;
+    int iu = rbuf[n].iflux[0].bie;
+    int jl = rbuf[n].iflux[0].bjs;
+    int ju = rbuf[n].iflux[0].bje;
+    int kl = rbuf[n].iflux[0].bks;
+    int ku = rbuf[n].iflux[0].bke;
+    const int ni = iu - il + 1;
+    const int nj = ju - jl + 1;
+    const int nk = ku - kl + 1;
+    const int nkj  = nk*nj;
 
-      // Middle loop over k,j
-      Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
-        int k = idx / nj;
-        int j = (idx - k * nj) + jl;
-        k += kl;
-         
-        // x1faces
-        if (n<8) {
+    // only unpack buffers for faces when neighbor is at finer level
+    if ((nghbr.d_view(m,n).gid >=0) && (nghbr.d_view(m,n).lev > mblev.d_view(m))) {
+
+      //x1 faces
+      if (n<8) {
+        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
+          int k = idx / nj;
+          int j = (idx - k * nj) + jl;
+          k += kl;
           Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
           [&](const int i) {
             flx.x1f(m,v,k,j,i) = rbuf[n].flux(m,v,i-il + ni*(j-jl + nj*(k-kl)));
@@ -278,8 +294,13 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx)
 std::cout << "x1recv (m,n)="<<m<<","<<n<<"  (i,j,k)="<<i<<","<<j<<","<<k << std::endl;
 ********/
           });
-        // x2faces
-        } else if (n<16) {
+        });
+      // x2faces
+      } else if (n<16) {
+        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
+          int k = idx / nj;
+          int j = (idx - k * nj) + jl;
+          k += kl;
           Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
           [&](const int i) {
             flx.x2f(m,v,k,j,i) = rbuf[n].flux(m,v,i-il + ni*(j-jl + nj*(k-kl)));
@@ -287,14 +308,19 @@ std::cout << "x1recv (m,n)="<<m<<","<<n<<"  (i,j,k)="<<i<<","<<j<<","<<k << std:
 std::cout << "x2recv (m,n)="<<m<<","<<n<<"  (i,j,k)="<<i<<","<<j<<","<<k << std::endl;
 ********/
           });
-        // x3faces
-        } else {
+        });
+      // x3faces
+      } else if ((n>=24) && (n<32)) {
+        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
+          int k = idx / nj;
+          int j = (idx - k * nj) + jl;
+          k += kl;
           Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
           [&](const int i) {
             flx.x3f(m,v,k,j,i) = rbuf[n].flux(m,v,i-il + ni*(j-jl + nj*(k-kl)));
           });
-        }
-      });
+        });
+      }
     }  // end if-neighbor-exists block
   });  // end par_for_outer
 

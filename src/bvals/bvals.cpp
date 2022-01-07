@@ -237,8 +237,9 @@ std::cout <<"recv_flux.ndat:" <<recv_buf[n].iflux_ndat << std::endl;
 
 //----------------------------------------------------------------------------------------
 //! \fn  void BoundaryValues::InitRecv
-//  \brief Posts non-blocking receives (with MPI), and initialize all boundary receive
-//  status flags to waiting (with or without MPI) for boundary communication of CC vars.
+//! \brief Posts non-blocking receives (with MPI), and initialize all boundary receive
+//! status flags to waiting (with or without MPI) for boundary communications.
+//! This includes communications required for the flux correction step with SMR/AMR
 
 TaskStatus BoundaryValues::InitRecv(int nvar)
 { 
@@ -247,39 +248,35 @@ TaskStatus BoundaryValues::InitRecv(int nvar)
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &mblev = pmy_pack->pmb->mb_lev;
   
-  // Initialize communications for cell-centered conserved variables
+  // Initialize communications of variables and fluxes (with SMR/AMR)
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) { 
       if (nghbr.h_view(m,n).gid >= 0) {
 #if MPI_PARALLEL_ENABLED
+        // rank of destination buffer
+        int drank = nghbr.h_view(m,n).rank;
+
         // post non-blocking receive if neighboring MeshBlock on a different rank 
-        if (nghbr.h_view(m,n).rank != global_variable::my_rank) {
+        if (drank != global_variable::my_rank) {
           // create tag using local ID and buffer index of *receiving* MeshBlock
           int tag = CreateMPITag(m, n);
 
-          // creat subview of recv buffer of correct size
+          // create subview of recv buffer when neighbor is at coarser/same/fine level
           std::pair data_range;
           if (nghbr.h_view(m,n).lev < mblev.h_view(m)) {
-            data_range = std::make_pair(0,(recv_buf[n].coar.ndat)*nvar;
+            data_range = std::make_pair(0,(recv_buf[n].icoar_ndat));
           } else if (nghbr.h_view(m,n).lev == mblev.h_view(m)) {
-            data_range = (recv_buf[n].same.ndat)*nvar;
+            data_range = std::make_pair(0,(recv_buf[n].isame_ndat));
           } else {
-            data_range = (recv_buf[n].fine.ndat)*nvar;
+            data_range = std::make_pair(0,(recv_buf[n].ifine_ndat));
           }
-
-          auto recv_data = Kokkos::subview(recv_buf[n].data, m, Kokkos::ALL, Kokkos::ALL);
+          auto recv_data = Kokkos::subview(recv_buf[n].data, m, Kokkos::ALL, data_range);
           void* recv_ptr = recv_data.data();
+
+          // Post non-blocking receive for this buffer on this MeshBlock
           int data_size;
-          // get data size if neighbor is at coarser/same/fine level
-          if (nghbr.h_view(m,n).lev < mblev.h_view(m)) {
-            data_size = (recv_buf[n].coar.ndat)*nvar;
-          } else if (nghbr.h_view(m,n).lev == mblev.h_view(m)) {
-            data_size = (recv_buf[n].same.ndat)*nvar;
-          } else {
-            data_size = (recv_buf[n].fine.ndat)*nvar;
-          }
-          (void) MPI_Irecv(recv_ptr, data_size, MPI_ATHENA_REAL, nghbr.h_view(m,n).rank,
-                           tag, ccvar_comm, &(recv_buf[n].comm_req[m]));
+          (void) MPI_Irecv(recv_ptr, recv_data.size(), MPI_ATHENA_REAL, drank,
+                           tag, vars_comm, &(recv_buf[n].comm_req[m]));
         }
 #endif  
         // initialize boundary receive status flags
