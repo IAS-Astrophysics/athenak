@@ -170,9 +170,6 @@ std::cout << "x2send (m,n)="<<m<<","<<n<<"  (i,j,k)="<<fi<<","<<fj<<","<<fk << s
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &rbuf = recv_buf;
   auto &mblev = pmy_pack->pmb->mb_lev;
-#if MPI_PARALLEL_ENABLED
-  auto &sbuf = send_buf;
-#endif
 
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
@@ -193,12 +190,15 @@ std::cout << "x2send (m,n)="<<m<<","<<n<<"  (i,j,k)="<<fi<<","<<fj<<","<<fk << s
         } else {
           // create tag using local ID and buffer index of *receiving* MeshBlock
           int lid = nghbr.h_view(m,n).gid - pmy_pack->pmesh->gidslist[drank];
-          int tag = CreateMPITag(lid, nn, key);
-          auto send_data = Kokkos::subview(sbuf[n].data, m, Kokkos::ALL, Kokkos::ALL);
-          void* send_ptr = send_data.data();
-          int data_size = (sbuf[n].flux[0].ndat)*nvar;
-          int ierr = MPI_Isend(send_ptr, data_size, MPI_ATHENA_REAL, drank, tag,
-                               MPI_COMM_WORLD, &(sbuf[n].flx_req[m]));
+          int tag = CreateMPITag(lid, dn);
+
+          // create subview of send buffer for fluxes
+          std::pair<int,int> data_range = std::make_pair(0,(send_buf[n].iflux_ndat));
+          auto send_flux = Kokkos::subview(send_buf[n].flux, m, Kokkos::ALL, data_range);
+          void* send_ptr = send_flux.data();
+
+          int ierr = MPI_Isend(send_ptr, send_flux.size(), MPI_ATHENA_REAL, drank, tag,
+                               flux_comm, &(send_buf[n].flux_req[m]));
 #endif
         }
       }
@@ -227,7 +227,7 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx)
   // probe MPI communications.  This is a bit of black magic that seems to promote
   // communications to top of stack and gets them to complete more quickly
   int test;
-  MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &test, MPI_STATUS_IGNORE);
+  MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, flux_comm, &test, MPI_STATUS_IGNORE);
 #endif
 
   //----- STEP 1: check that recv boundary buffer communications have all completed
@@ -241,9 +241,9 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx)
           if (rbuf[n].flux_stat[m] == BoundaryCommStatus::waiting) {bflag = true;}
 #if MPI_PARALLEL_ENABLED
         } else {
-          MPI_Test(&(rbuf[n].flx_req[m]), &test, MPI_STATUS_IGNORE);
+          MPI_Test(&(rbuf[n].flux_req[m]), &test, MPI_STATUS_IGNORE);
           if (static_cast<bool>(test)) {
-            rbuf[n].flx_stat[m] = BoundaryCommStatus::received;
+            rbuf[n].flux_stat[m] = BoundaryCommStatus::received;
           } else {
             bflag = true;
           }

@@ -9,6 +9,7 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <utility>
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -155,9 +156,6 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &rbuf = recv_buf;
   auto &mblev = pmy_pack->pmb->mb_lev;
-#if MPI_PARALLEL_ENABLED
-  auto &sbuf = send_buf;
-#endif
 
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
@@ -180,20 +178,20 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
           int lid = nghbr.h_view(m,n).gid - pmy_pack->pmesh->gidslist[drank];
           int tag = CreateMPITag(lid, dn);
 
-          // create subview of buffer containing required data
-          auto send_data = Kokkos::subview(sbuf[n].data, m, Kokkos::ALL, Kokkos::ALL);
-          void* send_ptr = send_data.data();
-          int data_size;
-          // get data size if neighbor is at coarser/same/fine level
+          // create subview of send buffer when neighbor is at coarser/same/fine level
+          std::pair<int,int> data_range;
           if (nghbr.h_view(m,n).lev < mblev.h_view(m)) {
-            data_size = (sbuf[n].coar.ndat)*nvar;
+            data_range = std::make_pair(0,(send_buf[n].icoar_ndat));
           } else if (nghbr.h_view(m,n).lev == mblev.h_view(m)) {
-            data_size = (sbuf[n].same.ndat)*nvar;
+            data_range = std::make_pair(0,(send_buf[n].isame_ndat));
           } else {
-            data_size = (sbuf[n].fine.ndat)*nvar;
+            data_range = std::make_pair(0,(send_buf[n].ifine_ndat));
           }
-          int ierr = MPI_Isend(send_ptr, data_size, MPI_ATHENA_REAL, drank, tag,
-                               MPI_COMM_WORLD, &(sbuf[n].comm_req[m]));
+          auto send_vars = Kokkos::subview(send_buf[n].vars, m, Kokkos::ALL, data_range);
+          void* send_ptr = send_vars.data();
+
+          int ierr = MPI_Isend(send_ptr, send_vars.size(), MPI_ATHENA_REAL, drank, tag,
+                               vars_comm, &(send_buf[n].vars_req[m]));
 #endif
         }
       }
@@ -221,7 +219,7 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<R
   // probe MPI communications.  This is a bit of black magic that seems to promote
   // communications to top of stack and gets them to complete more quickly
   int test;
-  MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &test, MPI_STATUS_IGNORE);
+  MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, vars_comm, &test, MPI_STATUS_IGNORE);
 #endif
 
   //----- STEP 1: check that recv boundary buffer communications have all completed
@@ -233,9 +231,9 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<R
           if (rbuf[n].vars_stat[m] == BoundaryCommStatus::waiting) {bflag = true;}
 #if MPI_PARALLEL_ENABLED
         } else {
-          MPI_Test(&(rbuf[n].comm_req[m]), &test, MPI_STATUS_IGNORE);
+          MPI_Test(&(rbuf[n].vars_req[m]), &test, MPI_STATUS_IGNORE);
           if (static_cast<bool>(test)) {
-            rbuf[n].var_stat[m] = BoundaryCommStatus::received;
+            rbuf[n].vars_stat[m] = BoundaryCommStatus::received;
           } else {
             bflag = true;
           }

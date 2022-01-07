@@ -9,6 +9,7 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <utility>
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -211,9 +212,6 @@ TaskStatus BoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &rbuf = recv_buf;
   auto &mblev = pmy_pack->pmb->mb_lev;
-#if MPI_PARALLEL_ENABLED
-  auto &sbuf = send_buf;
-#endif
 
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
@@ -233,22 +231,22 @@ TaskStatus BoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
         } else {
           // create tag using local ID and buffer index of *receiving* MeshBlock
           int lid = nghbr.h_view(m,n).gid - pmy_pack->pmesh->gidslist[drank];
-          int tag = CreateMPITag(lid, dn, key);
-          auto send_data = Kokkos::subview(sbuf[n].data, m, Kokkos::ALL, Kokkos::ALL);
-          void* send_ptr = send_data.data();
-          int data_size=0;
-          // if neighbor is at coarser level, use cindices size
+          int tag = CreateMPITag(lid, dn);
+
+          // create subview of send buffer when neighbor is at coarser/same/fine level
+          std::pair<int,int> data_range;
           if (nghbr.h_view(m,n).lev < mblev.h_view(m)) {
-            for (int v=0; v<3; ++v) {data_size += sbuf[n].cindcs[v].ndat;}
-          // if neighbor is at same level, use sindices size
+            data_range = std::make_pair(0,(send_buf[n].icoar_ndat));
           } else if (nghbr.h_view(m,n).lev == mblev.h_view(m)) {
-            for (int v=0; v<3; ++v) {data_size += sbuf[n].sindcs[v].ndat;}
-          // if neighbor is at finer level, use findices size
+            data_range = std::make_pair(0,(send_buf[n].isame_ndat));
           } else {
-            for (int v=0; v<3; ++v) {data_size += sbuf[n].findcs[v].ndat;}
+            data_range = std::make_pair(0,(send_buf[n].ifine_ndat));
           }
-          int ierr = MPI_Isend(send_ptr, data_size, MPI_ATHENA_REAL, drank, tag,
-                               MPI_COMM_WORLD, &(sbuf[n].comm_req[m]));
+          auto send_vars = Kokkos::subview(send_buf[n].vars, m, Kokkos::ALL, data_range);
+          void* send_ptr = send_vars.data();
+
+          int ierr = MPI_Isend(send_ptr, send_vars.size(), MPI_ATHENA_REAL, drank, tag,
+                               vars_comm, &(send_buf[n].vars_req[m]));
 #endif
         }
       }
@@ -276,7 +274,7 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b, DvceFaceFld
   // probe MPI communications.  This is a bit of black magic that seems to promote
   // communications to top of stack and gets them to complete more quickly
   int test;
-  MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &test, MPI_STATUS_IGNORE);
+  MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, vars_comm, &test, MPI_STATUS_IGNORE);
 #endif
 
   //----- STEP 1: check that recv boundary buffer communications have all completed
@@ -288,9 +286,9 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b, DvceFaceFld
           if (rbuf[n].vars_stat[m] == BoundaryCommStatus::waiting) {bflag = true;}
 #if MPI_PARALLEL_ENABLED
         } else {
-          MPI_Test(&(rbuf[n].comm_req[m]), &test, MPI_STATUS_IGNORE);
+          MPI_Test(&(rbuf[n].vars_req[m]), &test, MPI_STATUS_IGNORE);
           if (static_cast<bool>(test)) {
-            rbuf[n].var_stat[m] = BoundaryCommStatus::received;
+            rbuf[n].vars_stat[m] = BoundaryCommStatus::received;
           } else {
             bflag = true;
           }

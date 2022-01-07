@@ -107,15 +107,15 @@ public:
   DvceArray2D<Real> u_in, b_in;
 
 #if MPI_PARALLEL_ENABLED
-  // unique MPI communicator for this BoundaryValues object
-  MPI_Comm bvals_comm;
+  // unique MPI communicators for variables and fluxes
+  MPI_Comm vars_comm, flux_comm;
 #endif
   
   //functions
   virtual void InitSendIndices(BoundaryBuffer &buf, int x, int y, int z, int a, int b)=0;
   virtual void InitRecvIndices(BoundaryBuffer &buf, int x, int y, int z, int a, int b)=0;
   void InitializeBuffers(const int nvar);
-  TaskStatus InitRecv(int nvar);
+  TaskStatus InitRecv();
   TaskStatus ClearRecv();
   TaskStatus ClearSend();
 

@@ -9,6 +9,7 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <utility>
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -62,8 +63,9 @@ BoundaryValues::BoundaryValues(MeshBlockPack *pp, ParameterInput *pin)
   }
 
 #if MPI_PARALLEL_ENABLED
-  // create unique communicator for this BoundaryValues object (if needed)
-  MPI_Comm_dup(MPI_COMM_WORLD, MPI_Comm &bvals_comm)
+  // create unique communicators for variables and fluxes in this BoundaryValues object
+  MPI_Comm_dup(MPI_COMM_WORLD, &vars_comm);
+  MPI_Comm_dup(MPI_COMM_WORLD, &flux_comm);
 #endif
 } 
 
@@ -239,16 +241,17 @@ std::cout <<"recv_flux.ndat:" <<recv_buf[n].iflux_ndat << std::endl;
 //! \fn  void BoundaryValues::InitRecv
 //! \brief Posts non-blocking receives (with MPI), and initialize all boundary receive
 //! status flags to waiting (with or without MPI) for boundary communications.
-//! This includes communications required for the flux correction step with SMR/AMR
+//! Calls InitRecvFlux() function in derived classes to post receives for flux
+//! communcations (since these depend on whether fluxes are for CC or FC variables).
 
-TaskStatus BoundaryValues::InitRecv(int nvar)
+TaskStatus BoundaryValues::InitRecv()
 { 
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &mblev = pmy_pack->pmb->mb_lev;
   
-  // Initialize communications of variables and fluxes (with SMR/AMR)
+  // Initialize communications of variables
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) { 
       if (nghbr.h_view(m,n).gid >= 0) {
@@ -262,7 +265,7 @@ TaskStatus BoundaryValues::InitRecv(int nvar)
           int tag = CreateMPITag(m, n);
 
           // create subview of recv buffer when neighbor is at coarser/same/fine level
-          std::pair data_range;
+          std::pair<int,int> data_range;
           if (nghbr.h_view(m,n).lev < mblev.h_view(m)) {
             data_range = std::make_pair(0,(recv_buf[n].icoar_ndat));
           } else if (nghbr.h_view(m,n).lev == mblev.h_view(m)) {
@@ -270,28 +273,30 @@ TaskStatus BoundaryValues::InitRecv(int nvar)
           } else {
             data_range = std::make_pair(0,(recv_buf[n].ifine_ndat));
           }
-          auto recv_data = Kokkos::subview(recv_buf[n].data, m, Kokkos::ALL, data_range);
-          void* recv_ptr = recv_data.data();
+          auto recv_vars = Kokkos::subview(recv_buf[n].vars, m, Kokkos::ALL, data_range);
+          void* recv_ptr = recv_vars.data();
 
           // Post non-blocking receive for this buffer on this MeshBlock
-          int data_size;
-          (void) MPI_Irecv(recv_ptr, recv_data.size(), MPI_ATHENA_REAL, drank,
-                           tag, vars_comm, &(recv_buf[n].comm_req[m]));
+          int ierr = MPI_Irecv(recv_ptr, recv_vars.size(), MPI_ATHENA_REAL, drank, tag,
+                               vars_comm, &(recv_buf[n].vars_req[m]));
         }
 #endif  
         // initialize boundary receive status flags
         recv_buf[n].vars_stat[m] = BoundaryCommStatus::waiting;
-        recv_buf[n].flux_stat[m] = BoundaryCommStatus::waiting;
       }
     }
   }
+
+  // With SMR/AMR, initialize communications of fluxes (for flux correction step)
+
+//        recv_buf[n].flux_stat[m] = BoundaryCommStatus::waiting;
   
   return TaskStatus::complete;
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn  void BoundaryValues::ClearRecv
-//  \brief Waits for all MPI receives associated with boundary communcations of CC vars
+//  \brief Waits for all MPI receives associated with boundary communcations
 //  to complete before allowing execution to continue
   
 TaskStatus BoundaryValues::ClearRecv()
@@ -301,12 +306,12 @@ TaskStatus BoundaryValues::ClearRecv()
   int nnghbr = pmy_pack->pmb->nnghbr;
   auto &nghbr = pmy_pack->pmb->nghbr;
 
-  // wait for all non-blocking receives for CC vars to finish before continuing 
+  // wait for all non-blocking receives for vars to finish before continuing 
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
       if (nghbr.h_view(m,n).gid >= 0) {
         if (nghbr.h_view(m,n).rank != global_variable::my_rank) {
-          MPI_Wait(&(recv_buf[n].comm_req[m]), MPI_STATUS_IGNORE);
+          MPI_Wait(&(recv_buf[n].vars_req[m]), MPI_STATUS_IGNORE);
         }
       }
     }
@@ -317,7 +322,7 @@ TaskStatus BoundaryValues::ClearRecv()
           
 //----------------------------------------------------------------------------------------
 //! \fn  void BoundaryValues::ClearSend
-//  \brief Waits for all MPI sends associated with boundary communcations of CC vars to
+//  \brief Waits for all MPI sends associated with boundary communcations to
 //   complete before allowing execution to continue
   
 TaskStatus BoundaryValues::ClearSend()
@@ -327,12 +332,12 @@ TaskStatus BoundaryValues::ClearSend()
   int nnghbr = pmy_pack->pmb->nnghbr;
   auto &nghbr = pmy_pack->pmb->nghbr;
 
-  // wait for all non-blocking sends for CC vars to finish before continuing 
+  // wait for all non-blocking sends for vars to finish before continuing 
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
       if (nghbr.h_view(m,n).gid >= 0) {
         if (nghbr.h_view(m,n).rank != global_variable::my_rank) {
-          MPI_Wait(&(send_buf[n].comm_req[m]), MPI_STATUS_IGNORE);
+          MPI_Wait(&(send_buf[n].vars_req[m]), MPI_STATUS_IGNORE);
         }
       }
     }

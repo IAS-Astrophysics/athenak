@@ -80,9 +80,8 @@ void MHD::AssembleMHDTasks(TaskList &start, TaskList &run, TaskList &end)
 
 TaskStatus MHD::InitRecv(Driver *pdrive, int stage)
 {
-  int nvar = nmhd + nscalars;  // TODO: potential bug if more variables added
-  TaskStatus tstat = pbval_u->InitRecv(nvar);
-  TaskStatus tstat2 = pbval_b->InitRecv(3);
+  TaskStatus tstat = pbval_u->InitRecv();
+  TaskStatus tstat2 = pbval_b->InitRecv();
   return TaskStatus::complete;
 }
 

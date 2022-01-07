@@ -86,8 +86,7 @@ void Hydro::AssembleHydroTasks(TaskList &start, TaskList &run, TaskList &end)
 
 TaskStatus Hydro::InitRecv(Driver *pdrive, int stage)
 {
-  int nvar = nhydro + nscalars;  // TODO: potential bug if more variables added
-  TaskStatus tstat = pbval_u->InitRecv(nvar);
+  TaskStatus tstat = pbval_u->InitRecv();
   return tstat;
 }
 
