@@ -351,26 +351,22 @@ void Mesh::PrintMeshDiagnostics()
       nb_per_rank[ranklist[i]]++;
       cost_per_rank[ranklist[i]] += costlist[i];
     }
+    int mincost = std::numeric_limits<int>::max();
+    int maxcost = 0, totalcost = 0;
     for (int i=0; i<global_variable::nranks; ++i) {
       std::cout << "  Rank = " << i << ": " << nb_per_rank[i] <<" MeshBlocks, cost = "
                 << cost_per_rank[i] << std::endl;
+      mincost = std::min(mincost,cost_per_rank[i]);
+      maxcost = std::max(maxcost,cost_per_rank[i]);
+      totalcost += cost_per_rank[i];
     }
 
-    // output total cost and load balancing info
-    float mincost = std::numeric_limits<float>::max();
-    float maxcost = 0.0, totalcost = 0.0;
-    for (int i=root_level; i<=max_level; i++) {
-      for (int j=0; j<nmb_total; j++) {
-        if (lloclist[j].level == i) {
-          mincost = std::min(mincost,costlist[i]);
-          maxcost = std::max(maxcost,costlist[i]);
-          totalcost += costlist[i];
-        }
-      }
-    }
+    // output normalized costs per rank
     std::cout << "Load Balancing:" << std::endl;
-    std::cout << "  Minimum cost = " << mincost << ", Maximum cost = " << maxcost
-              << ", Average cost = " << totalcost/nmb_total << std::endl;
+    std::cout << "  Maximum normalized cost = "
+      << static_cast<float>(maxcost)/static_cast<float>(mincost) << ", Average = " 
+      << static_cast<float>(totalcost)/static_cast<float>(global_variable::nranks*mincost)
+      << std::endl;
   }
 }
 
