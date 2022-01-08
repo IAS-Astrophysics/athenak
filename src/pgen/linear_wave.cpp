@@ -21,6 +21,7 @@
 
 // Athena++ headers
 #include "athena.hpp"
+#include "globals.hpp"
 #include "parameter_input.hpp"
 #include "coordinates/cell_locations.hpp"
 #include "mesh/mesh.hpp"
@@ -840,6 +841,10 @@ void ProblemGenerator::LinearWaveErrors_(MeshBlockPack *pmbp, ParameterInput *pi
     }
   }
 
+#if MPI_PARALLEL_ENABLED
+  MPI_Allreduce(MPI_IN_PLACE, &l1_err, nvars, MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
+#endif
+
   // normalize errors by number of cells
   Real vol=  (pmbp->pmesh->mesh_size.x1max - pmbp->pmesh->mesh_size.x1min)
             *(pmbp->pmesh->mesh_size.x2max - pmbp->pmesh->mesh_size.x2min)
@@ -853,47 +858,47 @@ void ProblemGenerator::LinearWaveErrors_(MeshBlockPack *pmbp, ParameterInput *pi
   }
   rms_err = std::sqrt(rms_err);
 
-  // open output file and write out errors
-  std::string fname;
-  fname.assign(pin->GetString("job","basename"));
-  fname.append("-errs.dat");
-  FILE *pfile;
+  // root process opens output file and writes out errors
+  if (global_variable::my_rank == 0) {
+    std::string fname;
+    fname.assign(pin->GetString("job","basename"));
+    fname.append("-errs.dat");
+    FILE *pfile;
 
-  // The file exists -- reopen the file in append mode
-  if ((pfile = std::fopen(fname.c_str(), "r")) != nullptr) {
-    if ((pfile = std::freopen(fname.c_str(), "a", pfile)) == nullptr) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "Error output file could not be opened" <<std::endl;
-      std::exit(EXIT_FAILURE);
+    // The file exists -- reopen the file in append mode
+    if ((pfile = std::fopen(fname.c_str(), "r")) != nullptr) {
+      if ((pfile = std::freopen(fname.c_str(), "a", pfile)) == nullptr) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Error output file could not be opened" <<std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+
+    // The file does not exist -- open the file in write mode and add headers
+    } else {
+      if ((pfile = std::fopen(fname.c_str(), "w")) == nullptr) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Error output file could not be opened" <<std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      std::fprintf(pfile, "# Nx1  Nx2  Nx3   Ncycle  RMS-L1-err       ");
+      std::fprintf(pfile,"d_L1         M1_L1         M2_L1         M3_L1         E_L1");
+      if (pmbp->pmhd != nullptr) {
+        std::fprintf(pfile,"          B1_L1         B2_L1         B3_L1");
+      }
+      std::fprintf(pfile, "\n");
     }
 
-  // The file does not exist -- open the file in write mode and add headers
-  } else {
-    if ((pfile = std::fopen(fname.c_str(), "w")) == nullptr) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "Error output file could not be opened" <<std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    std::fprintf(pfile, "# Nx1  Nx2  Nx3   Ncycle  RMS-L1-err       ");
-    if (pmbp->phydro != nullptr) {
-      std::fprintf(pfile, "d_L1         M1_L1         M2_L1         M3_L1         E_L1 ");
-    }
-    if (pmbp->pmhd != nullptr) {
-      std::fprintf(pfile, "d_L1         M1_L1         M2_L1         M3_L1         E_L1          B1_L1         B2_L1         B3_L1");
+    // write errors
+    std::fprintf(pfile, "%04d", pmbp->pmesh->mesh_indcs.nx1);
+    std::fprintf(pfile, "  %04d", pmbp->pmesh->mesh_indcs.nx2);
+    std::fprintf(pfile, "  %04d", pmbp->pmesh->mesh_indcs.nx3);
+    std::fprintf(pfile, "  %05d  %e", pmbp->pmesh->ncycle, rms_err);
+    for (int i=0; i<nvars; ++i) {
+      std::fprintf(pfile, "  %e", l1_err[i]);
     }
     std::fprintf(pfile, "\n");
+    std::fclose(pfile);
   }
-
-  // write errors
-  std::fprintf(pfile, "%04d", pmbp->pmesh->mesh_indcs.nx1);
-  std::fprintf(pfile, "  %04d", pmbp->pmesh->mesh_indcs.nx2);
-  std::fprintf(pfile, "  %04d", pmbp->pmesh->mesh_indcs.nx3);
-  std::fprintf(pfile, "  %05d  %e", pmbp->pmesh->ncycle, rms_err);
-  for (int i=0; i<nvars; ++i) {
-    std::fprintf(pfile, "  %e", l1_err[i]);
-  }
-  std::fprintf(pfile, "\n");
-  std::fclose(pfile);
 
   return;
 }
