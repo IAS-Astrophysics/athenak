@@ -470,3 +470,52 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx)
 
   return TaskStatus::complete;
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn  void BoundaryValuesFC::InitRecvFlux
+//! \brief Posts non-blocking receives (with MPI), and initialize all boundary receive
+//! status flags to waiting (with or without MPI) for boundary communications of fluxes.
+
+TaskStatus BoundaryValuesFC::InitRecvFlux()
+{
+  int &nmb = pmy_pack->nmb_thispack;
+  int &nnghbr = pmy_pack->pmb->nnghbr;
+  auto &nghbr = pmy_pack->pmb->nghbr;
+  auto &mblev = pmy_pack->pmb->mb_lev;
+
+  // Initialize communications of fluxes
+  for (int m=0; m<nmb; ++m) {
+    for (int n=0; n<nnghbr; ++n) {
+
+      // only post receives for neighbors on faces and edges at FINER level
+      // this is the only thing different from BoundaryValuesCC::InitRecvFlux()
+      if ( (nghbr.d_view(m,n).gid >=0) && (nghbr.d_view(m,n).lev > mblev.d_view(m)) &&
+           (n<48) ) {
+
+#if MPI_PARALLEL_ENABLED
+        // rank of destination buffer
+        int drank = nghbr.h_view(m,n).rank;
+
+        // post non-blocking receive if neighboring MeshBlock on a different rank 
+        if (drank != global_variable::my_rank) {
+          // create tag using local ID and buffer index of *receiving* MeshBlock
+          int tag = CreateMPITag(m, n);
+
+          // create subview of recv buffer when neighbor is at coarser/same/fine level
+          std::pair<int,int> data_range = std::make_pair(0,(recv_buf[n].iflux_ndat));
+          auto recv_flux = Kokkos::subview(recv_buf[n].flux, m, Kokkos::ALL, data_range);
+          void* recv_ptr = recv_flux.data();
+          
+          // Post non-blocking receive for this buffer on this MeshBlock
+          int ierr = MPI_Irecv(recv_ptr, recv_flux.size(), MPI_ATHENA_REAL, drank, tag,
+                               flux_comm, &(recv_buf[n].flux_req[m]));
+        } 
+#endif    
+        // initialize boundary receive status flags
+        recv_buf[n].flux_stat[m] = BoundaryCommStatus::waiting;
+      }   
+    }     
+  }                            
+    
+  return TaskStatus::complete;
+}

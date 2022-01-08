@@ -116,6 +116,7 @@ public:
   virtual void InitRecvIndices(BoundaryBuffer &buf, int x, int y, int z, int a, int b)=0;
   void InitializeBuffers(const int nvar);
   TaskStatus InitRecv();
+  virtual TaskStatus InitRecvFlux()=0;
   TaskStatus ClearRecv();
   TaskStatus ClearSend();
 
@@ -139,9 +140,12 @@ public:
   //functions
   void InitSendIndices(BoundaryBuffer &buf, int o1, int o2,int o3,int f1,int f2) override;
   void InitRecvIndices(BoundaryBuffer &buf, int o1, int o2,int o3,int f1,int f2) override;
+  TaskStatus InitRecvFlux() override;
+
   TaskStatus PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
   TaskStatus RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
   void ProlongCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
+
   TaskStatus PackAndSendFluxCC(DvceFaceFld5D<Real> &flx);
   TaskStatus RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx);
 };
@@ -158,8 +162,11 @@ public:
   //functions
   void InitSendIndices(BoundaryBuffer &buf, int o1, int o2,int o3,int f1,int f2) override;
   void InitRecvIndices(BoundaryBuffer &buf, int o1, int o2,int o3,int f1,int f2) override;
+  TaskStatus InitRecvFlux() override;
+
   TaskStatus PackAndSendFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
   TaskStatus RecvAndUnpackFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
+
   void ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
   TaskStatus PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx);
   TaskStatus RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx);

@@ -41,11 +41,13 @@ BoundaryValues::BoundaryValues(MeshBlockPack *pp, ParameterInput *pin)
       recv_buf[n].flux_stat.push_back(recvflux_stat);
 #if MPI_PARALLEL_ENABLED
       // cannot create Kokkos::View of type MPI_Request (not POD) so use STL vector
-      MPI_Request sendvars_req, recvvars_req;
+      MPI_Request sendvars_req = MPI_REQUEST_NULL;
+      MPI_Request recvvars_req = MPI_REQUEST_NULL;
       send_buf[n].vars_req.push_back(sendvars_req);
       recv_buf[n].vars_req.push_back(recvvars_req);
 
-      MPI_Request sendflux_req, recvflux_req;
+      MPI_Request sendflux_req = MPI_REQUEST_NULL;
+      MPI_Request recvflux_req = MPI_REQUEST_NULL;
       send_buf[n].flux_req.push_back(sendflux_req);
       recv_buf[n].flux_req.push_back(recvflux_req);
 #endif
@@ -288,8 +290,9 @@ TaskStatus BoundaryValues::InitRecv()
   }
 
   // With SMR/AMR, initialize communications of fluxes (for flux correction step)
-
-//        recv_buf[n].flux_stat[m] = BoundaryCommStatus::waiting;
+  if (pmy_pack->pmesh->multilevel) {
+    TaskStatus tstat = InitRecvFlux();
+  }
   
   return TaskStatus::complete;
 }
@@ -302,16 +305,19 @@ TaskStatus BoundaryValues::InitRecv()
 TaskStatus BoundaryValues::ClearRecv()
 { 
 #if MPI_PARALLEL_ENABLED
-  int nmb = pmy_pack->nmb_thispack;
-  int nnghbr = pmy_pack->pmb->nnghbr;
+  int &nmb = pmy_pack->nmb_thispack;
+  int &nnghbr = pmy_pack->pmb->nnghbr;
   auto &nghbr = pmy_pack->pmb->nghbr;
 
   // wait for all non-blocking receives for vars to finish before continuing 
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
-      if (nghbr.h_view(m,n).gid >= 0) {
-        if (nghbr.h_view(m,n).rank != global_variable::my_rank) {
-          MPI_Wait(&(recv_buf[n].vars_req[m]), MPI_STATUS_IGNORE);
+      if ( (nghbr.h_view(m,n).gid >= 0) && 
+           (nghbr.h_view(m,n).rank != global_variable::my_rank) ) {
+        MPI_Wait(&(recv_buf[n].vars_req[m]), MPI_STATUS_IGNORE);
+        // not every neighbor participates in flux correction communication
+        if (recv_buf[n].flux_req[m] != MPI_REQUEST_NULL) {
+          MPI_Wait(&(recv_buf[n].flux_req[m]), MPI_STATUS_IGNORE);
         }
       }
     }
@@ -328,16 +334,19 @@ TaskStatus BoundaryValues::ClearRecv()
 TaskStatus BoundaryValues::ClearSend()
 { 
 #if MPI_PARALLEL_ENABLED
-  int nmb = pmy_pack->nmb_thispack;
-  int nnghbr = pmy_pack->pmb->nnghbr;
+  int &nmb = pmy_pack->nmb_thispack;
+  int &nnghbr = pmy_pack->pmb->nnghbr;
   auto &nghbr = pmy_pack->pmb->nghbr;
 
   // wait for all non-blocking sends for vars to finish before continuing 
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
-      if (nghbr.h_view(m,n).gid >= 0) {
-        if (nghbr.h_view(m,n).rank != global_variable::my_rank) {
-          MPI_Wait(&(send_buf[n].vars_req[m]), MPI_STATUS_IGNORE);
+      if ( (nghbr.h_view(m,n).gid >= 0) &&
+           (nghbr.h_view(m,n).rank != global_variable::my_rank) ) {
+        MPI_Wait(&(send_buf[n].vars_req[m]), MPI_STATUS_IGNORE);
+        // not every neighbor participates in flux correction communication
+        if (send_buf[n].flux_req[m] != MPI_REQUEST_NULL) {
+          MPI_Wait(&(send_buf[n].flux_req[m]), MPI_STATUS_IGNORE);
         }
       }
     }
