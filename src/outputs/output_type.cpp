@@ -374,6 +374,14 @@ void OutputType::LoadOutputData(Mesh *pm)
     outmbs.emplace_back(id,ois,oie,ojs,oje,oks,oke);
   }
 
+  noutmbs_min = outmbs.size();
+  noutmbs_max = outmbs.size();
+#if MPI_PARALLEL_ENABLED
+  // get minimum number of output MeshBlocks over all MPI ranks
+  MPI_Allreduce(MPI_IN_PLACE, &noutmbs_min, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE, &noutmbs_max, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
+#endif
+
   // get number of output vars and MBs, then realloc HostArray
   int nout_vars = outvars.size();
   int nout_mbs = outmbs.size();

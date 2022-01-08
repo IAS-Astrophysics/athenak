@@ -124,10 +124,14 @@ class OutputType
   void ErrForceOutput(std::string block);
 
  protected:
-  HostArray5D<Real> outdata;       // container for data on host with dims (n,m,k,j,i)
+  HostArray5D<Real> outdata;  // container for data on host with dims (n,m,k,j,i)
+  int noutmbs_min;            // with MPI, minimum number of output MBs across all ranks
+  int noutmbs_max;            // with MPI, maximum number of output MBs across all ranks
+
   // Following vector will be of length (# output MeshBlocks)
   // With slicing, this may not be same as # of MeshBlocks in calculation
   std::vector<OutputMeshBlockInfo> outmbs; 
+
   // Following vector will be of length (# output variables)
   std::vector<OutputVariableInfo> outvars;
 };
