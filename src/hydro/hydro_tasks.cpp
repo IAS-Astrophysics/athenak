@@ -87,6 +87,9 @@ void Hydro::AssembleHydroTasks(TaskList &start, TaskList &run, TaskList &end)
 TaskStatus Hydro::InitRecv(Driver *pdrive, int stage)
 {
   TaskStatus tstat = pbval_u->InitRecv();
+  if (pmy_pack->pmesh->multilevel) {
+    TaskStatus tstat2 = pbval_u->InitFluxRecv();
+  }
   return tstat;
 }
 
@@ -97,6 +100,9 @@ TaskStatus Hydro::InitRecv(Driver *pdrive, int stage)
 TaskStatus Hydro::ClearRecv(Driver *pdrive, int stage)
 {
   TaskStatus tstat = pbval_u->ClearRecv();
+  if (pmy_pack->pmesh->multilevel) {
+    TaskStatus tstat2 = pbval_u->ClearFluxRecv();
+  }
   return tstat;
 }
 
@@ -107,6 +113,9 @@ TaskStatus Hydro::ClearRecv(Driver *pdrive, int stage)
 TaskStatus Hydro::ClearSend(Driver *pdrive, int stage)
 {
   TaskStatus tstat = pbval_u->ClearSend();
+  if (pmy_pack->pmesh->multilevel) {
+    TaskStatus tstat2 = pbval_u->ClearFluxSend();
+  }
   return tstat;
 }
 

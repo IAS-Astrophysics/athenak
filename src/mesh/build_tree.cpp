@@ -275,7 +275,7 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin)
   pmb_pack->pmb->SetNeighbors(ptree, ranklist);
 
 
-/************/
+/************
   for (int m=0; m<pmb_pack->nmb_thispack; ++m) {
     std::cout << "******* Block=" << pmb_pack->pmb->mb_gid.h_view(m) << std::endl;
     for (int n=0; n<6; ++n) {
@@ -285,7 +285,7 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin)
       std::cout << "n=" << n << " gid=" << pmb_pack->pmb->nghbr.h_view(m,n).gid << " level=" << pmb_pack->pmb->nghbr.h_view(m,n).lev << " rank=" << pmb_pack->pmb->nghbr.h_view(m,n).rank << " dest=" << pmb_pack->pmb->nghbr.h_view(m,n).dest << std::endl;
     }
   }
-/************/
+************/
 
   
   ResetLoadBalanceCounters();

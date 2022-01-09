@@ -476,7 +476,7 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx)
 //! \brief Posts non-blocking receives (with MPI), and initialize all boundary receive
 //! status flags to waiting (with or without MPI) for boundary communications of fluxes.
 
-TaskStatus BoundaryValuesFC::InitRecvFlux()
+TaskStatus BoundaryValuesFC::InitFluxRecv()
 {
   int &nmb = pmy_pack->nmb_thispack;
   int &nnghbr = pmy_pack->pmb->nnghbr;
@@ -517,5 +517,57 @@ TaskStatus BoundaryValuesFC::InitRecvFlux()
     }     
   }                            
     
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void BoundaryValuesFC::ClearFluxRecv
+//  \brief Waits for all MPI receives associated with boundary communcations for fluxes
+//  to complete before allowing execution to continue
+
+TaskStatus BoundaryValuesFC::ClearFluxRecv()
+{
+#if MPI_PARALLEL_ENABLED
+  int &nmb = pmy_pack->nmb_thispack;
+  int &nnghbr = pmy_pack->pmb->nnghbr;
+  auto &nghbr = pmy_pack->pmb->nghbr;
+
+  // wait for all non-blocking receives for fluxes to finish before continuing 
+  for (int m=0; m<nmb; ++m) {
+    for (int n=0; n<nnghbr; ++n) {
+      if ( (nghbr.h_view(m,n).gid >= 0) &&
+           (nghbr.h_view(m,n).rank != global_variable::my_rank) && 
+           (recv_buf[n].flux_req[m] != MPI_REQUEST_NULL) ) {
+        MPI_Wait(&(recv_buf[n].flux_req[m]), MPI_STATUS_IGNORE);
+      }
+    }
+  }
+#endif
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void BoundaryValuesFC::ClearFluxSend
+//  \brief Waits for all MPI sends associated with boundary communcations for fluxes to
+//   complete before allowing execution to continue
+
+TaskStatus BoundaryValuesFC::ClearFluxSend()
+{
+#if MPI_PARALLEL_ENABLED
+  int &nmb = pmy_pack->nmb_thispack;
+  int &nnghbr = pmy_pack->pmb->nnghbr;
+  auto &nghbr = pmy_pack->pmb->nghbr;
+
+  // wait for all non-blocking sends for fluxes to finish before continuing 
+  for (int m=0; m<nmb; ++m) {
+    for (int n=0; n<nnghbr; ++n) {
+      if ( (nghbr.h_view(m,n).gid >= 0) &&
+           (nghbr.h_view(m,n).rank != global_variable::my_rank) && 
+           (send_buf[n].flux_req[m] != MPI_REQUEST_NULL) ) {
+        MPI_Wait(&(send_buf[n].flux_req[m]), MPI_STATUS_IGNORE);
+      }
+    }
+  }
+#endif
   return TaskStatus::complete;
 }

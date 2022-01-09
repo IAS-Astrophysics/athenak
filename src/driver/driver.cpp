@@ -215,10 +215,10 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
     phydro->CheckUserBoundaries();
     // following functions return a TaskStatus, but it is ignored so cast to (void)
     (void) phydro->RestrictU(this, 0);
-    (void) phydro->InitRecv(this, 0);
+    (void) phydro->pbval_u->InitRecv();
     (void) phydro->SendU(this, 0);
-    (void) phydro->ClearSend(this, 0);
-    (void) phydro->ClearRecv(this, 0);
+    (void) phydro->pbval_u->ClearSend();
+    (void) phydro->pbval_u->ClearRecv();
     (void) phydro->RecvU(this, 0);
     (void) phydro->ApplyPhysicalBCs(this, 0);
 
@@ -234,11 +234,14 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
     // following functions return a TaskStatus, but it is ignored so cast to (void)
     (void) pmhd->RestrictU(this, 0);
     (void) pmhd->RestrictB(this, 0);
-    (void) pmhd->InitRecv(this, 0);
+    (void) pmhd->pbval_u->InitRecv();
+    (void) pmhd->pbval_b->InitRecv();
     (void) pmhd->SendU(this, 0);
     (void) pmhd->SendB(this, 0);
-    (void) pmhd->ClearSend(this, 0);
-    (void) pmhd->ClearRecv(this, 0);
+    (void) pmhd->pbval_u->ClearSend();
+    (void) pmhd->pbval_b->ClearSend();
+    (void) pmhd->pbval_u->ClearRecv();
+    (void) pmhd->pbval_b->ClearRecv();
     (void) pmhd->RecvU(this, 0);
     (void) pmhd->RecvB(this, 0);
     (void) pmhd->ApplyPhysicalBCs(this, 0);

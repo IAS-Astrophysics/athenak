@@ -173,7 +173,7 @@ std::cout << "x2send (m,n)="<<m<<","<<n<<"  (i,j,k)="<<fi<<","<<fj<<","<<fk << s
 
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
-      if ( (nghbr.d_view(m,n).gid >=0) && (nghbr.d_view(m,n).lev < mblev.d_view(m)) &&
+      if ( (nghbr.h_view(m,n).gid >=0) && (nghbr.h_view(m,n).lev < mblev.h_view(m)) &&
            ((n<16) || ((n>=24) && (n<32))) ) {
         // index and rank of destination Neighbor 
         int dn = nghbr.h_view(m,n).dest;
@@ -235,7 +235,7 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx)
 
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
-      if ( (nghbr.d_view(m,n).gid >=0) && (nghbr.d_view(m,n).lev > mblev.d_view(m)) &&
+      if ( (nghbr.h_view(m,n).gid >=0) && (nghbr.h_view(m,n).lev > mblev.h_view(m)) &&
            ((n<16) || ((n>=24) && (n<32))) ) {
         if (nghbr.h_view(m,n).rank == global_variable::my_rank) {
           if (rbuf[n].flux_stat[m] == BoundaryCommStatus::waiting) {bflag = true;}
@@ -280,7 +280,7 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx)
     const int nkj  = nk*nj;
 
     // only unpack buffers for faces when neighbor is at finer level
-    if ((nghbr.d_view(m,n).gid >=0) && (nghbr.d_view(m,n).lev > mblev.d_view(m))) {
+    if ((nghbr.h_view(m,n).gid >=0) && (nghbr.h_view(m,n).lev > mblev.h_view(m))) {
 
       //x1 faces
       if (n<8) {
@@ -333,7 +333,7 @@ std::cout << "x2recv (m,n)="<<m<<","<<n<<"  (i,j,k)="<<i<<","<<j<<","<<k << std:
 //! \brief Posts non-blocking receives (with MPI), and initialize all boundary receive
 //! status flags to waiting (with or without MPI) for boundary communications of fluxes.
 
-TaskStatus BoundaryValuesCC::InitRecvFlux()
+TaskStatus BoundaryValuesCC::InitFluxRecv()
 {
   int &nmb = pmy_pack->nmb_thispack;
   int &nnghbr = pmy_pack->pmb->nnghbr;
@@ -346,7 +346,7 @@ TaskStatus BoundaryValuesCC::InitRecvFlux()
 
       // only post receives for neighbors on faces at FINER level
       // this is the only thing different from BoundaryValuesFC::InitRecvFlux()
-      if ( (nghbr.d_view(m,n).gid >=0) && (nghbr.d_view(m,n).lev > mblev.d_view(m)) &&
+      if ( (nghbr.h_view(m,n).gid >=0) && (nghbr.h_view(m,n).lev > mblev.h_view(m)) &&
            ((n<16) || ((n>=24) && (n<32))) ) {
 
 #if MPI_PARALLEL_ENABLED
@@ -374,5 +374,57 @@ TaskStatus BoundaryValuesCC::InitRecvFlux()
     }     
   }                            
     
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void BoundaryValuesCC::ClearFluxRecv
+//  \brief Waits for all MPI receives associated with boundary communcations for fluxes
+//  to complete before allowing execution to continue
+
+TaskStatus BoundaryValuesCC::ClearFluxRecv()
+{
+#if MPI_PARALLEL_ENABLED
+  int &nmb = pmy_pack->nmb_thispack;
+  int &nnghbr = pmy_pack->pmb->nnghbr;
+  auto &nghbr = pmy_pack->pmb->nghbr;
+
+  // wait for all non-blocking receives for fluxes to finish before continuing 
+  for (int m=0; m<nmb; ++m) {
+    for (int n=0; n<nnghbr; ++n) {
+      if ( (nghbr.h_view(m,n).gid >= 0) &&
+           (nghbr.h_view(m,n).rank != global_variable::my_rank) &&
+           (recv_buf[n].flux_req[m] != MPI_REQUEST_NULL) ) {
+        MPI_Wait(&(recv_buf[n].flux_req[m]), MPI_STATUS_IGNORE);
+      }
+    }
+  }
+#endif
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void BoundaryValuesCC::ClearFluxSend
+//  \brief Waits for all MPI sends associated with boundary communcations for fluxes to
+//   complete before allowing execution to continue
+
+TaskStatus BoundaryValuesCC::ClearFluxSend()
+{
+#if MPI_PARALLEL_ENABLED
+  int &nmb = pmy_pack->nmb_thispack;
+  int &nnghbr = pmy_pack->pmb->nnghbr;
+  auto &nghbr = pmy_pack->pmb->nghbr;
+
+  // wait for all non-blocking sends for fluxes to finish before continuing 
+  for (int m=0; m<nmb; ++m) {
+    for (int n=0; n<nnghbr; ++n) {
+      if ( (nghbr.h_view(m,n).gid >= 0) &&
+           (nghbr.h_view(m,n).rank != global_variable::my_rank) &&
+           (send_buf[n].flux_req[m] != MPI_REQUEST_NULL) ) {
+        MPI_Wait(&(send_buf[n].flux_req[m]), MPI_STATUS_IGNORE);
+      }
+    }
+  }
+#endif
   return TaskStatus::complete;
 }

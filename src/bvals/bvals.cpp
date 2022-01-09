@@ -219,7 +219,7 @@ std::cout <<"recv_flux["<<v<<"]:" <<recv_buf[n].flux[v].bis<<"  "<<recv_buf[n].f
 }
   }
 ***************/
-/***************/
+/***************
   int nnghbr = pmy_pack->pmb->nnghbr;
   for (int n=0; n<nnghbr; ++n) {
 std::cout << std::endl <<"Buffer="<< n << std::endl;
@@ -232,7 +232,7 @@ std::cout <<"recv_coar.ndat:" <<recv_buf[n].icoar_ndat << std::endl;
 std::cout <<"recv_fine.ndat:" <<recv_buf[n].ifine_ndat << std::endl;
 std::cout <<"recv_flux.ndat:" <<recv_buf[n].iflux_ndat << std::endl;
    }
- /***************/
+***************/
 
 
 
@@ -242,9 +242,7 @@ std::cout <<"recv_flux.ndat:" <<recv_buf[n].iflux_ndat << std::endl;
 //----------------------------------------------------------------------------------------
 //! \fn  void BoundaryValues::InitRecv
 //! \brief Posts non-blocking receives (with MPI), and initialize all boundary receive
-//! status flags to waiting (with or without MPI) for boundary communications.
-//! Calls InitRecvFlux() function in derived classes to post receives for flux
-//! communcations (since these depend on whether fluxes are for CC or FC variables).
+//! status flags to waiting (with or without MPI) for boundary communications of vars.
 
 TaskStatus BoundaryValues::InitRecv()
 { 
@@ -288,11 +286,6 @@ TaskStatus BoundaryValues::InitRecv()
       }
     }
   }
-
-  // With SMR/AMR, initialize communications of fluxes (for flux correction step)
-  if (pmy_pack->pmesh->multilevel) {
-    TaskStatus tstat = InitRecvFlux();
-  }
   
   return TaskStatus::complete;
 }
@@ -315,10 +308,6 @@ TaskStatus BoundaryValues::ClearRecv()
       if ( (nghbr.h_view(m,n).gid >= 0) && 
            (nghbr.h_view(m,n).rank != global_variable::my_rank) ) {
         MPI_Wait(&(recv_buf[n].vars_req[m]), MPI_STATUS_IGNORE);
-        // not every neighbor participates in flux correction communication
-        if (recv_buf[n].flux_req[m] != MPI_REQUEST_NULL) {
-          MPI_Wait(&(recv_buf[n].flux_req[m]), MPI_STATUS_IGNORE);
-        }
       }
     }
   }
@@ -344,13 +333,9 @@ TaskStatus BoundaryValues::ClearSend()
       if ( (nghbr.h_view(m,n).gid >= 0) &&
            (nghbr.h_view(m,n).rank != global_variable::my_rank) ) {
         MPI_Wait(&(send_buf[n].vars_req[m]), MPI_STATUS_IGNORE);
-        // not every neighbor participates in flux correction communication
-        if (send_buf[n].flux_req[m] != MPI_REQUEST_NULL) {
-          MPI_Wait(&(send_buf[n].flux_req[m]), MPI_STATUS_IGNORE);
-        }
       }
     }
   }
 #endif
   return TaskStatus::complete;
-}       
+}
