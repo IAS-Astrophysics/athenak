@@ -95,10 +95,10 @@ TaskStatus BoundaryValuesCC::PackAndSendFluxCC(DvceFaceFld5D<Real> &flx)
             }
             // copy directly into recv buffer if MeshBlocks on same rank
             if (nghbr.d_view(m,n).rank == my_rank) {
-              rbuf[dn].flux(dm, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
+              rbuf[dn].flux(dm, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) ) = rflx;
             // else copy into send buffer for MPI communication below
             } else {
-              sbuf[n].flux(m, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
+              sbuf[n].flux(m, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) ) = rflx;
             }
 /*****
 std::cout << "x1send (m,n)="<<m<<","<<n<<"  (i,j,k)="<<fi<<","<<fj<<","<<fk << std::endl;
@@ -126,10 +126,10 @@ std::cout << "x1send (m,n)="<<m<<","<<n<<"  (i,j,k)="<<fi<<","<<fj<<","<<fk << s
             }
             // copy directly into recv buffer if MeshBlocks on same rank
             if (nghbr.d_view(m,n).rank == my_rank) { 
-              rbuf[dn].flux(dm, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
+              rbuf[dn].flux(dm, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) ) = rflx;
             // else copy into send buffer for MPI communication below
             } else {
-              sbuf[n].flux(m, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
+              sbuf[n].flux(m, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) ) = rflx;
             }
 /*********
 std::cout << "x2send (m,n)="<<m<<","<<n<<"  (i,j,k)="<<fi<<","<<fj<<","<<fk << std::endl;
@@ -152,10 +152,10 @@ std::cout << "x2send (m,n)="<<m<<","<<n<<"  (i,j,k)="<<fi<<","<<fj<<","<<fk << s
                               flx.x3f(m,v,fk,fj+1,fi) + flx.x3f(m,v,fk,fj+1,fi+1));
             // copy directly into recv buffer if MeshBlocks on same rank
             if (nghbr.d_view(m,n).rank == my_rank) {
-              rbuf[dn].flux(dm, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
+              rbuf[dn].flux(dm, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) ) = rflx;
             // else copy into send buffer for MPI communication below
             } else {
-              sbuf[n].flux(m, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
+              sbuf[n].flux(m, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) ) = rflx;
             }
           });
         });
@@ -290,7 +290,7 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx)
           k += kl;
           Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
           [&](const int i) {
-            flx.x1f(m,v,k,j,i) = rbuf[n].flux(m,v,i-il + ni*(j-jl + nj*(k-kl)));
+            flx.x1f(m,v,k,j,i) = rbuf[n].flux(m,(i-il + ni*(j-jl + nj*(k-kl + nk*v))));
 /*********
 std::cout << "x1recv (m,n)="<<m<<","<<n<<"  (i,j,k)="<<i<<","<<j<<","<<k << std::endl;
 ********/
@@ -304,7 +304,7 @@ std::cout << "x1recv (m,n)="<<m<<","<<n<<"  (i,j,k)="<<i<<","<<j<<","<<k << std:
           k += kl;
           Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
           [&](const int i) {
-            flx.x2f(m,v,k,j,i) = rbuf[n].flux(m,v,i-il + ni*(j-jl + nj*(k-kl)));
+            flx.x2f(m,v,k,j,i) = rbuf[n].flux(m,(i-il + ni*(j-jl + nj*(k-kl + nk*v))));
 /*********
 std::cout << "x2recv (m,n)="<<m<<","<<n<<"  (i,j,k)="<<i<<","<<j<<","<<k << std::endl;
 ********/
@@ -318,7 +318,7 @@ std::cout << "x2recv (m,n)="<<m<<","<<n<<"  (i,j,k)="<<i<<","<<j<<","<<k << std:
           k += kl;
           Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
           [&](const int i) {
-            flx.x3f(m,v,k,j,i) = rbuf[n].flux(m,v,i-il + ni*(j-jl + nj*(k-kl)));
+            flx.x3f(m,v,k,j,i) = rbuf[n].flux(m,(i-il + ni*(j-jl + nj*(k-kl + nk*v))));
           });
         });
       }

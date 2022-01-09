@@ -59,6 +59,14 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx)
     int ju = sbuf[n].iflux[v].bje;
     int kl = sbuf[n].iflux[v].bks;
     int ku = sbuf[n].iflux[v].bke;
+    int nv[3];
+    nv[0] = 0;
+    nv[1] = (sbuf[n].iflux[0].bie - sbuf[n].iflux[0].bis + 1)*
+            (sbuf[n].iflux[0].bje - sbuf[n].iflux[0].bjs + 1)*
+            (sbuf[n].iflux[0].bke - sbuf[n].iflux[0].bks + 1);
+    nv[2] = nv[1] + (sbuf[n].iflux[1].bie - sbuf[n].iflux[1].bis + 1)*
+                    (sbuf[n].iflux[1].bje - sbuf[n].iflux[1].bjs + 1)*
+                    (sbuf[n].iflux[1].bke - sbuf[n].iflux[1].bks + 1);
     const int ni = iu - il + 1;
     const int nj = ju - jl + 1;
     const int nk = ku - kl + 1;
@@ -104,10 +112,10 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx)
               }
               // copy directly into recv buffer if MeshBlocks on same rank
               if (nghbr.d_view(m,n).rank == my_rank) {
-                rbuf[dn].flux(dm, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
+                rbuf[dn].flux(dm, nv[v] + i-il + ni*(j-jl + nj*(k-kl))) = rflx;
               // else copy into send buffer for MPI communication below
               } else {
-                sbuf[n].flux(m, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
+                sbuf[n].flux(m, nv[v] + i-il + ni*(j-jl + nj*(k-kl))) = rflx;
               }
             });
           }
@@ -140,9 +148,9 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx)
                 }
               }
               if (nghbr.d_view(m,n).rank == my_rank) { 
-                rbuf[dn].flux(dm, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
+                rbuf[dn].flux(dm, nv[v] + i-il + ni*(j-jl + nj*(k-kl))) = rflx;
               } else {
-                sbuf[n].flux(m, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
+                sbuf[n].flux(m, nv[v] + i-il + ni*(j-jl + nj*(k-kl))) = rflx;
               }
             });
           }
@@ -167,9 +175,9 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx)
                 rflx = 0.5*(flx.x3e(m,fk,fj,fi) + flx.x3e(m,fk+1,fj,fi));
               }
               if (nghbr.d_view(m,n).rank == my_rank) {
-                rbuf[dn].flux(dm, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
+                rbuf[dn].flux(dm, nv[v] + i-il + ni*(j-jl + nj*(k-kl))) = rflx;
               } else {
-                sbuf[n].flux(m, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
+                sbuf[n].flux(m, nv[v] + i-il + ni*(j-jl + nj*(k-kl))) = rflx;
               }
             });
           }
@@ -194,9 +202,9 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx)
                 rflx = 0.5*(flx.x2e(m,fk,fj,fi) + flx.x2e(m,fk,fj+1,fi));
               }
               if (nghbr.d_view(m,n).rank == my_rank) {
-                rbuf[dn].flux(dm, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
+                rbuf[dn].flux(dm, nv[v] + i-il + ni*(j-jl + nj*(k-kl))) = rflx;
               } else {
-                sbuf[n].flux(m, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
+                sbuf[n].flux(m, nv[v] + i-il + ni*(j-jl + nj*(k-kl))) = rflx;
               }
             });
           }
@@ -216,9 +224,9 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx)
               int fi = 2*i - cis;
               Real rflx = 0.5*(flx.x2e(m,fk,fj,fi) + flx.x2e(m,fk,fj+1,fi));
               if (nghbr.d_view(m,n).rank == my_rank) {
-                rbuf[dn].flux(dm, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
+                rbuf[dn].flux(dm, nv[v] + i-il + ni*(j-jl + nj*(k-kl))) = rflx;
               } else {
-                sbuf[n].flux(m, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
+                sbuf[n].flux(m, nv[v] + i-il + ni*(j-jl + nj*(k-kl))) = rflx;
               }
             });
           }
@@ -238,9 +246,9 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx)
               int fi = 2*i - cis;
               Real rflx = 0.5*(flx.x1e(m,fk,fj,fi) + flx.x1e(m,fk,fj,fi+1));
               if (nghbr.d_view(m,n).rank == my_rank) {
-                rbuf[dn].flux(dm, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
+                rbuf[dn].flux(dm, nv[v] + i-il + ni*(j-jl + nj*(k-kl))) = rflx;
               } else {
-                sbuf[n].flux(m, v, i-il + ni*(j-jl + nj*(k-kl))) = rflx;
+                sbuf[n].flux(m, nv[v] + i-il + ni*(j-jl + nj*(k-kl))) = rflx;
               }
             });
           }
@@ -358,6 +366,14 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx)
     int ju = rbuf[n].iflux[v].bje;
     int kl = rbuf[n].iflux[v].bks;
     int ku = rbuf[n].iflux[v].bke;
+    int nv[3];
+    nv[0] = 0;
+    nv[1] = (rbuf[n].iflux[0].bie - rbuf[n].iflux[0].bis + 1)*
+            (rbuf[n].iflux[0].bje - rbuf[n].iflux[0].bjs + 1)*
+            (rbuf[n].iflux[0].bke - rbuf[n].iflux[0].bks + 1);
+    nv[2] = nv[1] + (rbuf[n].iflux[1].bie - rbuf[n].iflux[1].bis + 1)*
+                    (rbuf[n].iflux[1].bje - rbuf[n].iflux[1].bjs + 1)*
+                    (rbuf[n].iflux[1].bke - rbuf[n].iflux[1].bks + 1);
     const int ni = iu - il + 1;
     const int nj = ju - jl + 1;
     const int nk = ku - kl + 1;
@@ -375,12 +391,12 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx)
           if (v==1) {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
             [&](const int i) {
-              flx.x2e(m,k,j,i) = rbuf[n].flux(m,v,i-il + ni*(j-jl + nj*(k-kl)));
+              flx.x2e(m,k,j,i) = rbuf[n].flux(m,nv[v] + i-il + ni*(j-jl + nj*(k-kl)));
             });
           } else if (v==2) {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
             [&](const int i) {
-              flx.x3e(m,k,j,i) = rbuf[n].flux(m,v,i-il + ni*(j-jl + nj*(k-kl)));
+              flx.x3e(m,k,j,i) = rbuf[n].flux(m,nv[v] + i-il + ni*(j-jl + nj*(k-kl)));
             });
           }
         });
@@ -394,12 +410,12 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx)
           if (v==0) {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
             [&](const int i) {
-              flx.x1e(m,k,j,i) = rbuf[n].flux(m,v,i-il + ni*(j-jl + nj*(k-kl)));
+              flx.x1e(m,k,j,i) = rbuf[n].flux(m,nv[v] + i-il + ni*(j-jl + nj*(k-kl)));
             });
           } else if (v==2) {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
             [&](const int i) {
-              flx.x3e(m,k,j,i) = rbuf[n].flux(m,v,i-il + ni*(j-jl + nj*(k-kl)));
+              flx.x3e(m,k,j,i) = rbuf[n].flux(m,nv[v] + i-il + ni*(j-jl + nj*(k-kl)));
             });
           }
         });
@@ -413,7 +429,7 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx)
           if (v==2) {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
             [&](const int i) { 
-              flx.x3e(m,k,j,i) = rbuf[n].flux(m,v,i-il + ni*(j-jl + nj*(k-kl)));
+              flx.x3e(m,k,j,i) = rbuf[n].flux(m,nv[v] + i-il + ni*(j-jl + nj*(k-kl)));
             });
           }
         });
@@ -427,12 +443,12 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx)
           if (v==0) {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
             [&](const int i) {
-              flx.x1e(m,k,j,i) = rbuf[n].flux(m,v,i-il + ni*(j-jl + nj*(k-kl)));
+              flx.x1e(m,k,j,i) = rbuf[n].flux(m,nv[v] + i-il + ni*(j-jl + nj*(k-kl)));
             });
           } else if (v==1) {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
             [&](const int i) {
-              flx.x2e(m,k,j,i) = rbuf[n].flux(m,v,i-il + ni*(j-jl + nj*(k-kl)));
+              flx.x2e(m,k,j,i) = rbuf[n].flux(m,nv[v] + i-il + ni*(j-jl + nj*(k-kl)));
             });
           }
         });
@@ -446,7 +462,7 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx)
           if (v==1) {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
             [&](const int i) {
-              flx.x2e(m,k,j,i) = rbuf[n].flux(m,v,i-il + ni*(j-jl + nj*(k-kl)));
+              flx.x2e(m,k,j,i) = rbuf[n].flux(m,nv[v] + i-il + ni*(j-jl + nj*(k-kl)));
             });
           } 
         });
@@ -460,7 +476,7 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx)
           if (v==0) {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
             [&](const int i) {
-              flx.x1e(m,k,j,i) = rbuf[n].flux(m,v,i-il + ni*(j-jl + nj*(k-kl)));
+              flx.x1e(m,k,j,i) = rbuf[n].flux(m,nv[v] + i-il + ni*(j-jl + nj*(k-kl)));
             });
           } 
         });

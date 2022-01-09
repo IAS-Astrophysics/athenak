@@ -115,14 +115,14 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
             [&](const int i)
             {
-              rbuf[dn].vars(dm, v, i-il + ni*(j-jl + nj*(k-kl))) = a(m,v,k,j,i);
+              rbuf[dn].vars(dm, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) ) = a(m,v,k,j,i);
             });
           // if neighbor is at coarser level, load data from coarse_u0
           } else {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
             [&](const int i)
             {
-              rbuf[dn].vars(dm, v, i-il + ni*(j-jl + nj*(k-kl))) = ca(m,v,k,j,i);
+              rbuf[dn].vars(dm, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) ) = ca(m,v,k,j,i);
             });
           }
 
@@ -134,14 +134,14 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
             [&](const int i)
             {
-              sbuf[n].vars(m, v, i-il + ni*(j-jl + nj*(k-kl))) = a(m,v,k,j,i);
+              sbuf[n].vars(m, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) ) = a(m,v,k,j,i);
             });
           // if neighbor is at coarser level, load data from coarse_u0
           } else {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
             [&](const int i)
             {
-              sbuf[n].vars(m, v, i-il + ni*(j-jl + nj*(k-kl))) = ca(m,v,k,j,i);
+              sbuf[n].vars(m, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) ) = ca(m,v,k,j,i);
             });
           }
         }
@@ -307,14 +307,14 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<R
         if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
           Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),[&](const int i)
           {
-            a(m,v,k,j,i) = rbuf[n].vars(m,v,i-il + ni*(j-jl + nj*(k-kl)));
+            a(m,v,k,j,i) = rbuf[n].vars(m, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) );
           });
 
         // if neighbor is at coarser level, load data into coarse_u0 (prolongate below)
         } else {
           Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),[&](const int i)
           {
-            ca(m,v,k,j,i) = rbuf[n].vars(m,v,i-il + ni*(j-jl + nj*(k-kl)));
+            ca(m,v,k,j,i) = rbuf[n].vars(m, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) );
           });
         }
 

@@ -69,7 +69,7 @@ struct BoundaryBuffer
   int isame_ndat, icoar_ndat, ifine_ndat, iflux_ndat;
 
   // 3D Views that store buffer data on device
-  DvceArray3D<Real> vars, flux;
+  DvceArray2D<Real> vars, flux;
 
   // following two 1D arrays only accessed from host, so can use STL vector
   std::vector<BoundaryCommStatus> vars_stat, flux_stat;
@@ -79,10 +79,10 @@ struct BoundaryBuffer
 
   // function to allocate memory for buffers for variables and their fluxes
   // Must only be called after BufferIndcs above are initialized
-  void AllocateBuffers(int nmb, int nvar) {
+  void AllocateBuffers(int nmb, int nvars) {
     int nmax = std::max(isame_ndat, std::max(icoar_ndat, ifine_ndat) );
-    Kokkos::realloc(vars, nmb, nvar, nmax);
-    Kokkos::realloc(flux, nmb, nvar, iflux_ndat);
+    Kokkos::realloc(vars, nmb, (nvars*nmax));
+    Kokkos::realloc(flux, nmb, (nvars*iflux_ndat));
   }
 };
 
