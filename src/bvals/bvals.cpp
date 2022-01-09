@@ -246,12 +246,13 @@ std::cout <<"recv_flux.ndat:" <<recv_buf[n].iflux_ndat << std::endl;
 
 TaskStatus BoundaryValues::InitRecv(const int nvars)
 { 
-  int nmb = pmy_pack->nmb_thispack;
-  int nnghbr = pmy_pack->pmb->nnghbr;
+  int &nmb = pmy_pack->nmb_thispack;
+  int &nnghbr = pmy_pack->pmb->nnghbr;
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &mblev = pmy_pack->pmb->mb_lev;
   
   // Initialize communications of variables
+  bool no_errors=true;
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) { 
       if (nghbr.h_view(m,n).gid >= 0) {
@@ -279,6 +280,7 @@ TaskStatus BoundaryValues::InitRecv(const int nvars)
           // Post non-blocking receive for this buffer on this MeshBlock
           int ierr = MPI_Irecv(recv_ptr, data_size, MPI_ATHENA_REAL, drank, tag,
                                vars_comm, &(recv_buf[n].vars_req[m]));
+          if (ierr != MPI_SUCCESS) {no_errors=false;}
         }
 #endif  
         // initialize boundary receive status flags
@@ -286,8 +288,9 @@ TaskStatus BoundaryValues::InitRecv(const int nvars)
       }
     }
   }
-  
-  return TaskStatus::complete;
+  if (no_errors) return TaskStatus::complete;
+
+  return TaskStatus::fail;
 }
 
 //----------------------------------------------------------------------------------------
@@ -297,6 +300,7 @@ TaskStatus BoundaryValues::InitRecv(const int nvars)
   
 TaskStatus BoundaryValues::ClearRecv()
 { 
+  bool no_errors=true;
 #if MPI_PARALLEL_ENABLED
   int &nmb = pmy_pack->nmb_thispack;
   int &nnghbr = pmy_pack->pmb->nnghbr;
@@ -307,12 +311,15 @@ TaskStatus BoundaryValues::ClearRecv()
     for (int n=0; n<nnghbr; ++n) {
       if ( (nghbr.h_view(m,n).gid >= 0) && 
            (nghbr.h_view(m,n).rank != global_variable::my_rank) ) {
-        MPI_Wait(&(recv_buf[n].vars_req[m]), MPI_STATUS_IGNORE);
+        int ierr = MPI_Wait(&(recv_buf[n].vars_req[m]), MPI_STATUS_IGNORE);
+        if (ierr != MPI_SUCCESS) {no_errors=false;}
       }
     }
   }
 #endif
-  return TaskStatus::complete;
+  if (no_errors) return TaskStatus::complete;
+
+  return TaskStatus::fail;
 }       
           
 //----------------------------------------------------------------------------------------
@@ -322,6 +329,7 @@ TaskStatus BoundaryValues::ClearRecv()
   
 TaskStatus BoundaryValues::ClearSend()
 { 
+  bool no_errors=true;
 #if MPI_PARALLEL_ENABLED
   int &nmb = pmy_pack->nmb_thispack;
   int &nnghbr = pmy_pack->pmb->nnghbr;
@@ -332,10 +340,13 @@ TaskStatus BoundaryValues::ClearSend()
     for (int n=0; n<nnghbr; ++n) {
       if ( (nghbr.h_view(m,n).gid >= 0) &&
            (nghbr.h_view(m,n).rank != global_variable::my_rank) ) {
-        MPI_Wait(&(send_buf[n].vars_req[m]), MPI_STATUS_IGNORE);
+        int ierr = MPI_Wait(&(send_buf[n].vars_req[m]), MPI_STATUS_IGNORE);
+        if (ierr != MPI_SUCCESS) {no_errors=false;}
       }
     }
   }
 #endif
-  return TaskStatus::complete;
+  if (no_errors) return TaskStatus::complete;
+
+  return TaskStatus::fail;
 }

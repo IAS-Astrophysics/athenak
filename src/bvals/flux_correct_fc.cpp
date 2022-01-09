@@ -260,11 +260,7 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx)
   // Send boundary buffer to neighboring MeshBlocks using MPI
   // Sends only occur to neighbors on faces and edges at a COARSER level
 
-  {int &my_rank = global_variable::my_rank;
-  auto &nghbr = pmy_pack->pmb->nghbr;
-  auto &rbuf = recv_buf;
-  auto &mblev = pmy_pack->pmb->mb_lev;
-
+  bool no_errors=true;
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
       if ( (nghbr.d_view(m,n).gid >=0) && (nghbr.d_view(m,n).lev < mblev.d_view(m)) &&
@@ -293,13 +289,15 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx)
 
           int ierr = MPI_Isend(send_ptr, data_size, MPI_ATHENA_REAL, drank, tag,
                                flux_comm, &(send_buf[n].flux_req[m]));
+          if (ierr != MPI_SUCCESS) {no_errors=false;}
 #endif
         }
       }
     }
-  }}
-
-  return TaskStatus::complete;
+  }
+  if (no_errors) return TaskStatus::complete;
+  
+  return TaskStatus::fail;
 }
 
 //----------------------------------------------------------------------------------------
@@ -321,7 +319,8 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx)
   // probe MPI communications.  This is a bit of black magic that seems to promote
   // communications to top of stack and gets them to complete more quickly
   int test;
-  MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, flux_comm, &test, MPI_STATUS_IGNORE);
+  int ierr = MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, flux_comm, &test, MPI_STATUS_IGNORE);
+  if (ierr != MPI_SUCCESS) {return TaskStatus::incomplete;}
 #endif
 
   //----- STEP 1: check that recv boundary buffer communications have all completed
@@ -500,6 +499,7 @@ TaskStatus BoundaryValuesFC::InitFluxRecv(const int nvar)
   auto &mblev = pmy_pack->pmb->mb_lev;
 
   // Initialize communications of fluxes
+  bool no_errors=true;
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
 
@@ -525,6 +525,7 @@ TaskStatus BoundaryValuesFC::InitFluxRecv(const int nvar)
           // Post non-blocking receive for this buffer on this MeshBlock
           int ierr = MPI_Irecv(recv_ptr, data_size, MPI_ATHENA_REAL, drank, tag,
                                flux_comm, &(recv_buf[n].flux_req[m]));
+          if (ierr != MPI_SUCCESS) {no_errors=false;}
         } 
 #endif    
         // initialize boundary receive status flags
@@ -532,8 +533,9 @@ TaskStatus BoundaryValuesFC::InitFluxRecv(const int nvar)
       }   
     }     
   }                            
-    
-  return TaskStatus::complete;
+  if (no_errors) return TaskStatus::complete;
+
+  return TaskStatus::fail;
 }
 
 //----------------------------------------------------------------------------------------
@@ -543,6 +545,7 @@ TaskStatus BoundaryValuesFC::InitFluxRecv(const int nvar)
 
 TaskStatus BoundaryValuesFC::ClearFluxRecv()
 {
+  int no_errors=true;
 #if MPI_PARALLEL_ENABLED
   int &nmb = pmy_pack->nmb_thispack;
   int &nnghbr = pmy_pack->pmb->nnghbr;
@@ -554,12 +557,15 @@ TaskStatus BoundaryValuesFC::ClearFluxRecv()
       if ( (nghbr.h_view(m,n).gid >= 0) &&
            (nghbr.h_view(m,n).rank != global_variable::my_rank) && 
            (recv_buf[n].flux_req[m] != MPI_REQUEST_NULL) ) {
-        MPI_Wait(&(recv_buf[n].flux_req[m]), MPI_STATUS_IGNORE);
+        int ierr = MPI_Wait(&(recv_buf[n].flux_req[m]), MPI_STATUS_IGNORE);
+        if (ierr != MPI_SUCCESS) {no_errors=false;}
       }
     }
   }
 #endif
-  return TaskStatus::complete;
+  if (no_errors) return TaskStatus::complete;
+
+  return TaskStatus::fail;
 }
 
 //----------------------------------------------------------------------------------------
@@ -569,6 +575,7 @@ TaskStatus BoundaryValuesFC::ClearFluxRecv()
 
 TaskStatus BoundaryValuesFC::ClearFluxSend()
 {
+  int no_errors=true;
 #if MPI_PARALLEL_ENABLED
   int &nmb = pmy_pack->nmb_thispack;
   int &nnghbr = pmy_pack->pmb->nnghbr;
@@ -580,10 +587,13 @@ TaskStatus BoundaryValuesFC::ClearFluxSend()
       if ( (nghbr.h_view(m,n).gid >= 0) &&
            (nghbr.h_view(m,n).rank != global_variable::my_rank) && 
            (send_buf[n].flux_req[m] != MPI_REQUEST_NULL) ) {
-        MPI_Wait(&(send_buf[n].flux_req[m]), MPI_STATUS_IGNORE);
+        int ierr = MPI_Wait(&(send_buf[n].flux_req[m]), MPI_STATUS_IGNORE);
+        if (ierr != MPI_SUCCESS) {no_errors=false;}
       }
     }
   }
 #endif
-  return TaskStatus::complete;
+  if (no_errors) return TaskStatus::complete;
+
+  return TaskStatus::fail;
 }

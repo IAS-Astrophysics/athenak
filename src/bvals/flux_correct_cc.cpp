@@ -100,9 +100,6 @@ TaskStatus BoundaryValuesCC::PackAndSendFluxCC(DvceFaceFld5D<Real> &flx)
             } else {
               sbuf[n].flux(m, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) ) = rflx;
             }
-/*****
-std::cout << "x1send (m,n)="<<m<<","<<n<<"  (i,j,k)="<<fi<<","<<fj<<","<<fk << std::endl;
-*****/
           });
         });
 
@@ -131,9 +128,6 @@ std::cout << "x1send (m,n)="<<m<<","<<n<<"  (i,j,k)="<<fi<<","<<fj<<","<<fk << s
             } else {
               sbuf[n].flux(m, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) ) = rflx;
             }
-/*********
-std::cout << "x2send (m,n)="<<m<<","<<n<<"  (i,j,k)="<<fi<<","<<fj<<","<<fk << std::endl;
-*****/
           });
         });
 
@@ -166,11 +160,7 @@ std::cout << "x2send (m,n)="<<m<<","<<n<<"  (i,j,k)="<<fi<<","<<fj<<","<<fk << s
   // Send boundary buffer to neighboring MeshBlocks using MPI
   // Sends only occur to neighbors on faces at a COARSER level
 
-  {int &my_rank = global_variable::my_rank;
-  auto &nghbr = pmy_pack->pmb->nghbr;
-  auto &rbuf = recv_buf;
-  auto &mblev = pmy_pack->pmb->mb_lev;
-
+  bool no_errors=true;
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
       if ( (nghbr.h_view(m,n).gid >=0) && (nghbr.h_view(m,n).lev < mblev.h_view(m)) &&
@@ -199,13 +189,15 @@ std::cout << "x2send (m,n)="<<m<<","<<n<<"  (i,j,k)="<<fi<<","<<fj<<","<<fk << s
 
           int ierr = MPI_Isend(send_ptr, data_size, MPI_ATHENA_REAL, drank, tag,
                                flux_comm, &(send_buf[n].flux_req[m]));
+          if (ierr != MPI_SUCCESS) {no_errors=false;}
 #endif
         }
       }
     }
-  }}
-
-  return TaskStatus::complete;
+  }
+  if (no_errors) return TaskStatus::complete;
+  
+  return TaskStatus::fail;
 }
 
 //----------------------------------------------------------------------------------------
@@ -227,7 +219,8 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx)
   // probe MPI communications.  This is a bit of black magic that seems to promote
   // communications to top of stack and gets them to complete more quickly
   int test;
-  MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, flux_comm, &test, MPI_STATUS_IGNORE);
+  int ierr = MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, flux_comm, &test, MPI_STATUS_IGNORE);
+  if (ierr != MPI_SUCCESS) {return TaskStatus::incomplete;}
 #endif
 
   //----- STEP 1: check that recv boundary buffer communications have all completed
@@ -291,9 +284,6 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx)
           Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
           [&](const int i) {
             flx.x1f(m,v,k,j,i) = rbuf[n].flux(m,(i-il + ni*(j-jl + nj*(k-kl + nk*v))));
-/*********
-std::cout << "x1recv (m,n)="<<m<<","<<n<<"  (i,j,k)="<<i<<","<<j<<","<<k << std::endl;
-********/
           });
         });
       // x2faces
@@ -305,9 +295,6 @@ std::cout << "x1recv (m,n)="<<m<<","<<n<<"  (i,j,k)="<<i<<","<<j<<","<<k << std:
           Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
           [&](const int i) {
             flx.x2f(m,v,k,j,i) = rbuf[n].flux(m,(i-il + ni*(j-jl + nj*(k-kl + nk*v))));
-/*********
-std::cout << "x2recv (m,n)="<<m<<","<<n<<"  (i,j,k)="<<i<<","<<j<<","<<k << std::endl;
-********/
           });
         });
       // x3faces
@@ -341,6 +328,7 @@ TaskStatus BoundaryValuesCC::InitFluxRecv(const int nvar)
   auto &mblev = pmy_pack->pmb->mb_lev;
 
   // Initialize communications of fluxes
+  bool no_errors=true;
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
 
@@ -366,15 +354,17 @@ TaskStatus BoundaryValuesCC::InitFluxRecv(const int nvar)
           // Post non-blocking receive for this buffer on this MeshBlock
           int ierr = MPI_Irecv(recv_ptr, data_size, MPI_ATHENA_REAL, drank, tag,
                                flux_comm, &(recv_buf[n].flux_req[m]));
+          if (ierr != MPI_SUCCESS) {no_errors=false;}
         } 
 #endif    
         // initialize boundary receive status flags
         recv_buf[n].flux_stat[m] = BoundaryCommStatus::waiting;
-      }   
-    }     
-  }                            
-    
-  return TaskStatus::complete;
+      }
+    }
+  }
+  if (no_errors) return TaskStatus::complete;
+
+  return TaskStatus::fail;
 }
 
 //----------------------------------------------------------------------------------------
@@ -384,6 +374,7 @@ TaskStatus BoundaryValuesCC::InitFluxRecv(const int nvar)
 
 TaskStatus BoundaryValuesCC::ClearFluxRecv()
 {
+  bool no_errors=true;
 #if MPI_PARALLEL_ENABLED
   int &nmb = pmy_pack->nmb_thispack;
   int &nnghbr = pmy_pack->pmb->nnghbr;
@@ -395,12 +386,15 @@ TaskStatus BoundaryValuesCC::ClearFluxRecv()
       if ( (nghbr.h_view(m,n).gid >= 0) &&
            (nghbr.h_view(m,n).rank != global_variable::my_rank) &&
            (recv_buf[n].flux_req[m] != MPI_REQUEST_NULL) ) {
-        MPI_Wait(&(recv_buf[n].flux_req[m]), MPI_STATUS_IGNORE);
+        int ierr = MPI_Wait(&(recv_buf[n].flux_req[m]), MPI_STATUS_IGNORE);
+        if (ierr != MPI_SUCCESS) {no_errors=false;}
       }
     }
   }
 #endif
-  return TaskStatus::complete;
+  if (no_errors) return TaskStatus::complete;
+
+  return TaskStatus::fail;
 }
 
 //----------------------------------------------------------------------------------------
@@ -410,6 +404,7 @@ TaskStatus BoundaryValuesCC::ClearFluxRecv()
 
 TaskStatus BoundaryValuesCC::ClearFluxSend()
 {
+  bool no_errors=true;
 #if MPI_PARALLEL_ENABLED
   int &nmb = pmy_pack->nmb_thispack;
   int &nnghbr = pmy_pack->pmb->nnghbr;
@@ -421,10 +416,13 @@ TaskStatus BoundaryValuesCC::ClearFluxSend()
       if ( (nghbr.h_view(m,n).gid >= 0) &&
            (nghbr.h_view(m,n).rank != global_variable::my_rank) &&
            (send_buf[n].flux_req[m] != MPI_REQUEST_NULL) ) {
-        MPI_Wait(&(send_buf[n].flux_req[m]), MPI_STATUS_IGNORE);
+        int ierr = MPI_Wait(&(send_buf[n].flux_req[m]), MPI_STATUS_IGNORE);
+        if (ierr != MPI_SUCCESS) {no_errors=false;}
       }
     }
   }
 #endif
-  return TaskStatus::complete;
+  if (no_errors) return TaskStatus::complete;
+
+  return TaskStatus::fail;
 }

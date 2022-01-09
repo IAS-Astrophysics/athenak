@@ -227,11 +227,12 @@ TaskStatus BoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
 
   // Send boundary buffer to neighboring MeshBlocks using MPI
 
-  {int &my_rank = global_variable::my_rank;
+  int &my_rank = global_variable::my_rank;
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &rbuf = recv_buf;
   auto &mblev = pmy_pack->pmb->mb_lev;
 
+  bool no_errors=true;
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
       if (nghbr.h_view(m,n).gid >= 0) {  // neighbor exists and not a physical boundary
@@ -266,13 +267,15 @@ TaskStatus BoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
 
           int ierr = MPI_Isend(send_ptr, data_size, MPI_ATHENA_REAL, drank, tag,
                                vars_comm, &(send_buf[n].vars_req[m]));
+          if (ierr != MPI_SUCCESS) {no_errors=false;}
 #endif
         }
       }
     }
-  }}
+  }
+  if (no_errors) return TaskStatus::complete;
 
-  return TaskStatus::complete;
+  return TaskStatus::fail;
 }
 
 //----------------------------------------------------------------------------------------
@@ -286,14 +289,15 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b, DvceFaceFld
   int nnghbr = pmy_pack->pmb->nnghbr;
 
   bool bflag = false;
-  {auto &nghbr = pmy_pack->pmb->nghbr;
+  auto &nghbr = pmy_pack->pmb->nghbr;
   auto &rbuf = recv_buf;
 
 #if MPI_PARALLEL_ENABLED
   // probe MPI communications.  This is a bit of black magic that seems to promote
   // communications to top of stack and gets them to complete more quickly
   int test;
-  MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, vars_comm, &test, MPI_STATUS_IGNORE);
+  int ierr = MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, vars_comm, &test, MPI_STATUS_IGNORE);
+  if (ierr != MPI_SUCCESS) {return TaskStatus::incomplete;}
 #endif
 
   //----- STEP 1: check that recv boundary buffer communications have all completed
@@ -315,20 +319,17 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b, DvceFaceFld
         }
       }
     }
-  }}
+  }
 
   // exit if recv boundary buffer communications have not completed
   if (bflag) {return TaskStatus::incomplete;}
 
   //----- STEP 2: buffers have all completed, so unpack 3-components of field
 
-  {int nmnv = 3*nmb*nnghbr;
-  auto &nghbr = pmy_pack->pmb->nghbr;
   auto &mblev = pmy_pack->pmb->mb_lev;
-  auto &rbuf = recv_buf;
 
   // Outer loop over (# of MeshBlocks)*(# of buffers)*(three field components)
-  Kokkos::TeamPolicy<> policy(DevExeSpace(), nmnv, Kokkos::AUTO);
+  Kokkos::TeamPolicy<> policy(DevExeSpace(), (3*nmb*nnghbr), Kokkos::AUTO);
   Kokkos::parallel_for("RecvBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember)
   {
     const int m = (tmember.league_rank())/(3*nnghbr);
@@ -444,7 +445,6 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b, DvceFaceFld
       });
     }  // end if-neighbor-exists block
   });  // end par_for_outer
-  }
 
   //----- STEP 3: Prolongate face-fields when neighbor at coarser level
 
