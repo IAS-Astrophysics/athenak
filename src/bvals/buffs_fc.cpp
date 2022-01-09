@@ -604,6 +604,19 @@ void BoundaryValuesFC::InitRecvIndices(
     ifine[1].bks = mb_indcs.ks - ng;        ifine[1].bke = mb_indcs.ks - 1;
     ifine[2].bks = mb_indcs.ks - ng;        ifine[2].bke = mb_indcs.ks - 1;
   }
+  // for SMR/AMR, always include the overlapping faces in edge and corner boundaries
+  if (pmy_pack->pmesh->multilevel && (ox2 != 0 || ox3 != 0)) {
+    if (ox1 > 0) {ifine[0].bis--;}
+    if (ox1 < 0) {ifine[0].bie++;}
+  }
+  if (pmy_pack->pmesh->multilevel && (ox1 != 0 || ox3 != 0)) {
+    if (ox2 > 0) {ifine[1].bjs--;}
+    if (ox2 < 0) {ifine[1].bje++;}
+  }
+  if (pmy_pack->pmesh->multilevel && (ox1 != 0 || ox2 != 0)) {
+    if (ox3 > 0) {ifine[2].bks--;}
+    if (ox3 < 0) {ifine[2].bke++;}
+  }
   for (int i=0; i<=2; ++i) {
     int ndat = (ifine[i].bie - ifine[i].bis + 1)*(ifine[i].bje - ifine[i].bjs + 1)*
                (ifine[i].bke - ifine[i].bks + 1);
