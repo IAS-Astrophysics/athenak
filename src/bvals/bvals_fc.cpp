@@ -253,18 +253,18 @@ TaskStatus BoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
           int tag = CreateMPITag(lid, dn);
 
           // create subview of send buffer when neighbor is at coarser/same/fine level
-          std::pair<int,int> data_range;
+          int data_size = 3;
           if (nghbr.h_view(m,n).lev < mblev.h_view(m)) {
-            data_range = std::make_pair(0,(send_buf[n].icoar_ndat));
+            data_size *= send_buf[n].icoar_ndat;
           } else if (nghbr.h_view(m,n).lev == mblev.h_view(m)) {
-            data_range = std::make_pair(0,(send_buf[n].isame_ndat));
+            data_size *= send_buf[n].isame_ndat;
           } else {
-            data_range = std::make_pair(0,(send_buf[n].ifine_ndat));
+            data_size *= send_buf[n].ifine_ndat;
           }
-          auto send_vars = Kokkos::subview(send_buf[n].vars, m, Kokkos::ALL, data_range);
+          auto send_vars = Kokkos::subview(send_buf[n].vars, m, Kokkos::ALL);
           void* send_ptr = send_vars.data();
 
-          int ierr = MPI_Isend(send_ptr, send_vars.size(), MPI_ATHENA_REAL, drank, tag,
+          int ierr = MPI_Isend(send_ptr, data_size, MPI_ATHENA_REAL, drank, tag,
                                vars_comm, &(send_buf[n].vars_req[m]));
 #endif
         }

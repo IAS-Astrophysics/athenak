@@ -244,7 +244,7 @@ std::cout <<"recv_flux.ndat:" <<recv_buf[n].iflux_ndat << std::endl;
 //! \brief Posts non-blocking receives (with MPI), and initialize all boundary receive
 //! status flags to waiting (with or without MPI) for boundary communications of vars.
 
-TaskStatus BoundaryValues::InitRecv()
+TaskStatus BoundaryValues::InitRecv(const int nvars)
 { 
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
@@ -264,20 +264,20 @@ TaskStatus BoundaryValues::InitRecv()
           // create tag using local ID and buffer index of *receiving* MeshBlock
           int tag = CreateMPITag(m, n);
 
-          // create subview of recv buffer when neighbor is at coarser/same/fine level
-          std::pair<int,int> data_range;
+          // calculate amount of data to be passed, get pointer to variables
+          int data_size = nvars;
           if (nghbr.h_view(m,n).lev < mblev.h_view(m)) {
-            data_range = std::make_pair(0,(recv_buf[n].icoar_ndat));
+            data_size *= recv_buf[n].icoar_ndat;
           } else if (nghbr.h_view(m,n).lev == mblev.h_view(m)) {
-            data_range = std::make_pair(0,(recv_buf[n].isame_ndat));
+            data_size *= recv_buf[n].isame_ndat;
           } else {
-            data_range = std::make_pair(0,(recv_buf[n].ifine_ndat));
+            data_size *= recv_buf[n].ifine_ndat;
           }
-          auto recv_vars = Kokkos::subview(recv_buf[n].vars, m, Kokkos::ALL, data_range);
+          auto recv_vars = Kokkos::subview(recv_buf[n].vars, m, Kokkos::ALL);
           void* recv_ptr = recv_vars.data();
 
           // Post non-blocking receive for this buffer on this MeshBlock
-          int ierr = MPI_Irecv(recv_ptr, recv_vars.size(), MPI_ATHENA_REAL, drank, tag,
+          int ierr = MPI_Irecv(recv_ptr, data_size, MPI_ATHENA_REAL, drank, tag,
                                vars_comm, &(recv_buf[n].vars_req[m]));
         }
 #endif  

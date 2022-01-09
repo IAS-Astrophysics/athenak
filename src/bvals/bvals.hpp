@@ -114,12 +114,12 @@ public:
   //functions
   virtual void InitSendIndices(BoundaryBuffer &buf, int x, int y, int z, int a, int b)=0;
   virtual void InitRecvIndices(BoundaryBuffer &buf, int x, int y, int z, int a, int b)=0;
-  virtual TaskStatus InitFluxRecv()=0;
+  virtual TaskStatus InitFluxRecv(const int nvar)=0;
   virtual TaskStatus ClearFluxRecv()=0;
   virtual TaskStatus ClearFluxSend()=0;
 
   void InitializeBuffers(const int nvar);
-  TaskStatus InitRecv();
+  TaskStatus InitRecv(const int nvar);
   TaskStatus ClearRecv();
   TaskStatus ClearSend();
 
@@ -143,7 +143,7 @@ public:
   //functions
   void InitSendIndices(BoundaryBuffer &buf, int o1, int o2,int o3,int f1,int f2) override;
   void InitRecvIndices(BoundaryBuffer &buf, int o1, int o2,int o3,int f1,int f2) override;
-  TaskStatus InitFluxRecv() override;
+  TaskStatus InitFluxRecv(const int nvar) override;
   virtual TaskStatus ClearFluxRecv() override;
   virtual TaskStatus ClearFluxSend() override;
 
@@ -167,7 +167,7 @@ public:
   //functions
   void InitSendIndices(BoundaryBuffer &buf, int o1, int o2,int o3,int f1,int f2) override;
   void InitRecvIndices(BoundaryBuffer &buf, int o1, int o2,int o3,int f1,int f2) override;
-  TaskStatus InitFluxRecv() override;
+  TaskStatus InitFluxRecv(const int nvar) override;
   TaskStatus ClearFluxRecv() override;
   TaskStatus ClearFluxSend() override;
 

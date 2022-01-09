@@ -278,9 +278,11 @@ void BoundaryValuesFC::InitSendIndices(
     iflux[1].bis = mb_indcs.cis,          iflux[1].bie = mb_indcs.cie + 1;
     iflux[2].bis = mb_indcs.cis,          iflux[2].bie = mb_indcs.cie + 1;
   } else if (ox1 > 0) {
+    iflux[0].bis = mb_indcs.cie + 1,      iflux[0].bie = mb_indcs.cie + 1;
     iflux[1].bis = mb_indcs.cie + 1;      iflux[1].bie = mb_indcs.cie + 1;
     iflux[2].bis = mb_indcs.cie + 1;      iflux[2].bie = mb_indcs.cie + 1;
   } else {
+    iflux[0].bis = mb_indcs.cis;          iflux[0].bie = mb_indcs.cis;
     iflux[1].bis = mb_indcs.cis;          iflux[1].bie = mb_indcs.cis;
     iflux[2].bis = mb_indcs.cis;          iflux[2].bie = mb_indcs.cis;
   }
@@ -290,9 +292,11 @@ void BoundaryValuesFC::InitSendIndices(
     iflux[2].bjs = mb_indcs.cjs,          iflux[2].bje = mb_indcs.cje + 1;
   } else if (ox2 > 0) {
     iflux[0].bjs = mb_indcs.cje + 1;      iflux[0].bje = mb_indcs.cje + 1;
+    iflux[1].bjs = mb_indcs.cje + 1;      iflux[1].bje = mb_indcs.cje + 1;
     iflux[2].bjs = mb_indcs.cje + 1;      iflux[2].bje = mb_indcs.cje + 1;
   } else {
     iflux[0].bjs = mb_indcs.cjs;          iflux[0].bje = mb_indcs.cjs;
+    iflux[1].bjs = mb_indcs.cjs;          iflux[1].bje = mb_indcs.cjs;
     iflux[2].bjs = mb_indcs.cjs;          iflux[2].bje = mb_indcs.cjs;
   }
   if (ox3 == 0) {
@@ -302,9 +306,11 @@ void BoundaryValuesFC::InitSendIndices(
   } else if (ox3 > 0) {
     iflux[0].bks = mb_indcs.cke + 1;      iflux[0].bke = mb_indcs.cke + 1;
     iflux[1].bks = mb_indcs.cke + 1;      iflux[1].bke = mb_indcs.cke + 1;
+    iflux[2].bks = mb_indcs.cke + 1;      iflux[2].bke = mb_indcs.cke + 1;
   } else {
     iflux[0].bks = mb_indcs.cks;          iflux[0].bke = mb_indcs.cks;
     iflux[1].bks = mb_indcs.cks;          iflux[1].bke = mb_indcs.cks;
+    iflux[2].bks = mb_indcs.cks;          iflux[2].bke = mb_indcs.cks;
   }
   for (int i=0; i<=2; ++i) {
     int ndat = (iflux[i].bie - iflux[i].bis + 1)*(iflux[i].bje - iflux[i].bjs + 1)*
@@ -724,9 +730,11 @@ void BoundaryValuesFC::InitRecvIndices(
       iflux[2].bie -= mb_indcs.cnx1;
     }
   } else if (ox1 > 0) {
+    iflux[0].bis = mb_indcs.ie + 1,         iflux[0].bie = mb_indcs.ie + 1;
     iflux[1].bis = mb_indcs.ie + 1,         iflux[1].bie = mb_indcs.ie + 1;
     iflux[2].bis = mb_indcs.ie + 1,         iflux[2].bie = mb_indcs.ie + 1;
   } else {
+    iflux[0].bis = mb_indcs.is,             iflux[0].bie = mb_indcs.is;
     iflux[1].bis = mb_indcs.is,             iflux[1].bie = mb_indcs.is;
     iflux[2].bis = mb_indcs.is,             iflux[2].bie = mb_indcs.is;
   }
@@ -759,9 +767,11 @@ void BoundaryValuesFC::InitRecvIndices(
     }
   } else if (ox2 > 0) {
     iflux[0].bjs = mb_indcs.je + 1,         iflux[0].bje = mb_indcs.je + 1;
+    iflux[1].bjs = mb_indcs.je + 1,         iflux[1].bje = mb_indcs.je + 1;
     iflux[2].bjs = mb_indcs.je + 1,         iflux[2].bje = mb_indcs.je + 1;
   } else {
     iflux[0].bjs = mb_indcs.js,             iflux[0].bje = mb_indcs.js;
+    iflux[1].bjs = mb_indcs.js,             iflux[1].bje = mb_indcs.js;
     iflux[2].bjs = mb_indcs.js,             iflux[2].bje = mb_indcs.js;
   }
   if (ox3 == 0) {
@@ -794,9 +804,11 @@ void BoundaryValuesFC::InitRecvIndices(
   } else if (ox3 > 0) {
     iflux[0].bks = mb_indcs.ke + 1,      iflux[0].bke = mb_indcs.ke + 1;
     iflux[1].bks = mb_indcs.ke + 1,      iflux[1].bke = mb_indcs.ke + 1;
+    iflux[2].bks = mb_indcs.ke + 1,      iflux[2].bke = mb_indcs.ke + 1;
   } else {
     iflux[0].bks = mb_indcs.ks,          iflux[0].bke = mb_indcs.ks;
     iflux[1].bks = mb_indcs.ks,          iflux[1].bke = mb_indcs.ks;
+    iflux[2].bks = mb_indcs.ks,          iflux[2].bke = mb_indcs.ks;
   }
   for (int i=0; i<=2; ++i) {
     int ndat = (iflux[i].bie - iflux[i].bis + 1)*(iflux[i].bje - iflux[i].bjs + 1)*

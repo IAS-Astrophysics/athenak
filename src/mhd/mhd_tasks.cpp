@@ -80,11 +80,11 @@ void MHD::AssembleMHDTasks(TaskList &start, TaskList &run, TaskList &end)
 
 TaskStatus MHD::InitRecv(Driver *pdrive, int stage)
 {
-  TaskStatus tstat = pbval_u->InitRecv();
-  TaskStatus tstat2 = pbval_b->InitRecv();
-  if (pmy_pack->pmesh->multilevel) {
-    tstat2 = pbval_u->InitFluxRecv();
-    tstat2 = pbval_b->InitFluxRecv();
+  TaskStatus tstat = pbval_u->InitRecv(nmhd+nscalars);
+  TaskStatus tstat2 = pbval_b->InitRecv(3);
+  if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
+    tstat2 = pbval_u->InitFluxRecv(nmhd+nscalars);
+    tstat2 = pbval_b->InitFluxRecv(3);
   }
   return TaskStatus::complete;
 }
@@ -98,7 +98,7 @@ TaskStatus MHD::ClearRecv(Driver *pdrive, int stage)
 {
   TaskStatus tstat = pbval_u->ClearRecv();
   TaskStatus tstat2 = pbval_b->ClearRecv();
-  if (pmy_pack->pmesh->multilevel) {
+  if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
     tstat2 = pbval_u->ClearFluxRecv();
     tstat2 = pbval_b->ClearFluxRecv();
   }
@@ -115,7 +115,7 @@ TaskStatus MHD::ClearSend(Driver *pdrive, int stage)
 {
   TaskStatus tstat = pbval_u->ClearSend();
   TaskStatus tstat2 = pbval_b->ClearSend();
-  if (pmy_pack->pmesh->multilevel) {
+  if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
     tstat2 = pbval_u->ClearFluxSend();
     tstat2 = pbval_b->ClearFluxSend();
   }

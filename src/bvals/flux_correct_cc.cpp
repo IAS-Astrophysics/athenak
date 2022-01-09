@@ -193,11 +193,11 @@ std::cout << "x2send (m,n)="<<m<<","<<n<<"  (i,j,k)="<<fi<<","<<fj<<","<<fk << s
           int tag = CreateMPITag(lid, dn);
 
           // create subview of send buffer for fluxes
-          std::pair<int,int> data_range = std::make_pair(0,(send_buf[n].iflux_ndat));
-          auto send_flux = Kokkos::subview(send_buf[n].flux, m, Kokkos::ALL, data_range);
+          int data_size = nvar*(send_buf[n].iflux_ndat);
+          auto send_flux = Kokkos::subview(send_buf[n].flux, m, Kokkos::ALL);
           void* send_ptr = send_flux.data();
 
-          int ierr = MPI_Isend(send_ptr, send_flux.size(), MPI_ATHENA_REAL, drank, tag,
+          int ierr = MPI_Isend(send_ptr, data_size, MPI_ATHENA_REAL, drank, tag,
                                flux_comm, &(send_buf[n].flux_req[m]));
 #endif
         }
@@ -333,7 +333,7 @@ std::cout << "x2recv (m,n)="<<m<<","<<n<<"  (i,j,k)="<<i<<","<<j<<","<<k << std:
 //! \brief Posts non-blocking receives (with MPI), and initialize all boundary receive
 //! status flags to waiting (with or without MPI) for boundary communications of fluxes.
 
-TaskStatus BoundaryValuesCC::InitFluxRecv()
+TaskStatus BoundaryValuesCC::InitFluxRecv(const int nvar)
 {
   int &nmb = pmy_pack->nmb_thispack;
   int &nnghbr = pmy_pack->pmb->nnghbr;
@@ -359,12 +359,12 @@ TaskStatus BoundaryValuesCC::InitFluxRecv()
           int tag = CreateMPITag(m, n);
 
           // create subview of recv buffer when neighbor is at coarser/same/fine level
-          std::pair<int,int> data_range = std::make_pair(0,(recv_buf[n].iflux_ndat));
-          auto recv_flux = Kokkos::subview(recv_buf[n].flux, m, Kokkos::ALL, data_range);
+          int data_size = nvar*(recv_buf[n].iflux_ndat);
+          auto recv_flux = Kokkos::subview(recv_buf[n].flux, m, Kokkos::ALL);
           void* recv_ptr = recv_flux.data();
           
           // Post non-blocking receive for this buffer on this MeshBlock
-          int ierr = MPI_Irecv(recv_ptr, recv_flux.size(), MPI_ATHENA_REAL, drank, tag,
+          int ierr = MPI_Irecv(recv_ptr, data_size, MPI_ATHENA_REAL, drank, tag,
                                flux_comm, &(recv_buf[n].flux_req[m]));
         } 
 #endif    
