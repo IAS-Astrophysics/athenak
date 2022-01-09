@@ -391,10 +391,10 @@ void Mesh::WriteMeshStructure()
     std::exit(EXIT_FAILURE);
   }
 
-  auto &size = this->pmb_pack->pmb->mb_size;
   for (int i=root_level; i<=max_level; i++) {
   for (int j=0; j<nmb_total; j++) {
     if (lloclist[j].level == i) {
+      MeshBlock block(this->pmb_pack, j, 1);
       std::int32_t &lx1 = lloclist[j].lx1;
       std::int32_t &lx2 = lloclist[j].lx2;
       std::int32_t &lx3 = lloclist[j].lx3;
@@ -404,17 +404,24 @@ void Mesh::WriteMeshStructure()
           fp,"#  Logical level %d, location = (%" PRId32 " %" PRId32 " %" PRId32")\n",
           lloclist[j].level, lx1, lx2, lx3);
       if (two_d) { // 2D
-        std::fprintf(fp,"%g %g\n", size.h_view(j).x1min, size.h_view(j).x2min);
-        std::fprintf(fp,"%g %g\n", size.h_view(j).x1max, size.h_view(j).x2min);
-        std::fprintf(fp,"%g %g\n", size.h_view(j).x1max, size.h_view(j).x2max);
-        std::fprintf(fp,"%g %g\n", size.h_view(j).x1min, size.h_view(j).x2max);
-        std::fprintf(fp,"%g %g\n", size.h_view(j).x1min, size.h_view(j).x2min);
+        Real &x1min = block.mb_size.h_view(0).x1min;
+        Real &x1max = block.mb_size.h_view(0).x1max;
+        Real &x2min = block.mb_size.h_view(0).x2min;
+        Real &x2max = block.mb_size.h_view(0).x2max;
+        std::fprintf(fp,"%g %g\n", x1min, x2min);
+        std::fprintf(fp,"%g %g\n", x1max, x2min);
+        std::fprintf(fp,"%g %g\n", x1max, x2max);
+        std::fprintf(fp,"%g %g\n", x1min, x2max);
+        std::fprintf(fp,"%g %g\n", x1min, x2min);
         std::fprintf(fp,"\n\n");
       }
       if (three_d) { // 3D
-        Real &x1min = size.h_view(j).x1min, &x1max = size.h_view(j).x1max;
-        Real &x2min = size.h_view(j).x2min, &x2max = size.h_view(j).x2max;
-        Real &x3min = size.h_view(j).x3min, &x3max = size.h_view(j).x3max;
+        Real &x1min = block.mb_size.h_view(0).x1min;
+        Real &x1max = block.mb_size.h_view(0).x1max;
+        Real &x2min = block.mb_size.h_view(0).x2min;
+        Real &x2max = block.mb_size.h_view(0).x2max;
+        Real &x3min = block.mb_size.h_view(0).x3min;
+        Real &x3max = block.mb_size.h_view(0).x3max;
         std::fprintf(fp,"%g %g %g\n", x1min, x2min, x3min);
         std::fprintf(fp,"%g %g %g\n", x1max, x2min, x3min);
         std::fprintf(fp,"%g %g %g\n", x1max, x2max, x3min);
