@@ -179,7 +179,7 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
           int lid = nghbr.h_view(m,n).gid - pmy_pack->pmesh->gidslist[drank];
           int tag = CreateMPITag(lid, dn);
 
-          // create subview of send buffer when neighbor is at coarser/same/fine level
+          // get ptr to send buffer when neighbor is at coarser/same/fine level
           int data_size = nvar;
           if (nghbr.h_view(m,n).lev < mblev.h_view(m)) {
             data_size *= send_buf[n].icoar_ndat;
@@ -188,8 +188,7 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
           } else {
             data_size *= send_buf[n].ifine_ndat;
           }
-          auto send_vars = Kokkos::subview(send_buf[n].vars, m, Kokkos::ALL);
-          void* send_ptr = send_vars.data();
+          void* send_ptr = &(send_buf[n].vars(m,0));
 
           int ierr = MPI_Isend(send_ptr, data_size, MPI_ATHENA_REAL, drank, tag,
                                vars_comm, &(send_buf[n].vars_req[m]));

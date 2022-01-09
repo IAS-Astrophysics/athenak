@@ -182,10 +182,9 @@ TaskStatus BoundaryValuesCC::PackAndSendFluxCC(DvceFaceFld5D<Real> &flx)
           int lid = nghbr.h_view(m,n).gid - pmy_pack->pmesh->gidslist[drank];
           int tag = CreateMPITag(lid, dn);
 
-          // create subview of send buffer for fluxes
+          // get ptr to send buffer for fluxes
           int data_size = nvar*(send_buf[n].iflux_ndat);
-          auto send_flux = Kokkos::subview(send_buf[n].flux, m, Kokkos::ALL);
-          void* send_ptr = send_flux.data();
+          void* send_ptr = &(send_buf[n].flux(m,0));
 
           int ierr = MPI_Isend(send_ptr, data_size, MPI_ATHENA_REAL, drank, tag,
                                flux_comm, &(send_buf[n].flux_req[m]));
@@ -346,10 +345,9 @@ TaskStatus BoundaryValuesCC::InitFluxRecv(const int nvar)
           // create tag using local ID and buffer index of *receiving* MeshBlock
           int tag = CreateMPITag(m, n);
 
-          // create subview of recv buffer when neighbor is at coarser/same/fine level
+          // get ptr to recv buffer when neighbor is at coarser/same/fine level
           int data_size = nvar*(recv_buf[n].iflux_ndat);
-          auto recv_flux = Kokkos::subview(recv_buf[n].flux, m, Kokkos::ALL);
-          void* recv_ptr = recv_flux.data();
+          void* recv_ptr = &(recv_buf[n].flux(m,0));
           
           // Post non-blocking receive for this buffer on this MeshBlock
           int ierr = MPI_Irecv(recv_ptr, data_size, MPI_ATHENA_REAL, drank, tag,
