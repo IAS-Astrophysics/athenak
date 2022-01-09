@@ -272,7 +272,7 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx)
     const int nkj  = nk*nj;
 
     // only unpack buffers for faces when neighbor is at finer level
-    if ((nghbr.h_view(m,n).gid >=0) && (nghbr.h_view(m,n).lev > mblev.h_view(m))) {
+    if ((nghbr.d_view(m,n).gid >=0) && (nghbr.d_view(m,n).lev > mblev.d_view(m))) {
 
       //x1 faces
       if (n<8) {
