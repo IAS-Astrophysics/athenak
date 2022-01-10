@@ -461,6 +461,10 @@ BoundaryFlag Mesh::GetBoundaryFlag(const std::string& input_string)
     return BoundaryFlag::reflect;
   } else if (input_string == "outflow") {
     return BoundaryFlag::outflow;
+  } else if (input_string == "inflow") {
+    return BoundaryFlag::inflow;
+  } else if (input_string == "diode") {
+    return BoundaryFlag::diode;
   } else if (input_string == "user") {
     return BoundaryFlag::user;
   } else if (input_string == "periodic") {
@@ -488,8 +492,12 @@ std::string Mesh::GetBoundaryString(BoundaryFlag input_flag)
       return "block";
     case BoundaryFlag::reflect:
       return "reflect";
+    case BoundaryFlag::inflow:
+      return "inflow";
     case BoundaryFlag::outflow:
       return "outflow";
+    case BoundaryFlag::diode:
+      return "diode";
     case BoundaryFlag::user:
       return "user";
     case BoundaryFlag::periodic:
