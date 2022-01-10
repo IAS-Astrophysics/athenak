@@ -19,7 +19,7 @@
 // \!fn void ProlongCC()
 // \brief Prolongate data at boundaries for cell-centered data
 
-void BValCC::ProlongCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
+void BoundaryValuesCC::ProlongCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
 {
   // create local references for variables in kernel
   int nmb = pmy_pack->pmb->nmb;
@@ -49,12 +49,12 @@ void BValCC::ProlongCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
     if ((nghbr.d_view(m,n).gid >= 0) && (nghbr.d_view(m,n).lev < mblev.d_view(m))) {
 
       // loop over indices for prolongation on this buffer
-      int il = rbuf[n].pindcs.bis;
-      int iu = rbuf[n].pindcs.bie;
-      int jl = rbuf[n].pindcs.bjs;
-      int ju = rbuf[n].pindcs.bje;
-      int kl = rbuf[n].pindcs.bks;
-      int ku = rbuf[n].pindcs.bke;
+      int il = rbuf[n].iprol[0].bis;
+      int iu = rbuf[n].iprol[0].bie;
+      int jl = rbuf[n].iprol[0].bjs;
+      int ju = rbuf[n].iprol[0].bje;
+      int kl = rbuf[n].iprol[0].bks;
+      int ku = rbuf[n].iprol[0].bke;
       const int ni = iu - il + 1;
       const int nj = ju - jl + 1;
       const int nk = ku - kl + 1;
@@ -69,7 +69,7 @@ void BValCC::ProlongCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
 
         Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),[&](const int i)
         {
-          // indices for prolongation (pindcs) refer to coarse array.  So must compute
+          // indices for prolongation refer to coarse array.  So must compute
           // indices for fine array
           int finei = (i - indcs.cis)*2 + indcs.is;
           int finej = (j - indcs.cjs)*2 + indcs.js;
@@ -122,7 +122,7 @@ void BValCC::ProlongCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
 // \!fn void ProlongFC()
 // \brief Prolongate data at boundaries for face-centered data
 
-void BValFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb)
+void BoundaryValuesFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb)
 {
   // create local references for variables in kernel
   int nmb = pmy_pack->pmb->nmb;
@@ -149,8 +149,8 @@ void BValFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb)
       if ((nghbr.d_view(m,n).gid >= 0) && (nghbr.d_view(m,n).lev < mblev.d_view(m))) {
 
         // prolongate b.x1f (v=0)
-        int il = rbuf[n].pindcs[0].bis;
-        int iu = rbuf[n].pindcs[0].bie;
+        int il = rbuf[n].iprol[0].bis;
+        int iu = rbuf[n].iprol[0].bie;
         par_for_inner(member, il, iu, [&](const int i)
         {
           int finei = (i - indcs.cis)*2 + indcs.is;
@@ -169,8 +169,8 @@ void BValFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb)
         });
 
         // prolongate b.x2f (v=1)
-        il = rbuf[n].pindcs[1].bis;
-        iu = rbuf[n].pindcs[1].bie;
+        il = rbuf[n].iprol[1].bis;
+        iu = rbuf[n].iprol[1].bie;
         par_for_inner(member, il, iu, [&](const int i)
         {
           int finei = (i - indcs.cis)*2 + indcs.is;
@@ -186,8 +186,8 @@ void BValFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb)
         });
 
         // prolongate b.x3f (v=2)
-        il = rbuf[n].pindcs[2].bis;
-        iu = rbuf[n].pindcs[2].bie;
+        il = rbuf[n].iprol[2].bis;
+        iu = rbuf[n].iprol[2].bie;
         par_for_inner(member, il, iu, [&](const int i)
         {
           int finei = (i - indcs.cis)*2 + indcs.is;
@@ -226,12 +226,12 @@ void BValFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb)
 
       // only prolongate when neighbor exists and is at coarser level
       if ((nghbr.d_view(m,n).gid >= 0) && (nghbr.d_view(m,n).lev < mblev.d_view(m))) {
-        int il = rbuf[n].pindcs[v].bis;
-        int iu = rbuf[n].pindcs[v].bie;
-        int jl = rbuf[n].pindcs[v].bjs;
-        int ju = rbuf[n].pindcs[v].bje;
-        int kl = rbuf[n].pindcs[v].bks;
-        int ku = rbuf[n].pindcs[v].bke;
+        int il = rbuf[n].iprol[v].bis;
+        int iu = rbuf[n].iprol[v].bie;
+        int jl = rbuf[n].iprol[v].bjs;
+        int ju = rbuf[n].iprol[v].bje;
+        int kl = rbuf[n].iprol[v].bks;
+        int ku = rbuf[n].iprol[v].bke;
         const int nj = ju - jl + 1;
         const int nk = ku - kl + 1;
         const int nkj  = nk*nj;
@@ -327,12 +327,12 @@ void BValFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb)
       // only prolongate when neighbor exists and is at coarser level
       if ((nghbr.d_view(m,n).gid >= 0) && (nghbr.d_view(m,n).lev < mblev.d_view(m))) {
         // use prolongation indices of different field components for interior fine cells
-        int il = rbuf[n].pindcs[2].bis;
-        int iu = rbuf[n].pindcs[2].bie;
-        int jl = rbuf[n].pindcs[0].bjs;
-        int ju = rbuf[n].pindcs[0].bje;
-        int kl = rbuf[n].pindcs[1].bks;
-        int ku = rbuf[n].pindcs[1].bke;
+        int il = rbuf[n].iprol[2].bis;
+        int iu = rbuf[n].iprol[2].bie;
+        int jl = rbuf[n].iprol[0].bjs;
+        int ju = rbuf[n].iprol[0].bje;
+        int kl = rbuf[n].iprol[1].bks;
+        int ku = rbuf[n].iprol[1].bke;
         const int nj = ju - jl + 1;
         const int nk = ku - kl + 1;
         const int nkj  = nk*nj;
@@ -386,12 +386,12 @@ void BValFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb)
 
       // only prolongate when neighbor exists and is at coarser level
       if ((nghbr.d_view(m,n).gid >= 0) && (nghbr.d_view(m,n).lev < mblev.d_view(m))) {
-        int il = rbuf[n].pindcs[v].bis;
-        int iu = rbuf[n].pindcs[v].bie;
-        int jl = rbuf[n].pindcs[v].bjs;
-        int ju = rbuf[n].pindcs[v].bje;
-        int kl = rbuf[n].pindcs[v].bks;
-        int ku = rbuf[n].pindcs[v].bke;
+        int il = rbuf[n].iprol[v].bis;
+        int iu = rbuf[n].iprol[v].bie;
+        int jl = rbuf[n].iprol[v].bjs;
+        int ju = rbuf[n].iprol[v].bje;
+        int kl = rbuf[n].iprol[v].bks;
+        int ku = rbuf[n].iprol[v].bke;
         const int nj = ju - jl + 1;
         const int nk = ku - kl + 1;
         const int nkj  = nk*nj;
@@ -500,12 +500,12 @@ void BValFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb)
       // only prolongate when neighbor exists and is at coarser level
       if ((nghbr.d_view(m,n).gid >= 0) && (nghbr.d_view(m,n).lev < mblev.d_view(m))) {
         // use prolongation indices of different field components for interior fine cells
-        int il = rbuf[n].pindcs[2].bis;
-        int iu = rbuf[n].pindcs[2].bie;
-        int jl = rbuf[n].pindcs[0].bjs;
-        int ju = rbuf[n].pindcs[0].bje;
-        int kl = rbuf[n].pindcs[1].bks;
-        int ku = rbuf[n].pindcs[1].bke;
+        int il = rbuf[n].iprol[2].bis;
+        int iu = rbuf[n].iprol[2].bie;
+        int jl = rbuf[n].iprol[0].bjs;
+        int ju = rbuf[n].iprol[0].bje;
+        int kl = rbuf[n].iprol[1].bks;
+        int ku = rbuf[n].iprol[1].bke;
         const int nj = ju - jl + 1;
         const int nk = ku - kl + 1;
         const int nkj  = nk*nj;

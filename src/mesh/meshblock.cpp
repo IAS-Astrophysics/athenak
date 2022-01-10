@@ -39,18 +39,18 @@ MeshBlock::MeshBlock(MeshBlockPack* ppack, int igids, int nmb) :
     std::int32_t nmbx1 = pm->nmb_rootx1 << (lev - pm->root_level);
     if (lx1 == 0) {
       mb_size.h_view(m).x1min = ms.x1min;
-      mb_bcs(m,0) = pm->mesh_bcs[BoundaryFace::inner_x1];
+      mb_bcs.h_view(m,0) = pm->mesh_bcs[BoundaryFace::inner_x1];
     } else {
       mb_size.h_view(m).x1min = LeftEdgeX(lx1, nmbx1, ms.x1min, ms.x1max);
-      mb_bcs(m,0) = BoundaryFlag::block;
+      mb_bcs.h_view(m,0) = BoundaryFlag::block;
     }
 
     if (lx1 == nmbx1 - 1) {
       mb_size.h_view(m).x1max = ms.x1max;
-      mb_bcs(m,1) = pm->mesh_bcs[BoundaryFace::outer_x1];
+      mb_bcs.h_view(m,1) = pm->mesh_bcs[BoundaryFace::outer_x1];
     } else {
       mb_size.h_view(m).x1max = LeftEdgeX(lx1+1, nmbx1, ms.x1min, ms.x1max);
-      mb_bcs(m,1) = BoundaryFlag::block;
+      mb_bcs.h_view(m,1) = BoundaryFlag::block;
     }
 
     // calculate physical size and set BCs of each MeshBlock in x2, dependng on whether
@@ -58,26 +58,26 @@ MeshBlock::MeshBlock(MeshBlockPack* ppack, int igids, int nmb) :
     if (!(pm->multi_d)) {
       mb_size.h_view(m).x2min = ms.x2min;
       mb_size.h_view(m).x2max = ms.x2max;
-      mb_bcs(m,2) = pm->mesh_bcs[BoundaryFace::inner_x2];
-      mb_bcs(m,3) = pm->mesh_bcs[BoundaryFace::outer_x2];
+      mb_bcs.h_view(m,2) = pm->mesh_bcs[BoundaryFace::inner_x2];
+      mb_bcs.h_view(m,3) = pm->mesh_bcs[BoundaryFace::outer_x2];
     } else {
 
       std::int32_t &lx2 = pm->lloclist[igids+m].lx2;
       std::int32_t nmbx2 = pm->nmb_rootx2 << (lev - pm->root_level);
       if (lx2 == 0) {
         mb_size.h_view(m).x2min = ms.x2min;
-        mb_bcs(m,2) = pm->mesh_bcs[BoundaryFace::inner_x2];
+        mb_bcs.h_view(m,2) = pm->mesh_bcs[BoundaryFace::inner_x2];
       } else {
         mb_size.h_view(m).x2min = LeftEdgeX(lx2, nmbx2, ms.x2min, ms.x2max);
-        mb_bcs(m,2) = BoundaryFlag::block;
+        mb_bcs.h_view(m,2) = BoundaryFlag::block;
       }
 
       if (lx2 == (nmbx2) - 1) {
         mb_size.h_view(m).x2max = ms.x2max;
-        mb_bcs(m,3) = pm->mesh_bcs[BoundaryFace::outer_x2];
+        mb_bcs.h_view(m,3) = pm->mesh_bcs[BoundaryFace::outer_x2];
       } else {
         mb_size.h_view(m).x2max = LeftEdgeX(lx2+1, nmbx2, ms.x2min, ms.x2max);
-        mb_bcs(m,3) = BoundaryFlag::block;
+        mb_bcs.h_view(m,3) = BoundaryFlag::block;
       }
 
     }
@@ -87,24 +87,24 @@ MeshBlock::MeshBlock(MeshBlockPack* ppack, int igids, int nmb) :
     if (!(pm->three_d)) {
       mb_size.h_view(m).x3min = ms.x3min;
       mb_size.h_view(m).x3max = ms.x3max;
-      mb_bcs(m,4) = pm->mesh_bcs[BoundaryFace::inner_x3];
-      mb_bcs(m,5) = pm->mesh_bcs[BoundaryFace::outer_x3];
+      mb_bcs.h_view(m,4) = pm->mesh_bcs[BoundaryFace::inner_x3];
+      mb_bcs.h_view(m,5) = pm->mesh_bcs[BoundaryFace::outer_x3];
     } else {
       std::int32_t &lx3 = pm->lloclist[igids+m].lx3;
       std::int32_t nmbx3 = pm->nmb_rootx3 << (lev - pm->root_level);
       if (lx3 == 0) {
         mb_size.h_view(m).x3min = ms.x3min;
-        mb_bcs(m,4) = pm->mesh_bcs[BoundaryFace::inner_x3];
+        mb_bcs.h_view(m,4) = pm->mesh_bcs[BoundaryFace::inner_x3];
       } else {
         mb_size.h_view(m).x3min = LeftEdgeX(lx3, nmbx3, ms.x3min, ms.x3max);
-        mb_bcs(m,4) = BoundaryFlag::block;
+        mb_bcs.h_view(m,4) = BoundaryFlag::block;
       }
       if (lx3 == (nmbx3) - 1) {
         mb_size.h_view(m).x3max = ms.x3max;
-        mb_bcs(m,5) = pm->mesh_bcs[BoundaryFace::outer_x3];
+        mb_bcs.h_view(m,5) = pm->mesh_bcs[BoundaryFace::outer_x3];
       } else {
         mb_size.h_view(m).x3max = LeftEdgeX(lx3+1, nmbx3, ms.x3min, ms.x3max);
-        mb_bcs(m,5) = BoundaryFlag::block;
+        mb_bcs.h_view(m,5) = BoundaryFlag::block;
       }
     }
 
@@ -121,10 +121,12 @@ MeshBlock::MeshBlock(MeshBlockPack* ppack, int igids, int nmb) :
   mb_gid.template modify<HostMemSpace>();
   mb_lev.template modify<HostMemSpace>();
   mb_size.template modify<HostMemSpace>();
+  mb_bcs.template modify<HostMemSpace>();
 
   mb_gid.template sync<DevExeSpace>();
   mb_lev.template sync<DevExeSpace>();
   mb_size.template sync<DevExeSpace>();
+  mb_bcs.template sync<DevExeSpace>();
 }
 
 //----------------------------------------------------------------------------------------
@@ -154,10 +156,10 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
   // Initialize host view elements of DualViews
   for (int n=0; n<nnghbr; ++n) {
     for (int m=0; m<nmb; ++m) {
-      nghbr.h_view(m,n).gid = -1;
-      nghbr.h_view(m,n).lev = -1;
-      nghbr.h_view(m,n).rank = -1;
-      nghbr.h_view(m,n).dest = -1;
+      nghbr.h_view(m,n).gid   = -1;
+      nghbr.h_view(m,n).lev   = -1;
+      nghbr.h_view(m,n).rank  = -1;
+      nghbr.h_view(m,n).dest  = -1;
     }
   }
 
@@ -203,7 +205,7 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
           if (nt->lloc_.level == lloc.level) { // neighbor at same level -- no subblocks
             inghbr = NeighborIndx(n,0,0,0,0);
             idest = NeighborIndx(-n,0,0,0,0);
-          } else {  // neighbor at coarser level, set destn to appropriate subblock
+          } else { // neighbor at coarser level, set index/destn to appropriate subblock
             inghbr = NeighborIndx(n,0,0,myfx2,myfx3);
             idest = NeighborIndx(-n,0,0,myfx2,myfx3);
           }
@@ -237,7 +239,7 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
             if (nt->lloc_.level == lloc.level) { // neighbor at same level -- no subblocks
               inghbr = NeighborIndx(0,m,0,0,0);
               idest = NeighborIndx(0,-m,0,0,0);
-            } else {  // neighbor at coarser level, set destn to appropriate subblock
+            } else { // neighbor at coarser level, set index/destn to appropriate subblock
               inghbr = NeighborIndx(0,m,0,myfx1,myfx3);
               idest = NeighborIndx(0,-m,0,myfx1,myfx3);
             }
@@ -270,7 +272,7 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
               if (nt->lloc_.level == lloc.level) { // same level -- no subblocks
                 inghbr = NeighborIndx(n,m,0,0,0);
                 idest = NeighborIndx(-n,-m,0,0,0);
-              } else {  // neighbor at coarser level, set destn to appropriate subblock
+              } else { // neighbor at coarser level, set indx/dest to appropriate subblock
                 inghbr = NeighborIndx(n,m,0,myfx3,0);
                 idest = NeighborIndx(-n,-m,0,myfx3,0);
               }
@@ -309,7 +311,7 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
             if (nt->lloc_.level == lloc.level) { // neighbor at same level
               inghbr = NeighborIndx(0,0,l,0,0);
               idest = NeighborIndx(0,0,-l,0,0);
-            } else {  // neighbor at coarser level, set destn to appropriate subblock
+            } else { // neighbor at coarser level, set index/destn to appropriate subblock
               inghbr = NeighborIndx(0,0,l,myfx1,myfx2);
               idest = NeighborIndx(0,0,-l,myfx1,myfx2);
             }
@@ -342,7 +344,7 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
               if (nt->lloc_.level == lloc.level) { // neighbor at same level
                 inghbr = NeighborIndx(n,0,l,0,0);
                 idest = NeighborIndx(-n,0,-l,0,0);
-              } else {  // neighbor at coarser level, set destn to appropriate subblock
+              } else { // neighbor at coarser level, set indx/dest to appropriate subblock
                 inghbr = NeighborIndx(n,0,l,myfx2,0);
                 idest = NeighborIndx(-n,0,-l,myfx2,0);
               }
@@ -379,7 +381,7 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
               if (nt->lloc_.level == lloc.level) { // neighbor at same level
                 inghbr = NeighborIndx(0,m,l,0,0);
                 idest = NeighborIndx(0,-m,-l,0,0);
-              } else {  // neighbor at coarser level, set destn to appropriate subblock
+              } else { // neighbor at coarser level, set indx/dest to appropriate subblock
                 inghbr = NeighborIndx(0,m,l,myfx1,0);
                 idest = NeighborIndx(0,-m,-l,myfx1,0);
               }

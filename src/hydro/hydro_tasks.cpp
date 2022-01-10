@@ -16,7 +16,6 @@
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
 #include "bvals/bvals.hpp"
-#include "utils/create_mpitag.hpp"
 #include "hydro/hydro.hpp"
 
 namespace hydro {
@@ -64,9 +63,11 @@ void Hydro::AssembleHydroTasks(TaskList &start, TaskList &run, TaskList &end)
     id.flux = run.AddTask(&Hydro::CalcFluxes<Hydro_RSolver::hlle_gr>,this,id.copyu);
   }
   // now the rest of the Hydro run tasks
-  id.expl    = run.AddTask(&Hydro::ExpRKUpdate, this, id.flux);
-  id.rstrict = run.AddTask(&Hydro::RestrictU, this, id.expl);
-  id.sendu = run.AddTask(&Hydro::SendU, this, id.rstrict);
+  id.sendf = run.AddTask(&Hydro::SendFlux, this, id.flux);
+  id.recvf = run.AddTask(&Hydro::RecvFlux, this, id.sendf);
+  id.expl  = run.AddTask(&Hydro::ExpRKUpdate, this, id.recvf);
+  id.restu = run.AddTask(&Hydro::RestrictU, this, id.expl);
+  id.sendu = run.AddTask(&Hydro::SendU, this, id.restu);
   id.recvu = run.AddTask(&Hydro::RecvU, this, id.sendu);
   id.bcs   = run.AddTask(&Hydro::ApplyPhysicalBCs, this, id.recvu);
   id.c2p   = run.AddTask(&Hydro::ConToPrim, this, id.bcs);
@@ -85,46 +86,13 @@ void Hydro::AssembleHydroTasks(TaskList &start, TaskList &run, TaskList &end)
 
 TaskStatus Hydro::InitRecv(Driver *pdrive, int stage)
 {
-  int nmb = pmy_pack->nmb_thispack;
-  int nnghbr = pmy_pack->pmb->nnghbr;
-  auto nghbr = pmy_pack->pmb->nghbr;
-  auto &mblev = pmy_pack->pmb->mb_lev;
-  int nvar = nhydro + nscalars;  // TODO: potential bug if more variables added
+  TaskStatus tstat = pbval_u->InitRecv(nhydro+nscalars);
+  if (tstat != TaskStatus::complete) return tstat;
 
-  // Initialize communications for cell-centered conserved variables
-  auto &rbufu = pbval_u->recv_buf;
-  for (int m=0; m<nmb; ++m) {
-    for (int n=0; n<nnghbr; ++n) {
-      if (nghbr.h_view(m,n).gid >= 0) {
-#if MPI_PARALLEL_ENABLED
-        // post non-blocking receive if neighboring MeshBlock on a different rank 
-        if (nghbr.h_view(m,n).rank != global_variable::my_rank) {
-          // create tag using local ID and buffer index of *receiving* MeshBlock
-          int tag = CreateMPITag(m, n, VariablesID::FluidCons_ID);
-          auto recv_data = Kokkos::subview(rbufu[n].data, m, Kokkos::ALL, Kokkos::ALL);
-          void* recv_ptr = recv_data.data();
-          int data_size;
-          // if neighbor is at coarser level, use cindices size
-          if (nghbr.h_view(m,n).lev < mblev.h_view(m)) {
-            data_size = (rbufu[n].cindcs.ndat)*nvar;
-          // if neighbor is at same level, use sindices size
-          } else if (nghbr.h_view(m,n).lev == mblev.h_view(m)) {
-            data_size = (rbufu[n].sindcs.ndat)*nvar;
-          // if neighbor is at finer level, use findices size
-          } else {
-            data_size = (rbufu[n].findcs.ndat)*nvar;
-          }
-          int ierr = MPI_Irecv(recv_ptr, data_size, MPI_ATHENA_REAL,
-            nghbr.h_view(m,n).rank, tag, MPI_COMM_WORLD, &(rbufu[n].comm_req[m]));
-        }
-#endif
-        // initialize boundary receive status flag
-        rbufu[n].bcomm_stat(m) = BoundaryCommStatus::waiting;
-      }
-    }
+  if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
+    tstat = pbval_u->InitFluxRecv(nhydro+nscalars);
   }
-
-  return TaskStatus::complete;
+  return tstat;
 }
 
 //----------------------------------------------------------------------------------------
@@ -133,23 +101,13 @@ TaskStatus Hydro::InitRecv(Driver *pdrive, int stage)
 
 TaskStatus Hydro::ClearRecv(Driver *pdrive, int stage)
 {
-#if MPI_PARALLEL_ENABLED
-  int nmb = pmy_pack->nmb_thispack;
-  int nnghbr = pmy_pack->pmb->nnghbr;
-  auto nghbr = pmy_pack->pmb->nghbr;
+  TaskStatus tstat = pbval_u->ClearRecv();
+  if (tstat != TaskStatus::complete) return tstat;
 
-  // wait for all non-blocking receives for U to finish before continuing 
-  for (int m=0; m<nmb; ++m) {
-    for (int n=0; n<nnghbr; ++n) {
-      if (nghbr.h_view(m,n).gid >= 0) {
-        if (nghbr.h_view(m,n).rank != global_variable::my_rank) {
-          MPI_Wait(&(pbval_u->recv_buf[n].comm_req[m]), MPI_STATUS_IGNORE);
-        }
-      }
-    }
+  if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
+    tstat = pbval_u->ClearFluxRecv();
   }
-#endif
-  return TaskStatus::complete;
+  return tstat;
 }
 
 //----------------------------------------------------------------------------------------
@@ -158,23 +116,13 @@ TaskStatus Hydro::ClearRecv(Driver *pdrive, int stage)
 
 TaskStatus Hydro::ClearSend(Driver *pdrive, int stage)
 {
-#if MPI_PARALLEL_ENABLED
-  int nmb = pmy_pack->nmb_thispack;
-  int nnghbr = pmy_pack->pmb->nnghbr;
-  auto nghbr = pmy_pack->pmb->nghbr;
+  TaskStatus tstat = pbval_u->ClearSend();
+  if (tstat != TaskStatus::complete) return tstat;
 
-  // wait for all non-blocking sends for U to finish before continuing 
-  for (int m=0; m<nmb; ++m) {
-    for (int n=0; n<nnghbr; ++n) {
-      if (nghbr.h_view(m,n).gid >= 0) {
-        if (nghbr.h_view(m,n).rank != global_variable::my_rank) {
-          MPI_Wait(&(pbval_u->send_buf[n].comm_req[m]), MPI_STATUS_IGNORE);
-        }
-      }
-    }
+  if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
+    tstat = pbval_u->ClearFluxSend();
   }
-#endif
-  return TaskStatus::complete;
+  return tstat;
 }
 
 //----------------------------------------------------------------------------------------
@@ -195,7 +143,7 @@ TaskStatus Hydro::CopyCons(Driver *pdrive, int stage)
 
 TaskStatus Hydro::SendU(Driver *pdrive, int stage) 
 {
-  TaskStatus tstat = pbval_u->PackAndSendCC(u0, coarse_u0, VariablesID::FluidCons_ID);
+  TaskStatus tstat = pbval_u->PackAndSendCC(u0, coarse_u0);
   return tstat;
 }
 
@@ -210,6 +158,32 @@ TaskStatus Hydro::RecvU(Driver *pdrive, int stage)
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn  void Hydro::SendFlux
+//  \brief 
+
+TaskStatus Hydro::SendFlux(Driver *pdrive, int stage)
+{
+  // Only execute this function with SMR/SMR
+  if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
+
+  TaskStatus tstat = pbval_u->PackAndSendFluxCC(uflx);
+  return tstat;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void Hydro::RecvFlux
+//  \brief 
+
+TaskStatus Hydro::RecvFlux(Driver *pdrive, int stage)
+{
+  // Only execute this function with SMR/SMR
+  if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
+
+  TaskStatus tstat = pbval_u->RecvAndUnpackFluxCC(uflx);
+  return tstat;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn  void Hydro::RestrictU
 //  \brief 
 
@@ -219,6 +193,19 @@ TaskStatus Hydro::RestrictU(Driver *pdrive, int stage)
   if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
 
   pmy_pack->pmesh->RestrictCC(u0, coarse_u0);
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void Hydro::ApplyPhysicalBCs
+//  \brief 
+
+TaskStatus Hydro::ApplyPhysicalBCs(Driver *pdrive, int stage)
+{
+  // only apply BCs if domain is not strictly periodic
+  if (!(pmy_pack->pmesh->strictly_periodic)) {
+    pbval_u->HydroBCs((pmy_pack), (pbval_u->u_in), u0);
+  }
   return TaskStatus::complete;
 }
 

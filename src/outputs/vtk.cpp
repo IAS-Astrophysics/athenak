@@ -152,7 +152,9 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
 
 #if MPI_PARALLEL_ENABLED
   //----- WRITE IN PARALLEL WITH MPI: -----
-  // For MPI runs, create derived data types for outdata and Cartesian grid of MBs
+  // For MPI runs, create derived data types for outdata and Cartesian grid of MBs. 
+  // MPI then takes care of writing to file in proper order
+
   // open file and write file header
   MPI_File fh;
   if (MPI_File_open(MPI_COMM_WORLD, fname.c_str(), MPI_MODE_CREATE | MPI_MODE_WRONLY,
@@ -179,6 +181,14 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   MPI_Type_create_subarray(3,bsize,bsize,bstrt,MPI_ORDER_C,MPI_FLOAT,&block);
   MPI_Type_commit(&block);
 
+  // create new datatype representing grid of MeshBlocks
+  MPI_Datatype grid;
+  int gridsize[3] = {nout3, nout2, nout1};   // total number of cells over all MBs
+  int mbstrt[3] = {0, 0, 0};                 // i/j/k starting index of blocks
+  int mbsize[3] = {nx3, nx2, nx1};           // number of cells in blocks
+  MPI_Type_create_subarray(3,gridsize,mbsize,mbstrt,MPI_ORDER_C,MPI_FLOAT,&grid);
+  MPI_Type_commit(&grid);
+
   // Loop over variables
   int nout_vars = outvars.size();
   int nout_mbs = (outmbs.size());
@@ -194,50 +204,62 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
     }
     header_size += data_msg.str().size();
 
-    // Loop over MeshBlocks, set location in 3D array of MBs
-    for (int m=0; m<nout_mbs; ++m) {
-      LogicalLocation lloc = pm->lloclist[outmbs[m].mb_gid];
-      // calculate indices of this MeshBlock in 3D grid of MBs
-      int imb = (out_params.slice1 || (out_params.gid >= 0))? 0 : lloc.lx1;
-      int jmb = (out_params.slice2 || (out_params.gid >= 0))? 0 : lloc.lx2;
-      int kmb = (out_params.slice3 || (out_params.gid >= 0))? 0 : lloc.lx3;
+    // Loop over max number of MeshBlocks to be written on any rank
+    // This guarantees collective MPI functions are called by all ranks
+    MPI_Datatype mygrid;
+    for (int m=0; m<noutmbs_max; ++m) {
+      // if there is a MB to be written, set location in 3D grid of MBs in output file.
+      if (m < nout_mbs) {
+        LogicalLocation lloc = pm->lloclist[outmbs[m].mb_gid];
+        // calculate indices of this MeshBlock in 3D grid of MBs
+        int imb = (out_params.slice1 || (out_params.gid >= 0))? 0 : lloc.lx1;
+        int jmb = (out_params.slice2 || (out_params.gid >= 0))? 0 : lloc.lx2;
+        int kmb = (out_params.slice3 || (out_params.gid >= 0))? 0 : lloc.lx3;
 
-      // convert data to float and byte swap into big endian order
-      for (int k=0; k<nx3; ++k) {
-        for (int j=0; j<nx2; ++j) {
-          for (int i=0; i<nx1; ++i) {
-            int indx = i + j*indcs.nx1 + k*indcs.nx1*indcs.nx2;
-            data[indx] = static_cast<float>(outdata(n,m,k,j,i));
+        // convert data to float and byte swap into big endian order
+        for (int k=0; k<nx3; ++k) {
+          for (int j=0; j<nx2; ++j) {
+            for (int i=0; i<nx1; ++i) {
+              int indx = i + j*indcs.nx1 + k*indcs.nx1*indcs.nx2;
+              data[indx] = static_cast<float>(outdata(n,m,k,j,i));
+            }
           }
         }
-      }
-      if (!big_end) {
-        for (int i=0; i<(nx1*nx2*nx3); ++i) {
-          swap_function::Swap4Bytes(&data[i]);
+        if (!big_end) {
+          for (int i=0; i<(nx1*nx2*nx3); ++i) {
+            swap_function::Swap4Bytes(&data[i]);
+          }
         }
+        // create new datatype representing this block in grid of MBs, and set file view
+        int mystrt[3] = {kmb*nx3, jmb*nx2, imb*nx1};   // starting indices of this block
+        MPI_Type_create_subarray(3,gridsize,mbsize,mystrt,MPI_ORDER_C,MPI_FLOAT,&mygrid);
+        MPI_Type_commit(&mygrid);
+        MPI_File_set_view(fh, header_size, MPI_FLOAT, mygrid, "native", MPI_INFO_NULL);
+      } else {
+        // if no data to be written, set file view to default
+        // file view function is a collective operation, so must be called by all ranks
+        MPI_File_set_view(fh, header_size, MPI_FLOAT, grid, "native", MPI_INFO_NULL);
       }
 
-      // create new datatype representing grid of MeshBlocks
-      MPI_Datatype grid;
-      int gridsize[3] = {nout3, nout2, nout1};      // total number of cells over all MBs
-      int mbstrt[3] = {kmb*nx3, jmb*nx2, imb*nx1};  // i/j/k starting index of this block
-      int mbsize[3] = {nx3, nx2, nx1};              // number of cells in this block
-      MPI_Type_create_subarray(3,gridsize,mbsize,mbstrt,MPI_ORDER_C,MPI_FLOAT,&grid);
-      MPI_Type_commit(&grid);
-
-      // output data this MeshBlock. MPI takes care of writing to file in proper order
-      MPI_File_set_view(fh, header_size, MPI_FLOAT, grid, "native", MPI_INFO_NULL);
-      MPI_File_write_all(fh, &(data[0]), 1, block, MPI_STATUS_IGNORE);
-      MPI_Type_free(&grid);
+      // every rank has a MB to write, so write collectively
+      if (m < noutmbs_min) {
+        MPI_File_write_all(fh, &(data[0]), 1, block, MPI_STATUS_IGNORE);
+      // some ranks are finished writing, so use non-collective write
+      } else if (m < nout_mbs) {
+        MPI_File_write(fh, &(data[0]), 1, block, MPI_STATUS_IGNORE);
+      }
     }  // end loop over MeshBlocks
+    MPI_Type_free(&mygrid);
 
     // reset view to stream of bytes in preparation for adding next data header
     header_size += nout1*nout2*nout3*sizeof(float);
     MPI_File_set_view(fh, header_size, MPI_BYTE, MPI_BYTE, "native", MPI_INFO_NULL);
-  }    // end loop over variables
+
+  }  // end loop over variables
 
   // close the output file and clean up
   MPI_Type_free(&block);
+  MPI_Type_free(&grid);
   MPI_File_close(&fh);
   delete[] data;
 

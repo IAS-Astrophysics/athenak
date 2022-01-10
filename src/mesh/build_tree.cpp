@@ -273,7 +273,7 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin)
   pmb_pack = new MeshBlockPack(this, gids, gide);
   pmb_pack->AddMeshBlocksAndCoordinates(pin, mb_indcs);
   pmb_pack->pmb->SetNeighbors(ptree, ranklist);
-  
+
   ResetLoadBalanceCounters();
   if (global_variable::my_rank == 0) {PrintMeshDiagnostics();}
 

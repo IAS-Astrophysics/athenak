@@ -25,14 +25,6 @@
 #include "hydro/hydro.hpp"
 #include "coordinates/cell_locations.hpp"
 
-// postshock flow variables are shared with IIB function
-namespace {
-Real shock_d, shock_m, shock_e;
-} // namespace
-
-// fixes BCs on L-x1 (left edge) of grid to postshock flow.
-void ShockCloudInnerX1(int m, CoordData &coord, EOS_Data &eos, DvceArray5D<Real> &u);
-
 //----------------------------------------------------------------------------------------
 //! \fn ProblemGenerator::_()
 //! \brief Problem Generator for the shock-cloud interaction problem
@@ -62,9 +54,11 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
   Real pl = pr*jump2;
   Real ul = ur + jump3*mach*std::sqrt(gm*pr/dr);
 
-  shock_d = dl;
-  shock_m = dl*ul;
-  shock_e = pl/gm1 + 0.5*dl*(ul*ul);
+  // set inflow state in BoundaryValues
+  auto &u_in = pmbp->phydro->pbval_u->u_in;
+  u_in(IDN,BoundaryFace::inner_x1) = dl;
+  u_in(IM1,BoundaryFace::inner_x1) = dl*ul;
+  u_in(IEN,BoundaryFace::inner_x1) = pl/gm1 + 0.5*dl*(ul*ul);
 
   // capture variables for the kernel
   auto &indcs = pmbp->pmesh->mb_indcs;
@@ -125,38 +119,5 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
     );
   }  // End initialization of Hydro variables
 
-  // Enroll boundary function
-  pmbp->pmesh->EnrollBoundaryFunction(BoundaryFace::inner_x1, ShockCloudInnerX1);
-
-  return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void ShockCloudInnerX1()
-//  \brief Sets boundary condition on left X boundary (iib)
-// Note quantities at this boundary are held fixed at the downstream state
-
-void ShockCloudInnerX1(int m, CoordData &coord, EOS_Data &eos, DvceArray5D<Real> &u)
-{
-  auto &indcs = coord.indcs;
-  int &ng = indcs.ng;
-  int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
-  int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
-  int &is = indcs.is;
-
-  Real &shock_d_ = shock_d;
-  Real &shock_m_ = shock_m;
-  Real &shock_e_ = shock_e;
-
-  par_for("outflow_ix1", DevExeSpace(),0,(n3-1),0,(n2-1),0,(ng-1),
-    KOKKOS_LAMBDA(int k, int j, int i)
-    {
-      u(m,IDN,k,j,is-i-1) = shock_d_;
-      u(m,IM1,k,j,is-i-1) = shock_m_;
-      u(m,IM2,k,j,is-i-1) = 0.0;
-      u(m,IM3,k,j,is-i-1) = 0.0;
-      u(m,IEN,k,j,is-i-1) = shock_e_;
-    }
-  );
   return;
 }

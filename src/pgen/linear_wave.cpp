@@ -21,6 +21,7 @@
 
 // Athena++ headers
 #include "athena.hpp"
+#include "globals.hpp"
 #include "parameter_input.hpp"
 #include "coordinates/cell_locations.hpp"
 #include "mesh/mesh.hpp"
@@ -200,10 +201,6 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
     Real gm1 = eos.gamma - 1.0;
     Real p0 = 1.0/eos.gamma;
 
-    // compute solution in u1 register. For initial conditions, set u1 -> u0.
-    auto u1 = pmbp->phydro->u1; 
-    if (set_initial_conditions) {u1 = pmbp->phydro->u0;}
-
     // Compute eigenvectors in hydrodynamics
     Real rem[5][5];
     Real ev[5];
@@ -216,6 +213,9 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
       Real tlim = pin->GetReal("time", "tlim");
       pin->SetReal("time", "tlim", tlim*(std::abs(lambda/ev[wave_flag])));
     }
+
+    // compute solution in u1 register. For initial conditions, set u1 -> u0.
+    auto &u1 = (set_initial_conditions)? pmbp->phydro->u0 : pmbp->phydro->u1; 
 
     par_for("pgen_linwave1", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i)
@@ -264,14 +264,6 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
     auto &u0 = pmbp->pmhd->u0;
     auto &b0 = pmbp->pmhd->b0;
 
-    // compute solution in u1/b1 registers. For initial conditions, set u1/b1 -> u0/b0.
-    auto u1 = pmbp->pmhd->u1; 
-    auto b1 = pmbp->pmhd->b1;
-    if (set_initial_conditions) {
-      u1 = pmbp->pmhd->u0;
-      b1 = pmbp->pmhd->b0;
-    }
-
     // Compute eigenvectors in mhd
     Real rem[7][7];
     Real ev[7];
@@ -287,6 +279,10 @@ void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
       Real tlim = pin->GetReal("time", "tlim");
       pin->SetReal("time", "tlim", tlim*(std::abs(lambda/ev[wave_flag])));
     }
+
+    // compute solution in u1/b1 registers. For initial conditions, set u1/b1 -> u0/b0.
+    auto &u1 = (set_initial_conditions)? pmbp->pmhd->u0 : pmbp->pmhd->u1; 
+    auto &b1 = (set_initial_conditions)? pmbp->pmhd->b0 : pmbp->pmhd->b1;
 
     par_for("pgen_linwave2", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i)
@@ -845,6 +841,10 @@ void ProblemGenerator::LinearWaveErrors_(MeshBlockPack *pmbp, ParameterInput *pi
     }
   }
 
+#if MPI_PARALLEL_ENABLED
+  MPI_Allreduce(MPI_IN_PLACE, &l1_err, nvars, MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
+#endif
+
   // normalize errors by number of cells
   Real vol=  (pmbp->pmesh->mesh_size.x1max - pmbp->pmesh->mesh_size.x1min)
             *(pmbp->pmesh->mesh_size.x2max - pmbp->pmesh->mesh_size.x2min)
@@ -858,47 +858,47 @@ void ProblemGenerator::LinearWaveErrors_(MeshBlockPack *pmbp, ParameterInput *pi
   }
   rms_err = std::sqrt(rms_err);
 
-  // open output file and write out errors
-  std::string fname;
-  fname.assign(pin->GetString("job","basename"));
-  fname.append("-errs.dat");
-  FILE *pfile;
+  // root process opens output file and writes out errors
+  if (global_variable::my_rank == 0) {
+    std::string fname;
+    fname.assign(pin->GetString("job","basename"));
+    fname.append("-errs.dat");
+    FILE *pfile;
 
-  // The file exists -- reopen the file in append mode
-  if ((pfile = std::fopen(fname.c_str(), "r")) != nullptr) {
-    if ((pfile = std::freopen(fname.c_str(), "a", pfile)) == nullptr) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "Error output file could not be opened" <<std::endl;
-      std::exit(EXIT_FAILURE);
+    // The file exists -- reopen the file in append mode
+    if ((pfile = std::fopen(fname.c_str(), "r")) != nullptr) {
+      if ((pfile = std::freopen(fname.c_str(), "a", pfile)) == nullptr) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Error output file could not be opened" <<std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+
+    // The file does not exist -- open the file in write mode and add headers
+    } else {
+      if ((pfile = std::fopen(fname.c_str(), "w")) == nullptr) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Error output file could not be opened" <<std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      std::fprintf(pfile, "# Nx1  Nx2  Nx3   Ncycle  RMS-L1-err       ");
+      std::fprintf(pfile,"d_L1         M1_L1         M2_L1         M3_L1         E_L1");
+      if (pmbp->pmhd != nullptr) {
+        std::fprintf(pfile,"          B1_L1         B2_L1         B3_L1");
+      }
+      std::fprintf(pfile, "\n");
     }
 
-  // The file does not exist -- open the file in write mode and add headers
-  } else {
-    if ((pfile = std::fopen(fname.c_str(), "w")) == nullptr) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "Error output file could not be opened" <<std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    std::fprintf(pfile, "# Nx1  Nx2  Nx3   Ncycle  RMS-L1-err       ");
-    if (pmbp->phydro != nullptr) {
-      std::fprintf(pfile, "d_L1         M1_L1         M2_L1         M3_L1         E_L1 ");
-    }
-    if (pmbp->pmhd != nullptr) {
-      std::fprintf(pfile, "d_L1         M1_L1         M2_L1         M3_L1         E_L1          B1_L1         B2_L1         B3_L1");
+    // write errors
+    std::fprintf(pfile, "%04d", pmbp->pmesh->mesh_indcs.nx1);
+    std::fprintf(pfile, "  %04d", pmbp->pmesh->mesh_indcs.nx2);
+    std::fprintf(pfile, "  %04d", pmbp->pmesh->mesh_indcs.nx3);
+    std::fprintf(pfile, "  %05d  %e", pmbp->pmesh->ncycle, rms_err);
+    for (int i=0; i<nvars; ++i) {
+      std::fprintf(pfile, "  %e", l1_err[i]);
     }
     std::fprintf(pfile, "\n");
+    std::fclose(pfile);
   }
-
-  // write errors
-  std::fprintf(pfile, "%04d", pmbp->pmesh->mesh_indcs.nx1);
-  std::fprintf(pfile, "  %04d", pmbp->pmesh->mesh_indcs.nx2);
-  std::fprintf(pfile, "  %04d", pmbp->pmesh->mesh_indcs.nx3);
-  std::fprintf(pfile, "  %05d  %e", pmbp->pmesh->ncycle, rms_err);
-  for (int i=0; i<nvars; ++i) {
-    std::fprintf(pfile, "  %e", l1_err[i]);
-  }
-  std::fprintf(pfile, "\n");
-  std::fclose(pfile);
 
   return;
 }

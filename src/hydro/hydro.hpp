@@ -39,8 +39,10 @@ struct HydroTaskIDs
   TaskID irecv;
   TaskID copyu;
   TaskID flux;
+  TaskID sendf;
+  TaskID recvf;
   TaskID expl;
-  TaskID rstrict;
+  TaskID restu;
   TaskID sendu;
   TaskID recvu;
   TaskID bcs;
@@ -77,7 +79,7 @@ public:
   DvceArray5D<Real> coarse_u0;  // conserved variables on 2x coarser grid (for SMR/AMR)
 
   // Boundary communication buffers and routines for u, and user-defined boundary fn 
-  BValCC *pbval_u;
+  BoundaryValuesCC *pbval_u;
   HydroBoundaryFnPtr HydroBoundaryFunc[6];
 
   // Object(s) for extra physics (viscosity, srcterms)
@@ -100,6 +102,8 @@ public:
   TaskStatus CopyCons(Driver *d, int stage);
   TaskStatus SendU(Driver *d, int stage); 
   TaskStatus RecvU(Driver *d, int stage); 
+  TaskStatus SendFlux(Driver *d, int stage); 
+  TaskStatus RecvFlux(Driver *d, int stage); 
   TaskStatus RestrictU(Driver *d, int stage); 
   TaskStatus ConToPrim(Driver *d, int stage);
   TaskStatus ExpRKUpdate(Driver *d, int stage);

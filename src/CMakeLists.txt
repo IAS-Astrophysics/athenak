@@ -11,11 +11,16 @@ add_executable(
         globals.cpp
         parameter_input.cpp
 
-        bvals/bvals_cc.cpp
-        bvals/bvals_fc.cpp
+        bvals/bvals.cpp
         bvals/buffs_cc.cpp
         bvals/buffs_fc.cpp
+        bvals/bvals_cc.cpp
+        bvals/bvals_fc.cpp
+        bvals/flux_correct_cc.cpp
+        bvals/flux_correct_fc.cpp
         bvals/prolongation.cpp
+        bvals/physics/hydro_bcs.cpp
+        bvals/physics/bfield_bcs.cpp
 
         coordinates/coordinates.cpp
 
@@ -39,10 +44,6 @@ add_executable(
         hydro/hydro_newdt.cpp
         hydro/hydro_tasks.cpp
         hydro/hydro_update.cpp
-        hydro/bvals/apply_physical_bcs.cpp
-        hydro/bvals/outflow_hydro.cpp
-        hydro/bvals/reflect_hydro.cpp
-        hydro/bvals/shear_hydro.cpp
 
 	ion-neutral/ion_neutral.cpp
 
@@ -60,10 +61,6 @@ add_executable(
         mhd/mhd_newdt.cpp
         mhd/mhd_tasks.cpp
         mhd/mhd_update.cpp
-        mhd/bvals/apply_physical_bcs.cpp
-        mhd/bvals/outflow_mhd.cpp
-        mhd/bvals/reflect_mhd.cpp
-        mhd/bvals/shear_mhd.cpp
 
         outputs/io_wrapper.cpp
         outputs/outputs.cpp

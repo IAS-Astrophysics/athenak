@@ -36,6 +36,7 @@ Mesh::Mesh(ParameterInput *pin)
     three_d(false),
     multi_d(false),
     shearing_periodic(false),
+    strictly_periodic(true),
     lb_flag_(false), lb_automatic_(false),
     lb_cyc_interval_(10),cyc_since_lb_(0)
 {
@@ -73,6 +74,9 @@ Mesh::Mesh(ParameterInput *pin)
         << "Both inner and outer x1 bcs must be periodic" << std::endl;
     std::exit(EXIT_FAILURE);
   }
+  if (mesh_bcs[BoundaryFace::inner_x1] != BoundaryFlag::periodic) {
+    strictly_periodic = false;
+  }
   // Check if x1 boundaries are shearing periodic. When flag set to true, shearing BCs
   // will be called in ApplyPhysicalBCs() in Hydro and/or MHD.
   if (mesh_bcs[BoundaryFace::inner_x1] == BoundaryFlag::periodic) {
@@ -90,6 +94,9 @@ Mesh::Mesh(ParameterInput *pin)
           << std::endl << "Both inner and outer x2 bcs must be periodic" << std::endl;
       std::exit(EXIT_FAILURE);
     }
+    if (mesh_bcs[BoundaryFace::inner_x2] != BoundaryFlag::periodic) {
+      strictly_periodic = false;
+    }
   } else {
     // ix2/ox2 BC flags set to undef for 1D problems
     mesh_bcs[BoundaryFace::inner_x2] = BoundaryFlag::undef;
@@ -106,6 +113,9 @@ Mesh::Mesh(ParameterInput *pin)
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "Both inner and outer x3 bcs must be periodic" << std::endl;
       std::exit(EXIT_FAILURE);
+    }
+    if (mesh_bcs[BoundaryFace::inner_x3] != BoundaryFlag::periodic) {
+      strictly_periodic = false;
     }
   } else {
     // ix3/ox3 BC flags set to undef for 1D or 2D problems
@@ -341,26 +351,22 @@ void Mesh::PrintMeshDiagnostics()
       nb_per_rank[ranklist[i]]++;
       cost_per_rank[ranklist[i]] += costlist[i];
     }
+    int mincost = std::numeric_limits<int>::max();
+    int maxcost = 0, totalcost = 0;
     for (int i=0; i<global_variable::nranks; ++i) {
       std::cout << "  Rank = " << i << ": " << nb_per_rank[i] <<" MeshBlocks, cost = "
                 << cost_per_rank[i] << std::endl;
+      mincost = std::min(mincost,cost_per_rank[i]);
+      maxcost = std::max(maxcost,cost_per_rank[i]);
+      totalcost += cost_per_rank[i];
     }
 
-    // output total cost and load balancing info
-    float mincost = std::numeric_limits<float>::max();
-    float maxcost = 0.0, totalcost = 0.0;
-    for (int i=root_level; i<=max_level; i++) {
-      for (int j=0; j<nmb_total; j++) {
-        if (lloclist[j].level == i) {
-          mincost = std::min(mincost,costlist[i]);
-          maxcost = std::max(maxcost,costlist[i]);
-          totalcost += costlist[i];
-        }
-      }
-    }
+    // output normalized costs per rank
     std::cout << "Load Balancing:" << std::endl;
-    std::cout << "  Minimum cost = " << mincost << ", Maximum cost = " << maxcost
-              << ", Average cost = " << totalcost/nmb_total << std::endl;
+    std::cout << "  Maximum normalized cost = "
+      << static_cast<float>(maxcost)/static_cast<float>(mincost) << ", Average = " 
+      << static_cast<float>(totalcost)/static_cast<float>(global_variable::nranks*mincost)
+      << std::endl;
   }
 }
 
@@ -385,10 +391,10 @@ void Mesh::WriteMeshStructure()
     std::exit(EXIT_FAILURE);
   }
 
-  auto &size = this->pmb_pack->pmb->mb_size;
   for (int i=root_level; i<=max_level; i++) {
   for (int j=0; j<nmb_total; j++) {
     if (lloclist[j].level == i) {
+      MeshBlock block(this->pmb_pack, j, 1);
       std::int32_t &lx1 = lloclist[j].lx1;
       std::int32_t &lx2 = lloclist[j].lx2;
       std::int32_t &lx3 = lloclist[j].lx3;
@@ -398,17 +404,24 @@ void Mesh::WriteMeshStructure()
           fp,"#  Logical level %d, location = (%" PRId32 " %" PRId32 " %" PRId32")\n",
           lloclist[j].level, lx1, lx2, lx3);
       if (two_d) { // 2D
-        std::fprintf(fp,"%g %g\n", size.h_view(j).x1min, size.h_view(j).x2min);
-        std::fprintf(fp,"%g %g\n", size.h_view(j).x1max, size.h_view(j).x2min);
-        std::fprintf(fp,"%g %g\n", size.h_view(j).x1max, size.h_view(j).x2max);
-        std::fprintf(fp,"%g %g\n", size.h_view(j).x1min, size.h_view(j).x2max);
-        std::fprintf(fp,"%g %g\n", size.h_view(j).x1min, size.h_view(j).x2min);
+        Real &x1min = block.mb_size.h_view(0).x1min;
+        Real &x1max = block.mb_size.h_view(0).x1max;
+        Real &x2min = block.mb_size.h_view(0).x2min;
+        Real &x2max = block.mb_size.h_view(0).x2max;
+        std::fprintf(fp,"%g %g\n", x1min, x2min);
+        std::fprintf(fp,"%g %g\n", x1max, x2min);
+        std::fprintf(fp,"%g %g\n", x1max, x2max);
+        std::fprintf(fp,"%g %g\n", x1min, x2max);
+        std::fprintf(fp,"%g %g\n", x1min, x2min);
         std::fprintf(fp,"\n\n");
       }
       if (three_d) { // 3D
-        Real &x1min = size.h_view(j).x1min, &x1max = size.h_view(j).x1max;
-        Real &x2min = size.h_view(j).x2min, &x2max = size.h_view(j).x2max;
-        Real &x3min = size.h_view(j).x3min, &x3max = size.h_view(j).x3max;
+        Real &x1min = block.mb_size.h_view(0).x1min;
+        Real &x1max = block.mb_size.h_view(0).x1max;
+        Real &x2min = block.mb_size.h_view(0).x2min;
+        Real &x2max = block.mb_size.h_view(0).x2max;
+        Real &x3min = block.mb_size.h_view(0).x3min;
+        Real &x3max = block.mb_size.h_view(0).x3max;
         std::fprintf(fp,"%g %g %g\n", x1min, x2min, x3min);
         std::fprintf(fp,"%g %g %g\n", x1max, x2min, x3min);
         std::fprintf(fp,"%g %g %g\n", x1max, x2max, x3min);
@@ -448,6 +461,10 @@ BoundaryFlag Mesh::GetBoundaryFlag(const std::string& input_string)
     return BoundaryFlag::reflect;
   } else if (input_string == "outflow") {
     return BoundaryFlag::outflow;
+  } else if (input_string == "inflow") {
+    return BoundaryFlag::inflow;
+  } else if (input_string == "diode") {
+    return BoundaryFlag::diode;
   } else if (input_string == "user") {
     return BoundaryFlag::user;
   } else if (input_string == "periodic") {
@@ -475,8 +492,12 @@ std::string Mesh::GetBoundaryString(BoundaryFlag input_flag)
       return "block";
     case BoundaryFlag::reflect:
       return "reflect";
+    case BoundaryFlag::inflow:
+      return "inflow";
     case BoundaryFlag::outflow:
       return "outflow";
+    case BoundaryFlag::diode:
+      return "diode";
     case BoundaryFlag::user:
       return "user";
     case BoundaryFlag::periodic:

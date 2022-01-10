@@ -16,7 +16,6 @@
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
 #include "bvals/bvals.hpp"
-#include "utils/create_mpitag.hpp"
 #include "mhd/mhd.hpp"
 
 namespace mhd {
@@ -50,12 +49,16 @@ void MHD::AssembleMHDTasks(TaskList &start, TaskList &run, TaskList &end)
   } else if (rsolver_method == MHD_RSolver::hlle_gr) {
     id.flux = run.AddTask(&MHD::CalcFluxes<MHD_RSolver::hlle_gr>, this, id.copyu);
   }
-  id.expl  = run.AddTask(&MHD::ExpRKUpdate, this, id.flux);
+  id.sendf = run.AddTask(&MHD::SendFlux, this, id.flux);
+  id.recvf = run.AddTask(&MHD::RecvFlux, this, id.sendf);
+  id.expl  = run.AddTask(&MHD::ExpRKUpdate, this, id.recvf);
   id.restu = run.AddTask(&MHD::RestrictU, this, id.expl);
   id.sendu = run.AddTask(&MHD::SendU, this, id.restu);
   id.recvu = run.AddTask(&MHD::RecvU, this, id.sendu);
   id.efld  = run.AddTask(&MHD::CornerE, this, id.recvu);
-  id.ct    = run.AddTask(&MHD::CT, this, id.efld);
+  id.sende = run.AddTask(&MHD::SendE, this, id.efld);
+  id.recve = run.AddTask(&MHD::RecvE, this, id.sende);
+  id.ct    = run.AddTask(&MHD::CT, this, id.recve);
   id.restb = run.AddTask(&MHD::RestrictB, this, id.ct);
   id.sendb = run.AddTask(&MHD::SendB, this, id.restb);
   id.recvb = run.AddTask(&MHD::RecvB, this, id.sendb);
@@ -77,48 +80,19 @@ void MHD::AssembleMHDTasks(TaskList &start, TaskList &run, TaskList &end)
 
 TaskStatus MHD::InitRecv(Driver *pdrive, int stage)
 {
-  int &nmb = pmy_pack->pmb->nmb;
-  int &nnghbr = pmy_pack->pmb->nnghbr;
-  auto nghbr = pmy_pack->pmb->nghbr;
+  TaskStatus tstat = pbval_u->InitRecv(nmhd+nscalars);
+  if (tstat != TaskStatus::complete) return tstat;
 
-  // Initialize communications for both cell-centered conserved variables and 
-  // face-centered magnetic fields
-  auto &rbufu = pbval_u->recv_buf;
-  auto &rbufb = pbval_b->recv_buf;
-  for (int m=0; m<nmb; ++m) {
-    for (int n=0; n<nnghbr; ++n) {
-      if (nghbr.h_view(m,n).gid >= 0) {
-#if MPI_PARALLEL_ENABLED
-        // post non-blocking receive if neighboring MeshBlock on a different rank 
-        if (nghbr.h_view(m,n).rank != global_variable::my_rank) {
-          {
-          // Receive requests for U
-          // create tag using local ID and buffer index of *receiving* MeshBlock
-          int tag = CreateMPITag(m, n, VariablesID::FluidCons_ID);
-          auto recv_data = Kokkos::subview(rbufu[n].data, m, Kokkos::ALL, Kokkos::ALL);
-          void* recv_ptr = recv_data.data();
-          int ierr = MPI_Irecv(recv_ptr, recv_data.size(), MPI_ATHENA_REAL,
-            nghbr.h_view(m,n).rank, tag, MPI_COMM_WORLD, &(rbufu[n].comm_req[m]));
-          }
+  tstat = pbval_b->InitRecv(3);
+  if (tstat != TaskStatus::complete) return tstat;
 
-          {
-          // Receive requests for B
-          // create tag using local ID and buffer index of *receiving* MeshBlock
-          int tag = CreateMPITag(m, n, VariablesID::BField_ID);
-          auto recv_data = Kokkos::subview(rbufb[n].data, m, Kokkos::ALL, Kokkos::ALL);
-          void* recv_ptr = recv_data.data();
-          int ierr = MPI_Irecv(recv_ptr, recv_data.size(), MPI_ATHENA_REAL,
-            nghbr.h_view(m,n).rank, tag, MPI_COMM_WORLD, &(rbufb[n].comm_req[m]));
-          }
-        }
-#endif
-        // initialize boundary receive status flag
-        rbufu[n].bcomm_stat(m) = BoundaryCommStatus::waiting;
-        rbufb[n].bcomm_stat(m) = BoundaryCommStatus::waiting;
-      }
-    }
+  if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
+    tstat = pbval_u->InitFluxRecv(nmhd+nscalars);
+    if (tstat != TaskStatus::complete) return tstat;
+
+    tstat = pbval_b->InitFluxRecv(3);
+    if (tstat != TaskStatus::complete) return tstat;
   }
-
   return TaskStatus::complete;
 }
 
@@ -129,23 +103,19 @@ TaskStatus MHD::InitRecv(Driver *pdrive, int stage)
 
 TaskStatus MHD::ClearRecv(Driver *pdrive, int stage)
 {
-#if MPI_PARALLEL_ENABLED
-  int nmb = pmy_pack->nmb_thispack;
-  int nnghbr = pmy_pack->pmb->nnghbr;
-  auto nghbr = pmy_pack->pmb->nghbr;
+  TaskStatus tstat = pbval_u->ClearRecv();
+  if (tstat != TaskStatus::complete) return tstat;
 
-  // wait for all non-blocking receives for U and B to finish before continuing 
-  for (int m=0; m<nmb; ++m) {
-    for (int n=0; n<nnghbr; ++n) {
-      if (nghbr.h_view(m,n).gid >= 0) {
-        if (nghbr.h_view(m,n).rank != global_variable::my_rank) {
-          MPI_Wait(&(pbval_u->recv_buf[n].comm_req[m]), MPI_STATUS_IGNORE);
-          MPI_Wait(&(pbval_b->recv_buf[n].comm_req[m]), MPI_STATUS_IGNORE);
-        }
-      }
-    }
+  tstat = pbval_b->ClearRecv();
+  if (tstat != TaskStatus::complete) return tstat;
+
+  if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
+    tstat = pbval_u->ClearFluxRecv();
+    if (tstat != TaskStatus::complete) return tstat;
+
+    tstat = pbval_b->ClearFluxRecv();
+    if (tstat != TaskStatus::complete) return tstat;
   }
-#endif
   return TaskStatus::complete;
 }
 
@@ -157,23 +127,19 @@ TaskStatus MHD::ClearRecv(Driver *pdrive, int stage)
 
 TaskStatus MHD::ClearSend(Driver *pdrive, int stage)
 {
-#if MPI_PARALLEL_ENABLED
-  int nmb = pmy_pack->nmb_thispack;
-  int nnghbr = pmy_pack->pmb->nnghbr;
-  auto nghbr = pmy_pack->pmb->nghbr;
+  TaskStatus tstat = pbval_u->ClearSend();
+  if (tstat != TaskStatus::complete) return tstat;
 
-  // wait for all non-blocking sends for U and B to finish before continuing 
-  for (int m=0; m<nmb; ++m) {
-    for (int n=0; n<nnghbr; ++n) {
-      if (nghbr.h_view(m,n).gid >= 0) {
-        if (nghbr.h_view(m,n).rank != global_variable::my_rank) {
-          MPI_Wait(&(pbval_u->send_buf[n].comm_req[m]), MPI_STATUS_IGNORE);
-          MPI_Wait(&(pbval_b->send_buf[n].comm_req[m]), MPI_STATUS_IGNORE);
-        }
-      }
-    }
+  tstat = pbval_b->ClearSend();
+  if (tstat != TaskStatus::complete) return tstat;
+
+  if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
+    tstat = pbval_u->ClearFluxSend();
+    if (tstat != TaskStatus::complete) return tstat;
+
+    tstat = pbval_b->ClearFluxSend();
+    if (tstat != TaskStatus::complete) return tstat;
   }
-#endif
   return TaskStatus::complete;
 }
 
@@ -199,7 +165,7 @@ TaskStatus MHD::CopyCons(Driver *pdrive, int stage)
 
 TaskStatus MHD::SendU(Driver *pdrive, int stage) 
 {
-  TaskStatus tstat = pbval_u->PackAndSendCC(u0, coarse_u0, VariablesID::FluidCons_ID);
+  TaskStatus tstat = pbval_u->PackAndSendCC(u0, coarse_u0);
   return tstat;
 }
 
@@ -214,12 +180,38 @@ TaskStatus MHD::RecvU(Driver *pdrive, int stage)
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn  void MHD::SendE
+//  \brief sends face-centered magnetic fields
+
+TaskStatus MHD::SendE(Driver *pdrive, int stage)
+{
+  // Only execute this function with SMR/SMR
+  if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
+
+  TaskStatus tstat = pbval_b->PackAndSendFluxFC(efld);
+  return tstat;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void MHD::RecvE
+//  \brief receives face-centered magnetic fields
+
+TaskStatus MHD::RecvE(Driver *pdrive, int stage)
+{
+  // Only execute this function with SMR/SMR
+  if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
+
+  TaskStatus tstat = pbval_b->RecvAndUnpackFluxFC(efld);
+  return tstat;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn  void MHD::SendB
 //  \brief sends face-centered magnetic fields
 
 TaskStatus MHD::SendB(Driver *pdrive, int stage)
 {
-  TaskStatus tstat = pbval_b->PackAndSendFC(b0, coarse_b0, VariablesID::BField_ID);
+  TaskStatus tstat = pbval_b->PackAndSendFC(b0, coarse_b0);
   return tstat;
 }
 
@@ -230,6 +222,32 @@ TaskStatus MHD::SendB(Driver *pdrive, int stage)
 TaskStatus MHD::RecvB(Driver *pdrive, int stage)
 {
   TaskStatus tstat = pbval_b->RecvAndUnpackFC(b0, coarse_b0);
+  return tstat;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void MHD::SendFlux
+//  \brief 
+
+TaskStatus MHD::SendFlux(Driver *pdrive, int stage)
+{
+  // Only execute this function with SMR/SMR
+  if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
+
+  TaskStatus tstat = pbval_u->PackAndSendFluxCC(uflx);
+  return tstat;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void MHD::RecvFlux
+//  \brief 
+
+TaskStatus MHD::RecvFlux(Driver *pdrive, int stage)
+{
+  // Only execute this function with SMR/SMR
+  if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
+
+  TaskStatus tstat = pbval_u->RecvAndUnpackFluxCC(uflx);
   return tstat;
 }
 
@@ -256,6 +274,20 @@ TaskStatus MHD::RestrictB(Driver *pdrive, int stage)
   if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
 
   pmy_pack->pmesh->RestrictFC(b0, coarse_b0);
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void MHD::ApplyPhysicalBCs
+//  \brief 
+
+TaskStatus MHD::ApplyPhysicalBCs(Driver *pdrive, int stage)
+{
+  // only apply BCs if domain is not strictly periodic
+  if (!(pmy_pack->pmesh->strictly_periodic)) {
+    pbval_u->HydroBCs((pmy_pack), (pbval_u->u_in), u0);
+    pbval_b->BFieldBCs((pmy_pack), (pbval_b->b_in), b0);
+  }
   return TaskStatus::complete;
 }
 

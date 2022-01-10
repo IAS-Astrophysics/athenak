@@ -40,11 +40,15 @@ struct MHDTaskIDs
   TaskID irecv;
   TaskID copyu;
   TaskID flux;
+  TaskID sendf;
+  TaskID recvf;
   TaskID expl;
   TaskID restu;
   TaskID sendu;
   TaskID recvu;
   TaskID efld;
+  TaskID sende;
+  TaskID recve;
   TaskID ct;
   TaskID restb;
   TaskID sendb;
@@ -86,8 +90,8 @@ public:
   DvceFaceFld4D<Real> coarse_b0;  // face-centered B-field on 2x coarser grid
 
   // Objects containing boundary communication buffers and routines for u and b
-  BValCC *pbval_u;
-  BValFC *pbval_b;
+  BoundaryValuesCC *pbval_u;
+  BoundaryValuesFC *pbval_b;
   MHDBoundaryFnPtr MHDBoundaryFunc[6];
 
   // Object(s) for extra physics (viscosity, resistivity, srcterms)
@@ -113,8 +117,12 @@ public:
   TaskStatus CopyCons(Driver *d, int stage);
   TaskStatus SendU(Driver *d, int stage); 
   TaskStatus RecvU(Driver *d, int stage); 
+  TaskStatus SendE(Driver *d, int stage); 
+  TaskStatus RecvE(Driver *d, int stage); 
   TaskStatus SendB(Driver *d, int stage); 
   TaskStatus RecvB(Driver *d, int stage); 
+  TaskStatus SendFlux(Driver *d, int stage);
+  TaskStatus RecvFlux(Driver *d, int stage);
   TaskStatus RestrictU(Driver *d, int stage);
   TaskStatus RestrictB(Driver *d, int stage);
   TaskStatus ConToPrim(Driver *d, int stage);
