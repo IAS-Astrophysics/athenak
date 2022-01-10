@@ -14,7 +14,7 @@
 
 //----------------------------------------------------------------------------------------
 // \!fn void BoundaryValues::BFieldBCs()
-// \brief Apply physical boundary conditions for all Hydro variables at faces of MB which
+// \brief Apply physical boundary conditions for all field variables at faces of MB which
 //  are at the edge of the computational domain
 
 void BoundaryValues::BFieldBCs(MeshBlockPack *ppack, DvceArray2D<Real> b_in,

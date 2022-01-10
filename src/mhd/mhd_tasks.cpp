@@ -81,10 +81,17 @@ void MHD::AssembleMHDTasks(TaskList &start, TaskList &run, TaskList &end)
 TaskStatus MHD::InitRecv(Driver *pdrive, int stage)
 {
   TaskStatus tstat = pbval_u->InitRecv(nmhd+nscalars);
-  TaskStatus tstat2 = pbval_b->InitRecv(3);
+  if (tstat != TaskStatus::complete) return tstat;
+
+  tstat = pbval_b->InitRecv(3);
+  if (tstat != TaskStatus::complete) return tstat;
+
   if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
-    tstat2 = pbval_u->InitFluxRecv(nmhd+nscalars);
-    tstat2 = pbval_b->InitFluxRecv(3);
+    tstat = pbval_u->InitFluxRecv(nmhd+nscalars);
+    if (tstat != TaskStatus::complete) return tstat;
+
+    tstat = pbval_b->InitFluxRecv(3);
+    if (tstat != TaskStatus::complete) return tstat;
   }
   return TaskStatus::complete;
 }
@@ -97,10 +104,17 @@ TaskStatus MHD::InitRecv(Driver *pdrive, int stage)
 TaskStatus MHD::ClearRecv(Driver *pdrive, int stage)
 {
   TaskStatus tstat = pbval_u->ClearRecv();
-  TaskStatus tstat2 = pbval_b->ClearRecv();
+  if (tstat != TaskStatus::complete) return tstat;
+
+  tstat = pbval_b->ClearRecv();
+  if (tstat != TaskStatus::complete) return tstat;
+
   if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
-    tstat2 = pbval_u->ClearFluxRecv();
-    tstat2 = pbval_b->ClearFluxRecv();
+    tstat = pbval_u->ClearFluxRecv();
+    if (tstat != TaskStatus::complete) return tstat;
+
+    tstat = pbval_b->ClearFluxRecv();
+    if (tstat != TaskStatus::complete) return tstat;
   }
   return TaskStatus::complete;
 }
@@ -114,10 +128,17 @@ TaskStatus MHD::ClearRecv(Driver *pdrive, int stage)
 TaskStatus MHD::ClearSend(Driver *pdrive, int stage)
 {
   TaskStatus tstat = pbval_u->ClearSend();
-  TaskStatus tstat2 = pbval_b->ClearSend();
+  if (tstat != TaskStatus::complete) return tstat;
+
+  tstat = pbval_b->ClearSend();
+  if (tstat != TaskStatus::complete) return tstat;
+
   if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
-    tstat2 = pbval_u->ClearFluxSend();
-    tstat2 = pbval_b->ClearFluxSend();
+    tstat = pbval_u->ClearFluxSend();
+    if (tstat != TaskStatus::complete) return tstat;
+
+    tstat = pbval_b->ClearFluxSend();
+    if (tstat != TaskStatus::complete) return tstat;
   }
   return TaskStatus::complete;
 }
@@ -213,8 +234,8 @@ TaskStatus MHD::SendFlux(Driver *pdrive, int stage)
   // Only execute this function with SMR/SMR
   if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
 
-  pbval_u->PackAndSendFluxCC(uflx);
-  return TaskStatus::complete;
+  TaskStatus tstat = pbval_u->PackAndSendFluxCC(uflx);
+  return tstat;
 }
 
 //----------------------------------------------------------------------------------------
@@ -226,8 +247,8 @@ TaskStatus MHD::RecvFlux(Driver *pdrive, int stage)
   // Only execute this function with SMR/SMR
   if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
 
-  pbval_u->RecvAndUnpackFluxCC(uflx);
-  return TaskStatus::complete;
+  TaskStatus tstat = pbval_u->RecvAndUnpackFluxCC(uflx);
+  return tstat;
 }
 
 //----------------------------------------------------------------------------------------

@@ -88,7 +88,7 @@ void BoundaryValues::InitializeBuffers(const int nvar)
     Kokkos::realloc(b_in, 3, 6);   // always 3 components of face-fields
   }
 
-  // initialize buffers used for uniform grid nd SMR/AMR calculations
+  // initialize buffers used for uniform grid and SMR/AMR calculations
   // set number of subblocks in x2- and x3-dirs
   int nfx = 1, nfy = 1, nfz = 1;
   if (pmy_pack->pmesh->multilevel) {

@@ -87,8 +87,10 @@ void Hydro::AssembleHydroTasks(TaskList &start, TaskList &run, TaskList &end)
 TaskStatus Hydro::InitRecv(Driver *pdrive, int stage)
 {
   TaskStatus tstat = pbval_u->InitRecv(nhydro+nscalars);
+  if (tstat != TaskStatus::complete) return tstat;
+
   if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
-    TaskStatus tstat2 = pbval_u->InitFluxRecv(nhydro+nscalars);
+    tstat = pbval_u->InitFluxRecv(nhydro+nscalars);
   }
   return tstat;
 }
@@ -100,8 +102,10 @@ TaskStatus Hydro::InitRecv(Driver *pdrive, int stage)
 TaskStatus Hydro::ClearRecv(Driver *pdrive, int stage)
 {
   TaskStatus tstat = pbval_u->ClearRecv();
+  if (tstat != TaskStatus::complete) return tstat;
+
   if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
-    TaskStatus tstat2 = pbval_u->ClearFluxRecv();
+    tstat = pbval_u->ClearFluxRecv();
   }
   return tstat;
 }
@@ -113,8 +117,10 @@ TaskStatus Hydro::ClearRecv(Driver *pdrive, int stage)
 TaskStatus Hydro::ClearSend(Driver *pdrive, int stage)
 {
   TaskStatus tstat = pbval_u->ClearSend();
+  if (tstat != TaskStatus::complete) return tstat;
+
   if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
-    TaskStatus tstat2 = pbval_u->ClearFluxSend();
+    tstat = pbval_u->ClearFluxSend();
   }
   return tstat;
 }
@@ -160,8 +166,8 @@ TaskStatus Hydro::SendFlux(Driver *pdrive, int stage)
   // Only execute this function with SMR/SMR
   if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
 
-  pbval_u->PackAndSendFluxCC(uflx);
-  return TaskStatus::complete;
+  TaskStatus tstat = pbval_u->PackAndSendFluxCC(uflx);
+  return tstat;
 }
 
 //----------------------------------------------------------------------------------------
@@ -173,8 +179,8 @@ TaskStatus Hydro::RecvFlux(Driver *pdrive, int stage)
   // Only execute this function with SMR/SMR
   if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
 
-  pbval_u->RecvAndUnpackFluxCC(uflx);
-  return TaskStatus::complete;
+  TaskStatus tstat = pbval_u->RecvAndUnpackFluxCC(uflx);
+  return tstat;
 }
 
 //----------------------------------------------------------------------------------------
