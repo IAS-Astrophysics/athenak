@@ -35,7 +35,7 @@ void BoundaryValues::BFieldBCs(MeshBlockPack *ppack, DvceArray2D<Real> b_in,
   if (pm->mesh_bcs[BoundaryFace::inner_x1] != BoundaryFlag::periodic) {
     int &is = indcs.is;
     int &ie = indcs.ie;
-    par_for("hydrobc_x1", DevExeSpace(), 0,(nmb-1),0,(n3-1),0,(n2-1),
+    par_for("bfield-bc_x1", DevExeSpace(), 0,(nmb-1),0,(n3-1),0,(n2-1),
     KOKKOS_LAMBDA(int m, int k, int j) {
       // apply physical boundaries to inner_x1
       switch (mb_bcs.d_view(m,BoundaryFace::inner_x1)) {
@@ -112,7 +112,7 @@ void BoundaryValues::BFieldBCs(MeshBlockPack *ppack, DvceArray2D<Real> b_in,
   if (pm->mesh_bcs[BoundaryFace::inner_x2] != BoundaryFlag::periodic) {
     int &js = indcs.js;
     int &je = indcs.je;
-    par_for("hydrobc_x2", DevExeSpace(), 0,(nmb-1),0,(n3-1),0,(n1-1),
+    par_for("bfield-bc_x2", DevExeSpace(), 0,(nmb-1),0,(n3-1),0,(n1-1),
     KOKKOS_LAMBDA(int m, int k, int i) {
       // apply physical boundaries to inner_x2
       switch (mb_bcs.d_view(m,BoundaryFace::inner_x2)) {
@@ -189,7 +189,7 @@ void BoundaryValues::BFieldBCs(MeshBlockPack *ppack, DvceArray2D<Real> b_in,
   if (pm->mesh_bcs[BoundaryFace::inner_x3] == BoundaryFlag::periodic) return;
   int &ks = indcs.ks;
   int &ke = indcs.ke;
-  par_for("hydrobc_x1", DevExeSpace(), 0,(nmb-1),0,(n2-1),0,(n1-1),
+  par_for("bfield-bc_x3", DevExeSpace(), 0,(nmb-1),0,(n2-1),0,(n1-1),
   KOKKOS_LAMBDA(int m, int j, int i) {
     // apply physical boundaries to inner_x3
     switch (mb_bcs.d_view(m,BoundaryFace::inner_x3)) {

@@ -188,7 +188,7 @@ void BoundaryValues::HydroBCs(MeshBlockPack *ppack, DvceArray2D<Real> u_in,
   if (pm->mesh_bcs[BoundaryFace::inner_x3] == BoundaryFlag::periodic) return;
   int &ks = indcs.ks;
   int &ke = indcs.ke;
-  par_for("hydrobc_x1", DevExeSpace(), 0,(nmb-1),0,(nvar-1),0,(n2-1),0,(n1-1),
+  par_for("hydrobc_x3", DevExeSpace(), 0,(nmb-1),0,(nvar-1),0,(n2-1),0,(n1-1),
   KOKKOS_LAMBDA(int m, int n, int j, int i) {
     // apply physical boundaries to inner_x3
     switch (mb_bcs.d_view(m,BoundaryFace::inner_x3)) {
