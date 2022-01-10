@@ -203,39 +203,6 @@ void BoundaryValues::InitializeBuffers(const int nvar)
     }
   }
 
-/***************
-  int nnghbr = pmy_pack->pmb->nnghbr;
-  for (int n=0; n<nnghbr; ++n) {
-std::cout << std::endl <<"Buffer="<< n << std::endl;
-for (int v=0; v<3; ++v) {
-std::cout <<"send_flux["<<v<<"]:" <<send_buf[n].flux[v].bis<<"  "<<send_buf[n].flux[v].bie<<
-                "  "<<send_buf[n].flux[v].bjs<<"  "<<send_buf[n].flux[v].bje<<
-                "  "<<send_buf[n].flux[v].bks<<"  "<<send_buf[n].flux[v].bke<< std::endl;
-}
-for (int v=0; v<3; ++v) {
-std::cout <<"recv_flux["<<v<<"]:" <<recv_buf[n].flux[v].bis<<"  "<<recv_buf[n].flux[v].bie<<
-                "  "<<recv_buf[n].flux[v].bjs<<"  "<<recv_buf[n].flux[v].bje<<
-                "  "<<recv_buf[n].flux[v].bks<<"  "<<recv_buf[n].flux[v].bke<< std::endl;
-}
-  }
-***************/
-/***************
-  int nnghbr = pmy_pack->pmb->nnghbr;
-  for (int n=0; n<nnghbr; ++n) {
-std::cout << std::endl <<"Buffer="<< n << std::endl;
-std::cout <<"send_same.ndat:" <<send_buf[n].isame_ndat << std::endl;
-std::cout <<"send_coar.ndat:" <<send_buf[n].icoar_ndat << std::endl;
-std::cout <<"send_fine.ndat:" <<send_buf[n].ifine_ndat << std::endl;
-std::cout <<"send_flux.ndat:" <<send_buf[n].iflux_ndat << std::endl;
-std::cout <<"recv_same.ndat:" <<recv_buf[n].isame_ndat << std::endl;
-std::cout <<"recv_coar.ndat:" <<recv_buf[n].icoar_ndat << std::endl;
-std::cout <<"recv_fine.ndat:" <<recv_buf[n].ifine_ndat << std::endl;
-std::cout <<"recv_flux.ndat:" <<recv_buf[n].iflux_ndat << std::endl;
-   }
-***************/
-
-
-
   return;
 }
 
