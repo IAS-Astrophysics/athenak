@@ -72,11 +72,11 @@ add_executable(
         outputs/vtk.cpp
 
         pgen/pgen.cpp
-        pgen/advection.cpp
-        pgen/linear_wave.cpp
-        pgen/lw_implode.cpp
-        pgen/orszag_tang.cpp
-        pgen/shock_tube.cpp
+        pgen/tests/advection.cpp
+        pgen/tests/linear_wave.cpp
+        pgen/tests/lw_implode.cpp
+        pgen/tests/orszag_tang.cpp
+        pgen/tests/shock_tube.cpp
 
         srcterms/srcterms.cpp
         srcterms/turb_driver.cpp

@@ -22,7 +22,7 @@
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
 #include "mhd/mhd.hpp"
-#include "pgen.hpp"
+#include "pgen/pgen.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \fn Real A3(const Real x1,const Real x2,const Real x3)
