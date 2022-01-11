@@ -1,10 +1,8 @@
 #! /usr/bin/env python
 
-"""
-Script for plotting 1D data from Athena++ .hst files.
+# Script for plotting 1D data from Athena++ .hst files.
 
-Run "plot_hst.py -h" for help.
-"""
+# Run "plot_hst.py -h" for help.
 
 # Python modules
 import argparse
@@ -46,16 +44,15 @@ def main(**kwargs):
     plt.show()
 
 
-
 # Execute main function
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('-i','--input',
+    parser.add_argument('-i', '--input',
                         help='name of input (hst) file')
-    parser.add_argument('-o','--output',
+    parser.add_argument('-o', '--output',
                         default='show',
-                        help='name of output image file; omit to display to screen')
-    parser.add_argument('-v','--variables',
+                        help='image filename; omit to display to screen')
+    parser.add_argument('-v', '--variables',
                         help='comma-separated list of variables to be plotted')
 
     args = parser.parse_args()

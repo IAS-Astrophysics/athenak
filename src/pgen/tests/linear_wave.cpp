@@ -29,7 +29,7 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "driver/driver.hpp"
-#include "pgen.hpp"
+#include "pgen/pgen.hpp"
 
 // global variable to control computation of initial conditions versus errors
 bool set_initial_conditions = true;

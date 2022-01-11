@@ -17,7 +17,7 @@
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
-#include "pgen.hpp"
+#include "pgen/pgen.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \fn void MeshBlock::Advection_()

@@ -1,11 +1,7 @@
-"""
-Various functions to read Athena++ output data files.
-"""
+# Various functions to read Athena++ output data files
 
 # Python modules
 import re
-import struct
-import sys
 import warnings
 from io import open  # Consistent binary I/O from Python 2 and 3
 
@@ -14,33 +10,27 @@ import numpy as np
 
 check_nan_flag = False
 
-# ========================================================================================
 
+# Check input NumPy array for the presence of any NaN entries
 def check_nan(data):
-    """Check input NumPy array for the presence of any NaN entries"""
     if np.isnan(data).any():
         raise FloatingPointError("NaN encountered")
     return
 
 
-# ========================================================================================
-
+# Wrapper to np.loadtxt() for checks used in regression tests
 def error_dat(filename, **kwargs):
-    """Wrapper to np.loadtxt() for applying optional checks used in regression tests"""
     data = np.loadtxt(filename,
                       dtype=np.float64,
-                      ndmin=2,  # prevent NumPy from squeezing singleton dimensions
+                      ndmin=2,  # prevent NumPy from squeezing singleton dim
                       **kwargs)
     if check_nan_flag:
         check_nan(data)
     return data
 
-# ========================================================================================
 
+# Read .tab files and return dict.
 def tab(filename):
-    """
-    Read .tab files and return dict.
-    """
 
     # Parse header
     data_dict = {}
@@ -77,7 +67,8 @@ def tab(filename):
     # Reshape array
     array_shape = (num_lines, num_entries)
     array_transpose = (1, 0)
-    data_array = np.transpose(np.reshape(data_array, array_shape), array_transpose)
+    data_array = np.transpose(np.reshape(data_array, array_shape),
+                              array_transpose)
 
     # Finalize data
     for n, heading in enumerate(headings):
@@ -86,16 +77,12 @@ def tab(filename):
         data_dict[heading] = data_array[n, ...]
     return data_dict
 
-# ========================================================================================
 
+# Read .hst files and return dict of 1D arrays.
+# Keyword arguments:
+# raw -- if True, do not prune file to remove stale data
+# from prev runs (default False)
 def hst(filename, raw=False):
-    """
-    Read .hst files and return dict of 1D arrays.
-
-    Keyword arguments:
-    raw -- if True, do not prune file to remove stale data from prev runs (default False)
-    """
-
     # Read data
     with open(filename, 'r') as data_file:
         # Find header
@@ -138,16 +125,18 @@ def hst(filename, raw=False):
         data[key] = np.array(val)
     if not raw:
         if data_names[0] != 'time':
-            raise AthenaError('Cannot remove spurious data because time column could not'
-                              + ' be identified')
+            raise AthenaError('Cannot remove spurious data because time '
+                              'column could not be identified')
         branches_removed = False
         while not branches_removed:
             branches_removed = True
             for n in range(1, len(data['time'])):
                 if data['time'][n] <= data['time'][n-1]:
-                    branch_index = np.where(data['time'][:n] >= data['time'][n])[0][0]
+                    branch_index = np.where((data['time'][:n] >=
+                                             data['time'][n]))[0][0]
                     for key, val in data.items():
-                        data[key] = np.concatenate((val[:branch_index], val[n:]))
+                        data[key] = np.concatenate((val[:branch_index],
+                                                    val[n:]))
                     branches_removed = False
                     break
         if check_nan_flag:
@@ -155,3 +144,7 @@ def hst(filename, raw=False):
                 check_nan(val)
     return data
 
+
+# General exception class for these functions
+class AthenaError(RuntimeError):
+    pass
