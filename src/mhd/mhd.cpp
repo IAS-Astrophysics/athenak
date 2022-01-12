@@ -14,6 +14,7 @@
 #include "eos/eos.hpp"
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
+#include "diffusion/conduction.hpp"
 #include "srcterms/srcterms.hpp"
 #include "bvals/bvals.hpp"
 #include "mhd/mhd.hpp"
@@ -102,6 +103,13 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     presist = new Resistivity(ppack, pin);
   } else {
     presist = nullptr;
+  }
+
+  // Thermal conduction (only constructed if needed)
+  if (pin->DoesParameterExist("mhd","conductivity")) {
+    pcond = new Conduction("mhd", ppack, pin);
+  } else {
+    pcond = nullptr;
   }
 
   // Source terms (constructor parses input file to initialize only srcterms needed)
@@ -292,6 +300,7 @@ MHD::~MHD()
   delete pbval_b;
   if (pvisc != nullptr) {delete pvisc;}
   if (presist!= nullptr) {delete presist;}
+  if (pcond != nullptr) {delete pcond;}
   if (psrc!= nullptr) {delete psrc;}
 }
 

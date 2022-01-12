@@ -17,6 +17,7 @@
 class EquationOfState;
 class Coordinates;
 class Viscosity;
+class Conduction;
 class SourceTerms;
 class Driver;
 
@@ -76,8 +77,9 @@ public:
   // Boundary communication buffers and functions for u
   BoundaryValuesCC *pbval_u;
 
-  // Object(s) for extra physics (viscosity, srcterms)
+  // Object(s) for extra physics (viscosity, thermal conduction, srcterms)
   Viscosity *pvisc = nullptr;
+  Conduction *pcond = nullptr;
   SourceTerms *psrc = nullptr;
 
   // following only used for time-evolving flow
