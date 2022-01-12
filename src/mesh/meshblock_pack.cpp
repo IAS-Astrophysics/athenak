@@ -19,6 +19,7 @@
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
 #include "srcterms/turb_driver.hpp"
+#include "units/units.hpp" 
 
 //----------------------------------------------------------------------------------------
 // MeshBlockPack constructor:
@@ -44,6 +45,7 @@ MeshBlockPack::~MeshBlockPack()
   if (phydro != nullptr) {delete phydro;}
   if (pmhd   != nullptr) {delete pmhd;}
   if (pturb  != nullptr) {delete pturb;}
+  if (punit  != nullptr) {delete punit;}
 }
 
 //----------------------------------------------------------------------------------------
@@ -127,6 +129,14 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin)
     pturb->IncludeAddForcingTask(run_tl, none);
   } else {
     pturb = nullptr;
+  }
+
+  // Units
+  // Default units are cgs units
+  if (pin->DoesBlockExist("units")) {
+    punit = new units::Units(pin);
+  } else {
+    punit = nullptr;
   }
 
   // Check that at least ONE is requested and initialized.
