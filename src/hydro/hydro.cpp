@@ -13,6 +13,7 @@
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
 #include "diffusion/viscosity.hpp"
+#include "diffusion/conduction.hpp"
 #include "srcterms/srcterms.hpp"
 #include "bvals/bvals.hpp"
 #include "hydro/hydro.hpp"
@@ -80,6 +81,13 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
     pvisc = new Viscosity("hydro", ppack, pin);
   } else {
     pvisc = nullptr;
+  }
+
+  // Thermal conduction (only constructed if needed)
+  if (pin->DoesParameterExist("hydro","conductivity")) {
+    pcond = new Conduction("hydro", ppack, pin);
+  } else {
+    pcond = nullptr;
   }
 
   // Source terms (constructor parses input file to initialize only srcterms needed)
@@ -246,6 +254,7 @@ Hydro::~Hydro()
   delete peos;
   delete pbval_u;
   if (pvisc != nullptr) {delete pvisc;}
+  if (pcond != nullptr) {delete pcond;}
   if (psrc != nullptr) {delete psrc;}
 }
 

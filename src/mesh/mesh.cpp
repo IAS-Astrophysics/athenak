@@ -18,6 +18,7 @@
 #include "mhd/mhd.hpp"
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
+#include "diffusion/conduction.hpp"
 #include "outputs/io_wrapper.hpp"
 
 #if MPI_PARALLEL_ENABLED
@@ -530,6 +531,10 @@ void Mesh::NewTimeStep(const Real tlim)
     if (pmb_pack->phydro->pvisc != nullptr) {
       dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->pvisc->dtnew) );
     }
+    // thermal conduction timestep
+    if (pmb_pack->phydro->pcond != nullptr) {
+      dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->pcond->dtnew) );
+    }
   }
   // MHD timestep
   if (pmb_pack->pmhd != nullptr) {
@@ -541,6 +546,10 @@ void Mesh::NewTimeStep(const Real tlim)
     // resistivity timestep
     if (pmb_pack->pmhd->presist != nullptr) {
       dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->presist->dtnew) );
+    }
+    // thermal conduction timestep
+    if (pmb_pack->pmhd->pcond != nullptr) {
+      dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->pcond->dtnew) );
     }
   }
 

@@ -18,6 +18,7 @@ class EquationOfState;
 class Coordinates;
 class Viscosity;
 class Resistivity;
+class Conduction;
 class SourceTerms;
 class Driver;
 
@@ -94,9 +95,10 @@ public:
   BoundaryValuesFC *pbval_b;
   MHDBoundaryFnPtr MHDBoundaryFunc[6];
 
-  // Object(s) for extra physics (viscosity, resistivity, srcterms)
+  // Object(s) for extra physics (viscosity, resistivity, thermal conduction, srcterms)
   Viscosity *pvisc = nullptr;
   Resistivity *presist = nullptr;
+  Conduction *pcond = nullptr;
   SourceTerms *psrc = nullptr;
 
   // following only used for time-evolving flow
