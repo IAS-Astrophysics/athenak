@@ -28,7 +28,7 @@
 //! \fn ProblemGenerator::ShockTube_()
 //! \brief Problem Generator for the shock tube (Riemann problem) tests
 
-void ProblemGenerator::ShockTube_(MeshBlockPack *pmbp, ParameterInput *pin)
+void ProblemGenerator::ShockTube(MeshBlockPack *pmbp, ParameterInput *pin)
 {
   // parse shock direction: {1,2,3} -> {x1,x2,x3}
   int shk_dir = pin->GetInteger("problem","shock_dir");

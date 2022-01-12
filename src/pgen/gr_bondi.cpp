@@ -23,8 +23,8 @@
 namespace {
 
 KOKKOS_INLINE_FUNCTION
-static void ComputePrimitiveSingle(int m, int k, int j, int i,
-                                   CoordData coord, Real g_[], Real gi_[],
+static void ComputePrimitiveSingle(Real x1v, Real x2v, Real x3v, CoordData coord,
+                                   Real g_[], Real gi_[],
                                    struct bondi_pgen pgen,
                                    Real& rho, Real& pgas,
                                    Real& uu1, Real& uu2, Real& uu3);
@@ -66,12 +66,9 @@ struct bondi_pgen {
 
 } // namespace
 
-void FixedInnerX1(int m, CoordData &coord, EOS_Data &eos, DvceArray5D<Real> &u);
-void FixedOuterX1(int m, CoordData &coord, EOS_Data &eos, DvceArray5D<Real> &u);
-void FixedInnerX2(int m, CoordData &coord, EOS_Data &eos, DvceArray5D<Real> &u);
-void FixedOuterX2(int m, CoordData &coord, EOS_Data &eos, DvceArray5D<Real> &u);
-void FixedInnerX3(int m, CoordData &coord, EOS_Data &eos, DvceArray5D<Real> &u);
-void FixedOuterX3(int m, CoordData &coord, EOS_Data &eos, DvceArray5D<Real> &u);
+// prototypes for user-defined BCs and error functions
+void FixedBondiInflow(Mesh *pm);
+void BondiErrors(MeshBlockPack *pmbp, ParameterInput *pin);
 
 //----------------------------------------------------------------------------------------
 //! \fn void ProblemGenerator::BondiAccretion_()
@@ -79,13 +76,17 @@ void FixedOuterX3(int m, CoordData &coord, EOS_Data &eos, DvceArray5D<Real> &u);
 //  Compile with '-D PROBLEM=gr_bondi' to enroll as user-specific problem generator 
 //    reference: Hawley, Smarr, & Wilson 1984, ApJ 277 296 (HSW)
 
-void ProblemGenerator::BondiAccretion_(MeshBlockPack *pmbp, ParameterInput *pin)
+void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
 {
   if (!(pmbp->phydro->peos->eos_data.use_e)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "gr_bondi test requires hydro/use_e=true" << std::endl;
     exit(EXIT_FAILURE);
   }
+
+  // set user-defined BCs and error function pointers
+  pgen_error_func = BondiErrors; 
+  user_bcs_func = FixedBondiInflow;
 
   // Read problem-specific parameters from input file
   // global parameters
@@ -101,8 +102,8 @@ void ProblemGenerator::BondiAccretion_(MeshBlockPack *pmbp, ParameterInput *pin)
   bondi.temp_max = 1.0e1;   // greater temperature root must be less than this
 
   // Get mass and spin of black hole
-  bondi.mass = pmbp->pcoord->mbdata.bh_mass;
-  bondi.spin = pmbp->pcoord->mbdata.bh_spin;
+  bondi.mass = pmbp->pcoord->coord_data.bh_mass;
+  bondi.spin = pmbp->pcoord->coord_data.bh_spin;
 
   // Get ratio of specific heats
   bondi.n_adi = 1.0/(bondi.gm - 1.0);
@@ -117,23 +118,38 @@ void ProblemGenerator::BondiAccretion_(MeshBlockPack *pmbp, ParameterInput *pin)
               * (1.0 - 3.0*bondi.mass/(2.0*bondi.r_crit)));          // (HSW 69)
 
   // capture variables for the kernel
-  auto &indcs = pmbp->coord.coord_data.mb_indcs;
+  auto &indcs = pmy_mesh_->mb_indcs;
+  auto &size = pmbp->pmb->mb_size;
+  auto &coord = pmbp->pcoord->coord_data;
+  auto bondi_ = bondi;
   int &ng = indcs.ng;
   int n1 = indcs.nx1 + 2*ng;
   int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
   int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
+  int is = indcs.is;
+  int js = indcs.js;
+  int ks = indcs.ks;
   int nmb = pmbp->nmb_thispack;
-  auto coord = pmbp->coord.coord_data;
   auto w0_ = pmbp->phydro->w0;
-  auto bondi_ = bondi;
 
   // Initialize primitive values (HYDRO ONLY)
   par_for("pgen_bondi", DevExeSpace(), 0,(nmb-1),0,(n3-1),0,(n2-1),0,(n1-1),
     KOKKOS_LAMBDA(int m, int k, int j, int i)
     {
       Real rho, pgas, uu1, uu2, uu3, g_[NMETRIC], gi_[NMETRIC];
-      ComputePrimitiveSingle(m,k,j,i,mbd,g_,gi_,bondi_,
-                             rho,pgas,uu1,uu2,uu3);
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+      Real &x2min = size.d_view(m).x2min;
+      Real &x2max = size.d_view(m).x2max;
+      Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+      Real &x3min = size.d_view(m).x3min;
+      Real &x3max = size.d_view(m).x3max;
+      Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+
+      ComputePrimitiveSingle(x1v,x2v,x3v,coord,g_,gi_,bondi_,rho,pgas,uu1,uu2,uu3);
       w0_(m,IDN,k,j,i) = rho;
       w0_(m,IEN,k,j,i) = pgas/gm1;
       w0_(m,IM1,k,j,i) = uu1;
@@ -151,26 +167,6 @@ void ProblemGenerator::BondiAccretion_(MeshBlockPack *pmbp, ParameterInput *pin)
     pmbp->phydro->peos->PrimToCons(w0_, u0_);
   }
 
-  // Enroll boundary function
-  if (pin->GetString("mesh", "ix1_bc")=="user") {
-    pmbp->pmesh->EnrollBoundaryFunction(BoundaryFace::inner_x1, FixedInnerX1);
-  }
-  if (pin->GetString("mesh", "ox1_bc")=="user") {
-    pmbp->pmesh->EnrollBoundaryFunction(BoundaryFace::outer_x1, FixedOuterX1);
-  }
-  if (pin->GetString("mesh", "ix2_bc")=="user") {
-    pmbp->pmesh->EnrollBoundaryFunction(BoundaryFace::inner_x2, FixedInnerX2);
-  }
-  if (pin->GetString("mesh", "ox2_bc")=="user") {
-    pmbp->pmesh->EnrollBoundaryFunction(BoundaryFace::outer_x2, FixedOuterX2);
-  }
-  if (pin->GetString("mesh", "ix3_bc")=="user") {
-    pmbp->pmesh->EnrollBoundaryFunction(BoundaryFace::inner_x3, FixedInnerX3);
-  }
-  if (pin->GetString("mesh", "ox3_bc")=="user") {
-    pmbp->pmesh->EnrollBoundaryFunction(BoundaryFace::outer_x3, FixedOuterX3);
-  }
-
   return;
 }
 
@@ -178,25 +174,25 @@ void ProblemGenerator::BondiAccretion_(MeshBlockPack *pmbp, ParameterInput *pin)
 //! \fn void ProblemGenerator::LinearWaveErrors_()
 //  \brief Computes errors in linear wave solution and outputs to file.
 
-void ProblemGenerator::BondiErrors_(MeshBlockPack *pmbp, ParameterInput *pin)
+void BondiErrors(MeshBlockPack *pmbp, ParameterInput *pin)
 {
   // calculate reference solution by calling pgen again.  Solution stored in second
   // register u1/b1 when flag is false.
   bondi.reset_ic=true;
-  BondiAccretion_(pmbp, pin);
+  pmbp->pmesh->pgen->UserProblem(pmbp, pin);
 
   Real l1_err[8];
   int nvars=0;
 
   // capture class variables for kernel
-  auto &indcs = pmbp->pcoord->mbdata.indcs;
+  auto &indcs = pmbp->pmesh->mb_indcs;
   int &nx1 = indcs.nx1;
   int &nx2 = indcs.nx2;
   int &nx3 = indcs.nx3;
   int &is = indcs.is;
   int &js = indcs.js;
   int &ks = indcs.ks;
-  auto &size = pmbp->pcoord->mbdata.size;
+  auto &size = pmbp->pmb->mb_size;
 
   // compute errors for Hydro  -----------------------------------------------------------
   if (pmbp->phydro != nullptr) {
@@ -330,29 +326,11 @@ namespace {
 //   pr,ptheta,pphi: variables pointed to set to Boyer-Lindquist coordinates
 
 KOKKOS_INLINE_FUNCTION
-static void ComputePrimitiveSingle(int m, int k, int j, int i,
-                                   CoordData coord, Real g_[], Real gi_[],
+static void ComputePrimitiveSingle(Real x1v, Real x2v, Real x3v, CoordData coord,
+                                   Real g_[], Real gi_[],
                                    struct bondi_pgen pgen,
                                    Real& rho, Real& pgas, Real& uu1, Real& uu2, Real& uu3)
 {
-  auto &indcs = coord.indcs;
-  int &is = indcs.is; int &js = indcs.js; int &ks = indcs.ks;
-
-  Real &x1min = coord.size.d_view(m).x1min;
-  Real &x1max = coord.size.d_view(m).x1max;
-  int nx1 = coord.indcs.nx1;
-  Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
-
-  Real &x2min = coord.size.d_view(m).x2min;
-  Real &x2max = coord.size.d_view(m).x2max;
-  int nx2 = coord.indcs.nx2;
-  Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
-
-  Real &x3min = coord.size.d_view(m).x3min;
-  Real &x3max = coord.size.d_view(m).x3max;
-  int nx3 = coord.indcs.nx3;
-  Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
-
   // Calculate Boyer-Lindquist coordinates of cell
   Real r, theta, phi;
   GetBoyerLindquistCoordinates(pgen, x1v, x2v, x3v, &r, &theta, &phi);
@@ -602,199 +580,147 @@ static Real TemperatureResidual(struct bondi_pgen pgen, Real t, Real r) {
 } // namespace
 
 //----------------------------------------------------------------------------------------
-//! \fn FixedInnerX1
-//  \brief Sets boundary condition on inner X1 boundary
-// Note quantities at this boundary are held fixed to initial condition values
+//! \fn FixedBondiInflow
+//  \brief Sets boundary condition on surfaces of computational domain
+// Note quantities at boundaryies are held fixed to initial condition values
 
-void FixedInnerX1(int m, CoordData &coord, EOS_Data &eos, DvceArray5D<Real> &u)
+void FixedBondiInflow(Mesh *pm)
 {
-  auto &indcs = coord.indcs;
+  auto &indcs = pm->mb_indcs;
+  auto &size = pm->pmb_pack->pmb->mb_size;
+  auto &coord = pm->pmb_pack->pcoord->coord_data;
+  auto &eos = pm->pmb_pack->phydro->peos->eos_data;
   int &ng = indcs.ng;
+  int n1 = indcs.nx1 + 2*ng;
   int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
   int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
-  int &is = indcs.is;
+  int &is = indcs.is;  int &ie  = indcs.ie;
+  int &js = indcs.js;  int &je  = indcs.je;
+  int &ks = indcs.ks;  int &ke  = indcs.ke;
   auto bondi_ = bondi;
+  
+  int nmb = pm->pmb_pack->nmb_thispack;
+  auto u0_ = pm->pmb_pack->phydro->u0;
 
-  par_for("fixed_ix1", DevExeSpace(),0,(n3-1),0,(n2-1),0,(ng-1),
-    KOKKOS_LAMBDA(int k, int j, int i)
-    {
-      Real rho, pgas, uu1, uu2, uu3, g_[NMETRIC], gi_[NMETRIC];
-      ComputePrimitiveSingle(m,k,j,(is-i-1),coord,g_,gi_,bondi_,
-                             rho,pgas,uu1,uu2,uu3);
-      Real ud, ue, um1, um2, um3;
-      eos.PrimToConsSingleGRHydro(g_, gi_, rho, pgas, uu1, uu2, uu3,
+  par_for("fixed_x1", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),0,(ng-1),
+  KOKKOS_LAMBDA(int m, int k, int j, int i)
+  {
+    // inner x1 boundary
+    Real &x1min = size.d_view(m).x1min;
+    Real &x1max = size.d_view(m).x1max;
+    Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+    Real &x2min = size.d_view(m).x2min;
+    Real &x2max = size.d_view(m).x2max;
+    Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+    Real &x3min = size.d_view(m).x3min;
+    Real &x3max = size.d_view(m).x3max;
+    Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+
+    Real rho, pgas, uu1, uu2, uu3, g_[NMETRIC], gi_[NMETRIC];
+    ComputePrimitiveSingle(x1v,x2v,x3v,coord,g_,gi_,bondi_,rho,pgas,uu1,uu2,uu3);
+    Real ud, ue, um1, um2, um3;
+    eos.PrimToConsSingleGRHydro(g_, gi_, rho, pgas, uu1, uu2, uu3,
                                   ud, ue, um1, um2, um3);
-      u(m,IDN,k,j,(is-i-1)) = ud;
-      u(m,IEN,k,j,(is-i-1)) = ue;
-      u(m,IM1,k,j,(is-i-1)) = um1;
-      u(m,IM2,k,j,(is-i-1)) = um2;
-      u(m,IM3,k,j,(is-i-1)) = um3;
-    }
-  );
-  return;
-}
+    u0_(m,IDN,k,j,i) = ud;
+    u0_(m,IEN,k,j,i) = ue;
+    u0_(m,IM1,k,j,i) = um1;
+    u0_(m,IM2,k,j,i) = um2;
+    u0_(m,IM3,k,j,i) = um3;
 
-//----------------------------------------------------------------------------------------
-//! \fn FixedOuterrX1
-//  \brief Sets boundary condition on outer X1 boundary
-// Note quantities at this boundary are held fixed to initial condition values
+    // outer x1 boundary
+    x1v = CellCenterX((ie+i+1)-is, indcs.nx1, x1min, x1max);
 
-void FixedOuterX1(int m, CoordData &coord, EOS_Data &eos, DvceArray5D<Real> &u)
-{
-  auto &indcs = coord.indcs;
-  int &ng = indcs.ng;
-  int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
-  int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
-  int &ie = indcs.ie;
-  auto bondi_ = bondi;
+    ComputePrimitiveSingle(x1v,x2v,x3v,coord,g_,gi_,bondi_, rho,pgas,uu1,uu2,uu3);
+    eos.PrimToConsSingleGRHydro(g_, gi_, rho, pgas, uu1, uu2, uu3,
+                                ud, ue, um1, um2, um3);
+    u0_(m,IDN,k,j,(ie+i+1)) = ud;
+    u0_(m,IEN,k,j,(ie+i+1)) = ue;
+    u0_(m,IM1,k,j,(ie+i+1)) = um1;
+    u0_(m,IM2,k,j,(ie+i+1)) = um2;
+    u0_(m,IM3,k,j,(ie+i+1)) = um3;
+  });
 
-  par_for("fixed_ox1", DevExeSpace(),0,(n3-1),0,(n2-1),0,(ng-1),
-    KOKKOS_LAMBDA(int k, int j, int i)
-    {
-      Real rho, pgas, uu1, uu2, uu3, g_[NMETRIC], gi_[NMETRIC];
-      ComputePrimitiveSingle(m,k,j,(ie+i+1),coord,g_,gi_,bondi_,
-                             rho,pgas,uu1,uu2,uu3);
-      Real ud, ue, um1, um2, um3;
-      eos.PrimToConsSingleGRHydro(g_, gi_, rho, pgas, uu1, uu2, uu3,
+  par_for("fixed_x2", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(ng-1),0,(n1-1),
+  KOKKOS_LAMBDA(int m, int k, int j, int i)
+  {
+    // inner x2 boundary
+    Real &x1min = size.d_view(m).x1min;
+    Real &x1max = size.d_view(m).x1max;
+    Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+    
+    Real &x2min = size.d_view(m).x2min;
+    Real &x2max = size.d_view(m).x2max;
+    Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+    
+    Real &x3min = size.d_view(m).x3min;
+    Real &x3max = size.d_view(m).x3max;
+    Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+
+    Real rho, pgas, uu1, uu2, uu3, g_[NMETRIC], gi_[NMETRIC];
+    ComputePrimitiveSingle(x1v,x2v,x3v,coord,g_,gi_,bondi_,rho,pgas,uu1,uu2,uu3);
+    Real ud, ue, um1, um2, um3;
+    eos.PrimToConsSingleGRHydro(g_, gi_, rho, pgas, uu1, uu2, uu3,
+                                ud, ue, um1, um2, um3);
+    u0_(m,IDN,k,j,i) = ud;
+    u0_(m,IEN,k,j,i) = ue;
+    u0_(m,IM1,k,j,i) = um1;
+    u0_(m,IM2,k,j,i) = um2;
+    u0_(m,IM3,k,j,i) = um3;
+
+    // outer x2 boundary
+    x2v = CellCenterX((je+j+1)-js, indcs.nx2, x2min, x2max);
+
+    ComputePrimitiveSingle(x1v,x2v,x3v,coord,g_,gi_,bondi_,rho,pgas,uu1,uu2,uu3);
+    eos.PrimToConsSingleGRHydro(g_, gi_, rho, pgas, uu1, uu2, uu3,
+                                ud, ue, um1, um2, um3);
+    u0_(m,IDN,k,(je+j+1),i) = ud;
+    u0_(m,IEN,k,(je+j+1),i) = ue;
+    u0_(m,IM1,k,(je+j+1),i) = um1;
+    u0_(m,IM2,k,(je+j+1),i) = um2;
+    u0_(m,IM3,k,(je+j+1),i) = um3;
+  });
+
+  par_for("fixed_ix3", DevExeSpace(),0,(nmb-1),0,(ng-1),0,(n2-1),0,(n1-1),
+  KOKKOS_LAMBDA(int m, int k, int j, int i)
+  {
+    // inner x3 boundary
+    Real &x1min = size.d_view(m).x1min;
+    Real &x1max = size.d_view(m).x1max;
+    Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+                           
+    Real &x2min = size.d_view(m).x2min;
+    Real &x2max = size.d_view(m).x2max;
+    Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+    
+    Real &x3min = size.d_view(m).x3min;
+    Real &x3max = size.d_view(m).x3max;
+    Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+
+    Real rho, pgas, uu1, uu2, uu3, g_[NMETRIC], gi_[NMETRIC];
+    ComputePrimitiveSingle(x1v,x2v,x3v,coord,g_,gi_,bondi_,rho,pgas,uu1,uu2,uu3);
+    Real ud, ue, um1, um2, um3;
+    eos.PrimToConsSingleGRHydro(g_, gi_, rho, pgas, uu1, uu2, uu3,
                                   ud, ue, um1, um2, um3);
-      u(m,IDN,k,j,(ie+i+1)) = ud;
-      u(m,IEN,k,j,(ie+i+1)) = ue;
-      u(m,IM1,k,j,(ie+i+1)) = um1;
-      u(m,IM2,k,j,(ie+i+1)) = um2;
-      u(m,IM3,k,j,(ie+i+1)) = um3;
-    }
-  );
-  return;
-}
+    u0_(m,IDN,k,j,i) = ud;
+    u0_(m,IEN,k,j,i) = ue;
+    u0_(m,IM1,k,j,i) = um1;
+    u0_(m,IM2,k,j,i) = um2;
+    u0_(m,IM3,k,j,i) = um3;
 
-//----------------------------------------------------------------------------------------
-//! \fn FixedInnerX2
-//  \brief Sets boundary condition on inner X2 boundary
-// Note quantities at this boundary are held fixed to initial condition values
+    // outer x3 boundary
+    x3v = CellCenterX((ke+k+1)-ks, indcs.nx3, x3min, x3max);
 
-void FixedInnerX2(int m, CoordData &coord, EOS_Data &eos, DvceArray5D<Real> &u)
-{
-  auto &indcs = coord.indcs;
-  int &ng = indcs.ng;
-  int n1 = indcs.nx1 + 2*ng;
-  int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
-  int &js = indcs.js;
-  auto bondi_ = bondi;
+    ComputePrimitiveSingle(x1v,x2v,x3v,coord,g_,gi_,bondi_,rho,pgas,uu1,uu2,uu3);
+    eos.PrimToConsSingleGRHydro(g_, gi_, rho, pgas, uu1, uu2, uu3,
+                                ud, ue, um1, um2, um3);
+    u0_(m,IDN,(ke+k+1),j,i) = ud;
+    u0_(m,IEN,(ke+k+1),j,i) = ue;
+    u0_(m,IM1,(ke+k+1),j,i) = um1;
+    u0_(m,IM2,(ke+k+1),j,i) = um2;
+    u0_(m,IM3,(ke+k+1),j,i) = um3;
+  });
 
-  par_for("fixed_ix2", DevExeSpace(),0,(n3-1),0,(ng-1),0,(n1-1),
-    KOKKOS_LAMBDA(int k, int j, int i)
-    {
-      Real rho, pgas, uu1, uu2, uu3, g_[NMETRIC], gi_[NMETRIC];
-      ComputePrimitiveSingle(m,k,(js-j-1),i,coord,g_,gi_,bondi_,
-                             rho,pgas,uu1,uu2,uu3);
-      Real ud, ue, um1, um2, um3;
-      eos.PrimToConsSingleGRHydro(g_, gi_, rho, pgas, uu1, uu2, uu3,
-                                  ud, ue, um1, um2, um3);
-      u(m,IDN,k,(js-j-1),i) = ud;
-      u(m,IEN,k,(js-j-1),i) = ue;
-      u(m,IM1,k,(js-j-1),i) = um1;
-      u(m,IM2,k,(js-j-1),i) = um2;
-      u(m,IM3,k,(js-j-1),i) = um3;
-    }
-  );
-  return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn FixedOuterX2
-//  \brief Sets boundary condition on outer X2 boundary
-// Note quantities at this boundary are held fixed to initial condition values
-
-void FixedOuterX2(int m, CoordData &coord, EOS_Data &eos, DvceArray5D<Real> &u)
-{
-  auto &indcs = coord.indcs;
-  int &ng = indcs.ng;
-  int n1 = indcs.nx1 + 2*ng;
-  int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
-  int &je = indcs.je;
-  auto bondi_ = bondi;
-
-  par_for("fixed_ox2", DevExeSpace(),0,(n3-1),0,(ng-1),0,(n1-1),
-    KOKKOS_LAMBDA(int k, int j, int i)
-    {
-      Real rho, pgas, uu1, uu2, uu3, g_[NMETRIC], gi_[NMETRIC];
-      ComputePrimitiveSingle(m,k,(je+j+1),i,coord,g_,gi_,bondi_,
-                             rho,pgas,uu1,uu2,uu3);
-      Real ud, ue, um1, um2, um3;
-      eos.PrimToConsSingleGRHydro(g_, gi_, rho, pgas, uu1, uu2, uu3,
-                                  ud, ue, um1, um2, um3);
-      u(m,IDN,k,(je+j+1),i) = ud;
-      u(m,IEN,k,(je+j+1),i) = ue;
-      u(m,IM1,k,(je+j+1),i) = um1;
-      u(m,IM2,k,(je+j+1),i) = um2;
-      u(m,IM3,k,(je+j+1),i) = um3;
-    }
-  );
-  return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn FixedInnerX3
-//  \brief Sets boundary condition on inner X3 boundary
-// Note quantities at this boundary are held fixed to initial condition values
-
-void FixedInnerX3(int m, CoordData &coord, EOS_Data &eos, DvceArray5D<Real> &u)
-{
-  auto &indcs = coord.indcs;
-  int &ng = indcs.ng;
-  int n1 = indcs.nx1 + 2*ng;
-  int n2 = indcs.nx2 + 2*ng;
-  int &ks = indcs.ks;
-  auto bondi_ = bondi;
-
-  par_for("fixed_ix3", DevExeSpace(),0,(ng-1),0,(n2-1),0,(n1-1),
-    KOKKOS_LAMBDA(int k, int j, int i)
-    {
-      Real rho, pgas, uu1, uu2, uu3, g_[NMETRIC], gi_[NMETRIC];
-      ComputePrimitiveSingle(m,(ks-k-1),j,i,coord,g_,gi_,bondi_,
-                             rho,pgas,uu1,uu2,uu3);
-      Real ud, ue, um1, um2, um3;
-      eos.PrimToConsSingleGRHydro(g_, gi_, rho, pgas, uu1, uu2, uu3,
-                                  ud, ue, um1, um2, um3);
-      u(m,IDN,(ks-k-1),j,i) = ud;
-      u(m,IEN,(ks-k-1),j,i) = ue;
-      u(m,IM1,(ks-k-1),j,i) = um1;
-      u(m,IM2,(ks-k-1),j,i) = um2;
-      u(m,IM3,(ks-k-1),j,i) = um3;
-    }
-  );
-  return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn FixedOuterX3
-//  \brief Sets boundary condition on outer X3 boundary
-// Note quantities at this boundary are held fixed to initial condition values
-
-void FixedOuterX3(int m, CoordData &coord, EOS_Data &eos, DvceArray5D<Real> &u)
-{
-  auto &indcs = coord.indcs;
-  int &ng = indcs.ng;
-  int n1 = indcs.nx1 + 2*ng;
-  int n2 = indcs.nx2 + 2*ng;
-  int &ke = indcs.ke;
-  auto bondi_ = bondi;
-
-  par_for("fixed_ox3", DevExeSpace(),0,(ng-1),0,(n2-1),0,(n1-1),
-    KOKKOS_LAMBDA(int k, int j, int i)
-    {
-      Real rho, pgas, uu1, uu2, uu3, g_[NMETRIC], gi_[NMETRIC];
-      ComputePrimitiveSingle(m,(ke+k+1),j,i,coord,g_,gi_,bondi_,
-                             rho,pgas,uu1,uu2,uu3);
-      Real ud, ue, um1, um2, um3;
-      eos.PrimToConsSingleGRHydro(g_, gi_, rho, pgas, uu1, uu2, uu3,
-                                  ud, ue, um1, um2, um3);
-      u(m,IDN,(ke+k+1),j,i) = ud;
-      u(m,IEN,(ke+k+1),j,i) = ue;
-      u(m,IM1,(ke+k+1),j,i) = um1;
-      u(m,IM2,(ke+k+1),j,i) = um2;
-      u(m,IM3,(ke+k+1),j,i) = um3;
-    }
-  );
   return;
 }

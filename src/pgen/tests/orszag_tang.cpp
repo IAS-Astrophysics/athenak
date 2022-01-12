@@ -39,7 +39,7 @@ Real A3(const Real x1, const Real x2, const Real B0) {
 //  constructed assuming the domain extends over [-0.5x0.5, -0.5x0.5], so that exact
 //  symmetry can be enforced across x=0 and y=0.
 
-void ProblemGenerator::OrszagTang_(MeshBlockPack *pmbp, ParameterInput *pin)
+void ProblemGenerator::OrszagTang(MeshBlockPack *pmbp, ParameterInput *pin)
 {
   if (pmbp->pmhd == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl

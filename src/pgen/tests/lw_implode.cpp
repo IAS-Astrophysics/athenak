@@ -21,7 +21,7 @@
 //! \fn void MeshBlock::LWImplode_()
 //  \brief Problem Generator for LW Implosion test
 
-void ProblemGenerator::LWImplode_(MeshBlockPack *pmbp, ParameterInput *pin)
+void ProblemGenerator::LWImplode(MeshBlockPack *pmbp, ParameterInput *pin)
 {
   if (pmbp->phydro == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl

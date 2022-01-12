@@ -20,11 +20,6 @@ class Viscosity;
 class SourceTerms;
 class Driver;
 
-// function ptr for user-defined Hydro boundary functions enrolled in problem generator 
-namespace hydro {
-using HydroBoundaryFnPtr = void (*)(int m, Mesh* pm, Hydro* phyd, DvceArray5D<Real> &u);
-}
-
 // constants that enumerate Hydro Riemann Solver options
 enum class Hydro_RSolver {advect, llf, hlle, hllc, roe,    // non-relativistic
                           llf_sr, hlle_sr, hllc_sr,        // SR
@@ -78,9 +73,8 @@ public:
 
   DvceArray5D<Real> coarse_u0;  // conserved variables on 2x coarser grid (for SMR/AMR)
 
-  // Boundary communication buffers and routines for u, and user-defined boundary fn 
+  // Boundary communication buffers and functions for u
   BoundaryValuesCC *pbval_u;
-  HydroBoundaryFnPtr HydroBoundaryFunc[6];
 
   // Object(s) for extra physics (viscosity, srcterms)
   Viscosity *pvisc = nullptr;
@@ -113,25 +107,6 @@ public:
   // CalculateFluxes function templated over Riemann Solvers
   template <Hydro_RSolver T>
   TaskStatus CalcFluxes(Driver *d, int stage);
-
-  // functions to set physical BCs for Hydro conserved variables, applied to single MB
-  // specified by argument 'm'. 
-  void EnrollBoundaryFunction(BoundaryFace dir, HydroBoundaryFnPtr my_bcfunc);
-  void CheckUserBoundaries();
-  void ReflectInnerX1(int m);
-  void ReflectOuterX1(int m);
-  void ReflectInnerX2(int m);
-  void ReflectOuterX2(int m);
-  void ReflectInnerX3(int m);
-  void ReflectOuterX3(int m);
-  void OutflowInnerX1(int m);
-  void OutflowOuterX1(int m);
-  void OutflowInnerX2(int m);
-  void OutflowOuterX2(int m);
-  void OutflowInnerX3(int m);
-  void OutflowOuterX3(int m);
-  void ShearInnerX1(int m);
-  void ShearOuterX1(int m);
 
 private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Hydro

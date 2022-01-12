@@ -212,7 +212,6 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
   // Initialize HYDRO: ghost zones and primitive variables (everywhere)
   hydro::Hydro *phydro = pmesh->pmb_pack->phydro;
   if (phydro != nullptr) {
-    phydro->CheckUserBoundaries();
     // following functions return a TaskStatus, but it is ignored so cast to (void)
     (void) phydro->RestrictU(this, 0);
     (void) phydro->InitRecv(this, -1);  // stage < 0 suppresses InitFluxRecv
@@ -230,7 +229,6 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
   // Note this requires communicating BOTH u and B
   mhd::MHD *pmhd = pmesh->pmb_pack->pmhd;
   if (pmhd != nullptr) {
-    pmhd->CheckUserBoundaries();
     // following functions return a TaskStatus, but it is ignored so cast to (void)
     (void) pmhd->RestrictU(this, 0);
     (void) pmhd->RestrictB(this, 0);

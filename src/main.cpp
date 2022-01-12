@@ -265,7 +265,7 @@ int main(int argc, char *argv[])
 
   pmesh->pmb_pack->AddPhysics(pinput);
   if (res_flag == 0) {
-    // set ICs for new problem by calling ProblemGenerator
+    // set ICs using ProblemGenerator constructor for new runs
     pmesh->pgen = std::make_unique<ProblemGenerator>(pinput, pmesh);
   } else {
     // read ICs from restart file using ProblemGenerator constructor for restarts

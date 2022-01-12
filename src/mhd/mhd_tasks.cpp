@@ -285,8 +285,15 @@ TaskStatus MHD::ApplyPhysicalBCs(Driver *pdrive, int stage)
 {
   // only apply BCs if domain is not strictly periodic
   if (!(pmy_pack->pmesh->strictly_periodic)) {
+
+    // physical BCs
     pbval_u->HydroBCs((pmy_pack), (pbval_u->u_in), u0);
     pbval_b->BFieldBCs((pmy_pack), (pbval_b->b_in), b0);
+
+    // user BCs
+    if (pmy_pack->pmesh->pgen->user_bcs) {
+      (pmy_pack->pmesh->pgen->user_bcs_func)(pmy_pack->pmesh);
+    }
   }
   return TaskStatus::complete;
 }

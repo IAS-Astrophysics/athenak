@@ -44,6 +44,9 @@ void MHDEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
                     const Real x, const Real y, const EOS_Data &eos,
                     Real eigenvalues[7], Real right_eigenmatrix[7][7]);
 
+// function to compute errors in solution at end of run
+void LinearWaveErrors(MeshBlockPack *pmbp, ParameterInput *pin);
+
 //----------------------------------------------------------------------------------------
 //! \struct LinWaveVariables
 //! \brief container for variables shared with vector potential and error functions
@@ -100,8 +103,11 @@ Real A3(const Real x1, const Real x2, const Real x3, const LinWaveVariables lw) 
 //! \fn void ProblemGenerator::LinearWave_()
 //! \brief Sets initial conditions for linear wave tests
 
-void ProblemGenerator::LinearWave_(MeshBlockPack *pmbp, ParameterInput *pin)
+void ProblemGenerator::LinearWave(MeshBlockPack *pmbp, ParameterInput *pin)
 {
+  // set linear wave errors function
+  pgen_error_func = LinearWaveErrors;
+
   // read global parameters
   int wave_flag = pin->GetInteger("problem", "wave_flag");
   Real amp = pin->GetReal("problem", "amp");
@@ -697,17 +703,17 @@ void MHDEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void ProblemGenerator::LinearWaveErrors_()
+//! \fn void LinearWaveErrors_()
 //! \brief Computes errors in linear wave solution by calling initialization function
 //! again to compute initial condictions, and subtracting current solution from ICs, and
 //! outputs errors to file. Problem must be run for an integer number of wave periods.
 
-void ProblemGenerator::LinearWaveErrors_(MeshBlockPack *pmbp, ParameterInput *pin)
+void LinearWaveErrors(MeshBlockPack *pmbp, ParameterInput *pin)
 {
   // calculate reference solution by calling pgen again.  Solution stored in second
   // register u1/b1 when flag is false.
   set_initial_conditions = false;
-  LinearWave_(pmbp, pin);
+  pmbp->pmesh->pgen->LinearWave(pmbp, pin);
 
   Real l1_err[8];
   int nvars=0;

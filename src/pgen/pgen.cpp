@@ -3,7 +3,7 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file pgen.cpp
+//! \file ogen.cpp
 //  \brief implementation of functions in class ProblemGenerator
 
 #include <iostream>
@@ -19,26 +19,33 @@
 // constructor, initializes data structures and parameters
 
 ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm)
- : pmy_mesh_(pm)
+ : user_bcs(false),
+   pmy_mesh_(pm)
 {
+  // check for user-defined boundary conditions 
+  for (int dir=0; dir<6; ++dir) {
+    if (pm->mesh_bcs[dir] == BoundaryFlag::user) {
+      user_bcs = true;
+    }
+  }
+
 #if USER_PROBLEM_ENABLED
   // call user-defined problem generator
   UserProblem(pm->pmb_pack, pin);
 #else
-
   // else read name of built-in pgen from <problem> block in input file, and call
   std::string pgen_fun_name = pin->GetOrAddString("problem", "pgen_name", "none");
 
   if (pgen_fun_name.compare("advection") == 0) {
-    pgen_func_ = &ProblemGenerator::Advection_;
+    Advection(pm->pmb_pack, pin);
   } else if (pgen_fun_name.compare("linear_wave") == 0) {
-    pgen_func_ = &ProblemGenerator::LinearWave_;
+    LinearWave(pm->pmb_pack, pin);
   } else if (pgen_fun_name.compare("shock_tube") == 0) {
-    pgen_func_ = &ProblemGenerator::ShockTube_; 
+    ShockTube(pm->pmb_pack, pin); 
   } else if (pgen_fun_name.compare("implode") == 0) {
-    pgen_func_ = &ProblemGenerator::LWImplode_;
+    LWImplode(pm->pmb_pack, pin);
   } else if (pgen_fun_name.compare("orszag_tang") == 0) {
-    pgen_func_ = &ProblemGenerator::OrszagTang_;
+    OrszagTang(pm->pmb_pack, pin);
 
   // else, name not set on command line or input file, print warning and quit
   } else {
@@ -51,17 +58,26 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm)
         << std::endl;;
     std::exit(EXIT_FAILURE);
   }
-
-  // now call appropriate pgen function
-  (this->*pgen_func_)(pm->pmb_pack, pin);
 #endif
+
+  // Check that user defined BCs were enrolled if needed
+  if (user_bcs) {
+    if (user_bcs_func == nullptr) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "User BCs specified in <mesh> block, but not enrolled "
+                << "by problem generator." << std::endl;
+      exit(EXIT_FAILURE);
+    }
+  }
+
 }
 
 //----------------------------------------------------------------------------------------
 // constructor for restarts
 
 ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resfile)
- : pmy_mesh_(pm)
+ : user_bcs(false),
+   pmy_mesh_(pm)
 {
   IOWrapperSizeT datasize;
   // Read size of data arrays from restart file
@@ -112,21 +128,14 @@ std::cout << "datasize = " << datasize << std::endl;
 }
 
 //----------------------------------------------------------------------------------------
-// dtor
-
-//ProblemGenerator::~ProblemGenerator() {
-//}
-
-//----------------------------------------------------------------------------------------
 //! \fn ProblemGenerator::ProblemGeneratorFinalize()
 //  \brief calls any final work to be done after execution of main loop, for example
 //  compute errors in linear wave test
 
 void ProblemGenerator::ProblemGeneratorFinalize(ParameterInput *pin, Mesh *pm)
 {
-  std::string pgen_fun_name = pin->GetOrAddString("problem", "pgen_name", "none");
-  if (pgen_fun_name.compare("linear_wave") == 0) {
-    LinearWaveErrors_(pm->pmb_pack, pin);
+  if (pgen_error_func != nullptr) {
+    (pgen_error_func)(pm->pmb_pack, pin);
   }
   return;
 }

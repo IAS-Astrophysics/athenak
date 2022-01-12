@@ -28,7 +28,7 @@
 //   iprob=2: square wave
 //   iprob=2: Gaussian, square, and triangle
 
-void ProblemGenerator::Advection_(MeshBlockPack *pmbp, ParameterInput *pin)
+void ProblemGenerator::Advection(MeshBlockPack *pmbp, ParameterInput *pin)
 {
   // Read input parameters
   int flow_dir = pin->GetInteger("problem","flow_dir");
