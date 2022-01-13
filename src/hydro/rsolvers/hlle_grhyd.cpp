@@ -23,7 +23,8 @@ namespace hydro {
 //
 
 KOKKOS_INLINE_FUNCTION
-void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coord,
+void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos,
+     const RegionIndcs &indcs,const DualArray1D<RegionSize> &size,const CoordData &coord,
      const int m, const int k, const int j, const int il, const int iu, const int ivx,
      const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr, DvceArray5D<Real> flx) {
   int ivy = IVX + ((ivx-IVX)+1)%3;
@@ -31,33 +32,30 @@ void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &c
   const Real gm1 = (eos.gamma - 1.0);
   const Real gamma_prime = eos.gamma/(eos.gamma - 1.0);
 
-  int is = coord.indcs.is;
-  int js = coord.indcs.js;
-  int ks = coord.indcs.ks;
+  int is = indcs.is;
+  int js = indcs.js;
+  int ks = indcs.ks;
   par_for_inner(member, il, iu, [&](const int i) {
     // Extract components of metric
-    Real &x1min = coord.size.d_view(m).x1min;
-    Real &x1max = coord.size.d_view(m).x1max;
-    Real &x2min = coord.size.d_view(m).x2min;
-    Real &x2max = coord.size.d_view(m).x2max;
-    Real &x3min = coord.size.d_view(m).x3min;
-    Real &x3max = coord.size.d_view(m).x3max;
-    int nx1 = coord.indcs.nx1;
-    int nx2 = coord.indcs.nx2;
-    int nx3 = coord.indcs.nx3;
+    Real &x1min = size.d_view(m).x1min;
+    Real &x1max = size.d_view(m).x1max;
+    Real &x2min = size.d_view(m).x2min;
+    Real &x2max = size.d_view(m).x2max;
+    Real &x3min = size.d_view(m).x3min;
+    Real &x3max = size.d_view(m).x3max;
     Real x1v,x2v,x3v;
     if (ivx == IVX) {
-      x1v = LeftEdgeX  (i-is, nx1, x1min, x1max);
-      x2v = CellCenterX(j-js, nx2, x2min, x2max);
-      x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+      x1v = LeftEdgeX  (i-is, indcs.nx1, x1min, x1max);
+      x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+      x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
     } else if (ivx == IVY) {
-      x1v = CellCenterX(i-is, nx1, x1min, x1max);
-      x2v = LeftEdgeX  (j-js, nx2, x2min, x2max);
-      x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+      x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+      x2v = LeftEdgeX  (j-js, indcs.nx2, x2min, x2max);
+      x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
     } else {
-      x1v = CellCenterX(i-is, nx1, x1min, x1max);
-      x2v = CellCenterX(j-js, nx2, x2min, x2max);
-      x3v = LeftEdgeX  (k-ks, nx3, x3min, x3max);
+      x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+      x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+      x3v = LeftEdgeX  (k-ks, indcs.nx3, x3min, x3max);
     }
 
     Real g_[NMETRIC], gi_[NMETRIC];

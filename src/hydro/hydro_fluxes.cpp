@@ -29,7 +29,7 @@
 #include "hydro/rsolvers/llf_srhyd.cpp"   // NOLINT(build/include)
 #include "hydro/rsolvers/hlle_srhyd.cpp"  // NOLINT(build/include)
 #include "hydro/rsolvers/hllc_srhyd.cpp"  // NOLINT(build/include)
-// #include "hydro/rsolvers/hlle_grhyd.cpp"  // NOLINT(build/include)
+#include "hydro/rsolvers/hlle_grhyd.cpp"  // NOLINT(build/include)
 
 namespace hydro {
 //----------------------------------------------------------------------------------------
@@ -39,7 +39,7 @@ namespace hydro {
 
 template <Hydro_RSolver rsolver_method_>
 TaskStatus Hydro::CalcFluxes(Driver *pdriver, int stage) {
-  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  RegionIndcs &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
@@ -50,7 +50,8 @@ TaskStatus Hydro::CalcFluxes(Driver *pdriver, int stage) {
   int nmb1 = pmy_pack->nmb_thispack - 1;
   const auto recon_method_ = recon_method;
   auto &eos = peos->eos_data;
-  // auto &mbd = pmy_pack->pcoord->mbdata;
+  auto &size = pmy_pack->pmb->mb_size;
+  auto &coord = pmy_pack->pcoord->coord_data;
   auto &w0_ = w0;
 
   //--------------------------------------------------------------------------------------
@@ -102,8 +103,8 @@ TaskStatus Hydro::CalcFluxes(Driver *pdriver, int stage) {
       HLLE_SR(member, eos, m, k, j, is, ie+1, IVX, wl, wr, flx1);
     } else if constexpr (rsolver_method_ == Hydro_RSolver::hllc_sr) {
       HLLC_SR(member, eos, m, k, j, is, ie+1, IVX, wl, wr, flx1);
-    // } else if constexpr (rsolver_method_ == Hydro_RSolver::hlle_gr) {
-    //   HLLE_GR(member, eos, mbd, m, k, j, is, ie+1, IVX, wl, wr, flx1);
+    } else if constexpr (rsolver_method_ == Hydro_RSolver::hlle_gr) {
+      HLLE_GR(member, eos, indcs, size, coord, m, k, j, is, ie+1, IVX, wl, wr, flx1);
     }
     member.team_barrier();
 
@@ -181,8 +182,8 @@ TaskStatus Hydro::CalcFluxes(Driver *pdriver, int stage) {
             HLLE_SR(member, eos, m, k, j, is, ie, IVY, wl, wr, flx2);
           } else if constexpr (rsolver_method_ == Hydro_RSolver::hllc_sr) {
             HLLC_SR(member, eos, m, k, j, is, ie, IVY, wl, wr, flx2);
-          // } else if constexpr (rsolver_method_ == Hydro_RSolver::hlle_gr) {
-          //   HLLE_GR(member, eos, mbd, m, k, j, is, ie, IVY, wl, wr, flx2);
+          } else if constexpr (rsolver_method_ == Hydro_RSolver::hlle_gr) {
+            HLLE_GR(member, eos, indcs, size, coord, m, k, j, is, ie, IVY, wl, wr, flx2);
           }
           member.team_barrier();
         }
@@ -263,8 +264,8 @@ TaskStatus Hydro::CalcFluxes(Driver *pdriver, int stage) {
             HLLE_SR(member, eos, m, k, j, is, ie, IVZ, wl, wr, flx3);
           } else if constexpr (rsolver_method_ == Hydro_RSolver::hllc_sr) {
             HLLC_SR(member, eos, m, k, j, is, ie, IVZ, wl, wr, flx3);
-          // } else if constexpr (rsolver_method_ == Hydro_RSolver::hlle_gr) {
-          //   HLLE_GR(member, eos, mbd, m, k, j, is, ie, IVZ, wl, wr, flx3);
+          } else if constexpr (rsolver_method_ == Hydro_RSolver::hlle_gr) {
+            HLLE_GR(member, eos, indcs, size, coord, m, k, j, is, ie, IVZ, wl, wr, flx3);
           }
           member.team_barrier();
         }
