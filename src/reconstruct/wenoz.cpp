@@ -10,8 +10,9 @@
 // Borges R., Carmona M., Costa B., Don W.S. , "An improved weighted essentially
 // non-oscillatory scheme for hyperbolic conservation laws" , JCP, 227, 3191 (2008)
 
-#include <algorithm>    // max()
 #include <math.h>
+
+#include <algorithm>    // max()
 
 #include "athena.hpp"
 
@@ -22,8 +23,7 @@
 
 KOKKOS_INLINE_FUNCTION
 void WENOZ(const Real &q_im2, const Real &q_im1, const Real &q_i, const Real &q_ip1,
-           const Real &q_ip2, Real &ql_ip1, Real &qr_i) noexcept 
-{
+           const Real &q_ip2, Real &ql_ip1, Real &qr_i) noexcept  {
   // Smooth WENO weights: Note that these are from Del Zanna et al. 2007 (A.18)
   const Real beta_coeff[2]{13. / 12., 0.25};
 
@@ -88,12 +88,10 @@ void WENOZ(const Real &q_im2, const Real &q_im1, const Real &q_i, const Real &q_
 KOKKOS_INLINE_FUNCTION
 void WENOZX1(TeamMember_t const &member,const int m,const int k,const int j,
      const int il, const int iu, const DvceArray5D<Real> &q,
-     ScrArray2D<Real> &ql, ScrArray2D<Real> &qr)
-{
+     ScrArray2D<Real> &ql, ScrArray2D<Real> &qr) {
   int nvar = q.extent_int(1);
   for (int n=0; n<nvar; ++n) {
-    par_for_inner(member, il, iu, [&](const int i)
-    { 
+    par_for_inner(member, il, iu, [&](const int i) {
       WENOZ(q(m,n,k,j,i-2), q(m,n,k,j,i-1), q(m,n,k,j,i), q(m,n,k,j,i+1),
             q(m,n,k,j,i+2), ql(n,i+1), qr(n,i));
     });
@@ -109,12 +107,10 @@ void WENOZX1(TeamMember_t const &member,const int m,const int k,const int j,
 KOKKOS_INLINE_FUNCTION
 void WENOZX2(TeamMember_t const &member,const int m,const int k,const int j,
      const int il, const int iu, const DvceArray5D<Real> &q,
-     ScrArray2D<Real> &ql_jp1, ScrArray2D<Real> &qr_j)
-{
+     ScrArray2D<Real> &ql_jp1, ScrArray2D<Real> &qr_j) {
   int nvar = q.extent_int(1);
   for (int n=0; n<nvar; ++n) {
-    par_for_inner(member, il, iu, [&](const int i)
-    { 
+    par_for_inner(member, il, iu, [&](const int i) {
       WENOZ(q(m,n,k,j-2,i), q(m,n,k,j-1,i), q(m,n,k,j,i), q(m,n,k,j+1,i),
             q(m,n,k,j+2,i), ql_jp1(n,i), qr_j(n,i));
     });
@@ -130,12 +126,10 @@ void WENOZX2(TeamMember_t const &member,const int m,const int k,const int j,
 KOKKOS_INLINE_FUNCTION
 void WENOZX3(TeamMember_t const &member,const int m,const int k,const int j,
      const int il, const int iu, const DvceArray5D<Real> &q,
-     ScrArray2D<Real> &ql_kp1, ScrArray2D<Real> &qr_k)
-{
+     ScrArray2D<Real> &ql_kp1, ScrArray2D<Real> &qr_k) {
   int nvar = q.extent_int(1);
   for (int n=0; n<nvar; ++n) {
-    par_for_inner(member, il, iu, [&](const int i)
-    { 
+    par_for_inner(member, il, iu, [&](const int i) {
       WENOZ(q(m,n,k-2,j,i), q(m,n,k-1,j,i), q(m,n,k,j,i), q(m,n,k+1,j,i),
             q(m,n,k+2,j,i), ql_kp1(n,i), qr_k(n,i));
     });

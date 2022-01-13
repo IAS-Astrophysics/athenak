@@ -25,9 +25,8 @@
 //! relative to center of MeshBlock (0,0,0).  The arguments f1/2 are the coordinates
 //! of subblocks within faces/edges (only relevant with SMR/AMR)
 
-void BoundaryValuesFC::InitSendIndices(
-     BoundaryBuffer &buf, int ox1, int ox2, int ox3, int f1, int f2)
-{
+void BoundaryValuesFC::InitSendIndices(BoundaryBuffer &buf,
+                                       int ox1, int ox2, int ox3, int f1, int f2) {
   auto &mb_indcs  = pmy_pack->pmesh->mb_indcs;
   int ng  = mb_indcs.ng;
   int ng1 = ng - 1;
@@ -103,7 +102,7 @@ void BoundaryValuesFC::InitSendIndices(
   // Formulae taken from LoadBoundaryBufferToCoarser() in src/bvals/fc/bvals_fc.cpp
   // Identical to send indices for same level replacing is,ie,.. with cis,cie,...
   {auto &icoar = buf.icoar;   // indices of buffer for neighbor coarser level
-  if (ox1 == 0) { 
+  if (ox1 == 0) {
     icoar[0].bis = mb_indcs.cis,          icoar[0].bie = mb_indcs.cie + 1;
     icoar[1].bis = mb_indcs.cis,          icoar[1].bie = mb_indcs.cie;
     icoar[2].bis = mb_indcs.cis,          icoar[2].bie = mb_indcs.cie;
@@ -116,7 +115,7 @@ void BoundaryValuesFC::InitSendIndices(
     icoar[1].bis = mb_indcs.cis,          icoar[1].bie = mb_indcs.cis + ng1;
     icoar[2].bis = mb_indcs.cis,          icoar[2].bie = mb_indcs.cis + ng1;
   }
-  if (ox2 == 0) { 
+  if (ox2 == 0) {
     icoar[0].bjs = mb_indcs.cjs,          icoar[0].bje = mb_indcs.cje;
     icoar[1].bjs = mb_indcs.cjs,          icoar[1].bje = mb_indcs.cje + 1;
     icoar[2].bjs = mb_indcs.cjs,          icoar[2].bje = mb_indcs.cje;
@@ -137,7 +136,7 @@ void BoundaryValuesFC::InitSendIndices(
     icoar[0].bks = mb_indcs.cke - ng1,    icoar[0].bke = mb_indcs.cke;
     icoar[1].bks = mb_indcs.cke - ng1,    icoar[1].bke = mb_indcs.cke;
     icoar[2].bks = mb_indcs.cke - ng1,    icoar[2].bke = mb_indcs.cke;
-  } else {              
+  } else {
     icoar[0].bks = mb_indcs.cks,          icoar[0].bke = mb_indcs.cks + ng1;
     icoar[1].bks = mb_indcs.cks,          icoar[1].bke = mb_indcs.cks + ng1;
     icoar[2].bks = mb_indcs.cks + 1,      icoar[2].bke = mb_indcs.cks + ng;
@@ -159,7 +158,8 @@ void BoundaryValuesFC::InitSendIndices(
     int ndat = (icoar[i].bie - icoar[i].bis + 1)*(icoar[i].bje - icoar[i].bjs + 1)*
                (icoar[i].bke - icoar[i].bks + 1);
     buf.icoar_ndat = std::max(buf.icoar_ndat, ndat);
-  }}
+  }
+  }
 
   // set indices for sends to neighbors on FINER level (matches recv from COARSER)
   // Formulae taken from LoadBoundaryBufferToFiner() src/bvals/fc/bvals_fc.cpp
@@ -269,7 +269,8 @@ void BoundaryValuesFC::InitSendIndices(
     int ndat = (ifine[i].bie - ifine[i].bis + 1)*(ifine[i].bje - ifine[i].bjs + 1)*
                (ifine[i].bke - ifine[i].bks + 1);
     buf.ifine_ndat = std::max(buf.ifine_ndat, ndat);
-  }}
+  }
+  }
 
   // set indices for sends for FLUX CORRECTION (sends always to COARSER level)
   {auto &iflux = buf.iflux;    // indices of buffer for flux correction
@@ -316,7 +317,8 @@ void BoundaryValuesFC::InitSendIndices(
     int ndat = (iflux[i].bie - iflux[i].bis + 1)*(iflux[i].bje - iflux[i].bjs + 1)*
                (iflux[i].bke - iflux[i].bks + 1);
     buf.iflux_ndat = std::max(buf.iflux_ndat, ndat);
-  }}
+  }
+  }
 
   return;
 }
@@ -332,9 +334,8 @@ void BoundaryValuesFC::InitSendIndices(
 //! relative to center of MeshBlock (0,0,0).  The arguments f1/2 are the coordinates
 //! of subblocks within faces/edges (only relevant with SMR/AMR)
 
-void BoundaryValuesFC::InitRecvIndices(
-     BoundaryBuffer &buf, int ox1, int ox2, int ox3, int f1, int f2)
-{ 
+void BoundaryValuesFC::InitRecvIndices(BoundaryBuffer &buf,
+                                       int ox1, int ox2, int ox3, int f1, int f2) {
   auto &mb_indcs  = pmy_pack->pmesh->mb_indcs;
   int ng = mb_indcs.ng;
 
@@ -505,7 +506,8 @@ void BoundaryValuesFC::InitRecvIndices(
     int ndat = (icoar[i].bie - icoar[i].bis + 1)*(icoar[i].bje - icoar[i].bjs + 1)*
                (icoar[i].bke - icoar[i].bks + 1);
     buf.icoar_ndat = std::max(buf.icoar_ndat, ndat);
-  }}
+  }
+  }
 
   // set indices for receives from neighbors on FINER level (matches send to COARSER)
   // Formulae taken from SetBoundaryFromFiner() in src/bvals/cc/bvals_cc.cpp
@@ -621,7 +623,8 @@ void BoundaryValuesFC::InitRecvIndices(
     int ndat = (ifine[i].bie - ifine[i].bis + 1)*(ifine[i].bje - ifine[i].bjs + 1)*
                (ifine[i].bke - ifine[i].bks + 1);
     buf.ifine_ndat = std::max(buf.ifine_ndat, ndat);
-  }}
+  }
+  }
 
   // set indices for PROLONGATION in coarse cell buffers. Indices refer to coarse cells.
   // Formulae taken from ProlongateBoundaries() in src/bvals/bvals_refine.cpp
@@ -724,7 +727,8 @@ void BoundaryValuesFC::InitRecvIndices(
     iprol[0].bks = mb_indcs.cks - cn;         iprol[0].bke = mb_indcs.cks - 1;
     iprol[1].bks = mb_indcs.cks - cn;         iprol[1].bke = mb_indcs.cks - 1;
     iprol[2].bks = mb_indcs.cks - cn;         iprol[2].bke = mb_indcs.cks - 1;
-  }}
+  }
+  }
 
   // set indices for receives for flux-correction.  Similar to send, except data loaded
   // into appropriate sub-block of coarse buffer (similar to receive from FINER level)
@@ -827,6 +831,6 @@ void BoundaryValuesFC::InitRecvIndices(
     int ndat = (iflux[i].bie - iflux[i].bis + 1)*(iflux[i].bje - iflux[i].bjs + 1)*
                (iflux[i].bke - iflux[i].bks + 1);
     buf.iflux_ndat = std::max(buf.iflux_ndat, ndat);
-  }}
-
+  }
+  }
 }

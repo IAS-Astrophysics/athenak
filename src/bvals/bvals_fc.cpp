@@ -20,10 +20,9 @@
 //----------------------------------------------------------------------------------------
 // BValFC constructor:
 
-BoundaryValuesFC::BoundaryValuesFC(MeshBlockPack *pp, ParameterInput *pin)
- : BoundaryValues(pp, pin)
-{
-} 
+BoundaryValuesFC::BoundaryValuesFC(MeshBlockPack *pp, ParameterInput *pin) :
+  BoundaryValues(pp, pin) {
+}
 
 //----------------------------------------------------------------------------------------
 //! \!fn void BoundaryValuesFC::PackAndSendFC()
@@ -37,8 +36,7 @@ BoundaryValuesFC::BoundaryValuesFC(MeshBlockPack *pp, ParameterInput *pin)
 //! DvceFaceFld4D of coarsened (restricted) fields also required with SMR/AMR
 
 TaskStatus BoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
-                                           DvceFaceFld4D<Real> &cb)
-{
+                                           DvceFaceFld4D<Real> &cb) {
   // create local references for variables in kernel
   int nmb = pmy_pack->pmb->nmb;
   int nnghbr = pmy_pack->pmb->nnghbr;
@@ -54,15 +52,13 @@ TaskStatus BoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
   // Outer loop over (# of MeshBlocks)*(# of buffers)*(three field components)
   int nmnv = 3*nmb*nnghbr;
   Kokkos::TeamPolicy<> policy(DevExeSpace(), nmnv, Kokkos::AUTO);
-  Kokkos::parallel_for("SendBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember)
-  { 
+  Kokkos::parallel_for("SendBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
     const int m = (tmember.league_rank())/(3*nnghbr);
     const int n = (tmember.league_rank() - m*(3*nnghbr))/3;
     const int v = (tmember.league_rank() - m*(3*nnghbr) - 3*n);
 
     // only load buffers when neighbor exists
     if (nghbr.d_view(m,n).gid >= 0) {
-
       // if neighbor is at coarser level, use cindices to pack buffer
       // Note indices can be different for each component of face-centered field.
       int il, iu, jl, ju, kl, ku, nv[3];
@@ -119,12 +115,11 @@ TaskStatus BoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
       int dn = nghbr.d_view(m,n).dest;
 
       // Middle loop over k,j
-      Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx)
-      {
+      Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
         int k = idx / nj;
         int j = (idx - k * nj) + jl;
         k += kl;
-  
+
         // Inner (vector) loop over i
         // copy field components directly into recv buffer if MeshBlocks on same rank
 
@@ -133,20 +128,17 @@ TaskStatus BoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
           if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
             if (v==0) {
               Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-              [&](const int i)
-              {
+              [&](const int i) {
                 rbuf[dn].vars(dm,i-il + ni*(j-jl + nj*(k-kl))) = b.x1f(m,k,j,i);
               });
             } else if (v==1) {
               Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-              [&](const int i)
-              {
+              [&](const int i) {
                 rbuf[dn].vars(dm,nv[1] + i-il + ni*(j-jl + nj*(k-kl))) = b.x2f(m,k,j,i);
               });
             } else {
               Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-              [&](const int i)
-              {
+              [&](const int i) {
                 rbuf[dn].vars(dm,nv[2] + i-il + ni*(j-jl + nj*(k-kl))) = b.x3f(m,k,j,i);
               });
             }
@@ -154,20 +146,17 @@ TaskStatus BoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
           } else {
             if (v==0) {
               Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-              [&](const int i)
-              {
+              [&](const int i) {
                 rbuf[dn].vars(dm,i-il + ni*(j-jl + nj*(k-kl))) = cb.x1f(m,k,j,i);
               });
             } else if (v==1) {
               Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-              [&](const int i)
-              {
+              [&](const int i) {
                 rbuf[dn].vars(dm,nv[1] + i-il + ni*(j-jl + nj*(k-kl))) = cb.x2f(m,k,j,i);
               });
             } else {
               Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-              [&](const int i)
-              {
+              [&](const int i) {
                 rbuf[dn].vars(dm,nv[2] + i-il + ni*(j-jl + nj*(k-kl))) = cb.x3f(m,k,j,i);
               });
             }
@@ -180,20 +169,17 @@ TaskStatus BoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
           if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
             if (v==0) {
               Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-              [&](const int i)
-              {
+              [&](const int i) {
                 sbuf[n].vars(m,i-il + ni*(j-jl + nj*(k-kl))) = b.x1f(m,k,j,i);
               });
             } else if (v==1) {
               Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-              [&](const int i)
-              {
+              [&](const int i) {
                 sbuf[n].vars(m,nv[1] + i-il + ni*(j-jl + nj*(k-kl))) = b.x2f(m,k,j,i);
               });
             } else {
               Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-              [&](const int i)
-              {
+              [&](const int i) {
                 sbuf[n].vars(m,nv[2] + i-il + ni*(j-jl + nj*(k-kl))) = b.x3f(m,k,j,i);
               });
             }
@@ -201,20 +187,17 @@ TaskStatus BoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
           } else {
             if (v==0) {
               Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-              [&](const int i)
-              {
+              [&](const int i) {
                 sbuf[n].vars(m,i-il + ni*(j-jl + nj*(k-kl))) = cb.x1f(m,k,j,i);
               });
             } else if (v==1) {
               Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-              [&](const int i)
-              {
+              [&](const int i) {
                 sbuf[n].vars(m,nv[1] + i-il + ni*(j-jl + nj*(k-kl))) = cb.x2f(m,k,j,i);
               });
             } else {
               Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-              [&](const int i)
-              {
+              [&](const int i) {
                 sbuf[n].vars(m,nv[2] + i-il + ni*(j-jl + nj*(k-kl))) = cb.x3f(m,k,j,i);
               });
             }
@@ -236,7 +219,7 @@ TaskStatus BoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
       if (nghbr.h_view(m,n).gid >= 0) {  // neighbor exists and not a physical boundary
-        // index and rank of destination Neighbor 
+        // index and rank of destination Neighbor
         int dn = nghbr.h_view(m,n).dest;
         int drank = nghbr.h_view(m,n).rank;
 
@@ -246,7 +229,6 @@ TaskStatus BoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
           // index of destination MeshBlock in this MBPack
           int dm = nghbr.h_view(m,n).gid - pmy_pack->gids;
           rbuf[dn].vars_stat[dm] = BoundaryCommStatus::received;
-
 #if MPI_PARALLEL_ENABLED
         } else {
           // create tag using local ID and buffer index of *receiving* MeshBlock
@@ -281,8 +263,8 @@ TaskStatus BoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
 // \!fn void RecvBuffers()
 // \brief Unpack boundary buffers
 
-TaskStatus BoundaryValuesFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb)
-{
+TaskStatus BoundaryValuesFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b,
+                                             DvceFaceFld4D<Real> &cb) {
   // create local references for variables in kernel
   int nmb = pmy_pack->pmb->nmb;
   int nnghbr = pmy_pack->pmb->nnghbr;
@@ -329,17 +311,15 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b, DvceFaceFld
 
   // Outer loop over (# of MeshBlocks)*(# of buffers)*(three field components)
   Kokkos::TeamPolicy<> policy(DevExeSpace(), (3*nmb*nnghbr), Kokkos::AUTO);
-  Kokkos::parallel_for("RecvBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember)
-  {
+  Kokkos::parallel_for("RecvBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
     const int m = (tmember.league_rank())/(3*nnghbr);
     const int n = (tmember.league_rank() - m*(3*nnghbr))/3;
     const int v = (tmember.league_rank() - m*(3*nnghbr) - 3*n);
 
     // only unpack buffers when neighbor exists
     if (nghbr.d_view(m,n).gid >= 0) {
-      
       // if neighbor is at coarser level, use cindices to unpack buffer
-      int il, iu, jl, ju, kl, ku, nv[3]; 
+      int il, iu, jl, ju, kl, ku, nv[3];
       nv[0] = 0;
       if (nghbr.d_view(m,n).lev < mblev.d_view(m)) {
         il = rbuf[n].icoar[v].bis;
@@ -389,12 +369,11 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b, DvceFaceFld
       const int nkj  = nk*nj;
 
       // Middle loop over k,j
-      Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx)
-      {
+      Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
         int k = idx / nj;
         int j = (idx - k * nj) + jl;
         k += kl;
-         
+
         // Inner (vector) loop over i
         // copy contents of recv_buf into appropriate vector components
 
@@ -402,20 +381,17 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b, DvceFaceFld
         if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
           if (v==0) {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-            [&](const int i)
-            {
+            [&](const int i) {
               b.x1f(m,k,j,i) = rbuf[n].vars(m,i-il + ni*(j-jl + nj*(k-kl)));
             });
           } else if (v==1) {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-            [&](const int i)
-            {
+            [&](const int i) {
               b.x2f(m,k,j,i) = rbuf[n].vars(m,nv[1] + i-il + ni*(j-jl + nj*(k-kl)));
             });
           } else {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-            [&](const int i)
-            {
+            [&](const int i) {
               b.x3f(m,k,j,i) = rbuf[n].vars(m,nv[2] + i-il + ni*(j-jl + nj*(k-kl)));
             });
           }
@@ -423,20 +399,17 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b, DvceFaceFld
         } else {
           if (v==0) {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-            [&](const int i)
-            {
+            [&](const int i) {
               cb.x1f(m,k,j,i) = rbuf[n].vars(m,i-il + ni*(j-jl + nj*(k-kl)));
             });
           } else if (v==1) {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-            [&](const int i)
-            {
+            [&](const int i) {
               cb.x2f(m,k,j,i) = rbuf[n].vars(m,nv[1] + i-il + ni*(j-jl + nj*(k-kl)));
             });
           } else {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-            [&](const int i)
-            {
+            [&](const int i) {
               cb.x3f(m,k,j,i) = rbuf[n].vars(m,nv[2] + i-il + ni*(j-jl + nj*(k-kl)));
             });
           }

@@ -16,8 +16,7 @@
 //----------------------------------------------------------------------------------------
 //! \class TurbulenceDriver
 
-class TurbulenceDriver
-{
+class TurbulenceDriver {
  public:
   TurbulenceDriver(MeshBlockPack *pp, ParameterInput *pin);
   ~TurbulenceDriver();
@@ -49,7 +48,7 @@ class TurbulenceDriver
   TaskStatus AddForcing(Driver *pdrive, int stage);
 
  private:
-  bool first_time=true;     // flag to enable initialization on first call 
+  bool first_time=true;     // flag to enable initialization on first call
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this TurbulenceDriver
 };
 

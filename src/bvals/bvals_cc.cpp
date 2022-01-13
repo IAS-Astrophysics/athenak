@@ -20,10 +20,9 @@
 //----------------------------------------------------------------------------------------
 // BValCC constructor:
 
-BoundaryValuesCC::BoundaryValuesCC(MeshBlockPack *pp, ParameterInput *pin)
- : BoundaryValues(pp, pin)
-{
-} 
+BoundaryValuesCC::BoundaryValuesCC(MeshBlockPack *pp, ParameterInput *pin) :
+  BoundaryValues(pp, pin) {
+}
 
 //----------------------------------------------------------------------------------------
 //! \fn void BoundaryValuesCC::PackAndSendCC()
@@ -35,14 +34,13 @@ BoundaryValuesCC::BoundaryValuesCC(MeshBlockPack *pp, ParameterInput *pin)
 //! directly for periodic or block boundaries.
 //!
 //! Input arrays must be 5D Kokkos View dimensioned (nmb, nvar, nx3, nx2, nx1)
-//! 5D Kokkos View of coarsened (restricted) array data also required with SMR/AMR 
+//! 5D Kokkos View of coarsened (restricted) array data also required with SMR/AMR
 
-TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
-{
+TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca) {
   // create local references for variables in kernel
   int nmb = pmy_pack->pmb->nmb;
   int nnghbr = pmy_pack->pmb->nnghbr;
-  int nvar = a.extent_int(1);  // TODO: 2nd index from L of input array must be NVAR
+  int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
 
   {int &my_rank = global_variable::my_rank;
   auto &nghbr = pmy_pack->pmb->nghbr;
@@ -54,15 +52,13 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
   // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
   int nmnv = nmb*nnghbr*nvar;
   Kokkos::TeamPolicy<> policy(DevExeSpace(), nmnv, Kokkos::AUTO);
-  Kokkos::parallel_for("SendBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember)
-  { 
+  Kokkos::parallel_for("SendBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
     const int m = (tmember.league_rank())/(nnghbr*nvar);
     const int n = (tmember.league_rank() - m*(nnghbr*nvar))/nvar;
     const int v = (tmember.league_rank() - m*(nnghbr*nvar) - n*nvar);
 
     // only load buffers when neighbor exists
     if (nghbr.d_view(m,n).gid >= 0) {
-
       // if neighbor is at coarser level, use coar indices to pack buffer
       int il, iu, jl, ju, kl, ku;
       if (nghbr.d_view(m,n).lev < mblev.d_view(m)) {
@@ -100,12 +96,11 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
       int dn = nghbr.d_view(m,n).dest;
 
       // Middle loop over k,j
-      Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx)
-      {
+      Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
         int k = idx / nj;
         int j = (idx - k * nj) + jl;
         k += kl;
-  
+
         // Inner (vector) loop over i
         // copy directly into recv buffer if MeshBlocks on same rank
 
@@ -113,15 +108,13 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
           // if neighbor is at same or finer level, load data from u0
           if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-            [&](const int i)
-            {
+            [&](const int i) {
               rbuf[dn].vars(dm, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) ) = a(m,v,k,j,i);
             });
           // if neighbor is at coarser level, load data from coarse_u0
           } else {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-            [&](const int i)
-            {
+            [&](const int i) {
               rbuf[dn].vars(dm, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) ) = ca(m,v,k,j,i);
             });
           }
@@ -132,15 +125,13 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
           // if neighbor is at same or finer level, load data from u0
           if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-            [&](const int i)
-            {
+            [&](const int i) {
               sbuf[n].vars(m, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) ) = a(m,v,k,j,i);
             });
           // if neighbor is at coarser level, load data from coarse_u0
           } else {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-            [&](const int i)
-            {
+            [&](const int i) {
               sbuf[n].vars(m, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) ) = ca(m,v,k,j,i);
             });
           }
@@ -161,7 +152,7 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
       if (nghbr.h_view(m,n).gid >= 0) {  // neighbor exists and not a physical boundary
-        // index and rank of destination Neighbor 
+        // index and rank of destination Neighbor
         int dn = nghbr.h_view(m,n).dest;
         int drank = nghbr.h_view(m,n).rank;
 
@@ -207,8 +198,8 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
 // \!fn void RecvBuffers()
 // \brief Unpack boundary buffers
 
-TaskStatus BoundaryValuesCC::RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
-{
+TaskStatus BoundaryValuesCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
+                                             DvceArray5D<Real> &ca) {
   // create local references for variables in kernel
   int nmb = pmy_pack->pmb->nmb;
   int nnghbr = pmy_pack->pmb->nnghbr;
@@ -251,20 +242,18 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<R
 
   //----- STEP 2: buffers have all completed, so unpack
 
-  int nvar = a.extent_int(1);  // TODO: 2nd index from L of input array must be NVAR
+  int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
   auto &mblev = pmy_pack->pmb->mb_lev;
 
   // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
   Kokkos::TeamPolicy<> policy(DevExeSpace(), (nmb*nnghbr*nvar), Kokkos::AUTO);
-  Kokkos::parallel_for("RecvBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember)
-  {
+  Kokkos::parallel_for("RecvBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
     const int m = (tmember.league_rank())/(nnghbr*nvar);
     const int n = (tmember.league_rank() - m*(nnghbr*nvar))/nvar;
     const int v = (tmember.league_rank() - m*(nnghbr*nvar) - n*nvar);
 
     // only unpack buffers when neighbor exists
     if (nghbr.d_view(m,n).gid >= 0) {
-
       // if neighbor is at coarser level, use coar indices to unpack buffer
       int il, iu, jl, ju, kl, ku;
       if (nghbr.d_view(m,n).lev < mblev.d_view(m)) {
@@ -297,27 +286,25 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<R
       const int nkj  = nk*nj;
 
       // Middle loop over k,j
-      Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx)
-      {
+      Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
         int k = idx / nj;
         int j = (idx - k * nj) + jl;
         k += kl;
-         
+
         // if neighbor is at same or finer level, load data directly into u0
         if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
-          Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),[&](const int i)
-          {
+          Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
+          [&](const int i) {
             a(m,v,k,j,i) = rbuf[n].vars(m, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) );
           });
 
         // if neighbor is at coarser level, load data into coarse_u0 (prolongate below)
         } else {
-          Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),[&](const int i)
-          {
+          Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
+          [&](const int i) {
             ca(m,v,k,j,i) = rbuf[n].vars(m, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) );
           });
         }
-
       });
     }  // end if-neighbor-exists block
   });  // end par_for_outer

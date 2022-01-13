@@ -37,7 +37,7 @@ static void GetBoyerLindquistCoordinates(struct bondi_pgen pgen,
 KOKKOS_INLINE_FUNCTION
 static void TransformVector(struct bondi_pgen pgen,
                             Real a1_bl, Real a2_bl, Real a3_bl,
-                            Real x1, Real x2, Real x3, 
+                            Real x1, Real x2, Real x3,
                             Real *pa1, Real *pa2, Real *pa3);
 
 KOKKOS_INLINE_FUNCTION
@@ -73,11 +73,10 @@ void BondiErrors(MeshBlockPack *pmbp, ParameterInput *pin);
 //----------------------------------------------------------------------------------------
 //! \fn void ProblemGenerator::BondiAccretion_()
 //! \brief set initial conditions for Bondi accretion test
-//  Compile with '-D PROBLEM=gr_bondi' to enroll as user-specific problem generator 
+//  Compile with '-D PROBLEM=gr_bondi' to enroll as user-specific problem generator
 //    reference: Hawley, Smarr, & Wilson 1984, ApJ 277 296 (HSW)
 
-void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
-{
+void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin) {
   if (!(pmbp->phydro->peos->eos_data.use_e)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "gr_bondi test requires hydro/use_e=true" << std::endl;
@@ -85,7 +84,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
   }
 
   // set user-defined BCs and error function pointers
-  pgen_error_func = BondiErrors; 
+  pgen_error_func = BondiErrors;
   user_bcs_func = FixedBondiInflow;
 
   // Read problem-specific parameters from input file
@@ -134,29 +133,27 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
 
   // Initialize primitive values (HYDRO ONLY)
   par_for("pgen_bondi", DevExeSpace(), 0,(nmb-1),0,(n3-1),0,(n2-1),0,(n1-1),
-    KOKKOS_LAMBDA(int m, int k, int j, int i)
-    {
-      Real rho, pgas, uu1, uu2, uu3, g_[NMETRIC], gi_[NMETRIC];
-      Real &x1min = size.d_view(m).x1min;
-      Real &x1max = size.d_view(m).x1max;
-      Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    Real rho, pgas, uu1, uu2, uu3, g_[NMETRIC], gi_[NMETRIC];
+    Real &x1min = size.d_view(m).x1min;
+    Real &x1max = size.d_view(m).x1max;
+    Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
 
-      Real &x2min = size.d_view(m).x2min;
-      Real &x2max = size.d_view(m).x2max;
-      Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+    Real &x2min = size.d_view(m).x2min;
+    Real &x2max = size.d_view(m).x2max;
+    Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
 
-      Real &x3min = size.d_view(m).x3min;
-      Real &x3max = size.d_view(m).x3max;
-      Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+    Real &x3min = size.d_view(m).x3min;
+    Real &x3max = size.d_view(m).x3max;
+    Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
-      ComputePrimitiveSingle(x1v,x2v,x3v,coord,g_,gi_,bondi_,rho,pgas,uu1,uu2,uu3);
-      w0_(m,IDN,k,j,i) = rho;
-      w0_(m,IEN,k,j,i) = pgas/gm1;
-      w0_(m,IM1,k,j,i) = uu1;
-      w0_(m,IM2,k,j,i) = uu2;
-      w0_(m,IM3,k,j,i) = uu3;
-    }
-  );
+    ComputePrimitiveSingle(x1v,x2v,x3v,coord,g_,gi_,bondi_,rho,pgas,uu1,uu2,uu3);
+    w0_(m,IDN,k,j,i) = rho;
+    w0_(m,IEN,k,j,i) = pgas/gm1;
+    w0_(m,IM1,k,j,i) = uu1;
+    w0_(m,IM2,k,j,i) = uu2;
+    w0_(m,IM3,k,j,i) = uu3;
+  });
 
   // Convert primitives to conserved
   auto &u0_ = pmbp->phydro->u0;
@@ -174,8 +171,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
 //! \fn void ProblemGenerator::LinearWaveErrors_()
 //  \brief Computes errors in linear wave solution and outputs to file.
 
-void BondiErrors(MeshBlockPack *pmbp, ParameterInput *pin)
-{
+void BondiErrors(MeshBlockPack *pmbp, ParameterInput *pin) {
   // calculate reference solution by calling pgen again.  Solution stored in second
   // register u1/b1 when flag is false.
   bondi.reset_ic=true;
@@ -208,38 +204,35 @@ void BondiErrors(MeshBlockPack *pmbp, ParameterInput *pin)
     array_sum::GlobalSum sum_this_mb;
     Kokkos::parallel_reduce("Bondi-err-Sums",
                             Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-      KOKKOS_LAMBDA(const int &idx, array_sum::GlobalSum &mb_sum)
-      {
-        // compute n,k,j,i indices of thread
-        int m = (idx)/nkji;
-        int k = (idx - m*nkji)/nji;
-        int j = (idx - m*nkji - k*nji)/nx1;
-        int i = (idx - m*nkji - k*nji - j*nx1) + is;
-        k += ks;
-        j += js;
+    KOKKOS_LAMBDA(const int &idx, array_sum::GlobalSum &mb_sum) {
+      // compute n,k,j,i indices of thread
+      int m = (idx)/nkji;
+      int k = (idx - m*nkji)/nji;
+      int j = (idx - m*nkji - k*nji)/nx1;
+      int i = (idx - m*nkji - k*nji - j*nx1) + is;
+      k += ks;
+      j += js;
 
-        Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
+      Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
 
-        // Hydro conserved variables:
-        array_sum::GlobalSum evars;
-        evars.the_array[IDN] = vol*fabs(u0_(m,IDN,k,j,i) - u1_(m,IDN,k,j,i));
-        evars.the_array[IM1] = vol*fabs(u0_(m,IM1,k,j,i) - u1_(m,IM1,k,j,i));
-        evars.the_array[IM2] = vol*fabs(u0_(m,IM2,k,j,i) - u1_(m,IM2,k,j,i));
-        evars.the_array[IM3] = vol*fabs(u0_(m,IM3,k,j,i) - u1_(m,IM3,k,j,i));
-        if (eos.is_ideal) {
-          evars.the_array[IEN] = vol*fabs(u0_(m,IEN,k,j,i) - u1_(m,IEN,k,j,i));
-        }
+      // Hydro conserved variables:
+      array_sum::GlobalSum evars;
+      evars.the_array[IDN] = vol*fabs(u0_(m,IDN,k,j,i) - u1_(m,IDN,k,j,i));
+      evars.the_array[IM1] = vol*fabs(u0_(m,IM1,k,j,i) - u1_(m,IM1,k,j,i));
+      evars.the_array[IM2] = vol*fabs(u0_(m,IM2,k,j,i) - u1_(m,IM2,k,j,i));
+      evars.the_array[IM3] = vol*fabs(u0_(m,IM3,k,j,i) - u1_(m,IM3,k,j,i));
+      if (eos.is_ideal) {
+        evars.the_array[IEN] = vol*fabs(u0_(m,IEN,k,j,i) - u1_(m,IEN,k,j,i));
+      }
 
-        // fill rest of the_array with zeros, if narray < NREDUCTION_VARIABLES
-        for (int n=nvars; n<NREDUCTION_VARIABLES; ++n) {
-          evars.the_array[n] = 0.0;
-        }
+      // fill rest of the_array with zeros, if narray < NREDUCTION_VARIABLES
+      for (int n=nvars; n<NREDUCTION_VARIABLES; ++n) {
+        evars.the_array[n] = 0.0;
+      }
 
-        // sum into parallel reduce
-        mb_sum += evars;
-
-      }, Kokkos::Sum<array_sum::GlobalSum>(sum_this_mb)
-    );
+      // sum into parallel reduce
+      mb_sum += evars;
+    }, Kokkos::Sum<array_sum::GlobalSum>(sum_this_mb));
 
     // store data into l1_err array
     for (int n=0; n<nvars; ++n) {
@@ -329,8 +322,8 @@ KOKKOS_INLINE_FUNCTION
 static void ComputePrimitiveSingle(Real x1v, Real x2v, Real x3v, CoordData coord,
                                    Real g_[], Real gi_[],
                                    struct bondi_pgen pgen,
-                                   Real& rho, Real& pgas, Real& uu1, Real& uu2, Real& uu3)
-{
+                                   Real& rho, Real& pgas,
+                                   Real& uu1, Real& uu2, Real& uu3) {
   // Calculate Boyer-Lindquist coordinates of cell
   Real r, theta, phi;
   GetBoyerLindquistCoordinates(pgen, x1v, x2v, x3v, &r, &theta, &phi);
@@ -371,8 +364,7 @@ static void ComputePrimitiveSingle(Real x1v, Real x2v, Real x3v, CoordData coord
 KOKKOS_INLINE_FUNCTION
 static void GetBoyerLindquistCoordinates(struct bondi_pgen pgen,
                                          Real x1, Real x2, Real x3,
-                                         Real *pr, Real *ptheta, Real *pphi)
-{
+                                         Real *pr, Real *ptheta, Real *pphi) {
     Real rad = sqrt(SQR(x1) + SQR(x2) + SQR(x3));
     Real r = sqrt( SQR(rad) - SQR(pgen.spin) + sqrt(SQR(SQR(rad)-SQR(pgen.spin))
                    + 4.0*SQR(pgen.spin)*SQR(x3)) ) / sqrt(2.0);
@@ -397,8 +389,7 @@ KOKKOS_INLINE_FUNCTION
 static void TransformVector(struct bondi_pgen pgen,
                             Real a1_bl, Real a2_bl, Real a3_bl,
                             Real x1, Real x2, Real x3,
-                            Real *pa1, Real *pa2, Real *pa3)
-{ 
+                            Real *pa1, Real *pa2, Real *pa3) {
   Real rad = sqrt( SQR(x1) + SQR(x2) + SQR(x3) );
   Real r = sqrt( SQR(rad) - SQR(pgen.spin) + sqrt( SQR(SQR(rad) - SQR(pgen.spin))
                + 4.0*SQR(pgen.spin)*SQR(x3) ) )/ sqrt(2.0);
@@ -429,8 +420,7 @@ static void TransformVector(struct bondi_pgen pgen,
 
 KOKKOS_INLINE_FUNCTION
 static void CalculatePrimitives(struct bondi_pgen pgen, Real r,
-                                Real *prho, Real *ppgas, Real *pur)
-{
+                                Real *prho, Real *ppgas, Real *pur) {
   // Calculate solution to (HSW 76)
   Real temp_neg_res = TemperatureMin(pgen, r, pgen.temp_min, pgen.temp_max);
   Real temp;
@@ -584,8 +574,7 @@ static Real TemperatureResidual(struct bondi_pgen pgen, Real t, Real r) {
 //  \brief Sets boundary condition on surfaces of computational domain
 // Note quantities at boundaryies are held fixed to initial condition values
 
-void FixedBondiInflow(Mesh *pm)
-{
+void FixedBondiInflow(Mesh *pm) {
   auto &indcs = pm->mb_indcs;
   auto &size = pm->pmb_pack->pmb->mb_size;
   auto &coord = pm->pmb_pack->pcoord->coord_data;
@@ -598,13 +587,12 @@ void FixedBondiInflow(Mesh *pm)
   int &js = indcs.js;  int &je  = indcs.je;
   int &ks = indcs.ks;  int &ke  = indcs.ke;
   auto bondi_ = bondi;
-  
+
   int nmb = pm->pmb_pack->nmb_thispack;
   auto u0_ = pm->pmb_pack->phydro->u0;
 
   par_for("fixed_x1", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),0,(ng-1),
-  KOKKOS_LAMBDA(int m, int k, int j, int i)
-  {
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
     // inner x1 boundary
     Real &x1min = size.d_view(m).x1min;
     Real &x1max = size.d_view(m).x1max;
@@ -643,17 +631,16 @@ void FixedBondiInflow(Mesh *pm)
   });
 
   par_for("fixed_x2", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(ng-1),0,(n1-1),
-  KOKKOS_LAMBDA(int m, int k, int j, int i)
-  {
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
     // inner x2 boundary
     Real &x1min = size.d_view(m).x1min;
     Real &x1max = size.d_view(m).x1max;
     Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
-    
+
     Real &x2min = size.d_view(m).x2min;
     Real &x2max = size.d_view(m).x2max;
     Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
-    
+
     Real &x3min = size.d_view(m).x3min;
     Real &x3max = size.d_view(m).x3max;
     Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
@@ -683,17 +670,16 @@ void FixedBondiInflow(Mesh *pm)
   });
 
   par_for("fixed_ix3", DevExeSpace(),0,(nmb-1),0,(ng-1),0,(n2-1),0,(n1-1),
-  KOKKOS_LAMBDA(int m, int k, int j, int i)
-  {
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
     // inner x3 boundary
     Real &x1min = size.d_view(m).x1min;
     Real &x1max = size.d_view(m).x1max;
     Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
-                           
+
     Real &x2min = size.d_view(m).x2min;
     Real &x2max = size.d_view(m).x2max;
     Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
-    
+
     Real &x3min = size.d_view(m).x3min;
     Real &x3max = size.d_view(m).x3max;
     Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);

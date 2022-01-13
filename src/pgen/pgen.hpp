@@ -10,7 +10,7 @@
 
 #include <functional>
 #include "parameter_input.hpp"
-  
+
 using UserBoundaryFnPtr = void (*)(Mesh* pm);
 using UserErrorFnPtr = void (*)(MeshBlockPack *pmbp, ParameterInput *pin);
 
@@ -26,7 +26,7 @@ class ProblemGenerator {
   ~ProblemGenerator() = default;
 
   // data
-  bool user_bcs;  
+  bool user_bcs;
 
   // function pointers for pgen errors / user enrolled BCs
   UserErrorFnPtr pgen_error_func=nullptr;

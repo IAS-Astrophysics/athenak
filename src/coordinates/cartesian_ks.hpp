@@ -1,3 +1,5 @@
+#ifndef COORDINATES_CARTESIAN_KS_HPP_
+#define COORDINATES_CARTESIAN_KS_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
@@ -6,13 +8,13 @@
 //! \file cartesian_gr.hpp
 //! \brief implements functions for Cartesian Kerr-Schild coordinates in GR.  This
 //! includes inline functions to compute metric, derivatives of the metric, and function
-//! to compute "cordinate source terms".  Based on functions in 'gr_user.cpp' file in
+//! to compute "coordinate source terms".  Based on functions in 'gr_user.cpp' file in
 //! Athena++, as well as CartesianGR.cpp function from CJW and SR.
 
 #include "athena.hpp"
 #include "globals.hpp"
 #include "mesh/mesh.hpp"
-  
+
 #define SMALL_NUMBER 1.0e-5
 
 //----------------------------------------------------------------------------------------
@@ -22,14 +24,13 @@
 
 KOKKOS_INLINE_FUNCTION
 void ComputeMetricAndInverse(Real x, Real y, Real z, bool minkowski, bool ic,
-                             Real a, Real g[], Real ginv[])
-{
+                             Real a, Real g[], Real ginv[]) {
   if (fabs(z) < (SMALL_NUMBER)) z = (SMALL_NUMBER);
   Real rad = fmax(sqrt(SQR(x) + SQR(y) + SQR(z)),1.0);  // avoid singularity for rad<1
   if (ic) {rad=sqrt(SQR(x) + SQR(y) + SQR(z));}  // unless you are trying to set ic
   Real r = SQR(rad)-SQR(a) + sqrt( SQR(SQR(rad)-SQR(a))+4.0*SQR(a)*SQR(z) );
   r = sqrt(r/2.0);
-  
+
   // Set covariant components
   // null vector l
   Real l_lower[4];
@@ -37,7 +38,7 @@ void ComputeMetricAndInverse(Real x, Real y, Real z, bool minkowski, bool ic,
   l_lower[1] = (r*x + (a)*y)/( SQR(r) + SQR(a) );
   l_lower[2] = (r*y - (a)*x)/( SQR(r) + SQR(a) );
   l_lower[3] = z/r;
-  
+
   // g_nm = f*l_n*l_m + eta_nm, where eta_nm is Minkowski metric
   Real f = 2.0 * SQR(r)*r / (SQR(SQR(r)) + SQR(a)*SQR(z));
   if (minkowski) {f=0.0;}
@@ -82,8 +83,7 @@ void ComputeMetricAndInverse(Real x, Real y, Real z, bool minkowski, bool ic,
 
 KOKKOS_INLINE_FUNCTION
 void ComputeMetricDerivatives(Real x, Real y, Real z, bool minkowski,
-                              Real a, Real dg_dx1[], Real dg_dx2[], Real dg_dx3[])
-{
+                              Real a, Real dg_dx1[], Real dg_dx2[], Real dg_dx3[]) {
   if (fabs(z) < (SMALL_NUMBER)) z = (SMALL_NUMBER);
   Real rad = fmax(sqrt(SQR(x) + SQR(y) + SQR(z)),1.0);  // avoid singularity for rad<1
   Real r = SQR(rad)-SQR(a) + sqrt( SQR(SQR(rad)-SQR(a))+4.0*SQR(a)*SQR(z) );
@@ -100,15 +100,15 @@ void ComputeMetricDerivatives(Real x, Real y, Real z, bool minkowski,
   Real qc = 3.0*SQR(a * z)-SQR(r)*SQR(r);
   Real f = 2.0 * SQR(r)*r / (SQR(SQR(r)) + SQR(a)*SQR(z));
 
-  Real df_dx1 = SQR(f)*x/(2.0*std::pow(r,3)) * ( ( qc ) )/ qa ;
+  Real df_dx1 = SQR(f)*x/(2.0*std::pow(r,3)) * ( ( qc ) )/ qa;
   //4 x/r^2 1/(2r^3) * -r^4/r^2 = 2 x / r^3
-  Real df_dx2 = SQR(f)*y/(2.0*std::pow(r,3)) * ( ( qc ) )/ qa ;
-  Real df_dx3 = SQR(f)*z/(2.0*std::pow(r,5)) * ( ( qc * qb ) / qa - 2.0*SQR(a*r)) ;
+  Real df_dx2 = SQR(f)*y/(2.0*std::pow(r,3)) * ( ( qc ) )/ qa;
+  Real df_dx3 = SQR(f)*z/(2.0*std::pow(r,5)) * ( ( qc * qb ) / qa - 2.0*SQR(a*r));
   //4 z/r^2 * 1/2r^5 * -r^4*r^2 / r^2 = -2 z/r^3
   Real dl1_dx1 = x*r * ( SQR(a)*x - 2.0*a*r*y - SQR(r)*x )/( SQR(qb) * qa ) + r/( qb );
   // x r *(-r^2 x)/(r^6) + 1/r = -x^2/r^3 + 1/r
   Real dl1_dx2 = y*r * ( SQR(a)*x - 2.0*a*r*y - SQR(r)*x )/( SQR(qb) * qa )+ a/( qb );
-  Real dl1_dx3 = z/r * ( SQR(a)*x - 2.0*a*r*y - SQR(r)*x )/( (qb) * qa ) ;
+  Real dl1_dx3 = z/r * ( SQR(a)*x - 2.0*a*r*y - SQR(r)*x )/( (qb) * qa );
   Real dl2_dx1 = x*r * ( SQR(a)*y + 2.0*a*r*x - SQR(r)*y )/( SQR(qb) * qa ) - a/( qb );
   Real dl2_dx2 = y*r * ( SQR(a)*y + 2.0*a*r*x - SQR(r)*y )/( SQR(qb) * qa ) + r/( qb );
   Real dl2_dx3 = z/r * ( SQR(a)*y + 2.0*a*r*x - SQR(r)*y )/( (qb) * qa );
@@ -165,3 +165,5 @@ void ComputeMetricDerivatives(Real x, Real y, Real z, bool minkowski,
 
   return;
 }
+
+#endif // COORDINATES_CARTESIAN_KS_HPP_

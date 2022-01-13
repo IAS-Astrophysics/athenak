@@ -21,8 +21,7 @@
 // cell). Averages linear interpolation from each side to symmetrize r.o. error
 
 KOKKOS_INLINE_FUNCTION
-static Real LeftEdgeX(int ith, int n, Real xmin, Real xmax)
-{
+static Real LeftEdgeX(int ith, int n, Real xmin, Real xmax) {
   Real x = (static_cast<Real>(ith)) / (static_cast<Real>(n));
   return (x*xmax - x*xmin) - (0.5*xmax - 0.5*xmin) + (0.5*xmin + 0.5*xmax);
 }
@@ -34,8 +33,7 @@ static Real LeftEdgeX(int ith, int n, Real xmin, Real xmax)
 // cell). Averages linear interpolation from each side to symmetrize r.o. error
 
 KOKKOS_INLINE_FUNCTION
-static Real CellCenterX(int ith, int n, Real xmin, Real xmax)
-{
+static Real CellCenterX(int ith, int n, Real xmin, Real xmax) {
   Real x = (static_cast<Real>(ith) + 0.5) / (static_cast<Real>(n));
   return (x*xmax - x*xmin) - (0.5*xmax - 0.5*xmin) + (0.5*xmin + 0.5*xmax);
 }
@@ -44,11 +42,10 @@ static Real CellCenterX(int ith, int n, Real xmin, Real xmax)
 //! \fn void CellCenterIndex()
 // returns i-index of cell containing x position
 
-// TODO: set trap if out-of-range
+// TODO(@user): set trap if out-of-range
 
 KOKKOS_INLINE_FUNCTION
-static int CellCenterIndex(Real x, int n, Real xmin, Real xmax)
-{
+static int CellCenterIndex(Real x, int n, Real xmin, Real xmax) {
   return static_cast<int>(((x-xmin)/(xmax-xmin))*static_cast<Real>(n));
 }
 

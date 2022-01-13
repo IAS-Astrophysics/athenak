@@ -1,4 +1,4 @@
-//=======================================================================================r
+//========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
@@ -32,8 +32,7 @@
 // Creates vector of output variable data
 
 OutputType::OutputType(OutputParameters opar, Mesh *pm) :
-   out_params(opar)
-{
+  out_params(opar) {
   // exit for history files
   if (out_params.file_type.compare("hst") == 0) {return;}
 
@@ -307,22 +306,20 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
 // create std::vector of HostArray3Ds containing data specified in <output> block for
 // this output type
 
-void OutputType::LoadOutputData(Mesh *pm)
-{
+void OutputType::LoadOutputData(Mesh *pm) {
   // out_data_ vector (indexed over # of output MBs) stores 4D array of variables
   // so start iteration over number of MeshBlocks
-  // TODO: get this working for multiple physics, which may be either defined/undef
+  // TODO(@user): get this working for multiple physics, which may be either defined/undef
 
   // With AMR, number and location of output MBs can change between output times.
   // So start with clean vector of output MeshBlock info, and re-compute
   outmbs.clear();
 
   // loop over all MeshBlocks
-  // set size & starting indices of output arrays, adjusted accordingly if gz included 
+  // set size & starting indices of output arrays, adjusted accordingly if gz included
   auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
   auto &size  = pm->pmb_pack->pmb->mb_size;
   for (int m=0; m<(pm->pmb_pack->nmb_thispack); ++m) {
-
     // skip if MeshBlock ID is specified and not equal to this ID
     if (out_params.gid >= 0 && m != out_params.gid) { continue; }
 
@@ -386,7 +383,7 @@ void OutputType::LoadOutputData(Mesh *pm)
   int nout_vars = outvars.size();
   int nout_mbs = outmbs.size();
   // note that while ois,oie,etc. can be different on each MB, the number of cells output
-  // on each MeshBlock, i.e. (ois-ois+1), etc. is the same. 
+  // on each MeshBlock, i.e. (ois-ois+1), etc. is the same.
   if (nout_mbs > 0) {
     int nout1 = (outmbs[0].oie - outmbs[0].ois + 1);
     int nout2 = (outmbs[0].oje - outmbs[0].ojs + 1);
@@ -425,11 +422,10 @@ void OutputType::LoadOutputData(Mesh *pm)
 // Print error message when output of Hydro variable requested but Hydro object not
 // constructed, and then quit
 
-void OutputType::ErrHydroOutput(std::string block)
-{
+void OutputType::ErrHydroOutput(std::string block) {
   std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
             << "Output of Hydro variable requested in <output> block '" << block
-            << "' but no Hydro object " << std::endl << "has been constructed." 
+            << "' but no Hydro object " << std::endl << "has been constructed."
             << " Input file is likely missing a <hydro> block" << std::endl;
   exit(EXIT_FAILURE);
 }
@@ -439,8 +435,7 @@ void OutputType::ErrHydroOutput(std::string block)
 // Print error message when output of MHD variable requested but MHD object not
 // constructed, and then quit
 
-void OutputType::ErrMHDOutput(std::string block)
-{
+void OutputType::ErrMHDOutput(std::string block) {
   std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
             << "Output of MHD variable requested in <output> block '" << block
             << "' but no MHD object " << std::endl << "has been constructed."
@@ -453,8 +448,7 @@ void OutputType::ErrMHDOutput(std::string block)
 // Print error message when output of Force variable requested but Force object not
 // constructed, and then quit
 
-void OutputType::ErrForceOutput(std::string block)
-{
+void OutputType::ErrForceOutput(std::string block) {
   std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
             << "Output of Force variable requested in <output> block '" << block
             << "' but no Force object " << std::endl << "has been constructed."

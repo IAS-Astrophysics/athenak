@@ -21,12 +21,11 @@
 //  refer to the overall tree itself, but rather each MeshBlockTree is a node. A pointer
 //  to the root node is stored in the Mesh class.
 
-class MeshBlockTree
-{
- // mesh classes (Mesh, MeshBlock, MeshBlockPack, MeshBlockTree) like to play together
- friend class Mesh;
- friend class MeshBlock;
- friend class MeshBlockPack;
+class MeshBlockTree {
+  // mesh classes (Mesh, MeshBlock, MeshBlockPack, MeshBlockTree) like to play together
+  friend class Mesh;
+  friend class MeshBlock;
+  friend class MeshBlockPack;
 
  public:
   explicit MeshBlockTree(Mesh *pmesh);

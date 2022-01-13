@@ -51,8 +51,7 @@ void LinearWaveErrors(MeshBlockPack *pmbp, ParameterInput *pin);
 //! \struct LinWaveVariables
 //! \brief container for variables shared with vector potential and error functions
 
-struct LinWaveVariables
-{
+struct LinWaveVariables {
   Real d0, p0, v1_0, b1_0, b2_0, b3_0, dby, dbz, k_par;
   Real cos_a2, cos_a3, sin_a2, sin_a3;
 };
@@ -75,7 +74,7 @@ Real A1(const Real x1, const Real x2, const Real x3, const LinWaveVariables lw) 
 //----------------------------------------------------------------------------------------
 //! \fn Real A2(const Real x1,const Real x2,const Real x3)
 //! \brief A2: 2-component of vector potential
-  
+
 KOKKOS_INLINE_FUNCTION
 Real A2(const Real x1, const Real x2, const Real x3, const LinWaveVariables lw) {
   Real x =  x1*lw.cos_a2*lw.cos_a3 + x2*lw.cos_a2*lw.sin_a3 + x3*lw.sin_a2;
@@ -103,8 +102,7 @@ Real A3(const Real x1, const Real x2, const Real x3, const LinWaveVariables lw) 
 //! \fn void ProblemGenerator::LinearWave_()
 //! \brief Sets initial conditions for linear wave tests
 
-void ProblemGenerator::LinearWave(MeshBlockPack *pmbp, ParameterInput *pin)
-{
+void ProblemGenerator::LinearWave(MeshBlockPack *pmbp, ParameterInput *pin) {
   // set linear wave errors function
   pgen_error_func = LinearWaveErrors;
 
@@ -213,7 +211,7 @@ void ProblemGenerator::LinearWave(MeshBlockPack *pmbp, ParameterInput *pin)
     HydroEigensystem(lwv.d0, lwv.v1_0, 0.0, 0.0, p0, eos, ev, rem);
 
     // set new time limit in ParameterInput (to be read by Driver constructor) based on
-    // wave speed of selected mode.  
+    // wave speed of selected mode.
     // input tlim is interpreted asnumber of wave periods for evolution
     if (set_initial_conditions) {
       Real tlim = pin->GetReal("time", "tlim");
@@ -221,44 +219,42 @@ void ProblemGenerator::LinearWave(MeshBlockPack *pmbp, ParameterInput *pin)
     }
 
     // compute solution in u1 register. For initial conditions, set u1 -> u0.
-    auto &u1 = (set_initial_conditions)? pmbp->phydro->u0 : pmbp->phydro->u1; 
+    auto &u1 = (set_initial_conditions)? pmbp->phydro->u0 : pmbp->phydro->u1;
 
     par_for("pgen_linwave1", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
-      KOKKOS_LAMBDA(int m, int k, int j, int i)
-      {
-        Real &x1min = size.d_view(m).x1min;
-        Real &x1max = size.d_view(m).x1max;
-        int nx1 = indcs.nx1;
-        Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      int nx1 = indcs.nx1;
+      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
-        Real &x2min = size.d_view(m).x2min;
-        Real &x2max = size.d_view(m).x2max;
-        int nx2 = indcs.nx2;
-        Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+      Real &x2min = size.d_view(m).x2min;
+      Real &x2max = size.d_view(m).x2max;
+      int nx2 = indcs.nx2;
+      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
-        Real &x3min = size.d_view(m).x3min;
-        Real &x3max = size.d_view(m).x3max;
-        int nx3 = indcs.nx3;
-        Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+      Real &x3min = size.d_view(m).x3min;
+      Real &x3max = size.d_view(m).x3max;
+      int nx3 = indcs.nx3;
+      Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
-        Real x = lwv.cos_a2*(x1v*lwv.cos_a3 + x2v*lwv.sin_a3) + x3v*lwv.sin_a2;
-        Real sn = std::sin(lwv.k_par*x);
-        Real mx = lwv.d0*vflow + amp*sn*rem[1][wave_flag];
-        Real my = amp*sn*rem[2][wave_flag];
-        Real mz = amp*sn*rem[3][wave_flag];
-  
-        // compute cell-centered conserved variables
-        u1(m,IDN,k,j,i)=lwv.d0 + amp*sn*rem[0][wave_flag];
-        u1(m,IM1,k,j,i)=mx*lwv.cos_a2*lwv.cos_a3 -my*lwv.sin_a3 -mz*lwv.sin_a2*lwv.cos_a3;
-        u1(m,IM2,k,j,i)=mx*lwv.cos_a2*lwv.sin_a3 +my*lwv.cos_a3 -mz*lwv.sin_a2*lwv.sin_a3;
-        u1(m,IM3,k,j,i)=mx*lwv.sin_a2                           +mz*lwv.cos_a2;
+      Real x = lwv.cos_a2*(x1v*lwv.cos_a3 + x2v*lwv.sin_a3) + x3v*lwv.sin_a2;
+      Real sn = std::sin(lwv.k_par*x);
+      Real mx = lwv.d0*vflow + amp*sn*rem[1][wave_flag];
+      Real my = amp*sn*rem[2][wave_flag];
+      Real mz = amp*sn*rem[3][wave_flag];
 
-        if (eos.is_ideal) {
-          u1(m,IEN,k,j,i) = p0/gm1 + 0.5*lwv.d0*(lwv.v1_0)*(lwv.v1_0) +
-                          amp*sn*rem[4][wave_flag];
-        }
+      // compute cell-centered conserved variables
+      u1(m,IDN,k,j,i)=lwv.d0 + amp*sn*rem[0][wave_flag];
+      u1(m,IM1,k,j,i)=mx*lwv.cos_a2*lwv.cos_a3 -my*lwv.sin_a3 -mz*lwv.sin_a2*lwv.cos_a3;
+      u1(m,IM2,k,j,i)=mx*lwv.cos_a2*lwv.sin_a3 +my*lwv.cos_a3 -mz*lwv.sin_a2*lwv.sin_a3;
+      u1(m,IM3,k,j,i)=mx*lwv.sin_a2                           +mz*lwv.cos_a2;
+
+      if (eos.is_ideal) {
+        u1(m,IEN,k,j,i) = p0/gm1 + 0.5*lwv.d0*(lwv.v1_0)*(lwv.v1_0) +
+                        amp*sn*rem[4][wave_flag];
       }
-    );
+    });
   }  // End initialization Hydro variables
 
   // initialize MHD variables ------------------------------------------------------------
@@ -279,7 +275,7 @@ void ProblemGenerator::LinearWave(MeshBlockPack *pmbp, ParameterInput *pin)
     lwv.dbz = amp*rem[nmhd_+1][wave_flag];
 
     // set new time limit in ParameterInput (to be read by Driver constructor) based on
-    // wave speed of selected mode.  
+    // wave speed of selected mode.
     // input tlim is interpreted asnumber of wave periods for evolution
     if (set_initial_conditions) {
       Real tlim = pin->GetReal("time", "tlim");
@@ -287,77 +283,75 @@ void ProblemGenerator::LinearWave(MeshBlockPack *pmbp, ParameterInput *pin)
     }
 
     // compute solution in u1/b1 registers. For initial conditions, set u1/b1 -> u0/b0.
-    auto &u1 = (set_initial_conditions)? pmbp->pmhd->u0 : pmbp->pmhd->u1; 
+    auto &u1 = (set_initial_conditions)? pmbp->pmhd->u0 : pmbp->pmhd->u1;
     auto &b1 = (set_initial_conditions)? pmbp->pmhd->b0 : pmbp->pmhd->b1;
 
     par_for("pgen_linwave2", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
-      KOKKOS_LAMBDA(int m, int k, int j, int i)
-      {
-        Real &x1min = size.d_view(m).x1min;
-        Real &x1max = size.d_view(m).x1max;
-        int nx1 = indcs.nx1;
-        Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      int nx1 = indcs.nx1;
+      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
-        Real &x2min = size.d_view(m).x2min;
-        Real &x2max = size.d_view(m).x2max;
-        int nx2 = indcs.nx2;
-        Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+      Real &x2min = size.d_view(m).x2min;
+      Real &x2max = size.d_view(m).x2max;
+      int nx2 = indcs.nx2;
+      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
-        Real &x3min = size.d_view(m).x3min;
-        Real &x3max = size.d_view(m).x3max;
-        int nx3 = indcs.nx3;
-        Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+      Real &x3min = size.d_view(m).x3min;
+      Real &x3max = size.d_view(m).x3max;
+      int nx3 = indcs.nx3;
+      Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
-        Real x = lwv.cos_a2*(x1v*lwv.cos_a3 + x2v*lwv.sin_a3) + x3v*lwv.sin_a2;
-        Real sn = std::sin(lwv.k_par*x);
-        Real mx = lwv.d0*vflow + amp*sn*rem[1][wave_flag];
-        Real my = amp*sn*rem[2][wave_flag];
-        Real mz = amp*sn*rem[3][wave_flag];
- 
-        // compute cell-centered conserved variables
-        u1(m,IDN,k,j,i)=lwv.d0 + amp*sn*rem[0][wave_flag];
-        u1(m,IM1,k,j,i)=mx*lwv.cos_a2*lwv.cos_a3 -my*lwv.sin_a3 -mz*lwv.sin_a2*lwv.cos_a3;
-        u1(m,IM2,k,j,i)=mx*lwv.cos_a2*lwv.sin_a3 +my*lwv.cos_a3 -mz*lwv.sin_a2*lwv.sin_a3;
-        u1(m,IM3,k,j,i)=mx*lwv.sin_a2                           +mz*lwv.cos_a2;
+      Real x = lwv.cos_a2*(x1v*lwv.cos_a3 + x2v*lwv.sin_a3) + x3v*lwv.sin_a2;
+      Real sn = std::sin(lwv.k_par*x);
+      Real mx = lwv.d0*vflow + amp*sn*rem[1][wave_flag];
+      Real my = amp*sn*rem[2][wave_flag];
+      Real mz = amp*sn*rem[3][wave_flag];
 
-        if (eos.is_ideal) {
-          u1(m,IEN,k,j,i) = p0/gm1 + 0.5*lwv.d0*SQR(lwv.v1_0) +
-           amp*sn*rem[4][wave_flag] + 0.5*(SQR(lwv.b1_0) + SQR(lwv.b2_0) + SQR(lwv.b3_0));
-        }
+      // compute cell-centered conserved variables
+      u1(m,IDN,k,j,i)=lwv.d0 + amp*sn*rem[0][wave_flag];
+      u1(m,IM1,k,j,i)=mx*lwv.cos_a2*lwv.cos_a3 -my*lwv.sin_a3 -mz*lwv.sin_a2*lwv.cos_a3;
+      u1(m,IM2,k,j,i)=mx*lwv.cos_a2*lwv.sin_a3 +my*lwv.cos_a3 -mz*lwv.sin_a2*lwv.sin_a3;
+      u1(m,IM3,k,j,i)=mx*lwv.sin_a2                           +mz*lwv.cos_a2;
 
-        // Compute face-centered fields from curl(A).
-        Real x1f   = LeftEdgeX(i  -is, nx1, x1min, x1max);
-        Real x1fp1 = LeftEdgeX(i+1-is, nx1, x1min, x1max);
-        Real x2f   = LeftEdgeX(j  -js, nx2, x2min, x2max);
-        Real x2fp1 = LeftEdgeX(j+1-js, nx2, x2min, x2max);
-        Real x3f   = LeftEdgeX(k  -ks, nx3, x3min, x3max);
-        Real x3fp1 = LeftEdgeX(k+1-ks, nx3, x3min, x3max);
-        Real dx1 = size.d_view(m).dx1;
-        Real dx2 = size.d_view(m).dx2;
-        Real dx3 = size.d_view(m).dx3;
-
-        b1.x1f(m,k,j,i) = (A3(x1f,  x2fp1,x3v  ,lwv) - A3(x1f,x2f,x3v,lwv))/dx2 -
-                          (A2(x1f,  x2v,  x3fp1,lwv) - A2(x1f,x2v,x3f,lwv))/dx3;
-        b1.x2f(m,k,j,i) = (A1(x1v,  x2f,  x3fp1,lwv) - A1(x1v,x2f,x3f,lwv))/dx3 -
-                          (A3(x1fp1,x2f,  x3v  ,lwv) - A3(x1f,x2f,x3v,lwv))/dx1;
-        b1.x3f(m,k,j,i) = (A2(x1fp1,x2v,  x3f  ,lwv) - A2(x1f,x2v,x3f,lwv))/dx1 -
-                          (A1(x1v,  x2fp1,x3f  ,lwv) - A1(x1v,x2f,x3f,lwv))/dx2;
-
-        // Include extra face-component at edge of block in each direction
-        if (i==ie) {
-          b1.x1f(m,k,j,i+1) = (A3(x1fp1,x2fp1,x3v  ,lwv) - A3(x1fp1,x2f,x3v,lwv))/dx2 -
-                              (A2(x1fp1,x2v,  x3fp1,lwv) - A2(x1fp1,x2v,x3f,lwv))/dx3;
-        }
-        if (j==je) {
-          b1.x2f(m,k,j+1,i) = (A1(x1v,  x2fp1,x3fp1,lwv) - A1(x1v,x2fp1,x3f,lwv))/dx3 -
-                              (A3(x1fp1,x2fp1,x3v  ,lwv) - A3(x1f,x2fp1,x3v,lwv))/dx1;
-        }
-        if (k==ke) {
-          b1.x3f(m,k+1,j,i) = (A2(x1fp1,x2v,  x3fp1,lwv) - A2(x1f,x2v,x3fp1,lwv))/dx1 -
-                              (A1(x1v,  x2fp1,x3fp1,lwv) - A1(x1v,x2f,x3fp1,lwv))/dx2;
-        }
+      if (eos.is_ideal) {
+        u1(m,IEN,k,j,i) = p0/gm1 + 0.5*lwv.d0*SQR(lwv.v1_0) +
+         amp*sn*rem[4][wave_flag] + 0.5*(SQR(lwv.b1_0) + SQR(lwv.b2_0) + SQR(lwv.b3_0));
       }
-    );
+
+      // Compute face-centered fields from curl(A).
+      Real x1f   = LeftEdgeX(i  -is, nx1, x1min, x1max);
+      Real x1fp1 = LeftEdgeX(i+1-is, nx1, x1min, x1max);
+      Real x2f   = LeftEdgeX(j  -js, nx2, x2min, x2max);
+      Real x2fp1 = LeftEdgeX(j+1-js, nx2, x2min, x2max);
+      Real x3f   = LeftEdgeX(k  -ks, nx3, x3min, x3max);
+      Real x3fp1 = LeftEdgeX(k+1-ks, nx3, x3min, x3max);
+      Real dx1 = size.d_view(m).dx1;
+      Real dx2 = size.d_view(m).dx2;
+      Real dx3 = size.d_view(m).dx3;
+
+      b1.x1f(m,k,j,i) = (A3(x1f,  x2fp1,x3v  ,lwv) - A3(x1f,x2f,x3v,lwv))/dx2 -
+                        (A2(x1f,  x2v,  x3fp1,lwv) - A2(x1f,x2v,x3f,lwv))/dx3;
+      b1.x2f(m,k,j,i) = (A1(x1v,  x2f,  x3fp1,lwv) - A1(x1v,x2f,x3f,lwv))/dx3 -
+                        (A3(x1fp1,x2f,  x3v  ,lwv) - A3(x1f,x2f,x3v,lwv))/dx1;
+      b1.x3f(m,k,j,i) = (A2(x1fp1,x2v,  x3f  ,lwv) - A2(x1f,x2v,x3f,lwv))/dx1 -
+                        (A1(x1v,  x2fp1,x3f  ,lwv) - A1(x1v,x2f,x3f,lwv))/dx2;
+
+      // Include extra face-component at edge of block in each direction
+      if (i==ie) {
+        b1.x1f(m,k,j,i+1) = (A3(x1fp1,x2fp1,x3v  ,lwv) - A3(x1fp1,x2f,x3v,lwv))/dx2 -
+                            (A2(x1fp1,x2v,  x3fp1,lwv) - A2(x1fp1,x2v,x3f,lwv))/dx3;
+      }
+      if (j==je) {
+        b1.x2f(m,k,j+1,i) = (A1(x1v,  x2fp1,x3fp1,lwv) - A1(x1v,x2fp1,x3f,lwv))/dx3 -
+                            (A3(x1fp1,x2fp1,x3v  ,lwv) - A3(x1f,x2fp1,x3v,lwv))/dx1;
+      }
+      if (k==ke) {
+        b1.x3f(m,k+1,j,i) = (A2(x1fp1,x2v,  x3fp1,lwv) - A2(x1f,x2v,x3fp1,lwv))/dx1 -
+                            (A1(x1v,  x2fp1,x3fp1,lwv) - A1(x1v,x2f,x3fp1,lwv))/dx2;
+      }
+    });
   }  // End initialization MHD variables
 
   return;
@@ -369,8 +363,7 @@ void ProblemGenerator::LinearWave(MeshBlockPack *pmbp, ParameterInput *pin)
 
 void HydroEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
                       const Real p, const EOS_Data &eos,
-                      Real eigenvalues[5], Real right_eigenmatrix[5][5])
-{
+                      Real eigenvalues[5], Real right_eigenmatrix[5][5]) {
   //--- Ideal Gas Hydrodynamics ---
   if (eos.is_ideal) {
     Real vsq = v1*v1 + v2*v2 + v3*v3;
@@ -453,8 +446,7 @@ void HydroEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
 void MHDEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
                     const Real p, const Real b1, const Real b2, const Real b3,
                     const Real x, const Real y, const EOS_Data &eos,
-                    Real eigenvalues[7], Real right_eigenmatrix[7][7])
-{
+                    Real eigenvalues[7], Real right_eigenmatrix[7][7]) {
   // common factors for both ideal gas and isothermal eigenvectors
   Real btsq = b2*b2 + b3*b3;
   Real bt = std::sqrt(btsq);
@@ -599,10 +591,8 @@ void MHDEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
     right_eigenmatrix[6][4] = right_eigenmatrix[6][2];
     right_eigenmatrix[6][5] = right_eigenmatrix[6][1];
     right_eigenmatrix[6][6] = right_eigenmatrix[6][0];
-
   //--- Isothermal MHD ---
   } else {
-
     Real bt_starsq = btsq*y;
     Real vaxsq = b1*b1/d;
     Real twid_csq = (eos.iso_cs*eos.iso_cs) + x;
@@ -708,8 +698,7 @@ void MHDEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
 //! again to compute initial condictions, and subtracting current solution from ICs, and
 //! outputs errors to file. Problem must be run for an integer number of wave periods.
 
-void LinearWaveErrors(MeshBlockPack *pmbp, ParameterInput *pin)
-{
+void LinearWaveErrors(MeshBlockPack *pmbp, ParameterInput *pin) {
   // calculate reference solution by calling pgen again.  Solution stored in second
   // register u1/b1 when flag is false.
   set_initial_conditions = false;
@@ -718,7 +707,7 @@ void LinearWaveErrors(MeshBlockPack *pmbp, ParameterInput *pin)
   Real l1_err[8];
   int nvars=0;
 
-  // capture class variables for kernel  
+  // capture class variables for kernel
   auto &indcs = pmbp->pmesh->mb_indcs;
   int &nx1 = indcs.nx1;
   int &nx2 = indcs.nx2;
@@ -741,38 +730,35 @@ void LinearWaveErrors(MeshBlockPack *pmbp, ParameterInput *pin)
     const int nji  = nx2*nx1;
     array_sum::GlobalSum sum_this_mb;
     Kokkos::parallel_reduce("LW-err-Sums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-      KOKKOS_LAMBDA(const int &idx, array_sum::GlobalSum &mb_sum)
-      {
-        // compute n,k,j,i indices of thread
-        int m = (idx)/nkji;
-        int k = (idx - m*nkji)/nji;
-        int j = (idx - m*nkji - k*nji)/nx1;
-        int i = (idx - m*nkji - k*nji - j*nx1) + is;
-        k += ks;
-        j += js;
+    KOKKOS_LAMBDA(const int &idx, array_sum::GlobalSum &mb_sum) {
+      // compute n,k,j,i indices of thread
+      int m = (idx)/nkji;
+      int k = (idx - m*nkji)/nji;
+      int j = (idx - m*nkji - k*nji)/nx1;
+      int i = (idx - m*nkji - k*nji - j*nx1) + is;
+      k += ks;
+      j += js;
 
-        Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
+      Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
 
-        // conserved variables:
-        array_sum::GlobalSum evars;
-        evars.the_array[IDN] = vol*fabs(u0_(m,IDN,k,j,i) - u1_(m,IDN,k,j,i));
-        evars.the_array[IM1] = vol*fabs(u0_(m,IM1,k,j,i) - u1_(m,IM1,k,j,i));
-        evars.the_array[IM2] = vol*fabs(u0_(m,IM2,k,j,i) - u1_(m,IM2,k,j,i));
-        evars.the_array[IM3] = vol*fabs(u0_(m,IM3,k,j,i) - u1_(m,IM3,k,j,i));
-        if (eos.is_ideal) {
-          evars.the_array[IEN] = vol*fabs(u0_(m,IEN,k,j,i) - u1_(m,IEN,k,j,i));
-        }
-  
-        // fill rest of the_array with zeros, if narray < NREDUCTION_VARIABLES
-        for (int n=nvars; n<NREDUCTION_VARIABLES; ++n) {
-          evars.the_array[n] = 0.0;
-        }
+      // conserved variables:
+      array_sum::GlobalSum evars;
+      evars.the_array[IDN] = vol*fabs(u0_(m,IDN,k,j,i) - u1_(m,IDN,k,j,i));
+      evars.the_array[IM1] = vol*fabs(u0_(m,IM1,k,j,i) - u1_(m,IM1,k,j,i));
+      evars.the_array[IM2] = vol*fabs(u0_(m,IM2,k,j,i) - u1_(m,IM2,k,j,i));
+      evars.the_array[IM3] = vol*fabs(u0_(m,IM3,k,j,i) - u1_(m,IM3,k,j,i));
+      if (eos.is_ideal) {
+        evars.the_array[IEN] = vol*fabs(u0_(m,IEN,k,j,i) - u1_(m,IEN,k,j,i));
+      }
 
-        // sum into parallel reduce
-        mb_sum += evars;
+      // fill rest of the_array with zeros, if narray < NREDUCTION_VARIABLES
+      for (int n=nvars; n<NREDUCTION_VARIABLES; ++n) {
+        evars.the_array[n] = 0.0;
+      }
 
-      }, Kokkos::Sum<array_sum::GlobalSum>(sum_this_mb)
-    );
+      // sum into parallel reduce
+      mb_sum += evars;
+    }, Kokkos::Sum<array_sum::GlobalSum>(sum_this_mb));
 
     // store data into l1_err array
     for (int n=0; n<nvars; ++n) {
@@ -795,51 +781,48 @@ void LinearWaveErrors(MeshBlockPack *pmbp, ParameterInput *pin)
     const int nji  = nx2*nx1;
     array_sum::GlobalSum sum_this_mb;
     Kokkos::parallel_reduce("LW-err-Sums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-      KOKKOS_LAMBDA(const int &idx, array_sum::GlobalSum &mb_sum)
-      {
-        // compute n,k,j,i indices of thread
-        int m = (idx)/nkji;
-        int k = (idx - m*nkji)/nji;
-        int j = (idx - m*nkji - k*nji)/nx1;
-        int i = (idx - m*nkji - k*nji - j*nx1) + is;
-        k += ks;
-        j += js;
+    KOKKOS_LAMBDA(const int &idx, array_sum::GlobalSum &mb_sum) {
+      // compute n,k,j,i indices of thread
+      int m = (idx)/nkji;
+      int k = (idx - m*nkji)/nji;
+      int j = (idx - m*nkji - k*nji)/nx1;
+      int i = (idx - m*nkji - k*nji - j*nx1) + is;
+      k += ks;
+      j += js;
 
-        Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
+      Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
 
-        // conserved variables:
-        array_sum::GlobalSum evars;
-        evars.the_array[IDN] = vol*fabs(u0_(m,IDN,k,j,i) - u1_(m,IDN,k,j,i));
-        evars.the_array[IM1] = vol*fabs(u0_(m,IM1,k,j,i) - u1_(m,IM1,k,j,i));
-        evars.the_array[IM2] = vol*fabs(u0_(m,IM2,k,j,i) - u1_(m,IM2,k,j,i));
-        evars.the_array[IM3] = vol*fabs(u0_(m,IM3,k,j,i) - u1_(m,IM3,k,j,i));
-        if (eos.is_ideal) {
-          evars.the_array[IEN] = vol*fabs(u0_(m,IEN,k,j,i) - u1_(m,IEN,k,j,i));
-        }
+      // conserved variables:
+      array_sum::GlobalSum evars;
+      evars.the_array[IDN] = vol*fabs(u0_(m,IDN,k,j,i) - u1_(m,IDN,k,j,i));
+      evars.the_array[IM1] = vol*fabs(u0_(m,IM1,k,j,i) - u1_(m,IM1,k,j,i));
+      evars.the_array[IM2] = vol*fabs(u0_(m,IM2,k,j,i) - u1_(m,IM2,k,j,i));
+      evars.the_array[IM3] = vol*fabs(u0_(m,IM3,k,j,i) - u1_(m,IM3,k,j,i));
+      if (eos.is_ideal) {
+        evars.the_array[IEN] = vol*fabs(u0_(m,IEN,k,j,i) - u1_(m,IEN,k,j,i));
+      }
 
-        // cell-centered B
-        Real bcc0 = 0.5*(b0_.x1f(m,k,j,i) + b0_.x1f(m,k,j,i+1));
-        Real bcc1 = 0.5*(b1_.x1f(m,k,j,i) + b1_.x1f(m,k,j,i+1));
-        evars.the_array[IEN+1] = vol*fabs(bcc0 - bcc1);
- 
-        bcc0 = 0.5*(b0_.x2f(m,k,j,i) + b0_.x2f(m,k,j+1,i));
-        bcc1 = 0.5*(b1_.x2f(m,k,j,i) + b1_.x2f(m,k,j+1,i));
-        evars.the_array[IEN+2] = vol*fabs(bcc0 - bcc1);
+      // cell-centered B
+      Real bcc0 = 0.5*(b0_.x1f(m,k,j,i) + b0_.x1f(m,k,j,i+1));
+      Real bcc1 = 0.5*(b1_.x1f(m,k,j,i) + b1_.x1f(m,k,j,i+1));
+      evars.the_array[IEN+1] = vol*fabs(bcc0 - bcc1);
 
-        bcc0 = 0.5*(b0_.x3f(m,k,j,i) + b0_.x3f(m,k+1,j,i));
-        bcc1 = 0.5*(b1_.x3f(m,k,j,i) + b1_.x3f(m,k+1,j,i));
-        evars.the_array[IEN+3] = vol*fabs(bcc0 - bcc1);
+      bcc0 = 0.5*(b0_.x2f(m,k,j,i) + b0_.x2f(m,k,j+1,i));
+      bcc1 = 0.5*(b1_.x2f(m,k,j,i) + b1_.x2f(m,k,j+1,i));
+      evars.the_array[IEN+2] = vol*fabs(bcc0 - bcc1);
 
-        // fill rest of the_array with zeros, if narray < NREDUCTION_VARIABLES
-        for (int n=nvars; n<NREDUCTION_VARIABLES; ++n) {
-          evars.the_array[n] = 0.0;
-        }
+      bcc0 = 0.5*(b0_.x3f(m,k,j,i) + b0_.x3f(m,k+1,j,i));
+      bcc1 = 0.5*(b1_.x3f(m,k,j,i) + b1_.x3f(m,k+1,j,i));
+      evars.the_array[IEN+3] = vol*fabs(bcc0 - bcc1);
 
-        // sum into parallel reduce
-        mb_sum += evars;
+      // fill rest of the_array with zeros, if narray < NREDUCTION_VARIABLES
+      for (int n=nvars; n<NREDUCTION_VARIABLES; ++n) {
+        evars.the_array[n] = 0.0;
+      }
 
-      }, Kokkos::Sum<array_sum::GlobalSum>(sum_this_mb)
-    );
+      // sum into parallel reduce
+      mb_sum += evars;
+    }, Kokkos::Sum<array_sum::GlobalSum>(sum_this_mb));
 
     // store data into l1_err array
     for (int n=0; n<nvars; ++n) {

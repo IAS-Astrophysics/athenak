@@ -8,9 +8,11 @@
 //! Data is written in RECTILINEAR_GRID geometry, in BINARY format, and in FLOAT type
 //! Data over multiple MeshBlocks and MPI ranks is written to a single file using MPI-IO.
 
-// TODO: create new communicator for MPI-IO for slicing, including only those ranks that
-// have MeshBlocks in slice.  Current design segfaults with slicing if there are ranks
-// that do not write. 
+// TODO(@user): create new communicator for MPI-IO for slicing, including only those ranks
+// that have MeshBlocks in slice.  Current design segfaults with slicing if there are
+// ranks that do not write.
+
+#include <sys/stat.h>  // mkdir
 
 #include <algorithm>
 #include <cstdio>      // fwrite(), fclose(), fopen(), fnprintf(), snprintf()
@@ -19,7 +21,6 @@
 #include <iostream>
 #include <sstream>
 #include <string>
-#include <sys/stat.h>  // mkdir
 
 #include "athena.hpp"
 #include "coordinates/cell_locations.hpp"
@@ -32,9 +33,8 @@
 // ctor: also calls OutputType base class constructor
 // Checks compatibility options for VTK outputs
 
-VTKOutput::VTKOutput(OutputParameters op, Mesh *pm)
-  : OutputType(op, pm)
-{
+VTKOutput::VTKOutput(OutputParameters op, Mesh *pm) :
+  OutputType(op, pm) {
   // create directories for outputs. Comments in binary.cpp constructor explain why
   mkdir("vtk",0775);
 }
@@ -45,15 +45,13 @@ VTKOutput::VTKOutput(OutputParameters op, Mesh *pm)
 
 namespace swap_function {
 
-int IsBigEndian()
-{
+int IsBigEndian() {
   std::int32_t n = 1;
   char *ep = reinterpret_cast<char *>(&n);
   return (*ep == 0); // Returns 1 (true) on a big endian machine
 }
 
-inline void Swap4Bytes(void *vdat)
-{
+inline void Swap4Bytes(void *vdat) {
   char tmp, *dat = static_cast<char *>(vdat);
   tmp = dat[0];  dat[0] = dat[3];  dat[3] = tmp;
   tmp = dat[1];  dat[1] = dat[2];  dat[2] = tmp;
@@ -66,8 +64,7 @@ inline void Swap4Bytes(void *vdat)
 //! \brief Cycles over all MeshBlocks and writes outputdata in (legacy) vtk format.
 //! All MeshBlocks are written to the same file in proper order.
 
-void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
-{
+void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   int big_end = swap_function::IsBigEndian(); // =1 on big endian machine
 
   // output entire grid unless gid is specified
@@ -100,7 +97,7 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   fname.append(number);
   fname.append(".vtk");
 
-  // Create string with header text. 
+  // Create string with header text.
   // There are five basic parts to the VTK "legacy" file format.
   //  1. File version and identifier
   //  2. Header (time, cycle, variables, etc.)
@@ -152,7 +149,7 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
 
 #if MPI_PARALLEL_ENABLED
   //----- WRITE IN PARALLEL WITH MPI: -----
-  // For MPI runs, create derived data types for outdata and Cartesian grid of MBs. 
+  // For MPI runs, create derived data types for outdata and Cartesian grid of MBs.
   // MPI then takes care of writing to file in proper order
 
   // open file and write file header
@@ -254,7 +251,6 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
     // reset view to stream of bytes in preparation for adding next data header
     header_size += nout1*nout2*nout3*sizeof(float);
     MPI_File_set_view(fh, header_size, MPI_BYTE, MPI_BYTE, "native", MPI_INFO_NULL);
-
   }  // end loop over variables
 
   // close the output file and clean up
@@ -288,7 +284,7 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
              << "LOOKUP_TABLE default" << std::endl;
     std::fprintf(pfile,"%s",data_msg.str().c_str());
 
-    // Loop over MeshBlocks, insert variable into 3D array 
+    // Loop over MeshBlocks, insert variable into 3D array
     for (int m=0; m<nout_mbs; ++m) {
       LogicalLocation lloc = pm->lloclist[outmbs[m].mb_gid];
       // calculate indices of this MeshBlock in 3D grid of MBs
@@ -305,7 +301,7 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
       for (int k=oks; k<=oke; ++k) {
         for (int j=ojs; j<=oje; ++j) {
           for (int i=ois; i<=oie; ++i) {
-            int indx = imb*indcs.nx1 + (i-ois) + 
+            int indx = imb*indcs.nx1 + (i-ois) +
                       (jmb*indcs.nx2 + (j-ojs))*nout1 +
                       (kmb*indcs.nx3 + (k-oks))*nout1*nout2;
             data[indx] = static_cast<float>(outdata(n,m,k-oks,j-ojs,i-ois));

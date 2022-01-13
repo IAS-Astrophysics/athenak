@@ -8,23 +8,24 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <memory>
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh.hpp"
 #include "coordinates/cell_locations.hpp"
+#include "meshblock.hpp"
 
 //----------------------------------------------------------------------------------------
 // MeshBlock constructor:
 //
 
-MeshBlock::MeshBlock(MeshBlockPack* ppack, int igids, int nmb) : 
+MeshBlock::MeshBlock(MeshBlockPack* ppack, int igids, int nmb) :
   pmy_pack(ppack), nmb(nmb),
   mb_gid("mb_gid",nmb),
   mb_lev("mb_lev",nmb),
   mb_size("mbsize",nmb),
-  mb_bcs("mbbcs",nmb,6)
-{
+  mb_bcs("mbbcs",nmb,6) {
   Mesh* pm = pmy_pack->pmesh;
   auto &ms = pm->mesh_size;
 
@@ -61,7 +62,6 @@ MeshBlock::MeshBlock(MeshBlockPack* ppack, int igids, int nmb) :
       mb_bcs.h_view(m,2) = pm->mesh_bcs[BoundaryFace::inner_x2];
       mb_bcs.h_view(m,3) = pm->mesh_bcs[BoundaryFace::outer_x2];
     } else {
-
       std::int32_t &lx2 = pm->lloclist[igids+m].lx2;
       std::int32_t nmbx2 = pm->nmb_rootx2 << (lev - pm->root_level);
       if (lx2 == 0) {
@@ -79,7 +79,6 @@ MeshBlock::MeshBlock(MeshBlockPack* ppack, int igids, int nmb) :
         mb_size.h_view(m).x2max = LeftEdgeX(lx2+1, nmbx2, ms.x2min, ms.x2max);
         mb_bcs.h_view(m,3) = BoundaryFlag::block;
       }
-
     }
 
     // calculate physical size and set BCs of each MeshBlock in x1, dependng on whether
@@ -142,8 +141,7 @@ MeshBlock::MeshBlock(MeshBlockPack* ppack, int igids, int nmb) :
 // Indices of the view are (m,n) = (no. of MBs, no. of neighbors)
 // Based on SearchAndSetNeighbors() function in /src/bvals/bvals_base.cpp in C++ version
 
-void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklist)
-{
+void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklist) {
   // min number of array elements needed to store MeshBlock neighbors withe SMR/AMR
   // Note not all buffers will be allocated for all nghbrs
   if (pmy_pack->pmesh->one_d) {nnghbr = 8;}
@@ -320,7 +318,7 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
             nghbr.h_view(b,inghbr).rank = ranklist[nt->gid_];
             nghbr.h_view(b,inghbr).dest = idest;
           }
-        }   
+        }
       }
 
       // neighbors on x3x1 edges
@@ -393,7 +391,7 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
                 nghbr.h_view(b,inghbr).dest = idest;
               }
             }
-          } 
+          }
         }
       }
 
@@ -445,7 +443,7 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
 // used to specify the two subblocks.
 //
 // The neighbor (boundary buffer) indexing scheme is as follows:
-//   x1faces:    [0-3],  [4-7] 
+//   x1faces:    [0-3],  [4-7]
 //   x2faces:    [8-11], [12-15]
 //   x1x2edges:  [16-23]
 //   x3faces:    [24-27], [28-31]
@@ -453,8 +451,7 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
 //   x2x3edges:  [40-47]
 //   corners:    [48-55]
 
-int MeshBlock::NeighborIndx(int ix, int iy, int iz, int n1, int n2)
-{
+int MeshBlock::NeighborIndx(int ix, int iy, int iz, int n1, int n2) {
   // do some error checking on input parameters
   if ((std::abs(ix) + std::abs(iy) + std::abs(iz)) == 0) {return -1;}
   if (std::abs(ix*iy*iz) > 1) {return -1;}

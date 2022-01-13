@@ -21,8 +21,7 @@ Units::Units(ParameterInput *pin) :
 
 //----------------------------------------------------------------------------------------
 //! \brief Units destructor
-Units::~Units()
-{
+Units::~Units() {
 }
 
 //----------------------------------------------------------------------------------------
@@ -37,22 +36,22 @@ Real Units::mu() const { return mu_; }
 //----------------------------------------------------------------------------------------
 // Derived code scales in cgs units
 // Converting variables from code unit to physical (cgs) unit
-// i.e., variable_in_physical_unit = variable_in_code_unit * code_scale  
+// i.e., variable_in_physical_unit = variable_in_code_unit * code_scale
 Real Units::velocity_cgs() const {
   return Units::length_cgs() / Units::time_cgs();
 }
 Real Units::density_cgs() const {
-  return Units::mass_cgs() / 
+  return Units::mass_cgs() /
          (Units::length_cgs() * Units::length_cgs() * Units::length_cgs());
 }
 Real Units::energy_cgs() const {
   return Units::mass_cgs() * Units::velocity_cgs() * Units::velocity_cgs();
 }
 Real Units::pressure_cgs() const {
-  return Units::energy_cgs() / 
+  return Units::energy_cgs() /
          (Units::length_cgs() * Units::length_cgs() * Units::length_cgs());
 }
-Real Units::temperature_cgs() const{
+Real Units::temperature_cgs() const {
   return Units::velocity_cgs() * Units::velocity_cgs() * Units::mu() *
          Units::atomic_mass_unit_cgs / Units::k_boltzmann_cgs;
 }

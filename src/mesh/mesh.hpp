@@ -13,6 +13,7 @@
 
 #include <cstdint>  // int32_t
 #include <memory>
+#include <string>
 
 #include "athena.hpp"
 
@@ -21,8 +22,7 @@
 //! \struct RegionSize
 //! \brief physical size in a Mesh or a MeshBlock
 
-struct RegionSize
-{
+struct RegionSize {
   Real x1min, x2min, x3min;
   Real x1max, x2max, x3max;
   Real dx1, dx2, dx3;       // (uniform) grid spacing
@@ -32,8 +32,7 @@ struct RegionSize
 //! \struct RegionIndcs
 //! \brief Cell indices and number of active and ghost cells in a Mesh or a MeshBlock
 
-struct RegionIndcs
-{
+struct RegionIndcs {
   int ng;                   // number of ghost cells
   int nx1, nx2, nx3;        // number of active cells (not including ghost zones)
   int is,ie,js,je,ks,ke;    // indices of ACTIVE cells
@@ -45,11 +44,10 @@ struct RegionIndcs
 //! \struct NeighborBlock
 //  \brief Information about neighboring MeshBlocks stored as 2D DualArray in MeshBlock
 
-struct NeighborBlock
-{
+struct NeighborBlock {
   int gid;     // global ID
   int lev;     // logical level
-  int rank;    // MPI rank     
+  int rank;    // MPI rank
   int dest;    // index of recv buffer in target NeighborBlocks
 };
 
@@ -61,20 +59,16 @@ struct NeighborBlock
 //! of AMR, even if the root grid consists of a single MeshBlock, since the corresponding
 //! max index = 1*2^31 > INT_MAX = 2^31 -1 for most 32-bit signed integer types
 
-struct LogicalLocation
-{
-  std::int32_t lx1, lx2, lx3, level;  
+struct LogicalLocation {
+  std::int32_t lx1, lx2, lx3, level;
   // comparison functions for sorting, and overloaded operator==
-  static bool Lesser(const LogicalLocation &left, const LogicalLocation &right)
-  {
+  static bool Lesser(const LogicalLocation &left, const LogicalLocation &right) {
     return left.level < right.level;
   }
-  static bool Greater(const LogicalLocation & left, const LogicalLocation &right)
-  {
+  static bool Greater(const LogicalLocation & left, const LogicalLocation &right) {
     return left.level > right.level;
   }
-  bool operator==(LogicalLocation const &rhs) const
-  {
+  bool operator==(LogicalLocation const &rhs) const {
     return ((this->lx1 == rhs.lx1) && (this->lx2 == rhs.lx2) &&
             (this->lx3 == rhs.lx3) && (this->level == rhs.level));
   }
@@ -95,14 +89,13 @@ class Mesh;
 //! \class Mesh
 //! \brief data/functions associated with the overall mesh
 
-class Mesh
-{
+class Mesh {
   // mesh classes (Mesh, MeshBlock, MeshBlockPack, MeshBlockTree) like to play together
   friend class MeshBlock;
   friend class MeshBlockPack;
   friend class MeshBlockTree;
 
-public:
+ public:
   explicit Mesh(ParameterInput *pin);
   ~Mesh();
 
@@ -116,7 +109,7 @@ public:
   bool one_d, two_d, three_d; // flags to indicate 1D or 2D or 3D calculations
   bool multi_d;               // flag to indicate 2D and 3D calculations
   bool shearing_periodic;     // flag to indicate periodic x1/x2 boundaries are sheared
-  bool multilevel;            // true for SMR and AMR 
+  bool multilevel;            // true for SMR and AMR
   bool adaptive;              // true only for AMR
 
   int nmb_rootx1, nmb_rootx2, nmb_rootx3; // # of MeshBlocks at root level in each dir
@@ -144,7 +137,7 @@ public:
   int *bnref, *bnderef;
   int *brdisp, *bddisp;
 
-  Real time, dt, cfl_no;           
+  Real time, dt, cfl_no;
   int ncycle;
 
   MeshBlockPack* pmb_pack;                 // container for MeshBlocks on this rank
@@ -162,8 +155,7 @@ public:
   std::string GetBoundaryString(BoundaryFlag input_flag);
 
   // accessors
-  int FindMeshBlockIndex(int tgid)
-  {
+  int FindMeshBlockIndex(int tgid) {
     for (int m=0; m<pmb_pack->pmb->nmb; ++m) {
       if (pmb_pack->pmb->mb_gid.h_view(m) == tgid) return m;
     }
@@ -173,7 +165,7 @@ public:
     return (mb_indcs.nx1)*(mb_indcs.nx2)*(mb_indcs.nx3);
   }
 
-private:
+ private:
   // variables for load balancing control (not yet implemented)
   bool lb_flag_, lb_automatic_;
   int lb_cyc_interval_;

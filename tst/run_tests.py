@@ -38,7 +38,7 @@ def main(**kwargs):
     test_names = []
     if len(tests) == 0:  # run all tests
         for _, directory, ispkg in iter_modules(path=['scripts']):
-            if ispkg and directory != 'utils':
+            if ispkg and (directory != 'utils' and directory != 'style'):
                 dir_test_names = [name for _, name, _ in
                                   iter_modules(path=['scripts/'
                                                      + directory],

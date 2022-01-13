@@ -48,10 +48,9 @@
 //! \fn int main(int argc, char *argv[])
 //  \brief AthenaK main program
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
   std::string input_file, restart_file, run_dir;
-  int  res_flag = 0;  // set to 1 if -r        argument is on cmdline 
+  int  res_flag = 0;  // set to 1 if -r        argument is on cmdline
   int narg_flag = 0;  // set to 1 if -n        argument is on cmdline
   int marg_flag = 0;  // set to 1 if -m        argument is on cmdline
   int iarg_flag = 0;  // set to 1 if -i <file> argument is on cmdline
@@ -110,7 +109,6 @@ int main(int argc, char *argv[])
   for (int i=1; i<argc; i++) {
     // If argv[i] is a 2 character string of the form "-?" then:
     if (*argv[i] == '-'  && *(argv[i]+1) != '\0' && *(argv[i]+2) == '\0') {
-
       // check that command line options that require arguments actually have them:
       char opt_letter = *(argv[i]+1);
       switch(opt_letter) {
@@ -124,7 +122,7 @@ int main(int argc, char *argv[])
               || (*argv[i+1] == '-') ) { // flag is followed by another flag
             if (global_variable::my_rank == 0) {
               std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                        << std::endl << "-" << opt_letter 
+                        << std::endl << "-" << opt_letter
                         << " must be followed by a valid argument" << std::endl;
               Kokkos::finalize();
 #if MPI_PARALLEL_ENABLED
@@ -165,7 +163,7 @@ int main(int argc, char *argv[])
         case 'h':
         default:
           if (global_variable::my_rank == 0) {
-            std::cout << "Athena++ v" << ATHENA_VERSION_MAJOR << "." 
+            std::cout << "Athena++ v" << ATHENA_VERSION_MAJOR << "."
                                       << ATHENA_VERSION_MINOR << std::endl;
             std::cout << "Usage: " << argv[0] << " [options] [block/par=value ...]\n";
             std::cout << "Options:" << std::endl;

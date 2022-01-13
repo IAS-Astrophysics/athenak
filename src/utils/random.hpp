@@ -36,8 +36,7 @@
 #define NTAB 32
 
 KOKKOS_INLINE_FUNCTION
-static Real Ran2(int64_t *idum)
-{
+static Real Ran2(int64_t *idum) {
   int j;
   int64_t k;
   static int64_t idum2=123456789;
@@ -96,8 +95,7 @@ static Real Ran2(int64_t *idum)
 //! \fn RanGaussian
 
 KOKKOS_INLINE_FUNCTION
-static Real RanGaussian(int64_t *idum)
-{
+static Real RanGaussian(int64_t *idum) {
   static int32_t iset = 0;
   static Real gset;
   Real fac, rsq, v1, v2;

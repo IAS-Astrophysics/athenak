@@ -8,6 +8,8 @@
 //! \file meshblock_pack.hpp
 //  \brief defines MeshBlockPack class, a container for MeshBlocks
 
+#include <memory>
+
 #include "parameter_input.hpp"
 #include "coordinates/coordinates.hpp"
 #include "driver/driver.hpp"
@@ -25,14 +27,13 @@ namespace units {class Units;}
 //! \class MeshBlock
 //  \brief data/functions associated with a single block
 
-class MeshBlockPack
-{
+class MeshBlockPack {
   // mesh classes (Mesh, MeshBlock, MeshBlockPack, MeshBlockTree) like to play together
   friend class Mesh;
   friend class MeshBlock;
   friend class MeshBlockTree;
 
-public:
+ public:
   MeshBlockPack(Mesh *pm, int igids, int igide);
   ~MeshBlockPack();
 
@@ -42,7 +43,7 @@ public:
   int nmb_thispack;       // number of MBs in this pack
 
   // following Grid/Physics objects are all pointers so they can be allocated after
-  // MeshBlockPack is constructed with pointer to my_pack. 
+  // MeshBlockPack is constructed with pointer to my_pack.
 
   MeshBlock* pmb;         // MeshBlocks in this MeshBlockPack
   Coordinates* pcoord;
@@ -62,12 +63,11 @@ public:
   void AddPhysics(ParameterInput *pin);
   void AddMeshBlocksAndCoordinates(ParameterInput *pin, RegionIndcs indcs);
 
-private:
+ private:
   // data
 
   // functions
   void SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklist);
-
 };
 
 #endif // MESH_MESHBLOCK_PACK_HPP_

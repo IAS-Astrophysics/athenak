@@ -6,8 +6,9 @@
 //! \file mhd_newdt.cpp
 //! \brief function to compute MHD timestep across all MeshBlock(s) in a MeshBlockPack
 
-#include <limits>
 #include <math.h>
+
+#include <limits>
 #include <iostream>
 
 #include "athena.hpp"
@@ -22,8 +23,7 @@ namespace mhd {
 // \!fn void MHD::NewTimeStep()
 // \brief calculate the minimum timestep within a MeshBlockPack for MHD problems
 
-TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage)
-{
+TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage) {
   if (stage != (pdriver->nexp_stages)) {
     return TaskStatus::complete; // only execute last stage
   }
@@ -50,8 +50,7 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage)
   if (pdriver->time_evolution == TimeEvolution::kinematic) {
     // find smallest (dx/v) in each direction for advection problems
     Kokkos::parallel_reduce("MHDNudt1",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-      KOKKOS_LAMBDA(const int &idx, Real &min_dt1, Real &min_dt2, Real &min_dt3)
-      {
+    KOKKOS_LAMBDA(const int &idx, Real &min_dt1, Real &min_dt2, Real &min_dt3) {
       // compute m,k,j,i indices of thread and call function
       int m = (idx)/nkji;
       int k = (idx - m*nkji)/nji;
@@ -64,15 +63,12 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage)
       min_dt2 = fmin((mbsize.d_view(m).dx2/fabs(w0_(m,IVY,k,j,i))), min_dt2);
       min_dt3 = fmin((mbsize.d_view(m).dx3/fabs(w0_(m,IVZ,k,j,i))), min_dt3);
     }, Kokkos::Min<Real>(dt1), Kokkos::Min<Real>(dt2),Kokkos::Min<Real>(dt3));
- 
   } else {
-
     // find smallest dx/(v +/- Cf) in each direction for mhd problems
     auto &bcc0_ = bcc0;
 
     Kokkos::parallel_reduce("MHDNudt2",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-      KOKKOS_LAMBDA(const int &idx, Real &min_dt1, Real &min_dt2, Real &min_dt3)
-    { 
+    KOKKOS_LAMBDA(const int &idx, Real &min_dt1, Real &min_dt2, Real &min_dt3) {
       // compute m,k,j,i indices of thread and call function
       int m = (idx)/nkji;
       int k = (idx - m*nkji)/nji;
@@ -87,7 +83,6 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage)
         max_dv1 = 1.0;
         max_dv2 = 1.0;
         max_dv3 = 1.0;
-
       // timestep in SR MHD
       } else if (is_special_relativistic_) {
         Real &wd = w0_(m,IDN,k,j,i);
@@ -118,7 +113,6 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage)
 
         eos.IdealSRMHDFastSpeeds(wd, p, uz, lor, b_sq, lp, lm);
         max_dv3 = fmax(fabs(lm), lp);
-
       // timestep in Newtonian MHD
       } else {
         Real &w_d = w0_(m,IDN,k,j,i);
@@ -127,21 +121,21 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage)
         Real &w_bz = bcc0_(m,IBZ,k,j,i);
         Real cf;
         Real p = eos.IdealGasPressure(w0_(m,IDN,k,j,i), w0_(m,IEN,k,j,i));
-        if (eos.is_ideal) { 
+        if (eos.is_ideal) {
           cf = eos.IdealMHDFastSpeed(w_d, p, w_bx, w_by, w_bz);
         } else {
           cf = eos.IdealMHDFastSpeed(w_d, w_bx, w_by, w_bz);
         }
         max_dv1 = fabs(w0_(m,IVX,k,j,i)) + cf;
 
-        if (eos.is_ideal) { 
+        if (eos.is_ideal) {
           cf = eos.IdealMHDFastSpeed(w_d, p, w_by, w_bz, w_bx);
         } else {
           cf = eos.IdealMHDFastSpeed(w_d, w_by, w_bz, w_bx);
         }
         max_dv2 = fabs(w0_(m,IVY,k,j,i)) + cf;
 
-        if (eos.is_ideal) { 
+        if (eos.is_ideal) {
           cf = eos.IdealMHDFastSpeed(w_d, p, w_bz, w_bx, w_by);
         } else {
           cf = eos.IdealMHDFastSpeed(w_d, w_bz, w_bx, w_by);
@@ -152,9 +146,7 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage)
       min_dt1 = fmin((mbsize.d_view(m).dx1/max_dv1), min_dt1);
       min_dt2 = fmin((mbsize.d_view(m).dx2/max_dv2), min_dt2);
       min_dt3 = fmin((mbsize.d_view(m).dx3/max_dv3), min_dt3);
-
     }, Kokkos::Min<Real>(dt1), Kokkos::Min<Real>(dt2),Kokkos::Min<Real>(dt3));
-
   }
 
   // compute minimum of dt1/dt2/dt3 for 1D/2D/3D problems

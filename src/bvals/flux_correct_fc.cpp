@@ -26,8 +26,7 @@
 //! MeshBlocks. Buffer data are then sent (via MPI) or copied directly for periodic or
 //! block boundaries.
 
-TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx)
-{
+TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
   // create local references for variables in kernel
   int nmb = pmy_pack->pmb->nmb;
   int nnghbr = pmy_pack->pmb->nnghbr;
@@ -79,7 +78,6 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx)
 
     // only pack buffers when neighbor is at coarser level
     if ((nghbr.d_view(m,n).gid >=0) && (nghbr.d_view(m,n).lev < mblev.d_view(m))) {
-
       // x1faces (only load x2e and x3e)
       if (n<8) {
         Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
@@ -133,7 +131,7 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx)
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
             [&](const int i) {
               int fi = 2*i - cis;
-              Real rflx; 
+              Real rflx;
               if (v==0) {
                 if (two_d) {
                   rflx = 0.5*(flx.x1e(m,k,fj,fi) + flx.x1e(m,k,fj,fi+1));
@@ -147,7 +145,7 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx)
                   rflx = 0.5*(flx.x3e(m,fk,fj,fi) + flx.x3e(m,fk+1,fj,fi));
                 }
               }
-              if (nghbr.d_view(m,n).rank == my_rank) { 
+              if (nghbr.d_view(m,n).rank == my_rank) {
                 rbuf[dn].flux(dm, nv[v] + i-il + ni*(j-jl + nj*(k-kl))) = rflx;
               } else {
                 sbuf[n].flux(m, nv[v] + i-il + ni*(j-jl + nj*(k-kl))) = rflx;
@@ -265,7 +263,7 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx)
     for (int n=0; n<nnghbr; ++n) {
       if ( (nghbr.h_view(m,n).gid >=0) && (nghbr.h_view(m,n).lev < mblev.h_view(m)) &&
            (n<48) ) {
-        // index and rank of destination Neighbor 
+        // index and rank of destination Neighbor
         int dn = nghbr.h_view(m,n).dest;
         int drank = nghbr.h_view(m,n).rank;
 
@@ -295,7 +293,7 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx)
     }
   }
   if (no_errors) return TaskStatus::complete;
-  
+
   return TaskStatus::fail;
 }
 
@@ -303,8 +301,7 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx)
 // \!fn void RecvBuffers()
 // \brief Unpack boundary buffers
 
-TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx)
-{
+TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx) {
   // create local references for variables in kernel
   int nmb = pmy_pack->pmb->nmb;
   int nnghbr = pmy_pack->pmb->nnghbr;
@@ -379,7 +376,6 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx)
 
     // only unpack buffers for faces and edges when neighbor is at finer level
     if ((nghbr.d_view(m,n).gid >=0) && (nghbr.d_view(m,n).lev > mblev.d_view(m))) {
-
       // x1faces
       if (n<8) {
         Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
@@ -426,7 +422,7 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx)
           k += kl;
           if (v==2) {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-            [&](const int i) { 
+            [&](const int i) {
               flx.x3e(m,k,j,i) = rbuf[n].flux(m,nv[v] + i-il + ni*(j-jl + nj*(k-kl)));
             });
           }
@@ -462,7 +458,7 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx)
             [&](const int i) {
               flx.x2e(m,k,j,i) = rbuf[n].flux(m,nv[v] + i-il + ni*(j-jl + nj*(k-kl)));
             });
-          } 
+          }
         });
 
       // x2x3 edges
@@ -476,7 +472,7 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx)
             [&](const int i) {
               flx.x1e(m,k,j,i) = rbuf[n].flux(m,nv[v] + i-il + ni*(j-jl + nj*(k-kl)));
             });
-          } 
+          }
         });
       }
     }  // end if-neighbor-exists block
@@ -490,8 +486,7 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx)
 //! \brief Posts non-blocking receives (with MPI), and initialize all boundary receive
 //! status flags to waiting (with or without MPI) for boundary communications of fluxes.
 
-TaskStatus BoundaryValuesFC::InitFluxRecv(const int nvar)
-{
+TaskStatus BoundaryValuesFC::InitFluxRecv(const int nvar) {
   int &nmb = pmy_pack->nmb_thispack;
   int &nnghbr = pmy_pack->pmb->nnghbr;
   auto &nghbr = pmy_pack->pmb->nghbr;
@@ -501,17 +496,15 @@ TaskStatus BoundaryValuesFC::InitFluxRecv(const int nvar)
   bool no_errors=true;
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
-
       // only post receives for neighbors on faces and edges at FINER level
       // this is the only thing different from BoundaryValuesCC::InitRecvFlux()
       if ( (nghbr.h_view(m,n).gid >=0) && (nghbr.h_view(m,n).lev > mblev.h_view(m)) &&
            (n<48) ) {
-
 #if MPI_PARALLEL_ENABLED
         // rank of destination buffer
         int drank = nghbr.h_view(m,n).rank;
 
-        // post non-blocking receive if neighboring MeshBlock on a different rank 
+        // post non-blocking receive if neighboring MeshBlock on a different rank
         if (drank != global_variable::my_rank) {
           // create tag using local ID and buffer index of *receiving* MeshBlock
           int tag = CreateMPITag(m, n);
@@ -519,18 +512,18 @@ TaskStatus BoundaryValuesFC::InitFluxRecv(const int nvar)
           // get ptr to recv buffer when neighbor is at coarser/same/fine level
           int data_size = nvar*(recv_buf[n].iflux_ndat);
           void* recv_ptr = &(recv_buf[n].flux(m,0));
-          
+
           // Post non-blocking receive for this buffer on this MeshBlock
           int ierr = MPI_Irecv(recv_ptr, data_size, MPI_ATHENA_REAL, drank, tag,
                                flux_comm, &(recv_buf[n].flux_req[m]));
           if (ierr != MPI_SUCCESS) {no_errors=false;}
-        } 
-#endif    
+        }
+#endif
         // initialize boundary receive status flags
         recv_buf[n].flux_stat[m] = BoundaryCommStatus::waiting;
-      }   
-    }     
-  }                            
+      }
+    }
+  }
   if (no_errors) return TaskStatus::complete;
 
   return TaskStatus::fail;
@@ -541,19 +534,18 @@ TaskStatus BoundaryValuesFC::InitFluxRecv(const int nvar)
 //  \brief Waits for all MPI receives associated with boundary communcations for fluxes
 //  to complete before allowing execution to continue
 
-TaskStatus BoundaryValuesFC::ClearFluxRecv()
-{
+TaskStatus BoundaryValuesFC::ClearFluxRecv() {
   int no_errors=true;
 #if MPI_PARALLEL_ENABLED
   int &nmb = pmy_pack->nmb_thispack;
   int &nnghbr = pmy_pack->pmb->nnghbr;
   auto &nghbr = pmy_pack->pmb->nghbr;
 
-  // wait for all non-blocking receives for fluxes to finish before continuing 
+  // wait for all non-blocking receives for fluxes to finish before continuing
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
       if ( (nghbr.h_view(m,n).gid >= 0) &&
-           (nghbr.h_view(m,n).rank != global_variable::my_rank) && 
+           (nghbr.h_view(m,n).rank != global_variable::my_rank) &&
            (recv_buf[n].flux_req[m] != MPI_REQUEST_NULL) ) {
         int ierr = MPI_Wait(&(recv_buf[n].flux_req[m]), MPI_STATUS_IGNORE);
         if (ierr != MPI_SUCCESS) {no_errors=false;}
@@ -571,19 +563,18 @@ TaskStatus BoundaryValuesFC::ClearFluxRecv()
 //  \brief Waits for all MPI sends associated with boundary communcations for fluxes to
 //   complete before allowing execution to continue
 
-TaskStatus BoundaryValuesFC::ClearFluxSend()
-{
+TaskStatus BoundaryValuesFC::ClearFluxSend() {
   int no_errors=true;
 #if MPI_PARALLEL_ENABLED
   int &nmb = pmy_pack->nmb_thispack;
   int &nnghbr = pmy_pack->pmb->nnghbr;
   auto &nghbr = pmy_pack->pmb->nghbr;
 
-  // wait for all non-blocking sends for fluxes to finish before continuing 
+  // wait for all non-blocking sends for fluxes to finish before continuing
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
       if ( (nghbr.h_view(m,n).gid >= 0) &&
-           (nghbr.h_view(m,n).rank != global_variable::my_rank) && 
+           (nghbr.h_view(m,n).rank != global_variable::my_rank) &&
            (send_buf[n].flux_req[m] != MPI_REQUEST_NULL) ) {
         int ierr = MPI_Wait(&(send_buf[n].flux_req[m]), MPI_STATUS_IGNORE);
         if (ierr != MPI_SUCCESS) {no_errors=false;}

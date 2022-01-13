@@ -6,13 +6,15 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file srcterms.hpp
-//! \brief Data, functions, and classes to implement various source terms in the hydro 
+//! \brief Data, functions, and classes to implement various source terms in the hydro
 //! and/or MHD equations of motion.  Currently implemented:
 //!  (1) constant (gravitational) acceleration - for RTI
 //!  (2) shearing box in 2D (x-z), for both hydro and MHD
 //!  (3) random forcing to drive turbulence - implemented in TurbulenceDriver class
 
 #include <map>
+#include <string>
+
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
@@ -25,8 +27,7 @@ class Driver;
 //! \class SourceTerms
 //! \brief data and functions for physical source terms
 
-class SourceTerms
-{
+class SourceTerms {
  public:
   SourceTerms(std::string block, MeshBlockPack *pp, ParameterInput *pin);
   ~SourceTerms();

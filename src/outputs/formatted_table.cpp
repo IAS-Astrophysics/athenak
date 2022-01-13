@@ -9,13 +9,14 @@
 //  1D slices.  Code will issue error if this format is selected for 2D or 3D outputs.
 //  Output is written to a single file even with multiple MeshBlocks and MPI ranks.
 
+#include <sys/stat.h>  // mkdir
+
 #include <cstdio>      // fwrite(), fclose(), fopen(), fnprintf(), snprintf()
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <string>
-#include <sys/stat.h>  // mkdir
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -26,9 +27,8 @@
 //----------------------------------------------------------------------------------------
 // ctor: also calls OutputType base class constructor
 
-FormattedTableOutput::FormattedTableOutput(OutputParameters op, Mesh *pm)
-  : OutputType(op, pm)
-{
+FormattedTableOutput::FormattedTableOutput(OutputParameters op, Mesh *pm) :
+  OutputType(op, pm) {
   // check that 1D slice specified, otherwise issue warning and quit
   if (pm->multi_d) {
     if (!(out_params.slice1) && !(out_params.slice2)) {
@@ -55,8 +55,7 @@ FormattedTableOutput::FormattedTableOutput(OutputParameters op, Mesh *pm)
 //! \fn void FormattedTableOutput:::WriteOutputFile(Mesh *pm)
 //  \brief writes output_data_ to file in tabular format using C style std::fprintf
 
-void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
-{
+void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   // create filename: "tab/file_basename" + "." + "file_id" + "." + XXXXX + ".tab"
   // where XXXXX = 5-digit file_number
   std::string fname;

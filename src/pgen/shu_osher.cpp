@@ -27,8 +27,7 @@
 //! \fn ProblemGenerator::UserProblem()
 //  \brief Shu-Osher test problem generator
 
-void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
-{
+void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin) {
   if (pmbp->phydro == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "Shu-Osher test can only be run in Hydro, but no <hydro> block "
@@ -53,28 +52,26 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
   auto &u0 = pmbp->phydro->u0;
 
   par_for("pgen_shock1", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
-    KOKKOS_LAMBDA(int m,int k, int j, int i)
-    {
-      Real &x1min = size.d_view(m).x1min;
-      Real &x1max = size.d_view(m).x1max;
-      int nx1 = indcs.nx1;
-      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+  KOKKOS_LAMBDA(int m,int k, int j, int i) {
+    Real &x1min = size.d_view(m).x1min;
+    Real &x1max = size.d_view(m).x1max;
+    int nx1 = indcs.nx1;
+    Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
-      if (x1v < -0.8) {
-        u0(m,IDN,k,j,i) = dl;
-        u0(m,IM1,k,j,i) = ul*dl;
-        u0(m,IM2,k,j,i) = vl*dl;
-        u0(m,IM3,k,j,i) = wl*dl;
-        u0(m,IEN,k,j,i) = pl/gm1 + 0.5*dl*(ul*ul + vl*vl + wl*wl);
-      } else {
-        u0(m,IDN,k,j,i) = 1.0 + 0.2*std::sin(5.0*M_PI*(x1v));
-        u0(m,IM1,k,j,i) = 0.0;
-        u0(m,IM2,k,j,i) = 0.0;
-        u0(m,IM3,k,j,i) = 0.0;
-        u0(m,IEN,k,j,i) = 1.0/gm1;
-      }
+    if (x1v < -0.8) {
+      u0(m,IDN,k,j,i) = dl;
+      u0(m,IM1,k,j,i) = ul*dl;
+      u0(m,IM2,k,j,i) = vl*dl;
+      u0(m,IM3,k,j,i) = wl*dl;
+      u0(m,IEN,k,j,i) = pl/gm1 + 0.5*dl*(ul*ul + vl*vl + wl*wl);
+    } else {
+      u0(m,IDN,k,j,i) = 1.0 + 0.2*std::sin(5.0*M_PI*(x1v));
+      u0(m,IM1,k,j,i) = 0.0;
+      u0(m,IM2,k,j,i) = 0.0;
+      u0(m,IM3,k,j,i) = 0.0;
+      u0(m,IEN,k,j,i) = 1.0/gm1;
     }
-  );
+  });
 
   return;
 }

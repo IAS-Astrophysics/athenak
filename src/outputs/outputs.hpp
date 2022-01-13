@@ -24,7 +24,7 @@ enum class OutputVariable {undef=-1,
   hydro_u_d, hydro_u_m1, hydro_u_m2, hydro_u_m3, hydro_u_e, hydro_u,
   hydro_w_d, hydro_w_vx, hydro_w_vy, hydro_w_vz, hydro_w_p, hydro_w,
   mhd_u_d,   mhd_u_m1,   mhd_u_m2,   mhd_u_m3,   mhd_u_e,   mhd_u,
-  mhd_w_d,   mhd_w_vx,   mhd_w_vy,   mhd_w_vz,   mhd_w_p,   mhd_w, 
+  mhd_w_d,   mhd_w_vx,   mhd_w_vy,   mhd_w_vz,   mhd_w_p,   mhd_w,
   mhd_bcc1,  mhd_bcc2,   mhd_bcc3,   mhd_bcc,    mhd_b_x1f, mhd_b_x2f, mhd_b_x3f,
   mhd_u_bcc, mhd_w_bcc,  turb_force};
 
@@ -38,8 +38,7 @@ std::string GetOutputVariableString(OutputVariable input_flag);
 //! \struct OutputParameters
 //  \brief  container for parameters read from <output> block in the input file
 
-struct OutputParameters
-{
+struct OutputParameters {
   int block_number;
   std::string block_name;
   std::string file_basename;
@@ -59,8 +58,7 @@ struct OutputParameters
 //! \struct OutputVariableInfo
 //  \brief  container for various properties of each output variable
 
-struct OutputVariableInfo
-{
+struct OutputVariableInfo {
   std::string label;             // "name" of variable
   int data_index;                // index of variable in device array
   DvceArray5D<Real> *data_ptr;   // ptr to device array containing variable
@@ -73,8 +71,7 @@ struct OutputVariableInfo
 //! \struct OutputMeshBlockInfo
 //  \brief  container for various properties of each output MeshBlock
 
-struct OutputMeshBlockInfo
-{ 
+struct OutputMeshBlockInfo {
   int mb_gid;                        // gid of output MB
   int ois, oie, ojs, oje, oks, oke;  // start/end indices of data to be output on MB
   // constructor
@@ -86,23 +83,21 @@ struct OutputMeshBlockInfo
 //! \struct HistoryData
 //  \brief  container for history data for different physics modules
 
-struct HistoryData
-{
+struct HistoryData {
   int nhist;
   PhysicsModule physics;
   std::string label[NHISTORY_VARIABLES];
   Real hdata[NHISTORY_VARIABLES];
   bool header_written;
   // constructor
-  HistoryData(PhysicsModule name) : physics(name), header_written(false) {}
+  explicit HistoryData(PhysicsModule name) : physics(name), header_written(false) {}
 };
 
 //----------------------------------------------------------------------------------------
 // \brief abstract base class for different output types (modes/formats); node in
 //        std::list of OutputType created & stored in the Outputs class
 
-class OutputType
-{
+class OutputType {
  public:
   OutputType(OutputParameters oparams, Mesh *pm);
   virtual ~OutputType() = default;
@@ -130,7 +125,7 @@ class OutputType
 
   // Following vector will be of length (# output MeshBlocks)
   // With slicing, this may not be same as # of MeshBlocks in calculation
-  std::vector<OutputMeshBlockInfo> outmbs; 
+  std::vector<OutputMeshBlockInfo> outmbs;
 
   // Following vector will be of length (# output variables)
   std::vector<OutputVariableInfo> outvars;
@@ -140,8 +135,7 @@ class OutputType
 //! \class FormattedTableOutput
 //  \brief derived OutputType class for formatted table (tabular) data
 
-class FormattedTableOutput : public OutputType
-{
+class FormattedTableOutput : public OutputType {
  public:
   FormattedTableOutput(OutputParameters oparams, Mesh *pm);
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
@@ -150,9 +144,8 @@ class FormattedTableOutput : public OutputType
 //----------------------------------------------------------------------------------------
 //! \class HistoryOutput
 //  \brief derived OutputType class for history data
-    
-class HistoryOutput : public OutputType
-{   
+
+class HistoryOutput : public OutputType {
  public:
   HistoryOutput(OutputParameters oparams, Mesh *pm);
 
@@ -163,14 +156,13 @@ class HistoryOutput : public OutputType
   void LoadHydroHistoryData(HistoryData *pdata, Mesh *pm);
   void LoadMHDHistoryData(HistoryData *pdata, Mesh *pm);
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
-};  
+};
 
 //----------------------------------------------------------------------------------------
 //! \class VTKOutput
 //  \brief derived OutputType class for vtk binary data (VTK legacy format)
 
-class VTKOutput : public OutputType
-{
+class VTKOutput : public OutputType {
  public:
   VTKOutput(OutputParameters oparams, Mesh *pm);
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
@@ -180,8 +172,7 @@ class VTKOutput : public OutputType
 //! \class BinaryOutput
 //  \brief derived OutputType class for binary grid data (nbf format in pegasus++)
 
-class BinaryOutput : public OutputType
-{
+class BinaryOutput : public OutputType {
  public:
   BinaryOutput(OutputParameters oparams, Mesh *pm);
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
@@ -191,8 +182,7 @@ class BinaryOutput : public OutputType
 //! \class RestartOutput
 //  \brief derived OutputType class for restarts
 
-class RestartOutput : public OutputType
-{
+class RestartOutput : public OutputType {
  public:
   RestartOutput(OutputParameters oparams, Mesh *pm);
   void LoadOutputData(Mesh *pm) override;
@@ -204,14 +194,13 @@ class RestartOutput : public OutputType
 //  \brief root class for all Athena++ outputs. Provides a std::vector of OutputTypes,
 //   with each element representing one mode/format of output to be made.
 
-class Outputs
-{
+class Outputs {
  public:
   Outputs(ParameterInput *pin, Mesh *pm);
   ~Outputs();
 
-  // use vector of pointers to OutputTypes since it is an abstract base class 
-  std::vector<OutputType*> pout_list;  
+  // use vector of pointers to OutputTypes since it is an abstract base class
+  std::vector<OutputType*> pout_list;
 };
 
 #endif // OUTPUTS_OUTPUTS_HPP_

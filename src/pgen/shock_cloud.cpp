@@ -29,8 +29,7 @@
 //! \fn ProblemGenerator::_()
 //! \brief Problem Generator for the shock-cloud interaction problem
 
-void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
-{
+void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin) {
   Real gm = pmbp->phydro->peos->eos_data.gamma;
   Real gm1 = gm - 1.0;
 
@@ -69,54 +68,51 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
 
   // Initialize Hydro variables -------------------------------
   if (pmbp->phydro != nullptr) {
-
     auto &u0 = pmbp->phydro->u0;
     par_for("pgen_cloud1", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
-      KOKKOS_LAMBDA(int m,int k, int j, int i)
-      {
-        Real &x1min = size.d_view(m).x1min;
-        Real &x1max = size.d_view(m).x1max;
-        int nx1 = indcs.nx1;
-        Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+    KOKKOS_LAMBDA(int m,int k, int j, int i) {
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      int nx1 = indcs.nx1;
+      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
-        Real &x2min = size.d_view(m).x2min;
-        Real &x2max = size.d_view(m).x2max;
-        int nx2 = indcs.nx2;
-        Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+      Real &x2min = size.d_view(m).x2min;
+      Real &x2max = size.d_view(m).x2max;
+      int nx2 = indcs.nx2;
+      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
-        Real &x3min = size.d_view(m).x3min;
-        Real &x3max = size.d_view(m).x3max;
-        int nx3 = indcs.nx3;
-        Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+      Real &x3min = size.d_view(m).x3min;
+      Real &x3max = size.d_view(m).x3max;
+      int nx3 = indcs.nx3;
+      Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
-        // postshock flow
-        if (x1v < xshock) {
-          u0(m,IDN,k,j,i) = dl;
-          u0(m,IM1,k,j,i) = ul*dl;
-          u0(m,IM2,k,j,i) = 0.0;
-          u0(m,IM3,k,j,i) = 0.0;
-          u0(m,IEN,k,j,i) = pl/gm1 + 0.5*dl*(ul*ul);
+      // postshock flow
+      if (x1v < xshock) {
+        u0(m,IDN,k,j,i) = dl;
+        u0(m,IM1,k,j,i) = ul*dl;
+        u0(m,IM2,k,j,i) = 0.0;
+        u0(m,IM3,k,j,i) = 0.0;
+        u0(m,IEN,k,j,i) = pl/gm1 + 0.5*dl*(ul*ul);
 
-          // preshock ambient gas
-        } else {
-          u0(m,IDN,k,j,i) = dr;
-          u0(m,IM1,k,j,i) = ur*dr;
-          u0(m,IM2,k,j,i) = 0.0;
-          u0(m,IM3,k,j,i) = 0.0;
-          u0(m,IEN,k,j,i) = pr/gm1 + 0.5*dr*(ur*ur);
-        }
-
-        // cloud interior
-        Real diag = sqrt(SQR(x1v) + SQR(x2v) + SQR(x3v));
-        if (diag < rad) {
-          u0(m,IDN,k,j,i) = dr*drat;
-          u0(m,IM1,k,j,i) = ur*dr*drat;
-          u0(m,IM2,k,j,i) = 0.0;
-          u0(m,IM3,k,j,i) = 0.0;
-          u0(m,IEN,k,j,i) = pr/gm1 + 0.5*dr*drat*(ur*ur);
-        }
+        // preshock ambient gas
+      } else {
+        u0(m,IDN,k,j,i) = dr;
+        u0(m,IM1,k,j,i) = ur*dr;
+        u0(m,IM2,k,j,i) = 0.0;
+        u0(m,IM3,k,j,i) = 0.0;
+        u0(m,IEN,k,j,i) = pr/gm1 + 0.5*dr*(ur*ur);
       }
-    );
+
+      // cloud interior
+      Real diag = sqrt(SQR(x1v) + SQR(x2v) + SQR(x3v));
+      if (diag < rad) {
+        u0(m,IDN,k,j,i) = dr*drat;
+        u0(m,IM1,k,j,i) = ur*dr*drat;
+        u0(m,IM2,k,j,i) = 0.0;
+        u0(m,IM3,k,j,i) = 0.0;
+        u0(m,IEN,k,j,i) = pr/gm1 + 0.5*dr*drat*(ur*ur);
+      }
+    });
   }  // End initialization of Hydro variables
 
   return;

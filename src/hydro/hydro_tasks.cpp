@@ -33,8 +33,7 @@ namespace hydro {
 //  finished over all MeshBlocks for EACH stage, such as clearing all MPI non-blocking
 //  sends, etc.
 
-void Hydro::AssembleHydroTasks(TaskList &start, TaskList &run, TaskList &end)
-{
+void Hydro::AssembleHydroTasks(TaskList &start, TaskList &run, TaskList &end) {
   TaskID none(0);
 
   // start task list
@@ -84,8 +83,7 @@ void Hydro::AssembleHydroTasks(TaskList &start, TaskList &run, TaskList &end)
 //  \brief function to post non-blocking receives (with MPI), and initialize all boundary
 //  receive status flags to waiting (with or without MPI) for Hydro variables.
 
-TaskStatus Hydro::InitRecv(Driver *pdrive, int stage)
-{
+TaskStatus Hydro::InitRecv(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_u->InitRecv(nhydro+nscalars);
   if (tstat != TaskStatus::complete) return tstat;
 
@@ -99,8 +97,7 @@ TaskStatus Hydro::InitRecv(Driver *pdrive, int stage)
 //! \fn  void Hydro::ClearRecv
 //  \brief Waits for all MPI receives to complete before allowing execution to continue
 
-TaskStatus Hydro::ClearRecv(Driver *pdrive, int stage)
-{
+TaskStatus Hydro::ClearRecv(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_u->ClearRecv();
   if (tstat != TaskStatus::complete) return tstat;
 
@@ -114,8 +111,7 @@ TaskStatus Hydro::ClearRecv(Driver *pdrive, int stage)
 //! \fn  void Hydro::ClearSend
 //  \brief Waits for all MPI sends to complete before allowing execution to continue
 
-TaskStatus Hydro::ClearSend(Driver *pdrive, int stage)
-{
+TaskStatus Hydro::ClearSend(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_u->ClearSend();
   if (tstat != TaskStatus::complete) return tstat;
 
@@ -129,8 +125,7 @@ TaskStatus Hydro::ClearSend(Driver *pdrive, int stage)
 //! \fn  void Hydro::CopyCons
 //  \brief  copy u0 --> u1 in first stage
 
-TaskStatus Hydro::CopyCons(Driver *pdrive, int stage)
-{
+TaskStatus Hydro::CopyCons(Driver *pdrive, int stage) {
   if (stage == 1) {
     Kokkos::deep_copy(DevExeSpace(), u1, u0);
   }
@@ -141,8 +136,7 @@ TaskStatus Hydro::CopyCons(Driver *pdrive, int stage)
 //! \fn  void Hydro::SendU
 //  \brief sends cell-centered conserved variables
 
-TaskStatus Hydro::SendU(Driver *pdrive, int stage) 
-{
+TaskStatus Hydro::SendU(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_u->PackAndSendCC(u0, coarse_u0);
   return tstat;
 }
@@ -151,18 +145,16 @@ TaskStatus Hydro::SendU(Driver *pdrive, int stage)
 //! \fn  void Hydro::RecvU
 //  \brief receives cell-centered conserved variables
 
-TaskStatus Hydro::RecvU(Driver *pdrive, int stage)
-{
+TaskStatus Hydro::RecvU(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_u->RecvAndUnpackCC(u0, coarse_u0);
   return tstat;
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn  void Hydro::SendFlux
-//  \brief 
+//  \brief
 
-TaskStatus Hydro::SendFlux(Driver *pdrive, int stage)
-{
+TaskStatus Hydro::SendFlux(Driver *pdrive, int stage) {
   // Only execute this function with SMR/SMR
   if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
 
@@ -172,10 +164,9 @@ TaskStatus Hydro::SendFlux(Driver *pdrive, int stage)
 
 //----------------------------------------------------------------------------------------
 //! \fn  void Hydro::RecvFlux
-//  \brief 
+//  \brief
 
-TaskStatus Hydro::RecvFlux(Driver *pdrive, int stage)
-{
+TaskStatus Hydro::RecvFlux(Driver *pdrive, int stage) {
   // Only execute this function with SMR/SMR
   if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
 
@@ -185,10 +176,9 @@ TaskStatus Hydro::RecvFlux(Driver *pdrive, int stage)
 
 //----------------------------------------------------------------------------------------
 //! \fn  void Hydro::RestrictU
-//  \brief 
+//  \brief
 
-TaskStatus Hydro::RestrictU(Driver *pdrive, int stage)
-{
+TaskStatus Hydro::RestrictU(Driver *pdrive, int stage) {
   // Only execute this function with SMR/SMR
   if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
 
@@ -198,13 +188,11 @@ TaskStatus Hydro::RestrictU(Driver *pdrive, int stage)
 
 //----------------------------------------------------------------------------------------
 //! \fn  void Hydro::ApplyPhysicalBCs
-//  \brief 
+//  \brief
 
-TaskStatus Hydro::ApplyPhysicalBCs(Driver *pdrive, int stage)
-{
+TaskStatus Hydro::ApplyPhysicalBCs(Driver *pdrive, int stage) {
   // only apply BCs if domain is not strictly periodic
   if (!(pmy_pack->pmesh->strictly_periodic)) {
-
     // physical BCs
     pbval_u->HydroBCs((pmy_pack), (pbval_u->u_in), u0);
 
@@ -220,8 +208,7 @@ TaskStatus Hydro::ApplyPhysicalBCs(Driver *pdrive, int stage)
 //! \fn  void Hydro::ConToPrim
 //  \brief
 
-TaskStatus Hydro::ConToPrim(Driver *pdrive, int stage)
-{
+TaskStatus Hydro::ConToPrim(Driver *pdrive, int stage) {
   peos->ConsToPrim(u0, w0);
   return TaskStatus::complete;
 }

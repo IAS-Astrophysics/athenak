@@ -23,7 +23,6 @@
 //  This function must not be called by multiple threads in shared memory parallel regions
 
 int IOWrapper::Open(const char* fname, FileMode rw) {
-
   if (rw == FileMode::read) {
 #if MPI_PARALLEL_ENABLED
     // NOLINTNEXTLINE

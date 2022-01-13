@@ -26,8 +26,7 @@ void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &c
      const int m, const int k, const int j, const int il, const int iu, const int ivx,
      const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr,
      const ScrArray2D<Real> &bl, const ScrArray2D<Real> &br, const DvceArray4D<Real> &bx,
-     DvceArray5D<Real> flx, DvceArray4D<Real> ey, DvceArray4D<Real> ez)
-{
+     DvceArray5D<Real> flx, DvceArray4D<Real> ey, DvceArray4D<Real> ez) {
   // Cyclic permutation of array indices corresponding to velocity/b_field components
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
@@ -40,8 +39,7 @@ void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &c
   int is = coord.indcs.is;
   int js = coord.indcs.js;
   int ks = coord.indcs.ks;
-  par_for_inner(member, il, iu, [&](const int i)
-  {
+  par_for_inner(member, il, iu, [&](const int i) {
     // Extract components of metric
     Real &x1min = coord.size.d_view(m).x1min;
     Real &x1max = coord.size.d_view(m).x1max;
@@ -68,7 +66,7 @@ void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &c
     }
 
     Real g_[NMETRIC], gi_[NMETRIC];
-    ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, false, 
+    ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, false,
                             coord.bh_spin, g_, gi_);
     const Real
       &g_00 = g_[I00], &g_01 = g_[I01], &g_02 = g_[I02], &g_03 = g_[I03],

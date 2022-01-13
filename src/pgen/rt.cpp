@@ -48,8 +48,7 @@
 //! \fn void ProblemGenerator::UserProblem()
 //  \brief Problem Generator for the Rayleigh-Taylor instability test
 
-void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
-{
+void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin) {
   if (pmbp->pmesh->one_d) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "rti problem generator only works in 2D/3D" << std::endl;
@@ -79,81 +78,78 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
     EOS_Data &eos = pmbp->phydro->peos->eos_data;
     Real gm1 = eos.gamma - 1.0;
     Real p0 = 1.0/eos.gamma;
-   
+
     // 2D PROBLEM
 
     if (pmbp->pmesh->two_d) {
       auto u0 = pmbp->phydro->u0;
       par_for("rt2d", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
-        KOKKOS_LAMBDA(int m, int k, int j, int i)
-        {
-          Real &x1min = size.d_view(m).x1min;
-          Real &x1max = size.d_view(m).x1max;
-          int nx1 = indcs.nx1;
-          Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+      KOKKOS_LAMBDA(int m, int k, int j, int i) {
+        Real &x1min = size.d_view(m).x1min;
+        Real &x1max = size.d_view(m).x1max;
+        int nx1 = indcs.nx1;
+        Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
-          Real &x2min = size.d_view(m).x2min;
-          Real &x2max = size.d_view(m).x2max;
-          int nx2 = indcs.nx2;
-          Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+        Real &x2min = size.d_view(m).x2min;
+        Real &x2max = size.d_view(m).x2max;
+        int nx2 = indcs.nx2;
+        Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
-          Real den=1.0;
-          if (x2v > 0.0) den *= drat;
+        Real den=1.0;
+        if (x2v > 0.0) den *= drat;
 
-          if (iprob == 1) {
-            u0(m,IM2,k,j,i) = (1.0 + cos(kx*x1v))*(1.0 + cos(ky*x2v))/4.0;
-          } else {
-            u0(m,IM2,k,j,i) = (Ran2((int64_t*)iseed) - 0.5)*(1.0 + cos(ky*x2v));
-          }
-
-          u0(m,IDN,k,j,i) = den;
-          u0(m,IM1,k,j,i) = 0.0;
-          u0(m,IM2,k,j,i) *= (den*amp);
-          u0(m,IM3,k,j,i) = 0.0;
-          u0(m,IEN,k,j,i) = (p0 + grav_acc*den*x2v)/gm1 + 0.5*SQR(u0(m,IM2,k,j,i))/den;
+        if (iprob == 1) {
+          u0(m,IM2,k,j,i) = (1.0 + cos(kx*x1v))*(1.0 + cos(ky*x2v))/4.0;
+        } else {
+          u0(m,IM2,k,j,i) = ((Ran2((int64_t*)iseed)-0.5) *  // NOLINT
+                             (1.0 + cos(ky*x2v)));
         }
-      );
+
+        u0(m,IDN,k,j,i) = den;
+        u0(m,IM1,k,j,i) = 0.0;
+        u0(m,IM2,k,j,i) *= (den*amp);
+        u0(m,IM3,k,j,i) = 0.0;
+        u0(m,IEN,k,j,i) = (p0 + grav_acc*den*x2v)/gm1 + 0.5*SQR(u0(m,IM2,k,j,i))/den;
+      });
 
     // 3D PROBLEM ----------------------------------------------------------------
 
     } else {
       auto u0 = pmbp->phydro->u0;
       par_for("rt2d", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
-        KOKKOS_LAMBDA(int m, int k, int j, int i)
-        {
-          Real &x1min = size.d_view(m).x1min;
-          Real &x1max = size.d_view(m).x1max;
-          int nx1 = indcs.nx1;
-          Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+      KOKKOS_LAMBDA(int m, int k, int j, int i) {
+        Real &x1min = size.d_view(m).x1min;
+        Real &x1max = size.d_view(m).x1max;
+        int nx1 = indcs.nx1;
+        Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
-          Real &x2min = size.d_view(m).x2min;
-          Real &x2max = size.d_view(m).x2max;
-          int nx2 = indcs.nx2;
-          Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+        Real &x2min = size.d_view(m).x2min;
+        Real &x2max = size.d_view(m).x2max;
+        int nx2 = indcs.nx2;
+        Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
-          Real &x3min = size.d_view(m).x3min;
-          Real &x3max = size.d_view(m).x3max;
-          int nx3 = indcs.nx3;
-          Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+        Real &x3min = size.d_view(m).x3min;
+        Real &x3max = size.d_view(m).x3max;
+        int nx3 = indcs.nx3;
+        Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
-          Real den=1.0;
-          if (x3v > 0.0) den *= drat;
+        Real den=1.0;
+        if (x3v > 0.0) den *= drat;
 
-          if (iprob == 1) {
-            u0(m,IM3,k,j,i) = (1.0+cos(kx*x1v))*(1.0+cos(ky*x2v))*(1.0+cos(kz*x3v))/8.0;
-          } else {
-            u0(m,IM3,k,j,i) = amp*(Ran2((int64_t*)iseed) - 0.5)*(1.0 + cos(kz*x3v));
-          }
-
-          u0(m,IDN,k,j,i) = den;
-          u0(m,IM1,k,j,i) = 0.0;
-          u0(m,IM2,k,j,i) = 0.0;
-          u0(m,IM3,k,j,i) *= (den*amp);
-          u0(m,IEN,k,j,i) = (p0 + grav_acc*den*x3v)/gm1 + 0.5*SQR(u0(m,IM3,k,j,i))/den;
+        if (iprob == 1) {
+          u0(m,IM3,k,j,i) = (1.0+cos(kx*x1v))*(1.0+cos(ky*x2v))*(1.0+cos(kz*x3v))/8.0;
+        } else {
+          u0(m,IM3,k,j,i) = (amp*(Ran2((int64_t*)iseed)-0.5) *  // NOLINT
+                             (1.0 + cos(kz*x3v)));
         }
-      );
-    }
 
+        u0(m,IDN,k,j,i) = den;
+        u0(m,IM1,k,j,i) = 0.0;
+        u0(m,IM2,k,j,i) = 0.0;
+        u0(m,IM3,k,j,i) *= (den*amp);
+        u0(m,IEN,k,j,i) = (p0 + grav_acc*den*x3v)/gm1 + 0.5*SQR(u0(m,IM3,k,j,i))/den;
+      });
+    }
   } // end of Hydro initialization
 
   return;

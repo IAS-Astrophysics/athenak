@@ -13,6 +13,8 @@
 //  (potentially on different levels) that tile the entire domain and are stored in
 //  containers called MashBlockPack.
 
+#include <memory>
+
 #include "bvals/bvals.hpp"
 #include "meshblock_pack.hpp"
 
@@ -20,22 +22,21 @@
 //! \class MeshBlock
 //  \brief data/functions associated with each MeshBlock
 
-class MeshBlock
-{
- // mesh classes (Mesh, MeshBlock, MeshBlockPack, MeshBlockTree) like to play together
- friend class Mesh;
- friend class MeshBlockPack;
- friend class MeshBlockTree;
+class MeshBlock {
+  // mesh classes (Mesh, MeshBlock, MeshBlockPack, MeshBlockTree) like to play together
+  friend class Mesh;
+  friend class MeshBlockPack;
+  friend class MeshBlockTree;
 
  public:
   MeshBlock(MeshBlockPack *ppack, int igids, int nmb);
-  ~MeshBlock() {};  // only default destructor needed
+  ~MeshBlock() {}  // only default destructor needed
 
   // data
   int nmb;              // number of MeshBlocks
   int nnghbr;           // maximum number of neighbors for each MeshBlock
 
-  // DualArrays are used to store data used on both device and host 
+  // DualArrays are used to store data used on both device and host
   // First dimension of each array will be [# of MeshBlocks in this MeshBlockPack]
   DualArray1D<int> mb_gid;           // grid ID, unique identifier for each MeshBlock
   DualArray1D<int> mb_lev;           // logical level of each MeshBlock

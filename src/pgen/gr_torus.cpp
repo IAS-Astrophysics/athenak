@@ -8,7 +8,7 @@
 //  Kerr-Schild coordinates.  Based on gr_torus.cpp in Athena++, with edits by CJW and SR.
 //  Simplified and implemented in Kokkos by JMS.
 
-#include <Kokkos_Random.hpp>
+#include <stdio.h>
 
 #include <algorithm>  // max(), max_element(), min(), min_element()
 #include <cmath>      // abs(), cos(), exp(), log(), NAN, pow(), sin(), sqrt()
@@ -17,7 +17,6 @@
 #include <sstream>    // stringstream
 #include <string>     // c_str(), string
 #include <cfloat>
-#include <stdio.h>
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
@@ -29,6 +28,7 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 
+#include <Kokkos_Random.hpp>
 
 // prototypes for functions used internally to this pgen
 namespace {
@@ -88,13 +88,12 @@ struct torus_pgen {
 //----------------------------------------------------------------------------------------
 //! \fn void ProblemGenerator::UserProblem()
 //  \brief Sets initial conditions for Fishbone-Moncrief torus in GR
-//  Compile with '-D PROBLEM=gr_torus' to enroll as user-specific problem generator 
+//  Compile with '-D PROBLEM=gr_torus' to enroll as user-specific problem generator
 //   references Fishbone & Moncrief 1976, ApJ 207 962 (FM)
 //              Fishbone 1977, ApJ 215 323 (F)
 //   assumes x3 is axisymmetric direction
 
-void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
-{
+void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin) {
   // Read problem-specific parameters from input file
   // global parameters
   torus.rho_min = pin->GetReal("problem", "rho_min");
@@ -107,7 +106,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
 
   torus.dfloor=pin->GetOrAddReal("hydro","dfloor",(1024*(FLT_MIN)));
   torus.pfloor=pin->GetOrAddReal("hydro","pfloor",(1024*(FLT_MIN)));
-  
+
   torus.rho_max = pin->GetReal("problem", "rho_max");
   torus.k_adi = pin->GetReal("problem", "k_adi");
   torus.r_edge = pin->GetReal("problem", "r_edge");
@@ -115,7 +114,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
 
   // local parameters
   Real pert_amp = pin->GetOrAddReal("problem", "pert_amp", 0.0);
-  
+
   // capture variables for kernel
   auto &indcs = pmbp->pmesh->mb_indcs;
   int &ng = indcs.ng;
@@ -150,7 +149,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
   torus.pgas_over_rho_peak = gm1/torus.gamma_adi * (exp(torus.log_h_peak)-1.0);
   torus.rho_peak = pow(torus.pgas_over_rho_peak/torus.k_adi, 1.0/gm1) / torus.rho_max;
 
-  // Select either Hydro or MHD 
+  // Select either Hydro or MHD
   DvceArray5D<Real> u0_, w0_;
   if (pmbp->phydro != nullptr) {
     u0_ = pmbp->phydro->u0;
@@ -166,8 +165,103 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
   auto &size = pmbp->pmb->mb_size;
   Kokkos::Random_XorShift64_Pool<> rand_pool64(pmbp->gids);
   par_for("pgen_torus1", DevExeSpace(), 0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
-    KOKKOS_LAMBDA(int m, int k, int j, int i)
-    {
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    Real &x1min = size.d_view(m).x1min;
+    Real &x1max = size.d_view(m).x1max;
+    Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+    Real &x2min = size.d_view(m).x2min;
+    Real &x2max = size.d_view(m).x2max;
+    Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+    Real &x3min = size.d_view(m).x3min;
+    Real &x3max = size.d_view(m).x3max;
+    Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+
+    // Calculate Boyer-Lindquist coordinates of cell
+    Real r, theta, phi;
+    GetBoyerLindquistCoordinates(trs, x1v, x2v, x3v, &r, &theta, &phi);
+    Real sin_theta = sin(theta);
+    Real cos_theta = cos(theta);
+    Real sin_phi = sin(phi);
+    Real cos_phi = cos(phi);
+
+    Real sin_vartheta = abs(sin_theta);
+    Real cos_vartheta = cos_theta;
+    Real varphi = (sin_theta < 0.0) ? (phi - M_PI) : phi;
+    Real sin_varphi = sin(varphi);
+    Real cos_varphi = cos(varphi);
+
+    // Determine if we are in the torus
+    Real log_h;
+    bool in_torus = false;
+    if (r >= trs.r_edge) {
+      log_h = LogHAux(trs, r, sin_vartheta) - trs.log_h_edge;  // (FM 3.6)
+      if (log_h >= 0.0) {
+        in_torus = true;
+      }
+    }
+
+    // Calculate background primitives
+    Real rho_bg = trs.rho_min * pow(r, trs.rho_pow);
+    Real pgas_bg = trs.pgas_min * pow(r, trs.pgas_pow);
+
+    Real rho = rho_bg;
+    Real pgas = pgas_bg;
+    Real uu1 = 0.0;
+    Real uu2 = 0.0;
+    Real uu3 = 0.0;
+    Real perturbation = 0.0;
+    // Overwrite primitives inside torus
+    if (in_torus) {
+      // Calculate perturbation
+      auto rand_gen = rand_pool64.get_state(); // get random number state this thread
+      perturbation = pert_amp*(rand_gen.frand() - 0.5);
+      rand_pool64.free_state(rand_gen);  // free state for use by other threads
+
+      // Calculate thermodynamic variables
+      Real pgas_over_rho = gm1/trs.gamma_adi * (exp(log_h) - 1.0);
+      rho = pow(pgas_over_rho/trs.k_adi, 1.0/gm1) / trs.rho_peak;
+      pgas = pgas_over_rho * rho;
+
+      // Calculate velocities in Boyer-Lindquist coordinates
+      Real u0_bl, u1_bl, u2_bl, u3_bl;
+      CalculateVelocityInTiltedTorus(trs, r, theta, phi,
+                                     &u0_bl, &u1_bl, &u2_bl, &u3_bl);
+
+      // Transform to preferred coordinates
+      Real u0, u1, u2, u3;
+      TransformVector(trs, u0_bl, 0.0, u2_bl, u3_bl,
+                      x1v, x2v, x3v, &u0, &u1, &u2, &u3);
+
+      Real g_[NMETRIC], gi_[NMETRIC];
+      ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, true,
+                                coord.bh_spin, g_, gi_);
+      uu1 = u1 - gi_[I01]/gi_[I00] * u0;
+      uu2 = u2 - gi_[I02]/gi_[I00] * u0;
+      uu3 = u3 - gi_[I03]/gi_[I00] * u0;
+    }
+
+    // Set primitive values, including random perturbations to pressure
+    w0_(m,IDN,k,j,i) = fmax(rho, rho_bg);
+    w0_(m,IEN,k,j,i) = fmax(pgas, pgas_bg) * (1.0 + perturbation) / gm1;
+    w0_(m,IVX,k,j,i) = uu1;
+    w0_(m,IVY,k,j,i) = uu2;
+    w0_(m,IVZ,k,j,i) = uu3;
+  });
+
+  // initialize magnetic fields ---------------------------------------
+
+  if (pmbp->pmhd != nullptr) {
+    // parse some more parameters from input
+    torus.potential_cutoff = pin->GetReal("problem", "potential_cutoff");
+    torus.potential_r_pow = pin->GetReal("problem", "potential_r_pow");
+    torus.potential_rho_pow = pin->GetReal("problem", "potential_rho_pow");
+
+    auto &b0 = pmbp->pmhd->b0;
+    auto trs = torus;
+    par_for("pgen_torus2", DevExeSpace(), 0,nmb1,ks,ke,js,je,is,ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
       Real &x1min = size.d_view(m).x1min;
       Real &x1max = size.d_view(m).x1max;
       Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
@@ -180,154 +274,51 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
       Real &x3max = size.d_view(m).x3max;
       Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
-      // Calculate Boyer-Lindquist coordinates of cell
-      Real r, theta, phi;
-      GetBoyerLindquistCoordinates(trs, x1v, x2v, x3v, &r, &theta, &phi);
-      Real sin_theta = sin(theta);
-      Real cos_theta = cos(theta);
-      Real sin_phi = sin(phi);
-      Real cos_phi = cos(phi);
+      // Compute face-centered fields from curl(A).
+      Real x1f   = LeftEdgeX(i  -is, indcs.nx1, x1min, x1max);
+      Real x1fp1 = LeftEdgeX(i+1-is, indcs.nx1, x1min, x1max);
+      Real x2f   = LeftEdgeX(j  -js, indcs.nx2, x2min, x2max);
+      Real x2fp1 = LeftEdgeX(j+1-js, indcs.nx2, x2min, x2max);
+      Real x3f   = LeftEdgeX(k  -ks, indcs.nx3, x3min, x3max);
+      Real x3fp1 = LeftEdgeX(k+1-ks, indcs.nx3, x3min, x3max);
+      Real dx1 = size.d_view(m).dx1;
+      Real dx2 = size.d_view(m).dx2;
+      Real dx3 = size.d_view(m).dx3;
 
-      Real sin_vartheta = abs(sin_theta);
-      Real cos_vartheta = cos_theta;
-      Real varphi = (sin_theta < 0.0) ? (phi - M_PI) : phi;
-      Real sin_varphi = sin(varphi);
-      Real cos_varphi = cos(varphi);
+      b0.x1f(m,k,j,i) = (A3(trs,x1f,  x2fp1,x3v  ) - A3(trs,x1f,x2f,x3v))/dx2 -
+                        (A2(trs,x1f,  x2v,  x3fp1) - A2(trs,x1f,x2v,x3f))/dx3;
+      b0.x2f(m,k,j,i) = (A1(trs,x1v,  x2f,  x3fp1) - A1(trs,x1v,x2f,x3f))/dx3 -
+                        (A3(trs,x1fp1,x2f,  x3v  ) - A3(trs,x1f,x2f,x3v))/dx1;
+      b0.x3f(m,k,j,i) = (A2(trs,x1fp1,x2v,  x3f  ) - A2(trs,x1f,x2v,x3f))/dx1 -
+                        (A1(trs,x1v,  x2fp1,x3f  ) - A1(trs,x1v,x2f,x3f))/dx2;
 
-      // Determine if we are in the torus
-      Real log_h;
-      bool in_torus = false;
-      if (r >= trs.r_edge) {
-        log_h = LogHAux(trs, r, sin_vartheta) - trs.log_h_edge;  // (FM 3.6)
-        if (log_h >= 0.0) {
-          in_torus = true;
-        }
+      // Include extra face-component at edge of block in each direction
+      if (i==ie) {
+        b0.x1f(m,k,j,i+1) = (A3(trs,x1fp1,x2fp1,x3v  ) - A3(trs,x1fp1,x2f,x3v))/dx2 -
+                            (A2(trs,x1fp1,x2v,  x3fp1) - A2(trs,x1fp1,x2v,x3f))/dx3;
       }
-
-      // Calculate background primitives
-      Real rho_bg = trs.rho_min * pow(r, trs.rho_pow);
-      Real pgas_bg = trs.pgas_min * pow(r, trs.pgas_pow);
-
-      Real rho = rho_bg;
-      Real pgas = pgas_bg;
-      Real uu1 = 0.0;
-      Real uu2 = 0.0;
-      Real uu3 = 0.0;
-      Real perturbation = 0.0;
-      // Overwrite primitives inside torus
-      if (in_torus) {
-        // Calculate perturbation
-        auto rand_gen = rand_pool64.get_state(); // get random number state this thread
-        perturbation = pert_amp*(rand_gen.frand() - 0.5);
-        rand_pool64.free_state(rand_gen);  // free state for use by other threads
-
-        // Calculate thermodynamic variables
-        Real pgas_over_rho = gm1/trs.gamma_adi * (exp(log_h) - 1.0);
-        rho = pow(pgas_over_rho/trs.k_adi, 1.0/gm1) / trs.rho_peak;
-        pgas = pgas_over_rho * rho;
-
-        // Calculate velocities in Boyer-Lindquist coordinates
-        Real u0_bl, u1_bl, u2_bl, u3_bl;
-        CalculateVelocityInTiltedTorus(trs, r, theta, phi,
-                                       &u0_bl, &u1_bl, &u2_bl, &u3_bl);
-
-        // Transform to preferred coordinates
-        Real u0, u1, u2, u3;
-        TransformVector(trs, u0_bl, 0.0, u2_bl, u3_bl,
-                        x1v, x2v, x3v, &u0, &u1, &u2, &u3);
-
-        Real g_[NMETRIC], gi_[NMETRIC];
-        ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, true,
-                                  coord.bh_spin, g_, gi_);
-        uu1 = u1 - gi_[I01]/gi_[I00] * u0;
-        uu2 = u2 - gi_[I02]/gi_[I00] * u0;
-        uu3 = u3 - gi_[I03]/gi_[I00] * u0;
+      if (j==je) {
+        b0.x2f(m,k,j+1,i) = (A1(trs,x1v,  x2fp1,x3fp1) - A1(trs,x1v,x2fp1,x3f))/dx3 -
+                            (A3(trs,x1fp1,x2fp1,x3v  ) - A3(trs,x1f,x2fp1,x3v))/dx1;
       }
-
-      // Set primitive values, including random perturbations to pressure
-      w0_(m,IDN,k,j,i) = fmax(rho, rho_bg);
-      w0_(m,IEN,k,j,i) = fmax(pgas, pgas_bg) * (1.0 + perturbation) / gm1;
-      w0_(m,IVX,k,j,i) = uu1;
-      w0_(m,IVY,k,j,i) = uu2;
-      w0_(m,IVZ,k,j,i) = uu3;
-    }
-  );
-
-  // initialize magnetic fields ---------------------------------------
-
-  if (pmbp->pmhd != nullptr) {
-
-    // parse some more parameters from input
-    torus.potential_cutoff = pin->GetReal("problem", "potential_cutoff");
-    torus.potential_r_pow = pin->GetReal("problem", "potential_r_pow");
-    torus.potential_rho_pow = pin->GetReal("problem", "potential_rho_pow");
-
-    auto &b0 = pmbp->pmhd->b0;
-    auto trs = torus;
-    par_for("pgen_torus2", DevExeSpace(), 0,nmb1,ks,ke,js,je,is,ie,
-      KOKKOS_LAMBDA(int m, int k, int j, int i)
-      { 
-        Real &x1min = size.d_view(m).x1min;
-        Real &x1max = size.d_view(m).x1max;
-        Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
-        
-        Real &x2min = size.d_view(m).x2min;
-        Real &x2max = size.d_view(m).x2max;
-        Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
-        
-        Real &x3min = size.d_view(m).x3min;
-        Real &x3max = size.d_view(m).x3max;
-        Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
-        
-        // Compute face-centered fields from curl(A).
-        Real x1f   = LeftEdgeX(i  -is, indcs.nx1, x1min, x1max);
-        Real x1fp1 = LeftEdgeX(i+1-is, indcs.nx1, x1min, x1max);
-        Real x2f   = LeftEdgeX(j  -js, indcs.nx2, x2min, x2max);
-        Real x2fp1 = LeftEdgeX(j+1-js, indcs.nx2, x2min, x2max);
-        Real x3f   = LeftEdgeX(k  -ks, indcs.nx3, x3min, x3max);
-        Real x3fp1 = LeftEdgeX(k+1-ks, indcs.nx3, x3min, x3max);
-        Real dx1 = size.d_view(m).dx1;
-        Real dx2 = size.d_view(m).dx2;
-        Real dx3 = size.d_view(m).dx3;
-        
-        b0.x1f(m,k,j,i) = (A3(trs,x1f,  x2fp1,x3v  ) - A3(trs,x1f,x2f,x3v))/dx2 -
-                          (A2(trs,x1f,  x2v,  x3fp1) - A2(trs,x1f,x2v,x3f))/dx3;
-        b0.x2f(m,k,j,i) = (A1(trs,x1v,  x2f,  x3fp1) - A1(trs,x1v,x2f,x3f))/dx3 -
-                          (A3(trs,x1fp1,x2f,  x3v  ) - A3(trs,x1f,x2f,x3v))/dx1;
-        b0.x3f(m,k,j,i) = (A2(trs,x1fp1,x2v,  x3f  ) - A2(trs,x1f,x2v,x3f))/dx1 -
-                          (A1(trs,x1v,  x2fp1,x3f  ) - A1(trs,x1v,x2f,x3f))/dx2;
-        
-        // Include extra face-component at edge of block in each direction
-        if (i==ie) {
-          b0.x1f(m,k,j,i+1) = (A3(trs,x1fp1,x2fp1,x3v  ) - A3(trs,x1fp1,x2f,x3v))/dx2 -
-                              (A2(trs,x1fp1,x2v,  x3fp1) - A2(trs,x1fp1,x2v,x3f))/dx3;
-        }
-        if (j==je) {
-          b0.x2f(m,k,j+1,i) = (A1(trs,x1v,  x2fp1,x3fp1) - A1(trs,x1v,x2fp1,x3f))/dx3 -
-                              (A3(trs,x1fp1,x2fp1,x3v  ) - A3(trs,x1f,x2fp1,x3v))/dx1;
-        }
-        if (k==ke) {
-          b0.x3f(m,k+1,j,i) = (A2(trs,x1fp1,x2v,  x3fp1) - A2(trs,x1f,x2v,x3fp1))/dx1 -
-                              (A1(trs,x1v,  x2fp1,x3fp1) - A1(trs,x1v,x2f,x3fp1))/dx2;
-        }
+      if (k==ke) {
+        b0.x3f(m,k+1,j,i) = (A2(trs,x1fp1,x2v,  x3fp1) - A2(trs,x1f,x2v,x3fp1))/dx1 -
+                            (A1(trs,x1v,  x2fp1,x3fp1) - A1(trs,x1v,x2f,x3fp1))/dx2;
       }
-    );
+    });
 
     // Compute cell-centered fields
     auto &bcc_ = pmbp->pmhd->bcc0;
     par_for("pgen_torus2", DevExeSpace(), 0,nmb1,ks,ke,js,je,is,ie,
-      KOKKOS_LAMBDA(int m, int k, int j, int i)
-      {
-        // cell-centered fields are simple linear average of face-centered fields
-        Real& w_bx = bcc_(m,IBX,k,j,i);
-        Real& w_by = bcc_(m,IBY,k,j,i);
-        Real& w_bz = bcc_(m,IBZ,k,j,i);
-        w_bx = 0.5*(b0.x1f(m,k,j,i) + b0.x1f(m,k,j,i+1));
-        w_by = 0.5*(b0.x2f(m,k,j,i) + b0.x2f(m,k,j+1,i));
-        w_bz = 0.5*(b0.x3f(m,k,j,i) + b0.x3f(m,k+1,j,i));
-      }
-    );
-
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      // cell-centered fields are simple linear average of face-centered fields
+      Real& w_bx = bcc_(m,IBX,k,j,i);
+      Real& w_by = bcc_(m,IBY,k,j,i);
+      Real& w_bz = bcc_(m,IBZ,k,j,i);
+      w_bx = 0.5*(b0.x1f(m,k,j,i) + b0.x1f(m,k,j,i+1));
+      w_by = 0.5*(b0.x2f(m,k,j,i) + b0.x2f(m,k,j+1,i));
+      w_bz = 0.5*(b0.x3f(m,k,j,i) + b0.x3f(m,k+1,j,i));
+    });
   }
 
   // Convert primitives to conserved
@@ -358,8 +349,7 @@ namespace {
 //   assumes corotation
 
 KOKKOS_INLINE_FUNCTION
-static Real CalculateLFromRPeak(struct torus_pgen pgen, Real r)
-{
+static Real CalculateLFromRPeak(struct torus_pgen pgen, Real r) {
   Real num = SQR(r*r) + SQR(pgen.spin*r) - 2.0*pgen.mass*SQR(pgen.spin)*r
            - pgen.spin*(r*r - pgen.spin*pgen.spin)*sqrt(pgen.mass*r);
   Real denom = SQR(r) - 3.0*pgen.mass*r + 2.0*pgen.spin*sqrt(pgen.mass*r);
@@ -379,8 +369,7 @@ static Real CalculateLFromRPeak(struct torus_pgen pgen, Real r)
 //   implements first half of (FM 3.6)
 
 KOKKOS_INLINE_FUNCTION
-static Real LogHAux(struct torus_pgen pgen, Real r, Real sin_theta)
-{
+static Real LogHAux(struct torus_pgen pgen, Real r, Real sin_theta) {
   Real sin_sq_theta = SQR(sin_theta);
   Real cos_sq_theta = 1.0 - sin_sq_theta;
   Real delta = SQR(r) - 2.0*pgen.mass*r + SQR(pgen.spin);  // \Delta
@@ -407,8 +396,7 @@ static Real LogHAux(struct torus_pgen pgen, Real r, Real sin_theta)
 KOKKOS_INLINE_FUNCTION
 static void GetBoyerLindquistCoordinates(struct torus_pgen pgen,
                                          Real x1, Real x2, Real x3,
-                                         Real *pr, Real *ptheta, Real *pphi) 
-{
+                                         Real *pr, Real *ptheta, Real *pphi) {
     Real rad = sqrt(SQR(x1) + SQR(x2) + SQR(x3));
     Real r = sqrt( SQR(rad) - SQR(pgen.spin) + sqrt(SQR(SQR(rad)-SQR(pgen.spin))
                    + 4.0*SQR(pgen.spin)*SQR(x3)) ) / sqrt(2.0);
@@ -434,8 +422,7 @@ static void GetBoyerLindquistCoordinates(struct torus_pgen pgen,
 KOKKOS_INLINE_FUNCTION
 static void CalculateVelocityInTiltedTorus(struct torus_pgen pgen,
                                            Real r, Real theta, Real phi, Real *pu0,
-                                           Real *pu1, Real *pu2, Real *pu3)
-{
+                                           Real *pu1, Real *pu2, Real *pu3) {
   // Calculate corresponding location
   Real sin_theta = sin(theta);
   Real cos_theta = cos(theta);
@@ -504,8 +491,7 @@ static void CalculateVelocityInTiltedTorus(struct torus_pgen pgen,
 
 KOKKOS_INLINE_FUNCTION
 static void CalculateVelocityInTorus(struct torus_pgen pgen,
-                                     Real r, Real sin_theta, Real *pu0, Real *pu3)
-{
+                                     Real r, Real sin_theta, Real *pu0, Real *pu3) {
   Real sin_sq_theta = SQR(sin_theta);
   Real cos_sq_theta = 1.0 - sin_sq_theta;
   Real delta = SQR(r) - 2.0*pgen.mass*r + SQR(pgen.spin);                    // \Delta
@@ -547,8 +533,7 @@ KOKKOS_INLINE_FUNCTION
 static void TransformVector(struct torus_pgen pgen,
                             Real a0_bl, Real a1_bl, Real a2_bl, Real a3_bl,
                             Real x1, Real x2, Real x3,
-                            Real *pa0, Real *pa1, Real *pa2, Real *pa3) 
-{
+                            Real *pa0, Real *pa1, Real *pa2, Real *pa3) {
   Real x = x1;
   Real y = x2;
   Real z = x3;
@@ -560,11 +545,11 @@ static void TransformVector(struct torus_pgen pgen,
   *pa0 = a0_bl + 2.0*r/delta * a1_bl;
   *pa1 = a1_bl * ( (r*x+pgen.spin*y)/(SQR(r) + SQR(pgen.spin)) - y*pgen.spin/delta) +
          a2_bl * x*z/r * sqrt((SQR(r) + SQR(pgen.spin))/(SQR(x) + SQR(y))) -
-         a3_bl * y; 
+         a3_bl * y;
   *pa2 = a1_bl * ( (r*y-pgen.spin*x)/(SQR(r) + SQR(pgen.spin)) + x*pgen.spin/delta) +
          a2_bl * y*z/r * sqrt((SQR(r) + SQR(pgen.spin))/(SQR(x) + SQR(y))) +
          a3_bl * x;
-  *pa3 = a1_bl * z/r - 
+  *pa3 = a1_bl * z/r -
          a2_bl * r * sqrt((SQR(x) + SQR(y))/(SQR(r) + SQR(pgen.spin)));
   return;
 }
@@ -573,12 +558,11 @@ static void TransformVector(struct torus_pgen pgen,
 // Function to compute 1-component of vector potential.  First computes phi-componenent
 // in BL coordinates, then transforms to Cartesian KS, assuming A_r = A_theta = 0
 // A_\mu (cks) = A_nu (ks)  dx^nu (ks)/dx^\mu (cks) = A_phi (ks) dphi (ks)/dx^\mu
-// phi_ks = arctan((r*y + a*x)/(r*x - a*y) ) 
+// phi_ks = arctan((r*y + a*x)/(r*x - a*y) )
 //
 
 KOKKOS_INLINE_FUNCTION
-Real A1(struct torus_pgen trs, Real x1, Real x2, Real x3)
-{
+Real A1(struct torus_pgen trs, Real x1, Real x2, Real x3) {
   Real r, theta, phi;
   Real aphi = 0.0;
   GetBoyerLindquistCoordinates(trs, x1, x2, x3, &r, &theta, &phi);
@@ -598,7 +582,7 @@ Real A1(struct torus_pgen trs, Real x1, Real x2, Real x3)
          + 4.0*SQR(trs.spin)*SQR(x3)) ) / sqrt(2.0);
   Real sqrt_term =  2.0*SQR(r) - SQR(big_r) + SQR(trs.spin);
 
-  //dphi/dx =  partial phi/partial x + partial phi/partial r partial r/partial x 
+  //dphi/dx =  partial phi/partial x + partial phi/partial r partial r/partial x
   return aphi*(-x2/(SQR(x1)+SQR(x2)) + trs.spin*x1*r/((SQR(trs.spin)+SQR(r))*sqrt_term));
 }
 
@@ -606,8 +590,7 @@ Real A1(struct torus_pgen trs, Real x1, Real x2, Real x3)
 // Function to compute 2-component of vector potential. See comments for A1.
 
 KOKKOS_INLINE_FUNCTION
-Real A2(struct torus_pgen trs, Real x1, Real x2, Real x3)
-{
+Real A2(struct torus_pgen trs, Real x1, Real x2, Real x3) {
   Real r, theta, phi;
   Real aphi = 0.0;
   GetBoyerLindquistCoordinates(trs, x1, x2, x3, &r, &theta, &phi);
@@ -621,13 +604,13 @@ Real A2(struct torus_pgen trs, Real x1, Real x2, Real x3)
       aphi = pow(r, trs.potential_r_pow) * pow(rho_cutoff, trs.potential_rho_pow);
     }
   }
-  
+
   Real big_r = sqrt( SQR(x1) + SQR(x2) + SQR(x3) );
   r = sqrt( SQR(big_r) - SQR(trs.spin) + sqrt(SQR(SQR(big_r) - SQR(trs.spin))
          + 4.0*SQR(trs.spin)*SQR(x3)) ) / sqrt(2.0);
   Real sqrt_term =  2.0*SQR(r) - SQR(big_r) + SQR(trs.spin);
 
-  //dphi/dx =  partial phi/partial y + partial phi/partial r partial r/partial y 
+  //dphi/dx =  partial phi/partial y + partial phi/partial r partial r/partial y
   return aphi*( x1/(SQR(x1)+SQR(x2)) + trs.spin*x2*r/((SQR(trs.spin)+SQR(r))*sqrt_term) );
 }
 
@@ -635,8 +618,7 @@ Real A2(struct torus_pgen trs, Real x1, Real x2, Real x3)
 // Function to compute 3-component of vector potential. See comments for A1.
 
 KOKKOS_INLINE_FUNCTION
-Real A3(struct torus_pgen trs, Real x1, Real x2, Real x3)
-{
+Real A3(struct torus_pgen trs, Real x1, Real x2, Real x3) {
   Real r, theta, phi;
   Real aphi = 0.0;
   GetBoyerLindquistCoordinates(trs, x1, x2, x3, &r, &theta, &phi);
@@ -650,13 +632,13 @@ Real A3(struct torus_pgen trs, Real x1, Real x2, Real x3)
       aphi = pow(r, trs.potential_r_pow) * pow(rho_cutoff, trs.potential_rho_pow);
     }
   }
-  
+
   Real big_r = sqrt( SQR(x1) + SQR(x2) + SQR(x3) );
   r = sqrt( SQR(big_r) - SQR(trs.spin) + sqrt(SQR(SQR(big_r) - SQR(trs.spin))
          + 4.0*SQR(trs.spin)*SQR(x3)) ) / sqrt(2.0);
   Real sqrt_term =  2.0*SQR(r) - SQR(big_r) + SQR(trs.spin);
 
-  //dphi/dx =   partial phi/partial r partial r/partial z 
+  //dphi/dx =   partial phi/partial r partial r/partial z
   return aphi * ( trs.spin*x3/(r*sqrt_term) );
 }
 

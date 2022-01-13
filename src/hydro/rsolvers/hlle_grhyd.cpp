@@ -25,8 +25,7 @@ namespace hydro {
 KOKKOS_INLINE_FUNCTION
 void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &coord,
      const int m, const int k, const int j, const int il, const int iu, const int ivx,
-     const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr, DvceArray5D<Real> flx)
-{
+     const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr, DvceArray5D<Real> flx) {
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
   const Real gm1 = (eos.gamma - 1.0);
@@ -35,8 +34,7 @@ void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos, const CoordData &c
   int is = coord.indcs.is;
   int js = coord.indcs.js;
   int ks = coord.indcs.ks;
-  par_for_inner(member, il, iu, [&](const int i)
-  {
+  par_for_inner(member, il, iu, [&](const int i) {
     // Extract components of metric
     Real &x1min = coord.size.d_view(m).x1min;
     Real &x1max = coord.size.d_view(m).x1max;

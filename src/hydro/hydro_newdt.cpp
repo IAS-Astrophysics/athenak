@@ -6,8 +6,9 @@
 //! \file hydro_newdt.cpp
 //! \brief function to compute hydro timestep across all MeshBlock(s) in a MeshBlockPack
 
-#include <limits>
 #include <math.h>
+
+#include <limits>
 #include <iostream>
 
 #include "athena.hpp"
@@ -22,12 +23,11 @@ namespace hydro {
 // \!fn void Hydro::NewTimeStep()
 // \brief calculate the minimum timestep within a MeshBlockPack for hydrodynamic problems
 
-TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage)
-{
+TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage) {
   if (stage != (pdriver->nexp_stages)) {
     return TaskStatus::complete; // only execute last stage
   }
-  
+
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, nx1 = indcs.nx1;
   int js = indcs.js, nx2 = indcs.nx2;
@@ -50,8 +50,7 @@ TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage)
   if (pdriver->time_evolution == TimeEvolution::kinematic) {
     // find smallest (dx/v) in each direction for advection problems
     Kokkos::parallel_reduce("HydroNudt1",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-      KOKKOS_LAMBDA(const int &idx, Real &min_dt1, Real &min_dt2, Real &min_dt3)
-      {
+    KOKKOS_LAMBDA(const int &idx, Real &min_dt1, Real &min_dt2, Real &min_dt3) {
       // compute m,k,j,i indices of thread and call function
       int m = (idx)/nkji;
       int k = (idx - m*nkji)/nji;
@@ -64,13 +63,10 @@ TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage)
       min_dt2 = fmin((mbsize.d_view(m).dx2/fabs(w0_(m,IVY,k,j,i))), min_dt2);
       min_dt3 = fmin((mbsize.d_view(m).dx3/fabs(w0_(m,IVZ,k,j,i))), min_dt3);
     }, Kokkos::Min<Real>(dt1), Kokkos::Min<Real>(dt2),Kokkos::Min<Real>(dt3));
- 
   } else {
-
     // find smallest dx/(v +/- Cs) in each direction for hydrodynamic problems
     Kokkos::parallel_reduce("HydroNudt2",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-      KOKKOS_LAMBDA(const int &idx, Real &min_dt1, Real &min_dt2, Real &min_dt3)
-      { 
+    KOKKOS_LAMBDA(const int &idx, Real &min_dt1, Real &min_dt2, Real &min_dt3) {
       // compute m,k,j,i indices of thread and call function
       int m = (idx)/nkji;
       int k = (idx - m*nkji)/nji;
@@ -100,7 +96,6 @@ TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage)
 
         eos.IdealSRHydroSoundSpeeds(w0_(m,IDN,k,j,i), p, w0_(m,IVZ,k,j,i), lor, lp, lm);
         max_dv3 = fmax(fabs(lm), lp);
-
       } else {
         Real cs;
         if (eos.is_ideal) {
@@ -113,12 +108,10 @@ TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage)
         max_dv2 = fabs(w0_(m,IVY,k,j,i)) + cs;
         max_dv3 = fabs(w0_(m,IVZ,k,j,i)) + cs;
       }
-
       min_dt1 = fmin((mbsize.d_view(m).dx1/max_dv1), min_dt1);
       min_dt2 = fmin((mbsize.d_view(m).dx2/max_dv2), min_dt2);
       min_dt3 = fmin((mbsize.d_view(m).dx3/max_dv3), min_dt3);
     }, Kokkos::Min<Real>(dt1), Kokkos::Min<Real>(dt2),Kokkos::Min<Real>(dt3));
- 
   }
 
   // compute minimum of dt1/dt2/dt3 for 1D/2D/3D problems

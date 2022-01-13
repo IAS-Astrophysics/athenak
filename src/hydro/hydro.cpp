@@ -7,6 +7,7 @@
 //! \brief implementation of Hydro class constructor and assorted other functions
 
 #include <iostream>
+#include <string>
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
@@ -28,8 +29,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   w0("prim",1,1,1,1,1),
   coarse_u0("ccons",1,1,1,1,1),
   u1("cons1",1,1,1,1,1),
-  uflx("uflx",1,1,1,1,1)
-{
+  uflx("uflx",1,1,1,1,1) {
   // (1) Start by selecting physics for this Hydro:
 
   // Check for relativistic dynamics
@@ -43,21 +43,19 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // (2) construct EOS object (no default)
   {std::string eqn_of_state = pin->GetString("hydro","eos");
-
   // ideal gas EOS
   if (eqn_of_state.compare("ideal") == 0) {
-    if (is_special_relativistic){
+    if (is_special_relativistic) {
       peos = new IdealSRHydro(ppack, pin);
-    } else if (is_general_relativistic){
+    } else if (is_general_relativistic) {
       peos = new IdealGRHydro(ppack, pin);
     } else {
       peos = new IdealHydro(ppack, pin);
     }
     nhydro = 5;
-
   // isothermal EOS
   } else if (eqn_of_state.compare("isothermal") == 0) {
-    if (is_special_relativistic || is_general_relativistic){
+    if (is_special_relativistic || is_general_relativistic) {
       std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
                 << "<hydro>/eos = isothermal cannot be used with SR/GR" << std::endl;
       std::exit(EXIT_FAILURE);
@@ -65,13 +63,13 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
       peos = new IsothermalHydro(ppack, pin);
       nhydro = 4;
     }
-
   // EOS string not recognized
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "<hydro>/eos = '" << eqn_of_state << "' not implemented" << std::endl;
     std::exit(EXIT_FAILURE);
-  }}
+  }
+  }
 
   // (3) Initialize scalars, diffusion, source terms
   nscalars = pin->GetOrAddInteger("hydro","nscalars",0);
@@ -123,7 +121,6 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // for time-evolving problems, continue to construct methods, allocate arrays
   if (evolution_t.compare("stationary") != 0) {
-
     // select reconstruction method (default PLM)
     {std::string xorder = pin->GetOrAddString("hydro","reconstruct","plm");
     if (xorder.compare("dc") == 0) {
@@ -136,8 +133,8 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "PPM reconstruction requires at least 3 ghost zones, "
           << "but <mesh>/nghost=" << indcs.ng << std::endl;
-        std::exit(EXIT_FAILURE); 
-      }                
+        std::exit(EXIT_FAILURE);
+      }
       recon_method = ReconstructionMethod::ppm;
     } else if (xorder.compare("wenoz") == 0) {
       // check that nghost > 2
@@ -145,19 +142,19 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
             << std::endl << "WENOZ reconstruction requires at least 3 ghost zones, "
             << "but <mesh>/nghost=" << indcs.ng << std::endl;
-        std::exit(EXIT_FAILURE); 
-      }                
+        std::exit(EXIT_FAILURE);
+      }
       recon_method = ReconstructionMethod::wenoz;
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "<hydro> recon = '" << xorder << "' not implemented"
                 << std::endl;
       std::exit(EXIT_FAILURE);
-    }}
+    }
+    }
 
     // select Riemann solver (no default).  Test for compatibility of options
     {std::string rsolver = pin->GetString("hydro","rsolver");
-
     // Special relativistic solvers
     if (is_special_relativistic) {
       if (rsolver.compare("llf") == 0) {
@@ -175,7 +172,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
       }
 
     // General relativistic solvers
-    } else if (is_general_relativistic){
+    } else if (is_general_relativistic) {
       if (rsolver.compare("hlle") == 0) {
         rsolver_method = Hydro_RSolver::hlle_gr;
       // Error for anything else
@@ -183,7 +180,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                   << std::endl << "<hydro> rsolver = '" << rsolver << "' not implemented"
                   << " for GR dynamics" << std::endl;
-        std::exit(EXIT_FAILURE); 
+        std::exit(EXIT_FAILURE);
       }
 
     // Non-relativistic solvers
@@ -214,12 +211,12 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
       } else if (rsolver.compare("hllc") == 0) {
         if (peos->eos_data.is_ideal) {
           rsolver_method = Hydro_RSolver::hllc;
-        } else { 
+        } else {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "<hydro>/rsolver = hllc cannot be used with "
                     << "isothermal EOS" << std::endl;
-          std::exit(EXIT_FAILURE); 
-        }  
+          std::exit(EXIT_FAILURE);
+        }
       // Roe solver
       } else if (rsolver.compare("roe") == 0) {
         rsolver_method = Hydro_RSolver::roe;
@@ -228,9 +225,10 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                   << std::endl << "<hydro> rsolver = '" << rsolver << "' not implemented"
                   << std::endl;
-        std::exit(EXIT_FAILURE); 
+        std::exit(EXIT_FAILURE);
       }
-    }}
+    }
+    }
 
     // allocate second registers, fluxes
     int ncells1 = indcs.nx1 + 2*(indcs.ng);
@@ -248,9 +246,8 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
 
 //----------------------------------------------------------------------------------------
 // destructor
-  
-Hydro::~Hydro()
-{
+
+Hydro::~Hydro() {
   delete peos;
   delete pbval_u;
   if (pvisc != nullptr) {delete pvisc;}

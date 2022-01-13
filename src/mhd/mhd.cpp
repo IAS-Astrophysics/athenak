@@ -7,6 +7,7 @@
 //! \brief implementation of MHD class constructor and assorted functions
 
 #include <iostream>
+#include <string>
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
@@ -43,8 +44,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   e1x3("e1x3",1,1,1,1),
   e1_cc("e1_cc",1,1,1,1),
   e2_cc("e2_cc",1,1,1,1),
-  e3_cc("e3_cc",1,1,1,1)
-{
+  e3_cc("e3_cc",1,1,1,1) {
   // (1) Start by selecting physics for this MHD:
 
   // Check for relativistic dynamics
@@ -58,12 +58,11 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // (2) construct EOS object (no default)
   {std::string eqn_of_state = pin->GetString("mhd","eos");
-
   // ideal gas EOS
   if (eqn_of_state.compare("ideal") == 0) {
-    if (is_special_relativistic){
+    if (is_special_relativistic) {
       peos = new IdealSRMHD(ppack, pin);
-    } else if (is_general_relativistic){
+    } else if (is_general_relativistic) {
       peos = new IdealGRMHD(ppack, pin);
     } else {
       peos = new IdealMHD(ppack, pin);
@@ -72,7 +71,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // isothermal EOS
   } else if (eqn_of_state.compare("isothermal") == 0) {
-    if (is_special_relativistic || is_general_relativistic){
+    if (is_special_relativistic || is_general_relativistic) {
       std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
                 << "<mhd> eos = isothermal cannot be used with SR/GR" << std::endl;
       std::exit(EXIT_FAILURE);
@@ -86,7 +85,8 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "<mhd> eos = '" << eqn_of_state << "' not implemented" << std::endl;
     std::exit(EXIT_FAILURE);
-  }}
+  }
+  }
 
   // (3) Initialize scalars, diffusion, source terms
   nscalars = pin->GetOrAddInteger("mhd","nscalars",0);
@@ -147,7 +147,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     Kokkos::realloc(coarse_b0.x2f, nmb, nccells3, nccells2+1, nccells1);
     Kokkos::realloc(coarse_b0.x3f, nmb, nccells3+1, nccells2, nccells1);
   }
-  
+
   // allocate boundary buffers for conserved (cell-centered) variables
   pbval_u = new BoundaryValuesCC(ppack, pin);
   pbval_u->InitializeBuffers((nmhd+nscalars));
@@ -158,7 +158,6 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // for time-evolving problems, continue to construct methods, allocate arrays
   if (evolution_t.compare("stationary") != 0) {
-
     // select reconstruction method (default PLM)
     {std::string xorder = pin->GetOrAddString("mhd","reconstruct","plm");
     if (xorder.compare("dc") == 0) {
@@ -171,8 +170,8 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
             << std::endl << "PPM reconstruction requires at least 3 ghost zones, "
             << "but <mesh>/nghost=" << indcs.ng << std::endl;
-        std::exit(EXIT_FAILURE); 
-      }                
+        std::exit(EXIT_FAILURE);
+      }
       recon_method = ReconstructionMethod::ppm;
     } else if (xorder.compare("wenoz") == 0) {
       // check that nghost > 2
@@ -180,19 +179,19 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
             << std::endl << "WENOZ reconstruction requires at least 3 ghost zones, "
             << "but <mesh>/nghost=" << indcs.ng << std::endl;
-        std::exit(EXIT_FAILURE); 
-      }                
+        std::exit(EXIT_FAILURE);
+      }
       recon_method = ReconstructionMethod::wenoz;
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "<mhd>/recon = '" << xorder << "' not implemented"
                 << std::endl;
       std::exit(EXIT_FAILURE);
-    }}
+    }
+    }
 
     // select Riemann solver (no default).  Test for compatibility of options
     {std::string rsolver = pin->GetString("mhd","rsolver");
-
     // Special relativistic solvers
     if (is_special_relativistic) {
       if (rsolver.compare("llf") == 0) {
@@ -208,7 +207,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
       }
 
     // General relativistic solvers
-    } else if (is_general_relativistic){
+    } else if (is_general_relativistic) {
       if (rsolver.compare("hlle") == 0) {
         rsolver_method = MHD_RSolver::hlle_gr;
       // Error for anything else
@@ -245,17 +244,18 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
         rsolver_method = MHD_RSolver::hlle;
       // HLLD solver
       } else if (rsolver.compare("hlld") == 0) {
-          rsolver_method = MHD_RSolver::hlld;
+        rsolver_method = MHD_RSolver::hlld;
       // Roe solver
-//      } else if (rsolver.compare("roe") == 0) {
-//        rsolver_method = MHD_RSolver::roe;
+      // } else if (rsolver.compare("roe") == 0) {
+      //   rsolver_method = MHD_RSolver::roe;
       } else {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                   << std::endl << "<mhd>/rsolver = '" << rsolver << "' not implemented"
                   << std::endl;
-        std::exit(EXIT_FAILURE); 
+        std::exit(EXIT_FAILURE);
       }
-    }}
+    }
+    }
 
     // allocate second registers
     int ncells1 = indcs.nx1 + 2*(indcs.ng);
@@ -292,9 +292,8 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 
 //----------------------------------------------------------------------------------------
 // destructor
-  
-MHD::~MHD()
-{
+
+MHD::~MHD() {
   delete peos;
   delete pbval_u;
   delete pbval_b;

@@ -26,8 +26,7 @@
 //! divides grid into MeshBlock(s) for new runs (starting from scratch), using parameters
 //! read from input file.  Also does initial load balance based on simple cost estimate.
 
-void Mesh::BuildTreeFromScratch(ParameterInput *pin)
-{
+void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
   // calculate the number of MeshBlocks at root level in each dir
   nmb_rootx1 = mesh_indcs.nx1/mb_indcs.nx1;
   nmb_rootx2 = mesh_indcs.nx2/mb_indcs.nx2;
@@ -40,7 +39,7 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin)
   // Find smallest N such that 2^N > max number of MeshBlocks in any dimension (nmbmax)
   // Then N is logical level of root grid.  2^N implemented as left-shift (1<<root_level)
   for (root_level=0; ((1<<root_level) < nmbmax); root_level++) {}
-  int current_level = root_level; 
+  int current_level = root_level;
 
   // Construct tree and create root grid
   ptree = std::make_unique<MeshBlockTree>(this);
@@ -51,7 +50,7 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin)
     max_level = pin->GetOrAddInteger("mesh", "numlevel", 1) + root_level - 1;
     if (max_level > 31) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "Number of refinement levels must be smaller than " 
+                << std::endl << "Number of refinement levels must be smaller than "
                 << 31 - root_level + 1 << std::endl;
       std::exit(EXIT_FAILURE);
     }
@@ -63,7 +62,7 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin)
 
   if (multilevel) {
     // error check that number of cells in MeshBlock divisible by two
-    if (mb_indcs.nx1 % 2 != 0 || 
+    if (mb_indcs.nx1 % 2 != 0 ||
        (mb_indcs.nx2 % 2 != 0 && multi_d) ||
        (mb_indcs.nx3 % 2 != 0 && three_d)) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -86,7 +85,7 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin)
           ref_size.x2min = mesh_size.x2min;
           ref_size.x2max = mesh_size.x2max;
         }
-        if (three_d) { 
+        if (three_d) {
           ref_size.x3min = pin->GetReal(it->block_name, "x3min");
           ref_size.x3max = pin->GetReal(it->block_name, "x3max");
         } else {
@@ -99,7 +98,7 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin)
 
         // error check parameters in "refinement" blocks
         if (phy_ref_lev < 1) {
-          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ 
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "Refinement level must be larger than 0 (root level = 0)"
               << std::endl;
           std::exit(EXIT_FAILURE);
@@ -221,10 +220,9 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin)
             }
           }
         }
-
       }
     }
-  } // if(multilevel)
+  } // if (multilevel)
 
   if (!adaptive) max_level = current_level;
 
@@ -282,7 +280,7 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin)
   dt   = std::numeric_limits<float>::max();
   cfl_no = pin->GetReal("time", "cfl_number");
   ncycle = 0;
-  
+
   return;
 }
 
@@ -292,13 +290,12 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin)
 //! divides grid into MeshBlock(s) for restart runs, using parameters and data read from
 //! restart file.
 
-void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile)
-{
+void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile) {
   // At this point, the restartfile is already open and the ParameterInput (input file)
   // data has already been read in main(). Thus the file pointer is set to after <par_end>
   IOWrapperSizeT headeroffset = resfile.GetPosition();
 
-  // following must be identical to calculation of headeroffset (excluding size of 
+  // following must be identical to calculation of headeroffset (excluding size of
   // ParameterInput data) in restart.cpp
   IOWrapperSizeT headersize = 3*sizeof(int) + 2*sizeof(Real)
     + sizeof(RegionSize) + 2*sizeof(RegionIndcs);
@@ -343,7 +340,7 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile)
   nmb_rootx1 = mesh_indcs.nx1/mb_indcs.nx1;
   nmb_rootx2 = mesh_indcs.nx2/mb_indcs.nx2;
   nmb_rootx3 = mesh_indcs.nx3/mb_indcs.nx3;
-  int current_level = root_level; 
+  int current_level = root_level;
 
   // Error check properties of input paraemters for SMR/AMR meshes.
   if (adaptive) {

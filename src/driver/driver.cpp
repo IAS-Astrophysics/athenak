@@ -49,19 +49,15 @@
 
 Driver::Driver(ParameterInput *pin, Mesh *pmesh) :
   tlim(-1.0), nlim(-1), ndiag(1),
-  impl_src("ru",1,1,1,1,1,1)
-{
+  impl_src("ru",1,1,1,1,1,1) {
   // set time-evolution option (no default)
   {std::string evolution_t = pin->GetString("time","evolution");
   if (evolution_t.compare("static") == 0) {
     time_evolution = TimeEvolution::tstatic;  // cannot use 'static' (keyword);
-
   } else if (evolution_t.compare("kinematic") == 0) {
     time_evolution = TimeEvolution::kinematic;
-
   } else if (evolution_t.compare("dynamic") == 0) {
     time_evolution = TimeEvolution::dynamic;
-
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "<hydro> evolution = '" << evolution_t << "' not implemented"
@@ -84,7 +80,6 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh) :
       gam0[0] = 0.0;
       gam1[0] = 1.0;
       beta[0] = 1.0;
-
     } else if (integrator == "rk2") {
       // Heun's method / SSPRK (2,2): Gottlieb (2009) equation 3.1
       // Optimal (in error bounds) explicit two-stage, second-order SSPRK
@@ -94,11 +89,10 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh) :
       gam0[0] = 0.0;
       gam1[0] = 1.0;
       beta[0] = 1.0;
-  
+
       gam0[1] = 0.5;
       gam1[1] = 0.5;
       beta[1] = 0.5;
-
     } else if (integrator == "rk3") {
       // SSPRK (3,3): Gottlieb (2009) equation 3.2
       // Optimal (in error bounds) explicit three-stage, third-order SSPRK
@@ -116,7 +110,6 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh) :
       gam0[2] = 2.0/3.0;
       gam1[2] = 1.0/3.0;
       beta[2] = 2.0/3.0;
-
     } else if (integrator == "imex2") {
       // IMEX-SSP2(3,2,2): Pareschi & Russo (2005) Table III.
       // two-stage explicit, three-stage implicit, second-order ImEx
@@ -144,7 +137,6 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh) :
       a_twid[2][1] = 0.25;
       a_twid[2][2] = 0.25;
       a_impl = 0.5;
-
     } else if (integrator == "imex3") {
       // IMEX-SSP3(4,3,3): Pareschi & Russo (2005) Table VI.
       // three-stage explicit, four-stage implicit, third-order ImEx
@@ -166,11 +158,11 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh) :
 
       Real a = 0.24169426078821;
       Real b = 0.06042356519705;
-      Real e = 0.12915286960590; 
+      Real e = 0.12915286960590;
       a_twid[0][0] = -2.0*a;
       a_twid[0][1] = 0.0;
       a_twid[0][2] = 0.0;
-      a_twid[0][3] = 0.0; 
+      a_twid[0][3] = 0.0;
 
       a_twid[1][0] = a;
       a_twid[1][1] = 1.0 - 2.0*a;
@@ -187,7 +179,6 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh) :
       a_twid[3][2] = b + e + a - (1.0/6.0);
       a_twid[3][3] = (2.0/3.0)*(1.0 - a);
       a_impl = a;
-
     // Error, unrecognized integrator name.
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -196,7 +187,6 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh) :
       exit(EXIT_FAILURE);
     }
   }
-
 }
 
 //----------------------------------------------------------------------------------------
@@ -204,8 +194,7 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh) :
 // Tasks to be performed before execution of Driver, such as setting ghost zones (BCs),
 //  outputting ICs, and computing initial time step
 
-void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
-{
+void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
   //---- Step 1.  Set conserved variables in ghost zones for all physics
   // Note: with MPI, sends on ALL MBs must be complete before receives execute
 
@@ -241,7 +230,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
     (void) pmhd->RecvB(this, 0);
     (void) pmhd->ApplyPhysicalBCs(this, 0);
 
-    // Set primitive variables in initial conditions everywhere 
+    // Set primitive variables in initial conditions everywhere
     (void) pmhd->ConToPrim(this, 0);
   }
 
@@ -274,7 +263,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
   ion_neutral::IonNeutral *pionn = pmesh->pmb_pack->pionn;
   if (pionn != nullptr) {
     if (nimp_stages == 0) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ 
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "IonNetral MHD can only be run with ImEx integrators."
           << std::endl;
       std::exit(EXIT_FAILURE);
@@ -293,7 +282,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
 
 //----------------------------------------------------------------------------------------
 // Driver::Execute()
-// \brief Executes all relevant task lists over all MeshBlockPacks.  For static 
+// \brief Executes all relevant task lists over all MeshBlockPacks.  For static
 // (non-evolving) problems, currently implemented task lists are:
 //  (1) TODO
 // For dynamic (time-evolving) problems, currently implemented task lists are:
@@ -302,21 +291,18 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
 //  [Note for ImEx integrators, the first two fully implicit updates should be performed
 //  at the start of the first stage.]
 
-void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
-{
+void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
   if (global_variable::my_rank == 0) {
     std::cout << "\nSetup complete, executing task list...\n" << std::endl;
   }
 
   if (time_evolution == TimeEvolution::tstatic) {
-    // TODO: add work for time static problems here
+    // TODO(@user): add work for time static problems here
   } else {
-
     while ((pmesh->time < tlim) && (pmesh->ncycle < nlim || nlim < 0)) {
       if (global_variable::my_rank == 0) {OutputCycleDiagnostics(pmesh);}
-      int npacks = 1;  // TODO: extend for multiple MeshBlockPacks
+      int npacks = 1;  // TODO(@user): extend for multiple MeshBlockPacks
       MeshBlockPack* pmbp = pmesh->pmb_pack;
-
       //---------------------------------------
       // (1) Do *** operator split *** TaskList
       {for (int p=0; p<npacks; ++p) {
@@ -328,7 +314,7 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
           npack_left--;
         } else {
           if (!pmbp->operator_split_tl.IsComplete()) {
-            // note 2nd argument to DoAvailable (stage) is not used, set to 0 
+            // note 2nd argument to DoAvailable (stage) is not used, set to 0
             auto status = pmbp->operator_split_tl.DoAvailable(this, 0);
             if (status == TaskListStatus::complete) { npack_left--; }
           }
@@ -338,7 +324,6 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
       //--------------------------------------------------------------
       // (2) Do *** explicit and ImEx RK time-integrator *** TaskLists
       for (int stage=1; stage<=(nexp_stages); ++stage) {
-
         // (2a) StageStart Tasks
         // tasks that must be completed over all MBPacks at start of each explicit stage
         {for (int p=0; p<npacks; ++p) {
@@ -347,7 +332,7 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
         int npack_left = npacks;
         while (npack_left > 0) {
           if (pmbp->start_tl.Empty()) {
-            npack_left--; 
+            npack_left--;
           } else {
             if (!pmbp->start_tl.IsComplete()) {
               auto status = pmbp->start_tl.DoAvailable(this, stage);
@@ -364,7 +349,7 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
         int npack_left = npacks;
         while (npack_left > 0) {
           if (pmbp->run_tl.Empty()) {
-            npack_left--; 
+            npack_left--;
           } else {
             if (!pmbp->run_tl.IsComplete()) {
               auto status = pmbp->run_tl.DoAvailable(this, stage);
@@ -381,7 +366,7 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
         int npack_left = npacks;
         while (npack_left > 0) {
           if (pmbp->end_tl.Empty()) {
-            npack_left--; 
+            npack_left--;
           } else {
             if (!pmbp->end_tl.IsComplete()) {
               auto status = pmbp->end_tl.DoAvailable(this, stage);
@@ -389,7 +374,6 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
             }
           }
         }} // extra brace to enclose scope
-
       } // end of loop over stages
 
       //-------------------------------
@@ -411,10 +395,8 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
           out->WriteOutputFile(pmesh, pin);
         }
       }
-
     }
-
-  }  // end of (time_evolution != tstatic) clause 
+  }  // end of (time_evolution != tstatic) clause
 
   return;
 }
@@ -424,8 +406,7 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
 // Tasks to be performed after execution of Driver, such as making final output and
 // printing diagnostic messages
 
-void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
-{
+void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
   // cycle through output Types and load data / write files
   //  This design allows for asynchronous outputs to implemented in the future.
   for (auto &out : pout->pout_list) {
@@ -435,10 +416,10 @@ void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
 
   // call any problem specific functions to do work after main loop
   pmesh->pgen->ProblemGeneratorFinalize(pin, pmesh);
-    
+
   float exe_time = run_time_.seconds();
 
-  if (time_evolution != TimeEvolution::tstatic) { 
+  if (time_evolution != TimeEvolution::tstatic) {
     if (global_variable::my_rank == 0) {
       // Print diagnostic messages related to the end of the simulation
       OutputCycleDiagnostics(pmesh);
@@ -456,7 +437,7 @@ void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
                   << std::endl << pmesh->nmb_created << " MeshBlocks were created, and "
                   << pmesh->nmb_deleted << " were deleted during this run." << std::endl;
       }
-  
+
       // Calculate and print the zone-cycles/exe-second and wall-second
       std::uint64_t zonecycles = nmb_updated_ *
           static_cast<std::uint64_t>(pmesh->NumberOfMeshBlockCells());
@@ -473,8 +454,7 @@ void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout)
 //----------------------------------------------------------------------------------------
 // Driver::OutputCycleDiagnostics()
 
-void Driver::OutputCycleDiagnostics(Mesh *pm)
-{
+void Driver::OutputCycleDiagnostics(Mesh *pm) {
 //  const int dtprcsn = std::numeric_limits<Real>::max_digits10 - 1;
   const int dtprcsn = 6;
   if (pm->ncycle % ndiag == 0) {

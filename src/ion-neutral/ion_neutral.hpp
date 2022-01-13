@@ -16,9 +16,8 @@
 //----------------------------------------------------------------------------------------
 //! \struct IonNeutralTaskIDs
 //  \brief container to hold TaskIDs of all ion-neutral tasks
-  
-struct IonNeutralTaskIDs
-{   
+
+struct IonNeutralTaskIDs {
   TaskID i_irecv;
   TaskID n_irecv;
   TaskID impl_2x;
@@ -50,8 +49,7 @@ namespace ion_neutral {
 //----------------------------------------------------------------------------------------
 //! \class IonNeutral
 
-class IonNeutral
-{
+class IonNeutral {
  public:
   IonNeutral(MeshBlockPack *ppack, ParameterInput *pin);
   ~IonNeutral();

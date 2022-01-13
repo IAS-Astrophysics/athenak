@@ -27,7 +27,7 @@
 //!   variable    = prim      # variables to be output
 //!   data_format = %12.5e    # Optional data format string
 //!   dt          = 0.01      # time increment between outputs
-//!   slice_x2    = 0.0       # slice at x2 
+//!   slice_x2    = 0.0       # slice at x2
 //!   slice_x3    = 0.0       # slice at x3
 //!
 //! Each <output[n]> block will result in a new node being created in a linked list of
@@ -56,7 +56,6 @@
 // Outputs constructor
 
 Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
-
   // loop over input block names.  Find those that start with "output", read parameters,
   // and add to linked list of OutputTypes.
 
@@ -190,12 +189,11 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
 
   // check there were no more than one history or restart files requested
   if (num_hst > 1 || num_rst > 1) {
-   std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "More than one history or restart output block detected in input file"
-        << std::endl;
-   exit(EXIT_FAILURE);
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "More than one history or restart output block detected in input file"
+              << std::endl;
+    exit(EXIT_FAILURE);
   }
-
 }
 
 //----------------------------------------------------------------------------------------
@@ -209,8 +207,7 @@ Outputs::~Outputs() {
 //  \brief Parses input string to return scoped enumerator flag specifying output var.
 //  Generally output utility function, not part of any outputs class
 
-OutputVariable GetOutputVariable(const std::string& input_string)
-{ 
+OutputVariable GetOutputVariable(const std::string& input_string) {
   // hydro conserved variables
   if (input_string == "hydro_u_d") {
     return OutputVariable::hydro_u_d;
@@ -308,10 +305,8 @@ OutputVariable GetOutputVariable(const std::string& input_string)
 //
 //  Generally output utility function, not part of any outputs class
 
-std::string GetOutputVariableString(OutputVariable input_flag)
-{
+std::string GetOutputVariableString(OutputVariable input_flag) {
   switch (input_flag) {
-
     // hydro conserved variables
     case OutputVariable::hydro_u_d:  // 0
       return "hydro_u_d";

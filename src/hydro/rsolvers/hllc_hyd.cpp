@@ -24,8 +24,7 @@ namespace hydro {
 KOKKOS_INLINE_FUNCTION
 void HLLC(TeamMember_t const &member, const EOS_Data &eos,
      const int m, const int k, const int j, const int il, const int iu, const int ivx,
-     const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr, DvceArray5D<Real> flx)
-{
+     const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr, DvceArray5D<Real> flx) {
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
 
@@ -33,8 +32,7 @@ void HLLC(TeamMember_t const &member, const EOS_Data &eos,
   Real igm1 = 1.0/gm1;
   Real alpha = ((eos.gamma) + 1.0)/(2.0*(eos.gamma));
 
-  par_for_inner(member, il, iu, [&](const int i)
-  {
+  par_for_inner(member, il, iu, [&](const int i) {
     //--- Step 1.  Create local references for L/R states (helps compiler vectorize)
 
     Real &wl_idn = wl(IDN,i);
@@ -129,7 +127,7 @@ void HLLC(TeamMember_t const &member, const EOS_Data &eos,
     //--- Step 9. Compute the HLLC flux at interface, including weighted contribution
     // of the flux along the contact
 
-    flx(m,IDN,k,j,i) = qc*fl.d  + qd*fr.d ;
+    flx(m,IDN,k,j,i) = qc*fl.d  + qd*fr.d;
     flx(m,ivx,k,j,i) = qc*fl.mx + qd*fr.mx + qe*cp;
     flx(m,ivy,k,j,i) = qc*fl.my + qd*fr.my;
     flx(m,ivz,k,j,i) = qc*fl.mz + qd*fr.mz;

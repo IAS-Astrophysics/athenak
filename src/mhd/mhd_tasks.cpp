@@ -23,11 +23,10 @@ namespace mhd {
 //! \fn  void MHD::AssembleMHDTasks
 //  \brief Adds mhd tasks to stage start/run/end task lists
 //  Called by MeshBlockPack::AddPhysics() function directly after MHD constrctr
-  
-void MHD::AssembleMHDTasks(TaskList &start, TaskList &run, TaskList &end)
-{ 
+
+void MHD::AssembleMHDTasks(TaskList &start, TaskList &run, TaskList &end) {
   TaskID none(0);
-  
+
   // start task list
   id.irecv = start.AddTask(&MHD::InitRecv, this, none);
 
@@ -78,8 +77,7 @@ void MHD::AssembleMHDTasks(TaskList &start, TaskList &run, TaskList &end)
 //  receive status flags to waiting (with or without MPI).  Note this must be done for
 //  communication of BOTH conserved (cell-centered) and face-centered fields
 
-TaskStatus MHD::InitRecv(Driver *pdrive, int stage)
-{
+TaskStatus MHD::InitRecv(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_u->InitRecv(nmhd+nscalars);
   if (tstat != TaskStatus::complete) return tstat;
 
@@ -101,8 +99,7 @@ TaskStatus MHD::InitRecv(Driver *pdrive, int stage)
 //  \brief Waits for all MPI receives to complete before allowing execution to continue
 //  With MHD, clears both receives of U and B
 
-TaskStatus MHD::ClearRecv(Driver *pdrive, int stage)
-{
+TaskStatus MHD::ClearRecv(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_u->ClearRecv();
   if (tstat != TaskStatus::complete) return tstat;
 
@@ -125,8 +122,7 @@ TaskStatus MHD::ClearRecv(Driver *pdrive, int stage)
 //  \brief Waits for all MPI sends to complete before allowing execution to continue
 //  With MHD, clears both sends of U and B
 
-TaskStatus MHD::ClearSend(Driver *pdrive, int stage)
-{
+TaskStatus MHD::ClearSend(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_u->ClearSend();
   if (tstat != TaskStatus::complete) return tstat;
 
@@ -148,8 +144,7 @@ TaskStatus MHD::ClearSend(Driver *pdrive, int stage)
 //! \fn  void MHD::CopyCons
 //  \brief  copy u0 --> u1, and b0 --> b1 in first stage
 
-TaskStatus MHD::CopyCons(Driver *pdrive, int stage)
-{
+TaskStatus MHD::CopyCons(Driver *pdrive, int stage) {
   if (stage == 1) {
     Kokkos::deep_copy(DevExeSpace(), u1, u0);
     Kokkos::deep_copy(DevExeSpace(), b1.x1f, b0.x1f);
@@ -163,8 +158,7 @@ TaskStatus MHD::CopyCons(Driver *pdrive, int stage)
 //! \fn  void MHD::SendU
 //  \brief sends cell-centered conserved variables
 
-TaskStatus MHD::SendU(Driver *pdrive, int stage) 
-{
+TaskStatus MHD::SendU(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_u->PackAndSendCC(u0, coarse_u0);
   return tstat;
 }
@@ -173,8 +167,7 @@ TaskStatus MHD::SendU(Driver *pdrive, int stage)
 //! \fn  void MHD::RecvU
 //  \brief receives cell-centered conserved variables
 
-TaskStatus MHD::RecvU(Driver *pdrive, int stage)
-{
+TaskStatus MHD::RecvU(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_u->RecvAndUnpackCC(u0, coarse_u0);
   return tstat;
 }
@@ -183,8 +176,7 @@ TaskStatus MHD::RecvU(Driver *pdrive, int stage)
 //! \fn  void MHD::SendE
 //  \brief sends face-centered magnetic fields
 
-TaskStatus MHD::SendE(Driver *pdrive, int stage)
-{
+TaskStatus MHD::SendE(Driver *pdrive, int stage) {
   // Only execute this function with SMR/SMR
   if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
 
@@ -196,8 +188,7 @@ TaskStatus MHD::SendE(Driver *pdrive, int stage)
 //! \fn  void MHD::RecvE
 //  \brief receives face-centered magnetic fields
 
-TaskStatus MHD::RecvE(Driver *pdrive, int stage)
-{
+TaskStatus MHD::RecvE(Driver *pdrive, int stage) {
   // Only execute this function with SMR/SMR
   if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
 
@@ -209,8 +200,7 @@ TaskStatus MHD::RecvE(Driver *pdrive, int stage)
 //! \fn  void MHD::SendB
 //  \brief sends face-centered magnetic fields
 
-TaskStatus MHD::SendB(Driver *pdrive, int stage)
-{
+TaskStatus MHD::SendB(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_b->PackAndSendFC(b0, coarse_b0);
   return tstat;
 }
@@ -219,18 +209,16 @@ TaskStatus MHD::SendB(Driver *pdrive, int stage)
 //! \fn  void MHD::RecvB
 //  \brief receives face-centered magnetic fields
 
-TaskStatus MHD::RecvB(Driver *pdrive, int stage)
-{
+TaskStatus MHD::RecvB(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_b->RecvAndUnpackFC(b0, coarse_b0);
   return tstat;
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn  void MHD::SendFlux
-//  \brief 
+//  \brief
 
-TaskStatus MHD::SendFlux(Driver *pdrive, int stage)
-{
+TaskStatus MHD::SendFlux(Driver *pdrive, int stage) {
   // Only execute this function with SMR/SMR
   if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
 
@@ -240,10 +228,9 @@ TaskStatus MHD::SendFlux(Driver *pdrive, int stage)
 
 //----------------------------------------------------------------------------------------
 //! \fn  void MHD::RecvFlux
-//  \brief 
+//  \brief
 
-TaskStatus MHD::RecvFlux(Driver *pdrive, int stage)
-{
+TaskStatus MHD::RecvFlux(Driver *pdrive, int stage) {
   // Only execute this function with SMR/SMR
   if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
 
@@ -253,10 +240,9 @@ TaskStatus MHD::RecvFlux(Driver *pdrive, int stage)
 
 //----------------------------------------------------------------------------------------
 //! \fn  void MHD::RestrictU
-//  \brief 
+//  \brief
 
-TaskStatus MHD::RestrictU(Driver *pdrive, int stage)
-{
+TaskStatus MHD::RestrictU(Driver *pdrive, int stage) {
   // Skip if this calculation does not use SMR/AMR
   if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
 
@@ -266,10 +252,9 @@ TaskStatus MHD::RestrictU(Driver *pdrive, int stage)
 
 //----------------------------------------------------------------------------------------
 //! \fn  void MHD::RestrictB
-//  \brief 
+//  \brief
 
-TaskStatus MHD::RestrictB(Driver *pdrive, int stage)
-{
+TaskStatus MHD::RestrictB(Driver *pdrive, int stage) {
   // Skip if this calculation does not use SMR/AMR
   if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
 
@@ -279,13 +264,11 @@ TaskStatus MHD::RestrictB(Driver *pdrive, int stage)
 
 //----------------------------------------------------------------------------------------
 //! \fn  void MHD::ApplyPhysicalBCs
-//  \brief 
+//  \brief
 
-TaskStatus MHD::ApplyPhysicalBCs(Driver *pdrive, int stage)
-{
+TaskStatus MHD::ApplyPhysicalBCs(Driver *pdrive, int stage) {
   // only apply BCs if domain is not strictly periodic
   if (!(pmy_pack->pmesh->strictly_periodic)) {
-
     // physical BCs
     pbval_u->HydroBCs((pmy_pack), (pbval_u->u_in), u0);
     pbval_b->BFieldBCs((pmy_pack), (pbval_b->b_in), b0);
@@ -302,8 +285,7 @@ TaskStatus MHD::ApplyPhysicalBCs(Driver *pdrive, int stage)
 //! \fn  void MHD::ConToPrim
 //  \brief
 
-TaskStatus MHD::ConToPrim(Driver *pdrive, int stage)
-{
+TaskStatus MHD::ConToPrim(Driver *pdrive, int stage) {
   peos->ConsToPrim(u0, b0, w0, bcc0);
   return TaskStatus::complete;
 }
