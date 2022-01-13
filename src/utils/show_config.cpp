@@ -33,8 +33,8 @@ void ShowConfig() {
   std::cout<<"  OpenMP parallelism:         OFF" << std::endl;
 #endif
 
-//  std::cout<<"  Compiler:                   " << COMPILED_WITH << std::endl;
-//  std::cout<<"  Compilation command:        " << COMPILER_COMMAND
-//           << COMPILED_WITH_OPTIONS << std::endl;
+  // std::cout<<"  Compiler:                   " << COMPILED_WITH << std::endl;
+  // std::cout<<"  Compilation command:        " << COMPILER_COMMAND
+  //          << COMPILED_WITH_OPTIONS << std::endl;
   return;
 }

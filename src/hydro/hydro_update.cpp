@@ -22,8 +22,7 @@ namespace hydro {
 //! \fn  void Hydro::Update
 //  \brief Explicit RK update of flux divergence and physical source terms
 
-TaskStatus Hydro::ExpRKUpdate(Driver *pdriver, int stage)
-{
+TaskStatus Hydro::ExpRKUpdate(Driver *pdriver, int stage) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
@@ -51,46 +50,40 @@ TaskStatus Hydro::ExpRKUpdate(Driver *pdriver, int stage)
   size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1);
 
   par_for_outer("h_update",DevExeSpace(),scr_size,scr_level,0,nmb1,0,nvar-1,ks,ke,js,je,
-    KOKKOS_LAMBDA(TeamMember_t member, const int m, const int n, const int k, const int j)
-    {
-      ScrArray1D<Real> divf(member.team_scratch(scr_level), ncells1);
+  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int n, const int k, const int j) {
+    ScrArray1D<Real> divf(member.team_scratch(scr_level), ncells1);
 
-      // compute dF1/dx1
-      par_for_inner(member, is, ie, [&](const int i)
-      {
-        divf(i) = (flx1(m,n,k,j,i+1) - flx1(m,n,k,j,i))/mbsize.d_view(m).dx1;
+    // compute dF1/dx1
+    par_for_inner(member, is, ie, [&](const int i) {
+      divf(i) = (flx1(m,n,k,j,i+1) - flx1(m,n,k,j,i))/mbsize.d_view(m).dx1;
+    });
+    member.team_barrier();
+
+    // Add dF2/dx2
+    // Fluxes must be summed in pairs to symmetrize round-off error in each dir
+    if (multi_d) {
+      par_for_inner(member, is, ie, [&](const int i) {
+        divf(i) += (flx2(m,n,k,j+1,i) - flx2(m,n,k,j,i))/mbsize.d_view(m).dx2;
       });
       member.team_barrier();
-
-      // Add dF2/dx2
-      // Fluxes must be summed in pairs to symmetrize round-off error in each dir
-      if (multi_d) {
-        par_for_inner(member, is, ie, [&](const int i)
-        {
-          divf(i) += (flx2(m,n,k,j+1,i) - flx2(m,n,k,j,i))/mbsize.d_view(m).dx2;
-        });
-        member.team_barrier();
-      }
-
-      // Add dF3/dx3
-      // Fluxes must be summed in pairs to symmetrize round-off error in each dir
-      if (three_d) {
-        par_for_inner(member, is, ie, [&](const int i)
-        {
-          divf(i) += (flx3(m,n,k+1,j,i) - flx3(m,n,k,j,i))/mbsize.d_view(m).dx3;
-        });
-        member.team_barrier();
-      }
-
-      par_for_inner(member, is, ie, [&](const int i)
-      {
-        u0_(m,n,k,j,i) = gam0*u0_(m,n,k,j,i) + gam1*u1_(m,n,k,j,i) - beta_dt*divf(i);
-      });
     }
-  );
+
+    // Add dF3/dx3
+    // Fluxes must be summed in pairs to symmetrize round-off error in each dir
+    if (three_d) {
+      par_for_inner(member, is, ie, [&](const int i) {
+        divf(i) += (flx3(m,n,k+1,j,i) - flx3(m,n,k,j,i))/mbsize.d_view(m).dx3;
+      });
+      member.team_barrier();
+    }
+
+    par_for_inner(member, is, ie, [&](const int i) {
+      u0_(m,n,k,j,i) = gam0*u0_(m,n,k,j,i) + gam1*u1_(m,n,k,j,i) - beta_dt*divf(i);
+    });
+  });
 
   // Add physical source terms.
-  // Note source terms must be computed using only primitives (w0), as the conserved 
+  // Note source terms must be computed using only primitives (w0), as the conserved
   // variables (u0) have already been partially updated.
   if (psrc->source_terms_enabled) {
     if (psrc->const_accel)  psrc->AddConstantAccel(u0, w0, beta_dt);

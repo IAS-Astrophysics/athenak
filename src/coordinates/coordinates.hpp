@@ -24,8 +24,7 @@ struct EOS_Data;
 //! everything in a container makes them easier to capture, and pass to inline functions,
 //! inside kernels.
 
-struct CoordData
-{
+struct CoordData {
   // following data is only used in GR calculations to compute metric
   bool is_minkowski;               // flag to specify Minkowski (flat) space
   Real bh_mass;                    // needed for GR metric
@@ -37,11 +36,10 @@ struct CoordData
 //! \class Coordinates
 //! \brief data and functions for coordinates
 
-class Coordinates
-{
-public:
-  Coordinates(MeshBlockPack *ppack);
-  ~Coordinates() {};
+class Coordinates {
+ public:
+  explicit Coordinates(MeshBlockPack *ppack);
+  ~Coordinates() {}
 
   CoordData coord_data;
 
@@ -52,7 +50,7 @@ public:
   void AddCoordTerms(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc,
                      const EOS_Data &eos, const Real dt, DvceArray5D<Real> &u0);
 
-private:
+ private:
   MeshBlockPack* pmy_pack;
 };
 

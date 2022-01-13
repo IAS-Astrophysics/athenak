@@ -9,6 +9,8 @@
 //! \brief Contains data and functions that implement various formulations for conduction.
 //  Currently only isotropic conduction implemented
 
+#include <string>
+
 #include "athena.hpp"
 #include "parameter_input.hpp"
 
@@ -16,8 +18,7 @@
 //! \class Conduction
 //! \brief data and functions that implement thermal conduction in Hydro and MHD
 
-class Conduction
-{
+class Conduction {
  public:
   Conduction(std::string block, MeshBlockPack *pp, ParameterInput *pin);
   ~Conduction();

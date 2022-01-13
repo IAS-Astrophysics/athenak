@@ -16,13 +16,11 @@ namespace hydro {
 KOKKOS_INLINE_FUNCTION
 void Advect(TeamMember_t const &member, const EOS_Data eos,
      const int m, const int k, const int j,  const int il, const int iu, const int ivx,
-     const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr, DvceArray5D<Real> flx)
-{
+     const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr, DvceArray5D<Real> flx) {
   int ivy = IVX + ((ivx-IVX) + 1)%3;
   int ivz = IVX + ((ivx-IVX) + 2)%3;
 
-  par_for_inner(member, il, iu, [&](const int i)
-  {
+  par_for_inner(member, il, iu, [&](const int i) {
     //  Compute upwind fluxes
     if (wl(ivx,i) >= 0.0) {
       flx(m,IDN,k,j,i) = wl(IDN,i)*wl(ivx,i);

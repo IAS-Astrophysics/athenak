@@ -10,7 +10,7 @@
 //  conversion for various EOS (e.g. ideal gas, isothermal, etc.), for various fluids
 //  (Hydro, MHD, etc.), and for non-relativistic and relativistic flows.
 
-#include <cmath> 
+#include <cmath>
 
 #include "athena.hpp"
 #include "mesh/meshblock.hpp"
@@ -22,8 +22,7 @@
 //  everything in a container makes them easier to capture, and pass to inline functions,
 //  inside kernels.
 
-struct EOS_Data
-{
+struct EOS_Data {
   Real gamma;        // ratio of specific heats for ideal gas
   Real iso_cs;       // isothermal sound speed
   bool is_ideal;     // flag to denote ideal gas EOS
@@ -33,24 +32,24 @@ struct EOS_Data
   // IDEAL GAS PRESSURE: converts primitive variable (either internal energy density e
   // or temperature e/d) into pressure.
   KOKKOS_INLINE_FUNCTION
-  Real IdealGasPressure(const Real d, const Real prim)
-  const {
-    if (use_e) {return ((gamma-1.0)*prim);}
-    else {return (d*prim);}
+  Real IdealGasPressure(const Real d, const Real prim) const {
+    if (use_e) {
+      return ((gamma-1.0)*prim);
+    } else {
+      return (d*prim);
+    }
   }
 
   // NON-RELATIVISTIC IDEAL GAS HYDRO: inlined sound speed function
   KOKKOS_INLINE_FUNCTION
-  Real IdealHydroSoundSpeed(const Real d, const Real p)
-  const {
+  Real IdealHydroSoundSpeed(const Real d, const Real p) const {
     return sqrt(gamma*p/d);
   }
 
   // NON-RELATIVISTIC IDEAL GAS MHD: inlined fast magnetosonic speed function
   KOKKOS_INLINE_FUNCTION
   Real IdealMHDFastSpeed(const Real d, const Real p,
-                         const Real bx, const Real by, const Real bz)
-  const {
+                         const Real bx, const Real by, const Real bz) const {
     Real asq = gamma*p;
     Real ct2 = by*by + bz*bz;
     Real qsq = bx*bx + ct2 + asq;
@@ -60,8 +59,8 @@ struct EOS_Data
 
   // NON-RELATIVISTIC ISOTHERMAL MHD: inlined fast magnetosonic speed function
   KOKKOS_INLINE_FUNCTION
-  Real IdealMHDFastSpeed(const Real d, const Real bx, const Real by, const Real bz)
-  const {
+  Real IdealMHDFastSpeed(const Real d,
+                         const Real bx, const Real by, const Real bz) const {
     Real asq = (iso_cs*iso_cs)*d;
     Real ct2 = by*by + bz*bz;
     Real qsq = bx*bx + ct2 + asq;
@@ -71,7 +70,7 @@ struct EOS_Data
 
   // SPECIAL RELATIVISTIC IDEAL GAS HYDRO: inlined maximal sound wave speeds function
   // Inputs:
-  //   d: density in comoving frame 
+  //   d: density in comoving frame
   //   p: gas pressure
   //   ux: x-component of 4-velocity u^x
   //   lor: Lorentz factor \gamma
@@ -81,8 +80,7 @@ struct EOS_Data
   //   Del Zanna et al, A&A 473, 11 (2007) (eq. 76)
   KOKKOS_INLINE_FUNCTION
   void IdealSRHydroSoundSpeeds(const Real d, const Real p, const Real ux, const Real lor,
-                               Real& l_p, Real& l_m)
-  const {
+                               Real& l_p, Real& l_m) const {
     Real cs2 = gamma*p / (d + gamma*p/(gamma - 1.0));  // (DZB 73)
     Real v2 = 1.0 - 1.0/(lor*lor);
     auto const p1 = (ux/lor) * (1.0 - cs2);
@@ -99,8 +97,7 @@ struct EOS_Data
   //   Del Zanna et al, A&A 473, 11 (2007) (eq. 76)
   KOKKOS_INLINE_FUNCTION
   void IdealSRMHDFastSpeeds(const Real d, const Real p, const Real ux, const Real lor,
-                            const Real b_sq, Real& l_p, Real& l_m)
-  const {
+                            const Real b_sq, Real& l_p, Real& l_m) const {
     // Calculate comoving fast magnetosonic speed
     Real w = d + gamma*p/(gamma - 1.0);
     Real cs_sq = gamma*p/w;                            // (DZB 73)
@@ -130,8 +127,7 @@ struct EOS_Data
   KOKKOS_INLINE_FUNCTION
   void IdealGRHydroSoundSpeeds(const Real d, const Real p, const Real u0, const Real u1,
                                const Real g00, const Real g01, const Real g11,
-                               Real& l_p, Real& l_m)
-  const {
+                               Real& l_p, Real& l_m) const {
     // Parameters and constants
     const Real discriminant_tol = -1.0e-10;  // values between this and 0 are considered 0
 
@@ -174,8 +170,7 @@ struct EOS_Data
   KOKKOS_INLINE_FUNCTION
   void IdealGRMHDFastSpeeds(const Real d, const Real p, const Real u0, const Real u1,
                             const Real b_sq, const Real g00, const Real g01,
-                            const Real g11, Real& l_p, Real& l_m)
-  const {
+                            const Real g11, Real& l_p, Real& l_m) const {
     // Calculate comoving fast magnetosonic speed
     Real w = d + gamma*p/(gamma - 1.0);
     Real cs_sq = gamma * p / w;
@@ -203,8 +198,7 @@ struct EOS_Data
                           const Real wd, const Real wp,
                           const Real wvx, const Real wvy, const Real wvz,
                           Real& ud, Real& ue,
-                          Real& um1, Real& um2, Real& um3)
-  const {
+                          Real& um1, Real& um2, Real& um3) const {
     Real gamma_prime = gamma/(gamma-1.0);
 
     const Real
@@ -239,8 +233,9 @@ struct EOS_Data
 
 
   //--------------------------------------------------------------------------------------
-  //  // \!fn void PrimToConsSingleGRMHD()
-  //    // \brief Converts primitive into conserved variables in GRMHD. Operates on only one active cell.
+  //  \!fn void PrimToConsSingleGRMHD()
+  //  \brief Converts primitive into conserved variables in GRMHD.
+  // Operates on only one active cell.
 
   KOKKOS_INLINE_FUNCTION
   void PrimToConsSingleGRMHD(Real g_[], Real gi_[],
@@ -248,10 +243,9 @@ struct EOS_Data
                              const Real wvx, const Real wvy, const Real wvz,
                              const Real bcc1, const Real bcc2, const Real bcc3,
                              Real& ud, Real& ue,
-                             Real& um1, Real& um2, Real& um3)
-  const {
+                             Real& um1, Real& um2, Real& um3) const {
     Real gamma_prime = gamma/(gamma-1.0);
-    
+
     const Real
       &g_00 = g_[I00], &g_01 = g_[I01], &g_02 = g_[I02], &g_03 = g_[I03],
       &g_10 = g_[I01], &g_11 = g_[I11], &g_12 = g_[I12], &g_13 = g_[I13],
@@ -267,7 +261,7 @@ struct EOS_Data
     Real u0 = gg/alpha;
     Real u1 = wvx - alpha * gg * gi_[I01];
     Real u2 = wvy - alpha * gg * gi_[I02];
-    Real u3 = wvz - alpha * gg * gi_[I03]; 
+    Real u3 = wvz - alpha * gg * gi_[I03];
     // lower vector indices
     Real u_0 = g_00*u0 + g_01*u1 + g_02*u2 + g_03*u3;
     Real u_1 = g_10*u0 + g_11*u1 + g_12*u2 + g_13*u3;
@@ -298,16 +292,14 @@ struct EOS_Data
     um3 = wtot * u0 * u_3 - b0 * b_3;
     return;
   }
-
 };
 
 //----------------------------------------------------------------------------------------
 //! \class EquationOfState
 //  \brief Abstract base class for Hydro EOS
 
-class EquationOfState
-{
-public:
+class EquationOfState {
+ public:
   EquationOfState(MeshBlockPack *pp, ParameterInput *pin);
   virtual ~EquationOfState() = default;
 
@@ -332,9 +324,8 @@ public:
 //! \class IsothermalHydro
 //  \brief Derived class for Hydro isothermal EOS
 
-class IsothermalHydro : public EquationOfState
-{ 
-public:
+class IsothermalHydro : public EquationOfState {
+ public:
   // Following suppress warnings that MHD versions are not over-ridden
   using EquationOfState::ConsToPrim;
   using EquationOfState::PrimToCons;
@@ -348,9 +339,8 @@ public:
 //! \class IdealHydro
 //  \brief Derived class for ideal gas EOS in nonrelativistic hydro
 
-class IdealHydro : public EquationOfState
-{
-public:
+class IdealHydro : public EquationOfState {
+ public:
   // Following suppress warnings that MHD versions are not over-ridden
   using EquationOfState::ConsToPrim;
   using EquationOfState::PrimToCons;
@@ -364,9 +354,8 @@ public:
 //! \class IdealHydroSR
 //  \brief Derived class for ideal gas EOS in special relativistic Hydro
 
-class IdealSRHydro : public EquationOfState
-{
-public:
+class IdealSRHydro : public EquationOfState {
+ public:
   // Following suppress warnings that MHD versions are not over-ridden
   using EquationOfState::ConsToPrim;
   using EquationOfState::PrimToCons;
@@ -380,9 +369,8 @@ public:
 //! \class IdealSRMHD
 //  \brief Derived class for ideal gas EOS in special relativistic MHD
 
-class IdealSRMHD : public EquationOfState
-{
-public:
+class IdealSRMHD : public EquationOfState {
+ public:
   // Following suppress warnings that hydro versions are not over-ridden
   using EquationOfState::ConsToPrim;
   using EquationOfState::PrimToCons;
@@ -398,9 +386,8 @@ public:
 //! \class IdealGRMHD
 //  \brief Derived class for ideal gas EOS in general relativistic MHD
 
-class IdealGRMHD : public EquationOfState
-{
-public:
+class IdealGRMHD : public EquationOfState {
+ public:
   // Following suppress warnings that MHD versions are not over-ridden
   using EquationOfState::ConsToPrim;
   using EquationOfState::PrimToCons;
@@ -416,9 +403,8 @@ public:
 //! \class IdealHydroGR
 //  \brief Derived class for ideal gas EOS in general relativistic Hydro
 
-class IdealGRHydro : public EquationOfState
-{
-public:
+class IdealGRHydro : public EquationOfState {
+ public:
   // Following suppress warnings that MHD versions are not over-ridden
   using EquationOfState::ConsToPrim;
   using EquationOfState::PrimToCons;
@@ -432,11 +418,10 @@ public:
 //! \class IsothermalMHD
 //  \brief Derived class for isothermal EOS in nonrelativistic MHD
 
-class IsothermalMHD : public EquationOfState
-{
-public:
+class IsothermalMHD : public EquationOfState {
+ public:
   // Following suppress warnings that Hydro versions are not over-ridden
-  using EquationOfState::ConsToPrim; 
+  using EquationOfState::ConsToPrim;
   using EquationOfState::PrimToCons;
 
   IsothermalMHD(MeshBlockPack *pp, ParameterInput *pin);
@@ -450,9 +435,8 @@ public:
 //! \class IdealMHD
 //  \brief Derived class for ideal gas EOS in nonrelativistic MHD
 
-class IdealMHD : public EquationOfState
-{
-public:
+class IdealMHD : public EquationOfState {
+ public:
   // Following suppress warnings that Hydro versions are not over-ridden
   using EquationOfState::ConsToPrim;
   using EquationOfState::PrimToCons;

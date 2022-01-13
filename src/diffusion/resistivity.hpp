@@ -6,9 +6,8 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file resistivity.hpp
-//  \brief Contains data and functions that implement various non-ideal MHD (resistive) 
-//  processes, such as Ohmic diffusion.
-//  TODO: add ambipolar diffusion, Hall effect
+//  \brief Contains data and functions that implement various non-ideal MHD (resistive)
+//  processes, such as Ohmic diffusion. TODO(@user): add ambipolar diffusion, Hall effect
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
@@ -18,8 +17,7 @@
 //! \class Resistivity
 //  \brief data and functions that implement various resistive physics
 
-class Resistivity
-{
+class Resistivity {
  public:
   Resistivity(MeshBlockPack *pp, ParameterInput *pin);
   ~Resistivity();

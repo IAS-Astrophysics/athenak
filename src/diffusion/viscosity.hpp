@@ -6,9 +6,11 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file viscosity.hpp
-//  \brief Contains data and functions that implement various formulations for viscosity.
-//  Currently only Navier-Stokes (uniform, isotropic) shear viscosity implemented
-//  TODO: add Braginskii viscosity
+//  \brief Contains data and functions that implement various formulations for
+//  viscosity. Currently only Navier-Stokes (uniform, isotropic) shear viscosity
+//  is implemented. TODO: add Braginskii viscosity
+
+#include <string>
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
@@ -18,8 +20,7 @@
 //! \class Viscosity
 //  \brief data and functions that implement viscosity in Hydro and MHD
 
-class Viscosity
-{
+class Viscosity {
  public:
   Viscosity(std::string block, MeshBlockPack *pp, ParameterInput *pin);
   ~Viscosity();
@@ -28,7 +29,7 @@ class Viscosity
   Real dtnew;
   Real nu;     // coefficient of isotropic kinematic shear viscosity
 
-  // function to add viscous fluxes to Hydro and/or MHD fluxes  
+  // function to add viscous fluxes to Hydro and/or MHD fluxes
   void IsotropicViscousFlux(const DvceArray5D<Real> &w, const Real nu,
                             const EOS_Data &eos, DvceFaceFld5D<Real> &f);
 

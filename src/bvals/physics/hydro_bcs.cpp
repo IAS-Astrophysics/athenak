@@ -18,8 +18,7 @@
 //  are at the edge of the computational domain
 
 void BoundaryValues::HydroBCs(MeshBlockPack *ppack, DvceArray2D<Real> u_in,
-                              DvceArray5D<Real> u0)
-{
+                              DvceArray5D<Real> u0) {
   // loop over all MeshBlocks in this MeshBlockPack
   auto &pm = ppack->pmesh;
   auto &indcs = ppack->pmesh->mb_indcs;
@@ -29,7 +28,7 @@ void BoundaryValues::HydroBCs(MeshBlockPack *ppack, DvceArray2D<Real> u_in,
   int n1 = indcs.nx1 + 2*ng;
   int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
   int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
-  int nvar = u0.extent_int(1);  // TODO: 2nd index from L of input array must be NVAR
+  int nvar = u0.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
   int nmb = ppack->nmb_thispack;
 
   // only apply BCs if not periodic

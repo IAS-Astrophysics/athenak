@@ -7,6 +7,7 @@
 //  \brief implementation of functions in class ProblemGenerator
 
 #include <iostream>
+#include <string>
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -18,11 +19,10 @@
 //----------------------------------------------------------------------------------------
 // constructor, initializes data structures and parameters
 
-ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm)
- : user_bcs(false),
-   pmy_mesh_(pm)
-{
-  // check for user-defined boundary conditions 
+ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
+  user_bcs(false),
+  pmy_mesh_(pm) {
+  // check for user-defined boundary conditions
   for (int dir=0; dir<6; ++dir) {
     if (pm->mesh_bcs[dir] == BoundaryFlag::user) {
       user_bcs = true;
@@ -41,17 +41,16 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm)
   } else if (pgen_fun_name.compare("linear_wave") == 0) {
     LinearWave(pm->pmb_pack, pin);
   } else if (pgen_fun_name.compare("shock_tube") == 0) {
-    ShockTube(pm->pmb_pack, pin); 
+    ShockTube(pm->pmb_pack, pin);
   } else if (pgen_fun_name.compare("implode") == 0) {
     LWImplode(pm->pmb_pack, pin);
   } else if (pgen_fun_name.compare("orszag_tang") == 0) {
     OrszagTang(pm->pmb_pack, pin);
-
   // else, name not set on command line or input file, print warning and quit
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
         << "Problem generator name could not be found in <problem> block in input file"
-        << std::endl 
+        << std::endl
         << "and it was not set by -D PROBLEM option on cmake command line during build"
         << std::endl
         << "Rerun cmake with -D PROBLEM=file to specify custom problem generator file"
@@ -69,16 +68,14 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm)
       exit(EXIT_FAILURE);
     }
   }
-
 }
 
 //----------------------------------------------------------------------------------------
 // constructor for restarts
 
-ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resfile)
- : user_bcs(false),
-   pmy_mesh_(pm)
-{
+ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resfile) :
+  user_bcs(false),
+  pmy_mesh_(pm) {
   IOWrapperSizeT datasize;
   // Read size of data arrays from restart file
   if (global_variable::my_rank == 0) { // the master process reads the header data
@@ -89,10 +86,10 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
       exit(EXIT_FAILURE);
     }
   }
-  // get file offset for reading data arrays 
+  // get file offset for reading data arrays
   IOWrapperSizeT headeroffset = resfile.GetPosition();
 
-std::cout << "datasize = " << datasize << std::endl;
+  std::cout << "datasize = " << datasize << std::endl;
 
   // get size of arrays, including ghost zones
   auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
@@ -124,7 +121,6 @@ std::cout << "datasize = " << datasize << std::endl;
     }
     Kokkos::deep_copy(phydro->u0, indata);
   }
-
 }
 
 //----------------------------------------------------------------------------------------
@@ -132,8 +128,7 @@ std::cout << "datasize = " << datasize << std::endl;
 //  \brief calls any final work to be done after execution of main loop, for example
 //  compute errors in linear wave test
 
-void ProblemGenerator::ProblemGeneratorFinalize(ParameterInput *pin, Mesh *pm)
-{
+void ProblemGenerator::ProblemGeneratorFinalize(ParameterInput *pin, Mesh *pm) {
   if (pgen_error_func != nullptr) {
     (pgen_error_func)(pm->pmb_pack, pin);
   }

@@ -29,9 +29,8 @@ enum class Hydro_RSolver {advect, llf, hlle, hllc, roe,    // non-relativistic
 //----------------------------------------------------------------------------------------
 //! \struct HydroTaskIDs
 //  \brief container to hold TaskIDs of all hydro tasks
-  
-struct HydroTaskIDs
-{   
+
+struct HydroTaskIDs {
   TaskID irecv;
   TaskID copyu;
   TaskID flux;
@@ -52,9 +51,8 @@ namespace hydro {
 //----------------------------------------------------------------------------------------
 //! \class Hydro
 
-class Hydro
-{
-public:
+class Hydro {
+ public:
   Hydro(MeshBlockPack *ppack, ParameterInput *pin);
   ~Hydro();
 
@@ -83,7 +81,7 @@ public:
   SourceTerms *psrc = nullptr;
 
   // following only used for time-evolving flow
-  DvceArray5D<Real> u1;       // conserved variables at intermediate step 
+  DvceArray5D<Real> u1;       // conserved variables at intermediate step
   DvceFaceFld5D<Real> uflx;   // fluxes of conserved quantities on cell faces
   Real dtnew;
 
@@ -96,11 +94,11 @@ public:
   TaskStatus ClearRecv(Driver *d, int stage);
   TaskStatus ClearSend(Driver *d, int stage);
   TaskStatus CopyCons(Driver *d, int stage);
-  TaskStatus SendU(Driver *d, int stage); 
-  TaskStatus RecvU(Driver *d, int stage); 
-  TaskStatus SendFlux(Driver *d, int stage); 
-  TaskStatus RecvFlux(Driver *d, int stage); 
-  TaskStatus RestrictU(Driver *d, int stage); 
+  TaskStatus SendU(Driver *d, int stage);
+  TaskStatus RecvU(Driver *d, int stage);
+  TaskStatus SendFlux(Driver *d, int stage);
+  TaskStatus RecvFlux(Driver *d, int stage);
+  TaskStatus RestrictU(Driver *d, int stage);
   TaskStatus ConToPrim(Driver *d, int stage);
   TaskStatus ExpRKUpdate(Driver *d, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
@@ -110,7 +108,7 @@ public:
   template <Hydro_RSolver T>
   TaskStatus CalcFluxes(Driver *d, int stage);
 
-private:
+ private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Hydro
 };
 

@@ -28,8 +28,7 @@
 //! \fn ProblemGenerator::ShockTube_()
 //! \brief Problem Generator for the shock tube (Riemann problem) tests
 
-void ProblemGenerator::ShockTube(MeshBlockPack *pmbp, ParameterInput *pin)
-{
+void ProblemGenerator::ShockTube(MeshBlockPack *pmbp, ParameterInput *pin) {
   // parse shock direction: {1,2,3} -> {x1,x2,x3}
   int shk_dir = pin->GetInteger("problem","shock_dir");
   if (shk_dir < 1 || shk_dir > 3) {
@@ -74,7 +73,6 @@ void ProblemGenerator::ShockTube(MeshBlockPack *pmbp, ParameterInput *pin)
 
   // Initialize Hydro variables -------------------------------
   if (pmbp->phydro != nullptr) {
-
     // Parse left state read from input file: d,vx,vy,vz,[P]
     HydPrim1D wl,wr;
     wl.d  = pin->GetReal("problem","dl");
@@ -87,7 +85,7 @@ void ProblemGenerator::ShockTube(MeshBlockPack *pmbp, ParameterInput *pin)
     if (pmbp->phydro->is_special_relativistic || pmbp->phydro->is_general_relativistic) {
       u0l = 1.0/sqrt( 1.0 - (SQR(wl.vx) + SQR(wl.vy) + SQR(wl.vz)) );
     }
-  
+
     // Parse right state read from input file: d,vx,vy,vz,[P]
     wr.d  = pin->GetReal("problem","dr");
     wr.vx = pin->GetReal("problem","ur");
@@ -113,52 +111,48 @@ void ProblemGenerator::ShockTube(MeshBlockPack *pmbp, ParameterInput *pin)
 
     auto &w0 = pmbp->phydro->w0;
     par_for("pgen_shock1", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
-      KOKKOS_LAMBDA(int m,int k, int j, int i)
-      {
-        Real x;
-        if (shk_dir == 1) {
-          Real &x1min = size.d_view(m).x1min;
-          Real &x1max = size.d_view(m).x1max;
-          int nx1 = indcs.nx1;
-          x = CellCenterX(i-is, nx1, x1min, x1max);
-        } else if (shk_dir == 2) {
-          Real &x2min = size.d_view(m).x2min;
-          Real &x2max = size.d_view(m).x2max;
-          int nx2 = indcs.nx2;
-          x = CellCenterX(j-js, nx2, x2min, x2max);
-        } else {
-          Real &x3min = size.d_view(m).x3min;
-          Real &x3max = size.d_view(m).x3max;
-          int nx3 = indcs.nx3;
-          x = CellCenterX(k-ks, nx3, x3min, x3max);
-        }
-
-        // in SR/GR, primitive variables use spatial components of 4-vel u^i = gamma * v^i
-        if (x < xshock) {
-          w0(m,IDN,k,j,i) = wl.d;
-          w0(m,ivx,k,j,i) = wl.vx*u0l;
-          w0(m,ivy,k,j,i) = wl.vy*u0l;
-          w0(m,ivz,k,j,i) = wl.vz*u0l;
-          w0(m,IEN,k,j,i) = prim_l;
-        } else {
-          w0(m,IDN,k,j,i) = wr.d;
-          w0(m,ivx,k,j,i) = wr.vx*u0r;
-          w0(m,ivy,k,j,i) = wr.vy*u0r;
-          w0(m,ivz,k,j,i) = wr.vz*u0r;
-          w0(m,IEN,k,j,i) = prim_r;
-        }
+    KOKKOS_LAMBDA(int m,int k, int j, int i) {
+      Real x;
+      if (shk_dir == 1) {
+        Real &x1min = size.d_view(m).x1min;
+        Real &x1max = size.d_view(m).x1max;
+        int nx1 = indcs.nx1;
+        x = CellCenterX(i-is, nx1, x1min, x1max);
+      } else if (shk_dir == 2) {
+        Real &x2min = size.d_view(m).x2min;
+        Real &x2max = size.d_view(m).x2max;
+        int nx2 = indcs.nx2;
+        x = CellCenterX(j-js, nx2, x2min, x2max);
+      } else {
+        Real &x3min = size.d_view(m).x3min;
+        Real &x3max = size.d_view(m).x3max;
+        int nx3 = indcs.nx3;
+        x = CellCenterX(k-ks, nx3, x3min, x3max);
       }
-    );
+
+      // in SR/GR, primitive variables use spatial components of 4-vel u^i = gamma * v^i
+      if (x < xshock) {
+        w0(m,IDN,k,j,i) = wl.d;
+        w0(m,ivx,k,j,i) = wl.vx*u0l;
+        w0(m,ivy,k,j,i) = wl.vy*u0l;
+        w0(m,ivz,k,j,i) = wl.vz*u0l;
+        w0(m,IEN,k,j,i) = prim_l;
+      } else {
+        w0(m,IDN,k,j,i) = wr.d;
+        w0(m,ivx,k,j,i) = wr.vx*u0r;
+        w0(m,ivy,k,j,i) = wr.vy*u0r;
+        w0(m,ivz,k,j,i) = wr.vz*u0r;
+        w0(m,IEN,k,j,i) = prim_r;
+      }
+    });
 
     // Convert primitives to conserved
     auto &u0 = pmbp->phydro->u0;
     pmbp->phydro->peos->PrimToCons(w0, u0);
-
   } // End initialization of Hydro variables
 
   // Initialize MHD variables -------------------------------
   if (pmbp->pmhd != nullptr) {
-  
     // Parse left state read from input file: d,vx,vy,vz,[P]
     MHDPrim1D wl,wr;
     wl.d  = pin->GetReal("problem","dl");
@@ -174,7 +168,7 @@ void ProblemGenerator::ShockTube(MeshBlockPack *pmbp, ParameterInput *pin)
     if (pmbp->pmhd->is_special_relativistic || pmbp->pmhd->is_general_relativistic) {
       u0l = 1.0/sqrt( 1.0 - (SQR(wl.vx) + SQR(wl.vy) + SQR(wl.vz)) );
     }
-    
+
     // Parse right state read from input file: d,vx,vy,vz,[P]
     wr.d  = pin->GetReal("problem","dr");
     wr.vx = pin->GetReal("problem","ur");
@@ -200,75 +194,72 @@ void ProblemGenerator::ShockTube(MeshBlockPack *pmbp, ParameterInput *pin)
       prim_l = wl.p/(wl.d);
       prim_r = wr.p/(wr.d);
     }
-    
+
     auto &w0 = pmbp->pmhd->w0;
     auto &b0 = pmbp->pmhd->b0;
     auto &bcc0 = pmbp->pmhd->bcc0;
     par_for("pgen_shock1", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
-      KOKKOS_LAMBDA(int m,int k, int j, int i)
-      {
-        Real x,bxl,byl,bzl,bxr,byr,bzr;
-        if (shk_dir == 1) {
-          Real &x1min = size.d_view(m).x1min;
-          Real &x1max = size.d_view(m).x1max;
-          int nx1 = indcs.nx1;
-          x = CellCenterX(i-is, nx1, x1min, x1max);
-          bxl = bx_l; byl = wl.by; bzl = wl.bz;
-          bxr = bx_r; byr = wr.by; bzr = wr.bz;
-        } else if (shk_dir == 2) {
-          Real &x2min = size.d_view(m).x2min;
-          Real &x2max = size.d_view(m).x2max;
-          int nx2 = indcs.nx2;
-          x = CellCenterX(j-js, nx2, x2min, x2max);
-          bxl = wl.bz; byl = bx_l; bzl = wl.by;
-          bxr = wr.bz; byr = bx_r; bzr = wr.by;
-        } else {
-          Real &x3min = size.d_view(m).x3min;
-          Real &x3max = size.d_view(m).x3max;
-          int nx3 = indcs.nx3;
-          x = CellCenterX(k-ks, nx3, x3min, x3max);
-          bxl = wl.by; byl = wl.bz; bzl = bx_l;
-          bxr = wr.by; byr = wr.bz; bzr = bx_r;
-        } 
-          
-        // in SR/GR, primitive variables use spatial components of 4-vel u^i = gamma * v^i
-        if (x < xshock) {
-          w0(m,IDN,k,j,i) = wl.d; 
-          w0(m,ivx,k,j,i) = wl.vx*u0l;
-          w0(m,ivy,k,j,i) = wl.vy*u0l;
-          w0(m,ivz,k,j,i) = wl.vz*u0l;
-          w0(m,IEN,k,j,i) = prim_l;
-          b0.x1f(m,k,j,i) = bxl;
-          b0.x2f(m,k,j,i) = byl;
-          b0.x3f(m,k,j,i) = bzl;
-          if (i==ie) {b0.x1f(m,k,j,i+1) = bxl;}
-          if (j==je) {b0.x2f(m,k,j+1,i) = byl;}
-          if (k==ke) {b0.x3f(m,k+1,j,i) = bzl;}
-          bcc0(m,IBX,k,j,i) = bxl;
-          bcc0(m,IBY,k,j,i) = byl;
-          bcc0(m,IBZ,k,j,i) = bzl;
-        } else {
-          w0(m,IDN,k,j,i) = wr.d;
-          w0(m,ivx,k,j,i) = wr.vx*u0r;
-          w0(m,ivy,k,j,i) = wr.vy*u0r;
-          w0(m,ivz,k,j,i) = wr.vz*u0r;
-          w0(m,IEN,k,j,i) = prim_r;
-          b0.x1f(m,k,j,i) = bxr;
-          b0.x2f(m,k,j,i) = byr;
-          b0.x3f(m,k,j,i) = bzr;
-          if (i==ie) {b0.x1f(m,k,j,i+1) = bxr;}
-          if (j==je) {b0.x2f(m,k,j+1,i) = byr;}
-          if (k==ke) {b0.x3f(m,k+1,j,i) = bzr;}
-          bcc0(m,IBX,k,j,i) = bxr;
-          bcc0(m,IBY,k,j,i) = byr;
-          bcc0(m,IBZ,k,j,i) = bzr;
-        }
+    KOKKOS_LAMBDA(int m,int k, int j, int i) {
+      Real x,bxl,byl,bzl,bxr,byr,bzr;
+      if (shk_dir == 1) {
+        Real &x1min = size.d_view(m).x1min;
+        Real &x1max = size.d_view(m).x1max;
+        int nx1 = indcs.nx1;
+        x = CellCenterX(i-is, nx1, x1min, x1max);
+        bxl = bx_l; byl = wl.by; bzl = wl.bz;
+        bxr = bx_r; byr = wr.by; bzr = wr.bz;
+      } else if (shk_dir == 2) {
+        Real &x2min = size.d_view(m).x2min;
+        Real &x2max = size.d_view(m).x2max;
+        int nx2 = indcs.nx2;
+        x = CellCenterX(j-js, nx2, x2min, x2max);
+        bxl = wl.bz; byl = bx_l; bzl = wl.by;
+        bxr = wr.bz; byr = bx_r; bzr = wr.by;
+      } else {
+        Real &x3min = size.d_view(m).x3min;
+        Real &x3max = size.d_view(m).x3max;
+        int nx3 = indcs.nx3;
+        x = CellCenterX(k-ks, nx3, x3min, x3max);
+        bxl = wl.by; byl = wl.bz; bzl = bx_l;
+        bxr = wr.by; byr = wr.bz; bzr = bx_r;
       }
-    );
+
+      // in SR/GR, primitive variables use spatial components of 4-vel u^i = gamma * v^i
+      if (x < xshock) {
+        w0(m,IDN,k,j,i) = wl.d;
+        w0(m,ivx,k,j,i) = wl.vx*u0l;
+        w0(m,ivy,k,j,i) = wl.vy*u0l;
+        w0(m,ivz,k,j,i) = wl.vz*u0l;
+        w0(m,IEN,k,j,i) = prim_l;
+        b0.x1f(m,k,j,i) = bxl;
+        b0.x2f(m,k,j,i) = byl;
+        b0.x3f(m,k,j,i) = bzl;
+        if (i==ie) {b0.x1f(m,k,j,i+1) = bxl;}
+        if (j==je) {b0.x2f(m,k,j+1,i) = byl;}
+        if (k==ke) {b0.x3f(m,k+1,j,i) = bzl;}
+        bcc0(m,IBX,k,j,i) = bxl;
+        bcc0(m,IBY,k,j,i) = byl;
+        bcc0(m,IBZ,k,j,i) = bzl;
+      } else {
+        w0(m,IDN,k,j,i) = wr.d;
+        w0(m,ivx,k,j,i) = wr.vx*u0r;
+        w0(m,ivy,k,j,i) = wr.vy*u0r;
+        w0(m,ivz,k,j,i) = wr.vz*u0r;
+        w0(m,IEN,k,j,i) = prim_r;
+        b0.x1f(m,k,j,i) = bxr;
+        b0.x2f(m,k,j,i) = byr;
+        b0.x3f(m,k,j,i) = bzr;
+        if (i==ie) {b0.x1f(m,k,j,i+1) = bxr;}
+        if (j==je) {b0.x2f(m,k,j+1,i) = byr;}
+        if (k==ke) {b0.x3f(m,k+1,j,i) = bzr;}
+        bcc0(m,IBX,k,j,i) = bxr;
+        bcc0(m,IBY,k,j,i) = byr;
+        bcc0(m,IBZ,k,j,i) = bzr;
+      }
+    });
     // Convert primitives to conserved
     auto &u0 = pmbp->pmhd->u0;
     pmbp->pmhd->peos->PrimToCons(w0, bcc0, u0);
-
   } // End initialization of MHD variables
 
   return;

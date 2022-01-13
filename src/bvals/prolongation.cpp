@@ -19,8 +19,7 @@
 // \!fn void ProlongCC()
 // \brief Prolongate data at boundaries for cell-centered data
 
-void BoundaryValuesCC::ProlongCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
-{
+void BoundaryValuesCC::ProlongCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca) {
   // create local references for variables in kernel
   int nmb = pmy_pack->pmb->nmb;
   int nnghbr = pmy_pack->pmb->nnghbr;
@@ -28,7 +27,7 @@ void BoundaryValuesCC::ProlongCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
   // Prolongate conserved variables when neighbor at coarser level
   // Code here is based on MeshRefinement::ProlongateCellCenteredValues() in C++ version
 
-  int nvar = a.extent_int(1);  // TODO: 2nd index from L of input array must be NVAR
+  int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
   int nmnv = nmb*nnghbr*nvar;
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &mblev = pmy_pack->pmb->mb_lev;
@@ -39,15 +38,13 @@ void BoundaryValuesCC::ProlongCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
 
   // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
   Kokkos::TeamPolicy<> policy(DevExeSpace(), nmnv, Kokkos::AUTO);
-  Kokkos::parallel_for("RecvBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember)
-  {
+  Kokkos::parallel_for("RecvBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
     const int m = (tmember.league_rank())/(nnghbr*nvar);
     const int n = (tmember.league_rank() - m*(nnghbr*nvar))/nvar;
     const int v = (tmember.league_rank() - m*(nnghbr*nvar) - n*nvar);
 
     // only prolongate when neighbor exists and is at coarser level
     if ((nghbr.d_view(m,n).gid >= 0) && (nghbr.d_view(m,n).lev < mblev.d_view(m))) {
-
       // loop over indices for prolongation on this buffer
       int il = rbuf[n].iprol[0].bis;
       int iu = rbuf[n].iprol[0].bie;
@@ -61,14 +58,13 @@ void BoundaryValuesCC::ProlongCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
       const int nkj  = nk*nj;
 
       // Middle loop over k,j
-      Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx)
-      {
+      Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
         int k = idx / nj;
         int j = (idx - k * nj) + jl;
         k += kl;
 
-        Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),[&](const int i)
-        {
+        Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
+        [&](const int i) {
           // indices for prolongation refer to coarse array.  So must compute
           // indices for fine array
           int finei = (i - indcs.cis)*2 + indcs.is;
@@ -109,7 +105,6 @@ void BoundaryValuesCC::ProlongCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
             a(m,v,finek+1,finej+1,finei  ) = ca(m,v,k,j,i) - dvar1 + dvar2 + dvar3;
             a(m,v,finek+1,finej+1,finei+1) = ca(m,v,k,j,i) + dvar1 + dvar2 + dvar3;
           }
-
         });
       });
     }
@@ -122,8 +117,7 @@ void BoundaryValuesCC::ProlongCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
 // \!fn void ProlongFC()
 // \brief Prolongate data at boundaries for face-centered data
 
-void BoundaryValuesFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb)
-{
+void BoundaryValuesFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb) {
   // create local references for variables in kernel
   int nmb = pmy_pack->pmb->nmb;
   int nnghbr = pmy_pack->pmb->nnghbr;
@@ -143,16 +137,13 @@ void BoundaryValuesFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb
 
     // Outer loop over (# of MeshBlocks)*(# of buffers)
     par_for_outer("ProlongFC-1d",DevExeSpace(), 0, 0, 0, (nmb-1), 0, (nnghbr-1),
-    KOKKOS_LAMBDA(TeamMember_t member, const int m, const int n)
-    {
+    KOKKOS_LAMBDA(TeamMember_t member, const int m, const int n) {
       // only prolongate when neighbor exists and is at coarser level
       if ((nghbr.d_view(m,n).gid >= 0) && (nghbr.d_view(m,n).lev < mblev.d_view(m))) {
-
         // prolongate b.x1f (v=0)
         int il = rbuf[n].iprol[0].bis;
         int iu = rbuf[n].iprol[0].bie;
-        par_for_inner(member, il, iu, [&](const int i)
-        {
+        par_for_inner(member, il, iu, [&](const int i) {
           int finei = (i - indcs.cis)*2 + indcs.is;
           // prolongate B1 at shared coarse/fine cell edges
           // equivalent to code for 1D in MeshRefinement::ProlongateSharedFieldX1()
@@ -171,8 +162,7 @@ void BoundaryValuesFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb
         // prolongate b.x2f (v=1)
         il = rbuf[n].iprol[1].bis;
         iu = rbuf[n].iprol[1].bie;
-        par_for_inner(member, il, iu, [&](const int i)
-        {
+        par_for_inner(member, il, iu, [&](const int i) {
           int finei = (i - indcs.cis)*2 + indcs.is;
           // interpolate B2 in x1 to fine cell locations
           // equivalent to code for 1D in MeshRefinement::ProlongateSharedFieldX2()
@@ -188,8 +178,7 @@ void BoundaryValuesFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb
         // prolongate b.x3f (v=2)
         il = rbuf[n].iprol[2].bis;
         iu = rbuf[n].iprol[2].bie;
-        par_for_inner(member, il, iu, [&](const int i)
-        {
+        par_for_inner(member, il, iu, [&](const int i) {
           int finei = (i - indcs.cis)*2 + indcs.is;
           // interpolate B3 in x1 to fine cell locations
           // equivalent to code for 1D in MeshRefinement::ProlongateSharedFieldX3()
@@ -211,15 +200,14 @@ void BoundaryValuesFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb
     int ks = indcs.ks;
     auto &mblev = pmy_pack->pmb->mb_lev;
     auto &rbuf = recv_buf;
-        
+
     // Prolongate b.x1f/b.x2f/b.x3f at all shared coarse/fine cell edges
     // equivalent to code for 2D in MeshRefinement::ProlongateSharedFieldX1/2/3()
 
     // Outer loop over (# of MeshBlocks)*(# of buffers)*(three field components)
     {int nmnv = 3*nmb*nnghbr;
     Kokkos::TeamPolicy<> policy(DevExeSpace(), nmnv, Kokkos::AUTO);
-    Kokkos::parallel_for("ProFC-2d-shared", policy, KOKKOS_LAMBDA(TeamMember_t tmember)
-    {
+    Kokkos::parallel_for("ProFC-2d-shared", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
       const int m = (tmember.league_rank())/(3*nnghbr);
       const int n = (tmember.league_rank() - m*(3*nnghbr))/3;
       const int v = (tmember.league_rank() - m*(3*nnghbr) - 3*n);
@@ -239,15 +227,14 @@ void BoundaryValuesFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb
         // Prolongate b.x1f (v=0) by interpolating in x2
         if (v==0) {
           // Middle loop over k,j
-          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx)
-          {
+          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj),
+          [&](const int idx) {
             int k = idx / nj;
             int j = (idx - k * nj) + jl;
             k += kl;
             // inner vector loop
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-            [&](const int i)
-            {
+            [&](const int i) {
               int fi = (i - indcs.cis)*2 + indcs.is;  // fine i
               int fj = (j - indcs.cjs)*2 + indcs.js;  // fine j
               Real dl = cb.x1f(m,k,j  ,i) - cb.x1f(m,k,j-1,i);
@@ -261,15 +248,14 @@ void BoundaryValuesFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb
         // Prolongate b.x2f (v=1) by interpolating in x1
         } else if (v==1) {
           // Middle loop over k,j
-          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx)
-          {
+          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj),
+          [&](const int idx) {
             int k = idx / nj;
             int j = (idx - k * nj) + jl;
             k += kl;
             // inner vector loop
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-            [&](const int i)
-            {
+            [&](const int i) {
               int fi = (i - indcs.cis)*2 + indcs.is;  // fine i
               int fj = (j - indcs.cjs)*2 + indcs.js;  // fine j
               Real dl = cb.x2f(m,k,j,i  ) - cb.x2f(m,k,j,i-1);
@@ -277,21 +263,20 @@ void BoundaryValuesFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb
               Real dvar1 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
               b.x2f(m,k,fj,fi  ) = cb.x2f(m,k,j,i) - dvar1;
               b.x2f(m,k,fj,fi+1) = cb.x2f(m,k,j,i) + dvar1;
-            }); 
-          }); 
+            });
+          });
 
         // Prolongate b.x3f (v=2) by interpolating in x1/x2
         } else {
           // Middle loop over k,j
-          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx)
-          {
+          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj),
+          [&](const int idx) {
             int k = idx / nj;
             int j = (idx - k * nj) + jl;
             k += kl;
             // inner vector loop
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-            [&](const int i)
-            {
+            [&](const int i) {
               int fi = (i - indcs.cis)*2 + indcs.is;  // fine i
               int fj = (j - indcs.cjs)*2 + indcs.js;  // fine j
               Real dl = cb.x3f(m,k,j,i  ) - cb.x3f(m,k,j,i-1);
@@ -319,8 +304,7 @@ void BoundaryValuesFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb
     // Outer loop over (# of MeshBlocks)*(# of buffers)
     {int nmn = nmb*nnghbr;
     Kokkos::TeamPolicy<> policy(DevExeSpace(), nmn, Kokkos::AUTO);
-    Kokkos::parallel_for("ProFC-2d-int", policy, KOKKOS_LAMBDA(TeamMember_t tmember)
-    {
+    Kokkos::parallel_for("ProFC-2d-int", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
       const int m = (tmember.league_rank())/(nnghbr);
       const int n = (tmember.league_rank() - m*(nnghbr));
 
@@ -338,15 +322,13 @@ void BoundaryValuesFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb
         const int nkj  = nk*nj;
 
         // Middle loop over k,j
-        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx)
-        {
+        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
           int k = idx / nj;
           int j = (idx - k * nj) + jl;
           k += kl;
 
           Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-          [&](const int i)
-          {
+          [&](const int i) {
             int fi = (i - indcs.cis)*2 + indcs.is;   // fine i
             int fj = (j - indcs.cjs)*2 + indcs.js;   // fine j
 
@@ -362,7 +344,7 @@ void BoundaryValuesFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb
         });
       }
     });
-  }
+    }
 
   //------ 3D PROBLEM: -----
   } else {
@@ -371,15 +353,14 @@ void BoundaryValuesFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb
     int ks = indcs.ks;
     auto &mblev = pmy_pack->pmb->mb_lev;
     auto &rbuf = recv_buf;
-        
+
     // Prolongate b.x1f/b.x2f/b.x3f at all shared coarse/fine cell edges
     // equivalent to code for 3D in MeshRefinement::ProlongateSharedFieldX1/2/3()
 
     // Outer loop over (# of MeshBlocks)*(# of buffers)*(three field components)
     {int nmnv = 3*nmb*nnghbr;
     Kokkos::TeamPolicy<> policy(DevExeSpace(), nmnv, Kokkos::AUTO);
-    Kokkos::parallel_for("ProFC-2d-shared", policy, KOKKOS_LAMBDA(TeamMember_t tmember)
-    {
+    Kokkos::parallel_for("ProFC-2d-shared", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
       const int m = (tmember.league_rank())/(3*nnghbr);
       const int n = (tmember.league_rank() - m*(3*nnghbr))/3;
       const int v = (tmember.league_rank() - m*(3*nnghbr) - 3*n);
@@ -399,15 +380,14 @@ void BoundaryValuesFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb
         // Prolongate b.x1f (v=0) by interpolating in x2/x3
         if (v==0) {
           // Middle loop over k,j
-          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx)
-          {
+          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj),
+          [&](const int idx) {
             int k = idx / nj;
             int j = (idx - k * nj) + jl;
             k += kl;
             // inner vector loop
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-            [&](const int i)
-            {
+            [&](const int i) {
               int fi = (i - indcs.cis)*2 + indcs.is;  // fine i
               int fj = (j - indcs.cjs)*2 + indcs.js;  // fine j
               int fk = (k - indcs.cks)*2 + indcs.ks;  // fine k
@@ -427,15 +407,14 @@ void BoundaryValuesFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb
         // Prolongate b.x2f (v=1) by interpolating in x1/x3
         } else if (v==1) {
           // Middle loop over k,j
-          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx)
-          {
+          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj),
+          [&](const int idx) {
             int k = idx / nj;
             int j = (idx - k * nj) + jl;
             k += kl;
             // inner vector loop
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-            [&](const int i)
-            {
+            [&](const int i) {
               int fi = (i - indcs.cis)*2 + indcs.is;  // fine i
               int fj = (j - indcs.cjs)*2 + indcs.js;  // fine j
               int fk = (k - indcs.cks)*2 + indcs.ks;  // fine k
@@ -449,21 +428,20 @@ void BoundaryValuesFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb
               b.x2f(m,fk  ,fj,fi+1) = cb.x2f(m,k,j,i) + dvar1 - dvar3;
               b.x2f(m,fk+1,fj,fi  ) = cb.x2f(m,k,j,i) - dvar1 + dvar3;
               b.x2f(m,fk+1,fj,fi+1) = cb.x2f(m,k,j,i) + dvar1 + dvar3;
-            }); 
-          }); 
+            });
+          });
 
         // Prolongate b.x3f (v=2) by interpolating in x1/x2
         } else {
           // Middle loop over k,j
-          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx)
-          {
+          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj),
+          [&](const int idx) {
             int k = idx / nj;
             int j = (idx - k * nj) + jl;
             k += kl;
             // inner vector loop
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-            [&](const int i)
-            {
+            [&](const int i) {
               int fi = (i - indcs.cis)*2 + indcs.is;  // fine i
               int fj = (j - indcs.cjs)*2 + indcs.js;  // fine j
               int fk = (k - indcs.cks)*2 + indcs.ks;  // fine k
@@ -492,8 +470,7 @@ void BoundaryValuesFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb
     // Outer loop over (# of MeshBlocks)*(# of buffers)
     {int nmn = nmb*nnghbr;
     Kokkos::TeamPolicy<> policy(DevExeSpace(), nmn, Kokkos::AUTO);
-    Kokkos::parallel_for("ProFC-2d-int", policy, KOKKOS_LAMBDA(TeamMember_t tmember)
-    {
+    Kokkos::parallel_for("ProFC-2d-int", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
       const int m = (tmember.league_rank())/(nnghbr);
       const int n = (tmember.league_rank() - m*(nnghbr));
 
@@ -511,15 +488,14 @@ void BoundaryValuesFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb
         const int nkj  = nk*nj;
 
         // Middle loop over k,j
-        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx)
-        {
+        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj),
+        [&](const int idx) {
           int k = idx / nj;
           int j = (idx - k * nj) + jl;
           k += kl;
 
           Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-          [&](const int i)
-          {
+          [&](const int i) {
             int fi = (i - indcs.cis)*2 + indcs.is;   // fine i
             int fj = (j - indcs.cjs)*2 + indcs.js;   // fine j
             int fk = (k - indcs.cks)*2 + indcs.ks;  // fine k
@@ -578,7 +554,8 @@ void BoundaryValuesFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb
         });
       }
     });
-  }}
+    }
+  }
 
   return;
 }

@@ -39,8 +39,7 @@ void RoeFluxIso(const Real wroe[], const Real du[], const Real wli[],
 KOKKOS_INLINE_FUNCTION
 void Roe(TeamMember_t const &member, const EOS_Data &eos,
      const int m, const int k, const int j, const int il, const int iu, const int ivx,
-     const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr, DvceArray5D<Real> flx)
-{
+     const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr, DvceArray5D<Real> flx) {
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
   Real wli[5],wri[5],wroe[5];
@@ -49,8 +48,7 @@ void Roe(TeamMember_t const &member, const EOS_Data &eos,
   Real gm1 = eos.gamma - 1.0;
   Real iso_cs = eos.iso_cs;
 
-  par_for_inner(member, il, iu, [&](const int i)
-  {
+  par_for_inner(member, il, iu, [&](const int i) {
     //--- Step 1.  Load L/R states into local variables
     wli[IDN]=wl(IDN,i);
     wli[IVX]=wl(ivx,i);
@@ -222,8 +220,7 @@ namespace roe {
 
 KOKKOS_INLINE_FUNCTION
 void RoeFluxAdb(const Real wroe[], const Real du[], const Real wli[], const Real gm1,
-     Real flx[], Real ev[], int &llf_flag)
-{
+     Real flx[], Real ev[], int &llf_flag) {
   Real v1 = wroe[IVX];
   Real v2 = wroe[IVY];
   Real v3 = wroe[IVZ];
@@ -319,8 +316,7 @@ void RoeFluxAdb(const Real wroe[], const Real du[], const Real wli[], const Real
 
 KOKKOS_INLINE_FUNCTION
 void RoeFluxIso(const Real wroe[], const Real du[], const Real wli[], const Real iso_cs,
-     Real flx[], Real ev[], int &llf_flag)
-{
+     Real flx[], Real ev[], int &llf_flag) {
   Real v1 = wroe[IVX];
   Real v2 = wroe[IVY];
   Real v3 = wroe[IVZ];

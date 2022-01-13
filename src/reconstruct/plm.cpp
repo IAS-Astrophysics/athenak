@@ -15,8 +15,8 @@
 //  reconstruction in any dimension by passing in the appropriate q_im1, q_i, and q_ip1.
 
 KOKKOS_INLINE_FUNCTION
-void PLM(const Real &q_im1, const Real &q_i, const Real &q_ip1, Real &ql_ip1, Real &qr_i)
-{
+void PLM(const Real &q_im1, const Real &q_i, const Real &q_ip1,
+         Real &ql_ip1, Real &qr_i) {
   // compute L/R slopes
   Real dql = (q_i - q_im1);
   Real dqr = (q_ip1 - q_i);
@@ -40,12 +40,10 @@ void PLM(const Real &q_im1, const Real &q_i, const Real &q_ip1, Real &ql_ip1, Re
 KOKKOS_INLINE_FUNCTION
 void PiecewiseLinearX1(TeamMember_t const &member, const int m, const int k, const int j,
      const int il, const int iu, const DvceArray5D<Real> &q,
-     ScrArray2D<Real> &ql, ScrArray2D<Real> &qr)
-{
+     ScrArray2D<Real> &ql, ScrArray2D<Real> &qr) {
   int nvar = q.extent_int(1);
   for (int n=0; n<nvar; ++n) {
-    par_for_inner(member, il, iu, [&](const int i)
-    { 
+    par_for_inner(member, il, iu, [&](const int i) {
       PLM(q(m,n,k,j,i-1), q(m,n,k,j,i), q(m,n,k,j,i+1), ql(n,i+1), qr(n,i));
     });
   }
@@ -60,12 +58,10 @@ void PiecewiseLinearX1(TeamMember_t const &member, const int m, const int k, con
 KOKKOS_INLINE_FUNCTION
 void PiecewiseLinearX2(TeamMember_t const &member, const int m, const int k, const int j,
      const int il, const int iu, const DvceArray5D<Real> &q,
-     ScrArray2D<Real> &ql_jp1, ScrArray2D<Real> &qr_j)
-{
+     ScrArray2D<Real> &ql_jp1, ScrArray2D<Real> &qr_j) {
   int nvar = q.extent_int(1);
   for (int n=0; n<nvar; ++n) {
-    par_for_inner(member, il, iu, [&](const int i)
-    { 
+    par_for_inner(member, il, iu, [&](const int i) {
       PLM(q(m,n,k,j-1,i), q(m,n,k,j,i), q(m,n,k,j+1,i), ql_jp1(n,i), qr_j(n,i));
     });
   }
@@ -80,12 +76,10 @@ void PiecewiseLinearX2(TeamMember_t const &member, const int m, const int k, con
 KOKKOS_INLINE_FUNCTION
 void PiecewiseLinearX3(TeamMember_t const &member, const int m, const int k, const int j,
      const int il, const int iu, const DvceArray5D<Real> &q,
-     ScrArray2D<Real> &ql_kp1, ScrArray2D<Real> &qr_k)
-{
+     ScrArray2D<Real> &ql_kp1, ScrArray2D<Real> &qr_k) {
   int nvar = q.extent_int(1);
   for (int n=0; n<nvar; ++n) {
-    par_for_inner(member, il, iu, [&](const int i)
-    { 
+    par_for_inner(member, il, iu, [&](const int i) {
       PLM(q(m,n,k-1,j,i), q(m,n,k,j,i), q(m,n,k+1,j,i), ql_kp1(n,i), qr_k(n,i));
     });
   }

@@ -29,10 +29,12 @@ enum class BoundaryCommStatus {undef=-1, waiting, sent, received};
 // conversions (and overflows from built-in types and MPI_TAG_UB).  Note, the MPI standard
 // requires signed int tag, with MPI_TAG_UB>= 2^15-1 = 32,767 (inclusive)
 
-static int CreateMPITag(int lid, int bufid)
-{
+static int CreateMPITag(int lid, int bufid) {
   return (lid<<6) | bufid;
 }
+
+#include <algorithm>
+#include <vector>
 
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
@@ -43,22 +45,20 @@ static int CreateMPITag(int lid, int bufid)
 //! \struct BufferIndcs
 //! \brief indices for range of cells packed/unpacked into boundary buffers
 
-struct BufferIndcs
-{
+struct BufferIndcs {
   int bis,bie,bjs,bje,bks,bke;  // start/end buffer ("b") indices in each dir
   BufferIndcs() :
-   bis(0), bie(0), bjs(0), bje(0), bks(0), bke(0) {}
+    bis(0), bie(0), bjs(0), bje(0), bks(0), bke(0) {}
 };
 
 //----------------------------------------------------------------------------------------
 //! \struct BoundaryBuffer
 //! \brief container for index ranges, storage, and flags for boundary buffers
 
-struct BoundaryBuffer
-{
+struct BoundaryBuffer {
   // fixed-length-3 arrays used to store indices of each buffer for cell-centered vars, or
   // each component of a face-centered vector field ([0,1,2] --> [x1f, x2f, x3f]). For
-  // cell-centered variables only first [0] component of index arrays are needed. 
+  // cell-centered variables only first [0] component of index arrays are needed.
   BufferIndcs isame[3];  // indices for pack/unpack when dest/src at same level
   BufferIndcs icoar[3];  // indices for pack/unpack when dest/src at coarser level
   BufferIndcs ifine[3];  // indices for pack/unpack when dest/src at finer level
@@ -93,14 +93,13 @@ class MeshBlockPack;
 //! \class BoundaryValues
 //  \brief Abstract base class for boundary values for different kinds of variables
 
-class BoundaryValues
-{
-public:
+class BoundaryValues {
+ public:
   BoundaryValues(MeshBlockPack *ppack, ParameterInput *pin);
 
   // data for all 56 buffers in most general 3D case. Not all elements used in most cases.
   // However each BoundaryBuffer is lightweight, so the convenience of fixed array
-  // sizes and index values for array elements outweighs cost of extra memory. 
+  // sizes and index values for array elements outweighs cost of extra memory.
   BoundaryBuffer send_buf[56], recv_buf[56];
 
   // constant inflow states at each face
@@ -110,7 +109,7 @@ public:
   // unique MPI communicators for variables and fluxes
   MPI_Comm vars_comm, flux_comm;
 #endif
-  
+
   //functions
   virtual void InitSendIndices(BoundaryBuffer &buf, int x, int y, int z, int a, int b)=0;
   virtual void InitRecvIndices(BoundaryBuffer &buf, int x, int y, int z, int a, int b)=0;
@@ -127,7 +126,7 @@ public:
   static void HydroBCs(MeshBlockPack *pp, DvceArray2D<Real> uin, DvceArray5D<Real> u0);
   static void BFieldBCs(MeshBlockPack *pp, DvceArray2D<Real> uin, DvceFaceFld4D<Real> b0);
 
-protected:
+ protected:
   MeshBlockPack* pmy_pack;
 };
 
@@ -135,17 +134,16 @@ protected:
 //! \class BoundaryValuesCC
 //  \brief boundary values for cell-centered variables
 
-class BoundaryValuesCC : public BoundaryValues
-{
-public:
+class BoundaryValuesCC : public BoundaryValues {
+ public:
   BoundaryValuesCC(MeshBlockPack *ppack, ParameterInput *pin);
 
   //functions
   void InitSendIndices(BoundaryBuffer &buf, int o1, int o2,int o3,int f1,int f2) override;
   void InitRecvIndices(BoundaryBuffer &buf, int o1, int o2,int o3,int f1,int f2) override;
   TaskStatus InitFluxRecv(const int nvar) override;
-  virtual TaskStatus ClearFluxRecv() override;
-  virtual TaskStatus ClearFluxSend() override;
+  TaskStatus ClearFluxRecv() override;
+  TaskStatus ClearFluxSend() override;
 
   TaskStatus PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
   TaskStatus RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
@@ -159,9 +157,8 @@ public:
 //! \class BoundaryValuesFC
 //  \brief boundary values for face-centered vector fields
 
-class BoundaryValuesFC : public BoundaryValues
-{
-public:
+class BoundaryValuesFC : public BoundaryValues {
+ public:
   BoundaryValuesFC(MeshBlockPack *ppack, ParameterInput *pin);
 
   //functions

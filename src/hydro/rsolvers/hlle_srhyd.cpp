@@ -26,15 +26,13 @@ namespace hydro {
 KOKKOS_INLINE_FUNCTION
 void HLLE_SR(TeamMember_t const &member, const EOS_Data &eos,
      const int m, const int k, const int j, const int il, const int iu, const int ivx,
-     const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr, DvceArray5D<Real> flx)
-{
+     const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr, DvceArray5D<Real> flx) {
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
   const Real gm1 = (eos.gamma - 1.0);
   const Real gamma_prime = eos.gamma/gm1;
 
-  par_for_inner(member, il, iu, [&](const int i)
-  {
+  par_for_inner(member, il, iu, [&](const int i) {
     // References to left primitives
     // Recall in SR the primitive variables are (\rho, u^i, P_g), where
     //   \rho is the mass density in the comoving/fluid frame,
@@ -136,7 +134,6 @@ void HLLE_SR(TeamMember_t const &member, const EOS_Data &eos,
 
     // We evolve tau = E - D
     flx(m,IEN,k,j,i) -= flx(m,IDN,k,j,i);
-
   });
 
   return;

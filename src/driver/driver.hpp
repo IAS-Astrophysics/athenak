@@ -14,6 +14,7 @@
 
 #include <ctime>
 #include <memory>
+#include <string>
 
 #include "parameter_input.hpp"
 #include "outputs/outputs.hpp"
@@ -52,6 +53,5 @@ class Driver {
   Kokkos::Timer run_time_;   // generalized timer for cpu/gpu/etc
   int nmb_updated_;         // running total of MB updated during run
   void OutputCycleDiagnostics(Mesh *pm);
-
 };
 #endif // DRIVER_DRIVER_HPP_

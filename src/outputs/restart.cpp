@@ -6,6 +6,8 @@
 //! \file restart.cpp
 //! \brief writes restart files
 
+#include <sys/stat.h>  // mkdir
+
 #include <algorithm>
 #include <cstdio>      // fwrite(), fclose(), fopen(), fnprintf(), snprintf()
 #include <cstdlib>
@@ -13,7 +15,6 @@
 #include <iostream>
 #include <sstream>
 #include <string>
-#include <sys/stat.h>  // mkdir
 
 #include "athena.hpp"
 #include "coordinates/cell_locations.hpp"
@@ -25,9 +26,8 @@
 //----------------------------------------------------------------------------------------
 // ctor: also calls OutputType base class constructor
 
-RestartOutput::RestartOutput(OutputParameters op, Mesh *pm)
-  : OutputType(op, pm)
-{
+RestartOutput::RestartOutput(OutputParameters op, Mesh *pm) :
+  OutputType(op, pm) {
   // create directories for outputs. Comments in binary.cpp constructor explain why
   mkdir("rst",0775);
 }
@@ -37,8 +37,7 @@ RestartOutput::RestartOutput(OutputParameters op, Mesh *pm)
 // overload of standard load data function specific to restarts.  Loads dependent
 // variables, including ghost zones.
 
-void RestartOutput::LoadOutputData(Mesh *pm)
-{ 
+void RestartOutput::LoadOutputData(Mesh *pm) {
   // get size of arrays, including ghost zones
   auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
   int nout1 = indcs.nx1 + 2*(indcs.ng);
@@ -50,11 +49,11 @@ void RestartOutput::LoadOutputData(Mesh *pm)
   hydro::Hydro* phydro = pm->pmb_pack->phydro;
   if (phydro != nullptr) {
     // resize host array to proper dimensions
-    int nvar = phydro->nhydro + phydro->nscalars; 
+    int nvar = phydro->nhydro + phydro->nscalars;
     Kokkos::realloc(outdata, nmb, nvar, nout3, nout2, nout1);
-  
+
     // Now copy data Hydro conserved variables to host, using device mirror
-//    DvceArray5D<Real>::HostMirror hst_data = Kokkos::create_mirror(u0_);
+    // DvceArray5D<Real>::HostMirror hst_data = Kokkos::create_mirror(u0_);
     Kokkos::deep_copy(outdata,phydro->u0);
   }
 }
@@ -63,8 +62,7 @@ void RestartOutput::LoadOutputData(Mesh *pm)
 //! \fn void RestartOutput:::WriteOutputFile(Mesh *pm)
 //  \brief Cycles over all MeshBlocks and writes everything to a single restart file
 
-void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
-{
+void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   // create filename: "rst/file_basename" + "." + XXXXX + ".rst"
   // where XXXXX = 5-digit file_number
   std::string fname;

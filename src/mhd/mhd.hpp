@@ -22,7 +22,7 @@ class Conduction;
 class SourceTerms;
 class Driver;
 
-// function ptr for user-defined MHD boundary functions enrolled in problem generator 
+// function ptr for user-defined MHD boundary functions enrolled in problem generator
 namespace mhd {
 using MHDBoundaryFnPtr = void (*)(int m, Mesh* pm, MHD* pmhd, DvceArray5D<Real> &u);
 }
@@ -36,8 +36,7 @@ enum class MHD_RSolver {advect, llf, hlle, hlld, roe,   // non-relativistic
 //! \struct MHDTaskIDs
 //  \brief container to hold TaskIDs of all mhd tasks
 
-struct MHDTaskIDs
-{
+struct MHDTaskIDs {
   TaskID irecv;
   TaskID copyu;
   TaskID flux;
@@ -65,9 +64,8 @@ namespace mhd {
 //----------------------------------------------------------------------------------------
 //! \class MHD
 
-class MHD
-{
-public:
+class MHD {
+ public:
   MHD(MeshBlockPack *ppack, ParameterInput *pin);
   ~MHD();
 
@@ -117,12 +115,12 @@ public:
   TaskStatus ClearRecv(Driver *d, int stage);
   TaskStatus ClearSend(Driver *d, int stage);
   TaskStatus CopyCons(Driver *d, int stage);
-  TaskStatus SendU(Driver *d, int stage); 
-  TaskStatus RecvU(Driver *d, int stage); 
-  TaskStatus SendE(Driver *d, int stage); 
-  TaskStatus RecvE(Driver *d, int stage); 
-  TaskStatus SendB(Driver *d, int stage); 
-  TaskStatus RecvB(Driver *d, int stage); 
+  TaskStatus SendU(Driver *d, int stage);
+  TaskStatus RecvU(Driver *d, int stage);
+  TaskStatus SendE(Driver *d, int stage);
+  TaskStatus RecvE(Driver *d, int stage);
+  TaskStatus SendB(Driver *d, int stage);
+  TaskStatus RecvB(Driver *d, int stage);
   TaskStatus SendFlux(Driver *d, int stage);
   TaskStatus RecvFlux(Driver *d, int stage);
   TaskStatus RestrictU(Driver *d, int stage);
@@ -138,7 +136,7 @@ public:
   template <MHD_RSolver T>
   TaskStatus CalcFluxes(Driver *d, int stage);
 
-private:
+ private:
   MeshBlockPack* pmy_pack;   // ptr to MeshBlockPack containing this MHD
   // temporary variables used to store face-centered electric fields returned by RS
   DvceArray4D<Real> e3x1, e2x1;

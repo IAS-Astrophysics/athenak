@@ -25,8 +25,9 @@
 // (PH) L. Peterson & G.W. Hammett, "Positivity preservation and advection algorithms
 // with application to edge plasma turbulence", SIAM J. Sci. Com, 35, B576 (2013)
 
-#include <algorithm>    // max()
 #include <math.h>
+
+#include <algorithm>    // max()
 
 #include "athena.hpp"
 
@@ -37,8 +38,7 @@
 
 KOKKOS_INLINE_FUNCTION
 void PPM(const Real &q_im2, const Real &q_im1, const Real &q_i, const Real &q_ip1,
-         const Real &q_ip2, Real &ql_ip1, Real &qr_i)
-{
+         const Real &q_ip2, Real &ql_ip1, Real &qr_i) {
   //---- Compute L/R values (CS eqns 12-15, PH 3.26 and 3.27) ----
   // qlv = q at left  side of cell-center = q[i-1/2] = a_{j,-} in CS
   // qrv = q at right side of cell-center = q[i+1/2] = a_{j,+} in CS
@@ -46,12 +46,12 @@ void PPM(const Real &q_im2, const Real &q_im1, const Real &q_i, const Real &q_ip
   Real qrv = (7.*(q_i + q_ip1) - (q_im1 + q_ip2))/12.0;
 
   //---- Apply CS monotonicity limiters to qrv and qlv ----
-  // approximate second derivatives at i-1/2 (PH 3.35) 
+  // approximate second derivatives at i-1/2 (PH 3.35)
   // KGF: add the off-center quantities first to preserve FP symmetry
   Real d2qc = 3.0*((q_im1 + q_i) - 2.0*qlv);
   Real d2ql = (q_im2 + q_i  ) - 2.0*q_im1;
-  Real d2qr = (q_im1 + q_ip1) - 2.0*q_i  ;
-    
+  Real d2qr = (q_im1 + q_ip1) - 2.0*q_i;
+
   // limit second derivative (PH 3.36)
   Real d2qlim = 0.0;
   Real lim_slope = fmin(fabs(d2ql),fabs(d2qr));
@@ -60,13 +60,13 @@ void PPM(const Real &q_im2, const Real &q_im1, const Real &q_i, const Real &q_ip
   }
   if (d2qc < 0.0 && d2ql < 0.0 && d2qr < 0.0) {
     d2qlim = SIGN(d2qc)*fmin(1.25*lim_slope,fabs(d2qc));
-  } 
+  }
   // compute limited value for qlv (PH 3.33 and 3.34)
   if (((q_im1 - qlv)*(q_i - qlv)) > 0.0) {
     qlv = 0.5*(q_i + q_im1) - d2qlim/6.0;
   }
 
-  // approximate second derivatives at i+1/2 (PH 3.35) 
+  // approximate second derivatives at i+1/2 (PH 3.35)
   // KGF: add the off-center quantities first to preserve FP symmetry
   d2qc = 3.0*((q_i + q_ip1) - 2.0*qrv);
   d2ql = d2qr;
@@ -143,12 +143,10 @@ void PPM(const Real &q_im2, const Real &q_im1, const Real &q_i, const Real &q_ip
 KOKKOS_INLINE_FUNCTION
 void PiecewiseParabolicX1(TeamMember_t const &member,const int m,const int k,const int j,
      const int il, const int iu, const DvceArray5D<Real> &q,
-     ScrArray2D<Real> &ql, ScrArray2D<Real> &qr)
-{
+     ScrArray2D<Real> &ql, ScrArray2D<Real> &qr) {
   int nvar = q.extent_int(1);
   for (int n=0; n<nvar; ++n) {
-    par_for_inner(member, il, iu, [&](const int i)
-    { 
+    par_for_inner(member, il, iu, [&](const int i) {
       PPM(q(m,n,k,j,i-2), q(m,n,k,j,i-1), q(m,n,k,j,i), q(m,n,k,j,i+1),
           q(m,n,k,j,i+2), ql(n,i+1), qr(n,i));
     });
@@ -164,12 +162,10 @@ void PiecewiseParabolicX1(TeamMember_t const &member,const int m,const int k,con
 KOKKOS_INLINE_FUNCTION
 void PiecewiseParabolicX2(TeamMember_t const &member,const int m,const int k,const int j,
      const int il, const int iu, const DvceArray5D<Real> &q,
-     ScrArray2D<Real> &ql_jp1, ScrArray2D<Real> &qr_j)
-{
+     ScrArray2D<Real> &ql_jp1, ScrArray2D<Real> &qr_j) {
   int nvar = q.extent_int(1);
   for (int n=0; n<nvar; ++n) {
-    par_for_inner(member, il, iu, [&](const int i)
-    { 
+    par_for_inner(member, il, iu, [&](const int i) {
       PPM(q(m,n,k,j-2,i), q(m,n,k,j-1,i), q(m,n,k,j,i), q(m,n,k,j+1,i),
           q(m,n,k,j+2,i), ql_jp1(n,i), qr_j(n,i));
     });
@@ -185,12 +181,10 @@ void PiecewiseParabolicX2(TeamMember_t const &member,const int m,const int k,con
 KOKKOS_INLINE_FUNCTION
 void PiecewiseParabolicX3(TeamMember_t const &member,const int m,const int k,const int j,
      const int il, const int iu, const DvceArray5D<Real> &q,
-     ScrArray2D<Real> &ql_kp1, ScrArray2D<Real> &qr_k)
-{
+     ScrArray2D<Real> &ql_kp1, ScrArray2D<Real> &qr_k) {
   int nvar = q.extent_int(1);
   for (int n=0; n<nvar; ++n) {
-    par_for_inner(member, il, iu, [&](const int i)
-    { 
+    par_for_inner(member, il, iu, [&](const int i) {
       PPM(q(m,n,k-2,j,i), q(m,n,k-1,j,i), q(m,n,k,j,i), q(m,n,k+1,j,i),
           q(m,n,k+2,j,i), ql_kp1(n,i), qr_k(n,i));
     });

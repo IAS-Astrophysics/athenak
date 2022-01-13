@@ -25,9 +25,8 @@
 //! relative to center of MeshBlock (0,0,0).  The arguments f1/2 are the coordinates
 //! of subblocks within faces/edges (only relevant with SMR/AMR)
 
-void BoundaryValuesCC::InitSendIndices(
-     BoundaryBuffer &buf, int ox1, int ox2, int ox3, int f1, int f2)
-{
+void BoundaryValuesCC::InitSendIndices(BoundaryBuffer &buf,
+                                       int ox1, int ox2, int ox3, int f1, int f2) {
   auto &mb_indcs  = pmy_pack->pmesh->mb_indcs;
   int ng  = mb_indcs.ng;
   int ng1 = ng - 1;
@@ -148,9 +147,8 @@ void BoundaryValuesCC::InitSendIndices(
 //! relative to center of MeshBlock (0,0,0).  The arguments f1/2 are the coordinates
 //! of subblocks within faces/edges (only relevant with SMR/AMR)
 
-void BoundaryValuesCC::InitRecvIndices(
-     BoundaryBuffer &buf, int ox1, int ox2, int ox3, int f1, int f2)
-{ 
+void BoundaryValuesCC::InitRecvIndices(BoundaryBuffer &buf,
+                                       int ox1, int ox2, int ox3, int f1, int f2) {
   auto &mb_indcs  = pmy_pack->pmesh->mb_indcs;
   int ng = mb_indcs.ng;
 
@@ -270,7 +268,7 @@ void BoundaryValuesCC::InitRecvIndices(
       if (ox1 != 0) {
         if (f1 == 1) {
           ifine.bjs += mb_indcs.cnx2;
-        } else { 
+        } else {
           ifine.bje -= mb_indcs.cnx2;
         }
       } else {
@@ -373,7 +371,8 @@ void BoundaryValuesCC::InitRecvIndices(
     iprol.bks = mb_indcs.cke + 1;      iprol.bke = mb_indcs.cke + cn;
   } else {
     iprol.bks = mb_indcs.cks - cn;     iprol.bke = mb_indcs.cks - 1;
-  }}
+  }
+  }
 
   // set indices for receives for flux-correction.  Similar to send, except data loaded
   // into appropriate sub-block of coarse buffer (similar to receive from FINER level)
@@ -437,5 +436,4 @@ void BoundaryValuesCC::InitRecvIndices(
   buf.iflux_ndat = (iflux.bie - iflux.bis + 1)*(iflux.bje - iflux.bjs + 1)*
                    (iflux.bke - iflux.bks + 1);
   }
-
 }

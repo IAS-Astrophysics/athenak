@@ -61,8 +61,7 @@ Real SlottedCylinderProfile(Real x1, Real x2) {
 //! \fn void MeshBlock::UserProblem(ParameterInput *pin)
 //  \brief Sets initial conditions for linear wave tests
 
-void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
-{
+void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin) {
   if (pmbp->phydro == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "Slotted cylinder test can only be run in Hydro, but no <hydro> block "
@@ -90,37 +89,35 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
   int &ks = indcs.ks; int &ke = indcs.ke;
   int &nscalars = pmbp->phydro->nscalars;
   int &nhydro = pmbp->phydro->nhydro;
-  auto &u0 = pmbp->phydro->u0; 
+  auto &u0 = pmbp->phydro->u0;
 
   // Set initial conditions
   par_for("pgen_slot_cyl", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i)
-    {
-      Real &x1min = size.d_view(m).x1min;
-      Real &x1max = size.d_view(m).x1max;
-      int nx1 = indcs.nx1;
-      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    Real &x1min = size.d_view(m).x1min;
+    Real &x1max = size.d_view(m).x1max;
+    int nx1 = indcs.nx1;
+    Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
-      Real &x2min = size.d_view(m).x2min;
-      Real &x2max = size.d_view(m).x2max;
-      int nx2 = mb_indcs.nx2;
-      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+    Real &x2min = size.d_view(m).x2min;
+    Real &x2max = size.d_view(m).x2max;
+    int nx2 = mb_indcs.nx2;
+    Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
-      // background fluid:
-      u0(m,IDN,k,j,i) = d0;
-      u0(m,IM1,k,j,i) = -d0*2.0*M_PI*omega*(x2v - omega_x2)*u0(m,IDN,k,j,i);
-      u0(m,IM2,k,j,i) = d0*2.0*M_PI*omega*(x1v - omega_x1)*u0(m,IDN,k,j,i);
-      u0(m,IM3,k,j,i) = 0.0;
+    // background fluid:
+    u0(m,IDN,k,j,i) = d0;
+    u0(m,IM1,k,j,i) = -d0*2.0*M_PI*omega*(x2v - omega_x2)*u0(m,IDN,k,j,i);
+    u0(m,IM2,k,j,i) = d0*2.0*M_PI*omega*(x1v - omega_x1)*u0(m,IDN,k,j,i);
+    u0(m,IM3,k,j,i) = 0.0;
 
-      // Use standard midpoint approximation with cell centered coords:
-      Real cell_ave = SlottedCylinderProfile(x1v, x2v);
+    // Use standard midpoint approximation with cell centered coords:
+    Real cell_ave = SlottedCylinderProfile(x1v, x2v);
 
-      // uniformly fill all scalars to have equal concentration
-      for (int n=nhydro; n<(nhydro+nscalars); ++n) {
-        u0(m,n,k,j,i) = cell_ave*d0;
-      }
+    // uniformly fill all scalars to have equal concentration
+    for (int n=nhydro; n<(nhydro+nscalars); ++n) {
+      u0(m,n,k,j,i) = cell_ave*d0;
     }
-  );
+  });
 
   return;
 }

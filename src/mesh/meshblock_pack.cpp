@@ -19,17 +19,17 @@
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
 #include "srcterms/turb_driver.hpp"
-#include "units/units.hpp" 
+#include "units/units.hpp"
+#include "meshblock_pack.hpp"
 
 //----------------------------------------------------------------------------------------
 // MeshBlockPack constructor:
 
-MeshBlockPack::MeshBlockPack(Mesh *pm, int igids, int igide)
-  : pmesh(pm),
-    gids(igids),
-    gide(igide),
-    nmb_thispack(igide - igids + 1)
-{
+MeshBlockPack::MeshBlockPack(Mesh *pm, int igids, int igide) :
+  pmesh(pm),
+  gids(igids),
+  gide(igide),
+  nmb_thispack(igide - igids + 1) {
 }
 
 //----------------------------------------------------------------------------------------
@@ -38,8 +38,7 @@ MeshBlockPack::MeshBlockPack(Mesh *pm, int igids, int igide)
 //----------------------------------------------------------------------------------------
 // MeshBlock destructor
 
-MeshBlockPack::~MeshBlockPack()
-{
+MeshBlockPack::~MeshBlockPack() {
   delete pmb;
   delete pcoord;
   if (phydro != nullptr) {delete phydro;}
@@ -51,8 +50,7 @@ MeshBlockPack::~MeshBlockPack()
 //----------------------------------------------------------------------------------------
 // \fn MeshBlockPack::AddMeshBlocksAndCoordinates()
 
-void MeshBlockPack::AddMeshBlocksAndCoordinates(ParameterInput *pin, RegionIndcs indcs)
-{
+void MeshBlockPack::AddMeshBlocksAndCoordinates(ParameterInput *pin, RegionIndcs indcs) {
   pmb = new MeshBlock(this, gids, nmb_thispack);
   pcoord = new Coordinates(this);
 }
@@ -62,8 +60,7 @@ void MeshBlockPack::AddMeshBlocksAndCoordinates(ParameterInput *pin, RegionIndcs
 // \brief construct physics modules and tasks lists in this MeshBlockPack, based on which
 // <blocks> are present in the input file.  Called from main().
 
-void MeshBlockPack::AddPhysics(ParameterInput *pin)
-{
+void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   int nphysics = 0;
   TaskID none(0);
 
@@ -73,7 +70,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin)
   if (pin->DoesBlockExist("hydro")) {
     phydro = new hydro::Hydro(this, pin);
     nphysics++;
-    if (not pin->DoesBlockExist("mhd")) {
+    if (!(pin->DoesBlockExist("mhd"))) {
       phydro->AssembleHydroTasks(start_tl, run_tl, end_tl);
     }
   } else {
@@ -83,9 +80,9 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin)
   // (2) MHD
   // Create MHD physics module.  Create TaskLists only for single-fluid MHD
   if (pin->DoesBlockExist("mhd")) {
-    pmhd = new mhd::MHD(this, pin);   
+    pmhd = new mhd::MHD(this, pin);
     nphysics++;
-    if (not pin->DoesBlockExist("hydro")) {
+    if (!(pin->DoesBlockExist("hydro"))) {
       pmhd->AssembleMHDTasks(start_tl, run_tl, end_tl);
     }
   } else {
@@ -97,7 +94,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin)
   // both defined as well.
   if (pin->DoesBlockExist("ion-neutral")) {
     pionn = new ion_neutral::IonNeutral(this, pin);   // construct new MHD object
-    if (pin->DoesBlockExist("hydro") and pin->DoesBlockExist("mhd")) {
+    if (pin->DoesBlockExist("hydro") && pin->DoesBlockExist("mhd")) {
       pionn->AssembleIonNeutralTasks(start_tl, run_tl, end_tl);
       nphysics++;
     } else {
@@ -108,7 +105,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin)
     }
   } else {
     // Error if both <hydro> and <mhd> defined, but not <ion-neutral>
-    if (pin->DoesBlockExist("hydro") and pin->DoesBlockExist("mhd")) {
+    if (pin->DoesBlockExist("hydro") && pin->DoesBlockExist("mhd")) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Both <hydro> and <mhd> blocks detected in input file, "
                 << "but <ion-neutral> block missing" << std::endl;

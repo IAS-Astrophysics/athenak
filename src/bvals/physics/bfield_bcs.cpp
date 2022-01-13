@@ -18,8 +18,7 @@
 //  are at the edge of the computational domain
 
 void BoundaryValues::BFieldBCs(MeshBlockPack *ppack, DvceArray2D<Real> b_in,
-                               DvceFaceFld4D<Real> b0)
-{
+                               DvceFaceFld4D<Real> b0) {
   // loop over all MeshBlocks in this MeshBlockPack
   auto &pm = ppack->pmesh;
   auto &indcs = ppack->pmesh->mb_indcs;

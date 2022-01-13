@@ -27,15 +27,13 @@ namespace hydro {
 KOKKOS_INLINE_FUNCTION
 void LLF_SR(TeamMember_t const &member, const EOS_Data &eos,
      const int m, const int k, const int j, const int il, const int iu, const int ivx,
-     const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr, DvceArray5D<Real> flx)
-{
+     const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr, DvceArray5D<Real> flx) {
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
   const Real gm1 = (eos.gamma - 1.0);
   const Real gamma_prime = eos.gamma/gm1;
 
-  par_for_inner(member, il, iu, [&](const int i)
-  {
+  par_for_inner(member, il, iu, [&](const int i) {
     //--- Step 1.  Create local references for L/R states (helps compiler vectorize)
     // Recall in SR the primitive variables are (\rho, u^i, P_g), where
     //  \rho is the mass density in the comoving/fluid frame,
@@ -58,7 +56,7 @@ void LLF_SR(TeamMember_t const &member, const EOS_Data &eos,
 
     Real u2l = SQR(wl_ivz) + SQR(wl_ivy) + SQR(wl_ivx);
     Real u2r = SQR(wr_ivz) + SQR(wr_ivy) + SQR(wr_ivx);
-    
+
     Real u0l  = sqrt(1. + u2l); // Lorentz factor in L-state
     Real u0r  = sqrt(1. + u2r); // Lorentz factor in R-state
 
@@ -76,7 +74,7 @@ void LLF_SR(TeamMember_t const &member, const EOS_Data &eos,
 
     Real qa = fmax(-fmin(lm_l,lm_r), 0.0);
     Real a = fmax(fmax(lp_l,lp_r), qa);
-    
+
     //--- Step 3.  Compute sum of L/R fluxes
 
     qa = wgas_l * wl_ivx;
@@ -89,9 +87,9 @@ void LLF_SR(TeamMember_t const &member, const EOS_Data &eos,
     fsum.mz = qa*wl_ivz + qb*wr_ivz;
     fsum.e  = qa*u0l + qb*u0r;
 
-//    Real el = wgas_l*u0l*u0l - wl_ipr - wl_idn*u0l;
-//    Real er = wgas_r*u0r*u0r - wr_ipr - wr_idn*u0r;
-//    fsum.e  = (er + wr_ipr)*wr_ivx/u0r + (el + wl_ipr)*wl_ivx/u0l;
+    // Real el = wgas_l*u0l*u0l - wl_ipr - wl_idn*u0l;
+    // Real er = wgas_r*u0r*u0r - wr_ipr - wr_idn*u0r;
+    // fsum.e  = (er + wr_ipr)*wr_ivx/u0r + (el + wl_ipr)*wl_ivx/u0l;
 
     //--- Step 4.  Compute difference dU = U_R - U_L multiplied by max wave speed
 
@@ -116,7 +114,6 @@ void LLF_SR(TeamMember_t const &member, const EOS_Data &eos,
 
     // We evolve tau = E - D
     flx(m,IEN,k,j,i) -= flx(m,IDN,k,j,i);
-
   });
   return;
 }

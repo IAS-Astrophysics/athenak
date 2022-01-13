@@ -28,12 +28,11 @@
 //! \struct InputLine
 //  \brief  node in a std::list of parameters contained within 1x input block
 
-struct InputLine
-{
+struct InputLine {
  public:
   InputLine(std::string name, std::string value, std::string comment)
     : param_name{name}, param_value{value}, param_comment{comment} {};
-  ~InputLine() {};
+  ~InputLine() {}
 
   std::string param_name;
   std::string param_value;   // value of the parameter is stored as a string!
@@ -44,11 +43,10 @@ struct InputLine
 //! \class InputBlock
 //  \brief node in a std::list of all input blocks contained within input file
 
-class InputBlock
-{
+class InputBlock {
  public:
-  InputBlock(std::string name) : block_name{name} {};
-  ~InputBlock() {};
+  explicit InputBlock(std::string name) : block_name{name} {};
+  ~InputBlock() {}
 
   // data
   std::string block_name;
@@ -65,8 +63,7 @@ class InputBlock
 //  \brief data and definitions of functions used to store and access input parameters
 //  Functions are implemented in parameter_input.cpp
 
-class ParameterInput
-{
+class ParameterInput {
  public:
   // constructor(s)/destructor
   ParameterInput();
@@ -123,6 +120,5 @@ class ParameterInput
 #endif
     return;
   }
-
 };
 #endif // PARAMETER_INPUT_HPP_

@@ -7,13 +7,14 @@
 //! \brief writes output data in binary format, which simply consists of each MeshBlock
 //! written contiguously in order of "gid" in binary format.
 
+#include <sys/stat.h>  // mkdir
+
 #include <cstdio>      // fwrite(), fclose(), fopen(), fnprintf(), snprintf()
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <string>
-#include <sys/stat.h>  // mkdir
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -24,12 +25,11 @@
 //----------------------------------------------------------------------------------------
 // ctor: also calls OutputType base class constructor
 
-BinaryOutput::BinaryOutput(OutputParameters op, Mesh *pm)
-  : OutputType(op, pm)
-{
+BinaryOutput::BinaryOutput(OutputParameters op, Mesh *pm) :
+  OutputType(op, pm) {
   // create directories for outputs
   // useful for mpiio-based outputs because on some supercomputers you may need to
-  // set different stripe counts depending on whether mpiio is used in order to 
+  // set different stripe counts depending on whether mpiio is used in order to
   // achieve the best performance and not to crash the filesystem
   mkdir("bin",0775);
 }
@@ -39,8 +39,7 @@ BinaryOutput::BinaryOutput(OutputParameters op, Mesh *pm)
 //  \brief Cycles over all MeshBlocks and writes OutputData in binary format
 //   All MeshBlocks are written to the same file.
 
-void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
-{
+void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   // create filename: "bin/file_basename" + "." + "file_id" + "." + XXXXX + ".bin"
   // where XXXXX = 5-digit file_number
   std::string fname;
@@ -98,8 +97,8 @@ void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin)
   int is = indcs.is; int &mb_nx1 = indcs.nx1;
   int js = indcs.js; int &mb_nx2 = indcs.nx2;
   int ks = indcs.ks; int &mb_nx3 = indcs.nx3;
-  int cells = mb_nx1*mb_nx2*mb_nx3; 
-  std::size_t data_size = 3*sizeof(int32_t) + (cells*nout_vars)*sizeof(float); 
+  int cells = mb_nx1*mb_nx2*mb_nx3;
+  std::size_t data_size = 3*sizeof(int32_t) + (cells*nout_vars)*sizeof(float);
 
   int nout_mbs = (outmbs.size());
   int ns_mbs = pm->gidslist[global_variable::my_rank];

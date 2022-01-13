@@ -22,8 +22,7 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
      const int m, const int k, const int j,  const int il, const int iu, const int ivx,
      const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr,
      const ScrArray2D<Real> &bl, const ScrArray2D<Real> &br, const DvceArray4D<Real> &bx,
-     const DvceArray5D<Real> flx, DvceArray4D<Real> ey, DvceArray4D<Real> ez)
-{
+     const DvceArray5D<Real> flx, DvceArray4D<Real> ey, DvceArray4D<Real> ez) {
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
   int iby = ((ivx-IVX) + 1)%3;
@@ -34,9 +33,7 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
   if (eos.is_ideal) {
     Real gm1 = eos.gamma - 1.0;
     Real igm1 = 1.0/gm1;
-    par_for_inner(member, il, iu, [&](const int i)
-    {
-
+    par_for_inner(member, il, iu, [&](const int i) {
       //--- Step 1.  Create local references for L/R states (helps compiler vectorize)
 
       Real &wl_idn=wl(IDN,i);
@@ -349,18 +346,16 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
       flx(m,ivx,k,j,i) = flxi.mx;
       flx(m,ivy,k,j,i) = flxi.my;
       flx(m,ivz,k,j,i) = flxi.mz;
-      flx(m,IEN,k,j,i) = flxi.e ;
+      flx(m,IEN,k,j,i) = flxi.e;
       ey(m,k,j,i) = -flxi.by;
       ez(m,k,j,i) =  flxi.bz;
     });
 
   //------------------------- ISOTHERMAL HLLD solver -------------------------------------
   } else {
-
     auto &dfloor_ = eos.density_floor;
     Real iso_cs = eos.iso_cs;
-    par_for_inner(member, il, iu, [&](const int i)
-    {
+    par_for_inner(member, il, iu, [&](const int i) {
       //--- Step 1.  Load L/R states into local variables
 
       Real &wl_idn=wl(IDN,i);
@@ -548,14 +543,13 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
         flxi.bz = ucst.bz*ustar - bxi*ucst.mz/ucst.d;
       }
 
-      flx(m,IDN,k,j,i) = flxi.d ;
+      flx(m,IDN,k,j,i) = flxi.d;
       flx(m,ivx,k,j,i) = flxi.mx;
       flx(m,ivy,k,j,i) = flxi.my;
       flx(m,ivz,k,j,i) = flxi.mz;
       ey(m,k,j,i) = -flxi.by;
       ez(m,k,j,i) =  flxi.bz;
     });
-
   } // end ideal gas/isothermal solvers
 
   return;

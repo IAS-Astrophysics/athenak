@@ -17,12 +17,10 @@
 KOKKOS_INLINE_FUNCTION
 void DonorCellX1(TeamMember_t const &member, const int m, const int k, const int j,
      const int il, const int iu, const DvceArray5D<Real> &q,
-     ScrArray2D<Real> &ql, ScrArray2D<Real> &qr)
-{
+     ScrArray2D<Real> &ql, ScrArray2D<Real> &qr) {
   int nvar = q.extent_int(1);
   for (int n=0; n<nvar; ++n) {
-    par_for_inner(member, il, iu, [&](const int i)
-    {
+    par_for_inner(member, il, iu, [&](const int i) {
       ql(n,i+1) = q(m,n,k,j,i);
       qr(n,i  ) = q(m,n,k,j,i);
     });
@@ -38,12 +36,10 @@ void DonorCellX1(TeamMember_t const &member, const int m, const int k, const int
 KOKKOS_INLINE_FUNCTION
 void DonorCellX2(TeamMember_t const &member, const int m, const int k, const int j,
      const int il, const int iu, const DvceArray5D<Real> &q,
-     ScrArray2D<Real> &ql_jp1, ScrArray2D<Real> &qr_j)
-{
+     ScrArray2D<Real> &ql_jp1, ScrArray2D<Real> &qr_j) {
   int nvar = q.extent_int(1);
   for (int n=0; n<nvar; ++n) {
-    par_for_inner(member, il, iu, [&](const int i)
-    {
+    par_for_inner(member, il, iu, [&](const int i) {
       ql_jp1(n,i) = q(m,n,k,j,i);
       qr_j  (n,i) = q(m,n,k,j,i);
     });
@@ -59,12 +55,10 @@ void DonorCellX2(TeamMember_t const &member, const int m, const int k, const int
 KOKKOS_INLINE_FUNCTION
 void DonorCellX3(TeamMember_t const &member, const int m, const int k, const int j,
      const int il, const int iu, const DvceArray5D<Real> &q,
-     ScrArray2D<Real> &ql_kp1, ScrArray2D<Real> &qr_k)
-{
+     ScrArray2D<Real> &ql_kp1, ScrArray2D<Real> &qr_k) {
   int nvar = q.extent_int(1);
   for (int n=0; n<nvar; ++n) {
-    par_for_inner(member, il, iu, [&](const int i)
-    {
+    par_for_inner(member, il, iu, [&](const int i) {
       ql_kp1(n,i) = q(m,n,k,j,i);
       qr_k  (n,i) = q(m,n,k,j,i);
     });

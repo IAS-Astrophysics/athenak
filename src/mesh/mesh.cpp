@@ -6,8 +6,10 @@
 //! \file mesh.cpp
 //  \brief implementation of constructor and functions in Mesh class
 
-#include <iostream>
+#include <algorithm>
 #include <cinttypes>
+#include <iostream>
+#include <limits>
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -31,16 +33,15 @@
 // function, so that they can store a pointer to the Mesh which can be reliably referenced
 // only after the Mesh constructor has finished
 
-Mesh::Mesh(ParameterInput *pin)
-  : one_d(false), 
-    two_d(false),
-    three_d(false),
-    multi_d(false),
-    shearing_periodic(false),
-    strictly_periodic(true),
-    lb_flag_(false), lb_automatic_(false),
-    lb_cyc_interval_(10),cyc_since_lb_(0)
-{
+Mesh::Mesh(ParameterInput *pin) :
+  one_d(false),
+  two_d(false),
+  three_d(false),
+  multi_d(false),
+  shearing_periodic(false),
+  strictly_periodic(true),
+  lb_flag_(false), lb_automatic_(false),
+  lb_cyc_interval_(10),cyc_since_lb_(0) {
   // Set physical size and number of cells in mesh (root level)
   mesh_size.x1min = pin->GetReal("mesh", "x1min");
   mesh_size.x1max = pin->GetReal("mesh", "x1max");
@@ -126,7 +127,7 @@ Mesh::Mesh(ParameterInput *pin)
 
   // set boolean flags indicating type of refinement (if any), and whether mesh is
   // periodic, depending on input strings
-  adaptive = 
+  adaptive =
     (pin->GetOrAddString("mesh", "refinement", "none") == "adaptive") ? true : false;
   multilevel =
     ((adaptive) || (pin->GetString("mesh", "refinement") == "static")) ?  true : false;
@@ -166,7 +167,7 @@ Mesh::Mesh(ParameterInput *pin)
   }
   if (mesh_indcs.nx2 == 1 && mesh_indcs.nx3 > 1) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "In <mesh> block in input file: nx2=1, nx3=" << mesh_indcs.nx3 
+        << "In <mesh> block in input file: nx2=1, nx3=" << mesh_indcs.nx3
         << ", but 2D problems in x1-x3 plane not supported" << std::endl;
     std::exit(EXIT_FAILURE);
   }
@@ -277,14 +278,12 @@ Mesh::Mesh(ParameterInput *pin)
     mb_indcs.ke   = 0;
     mb_indcs.cke  = 0;
   }
-
 }
 
 //----------------------------------------------------------------------------------------
 // destructor
 
-Mesh::~Mesh()
-{
+Mesh::~Mesh() {
   delete [] costlist;
   delete [] ranklist;
   delete [] lloclist;
@@ -307,21 +306,20 @@ Mesh::~Mesh()
 //  \brief prints information about mesh structure, always called at start of every
 //  calculation at end of BuildTree
 
-void Mesh::PrintMeshDiagnostics()
-{
+void Mesh::PrintMeshDiagnostics() {
   std::cout << std::endl;
   std::cout <<"Root grid = "<< nmb_rootx1 <<" x "<< nmb_rootx2 <<" x "<< nmb_rootx3
             <<" MeshBlocks"<< std::endl;
   std::cout <<"Total number of MeshBlocks = " << nmb_total << std::endl;
   std::cout <<"Number of logical  levels of refinement = "<< max_level
             <<" (" << (max_level + 1) << " levels total)" << std::endl;
-  std::cout <<"Number of physical levels of refinement = "<< (max_level - root_level) 
+  std::cout <<"Number of physical levels of refinement = "<< (max_level - root_level)
             <<" (" << (max_level - root_level + 1) << " levels total)" << std::endl;
 
   // if more than one physical level: compute/output # of blocks and cost per level
   if ((max_level - root_level) > 1) {
-    int nb_per_plevel[max_level];
-    float cost_per_plevel[max_level];
+    int nb_per_plevel[max_level];      // NOLINT(runtime/arrays)
+    float cost_per_plevel[max_level];  // NOLINT(runtime/arrays)
     for (int i=0; i<=max_level; ++i) {
       nb_per_plevel[i] = 0;
       cost_per_plevel[i] = 0.0;
@@ -342,8 +340,8 @@ void Mesh::PrintMeshDiagnostics()
   std::cout << "Number of parallel ranks = " << global_variable::nranks << std::endl;
   // if more than one rank: compute/output # of blocks and cost per rank
   if (global_variable::nranks > 1) {
-    int nb_per_rank[global_variable::nranks];
-    int cost_per_rank[global_variable::nranks];
+    int nb_per_rank[global_variable::nranks];    // NOLINT(runtime/arrays)
+    int cost_per_rank[global_variable::nranks];  // NOLINT(runtime/arrays)
     for (int i=0; i<global_variable::nranks; ++i) {
       nb_per_rank[i] = 0;
       cost_per_rank[i] = 0;
@@ -365,7 +363,7 @@ void Mesh::PrintMeshDiagnostics()
     // output normalized costs per rank
     std::cout << "Load Balancing:" << std::endl;
     std::cout << "  Maximum normalized cost = "
-      << static_cast<float>(maxcost)/static_cast<float>(mincost) << ", Average = " 
+      << static_cast<float>(maxcost)/static_cast<float>(mincost) << ", Average = "
       << static_cast<float>(totalcost)/static_cast<float>(global_variable::nranks*mincost)
       << std::endl;
   }
@@ -375,10 +373,9 @@ void Mesh::PrintMeshDiagnostics()
 //! \fn void Mesh::WriteMeshStructure(int ndim)
 //  \brief writes file containing MeshBlock positions and sizes that can be used to create
 //  plots using 'plot_mesh.py' script.  Only works for 2D/3D data.  Called from main if
-//  '-m' option is given on command line. 
+//  '-m' option is given on command line.
 
-void Mesh::WriteMeshStructure()
-{
+void Mesh::WriteMeshStructure() {
   if (one_d) {
     std::cout << "WARNING in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "Mesh only 1D, so no 'mesh_structure.dat' file produced" << std::endl;
@@ -387,63 +384,64 @@ void Mesh::WriteMeshStructure()
 
   FILE *fp = nullptr;
   if ((fp = std::fopen("mesh_structure.dat","wb")) == nullptr) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ 
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
         << std::endl << "Cannot open 'mesh_structure.dat' file for output" << std::endl;
     std::exit(EXIT_FAILURE);
   }
 
   for (int i=root_level; i<=max_level; i++) {
-  for (int j=0; j<nmb_total; j++) {
-    if (lloclist[j].level == i) {
-      MeshBlock block(this->pmb_pack, j, 1);
-      std::int32_t &lx1 = lloclist[j].lx1;
-      std::int32_t &lx2 = lloclist[j].lx2;
-      std::int32_t &lx3 = lloclist[j].lx3;
-      std::fprintf(fp,"#MeshBlock %d on rank=%d with cost=%g\n", j, ranklist[j],
-                   costlist[j]);
-      std::fprintf(
-          fp,"#  Logical level %d, location = (%" PRId32 " %" PRId32 " %" PRId32")\n",
-          lloclist[j].level, lx1, lx2, lx3);
-      if (two_d) { // 2D
-        Real &x1min = block.mb_size.h_view(0).x1min;
-        Real &x1max = block.mb_size.h_view(0).x1max;
-        Real &x2min = block.mb_size.h_view(0).x2min;
-        Real &x2max = block.mb_size.h_view(0).x2max;
-        std::fprintf(fp,"%g %g\n", x1min, x2min);
-        std::fprintf(fp,"%g %g\n", x1max, x2min);
-        std::fprintf(fp,"%g %g\n", x1max, x2max);
-        std::fprintf(fp,"%g %g\n", x1min, x2max);
-        std::fprintf(fp,"%g %g\n", x1min, x2min);
-        std::fprintf(fp,"\n\n");
-      }
-      if (three_d) { // 3D
-        Real &x1min = block.mb_size.h_view(0).x1min;
-        Real &x1max = block.mb_size.h_view(0).x1max;
-        Real &x2min = block.mb_size.h_view(0).x2min;
-        Real &x2max = block.mb_size.h_view(0).x2max;
-        Real &x3min = block.mb_size.h_view(0).x3min;
-        Real &x3max = block.mb_size.h_view(0).x3max;
-        std::fprintf(fp,"%g %g %g\n", x1min, x2min, x3min);
-        std::fprintf(fp,"%g %g %g\n", x1max, x2min, x3min);
-        std::fprintf(fp,"%g %g %g\n", x1max, x2max, x3min);
-        std::fprintf(fp,"%g %g %g\n", x1min, x2max, x3min);
-        std::fprintf(fp,"%g %g %g\n", x1min, x2min, x3min);
-        std::fprintf(fp,"%g %g %g\n", x1min, x2min, x3max);
-        std::fprintf(fp,"%g %g %g\n", x1max, x2min, x3max);
-        std::fprintf(fp,"%g %g %g\n", x1max, x2min, x3min);
-        std::fprintf(fp,"%g %g %g\n", x1max, x2min, x3max);
-        std::fprintf(fp,"%g %g %g\n", x1max, x2max, x3max);
-        std::fprintf(fp,"%g %g %g\n", x1max, x2max, x3min);
-        std::fprintf(fp,"%g %g %g\n", x1max, x2max, x3max);
-        std::fprintf(fp,"%g %g %g\n", x1min, x2max, x3max);
-        std::fprintf(fp,"%g %g %g\n", x1min, x2max, x3min);
-        std::fprintf(fp,"%g %g %g\n", x1min, x2max, x3max);
-        std::fprintf(fp,"%g %g %g\n", x1min, x2min, x3max);
-        std::fprintf(fp,"%g %g %g\n", x1min, x2min, x3min);
-        std::fprintf(fp, "\n\n");
+    for (int j=0; j<nmb_total; j++) {
+      if (lloclist[j].level == i) {
+        MeshBlock block(this->pmb_pack, j, 1);
+        std::int32_t &lx1 = lloclist[j].lx1;
+        std::int32_t &lx2 = lloclist[j].lx2;
+        std::int32_t &lx3 = lloclist[j].lx3;
+        std::fprintf(fp,"#MeshBlock %d on rank=%d with cost=%g\n", j, ranklist[j],
+                     costlist[j]);
+        std::fprintf(
+            fp,"#  Logical level %d, location = (%" PRId32 " %" PRId32 " %" PRId32")\n",
+            lloclist[j].level, lx1, lx2, lx3);
+        if (two_d) { // 2D
+          Real &x1min = block.mb_size.h_view(0).x1min;
+          Real &x1max = block.mb_size.h_view(0).x1max;
+          Real &x2min = block.mb_size.h_view(0).x2min;
+          Real &x2max = block.mb_size.h_view(0).x2max;
+          std::fprintf(fp,"%g %g\n", x1min, x2min);
+          std::fprintf(fp,"%g %g\n", x1max, x2min);
+          std::fprintf(fp,"%g %g\n", x1max, x2max);
+          std::fprintf(fp,"%g %g\n", x1min, x2max);
+          std::fprintf(fp,"%g %g\n", x1min, x2min);
+          std::fprintf(fp,"\n\n");
+        }
+        if (three_d) { // 3D
+          Real &x1min = block.mb_size.h_view(0).x1min;
+          Real &x1max = block.mb_size.h_view(0).x1max;
+          Real &x2min = block.mb_size.h_view(0).x2min;
+          Real &x2max = block.mb_size.h_view(0).x2max;
+          Real &x3min = block.mb_size.h_view(0).x3min;
+          Real &x3max = block.mb_size.h_view(0).x3max;
+          std::fprintf(fp,"%g %g %g\n", x1min, x2min, x3min);
+          std::fprintf(fp,"%g %g %g\n", x1max, x2min, x3min);
+          std::fprintf(fp,"%g %g %g\n", x1max, x2max, x3min);
+          std::fprintf(fp,"%g %g %g\n", x1min, x2max, x3min);
+          std::fprintf(fp,"%g %g %g\n", x1min, x2min, x3min);
+          std::fprintf(fp,"%g %g %g\n", x1min, x2min, x3max);
+          std::fprintf(fp,"%g %g %g\n", x1max, x2min, x3max);
+          std::fprintf(fp,"%g %g %g\n", x1max, x2min, x3min);
+          std::fprintf(fp,"%g %g %g\n", x1max, x2min, x3max);
+          std::fprintf(fp,"%g %g %g\n", x1max, x2max, x3max);
+          std::fprintf(fp,"%g %g %g\n", x1max, x2max, x3min);
+          std::fprintf(fp,"%g %g %g\n", x1max, x2max, x3max);
+          std::fprintf(fp,"%g %g %g\n", x1min, x2max, x3max);
+          std::fprintf(fp,"%g %g %g\n", x1min, x2max, x3min);
+          std::fprintf(fp,"%g %g %g\n", x1min, x2max, x3max);
+          std::fprintf(fp,"%g %g %g\n", x1min, x2min, x3max);
+          std::fprintf(fp,"%g %g %g\n", x1min, x2min, x3min);
+          std::fprintf(fp, "\n\n");
+        }
       }
     }
-  }}
+  }
   std::fclose(fp);
   std::cout << "See the 'mesh_structure.dat' file for MeshBlock data" << std::endl;
   std::cout << "Use 'plot_mesh.py' script to visualize data" << std::endl << std::endl;
@@ -456,8 +454,7 @@ void Mesh::WriteMeshStructure()
 //  \brief Parses input string to return scoped enumerator flag specifying boundary
 //  condition. Typically called in Mesh() ctor and in pgen/*.cpp files.
 
-BoundaryFlag Mesh::GetBoundaryFlag(const std::string& input_string) 
-{
+BoundaryFlag Mesh::GetBoundaryFlag(const std::string& input_string) {
   if (input_string == "reflect") {
     return BoundaryFlag::reflect;
   } else if (input_string == "outflow") {
@@ -486,8 +483,7 @@ BoundaryFlag Mesh::GetBoundaryFlag(const std::string& input_string)
 //  string describing the boundary condition. Typicall used to format descriptive errors
 //  or diagnostics. Inverse of GetBoundaryFlag().
 
-std::string Mesh::GetBoundaryString(BoundaryFlag input_flag)
-{
+std::string Mesh::GetBoundaryString(BoundaryFlag input_flag) {
   switch (input_flag) {
     case BoundaryFlag::block:  // 0
       return "block";
@@ -517,8 +513,7 @@ std::string Mesh::GetBoundaryString(BoundaryFlag input_flag)
 //----------------------------------------------------------------------------------------
 // \fn Mesh::NewTimeStep()
 
-void Mesh::NewTimeStep(const Real tlim)
-{
+void Mesh::NewTimeStep(const Real tlim) {
   // cycle over all MeshBlocks on this rank and find minimum dt
   // Requires at least ONE of the physics modules to be defined.
   // limit increase in timestep to 2x old value

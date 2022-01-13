@@ -14,8 +14,6 @@
 //! - ifield = 1 - Bz=B0 sin(x1) field with zero-net-flux [default]
 //! - ifield = 2 - uniform Bz
 
-#include <Kokkos_Random.hpp>
-
 // C++ headers
 #include <cmath>      // sqrt()
 #include <iostream>   // cout, endl
@@ -34,12 +32,13 @@
 #include "srcterms/srcterms.hpp"
 #include "pgen.hpp"
 
+#include <Kokkos_Random.hpp>
+
 //----------------------------------------------------------------------------------------
 //! \fn ProblemGenerator::_()
 //  \brief
 
-void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
-{
+void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin) {
   if (pmbp->pmesh->three_d) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "mri2d problem generator only works in 2D (nx3=1)" << std::endl;
@@ -81,37 +80,35 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
                 << "Shearing box source terms not enabled for mri2d problem" << std::endl;
       exit(EXIT_FAILURE);
     }
-    // Initialize magnetic field first, so entire arrays are initialized before adding 
+    // Initialize magnetic field first, so entire arrays are initialized before adding
     // magnetic energy to conserved variables in next loop.  For 2D shearing box
     // B1=Bx, B2=Bz, B3=By
     // ifield = 1 - Bz=B0 sin(kx*xav1) field with zero-net-flux [default]
     // ifield = 2 - uniform Bz
     auto b0 = pmbp->pmhd->b0;
     par_for("mri2d-b", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
-      KOKKOS_LAMBDA(int m, int k, int j, int i)
-      {
-        Real &x1min = size.d_view(m).x1min;
-        Real &x1max = size.d_view(m).x1max;
-        int nx1 = indcs.nx1;
-        Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      int nx1 = indcs.nx1;
+      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
-        if (ifield == 1) {
-          b0.x1f(m,k,j,i) = 0.0;
-          b0.x2f(m,k,j,i) = B0*sin(kx*x1v);
-          b0.x3f(m,k,j,i) = 0.0;
-          if (i==ie) b0.x1f(m,k,j,ie+1) = 0.0;
-          if (j==je) b0.x2f(m,k,je+1,i) = B0*sin(kx*x1v);
-          if (k==ke) b0.x3f(m,ke+1,j,i) = 0.0;
-        } else if (ifield == 2) {
-          b0.x1f(m,k,j,i) = 0.0;
-          b0.x2f(m,k,j,i) = B0;
-          b0.x3f(m,k,j,i) = 0.0;
-          if (i==ie) b0.x1f(m,k,j,ie+1) = 0.0;
-          if (j==je) b0.x2f(m,k,je+1,i) = B0;
-          if (k==ke) b0.x3f(m,ke+1,j,i) = 0.0;
-        }
+      if (ifield == 1) {
+        b0.x1f(m,k,j,i) = 0.0;
+        b0.x2f(m,k,j,i) = B0*sin(kx*x1v);
+        b0.x3f(m,k,j,i) = 0.0;
+        if (i==ie) b0.x1f(m,k,j,ie+1) = 0.0;
+        if (j==je) b0.x2f(m,k,je+1,i) = B0*sin(kx*x1v);
+        if (k==ke) b0.x3f(m,ke+1,j,i) = 0.0;
+      } else if (ifield == 2) {
+        b0.x1f(m,k,j,i) = 0.0;
+        b0.x2f(m,k,j,i) = B0;
+        b0.x3f(m,k,j,i) = 0.0;
+        if (i==ie) b0.x1f(m,k,j,ie+1) = 0.0;
+        if (j==je) b0.x2f(m,k,je+1,i) = B0;
+        if (k==ke) b0.x3f(m,ke+1,j,i) = 0.0;
       }
-    );
+    });
   }
 
 
@@ -136,15 +133,13 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
     Real gm1 = eos.gamma - 1.0;
     auto u0 = pmbp->phydro->u0;
     par_for("mri2d-u", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
-      KOKKOS_LAMBDA(int m, int k, int j, int i)
-      {
-        u0(m,IDN,k,j,i) = d0;
-        u0(m,IM1,k,j,i) = d0*amp;
-        u0(m,IM2,k,j,i) = 0.0;
-        u0(m,IM3,k,j,i) = 0.0;
-        if (eos.is_ideal) { u0(m,IEN,k,j,i) = p0/gm1 + 0.5*d0*amp*amp; }
-      }
-    );
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      u0(m,IDN,k,j,i) = d0;
+      u0(m,IM1,k,j,i) = d0*amp;
+      u0(m,IM2,k,j,i) = 0.0;
+      u0(m,IM3,k,j,i) = 0.0;
+      if (eos.is_ideal) { u0(m,IEN,k,j,i) = p0/gm1 + 0.5*d0*amp*amp; }
+    });
   }
 
   // Initialize conserved variables in MHD
@@ -158,27 +153,25 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin)
     auto u0 = pmbp->pmhd->u0;
     Kokkos::Random_XorShift64_Pool<> rand_pool64(pmbp->gids);
     par_for("mri2d-u", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
-      KOKKOS_LAMBDA(int m, int k, int j, int i)
-      {
-        Real rd = d0;
-        Real rp = p0;
-        auto rand_gen = rand_pool64.get_state();  // get random number state this thread
-        Real rval = 1.0 + amp*(rand_gen.frand() - 0.5);
-        if (eos.is_ideal) {
-          rp = rval*p0;
-        } else {
-          rd = rval*d0;
-        }
-        u0(m,IDN,k,j,i) = rd;
-        u0(m,IM1,k,j,i) = 0.0;
-        u0(m,IM2,k,j,i) = 0.0;
-        u0(m,IM3,k,j,i) = 0.0;
-        if (eos.is_ideal) {
-          u0(m,IEN,k,j,i) = rp/gm1 + 0.5*SQR(0.5*(b0.x2f(m,k,j,i) + b0.x2f(m,k,j+1,i)));
-        }
-        rand_pool64.free_state(rand_gen);  // free state for use by other threads
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real rd = d0;
+      Real rp = p0;
+      auto rand_gen = rand_pool64.get_state();  // get random number state this thread
+      Real rval = 1.0 + amp*(rand_gen.frand() - 0.5);
+      if (eos.is_ideal) {
+        rp = rval*p0;
+      } else {
+        rd = rval*d0;
       }
-    );
+      u0(m,IDN,k,j,i) = rd;
+      u0(m,IM1,k,j,i) = 0.0;
+      u0(m,IM2,k,j,i) = 0.0;
+      u0(m,IM3,k,j,i) = 0.0;
+      if (eos.is_ideal) {
+        u0(m,IEN,k,j,i) = rp/gm1 + 0.5*SQR(0.5*(b0.x2f(m,k,j,i) + b0.x2f(m,k,j+1,i)));
+      }
+      rand_pool64.free_state(rand_gen);  // free state for use by other threads
+    });
   }
 
   return;

@@ -1,5 +1,5 @@
-#ifndef UNITS_HPP_
-#define UNITS_HPP_
+#ifndef UNITS_UNITS_HPP_
+#define UNITS_UNITS_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
@@ -21,9 +21,9 @@ namespace units {
 
 class Units {
  public:
-  Units(ParameterInput *pin);
+  explicit Units(ParameterInput *pin);
   ~Units();
-  
+
   // data
   // CGS unit per X
   static constexpr Real cm_cgs = 1.0;                           // cm
@@ -39,7 +39,7 @@ class Units {
   static constexpr Real km_s_cgs = 1.0e5;                       // cm/s
   static constexpr Real g_cm3_cgs = 1.0;                        // g/cm^3
   static constexpr Real erg_cgs = 1.0;                          // erg
-  static constexpr Real dyne_cm2_cgs = 1.0;                     // dyne/cm^2  
+  static constexpr Real dyne_cm2_cgs = 1.0;                     // dyne/cm^2
   static constexpr Real kelvin_cgs = 1.0;                       // k
 
   // PHYSICAL CONSTANTS
@@ -49,7 +49,7 @@ class Units {
   // (Multiply code units to get quantities in cgs units)
   // (cgs unit per code unit)
   const Real length_cgs_, mass_cgs_, time_cgs_;
-  
+
   // mean molecular weight
   const Real mu_;
 
@@ -92,4 +92,4 @@ class Units {
 
 } // namespace units
 
-#endif // UNITS_HPP_
+#endif // UNITS_UNITS_HPP_

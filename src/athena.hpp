@@ -8,6 +8,8 @@
 //! \file athena.hpp
 //  \brief contains Athena++ general purpose types, structures, enums, etc.
 
+#include <string>
+
 #include <Kokkos_Core.hpp>
 #include <Kokkos_DualView.hpp>
 #include "config.hpp"
@@ -131,7 +133,7 @@ using ScrArray2D = Kokkos::View<T **, LayoutWrapper, ScratchMemSpace,
 //----------------------------------------------------------------------------------------
 // struct for storing face-centered (area-averaged) variables, e.g. magnetic field
 //                 ___________
-//                 |x3f[k+1,j,i] 
+//                 |x3f[k+1,j,i]
 //                 | \    X    \
 //                 |  \_________\
 //          x1f[k,j,i] |         |
@@ -195,15 +197,13 @@ struct DvceEdgeFld4D {
 template <typename Function>
 inline void par_for(const std::string &name, DevExeSpace exec_space,
                     const int &jl, const int &ju,
-                    const int &il, const int &iu, const Function &function)
-{
+                    const int &il, const int &iu, const Function &function) {
   // compute total number of elements and call Kokkos::parallel_for()
   const int nj = ju - jl + 1;
   const int ni = iu - il + 1;
   const int nji  = nj * ni;
   Kokkos::parallel_for(name, Kokkos::RangePolicy<>(exec_space, 0, nji),
-                       KOKKOS_LAMBDA(const int &idx)
-  {
+  KOKKOS_LAMBDA(const int &idx) {
     // compute j,i indices of thread and call function
     int j = (idx)/ni;
     int i = (idx - j*ni) + il;
@@ -217,8 +217,7 @@ inline void par_for(const std::string &name, DevExeSpace exec_space,
 template <typename Function>
 inline void par_for(const std::string &name, DevExeSpace exec_space,
                     const int &kl, const int &ku, const int &jl, const int &ju,
-                    const int &il, const int &iu, const Function &function)
-{ 
+                    const int &il, const int &iu, const Function &function) {
   // compute total number of elements and call Kokkos::parallel_for()
   const int nk = ku - kl + 1;
   const int nj = ju - jl + 1;
@@ -226,8 +225,7 @@ inline void par_for(const std::string &name, DevExeSpace exec_space,
   const int nkji = nk * nj * ni;
   const int nji  = nj * ni;
   Kokkos::parallel_for(name, Kokkos::RangePolicy<>(exec_space, 0, nkji),
-                       KOKKOS_LAMBDA(const int &idx)
-  { 
+  KOKKOS_LAMBDA(const int &idx) {
     // compute k,j,i indices of thread and call function
     int k = (idx)/nji;
     int j = (idx - k*nji)/ni;
@@ -254,8 +252,7 @@ inline void par_for(const std::string &name, DevExeSpace exec_space,
   const int nkji  = nk * nj * ni;
   const int nji   = nj * ni;
   Kokkos::parallel_for(name, Kokkos::RangePolicy<>(exec_space, 0, nnkji),
-                       KOKKOS_LAMBDA(const int &idx)
-  {
+  KOKKOS_LAMBDA(const int &idx) {
     // compute n,k,j,i indices of thread and call function
     int n = (idx)/nkji;
     int k = (idx - n*nkji)/nji;
@@ -287,8 +284,7 @@ inline void par_for(const std::string &name, DevExeSpace exec_space,
   const int nkji   = nk * nj * ni;
   const int nji    = nj * ni;
   Kokkos::parallel_for(name, Kokkos::RangePolicy<>(exec_space, 0, nmnkji),
-                       KOKKOS_LAMBDA(const int &idx)
-  {
+  KOKKOS_LAMBDA(const int &idx) {
     // compute m,n,k,j,i indices of thread and call function
     int m = (idx)/nnkji;
     int n = (idx - m*nnkji)/nkji;
@@ -308,13 +304,11 @@ inline void par_for(const std::string &name, DevExeSpace exec_space,
 template <typename Function>
 inline void par_for_outer(const std::string &name, DevExeSpace exec_space,
                           size_t scr_size, const int scr_level,
-                          const int kl, const int ku, const Function &function)
-{
+                          const int kl, const int ku, const Function &function) {
   const int nk = ku - kl + 1;
   Kokkos::TeamPolicy<> policy(exec_space, nk, Kokkos::AUTO);
   Kokkos::parallel_for(name, policy.set_scratch_size(scr_level,Kokkos::PerTeam(scr_size)),
-                       KOKKOS_LAMBDA(TeamMember_t tmember)
-  {
+  KOKKOS_LAMBDA(TeamMember_t tmember) {
     const int k = tmember.league_rank() + kl;
     function(tmember, k);
   });
@@ -326,15 +320,13 @@ template <typename Function>
 inline void par_for_outer(const std::string &name, DevExeSpace exec_space,
                           size_t scr_size, const int scr_level,
                           const int kl, const int ku, const int jl, const int ju,
-                          const Function &function)
-{ 
+                          const Function &function) {
   const int nk = ku - kl + 1;
   const int nj = ju - jl + 1;
   const int nkj = nk*nj;
   Kokkos::TeamPolicy<> policy(exec_space, nkj, Kokkos::AUTO);
   Kokkos::parallel_for(name, policy.set_scratch_size(scr_level,Kokkos::PerTeam(scr_size)),
-                       KOKKOS_LAMBDA(TeamMember_t tmember)
-  { 
+  KOKKOS_LAMBDA(TeamMember_t tmember) {
     const int k = tmember.league_rank()/nj + kl;
     const int j = tmember.league_rank()%nj + jl;
     function(tmember, k, j);
@@ -347,8 +339,7 @@ template <typename Function>
 inline void par_for_outer(const std::string &name, DevExeSpace exec_space,
                           size_t scr_size, const int scr_level,
                           const int nl, const int nu, const int kl, const int ku,
-                          const int jl, const int ju, const Function &function)
-{
+                          const int jl, const int ju, const Function &function) {
   const int nn = nu - nl + 1;
   const int nk = ku - kl + 1;
   const int nj = ju - jl + 1;
@@ -356,8 +347,7 @@ inline void par_for_outer(const std::string &name, DevExeSpace exec_space,
   const int nnkj = nn*nk*nj;
   Kokkos::TeamPolicy<> policy(exec_space, nnkj, Kokkos::AUTO);
   Kokkos::parallel_for(name, policy.set_scratch_size(scr_level,Kokkos::PerTeam(scr_size)),
-                       KOKKOS_LAMBDA(TeamMember_t tmember)
-  {
+  KOKKOS_LAMBDA(TeamMember_t tmember) {
     int n = (tmember.league_rank())/nkj;
     int k = (tmember.league_rank() - n*nkj)/nj;
     int j = (tmember.league_rank() - n*nkj - k*nj) + jl;
@@ -371,10 +361,10 @@ inline void par_for_outer(const std::string &name, DevExeSpace exec_space,
 // 4D outer parallel loop using Kokkos Teams
 template <typename Function>
 inline void par_for_outer(const std::string &name, DevExeSpace exec_space,
-                          size_t scr_size, const int scr_level, const int ml, const int mu,
+                          size_t scr_size, const int scr_level,
+                          const int ml, const int mu,
                           const int nl, const int nu, const int kl, const int ku,
-                          const int jl, const int ju, const Function &function)
-{
+                          const int jl, const int ju, const Function &function) {
   const int nm = mu - ml + 1;
   const int nn = nu - nl + 1;
   const int nk = ku - kl + 1;
@@ -384,8 +374,7 @@ inline void par_for_outer(const std::string &name, DevExeSpace exec_space,
   const int nmnkj = nm*nn*nk*nj;
   Kokkos::TeamPolicy<> policy(exec_space, nmnkj, Kokkos::AUTO);
   Kokkos::parallel_for(name, policy.set_scratch_size(scr_level,Kokkos::PerTeam(scr_size)),
-                       KOKKOS_LAMBDA(TeamMember_t tmember)
-  {
+  KOKKOS_LAMBDA(TeamMember_t tmember) {
     int m = (tmember.league_rank())/nnkj;
     int n = (tmember.league_rank() - m*nnkj)/nkj;
     int k = (tmember.league_rank() - m*nnkj - n*nkj)/nj;
@@ -401,8 +390,7 @@ inline void par_for_outer(const std::string &name, DevExeSpace exec_space,
 // 1D inner parallel loop using TeamVectorRange
 template <typename Function>
 KOKKOS_INLINE_FUNCTION void par_for_inner(TeamMember_t tmember, const int il,const int iu,
-                                          const Function &function)
-{
+                                          const Function &function) {
   // Note Kokkos::TeamVectorRange only iterates from ibegin to iend-1, so must pass iu+1
   Kokkos::parallel_for(Kokkos::TeamVectorRange(tmember, il, iu+1), function);
 }
@@ -414,45 +402,45 @@ KOKKOS_INLINE_FUNCTION void par_for_inner(TeamMember_t tmember, const int il,con
 // an arbitrary number (set by the compile time constant NREDUCTION_VARIABLES above) of
 // sum reductions to be computed simultaneously.  Used for history outputs, etc.
 
-namespace array_sum {  // namespace helps with name resolution in reduction identity 
-  template< class ScalarType, int N >
-  struct array_type {
-    ScalarType the_array[N];
+namespace array_sum {  // namespace helps with name resolution in reduction identity
+template< class ScalarType, int N >
+struct array_type {
+  ScalarType the_array[N];
+  KOKKOS_INLINE_FUNCTION   // Default constructor - Initialize to 0's
+  array_type() {
+    for (int i = 0; i < N; i++ ) { the_array[i] = 0; }
+  }
+  KOKKOS_INLINE_FUNCTION   // Copy Constructor
+  array_type(const array_type & rhs) {
+    for (int i = 0; i < N; i++ ) {
+      the_array[i] = rhs.the_array[i];
+    }
+  }
+  KOKKOS_INLINE_FUNCTION   // add operator
+  array_type& operator += (const array_type& src) {
+    for ( int i = 0; i < N; i++ ) {
+       the_array[i]+=src.the_array[i];
+    }
+    return *this;
+  }
+  KOKKOS_INLINE_FUNCTION   // volatile add operator
+  void operator += (const volatile array_type& src) volatile {
+    for ( int i = 0; i < N; i++ ) {
+      the_array[i]+=src.the_array[i];
+    }
+  }
+};
+// Number of reductions templated by (NHISTORY_VARIABLES)
+typedef array_type<Real,(NREDUCTION_VARIABLES)> GlobalSum;  // simplifies code below
+} // namespace array_sum
 
-    KOKKOS_INLINE_FUNCTION   // Default constructor - Initialize to 0's
-    array_type() {
-      for (int i = 0; i < N; i++ ) { the_array[i] = 0; }
-    }
-    KOKKOS_INLINE_FUNCTION   // Copy Constructor
-    array_type(const array_type & rhs) {
-       for (int i = 0; i < N; i++ ){
-          the_array[i] = rhs.the_array[i];
-       }
-    }
-    KOKKOS_INLINE_FUNCTION   // add operator
-    array_type& operator += (const array_type& src) {
-      for ( int i = 0; i < N; i++ ) {
-         the_array[i]+=src.the_array[i];
-      }
-      return *this;
-    }
-    KOKKOS_INLINE_FUNCTION   // volatile add operator 
-    void operator += (const volatile array_type& src) volatile {
-      for ( int i = 0; i < N; i++ ) {
-        the_array[i]+=src.the_array[i];
-      }
-    }
-  };
-  // Number of reductions templated by (NHISTORY_VARIABLES)
-  typedef array_type<Real,(NREDUCTION_VARIABLES)> GlobalSum;  // simplifies code below
-}
 namespace Kokkos { //reduction identity must be defined in Kokkos namespace
-  template<>
-  struct reduction_identity< array_sum::GlobalSum > {
-    KOKKOS_FORCEINLINE_FUNCTION static array_sum::GlobalSum sum() {
-      return array_sum::GlobalSum();
-    }
-  };
+template<>
+struct reduction_identity< array_sum::GlobalSum > {
+  KOKKOS_FORCEINLINE_FUNCTION static array_sum::GlobalSum sum() {
+    return array_sum::GlobalSum();
+  }
+};
 }
 
 #endif // ATHENA_HPP_

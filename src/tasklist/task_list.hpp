@@ -86,8 +86,8 @@ class TaskID {
 
 class Task {
  public:
-  Task(TaskID id, TaskID dep, std::function<TaskStatus(Driver*, int)> func)
-      : myid_(id), dep_(dep), func_(func) {}
+  Task(TaskID id, TaskID dep, std::function<TaskStatus(Driver*, int)> func) :
+  myid_(id), dep_(dep), func_(func) {}
   // overloaded operator() calls task function
   TaskStatus operator()(Driver *d, int s) {return func_(d,s);}
   TaskID GetID() {return myid_;}
@@ -103,10 +103,9 @@ class Task {
  private:
   TaskID myid_;    // encodes task ID in bitfld_
   TaskID dep_;     // encodes dependencies to other tasks in bitfld_
-//  bool lb_time_;   // flag to include this task in timing for automatic load balancing
+  // bool lb_time_;   // flag to include this task in timing for automatic load balancing
   bool complete_ = false;
   std::function<TaskStatus(Driver*, int)> func_;  // ptr to Task function
-
 };
 
 //----------------------------------------------------------------------------------------
@@ -134,7 +133,7 @@ class TaskList {
   TaskID GetIDLastTask() {return task_list_.back().GetID();}
   // output diagnostics (useful for debugging)
   void PrintIDs() { for (auto &it : task_list_) {it.GetID().PrintID();} }
-  void PrintDependencies() {for (auto &it : task_list_) {it.GetDependency().PrintID();}}
+  void PrintDependencies() { for (auto &it : task_list_) {it.GetDependency().PrintID();} }
 
   //
   void Reset() {
@@ -149,8 +148,8 @@ class TaskList {
       if ( tasks_completed_.CheckDependencies(dep) && !(task.IsComplete()) ) {
         TaskStatus status = task(d,s);  // calls Task function using overloaded operator()
         if (status == TaskStatus::complete) {
-          task.SetComplete();              // set bool flag in task 
-          MarkTaskComplete(task.GetID());  // add TaskID to tasks_completed_ 
+          task.SetComplete();              // set bool flag in task
+          MarkTaskComplete(task.GetID());  // add TaskID to tasks_completed_
         }
       }
     }

@@ -20,8 +20,7 @@ void LLF_SR(TeamMember_t const &member, const EOS_Data &eos,
      const int m, const int k, const int j,  const int il, const int iu, const int ivx,
      const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr,
      const ScrArray2D<Real> &bl, const ScrArray2D<Real> &br, const DvceArray4D<Real> &bx,
-     const DvceArray5D<Real> flx, DvceArray4D<Real> ey, DvceArray4D<Real> ez)
-{
+     const DvceArray5D<Real> flx, DvceArray4D<Real> ey, DvceArray4D<Real> ez) {
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
   int iby = ((ivx-IVX) + 1)%3;
@@ -29,8 +28,7 @@ void LLF_SR(TeamMember_t const &member, const EOS_Data &eos,
   const Real gm1 = (eos.gamma - 1.0);
   const Real gamma_prime = eos.gamma/gm1;
 
-  par_for_inner(member, il, iu, [&](const int i)
-  {
+  par_for_inner(member, il, iu, [&](const int i) {
     // Extract left primitives
     Real rho_l = wl(IDN,i);
     Real ux_l = wl(ivx,i);
