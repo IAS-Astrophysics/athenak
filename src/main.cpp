@@ -1,23 +1,23 @@
 //========================================================================================
-// AthenaXXX astrophysical plasma code
+// Athena astrophysical MHD code (Kokkos version)
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-/////////////////////////////////// AthenaXXX Main Program ///////////////////////////////
+//////////////////////////////////// Athena Main Program /////////////////////////////////
 //! \file main.cpp
-//  \brief AthenaXXX main program
+//  \brief Athena main program
 //
 // Based on the Athena (Cambridge version) and Athena++ MHD codes. Athena was originally
 // written in 2002-2005 by Jim Stone, Tom Gardiner, and Peter Teuben, with many important
 // contributions by many other developers after that, i.e. 2005-2014.
 //
 // Athena++ was started in Jan 2014.  The core design was finished during 4-7/2014 at the
-// KITP by Jim Stone.  GR was implemented by Chris White and AMR by Kengo Tomida during
+// KITP by J. Stone.  GR was implemented by Chris White and AMR by Kengo Tomida during
 // 2014-2016.  Contributions from many others have continued to the present.
 //
-// AthenaXXX is an outgrowth of the Athena-Parthenon collaboration, and is a completely
-// new implementation based on the Kokkos performance-portability library (an external
-// module for this version of the code, required to run on GPUs)
+// The Athena (Kokkos version) is an outgrowth of the Athena-Parthenon collaboration, and
+// is a completely new implementation based on the Kokkos performance-portability library
+// (an external dependency required for this version of the code).
 //========================================================================================
 
 // C/C++ headers
@@ -50,10 +50,10 @@
 
 int main(int argc, char *argv[]) {
   std::string input_file, restart_file, run_dir;
-  int  res_flag = 0;  // set to 1 if -r        argument is on cmdline
-  int narg_flag = 0;  // set to 1 if -n        argument is on cmdline
-  int marg_flag = 0;  // set to 1 if -m        argument is on cmdline
-  int iarg_flag = 0;  // set to 1 if -i <file> argument is on cmdline
+  bool  res_flag = false;  // set to true if -r        argument is on cmdline
+  bool narg_flag = false;  // set to true if -n        argument is on cmdline
+  bool marg_flag = false;  // set to true if -m        argument is on cmdline
+  bool iarg_flag = false;  // set to true if -i <file> argument is on cmdline
 
   //--- Step 1. --------------------------------------------------------------------------
   // Initialize environment (must initialize MPI first, then Kokkos)
@@ -118,8 +118,8 @@ int main(int argc, char *argv[]) {
         case 'n':
           break;
         default:
-          if ((i+1 >= argc) // flag is at the end of the command line options
-              || (*argv[i+1] == '-') ) { // flag is followed by another flag
+          if ((i+1 >= argc) // no argument after option
+              || (*argv[i+1] == '-') ) { // option is followed by another option
             if (global_variable::my_rank == 0) {
               std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                         << std::endl << "-" << opt_letter
@@ -137,20 +137,20 @@ int main(int argc, char *argv[]) {
       switch(*(argv[i]+1)) {
         case 'i':                      // -i <input_file>
           input_file.assign(argv[++i]);
-          iarg_flag = 1;
+          iarg_flag = true;
           break;
         case 'r':                      // -r <restart_file>
-          res_flag = 1;
+          res_flag = true;
           restart_file.assign(argv[++i]);
           break;
         case 'd':                      // -d <run_directory>
           run_dir.assign(argv[++i]);
           break;
         case 'n':
-          narg_flag = 1;
+          narg_flag = true;
           break;
         case 'm':
-          marg_flag = 1;
+          marg_flag = true;
           break;
         case 'c':
           if (global_variable::my_rank == 0) ShowConfig();
@@ -206,13 +206,13 @@ int main(int argc, char *argv[]) {
   ParameterInput* pinput = new ParameterInput;
   IOWrapper infile, restartfile;
   // read parameters from restart file
-  if (res_flag == 1) {
+  if (res_flag) {
     restartfile.Open(restart_file.c_str(), IOWrapper::FileMode::read);
     pinput->LoadFromFile(restartfile);
   }
   // read parameters from input file.  If both -r and -i are specified, this will
   // override parameters from the restart file
-  if (iarg_flag == 1) {
+  if (iarg_flag) {
     infile.Open(input_file.c_str(), IOWrapper::FileMode::read);
     pinput->LoadFromFile(infile);
     infile.Close();
@@ -222,7 +222,7 @@ int main(int argc, char *argv[]) {
   // Dump input parameters and quit if code was run with -n option.
   if (narg_flag) {
     if (global_variable::my_rank == 0) pinput->ParameterDump(std::cout);
-    if (res_flag == 1) restartfile.Close();
+    if (res_flag) restartfile.Close();
     delete pinput;
     Kokkos::finalize();
 #if MPI_PARALLEL_ENABLED
@@ -237,7 +237,7 @@ int main(int argc, char *argv[]) {
   // pointer to Mesh.
 
   Mesh* pmesh = new Mesh(pinput);
-  if (res_flag == 0) {
+  if (!res_flag) {
     pmesh->BuildTreeFromScratch(pinput);
   } else {
     pmesh->BuildTreeFromRestart(pinput, restartfile);
@@ -246,7 +246,7 @@ int main(int argc, char *argv[]) {
   //  If code was run with -m option, write mesh structure to file and quit.
   if (marg_flag) {
     if (global_variable::my_rank == 0) {pmesh->WriteMeshStructure();}
-    if (res_flag == 1) {restartfile.Close();}
+    if (res_flag) {restartfile.Close();}
     delete pmesh;
     delete pinput;
     Kokkos::finalize();
@@ -262,7 +262,7 @@ int main(int argc, char *argv[]) {
   // (including MeshBlocks and MeshBlockPack) is fully constructed.
 
   pmesh->pmb_pack->AddPhysics(pinput);
-  if (res_flag == 0) {
+  if (!res_flag) {
     // set ICs using ProblemGenerator constructor for new runs
     pmesh->pgen = std::make_unique<ProblemGenerator>(pinput, pmesh);
   } else {
