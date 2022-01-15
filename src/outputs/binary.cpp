@@ -23,10 +23,10 @@
 #include "outputs.hpp"
 
 //----------------------------------------------------------------------------------------
-// ctor: also calls OutputType base class constructor
+// ctor: also calls BaseTypeOutput base class constructor
 
 BinaryOutput::BinaryOutput(OutputParameters op, Mesh *pm) :
-  OutputType(op, pm) {
+  BaseTypeOutput(op, pm) {
   // create directories for outputs
   // useful for mpiio-based outputs because on some supercomputers you may need to
   // set different stripe counts depending on whether mpiio is used in order to
@@ -137,7 +137,7 @@ void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
       for (int k=oks; k<=oke; k++) {
         for (int j=ojs; j<=oje; j++) {
           for (int i=ois; i<=oie; i++) {
-            tmp_data = static_cast<float>(outdata(n,m,k-oks,j-ojs,i-ois));
+            tmp_data = static_cast<float>(outarray(n,m,k-oks,j-ojs,i-ois));
             single_data[cnt] = tmp_data;
             cnt++;
           }

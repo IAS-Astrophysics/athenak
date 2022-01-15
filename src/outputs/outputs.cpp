@@ -31,10 +31,10 @@
 //!   slice_x3    = 0.0       # slice at x3
 //!
 //! Each <output[n]> block will result in a new node being created in a linked list of
-//! OutputType stored in the Outputs class.  During a simulation, outputs are made when
-//! the simulation time satisfies the criteria implemented in the Driver class.
+//! BaseTypeOutput stored in the Outputs class.  During a simulation, outputs are made
+//! when the simulation time satisfies the criteria implemented in the Driver class.
 //!
-//! To implement a new output type, write a new OutputType derived class, and construct
+//! To implement a new output type, write a new BaseTypeOutput derived class and construct
 //! an object of this class in the Outputs constructor at the location indicated by the
 //! comment text: 'NEW_OUTPUT_TYPES'.
 //========================================================================================
@@ -57,7 +57,7 @@
 
 Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
   // loop over input block names.  Find those that start with "output", read parameters,
-  // and add to linked list of OutputTypes.
+  // and add to linked list of BaseTypeOutputs.
 
   int num_hst=0, num_rst=0; // count # of hst and rst outputs (should only be one each)
   for (auto it = pin->block.begin(); it != pin->block.end(); ++it) {
@@ -156,9 +156,9 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
       opar.data_format = pin->GetOrAddString(opar.block_name, "data_format", "%12.5e");
       opar.data_format.insert(0, " "); // prepend with blank to separate columns
 
-      // Construct new OutputType according to file format
+      // Construct new BaseTypeOutput according to file format
       // NEW_OUTPUT_TYPES: Add block to construct new types here
-      OutputType *pnode;
+      BaseTypeOutput *pnode;
       if (opar.file_type.compare("tab") == 0) {
         pnode = new FormattedTableOutput(opar,pm);
         pout_list.insert(pout_list.begin(),pnode);
@@ -173,7 +173,7 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
         pnode = new BinaryOutput(opar,pm);
         pout_list.insert(pout_list.begin(),pnode);
       } else if (opar.file_type.compare("rst") == 0) {
-      // Add restarts to the tail end of the OutputType list, so file counters for other
+      // Add restarts to the tail end of BaseTypeOutput list, so file counters for other
       // output types are up-to-date in restart file
         pnode = new RestartOutput(opar,pm);
         pout_list.push_back(pnode);
@@ -197,7 +197,7 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
 }
 
 //----------------------------------------------------------------------------------------
-// destructor - iterates through singly linked list of OutputTypes and deletes nodes
+// destructor - iterates through singly linked list of BaseTypeOutputs and deletes nodes
 
 Outputs::~Outputs() {
 }

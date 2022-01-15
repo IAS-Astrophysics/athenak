@@ -5,7 +5,7 @@
 //========================================================================================
 //////////////////////////////////// Athena Main Program /////////////////////////////////
 //! \file main.cpp
-//  \brief Athena main program
+//! \brief Athena main program
 //
 // Based on the Athena (Cambridge version) and Athena++ MHD codes. Athena was originally
 // written in 2002-2005 by Jim Stone, Tom Gardiner, and Peter Teuben, with many important
@@ -17,7 +17,9 @@
 //
 // The Athena (Kokkos version) is an outgrowth of the Athena-Parthenon collaboration, and
 // is a completely new implementation based on the Kokkos performance-portability library
-// (an external dependency required for this version of the code).
+// (an external dependency required for this version of the code). In order to keep this
+// version small and manageable, only a fraction of the features of the C++ version are
+// implemented.
 //========================================================================================
 
 // C/C++ headers

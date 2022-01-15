@@ -3,8 +3,8 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file output_type.cpp
-//  \brief implements base class OutputType constructor, and LoadOutputData functions
+//! \file basetype_output.cpp
+//  \brief implements BaseTypeOutput constructor, and LoadOutputData functions
 //
 
 #include <cstdio>
@@ -28,11 +28,14 @@
 #include "outputs.hpp"
 
 //----------------------------------------------------------------------------------------
-// OutputType base class constructor
+// BaseTypeOutput base class constructor
 // Creates vector of output variable data
 
-OutputType::OutputType(OutputParameters opar, Mesh *pm) :
-  out_params(opar) {
+BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
+    outarray("cc_outvar",1,1,1,1,1),
+    outfield("fc_outvar",1,1,1,1),
+    out_params(opar) {
+
   // exit for history files
   if (out_params.file_type.compare("hst") == 0) {return;}
 
@@ -302,11 +305,11 @@ OutputType::OutputType(OutputParameters opar, Mesh *pm) :
 }
 
 //----------------------------------------------------------------------------------------
-// OutputType::LoadOutputData()
+// BaseTypeOutput::LoadOutputData()
 // create std::vector of HostArray3Ds containing data specified in <output> block for
 // this output type
 
-void OutputType::LoadOutputData(Mesh *pm) {
+void BaseTypeOutput::LoadOutputData(Mesh *pm) {
   // out_data_ vector (indexed over # of output MBs) stores 4D array of variables
   // so start iteration over number of MeshBlocks
   // TODO(@user): get this working for multiple physics, which may be either defined/undef
@@ -388,7 +391,7 @@ void OutputType::LoadOutputData(Mesh *pm) {
     int nout1 = (outmbs[0].oie - outmbs[0].ois + 1);
     int nout2 = (outmbs[0].oje - outmbs[0].ojs + 1);
     int nout3 = (outmbs[0].oke - outmbs[0].oks + 1);
-    Kokkos::realloc(outdata, nout_vars, nout_mbs, nout3, nout2, nout1);
+    Kokkos::realloc(outarray, nout_vars, nout_mbs, nout3, nout2, nout1);
   }
 
   // Now load data over all variables and MeshBlocks
@@ -411,18 +414,18 @@ void OutputType::LoadOutputData(Mesh *pm) {
       // copy to host mirror array, and then to 5D host View containing all variables
       DvceArray3D<Real>::HostMirror hst_buff = Kokkos::create_mirror(dev_buff);
       Kokkos::deep_copy(hst_buff,dev_buff);
-      auto hst_slice = Kokkos::subview(outdata,n,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+      auto hst_slice = Kokkos::subview(outarray,n,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
       Kokkos::deep_copy(hst_slice,hst_buff);
     }
   }
 }
 
 //----------------------------------------------------------------------------------------
-// OutputType::ErrHydroOutput()
+// BaseTypeOutput::ErrHydroOutput()
 // Print error message when output of Hydro variable requested but Hydro object not
 // constructed, and then quit
 
-void OutputType::ErrHydroOutput(std::string block) {
+void BaseTypeOutput::ErrHydroOutput(std::string block) {
   std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
             << "Output of Hydro variable requested in <output> block '" << block
             << "' but no Hydro object " << std::endl << "has been constructed."
@@ -431,11 +434,11 @@ void OutputType::ErrHydroOutput(std::string block) {
 }
 
 //----------------------------------------------------------------------------------------
-// OutputType::ErrMHDOutput()
+// BaseTypeOutput::ErrMHDOutput()
 // Print error message when output of MHD variable requested but MHD object not
 // constructed, and then quit
 
-void OutputType::ErrMHDOutput(std::string block) {
+void BaseTypeOutput::ErrMHDOutput(std::string block) {
   std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
             << "Output of MHD variable requested in <output> block '" << block
             << "' but no MHD object " << std::endl << "has been constructed."
@@ -444,11 +447,11 @@ void OutputType::ErrMHDOutput(std::string block) {
 }
 
 //----------------------------------------------------------------------------------------
-// OutputType::ErrForceOutput()
+// BaseTypeOutput::ErrForceOutput()
 // Print error message when output of Force variable requested but Force object not
 // constructed, and then quit
 
-void OutputType::ErrForceOutput(std::string block) {
+void BaseTypeOutput::ErrForceOutput(std::string block) {
   std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
             << "Output of Force variable requested in <output> block '" << block
             << "' but no Force object " << std::endl << "has been constructed."

@@ -95,18 +95,18 @@ struct HistoryData {
 
 //----------------------------------------------------------------------------------------
 // \brief abstract base class for different output types (modes/formats); node in
-//        std::list of OutputType created & stored in the Outputs class
+//        std::list of BaseTypeOutput created & stored in the Outputs class
 
-class OutputType {
+class BaseTypeOutput {
  public:
-  OutputType(OutputParameters oparams, Mesh *pm);
-  virtual ~OutputType() = default;
+  BaseTypeOutput(OutputParameters oparams, Mesh *pm);
+  virtual ~BaseTypeOutput() = default;
   // copy constructor and assignment operator
-  OutputType(const OutputType& copy_other) = default;
-  OutputType& operator=(const OutputType& copy_other) = default;
+  BaseTypeOutput(const BaseTypeOutput& copy_other) = default;
+  BaseTypeOutput& operator=(const BaseTypeOutput& copy_other) = default;
   // move constructor and assignment operator
-  OutputType(OutputType&&) = default;
-  OutputType& operator=(OutputType&&) = default;
+  BaseTypeOutput(BaseTypeOutput&&) = default;
+  BaseTypeOutput& operator=(BaseTypeOutput&&) = default;
 
   // data
   OutputParameters out_params;    // data read from <output> block for this type
@@ -119,7 +119,8 @@ class OutputType {
   void ErrForceOutput(std::string block);
 
  protected:
-  HostArray5D<Real> outdata;  // container for data on host with dims (n,m,k,j,i)
+  HostArray5D<Real>   outarray;  // CC output data on host with dims (n,m,k,j,i)
+  HostFaceFld4D<Real> outfield;  // FC output field on host
   int noutmbs_min;            // with MPI, minimum number of output MBs across all ranks
   int noutmbs_max;            // with MPI, maximum number of output MBs across all ranks
 
@@ -133,9 +134,9 @@ class OutputType {
 
 //----------------------------------------------------------------------------------------
 //! \class FormattedTableOutput
-//  \brief derived OutputType class for formatted table (tabular) data
+//  \brief derived BaseTypeOutput class for formatted table (tabular) data
 
-class FormattedTableOutput : public OutputType {
+class FormattedTableOutput : public BaseTypeOutput {
  public:
   FormattedTableOutput(OutputParameters oparams, Mesh *pm);
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
@@ -143,9 +144,9 @@ class FormattedTableOutput : public OutputType {
 
 //----------------------------------------------------------------------------------------
 //! \class HistoryOutput
-//  \brief derived OutputType class for history data
+//  \brief derived BaseTypeOutput class for history data
 
-class HistoryOutput : public OutputType {
+class HistoryOutput : public BaseTypeOutput {
  public:
   HistoryOutput(OutputParameters oparams, Mesh *pm);
 
@@ -160,9 +161,9 @@ class HistoryOutput : public OutputType {
 
 //----------------------------------------------------------------------------------------
 //! \class VTKOutput
-//  \brief derived OutputType class for vtk binary data (VTK legacy format)
+//  \brief derived BaseTypeOutput class for vtk binary data (VTK legacy format)
 
-class VTKOutput : public OutputType {
+class VTKOutput : public BaseTypeOutput {
  public:
   VTKOutput(OutputParameters oparams, Mesh *pm);
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
@@ -170,9 +171,9 @@ class VTKOutput : public OutputType {
 
 //----------------------------------------------------------------------------------------
 //! \class BinaryOutput
-//  \brief derived OutputType class for binary grid data (nbf format in pegasus++)
+//  \brief derived BaseTypeOutput class for binary grid data (nbf format in pegasus++)
 
-class BinaryOutput : public OutputType {
+class BinaryOutput : public BaseTypeOutput {
  public:
   BinaryOutput(OutputParameters oparams, Mesh *pm);
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
@@ -180,9 +181,9 @@ class BinaryOutput : public OutputType {
 
 //----------------------------------------------------------------------------------------
 //! \class RestartOutput
-//  \brief derived OutputType class for restarts
+//  \brief derived BaseTypeOutput class for restarts
 
-class RestartOutput : public OutputType {
+class RestartOutput : public BaseTypeOutput {
  public:
   RestartOutput(OutputParameters oparams, Mesh *pm);
   void LoadOutputData(Mesh *pm) override;
@@ -191,7 +192,7 @@ class RestartOutput : public OutputType {
 
 //----------------------------------------------------------------------------------------
 //! \class Outputs
-//  \brief root class for all Athena++ outputs. Provides a std::vector of OutputTypes,
+//  \brief root class for all Athena++ outputs. Provides a std::vector of BaseTypeOutputs,
 //   with each element representing one mode/format of output to be made.
 
 class Outputs {
@@ -199,8 +200,8 @@ class Outputs {
   Outputs(ParameterInput *pin, Mesh *pm);
   ~Outputs();
 
-  // use vector of pointers to OutputTypes since it is an abstract base class
-  std::vector<OutputType*> pout_list;
+  // use vector of pointers to BaseTypeOutputs since it is an abstract base class
+  std::vector<BaseTypeOutput*> pout_list;
 };
 
 #endif // OUTPUTS_OUTPUTS_HPP_

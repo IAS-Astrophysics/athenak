@@ -162,6 +162,16 @@ struct DvceFaceFld5D {
   ~DvceFaceFld5D() = default;
 };
 
+template <typename T>
+struct HostFaceFld4D {
+  HostArray4D<T> x1f, x2f, x3f;  // name indicates both direction and location
+  HostFaceFld4D(const std::string &label, int nmb, int n3, int n2, int n1) :
+    x1f(label + ".x1f", nmb, n3, n2, n1+1),
+    x2f(label + ".x2f", nmb, n3, n2+1, n1),
+    x3f(label + ".x3f", nmb, n3+1, n2, n1) {}
+  ~HostFaceFld4D() = default;
+};
+
 //----------------------------------------------------------------------------------------
 // struct for storing edge-centered (line-averaged) variables, e.g. EMF
 //             _____________

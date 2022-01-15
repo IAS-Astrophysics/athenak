@@ -65,7 +65,7 @@ add_executable(
 
         outputs/io_wrapper.cpp
         outputs/outputs.cpp
-        outputs/output_type.cpp
+        outputs/basetype_output.cpp
         outputs/binary.cpp
         outputs/formatted_table.cpp
         outputs/history.cpp
