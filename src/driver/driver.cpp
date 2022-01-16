@@ -209,8 +209,6 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
     (void) phydro->ClearRecv(this, -1);
     (void) phydro->RecvU(this, 0);
     (void) phydro->ApplyPhysicalBCs(this, 0);
-
-    // Set primitive variables in initial conditions everywhere
     (void) phydro->ConToPrim(this, 0);
   }
 
@@ -218,7 +216,6 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
   // Note this requires communicating BOTH u and B
   mhd::MHD *pmhd = pmesh->pmb_pack->pmhd;
   if (pmhd != nullptr) {
-    // following functions return a TaskStatus, but it is ignored so cast to (void)
     (void) pmhd->RestrictU(this, 0);
     (void) pmhd->RestrictB(this, 0);
     (void) pmhd->InitRecv(this, -1);  // stage < 0 suppresses InitFluxRecv
@@ -229,8 +226,6 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
     (void) pmhd->RecvU(this, 0);
     (void) pmhd->RecvB(this, 0);
     (void) pmhd->ApplyPhysicalBCs(this, 0);
-
-    // Set primitive variables in initial conditions everywhere
     (void) pmhd->ConToPrim(this, 0);
   }
 
@@ -415,7 +410,9 @@ void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
   }
 
   // call any problem specific functions to do work after main loop
-  pmesh->pgen->ProblemGeneratorFinalize(pin, pmesh);
+  if (pmesh->pgen->pgen_final_func != nullptr) {
+    (pmesh->pgen->pgen_final_func)(pin, pmesh);
+  }
 
   float exe_time = run_time_.seconds();
 

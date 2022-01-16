@@ -28,7 +28,10 @@
 //   iprob=2: square wave
 //   iprob=2: Gaussian, square, and triangle
 
-void ProblemGenerator::Advection(MeshBlockPack *pmbp, ParameterInput *pin) {
+void ProblemGenerator::Advection(ParameterInput *pin, const bool restart) {
+  // nothing needs to be done on restarts for this pgen
+  if (restart) return;
+
   // Read input parameters
   int flow_dir = pin->GetInteger("problem","flow_dir");
   int iprob = pin->GetInteger("problem","iproblem");
@@ -61,11 +64,12 @@ void ProblemGenerator::Advection(MeshBlockPack *pmbp, ParameterInput *pin) {
   Real &x1mesh = pmy_mesh_->mesh_size.x1min;
   Real &x2mesh = pmy_mesh_->mesh_size.x2min;
   Real &x3mesh = pmy_mesh_->mesh_size.x3min;
-  auto &indcs = pmbp->pmesh->mb_indcs;
-  auto &size = pmbp->pmb->mb_size;
+  auto &indcs = pmy_mesh_->mb_indcs;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
+  MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
+  auto &size = pmbp->pmb->mb_size;
 
   // Initialize Hydro variables -------------------------------
   if (pmbp->phydro != nullptr) {

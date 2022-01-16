@@ -28,7 +28,8 @@
 //! \fn ProblemGenerator::ShockTube_()
 //! \brief Problem Generator for the shock tube (Riemann problem) tests
 
-void ProblemGenerator::ShockTube(MeshBlockPack *pmbp, ParameterInput *pin) {
+void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
+  if (restart) return;
   // parse shock direction: {1,2,3} -> {x1,x2,x3}
   int shk_dir = pin->GetInteger("problem","shock_dir");
   if (shk_dir < 1 || shk_dir > 3) {
@@ -65,11 +66,12 @@ void ProblemGenerator::ShockTube(MeshBlockPack *pmbp, ParameterInput *pin) {
   }
 
   // capture variables for the kernel
-  auto &indcs = pmbp->pmesh->mb_indcs;
-  auto &size = pmbp->pmb->mb_size;
+  auto &indcs = pmy_mesh_->mb_indcs;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
+  MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
+  auto &size = pmbp->pmb->mb_size;
 
   // Initialize Hydro variables -------------------------------
   if (pmbp->phydro != nullptr) {
