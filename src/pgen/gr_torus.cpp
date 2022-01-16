@@ -93,7 +93,8 @@ struct torus_pgen {
 //              Fishbone 1977, ApJ 215 323 (F)
 //   assumes x3 is axisymmetric direction
 
-void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin) {
+void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
+  if (restart) return;
   // Read problem-specific parameters from input file
   // global parameters
   torus.rho_min = pin->GetReal("problem", "rho_min");
@@ -116,7 +117,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin) {
   Real pert_amp = pin->GetOrAddReal("problem", "pert_amp", 0.0);
 
   // capture variables for kernel
-  auto &indcs = pmbp->pmesh->mb_indcs;
+  auto &indcs = pmy_mesh_->mb_indcs;
   int &ng = indcs.ng;
   int n1 = indcs.nx1 + 2*ng;
   int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
@@ -124,6 +125,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin) {
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
+  MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   int nmb1 = pmbp->nmb_thispack - 1;
   auto &coord = pmbp->pcoord->coord_data;
 

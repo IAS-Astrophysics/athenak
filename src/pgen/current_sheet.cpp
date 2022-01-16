@@ -32,7 +32,9 @@
 //! \fn void ProblemGenerator::CurrentSheet_()
 //  \brief Sets initial conditions for double Harris current sheet
 
-void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin) {
+void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
+  if (restart) return;
+
   // read global parameters
   Real d0 = pin->GetOrAddReal("problem", "d0", 1.0);
   Real ng = pin->GetOrAddReal("problem", "ng", 1.0);
@@ -49,11 +51,12 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin) {
   Real x3size = pmy_mesh_->mesh_size.x3max - pmy_mesh_->mesh_size.x3min;
 
   // capture variables for kernel
-  auto &indcs = pmbp->pmesh->mb_indcs;
-  auto &size = pmbp->pmb->mb_size;
+  auto &indcs = pmy_mesh_->mb_indcs;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
+  MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
+  auto &size = pmbp->pmb->mb_size;
 
   // initialize Hydro variables ----------------------------------------------------------
   if (pmbp->phydro != nullptr) {
@@ -139,7 +142,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin) {
       Real x1f   = LeftEdgeX(i  -is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
       Real x1fp1 = LeftEdgeX(i+1-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
       Real x2f   = LeftEdgeX(j  -js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
-      Real x2fp1 = LeftEdgeX(j+1-js, nx2, size.d_view(m).x2min, size.d_view(m.x2max));
+      Real x2fp1 = LeftEdgeX(j+1-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
       Real x3f   = LeftEdgeX(k  -ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
       Real x3fp1 = LeftEdgeX(k+1-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
 
