@@ -32,6 +32,7 @@
 // Creates vector of output variable data
 
 BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
+    derived_var("derived-var",1,1,1,1,1),
     outarray("cc_outvar",1,1,1,1,1),
     outfield("fc_outvar",1,1,1,1),
     out_params(opar) {
@@ -53,21 +54,21 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
 
   // check that appropriate physics is defined for requested output variable
   // TODO: Index limits of variable choices below may change if more choices added
-  if ((ivar<14) && (pm->pmb_pack->phydro == nullptr)) {
+  if ((ivar<16) && (pm->pmb_pack->phydro == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of Hydro variable requested in <output> block '" 
        << out_params.block_name << "' but no Hydro object has been constructed."
        << std::endl << " Input file is likely missing a <hydro> block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar>=14) && (ivar<34) && (pm->pmb_pack->pmhd == nullptr)) {
+  if ((ivar>=16) && (ivar<40) && (pm->pmb_pack->pmhd == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of MHD variable requested in <output> block '" 
        << out_params.block_name << "' but no MHD object has been constructed."
        << std::endl << " Input file is likely missing a <mhd> block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar==34) && (pm->pmb_pack->pturb == nullptr)) {
+  if ((ivar==40) && (pm->pmb_pack->pturb == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of Force variable requested in <output> block '" 
        << out_params.block_name << "' but no Force object has been constructed."
@@ -77,6 +78,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     
   // Now load STL vector of output variables
   outvars.clear();
+  int ndvars=0;
 
   // hydro (lab-frame) density
   if (out_params.variable.compare("hydro_u_d") == 0 ||
@@ -274,11 +276,47 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     outvars.emplace_back("bcc3",2,&(pm->pmb_pack->pmhd->bcc0));
   }
 
+  // hydro/mhd z-component of vorticity (useful in 2D)
+  if (out_params.variable.compare("hydro_wz") == 0 ||
+      out_params.variable.compare("mhd_wz") == 0) {
+    outvars.emplace_back(true,"vorz",0,&(derived_var));
+    ndvars++;
+  }
+
+  // hydro/mhd magnitude of vorticity (useful in 3D)
+  if (out_params.variable.compare("hydro_w2") == 0 ||
+      out_params.variable.compare("mhd_w2") == 0) {
+    outvars.emplace_back(true,"vor2",0,&(derived_var));
+    ndvars++;
+  }
+
+  // mhd z-component of current density (useful in 2D)
+  if (out_params.variable.compare("mhd_jz") == 0) {
+    outvars.emplace_back(true,"jz",0,&(derived_var));
+    ndvars++;
+  }
+
+  // mhd magnitude of current density (useful in 3D)
+  if (out_params.variable.compare("mhd_j2") == 0) {
+    outvars.emplace_back(true,"j2",0,&(derived_var));
+    ndvars++;
+  }
+
   // turbulent forcing
   if (out_params.variable.compare("turb_force") == 0) {
     outvars.emplace_back("force1",0,&(pm->pmb_pack->pturb->force));
     outvars.emplace_back("force2",1,&(pm->pmb_pack->pturb->force));
     outvars.emplace_back("force3",2,&(pm->pmb_pack->pturb->force));
+  }
+
+  if (ndvars > 0) {
+    int nmb = pm->pmb_pack->nmb_thispack;
+    auto &indcs = pm->mb_indcs;
+    int &ng = indcs.ng;
+    int n1 = indcs.nx1 + 2*ng;
+    int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
+    int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
+    Kokkos::realloc(derived_var, nmb, ndvars, n3, n2, n1);
   }
 }
 
@@ -374,6 +412,12 @@ void BaseTypeOutput::LoadOutputData(Mesh *pm) {
 
   // Now load data over all variables and MeshBlocks
   for (int n=0; n<nout_vars; ++n) {
+
+    // Calculate derived variable, if required
+    if (outvars[n].derived) {
+      ComputeDerivedVariable(out_params.variable, pm);
+    }
+
     for (int m=0; m<nout_mbs; ++m) {
       int &ois = outmbs[m].ois;
       int &oie = outmbs[m].oie;
@@ -396,43 +440,4 @@ void BaseTypeOutput::LoadOutputData(Mesh *pm) {
       Kokkos::deep_copy(hst_slice,hst_buff);
     }
   }
-}
-
-//----------------------------------------------------------------------------------------
-// BaseTypeOutput::ErrHydroOutput()
-// Print error message when output of Hydro variable requested but Hydro object not
-// constructed, and then quit
-
-void BaseTypeOutput::ErrHydroOutput(std::string block) {
-  std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-            << "Output of Hydro variable requested in <output> block '" << block
-            << "' but no Hydro object " << std::endl << "has been constructed."
-            << " Input file is likely missing a <hydro> block" << std::endl;
-  exit(EXIT_FAILURE);
-}
-
-//----------------------------------------------------------------------------------------
-// BaseTypeOutput::ErrMHDOutput()
-// Print error message when output of MHD variable requested but MHD object not
-// constructed, and then quit
-
-void BaseTypeOutput::ErrMHDOutput(std::string block) {
-  std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-            << "Output of MHD variable requested in <output> block '" << block
-            << "' but no MHD object " << std::endl << "has been constructed."
-            << " Input file is likely missing a <mhd> block" << std::endl;
-  exit(EXIT_FAILURE);
-}
-
-//----------------------------------------------------------------------------------------
-// BaseTypeOutput::ErrForceOutput()
-// Print error message when output of Force variable requested but Force object not
-// constructed, and then quit
-
-void BaseTypeOutput::ErrForceOutput(std::string block) {
-  std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-            << "Output of Force variable requested in <output> block '" << block
-            << "' but no Force object " << std::endl << "has been constructed."
-            << " Input file is likely missing a <forcing> block" << std::endl;
-  exit(EXIT_FAILURE);
 }

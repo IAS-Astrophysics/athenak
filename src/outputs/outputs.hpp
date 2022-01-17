@@ -19,7 +19,7 @@
     #error NHISTORY > NREDUCTION in outputs.hpp
 #endif
 
-#define NOUTPUT_CHOICES 35
+#define NOUTPUT_CHOICES 41 
 // choices for output variables used in <ouput> blocks in input file
 // TO ADD MORE CHOICES:
 //   - add more strings to array below, change NOUTPUT_CHOICES above appropriately
@@ -29,11 +29,12 @@
 const std::string var_choice[NOUTPUT_CHOICES] = {
   "hydro_u_d", "hydro_u_m1", "hydro_u_m2", "hydro_u_m3", "hydro_u_e", "hydro_u",
   "hydro_w_d", "hydro_w_vx", "hydro_w_vy", "hydro_w_vz", "hydro_w_e", "hydro_w",
-  "hydro_u_s", "hydro_w_s",
+  "hydro_u_s", "hydro_w_s",  "hydro_wz",   "hydro_w2",
   "mhd_u_d",   "mhd_u_m1",   "mhd_u_m2",   "mhd_u_m3",   "mhd_u_e",   "mhd_u",
   "mhd_w_d",   "mhd_w_vx",   "mhd_w_vy",   "mhd_w_vz",   "mhd_w_e",   "mhd_w",
-  "mhd_u_s",   "mhd_w_s",
+  "mhd_u_s",   "mhd_w_s",    "mhd_wz",     "mhd_w2",     
   "mhd_bcc1",  "mhd_bcc2",   "mhd_bcc3",   "mhd_bcc",    "mhd_u_bcc", "mhd_w_bcc",
+  "mhd_jz",    "mhd_j2",
   "turb_force"};
 
 // forward declarations
@@ -65,12 +66,15 @@ struct OutputParameters {
 //  \brief  container for various properties of each output variable
 
 struct OutputVariableInfo {
+  bool derived;                  // true if variable derived from cons or prims
   std::string label;             // "name" of variable
   int data_index;                // index of variable in device array
   DvceArray5D<Real> *data_ptr;   // ptr to device array containing variable
-  // constructor
+  // constructor(s)
   OutputVariableInfo(std::string lab, int indx, DvceArray5D<Real> *ptr) :
-    label(lab), data_index(indx), data_ptr(ptr) {}
+    derived(false), label(lab), data_index(indx), data_ptr(ptr) {}
+  OutputVariableInfo(bool der, std::string lab, int indx, DvceArray5D<Real> *ptr) :
+    derived(der), label(lab), data_index(indx), data_ptr(ptr) {}
 };
 
 //----------------------------------------------------------------------------------------
@@ -115,14 +119,15 @@ class BaseTypeOutput {
   BaseTypeOutput& operator=(BaseTypeOutput&&) = default;
 
   // data
-  OutputParameters out_params;    // data read from <output> block for this type
+  OutputParameters out_params;   // params read from <output> block for this type
+  DvceArray5D<Real> derived_var; // array to store output variables computed from u0/b0
+
+  // function which computes derived output variables like vorticity and current density
+  void ComputeDerivedVariable(std::string name, Mesh *pm);
 
   // virtual functions may be over-ridden in derived classes
   virtual void LoadOutputData(Mesh *pm);
   virtual void WriteOutputFile(Mesh *pm, ParameterInput *pin) = 0;
-  void ErrHydroOutput(std::string block);
-  void ErrMHDOutput(std::string block);
-  void ErrForceOutput(std::string block);
 
  protected:
   HostArray5D<Real>   outarray;  // CC output data on host with dims (n,m,k,j,i)
