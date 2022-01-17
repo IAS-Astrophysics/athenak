@@ -19,20 +19,26 @@
     #error NHISTORY > NREDUCTION in outputs.hpp
 #endif
 
-// identifiers for output variables
-enum class OutputVariable {undef=-1,
-  hydro_u_d, hydro_u_m1, hydro_u_m2, hydro_u_m3, hydro_u_e, hydro_u,
-  hydro_w_d, hydro_w_vx, hydro_w_vy, hydro_w_vz, hydro_w_p, hydro_w,
-  mhd_u_d,   mhd_u_m1,   mhd_u_m2,   mhd_u_m3,   mhd_u_e,   mhd_u,
-  mhd_w_d,   mhd_w_vx,   mhd_w_vy,   mhd_w_vz,   mhd_w_p,   mhd_w,
-  mhd_bcc1,  mhd_bcc2,   mhd_bcc3,   mhd_bcc,    mhd_b_x1f, mhd_b_x2f, mhd_b_x3f,
-  mhd_u_bcc, mhd_w_bcc,  turb_force};
+#define NOUTPUT_CHOICES 35
+// choices for output variables used in <ouput> blocks in input file
+// TO ADD MORE CHOICES:
+//   - add more strings to array below, change NOUTPUT_CHOICES above appropriately
+//   - add code to load new variables in BaseOutputType constructor
+//   - may need to change index limits that test whether physics is defined for 
+//     requested output variable near start of BaseOutputType constructor
+const std::string var_choice[NOUTPUT_CHOICES] = {
+  "hydro_u_d", "hydro_u_m1", "hydro_u_m2", "hydro_u_m3", "hydro_u_e", "hydro_u",
+  "hydro_w_d", "hydro_w_vx", "hydro_w_vy", "hydro_w_vz", "hydro_w_e", "hydro_w",
+  "hydro_u_s", "hydro_w_s",
+  "mhd_u_d",   "mhd_u_m1",   "mhd_u_m2",   "mhd_u_m3",   "mhd_u_e",   "mhd_u",
+  "mhd_w_d",   "mhd_w_vx",   "mhd_w_vy",   "mhd_w_vz",   "mhd_w_e",   "mhd_w",
+  "mhd_u_s",   "mhd_w_s",
+  "mhd_bcc1",  "mhd_bcc2",   "mhd_bcc3",   "mhd_bcc",    "mhd_u_bcc", "mhd_w_bcc",
+  "turb_force"};
 
-// forward declarations, and two utility function prototypes
+// forward declarations
 class Mesh;
 class ParameterInput;
-OutputVariable GetOutputVariable(const std::string& input_string);
-std::string GetOutputVariableString(OutputVariable input_flag);
 
 //----------------------------------------------------------------------------------------
 //! \struct OutputParameters
@@ -44,7 +50,7 @@ struct OutputParameters {
   std::string file_basename;
   std::string file_id;
   std::string file_type;
-  OutputVariable variable;
+  std::string variable;
   std::string data_format;
   Real last_time, dt;
   int file_number;
@@ -198,7 +204,7 @@ class RestartOutput : public BaseTypeOutput {
 class Outputs {
  public:
   Outputs(ParameterInput *pin, Mesh *pm);
-  ~Outputs();
+  ~Outputs() = default;
 
   // use vector of pointers to BaseTypeOutputs since it is an abstract base class
   std::vector<BaseTypeOutput*> pout_list;

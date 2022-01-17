@@ -16,8 +16,8 @@
 //! <output[n]> block in the input file.
 //!
 //! Required parameters that must be specified in an <output[n]> block are:
-//!   - variable  = [see the enum class OutputVariable in outputs.hpp to see the list of
-//!                  currently strings for specifing output variables]
+//!   - variable  = [list of currently implemented strings for specifing output variables
+//!                  is defined at start of outputs.hpp file]
 //!   - file_type = tab,vtk,hst,bin,rst
 //!   - dt        = problem time between outputs
 //!
@@ -147,9 +147,8 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
 
       // set output variable and optional file id (default is output variable name)
       if (opar.file_type.compare("hst") != 0 && opar.file_type.compare("rst") != 0) {
-        opar.variable = GetOutputVariable(pin->GetString(opar.block_name, "variable"));
-        opar.file_id = pin->GetOrAddString(
-                       opar.block_name,"id",pin->GetString(opar.block_name, "variable"));
+        opar.variable = pin->GetString(opar.block_name, "variable");
+        opar.file_id = pin->GetOrAddString(opar.block_name,"id",opar.variable);
       }
 
       // set optional data format string used in formatted writes
@@ -193,206 +192,5 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
               << "More than one history or restart output block detected in input file"
               << std::endl;
     exit(EXIT_FAILURE);
-  }
-}
-
-//----------------------------------------------------------------------------------------
-// destructor - iterates through singly linked list of BaseTypeOutputs and deletes nodes
-
-Outputs::~Outputs() {
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn GetOutputVariable(std::string input_string)
-//  \brief Parses input string to return scoped enumerator flag specifying output var.
-//  Generally output utility function, not part of any outputs class
-
-OutputVariable GetOutputVariable(const std::string& input_string) {
-  // hydro conserved variables
-  if (input_string == "hydro_u_d") {
-    return OutputVariable::hydro_u_d;
-  } else if (input_string == "hydro_u_m1") {
-    return OutputVariable::hydro_u_m1;
-  } else if (input_string == "hydro_u_m2") {
-    return OutputVariable::hydro_u_m2;
-  } else if (input_string == "hydro_u_m3") {
-    return OutputVariable::hydro_u_m3;
-  } else if (input_string == "hydro_u_e") {
-    return OutputVariable::hydro_u_e;
-  } else if (input_string == "hydro_u") {
-    return OutputVariable::hydro_u;
-
-  // hydro primitive variables
-  } else if (input_string == "hydro_w_d") {
-    return OutputVariable::hydro_w_d;
-  } else if (input_string == "hydro_w_vx") {
-    return OutputVariable::hydro_w_vx;
-  } else if (input_string == "hydro_w_vy") {
-    return OutputVariable::hydro_w_vy;
-  } else if (input_string == "hydro_w_vz") {
-    return OutputVariable::hydro_w_vz;
-  } else if (input_string == "hydro_w_p") {
-    return OutputVariable::hydro_w_p;
-  } else if (input_string == "hydro_w") {
-    return OutputVariable::hydro_w;
-
-  // mhd conserved variables
-  } else if (input_string == "mhd_u_d") {
-    return OutputVariable::mhd_u_d;
-  } else if (input_string == "mhd_u_m1") {
-    return OutputVariable::mhd_u_m1;
-  } else if (input_string == "mhd_u_m2") {
-    return OutputVariable::mhd_u_m2;
-  } else if (input_string == "mhd_u_m3") {
-    return OutputVariable::mhd_u_m3;
-  } else if (input_string == "mhd_u_e") {
-    return OutputVariable::mhd_u_e;
-  } else if (input_string == "mhd_u") {
-    return OutputVariable::mhd_u;
-
-  // mhd primitive variables
-  } else if (input_string == "mhd_w_d") {
-    return OutputVariable::mhd_w_d;
-  } else if (input_string == "mhd_w_vx") {
-    return OutputVariable::mhd_w_vx;
-  } else if (input_string == "mhd_w_vy") {
-    return OutputVariable::mhd_w_vy;
-  } else if (input_string == "mhd_w_vz") {
-    return OutputVariable::mhd_w_vz;
-  } else if (input_string == "mhd_w_p") {
-    return OutputVariable::mhd_w_p;
-  } else if (input_string == "mhd_w") {
-    return OutputVariable::mhd_w;
-
-  // cell-centered magnetic fields in mhd
-  } else if (input_string == "mhd_bcc1") {
-    return OutputVariable::mhd_bcc1;
-  } else if (input_string == "mhd_bcc2") {
-    return OutputVariable::mhd_bcc2;
-  } else if (input_string == "mhd_bcc3") {
-    return OutputVariable::mhd_bcc3;
-  } else if (input_string == "mhd_bcc") {
-    return OutputVariable::mhd_bcc;
-
-  // mhd conserved variables and cell-centered magnetic fields
-  } else if (input_string == "mhd_u_bcc") {
-    return OutputVariable::mhd_u_bcc;
-
-  // mhd primitive variables and cell-centered magnetic fields
-  } else if (input_string == "mhd_w_bcc") {
-    return OutputVariable::mhd_w_bcc;
-
-  // cell-centered forcing added in turbulent driving problems
-  } else if (input_string == "turb_force") {
-    return OutputVariable::turb_force;
-
-  // invalid variable requested
-  } else {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-       << "Input string = '" << input_string << "' is not a valid output variable"
-       << std::endl << "See the enum class OutputVariable defined in "
-       << "src/outputs/outputs.hpp for a complete list" << std::endl
-       << "of valid output variables" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn GetOutputVariableString(BoundaryFlag input_flag)
-//  \brief Parses enumerated type OutputVariable internal integer representation to return
-//  string describing the output variable. Typically used to format descriptive errors
-//  or diagnostics. Inverse of GetOutputVariable().
-//
-//  Generally output utility function, not part of any outputs class
-
-std::string GetOutputVariableString(OutputVariable input_flag) {
-  switch (input_flag) {
-    // hydro conserved variables
-    case OutputVariable::hydro_u_d:  // 0
-      return "hydro_u_d";
-    case OutputVariable::hydro_u_m1:
-      return "hydro_u_m1";
-    case OutputVariable::hydro_u_m2:
-      return "hydro_u_m2";
-    case OutputVariable::hydro_u_m3:
-      return "hydro_u_m3";
-    case OutputVariable::hydro_u_e:
-      return "hydro_u_e";
-    case OutputVariable::hydro_u:
-      return "hydro_u";
-
-    // hydro primitive variables
-    case OutputVariable::hydro_w_d:
-      return "hydro_w_d";
-    case OutputVariable::hydro_w_vx:
-      return "hydro_w_vx";
-    case OutputVariable::hydro_w_vy:
-      return "hydro_w_vy";
-    case OutputVariable::hydro_w_vz:
-      return "hydro_w_vz";
-    case OutputVariable::hydro_w_p:
-      return "hydro_w_p";
-    case OutputVariable::hydro_w:
-      return "hydro_w";
-
-    // mhd conserved variables
-    case OutputVariable::mhd_u_d:
-      return "mhd_u_d";
-    case OutputVariable::mhd_u_m1:
-      return "mhd_u_m1";
-    case OutputVariable::mhd_u_m2:
-      return "mhd_u_m2";
-    case OutputVariable::mhd_u_m3:
-      return "mhd_u_m3";
-    case OutputVariable::mhd_u_e:
-      return "mhd_u_e";
-    case OutputVariable::mhd_u:
-      return "mhd_u";
-
-    // mhd primitive variables
-    case OutputVariable::mhd_w_d:
-      return "mhd_w_d";
-    case OutputVariable::mhd_w_vx:
-      return "mhd_w_vx";
-    case OutputVariable::mhd_w_vy:
-      return "mhd_w_vy";
-    case OutputVariable::mhd_w_vz:
-      return "mhd_w_vz";
-    case OutputVariable::mhd_w_p:
-      return "mhd_w_p";
-    case OutputVariable::mhd_w:
-      return "mhd_w";
-
-    // cell-centered magnetic fields in mhd
-    case OutputVariable::mhd_bcc1:
-      return "mhd_bcc1";
-    case OutputVariable::mhd_bcc2:
-      return "mhd_bcc2";
-    case OutputVariable::mhd_bcc3:
-      return "mhd_bcc3";
-    case OutputVariable::mhd_bcc:
-      return "mhd_bcc";
-
-    // mhd conserved variables and cell-centered magnetic fields
-    case OutputVariable::mhd_u_bcc:
-      return "mhd_u_bcc";
-
-    // mhd primitive variables and cell-centered magnetic fields
-    case OutputVariable::mhd_w_bcc:
-      return "mhd_w_bcc";
-
-    // cell-centered forcing added in turbulent driving problems
-    case OutputVariable::turb_force:
-      return "turb_force";
-
-    // undefined or unknown variable names
-    case OutputVariable::undef:
-      return "undef";
-    default:
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-         << std::endl << "Input enum OutputVariable=" << static_cast<int>(input_flag)
-         << " is an invalid output variable" << std::endl;
-      std::exit(EXIT_FAILURE);
-      break;
   }
 }

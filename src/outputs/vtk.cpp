@@ -109,7 +109,7 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
       << "  level= 0"  // assuming uniform mesh
       << "  nranks= " << global_variable::nranks
       << "  cycle=" << pm->ncycle
-      << "  variables=" << GetOutputVariableString(out_params.variable).c_str()
+      << "  variables=" << out_params.variable
       << std::endl << "BINARY" << std::endl
       << "DATASET STRUCTURED_POINTS" << std::endl
       << "DIMENSIONS " << ncoord1 << " " << ncoord2 << " " << ncoord3 << std::endl;

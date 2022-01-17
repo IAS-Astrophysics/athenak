@@ -39,268 +39,246 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
   // exit for history files
   if (out_params.file_type.compare("hst") == 0) {return;}
 
+  // check for valid choice of variables
+  int ivar = -1;
+  for (int i=0; i<(NOUTPUT_CHOICES); ++i) {
+    if (out_params.variable.compare(var_choice[i]) == 0) {ivar = i;}
+  }
+  if (ivar < 0) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+       << "Input variable '" << out_params.variable << "' in block '"
+       << out_params.block_name << "' in input file is invalid" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
+  // check that appropriate physics is defined for requested output variable
+  // TODO: Index limits of variable choices below may change if more choices added
+  if ((ivar<14) && (pm->pmb_pack->phydro == nullptr)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+       << "Output of Hydro variable requested in <output> block '" 
+       << out_params.block_name << "' but no Hydro object has been constructed."
+       << std::endl << " Input file is likely missing a <hydro> block" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  if ((ivar>=14) && (ivar<34) && (pm->pmb_pack->pmhd == nullptr)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+       << "Output of MHD variable requested in <output> block '" 
+       << out_params.block_name << "' but no MHD object has been constructed."
+       << std::endl << " Input file is likely missing a <mhd> block" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  if ((ivar==34) && (pm->pmb_pack->pturb == nullptr)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+       << "Output of Force variable requested in <output> block '" 
+       << out_params.block_name << "' but no Force object has been constructed."
+       << std::endl << " Input file is likely missing a <forcing> block" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+    
+  // Now load STL vector of output variables
   outvars.clear();
-  switch (out_params.variable) {
-    // Load hydro conserved variables
-    case OutputVariable::hydro_u_d:
-      if (pm->pmb_pack->phydro == nullptr) ErrHydroOutput(out_params.block_name);
-      outvars.emplace_back("dens",0,&(pm->pmb_pack->phydro->u0));
-      break;
-    case OutputVariable::hydro_u_m1:
-      if (pm->pmb_pack->phydro == nullptr) ErrHydroOutput(out_params.block_name);
-      outvars.emplace_back("mom1",1,&(pm->pmb_pack->phydro->u0));
-      break;
-    case OutputVariable::hydro_u_m2:
-      if (pm->pmb_pack->phydro == nullptr) ErrHydroOutput(out_params.block_name);
-      outvars.emplace_back("mom2",2,&(pm->pmb_pack->phydro->u0));
-      break;
-    case OutputVariable::hydro_u_m3:
-      if (pm->pmb_pack->phydro == nullptr) ErrHydroOutput(out_params.block_name);
-      outvars.emplace_back("mom3",3,&(pm->pmb_pack->phydro->u0));
-      break;
-    case OutputVariable::hydro_u_e:
-      if (pm->pmb_pack->phydro == nullptr) ErrHydroOutput(out_params.block_name);
-      outvars.emplace_back("ener",4,&(pm->pmb_pack->phydro->u0));
-      break;
-    case OutputVariable::hydro_u:
-      {
-      if (pm->pmb_pack->phydro == nullptr) ErrHydroOutput(out_params.block_name);
-      outvars.emplace_back("dens",0,&(pm->pmb_pack->phydro->u0));
-      outvars.emplace_back("mom1",1,&(pm->pmb_pack->phydro->u0));
-      outvars.emplace_back("mom2",2,&(pm->pmb_pack->phydro->u0));
-      outvars.emplace_back("mom3",3,&(pm->pmb_pack->phydro->u0));
-      if (pm->pmb_pack->phydro->peos->eos_data.is_ideal) {
-        outvars.emplace_back("ener",4,&(pm->pmb_pack->phydro->u0));
-      }
-      int nhyd = pm->pmb_pack->phydro->nhydro;
-      int nvars = nhyd + pm->pmb_pack->phydro->nscalars;
-      for (int n=nhyd; n<nvars; ++n) {
-        char number[2];
-        std::snprintf(number,sizeof(number),"%02d",(n - nhyd));
-        std::string vname;
-        vname.assign("scal");
-        vname.append(number);
-        outvars.emplace_back(vname,n,&(pm->pmb_pack->phydro->u0));
-      }
-      }
-      break;
 
-    // Load hydro primitive variables
-    case OutputVariable::hydro_w_d:
-      if (pm->pmb_pack->phydro == nullptr) ErrHydroOutput(out_params.block_name);
-      outvars.emplace_back("dens",0,&(pm->pmb_pack->phydro->w0));
-      break;
-    case OutputVariable::hydro_w_vx:
-      if (pm->pmb_pack->phydro == nullptr) ErrHydroOutput(out_params.block_name);
-      outvars.emplace_back("velx",1,&(pm->pmb_pack->phydro->w0));
-      break;
-    case OutputVariable::hydro_w_vy:
-      if (pm->pmb_pack->phydro == nullptr) ErrHydroOutput(out_params.block_name);
-      outvars.emplace_back("vely",2,&(pm->pmb_pack->phydro->w0));
-      break;
-    case OutputVariable::hydro_w_vz:
-      if (pm->pmb_pack->phydro == nullptr) ErrHydroOutput(out_params.block_name);
-      outvars.emplace_back("velz",3,&(pm->pmb_pack->phydro->w0));
-      break;
-    case OutputVariable::hydro_w_p:
-      if (pm->pmb_pack->phydro == nullptr) ErrHydroOutput(out_params.block_name);
-      outvars.emplace_back("eint",4,&(pm->pmb_pack->phydro->w0));
-      break;
-    case OutputVariable::hydro_w:
-      {
-      if (pm->pmb_pack->phydro == nullptr) ErrHydroOutput(out_params.block_name);
-      outvars.emplace_back("dens",0,&(pm->pmb_pack->phydro->w0));
-      outvars.emplace_back("velx",1,&(pm->pmb_pack->phydro->w0));
-      outvars.emplace_back("vely",2,&(pm->pmb_pack->phydro->w0));
-      outvars.emplace_back("velz",3,&(pm->pmb_pack->phydro->w0));
-      if (pm->pmb_pack->phydro->peos->eos_data.is_ideal) {
-        outvars.emplace_back("eint",4,&(pm->pmb_pack->phydro->w0));
-      }
-      int nhyd = pm->pmb_pack->phydro->nhydro;
-      int nvars = nhyd + pm->pmb_pack->phydro->nscalars;
-      for (int n=nhyd; n<nvars; ++n) {
-        char number[2];
-        std::snprintf(number,sizeof(number),"%02d",(n - nhyd));
-        std::string vname;
-        vname.assign("scal");
-        vname.append(number);
-        outvars.emplace_back(vname,n,&(pm->pmb_pack->phydro->w0));
-      }
-      }
-      break;
+  // hydro (lab-frame) density
+  if (out_params.variable.compare("hydro_u_d") == 0 ||
+      out_params.variable.compare("hydro_u") == 0) {
+    outvars.emplace_back("dens",0,&(pm->pmb_pack->phydro->u0));
+  }
 
-    // Load mhd conserved variables
-    case OutputVariable::mhd_u_d:
-      if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
-      outvars.emplace_back("dens",0,&(pm->pmb_pack->pmhd->u0));
-      break;
-    case OutputVariable::mhd_u_m1:
-      if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
-      outvars.emplace_back("mom1",1,&(pm->pmb_pack->pmhd->u0));
-      break;
-    case OutputVariable::mhd_u_m2:
-      if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
-      outvars.emplace_back("mom2",2,&(pm->pmb_pack->pmhd->u0));
-      break;
-    case OutputVariable::mhd_u_m3:
-      if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
-      outvars.emplace_back("mom3",3,&(pm->pmb_pack->pmhd->u0));
-      break;
-    case OutputVariable::mhd_u_e:
-      if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
-      outvars.emplace_back("ener",4,&(pm->pmb_pack->pmhd->u0));
-      break;
-    case OutputVariable::mhd_u:
-      {
-      if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
-      outvars.emplace_back("dens",0,&(pm->pmb_pack->pmhd->u0));
-      outvars.emplace_back("mom1",1,&(pm->pmb_pack->pmhd->u0));
-      outvars.emplace_back("mom2",2,&(pm->pmb_pack->pmhd->u0));
-      outvars.emplace_back("mom3",3,&(pm->pmb_pack->pmhd->u0));
-      if (pm->pmb_pack->pmhd->peos->eos_data.is_ideal) {
-        outvars.emplace_back("ener",4,&(pm->pmb_pack->pmhd->u0));
-      }
-      int nmhd_ =  pm->pmb_pack->pmhd->nmhd;
-      int nvars = nmhd_ + pm->pmb_pack->pmhd->nscalars;
-      for (int n=nmhd_; n<nvars; ++n) {
-        char number[2];
-        std::snprintf(number,sizeof(number),"%02d",(n - nmhd_));
-        std::string vname;
-        vname.assign("scal");
-        vname.append(number);
-        outvars.emplace_back(vname,n,&(pm->pmb_pack->pmhd->u0));
-      }
-      }
-      break;
+  // hydro (rest-frame) density
+  if (out_params.variable.compare("hydro_w_d") == 0 ||
+      out_params.variable.compare("hydro_w") == 0) {
+    outvars.emplace_back("dens",0,&(pm->pmb_pack->phydro->w0));
+  }
 
-    // Load mhd primitive variables
-    case OutputVariable::mhd_w_d:
-      if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
-      outvars.emplace_back("dens",0,&(pm->pmb_pack->pmhd->w0));
-      break;
-    case OutputVariable::mhd_w_vx:
-      if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
-      outvars.emplace_back("velx",1,&(pm->pmb_pack->pmhd->w0));
-      break;
-    case OutputVariable::mhd_w_vy:
-      if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
-      outvars.emplace_back("vely",2,&(pm->pmb_pack->pmhd->w0));
-      break;
-    case OutputVariable::mhd_w_vz:
-      if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
-      outvars.emplace_back("velz",3,&(pm->pmb_pack->pmhd->w0));
-      break;
-    case OutputVariable::mhd_w_p:
-      if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
-      outvars.emplace_back("eint",4,&(pm->pmb_pack->pmhd->w0));
-      break;
-    case OutputVariable::mhd_w:
-      {
-      if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
-      outvars.emplace_back("dens",0,&(pm->pmb_pack->pmhd->w0));
-      outvars.emplace_back("velx",1,&(pm->pmb_pack->pmhd->w0));
-      outvars.emplace_back("vely",2,&(pm->pmb_pack->pmhd->w0));
-      outvars.emplace_back("velz",3,&(pm->pmb_pack->pmhd->w0));
-      if (pm->pmb_pack->pmhd->peos->eos_data.is_ideal) {
-        outvars.emplace_back("eint",4,&(pm->pmb_pack->pmhd->w0));
-      }
-      int nmhd_ =  pm->pmb_pack->pmhd->nmhd;
-      int nvars = nmhd_ + pm->pmb_pack->pmhd->nscalars;
-      for (int n=nmhd_; n<nvars; ++n) {
-        char number[2];
-        std::snprintf(number,sizeof(number),"%02d",(n - nmhd_));
-        std::string vname;
-        vname.assign("scal");
-        vname.append(number);
-        outvars.emplace_back(vname,n,&(pm->pmb_pack->pmhd->w0));
-      }
-      }
-      break;
+  // hydro components of momentum
+  if (out_params.variable.compare("hydro_u_m1") == 0 ||
+      out_params.variable.compare("hydro_u") == 0) {
+    outvars.emplace_back("mom1",1,&(pm->pmb_pack->phydro->u0));
+  }
+  if (out_params.variable.compare("hydro_u_m2") == 0 ||
+      out_params.variable.compare("hydro_u") == 0) {
+    outvars.emplace_back("mom2",2,&(pm->pmb_pack->phydro->u0));
+  }
+  if (out_params.variable.compare("hydro_u_m3") == 0 ||
+      out_params.variable.compare("hydro_u") == 0) {
+    outvars.emplace_back("mom2",3,&(pm->pmb_pack->phydro->u0));
+  }
 
-    // Load mhd cell-centered magnetic fields
-    case OutputVariable::mhd_bcc1:
-      if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
-      outvars.emplace_back("bcc1",0,&(pm->pmb_pack->pmhd->bcc0));
-      break;
-    case OutputVariable::mhd_bcc2:
-      if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
-      outvars.emplace_back("bcc2",1,&(pm->pmb_pack->pmhd->bcc0));
-      break;
-    case OutputVariable::mhd_bcc3:
-      if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
-      outvars.emplace_back("bcc3",2,&(pm->pmb_pack->pmhd->bcc0));
-      break;
-    case OutputVariable::mhd_bcc:
-      if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
-      outvars.emplace_back("bcc1",0,&(pm->pmb_pack->pmhd->bcc0));
-      outvars.emplace_back("bcc2",1,&(pm->pmb_pack->pmhd->bcc0));
-      outvars.emplace_back("bcc3",2,&(pm->pmb_pack->pmhd->bcc0));
-      break;
+  // hydro components of velocity
+  if (out_params.variable.compare("hydro_w_vx") == 0 ||
+      out_params.variable.compare("hydro_w") == 0) {
+    outvars.emplace_back("velx",1,&(pm->pmb_pack->phydro->w0));
+  }
+  if (out_params.variable.compare("hydro_w_vy") == 0 ||
+      out_params.variable.compare("hydro_w") == 0) {
+    outvars.emplace_back("vely",2,&(pm->pmb_pack->phydro->w0));
+  }
+  if (out_params.variable.compare("hydro_w_vz") == 0 ||
+      out_params.variable.compare("hydro_w") == 0) {
+    outvars.emplace_back("velz",3,&(pm->pmb_pack->phydro->w0));
+  }
 
-    // Load mhd conserved variables and cell-centered magnetic fields
-    case OutputVariable::mhd_u_bcc:
-      {
-      if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
-      outvars.emplace_back("dens",0,&(pm->pmb_pack->pmhd->u0));
-      outvars.emplace_back("mom1",1,&(pm->pmb_pack->pmhd->u0));
-      outvars.emplace_back("mom2",2,&(pm->pmb_pack->pmhd->u0));
-      outvars.emplace_back("mom3",3,&(pm->pmb_pack->pmhd->u0));
-      if (pm->pmb_pack->pmhd->peos->eos_data.is_ideal) {
-        outvars.emplace_back("ener",4,&(pm->pmb_pack->pmhd->u0));
-      }
-      outvars.emplace_back("bcc1",0,&(pm->pmb_pack->pmhd->bcc0));
-      outvars.emplace_back("bcc2",1,&(pm->pmb_pack->pmhd->bcc0));
-      outvars.emplace_back("bcc3",2,&(pm->pmb_pack->pmhd->bcc0));
-      int nmhd_ =  pm->pmb_pack->pmhd->nmhd;
-      int nvars = nmhd_ + pm->pmb_pack->pmhd->nscalars;
-      for (int n=nmhd_; n<nvars; ++n) {
-        char number[2];
-        std::snprintf(number,sizeof(number),"%02d",(n - nmhd_));
-        std::string vname;
-        vname.assign("scal");
-        vname.append(number);
-        outvars.emplace_back(vname,n,&(pm->pmb_pack->pmhd->w0));
-      }
-      }
-      break;
+  // hydro total energy
+  if (out_params.variable.compare("hydro_u_e") == 0 ||
+      out_params.variable.compare("hydro_u") == 0) {
+    outvars.emplace_back("ener",4,&(pm->pmb_pack->phydro->u0));
+  }
 
-    // Load mhd primitive variables and cell-centered magnetic fields
-    case OutputVariable::mhd_w_bcc:
-      {
-      if (pm->pmb_pack->pmhd == nullptr) ErrMHDOutput(out_params.block_name);
-      outvars.emplace_back("dens",0,&(pm->pmb_pack->pmhd->w0));
-      outvars.emplace_back("velx",1,&(pm->pmb_pack->pmhd->w0));
-      outvars.emplace_back("vely",2,&(pm->pmb_pack->pmhd->w0));
-      outvars.emplace_back("velz",3,&(pm->pmb_pack->pmhd->w0));
-      if (pm->pmb_pack->pmhd->peos->eos_data.is_ideal) {
-        outvars.emplace_back("eint",4,&(pm->pmb_pack->pmhd->w0));
-      }
-      int nmhd_ =  pm->pmb_pack->pmhd->nmhd;
-      outvars.emplace_back("bcc1",0,&(pm->pmb_pack->pmhd->bcc0));
-      outvars.emplace_back("bcc2",1,&(pm->pmb_pack->pmhd->bcc0));
-      outvars.emplace_back("bcc3",2,&(pm->pmb_pack->pmhd->bcc0));
-      int nvars = nmhd_ + pm->pmb_pack->pmhd->nscalars;
-      for (int n=nmhd_; n<nvars; ++n) {
-        char number[2];
-        std::snprintf(number,sizeof(number),"%02d",(n - nmhd_));
-        std::string vname;
-        vname.assign("scal");
-        vname.append(number);
-        outvars.emplace_back(vname,n,&(pm->pmb_pack->pmhd->w0));
-      }
-      }
-      break;
+  // hydro internal energy or temperature
+  if (out_params.variable.compare("hydro_w_e") == 0 ||
+      out_params.variable.compare("hydro_w") == 0) {
+    outvars.emplace_back("eint",4,&(pm->pmb_pack->phydro->w0));
+  }
 
-    // Load turbulent forcing
-    case OutputVariable::turb_force:
-      if (pm->pmb_pack->pturb == nullptr) ErrForceOutput(out_params.block_name);
-      outvars.emplace_back("force1",0,&(pm->pmb_pack->pturb->force));
-      outvars.emplace_back("force2",1,&(pm->pmb_pack->pturb->force));
-      outvars.emplace_back("force3",2,&(pm->pmb_pack->pturb->force));
-      break;
+  // hydro passive scalars mass densities (s*d)
+  if (out_params.variable.compare("hydro_u_s") == 0 ||
+      out_params.variable.compare("hydro_u") == 0) {
+    int nhyd = pm->pmb_pack->phydro->nhydro;
+    int nvars = nhyd + pm->pmb_pack->phydro->nscalars;
+    for (int n=nhyd; n<nvars; ++n) {
+      char number[2];
+      std::snprintf(number,sizeof(number),"%02d",(n - nhyd));
+      std::string vname;
+      vname.assign("r_");
+      vname.append(number);
+      outvars.emplace_back(vname,n,&(pm->pmb_pack->phydro->u0));
+    }
+  }
 
-    default:
-      break;
+  // hydro passive scalars (s)
+  if (out_params.variable.compare("hydro_w_s") == 0 ||
+      out_params.variable.compare("hydro_w") == 0) {
+    int nhyd = pm->pmb_pack->phydro->nhydro;
+    int nvars = nhyd + pm->pmb_pack->phydro->nscalars;
+    for (int n=nhyd; n<nvars; ++n) {
+      char number[2];
+      std::snprintf(number,sizeof(number),"%02d",(n - nhyd));
+      std::string vname;
+      vname.assign("s_");
+      vname.append(number);
+      outvars.emplace_back(vname,n,&(pm->pmb_pack->phydro->w0));
+    }
+  }
+
+  // mhd (lab-frame) density
+  if (out_params.variable.compare("mhd_u_d") == 0 ||
+      out_params.variable.compare("mhd_u") == 0 ||
+      out_params.variable.compare("mhd_u_bcc") == 0) {
+    outvars.emplace_back("dens",0,&(pm->pmb_pack->pmhd->u0));
+  }
+
+  // mhd (rest-frame) density
+  if (out_params.variable.compare("mhd_w_d") == 0 ||
+      out_params.variable.compare("mhd_w") == 0 ||
+      out_params.variable.compare("mhd_w_bcc") == 0) {
+    outvars.emplace_back("dens",0,&(pm->pmb_pack->pmhd->w0));
+  }
+
+  // mhd components of momentum
+  if (out_params.variable.compare("mhd_u_m1") == 0 ||
+      out_params.variable.compare("mhd_u") == 0 ||
+      out_params.variable.compare("mhd_u_bcc") == 0) {
+    outvars.emplace_back("mom1",1,&(pm->pmb_pack->pmhd->u0));
+  }
+  if (out_params.variable.compare("mhd_u_m2") == 0 ||
+      out_params.variable.compare("mhd_u") == 0 ||
+      out_params.variable.compare("mhd_u_bcc") == 0) {
+    outvars.emplace_back("mom2",2,&(pm->pmb_pack->pmhd->u0));
+  }
+  if (out_params.variable.compare("mhd_u_m3") == 0 ||
+      out_params.variable.compare("mhd_u") == 0 ||
+      out_params.variable.compare("mhd_u_bcc") == 0) {
+    outvars.emplace_back("mom2",3,&(pm->pmb_pack->pmhd->u0));
+  }
+
+  // mhd components of velocity
+  if (out_params.variable.compare("mhd_w_vx") == 0 ||
+      out_params.variable.compare("mhd_w") == 0 ||
+      out_params.variable.compare("mhd_w_bcc") == 0) {
+    outvars.emplace_back("velx",1,&(pm->pmb_pack->pmhd->w0));
+  }
+  if (out_params.variable.compare("mhd_w_vy") == 0 ||
+      out_params.variable.compare("mhd_w") == 0 ||
+      out_params.variable.compare("mhd_w_bcc") == 0) {
+    outvars.emplace_back("vely",2,&(pm->pmb_pack->pmhd->w0));
+  }
+  if (out_params.variable.compare("mhd_w_vz") == 0 ||
+      out_params.variable.compare("mhd_w") == 0 ||
+      out_params.variable.compare("mhd_w_bcc") == 0) {
+    outvars.emplace_back("velz",3,&(pm->pmb_pack->pmhd->w0));
+  }
+
+  // mhd total energy
+  if (out_params.variable.compare("mhd_u_e") == 0 ||
+      out_params.variable.compare("mhd_u") == 0 ||
+      out_params.variable.compare("mhd_u_bcc") == 0) {
+    outvars.emplace_back("ener",4,&(pm->pmb_pack->pmhd->u0));
+  }
+
+  // mhd internal energy or temperature
+  if (out_params.variable.compare("mhd_w_e") == 0 ||
+      out_params.variable.compare("mhd_w") == 0 ||
+      out_params.variable.compare("mhd_w_bcc") == 0) {
+    outvars.emplace_back("eint",4,&(pm->pmb_pack->pmhd->w0));
+  }
+
+  // mhd passive scalars mass densities (s*d)
+  if (out_params.variable.compare("mhd_u_s") == 0 ||
+      out_params.variable.compare("mhd_u") == 0 ||
+      out_params.variable.compare("mhd_u_bcc") == 0) {
+    int nmhd = pm->pmb_pack->pmhd->nmhd;
+    int nvars = nmhd + pm->pmb_pack->pmhd->nscalars;
+    for (int n=nmhd; n<nvars; ++n) {
+      char number[2];
+      std::snprintf(number,sizeof(number),"%02d",(n - nmhd));
+      std::string vname;
+      vname.assign("r_");
+      vname.append(number);
+      outvars.emplace_back(vname,n,&(pm->pmb_pack->pmhd->u0));
+    }
+  }
+
+  // mhd passive scalars (s)
+  if (out_params.variable.compare("mhd_w_s") == 0 ||
+      out_params.variable.compare("mhd_w") == 0 ||
+      out_params.variable.compare("mhd_w_bcc") == 0) {
+    int nmhd = pm->pmb_pack->pmhd->nmhd;
+    int nvars = nmhd + pm->pmb_pack->pmhd->nscalars;
+    for (int n=nmhd; n<nvars; ++n) {
+      char number[2];
+      std::snprintf(number,sizeof(number),"%02d",(n - nmhd));
+      std::string vname;
+      vname.assign("s_");
+      vname.append(number);
+      outvars.emplace_back(vname,n,&(pm->pmb_pack->pmhd->w0));
+    }
+  }
+
+  // mhd cell-centered magnetic fields
+  if (out_params.variable.compare("mhd_bcc1") == 0 ||
+      out_params.variable.compare("mhd_bcc") == 0 ||
+      out_params.variable.compare("mhd_u_bcc") == 0 ||
+      out_params.variable.compare("mhd_w_bcc") == 0) {
+    outvars.emplace_back("bcc1",0,&(pm->pmb_pack->pmhd->bcc0));
+  }
+  if (out_params.variable.compare("mhd_bcc2") == 0 ||
+      out_params.variable.compare("mhd_bcc") == 0 ||
+      out_params.variable.compare("mhd_u_bcc") == 0 ||
+      out_params.variable.compare("mhd_w_bcc") == 0) {
+    outvars.emplace_back("bcc2",1,&(pm->pmb_pack->pmhd->bcc0));
+  }
+  if (out_params.variable.compare("mhd_bcc3") == 0 ||
+      out_params.variable.compare("mhd_bcc") == 0 ||
+      out_params.variable.compare("mhd_u_bcc") == 0 ||
+      out_params.variable.compare("mhd_w_bcc") == 0) {
+    outvars.emplace_back("bcc3",2,&(pm->pmb_pack->pmhd->bcc0));
+  }
+
+  // turbulent forcing
+  if (out_params.variable.compare("turb_force") == 0) {
+    outvars.emplace_back("force1",0,&(pm->pmb_pack->pturb->force));
+    outvars.emplace_back("force2",1,&(pm->pmb_pack->pturb->force));
+    outvars.emplace_back("force3",2,&(pm->pmb_pack->pturb->force));
   }
 }
 
