@@ -23,9 +23,9 @@
 #include "outputs.hpp"
 
 //----------------------------------------------------------------------------------------
-// ctor: also calls OutputType base class constructor
+// ctor: also calls BaseTypeOutput base class constructor
 
-HistoryOutput::HistoryOutput(OutputParameters op, Mesh *pm) : OutputType(op, pm) {
+HistoryOutput::HistoryOutput(OutputParameters op, Mesh *pm) : BaseTypeOutput(op, pm) {
   // cycle through physics modules and add HistoryData struct for each
   hist_data.clear();
 

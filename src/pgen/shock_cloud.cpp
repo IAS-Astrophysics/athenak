@@ -29,9 +29,8 @@
 //! \fn ProblemGenerator::_()
 //! \brief Problem Generator for the shock-cloud interaction problem
 
-void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin) {
-  Real gm = pmbp->phydro->peos->eos_data.gamma;
-  Real gm1 = gm - 1.0;
+void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
+  if (restart) return;
 
   // Read input parameters
   Real xshock = -2.0;
@@ -40,6 +39,9 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin) {
   Real drat = pin->GetReal("problem","drat");
 
   // Set paramters in ambient medium ("R-state" for shock)
+  MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
+  Real gm = pmbp->phydro->peos->eos_data.gamma;
+  Real gm1 = gm - 1.0;
   Real dr = 1.0;
   Real pr = 1.0/gm;
   Real ur = 0.0;

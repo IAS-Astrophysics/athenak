@@ -45,7 +45,7 @@ void MHDEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
                     Real eigenvalues[7], Real right_eigenmatrix[7][7]);
 
 // function to compute errors in solution at end of run
-void LinearWaveErrors(MeshBlockPack *pmbp, ParameterInput *pin);
+void LinearWaveErrors(ParameterInput *pin, Mesh *pm);
 
 //----------------------------------------------------------------------------------------
 //! \struct LinWaveVariables
@@ -102,9 +102,10 @@ Real A3(const Real x1, const Real x2, const Real x3, const LinWaveVariables lw) 
 //! \fn void ProblemGenerator::LinearWave_()
 //! \brief Sets initial conditions for linear wave tests
 
-void ProblemGenerator::LinearWave(MeshBlockPack *pmbp, ParameterInput *pin) {
+void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
   // set linear wave errors function
-  pgen_error_func = LinearWaveErrors;
+  pgen_final_func = LinearWaveErrors;
+  if (restart) return;
 
   // read global parameters
   int wave_flag = pin->GetInteger("problem", "wave_flag");
@@ -193,11 +194,12 @@ void ProblemGenerator::LinearWave(MeshBlockPack *pmbp, ParameterInput *pin) {
   Real yfact = 1.0;
 
   // capture variables for kernel
-  auto &indcs = pmbp->pmesh->mb_indcs;
-  auto &size = pmbp->pmb->mb_size;
+  auto &indcs = pmy_mesh_->mb_indcs;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
+  MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
+  auto &size = pmbp->pmb->mb_size;
 
   // initialize Hydro variables ----------------------------------------------------------
   if (pmbp->phydro != nullptr) {
@@ -698,23 +700,24 @@ void MHDEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
 //! again to compute initial condictions, and subtracting current solution from ICs, and
 //! outputs errors to file. Problem must be run for an integer number of wave periods.
 
-void LinearWaveErrors(MeshBlockPack *pmbp, ParameterInput *pin) {
+void LinearWaveErrors(ParameterInput *pin, Mesh *pm) {
   // calculate reference solution by calling pgen again.  Solution stored in second
   // register u1/b1 when flag is false.
   set_initial_conditions = false;
-  pmbp->pmesh->pgen->LinearWave(pmbp, pin);
+  pm->pgen->LinearWave(pin, false);
 
   Real l1_err[8];
   int nvars=0;
 
   // capture class variables for kernel
-  auto &indcs = pmbp->pmesh->mb_indcs;
+  auto &indcs = pm->mb_indcs;
   int &nx1 = indcs.nx1;
   int &nx2 = indcs.nx2;
   int &nx3 = indcs.nx3;
   int &is = indcs.is;
   int &js = indcs.js;
   int &ks = indcs.ks;
+  MeshBlockPack *pmbp = pm->pmb_pack;
   auto &size = pmbp->pmb->mb_size;
 
   // compute errors for Hydro  -----------------------------------------------------------

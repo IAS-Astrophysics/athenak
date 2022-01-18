@@ -25,10 +25,10 @@
 #include "outputs.hpp"
 
 //----------------------------------------------------------------------------------------
-// ctor: also calls OutputType base class constructor
+// ctor: also calls BaseTypeOutput base class constructor
 
 FormattedTableOutput::FormattedTableOutput(OutputParameters op, Mesh *pm) :
-  OutputType(op, pm) {
+  BaseTypeOutput(op, pm) {
   // check that 1D slice specified, otherwise issue warning and quit
   if (pm->multi_d) {
     if (!(out_params.slice1) && !(out_params.slice2)) {
@@ -163,7 +163,7 @@ void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
               // write each output variable on same line
               for (int n=0; n<nout_vars; ++n) {
                 std::fprintf(pfile, out_params.data_format.c_str(),
-                             outdata(n,m,k-oks,j-ojs,i-ois));
+                             outarray(n,m,k-oks,j-ojs,i-ois));
               }
               std::fprintf(pfile,"\n"); // terminate line
             }

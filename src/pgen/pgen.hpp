@@ -11,8 +11,8 @@
 #include <functional>
 #include "parameter_input.hpp"
 
+using ProblemFinalizeFnPtr = void (*)(ParameterInput *pin, Mesh *pm);
 using UserBoundaryFnPtr = void (*)(Mesh* pm);
-using UserErrorFnPtr = void (*)(MeshBlockPack *pmbp, ParameterInput *pin);
 
 //----------------------------------------------------------------------------------------
 //! \class ProblemGenerator
@@ -25,30 +25,24 @@ class ProblemGenerator {
   ProblemGenerator(ParameterInput *pin, Mesh *pmesh, IOWrapper resfile);
   ~ProblemGenerator() = default;
 
-  // data
+  // true if user BCs are specified on any face
   bool user_bcs;
 
-  // function pointers for pgen errors / user enrolled BCs
-  UserErrorFnPtr pgen_error_func=nullptr;
+  // function pointer for final work after main loop (e.g. compute errors).  Called by
+  // Driver::Finalize()
+  ProblemFinalizeFnPtr pgen_final_func=nullptr;
+  // function pointer for user-enrolled BCs.  Called in ApplyPhysicalBCs in task list
   UserBoundaryFnPtr user_bcs_func=nullptr;
 
-  // predefined problem generator functions
-  void Advection(MeshBlockPack *pmbp, ParameterInput *pin);
-  void LinearWave(MeshBlockPack *pmbp, ParameterInput *pin);
-  void LWImplode(MeshBlockPack *pmbp, ParameterInput *pin);
-  void OrszagTang(MeshBlockPack *pmbp, ParameterInput *pin);
-  void ShockTube(MeshBlockPack *pmbp, ParameterInput *pin);
-
-  // function called after main loop contianing any final problem-specific work
-  // error functions in predefine problem generator
-  void ProblemGeneratorFinalize(ParameterInput *pin, Mesh *pmesh);
-  void LinearWaveErrors_(MeshBlockPack *pmbp, ParameterInput *pin);
+  // predefined problem generator functions (default test suite)
+  void Advection(ParameterInput *pin, const bool restart);
+  void LinearWave(ParameterInput *pin, const bool restart);
+  void LWImplode(ParameterInput *pin, const bool restart);
+  void OrszagTang(ParameterInput *pin, const bool restart);
+  void ShockTube(ParameterInput *pin, const bool restart);
 
   // template for user-specified problem generator
-  void UserProblem(MeshBlockPack *pmbp, ParameterInput *pin);
-
-  // function and function pointer for user-defined boundary conditions
-  void EnrollBoundaryFunction(UserBoundaryFnPtr my_bcfunc);
+  void UserProblem(ParameterInput *pin, const bool restart);
 
  private:
   Mesh* pmy_mesh_;

@@ -30,11 +30,11 @@
 #include "outputs.hpp"
 
 //----------------------------------------------------------------------------------------
-// ctor: also calls OutputType base class constructor
+// ctor: also calls BaseTypeOutput base class constructor
 // Checks compatibility options for VTK outputs
 
 VTKOutput::VTKOutput(OutputParameters op, Mesh *pm) :
-  OutputType(op, pm) {
+  BaseTypeOutput(op, pm) {
   // create directories for outputs. Comments in binary.cpp constructor explain why
   mkdir("vtk",0775);
 }
@@ -109,7 +109,7 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
       << "  level= 0"  // assuming uniform mesh
       << "  nranks= " << global_variable::nranks
       << "  cycle=" << pm->ncycle
-      << "  variables=" << GetOutputVariableString(out_params.variable).c_str()
+      << "  variables=" << out_params.variable
       << std::endl << "BINARY" << std::endl
       << "DATASET STRUCTURED_POINTS" << std::endl
       << "DIMENSIONS " << ncoord1 << " " << ncoord2 << " " << ncoord3 << std::endl;
@@ -149,7 +149,7 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
 
 #if MPI_PARALLEL_ENABLED
   //----- WRITE IN PARALLEL WITH MPI: -----
-  // For MPI runs, create derived data types for outdata and Cartesian grid of MBs.
+  // For MPI runs, create derived data types for outarray and Cartesian grid of MBs.
   // MPI then takes care of writing to file in proper order
 
   // open file and write file header
@@ -218,7 +218,7 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
           for (int j=0; j<nx2; ++j) {
             for (int i=0; i<nx1; ++i) {
               int indx = i + j*indcs.nx1 + k*indcs.nx1*indcs.nx2;
-              data[indx] = static_cast<float>(outdata(n,m,k,j,i));
+              data[indx] = static_cast<float>(outarray(n,m,k,j,i));
             }
           }
         }
@@ -304,7 +304,7 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
             int indx = imb*indcs.nx1 + (i-ois) +
                       (jmb*indcs.nx2 + (j-ojs))*nout1 +
                       (kmb*indcs.nx3 + (k-oks))*nout1*nout2;
-            data[indx] = static_cast<float>(outdata(n,m,k-oks,j-ojs,i-ois));
+            data[indx] = static_cast<float>(outarray(n,m,k-oks,j-ojs,i-ois));
           }
         }
       }

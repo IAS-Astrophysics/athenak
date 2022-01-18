@@ -19,20 +19,27 @@
     #error NHISTORY > NREDUCTION in outputs.hpp
 #endif
 
-// identifiers for output variables
-enum class OutputVariable {undef=-1,
-  hydro_u_d, hydro_u_m1, hydro_u_m2, hydro_u_m3, hydro_u_e, hydro_u,
-  hydro_w_d, hydro_w_vx, hydro_w_vy, hydro_w_vz, hydro_w_p, hydro_w,
-  mhd_u_d,   mhd_u_m1,   mhd_u_m2,   mhd_u_m3,   mhd_u_e,   mhd_u,
-  mhd_w_d,   mhd_w_vx,   mhd_w_vy,   mhd_w_vz,   mhd_w_p,   mhd_w,
-  mhd_bcc1,  mhd_bcc2,   mhd_bcc3,   mhd_bcc,    mhd_b_x1f, mhd_b_x2f, mhd_b_x3f,
-  mhd_u_bcc, mhd_w_bcc,  turb_force};
+#define NOUTPUT_CHOICES 41
+// choices for output variables used in <ouput> blocks in input file
+// TO ADD MORE CHOICES:
+//   - add more strings to array below, change NOUTPUT_CHOICES above appropriately
+//   - add code to load new variables in BaseOutputType constructor
+//   - may need to change index limits that test whether physics is defined for
+//     requested output variable near start of BaseOutputType constructor
+static const char *var_choice[NOUTPUT_CHOICES] = {
+  "hydro_u_d", "hydro_u_m1", "hydro_u_m2", "hydro_u_m3", "hydro_u_e", "hydro_u",
+  "hydro_w_d", "hydro_w_vx", "hydro_w_vy", "hydro_w_vz", "hydro_w_e", "hydro_w",
+  "hydro_u_s", "hydro_w_s",  "hydro_wz",   "hydro_w2",
+  "mhd_u_d",   "mhd_u_m1",   "mhd_u_m2",   "mhd_u_m3",   "mhd_u_e",   "mhd_u",
+  "mhd_w_d",   "mhd_w_vx",   "mhd_w_vy",   "mhd_w_vz",   "mhd_w_e",   "mhd_w",
+  "mhd_u_s",   "mhd_w_s",    "mhd_wz",     "mhd_w2",
+  "mhd_bcc1",  "mhd_bcc2",   "mhd_bcc3",   "mhd_bcc",    "mhd_u_bcc", "mhd_w_bcc",
+  "mhd_jz",    "mhd_j2",
+  "turb_force"};
 
-// forward declarations, and two utility function prototypes
+// forward declarations
 class Mesh;
 class ParameterInput;
-OutputVariable GetOutputVariable(const std::string& input_string);
-std::string GetOutputVariableString(OutputVariable input_flag);
 
 //----------------------------------------------------------------------------------------
 //! \struct OutputParameters
@@ -44,7 +51,7 @@ struct OutputParameters {
   std::string file_basename;
   std::string file_id;
   std::string file_type;
-  OutputVariable variable;
+  std::string variable;
   std::string data_format;
   Real last_time, dt;
   int file_number;
@@ -59,12 +66,15 @@ struct OutputParameters {
 //  \brief  container for various properties of each output variable
 
 struct OutputVariableInfo {
+  bool derived;                  // true if variable derived from cons or prims
   std::string label;             // "name" of variable
   int data_index;                // index of variable in device array
   DvceArray5D<Real> *data_ptr;   // ptr to device array containing variable
-  // constructor
+  // constructor(s)
   OutputVariableInfo(std::string lab, int indx, DvceArray5D<Real> *ptr) :
-    label(lab), data_index(indx), data_ptr(ptr) {}
+    derived(false), label(lab), data_index(indx), data_ptr(ptr) {}
+  OutputVariableInfo(bool der, std::string lab, int indx, DvceArray5D<Real> *ptr) :
+    derived(der), label(lab), data_index(indx), data_ptr(ptr) {}
 };
 
 //----------------------------------------------------------------------------------------
@@ -95,31 +105,33 @@ struct HistoryData {
 
 //----------------------------------------------------------------------------------------
 // \brief abstract base class for different output types (modes/formats); node in
-//        std::list of OutputType created & stored in the Outputs class
+//        std::list of BaseTypeOutput created & stored in the Outputs class
 
-class OutputType {
+class BaseTypeOutput {
  public:
-  OutputType(OutputParameters oparams, Mesh *pm);
-  virtual ~OutputType() = default;
+  BaseTypeOutput(OutputParameters oparams, Mesh *pm);
+  virtual ~BaseTypeOutput() = default;
   // copy constructor and assignment operator
-  OutputType(const OutputType& copy_other) = default;
-  OutputType& operator=(const OutputType& copy_other) = default;
+  BaseTypeOutput(const BaseTypeOutput& copy_other) = default;
+  BaseTypeOutput& operator=(const BaseTypeOutput& copy_other) = default;
   // move constructor and assignment operator
-  OutputType(OutputType&&) = default;
-  OutputType& operator=(OutputType&&) = default;
+  BaseTypeOutput(BaseTypeOutput&&) = default;
+  BaseTypeOutput& operator=(BaseTypeOutput&&) = default;
 
   // data
-  OutputParameters out_params;    // data read from <output> block for this type
+  OutputParameters out_params;   // params read from <output> block for this type
+  DvceArray5D<Real> derived_var; // array to store output variables computed from u0/b0
+
+  // function which computes derived output variables like vorticity and current density
+  void ComputeDerivedVariable(std::string name, Mesh *pm);
 
   // virtual functions may be over-ridden in derived classes
   virtual void LoadOutputData(Mesh *pm);
   virtual void WriteOutputFile(Mesh *pm, ParameterInput *pin) = 0;
-  void ErrHydroOutput(std::string block);
-  void ErrMHDOutput(std::string block);
-  void ErrForceOutput(std::string block);
 
  protected:
-  HostArray5D<Real> outdata;  // container for data on host with dims (n,m,k,j,i)
+  HostArray5D<Real>   outarray;  // CC output data on host with dims (n,m,k,j,i)
+  HostFaceFld4D<Real> outfield;  // FC output field on host
   int noutmbs_min;            // with MPI, minimum number of output MBs across all ranks
   int noutmbs_max;            // with MPI, maximum number of output MBs across all ranks
 
@@ -133,9 +145,9 @@ class OutputType {
 
 //----------------------------------------------------------------------------------------
 //! \class FormattedTableOutput
-//  \brief derived OutputType class for formatted table (tabular) data
+//  \brief derived BaseTypeOutput class for formatted table (tabular) data
 
-class FormattedTableOutput : public OutputType {
+class FormattedTableOutput : public BaseTypeOutput {
  public:
   FormattedTableOutput(OutputParameters oparams, Mesh *pm);
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
@@ -143,9 +155,9 @@ class FormattedTableOutput : public OutputType {
 
 //----------------------------------------------------------------------------------------
 //! \class HistoryOutput
-//  \brief derived OutputType class for history data
+//  \brief derived BaseTypeOutput class for history data
 
-class HistoryOutput : public OutputType {
+class HistoryOutput : public BaseTypeOutput {
  public:
   HistoryOutput(OutputParameters oparams, Mesh *pm);
 
@@ -160,9 +172,9 @@ class HistoryOutput : public OutputType {
 
 //----------------------------------------------------------------------------------------
 //! \class VTKOutput
-//  \brief derived OutputType class for vtk binary data (VTK legacy format)
+//  \brief derived BaseTypeOutput class for vtk binary data (VTK legacy format)
 
-class VTKOutput : public OutputType {
+class VTKOutput : public BaseTypeOutput {
  public:
   VTKOutput(OutputParameters oparams, Mesh *pm);
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
@@ -170,9 +182,9 @@ class VTKOutput : public OutputType {
 
 //----------------------------------------------------------------------------------------
 //! \class BinaryOutput
-//  \brief derived OutputType class for binary grid data (nbf format in pegasus++)
+//  \brief derived BaseTypeOutput class for binary grid data (nbf format in pegasus++)
 
-class BinaryOutput : public OutputType {
+class BinaryOutput : public BaseTypeOutput {
  public:
   BinaryOutput(OutputParameters oparams, Mesh *pm);
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
@@ -180,9 +192,9 @@ class BinaryOutput : public OutputType {
 
 //----------------------------------------------------------------------------------------
 //! \class RestartOutput
-//  \brief derived OutputType class for restarts
+//  \brief derived BaseTypeOutput class for restarts
 
-class RestartOutput : public OutputType {
+class RestartOutput : public BaseTypeOutput {
  public:
   RestartOutput(OutputParameters oparams, Mesh *pm);
   void LoadOutputData(Mesh *pm) override;
@@ -191,16 +203,16 @@ class RestartOutput : public OutputType {
 
 //----------------------------------------------------------------------------------------
 //! \class Outputs
-//  \brief root class for all Athena++ outputs. Provides a std::vector of OutputTypes,
+//  \brief root class for all Athena++ outputs. Provides a std::vector of BaseTypeOutputs,
 //   with each element representing one mode/format of output to be made.
 
 class Outputs {
  public:
   Outputs(ParameterInput *pin, Mesh *pm);
-  ~Outputs();
+  ~Outputs() = default;
 
-  // use vector of pointers to OutputTypes since it is an abstract base class
-  std::vector<OutputType*> pout_list;
+  // use vector of pointers to BaseTypeOutputs since it is an abstract base class
+  std::vector<BaseTypeOutput*> pout_list;
 };
 
 #endif // OUTPUTS_OUTPUTS_HPP_

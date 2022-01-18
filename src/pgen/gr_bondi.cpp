@@ -68,7 +68,7 @@ struct bondi_pgen {
 
 // prototypes for user-defined BCs and error functions
 void FixedBondiInflow(Mesh *pm);
-void BondiErrors(MeshBlockPack *pmbp, ParameterInput *pin);
+void BondiErrors(ParameterInput *pin, Mesh *pm);
 
 //----------------------------------------------------------------------------------------
 //! \fn void ProblemGenerator::BondiAccretion_()
@@ -76,7 +76,8 @@ void BondiErrors(MeshBlockPack *pmbp, ParameterInput *pin);
 //  Compile with '-D PROBLEM=gr_bondi' to enroll as user-specific problem generator
 //    reference: Hawley, Smarr, & Wilson 1984, ApJ 277 296 (HSW)
 
-void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin) {
+void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
+  MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   if (!(pmbp->phydro->peos->eos_data.use_e)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "gr_bondi test requires hydro/use_e=true" << std::endl;
@@ -84,8 +85,9 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin) {
   }
 
   // set user-defined BCs and error function pointers
-  pgen_error_func = BondiErrors;
+  pgen_final_func = BondiErrors;
   user_bcs_func = FixedBondiInflow;
+  if (restart) return;
 
   // Read problem-specific parameters from input file
   // global parameters
@@ -171,23 +173,24 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin) {
 //! \fn void ProblemGenerator::LinearWaveErrors_()
 //  \brief Computes errors in linear wave solution and outputs to file.
 
-void BondiErrors(MeshBlockPack *pmbp, ParameterInput *pin) {
+void BondiErrors(ParameterInput *pin, Mesh *pm) {
   // calculate reference solution by calling pgen again.  Solution stored in second
   // register u1/b1 when flag is false.
   bondi.reset_ic=true;
-  pmbp->pmesh->pgen->UserProblem(pmbp, pin);
+  pm->pgen->UserProblem(pin, false);
 
   Real l1_err[8];
   int nvars=0;
 
   // capture class variables for kernel
-  auto &indcs = pmbp->pmesh->mb_indcs;
+  auto &indcs = pm->mb_indcs;
   int &nx1 = indcs.nx1;
   int &nx2 = indcs.nx2;
   int &nx3 = indcs.nx3;
   int &is = indcs.is;
   int &js = indcs.js;
   int &ks = indcs.ks;
+  MeshBlockPack *pmbp = pm->pmb_pack;
   auto &size = pmbp->pmb->mb_size;
 
   // compute errors for Hydro  -----------------------------------------------------------

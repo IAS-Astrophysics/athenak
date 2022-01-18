@@ -39,7 +39,10 @@ Real A3(const Real x1, const Real x2, const Real B0) {
 //  constructed assuming the domain extends over [-0.5x0.5, -0.5x0.5], so that exact
 //  symmetry can be enforced across x=0 and y=0.
 
-void ProblemGenerator::OrszagTang(MeshBlockPack *pmbp, ParameterInput *pin) {
+void ProblemGenerator::OrszagTang(ParameterInput *pin, const bool restart) {
+  if (restart) return;
+
+  MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   if (pmbp->pmhd == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "Orszag-Tang test can only be run in MHD, but no <mhd> block "
@@ -53,7 +56,7 @@ void ProblemGenerator::OrszagTang(MeshBlockPack *pmbp, ParameterInput *pin) {
   Real p0 = 5.0/(12.0*M_PI);
 
   // capture variables for kernel
-  auto &indcs = pmbp->pmesh->mb_indcs;
+  auto &indcs = pmy_mesh_->mb_indcs;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;

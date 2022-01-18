@@ -24,7 +24,9 @@
 //! \fn ProblemGenerator::UserProblem_()
 //! \brief Problem Generator for spherical blast problem
 
-void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin) {
+void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
+  if (restart) return;
+
   Real rout = pin->GetReal("problem", "radius");
   Real rin  = rout - pin->GetOrAddReal("problem", "ramp", 0.0);
   Real pa   = pin->GetOrAddReal("problem", "pamb", 1.0);
@@ -33,11 +35,12 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin) {
   Real drat = pin->GetOrAddReal("problem", "drat", 1.0);
 
   // capture variables for the kernel
-  auto &indcs = pmbp->pmesh->mb_indcs;
-  auto &size = pmbp->pmb->mb_size;
+  auto &indcs = pmy_mesh_->mb_indcs;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
+  MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
+  auto &size = pmbp->pmb->mb_size;
 
   // setup uniform ambient medium with spherical over-pressured region in Hydro
   if (pmbp->phydro != nullptr) {
@@ -78,7 +81,7 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin) {
       }
 
       // set either internal energy density or temparature as primitive
-      Real prim,
+      Real prim;
       if (eos.use_e) {
         prim = pres/(eos.gamma - 1.0);
       } else {

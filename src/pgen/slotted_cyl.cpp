@@ -18,7 +18,6 @@
 #include "parameter_input.hpp"
 #include "coordinates/cell_locations.hpp"
 #include "mesh/mesh.hpp"
-#include "mesh/mesh_positions.hpp"
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 #include "pgen.hpp"
@@ -61,7 +60,10 @@ Real SlottedCylinderProfile(Real x1, Real x2) {
 //! \fn void MeshBlock::UserProblem(ParameterInput *pin)
 //  \brief Sets initial conditions for linear wave tests
 
-void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin) {
+void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
+  if (restart) return;
+
+  MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   if (pmbp->phydro == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "Slotted cylinder test can only be run in Hydro, but no <hydro> block "
@@ -82,13 +84,13 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin) {
   s_height = pin->GetOrAddReal("problem", "s_height", 0.25);
 
   // capture variables for kernel
-  auto &indcs = pmbp->pmesh->mb_indcs;
-  auto &size = pmbp->pmb->mb_size;
+  auto &indcs = pmy_mesh_->mb_indcs;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
   int &nscalars = pmbp->phydro->nscalars;
   int &nhydro = pmbp->phydro->nhydro;
+  auto &size = pmbp->pmb->mb_size;
   auto &u0 = pmbp->phydro->u0;
 
   // Set initial conditions
@@ -96,13 +98,11 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin) {
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     Real &x1min = size.d_view(m).x1min;
     Real &x1max = size.d_view(m).x1max;
-    int nx1 = indcs.nx1;
-    Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+    Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
 
     Real &x2min = size.d_view(m).x2min;
     Real &x2max = size.d_view(m).x2max;
-    int nx2 = mb_indcs.nx2;
-    Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+    Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
 
     // background fluid:
     u0(m,IDN,k,j,i) = d0;

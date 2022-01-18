@@ -21,13 +21,14 @@
 #include "globals.hpp"
 #include "mesh/mesh.hpp"
 #include "hydro/hydro.hpp"
+#include "mhd/mhd.hpp"
 #include "outputs.hpp"
 
 //----------------------------------------------------------------------------------------
-// ctor: also calls OutputType base class constructor
+// ctor: also calls BaseTypeOutput base class constructor
 
 RestartOutput::RestartOutput(OutputParameters op, Mesh *pm) :
-  OutputType(op, pm) {
+  BaseTypeOutput(op, pm) {
   // create directories for outputs. Comments in binary.cpp constructor explain why
   mkdir("rst",0775);
 }
@@ -38,23 +39,49 @@ RestartOutput::RestartOutput(OutputParameters op, Mesh *pm) :
 // variables, including ghost zones.
 
 void RestartOutput::LoadOutputData(Mesh *pm) {
-  // get size of arrays, including ghost zones
+  // get spatial dimensions of arrays, including ghost zones
   auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
   int nout1 = indcs.nx1 + 2*(indcs.ng);
   int nout2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
   int nout3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
   int nmb = pm->pmb_pack->nmb_thispack;
 
-  // load Hydro data
+  // calculate total number of CC variables
   hydro::Hydro* phydro = pm->pmb_pack->phydro;
+  mhd::MHD* pmhd = pm->pmb_pack->pmhd;
+  int nhydro=0, nmhd=0;
   if (phydro != nullptr) {
-    // resize host array to proper dimensions
-    int nvar = phydro->nhydro + phydro->nscalars;
-    Kokkos::realloc(outdata, nmb, nvar, nout3, nout2, nout1);
+    nhydro = phydro->nhydro + phydro->nscalars;
+  }
+  if (pmhd != nullptr) {
+    nmhd = pmhd->nmhd + pmhd->nscalars;
+  }
+  Kokkos::realloc(outarray, nmb, (nhydro+nmhd), nout3, nout2, nout1);
 
-    // Now copy data Hydro conserved variables to host, using device mirror
-    // DvceArray5D<Real>::HostMirror hst_data = Kokkos::create_mirror(u0_);
-    Kokkos::deep_copy(outdata,phydro->u0);
+  // load hydro (CC) data (copy to host)
+  if (phydro != nullptr) {
+    DvceArray5D<Real>::HostMirror host_u0 = Kokkos::create_mirror(phydro->u0);
+    Kokkos::deep_copy(host_u0,phydro->u0);
+    auto hst_slice = Kokkos::subview(outarray, Kokkos::ALL, std::make_pair(0,nhydro),
+                                     Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+    Kokkos::deep_copy(hst_slice,host_u0);
+  }
+
+  // load MHD (CC and FC) data (copy to host)
+  if (pmhd != nullptr) {
+    DvceArray5D<Real>::HostMirror host_u0 = Kokkos::create_mirror(pmhd->u0);
+    Kokkos::deep_copy(host_u0,pmhd->u0);
+    auto hst_slice = Kokkos::subview(outarray, Kokkos::ALL, std::make_pair(nhydro,nmhd),
+                                     Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+    Kokkos::deep_copy(hst_slice,host_u0);
+
+    Kokkos::realloc(outfield.x1f, nmb, nout3, nout2, nout1+1);
+    Kokkos::realloc(outfield.x2f, nmb, nout3, nout2+1, nout1);
+    Kokkos::realloc(outfield.x3f, nmb, nout3+1, nout2, nout1);
+
+    Kokkos::deep_copy(outfield.x1f,pmhd->b0.x1f);
+    Kokkos::deep_copy(outfield.x2f,pmhd->b0.x2f);
+    Kokkos::deep_copy(outfield.x3f,pmhd->b0.x3f);
   }
 }
 
@@ -123,20 +150,40 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   //--- STEP 3.  All ranks write data over all MeshBlocks (5D arrays) in parallel
   // This data read in ProblemGenerator constructor for restarts
 
-  // write the size of variables stored in each MeshBlockPack
-  IOWrapperSizeT datasize = outdata.size()*sizeof(Real);
+  // total size of all cell-centered variables and face-centered fields to be written by
+  // this rank
+  IOWrapperSizeT ccdata_size = outarray.size()*sizeof(Real);
+  IOWrapperSizeT fcdata_size = 0;
+  if (pm->pmb_pack->pmhd != nullptr) {
+    fcdata_size = (outfield.x1f.size() + outfield.x2f.size() + outfield.x3f.size())*
+                  (sizeof(Real));
+  }
   if (global_variable::my_rank == 0) {
-    resfile.Write(&(datasize), sizeof(IOWrapperSizeT), 1);
+    resfile.Write(&(ccdata_size), sizeof(IOWrapperSizeT), 1);
+    resfile.Write(&(fcdata_size), sizeof(IOWrapperSizeT), 1);
   }
 
-  // now write restart data in parallel
+  // calculate size of data written in Steps 1-2 above
   IOWrapperSizeT step1size = sbuf.size()*sizeof(char) + 3*sizeof(int) + 2*sizeof(Real) +
                              sizeof(RegionSize) + 2*sizeof(RegionIndcs);
   IOWrapperSizeT step2size = (pm->nmb_total)*(sizeof(LogicalLocation) + sizeof(float));
+
+  // write cell-centered variables in parallel
   int mygids = pm->gidslist[global_variable::my_rank];
-  IOWrapperSizeT myoffset  = step1size + step2size + sizeof(IOWrapperSizeT) +
-                             datasize*(pm->gidslist[global_variable::my_rank]);
-  resfile.Write_at_all(outdata.data(), datasize, 1, myoffset);
+  IOWrapperSizeT myoffset  = step1size + step2size + 2*sizeof(IOWrapperSizeT) +
+                (ccdata_size + fcdata_size)*(pm->gidslist[global_variable::my_rank]);
+  resfile.Write_at_all(outarray.data(), ccdata_size, 1, myoffset);
+  myoffset += ccdata_size;
+
+  if (fcdata_size > 0) {
+    resfile.Write_at_all(outfield.x1f.data(),outfield.x1f.size()*sizeof(Real),1,myoffset);
+    myoffset += outfield.x1f.size()*sizeof(Real);
+
+    resfile.Write_at_all(outfield.x2f.data(),outfield.x2f.size()*sizeof(Real),1,myoffset);
+    myoffset += outfield.x2f.size()*sizeof(Real);
+
+    resfile.Write_at_all(outfield.x3f.data(),outfield.x3f.size()*sizeof(Real),1,myoffset);
+  }
 
   // close file, clean up
   resfile.Close();

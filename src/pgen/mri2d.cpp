@@ -38,8 +38,10 @@
 //! \fn ProblemGenerator::_()
 //  \brief
 
-void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin) {
-  if (pmbp->pmesh->three_d) {
+void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
+  if (restart) return;
+
+  if (pmy_mesh_->three_d) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "mri2d problem generator only works in 2D (nx3=1)" << std::endl;
     exit(EXIT_FAILURE);
@@ -61,11 +63,12 @@ void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin) {
   Real kx = 2.0*(M_PI/x1size)*(static_cast<Real>(nwx));
 
   // capture variables for kernel
-  auto &indcs = pmbp->pmesh->mb_indcs;
-  auto &size = pmbp->pmb->mb_size;
+  auto &indcs = pmy_mesh_->mb_indcs;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
+  MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
+  auto &size = pmbp->pmb->mb_size;
 
   if (pmbp->pmhd != nullptr) {
     // First, do some error checks

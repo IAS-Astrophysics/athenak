@@ -21,7 +21,10 @@
 //! \fn void MeshBlock::LWImplode_()
 //  \brief Problem Generator for LW Implosion test
 
-void ProblemGenerator::LWImplode(MeshBlockPack *pmbp, ParameterInput *pin) {
+void ProblemGenerator::LWImplode(ParameterInput *pin, const bool restart) {
+  if (restart) return;
+
+  MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   if (pmbp->phydro == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "LW Implosion test can only be run in Hydro, but no <hydro> block "
@@ -36,16 +39,16 @@ void ProblemGenerator::LWImplode(MeshBlockPack *pmbp, ParameterInput *pin) {
 
   // capture variables for kernel
   Real gm1 = pmbp->phydro->peos->eos_data.gamma - 1.0;
-  auto &indcs = pmbp->pmesh->mb_indcs;
-  auto &size = pmbp->pmb->mb_size;
+  auto &indcs = pmy_mesh_->mb_indcs;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
   int &nscalars = pmbp->phydro->nscalars;
   int &nhydro = pmbp->phydro->nhydro;
   auto &u0 = pmbp->phydro->u0;
-  Real x2min_mesh = pmbp->pmesh->mesh_size.x2min;
-  Real x2max_mesh = pmbp->pmesh->mesh_size.x2max;
+  auto &size = pmbp->pmb->mb_size;
+  Real x2min_mesh = pmy_mesh_->mesh_size.x2min;
+  Real x2max_mesh = pmy_mesh_->mesh_size.x2max;
 
 
   // Set initial conditions
