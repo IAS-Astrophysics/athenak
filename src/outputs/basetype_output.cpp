@@ -31,7 +31,6 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     outarray("cc_outvar",1,1,1,1,1),
     outfield("fc_outvar",1,1,1,1),
     out_params(opar) {
-
   // exit for history or restart files
   if (out_params.file_type.compare("hst") == 0 ||
       out_params.file_type.compare("rst") == 0) {return;}
@@ -49,29 +48,29 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
   }
 
   // check that appropriate physics is defined for requested output variable
-  // TODO: Index limits of variable choices below may change if more choices added
+  // TODO(@user): Index limits of variable choices below may change if more choices added
   if ((ivar<16) && (pm->pmb_pack->phydro == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-       << "Output of Hydro variable requested in <output> block '" 
+       << "Output of Hydro variable requested in <output> block '"
        << out_params.block_name << "' but no Hydro object has been constructed."
        << std::endl << "Input file is likely missing a <hydro> block" << std::endl;
     exit(EXIT_FAILURE);
   }
   if ((ivar>=16) && (ivar<40) && (pm->pmb_pack->pmhd == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-       << "Output of MHD variable requested in <output> block '" 
+       << "Output of MHD variable requested in <output> block '"
        << out_params.block_name << "' but no MHD object has been constructed."
        << std::endl << "Input file is likely missing a <mhd> block" << std::endl;
     exit(EXIT_FAILURE);
   }
   if ((ivar==40) && (pm->pmb_pack->pturb == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-       << "Output of Force variable requested in <output> block '" 
+       << "Output of Force variable requested in <output> block '"
        << out_params.block_name << "' but no Force object has been constructed."
        << std::endl << "Input file is likely missing a <forcing> block" << std::endl;
     exit(EXIT_FAILURE);
   }
-    
+
   // Now load STL vector of output variables
   outvars.clear();
   int ndvars=0;
@@ -408,7 +407,6 @@ void BaseTypeOutput::LoadOutputData(Mesh *pm) {
 
   // Now load data over all variables and MeshBlocks
   for (int n=0; n<nout_vars; ++n) {
-
     // Calculate derived variable, if required
     if (outvars[n].derived) {
       ComputeDerivedVariable(out_params.variable, pm);

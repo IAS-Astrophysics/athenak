@@ -701,7 +701,6 @@ void MHDEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
 //! outputs errors to file. Problem must be run for an integer number of wave periods.
 
 void LinearWaveErrors(ParameterInput *pin, Mesh *pm) {
-  
   // calculate reference solution by calling pgen again.  Solution stored in second
   // register u1/b1 when flag is false.
   set_initial_conditions = false;

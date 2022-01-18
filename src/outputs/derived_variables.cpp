@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file derived_variables.cpp
-//! \brief Calculates various derived variables for outputs, storing them into the 
+//! \brief Calculates various derived variables for outputs, storing them into the
 //! "derived_vars" device array located in BaseTypeOutput class.  Variables are only
 //! calculated over active zones (ghost zones excluded). Currently implemented are:
 //!   - z-component of vorticity Curl(v)_z  [non-relativistic]
@@ -47,7 +47,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       name.compare("mhd_wz") == 0) {
     Kokkos::realloc(derived_var, nmb, 1, n3, n2, n1);
     auto dv = derived_var;
-    auto w0_ = (name.compare("hydro_wz") == 0)? 
+    auto w0_ = (name.compare("hydro_wz") == 0)?
       pm->pmb_pack->phydro->w0 : pm->pmb_pack->pmhd->w0;
     par_for("jz", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -63,7 +63,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       name.compare("mhd_w2") == 0) {
     Kokkos::realloc(derived_var, nmb, 1, n3, n2, n1);
     auto dv = derived_var;
-    auto w0_ = (name.compare("hydro_w2") == 0)? 
+    auto w0_ = (name.compare("hydro_w2") == 0)?
       pm->pmb_pack->phydro->w0 : pm->pmb_pack->pmhd->w0;
     par_for("jz", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -118,5 +118,4 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       dv(m,0,k,j,i) = j1*j1 + j2*j2 + j3*j3;
     });
   }
-
 }

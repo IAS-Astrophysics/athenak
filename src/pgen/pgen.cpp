@@ -8,6 +8,7 @@
 
 #include <iostream>
 #include <string>
+#include <utility>
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -82,7 +83,6 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
 ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resfile) :
     user_bcs(false),
     pmy_mesh_(pm) {
-
   // Read size of CC and FC data arrays from restart file
   IOWrapperSizeT ccdata_size, fcdata_size;
   if (global_variable::my_rank == 0) { // the master process reads the header data
@@ -203,7 +203,7 @@ std::cout << "ccdata_size = "<<ccdata_size<<"  fcdata_size = "<<fcdata_size<<std
   UserProblem(pin, true);
 #else
   std::string pgen_fun_name = pin->GetOrAddString("problem", "pgen_name", "none");
-  
+
   if (pgen_fun_name.compare("advection") == 0) {
     Advection(pin, true);
   } else if (pgen_fun_name.compare("linear_wave") == 0) {

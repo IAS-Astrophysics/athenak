@@ -154,7 +154,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   // this rank
   IOWrapperSizeT ccdata_size = outarray.size()*sizeof(Real);
   IOWrapperSizeT fcdata_size = 0;
-  if (pm->pmb_pack->pmhd != nullptr){
+  if (pm->pmb_pack->pmhd != nullptr) {
     fcdata_size = (outfield.x1f.size() + outfield.x2f.size() + outfield.x3f.size())*
                   (sizeof(Real));
   }

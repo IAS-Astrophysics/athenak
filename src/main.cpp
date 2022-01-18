@@ -6,20 +6,21 @@
 //////////////////////////////////// Athena Main Program /////////////////////////////////
 //! \file main.cpp
 //! \brief Athena main program
-//
-// Based on the Athena (Cambridge version) and Athena++ MHD codes. Athena was originally
-// written in 2002-2005 by Jim Stone, Tom Gardiner, and Peter Teuben, with many important
-// contributions by many other developers after that, i.e. 2005-2014.
-//
-// Athena++ was started in Jan 2014.  The core design was finished during 4-7/2014 at the
-// KITP by J. Stone.  GR was implemented by Chris White and AMR by Kengo Tomida during
-// 2014-2016.  Contributions from many others have continued to the present.
-//
-// The Athena (Kokkos version) is an outgrowth of the Athena-Parthenon collaboration, and
-// is a completely new implementation based on the Kokkos performance-portability library
-// (an external dependency required for this version of the code). In order to keep this
-// version small and manageable, only a fraction of the features of the C++ version are
-// implemented.
+//!
+//! Based on the Athena (Cambridge version) and Athena++ MHD codes. Athena originally was
+//! written in 2002-2005 by Jim Stone, Tom Gardiner, and Peter Teuben, with many important
+//! contributions by many other developers after that, i.e. 2005-2014.
+//!
+//! Athena++ was started in Jan 2014, with the core design developed 4-7/2014 during an
+//! extended visit to the KITP at UCSB by J. Stone. GR was implemented by Chris White and
+//! AMR by Kengo Tomida 2014-2016, with contributions from many others (esp. K. Felker)
+//! continuing after that.
+//!
+//! Athena (Kokkos version) is an outgrowth of the Athena-Parthenon collaboration, and is
+//! a completely new implementation based on the Kokkos performance-portability library
+//! (which is now an external dependency required for this version). It was started
+//! 6/2020 during the pandemic. In order to keep this version small and manageable, only
+//! a fraction of the features of the C++ version are implemented.
 //========================================================================================
 
 // C/C++ headers
@@ -28,7 +29,7 @@
 #include <string>
 #include <memory>
 
-// Athena++ headers
+// Athena headers
 #include "athena.hpp"
 #include "globals.hpp"
 #include "utils/utils.hpp"
@@ -48,14 +49,14 @@
 
 //----------------------------------------------------------------------------------------
 //! \fn int main(int argc, char *argv[])
-//  \brief AthenaK main program
+//! \brief Athena main program
 
 int main(int argc, char *argv[]) {
   std::string input_file, restart_file, run_dir;
-  bool  res_flag = false;  // set to true if -r        argument is on cmdline
-  bool narg_flag = false;  // set to true if -n        argument is on cmdline
-  bool marg_flag = false;  // set to true if -m        argument is on cmdline
   bool iarg_flag = false;  // set to true if -i <file> argument is on cmdline
+  bool marg_flag = false;  // set to true if -m        argument is on cmdline
+  bool narg_flag = false;  // set to true if -n        argument is on cmdline
+  bool  res_flag = false;  // set to true if -r <file> argument is on cmdline
 
   //--- Step 1. --------------------------------------------------------------------------
   // Initialize environment (must initialize MPI first, then Kokkos)
@@ -142,8 +143,8 @@ int main(int argc, char *argv[]) {
           iarg_flag = true;
           break;
         case 'r':                      // -r <restart_file>
-          res_flag = true;
           restart_file.assign(argv[++i]);
+          res_flag = true;
           break;
         case 'd':                      // -d <run_directory>
           run_dir.assign(argv[++i]);
@@ -165,8 +166,8 @@ int main(int argc, char *argv[]) {
         case 'h':
         default:
           if (global_variable::my_rank == 0) {
-            std::cout << "Athena++ v" << ATHENA_VERSION_MAJOR << "."
-                                      << ATHENA_VERSION_MINOR << std::endl;
+            std::cout << "Athena v" << ATHENA_VERSION_MAJOR << "."
+                                    << ATHENA_VERSION_MINOR << std::endl;
             std::cout << "Usage: " << argv[0] << " [options] [block/par=value ...]\n";
             std::cout << "Options:" << std::endl;
             std::cout << "  -i <file>       specify input file [athinput]\n";
