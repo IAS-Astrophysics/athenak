@@ -7,13 +7,8 @@
 //  \brief implements BaseTypeOutput constructor, and LoadOutputData functions
 //
 
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>    // strcmp
-#include <iomanip>
 #include <iostream>
 #include <sstream>
-#include <stdexcept>
 #include <string>   // std::string, to_string()
 
 #include "athena.hpp"
@@ -47,8 +42,8 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
   }
   if (ivar < 0) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-       << "Input variable '" << out_params.variable << "' in block '"
-       << out_params.block_name << "' in input file is invalid" << std::endl;
+       << "Variable '" << out_params.variable << "' in block '" << out_params.block_name
+       << "' in input file is not a valid choice" << std::endl;
     std::exit(EXIT_FAILURE);
   }
 
@@ -58,21 +53,21 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of Hydro variable requested in <output> block '" 
        << out_params.block_name << "' but no Hydro object has been constructed."
-       << std::endl << " Input file is likely missing a <hydro> block" << std::endl;
+       << std::endl << "Input file is likely missing a <hydro> block" << std::endl;
     exit(EXIT_FAILURE);
   }
   if ((ivar>=16) && (ivar<40) && (pm->pmb_pack->pmhd == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of MHD variable requested in <output> block '" 
        << out_params.block_name << "' but no MHD object has been constructed."
-       << std::endl << " Input file is likely missing a <mhd> block" << std::endl;
+       << std::endl << "Input file is likely missing a <mhd> block" << std::endl;
     exit(EXIT_FAILURE);
   }
   if ((ivar==40) && (pm->pmb_pack->pturb == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of Force variable requested in <output> block '" 
        << out_params.block_name << "' but no Force object has been constructed."
-       << std::endl << " Input file is likely missing a <forcing> block" << std::endl;
+       << std::endl << "Input file is likely missing a <forcing> block" << std::endl;
     exit(EXIT_FAILURE);
   }
     
