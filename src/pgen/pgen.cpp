@@ -142,16 +142,20 @@ std::cout << "ccdata_size = "<<ccdata_size<<"  fcdata_size = "<<fcdata_size<<std
 
   // copy CC Hydro data to device
   if (phydro != nullptr) {
-    auto array_slice = Kokkos::subview(ccin, Kokkos::ALL, std::make_pair(0,nhydro),
-                                       Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
-    Kokkos::deep_copy(phydro->u0, array_slice);
+    DvceArray5D<Real>::HostMirror host_u0 = Kokkos::create_mirror(phydro->u0);
+    auto hst_slice = Kokkos::subview(ccin, Kokkos::ALL, std::make_pair(0,nhydro),
+                                     Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+    Kokkos::deep_copy(host_u0, hst_slice);
+    Kokkos::deep_copy(phydro->u0, host_u0);
   }
 
   // copy CC MHD data to device
   if (pmhd != nullptr) {
-    auto array_slice = Kokkos::subview(ccin, Kokkos::ALL, std::make_pair(nhydro,nmhd),
-                                       Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
-    Kokkos::deep_copy(pmhd->u0, array_slice);
+    DvceArray5D<Real>::HostMirror host_u0 = Kokkos::create_mirror(pmhd->u0);
+    auto hst_slice = Kokkos::subview(ccin, Kokkos::ALL, std::make_pair(nhydro,nmhd),
+                                     Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+    Kokkos::deep_copy(host_u0, hst_slice);
+    Kokkos::deep_copy(pmhd->u0, host_u0);
   }
 
   // read MHD face-centered fields and copy to device

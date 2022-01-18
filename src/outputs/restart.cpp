@@ -60,16 +60,20 @@ void RestartOutput::LoadOutputData(Mesh *pm) {
 
   // load hydro (CC) data (copy to host)
   if (phydro != nullptr) {
-    auto array_slice = Kokkos::subview(outarray, Kokkos::ALL, std::make_pair(0,nhydro),
-                                       Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
-    Kokkos::deep_copy(array_slice,phydro->u0);
+    DvceArray5D<Real>::HostMirror host_u0 = Kokkos::create_mirror(phydro->u0);
+    Kokkos::deep_copy(host_u0,phydro->u0);
+    auto hst_slice = Kokkos::subview(outarray, Kokkos::ALL, std::make_pair(0,nhydro),
+                                     Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+    Kokkos::deep_copy(hst_slice,host_u0);
   }
 
   // load MHD (CC and FC) data (copy to host)
   if (pmhd != nullptr) {
-    auto array_slice = Kokkos::subview(outarray, Kokkos::ALL, std::make_pair(nhydro,nmhd),
-                                       Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
-    Kokkos::deep_copy(array_slice,pmhd->u0);
+    DvceArray5D<Real>::HostMirror host_u0 = Kokkos::create_mirror(pmhd->u0);
+    Kokkos::deep_copy(host_u0,pmhd->u0);
+    auto hst_slice = Kokkos::subview(outarray, Kokkos::ALL, std::make_pair(nhydro,nmhd),
+                                     Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+    Kokkos::deep_copy(hst_slice,host_u0);
 
     Kokkos::realloc(outfield.x1f, nmb, nout3, nout2, nout1+1);
     Kokkos::realloc(outfield.x2f, nmb, nout3, nout2+1, nout1);
