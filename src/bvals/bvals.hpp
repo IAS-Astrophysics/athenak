@@ -102,8 +102,8 @@ class BoundaryValues {
   // sizes and index values for array elements outweighs cost of extra memory.
   BoundaryBuffer send_buf[56], recv_buf[56];
 
-  // constant inflow states at each face
-  DvceArray2D<Real> u_in, b_in;
+  // constant inflow states at each face, initialized in problem generator
+  DualArray2D<Real> u_in, b_in;
 
 #if MPI_PARALLEL_ENABLED
   // unique MPI communicators for variables and fluxes
@@ -123,8 +123,8 @@ class BoundaryValues {
   TaskStatus ClearSend();
 
   // BCs associated with various physics modules
-  static void HydroBCs(MeshBlockPack *pp, DvceArray2D<Real> uin, DvceArray5D<Real> u0);
-  static void BFieldBCs(MeshBlockPack *pp, DvceArray2D<Real> uin, DvceFaceFld4D<Real> b0);
+  static void HydroBCs(MeshBlockPack *pp, DualArray2D<Real> uin, DvceArray5D<Real> u0);
+  static void BFieldBCs(MeshBlockPack *pp, DualArray2D<Real> bin, DvceFaceFld4D<Real> b0);
 
  protected:
   MeshBlockPack* pmy_pack;

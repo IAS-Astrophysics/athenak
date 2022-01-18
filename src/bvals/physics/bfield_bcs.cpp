@@ -17,7 +17,7 @@
 // \brief Apply physical boundary conditions for all field variables at faces of MB which
 //  are at the edge of the computational domain
 
-void BoundaryValues::BFieldBCs(MeshBlockPack *ppack, DvceArray2D<Real> b_in,
+void BoundaryValues::BFieldBCs(MeshBlockPack *ppack, DualArray2D<Real> b_in,
                                DvceFaceFld4D<Real> b0) {
   // loop over all MeshBlocks in this MeshBlockPack
   auto &pm = ppack->pmesh;
@@ -59,11 +59,15 @@ void BoundaryValues::BFieldBCs(MeshBlockPack *ppack, DvceArray2D<Real> b_in,
           break;
         case BoundaryFlag::inflow:
           for (int i=0; i<ng; ++i) {
-            b0.x1f(m,k,j,is-i-1) = b_in(0,BoundaryFace::inner_x1);
-            b0.x2f(m,k,j,is-i-1) = b_in(1,BoundaryFace::inner_x1);
-            if (j == n2-1) {b0.x2f(m,k,j+1,is-i-1) = b_in(1,BoundaryFace::inner_x1);}
-            b0.x3f(m,k,j,is-i-1) = b_in(2,BoundaryFace::inner_x1);
-            if (k == n3-1) {b0.x3f(m,k+1,j,is-i-1) = b_in(2,BoundaryFace::inner_x1);}
+            b0.x1f(m,k,j,is-i-1) = b_in.d_view(IBX,BoundaryFace::inner_x1);
+            b0.x2f(m,k,j,is-i-1) = b_in.d_view(IBY,BoundaryFace::inner_x1);
+            if (j == n2-1) {
+              b0.x2f(m,k,j+1,is-i-1) = b_in.d_view(IBY,BoundaryFace::inner_x1);
+            }
+            b0.x3f(m,k,j,is-i-1) = b_in.d_view(IBZ,BoundaryFace::inner_x1);
+            if (k == n3-1) {
+              b0.x3f(m,k+1,j,is-i-1) = b_in.d_view(IBZ,BoundaryFace::inner_x1);
+            }
           }
           break;
         default:
@@ -93,11 +97,15 @@ void BoundaryValues::BFieldBCs(MeshBlockPack *ppack, DvceArray2D<Real> b_in,
           break;
         case BoundaryFlag::inflow:
           for (int i=0; i<ng; ++i) {
-            b0.x1f(m,k,j,ie+i+2) = b_in(0,BoundaryFace::outer_x1);
-            b0.x2f(m,k,j,ie+i+1) = b_in(1,BoundaryFace::outer_x1);
-            if (j == n2-1) {b0.x2f(m,k,j+1,ie+i+1) = b_in(1,BoundaryFace::outer_x1);}
-            b0.x3f(m,k,j,ie+i+1) = b_in(2,BoundaryFace::outer_x1);
-            if (k == n3-1) {b0.x3f(m,k+1,j,ie+i+1) = b_in(2,BoundaryFace::outer_x1);}
+            b0.x1f(m,k,j,ie+i+2) = b_in.d_view(IBX,BoundaryFace::outer_x1);
+            b0.x2f(m,k,j,ie+i+1) = b_in.d_view(IBY,BoundaryFace::outer_x1);
+            if (j == n2-1) {
+              b0.x2f(m,k,j+1,ie+i+1) = b_in.d_view(IBY,BoundaryFace::outer_x1);
+            }
+            b0.x3f(m,k,j,ie+i+1) = b_in.d_view(IBZ,BoundaryFace::outer_x1);
+            if (k == n3-1) {
+              b0.x3f(m,k+1,j,ie+i+1) = b_in.d_view(IBZ,BoundaryFace::outer_x1);
+            }
           }
           break;
         default:
@@ -136,11 +144,15 @@ void BoundaryValues::BFieldBCs(MeshBlockPack *ppack, DvceArray2D<Real> b_in,
           break;
         case BoundaryFlag::inflow:
           for (int j=0; j<ng; ++j) {
-            b0.x1f(m,k,js-j-1,i) = b_in(0,BoundaryFace::inner_x2);
-            if (i == n1-1) {b0.x1f(m,k,js-j-1,i+1) = b_in(0,BoundaryFace::inner_x2);}
-            b0.x2f(m,k,js-j-1,i) = b_in(1,BoundaryFace::inner_x2);
-            b0.x3f(m,k,js-j-1,i) = b_in(2,BoundaryFace::inner_x2);
-            if (k == n3-1) {b0.x3f(m,k+1,js-j-1,i) = b_in(2,BoundaryFace::inner_x2);}
+            b0.x1f(m,k,js-j-1,i) = b_in.d_view(IBX,BoundaryFace::inner_x2);
+            if (i == n1-1) {
+              b0.x1f(m,k,js-j-1,i+1) = b_in.d_view(IBX,BoundaryFace::inner_x2);
+            }
+            b0.x2f(m,k,js-j-1,i) = b_in.d_view(IBY,BoundaryFace::inner_x2);
+            b0.x3f(m,k,js-j-1,i) = b_in.d_view(IBZ,BoundaryFace::inner_x2);
+            if (k == n3-1) {
+              b0.x3f(m,k+1,js-j-1,i) = b_in.d_view(IBZ,BoundaryFace::inner_x2);
+            }
           }
           break;
         default:
@@ -170,11 +182,15 @@ void BoundaryValues::BFieldBCs(MeshBlockPack *ppack, DvceArray2D<Real> b_in,
           break;
         case BoundaryFlag::inflow:
           for (int j=0; j<ng; ++j) {
-            b0.x1f(m,k,je+j+1,i) = b_in(0,BoundaryFace::outer_x2);
-            if (i == n1-1) {b0.x1f(m,k,je+j+1,i+1) = b_in(0,BoundaryFace::outer_x2);}
-            b0.x2f(m,k,je+j+2,i) = b_in(1,BoundaryFace::outer_x2);
-            b0.x3f(m,k,je+j+1,i) = b_in(2,BoundaryFace::outer_x2);
-            if (k == n3-1) {b0.x3f(m,k+1,je+j+1,i) = b_in(2,BoundaryFace::outer_x2);}
+            b0.x1f(m,k,je+j+1,i) = b_in.d_view(IBX,BoundaryFace::outer_x2);
+            if (i == n1-1) {
+              b0.x1f(m,k,je+j+1,i+1) = b_in.d_view(IBX,BoundaryFace::outer_x2);
+            }
+            b0.x2f(m,k,je+j+2,i) = b_in.d_view(IBY,BoundaryFace::outer_x2);
+            b0.x3f(m,k,je+j+1,i) = b_in.d_view(IBZ,BoundaryFace::outer_x2);
+            if (k == n3-1) {
+              b0.x3f(m,k+1,je+j+1,i) = b_in.d_view(IBZ,BoundaryFace::outer_x2);
+            }
           }
           break;
         default:
@@ -213,11 +229,15 @@ void BoundaryValues::BFieldBCs(MeshBlockPack *ppack, DvceArray2D<Real> b_in,
         break;
       case BoundaryFlag::inflow:
         for (int k=0; k<ng; ++k) {
-          b0.x1f(m,ks-k-1,j,i) = b_in(0,BoundaryFace::inner_x3);
-          if (i == n1-1) {b0.x1f(m,ks-k-1,j,i+1) = b_in(0,BoundaryFace::inner_x3);}
-          b0.x2f(m,ks-k-1,j,i) = b_in(1,BoundaryFace::inner_x3);
-          if (j == n2-1) {b0.x2f(m,ks-k-1,j+1,i) = b_in(1,BoundaryFace::inner_x3);}
-          b0.x3f(m,ks-k-1,j,i) = b_in(2,BoundaryFace::inner_x3);
+          b0.x1f(m,ks-k-1,j,i) = b_in.d_view(IBX,BoundaryFace::inner_x3);
+          if (i == n1-1) {
+            b0.x1f(m,ks-k-1,j,i+1) = b_in.d_view(IBX,BoundaryFace::inner_x3);
+          }
+          b0.x2f(m,ks-k-1,j,i) = b_in.d_view(IBY,BoundaryFace::inner_x3);
+          if (j == n2-1) {
+            b0.x2f(m,ks-k-1,j+1,i) = b_in.d_view(IBY,BoundaryFace::inner_x3);
+          }
+          b0.x3f(m,ks-k-1,j,i) = b_in.d_view(IBZ,BoundaryFace::inner_x3);
         }
         break;
       default:
@@ -247,11 +267,15 @@ void BoundaryValues::BFieldBCs(MeshBlockPack *ppack, DvceArray2D<Real> b_in,
         break;
       case BoundaryFlag::inflow:
         for (int k=0; k<ng; ++k) {
-          b0.x1f(m,ke+k+1,j,i) = b_in(0,BoundaryFace::outer_x3);
-          if (i == n1-1) {b0.x1f(m,ke+k+1,j,i+1) = b_in(0,BoundaryFace::outer_x3);}
-          b0.x2f(m,ke+k+1,j,i) = b_in(1,BoundaryFace::outer_x3);
-          if (j == n2-1) {b0.x2f(m,ke+k+1,j+1,i) = b_in(1,BoundaryFace::outer_x3);}
-          b0.x3f(m,ke+k+2,j,i) = b_in(2,BoundaryFace::outer_x3);
+          b0.x1f(m,ke+k+1,j,i) = b_in.d_view(IBX,BoundaryFace::outer_x3);
+          if (i == n1-1) {
+            b0.x1f(m,ke+k+1,j,i+1) = b_in.d_view(IBX,BoundaryFace::outer_x3);
+          }
+          b0.x2f(m,ke+k+1,j,i) = b_in.d_view(IBY,BoundaryFace::outer_x3);
+          if (j == n2-1) {
+            b0.x2f(m,ke+k+1,j+1,i) = b_in.d_view(IBY,BoundaryFace::outer_x3);
+          }
+          b0.x3f(m,ke+k+2,j,i) = b_in.d_view(IBZ,BoundaryFace::outer_x3);
         }
         break;
       default:

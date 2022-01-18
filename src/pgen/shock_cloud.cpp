@@ -55,11 +55,13 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   Real pl = pr*jump2;
   Real ul = ur + jump3*mach*std::sqrt(gm*pr/dr);
 
-  // set inflow state in BoundaryValues
+  // set inflow state in BoundaryValues, sync to device
   auto &u_in = pmbp->phydro->pbval_u->u_in;
-  u_in(IDN,BoundaryFace::inner_x1) = dl;
-  u_in(IM1,BoundaryFace::inner_x1) = dl*ul;
-  u_in(IEN,BoundaryFace::inner_x1) = pl/gm1 + 0.5*dl*(ul*ul);
+  u_in.h_view(IDN,BoundaryFace::inner_x1) = dl;
+  u_in.h_view(IM1,BoundaryFace::inner_x1) = dl*ul;
+  u_in.h_view(IEN,BoundaryFace::inner_x1) = pl/gm1 + 0.5*dl*(ul*ul);
+  u_in.template modify<HostMemSpace>();
+  u_in.template sync<DevExeSpace>();
 
   // capture variables for the kernel
   auto &indcs = pmbp->pmesh->mb_indcs;
