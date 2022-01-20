@@ -57,10 +57,6 @@ class Hydro {
   ~Hydro();
 
   // data
-  // flags to denote relativistic dynamics
-  bool is_special_relativistic = false;
-  bool is_general_relativistic = false;
-
   ReconstructionMethod recon_method;
   Hydro_RSolver rsolver_method;
   EquationOfState *peos;  // chosen EOS

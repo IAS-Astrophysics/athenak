@@ -15,8 +15,8 @@
 //----------------------------------------------------------------------------------------
 // ctor: also calls EOS base class constructor
 
-IdealSRMHD::IdealSRMHD(MeshBlockPack *pp,
-                       ParameterInput *pin) : EquationOfState(pp, pin) {
+IdealSRMHD::IdealSRMHD(MeshBlockPack *pp, ParameterInput *pin) :
+    EquationOfState("mhd", pp, pin) {
   eos_data.is_ideal = true;
   eos_data.gamma = pin->GetReal("mhd","gamma");
   eos_data.iso_cs = 0.0;
@@ -118,8 +118,8 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons,
   int &nmb = pmy_pack->nmb_thispack;
   Real gm1 = eos_data.gamma - 1.0;
 
-  Real &dfloor_ = eos_data.density_floor;
-  Real &pfloor_ = eos_data.pressure_floor;
+  Real &dfloor_ = eos_data.dfloor;
+  Real &pfloor_ = eos_data.pfloor;
   Real ee_min = pfloor_/gm1;
   bool &use_e = eos_data.use_e;
 

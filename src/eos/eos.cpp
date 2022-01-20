@@ -7,6 +7,7 @@
 //  \brief implements constructor and some fns for EquationOfState abstract base class
 
 #include <float.h>
+#include <string>
 
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
@@ -16,11 +17,11 @@
 //----------------------------------------------------------------------------------------
 // EquationOfState constructor
 
-EquationOfState::EquationOfState(MeshBlockPack* pp, ParameterInput *pin) :
-  pmy_pack(pp) {
-  eos_data.density_floor = pin->GetOrAddReal("eos","density_floor",(FLT_MIN));
-  eos_data.pressure_floor = pin->GetOrAddReal("eos","pressure_floor",(FLT_MIN));
-  eos_data.temperature_floor = pin->GetOrAddReal("eos","temperature_floor",(FLT_MIN));
+EquationOfState::EquationOfState(std::string bk, MeshBlockPack* pp, ParameterInput *pin) :
+    pmy_pack(pp) {
+  eos_data.dfloor = pin->GetOrAddReal(bk,"dfloor",(FLT_MIN));
+  eos_data.pfloor = pin->GetOrAddReal(bk,"pfloor",(FLT_MIN));
+  eos_data.tfloor = pin->GetOrAddReal(bk,"tfloor",(FLT_MIN));
 }
 
 //----------------------------------------------------------------------------------------

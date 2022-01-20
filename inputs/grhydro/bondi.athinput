@@ -27,6 +27,7 @@ ix3_bc    = user   # inner-X3 boundary flag
 ox3_bc    = user   # outer-X3 boundary flag
 
 <coord>
+general_rel = true   # w/ general relativity
 m = 1.0     # black hole mass M
 a = 0.0     # black hole spin a (0 <= a/M < 1)
 rmin = 2.0  # excision radius
@@ -45,7 +46,6 @@ tlim       = 10.0     # time limit
 ndiag      = 1        # cycles between diagostic output
 
 <hydro>
-general_rel = true   # w/ general relativity
 eos         = ideal  # EOS type
 reconstruct = plm    # spatial reconstruction method
 rsolver     = hlle   # Riemann-solver to be used

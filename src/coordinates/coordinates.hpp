@@ -38,13 +38,17 @@ struct CoordData {
 
 class Coordinates {
  public:
-  explicit Coordinates(MeshBlockPack *ppack);
+  explicit Coordinates(ParameterInput *pin, MeshBlockPack *ppack);
   ~Coordinates() {}
 
+  // flags to denote relativistic dynamics in these coordinates
+  bool is_special_relativistic = false;
+  bool is_general_relativistic = false;
+
+  // data needed to compute metric in GR
   CoordData coord_data;
 
   // functions
-  void InitMetric(ParameterInput *pin);
   void AddCoordTerms(const DvceArray5D<Real> &w0, const EOS_Data &eos, const Real dt,
                      DvceArray5D<Real> &u0);
   void AddCoordTerms(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc,

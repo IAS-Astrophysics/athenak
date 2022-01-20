@@ -16,12 +16,12 @@
 // ctor: also calls EOS base class constructor
 
 IsothermalMHD::IsothermalMHD(MeshBlockPack *pp, ParameterInput *pin) :
-  EquationOfState(pp, pin) {
-    eos_data.is_ideal = false;
-    eos_data.iso_cs = pin->GetReal("mhd","iso_sound_speed");
-    eos_data.gamma = 0.0;
-    eos_data.use_e = false;
-    eos_data.use_t = false;
+    EquationOfState("mhd", pp, pin) {
+  eos_data.is_ideal = false;
+  eos_data.iso_cs = pin->GetReal("mhd","iso_sound_speed");
+  eos_data.gamma = 0.0;
+  eos_data.use_e = false;
+  eos_data.use_t = false;
 }
 
 //----------------------------------------------------------------------------------------
@@ -42,7 +42,7 @@ void IsothermalMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real
   int &nscal = pmy_pack->pmhd->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
 
-  Real &dfloor_ = eos_data.density_floor;
+  Real &dfloor_ = eos_data.dfloor;
 
   par_for("isomhd_con2prim", DevExeSpace(), 0, (nmb-1), 0, (n3-1), 0, (n2-1), 0, (n1-1),
   KOKKOS_LAMBDA(int m, int k, int j, int i) {

@@ -52,7 +52,7 @@ MeshBlockPack::~MeshBlockPack() {
 
 void MeshBlockPack::AddMeshBlocksAndCoordinates(ParameterInput *pin, RegionIndcs indcs) {
   pmb = new MeshBlock(this, gids, nmb_thispack);
-  pcoord = new Coordinates(this);
+  pcoord = new Coordinates(pin, this);
 }
 
 //----------------------------------------------------------------------------------------

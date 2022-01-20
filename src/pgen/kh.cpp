@@ -77,8 +77,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     // Lorentz factor (needed to initializve 4-velocity in SR)
     Real u00 = 1.0;
     bool is_relativistic = false;
-    if (pmbp->phydro->is_special_relativistic ||
-        pmbp->phydro->is_general_relativistic) {
+    if (pmbp->pcoord->is_special_relativistic ||
+        pmbp->pcoord->is_general_relativistic) {
       is_relativistic = true;
     }
 

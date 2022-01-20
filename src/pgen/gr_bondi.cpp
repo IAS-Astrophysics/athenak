@@ -83,6 +83,12 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
               << "gr_bondi test requires hydro/use_e=true" << std::endl;
     exit(EXIT_FAILURE);
   }
+  if (!pmbp->pcoord->is_general_relativistic) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "GR bondi problem can only be run when GR defined in <coord> block"
+              << std::endl;
+    exit(EXIT_FAILURE);
+  }
 
   // set user-defined BCs and error function pointers
   pgen_final_func = BondiErrors;

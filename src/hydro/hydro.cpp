@@ -24,30 +24,19 @@ namespace hydro {
 // constructor, initializes data structures and parameters
 
 Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
-  pmy_pack(ppack),
-  u0("cons",1,1,1,1,1),
-  w0("prim",1,1,1,1,1),
-  coarse_u0("ccons",1,1,1,1,1),
-  u1("cons1",1,1,1,1,1),
-  uflx("uflx",1,1,1,1,1) {
-  // (1) Start by selecting physics for this Hydro:
-
-  // Check for relativistic dynamics
-  is_special_relativistic = pin->GetOrAddBoolean("hydro","special_rel",false);
-  is_general_relativistic = pin->GetOrAddBoolean("hydro","general_rel",false);
-  if (is_special_relativistic && is_general_relativistic) {
-    std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
-              << "Cannot specify both SR and GR at same time" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-
-  // (2) construct EOS object (no default)
+    pmy_pack(ppack),
+    u0("cons",1,1,1,1,1),
+    w0("prim",1,1,1,1,1),
+    coarse_u0("ccons",1,1,1,1,1),
+    u1("cons1",1,1,1,1,1),
+    uflx("uflx",1,1,1,1,1) {
+  // (1) construct EOS object (no default)
   {std::string eqn_of_state = pin->GetString("hydro","eos");
   // ideal gas EOS
   if (eqn_of_state.compare("ideal") == 0) {
-    if (is_special_relativistic) {
+    if (pmy_pack->pcoord->is_special_relativistic) {
       peos = new IdealSRHydro(ppack, pin);
-    } else if (is_general_relativistic) {
+    } else if (pmy_pack->pcoord->is_general_relativistic) {
       peos = new IdealGRHydro(ppack, pin);
     } else {
       peos = new IdealHydro(ppack, pin);
@@ -55,7 +44,8 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
     nhydro = 5;
   // isothermal EOS
   } else if (eqn_of_state.compare("isothermal") == 0) {
-    if (is_special_relativistic || is_general_relativistic) {
+    if (pmy_pack->pcoord->is_special_relativistic ||
+        pmy_pack->pcoord->is_general_relativistic) {
       std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
                 << "<hydro>/eos = isothermal cannot be used with SR/GR" << std::endl;
       std::exit(EXIT_FAILURE);
@@ -71,7 +61,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   }
   }
 
-  // (3) Initialize scalars, diffusion, source terms
+  // (2) Initialize scalars, diffusion, source terms
   nscalars = pin->GetOrAddInteger("hydro","nscalars",0);
 
   // Viscosity (only constructed if needed)
@@ -91,7 +81,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   // Source terms (constructor parses input file to initialize only srcterms needed)
   psrc = new SourceTerms("hydro", ppack, pin);
 
-  // (4) read time-evolution option [already error checked in driver constructor]
+  // (3) read time-evolution option [already error checked in driver constructor]
   // Then initialize memory and algorithms for reconstruction and Riemann solvers
   std::string evolution_t = pin->GetString("time","evolution");
 
@@ -156,7 +146,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
     // select Riemann solver (no default).  Test for compatibility of options
     {std::string rsolver = pin->GetString("hydro","rsolver");
     // Special relativistic solvers
-    if (is_special_relativistic) {
+    if (pmy_pack->pcoord->is_special_relativistic) {
       if (rsolver.compare("llf") == 0) {
         rsolver_method = Hydro_RSolver::llf_sr;
       } else if (rsolver.compare("hlle") == 0) {
@@ -172,7 +162,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
       }
 
     // General relativistic solvers
-    } else if (is_general_relativistic) {
+    } else if (pmy_pack->pcoord->is_general_relativistic) {
       if (rsolver.compare("hlle") == 0) {
         rsolver_method = Hydro_RSolver::hlle_gr;
       // Error for anything else
@@ -239,9 +229,6 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
     Kokkos::realloc(uflx.x2f, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
     Kokkos::realloc(uflx.x3f, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
   }
-
-  // (5) initialize metric (GR only)
-  if (is_general_relativistic) {pmy_pack->pcoord->InitMetric(pin);}
 }
 
 //----------------------------------------------------------------------------------------

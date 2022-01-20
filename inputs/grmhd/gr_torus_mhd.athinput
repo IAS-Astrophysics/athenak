@@ -37,16 +37,16 @@ evolution  = dynamic    # dynamic/kinematic/static
 integrator = rk2        # time integration algorithm
 cfl_number = 0.3
 nlim       = -1
-tlim       = 10000.0
+tlim       = 1000.0
 ndiag      = 1          # cycles between diagostic output
 
 <coord>
+general_rel = true
 m = 1.0     # black hole mass M
 a = 0.9375  # black hole spin a (0 <= a/M < 1)
-rmin = 2.0  # excision radius
+rmin = 2.5  # excision radius
 
 <mhd>
-general_rel = true
 eos         = ideal    # EOS type
 reconstruct = plm      # spatial reconstruction method
 rsolver     = hlle     # Riemann-solver to be used
@@ -75,14 +75,18 @@ potential_rho_pow = 1.0     # vector potential proportional to this power of den
 
 <output1>
 file_type  = hst        # History data dump
-dt         = 1.0        # time increment between outputs
+dt         = 10.0        # time increment between outputs
 
 <output2>
 file_type  = vtk        # Binary data dump
 variable   = mhd_w      # variables to be output
-dt         = 10.0       # time increment between outputs
+dt         = 100.0       # time increment between outputs
 
 <output3>
 file_type  = vtk        # Binary data dump
 variable   = mhd_bcc    # variables to be output
-dt         = 10.0       # time increment between outputs
+dt         = 100.0       # time increment between outputs
+
+<output4>
+file_type  = rst        # Binary data dump
+dt         = 1000.0       # time increment between outputs

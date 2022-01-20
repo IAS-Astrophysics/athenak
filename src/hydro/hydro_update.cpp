@@ -91,7 +91,7 @@ TaskStatus Hydro::ExpRKUpdate(Driver *pdriver, int stage) {
   }
 
   // Add coordinate source terms in GR.  Again, must be computed with only primitives.
-  if (is_general_relativistic) {
+  if (pmy_pack->pcoord->is_general_relativistic) {
     pmy_pack->pcoord->AddCoordTerms(w0, peos->eos_data, beta_dt, u0);
   }
 

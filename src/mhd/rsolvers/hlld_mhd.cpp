@@ -354,7 +354,7 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
 
   //------------------------- ISOTHERMAL HLLD solver -------------------------------------
   } else {
-    auto &dfloor_ = eos.density_floor;
+    auto &dfloor_ = eos.dfloor;
     Real iso_cs = eos.iso_cs;
     par_for_inner(member, il, iu, [&](const int i) {
       //--- Step 1.  Load L/R states into local variables

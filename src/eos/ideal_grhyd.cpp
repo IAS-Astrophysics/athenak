@@ -19,8 +19,8 @@
 //----------------------------------------------------------------------------------------
 // ctor: also calls EOS base class constructor
 
-IdealGRHydro::IdealGRHydro(MeshBlockPack *pp,
-                           ParameterInput *pin) : EquationOfState(pp, pin) {
+IdealGRHydro::IdealGRHydro(MeshBlockPack *pp, ParameterInput *pin) :
+    EquationOfState("hydro", pp, pin) {
   eos_data.is_ideal = true;
   eos_data.gamma = pin->GetReal("hydro","gamma");
   eos_data.iso_cs = 0.0;
@@ -88,8 +88,8 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) 
   int &nmb = pmy_pack->nmb_thispack;
   auto eos = eos_data;
   Real gm1 = eos_data.gamma - 1.0;
-  Real &pfloor_ = eos_data.pressure_floor;
-  Real &dfloor_ = eos_data.density_floor;
+  Real &pfloor_ = eos_data.pfloor;
+  Real &dfloor_ = eos_data.dfloor;
   bool &use_e = eos_data.use_e;
 
   // Parameters

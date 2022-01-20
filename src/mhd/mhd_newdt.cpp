@@ -41,8 +41,8 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage) {
   auto &w0_ = w0;
   auto &eos = pmy_pack->pmhd->peos->eos_data;
   auto &mbsize = pmy_pack->pmb->mb_size;
-  auto &is_special_relativistic_ = is_special_relativistic;
-  auto &is_general_relativistic_ = is_general_relativistic;
+  auto &is_special_relativistic_ = pmy_pack->pcoord->is_special_relativistic;
+  auto &is_general_relativistic_ = pmy_pack->pcoord->is_general_relativistic;
   const int nmkji = (pmy_pack->nmb_thispack)*nx3*nx2*nx1;
   const int nkji = nx3*nx2*nx1;
   const int nji  = nx2*nx1;

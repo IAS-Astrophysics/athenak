@@ -41,12 +41,12 @@ tlim       = 10000.0
 ndiag      = 1          # cycles between diagostic output
 
 <coord>
+general_rel = true
 m = 1.0     # black hole mass M
 a = 0.9375  # black hole spin a (0 <= a/M < 1)
 rmin = 2.0  # excision radius
 
 <hydro>
-general_rel = true
 eos         = ideal    # EOS type
 reconstruct = plm      # spatial reconstruction method
 rsolver     = hlle     # Riemann-solver to be used

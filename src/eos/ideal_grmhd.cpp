@@ -19,8 +19,8 @@
 //----------------------------------------------------------------------------------------
 // ctor: also calls EOS base class constructor
 
-IdealGRMHD::IdealGRMHD(MeshBlockPack *pp,
-                       ParameterInput *pin) : EquationOfState(pp, pin) {
+IdealGRMHD::IdealGRMHD(MeshBlockPack *pp, ParameterInput *pin) :
+    EquationOfState("mhd", pp, pin) {
   eos_data.is_ideal = true;
   eos_data.gamma = pin->GetReal("mhd","gamma");
   eos_data.iso_cs = 0.0;
@@ -112,8 +112,8 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons,
   auto &flat = pmy_pack->pcoord->coord_data.is_minkowski;
   auto &spin = pmy_pack->pcoord->coord_data.bh_spin;
   auto &rmin = pmy_pack->pcoord->coord_data.bh_rmin;
-  Real &dfloor_ = eos_data.density_floor;
-  Real &pfloor_ = eos_data.pressure_floor;
+  Real &dfloor_ = eos_data.dfloor;
+  Real &pfloor_ = eos_data.pfloor;
   Real ee_min = pfloor_/gm1;
   bool &use_e = eos_data.use_e;
 

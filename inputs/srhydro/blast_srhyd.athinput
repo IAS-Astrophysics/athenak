@@ -33,6 +33,9 @@ nx1       = 200         # Number of cells in each MeshBlock, X1-dir
 nx2       = 200         # Number of cells in each MeshBlock, X2-dir
 nx3       = 1           # Number of cells in each MeshBlock, X3-dir
 
+<coord>
+special_rel = true
+
 <time>
 evolution  = dynamic    # dynamic/kinematic/static
 integrator = rk2        # time integration algorithm
@@ -42,7 +45,6 @@ tlim       = 5.0        # time limit
 ndiag      = 1          # cycles between diagostic output
 
 <hydro>
-special_rel = true
 eos         = ideal     # EOS type
 reconstruct = ppm       # spatial reconstruction method
 rsolver     = hllc      # Riemann-solver to be used

@@ -16,7 +16,7 @@
 // ctor: also calls EOS base class constructor
 
 IdealMHD::IdealMHD(MeshBlockPack *pp, ParameterInput *pin) :
-  EquationOfState(pp, pin) {
+    EquationOfState("mhd", pp, pin) {
   eos_data.is_ideal = true;
   eos_data.gamma = pin->GetReal("mhd","gamma");
   eos_data.iso_cs = 0.0;
@@ -63,9 +63,9 @@ void IdealMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
   Real gm1 = (eos_data.gamma - 1.0);
   Real igm1 = 1.0/(gm1);
 
-  Real &dfloor_ = eos_data.density_floor;
-  Real &pfloor_ = eos_data.pressure_floor;
-  Real &tfloor_ = eos_data.temperature_floor;
+  Real &dfloor_ = eos_data.dfloor;
+  Real &pfloor_ = eos_data.pfloor;
+  Real &tfloor_ = eos_data.tfloor;
   bool &use_e = eos_data.use_e;
 
   par_for("mhd_con2prim", DevExeSpace(), 0, (nmb-1), 0, (n3-1), 0, (n2-1), 0, (n1-1),

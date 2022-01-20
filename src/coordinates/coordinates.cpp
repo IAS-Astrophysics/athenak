@@ -14,22 +14,26 @@
 #include "cell_locations.hpp"
 
 //----------------------------------------------------------------------------------------
-// constructor, initializes data structures describing MeshBlocks
+// constructor, initializes coordinates data
 
-Coordinates::Coordinates(MeshBlockPack *ppack) :
-  pmy_pack(ppack) {
-}
+Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
+    pmy_pack(ppack) {
+  // Check for relativistic dynamics
+  is_special_relativistic = pin->GetOrAddBoolean("coord","special_rel",false);
+  is_general_relativistic = pin->GetOrAddBoolean("coord","general_rel",false);
+  if (is_special_relativistic && is_general_relativistic) {
+    std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
+              << "Cannot specify both SR and GR at same time" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 
-//----------------------------------------------------------------------------------------
-//! \fn
-// Read properties of metric from input file for GR.  This function called from Hydro
-// and MHD constructors, but only when GR is specified
-
-void Coordinates::InitMetric(ParameterInput *pin) {
-  coord_data.is_minkowski = pin->GetOrAddBoolean("coord","minkowski",false);
-  coord_data.bh_mass = pin->GetReal("coord","m");
-  coord_data.bh_spin = pin->GetReal("coord","a");
-  coord_data.bh_rmin = pin->GetOrAddReal("coord","rmin",0.0);
+  // Read properties of metric from input file for GR.
+  if (is_general_relativistic) {
+    coord_data.is_minkowski = pin->GetOrAddBoolean("coord","minkowski",false);
+    coord_data.bh_mass = pin->GetReal("coord","m");
+    coord_data.bh_spin = pin->GetReal("coord","a");
+    coord_data.bh_rmin = pin->GetOrAddReal("coord","rmin",0.0);
+  }
 }
 
 //----------------------------------------------------------------------------------------

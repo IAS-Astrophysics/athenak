@@ -42,12 +42,12 @@ tlim        = 0.4     # time limit
 ndiag       = 1       # cycles between diagostic output
 
 <coord>
+general_rel = true
 a = 1.0
 m = 1.0
 minkowski = true
 
 <mhd>
-general_rel = true
 eos         = ideal
 reconstruct = ppm
 rsolver     = hlle

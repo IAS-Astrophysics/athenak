@@ -11,6 +11,7 @@
 //  (Hydro, MHD, etc.), and for non-relativistic and relativistic flows.
 
 #include <cmath>
+#include <string>
 
 #include "athena.hpp"
 #include "mesh/meshblock.hpp"
@@ -27,7 +28,7 @@ struct EOS_Data {
   Real iso_cs;       // isothermal sound speed
   bool is_ideal;     // flag to denote ideal gas EOS
   bool use_e, use_t; // use internal energy density (e) or temperature (t) as primitive
-  Real density_floor, pressure_floor, temperature_floor;
+  Real dfloor, pfloor, tfloor;
 
   // IDEAL GAS PRESSURE: converts primitive variable (either internal energy density e
   // or temperature e/d) into pressure.
@@ -300,7 +301,7 @@ struct EOS_Data {
 
 class EquationOfState {
  public:
-  EquationOfState(MeshBlockPack *pp, ParameterInput *pin);
+  EquationOfState(std::string block, MeshBlockPack *pp, ParameterInput *pin);
   virtual ~EquationOfState() = default;
 
   MeshBlockPack* pmy_pack;
