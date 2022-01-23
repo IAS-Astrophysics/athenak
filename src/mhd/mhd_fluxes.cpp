@@ -360,13 +360,13 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage) {
 
   // Add viscous, resistive, heat-flux, etc fluxes
   if (pvisc != nullptr) {
-    pvisc->IsotropicViscousFlux(u0, pvisc->nu, eos, uflx);
+    pvisc->IsotropicViscousFlux(w0, pvisc->nu, eos, uflx);
   }
   if ((presist != nullptr) && (peos->eos_data.is_ideal)) {
     presist->OhmicEnergyFlux(b0, uflx);
   }
   if (pcond != nullptr) {
-    pcond->IsotropicHeatFlux(u0, pcond->kappa, eos, uflx);
+    pcond->IsotropicHeatFlux(w0, pcond->kappa, eos, uflx);
   }
 
   return TaskStatus::complete;
