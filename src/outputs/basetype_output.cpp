@@ -382,11 +382,14 @@ void BaseTypeOutput::LoadOutputData(Mesh *pm) {
                             size.h_view(m).x3min, size.h_view(m).x3max);
       oke = oks;
     }
-   
+
     // set coordinate geometry information for MB
-    Real x1i = CellCenterX(ois - indcs.is, indcs.nx1, size.h_view(m).x1min, size.h_view(m).x1max);
-    Real x2i = CellCenterX(ojs - indcs.js, indcs.nx2, size.h_view(m).x2min, size.h_view(m).x2max);
-    Real x3i = CellCenterX(oks - indcs.ks, indcs.nx3, size.h_view(m).x3min, size.h_view(m).x3max);
+    Real x1i = CellCenterX(ois - indcs.is, indcs.nx1, size.h_view(m).x1min,
+                           size.h_view(m).x1max);
+    Real x2i = CellCenterX(ojs - indcs.js, indcs.nx2, size.h_view(m).x2min,
+                           size.h_view(m).x2max);
+    Real x3i = CellCenterX(oks - indcs.ks, indcs.nx3, size.h_view(m).x3min,
+                           size.h_view(m).x3max);
     Real dx1 = size.h_view(m).dx1;
     Real dx2 = size.h_view(m).dx2;
     Real dx3 = size.h_view(m).dx3;

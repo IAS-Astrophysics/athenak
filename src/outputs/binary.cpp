@@ -65,7 +65,8 @@ void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   // 4. Header (input file information)
   {std::stringstream msg;
   msg << "Athena binary output version=1.1" << std::endl
-      << "  size of preheader=5" << std::endl  // includes this line up to "number of variables"
+      // preheader size includes "size of preheader" line up to "number of variables"
+      << "  size of preheader=5" << std::endl
       << "  time=" << pm->time << std::endl
       << "  cycle=" << pm->ncycle << std::endl
       << "  size of location=" << sizeof(Real) << std::endl
@@ -104,7 +105,8 @@ void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   int cells = mb_nx1*mb_nx2*mb_nx3;
 
   // il1, il2, il3, level + x1i, x2i, x3i, dx1, dx2, dx + data
-  std::size_t data_size = 4*sizeof(int32_t) + 6*sizeof(Real) + (cells*nout_vars)*sizeof(float);
+  std::size_t data_size = 4*sizeof(int32_t) + 6*sizeof(Real)
+                        + (cells*nout_vars)*sizeof(float);
 
   int nout_mbs = (outmbs.size());
   int ns_mbs = pm->gidslist[global_variable::my_rank];
@@ -139,7 +141,7 @@ void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     memcpy(pdata,&(nx),sizeof(nx));
     pdata+=sizeof(nx);
 
-    // now coordinate location. 
+    // now coordinate location.
     Real xv = outmbs[m].x1i;
     memcpy(pdata,&(xv),sizeof(xv));
     pdata+=sizeof(xv);
