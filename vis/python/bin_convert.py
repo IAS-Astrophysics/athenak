@@ -1,5 +1,5 @@
 """
-Functions for reading and writing athena output formats.
+Functions to convert bin -> athdf(xdmf) with mesh refinement support.
 
 This module contains a collection of helper functions for reading and
 writing athena file data formats. More information is provided in the 
@@ -10,17 +10,18 @@ function docstrings.
 In order to translate a binary file into athdf and corresponding xdmf 
 files, you could do the following:
 
-  import athio
+  import bin_convert
+  import os
 
   binary_fname = "path/to/file.bin"
   athdf_fname = binary_fname.replace(".bin", ".athdf")
   xdmf_fname = athdf_fname + ".xdmf"
-  filedata = athio.read_binary(binary_fname)
-  athio.write_athdf(athdf_fname, filedata)
-  athio.write_xdmf_for(xdmf_fname, os.path.basename(athdf_fname), filedata)
+  filedata = bin_convert.read_binary(binary_fname)
+  bin_convert.write_athdf(athdf_fname, filedata)
+  bin_convert.write_xdmf_for(xdmf_fname, os.path.basename(athdf_fname), filedata)
 
-Notice that the write_xdmf_for(...) function expects the relative path
-to the athdf file, so be careful when setting this parameter!
+Notice that write_xdmf_for(...) function expects the relative path to
+the athdf file from the xdmf, so please be aware of this requirement.
 
 ----
 
@@ -283,7 +284,7 @@ def write_xdmf_for(xdmfname, dumpname, fdata, mode='auto'):
       xdmfname - name of xdmf file
       dumpname - location of fluid data file relative to xdmfname directory
       fdata    - dictionary of fluid file data, e.g., as loaded from read_binary(...)
-      mode     - (unimplemented) force xdmf for athdf or vtk format
+      mode     - (unimplemented) force xdmf for format (auto sets by extension)
     """
 
     fp = open(xdmfname, 'w')
