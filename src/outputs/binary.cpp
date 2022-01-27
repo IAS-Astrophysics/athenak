@@ -64,8 +64,12 @@ void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   // 3. List of variables in the file
   // 4. Header (input file information)
   {std::stringstream msg;
-  msg << "AthenaK binary output at time=" << pm->time << std::endl
+  msg << "Athena binary output version=1.1" << std::endl
+      << "  size of preheader=5" << std::endl  // includes this line up to "number of variables"
+      << "  time=" << pm->time << std::endl
       << "  cycle=" << pm->ncycle << std::endl
+      << "  size of location=" << sizeof(Real) << std::endl
+      << "  size of variable=" << sizeof(float) << std::endl
       << "  number of variables=" << outvars.size() << std::endl
       << "  variables:  ";
   for (int n=0; n<outvars.size(); n++) {
@@ -93,12 +97,14 @@ void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   //  in the OutputData doubly linked lists), all in binary floats format
 
   int nout_vars = outvars.size();
-  auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
+  auto &indcs = pm->mb_indcs;
   int is = indcs.is; int &mb_nx1 = indcs.nx1;
   int js = indcs.js; int &mb_nx2 = indcs.nx2;
   int ks = indcs.ks; int &mb_nx3 = indcs.nx3;
   int cells = mb_nx1*mb_nx2*mb_nx3;
-  std::size_t data_size = 3*sizeof(int32_t) + (cells*nout_vars)*sizeof(float);
+
+  // il1, il2, il3, level + x1i, x2i, x3i, dx1, dx2, dx + data
+  std::size_t data_size = 4*sizeof(int32_t) + 6*sizeof(Real) + (cells*nout_vars)*sizeof(float);
 
   int nout_mbs = (outmbs.size());
   int ns_mbs = pm->gidslist[global_variable::my_rank];
@@ -112,7 +118,6 @@ void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   for (int m=0; m<nout_mbs; ++m) {
     char *pdata=&(data[m*data_size]);
     LogicalLocation loc = pm->lloclist[outmbs[m].mb_gid];
-    int32_t nx;
     int &ois = outmbs[m].ois;
     int &oie = outmbs[m].oie;
     int &ojs = outmbs[m].ojs;
@@ -120,16 +125,39 @@ void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     int &oks = outmbs[m].oks;
     int &oke = outmbs[m].oke;
 
-    // logical location first
-    nx = (int32_t)(loc.lx1);
-    memcpy(pdata,&(nx),sizeof(int32_t));
-    pdata+=sizeof(int32_t);
+    // logical location first, lx1, lx2, lx3, llevel
+    int32_t nx = (int32_t)(loc.lx1);
+    memcpy(pdata,&(nx),sizeof(nx));
+    pdata+=sizeof(nx);
     nx = (int32_t)(loc.lx2);
-    memcpy(pdata,&(nx),sizeof(int32_t));
-    pdata+=sizeof(int32_t);
+    memcpy(pdata,&(nx),sizeof(nx));
+    pdata+=sizeof(nx);
     nx = (int32_t)(loc.lx3);
-    memcpy(pdata,&(nx),sizeof(int32_t));
-    pdata+=sizeof(int32_t);
+    memcpy(pdata,&(nx),sizeof(nx));
+    pdata+=sizeof(nx);
+    nx = (int32_t)(loc.level);
+    memcpy(pdata,&(nx),sizeof(nx));
+    pdata+=sizeof(nx);
+
+    // now coordinate location. 
+    Real xv = outmbs[m].x1i;
+    memcpy(pdata,&(xv),sizeof(xv));
+    pdata+=sizeof(xv);
+    xv = outmbs[m].x2i;
+    memcpy(pdata,&(xv),sizeof(xv));
+    pdata+=sizeof(xv);
+    xv = outmbs[m].x3i;
+    memcpy(pdata,&(xv),sizeof(xv));
+    pdata+=sizeof(xv);
+    xv = outmbs[m].dx1;
+    memcpy(pdata,&(xv),sizeof(xv));
+    pdata+=sizeof(xv);
+    xv = outmbs[m].dx2;
+    memcpy(pdata,&(xv),sizeof(xv));
+    pdata+=sizeof(xv);
+    xv = outmbs[m].dx3;
+    memcpy(pdata,&(xv),sizeof(xv));
+    pdata+=sizeof(xv);
 
     float tmp_data;
     for (int n=0; n<nout_vars; n++) {

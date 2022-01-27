@@ -84,9 +84,13 @@ struct OutputVariableInfo {
 struct OutputMeshBlockInfo {
   int mb_gid;                        // gid of output MB
   int ois, oie, ojs, oje, oks, oke;  // start/end indices of data to be output on MB
+  Real x1i, x2i, x3i;                // coordinate location of left-most cell center
+  Real dx1, dx2, dx3;                // cell spacing
   // constructor
-  OutputMeshBlockInfo(int id, int is, int ie, int js, int je, int ks, int ke) :
-    mb_gid(id), ois(is), oie(ie), ojs(js), oje(je), oks(ks), oke(ke) {}
+  OutputMeshBlockInfo(int id, int is, int ie, int js, int je, int ks, int ke,
+    Real x1i, Real x2i, Real x3i, Real dx1, Real dx2, Real dx3) :
+    mb_gid(id), ois(is), oie(ie), ojs(js), oje(je), oks(ks), oke(ke),
+    x1i(x1i), x2i(x2i), x3i(x3i), dx1(dx1), dx2(dx2), dx3(dx3) {}
 };
 
 //----------------------------------------------------------------------------------------
