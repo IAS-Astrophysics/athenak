@@ -332,7 +332,7 @@ def write_xdmf_for(xdmfname, dumpname, fdata, mode='auto'):
         fp.write("""   <Topology TopologyType="3DRectMesh" """)
         fp.write(f""" NumberOfElements="{nx3+1} {nx2+1} {nx1+1}"/>\n""")
         fp.write("""   <Geometry GeometryType="VXVYVZ">\n""")
-        fp.write("""    <DataItem ItemType="HyperSlab" Dimensions="{nx1+1}">
+        fp.write(f"""    <DataItem ItemType="HyperSlab" Dimensions="{nx1+1}">
      <DataItem Dimensions="3 2" NumberType="Int"> {mb} 0 1 1 1 {nx1+1} </DataItem>
      <DataItem Dimensions="{nmb} {nx1+1}" Format="HDF"> {dumpname}:/x1f </DataItem>
     </DataItem>
