@@ -102,8 +102,8 @@ def read_binary(filename):
     if len(code_header) < 1:
         raise TypeError("unknown file format")
     if code_header[0] != b"Athena":
-        raise TypeError(f"bad file format \"{code_header[0].decode('utf-8')}\" \
-            (should be \"Athena\")")
+        raise TypeError(f"bad file format \"{code_header[0].decode('utf-8')}\" " +
+                        "(should be \"Athena\")")
     version = code_header[-1].split(b'=')[-1]
     if version != b"1.1":
         raise TypeError(f"unsupported file format version {version.decode('utf-8')}")
@@ -166,8 +166,9 @@ def read_binary(filename):
     x3max = float(get_from_header(header, '<mesh>', 'x3max'))
 
     # load data from each meshblock
-    mb_fstr = f"={nx1*nx2*nx3}" + varfmt
-    mb_varsize = varsizebytes*nx1*nx2*nx3
+    n_vars = len(var_list)
+    mb_fstr = f"={nx1*nx2*nx3*n_vars}" + varfmt
+    mb_varsize = varsizebytes*nx1*nx2*nx3*n_vars
     mb_count = 0
 
     meshblock_logical = []
@@ -175,7 +176,7 @@ def read_binary(filename):
 
     meshblock_data = {}
     for var in var_list:
-        meshblock_data[var] = np.zeros((0, nx3, nx2, nx1))
+        meshblock_data[var] = []
 
     while fp.tell() < filesize:
         mb_count += 1
@@ -184,10 +185,10 @@ def read_binary(filename):
         meshblock_geometry.append(np.array(struct.unpack('=6'+locfmt,
                                   fp.read(6*locsizebytes))))
 
-        for var in var_list:
-            data = np.array(struct.unpack(mb_fstr, fp.read(mb_varsize)))
-            data = data.reshape(1, nx3, nx2, nx1)
-            meshblock_data[var] = np.append(meshblock_data[var], data, axis=0)
+        data = np.array(struct.unpack(mb_fstr, fp.read(mb_varsize)))
+        data = data.reshape(nvars, nx3, nx2, nx1)
+        for vari, var in enumerate(var_list):
+            meshblock_data[var].append(data[vari])
 
     fp.close()
 
