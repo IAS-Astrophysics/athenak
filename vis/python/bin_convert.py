@@ -383,8 +383,8 @@ def write_xdmf_for(xdmfname, dumpname, fdata, mode='auto'):
     fp.write("""<Grid Name="Mesh" GridType="Collection">\n""")
     fp.write(f""" <Time Value="{fdata['time']}"/>\n""")
 
-    vars_without_b = set([v for v in fdata['var_names'] if 'bcc' not in v])
-    vars_only_b = sorted(set(fdata['var_names']) - vars_without_b)
+    vars_without_b = [v for v in fdata['var_names'] if 'bcc' not in v]
+    vars_only_b = [v for v in fdata['var_names'] if v not in vars_without_b]
 
     nx1 = fdata['nx1_meshblock']
     nx2 = fdata['nx2_meshblock']
