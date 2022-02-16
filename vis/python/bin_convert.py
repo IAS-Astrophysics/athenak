@@ -350,7 +350,7 @@ def write_xdmf_for(xdmfname, dumpname, fdata, mode='auto'):
         for vi, var_name in enumerate(vars_no_b):
             fp.write(f"""   <Attribute Name="{var_name}" Center="Cell">
     <DataItem ItemType="HyperSlab" Dimensions="{nx3} {nx2} {nx1}">
-     <DataItem Dimensions="3 {nvar_no_b}" NumberType="Int">
+     <DataItem Dimensions="3 5" NumberType="Int">
       {vi} {mb} 0 0 0 1 1 1 1 1 1 1 {nx3} {nx2} {nx1}
      </DataItem>
      <DataItem Dimensions="{nvar_no_b} {nmb} {nx3} {nx2} {nx1}" Format="HDF">
@@ -364,10 +364,10 @@ def write_xdmf_for(xdmfname, dumpname, fdata, mode='auto'):
             for vi, var_name in enumerate(vars_w_b):
                 fp.write(f"""   <Attribute Name="{var_name}" Center="Cell">
         <DataItem ItemType="HyperSlab" Dimensions="{nx3} {nx2} {nx1}">
-         <DataItem Dimensions="3 {nvar_no_b}" NumberType="Int">
+         <DataItem Dimensions="3 5" NumberType="Int">
           {vi} {mb} 0 0 0 1 1 1 1 1 1 1 {nx3} {nx2} {nx1}
          </DataItem>
-         <DataItem Dimensions="{nvar_no_b} {nmb} {nx3} {nx2} {nx1}" Format="HDF">
+         <DataItem Dimensions="{nvar_w_b} {nmb} {nx3} {nx2} {nx1}" Format="HDF">
           {dumpname}:/B
          </DataItem>
         </DataItem>
