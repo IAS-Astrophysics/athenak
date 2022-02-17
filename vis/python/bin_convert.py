@@ -33,13 +33,13 @@ The read_*(...) functions return a filedata dictionary-like object with
         cycle from input file
     filedata['var_names'] = array of strings
         ordered array of variable names, like ['dens', 'eint', ...]
-    filedata['n_meshblocks'] = int
+    filedata['n_mbs'] = int
         total number of meshblocks in the file
-    filedata['nx1_meshblock'] = int
+    filedata['nx1_mb'] = int
         number of cells in x1 direction in meshblock
-    filedata['nx2_meshblock'] = int
+    filedata['nx2_mb'] = int
         number of cells in x2 direction in meshblock
-    filedata['nx3_meshblock'] = int
+    filedata['nx3_mb'] = int
         number of cells in x3 direction in meshblock
     filedata['Nx1'] = int
         total number of cell in x1 direction in root grid
@@ -61,12 +61,12 @@ The read_*(...) functions return a filedata dictionary-like object with
         coordinate maximum of root grid in x3 direction
     filedata['nvars'] = int
         number of output variables (including magnetic field if it exists)
-    filedata['meshblock_logical'] = array with shape [n_meshblock, 4]
+    filedata['mb_logical'] = array with shape [n_mbs, 4]
         i,j,k,level coordinates for each meshblock
-    filedata['meshblock_geometry'] = array with shape [n_meshblock, 6]
+    filedata['mb_geometry'] = array with shape [n_mbs, 6]
         x1i,x2i,x3i,dx1,dx2,dx3 including cell-centered location of left-most
         cell and offsets between cells
-    filedata['meshblock_data'] = dict of arrays with shape [n_meshblock, nx3, nx2, nx1]
+    filedata['mb_data'] = dict of arrays with shape [n_mbs, nx3, nx2, nx1]
         {'var1':var1_array, 'var2':var2_array, ...} dictionary of fluid data arrays
         for each variable in var_names
 """
@@ -171,24 +171,24 @@ def read_binary(filename):
     mb_varsize = varsizebytes*nx1*nx2*nx3*n_vars
     mb_count = 0
 
-    meshblock_logical = []
-    meshblock_geometry = []
+    mb_logical = []
+    mb_geometry = []
 
-    meshblock_data = {}
+    mb_data = {}
     for var in var_list:
-        meshblock_data[var] = []
+        mb_data[var] = []
 
     while fp.tell() < filesize:
         mb_count += 1
 
-        meshblock_logical.append(np.array(struct.unpack('@4i', fp.read(16))))
-        meshblock_geometry.append(np.array(struct.unpack('=6'+locfmt,
-                                  fp.read(6*locsizebytes))))
+        mb_logical.append(np.array(struct.unpack('@4i', fp.read(16))))
+        mb_geometry.append(np.array(struct.unpack('=6'+locfmt,
+                                    fp.read(6*locsizebytes))))
 
         data = np.array(struct.unpack(mb_fstr, fp.read(mb_varsize)))
         data = data.reshape(nvars, nx3, nx2, nx1)
         for vari, var in enumerate(var_list):
-            meshblock_data[var].append(data[vari])
+            mb_data[var].append(data[vari])
 
     fp.close()
 
@@ -208,14 +208,14 @@ def read_binary(filename):
     filedata['x3min'] = x3min
     filedata['x3max'] = x3max
 
-    filedata['n_meshblocks'] = mb_count
-    filedata['nx1_meshblock'] = nx1
-    filedata['nx2_meshblock'] = nx2
-    filedata['nx3_meshblock'] = nx3
+    filedata['n_mbs'] = mb_count
+    filedata['nx1_mb'] = nx1
+    filedata['nx2_mb'] = nx2
+    filedata['nx3_mb'] = nx3
 
-    filedata['meshblock_logical'] = np.array(meshblock_logical)
-    filedata['meshblock_geometry'] = np.array(meshblock_geometry)
-    filedata['meshblock_data'] = meshblock_data
+    filedata['mb_logical'] = np.array(mb_logical)
+    filedata['mb_geometry'] = np.array(mb_geometry)
+    filedata['mb_data'] = mb_data
 
     return filedata
 
@@ -244,10 +244,10 @@ def write_athdf(filename, fdata, varsize_bytes=4, locsize_bytes=8):
     locfmt = '<f4' if locsize_bytes == 4 else '<f8'
     varfmt = '<f4' if varsize_bytes == 4 else '<f8'
 
-    nmb = fdata['n_meshblocks']
-    nx1 = fdata['nx1_meshblock']
-    nx2 = fdata['nx2_meshblock']
-    nx3 = fdata['nx3_meshblock']
+    nmb = fdata['n_mbs']
+    nx1 = fdata['nx1_mb']
+    nx2 = fdata['nx2_mb']
+    nx3 = fdata['nx3_mb']
 
     # keep variable order but separate out magnetic field
     vars_without_b = [v for v in fdata['var_names'] if 'bcc' not in v]
@@ -256,7 +256,7 @@ def write_athdf(filename, fdata, varsize_bytes=4, locsize_bytes=8):
     B = np.zeros((3, nmb, nx3, nx2, nx1))
     Levels = np.zeros(nmb)
     LogicalLocations = np.zeros((nmb, 3))
-    prim = np.zeros((len(vars_without_b), nmb, nx3, nx2, nx1))
+    uov = np.zeros((len(vars_without_b), nmb, nx3, nx2, nx1))
     x1f = np.zeros((nmb, nx1+1))
     x1v = np.zeros((nmb, nx1))
     x2f = np.zeros((nmb, nx2+1))
@@ -265,15 +265,15 @@ def write_athdf(filename, fdata, varsize_bytes=4, locsize_bytes=8):
     x3v = np.zeros((nmb, nx3))
 
     for ivar, var in enumerate(vars_without_b):
-        prim[ivar] = fdata['meshblock_data'][var]
+        uov[ivar] = fdata['mb_data'][var]
     for ibvar, bvar in enumerate(vars_only_b):
-        B[ibvar] = fdata['meshblock_data'][bvar]
+        B[ibvar] = fdata['mb_data'][bvar]
 
     for mb in range(nmb):
-        logical = fdata['meshblock_logical'][mb]
+        logical = fdata['mb_logical'][mb]
         LogicalLocations[mb] = logical[:3]
         Levels[mb] = logical[-1]
-        geometry = fdata['meshblock_geometry'][mb]
+        geometry = fdata['mb_geometry'][mb]
         x1f[mb] = geometry[0] + (np.arange(nx1+1)-0.5)*geometry[3]
         x1v[mb] = geometry[0] + np.arange(nx1)*geometry[3]
         x2f[mb] = geometry[1] + (np.arange(nx2+1)-0.5)*geometry[4]
@@ -281,26 +281,28 @@ def write_athdf(filename, fdata, varsize_bytes=4, locsize_bytes=8):
         x3f[mb] = geometry[2] + (np.arange(nx3+1)-0.5)*geometry[5]
         x3v[mb] = geometry[2] + np.arange(nx3)*geometry[5]
 
-    # TODO, support attributes
-    #    ATTRIBUTE "Coordinates"
-    #    ATTRIBUTE "DatasetNames"
-    #    ATTRIBUTE "MaxLevel"
-    #    ATTRIBUTE "MeshBlockSize"
-    #    ATTRIBUTE "NumCycles"
-    #    ATTRIBUTE "NumMeshBlocks"
-    #    ATTRIBUTE "NumVariables"
-    #    ATTRIBUTE "RootGridSize"
-    #    ATTRIBUTE "RootGridX1"
-    #    ATTRIBUTE "RootGridX2"
-    #    ATTRIBUTE "RootGridX3"
-    #    ATTRIBUTE "Time"
-    #    ATTRIBUTE "VariableNames"
-
+    # write file
+    utf8_type = h5py.string_dtype('utf-8', 30)
+    ascii_type = h5py.string_dtype('ascii', 30)
     hfp = h5py.File(filename, 'w')
+    hfp.attrs['Time'] = fdata['time']
+    hfp.attrs['NumCycles'] = fdata['cycle']
+    hfp.attrs['Coordinates'] = np.array('cartesian'.encode("utf-8"), dtype=utf8_type)
+    hfp.attrs['NumMeshBlocks'] = fdata['n_mbs']
+    hfp.attrs['MaxLevel'] = int(max(Levels))
+    hfp.attrs['MeshBlockSize'] = [fdata['nx1_mb'], fdata['nx2_mb'], fdata['nx3_mb']]
+    hfp.attrs['RootGridSize'] = [fdata['Nx1'], fdata['Nx2'], fdata['Nx3']]
+    hfp.attrs['RootGridX1'] = [fdata['x1min'], fdata['x1max'], 1.0]
+    hfp.attrs['RootGridX2'] = [fdata['x2min'], fdata['x2max'], 1.0]
+    hfp.attrs['RootGridX3'] = [fdata['x3min'], fdata['x3max'], 1.0]
+    hfp.attrs['DatasetNames'] = [np.array('uov'.encode("utf-8"), dtype=ascii_type)]
+    hfp.attrs['NumVariables'] = [len(fdata['var_names'])]
+    hfp.attrs['VariableNames'] = [np.array(i.encode("utf-8"), dtype=ascii_type)
+                                  for i in fdata['var_names']]
     hfp.create_dataset('B', data=B, dtype=varfmt)
     hfp.create_dataset('Levels', data=Levels, dtype='>i4')
     hfp.create_dataset('LogicalLocations', data=LogicalLocations, dtype='>i8')
-    hfp.create_dataset('prim', data=prim, dtype=varfmt)
+    hfp.create_dataset('uov', data=uov, dtype=varfmt)
     hfp.create_dataset('x1f', data=x1f, dtype=locfmt)
     hfp.create_dataset('x1v', data=x1v, dtype=locfmt)
     hfp.create_dataset('x2f', data=x2f, dtype=locfmt)
@@ -328,7 +330,7 @@ def write_xdmf_for(xdmfname, dumpname, fdata, mode='auto'):
     fp = open(xdmfname, 'w')
 
     def write_meshblock(fp, mb, nx1, nx2, nx3, nmb, dumpname, vars_no_b, vars_w_b):
-        fp.write("""  <Grid Name="MeshBlock{mb}" GridType="Uniform">\n""")
+        fp.write(f"""  <Grid Name="MeshBlock{mb}" GridType="Uniform">\n""")
         fp.write("""   <Topology TopologyType="3DRectMesh" """)
         fp.write(f""" NumberOfElements="{nx3+1} {nx2+1} {nx1+1}"/>\n""")
         fp.write("""   <Geometry GeometryType="VXVYVZ">\n""")
@@ -354,7 +356,7 @@ def write_xdmf_for(xdmfname, dumpname, fdata, mode='auto'):
       {vi} {mb} 0 0 0 1 1 1 1 1 1 1 {nx3} {nx2} {nx1}
      </DataItem>
      <DataItem Dimensions="{nvar_no_b} {nmb} {nx3} {nx2} {nx1}" Format="HDF">
-      {dumpname}:/prim
+      {dumpname}:/uov
      </DataItem>
     </DataItem>
    </Attribute>\n""")
@@ -386,10 +388,10 @@ def write_xdmf_for(xdmfname, dumpname, fdata, mode='auto'):
     vars_without_b = [v for v in fdata['var_names'] if 'bcc' not in v]
     vars_only_b = [v for v in fdata['var_names'] if v not in vars_without_b]
 
-    nx1 = fdata['nx1_meshblock']
-    nx2 = fdata['nx2_meshblock']
-    nx3 = fdata['nx3_meshblock']
-    nmb = fdata['n_meshblocks']
+    nx1 = fdata['nx1_mb']
+    nx2 = fdata['nx2_mb']
+    nx3 = fdata['nx3_mb']
+    nmb = fdata['n_mbs']
 
     for mb in range(nmb):
         write_meshblock(fp, mb, nx1, nx2, nx3, nmb, dumpname, vars_without_b, vars_only_b)
