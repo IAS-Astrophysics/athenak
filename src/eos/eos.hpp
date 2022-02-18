@@ -6,9 +6,9 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file eos.hpp
-//  \brief Contains data and functions that implement conserved->primitive variable
-//  conversion for various EOS (e.g. ideal gas, isothermal, etc.), for various fluids
-//  (Hydro, MHD, etc.), and for non-relativistic and relativistic flows.
+//! \brief Contains data and functions that implement conserved->primitive variable
+//! conversion for various EOS (e.g. ideal gas, isothermal, etc.), for various fluids
+//! (Hydro, MHD, etc.), and for non-relativistic and relativistic flows.
 
 #include <cmath>
 #include <string>
@@ -19,9 +19,9 @@
 
 //----------------------------------------------------------------------------------------
 //! \struct EOSData
-//  \brief container for EOS variables and functions needed inside kernels. Storing
-//  everything in a container makes them easier to capture, and pass to inline functions,
-//  inside kernels.
+//! \brief container for EOS variables and functions needed inside kernels. Storing
+//! everything in a container makes them easier to capture, and pass to inline functions,
+//! inside kernels.
 
 struct EOS_Data {
   Real gamma;        // ratio of specific heats for ideal gas
@@ -297,7 +297,7 @@ struct EOS_Data {
 
 //----------------------------------------------------------------------------------------
 //! \class EquationOfState
-//  \brief Abstract base class for Hydro EOS
+//! \brief Abstract base class for EOS.
 
 class EquationOfState {
  public:
@@ -309,21 +309,27 @@ class EquationOfState {
 
   // virtual functions to convert cons to prim in either Hydro or MHD (depending on
   // arguments), overwritten in derived eos classes
-  virtual void ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim);
+  virtual void ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
+                          const int il, const int iu, const int jl, const int ju,
+                          const int kl, const int ku);
   virtual void ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
-                          DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc);
+                          DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc,
+                          const int il, const int iu, const int jl, const int ju,
+                          const int kl, const int ku);
 
   // virtual functions to convert prim to cons in either Hydro or MHD (depending on
-  // arguments), overwritten in derived eos classes.  Used in SR/GR, and for prolongation
-  // with SMR/AMR.
-  virtual void PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons);
+  // arguments), overwritten in derived eos classes.
+  virtual void PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons,
+                          const int il, const int iu, const int jl, const int ju,
+                          const int kl, const int ku);
   virtual void PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,
-                          DvceArray5D<Real> &cons);
+                          DvceArray5D<Real> &cons, const int il, const int iu,
+                          const int jl, const int ju, const int kl, const int ku);
 };
 
 //----------------------------------------------------------------------------------------
 //! \class IsothermalHydro
-//  \brief Derived class for Hydro isothermal EOS
+//! \brief Derived class for isothermal EOS in nonrelativistic Hydro
 
 class IsothermalHydro : public EquationOfState {
  public:
@@ -332,13 +338,17 @@ class IsothermalHydro : public EquationOfState {
   using EquationOfState::PrimToCons;
 
   IsothermalHydro(MeshBlockPack *pp, ParameterInput *pin);
-  void ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
-  void PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons) override;
+  void ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
+                  const int il, const int iu, const int jl, const int ju,
+                  const int kl, const int ku) override;
+  void PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons,
+                  const int il, const int iu, const int jl, const int ju,
+                  const int kl, const int ku) override;
 };
 
 //----------------------------------------------------------------------------------------
 //! \class IdealHydro
-//  \brief Derived class for ideal gas EOS in nonrelativistic hydro
+//! \brief Derived class for ideal gas EOS in nonrelativistic hydro
 
 class IdealHydro : public EquationOfState {
  public:
@@ -347,13 +357,17 @@ class IdealHydro : public EquationOfState {
   using EquationOfState::PrimToCons;
 
   IdealHydro(MeshBlockPack *pp, ParameterInput *pin);
-  void ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
-  void PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons) override;
+  void ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
+                  const int il, const int iu, const int jl, const int ju,
+                  const int kl, const int ku) override;
+  void PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons,
+                  const int il, const int iu, const int jl, const int ju,
+                  const int kl, const int ku) override;
 };
 
 //----------------------------------------------------------------------------------------
-//! \class IdealHydroSR
-//  \brief Derived class for ideal gas EOS in special relativistic Hydro
+//! \class IdealSRHydro
+//! \brief Derived class for ideal gas EOS in special relativistic Hydro
 
 class IdealSRHydro : public EquationOfState {
  public:
@@ -362,47 +376,17 @@ class IdealSRHydro : public EquationOfState {
   using EquationOfState::PrimToCons;
 
   IdealSRHydro(MeshBlockPack *pp, ParameterInput *pin);
-  void ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
-  void PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons) override;
+  void ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
+                  const int il, const int iu, const int jl, const int ju,
+                  const int kl, const int ku) override;
+  void PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons,
+                  const int il, const int iu, const int jl, const int ju,
+                  const int kl, const int ku) override;
 };
 
 //----------------------------------------------------------------------------------------
-//! \class IdealSRMHD
-//  \brief Derived class for ideal gas EOS in special relativistic MHD
-
-class IdealSRMHD : public EquationOfState {
- public:
-  // Following suppress warnings that hydro versions are not over-ridden
-  using EquationOfState::ConsToPrim;
-  using EquationOfState::PrimToCons;
-
-  IdealSRMHD(MeshBlockPack *pp, ParameterInput *pin);
-  void ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
-                  DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc) override;
-  void PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,
-                  DvceArray5D<Real> &cons) override;
-};
-
-//----------------------------------------------------------------------------------------
-//! \class IdealGRMHD
-//  \brief Derived class for ideal gas EOS in general relativistic MHD
-
-class IdealGRMHD : public EquationOfState {
- public:
-  // Following suppress warnings that MHD versions are not over-ridden
-  using EquationOfState::ConsToPrim;
-  using EquationOfState::PrimToCons;
-
-  IdealGRMHD(MeshBlockPack *pp, ParameterInput *pin);
-  void ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
-                  DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc) override;
-  void PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,
-                  DvceArray5D<Real> &cons) override;
-};
-
-//----------------------------------------------------------------------------------------
-//! \class IdealHydroGR
-//  \brief Derived class for ideal gas EOS in general relativistic Hydro
+//! \class IdealGRHydro
+//! \brief Derived class for ideal gas EOS in general relativistic Hydro
 
 class IdealGRHydro : public EquationOfState {
  public:
@@ -411,13 +395,17 @@ class IdealGRHydro : public EquationOfState {
   using EquationOfState::PrimToCons;
 
   IdealGRHydro(MeshBlockPack *pp, ParameterInput *pin);
-  void ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) override;
-  void PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons) override;
+  void ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
+                  const int il, const int iu, const int jl, const int ju,
+                  const int kl, const int ku) override;
+  void PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons,
+                  const int il, const int iu, const int jl, const int ju,
+                  const int kl, const int ku) override;
 };
 
 //----------------------------------------------------------------------------------------
 //! \class IsothermalMHD
-//  \brief Derived class for isothermal EOS in nonrelativistic MHD
+//! \brief Derived class for isothermal EOS in nonrelativistic MHD
 
 class IsothermalMHD : public EquationOfState {
  public:
@@ -427,14 +415,17 @@ class IsothermalMHD : public EquationOfState {
 
   IsothermalMHD(MeshBlockPack *pp, ParameterInput *pin);
   void ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
-                  DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc) override;
+                  DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc,
+                  const int il, const int iu, const int jl, const int ju,
+                  const int kl, const int ku) override;
   void PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,
-                  DvceArray5D<Real> &cons) override;
+                  DvceArray5D<Real> &cons, const int il, const int iu,
+                  const int jl, const int ju, const int kl, const int ku) override;
 };
 
 //----------------------------------------------------------------------------------------
 //! \class IdealMHD
-//  \brief Derived class for ideal gas EOS in nonrelativistic MHD
+//! \brief Derived class for ideal gas EOS in nonrelativistic MHD
 
 class IdealMHD : public EquationOfState {
  public:
@@ -444,9 +435,52 @@ class IdealMHD : public EquationOfState {
 
   IdealMHD(MeshBlockPack *pp, ParameterInput *pin);
   void ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
-                  DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc) override;
+                  DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc,
+                  const int il, const int iu, const int jl, const int ju,
+                  const int kl, const int ku) override;
   void PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,
-                  DvceArray5D<Real> &cons) override;
+                  DvceArray5D<Real> &cons, const int il, const int iu,
+                  const int jl, const int ju, const int kl, const int ku) override;
+};
+
+//----------------------------------------------------------------------------------------
+//! \class IdealSRMHD
+//! \brief Derived class for ideal gas EOS in special relativistic MHD
+
+class IdealSRMHD : public EquationOfState {
+ public:
+  // Following suppress warnings that hydro versions are not over-ridden
+  using EquationOfState::ConsToPrim;
+  using EquationOfState::PrimToCons;
+
+  IdealSRMHD(MeshBlockPack *pp, ParameterInput *pin);
+  void ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
+                  DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc,
+                  const int il, const int iu, const int jl, const int ju,
+                  const int kl, const int ku) override;
+  void PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,
+                  DvceArray5D<Real> &cons, const int il, const int iu,
+                  const int jl, const int ju, const int kl, const int ku) override;
+};
+
+//----------------------------------------------------------------------------------------
+//! \class IdealGRMHD
+//! \brief Derived class for ideal gas EOS in general relativistic MHD
+
+class IdealGRMHD : public EquationOfState {
+ public:
+  // Following suppress warnings that MHD versions are not over-ridden
+  using EquationOfState::ConsToPrim;
+  using EquationOfState::PrimToCons;
+
+  IdealGRMHD(MeshBlockPack *pp, ParameterInput *pin);
+  void ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
+                  DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc,
+                  const int il, const int iu, const int jl, const int ju,
+                  const int kl, const int ku) override;
+  void PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,
+                  DvceArray5D<Real> &cons, const int il, const int iu,
+                  const int jl, const int ju, const int kl, const int ku) override;
 };
 
 #endif // EOS_EOS_HPP_

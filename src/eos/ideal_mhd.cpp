@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file ideal_mhd.cpp
-//  \brief derived class that implements ideal gas EOS in nonrelativistic mhd
+//! \brief derived class that implements ideal gas EOS in nonrelativistic mhd
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
@@ -44,19 +44,16 @@ IdealMHD::IdealMHD(MeshBlockPack *pp, ParameterInput *pin) :
 }
 
 //----------------------------------------------------------------------------------------
-// \!fn void ConsToPrim()
-// \brief Converts conserved into primitive variables.  Operates over entire MeshBlock,
-//  including ghost cells.
-// Note that the primitive variables contain the cell-centered magnetic fields, so that
-// W contains (nmhd+3+nscalars) elements, while U contains (nmhd+nscalars)
+//! \!fn void ConsToPrim()
+//! \brief Converts conserved into primitive variables.  Operates over range of cells
+//! given in argument list.
+//! Note that the primitive variables contain the cell-centered magnetic fields, so that
+//! W contains (nmhd+3+nscalars) elements, while U contains (nmhd+nscalars)
 
 void IdealMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
-                              DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc) {
-  auto &indcs = pmy_pack->pmesh->mb_indcs;
-  int &ng = indcs.ng;
-  int n1 = indcs.nx1 + 2*ng;
-  int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
-  int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
+                          DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc,
+                          const int il, const int iu, const int jl, const int ju,
+                          const int kl, const int ku) {
   int &nmhd  = pmy_pack->pmhd->nmhd;
   int &nscal = pmy_pack->pmhd->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
@@ -68,7 +65,7 @@ void IdealMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
   Real &tfloor_ = eos_data.tfloor;
   bool &use_e = eos_data.use_e;
 
-  par_for("mhd_con2prim", DevExeSpace(), 0, (nmb-1), 0, (n3-1), 0, (n2-1), 0, (n1-1),
+  par_for("mhd_con2prim", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     Real& u_d  = cons(m,IDN,k,j,i);
     Real& u_e  = cons(m,IEN,k,j,i);
@@ -128,23 +125,20 @@ void IdealMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
 }
 
 //----------------------------------------------------------------------------------------
-// \!fn void PrimToCons()
-// \brief Converts conserved into primitive variables.  Operates over only active cells.
-//  Does not change cell- or face-centered magnetic fields.
+//! \!fn void PrimToCons()
+//! \brief Converts conserved into primitive variables.  Operates over range of cells
+//! given in argument list.  Does not change cell- or face-centered magnetic fields.
 
 void IdealMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,
-                              DvceArray5D<Real> &cons) {
-  auto &indcs = pmy_pack->pmesh->mb_indcs;
-  int &is = indcs.is; int &ie = indcs.ie;
-  int &js = indcs.js; int &je = indcs.je;
-  int &ks = indcs.ks; int &ke = indcs.ke;
+                          DvceArray5D<Real> &cons, const int il, const int iu,
+                          const int jl, const int ju, const int kl, const int ku) {
   int &nmhd  = pmy_pack->pmhd->nmhd;
   int &nscal = pmy_pack->pmhd->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
   Real igm1 = 1.0/(eos_data.gamma - 1.0);
   bool &use_e = eos_data.use_e;
 
-  par_for("mhd_prim2con", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+  par_for("mhd_prim2con", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     Real& u_d  = cons(m,IDN,k,j,i);
     Real& u_e  = cons(m,IEN,k,j,i);

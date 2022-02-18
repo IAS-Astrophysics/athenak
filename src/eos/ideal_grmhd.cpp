@@ -89,18 +89,14 @@ Real Equation44(const Real mu, const Real b2, const Real rpar, const Real r, con
 //----------------------------------------------------------------------------------------
 //! \fn void ConsToPrim()
 //! \brief Converts conserved into primitive variables.
-//! Operates over entire MeshBlock, including ghost cells.
+//! Operates over range of cells given in argument list.
 
-void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons,
-         const DvceFaceFld4D<Real> &b, DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc) {
+void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
+                            DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc,
+                            const int il, const int iu, const int jl, const int ju,
+                            const int kl, const int ku) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
-  int &ng = indcs.ng;
-  int n1 = indcs.nx1 + 2*ng;
-  int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
-  int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
-  int &is = indcs.is;
-  int &js = indcs.js;
-  int &ks = indcs.ks;
+  int &is = indcs.is, &js = indcs.js, &ks = indcs.ks;
   auto &size = pmy_pack->pmb->mb_size;
   int &nmhd  = pmy_pack->pmhd->nmhd;
   int &nscal = pmy_pack->pmhd->nscalars;
@@ -127,7 +123,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons,
   Real const v_sq_max = 1.0 - 1.0e-12;
   Real const rr_max = 1.0 - 1.0e-12;
 
-  par_for("grmhd_con2prim", DevExeSpace(), 0, (nmb-1), 0, (n3-1), 0, (n2-1), 0, (n1-1),
+  par_for("grmhd_con2prim", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     Real& u_d  = cons(m, IDN,k,j,i);
     Real& u_m1 = cons(m, IM1,k,j,i);
@@ -389,14 +385,14 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons,
 
 //----------------------------------------------------------------------------------------
 //! \fn void PrimToCons()
-//! \brief Converts primitive into conserved variables.  Operates only over active cells.
+//! \brief Converts primitive into conserved variables.  Operates over range of cells
+//! given in argument list.
 
 void IdealGRMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,
-            DvceArray5D<Real> &cons) {
+                            DvceArray5D<Real> &cons, const int il, const int iu,
+                            const int jl, const int ju, const int kl, const int ku) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
-  int is = indcs.is; int ie = indcs.ie;
-  int js = indcs.js; int je = indcs.je;
-  int ks = indcs.ks; int ke = indcs.ke;
+  int &is = indcs.is, &js = indcs.js, &ks = indcs.ks;
   auto &size = pmy_pack->pmb->mb_size;
   auto &flat = pmy_pack->pcoord->coord_data.is_minkowski;
   auto &spin = pmy_pack->pcoord->coord_data.bh_spin;
@@ -407,7 +403,7 @@ void IdealGRMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Rea
   Real gamma_prime = eos_data.gamma/(gm1);
   bool &use_e = eos_data.use_e;
 
-  par_for("grmhd_prim2cons", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+  par_for("grmhd_prim2cons", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     // Extract components of metric
     Real &x1min = size.d_view(m).x1min;

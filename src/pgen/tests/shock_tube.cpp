@@ -150,7 +150,7 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
 
     // Convert primitives to conserved
     auto &u0 = pmbp->phydro->u0;
-    pmbp->phydro->peos->PrimToCons(w0, u0);
+    pmbp->phydro->peos->PrimToCons(w0, u0, is, ie, js, je, ks, ke);
   } // End initialization of Hydro variables
 
   // Initialize MHD variables -------------------------------
@@ -261,7 +261,7 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
     });
     // Convert primitives to conserved
     auto &u0 = pmbp->pmhd->u0;
-    pmbp->pmhd->peos->PrimToCons(w0, bcc0, u0);
+    pmbp->pmhd->peos->PrimToCons(w0, bcc0, u0, is, ie, js, je, ks, ke);
   } // End initialization of MHD variables
 
   return;
