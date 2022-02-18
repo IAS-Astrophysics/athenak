@@ -98,4 +98,12 @@ Real Units::k_boltzmann() const {
   return k_boltzmann_cgs / (Units::energy_cgs() / Units::temperature_cgs());
 }
 
+Real Units::grav_constant() const {
+  return grav_constant_cgs * Units::density_cgs() * Units::time_cgs() * Units::time_cgs();
+}
+
+Real Units::speed_of_light() const {
+  return speed_of_light_cgs / Units::velocity_cgs();
+}
+
 } // namespace units

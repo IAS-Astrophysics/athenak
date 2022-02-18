@@ -44,6 +44,8 @@ class Units {
 
   // PHYSICAL CONSTANTS
   static constexpr Real k_boltzmann_cgs = 1.3806488e-16;        // erg/k
+  static constexpr Real grav_constant_cgs = 6.67408e-8;         // cm^3/(g*s^2)
+  static constexpr Real speed_of_light_cgs = 2.99792458e10;     // cm/s
 
   // Specified code scales in cgs units
   // (Multiply code units to get quantities in cgs units)
@@ -88,6 +90,8 @@ class Units {
 
   // Physical Constants in code units
   Real k_boltzmann() const;
+  Real grav_constant() const;
+  Real speed_of_light() const;
 };
 
 } // namespace units
