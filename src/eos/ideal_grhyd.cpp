@@ -52,8 +52,8 @@ IdealGRHydro::IdealGRHydro(MeshBlockPack *pp, ParameterInput *pin) :
 //! \brief Converts single set of primitive into conserved variables.
 
 KOKKOS_INLINE_FUNCTION
-void PrimToConsSingle(const Real g_[], const Real gi_[], const Real gammap,
-                      const HydPrim1D w, HydCons1D u) {
+void PrimToConsSingle(const Real g_[], const Real gi_[], const Real &gammap,
+                      const HydPrim1D &w, HydCons1D &u) {
   const Real
     &g_00 = g_[I00], &g_01 = g_[I01], &g_02 = g_[I02], &g_03 = g_[I03],
     &g_10 = g_[I01], &g_11 = g_[I11], &g_12 = g_[I12], &g_13 = g_[I13],

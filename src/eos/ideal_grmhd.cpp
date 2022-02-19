@@ -53,9 +53,9 @@ IdealGRMHD::IdealGRMHD(MeshBlockPack *pp, ParameterInput *pin) :
 // Operates on only one active cell.
 
 KOKKOS_INLINE_FUNCTION
-void PrimToConsSingle(const Real g_[], const Real gi_[], const Real gammap,
-                      const Real bcc1, const Real bcc2, const Real bcc3,
-                      const HydPrim1D w, HydCons1D u) {
+void PrimToConsSingle(const Real g_[], const Real gi_[], const Real &gammap,
+                      const Real &bcc1, const Real &bcc2, const Real &bcc3,
+                      const HydPrim1D &w, HydCons1D &u) {
   const Real
     &g_00 = g_[I00], &g_01 = g_[I01], &g_02 = g_[I02], &g_03 = g_[I03],
     &g_10 = g_[I01], &g_11 = g_[I11], &g_12 = g_[I12], &g_13 = g_[I13],
