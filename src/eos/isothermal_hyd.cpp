@@ -26,7 +26,8 @@ IsothermalHydro::IsothermalHydro(MeshBlockPack *pp, ParameterInput *pin) :
 
 //----------------------------------------------------------------------------------------
 //! \fn void ConsToPrim()
-//! \brief Converts conserved into primitive variables. Operates over range of cells given//! in argument list.
+//! \brief Converts conserved into primitive variables. Operates over range of cells given
+//! in argument list.
 
 void IsothermalHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
                                  const int il, const int iu, const int jl, const int ju,
