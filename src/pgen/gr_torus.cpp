@@ -385,10 +385,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   // Convert primitives to conserved
   if (pmbp->phydro != nullptr) {
-    pmbp->phydro->peos->PrimToCons(w0_, u0_);
+    pmbp->phydro->peos->PrimToCons(w0_, u0_, is, ie, js, je, ks, ke);
   } else if (pmbp->pmhd != nullptr) {
     auto &bcc0_ = pmbp->pmhd->bcc0;
-    pmbp->pmhd->peos->PrimToCons(w0_, bcc0_, u0_);
+    pmbp->pmhd->peos->PrimToCons(w0_, bcc0_, u0_, is, ie, js, je, ks, ke);
   }
 
   return;
