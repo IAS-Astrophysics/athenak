@@ -47,6 +47,44 @@ IdealGRHydro::IdealGRHydro(MeshBlockPack *pp, ParameterInput *pin) :
   }
 }
 
+//--------------------------------------------------------------------------------------
+//! \fn void PrimToConsSingle()
+//! \brief Converts single set of primitive into conserved variables.
+
+KOKKOS_INLINE_FUNCTION
+void PrimToConsSingle(const Real g_[], const Real gi_[], const Real gammap,
+                      const HydPrim1D w, HydCons1D u) {
+  const Real
+    &g_00 = g_[I00], &g_01 = g_[I01], &g_02 = g_[I02], &g_03 = g_[I03],
+    &g_10 = g_[I01], &g_11 = g_[I11], &g_12 = g_[I12], &g_13 = g_[I13],
+    &g_20 = g_[I02], &g_21 = g_[I12], &g_22 = g_[I22], &g_23 = g_[I23],
+    &g_30 = g_[I03], &g_31 = g_[I13], &g_32 = g_[I23], &g_33 = g_[I33];
+
+  // Calculate 4-velocity
+  Real alpha = sqrt(-1.0/gi_[I00]);
+  Real tmp = g_[I11]*w.vx*w.vx + 2.0*g_[I12]*w.vx*w.vy + 2.0*g_[I13]*w.vx*w.vz
+           + g_[I22]*w.vy*w.vy + 2.0*g_[I23]*w.vy*w.vz
+           + g_[I33]*w.vz*w.vz;
+  Real gg = sqrt(1.0 + tmp);
+  Real u0 = gg/alpha;
+  Real u1 = w.vx - alpha * gg * gi_[I01];
+  Real u2 = w.vy - alpha * gg * gi_[I02];
+  Real u3 = w.vz - alpha * gg * gi_[I03];
+  Real u_0 = g_00*u0 + g_01*u1 + g_02*u2 + g_03*u3;
+  Real u_1 = g_10*u0 + g_11*u1 + g_12*u2 + g_13*u3;
+  Real u_2 = g_20*u0 + g_21*u1 + g_22*u2 + g_23*u3;
+  Real u_3 = g_30*u0 + g_31*u1 + g_32*u2 + g_33*u3;
+
+  Real wgas_u0 = (w.d + gammap * w.p) * u0;
+  u.d  = w.d * u0;
+  u.e  = wgas_u0 * u_0 + w.p - u.d;  // Evolve E-D as in SR
+  u.mx = wgas_u0 * u_1;
+  u.my = wgas_u0 * u_2;
+  u.mz = wgas_u0 * u_3;
+  return;
+}
+
+
 //----------------------------------------------------------------------------------------
 //! \fn Real EquationC22()
 //! \brief Inline function to compute function f(z) defined in eq. C22 of Galeazzi et al.
@@ -84,6 +122,7 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
   int &nmb = pmy_pack->nmb_thispack;
   auto eos = eos_data;
   Real gm1 = eos_data.gamma - 1.0;
+  Real gamma_prime = eos_data.gamma/(eos_data.gamma - 1.0);
   Real &pfloor_ = eos_data.pfloor;
   Real &dfloor_ = eos_data.dfloor;
   bool &use_e = eos_data.use_e;
@@ -262,14 +301,21 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
       w_p = w_t*gm1*w_d;
     }
     if (rad <= rmin || floor_hit) {
-      Real ud, ue, um1, um2, um3;
-      eos.PrimToConsSingleGRHydro(g_, gi_, w_d, w_p, w_ux, w_uy, w_uz,
-                                  ud, ue, um1, um2, um3);
-      cons(m,IDN,k,j,i) = ud;
-      cons(m,IEN,k,j,i) = ue;
-      cons(m,IM1,k,j,i) = um1;
-      cons(m,IM2,k,j,i) = um2;
-      cons(m,IM3,k,j,i) = um3;
+      HydPrim1D w;
+      w.d  = w_d;
+      w.vx = w_ux;
+      w.vy = w_uy;
+      w.vz = w_uz;
+      w.p  = w_p;
+
+      HydCons1D u;
+      PrimToConsSingle(g_, gi_, gamma_prime, w, u);
+
+      cons(m,IDN,k,j,i) = u.d;
+      cons(m,IEN,k,j,i) = u.e;
+      cons(m,IM1,k,j,i) = u.mx;
+      cons(m,IM2,k,j,i) = u.my;
+      cons(m,IM3,k,j,i) = u.mz;
       // convert scalars (if any)
       for (int n=nhyd; n<(nhyd+nscal); ++n) {
         cons(m,n,k,j,i) = prim(m,n,k,j,i)*cons(m,IDN,k,j,i);
@@ -318,58 +364,31 @@ void IdealGRHydro::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &
     Real g_[NMETRIC], gi_[NMETRIC];
     ComputeMetricAndInverse(x1v, x2v, x3v, flat, false, spin, g_, gi_);
 
-    const Real
-      &g_00 = g_[I00], &g_01 = g_[I01], &g_02 = g_[I02], &g_03 = g_[I03],
-      &g_10 = g_[I01], &g_11 = g_[I11], &g_12 = g_[I12], &g_13 = g_[I13],
-      &g_20 = g_[I02], &g_21 = g_[I12], &g_22 = g_[I22], &g_23 = g_[I23],
-      &g_30 = g_[I03], &g_31 = g_[I13], &g_32 = g_[I23], &g_33 = g_[I33];
-
-    const Real& w_d  = prim(m,IDN,k,j,i);
-    const Real& w_ux = prim(m,IVX,k,j,i);
-    const Real& w_uy = prim(m,IVY,k,j,i);
-    const Real& w_uz = prim(m,IVZ,k,j,i);
-
-    // Calculate 4-velocity
-    Real alpha = sqrt(-1.0/gi_[I00]);
-    Real tmp = g_[I11]*w_ux*w_ux + 2.0*g_[I12]*w_ux*w_uy + 2.0*g_[I13]*w_ux*w_uz
-             + g_[I22]*w_uy*w_uy + 2.0*g_[I23]*w_uy*w_uz
-             + g_[I33]*w_uz*w_uz;
-    Real gamma = sqrt(1.0 + tmp);
-    Real u0 = gamma/alpha;
-    Real u1 = w_ux - alpha * gamma * gi_[I01];
-    Real u2 = w_uy - alpha * gamma * gi_[I02];
-    Real u3 = w_uz - alpha * gamma * gi_[I03];
-    Real u_0 = g_00*u0 + g_01*u1 + g_02*u2 + g_03*u3;
-    Real u_1 = g_10*u0 + g_11*u1 + g_12*u2 + g_13*u3;
-    Real u_2 = g_20*u0 + g_21*u1 + g_22*u2 + g_23*u3;
-    Real u_3 = g_30*u0 + g_31*u1 + g_32*u2 + g_33*u3;
-
-    // Set conserved quantities
-    Real& u_d  = cons(m,IDN,k,j,i);
-    Real& u_e  = cons(m,IEN,k,j,i);
-    Real& u_m1 = cons(m,IM1,k,j,i);
-    Real& u_m2 = cons(m,IM2,k,j,i);
-    Real& u_m3 = cons(m,IM3,k,j,i);
-
-    Real w_p;
+    // Load single state of primitive variables
+    HydPrim1D w;
+    w.d  = prim(m,IDN,k,j,i);
+    w.vx = prim(m,IVX,k,j,i);
+    w.vy = prim(m,IVY,k,j,i);
+    w.vz = prim(m,IVZ,k,j,i);
     if (use_e) {
-      const Real& w_e  = prim(m,IEN,k,j,i);
-      w_p = w_e*gm1;
+      w.p = prim(m,IEN,k,j,i)*gm1;
     } else {
-      const Real& w_t  = prim(m,ITM,k,j,i);
-      w_p = w_t*w_d;
+      w.p = prim(m,IEN,k,j,i)*w.d;
     }
 
-    Real wgas_u0 = (w_d + gamma_prime * w_p) * u0;
-    u_d  = w_d * u0;
-    u_e  = wgas_u0 * u_0 + w_p - u_d;  // Evolve E-D, as in SR
-    u_m1 = wgas_u0 * u_1;
-    u_m2 = wgas_u0 * u_2;
-    u_m3 = wgas_u0 * u_3;
+    HydCons1D u;
+    PrimToConsSingle(g_, gi_, gamma_prime, w, u);
+
+    // Set conserved quantities
+    cons(m,IDN,k,j,i) = u.d;
+    cons(m,IEN,k,j,i) = u.e;
+    cons(m,IM1,k,j,i) = u.mx;
+    cons(m,IM2,k,j,i) = u.my;
+    cons(m,IM3,k,j,i) = u.mz;
 
     // convert scalars (if any)
     for (int n=nhyd; n<(nhyd+nscal); ++n) {
-      cons(m,n,k,j,i) = prim(m,n,k,j,i)*u_d;
+      cons(m,n,k,j,i) = prim(m,n,k,j,i)*u.d;
     }
   });
 
