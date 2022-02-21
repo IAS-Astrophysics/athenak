@@ -47,6 +47,62 @@ IdealGRMHD::IdealGRMHD(MeshBlockPack *pp, ParameterInput *pin) :
   }
 }
 
+//--------------------------------------------------------------------------------------
+//  \!fn void PrimToConsSingleGRMHD()
+//  \brief Converts primitive into conserved variables in GRMHD.
+// Operates on only one active cell.
+
+KOKKOS_INLINE_FUNCTION
+void PrimToConsSingle(const Real g_[], const Real gi_[], const Real &gammap,
+                      const Real &bcc1, const Real &bcc2, const Real &bcc3,
+                      const HydPrim1D &w, HydCons1D &u) {
+  const Real
+    &g_00 = g_[I00], &g_01 = g_[I01], &g_02 = g_[I02], &g_03 = g_[I03],
+    &g_10 = g_[I01], &g_11 = g_[I11], &g_12 = g_[I12], &g_13 = g_[I13],
+    &g_20 = g_[I02], &g_21 = g_[I12], &g_22 = g_[I22], &g_23 = g_[I23],
+    &g_30 = g_[I03], &g_31 = g_[I13], &g_32 = g_[I23], &g_33 = g_[I33];
+
+  // Calculate 4-velocity
+  Real alpha = sqrt(-1.0/gi_[I00]);
+  Real tmp = g_[I11]*w.vx*w.vx + 2.0*g_[I12]*w.vx*w.vy + 2.0*g_[I13]*w.vx*w.vz
+           + g_[I22]*w.vy*w.vy + 2.0*g_[I23]*w.vy*w.vz
+           + g_[I33]*w.vz*w.vz;
+  Real gg = sqrt(1.0 + tmp);
+  Real u0 = gg/alpha;
+  Real u1 = w.vx - alpha * gg * gi_[I01];
+  Real u2 = w.vy - alpha * gg * gi_[I02];
+  Real u3 = w.vz - alpha * gg * gi_[I03];
+  // lower vector indices
+  Real u_0 = g_00*u0 + g_01*u1 + g_02*u2 + g_03*u3;
+  Real u_1 = g_10*u0 + g_11*u1 + g_12*u2 + g_13*u3;
+  Real u_2 = g_20*u0 + g_21*u1 + g_22*u2 + g_23*u3;
+  Real u_3 = g_30*u0 + g_31*u1 + g_32*u2 + g_33*u3;
+
+  // Calculate 4-magnetic field
+  Real b0 = g_[I01]*u0*bcc1 + g_[I02]*u0*bcc2 + g_[I03]*u0*bcc3
+          + g_[I11]*u1*bcc1 + g_[I12]*u1*bcc2 + g_[I13]*u1*bcc3
+          + g_[I12]*u2*bcc1 + g_[I22]*u2*bcc2 + g_[I23]*u2*bcc3
+          + g_[I13]*u3*bcc1 + g_[I23]*u3*bcc2 + g_[I33]*u3*bcc3;
+  Real b1 = (bcc1 + b0 * u1) / u0;
+  Real b2 = (bcc2 + b0 * u2) / u0;
+  Real b3 = (bcc3 + b0 * u3) / u0;
+  // lower vector indices
+  Real b_0 = g_00*b0 + g_01*b1 + g_02*b2 + g_03*b3;
+  Real b_1 = g_10*b0 + g_11*b1 + g_12*b2 + g_13*b3;
+  Real b_2 = g_20*b0 + g_21*b1 + g_22*b2 + g_23*b3;
+  Real b_3 = g_30*b0 + g_31*b1 + g_32*b2 + g_33*b3;
+  Real b_sq = b0*b_0 + b1*b_1 + b2*b_2 + b3*b_3;
+
+  Real wtot = w.d + gammap * w.p + b_sq;
+  Real ptot = w.p + 0.5 * b_sq;
+  u.d  = w.d * u0;
+  u.e  = wtot * u0 * u_0 - b0 * b_0 + ptot - u.d;  // evolve E-D, as in SR
+  u.mx = wtot * u0 * u_1 - b0 * b_1;
+  u.my = wtot * u0 * u_2 - b0 * b_2;
+  u.mz = wtot * u0 * u_3 - b0 * b_3;
+  return;
+}
+
 //----------------------------------------------------------------------------------------
 //! \fn Real Equation49()
 //! \brief Inline function to compute function fa(mu) defined in eq. 49 of Kastaun et al.
@@ -89,25 +145,21 @@ Real Equation44(const Real mu, const Real b2, const Real rpar, const Real r, con
 //----------------------------------------------------------------------------------------
 //! \fn void ConsToPrim()
 //! \brief Converts conserved into primitive variables.
-//! Operates over entire MeshBlock, including ghost cells.
+//! Operates over range of cells given in argument list.
 
-void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons,
-         const DvceFaceFld4D<Real> &b, DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc) {
+void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
+                            DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc,
+                            const int il, const int iu, const int jl, const int ju,
+                            const int kl, const int ku) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
-  int &ng = indcs.ng;
-  int n1 = indcs.nx1 + 2*ng;
-  int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
-  int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
-  int &is = indcs.is;
-  int &js = indcs.js;
-  int &ks = indcs.ks;
+  int &is = indcs.is, &js = indcs.js, &ks = indcs.ks;
   auto &size = pmy_pack->pmb->mb_size;
   int &nmhd  = pmy_pack->pmhd->nmhd;
   int &nscal = pmy_pack->pmhd->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
   auto eos = eos_data;
   Real gm1 = eos_data.gamma - 1.0;
-  Real gamma_adi = eos_data.gamma;
+  Real gamma_prime = eos_data.gamma/(eos_data.gamma - 1.0);
 
   auto &flat = pmy_pack->pcoord->coord_data.is_minkowski;
   auto &spin = pmy_pack->pcoord->coord_data.bh_spin;
@@ -127,7 +179,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons,
   Real const v_sq_max = 1.0 - 1.0e-12;
   Real const rr_max = 1.0 - 1.0e-12;
 
-  par_for("grmhd_con2prim", DevExeSpace(), 0, (nmb-1), 0, (n3-1), 0, (n2-1), 0, (n1-1),
+  par_for("grmhd_con2prim", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     Real& u_d  = cons(m, IDN,k,j,i);
     Real& u_m1 = cons(m, IM1,k,j,i);
@@ -368,15 +420,21 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons,
       w_p = w_t*gm1*w_d;
     }
     if (rad <= rmin || floor_hit) {
-      Real ud, ue, um1, um2, um3;
-      eos.PrimToConsSingleGRMHD(g_, gi_, w_d, w_p, w_ux, w_uy, w_uz,
-                                w_bx, w_by, w_bz,
-                                ud, ue, um1, um2, um3);
-      cons(m,IDN,k,j,i) = ud;
-      cons(m,IEN,k,j,i) = ue;
-      cons(m,IM1,k,j,i) = um1;
-      cons(m,IM2,k,j,i) = um2;
-      cons(m,IM3,k,j,i) = um3;
+      HydPrim1D w;
+      w.d  = w_d;
+      w.vx = w_ux;
+      w.vy = w_uy;
+      w.vz = w_uz;
+      w.p  = w_p;
+
+      HydCons1D u;
+      PrimToConsSingle(g_, gi_, gamma_prime, w_bx, w_by, w_bz, w, u);
+
+      cons(m,IDN,k,j,i) = u.d;
+      cons(m,IEN,k,j,i) = u.e;
+      cons(m,IM1,k,j,i) = u.mx;
+      cons(m,IM2,k,j,i) = u.my;
+      cons(m,IM3,k,j,i) = u.mz;
       // convert scalars (if any)
         for (int n=nmhd; n<(nmhd+nscal); ++n) {
           cons(m,n,k,j,i) = prim(m,n,k,j,i)*cons(m,IDN,k,j,i);
@@ -389,14 +447,14 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons,
 
 //----------------------------------------------------------------------------------------
 //! \fn void PrimToCons()
-//! \brief Converts primitive into conserved variables.  Operates only over active cells.
+//! \brief Converts primitive into conserved variables.  Operates over range of cells
+//! given in argument list.
 
 void IdealGRMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,
-            DvceArray5D<Real> &cons) {
+                            DvceArray5D<Real> &cons, const int il, const int iu,
+                            const int jl, const int ju, const int kl, const int ku) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
-  int is = indcs.is; int ie = indcs.ie;
-  int js = indcs.js; int je = indcs.je;
-  int ks = indcs.ks; int ke = indcs.ke;
+  int &is = indcs.is, &js = indcs.js, &ks = indcs.ks;
   auto &size = pmy_pack->pmb->mb_size;
   auto &flat = pmy_pack->pcoord->coord_data.is_minkowski;
   auto &spin = pmy_pack->pcoord->coord_data.bh_spin;
@@ -407,7 +465,7 @@ void IdealGRMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Rea
   Real gamma_prime = eos_data.gamma/(gm1);
   bool &use_e = eos_data.use_e;
 
-  par_for("grmhd_prim2cons", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+  par_for("grmhd_prim2cons", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     // Extract components of metric
     Real &x1min = size.d_view(m).x1min;
@@ -425,60 +483,30 @@ void IdealGRMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Rea
     Real g_[NMETRIC], gi_[NMETRIC];
     ComputeMetricAndInverse(x1v, x2v, x3v, flat, false, spin, g_, gi_);
 
-    const Real
-      &g_00 = g_[I00], &g_01 = g_[I01], &g_02 = g_[I02], &g_03 = g_[I03],
-      &g_10 = g_[I01], &g_11 = g_[I11], &g_12 = g_[I12], &g_13 = g_[I13],
-      &g_20 = g_[I02], &g_21 = g_[I12], &g_22 = g_[I22], &g_23 = g_[I23],
-      &g_30 = g_[I03], &g_31 = g_[I13], &g_32 = g_[I23], &g_33 = g_[I33];
-
-    // extrct primitives
-    const Real& w_d  = prim(m,IDN,k,j,i);
-    const Real& w_ux = prim(m,IVX,k,j,i);
-    const Real& w_uy = prim(m,IVY,k,j,i);
-    const Real& w_uz = prim(m,IVZ,k,j,i);
+    // Load single state of primitive variables
+    HydPrim1D w;
+    w.d  = prim(m,IDN,k,j,i);
+    w.vx = prim(m,IVX,k,j,i);
+    w.vy = prim(m,IVY,k,j,i);
+    w.vz = prim(m,IVZ,k,j,i);
+    if (use_e) {
+      w.p = prim(m,IEN,k,j,i)*gm1;
+    } else {
+      w.p = prim(m,IEN,k,j,i)*w.d;
+    }
     const Real& bcc1 = bcc(m,IBX,k,j,i);
     const Real& bcc2 = bcc(m,IBY,k,j,i);
     const Real& bcc3 = bcc(m,IBZ,k,j,i);
 
-    Real w_p;
-    if (use_e) {
-      const Real& w_e  = prim(m,IEN,k,j,i);
-      w_p = w_e*gm1;
-    } else {
-      const Real& w_t  = prim(m,ITM,k,j,i);
-      w_p = w_t*w_d;
-    }
+    HydCons1D u;
+    PrimToConsSingle(g_, gi_, gamma_prime, bcc1, bcc2, bcc3, w, u);
 
-    // Calculate 4-velocity
-    Real alpha = sqrt(-1.0/gi_[I00]);
-    Real tmp = g_[I11]*w_ux*w_ux + 2.0*g_[I12]*w_ux*w_uy + 2.0*g_[I13]*w_ux*w_uz
-             + g_[I22]*w_uy*w_uy + 2.0*g_[I23]*w_uy*w_uz
-             + g_[I33]*w_uz*w_uz;
-    Real gamma = sqrt(1.0 + tmp);
-    Real u0 = gamma/alpha;
-    Real u1 = w_ux - alpha * gamma * gi_[I01];
-    Real u2 = w_uy - alpha * gamma * gi_[I02];
-    Real u3 = w_uz - alpha * gamma * gi_[I03];
-    // lower vector indices
-    Real u_0 = g_00*u0 + g_01*u1 + g_02*u2 + g_03*u3;
-    Real u_1 = g_10*u0 + g_11*u1 + g_12*u2 + g_13*u3;
-    Real u_2 = g_20*u0 + g_21*u1 + g_22*u2 + g_23*u3;
-    Real u_3 = g_30*u0 + g_31*u1 + g_32*u2 + g_33*u3;
-
-    // Calculate 4-magnetic field
-    Real b0 = g_[I01]*u0*bcc1 + g_[I02]*u0*bcc2 + g_[I03]*u0*bcc3
-            + g_[I11]*u1*bcc1 + g_[I12]*u1*bcc2 + g_[I13]*u1*bcc3
-            + g_[I12]*u2*bcc1 + g_[I22]*u2*bcc2 + g_[I23]*u2*bcc3
-            + g_[I13]*u3*bcc1 + g_[I23]*u3*bcc2 + g_[I33]*u3*bcc3;
-    Real b1 = (bcc1 + b0 * u1) / u0;
-    Real b2 = (bcc2 + b0 * u2) / u0;
-    Real b3 = (bcc3 + b0 * u3) / u0;
-    // lower vector indices
-    Real b_0 = g_00*b0 + g_01*b1 + g_02*b2 + g_03*b3;
-    Real b_1 = g_10*b0 + g_11*b1 + g_12*b2 + g_13*b3;
-    Real b_2 = g_20*b0 + g_21*b1 + g_22*b2 + g_23*b3;
-    Real b_3 = g_30*b0 + g_31*b1 + g_32*b2 + g_33*b3;
-    Real b_sq = b0*b_0 + b1*b_1 + b2*b_2 + b3*b_3;
+    // Set conserved quantities
+    cons(m,IDN,k,j,i) = u.d;
+    cons(m,IEN,k,j,i) = u.e;
+    cons(m,IM1,k,j,i) = u.mx;
+    cons(m,IM2,k,j,i) = u.my;
+    cons(m,IM3,k,j,i) = u.mz;
 
     // Extract conserved quantities
     Real& u_d    = cons(m,IDN,k,j,i);
@@ -486,15 +514,6 @@ void IdealGRMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Rea
     Real& u_t0_1 = cons(m,IM1,k,j,i);
     Real& u_t0_2 = cons(m,IM2,k,j,i);
     Real& u_t0_3 = cons(m,IM3,k,j,i);
-
-    // Set conserved quantities
-    Real wtot = w_d + gamma_prime * w_p + b_sq;
-    Real ptot = w_p + 0.5 * b_sq;
-    u_d    = w_d * u0;
-    u_t0_0 = wtot * u0 * u_0 - b0 * b_0 + ptot - u_d;  // evolve E-D, as in SR
-    u_t0_1 = wtot * u0 * u_1 - b0 * b_1;
-    u_t0_2 = wtot * u0 * u_2 - b0 * b_2;
-    u_t0_3 = wtot * u0 * u_3 - b0 * b_3;
 
     // convert scalars (if any)
     for (int n=nmhd; n<(nmhd+nscal); ++n) {
@@ -504,6 +523,3 @@ void IdealGRMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Rea
 
   return;
 }
-
-
-
