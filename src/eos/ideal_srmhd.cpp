@@ -153,8 +153,7 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
     // u_e = (u_e > ee_min) ?  u_e : ee_min;
 
     // Recast all variables (eq 22-24)
-    // Variables q and r defined in anonymous namspace: global this file
-    Real q = u_e/u_d;
+    Real q = u_e/u_d + 1.0;  // We evolve u_e = E-D
     Real r = sqrt(SQR(u_m1) + SQR(u_m2) + SQR(u_m3))/u_d;
 
     Real sqrtd = sqrt(u_d);

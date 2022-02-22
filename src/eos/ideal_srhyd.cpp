@@ -124,7 +124,7 @@ void IdealSRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
     // u_e = (u_e > ee_min) ?  u_e : ee_min;
 
     // Recast all variables (eq C2)
-    Real q = u_e/u_d;
+    Real q = u_e/u_d + 1.0;  // We evolve u_e = E-D
     Real r = sqrt(SQR(u_m1) + SQR(u_m2) + SQR(u_m3))/u_d;
     Real kk = r/(1.+q);
 
