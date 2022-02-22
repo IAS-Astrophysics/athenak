@@ -265,8 +265,6 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
     int nmhd_ = pmbp->pmhd->nmhd;
     Real gm1 = eos.gamma - 1.0;
     Real p0 = 1.0/eos.gamma;
-    auto &u0 = pmbp->pmhd->u0;
-    auto &b0 = pmbp->pmhd->b0;
 
     // Compute eigenvectors in mhd
     Real rem[7][7];

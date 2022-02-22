@@ -27,8 +27,6 @@ void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos,
      const RegionIndcs &indcs,const DualArray1D<RegionSize> &size,const CoordData &coord,
      const int m, const int k, const int j, const int il, const int iu, const int ivx,
      const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr, DvceArray5D<Real> flx) {
-  int ivy = IVX + ((ivx-IVX)+1)%3;
-  int ivz = IVX + ((ivx-IVX)+2)%3;
   const Real gm1 = (eos.gamma - 1.0);
   const Real gamma_prime = eos.gamma/(eos.gamma - 1.0);
 
@@ -69,9 +67,9 @@ void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos,
       &g_30 = g_[I03], &g_31 = g_[I13], &g_32 = g_[I23], &g_33 = g_[I33];
     const Real
       &g00 = gi_[I00], &g01 = gi_[I01], &g02 = gi_[I02], &g03 = gi_[I03],
-      &g10 = gi_[I01], &g11 = gi_[I11], &g12 = gi_[I12], &g13 = gi_[I13],
-      &g20 = gi_[I02], &g21 = gi_[I12], &g22 = gi_[I22], &g23 = gi_[I23],
-      &g30 = gi_[I03], &g31 = gi_[I13], &g32 = gi_[I23], &g33 = gi_[I33];
+                       &g11 = gi_[I11],
+                                        &g22 = gi_[I22],
+                                                         &g33 = gi_[I33];
     Real alpha = std::sqrt(-1.0/g00);
     Real gii, g0i;
     if (ivx == IVX) {

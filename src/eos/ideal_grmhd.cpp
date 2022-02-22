@@ -169,15 +169,9 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
   Real ee_min = pfloor_/gm1;
   bool &use_e = eos_data.use_e;
 
-  Real mm_sq_ee_sq_max = 1.0 - 1.0e-12;  // max. of squared momentum over energy
-
   // Parameters
   int const max_iterations = 15;
   Real const tol = 1.0e-12;
-  Real const pgas_uniform_min = 1.0e-12;
-  Real const a_min = 1.0e-12;
-  Real const v_sq_max = 1.0 - 1.0e-12;
-  Real const rr_max = 1.0 - 1.0e-12;
 
   par_for("grmhd_con2prim", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {

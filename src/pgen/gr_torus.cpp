@@ -243,7 +243,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     Real cos_phi = cos(phi);
 
     Real sin_vartheta = abs(sin_theta);
-    Real cos_vartheta = cos_theta;
     Real varphi = (sin_theta < 0.0) ? (phi - M_PI) : phi;
     Real sin_varphi = sin(varphi);
     Real cos_varphi = cos(varphi);

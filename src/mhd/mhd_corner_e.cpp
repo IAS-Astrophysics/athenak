@@ -13,7 +13,6 @@
 #include "driver/driver.hpp"
 #include "srcterms/srcterms.hpp"
 #include "diffusion/resistivity.hpp"
-#include "eos/eos.hpp"
 #include "mhd.hpp"
 
 #include "coordinates/coordinates.hpp"
@@ -31,7 +30,6 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage) {
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
   int nmb1 = pmy_pack->nmb_thispack - 1;
-  auto &eos = pmy_pack->pmhd->peos->eos_data;
   auto &size = pmy_pack->pmb->mb_size;
   auto &flat = pmy_pack->pcoord->coord_data.is_minkowski;
   auto &spin = pmy_pack->pcoord->coord_data.bh_spin;
