@@ -338,8 +338,8 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       zp= z;
 
       // Evaluate master function (eq 44) at bracket values
-      fm = Equation44(zm, b2, rpar, r, q, u_d, pfloor_, gm1);
-      fp = Equation44(zp, b2, rpar, r, q, u_d, pfloor_, gm1);
+      fm = Equation44(zm, b2, rpar, r, q, ud_sr, pfloor_, gm1);
+      fp = Equation44(zp, b2, rpar, r, q, ud_sr, pfloor_, gm1);
 
       // For simplicity on the GPU, find roots using the false position method
       iterations = max_iterations;
@@ -351,7 +351,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
 
       for (int ii=0; ii < iterations; ++ii) {
         z =  (zm*fp - zp*fm)/(fp-fm);  // linear interpolation to point f(z)=0
-        Real f = Equation44(z, b2, rpar, r, q, u_d, pfloor_, gm1);
+        Real f = Equation44(z, b2, rpar, r, q, ud_sr, pfloor_, gm1);
 
         // Quit if convergence reached
         // NOTE: both z and f are of order unity
