@@ -280,7 +280,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       Real q = ue_tmp/ud_tmp;
       Real r = sqrt(um1_tmp*m1u + um2_tmp*m2u + um3_tmp*m3u)/ud_tmp;
 
-      Real sqrtd = sqrt(u_d);
+      Real sqrtd = sqrt(ud_tmp);
       Real bx = w_bx/sqrtd;
       Real by = w_by/sqrtd;
       Real bz = w_bz/sqrtd;
@@ -293,7 +293,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
 
       Real b2 =     g_[I11] * bx * bx + g_[I22] * by * by + g_[I33] * bz * bz
               +2.*( g_[I12] * bx * by + g_[I13] * bx * bz + g_[I23] * by * bz);
-      Real rpar = (bx*um1_tmp +  by*um2_tmp +  bz*um3_tmp)/u_d;
+      Real rpar = (bx*um1_tmp +  by*um2_tmp +  bz*um3_tmp)/ud_tmp;
 
       // Need to find initial bracket. Requires separate solve
       Real zm=0.;
@@ -385,7 +385,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       Real z2 = (mu*mu*rbar/(fabs(1.- SQR(mu)*rbar))); // (32)
       Real w = sqrt(1.+z2);
 
-      w_d = u_d/w;                  // (34)
+      w_d = ud_tmp/w;                  // (34)
       Real eps = w*(qbar - mu*rbar)+  z2/(w+1.);
 
       // NOTE(@ermost): The following generalizes to ANY equation of state
@@ -400,9 +400,9 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       }
 
       Real const conv = w/(h*w + b2); // (C26)
-      w_ux = conv * ( m1u/u_d + bx * rpar/(h*w));           // (C26)
-      w_uy = conv * ( m2u/u_d + by * rpar/(h*w));           // (C26)
-      w_uz = conv * ( m3u/u_d + bz * rpar/(h*w));           // (C26)
+      w_ux = conv * ( m1u/ud_tmp + bx * rpar/(h*w));           // (C26)
+      w_uy = conv * ( m2u/ud_tmp + by * rpar/(h*w));           // (C26)
+      w_uz = conv * ( m3u/ud_tmp + bz * rpar/(h*w));           // (C26)
 
       // convert scalars (if any)
       for (int n=nmhd; n<(nmhd+nscal); ++n) {
