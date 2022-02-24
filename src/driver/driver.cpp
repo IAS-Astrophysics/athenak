@@ -176,8 +176,8 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh) :
 
       a_twid[3][0] = (-2.0/3.0)*b;
       a_twid[3][1] = (1.0 - 4.0*e)/6.0;
-      a_twid[3][2] = b + e + a - (1.0/6.0);
-      a_twid[3][3] = (2.0/3.0)*(1.0 - a);
+      a_twid[3][2] = (4.0*(b + e + a) - 1.0)/6.0;
+      a_twid[3][3] = 2.0*(1.0 - a)/3.0;
       a_impl = a;
     // Error, unrecognized integrator name.
     } else {
