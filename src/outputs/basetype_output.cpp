@@ -338,6 +338,7 @@ void BaseTypeOutput::LoadOutputData(Mesh *pm) {
     if (out_params.gid >= 0 && m != out_params.gid) { continue; }
 
     int ois,oie,ojs,oje,oks,oke;
+
     if (out_params.include_gzs) {
       int nout1 = indcs.nx1 + 2*(indcs.ng);
       int nout2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
@@ -381,8 +382,20 @@ void BaseTypeOutput::LoadOutputData(Mesh *pm) {
                             size.h_view(m).x3min, size.h_view(m).x3max);
       oke = oks;
     }
+
+    // set coordinate geometry information for MB
+    Real x1i = CellCenterX(ois - indcs.is, indcs.nx1, size.h_view(m).x1min,
+                           size.h_view(m).x1max);
+    Real x2i = CellCenterX(ojs - indcs.js, indcs.nx2, size.h_view(m).x2min,
+                           size.h_view(m).x2max);
+    Real x3i = CellCenterX(oks - indcs.ks, indcs.nx3, size.h_view(m).x3min,
+                           size.h_view(m).x3max);
+    Real dx1 = size.h_view(m).dx1;
+    Real dx2 = size.h_view(m).dx2;
+    Real dx3 = size.h_view(m).dx3;
+
     int id = pm->pmb_pack->pmb->mb_gid.h_view(m);
-    outmbs.emplace_back(id,ois,oie,ojs,oje,oks,oke);
+    outmbs.emplace_back(id,ois,oie,ojs,oje,oks,oke,x1i,x2i,x3i,dx1,dx2,dx3);
   }
 
   noutmbs_min = outmbs.size();
