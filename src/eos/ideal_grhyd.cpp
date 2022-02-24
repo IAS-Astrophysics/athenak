@@ -185,9 +185,9 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
 
       // Need to treat the conserved momenta. Also they lack an alpha
       // This is only true if sqrt{-g}=1!
-      Real um1_tmp = u_m1*alpha;
-      Real um2_tmp = u_m2*alpha;
-      Real um3_tmp = u_m3*alpha;
+      Real um1_sr = u_m1*alpha;
+      Real um2_sr = u_m2*alpha;
+      Real um3_sr = u_m3*alpha;
 
       // apply density floor, without changing momentum or energy
       if (ud_sr < dfloor_) {
@@ -209,20 +209,20 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
       //       g^0i = beta^i/alpha^2
       //       g^00 = -1/ alpha^2
       // Hence gamma^ij =  g^ij - g^0i g^0j/g^00
-      Real m1u = ((gi_[I11] - gi_[I01]*gi_[I01]/gi_[I00])*um1_tmp +
-                  (gi_[I12] - gi_[I01]*gi_[I02]/gi_[I00])*um2_tmp +
-                  (gi_[I13] - gi_[I01]*gi_[I03]/gi_[I00])*um3_tmp);  // (C26)
+      Real m1u = ((gi_[I11] - gi_[I01]*gi_[I01]/gi_[I00])*um1_sr +
+                  (gi_[I12] - gi_[I01]*gi_[I02]/gi_[I00])*um2_sr +
+                  (gi_[I13] - gi_[I01]*gi_[I03]/gi_[I00])*um3_sr);  // (C26)
 
-      Real m2u = ((gi_[I12] - gi_[I01]*gi_[I02]/gi_[I00])*um1_tmp +
-                  (gi_[I22] - gi_[I02]*gi_[I02]/gi_[I00])*um2_tmp +
-                  (gi_[I23] - gi_[I02]*gi_[I03]/gi_[I00])*um3_tmp);  // (C26)
+      Real m2u = ((gi_[I12] - gi_[I01]*gi_[I02]/gi_[I00])*um1_sr +
+                  (gi_[I22] - gi_[I02]*gi_[I02]/gi_[I00])*um2_sr +
+                  (gi_[I23] - gi_[I02]*gi_[I03]/gi_[I00])*um3_sr);  // (C26)
 
-      Real m3u = ((gi_[I13] - gi_[I01]*gi_[I03]/gi_[I00])*um1_tmp +
-                  (gi_[I23] - gi_[I02]*gi_[I03]/gi_[I00])*um2_tmp +
-                  (gi_[I33] - gi_[I03]*gi_[I03]/gi_[I00])*um3_tmp);  // (C26)
+      Real m3u = ((gi_[I13] - gi_[I01]*gi_[I03]/gi_[I00])*um1_sr +
+                  (gi_[I23] - gi_[I02]*gi_[I03]/gi_[I00])*um2_sr +
+                  (gi_[I33] - gi_[I03]*gi_[I03]/gi_[I00])*um3_sr);  // (C26)
 
       Real q = ue_sr/ud_sr;
-      Real r = sqrt(um1_tmp*m1u + um2_tmp*m2u + um3_tmp*m3u)/ud_sr;
+      Real r = sqrt(um1_sr*m1u + um2_sr*m2u + um3_sr*m3u)/ud_sr;
 
       // Enforce lower velocity bound (eq. C13). This bound combined with a floor on
       // the value of p will guarantee "some" result of the inversion

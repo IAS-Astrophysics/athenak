@@ -233,9 +233,9 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
 
       // Need to treat the conserved momenta. Also they lack an alpha
       // This is only true if sqrt{-g}=1!
-      Real um1_tmp = u_m1*alpha;
-      Real um2_tmp = u_m2*alpha;
-      Real um3_tmp = u_m3*alpha;
+      Real um1_sr = u_m1*alpha;
+      Real um2_sr = u_m2*alpha;
+      Real um3_sr = u_m3*alpha;
 
       // apply density floor, without changing momentum or energy
       if (ud_sr < dfloor_) {
@@ -257,22 +257,22 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       //       g^0i = beta^i/alpha^2
       //       g^00 = -1/ alpha^2
       // Hence gamma^ij =  g^ij - g^0i g^0j/g^00
-      Real m1u = ((gi_[I11] - gi_[I01]*gi_[I01]/gi_[I00])*um1_tmp +
-                  (gi_[I12] - gi_[I01]*gi_[I02]/gi_[I00])*um2_tmp +
-                  (gi_[I13] - gi_[I01]*gi_[I03]/gi_[I00])*um3_tmp);  // (C26)
+      Real m1u = ((gi_[I11] - gi_[I01]*gi_[I01]/gi_[I00])*um1_sr +
+                  (gi_[I12] - gi_[I01]*gi_[I02]/gi_[I00])*um2_sr +
+                  (gi_[I13] - gi_[I01]*gi_[I03]/gi_[I00])*um3_sr);  // (C26)
 
-      Real m2u = ((gi_[I12] - gi_[I01]*gi_[I02]/gi_[I00])*um1_tmp +
-                  (gi_[I22] - gi_[I02]*gi_[I02]/gi_[I00])*um2_tmp +
-                  (gi_[I23] - gi_[I02]*gi_[I03]/gi_[I00])*um3_tmp);  // (C26)
+      Real m2u = ((gi_[I12] - gi_[I01]*gi_[I02]/gi_[I00])*um1_sr +
+                  (gi_[I22] - gi_[I02]*gi_[I02]/gi_[I00])*um2_sr +
+                  (gi_[I23] - gi_[I02]*gi_[I03]/gi_[I00])*um3_sr);  // (C26)
 
-      Real m3u = ((gi_[I13] - gi_[I01]*gi_[I03]/gi_[I00])*um1_tmp +
-                  (gi_[I23] - gi_[I02]*gi_[I03]/gi_[I00])*um2_tmp +
-                  (gi_[I33] - gi_[I03]*gi_[I03]/gi_[I00])*um3_tmp);  // (C26)
+      Real m3u = ((gi_[I13] - gi_[I01]*gi_[I03]/gi_[I00])*um1_sr +
+                  (gi_[I23] - gi_[I02]*gi_[I03]/gi_[I00])*um2_sr +
+                  (gi_[I33] - gi_[I03]*gi_[I03]/gi_[I00])*um3_sr);  // (C26)
 
       // Recast all variables (eq 22-24)
       // Variables q and r defined in anonymous namspace: global this file
       Real q = ue_sr/ud_sr;
-      Real r = sqrt(um1_tmp*m1u + um2_tmp*m2u + um3_tmp*m3u)/ud_sr;
+      Real r = sqrt(um1_sr*m1u + um2_sr*m2u + um3_sr*m3u)/ud_sr;
 
       Real sqrtd = sqrt(ud_sr);
       Real bx = w_bx/sqrtd;
@@ -287,7 +287,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
 
       Real b2 =     g_[I11] * bx * bx + g_[I22] * by * by + g_[I33] * bz * bz
               +2.*( g_[I12] * bx * by + g_[I13] * bx * bz + g_[I23] * by * bz);
-      Real rpar = (bx*um1_tmp +  by*um2_tmp +  bz*um3_tmp)/ud_sr;
+      Real rpar = (bx*um1_sr +  by*um2_sr +  bz*um3_sr)/ud_sr;
 
       // Need to find initial bracket. Requires separate solve
       Real zm=0.;
