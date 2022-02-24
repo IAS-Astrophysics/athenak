@@ -170,34 +170,34 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
       // We are evolving T^t_t, but the SR C2P algorithm is only consistent with
       // alpha^2 T^{tt}.J.  Therefore compute T^{tt} = g^0\mu T^t_\mu
       // We are also evolving (E-D) as conserved variable, so must convert to E
-      Real ue_tmp = gi_[I00]*(u_e+u_d) + gi_[I01]*u_m1 + gi_[I02]*u_m2 + gi_[I03]*u_m3;
+      Real ue_sr = gi_[I00]*(u_e+u_d) + gi_[I01]*u_m1 + gi_[I02]*u_m2 + gi_[I03]*u_m3;
 
       // This is only true if sqrt{-g}=1!
-      ue_tmp *= (-1./gi_[I00]);  // Multiply by alpha^2
+      ue_sr *= (-1./gi_[I00]);  // Multiply by alpha^2
 
       // Need to multiply the conserved density by alpha, so that it
       // contains a lorentz factor
       Real alpha = sqrt(-1.0/gi_[I00]);
-      Real ud_tmp = u_d*alpha;
+      Real ud_sr = u_d*alpha;
 
       // Subtract density for consistency with the rest of the algorithm
-      ue_tmp -= ud_tmp;
+      ue_sr -= ud_sr;
 
       // Need to treat the conserved momenta. Also they lack an alpha
       // This is only true if sqrt{-g}=1!
-      Real um1_tmp = u_m1*alpha;
-      Real um2_tmp = u_m2*alpha;
-      Real um3_tmp = u_m3*alpha;
+      Real um1_sr = u_m1*alpha;
+      Real um2_sr = u_m2*alpha;
+      Real um3_sr = u_m3*alpha;
 
       // apply density floor, without changing momentum or energy
-      if (ud_tmp < dfloor_) {
-        ud_tmp = dfloor_;
+      if (ud_sr < dfloor_) {
+        ud_sr = dfloor_;
         floor_hit = true;
       }
 
       // apply energy floor
-      if (ue_tmp < pfloor_/gm1) {
-        ue_tmp = pfloor_/gm1;
+      if (ue_sr < pfloor_/gm1) {
+        ue_sr = pfloor_/gm1;
         floor_hit = true;
       }
 
@@ -209,20 +209,20 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
       //       g^0i = beta^i/alpha^2
       //       g^00 = -1/ alpha^2
       // Hence gamma^ij =  g^ij - g^0i g^0j/g^00
-      Real m1u = ((gi_[I11] - gi_[I01]*gi_[I01]/gi_[I00])*um1_tmp +
-                  (gi_[I12] - gi_[I01]*gi_[I02]/gi_[I00])*um2_tmp +
-                  (gi_[I13] - gi_[I01]*gi_[I03]/gi_[I00])*um3_tmp);  // (C26)
+      Real m1u = ((gi_[I11] - gi_[I01]*gi_[I01]/gi_[I00])*um1_sr +
+                  (gi_[I12] - gi_[I01]*gi_[I02]/gi_[I00])*um2_sr +
+                  (gi_[I13] - gi_[I01]*gi_[I03]/gi_[I00])*um3_sr);  // (C26)
 
-      Real m2u = ((gi_[I12] - gi_[I01]*gi_[I02]/gi_[I00])*um1_tmp +
-                  (gi_[I22] - gi_[I02]*gi_[I02]/gi_[I00])*um2_tmp +
-                  (gi_[I23] - gi_[I02]*gi_[I03]/gi_[I00])*um3_tmp);  // (C26)
+      Real m2u = ((gi_[I12] - gi_[I01]*gi_[I02]/gi_[I00])*um1_sr +
+                  (gi_[I22] - gi_[I02]*gi_[I02]/gi_[I00])*um2_sr +
+                  (gi_[I23] - gi_[I02]*gi_[I03]/gi_[I00])*um3_sr);  // (C26)
 
-      Real m3u = ((gi_[I13] - gi_[I01]*gi_[I03]/gi_[I00])*um1_tmp +
-                  (gi_[I23] - gi_[I02]*gi_[I03]/gi_[I00])*um2_tmp +
-                  (gi_[I33] - gi_[I03]*gi_[I03]/gi_[I00])*um3_tmp);  // (C26)
+      Real m3u = ((gi_[I13] - gi_[I01]*gi_[I03]/gi_[I00])*um1_sr +
+                  (gi_[I23] - gi_[I02]*gi_[I03]/gi_[I00])*um2_sr +
+                  (gi_[I33] - gi_[I03]*gi_[I03]/gi_[I00])*um3_sr);  // (C26)
 
-      Real q = ue_tmp/ud_tmp;
-      Real r = sqrt(um1_tmp*m1u + um2_tmp*m2u + um3_tmp*m3u)/ud_tmp;
+      Real q = ue_sr/ud_sr;
+      Real r = sqrt(um1_sr*m1u + um2_sr*m2u + um3_sr*m3u)/ud_sr;
 
       // Enforce lower velocity bound (eq. C13). This bound combined with a floor on
       // the value of p will guarantee "some" result of the inversion
@@ -233,8 +233,8 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
       auto zp = kk/sqrt(1.0 - kk*kk);
 
       // Evaluate master function (eq C22) at bracket values
-      Real fm = EquationC22(zm, ud_tmp, q, r, gm1, pfloor_);
-      Real fp = EquationC22(zp, ud_tmp, q, r, gm1, pfloor_);
+      Real fm = EquationC22(zm, ud_sr, q, r, gm1, pfloor_);
+      Real fp = EquationC22(zp, ud_sr, q, r, gm1, pfloor_);
 
       // For simplicity on the GPU, find roots using the false position method
       int iterations = max_iterations;
@@ -246,7 +246,7 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
 
       for (int ii=0; ii < iterations; ++ii) {
         z =  (zm*fp - zp*fm)/(fp-fm);  // linear interpolation to point f(z)=0
-        Real f = EquationC22(z, ud_tmp, q, r, gm1, pfloor_);
+        Real f = EquationC22(z, ud_sr, q, r, gm1, pfloor_);
 
         // Quit if convergence reached
         // NOTE: both z and f are of order unity
@@ -268,7 +268,7 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
 
       // iterations ended, compute primitives from resulting value of z
       Real const w = sqrt(1.0 + z*z);  // (C15)
-      w_d = ud_tmp/w;  // (C15)
+      w_d = ud_sr/w;  // (C15)
       Real eps = w*q - z*r + (z*z)/(1.0 + w);  // (C16)
       eps = fmax(pfloor_/w_d/gm1, eps);  // (C18)
       Real h = (1.0 + eps) * (1.0 + (gm1*eps)/(1.0+eps)); // (C1) & (C21)
@@ -280,7 +280,7 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
         w_t = gm1*eps;  // TODO(@user):  is this the correct expression?
       }
 
-      Real const conv = 1.0/(h*ud_tmp); // (C26)
+      Real const conv = 1.0/(h*ud_sr); // (C26)
       w_ux = conv*m1u;  // (C26)
       w_uy = conv*m2u;  // (C26)
       w_uz = conv*m3u;  // (C26)

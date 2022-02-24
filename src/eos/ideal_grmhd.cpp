@@ -218,34 +218,34 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       // We are evolving T^t_t, but the SR C2P algorithm is only consistent with
       // alpha^2 T^{tt}.  Therefore compute T^{tt} = g^0\mu T^t_\mu
       // We are also evolving (E-D) as conserved variable, so must convert to E
-      Real ue_tmp = gi_[I00]*(u_e+u_d) + gi_[I01]*u_m1 + gi_[I02]*u_m2 + gi_[I03]*u_m3;
+      Real ue_sr = gi_[I00]*(u_e+u_d) + gi_[I01]*u_m1 + gi_[I02]*u_m2 + gi_[I03]*u_m3;
 
       // This is only true if sqrt{-g}=1!
-      ue_tmp *= (-1./gi_[I00]);  // Multiply by alpha^2
+      ue_sr *= (-1./gi_[I00]);  // Multiply by alpha^2
 
       // Need to multiply the conserved density by alpha, so that it
       // contains a lorentz factor
       Real alpha = sqrt(-1.0/gi_[I00]);
-      Real ud_tmp = u_d*alpha;
+      Real ud_sr = u_d*alpha;
 
       // Subtract density for consistency with the rest of the algorithm
-      ue_tmp -= ud_tmp;
+      ue_sr -= ud_sr;
 
       // Need to treat the conserved momenta. Also they lack an alpha
       // This is only true if sqrt{-g}=1!
-      Real um1_tmp = u_m1*alpha;
-      Real um2_tmp = u_m2*alpha;
-      Real um3_tmp = u_m3*alpha;
+      Real um1_sr = u_m1*alpha;
+      Real um2_sr = u_m2*alpha;
+      Real um3_sr = u_m3*alpha;
 
       // apply density floor, without changing momentum or energy
-      if (ud_tmp < dfloor_) {
-        ud_tmp = dfloor_;
+      if (ud_sr < dfloor_) {
+        ud_sr = dfloor_;
         floor_hit = true;
       }
 
       // apply energy floor
-      if (ue_tmp < pfloor_/gm1) {
-        ue_tmp = pfloor_/gm1;
+      if (ue_sr < pfloor_/gm1) {
+        ue_sr = pfloor_/gm1;
         floor_hit = true;
       }
 
@@ -257,24 +257,24 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       //       g^0i = beta^i/alpha^2
       //       g^00 = -1/ alpha^2
       // Hence gamma^ij =  g^ij - g^0i g^0j/g^00
-      Real m1u = ((gi_[I11] - gi_[I01]*gi_[I01]/gi_[I00])*um1_tmp +
-                  (gi_[I12] - gi_[I01]*gi_[I02]/gi_[I00])*um2_tmp +
-                  (gi_[I13] - gi_[I01]*gi_[I03]/gi_[I00])*um3_tmp);  // (C26)
+      Real m1u = ((gi_[I11] - gi_[I01]*gi_[I01]/gi_[I00])*um1_sr +
+                  (gi_[I12] - gi_[I01]*gi_[I02]/gi_[I00])*um2_sr +
+                  (gi_[I13] - gi_[I01]*gi_[I03]/gi_[I00])*um3_sr);  // (C26)
 
-      Real m2u = ((gi_[I12] - gi_[I01]*gi_[I02]/gi_[I00])*um1_tmp +
-                  (gi_[I22] - gi_[I02]*gi_[I02]/gi_[I00])*um2_tmp +
-                  (gi_[I23] - gi_[I02]*gi_[I03]/gi_[I00])*um3_tmp);  // (C26)
+      Real m2u = ((gi_[I12] - gi_[I01]*gi_[I02]/gi_[I00])*um1_sr +
+                  (gi_[I22] - gi_[I02]*gi_[I02]/gi_[I00])*um2_sr +
+                  (gi_[I23] - gi_[I02]*gi_[I03]/gi_[I00])*um3_sr);  // (C26)
 
-      Real m3u = ((gi_[I13] - gi_[I01]*gi_[I03]/gi_[I00])*um1_tmp +
-                  (gi_[I23] - gi_[I02]*gi_[I03]/gi_[I00])*um2_tmp +
-                  (gi_[I33] - gi_[I03]*gi_[I03]/gi_[I00])*um3_tmp);  // (C26)
+      Real m3u = ((gi_[I13] - gi_[I01]*gi_[I03]/gi_[I00])*um1_sr +
+                  (gi_[I23] - gi_[I02]*gi_[I03]/gi_[I00])*um2_sr +
+                  (gi_[I33] - gi_[I03]*gi_[I03]/gi_[I00])*um3_sr);  // (C26)
 
       // Recast all variables (eq 22-24)
       // Variables q and r defined in anonymous namspace: global this file
-      Real q = ue_tmp/ud_tmp;
-      Real r = sqrt(um1_tmp*m1u + um2_tmp*m2u + um3_tmp*m3u)/ud_tmp;
+      Real q = ue_sr/ud_sr;
+      Real r = sqrt(um1_sr*m1u + um2_sr*m2u + um3_sr*m3u)/ud_sr;
 
-      Real sqrtd = sqrt(u_d);
+      Real sqrtd = sqrt(ud_sr);
       Real bx = w_bx/sqrtd;
       Real by = w_by/sqrtd;
       Real bz = w_bz/sqrtd;
@@ -287,7 +287,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
 
       Real b2 =     g_[I11] * bx * bx + g_[I22] * by * by + g_[I33] * bz * bz
               +2.*( g_[I12] * bx * by + g_[I13] * bx * bz + g_[I23] * by * bz);
-      Real rpar = (bx*um1_tmp +  by*um2_tmp +  bz*um3_tmp)/u_d;
+      Real rpar = (bx*um1_sr +  by*um2_sr +  bz*um3_sr)/ud_sr;
 
       // Need to find initial bracket. Requires separate solve
       Real zm=0.;
@@ -332,8 +332,8 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       zp= z;
 
       // Evaluate master function (eq 44) at bracket values
-      fm = Equation44(zm, b2, rpar, r, q, u_d, pfloor_, gm1);
-      fp = Equation44(zp, b2, rpar, r, q, u_d, pfloor_, gm1);
+      fm = Equation44(zm, b2, rpar, r, q, ud_sr, pfloor_, gm1);
+      fp = Equation44(zp, b2, rpar, r, q, ud_sr, pfloor_, gm1);
 
       // For simplicity on the GPU, find roots using the false position method
       iterations = max_iterations;
@@ -345,7 +345,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
 
       for (int ii=0; ii < iterations; ++ii) {
         z =  (zm*fp - zp*fm)/(fp-fm);  // linear interpolation to point f(z)=0
-        Real f = Equation44(z, b2, rpar, r, q, u_d, pfloor_, gm1);
+        Real f = Equation44(z, b2, rpar, r, q, ud_sr, pfloor_, gm1);
 
         // Quit if convergence reached
         // NOTE: both z and f are of order unity
@@ -379,7 +379,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       Real z2 = (mu*mu*rbar/(fabs(1.- SQR(mu)*rbar))); // (32)
       Real w = sqrt(1.+z2);
 
-      w_d = u_d/w;                  // (34)
+      w_d = ud_sr/w;                  // (34)
       Real eps = w*(qbar - mu*rbar)+  z2/(w+1.);
 
       // NOTE(@ermost): The following generalizes to ANY equation of state
@@ -394,9 +394,9 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       }
 
       Real const conv = w/(h*w + b2); // (C26)
-      w_ux = conv * ( m1u/u_d + bx * rpar/(h*w));           // (C26)
-      w_uy = conv * ( m2u/u_d + by * rpar/(h*w));           // (C26)
-      w_uz = conv * ( m3u/u_d + bz * rpar/(h*w));           // (C26)
+      w_ux = conv * ( m1u/ud_sr + bx * rpar/(h*w));           // (C26)
+      w_uy = conv * ( m2u/ud_sr + by * rpar/(h*w));           // (C26)
+      w_uz = conv * ( m3u/ud_sr + bz * rpar/(h*w));           // (C26)
 
       // convert scalars (if any)
       for (int n=nmhd; n<(nmhd+nscal); ++n) {
