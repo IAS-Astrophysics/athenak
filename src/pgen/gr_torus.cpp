@@ -243,7 +243,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     Real cos_phi = cos(phi);
 
     Real sin_vartheta = abs(sin_theta);
-    Real cos_vartheta = cos_theta;
     Real varphi = (sin_theta < 0.0) ? (phi - M_PI) : phi;
     Real sin_varphi = sin(varphi);
     Real cos_varphi = cos(varphi);
@@ -385,10 +384,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   // Convert primitives to conserved
   if (pmbp->phydro != nullptr) {
-    pmbp->phydro->peos->PrimToCons(w0_, u0_);
+    pmbp->phydro->peos->PrimToCons(w0_, u0_, is, ie, js, je, ks, ke);
   } else if (pmbp->pmhd != nullptr) {
     auto &bcc0_ = pmbp->pmhd->bcc0;
-    pmbp->pmhd->peos->PrimToCons(w0_, bcc0_, u0_);
+    pmbp->pmhd->peos->PrimToCons(w0_, bcc0_, u0_, is, ie, js, je, ks, ke);
   }
 
   return;

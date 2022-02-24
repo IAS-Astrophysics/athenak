@@ -211,7 +211,6 @@ TaskStatus BoundaryValues::InitRecv(const int nvars) {
   int &nmb = pmy_pack->nmb_thispack;
   int &nnghbr = pmy_pack->pmb->nnghbr;
   auto &nghbr = pmy_pack->pmb->nghbr;
-  auto &mblev = pmy_pack->pmb->mb_lev;
 
   // Initialize communications of variables
   bool no_errors=true;
@@ -229,9 +228,9 @@ TaskStatus BoundaryValues::InitRecv(const int nvars) {
 
           // calculate amount of data to be passed, get pointer to variables
           int data_size = nvars;
-          if (nghbr.h_view(m,n).lev < mblev.h_view(m)) {
+          if ( nghbr.h_view(m,n).lev < pmy_pack->pmb->mb_lev.h_view(m) ) {
             data_size *= recv_buf[n].icoar_ndat;
-          } else if (nghbr.h_view(m,n).lev == mblev.h_view(m)) {
+          } else if ( nghbr.h_view(m,n).lev == pmy_pack->pmb->mb_lev.h_view(m) ) {
             data_size *= recv_buf[n].isame_ndat;
           } else {
             data_size *= recv_buf[n].ifine_ndat;

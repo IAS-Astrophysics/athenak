@@ -98,7 +98,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
   }
   if (out_params.variable.compare("hydro_u_m3") == 0 ||
       out_params.variable.compare("hydro_u") == 0) {
-    outvars.emplace_back("mom2",3,&(pm->pmb_pack->phydro->u0));
+    outvars.emplace_back("mom3",3,&(pm->pmb_pack->phydro->u0));
   }
 
   // hydro components of velocity
@@ -185,7 +185,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
   if (out_params.variable.compare("mhd_u_m3") == 0 ||
       out_params.variable.compare("mhd_u") == 0 ||
       out_params.variable.compare("mhd_u_bcc") == 0) {
-    outvars.emplace_back("mom2",3,&(pm->pmb_pack->pmhd->u0));
+    outvars.emplace_back("mom3",3,&(pm->pmb_pack->pmhd->u0));
   }
 
   // mhd components of velocity

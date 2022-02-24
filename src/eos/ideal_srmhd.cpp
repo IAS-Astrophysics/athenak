@@ -104,15 +104,12 @@ Real Equation44(const Real mu, const Real b2, const Real rpar, const Real r, con
 //! Note components of the 4-velocity (not 3-velocity) are stored in the primitive
 //! variables because tests show it is better to reconstruct the 4-vel.
 //!
-//! This function operates over entire MeshBlock, including ghost cells.
+//! This function operates over range of cells given in argument list.
 
-void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons,
-         const DvceFaceFld4D<Real> &b, DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc) {
-  auto &indcs = pmy_pack->pmesh->mb_indcs;
-  int &ng = indcs.ng;
-  int n1 = indcs.nx1 + 2*ng;
-  int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
-  int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
+void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
+                            DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc,
+                            const int il, const int iu, const int jl, const int ju,
+                            const int kl, const int ku) {
   int &nmhd  = pmy_pack->pmhd->nmhd;
   int &nscal = pmy_pack->pmhd->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
@@ -123,17 +120,11 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons,
   Real ee_min = pfloor_/gm1;
   bool &use_e = eos_data.use_e;
 
-  Real mm_sq_ee_sq_max = 1.0 - 1.0e-12;  // max. of squared momentum over energy
-
   // Parameters
   int const max_iterations = 15;
   Real const tol = 1.0e-12;
-  Real const pgas_uniform_min = 1.0e-12;
-  Real const a_min = 1.0e-12;
-  Real const v_sq_max = 1.0 - 1.0e-12;
-  Real const rr_max = 1.0 - 1.0e-12;
 
-  par_for("srmhd_con2prim", DevExeSpace(), 0, (nmb-1), 0, (n3-1), 0, (n2-1), 0, (n1-1),
+  par_for("srmhd_con2prim", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     Real& u_d  = cons(m, IDN,k,j,i);
     Real& u_m1 = cons(m, IM1,k,j,i);
@@ -162,8 +153,7 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons,
     // u_e = (u_e > ee_min) ?  u_e : ee_min;
 
     // Recast all variables (eq 22-24)
-    // Variables q and r defined in anonymous namspace: global this file
-    Real q = u_e/u_d;
+    Real q = u_e/u_d + 1.0;  // We evolve u_e = E-D
     Real r = sqrt(SQR(u_m1) + SQR(u_m2) + SQR(u_m3))/u_d;
 
     Real sqrtd = sqrt(u_d);
@@ -288,17 +278,14 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons,
 
 //----------------------------------------------------------------------------------------
 //! \fn void PrimToCons()
-//! \brief Converts primitive into conserved variables for SR mhd. Operates
-//! only over active cells.
+//! \brief Converts primitive into conserved variables for SR mhd. Operates over range
+//! of cells given in argument list.
 //! Recall in SR mhd the conserved variables are: (D, E-D, m^i, bcc),
 //!              and the primitive variables are: (\rho, P_gas, u^i).
 
 void IdealSRMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,
-            DvceArray5D<Real> &cons) {
-  auto &indcs = pmy_pack->pmesh->mb_indcs;
-  int is = indcs.is; int ie = indcs.ie;
-  int js = indcs.js; int je = indcs.je;
-  int ks = indcs.ks; int ke = indcs.ke;
+                            DvceArray5D<Real> &cons, const int il, const int iu,
+                            const int jl, const int ju, const int kl, const int ku) {
   int &nmhd  = pmy_pack->pmhd->nmhd;
   int &nscal = pmy_pack->pmhd->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
@@ -306,7 +293,7 @@ void IdealSRMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Rea
   Real gamma_prime = eos_data.gamma/(gm1);
   bool &use_e = eos_data.use_e;
 
-  par_for("srmhd_prim2cons", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+  par_for("srmhd_prim2cons", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     Real& u_d  = cons(m,IDN,k,j,i);
     Real& u_e  = cons(m,IEN,k,j,i);
@@ -357,4 +344,3 @@ void IdealSRMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Rea
 
   return;
 }
-

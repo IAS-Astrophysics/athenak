@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file isothermal_hyd.cpp
-//  \brief derived class that implements isothermal EOS for nonrelativistic hydro
+//! \brief derived class that implements isothermal EOS for nonrelativistic hydro
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
@@ -25,23 +25,20 @@ IsothermalHydro::IsothermalHydro(MeshBlockPack *pp, ParameterInput *pin) :
 }
 
 //----------------------------------------------------------------------------------------
-// \!fn void ConsToPrim()
-// \brief Converts conserved into primitive variables.  Operates over entire MeshBlock,
-//  including ghost cells.
+//! \fn void ConsToPrim()
+//! \brief Converts conserved into primitive variables. Operates over range of cells given
+//! in argument list.
 
-void IsothermalHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim) {
-  auto &indcs = pmy_pack->pmesh->mb_indcs;
-  int &ng = indcs.ng;
-  int n1 = indcs.nx1 + 2*ng;
-  int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
-  int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
+void IsothermalHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
+                                 const int il, const int iu, const int jl, const int ju,
+                                 const int kl, const int ku) {
   int &nhyd  = pmy_pack->phydro->nhydro;
   int &nscal = pmy_pack->phydro->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
 
   Real &dfloor_ = eos_data.dfloor;
 
-  par_for("isohyd_con2prim", DevExeSpace(), 0, (nmb-1), 0, (n3-1), 0, (n2-1), 0, (n1-1),
+  par_for("isohyd_con2prim", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     Real& u_d  = cons(m,IDN,k,j,i);
     const Real& u_m1 = cons(m,IM1,k,j,i);
@@ -72,19 +69,18 @@ void IsothermalHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &pri
 }
 
 //----------------------------------------------------------------------------------------
-// \!fn void PrimToCons()
-// \brief Converts primitive into conserved variables. Operates over only active cells.
+//! \fn void PrimToCons()
+//! \brief Converts primitive into conserved variables. Operates over range of cells given
+//! in argument list.
 
-void IsothermalHydro::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons) {
-  auto &indcs = pmy_pack->pmesh->mb_indcs;
-  int &is = indcs.is; int &ie = indcs.ie;
-  int &js = indcs.js; int &je = indcs.je;
-  int &ks = indcs.ks; int &ke = indcs.ke;
+void IsothermalHydro::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons,
+                                 const int il, const int iu, const int jl, const int ju,
+                                 const int kl, const int ku) {
   int &nhyd  = pmy_pack->phydro->nhydro;
   int &nscal = pmy_pack->phydro->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
 
-  par_for("isohyd_prim2con", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+  par_for("isohyd_prim2con", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     Real& u_d  = cons(m,IDN,k,j,i);
     Real& u_m1 = cons(m,IM1,k,j,i);

@@ -145,54 +145,50 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
 
     // select Riemann solver (no default).  Test for compatibility of options
     {std::string rsolver = pin->GetString("hydro","rsolver");
-    // Special relativistic solvers
+    // Special relativistic dynamic solvers
     if (pmy_pack->pcoord->is_special_relativistic) {
-      if (rsolver.compare("llf") == 0) {
-        rsolver_method = Hydro_RSolver::llf_sr;
-      } else if (rsolver.compare("hlle") == 0) {
-        rsolver_method = Hydro_RSolver::hlle_sr;
-      } else if (rsolver.compare("hllc") == 0) {
-        rsolver_method = Hydro_RSolver::hllc_sr;
-      // Error for anything else
-      } else {
-        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                  << std::endl << "<hydro> rsolver = '" << rsolver << "' not implemented"
-                  << " for SR dynamics" << std::endl;
-        std::exit(EXIT_FAILURE);
-      }
-
-    // General relativistic solvers
-    } else if (pmy_pack->pcoord->is_general_relativistic) {
-      if (rsolver.compare("hlle") == 0) {
-        rsolver_method = Hydro_RSolver::hlle_gr;
-      // Error for anything else
-      } else {
-        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                  << std::endl << "<hydro> rsolver = '" << rsolver << "' not implemented"
-                  << " for GR dynamics" << std::endl;
-        std::exit(EXIT_FAILURE);
-      }
-
-    // Non-relativistic solvers
-    } else {
-      // Advect solver
-      if (rsolver.compare("advect") == 0) {
-        if (evolution_t.compare("dynamic") == 0) {
-          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                    << std::endl << "<hydro>/rsolver = '" << rsolver
-                    << "' cannot be used with hydrodynamic problems" << std::endl;
-          std::exit(EXIT_FAILURE);
+      if (evolution_t.compare("dynamic") == 0) {
+        if (rsolver.compare("llf") == 0) {
+          rsolver_method = Hydro_RSolver::llf_sr;
+        } else if (rsolver.compare("hlle") == 0) {
+          rsolver_method = Hydro_RSolver::hlle_sr;
+        } else if (rsolver.compare("hllc") == 0) {
+          rsolver_method = Hydro_RSolver::hllc_sr;
+        // Error for anything else
         } else {
-          rsolver_method = Hydro_RSolver::advect;
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                    << std::endl << "<hydro> rsolver = '" << rsolver
+                    << "' not implemented for SR dynamics" << std::endl;
+          std::exit(EXIT_FAILURE);
         }
-      // only advect RS can be used with non-dynamic problems; print error otherwise
-      } else if (evolution_t.compare("dynamic") != 0) {
+      } else {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                  << std::endl << "<hydro>/rsolver = '" << rsolver
-                  << "' cannot be used with non-hydrodynamic problems" << std::endl;
+                  << std::endl << "kinematic dynamics not implemented for SR" <<std::endl;
         std::exit(EXIT_FAILURE);
+      }
+
+    // General relativistic dynamic solvers
+    } else if (pmy_pack->pcoord->is_general_relativistic) {
+      if (evolution_t.compare("dynamic") == 0) {
+        if (rsolver.compare("hlle") == 0) {
+          rsolver_method = Hydro_RSolver::hlle_gr;
+        // Error for anything else
+        } else {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                    << std::endl << "<hydro> rsolver = '" << rsolver
+                    << "' not implemented for GR dynamics" << std::endl;
+          std::exit(EXIT_FAILURE);
+        }
+      } else {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "kinematic dynamics not implemented for GR" <<std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+
+    // Non-relativistic dynamic solvers
+    } else if (evolution_t.compare("dynamic") == 0) {
       // LLF solver
-      } else if (rsolver.compare("llf") == 0) {
+      if (rsolver.compare("llf") == 0) {
         rsolver_method = Hydro_RSolver::llf;
       // HLLE solver
       } else if (rsolver.compare("hlle") == 0) {
@@ -214,7 +210,19 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
       } else {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                   << std::endl << "<hydro> rsolver = '" << rsolver << "' not implemented"
-                  << std::endl;
+                  << " for dynamic problems" << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+
+    // Non-relativistic kinematic solvers
+    } else {
+      // Advect solver
+      if (rsolver.compare("advect") == 0) {
+        rsolver_method = Hydro_RSolver::advect;
+      } else {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "<hydro> rsolver = '" << rsolver << "' not implemented"
+                  << " for kinematic problems" << std::endl;
         std::exit(EXIT_FAILURE);
       }
     }

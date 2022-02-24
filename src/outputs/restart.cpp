@@ -169,7 +169,6 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   IOWrapperSizeT step2size = (pm->nmb_total)*(sizeof(LogicalLocation) + sizeof(float));
 
   // write cell-centered variables in parallel
-  int mygids = pm->gidslist[global_variable::my_rank];
   IOWrapperSizeT myoffset  = step1size + step2size + 2*sizeof(IOWrapperSizeT) +
                 (ccdata_size + fcdata_size)*(pm->gidslist[global_variable::my_rank]);
   resfile.Write_at_all(outarray.data(), ccdata_size, 1, myoffset);
