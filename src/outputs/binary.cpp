@@ -94,10 +94,7 @@ void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
 
   int nout_vars = outvars.size();
   auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
-  int is = indcs.is; int &mb_nx1 = indcs.nx1;
-  int js = indcs.js; int &mb_nx2 = indcs.nx2;
-  int ks = indcs.ks; int &mb_nx3 = indcs.nx3;
-  int cells = mb_nx1*mb_nx2*mb_nx3;
+  int cells = indcs.nx1*indcs.nx2*indcs.nx3;
   std::size_t data_size = 3*sizeof(int32_t) + (cells*nout_vars)*sizeof(float);
 
   int nout_mbs = (outmbs.size());
