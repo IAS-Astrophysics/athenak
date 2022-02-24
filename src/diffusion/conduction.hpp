@@ -30,6 +30,7 @@ class Conduction {
   // function to add heat fluxes to Hydro and/or MHD fluxes
   void IsotropicHeatFlux(const DvceArray5D<Real> &w, const Real kappa,
                          const EOS_Data &eos, DvceFaceFld5D<Real> &f);
+  void NewTimeStep(const DvceArray5D<Real> &w, const EOS_Data &eos_data);
 
  private:
   MeshBlockPack* pmy_pack;

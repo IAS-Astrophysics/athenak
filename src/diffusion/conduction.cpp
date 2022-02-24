@@ -23,6 +23,8 @@
 
 //----------------------------------------------------------------------------------------
 //! \brief Conduction constructor
+// Note that the coefficient of thermal conduction, kappa, corresponds to conductivity,
+// not diffusivity. This is different from the coefficient used in Athena++.
 
 Conduction::Conduction(std::string block, MeshBlockPack *pp, ParameterInput *pin) :
   pmy_pack(pp) {
@@ -46,27 +48,6 @@ Conduction::Conduction(std::string block, MeshBlockPack *pp, ParameterInput *pin
 
   // Read thermal conductivity of isotropic thermal conduction
   kappa = pin->GetReal(block,"conductivity");
-
-  // timestep for thermal conduction on MeshBlock(s) in this pack
-  dtnew = std::numeric_limits<float>::max();
-  auto size = pmy_pack->pmb->mb_size;
-  Real fac;
-  if (pmy_pack->pmesh->three_d) {
-    fac = 1.0/6.0;
-  } else if (pmy_pack->pmesh->two_d) {
-    fac = 0.25;
-  } else {
-    fac = 0.5;
-  }
-  for (int m=0; m<(pmy_pack->nmb_thispack); ++m) {
-    dtnew = std::min(dtnew, fac*SQR(size.h_view(m).dx1)/kappa);
-    if (pmy_pack->pmesh->multi_d) {
-      dtnew = std::min(dtnew, fac*SQR(size.h_view(m).dx2)/kappa);
-    }
-    if (pmy_pack->pmesh->three_d) {
-      dtnew = std::min(dtnew, fac*SQR(size.h_view(m).dx3)/kappa);
-    }
-  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -157,6 +138,60 @@ void Conduction::IsotropicHeatFlux(const DvceArray5D<Real> &w0, const Real kappa
       flx3(m,IEN,k,j,i) -= kappa * hflx3(i);
     });
   });
+
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void Conduction::NewTimeStep()
+//! \brief Compute new time step for thermal conduction.
+
+void Conduction::NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos_data) {
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  int is = indcs.is, nx1 = indcs.nx1;
+  int js = indcs.js, nx2 = indcs.nx2;
+  int ks = indcs.ks, nx3 = indcs.nx3;
+  const int nmkji = (pmy_pack->nmb_thispack)*nx3*nx2*nx1;
+  const int nkji = nx3*nx2*nx1;
+  const int nji  = nx2*nx1;
+  auto &w0_ = w0;
+  auto &multi_d = pmy_pack->pmesh->multi_d;
+  auto &three_d = pmy_pack->pmesh->three_d;
+  auto &size = pmy_pack->pmb->mb_size;
+  Real gm1 = eos_data.gamma-1.0;
+  Real &kappa_ = kappa;
+  Real fac;
+  if (pmy_pack->pmesh->three_d) {
+    fac = 1.0/6.0;
+  } else if (pmy_pack->pmesh->two_d) {
+    fac = 0.25;
+  } else {
+    fac = 0.5;
+  }
+
+  dtnew = static_cast<Real>(std::numeric_limits<float>::max());
+
+  // find smallest timestep for thermal conduction in each cell
+  Kokkos::parallel_reduce("cond_newdt", Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+  KOKKOS_LAMBDA(const int &idx, Real &min_dt) {
+    // compute m,k,j,i indices of thread and call function
+    int m = (idx)/nkji;
+    int k = (idx - m*nkji)/nji;
+    int j = (idx - m*nkji - k*nji)/nx1;
+    int i = (idx - m*nkji - k*nji - j*nx1) + is;
+    k += ks;
+    j += js;
+
+    min_dt = fmin(min_dt, SQR(size.d_view(m).dx1)/kappa_*w0_(m,IDN,k,j,i)/gm1);
+    if (multi_d) {
+      min_dt = fmin(min_dt, SQR(size.d_view(m).dx2)/kappa_*w0_(m,IDN,k,j,i)/gm1);
+    }
+    if (three_d) {
+      min_dt = fmin(min_dt, SQR(size.d_view(m).dx3)/kappa_*w0_(m,IDN,k,j,i)/gm1);
+    }
+  }, Kokkos::Min<Real>(dtnew));
+
+  dtnew *= fac;
 
   return;
 }

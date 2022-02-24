@@ -16,6 +16,7 @@
 #include "driver/driver.hpp"
 #include "eos/eos.hpp"
 #include "hydro.hpp"
+#include "diffusion/conduction.hpp"
 
 namespace hydro {
 
@@ -118,6 +119,11 @@ TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage) {
   dtnew = dt1;
   if (pmy_pack->pmesh->multi_d) { dtnew = std::min(dtnew, dt2); }
   if (pmy_pack->pmesh->three_d) { dtnew = std::min(dtnew, dt3); }
+
+  // compute timestep for diffusion
+  if (pcond != nullptr) {
+    pcond->NewTimeStep(w0, peos->eos_data);
+  }
 
   return TaskStatus::complete;
 }
