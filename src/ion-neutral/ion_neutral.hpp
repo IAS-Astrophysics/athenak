@@ -55,7 +55,6 @@ class IonNeutral {
   ~IonNeutral();
 
   Real drag_coeff;       // ion-neutral coupling coefficient
-  DvceArray6D<Real> ru;  // drag term in each dirn evaluated at different time levels
 
   // container to hold names of TaskIDs
   IonNeutralTaskIDs id;
