@@ -120,15 +120,9 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
   Real ee_min = pfloor_/gm1;
   bool &use_e = eos_data.use_e;
 
-  Real mm_sq_ee_sq_max = 1.0 - 1.0e-12;  // max. of squared momentum over energy
-
   // Parameters
   int const max_iterations = 15;
   Real const tol = 1.0e-12;
-  Real const pgas_uniform_min = 1.0e-12;
-  Real const a_min = 1.0e-12;
-  Real const v_sq_max = 1.0 - 1.0e-12;
-  Real const rr_max = 1.0 - 1.0e-12;
 
   par_for("srmhd_con2prim", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -159,8 +153,7 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
     // u_e = (u_e > ee_min) ?  u_e : ee_min;
 
     // Recast all variables (eq 22-24)
-    // Variables q and r defined in anonymous namspace: global this file
-    Real q = u_e/u_d;
+    Real q = u_e/u_d + 1.0;  // We evolve u_e = E-D
     Real r = sqrt(SQR(u_m1) + SQR(u_m2) + SQR(u_m3))/u_d;
 
     Real sqrtd = sqrt(u_d);

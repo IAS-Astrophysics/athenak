@@ -52,7 +52,6 @@ void BoundaryValuesCC::ProlongCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca) {
       int ju = rbuf[n].iprol[0].bje;
       int kl = rbuf[n].iprol[0].bks;
       int ku = rbuf[n].iprol[0].bke;
-      const int ni = iu - il + 1;
       const int nj = ju - jl + 1;
       const int nk = ku - kl + 1;
       const int nkj  = nk*nj;
@@ -350,7 +349,6 @@ void BoundaryValuesFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb
   } else {
     auto &nghbr = pmy_pack->pmb->nghbr;
     auto &indcs  = pmy_pack->pmesh->mb_indcs;
-    int ks = indcs.ks;
     auto &mblev = pmy_pack->pmb->mb_lev;
     auto &rbuf = recv_buf;
 

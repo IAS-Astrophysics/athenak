@@ -139,11 +139,11 @@ void LLF_SR(TeamMember_t const &member, const EOS_Data &eos,
     fr.bz = b_r[3] * u_r[1] - b_r[1] * u_r[3];
 
     // Store results in 3D array of fluxes
-    flx(m,IDN,k,j,i) = 0.5 * (fl.d  + fl.d  - lambda * (consr.d  - consl.d ));
-    flx(m,IEN,k,j,i) = 0.5 * (fl.e  + fl.e  - lambda * (consr.e  - consl.e ));
-    flx(m,ivx,k,j,i) = 0.5 * (fl.mx + fl.mx - lambda * (consr.mx - consl.mx));
-    flx(m,ivy,k,j,i) = 0.5 * (fl.my + fl.my - lambda * (consr.my - consl.my));
-    flx(m,ivz,k,j,i) = 0.5 * (fl.mz + fl.mz - lambda * (consr.mz - consl.mz));
+    flx(m,IDN,k,j,i) = 0.5 * (fl.d  + fr.d  - lambda * (consr.d  - consl.d ));
+    flx(m,IEN,k,j,i) = 0.5 * (fl.e  + fr.e  - lambda * (consr.e  - consl.e ));
+    flx(m,ivx,k,j,i) = 0.5 * (fl.mx + fr.mx - lambda * (consr.mx - consl.mx));
+    flx(m,ivy,k,j,i) = 0.5 * (fl.my + fr.my - lambda * (consr.my - consl.my));
+    flx(m,ivz,k,j,i) = 0.5 * (fl.mz + fr.mz - lambda * (consr.mz - consl.mz));
 
     ey(m,k,j,i) = -0.5 * (fl.by + fr.by - lambda * (consr.by - consl.by));
     ez(m,k,j,i) =  0.5 * (fl.bz + fr.bz - lambda * (consr.bz - consl.bz));

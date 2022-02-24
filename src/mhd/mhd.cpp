@@ -184,50 +184,46 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     {std::string rsolver = pin->GetString("mhd","rsolver");
     // Special relativistic solvers
     if (pmy_pack->pcoord->is_special_relativistic) {
-      if (rsolver.compare("llf") == 0) {
-        rsolver_method = MHD_RSolver::llf_sr;
-      } else if (rsolver.compare("hlle") == 0) {
-        rsolver_method = MHD_RSolver::hlle_sr;
-      // Error for anything else
+      if (evolution_t.compare("dynamic") == 0) {
+        if (rsolver.compare("llf") == 0) {
+          rsolver_method = MHD_RSolver::llf_sr;
+        } else if (rsolver.compare("hlle") == 0) {
+          rsolver_method = MHD_RSolver::hlle_sr;
+        // Error for anything else
+        } else {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                    << std::endl << "<mhd> rsolver = '" << rsolver << "' not implemented"
+                    << " for SR dynamics" << std::endl;
+          std::exit(EXIT_FAILURE);
+        }
       } else {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                  << std::endl << "<mhd> rsolver = '" << rsolver << "' not implemented"
-                  << " for SR dynamics" << std::endl;
+                  << std::endl << "kinematic dynamics not implemented for SR" <<std::endl;
         std::exit(EXIT_FAILURE);
       }
 
     // General relativistic solvers
     } else if (pmy_pack->pcoord->is_general_relativistic) {
-      if (rsolver.compare("hlle") == 0) {
-        rsolver_method = MHD_RSolver::hlle_gr;
-      // Error for anything else
+      if (evolution_t.compare("dynamic") == 0) {
+        if (rsolver.compare("hlle") == 0) {
+          rsolver_method = MHD_RSolver::hlle_gr;
+        // Error for anything else
+        } else {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                    << std::endl << "<mhd> rsolver = '" << rsolver << "' not implemented"
+                    << " for GR dynamics" << std::endl;
+          std::exit(EXIT_FAILURE);
+        }
       } else {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                  << std::endl << "<mhd> rsolver = '" << rsolver << "' not implemented"
-                  << " for GR dynamics" << std::endl;
+                  << std::endl << "kinematic dynamics not implemented for GR" <<std::endl;
         std::exit(EXIT_FAILURE);
       }
 
-    // Non-relativistic solvers
-    } else {
-      // Advect solver
-      if (rsolver.compare("advect") == 0) {
-        if (evolution_t.compare("dynamic") == 0) {
-          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                    << std::endl << "<mhd>/rsolver = '" << rsolver
-                    << "' cannot be used with dynamic problems" << std::endl;
-          std::exit(EXIT_FAILURE);
-        } else {
-          rsolver_method = MHD_RSolver::advect;
-        }
-      // only advect RS can be used with non-dynamic problems; print error otherwise
-      } else  if (evolution_t.compare("dynamic") != 0) {
-        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                  << std::endl << "<mhd>/rsolver = '" << rsolver
-                  << "' cannot be used with non-dynamic problems" << std::endl;
-        std::exit(EXIT_FAILURE);
+    // Non-relativistic dynamic solvers
+    } else if (evolution_t.compare("dynamic") == 0) {
       // LLF solver
-      } else if (rsolver.compare("llf") == 0) {
+      if (rsolver.compare("llf") == 0) {
         rsolver_method = MHD_RSolver::llf;
       // HLLE solver
       } else if (rsolver.compare("hlle") == 0) {
@@ -241,7 +237,19 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
       } else {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                   << std::endl << "<mhd>/rsolver = '" << rsolver << "' not implemented"
-                  << std::endl;
+                  << " for dynamic problems" << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+
+    // Non-relativistic kinematic solver
+    } else {
+      // Advect solver
+      if (rsolver.compare("advect") == 0) {
+        rsolver_method = MHD_RSolver::advect;
+      } else {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "<mhd>/rsolver = '" << rsolver << "' not implemented"
+                  << " for kinematic problems" << std::endl;
         std::exit(EXIT_FAILURE);
       }
     }

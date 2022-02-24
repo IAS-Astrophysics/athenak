@@ -213,7 +213,6 @@ TaskStatus BoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
   int &my_rank = global_variable::my_rank;
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &rbuf = recv_buf;
-  auto &mblev = pmy_pack->pmb->mb_lev;
 
   bool no_errors=true;
   for (int m=0; m<nmb; ++m) {
@@ -237,9 +236,9 @@ TaskStatus BoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
 
           // get ptr to send buffer when neighbor is at coarser/same/fine level
           int data_size = 3;
-          if (nghbr.h_view(m,n).lev < mblev.h_view(m)) {
+          if ( nghbr.h_view(m,n).lev < pmy_pack->pmb->mb_lev.h_view(m) ) {
             data_size *= send_buf[n].icoar_ndat;
-          } else if (nghbr.h_view(m,n).lev == mblev.h_view(m)) {
+          } else if ( nghbr.h_view(m,n).lev == pmy_pack->pmb->mb_lev.h_view(m) ) {
             data_size *= send_buf[n].isame_ndat;
           } else {
             data_size *= send_buf[n].ifine_ndat;
