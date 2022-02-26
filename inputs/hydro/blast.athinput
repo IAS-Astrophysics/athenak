@@ -21,7 +21,7 @@ x2max     = 0.75       # maximum value of X2
 ix2_bc    = periodic   # inner-X2 boundary flag
 ox2_bc    = periodic   # outer-X2 boundary flag
 
-nx3       = 1 0        # Number of zones in X3-direction
+nx3       = 1          # Number of zones in X3-direction
 x3min     = -0.5       # minimum value of X3
 x3max     = 0.5        # maximum value of X3
 ix3_bc    = periodic   # inner-X3 boundary flag

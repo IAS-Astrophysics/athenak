@@ -93,7 +93,12 @@ void EventLogOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     std::fclose(pfile);
   }
 
-  // increment counters, clean up
+  // reset counters
+  pm->ecounter.neos_dfloor = 0;
+  pm->ecounter.neos_efloor = 0;
+  pm->ecounter.maxit_c2p = 0;
+
+  // increment output time, clean up
   if (out_params.last_time < 0.0) {
     out_params.last_time = pm->time;
   } else {
