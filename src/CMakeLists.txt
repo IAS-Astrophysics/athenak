@@ -68,6 +68,7 @@ add_executable(
         outputs/basetype_output.cpp
         outputs/derived_variables.cpp
         outputs/binary.cpp
+        outputs/eventlog.cpp
         outputs/formatted_table.cpp
         outputs/history.cpp
         outputs/restart.cpp

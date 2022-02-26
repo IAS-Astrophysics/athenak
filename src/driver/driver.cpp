@@ -385,7 +385,10 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
         float time_32 = static_cast<float>(pmesh->time);
         float next_32 = static_cast<float>(out->out_params.last_time+out->out_params.dt);
         float tlim_32 = static_cast<float>(tlim);
-        if (time_32 >= next_32 && time_32 < tlim_32) {
+        int &dcycle_ = out->out_params.dcycle;
+
+        if ( ((out->out_params.dt > 0.0) && (time_32 >= next_32)) && (time_32<tlim_32) ||
+             ((dcycle_ > 0) && ((pmesh->ncycle)%(dcycle_) == 0)) ) {
           out->LoadOutputData(pmesh);
           out->WriteOutputFile(pmesh, pin);
         }

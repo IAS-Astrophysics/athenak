@@ -54,6 +54,7 @@ struct OutputParameters {
   std::string variable;
   std::string data_format;
   Real last_time, dt;
+  int dcycle;  // enables outputs every 'dcycle'
   int file_number;
   int gid;
   bool include_gzs;
@@ -201,6 +202,22 @@ class BinaryOutput : public BaseTypeOutput {
 class RestartOutput : public BaseTypeOutput {
  public:
   RestartOutput(OutputParameters oparams, Mesh *pm);
+  void LoadOutputData(Mesh *pm) override;
+  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+};
+
+//----------------------------------------------------------------------------------------
+//! \class EventLogOutput
+//  \brief derived BaseTypeOutput class for event counter data
+
+class EventLogOutput : public BaseTypeOutput {
+ public:
+  EventLogOutput(OutputParameters oparams, Mesh *pm);
+
+  // various flags to denote output status
+  bool header_written=false;
+  bool no_output=true;
+
   void LoadOutputData(Mesh *pm) override;
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
 };

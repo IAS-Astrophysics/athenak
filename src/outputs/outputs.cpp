@@ -59,7 +59,7 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
   // loop over input block names.  Find those that start with "output", read parameters,
   // and add to linked list of BaseTypeOutputs.
 
-  int num_hst=0, num_rst=0; // count # of hst and rst outputs (should only be one each)
+  int num_hst=0, num_rst=0, num_log=0; // count # of hst,rst,log outputs
   for (auto it = pin->block.begin(); it != pin->block.end(); ++it) {
     if (it->block_name.compare(0, 6, "output") == 0) {
       OutputParameters opar;  // define temporary OutputParameters struct
@@ -69,12 +69,18 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
       opar.block_number = atoi(outn.c_str());
       opar.block_name.assign(it->block_name);
 
-      // set time of last output, time between outputs
+      // set time of last output, time or cycles between outputs
       // when last_time < 0, then outputs will always be made
       opar.last_time = pin->GetOrAddReal(opar.block_name,"last_time", -1.0);
-      opar.dt = pin->GetReal(opar.block_name,"dt");
+      if (pin->DoesParameterExist(opar.block_name,"dcycle")) {
+        opar.dcycle = pin->GetInteger(opar.block_name,"dcycle");
+        opar.dt = 0.0;
+      } else {
+        opar.dt = pin->GetReal(opar.block_name,"dt");
+        opar.dcycle = 0;
+      }
 
-      if (opar.dt <= 0.0) continue;  // only add output if dt>0
+      if (opar.dcycle == 0 && opar.dt <= 0.0) continue;  // only add output if dt>0
 
       // set file number, basename, and format
       opar.file_number = pin->GetOrAddInteger(opar.block_name,"file_number",0);
@@ -146,7 +152,9 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
       }
 
       // set output variable and optional file id (default is output variable name)
-      if (opar.file_type.compare("hst") != 0 && opar.file_type.compare("rst") != 0) {
+      if (opar.file_type.compare("hst") != 0 &&
+          opar.file_type.compare("rst") != 0 &&
+          opar.file_type.compare("log") != 0) {
         opar.variable = pin->GetString(opar.block_name, "variable");
         opar.file_id = pin->GetOrAddString(opar.block_name,"id",opar.variable);
       }
@@ -165,6 +173,10 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
         pnode = new HistoryOutput(opar,pm);
         pout_list.insert(pout_list.begin(),pnode);
         num_hst++;
+      } else if (opar.file_type.compare("log") == 0) {
+        pnode = new EventLogOutput(opar,pm);
+        pout_list.insert(pout_list.begin(),pnode);
+        num_log++;
       } else if (opar.file_type.compare("vtk") == 0) {
         pnode = new VTKOutput(opar,pm);
         pout_list.insert(pout_list.begin(),pnode);
@@ -186,11 +198,11 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
     }
   }
 
-  // check there were no more than one history or restart files requested
-  if (num_hst > 1 || num_rst > 1) {
+  // check there were no more than one history, event log, or restart files requested
+  if (num_hst > 1 || num_rst > 1 || num_log > 1) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "More than one history or restart output block detected in input file"
-              << std::endl;
+              << "More than one history, event log, or restart output block found in "
+              << "input file" << std::endl;
     exit(EXIT_FAILURE);
   }
 }
