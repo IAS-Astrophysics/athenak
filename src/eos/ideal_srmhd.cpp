@@ -124,18 +124,32 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
   int const max_iterations = 15;
   Real const tol = 1.0e-12;
 
-  par_for("srmhd_con2prim", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
-  KOKKOS_LAMBDA(int m, int k, int j, int i) {
-    Real& u_d  = cons(m, IDN,k,j,i);
-    Real& u_m1 = cons(m, IM1,k,j,i);
-    Real& u_m2 = cons(m, IM2,k,j,i);
-    Real& u_m3 = cons(m, IM3,k,j,i);
-    Real& u_e  = cons(m, IEN,k,j,i);
+  const int ni   = (iu - il + 1);
+  const int nji  = (ju - jl + 1)*ni;
+  const int nkji = (ku - kl + 1)*nji;
+  const int nmkji = nmb*nkji;
 
-    Real& w_d  = prim(m, IDN,k,j,i);
-    Real& w_ux = prim(m, IVX,k,j,i);
-    Real& w_uy = prim(m, IVY,k,j,i);
-    Real& w_uz = prim(m, IVZ,k,j,i);
+  int nfloord_=0, nfloore_=0, maxit_=0;
+  Kokkos::parallel_reduce("hyd_c2p",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+  KOKKOS_LAMBDA(const int &idx, int &sum_d, int &sum_e, int &max_iter) {
+    int m = (idx)/nkji;
+    int k = (idx - m*nkji)/nji;
+    int j = (idx - m*nkji - k*nji)/ni;
+    int i = (idx - m*nkji - k*nji - j*ni) + il;
+    j += jl;
+    k += kl;
+
+    Real& u_d  = cons(m,IDN,k,j,i);
+    Real& u_e  = cons(m,IEN,k,j,i);
+    const Real& u_m1 = cons(m,IM1,k,j,i);
+    const Real& u_m2 = cons(m,IM2,k,j,i);
+    const Real& u_m3 = cons(m,IM3,k,j,i);
+
+    Real& w_d  = prim(m,IDN,k,j,i);
+    Real& w_ux = prim(m,IVX,k,j,i);
+    Real& w_uy = prim(m,IVY,k,j,i);
+    Real& w_uz = prim(m,IVZ,k,j,i);
+    Real& w_e  = prim(m,IEN,k,j,i);
 
     // cell-centered fields are simple linear average of face-centered fields
     Real& w_bx = bcc(m,IBX,k,j,i);
@@ -146,7 +160,10 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
     w_bz = 0.5*(b.x3f(m,k,j,i) + b.x3f(m,k+1,j,i));
 
     // apply density floor, without changing momentum or energy
-    u_d = (u_d > dfloor_) ?  u_d : dfloor_;
+    if (u_d < dfloor_) {
+      u_d = dfloor_;
+      sum_d++;
+    }
 
     // apply energy floor
     // Real ee_min = pfloor_/gm1;
@@ -172,7 +189,6 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
     Real fm = Equation49(zm, b2, rpar, r, q);
     Real fp = Equation49(zp, b2, rpar, r, q);
 
-
     // For simplicity on the GPU, find roots using the false position method
     int iterations = max_iterations;
     // If bracket within tolerances, don't bother doing any iterations
@@ -180,7 +196,9 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       iterations = -1;
     }
     Real z = 0.5*(zm + zp);
-    for (int ii=0; ii < iterations; ++ii) {
+
+    {int iter;
+    for (iter=0; iter < iterations; ++iter) {
       z =  (zm*fp - zp*fm)/(fp-fm);  // linear interpolation to point f(z)=0
       Real f = Equation49(z, b2, rpar, r, q);
       // Quit if convergence reached
@@ -200,7 +218,11 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
         fp = f;
       }
     }
+    max_iter = (iter > max_iter)? iter : max_iter;
+    }
 
+    // Found brackets. Now find solution in bounded interval, again using the
+    // false position method
     zm= 0.;
     zp= z;
 
@@ -208,15 +230,14 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
     fm = Equation44(zm, b2, rpar, r, q, u_d, pfloor_, gm1);
     fp = Equation44(zp, b2, rpar, r, q, u_d, pfloor_, gm1);
 
-    // For simplicity on the GPU, find roots using the false position method
     iterations = max_iterations;
-    // If bracket within tolerances, don't bother doing any iterations
     if ((fabs(zm-zp) < tol) || ((fabs(fm) + fabs(fp)) < 2.0*tol)) {
       iterations = -1;
     }
     z = 0.5*(zm + zp);
 
-    for (int ii=0; ii < iterations; ++ii) {
+    {int iter;
+    for (iter=0; iter < iterations; ++iter) {
       z =  (zm*fp - zp*fm)/(fp-fm);  // linear interpolation to point f(z)=0
       Real f = Equation44(z, b2, rpar, r, q, u_d, pfloor_, gm1);
       // Quit if convergence reached
@@ -236,7 +257,10 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
         fp = f;
       }
     }
+    max_iter = (iter > max_iter)? iter : max_iter;
+    }
 
+    // iterations ended, compute primitives from resulting value of z
     Real &mu = z;
     Real const x = 1./(1.+mu*b2);                              // (26)
     Real rbar = (x*x*r*r + mu*x*(1.+x)*rpar*rpar);             // (38)
@@ -246,18 +270,20 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
     Real z2 = (mu*mu*rbar/(fabs(1.- SQR(mu)*rbar)));           // (32)
     Real w = sqrt(1.+z2);
 
-    w_d = u_d/w;                  // (34)
+    w_d = u_d/w;                                               // (34)
     Real eps = w*(qbar - mu*rbar)+  z2/(w+1.);
+    Real epsmin = pfloor_/(w_d*gm1);
+    if (eps < epsmin) {
+      eps = epsmin;
+      sum_e++;
+    }
 
     //NOTE: The following generalizes to ANY equation of state
-    eps = fmax(pfloor_/(w_d*gm1), eps);
     Real const h = (1.0 + eps) * (1.0 + (gm1*eps)/(1.0+eps));  // (43)
     if (use_e) {
-      Real& w_e  = prim(m,IEN,k,j,i);
       w_e = w_d*eps;
     } else {
-      Real& w_t  = prim(m,ITM,k,j,i);
-      w_t = gm1*eps;  // TODO(@user):  is this the correct expression?
+      w_e = gm1*eps;  // TODO(@user):  is this the correct expression?
     }
 
     Real const conv = w/(h*w + b2); // (C26)
@@ -269,9 +295,12 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
     for (int n=nmhd; n<(nmhd+nscal); ++n) {
       prim(m,n,k,j,i) = cons(m,n,k,j,i)/u_d;
     }
-  });
+  }, Kokkos::Sum<int>(nfloord_), Kokkos::Sum<int>(nfloore_), Kokkos::Max<int>(maxit_));
 
-  // TODO(@user): error handling
+  // store counters
+  pmy_pack->pmesh->ecounter.neos_dfloor += nfloord_;
+  pmy_pack->pmesh->ecounter.neos_efloor += nfloore_;
+  pmy_pack->pmesh->ecounter.maxit_c2p = maxit_;
 
   return;
 }

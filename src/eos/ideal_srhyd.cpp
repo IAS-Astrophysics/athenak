@@ -103,21 +103,38 @@ void IdealSRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
   Real const tol = 1.0e-12;
   Real const v_sq_max = 1.0 - tol;
 
-  par_for("srhyd_con2prim", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
-  KOKKOS_LAMBDA(int m, int k, int j, int i) {
-    Real& u_d  = cons(m, IDN,k,j,i);
-    Real& u_e  = cons(m, IEN,k,j,i);
-    const Real& u_m1 = cons(m, IM1,k,j,i);
-    const Real& u_m2 = cons(m, IM2,k,j,i);
-    const Real& u_m3 = cons(m, IM3,k,j,i);
+  const int ni   = (iu - il + 1);
+  const int nji  = (ju - jl + 1)*ni;
+  const int nkji = (ku - kl + 1)*nji;
+  const int nmkji = nmb*nkji;
 
-    Real& w_d  = prim(m, IDN,k,j,i);
-    Real& w_ux = prim(m, IVX,k,j,i);
-    Real& w_uy = prim(m, IVY,k,j,i);
-    Real& w_uz = prim(m, IVZ,k,j,i);
+  int nfloord_=0, nfloore_=0, maxit_=0;
+  Kokkos::parallel_reduce("hyd_c2p",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+  KOKKOS_LAMBDA(const int &idx, int &sum_d, int &sum_e, int &max_iter) {
+    int m = (idx)/nkji;
+    int k = (idx - m*nkji)/nji;
+    int j = (idx - m*nkji - k*nji)/ni;
+    int i = (idx - m*nkji - k*nji - j*ni) + il;
+    j += jl;
+    k += kl;
+
+    Real& u_d  = cons(m,IDN,k,j,i);
+    Real& u_e  = cons(m,IEN,k,j,i);
+    const Real& u_m1 = cons(m,IM1,k,j,i);
+    const Real& u_m2 = cons(m,IM2,k,j,i);
+    const Real& u_m3 = cons(m,IM3,k,j,i);
+
+    Real& w_d  = prim(m,IDN,k,j,i);
+    Real& w_ux = prim(m,IVX,k,j,i);
+    Real& w_uy = prim(m,IVY,k,j,i);
+    Real& w_uz = prim(m,IVZ,k,j,i);
+    Real& w_e  = prim(m,IEN,k,j,i);
 
     // apply density floor, without changing momentum or energy
-    u_d = (u_d > dfloor_) ?  u_d : dfloor_;
+    if (u_d < dfloor_) {
+      u_d = dfloor_;
+      sum_d++;
+    }
 
     // apply energy floor
     // Real ee_min = pfloor_/gm1;
@@ -148,7 +165,8 @@ void IdealSRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
     }
     Real z = 0.5*(zm + zp);
 
-    for (int ii=0; ii < iterations; ++ii) {
+    {int iter;
+    for (iter=0; iter < iterations; ++iter) {
       z =  (zm*fp - zp*fm)/(fp-fm);  // linear interpolation to point f(z)=0
       Real f = EquationC22(z, u_d, q, r, gm1, pfloor_);
 
@@ -170,6 +188,8 @@ void IdealSRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
         fp = f;
       }
     }
+    max_iter = (iter > max_iter)? iter : max_iter;
+    }
 
     // iterations ended, compute primitives from resulting value of z
     Real const w = sqrt(1.0 + z*z); // (C15)
@@ -177,14 +197,16 @@ void IdealSRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
 
     // NOTE(@ermost): The following generalizes to ANY equation of state
     Real eps = w*q - z*r + (z*z)/(1.0 + w);           // (C16)
-    eps = fmax(pfloor_/w_d/gm1, eps);                 // (C18)
+    Real epsmin = pfloor_/(w_d*gm1);
+    if (eps < epsmin) {                               // C18
+      eps = epsmin;
+      sum_e++;
+    }
     Real h = (1. + eps) * (1.0 + (gm1*eps)/(1.+eps)); // (C1) & (C21)
     if (use_e) {
-      Real& w_e  = prim(m,IEN,k,j,i);
       w_e = w_d*eps;
     } else {
-      Real& w_t  = prim(m,ITM,k,j,i);
-      w_t = gm1*eps;  // TODO(@user):  is this the correct expression?
+      w_e = gm1*eps;  // TODO(@user):  is this the correct expression?
     }
 
     Real const conv = 1.0/(h*u_d); // (C26)
@@ -210,7 +232,12 @@ void IdealSRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
     //   cons(m,IM2,k,j,i) = wgas * gamma * w_vy;
     //   cons(m,IM3,k,j,i) = wgas * gamma * w_vz;
     // }
-  });
+  }, Kokkos::Sum<int>(nfloord_), Kokkos::Sum<int>(nfloore_), Kokkos::Max<int>(maxit_));
+
+  // store counters
+  pmy_pack->pmesh->ecounter.neos_dfloor += nfloord_;
+  pmy_pack->pmesh->ecounter.neos_efloor += nfloore_;
+  pmy_pack->pmesh->ecounter.maxit_c2p = maxit_;
 
   return;
 }
