@@ -43,6 +43,34 @@ IdealSRMHD::IdealSRMHD(MeshBlockPack *pp, ParameterInput *pin) :
   }
 }
 
+//--------------------------------------------------------------------------------------
+//! \fn void PrimToConsSingle()
+//! \brief Converts primitive into conserved variables in SRMHD.
+//! Operates on only one active cell.
+
+KOKKOS_INLINE_FUNCTION
+void PrimToConsSingle(const Real &gammap, const Real &bcc1, const Real &bcc2,
+                      const Real &bcc3, const HydPrim1D &w, HydCons1D &u) {
+  // Calculate Lorentz factor
+  Real u0 = sqrt(1.0 + SQR(w.vx) + SQR(w.vy) + SQR(w.vz));
+
+  // Calculate 4-magnetic field
+  Real b0 = bcc1*w.vx + bcc2*w.vy + bcc3*w.vz;
+  Real b1 = (bcc1 + b0 * w.vx) / u0;
+  Real b2 = (bcc2 + b0 * w.vy) / u0;
+  Real b3 = (bcc3 + b0 * w.vz) / u0;
+  Real b_sq = -SQR(b0) + SQR(b1) + SQR(b2) + SQR(b3);
+
+  // Set conserved quantities
+  Real wtot_u02 = (w.d + gammap * w.p + b_sq) * u0 * u0;
+  u.d  = w.d * u0;
+  u.e  = wtot_u02 - b0 * b0 - (w.p + 0.5*b_sq) - u.d;  // In SR, evolve E - D
+  u.mx = wtot_u02 * w.vx / u0 - b0 * b1;
+  u.my = wtot_u02 * w.vy / u0 - b0 * b2;
+  u.mz = wtot_u02 * w.vz / u0 - b0 * b3;
+  return;
+}
+
 //----------------------------------------------------------------------------------------
 //! \fn Real Equation49()
 //! \brief Inline function to compute function fa(mu) defined in eq. 49 of Kastaun et al.
@@ -114,10 +142,10 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
   int &nscal = pmy_pack->pmhd->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
   Real gm1 = eos_data.gamma - 1.0;
+  Real gamma_prime = eos_data.gamma/(gm1);
 
   Real &dfloor_ = eos_data.dfloor;
   Real &pfloor_ = eos_data.pfloor;
-  Real ee_min = pfloor_/gm1;
   bool &use_e = eos_data.use_e;
 
   // Parameters
@@ -160,9 +188,11 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
     w_bz = 0.5*(b.x3f(m,k,j,i) + b.x3f(m,k+1,j,i));
 
     // apply density floor, without changing momentum or energy
+    bool floor_hit = false;
     if (u_d < dfloor_) {
       u_d = dfloor_;
       sum_d++;
+      floor_hit = true;
     }
 
     // apply energy floor
@@ -273,9 +303,10 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
     w_d = u_d/w;                                               // (34)
     Real eps = w*(qbar - mu*rbar)+  z2/(w+1.);
     Real epsmin = pfloor_/(w_d*gm1);
-    if (eps < epsmin) {
+    if (eps <= epsmin) {
       eps = epsmin;
       sum_e++;
+      floor_hit = true;
     }
 
     //NOTE: The following generalizes to ANY equation of state
@@ -295,6 +326,34 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
     for (int n=nmhd; n<(nmhd+nscal); ++n) {
       prim(m,n,k,j,i) = cons(m,n,k,j,i)/u_d;
     }
+
+    // reset conserved variables if floor is hit
+    if (floor_hit) {
+      HydPrim1D w;
+      w.d  = w_d;
+      w.vx = w_ux;
+      w.vy = w_uy;
+      w.vz = w_uz;
+      if (use_e) {
+        w.p = w_e*gm1;
+      } else {
+        w.p = w_e*gm1*w_d;
+      }
+
+      HydCons1D u;
+      PrimToConsSingle(gamma_prime, w_bx, w_by, w_bz, w, u);
+
+      cons(m,IDN,k,j,i) = u.d;
+      cons(m,IEN,k,j,i) = u.e;
+      cons(m,IM1,k,j,i) = u.mx;
+      cons(m,IM2,k,j,i) = u.my;
+      cons(m,IM3,k,j,i) = u.mz;
+      // convert scalars (if any)
+      for (int n=nmhd; n<(nmhd+nscal); ++n) {
+        cons(m,n,k,j,i) = prim(m,n,k,j,i)*cons(m,IDN,k,j,i);
+      }
+    }
+
   }, Kokkos::Sum<int>(nfloord_), Kokkos::Sum<int>(nfloore_), Kokkos::Max<int>(maxit_));
 
   // store counters
@@ -330,40 +389,30 @@ void IdealSRMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Rea
     Real& u_m2 = cons(m,IM2,k,j,i);
     Real& u_m3 = cons(m,IM3,k,j,i);
 
-    const Real& w_d  = prim(m,IDN,k,j,i);
-    const Real& w_ux = prim(m,IVX,k,j,i);
-    const Real& w_uy = prim(m,IVY,k,j,i);
-    const Real& w_uz = prim(m,IVZ,k,j,i);
+    // Load single state of primitive variables
+    HydPrim1D w;
+    w.d  = prim(m,IDN,k,j,i);
+    w.vx = prim(m,IVX,k,j,i);
+    w.vy = prim(m,IVY,k,j,i);
+    w.vz = prim(m,IVZ,k,j,i);
+    if (use_e) {
+      w.p = prim(m,IEN,k,j,i)*gm1;
+    } else {
+      w.p = prim(m,IEN,k,j,i)*w.d;
+    }
     const Real& bcc1 = bcc(m,IBX,k,j,i);
     const Real& bcc2 = bcc(m,IBY,k,j,i);
     const Real& bcc3 = bcc(m,IBZ,k,j,i);
 
-    Real w_p;
-    if (use_e) {
-      const Real& w_e  = prim(m,IEN,k,j,i);
-      w_p = w_e*gm1;
-    } else {
-      const Real& w_t  = prim(m,ITM,k,j,i);
-      w_p = w_t*w_d;
-    }
-
-    // Calculate Lorentz factor
-    Real u0 = sqrt(1.0 + SQR(w_ux) + SQR(w_uy) + SQR(w_uz));
-
-    // Calculate 4-magnetic field
-    Real b0 = bcc1*w_ux + bcc2*w_uy + bcc3*w_uz;
-    Real b1 = (bcc1 + b0 * w_ux) / u0;
-    Real b2 = (bcc2 + b0 * w_uy) / u0;
-    Real b3 = (bcc3 + b0 * w_uz) / u0;
-    Real b_sq = -SQR(b0) + SQR(b1) + SQR(b2) + SQR(b3);
+    HydCons1D u;
+    PrimToConsSingle(gamma_prime, bcc1, bcc2, bcc3, w, u);
 
     // Set conserved quantities
-    Real wtot_u02 = (w_d + gamma_prime * w_p + b_sq) * u0 * u0;
-    u_d  = w_d * u0;
-    u_e  = wtot_u02 - b0 * b0 - (w_p + 0.5*b_sq) - u_d;  // In SR, evolve E - D
-    u_m1 = wtot_u02 * w_ux / u0 - b0 * b1;
-    u_m2 = wtot_u02 * w_uy / u0 - b0 * b2;
-    u_m3 = wtot_u02 * w_uz / u0 - b0 * b3;
+    cons(m,IDN,k,j,i) = u.d;
+    cons(m,IEN,k,j,i) = u.e;
+    cons(m,IM1,k,j,i) = u.mx;
+    cons(m,IM2,k,j,i) = u.my;
+    cons(m,IM3,k,j,i) = u.mz;
 
     // convert scalars (if any)
     for (int n=nmhd; n<(nmhd+nscal); ++n) {

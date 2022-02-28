@@ -45,6 +45,26 @@ IdealSRHydro::IdealSRHydro(MeshBlockPack *pp, ParameterInput *pin) :
   }
 }
 
+//--------------------------------------------------------------------------------------
+//! \fn void PrimToConsSingle()
+//! \brief Converts primitive into conserved variables in SR Hydro.
+//! Operates on only one active cell.
+
+KOKKOS_INLINE_FUNCTION
+void PrimToConsSingle(const Real &gammap, const HydPrim1D &w, HydCons1D &u) {
+    // Calculate Lorentz factor
+    Real u0 = sqrt(1.0 + SQR(w.vx) + SQR(w.vy) + SQR(w.vz));
+    Real wgas_u0 = (w.d + gammap * w.p) * u0;
+
+    // Set conserved quantities
+    u.d  = w.d * u0;
+    u.e  = wgas_u0 * u0 - w.p - u.d;  // In SR, evolve E - D
+    u.mx = wgas_u0 * w.vx;            // In SR, w_ux/y/z are 4-velocity
+    u.my = wgas_u0 * w.vy;
+    u.mz = wgas_u0 * w.vz;
+  return;
+}
+
 //----------------------------------------------------------------------------------------
 //! \fn Real EquationC22()
 //! \brief Inline function to compute function f(z) defined in eq. C22 of Galeazzi et al.
@@ -94,6 +114,8 @@ void IdealSRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
   int &nscal = pmy_pack->phydro->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
   Real gm1 = eos_data.gamma - 1.0;
+  Real gamma_prime = eos_data.gamma/(gm1);
+
   Real &pfloor_ = eos_data.pfloor;
   Real &dfloor_ = eos_data.dfloor;
   bool &use_e = eos_data.use_e;
@@ -131,9 +153,11 @@ void IdealSRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
     Real& w_e  = prim(m,IEN,k,j,i);
 
     // apply density floor, without changing momentum or energy
+    bool floor_hit = false;
     if (u_d < dfloor_) {
       u_d = dfloor_;
       sum_d++;
+      floor_hit = true;
     }
 
     // apply energy floor
@@ -198,9 +222,10 @@ void IdealSRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
     // NOTE(@ermost): The following generalizes to ANY equation of state
     Real eps = w*q - z*r + (z*z)/(1.0 + w);           // (C16)
     Real epsmin = pfloor_/(w_d*gm1);
-    if (eps < epsmin) {                               // C18
+    if (eps <= epsmin) {                               // C18
       eps = epsmin;
       sum_e++;
+      floor_hit = true;
     }
     Real h = (1. + eps) * (1.0 + (gm1*eps)/(1.+eps)); // (C1) & (C21)
     if (use_e) {
@@ -219,19 +244,33 @@ void IdealSRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
       prim(m,n,k,j,i) = cons(m,n,k,j,i)/u_d;
     }
 
-    // TODO(@user): error handling
-    // if (false) {
-    //   Real gamma_adi = gm1+1.;
-    //   Real rho_eps = w_p / gm1;
-    //   // TODO(@ermost): Only ideal fluid for now
-    //   Real wgas = w_d + gamma_adi / gm1 *w_p;
-    //   auto gamma = sqrt(1. +z*z);
-    //   cons(m,IDN,k,j,i) = w_d * gamma;
-    //   cons(m,IEN,k,j,i) = wgas*gamma*gamma - w_p - w_d * gamma;
-    //   cons(m,IM1,k,j,i) = wgas * gamma * w_vx;
-    //   cons(m,IM2,k,j,i) = wgas * gamma * w_vy;
-    //   cons(m,IM3,k,j,i) = wgas * gamma * w_vz;
-    // }
+    // reset conserved variables if floor is hit
+    if (floor_hit) {
+      HydPrim1D w;
+      w.d  = w_d;
+      w.vx = w_ux;
+      w.vy = w_uy;
+      w.vz = w_uz;
+      if (use_e) {
+        w.p = w_e*gm1;
+      } else {
+        w.p = w_e*gm1*w_d;
+      }
+
+      HydCons1D u;
+      PrimToConsSingle(gamma_prime, w, u);
+
+      cons(m,IDN,k,j,i) = u.d;
+      cons(m,IEN,k,j,i) = u.e;
+      cons(m,IM1,k,j,i) = u.mx;
+      cons(m,IM2,k,j,i) = u.my;
+      cons(m,IM3,k,j,i) = u.mz;
+      // convert scalars (if any)
+      for (int n=nhyd; n<(nhyd+nscal); ++n) {
+        cons(m,n,k,j,i) = prim(m,n,k,j,i)*cons(m,IDN,k,j,i);
+      }
+    }
+
   }, Kokkos::Sum<int>(nfloord_), Kokkos::Sum<int>(nfloore_), Kokkos::Max<int>(maxit_));
 
   // store counters
@@ -267,30 +306,27 @@ void IdealSRHydro::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &
     Real& u_m2 = cons(m, IM2,k,j,i);
     Real& u_m3 = cons(m, IM3,k,j,i);
 
-    const Real& w_d  = prim(m, IDN,k,j,i);
-    const Real& w_ux = prim(m, IVX,k,j,i);
-    const Real& w_uy = prim(m, IVY,k,j,i);
-    const Real& w_uz = prim(m, IVZ,k,j,i);
-
-    Real w_p;
+    // Load single state of primitive variables
+    HydPrim1D w;
+    w.d  = prim(m,IDN,k,j,i);
+    w.vx = prim(m,IVX,k,j,i);
+    w.vy = prim(m,IVY,k,j,i);
+    w.vz = prim(m,IVZ,k,j,i);
     if (use_e) {
-      const Real& w_e  = prim(m,IEN,k,j,i);
-      w_p = w_e*gm1;
+      w.p = prim(m,IEN,k,j,i)*gm1;
     } else {
-      const Real& w_t  = prim(m,ITM,k,j,i);
-      w_p = w_t*w_d;
+      w.p = prim(m,IEN,k,j,i)*w.d;
     }
 
-    // Calculate Lorentz factor
-    Real u0 = sqrt(1.0 + SQR(w_ux) + SQR(w_uy) + SQR(w_uz));
-    Real wgas_u0 = (w_d + gamma_prime * w_p) * u0;
+    HydCons1D u;
+    PrimToConsSingle(gamma_prime, w, u);
 
     // Set conserved quantities
-    u_d  = w_d * u0;
-    u_e  = wgas_u0 * u0 - w_p - u_d;  // In SR, evolve E - D
-    u_m1 = wgas_u0 * w_ux;            // In SR, w_ux/y/z are 4-velocity
-    u_m2 = wgas_u0 * w_uy;
-    u_m3 = wgas_u0 * w_uz;
+    cons(m,IDN,k,j,i) = u.d;
+    cons(m,IEN,k,j,i) = u.e;
+    cons(m,IM1,k,j,i) = u.mx;
+    cons(m,IM2,k,j,i) = u.my;
+    cons(m,IM3,k,j,i) = u.mz;
 
     // convert scalars (if any)
     for (int n=nhyd; n<(nhyd+nscal); ++n) {
