@@ -270,7 +270,6 @@ void IdealSRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
         cons(m,n,k,j,i) = prim(m,n,k,j,i)*cons(m,IDN,k,j,i);
       }
     }
-
   }, Kokkos::Sum<int>(nfloord_), Kokkos::Sum<int>(nfloore_), Kokkos::Max<int>(maxit_));
 
   // store counters

@@ -452,7 +452,6 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
           cons(m,n,k,j,i) = prim(m,n,k,j,i)*cons(m,IDN,k,j,i);
        }
     }
-
   }, Kokkos::Sum<int>(nfloord_), Kokkos::Sum<int>(nfloore_), Kokkos::Max<int>(maxit_));
 
   // store counters
