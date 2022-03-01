@@ -74,6 +74,15 @@ struct LogicalLocation {
   }
 };
 
+//----------------------------------------------------------------------------------------
+//! \struct EventCounters
+//! \brief stores various counters used as diagnostics throughout the code
+
+struct EventCounters {
+  int neos_dfloor, neos_efloor, maxit_c2p;
+  EventCounters() : neos_dfloor(0), neos_efloor(0), maxit_c2p(0) {}
+};
+
 // Forward declarations required due to recursive definitions amongst mesh classes
 class MeshBlock;
 class MeshBlockPack;
@@ -122,12 +131,12 @@ class Mesh {
   int max_level;  // logical level of maximum refinement grid in Mesh
   int gids, gide; // start/end of global IDs on this MPI rank
 
-  // following 2x arrays allocated with length [nmbtotal]
+  // following 3x arrays allocated with length [nmbtotal] in BuildTreeFromXXXX()
   int *ranklist;              // rank of each MeshBlock
   float *costlist;            // cost of each MeshBlock
   LogicalLocation *lloclist;  // LogicalLocations for each MeshBlocks
 
-  // following 2x arrays allocated with length [nranks]
+  // following 2x arrays allocated with length [nranks] in BuildTreeFromXXXX()
   int *gidslist;       // starting global ID of MeshBlocks in each rank
   int *nmblist;        // number of MeshBlocks on each rank
 
@@ -139,6 +148,7 @@ class Mesh {
 
   Real time, dt, cfl_no;
   int ncycle;
+  EventCounters ecounter;
 
   MeshBlockPack* pmb_pack;                 // container for MeshBlocks on this rank
   std::unique_ptr<ProblemGenerator> pgen;  // class containing functions to set ICs

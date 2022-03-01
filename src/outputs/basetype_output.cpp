@@ -31,9 +31,10 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     outarray("cc_outvar",1,1,1,1,1),
     outfield("fc_outvar",1,1,1,1),
     out_params(opar) {
-  // exit for history or restart files
+  // exit for history, restart, or event log files
   if (out_params.file_type.compare("hst") == 0 ||
-      out_params.file_type.compare("rst") == 0) {return;}
+      out_params.file_type.compare("rst") == 0 ||
+      out_params.file_type.compare("log") == 0) {return;}
 
   // check for valid choice of variables
   int ivar = -1;

@@ -62,8 +62,21 @@ void IdealHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
   Real &tfloor_ = eos_data.tfloor;
   bool &use_e = eos_data.use_e;
 
-  par_for("hyd_con2prim", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
-  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+  const int ni   = (iu - il + 1);
+  const int nji  = (ju - jl + 1)*ni;
+  const int nkji = (ku - kl + 1)*nji;
+  const int nmkji = nmb*nkji;
+
+  int nfloord_=0, nfloore_=0;
+  Kokkos::parallel_reduce("hyd_c2p",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+  KOKKOS_LAMBDA(const int &idx, int &sum_d, int &sum_e) {
+    int m = (idx)/nkji;
+    int k = (idx - m*nkji)/nji;
+    int j = (idx - m*nkji - k*nji)/ni;
+    int i = (idx - m*nkji - k*nji - j*ni) + il;
+    j += jl;
+    k += kl;
+
     Real& u_d  = cons(m,IDN,k,j,i);
     Real& u_e  = cons(m,IEN,k,j,i);
     const Real& u_m1 = cons(m,IM1,k,j,i);
@@ -74,9 +87,13 @@ void IdealHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
     Real& w_vx = prim(m,IVX,k,j,i);
     Real& w_vy = prim(m,IVY,k,j,i);
     Real& w_vz = prim(m,IVZ,k,j,i);
+    Real& w_e  = prim(m,IEN,k,j,i);
 
     // apply density floor, without changing momentum or energy
-    u_d = (u_d > dfloor_) ?  u_d : dfloor_;
+    if (u_d < dfloor_) {
+      u_d = dfloor_;
+      sum_d++;
+    }
     w_d = u_d;
 
     Real di = 1.0/u_d;
@@ -84,26 +101,33 @@ void IdealHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
     w_vy = u_m2*di;
     w_vz = u_m3*di;
 
+    // set internal energy, apply floor, correcting total energy
     Real e_k = 0.5*di*(u_m1*u_m1 + u_m2*u_m2 + u_m3*u_m3);
     if (use_e) {  // internal energy density is primitive
-      Real& w_e  = prim(m,IEN,k,j,i);
       w_e = (u_e - e_k);
-      // apply pressure floor, correct total energy
-      u_e = (w_e > (pfloor_*igm1)) ?  u_e : ((pfloor_*igm1) + e_k);
-      w_e = (w_e > (pfloor_*igm1)) ?  w_e : (pfloor_*igm1);
+      if (w_e < pfloor_) {
+        w_e = pfloor_;
+        u_e = pfloor_ + e_k;
+        sum_e++;
+      }
     } else {  // temperature is primitive
-      Real& w_t  = prim(m,ITM,k,j,i);
-      w_t = (gm1/u_d)*(u_e - e_k);
-      // apply temperature floor, correct total energy
-      u_e = (w_t > tfloor_) ?  u_e : ((u_d*igm1*tfloor_) + e_k);
-      w_t = (w_t > tfloor_) ?  w_t : tfloor_;
+      w_e = (gm1/u_d)*(u_e - e_k);
+      if (w_e < tfloor_) {
+        w_e = tfloor_;
+        u_e = (u_d*igm1)*tfloor_ + e_k;
+        sum_e++;
+      }
     }
 
     // convert scalars (if any)
     for (int n=nhyd; n<(nhyd+nscal); ++n) {
       prim(m,n,k,j,i) = cons(m,n,k,j,i)/u_d;
     }
-  });
+  }, Kokkos::Sum<int>(nfloord_), Kokkos::Sum<int>(nfloore_));
+
+  // store counters
+  pmy_pack->pmesh->ecounter.neos_dfloor += nfloord_;
+  pmy_pack->pmesh->ecounter.neos_efloor += nfloore_;
 
   return;
 }

@@ -48,9 +48,9 @@ IdealGRMHD::IdealGRMHD(MeshBlockPack *pp, ParameterInput *pin) :
 }
 
 //--------------------------------------------------------------------------------------
-//  \!fn void PrimToConsSingleGRMHD()
-//  \brief Converts primitive into conserved variables in GRMHD.
-// Operates on only one active cell.
+//! \fn void PrimToConsSingle()
+//! \brief Converts primitive into conserved variables in GRMHD.
+//! Operates on only one active cell.
 
 KOKKOS_INLINE_FUNCTION
 void PrimToConsSingle(const Real g_[], const Real gi_[], const Real &gammap,
@@ -173,18 +173,32 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
   int const max_iterations = 15;
   Real const tol = 1.0e-12;
 
-  par_for("grmhd_con2prim", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
-  KOKKOS_LAMBDA(int m, int k, int j, int i) {
-    Real& u_d  = cons(m, IDN,k,j,i);
-    Real& u_m1 = cons(m, IM1,k,j,i);
-    Real& u_m2 = cons(m, IM2,k,j,i);
-    Real& u_m3 = cons(m, IM3,k,j,i);
-    Real& u_e  = cons(m, IEN,k,j,i);
+  const int ni   = (iu - il + 1);
+  const int nji  = (ju - jl + 1)*ni;
+  const int nkji = (ku - kl + 1)*nji;
+  const int nmkji = nmb*nkji;
 
-    Real& w_d  = prim(m, IDN,k,j,i);
-    Real& w_ux = prim(m, IVX,k,j,i);
-    Real& w_uy = prim(m, IVY,k,j,i);
-    Real& w_uz = prim(m, IVZ,k,j,i);
+  int nfloord_=0, nfloore_=0, maxit_=0;
+  Kokkos::parallel_reduce("hyd_c2p",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+  KOKKOS_LAMBDA(const int &idx, int &sum_d, int &sum_e, int &max_iter) {
+    int m = (idx)/nkji;
+    int k = (idx - m*nkji)/nji;
+    int j = (idx - m*nkji - k*nji)/ni;
+    int i = (idx - m*nkji - k*nji - j*ni) + il;
+    j += jl;
+    k += kl;
+
+    Real& u_d  = cons(m,IDN,k,j,i);
+    Real& u_e  = cons(m,IEN,k,j,i);
+    const Real& u_m1 = cons(m,IM1,k,j,i);
+    const Real& u_m2 = cons(m,IM2,k,j,i);
+    const Real& u_m3 = cons(m,IM3,k,j,i);
+
+    Real& w_d  = prim(m,IDN,k,j,i);
+    Real& w_ux = prim(m,IVX,k,j,i);
+    Real& w_uy = prim(m,IVY,k,j,i);
+    Real& w_uz = prim(m,IVZ,k,j,i);
+    Real& w_e  = prim(m,IEN,k,j,i);
 
     // cell-centered fields are simple linear average of face-centered fields
     Real& w_bx = bcc(m,IBX,k,j,i);
@@ -211,9 +225,9 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
     ComputeMetricAndInverse(x1v, x2v, x3v, flat, false, spin, g_, gi_);
 
     Real rad = sqrt(SQR(x1v) + SQR(x2v) + SQR(x3v));
-    bool floor_hit = false;
 
     // Only execute cons2prim if outside excised region
+    bool floor_hit = false;
     if (rad > rmin) {
       // We are evolving T^t_t, but the SR C2P algorithm is only consistent with
       // alpha^2 T^{tt}.  Therefore compute T^{tt} = g^0\mu T^t_\mu
@@ -240,12 +254,14 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       // apply density floor, without changing momentum or energy
       if (ud_sr < dfloor_) {
         ud_sr = dfloor_;
+        sum_d++;
         floor_hit = true;
       }
 
       // apply energy floor
       if (ue_sr < pfloor_/gm1) {
         ue_sr = pfloor_/gm1;
+        sum_e++;
         floor_hit = true;
       }
 
@@ -305,7 +321,8 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       }
       Real z = 0.5*(zm + zp);
 
-      for (int ii=0; ii < iterations; ++ii) {
+      {int iter;
+      for (iter=0; iter < iterations; ++iter) {
         z =  (zm*fp - zp*fm)/(fp-fm);  // linear interpolation to point f(z)=0
         Real f = Equation49(z, b2, rpar, r, q);
 
@@ -327,6 +344,8 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
           fp = f;
         }
       }
+      max_iter = (iter > max_iter)? iter : max_iter;
+      }
 
       zm= 0.;
       zp= z;
@@ -343,7 +362,8 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       }
       z = 0.5*(zm + zp);
 
-      for (int ii=0; ii < iterations; ++ii) {
+      {int iter;
+      for (int iter=0; iter < iterations; ++iter) {
         z =  (zm*fp - zp*fm)/(fp-fm);  // linear interpolation to point f(z)=0
         Real f = Equation44(z, b2, rpar, r, q, ud_sr, pfloor_, gm1);
 
@@ -366,31 +386,33 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
           fp = f;
         }
       }
+      max_iter = (iter > max_iter)? iter : max_iter;
+      }
 
+      // iterations ended, compute primitives from resulting value of z
       Real &mu = z;
-
-      Real const x = 1./(1.+mu*b2);           // (26)
-
-      Real rbar = (x*x*r*r + mu*x*(1.+x)*rpar*rpar); // (38)
+      Real const x = 1./(1.+mu*b2);                              // (26)
+      Real rbar = (x*x*r*r + mu*x*(1.+x)*rpar*rpar);             // (38)
       Real qbar = q - 0.5*b2 - 0.5*(mu*mu*(b2*rbar- rpar*rpar)); // (31)
             //  rbar = sqrt(rbar);
 
-
-      Real z2 = (mu*mu*rbar/(fabs(1.- SQR(mu)*rbar))); // (32)
+      Real z2 = (mu*mu*rbar/(fabs(1.- SQR(mu)*rbar)));           // (32)
       Real w = sqrt(1.+z2);
 
-      w_d = ud_sr/w;                  // (34)
+      w_d = ud_sr/w;                                             // (34)
       Real eps = w*(qbar - mu*rbar)+  z2/(w+1.);
+      Real epsmin = pfloor_/(w_d*gm1);
+      if (eps <= epsmin) {
+        eps = epsmin;
+        sum_e++;
+        floor_hit = true;
+      }
 
-      // NOTE(@ermost): The following generalizes to ANY equation of state
-      eps = fmax(pfloor_/(w_d*gm1), eps);                          //
       Real const h = (1.0 + eps) * (1.0 + (gm1*eps)/(1.0+eps));   // (43)
       if (use_e) {
-        Real& w_e  = prim(m,IEN,k,j,i);
         w_e = w_d*eps;
       } else {
-        Real& w_t  = prim(m,ITM,k,j,i);
-        w_t = gm1*eps;  // TODO(@user):  is this the correct expression?
+        w_e = gm1*eps;  // TODO(@user):  is this the correct expression?
       }
 
       Real const conv = w/(h*w + b2); // (C26)
@@ -405,21 +427,17 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
     }
 
     // reset conserved variables inside excised regions or if floor is hit
-    Real w_p;
-    if (use_e) {
-      const Real& w_e  = prim(m,IEN,k,j,i);
-      w_p = w_e*gm1;
-    } else {
-      const Real& w_t  = prim(m,ITM,k,j,i);
-      w_p = w_t*gm1*w_d;
-    }
     if (rad <= rmin || floor_hit) {
       HydPrim1D w;
       w.d  = w_d;
       w.vx = w_ux;
       w.vy = w_uy;
       w.vz = w_uz;
-      w.p  = w_p;
+      if (use_e) {
+        w.p = w_e*gm1;
+      } else {
+        w.p = w_e*gm1*w_d;
+      }
 
       HydCons1D u;
       PrimToConsSingle(g_, gi_, gamma_prime, w_bx, w_by, w_bz, w, u);
@@ -434,7 +452,12 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
           cons(m,n,k,j,i) = prim(m,n,k,j,i)*cons(m,IDN,k,j,i);
        }
     }
-  });
+  }, Kokkos::Sum<int>(nfloord_), Kokkos::Sum<int>(nfloore_), Kokkos::Max<int>(maxit_));
+
+  // store counters
+  pmy_pack->pmesh->ecounter.neos_dfloor += nfloord_;
+  pmy_pack->pmesh->ecounter.neos_efloor += nfloore_;
+  pmy_pack->pmesh->ecounter.maxit_c2p = maxit_;
 
   return;
 }
