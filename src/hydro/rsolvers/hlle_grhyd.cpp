@@ -96,8 +96,8 @@ void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos,
     const Real &uu3_r  = wr(IVZ,i);
 
     Real pgas_l, pgas_r;
-    pgas_l = eos.IdealGasPressure(wl(IDN,i), wl(IEN,i));
-    pgas_r = eos.IdealGasPressure(wr(IDN,i), wr(IEN,i));
+    pgas_l = eos.IdealGasPressure(wl(IEN,i));
+    pgas_r = eos.IdealGasPressure(wr(IEN,i));
 
     // Calculate 4-velocity in left state
     Real ucon_l[4], ucov_l[4];

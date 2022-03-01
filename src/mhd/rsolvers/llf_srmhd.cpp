@@ -57,8 +57,8 @@ void LLF_SR(TeamMember_t const &member, const EOS_Data &eos,
     Real bb3_r = br(ibz,i);
 
     Real pgas_l, pgas_r;
-    pgas_l = eos.IdealGasPressure(wl(IDN,i), wl(IEN,i));
-    pgas_r = eos.IdealGasPressure(wr(IDN,i), wr(IEN,i));
+    pgas_l = eos.IdealGasPressure(wl(IEN,i));
+    pgas_r = eos.IdealGasPressure(wr(IEN,i));
 
     // Extract normal magnetic field
     Real bb1 = bx(m,k,j,i);

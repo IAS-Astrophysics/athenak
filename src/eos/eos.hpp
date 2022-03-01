@@ -33,12 +33,8 @@ struct EOS_Data {
   // IDEAL GAS PRESSURE: converts primitive variable (either internal energy density e
   // or temperature e/d) into pressure.
   KOKKOS_INLINE_FUNCTION
-  Real IdealGasPressure(const Real d, const Real prim) const {
-    if (use_e) {
-      return ((gamma-1.0)*prim);
-    } else {
-      return (d*prim);
-    }
+  Real IdealGasPressure(const Real eint) const {
+    return ((gamma-1.0)*eint);
   }
 
   // NON-RELATIVISTIC IDEAL GAS HYDRO: inlined sound speed function

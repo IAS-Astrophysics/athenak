@@ -51,8 +51,8 @@ void HLLE_SR(TeamMember_t const &member, const EOS_Data &eos,
     Real &wr_ivz=wr(ivz,i);
 
     Real wl_ipr, wr_ipr;
-    wl_ipr = eos.IdealGasPressure(wl_idn, wl(IEN,i));
-    wr_ipr = eos.IdealGasPressure(wr_idn, wr(IEN,i));
+    wl_ipr = eos.IdealGasPressure(wl(IEN,i));
+    wr_ipr = eos.IdealGasPressure(wr(IEN,i));
 
     Real u2l = SQR(wl_ivz) + SQR(wl_ivy) + SQR(wl_ivx);
     Real u2r = SQR(wr_ivz) + SQR(wr_ivy) + SQR(wr_ivx);

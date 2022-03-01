@@ -100,7 +100,7 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
       u0r = 1.0/sqrt( 1.0 - (SQR(wr.vx) + SQR(wr.vy) + SQR(wr.vz)) );
     }
 
-    // set either internal energy density or temparature as primitive
+    // set either internal energy density or temparature as primitive, depending on EOS
     Real prim_l,prim_r;
     auto &eos = pmbp->phydro->peos->eos_data;
     if (eos.use_e) {
@@ -186,7 +186,7 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
       u0r = 1.0/sqrt( 1.0 - (SQR(wr.vx) + SQR(wr.vy) + SQR(wr.vz)) );
     }
 
-    // set either internal energy density or temparature as primitive
+    // set either internal energy density or temparature as primitive, depending on EOS
     Real prim_l,prim_r;
     auto &eos = pmbp->pmhd->peos->eos_data;
     if (eos.use_e) {

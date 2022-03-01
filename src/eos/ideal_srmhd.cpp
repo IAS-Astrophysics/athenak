@@ -20,27 +20,8 @@ IdealSRMHD::IdealSRMHD(MeshBlockPack *pp, ParameterInput *pin) :
   eos_data.is_ideal = true;
   eos_data.gamma = pin->GetReal("mhd","gamma");
   eos_data.iso_cs = 0.0;
-
-  // Read flags specifying which variable to use in primitives
-  // if nothing set in input file, use e as default
-  if (!(pin->DoesParameterExist("mhd","use_e")) &&
-      !(pin->DoesParameterExist("mhd","use_t")) ) {
-    eos_data.use_e = true;
-    eos_data.use_t = false;
-  } else {
-    eos_data.use_e = pin->GetOrAddBoolean("mhd","use_e",false);
-    eos_data.use_t = pin->GetOrAddBoolean("mhd","use_t",false);
-  }
-  if (!(eos_data.use_e) && !(eos_data.use_t)) {
-    std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
-              << "Both use_e and use_t set to false" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-  if (eos_data.use_e && eos_data.use_t) {
-    std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
-              << "Both use_e and use_t set to true" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
+  eos_data.use_e = true;  // ideal gas EOS always uses internal energy
+  eos_data.use_t = false;
 }
 
 //--------------------------------------------------------------------------------------
@@ -146,7 +127,6 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
 
   Real &dfloor_ = eos_data.dfloor;
   Real &pfloor_ = eos_data.pfloor;
-  bool &use_e = eos_data.use_e;
 
   // Parameters
   int const max_iterations = 15;
@@ -311,11 +291,7 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
 
     //NOTE: The following generalizes to ANY equation of state
     Real const h = (1.0 + eps) * (1.0 + (gm1*eps)/(1.0+eps));  // (43)
-    if (use_e) {
-      w_e = w_d*eps;
-    } else {
-      w_e = gm1*eps;  // TODO(@user):  is this the correct expression?
-    }
+    w_e = w_d*eps;
 
     Real const conv = w/(h*w + b2); // (C26)
     w_ux = conv * ( u_m1/u_d + bx * rpar/(h*w));  // (C26)
@@ -334,11 +310,7 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       w.vx = w_ux;
       w.vy = w_uy;
       w.vz = w_uz;
-      if (use_e) {
-        w.p = w_e*gm1;
-      } else {
-        w.p = w_e*gm1*w_d;
-      }
+      w.p = w_e*gm1;
 
       HydCons1D u;
       PrimToConsSingle(gamma_prime, w_bx, w_by, w_bz, w, u);
@@ -378,7 +350,6 @@ void IdealSRMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Rea
   int &nmb = pmy_pack->nmb_thispack;
   Real gm1 = eos_data.gamma - 1.0;
   Real gamma_prime = eos_data.gamma/(gm1);
-  bool &use_e = eos_data.use_e;
 
   par_for("srmhd_prim2cons", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -394,11 +365,7 @@ void IdealSRMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Rea
     w.vx = prim(m,IVX,k,j,i);
     w.vy = prim(m,IVY,k,j,i);
     w.vz = prim(m,IVZ,k,j,i);
-    if (use_e) {
-      w.p = prim(m,IEN,k,j,i)*gm1;
-    } else {
-      w.p = prim(m,IEN,k,j,i)*w.d;
-    }
+    w.p = prim(m,IEN,k,j,i)*gm1;
     const Real& bcc1 = bcc(m,IBX,k,j,i);
     const Real& bcc2 = bcc(m,IBY,k,j,i);
     const Real& bcc3 = bcc(m,IBZ,k,j,i);

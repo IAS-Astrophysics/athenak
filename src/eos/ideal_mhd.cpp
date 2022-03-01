@@ -20,27 +20,8 @@ IdealMHD::IdealMHD(MeshBlockPack *pp, ParameterInput *pin) :
   eos_data.is_ideal = true;
   eos_data.gamma = pin->GetReal("mhd","gamma");
   eos_data.iso_cs = 0.0;
-
-  // Read flags specifying which variable to use in primitives
-  // if nothing set in input file, use e as default
-  if (!(pin->DoesParameterExist("mhd","use_e")) &&
-      !(pin->DoesParameterExist("mhd","use_t")) ) {
-    eos_data.use_e = true;
-    eos_data.use_t = false;
-  } else {
-    eos_data.use_e = pin->GetOrAddBoolean("mhd","use_e",false);
-    eos_data.use_t = pin->GetOrAddBoolean("mhd","use_t",false);
-  }
-  if (!(eos_data.use_e) && !(eos_data.use_t)) {
-    std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
-              << "Both use_e and use_t set to false" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-  if (eos_data.use_e && eos_data.use_t) {
-    std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
-              << "Both use_e and use_t set to true" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
+  eos_data.use_e = true;  // ideal gas EOS always uses internal energy
+  eos_data.use_t = false;
 }
 
 //----------------------------------------------------------------------------------------
@@ -61,9 +42,7 @@ void IdealMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
   Real igm1 = 1.0/(gm1);
 
   Real &dfloor_ = eos_data.dfloor;
-  Real &pfloor_ = eos_data.pfloor;
-  Real &tfloor_ = eos_data.tfloor;
-  bool &use_e = eos_data.use_e;
+  Real efloor = eos_data.pfloor/gm1;
 
   const int ni   = (iu - il + 1);
   const int nji  = (ju - jl + 1)*ni;
@@ -119,20 +98,11 @@ void IdealMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
 
     // set internal energy, apply floor, correcting total energy
     Real e_k = 0.5*di*(SQR(u_m1) + SQR(u_m2) + SQR(u_m3));
-    if (use_e) {  // internal energy density is primitive
-      w_e = (u_e - e_k - pb);
-      if (w_e < pfloor_) {
-        w_e = pfloor_;
-        u_e = pfloor_ + e_k + pb;
-        sum_e++;
-      }
-    } else {  // temperature is primitive
-      w_e = (gm1/u_d)*(u_e - e_k - pb);
-      if (w_e < tfloor_) {
-        w_e = tfloor_;
-        u_e = (u_d*igm1)*tfloor_ + e_k + pb;
-        sum_e++;
-      }
+    w_e = (u_e - e_k - pb);
+    if (w_e < efloor) {
+      w_e = efloor;
+      u_e = efloor + e_k + pb;
+      sum_e++;
     }
 
     // convert scalars (if any), always stored at end of cons and prim arrays.
@@ -160,7 +130,6 @@ void IdealMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real>
   int &nscal = pmy_pack->pmhd->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
   Real igm1 = 1.0/(eos_data.gamma - 1.0);
-  bool &use_e = eos_data.use_e;
 
   par_for("mhd_prim2con", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -174,24 +143,18 @@ void IdealMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real>
     const Real& w_vx = prim(m,IVX,k,j,i);
     const Real& w_vy = prim(m,IVY,k,j,i);
     const Real& w_vz = prim(m,IVZ,k,j,i);
+    const Real& w_e  = prim(m,IEN,k,j,i);
 
     const Real& bcc1 = bcc(m,IBX,k,j,i);
     const Real& bcc2 = bcc(m,IBY,k,j,i);
     const Real& bcc3 = bcc(m,IBZ,k,j,i);
 
-    u_d = w_d;
+    u_d  = w_d;
     u_m1 = w_vx*w_d;
     u_m2 = w_vy*w_d;
     u_m3 = w_vz*w_d;
-    if (use_e) {  // internal energy density is primitive
-      const Real& w_e  = prim(m,IEN,k,j,i);
-      u_e = w_e + 0.5*(w_d*(SQR(w_vx) + SQR(w_vy) + SQR(w_vz)) +
-                           (SQR(bcc1) + SQR(bcc2) + SQR(bcc3)));
-    } else {  // temperature is primitive
-      const Real& w_t  = prim(m,ITM,k,j,i);
-      u_e = w_t*w_d*igm1 + 0.5*(w_d*(SQR(w_vx) + SQR(w_vy) + SQR(w_vz)) +
-                                    (SQR(bcc1) + SQR(bcc2) + SQR(bcc3)));
-    }
+    u_e  = w_e + 0.5*( w_d*(SQR(w_vx) + SQR(w_vy) + SQR(w_vz)) +
+                           (SQR(bcc1) + SQR(bcc2) + SQR(bcc3)) );
 
     // convert scalars (if any), always stored at end of cons and prim arrays.
     for (int n=nmhd; n<(nmhd+nscal); ++n) {

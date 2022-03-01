@@ -59,8 +59,8 @@ void HLLC_SR(TeamMember_t const &member, const EOS_Data &eos,
     u_r[3] = uz_r;
 
     Real pgas_l, pgas_r;
-    pgas_l = eos.IdealGasPressure(wl(IDN,i), wl(IEN,i));
-    pgas_r = eos.IdealGasPressure(wr(IDN,i), wr(IEN,i));
+    pgas_l = eos.IdealGasPressure(wl(IEN,i));
+    pgas_r = eos.IdealGasPressure(wr(IEN,i));
 
     Real wgas_l = rho_l + gamma_prime * pgas_l;  // total enthalpy in L-state
     Real wgas_r = rho_r + gamma_prime * pgas_r;  // total enthalpy in R-state
