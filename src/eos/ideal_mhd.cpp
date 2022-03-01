@@ -42,7 +42,7 @@ void IdealMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
   Real igm1 = 1.0/(gm1);
 
   Real &dfloor_ = eos_data.dfloor;
-  Real &pfloor_ = eos_data.pfloor;
+  Real efloor = eos_data.pfloor/gm1;
 
   const int ni   = (iu - il + 1);
   const int nji  = (ju - jl + 1)*ni;
@@ -99,9 +99,9 @@ void IdealMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
     // set internal energy, apply floor, correcting total energy
     Real e_k = 0.5*di*(SQR(u_m1) + SQR(u_m2) + SQR(u_m3));
     w_e = (u_e - e_k - pb);
-    if (w_e < pfloor_) {
-      w_e = pfloor_;
-      u_e = pfloor_ + e_k + pb;
+    if (w_e < efloor) {
+      w_e = efloor;
+      u_e = efloor + e_k + pb;
       sum_e++;
     }
 

@@ -58,8 +58,8 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos,
 
     Real wl_ipr, wr_ipr;
     if (eos.is_ideal) {
-      wl_ipr = eos.IdealGasPressure(wl_idn, wl(IEN,i));
-      wr_ipr = eos.IdealGasPressure(wr_idn, wr(IEN,i));
+      wl_ipr = eos.IdealGasPressure(wl(IEN,i));
+      wr_ipr = eos.IdealGasPressure(wr(IEN,i));
     }
 
     Real &bxi = bx(m,k,j,i);

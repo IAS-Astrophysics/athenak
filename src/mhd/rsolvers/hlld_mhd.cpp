@@ -52,8 +52,8 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
       Real &wr_ibz=br(ibz,i);
 
       Real wl_ipr, wr_ipr;
-      wl_ipr = eos.IdealGasPressure(wl_idn, wl(IEN,i));
-      wr_ipr = eos.IdealGasPressure(wr_idn, wr(IEN,i));
+      wl_ipr = eos.IdealGasPressure(wl(IEN,i));
+      wr_ipr = eos.IdealGasPressure(wr(IEN,i));
 
       Real &bxi = bx(m,k,j,i);
 

@@ -77,7 +77,7 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim, const EOS_Data &e
     const Real &uu1  = prim(m,IVX,k,j,i);
     const Real &uu2  = prim(m,IVY,k,j,i);
     const Real &uu3  = prim(m,IVZ,k,j,i);
-    Real pgas = eos.IdealGasPressure(prim(m,IDN,k,j,i), prim(m,IEN,k,j,i));
+    Real pgas = eos.IdealGasPressure(prim(m,IEN,k,j,i));
 
     // Calculate 4-velocity
     Real uu_sq = g_[I11]*uu1*uu1 + 2.0*g_[I12]*uu1*uu2 + 2.0*g_[I13]*uu1*uu3
@@ -225,7 +225,7 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim,
     const Real &uu1  = prim(m,IVX,k,j,i);
     const Real &uu2  = prim(m,IVY,k,j,i);
     const Real &uu3  = prim(m,IVZ,k,j,i);
-    Real pgas = eos.IdealGasPressure(prim(m,IDN,k,j,i), prim(m,IEN,k,j,i));
+    Real pgas = eos.IdealGasPressure(prim(m,IEN,k,j,i));
 
     // Calculate 4-velocity
     Real uu_sq = g_11*uu1*uu1 + 2.0*g_12*uu1*uu2 + 2.0*g_13*uu1*uu3

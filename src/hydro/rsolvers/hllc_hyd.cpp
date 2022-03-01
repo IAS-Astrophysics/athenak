@@ -47,8 +47,8 @@ void HLLC(TeamMember_t const &member, const EOS_Data &eos,
     Real &wr_ivz = wr(ivz,i);
 
     Real wl_ipr, wr_ipr;
-    wl_ipr = eos.IdealGasPressure(wl_idn, wl(IEN,i));
-    wr_ipr = eos.IdealGasPressure(wr_idn, wr(IEN,i));
+    wl_ipr = eos.IdealGasPressure(wl(IEN,i));
+    wr_ipr = eos.IdealGasPressure(wr(IEN,i));
 
     //--- Step 2.  Compute middle state estimates with PVRS (Toro 10.5.2)
 

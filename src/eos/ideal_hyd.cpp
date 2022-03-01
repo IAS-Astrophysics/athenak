@@ -39,7 +39,7 @@ void IdealHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
   Real igm1 = 1.0/(gm1);
 
   Real &dfloor_ = eos_data.dfloor;
-  Real &pfloor_ = eos_data.pfloor;
+  Real efloor = eos_data.pfloor/gm1;
 
   const int ni   = (iu - il + 1);
   const int nji  = (ju - jl + 1)*ni;
@@ -83,9 +83,9 @@ void IdealHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
     // set internal energy, apply floor, correcting total energy
     Real e_k = 0.5*di*(u_m1*u_m1 + u_m2*u_m2 + u_m3*u_m3);
     w_e = (u_e - e_k);
-    if (w_e < pfloor_) {
-      w_e = pfloor_;
-      u_e = pfloor_ + e_k;
+    if (w_e < efloor) {
+      w_e = efloor;
+      u_e = efloor + e_k;
       sum_e++;
     }
 
