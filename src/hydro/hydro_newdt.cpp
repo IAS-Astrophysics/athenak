@@ -17,6 +17,7 @@
 #include "eos/eos.hpp"
 #include "hydro.hpp"
 #include "diffusion/conduction.hpp"
+#include "srcterms/srcterms.hpp"
 
 namespace hydro {
 
@@ -123,6 +124,10 @@ TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage) {
   // compute timestep for diffusion
   if (pcond != nullptr) {
     pcond->NewTimeStep(w0, peos->eos_data);
+  }
+  // compute source terms timestep
+  if (psrc->source_terms_enabled) {
+    psrc->NewTimeStep(w0, peos->eos_data);
   }
 
   return TaskStatus::complete;

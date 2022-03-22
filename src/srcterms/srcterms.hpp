@@ -39,6 +39,9 @@ class SourceTerms {
   bool shearing_box;
   bool ism_cooling;
 
+  // new timestep
+  Real dtnew;
+
   // magnitude and direction of constant accel
   Real const_accel_val;
   int  const_accel_dir;
@@ -46,8 +49,8 @@ class SourceTerms {
   // Orbital frequency and shear rate for shearing box
   Real omega0, qshear;
 
-  // physical constants and heating rate used with ISM cooling
-  Real mbar, kboltz, hrate;
+  // heating rate used with ISM cooling
+  Real hrate;
 
   // functions
   void AddConstantAccel(DvceArray5D<Real> &u0,const DvceArray5D<Real> &w0,const Real dt);
@@ -55,6 +58,9 @@ class SourceTerms {
   void AddShearingBox(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
                       const DvceArray5D<Real> &bcc, const Real dt);
   void AddSBoxEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &efld);
+  void AddISMCooling(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
+                     const EOS_Data &eos, const Real dt);
+  void NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos);
 
  private:
   MeshBlockPack* pmy_pack;

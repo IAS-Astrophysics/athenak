@@ -15,10 +15,13 @@
 #include "parameter_input.hpp"
 #include "coordinates/cell_locations.hpp"
 #include "mesh/mesh.hpp"
+#include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "turb_driver.hpp"
 #include "srcterms.hpp"
+#include "ismcooling.hpp"
+#include "units/units.hpp"
 
 //----------------------------------------------------------------------------------------
 // constructor, parses input file and initializes data structures and parameters
@@ -49,14 +52,11 @@ SourceTerms::SourceTerms(std::string block, MeshBlockPack *pp, ParameterInput *p
     omega0 = pin->GetReal(block,"omega0");
   }
 
-  // TODO(@user): finish implementing cooling
   // (3) Optically thin (ISM) cooling
   ism_cooling = pin->GetOrAddBoolean(block,"ism_cooling",false);
   if (ism_cooling) {
     source_terms_enabled = true;
-    mbar   = pin->GetReal(block,"mbar");
-    kboltz = pin->GetReal(block,"kboltz");
-    hrate  = pin->GetReal(block,"heating_rate");
+    hrate = pin->GetReal(block,"hrate");
   }
 }
 
@@ -203,5 +203,47 @@ void SourceTerms::AddSBoxEField(const DvceFaceFld4D<Real> &b0,
   }
   // TODO(@user): add 3D shearing box
 
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void SourceTerms::AddISMCooling()
+//! \brief Add explict ISM cooling and heating source terms in the energy equations.
+// NOTE source terms must all be computed using primitive (w0) and NOT conserved (u0) vars
+
+void SourceTerms::AddISMCooling(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
+                                const EOS_Data &eos_data, const Real bdt) {
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  int is = indcs.is, ie = indcs.ie;
+  int js = indcs.js, je = indcs.je;
+  int ks = indcs.ks, ke = indcs.ke;
+  int nmb1 = pmy_pack->nmb_thispack - 1;
+  Real use_e = eos_data.use_e;
+  Real gamma = eos_data.gamma;
+  Real gm1 = gamma - 1.0;
+  Real heating_rate = hrate;
+  Real temp_unit = pmy_pack->punit->temperature_cgs();
+  Real n_unit = pmy_pack->punit->density_cgs()/pmy_pack->punit->mu()
+                /pmy_pack->punit->atomic_mass_unit_cgs;
+  Real cooling_unit = pmy_pack->punit->pressure_cgs()/pmy_pack->punit->time_cgs()
+                      /n_unit/n_unit;
+  Real heating_unit = pmy_pack->punit->pressure_cgs()/pmy_pack->punit->time_cgs()/n_unit;
+
+  par_for("cooling", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    // temperature in cgs unit
+    Real temp = 1.0;
+    if (use_e) {
+      temp = temp_unit*w0(m,IEN,k,j,i)/w0(m,IDN,k,j,i)*gm1;
+    } else {
+      temp = temp_unit*w0(m,ITM,k,j,i);
+    }
+
+    Real lambda_cooling = ISMCoolFn(temp)/cooling_unit;
+    Real gamma_heating = heating_rate/heating_unit;
+
+    u0(m,IEN,k,j,i) -= bdt * w0(m,IDN,k,j,i) *
+                        (w0(m,IDN,k,j,i) * lambda_cooling - gamma_heating);
+  });
   return;
 }
