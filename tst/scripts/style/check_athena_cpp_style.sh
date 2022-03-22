@@ -25,7 +25,7 @@ echo "Starting Google C++ Style cpplint.py test"
 # Use "python3 -u" to prevent buffering of sys.stdout,stderr.write()
 # calls in cpplint.py and mix-up in Jenkins logs,
 find ../../../src -type f \( -name "*.cpp" -o -name "*.hpp" \) \
--print | xargs python3 -u cpplint.py --counting=detailed
+-print | xargs python3 -u cpplint.py --filter=-build/include_subdir --counting=detailed
 if [ $? -ne 0 ]; then echo "ERROR: C++ style errors found"; rm -f cpplint.py; exit 1; fi
 rm -f cpplint.py
 echo "End of Google C++ Style cpplint.py test"
