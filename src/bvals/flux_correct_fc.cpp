@@ -462,7 +462,7 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx) {
         });
 
       // x2x3 edges
-      } else {
+      } else if (n<48) {
         Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
           int k = idx / nj;
           int j = (idx - k * nj) + jl;
