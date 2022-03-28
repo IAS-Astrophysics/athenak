@@ -280,7 +280,7 @@ void LLF_GR(TeamMember_t const &member, const EOS_Data &eos,
 
 //----------------------------------------------------------------------------------------
 //! \fn void SingleStateLLF_GR
-//  \brief The LLF Riemann solver for SR MHD for a single L/R state
+//  \brief The LLF Riemann solver for GR MHD for a single L/R state
 
 KOKKOS_INLINE_FUNCTION
 void SingleStateLLF_GR(const MHDPrim1D wl, const MHDPrim1D wr, const Real bx,
