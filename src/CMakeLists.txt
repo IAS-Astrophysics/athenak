@@ -23,6 +23,7 @@ add_executable(
         bvals/physics/bfield_bcs.cpp
 
         coordinates/coordinates.cpp
+        coordinates/excision.cpp
 
         diffusion/conduction.cpp
         diffusion/resistivity.cpp
@@ -46,7 +47,7 @@ add_executable(
         hydro/hydro_tasks.cpp
         hydro/hydro_update.cpp
 
-	ion-neutral/ion_neutral.cpp
+	      ion-neutral/ion_neutral.cpp
 
         mesh/build_tree.cpp
         mesh/mesh.cpp
@@ -76,6 +77,7 @@ add_executable(
 
         pgen/pgen.cpp
         pgen/tests/advection.cpp
+        pgen/tests/gr_bondi.cpp
         pgen/tests/linear_wave.cpp
         pgen/tests/lw_implode.cpp
         pgen/tests/orszag_tang.cpp

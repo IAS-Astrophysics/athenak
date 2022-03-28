@@ -29,7 +29,9 @@ struct CoordData {
   bool is_minkowski;               // flag to specify Minkowski (flat) space
   Real bh_mass;                    // needed for GR metric
   Real bh_spin;                    // needed for GR metric
-  Real bh_rmin;                    // needed for GR cons2prim
+  bool bh_excise;                  // flag to specify excision
+  Real dexcise;                    // rest-mass density inside excised region
+  Real pexcise;                    // pressure inside excised region
 };
 
 //----------------------------------------------------------------------------------------
@@ -48,11 +50,16 @@ class Coordinates {
   // data needed to compute metric in GR
   CoordData coord_data;
 
+  // excision masks
+  DvceArray4D<bool> cc_mask;          // cell-centered mask for C2P
+  DvceFaceFld4D<bool> fc_mask;        // face-centered mask to enable first-order fluxes
+
   // functions
   void AddCoordTerms(const DvceArray5D<Real> &w0, const EOS_Data &eos, const Real dt,
                      DvceArray5D<Real> &u0);
   void AddCoordTerms(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc,
                      const EOS_Data &eos, const Real dt, DvceArray5D<Real> &u0);
+  void SetExcisionMasks();
 
  private:
   MeshBlockPack* pmy_pack;

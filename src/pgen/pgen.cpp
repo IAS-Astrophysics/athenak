@@ -40,6 +40,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
 
   if (pgen_fun_name.compare("advection") == 0) {
     Advection(pin, false);
+  } else if (pgen_fun_name.compare("gr_bondi") == 0) {
+    BondiAccretion(pin, false);
   } else if (pgen_fun_name.compare("linear_wave") == 0) {
     LinearWave(pin, false);
   } else if (pgen_fun_name.compare("implode") == 0) {
@@ -102,7 +104,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   // get file offset for reading data arrays
   IOWrapperSizeT headeroffset = resfile.GetPosition();
 
-std::cout << "ccdata_size = "<<ccdata_size<<"  fcdata_size = "<<fcdata_size<<std::endl;
+  std::cout << "ccdata_size = "<<ccdata_size<<"  fcdata_size = "<<fcdata_size<<std::endl;
 
   // get spatial dimensions of arrays, including ghost zones
   auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
@@ -206,6 +208,8 @@ std::cout << "ccdata_size = "<<ccdata_size<<"  fcdata_size = "<<fcdata_size<<std
 
   if (pgen_fun_name.compare("advection") == 0) {
     Advection(pin, true);
+  } else if (pgen_fun_name.compare("gr_bondi") == 0) {
+    BondiAccretion(pin, true);
   } else if (pgen_fun_name.compare("linear_wave") == 0) {
     LinearWave(pin, true);
   } else if (pgen_fun_name.compare("implode") == 0) {

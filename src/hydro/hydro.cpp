@@ -170,7 +170,9 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
     // General relativistic dynamic solvers
     } else if (pmy_pack->pcoord->is_general_relativistic) {
       if (evolution_t.compare("dynamic") == 0) {
-        if (rsolver.compare("hlle") == 0) {
+        if (rsolver.compare("llf") == 0) {
+          rsolver_method = Hydro_RSolver::llf_gr;
+        } else if (rsolver.compare("hlle") == 0) {
           rsolver_method = Hydro_RSolver::hlle_gr;
         // Error for anything else
         } else {

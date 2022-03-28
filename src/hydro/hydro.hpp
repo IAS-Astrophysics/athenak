@@ -24,7 +24,7 @@ class Driver;
 // constants that enumerate Hydro Riemann Solver options
 enum class Hydro_RSolver {advect, llf, hlle, hllc, roe,    // non-relativistic
                           llf_sr, hlle_sr, hllc_sr,        // SR
-                          hlle_gr};                        // GR
+                          llf_gr, hlle_gr};                // GR
 
 //----------------------------------------------------------------------------------------
 //! \struct HydroTaskIDs

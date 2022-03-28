@@ -12,12 +12,16 @@
 #include "cartesian_ks.hpp"
 #include "coordinates.hpp"
 #include "cell_locations.hpp"
+#include "hydro/hydro.hpp"
+#include "mhd/mhd.hpp"
 
 //----------------------------------------------------------------------------------------
 // constructor, initializes coordinates data
 
 Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
-    pmy_pack(ppack) {
+    pmy_pack(ppack),
+    cc_mask("cc_mask",1,1,1,1),
+    fc_mask("fc_mask",1,1,1,1) {
   // Check for relativistic dynamics
   is_special_relativistic = pin->GetOrAddBoolean("coord","special_rel",false);
   is_general_relativistic = pin->GetOrAddBoolean("coord","general_rel",false);
@@ -27,12 +31,37 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
     std::exit(EXIT_FAILURE);
   }
 
-  // Read properties of metric from input file for GR.
+  // Read properties of metric and excision from input file for GR.
   if (is_general_relativistic) {
     coord_data.is_minkowski = pin->GetOrAddBoolean("coord","minkowski",false);
     coord_data.bh_mass = pin->GetReal("coord","m");
     coord_data.bh_spin = pin->GetReal("coord","a");
-    coord_data.bh_rmin = pin->GetOrAddReal("coord","rmin",0.0);
+    coord_data.bh_excise = pin->GetOrAddBoolean("coord","excise",true);
+
+    if (coord_data.bh_excise) {
+      // throw error if attempting to excise in 1D/2D
+      if (!(pmy_pack->pmesh->three_d)) {
+        std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__
+                  << std::endl << "Excising only supported in 3D" << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+
+      // Set the density and pressure to which cells inside the excision radius will
+      // be reset to.  Primitive velocities will be set to zero.
+      coord_data.dexcise = pin->GetReal("coord","dexcise");
+      coord_data.pexcise = pin->GetReal("coord","pexcise");
+
+      // boolean masks allocation
+      int nmb = ppack->nmb_thispack;
+      auto &indcs = pmy_pack->pmesh->mb_indcs;
+      int ncells1 = indcs.nx1 + 2*(indcs.ng);
+      int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
+      int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
+      Kokkos::realloc(cc_mask, nmb, ncells3, ncells2, ncells1);
+      Kokkos::realloc(fc_mask.x1f, nmb, ncells3, ncells2, ncells1+1);
+      Kokkos::realloc(fc_mask.x2f, nmb, ncells3, ncells2+1, ncells1);
+      Kokkos::realloc(fc_mask.x3f, nmb, ncells3+1, ncells2, ncells1);
+    }
   }
 }
 
@@ -70,7 +99,7 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim, const EOS_Data &e
     Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
     Real g_[NMETRIC], gi_[NMETRIC];
-    ComputeMetricAndInverse(x1v, x2v, x3v, flat, false, spin, g_, gi_);
+    ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, g_, gi_);
 
     // Extract primitives
     const Real &rho  = prim(m,IDN,k,j,i);
@@ -205,7 +234,7 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim,
     Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
     Real g_[NMETRIC], gi_[NMETRIC];
-    ComputeMetricAndInverse(x1v, x2v, x3v, flat, false, spin, g_, gi_);
+    ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, g_, gi_);
 
     // create references to components of metric; formatting reflects structure
     const Real

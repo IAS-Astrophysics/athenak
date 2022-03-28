@@ -30,7 +30,7 @@ using MHDBoundaryFnPtr = void (*)(int m, Mesh* pm, MHD* pmhd, DvceArray5D<Real> 
 // constants that enumerate MHD Riemann Solver options
 enum class MHD_RSolver {advect, llf, hlle, hlld, roe,   // non-relativistic
                         llf_sr, hlle_sr,                // SR
-                        hlle_gr};                       // GR
+                        llf_gr, hlle_gr};                       // GR
 
 //----------------------------------------------------------------------------------------
 //! \struct MHDTaskIDs
@@ -79,7 +79,7 @@ class MHD {
   DvceArray5D<Real> u0;    // conserved variables
   DvceArray5D<Real> w0;    // primitive variables
   DvceFaceFld4D<Real> b0;  // face-centered magnetic fields
-  DvceArray5D<Real> bcc0;  // cell-centered magnetic fields`
+  DvceArray5D<Real> bcc0;  // cell-centered magnetic fields
 
   DvceArray5D<Real> coarse_u0;    // conserved variables on 2x coarser grid (for SMR/AMR)
   DvceFaceFld4D<Real> coarse_b0;  // face-centered B-field on 2x coarser grid

@@ -133,11 +133,11 @@ void IdealSRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
     Real& w_e  = prim(m,IEN,k,j,i);
 
     // apply density floor, without changing momentum or energy
-    bool floor_hit = false;
+    bool fixup_hit = false;
     if (u_d < dfloor_) {
       u_d = dfloor_;
       sum_d++;
-      floor_hit = true;
+      fixup_hit = true;
     }
 
     // apply energy floor
@@ -205,7 +205,7 @@ void IdealSRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
     if (eps <= epsmin) {                               // C18
       eps = epsmin;
       sum_e++;
-      floor_hit = true;
+      fixup_hit = true;
     }
     Real h = (1. + eps) * (1.0 + (gm1*eps)/(1.+eps)); // (C1) & (C21)
     w_e = w_d*eps;
@@ -221,7 +221,7 @@ void IdealSRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
     }
 
     // reset conserved variables if floor is hit
-    if (floor_hit) {
+    if (fixup_hit) {
       HydPrim1D w;
       w.d  = w_d;
       w.vx = w_ux;
