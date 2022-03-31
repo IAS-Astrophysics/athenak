@@ -81,7 +81,7 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage) {
         Real x3v = CellCenterX(0, indcs.nx3, x3min, x3max);
 
         Real g_[NMETRIC], gi_[NMETRIC];
-        ComputeMetricAndInverse(x1v, x2v, x3v, flat, false, spin, g_, gi_);
+        ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, g_, gi_);
 
         const Real &ux = w0_(m,IVX,ks,j,i);
         const Real &uy = w0_(m,IVY,ks,j,i);
@@ -207,7 +207,7 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage) {
         Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
         Real g_[NMETRIC], gi_[NMETRIC];
-        ComputeMetricAndInverse(x1v, x2v, x3v, flat, false, spin, g_, gi_);
+        ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, g_, gi_);
 
         const Real &ux = w0_(m,IVX,k,j,i);
         const Real &uy = w0_(m,IVY,k,j,i);

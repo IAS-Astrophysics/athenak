@@ -19,6 +19,7 @@
 #include "coordinates/cell_locations.hpp"
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
+#include "pgen/pgen.hpp"
 
 namespace {
 
@@ -55,6 +56,7 @@ static Real TemperatureResidual(struct bondi_pgen pgen, Real t, Real r);
 
 struct bondi_pgen {
   Real mass, spin;          // black hole mass and spin
+  Real dexcise, pexcise;    // excision parameters
   Real n_adi, k_adi, gm;    // hydro EOS parameters
   Real r_crit;              // sonic point radius
   Real c1, c2;              // useful constants
@@ -76,7 +78,7 @@ void BondiErrors(ParameterInput *pin, Mesh *pm);
 //  Compile with '-D PROBLEM=gr_bondi' to enroll as user-specific problem generator
 //    reference: Hawley, Smarr, & Wilson 1984, ApJ 277 296 (HSW)
 
-void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
+void ProblemGenerator::BondiAccretion(ParameterInput *pin, const bool restart) {
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   if (!(pmbp->phydro->peos->eos_data.use_e)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
@@ -111,6 +113,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   // Get mass and spin of black hole
   bondi.mass = pmbp->pcoord->coord_data.bh_mass;
   bondi.spin = pmbp->pcoord->coord_data.bh_spin;
+
+  // Get excision parameters
+  bondi.dexcise = pmbp->pcoord->coord_data.dexcise;
+  bondi.pexcise = pmbp->pcoord->coord_data.pexcise;
 
   // Get ratio of specific heats
   bondi.n_adi = 1.0/(bondi.gm - 1.0);
@@ -167,9 +173,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   auto &u0_ = pmbp->phydro->u0;
   auto &u1_ = pmbp->phydro->u1;
   if (bondi.reset_ic) {
-    pmbp->phydro->peos->PrimToCons(w0_, u1_);
+    pmbp->phydro->peos->PrimToCons(w0_, u1_, 0, (n1-1), 0, (n2-1), 0, (n3-1));
   } else {
-    pmbp->phydro->peos->PrimToCons(w0_, u0_);
+    pmbp->phydro->peos->PrimToCons(w0_, u0_, 0, (n1-1), 0, (n2-1), 0, (n3-1));
   }
 
   return;
@@ -183,7 +189,7 @@ void BondiErrors(ParameterInput *pin, Mesh *pm) {
   // calculate reference solution by calling pgen again.  Solution stored in second
   // register u1/b1 when flag is false.
   bondi.reset_ic=true;
-  pm->pgen->UserProblem(pin, false);
+  pm->pgen->BondiAccretion(pin, false);
 
   Real l1_err[8];
   int nvars=0;
@@ -343,21 +349,28 @@ static void ComputePrimitiveSingle(Real x1v, Real x2v, Real x3v, CoordData coord
   Real u0(0.0), u1(0.0), u2(0.0), u3(0.0);
   TransformVector(pgen, my_ur, 0.0, 0.0, x1v, x2v, x3v, &u1, &u2, &u3);
 
-  ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, true,
-                          coord.bh_spin, g_, gi_);
+  ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, coord.bh_spin, g_, gi_);
 
   Real tmp = g_[I11]*u1*u1 + 2.0*g_[I12]*u1*u2 + 2.0*g_[I13]*u1*u3
            + g_[I22]*u2*u2 + 2.0*g_[I23]*u2*u3
            + g_[I33]*u3*u3;
   Real gammasq = 1.0 + tmp;
   Real b = g_[I01]*u1+g_[I02]*u2+g_[I03]*u3;
-  u0 = (-b - sqrt(SQR(b) - g_[I00]*gammasq))/g_[I00];
+  u0 = (-b - sqrt(fmax(SQR(b) - g_[I00]*gammasq, 0.0)))/g_[I00];
 
-  rho = my_rho;
-  pgas = my_pgas;
-  uu1 = u1 - gi_[I01]/gi_[I00] * u0;
-  uu2 = u2 - gi_[I02]/gi_[I00] * u0;
-  uu3 = u3 - gi_[I03]/gi_[I00] * u0;
+  if (r > 1.0) {
+    rho = my_rho;
+    pgas = my_pgas;
+    uu1 = u1 - gi_[I01]/gi_[I00] * u0;
+    uu2 = u2 - gi_[I02]/gi_[I00] * u0;
+    uu3 = u3 - gi_[I03]/gi_[I00] * u0;
+  } else {
+    rho = pgen.dexcise;
+    pgas = pgen.pexcise;
+    uu1 = 0.0;
+    uu2 = 0.0;
+    uu3 = 0.0;
+  }
 
   return;
 }
@@ -375,8 +388,8 @@ static void GetBoyerLindquistCoordinates(struct bondi_pgen pgen,
                                          Real x1, Real x2, Real x3,
                                          Real *pr, Real *ptheta, Real *pphi) {
     Real rad = sqrt(SQR(x1) + SQR(x2) + SQR(x3));
-    Real r = sqrt( SQR(rad) - SQR(pgen.spin) + sqrt(SQR(SQR(rad)-SQR(pgen.spin))
-                   + 4.0*SQR(pgen.spin)*SQR(x3)) ) / sqrt(2.0);
+    Real r = fmax((sqrt( SQR(rad) - SQR(pgen.spin) + sqrt(SQR(SQR(rad)-SQR(pgen.spin))
+                        + 4.0*SQR(pgen.spin)*SQR(x3)) ) / sqrt(2.0)), 1.0);
     *pr = r;
     *ptheta = acos(x3/r);
     *pphi = atan2( (r*x2-pgen.spin*x1)/(SQR(r)+SQR(pgen.spin)),
@@ -400,8 +413,8 @@ static void TransformVector(struct bondi_pgen pgen,
                             Real x1, Real x2, Real x3,
                             Real *pa1, Real *pa2, Real *pa3) {
   Real rad = sqrt( SQR(x1) + SQR(x2) + SQR(x3) );
-  Real r = sqrt( SQR(rad) - SQR(pgen.spin) + sqrt( SQR(SQR(rad) - SQR(pgen.spin))
-               + 4.0*SQR(pgen.spin)*SQR(x3) ) )/ sqrt(2.0);
+  Real r = fmax((sqrt( SQR(rad) - SQR(pgen.spin) + sqrt(SQR(SQR(rad)-SQR(pgen.spin))
+                      + 4.0*SQR(pgen.spin)*SQR(x3)) ) / sqrt(2.0)), 1.0);
   Real delta = SQR(r) - 2.0*pgen.mass*r + SQR(pgen.spin);
   *pa1 = a1_bl * ( (r*x1+pgen.spin*x2)/(SQR(r) + SQR(pgen.spin)) - x2*pgen.spin/delta) +
          a2_bl * x1*x3/r * sqrt((SQR(r) + SQR(pgen.spin))/(SQR(x1) + SQR(x2))) -
@@ -587,7 +600,6 @@ void FixedBondiInflow(Mesh *pm) {
   auto &indcs = pm->mb_indcs;
   auto &size = pm->pmb_pack->pmb->mb_size;
   auto &coord = pm->pmb_pack->pcoord->coord_data;
-  auto &eos = pm->pmb_pack->phydro->peos->eos_data;
   int &ng = indcs.ng;
   int n1 = indcs.nx1 + 2*ng;
   int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
@@ -595,11 +607,15 @@ void FixedBondiInflow(Mesh *pm) {
   int &is = indcs.is;  int &ie  = indcs.ie;
   int &js = indcs.js;  int &je  = indcs.je;
   int &ks = indcs.ks;  int &ke  = indcs.ke;
+  auto &mb_bcs = pm->pmb_pack->pmb->mb_bcs;
   auto bondi_ = bondi;
 
   int nmb = pm->pmb_pack->nmb_thispack;
   auto u0_ = pm->pmb_pack->phydro->u0;
+  auto w0_ = pm->pmb_pack->phydro->w0;
 
+  pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,is-ng,is-1,0,(n2-1),0,(n3-1));
+  pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,ie+1,ie+ng,0,(n2-1),0,(n3-1));
   par_for("fixed_x1", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),0,(ng-1),
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     // inner x1 boundary
@@ -616,29 +632,33 @@ void FixedBondiInflow(Mesh *pm) {
     Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
     Real rho, pgas, uu1, uu2, uu3, g_[NMETRIC], gi_[NMETRIC];
-    ComputePrimitiveSingle(x1v,x2v,x3v,coord,g_,gi_,bondi_,rho,pgas,uu1,uu2,uu3);
-    Real ud, ue, um1, um2, um3;
-    eos.PrimToConsSingleGRHydro(g_, gi_, rho, pgas, uu1, uu2, uu3,
-                                  ud, ue, um1, um2, um3);
-    u0_(m,IDN,k,j,i) = ud;
-    u0_(m,IEN,k,j,i) = ue;
-    u0_(m,IM1,k,j,i) = um1;
-    u0_(m,IM2,k,j,i) = um2;
-    u0_(m,IM3,k,j,i) = um3;
+    if (mb_bcs.d_view(m,BoundaryFace::inner_x1) == BoundaryFlag::user) {
+      ComputePrimitiveSingle(x1v,x2v,x3v,coord,g_,gi_,bondi_,rho,pgas,uu1,uu2,uu3);
+      w0_(m,IDN,k,j,i) = rho;
+      w0_(m,IEN,k,j,i) = pgas/(bondi_.gm - 1.0);
+      w0_(m,IM1,k,j,i) = uu1;
+      w0_(m,IM2,k,j,i) = uu2;
+      w0_(m,IM3,k,j,i) = uu3;
+    }
 
     // outer x1 boundary
     x1v = CellCenterX((ie+i+1)-is, indcs.nx1, x1min, x1max);
 
-    ComputePrimitiveSingle(x1v,x2v,x3v,coord,g_,gi_,bondi_, rho,pgas,uu1,uu2,uu3);
-    eos.PrimToConsSingleGRHydro(g_, gi_, rho, pgas, uu1, uu2, uu3,
-                                ud, ue, um1, um2, um3);
-    u0_(m,IDN,k,j,(ie+i+1)) = ud;
-    u0_(m,IEN,k,j,(ie+i+1)) = ue;
-    u0_(m,IM1,k,j,(ie+i+1)) = um1;
-    u0_(m,IM2,k,j,(ie+i+1)) = um2;
-    u0_(m,IM3,k,j,(ie+i+1)) = um3;
+    if (mb_bcs.d_view(m,BoundaryFace::outer_x1) == BoundaryFlag::user) {
+      ComputePrimitiveSingle(x1v,x2v,x3v,coord,g_,gi_,bondi_, rho,pgas,uu1,uu2,uu3);
+      w0_(m,IDN,k,j,(ie+i+1)) = rho;
+      w0_(m,IEN,k,j,(ie+i+1)) = pgas/(bondi_.gm - 1.0);
+      w0_(m,IM1,k,j,(ie+i+1)) = uu1;
+      w0_(m,IM2,k,j,(ie+i+1)) = uu2;
+      w0_(m,IM3,k,j,(ie+i+1)) = uu3;
+    }
   });
+  // PrimToCons on X1 physical boundary ghost zones
+  pm->pmb_pack->phydro->peos->PrimToCons(w0_,u0_,is-ng,is-1,0,(n2-1),0,(n3-1));
+  pm->pmb_pack->phydro->peos->PrimToCons(w0_,u0_,ie+1,ie+ng,0,(n2-1),0,(n3-1));
 
+  pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,0,(n1-1),js-ng,js-1,0,(n3-1));
+  pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,0,(n1-1),je+1,je+ng,0,(n3-1));
   par_for("fixed_x2", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(ng-1),0,(n1-1),
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     // inner x2 boundary
@@ -655,29 +675,32 @@ void FixedBondiInflow(Mesh *pm) {
     Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
     Real rho, pgas, uu1, uu2, uu3, g_[NMETRIC], gi_[NMETRIC];
-    ComputePrimitiveSingle(x1v,x2v,x3v,coord,g_,gi_,bondi_,rho,pgas,uu1,uu2,uu3);
-    Real ud, ue, um1, um2, um3;
-    eos.PrimToConsSingleGRHydro(g_, gi_, rho, pgas, uu1, uu2, uu3,
-                                ud, ue, um1, um2, um3);
-    u0_(m,IDN,k,j,i) = ud;
-    u0_(m,IEN,k,j,i) = ue;
-    u0_(m,IM1,k,j,i) = um1;
-    u0_(m,IM2,k,j,i) = um2;
-    u0_(m,IM3,k,j,i) = um3;
+    if (mb_bcs.d_view(m,BoundaryFace::inner_x2) == BoundaryFlag::user) {
+      ComputePrimitiveSingle(x1v,x2v,x3v,coord,g_,gi_,bondi_,rho,pgas,uu1,uu2,uu3);
+      w0_(m,IDN,k,j,i) = rho;
+      w0_(m,IEN,k,j,i) = pgas/(bondi_.gm - 1.0);
+      w0_(m,IM1,k,j,i) = uu1;
+      w0_(m,IM2,k,j,i) = uu2;
+      w0_(m,IM3,k,j,i) = uu3;
+    }
 
     // outer x2 boundary
     x2v = CellCenterX((je+j+1)-js, indcs.nx2, x2min, x2max);
 
-    ComputePrimitiveSingle(x1v,x2v,x3v,coord,g_,gi_,bondi_,rho,pgas,uu1,uu2,uu3);
-    eos.PrimToConsSingleGRHydro(g_, gi_, rho, pgas, uu1, uu2, uu3,
-                                ud, ue, um1, um2, um3);
-    u0_(m,IDN,k,(je+j+1),i) = ud;
-    u0_(m,IEN,k,(je+j+1),i) = ue;
-    u0_(m,IM1,k,(je+j+1),i) = um1;
-    u0_(m,IM2,k,(je+j+1),i) = um2;
-    u0_(m,IM3,k,(je+j+1),i) = um3;
+    if (mb_bcs.d_view(m,BoundaryFace::outer_x2) == BoundaryFlag::user) {
+      ComputePrimitiveSingle(x1v,x2v,x3v,coord,g_,gi_,bondi_,rho,pgas,uu1,uu2,uu3);
+      w0_(m,IDN,k,(je+j+1),i) = rho;
+      w0_(m,IEN,k,(je+j+1),i) = pgas/(bondi_.gm - 1.0);
+      w0_(m,IM1,k,(je+j+1),i) = uu1;
+      w0_(m,IM2,k,(je+j+1),i) = uu2;
+      w0_(m,IM3,k,(je+j+1),i) = uu3;
+    }
   });
+  pm->pmb_pack->phydro->peos->PrimToCons(w0_,u0_,0,(n1-1),js-ng,js-1,0,(n3-1));
+  pm->pmb_pack->phydro->peos->PrimToCons(w0_,u0_,0,(n1-1),je+1,je+ng,0,(n3-1));
 
+  pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,0,(n1-1),0,(n2-1),ks-ng,ks-1);
+  pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,0,(n1-1),0,(n2-1),ke+1,ke+ng);
   par_for("fixed_ix3", DevExeSpace(),0,(nmb-1),0,(ng-1),0,(n2-1),0,(n1-1),
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     // inner x3 boundary
@@ -694,28 +717,29 @@ void FixedBondiInflow(Mesh *pm) {
     Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
     Real rho, pgas, uu1, uu2, uu3, g_[NMETRIC], gi_[NMETRIC];
-    ComputePrimitiveSingle(x1v,x2v,x3v,coord,g_,gi_,bondi_,rho,pgas,uu1,uu2,uu3);
-    Real ud, ue, um1, um2, um3;
-    eos.PrimToConsSingleGRHydro(g_, gi_, rho, pgas, uu1, uu2, uu3,
-                                  ud, ue, um1, um2, um3);
-    u0_(m,IDN,k,j,i) = ud;
-    u0_(m,IEN,k,j,i) = ue;
-    u0_(m,IM1,k,j,i) = um1;
-    u0_(m,IM2,k,j,i) = um2;
-    u0_(m,IM3,k,j,i) = um3;
+    if (mb_bcs.d_view(m,BoundaryFace::inner_x3) == BoundaryFlag::user) {
+      ComputePrimitiveSingle(x1v,x2v,x3v,coord,g_,gi_,bondi_,rho,pgas,uu1,uu2,uu3);
+      w0_(m,IDN,k,j,i) = rho;
+      w0_(m,IEN,k,j,i) = pgas/(bondi_.gm - 1.0);
+      w0_(m,IM1,k,j,i) = uu1;
+      w0_(m,IM2,k,j,i) = uu2;
+      w0_(m,IM3,k,j,i) = uu3;
+    }
 
     // outer x3 boundary
     x3v = CellCenterX((ke+k+1)-ks, indcs.nx3, x3min, x3max);
 
-    ComputePrimitiveSingle(x1v,x2v,x3v,coord,g_,gi_,bondi_,rho,pgas,uu1,uu2,uu3);
-    eos.PrimToConsSingleGRHydro(g_, gi_, rho, pgas, uu1, uu2, uu3,
-                                ud, ue, um1, um2, um3);
-    u0_(m,IDN,(ke+k+1),j,i) = ud;
-    u0_(m,IEN,(ke+k+1),j,i) = ue;
-    u0_(m,IM1,(ke+k+1),j,i) = um1;
-    u0_(m,IM2,(ke+k+1),j,i) = um2;
-    u0_(m,IM3,(ke+k+1),j,i) = um3;
+    if (mb_bcs.d_view(m,BoundaryFace::outer_x3) == BoundaryFlag::user) {
+      ComputePrimitiveSingle(x1v,x2v,x3v,coord,g_,gi_,bondi_,rho,pgas,uu1,uu2,uu3);
+      w0_(m,IDN,(ke+k+1),j,i) = rho;
+      w0_(m,IEN,(ke+k+1),j,i) = pgas/(bondi_.gm - 1.0);
+      w0_(m,IM1,(ke+k+1),j,i) = uu1;
+      w0_(m,IM2,(ke+k+1),j,i) = uu2;
+      w0_(m,IM3,(ke+k+1),j,i) = uu3;
+    }
   });
+  pm->pmb_pack->phydro->peos->PrimToCons(w0_,u0_,0,(n1-1),0,(n2-1),ks-ng,ks-1);
+  pm->pmb_pack->phydro->peos->PrimToCons(w0_,u0_,0,(n1-1),0,(n2-1),ke+1,ke+ng);
 
   return;
 }

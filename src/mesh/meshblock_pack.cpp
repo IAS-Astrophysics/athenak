@@ -53,6 +53,7 @@ MeshBlockPack::~MeshBlockPack() {
 void MeshBlockPack::AddMeshBlocksAndCoordinates(ParameterInput *pin, RegionIndcs indcs) {
   pmb = new MeshBlock(this, gids, nmb_thispack);
   pcoord = new Coordinates(pin, this);
+  if (pcoord->coord_data.bh_excise) pcoord->SetExcisionMasks();
 }
 
 //----------------------------------------------------------------------------------------

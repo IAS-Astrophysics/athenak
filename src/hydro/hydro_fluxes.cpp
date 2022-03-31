@@ -29,6 +29,7 @@
 #include "hydro/rsolvers/llf_srhyd.cpp"   // NOLINT(build/include)
 #include "hydro/rsolvers/hlle_srhyd.cpp"  // NOLINT(build/include)
 #include "hydro/rsolvers/hllc_srhyd.cpp"  // NOLINT(build/include)
+#include "hydro/rsolvers/llf_grhyd.cpp"   // NOLINT(build/include)
 #include "hydro/rsolvers/hlle_grhyd.cpp"  // NOLINT(build/include)
 
 namespace hydro {
@@ -103,6 +104,8 @@ TaskStatus Hydro::CalcFluxes(Driver *pdriver, int stage) {
       HLLE_SR(member, eos, indcs, size, coord, m, k, j, is, ie+1, IVX, wl, wr, flx1);
     } else if constexpr (rsolver_method_ == Hydro_RSolver::hllc_sr) {
       HLLC_SR(member, eos, indcs, size, coord, m, k, j, is, ie+1, IVX, wl, wr, flx1);
+    } else if constexpr (rsolver_method_ == Hydro_RSolver::llf_gr) {
+      LLF_GR(member, eos, indcs, size, coord, m, k, j, is, ie+1, IVX, wl, wr, flx1);
     } else if constexpr (rsolver_method_ == Hydro_RSolver::hlle_gr) {
       HLLE_GR(member, eos, indcs, size, coord, m, k, j, is, ie+1, IVX, wl, wr, flx1);
     }
@@ -182,6 +185,8 @@ TaskStatus Hydro::CalcFluxes(Driver *pdriver, int stage) {
             HLLE_SR(member, eos, indcs, size, coord, m, k, j, is, ie, IVY, wl, wr, flx2);
           } else if constexpr (rsolver_method_ == Hydro_RSolver::hllc_sr) {
             HLLC_SR(member, eos, indcs, size, coord, m, k, j, is, ie, IVY, wl, wr, flx2);
+          } else if constexpr (rsolver_method_ == Hydro_RSolver::llf_gr) {
+            LLF_GR(member, eos, indcs, size, coord, m, k, j, is, ie, IVY, wl, wr, flx2);
           } else if constexpr (rsolver_method_ == Hydro_RSolver::hlle_gr) {
             HLLE_GR(member, eos, indcs, size, coord, m, k, j, is, ie, IVY, wl, wr, flx2);
           }
@@ -264,6 +269,8 @@ TaskStatus Hydro::CalcFluxes(Driver *pdriver, int stage) {
             HLLE_SR(member, eos, indcs, size, coord, m, k, j, is, ie, IVZ, wl, wr, flx3);
           } else if constexpr (rsolver_method_ == Hydro_RSolver::hllc_sr) {
             HLLC_SR(member, eos, indcs, size, coord, m, k, j, is, ie, IVZ, wl, wr, flx3);
+          } else if constexpr (rsolver_method_ == Hydro_RSolver::llf_gr) {
+            LLF_GR(member, eos, indcs, size, coord, m, k, j, is, ie, IVZ, wl, wr, flx3);
           } else if constexpr (rsolver_method_ == Hydro_RSolver::hlle_gr) {
             HLLE_GR(member, eos, indcs, size, coord, m, k, j, is, ie, IVZ, wl, wr, flx3);
           }
@@ -286,6 +293,114 @@ TaskStatus Hydro::CalcFluxes(Driver *pdriver, int stage) {
     });
   }
 
+  // handle excision masks
+  if (pmy_pack->pcoord->is_general_relativistic) {
+    if (coord.bh_excise) {
+      auto &fc_mask_ = pmy_pack->pcoord->fc_mask;
+
+      auto fcorr_x1  = uflx.x1f;
+      auto fcorr_x2  = uflx.x2f;
+      auto fcorr_x3  = uflx.x3f;
+      par_for("excise_flux",DevExeSpace(), 0, nmb1, ks, ke+1, js, je+1, is, ie+1,
+      KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+        Real &x1min = size.d_view(m).x1min;
+        Real &x1max = size.d_view(m).x1max;
+        Real &x2min = size.d_view(m).x2min;
+        Real &x2max = size.d_view(m).x2max;
+        Real &x3min = size.d_view(m).x3min;
+        Real &x3max = size.d_view(m).x3max;
+
+        Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+        Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+        Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+        Real x1f = LeftEdgeX  (i-is, indcs.nx1, x1min, x1max);
+        Real x2f = LeftEdgeX  (j-js, indcs.nx2, x2min, x2max);
+        Real x3f = LeftEdgeX  (k-ks, indcs.nx3, x3min, x3max);
+
+        if (j<(je+1) && k<(ke+1)) {
+          if (fc_mask_.x1f(m,k,j,i)) {
+            HydPrim1D wim1;
+            wim1.d  = w0_(m,IDN,k,j,i-1);
+            wim1.vx = w0_(m,IVX,k,j,i-1);
+            wim1.vy = w0_(m,IVY,k,j,i-1);
+            wim1.vz = w0_(m,IVZ,k,j,i-1);
+            wim1.p  = eos.IdealGasPressure(w0_(m,IEN,k,j,i-1));
+
+            HydPrim1D wi;
+            wi.d  = w0_(m,IDN,k,j,i);
+            wi.vx = w0_(m,IVX,k,j,i);
+            wi.vy = w0_(m,IVY,k,j,i);
+            wi.vz = w0_(m,IVZ,k,j,i);
+            wi.p  = eos.IdealGasPressure(w0_(m,IEN,k,j,i));
+
+            HydCons1D flux;
+            SingleStateLLF_GR(wim1, wi, x1f, x2v, x3v, IVX, coord, eos, flux);
+
+            fcorr_x1(m,IDN,k,j,i) = flux.d;
+            fcorr_x1(m,IM1,k,j,i) = flux.mx;
+            fcorr_x1(m,IM2,k,j,i) = flux.my;
+            fcorr_x1(m,IM3,k,j,i) = flux.mz;
+            fcorr_x1(m,IEN,k,j,i) = flux.e;
+          }
+        }
+
+        if (i<(ie+1) && k<(ke+1)) {
+          if (fc_mask_.x2f(m,k,j,i)) {
+            HydPrim1D wjm1;
+            wjm1.d  = w0_(m,IDN,k,j-1,i);
+            wjm1.vx = w0_(m,IVX,k,j-1,i);
+            wjm1.vy = w0_(m,IVY,k,j-1,i);
+            wjm1.vz = w0_(m,IVZ,k,j-1,i);
+            wjm1.p  = eos.IdealGasPressure(w0_(m,IEN,k,j-1,i));
+
+            HydPrim1D wj;
+            wj.d  = w0_(m,IDN,k,j,i);
+            wj.vx = w0_(m,IVX,k,j,i);
+            wj.vy = w0_(m,IVY,k,j,i);
+            wj.vz = w0_(m,IVZ,k,j,i);
+            wj.p  = eos.IdealGasPressure(w0_(m,IEN,k,j,i));
+
+            HydCons1D flux;
+            SingleStateLLF_GR(wjm1, wj, x1v, x2f, x3v, IVY, coord, eos, flux);
+
+            fcorr_x2(m,IDN,k,j,i) = flux.d;
+            fcorr_x2(m,IM1,k,j,i) = flux.mx;
+            fcorr_x2(m,IM2,k,j,i) = flux.my;
+            fcorr_x2(m,IM3,k,j,i) = flux.mz;
+            fcorr_x2(m,IEN,k,j,i) = flux.e;
+          }
+        }
+
+        if (i<(ie+1) && j<(je+1)) {
+          if (fc_mask_.x3f(m,k,j,i)) {
+            HydPrim1D wkm1;
+            wkm1.d  = w0_(m,IDN,k-1,j,i);
+            wkm1.vx = w0_(m,IVX,k-1,j,i);
+            wkm1.vy = w0_(m,IVY,k-1,j,i);
+            wkm1.vz = w0_(m,IVZ,k-1,j,i);
+            wkm1.p  = eos.IdealGasPressure(w0_(m,IEN,k-1,j,i));
+
+            HydPrim1D wk;
+            wk.d  = w0_(m,IDN,k,j,i);
+            wk.vx = w0_(m,IVX,k,j,i);
+            wk.vy = w0_(m,IVY,k,j,i);
+            wk.vz = w0_(m,IVZ,k,j,i);
+            wk.p  = eos.IdealGasPressure(w0_(m,IEN,k,j,i));
+
+            HydCons1D flux;
+            SingleStateLLF_GR(wkm1, wk, x1v, x2v, x3f, IVZ, coord, eos, flux);
+
+            fcorr_x3(m,IDN,k,j,i) = flux.d;
+            fcorr_x3(m,IM1,k,j,i) = flux.mx;
+            fcorr_x3(m,IM2,k,j,i) = flux.my;
+            fcorr_x3(m,IM3,k,j,i) = flux.mz;
+            fcorr_x3(m,IEN,k,j,i) = flux.e;
+          }
+        }
+      });
+    }
+  }
+
   // Add viscous, resistive, heat-flux, etc fluxes
   if (pvisc != nullptr) {
     pvisc->IsotropicViscousFlux(w0, pvisc->nu, eos, uflx);
@@ -306,6 +421,7 @@ template TaskStatus Hydro::CalcFluxes<Hydro_RSolver::roe>(Driver *pdriver, int s
 template TaskStatus Hydro::CalcFluxes<Hydro_RSolver::llf_sr>(Driver *pdriver, int stage);
 template TaskStatus Hydro::CalcFluxes<Hydro_RSolver::hlle_sr>(Driver *pdriver, int stage);
 template TaskStatus Hydro::CalcFluxes<Hydro_RSolver::hllc_sr>(Driver *pdriver, int stage);
+template TaskStatus Hydro::CalcFluxes<Hydro_RSolver::llf_gr>(Driver *pdriver, int stage);
 template TaskStatus Hydro::CalcFluxes<Hydro_RSolver::hlle_gr>(Driver *pdriver, int stage);
 
 } // namespace hydro

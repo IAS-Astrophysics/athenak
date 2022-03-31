@@ -168,11 +168,11 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
     w_bz = 0.5*(b.x3f(m,k,j,i) + b.x3f(m,k+1,j,i));
 
     // apply density floor, without changing momentum or energy
-    bool floor_hit = false;
+    bool fixup_hit = false;
     if (u_d < dfloor_) {
       u_d = dfloor_;
       sum_d++;
-      floor_hit = true;
+      fixup_hit = true;
     }
 
     // apply energy floor
@@ -286,7 +286,7 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
     if (eps <= epsmin) {
       eps = epsmin;
       sum_e++;
-      floor_hit = true;
+      fixup_hit = true;
     }
 
     //NOTE: The following generalizes to ANY equation of state
@@ -304,7 +304,7 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
     }
 
     // reset conserved variables if floor is hit
-    if (floor_hit) {
+    if (fixup_hit) {
       HydPrim1D w;
       w.d  = w_d;
       w.vx = w_ux;

@@ -36,6 +36,7 @@ class ProblemGenerator {
 
   // predefined problem generator functions (default test suite)
   void Advection(ParameterInput *pin, const bool restart);
+  void BondiAccretion(ParameterInput *pin, const bool restart);
   void LinearWave(ParameterInput *pin, const bool restart);
   void LWImplode(ParameterInput *pin, const bool restart);
   void OrszagTang(ParameterInput *pin, const bool restart);

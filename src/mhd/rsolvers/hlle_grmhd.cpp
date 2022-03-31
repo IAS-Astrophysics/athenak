@@ -62,8 +62,7 @@ void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos,
     }
 
     Real g_[NMETRIC], gi_[NMETRIC];
-    ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, false,
-                            coord.bh_spin, g_, gi_);
+    ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, coord.bh_spin, g_, gi_);
     const Real
       &g_00 = g_[I00], &g_01 = g_[I01], &g_02 = g_[I02], &g_03 = g_[I03],
       &g_10 = g_[I01], &g_11 = g_[I11], &g_12 = g_[I12], &g_13 = g_[I13],
