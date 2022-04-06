@@ -58,7 +58,7 @@ void PrimToConsSingle(const Real g_[], const Real gi_[], const Real &gammap,
 
   Real wgas_u0 = (w.d + gammap * w.p) * u0;
   u.d  = w.d * u0;
-  u.e  = wgas_u0 * u_0 + w.p - u.d;  // Evolve E-D as in SR
+  u.e  = wgas_u0 * u_0 + w.p + u.d;  // evolve T^t_t + D
   u.mx = wgas_u0 * u_1;
   u.my = wgas_u0 * u_2;
   u.mz = wgas_u0 * u_3;
@@ -162,9 +162,9 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
     bool fixup_hit = false;
 
     // We are evolving T^t_t, but the SR C2P algorithm is only consistent with
-    // alpha^2 T^{tt}.J.  Therefore compute T^{tt} = g^0\mu T^t_\mu
-    // We are also evolving (E-D) as conserved variable, so must convert to E
-    Real ue_sr = gi_[I00]*(u_e+u_d) + gi_[I01]*u_m1 + gi_[I02]*u_m2 + gi_[I03]*u_m3;
+    // alpha^2 T^{tt}.  Therefore compute T^{tt} = g^0\mu T^t_\mu
+    // We are also evolving T^t_t + D as conserved variable, so must convert to E
+    Real ue_sr = gi_[I00]*(u_e-u_d) + gi_[I01]*u_m1 + gi_[I02]*u_m2 + gi_[I03]*u_m3;
 
     // This is only true if sqrt{-g}=1!
     ue_sr *= (-1./gi_[I00]);  // Multiply by alpha^2
