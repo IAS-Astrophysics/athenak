@@ -26,10 +26,9 @@ int IOWrapper::Open(const char* fname, FileMode rw) {
   if (rw == FileMode::read) {
 #if MPI_PARALLEL_ENABLED
     // NOLINTNEXTLINE
-    if (MPI_File_open(comm_,const_cast<char*>(fname),MPI_MODE_RDONLY,MPI_INFO_NULL,&fh_)
-        !=MPI_SUCCESS) // use const_cast to convince the compiler.
+    if (MPI_File_open(comm_,fname,MPI_MODE_RDONLY,MPI_INFO_NULL,&fh_) != MPI_SUCCESS)
 #else
-      if ((fh_ = std::fopen(fname,"rb")) == nullptr) // NOLINT
+    if ((fh_ = std::fopen(fname,"rb")) == nullptr) // NOLINT
 #endif
       {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -40,12 +39,12 @@ int IOWrapper::Open(const char* fname, FileMode rw) {
 
   } else if (rw == FileMode::write) {
 #if MPI_PARALLEL_ENABLED
-    MPI_File_delete(const_cast<char*>(fname), MPI_INFO_NULL); // truncation
+    MPI_File_delete(fname, MPI_INFO_NULL); // truncation
     // NOLINTNEXTLINE
-    if (MPI_File_open(comm_,const_cast<char*>(fname),MPI_MODE_WRONLY | MPI_MODE_CREATE,
-                      MPI_INFO_NULL,&fh_) != MPI_SUCCESS)
+    if (MPI_File_open(comm_,fname,MPI_MODE_WRONLY | MPI_MODE_CREATE,
+        MPI_INFO_NULL,&fh_) != MPI_SUCCESS)
 #else
-      if ((fh_ = std::fopen(fname,"wb")) == nullptr) // NOLINT
+    if ((fh_ = std::fopen(fname,"wb")) == nullptr) // NOLINT
 #endif
       {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -68,8 +67,8 @@ std::size_t IOWrapper::Read(void *buf, IOWrapperSizeT size, IOWrapperSizeT count
 #if MPI_PARALLEL_ENABLED
   MPI_Status status;
   int nread;
-  if (MPI_File_read(fh_,buf,count*size,MPI_BYTE,&status)!=MPI_SUCCESS) return -1;
-  if (MPI_Get_count(&status,MPI_BYTE,&nread)==MPI_UNDEFINED) return -1;
+  if (MPI_File_read(fh_,buf,count*size,MPI_BYTE,&status) != MPI_SUCCESS) return 0;
+  if (MPI_Get_count(&status,MPI_BYTE,&nread) == MPI_UNDEFINED) return 0;
   return nread/size;
 #else
   return std::fread(buf,size,count,fh_);
@@ -84,8 +83,8 @@ std::size_t IOWrapper::Read_all(void *buf, IOWrapperSizeT size, IOWrapperSizeT c
 #if MPI_PARALLEL_ENABLED
   MPI_Status status;
   int nread;
-  if (MPI_File_read_all(fh_,buf,count*size,MPI_BYTE,&status)!=MPI_SUCCESS) return -1;
-  if (MPI_Get_count(&status,MPI_BYTE,&nread)==MPI_UNDEFINED) return -1;
+  if (MPI_File_read_all(fh_,buf,count*size,MPI_BYTE,&status) != MPI_SUCCESS) return 0;
+  if (MPI_Get_count(&status,MPI_BYTE,&nread) == MPI_UNDEFINED) return 0;
   return nread/size;
 #else
   return std::fread(buf,size,count,fh_);
@@ -102,9 +101,10 @@ std::size_t IOWrapper::Read_at_all(void *buf, IOWrapperSizeT size,
 #if MPI_PARALLEL_ENABLED
   MPI_Status status;
   int nread;
-  if (MPI_File_read_at_all(fh_,offset,buf,count*size,MPI_BYTE,&status)!=MPI_SUCCESS)
-    return -1;
-  if (MPI_Get_count(&status,MPI_BYTE,&nread)==MPI_UNDEFINED) return -1;
+  if (MPI_File_read_at_all(fh_,offset,buf,count*size,MPI_BYTE,&status) != MPI_SUCCESS) {
+    return 0;
+  }
+  if (MPI_Get_count(&status,MPI_BYTE,&nread) == MPI_UNDEFINED) return 0;
   return nread/size;
 #else
   std::fseek(fh_, offset, SEEK_SET);
@@ -120,9 +120,10 @@ std::size_t IOWrapper::Write(const void *buf, IOWrapperSizeT size, IOWrapperSize
 #if MPI_PARALLEL_ENABLED
   MPI_Status status;
   int nwrite;
-  if (MPI_File_write(fh_,const_cast<void*>(buf),cnt*size,MPI_BYTE,&status)!=MPI_SUCCESS)
-    return -1;
-  if (MPI_Get_count(&status,MPI_BYTE,&nwrite)==MPI_UNDEFINED) return -1;
+  if (MPI_File_write(fh_,buf,cnt*size,MPI_BYTE,&status) != MPI_SUCCESS) {
+    return 0;
+  }
+  if (MPI_Get_count(&status,MPI_BYTE,&nwrite) == MPI_UNDEFINED) return 0;
   return nwrite/size;
 #else
   return std::fwrite(buf,size,cnt,fh_);
@@ -139,10 +140,10 @@ std::size_t IOWrapper::Write_at_all(const void *buf, IOWrapperSizeT size,
 #if MPI_PARALLEL_ENABLED
   MPI_Status status;
   int nwrite;
-  if (MPI_File_write_at_all(fh_,offset,const_cast<void*>(buf),cnt*size,MPI_BYTE,&status)
-      !=MPI_SUCCESS)
-    return -1;
-  if (MPI_Get_count(&status,MPI_BYTE,&nwrite)==MPI_UNDEFINED) return -1;
+  if (MPI_File_write_at_all(fh_,offset,buf,cnt*size,MPI_BYTE,&status) != MPI_SUCCESS) {
+    return 0;
+  }
+  if (MPI_Get_count(&status,MPI_BYTE,&nwrite) == MPI_UNDEFINED) return 0;
   return nwrite/size;
 #else
   std::fseek(fh_, offset, SEEK_SET);
