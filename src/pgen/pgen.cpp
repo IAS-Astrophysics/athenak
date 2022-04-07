@@ -85,26 +85,26 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
 ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resfile) :
     user_bcs(false),
     pmy_mesh_(pm) {
-  // Read size of CC and FC data arrays from restart file
-  IOWrapperSizeT ccdata_size, fcdata_size;
-  if (global_variable::my_rank == 0) { // the master process reads the header data
-    if (resfile.Read(&ccdata_size, 1, sizeof(IOWrapperSizeT)) != sizeof(IOWrapperSizeT)) {
+  // root process reads size of CC and FC data arrays from restart file
+  IOWrapperSizeT variablesize = 2*sizeof(IOWrapperSizeT);
+  char *variabledata = new char[variablesize];
+  if (global_variable::my_rank == 0) { // the master process reads the variables data
+    if (resfile.Read(variabledata, 1, variablesize) != variablesize) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "CC data size read from restart file is corrupted, "
-                << "restart file is broken." << std::endl;
-      exit(EXIT_FAILURE);
-    }
-    if (resfile.Read(&fcdata_size, 1, sizeof(IOWrapperSizeT)) != sizeof(IOWrapperSizeT)) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "FC data size read from restart file is corrupted, "
+                << std::endl << "Variable data size read from restart file is incorrect, "
                 << "restart file is broken." << std::endl;
       exit(EXIT_FAILURE);
     }
   }
-  // get file offset for reading data arrays
-  IOWrapperSizeT headeroffset = resfile.GetPosition();
+#if MPI_PARALLEL_ENABLED
+  // then broadcast the datasize information
+  MPI_Bcast(variabledata, variablesize, MPI_CHAR, 0, MPI_COMM_WORLD);
+#endif
 
-  std::cout << "ccdata_size = "<<ccdata_size<<"  fcdata_size = "<<fcdata_size<<std::endl;
+  IOWrapperSizeT ccdata_size, fcdata_size, hdos = 0;
+  std::memcpy(&ccdata_size, &(variabledata[hdos]), sizeof(IOWrapperSizeT));
+  hdos += sizeof(IOWrapperSizeT);
+  std::memcpy(&fcdata_size, &(variabledata[hdos]), sizeof(IOWrapperSizeT));
 
   // get spatial dimensions of arrays, including ghost zones
   auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
@@ -116,22 +116,34 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   // calculate total number of CC variables
   hydro::Hydro* phydro = pm->pmb_pack->phydro;
   mhd::MHD* pmhd = pm->pmb_pack->pmhd;
-  int nhydro=0, nmhd=0;
+  int nhydro_tot = 0, nmhd_tot = 0;
   if (phydro != nullptr) {
-    nhydro = phydro->nhydro + phydro->nscalars;
+    nhydro_tot = phydro->nhydro + phydro->nscalars;
   }
   if (pmhd != nullptr) {
-    nmhd = pmhd->nmhd + pmhd->nscalars;
+    nmhd_tot = pmhd->nmhd + pmhd->nscalars;
   }
 
-  // read CC data into host array
-  HostArray5D<Real> ccin("rst-cc-in", nmb, (nhydro+nmhd), nout3, nout2, nout1);
+  IOWrapperSizeT headeroffset;
+  // master process gets file offset
+  if (global_variable::my_rank == 0) {
+    headeroffset = resfile.GetPosition();
+  }
+#if MPI_PARALLEL_ENABLED
+  // then broadcasts it
+  MPI_Bcast(&headeroffset, sizeof(IOWrapperSizeT), MPI_CHAR, 0, MPI_COMM_WORLD);
+#endif
+
+  // allocate arrays for CC data
+  HostArray5D<Real> ccin("pgen-ccin", nmb, (nhydro_tot + nmhd_tot), nout3, nout2, nout1);
   if (ccin.size()*sizeof(Real) != ccdata_size) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "CC data size read from restart file not equal to size "
               << "of Hydro and MHD arrays, restart file is broken." << std::endl;
     exit(EXIT_FAILURE);
   }
+
+  // read CC data into host array
   int mygids = pm->gidslist[global_variable::my_rank];
   IOWrapperSizeT myoffset = headeroffset + (ccdata_size+fcdata_size)*mygids;
   if (resfile.Read_at_all(ccin.data(), ccdata_size, 1, myoffset) != 1) {
@@ -145,7 +157,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   // copy CC Hydro data to device
   if (phydro != nullptr) {
     DvceArray5D<Real>::HostMirror host_u0 = Kokkos::create_mirror(phydro->u0);
-    auto hst_slice = Kokkos::subview(ccin, Kokkos::ALL, std::make_pair(0,nhydro),
+    auto hst_slice = Kokkos::subview(ccin, Kokkos::ALL, std::make_pair(0,nhydro_tot),
                                      Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
     Kokkos::deep_copy(host_u0, hst_slice);
     Kokkos::deep_copy(phydro->u0, host_u0);
@@ -154,15 +166,15 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   // copy CC MHD data to device
   if (pmhd != nullptr) {
     DvceArray5D<Real>::HostMirror host_u0 = Kokkos::create_mirror(pmhd->u0);
-    auto hst_slice = Kokkos::subview(ccin, Kokkos::ALL, std::make_pair(nhydro,nmhd),
+    auto hst_slice = Kokkos::subview(ccin,Kokkos::ALL,std::make_pair(nhydro_tot,nmhd_tot),
                                      Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
     Kokkos::deep_copy(host_u0, hst_slice);
     Kokkos::deep_copy(pmhd->u0, host_u0);
   }
 
-  // read MHD face-centered fields and copy to device
+  // allocate arrays for FC data, read face-centered fields, and copy to device
   if (pmhd != nullptr) {
-    HostFaceFld4D<Real> fcin("rst-fc-in", nmb, nout3, nout2, nout1);
+    HostFaceFld4D<Real> fcin("pgen-fcin", nmb, nout3, nout2, nout1);
     if ((fcin.x1f.size() +fcin.x2f.size() +fcin.x3f.size())*sizeof(Real) != fcdata_size) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "FC data size read from restart file not equal to size "

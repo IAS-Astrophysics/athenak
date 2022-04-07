@@ -310,9 +310,9 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile) {
     }
   }
 
-#ifdef MPI_PARALLEL
+#if MPI_PARALLEL_ENABLED
   // then broadcast the header data
-  MPI_Bcast(headerdata, headersize, MPI_BYTE, 0, MPI_COMM_WORLD);
+  MPI_Bcast(headerdata, headersize, MPI_CHAR, 0, MPI_COMM_WORLD);
 #endif
 
   // Now copy mesh data read from restart file into Mesh variables. Order of variables
@@ -384,9 +384,9 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile) {
       std::exit(EXIT_FAILURE);
     }
   }
-#ifdef MPI_PARALLEL
+#if MPI_PARALLEL_ENABLED
   // then broadcast the ID list
-  MPI_Bcast(idlist, listsize*nmb_total, MPI_BYTE, 0, MPI_COMM_WORLD);
+  MPI_Bcast(idlist, listsize*nmb_total, MPI_CHAR, 0, MPI_COMM_WORLD);
 #endif
 
   // everyone sets the logical location and cost lists based on bradcasted data
@@ -419,7 +419,7 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile) {
     std::exit(EXIT_FAILURE);
   }
 
-#ifdef MPI_PARALLEL
+#ifdef MPI_PARALLEL_ENABLED
   // check there is at least one MeshBlock per MPI rank
   if (nmb_total < global_variable::nranks) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl

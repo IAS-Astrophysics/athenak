@@ -235,10 +235,10 @@ TaskStatus BoundaryValues::InitRecv(const int nvars) {
           } else {
             data_size *= recv_buf[n].ifine_ndat;
           }
-          void* recv_ptr = &(recv_buf[n].vars(m,0));
+          auto recv_ptr = Kokkos::subview(recv_buf[n].vars, m, Kokkos::ALL);
 
           // Post non-blocking receive for this buffer on this MeshBlock
-          int ierr = MPI_Irecv(recv_ptr, data_size, MPI_ATHENA_REAL, drank, tag,
+          int ierr = MPI_Irecv(recv_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
                                vars_comm, &(recv_buf[n].vars_req[m]));
           if (ierr != MPI_SUCCESS) {no_errors=false;}
         }

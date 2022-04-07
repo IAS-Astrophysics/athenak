@@ -196,7 +196,6 @@ void BoundaryValuesFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb
   } else if (pmy_pack->pmesh->two_d) {
     auto &nghbr = pmy_pack->pmb->nghbr;
     auto &indcs  = pmy_pack->pmesh->mb_indcs;
-    int ks = indcs.ks;
     auto &mblev = pmy_pack->pmb->mb_lev;
     auto &rbuf = recv_buf;
 
