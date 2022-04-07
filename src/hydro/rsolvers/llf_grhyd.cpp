@@ -191,8 +191,8 @@ void LLF_GR(TeamMember_t const &member, const EOS_Data &eos,
     flx(m,IVY,k,j,i) = 0.5 * (fl.my + fr.my - lambda * (consr.my - consl.my));
     flx(m,IVZ,k,j,i) = 0.5 * (fl.mz + fr.mz - lambda * (consr.mz - consl.mz));
 
-    // We evolve tau = E - D
-    flx(m,IEN,k,j,i) -= flx(m,IDN,k,j,i);
+    // We evolve tau = T^t_t + D
+    flx(m,IEN,k,j,i) += flx(m,IDN,k,j,i);
   });
 
   return;
@@ -346,8 +346,8 @@ void SingleStateLLF_GR(const HydPrim1D wl, const HydPrim1D wr,
   flux.my = 0.5 * (fl.my + fr.my - lambda * (consr.my - consl.my));
   flux.mz = 0.5 * (fl.mz + fr.mz - lambda * (consr.mz - consl.mz));
 
-  // We evolve tau = E - D
-  flux.e  -= flux.d;
+  // We evolve tau = T^t_t + D
+  flux.e  += flux.d;
   return;
 }
 

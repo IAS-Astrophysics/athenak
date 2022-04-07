@@ -43,7 +43,7 @@ def analyze():
     data = athena_read.error_dat('build/src/gr_bondi-errs.dat')
     analyze_status = True
     error_threshold = 8.5e-7
-    conv_threshold = 0.25
+    conv_threshold = 0.31
     l1_rms_n64 = data[0][4]
     l1_rms_n128 = data[1][4]
     if (l1_rms_n128 > error_threshold):

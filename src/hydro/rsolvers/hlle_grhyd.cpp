@@ -198,8 +198,8 @@ void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos,
     flx(m,IVZ,k,j,i) = flux_interface[IVZ];
     flx(m,IEN,k,j,i) = flux_interface[IEN];
 
-    // We evolve tau = E - D
-    flx(m,IEN,k,j,i) -= flx(m,IDN,k,j,i);
+    // We evolve tau = T^t_t + D
+    flx(m,IEN,k,j,i) += flx(m,IDN,k,j,i);
   });
 
   return;
