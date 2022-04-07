@@ -178,9 +178,9 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
           } else {
             data_size *= send_buf[n].ifine_ndat;
           }
-          void* send_ptr = &(send_buf[n].vars(m,0));
+          auto send_ptr = Kokkos::subview(send_buf[n].vars, m, Kokkos::ALL);
 
-          int ierr = MPI_Isend(send_ptr, data_size, MPI_ATHENA_REAL, drank, tag,
+          int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
                                vars_comm, &(send_buf[n].vars_req[m]));
           if (ierr != MPI_SUCCESS) {no_errors=false;}
 #endif
