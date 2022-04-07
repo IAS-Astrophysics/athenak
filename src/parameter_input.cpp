@@ -178,8 +178,9 @@ void ParameterInput::LoadFromFile(IOWrapper &input) {
 
   // search for <par_end> (reading from restart files) or EOF (reading from input file).
   do {
-    if (global_variable::my_rank == 0) // only the master process reads header from file
+    if (global_variable::my_rank == 0) { // only the master process reads header from file
       ret = input.Read(buf, sizeof(char), kBufSize);
+    }
 #if MPI_PARALLEL_ENABLED
     // then broadcasts it
     MPI_Bcast(&ret, sizeof(IOWrapperSizeT), MPI_BYTE, 0, MPI_COMM_WORLD);
