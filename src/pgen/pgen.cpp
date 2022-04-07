@@ -96,7 +96,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
       exit(EXIT_FAILURE);
     }
   }
-#ifdef MPI_PARALLEL_ENABLED
+#if MPI_PARALLEL_ENABLED
   // then broadcast the datasize information
   MPI_Bcast(variabledata, variablesize, MPI_CHAR, 0, MPI_COMM_WORLD);
 #endif
@@ -129,7 +129,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   if (global_variable::my_rank == 0) {
     headeroffset = resfile.GetPosition();
   }
-#ifdef MPI_PARALLEL_ENABLED
+#if MPI_PARALLEL_ENABLED
   // then broadcasts it
   MPI_Bcast(&headeroffset, sizeof(IOWrapperSizeT), MPI_CHAR, 0, MPI_COMM_WORLD);
 #endif

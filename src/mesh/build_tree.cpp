@@ -310,7 +310,7 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile) {
     }
   }
 
-#ifdef MPI_PARALLEL_ENABLED
+#if MPI_PARALLEL_ENABLED
   // then broadcast the header data
   MPI_Bcast(headerdata, headersize, MPI_CHAR, 0, MPI_COMM_WORLD);
 #endif
@@ -384,7 +384,7 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile) {
       std::exit(EXIT_FAILURE);
     }
   }
-#ifdef MPI_PARALLEL_ENABLED
+#if MPI_PARALLEL_ENABLED
   // then broadcast the ID list
   MPI_Bcast(idlist, listsize*nmb_total, MPI_CHAR, 0, MPI_COMM_WORLD);
 #endif
