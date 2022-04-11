@@ -37,9 +37,15 @@ void EventLogOutput::LoadOutputData(Mesh *pm) {
   int* pdfloor = &(pm->ecounter.neos_dfloor);
   int* pefloor = &(pm->ecounter.neos_efloor);
   int* pmaxit  = &(pm->ecounter.maxit_c2p);
-  MPI_Allreduce(MPI_IN_PLACE, pdfloor, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-  MPI_Allreduce(MPI_IN_PLACE, pefloor, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-  MPI_Allreduce(MPI_IN_PLACE, pmaxit,  1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
+  if (global_variable::my_rank == 0) {
+    MPI_Reduce(MPI_IN_PLACE, pdfloor, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE, pefloor, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE, pmaxit,  1, MPI_INT, MPI_MAX, 0, MPI_COMM_WORLD);
+  } else {
+    MPI_Reduce(pdfloor, pdfloor, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
+    MPI_Reduce(pefloor, pefloor, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
+    MPI_Reduce(pmaxit,  pmaxit,  1, MPI_INT, MPI_MAX, 0, MPI_COMM_WORLD);
+  }
 #endif
 
   // check if there is any data to be written
@@ -56,8 +62,6 @@ void EventLogOutput::LoadOutputData(Mesh *pm) {
 //! \brief writes event counter data to log file
 
 void EventLogOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
-  if (header_written && no_output) return;
-
   // only the master rank writes the file
   if (global_variable::my_rank == 0) {
     // create filename: "file_basename" + ".log"
