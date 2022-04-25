@@ -282,7 +282,7 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
 
           // get ptr to send buffer for fluxes
           int data_size = 3*(send_buf[n].iflux_ndat);
-          auto send_ptr = Kokkos::subview(send_buf[n].vars, m, Kokkos::ALL);
+          auto send_ptr = Kokkos::subview(send_buf[n].flux, m, Kokkos::ALL);
 
           int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
                                flux_comm, &(send_buf[n].flux_req[m]));
@@ -511,7 +511,7 @@ TaskStatus BoundaryValuesFC::InitFluxRecv(const int nvar) {
 
           // get ptr to recv buffer when neighbor is at coarser/same/fine level
           int data_size = nvar*(recv_buf[n].iflux_ndat);
-          auto recv_ptr = Kokkos::subview(recv_buf[n].vars, m, Kokkos::ALL);
+          auto recv_ptr = Kokkos::subview(recv_buf[n].flux, m, Kokkos::ALL);
 
           // Post non-blocking receive for this buffer on this MeshBlock
           int ierr = MPI_Irecv(recv_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
