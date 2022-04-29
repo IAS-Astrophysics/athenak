@@ -4,11 +4,10 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file mhd_fluxes.cpp
-//  \brief Calculate fluxes of the conserved variables, and area-averaged electric fields
-//  E = - (v X B) on cell faces for mhd.  Fluxes are stored in face-centered vector
-//  'uflx', while electric fields are stored in individual arrays: e2x1,e3x1 on x1-faces;
-//  e1x2,e3x2 on x2-faces; e1x3,e2x3 on x3-faces.
-//
+//! \brief Calculate fluxes of the conserved variables, and area-averaged electric fields
+//! E = - (v X B) on cell faces for mhd.  Fluxes are stored in face-centered vector
+//! 'uflx', while electric fields are stored in individual arrays: e2x1,e3x1 on x1-faces;
+//! e1x2,e3x2 on x2-faces; e1x3,e2x3 on x3-faces.
 
 #include <iostream>
 
@@ -16,9 +15,6 @@
 #include "mesh/mesh.hpp"
 #include "mhd.hpp"
 #include "eos/eos.hpp"
-#include "diffusion/viscosity.hpp"
-#include "diffusion/resistivity.hpp"
-#include "diffusion/conduction.hpp"
 // include inlined reconstruction methods (yuck...)
 #include "reconstruct/dc.cpp"           // NOLINT(build/include)
 #include "reconstruct/plm.cpp"          // NOLINT(build/include)
@@ -37,13 +33,13 @@
 
 namespace mhd {
 //----------------------------------------------------------------------------------------
-//! \fn  void MHD::CalcFlux
+//! \fn void MHD::CalculateFlux
 //! \brief Calculate fluxes of conserved variables, and face-centered area-averaged EMFs
 //! for evolution of magnetic field
 //! Note this function is templated over RS for better performance on GPUs.
 
 template <MHD_RSolver rsolver_method_>
-TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage) {
+void MHD::CalculateFluxes(Driver *pdriver, int stage) {
   RegionIndcs &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
@@ -507,29 +503,17 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage) {
       });
     }
   }
-
-  // Add viscous, resistive, heat-flux, etc fluxes
-  if (pvisc != nullptr) {
-    pvisc->IsotropicViscousFlux(w0, pvisc->nu, eos, uflx);
-  }
-  if ((presist != nullptr) && (peos->eos_data.is_ideal)) {
-    presist->OhmicEnergyFlux(b0, uflx);
-  }
-  if (pcond != nullptr) {
-    pcond->IsotropicHeatFlux(w0, pcond->kappa, eos, uflx);
-  }
-
-  return TaskStatus::complete;
+  return;
 }
 
 // function definitions for each template parameter
-template TaskStatus MHD::CalcFluxes<MHD_RSolver::advect>(Driver *pdriver, int stage);
-template TaskStatus MHD::CalcFluxes<MHD_RSolver::llf>(Driver *pdriver, int stage);
-template TaskStatus MHD::CalcFluxes<MHD_RSolver::hlle>(Driver *pdriver, int stage);
-template TaskStatus MHD::CalcFluxes<MHD_RSolver::hlld>(Driver *pdriver, int stage);
-template TaskStatus MHD::CalcFluxes<MHD_RSolver::llf_sr>(Driver *pdriver, int stage);
-template TaskStatus MHD::CalcFluxes<MHD_RSolver::hlle_sr>(Driver *pdriver, int stage);
-template TaskStatus MHD::CalcFluxes<MHD_RSolver::llf_gr>(Driver *pdriver, int stage);
-template TaskStatus MHD::CalcFluxes<MHD_RSolver::hlle_gr>(Driver *pdriver, int stage);
+template void MHD::CalculateFluxes<MHD_RSolver::advect>(Driver *pdriver, int stage);
+template void MHD::CalculateFluxes<MHD_RSolver::llf>(Driver *pdriver, int stage);
+template void MHD::CalculateFluxes<MHD_RSolver::hlle>(Driver *pdriver, int stage);
+template void MHD::CalculateFluxes<MHD_RSolver::hlld>(Driver *pdriver, int stage);
+template void MHD::CalculateFluxes<MHD_RSolver::llf_sr>(Driver *pdriver, int stage);
+template void MHD::CalculateFluxes<MHD_RSolver::hlle_sr>(Driver *pdriver, int stage);
+template void MHD::CalculateFluxes<MHD_RSolver::llf_gr>(Driver *pdriver, int stage);
+template void MHD::CalculateFluxes<MHD_RSolver::hlle_gr>(Driver *pdriver, int stage);
 
 } // namespace mhd
