@@ -56,7 +56,8 @@ struct MHDTaskIDs {
   TaskID bcs;
   TaskID c2p;
   TaskID newdt;
-  TaskID clear;
+  TaskID csend;
+  TaskID crecv;
 };
 
 namespace mhd {
@@ -105,32 +106,36 @@ class MHD {
   // container to hold names of TaskIDs
   MHDTaskIDs id;
 
-  // functions
+  // functions...
   void AssembleMHDTasks(TaskList &start, TaskList &run, TaskList &end);
+  // ...in start task list
   TaskStatus InitRecv(Driver *d, int stage);
-  TaskStatus ClearRecv(Driver *d, int stage);
-  TaskStatus ClearSend(Driver *d, int stage);
+  // ...in run task list
   TaskStatus CopyCons(Driver *d, int stage);
-  TaskStatus SendU(Driver *d, int stage);
-  TaskStatus RecvU(Driver *d, int stage);
-  TaskStatus SendE(Driver *d, int stage);
-  TaskStatus RecvE(Driver *d, int stage);
-  TaskStatus SendB(Driver *d, int stage);
-  TaskStatus RecvB(Driver *d, int stage);
+  TaskStatus Fluxes(Driver *d, int stage);
   TaskStatus SendFlux(Driver *d, int stage);
   TaskStatus RecvFlux(Driver *d, int stage);
-  TaskStatus RestrictU(Driver *d, int stage);
-  TaskStatus RestrictB(Driver *d, int stage);
-  TaskStatus ConToPrim(Driver *d, int stage);
-  TaskStatus CornerE(Driver *d, int stage);
-  TaskStatus CT(Driver *d, int stage);
   TaskStatus ExpRKUpdate(Driver *d, int stage);
-  TaskStatus NewTimeStep(Driver *d, int stage);
+  TaskStatus RestrictU(Driver *d, int stage);
+  TaskStatus SendU(Driver *d, int stage);
+  TaskStatus RecvU(Driver *d, int stage);
+  TaskStatus CornerE(Driver *d, int stage);
+  TaskStatus SendE(Driver *d, int stage);
+  TaskStatus RecvE(Driver *d, int stage);
+  TaskStatus CT(Driver *d, int stage);
+  TaskStatus RestrictB(Driver *d, int stage);
+  TaskStatus SendB(Driver *d, int stage);
+  TaskStatus RecvB(Driver *d, int stage);
   TaskStatus ApplyPhysicalBCs(Driver* pdrive, int stage); // file in mhd/bvals dir
+  TaskStatus ConToPrim(Driver *d, int stage);
+  TaskStatus NewTimeStep(Driver *d, int stage);
+  // ...in end task list
+  TaskStatus ClearSend(Driver *d, int stage);
+  TaskStatus ClearRecv(Driver *d, int stage);  // also in Driver::Initialize
 
   // CalculateFluxes function templated over Riemann Solvers
   template <MHD_RSolver T>
-  TaskStatus CalcFluxes(Driver *d, int stage);
+  void CalculateFluxes(Driver *d, int stage);
 
  private:
   MeshBlockPack* pmy_pack;   // ptr to MeshBlockPack containing this MHD

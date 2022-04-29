@@ -40,37 +40,17 @@ void IonNeutral::AssembleIonNeutralTasks(TaskList &start, TaskList &run, TaskLis
   MHD *pmhd = pmy_pack->pmhd;
   Hydro *phyd = pmy_pack->phydro;
 
-  // start task list
+  // assemble start task list
   id.i_irecv = start.AddTask(&MHD::InitRecv, pmhd, none);
   id.n_irecv = start.AddTask(&Hydro::InitRecv, phyd, none);
 
-  // run task list
+  // assemble run task list
   id.impl_2x = run.AddTask(&IonNeutral::FirstTwoImpRK, this, none);
 
-  // select which calculate_flux function to add based on MHD rsolver_method
-  if (pmhd->rsolver_method == MHD_RSolver::advect) {
-    id.i_flux = run.AddTask(&MHD::CalcFluxes<MHD_RSolver::advect>,pmhd,id.impl_2x);
-  } else if (pmhd->rsolver_method == MHD_RSolver::llf) {
-    id.i_flux = run.AddTask(&MHD::CalcFluxes<MHD_RSolver::llf>,pmhd,id.impl_2x);
-  } else if (pmhd->rsolver_method == MHD_RSolver::hlle) {
-    id.i_flux = run.AddTask(&MHD::CalcFluxes<MHD_RSolver::hlle>,pmhd,id.impl_2x);
-  } else if (pmhd->rsolver_method == MHD_RSolver::hlld) {
-    id.i_flux = run.AddTask(&MHD::CalcFluxes<MHD_RSolver::hlld>,pmhd,id.impl_2x);
-  }
+  id.i_flux = run.AddTask(&MHD::Fluxes, pmhd, id.impl_2x);
   id.i_expl = run.AddTask(&MHD::ExpRKUpdate, pmhd, id.i_flux);
 
-  // select which calculate_flux function to add based on Hydro rsolver_method
-  if (phyd->rsolver_method == Hydro_RSolver::advect) {
-    id.n_flux = run.AddTask(&Hydro::CalcFluxes<Hydro_RSolver::advect>,phyd,id.i_expl);
-  } else if (phyd->rsolver_method == Hydro_RSolver::llf) {
-    id.n_flux = run.AddTask(&Hydro::CalcFluxes<Hydro_RSolver::llf>,phyd,id.i_expl);
-  } else if (phyd->rsolver_method == Hydro_RSolver::hlle) {
-    id.n_flux = run.AddTask(&Hydro::CalcFluxes<Hydro_RSolver::hlle>,phyd,id.i_expl);
-  } else if (phyd->rsolver_method == Hydro_RSolver::hllc) {
-    id.n_flux = run.AddTask(&Hydro::CalcFluxes<Hydro_RSolver::hllc>,phyd,id.i_expl);
-  } else if (phyd->rsolver_method == Hydro_RSolver::roe) {
-    id.n_flux = run.AddTask(&Hydro::CalcFluxes<Hydro_RSolver::roe>,phyd,id.i_expl);
-  }
+  id.n_flux = run.AddTask(&Hydro::Fluxes, phyd, id.i_expl);
   id.n_expl = run.AddTask(&Hydro::ExpRKUpdate, phyd, id.n_flux);
 
   id.impl = run.AddTask(&IonNeutral::ImpRKUpdate, this, id.n_expl);
@@ -92,7 +72,7 @@ void IonNeutral::AssembleIonNeutralTasks(TaskList &start, TaskList &run, TaskLis
   id.i_newdt = run.AddTask(&MHD::NewTimeStep, pmhd, id.i_c2p);
   id.n_newdt = run.AddTask(&Hydro::NewTimeStep, phyd, id.n_c2p);
 
-  // end task list
+  // assemble end task list
   id.i_clear = end.AddTask(&MHD::ClearSend, pmhd, none);
   id.n_clear = end.AddTask(&Hydro::ClearSend, phyd, none);
 
