@@ -114,7 +114,7 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
     if constexpr (rsolver_method_ == MHD_RSolver::advect) {
       Advect(member,eos,indcs,size,coord,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e31,e21);
     } else if constexpr (rsolver_method_ == MHD_RSolver::llf) {
-      LLF(member,eos,indcs,size,coord,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e31,e21);
+      LLF_MHD(member,eos,indcs,size,coord,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e31,e21);
     } else if constexpr (rsolver_method_ == MHD_RSolver::hlle) {
       HLLE(member,eos,indcs,size,coord,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e31,e21);
     } else if constexpr (rsolver_method_ == MHD_RSolver::hlld) {
@@ -217,7 +217,7 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
             Advect(member,eos,indcs,size,coord,
                     m,k,j,is-1,ie+1,IVY,wl,wr,bl,br,by,flx2,e12,e32);
           } else if constexpr (rsolver_method_ == MHD_RSolver::llf) {
-            LLF(member,eos,indcs,size,coord,
+            LLF_MHD(member,eos,indcs,size,coord,
                     m,k,j,is-1,ie+1,IVY,wl,wr,bl,br,by,flx2,e12,e32);
           } else if constexpr (rsolver_method_ == MHD_RSolver::hlle) {
             HLLE(member,eos,indcs,size,coord,
@@ -323,7 +323,7 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
             Advect(member,eos,indcs,size,coord,
                     m,k,j,is-1,ie+1,IVZ,wl,wr,bl,br,bz,flx3,e23,e13);
           } else if constexpr (rsolver_method_ == MHD_RSolver::llf) {
-            LLF(member,eos,indcs,size,coord,
+            LLF_MHD(member,eos,indcs,size,coord,
                     m,k,j,is-1,ie+1,IVZ,wl,wr,bl,br,bz,flx3,e23,e13);
           } else if constexpr (rsolver_method_ == MHD_RSolver::hlle) {
             HLLE(member,eos,indcs,size,coord,
@@ -421,7 +421,7 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
             Real bxi = b0_x1(m,k,j,i);
 
             MHDCons1D flux;
-            SingleStateLLF_GR(wim1, wi, bxi, x1f, x2v, x3v, IVX, coord, eos, flux);
+            SingleStateLLF_GRMHD(wim1, wi, bxi, x1f, x2v, x3v, IVX, coord, eos, flux);
 
             fcorr_x1(m,IDN,k,j,i) = flux.d;
             fcorr_x1(m,IM1,k,j,i) = flux.mx;
@@ -455,7 +455,7 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
             Real bxi = b0_x2(m,k,j,i);
 
             MHDCons1D flux;
-            SingleStateLLF_GR(wjm1, wj, bxi, x1v, x2f, x3v, IVY, coord, eos, flux);
+            SingleStateLLF_GRMHD(wjm1, wj, bxi, x1v, x2f, x3v, IVY, coord, eos, flux);
 
             fcorr_x2(m,IDN,k,j,i) = flux.d;
             fcorr_x2(m,IM1,k,j,i) = flux.mx;
@@ -489,7 +489,7 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
             Real bxi = b0_x3(m,k,j,i);
 
             MHDCons1D flux;
-            SingleStateLLF_GR(wkm1, wk, bxi, x1v, x2v, x3f, IVZ, coord, eos, flux);
+            SingleStateLLF_GRMHD(wkm1, wk, bxi, x1v, x2v, x3f, IVZ, coord, eos, flux);
 
             fcorr_x3(m,IDN,k,j,i) = flux.d;
             fcorr_x3(m,IM1,k,j,i) = flux.mx;
