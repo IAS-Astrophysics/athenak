@@ -6,7 +6,7 @@
 //! \file llf_srmhd.cpp
 //! \brief Local Lax-Friedrichs (LLF) Riemann solver for special relativistic MHD.
 
-#include "llf_single.hpp"
+#include "llf_mhd_singlestate.hpp"
 
 namespace mhd {
 //----------------------------------------------------------------------------------------

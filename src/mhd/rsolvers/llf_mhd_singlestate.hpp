@@ -1,16 +1,23 @@
-#ifndef MHD_RSOLVERS_LLF_SINGLE_HPP_
-#define MHD_RSOLVERS_LLF_SINGLE_HPP_
+#ifndef MHD_RSOLVERS_LLF_MHD_SINGLESTATE_HPP_
+#define MHD_RSOLVERS_LLF_MHD_SINGLESTATE_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file llf_single.hpp
-//! \brief Provides local Lax Friedrichs (LLF) Riemann solver for different physics that
-//! that operate on a single L/R state and return a single flux.
+//! \file llf_mhd_singlestate.hpp
+//! \brief various Local Lax Friedrichs (LLF) Riemann solvers, also known as Rusanov's
+//! method, for NR/SR/GR MHD. This flux is very diffusive, even more diffusive than HLLE,
+//! and so it is not recommended for use in applications.  However, it is useful for
+//! testing, or for problems where other Riemann solvers fail.
+//!
+//! Each solver in this file works on a single L/R state
+//!
+//! REFERENCES:
+//! - E.F. Toro, "Riemann Solvers and numerical methods for fluid dynamics", 2nd ed.,
+//!   Springer-Verlag, Berlin, (1999) chpt. 10.
 
 #include "coordinates/cartesian_ks.hpp"
-#include "coordinates/cell_locations.hpp"
 
 namespace mhd {
 //----------------------------------------------------------------------------------------
@@ -29,7 +36,7 @@ void SingleStateLLF_MHD(const MHDPrim1D &wl, const MHDPrim1D &wr, const Real &bx
   Real qd = 0.5*(SQR(wr.by) + SQR(wr.bz) - SQR(bxi));
 
   MHDCons1D fsum;
-  fsum.d  = qa        + qb;
+  fsum.d  = qa       + qb;
   fsum.mx = qa*wl.vx + qb*wr.vx + qc + qd;
   fsum.my = qa*wl.vy + qb*wr.vy - bxi*(wl.by + wr.by);
   fsum.mz = qa*wl.vz + qb*wr.vz - bxi*(wl.bz + wr.bz);
@@ -166,7 +173,7 @@ void SingleStateLLF_SRMHD(const MHDPrim1D &wl, const MHDPrim1D &wr, const Real &
   fr.by = b_r[2] * wr.vx - b_r[1] * wr.vy;
   fr.bz = b_r[3] * wr.vx - b_r[1] * wr.vz;
 
-  // Store results in 3D array of fluxes
+  // Compute the LLF flux at the interface
   flux.d  = 0.5 * (fl.d  + fr.d  - lambda * (consr.d  - consl.d ));
   flux.e  = 0.5 * (fl.e  + fr.e  - lambda * (consr.e  - consl.e ));
   flux.mx = 0.5 * (fl.mx + fr.mx - lambda * (consr.mx - consl.mx));
@@ -396,7 +403,7 @@ void SingleStateLLF_GRMHD(const MHDPrim1D wl, const MHDPrim1D wr, const Real bx,
     fr.mz += ptot_r;
   }
 
-  // Store results in 3D array of fluxes
+  // Compute the LLF flux at the interface
   flux.d  = 0.5 * (fl.d  + fr.d  - lambda * (consr.d  - consl.d ));
   flux.e  = 0.5 * (fl.e  + fr.e  - lambda * (consr.e  - consl.e ));
   flux.mx = 0.5 * (fl.mx + fr.mx - lambda * (consr.mx - consl.mx));
@@ -411,4 +418,4 @@ void SingleStateLLF_GRMHD(const MHDPrim1D wl, const MHDPrim1D wr, const Real bx,
 }
 
 } // namespace mhd
-#endif // MHD_RSOLVERS_LLF_SINGLE_HPP_
+#endif // MHD_RSOLVERS_LLF_MHD_SINGLESTATE_HPP_
