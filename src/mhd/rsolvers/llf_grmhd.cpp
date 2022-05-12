@@ -6,7 +6,8 @@
 //! \file llf_grmhd.cpp
 //! \brief LLF Riemann solver for general relativistic MHD.
 
-#include "llf_single.hpp"
+#include "coordinates/cell_locations.hpp"
+#include "llf_mhd_singlestate.hpp"
 
 namespace mhd {
 //----------------------------------------------------------------------------------------
@@ -21,8 +22,6 @@ void LLF_GR(TeamMember_t const &member, const EOS_Data &eos,
      const ScrArray2D<Real> &bl, const ScrArray2D<Real> &br, const DvceArray4D<Real> &bx,
      DvceArray5D<Real> flx, DvceArray4D<Real> ey, DvceArray4D<Real> ez) {
   // Cyclic permutation of array indices
-  int ivy = IVX + ((ivx-IVX)+1)%3;
-  int ivz = IVX + ((ivx-IVX)+2)%3;
   int iby = ((ivx-IVX) + 1)%3;
   int ibz = ((ivx-IVX) + 2)%3;
 

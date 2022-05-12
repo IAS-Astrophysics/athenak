@@ -332,7 +332,7 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
             wi.p  = eos.IdealGasPressure(w0_(m,IEN,k,j,i));
 
             HydCons1D flux;
-            SingleStateLLF_GR(wim1, wi, x1f, x2v, x3v, IVX, coord, eos, flux);
+            SingleStateLLF_GRHyd(wim1, wi, x1f, x2v, x3v, IVX, coord, eos, flux);
 
             fcorr_x1(m,IDN,k,j,i) = flux.d;
             fcorr_x1(m,IM1,k,j,i) = flux.mx;
@@ -359,7 +359,7 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
             wj.p  = eos.IdealGasPressure(w0_(m,IEN,k,j,i));
 
             HydCons1D flux;
-            SingleStateLLF_GR(wjm1, wj, x1v, x2f, x3v, IVY, coord, eos, flux);
+            SingleStateLLF_GRHyd(wjm1, wj, x1v, x2f, x3v, IVY, coord, eos, flux);
 
             fcorr_x2(m,IDN,k,j,i) = flux.d;
             fcorr_x2(m,IM1,k,j,i) = flux.mx;
@@ -386,7 +386,7 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
             wk.p  = eos.IdealGasPressure(w0_(m,IEN,k,j,i));
 
             HydCons1D flux;
-            SingleStateLLF_GR(wkm1, wk, x1v, x2v, x3f, IVZ, coord, eos, flux);
+            SingleStateLLF_GRHyd(wkm1, wk, x1v, x2v, x3f, IVZ, coord, eos, flux);
 
             fcorr_x3(m,IDN,k,j,i) = flux.d;
             fcorr_x3(m,IM1,k,j,i) = flux.mx;

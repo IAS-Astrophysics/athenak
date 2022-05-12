@@ -4,18 +4,9 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file llf_mhd.cpp
-//! \brief Local Lax Friedrichs (LLF) Riemann solver for non-relativistic MHD, also known
-//! as Rusanov's method. This flux is very diffusive, even more diffusive than HLLE, and
-//! so it is not recommended for use in applications. However, it is useful for testing,\///! or for problems where other Riemann solvers fail.
-//!
-//! This is just a wrapper function that loops over i, loads L/R states, and calls an
-//! inlined SingleStateLLF() function.
-//!
-//! REFERENCES:
-//! - E.F. Toro, "Riemann Solvers and numerical methods for fluid dynamics", 2nd ed.,
-//!   Springer-Verlag, Berlin, (1999) chpt. 10.
+//! \brief Local Lax Friedrichs (LLF) Riemann solver for non-relativistic MHD.
 
-#include "llf_single.hpp"
+#include "llf_mhd_singlestate.hpp"
 
 namespace mhd {
 //----------------------------------------------------------------------------------------
@@ -23,7 +14,7 @@ namespace mhd {
 //  \brief The LLF Riemann solver for MHD (both ideal gas and isothermal)
 
 KOKKOS_INLINE_FUNCTION
-void LLF_MHD(TeamMember_t const &member, const EOS_Data &eos,
+void LLF(TeamMember_t const &member, const EOS_Data &eos,
      const RegionIndcs &indcs,const DualArray1D<RegionSize> &size,const CoordData &coord,
      const int m, const int k, const int j, const int il, const int iu, const int ivx,
      const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr,
