@@ -1,40 +1,41 @@
+#ifndef RECONSTRUCT_PPM_HPP_
+#define RECONSTRUCT_PPM_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file ppm.cpp
-//  \brief piecewise parabolic reconstruction with Collela-Sekora extremum preserving
-//  limiters for a Cartesian-like coordinate with uniform spacing.
-//
-// This version does not include the extensions to the CS limiters described by
-// McCorquodale et al. and as implemented in Athena++ by K. Felker.  This is to keep the
-// code simple, because Kyle found these extensions did not improve the solution very
-// much in practice, and because they can break monotonicity.
-//
-// REFERENCES:
-// (CW) P. Colella & P. Woodward, "The Piecewise Parabolic Method (PPM) for Gas-Dynamical
-// Simulations", JCP, 54, 174 (1984)
-//
-// (CS) P. Colella & M. Sekora, "A limiter for PPM that preserves accuracy at smooth
-// extrema", JCP, 227, 7069 (2008)
-//
-// (MC) P. McCorquodale & P. Colella,  "A high-order finite-volume method for conservation
-// laws on locally refined grids", CAMCoS, 6, 1 (2011)
-//
-// (PH) L. Peterson & G.W. Hammett, "Positivity preservation and advection algorithms
-// with application to edge plasma turbulence", SIAM J. Sci. Com, 35, B576 (2013)
+//! \file ppm.hpp
+//! \brief piecewise parabolic reconstruction with Collela-Sekora extremum preserving
+//! limiters for a Cartesian-like coordinate with uniform spacing.
+//!
+//! This version does not include the extensions to the CS limiters described by
+//! McCorquodale et al. and as implemented in Athena++ by K. Felker.  This is to keep the
+//! code simple, because Kyle found these extensions did not improve the solution very
+//! much in practice, and because they can break monotonicity.
+//!
+//! REFERENCES:
+//! (CW) P. Colella & P. Woodward, "The Piecewise Parabolic Method (PPM) for Gas-Dynamical
+//! Simulations", JCP, 54, 174 (1984)
+//!
+//! (CS) P. Colella & M. Sekora, "A limiter for PPM that preserves accuracy at smooth
+//! extrema", JCP, 227, 7069 (2008)
+//!
+//! (MC) P. McCorquodale & P. Colella, "A high-order finite-volume method for conservation
+//! laws on locally refined grids", CAMCoS, 6, 1 (2011)
+//!
+//! (PH) L. Peterson & G.W. Hammett, "Positivity preservation and advection algorithms
+//! with application to edge plasma turbulence", SIAM J. Sci. Com, 35, B576 (2013)
 
 #include <math.h>
-
 #include <algorithm>    // max()
 
 #include "athena.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \fn PPM()
-//  \brief Reconstructs parabolic slope in cell i to compute ql(i+1) and qr(i). Works for
-//  reconstruction in any dimension by passing in the appropriate q_im2,...,q _ip2.
+//! \brief Reconstructs parabolic slope in cell i to compute ql(i+1) and qr(i). Works for
+//! reconstruction in any dimension by passing in the appropriate q_im2,...,q _ip2.
 
 KOKKOS_INLINE_FUNCTION
 void PPM(const Real &q_im2, const Real &q_im1, const Real &q_i, const Real &q_ip1,
@@ -137,8 +138,8 @@ void PPM(const Real &q_im2, const Real &q_im1, const Real &q_i, const Real &q_ip
 
 //----------------------------------------------------------------------------------------
 //! \fn PiecewiseParabolicX1()
-//  \brief Wrapper function for PPM reconstruction in x1-direction.
-//  This function should be called over [is-1,ie+1] to get BOTH L/R states over [is,ie]
+//! \brief Wrapper function for PPM reconstruction in x1-direction.
+//! This function should be called over [is-1,ie+1] to get BOTH L/R states over [is,ie]
 
 KOKKOS_INLINE_FUNCTION
 void PiecewiseParabolicX1(TeamMember_t const &member,const int m,const int k,const int j,
@@ -156,8 +157,8 @@ void PiecewiseParabolicX1(TeamMember_t const &member,const int m,const int k,con
 
 //----------------------------------------------------------------------------------------
 //! \fn PiecewiseParabolicX2()
-//  \brief Wrapper function for PPM reconstruction in x2-direction.
-//  This function should be called over [js-1,je+1] to get BOTH L/R states over [js,je]
+//! \brief Wrapper function for PPM reconstruction in x2-direction.
+//! This function should be called over [js-1,je+1] to get BOTH L/R states over [js,je]
 
 KOKKOS_INLINE_FUNCTION
 void PiecewiseParabolicX2(TeamMember_t const &member,const int m,const int k,const int j,
@@ -175,8 +176,8 @@ void PiecewiseParabolicX2(TeamMember_t const &member,const int m,const int k,con
 
 //----------------------------------------------------------------------------------------
 //! \fn PiecewiseParabolicX3()
-//  \brief Wrapper function for PPM reconstruction in x3-direction.
-//  This function should be called over [ks-1,ke+1] to get BOTH L/R states over [ks,ke]
+//! \brief Wrapper function for PPM reconstruction in x3-direction.
+//! This function should be called over [ks-1,ke+1] to get BOTH L/R states over [ks,ke]
 
 KOKKOS_INLINE_FUNCTION
 void PiecewiseParabolicX3(TeamMember_t const &member,const int m,const int k,const int j,
@@ -191,3 +192,4 @@ void PiecewiseParabolicX3(TeamMember_t const &member,const int m,const int k,con
   }
   return;
 }
+#endif // RECONSTRUCT_PPM_HPP_
