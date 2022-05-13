@@ -1,9 +1,11 @@
+#ifndef HYDRO_RSOLVERS_HLLC_SRHYD_HPP_
+#define HYDRO_RSOLVERS_HLLC_SRHYD_HPP_
 //========================================================================================
 // Athena++ (Kokkos version) astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file hllc_srhyd.cpp
+//! \file hllc_srhyd.hpp
 //! \brief Implements HLLC Riemann solver for special relativistic hydrodynamics.
 //!
 //! REFERENCES:
@@ -16,7 +18,6 @@
 #include <cmath>      // sqrt()
 
 namespace hydro {
-
 //----------------------------------------------------------------------------------------
 //! \fn void HLLC
 //! \brief The HLLC Riemann solver for SR hydrodynamics.  Based on HLLCTransforming()
@@ -200,5 +201,5 @@ void HLLC_SR(TeamMember_t const &member, const EOS_Data &eos,
   });
   return;
 }
-
 } // namespace hydro
+#endif // HYDRO_RSOLVERS_HLLC_SRHYD_HPP_
