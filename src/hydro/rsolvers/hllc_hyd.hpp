@@ -1,22 +1,25 @@
+#ifndef HYDRO_RSOLVERS_HLLC_HYD_HPP_
+#define HYDRO_RSOLVERS_HLLC_HYD_HPP_
+//========================================================================================
+// AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file hllc_hyd.cpp
-//  \brief HLLC Riemann solver for hydrodynamics, an extension of the HLLE fluxes to
-//  include the contact wave.  Only works for ideal gas EOS in hydrodynamics.
-//
-// REFERENCES:
-// - E.F. Toro, "Riemann Solvers and numerical methods for fluid dynamics", 2nd ed.,
-//   Springer-Verlag, Berlin, (1999) chpt. 10.
-//
-// - P. Batten, N. Clarke, C. Lambert, and D. M. Causon, "On the Choice of Wavespeeds
-//   for the HLLC Riemann Solver", SIAM J. Sci. & Stat. Comp. 18, 6, 1553-1570, (1997).
+//! \file hllc_hyd.hpp
+//! \brief The HLLC Riemann solver for hydrodynamics, an extension of the HLLE fluxes to
+//! include the contact wave.  Only works for ideal gas EOS in hydrodynamics.
+//!
+//! REFERENCES:
+//! - E.F. Toro, "Riemann Solvers and numerical methods for fluid dynamics", 2nd ed.,
+//!   Springer-Verlag, Berlin, (1999) chpt. 10.
+//!
+//! - P. Batten, N. Clarke, C. Lambert, and D. M. Causon, "On the Choice of Wavespeeds
+//!   for the HLLC Riemann Solver", SIAM J. Sci. & Stat. Comp. 18, 6, 1553-1570, (1997).
 
 #include <algorithm>  // max(), min()
 #include <cmath>      // sqrt()
 
 namespace hydro {
-
 //----------------------------------------------------------------------------------------
 //! \fn void HLLC
 //! \brief The HLLC Riemann solver for ideal gas hydrodynamics (use HLLE for isothermal)
@@ -136,5 +139,5 @@ void HLLC(TeamMember_t const &member, const EOS_Data &eos,
   });
   return;
 }
-
 } // namespace hydro
+#endif // HYDRO_RSOLVERS_HLLC_HYD_HPP_

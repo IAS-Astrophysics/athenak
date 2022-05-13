@@ -1,24 +1,26 @@
+#ifndef HYDRO_RSOLVERS_HLLE_HYD_HPP_
+#define HYDRO_RSOLVERS_HLLE_HYD_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file hlle_hyd.cpp
-//  \brief Contains HLLE Riemann solver for hydrodynamics
-//
-//  Computes fluxes using the Harten-Lax-vanLeer-Einfeldt (HLLE) Riemann solver.  This
-//  flux is very diffusive, especially for contacts, and so it is not recommended for
-//  applications. However it is better than LLF. Einfeldt et al.(1991) prove it is
-//  positively conservative (cannot return negative densities or pressure), so it is a
-//  useful option when other approximate solvers fail and/or when extra dissipation is
-//  needed.
-//
-// REFERENCES:
-// - E.F. Toro, "Riemann Solvers and numerical methods for fluid dynamics", 2nd ed.,
-//   Springer-Verlag, Berlin, (1999) chpt. 10.
-// - Einfeldt et al., "On Godunov-type methods near low densities", JCP, 92, 273 (1991)
-// - A. Harten, P. D. Lax and B. van Leer, "On upstream differencing and Godunov-type
-//   schemes for hyperbolic conservation laws", SIAM Review 25, 35-61 (1983).
+//! \file hlle_hyd.hpp
+//! \brief Contains HLLE Riemann solver for hydrodynamics
+//!
+//! Computes fluxes using the Harten-Lax-vanLeer-Einfeldt (HLLE) Riemann solver.  This
+//! flux is very diffusive, especially for contacts, and so it is not recommended for
+//! applications. However it is better than LLF. Einfeldt et al.(1991) prove it is
+//! positively conservative (cannot return negative densities or pressure), so it is a
+//! useful option when other approximate solvers fail and/or when extra dissipation is
+//! needed.
+//!
+//! REFERENCES:
+//! - E.F. Toro, "Riemann Solvers and numerical methods for fluid dynamics", 2nd ed.,
+//!   Springer-Verlag, Berlin, (1999) chpt. 10.
+//! - Einfeldt et al., "On Godunov-type methods near low densities", JCP, 92, 273 (1991)
+//! - A. Harten, P. D. Lax and B. van Leer, "On upstream differencing and Godunov-type
+//!   schemes for hyperbolic conservation laws", SIAM Review 25, 35-61 (1983).
 
 #include <algorithm>  // max(), min()
 #include <cmath>      // sqrt()
@@ -32,7 +34,7 @@ namespace hydro {
 
 //----------------------------------------------------------------------------------------
 //! \fn void HLLE
-//  \brief The HLLE Riemann solver for hydrodynamics (both ideal gas and isothermal)
+//! \brief The HLLE Riemann solver for hydrodynamics (both ideal gas and isothermal)
 
 KOKKOS_INLINE_FUNCTION
 void HLLE(TeamMember_t const &member, const EOS_Data &eos,
@@ -151,3 +153,4 @@ void HLLE(TeamMember_t const &member, const EOS_Data &eos,
 }
 
 } // namespace hydro
+#endif // HYDRO_RSOLVERS_HLLE_HYD_HPP_
