@@ -1,9 +1,11 @@
+#ifndef MHD_RSOLVERS_LLF_MHD_HPP_
+#define MHD_RSOLVERS_LLF_MHD_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file llf_mhd.cpp
+//! \file llf_mhd.hpp
 //! \brief Local Lax Friedrichs (LLF) Riemann solver for non-relativistic MHD.
 
 #include "llf_mhd_singlestate.hpp"
@@ -11,7 +13,7 @@
 namespace mhd {
 //----------------------------------------------------------------------------------------
 //! \fn void LLF
-//  \brief The LLF Riemann solver for MHD (both ideal gas and isothermal)
+//! \brief The LLF Riemann solver for MHD (both ideal gas and isothermal)
 
 KOKKOS_INLINE_FUNCTION
 void LLF(TeamMember_t const &member, const EOS_Data &eos,
@@ -67,3 +69,4 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos,
   return;
 }
 } // namespace mhd
+#endif // MHD_RSOLVERS_LLF_MHD_HPP_

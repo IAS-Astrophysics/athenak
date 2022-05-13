@@ -1,9 +1,11 @@
+#ifndef MHD_RSOLVERS_HLLE_MHD_HPP_
+#define MHD_RSOLVERS_HLLE_MHD_HPP_
 //========================================================================================
 // Athena++ astrophysical MHD code
 // Copyright(C) 2014 James M. Stone <jmstone@princeton.edu> and other code contributors
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
-//! \file hlle_mhd.cpp
+//! \file hlle_mhd.hpp
 //! \brief HLLE Riemann solver for MHD. See the hydro version for details.
 
 #include <algorithm>  // max(), min()
@@ -18,7 +20,7 @@ namespace mhd {
 
 //----------------------------------------------------------------------------------------
 //! \fn void HLLE
-//  \brief The HLLE Riemann solver for hydrodynamics (both ideal gas and isothermal)
+//! \brief The HLLE Riemann solver for hydrodynamics (both ideal gas and isothermal)
 
 KOKKOS_INLINE_FUNCTION
 void HLLE(TeamMember_t const &member, const EOS_Data &eos,
@@ -177,5 +179,5 @@ void HLLE(TeamMember_t const &member, const EOS_Data &eos,
 
   return;
 }
-
 } // namespace mhd
+#endif // MHD_RSOLVERS_HLLE_MHD_HPP_

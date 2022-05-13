@@ -1,9 +1,11 @@
+#ifndef MHD_RSOLVERS_LLF_GRMHD_HPP_
+#define MHD_RSOLVERS_LLF_GRMHD_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file llf_grmhd.cpp
+//! \file llf_grmhd.hpp
 //! \brief LLF Riemann solver for general relativistic MHD.
 
 #include "coordinates/cell_locations.hpp"
@@ -90,3 +92,4 @@ void LLF_GR(TeamMember_t const &member, const EOS_Data &eos,
   return;
 }
 } // namespace mhd
+#endif // MHD_RSOLVERS_LLF_GRMHD_HPP_
