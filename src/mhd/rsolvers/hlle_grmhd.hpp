@@ -1,11 +1,13 @@
+#ifndef MHD_RSOLVERS_HLLE_GRMHD_HPP_
+#define MHD_RSOLVERS_HLLE_GRMHD_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file hlle_grmhd.cpp
+//! \file hlle_grmhd.hpp
 //! \brief HLLE Riemann solver for general relativistic MHD.
-//
+//!
 //! Notes:
 //!  - cf. HLLE solver in hlle_mhd_rel_no_transform.cpp in Athena++
 
@@ -15,11 +17,9 @@
 #include "coordinates/cell_locations.hpp"
 
 namespace mhd {
-
 //----------------------------------------------------------------------------------------
 //! \fn void HLLE_GR
 //! \brief
-//
 
 KOKKOS_INLINE_FUNCTION
 void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos,
@@ -290,5 +290,5 @@ void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos,
 
   return;
 }
-
 } // namespace mhd
+#endif // MHD_RSOLVERS_HLLE_GRMHD_HPP_

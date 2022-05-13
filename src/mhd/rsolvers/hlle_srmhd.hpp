@@ -1,19 +1,20 @@
+#ifndef MHD_RSOLVERS_HLLE_SRMHD_HPP_
+#define MHD_RSOLVERS_HLLE_SRMHD_HPP_
 //========================================================================================
 // Athena++ (Kokkos version) astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file hlle_srmhd.cpp
+//! \file hlle_srmhd.hpp
 //! \brief HLLE Riemann solver for special relativistic MHD.
 
 #include <algorithm>  // max(), min()
 #include <cmath>      // sqrt()
 
 namespace mhd {
-
 //----------------------------------------------------------------------------------------
 //! \fn void HLLE
-//  \brief The HLLE Riemann solver for SR MHD
+//! \brief The HLLE Riemann solver for SR MHD
 
 KOKKOS_INLINE_FUNCTION
 void HLLE_SR(TeamMember_t const &member, const EOS_Data &eos,
@@ -175,5 +176,5 @@ void HLLE_SR(TeamMember_t const &member, const EOS_Data &eos,
 
   return;
 }
-
 } // namespace mhd
+#endif // MHD_RSOLVERS_HLLE_SRMHD_HPP_
