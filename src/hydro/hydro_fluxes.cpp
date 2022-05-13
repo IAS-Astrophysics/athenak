@@ -14,10 +14,10 @@
 #include "hydro.hpp"
 #include "eos/eos.hpp"
 // include inlined reconstruction methods (yuck...)
-#include "reconstruct/dc.cpp"             // NOLINT(build/include)
-#include "reconstruct/plm.cpp"            // NOLINT(build/include)
-#include "reconstruct/ppm.cpp"            // NOLINT(build/include)
-#include "reconstruct/wenoz.cpp"          // NOLINT(build/include)
+#include "reconstruct/dc.hpp"             // NOLINT(build/include)
+#include "reconstruct/plm.hpp"            // NOLINT(build/include)
+#include "reconstruct/ppm.hpp"            // NOLINT(build/include)
+#include "reconstruct/wenoz.hpp"          // NOLINT(build/include)
 // include inlined Riemann solvers (double yuck...)
 #include "hydro/rsolvers/advect_hyd.hpp"  // NOLINT(build/include)
 #include "hydro/rsolvers/llf_hyd.hpp"     // NOLINT(build/include)
