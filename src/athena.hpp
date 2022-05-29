@@ -60,18 +60,18 @@ enum TimeEvolution {tstatic, kinematic, dynamic};
 enum PhysicsModule {HydroDynamics, MagnetoHydroDynamics};
 
 // structs to store primitive/conserved variables in one-dimension
-// (density, velocity/momentum, pressure/(total energy), [transverse magnetic field])
+// (density, velocity/momentum, internal/total energy, [transverse magnetic field])
 struct HydPrim1D {
-  Real d, vx, vy, vz, p;
+  Real d, vx, vy, vz, e;
 };
 struct HydCons1D {
   Real d, mx, my, mz, e;
 };
 struct MHDPrim1D {
-  Real d, vx, vy, vz, p, by, bz;
+  Real d, vx, vy, vz, e, bx, by, bz;
 };
 struct MHDCons1D {
-  Real d, mx, my, mz, e, by, bz;
+  Real d, mx, my, mz, e, bx, by, bz;
 };
 
 //----------------------------------------------------------------------------------------

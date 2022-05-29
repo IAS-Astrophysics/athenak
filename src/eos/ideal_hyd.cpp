@@ -7,10 +7,9 @@
 //! \brief derived class that implements ideal gas EOS in nonrelativistic hydro
 
 #include "athena.hpp"
-#include "parameter_input.hpp"
-#include "mesh/mesh.hpp"
 #include "hydro/hydro.hpp"
 #include "eos/eos.hpp"
+#include "eos/ideal_hyd.hpp"
 
 //----------------------------------------------------------------------------------------
 // ctor: also calls EOS base class constructor
@@ -27,7 +26,7 @@ IdealHydro::IdealHydro(MeshBlockPack *pp, ParameterInput *pin) :
 //----------------------------------------------------------------------------------------
 //! \fn void ConsToPrim()
 //! \brief Converts conserved into primitive variables. Operates over range of cells given
-//! in argument list.
+//! in argument list. Number of times floors used stored into event counters.
 
 void IdealHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
                             const int il, const int iu, const int jl, const int ju,
@@ -35,11 +34,7 @@ void IdealHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
   int &nhyd  = pmy_pack->phydro->nhydro;
   int &nscal = pmy_pack->phydro->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
-  Real gm1 = (eos_data.gamma - 1.0);
-  Real igm1 = 1.0/(gm1);
-
-  Real &dfloor_ = eos_data.dfloor;
-  Real efloor = eos_data.pfloor/gm1;
+  auto &eos = eos_data;
 
   const int ni   = (iu - il + 1);
   const int nji  = (ju - jl + 1)*ni;
@@ -48,7 +43,7 @@ void IdealHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
 
   int nfloord_=0, nfloore_=0;
   Kokkos::parallel_reduce("hyd_c2p",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-  KOKKOS_LAMBDA(const int &idx, int &sum_d, int &sum_e) {
+  KOKKOS_LAMBDA(const int &idx, int &sumd, int &sume) {
     int m = (idx)/nkji;
     int k = (idx - m*nkji)/nji;
     int j = (idx - m*nkji - k*nji)/ni;
@@ -56,42 +51,31 @@ void IdealHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
     j += jl;
     k += kl;
 
-    Real& u_d  = cons(m,IDN,k,j,i);
-    Real& u_e  = cons(m,IEN,k,j,i);
-    const Real& u_m1 = cons(m,IM1,k,j,i);
-    const Real& u_m2 = cons(m,IM2,k,j,i);
-    const Real& u_m3 = cons(m,IM3,k,j,i);
+    // load single state conserved variables
+    HydCons1D u;
+    u.d  = cons(m,IDN,k,j,i);
+    u.mx = cons(m,IM1,k,j,i);
+    u.my = cons(m,IM2,k,j,i);
+    u.mz = cons(m,IM3,k,j,i);
+    u.e  = cons(m,IEN,k,j,i);
 
-    Real& w_d  = prim(m,IDN,k,j,i);
-    Real& w_vx = prim(m,IVX,k,j,i);
-    Real& w_vy = prim(m,IVY,k,j,i);
-    Real& w_vz = prim(m,IVZ,k,j,i);
-    Real& w_e  = prim(m,IEN,k,j,i);
+    // call c2p function
+    HydPrim1D w;
+    bool dfloor_used, efloor_used;
+    SingleC2P_IdealHyd(u, eos, w, dfloor_used, efloor_used);
+    if (dfloor_used) {sumd++;}
+    if (efloor_used) {sume++;}
 
-    // apply density floor, without changing momentum or energy
-    if (u_d < dfloor_) {
-      u_d = dfloor_;
-      sum_d++;
-    }
-    w_d = u_d;
-
-    Real di = 1.0/u_d;
-    w_vx = u_m1*di;
-    w_vy = u_m2*di;
-    w_vz = u_m3*di;
-
-    // set internal energy, apply floor, correcting total energy
-    Real e_k = 0.5*di*(u_m1*u_m1 + u_m2*u_m2 + u_m3*u_m3);
-    w_e = (u_e - e_k);
-    if (w_e < efloor) {
-      w_e = efloor;
-      u_e = efloor + e_k;
-      sum_e++;
-    }
+    // store primitive state in 3D array
+    prim(m,IDN,k,j,i) = w.d;
+    prim(m,IVX,k,j,i) = w.vx;
+    prim(m,IVY,k,j,i) = w.vy;
+    prim(m,IVZ,k,j,i) = w.vz;
+    prim(m,IEN,k,j,i) = w.e;
 
     // convert scalars (if any)
     for (int n=nhyd; n<(nhyd+nscal); ++n) {
-      prim(m,n,k,j,i) = cons(m,n,k,j,i)/u_d;
+      prim(m,n,k,j,i) = cons(m,n,k,j,i)/u.d;
     }
   }, Kokkos::Sum<int>(nfloord_), Kokkos::Sum<int>(nfloore_));
 
@@ -104,8 +88,8 @@ void IdealHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
 
 //----------------------------------------------------------------------------------------
 //! \fn void PrimToCons()
-//! \brief Converts conserved into primitive variables. Operates over range of cells given
-//! in argument list.
+//! \brief Converts primitive into conserved variables. Operates over range of cells given
+//! in argument list.  Floors never needed.
 
 void IdealHydro::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons,
                             const int il, const int iu, const int jl, const int ju,
@@ -113,31 +97,31 @@ void IdealHydro::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &co
   int &nhyd  = pmy_pack->phydro->nhydro;
   int &nscal = pmy_pack->phydro->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
-  Real igm1 = 1.0/(eos_data.gamma - 1.0);
 
-  par_for("hyd_prim2con", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
+  par_for("hyd_p2c", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
-    Real& u_d  = cons(m,IDN,k,j,i);
-    Real& u_e  = cons(m,IEN,k,j,i);
-    Real& u_m1 = cons(m,IM1,k,j,i);
-    Real& u_m2 = cons(m,IM2,k,j,i);
-    Real& u_m3 = cons(m,IM3,k,j,i);
+    // load single state primitive variables
+    HydPrim1D w;
+    w.d  = prim(m,IDN,k,j,i);
+    w.vx = prim(m,IVX,k,j,i);
+    w.vy = prim(m,IVY,k,j,i);
+    w.vz = prim(m,IVZ,k,j,i);
+    w.e  = prim(m,IEN,k,j,i);
 
-    const Real& w_d  = prim(m,IDN,k,j,i);
-    const Real& w_vx = prim(m,IVX,k,j,i);
-    const Real& w_vy = prim(m,IVY,k,j,i);
-    const Real& w_vz = prim(m,IVZ,k,j,i);
+    // call p2c function
+    HydCons1D u;
+    SingleP2C_IdealHyd(w, u);
 
-    u_d  = w_d;
-    u_m1 = w_vx*w_d;
-    u_m2 = w_vy*w_d;
-    u_m3 = w_vz*w_d;
-    const Real& w_e  = prim(m,IEN,k,j,i);
-    u_e = w_e + 0.5*w_d*(SQR(w_vx) + SQR(w_vy) + SQR(w_vz));
+    // store conserved state in 3D array
+    cons(m,IDN,k,j,i) = u.d;
+    cons(m,IM1,k,j,i) = u.mx;
+    cons(m,IM2,k,j,i) = u.my;
+    cons(m,IM3,k,j,i) = u.mz;
+    cons(m,IEN,k,j,i) = u.e;
 
     // convert scalars (if any)
     for (int n=nhyd; n<(nhyd+nscal); ++n) {
-      cons(m,n,k,j,i) = prim(m,n,k,j,i)*w_d;
+      cons(m,n,k,j,i) = u.d*prim(m,n,k,j,i);
     }
   });
 
