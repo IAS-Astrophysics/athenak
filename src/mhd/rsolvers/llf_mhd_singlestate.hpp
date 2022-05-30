@@ -27,8 +27,6 @@ namespace mhd {
 KOKKOS_INLINE_FUNCTION
 void SingleStateLLF_MHD(const MHDPrim1D &wl, const MHDPrim1D &wr, const Real &bxi,
                         const EOS_Data &eos, MHDCons1D &flux) {
-  const Real igm1 = 1.0/(eos.gamma - 1.0);
-
   // Compute sum of L/R fluxes
   Real qa = wl.d*wl.vx;
   Real qb = wr.d*wr.vx;
@@ -43,12 +41,14 @@ void SingleStateLLF_MHD(const MHDPrim1D &wl, const MHDPrim1D &wr, const Real &bx
   fsum.by = wl.by*wl.vx + wr.by*wr.vx - bxi*(wl.vy + wr.vy);
   fsum.bz = wl.bz*wl.vx + wr.bz*wr.vx - bxi*(wl.vz + wr.vz);
 
-  Real el,er;
+  Real el,er,pl,pr;
   if (eos.is_ideal) {
-    el = wl.p*igm1 + 0.5*wl.d*(SQR(wl.vx)+SQR(wl.vy)+SQR(wl.vz)) + qc + SQR(bxi);
-    er = wr.p*igm1 + 0.5*wr.d*(SQR(wr.vx)+SQR(wr.vy)+SQR(wr.vz)) + qd + SQR(bxi);
-    fsum.mx += (wl.p + wr.p);
-    fsum.e  = (el + wl.p + qc)*wl.vx + (er + wr.p + qd)*wr.vx;
+    pl = eos.IdealGasPressure(wl.e);
+    pr = eos.IdealGasPressure(wr.e);
+    el = wl.e + 0.5*wl.d*(SQR(wl.vx)+SQR(wl.vy)+SQR(wl.vz)) + qc + SQR(bxi);
+    er = wr.e + 0.5*wr.d*(SQR(wr.vx)+SQR(wr.vy)+SQR(wr.vz)) + qd + SQR(bxi);
+    fsum.mx += (pl + pr);
+    fsum.e  = (el + pl + qc)*wl.vx + (er + pr + qd)*wr.vx;
     fsum.e  -= bxi*(wl.by*wl.vy + wl.bz*wl.vz);
     fsum.e  -= bxi*(wr.by*wr.vy + wr.bz*wr.vz);
   } else {
@@ -57,8 +57,8 @@ void SingleStateLLF_MHD(const MHDPrim1D &wl, const MHDPrim1D &wr, const Real &bx
 
   // Compute max wave speed in L,R states (see Toro eq. 10.43)
   if (eos.is_ideal) {
-    qa = eos.IdealMHDFastSpeed(wl.d, wl.p, bxi, wl.by, wl.bz);
-    qb = eos.IdealMHDFastSpeed(wr.d, wr.p, bxi, wr.by, wr.bz);
+    qa = eos.IdealMHDFastSpeed(wl.d, pl, bxi, wl.by, wl.bz);
+    qb = eos.IdealMHDFastSpeed(wr.d, pr, bxi, wr.by, wr.bz);
   } else {
     qa = eos.IdealMHDFastSpeed(wl.d, bxi, wl.by, wl.bz);
     qb = eos.IdealMHDFastSpeed(wr.d, bxi, wr.by, wr.bz);
@@ -94,8 +94,6 @@ void SingleStateLLF_MHD(const MHDPrim1D &wl, const MHDPrim1D &wr, const Real &bx
 KOKKOS_INLINE_FUNCTION
 void SingleStateLLF_SRMHD(const MHDPrim1D &wl, const MHDPrim1D &wr, const Real &bxi,
                           const EOS_Data &eos, MHDCons1D &flux) {
-  const Real gamma_prime = eos.gamma/(eos.gamma - 1.0);
-
   // Calculate 4-magnetic field in left state
   Real gam_l = sqrt(1.0 + SQR(wl.vx) + SQR(wl.vy) + SQR(wl.vz));
   Real b_l[4];
@@ -115,12 +113,14 @@ void SingleStateLLF_SRMHD(const MHDPrim1D &wl, const MHDPrim1D &wr, const Real &
   Real b_sq_r = -SQR(b_r[0]) + SQR(b_r[1]) + SQR(b_r[2]) + SQR(b_r[3]);
 
   // Calculate left wavespeeds
+  Real pl = eos.IdealGasPressure(wl.e);
   Real lm_l, lp_l;
-  eos.IdealSRMHDFastSpeeds(wl.d, wl.p, wl.vx, gam_l, b_sq_l, lp_l, lm_l);
+  eos.IdealSRMHDFastSpeeds(wl.d, pl, wl.vx, gam_l, b_sq_l, lp_l, lm_l);
 
   // Calculate right wavespeeds
+  Real pr = eos.IdealGasPressure(wr.e);
   Real lm_r, lp_r;
-  eos.IdealSRMHDFastSpeeds(wr.d, wr.p, wr.vx, gam_r, b_sq_r, lp_r, lm_r);
+  eos.IdealSRMHDFastSpeeds(wr.d, pr, wr.vx, gam_r, b_sq_r, lp_r, lm_r);
 
   // Calculate extremal wavespeeds
   Real lambda_l = fmin(lm_l, lm_r);  // (MB 55)
@@ -129,9 +129,9 @@ void SingleStateLLF_SRMHD(const MHDPrim1D &wl, const MHDPrim1D &wr, const Real &
 
   // Calculate conserved quantities in L region (MUB 8)
   MHDCons1D consl;
-  Real wgas_l = wl.d + gamma_prime * wl.p;
+  Real wgas_l = wl.d + eos.gamma * wl.e;
   Real wtot_l = wgas_l + b_sq_l;
-  Real ptot_l = wl.p + 0.5*b_sq_l;
+  Real ptot_l = pl + 0.5*b_sq_l;
   consl.d  = wl.d * gam_l;
   consl.e  = wtot_l * gam_l * gam_l - b_l[0] * b_l[0] - ptot_l;
   consl.mx = wtot_l * wl.vx * gam_l - b_l[1] * b_l[0];
@@ -152,9 +152,9 @@ void SingleStateLLF_SRMHD(const MHDPrim1D &wl, const MHDPrim1D &wr, const Real &
 
   // Calculate conserved quantities in R region (MUB 8)
   MHDCons1D consr;
-  Real wgas_r = wr.d + gamma_prime * wr.p;
+  Real wgas_r = wr.d + eos.gamma * wr.e;
   Real wtot_r = wgas_r + b_sq_r;
-  Real ptot_r = wr.p + 0.5*b_sq_r;
+  Real ptot_r = pr + 0.5*b_sq_r;
   consr.d  = wr.d * gam_r;
   consr.e  = wtot_r * gam_r * gam_r - b_r[0] * b_r[0] - ptot_r;
   consr.mx = wtot_r * wr.vx * gam_r - b_r[1] * b_r[0];
@@ -200,8 +200,6 @@ void SingleStateLLF_GRMHD(const MHDPrim1D wl, const MHDPrim1D wr, const Real bx,
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
 
-  const Real gamma_prime = eos.gamma/(eos.gamma - 1.0);
-
   Real g_[NMETRIC], gi_[NMETRIC];
   ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, coord.bh_spin, g_, gi_);
   const Real
@@ -221,14 +219,14 @@ void SingleStateLLF_GRMHD(const MHDPrim1D wl, const MHDPrim1D wr, const Real bx,
   const Real &uu1_l = wl.vx;
   const Real &uu2_l = wl.vy;
   const Real &uu3_l = wl.vz;
-  const Real &pgas_l = wl.p;
+  const Real &pgas_l = eos.IdealGasPressure(wl.e);
 
   // Extract right primitives.  Note 1/2/3 always refers to x1/2/3 dirs
   const Real &rho_r  = wr.d;
   const Real &uu1_r  = wr.vx;
   const Real &uu2_r  = wr.vy;
   const Real &uu3_r  = wr.vz;
-  const Real &pgas_r = wr.p;
+  const Real &pgas_r = eos.IdealGasPressure(wr.e);
 
   // on input;
   //   bx = face-centered field in direction of slice
@@ -344,7 +342,7 @@ void SingleStateLLF_GRMHD(const MHDPrim1D wl, const MHDPrim1D wr, const Real bx,
 
   // Calculate conserved quantities in left state (rho u^0 and T^0_\mu)
   MHDCons1D consl;
-  Real wgas_l = rho_l + gamma_prime * pgas_l;
+  Real wgas_l = rho_l + eos.gamma * wl.e;
   Real wtot_l = wgas_l + b_sq_l;
   Real ptot_l = pgas_l + 0.5*b_sq_l;
   Real qa = wtot_l * ucon_l[0];
@@ -369,7 +367,7 @@ void SingleStateLLF_GRMHD(const MHDPrim1D wl, const MHDPrim1D wr, const Real bx,
 
   // Calculate conserved quantities in right state (rho u^0 and T^0_\mu)
   MHDCons1D consr;
-  Real wgas_r = rho_r + gamma_prime * pgas_r;
+  Real wgas_r = rho_r + eos.gamma * wr.e;
   Real wtot_r = wgas_r + b_sq_r;
   Real ptot_r = pgas_r + 0.5*b_sq_r;
   qa = wtot_r * ucon_r[0];

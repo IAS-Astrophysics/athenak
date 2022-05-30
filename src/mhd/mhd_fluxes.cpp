@@ -406,7 +406,7 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
             wim1.vx = w0_(m,IVX,k,j,i-1);
             wim1.vy = w0_(m,IVY,k,j,i-1);
             wim1.vz = w0_(m,IVZ,k,j,i-1);
-            wim1.p  = eos.IdealGasPressure(w0_(m,IEN,k,j,i-1));
+            wim1.e  = w0_(m,IEN,k,j,i-1);
             wim1.by = bcc(m,IBY,k,j,i-1);
             wim1.bz = bcc(m,IBZ,k,j,i-1);
 
@@ -415,7 +415,7 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
             wi.vx = w0_(m,IVX,k,j,i);
             wi.vy = w0_(m,IVY,k,j,i);
             wi.vz = w0_(m,IVZ,k,j,i);
-            wi.p  = eos.IdealGasPressure(w0_(m,IEN,k,j,i));
+            wi.e  = w0_(m,IEN,k,j,i);
             wi.by = bcc(m,IBY,k,j,i);
             wi.bz = bcc(m,IBZ,k,j,i);
             Real bxi = b0_x1(m,k,j,i);
@@ -440,7 +440,7 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
             wjm1.vx = w0_(m,IVX,k,j-1,i);
             wjm1.vy = w0_(m,IVY,k,j-1,i);
             wjm1.vz = w0_(m,IVZ,k,j-1,i);
-            wjm1.p  = eos.IdealGasPressure(w0_(m,IEN,k,j-1,i));
+            wjm1.e  = w0_(m,IEN,k,j-1,i);
             wjm1.by = bcc(m,IBZ,k,j-1,i);
             wjm1.bz = bcc(m,IBX,k,j-1,i);
 
@@ -449,7 +449,7 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
             wj.vx = w0_(m,IVX,k,j,i);
             wj.vy = w0_(m,IVY,k,j,i);
             wj.vz = w0_(m,IVZ,k,j,i);
-            wj.p  = eos.IdealGasPressure(w0_(m,IEN,k,j,i));
+            wj.e  = w0_(m,IEN,k,j,i);
             wj.by = bcc(m,IBZ,k,j,i);
             wj.bz = bcc(m,IBX,k,j,i);
             Real bxi = b0_x2(m,k,j,i);
@@ -474,7 +474,7 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
             wkm1.vx = w0_(m,IVX,k-1,j,i);
             wkm1.vy = w0_(m,IVY,k-1,j,i);
             wkm1.vz = w0_(m,IVZ,k-1,j,i);
-            wkm1.p  = eos.IdealGasPressure(w0_(m,IEN,k-1,j,i));
+            wkm1.e  = w0_(m,IEN,k-1,j,i);
             wkm1.by = bcc(m,IBX,k-1,j,i);
             wkm1.bz = bcc(m,IBY,k-1,j,i);
 
@@ -483,7 +483,7 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
             wk.vx = w0_(m,IVX,k,j,i);
             wk.vy = w0_(m,IVY,k,j,i);
             wk.vz = w0_(m,IVZ,k,j,i);
-            wk.p  = eos.IdealGasPressure(w0_(m,IEN,k,j,i));
+            wk.e  = w0_(m,IEN,k,j,i);
             wk.by = bcc(m,IBX,k,j,i);
             wk.bz = bcc(m,IBY,k,j,i);
             Real bxi = b0_x3(m,k,j,i);
