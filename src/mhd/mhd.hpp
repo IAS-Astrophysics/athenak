@@ -103,6 +103,11 @@ class MHD {
   DvceEdgeFld4D<Real> efld;   // edge-centered electric fields (fluxes of B)
   Real dtnew;
 
+  // following used for FOFC and energy-fix algorithms
+  DvceArray4D<bool> fofc;     // flag for each cell to indicate if FOFC is needed
+  bool use_fofc = false;      // flag to enable FOFC
+  bool use_energy_fix= false; // flag to enable energy fix (useful when beta << 1)
+
   // container to hold names of TaskIDs
   MHDTaskIDs id;
 
