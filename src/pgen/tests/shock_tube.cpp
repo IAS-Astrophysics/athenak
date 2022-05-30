@@ -75,13 +75,14 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
 
   // Initialize Hydro variables -------------------------------
   if (pmbp->phydro != nullptr) {
+    auto &eos = pmbp->phydro->peos->eos_data;
     // Parse left state read from input file: d,vx,vy,vz,[P]
     HydPrim1D wl,wr;
     wl.d  = pin->GetReal("problem","dl");
     wl.vx = pin->GetReal("problem","ul");
     wl.vy = pin->GetReal("problem","vl");
     wl.vz = pin->GetReal("problem","wl");
-    wl.p  = pin->GetReal("problem","pl");
+    wl.e  = (pin->GetReal("problem","pl"))/(eos.gamma - 1.0);
     // compute Lorentz factor (needed for SR/GR)
     Real u0l = 1.0;
     if (pmbp->pcoord->is_special_relativistic || pmbp->pcoord->is_general_relativistic) {
@@ -93,22 +94,11 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
     wr.vx = pin->GetReal("problem","ur");
     wr.vy = pin->GetReal("problem","vr");
     wr.vz = pin->GetReal("problem","wr");
-    wr.p  = pin->GetReal("problem","pr");
+    wr.e  = (pin->GetReal("problem","pr"))/(eos.gamma - 1.0);
     // compute Lorentz factor (needed for SR/GR)
     Real u0r = 1.0;
     if (pmbp->pcoord->is_special_relativistic || pmbp->pcoord->is_general_relativistic) {
       u0r = 1.0/sqrt( 1.0 - (SQR(wr.vx) + SQR(wr.vy) + SQR(wr.vz)) );
-    }
-
-    // set either internal energy density or temparature as primitive, depending on EOS
-    Real prim_l,prim_r;
-    auto &eos = pmbp->phydro->peos->eos_data;
-    if (eos.use_e) {
-      prim_l = wl.p/(eos.gamma - 1.0);
-      prim_r = wr.p/(eos.gamma - 1.0);
-    } else {
-      prim_l = wl.p/(wl.d);
-      prim_r = wr.p/(wr.d);
     }
 
     auto &w0 = pmbp->phydro->w0;
@@ -138,13 +128,13 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
         w0(m,ivx,k,j,i) = wl.vx*u0l;
         w0(m,ivy,k,j,i) = wl.vy*u0l;
         w0(m,ivz,k,j,i) = wl.vz*u0l;
-        w0(m,IEN,k,j,i) = prim_l;
+        w0(m,IEN,k,j,i) = wl.e;
       } else {
         w0(m,IDN,k,j,i) = wr.d;
         w0(m,ivx,k,j,i) = wr.vx*u0r;
         w0(m,ivy,k,j,i) = wr.vy*u0r;
         w0(m,ivz,k,j,i) = wr.vz*u0r;
-        w0(m,IEN,k,j,i) = prim_r;
+        w0(m,IEN,k,j,i) = wr.e;
       }
     });
 
@@ -155,13 +145,14 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
 
   // Initialize MHD variables -------------------------------
   if (pmbp->pmhd != nullptr) {
+    auto &eos = pmbp->pmhd->peos->eos_data;
     // Parse left state read from input file: d,vx,vy,vz,[P]
     MHDPrim1D wl,wr;
     wl.d  = pin->GetReal("problem","dl");
     wl.vx = pin->GetReal("problem","ul");
     wl.vy = pin->GetReal("problem","vl");
     wl.vz = pin->GetReal("problem","wl");
-    wl.p  = pin->GetReal("problem","pl");
+    wl.e  = (pin->GetReal("problem","pl"))/(eos.gamma - 1.0);
     wl.by = pin->GetReal("problem","byl");
     wl.bz = pin->GetReal("problem","bzl");
     Real bx_l = pin->GetReal("problem","bxl");
@@ -176,7 +167,7 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
     wr.vx = pin->GetReal("problem","ur");
     wr.vy = pin->GetReal("problem","vr");
     wr.vz = pin->GetReal("problem","wr");
-    wr.p  = pin->GetReal("problem","pr");
+    wr.e  = (pin->GetReal("problem","pr"))/(eos.gamma - 1.0);
     wr.by = pin->GetReal("problem","byr");
     wr.bz = pin->GetReal("problem","bzr");
     Real bx_r = pin->GetReal("problem","bxr");
@@ -184,17 +175,6 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
     Real u0r = 1.0;
     if (pmbp->pcoord->is_special_relativistic || pmbp->pcoord->is_general_relativistic) {
       u0r = 1.0/sqrt( 1.0 - (SQR(wr.vx) + SQR(wr.vy) + SQR(wr.vz)) );
-    }
-
-    // set either internal energy density or temparature as primitive, depending on EOS
-    Real prim_l,prim_r;
-    auto &eos = pmbp->pmhd->peos->eos_data;
-    if (eos.use_e) {
-      prim_l = wl.p/(eos.gamma - 1.0);
-      prim_r = wr.p/(eos.gamma - 1.0);
-    } else {
-      prim_l = wl.p/(wl.d);
-      prim_r = wr.p/(wr.d);
     }
 
     auto &w0 = pmbp->pmhd->w0;
@@ -232,7 +212,7 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
         w0(m,ivx,k,j,i) = wl.vx*u0l;
         w0(m,ivy,k,j,i) = wl.vy*u0l;
         w0(m,ivz,k,j,i) = wl.vz*u0l;
-        w0(m,IEN,k,j,i) = prim_l;
+        w0(m,IEN,k,j,i) = wl.e;
         b0.x1f(m,k,j,i) = bxl;
         b0.x2f(m,k,j,i) = byl;
         b0.x3f(m,k,j,i) = bzl;
@@ -247,7 +227,7 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
         w0(m,ivx,k,j,i) = wr.vx*u0r;
         w0(m,ivy,k,j,i) = wr.vy*u0r;
         w0(m,ivz,k,j,i) = wr.vz*u0r;
-        w0(m,IEN,k,j,i) = prim_r;
+        w0(m,IEN,k,j,i) = wr.e;
         b0.x1f(m,k,j,i) = bxr;
         b0.x2f(m,k,j,i) = byr;
         b0.x3f(m,k,j,i) = bzr;

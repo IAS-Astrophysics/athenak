@@ -322,14 +322,14 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
             wim1.vx = w0_(m,IVX,k,j,i-1);
             wim1.vy = w0_(m,IVY,k,j,i-1);
             wim1.vz = w0_(m,IVZ,k,j,i-1);
-            wim1.p  = eos.IdealGasPressure(w0_(m,IEN,k,j,i-1));
+            wim1.e  = w0_(m,IEN,k,j,i-1);
 
             HydPrim1D wi;
             wi.d  = w0_(m,IDN,k,j,i);
             wi.vx = w0_(m,IVX,k,j,i);
             wi.vy = w0_(m,IVY,k,j,i);
             wi.vz = w0_(m,IVZ,k,j,i);
-            wi.p  = eos.IdealGasPressure(w0_(m,IEN,k,j,i));
+            wi.e  = w0_(m,IEN,k,j,i);
 
             HydCons1D flux;
             SingleStateLLF_GRHyd(wim1, wi, x1f, x2v, x3v, IVX, coord, eos, flux);
@@ -349,14 +349,14 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
             wjm1.vx = w0_(m,IVX,k,j-1,i);
             wjm1.vy = w0_(m,IVY,k,j-1,i);
             wjm1.vz = w0_(m,IVZ,k,j-1,i);
-            wjm1.p  = eos.IdealGasPressure(w0_(m,IEN,k,j-1,i));
+            wjm1.e  = w0_(m,IEN,k,j-1,i);
 
             HydPrim1D wj;
             wj.d  = w0_(m,IDN,k,j,i);
             wj.vx = w0_(m,IVX,k,j,i);
             wj.vy = w0_(m,IVY,k,j,i);
             wj.vz = w0_(m,IVZ,k,j,i);
-            wj.p  = eos.IdealGasPressure(w0_(m,IEN,k,j,i));
+            wj.e  = w0_(m,IEN,k,j,i);
 
             HydCons1D flux;
             SingleStateLLF_GRHyd(wjm1, wj, x1v, x2f, x3v, IVY, coord, eos, flux);
@@ -376,14 +376,14 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
             wkm1.vx = w0_(m,IVX,k-1,j,i);
             wkm1.vy = w0_(m,IVY,k-1,j,i);
             wkm1.vz = w0_(m,IVZ,k-1,j,i);
-            wkm1.p  = eos.IdealGasPressure(w0_(m,IEN,k-1,j,i));
+            wkm1.e  = w0_(m,IEN,k-1,j,i);
 
             HydPrim1D wk;
             wk.d  = w0_(m,IDN,k,j,i);
             wk.vx = w0_(m,IVX,k,j,i);
             wk.vy = w0_(m,IVY,k,j,i);
             wk.vz = w0_(m,IVZ,k,j,i);
-            wk.p  = eos.IdealGasPressure(w0_(m,IEN,k,j,i));
+            wk.e  = w0_(m,IEN,k,j,i);
 
             HydCons1D flux;
             SingleStateLLF_GRHyd(wkm1, wk, x1v, x2v, x3f, IVZ, coord, eos, flux);

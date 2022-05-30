@@ -38,8 +38,8 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos,
     wri.vz = wr(ivz,i);
 
     if (eos.is_ideal) {
-      wli.p = eos.IdealGasPressure(wl(IEN,i));
-      wri.p = eos.IdealGasPressure(wr(IEN,i));
+      wli.e = wl(IEN,i);
+      wri.e = wr(IEN,i);
     }
 
     // Call LLF solver on single interface state

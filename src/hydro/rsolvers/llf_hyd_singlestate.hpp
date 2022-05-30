@@ -27,32 +27,32 @@ namespace hydro {
 KOKKOS_INLINE_FUNCTION
 void SingleStateLLF_Hyd(const HydPrim1D &wl, const HydPrim1D &wr, const EOS_Data &eos,
                         HydCons1D &flux) {
-  const Real igm1 = 1.0/(eos.gamma - 1.0);
-
-  // Compute sum of L/R fluxes
   Real qa = wl.d*wl.vx;
   Real qb = wr.d*wr.vx;
 
+  // Compute sum of L/R fluxes
   HydCons1D fsum;
   fsum.d  = qa        + qb;
   fsum.mx = qa*wl.vx + qb*wr.vx;
   fsum.my = qa*wl.vy + qb*wr.vy;
   fsum.mz = qa*wl.vz + qb*wr.vz;
 
-  Real el,er;
+  Real el,er,pl,pr;
   if (eos.is_ideal) {
-    el = wl.p*igm1 + 0.5*wl.d*(SQR(wl.vx) + SQR(wl.vy) + SQR(wl.vz));
-    er = wr.p*igm1 + 0.5*wr.d*(SQR(wr.vx) + SQR(wr.vy) + SQR(wr.vz));
-    fsum.mx += (wl.p + wr.p);
-    fsum.e  = (el + wl.p)*wl.vx + (er + wr.p)*wr.vx;
+    pl = eos.IdealGasPressure(wl.e);
+    pr = eos.IdealGasPressure(wr.e);
+    el = wl.e + 0.5*wl.d*(SQR(wl.vx) + SQR(wl.vy) + SQR(wl.vz));
+    er = wr.e + 0.5*wr.d*(SQR(wr.vx) + SQR(wr.vy) + SQR(wr.vz));
+    fsum.mx += (pl + pr);
+    fsum.e  = (el + pl)*wl.vx + (er + pr)*wr.vx;
   } else {
     fsum.mx += SQR(eos.iso_cs)*(wl.d + wr.d);
   }
 
   // Compute max wave speed in L,R states (see Toro eq. 10.43)
   if (eos.is_ideal) {
-    qa = eos.IdealHydroSoundSpeed(wl.d, wl.p);
-    qb = eos.IdealHydroSoundSpeed(wr.d, wr.p);
+    qa = eos.IdealHydroSoundSpeed(wl.d, pl);
+    qb = eos.IdealHydroSoundSpeed(wr.d, pr);
   } else {
     qa = eos.iso_cs;
     qb = eos.iso_cs;
@@ -84,8 +84,6 @@ void SingleStateLLF_Hyd(const HydPrim1D &wl, const HydPrim1D &wr, const EOS_Data
 KOKKOS_INLINE_FUNCTION
 void SingleStateLLF_SRHyd(const HydPrim1D &wl, const HydPrim1D &wr, const EOS_Data &eos,
                         HydCons1D &flux) {
-  const Real gamma_prime = eos.gamma/(eos.gamma - 1.0);
-
   // Recall in SR the primitive variables are (\rho, u^i, P_g), where
   //  \rho is the mass density in the comoving/fluid frame,
   //  u^i = \gamma v^i are the spatial components of the 4-velocity (v^i is the 3-vel),
@@ -94,15 +92,17 @@ void SingleStateLLF_SRHyd(const HydPrim1D &wl, const HydPrim1D &wr, const EOS_Da
   Real u0l  = sqrt(1.0 + SQR(wl.vz) + SQR(wl.vy) + SQR(wl.vx)); // Lorentz fact in L
   Real u0r  = sqrt(1.0 + SQR(wr.vz) + SQR(wr.vy) + SQR(wr.vx)); // Lorentz fact in R
   // FIXME ERM: Ideal fluid for now
-  Real wgas_l = wl.d + gamma_prime * wl.p;  // total enthalpy in L-state
-  Real wgas_r = wr.d + gamma_prime * wr.p;  // total enthalpy in R-state
+  Real wgas_l = wl.d + eos.gamma * wl.e;  // total enthalpy in L-state
+  Real wgas_r = wr.d + eos.gamma * wr.e;  // total enthalpy in R-state
 
   // Compute wave speeds in L,R states (see Toro eq. 10.43)
+  Real pl = eos.IdealGasPressure(wl.e);
   Real lp_l, lm_l;
-  eos.IdealSRHydroSoundSpeeds(wl.d, wl.p, wl.vx, u0l, lp_l, lm_l);
+  eos.IdealSRHydroSoundSpeeds(wl.d, pl, wl.vx, u0l, lp_l, lm_l);
 
+  Real pr = eos.IdealGasPressure(wr.e);
   Real lp_r, lm_r;
-  eos.IdealSRHydroSoundSpeeds(wr.d, wr.p, wr.vx, u0r, lp_r, lm_r);
+  eos.IdealSRHydroSoundSpeeds(wr.d, pr, wr.vx, u0r, lp_r, lm_r);
 
   Real qa = fmax(-fmin(lm_l,lm_r), 0.0);
   Real a = fmax(fmax(lp_l,lp_r), qa);
@@ -113,7 +113,7 @@ void SingleStateLLF_SRHyd(const HydPrim1D &wl, const HydPrim1D &wr, const EOS_Da
 
   HydCons1D fsum;
   fsum.d  = wl.d * wl.vx + wr.d * wr.vx;
-  fsum.mx = qa*wl.vx + qb*wr.vx + (wl.p + wr.p);
+  fsum.mx = qa*wl.vx + qb*wr.vx + (pl + pr);
   fsum.my = qa*wl.vy + qb*wr.vy;
   fsum.mz = qa*wl.vz + qb*wr.vz;
   fsum.e  = qa*u0l + qb*u0r;
@@ -122,8 +122,8 @@ void SingleStateLLF_SRHyd(const HydPrim1D &wl, const HydPrim1D &wr, const EOS_Da
   HydCons1D du;
   qa = wgas_r*u0r;
   qb = wgas_l*u0l;
-  Real er = qa*u0r - wr.p;
-  Real el = qb*u0l - wl.p;
+  Real er = qa*u0r - pr;
+  Real el = qb*u0l - pl;
   du.d  = a*(u0r*wr.d  - u0l*wl.d);
   du.mx = a*( qa*wr.vx -  qb*wl.vx);
   du.my = a*( qa*wr.vy -  qb*wl.vy);
@@ -151,8 +151,6 @@ KOKKOS_INLINE_FUNCTION
 void SingleStateLLF_GRHyd(const HydPrim1D wl, const HydPrim1D wr,
                        const Real x1v, const Real x2v, const Real x3v, const int ivx,
                        const CoordData &coord, const EOS_Data &eos, HydCons1D &flux) {
-  const Real gamma_prime = eos.gamma/(eos.gamma - 1.0);
-
   Real g_[NMETRIC], gi_[NMETRIC];
   ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, coord.bh_spin, g_, gi_);
   const Real
@@ -183,14 +181,14 @@ void SingleStateLLF_GRHyd(const HydPrim1D wl, const HydPrim1D wr,
   const Real &uu1_l = wl.vx;
   const Real &uu2_l = wl.vy;
   const Real &uu3_l = wl.vz;
-  const Real &pgas_l = wl.p;
+  const Real &pgas_l = eos.IdealGasPressure(wl.e);
 
   // Extract right primitives.  Note 1/2/3 always refers to x1/2/3 dirs
   const Real &rho_r  = wr.d;
   const Real &uu1_r  = wr.vx;
   const Real &uu2_r  = wr.vy;
   const Real &uu3_r  = wr.vz;
-  const Real &pgas_r = wr.p;
+  const Real &pgas_r = eos.IdealGasPressure(wr.e);
 
   // Calculate 4-velocity in left state
   Real ucon_l[4], ucov_l[4];
@@ -237,7 +235,7 @@ void SingleStateLLF_GRHyd(const HydPrim1D wl, const HydPrim1D wr,
 
   // Calculate conserved quantities in left state (rho u^0 and T^0_\mu)
   HydCons1D consl;
-  Real wgas_l = rho_l + gamma_prime * pgas_l;
+  Real wgas_l = rho_l + eos.gamma * wl.e;
   Real qa = wgas_l * ucon_l[0];
   consl.d  = rho_l * ucon_l[0];
   consl.e  = qa * ucov_l[0] + pgas_l;
@@ -256,7 +254,7 @@ void SingleStateLLF_GRHyd(const HydPrim1D wl, const HydPrim1D wr,
 
   // Calculate conserved quantities in right state (rho u^0 and T^0_\mu)
   HydCons1D consr;
-  Real wgas_r = rho_r + gamma_prime * pgas_r;
+  Real wgas_r = rho_r + eos.gamma * wr.e;
   qa = wgas_r * ucon_r[0];
   consr.d  = rho_r * ucon_r[0];
   consr.e  = qa * ucov_r[0] + pgas_r;
