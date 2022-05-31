@@ -29,12 +29,14 @@ IdealHydro::IdealHydro(MeshBlockPack *pp, ParameterInput *pin) :
 //! in argument list. Number of times floors used stored into event counters.
 
 void IdealHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
+                            const bool only_testfloors,
                             const int il, const int iu, const int jl, const int ju,
                             const int kl, const int ku) {
   int &nhyd  = pmy_pack->phydro->nhydro;
   int &nscal = pmy_pack->phydro->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
   auto &eos = eos_data;
+  auto &fofc_ = pmy_pack->phydro->fofc;
 
   const int ni   = (iu - il + 1);
   const int nji  = (ju - jl + 1)*ni;
@@ -61,27 +63,36 @@ void IdealHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
 
     // call c2p function
     HydPrim1D w;
-    bool dfloor_used, efloor_used;
+    bool dfloor_used = false, efloor_used = false;
     SingleC2P_IdealHyd(u, eos, w, dfloor_used, efloor_used);
     if (dfloor_used) {sumd++;}
     if (efloor_used) {sume++;}
 
-    // store primitive state in 3D array
-    prim(m,IDN,k,j,i) = w.d;
-    prim(m,IVX,k,j,i) = w.vx;
-    prim(m,IVY,k,j,i) = w.vy;
-    prim(m,IVZ,k,j,i) = w.vz;
-    prim(m,IEN,k,j,i) = w.e;
-
-    // convert scalars (if any)
-    for (int n=nhyd; n<(nhyd+nscal); ++n) {
-      prim(m,n,k,j,i) = cons(m,n,k,j,i)/u.d;
+    // set FOFC flag and quit loop if this function called only to check floors
+    if (only_testfloors) {
+      if (dfloor_used || efloor_used) {fofc_(m,k,j,i) = true;}
+    } else {
+      // store primitive state in 3D array
+      prim(m,IDN,k,j,i) = w.d;
+      prim(m,IVX,k,j,i) = w.vx;
+      prim(m,IVY,k,j,i) = w.vy;
+      prim(m,IVZ,k,j,i) = w.vz;
+      prim(m,IEN,k,j,i) = w.e;
+      // convert scalars (if any)
+      for (int n=nhyd; n<(nhyd+nscal); ++n) {
+        prim(m,n,k,j,i) = cons(m,n,k,j,i)/u.d;
+      }
     }
   }, Kokkos::Sum<int>(nfloord_), Kokkos::Sum<int>(nfloore_));
 
-  // store counters
-  pmy_pack->pmesh->ecounter.neos_dfloor += nfloord_;
-  pmy_pack->pmesh->ecounter.neos_efloor += nfloore_;
+  // store appropriate counters
+  if (only_testfloors) {
+    pmy_pack->pmesh->ecounter.fofc_dfloor += nfloord_;
+    pmy_pack->pmesh->ecounter.fofc_efloor += nfloore_;
+  } else {
+    pmy_pack->pmesh->ecounter.neos_dfloor += nfloord_;
+    pmy_pack->pmesh->ecounter.neos_efloor += nfloore_;
+  }
 
   return;
 }

@@ -614,8 +614,8 @@ void FixedBondiInflow(Mesh *pm) {
   auto u0_ = pm->pmb_pack->phydro->u0;
   auto w0_ = pm->pmb_pack->phydro->w0;
 
-  pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,is-ng,is-1,0,(n2-1),0,(n3-1));
-  pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,ie+1,ie+ng,0,(n2-1),0,(n3-1));
+  pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,false,is-ng,is-1,0,(n2-1),0,(n3-1));
+  pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,false,ie+1,ie+ng,0,(n2-1),0,(n3-1));
   par_for("fixed_x1", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),0,(ng-1),
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     // inner x1 boundary
@@ -657,8 +657,8 @@ void FixedBondiInflow(Mesh *pm) {
   pm->pmb_pack->phydro->peos->PrimToCons(w0_,u0_,is-ng,is-1,0,(n2-1),0,(n3-1));
   pm->pmb_pack->phydro->peos->PrimToCons(w0_,u0_,ie+1,ie+ng,0,(n2-1),0,(n3-1));
 
-  pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,0,(n1-1),js-ng,js-1,0,(n3-1));
-  pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,0,(n1-1),je+1,je+ng,0,(n3-1));
+  pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,false,0,(n1-1),js-ng,js-1,0,(n3-1));
+  pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,false,0,(n1-1),je+1,je+ng,0,(n3-1));
   par_for("fixed_x2", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(ng-1),0,(n1-1),
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     // inner x2 boundary
@@ -699,8 +699,8 @@ void FixedBondiInflow(Mesh *pm) {
   pm->pmb_pack->phydro->peos->PrimToCons(w0_,u0_,0,(n1-1),js-ng,js-1,0,(n3-1));
   pm->pmb_pack->phydro->peos->PrimToCons(w0_,u0_,0,(n1-1),je+1,je+ng,0,(n3-1));
 
-  pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,0,(n1-1),0,(n2-1),ks-ng,ks-1);
-  pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,0,(n1-1),0,(n2-1),ke+1,ke+ng);
+  pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,false,0,(n1-1),0,(n2-1),ks-ng,ks-1);
+  pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,false,0,(n1-1),0,(n2-1),ke+1,ke+ng);
   par_for("fixed_ix3", DevExeSpace(),0,(nmb-1),0,(ng-1),0,(n2-1),0,(n1-1),
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     // inner x3 boundary
