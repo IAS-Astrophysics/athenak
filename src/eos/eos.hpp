@@ -202,6 +202,7 @@ class EquationOfState {
   // virtual functions to convert cons to prim in either Hydro or MHD (depending on
   // arguments), overwritten in derived eos classes
   virtual void ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
+                          const bool only_testfloors,
                           const int il, const int iu, const int jl, const int ju,
                           const int kl, const int ku);
   virtual void ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
@@ -231,6 +232,7 @@ class IsothermalHydro : public EquationOfState {
 
   IsothermalHydro(MeshBlockPack *pp, ParameterInput *pin);
   void ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
+                  const bool only_testfloors,
                   const int il, const int iu, const int jl, const int ju,
                   const int kl, const int ku) override;
   void PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons,
@@ -250,6 +252,7 @@ class IdealHydro : public EquationOfState {
 
   IdealHydro(MeshBlockPack *pp, ParameterInput *pin);
   void ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
+                  const bool only_testfloors,
                   const int il, const int iu, const int jl, const int ju,
                   const int kl, const int ku) override;
   void PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons,
@@ -269,6 +272,7 @@ class IdealSRHydro : public EquationOfState {
 
   IdealSRHydro(MeshBlockPack *pp, ParameterInput *pin);
   void ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
+                  const bool only_testfloors,
                   const int il, const int iu, const int jl, const int ju,
                   const int kl, const int ku) override;
   void PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons,
@@ -288,6 +292,7 @@ class IdealGRHydro : public EquationOfState {
 
   IdealGRHydro(MeshBlockPack *pp, ParameterInput *pin);
   void ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
+                  const bool only_testfloors,
                   const int il, const int iu, const int jl, const int ju,
                   const int kl, const int ku) override;
   void PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons,

@@ -50,11 +50,13 @@ IdealSRHydro::IdealSRHydro(MeshBlockPack *pp, ParameterInput *pin) :
 //! This function operates over range of cells given in argument list.
 
 void IdealSRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
+                              const bool only_testfloors,
                               const int il, const int iu, const int jl, const int ju,
                               const int kl, const int ku) {
   int &nhyd  = pmy_pack->phydro->nhydro;
   int &nscal = pmy_pack->phydro->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
+  auto &fofc_ = pmy_pack->phydro->fofc;
   auto eos = eos_data;
 
   const int ni   = (iu - il + 1);
@@ -85,40 +87,48 @@ void IdealSRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
 
     // call c2p function
     HydPrim1D w;
-    bool dfloor_used, efloor_used;
+    bool dfloor_used = false, efloor_used = false;
     int iter_used;
     SingleC2P_IdealSRHyd(u, eos, s2, w, dfloor_used, efloor_used, iter_used);
     if (dfloor_used) {sumd++;}
     if (efloor_used) {sume++;}
     max_it = fmax(max_it, iter_used);
 
-    // store primitive state in 3D array
-    prim(m,IDN,k,j,i) = w.d;
-    prim(m,IVX,k,j,i) = w.vx;
-    prim(m,IVY,k,j,i) = w.vy;
-    prim(m,IVZ,k,j,i) = w.vz;
-    prim(m,IEN,k,j,i) = w.e;
-
-    // reset conserved variables if floor is hit
-    if (dfloor_used || efloor_used) {
-      SingleP2C_IdealSRHyd(w, eos.gamma, u);
-      cons(m,IDN,k,j,i) = u.d;
-      cons(m,IM1,k,j,i) = u.mx;
-      cons(m,IM2,k,j,i) = u.my;
-      cons(m,IM3,k,j,i) = u.mz;
-      cons(m,IEN,k,j,i) = u.e;
-    }
-
-    // convert scalars (if any)
-    for (int n=nhyd; n<(nhyd+nscal); ++n) {
-      prim(m,n,k,j,i) = cons(m,n,k,j,i)/u.d;
+    // set FOFC flag and quit loop if this function called only to check floors
+    if (only_testfloors) {
+      if (dfloor_used || efloor_used) {fofc_(m,k,j,i) = true;}
+    } else {
+      // store primitive state in 3D array
+      prim(m,IDN,k,j,i) = w.d;
+      prim(m,IVX,k,j,i) = w.vx;
+      prim(m,IVY,k,j,i) = w.vy;
+      prim(m,IVZ,k,j,i) = w.vz;
+      prim(m,IEN,k,j,i) = w.e;
+      // reset conserved variables if floor is hit
+      if (dfloor_used || efloor_used) {
+        SingleP2C_IdealSRHyd(w, eos.gamma, u);
+        cons(m,IDN,k,j,i) = u.d;
+        cons(m,IM1,k,j,i) = u.mx;
+        cons(m,IM2,k,j,i) = u.my;
+        cons(m,IM3,k,j,i) = u.mz;
+        cons(m,IEN,k,j,i) = u.e;
+      }
+      // convert scalars (if any)
+      for (int n=nhyd; n<(nhyd+nscal); ++n) {
+        prim(m,n,k,j,i) = cons(m,n,k,j,i)/u.d;
+      }
     }
   }, Kokkos::Sum<int>(nfloord_), Kokkos::Sum<int>(nfloore_), Kokkos::Max<int>(maxit_));
 
-  // store counters
-  pmy_pack->pmesh->ecounter.neos_dfloor += nfloord_;
-  pmy_pack->pmesh->ecounter.neos_efloor += nfloore_;
-  pmy_pack->pmesh->ecounter.maxit_c2p = maxit_;
+  // store appropriate counters
+  if (only_testfloors) {
+    pmy_pack->pmesh->ecounter.fofc_dfloor += nfloord_;
+    pmy_pack->pmesh->ecounter.fofc_efloor += nfloore_;
+  } else {
+    pmy_pack->pmesh->ecounter.neos_dfloor += nfloord_;
+    pmy_pack->pmesh->ecounter.neos_efloor += nfloore_;
+    pmy_pack->pmesh->ecounter.maxit_c2p = maxit_;
+  }
 
   return;
 }
