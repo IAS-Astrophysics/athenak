@@ -87,7 +87,7 @@ void IdealSRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
 
     // call c2p function
     HydPrim1D w;
-    bool dfloor_used = false, efloor_used = false;
+    bool dfloor_used=false, efloor_used=false;
     int iter_used;
     SingleC2P_IdealSRHyd(u, eos, s2, w, dfloor_used, efloor_used, iter_used);
     if (dfloor_used) {sumd++;}

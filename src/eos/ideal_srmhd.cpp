@@ -49,12 +49,14 @@ IdealSRMHD::IdealSRMHD(MeshBlockPack *pp, ParameterInput *pin) :
 
 void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
                             DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc,
+                            const bool only_testfloors,
                             const int il, const int iu, const int jl, const int ju,
                             const int kl, const int ku) {
   int &nmhd  = pmy_pack->pmhd->nmhd;
   int &nscal = pmy_pack->pmhd->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
   auto eos = eos_data;
+  auto &fofc_ = pmy_pack->pmhd->fofc;
 
   const int ni   = (iu - il + 1);
   const int nji  = (ju - jl + 1)*ni;
@@ -93,57 +95,67 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
 
     // call c2p function
     HydPrim1D w;
-    bool dfloor_used, efloor_used;
+    bool dfloor_used=false, efloor_used=false;
     int iter_used;
     SingleC2P_IdealSRMHD(u, eos, s2, b2, rpar, w, dfloor_used, efloor_used, iter_used);
     if (dfloor_used) {sumd++;}
     if (efloor_used) {sume++;}
     max_it = fmax(max_it, iter_used);
 
-    // store primitive state in 3D array
-    prim(m,IDN,k,j,i) = w.d;
-    prim(m,IVX,k,j,i) = w.vx;
-    prim(m,IVY,k,j,i) = w.vy;
-    prim(m,IVZ,k,j,i) = w.vz;
-    prim(m,IEN,k,j,i) = w.e;
+    // set FOFC flag and quit loop if this function called only to check floors
+    if (only_testfloors) {
+      if (dfloor_used || efloor_used) {fofc_(m,k,j,i) = true;}
+    } else {
+      // store primitive state in 3D array
+      prim(m,IDN,k,j,i) = w.d;
+      prim(m,IVX,k,j,i) = w.vx;
+      prim(m,IVY,k,j,i) = w.vy;
+      prim(m,IVZ,k,j,i) = w.vz;
+      prim(m,IEN,k,j,i) = w.e;
 
-    // store cell-centered fields in 3D array
-    bcc(m,IBX,k,j,i) = u.bx;
-    bcc(m,IBY,k,j,i) = u.by;
-    bcc(m,IBZ,k,j,i) = u.bz;
+      // store cell-centered fields in 3D array
+      bcc(m,IBX,k,j,i) = u.bx;
+      bcc(m,IBY,k,j,i) = u.by;
+      bcc(m,IBZ,k,j,i) = u.bz;
 
-    // reset conserved variables if floor is hit
-    if (dfloor_used || efloor_used) {
-      MHDPrim1D w_in;
-      w_in.d  = w.d;
-      w_in.vx = w.vx;
-      w_in.vy = w.vy;
-      w_in.vz = w.vz;
-      w_in.e  = w.e;
-      w_in.bx = u.bx;
-      w_in.by = u.by;
-      w_in.bz = u.bz;
+      // reset conserved variables if floor is hit
+      if (dfloor_used || efloor_used) {
+        MHDPrim1D w_in;
+        w_in.d  = w.d;
+        w_in.vx = w.vx;
+        w_in.vy = w.vy;
+        w_in.vz = w.vz;
+        w_in.e  = w.e;
+        w_in.bx = u.bx;
+        w_in.by = u.by;
+        w_in.bz = u.bz;
 
-      HydCons1D u_out;
-      SingleP2C_IdealSRMHD(w_in, eos.gamma, u_out);
-      cons(m,IDN,k,j,i) = u_out.d;
-      cons(m,IM1,k,j,i) = u_out.mx;
-      cons(m,IM2,k,j,i) = u_out.my;
-      cons(m,IM3,k,j,i) = u_out.mz;
-      cons(m,IEN,k,j,i) = u_out.e;
-      u.d = u_out.d;  // (needed if there are scalars below)
-    }
+        HydCons1D u_out;
+        SingleP2C_IdealSRMHD(w_in, eos.gamma, u_out);
+        cons(m,IDN,k,j,i) = u_out.d;
+        cons(m,IM1,k,j,i) = u_out.mx;
+        cons(m,IM2,k,j,i) = u_out.my;
+        cons(m,IM3,k,j,i) = u_out.mz;
+        cons(m,IEN,k,j,i) = u_out.e;
+        u.d = u_out.d;  // (needed if there are scalars below)
+      }
 
-    // convert scalars (if any)
-    for (int n=nmhd; n<(nmhd+nscal); ++n) {
-      prim(m,n,k,j,i) = cons(m,n,k,j,i)/u.d;
+      // convert scalars (if any)
+      for (int n=nmhd; n<(nmhd+nscal); ++n) {
+        prim(m,n,k,j,i) = cons(m,n,k,j,i)/u.d;
+      }
     }
   }, Kokkos::Sum<int>(nfloord_), Kokkos::Sum<int>(nfloore_), Kokkos::Max<int>(maxit_));
 
-  // store counters
-  pmy_pack->pmesh->ecounter.neos_dfloor += nfloord_;
-  pmy_pack->pmesh->ecounter.neos_efloor += nfloore_;
-  pmy_pack->pmesh->ecounter.maxit_c2p = maxit_;
+  // store appropriate counters
+  if (only_testfloors) {
+    pmy_pack->pmesh->ecounter.fofc_dfloor += nfloord_;
+    pmy_pack->pmesh->ecounter.fofc_efloor += nfloore_;
+  } else {
+    pmy_pack->pmesh->ecounter.neos_dfloor += nfloord_;
+    pmy_pack->pmesh->ecounter.neos_efloor += nfloore_;
+    pmy_pack->pmesh->ecounter.maxit_c2p = maxit_;
+  }
 
   return;
 }
