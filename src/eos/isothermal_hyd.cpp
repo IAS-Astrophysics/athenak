@@ -32,19 +32,17 @@ IsothermalHydro::IsothermalHydro(MeshBlockPack *pp, ParameterInput *pin) :
 KOKKOS_INLINE_FUNCTION
 void SingleC2P_IsothermalHyd(HydCons1D &u, const Real &dfloor_,
                              HydPrim1D &w, bool &dfloor_used) {
-  // apply density floor, without changing momentum or energy
+  // apply density floor, without changing momentum
   if (u.d < dfloor_) {
     u.d = dfloor_;
     dfloor_used = true;
   }
   w.d = u.d;
-
   // compute velocities
   Real di = 1.0/u.d;
   w.vx = di*u.mx;
   w.vy = di*u.my;
   w.vz = di*u.mz;
-
   return;
 }
 
@@ -82,7 +80,7 @@ void IsothermalHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &pri
   const int nkji = (ku - kl + 1)*nji;
   const int nmkji = nmb*nkji;
 
-  int nfloord_=0, nfloore_=0;
+  int nfloord_=0;
   Kokkos::parallel_reduce("isohyd_c2p",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
   KOKKOS_LAMBDA(const int &idx, int &sumd) {
     int m = (idx)/nkji;
@@ -116,7 +114,7 @@ void IsothermalHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &pri
       prim(m,IVZ,k,j,i) = w.vz;
       // convert scalars (if any)
       for (int n=nhyd; n<(nhyd+nscal); ++n) {
-        cons(m,n,k,j,i) = u.d*prim(m,n,k,j,i);
+        prim(m,n,k,j,i) = cons(m,n,k,j,i)/u.d;
       }
     }
   }, Kokkos::Sum<int>(nfloord_));
