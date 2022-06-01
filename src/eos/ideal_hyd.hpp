@@ -207,29 +207,24 @@ void SingleP2C_IdealSRHyd(const HydPrim1D &w, const Real gam, HydCons1D &u) {
 //! \brief Converts single set of primitive into conserved variables.
 
 KOKKOS_INLINE_FUNCTION
-void SingleP2C_IdealGRHyd(const Real g_[], const Real gi_[],
+void SingleP2C_IdealGRHyd(const Real glower[][4], const Real gupper[][4],
                           const HydPrim1D &w, const Real &gam, HydCons1D &u) {
-  const Real
-    &g_00 = g_[I00], &g_01 = g_[I01], &g_02 = g_[I02], &g_03 = g_[I03],
-    &g_10 = g_[I01], &g_11 = g_[I11], &g_12 = g_[I12], &g_13 = g_[I13],
-    &g_20 = g_[I02], &g_21 = g_[I12], &g_22 = g_[I22], &g_23 = g_[I23],
-    &g_30 = g_[I03], &g_31 = g_[I13], &g_32 = g_[I23], &g_33 = g_[I33];
+  // Calculate 4-velocity (exploiting symmetry of metric)
+  Real q = glower[1][1]*w.vx*w.vx +2.0*glower[1][2]*w.vx*w.vy +2.0*glower[1][3]*w.vx*w.vz
+         + glower[2][2]*w.vy*w.vy +2.0*glower[2][3]*w.vy*w.vz
+         + glower[3][3]*w.vz*w.vz;
+  Real alpha = sqrt(-1.0/gupper[0][0]);
+  Real gamma = sqrt(1.0 + q);
+  Real u0 = gamma / alpha;
+  Real u1 = w.vx - alpha * gamma * gupper[0][1];
+  Real u2 = w.vy - alpha * gamma * gupper[0][2];
+  Real u3 = w.vz - alpha * gamma * gupper[0][3];
 
-  // Calculate 4-velocity
-  Real alpha = sqrt(-1.0/gi_[I00]);
-  Real tmp = g_[I11]*w.vx*w.vx + 2.0*g_[I12]*w.vx*w.vy + 2.0*g_[I13]*w.vx*w.vz
-           + g_[I22]*w.vy*w.vy + 2.0*g_[I23]*w.vy*w.vz
-           + g_[I33]*w.vz*w.vz;
-  Real gg = sqrt(1.0 + tmp);
-  Real u0 = gg/alpha;
-  Real u1 = w.vx - alpha * gg * gi_[I01];
-  Real u2 = w.vy - alpha * gg * gi_[I02];
-  Real u3 = w.vz - alpha * gg * gi_[I03];
   // lower vector indices
-  Real u_0 = g_00*u0 + g_01*u1 + g_02*u2 + g_03*u3;
-  Real u_1 = g_10*u0 + g_11*u1 + g_12*u2 + g_13*u3;
-  Real u_2 = g_20*u0 + g_21*u1 + g_22*u2 + g_23*u3;
-  Real u_3 = g_30*u0 + g_31*u1 + g_32*u2 + g_33*u3;
+  Real u_0 = glower[0][0]*u0 + glower[0][1]*u1 + glower[0][2]*u2 + glower[0][3]*u3;
+  Real u_1 = glower[1][0]*u0 + glower[1][1]*u1 + glower[1][2]*u2 + glower[1][3]*u3;
+  Real u_2 = glower[2][0]*u0 + glower[2][1]*u1 + glower[2][2]*u2 + glower[2][3]*u3;
+  Real u_3 = glower[3][0]*u0 + glower[3][1]*u1 + glower[3][2]*u2 + glower[3][3]*u3;
   Real wgas_u0 = (w.d + gam * w.e) * u0;
 
   // set conserved quantities

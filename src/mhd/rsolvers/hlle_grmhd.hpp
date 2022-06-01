@@ -31,14 +31,41 @@ void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos,
   // Cyclic permutation of array indices corresponding to velocity/b_field components
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
+  int iby = ((ivx-IVX) + 1)%3;
+  int ibz = ((ivx-IVX) + 2)%3;
 
   const Real gm1 = (eos.gamma - 1.0);
   const Real gamma_prime = eos.gamma/(gm1);
+  auto &flat = coord.is_minkowski;
+  auto &spin = coord.bh_spin;
 
   int is = indcs.is;
   int js = indcs.js;
   int ks = indcs.ks;
   par_for_inner(member, il, iu, [&](const int i) {
+    // References to left primitives
+    Real &wl_idn=wl(IDN,i);
+    Real &wl_ivx=wl(ivx,i);
+    Real &wl_ivy=wl(ivy,i);
+    Real &wl_ivz=wl(ivz,i);
+    Real &wl_iby=bl(iby,i);
+    Real &wl_ibz=bl(ibz,i);
+
+    // References to right primitives
+    Real &wr_idn=wr(IDN,i);
+    Real &wr_ivx=wr(ivx,i);
+    Real &wr_ivy=wr(ivy,i);
+    Real &wr_ivz=wr(ivz,i);
+    Real &wr_iby=br(iby,i);
+    Real &wr_ibz=br(ibz,i);
+
+    Real wl_ipr, wr_ipr;
+    wl_ipr = eos.IdealGasPressure(wl(IEN,i));
+    wr_ipr = eos.IdealGasPressure(wr(IEN,i));
+
+    // reference to longitudinal field
+    Real &bxi = bx(m,k,j,i);
+
     // Extract components of metric
     Real &x1min = size.d_view(m).x1min;
     Real &x1max = size.d_view(m).x1max;
@@ -60,229 +87,192 @@ void HLLE_GR(TeamMember_t const &member, const EOS_Data &eos,
       x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
       x3v = LeftEdgeX  (k-ks, indcs.nx3, x3min, x3max);
     }
+    Real glower[4][4], gupper[4][4];
+    ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, glower, gupper);
 
-    Real g_[NMETRIC], gi_[NMETRIC];
-    ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, coord.bh_spin, g_, gi_);
-    const Real
-      &g_00 = g_[I00], &g_01 = g_[I01], &g_02 = g_[I02], &g_03 = g_[I03],
-      &g_10 = g_[I01], &g_11 = g_[I11], &g_12 = g_[I12], &g_13 = g_[I13],
-      &g_20 = g_[I02], &g_21 = g_[I12], &g_22 = g_[I22], &g_23 = g_[I23],
-      &g_30 = g_[I03], &g_31 = g_[I13], &g_32 = g_[I23], &g_33 = g_[I33];
-    const Real
-      &g00 = gi_[I00], &g01 = gi_[I01], &g02 = gi_[I02], &g03 = gi_[I03],
-                       &g11 = gi_[I11],
-                                        &g22 = gi_[I22],
-                                                         &g33 = gi_[I33];
-    Real alpha = sqrt(-1.0/g00);
+    // Calculate 4-velocity in left state (contravariant compt)
+    Real q = glower[ivx][ivx] * SQR(wl_ivx) + glower[ivy][ivy] * SQR(wl_ivy) +
+             glower[ivz][ivz] * SQR(wl_ivz) + 2.0*glower[ivx][ivy] * wl_ivx * wl_ivy +
+         2.0*glower[ivx][ivz] * wl_ivx * wl_ivz + 2.0*glower[ivy][ivz] * wl_ivy * wl_ivz;
 
-    // Extract left primitives.  Note 1/2/3 always refers to x1/2/3 dirs
-    const Real &rho_l = wl(IDN,i);
-    const Real &uu1_l = wl(IVX,i);
-    const Real &uu2_l = wl(IVY,i);
-    const Real &uu3_l = wl(IVZ,i);
+    Real alpha = std::sqrt(-1.0/gupper[0][0]);
+    Real gamma = sqrt(1.0 + q);
+    Real uul[4];
+    uul[0] = gamma / alpha;
+    uul[ivx] = wl_ivx - alpha * gamma * gupper[0][ivx];
+    uul[ivy] = wl_ivy - alpha * gamma * gupper[0][ivy];
+    uul[ivz] = wl_ivz - alpha * gamma * gupper[0][ivz];
 
-    // Extract right primitives.  Note 1/2/3 always refers to x1/2/3 dirs
-    const Real &rho_r  = wr(IDN,i);
-    const Real &uu1_r  = wr(IVX,i);
-    const Real &uu2_r  = wr(IVY,i);
-    const Real &uu3_r  = wr(IVZ,i);
+    // lower vector indices (covariant compt)
+    Real ull[4];
+    ull[0]   = glower[0][0]  *uul[0]   + glower[0][ivx]*uul[ivx] +
+               glower[0][ivy]*uul[ivy] + glower[0][ivz]*uul[ivz];
 
-    Real pgas_l, pgas_r;
-    pgas_l = eos.IdealGasPressure(wl(IEN,i));
-    pgas_r = eos.IdealGasPressure(wr(IEN,i));
+    ull[ivx] = glower[ivx][0]  *uul[0]   + glower[ivx][ivx]*uul[ivx] +
+               glower[ivx][ivy]*uul[ivy] + glower[ivx][ivz]*uul[ivz];
 
-    // on input;
-    //   bx = face-centered field in direction of slice
-    //   bl/r contain bcc1, bcc2, bcc3 in IBX/IBY/IBZ components
-    // extract magnetic field and metric components according to direction of slice
-    Real gii, g0i;
-    Real bb1_l, bb2_l, bb3_l, bb1_r, bb2_r, bb3_r;
-    if (ivx == IVX) {
-      gii = g11;
-      g0i = g01;
-      bb1_r = bx(m,k,j,i);
-      bb2_r = br(IBY,i);
-      bb3_r = br(IBZ,i);
-      bb1_l = bx(m,k,j,i);
-      bb2_l = bl(IBY,i);
-      bb3_l = bl(IBZ,i);
-    } else if (ivx == IVY) {
-      gii = g22;
-      g0i = g02;
-      bb1_l = bl(IBX,i);
-      bb2_l = bx(m,k,j,i);
-      bb3_l = bl(IBZ,i);
-      bb1_r = br(IBX,i);
-      bb2_r = bx(m,k,j,i);
-      bb3_r = br(IBZ,i);
-    } else {
-      gii = g33;
-      g0i = g03;
-      bb1_l = bl(IBX,i);
-      bb2_l = bl(IBY,i);
-      bb3_l = bx(m,k,j,i);
-      bb1_r = br(IBX,i);
-      bb2_r = br(IBY,i);
-      bb3_r = bx(m,k,j,i);
-    }
+    ull[ivy] = glower[ivy][0]  *uul[0]   + glower[ivy][ivx]*uul[ivx] +
+               glower[ivy][ivy]*uul[ivy] + glower[ivy][ivz]*uul[ivz];
 
-    // Calculate 4-velocity in left state
-    Real ucon_l[4], ucov_l[4];
-    Real tmp = g_11*SQR(uu1_l) + 2.0*g_12*uu1_l*uu2_l + 2.0*g_13*uu1_l*uu3_l
-             + g_22*SQR(uu2_l) + 2.0*g_23*uu2_l*uu3_l
-             + g_33*SQR(uu3_l);
-    Real gamma_l = sqrt(1.0 + tmp);
-    ucon_l[0] = gamma_l / alpha;
-    ucon_l[1] = uu1_l - alpha * gamma_l * g01;
-    ucon_l[2] = uu2_l - alpha * gamma_l * g02;
-    ucon_l[3] = uu3_l - alpha * gamma_l * g03;
-    ucov_l[0] = g_00*ucon_l[0] + g_01*ucon_l[1] + g_02*ucon_l[2] + g_03*ucon_l[3];
-    ucov_l[1] = g_10*ucon_l[0] + g_11*ucon_l[1] + g_12*ucon_l[2] + g_13*ucon_l[3];
-    ucov_l[2] = g_20*ucon_l[0] + g_21*ucon_l[1] + g_22*ucon_l[2] + g_23*ucon_l[3];
-    ucov_l[3] = g_30*ucon_l[0] + g_31*ucon_l[1] + g_32*ucon_l[2] + g_33*ucon_l[3];
+    ull[ivz] = glower[ivz][0]  *uul[0]   + glower[ivz][ivx]*uul[ivx] +
+               glower[ivz][ivy]*uul[ivy] + glower[ivz][ivz]*uul[ivz];
 
-    // Calculate 4-velocity in right state
-    Real ucon_r[4], ucov_r[4];
-    tmp = g_11*SQR(uu1_r) + 2.0*g_12*uu1_r*uu2_r + 2.0*g_13*uu1_r*uu3_r
-        + g_22*SQR(uu2_r) + 2.0*g_23*uu2_r*uu3_r
-        + g_33*SQR(uu3_r);
-    Real gamma_r = sqrt(1.0 + tmp);
-    ucon_r[0] = gamma_r / alpha;
-    ucon_r[1] = uu1_r - alpha * gamma_r * g01;
-    ucon_r[2] = uu2_r - alpha * gamma_r * g02;
-    ucon_r[3] = uu3_r - alpha * gamma_r * g03;
-    ucov_r[0] = g_00*ucon_r[0] + g_01*ucon_r[1] + g_02*ucon_r[2] + g_03*ucon_r[3];
-    ucov_r[1] = g_10*ucon_r[0] + g_11*ucon_r[1] + g_12*ucon_r[2] + g_13*ucon_r[3];
-    ucov_r[2] = g_20*ucon_r[0] + g_21*ucon_r[1] + g_22*ucon_r[2] + g_23*ucon_r[3];
-    ucov_r[3] = g_30*ucon_r[0] + g_31*ucon_r[1] + g_32*ucon_r[2] + g_33*ucon_r[3];
+    // calculate 4-magnetic field in left state (contravariant compt)
+    Real bul[4];
+    bul[0]   = ull[ivx]*bxi + ull[ivy]*wl_iby + ull[ivz]*wl_ibz;
+    bul[ivx] = (bxi    + bul[0] * uul[ivx]) / uul[0];
+    bul[ivy] = (wl_iby + bul[0] * uul[ivy]) / uul[0];
+    bul[ivz] = (wl_ibz + bul[0] * uul[ivz]) / uul[0];
 
-    // Calculate 4-magnetic field in left state
-    Real bcon_l[4], bcov_l[4];
-    bcon_l[0] = ucon_l[0] * (g_01*bb1_l + g_02*bb2_l + g_03*bb3_l)
-              + ucon_l[1] * (g_11*bb1_l + g_12*bb2_l + g_13*bb3_l)
-              + ucon_l[2] * (g_21*bb1_l + g_22*bb2_l + g_23*bb3_l)
-              + ucon_l[3] * (g_31*bb1_l + g_32*bb2_l + g_33*bb3_l);
-    bcon_l[1] = (bb1_l + bcon_l[0] * ucon_l[1]) / ucon_l[0];
-    bcon_l[2] = (bb2_l + bcon_l[0] * ucon_l[2]) / ucon_l[0];
-    bcon_l[3] = (bb3_l + bcon_l[0] * ucon_l[3]) / ucon_l[0];
-    bcov_l[0] = g_00*bcon_l[0] + g_01*bcon_l[1] + g_02*bcon_l[2] + g_03*bcon_l[3];
-    bcov_l[1] = g_10*bcon_l[0] + g_11*bcon_l[1] + g_12*bcon_l[2] + g_13*bcon_l[3];
-    bcov_l[2] = g_20*bcon_l[0] + g_21*bcon_l[1] + g_22*bcon_l[2] + g_23*bcon_l[3];
-    bcov_l[3] = g_30*bcon_l[0] + g_31*bcon_l[1] + g_32*bcon_l[2] + g_33*bcon_l[3];
-    Real b_sq_l = bcon_l[0]*bcov_l[0] + bcon_l[1]*bcov_l[1] + bcon_l[2]*bcov_l[2]
-                + bcon_l[3]*bcov_l[3];
+    // lower vector indices (covariant compt)
+    Real bll[4];
+    bll[0]   = glower[0][0]  *bul[0]   + glower[0][ivx]*bul[ivx] +
+               glower[0][ivy]*bul[ivy] + glower[0][ivz]*bul[ivz];
+
+    bll[ivx] = glower[ivx][0]  *bul[0]   + glower[ivx][ivx]*bul[ivx] +
+               glower[ivx][ivy]*bul[ivy] + glower[ivx][ivz]*bul[ivz];
+
+    bll[ivy] = glower[ivy][0]  *bul[0]   + glower[ivy][ivx]*bul[ivx] +
+               glower[ivy][ivy]*bul[ivy] + glower[ivy][ivz]*bul[ivz];
+
+    bll[ivz] = glower[ivz][0]  *bul[0]   + glower[ivz][ivx]*bul[ivx] +
+               glower[ivz][ivy]*bul[ivy] + glower[ivz][ivz]*bul[ivz];
+
+    Real bsq_l = bll[0]*bul[0] + bll[ivx]*bul[ivx] + bll[ivy]*bul[ivy] +bll[ivz]*bul[ivz];
+
+    // Calculate 4-velocity in right state (contravariant compt)
+    q = glower[ivx][ivx] * SQR(wr_ivx) + glower[ivy][ivy] * SQR(wr_ivy) +
+        glower[ivz][ivz] * SQR(wr_ivz) + 2.0*glower[ivx][ivy] * wr_ivx * wr_ivy +
+        2.0*glower[ivx][ivz] * wr_ivx * wr_ivz + 2.0*glower[ivy][ivz] * wr_ivy * wr_ivz;
+
+    gamma = sqrt(1.0 + q);
+    Real uur[4];
+    uur[0] = gamma / alpha;
+    uur[ivx] = wr_ivx - alpha * gamma * gupper[0][ivx];
+    uur[ivy] = wr_ivy - alpha * gamma * gupper[0][ivy];
+    uur[ivz] = wr_ivz - alpha * gamma * gupper[0][ivz];
+
+    // lower vector indices (covariant compt)
+    Real ulr[4];
+    ulr[0]   = glower[0][0]  *uur[0]   + glower[0][ivx]*uur[ivx] +
+               glower[0][ivy]*uur[ivy] + glower[0][ivz]*uur[ivz];
+
+    ulr[ivx] = glower[ivx][0]  *uur[0]   + glower[ivx][ivx]*uur[ivx] +
+               glower[ivx][ivy]*uur[ivy] + glower[ivx][ivz]*uur[ivz];
+
+    ulr[ivy] = glower[ivy][0]  *uur[0]   + glower[ivy][ivx]*uur[ivx] +
+               glower[ivy][ivy]*uur[ivy] + glower[ivy][ivz]*uur[ivz];
+
+    ulr[ivz] = glower[ivz][0]  *uur[0]   + glower[ivz][ivx]*uur[ivx] +
+               glower[ivz][ivy]*uur[ivy] + glower[ivz][ivz]*uur[ivz];
+
 
     // Calculate 4-magnetic field in right state
-    Real bcon_r[4], bcov_r[4];
-    bcon_r[0] = ucon_r[0] * (g_01*bb1_r + g_02*bb2_r + g_03*bb3_r)
-              + ucon_r[1] * (g_11*bb1_r + g_12*bb2_r + g_13*bb3_r)
-              + ucon_r[2] * (g_21*bb1_r + g_22*bb2_r + g_23*bb3_r)
-              + ucon_r[3] * (g_31*bb1_r + g_32*bb2_r + g_33*bb3_r);
-    bcon_r[1] = (bb1_r + bcon_r[0] * ucon_r[1]) / ucon_r[0];
-    bcon_r[2] = (bb2_r + bcon_r[0] * ucon_r[2]) / ucon_r[0];
-    bcon_r[3] = (bb3_r + bcon_r[0] * ucon_r[3]) / ucon_r[0];
-    bcov_r[0] = g_00*bcon_r[0] + g_01*bcon_r[1] + g_02*bcon_r[2] + g_03*bcon_r[3];
-    bcov_r[1] = g_10*bcon_r[0] + g_11*bcon_r[1] + g_12*bcon_r[2] + g_13*bcon_r[3];
-    bcov_r[2] = g_20*bcon_r[0] + g_21*bcon_r[1] + g_22*bcon_r[2] + g_23*bcon_r[3];
-    bcov_r[3] = g_30*bcon_r[0] + g_31*bcon_r[1] + g_32*bcon_r[2] + g_33*bcon_r[3];
-    Real b_sq_r = bcon_r[0]*bcov_r[0] + bcon_r[1]*bcov_r[1] + bcon_r[2]*bcov_r[2]
-                + bcon_r[3]*bcov_r[3];
+    Real bur[4];
+    bur[0]   = ulr[ivx]*bxi + ulr[ivy]*wr_iby + ulr[ivz]*wr_ibz;
+    bur[ivx] = (bxi    + bur[0] * uur[ivx]) / uur[0];
+    bur[ivy] = (wr_iby + bur[0] * uur[ivy]) / uur[0];
+    bur[ivz] = (wr_ibz + bur[0] * uur[ivz]) / uur[0];
+
+    // lower vector indices (covariant compt)
+    Real blr[4];
+    blr[0]   = glower[0][0]  *bur[0]   + glower[0][ivx]*bur[ivx] +
+               glower[0][ivy]*bur[ivy] + glower[0][ivz]*bur[ivz];
+
+    blr[ivx] = glower[ivx][0]  *bur[0]   + glower[ivx][ivx]*bur[ivx] +
+               glower[ivx][ivy]*bur[ivy] + glower[ivx][ivz]*bur[ivz];
+
+    blr[ivy] = glower[ivy][0]  *bur[0]   + glower[ivy][ivx]*bur[ivx] +
+               glower[ivy][ivy]*bur[ivy] + glower[ivy][ivz]*bur[ivz];
+
+    blr[ivz] = glower[ivz][0]  *bur[0]   + glower[ivz][ivx]*bur[ivx] +
+               glower[ivz][ivy]*bur[ivy] + glower[ivz][ivz]*bur[ivz];
+
+    Real bsq_r = blr[0]*bur[0] + blr[ivx]*bur[ivx] + blr[ivy]*bur[ivy] +blr[ivz]*bur[ivz];
 
     // Calculate wavespeeds in left state
     Real lp_l, lm_l;
-    eos.IdealGRMHDFastSpeeds(rho_l, pgas_l, ucon_l[0], ucon_l[ivx], b_sq_l, g00, g0i, gii,
-                             lp_l, lm_l);
+    eos.IdealGRMHDFastSpeeds(wl_idn, wl_ipr, uul[0], uul[ivx], bsq_l, gupper[0][0],
+                             gupper[0][ivx], gupper[ivx][ivx], lp_l, lm_l);
 
     // Calculate wavespeeds in right state
     Real lp_r, lm_r;
-    eos.IdealGRMHDFastSpeeds(rho_r, pgas_r, ucon_r[0], ucon_r[ivx], b_sq_r, g00, g0i, gii,
-                             lp_r, lm_r);
+    eos.IdealGRMHDFastSpeeds(wr_idn, wr_ipr, uur[0], uur[ivx], bsq_r, gupper[0][0],
+                             gupper[0][ivx], gupper[ivx][ivx], lp_r, lm_r);
 
     // Calculate extremal wavespeeds
     Real lambda_l = fmin(lm_l, lm_r);
     Real lambda_r = fmax(lp_l, lp_r);
 
     // Calculate difference du =  U_R - U_l in conserved quantities (rho u^0 and T^0_\mu)
-    Real wgas_r = rho_r + gamma_prime * pgas_r;
-    Real wtot_r = wgas_r + b_sq_r;
-    Real ptot_r = pgas_r + 0.5*b_sq_r;
-    Real du[7];
-    Real qa = wtot_r * ucon_r[0];
-    du[IDN] = rho_r * ucon_r[0];
-    du[IEN] = qa * ucov_r[0] - bcon_r[0] * bcov_r[0] + ptot_r;
-    du[IVX] = qa * ucov_r[1] - bcon_r[0] * bcov_r[1];
-    du[IVY] = qa * ucov_r[2] - bcon_r[0] * bcov_r[2];
-    du[IVZ] = qa * ucov_r[3] - bcon_r[0] * bcov_r[3];
-    du[5]   = bcon_r[ivy] * ucon_r[0] - bcon_r[0] * ucon_r[ivy];
-    du[6]   = bcon_r[ivz] * ucon_r[0] - bcon_r[0] * ucon_r[ivz];
-
-    Real wgas_l = rho_l + gamma_prime * pgas_l;
-    Real wtot_l = wgas_l + b_sq_l;
-    Real ptot_l = pgas_l + 0.5*b_sq_l;
-    Real qb = wtot_l * ucon_l[0];
-    du[IDN] -= (rho_l * ucon_l[0]);
-    du[IEN] -= (qb * ucov_l[0] - bcon_l[0] * bcov_l[0] + ptot_l);
-    du[IVX] -= (qb * ucov_l[1] - bcon_l[0] * bcov_l[1]);
-    du[IVY] -= (qb * ucov_l[2] - bcon_l[0] * bcov_l[2]);
-    du[IVZ] -= (qb * ucov_l[3] - bcon_l[0] * bcov_l[3]);
-    du[5]   -= bcon_l[ivy] * ucon_l[0] - bcon_l[0] * ucon_l[ivy];
-    du[6]   -= bcon_l[ivz] * ucon_l[0] - bcon_l[0] * ucon_l[ivz];
+    MHDCons1D du;
+    Real wtot_r = wr_idn + gamma_prime * wr_ipr + bsq_r;
+    Real ptot_r = wr_ipr + 0.5*bsq_r;
+    Real qa = wtot_r * uur[0];
+    Real wtot_l = wl_idn + gamma_prime * wl_ipr + bsq_l;
+    Real ptot_l = wl_ipr + 0.5*bsq_l;
+    Real qb = wtot_l * uul[0];
+    du.d  = (wr_idn*uur[0]) - (wl_idn*uul[0]);
+    du.mx = (qa*ulr[ivx] - bur[0]*blr[ivx]) - (qb*ull[ivx] - bul[0]*bll[ivx]) ;
+    du.my = (qa*ulr[ivy] - bur[0]*blr[ivy]) - (qb*ull[ivy] - bul[0]*bll[ivy]);
+    du.mz = (qa*ulr[ivz] - bur[0]*blr[ivz]) - (qb*ull[ivz] - bul[0]*bll[ivz]);
+    du.e  = (qa*ulr[0] - bur[0]*blr[0] + ptot_r) - (qa*ull[0] - bul[0]*bll[0] + ptot_l);
+    du.by = (bur[ivy]*uur[0] - bur[0]*uur[ivy]) - (bul[ivy]*uul[0] - bul[0]*uul[ivy]);
+    du.bz = (bur[ivz]*uur[0] - bur[0]*uur[ivz]) - (bul[ivz]*uul[0] - bul[0]*uul[ivz]);
 
     // Calculate fluxes in L region (rho u^i and T^i_\mu, where i = ivx)
-    Real flux_l[7];
-    qa = wtot_l * ucon_l[ivx];
-    flux_l[IDN] = rho_l * ucon_l[ivx];
-    flux_l[IEN] = qa * ucov_l[0] - bcon_l[ivx] * bcov_l[0];
-    flux_l[IVX] = qa * ucov_l[1] - bcon_l[ivx] * bcov_l[1];
-    flux_l[IVY] = qa * ucov_l[2] - bcon_l[ivx] * bcov_l[2];
-    flux_l[IVZ] = qa * ucov_l[3] - bcon_l[ivx] * bcov_l[3];
-    flux_l[ivx] += ptot_l;
-    flux_l[5]   = bcon_l[ivy] * ucon_l[ivx] - bcon_l[ivx] * ucon_l[ivy];
-    flux_l[6]   = bcon_l[ivz] * ucon_l[ivx] - bcon_l[ivx] * ucon_l[ivz];
+    MHDCons1D fl;
+    qa = wtot_l * uul[ivx];
+    fl.d  = wl_idn * uul[ivx];
+    fl.mx = qa * ull[ivx] - bul[ivx] * bll[ivx] + ptot_l;
+    fl.my = qa * ull[ivy] - bul[ivx] * bll[ivy];
+    fl.mz = qa * ull[ivz] - bul[ivx] * bll[ivz];
+    fl.e  = qa * ull[0]   - bul[ivx] * bll[0];
+    fl.by = bul[ivy] * uul[ivx] - bul[ivx] * uul[ivy];
+    fl.bz = bul[ivz] * uul[ivx] - bul[ivx] * uul[ivz];
 
     // Calculate fluxes in R region (rho u^i and T^i_\mu, where i = ivx)
-    Real flux_r[7];
-    qa = wtot_r * ucon_r[ivx];
-    flux_r[IDN] = rho_r * ucon_r[ivx];
-    flux_r[IEN] = qa * ucov_r[0] - bcon_r[ivx] * bcov_r[0];
-    flux_r[IVX] = qa * ucov_r[1] - bcon_r[ivx] * bcov_r[1];
-    flux_r[IVY] = qa * ucov_r[2] - bcon_r[ivx] * bcov_r[2];
-    flux_r[IVZ] = qa * ucov_r[3] - bcon_r[ivx] * bcov_r[3];
-    flux_r[ivx] += ptot_r;
-    flux_r[5]   = bcon_r[ivy] * ucon_r[ivx] - bcon_r[ivx] * ucon_r[ivy];
-    flux_r[6]   = bcon_r[ivz] * ucon_r[ivx] - bcon_r[ivx] * ucon_r[ivz];
+    MHDCons1D fr;
+    qa = wtot_r * uur[ivx];
+    fr.d  = wr_idn * uur[ivx];
+    fr.mx = qa * ulr[ivx] - bur[ivx] * blr[ivx] + ptot_r;
+    fr.my = qa * ulr[ivy] - bur[ivx] * blr[ivy];
+    fr.mz = qa * ulr[ivz] - bur[ivx] * blr[ivz];
+    fr.e  = qa * ulr[0]   - bur[ivx] * blr[0];
+    fr.by = bur[ivy] * uur[ivx] - bur[ivx] * uur[ivy];
+    fr.bz = bur[ivz] * uur[ivx] - bur[ivx] * uur[ivz];
 
     // Calculate fluxes in HLL region
-    Real flux_hll[7];
+    MHDCons1D flux_hll;
     qa = lambda_r*lambda_l;
-    qb = lambda_r - lambda_l;
-    flux_hll[IDN] = (lambda_r*flux_l[IDN] - lambda_l*flux_r[IDN] + qa*du[IDN]) / qb;
-    flux_hll[IVX] = (lambda_r*flux_l[IVX] - lambda_l*flux_r[IVX] + qa*du[IVX]) / qb;
-    flux_hll[IVY] = (lambda_r*flux_l[IVY] - lambda_l*flux_r[IVY] + qa*du[IVY]) / qb;
-    flux_hll[IVZ] = (lambda_r*flux_l[IVZ] - lambda_l*flux_r[IVZ] + qa*du[IVZ]) / qb;
-    flux_hll[IEN] = (lambda_r*flux_l[IEN] - lambda_l*flux_r[IEN] + qa*du[IEN]) / qb;
-    flux_hll[5]   = (lambda_r*flux_l[5]   - lambda_l*flux_r[5]   + qa*du[5]  ) / qb;
-    flux_hll[6]   = (lambda_r*flux_l[6]   - lambda_l*flux_r[6]   + qa*du[6]  ) / qb;
+    qb = 1.0/(lambda_r - lambda_l);
+    flux_hll.d  = (lambda_r*fl.d  - lambda_l*fr.d  + qa*du.d ) * qb;
+    flux_hll.mx = (lambda_r*fl.mx - lambda_l*fr.mx + qa*du.mx) * qb;
+    flux_hll.my = (lambda_r*fl.my - lambda_l*fr.my + qa*du.my) * qb;
+    flux_hll.mz = (lambda_r*fl.mz - lambda_l*fr.mz + qa*du.mz) * qb;
+    flux_hll.e  = (lambda_r*fl.e  - lambda_l*fr.e  + qa*du.e ) * qb;
+    flux_hll.by = (lambda_r*fl.by - lambda_l*fr.by + qa*du.by) * qb;
+    flux_hll.bz = (lambda_r*fl.bz - lambda_l*fr.bz + qa*du.bz) * qb;
 
     // Determine region of wavefan
-    Real *flux_interface;
+    MHDCons1D *flux_interface;
     if (lambda_l >= 0.0) {  // L region
-      flux_interface = flux_l;
+      flux_interface = &fl;
     } else if (lambda_r <= 0.0) { // R region
-      flux_interface = flux_r;
+      flux_interface = &fr;
     } else {  // HLL region
-      flux_interface = flux_hll;
+      flux_interface = &flux_hll;
     }
 
     // Set fluxes
-    flx(m,IDN,k,j,i) = flux_interface[IDN];
-    flx(m,IVX,k,j,i) = flux_interface[IVX];
-    flx(m,IVY,k,j,i) = flux_interface[IVY];
-    flx(m,IVZ,k,j,i) = flux_interface[IVZ];
-    flx(m,IEN,k,j,i) = flux_interface[IEN];
+    flx(m,IDN,k,j,i) = flux_interface->d;
+    flx(m,ivx,k,j,i) = flux_interface->mx;
+    flx(m,ivy,k,j,i) = flux_interface->my;
+    flx(m,ivz,k,j,i) = flux_interface->mz;
+    flx(m,IEN,k,j,i) = flux_interface->e;
 
-    ey(m,k,j,i) = -flux_interface[5];
-    ez(m,k,j,i) =  flux_interface[6];
+    ey(m,k,j,i) = -flux_interface->by;
+    ez(m,k,j,i) =  flux_interface->bz;
 
     // We evolve tau = T^t_t + D
     flx(m,IEN,k,j,i) += flx(m,IDN,k,j,i);
