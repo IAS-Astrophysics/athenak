@@ -24,6 +24,8 @@ void LLF_GR(TeamMember_t const &member, const EOS_Data &eos,
      const ScrArray2D<Real> &bl, const ScrArray2D<Real> &br, const DvceArray4D<Real> &bx,
      DvceArray5D<Real> flx, DvceArray4D<Real> ey, DvceArray4D<Real> ez) {
   // Cyclic permutation of array indices
+  int ivy = IVX + ((ivx-IVX)+1)%3;
+  int ivz = IVX + ((ivx-IVX)+2)%3;
   int iby = ((ivx-IVX) + 1)%3;
   int ibz = ((ivx-IVX) + 2)%3;
 
@@ -56,16 +58,16 @@ void LLF_GR(TeamMember_t const &member, const EOS_Data &eos,
     // Extract left/right primitives.  Note 1/2/3 always refers to x1/2/3 dirs
     MHDPrim1D wli,wri;
     wli.d  = wl(IDN,i);
-    wli.vx = wl(IVX,i);
-    wli.vy = wl(IVY,i);
-    wli.vz = wl(IVZ,i);
+    wli.vx = wl(ivx,i);
+    wli.vy = wl(ivy,i);
+    wli.vz = wl(ivz,i);
     wli.by = bl(iby,i);
     wli.bz = bl(ibz,i);
 
     wri.d  = wr(IDN,i);
-    wri.vx = wr(IVX,i);
-    wri.vy = wr(IVY,i);
-    wri.vz = wr(IVZ,i);
+    wri.vx = wr(ivx,i);
+    wri.vy = wr(ivy,i);
+    wri.vz = wr(ivz,i);
     wri.by = br(iby,i);
     wri.bz = br(ibz,i);
 
@@ -81,10 +83,10 @@ void LLF_GR(TeamMember_t const &member, const EOS_Data &eos,
 
     // Store results in 3D array of fluxes
     flx(m,IDN,k,j,i) = flux.d;
+    flx(m,ivx,k,j,i) = flux.mx;
+    flx(m,ivy,k,j,i) = flux.my;
+    flx(m,ivz,k,j,i) = flux.mz;
     flx(m,IEN,k,j,i) = flux.e;
-    flx(m,IVX,k,j,i) = flux.mx;
-    flx(m,IVY,k,j,i) = flux.my;
-    flx(m,IVZ,k,j,i) = flux.mz;
     ey(m,k,j,i) = flux.by;
     ez(m,k,j,i) = flux.bz;
   });

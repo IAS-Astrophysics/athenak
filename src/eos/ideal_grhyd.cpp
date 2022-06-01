@@ -90,8 +90,8 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
     Real &x3max = size.d_view(m).x3max;
     Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
-    Real g_[NMETRIC], gi_[NMETRIC];
-    ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, g_, gi_);
+    Real glower[4][4], gupper[4][4];
+    ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, glower, gupper);
 
     HydPrim1D w;
     bool dfloor_used=false, efloor_used=false;
@@ -110,16 +110,17 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
 
       // Need to multiply the conserved density by alpha, so that it
       // contains a lorentz factor
-      Real alpha = sqrt(-1.0/gi_[I00]);
+      Real alpha = sqrt(-1.0/gupper[0][0]);
       u_sr.d = u.d*alpha;
 
       // We are evolving T^t_t, but the SR C2P algorithm is only consistent with
       // alpha^2 T^{tt}.  Therefore compute T^{tt} = g^0\mu T^t_\mu
       // We are also evolving T^t_t + D as conserved variable, so must convert to E
-      u_sr.e = gi_[I00]*(u.e - u.d) + gi_[I01]*u.mx + gi_[I02]*u.my + gi_[I03]*u.mz;
+      u_sr.e = gupper[0][0]*(u.e - u.d) +
+               gupper[0][1]*u.mx + gupper[0][2]*u.my + gupper[0][3]*u.mz;
 
       // This is only true if sqrt{-g}=1!
-      u_sr.e *= (-1./gi_[I00]);  // Multiply by alpha^2
+      u_sr.e *= (-1./gupper[0][0]);  // Multiply by alpha^2
 
       // Subtract density for consistency with the rest of the algorithm
       u_sr.e -= u_sr.d;
@@ -137,17 +138,17 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
       //       g^0i = beta^i/alpha^2
       //       g^00 = -1/ alpha^2
       // Hence gamma^ij =  g^ij - g^0i g^0j/g^00
-      u_sr.mx = ((gi_[I11] - gi_[I01]*gi_[I01]/gi_[I00])*m1l +
-                 (gi_[I12] - gi_[I01]*gi_[I02]/gi_[I00])*m2l +
-                 (gi_[I13] - gi_[I01]*gi_[I03]/gi_[I00])*m3l);  // (C26)
+      u_sr.mx = ((gupper[1][1] - gupper[0][1]*gupper[0][1]/gupper[0][0])*m1l +
+                 (gupper[1][2] - gupper[0][1]*gupper[0][2]/gupper[0][0])*m2l +
+                 (gupper[1][3] - gupper[0][1]*gupper[0][3]/gupper[0][0])*m3l);  // (C26)
 
-      u_sr.my = ((gi_[I12] - gi_[I01]*gi_[I02]/gi_[I00])*m1l +
-                 (gi_[I22] - gi_[I02]*gi_[I02]/gi_[I00])*m2l +
-                 (gi_[I23] - gi_[I02]*gi_[I03]/gi_[I00])*m3l);  // (C26)
+      u_sr.my = ((gupper[2][1] - gupper[0][2]*gupper[0][1]/gupper[0][0])*m1l +
+                 (gupper[2][2] - gupper[0][2]*gupper[0][2]/gupper[0][0])*m2l +
+                 (gupper[2][3] - gupper[0][2]*gupper[0][3]/gupper[0][0])*m3l);  // (C26)
 
-      u_sr.mz = ((gi_[I13] - gi_[I01]*gi_[I03]/gi_[I00])*m1l +
-                 (gi_[I23] - gi_[I02]*gi_[I03]/gi_[I00])*m2l +
-                 (gi_[I33] - gi_[I03]*gi_[I03]/gi_[I00])*m3l);  // (C26)
+      u_sr.mz = ((gupper[3][1] - gupper[0][3]*gupper[0][1]/gupper[0][0])*m1l +
+                 (gupper[3][2] - gupper[0][3]*gupper[0][2]/gupper[0][0])*m2l +
+                 (gupper[3][3] - gupper[0][3]*gupper[0][3]/gupper[0][0])*m3l);  // (C26)
 
       // Compute (S^i S_i) (eqn C2)
       Real s2 = (m1l*u_sr.mx) + (m2l*u_sr.my) + (m3l*u_sr.mz);
@@ -171,7 +172,7 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
       prim(m,IEN,k,j,i) = w.e;
       // reset conserved variables if floor is hit
       if (dfloor_used || efloor_used) {
-        SingleP2C_IdealGRHyd(g_, gi_, w, eos.gamma, u);
+        SingleP2C_IdealGRHyd(glower, gupper, w, eos.gamma, u);
         cons(m,IDN,k,j,i) = u.d;
         cons(m,IM1,k,j,i) = u.mx;
         cons(m,IM2,k,j,i) = u.my;
@@ -231,8 +232,8 @@ void IdealGRHydro::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &
     Real &x3max = size.d_view(m).x3max;
     Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
-    Real g_[NMETRIC], gi_[NMETRIC];
-    ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, g_, gi_);
+    Real glower[4][4], gupper[4][4];
+    ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, glower, gupper);
 
     // Load single state of primitive variables
     HydPrim1D w;
@@ -244,7 +245,7 @@ void IdealGRHydro::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &
 
     // call p2c function
     HydCons1D u;
-    SingleP2C_IdealGRHyd(g_, gi_, w, gamma, u);
+    SingleP2C_IdealGRHyd(glower, gupper, w, gamma, u);
 
     // Set conserved quantities
     cons(m,IDN,k,j,i) = u.d;
