@@ -77,10 +77,17 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
     u.e  = cons(m,IEN,k,j,i);
 
     // load cell-centered fields into conserved state
-    // (simple linear average of face-centered fields)
-    u.bx = 0.5*(b.x1f(m,k,j,i) + b.x1f(m,k,j,i+1));
-    u.by = 0.5*(b.x2f(m,k,j,i) + b.x2f(m,k,j+1,i));
-    u.bz = 0.5*(b.x3f(m,k,j,i) + b.x3f(m,k+1,j,i));
+    // use input CC fields if only testing floors with FOFC
+    if (only_testfloors) {
+      u.bx = bcc(m,IBX,k,j,i);
+      u.by = bcc(m,IBY,k,j,i);
+      u.bz = bcc(m,IBZ,k,j,i);
+    // else use simple linear average of face-centered fields
+    } else {
+      u.bx = 0.5*(b.x1f(m,k,j,i) + b.x1f(m,k,j,i+1));
+      u.by = 0.5*(b.x2f(m,k,j,i) + b.x2f(m,k,j+1,i));
+      u.bz = 0.5*(b.x3f(m,k,j,i) + b.x3f(m,k+1,j,i));
+    }
 
     // Extract components of metric
     Real &x1min = size.d_view(m).x1min;
@@ -173,15 +180,18 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
 
       // call c2p function
       SingleC2P_IdealSRMHD(u_sr, eos, s2, b2, rpar, w, dfloor_used,efloor_used,iter_used);
-      if (dfloor_used) {sumd++;}
-      if (efloor_used) {sume++;}
-      max_it = fmax(max_it, iter_used);
     }
 
     // set FOFC flag and quit loop if this function called only to check floors
     if (only_testfloors) {
-      if (dfloor_used || efloor_used) {fofc_(m,k,j,i) = true;}
+      if (dfloor_used || efloor_used) {
+        fofc_(m,k,j,i) = true;
+        sumd++;  // use dfloor as counter for when either is true
+      }
     } else {
+      if (dfloor_used) {sumd++;}
+      if (efloor_used) {sume++;}
+      max_it = fmax(max_it, iter_used);
       // store primitive state in 3D array
       prim(m,IDN,k,j,i) = w.d;
       prim(m,IVX,k,j,i) = w.vx;
@@ -220,8 +230,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
 
   // store appropriate counters
   if (only_testfloors) {
-    pmy_pack->pmesh->ecounter.fofc_dfloor += nfloord_;
-    pmy_pack->pmesh->ecounter.fofc_efloor += nfloore_;
+    pmy_pack->pmesh->ecounter.nfofc += nfloord_;
   } else {
     pmy_pack->pmesh->ecounter.neos_dfloor += nfloord_;
     pmy_pack->pmesh->ecounter.neos_efloor += nfloore_;

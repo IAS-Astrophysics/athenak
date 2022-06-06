@@ -113,8 +113,12 @@ class Hydro {
   template <Hydro_RSolver T>
   void CalculateFluxes(Driver *d, int stage);
 
+  // first-order flux correction
+  void FOFC(Driver *d, int stage);
+
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Hydro
+  DvceArray5D<Real> utest;  // scratch array for FOFC
 };
 
 } // namespace hydro

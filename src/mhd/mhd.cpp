@@ -45,6 +45,8 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     e1_cc("e1_cc",1,1,1,1),
     e2_cc("e2_cc",1,1,1,1),
     e3_cc("e3_cc",1,1,1,1),
+    utest("utest",1,1,1,1,1),
+    bcctest("bcctest",1,1,1,1,1),
     fofc("fofc",1,1,1,1) {
   // (1) construct EOS object (no default)
   {std::string eqn_of_state = pin->GetString("mhd","eos");
@@ -289,7 +291,9 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     // allocate array of flags used with FOFC
     use_fofc = pin->GetOrAddBoolean("mhd","fofc",false);
     if (use_fofc) {
-      Kokkos::realloc(fofc, nmb, ncells3, ncells2, ncells1);
+      Kokkos::realloc(fofc,    nmb, ncells3, ncells2, ncells1);
+      Kokkos::realloc(utest,   nmb, nmhd, ncells3, ncells2, ncells1);
+      Kokkos::realloc(bcctest, nmb, 3,    ncells3, ncells2, ncells1);
     }
 
     // read flag for energy fix in strong fields
