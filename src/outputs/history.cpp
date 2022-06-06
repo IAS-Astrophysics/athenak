@@ -20,6 +20,7 @@
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "z4c/z4c.hpp"
 #include "outputs.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -36,6 +37,10 @@ HistoryOutput::HistoryOutput(OutputParameters op, Mesh *pm) : BaseTypeOutput(op,
   if (pm->pmb_pack->pmhd != nullptr) {
     hist_data.emplace_back(PhysicsModule::MagnetoHydroDynamics);
   }
+  
+  if (pm->pmb_pack->pz4c != nullptr) {
+    hist_data.emplace_back(PhysicsModule::SpaceTimeDynamics);
+  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -49,6 +54,8 @@ void HistoryOutput::LoadOutputData(Mesh *pm) {
       LoadHydroHistoryData(&data, pm);
     } else if (data.physics == PhysicsModule::MagnetoHydroDynamics) {
       LoadMHDHistoryData(&data, pm);
+    } else if (data.physics == PhysicsModule::SpaceTimeDynamics) {
+      LoadZ4cHistoryData(&data, pm);
     }
   }
 }
@@ -119,6 +126,82 @@ void HistoryOutput::LoadHydroHistoryData(HistoryData *pdata, Mesh *pm) {
     hvars.the_array[nhydro_  ] = vol*0.5*SQR(u0_(m,IM1,k,j,i))/u0_(m,IDN,k,j,i);
     hvars.the_array[nhydro_+1] = vol*0.5*SQR(u0_(m,IM2,k,j,i))/u0_(m,IDN,k,j,i);
     hvars.the_array[nhydro_+2] = vol*0.5*SQR(u0_(m,IM3,k,j,i))/u0_(m,IDN,k,j,i);
+
+    // fill rest of the_array with zeros, if nhist < NHISTORY_VARIABLES
+    for (int n=nhist_; n<NHISTORY_VARIABLES; ++n) {
+      hvars.the_array[n] = 0.0;
+    }
+
+    // sum into parallel reduce
+    mb_sum += hvars;
+  }, Kokkos::Sum<array_sum::GlobalSum>(sum_this_mb));
+
+  // store data into hdata array
+  for (int n=0; n<pdata->nhist; ++n) {
+    pdata->hdata[n] = sum_this_mb.the_array[n];
+  }
+
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void HistoryOutput::LoadZ4cHistoryData()
+//  \brief Compute and store history data over all MeshBlocks on this rank
+//  Data is stored in a Real array defined in derived class.
+
+void HistoryOutput::LoadZ4cHistoryData(HistoryData *pdata, Mesh *pm) {
+  int &nhydro_ = pm->pmb_pack->phydro->nhydro;
+
+  // set number of and names of history variables for z4c
+  pdata->nhist = 8;
+  pdata->label[0] = "H-norm2";
+  pdata->label[1] = "M-norm2";
+  pdata->label[2] = "Mx-norm2";
+  pdata->label[3] = "My-norm2";
+  pdata->label[4] = "Mz-norm2";
+  pdata->label[5] = "Z-norm2";
+  pdata->label[6] = "Theta-norm2";
+  pdata->label[7] = "C-norm2";
+
+  // capture class variabels for kernel
+  auto &u0_ = pm->pmb_pack->pz4c->u0;
+  auto &u_con_ = pm->pmb_pack->pz4c->u_con;
+  const int &I_Z4c_Theta_ =  pm->pmb_pack->pz4c->I_Z4c_Theta;
+
+  auto &size = pm->pmb_pack->pmb->mb_size;
+  int &nhist_ = pdata->nhist;
+
+  // loop over all MeshBlocks in this pack
+  auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
+  int is = indcs.is; int nx1 = indcs.nx1;
+  int js = indcs.js; int nx2 = indcs.nx2;
+  int ks = indcs.ks; int nx3 = indcs.nx3;
+  const int nmkji = (pm->pmb_pack->nmb_thispack)*nx3*nx2*nx1;
+  const int nkji = nx3*nx2*nx1;
+  const int nji  = nx2*nx1;
+  array_sum::GlobalSum sum_this_mb;
+  Kokkos::parallel_reduce("HistSums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+  KOKKOS_LAMBDA(const int &idx, array_sum::GlobalSum &mb_sum) {
+    // compute n,k,j,i indices of thread
+    int m = (idx)/nkji;
+    int k = (idx - m*nkji)/nji;
+    int j = (idx - m*nkji - k*nji)/nx1;
+    int i = (idx - m*nkji - k*nji - j*nx1) + is;
+    k += ks;
+    j += js;
+
+    Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
+
+    // Hydro conserved variables:
+    array_sum::GlobalSum hvars;
+    hvars.the_array[0] = vol*SQR(u_con_(m,0,k,j,i)); // ||H||^2
+    hvars.the_array[1] = vol*u_con_(m,1,k,j,i);      // ||M||^2 (comes already squared) 
+    hvars.the_array[2] = vol*SQR(u_con_(m,2,k,j,i)); // ||Mx||^2
+    hvars.the_array[3] = vol*SQR(u_con_(m,3,k,j,i)); // ||My||^2
+    hvars.the_array[4] = vol*u_con_(m,4,k,j,i);      // ||Mz||^2
+    hvars.the_array[5] = vol*u_con_(m,5,k,j,i);      // ||Z||^2 (comes already squared)
+    hvars.the_array[6] = vol*SQR(u0_(m,I_Z4c_Theta_,k,j,i)); // ||Theta||^2 
+    hvars.the_array[7] = vol*u_con_(m,6,k,j,i);      // ||C||^2 (comes already squared)
 
     // fill rest of the_array with zeros, if nhist < NHISTORY_VARIABLES
     for (int n=nhist_; n<NHISTORY_VARIABLES; ++n) {
@@ -261,6 +344,9 @@ void HistoryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
           break;
         case PhysicsModule::MagnetoHydroDynamics:
           fname.append(".mhd");
+          break;
+        case PhysicsModule::SpaceTimeDynamics:
+          fname.append(".z4c");
           break;
         default:
           break;

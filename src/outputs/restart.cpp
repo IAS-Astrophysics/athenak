@@ -22,6 +22,7 @@
 #include "mesh/mesh.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "z4c/z4c.hpp"
 #include "outputs.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -49,14 +50,18 @@ void RestartOutput::LoadOutputData(Mesh *pm) {
   // calculate total number of CC variables
   hydro::Hydro* phydro = pm->pmb_pack->phydro;
   mhd::MHD* pmhd = pm->pmb_pack->pmhd;
-  int nhydro=0, nmhd=0;
+  z4c::Z4c* pz4c = pm->pmb_pack->pz4c;
+  int nhydro=0, nmhd=0, nz4c=0;
   if (phydro != nullptr) {
     nhydro = phydro->nhydro + phydro->nscalars;
   }
   if (pmhd != nullptr) {
     nmhd = pmhd->nmhd + pmhd->nscalars;
   }
-  Kokkos::realloc(outarray, nmb, (nhydro+nmhd), nout3, nout2, nout1);
+  if (pz4c != nullptr) {
+    nz4c = pz4c->N_Z4c;
+  }
+  Kokkos::realloc(outarray, nmb, (nhydro+nmhd+nz4c), nout3, nout2, nout1);
 
   // load hydro (CC) data (copy to host)
   if (phydro != nullptr) {
@@ -82,6 +87,15 @@ void RestartOutput::LoadOutputData(Mesh *pm) {
     Kokkos::deep_copy(outfield.x1f,pmhd->b0.x1f);
     Kokkos::deep_copy(outfield.x2f,pmhd->b0.x2f);
     Kokkos::deep_copy(outfield.x3f,pmhd->b0.x3f);
+  }
+
+  // load z4c (CC) data (copy to host)
+  if (pz4c != nullptr) {
+    DvceArray5D<Real>::HostMirror host_u0 = Kokkos::create_mirror(pz4c->u0);
+    Kokkos::deep_copy(host_u0,pz4c->u0);
+    auto hst_slice = Kokkos::subview(outarray, Kokkos::ALL, std::make_pair(nhydro+nmhd,nz4c),
+                                     Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+    Kokkos::deep_copy(hst_slice,host_u0);
   }
 }
 

@@ -18,6 +18,7 @@
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "z4c/z4c.hpp"
 #include "srcterms/srcterms.hpp"
 #include "srcterms/turb_driver.hpp"
 #include "outputs.hpp"
@@ -69,6 +70,13 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
        << "Output of Force variable requested in <output> block '"
        << out_params.block_name << "' but no Force object has been constructed."
        << std::endl << "Input file is likely missing a <forcing> block" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  if ((ivar>=41) && (ivar<=43) && (pm->pmb_pack->pz4c == nullptr)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+       << "Output of Z4c variable requested in <output> block '"
+       << out_params.block_name << "' but no Z4c object has been constructed."
+       << std::endl << "Input file is likely missing a <z4c> block" << std::endl;
     exit(EXIT_FAILURE);
   }
 
@@ -305,6 +313,74 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     outvars.emplace_back("force3",2,&(pm->pmb_pack->pturb->force));
   }
 
+  // adm z4c variables
+  if (out_params.variable.compare("adm") == 0) {
+    outvars.emplace_back("adm.gxx",  pm->pmb_pack->pz4c->I_ADM_gxx,  &(pm->pmb_pack->pz4c->u_adm));
+    outvars.emplace_back("adm.gxy",  pm->pmb_pack->pz4c->I_ADM_gxy,  &(pm->pmb_pack->pz4c->u_adm));
+    outvars.emplace_back("adm.gxz",  pm->pmb_pack->pz4c->I_ADM_gxz,  &(pm->pmb_pack->pz4c->u_adm));
+    outvars.emplace_back("adm.gyy",  pm->pmb_pack->pz4c->I_ADM_gyy,  &(pm->pmb_pack->pz4c->u_adm));
+    outvars.emplace_back("adm.gyz",  pm->pmb_pack->pz4c->I_ADM_gyz,  &(pm->pmb_pack->pz4c->u_adm));
+    outvars.emplace_back("adm.gzz",  pm->pmb_pack->pz4c->I_ADM_gzz,  &(pm->pmb_pack->pz4c->u_adm));
+    outvars.emplace_back("adm.Kxx",  pm->pmb_pack->pz4c->I_ADM_Kxx,  &(pm->pmb_pack->pz4c->u_adm));
+    outvars.emplace_back("adm.Kxy",  pm->pmb_pack->pz4c->I_ADM_Kxy,  &(pm->pmb_pack->pz4c->u_adm));
+    outvars.emplace_back("adm.Kxz",  pm->pmb_pack->pz4c->I_ADM_Kxz,  &(pm->pmb_pack->pz4c->u_adm));
+    outvars.emplace_back("adm.Kyy",  pm->pmb_pack->pz4c->I_ADM_Kyy,  &(pm->pmb_pack->pz4c->u_adm));
+    outvars.emplace_back("adm.Kyz",  pm->pmb_pack->pz4c->I_ADM_Kyz,  &(pm->pmb_pack->pz4c->u_adm));
+    outvars.emplace_back("adm.Kzz",  pm->pmb_pack->pz4c->I_ADM_Kzz,  &(pm->pmb_pack->pz4c->u_adm));
+    outvars.emplace_back("adm.psi4", pm->pmb_pack->pz4c->I_ADM_psi4, &(pm->pmb_pack->pz4c->u_adm));
+  }
+  
+  // con z4c variables
+  if (out_params.variable.compare("con") == 0) {
+    outvars.emplace_back("con.C",  pm->pmb_pack->pz4c->I_CON_C,  &(pm->pmb_pack->pz4c->u_con));
+    outvars.emplace_back("con.H",  pm->pmb_pack->pz4c->I_CON_H,  &(pm->pmb_pack->pz4c->u_con));
+    outvars.emplace_back("con.M",  pm->pmb_pack->pz4c->I_CON_M,  &(pm->pmb_pack->pz4c->u_con));
+    outvars.emplace_back("con.Z",  pm->pmb_pack->pz4c->I_CON_Z,  &(pm->pmb_pack->pz4c->u_con));
+    outvars.emplace_back("con.Mx", pm->pmb_pack->pz4c->I_CON_Mx, &(pm->pmb_pack->pz4c->u_con));
+    outvars.emplace_back("con.My", pm->pmb_pack->pz4c->I_CON_My, &(pm->pmb_pack->pz4c->u_con));
+    outvars.emplace_back("con.Mz", pm->pmb_pack->pz4c->I_CON_Mz, &(pm->pmb_pack->pz4c->u_con));
+  }
+  
+  // mat z4c variables
+  if (out_params.variable.compare("mat") == 0) {
+    outvars.emplace_back("mat.rho", pm->pmb_pack->pz4c->I_MAT_rho, &(pm->pmb_pack->pz4c->u_mat));
+    outvars.emplace_back("mat.Sx",  pm->pmb_pack->pz4c->I_MAT_Sx,  &(pm->pmb_pack->pz4c->u_mat));
+    outvars.emplace_back("mat.Sy",  pm->pmb_pack->pz4c->I_MAT_Sy,  &(pm->pmb_pack->pz4c->u_mat));
+    outvars.emplace_back("mat.Sz",  pm->pmb_pack->pz4c->I_MAT_Sz,  &(pm->pmb_pack->pz4c->u_mat));
+    outvars.emplace_back("mat.Sxx", pm->pmb_pack->pz4c->I_MAT_Sxx, &(pm->pmb_pack->pz4c->u_mat));
+    outvars.emplace_back("mat.Sxy", pm->pmb_pack->pz4c->I_MAT_Sxy, &(pm->pmb_pack->pz4c->u_mat));
+    outvars.emplace_back("mat.Sxz", pm->pmb_pack->pz4c->I_MAT_Sxz, &(pm->pmb_pack->pz4c->u_mat));
+    outvars.emplace_back("mat.Syy", pm->pmb_pack->pz4c->I_MAT_Syy, &(pm->pmb_pack->pz4c->u_mat));
+    outvars.emplace_back("mat.Syz", pm->pmb_pack->pz4c->I_MAT_Syz, &(pm->pmb_pack->pz4c->u_mat));
+    outvars.emplace_back("mat.Szz", pm->pmb_pack->pz4c->I_MAT_Szz, &(pm->pmb_pack->pz4c->u_mat));
+  }
+  
+  // z4c z4c variables
+  if (out_params.variable.compare("z4c") == 0) {
+    outvars.emplace_back("z4c.chi",   pm->pmb_pack->pz4c->I_Z4c_chi,   &(pm->pmb_pack->pz4c->u0));
+    outvars.emplace_back("z4c.gxx",   pm->pmb_pack->pz4c->I_Z4c_gxx,   &(pm->pmb_pack->pz4c->u0));
+    outvars.emplace_back("z4c.gxy",   pm->pmb_pack->pz4c->I_Z4c_gxy,   &(pm->pmb_pack->pz4c->u0));
+    outvars.emplace_back("z4c.gxz",   pm->pmb_pack->pz4c->I_Z4c_gxz,   &(pm->pmb_pack->pz4c->u0));
+    outvars.emplace_back("z4c.gyy",   pm->pmb_pack->pz4c->I_Z4c_gyy,   &(pm->pmb_pack->pz4c->u0));
+    outvars.emplace_back("z4c.gyz",   pm->pmb_pack->pz4c->I_Z4c_gyz,   &(pm->pmb_pack->pz4c->u0));
+    outvars.emplace_back("z4c.gzz",   pm->pmb_pack->pz4c->I_Z4c_gzz,   &(pm->pmb_pack->pz4c->u0));
+    outvars.emplace_back("z4c.Khat",  pm->pmb_pack->pz4c->I_Z4c_Khat,  &(pm->pmb_pack->pz4c->u0));
+    outvars.emplace_back("z4c.Axx",   pm->pmb_pack->pz4c->I_Z4c_Axx,   &(pm->pmb_pack->pz4c->u0));
+    outvars.emplace_back("z4c.Axy",   pm->pmb_pack->pz4c->I_Z4c_Axy,   &(pm->pmb_pack->pz4c->u0));
+    outvars.emplace_back("z4c.Axz",   pm->pmb_pack->pz4c->I_Z4c_Axz,   &(pm->pmb_pack->pz4c->u0));
+    outvars.emplace_back("z4c.Ayy",   pm->pmb_pack->pz4c->I_Z4c_Ayy,   &(pm->pmb_pack->pz4c->u0));
+    outvars.emplace_back("z4c.Ayz",   pm->pmb_pack->pz4c->I_Z4c_Ayz,   &(pm->pmb_pack->pz4c->u0));
+    outvars.emplace_back("z4c.Azz",   pm->pmb_pack->pz4c->I_Z4c_Azz,   &(pm->pmb_pack->pz4c->u0));
+    outvars.emplace_back("z4c.Gamx",  pm->pmb_pack->pz4c->I_Z4c_Gamx,  &(pm->pmb_pack->pz4c->u0));
+    outvars.emplace_back("z4c.Gamy",  pm->pmb_pack->pz4c->I_Z4c_Gamy,  &(pm->pmb_pack->pz4c->u0));
+    outvars.emplace_back("z4c.Gamz",  pm->pmb_pack->pz4c->I_Z4c_Gamz,  &(pm->pmb_pack->pz4c->u0));
+    outvars.emplace_back("z4c.Theta", pm->pmb_pack->pz4c->I_Z4c_Theta, &(pm->pmb_pack->pz4c->u0));
+    outvars.emplace_back("z4c.alpha", pm->pmb_pack->pz4c->I_Z4c_alpha, &(pm->pmb_pack->pz4c->u0));
+    outvars.emplace_back("z4c.betax", pm->pmb_pack->pz4c->I_Z4c_betax, &(pm->pmb_pack->pz4c->u0));
+    outvars.emplace_back("z4c.betay", pm->pmb_pack->pz4c->I_Z4c_betay, &(pm->pmb_pack->pz4c->u0));
+    outvars.emplace_back("z4c.betaz", pm->pmb_pack->pz4c->I_Z4c_betaz, &(pm->pmb_pack->pz4c->u0));
+  }
+   
   if (ndvars > 0) {
     int nmb = pm->pmb_pack->nmb_thispack;
     auto &indcs = pm->mb_indcs;
@@ -360,7 +436,7 @@ void BaseTypeOutput::LoadOutputData(Mesh *pm) {
           out_params.slice_x1 >= size.h_view(m).x1max) { continue; }
       // set index of slice
       ois = CellCenterIndex(out_params.slice_x1, indcs.nx1,
-                            size.h_view(m).x1min, size.h_view(m).x1max);
+                            size.h_view(m).x1min, size.h_view(m).x1max)+indcs.ng;
       oie = ois;
     }
 
@@ -370,7 +446,7 @@ void BaseTypeOutput::LoadOutputData(Mesh *pm) {
           out_params.slice_x2 >= size.h_view(m).x2max) { continue; }
       // set index of slice
       ojs = CellCenterIndex(out_params.slice_x2, indcs.nx2,
-                            size.h_view(m).x2min, size.h_view(m).x2max);
+                            size.h_view(m).x2min, size.h_view(m).x2max)+indcs.ng;
       oje = ojs;
     }
 
@@ -380,7 +456,7 @@ void BaseTypeOutput::LoadOutputData(Mesh *pm) {
           out_params.slice_x3 >= size.h_view(m).x3max) { continue; }
       // set index of slice
       oks = CellCenterIndex(out_params.slice_x3, indcs.nx3,
-                            size.h_view(m).x3min, size.h_view(m).x3max);
+                            size.h_view(m).x3min, size.h_view(m).x3max)+indcs.ng;
       oke = oks;
     }
 
