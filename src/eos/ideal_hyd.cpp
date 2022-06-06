@@ -65,13 +65,16 @@ void IdealHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
     HydPrim1D w;
     bool dfloor_used=false, efloor_used=false;
     SingleC2P_IdealHyd(u, eos, w, dfloor_used, efloor_used);
-    if (dfloor_used) {sumd++;}
-    if (efloor_used) {sume++;}
 
     // set FOFC flag and quit loop if this function called only to check floors
     if (only_testfloors) {
-      if (dfloor_used || efloor_used) {fofc_(m,k,j,i) = true;}
+      if (dfloor_used || efloor_used) {
+        fofc_(m,k,j,i) = true;
+        sumd++;  // use dfloor as counter for when either is true
+      }
     } else {
+      if (dfloor_used) {sumd++;}
+      if (efloor_used) {sume++;}
       // store primitive state in 3D array
       prim(m,IDN,k,j,i) = w.d;
       prim(m,IVX,k,j,i) = w.vx;
@@ -87,8 +90,7 @@ void IdealHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
 
   // store appropriate counters
   if (only_testfloors) {
-    pmy_pack->pmesh->ecounter.fofc_dfloor += nfloord_;
-    pmy_pack->pmesh->ecounter.fofc_efloor += nfloore_;
+    pmy_pack->pmesh->ecounter.nfofc += nfloord_;
   } else {
     pmy_pack->pmesh->ecounter.neos_dfloor += nfloord_;
     pmy_pack->pmesh->ecounter.neos_efloor += nfloore_;

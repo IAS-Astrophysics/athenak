@@ -142,6 +142,9 @@ class MHD {
   template <MHD_RSolver T>
   void CalculateFluxes(Driver *d, int stage);
 
+  // first-order flux correction
+  void FOFC(Driver *d, int stage);
+
  private:
   MeshBlockPack* pmy_pack;   // ptr to MeshBlockPack containing this MHD
   // temporary variables used to store face-centered electric fields returned by RS
@@ -149,6 +152,7 @@ class MHD {
   DvceArray4D<Real> e1x2, e3x2;
   DvceArray4D<Real> e2x3, e1x3;
   DvceArray4D<Real> e1_cc, e2_cc, e3_cc;
+  DvceArray5D<Real> utest, bcctest;  // scratch arrays for FOFC
 };
 
 } // namespace mhd

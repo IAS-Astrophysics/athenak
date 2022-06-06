@@ -148,6 +148,9 @@ TaskStatus Hydro::Fluxes(Driver *pdrive, int stage) {
     pcond->IsotropicHeatFlux(w0, pcond->kappa, peos->eos_data, uflx);
   }
 
+  // call FOFC if used
+  if (use_fofc) {FOFC(pdrive, stage);}
+
   return TaskStatus::complete;
 }
 

@@ -30,6 +30,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
     coarse_u0("ccons",1,1,1,1,1),
     u1("cons1",1,1,1,1,1),
     uflx("uflx",1,1,1,1,1),
+    utest("utest",1,1,1,1,1),
     fofc("fofc",1,1,1,1) {
   // (1) construct EOS object (no default)
   {std::string eqn_of_state = pin->GetString("hydro","eos");
@@ -243,7 +244,8 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
     // allocate array of flags used with FOFC
     use_fofc = pin->GetOrAddBoolean("hydro","fofc",false);
     if (use_fofc) {
-      Kokkos::realloc(fofc, nmb, ncells3, ncells2, ncells1);
+      Kokkos::realloc(fofc,  nmb, ncells3, ncells2, ncells1);
+      Kokkos::realloc(utest, nmb, nhydro, ncells3, ncells2, ncells1);
     }
   }
 }

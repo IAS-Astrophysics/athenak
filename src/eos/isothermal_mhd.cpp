@@ -134,7 +134,7 @@ void IsothermalMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real
 
   // store appropriate counters
   if (only_testfloors) {
-    pmy_pack->pmesh->ecounter.fofc_dfloor += nfloord_;
+    pmy_pack->pmesh->ecounter.nfofc += nfloord_;
   } else {
     pmy_pack->pmesh->ecounter.neos_dfloor += nfloord_;
   }
