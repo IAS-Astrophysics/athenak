@@ -160,6 +160,9 @@ in `ProblemGenerator` constructor (resfile)
 
 # TODO
 - RK4: to implement
+- AMR: to implement
+- Puncture Tracker: to implement
+- Wave Extraction: to implement
 - SBC: Sommerfeld boundary condition need a way ad hoc to be implemented in this code base
 - Derivatives-ghosts: how it is done now (switch/case over nghost in each derivative call) is stupid and expensive. Best thing would be to have nghost compile-time. If not possible, do only one if clause at the task-list level, for example.  
 - Test hist output (e.g. compare with Athena++)
