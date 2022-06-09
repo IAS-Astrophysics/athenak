@@ -113,7 +113,7 @@ Real Equation44(const Real mu, const Real b2, const Real rpar, const Real r, con
 KOKKOS_INLINE_FUNCTION
 void SingleC2P_IdealSRMHD(MHDCons1D &u, const EOS_Data &eos, Real s2, Real b2, Real rpar,
                           HydPrim1D &w,
-                          bool &dfloor_used, bool &efloor_used, int &iter_used) {
+                          bool &dfloor_used, bool &efloor_used, int &max_iter) {
   // Parameters
   const int max_iterations = 15;
   const Real tol = 1.0e-12;
@@ -160,7 +160,8 @@ void SingleC2P_IdealSRMHD(MHDCons1D &u, const EOS_Data &eos, Real s2, Real b2, R
   }
   Real z = 0.5*(zm + zp);
 
-  for (iter_used=0; iter_used < iterations; ++iter_used) {
+  int iter;
+  for (iter=0; iter < iterations; ++iter) {
     z =  (zm*fp - zp*fm)/(fp-fm);  // linear interpolation to point f(z)=0
     Real f = Equation49(z, b2, rpar, r, q);
     // Quit if convergence reached
@@ -180,6 +181,7 @@ void SingleC2P_IdealSRMHD(MHDCons1D &u, const EOS_Data &eos, Real s2, Real b2, R
       fp = f;
     }
   }
+  max_iter = (iter > max_iter)? iter : max_iter;
 
   // Found brackets. Now find solution in bounded interval, again using the
   // false position method
@@ -196,7 +198,7 @@ void SingleC2P_IdealSRMHD(MHDCons1D &u, const EOS_Data &eos, Real s2, Real b2, R
   }
   z = 0.5*(zm + zp);
 
-  for (iter_used=0; iter_used < iterations; ++iter_used) {
+  for (iter=0; iter < iterations; ++iter) {
     z =  (zm*fp - zp*fm)/(fp-fm);  // linear interpolation to point f(z)=0
     Real f = Equation44(z, b2, rpar, r, q, u.d, eos);
     // Quit if convergence reached
@@ -216,6 +218,7 @@ void SingleC2P_IdealSRMHD(MHDCons1D &u, const EOS_Data &eos, Real s2, Real b2, R
       fp = f;
     }
   }
+  max_iter = (iter > max_iter)? iter : max_iter;
 
   // iterations ended, compute primitives from resulting value of z
   Real &mu = z;

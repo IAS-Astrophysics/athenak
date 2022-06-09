@@ -103,7 +103,7 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
     // call c2p function
     HydPrim1D w;
     bool dfloor_used=false, efloor_used=false;
-    int iter_used;
+    int iter_used=0;
     SingleC2P_IdealSRMHD(u, eos, s2, b2, rpar, w, dfloor_used, efloor_used, iter_used);
 
     // set FOFC flag and quit loop if this function called only to check floors
