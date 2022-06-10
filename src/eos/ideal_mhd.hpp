@@ -126,8 +126,8 @@ void SingleC2P_IdealSRMHD(MHDCons1D &u, const EOS_Data &eos, Real s2, Real b2, R
   }
 
   // apply energy floor
-  if (u.e < eos.pfloor/gm1) {
-    u.e = eos.pfloor/gm1;
+  if (u.e < (eos.pfloor/gm1 + 0.5*b2)) {
+    u.e = eos.pfloor/gm1 + 0.5*b2;
     efloor_used = true;
   }
 

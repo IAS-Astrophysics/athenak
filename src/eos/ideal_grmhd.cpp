@@ -49,6 +49,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
 
   auto &flat = pmy_pack->pcoord->coord_data.is_minkowski;
   auto &spin = pmy_pack->pcoord->coord_data.bh_spin;
+  auto &use_excise = pmy_pack->pcoord->coord_data.bh_excise;
   auto &horizon_mask_ = pmy_pack->pcoord->horizon_mask;
   auto &dexcise_ = pmy_pack->pcoord->coord_data.dexcise;
   auto &pexcise_ = pmy_pack->pcoord->coord_data.pexcise;
@@ -110,13 +111,19 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
     int iter_used=0;
 
     // Only execute cons2prim if outside excised region
-    if (horizon_mask_(m,k,j,i)) {
+    bool excised = false;
+    if (use_excise) {
+      if (horizon_mask_(m,k,j,i)) {
         w.d = dexcise_;
         w.vx = 0.0;
         w.vy = 0.0;
         w.vz = 0.0;
         w.e = pexcise_/gm1;
-    } else {
+        excised = true;
+      }
+    }
+
+    if (not excised) {
       // calculate SR conserved quantities
       MHDCons1D u_sr;
 
@@ -198,6 +205,11 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       prim(m,IVY,k,j,i) = w.vy;
       prim(m,IVZ,k,j,i) = w.vz;
       prim(m,IEN,k,j,i) = w.e;
+
+      // store cell-centered fields in 3D array
+      bcc(m,IBX,k,j,i) = u.bx;
+      bcc(m,IBY,k,j,i) = u.by;
+      bcc(m,IBZ,k,j,i) = u.bz;
 
       // reset conserved variables if floor is hit
       if (dfloor_used || efloor_used) {
