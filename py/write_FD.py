@@ -275,9 +275,9 @@ KOKKOS_INLINE_FUNCTION
 
 
 if __name__=="__main__":
-    f = open("z4c_template.hpp", "r")
-    template = f.read()
-    f.close()
+    ders = """
+// This file has been generated with py/write_FD.py, please do modifications there.
+"""
 
     Dx_strings = ["-1./2., 0., 1./2.", "1./12., -2./3., 0., 2./3., -1./12.", "-1./60., 3./20., -3./4., 0., 3./4., -3./20., 1./60."]
     Dx = generate_central(Dx_strings,"Dx") + generate_central(Dx_strings,"Dx",a=1) + generate_central(Dx_strings,"Dx",a=1,b=1)
@@ -294,11 +294,6 @@ if __name__=="__main__":
     Diss_string = ["1., -4., 6., -4., 1.", "1., -6., 15., -20., 15., -6., 1.", "1., -8., 28., -56., 70., -56., 28., -8., 1."]
     Diss = generate_central(Diss_string,"Diss",a=1)
 
-    ders = Dx + Dxx + Dxy + Lx + Diss
-
-    z4c_hpp = template.format(sys.argv[0], derivatives=ders)
-    f = open("z4c.hpp", "w")
-    f.write(z4c_hpp)
-    f.close()
-
-
+    ders += Dx + Dxx + Dxy + Lx + Diss
+    with open("derivatives.inc", "w") as f:
+        f.write(ders)
