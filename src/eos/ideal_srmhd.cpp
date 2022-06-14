@@ -115,7 +115,7 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
     } else {
       if (dfloor_used) {sumd++;}
       if (efloor_used) {sume++;}
-      max_it = fmax(max_it, iter_used);
+      max_it = (iter_used > max_it) ? iter_used : max_it;
       // store primitive state in 3D array
       prim(m,IDN,k,j,i) = w.d;
       prim(m,IVX,k,j,i) = w.vx;
