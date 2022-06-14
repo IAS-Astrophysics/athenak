@@ -245,7 +245,7 @@ void Z4c::Z4cToADM(MeshBlockPack *pmbp) {
 //
 // The constraints are set only in the MeshBlock interior, because derivatives
 // of the ADM quantities are neded to compute them.
-
+template <int NGHOST>
 void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
   // capture variables for the kernel
   auto &indcs = pmbp->pmesh->mb_indcs;
@@ -332,8 +332,8 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     for(int a = 0; a < NDIM; ++a)
     for(int b = a; b < NDIM; ++b) {
       par_for_inner(member, is, ie, [&](const int i) {
-        dg_ddd(c,a,b,i) = Dx(c, ord_der, idx, adm.g_dd, m,a,b,k,j,i);
-        dK_ddd(c,a,b,i) = Dx(c, ord_der, idx, adm.K_dd, m,a,b,k,j,i);
+        dg_ddd(c,a,b,i) = Dx<NGHOST>(c, idx, adm.g_dd, m,a,b,k,j,i);
+        dK_ddd(c,a,b,i) = Dx<NGHOST>(c, idx, adm.K_dd, m,a,b,k,j,i);
       });
     }
     
@@ -344,12 +344,12 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     for(int d = c; d < NDIM; ++d) {
       if(a == b) {
         par_for_inner(member, is, ie, [&](const int i) {
-          ddg_dddd(a,a,c,d,i) = Dxx(a, ord_der, idx, adm.g_dd, m,c,d,k,j,i);
+          ddg_dddd(a,a,c,d,i) = Dxx<NGHOST>(a, idx, adm.g_dd, m,c,d,k,j,i);
         });
       }
       else {
         par_for_inner(member, is, ie, [&](const int i) {
-          ddg_dddd(a,b,c,d,i) = Dxy(a, b, ord_der, idx, adm.g_dd, m,c,d,k,j,i);
+          ddg_dddd(a,b,c,d,i) = Dxy<NGHOST>(a, b, idx, adm.g_dd, m,c,d,k,j,i);
         });
       }
     }
@@ -522,4 +522,7 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     });
 });
 }
+template void Z4c::ADMConstraints<2>(MeshBlockPack *pmbp);
+template void Z4c::ADMConstraints<3>(MeshBlockPack *pmbp);
+template void Z4c::ADMConstraints<4>(MeshBlockPack *pmbp);
 }

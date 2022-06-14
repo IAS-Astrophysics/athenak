@@ -14,7 +14,7 @@ namespace z4c {
 //----------------------------------------------------------------------------------------
 //! \fn TaskStatus Z4c::CalcRHS
 //! \brief Computes the wave equation RHS
-
+template <int NGHOST>
 TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
 {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
@@ -187,18 +187,18 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
     // Scalars
     for(int a = 0; a < NDIM; ++a) {
       par_for_inner(member, is, ie, [&](const int i) {
-        dalpha_d(a,i) = Dx(a, der_ghost, idx, z4c.alpha, m,k,j,i);
-        dchi_d  (a,i) = Dx(a, der_ghost, idx, z4c.chi,   m,k,j,i);
-        dKhat_d (a,i) = Dx(a, der_ghost, idx, z4c.Khat,  m,k,j,i);
-        dTheta_d(a,i) = Dx(a, der_ghost, idx, z4c.Theta, m,k,j,i);
+        dalpha_d(a,i) = Dx<NGHOST>(a, idx, z4c.alpha, m,k,j,i);
+        dchi_d  (a,i) = Dx<NGHOST>(a, idx, z4c.chi,   m,k,j,i);
+        dKhat_d (a,i) = Dx<NGHOST>(a, idx, z4c.Khat,  m,k,j,i);
+        dTheta_d(a,i) = Dx<NGHOST>(a, idx, z4c.Theta, m,k,j,i);
       });
     }
     // Vectors
     for(int a = 0; a < NDIM; ++a)
     for(int b = 0; b < NDIM; ++b) {
       par_for_inner(member, is, ie, [&](const int i) {
-        dbeta_du(b,a,i) = Dx(b, der_ghost, idx, z4c.beta_u, m,a,k,j,i);
-         dGam_du(b,a,i) = Dx(b, der_ghost, idx, z4c.Gam_u,  m,a,k,j,i);
+        dbeta_du(b,a,i) = Dx<NGHOST>(b, idx, z4c.beta_u, m,a,k,j,i);
+         dGam_du(b,a,i) = Dx<NGHOST>(b, idx, z4c.Gam_u,  m,a,k,j,i);
       });
     }
     // Tensors
@@ -206,8 +206,8 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
     for(int b = a; b < NDIM; ++b)
     for(int c = 0; c < NDIM; ++c) {
       par_for_inner(member, is, ie, [&](const int i) {
-        dg_ddd(c,a,b,i) = Dx(c, der_ghost, idx, z4c.g_dd, m,a,b,k,j,i);
-        dA_ddd(c,a,b,i) = Dx(c, der_ghost, idx, z4c.A_dd, m,a,b,k,j,i);
+        dg_ddd(c,a,b,i) = Dx<NGHOST>(c, idx, z4c.g_dd, m,a,b,k,j,i);
+        dA_ddd(c,a,b,i) = Dx<NGHOST>(c, idx, z4c.A_dd, m,a,b,k,j,i);
       });
     }
 
@@ -219,13 +219,13 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
     ddchi_dd.ZeroClear();
     for(int a = 0; a < NDIM; ++a) {
       par_for_inner(member, is, ie, [&](const int i) {
-        ddalpha_dd(a,a,i) = Dxx(a, der_ghost, idx, z4c.alpha, m,k,j,i);
-          ddchi_dd(a,a,i) = Dxx(a, der_ghost, idx, z4c.chi,   m,k,j,i);
+        ddalpha_dd(a,a,i) = Dxx<NGHOST>(a, idx, z4c.alpha, m,k,j,i);
+          ddchi_dd(a,a,i) = Dxx<NGHOST>(a, idx, z4c.chi,   m,k,j,i);
       });
       for(int b = a + 1; b < NDIM; ++b) {
         par_for_inner(member, is, ie, [&](const int i) {
-          ddalpha_dd(a,b,i) = Dxy(a, b, der_ghost, idx, z4c.alpha, m,k,j,i);
-            ddchi_dd(a,b,i) = Dxy(a, b, der_ghost, idx, z4c.chi,   m,k,j,i);
+          ddalpha_dd(a,b,i) = Dxy<NGHOST>(a, b, idx, z4c.alpha, m,k,j,i);
+            ddchi_dd(a,b,i) = Dxy<NGHOST>(a, b, idx, z4c.chi,   m,k,j,i);
         });
       }
     }
@@ -236,12 +236,12 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
     for(int b = a; b < NDIM; ++b) {
       if(a == b) {
         par_for_inner(member, is, ie, [&](const int i) {
-          ddbeta_ddu(a,b,c,i) = Dxx(a, der_ghost, idx, z4c.beta_u, m,c,k,j,i);
+          ddbeta_ddu(a,b,c,i) = Dxx<NGHOST>(a, idx, z4c.beta_u, m,c,k,j,i);
         });
       }
       else {
         par_for_inner(member, is, ie, [&](const int i) {
-          ddbeta_ddu(a,b,c,i) = Dxy(a, b, der_ghost, idx, z4c.beta_u, m,c,k,j,i);
+          ddbeta_ddu(a,b,c,i) = Dxy<NGHOST>(a, b, idx, z4c.beta_u, m,c,k,j,i);
         });
       }
     }
@@ -253,12 +253,12 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
     for(int b = a; b < NDIM; ++b) {
       if(a == b) {
         par_for_inner(member, is, ie, [&](const int i) {
-          ddg_dddd(a,b,c,d,i) = Dxx(a, der_ghost, idx, z4c.g_dd, m,c,d,k,j,i);
+          ddg_dddd(a,b,c,d,i) = Dxx<NGHOST>(a, idx, z4c.g_dd, m,c,d,k,j,i);
         });
       }
       else {
         par_for_inner(member, is, ie, [&](const int i) {
-          ddg_dddd(a,b,c,d,i) = Dxy(a, b, der_ghost, idx, z4c.g_dd, m,c,d,k,j,i);
+          ddg_dddd(a,b,c,d,i) = Dxy<NGHOST>(a, b, idx, z4c.g_dd, m,c,d,k,j,i);
         });
       }
     }
@@ -272,10 +272,10 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
     LTheta.ZeroClear();
     for(int a = 0; a < NDIM; ++a) {
       par_for_inner(member, is, ie, [&](const int i) {  
-        Lalpha(i) += Lx(a, der_ghost, idx, z4c.beta_u, z4c.alpha, m,a,k,j,i);
-        Lchi(i)   += Lx(a, der_ghost, idx, z4c.beta_u, z4c.chi,   m,a,k,j,i);
-        LKhat(i)  += Lx(a, der_ghost, idx, z4c.beta_u, z4c.Khat,  m,a,k,j,i);
-        LTheta(i) += Lx(a, der_ghost, idx, z4c.beta_u, z4c.Theta, m,a,k,j,i);
+        Lalpha(i) += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.alpha, m,a,k,j,i);
+        Lchi(i)   += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.chi,   m,a,k,j,i);
+        LKhat(i)  += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.Khat,  m,a,k,j,i);
+        LTheta(i) += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.Theta, m,a,k,j,i);
       });
     }
     // Vectors
@@ -284,8 +284,8 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
     for(int a = 0; a < NDIM; ++a)
     for(int b = 0; b < NDIM; ++b) {
       par_for_inner(member, is, ie, [&](const int i) {
-        Lbeta_u(b,i) += Lx(a, der_ghost, idx, z4c.beta_u, z4c.beta_u, m,a,b,k,j,i);
-        LGam_u(b,i)  += Lx(a, der_ghost, idx, z4c.beta_u, z4c.Gam_u,  m,a,b,k,j,i);
+        Lbeta_u(b,i) += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.beta_u, m,a,b,k,j,i);
+        LGam_u(b,i)  += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.Gam_u,  m,a,b,k,j,i);
       });
     }
     // Tensors
@@ -295,8 +295,8 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
     for(int b = a; b < NDIM; ++b)
     for(int c = 0; c < NDIM; ++c) {
       par_for_inner(member, is, ie, [&](const int i) {
-        Lg_dd(a,b,i) += Lx(c, der_ghost, idx, z4c.beta_u, z4c.g_dd, m,c,a,b,k,j,i);
-        LA_dd(a,b,i) += Lx(c, der_ghost, idx, z4c.beta_u, z4c.A_dd, m,c,a,b,k,j,i);
+        Lg_dd(a,b,i) += Lx<NGHOST>(c, idx, z4c.beta_u, z4c.g_dd, m,c,a,b,k,j,i);
+        LA_dd(a,b,i) += Lx<NGHOST>(c, idx, z4c.beta_u, z4c.A_dd, m,c,a,b,k,j,i);
       });
     }
     // -----------------------------------------------------------------------------------
@@ -672,11 +672,14 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
   Real idx[] = {size.d_view(m).idx1, size.d_view(m).idx2, size.d_view(m).idx3}; 
   for(int a = 0; a < NDIM; ++a) {
     par_for_inner(member, is, ie, [&](const int i) {
-      //u_rhs(m,n,k,j,i) += Diss(a, indcs.ng, idx, u0, m, n, k, j, i)*diss;
+      u_rhs(m,n,k,j,i) += Diss<NGHOST>(a, idx, u0, m, n, k, j, i)*diss;
     });
   }  
   });
   return TaskStatus::complete;
 }
 
+template TaskStatus Z4c::CalcRHS<2>(Driver *pdriver, int stage);
+template TaskStatus Z4c::CalcRHS<3>(Driver *pdriver, int stage);
+template TaskStatus Z4c::CalcRHS<4>(Driver *pdriver, int stage);
 }
