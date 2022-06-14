@@ -196,21 +196,24 @@ class Z4c {
   TaskStatus CopyU(Driver *d, int stage);
   TaskStatus SendU(Driver *d, int stage);
   TaskStatus RecvU(Driver *d, int stage);
-  TaskStatus CalcRHS(Driver *d, int stage);
   TaskStatus ExpRKUpdate(Driver *d, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
   TaskStatus ApplyPhysicalBCs(Driver *d, int stage);
   TaskStatus EnforceAlgConstr(Driver *d, int stage);
+  
   TaskStatus Z4cToADM_(Driver *d, int stage);
   TaskStatus ADMConstraints_(Driver *d, int stage);
   TaskStatus Z4cBoundaryRHS(Driver *d, int stage);
   TaskStatus RestrictU(Driver *d, int stage);
   
+  template <int NGHOST>
+  TaskStatus CalcRHS(Driver *d, int stage);
   
   void ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin);
   void ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin);
   void GaugePreCollapsedLapse(MeshBlockPack *pmbp, ParameterInput *pin);
   void Z4cToADM(MeshBlockPack *pmbp);
+  template <int NGHOST>
   void ADMConstraints(MeshBlockPack *pmbp);
   void AlgConstr(MeshBlockPack *pmbp);
 #if TWO_PUNCTURES

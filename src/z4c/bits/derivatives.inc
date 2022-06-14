@@ -3,10 +3,10 @@
 
   // Reminder: this code has been generated with py/write_FD.py, please do modifications there. 
   // 1st derivative scalar
-  template <typename TYPE>
+  template <int NGHOST, typename TYPE>
 KOKKOS_INLINE_FUNCTION
-  Real Dx(int const dir, int const nghost,
-          const Real idx[], const TYPE &quant,
+  Real Dx(int const dir,
+          const Real idx[], TYPE &quant,
           int const m,
           int const k, int const j, int const i)
   {
@@ -14,46 +14,45 @@ KOKKOS_INLINE_FUNCTION
   int const shiftj = dir==1;
   int const shifti = dir==0;
   Real out;
-  switch(nghost) {
-    case 2 : out = -1./2.   * quant(m,k+(-1)*shiftk,
-                                       j+(-1)*shiftj,
-                                       i+(-1)*shifti)
-                    +1./2.   * quant(m,k+( 1)*shiftk,
-                                       j+( 1)*shiftj,
-                                       i+( 1)*shifti);
-             break;
-    case 3 : out = +1./12.   * quant(m,k+(-2)*shiftk,
-                                       j+(-2)*shiftj,
-                                       i+(-2)*shifti)
-                    -2./3.   * quant(m,k+(-1)*shiftk,
-                                       j+(-1)*shiftj,
-                                       i+(-1)*shifti)
-                    +2./3.   * quant(m,k+( 1)*shiftk,
-                                       j+( 1)*shiftj,
-                                       i+( 1)*shifti)
-                   -1./12.   * quant(m,k+( 2)*shiftk,
-                                       j+( 2)*shiftj,
-                                       i+( 2)*shifti);
-             break;
-    case 4 : out = -1./60.   * quant(m,k+(-3)*shiftk,
-                                       j+(-3)*shiftj,
-                                       i+(-3)*shifti)
-                   +3./20.   * quant(m,k+(-2)*shiftk,
-                                       j+(-2)*shiftj,
-                                       i+(-2)*shifti)
-                    -3./4.   * quant(m,k+(-1)*shiftk,
-                                       j+(-1)*shiftj,
-                                       i+(-1)*shifti)
-                    +3./4.   * quant(m,k+( 1)*shiftk,
-                                       j+( 1)*shiftj,
-                                       i+( 1)*shifti)
-                   -3./20.   * quant(m,k+( 2)*shiftk,
-                                       j+( 2)*shiftj,
-                                       i+( 2)*shifti)
-                   +1./60.   * quant(m,k+( 3)*shiftk,
-                                       j+( 3)*shiftj,
-                                       i+( 3)*shifti);
-             break;
+  if constexpr ( NGHOST == 2 ) {
+    out = + (  -1./2.   * quant(m,k+(-1)*shiftk,
+                                  j+(-1)*shiftj,
+                                  i+(-1)*shifti)
+               +1./2.   * quant(m,k+( 1)*shiftk,
+                                  j+( 1)*shiftj,
+                                  i+( 1)*shifti));
+  } else if constexpr ( NGHOST == 3 ) {
+    out = + ( +1./12.   * quant(m,k+(-2)*shiftk,
+                                  j+(-2)*shiftj,
+                                  i+(-2)*shifti)
+              -1./12.   * quant(m,k+( 2)*shiftk,
+                                  j+( 2)*shiftj,
+                                  i+( 2)*shifti))
+          + (  -2./3.   * quant(m,k+(-1)*shiftk,
+                                  j+(-1)*shiftj,
+                                  i+(-1)*shifti)
+               +2./3.   * quant(m,k+( 1)*shiftk,
+                                  j+( 1)*shiftj,
+                                  i+( 1)*shifti));
+  } else if constexpr ( NGHOST == 4 ) {
+    out = + ( -1./60.   * quant(m,k+(-3)*shiftk,
+                                  j+(-3)*shiftj,
+                                  i+(-3)*shifti)
+              +1./60.   * quant(m,k+( 3)*shiftk,
+                                  j+( 3)*shiftj,
+                                  i+( 3)*shifti))
+          + ( +3./20.   * quant(m,k+(-2)*shiftk,
+                                  j+(-2)*shiftj,
+                                  i+(-2)*shifti)
+              -3./20.   * quant(m,k+( 2)*shiftk,
+                                  j+( 2)*shiftj,
+                                  i+( 2)*shifti))
+          + (  -3./4.   * quant(m,k+(-1)*shiftk,
+                                  j+(-1)*shiftj,
+                                  i+(-1)*shifti)
+               +3./4.   * quant(m,k+( 1)*shiftk,
+                                  j+( 1)*shiftj,
+                                  i+( 1)*shifti));
   }
   return out*idx[dir];
   }
@@ -61,10 +60,10 @@ KOKKOS_INLINE_FUNCTION
 
   // Reminder: this code has been generated with py/write_FD.py, please do modifications there. 
   // 1st derivative vector
-  template <typename TYPE>
+  template <int NGHOST, typename TYPE>
 KOKKOS_INLINE_FUNCTION
-  Real Dx(int const dir, int const nghost,
-          const Real idx[], const TYPE &quant,
+  Real Dx(int const dir,
+          const Real idx[], TYPE &quant,
           int const m, int const a,
           int const k, int const j, int const i)
   {
@@ -72,46 +71,45 @@ KOKKOS_INLINE_FUNCTION
   int const shiftj = dir==1;
   int const shifti = dir==0;
   Real out;
-  switch(nghost) {
-    case 2 : out = -1./2.   * quant(m,a,k+(-1)*shiftk,
-                                         j+(-1)*shiftj,
-                                         i+(-1)*shifti)
-                    +1./2.   * quant(m,a,k+( 1)*shiftk,
-                                         j+( 1)*shiftj,
-                                         i+( 1)*shifti);
-             break;
-    case 3 : out = +1./12.   * quant(m,a,k+(-2)*shiftk,
-                                         j+(-2)*shiftj,
-                                         i+(-2)*shifti)
-                    -2./3.   * quant(m,a,k+(-1)*shiftk,
-                                         j+(-1)*shiftj,
-                                         i+(-1)*shifti)
-                    +2./3.   * quant(m,a,k+( 1)*shiftk,
-                                         j+( 1)*shiftj,
-                                         i+( 1)*shifti)
-                   -1./12.   * quant(m,a,k+( 2)*shiftk,
-                                         j+( 2)*shiftj,
-                                         i+( 2)*shifti);
-             break;
-    case 4 : out = -1./60.   * quant(m,a,k+(-3)*shiftk,
-                                         j+(-3)*shiftj,
-                                         i+(-3)*shifti)
-                   +3./20.   * quant(m,a,k+(-2)*shiftk,
-                                         j+(-2)*shiftj,
-                                         i+(-2)*shifti)
-                    -3./4.   * quant(m,a,k+(-1)*shiftk,
-                                         j+(-1)*shiftj,
-                                         i+(-1)*shifti)
-                    +3./4.   * quant(m,a,k+( 1)*shiftk,
-                                         j+( 1)*shiftj,
-                                         i+( 1)*shifti)
-                   -3./20.   * quant(m,a,k+( 2)*shiftk,
-                                         j+( 2)*shiftj,
-                                         i+( 2)*shifti)
-                   +1./60.   * quant(m,a,k+( 3)*shiftk,
-                                         j+( 3)*shiftj,
-                                         i+( 3)*shifti);
-             break;
+  if constexpr ( NGHOST == 2 ) {
+    out = + (  -1./2.   * quant(m,a,k+(-1)*shiftk,
+                                    j+(-1)*shiftj,
+                                    i+(-1)*shifti)
+               +1./2.   * quant(m,a,k+( 1)*shiftk,
+                                    j+( 1)*shiftj,
+                                    i+( 1)*shifti));
+  } else if constexpr ( NGHOST == 3 ) {
+    out = + ( +1./12.   * quant(m,a,k+(-2)*shiftk,
+                                    j+(-2)*shiftj,
+                                    i+(-2)*shifti)
+              -1./12.   * quant(m,a,k+( 2)*shiftk,
+                                    j+( 2)*shiftj,
+                                    i+( 2)*shifti))
+          + (  -2./3.   * quant(m,a,k+(-1)*shiftk,
+                                    j+(-1)*shiftj,
+                                    i+(-1)*shifti)
+               +2./3.   * quant(m,a,k+( 1)*shiftk,
+                                    j+( 1)*shiftj,
+                                    i+( 1)*shifti));
+  } else if constexpr ( NGHOST == 4 ) {
+    out = + ( -1./60.   * quant(m,a,k+(-3)*shiftk,
+                                    j+(-3)*shiftj,
+                                    i+(-3)*shifti)
+              +1./60.   * quant(m,a,k+( 3)*shiftk,
+                                    j+( 3)*shiftj,
+                                    i+( 3)*shifti))
+          + ( +3./20.   * quant(m,a,k+(-2)*shiftk,
+                                    j+(-2)*shiftj,
+                                    i+(-2)*shifti)
+              -3./20.   * quant(m,a,k+( 2)*shiftk,
+                                    j+( 2)*shiftj,
+                                    i+( 2)*shifti))
+          + (  -3./4.   * quant(m,a,k+(-1)*shiftk,
+                                    j+(-1)*shiftj,
+                                    i+(-1)*shifti)
+               +3./4.   * quant(m,a,k+( 1)*shiftk,
+                                    j+( 1)*shiftj,
+                                    i+( 1)*shifti));
   }
   return out*idx[dir];
   }
@@ -119,10 +117,10 @@ KOKKOS_INLINE_FUNCTION
 
   // Reminder: this code has been generated with py/write_FD.py, please do modifications there. 
   // 1st derivative 2D tensor
-  template <typename TYPE>
+  template <int NGHOST, typename TYPE>
 KOKKOS_INLINE_FUNCTION
-  Real Dx(int const dir, int const nghost,
-          const Real idx[], const TYPE &quant,
+  Real Dx(int const dir,
+          const Real idx[], TYPE &quant,
           int const m, int const a, int const b,
           int const k, int const j, int const i)
   {
@@ -130,46 +128,45 @@ KOKKOS_INLINE_FUNCTION
   int const shiftj = dir==1;
   int const shifti = dir==0;
   Real out;
-  switch(nghost) {
-    case 2 : out = -1./2.   * quant(m,a,b,k+(-1)*shiftk,
-                                           j+(-1)*shiftj,
-                                           i+(-1)*shifti)
-                    +1./2.   * quant(m,a,b,k+( 1)*shiftk,
-                                           j+( 1)*shiftj,
-                                           i+( 1)*shifti);
-             break;
-    case 3 : out = +1./12.   * quant(m,a,b,k+(-2)*shiftk,
-                                           j+(-2)*shiftj,
-                                           i+(-2)*shifti)
-                    -2./3.   * quant(m,a,b,k+(-1)*shiftk,
-                                           j+(-1)*shiftj,
-                                           i+(-1)*shifti)
-                    +2./3.   * quant(m,a,b,k+( 1)*shiftk,
-                                           j+( 1)*shiftj,
-                                           i+( 1)*shifti)
-                   -1./12.   * quant(m,a,b,k+( 2)*shiftk,
-                                           j+( 2)*shiftj,
-                                           i+( 2)*shifti);
-             break;
-    case 4 : out = -1./60.   * quant(m,a,b,k+(-3)*shiftk,
-                                           j+(-3)*shiftj,
-                                           i+(-3)*shifti)
-                   +3./20.   * quant(m,a,b,k+(-2)*shiftk,
-                                           j+(-2)*shiftj,
-                                           i+(-2)*shifti)
-                    -3./4.   * quant(m,a,b,k+(-1)*shiftk,
-                                           j+(-1)*shiftj,
-                                           i+(-1)*shifti)
-                    +3./4.   * quant(m,a,b,k+( 1)*shiftk,
-                                           j+( 1)*shiftj,
-                                           i+( 1)*shifti)
-                   -3./20.   * quant(m,a,b,k+( 2)*shiftk,
-                                           j+( 2)*shiftj,
-                                           i+( 2)*shifti)
-                   +1./60.   * quant(m,a,b,k+( 3)*shiftk,
-                                           j+( 3)*shiftj,
-                                           i+( 3)*shifti);
-             break;
+  if constexpr ( NGHOST == 2 ) {
+    out = + (  -1./2.   * quant(m,a,b,k+(-1)*shiftk,
+                                      j+(-1)*shiftj,
+                                      i+(-1)*shifti)
+               +1./2.   * quant(m,a,b,k+( 1)*shiftk,
+                                      j+( 1)*shiftj,
+                                      i+( 1)*shifti));
+  } else if constexpr ( NGHOST == 3 ) {
+    out = + ( +1./12.   * quant(m,a,b,k+(-2)*shiftk,
+                                      j+(-2)*shiftj,
+                                      i+(-2)*shifti)
+              -1./12.   * quant(m,a,b,k+( 2)*shiftk,
+                                      j+( 2)*shiftj,
+                                      i+( 2)*shifti))
+          + (  -2./3.   * quant(m,a,b,k+(-1)*shiftk,
+                                      j+(-1)*shiftj,
+                                      i+(-1)*shifti)
+               +2./3.   * quant(m,a,b,k+( 1)*shiftk,
+                                      j+( 1)*shiftj,
+                                      i+( 1)*shifti));
+  } else if constexpr ( NGHOST == 4 ) {
+    out = + ( -1./60.   * quant(m,a,b,k+(-3)*shiftk,
+                                      j+(-3)*shiftj,
+                                      i+(-3)*shifti)
+              +1./60.   * quant(m,a,b,k+( 3)*shiftk,
+                                      j+( 3)*shiftj,
+                                      i+( 3)*shifti))
+          + ( +3./20.   * quant(m,a,b,k+(-2)*shiftk,
+                                      j+(-2)*shiftj,
+                                      i+(-2)*shifti)
+              -3./20.   * quant(m,a,b,k+( 2)*shiftk,
+                                      j+( 2)*shiftj,
+                                      i+( 2)*shifti))
+          + (  -3./4.   * quant(m,a,b,k+(-1)*shiftk,
+                                      j+(-1)*shiftj,
+                                      i+(-1)*shifti)
+               +3./4.   * quant(m,a,b,k+( 1)*shiftk,
+                                      j+( 1)*shiftj,
+                                      i+( 1)*shifti));
   }
   return out*idx[dir];
   }
@@ -177,10 +174,10 @@ KOKKOS_INLINE_FUNCTION
 
   // Reminder: this code has been generated with py/write_FD.py, please do modifications there. 
   // 1st derivative scalar
-  template <typename TYPE>
+  template <int NGHOST, typename TYPE>
 KOKKOS_INLINE_FUNCTION
-  Real Dxx(int const dir, int const nghost,
-          const Real idx[], const TYPE &quant,
+  Real Dxx(int const dir,
+          const Real idx[], TYPE &quant,
           int const m,
           int const k, int const j, int const i)
   {
@@ -188,55 +185,54 @@ KOKKOS_INLINE_FUNCTION
   int const shiftj = dir==1;
   int const shifti = dir==0;
   Real out;
-  switch(nghost) {
-    case 2 : out = +1.     * quant(m,k+(-1)*shiftk,
-                                       j+(-1)*shiftj,
-                                       i+(-1)*shifti)
-                     -2.     * quant(m,k,
-                                       j,
-                                       i)
-                     +1.     * quant(m,k+( 1)*shiftk,
-                                       j+( 1)*shiftj,
-                                       i+( 1)*shifti);
-             break;
-    case 3 : out = -1./12.   * quant(m,k+(-2)*shiftk,
-                                       j+(-2)*shiftj,
-                                       i+(-2)*shifti)
-                    +4./3.   * quant(m,k+(-1)*shiftk,
-                                       j+(-1)*shiftj,
-                                       i+(-1)*shifti)
-                    -5./2.   * quant(m,k,
-                                       j,
-                                       i)
-                    +4./3.   * quant(m,k+( 1)*shiftk,
-                                       j+( 1)*shiftj,
-                                       i+( 1)*shifti)
-                   -1./12.   * quant(m,k+( 2)*shiftk,
-                                       j+( 2)*shiftj,
-                                       i+( 2)*shifti);
-             break;
-    case 4 : out = +1./90.   * quant(m,k+(-3)*shiftk,
-                                       j+(-3)*shiftj,
-                                       i+(-3)*shifti)
-                   -3./20.   * quant(m,k+(-2)*shiftk,
-                                       j+(-2)*shiftj,
-                                       i+(-2)*shifti)
-                    +3./2.   * quant(m,k+(-1)*shiftk,
-                                       j+(-1)*shiftj,
-                                       i+(-1)*shifti)
-                   -49./18.  * quant(m,k,
-                                       j,
-                                       i)
-                    +3./2.   * quant(m,k+( 1)*shiftk,
-                                       j+( 1)*shiftj,
-                                       i+( 1)*shifti)
-                   -3./20.   * quant(m,k+( 2)*shiftk,
-                                       j+( 2)*shiftj,
-                                       i+( 2)*shifti)
-                   +1./90.   * quant(m,k+( 3)*shiftk,
-                                       j+( 3)*shiftj,
-                                       i+( 3)*shifti);
-             break;
+  if constexpr ( NGHOST == 2 ) {
+    out = + (   +1.     * quant(m,k+(-1)*shiftk,
+                                  j+(-1)*shiftj,
+                                  i+(-1)*shifti)
+                +1.     * quant(m,k+( 1)*shiftk,
+                                  j+( 1)*shiftj,
+                                  i+( 1)*shifti))
+                -2.     * quant(m,k,
+                                  j,
+                                  i);
+  } else if constexpr ( NGHOST == 3 ) {
+    out = + ( -1./12.   * quant(m,k+(-2)*shiftk,
+                                  j+(-2)*shiftj,
+                                  i+(-2)*shifti)
+              -1./12.   * quant(m,k+( 2)*shiftk,
+                                  j+( 2)*shiftj,
+                                  i+( 2)*shifti))
+          + (  +4./3.   * quant(m,k+(-1)*shiftk,
+                                  j+(-1)*shiftj,
+                                  i+(-1)*shifti)
+               +4./3.   * quant(m,k+( 1)*shiftk,
+                                  j+( 1)*shiftj,
+                                  i+( 1)*shifti))
+               -5./2.   * quant(m,k,
+                                  j,
+                                  i);
+  } else if constexpr ( NGHOST == 4 ) {
+    out = + ( +1./90.   * quant(m,k+(-3)*shiftk,
+                                  j+(-3)*shiftj,
+                                  i+(-3)*shifti)
+              +1./90.   * quant(m,k+( 3)*shiftk,
+                                  j+( 3)*shiftj,
+                                  i+( 3)*shifti))
+          + ( -3./20.   * quant(m,k+(-2)*shiftk,
+                                  j+(-2)*shiftj,
+                                  i+(-2)*shifti)
+              -3./20.   * quant(m,k+( 2)*shiftk,
+                                  j+( 2)*shiftj,
+                                  i+( 2)*shifti))
+          + (  +3./2.   * quant(m,k+(-1)*shiftk,
+                                  j+(-1)*shiftj,
+                                  i+(-1)*shifti)
+               +3./2.   * quant(m,k+( 1)*shiftk,
+                                  j+( 1)*shiftj,
+                                  i+( 1)*shifti))
+              -49./18.  * quant(m,k,
+                                  j,
+                                  i);
   }
   return out*idx[dir]*idx[dir];
   }
@@ -244,10 +240,10 @@ KOKKOS_INLINE_FUNCTION
 
   // Reminder: this code has been generated with py/write_FD.py, please do modifications there. 
   // 1st derivative vector
-  template <typename TYPE>
+  template <int NGHOST, typename TYPE>
 KOKKOS_INLINE_FUNCTION
-  Real Dxx(int const dir, int const nghost,
-          const Real idx[], const TYPE &quant,
+  Real Dxx(int const dir,
+          const Real idx[], TYPE &quant,
           int const m, int const a,
           int const k, int const j, int const i)
   {
@@ -255,55 +251,54 @@ KOKKOS_INLINE_FUNCTION
   int const shiftj = dir==1;
   int const shifti = dir==0;
   Real out;
-  switch(nghost) {
-    case 2 : out = +1.     * quant(m,a,k+(-1)*shiftk,
-                                         j+(-1)*shiftj,
-                                         i+(-1)*shifti)
-                     -2.     * quant(m,a,k,
-                                         j,
-                                         i)
-                     +1.     * quant(m,a,k+( 1)*shiftk,
-                                         j+( 1)*shiftj,
-                                         i+( 1)*shifti);
-             break;
-    case 3 : out = -1./12.   * quant(m,a,k+(-2)*shiftk,
-                                         j+(-2)*shiftj,
-                                         i+(-2)*shifti)
-                    +4./3.   * quant(m,a,k+(-1)*shiftk,
-                                         j+(-1)*shiftj,
-                                         i+(-1)*shifti)
-                    -5./2.   * quant(m,a,k,
-                                         j,
-                                         i)
-                    +4./3.   * quant(m,a,k+( 1)*shiftk,
-                                         j+( 1)*shiftj,
-                                         i+( 1)*shifti)
-                   -1./12.   * quant(m,a,k+( 2)*shiftk,
-                                         j+( 2)*shiftj,
-                                         i+( 2)*shifti);
-             break;
-    case 4 : out = +1./90.   * quant(m,a,k+(-3)*shiftk,
-                                         j+(-3)*shiftj,
-                                         i+(-3)*shifti)
-                   -3./20.   * quant(m,a,k+(-2)*shiftk,
-                                         j+(-2)*shiftj,
-                                         i+(-2)*shifti)
-                    +3./2.   * quant(m,a,k+(-1)*shiftk,
-                                         j+(-1)*shiftj,
-                                         i+(-1)*shifti)
-                   -49./18.  * quant(m,a,k,
-                                         j,
-                                         i)
-                    +3./2.   * quant(m,a,k+( 1)*shiftk,
-                                         j+( 1)*shiftj,
-                                         i+( 1)*shifti)
-                   -3./20.   * quant(m,a,k+( 2)*shiftk,
-                                         j+( 2)*shiftj,
-                                         i+( 2)*shifti)
-                   +1./90.   * quant(m,a,k+( 3)*shiftk,
-                                         j+( 3)*shiftj,
-                                         i+( 3)*shifti);
-             break;
+  if constexpr ( NGHOST == 2 ) {
+    out = + (   +1.     * quant(m,a,k+(-1)*shiftk,
+                                    j+(-1)*shiftj,
+                                    i+(-1)*shifti)
+                +1.     * quant(m,a,k+( 1)*shiftk,
+                                    j+( 1)*shiftj,
+                                    i+( 1)*shifti))
+                -2.     * quant(m,a,k,
+                                    j,
+                                    i);
+  } else if constexpr ( NGHOST == 3 ) {
+    out = + ( -1./12.   * quant(m,a,k+(-2)*shiftk,
+                                    j+(-2)*shiftj,
+                                    i+(-2)*shifti)
+              -1./12.   * quant(m,a,k+( 2)*shiftk,
+                                    j+( 2)*shiftj,
+                                    i+( 2)*shifti))
+          + (  +4./3.   * quant(m,a,k+(-1)*shiftk,
+                                    j+(-1)*shiftj,
+                                    i+(-1)*shifti)
+               +4./3.   * quant(m,a,k+( 1)*shiftk,
+                                    j+( 1)*shiftj,
+                                    i+( 1)*shifti))
+               -5./2.   * quant(m,a,k,
+                                    j,
+                                    i);
+  } else if constexpr ( NGHOST == 4 ) {
+    out = + ( +1./90.   * quant(m,a,k+(-3)*shiftk,
+                                    j+(-3)*shiftj,
+                                    i+(-3)*shifti)
+              +1./90.   * quant(m,a,k+( 3)*shiftk,
+                                    j+( 3)*shiftj,
+                                    i+( 3)*shifti))
+          + ( -3./20.   * quant(m,a,k+(-2)*shiftk,
+                                    j+(-2)*shiftj,
+                                    i+(-2)*shifti)
+              -3./20.   * quant(m,a,k+( 2)*shiftk,
+                                    j+( 2)*shiftj,
+                                    i+( 2)*shifti))
+          + (  +3./2.   * quant(m,a,k+(-1)*shiftk,
+                                    j+(-1)*shiftj,
+                                    i+(-1)*shifti)
+               +3./2.   * quant(m,a,k+( 1)*shiftk,
+                                    j+( 1)*shiftj,
+                                    i+( 1)*shifti))
+              -49./18.  * quant(m,a,k,
+                                    j,
+                                    i);
   }
   return out*idx[dir]*idx[dir];
   }
@@ -311,10 +306,10 @@ KOKKOS_INLINE_FUNCTION
 
   // Reminder: this code has been generated with py/write_FD.py, please do modifications there. 
   // 1st derivative 2D tensor
-  template <typename TYPE>
+  template <int NGHOST, typename TYPE>
 KOKKOS_INLINE_FUNCTION
-  Real Dxx(int const dir, int const nghost,
-          const Real idx[], const TYPE &quant,
+  Real Dxx(int const dir,
+          const Real idx[], TYPE &quant,
           int const m, int const a, int const b,
           int const k, int const j, int const i)
   {
@@ -322,55 +317,54 @@ KOKKOS_INLINE_FUNCTION
   int const shiftj = dir==1;
   int const shifti = dir==0;
   Real out;
-  switch(nghost) {
-    case 2 : out = +1.     * quant(m,a,b,k+(-1)*shiftk,
-                                           j+(-1)*shiftj,
-                                           i+(-1)*shifti)
-                     -2.     * quant(m,a,b,k,
-                                           j,
-                                           i)
-                     +1.     * quant(m,a,b,k+( 1)*shiftk,
-                                           j+( 1)*shiftj,
-                                           i+( 1)*shifti);
-             break;
-    case 3 : out = -1./12.   * quant(m,a,b,k+(-2)*shiftk,
-                                           j+(-2)*shiftj,
-                                           i+(-2)*shifti)
-                    +4./3.   * quant(m,a,b,k+(-1)*shiftk,
-                                           j+(-1)*shiftj,
-                                           i+(-1)*shifti)
-                    -5./2.   * quant(m,a,b,k,
-                                           j,
-                                           i)
-                    +4./3.   * quant(m,a,b,k+( 1)*shiftk,
-                                           j+( 1)*shiftj,
-                                           i+( 1)*shifti)
-                   -1./12.   * quant(m,a,b,k+( 2)*shiftk,
-                                           j+( 2)*shiftj,
-                                           i+( 2)*shifti);
-             break;
-    case 4 : out = +1./90.   * quant(m,a,b,k+(-3)*shiftk,
-                                           j+(-3)*shiftj,
-                                           i+(-3)*shifti)
-                   -3./20.   * quant(m,a,b,k+(-2)*shiftk,
-                                           j+(-2)*shiftj,
-                                           i+(-2)*shifti)
-                    +3./2.   * quant(m,a,b,k+(-1)*shiftk,
-                                           j+(-1)*shiftj,
-                                           i+(-1)*shifti)
-                   -49./18.  * quant(m,a,b,k,
-                                           j,
-                                           i)
-                    +3./2.   * quant(m,a,b,k+( 1)*shiftk,
-                                           j+( 1)*shiftj,
-                                           i+( 1)*shifti)
-                   -3./20.   * quant(m,a,b,k+( 2)*shiftk,
-                                           j+( 2)*shiftj,
-                                           i+( 2)*shifti)
-                   +1./90.   * quant(m,a,b,k+( 3)*shiftk,
-                                           j+( 3)*shiftj,
-                                           i+( 3)*shifti);
-             break;
+  if constexpr ( NGHOST == 2 ) {
+    out = + (   +1.     * quant(m,a,b,k+(-1)*shiftk,
+                                      j+(-1)*shiftj,
+                                      i+(-1)*shifti)
+                +1.     * quant(m,a,b,k+( 1)*shiftk,
+                                      j+( 1)*shiftj,
+                                      i+( 1)*shifti))
+                -2.     * quant(m,a,b,k,
+                                      j,
+                                      i);
+  } else if constexpr ( NGHOST == 3 ) {
+    out = + ( -1./12.   * quant(m,a,b,k+(-2)*shiftk,
+                                      j+(-2)*shiftj,
+                                      i+(-2)*shifti)
+              -1./12.   * quant(m,a,b,k+( 2)*shiftk,
+                                      j+( 2)*shiftj,
+                                      i+( 2)*shifti))
+          + (  +4./3.   * quant(m,a,b,k+(-1)*shiftk,
+                                      j+(-1)*shiftj,
+                                      i+(-1)*shifti)
+               +4./3.   * quant(m,a,b,k+( 1)*shiftk,
+                                      j+( 1)*shiftj,
+                                      i+( 1)*shifti))
+               -5./2.   * quant(m,a,b,k,
+                                      j,
+                                      i);
+  } else if constexpr ( NGHOST == 4 ) {
+    out = + ( +1./90.   * quant(m,a,b,k+(-3)*shiftk,
+                                      j+(-3)*shiftj,
+                                      i+(-3)*shifti)
+              +1./90.   * quant(m,a,b,k+( 3)*shiftk,
+                                      j+( 3)*shiftj,
+                                      i+( 3)*shifti))
+          + ( -3./20.   * quant(m,a,b,k+(-2)*shiftk,
+                                      j+(-2)*shiftj,
+                                      i+(-2)*shifti)
+              -3./20.   * quant(m,a,b,k+( 2)*shiftk,
+                                      j+( 2)*shiftj,
+                                      i+( 2)*shifti))
+          + (  +3./2.   * quant(m,a,b,k+(-1)*shiftk,
+                                      j+(-1)*shiftj,
+                                      i+(-1)*shifti)
+               +3./2.   * quant(m,a,b,k+( 1)*shiftk,
+                                      j+( 1)*shiftj,
+                                      i+( 1)*shifti))
+              -49./18.  * quant(m,a,b,k,
+                                      j,
+                                      i);
   }
   return out*idx[dir]*idx[dir];
   }
@@ -378,10 +372,10 @@ KOKKOS_INLINE_FUNCTION
 
   // Reminder: this code has been generated with py/write_FD.py, please do modifications there. 
   // 1st derivative scalar
-  template <typename TYPE>
+  template <int NGHOST, typename TYPE>
 KOKKOS_INLINE_FUNCTION
-  Real Dxy(int const dirx, int const diry, int const nghost,
-          const Real idx[], const TYPE &quant,
+  Real Dxy(int const dirx, int const diry,
+          const Real idx[], TYPE &quant,
           int const m,
           int const k, int const j, int const i)
   {
@@ -392,178 +386,261 @@ KOKKOS_INLINE_FUNCTION
   int const shiftyj = diry==1;
   int const shiftyi = diry==0;
   Real out;
-  switch(nghost) {
-    case 2 : out = +(  -1./2.  ) * (  -1./2.  ) * quant(m,k+(-1)*shiftxk + (-1)*shiftyk,
-                                                         j+(-1)*shiftxj + (-1)*shiftyj,
-                                                         i+(-1)*shiftxi + (-1)*shiftyi)
-                  +(  -1./2.  ) * (  1./2.   ) * quant(m,k+(-1)*shiftxk + ( 1)*shiftyk,
-                                                         j+(-1)*shiftxj + ( 1)*shiftyj,
-                                                         i+(-1)*shiftxi + ( 1)*shiftyi)
-                  +(  1./2.   ) * (  -1./2.  ) * quant(m,k+( 1)*shiftxk + (-1)*shiftyk,
-                                                         j+( 1)*shiftxj + (-1)*shiftyj,
-                                                         i+( 1)*shiftxi + (-1)*shiftyi)
-                  +(  1./2.   ) * (  1./2.   ) * quant(m,k+( 1)*shiftxk + ( 1)*shiftyk,
-                                                         j+( 1)*shiftxj + ( 1)*shiftyj,
-                                                         i+( 1)*shiftxi + ( 1)*shiftyi);
-             break;
-    case 3 : out = +(  1./12.  ) * (  1./12.  ) * quant(m,k+(-2)*shiftxk + (-2)*shiftyk,
-                                                         j+(-2)*shiftxj + (-2)*shiftyj,
-                                                         i+(-2)*shiftxi + (-2)*shiftyi)
-                  +(  1./12.  ) * (  -2./3.  ) * quant(m,k+(-2)*shiftxk + (-1)*shiftyk,
-                                                         j+(-2)*shiftxj + (-1)*shiftyj,
-                                                         i+(-2)*shiftxi + (-1)*shiftyi)
-                  +(  1./12.  ) * (  2./3.   ) * quant(m,k+(-2)*shiftxk + ( 1)*shiftyk,
-                                                         j+(-2)*shiftxj + ( 1)*shiftyj,
-                                                         i+(-2)*shiftxi + ( 1)*shiftyi)
-                  +(  1./12.  ) * ( -1./12.  ) * quant(m,k+(-2)*shiftxk + ( 2)*shiftyk,
-                                                         j+(-2)*shiftxj + ( 2)*shiftyj,
-                                                         i+(-2)*shiftxi + ( 2)*shiftyi)
-                  +(  -2./3.  ) * (  1./12.  ) * quant(m,k+(-1)*shiftxk + (-2)*shiftyk,
-                                                         j+(-1)*shiftxj + (-2)*shiftyj,
-                                                         i+(-1)*shiftxi + (-2)*shiftyi)
-                  +(  -2./3.  ) * (  -2./3.  ) * quant(m,k+(-1)*shiftxk + (-1)*shiftyk,
-                                                         j+(-1)*shiftxj + (-1)*shiftyj,
-                                                         i+(-1)*shiftxi + (-1)*shiftyi)
-                  +(  -2./3.  ) * (  2./3.   ) * quant(m,k+(-1)*shiftxk + ( 1)*shiftyk,
-                                                         j+(-1)*shiftxj + ( 1)*shiftyj,
-                                                         i+(-1)*shiftxi + ( 1)*shiftyi)
-                  +(  -2./3.  ) * ( -1./12.  ) * quant(m,k+(-1)*shiftxk + ( 2)*shiftyk,
-                                                         j+(-1)*shiftxj + ( 2)*shiftyj,
-                                                         i+(-1)*shiftxi + ( 2)*shiftyi)
-                  +(  2./3.   ) * (  1./12.  ) * quant(m,k+( 1)*shiftxk + (-2)*shiftyk,
-                                                         j+( 1)*shiftxj + (-2)*shiftyj,
-                                                         i+( 1)*shiftxi + (-2)*shiftyi)
-                  +(  2./3.   ) * (  -2./3.  ) * quant(m,k+( 1)*shiftxk + (-1)*shiftyk,
-                                                         j+( 1)*shiftxj + (-1)*shiftyj,
-                                                         i+( 1)*shiftxi + (-1)*shiftyi)
-                  +(  2./3.   ) * (  2./3.   ) * quant(m,k+( 1)*shiftxk + ( 1)*shiftyk,
-                                                         j+( 1)*shiftxj + ( 1)*shiftyj,
-                                                         i+( 1)*shiftxi + ( 1)*shiftyi)
-                  +(  2./3.   ) * ( -1./12.  ) * quant(m,k+( 1)*shiftxk + ( 2)*shiftyk,
-                                                         j+( 1)*shiftxj + ( 2)*shiftyj,
-                                                         i+( 1)*shiftxi + ( 2)*shiftyi)
-                  +( -1./12.  ) * (  1./12.  ) * quant(m,k+( 2)*shiftxk + (-2)*shiftyk,
-                                                         j+( 2)*shiftxj + (-2)*shiftyj,
-                                                         i+( 2)*shiftxi + (-2)*shiftyi)
-                  +( -1./12.  ) * (  -2./3.  ) * quant(m,k+( 2)*shiftxk + (-1)*shiftyk,
-                                                         j+( 2)*shiftxj + (-1)*shiftyj,
-                                                         i+( 2)*shiftxi + (-1)*shiftyi)
-                  +( -1./12.  ) * (  2./3.   ) * quant(m,k+( 2)*shiftxk + ( 1)*shiftyk,
-                                                         j+( 2)*shiftxj + ( 1)*shiftyj,
-                                                         i+( 2)*shiftxi + ( 1)*shiftyi)
-                  +( -1./12.  ) * ( -1./12.  ) * quant(m,k+( 2)*shiftxk + ( 2)*shiftyk,
-                                                         j+( 2)*shiftxj + ( 2)*shiftyj,
-                                                         i+( 2)*shiftxi + ( 2)*shiftyi);
-             break;
-    case 4 : out = +( -1./60.  ) * ( -1./60.  ) * quant(m,k+(-3)*shiftxk + (-3)*shiftyk,
-                                                         j+(-3)*shiftxj + (-3)*shiftyj,
-                                                         i+(-3)*shiftxi + (-3)*shiftyi)
-                  +( -1./60.  ) * (  3./20.  ) * quant(m,k+(-3)*shiftxk + (-2)*shiftyk,
-                                                         j+(-3)*shiftxj + (-2)*shiftyj,
-                                                         i+(-3)*shiftxi + (-2)*shiftyi)
-                  +( -1./60.  ) * (  -3./4.  ) * quant(m,k+(-3)*shiftxk + (-1)*shiftyk,
-                                                         j+(-3)*shiftxj + (-1)*shiftyj,
-                                                         i+(-3)*shiftxi + (-1)*shiftyi)
-                  +( -1./60.  ) * (  3./4.   ) * quant(m,k+(-3)*shiftxk + ( 1)*shiftyk,
-                                                         j+(-3)*shiftxj + ( 1)*shiftyj,
-                                                         i+(-3)*shiftxi + ( 1)*shiftyi)
-                  +( -1./60.  ) * ( -3./20.  ) * quant(m,k+(-3)*shiftxk + ( 2)*shiftyk,
-                                                         j+(-3)*shiftxj + ( 2)*shiftyj,
-                                                         i+(-3)*shiftxi + ( 2)*shiftyi)
-                  +( -1./60.  ) * (  1./60.  ) * quant(m,k+(-3)*shiftxk + ( 3)*shiftyk,
-                                                         j+(-3)*shiftxj + ( 3)*shiftyj,
-                                                         i+(-3)*shiftxi + ( 3)*shiftyi)
-                  +(  3./20.  ) * ( -1./60.  ) * quant(m,k+(-2)*shiftxk + (-3)*shiftyk,
-                                                         j+(-2)*shiftxj + (-3)*shiftyj,
-                                                         i+(-2)*shiftxi + (-3)*shiftyi)
-                  +(  3./20.  ) * (  3./20.  ) * quant(m,k+(-2)*shiftxk + (-2)*shiftyk,
-                                                         j+(-2)*shiftxj + (-2)*shiftyj,
-                                                         i+(-2)*shiftxi + (-2)*shiftyi)
-                  +(  3./20.  ) * (  -3./4.  ) * quant(m,k+(-2)*shiftxk + (-1)*shiftyk,
-                                                         j+(-2)*shiftxj + (-1)*shiftyj,
-                                                         i+(-2)*shiftxi + (-1)*shiftyi)
-                  +(  3./20.  ) * (  3./4.   ) * quant(m,k+(-2)*shiftxk + ( 1)*shiftyk,
-                                                         j+(-2)*shiftxj + ( 1)*shiftyj,
-                                                         i+(-2)*shiftxi + ( 1)*shiftyi)
-                  +(  3./20.  ) * ( -3./20.  ) * quant(m,k+(-2)*shiftxk + ( 2)*shiftyk,
-                                                         j+(-2)*shiftxj + ( 2)*shiftyj,
-                                                         i+(-2)*shiftxi + ( 2)*shiftyi)
-                  +(  3./20.  ) * (  1./60.  ) * quant(m,k+(-2)*shiftxk + ( 3)*shiftyk,
-                                                         j+(-2)*shiftxj + ( 3)*shiftyj,
-                                                         i+(-2)*shiftxi + ( 3)*shiftyi)
-                  +(  -3./4.  ) * ( -1./60.  ) * quant(m,k+(-1)*shiftxk + (-3)*shiftyk,
-                                                         j+(-1)*shiftxj + (-3)*shiftyj,
-                                                         i+(-1)*shiftxi + (-3)*shiftyi)
-                  +(  -3./4.  ) * (  3./20.  ) * quant(m,k+(-1)*shiftxk + (-2)*shiftyk,
-                                                         j+(-1)*shiftxj + (-2)*shiftyj,
-                                                         i+(-1)*shiftxi + (-2)*shiftyi)
-                  +(  -3./4.  ) * (  -3./4.  ) * quant(m,k+(-1)*shiftxk + (-1)*shiftyk,
-                                                         j+(-1)*shiftxj + (-1)*shiftyj,
-                                                         i+(-1)*shiftxi + (-1)*shiftyi)
-                  +(  -3./4.  ) * (  3./4.   ) * quant(m,k+(-1)*shiftxk + ( 1)*shiftyk,
-                                                         j+(-1)*shiftxj + ( 1)*shiftyj,
-                                                         i+(-1)*shiftxi + ( 1)*shiftyi)
-                  +(  -3./4.  ) * ( -3./20.  ) * quant(m,k+(-1)*shiftxk + ( 2)*shiftyk,
-                                                         j+(-1)*shiftxj + ( 2)*shiftyj,
-                                                         i+(-1)*shiftxi + ( 2)*shiftyi)
-                  +(  -3./4.  ) * (  1./60.  ) * quant(m,k+(-1)*shiftxk + ( 3)*shiftyk,
-                                                         j+(-1)*shiftxj + ( 3)*shiftyj,
-                                                         i+(-1)*shiftxi + ( 3)*shiftyi)
-                  +(  3./4.   ) * ( -1./60.  ) * quant(m,k+( 1)*shiftxk + (-3)*shiftyk,
-                                                         j+( 1)*shiftxj + (-3)*shiftyj,
-                                                         i+( 1)*shiftxi + (-3)*shiftyi)
-                  +(  3./4.   ) * (  3./20.  ) * quant(m,k+( 1)*shiftxk + (-2)*shiftyk,
-                                                         j+( 1)*shiftxj + (-2)*shiftyj,
-                                                         i+( 1)*shiftxi + (-2)*shiftyi)
-                  +(  3./4.   ) * (  -3./4.  ) * quant(m,k+( 1)*shiftxk + (-1)*shiftyk,
-                                                         j+( 1)*shiftxj + (-1)*shiftyj,
-                                                         i+( 1)*shiftxi + (-1)*shiftyi)
-                  +(  3./4.   ) * (  3./4.   ) * quant(m,k+( 1)*shiftxk + ( 1)*shiftyk,
-                                                         j+( 1)*shiftxj + ( 1)*shiftyj,
-                                                         i+( 1)*shiftxi + ( 1)*shiftyi)
-                  +(  3./4.   ) * ( -3./20.  ) * quant(m,k+( 1)*shiftxk + ( 2)*shiftyk,
-                                                         j+( 1)*shiftxj + ( 2)*shiftyj,
-                                                         i+( 1)*shiftxi + ( 2)*shiftyi)
-                  +(  3./4.   ) * (  1./60.  ) * quant(m,k+( 1)*shiftxk + ( 3)*shiftyk,
-                                                         j+( 1)*shiftxj + ( 3)*shiftyj,
-                                                         i+( 1)*shiftxi + ( 3)*shiftyi)
-                  +( -3./20.  ) * ( -1./60.  ) * quant(m,k+( 2)*shiftxk + (-3)*shiftyk,
-                                                         j+( 2)*shiftxj + (-3)*shiftyj,
-                                                         i+( 2)*shiftxi + (-3)*shiftyi)
-                  +( -3./20.  ) * (  3./20.  ) * quant(m,k+( 2)*shiftxk + (-2)*shiftyk,
-                                                         j+( 2)*shiftxj + (-2)*shiftyj,
-                                                         i+( 2)*shiftxi + (-2)*shiftyi)
-                  +( -3./20.  ) * (  -3./4.  ) * quant(m,k+( 2)*shiftxk + (-1)*shiftyk,
-                                                         j+( 2)*shiftxj + (-1)*shiftyj,
-                                                         i+( 2)*shiftxi + (-1)*shiftyi)
-                  +( -3./20.  ) * (  3./4.   ) * quant(m,k+( 2)*shiftxk + ( 1)*shiftyk,
-                                                         j+( 2)*shiftxj + ( 1)*shiftyj,
-                                                         i+( 2)*shiftxi + ( 1)*shiftyi)
-                  +( -3./20.  ) * ( -3./20.  ) * quant(m,k+( 2)*shiftxk + ( 2)*shiftyk,
-                                                         j+( 2)*shiftxj + ( 2)*shiftyj,
-                                                         i+( 2)*shiftxi + ( 2)*shiftyi)
-                  +( -3./20.  ) * (  1./60.  ) * quant(m,k+( 2)*shiftxk + ( 3)*shiftyk,
-                                                         j+( 2)*shiftxj + ( 3)*shiftyj,
-                                                         i+( 2)*shiftxi + ( 3)*shiftyi)
-                  +(  1./60.  ) * ( -1./60.  ) * quant(m,k+( 3)*shiftxk + (-3)*shiftyk,
-                                                         j+( 3)*shiftxj + (-3)*shiftyj,
-                                                         i+( 3)*shiftxi + (-3)*shiftyi)
-                  +(  1./60.  ) * (  3./20.  ) * quant(m,k+( 3)*shiftxk + (-2)*shiftyk,
-                                                         j+( 3)*shiftxj + (-2)*shiftyj,
-                                                         i+( 3)*shiftxi + (-2)*shiftyi)
-                  +(  1./60.  ) * (  -3./4.  ) * quant(m,k+( 3)*shiftxk + (-1)*shiftyk,
-                                                         j+( 3)*shiftxj + (-1)*shiftyj,
-                                                         i+( 3)*shiftxi + (-1)*shiftyi)
-                  +(  1./60.  ) * (  3./4.   ) * quant(m,k+( 3)*shiftxk + ( 1)*shiftyk,
-                                                         j+( 3)*shiftxj + ( 1)*shiftyj,
-                                                         i+( 3)*shiftxi + ( 1)*shiftyi)
-                  +(  1./60.  ) * ( -3./20.  ) * quant(m,k+( 3)*shiftxk + ( 2)*shiftyk,
-                                                         j+( 3)*shiftxj + ( 2)*shiftyj,
-                                                         i+( 3)*shiftxi + ( 2)*shiftyi)
-                  +(  1./60.  ) * (  1./60.  ) * quant(m,k+( 3)*shiftxk + ( 3)*shiftyk,
-                                                         j+( 3)*shiftxj + ( 3)*shiftyj,
-                                                         i+( 3)*shiftxi + ( 3)*shiftyi);
-             break;
+  if constexpr ( NGHOST == 2 ) {
+    out = + (
+            + (
+              + (  -1./2.  ) * (  -1./2.  ) * quant(m,k+(-1)*shiftxk + (-1)*shiftyk,
+                                                      j+(-1)*shiftxj + (-1)*shiftyj,
+                                                      i+(-1)*shiftxi + (-1)*shiftyi)
+              + (  -1./2.  ) * (  1./2.   ) * quant(m,k+(-1)*shiftxk + ( 1)*shiftyk,
+                                                      j+(-1)*shiftxj + ( 1)*shiftyj,
+                                                      i+(-1)*shiftxi + ( 1)*shiftyi)
+              )
+            + (
+              + (  1./2.   ) * (  -1./2.  ) * quant(m,k+( 1)*shiftxk + (-1)*shiftyk,
+                                                      j+( 1)*shiftxj + (-1)*shiftyj,
+                                                      i+( 1)*shiftxi + (-1)*shiftyi)
+              + (  1./2.   ) * (  1./2.   ) * quant(m,k+( 1)*shiftxk + ( 1)*shiftyk,
+                                                      j+( 1)*shiftxj + ( 1)*shiftyj,
+                                                      i+( 1)*shiftxi + ( 1)*shiftyi)
+              )
+            );
+  } else if constexpr ( NGHOST == 3 ) {
+    out = + (
+            + (
+              + (  1./12.  ) * (  1./12.  ) * quant(m,k+(-2)*shiftxk + (-2)*shiftyk,
+                                                      j+(-2)*shiftxj + (-2)*shiftyj,
+                                                      i+(-2)*shiftxi + (-2)*shiftyi)
+              + (  1./12.  ) * ( -1./12.  ) * quant(m,k+(-2)*shiftxk + ( 2)*shiftyk,
+                                                      j+(-2)*shiftxj + ( 2)*shiftyj,
+                                                      i+(-2)*shiftxi + ( 2)*shiftyi)
+              )
+            + (
+              + ( -1./12.  ) * (  1./12.  ) * quant(m,k+( 2)*shiftxk + (-2)*shiftyk,
+                                                      j+( 2)*shiftxj + (-2)*shiftyj,
+                                                      i+( 2)*shiftxi + (-2)*shiftyi)
+              + ( -1./12.  ) * ( -1./12.  ) * quant(m,k+( 2)*shiftxk + ( 2)*shiftyk,
+                                                      j+( 2)*shiftxj + ( 2)*shiftyj,
+                                                      i+( 2)*shiftxi + ( 2)*shiftyi)
+              )
+            )
+          + (
+            + (
+              + (  1./12.  ) * (  -2./3.  ) * quant(m,k+(-2)*shiftxk + (-1)*shiftyk,
+                                                      j+(-2)*shiftxj + (-1)*shiftyj,
+                                                      i+(-2)*shiftxi + (-1)*shiftyi)
+              + (  1./12.  ) * (  2./3.   ) * quant(m,k+(-2)*shiftxk + ( 1)*shiftyk,
+                                                      j+(-2)*shiftxj + ( 1)*shiftyj,
+                                                      i+(-2)*shiftxi + ( 1)*shiftyi)
+              )
+            + (
+              + ( -1./12.  ) * (  -2./3.  ) * quant(m,k+( 2)*shiftxk + (-1)*shiftyk,
+                                                      j+( 2)*shiftxj + (-1)*shiftyj,
+                                                      i+( 2)*shiftxi + (-1)*shiftyi)
+              + ( -1./12.  ) * (  2./3.   ) * quant(m,k+( 2)*shiftxk + ( 1)*shiftyk,
+                                                      j+( 2)*shiftxj + ( 1)*shiftyj,
+                                                      i+( 2)*shiftxi + ( 1)*shiftyi)
+              )
+            )
+          + (
+            + (
+              + (  -2./3.  ) * (  1./12.  ) * quant(m,k+(-1)*shiftxk + (-2)*shiftyk,
+                                                      j+(-1)*shiftxj + (-2)*shiftyj,
+                                                      i+(-1)*shiftxi + (-2)*shiftyi)
+              + (  -2./3.  ) * ( -1./12.  ) * quant(m,k+(-1)*shiftxk + ( 2)*shiftyk,
+                                                      j+(-1)*shiftxj + ( 2)*shiftyj,
+                                                      i+(-1)*shiftxi + ( 2)*shiftyi)
+              )
+            + (
+              + (  2./3.   ) * (  1./12.  ) * quant(m,k+( 1)*shiftxk + (-2)*shiftyk,
+                                                      j+( 1)*shiftxj + (-2)*shiftyj,
+                                                      i+( 1)*shiftxi + (-2)*shiftyi)
+              + (  2./3.   ) * ( -1./12.  ) * quant(m,k+( 1)*shiftxk + ( 2)*shiftyk,
+                                                      j+( 1)*shiftxj + ( 2)*shiftyj,
+                                                      i+( 1)*shiftxi + ( 2)*shiftyi)
+              )
+            )
+          + (
+            + (
+              + (  -2./3.  ) * (  -2./3.  ) * quant(m,k+(-1)*shiftxk + (-1)*shiftyk,
+                                                      j+(-1)*shiftxj + (-1)*shiftyj,
+                                                      i+(-1)*shiftxi + (-1)*shiftyi)
+              + (  -2./3.  ) * (  2./3.   ) * quant(m,k+(-1)*shiftxk + ( 1)*shiftyk,
+                                                      j+(-1)*shiftxj + ( 1)*shiftyj,
+                                                      i+(-1)*shiftxi + ( 1)*shiftyi)
+              )
+            + (
+              + (  2./3.   ) * (  -2./3.  ) * quant(m,k+( 1)*shiftxk + (-1)*shiftyk,
+                                                      j+( 1)*shiftxj + (-1)*shiftyj,
+                                                      i+( 1)*shiftxi + (-1)*shiftyi)
+              + (  2./3.   ) * (  2./3.   ) * quant(m,k+( 1)*shiftxk + ( 1)*shiftyk,
+                                                      j+( 1)*shiftxj + ( 1)*shiftyj,
+                                                      i+( 1)*shiftxi + ( 1)*shiftyi)
+              )
+            );
+  } else if constexpr ( NGHOST == 4 ) {
+    out = + (
+            + (
+              + ( -1./60.  ) * ( -1./60.  ) * quant(m,k+(-3)*shiftxk + (-3)*shiftyk,
+                                                      j+(-3)*shiftxj + (-3)*shiftyj,
+                                                      i+(-3)*shiftxi + (-3)*shiftyi)
+              + ( -1./60.  ) * (  1./60.  ) * quant(m,k+(-3)*shiftxk + ( 3)*shiftyk,
+                                                      j+(-3)*shiftxj + ( 3)*shiftyj,
+                                                      i+(-3)*shiftxi + ( 3)*shiftyi)
+              )
+            + (
+              + (  1./60.  ) * ( -1./60.  ) * quant(m,k+( 3)*shiftxk + (-3)*shiftyk,
+                                                      j+( 3)*shiftxj + (-3)*shiftyj,
+                                                      i+( 3)*shiftxi + (-3)*shiftyi)
+              + (  1./60.  ) * (  1./60.  ) * quant(m,k+( 3)*shiftxk + ( 3)*shiftyk,
+                                                      j+( 3)*shiftxj + ( 3)*shiftyj,
+                                                      i+( 3)*shiftxi + ( 3)*shiftyi)
+              )
+            )
+          + (
+            + (
+              + ( -1./60.  ) * (  3./20.  ) * quant(m,k+(-3)*shiftxk + (-2)*shiftyk,
+                                                      j+(-3)*shiftxj + (-2)*shiftyj,
+                                                      i+(-3)*shiftxi + (-2)*shiftyi)
+              + ( -1./60.  ) * ( -3./20.  ) * quant(m,k+(-3)*shiftxk + ( 2)*shiftyk,
+                                                      j+(-3)*shiftxj + ( 2)*shiftyj,
+                                                      i+(-3)*shiftxi + ( 2)*shiftyi)
+              )
+            + (
+              + (  1./60.  ) * (  3./20.  ) * quant(m,k+( 3)*shiftxk + (-2)*shiftyk,
+                                                      j+( 3)*shiftxj + (-2)*shiftyj,
+                                                      i+( 3)*shiftxi + (-2)*shiftyi)
+              + (  1./60.  ) * ( -3./20.  ) * quant(m,k+( 3)*shiftxk + ( 2)*shiftyk,
+                                                      j+( 3)*shiftxj + ( 2)*shiftyj,
+                                                      i+( 3)*shiftxi + ( 2)*shiftyi)
+              )
+            )
+          + (
+            + (
+              + ( -1./60.  ) * (  -3./4.  ) * quant(m,k+(-3)*shiftxk + (-1)*shiftyk,
+                                                      j+(-3)*shiftxj + (-1)*shiftyj,
+                                                      i+(-3)*shiftxi + (-1)*shiftyi)
+              + ( -1./60.  ) * (  3./4.   ) * quant(m,k+(-3)*shiftxk + ( 1)*shiftyk,
+                                                      j+(-3)*shiftxj + ( 1)*shiftyj,
+                                                      i+(-3)*shiftxi + ( 1)*shiftyi)
+              )
+            + (
+              + (  1./60.  ) * (  -3./4.  ) * quant(m,k+( 3)*shiftxk + (-1)*shiftyk,
+                                                      j+( 3)*shiftxj + (-1)*shiftyj,
+                                                      i+( 3)*shiftxi + (-1)*shiftyi)
+              + (  1./60.  ) * (  3./4.   ) * quant(m,k+( 3)*shiftxk + ( 1)*shiftyk,
+                                                      j+( 3)*shiftxj + ( 1)*shiftyj,
+                                                      i+( 3)*shiftxi + ( 1)*shiftyi)
+              )
+            )
+          + (
+            + (
+              + (  3./20.  ) * ( -1./60.  ) * quant(m,k+(-2)*shiftxk + (-3)*shiftyk,
+                                                      j+(-2)*shiftxj + (-3)*shiftyj,
+                                                      i+(-2)*shiftxi + (-3)*shiftyi)
+              + (  3./20.  ) * (  1./60.  ) * quant(m,k+(-2)*shiftxk + ( 3)*shiftyk,
+                                                      j+(-2)*shiftxj + ( 3)*shiftyj,
+                                                      i+(-2)*shiftxi + ( 3)*shiftyi)
+              )
+            + (
+              + ( -3./20.  ) * ( -1./60.  ) * quant(m,k+( 2)*shiftxk + (-3)*shiftyk,
+                                                      j+( 2)*shiftxj + (-3)*shiftyj,
+                                                      i+( 2)*shiftxi + (-3)*shiftyi)
+              + ( -3./20.  ) * (  1./60.  ) * quant(m,k+( 2)*shiftxk + ( 3)*shiftyk,
+                                                      j+( 2)*shiftxj + ( 3)*shiftyj,
+                                                      i+( 2)*shiftxi + ( 3)*shiftyi)
+              )
+            )
+          + (
+            + (
+              + (  3./20.  ) * (  3./20.  ) * quant(m,k+(-2)*shiftxk + (-2)*shiftyk,
+                                                      j+(-2)*shiftxj + (-2)*shiftyj,
+                                                      i+(-2)*shiftxi + (-2)*shiftyi)
+              + (  3./20.  ) * ( -3./20.  ) * quant(m,k+(-2)*shiftxk + ( 2)*shiftyk,
+                                                      j+(-2)*shiftxj + ( 2)*shiftyj,
+                                                      i+(-2)*shiftxi + ( 2)*shiftyi)
+              )
+            + (
+              + ( -3./20.  ) * (  3./20.  ) * quant(m,k+( 2)*shiftxk + (-2)*shiftyk,
+                                                      j+( 2)*shiftxj + (-2)*shiftyj,
+                                                      i+( 2)*shiftxi + (-2)*shiftyi)
+              + ( -3./20.  ) * ( -3./20.  ) * quant(m,k+( 2)*shiftxk + ( 2)*shiftyk,
+                                                      j+( 2)*shiftxj + ( 2)*shiftyj,
+                                                      i+( 2)*shiftxi + ( 2)*shiftyi)
+              )
+            )
+          + (
+            + (
+              + (  3./20.  ) * (  -3./4.  ) * quant(m,k+(-2)*shiftxk + (-1)*shiftyk,
+                                                      j+(-2)*shiftxj + (-1)*shiftyj,
+                                                      i+(-2)*shiftxi + (-1)*shiftyi)
+              + (  3./20.  ) * (  3./4.   ) * quant(m,k+(-2)*shiftxk + ( 1)*shiftyk,
+                                                      j+(-2)*shiftxj + ( 1)*shiftyj,
+                                                      i+(-2)*shiftxi + ( 1)*shiftyi)
+              )
+            + (
+              + ( -3./20.  ) * (  -3./4.  ) * quant(m,k+( 2)*shiftxk + (-1)*shiftyk,
+                                                      j+( 2)*shiftxj + (-1)*shiftyj,
+                                                      i+( 2)*shiftxi + (-1)*shiftyi)
+              + ( -3./20.  ) * (  3./4.   ) * quant(m,k+( 2)*shiftxk + ( 1)*shiftyk,
+                                                      j+( 2)*shiftxj + ( 1)*shiftyj,
+                                                      i+( 2)*shiftxi + ( 1)*shiftyi)
+              )
+            )
+          + (
+            + (
+              + (  -3./4.  ) * ( -1./60.  ) * quant(m,k+(-1)*shiftxk + (-3)*shiftyk,
+                                                      j+(-1)*shiftxj + (-3)*shiftyj,
+                                                      i+(-1)*shiftxi + (-3)*shiftyi)
+              + (  -3./4.  ) * (  1./60.  ) * quant(m,k+(-1)*shiftxk + ( 3)*shiftyk,
+                                                      j+(-1)*shiftxj + ( 3)*shiftyj,
+                                                      i+(-1)*shiftxi + ( 3)*shiftyi)
+              )
+            + (
+              + (  3./4.   ) * ( -1./60.  ) * quant(m,k+( 1)*shiftxk + (-3)*shiftyk,
+                                                      j+( 1)*shiftxj + (-3)*shiftyj,
+                                                      i+( 1)*shiftxi + (-3)*shiftyi)
+              + (  3./4.   ) * (  1./60.  ) * quant(m,k+( 1)*shiftxk + ( 3)*shiftyk,
+                                                      j+( 1)*shiftxj + ( 3)*shiftyj,
+                                                      i+( 1)*shiftxi + ( 3)*shiftyi)
+              )
+            )
+          + (
+            + (
+              + (  -3./4.  ) * (  3./20.  ) * quant(m,k+(-1)*shiftxk + (-2)*shiftyk,
+                                                      j+(-1)*shiftxj + (-2)*shiftyj,
+                                                      i+(-1)*shiftxi + (-2)*shiftyi)
+              + (  -3./4.  ) * ( -3./20.  ) * quant(m,k+(-1)*shiftxk + ( 2)*shiftyk,
+                                                      j+(-1)*shiftxj + ( 2)*shiftyj,
+                                                      i+(-1)*shiftxi + ( 2)*shiftyi)
+              )
+            + (
+              + (  3./4.   ) * (  3./20.  ) * quant(m,k+( 1)*shiftxk + (-2)*shiftyk,
+                                                      j+( 1)*shiftxj + (-2)*shiftyj,
+                                                      i+( 1)*shiftxi + (-2)*shiftyi)
+              + (  3./4.   ) * ( -3./20.  ) * quant(m,k+( 1)*shiftxk + ( 2)*shiftyk,
+                                                      j+( 1)*shiftxj + ( 2)*shiftyj,
+                                                      i+( 1)*shiftxi + ( 2)*shiftyi)
+              )
+            )
+          + (
+            + (
+              + (  -3./4.  ) * (  -3./4.  ) * quant(m,k+(-1)*shiftxk + (-1)*shiftyk,
+                                                      j+(-1)*shiftxj + (-1)*shiftyj,
+                                                      i+(-1)*shiftxi + (-1)*shiftyi)
+              + (  -3./4.  ) * (  3./4.   ) * quant(m,k+(-1)*shiftxk + ( 1)*shiftyk,
+                                                      j+(-1)*shiftxj + ( 1)*shiftyj,
+                                                      i+(-1)*shiftxi + ( 1)*shiftyi)
+              )
+            + (
+              + (  3./4.   ) * (  -3./4.  ) * quant(m,k+( 1)*shiftxk + (-1)*shiftyk,
+                                                      j+( 1)*shiftxj + (-1)*shiftyj,
+                                                      i+( 1)*shiftxi + (-1)*shiftyi)
+              + (  3./4.   ) * (  3./4.   ) * quant(m,k+( 1)*shiftxk + ( 1)*shiftyk,
+                                                      j+( 1)*shiftxj + ( 1)*shiftyj,
+                                                      i+( 1)*shiftxi + ( 1)*shiftyi)
+              )
+            );
   }
   return out*idx[dirx]*idx[diry];
   }
@@ -571,10 +648,10 @@ KOKKOS_INLINE_FUNCTION
 
   // Reminder: this code has been generated with py/write_FD.py, please do modifications there. 
   // 1st derivative vector
-  template <typename TYPE>
+  template <int NGHOST, typename TYPE>
 KOKKOS_INLINE_FUNCTION
-  Real Dxy(int const dirx, int const diry, int const nghost,
-          const Real idx[], const TYPE &quant,
+  Real Dxy(int const dirx, int const diry,
+          const Real idx[], TYPE &quant,
           int const m, int const a,
           int const k, int const j, int const i)
   {
@@ -585,178 +662,261 @@ KOKKOS_INLINE_FUNCTION
   int const shiftyj = diry==1;
   int const shiftyi = diry==0;
   Real out;
-  switch(nghost) {
-    case 2 : out = +(  -1./2.  ) * (  -1./2.  ) * quant(m,a,k+(-1)*shiftxk + (-1)*shiftyk,
-                                                           j+(-1)*shiftxj + (-1)*shiftyj,
-                                                           i+(-1)*shiftxi + (-1)*shiftyi)
-                  +(  -1./2.  ) * (  1./2.   ) * quant(m,a,k+(-1)*shiftxk + ( 1)*shiftyk,
-                                                           j+(-1)*shiftxj + ( 1)*shiftyj,
-                                                           i+(-1)*shiftxi + ( 1)*shiftyi)
-                  +(  1./2.   ) * (  -1./2.  ) * quant(m,a,k+( 1)*shiftxk + (-1)*shiftyk,
-                                                           j+( 1)*shiftxj + (-1)*shiftyj,
-                                                           i+( 1)*shiftxi + (-1)*shiftyi)
-                  +(  1./2.   ) * (  1./2.   ) * quant(m,a,k+( 1)*shiftxk + ( 1)*shiftyk,
-                                                           j+( 1)*shiftxj + ( 1)*shiftyj,
-                                                           i+( 1)*shiftxi + ( 1)*shiftyi);
-             break;
-    case 3 : out = +(  1./12.  ) * (  1./12.  ) * quant(m,a,k+(-2)*shiftxk + (-2)*shiftyk,
-                                                           j+(-2)*shiftxj + (-2)*shiftyj,
-                                                           i+(-2)*shiftxi + (-2)*shiftyi)
-                  +(  1./12.  ) * (  -2./3.  ) * quant(m,a,k+(-2)*shiftxk + (-1)*shiftyk,
-                                                           j+(-2)*shiftxj + (-1)*shiftyj,
-                                                           i+(-2)*shiftxi + (-1)*shiftyi)
-                  +(  1./12.  ) * (  2./3.   ) * quant(m,a,k+(-2)*shiftxk + ( 1)*shiftyk,
-                                                           j+(-2)*shiftxj + ( 1)*shiftyj,
-                                                           i+(-2)*shiftxi + ( 1)*shiftyi)
-                  +(  1./12.  ) * ( -1./12.  ) * quant(m,a,k+(-2)*shiftxk + ( 2)*shiftyk,
-                                                           j+(-2)*shiftxj + ( 2)*shiftyj,
-                                                           i+(-2)*shiftxi + ( 2)*shiftyi)
-                  +(  -2./3.  ) * (  1./12.  ) * quant(m,a,k+(-1)*shiftxk + (-2)*shiftyk,
-                                                           j+(-1)*shiftxj + (-2)*shiftyj,
-                                                           i+(-1)*shiftxi + (-2)*shiftyi)
-                  +(  -2./3.  ) * (  -2./3.  ) * quant(m,a,k+(-1)*shiftxk + (-1)*shiftyk,
-                                                           j+(-1)*shiftxj + (-1)*shiftyj,
-                                                           i+(-1)*shiftxi + (-1)*shiftyi)
-                  +(  -2./3.  ) * (  2./3.   ) * quant(m,a,k+(-1)*shiftxk + ( 1)*shiftyk,
-                                                           j+(-1)*shiftxj + ( 1)*shiftyj,
-                                                           i+(-1)*shiftxi + ( 1)*shiftyi)
-                  +(  -2./3.  ) * ( -1./12.  ) * quant(m,a,k+(-1)*shiftxk + ( 2)*shiftyk,
-                                                           j+(-1)*shiftxj + ( 2)*shiftyj,
-                                                           i+(-1)*shiftxi + ( 2)*shiftyi)
-                  +(  2./3.   ) * (  1./12.  ) * quant(m,a,k+( 1)*shiftxk + (-2)*shiftyk,
-                                                           j+( 1)*shiftxj + (-2)*shiftyj,
-                                                           i+( 1)*shiftxi + (-2)*shiftyi)
-                  +(  2./3.   ) * (  -2./3.  ) * quant(m,a,k+( 1)*shiftxk + (-1)*shiftyk,
-                                                           j+( 1)*shiftxj + (-1)*shiftyj,
-                                                           i+( 1)*shiftxi + (-1)*shiftyi)
-                  +(  2./3.   ) * (  2./3.   ) * quant(m,a,k+( 1)*shiftxk + ( 1)*shiftyk,
-                                                           j+( 1)*shiftxj + ( 1)*shiftyj,
-                                                           i+( 1)*shiftxi + ( 1)*shiftyi)
-                  +(  2./3.   ) * ( -1./12.  ) * quant(m,a,k+( 1)*shiftxk + ( 2)*shiftyk,
-                                                           j+( 1)*shiftxj + ( 2)*shiftyj,
-                                                           i+( 1)*shiftxi + ( 2)*shiftyi)
-                  +( -1./12.  ) * (  1./12.  ) * quant(m,a,k+( 2)*shiftxk + (-2)*shiftyk,
-                                                           j+( 2)*shiftxj + (-2)*shiftyj,
-                                                           i+( 2)*shiftxi + (-2)*shiftyi)
-                  +( -1./12.  ) * (  -2./3.  ) * quant(m,a,k+( 2)*shiftxk + (-1)*shiftyk,
-                                                           j+( 2)*shiftxj + (-1)*shiftyj,
-                                                           i+( 2)*shiftxi + (-1)*shiftyi)
-                  +( -1./12.  ) * (  2./3.   ) * quant(m,a,k+( 2)*shiftxk + ( 1)*shiftyk,
-                                                           j+( 2)*shiftxj + ( 1)*shiftyj,
-                                                           i+( 2)*shiftxi + ( 1)*shiftyi)
-                  +( -1./12.  ) * ( -1./12.  ) * quant(m,a,k+( 2)*shiftxk + ( 2)*shiftyk,
-                                                           j+( 2)*shiftxj + ( 2)*shiftyj,
-                                                           i+( 2)*shiftxi + ( 2)*shiftyi);
-             break;
-    case 4 : out = +( -1./60.  ) * ( -1./60.  ) * quant(m,a,k+(-3)*shiftxk + (-3)*shiftyk,
-                                                           j+(-3)*shiftxj + (-3)*shiftyj,
-                                                           i+(-3)*shiftxi + (-3)*shiftyi)
-                  +( -1./60.  ) * (  3./20.  ) * quant(m,a,k+(-3)*shiftxk + (-2)*shiftyk,
-                                                           j+(-3)*shiftxj + (-2)*shiftyj,
-                                                           i+(-3)*shiftxi + (-2)*shiftyi)
-                  +( -1./60.  ) * (  -3./4.  ) * quant(m,a,k+(-3)*shiftxk + (-1)*shiftyk,
-                                                           j+(-3)*shiftxj + (-1)*shiftyj,
-                                                           i+(-3)*shiftxi + (-1)*shiftyi)
-                  +( -1./60.  ) * (  3./4.   ) * quant(m,a,k+(-3)*shiftxk + ( 1)*shiftyk,
-                                                           j+(-3)*shiftxj + ( 1)*shiftyj,
-                                                           i+(-3)*shiftxi + ( 1)*shiftyi)
-                  +( -1./60.  ) * ( -3./20.  ) * quant(m,a,k+(-3)*shiftxk + ( 2)*shiftyk,
-                                                           j+(-3)*shiftxj + ( 2)*shiftyj,
-                                                           i+(-3)*shiftxi + ( 2)*shiftyi)
-                  +( -1./60.  ) * (  1./60.  ) * quant(m,a,k+(-3)*shiftxk + ( 3)*shiftyk,
-                                                           j+(-3)*shiftxj + ( 3)*shiftyj,
-                                                           i+(-3)*shiftxi + ( 3)*shiftyi)
-                  +(  3./20.  ) * ( -1./60.  ) * quant(m,a,k+(-2)*shiftxk + (-3)*shiftyk,
-                                                           j+(-2)*shiftxj + (-3)*shiftyj,
-                                                           i+(-2)*shiftxi + (-3)*shiftyi)
-                  +(  3./20.  ) * (  3./20.  ) * quant(m,a,k+(-2)*shiftxk + (-2)*shiftyk,
-                                                           j+(-2)*shiftxj + (-2)*shiftyj,
-                                                           i+(-2)*shiftxi + (-2)*shiftyi)
-                  +(  3./20.  ) * (  -3./4.  ) * quant(m,a,k+(-2)*shiftxk + (-1)*shiftyk,
-                                                           j+(-2)*shiftxj + (-1)*shiftyj,
-                                                           i+(-2)*shiftxi + (-1)*shiftyi)
-                  +(  3./20.  ) * (  3./4.   ) * quant(m,a,k+(-2)*shiftxk + ( 1)*shiftyk,
-                                                           j+(-2)*shiftxj + ( 1)*shiftyj,
-                                                           i+(-2)*shiftxi + ( 1)*shiftyi)
-                  +(  3./20.  ) * ( -3./20.  ) * quant(m,a,k+(-2)*shiftxk + ( 2)*shiftyk,
-                                                           j+(-2)*shiftxj + ( 2)*shiftyj,
-                                                           i+(-2)*shiftxi + ( 2)*shiftyi)
-                  +(  3./20.  ) * (  1./60.  ) * quant(m,a,k+(-2)*shiftxk + ( 3)*shiftyk,
-                                                           j+(-2)*shiftxj + ( 3)*shiftyj,
-                                                           i+(-2)*shiftxi + ( 3)*shiftyi)
-                  +(  -3./4.  ) * ( -1./60.  ) * quant(m,a,k+(-1)*shiftxk + (-3)*shiftyk,
-                                                           j+(-1)*shiftxj + (-3)*shiftyj,
-                                                           i+(-1)*shiftxi + (-3)*shiftyi)
-                  +(  -3./4.  ) * (  3./20.  ) * quant(m,a,k+(-1)*shiftxk + (-2)*shiftyk,
-                                                           j+(-1)*shiftxj + (-2)*shiftyj,
-                                                           i+(-1)*shiftxi + (-2)*shiftyi)
-                  +(  -3./4.  ) * (  -3./4.  ) * quant(m,a,k+(-1)*shiftxk + (-1)*shiftyk,
-                                                           j+(-1)*shiftxj + (-1)*shiftyj,
-                                                           i+(-1)*shiftxi + (-1)*shiftyi)
-                  +(  -3./4.  ) * (  3./4.   ) * quant(m,a,k+(-1)*shiftxk + ( 1)*shiftyk,
-                                                           j+(-1)*shiftxj + ( 1)*shiftyj,
-                                                           i+(-1)*shiftxi + ( 1)*shiftyi)
-                  +(  -3./4.  ) * ( -3./20.  ) * quant(m,a,k+(-1)*shiftxk + ( 2)*shiftyk,
-                                                           j+(-1)*shiftxj + ( 2)*shiftyj,
-                                                           i+(-1)*shiftxi + ( 2)*shiftyi)
-                  +(  -3./4.  ) * (  1./60.  ) * quant(m,a,k+(-1)*shiftxk + ( 3)*shiftyk,
-                                                           j+(-1)*shiftxj + ( 3)*shiftyj,
-                                                           i+(-1)*shiftxi + ( 3)*shiftyi)
-                  +(  3./4.   ) * ( -1./60.  ) * quant(m,a,k+( 1)*shiftxk + (-3)*shiftyk,
-                                                           j+( 1)*shiftxj + (-3)*shiftyj,
-                                                           i+( 1)*shiftxi + (-3)*shiftyi)
-                  +(  3./4.   ) * (  3./20.  ) * quant(m,a,k+( 1)*shiftxk + (-2)*shiftyk,
-                                                           j+( 1)*shiftxj + (-2)*shiftyj,
-                                                           i+( 1)*shiftxi + (-2)*shiftyi)
-                  +(  3./4.   ) * (  -3./4.  ) * quant(m,a,k+( 1)*shiftxk + (-1)*shiftyk,
-                                                           j+( 1)*shiftxj + (-1)*shiftyj,
-                                                           i+( 1)*shiftxi + (-1)*shiftyi)
-                  +(  3./4.   ) * (  3./4.   ) * quant(m,a,k+( 1)*shiftxk + ( 1)*shiftyk,
-                                                           j+( 1)*shiftxj + ( 1)*shiftyj,
-                                                           i+( 1)*shiftxi + ( 1)*shiftyi)
-                  +(  3./4.   ) * ( -3./20.  ) * quant(m,a,k+( 1)*shiftxk + ( 2)*shiftyk,
-                                                           j+( 1)*shiftxj + ( 2)*shiftyj,
-                                                           i+( 1)*shiftxi + ( 2)*shiftyi)
-                  +(  3./4.   ) * (  1./60.  ) * quant(m,a,k+( 1)*shiftxk + ( 3)*shiftyk,
-                                                           j+( 1)*shiftxj + ( 3)*shiftyj,
-                                                           i+( 1)*shiftxi + ( 3)*shiftyi)
-                  +( -3./20.  ) * ( -1./60.  ) * quant(m,a,k+( 2)*shiftxk + (-3)*shiftyk,
-                                                           j+( 2)*shiftxj + (-3)*shiftyj,
-                                                           i+( 2)*shiftxi + (-3)*shiftyi)
-                  +( -3./20.  ) * (  3./20.  ) * quant(m,a,k+( 2)*shiftxk + (-2)*shiftyk,
-                                                           j+( 2)*shiftxj + (-2)*shiftyj,
-                                                           i+( 2)*shiftxi + (-2)*shiftyi)
-                  +( -3./20.  ) * (  -3./4.  ) * quant(m,a,k+( 2)*shiftxk + (-1)*shiftyk,
-                                                           j+( 2)*shiftxj + (-1)*shiftyj,
-                                                           i+( 2)*shiftxi + (-1)*shiftyi)
-                  +( -3./20.  ) * (  3./4.   ) * quant(m,a,k+( 2)*shiftxk + ( 1)*shiftyk,
-                                                           j+( 2)*shiftxj + ( 1)*shiftyj,
-                                                           i+( 2)*shiftxi + ( 1)*shiftyi)
-                  +( -3./20.  ) * ( -3./20.  ) * quant(m,a,k+( 2)*shiftxk + ( 2)*shiftyk,
-                                                           j+( 2)*shiftxj + ( 2)*shiftyj,
-                                                           i+( 2)*shiftxi + ( 2)*shiftyi)
-                  +( -3./20.  ) * (  1./60.  ) * quant(m,a,k+( 2)*shiftxk + ( 3)*shiftyk,
-                                                           j+( 2)*shiftxj + ( 3)*shiftyj,
-                                                           i+( 2)*shiftxi + ( 3)*shiftyi)
-                  +(  1./60.  ) * ( -1./60.  ) * quant(m,a,k+( 3)*shiftxk + (-3)*shiftyk,
-                                                           j+( 3)*shiftxj + (-3)*shiftyj,
-                                                           i+( 3)*shiftxi + (-3)*shiftyi)
-                  +(  1./60.  ) * (  3./20.  ) * quant(m,a,k+( 3)*shiftxk + (-2)*shiftyk,
-                                                           j+( 3)*shiftxj + (-2)*shiftyj,
-                                                           i+( 3)*shiftxi + (-2)*shiftyi)
-                  +(  1./60.  ) * (  -3./4.  ) * quant(m,a,k+( 3)*shiftxk + (-1)*shiftyk,
-                                                           j+( 3)*shiftxj + (-1)*shiftyj,
-                                                           i+( 3)*shiftxi + (-1)*shiftyi)
-                  +(  1./60.  ) * (  3./4.   ) * quant(m,a,k+( 3)*shiftxk + ( 1)*shiftyk,
-                                                           j+( 3)*shiftxj + ( 1)*shiftyj,
-                                                           i+( 3)*shiftxi + ( 1)*shiftyi)
-                  +(  1./60.  ) * ( -3./20.  ) * quant(m,a,k+( 3)*shiftxk + ( 2)*shiftyk,
-                                                           j+( 3)*shiftxj + ( 2)*shiftyj,
-                                                           i+( 3)*shiftxi + ( 2)*shiftyi)
-                  +(  1./60.  ) * (  1./60.  ) * quant(m,a,k+( 3)*shiftxk + ( 3)*shiftyk,
-                                                           j+( 3)*shiftxj + ( 3)*shiftyj,
-                                                           i+( 3)*shiftxi + ( 3)*shiftyi);
-             break;
+  if constexpr ( NGHOST == 2 ) {
+    out = + (
+            + (
+              + (  -1./2.  ) * (  -1./2.  ) * quant(m,a,k+(-1)*shiftxk + (-1)*shiftyk,
+                                                        j+(-1)*shiftxj + (-1)*shiftyj,
+                                                        i+(-1)*shiftxi + (-1)*shiftyi)
+              + (  -1./2.  ) * (  1./2.   ) * quant(m,a,k+(-1)*shiftxk + ( 1)*shiftyk,
+                                                        j+(-1)*shiftxj + ( 1)*shiftyj,
+                                                        i+(-1)*shiftxi + ( 1)*shiftyi)
+              )
+            + (
+              + (  1./2.   ) * (  -1./2.  ) * quant(m,a,k+( 1)*shiftxk + (-1)*shiftyk,
+                                                        j+( 1)*shiftxj + (-1)*shiftyj,
+                                                        i+( 1)*shiftxi + (-1)*shiftyi)
+              + (  1./2.   ) * (  1./2.   ) * quant(m,a,k+( 1)*shiftxk + ( 1)*shiftyk,
+                                                        j+( 1)*shiftxj + ( 1)*shiftyj,
+                                                        i+( 1)*shiftxi + ( 1)*shiftyi)
+              )
+            );
+  } else if constexpr ( NGHOST == 3 ) {
+    out = + (
+            + (
+              + (  1./12.  ) * (  1./12.  ) * quant(m,a,k+(-2)*shiftxk + (-2)*shiftyk,
+                                                        j+(-2)*shiftxj + (-2)*shiftyj,
+                                                        i+(-2)*shiftxi + (-2)*shiftyi)
+              + (  1./12.  ) * ( -1./12.  ) * quant(m,a,k+(-2)*shiftxk + ( 2)*shiftyk,
+                                                        j+(-2)*shiftxj + ( 2)*shiftyj,
+                                                        i+(-2)*shiftxi + ( 2)*shiftyi)
+              )
+            + (
+              + ( -1./12.  ) * (  1./12.  ) * quant(m,a,k+( 2)*shiftxk + (-2)*shiftyk,
+                                                        j+( 2)*shiftxj + (-2)*shiftyj,
+                                                        i+( 2)*shiftxi + (-2)*shiftyi)
+              + ( -1./12.  ) * ( -1./12.  ) * quant(m,a,k+( 2)*shiftxk + ( 2)*shiftyk,
+                                                        j+( 2)*shiftxj + ( 2)*shiftyj,
+                                                        i+( 2)*shiftxi + ( 2)*shiftyi)
+              )
+            )
+          + (
+            + (
+              + (  1./12.  ) * (  -2./3.  ) * quant(m,a,k+(-2)*shiftxk + (-1)*shiftyk,
+                                                        j+(-2)*shiftxj + (-1)*shiftyj,
+                                                        i+(-2)*shiftxi + (-1)*shiftyi)
+              + (  1./12.  ) * (  2./3.   ) * quant(m,a,k+(-2)*shiftxk + ( 1)*shiftyk,
+                                                        j+(-2)*shiftxj + ( 1)*shiftyj,
+                                                        i+(-2)*shiftxi + ( 1)*shiftyi)
+              )
+            + (
+              + ( -1./12.  ) * (  -2./3.  ) * quant(m,a,k+( 2)*shiftxk + (-1)*shiftyk,
+                                                        j+( 2)*shiftxj + (-1)*shiftyj,
+                                                        i+( 2)*shiftxi + (-1)*shiftyi)
+              + ( -1./12.  ) * (  2./3.   ) * quant(m,a,k+( 2)*shiftxk + ( 1)*shiftyk,
+                                                        j+( 2)*shiftxj + ( 1)*shiftyj,
+                                                        i+( 2)*shiftxi + ( 1)*shiftyi)
+              )
+            )
+          + (
+            + (
+              + (  -2./3.  ) * (  1./12.  ) * quant(m,a,k+(-1)*shiftxk + (-2)*shiftyk,
+                                                        j+(-1)*shiftxj + (-2)*shiftyj,
+                                                        i+(-1)*shiftxi + (-2)*shiftyi)
+              + (  -2./3.  ) * ( -1./12.  ) * quant(m,a,k+(-1)*shiftxk + ( 2)*shiftyk,
+                                                        j+(-1)*shiftxj + ( 2)*shiftyj,
+                                                        i+(-1)*shiftxi + ( 2)*shiftyi)
+              )
+            + (
+              + (  2./3.   ) * (  1./12.  ) * quant(m,a,k+( 1)*shiftxk + (-2)*shiftyk,
+                                                        j+( 1)*shiftxj + (-2)*shiftyj,
+                                                        i+( 1)*shiftxi + (-2)*shiftyi)
+              + (  2./3.   ) * ( -1./12.  ) * quant(m,a,k+( 1)*shiftxk + ( 2)*shiftyk,
+                                                        j+( 1)*shiftxj + ( 2)*shiftyj,
+                                                        i+( 1)*shiftxi + ( 2)*shiftyi)
+              )
+            )
+          + (
+            + (
+              + (  -2./3.  ) * (  -2./3.  ) * quant(m,a,k+(-1)*shiftxk + (-1)*shiftyk,
+                                                        j+(-1)*shiftxj + (-1)*shiftyj,
+                                                        i+(-1)*shiftxi + (-1)*shiftyi)
+              + (  -2./3.  ) * (  2./3.   ) * quant(m,a,k+(-1)*shiftxk + ( 1)*shiftyk,
+                                                        j+(-1)*shiftxj + ( 1)*shiftyj,
+                                                        i+(-1)*shiftxi + ( 1)*shiftyi)
+              )
+            + (
+              + (  2./3.   ) * (  -2./3.  ) * quant(m,a,k+( 1)*shiftxk + (-1)*shiftyk,
+                                                        j+( 1)*shiftxj + (-1)*shiftyj,
+                                                        i+( 1)*shiftxi + (-1)*shiftyi)
+              + (  2./3.   ) * (  2./3.   ) * quant(m,a,k+( 1)*shiftxk + ( 1)*shiftyk,
+                                                        j+( 1)*shiftxj + ( 1)*shiftyj,
+                                                        i+( 1)*shiftxi + ( 1)*shiftyi)
+              )
+            );
+  } else if constexpr ( NGHOST == 4 ) {
+    out = + (
+            + (
+              + ( -1./60.  ) * ( -1./60.  ) * quant(m,a,k+(-3)*shiftxk + (-3)*shiftyk,
+                                                        j+(-3)*shiftxj + (-3)*shiftyj,
+                                                        i+(-3)*shiftxi + (-3)*shiftyi)
+              + ( -1./60.  ) * (  1./60.  ) * quant(m,a,k+(-3)*shiftxk + ( 3)*shiftyk,
+                                                        j+(-3)*shiftxj + ( 3)*shiftyj,
+                                                        i+(-3)*shiftxi + ( 3)*shiftyi)
+              )
+            + (
+              + (  1./60.  ) * ( -1./60.  ) * quant(m,a,k+( 3)*shiftxk + (-3)*shiftyk,
+                                                        j+( 3)*shiftxj + (-3)*shiftyj,
+                                                        i+( 3)*shiftxi + (-3)*shiftyi)
+              + (  1./60.  ) * (  1./60.  ) * quant(m,a,k+( 3)*shiftxk + ( 3)*shiftyk,
+                                                        j+( 3)*shiftxj + ( 3)*shiftyj,
+                                                        i+( 3)*shiftxi + ( 3)*shiftyi)
+              )
+            )
+          + (
+            + (
+              + ( -1./60.  ) * (  3./20.  ) * quant(m,a,k+(-3)*shiftxk + (-2)*shiftyk,
+                                                        j+(-3)*shiftxj + (-2)*shiftyj,
+                                                        i+(-3)*shiftxi + (-2)*shiftyi)
+              + ( -1./60.  ) * ( -3./20.  ) * quant(m,a,k+(-3)*shiftxk + ( 2)*shiftyk,
+                                                        j+(-3)*shiftxj + ( 2)*shiftyj,
+                                                        i+(-3)*shiftxi + ( 2)*shiftyi)
+              )
+            + (
+              + (  1./60.  ) * (  3./20.  ) * quant(m,a,k+( 3)*shiftxk + (-2)*shiftyk,
+                                                        j+( 3)*shiftxj + (-2)*shiftyj,
+                                                        i+( 3)*shiftxi + (-2)*shiftyi)
+              + (  1./60.  ) * ( -3./20.  ) * quant(m,a,k+( 3)*shiftxk + ( 2)*shiftyk,
+                                                        j+( 3)*shiftxj + ( 2)*shiftyj,
+                                                        i+( 3)*shiftxi + ( 2)*shiftyi)
+              )
+            )
+          + (
+            + (
+              + ( -1./60.  ) * (  -3./4.  ) * quant(m,a,k+(-3)*shiftxk + (-1)*shiftyk,
+                                                        j+(-3)*shiftxj + (-1)*shiftyj,
+                                                        i+(-3)*shiftxi + (-1)*shiftyi)
+              + ( -1./60.  ) * (  3./4.   ) * quant(m,a,k+(-3)*shiftxk + ( 1)*shiftyk,
+                                                        j+(-3)*shiftxj + ( 1)*shiftyj,
+                                                        i+(-3)*shiftxi + ( 1)*shiftyi)
+              )
+            + (
+              + (  1./60.  ) * (  -3./4.  ) * quant(m,a,k+( 3)*shiftxk + (-1)*shiftyk,
+                                                        j+( 3)*shiftxj + (-1)*shiftyj,
+                                                        i+( 3)*shiftxi + (-1)*shiftyi)
+              + (  1./60.  ) * (  3./4.   ) * quant(m,a,k+( 3)*shiftxk + ( 1)*shiftyk,
+                                                        j+( 3)*shiftxj + ( 1)*shiftyj,
+                                                        i+( 3)*shiftxi + ( 1)*shiftyi)
+              )
+            )
+          + (
+            + (
+              + (  3./20.  ) * ( -1./60.  ) * quant(m,a,k+(-2)*shiftxk + (-3)*shiftyk,
+                                                        j+(-2)*shiftxj + (-3)*shiftyj,
+                                                        i+(-2)*shiftxi + (-3)*shiftyi)
+              + (  3./20.  ) * (  1./60.  ) * quant(m,a,k+(-2)*shiftxk + ( 3)*shiftyk,
+                                                        j+(-2)*shiftxj + ( 3)*shiftyj,
+                                                        i+(-2)*shiftxi + ( 3)*shiftyi)
+              )
+            + (
+              + ( -3./20.  ) * ( -1./60.  ) * quant(m,a,k+( 2)*shiftxk + (-3)*shiftyk,
+                                                        j+( 2)*shiftxj + (-3)*shiftyj,
+                                                        i+( 2)*shiftxi + (-3)*shiftyi)
+              + ( -3./20.  ) * (  1./60.  ) * quant(m,a,k+( 2)*shiftxk + ( 3)*shiftyk,
+                                                        j+( 2)*shiftxj + ( 3)*shiftyj,
+                                                        i+( 2)*shiftxi + ( 3)*shiftyi)
+              )
+            )
+          + (
+            + (
+              + (  3./20.  ) * (  3./20.  ) * quant(m,a,k+(-2)*shiftxk + (-2)*shiftyk,
+                                                        j+(-2)*shiftxj + (-2)*shiftyj,
+                                                        i+(-2)*shiftxi + (-2)*shiftyi)
+              + (  3./20.  ) * ( -3./20.  ) * quant(m,a,k+(-2)*shiftxk + ( 2)*shiftyk,
+                                                        j+(-2)*shiftxj + ( 2)*shiftyj,
+                                                        i+(-2)*shiftxi + ( 2)*shiftyi)
+              )
+            + (
+              + ( -3./20.  ) * (  3./20.  ) * quant(m,a,k+( 2)*shiftxk + (-2)*shiftyk,
+                                                        j+( 2)*shiftxj + (-2)*shiftyj,
+                                                        i+( 2)*shiftxi + (-2)*shiftyi)
+              + ( -3./20.  ) * ( -3./20.  ) * quant(m,a,k+( 2)*shiftxk + ( 2)*shiftyk,
+                                                        j+( 2)*shiftxj + ( 2)*shiftyj,
+                                                        i+( 2)*shiftxi + ( 2)*shiftyi)
+              )
+            )
+          + (
+            + (
+              + (  3./20.  ) * (  -3./4.  ) * quant(m,a,k+(-2)*shiftxk + (-1)*shiftyk,
+                                                        j+(-2)*shiftxj + (-1)*shiftyj,
+                                                        i+(-2)*shiftxi + (-1)*shiftyi)
+              + (  3./20.  ) * (  3./4.   ) * quant(m,a,k+(-2)*shiftxk + ( 1)*shiftyk,
+                                                        j+(-2)*shiftxj + ( 1)*shiftyj,
+                                                        i+(-2)*shiftxi + ( 1)*shiftyi)
+              )
+            + (
+              + ( -3./20.  ) * (  -3./4.  ) * quant(m,a,k+( 2)*shiftxk + (-1)*shiftyk,
+                                                        j+( 2)*shiftxj + (-1)*shiftyj,
+                                                        i+( 2)*shiftxi + (-1)*shiftyi)
+              + ( -3./20.  ) * (  3./4.   ) * quant(m,a,k+( 2)*shiftxk + ( 1)*shiftyk,
+                                                        j+( 2)*shiftxj + ( 1)*shiftyj,
+                                                        i+( 2)*shiftxi + ( 1)*shiftyi)
+              )
+            )
+          + (
+            + (
+              + (  -3./4.  ) * ( -1./60.  ) * quant(m,a,k+(-1)*shiftxk + (-3)*shiftyk,
+                                                        j+(-1)*shiftxj + (-3)*shiftyj,
+                                                        i+(-1)*shiftxi + (-3)*shiftyi)
+              + (  -3./4.  ) * (  1./60.  ) * quant(m,a,k+(-1)*shiftxk + ( 3)*shiftyk,
+                                                        j+(-1)*shiftxj + ( 3)*shiftyj,
+                                                        i+(-1)*shiftxi + ( 3)*shiftyi)
+              )
+            + (
+              + (  3./4.   ) * ( -1./60.  ) * quant(m,a,k+( 1)*shiftxk + (-3)*shiftyk,
+                                                        j+( 1)*shiftxj + (-3)*shiftyj,
+                                                        i+( 1)*shiftxi + (-3)*shiftyi)
+              + (  3./4.   ) * (  1./60.  ) * quant(m,a,k+( 1)*shiftxk + ( 3)*shiftyk,
+                                                        j+( 1)*shiftxj + ( 3)*shiftyj,
+                                                        i+( 1)*shiftxi + ( 3)*shiftyi)
+              )
+            )
+          + (
+            + (
+              + (  -3./4.  ) * (  3./20.  ) * quant(m,a,k+(-1)*shiftxk + (-2)*shiftyk,
+                                                        j+(-1)*shiftxj + (-2)*shiftyj,
+                                                        i+(-1)*shiftxi + (-2)*shiftyi)
+              + (  -3./4.  ) * ( -3./20.  ) * quant(m,a,k+(-1)*shiftxk + ( 2)*shiftyk,
+                                                        j+(-1)*shiftxj + ( 2)*shiftyj,
+                                                        i+(-1)*shiftxi + ( 2)*shiftyi)
+              )
+            + (
+              + (  3./4.   ) * (  3./20.  ) * quant(m,a,k+( 1)*shiftxk + (-2)*shiftyk,
+                                                        j+( 1)*shiftxj + (-2)*shiftyj,
+                                                        i+( 1)*shiftxi + (-2)*shiftyi)
+              + (  3./4.   ) * ( -3./20.  ) * quant(m,a,k+( 1)*shiftxk + ( 2)*shiftyk,
+                                                        j+( 1)*shiftxj + ( 2)*shiftyj,
+                                                        i+( 1)*shiftxi + ( 2)*shiftyi)
+              )
+            )
+          + (
+            + (
+              + (  -3./4.  ) * (  -3./4.  ) * quant(m,a,k+(-1)*shiftxk + (-1)*shiftyk,
+                                                        j+(-1)*shiftxj + (-1)*shiftyj,
+                                                        i+(-1)*shiftxi + (-1)*shiftyi)
+              + (  -3./4.  ) * (  3./4.   ) * quant(m,a,k+(-1)*shiftxk + ( 1)*shiftyk,
+                                                        j+(-1)*shiftxj + ( 1)*shiftyj,
+                                                        i+(-1)*shiftxi + ( 1)*shiftyi)
+              )
+            + (
+              + (  3./4.   ) * (  -3./4.  ) * quant(m,a,k+( 1)*shiftxk + (-1)*shiftyk,
+                                                        j+( 1)*shiftxj + (-1)*shiftyj,
+                                                        i+( 1)*shiftxi + (-1)*shiftyi)
+              + (  3./4.   ) * (  3./4.   ) * quant(m,a,k+( 1)*shiftxk + ( 1)*shiftyk,
+                                                        j+( 1)*shiftxj + ( 1)*shiftyj,
+                                                        i+( 1)*shiftxi + ( 1)*shiftyi)
+              )
+            );
   }
   return out*idx[dirx]*idx[diry];
   }
@@ -764,10 +924,10 @@ KOKKOS_INLINE_FUNCTION
 
   // Reminder: this code has been generated with py/write_FD.py, please do modifications there. 
   // 1st derivative 2D tensor
-  template <typename TYPE>
+  template <int NGHOST, typename TYPE>
 KOKKOS_INLINE_FUNCTION
-  Real Dxy(int const dirx, int const diry, int const nghost,
-          const Real idx[], const TYPE &quant,
+  Real Dxy(int const dirx, int const diry,
+          const Real idx[], TYPE &quant,
           int const m, int const a, int const b,
           int const k, int const j, int const i)
   {
@@ -778,178 +938,261 @@ KOKKOS_INLINE_FUNCTION
   int const shiftyj = diry==1;
   int const shiftyi = diry==0;
   Real out;
-  switch(nghost) {
-    case 2 : out = +(  -1./2.  ) * (  -1./2.  ) * quant(m,a,b,k+(-1)*shiftxk + (-1)*shiftyk,
-                                                             j+(-1)*shiftxj + (-1)*shiftyj,
-                                                             i+(-1)*shiftxi + (-1)*shiftyi)
-                  +(  -1./2.  ) * (  1./2.   ) * quant(m,a,b,k+(-1)*shiftxk + ( 1)*shiftyk,
-                                                             j+(-1)*shiftxj + ( 1)*shiftyj,
-                                                             i+(-1)*shiftxi + ( 1)*shiftyi)
-                  +(  1./2.   ) * (  -1./2.  ) * quant(m,a,b,k+( 1)*shiftxk + (-1)*shiftyk,
-                                                             j+( 1)*shiftxj + (-1)*shiftyj,
-                                                             i+( 1)*shiftxi + (-1)*shiftyi)
-                  +(  1./2.   ) * (  1./2.   ) * quant(m,a,b,k+( 1)*shiftxk + ( 1)*shiftyk,
-                                                             j+( 1)*shiftxj + ( 1)*shiftyj,
-                                                             i+( 1)*shiftxi + ( 1)*shiftyi);
-             break;
-    case 3 : out = +(  1./12.  ) * (  1./12.  ) * quant(m,a,b,k+(-2)*shiftxk + (-2)*shiftyk,
-                                                             j+(-2)*shiftxj + (-2)*shiftyj,
-                                                             i+(-2)*shiftxi + (-2)*shiftyi)
-                  +(  1./12.  ) * (  -2./3.  ) * quant(m,a,b,k+(-2)*shiftxk + (-1)*shiftyk,
-                                                             j+(-2)*shiftxj + (-1)*shiftyj,
-                                                             i+(-2)*shiftxi + (-1)*shiftyi)
-                  +(  1./12.  ) * (  2./3.   ) * quant(m,a,b,k+(-2)*shiftxk + ( 1)*shiftyk,
-                                                             j+(-2)*shiftxj + ( 1)*shiftyj,
-                                                             i+(-2)*shiftxi + ( 1)*shiftyi)
-                  +(  1./12.  ) * ( -1./12.  ) * quant(m,a,b,k+(-2)*shiftxk + ( 2)*shiftyk,
-                                                             j+(-2)*shiftxj + ( 2)*shiftyj,
-                                                             i+(-2)*shiftxi + ( 2)*shiftyi)
-                  +(  -2./3.  ) * (  1./12.  ) * quant(m,a,b,k+(-1)*shiftxk + (-2)*shiftyk,
-                                                             j+(-1)*shiftxj + (-2)*shiftyj,
-                                                             i+(-1)*shiftxi + (-2)*shiftyi)
-                  +(  -2./3.  ) * (  -2./3.  ) * quant(m,a,b,k+(-1)*shiftxk + (-1)*shiftyk,
-                                                             j+(-1)*shiftxj + (-1)*shiftyj,
-                                                             i+(-1)*shiftxi + (-1)*shiftyi)
-                  +(  -2./3.  ) * (  2./3.   ) * quant(m,a,b,k+(-1)*shiftxk + ( 1)*shiftyk,
-                                                             j+(-1)*shiftxj + ( 1)*shiftyj,
-                                                             i+(-1)*shiftxi + ( 1)*shiftyi)
-                  +(  -2./3.  ) * ( -1./12.  ) * quant(m,a,b,k+(-1)*shiftxk + ( 2)*shiftyk,
-                                                             j+(-1)*shiftxj + ( 2)*shiftyj,
-                                                             i+(-1)*shiftxi + ( 2)*shiftyi)
-                  +(  2./3.   ) * (  1./12.  ) * quant(m,a,b,k+( 1)*shiftxk + (-2)*shiftyk,
-                                                             j+( 1)*shiftxj + (-2)*shiftyj,
-                                                             i+( 1)*shiftxi + (-2)*shiftyi)
-                  +(  2./3.   ) * (  -2./3.  ) * quant(m,a,b,k+( 1)*shiftxk + (-1)*shiftyk,
-                                                             j+( 1)*shiftxj + (-1)*shiftyj,
-                                                             i+( 1)*shiftxi + (-1)*shiftyi)
-                  +(  2./3.   ) * (  2./3.   ) * quant(m,a,b,k+( 1)*shiftxk + ( 1)*shiftyk,
-                                                             j+( 1)*shiftxj + ( 1)*shiftyj,
-                                                             i+( 1)*shiftxi + ( 1)*shiftyi)
-                  +(  2./3.   ) * ( -1./12.  ) * quant(m,a,b,k+( 1)*shiftxk + ( 2)*shiftyk,
-                                                             j+( 1)*shiftxj + ( 2)*shiftyj,
-                                                             i+( 1)*shiftxi + ( 2)*shiftyi)
-                  +( -1./12.  ) * (  1./12.  ) * quant(m,a,b,k+( 2)*shiftxk + (-2)*shiftyk,
-                                                             j+( 2)*shiftxj + (-2)*shiftyj,
-                                                             i+( 2)*shiftxi + (-2)*shiftyi)
-                  +( -1./12.  ) * (  -2./3.  ) * quant(m,a,b,k+( 2)*shiftxk + (-1)*shiftyk,
-                                                             j+( 2)*shiftxj + (-1)*shiftyj,
-                                                             i+( 2)*shiftxi + (-1)*shiftyi)
-                  +( -1./12.  ) * (  2./3.   ) * quant(m,a,b,k+( 2)*shiftxk + ( 1)*shiftyk,
-                                                             j+( 2)*shiftxj + ( 1)*shiftyj,
-                                                             i+( 2)*shiftxi + ( 1)*shiftyi)
-                  +( -1./12.  ) * ( -1./12.  ) * quant(m,a,b,k+( 2)*shiftxk + ( 2)*shiftyk,
-                                                             j+( 2)*shiftxj + ( 2)*shiftyj,
-                                                             i+( 2)*shiftxi + ( 2)*shiftyi);
-             break;
-    case 4 : out = +( -1./60.  ) * ( -1./60.  ) * quant(m,a,b,k+(-3)*shiftxk + (-3)*shiftyk,
-                                                             j+(-3)*shiftxj + (-3)*shiftyj,
-                                                             i+(-3)*shiftxi + (-3)*shiftyi)
-                  +( -1./60.  ) * (  3./20.  ) * quant(m,a,b,k+(-3)*shiftxk + (-2)*shiftyk,
-                                                             j+(-3)*shiftxj + (-2)*shiftyj,
-                                                             i+(-3)*shiftxi + (-2)*shiftyi)
-                  +( -1./60.  ) * (  -3./4.  ) * quant(m,a,b,k+(-3)*shiftxk + (-1)*shiftyk,
-                                                             j+(-3)*shiftxj + (-1)*shiftyj,
-                                                             i+(-3)*shiftxi + (-1)*shiftyi)
-                  +( -1./60.  ) * (  3./4.   ) * quant(m,a,b,k+(-3)*shiftxk + ( 1)*shiftyk,
-                                                             j+(-3)*shiftxj + ( 1)*shiftyj,
-                                                             i+(-3)*shiftxi + ( 1)*shiftyi)
-                  +( -1./60.  ) * ( -3./20.  ) * quant(m,a,b,k+(-3)*shiftxk + ( 2)*shiftyk,
-                                                             j+(-3)*shiftxj + ( 2)*shiftyj,
-                                                             i+(-3)*shiftxi + ( 2)*shiftyi)
-                  +( -1./60.  ) * (  1./60.  ) * quant(m,a,b,k+(-3)*shiftxk + ( 3)*shiftyk,
-                                                             j+(-3)*shiftxj + ( 3)*shiftyj,
-                                                             i+(-3)*shiftxi + ( 3)*shiftyi)
-                  +(  3./20.  ) * ( -1./60.  ) * quant(m,a,b,k+(-2)*shiftxk + (-3)*shiftyk,
-                                                             j+(-2)*shiftxj + (-3)*shiftyj,
-                                                             i+(-2)*shiftxi + (-3)*shiftyi)
-                  +(  3./20.  ) * (  3./20.  ) * quant(m,a,b,k+(-2)*shiftxk + (-2)*shiftyk,
-                                                             j+(-2)*shiftxj + (-2)*shiftyj,
-                                                             i+(-2)*shiftxi + (-2)*shiftyi)
-                  +(  3./20.  ) * (  -3./4.  ) * quant(m,a,b,k+(-2)*shiftxk + (-1)*shiftyk,
-                                                             j+(-2)*shiftxj + (-1)*shiftyj,
-                                                             i+(-2)*shiftxi + (-1)*shiftyi)
-                  +(  3./20.  ) * (  3./4.   ) * quant(m,a,b,k+(-2)*shiftxk + ( 1)*shiftyk,
-                                                             j+(-2)*shiftxj + ( 1)*shiftyj,
-                                                             i+(-2)*shiftxi + ( 1)*shiftyi)
-                  +(  3./20.  ) * ( -3./20.  ) * quant(m,a,b,k+(-2)*shiftxk + ( 2)*shiftyk,
-                                                             j+(-2)*shiftxj + ( 2)*shiftyj,
-                                                             i+(-2)*shiftxi + ( 2)*shiftyi)
-                  +(  3./20.  ) * (  1./60.  ) * quant(m,a,b,k+(-2)*shiftxk + ( 3)*shiftyk,
-                                                             j+(-2)*shiftxj + ( 3)*shiftyj,
-                                                             i+(-2)*shiftxi + ( 3)*shiftyi)
-                  +(  -3./4.  ) * ( -1./60.  ) * quant(m,a,b,k+(-1)*shiftxk + (-3)*shiftyk,
-                                                             j+(-1)*shiftxj + (-3)*shiftyj,
-                                                             i+(-1)*shiftxi + (-3)*shiftyi)
-                  +(  -3./4.  ) * (  3./20.  ) * quant(m,a,b,k+(-1)*shiftxk + (-2)*shiftyk,
-                                                             j+(-1)*shiftxj + (-2)*shiftyj,
-                                                             i+(-1)*shiftxi + (-2)*shiftyi)
-                  +(  -3./4.  ) * (  -3./4.  ) * quant(m,a,b,k+(-1)*shiftxk + (-1)*shiftyk,
-                                                             j+(-1)*shiftxj + (-1)*shiftyj,
-                                                             i+(-1)*shiftxi + (-1)*shiftyi)
-                  +(  -3./4.  ) * (  3./4.   ) * quant(m,a,b,k+(-1)*shiftxk + ( 1)*shiftyk,
-                                                             j+(-1)*shiftxj + ( 1)*shiftyj,
-                                                             i+(-1)*shiftxi + ( 1)*shiftyi)
-                  +(  -3./4.  ) * ( -3./20.  ) * quant(m,a,b,k+(-1)*shiftxk + ( 2)*shiftyk,
-                                                             j+(-1)*shiftxj + ( 2)*shiftyj,
-                                                             i+(-1)*shiftxi + ( 2)*shiftyi)
-                  +(  -3./4.  ) * (  1./60.  ) * quant(m,a,b,k+(-1)*shiftxk + ( 3)*shiftyk,
-                                                             j+(-1)*shiftxj + ( 3)*shiftyj,
-                                                             i+(-1)*shiftxi + ( 3)*shiftyi)
-                  +(  3./4.   ) * ( -1./60.  ) * quant(m,a,b,k+( 1)*shiftxk + (-3)*shiftyk,
-                                                             j+( 1)*shiftxj + (-3)*shiftyj,
-                                                             i+( 1)*shiftxi + (-3)*shiftyi)
-                  +(  3./4.   ) * (  3./20.  ) * quant(m,a,b,k+( 1)*shiftxk + (-2)*shiftyk,
-                                                             j+( 1)*shiftxj + (-2)*shiftyj,
-                                                             i+( 1)*shiftxi + (-2)*shiftyi)
-                  +(  3./4.   ) * (  -3./4.  ) * quant(m,a,b,k+( 1)*shiftxk + (-1)*shiftyk,
-                                                             j+( 1)*shiftxj + (-1)*shiftyj,
-                                                             i+( 1)*shiftxi + (-1)*shiftyi)
-                  +(  3./4.   ) * (  3./4.   ) * quant(m,a,b,k+( 1)*shiftxk + ( 1)*shiftyk,
-                                                             j+( 1)*shiftxj + ( 1)*shiftyj,
-                                                             i+( 1)*shiftxi + ( 1)*shiftyi)
-                  +(  3./4.   ) * ( -3./20.  ) * quant(m,a,b,k+( 1)*shiftxk + ( 2)*shiftyk,
-                                                             j+( 1)*shiftxj + ( 2)*shiftyj,
-                                                             i+( 1)*shiftxi + ( 2)*shiftyi)
-                  +(  3./4.   ) * (  1./60.  ) * quant(m,a,b,k+( 1)*shiftxk + ( 3)*shiftyk,
-                                                             j+( 1)*shiftxj + ( 3)*shiftyj,
-                                                             i+( 1)*shiftxi + ( 3)*shiftyi)
-                  +( -3./20.  ) * ( -1./60.  ) * quant(m,a,b,k+( 2)*shiftxk + (-3)*shiftyk,
-                                                             j+( 2)*shiftxj + (-3)*shiftyj,
-                                                             i+( 2)*shiftxi + (-3)*shiftyi)
-                  +( -3./20.  ) * (  3./20.  ) * quant(m,a,b,k+( 2)*shiftxk + (-2)*shiftyk,
-                                                             j+( 2)*shiftxj + (-2)*shiftyj,
-                                                             i+( 2)*shiftxi + (-2)*shiftyi)
-                  +( -3./20.  ) * (  -3./4.  ) * quant(m,a,b,k+( 2)*shiftxk + (-1)*shiftyk,
-                                                             j+( 2)*shiftxj + (-1)*shiftyj,
-                                                             i+( 2)*shiftxi + (-1)*shiftyi)
-                  +( -3./20.  ) * (  3./4.   ) * quant(m,a,b,k+( 2)*shiftxk + ( 1)*shiftyk,
-                                                             j+( 2)*shiftxj + ( 1)*shiftyj,
-                                                             i+( 2)*shiftxi + ( 1)*shiftyi)
-                  +( -3./20.  ) * ( -3./20.  ) * quant(m,a,b,k+( 2)*shiftxk + ( 2)*shiftyk,
-                                                             j+( 2)*shiftxj + ( 2)*shiftyj,
-                                                             i+( 2)*shiftxi + ( 2)*shiftyi)
-                  +( -3./20.  ) * (  1./60.  ) * quant(m,a,b,k+( 2)*shiftxk + ( 3)*shiftyk,
-                                                             j+( 2)*shiftxj + ( 3)*shiftyj,
-                                                             i+( 2)*shiftxi + ( 3)*shiftyi)
-                  +(  1./60.  ) * ( -1./60.  ) * quant(m,a,b,k+( 3)*shiftxk + (-3)*shiftyk,
-                                                             j+( 3)*shiftxj + (-3)*shiftyj,
-                                                             i+( 3)*shiftxi + (-3)*shiftyi)
-                  +(  1./60.  ) * (  3./20.  ) * quant(m,a,b,k+( 3)*shiftxk + (-2)*shiftyk,
-                                                             j+( 3)*shiftxj + (-2)*shiftyj,
-                                                             i+( 3)*shiftxi + (-2)*shiftyi)
-                  +(  1./60.  ) * (  -3./4.  ) * quant(m,a,b,k+( 3)*shiftxk + (-1)*shiftyk,
-                                                             j+( 3)*shiftxj + (-1)*shiftyj,
-                                                             i+( 3)*shiftxi + (-1)*shiftyi)
-                  +(  1./60.  ) * (  3./4.   ) * quant(m,a,b,k+( 3)*shiftxk + ( 1)*shiftyk,
-                                                             j+( 3)*shiftxj + ( 1)*shiftyj,
-                                                             i+( 3)*shiftxi + ( 1)*shiftyi)
-                  +(  1./60.  ) * ( -3./20.  ) * quant(m,a,b,k+( 3)*shiftxk + ( 2)*shiftyk,
-                                                             j+( 3)*shiftxj + ( 2)*shiftyj,
-                                                             i+( 3)*shiftxi + ( 2)*shiftyi)
-                  +(  1./60.  ) * (  1./60.  ) * quant(m,a,b,k+( 3)*shiftxk + ( 3)*shiftyk,
-                                                             j+( 3)*shiftxj + ( 3)*shiftyj,
-                                                             i+( 3)*shiftxi + ( 3)*shiftyi);
-             break;
+  if constexpr ( NGHOST == 2 ) {
+    out = + (
+            + (
+              + (  -1./2.  ) * (  -1./2.  ) * quant(m,a,b,k+(-1)*shiftxk + (-1)*shiftyk,
+                                                          j+(-1)*shiftxj + (-1)*shiftyj,
+                                                          i+(-1)*shiftxi + (-1)*shiftyi)
+              + (  -1./2.  ) * (  1./2.   ) * quant(m,a,b,k+(-1)*shiftxk + ( 1)*shiftyk,
+                                                          j+(-1)*shiftxj + ( 1)*shiftyj,
+                                                          i+(-1)*shiftxi + ( 1)*shiftyi)
+              )
+            + (
+              + (  1./2.   ) * (  -1./2.  ) * quant(m,a,b,k+( 1)*shiftxk + (-1)*shiftyk,
+                                                          j+( 1)*shiftxj + (-1)*shiftyj,
+                                                          i+( 1)*shiftxi + (-1)*shiftyi)
+              + (  1./2.   ) * (  1./2.   ) * quant(m,a,b,k+( 1)*shiftxk + ( 1)*shiftyk,
+                                                          j+( 1)*shiftxj + ( 1)*shiftyj,
+                                                          i+( 1)*shiftxi + ( 1)*shiftyi)
+              )
+            );
+  } else if constexpr ( NGHOST == 3 ) {
+    out = + (
+            + (
+              + (  1./12.  ) * (  1./12.  ) * quant(m,a,b,k+(-2)*shiftxk + (-2)*shiftyk,
+                                                          j+(-2)*shiftxj + (-2)*shiftyj,
+                                                          i+(-2)*shiftxi + (-2)*shiftyi)
+              + (  1./12.  ) * ( -1./12.  ) * quant(m,a,b,k+(-2)*shiftxk + ( 2)*shiftyk,
+                                                          j+(-2)*shiftxj + ( 2)*shiftyj,
+                                                          i+(-2)*shiftxi + ( 2)*shiftyi)
+              )
+            + (
+              + ( -1./12.  ) * (  1./12.  ) * quant(m,a,b,k+( 2)*shiftxk + (-2)*shiftyk,
+                                                          j+( 2)*shiftxj + (-2)*shiftyj,
+                                                          i+( 2)*shiftxi + (-2)*shiftyi)
+              + ( -1./12.  ) * ( -1./12.  ) * quant(m,a,b,k+( 2)*shiftxk + ( 2)*shiftyk,
+                                                          j+( 2)*shiftxj + ( 2)*shiftyj,
+                                                          i+( 2)*shiftxi + ( 2)*shiftyi)
+              )
+            )
+          + (
+            + (
+              + (  1./12.  ) * (  -2./3.  ) * quant(m,a,b,k+(-2)*shiftxk + (-1)*shiftyk,
+                                                          j+(-2)*shiftxj + (-1)*shiftyj,
+                                                          i+(-2)*shiftxi + (-1)*shiftyi)
+              + (  1./12.  ) * (  2./3.   ) * quant(m,a,b,k+(-2)*shiftxk + ( 1)*shiftyk,
+                                                          j+(-2)*shiftxj + ( 1)*shiftyj,
+                                                          i+(-2)*shiftxi + ( 1)*shiftyi)
+              )
+            + (
+              + ( -1./12.  ) * (  -2./3.  ) * quant(m,a,b,k+( 2)*shiftxk + (-1)*shiftyk,
+                                                          j+( 2)*shiftxj + (-1)*shiftyj,
+                                                          i+( 2)*shiftxi + (-1)*shiftyi)
+              + ( -1./12.  ) * (  2./3.   ) * quant(m,a,b,k+( 2)*shiftxk + ( 1)*shiftyk,
+                                                          j+( 2)*shiftxj + ( 1)*shiftyj,
+                                                          i+( 2)*shiftxi + ( 1)*shiftyi)
+              )
+            )
+          + (
+            + (
+              + (  -2./3.  ) * (  1./12.  ) * quant(m,a,b,k+(-1)*shiftxk + (-2)*shiftyk,
+                                                          j+(-1)*shiftxj + (-2)*shiftyj,
+                                                          i+(-1)*shiftxi + (-2)*shiftyi)
+              + (  -2./3.  ) * ( -1./12.  ) * quant(m,a,b,k+(-1)*shiftxk + ( 2)*shiftyk,
+                                                          j+(-1)*shiftxj + ( 2)*shiftyj,
+                                                          i+(-1)*shiftxi + ( 2)*shiftyi)
+              )
+            + (
+              + (  2./3.   ) * (  1./12.  ) * quant(m,a,b,k+( 1)*shiftxk + (-2)*shiftyk,
+                                                          j+( 1)*shiftxj + (-2)*shiftyj,
+                                                          i+( 1)*shiftxi + (-2)*shiftyi)
+              + (  2./3.   ) * ( -1./12.  ) * quant(m,a,b,k+( 1)*shiftxk + ( 2)*shiftyk,
+                                                          j+( 1)*shiftxj + ( 2)*shiftyj,
+                                                          i+( 1)*shiftxi + ( 2)*shiftyi)
+              )
+            )
+          + (
+            + (
+              + (  -2./3.  ) * (  -2./3.  ) * quant(m,a,b,k+(-1)*shiftxk + (-1)*shiftyk,
+                                                          j+(-1)*shiftxj + (-1)*shiftyj,
+                                                          i+(-1)*shiftxi + (-1)*shiftyi)
+              + (  -2./3.  ) * (  2./3.   ) * quant(m,a,b,k+(-1)*shiftxk + ( 1)*shiftyk,
+                                                          j+(-1)*shiftxj + ( 1)*shiftyj,
+                                                          i+(-1)*shiftxi + ( 1)*shiftyi)
+              )
+            + (
+              + (  2./3.   ) * (  -2./3.  ) * quant(m,a,b,k+( 1)*shiftxk + (-1)*shiftyk,
+                                                          j+( 1)*shiftxj + (-1)*shiftyj,
+                                                          i+( 1)*shiftxi + (-1)*shiftyi)
+              + (  2./3.   ) * (  2./3.   ) * quant(m,a,b,k+( 1)*shiftxk + ( 1)*shiftyk,
+                                                          j+( 1)*shiftxj + ( 1)*shiftyj,
+                                                          i+( 1)*shiftxi + ( 1)*shiftyi)
+              )
+            );
+  } else if constexpr ( NGHOST == 4 ) {
+    out = + (
+            + (
+              + ( -1./60.  ) * ( -1./60.  ) * quant(m,a,b,k+(-3)*shiftxk + (-3)*shiftyk,
+                                                          j+(-3)*shiftxj + (-3)*shiftyj,
+                                                          i+(-3)*shiftxi + (-3)*shiftyi)
+              + ( -1./60.  ) * (  1./60.  ) * quant(m,a,b,k+(-3)*shiftxk + ( 3)*shiftyk,
+                                                          j+(-3)*shiftxj + ( 3)*shiftyj,
+                                                          i+(-3)*shiftxi + ( 3)*shiftyi)
+              )
+            + (
+              + (  1./60.  ) * ( -1./60.  ) * quant(m,a,b,k+( 3)*shiftxk + (-3)*shiftyk,
+                                                          j+( 3)*shiftxj + (-3)*shiftyj,
+                                                          i+( 3)*shiftxi + (-3)*shiftyi)
+              + (  1./60.  ) * (  1./60.  ) * quant(m,a,b,k+( 3)*shiftxk + ( 3)*shiftyk,
+                                                          j+( 3)*shiftxj + ( 3)*shiftyj,
+                                                          i+( 3)*shiftxi + ( 3)*shiftyi)
+              )
+            )
+          + (
+            + (
+              + ( -1./60.  ) * (  3./20.  ) * quant(m,a,b,k+(-3)*shiftxk + (-2)*shiftyk,
+                                                          j+(-3)*shiftxj + (-2)*shiftyj,
+                                                          i+(-3)*shiftxi + (-2)*shiftyi)
+              + ( -1./60.  ) * ( -3./20.  ) * quant(m,a,b,k+(-3)*shiftxk + ( 2)*shiftyk,
+                                                          j+(-3)*shiftxj + ( 2)*shiftyj,
+                                                          i+(-3)*shiftxi + ( 2)*shiftyi)
+              )
+            + (
+              + (  1./60.  ) * (  3./20.  ) * quant(m,a,b,k+( 3)*shiftxk + (-2)*shiftyk,
+                                                          j+( 3)*shiftxj + (-2)*shiftyj,
+                                                          i+( 3)*shiftxi + (-2)*shiftyi)
+              + (  1./60.  ) * ( -3./20.  ) * quant(m,a,b,k+( 3)*shiftxk + ( 2)*shiftyk,
+                                                          j+( 3)*shiftxj + ( 2)*shiftyj,
+                                                          i+( 3)*shiftxi + ( 2)*shiftyi)
+              )
+            )
+          + (
+            + (
+              + ( -1./60.  ) * (  -3./4.  ) * quant(m,a,b,k+(-3)*shiftxk + (-1)*shiftyk,
+                                                          j+(-3)*shiftxj + (-1)*shiftyj,
+                                                          i+(-3)*shiftxi + (-1)*shiftyi)
+              + ( -1./60.  ) * (  3./4.   ) * quant(m,a,b,k+(-3)*shiftxk + ( 1)*shiftyk,
+                                                          j+(-3)*shiftxj + ( 1)*shiftyj,
+                                                          i+(-3)*shiftxi + ( 1)*shiftyi)
+              )
+            + (
+              + (  1./60.  ) * (  -3./4.  ) * quant(m,a,b,k+( 3)*shiftxk + (-1)*shiftyk,
+                                                          j+( 3)*shiftxj + (-1)*shiftyj,
+                                                          i+( 3)*shiftxi + (-1)*shiftyi)
+              + (  1./60.  ) * (  3./4.   ) * quant(m,a,b,k+( 3)*shiftxk + ( 1)*shiftyk,
+                                                          j+( 3)*shiftxj + ( 1)*shiftyj,
+                                                          i+( 3)*shiftxi + ( 1)*shiftyi)
+              )
+            )
+          + (
+            + (
+              + (  3./20.  ) * ( -1./60.  ) * quant(m,a,b,k+(-2)*shiftxk + (-3)*shiftyk,
+                                                          j+(-2)*shiftxj + (-3)*shiftyj,
+                                                          i+(-2)*shiftxi + (-3)*shiftyi)
+              + (  3./20.  ) * (  1./60.  ) * quant(m,a,b,k+(-2)*shiftxk + ( 3)*shiftyk,
+                                                          j+(-2)*shiftxj + ( 3)*shiftyj,
+                                                          i+(-2)*shiftxi + ( 3)*shiftyi)
+              )
+            + (
+              + ( -3./20.  ) * ( -1./60.  ) * quant(m,a,b,k+( 2)*shiftxk + (-3)*shiftyk,
+                                                          j+( 2)*shiftxj + (-3)*shiftyj,
+                                                          i+( 2)*shiftxi + (-3)*shiftyi)
+              + ( -3./20.  ) * (  1./60.  ) * quant(m,a,b,k+( 2)*shiftxk + ( 3)*shiftyk,
+                                                          j+( 2)*shiftxj + ( 3)*shiftyj,
+                                                          i+( 2)*shiftxi + ( 3)*shiftyi)
+              )
+            )
+          + (
+            + (
+              + (  3./20.  ) * (  3./20.  ) * quant(m,a,b,k+(-2)*shiftxk + (-2)*shiftyk,
+                                                          j+(-2)*shiftxj + (-2)*shiftyj,
+                                                          i+(-2)*shiftxi + (-2)*shiftyi)
+              + (  3./20.  ) * ( -3./20.  ) * quant(m,a,b,k+(-2)*shiftxk + ( 2)*shiftyk,
+                                                          j+(-2)*shiftxj + ( 2)*shiftyj,
+                                                          i+(-2)*shiftxi + ( 2)*shiftyi)
+              )
+            + (
+              + ( -3./20.  ) * (  3./20.  ) * quant(m,a,b,k+( 2)*shiftxk + (-2)*shiftyk,
+                                                          j+( 2)*shiftxj + (-2)*shiftyj,
+                                                          i+( 2)*shiftxi + (-2)*shiftyi)
+              + ( -3./20.  ) * ( -3./20.  ) * quant(m,a,b,k+( 2)*shiftxk + ( 2)*shiftyk,
+                                                          j+( 2)*shiftxj + ( 2)*shiftyj,
+                                                          i+( 2)*shiftxi + ( 2)*shiftyi)
+              )
+            )
+          + (
+            + (
+              + (  3./20.  ) * (  -3./4.  ) * quant(m,a,b,k+(-2)*shiftxk + (-1)*shiftyk,
+                                                          j+(-2)*shiftxj + (-1)*shiftyj,
+                                                          i+(-2)*shiftxi + (-1)*shiftyi)
+              + (  3./20.  ) * (  3./4.   ) * quant(m,a,b,k+(-2)*shiftxk + ( 1)*shiftyk,
+                                                          j+(-2)*shiftxj + ( 1)*shiftyj,
+                                                          i+(-2)*shiftxi + ( 1)*shiftyi)
+              )
+            + (
+              + ( -3./20.  ) * (  -3./4.  ) * quant(m,a,b,k+( 2)*shiftxk + (-1)*shiftyk,
+                                                          j+( 2)*shiftxj + (-1)*shiftyj,
+                                                          i+( 2)*shiftxi + (-1)*shiftyi)
+              + ( -3./20.  ) * (  3./4.   ) * quant(m,a,b,k+( 2)*shiftxk + ( 1)*shiftyk,
+                                                          j+( 2)*shiftxj + ( 1)*shiftyj,
+                                                          i+( 2)*shiftxi + ( 1)*shiftyi)
+              )
+            )
+          + (
+            + (
+              + (  -3./4.  ) * ( -1./60.  ) * quant(m,a,b,k+(-1)*shiftxk + (-3)*shiftyk,
+                                                          j+(-1)*shiftxj + (-3)*shiftyj,
+                                                          i+(-1)*shiftxi + (-3)*shiftyi)
+              + (  -3./4.  ) * (  1./60.  ) * quant(m,a,b,k+(-1)*shiftxk + ( 3)*shiftyk,
+                                                          j+(-1)*shiftxj + ( 3)*shiftyj,
+                                                          i+(-1)*shiftxi + ( 3)*shiftyi)
+              )
+            + (
+              + (  3./4.   ) * ( -1./60.  ) * quant(m,a,b,k+( 1)*shiftxk + (-3)*shiftyk,
+                                                          j+( 1)*shiftxj + (-3)*shiftyj,
+                                                          i+( 1)*shiftxi + (-3)*shiftyi)
+              + (  3./4.   ) * (  1./60.  ) * quant(m,a,b,k+( 1)*shiftxk + ( 3)*shiftyk,
+                                                          j+( 1)*shiftxj + ( 3)*shiftyj,
+                                                          i+( 1)*shiftxi + ( 3)*shiftyi)
+              )
+            )
+          + (
+            + (
+              + (  -3./4.  ) * (  3./20.  ) * quant(m,a,b,k+(-1)*shiftxk + (-2)*shiftyk,
+                                                          j+(-1)*shiftxj + (-2)*shiftyj,
+                                                          i+(-1)*shiftxi + (-2)*shiftyi)
+              + (  -3./4.  ) * ( -3./20.  ) * quant(m,a,b,k+(-1)*shiftxk + ( 2)*shiftyk,
+                                                          j+(-1)*shiftxj + ( 2)*shiftyj,
+                                                          i+(-1)*shiftxi + ( 2)*shiftyi)
+              )
+            + (
+              + (  3./4.   ) * (  3./20.  ) * quant(m,a,b,k+( 1)*shiftxk + (-2)*shiftyk,
+                                                          j+( 1)*shiftxj + (-2)*shiftyj,
+                                                          i+( 1)*shiftxi + (-2)*shiftyi)
+              + (  3./4.   ) * ( -3./20.  ) * quant(m,a,b,k+( 1)*shiftxk + ( 2)*shiftyk,
+                                                          j+( 1)*shiftxj + ( 2)*shiftyj,
+                                                          i+( 1)*shiftxi + ( 2)*shiftyi)
+              )
+            )
+          + (
+            + (
+              + (  -3./4.  ) * (  -3./4.  ) * quant(m,a,b,k+(-1)*shiftxk + (-1)*shiftyk,
+                                                          j+(-1)*shiftxj + (-1)*shiftyj,
+                                                          i+(-1)*shiftxi + (-1)*shiftyi)
+              + (  -3./4.  ) * (  3./4.   ) * quant(m,a,b,k+(-1)*shiftxk + ( 1)*shiftyk,
+                                                          j+(-1)*shiftxj + ( 1)*shiftyj,
+                                                          i+(-1)*shiftxi + ( 1)*shiftyi)
+              )
+            + (
+              + (  3./4.   ) * (  -3./4.  ) * quant(m,a,b,k+( 1)*shiftxk + (-1)*shiftyk,
+                                                          j+( 1)*shiftxj + (-1)*shiftyj,
+                                                          i+( 1)*shiftxi + (-1)*shiftyi)
+              + (  3./4.   ) * (  3./4.   ) * quant(m,a,b,k+( 1)*shiftxk + ( 1)*shiftyk,
+                                                          j+( 1)*shiftxj + ( 1)*shiftyj,
+                                                          i+( 1)*shiftxi + ( 1)*shiftyi)
+              )
+            );
   }
   return out*idx[dirx]*idx[diry];
   }
@@ -957,10 +1200,11 @@ KOKKOS_INLINE_FUNCTION
 
   // Reminder: this code has been generated with py/write_FD.py, please do modifications there.
   // 1st advective derivative scalar
-  template <typename TYPE1, typename TYPE2>
+  template <int NGHOST, typename TYPE1, typename TYPE2>
 KOKKOS_INLINE_FUNCTION 
-  Real Lx(int const dir,    int const nghost,
-          const Real idx[], const TYPE1 &vx, const TYPE2 &quant,
+  Real Lx(int const dir,
+          const Real idx[], const TYPE1 &vx, 
+                            const TYPE2 &quant,
           int const m, int const a,
           int const k, int const j, int const i)
   {
@@ -968,8 +1212,8 @@ KOKKOS_INLINE_FUNCTION
   int const shiftj = dir==1;
   int const shifti = dir==0;
   Real dl, dr;
-  switch(nghost) {
-    case 2 : dl = +0.5    * quant(m,k+(-2)*shiftk,
+  if constexpr ( NGHOST == 2 ) {
+    dl = +0.5    * quant(m,k+(-2)*shiftk,
                                        j+(-2)*shiftj,
                                        i+(-2)*shifti)
                      -2.0    * quant(m,k+(-1)*shiftk,
@@ -978,7 +1222,7 @@ KOKKOS_INLINE_FUNCTION
                      +1.5    * quant(m,k,
                                        j,
                                        i);
-             dr = -0.5    * quant(m,k+(2)*shiftk,
+    dr = -0.5    * quant(m,k+(2)*shiftk,
                                        j+(2)*shiftj,
                                        i+(2)*shifti)
                      +2.0    * quant(m,k+(1)*shiftk,
@@ -987,8 +1231,8 @@ KOKKOS_INLINE_FUNCTION
                      -1.5    * quant(m,k,
                                        j,
                                        i);
-             break;
-    case 3 : dl = -1./12.   * quant(m,k+(-3)*shiftk,
+  } else if constexpr ( NGHOST == 3 ) {
+    dl = -1./12.   * quant(m,k+(-3)*shiftk,
                                        j+(-3)*shiftj,
                                        i+(-3)*shifti)
                    +6./12.   * quant(m,k+(-2)*shiftk,
@@ -1003,7 +1247,7 @@ KOKKOS_INLINE_FUNCTION
                    +3./12.   * quant(m,k+(1)*shiftk,
                                        j+(1)*shiftj,
                                        i+(1)*shifti);
-             dr = +1./12.   * quant(m,k+(3)*shiftk,
+    dr = +1./12.   * quant(m,k+(3)*shiftk,
                                        j+(3)*shiftj,
                                        i+(3)*shifti)
                    -6./12.   * quant(m,k+(2)*shiftk,
@@ -1018,8 +1262,8 @@ KOKKOS_INLINE_FUNCTION
                    -3./12.   * quant(m,k+(-1)*shiftk,
                                        j+(-1)*shiftj,
                                        i+(-1)*shifti);
-             break;
-    case 4 : dl = +1./60.   * quant(m,k+(-4)*shiftk,
+  } else if constexpr ( NGHOST == 4 ) {
+    dl = +1./60.   * quant(m,k+(-4)*shiftk,
                                        j+(-4)*shiftj,
                                        i+(-4)*shifti)
                    -2./15.   * quant(m,k+(-3)*shiftk,
@@ -1040,7 +1284,7 @@ KOKKOS_INLINE_FUNCTION
                    -1./30.   * quant(m,k+(2)*shiftk,
                                        j+(2)*shiftj,
                                        i+(2)*shifti);
-             dr = -1./60.   * quant(m,k+(4)*shiftk,
+    dr = -1./60.   * quant(m,k+(4)*shiftk,
                                        j+(4)*shiftj,
                                        i+(4)*shifti)
                    +2./15.   * quant(m,k+(3)*shiftk,
@@ -1061,7 +1305,6 @@ KOKKOS_INLINE_FUNCTION
                    +1./30.   * quant(m,k+(-2)*shiftk,
                                        j+(-2)*shiftj,
                                        i+(-2)*shifti);
-             break;
   }
   return ((vx(m,a,k,j,i) < 0) ? (vx(m,a,k,j,i) * dl) : (vx(m,a,k,j,i) * dr)) * idx[dir];
   }
@@ -1069,10 +1312,11 @@ KOKKOS_INLINE_FUNCTION
 
   // Reminder: this code has been generated with py/write_FD.py, please do modifications there.
   // 1st advective derivative vector
-  template <typename TYPE1, typename TYPE2>
+  template <int NGHOST, typename TYPE1, typename TYPE2>
 KOKKOS_INLINE_FUNCTION 
-  Real Lx(int const dir,    int const nghost,
-          const Real idx[], const TYPE1 &vx, const TYPE2 &quant,
+  Real Lx(int const dir,
+          const Real idx[], const TYPE1 &vx, 
+                            const TYPE2 &quant,
           int const m, int const a, int const b,
           int const k, int const j, int const i)
   {
@@ -1080,8 +1324,8 @@ KOKKOS_INLINE_FUNCTION
   int const shiftj = dir==1;
   int const shifti = dir==0;
   Real dl, dr;
-  switch(nghost) {
-    case 2 : dl = +0.5    * quant(m,b,k+(-2)*shiftk,
+  if constexpr ( NGHOST == 2 ) {
+    dl = +0.5    * quant(m,b,k+(-2)*shiftk,
                                          j+(-2)*shiftj,
                                          i+(-2)*shifti)
                      -2.0    * quant(m,b,k+(-1)*shiftk,
@@ -1090,7 +1334,7 @@ KOKKOS_INLINE_FUNCTION
                      +1.5    * quant(m,b,k,
                                          j,
                                          i);
-             dr = -0.5    * quant(m,b,k+(2)*shiftk,
+    dr = -0.5    * quant(m,b,k+(2)*shiftk,
                                          j+(2)*shiftj,
                                          i+(2)*shifti)
                      +2.0    * quant(m,b,k+(1)*shiftk,
@@ -1099,8 +1343,8 @@ KOKKOS_INLINE_FUNCTION
                      -1.5    * quant(m,b,k,
                                          j,
                                          i);
-             break;
-    case 3 : dl = -1./12.   * quant(m,b,k+(-3)*shiftk,
+  } else if constexpr ( NGHOST == 3 ) {
+    dl = -1./12.   * quant(m,b,k+(-3)*shiftk,
                                          j+(-3)*shiftj,
                                          i+(-3)*shifti)
                    +6./12.   * quant(m,b,k+(-2)*shiftk,
@@ -1115,7 +1359,7 @@ KOKKOS_INLINE_FUNCTION
                    +3./12.   * quant(m,b,k+(1)*shiftk,
                                          j+(1)*shiftj,
                                          i+(1)*shifti);
-             dr = +1./12.   * quant(m,b,k+(3)*shiftk,
+    dr = +1./12.   * quant(m,b,k+(3)*shiftk,
                                          j+(3)*shiftj,
                                          i+(3)*shifti)
                    -6./12.   * quant(m,b,k+(2)*shiftk,
@@ -1130,8 +1374,8 @@ KOKKOS_INLINE_FUNCTION
                    -3./12.   * quant(m,b,k+(-1)*shiftk,
                                          j+(-1)*shiftj,
                                          i+(-1)*shifti);
-             break;
-    case 4 : dl = +1./60.   * quant(m,b,k+(-4)*shiftk,
+  } else if constexpr ( NGHOST == 4 ) {
+    dl = +1./60.   * quant(m,b,k+(-4)*shiftk,
                                          j+(-4)*shiftj,
                                          i+(-4)*shifti)
                    -2./15.   * quant(m,b,k+(-3)*shiftk,
@@ -1152,7 +1396,7 @@ KOKKOS_INLINE_FUNCTION
                    -1./30.   * quant(m,b,k+(2)*shiftk,
                                          j+(2)*shiftj,
                                          i+(2)*shifti);
-             dr = -1./60.   * quant(m,b,k+(4)*shiftk,
+    dr = -1./60.   * quant(m,b,k+(4)*shiftk,
                                          j+(4)*shiftj,
                                          i+(4)*shifti)
                    +2./15.   * quant(m,b,k+(3)*shiftk,
@@ -1173,7 +1417,6 @@ KOKKOS_INLINE_FUNCTION
                    +1./30.   * quant(m,b,k+(-2)*shiftk,
                                          j+(-2)*shiftj,
                                          i+(-2)*shifti);
-             break;
   }
   return ((vx(m,a,k,j,i) < 0) ? (vx(m,a,k,j,i) * dl) : (vx(m,a,k,j,i) * dr)) * idx[dir];
   }
@@ -1181,10 +1424,11 @@ KOKKOS_INLINE_FUNCTION
 
   // Reminder: this code has been generated with py/write_FD.py, please do modifications there.
   // 1st advective derivative 2D tensor
-  template <typename TYPE1, typename TYPE2>
+  template <int NGHOST, typename TYPE1, typename TYPE2>
 KOKKOS_INLINE_FUNCTION 
-  Real Lx(int const dir,    int const nghost,
-          const Real idx[], const TYPE1 &vx, const TYPE2 &quant,
+  Real Lx(int const dir,
+          const Real idx[], const TYPE1 &vx, 
+                            const TYPE2 &quant,
           int const m, int const a, int const b, int const c,
           int const k, int const j, int const i)
   {
@@ -1192,8 +1436,8 @@ KOKKOS_INLINE_FUNCTION
   int const shiftj = dir==1;
   int const shifti = dir==0;
   Real dl, dr;
-  switch(nghost) {
-    case 2 : dl = +0.5    * quant(m,b,c,k+(-2)*shiftk,
+  if constexpr ( NGHOST == 2 ) {
+    dl = +0.5    * quant(m,b,c,k+(-2)*shiftk,
                                            j+(-2)*shiftj,
                                            i+(-2)*shifti)
                      -2.0    * quant(m,b,c,k+(-1)*shiftk,
@@ -1202,7 +1446,7 @@ KOKKOS_INLINE_FUNCTION
                      +1.5    * quant(m,b,c,k,
                                            j,
                                            i);
-             dr = -0.5    * quant(m,b,c,k+(2)*shiftk,
+    dr = -0.5    * quant(m,b,c,k+(2)*shiftk,
                                            j+(2)*shiftj,
                                            i+(2)*shifti)
                      +2.0    * quant(m,b,c,k+(1)*shiftk,
@@ -1211,8 +1455,8 @@ KOKKOS_INLINE_FUNCTION
                      -1.5    * quant(m,b,c,k,
                                            j,
                                            i);
-             break;
-    case 3 : dl = -1./12.   * quant(m,b,c,k+(-3)*shiftk,
+  } else if constexpr ( NGHOST == 3 ) {
+    dl = -1./12.   * quant(m,b,c,k+(-3)*shiftk,
                                            j+(-3)*shiftj,
                                            i+(-3)*shifti)
                    +6./12.   * quant(m,b,c,k+(-2)*shiftk,
@@ -1227,7 +1471,7 @@ KOKKOS_INLINE_FUNCTION
                    +3./12.   * quant(m,b,c,k+(1)*shiftk,
                                            j+(1)*shiftj,
                                            i+(1)*shifti);
-             dr = +1./12.   * quant(m,b,c,k+(3)*shiftk,
+    dr = +1./12.   * quant(m,b,c,k+(3)*shiftk,
                                            j+(3)*shiftj,
                                            i+(3)*shifti)
                    -6./12.   * quant(m,b,c,k+(2)*shiftk,
@@ -1242,8 +1486,8 @@ KOKKOS_INLINE_FUNCTION
                    -3./12.   * quant(m,b,c,k+(-1)*shiftk,
                                            j+(-1)*shiftj,
                                            i+(-1)*shifti);
-             break;
-    case 4 : dl = +1./60.   * quant(m,b,c,k+(-4)*shiftk,
+  } else if constexpr ( NGHOST == 4 ) {
+    dl = +1./60.   * quant(m,b,c,k+(-4)*shiftk,
                                            j+(-4)*shiftj,
                                            i+(-4)*shifti)
                    -2./15.   * quant(m,b,c,k+(-3)*shiftk,
@@ -1264,7 +1508,7 @@ KOKKOS_INLINE_FUNCTION
                    -1./30.   * quant(m,b,c,k+(2)*shiftk,
                                            j+(2)*shiftj,
                                            i+(2)*shifti);
-             dr = -1./60.   * quant(m,b,c,k+(4)*shiftk,
+    dr = -1./60.   * quant(m,b,c,k+(4)*shiftk,
                                            j+(4)*shiftj,
                                            i+(4)*shifti)
                    +2./15.   * quant(m,b,c,k+(3)*shiftk,
@@ -1285,7 +1529,6 @@ KOKKOS_INLINE_FUNCTION
                    +1./30.   * quant(m,b,c,k+(-2)*shiftk,
                                            j+(-2)*shiftj,
                                            i+(-2)*shifti);
-             break;
   }
   return ((vx(m,a,k,j,i) < 0) ? (vx(m,a,k,j,i) * dl) : (vx(m,a,k,j,i) * dr)) * idx[dir];
   }
@@ -1293,10 +1536,10 @@ KOKKOS_INLINE_FUNCTION
 
   // Reminder: this code has been generated with py/write_FD.py, please do modifications there. 
   // 1st derivative vector
-  template <typename TYPE>
+  template <int NGHOST, typename TYPE>
 KOKKOS_INLINE_FUNCTION
-  Real Diss(int const dir, int const nghost,
-          const Real idx[], const TYPE &quant,
+  Real Diss(int const dir,
+          const Real idx[], TYPE &quant,
           int const m, int const a,
           int const k, int const j, int const i)
   {
@@ -1304,73 +1547,72 @@ KOKKOS_INLINE_FUNCTION
   int const shiftj = dir==1;
   int const shifti = dir==0;
   Real out;
-  switch(nghost) {
-    case 2 : out = +1.     * quant(m,a,k+(-2)*shiftk,
-                                         j+(-2)*shiftj,
-                                         i+(-2)*shifti)
-                     -4.     * quant(m,a,k+(-1)*shiftk,
-                                         j+(-1)*shiftj,
-                                         i+(-1)*shifti)
-                     +6.     * quant(m,a,k,
-                                         j,
-                                         i)
-                     -4.     * quant(m,a,k+( 1)*shiftk,
-                                         j+( 1)*shiftj,
-                                         i+( 1)*shifti)
-                     +1.     * quant(m,a,k+( 2)*shiftk,
-                                         j+( 2)*shiftj,
-                                         i+( 2)*shifti);
-             break;
-    case 3 : out = +1.     * quant(m,a,k+(-3)*shiftk,
-                                         j+(-3)*shiftj,
-                                         i+(-3)*shifti)
-                     -6.     * quant(m,a,k+(-2)*shiftk,
-                                         j+(-2)*shiftj,
-                                         i+(-2)*shifti)
-                     +15.    * quant(m,a,k+(-1)*shiftk,
-                                         j+(-1)*shiftj,
-                                         i+(-1)*shifti)
-                     -20.    * quant(m,a,k,
-                                         j,
-                                         i)
-                     +15.    * quant(m,a,k+( 1)*shiftk,
-                                         j+( 1)*shiftj,
-                                         i+( 1)*shifti)
-                     -6.     * quant(m,a,k+( 2)*shiftk,
-                                         j+( 2)*shiftj,
-                                         i+( 2)*shifti)
-                     +1.     * quant(m,a,k+( 3)*shiftk,
-                                         j+( 3)*shiftj,
-                                         i+( 3)*shifti);
-             break;
-    case 4 : out = +1.     * quant(m,a,k+(-4)*shiftk,
-                                         j+(-4)*shiftj,
-                                         i+(-4)*shifti)
-                     -8.     * quant(m,a,k+(-3)*shiftk,
-                                         j+(-3)*shiftj,
-                                         i+(-3)*shifti)
-                     +28.    * quant(m,a,k+(-2)*shiftk,
-                                         j+(-2)*shiftj,
-                                         i+(-2)*shifti)
-                     -56.    * quant(m,a,k+(-1)*shiftk,
-                                         j+(-1)*shiftj,
-                                         i+(-1)*shifti)
-                     +70.    * quant(m,a,k,
-                                         j,
-                                         i)
-                     -56.    * quant(m,a,k+( 1)*shiftk,
-                                         j+( 1)*shiftj,
-                                         i+( 1)*shifti)
-                     +28.    * quant(m,a,k+( 2)*shiftk,
-                                         j+( 2)*shiftj,
-                                         i+( 2)*shifti)
-                     -8.     * quant(m,a,k+( 3)*shiftk,
-                                         j+( 3)*shiftj,
-                                         i+( 3)*shifti)
-                     +1.     * quant(m,a,k+( 4)*shiftk,
-                                         j+( 4)*shiftj,
-                                         i+( 4)*shifti);
-             break;
+  if constexpr ( NGHOST == 2 ) {
+    out = + (   +1.     * quant(m,a,k+(-2)*shiftk,
+                                    j+(-2)*shiftj,
+                                    i+(-2)*shifti)
+                +1.     * quant(m,a,k+( 2)*shiftk,
+                                    j+( 2)*shiftj,
+                                    i+( 2)*shifti))
+          + (   -4.     * quant(m,a,k+(-1)*shiftk,
+                                    j+(-1)*shiftj,
+                                    i+(-1)*shifti)
+                -4.     * quant(m,a,k+( 1)*shiftk,
+                                    j+( 1)*shiftj,
+                                    i+( 1)*shifti))
+                +6.     * quant(m,a,k,
+                                    j,
+                                    i);
+  } else if constexpr ( NGHOST == 3 ) {
+    out = + (   +1.     * quant(m,a,k+(-3)*shiftk,
+                                    j+(-3)*shiftj,
+                                    i+(-3)*shifti)
+                +1.     * quant(m,a,k+( 3)*shiftk,
+                                    j+( 3)*shiftj,
+                                    i+( 3)*shifti))
+          + (   -6.     * quant(m,a,k+(-2)*shiftk,
+                                    j+(-2)*shiftj,
+                                    i+(-2)*shifti)
+                -6.     * quant(m,a,k+( 2)*shiftk,
+                                    j+( 2)*shiftj,
+                                    i+( 2)*shifti))
+          + (   +15.    * quant(m,a,k+(-1)*shiftk,
+                                    j+(-1)*shiftj,
+                                    i+(-1)*shifti)
+                +15.    * quant(m,a,k+( 1)*shiftk,
+                                    j+( 1)*shiftj,
+                                    i+( 1)*shifti))
+                -20.    * quant(m,a,k,
+                                    j,
+                                    i);
+  } else if constexpr ( NGHOST == 4 ) {
+    out = + (   +1.     * quant(m,a,k+(-4)*shiftk,
+                                    j+(-4)*shiftj,
+                                    i+(-4)*shifti)
+                +1.     * quant(m,a,k+( 4)*shiftk,
+                                    j+( 4)*shiftj,
+                                    i+( 4)*shifti))
+          + (   -8.     * quant(m,a,k+(-3)*shiftk,
+                                    j+(-3)*shiftj,
+                                    i+(-3)*shifti)
+                -8.     * quant(m,a,k+( 3)*shiftk,
+                                    j+( 3)*shiftj,
+                                    i+( 3)*shifti))
+          + (   +28.    * quant(m,a,k+(-2)*shiftk,
+                                    j+(-2)*shiftj,
+                                    i+(-2)*shifti)
+                +28.    * quant(m,a,k+( 2)*shiftk,
+                                    j+( 2)*shiftj,
+                                    i+( 2)*shifti))
+          + (   -56.    * quant(m,a,k+(-1)*shiftk,
+                                    j+(-1)*shiftj,
+                                    i+(-1)*shifti)
+                -56.    * quant(m,a,k+( 1)*shiftk,
+                                    j+( 1)*shiftj,
+                                    i+( 1)*shifti))
+                +70.    * quant(m,a,k,
+                                    j,
+                                    i);
   }
   return out*idx[dir];
   }

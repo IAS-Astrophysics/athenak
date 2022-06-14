@@ -6,23 +6,32 @@ def string_central(stencil,a=0,b=0):
     mid_stenc = len_stenc//2
     string_der = ""
     for i, s in enumerate(a_):
+        if i>mid_stenc:
+            break
         if s == "0.":
             continue
         elif not s[0] == "-":
             s = "+" + s
+        if not a_[len_stenc-i-1][0] == "-":
+            a_[len_stenc-i-1] = "+" + a_[len_stenc-i-1]
+        aux  = "{:^10} * quant(m".format(s)
+        aux2 = "{:^10} * quant(m".format(a_[len_stenc-i-1])
         if a:
+            aux  = aux  + ",a"
+            aux2 = aux2 + ",a"
             if b:
-                aux = "{:^10} * quant(m,a,b".format(s)
-            else:
-                aux = "{:^10} * quant(m,a".format(s)
-        else:
-            aux = "{:^10} * quant(m".format(s)
-        offset = " " * (len(aux) + len("    case 2 : out =") + 1)
+                aux  = aux  + ",b"
+                aux2 = aux2 + ",b"
+        offset_out = len("    out = ") + 4
+        offset = " " * (len(aux) + offset_out)
         fact = i-mid_stenc
+        if i > 0:
+            string_der += " " * (offset_out - 4)
         if fact == 0:
-            string_der += aux + ",k,\n{offset}j,\n{offset}i)\n".format(offset = offset) + " " * (len("    case 2 : out ="))
+            string_der += " " * 3 + aux + ",k,\n{offset}j,\n{offset}i)\n".format(offset = offset) + " " * (len("    out ="))
         else:
-            string_der += aux + ",k+({fact:>2})*shiftk,\n{offset}j+({fact:>2})*shiftj,\n{offset}i+({fact:>2})*shifti)\n".format(fact = str(fact), offset = offset)+ " " * (len("    case 2 : out ="))
+            string_der += "+ (" + aux + ",k+({fact:>2})*shiftk,\n{offset}j+({fact:>2})*shiftj,\n{offset}i+({fact:>2})*shifti)\n".format(fact = str(fact), offset = offset)
+            string_der += " " * (offset_out-1) + aux2 + ",k+({fact:>2})*shiftk,\n{offset}j+({fact:>2})*shiftj,\n{offset}i+({fact:>2})*shifti))\n".format(fact = str(-fact), offset = offset)
     return string_der.strip()+";"
 
 def string_mixed(stencil,a=0,b=0):
@@ -31,18 +40,61 @@ def string_mixed(stencil,a=0,b=0):
     mid_stenc = len_stenc//2
     string_der = ""
     for i, si in enumerate(a_):
+        if i>=mid_stenc:
+            break
+        ## Open parenthesis
         for j, sj in enumerate(a_):
-          if si == "0." or sj == "0.":
-              continue
-          if a:
-              if b:
-                  aux = "+({:^10}) * ({:^10}) * quant(m,a,b".format(si, sj)
-              else:
-                  aux = "+({:^10}) * ({:^10}) * quant(m,a".format(si, sj)
-          else:
-              aux = "+({:^10}) * ({:^10}) * quant(m".format(si, sj)
-          offset = " " * (len(aux) + 1 + len("    case 2 : out ="))
-          string_der += aux + ",k+({fact1:>2})*shiftxk + ({fact2:>2})*shiftyk,\n{offset}j+({fact1:>2})*shiftxj + ({fact2:>2})*shiftyj,\n{offset}i+({fact1:>2})*shiftxi + ({fact2:>2})*shiftyi)\n".format(fact1 = i-mid_stenc, fact2 = j-mid_stenc, offset = offset) + " " * (len("    case 2 : out ="))
+            if j>=mid_stenc:
+              break
+            string_der += "\n" + " " * (len("    out =") + 1) + "+ (\n"
+            string_der += " " * (len("    out =") + 3) + "+ (\n"
+            if si == "0." or sj == "0.":
+                continue
+            #aux = aux + "+({:^10}) * ({:^10}) * quant(m".format(si, sj)
+            aux =  "+ ({:^10}) * ({:^10}) * quant(m".format(si, sj)
+            aux2 = "+ ({:^10}) * ({:^10}) * quant(m".format(si, a_[len_stenc-j-1])
+            aux3 =  "+ ({:^10}) * ({:^10}) * quant(m".format(a_[len_stenc-i-1], sj)
+            aux4 = "+ ({:^10}) * ({:^10}) * quant(m".format(a_[len_stenc-i-1], a_[len_stenc-j-1])
+            if a:
+                aux  = aux  + ",a"
+                aux2 = aux2 + ",a"
+                aux3 = aux3 + ",a"
+                aux4 = aux4 + ",a"
+                if b:
+                    aux  = aux  + ",b"
+                    aux2 = aux2 + ",b"
+                    aux3 = aux3  + ",b"
+                    aux4 = aux4 + ",b"
+            offset = " " * (len(aux) + 1 + len("    out ="))
+            string_der += " " * (len("    out =") + 5 ) + aux + ",k+({fact1:>2})*shiftxk + ({fact2:>2})*shiftyk,\n\
+{offset}j+({fact1:>2})*shiftxj + ({fact2:>2})*shiftyj,\n\
+{offset}i+({fact1:>2})*shiftxi + ({fact2:>2})*shiftyi)\n"\
+                                  .format(fact1 = i-mid_stenc,\
+                                          fact2 = j-mid_stenc,\
+                                          offset = offset + (" " * (len("    out =") - 4)))
+            string_der += " " * (len("    out =") + 5 ) +  aux2 + ",k+({fact1:>2})*shiftxk + ({fact2:>2})*shiftyk,\n\
+{offset}j+({fact1:>2})*shiftxj + ({fact2:>2})*shiftyj,\n\
+{offset}i+({fact1:>2})*shiftxi + ({fact2:>2})*shiftyi)\n"\
+                                  .format(fact1 =   i-mid_stenc,\
+                                          fact2 = -(j-mid_stenc),\
+                                          offset = offset + " " * (len("    out =") - 4))
+            string_der += " " * (len("    out =") + 5 )  + ")\n"
+            string_der += " " * (len("    out =") + 3) + "+ (\n"
+            string_der += " " * (len("    out =") + 5 ) + aux3 + ",k+({fact1:>2})*shiftxk + ({fact2:>2})*shiftyk,\n\
+{offset}j+({fact1:>2})*shiftxj + ({fact2:>2})*shiftyj,\n\
+{offset}i+({fact1:>2})*shiftxi + ({fact2:>2})*shiftyi)\n"\
+                                  .format(fact1 = -(i-mid_stenc),\
+                                          fact2 = j-mid_stenc,\
+                                          offset = offset + (" " * (len("    out =") - 4)))
+            string_der += " " * (len("    out =") + 5 ) +  aux4 + ",k+({fact1:>2})*shiftxk + ({fact2:>2})*shiftyk,\n\
+{offset}j+({fact1:>2})*shiftxj + ({fact2:>2})*shiftyj,\n\
+{offset}i+({fact1:>2})*shiftxi + ({fact2:>2})*shiftyi)\n"\
+                                  .format(fact1 = -(i-mid_stenc),\
+                                          fact2 = -(j-mid_stenc),\
+                                          offset = offset + " " * (len("    out =") - 4))
+            string_der += " " * (len("    out =") + 5 )  + ")\n"
+            string_der += " " * (len("    out =") + 3 ) + ")"
+
     return string_der.strip()+";"
 
 def string_biased(stencil,left=1,a=0,b=0):
@@ -73,13 +125,11 @@ def string_biased(stencil,left=1,a=0,b=0):
     for i, s in enumerate(a_):
         if s == "0.":
             continue
+        aux = "{:^10} * quant(m".format(s)
         if a:
+            aux = aux + ",b"
             if b:
-                aux = "{:^10} * quant(m,b,c".format(s)
-            else:
-                aux = "{:^10} * quant(m,b".format(s)
-        else:
-            aux = "{:^10} * quant(m".format(s)
+                aux = aux + ",c"
         if left:
             fact = i-mid_stenc
         else:
@@ -174,7 +224,7 @@ def generate_central(strings,name_diff,a=0,b=0):
         dx_2 = string_central(strings[0],a,b)
         dx_3 = string_central(strings[1],a,b)
         dx_4 = string_central(strings[2],a,b)
-        first_line = "Real {}(int const dir, int const nghost,".format(name_diff)      
+        first_line = "Real {}(int const dir,".format(name_diff)      
         shifts = """int const shiftk = dir==2;
   int const shiftj = dir==1;
   int const shifti = dir==0;"""
@@ -185,7 +235,7 @@ def generate_central(strings,name_diff,a=0,b=0):
         dx_2 = string_mixed(strings[0],a,b)
         dx_3 = string_mixed(strings[1],a,b)
         dx_4 = string_mixed(strings[2],a,b)
-        first_line = "Real {}(int const dirx, int const diry, int const nghost,".format(name_diff)
+        first_line = "Real {}(int const dirx, int const diry,".format(name_diff)
         shifts = """int const shiftxk = dirx==2;
   int const shiftxj = dirx==1;
   int const shiftxi = dirx==0;
@@ -193,27 +243,27 @@ def generate_central(strings,name_diff,a=0,b=0):
   int const shiftyj = diry==1;
   int const shiftyi = diry==0;"""
         idx = "idx[dirx]*idx[diry]"
+    
 
     central_code =\
 """
   // Reminder: this code has been generated with py/{}, please do modifications there. 
   // 1st derivative {}
-  template <typename TYPE>
+  template <int NGHOST, typename TYPE>
 KOKKOS_INLINE_FUNCTION
   {}
-          const Real idx[], const TYPE &quant,
+          const Real idx[], TYPE &quant,
           int const m,{}
           int const k, int const j, int const i)
   {{
   {}
   Real out;
-  switch(nghost) {{
-    case 2 : out = {}
-             break;
-    case 3 : out = {}
-             break;
-    case 4 : out = {}
-             break;
+  if constexpr ( NGHOST == 2 ) {{
+    out = {}
+  }} else if constexpr ( NGHOST == 3 ) {{
+    out = {}
+  }} else if constexpr ( NGHOST == 4 ) {{
+    out = {}
   }}
   return out*{};
   }}\n
@@ -247,25 +297,25 @@ def generate_biased(strings,name_diff,a=0,b=0):
 """
   // Reminder: this code has been generated with py/{}, please do modifications there.
   // 1st advective derivative {}
-  template <typename TYPE1, typename TYPE2>
+  template <int NGHOST, typename TYPE1, typename TYPE2>
 KOKKOS_INLINE_FUNCTION 
-  Real Lx(int const dir,    int const nghost,
-          const Real idx[], const TYPE1 &vx, const TYPE2 &quant,
+  Real Lx(int const dir,
+          const Real idx[], const TYPE1 &vx, 
+                            const TYPE2 &quant,
           int const m, int const a,{}
           int const k, int const j, int const i)
   {{
   {}
   Real dl, dr;
-  switch(nghost) {{
-    case 2 : dl = {}
-             dr = {}
-             break;
-    case 3 : dl = {}
-             dr = {}
-             break;
-    case 4 : dl = {}
-             dr = {}
-             break;
+  if constexpr ( NGHOST == 2 ) {{
+    dl = {}
+    dr = {}
+  }} else if constexpr ( NGHOST == 3 ) {{
+    dl = {}
+    dr = {}
+  }} else if constexpr ( NGHOST == 4 ) {{
+    dl = {}
+    dr = {}
   }}
   return ((vx(m,a,k,j,i) < 0) ? (vx(m,a,k,j,i) * dl) : (vx(m,a,k,j,i) * dr)) * idx[dir];
   }}\n
