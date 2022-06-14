@@ -12,6 +12,7 @@
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
+#include "adm/adm.hpp"
 #include "mesh/mesh.hpp"
 #include "bvals/bvals.hpp"
 #include "z4c/z4c.hpp"
@@ -19,34 +20,28 @@
 namespace z4c {
 
 char const * const Z4c::Z4c_names[Z4c::N_Z4c] = {
-  "z4c.chi",
-  "z4c.gxx", "z4c.gxy", "z4c.gxz", "z4c.gyy", "z4c.gyz", "z4c.gzz",
-  "z4c.Khat",
-  "z4c.Axx", "z4c.Axy", "z4c.Axz", "z4c.Ayy", "z4c.Ayz", "z4c.Azz",
-  "z4c.Gamx", "z4c.Gamy", "z4c.Gamz",
-  "z4c.Theta",
-  "z4c.alpha",
-  "z4c.betax", "z4c.betay", "z4c.betaz",
-};
-
-char const * const Z4c::ADM_names[Z4c::N_ADM] = {
-  "adm.gxx", "adm.gxy", "adm.gxz", "adm.gyy", "adm.gyz", "adm.gzz",
-  "adm.Kxx", "adm.Kxy", "adm.Kxz", "adm.Kyy", "adm.Kyz", "adm.Kzz",
-  "adm.psi4",
+  "z4c_chi",
+  "z4c_gxx", "z4c_gxy", "z4c_gxz", "z4c_gyy", "z4c_gyz", "z4c_gzz",
+  "z4c_Khat",
+  "z4c_Axx", "z4c_Axy", "z4c_Axz", "z4c_Ayy", "z4c_Ayz", "z4c_Azz",
+  "z4c_Gamx", "z4c_Gamy", "z4c_Gamz",
+  "z4c_Theta",
+  "z4c_alpha",
+  "z4c_betax", "z4c_betay", "z4c_betaz",
 };
 
 char const * const Z4c::Constraint_names[Z4c::N_CON] = {
-  "con.C",
-  "con.H",
-  "con.M",
-  "con.Z",
-  "con.Mx", "con.My", "con.Mz",
+  "con_C",
+  "con_H",
+  "con_M",
+  "con_Z",
+  "con_Mx", "con_My", "con_Mz",
 };
 
 char const * const Z4c::Matter_names[Z4c::N_MAT] = {
-  "mat.rho",
-  "mat.Sx", "mat.Sy", "mat.Sz",
-  "mat.Sxx", "mat.Sxy", "mat.Sxz", "mat.Syy", "mat.Syz", "mat.Szz",
+  "mat_rho",
+  "mat_Sx", "mat_Sy", "mat_Sz",
+  "mat_Sxx", "mat_Sxy", "mat_Sxz", "mat_Syy", "mat_Syz", "mat_Szz",
 };
 
 //----------------------------------------------------------------------------------------
@@ -55,7 +50,6 @@ char const * const Z4c::Matter_names[Z4c::N_MAT] = {
 
 Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   pmy_pack(ppack),
-  u_adm("u_adm",1,1,1,1,1),
   u_con("u_con",1,1,1,1,1),
   u_mat("u_mat",1,1,1,1,1),
   u0("u0 z4c",1,1,1,1,1),
@@ -75,18 +69,13 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
   int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
   Kokkos::Profiling::pushRegion("Tensor fields");
-  Kokkos::realloc(u_adm, nmb, (N_ADM), ncells3, ncells2, ncells1);
   Kokkos::realloc(u_con, nmb, (N_CON), ncells3, ncells2, ncells1);
   // Matter commented out
   // kokkos::realloc(u_mat, nmb, (N_MAT), ncells3, ncells2, ncells1);
   Kokkos::realloc(u0,    nmb, (N_Z4c), ncells3, ncells2, ncells1);
   Kokkos::realloc(u1,    nmb, (N_Z4c), ncells3, ncells2, ncells1);
   Kokkos::realloc(u_rhs, nmb, (N_Z4c), ncells3, ncells2, ncells1);
-  
-  adm.psi4.InitWithShallowSlice(u_adm, I_ADM_psi4);
-  adm.g_dd.InitWithShallowSlice(u_adm, I_ADM_gxx, I_ADM_gzz);
-  adm.K_dd.InitWithShallowSlice(u_adm, I_ADM_Kxx, I_ADM_Kzz);
-  
+
   con.C.InitWithShallowSlice(u_con, I_CON_C);
   con.H.InitWithShallowSlice(u_con, I_CON_H);
   con.M.InitWithShallowSlice(u_con, I_CON_M);
@@ -183,7 +172,6 @@ void Z4c::AlgConstr(MeshBlockPack *pmbp)
   int nmb = pmbp->nmb_thispack;
 
   auto &z4c = pmbp->pz4c->z4c;
-  auto &adm = pmbp->pz4c->adm;
   auto &opt = pmbp->pz4c->opt;
   int &NDIM = pmbp->pz4c->NDIM;
   int scr_level = 0;

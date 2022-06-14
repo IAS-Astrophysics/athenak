@@ -27,6 +27,7 @@ static ini_data *data;
 //! \brief Problem Generator for spherical blast problem
 
 void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
+  if (restart) return;
 
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
 		

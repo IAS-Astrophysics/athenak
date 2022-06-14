@@ -17,6 +17,7 @@
 
 // Forward declarations
 class MeshBlock;
+class ADM;
 namespace hydro {class Hydro;}
 namespace mhd {class MHD;}
 namespace z4c {class Z4c;}
@@ -52,6 +53,7 @@ class MeshBlockPack {
   // physics (controlled by AddPhysics() function in meshblock_pack.cpp)
   hydro::Hydro *phydro=nullptr;
   mhd::MHD *pmhd=nullptr;
+  ADM *padm=nullptr;
   z4c::Z4c *pz4c=nullptr;
   ion_neutral::IonNeutral *pionn=nullptr;
   TurbulenceDriver *pturb=nullptr;
