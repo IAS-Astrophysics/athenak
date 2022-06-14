@@ -6,6 +6,7 @@
 
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
+#include "adm/adm.hpp"
 #include "z4c/z4c.hpp"
 #include "coordinates/cell_locations.hpp"
 

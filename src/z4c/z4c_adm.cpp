@@ -20,7 +20,6 @@
 #include "z4c/z4c.hpp" 
 #include "coordinates/cell_locations.hpp" 
 
-
 namespace z4c {
 
 template <typename TYPE>
