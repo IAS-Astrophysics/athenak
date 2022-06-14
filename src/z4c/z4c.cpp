@@ -12,6 +12,7 @@
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
+#include "adm/adm.hpp"
 #include "mesh/mesh.hpp"
 #include "bvals/bvals.hpp"
 #include "z4c/z4c.hpp"

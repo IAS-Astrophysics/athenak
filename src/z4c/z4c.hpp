@@ -218,46 +218,6 @@ KOKKOS_FUNCTION
                      int const scr_level,
                      TeamMember_t member);
 
- 
-KOKKOS_INLINE_FUNCTION
-  Real SpatialDet(Real const gxx, Real const gxy, Real const gxz,
-                  Real const gyy, Real const gyz, Real const gzz)
-{
-  return - SQR(gxz)*gyy + 2*gxy*gxz*gyz 
-         - SQR(gyz)*gxx 
-         - SQR(gxy)*gzz +   gxx*gyy*gzz;
-}
- 
-KOKKOS_INLINE_FUNCTION
-  Real Trace(Real const detginv,
-                Real const gxx, Real const gxy, Real const gxz,
-                Real const gyy, Real const gyz, Real const gzz,
-                Real const Axx, Real const Axy, Real const Axz,
-                Real const Ayy, Real const Ayz, Real const Azz)
-{
-  return (detginv*(
-       - 2.*Ayz*gxx*gyz + Axx*gyy*gzz +  gxx*(Azz*gyy + Ayy*gzz)
-       + 2.*(gxz*(Ayz*gxy - Axz*gyy + Axy*gyz) + gxy*(Axz*gyz - Axy*gzz))
-       - Azz*SQR(gxy) - Ayy*SQR(gxz) - Axx*SQR(gyz)
-       ));
-}
-KOKKOS_INLINE_FUNCTION
-  // compute inverse of a 3x3 matrix
-  void SpatialInv(Real const detginv,
-                  Real const gxx, Real const gxy, Real const gxz,
-                  Real const gyy, Real const gyz, Real const gzz,
-                  Real * uxx, Real * uxy, Real * uxz,
-                  Real * uyy, Real * uyz, Real * uzz)
-  {
-    *uxx = (-SQR(gyz) + gyy*gzz)*detginv;
-    *uxy = (gxz*gyz  - gxy*gzz)*detginv;
-    *uyy = (-SQR(gxz) + gxx*gzz)*detginv;
-    *uxz = (-gxz*gyy + gxy*gyz)*detginv;
-    *uyz = (gxy*gxz  - gxx*gyz)*detginv;
-    *uzz = (-SQR(gxy) + gxx*gyy)*detginv;
-    return;
-  }
-
 #include "bits/derivatives.inc"
 
  private:
