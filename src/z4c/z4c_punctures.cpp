@@ -14,6 +14,7 @@
 // Athena++ headers
 #include "parameter_input.hpp"
 #include "athena.hpp"
+#include "adm/adm.hpp"
 #include "mesh/mesh.hpp"
 #include "z4c/z4c.hpp"
 #include "coordinates/cell_locations.hpp"
@@ -40,7 +41,7 @@ void Z4c::ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin) {
   int nmb = pmbp->nmb_thispack;
   Real ADM_mass = pin->GetOrAddReal("problem", "punc_ADM_mass", 1.);
   auto &z4c = pmbp->pz4c->z4c;
-  auto &adm = pmbp->pz4c->adm; 
+  adm::ADM::ADM_vars &adm = pmbp->padm->adm; 
   int &NDIM = pmbp->pz4c->NDIM;
 
   int scr_level = 0;
@@ -108,13 +109,13 @@ void Z4c::ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin) {
 #if TWO_PUNCTURES
 void Z4c::ADMTwoPunctures(MeshBlockPack *pmbp, ini_data *data) {
   // capture variables for the kernel
-  auto &u_adm = pmbp->pz4c->u_adm;
+  auto &u_adm = pmbp->padm->u_adm;
 
   HostArray5D<Real>::HostMirror host_u_adm = create_mirror(u_adm);
   ADM_vars host_adm;
-  host_adm.psi4.InitWithShallowSlice(host_u_adm, I_ADM_psi4);
-  host_adm.g_dd.InitWithShallowSlice(host_u_adm, I_ADM_gxx, I_ADM_gzz);
-  host_adm.K_dd.InitWithShallowSlice(host_u_adm, I_ADM_Kxx, I_ADM_Kzz);
+  host_adm.psi4.InitWithShallowSlice(host_u_adm, adm::I_ADM_psi4);
+  host_adm.g_dd.InitWithShallowSlice(host_u_adm, adm::I_ADM_gxx, adm::I_ADM_gzz);
+  host_adm.K_dd.InitWithShallowSlice(host_u_adm, adm::I_ADM_Kxx, adm::I_ADM_Kzz);
   auto &indcs = pmbp->pmesh->mb_indcs;
   auto &size = pmbp->pmb->mb_size;
   int &is = indcs.is; int &ie = indcs.ie;

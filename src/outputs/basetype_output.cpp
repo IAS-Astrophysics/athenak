@@ -18,6 +18,7 @@
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "adm/adm.hpp"
 #include "z4c/z4c.hpp"
 #include "srcterms/srcterms.hpp"
 #include "srcterms/turb_driver.hpp"
@@ -48,6 +49,8 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
        << "' in input file is not a valid choice" << std::endl;
     std::exit(EXIT_FAILURE);
   }
+
+  // QUESTION: can we generalize this to work with ADM/Z4c?
 
   // check that appropriate physics is defined for requested output variable
   // TODO(@user): Index limits of variable choices below may change if more choices added
@@ -313,72 +316,46 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     outvars.emplace_back("force3",2,&(pm->pmb_pack->pturb->force));
   }
 
-  // adm z4c variables
-  if (out_params.variable.compare("adm") == 0) {
-    outvars.emplace_back("adm.gxx",  pm->pmb_pack->pz4c->I_ADM_gxx,  &(pm->pmb_pack->pz4c->u_adm));
-    outvars.emplace_back("adm.gxy",  pm->pmb_pack->pz4c->I_ADM_gxy,  &(pm->pmb_pack->pz4c->u_adm));
-    outvars.emplace_back("adm.gxz",  pm->pmb_pack->pz4c->I_ADM_gxz,  &(pm->pmb_pack->pz4c->u_adm));
-    outvars.emplace_back("adm.gyy",  pm->pmb_pack->pz4c->I_ADM_gyy,  &(pm->pmb_pack->pz4c->u_adm));
-    outvars.emplace_back("adm.gyz",  pm->pmb_pack->pz4c->I_ADM_gyz,  &(pm->pmb_pack->pz4c->u_adm));
-    outvars.emplace_back("adm.gzz",  pm->pmb_pack->pz4c->I_ADM_gzz,  &(pm->pmb_pack->pz4c->u_adm));
-    outvars.emplace_back("adm.Kxx",  pm->pmb_pack->pz4c->I_ADM_Kxx,  &(pm->pmb_pack->pz4c->u_adm));
-    outvars.emplace_back("adm.Kxy",  pm->pmb_pack->pz4c->I_ADM_Kxy,  &(pm->pmb_pack->pz4c->u_adm));
-    outvars.emplace_back("adm.Kxz",  pm->pmb_pack->pz4c->I_ADM_Kxz,  &(pm->pmb_pack->pz4c->u_adm));
-    outvars.emplace_back("adm.Kyy",  pm->pmb_pack->pz4c->I_ADM_Kyy,  &(pm->pmb_pack->pz4c->u_adm));
-    outvars.emplace_back("adm.Kyz",  pm->pmb_pack->pz4c->I_ADM_Kyz,  &(pm->pmb_pack->pz4c->u_adm));
-    outvars.emplace_back("adm.Kzz",  pm->pmb_pack->pz4c->I_ADM_Kzz,  &(pm->pmb_pack->pz4c->u_adm));
-    outvars.emplace_back("adm.psi4", pm->pmb_pack->pz4c->I_ADM_psi4, &(pm->pmb_pack->pz4c->u_adm));
+  // ADM variables, excluding gauge
+  for (int v = 0; v < adm::ADM::N_ADM - 4; ++v) {
+    if (out_params.variable.compare("adm") == 0 ||
+        out_params.variable.compare(adm::ADM::ADM_names[v]) == 0) {
+      outvars.emplace_back(adm::ADM::ADM_names[v], v, &(pm->pmb_pack->padm->u_adm));
+    }
+  }
+
+  // ADM gauge variables
+  if (nullptr == pm->pmb_pack->pz4c) {
+    for (int v = adm::ADM::N_ADM - 4; v < adm::ADM::N_ADM; ++v) {
+      if (out_params.variable.compare("adm") == 0 ||
+          out_params.variable.compare(adm::ADM::ADM_names[v]) == 0) {
+        outvars.emplace_back(adm::ADM::ADM_names[v], v, &(pm->pmb_pack->padm->u_adm));
+      }
+    }
   }
   
   // con z4c variables
-  if (out_params.variable.compare("con") == 0) {
-    outvars.emplace_back("con.C",  pm->pmb_pack->pz4c->I_CON_C,  &(pm->pmb_pack->pz4c->u_con));
-    outvars.emplace_back("con.H",  pm->pmb_pack->pz4c->I_CON_H,  &(pm->pmb_pack->pz4c->u_con));
-    outvars.emplace_back("con.M",  pm->pmb_pack->pz4c->I_CON_M,  &(pm->pmb_pack->pz4c->u_con));
-    outvars.emplace_back("con.Z",  pm->pmb_pack->pz4c->I_CON_Z,  &(pm->pmb_pack->pz4c->u_con));
-    outvars.emplace_back("con.Mx", pm->pmb_pack->pz4c->I_CON_Mx, &(pm->pmb_pack->pz4c->u_con));
-    outvars.emplace_back("con.My", pm->pmb_pack->pz4c->I_CON_My, &(pm->pmb_pack->pz4c->u_con));
-    outvars.emplace_back("con.Mz", pm->pmb_pack->pz4c->I_CON_Mz, &(pm->pmb_pack->pz4c->u_con));
+  for (int v = 0; v < z4c::Z4c::N_CON; ++v) {
+    if (out_params.variable.compare("con") == 0 ||
+        out_params.variable.compare(z4c::Z4c::Constraint_names[v]) == 0) {
+      outvars.emplace_back(z4c::Z4c::Constraint_names[v], v, &(pm->pmb_pack->pz4c->u_con));
+    }
   }
   
   // mat z4c variables
-  if (out_params.variable.compare("mat") == 0) {
-    outvars.emplace_back("mat.rho", pm->pmb_pack->pz4c->I_MAT_rho, &(pm->pmb_pack->pz4c->u_mat));
-    outvars.emplace_back("mat.Sx",  pm->pmb_pack->pz4c->I_MAT_Sx,  &(pm->pmb_pack->pz4c->u_mat));
-    outvars.emplace_back("mat.Sy",  pm->pmb_pack->pz4c->I_MAT_Sy,  &(pm->pmb_pack->pz4c->u_mat));
-    outvars.emplace_back("mat.Sz",  pm->pmb_pack->pz4c->I_MAT_Sz,  &(pm->pmb_pack->pz4c->u_mat));
-    outvars.emplace_back("mat.Sxx", pm->pmb_pack->pz4c->I_MAT_Sxx, &(pm->pmb_pack->pz4c->u_mat));
-    outvars.emplace_back("mat.Sxy", pm->pmb_pack->pz4c->I_MAT_Sxy, &(pm->pmb_pack->pz4c->u_mat));
-    outvars.emplace_back("mat.Sxz", pm->pmb_pack->pz4c->I_MAT_Sxz, &(pm->pmb_pack->pz4c->u_mat));
-    outvars.emplace_back("mat.Syy", pm->pmb_pack->pz4c->I_MAT_Syy, &(pm->pmb_pack->pz4c->u_mat));
-    outvars.emplace_back("mat.Syz", pm->pmb_pack->pz4c->I_MAT_Syz, &(pm->pmb_pack->pz4c->u_mat));
-    outvars.emplace_back("mat.Szz", pm->pmb_pack->pz4c->I_MAT_Szz, &(pm->pmb_pack->pz4c->u_mat));
+  for (int v = 0; v < z4c::Z4c::N_MAT; ++v) {
+    if (out_params.variable.compare("mat") == 0 ||
+        out_params.variable.compare(z4c::Z4c::Matter_names[v]) == 0) {
+      outvars.emplace_back(z4c::Z4c::Matter_names[v], v, &(pm->pmb_pack->pz4c->u_mat));
+    }
   }
   
-  // z4c z4c variables
-  if (out_params.variable.compare("z4c") == 0) {
-    outvars.emplace_back("z4c.chi",   pm->pmb_pack->pz4c->I_Z4c_chi,   &(pm->pmb_pack->pz4c->u0));
-    outvars.emplace_back("z4c.gxx",   pm->pmb_pack->pz4c->I_Z4c_gxx,   &(pm->pmb_pack->pz4c->u0));
-    outvars.emplace_back("z4c.gxy",   pm->pmb_pack->pz4c->I_Z4c_gxy,   &(pm->pmb_pack->pz4c->u0));
-    outvars.emplace_back("z4c.gxz",   pm->pmb_pack->pz4c->I_Z4c_gxz,   &(pm->pmb_pack->pz4c->u0));
-    outvars.emplace_back("z4c.gyy",   pm->pmb_pack->pz4c->I_Z4c_gyy,   &(pm->pmb_pack->pz4c->u0));
-    outvars.emplace_back("z4c.gyz",   pm->pmb_pack->pz4c->I_Z4c_gyz,   &(pm->pmb_pack->pz4c->u0));
-    outvars.emplace_back("z4c.gzz",   pm->pmb_pack->pz4c->I_Z4c_gzz,   &(pm->pmb_pack->pz4c->u0));
-    outvars.emplace_back("z4c.Khat",  pm->pmb_pack->pz4c->I_Z4c_Khat,  &(pm->pmb_pack->pz4c->u0));
-    outvars.emplace_back("z4c.Axx",   pm->pmb_pack->pz4c->I_Z4c_Axx,   &(pm->pmb_pack->pz4c->u0));
-    outvars.emplace_back("z4c.Axy",   pm->pmb_pack->pz4c->I_Z4c_Axy,   &(pm->pmb_pack->pz4c->u0));
-    outvars.emplace_back("z4c.Axz",   pm->pmb_pack->pz4c->I_Z4c_Axz,   &(pm->pmb_pack->pz4c->u0));
-    outvars.emplace_back("z4c.Ayy",   pm->pmb_pack->pz4c->I_Z4c_Ayy,   &(pm->pmb_pack->pz4c->u0));
-    outvars.emplace_back("z4c.Ayz",   pm->pmb_pack->pz4c->I_Z4c_Ayz,   &(pm->pmb_pack->pz4c->u0));
-    outvars.emplace_back("z4c.Azz",   pm->pmb_pack->pz4c->I_Z4c_Azz,   &(pm->pmb_pack->pz4c->u0));
-    outvars.emplace_back("z4c.Gamx",  pm->pmb_pack->pz4c->I_Z4c_Gamx,  &(pm->pmb_pack->pz4c->u0));
-    outvars.emplace_back("z4c.Gamy",  pm->pmb_pack->pz4c->I_Z4c_Gamy,  &(pm->pmb_pack->pz4c->u0));
-    outvars.emplace_back("z4c.Gamz",  pm->pmb_pack->pz4c->I_Z4c_Gamz,  &(pm->pmb_pack->pz4c->u0));
-    outvars.emplace_back("z4c.Theta", pm->pmb_pack->pz4c->I_Z4c_Theta, &(pm->pmb_pack->pz4c->u0));
-    outvars.emplace_back("z4c.alpha", pm->pmb_pack->pz4c->I_Z4c_alpha, &(pm->pmb_pack->pz4c->u0));
-    outvars.emplace_back("z4c.betax", pm->pmb_pack->pz4c->I_Z4c_betax, &(pm->pmb_pack->pz4c->u0));
-    outvars.emplace_back("z4c.betay", pm->pmb_pack->pz4c->I_Z4c_betay, &(pm->pmb_pack->pz4c->u0));
-    outvars.emplace_back("z4c.betaz", pm->pmb_pack->pz4c->I_Z4c_betaz, &(pm->pmb_pack->pz4c->u0));
+  // z4c variables
+  for (int v = 0; v < z4c::Z4c::N_Z4c; ++v) {
+    if (out_params.variable.compare("z4c") == 0 ||
+        out_params.variable.compare(z4c::Z4c::Z4c_names[v]) == 0) {
+      outvars.emplace_back(z4c::Z4c::Z4c_names[v], v, &(pm->pmb_pack->pz4c->u0));
+    }
   }
    
   if (ndvars > 0) {

@@ -16,12 +16,13 @@
 #include "parameter_input.hpp" 
 #include "athena.hpp" 
 #include "mesh/mesh.hpp" 
+#include "adm/adm.hpp"
 #include "z4c/z4c.hpp" 
 #include "coordinates/cell_locations.hpp" 
 
 
 namespace z4c {
-// This is an ad hoc derivative operator needed only here
+
 template <typename TYPE>
 KOKKOS_INLINE_FUNCTION
 Real Dx_(int const ind, int const nghost, Real const &idx, const TYPE &quant, MeshBlockPack *pmbp)
@@ -51,8 +52,6 @@ return (-0.5*quant(ind-1)+0.5*quant(ind+1))*idx; //Multiply by inverse
 // The Z4c variables will be set on the whole MeshBlock with the exception of
 // the Gamma's that can only be set in the interior of the MeshBlock.
 void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
-  Real ADM_mass = pin->GetOrAddReal("problem", "punc_ADM_mass", 1.);
-
   // capture variables for the kernel
   auto &indcs = pmbp->pmesh->mb_indcs;
   auto &size = pmbp->pmb->mb_size;
@@ -70,7 +69,7 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
   int nmb = pmbp->nmb_thispack;
  
   auto &z4c = pmbp->pz4c->z4c;
-  auto &adm = pmbp->pz4c->adm;
+  auto &adm = pmbp->padm->adm;
   auto &opt = pmbp->pz4c->opt;
   int &NDIM = pmbp->pz4c->NDIM; 
   int scr_level = 0;
@@ -204,7 +203,7 @@ void Z4c::Z4cToADM(MeshBlockPack *pmbp) {
   int nmb = pmbp->nmb_thispack;
  
   auto &z4c = pmbp->pz4c->z4c;
-  auto &adm = pmbp->pz4c->adm;
+  auto &adm = pmbp->padm->adm;
   auto &opt = pmbp->pz4c->opt;
   int &NDIM = pmbp->pz4c->NDIM; 
   int scr_level = 0;
@@ -264,7 +263,7 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
   int nmb = pmbp->nmb_thispack;
  
   auto &z4c = pmbp->pz4c->z4c;
-  auto &adm = pmbp->pz4c->adm;
+  auto &adm = pmbp->padm->adm;
   auto &opt = pmbp->pz4c->opt;
   auto &u_con = pmbp->pz4c->u_con;
   Kokkos::deep_copy(u_con, 0.);

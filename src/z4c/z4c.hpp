@@ -62,7 +62,7 @@ class Z4c {
   Z4c(MeshBlockPack *ppack, ParameterInput *pin);
   ~Z4c();
 
-    // Indexes of evolved variables
+  // Indices of evolved variables
   enum {
     I_Z4c_chi,
     I_Z4c_gxx, I_Z4c_gxy, I_Z4c_gxz, I_Z4c_gyy, I_Z4c_gyz, I_Z4c_gzz,
@@ -76,16 +76,7 @@ class Z4c {
   };
   // Names of Z4c variables
   static char const * const Z4c_names[N_Z4c];
-  // Indexes of ADM variables
-  enum {
-    I_ADM_gxx, I_ADM_gxy, I_ADM_gxz, I_ADM_gyy, I_ADM_gyz, I_ADM_gzz,
-    I_ADM_Kxx, I_ADM_Kxy, I_ADM_Kxz, I_ADM_Kyy, I_ADM_Kyz, I_ADM_Kzz,
-    I_ADM_psi4,
-    N_ADM
-  };
-  // Names of ADM variables
-  static char const * const ADM_names[N_ADM];
-  // Indexes of Constraint variables
+  // Indices of Constraint variables
   enum {
     I_CON_C,
     I_CON_H,
@@ -96,7 +87,7 @@ class Z4c {
   };
   // Names of costraint variables
   static char const * const Constraint_names[N_CON];
-  // Indexes of matter fields
+  // Indices of matter fields
   enum {
     I_MAT_rho,
     I_MAT_Sx, I_MAT_Sy, I_MAT_Sz,
@@ -108,7 +99,6 @@ class Z4c {
 
   // data
   // flags to denote relativistic dynamics
-  DvceArray5D<Real> u_adm;     // adm fields
   DvceArray5D<Real> u_con;     // constraints fields
   DvceArray5D<Real> u_mat;    
   DvceArray5D<Real> u0;        // z4c solution
@@ -175,9 +165,7 @@ class Z4c {
     Real shift_eta;
   };
   Options opt;
-  Real diss;
-  
-  // Dissipation parameter
+  Real diss;              // Dissipation parameter
  
   // Boundary communication buffers and functions for u
   BoundaryValuesCC *pbval_u;
@@ -205,7 +193,6 @@ class Z4c {
   TaskStatus ADMConstraints_(Driver *d, int stage);
   TaskStatus Z4cBoundaryRHS(Driver *d, int stage);
   TaskStatus RestrictU(Driver *d, int stage);
-  
   
   void ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin);
   void ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin);
