@@ -46,6 +46,7 @@ void Hydro::FOFC(Driver *pdriver, int stage) {
   int &nhyd_ = nhydro;
   auto &u0_ = u0;
   auto &u1_ = u1;
+  auto &utest_ = utest;
 
   // Estimate updated conserved variables and cell-centered fields
   par_for("FOFC-newu", DevExeSpace(), 0, nmb-1, ks, ke, js, je, is, ie,
@@ -63,13 +64,13 @@ void Hydro::FOFC(Driver *pdriver, int stage) {
       if (three_d) {
         divf += dtodx3*(flx3(m,n,k+1,j,i) - flx3(m,n,k,j,i));
       }
-      utest(m,n,k,j,i) = gam0*u0_(m,n,k,j,i) + gam1*u1_(m,n,k,j,i) - divf;
+      utest_(m,n,k,j,i) = gam0*u0_(m,n,k,j,i) + gam1*u1_(m,n,k,j,i) - divf;
     }
   });
 
   // Test whether conversion to primitives requires floors
   // Note b0 and w0 passed to function, but not used/changed.
-  peos->ConsToPrim(utest, w0, true, is, ie, js, je, ks, ke);
+  peos->ConsToPrim(utest_, w0, true, is, ie, js, je, ks, ke);
 
   auto &coord = pmy_pack->pcoord->coord_data;
   bool is_sr = pmy_pack->pcoord->is_special_relativistic;
@@ -104,15 +105,15 @@ void Hydro::FOFC(Driver *pdriver, int stage) {
       if (is_gr) {
         Real &x1min = size.d_view(m).x1min;
         Real &x1max = size.d_view(m).x1max;
-        Real x1v = LeftEdgeX(i-is, indcs.nx1, x1min, x1max);
+        Real x1v = LeftEdgeX(i-is, nx1, x1min, x1max);
 
         Real &x2min = size.d_view(m).x2min;
         Real &x2max = size.d_view(m).x2max;
-        Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+        Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
         Real &x3min = size.d_view(m).x3min;
         Real &x3max = size.d_view(m).x3max;
-        Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+        Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
         SingleStateLLF_GRHyd(wim1, wi, x1v, x2v, x3v, IVX, coord, eos, flux);
       } else if (is_sr) {
         SingleStateLLF_SRHyd(wim1, wi, eos, flux);
@@ -140,15 +141,15 @@ void Hydro::FOFC(Driver *pdriver, int stage) {
       if (is_gr) {
         Real &x1min = size.d_view(m).x1min;
         Real &x1max = size.d_view(m).x1max;
-        Real x1v = LeftEdgeX(i+1-is, indcs.nx1, x1min, x1max);
+        Real x1v = LeftEdgeX(i+1-is, nx1, x1min, x1max);
 
         Real &x2min = size.d_view(m).x2min;
         Real &x2max = size.d_view(m).x2max;
-        Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+        Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
         Real &x3min = size.d_view(m).x3min;
         Real &x3max = size.d_view(m).x3max;
-        Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+        Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
         SingleStateLLF_GRHyd(wi, wip1, x1v, x2v, x3v, IVX, coord, eos, flux);
       } else if (is_sr) {
         SingleStateLLF_SRHyd(wi, wip1, eos, flux);
@@ -185,15 +186,15 @@ void Hydro::FOFC(Driver *pdriver, int stage) {
         if (is_gr) {
           Real &x1min = size.d_view(m).x1min;
           Real &x1max = size.d_view(m).x1max;
-          Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+          Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
           Real &x2min = size.d_view(m).x2min;
           Real &x2max = size.d_view(m).x2max;
-          Real x2v = LeftEdgeX(j-js, indcs.nx2, x2min, x2max);
+          Real x2v = LeftEdgeX(j-js, nx2, x2min, x2max);
 
           Real &x3min = size.d_view(m).x3min;
           Real &x3max = size.d_view(m).x3max;
-          Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+          Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
           SingleStateLLF_GRHyd(wjm1, wj, x1v, x2v, x3v, IVY, coord, eos, flux);
         } else if (is_sr) {
           SingleStateLLF_SRHyd(wjm1, wj, eos, flux);
@@ -222,15 +223,15 @@ void Hydro::FOFC(Driver *pdriver, int stage) {
         if (is_gr) {
           Real &x1min = size.d_view(m).x1min;
           Real &x1max = size.d_view(m).x1max;
-          Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+          Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
           Real &x2min = size.d_view(m).x2min;
           Real &x2max = size.d_view(m).x2max;
-          Real x2v = LeftEdgeX(j+1-js, indcs.nx2, x2min, x2max);
+          Real x2v = LeftEdgeX(j+1-js, nx2, x2min, x2max);
 
           Real &x3min = size.d_view(m).x3min;
           Real &x3max = size.d_view(m).x3max;
-          Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+          Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
           SingleStateLLF_GRHyd(wj, wjp1, x1v, x2v, x3v, IVY, coord, eos, flux);
         } else if (is_sr) {
           SingleStateLLF_SRHyd(wj, wjp1, eos, flux);
@@ -268,15 +269,15 @@ void Hydro::FOFC(Driver *pdriver, int stage) {
         if (is_gr) {
           Real &x1min = size.d_view(m).x1min;
           Real &x1max = size.d_view(m).x1max;
-          Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+          Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
           Real &x2min = size.d_view(m).x2min;
           Real &x2max = size.d_view(m).x2max;
-          Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+          Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
           Real &x3min = size.d_view(m).x3min;
           Real &x3max = size.d_view(m).x3max;
-          Real x3v = LeftEdgeX(k-ks, indcs.nx3, x3min, x3max);
+          Real x3v = LeftEdgeX(k-ks, nx3, x3min, x3max);
           SingleStateLLF_GRHyd(wkm1, wk, x1v, x2v, x3v, IVZ, coord, eos, flux);
         } else if (is_sr) {
           SingleStateLLF_SRHyd(wkm1, wk, eos, flux);
@@ -305,15 +306,15 @@ void Hydro::FOFC(Driver *pdriver, int stage) {
         if (is_gr) {
           Real &x1min = size.d_view(m).x1min;
           Real &x1max = size.d_view(m).x1max;
-          Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+          Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
           Real &x2min = size.d_view(m).x2min;
           Real &x2max = size.d_view(m).x2max;
-          Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+          Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
           Real &x3min = size.d_view(m).x3min;
           Real &x3max = size.d_view(m).x3max;
-          Real x3v = LeftEdgeX(k+1-ks, indcs.nx3, x3min, x3max);
+          Real x3v = LeftEdgeX(k+1-ks, nx3, x3min, x3max);
           SingleStateLLF_GRHyd(wk, wkp1, x1v, x2v, x3v, IVZ, coord, eos, flux);
         } else if (is_sr) {
           SingleStateLLF_SRHyd(wk, wkp1, eos, flux);
