@@ -11,8 +11,8 @@
 //  Convention: indices a,b,c,d are tensor indices. Indices n,i,j,k are grid indices.
 
 #include <cassert> // assert
-
 #include "athena.hpp"
+#include <utility>
 
 // tensor symmetries
 enum class TensorSymm {
@@ -22,26 +22,39 @@ enum class TensorSymm {
   SYM22,    // symmetric in the last 2 pairs of indices
 };
 
-using sub_DvceArray5D_2D = decltype(Kokkos::subview(std::declval<DvceArray5D<Real>>(),Kokkos::ALL,std::make_pair(0,5),Kokkos::ALL,Kokkos::ALL,Kokkos::ALL));
-using sub_DvceArray5D_1D = decltype(Kokkos::subview(std::declval<DvceArray5D<Real>>(),Kokkos::ALL,std::make_pair(0,2),Kokkos::ALL,Kokkos::ALL,Kokkos::ALL));
-using sub_DvceArray5D_0D = decltype(Kokkos::subview(std::declval<DvceArray5D<Real>>(),Kokkos::ALL,1,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL));
+
+using sub_DvceArray5D_2D = decltype(Kokkos::subview(
+                           std::declval<DvceArray5D<Real>>(),
+                           Kokkos::ALL,std::make_pair(0,5),
+                           Kokkos::ALL,Kokkos::ALL,Kokkos::ALL));
+using sub_DvceArray5D_1D = decltype(Kokkos::subview(
+                           std::declval<DvceArray5D<Real>>(),
+                           Kokkos::ALL,std::make_pair(0,2),
+                           Kokkos::ALL,Kokkos::ALL,Kokkos::ALL));
+using sub_DvceArray5D_0D = decltype(Kokkos::subview(
+                           std::declval<DvceArray5D<Real>>(),
+                           Kokkos::ALL,1,
+                           Kokkos::ALL,Kokkos::ALL,Kokkos::ALL));
+
 
 // this is the abstract base class
 // This now works only for spatially 3D data
 template<typename T, TensorSymm sym, int ndim, int rank>
 class AthenaTensor;
 
+
 //----------------------------------------------------------------------------------------
 // rank 0 AthenaTensor: 3D scalar fields
 // This is simply a DvceArray3D
 template<typename T, TensorSymm sym, int ndim>
 class AthenaTensor<T, sym, ndim, 0> {
-public:
+ public:
   // the default constructor/destructor/copy operators are sufficient
   AthenaTensor() = default;
   ~AthenaTensor() = default;
   AthenaTensor(AthenaTensor<T, sym, ndim, 0> const &) = default;
-  AthenaTensor<T, sym, ndim, 0> & operator=(AthenaTensor<T, sym, ndim, 0> const &) = default;
+  AthenaTensor<T, sym, ndim, 0> & operator=
+  (AthenaTensor<T, sym, ndim, 0> const &) = default;
   // operators to access the data
   KOKKOS_INLINE_FUNCTION
   decltype(auto) operator() (int const m, int const k, int const j, int const i) const {
@@ -51,7 +64,7 @@ public:
   void InitWithShallowSlice(DvceArray5D<Real> src, const int indx) {
     data_ = Kokkos::subview(src,Kokkos::ALL,indx,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
   }
-private:
+ private:
   sub_DvceArray5D_0D data_;
 };
 
@@ -60,24 +73,25 @@ private:
 // This is a 4D AthenaTensor
 template<typename T, TensorSymm sym, int ndim>
 class AthenaTensor<T, sym, ndim, 1> {
-public:
+ public:
   // the default constructor/destructor/copy operators are sufficient
   AthenaTensor() = default;
   ~AthenaTensor() = default;
   AthenaTensor(AthenaTensor<T, sym, ndim, 1> const &) = default;
-  AthenaTensor<T, sym, ndim, 1> & operator=(AthenaTensor<T, sym, ndim, 1> const &) = default;
+  AthenaTensor<T, sym, ndim, 1> & operator=
+  (AthenaTensor<T, sym, ndim, 1> const &) = default;
   // operators to access the data
   KOKKOS_INLINE_FUNCTION
   decltype(auto) operator() (int const m, int const a,
                              int const k, int const j, int const i) const {
     return data_(m,a,k,j,i);
   }
-  // KOKKOS_INLINE_FUNCTION
+  //KOKKOS_INLINE_FUNCTION
   void InitWithShallowSlice(DvceArray5D<Real> src, const int indx1, const int indx2) {
     data_ = Kokkos::subview(src, Kokkos::ALL, std::make_pair(indx1, indx2),
                                  Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
   }
-private:
+ private:
   sub_DvceArray5D_1D data_;
 };
 
@@ -85,12 +99,13 @@ private:
 // rank 2 AthenaTensor, e.g., the metric or the extrinsic curvature
 template<typename T, TensorSymm sym, int ndim>
 class AthenaTensor<T, sym, ndim, 2> {
-public:
+ public:
   AthenaTensor();
   // the default destructor/copy operators are sufficient
   ~AthenaTensor() = default;
   AthenaTensor(AthenaTensor<T, sym, ndim, 2> const &) = default;
-  AthenaTensor<T, sym, ndim, 2> & operator=(AthenaTensor<T, sym, ndim, 2> const &) = default;
+  AthenaTensor<T, sym, ndim, 2> & operator=
+  (AthenaTensor<T, sym, ndim, 2> const &) = default;
 
   int idxmap(int const a, int const b) const {
     return idxmap_[a][b];
@@ -101,12 +116,13 @@ public:
                              int const k, int const j, int const i) const {
     return data_(m,idxmap_[a][b],k,j,i);
   }
-  // KOKKOS_INLINE_FUNCTION
+  //KOKKOS_INLINE_FUNCTION
   void InitWithShallowSlice(DvceArray5D<Real> src, const int indx1, const int indx2) {
     data_ = Kokkos::subview(src, Kokkos::ALL, std::make_pair(indx1, indx2),
                                  Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
   }
-private:
+
+ private:
   sub_DvceArray5D_2D data_;
   int idxmap_[ndim][ndim];
   int ndof_;
@@ -134,9 +150,11 @@ AthenaTensor<T, sym, ndim, 2>::AthenaTensor() {
         idxmap_[b][a] = idxmap_[a][b];
       }
       break;
+#ifndef __CUDA_ARCH__
     default:
       assert(false); // you shouldn't be here
       abort();
+#endif
   }
 }
 
@@ -152,12 +170,13 @@ class AthenaScratchTensor;
 // This is a 1D AthenaScratchTensor
 template<typename T, TensorSymm sym, int ndim>
 class AthenaScratchTensor<T, sym, ndim, 0> {
-public:
+ public:
   // the default constructor/destructor/copy operators are sufficient
   AthenaScratchTensor() = default;
   ~AthenaScratchTensor() = default;
   AthenaScratchTensor(AthenaScratchTensor<T, sym, ndim, 0> const &) = default;
-  AthenaScratchTensor<T, sym, ndim, 0> & operator=(AthenaScratchTensor<T, sym, ndim, 0> const &) = default;
+  AthenaScratchTensor<T, sym, ndim, 0> & operator=
+  (AthenaScratchTensor<T, sym, ndim, 0> const &) = default;
 
   KOKKOS_INLINE_FUNCTION
   decltype(auto) operator()(int const i) const {
@@ -171,7 +190,7 @@ public:
   void ZeroClear() {
     Kokkos::Experimental::local_deep_copy(data_, 0.);
   }
-private:
+ private:
   ScrArray1D<T> data_;
 };
 
@@ -180,12 +199,13 @@ private:
 // This is a 1D AthenaScratchTensor
 template<typename T, TensorSymm sym, int ndim>
 class AthenaScratchTensor<T, sym, ndim, 1> {
-public:
+ public:
   // the default constructor/destructor/copy operators are sufficient
   AthenaScratchTensor() = default;
   ~AthenaScratchTensor() = default;
   AthenaScratchTensor(AthenaScratchTensor<T, sym, ndim, 1> const &) = default;
-  AthenaScratchTensor<T, sym, ndim, 1> & operator=(AthenaScratchTensor<T, sym, ndim, 1> const &) = default;
+  AthenaScratchTensor<T, sym, ndim, 1> & operator=
+  (AthenaScratchTensor<T, sym, ndim, 1> const &) = default;
 
   KOKKOS_INLINE_FUNCTION
   decltype(auto) operator()(int const a, int const i) const {
@@ -199,7 +219,7 @@ public:
   void ZeroClear() {
     Kokkos::Experimental::local_deep_copy(data_, 0.);
   }
-private:
+ private:
   ScrArray2D<T> data_;
 };
 
@@ -208,7 +228,7 @@ private:
 // This is a 1D AthenaScratchTensor
 template<typename T, TensorSymm sym, int ndim>
 class AthenaScratchTensor<T, sym, ndim, 2> {
-public:
+ public:
 #ifdef __CUDA_ARCH__
 __device__ __host__ AthenaScratchTensor();
 #else
@@ -218,7 +238,8 @@ __device__ __host__ AthenaScratchTensor();
   // the default destructor/copy operators are sufficient
   ~AthenaScratchTensor() = default;
   AthenaScratchTensor(AthenaScratchTensor<T, sym, ndim, 2> const &) = default;
-  AthenaScratchTensor<T, sym, ndim, 2> & operator=(AthenaScratchTensor<T, sym, ndim, 2> const &) = default;
+  AthenaScratchTensor<T, sym, ndim, 2> & operator=
+  (AthenaScratchTensor<T, sym, ndim, 2> const &) = default;
   KOKKOS_INLINE_FUNCTION
   int idxmap(int const a, int const b) const {
     return idxmap_[a][b];
@@ -235,7 +256,8 @@ __device__ __host__ AthenaScratchTensor();
   void ZeroClear() {
     Kokkos::Experimental::local_deep_copy(data_, 0);
   }
-private:
+
+ private:
   ScrArray2D<T> data_;
   int idxmap_[ndim][ndim];
   int ndof_;
@@ -279,7 +301,7 @@ switch(sym) {
 // This is a 1D AthenaScratchTensor
 template<typename T, TensorSymm sym, int ndim>
 class AthenaScratchTensor<T, sym, ndim, 3> {
-public:
+ public:
 #ifdef __CUDA_ARCH__
 __device__ __host__ AthenaScratchTensor();
 #else
@@ -289,7 +311,8 @@ __device__ __host__ AthenaScratchTensor();
   // the default destructor/copy operators are sufficient
   ~AthenaScratchTensor() = default;
   AthenaScratchTensor(AthenaScratchTensor<T, sym, ndim, 3> const &) = default;
-  AthenaScratchTensor<T, sym, ndim, 3> & operator=(AthenaScratchTensor<T, sym, ndim, 3> const &) = default;
+  AthenaScratchTensor<T, sym, ndim, 3> & operator=
+  (AthenaScratchTensor<T, sym, ndim, 3> const &) = default;
   KOKKOS_INLINE_FUNCTION
   int idxmap(int const a, int const b, int const c) const {
     return idxmap_[a][b][c];
@@ -306,7 +329,8 @@ __device__ __host__ AthenaScratchTensor();
   void ZeroClear() {
     Kokkos::Experimental::local_deep_copy(data_, 0);
   }
-private:
+
+ private:
   ScrArray2D<T> data_;
   int idxmap_[ndim][ndim][ndim];
   int ndof_;
@@ -360,7 +384,7 @@ __device__ __host__ AthenaScratchTensor<T, sym, ndim, 3>::AthenaScratchTensor() 
 // This is a 1D AthenaScratchTensor
 template<typename T, TensorSymm sym, int ndim>
 class AthenaScratchTensor<T, sym, ndim, 4> {
-public:
+ public:
 #ifdef __CUDA_ARCH__
 __device__ __host__ AthenaScratchTensor();
 #else
@@ -370,7 +394,8 @@ __device__ __host__ AthenaScratchTensor();
   // the default destructor/copy operators are sufficient
   ~AthenaScratchTensor() = default;
   AthenaScratchTensor(AthenaScratchTensor<T, sym, ndim, 4> const &) = default;
-  AthenaScratchTensor<T, sym, ndim, 4> & operator=(AthenaScratchTensor<T, sym, ndim, 4> const &) = default;
+  AthenaScratchTensor<T, sym, ndim, 4> & operator=
+  (AthenaScratchTensor<T, sym, ndim, 4> const &) = default;
   KOKKOS_INLINE_FUNCTION
   int idxmap(int const a, int const b, int const c, int const d) const {
     return idxmap_[a][b][c][d];
@@ -387,7 +412,8 @@ __device__ __host__ AthenaScratchTensor();
   void ZeroClear() {
     Kokkos::Experimental::local_deep_copy(data_, 0);
   }
-private:
+
+ private:
   ScrArray2D<T> data_;
   int idxmap_[ndim][ndim][ndim][ndim];
   int ndof_;
@@ -451,4 +477,4 @@ __device__ __host__ AthenaScratchTensor<T, sym, ndim, 4>::AthenaScratchTensor() 
   }
 }
 
-#endif
+#endif // ATHENA_TENSOR_HPP_
