@@ -18,8 +18,7 @@
 namespace z4c {
 //----------------------------------------------------------------------------------------
 //! \fn  void Z4c::Update
-//  \brief Explicit RK update 
-
+//  \brief Explicit RK update
 TaskStatus Z4c::ExpRKUpdate(Driver *pdriver, int stage) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
@@ -39,13 +38,13 @@ TaskStatus Z4c::ExpRKUpdate(Driver *pdriver, int stage) {
   int scr_level = 0;
   int ncells1 = indcs.nx1;
   size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1);
-  par_for_outer("z4c RK update",DevExeSpace(),scr_size,scr_level,0,nmb1,0,nvar-1,ks,ke,js,je,
+  par_for_outer("z4c RK update",DevExeSpace(),scr_size,scr_level,
+                                0,nmb1,0,nvar-1,ks,ke,js,je,
   KOKKOS_LAMBDA(TeamMember_t member, const int m, const int n, const int k, const int j) {
   par_for_inner(member, is, ie, [&](const int i) {
     u0(m,n,k,j,i) = gam0*u0(m,n,k,j,i) + gam1*u1(m,n,k,j,i) + beta_dt*u_rhs(m,n,k,j,i);
   });
-  }); 
-
+  });
   return TaskStatus::complete;
 }
 } // namespace z4c

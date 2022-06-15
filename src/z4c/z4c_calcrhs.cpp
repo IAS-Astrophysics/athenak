@@ -57,7 +57,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
     AthenaTensor<Real, TensorSymm::NONE, 1, 0> KK;           // K^a_b K^b_a
     AthenaTensor<Real, TensorSymm::NONE, 1, 0> S;            // Trace of S_ik
     AthenaTensor<Real, TensorSymm::NONE, 1, 0> Ddalpha;      // Trace of Ddalpha_dd         
-    
+
               r.NewAthenaTensor(member, scr_level, ncells1);
            detg.NewAthenaTensor(member, scr_level, ncells1);
     chi_guarded.NewAthenaTensor(member, scr_level, ncells1);
@@ -75,12 +75,12 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
     AthenaTensor<Real, TensorSymm::NONE, 1, 1> Gamma_u;     // Gamma computed from the metric
     AthenaTensor<Real, TensorSymm::NONE, 1, 1> DA_u;        // Covariant derivative of A
     AthenaTensor<Real, TensorSymm::NONE, 1, 1> s_u;         // x^i/r where r is the coord. radius
-    
+
         M_u.NewAthenaTensor(member, scr_level, ncells1);
     Gamma_u.NewAthenaTensor(member, scr_level, ncells1);
        DA_u.NewAthenaTensor(member, scr_level, ncells1);
         s_u.NewAthenaTensor(member, scr_level, ncells1);
-    
+
     AthenaTensor<Real, TensorSymm::SYM2, 1, 2> g_uu;        // inverse of conf. metric
     AthenaTensor<Real, TensorSymm::SYM2, 1, 2> A_uu;        // inverse of A
     AthenaTensor<Real, TensorSymm::SYM2, 1, 2> AA_dd;       // g^cd A_ac A_db
@@ -90,8 +90,8 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
     AthenaTensor<Real, TensorSymm::SYM2, 1, 2> K_ud;        // extrinsic curvature
     AthenaTensor<Real, TensorSymm::SYM2, 1, 2> Ddalpha_dd;  // 2nd differential of the lapse
     AthenaTensor<Real, TensorSymm::SYM2, 1, 2> Ddphi_dd;    // 2nd differential of phi
-    
-    
+
+
           g_uu.NewAthenaTensor(member, scr_level, ncells1);
           A_uu.NewAthenaTensor(member, scr_level, ncells1);
          AA_dd.NewAthenaTensor(member, scr_level, ncells1);
@@ -114,7 +114,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
 
     // auxiliary derivatives
     AthenaTensor<Real, TensorSymm::NONE, 1, 0> dbeta;       // d_a beta^a
-       
+
     dbeta.NewAthenaTensor(member, scr_level, ncells1);
 
     AthenaTensor<Real, TensorSymm::NONE, 1, 1> dalpha_d;    // lapse 1st drvts
@@ -124,13 +124,13 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
     AthenaTensor<Real, TensorSymm::NONE, 1, 1> dK_d;        // K 1st drvts
     AthenaTensor<Real, TensorSymm::NONE, 1, 1> dKhat_d;     // Khat 1st drvts
     AthenaTensor<Real, TensorSymm::NONE, 1, 1> dTheta_d;    // Theta 1st drvts
-   
+
     dalpha_d.NewAthenaTensor(member, scr_level, ncells1);
     ddbeta_d.NewAthenaTensor(member, scr_level, ncells1);
-      dchi_d.NewAthenaTensor(member, scr_level, ncells1);  
-      dphi_d.NewAthenaTensor(member, scr_level, ncells1);  
-        dK_d.NewAthenaTensor(member, scr_level, ncells1);    
-     dKhat_d.NewAthenaTensor(member, scr_level, ncells1); 
+      dchi_d.NewAthenaTensor(member, scr_level, ncells1);
+      dphi_d.NewAthenaTensor(member, scr_level, ncells1);
+        dK_d.NewAthenaTensor(member, scr_level, ncells1);
+     dKhat_d.NewAthenaTensor(member, scr_level, ncells1);
     dTheta_d.NewAthenaTensor(member, scr_level, ncells1);
 
     AthenaTensor<Real, TensorSymm::SYM2, 1, 2> ddalpha_dd;  // lapse 2nd drvts
@@ -139,44 +139,44 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
     AthenaTensor<Real, TensorSymm::NONE, 1, 2> dGam_du;     // Gamma 1st drvts
 
     ddalpha_dd.NewAthenaTensor(member, scr_level, ncells1);
-      dbeta_du.NewAthenaTensor(member, scr_level, ncells1);  
-      ddchi_dd.NewAthenaTensor(member, scr_level, ncells1);  
-       dGam_du.NewAthenaTensor(member, scr_level, ncells1);   
+      dbeta_du.NewAthenaTensor(member, scr_level, ncells1);
+      ddchi_dd.NewAthenaTensor(member, scr_level, ncells1);
+       dGam_du.NewAthenaTensor(member, scr_level, ncells1);
 
     AthenaTensor<Real, TensorSymm::SYM2,  1, 3> dg_ddd;      // metric 1st drvts
     AthenaTensor<Real, TensorSymm::SYM2,  1, 3> dK_ddd;      // K 1st drvts
     AthenaTensor<Real, TensorSymm::SYM2,  1, 3> dA_ddd;      // A 1st drvts
     AthenaTensor<Real, TensorSymm::ISYM2, 1, 3> ddbeta_ddu; // shift 2nd drvts
 
-        dg_ddd.NewAthenaTensor(member, scr_level, ncells1);    
-        dK_ddd.NewAthenaTensor(member, scr_level, ncells1);    
-        dA_ddd.NewAthenaTensor(member, scr_level, ncells1);    
+        dg_ddd.NewAthenaTensor(member, scr_level, ncells1);
+        dK_ddd.NewAthenaTensor(member, scr_level, ncells1);
+        dA_ddd.NewAthenaTensor(member, scr_level, ncells1);
     ddbeta_ddu.NewAthenaTensor(member, scr_level, ncells1);
-    
+
     AthenaTensor<Real, TensorSymm::SYM22, 1, 4> ddg_dddd;   // metric 2nd drvts
-    
+
     ddg_dddd.NewAthenaTensor(member, scr_level, ncells1);
-    
+
     // auxiliary Lie derivatives along the shift vector
     AthenaTensor<Real, TensorSymm::NONE, 1, 0> Lchi;        // Lie derivative of chi
     AthenaTensor<Real, TensorSymm::NONE, 1, 0> LKhat;       // Lie derivative of Khat
     AthenaTensor<Real, TensorSymm::NONE, 1, 0> LTheta;      // Lie derivative of Theta
     AthenaTensor<Real, TensorSymm::NONE, 1, 0> Lalpha;      // Lie derivative of the lapse
 
-      Lchi.NewAthenaTensor(member, scr_level, ncells1);  
-     LKhat.NewAthenaTensor(member, scr_level, ncells1); 
+      Lchi.NewAthenaTensor(member, scr_level, ncells1);
+     LKhat.NewAthenaTensor(member, scr_level, ncells1);
     LTheta.NewAthenaTensor(member, scr_level, ncells1);
     Lalpha.NewAthenaTensor(member, scr_level, ncells1);
 
     AthenaTensor<Real, TensorSymm::NONE, 1, 1> LGam_u;      // Lie derivative of Gamma
     AthenaTensor<Real, TensorSymm::NONE, 1, 1> Lbeta_u;     // Lie derivative of the shift
-    
-     LGam_u.NewAthenaTensor(member, scr_level, ncells1); 
+
+     LGam_u.NewAthenaTensor(member, scr_level, ncells1);
     Lbeta_u.NewAthenaTensor(member, scr_level, ncells1);
 
     AthenaTensor<Real, TensorSymm::SYM2, 1, 2> Lg_dd;       // Lie derivative of conf. 3-metric
     AthenaTensor<Real, TensorSymm::SYM2, 1, 2> LA_dd;       // Lie derivative of A
-   
+
     Lg_dd.NewAthenaTensor(member, scr_level, ncells1);
     LA_dd.NewAthenaTensor(member, scr_level, ncells1); 
 

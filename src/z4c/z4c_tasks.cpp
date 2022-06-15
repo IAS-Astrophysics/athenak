@@ -41,7 +41,7 @@ void Z4c::AssembleZ4cTasks(TaskList &start, TaskList &run, TaskList &end) {
 
   // run task list
   id.copyu = run.AddTask(&Z4c::CopyU, this, none);
-  
+
   switch (indcs.ng) {
       case 2: id.crhs  = run.AddTask(&Z4c::CalcRHS<2>, this, id.copyu);
               break;
@@ -49,7 +49,7 @@ void Z4c::AssembleZ4cTasks(TaskList &start, TaskList &run, TaskList &end) {
               break;
       case 4: id.crhs  = run.AddTask(&Z4c::CalcRHS<4>, this, id.copyu);
               break;
-  } 
+  }
   //id.crhs  = run.AddTask(&Z4c::CalcRHS, this, id.copyu);
   id.sombc = run.AddTask(&Z4c::Z4cBoundaryRHS, this, id.crhs);
   id.expl  = run.AddTask(&Z4c::ExpRKUpdate, this, id.sombc);
@@ -59,7 +59,7 @@ void Z4c::AssembleZ4cTasks(TaskList &start, TaskList &run, TaskList &end) {
   id.bcs   = run.AddTask(&Z4c::ApplyPhysicalBCs, this, id.recvu);
   id.algc  = run.AddTask(&Z4c::EnforceAlgConstr, this, id.bcs);
   id.z4tad = run.AddTask(&Z4c::Z4cToADM_, this, id.algc);
-  id.admc  = run.AddTask(&Z4c::ADMConstraints_, this, id.z4tad); 
+  id.admc  = run.AddTask(&Z4c::ADMConstraints_, this, id.z4tad);
   id.newdt = run.AddTask(&Z4c::NewTimeStep, this, id.admc);
   // end task list
   id.clear = end.AddTask(&Z4c::ClearSend, this, none);
