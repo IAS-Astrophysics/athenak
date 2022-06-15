@@ -10,6 +10,7 @@
 //  \brief definitions for Z4c class
 
 #include "athena.hpp"
+#include "utils/finite_diff.hpp"
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
 #include "bvals/bvals.hpp"
@@ -218,7 +219,6 @@ KOKKOS_FUNCTION
                      int const scr_level,
                      TeamMember_t member);
 
-#include "bits/derivatives.inc"
 
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Z4c
