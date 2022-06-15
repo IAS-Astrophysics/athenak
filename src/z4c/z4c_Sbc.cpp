@@ -11,7 +11,7 @@
 namespace z4c {
 //---------------------------------------------------------------------------------------
 //! \fn TaskStatus Z4c::Z4cBoundaryRHS
-//! \brief Implement the Sommerfield Boundary conditions for z4c 
+//! \brief Implement the Sommerfield Boundary conditions for z4c
 TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage)
 {
 #if 0
@@ -34,7 +34,6 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage)
   auto &size = pmy_pack->pmb->mb_size;
   auto &z4c = pmy_pack->pz4c->z4c;
   auto &rhs = pmy_pack->pz4c->rhs;
-  int &NDIM = pmy_pack->pz4c->NDIM;
   // 2 1D scratch array and 1 2D scratch array
   size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1)   // 0 tensors
                   + ScrArray2D<Real>::shmem_size(3,ncells1)*3 // vectors
@@ -43,7 +42,7 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage)
   int scr_level = 1;
   //par_for_outer("Sommerfeld loop",DevExeSpace(),scr_size,scr_level,0,nmb1,ks_,ke_,js_,je_,
   par_for("Sommerfeld loop",DevExeSpace(),0,nmb1,ks_,ke_,js_,je_,
-  KOKKOS_LAMBDA(const int m, const int k, const int j) 
+  KOKKOS_LAMBDA(const int m, const int k, const int j)
     {
     //int is, ie, js, je, ks, ke, p;
       Real idx[] = {size.d_view(m).idx1, size.d_view(m).idx2, size.d_view(m).idx3};
@@ -62,36 +61,36 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage)
       Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 /*
       AthenaTensor<Real, TensorSymm::NONE, 1, 0> r;
-      
-             r.NewAthenaTensor(member, scr_level, nx1);    
+
+             r.NewAthenaScratchTensor(member, scr_level, nx1);
 
       AthenaTensor<Real, TensorSymm::NONE, 1, 1> dKhat_d;
       AthenaTensor<Real, TensorSymm::NONE, 1, 1> dTheta_d;
       AthenaTensor<Real, TensorSymm::NONE, 1, 1> s_u;
-      
-       dKhat_d.NewAthenaTensor(member, scr_level, nx1);
-      dTheta_d.NewAthenaTensor(member, scr_level, nx1);
-           s_u.NewAthenaTensor(member, scr_level, nx1);
-      
+
+       dKhat_d.NewAthenaScratchTensor(member, scr_level, nx1);
+      dTheta_d.NewAthenaScratchTensor(member, scr_level, nx1);
+           s_u.NewAthenaScratchTensor(member, scr_level, nx1);
+
       AthenaTensor<Real, TensorSymm::NONE, 1, 2> dGam_du;
-      
-      dGam_du.NewAthenaTensor(member, scr_level, nx1);
-      
+
+      dGam_du.NewAthenaScratchTensor(member, scr_level, nx1);
+
       AthenaTensor<Real, TensorSymm::SYM2, 1, 3> dA_ddd;
-      
-       dA_ddd.NewAthenaTensor(member, scr_level, nx1);
+
+       dA_ddd.NewAthenaScratchTensor(member, scr_level, nx1);
     //bool Boundary = false;
     if (mb_bcs.d_view(m,BoundaryFace::inner_x1) == BoundaryFlag::outflow) {
       is = is_, ie = is_;
       js = js_, je = je_;
       ks = ks_, ke = ke_;
       p = +1;
-      
+
       // -----------------------------------------------------------------------------------
       // 1st derivatives
       //
       // Scalars
-      for(int a = 0; a < NDIM; ++a) {
+      for(int a = 0; a < 3; ++a) {
         par_for_inner(member, is, ie, [&](const int i) {
           dKhat_d (a,i)  = p*Dx(a, 2, idx, z4c.Khat, m, k, j, i);
           dTheta_d(a,i)  = p*Dx(a, 2, idx, z4c.Theta, m, k, j, i);
@@ -105,16 +104,16 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage)
         if (j==11 && k ==11) printf("z4c.Khat(i=%d) = %.9g, stage = %d\n", i, z4c.Khat(m,k,j,i), stage);
       });
       // Vectors
-      for(int a = 0; a < NDIM; ++a)
-      for(int b = 0; b < NDIM; ++b) {
+      for(int a = 0; a < 3; ++a)
+      for(int b = 0; b < 3; ++b) {
         par_for_inner(member, is, ie, [&](const int i) {
           dGam_du(b,a,i) = p*Dx(b, 2, idx, z4c.Gam_u, m,a,k,j,i);
         });
       }
       // Tensors
-      for(int a = 0; a < NDIM; ++a)
-      for(int b = a; b < NDIM; ++b)
-      for(int c = 0; c < NDIM; ++c) {
+      for(int a = 0; a < 3; ++a)
+      for(int b = a; b < 3; ++b)
+      for(int c = 0; c < 3; ++c) {
         par_for_inner(member, is, ie, [&](const int i) {
           dA_ddd(c,a,b,i) = p*Dx(c, 2, idx, z4c.A_dd, m,a,b,k,j,i);
         });
@@ -139,7 +138,7 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage)
         rhs.Theta(m,k,j,i) = - z4c.Theta(m,k,j,i)/r(i);
         rhs.Khat(m,k,j,i) = - SQRT2 * z4c.Khat(m,k,j,i)/r(i);
       });
-      for(int a = 0; a < NDIM; ++a) {
+      for(int a = 0; a < 3; ++a) {
         par_for_inner(member, is, ie, [&](const int i) {
           rhs.Theta(m,k,j,i) -= s_u(a,i) * dTheta_d(a,i);
           rhs.Khat(m,k,j,i) -= SQRT2 * s_u(a,i) * dKhat_d(a,i);
@@ -149,11 +148,11 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage)
       // -----------------------------------------------------------------------------------
       // Boundary RHS for the Gamma's
       //
-      for(int a = 0; a < NDIM; ++a) {
+      for(int a = 0; a < 3; ++a) {
         par_for_inner(member, is, ie, [&](const int i) {
           rhs.Gam_u(m,a,k,j,i) = - z4c.Gam_u(m,a,k,j,i)/r(i);
         });
-        for(int b = 0; b < NDIM; ++b) {
+        for(int b = 0; b < 3; ++b) {
           par_for_inner(member, is, ie, [&](const int i) {
             rhs.Gam_u(m,a,k,j,i) -= s_u(b,i) * dGam_du(b,a,i);
           });
@@ -163,12 +162,12 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage)
       // -----------------------------------------------------------------------------------
       // Boundary RHS for the A_ab
       //
-      for(int a = 0; a < NDIM; ++a)
-      for(int b = a; b < NDIM; ++b) {
+      for(int a = 0; a < 3; ++a)
+      for(int b = a; b < 3; ++b) {
         par_for_inner(member, is, ie, [&](const int i) {
           rhs.A_dd(m,a,b,k,j,i) = - z4c.A_dd(m,a,b,k,j,i)/r(i);
         });
-        for(int c = 0; c < NDIM; ++c) {
+        for(int c = 0; c < 3; ++c) {
           par_for_inner(member, is, ie, [&](const int i) {
             rhs.A_dd(m,a,b,k,j,i) -= s_u(c,i) * dA_ddd(c,a,b,i);
           });
@@ -180,12 +179,12 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage)
       js = js_, je = je_;
       ks = ks_, ke = ke_;
       p = -1;
-      
+
       // -----------------------------------------------------------------------------------
       // 1st derivatives
       //
       // Scalars
-      for(int a = 0; a < NDIM; ++a) {
+      for(int a = 0; a < 3; ++a) {
         par_for_inner(member, is, ie, [&](const int i) {
           dKhat_d (a,i)  = p*Dx(a, 2, idx, z4c.Khat, m, k, j, i);
           dTheta_d(a,i)  = p*Dx(a, 2, idx, z4c.Theta, m, k, j, i);
@@ -199,16 +198,16 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage)
         if (j==11 && k ==11) printf("z4c.Khat(i=%d) = %.9g, stage = %d\n", i, z4c.Khat(m,k,j,i), stage);
       });
       // Vectors
-      for(int a = 0; a < NDIM; ++a)
-      for(int b = 0; b < NDIM; ++b) {
+      for(int a = 0; a < 3; ++a)
+      for(int b = 0; b < 3; ++b) {
         par_for_inner(member, is, ie, [&](const int i) {
           dGam_du(b,a,i) = p*Dx(b, 2, idx, z4c.Gam_u, m,a,k,j,i);
         });
       }
       // Tensors
-      for(int a = 0; a < NDIM; ++a)
-      for(int b = a; b < NDIM; ++b)
-      for(int c = 0; c < NDIM; ++c) {
+      for(int a = 0; a < 3; ++a)
+      for(int b = a; b < 3; ++b)
+      for(int c = 0; c < 3; ++c) {
         par_for_inner(member, is, ie, [&](const int i) {
           dA_ddd(c,a,b,i) = p*Dx(c, 2, idx, z4c.A_dd, m,a,b,k,j,i);
         });
@@ -233,7 +232,7 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage)
         rhs.Theta(m,k,j,i) = - z4c.Theta(m,k,j,i)/r(i);
         rhs.Khat(m,k,j,i) = - SQRT2 * z4c.Khat(m,k,j,i)/r(i);
       });
-      for(int a = 0; a < NDIM; ++a) {
+      for(int a = 0; a < 3; ++a) {
         par_for_inner(member, is, ie, [&](const int i) {
           rhs.Theta(m,k,j,i) -= s_u(a,i) * dTheta_d(a,i);
           rhs.Khat(m,k,j,i) -= SQRT2 * s_u(a,i) * dKhat_d(a,i);
@@ -243,11 +242,11 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage)
       // -----------------------------------------------------------------------------------
       // Boundary RHS for the Gamma's
       //
-      for(int a = 0; a < NDIM; ++a) {
+      for(int a = 0; a < 3; ++a) {
         par_for_inner(member, is, ie, [&](const int i) {
           rhs.Gam_u(m,a,k,j,i) = - z4c.Gam_u(m,a,k,j,i)/r(i);
         });
-        for(int b = 0; b < NDIM; ++b) {
+        for(int b = 0; b < 3; ++b) {
           par_for_inner(member, is, ie, [&](const int i) {
             rhs.Gam_u(m,a,k,j,i) -= s_u(b,i) * dGam_du(b,a,i);
           });
@@ -257,12 +256,12 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage)
       // -----------------------------------------------------------------------------------
       // Boundary RHS for the A_ab
       //
-      for(int a = 0; a < NDIM; ++a)
-      for(int b = a; b < NDIM; ++b) {
+      for(int a = 0; a < 3; ++a)
+      for(int b = a; b < 3; ++b) {
         par_for_inner(member, is, ie, [&](const int i) {
           rhs.A_dd(m,a,b,k,j,i) = - z4c.A_dd(m,a,b,k,j,i)/r(i);
         });
-        for(int c = 0; c < NDIM; ++c) {
+        for(int c = 0; c < 3; ++c) {
           par_for_inner(member, is, ie, [&](const int i) {
             rhs.A_dd(m,a,b,k,j,i) -= s_u(c,i) * dA_ddd(c,a,b,i);
           });
@@ -274,12 +273,12 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage)
       js = js_, je = js_;
       ks = ks_, ke = ke_;
       p = +1;
-      
+
       // -----------------------------------------------------------------------------------
       // 1st derivatives
       //
       // Scalars
-      for(int a = 0; a < NDIM; ++a) {
+      for(int a = 0; a < 3; ++a) {
         par_for_inner(member, is, ie, [&](const int i) {
           dKhat_d (a,i)  = p*Dx(a, 2, idx, z4c.Khat, m, k, j, i);
           dTheta_d(a,i)  = p*Dx(a, 2, idx, z4c.Theta, m, k, j, i);
@@ -293,16 +292,16 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage)
         if (j==11 && k ==11) printf("z4c.Khat(i=%d) = %.9g, stage = %d\n", i, z4c.Khat(m,k,j,i), stage);
       });
       // Vectors
-      for(int a = 0; a < NDIM; ++a)
-      for(int b = 0; b < NDIM; ++b) {
+      for(int a = 0; a < 3; ++a)
+      for(int b = 0; b < 3; ++b) {
         par_for_inner(member, is, ie, [&](const int i) {
           dGam_du(b,a,i) = p*Dx(b, 2, idx, z4c.Gam_u, m,a,k,j,i);
         });
       }
       // Tensors
-      for(int a = 0; a < NDIM; ++a)
-      for(int b = a; b < NDIM; ++b)
-      for(int c = 0; c < NDIM; ++c) {
+      for(int a = 0; a < 3; ++a)
+      for(int b = a; b < 3; ++b)
+      for(int c = 0; c < 3; ++c) {
         par_for_inner(member, is, ie, [&](const int i) {
           dA_ddd(c,a,b,i) = p*Dx(c, 2, idx, z4c.A_dd, m,a,b,k,j,i);
         });
@@ -327,7 +326,7 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage)
         rhs.Theta(m,k,j,i) = - z4c.Theta(m,k,j,i)/r(i);
         rhs.Khat(m,k,j,i) = - SQRT2 * z4c.Khat(m,k,j,i)/r(i);
       });
-      for(int a = 0; a < NDIM; ++a) {
+      for(int a = 0; a < 3; ++a) {
         par_for_inner(member, is, ie, [&](const int i) {
           rhs.Theta(m,k,j,i) -= s_u(a,i) * dTheta_d(a,i);
           rhs.Khat(m,k,j,i) -= SQRT2 * s_u(a,i) * dKhat_d(a,i);
@@ -337,11 +336,11 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage)
       // -----------------------------------------------------------------------------------
       // Boundary RHS for the Gamma's
       //
-      for(int a = 0; a < NDIM; ++a) {
+      for(int a = 0; a < 3; ++a) {
         par_for_inner(member, is, ie, [&](const int i) {
           rhs.Gam_u(m,a,k,j,i) = - z4c.Gam_u(m,a,k,j,i)/r(i);
         });
-        for(int b = 0; b < NDIM; ++b) {
+        for(int b = 0; b < 3; ++b) {
           par_for_inner(member, is, ie, [&](const int i) {
             rhs.Gam_u(m,a,k,j,i) -= s_u(b,i) * dGam_du(b,a,i);
           });
@@ -351,12 +350,12 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage)
       // -----------------------------------------------------------------------------------
       // Boundary RHS for the A_ab
       //
-      for(int a = 0; a < NDIM; ++a)
-      for(int b = a; b < NDIM; ++b) {
+      for(int a = 0; a < 3; ++a)
+      for(int b = a; b < 3; ++b) {
         par_for_inner(member, is, ie, [&](const int i) {
           rhs.A_dd(m,a,b,k,j,i) = - z4c.A_dd(m,a,b,k,j,i)/r(i);
         });
-        for(int c = 0; c < NDIM; ++c) {
+        for(int c = 0; c < 3; ++c) {
           par_for_inner(member, is, ie, [&](const int i) {
             rhs.A_dd(m,a,b,k,j,i) -= s_u(c,i) * dA_ddd(c,a,b,i);
           });
@@ -368,12 +367,12 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage)
       js = je_, je = je_;
       ks = ks_, ke = ke_;
       p = -1;
-      
+
       // -----------------------------------------------------------------------------------
       // 1st derivatives
       //
       // Scalars
-      for(int a = 0; a < NDIM; ++a) {
+      for(int a = 0; a < 3; ++a) {
         par_for_inner(member, is, ie, [&](const int i) {
           dKhat_d (a,i)  = p*Dx(a, 2, idx, z4c.Khat, m, k, j, i);
           dTheta_d(a,i)  = p*Dx(a, 2, idx, z4c.Theta, m, k, j, i);
@@ -384,16 +383,16 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage)
         if (j==11 && k ==11) printf("dKhat_d(a=%d,i=%d) = %.9g, stage = %d\n", a, i, dKhat_d(a,i), stage);
       });
       // Vectors
-      for(int a = 0; a < NDIM; ++a)
-      for(int b = 0; b < NDIM; ++b) {
+      for(int a = 0; a < 3; ++a)
+      for(int b = 0; b < 3; ++b) {
         par_for_inner(member, is, ie, [&](const int i) {
           dGam_du(b,a,i) = p*Dx(b, 2, idx, z4c.Gam_u, m,a,k,j,i);
         });
       }
       // Tensors
-      for(int a = 0; a < NDIM; ++a)
-      for(int b = a; b < NDIM; ++b)
-      for(int c = 0; c < NDIM; ++c) {
+      for(int a = 0; a < 3; ++a)
+      for(int b = a; b < 3; ++b)
+      for(int c = 0; c < 3; ++c) {
         par_for_inner(member, is, ie, [&](const int i) {
           dA_ddd(c,a,b,i) = p*Dx(c, 2, idx, z4c.A_dd, m,a,b,k,j,i);
         });
@@ -418,7 +417,7 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage)
         rhs.Theta(m,k,j,i) = - z4c.Theta(m,k,j,i)/r(i);
         rhs.Khat(m,k,j,i) = - SQRT2 * z4c.Khat(m,k,j,i)/r(i);
       });
-      for(int a = 0; a < NDIM; ++a) {
+      for(int a = 0; a < 3; ++a) {
         par_for_inner(member, is, ie, [&](const int i) {
           rhs.Theta(m,k,j,i) -= s_u(a,i) * dTheta_d(a,i);
           rhs.Khat(m,k,j,i) -= SQRT2 * s_u(a,i) * dKhat_d(a,i);
@@ -428,11 +427,11 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage)
       // -----------------------------------------------------------------------------------
       // Boundary RHS for the Gamma's
       //
-      for(int a = 0; a < NDIM; ++a) {
+      for(int a = 0; a < 3; ++a) {
         par_for_inner(member, is, ie, [&](const int i) {
           rhs.Gam_u(m,a,k,j,i) = - z4c.Gam_u(m,a,k,j,i)/r(i);
         });
-        for(int b = 0; b < NDIM; ++b) {
+        for(int b = 0; b < 3; ++b) {
           par_for_inner(member, is, ie, [&](const int i) {
             rhs.Gam_u(m,a,k,j,i) -= s_u(b,i) * dGam_du(b,a,i);
           });
@@ -442,12 +441,12 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage)
       // -----------------------------------------------------------------------------------
       // Boundary RHS for the A_ab
       //
-      for(int a = 0; a < NDIM; ++a)
-      for(int b = a; b < NDIM; ++b) {
+      for(int a = 0; a < 3; ++a)
+      for(int b = a; b < 3; ++b) {
         par_for_inner(member, is, ie, [&](const int i) {
           rhs.A_dd(m,a,b,k,j,i) = - z4c.A_dd(m,a,b,k,j,i)/r(i);
         });
-        for(int c = 0; c < NDIM; ++c) {
+        for(int c = 0; c < 3; ++c) {
           par_for_inner(member, is, ie, [&](const int i) {
             rhs.A_dd(m,a,b,k,j,i) -= s_u(c,i) * dA_ddd(c,a,b,i);
           });
@@ -459,12 +458,12 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage)
       js = js_, je = je_;
       ks = ks_, ke = ks_;
       p = +1;
-      
+
       // -----------------------------------------------------------------------------------
       // 1st derivatives
       //
       // Scalars
-      for(int a = 0; a < NDIM; ++a) {
+      for(int a = 0; a < 3; ++a) {
         par_for_inner(member, is, ie, [&](const int i) {
           dKhat_d (a,i)  = p*Dx(a, 2, idx, z4c.Khat, m, k, j, i);
           dTheta_d(a,i)  = p*Dx(a, 2, idx, z4c.Theta, m, k, j, i);
@@ -475,16 +474,16 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage)
         if (j==11 && k ==11) printf("dKhat_d(a=%d,i=%d) = %.9g, stage = %d\n", a, i, dKhat_d(a,i), stage);
       });
       // Vectors
-      for(int a = 0; a < NDIM; ++a)
-      for(int b = 0; b < NDIM; ++b) {
+      for(int a = 0; a < 3; ++a)
+      for(int b = 0; b < 3; ++b) {
         par_for_inner(member, is, ie, [&](const int i) {
           dGam_du(b,a,i) = p*Dx(b, 2, idx, z4c.Gam_u, m,a,k,j,i);
         });
       }
       // Tensors
-      for(int a = 0; a < NDIM; ++a)
-      for(int b = a; b < NDIM; ++b)
-      for(int c = 0; c < NDIM; ++c) {
+      for(int a = 0; a < 3; ++a)
+      for(int b = a; b < 3; ++b)
+      for(int c = 0; c < 3; ++c) {
         par_for_inner(member, is, ie, [&](const int i) {
           dA_ddd(c,a,b,i) = p*Dx(c, 2, idx, z4c.A_dd, m,a,b,k,j,i);
         });
@@ -509,7 +508,7 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage)
         rhs.Theta(m,k,j,i) = - z4c.Theta(m,k,j,i)/r(i);
         rhs.Khat(m,k,j,i) = - SQRT2 * z4c.Khat(m,k,j,i)/r(i);
       });
-      for(int a = 0; a < NDIM; ++a) {
+      for(int a = 0; a < 3; ++a) {
         par_for_inner(member, is, ie, [&](const int i) {
           rhs.Theta(m,k,j,i) -= s_u(a,i) * dTheta_d(a,i);
           rhs.Khat(m,k,j,i) -= SQRT2 * s_u(a,i) * dKhat_d(a,i);
@@ -519,11 +518,11 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage)
       // -----------------------------------------------------------------------------------
       // Boundary RHS for the Gamma's
       //
-      for(int a = 0; a < NDIM; ++a) {
+      for(int a = 0; a < 3; ++a) {
         par_for_inner(member, is, ie, [&](const int i) {
           rhs.Gam_u(m,a,k,j,i) = - z4c.Gam_u(m,a,k,j,i)/r(i);
         });
-        for(int b = 0; b < NDIM; ++b) {
+        for(int b = 0; b < 3; ++b) {
           par_for_inner(member, is, ie, [&](const int i) {
             rhs.Gam_u(m,a,k,j,i) -= s_u(b,i) * dGam_du(b,a,i);
           });
@@ -533,12 +532,12 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage)
       // -----------------------------------------------------------------------------------
       // Boundary RHS for the A_ab
       //
-      for(int a = 0; a < NDIM; ++a)
-      for(int b = a; b < NDIM; ++b) {
+      for(int a = 0; a < 3; ++a)
+      for(int b = a; b < 3; ++b) {
         par_for_inner(member, is, ie, [&](const int i) {
           rhs.A_dd(m,a,b,k,j,i) = - z4c.A_dd(m,a,b,k,j,i)/r(i);
         });
-        for(int c = 0; c < NDIM; ++c) {
+        for(int c = 0; c < 3; ++c) {
           par_for_inner(member, is, ie, [&](const int i) {
             rhs.A_dd(m,a,b,k,j,i) -= s_u(c,i) * dA_ddd(c,a,b,i);
           });
@@ -550,12 +549,12 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage)
       js = js_, je = je_;
       ks = ke_, ke = ke_;
       p = -1;
-      
+
       // -----------------------------------------------------------------------------------
       // 1st derivatives
       //
       // Scalars
-      for(int a = 0; a < NDIM; ++a) {
+      for(int a = 0; a < 3; ++a) {
         par_for_inner(member, is, ie, [&](const int i) {
           dKhat_d (a,i)  = p*Dx(a, 2, idx, z4c.Khat, m, k, j, i);
           dTheta_d(a,i)  = p*Dx(a, 2, idx, z4c.Theta, m, k, j, i);
@@ -566,16 +565,16 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage)
         if (j==11 && k ==11) printf("dKhat_d(a=%d,i=%d) = %.9g, stage = %d\n", a, i, dKhat_d(a,i), stage);
       });
       // Vectors
-      for(int a = 0; a < NDIM; ++a)
-      for(int b = 0; b < NDIM; ++b) {
+      for(int a = 0; a < 3; ++a)
+      for(int b = 0; b < 3; ++b) {
         par_for_inner(member, is, ie, [&](const int i) {
           dGam_du(b,a,i) = p*Dx(b, 2, idx, z4c.Gam_u, m,a,k,j,i);
         });
       }
       // Tensors
-      for(int a = 0; a < NDIM; ++a)
-      for(int b = a; b < NDIM; ++b)
-      for(int c = 0; c < NDIM; ++c) {
+      for(int a = 0; a < 3; ++a)
+      for(int b = a; b < 3; ++b)
+      for(int c = 0; c < 3; ++c) {
         par_for_inner(member, is, ie, [&](const int i) {
           dA_ddd(c,a,b,i) = p*Dx(c, 2, idx, z4c.A_dd, m,a,b,k,j,i);
         });
@@ -600,7 +599,7 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage)
         rhs.Theta(m,k,j,i) = - z4c.Theta(m,k,j,i)/r(i);
         rhs.Khat(m,k,j,i) = - SQRT2 * z4c.Khat(m,k,j,i)/r(i);
       });
-      for(int a = 0; a < NDIM; ++a) {
+      for(int a = 0; a < 3; ++a) {
         par_for_inner(member, is, ie, [&](const int i) {
           rhs.Theta(m,k,j,i) -= s_u(a,i) * dTheta_d(a,i);
           rhs.Khat(m,k,j,i) -= SQRT2 * s_u(a,i) * dKhat_d(a,i);
@@ -610,11 +609,11 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage)
       // -----------------------------------------------------------------------------------
       // Boundary RHS for the Gamma's
       //
-      for(int a = 0; a < NDIM; ++a) {
+      for(int a = 0; a < 3; ++a) {
         par_for_inner(member, is, ie, [&](const int i) {
           rhs.Gam_u(m,a,k,j,i) = - z4c.Gam_u(m,a,k,j,i)/r(i);
         });
-        for(int b = 0; b < NDIM; ++b) {
+        for(int b = 0; b < 3; ++b) {
           par_for_inner(member, is, ie, [&](const int i) {
             rhs.Gam_u(m,a,k,j,i) -= s_u(b,i) * dGam_du(b,a,i);
           });
@@ -624,12 +623,12 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage)
       // -----------------------------------------------------------------------------------
       // Boundary RHS for the A_ab
       //
-      for(int a = 0; a < NDIM; ++a)
-      for(int b = a; b < NDIM; ++b) {
+      for(int a = 0; a < 3; ++a)
+      for(int b = a; b < 3; ++b) {
         par_for_inner(member, is, ie, [&](const int i) {
           rhs.A_dd(m,a,b,k,j,i) = - z4c.A_dd(m,a,b,k,j,i)/r(i);
         });
-        for(int c = 0; c < NDIM; ++c) {
+        for(int c = 0; c < 3; ++c) {
           par_for_inner(member, is, ie, [&](const int i) {
             rhs.A_dd(m,a,b,k,j,i) -= s_u(c,i) * dA_ddd(c,a,b,i);
           });
@@ -648,11 +647,11 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage)
 // \brief apply Sommerfeld BCs to the given set of points
 //
 KOKKOS_FUNCTION
-void Z4c::Z4cSommerfeld(int const m, 
+void Z4c::Z4cSommerfeld(int const m,
 		        int const is, int const ie,
                         int const ks, int const k,
                         int const js, int const j,
-			int const parity, 
+			int const parity,
                         int const scr_size,
                         int const scr_level,
                         TeamMember_t member)
@@ -664,10 +663,9 @@ void Z4c::Z4cSommerfeld(int const m,
   //
   //int ncells1 = indcs.nx1;
   //int nmb = pmy_pack->nmb_thispack;
- 
+
   //auto &z4c = pmy_pack->pz4c->z4c;
   //auto &rhs = pmy_pack->pz4c->rhs;
-  //int &NDIM = pmy_pack->pz4c->NDIM;
   //int scr_level = 1;
   //int der_ord = 1;
   //// 2 1D scratch array and 1 2D scratch array
@@ -676,7 +674,7 @@ void Z4c::Z4cSommerfeld(int const m,
   //                + ScrArray2D<Real>::shmem_size(9,ncells1)  // 2D tensor with no symm
   //                + ScrArray2D<Real>::shmem_size(18,ncells1); // 3D tensor with symm
   //par_for_outer("Sommerfeld loop",DevExeSpace(),scr_size,scr_level,ks,ke,js,je,
-  //KOKKOS_LAMBDA(TeamMember_t member, const int k, const int j) {  
+  //KOKKOS_LAMBDA(TeamMember_t member, const int k, const int j) {
     Real idx[] = {size.d_view(m).idx1, size.d_view(m).idx2, size.d_view(m).idx3};
     Real &x1min = size.d_view(m).x1min;
     Real &x1max = size.d_view(m).x1max;
@@ -691,48 +689,48 @@ void Z4c::Z4cSommerfeld(int const m,
     Real &x3max = size.d_view(m).x3max;
     int nx3 = indcs.nx3;
     Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
-   
+
     AthenaTensor<Real, TensorSymm::NONE, 1, 0> r;
-    
-           r.NewAthenaTensor(member, scr_level, nx1);    
+
+           r.NewAthenaScratchTensor(member, scr_level, nx1);
 
     AthenaTensor<Real, TensorSymm::NONE, 1, 1> dKhat_d;
     AthenaTensor<Real, TensorSymm::NONE, 1, 1> dTheta_d;
     AthenaTensor<Real, TensorSymm::NONE, 1, 1> s_u;
-    
-     dKhat_d.NewAthenaTensor(member, scr_level, nx1);
-    dTheta_d.NewAthenaTensor(member, scr_level, nx1);
-         s_u.NewAthenaTensor(member, scr_level, nx1);
-    
+
+     dKhat_d.NewAthenaScratchTensor(member, scr_level, nx1);
+    dTheta_d.NewAthenaScratchTensor(member, scr_level, nx1);
+         s_u.NewAthenaScratchTensor(member, scr_level, nx1);
+
     AthenaTensor<Real, TensorSymm::NONE, 1, 2> dGam_du;
-    
-    dGam_du.NewAthenaTensor(member, scr_level, nx1);
-    
+
+    dGam_du.NewAthenaScratchTensor(member, scr_level, nx1);
+
     AthenaTensor<Real, TensorSymm::SYM2, 1, 3> dA_ddd;
-    
-     dA_ddd.NewAthenaTensor(member, scr_level, nx1);
+
+     dA_ddd.NewAthenaScratchTensor(member, scr_level, nx1);
     //
     //// -----------------------------------------------------------------------------------
     //// 1st derivatives
     ////
     //// Scalars
-    //for(int a = 0; a < NDIM; ++a) {
+    //for(int a = 0; a < 3; ++a) {
     //  par_for_inner(member, is, ie, [&](const int i) {
     //    dKhat_d (a,i)  = parity*Dx(a, der_ord, idx, z4c.Khat, m, k, j, i);
     //    dTheta_d(a,i)  = parity*Dx(a, der_ord, idx, z4c.Theta, m, k, j, i);
     //  });
     //}
     //// Vectors
-    //for(int a = 0; a < NDIM; ++a)
-    //for(int b = 0; b < NDIM; ++b) {
+    //for(int a = 0; a < 3; ++a)
+    //for(int b = 0; b < 3; ++b) {
     //  par_for_inner(member, is, ie, [&](const int i) {
     //    dGam_du(b,a,i) = parity*Dx(b, der_ord, idx, z4c.Gam_u, m,a,k,j,i);
     //  });
     //}
     //// Tensors
-    //for(int a = 0; a < NDIM; ++a)
-    //for(int b = a; b < NDIM; ++b)
-    //for(int c = 0; c < NDIM; ++c) {
+    //for(int a = 0; a < 3; ++a)
+    //for(int b = a; b < 3; ++b)
+    //for(int c = 0; c < 3; ++c) {
     //  par_for_inner(member, is, ie, [&](const int i) {
     //    dA_ddd(c,a,b,i) = parity*Dx(c, der_ord, idx, z4c.A_dd, m,a,b,k,j,i);
     //  });
@@ -757,7 +755,7 @@ void Z4c::Z4cSommerfeld(int const m,
     //  rhs.Theta(m,k,j,i) = - z4c.Theta(m,k,j,i)/r(i);
     //  rhs.Khat(m,k,j,i) = - SQRT2 * z4c.Khat(m,k,j,i)/r(i);
     //});
-    //for(int a = 0; a < NDIM; ++a) {
+    //for(int a = 0; a < 3; ++a) {
     //  par_for_inner(member, is, ie, [&](const int i) {
     //    rhs.Theta(m,k,j,i) -= s_u(a,i) * dTheta_d(a,i);
     //    rhs.Khat(m,k,j,i) -= SQRT2 * s_u(a,i) * dKhat_d(a,i);
@@ -767,11 +765,11 @@ void Z4c::Z4cSommerfeld(int const m,
     //// -----------------------------------------------------------------------------------
     //// Boundary RHS for the Gamma's
     ////
-    //for(int a = 0; a < NDIM; ++a) {
+    //for(int a = 0; a < 3; ++a) {
     //  par_for_inner(member, is, ie, [&](const int i) {
     //    rhs.Gam_u(m,a,k,j,i) = - z4c.Gam_u(m,a,k,j,i)/r(i);
     //  });
-    //  for(int b = 0; b < NDIM; ++b) {
+    //  for(int b = 0; b < 3; ++b) {
     //    par_for_inner(member, is, ie, [&](const int i) {
     //      rhs.Gam_u(m,a,k,j,i) -= s_u(b,i) * dGam_du(b,a,i);
     //    });
@@ -781,12 +779,12 @@ void Z4c::Z4cSommerfeld(int const m,
     //// -----------------------------------------------------------------------------------
     //// Boundary RHS for the A_ab
     ////
-    //for(int a = 0; a < NDIM; ++a)
-    //for(int b = a; b < NDIM; ++b) {
+    //for(int a = 0; a < 3; ++a)
+    //for(int b = a; b < 3; ++b) {
     //  par_for_inner(member, is, ie, [&](const int i) {
     //    rhs.A_dd(m,a,b,k,j,i) = - z4c.A_dd(m,a,b,k,j,i)/r(i);
     //  });
-    //  for(int c = 0; c < NDIM; ++c) {
+    //  for(int c = 0; c < 3; ++c) {
     //    par_for_inner(member, is, ie, [&](const int i) {
     //      rhs.A_dd(m,a,b,k,j,i) -= s_u(c,i) * dA_ddd(c,a,b,i);
     //    });

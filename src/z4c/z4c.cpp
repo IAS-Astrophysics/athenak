@@ -55,8 +55,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   u0("u0 z4c",1,1,1,1,1),
   coarse_u0("coarse u0 z4c",1,1,1,1,1),
   u1("u1 z4c",1,1,1,1,1),
-  u_rhs("u_rhs z4c",1,1,1,1,1),
-  NDIM(3) 
+  u_rhs("u_rhs z4c",1,1,1,1,1)
   {
   // (1) read time-evolution option [already error checked in driver constructor]
   // Then initialize memory and algorithms for reconstruction and Riemann solvers
@@ -173,18 +172,17 @@ void Z4c::AlgConstr(MeshBlockPack *pmbp)
 
   auto &z4c = pmbp->pz4c->z4c;
   auto &opt = pmbp->pz4c->opt;
-  int &NDIM = pmbp->pz4c->NDIM;
   int scr_level = 0;
   size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1)*3;
   par_for_outer("Alg constr loop",DevExeSpace(),scr_size,scr_level,0,nmb-1,ksg,keg,jsg,jeg,
   KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {
-    AthenaTensor<Real, TensorSymm::NONE, 1, 0> detg;
-    AthenaTensor<Real, TensorSymm::NONE, 1, 0> oopsi4;
-    AthenaTensor<Real, TensorSymm::NONE, 1, 0> A;
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> detg;
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> oopsi4;
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> A;
     
-      detg.NewAthenaTensor(member, scr_level, ncells1);
-    oopsi4.NewAthenaTensor(member, scr_level, ncells1);
-         A.NewAthenaTensor(member, scr_level, ncells1);
+      detg.NewAthenaScratchTensor(member, scr_level, ncells1);
+    oopsi4.NewAthenaScratchTensor(member, scr_level, ncells1);
+         A.NewAthenaScratchTensor(member, scr_level, ncells1);
     par_for_inner(member, isg, ieg, [&](const int i) {
       detg(i) = SpatialDet(z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i), z4c.g_dd(m,0,2,k,j,i),
                            z4c.g_dd(m,1,1,k,j,i), z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i));
@@ -193,8 +191,8 @@ void Z4c::AlgConstr(MeshBlockPack *pmbp)
       Real eps = detg(i) - 1.;
       oopsi4(i) = (eps < opt.eps_floor) ? (1. - opt.eps_floor/3.) : (std::pow(1./detg(i), 1./3.));
     });
-    for(int a = 0; a < NDIM; ++a)
-    for(int b = a; b < NDIM; ++b) {
+    for(int a = 0; a < 3; ++a)
+    for(int b = a; b < 3; ++b) {
       par_for_inner(member, isg, ieg, [&](const int i) {
         z4c.g_dd(m,a,b,k,j,i) *= oopsi4(i);
       });
@@ -209,8 +207,8 @@ void Z4c::AlgConstr(MeshBlockPack *pmbp)
                    z4c.A_dd(m,1,1,k,j,i), z4c.A_dd(m,1,2,k,j,i), z4c.A_dd(m,2,2,k,j,i));
     });
     // enforce trace of A to be zero
-    for(int a = 0; a < NDIM; ++a)
-    for(int b = a; b < NDIM; ++b) {
+    for(int a = 0; a < 3; ++a)
+    for(int b = a; b < 3; ++b) {
       par_for_inner(member, isg, ieg, [&](const int i) {
         z4c.A_dd(m,a,b,k,j,i) -= (1.0/3.0) * A(i) * z4c.g_dd(m,a,b,k,j,i);
       });

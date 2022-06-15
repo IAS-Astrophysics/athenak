@@ -70,7 +70,6 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
   auto &z4c = pmbp->pz4c->z4c;
   auto &adm = pmbp->padm->adm;
   auto &opt = pmbp->pz4c->opt;
-  int &NDIM = pmbp->pz4c->NDIM; 
   int scr_level = 0;
   // 2 1D scratch array and 1 2D scratch array
   Kokkos::Profiling::pushRegion("Region1");
@@ -78,14 +77,14 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
                   + ScrArray2D<Real>::shmem_size(6,ncells1);  // 2D tensor with symm
   par_for_outer("initialize z4c fields",DevExeSpace(),scr_size,scr_level,0,nmb-1,ksg,keg,jsg,jeg,
   KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {  
-    AthenaTensor<Real, TensorSymm::NONE, 1, 0> detg;
-    AthenaTensor<Real, TensorSymm::NONE, 1, 0> oopsi4;
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> detg;
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> oopsi4;
     
-      detg.NewAthenaTensor(member, scr_level, ncells1);
-    oopsi4.NewAthenaTensor(member, scr_level, ncells1);
+      detg.NewAthenaScratchTensor(member, scr_level, ncells1);
+    oopsi4.NewAthenaScratchTensor(member, scr_level, ncells1);
     
-    AthenaTensor<Real, TensorSymm::SYM2, 1, 2> Kt_dd;
-    Kt_dd.NewAthenaTensor(member, scr_level, ncells1);
+    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> Kt_dd;
+    Kt_dd.NewAthenaScratchTensor(member, scr_level, ncells1);
 
     par_for_inner(member, isg, ieg, [&](const int i) { 
       detg(i) = SpatialDet(adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i), adm.g_dd(m,0,2,k,j,i),
@@ -94,8 +93,8 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
       z4c.chi(m,k,j,i) = std::pow(detg(i), 1./12.*opt.chi_psi_power);
     });
 
-    for(int a = 0; a < NDIM; ++a)
-    for(int b = a; b < NDIM; ++b) {
+    for(int a = 0; a < 3; ++a)
+    for(int b = a; b < 3; ++b) {
       par_for_inner(member, isg, ieg, [&](const int i) { 
         z4c.g_dd(m,a,b,k,j,i) = oopsi4(i) * adm.g_dd(m,a,b,k,j,i);
         Kt_dd(a,b,i)          = oopsi4(i) * adm.K_dd(m,a,b,k,j,i);
@@ -112,8 +111,8 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
                                 Kt_dd(1,1,i), Kt_dd(1,2,i), Kt_dd(2,2,i));
     });
 
-    for(int a = 0; a < NDIM; ++a)
-    for(int b = a; b < NDIM; ++b) {
+    for(int a = 0; a < 3; ++a)
+    for(int b = a; b < 3; ++b) {
       par_for_inner(member, isg, ieg, [&](const int i) { 
         z4c.A_dd(m,a,b,k,j,i) = Kt_dd(a,b,i) - (1./3.) * z4c.Khat(m,k,j,i) * z4c.g_dd(m,a,b,k,j,i);
       });
@@ -126,9 +125,9 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
   scr_size = ScrArray1D<Real>::shmem_size(ncells1); 
   par_for_outer("invert z4c metric",DevExeSpace(),scr_size,scr_level,0,nmb-1,ksg,keg,jsg,jeg,
   KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {  
-    AthenaTensor<Real, TensorSymm::NONE, 1, 0> detg;
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> detg;
     
-      detg.NewAthenaTensor(member, scr_level, ncells1);
+      detg.NewAthenaScratchTensor(member, scr_level, ncells1);
 
     par_for_inner(member, isg, ieg, [&](const int i) { 
       detg(i) = SpatialDet(z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i), z4c.g_dd(m,0,2,k,j,i),
@@ -204,7 +203,6 @@ void Z4c::Z4cToADM(MeshBlockPack *pmbp) {
   auto &z4c = pmbp->pz4c->z4c;
   auto &adm = pmbp->padm->adm;
   auto &opt = pmbp->pz4c->opt;
-  int &NDIM = pmbp->pz4c->NDIM; 
   int scr_level = 0;
   size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1);
   par_for_outer("initialize z4c fields",DevExeSpace(),scr_size,scr_level,0,nmb-1,ksg,keg,jsg,jeg,
@@ -213,15 +211,15 @@ void Z4c::Z4cToADM(MeshBlockPack *pmbp) {
       adm.psi4(m,k,j,i) = std::pow(z4c.chi(m,k,j,i), 4./opt.chi_psi_power);
     });
     // g_ab
-    for(int a = 0; a < NDIM; ++a)
-    for(int b = a; b < NDIM; ++b) {
+    for(int a = 0; a < 3; ++a)
+    for(int b = a; b < 3; ++b) {
       par_for_inner(member, isg, ieg, [&](const int i) { 
         adm.g_dd(m,a,b,k,j,i) = adm.psi4(m,k,j,i) * z4c.g_dd(m,a,b,k,j,i);
       });
     }
     // K_ab 
-    for(int a = 0; a < NDIM; ++a) 
-    for(int b = a; b < NDIM; ++b) { 
+    for(int a = 0; a < 3; ++a) 
+    for(int b = a; b < 3; ++b) { 
       par_for_inner(member, isg, ieg, [&](const int i) { 
         adm.K_dd(m,a,b,k,j,i) = adm.psi4(m,k,j,i) * z4c.A_dd(m,a,b,k,j,i) + 
           (1./3.) * (z4c.Khat(m,k,j,i) + 2.*z4c.Theta(m,k,j,i)) * adm.g_dd(m,a,b,k,j,i); 
@@ -267,7 +265,6 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
   auto &u_con = pmbp->pz4c->u_con;
   Kokkos::deep_copy(u_con, 0.);
   auto &con = pmbp->pz4c->con;
-  int &NDIM = pmbp->pz4c->NDIM;
   int scr_level = 1;
   // 2 1D scratch array and 1 2D scratch array
   size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1)*4     // 0 tensors
@@ -277,47 +274,47 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
                   + ScrArray2D<Real>::shmem_size(36,ncells1); // 3D tensor with symm
   par_for_outer("ADM constraints loop",DevExeSpace(),scr_size,scr_level,0,nmb-1,ks,ke,js,je,
   KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {  
-    AthenaTensor<Real, TensorSymm::NONE, 1, 0> R;
-    AthenaTensor<Real, TensorSymm::NONE, 1, 0> K;
-    AthenaTensor<Real, TensorSymm::NONE, 1, 0> KK;
-    AthenaTensor<Real, TensorSymm::NONE, 1, 0> detg;
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> R;
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> K;
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> KK;
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> detg;
     
-       R.NewAthenaTensor(member, scr_level, ncells1);
-       K.NewAthenaTensor(member, scr_level, ncells1);
-      KK.NewAthenaTensor(member, scr_level, ncells1);
-    detg.NewAthenaTensor(member, scr_level, ncells1);
+       R.NewAthenaScratchTensor(member, scr_level, ncells1);
+       K.NewAthenaScratchTensor(member, scr_level, ncells1);
+      KK.NewAthenaScratchTensor(member, scr_level, ncells1);
+    detg.NewAthenaScratchTensor(member, scr_level, ncells1);
 
-    AthenaTensor<Real, TensorSymm::NONE, 1, 1> Gamma_u;
-    AthenaTensor<Real, TensorSymm::NONE, 1, 1> M_u;
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> Gamma_u;
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> M_u;
 
-    Gamma_u.NewAthenaTensor(member, scr_level, ncells1);
-        M_u.NewAthenaTensor(member, scr_level, ncells1);
+    Gamma_u.NewAthenaScratchTensor(member, scr_level, ncells1);
+        M_u.NewAthenaScratchTensor(member, scr_level, ncells1);
     
-    AthenaTensor<Real, TensorSymm::SYM2, 1, 2> g_uu;
-    AthenaTensor<Real, TensorSymm::SYM2, 1, 2> R_dd;
-    AthenaTensor<Real, TensorSymm::SYM2, 1, 2> K_ud;
+    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;
+    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> R_dd;
+    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> K_ud;
     
-    g_uu.NewAthenaTensor(member, scr_level, ncells1);
-    R_dd.NewAthenaTensor(member, scr_level, ncells1);
-    K_ud.NewAthenaTensor(member, scr_level, ncells1);
+    g_uu.NewAthenaScratchTensor(member, scr_level, ncells1);
+    R_dd.NewAthenaScratchTensor(member, scr_level, ncells1);
+    K_ud.NewAthenaScratchTensor(member, scr_level, ncells1);
     
-    AthenaTensor<Real, TensorSymm::SYM2, 1, 3> dg_ddd;
-    AthenaTensor<Real, TensorSymm::SYM2, 1, 3> dK_ddd;
-    AthenaTensor<Real, TensorSymm::SYM2, 1, 3> Gamma_ddd;
-    AthenaTensor<Real, TensorSymm::SYM2, 1, 3> Gamma_udd;
-    AthenaTensor<Real, TensorSymm::SYM2, 1, 3> DK_ddd;
-    AthenaTensor<Real, TensorSymm::SYM2, 1, 3> DK_udd;
+    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> dg_ddd;
+    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> dK_ddd;
+    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_ddd;
+    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_udd;
+    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> DK_ddd;
+    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> DK_udd;
 
-       dg_ddd.NewAthenaTensor(member, scr_level, ncells1);
-       dK_ddd.NewAthenaTensor(member, scr_level, ncells1);
-    Gamma_ddd.NewAthenaTensor(member, scr_level, ncells1);
-    Gamma_udd.NewAthenaTensor(member, scr_level, ncells1);
-       DK_ddd.NewAthenaTensor(member, scr_level, ncells1);
-       DK_udd.NewAthenaTensor(member, scr_level, ncells1);
+       dg_ddd.NewAthenaScratchTensor(member, scr_level, ncells1);
+       dK_ddd.NewAthenaScratchTensor(member, scr_level, ncells1);
+    Gamma_ddd.NewAthenaScratchTensor(member, scr_level, ncells1);
+    Gamma_udd.NewAthenaScratchTensor(member, scr_level, ncells1);
+       DK_ddd.NewAthenaScratchTensor(member, scr_level, ncells1);
+       DK_udd.NewAthenaScratchTensor(member, scr_level, ncells1);
     
-    AthenaTensor<Real, TensorSymm::SYM22, 1, 4> ddg_dddd;
+    AthenaScratchTensor<Real, TensorSymm::SYM22, 3, 4> ddg_dddd;
 
-    ddg_dddd.NewAthenaTensor(member, scr_level, ncells1);
+    ddg_dddd.NewAthenaScratchTensor(member, scr_level, ncells1);
     
     
     Real idx[] = {size.d_view(m).idx1, size.d_view(m).idx2, size.d_view(m).idx3};
@@ -326,9 +323,9 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     // derivatives
     //
     // first derivatives of g and K
-    for(int c = 0; c < NDIM; ++c)
-    for(int a = 0; a < NDIM; ++a)
-    for(int b = a; b < NDIM; ++b) {
+    for(int c = 0; c < 3; ++c)
+    for(int a = 0; a < 3; ++a)
+    for(int b = a; b < 3; ++b) {
       par_for_inner(member, is, ie, [&](const int i) {
         dg_ddd(c,a,b,i) = Dx<NGHOST>(c, idx, adm.g_dd, m,a,b,k,j,i);
         dK_ddd(c,a,b,i) = Dx<NGHOST>(c, idx, adm.K_dd, m,a,b,k,j,i);
@@ -336,10 +333,10 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     }
     
     // second derivatives of g
-    for(int a = 0; a < NDIM; ++a)
-    for(int b = a; b < NDIM; ++b)
-    for(int c = 0; c < NDIM; ++c)
-    for(int d = c; d < NDIM; ++d) {
+    for(int a = 0; a < 3; ++a)
+    for(int b = a; b < 3; ++b)
+    for(int c = 0; c < 3; ++c)
+    for(int d = c; d < 3; ++d) {
       if(a == b) {
         par_for_inner(member, is, ie, [&](const int i) {
           ddg_dddd(a,a,c,d,i) = Dxx<NGHOST>(a, idx, adm.g_dd, m,c,d,k,j,i);
@@ -369,28 +366,28 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     // -----------------------------------------------------------------------------------
     // Christoffel symbols
     //
-    for(int c = 0; c < NDIM; ++c)
-    for(int a = 0; a < NDIM; ++a)
-    for(int b = a; b < NDIM; ++b) {
+    for(int c = 0; c < 3; ++c)
+    for(int a = 0; a < 3; ++a)
+    for(int b = a; b < 3; ++b) {
       par_for_inner(member, is, ie, [&](const int i) {
         Gamma_ddd(c,a,b,i) = 0.5*(dg_ddd(a,b,c,i) + dg_ddd(b,a,c,i) - dg_ddd(c,a,b,i));
       });
     }
     
     Gamma_udd.ZeroClear();
-    for(int c = 0; c < NDIM; ++c)
-    for(int a = 0; a < NDIM; ++a)
-    for(int b = a; b < NDIM; ++b)
-    for(int d = 0; d < NDIM; ++d) {
+    for(int c = 0; c < 3; ++c)
+    for(int a = 0; a < 3; ++a)
+    for(int b = a; b < 3; ++b)
+    for(int d = 0; d < 3; ++d) {
       par_for_inner(member, is, ie, [&](const int i) {
         Gamma_udd(c,a,b,i) += g_uu(c,d,i)*Gamma_ddd(d,a,b,i);
       });
     }
 
     Gamma_u.ZeroClear();
-    for(int a = 0; a < NDIM; ++a)
-    for(int b = 0; b < NDIM; ++b)
-    for(int c = 0; c < NDIM; ++c) {
+    for(int a = 0; a < 3; ++a)
+    for(int b = 0; b < 3; ++b)
+    for(int c = 0; c < 3; ++c) {
       par_for_inner(member, is, ie, [&](const int i) {
         Gamma_u(a,i) += g_uu(b,c,i)*Gamma_udd(a,b,c,i);
       });
@@ -401,12 +398,12 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     //
     R.ZeroClear();
     R_dd.ZeroClear();
-    for(int a = 0; a < NDIM; ++a)
-    for(int b = a; b < NDIM; ++b) {
-      for(int c = 0; c < NDIM; ++c)
-      for(int d = 0; d < NDIM; ++d) {
+    for(int a = 0; a < 3; ++a)
+    for(int b = a; b < 3; ++b) {
+      for(int c = 0; c < 3; ++c)
+      for(int d = 0; d < 3; ++d) {
         // Part with the Christoffel symbols
-        for(int e = 0; e < NDIM; ++e) {
+        for(int e = 0; e < 3; ++e) {
           par_for_inner(member, is, ie, [&](const int i) {
             R_dd(a,b,i) += g_uu(c,d,i) * Gamma_udd(e,a,c,i) * Gamma_ddd(e,b,d,i);
             R_dd(a,b,i) -= g_uu(c,d,i) * Gamma_udd(e,a,b,i) * Gamma_ddd(e,c,d,i);
@@ -428,9 +425,9 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     //
     K.ZeroClear();
     K_ud.ZeroClear();
-    for(int a = 0; a < NDIM; ++a) {
-      for(int b = a; b < NDIM; ++b) {
-        for(int c = 0; c < NDIM; ++c) {
+    for(int a = 0; a < 3; ++a) {
+      for(int b = a; b < 3; ++b) {
+        for(int c = 0; c < 3; ++c) {
           par_for_inner(member, is, ie, [&](const int i) {
             K_ud(a,b,i) += g_uu(a,c,i) * adm.K_dd(m,c,b,k,j,i);
           });
@@ -442,20 +439,20 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     }
     // K^a_b K^b_a
     KK.ZeroClear();
-    for(int a = 0; a < NDIM; ++a)
-    for(int b = 0; b < NDIM; ++b) {
+    for(int a = 0; a < 3; ++a)
+    for(int b = 0; b < 3; ++b) {
       par_for_inner(member, is, ie, [&](const int i) {
         KK(i) += K_ud(a,b,i) * K_ud(b,a,i);
       });
     }
     // Covariant derivative of K
-    for(int a = 0; a < NDIM; ++a)
-    for(int b = 0; b < NDIM; ++b)
-    for(int c = b; c < NDIM; ++c) {
+    for(int a = 0; a < 3; ++a)
+    for(int b = 0; b < 3; ++b)
+    for(int c = b; c < 3; ++c) {
       par_for_inner(member, is, ie, [&](const int i) {
         DK_ddd(a,b,c,i) = dK_ddd(a,b,c,i);
       });
-      for(int d = 0; d < NDIM; ++d) {
+      for(int d = 0; d < 3; ++d) {
         par_for_inner(member, is, ie, [&](const int i) {
           DK_ddd(a,b,c,i) -= Gamma_udd(d,a,b,i) * adm.K_dd(m,d,c,k,j,i);
           DK_ddd(a,b,c,i) -= Gamma_udd(d,a,c,i) * adm.K_dd(m,b,d,k,j,i);
@@ -463,10 +460,10 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
       }
     }
     DK_udd.ZeroClear();
-    for(int a = 0; a < NDIM; ++a)
-    for(int b = 0; b < NDIM; ++b)
-    for(int c = b; c < NDIM; ++c)
-    for(int d = 0; d < NDIM; ++d) {
+    for(int a = 0; a < 3; ++a)
+    for(int b = 0; b < 3; ++b)
+    for(int c = b; c < 3; ++c)
+    for(int d = 0; d < 3; ++d) {
       par_for_inner(member, is, ie, [&](const int i) {
         DK_udd(a,b,c,i) += g_uu(a,d,i) * DK_ddd(d,b,c,i);
       });
@@ -482,10 +479,10 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     // Momentum constraint (contravariant)
     //
     M_u.ZeroClear();
-    for(int a = 0; a < NDIM; ++a)
-    for(int b = 0; b < NDIM; ++b) {
+    for(int a = 0; a < 3; ++a)
+    for(int b = 0; b < 3; ++b) {
       //M_u(a,i) -= 8*M_PI * g_uu(a,b,i) * mat.S_d(b,k,j,i);
-      for(int c = 0; c < NDIM; ++c) {
+      for(int c = 0; c < 3; ++c) {
         par_for_inner(member, is, ie, [&](const int i) {
           M_u(a,i) += g_uu(a,b,i) * DK_udd(c,b,c,i);
           M_u(a,i) -= g_uu(b,c,i) * DK_udd(a,b,c,i);
@@ -493,22 +490,22 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
       }
     }
     // Momentum constraint (covariant)
-    for(int a = 0; a < NDIM; ++a)
-    for(int b = 0; b < NDIM; ++b) {
+    for(int a = 0; a < 3; ++a)
+    for(int b = 0; b < 3; ++b) {
       par_for_inner(member, is, ie, [&](const int i) {
         con.M_d(m,a,k,j,i) += adm.g_dd(m,a,b,k,j,i) * M_u(b,i);
       });
     }
     // Momentum constraint (norm squared)
-    for(int a = 0; a < NDIM; ++a)
-    for(int b = 0; b < NDIM; ++b) {
+    for(int a = 0; a < 3; ++a)
+    for(int b = 0; b < 3; ++b) {
       par_for_inner(member, is, ie, [&](const int i) {
         con.M(m,k,j,i) += adm.g_dd(m,a,b,k,j,i) * M_u(a,i) * M_u(b,i);
       });
     }
     // Constraint violation Z (norm squared)
-    for(int a = 0; a < NDIM; ++a)
-    for(int b = 0; b < NDIM; ++b) {
+    for(int a = 0; a < 3; ++a)
+    for(int b = 0; b < 3; ++b) {
       par_for_inner(member, is, ie, [&](const int i) {
         con.Z(m,k,j,i) += 0.25*adm.g_dd(m,a,b,k,j,i)*(z4c.Gam_u(m,a,k,j,i) - Gamma_u(a,i))
                                                     *(z4c.Gam_u(m,b,k,j,i) - Gamma_u(b,i));
