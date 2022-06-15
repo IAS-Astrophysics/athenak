@@ -111,6 +111,8 @@ TaskStatus Z4c::CopyU(Driver *pdrive, int stage) {
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
   int nmb1 = pmy_pack->nmb_thispack - 1;
+  auto &u0 = pmy_pack->pz4c->u0;
+  auto &u1 = pmy_pack->pz4c->u1;
 
   // hierarchical parallel loop that updates conserved variables to intermediate step
   // using weights and fractional time step appropriate to stages of time-integrator.

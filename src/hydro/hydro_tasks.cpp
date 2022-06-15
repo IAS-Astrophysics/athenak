@@ -167,6 +167,8 @@ TaskStatus Hydro::CopyCons(Driver *pdrive, int stage) {
   int ks = indcs.ks, ke = indcs.ke;
   int nmb1 = pmy_pack->nmb_thispack - 1;
   int nvar = nhydro + nscalars;
+  auto &u0 = pmy_pack->phydro->u0;
+  auto &u1 = pmy_pack->phydro->u1;
 
   // hierarchical parallel loop that updates conserved variables to intermediate step
   // using weights and fractional time step appropriate to stages of time-integrator.
