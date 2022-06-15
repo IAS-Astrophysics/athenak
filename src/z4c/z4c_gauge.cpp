@@ -41,7 +41,6 @@ void Z4c::GaugePreCollapsedLapse(MeshBlockPack *pmbp, ParameterInput *pin) {
   int nmb = pmbp->nmb_thispack;
   auto &z4c = pmbp->pz4c->z4c;
   auto &adm = pmbp->padm->adm;
-  int &NDIM = pmbp->pz4c->NDIM;
 
   int scr_level = 0;
   size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1);
