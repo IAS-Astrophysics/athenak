@@ -22,13 +22,6 @@
 
 namespace z4c {
 
-template <typename TYPE>
-KOKKOS_INLINE_FUNCTION
-Real Dx_(int const ind, int const nghost, Real const &idx, const TYPE &quant, MeshBlockPack *pmbp)
-{
-return (-0.5*quant(ind-1)+0.5*quant(ind+1))*idx; //Multiply by inverse
-}
-
 // \!fn void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin)
 // \brief Compute Z4c variables from ADM variables
 //
@@ -50,6 +43,7 @@ return (-0.5*quant(ind-1)+0.5*quant(ind+1))*idx; //Multiply by inverse
 //
 // The Z4c variables will be set on the whole MeshBlock with the exception of
 // the Gamma's that can only be set in the interior of the MeshBlock.
+template <int NGHOST>
 void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
   // capture variables for the kernel
   auto &indcs = pmbp->pmesh->mb_indcs;
@@ -148,36 +142,38 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
   int const &I_Z4c_Gamy = pmbp->pz4c->I_Z4c_Gamy;
   int const &I_Z4c_Gamz = pmbp->pz4c->I_Z4c_Gamz;
   auto              &u0 = pmbp->pz4c->u0;
+  sub_DvceArray5D_0D g_00 = Kokkos::subview(g_uu, Kokkos::ALL, 0, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+  sub_DvceArray5D_0D g_01 = Kokkos::subview(g_uu, Kokkos::ALL, 1, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+  sub_DvceArray5D_0D g_02 = Kokkos::subview(g_uu, Kokkos::ALL, 2, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+  sub_DvceArray5D_0D g_11 = Kokkos::subview(g_uu, Kokkos::ALL, 3, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+  sub_DvceArray5D_0D g_12 = Kokkos::subview(g_uu, Kokkos::ALL, 4, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+  sub_DvceArray5D_0D g_22 = Kokkos::subview(g_uu, Kokkos::ALL, 5, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
   par_for_outer("initialize Gamma",DevExeSpace(),scr_size,scr_level,0,nmb-1,ks,ke,js,je,
   KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {  
     // Usage of Dx: pmbp->pz4c->Dx(blockn, posvar, k,j,i, dir, nghost, dx, quantity);
     Real &idx1 = size.d_view(m).idx1;
     Real &idx2 = size.d_view(m).idx2;
     Real &idx3 = size.d_view(m).idx3;
-    par_for_inner(member, is, ie, [&](const int i) { 
-      u0(m,I_Z4c_Gamx,k,j,i) = -Dx_(i, indcs.ng-1, idx1, 
-                                    Kokkos::subview(g_uu, m, 0, k, j, Kokkos::ALL), pmbp)  // d/dx g00
-                               -Dx_(j, indcs.ng, idx2, 
-                                    Kokkos::subview(g_uu, m, 1, k, Kokkos::ALL, i), pmbp)  // d/dy g01
-                               -Dx_(k, indcs.ng, idx3, 
-                                    Kokkos::subview(g_uu, m, 2, Kokkos::ALL, j, i), pmbp); // d/dz g02
-      u0(m,I_Z4c_Gamy,k,j,i) = -Dx_(i, indcs.ng-1, idx1,
-                                    Kokkos::subview(g_uu, m, 1, k, j, Kokkos::ALL), pmbp)  // d/dx g01
-                               -Dx_(j, indcs.ng-1, idx2, 
-                                    Kokkos::subview(g_uu, m, 3, k, Kokkos::ALL, i), pmbp)  // d/dy g11
-                               -Dx_(k, indcs.ng-1, idx3, 
-                                    Kokkos::subview(g_uu, m, 4, Kokkos::ALL, j, i), pmbp); // d/dz g12
-      u0(m,I_Z4c_Gamz,k,j,i) = -Dx_(i, indcs.ng-1, idx1, 
-                                    Kokkos::subview(g_uu, m, 2, k, j, Kokkos::ALL), pmbp)  // d/dx g02
-                               -Dx_(j, indcs.ng-1, idx2, 
-                                    Kokkos::subview(g_uu, m, 4, k, Kokkos::ALL, i), pmbp)  // d/dy g12
-                               -Dx_(k, indcs.ng-1, idx3, 
-                                    Kokkos::subview(g_uu, m, 5, Kokkos::ALL, j, i), pmbp); // d/dz g22
+    Real idx[] = {size.d_view(m).idx1, size.d_view(m).idx2, size.d_view(m).idx3};
+    sub_DvceArray5D_0D aux = Kokkos::subview(g_uu, Kokkos::ALL, 0, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+    par_for_inner(member, is, ie, [&](const int i) {
+      u0(m,I_Z4c_Gamx,k,j,i) = -Dx<NGHOST>(0, idx, g_00, m, k, j, i)  // d/dx g00
+                               -Dx<NGHOST>(1, idx, g_01, m, k, j, i)  // d/dy g01
+                               -Dx<NGHOST>(2, idx, g_02, m, k, j, i); // d/dz g02
+      u0(m,I_Z4c_Gamy,k,j,i) = -Dx<NGHOST>(0, idx, g_01, m, k, j, i)  // d/dx g01
+                               -Dx<NGHOST>(1, idx, g_11, m, k, j, i)  // d/dy g11
+                               -Dx<NGHOST>(2, idx, g_12, m, k, j, i); // d/dz g12
+      u0(m,I_Z4c_Gamz,k,j,i) = -Dx<NGHOST>(0, idx, g_02, m, k, j, i)  // d/dx g01
+                               -Dx<NGHOST>(1, idx, g_12, m, k, j, i)  // d/dy g11
+                               -Dx<NGHOST>(2, idx, g_22, m, k, j, i); // d/dz g12
     });
   });
   AlgConstr(pmbp);
   return;
 }
+template void Z4c::ADMToZ4c<2>(MeshBlockPack *pmbp, ParameterInput *pin);
+template void Z4c::ADMToZ4c<3>(MeshBlockPack *pmbp, ParameterInput *pin);
+template void Z4c::ADMToZ4c<4>(MeshBlockPack *pmbp, ParameterInput *pin);
 //----------------------------------------------------------------------------------------
 // \!fn void Z4c::Z4cToADM(MeshBlockPack *pmbp)
 // \brief Compute ADM Psi4, g_ij, and K_ij from Z4c variables

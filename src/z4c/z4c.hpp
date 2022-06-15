@@ -196,7 +196,7 @@ class Z4c {
   
   template <int NGHOST>
   TaskStatus CalcRHS(Driver *d, int stage);
-  
+  template <int NGHOST>
   void ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin);
   void ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin);
   void GaugePreCollapsedLapse(MeshBlockPack *pmbp, ParameterInput *pin);
