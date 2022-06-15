@@ -139,7 +139,7 @@ void SpacetimeUpperMetric(Real const alp,
   Real const det = SpatialDet(gxx, gxy, gxz, gyy, gyz, gzz);
 
   Real uxx, uxy, uxz, uyy, uyz, uzz;
-  SpatialInv(det, gxx, gxy, gxz, gyy, gyz, gzz,
+  SpatialInv(1.0/det, gxx, gxy, gxz, gyy, gyz, gzz,
              &uxx, &uxy, &uxz, &uyy, &uyz, &uzz);
   u[5]  = uxx + betax*betax*u[0];
   u[6]  = uxy + betax*betay*u[0];
