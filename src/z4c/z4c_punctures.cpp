@@ -40,7 +40,6 @@ void Z4c::ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin) {
   int ncells1 = indcs.nx1 + 2*(indcs.ng);
   int nmb = pmbp->nmb_thispack;
   Real ADM_mass = pin->GetOrAddReal("problem", "punc_ADM_mass", 1.);
-  auto &z4c = pmbp->pz4c->z4c;
   ADM::ADM_vars &adm = pmbp->padm->adm;
 
   int scr_level = 0;

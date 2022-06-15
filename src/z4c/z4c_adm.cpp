@@ -182,7 +182,6 @@ template void Z4c::ADMToZ4c<4>(MeshBlockPack *pmbp, ParameterInput *pin);
 void Z4c::Z4cToADM(MeshBlockPack *pmbp) {
   // capture variables for the kernel
   auto &indcs = pmbp->pmesh->mb_indcs;
-  auto &size = pmbp->pmb->mb_size;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
@@ -192,8 +191,6 @@ void Z4c::Z4cToADM(MeshBlockPack *pmbp) {
   int ksg = ks-indcs.ng; int keg = ke+indcs.ng;
 
   int ncells1 = indcs.nx1 + 2*(indcs.ng);
-  int ncells2 = indcs.nx2 + 2*(indcs.ng);
-  int ncells3 = indcs.nx3 + 2*(indcs.ng);
   int nmb = pmbp->nmb_thispack;
  
   auto &z4c = pmbp->pz4c->z4c;
@@ -246,18 +243,12 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
   //For GLOOPS
-  int isg = is-indcs.ng; int ieg = ie+indcs.ng;
-  int jsg = js-indcs.ng; int jeg = je+indcs.ng;
-  int ksg = ks-indcs.ng; int keg = ke+indcs.ng;
 
   int ncells1 = indcs.nx1 + 2*(indcs.ng);
-  int ncells2 = indcs.nx2 + 2*(indcs.ng);
-  int ncells3 = indcs.nx3 + 2*(indcs.ng);
   int nmb = pmbp->nmb_thispack;
  
   auto &z4c = pmbp->pz4c->z4c;
   auto &adm = pmbp->padm->adm;
-  auto &opt = pmbp->pz4c->opt;
   auto &u_con = pmbp->pz4c->u_con;
   Kokkos::deep_copy(u_con, 0.);
   auto &con = pmbp->pz4c->con;
@@ -314,7 +305,6 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     
     
     Real idx[] = {size.d_view(m).idx1, size.d_view(m).idx2, size.d_view(m).idx3};
-    int ord_der = indcs.ng;
     // -----------------------------------------------------------------------------------
     // derivatives
     //

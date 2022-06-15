@@ -156,7 +156,6 @@ void Z4c::AlgConstr(MeshBlockPack *pmbp)
 { 
   // capture variables for the kernel
   auto &indcs = pmbp->pmesh->mb_indcs;
-  auto &size = pmbp->pmb->mb_size;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
@@ -166,8 +165,6 @@ void Z4c::AlgConstr(MeshBlockPack *pmbp)
   int ksg = ks-indcs.ng; int keg = ke+indcs.ng;
 
   int ncells1 = indcs.nx1 + 2*(indcs.ng);
-  int ncells2 = indcs.nx2 + 2*(indcs.ng);
-  int ncells3 = indcs.nx3 + 2*(indcs.ng);
   int nmb = pmbp->nmb_thispack;
 
   auto &z4c = pmbp->pz4c->z4c;
