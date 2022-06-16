@@ -12,6 +12,7 @@
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
+#include "adm/adm.hpp"
 #include "mesh/mesh.hpp"
 #include "bvals/bvals.hpp"
 #include "z4c/z4c.hpp"
@@ -19,34 +20,28 @@
 namespace z4c {
 
 char const * const Z4c::Z4c_names[Z4c::N_Z4c] = {
-  "z4c.chi",
-  "z4c.gxx", "z4c.gxy", "z4c.gxz", "z4c.gyy", "z4c.gyz", "z4c.gzz",
-  "z4c.Khat",
-  "z4c.Axx", "z4c.Axy", "z4c.Axz", "z4c.Ayy", "z4c.Ayz", "z4c.Azz",
-  "z4c.Gamx", "z4c.Gamy", "z4c.Gamz",
-  "z4c.Theta",
-  "z4c.alpha",
-  "z4c.betax", "z4c.betay", "z4c.betaz",
-};
-
-char const * const Z4c::ADM_names[Z4c::N_ADM] = {
-  "adm.gxx", "adm.gxy", "adm.gxz", "adm.gyy", "adm.gyz", "adm.gzz",
-  "adm.Kxx", "adm.Kxy", "adm.Kxz", "adm.Kyy", "adm.Kyz", "adm.Kzz",
-  "adm.psi4",
+  "z4c_chi",
+  "z4c_gxx", "z4c_gxy", "z4c_gxz", "z4c_gyy", "z4c_gyz", "z4c_gzz",
+  "z4c_Khat",
+  "z4c_Axx", "z4c_Axy", "z4c_Axz", "z4c_Ayy", "z4c_Ayz", "z4c_Azz",
+  "z4c_Gamx", "z4c_Gamy", "z4c_Gamz",
+  "z4c_Theta",
+  "z4c_alpha",
+  "z4c_betax", "z4c_betay", "z4c_betaz",
 };
 
 char const * const Z4c::Constraint_names[Z4c::N_CON] = {
-  "con.C",
-  "con.H",
-  "con.M",
-  "con.Z",
-  "con.Mx", "con.My", "con.Mz",
+  "con_C",
+  "con_H",
+  "con_M",
+  "con_Z",
+  "con_Mx", "con_My", "con_Mz",
 };
 
 char const * const Z4c::Matter_names[Z4c::N_MAT] = {
-  "mat.rho",
-  "mat.Sx", "mat.Sy", "mat.Sz",
-  "mat.Sxx", "mat.Sxy", "mat.Sxz", "mat.Syy", "mat.Syz", "mat.Szz",
+  "mat_rho",
+  "mat_Sx", "mat_Sy", "mat_Sz",
+  "mat_Sxx", "mat_Sxy", "mat_Sxz", "mat_Syy", "mat_Syz", "mat_Szz",
 };
 
 //----------------------------------------------------------------------------------------
@@ -55,14 +50,12 @@ char const * const Z4c::Matter_names[Z4c::N_MAT] = {
 
 Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   pmy_pack(ppack),
-  u_adm("u_adm",1,1,1,1,1),
   u_con("u_con",1,1,1,1,1),
   u_mat("u_mat",1,1,1,1,1),
   u0("u0 z4c",1,1,1,1,1),
   coarse_u0("coarse u0 z4c",1,1,1,1,1),
   u1("u1 z4c",1,1,1,1,1),
-  u_rhs("u_rhs z4c",1,1,1,1,1),
-  NDIM(3) 
+  u_rhs("u_rhs z4c",1,1,1,1,1)
   {
   // (1) read time-evolution option [already error checked in driver constructor]
   // Then initialize memory and algorithms for reconstruction and Riemann solvers
@@ -75,18 +68,13 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
   int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
   Kokkos::Profiling::pushRegion("Tensor fields");
-  Kokkos::realloc(u_adm, nmb, (N_ADM), ncells3, ncells2, ncells1);
   Kokkos::realloc(u_con, nmb, (N_CON), ncells3, ncells2, ncells1);
   // Matter commented out
   // kokkos::realloc(u_mat, nmb, (N_MAT), ncells3, ncells2, ncells1);
   Kokkos::realloc(u0,    nmb, (N_Z4c), ncells3, ncells2, ncells1);
   Kokkos::realloc(u1,    nmb, (N_Z4c), ncells3, ncells2, ncells1);
   Kokkos::realloc(u_rhs, nmb, (N_Z4c), ncells3, ncells2, ncells1);
-  
-  adm.psi4.InitWithShallowSlice(u_adm, I_ADM_psi4);
-  adm.g_dd.InitWithShallowSlice(u_adm, I_ADM_gxx, I_ADM_gzz);
-  adm.K_dd.InitWithShallowSlice(u_adm, I_ADM_Kxx, I_ADM_Kzz);
-  
+
   con.C.InitWithShallowSlice(u_con, I_CON_C);
   con.H.InitWithShallowSlice(u_con, I_CON_H);
   con.M.InitWithShallowSlice(u_con, I_CON_M);
@@ -168,7 +156,6 @@ void Z4c::AlgConstr(MeshBlockPack *pmbp)
 { 
   // capture variables for the kernel
   auto &indcs = pmbp->pmesh->mb_indcs;
-  auto &size = pmbp->pmb->mb_size;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
@@ -178,25 +165,21 @@ void Z4c::AlgConstr(MeshBlockPack *pmbp)
   int ksg = ks-indcs.ng; int keg = ke+indcs.ng;
 
   int ncells1 = indcs.nx1 + 2*(indcs.ng);
-  int ncells2 = indcs.nx2 + 2*(indcs.ng);
-  int ncells3 = indcs.nx3 + 2*(indcs.ng);
   int nmb = pmbp->nmb_thispack;
 
   auto &z4c = pmbp->pz4c->z4c;
-  auto &adm = pmbp->pz4c->adm;
   auto &opt = pmbp->pz4c->opt;
-  int &NDIM = pmbp->pz4c->NDIM;
   int scr_level = 0;
   size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1)*3;
   par_for_outer("Alg constr loop",DevExeSpace(),scr_size,scr_level,0,nmb-1,ksg,keg,jsg,jeg,
   KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {
-    AthenaTensor<Real, TensorSymm::NONE, 1, 0> detg;
-    AthenaTensor<Real, TensorSymm::NONE, 1, 0> oopsi4;
-    AthenaTensor<Real, TensorSymm::NONE, 1, 0> A;
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> detg;
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> oopsi4;
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> A;
     
-      detg.NewAthenaTensor(member, scr_level, ncells1);
-    oopsi4.NewAthenaTensor(member, scr_level, ncells1);
-         A.NewAthenaTensor(member, scr_level, ncells1);
+      detg.NewAthenaScratchTensor(member, scr_level, ncells1);
+    oopsi4.NewAthenaScratchTensor(member, scr_level, ncells1);
+         A.NewAthenaScratchTensor(member, scr_level, ncells1);
     par_for_inner(member, isg, ieg, [&](const int i) {
       detg(i) = SpatialDet(z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i), z4c.g_dd(m,0,2,k,j,i),
                            z4c.g_dd(m,1,1,k,j,i), z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i));
@@ -205,8 +188,8 @@ void Z4c::AlgConstr(MeshBlockPack *pmbp)
       Real eps = detg(i) - 1.;
       oopsi4(i) = (eps < opt.eps_floor) ? (1. - opt.eps_floor/3.) : (std::pow(1./detg(i), 1./3.));
     });
-    for(int a = 0; a < NDIM; ++a)
-    for(int b = a; b < NDIM; ++b) {
+    for(int a = 0; a < 3; ++a)
+    for(int b = a; b < 3; ++b) {
       par_for_inner(member, isg, ieg, [&](const int i) {
         z4c.g_dd(m,a,b,k,j,i) *= oopsi4(i);
       });
@@ -221,8 +204,8 @@ void Z4c::AlgConstr(MeshBlockPack *pmbp)
                    z4c.A_dd(m,1,1,k,j,i), z4c.A_dd(m,1,2,k,j,i), z4c.A_dd(m,2,2,k,j,i));
     });
     // enforce trace of A to be zero
-    for(int a = 0; a < NDIM; ++a)
-    for(int b = a; b < NDIM; ++b) {
+    for(int a = 0; a < 3; ++a)
+    for(int b = a; b < 3; ++b) {
       par_for_inner(member, isg, ieg, [&](const int i) {
         z4c.A_dd(m,a,b,k,j,i) -= (1.0/3.0) * A(i) * z4c.g_dd(m,a,b,k,j,i);
       });

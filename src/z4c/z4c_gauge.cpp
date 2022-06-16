@@ -14,6 +14,7 @@
 // Athena++ headers
 #include "parameter_input.hpp"
 #include "athena.hpp"
+#include "adm/adm.hpp"
 #include "mesh/mesh.hpp"
 #include "z4c/z4c.hpp"
 #include "coordinates/cell_locations.hpp"
@@ -28,7 +29,6 @@ void Z4c::GaugePreCollapsedLapse(MeshBlockPack *pmbp, ParameterInput *pin) {
 
   // capture variables for the kernel
   auto &indcs = pmbp->pmesh->mb_indcs;
-  auto &size = pmbp->pmb->mb_size;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
@@ -38,10 +38,8 @@ void Z4c::GaugePreCollapsedLapse(MeshBlockPack *pmbp, ParameterInput *pin) {
   int ksg = ks-indcs.ng; int keg = ke+indcs.ng;
   int ncells1 = indcs.nx1 + 2*(indcs.ng);
   int nmb = pmbp->nmb_thispack;
-  Real ADM_mass = pin->GetOrAddReal("problem", "punc_ADM_mass", 1.);
   auto &z4c = pmbp->pz4c->z4c;
-  auto &adm = pmbp->pz4c->adm;
-  int &NDIM = pmbp->pz4c->NDIM;
+  auto &adm = pmbp->padm->adm;
 
   int scr_level = 0;
   size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1);

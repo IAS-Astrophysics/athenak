@@ -10,6 +10,7 @@
 //  \brief definitions for Z4c class
 
 #include "athena.hpp"
+#include "utils/finite_diff.hpp"
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
 #include "bvals/bvals.hpp"
@@ -62,7 +63,7 @@ class Z4c {
   Z4c(MeshBlockPack *ppack, ParameterInput *pin);
   ~Z4c();
 
-    // Indexes of evolved variables
+  // Indices of evolved variables
   enum {
     I_Z4c_chi,
     I_Z4c_gxx, I_Z4c_gxy, I_Z4c_gxz, I_Z4c_gyy, I_Z4c_gyz, I_Z4c_gzz,
@@ -76,16 +77,7 @@ class Z4c {
   };
   // Names of Z4c variables
   static char const * const Z4c_names[N_Z4c];
-  // Indexes of ADM variables
-  enum {
-    I_ADM_gxx, I_ADM_gxy, I_ADM_gxz, I_ADM_gyy, I_ADM_gyz, I_ADM_gzz,
-    I_ADM_Kxx, I_ADM_Kxy, I_ADM_Kxz, I_ADM_Kyy, I_ADM_Kyz, I_ADM_Kzz,
-    I_ADM_psi4,
-    N_ADM
-  };
-  // Names of ADM variables
-  static char const * const ADM_names[N_ADM];
-  // Indexes of Constraint variables
+  // Indices of Constraint variables
   enum {
     I_CON_C,
     I_CON_H,
@@ -96,7 +88,7 @@ class Z4c {
   };
   // Names of costraint variables
   static char const * const Constraint_names[N_CON];
-  // Indexes of matter fields
+  // Indices of matter fields
   enum {
     I_MAT_rho,
     I_MAT_Sx, I_MAT_Sy, I_MAT_Sz,
@@ -108,7 +100,6 @@ class Z4c {
 
   // data
   // flags to denote relativistic dynamics
-  DvceArray5D<Real> u_adm;     // adm fields
   DvceArray5D<Real> u_con;     // constraints fields
   DvceArray5D<Real> u_mat;    
   DvceArray5D<Real> u0;        // z4c solution
@@ -117,40 +108,40 @@ class Z4c {
   DvceArray5D<Real> coarse_u0; // coarse representation of z4c solution
   
   struct ADM_vars {
-    AthenaTensorField<Real, TensorSymm::NONE, 3, 0> psi4;
-    AthenaTensorField<Real, TensorSymm::SYM2, 3, 2> g_dd;
-    AthenaTensorField<Real, TensorSymm::SYM2, 3, 2> K_dd;
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> psi4;
+    AthenaTensor<Real, TensorSymm::SYM2, 3, 2> g_dd;
+    AthenaTensor<Real, TensorSymm::SYM2, 3, 2> K_dd;
   }; 
   ADM_vars adm;
   
   struct Z4c_vars {
-    AthenaTensorField<Real, TensorSymm::NONE, 3, 0> chi;       // conf. factor
-    AthenaTensorField<Real, TensorSymm::NONE, 3, 0> Khat;      // trace extr. curvature
-    AthenaTensorField<Real, TensorSymm::NONE, 3, 0> Theta;     // Theta var in Z4c
-    AthenaTensorField<Real, TensorSymm::NONE, 3, 0> alpha;     // lapse
-    AthenaTensorField<Real, TensorSymm::NONE, 3, 1> Gam_u;     // Gamma functions (BSSN)
-    AthenaTensorField<Real, TensorSymm::NONE, 3, 1> beta_u;    // shift
-    AthenaTensorField<Real, TensorSymm::SYM2, 3, 2> g_dd;      // conf. 3-metric
-    AthenaTensorField<Real, TensorSymm::SYM2, 3, 2> A_dd;      // conf. traceless extr. curvature
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> chi;       // conf. factor
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> Khat;      // trace extr. curvature
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> Theta;     // Theta var in Z4c
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> alpha;     // lapse
+    AthenaTensor<Real, TensorSymm::NONE, 3, 1> Gam_u;     // Gamma functions (BSSN)
+    AthenaTensor<Real, TensorSymm::NONE, 3, 1> beta_u;    // shift
+    AthenaTensor<Real, TensorSymm::SYM2, 3, 2> g_dd;      // conf. 3-metric
+    AthenaTensor<Real, TensorSymm::SYM2, 3, 2> A_dd;      // conf. traceless extr. curvature
   };
   Z4c_vars z4c;
   Z4c_vars rhs;
 
   // aliases for the constraints
   struct Constraint_vars {
-    AthenaTensorField<Real, TensorSymm::NONE, 3, 0> C;         // Z constraint monitor
-    AthenaTensorField<Real, TensorSymm::NONE, 3, 0> H;         // hamiltonian constraint
-    AthenaTensorField<Real, TensorSymm::NONE, 3, 0> M;         // norm squared of M_d
-    AthenaTensorField<Real, TensorSymm::NONE, 3, 0> Z;         // Z constraint violation
-    AthenaTensorField<Real, TensorSymm::NONE, 3, 1> M_d;       // momentum constraint
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> C;         // Z constraint monitor
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> H;         // hamiltonian constraint
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> M;         // norm squared of M_d
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> Z;         // Z constraint violation
+    AthenaTensor<Real, TensorSymm::NONE, 3, 1> M_d;       // momentum constraint
   };
   Constraint_vars con;
 
   // aliases for the matter variables
   struct Matter_vars {
-    AthenaTensorField<Real, TensorSymm::NONE, 3, 0> rho;       // matter energy density
-    AthenaTensorField<Real, TensorSymm::NONE, 3, 1> S_d;       // matter momentum density
-    AthenaTensorField<Real, TensorSymm::SYM2, 3, 2> S_dd;      // matter stress tensor
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> rho;       // matter energy density
+    AthenaTensor<Real, TensorSymm::NONE, 3, 1> S_d;       // matter momentum density
+    AthenaTensor<Real, TensorSymm::SYM2, 3, 2> S_dd;      // matter stress tensor
   };
   Matter_vars mat;
 
@@ -175,16 +166,13 @@ class Z4c {
     Real shift_eta;
   };
   Options opt;
-  Real diss;
-  
-  // Dissipation parameter
+  Real diss;              // Dissipation parameter
  
   // Boundary communication buffers and functions for u
   BoundaryValuesCC *pbval_u;
 
   // following only used for time-evolving flow
   Real dtnew;
-  int  NDIM;
   // container to hold names of TaskIDs
   Z4cTaskIDs id;
 
@@ -196,21 +184,24 @@ class Z4c {
   TaskStatus CopyU(Driver *d, int stage);
   TaskStatus SendU(Driver *d, int stage);
   TaskStatus RecvU(Driver *d, int stage);
-  TaskStatus CalcRHS(Driver *d, int stage);
   TaskStatus ExpRKUpdate(Driver *d, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
   TaskStatus ApplyPhysicalBCs(Driver *d, int stage);
   TaskStatus EnforceAlgConstr(Driver *d, int stage);
+  
   TaskStatus Z4cToADM_(Driver *d, int stage);
   TaskStatus ADMConstraints_(Driver *d, int stage);
   TaskStatus Z4cBoundaryRHS(Driver *d, int stage);
   TaskStatus RestrictU(Driver *d, int stage);
   
-  
+  template <int NGHOST>
+  TaskStatus CalcRHS(Driver *d, int stage);
+  template <int NGHOST>
   void ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin);
   void ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin);
   void GaugePreCollapsedLapse(MeshBlockPack *pmbp, ParameterInput *pin);
   void Z4cToADM(MeshBlockPack *pmbp);
+  template <int NGHOST>
   void ADMConstraints(MeshBlockPack *pmbp);
   void AlgConstr(MeshBlockPack *pmbp);
 #if TWO_PUNCTURES
@@ -227,47 +218,6 @@ KOKKOS_FUNCTION
                      int const scr_level,
                      TeamMember_t member);
 
- 
-KOKKOS_INLINE_FUNCTION
-  Real SpatialDet(Real const gxx, Real const gxy, Real const gxz,
-                  Real const gyy, Real const gyz, Real const gzz)
-{
-  return - SQR(gxz)*gyy + 2*gxy*gxz*gyz 
-         - SQR(gyz)*gxx 
-         - SQR(gxy)*gzz +   gxx*gyy*gzz;
-}
- 
-KOKKOS_INLINE_FUNCTION
-  Real Trace(Real const detginv,
-                Real const gxx, Real const gxy, Real const gxz,
-                Real const gyy, Real const gyz, Real const gzz,
-                Real const Axx, Real const Axy, Real const Axz,
-                Real const Ayy, Real const Ayz, Real const Azz)
-{
-  return (detginv*(
-       - 2.*Ayz*gxx*gyz + Axx*gyy*gzz +  gxx*(Azz*gyy + Ayy*gzz)
-       + 2.*(gxz*(Ayz*gxy - Axz*gyy + Axy*gyz) + gxy*(Axz*gyz - Axy*gzz))
-       - Azz*SQR(gxy) - Ayy*SQR(gxz) - Axx*SQR(gyz)
-       ));
-}
-KOKKOS_INLINE_FUNCTION
-  // compute inverse of a 3x3 matrix
-  void SpatialInv(Real const detginv,
-                  Real const gxx, Real const gxy, Real const gxz,
-                  Real const gyy, Real const gyz, Real const gzz,
-                  Real * uxx, Real * uxy, Real * uxz,
-                  Real * uyy, Real * uyz, Real * uzz)
-  {
-    *uxx = (-SQR(gyz) + gyy*gzz)*detginv;
-    *uxy = (gxz*gyz  - gxy*gzz)*detginv;
-    *uyy = (-SQR(gxz) + gxx*gzz)*detginv;
-    *uxz = (-gxz*gyy + gxy*gyz)*detginv;
-    *uyz = (gxy*gxz  - gxx*gyz)*detginv;
-    *uzz = (-SQR(gxy) + gxx*gyy)*detginv;
-    return;
-  }
-
-#include "bits/derivatives.inc"
 
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Z4c
