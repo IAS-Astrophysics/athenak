@@ -9,59 +9,38 @@
 #include "athena.hpp"
 
 
-
-namespace GeodesicGrid {
-
 //----------------------------------------------------------------------------------------
 //! \class GeodesicGrid
 
 class GeodesicGrid {
  public:
-  GeodesicGrid(MeshBlockPack *ppack, ParameterInput *pin);
-  ~GeodesicGrid();
+  GeodesicGrid(MeshBlockPack *ppack, int *nlev, int *nang, bool *rotate_g);
 
   // Angular mesh parameters and functions
   int nlevel;                         // geodesic nlevel
   int nangles;                        // number of angles
   bool rotate_geo;                    // rotate geodesic mesh
-  bool angular_fluxes;                // flag to enable/disable angular fluxes
+  int nvertices;                      // number of vertices
   DualArray4D<Real> amesh_normals;    // normal components (regular faces)
   DualArray2D<Real> ameshp_normals;   // normal components (at poles)
   DualArray3D<Real> amesh_indices;    // indexing (regular faces)
   DualArray1D<Real> ameshp_indices;   // indexing (at poles)
-  
   DualArray1D<int>  num_neighbors;    // number of neighbors
   DualArray2D<int>  ind_neighbors;    // indices of neighbors
   DualArray2D<Real> arc_lengths;      // arc lengths
   DualArray1D<Real> solid_angle;      // solid angles
   DualArray2D<Real> nh_c;             // normal vector computed at face center
   DualArray3D<Real> nh_f;             // normal vector computed at face edges
-  
-  
+  DualArray2D<Real> polarcoord;       // polar coordinate for grid points
   void InitAngularMesh();
-  void SetOrthonormalTetrad();
 
   // intensity arrays
   DvceArray5D<Real> i0;         // intensities
-  DvceArray5D<Real> coarse_i0;  // intensities on 2x coarser grid (for SMR/AMR)
 
   // Boundary communication buffers and functions for i
   BoundaryValuesCC *pbval_i;
-
-  // following only used for time-evolving flow
-  DvceArray5D<Real> i1;         // intensity at intermediate step
-  DvceFaceFld5D<Real> iflx;     // spatial fluxes on zone faces
-  DvceArray5D<Real> divfa;      // angular flux divergence
-  DvceArray5D<bool> beam_mask;  // boolean mask used for beam source term
-  Real dtnew;
-
-  // reconstruction method
-  ReconstructionMethod recon_method;
-
-
 
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Hydro
 };
 
-} // namespace radiation

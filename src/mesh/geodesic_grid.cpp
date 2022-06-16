@@ -18,18 +18,13 @@
 #include "coordinates/cell_locations.hpp"
 #include "mesh/geodesic_grid.hpp"
 
-namespace GeodesicGrid {
 //----------------------------------------------------------------------------------------
 // inline functions for constructing geodesic mesh
 
-// constructor of class
-
-  GeodesicGrid::GeodesicGrid(MeshBlockPack *ppack, ParameterInput *pin) :
+// constructor of class GeodesicGrid
+  GeodesicGrid::GeodesicGrid(MeshBlockPack *ppack, int *nlev, int *nang, bool *rotate_g):
     pmy_pack(ppack),
     i0("i0",1,1,1,1,1),
-    i1("i1",1,1,1,1,1),
-    iflx("iflx",1,1,1,1,1),
-    divfa("divfa",1,1,1,1,1),
     nh_c("nh_c",1,1),
     nh_f("nh_f",1,1,1),
     arc_lengths("arclen",1,1),
@@ -39,114 +34,52 @@ namespace GeodesicGrid {
     amesh_indices("ameshind",1,1,1),
     ameshp_indices("ameshpind",1),
     num_neighbors("numneigh",1),
-    ind_neighbors("indneigh",1,1) {
-    
-  // Other rad source terms (constructor parses input file to init only srcterms needed)
+    ind_neighbors("indneigh",1,1),
+    polarcoord("polarcoord",1,1) {
 
-  // Setup angular mesh and radiation geometry data
-  nlevel = pin->GetInteger("geodesic_grid", "nlevel");
-  nangles = (nlevel > 0) ? (5*2*SQR(nlevel) + 2) : 8;
-  rotate_geo = pin->GetOrAddBoolean("geodesic_grid","rotate_geo",true);
-  angular_fluxes = pin->GetOrAddBoolean("geodesic_grid","angular_fluxes",true);
-  if (nlevel==0) angular_fluxes=false;
-  int nmb = ppack->nmb_thispack;
-  auto &indcs = pmy_pack->pmesh->mb_indcs;
-  {
-  int ncells1 = indcs.nx1 + 2*(indcs.ng);
-  int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
-  int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
-  Kokkos::realloc(amesh_normals, 5, 2+nlevel, 2+2*nlevel, 3);
-  Kokkos::realloc(ameshp_normals, 2, 3);
-  Kokkos::realloc(amesh_indices, 5, 2+nlevel, 2+2*nlevel);
-  Kokkos::realloc(ameshp_indices, 2);
-  Kokkos::realloc(num_neighbors, nangles);
-  Kokkos::realloc(ind_neighbors, nangles, 6);
-  Kokkos::realloc(solid_angle, nangles);
-  Kokkos::realloc(arc_lengths, nangles, 6);
-  Kokkos::realloc(nh_c, nangles, 4);
-  Kokkos::realloc(nh_f, nangles, 6, 4);
-  }
-  InitAngularMesh();
+    // Setup angular mesh
+    nlevel = *nlev;
+    nangles = *nang;
+    rotate_geo = *rotate_g;
 
-  // (3) read time-evolution option [already error checked in driver constructor]
-  // Then initialize memory and algorithms for reconstruction and Riemann solvers
-  std::string evolution_t = pin->GetString("time","evolution");
-
-  // allocate memory for intensities
-  {
-  int ncells1 = indcs.nx1 + 2*(indcs.ng);
-  int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
-  int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
-  Kokkos::realloc(i0,nmb,nangles,ncells3,ncells2,ncells1);
-  }
-
-  // allocate memory for conserved variables on coarse mesh
-  if (ppack->pmesh->multilevel) {
+    int nmb = ppack->nmb_thispack;
     auto &indcs = pmy_pack->pmesh->mb_indcs;
-    int nccells1 = indcs.cnx1 + 2*(indcs.ng);
-    int nccells2 = (indcs.cnx2 > 1)? (indcs.cnx2 + 2*(indcs.ng)) : 1;
-    int nccells3 = (indcs.cnx3 > 1)? (indcs.cnx3 + 2*(indcs.ng)) : 1;
-    Kokkos::realloc(coarse_i0,nmb,nangles,nccells3,nccells2,nccells1);
-  }
-
-  // allocate boundary buffers for conserved (cell-centered) variables
-  pbval_i = new BoundaryValuesCC(ppack, pin);
-  pbval_i->InitializeBuffers(nangles);
-
-  // for time-evolving problems, continue to construct methods, allocate arrays
-  if (evolution_t.compare("stationary") != 0) {
-    // select reconstruction method (default PLM)
-    {std::string xorder = pin->GetOrAddString("hydro","reconstruct","plm");
-    if (xorder.compare("dc") == 0) {
-      recon_method = ReconstructionMethod::dc;
-    } else if (xorder.compare("plm") == 0) {
-      recon_method = ReconstructionMethod::plm;
-    } else if (xorder.compare("ppm") == 0) {
-      // check that nghost > 2
-      if (indcs.ng < 3) {
-        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-          << std::endl << "PPM reconstruction requires at least 3 ghost zones, "
-          << "but <mesh>/nghost=" << indcs.ng << std::endl;
-        std::exit(EXIT_FAILURE);
-      }
-      recon_method = ReconstructionMethod::ppm;
-    } else if (xorder.compare("wenoz") == 0) {
-      // check that nghost > 2
-      if (indcs.ng < 3) {
-        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-            << std::endl << "WENOZ reconstruction requires at least 3 ghost zones, "
-            << "but <mesh>/nghost=" << indcs.ng << std::endl;
-        std::exit(EXIT_FAILURE);
-      }
-      recon_method = ReconstructionMethod::wenoz;
-    } else {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "<hydro> recon = '" << xorder << "' not implemented"
-                << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    }
-
-    // allocate second registers, fluxes, masks
+    {
     int ncells1 = indcs.nx1 + 2*(indcs.ng);
     int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
     int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
-    Kokkos::realloc(i1,      nmb,nangles,ncells3,ncells2,ncells1);
-    Kokkos::realloc(iflx.x1f,nmb,nangles,ncells3,ncells2,ncells1);
-    Kokkos::realloc(iflx.x2f,nmb,nangles,ncells3,ncells2,ncells1);
-    Kokkos::realloc(iflx.x3f,nmb,nangles,ncells3,ncells2,ncells1);
-    if (angular_fluxes) {
-      Kokkos::realloc(divfa,nmb,nangles,ncells3,ncells2,ncells1);
+    Kokkos::realloc(amesh_normals, 5, 2+nlevel, 2+2*nlevel, 3);
+    Kokkos::realloc(ameshp_normals, 2, 3);
+    Kokkos::realloc(amesh_indices, 5, 2+nlevel, 2+2*nlevel);
+    Kokkos::realloc(ameshp_indices, 2);
+    Kokkos::realloc(num_neighbors, nangles);
+    Kokkos::realloc(ind_neighbors, nangles, 6);
+    Kokkos::realloc(solid_angle, nangles);
+    Kokkos::realloc(arc_lengths, nangles, 6);
+    Kokkos::realloc(nh_c, nangles, 4);
+    Kokkos::realloc(nh_f, nangles, 6, 4);
+    Kokkos::realloc(polarcoord,nangles,2);
     }
+    GeodesicGrid::InitAngularMesh();
 
+    // allocate memory for intensities
+    {
+    int ncells1 = indcs.nx1 + 2*(indcs.ng);
+    int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
+    int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
+    Kokkos::realloc(i0,nmb,nangles,ncells3,ncells2,ncells1);
+    }
   }
-}
-
 
 KOKKOS_INLINE_FUNCTION
 void GridCartPosition(int n, int nlvl,
                       DualArray4D<Real> anorm, DualArray2D<Real> apnorm,
                       Real *x, Real *y, Real *z);
+
+KOKKOS_INLINE_FUNCTION  
+void GridPolarPosition(int n, int nlvl,
+                      DualArray4D<Real> anorm, DualArray2D<Real> apnorm,
+                      Real *theta, Real *phi);
 
 KOKKOS_INLINE_FUNCTION
 void GridCartPositionMid(int n, int nb, int nlvl,
@@ -193,7 +126,7 @@ void GreatCircleParam(Real zeta1, Real zeta2, Real psi1, Real psi2,
 
 void GeodesicGrid::InitAngularMesh() {
   // extract nlevel for angular mesh
-  int lev_ = nlevel;;
+  int lev_ = nlevel;
 
   if (lev_ > 0) {  // construct geodesic mesh
     Real sin_ang = 2.0/sqrt(5.0);
@@ -343,7 +276,7 @@ void GeodesicGrid::InitAngularMesh() {
     }
 
     // rotate geodesic mesh
-    if (rotate_geo || angular_fluxes) {
+    if (rotate_geo) {
       Real rotangles[2];
       OptimalAngles(nangles,lev_,anorm_,apnorm_,rotangles);
       RotateGrid(lev_,rotangles[0],rotangles[1],anorm_,apnorm_);
@@ -375,6 +308,16 @@ void GeodesicGrid::InitAngularMesh() {
         nh_f_.h_view(n,5,2) = (FLT_MAX);
         nh_f_.h_view(n,5,3) = (FLT_MAX);
       }
+    }
+
+    // compute polar coordinate of the mesh
+    auto polarcoord_ = polarcoord;
+    for (int n=0; n<nangles; ++n) {
+      Real theta, phi;
+      GridPolarPosition(n, lev_, anorm_, apnorm_,
+                        &theta, &phi);
+      polarcoord_.h_view(n,0) = theta;
+      polarcoord_.h_view(n,1) = phi;
     }
 
     // guarantee that arc lengths at shared faces are identical
@@ -421,7 +364,8 @@ void GeodesicGrid::InitAngularMesh() {
     nh_c_.template sync<DevExeSpace>();
     nh_f_.template modify<HostMemSpace>();
     nh_f_.template sync<DevExeSpace>();
-
+    polarcoord.template modify<HostMemSpace>();
+    polarcoord.template sync<DevExeSpace>();
   } else if (lev_==0) {  // one angle per octant mesh (only for testing)
     auto nh_c_ = nh_c;
     auto nh_f_ = nh_f;
@@ -444,11 +388,10 @@ void GeodesicGrid::InitAngularMesh() {
     nh_f_.template sync<DevExeSpace>();
     solid_angle_.template modify<HostMemSpace>();
     solid_angle_.template sync<DevExeSpace>();
-
   } else {  // invalid selection for <radiation>/nlevel
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
         << std::endl << "nlevel must be >= 0, "
-        << "but <radiation>/nlevel=" << lev_ << std::endl;
+        << "but nlev = " << lev_ << std::endl;
     std::exit(EXIT_FAILURE);
   }
 
@@ -740,4 +683,3 @@ void GreatCircleParam(Real zeta1, Real zeta2, Real psi1, Real psi2,
   return;
 }
 
-} // namespace radiation
