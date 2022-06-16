@@ -55,6 +55,7 @@ add_executable(
         mesh/meshblock_pack.cpp
         mesh/meshblock_tree.cpp
         mesh/mesh_refinement.cpp
+        mesh/geodesic_grid.cpp
 
         mhd/mhd.cpp
         mhd/mhd_corner_e.cpp
