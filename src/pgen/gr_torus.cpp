@@ -123,8 +123,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   torus.r_edge = pin->GetReal("problem", "r_edge");
   torus.r_peak = pin->GetReal("problem", "r_peak");
 
-  torus.b_norm = pin->GetReal("problem", "b_norm");
-
   // local parameters
   Real pert_amp = pin->GetOrAddReal("problem", "pert_amp", 0.0);
 
@@ -323,6 +321,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   if (pmbp->pmhd != nullptr) {
     // parse some more parameters from input
+    torus.b_norm = pin->GetReal("problem", "b_norm");
     torus.potential_cutoff = pin->GetReal("problem", "potential_cutoff");
     torus.potential_r_pow = pin->GetReal("problem", "potential_r_pow");
     torus.potential_rho_pow = pin->GetReal("problem", "potential_rho_pow");

@@ -107,7 +107,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
     ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, glower, gupper);
 
     HydPrim1D w;
-    bool dfloor_used=false, efloor_used=false;
+    bool dfloor_used=false, efloor_used=false, c2p_fail=false;
     int iter_used=0;
 
     // Only execute cons2prim if outside excised region
@@ -140,9 +140,6 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
 
       // This is only true if sqrt{-g}=1!
       u_sr.e *= (-1./gupper[0][0]);  // Multiply by alpha^2
-
-      // Subtract density for consistency with the rest of the algorithm
-      u_sr.e -= u_sr.d;
 
       // Need to treat the conserved momenta. Also they lack an alpha
       // This is only true if sqrt{-g}=1!
@@ -185,19 +182,46 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
                          glower[2][3]*u_sr.by*u_sr.bz);
       Real rpar = (u_sr.bx*m1l +  u_sr.by*m2l +  u_sr.bz*m3l)/u_sr.d;
 
+      // apply density floor, without changing momentum or energy
+      if (u_sr.d < eos.dfloor) {
+        u_sr.d = eos.dfloor;
+        dfloor_used = true;
+      }
+
+      // apply energy floor
+      if (u_sr.e < (eos.dfloor + eos.pfloor/gm1 + 0.5*b2)) {
+        u_sr.e = eos.dfloor + eos.pfloor/gm1 + 0.5*b2;
+        efloor_used = true;
+      }
+
+      // Subtract density for consistency with the rest of the algorithm
+      u_sr.e -= u_sr.d;
+
       // call c2p function
-      SingleC2P_IdealSRMHD(u_sr, eos, s2, b2, rpar, w, dfloor_used,efloor_used,iter_used);
+      if (!(only_testfloors) || !(dfloor_used || efloor_used)) {
+        SingleC2P_IdealSRMHD(u_sr, eos, s2, b2, rpar, w, c2p_fail, iter_used);
+      } else {
+        fofc_(m,k,j,i) = true;
+        sumd++;  // use dfloor as counter for when FOFC is triggered
+      }
     }
 
     // set FOFC flag and quit loop if this function called only to check floors
     if (only_testfloors) {
-      if (dfloor_used || efloor_used) {
+      if (c2p_fail) {
         fofc_(m,k,j,i) = true;
         sumd++;  // use dfloor as counter for when either is true
       }
     } else {
       if (dfloor_used) {sumd++;}
       if (efloor_used) {sume++;}
+      if (c2p_fail) {
+        w.d = eos.dfloor;
+        w.vx = 0.0;
+        w.vy = 0.0;
+        w.vz = 0.0;
+        w.e = eos.pfloor/gm1;
+      }
       max_it = (iter_used > max_it) ? iter_used : max_it;
       // store primitive state in 3D array
       prim(m,IDN,k,j,i) = w.d;
@@ -212,7 +236,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       bcc(m,IBZ,k,j,i) = u.bz;
 
       // reset conserved variables if floor is hit
-      if ((dfloor_used || efloor_used) || excised) {
+      if ((dfloor_used || efloor_used) || c2p_fail || excised) {
         MHDPrim1D w_in;
         w_in.d  = w.d;
         w_in.vx = w.vx;
