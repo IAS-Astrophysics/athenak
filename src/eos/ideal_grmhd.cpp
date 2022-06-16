@@ -210,7 +210,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
     if (only_testfloors) {
       if (c2p_fail) {
         fofc_(m,k,j,i) = true;
-        sumd++;  // use dfloor as counter for when either is true
+        sumd++;  // use dfloor as counter for when FOFC is triggered
       }
     } else {
       if (dfloor_used) {sumd++;}
@@ -235,7 +235,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       bcc(m,IBY,k,j,i) = u.by;
       bcc(m,IBZ,k,j,i) = u.bz;
 
-      // reset conserved variables if floor is hit
+      // reset conserved variables if floor is hit, C2P fails, or if horizon excised
       if ((dfloor_used || efloor_used) || c2p_fail || excised) {
         MHDPrim1D w_in;
         w_in.d  = w.d;

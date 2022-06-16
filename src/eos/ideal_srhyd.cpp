@@ -115,7 +115,7 @@ void IdealSRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
     if (only_testfloors) {
       if (c2p_fail) {
         fofc_(m,k,j,i) = true;
-        sumd++;  // use dfloor as counter for when either is true
+        sumd++;  // use dfloor as counter for when FOFC is triggered
       }
     } else {
       if (dfloor_used) {sumd++;}
