@@ -139,7 +139,9 @@ struct EOS_Data {
     if (dis < 0.0 && dis > discriminant_tol) {
       dis = 0.0;
     }
-    Real dis_sqrt = sqrt(dis);
+    // TODO(@pdmullen): fmax(dis, 0.0) prevents NaNs (see Issue #7), but this should be
+    // eliminated after enforcing positivity on recon L/R densities and pressures
+    Real dis_sqrt = sqrt(fmax(dis, 0.0));
     Real root_1 = (-b + dis_sqrt) / (2.0*a);
     Real root_2 = (-b - dis_sqrt) / (2.0*a);
     if (root_1 > root_2) {
