@@ -125,11 +125,28 @@ TaskStatus Hydro::ClearSend(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn  void Hydro::CopyCons
-//  \brief  copy u0 --> u1 in first stage
+//  \brief  handle RK register logic at given stage
 
 TaskStatus Hydro::CopyCons(Driver *pdrive, int stage) {
   if (stage == 1) {
     Kokkos::deep_copy(DevExeSpace(), u1, u0);
+  } else {
+    if (pdrive->integrator == "rk4") {
+      // parallel loop to update u1 with u0 at later stages, only for rk4
+      auto &indcs = pmy_pack->pmesh->mb_indcs;
+      int is = indcs.is, ie = indcs.ie;
+      int js = indcs.js, je = indcs.je;
+      int ks = indcs.ks, ke = indcs.ke;
+      int nmb1 = pmy_pack->nmb_thispack - 1;
+      int nvar = nhydro + nscalars;
+      auto &u0 = pmy_pack->phydro->u0;
+      auto &u1 = pmy_pack->phydro->u1;
+      Real &delta = pdrive->delta[stage-1];
+      par_for("rk4_copy_cons", DevExeSpace(),0, nmb1, 0, nvar-1, ks, ke, js, je, is, ie,
+      KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
+        u1(m,n,k,j,i) += delta*u0(m,n,k,j,i);
+      });
+    }
   }
   return TaskStatus::complete;
 }
