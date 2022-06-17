@@ -40,7 +40,8 @@ class Driver {
   std::string integrator;          // integrator name (rk1, rk2, rk3)
   int nimp_stages;                 // number of implicit stages (ImEx only)
   int nexp_stages;                 // number of explicit stages (both SSP-RK and ImEx)
-  Real gam0[3], gam1[3], beta[3];  // weights and fractional timestep per explicit stage
+  Real gam0[4], gam1[4], beta[4];  // weights and fractional timestep per explicit stage
+  Real delta[4];                   // weights for updating the intermediate stage (u1)
   Real a_twid[4][4], a_impl;       // matrix elements for implicit stages in ImEx
   Real cfl_limit;                  // maximum CFL number for integrator
 

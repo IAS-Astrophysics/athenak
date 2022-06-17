@@ -110,6 +110,38 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh) :
       gam0[2] = 2.0/3.0;
       gam1[2] = 1.0/3.0;
       beta[2] = 2.0/3.0;
+    } else if (integrator == "rk4") {
+      // RK4()4[2S] from Table 2 of Ketcheson (2010)
+      // Non-SSP, explicit four-stage, fourth-order RK
+      // Stability properties are similar to classical (non-SSP) RK4
+      // (but ~2x L2 principal error norm).
+      // Refer to Colella (2011) for linear stability analysis of constant coeff.
+      nimp_stages = 0;
+      nexp_stages = 4;
+
+      // Colella (2011) eq 101; 1st order flux is most severe constraint
+      cfl_limit = 1.3925;
+
+      gam0[0] = 0.0;
+      gam1[0] = 1.0;
+      beta[0] = 1.193743905974738;
+
+      gam0[1] = 0.121098479554482;
+      gam1[1] = 0.721781678111411;
+      beta[1] = 0.099279895495783;
+
+      gam0[2] = -3.843833699660025;
+      gam1[2] = 2.121209265338722;
+      beta[2] = 1.131678018054042;
+
+      gam0[3] = 0.546370891121863;
+      gam1[3] = 0.198653035682705;
+      beta[3] = 0.310665766509336;
+
+      delta[0] = 1.0;
+      delta[1] = 0.217683334308543;
+      delta[2] = 1.065841341361089;
+      delta[3] = 0.0;
     } else if (integrator == "imex2") {
       // IMEX-SSP2(3,2,2): Pareschi & Russo (2005) Table III.
       // two-stage explicit, three-stage implicit, second-order ImEx
