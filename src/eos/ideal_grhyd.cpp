@@ -95,7 +95,7 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
     ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, glower, gupper);
 
     HydPrim1D w;
-    bool dfloor_used=false, efloor_used=false, c2p_fail=false;
+    bool dfloor_used=false, efloor_used=false;
     int iter_used=0;
 
     // Only execute cons2prim if outside excised region
@@ -129,6 +129,9 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
       // This is only true if sqrt{-g}=1!
       u_sr.e *= (-1./gupper[0][0]);  // Multiply by alpha^2
 
+      // Subtract density for consistency with the rest of the algorithm
+      u_sr.e -= u_sr.d;
+
       // Need to treat the conserved momenta. Also they lack an alpha
       // This is only true if sqrt{-g}=1!
       Real m1l = u.mx*alpha;
@@ -157,46 +160,19 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
       // Compute (S^i S_i) (eqn C2)
       Real s2 = (m1l*u_sr.mx) + (m2l*u_sr.my) + (m3l*u_sr.mz);
 
-      // apply density floor, without changing momentum or energy
-      if (u_sr.d < eos.dfloor) {
-        u_sr.d = eos.dfloor;
-        dfloor_used = true;
-      }
-
-      // apply energy floor
-      if (u_sr.e < (eos.dfloor + eos.pfloor/gm1)) {
-        u_sr.e = eos.dfloor + eos.pfloor/gm1;
-        efloor_used = true;
-      }
-
-      // Subtract density for consistency with the rest of the algorithm
-      u_sr.e -= u_sr.d;
-
       // call c2p function
-      if (!(only_testfloors) || !(dfloor_used || efloor_used)) {
-        SingleC2P_IdealSRHyd(u_sr, eos, s2, w, c2p_fail, iter_used);
-      } else {
-        fofc_(m,k,j,i) = true;
-        sumd++;  // use dfloor as counter for when FOFC is triggered
-      }
+      SingleC2P_IdealSRHyd(u_sr, eos, s2, w, dfloor_used, efloor_used, iter_used);
     }
 
     // set FOFC flag and quit loop if this function called only to check floors
     if (only_testfloors) {
-      if (c2p_fail) {
+      if (dfloor_used || efloor_used) {
         fofc_(m,k,j,i) = true;
-        sumd++;  // use dfloor as counter for when FOFC is triggered
+        sumd++;  // use dfloor as counter for when either is true
       }
     } else {
       if (dfloor_used) {sumd++;}
       if (efloor_used) {sume++;}
-      if (c2p_fail) {
-        w.d = eos.dfloor;
-        w.vx = 0.0;
-        w.vy = 0.0;
-        w.vz = 0.0;
-        w.e = eos.pfloor/gm1;
-      }
       max_it = (iter_used > max_it) ? iter_used : max_it;
       // store primitive state in 3D array
       prim(m,IDN,k,j,i) = w.d;
@@ -204,8 +180,8 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
       prim(m,IVY,k,j,i) = w.vy;
       prim(m,IVZ,k,j,i) = w.vz;
       prim(m,IEN,k,j,i) = w.e;
-      // reset conserved variables if floor is hit, C2P fails, or if horizon excised
-      if ((dfloor_used || efloor_used) || c2p_fail || excised) {
+      // reset conserved variables if floor is hit or if horizon excised
+      if ((dfloor_used || efloor_used) || excised) {
         SingleP2C_IdealGRHyd(glower, gupper, w, eos.gamma, u);
         cons(m,IDN,k,j,i) = u.d;
         cons(m,IM1,k,j,i) = u.mx;

@@ -92,13 +92,25 @@ Real EquationC22(Real z, Real &u_d, Real q, Real r, EOS_Data eos) {
 
 KOKKOS_INLINE_FUNCTION
 void SingleC2P_IdealSRHyd(HydCons1D &u, const EOS_Data &eos, const Real s2, HydPrim1D &w,
-                          bool &c2p_fail, int &iter_used) {
+                          bool &dfloor_used, bool &efloor_used, int &iter_used) {
   // Parameters
   const int max_iterations = 25;
   const Real tol = 1.0e-12;
   const Real v_max = 0.9999999999995;
   const Real kmax = 2.0*v_max/(1.0 + v_max*v_max);
   const Real gm1 = eos.gamma - 1.0;
+
+  // apply density floor, without changing momentum or energy
+  if (u.d < eos.dfloor) {
+    u.d = eos.dfloor;
+    dfloor_used = true;
+  }
+
+  // apply energy floor
+  if (u.e < eos.pfloor/gm1) {
+    u.e = eos.pfloor/gm1;
+    efloor_used = true;
+  }
 
   // Recast all variables (eq C2)
   Real q = u.e/u.d;
@@ -157,7 +169,7 @@ void SingleC2P_IdealSRHyd(HydCons1D &u, const EOS_Data &eos, const Real s2, HydP
   Real epsmin = eos.pfloor/(w.d*gm1);
   if (eps <= epsmin || iter_used == max_iterations) {
     eps = epsmin;
-    c2p_fail = true;
+    efloor_used = true;
   }
 
   Real const conv = 1.0/((1.0 + eos.gamma*eps)*u.d); // (C1 and C21)

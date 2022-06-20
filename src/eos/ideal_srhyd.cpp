@@ -58,7 +58,6 @@ void IdealSRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
   int &nmb = pmy_pack->nmb_thispack;
   auto &fofc_ = pmy_pack->phydro->fofc;
   auto eos = eos_data;
-  Real gm1 = eos_data.gamma - 1.0;
 
   const int ni   = (iu - il + 1);
   const int nji  = (ju - jl + 1)*ni;
@@ -88,45 +87,19 @@ void IdealSRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
 
     // call c2p function
     HydPrim1D w;
-    bool dfloor_used=false, efloor_used=false, c2p_fail=false;
+    bool dfloor_used=false, efloor_used=false;
     int iter_used=0;
-
-    // apply density floor, without changing momentum or energy
-    if (u.d < eos.dfloor) {
-      u.d = eos.dfloor;
-      dfloor_used = true;
-    }
-
-    // apply energy floor
-    if (u.e < eos.pfloor/gm1) {
-      u.e = eos.pfloor/gm1;
-      efloor_used = true;
-    }
-
-    // call c2p function
-    if (!(only_testfloors) || !(dfloor_used || efloor_used)) {
-      SingleC2P_IdealSRHyd(u, eos, s2, w, c2p_fail, iter_used);
-    } else {
-      fofc_(m,k,j,i) = true;
-      sumd++;  // use dfloor as counter for when FOFC is triggered
-    }
+    SingleC2P_IdealSRHyd(u, eos, s2, w, dfloor_used, efloor_used, iter_used);
 
     // set FOFC flag and quit loop if this function called only to check floors
     if (only_testfloors) {
-      if (c2p_fail) {
+      if (dfloor_used || efloor_used) {
         fofc_(m,k,j,i) = true;
-        sumd++;  // use dfloor as counter for when FOFC is triggered
+        sumd++;  // use dfloor as counter for when either is true
       }
     } else {
       if (dfloor_used) {sumd++;}
       if (efloor_used) {sume++;}
-      if (c2p_fail) {
-        w.d = eos.dfloor;
-        w.vx = 0.0;
-        w.vy = 0.0;
-        w.vz = 0.0;
-        w.e = eos.pfloor/gm1;
-      }
       max_it = (iter_used > max_it) ? iter_used : max_it;
       // store primitive state in 3D array
       prim(m,IDN,k,j,i) = w.d;
@@ -134,8 +107,8 @@ void IdealSRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
       prim(m,IVY,k,j,i) = w.vy;
       prim(m,IVZ,k,j,i) = w.vz;
       prim(m,IEN,k,j,i) = w.e;
-      // reset conserved variables if floor is hit or C2P fails
-      if ((dfloor_used || efloor_used) || c2p_fail) {
+      // reset conserved variables if floor is hit
+      if (dfloor_used || efloor_used) {
         SingleP2C_IdealSRHyd(w, eos.gamma, u);
         cons(m,IDN,k,j,i) = u.d;
         cons(m,IM1,k,j,i) = u.mx;
