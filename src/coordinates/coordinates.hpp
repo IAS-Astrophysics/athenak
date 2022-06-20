@@ -51,7 +51,6 @@ class Coordinates {
   CoordData coord_data;
 
   // excision masks
-  DvceArray4D<bool> horizon_mask;     // cell-centered mask to excise horizon in GR
   DvceArray4D<bool> cc_mask;          // cell-centered mask for C2P
   DvceFaceFld4D<bool> fc_mask;        // face-centered mask to enable first-order fluxes
 
