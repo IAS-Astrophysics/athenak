@@ -128,7 +128,7 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       bcc(m,IBY,k,j,i) = u.by;
       bcc(m,IBZ,k,j,i) = u.bz;
 
-      // reset conserved variables if floor is hit or C2P fails
+      // reset conserved variables if floor is hit
       if (dfloor_used || efloor_used) {
         MHDPrim1D w_in;
         w_in.d  = w.d;

@@ -232,9 +232,9 @@ void SingleC2P_IdealSRMHD(MHDCons1D &u, const EOS_Data &eos, Real s2, Real b2, R
   w.d = u.d/lor;                                               // (34)
   Real eps = lor*(qbar - mu*rbar)+  z2/(lor + 1.0);
   Real epsmin = eos.pfloor/(w.d*gm1);
-  if (eps <= epsmin || iter == max_iterations) {
+  if (eps <= epsmin) {
     eps = epsmin;
-    c2p_fail = true;
+    efloor_used = true;
   }
 
   //NOTE: The following generalizes to ANY equation of state

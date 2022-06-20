@@ -167,7 +167,7 @@ void SingleC2P_IdealSRHyd(HydCons1D &u, const EOS_Data &eos, const Real s2, HydP
   // NOTE(@ermost): The following generalizes to ANY equation of state
   Real eps = lor*q - z*r + (z*z)/(1.0 + lor);   // (C16)
   Real epsmin = eos.pfloor/(w.d*gm1);
-  if (eps <= epsmin || iter_used == max_iterations) {
+  if (eps <= epsmin) {                      // C18
     eps = epsmin;
     efloor_used = true;
   }
