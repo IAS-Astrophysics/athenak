@@ -112,11 +112,24 @@ Real Equation44(const Real mu, const Real b2, const Real rpar, const Real r, con
 
 KOKKOS_INLINE_FUNCTION
 void SingleC2P_IdealSRMHD(MHDCons1D &u, const EOS_Data &eos, Real s2, Real b2, Real rpar,
-                          HydPrim1D &w, bool &c2p_fail, int &max_iter) {
+                          HydPrim1D &w,
+                          bool &dfloor_used, bool &efloor_used, int &max_iter) {
   // Parameters
   const int max_iterations = 25;
   const Real tol = 1.0e-12;
   const Real gm1 = eos.gamma - 1.0;
+
+  // apply density floor, without changing momentum or energy
+  if (u.d < eos.dfloor) {
+    u.d = eos.dfloor;
+    dfloor_used = true;
+  }
+
+  // apply energy floor
+  if (u.e < (eos.pfloor/gm1 + 0.5*b2)) {
+    u.e = eos.pfloor/gm1 + 0.5*b2;
+    efloor_used = true;
+  }
 
   // Recast all variables (eq 22-24)
   Real q = u.e/u.d;

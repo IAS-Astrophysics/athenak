@@ -57,7 +57,6 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
   int &nmb = pmy_pack->nmb_thispack;
   auto eos = eos_data;
   auto &fofc_ = pmy_pack->pmhd->fofc;
-  Real gm1 = eos_data.gamma - 1.0;
 
   const int ni   = (iu - il + 1);
   const int nji  = (ju - jl + 1)*ni;
@@ -103,45 +102,19 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
 
     // call c2p function
     HydPrim1D w;
-    bool dfloor_used=false, efloor_used=false, c2p_fail=false;
+    bool dfloor_used=false, efloor_used=false;
     int iter_used=0;
-
-    // apply density floor, without changing momentum or energy
-    if (u.d < eos.dfloor) {
-      u.d = eos.dfloor;
-      dfloor_used = true;
-    }
-
-    // apply energy floor
-    if (u.e < (eos.pfloor/gm1 + 0.5*b2)) {
-      u.e = eos.pfloor/gm1 + 0.5*b2;
-      efloor_used = true;
-    }
-
-    // call c2p function
-    if (!(only_testfloors) || !(dfloor_used || efloor_used)) {
-      SingleC2P_IdealSRMHD(u, eos, s2, b2, rpar, w, c2p_fail, iter_used);
-    } else {
-      fofc_(m,k,j,i) = true;
-      sumd++;  // use dfloor as counter for when FOFC is triggered
-    }
+    SingleC2P_IdealSRMHD(u, eos, s2, b2, rpar, w, dfloor_used, efloor_used, iter_used);
 
     // set FOFC flag and quit loop if this function called only to check floors
     if (only_testfloors) {
-      if (c2p_fail) {
+      if (dfloor_used || efloor_used) {
         fofc_(m,k,j,i) = true;
-        sumd++;  // use dfloor as counter for when FOFC is triggered
+        sumd++;  // use dfloor as counter for when either is true
       }
     } else {
       if (dfloor_used) {sumd++;}
       if (efloor_used) {sume++;}
-      if (c2p_fail) {
-        w.d = eos.dfloor;
-        w.vx = 0.0;
-        w.vy = 0.0;
-        w.vz = 0.0;
-        w.e = eos.pfloor/gm1;
-      }
       max_it = (iter_used > max_it) ? iter_used : max_it;
       // store primitive state in 3D array
       prim(m,IDN,k,j,i) = w.d;
@@ -156,7 +129,7 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       bcc(m,IBZ,k,j,i) = u.bz;
 
       // reset conserved variables if floor is hit or C2P fails
-      if ((dfloor_used || efloor_used) || c2p_fail) {
+      if (dfloor_used || efloor_used) {
         MHDPrim1D w_in;
         w_in.d  = w.d;
         w_in.vx = w.vx;
