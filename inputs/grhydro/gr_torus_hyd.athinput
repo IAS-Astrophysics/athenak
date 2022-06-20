@@ -72,9 +72,9 @@ tilt_angle = 0.0   # angle (degrees) at which to incline disk spin axis relative
 
 <output1>
 file_type  = hst        # History data dump
-dt         = 1.0        # time increment between outputs
+dt         = 10.0       # time increment between outputs
 
 <output2>
 file_type  = vtk        # Binary data dump
 variable   = hydro_w    # variables to be output
-dt         = 10.0       # time increment between outputs
+dt         = 100.0      # time increment between outputs

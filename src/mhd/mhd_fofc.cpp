@@ -46,6 +46,8 @@ void MHD::FOFC(Driver *pdriver, int stage) {
   int &nmhd_ = nmhd;
   auto &u0_ = u0;
   auto &u1_ = u1;
+  auto &utest_ = utest;
+  auto &bcctest_ = bcctest;
   auto &bcc0_ = bcc0;
   auto &b1_ = b1;
   auto &e3x1_ = e3x1;
@@ -71,7 +73,7 @@ void MHD::FOFC(Driver *pdriver, int stage) {
       if (three_d) {
         divf += dtodx3*(flx3(m,n,k+1,j,i) - flx3(m,n,k,j,i));
       }
-      utest(m,n,k,j,i) = gam0*u0_(m,n,k,j,i) + gam1*u1_(m,n,k,j,i) - divf;
+      utest_(m,n,k,j,i) = gam0*u0_(m,n,k,j,i) + gam1*u1_(m,n,k,j,i) - divf;
     }
 
     // Estimate updated cell-centered fields
@@ -79,25 +81,25 @@ void MHD::FOFC(Driver *pdriver, int stage) {
     Real b2old = 0.5*(b1_.x2f(m,k,j,i) + b1_.x2f(m,k,j+1,i));
     Real b3old = 0.5*(b1_.x3f(m,k,j,i) + b1_.x3f(m,k+1,j,i));
 
-    bcctest(m,IBX,k,j,i) = gam0*bcc0_(m,IBX,k,j,i) + gam1*b1old;
-    bcctest(m,IBY,k,j,i) = gam0*bcc0_(m,IBY,k,j,i) + gam1*b2old;
-    bcctest(m,IBZ,k,j,i) = gam0*bcc0_(m,IBZ,k,j,i) + gam1*b3old;
+    bcctest_(m,IBX,k,j,i) = gam0*bcc0_(m,IBX,k,j,i) + gam1*b1old;
+    bcctest_(m,IBY,k,j,i) = gam0*bcc0_(m,IBY,k,j,i) + gam1*b2old;
+    bcctest_(m,IBZ,k,j,i) = gam0*bcc0_(m,IBZ,k,j,i) + gam1*b3old;
 
-    bcctest(m,IBY,k,j,i) += dtodx1*(e3x1_(m,k,j,i+1) - e3x1_(m,k,j,i));
-    bcctest(m,IBZ,k,j,i) -= dtodx1*(e2x1_(m,k,j,i+1) - e2x1_(m,k,j,i));
+    bcctest_(m,IBY,k,j,i) += dtodx1*(e3x1_(m,k,j,i+1) - e3x1_(m,k,j,i));
+    bcctest_(m,IBZ,k,j,i) -= dtodx1*(e2x1_(m,k,j,i+1) - e2x1_(m,k,j,i));
     if (multi_d) {
-      bcctest(m,IBX,k,j,i) -= dtodx2*(e3x2_(m,k,j+1,i) - e3x2_(m,k,j,i));
-      bcctest(m,IBZ,k,j,i) += dtodx2*(e1x2_(m,k,j+1,i) - e1x2_(m,k,j,i));
+      bcctest_(m,IBX,k,j,i) -= dtodx2*(e3x2_(m,k,j+1,i) - e3x2_(m,k,j,i));
+      bcctest_(m,IBZ,k,j,i) += dtodx2*(e1x2_(m,k,j+1,i) - e1x2_(m,k,j,i));
     }
     if (three_d) {
-      bcctest(m,IBX,k,j,i) += dtodx3*(e2x3_(m,k+1,j,i) - e2x3_(m,k,j,i));
-      bcctest(m,IBY,k,j,i) -= dtodx3*(e1x3_(m,k+1,j,i) - e1x3_(m,k,j,i));
+      bcctest_(m,IBX,k,j,i) += dtodx3*(e2x3_(m,k+1,j,i) - e2x3_(m,k,j,i));
+      bcctest_(m,IBY,k,j,i) -= dtodx3*(e1x3_(m,k+1,j,i) - e1x3_(m,k,j,i));
     }
   });
 
   // Test whether conversion to primitives requires floors
   // Note b0 and w0 passed to function, but not used/changed.
-  peos->ConsToPrim(utest, b0, w0, bcctest, true, is, ie, js, je, ks, ke);
+  peos->ConsToPrim(utest_, b0, w0, bcctest_, true, is, ie, js, je, ks, ke);
 
   auto &coord = pmy_pack->pcoord->coord_data;
   bool is_sr = pmy_pack->pcoord->is_special_relativistic;
@@ -138,15 +140,15 @@ void MHD::FOFC(Driver *pdriver, int stage) {
       if (is_gr) {
         Real &x1min = size.d_view(m).x1min;
         Real &x1max = size.d_view(m).x1max;
-        Real x1v = LeftEdgeX(i-is, indcs.nx1, x1min, x1max);
+        Real x1v = LeftEdgeX(i-is, nx1, x1min, x1max);
 
         Real &x2min = size.d_view(m).x2min;
         Real &x2max = size.d_view(m).x2max;
-        Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+        Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
         Real &x3min = size.d_view(m).x3min;
         Real &x3max = size.d_view(m).x3max;
-        Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+        Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
         SingleStateLLF_GRMHD(wim1, wi, bxi, x1v, x2v, x3v, IVX, coord, eos, flux);
       } else if (is_sr) {
         SingleStateLLF_SRMHD(wim1, wi, bxi, eos, flux);
@@ -179,15 +181,15 @@ void MHD::FOFC(Driver *pdriver, int stage) {
       if (is_gr) {
         Real &x1min = size.d_view(m).x1min;
         Real &x1max = size.d_view(m).x1max;
-        Real x1v = LeftEdgeX(i+1-is, indcs.nx1, x1min, x1max);
+        Real x1v = LeftEdgeX(i+1-is, nx1, x1min, x1max);
 
         Real &x2min = size.d_view(m).x2min;
         Real &x2max = size.d_view(m).x2max;
-        Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+        Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
         Real &x3min = size.d_view(m).x3min;
         Real &x3max = size.d_view(m).x3max;
-        Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+        Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
         SingleStateLLF_GRMHD(wi, wip1, bxi, x1v, x2v, x3v, IVX, coord, eos, flux);
       } else if (is_sr) {
         SingleStateLLF_SRMHD(wi, wip1, bxi, eos, flux);
@@ -231,15 +233,15 @@ void MHD::FOFC(Driver *pdriver, int stage) {
         if (is_gr) {
           Real &x1min = size.d_view(m).x1min;
           Real &x1max = size.d_view(m).x1max;
-          Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+          Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
           Real &x2min = size.d_view(m).x2min;
           Real &x2max = size.d_view(m).x2max;
-          Real x2v = LeftEdgeX(j-js, indcs.nx2, x2min, x2max);
+          Real x2v = LeftEdgeX(j-js, nx2, x2min, x2max);
 
           Real &x3min = size.d_view(m).x3min;
           Real &x3max = size.d_view(m).x3max;
-          Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+          Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
           SingleStateLLF_GRMHD(wjm1, wj, bxi, x1v, x2v, x3v, IVY, coord, eos, flux);
         } else if (is_sr) {
           SingleStateLLF_SRMHD(wjm1, wj, bxi, eos, flux);
@@ -273,15 +275,15 @@ void MHD::FOFC(Driver *pdriver, int stage) {
         if (is_gr) {
           Real &x1min = size.d_view(m).x1min;
           Real &x1max = size.d_view(m).x1max;
-          Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+          Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
           Real &x2min = size.d_view(m).x2min;
           Real &x2max = size.d_view(m).x2max;
-          Real x2v = LeftEdgeX(j+1-js, indcs.nx2, x2min, x2max);
+          Real x2v = LeftEdgeX(j+1-js, nx2, x2min, x2max);
 
           Real &x3min = size.d_view(m).x3min;
           Real &x3max = size.d_view(m).x3max;
-          Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+          Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
           SingleStateLLF_GRMHD(wj, wjp1, bxi, x1v, x2v, x3v, IVY, coord, eos, flux);
         } else if (is_sr) {
           SingleStateLLF_SRMHD(wj, wjp1, bxi, eos, flux);
@@ -326,15 +328,15 @@ void MHD::FOFC(Driver *pdriver, int stage) {
         if (is_gr) {
           Real &x1min = size.d_view(m).x1min;
           Real &x1max = size.d_view(m).x1max;
-          Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+          Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
           Real &x2min = size.d_view(m).x2min;
           Real &x2max = size.d_view(m).x2max;
-          Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+          Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
           Real &x3min = size.d_view(m).x3min;
           Real &x3max = size.d_view(m).x3max;
-          Real x3v = LeftEdgeX(k-ks, indcs.nx3, x3min, x3max);
+          Real x3v = LeftEdgeX(k-ks, nx3, x3min, x3max);
           SingleStateLLF_GRMHD(wkm1, wk, bxi, x1v, x2v, x3v, IVZ, coord, eos, flux);
         } else if (is_sr) {
           SingleStateLLF_SRMHD(wkm1, wk, bxi, eos, flux);
@@ -368,15 +370,15 @@ void MHD::FOFC(Driver *pdriver, int stage) {
         if (is_gr) {
           Real &x1min = size.d_view(m).x1min;
           Real &x1max = size.d_view(m).x1max;
-          Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+          Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
           Real &x2min = size.d_view(m).x2min;
           Real &x2max = size.d_view(m).x2max;
-          Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+          Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
           Real &x3min = size.d_view(m).x3min;
           Real &x3max = size.d_view(m).x3max;
-          Real x3v = LeftEdgeX(k+1-ks, indcs.nx3, x3min, x3max);
+          Real x3v = LeftEdgeX(k+1-ks, nx3, x3min, x3max);
           SingleStateLLF_GRMHD(wk, wkp1, bxi, x1v, x2v, x3v, IVZ, coord, eos, flux);
         } else if (is_sr) {
           SingleStateLLF_SRMHD(wk, wkp1, bxi, eos, flux);

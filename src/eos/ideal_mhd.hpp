@@ -115,7 +115,7 @@ void SingleC2P_IdealSRMHD(MHDCons1D &u, const EOS_Data &eos, Real s2, Real b2, R
                           HydPrim1D &w,
                           bool &dfloor_used, bool &efloor_used, int &max_iter) {
   // Parameters
-  const int max_iterations = 15;
+  const int max_iterations = 25;
   const Real tol = 1.0e-12;
   const Real gm1 = eos.gamma - 1.0;
 

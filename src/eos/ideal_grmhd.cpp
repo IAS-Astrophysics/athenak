@@ -50,7 +50,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
   auto &flat = pmy_pack->pcoord->coord_data.is_minkowski;
   auto &spin = pmy_pack->pcoord->coord_data.bh_spin;
   auto &use_excise = pmy_pack->pcoord->coord_data.bh_excise;
-  auto &horizon_mask_ = pmy_pack->pcoord->horizon_mask;
+  auto &horizon_mask_ = pmy_pack->pcoord->cc_mask;
   auto &dexcise_ = pmy_pack->pcoord->coord_data.dexcise;
   auto &pexcise_ = pmy_pack->pcoord->coord_data.pexcise;
 
@@ -123,7 +123,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       }
     }
 
-    if (not excised) {
+    if (!(excised)) {
       // calculate SR conserved quantities
       MHDCons1D u_sr;
 
@@ -198,7 +198,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
     } else {
       if (dfloor_used) {sumd++;}
       if (efloor_used) {sume++;}
-      max_it = fmax(max_it, iter_used);
+      max_it = (iter_used > max_it) ? iter_used : max_it;
       // store primitive state in 3D array
       prim(m,IDN,k,j,i) = w.d;
       prim(m,IVX,k,j,i) = w.vx;
@@ -211,8 +211,8 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       bcc(m,IBY,k,j,i) = u.by;
       bcc(m,IBZ,k,j,i) = u.bz;
 
-      // reset conserved variables if floor is hit
-      if (dfloor_used || efloor_used) {
+      // reset conserved variables if floor is hit or if horizon excised
+      if ((dfloor_used || efloor_used) || excised) {
         MHDPrim1D w_in;
         w_in.d  = w.d;
         w_in.vx = w.vx;

@@ -50,7 +50,8 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
 
   auto &flat = pmy_pack->pcoord->coord_data.is_minkowski;
   auto &spin = pmy_pack->pcoord->coord_data.bh_spin;
-  auto &horizon_mask_ = pmy_pack->pcoord->horizon_mask;
+  auto &use_excise = pmy_pack->pcoord->coord_data.bh_excise;
+  auto &horizon_mask_ = pmy_pack->pcoord->cc_mask;
   auto &dexcise_ = pmy_pack->pcoord->coord_data.dexcise;
   auto &pexcise_ = pmy_pack->pcoord->coord_data.pexcise;
 
@@ -98,13 +99,19 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
     int iter_used=0;
 
     // Only execute cons2prim if outside excised region
-    if (horizon_mask_(m,k,j,i)) {
+    bool excised = false;
+    if (use_excise) {
+      if (horizon_mask_(m,k,j,i)) {
         w.d = dexcise_;
         w.vx = 0.0;
         w.vy = 0.0;
         w.vz = 0.0;
         w.e = pexcise_/gm1;
-    } else {
+        excised = true;
+      }
+    }
+
+    if (!(excised)) {
       // calculate SR conserved quantities
       HydCons1D u_sr;
 
@@ -166,15 +173,15 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
     } else {
       if (dfloor_used) {sumd++;}
       if (efloor_used) {sume++;}
-      max_it = fmax(max_it, iter_used);
+      max_it = (iter_used > max_it) ? iter_used : max_it;
       // store primitive state in 3D array
       prim(m,IDN,k,j,i) = w.d;
       prim(m,IVX,k,j,i) = w.vx;
       prim(m,IVY,k,j,i) = w.vy;
       prim(m,IVZ,k,j,i) = w.vz;
       prim(m,IEN,k,j,i) = w.e;
-      // reset conserved variables if floor is hit
-      if (dfloor_used || efloor_used) {
+      // reset conserved variables if floor is hit or if horizon excised
+      if ((dfloor_used || efloor_used) || excised) {
         SingleP2C_IdealGRHyd(glower, gupper, w, eos.gamma, u);
         cons(m,IDN,k,j,i) = u.d;
         cons(m,IM1,k,j,i) = u.mx;

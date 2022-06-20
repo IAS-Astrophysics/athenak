@@ -15,21 +15,19 @@
 #include "mesh/mesh.hpp"
 #include "mhd.hpp"
 #include "eos/eos.hpp"
-// include inlined reconstruction methods (yuck...)
-#include "reconstruct/dc.hpp"           // NOLINT(build/include)
-#include "reconstruct/plm.hpp"          // NOLINT(build/include)
-#include "reconstruct/ppm.hpp"          // NOLINT(build/include)
-#include "reconstruct/wenoz.hpp"        // NOLINT(build/include)
-// include inlined Riemann solvers (double yuck...)
-#include "mhd/rsolvers/advect_mhd.hpp"  // NOLINT(build/include)
-#include "mhd/rsolvers/llf_mhd.hpp"     // NOLINT(build/include)
-#include "mhd/rsolvers/hlle_mhd.hpp"    // NOLINT(build/include)
-#include "mhd/rsolvers/hlld_mhd.hpp"    // NOLINT(build/include)
-#include "mhd/rsolvers/llf_srmhd.hpp"   // NOLINT(build/include)
-#include "mhd/rsolvers/hlle_srmhd.hpp"  // NOLINT(build/include)
-#include "mhd/rsolvers/llf_grmhd.hpp"   // NOLINT(build/include)
-#include "mhd/rsolvers/hlle_grmhd.hpp"  // NOLINT(build/include)
-// #include "mhd/rsolvers/roe_mhd.hpp"     // NOLINT(build/include)
+#include "reconstruct/dc.hpp"
+#include "reconstruct/plm.hpp"
+#include "reconstruct/ppm.hpp"
+#include "reconstruct/wenoz.hpp"
+#include "mhd/rsolvers/advect_mhd.hpp"
+#include "mhd/rsolvers/llf_mhd.hpp"
+#include "mhd/rsolvers/hlle_mhd.hpp"
+#include "mhd/rsolvers/hlld_mhd.hpp"
+#include "mhd/rsolvers/llf_srmhd.hpp"
+#include "mhd/rsolvers/hlle_srmhd.hpp"
+#include "mhd/rsolvers/llf_grmhd.hpp"
+#include "mhd/rsolvers/hlle_grmhd.hpp"
+// #include "mhd/rsolvers/roe_mhd.hpp"
 
 namespace mhd {
 //----------------------------------------------------------------------------------------
@@ -437,18 +435,18 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
           if (fc_mask_.x2f(m,k,j,i)) {
             MHDPrim1D wjm1;
             wjm1.d  = w0_(m,IDN,k,j-1,i);
-            wjm1.vx = w0_(m,IVX,k,j-1,i);
-            wjm1.vy = w0_(m,IVY,k,j-1,i);
-            wjm1.vz = w0_(m,IVZ,k,j-1,i);
+            wjm1.vx = w0_(m,IVY,k,j-1,i);
+            wjm1.vy = w0_(m,IVZ,k,j-1,i);
+            wjm1.vz = w0_(m,IVX,k,j-1,i);
             wjm1.e  = w0_(m,IEN,k,j-1,i);
             wjm1.by = bcc(m,IBZ,k,j-1,i);
             wjm1.bz = bcc(m,IBX,k,j-1,i);
 
             MHDPrim1D wj;
             wj.d  = w0_(m,IDN,k,j,i);
-            wj.vx = w0_(m,IVX,k,j,i);
-            wj.vy = w0_(m,IVY,k,j,i);
-            wj.vz = w0_(m,IVZ,k,j,i);
+            wj.vx = w0_(m,IVY,k,j,i);
+            wj.vy = w0_(m,IVZ,k,j,i);
+            wj.vz = w0_(m,IVX,k,j,i);
             wj.e  = w0_(m,IEN,k,j,i);
             wj.by = bcc(m,IBZ,k,j,i);
             wj.bz = bcc(m,IBX,k,j,i);
@@ -458,9 +456,9 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
             SingleStateLLF_GRMHD(wjm1, wj, bxi, x1v, x2f, x3v, IVY, coord, eos, flux);
 
             fcorr_x2(m,IDN,k,j,i) = flux.d;
-            fcorr_x2(m,IM1,k,j,i) = flux.mx;
-            fcorr_x2(m,IM2,k,j,i) = flux.my;
-            fcorr_x2(m,IM3,k,j,i) = flux.mz;
+            fcorr_x2(m,IM2,k,j,i) = flux.mx;
+            fcorr_x2(m,IM3,k,j,i) = flux.my;
+            fcorr_x2(m,IM1,k,j,i) = flux.mz;
             fcorr_x2(m,IEN,k,j,i) = flux.e;
             fcorr_e12(m,k,j,i)    = flux.by;
             fcorr_e32(m,k,j,i)    = flux.bz;
@@ -471,18 +469,18 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
           if (fc_mask_.x3f(m,k,j,i)) {
             MHDPrim1D wkm1;
             wkm1.d  = w0_(m,IDN,k-1,j,i);
-            wkm1.vx = w0_(m,IVX,k-1,j,i);
-            wkm1.vy = w0_(m,IVY,k-1,j,i);
-            wkm1.vz = w0_(m,IVZ,k-1,j,i);
+            wkm1.vx = w0_(m,IVZ,k-1,j,i);
+            wkm1.vy = w0_(m,IVX,k-1,j,i);
+            wkm1.vz = w0_(m,IVY,k-1,j,i);
             wkm1.e  = w0_(m,IEN,k-1,j,i);
             wkm1.by = bcc(m,IBX,k-1,j,i);
             wkm1.bz = bcc(m,IBY,k-1,j,i);
 
             MHDPrim1D wk;
             wk.d  = w0_(m,IDN,k,j,i);
-            wk.vx = w0_(m,IVX,k,j,i);
-            wk.vy = w0_(m,IVY,k,j,i);
-            wk.vz = w0_(m,IVZ,k,j,i);
+            wk.vx = w0_(m,IVZ,k,j,i);
+            wk.vy = w0_(m,IVX,k,j,i);
+            wk.vz = w0_(m,IVY,k,j,i);
             wk.e  = w0_(m,IEN,k,j,i);
             wk.by = bcc(m,IBX,k,j,i);
             wk.bz = bcc(m,IBY,k,j,i);
@@ -492,9 +490,9 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
             SingleStateLLF_GRMHD(wkm1, wk, bxi, x1v, x2v, x3f, IVZ, coord, eos, flux);
 
             fcorr_x3(m,IDN,k,j,i) = flux.d;
-            fcorr_x3(m,IM1,k,j,i) = flux.mx;
-            fcorr_x3(m,IM2,k,j,i) = flux.my;
-            fcorr_x3(m,IM3,k,j,i) = flux.mz;
+            fcorr_x3(m,IM3,k,j,i) = flux.mx;
+            fcorr_x3(m,IM1,k,j,i) = flux.my;
+            fcorr_x3(m,IM2,k,j,i) = flux.mz;
             fcorr_x3(m,IEN,k,j,i) = flux.e;
             fcorr_e23(m,k,j,i)    = flux.by;
             fcorr_e13(m,k,j,i)    = flux.bz;
