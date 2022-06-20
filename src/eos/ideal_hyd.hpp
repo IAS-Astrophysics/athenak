@@ -96,7 +96,7 @@ void SingleC2P_IdealSRHyd(HydCons1D &u, const EOS_Data &eos, const Real s2, HydP
   // Parameters
   const int max_iterations = 25;
   const Real tol = 1.0e-12;
-  const Real v_max = 0.999;
+  const Real v_max = 0.9999999999995;  // NOTE(@pdmullen): SQR(v_max) = 1.0 - tol;
   const Real kmax = 2.0*v_max/(1.0 + v_max*v_max);
   const Real gm1 = eos.gamma - 1.0;
 

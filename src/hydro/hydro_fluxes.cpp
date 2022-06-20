@@ -13,22 +13,20 @@
 #include "coordinates/coordinates.hpp"
 #include "hydro.hpp"
 #include "eos/eos.hpp"
-// include inlined reconstruction methods (yuck...)
-#include "reconstruct/dc.hpp"             // NOLINT(build/include)
-#include "reconstruct/plm.hpp"            // NOLINT(build/include)
-#include "reconstruct/ppm.hpp"            // NOLINT(build/include)
-#include "reconstruct/wenoz.hpp"          // NOLINT(build/include)
-// include inlined Riemann solvers (double yuck...)
-#include "hydro/rsolvers/advect_hyd.hpp"  // NOLINT(build/include)
-#include "hydro/rsolvers/llf_hyd.hpp"     // NOLINT(build/include)
-#include "hydro/rsolvers/hlle_hyd.hpp"    // NOLINT(build/include)
-#include "hydro/rsolvers/hllc_hyd.hpp"    // NOLINT(build/include)
-#include "hydro/rsolvers/roe_hyd.hpp"     // NOLINT(build/include)
-#include "hydro/rsolvers/llf_srhyd.hpp"   // NOLINT(build/include)
-#include "hydro/rsolvers/hlle_srhyd.hpp"  // NOLINT(build/include)
-#include "hydro/rsolvers/hllc_srhyd.hpp"  // NOLINT(build/include)
-#include "hydro/rsolvers/llf_grhyd.hpp"   // NOLINT(build/include)
-#include "hydro/rsolvers/hlle_grhyd.hpp"  // NOLINT(build/include)
+#include "reconstruct/dc.hpp"
+#include "reconstruct/plm.hpp"
+#include "reconstruct/ppm.hpp"
+#include "reconstruct/wenoz.hpp"
+#include "hydro/rsolvers/advect_hyd.hpp"
+#include "hydro/rsolvers/llf_hyd.hpp"
+#include "hydro/rsolvers/hlle_hyd.hpp"
+#include "hydro/rsolvers/hllc_hyd.hpp"
+#include "hydro/rsolvers/roe_hyd.hpp"
+#include "hydro/rsolvers/llf_srhyd.hpp"
+#include "hydro/rsolvers/hlle_srhyd.hpp"
+#include "hydro/rsolvers/hllc_srhyd.hpp"
+#include "hydro/rsolvers/llf_grhyd.hpp"
+#include "hydro/rsolvers/hlle_grhyd.hpp"
 
 namespace hydro {
 //----------------------------------------------------------------------------------------
@@ -346,25 +344,25 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
           if (fc_mask_.x2f(m,k,j,i)) {
             HydPrim1D wjm1;
             wjm1.d  = w0_(m,IDN,k,j-1,i);
-            wjm1.vx = w0_(m,IVX,k,j-1,i);
-            wjm1.vy = w0_(m,IVY,k,j-1,i);
-            wjm1.vz = w0_(m,IVZ,k,j-1,i);
+            wjm1.vx = w0_(m,IVY,k,j-1,i);
+            wjm1.vy = w0_(m,IVZ,k,j-1,i);
+            wjm1.vz = w0_(m,IVX,k,j-1,i);
             wjm1.e  = w0_(m,IEN,k,j-1,i);
 
             HydPrim1D wj;
             wj.d  = w0_(m,IDN,k,j,i);
-            wj.vx = w0_(m,IVX,k,j,i);
-            wj.vy = w0_(m,IVY,k,j,i);
-            wj.vz = w0_(m,IVZ,k,j,i);
+            wj.vx = w0_(m,IVY,k,j,i);
+            wj.vy = w0_(m,IVZ,k,j,i);
+            wj.vz = w0_(m,IVX,k,j,i);
             wj.e  = w0_(m,IEN,k,j,i);
 
             HydCons1D flux;
             SingleStateLLF_GRHyd(wjm1, wj, x1v, x2f, x3v, IVY, coord, eos, flux);
 
             fcorr_x2(m,IDN,k,j,i) = flux.d;
-            fcorr_x2(m,IM1,k,j,i) = flux.mx;
-            fcorr_x2(m,IM2,k,j,i) = flux.my;
-            fcorr_x2(m,IM3,k,j,i) = flux.mz;
+            fcorr_x2(m,IM2,k,j,i) = flux.mx;
+            fcorr_x2(m,IM3,k,j,i) = flux.my;
+            fcorr_x2(m,IM1,k,j,i) = flux.mz;
             fcorr_x2(m,IEN,k,j,i) = flux.e;
           }
         }
@@ -373,25 +371,25 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
           if (fc_mask_.x3f(m,k,j,i)) {
             HydPrim1D wkm1;
             wkm1.d  = w0_(m,IDN,k-1,j,i);
-            wkm1.vx = w0_(m,IVX,k-1,j,i);
-            wkm1.vy = w0_(m,IVY,k-1,j,i);
-            wkm1.vz = w0_(m,IVZ,k-1,j,i);
+            wkm1.vx = w0_(m,IVZ,k-1,j,i);
+            wkm1.vy = w0_(m,IVX,k-1,j,i);
+            wkm1.vz = w0_(m,IVY,k-1,j,i);
             wkm1.e  = w0_(m,IEN,k-1,j,i);
 
             HydPrim1D wk;
             wk.d  = w0_(m,IDN,k,j,i);
-            wk.vx = w0_(m,IVX,k,j,i);
-            wk.vy = w0_(m,IVY,k,j,i);
-            wk.vz = w0_(m,IVZ,k,j,i);
+            wk.vx = w0_(m,IVZ,k,j,i);
+            wk.vy = w0_(m,IVX,k,j,i);
+            wk.vz = w0_(m,IVY,k,j,i);
             wk.e  = w0_(m,IEN,k,j,i);
 
             HydCons1D flux;
             SingleStateLLF_GRHyd(wkm1, wk, x1v, x2v, x3f, IVZ, coord, eos, flux);
 
             fcorr_x3(m,IDN,k,j,i) = flux.d;
-            fcorr_x3(m,IM1,k,j,i) = flux.mx;
-            fcorr_x3(m,IM2,k,j,i) = flux.my;
-            fcorr_x3(m,IM3,k,j,i) = flux.mz;
+            fcorr_x3(m,IM3,k,j,i) = flux.mx;
+            fcorr_x3(m,IM1,k,j,i) = flux.my;
+            fcorr_x3(m,IM2,k,j,i) = flux.mz;
             fcorr_x3(m,IEN,k,j,i) = flux.e;
           }
         }
