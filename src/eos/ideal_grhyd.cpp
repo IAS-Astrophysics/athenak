@@ -161,6 +161,7 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
       Real s2 = (m1l*u_sr.mx) + (m2l*u_sr.my) + (m3l*u_sr.mz);
 
       // call c2p function
+      // (inline function in ideal_c2p_hyd.hpp file)
       SingleC2P_IdealSRHyd(u_sr, eos, s2, w, dfloor_used, efloor_used, iter_used);
     }
 

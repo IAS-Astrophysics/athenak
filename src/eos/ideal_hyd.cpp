@@ -62,6 +62,7 @@ void IdealHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
     u.e  = cons(m,IEN,k,j,i);
 
     // call c2p function
+    // (inline function in ideal_c2p_hyd.hpp file)
     HydPrim1D w;
     bool dfloor_used=false, efloor_used=false;
     SingleC2P_IdealHyd(u, eos, w, dfloor_used, efloor_used);
