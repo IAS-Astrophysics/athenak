@@ -80,8 +80,8 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage) {
         Real &x3max = size.d_view(m).x3max;
         Real x3v = CellCenterX(0, indcs.nx3, x3min, x3max);
 
-        Real g_[NMETRIC], gi_[NMETRIC];
-        ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, g_, gi_);
+        Real glower[4][4], gupper[4][4];
+        ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, glower, gupper);
 
         const Real &ux = w0_(m,IVX,ks,j,i);
         const Real &uy = w0_(m,IVY,ks,j,i);
@@ -89,21 +89,26 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage) {
         const Real &bx = bcc_(m,IBX,ks,j,i);
         const Real &by = bcc_(m,IBY,ks,j,i);
         const Real &bz = bcc_(m,IBZ,ks,j,i);
-        Real alpha = sqrt(-1.0/gi_[I00]);
-        Real tmp = g_[I11]*SQR(ux) + 2.0*g_[I12]*ux*uy + 2.0*g_[I13]*ux*uz
-                 + g_[I22]*SQR(uy) + 2.0*g_[I23]*uy*uz
-                 + g_[I33]*SQR(uz);
-        Real gamma = std::sqrt(1.0 + tmp);
+        // Calculate 4-velocity
+        Real tmp = glower[1][1]*ux*ux + 2.0*glower[1][2]*ux*uy + 2.0*glower[1][3]*ux*uz
+                 + glower[2][2]*uy*uy + 2.0*glower[2][3]*uy*uz
+                 + glower[3][3]*uz*uz;
+        Real alpha = sqrt(-1.0/gupper[0][0]);
+        Real gamma = sqrt(1.0 + tmp);
         Real u0 = gamma / alpha;
-        Real u1 = ux - alpha * gamma * gi_[I01];
-        Real u2 = uy - alpha * gamma * gi_[I02];
-        Real u3 = uz - alpha * gamma * gi_[I03];
-        Real b0 = bx * (g_[I01]*u0 + g_[I11]*u1 + g_[I12]*u2 + g_[I13]*u3)
-                + by * (g_[I02]*u0 + g_[I12]*u1 + g_[I22]*u2 + g_[I23]*u3)
-                + bz * (g_[I03]*u0 + g_[I13]*u1 + g_[I23]*u2 + g_[I33]*u3);
+        Real u1 = ux - alpha * gamma * gupper[0][1];
+        Real u2 = uy - alpha * gamma * gupper[0][2];
+        Real u3 = uz - alpha * gamma * gupper[0][3];
+        // lower vector indices
+        Real u_1 = glower[1][0]*u0 + glower[1][1]*u1 + glower[1][2]*u2 + glower[1][3]*u3;
+        Real u_2 = glower[2][0]*u0 + glower[2][1]*u1 + glower[2][2]*u2 + glower[2][3]*u3;
+        Real u_3 = glower[3][0]*u0 + glower[3][1]*u1 + glower[3][2]*u2 + glower[3][3]*u3;
+        // calculate 4-magnetic field
+        Real b0 = u_1*bx + u_2*by + u_3*bz;
         Real b1 = (bx + b0 * u1) / u0;
         Real b2 = (by + b0 * u2) / u0;
         Real b3 = (bz + b0 * u3) / u0;
+
         e3cc_(m,ks,j,i) = b1 * u2 - b2 * u1;
       });
 
@@ -206,8 +211,8 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage) {
         Real &x3max = size.d_view(m).x3max;
         Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
-        Real g_[NMETRIC], gi_[NMETRIC];
-        ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, g_, gi_);
+        Real glower[4][4], gupper[4][4];
+        ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, glower, gupper);
 
         const Real &ux = w0_(m,IVX,k,j,i);
         const Real &uy = w0_(m,IVY,k,j,i);
@@ -215,21 +220,26 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage) {
         const Real &bx = bcc_(m,IBX,k,j,i);
         const Real &by = bcc_(m,IBY,k,j,i);
         const Real &bz = bcc_(m,IBZ,k,j,i);
-        Real alpha = sqrt(-1.0/gi_[I00]);
-        Real tmp = g_[I11]*SQR(ux) + 2.0*g_[I12]*ux*uy + 2.0*g_[I13]*ux*uz
-                 + g_[I22]*SQR(uy) + 2.0*g_[I23]*uy*uz
-                 + g_[I33]*SQR(uz);
-        Real gamma = std::sqrt(1.0 + tmp);
+        // Calculate 4-velocity
+        Real tmp = glower[1][1]*ux*ux + 2.0*glower[1][2]*ux*uy + 2.0*glower[1][3]*ux*uz
+                 + glower[2][2]*uy*uy + 2.0*glower[2][3]*uy*uz
+                 + glower[3][3]*uz*uz;
+        Real alpha = sqrt(-1.0/gupper[0][0]);
+        Real gamma = sqrt(1.0 + tmp);
         Real u0 = gamma / alpha;
-        Real u1 = ux - alpha * gamma * gi_[I01];
-        Real u2 = uy - alpha * gamma * gi_[I02];
-        Real u3 = uz - alpha * gamma * gi_[I03];
-        Real b0 = bx * (g_[I01]*u0 + g_[I11]*u1 + g_[I12]*u2 + g_[I13]*u3)
-                + by * (g_[I02]*u0 + g_[I12]*u1 + g_[I22]*u2 + g_[I23]*u3)
-                + bz * (g_[I03]*u0 + g_[I13]*u1 + g_[I23]*u2 + g_[I33]*u3);
+        Real u1 = ux - alpha * gamma * gupper[0][1];
+        Real u2 = uy - alpha * gamma * gupper[0][2];
+        Real u3 = uz - alpha * gamma * gupper[0][3];
+        // lower vector indices
+        Real u_1 = glower[1][0]*u0 + glower[1][1]*u1 + glower[1][2]*u2 + glower[1][3]*u3;
+        Real u_2 = glower[2][0]*u0 + glower[2][1]*u1 + glower[2][2]*u2 + glower[2][3]*u3;
+        Real u_3 = glower[3][0]*u0 + glower[3][1]*u1 + glower[3][2]*u2 + glower[3][3]*u3;
+        // calculate 4-magnetic field
+        Real b0 = u_1*bx + u_2*by + u_3*bz;
         Real b1 = (bx + b0 * u1) / u0;
         Real b2 = (by + b0 * u2) / u0;
         Real b3 = (bz + b0 * u3) / u0;
+
         e1cc_(m,k,j,i) = b2 * u3 - b3 * u2;
         e2cc_(m,k,j,i) = b3 * u1 - b1 * u3;
         e3cc_(m,k,j,i) = b1 * u2 - b2 * u1;

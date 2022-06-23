@@ -30,12 +30,14 @@ EquationOfState::EquationOfState(std::string bk, MeshBlockPack* pp, ParameterInp
 //! Required because each derived class overrides only one.
 
 void EquationOfState::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
+                                 const bool only_testfloors,
                                  const int il, const int iu, const int jl, const int ju,
                                  const int kl, const int ku) {
 }
 
 void EquationOfState::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
                                  DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc,
+                                 const bool only_testfloors,
                                  const int il, const int iu, const int jl, const int ju,
                                  const int kl, const int ku) {
 }

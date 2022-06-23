@@ -37,21 +37,18 @@ void EventLogOutput::LoadOutputData(Mesh *pm) {
   int* pdfloor = &(pm->ecounter.neos_dfloor);
   int* pefloor = &(pm->ecounter.neos_efloor);
   int* pmaxit  = &(pm->ecounter.maxit_c2p);
-  if (global_variable::my_rank == 0) {
-    MPI_Reduce(MPI_IN_PLACE, pdfloor, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
-    MPI_Reduce(MPI_IN_PLACE, pefloor, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
-    MPI_Reduce(MPI_IN_PLACE, pmaxit,  1, MPI_INT, MPI_MAX, 0, MPI_COMM_WORLD);
-  } else {
-    MPI_Reduce(pdfloor, pdfloor, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
-    MPI_Reduce(pefloor, pefloor, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
-    MPI_Reduce(pmaxit,  pmaxit,  1, MPI_INT, MPI_MAX, 0, MPI_COMM_WORLD);
-  }
+  int* pfofc   = &(pm->ecounter.nfofc);
+  MPI_Allreduce(MPI_IN_PLACE, pdfloor, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE, pefloor, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE, pmaxit,  1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE, pfofc,   1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 #endif
 
   // check if there is any data to be written
   no_output = true;
   if (pm->ecounter.neos_dfloor > 0 ||
       pm->ecounter.neos_efloor > 0 ||
+      pm->ecounter.nfofc > 0 ||
       pm->ecounter.maxit_c2p > 0) {
     no_output=false;
   }
@@ -62,6 +59,8 @@ void EventLogOutput::LoadOutputData(Mesh *pm) {
 //! \brief writes event counter data to log file
 
 void EventLogOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
+  if (header_written && no_output) return;
+
   // only the master rank writes the file
   if (global_variable::my_rank == 0) {
     // create filename: "file_basename" + ".log"
@@ -81,7 +80,7 @@ void EventLogOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     // Write header, if it has not been written already
     if (!(header_written)) {
       std::fprintf(pfile,"# Athena event counter data\n");
-      std::fprintf(pfile,"#  cycle eos_dfloor eos_efloor c2p_it");
+      std::fprintf(pfile,"#  cycle eos_dfloor eos_efloor c2p_it  fofc");
       std::fprintf(pfile,"\n");  // terminate line
       header_written = true;
     }
@@ -92,6 +91,7 @@ void EventLogOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
       std::fprintf(pfile, " %8d", pm->ecounter.neos_dfloor);
       std::fprintf(pfile, " %8d", pm->ecounter.neos_efloor);
       std::fprintf(pfile, " %6d", pm->ecounter.maxit_c2p);
+      std::fprintf(pfile, " %8d", pm->ecounter.nfofc);
       std::fprintf(pfile,"\n"); // terminate line
     }
     std::fclose(pfile);
@@ -101,6 +101,7 @@ void EventLogOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   pm->ecounter.neos_dfloor = 0;
   pm->ecounter.neos_efloor = 0;
   pm->ecounter.maxit_c2p = 0;
+  pm->ecounter.nfofc = 0;
 
   // increment output time, clean up
   if (out_params.last_time < 0.0) {

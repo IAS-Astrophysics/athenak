@@ -24,7 +24,7 @@
 
 KOKKOS_INLINE_FUNCTION
 void ComputeMetricAndInverse(Real x, Real y, Real z, bool minkowski, Real a,
-                             Real g[], Real ginv[]) {
+                             Real glower[][4], Real gupper[][4]) {
   // NOTE(@pdmullen): The following commented out floor on z dealt with the metric
   // singularity encountered for small z near the horizon (e.g., see g_00). However, this
   // floor was operating on z even for r_ks > 1.0, where (I believe) the metric should be
@@ -47,16 +47,22 @@ void ComputeMetricAndInverse(Real x, Real y, Real z, bool minkowski, Real a,
   // g_nm = f*l_n*l_m + eta_nm, where eta_nm is Minkowski metric
   Real f = 2.0 * SQR(r)*r / (SQR(SQR(r)) + SQR(a)*SQR(z));
   if (minkowski) {f=0.0;}
-  g[I00] = f * l_lower[0]*l_lower[0] - 1.0;
-  g[I01] = f * l_lower[0]*l_lower[1];
-  g[I02] = f * l_lower[0]*l_lower[2];
-  g[I03] = f * l_lower[0]*l_lower[3];
-  g[I11] = f * l_lower[1]*l_lower[1] + 1.0;
-  g[I12] = f * l_lower[1]*l_lower[2];
-  g[I13] = f * l_lower[1]*l_lower[3];
-  g[I22] = f * l_lower[2]*l_lower[2] + 1.0;
-  g[I23] = f * l_lower[2]*l_lower[3];
-  g[I33] = f * l_lower[3]*l_lower[3] + 1.0;
+  glower[0][0] = f * l_lower[0]*l_lower[0] - 1.0;
+  glower[0][1] = f * l_lower[0]*l_lower[1];
+  glower[0][2] = f * l_lower[0]*l_lower[2];
+  glower[0][3] = f * l_lower[0]*l_lower[3];
+  glower[1][0] = glower[0][1];
+  glower[1][1] = f * l_lower[1]*l_lower[1] + 1.0;
+  glower[1][2] = f * l_lower[1]*l_lower[2];
+  glower[1][3] = f * l_lower[1]*l_lower[3];
+  glower[2][0] = glower[0][2];
+  glower[2][1] = glower[1][2];
+  glower[2][2] = f * l_lower[2]*l_lower[2] + 1.0;
+  glower[2][3] = f * l_lower[2]*l_lower[3];
+  glower[3][0] = glower[0][3];
+  glower[3][1] = glower[1][3];
+  glower[3][2] = glower[2][3];
+  glower[3][3] = f * l_lower[3]*l_lower[3] + 1.0;
 
   // Set contravariant components
   // null vector l
@@ -67,16 +73,22 @@ void ComputeMetricAndInverse(Real x, Real y, Real z, bool minkowski, Real a,
   l_upper[3] = l_lower[3];
 
   // g^nm = -f*l^n*l^m + eta^nm, where eta^nm is Minkowski metric
-  ginv[I00] = -f * l_upper[0]*l_upper[0] - 1.0;
-  ginv[I01] = -f * l_upper[0]*l_upper[1];
-  ginv[I02] = -f * l_upper[0]*l_upper[2];
-  ginv[I03] = -f * l_upper[0]*l_upper[3];
-  ginv[I11] = -f * l_upper[1]*l_upper[1] + 1.0;
-  ginv[I12] = -f * l_upper[1]*l_upper[2];
-  ginv[I13] = -f * l_upper[1]*l_upper[3];
-  ginv[I22] = -f * l_upper[2]*l_upper[2] + 1.0;
-  ginv[I23] = -f * l_upper[2]*l_upper[3];
-  ginv[I33] = -f * l_upper[3]*l_upper[3] + 1.0;
+  gupper[0][0] = -f * l_upper[0]*l_upper[0] - 1.0;
+  gupper[0][1] = -f * l_upper[0]*l_upper[1];
+  gupper[0][2] = -f * l_upper[0]*l_upper[2];
+  gupper[0][3] = -f * l_upper[0]*l_upper[3];
+  gupper[1][0] = gupper[0][1];
+  gupper[1][1] = -f * l_upper[1]*l_upper[1] + 1.0;
+  gupper[1][2] = -f * l_upper[1]*l_upper[2];
+  gupper[1][3] = -f * l_upper[1]*l_upper[3];
+  gupper[2][0] = gupper[0][2];
+  gupper[2][1] = gupper[1][2];
+  gupper[2][2] = -f * l_upper[2]*l_upper[2] + 1.0;
+  gupper[2][3] = -f * l_upper[2]*l_upper[3];
+  gupper[3][0] = gupper[0][3];
+  gupper[3][1] = gupper[1][3];
+  gupper[3][2] = gupper[2][3];
+  gupper[3][3] = -f * l_upper[3]*l_upper[3] + 1.0;
 
   return;
 }
@@ -88,7 +100,7 @@ void ComputeMetricAndInverse(Real x, Real y, Real z, bool minkowski, Real a,
 
 KOKKOS_INLINE_FUNCTION
 void ComputeMetricDerivatives(Real x, Real y, Real z, bool minkowski, Real a,
-                              Real dg_dx1[], Real dg_dx2[], Real dg_dx3[]) {
+                              Real dg_dx1[][4], Real dg_dx2[][4], Real dg_dx3[][4]) {
   // NOTE(@pdmullen): See comment in ComputeMetricAndInverse
   // if (fabs(z) < (SMALL_NUMBER)) z = (SMALL_NUMBER);
   Real rad = sqrt(SQR(x) + SQR(y) + SQR(z));
@@ -131,40 +143,58 @@ void ComputeMetricDerivatives(Real x, Real y, Real z, bool minkowski, Real a,
   }
 
   // Set x-derivatives of covariant components
-  dg_dx1[I00] = df_dx1*llower[0]*llower[0] + f*dl0_dx1*llower[0] + f*llower[0]*dl0_dx1;
-  dg_dx1[I01] = df_dx1*llower[0]*llower[1] + f*dl0_dx1*llower[1] + f*llower[0]*dl1_dx1;
-  dg_dx1[I02] = df_dx1*llower[0]*llower[2] + f*dl0_dx1*llower[2] + f*llower[0]*dl2_dx1;
-  dg_dx1[I03] = df_dx1*llower[0]*llower[3] + f*dl0_dx1*llower[3] + f*llower[0]*dl3_dx1;
-  dg_dx1[I11] = df_dx1*llower[1]*llower[1] + f*dl1_dx1*llower[1] + f*llower[1]*dl1_dx1;
-  dg_dx1[I12] = df_dx1*llower[1]*llower[2] + f*dl1_dx1*llower[2] + f*llower[1]*dl2_dx1;
-  dg_dx1[I13] = df_dx1*llower[1]*llower[3] + f*dl1_dx1*llower[3] + f*llower[1]*dl3_dx1;
-  dg_dx1[I22] = df_dx1*llower[2]*llower[2] + f*dl2_dx1*llower[2] + f*llower[2]*dl2_dx1;
-  dg_dx1[I23] = df_dx1*llower[2]*llower[3] + f*dl2_dx1*llower[3] + f*llower[2]*dl3_dx1;
-  dg_dx1[I33] = df_dx1*llower[3]*llower[3] + f*dl3_dx1*llower[3] + f*llower[3]*dl3_dx1;
+  dg_dx1[0][0] = df_dx1*llower[0]*llower[0] + f*dl0_dx1*llower[0] + f*llower[0]*dl0_dx1;
+  dg_dx1[0][1] = df_dx1*llower[0]*llower[1] + f*dl0_dx1*llower[1] + f*llower[0]*dl1_dx1;
+  dg_dx1[0][2] = df_dx1*llower[0]*llower[2] + f*dl0_dx1*llower[2] + f*llower[0]*dl2_dx1;
+  dg_dx1[0][3] = df_dx1*llower[0]*llower[3] + f*dl0_dx1*llower[3] + f*llower[0]*dl3_dx1;
+  dg_dx1[1][0] = dg_dx1[0][1];
+  dg_dx1[1][1] = df_dx1*llower[1]*llower[1] + f*dl1_dx1*llower[1] + f*llower[1]*dl1_dx1;
+  dg_dx1[1][2] = df_dx1*llower[1]*llower[2] + f*dl1_dx1*llower[2] + f*llower[1]*dl2_dx1;
+  dg_dx1[1][3] = df_dx1*llower[1]*llower[3] + f*dl1_dx1*llower[3] + f*llower[1]*dl3_dx1;
+  dg_dx1[2][0] = dg_dx1[0][2];
+  dg_dx1[2][1] = dg_dx1[1][2];
+  dg_dx1[2][2] = df_dx1*llower[2]*llower[2] + f*dl2_dx1*llower[2] + f*llower[2]*dl2_dx1;
+  dg_dx1[2][3] = df_dx1*llower[2]*llower[3] + f*dl2_dx1*llower[3] + f*llower[2]*dl3_dx1;
+  dg_dx1[3][0] = dg_dx1[0][3];
+  dg_dx1[3][1] = dg_dx1[1][3];
+  dg_dx1[3][2] = dg_dx1[2][3];
+  dg_dx1[3][3] = df_dx1*llower[3]*llower[3] + f*dl3_dx1*llower[3] + f*llower[3]*dl3_dx1;
 
   // Set y-derivatives of covariant components
-  dg_dx2[I00] = df_dx2*llower[0]*llower[0] + f*dl0_dx2*llower[0] + f*llower[0]*dl0_dx2;
-  dg_dx2[I01] = df_dx2*llower[0]*llower[1] + f*dl0_dx2*llower[1] + f*llower[0]*dl1_dx2;
-  dg_dx2[I02] = df_dx2*llower[0]*llower[2] + f*dl0_dx2*llower[2] + f*llower[0]*dl2_dx2;
-  dg_dx2[I03] = df_dx2*llower[0]*llower[3] + f*dl0_dx2*llower[3] + f*llower[0]*dl3_dx2;
-  dg_dx2[I11] = df_dx2*llower[1]*llower[1] + f*dl1_dx2*llower[1] + f*llower[1]*dl1_dx2;
-  dg_dx2[I12] = df_dx2*llower[1]*llower[2] + f*dl1_dx2*llower[2] + f*llower[1]*dl2_dx2;
-  dg_dx2[I13] = df_dx2*llower[1]*llower[3] + f*dl1_dx2*llower[3] + f*llower[1]*dl3_dx2;
-  dg_dx2[I22] = df_dx2*llower[2]*llower[2] + f*dl2_dx2*llower[2] + f*llower[2]*dl2_dx2;
-  dg_dx2[I23] = df_dx2*llower[2]*llower[3] + f*dl2_dx2*llower[3] + f*llower[2]*dl3_dx2;
-  dg_dx2[I33] = df_dx2*llower[3]*llower[3] + f*dl3_dx2*llower[3] + f*llower[3]*dl3_dx2;
+  dg_dx2[0][0] = df_dx2*llower[0]*llower[0] + f*dl0_dx2*llower[0] + f*llower[0]*dl0_dx2;
+  dg_dx2[0][1] = df_dx2*llower[0]*llower[1] + f*dl0_dx2*llower[1] + f*llower[0]*dl1_dx2;
+  dg_dx2[0][2] = df_dx2*llower[0]*llower[2] + f*dl0_dx2*llower[2] + f*llower[0]*dl2_dx2;
+  dg_dx2[0][3] = df_dx2*llower[0]*llower[3] + f*dl0_dx2*llower[3] + f*llower[0]*dl3_dx2;
+  dg_dx2[1][0] = dg_dx2[0][1];
+  dg_dx2[1][1] = df_dx2*llower[1]*llower[1] + f*dl1_dx2*llower[1] + f*llower[1]*dl1_dx2;
+  dg_dx2[1][2] = df_dx2*llower[1]*llower[2] + f*dl1_dx2*llower[2] + f*llower[1]*dl2_dx2;
+  dg_dx2[1][3] = df_dx2*llower[1]*llower[3] + f*dl1_dx2*llower[3] + f*llower[1]*dl3_dx2;
+  dg_dx2[2][0] = dg_dx2[0][2];
+  dg_dx2[2][1] = dg_dx2[1][2];
+  dg_dx2[2][2] = df_dx2*llower[2]*llower[2] + f*dl2_dx2*llower[2] + f*llower[2]*dl2_dx2;
+  dg_dx2[2][3] = df_dx2*llower[2]*llower[3] + f*dl2_dx2*llower[3] + f*llower[2]*dl3_dx2;
+  dg_dx2[3][0] = dg_dx2[0][3];
+  dg_dx2[3][1] = dg_dx2[1][3];
+  dg_dx2[3][2] = dg_dx2[2][3];
+  dg_dx2[3][3] = df_dx2*llower[3]*llower[3] + f*dl3_dx2*llower[3] + f*llower[3]*dl3_dx2;
 
   // Set phi-derivatives of covariant components
-  dg_dx3[I00] = df_dx3*llower[0]*llower[0] + f*dl0_dx3*llower[0] + f*llower[0]*dl0_dx3;
-  dg_dx3[I01] = df_dx3*llower[0]*llower[1] + f*dl0_dx3*llower[1] + f*llower[0]*dl1_dx3;
-  dg_dx3[I02] = df_dx3*llower[0]*llower[2] + f*dl0_dx3*llower[2] + f*llower[0]*dl2_dx3;
-  dg_dx3[I03] = df_dx3*llower[0]*llower[3] + f*dl0_dx3*llower[3] + f*llower[0]*dl3_dx3;
-  dg_dx3[I11] = df_dx3*llower[1]*llower[1] + f*dl1_dx3*llower[1] + f*llower[1]*dl1_dx3;
-  dg_dx3[I12] = df_dx3*llower[1]*llower[2] + f*dl1_dx3*llower[2] + f*llower[1]*dl2_dx3;
-  dg_dx3[I13] = df_dx3*llower[1]*llower[3] + f*dl1_dx3*llower[3] + f*llower[1]*dl3_dx3;
-  dg_dx3[I22] = df_dx3*llower[2]*llower[2] + f*dl2_dx3*llower[2] + f*llower[2]*dl2_dx3;
-  dg_dx3[I23] = df_dx3*llower[2]*llower[3] + f*dl2_dx3*llower[3] + f*llower[2]*dl3_dx3;
-  dg_dx3[I33] = df_dx3*llower[3]*llower[3] + f*dl3_dx3*llower[3] + f*llower[3]*dl3_dx3;
+  dg_dx3[0][0] = df_dx3*llower[0]*llower[0] + f*dl0_dx3*llower[0] + f*llower[0]*dl0_dx3;
+  dg_dx3[0][1] = df_dx3*llower[0]*llower[1] + f*dl0_dx3*llower[1] + f*llower[0]*dl1_dx3;
+  dg_dx3[0][2] = df_dx3*llower[0]*llower[2] + f*dl0_dx3*llower[2] + f*llower[0]*dl2_dx3;
+  dg_dx3[0][3] = df_dx3*llower[0]*llower[3] + f*dl0_dx3*llower[3] + f*llower[0]*dl3_dx3;
+  dg_dx3[1][0] = dg_dx3[0][1];
+  dg_dx3[1][1] = df_dx3*llower[1]*llower[1] + f*dl1_dx3*llower[1] + f*llower[1]*dl1_dx3;
+  dg_dx3[1][2] = df_dx3*llower[1]*llower[2] + f*dl1_dx3*llower[2] + f*llower[1]*dl2_dx3;
+  dg_dx3[1][3] = df_dx3*llower[1]*llower[3] + f*dl1_dx3*llower[3] + f*llower[1]*dl3_dx3;
+  dg_dx3[2][0] = dg_dx3[0][2];
+  dg_dx3[2][1] = dg_dx3[1][2];
+  dg_dx3[2][2] = df_dx3*llower[2]*llower[2] + f*dl2_dx3*llower[2] + f*llower[2]*dl2_dx3;
+  dg_dx3[2][3] = df_dx3*llower[2]*llower[3] + f*dl2_dx3*llower[3] + f*llower[2]*dl3_dx3;
+  dg_dx3[3][0] = dg_dx3[0][3];
+  dg_dx3[3][1] = dg_dx3[1][3];
+  dg_dx3[3][2] = dg_dx3[2][3];
+  dg_dx3[3][3] = df_dx3*llower[3]*llower[3] + f*dl3_dx3*llower[3] + f*llower[3]*dl3_dx3;
 
   return;
 }

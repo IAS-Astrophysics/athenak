@@ -79,8 +79,8 @@ struct LogicalLocation {
 //! \brief stores various counters used as diagnostics throughout the code
 
 struct EventCounters {
-  int neos_dfloor, neos_efloor, maxit_c2p;
-  EventCounters() : neos_dfloor(0), neos_efloor(0), maxit_c2p(0) {}
+  int nfofc, neos_dfloor, neos_efloor, maxit_c2p;
+  EventCounters() : nfofc(0), neos_dfloor(0), neos_efloor(0), maxit_c2p(0) {}
 };
 
 // Forward declarations required due to recursive definitions amongst mesh classes

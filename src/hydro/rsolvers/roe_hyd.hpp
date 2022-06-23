@@ -1,18 +1,20 @@
+#ifndef HYDRO_RSOLVERS_ROE_HYD_HPP_
+#define HYDRO_RSOLVERS_ROE_HYD_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file  roe_hyd.cpp
-//  \brief Roe's linearized Riemann solver.
-//
-// Computes 1D fluxes using Roe's linearization.  When Roe's method fails because of
-// negative density in the intermediate states, LLF fluxes are used instead (only density,
-// not pressure, is checked in this version).
-//
-// REFERENCES:
-// - P. Roe, "Approximate Riemann solvers, parameter vectors, and difference schemes",
-//   JCP, 43, 357 (1981).
+//! \file  roe_hyd.hpp
+//! \brief Roe's linearized Riemann solver.
+//!
+//! Computes 1D fluxes using Roe's linearization.  When Roe's method fails because of
+//! negative density in the intermediate states, LLF fluxes are used instead (only
+//! density, not pressure, is checked in this version).
+//!
+//! REFERENCES:
+//! - P. Roe, "Approximate Riemann solvers, parameter vectors, and difference schemes",
+//!   JCP, 43, 357 (1981).
 
 #include <float.h>
 #include <algorithm>  // max()
@@ -34,7 +36,7 @@ void RoeFluxIso(const Real wroe[], const Real du[], const Real wli[],
 
 //----------------------------------------------------------------------------------------
 //! \fn void Roe
-//  \brief The Roe Riemann solver for hydrodynamics (both ideal gas and isothermal)
+//! \brief The Roe Riemann solver for hydrodynamics (both ideal gas and isothermal)
 
 KOKKOS_INLINE_FUNCTION
 void Roe(TeamMember_t const &member, const EOS_Data &eos,
@@ -377,3 +379,4 @@ void RoeFluxIso(const Real wroe[], const Real du[], const Real wli[], const Real
 } // namespace roe
 
 } // namespace hydro
+#endif // HYDRO_RSOLVERS_ROE_HYD_HPP_

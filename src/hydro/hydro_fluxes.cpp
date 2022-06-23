@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file hydro_fluxes.cpp
-//  \brief Calculate 3D fluxes for hydro
+//! \brief Calculate 3D fluxes for hydro
 
 #include <iostream>
 
@@ -13,33 +13,29 @@
 #include "coordinates/coordinates.hpp"
 #include "hydro.hpp"
 #include "eos/eos.hpp"
-#include "diffusion/viscosity.hpp"
-#include "diffusion/conduction.hpp"
-// include inlined reconstruction methods (yuck...)
-#include "reconstruct/dc.cpp"             // NOLINT(build/include)
-#include "reconstruct/plm.cpp"            // NOLINT(build/include)
-#include "reconstruct/ppm.cpp"            // NOLINT(build/include)
-#include "reconstruct/wenoz.cpp"          // NOLINT(build/include)
-// include inlined Riemann solvers (double yuck...)
-#include "hydro/rsolvers/advect_hyd.cpp"  // NOLINT(build/include)
-#include "hydro/rsolvers/llf_hyd.cpp"     // NOLINT(build/include)
-#include "hydro/rsolvers/hlle_hyd.cpp"    // NOLINT(build/include)
-#include "hydro/rsolvers/hllc_hyd.cpp"    // NOLINT(build/include)
-#include "hydro/rsolvers/roe_hyd.cpp"     // NOLINT(build/include)
-#include "hydro/rsolvers/llf_srhyd.cpp"   // NOLINT(build/include)
-#include "hydro/rsolvers/hlle_srhyd.cpp"  // NOLINT(build/include)
-#include "hydro/rsolvers/hllc_srhyd.cpp"  // NOLINT(build/include)
-#include "hydro/rsolvers/llf_grhyd.cpp"   // NOLINT(build/include)
-#include "hydro/rsolvers/hlle_grhyd.cpp"  // NOLINT(build/include)
+#include "reconstruct/dc.hpp"
+#include "reconstruct/plm.hpp"
+#include "reconstruct/ppm.hpp"
+#include "reconstruct/wenoz.hpp"
+#include "hydro/rsolvers/advect_hyd.hpp"
+#include "hydro/rsolvers/llf_hyd.hpp"
+#include "hydro/rsolvers/hlle_hyd.hpp"
+#include "hydro/rsolvers/hllc_hyd.hpp"
+#include "hydro/rsolvers/roe_hyd.hpp"
+#include "hydro/rsolvers/llf_srhyd.hpp"
+#include "hydro/rsolvers/hlle_srhyd.hpp"
+#include "hydro/rsolvers/hllc_srhyd.hpp"
+#include "hydro/rsolvers/llf_grhyd.hpp"
+#include "hydro/rsolvers/hlle_grhyd.hpp"
 
 namespace hydro {
 //----------------------------------------------------------------------------------------
-//! \fn  void Hydro::CalcFluxes
+//! \fn void Hydro::CalculateFluxes
 //! \brief Calls reconstruction and Riemann solver functions to compute hydro fluxes
 //! Note this function is templated over RS for better performance on GPUs.
 
 template <Hydro_RSolver rsolver_method_>
-TaskStatus Hydro::CalcFluxes(Driver *pdriver, int stage) {
+void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
   RegionIndcs &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
@@ -324,17 +320,17 @@ TaskStatus Hydro::CalcFluxes(Driver *pdriver, int stage) {
             wim1.vx = w0_(m,IVX,k,j,i-1);
             wim1.vy = w0_(m,IVY,k,j,i-1);
             wim1.vz = w0_(m,IVZ,k,j,i-1);
-            wim1.p  = eos.IdealGasPressure(w0_(m,IEN,k,j,i-1));
+            wim1.e  = w0_(m,IEN,k,j,i-1);
 
             HydPrim1D wi;
             wi.d  = w0_(m,IDN,k,j,i);
             wi.vx = w0_(m,IVX,k,j,i);
             wi.vy = w0_(m,IVY,k,j,i);
             wi.vz = w0_(m,IVZ,k,j,i);
-            wi.p  = eos.IdealGasPressure(w0_(m,IEN,k,j,i));
+            wi.e  = w0_(m,IEN,k,j,i);
 
             HydCons1D flux;
-            SingleStateLLF_GR(wim1, wi, x1f, x2v, x3v, IVX, coord, eos, flux);
+            SingleStateLLF_GRHyd(wim1, wi, x1f, x2v, x3v, IVX, coord, eos, flux);
 
             fcorr_x1(m,IDN,k,j,i) = flux.d;
             fcorr_x1(m,IM1,k,j,i) = flux.mx;
@@ -348,25 +344,25 @@ TaskStatus Hydro::CalcFluxes(Driver *pdriver, int stage) {
           if (fc_mask_.x2f(m,k,j,i)) {
             HydPrim1D wjm1;
             wjm1.d  = w0_(m,IDN,k,j-1,i);
-            wjm1.vx = w0_(m,IVX,k,j-1,i);
-            wjm1.vy = w0_(m,IVY,k,j-1,i);
-            wjm1.vz = w0_(m,IVZ,k,j-1,i);
-            wjm1.p  = eos.IdealGasPressure(w0_(m,IEN,k,j-1,i));
+            wjm1.vx = w0_(m,IVY,k,j-1,i);
+            wjm1.vy = w0_(m,IVZ,k,j-1,i);
+            wjm1.vz = w0_(m,IVX,k,j-1,i);
+            wjm1.e  = w0_(m,IEN,k,j-1,i);
 
             HydPrim1D wj;
             wj.d  = w0_(m,IDN,k,j,i);
-            wj.vx = w0_(m,IVX,k,j,i);
-            wj.vy = w0_(m,IVY,k,j,i);
-            wj.vz = w0_(m,IVZ,k,j,i);
-            wj.p  = eos.IdealGasPressure(w0_(m,IEN,k,j,i));
+            wj.vx = w0_(m,IVY,k,j,i);
+            wj.vy = w0_(m,IVZ,k,j,i);
+            wj.vz = w0_(m,IVX,k,j,i);
+            wj.e  = w0_(m,IEN,k,j,i);
 
             HydCons1D flux;
-            SingleStateLLF_GR(wjm1, wj, x1v, x2f, x3v, IVY, coord, eos, flux);
+            SingleStateLLF_GRHyd(wjm1, wj, x1v, x2f, x3v, IVY, coord, eos, flux);
 
             fcorr_x2(m,IDN,k,j,i) = flux.d;
-            fcorr_x2(m,IM1,k,j,i) = flux.mx;
-            fcorr_x2(m,IM2,k,j,i) = flux.my;
-            fcorr_x2(m,IM3,k,j,i) = flux.mz;
+            fcorr_x2(m,IM2,k,j,i) = flux.mx;
+            fcorr_x2(m,IM3,k,j,i) = flux.my;
+            fcorr_x2(m,IM1,k,j,i) = flux.mz;
             fcorr_x2(m,IEN,k,j,i) = flux.e;
           }
         }
@@ -375,25 +371,25 @@ TaskStatus Hydro::CalcFluxes(Driver *pdriver, int stage) {
           if (fc_mask_.x3f(m,k,j,i)) {
             HydPrim1D wkm1;
             wkm1.d  = w0_(m,IDN,k-1,j,i);
-            wkm1.vx = w0_(m,IVX,k-1,j,i);
-            wkm1.vy = w0_(m,IVY,k-1,j,i);
-            wkm1.vz = w0_(m,IVZ,k-1,j,i);
-            wkm1.p  = eos.IdealGasPressure(w0_(m,IEN,k-1,j,i));
+            wkm1.vx = w0_(m,IVZ,k-1,j,i);
+            wkm1.vy = w0_(m,IVX,k-1,j,i);
+            wkm1.vz = w0_(m,IVY,k-1,j,i);
+            wkm1.e  = w0_(m,IEN,k-1,j,i);
 
             HydPrim1D wk;
             wk.d  = w0_(m,IDN,k,j,i);
-            wk.vx = w0_(m,IVX,k,j,i);
-            wk.vy = w0_(m,IVY,k,j,i);
-            wk.vz = w0_(m,IVZ,k,j,i);
-            wk.p  = eos.IdealGasPressure(w0_(m,IEN,k,j,i));
+            wk.vx = w0_(m,IVZ,k,j,i);
+            wk.vy = w0_(m,IVX,k,j,i);
+            wk.vz = w0_(m,IVY,k,j,i);
+            wk.e  = w0_(m,IEN,k,j,i);
 
             HydCons1D flux;
-            SingleStateLLF_GR(wkm1, wk, x1v, x2v, x3f, IVZ, coord, eos, flux);
+            SingleStateLLF_GRHyd(wkm1, wk, x1v, x2v, x3f, IVZ, coord, eos, flux);
 
             fcorr_x3(m,IDN,k,j,i) = flux.d;
-            fcorr_x3(m,IM1,k,j,i) = flux.mx;
-            fcorr_x3(m,IM2,k,j,i) = flux.my;
-            fcorr_x3(m,IM3,k,j,i) = flux.mz;
+            fcorr_x3(m,IM3,k,j,i) = flux.mx;
+            fcorr_x3(m,IM1,k,j,i) = flux.my;
+            fcorr_x3(m,IM2,k,j,i) = flux.mz;
             fcorr_x3(m,IEN,k,j,i) = flux.e;
           }
         }
@@ -401,27 +397,19 @@ TaskStatus Hydro::CalcFluxes(Driver *pdriver, int stage) {
     }
   }
 
-  // Add viscous, resistive, heat-flux, etc fluxes
-  if (pvisc != nullptr) {
-    pvisc->IsotropicViscousFlux(w0, pvisc->nu, eos, uflx);
-  }
-  if (pcond != nullptr) {
-    pcond->IsotropicHeatFlux(w0, pcond->kappa, eos, uflx);
-  }
-
-  return TaskStatus::complete;
+  return;
 }
 
 // function definitions for each template parameter
-template TaskStatus Hydro::CalcFluxes<Hydro_RSolver::advect>(Driver *pdriver, int stage);
-template TaskStatus Hydro::CalcFluxes<Hydro_RSolver::llf>(Driver *pdriver, int stage);
-template TaskStatus Hydro::CalcFluxes<Hydro_RSolver::hlle>(Driver *pdriver, int stage);
-template TaskStatus Hydro::CalcFluxes<Hydro_RSolver::hllc>(Driver *pdriver, int stage);
-template TaskStatus Hydro::CalcFluxes<Hydro_RSolver::roe>(Driver *pdriver, int stage);
-template TaskStatus Hydro::CalcFluxes<Hydro_RSolver::llf_sr>(Driver *pdriver, int stage);
-template TaskStatus Hydro::CalcFluxes<Hydro_RSolver::hlle_sr>(Driver *pdriver, int stage);
-template TaskStatus Hydro::CalcFluxes<Hydro_RSolver::hllc_sr>(Driver *pdriver, int stage);
-template TaskStatus Hydro::CalcFluxes<Hydro_RSolver::llf_gr>(Driver *pdriver, int stage);
-template TaskStatus Hydro::CalcFluxes<Hydro_RSolver::hlle_gr>(Driver *pdriver, int stage);
+template void Hydro::CalculateFluxes<Hydro_RSolver::advect>(Driver *pdriver, int stage);
+template void Hydro::CalculateFluxes<Hydro_RSolver::llf>(Driver *pdriver, int stage);
+template void Hydro::CalculateFluxes<Hydro_RSolver::hlle>(Driver *pdriver, int stage);
+template void Hydro::CalculateFluxes<Hydro_RSolver::hllc>(Driver *pdriver, int stage);
+template void Hydro::CalculateFluxes<Hydro_RSolver::roe>(Driver *pdriver, int stage);
+template void Hydro::CalculateFluxes<Hydro_RSolver::llf_sr>(Driver *pdriver, int stage);
+template void Hydro::CalculateFluxes<Hydro_RSolver::hlle_sr>(Driver *pdriver, int stage);
+template void Hydro::CalculateFluxes<Hydro_RSolver::hllc_sr>(Driver *pdriver, int stage);
+template void Hydro::CalculateFluxes<Hydro_RSolver::llf_gr>(Driver *pdriver, int stage);
+template void Hydro::CalculateFluxes<Hydro_RSolver::hlle_gr>(Driver *pdriver, int stage);
 
 } // namespace hydro

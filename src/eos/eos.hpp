@@ -139,7 +139,9 @@ struct EOS_Data {
     if (dis < 0.0 && dis > discriminant_tol) {
       dis = 0.0;
     }
-    Real dis_sqrt = sqrt(dis);
+    // TODO(@pdmullen): fmax(dis, 0.0) prevents NaNs (see Issue #7), but this should be
+    // eliminated after enforcing positivity on recon L/R densities and pressures
+    Real dis_sqrt = sqrt(fmax(dis, 0.0));
     Real root_1 = (-b + dis_sqrt) / (2.0*a);
     Real root_2 = (-b - dis_sqrt) / (2.0*a);
     if (root_1 > root_2) {
@@ -202,10 +204,12 @@ class EquationOfState {
   // virtual functions to convert cons to prim in either Hydro or MHD (depending on
   // arguments), overwritten in derived eos classes
   virtual void ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
+                          const bool only_testfloors,
                           const int il, const int iu, const int jl, const int ju,
                           const int kl, const int ku);
   virtual void ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
                           DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc,
+                          const bool only_testfloors,
                           const int il, const int iu, const int jl, const int ju,
                           const int kl, const int ku);
 
@@ -231,6 +235,7 @@ class IsothermalHydro : public EquationOfState {
 
   IsothermalHydro(MeshBlockPack *pp, ParameterInput *pin);
   void ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
+                  const bool only_testfloors,
                   const int il, const int iu, const int jl, const int ju,
                   const int kl, const int ku) override;
   void PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons,
@@ -250,6 +255,7 @@ class IdealHydro : public EquationOfState {
 
   IdealHydro(MeshBlockPack *pp, ParameterInput *pin);
   void ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
+                  const bool only_testfloors,
                   const int il, const int iu, const int jl, const int ju,
                   const int kl, const int ku) override;
   void PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons,
@@ -269,6 +275,7 @@ class IdealSRHydro : public EquationOfState {
 
   IdealSRHydro(MeshBlockPack *pp, ParameterInput *pin);
   void ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
+                  const bool only_testfloors,
                   const int il, const int iu, const int jl, const int ju,
                   const int kl, const int ku) override;
   void PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons,
@@ -288,6 +295,7 @@ class IdealGRHydro : public EquationOfState {
 
   IdealGRHydro(MeshBlockPack *pp, ParameterInput *pin);
   void ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
+                  const bool only_testfloors,
                   const int il, const int iu, const int jl, const int ju,
                   const int kl, const int ku) override;
   void PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons,
@@ -308,6 +316,7 @@ class IsothermalMHD : public EquationOfState {
   IsothermalMHD(MeshBlockPack *pp, ParameterInput *pin);
   void ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
                   DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc,
+                  const bool only_testfloors,
                   const int il, const int iu, const int jl, const int ju,
                   const int kl, const int ku) override;
   void PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,
@@ -328,6 +337,7 @@ class IdealMHD : public EquationOfState {
   IdealMHD(MeshBlockPack *pp, ParameterInput *pin);
   void ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
                   DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc,
+                  const bool only_testfloors,
                   const int il, const int iu, const int jl, const int ju,
                   const int kl, const int ku) override;
   void PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,
@@ -348,6 +358,7 @@ class IdealSRMHD : public EquationOfState {
   IdealSRMHD(MeshBlockPack *pp, ParameterInput *pin);
   void ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
                   DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc,
+                  const bool only_testfloors,
                   const int il, const int iu, const int jl, const int ju,
                   const int kl, const int ku) override;
   void PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,
@@ -368,6 +379,7 @@ class IdealGRMHD : public EquationOfState {
   IdealGRMHD(MeshBlockPack *pp, ParameterInput *pin);
   void ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
                   DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc,
+                  const bool only_testfloors,
                   const int il, const int iu, const int jl, const int ju,
                   const int kl, const int ku) override;
   void PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,

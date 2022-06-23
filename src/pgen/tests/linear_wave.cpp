@@ -705,6 +705,7 @@ void LinearWaveErrors(ParameterInput *pin, Mesh *pm) {
   pm->pgen->LinearWave(pin, false);
 
   Real l1_err[8];
+  Real linfty_err=0.0;
   int nvars=0;
 
   // capture class variables for kernel
@@ -730,8 +731,8 @@ void LinearWaveErrors(ParameterInput *pin, Mesh *pm) {
     const int nkji = nx3*nx2*nx1;
     const int nji  = nx2*nx1;
     array_sum::GlobalSum sum_this_mb;
-    Kokkos::parallel_reduce("LW-err-Sums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-    KOKKOS_LAMBDA(const int &idx, array_sum::GlobalSum &mb_sum) {
+    Kokkos::parallel_reduce("LW-err",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+    KOKKOS_LAMBDA(const int &idx, array_sum::GlobalSum &mb_sum, Real &max_err) {
       // compute n,k,j,i indices of thread
       int m = (idx)/nkji;
       int k = (idx - m*nkji)/nji;
@@ -745,11 +746,16 @@ void LinearWaveErrors(ParameterInput *pin, Mesh *pm) {
       // conserved variables:
       array_sum::GlobalSum evars;
       evars.the_array[IDN] = vol*fabs(u0_(m,IDN,k,j,i) - u1_(m,IDN,k,j,i));
+      max_err = fmax(max_err, evars.the_array[IDN]);
       evars.the_array[IM1] = vol*fabs(u0_(m,IM1,k,j,i) - u1_(m,IM1,k,j,i));
+      max_err = fmax(max_err, evars.the_array[IM1]);
       evars.the_array[IM2] = vol*fabs(u0_(m,IM2,k,j,i) - u1_(m,IM2,k,j,i));
+      max_err = fmax(max_err, evars.the_array[IM2]);
       evars.the_array[IM3] = vol*fabs(u0_(m,IM3,k,j,i) - u1_(m,IM3,k,j,i));
+      max_err = fmax(max_err, evars.the_array[IM3]);
       if (eos.is_ideal) {
         evars.the_array[IEN] = vol*fabs(u0_(m,IEN,k,j,i) - u1_(m,IEN,k,j,i));
+        max_err = fmax(max_err, evars.the_array[IEN]);
       }
 
       // fill rest of the_array with zeros, if narray < NREDUCTION_VARIABLES
@@ -759,7 +765,7 @@ void LinearWaveErrors(ParameterInput *pin, Mesh *pm) {
 
       // sum into parallel reduce
       mb_sum += evars;
-    }, Kokkos::Sum<array_sum::GlobalSum>(sum_this_mb));
+    }, Kokkos::Sum<array_sum::GlobalSum>(sum_this_mb), Kokkos::Max<Real>(linfty_err));
 
     // store data into l1_err array
     for (int n=0; n<nvars; ++n) {
@@ -782,7 +788,7 @@ void LinearWaveErrors(ParameterInput *pin, Mesh *pm) {
     const int nji  = nx2*nx1;
     array_sum::GlobalSum sum_this_mb;
     Kokkos::parallel_reduce("LW-err-Sums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-    KOKKOS_LAMBDA(const int &idx, array_sum::GlobalSum &mb_sum) {
+    KOKKOS_LAMBDA(const int &idx, array_sum::GlobalSum &mb_sum, Real &max_err) {
       // compute n,k,j,i indices of thread
       int m = (idx)/nkji;
       int k = (idx - m*nkji)/nji;
@@ -796,25 +802,33 @@ void LinearWaveErrors(ParameterInput *pin, Mesh *pm) {
       // conserved variables:
       array_sum::GlobalSum evars;
       evars.the_array[IDN] = vol*fabs(u0_(m,IDN,k,j,i) - u1_(m,IDN,k,j,i));
+      max_err = fmax(max_err, evars.the_array[IDN]);
       evars.the_array[IM1] = vol*fabs(u0_(m,IM1,k,j,i) - u1_(m,IM1,k,j,i));
+      max_err = fmax(max_err, evars.the_array[IM1]);
       evars.the_array[IM2] = vol*fabs(u0_(m,IM2,k,j,i) - u1_(m,IM2,k,j,i));
+      max_err = fmax(max_err, evars.the_array[IM2]);
       evars.the_array[IM3] = vol*fabs(u0_(m,IM3,k,j,i) - u1_(m,IM3,k,j,i));
+      max_err = fmax(max_err, evars.the_array[IM3]);
       if (eos.is_ideal) {
         evars.the_array[IEN] = vol*fabs(u0_(m,IEN,k,j,i) - u1_(m,IEN,k,j,i));
+        max_err = fmax(max_err, evars.the_array[IEN]);
       }
 
       // cell-centered B
       Real bcc0 = 0.5*(b0_.x1f(m,k,j,i) + b0_.x1f(m,k,j,i+1));
       Real bcc1 = 0.5*(b1_.x1f(m,k,j,i) + b1_.x1f(m,k,j,i+1));
       evars.the_array[IEN+1] = vol*fabs(bcc0 - bcc1);
+      max_err = fmax(max_err, evars.the_array[IEN+1]);
 
       bcc0 = 0.5*(b0_.x2f(m,k,j,i) + b0_.x2f(m,k,j+1,i));
       bcc1 = 0.5*(b1_.x2f(m,k,j,i) + b1_.x2f(m,k,j+1,i));
       evars.the_array[IEN+2] = vol*fabs(bcc0 - bcc1);
+      max_err = fmax(max_err, evars.the_array[IEN+2]);
 
       bcc0 = 0.5*(b0_.x3f(m,k,j,i) + b0_.x3f(m,k+1,j,i));
       bcc1 = 0.5*(b1_.x3f(m,k,j,i) + b1_.x3f(m,k+1,j,i));
       evars.the_array[IEN+3] = vol*fabs(bcc0 - bcc1);
+      max_err = fmax(max_err, evars.the_array[IEN+3]);
 
       // fill rest of the_array with zeros, if narray < NREDUCTION_VARIABLES
       for (int n=nvars; n<NREDUCTION_VARIABLES; ++n) {
@@ -823,7 +837,7 @@ void LinearWaveErrors(ParameterInput *pin, Mesh *pm) {
 
       // sum into parallel reduce
       mb_sum += evars;
-    }, Kokkos::Sum<array_sum::GlobalSum>(sum_this_mb));
+    }, Kokkos::Sum<array_sum::GlobalSum>(sum_this_mb), Kokkos::Max<Real>(linfty_err));
 
     // store data into l1_err array
     for (int n=0; n<nvars; ++n) {
@@ -833,6 +847,7 @@ void LinearWaveErrors(ParameterInput *pin, Mesh *pm) {
 
 #if MPI_PARALLEL_ENABLED
   MPI_Allreduce(MPI_IN_PLACE, &l1_err, nvars, MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE, &linfty_err, 1, MPI_ATHENA_REAL, MPI_MAX, MPI_COMM_WORLD);
 #endif
 
   // normalize errors by number of cells
@@ -840,6 +855,7 @@ void LinearWaveErrors(ParameterInput *pin, Mesh *pm) {
             *(pmbp->pmesh->mesh_size.x2max - pmbp->pmesh->mesh_size.x2min)
             *(pmbp->pmesh->mesh_size.x3max - pmbp->pmesh->mesh_size.x3min);
   for (int i=0; i<nvars; ++i) l1_err[i] = l1_err[i]/vol;
+  linfty_err /= vol;
 
   // compute rms error
   Real rms_err = 0.0;
@@ -870,7 +886,7 @@ void LinearWaveErrors(ParameterInput *pin, Mesh *pm) {
                   << std::endl << "Error output file could not be opened" <<std::endl;
         std::exit(EXIT_FAILURE);
       }
-      std::fprintf(pfile, "# Nx1  Nx2  Nx3   Ncycle  RMS-L1-err       ");
+      std::fprintf(pfile, "# Nx1  Nx2  Nx3   Ncycle  RMS-L1    L-infty       ");
       std::fprintf(pfile,"d_L1         M1_L1         M2_L1         M3_L1         E_L1");
       if (pmbp->pmhd != nullptr) {
         std::fprintf(pfile,"          B1_L1         B2_L1         B3_L1");
@@ -882,7 +898,7 @@ void LinearWaveErrors(ParameterInput *pin, Mesh *pm) {
     std::fprintf(pfile, "%04d", pmbp->pmesh->mesh_indcs.nx1);
     std::fprintf(pfile, "  %04d", pmbp->pmesh->mesh_indcs.nx2);
     std::fprintf(pfile, "  %04d", pmbp->pmesh->mesh_indcs.nx3);
-    std::fprintf(pfile, "  %05d  %e", pmbp->pmesh->ncycle, rms_err);
+    std::fprintf(pfile, "  %05d  %e %e", pmbp->pmesh->ncycle, rms_err, linfty_err);
     for (int i=0; i<nvars; ++i) {
       std::fprintf(pfile, "  %e", l1_err[i]);
     }

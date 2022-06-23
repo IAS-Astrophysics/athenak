@@ -7,10 +7,9 @@
 //! \brief derived class that implements ideal gas EOS in nonrelativistic mhd
 
 #include "athena.hpp"
-#include "parameter_input.hpp"
-#include "mesh/mesh.hpp"
 #include "mhd/mhd.hpp"
 #include "eos.hpp"
+#include "eos/ideal_c2p_mhd.hpp"
 
 //----------------------------------------------------------------------------------------
 // ctor: also calls EOS base class constructor
@@ -28,21 +27,17 @@ IdealMHD::IdealMHD(MeshBlockPack *pp, ParameterInput *pin) :
 //! \!fn void ConsToPrim()
 //! \brief Converts conserved into primitive variables.  Operates over range of cells
 //! given in argument list.
-//! Note that the primitive variables contain the cell-centered magnetic fields, so that
-//! W contains (nmhd+3+nscalars) elements, while U contains (nmhd+nscalars)
 
 void IdealMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
                           DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc,
+                          const bool only_testfloors,
                           const int il, const int iu, const int jl, const int ju,
                           const int kl, const int ku) {
   int &nmhd  = pmy_pack->pmhd->nmhd;
   int &nscal = pmy_pack->pmhd->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
-  Real gm1 = (eos_data.gamma - 1.0);
-  Real igm1 = 1.0/(gm1);
-
-  Real &dfloor_ = eos_data.dfloor;
-  Real efloor = eos_data.pfloor/gm1;
+  auto &eos = eos_data;
+  auto &fofc_ = pmy_pack->pmhd->fofc;
 
   const int ni   = (iu - il + 1);
   const int nji  = (ju - jl + 1)*ni;
@@ -50,8 +45,8 @@ void IdealMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
   const int nmkji = nmb*nkji;
 
   int nfloord_=0, nfloore_=0;
-  Kokkos::parallel_reduce("hyd_c2p",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-  KOKKOS_LAMBDA(const int &idx, int &sum_d, int &sum_e) {
+  Kokkos::parallel_reduce("mhd_c2p",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+  KOKKOS_LAMBDA(const int &idx, int &sumd, int &sume) {
     int m = (idx)/nkji;
     int k = (idx - m*nkji)/nji;
     int j = (idx - m*nkji - k*nji)/ni;
@@ -59,61 +54,66 @@ void IdealMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
     j += jl;
     k += kl;
 
-    Real& u_d  = cons(m,IDN,k,j,i);
-    Real& u_e  = cons(m,IEN,k,j,i);
-    const Real& u_m1 = cons(m,IVX,k,j,i);
-    const Real& u_m2 = cons(m,IVY,k,j,i);
-    const Real& u_m3 = cons(m,IVZ,k,j,i);
+    // load single state conserved variables
+    MHDCons1D u;
+    u.d  = cons(m,IDN,k,j,i);
+    u.mx = cons(m,IM1,k,j,i);
+    u.my = cons(m,IM2,k,j,i);
+    u.mz = cons(m,IM3,k,j,i);
+    u.e  = cons(m,IEN,k,j,i);
 
-    Real& w_d  = prim(m,IDN,k,j,i);
-    Real& w_vx = prim(m,IVX,k,j,i);
-    Real& w_vy = prim(m,IVY,k,j,i);
-    Real& w_vz = prim(m,IVZ,k,j,i);
-    Real& w_e  = prim(m,IEN,k,j,i);
-
-    // apply density floor, without changing momentum or energy
-    if (u_d < dfloor_) {
-      u_d = dfloor_;
-      sum_d++;
-    }
-    w_d = u_d;
-
-    Real di = 1.0/u_d;
-    w_vx = u_m1*di;
-    w_vy = u_m2*di;
-    w_vz = u_m3*di;
-
-    // cell-centered fields are simple linear average of face-centered fields
-    Real& w_bx = bcc(m,IBX,k,j,i);
-    Real& w_by = bcc(m,IBY,k,j,i);
-    Real& w_bz = bcc(m,IBZ,k,j,i);
-    w_bx = 0.5*(b.x1f(m,k,j,i) + b.x1f(m,k,j,i+1));
-    w_by = 0.5*(b.x2f(m,k,j,i) + b.x2f(m,k,j+1,i));
-    w_bz = 0.5*(b.x3f(m,k,j,i) + b.x3f(m,k+1,j,i));
-
-    // pressure computed from linear average of magnetic energy of face-centered fields
-    Real pb = 0.25*(( SQR(b.x1f(m,k,j,i)) + SQR(b.x1f(m,k,j,i+1)) )
-                 +  ( SQR(b.x2f(m,k,j,i)) + SQR(b.x2f(m,k,j+1,i)) )
-                 +  ( SQR(b.x3f(m,k,j,i)) + SQR(b.x3f(m,k+1,j,i)) ));
-
-    // set internal energy, apply floor, correcting total energy
-    Real e_k = 0.5*di*(SQR(u_m1) + SQR(u_m2) + SQR(u_m3));
-    w_e = (u_e - e_k - pb);
-    if (w_e < efloor) {
-      w_e = efloor;
-      u_e = efloor + e_k + pb;
-      sum_e++;
+    // load cell-centered fields into conserved state
+    // use input CC fields if only testing floors with FOFC
+    if (only_testfloors) {
+      u.bx = bcc(m,IBX,k,j,i);
+      u.by = bcc(m,IBY,k,j,i);
+      u.bz = bcc(m,IBZ,k,j,i);
+    // else use simple linear average of face-centered fields
+    } else {
+      u.bx = 0.5*(b.x1f(m,k,j,i) + b.x1f(m,k,j,i+1));
+      u.by = 0.5*(b.x2f(m,k,j,i) + b.x2f(m,k,j+1,i));
+      u.bz = 0.5*(b.x3f(m,k,j,i) + b.x3f(m,k+1,j,i));
     }
 
-    // convert scalars (if any), always stored at end of cons and prim arrays.
-    for (int n=nmhd; n<(nmhd+nscal); ++n) {
-      prim(m,n,k,j,i) = cons(m,n,k,j,i)*di;
+    // call c2p function
+    // (inline function in ideal_c2p_mhd.hpp file)
+    HydPrim1D w;
+    bool dfloor_used=false, efloor_used=false;
+    SingleC2P_IdealMHD(u, eos, w, dfloor_used, efloor_used);
+
+    // set FOFC flag and quit loop if this function called only to check floors
+    if (only_testfloors) {
+      if (dfloor_used || efloor_used) {
+        fofc_(m,k,j,i) = true;
+        sumd++;  // use dfloor as counter for when either is true
+      }
+    } else {
+      if (dfloor_used) {sumd++;}
+      if (efloor_used) {sume++;}
+      // store primitive state in 3D array
+      prim(m,IDN,k,j,i) = w.d;
+      prim(m,IVX,k,j,i) = w.vx;
+      prim(m,IVY,k,j,i) = w.vy;
+      prim(m,IVZ,k,j,i) = w.vz;
+      prim(m,IEN,k,j,i) = w.e;
+      // store cell-centered fields in 3D array
+      bcc(m,IBX,k,j,i) = u.bx;
+      bcc(m,IBY,k,j,i) = u.by;
+      bcc(m,IBZ,k,j,i) = u.bz;
+      // convert scalars (if any), always stored at end of cons and prim arrays.
+      for (int n=nmhd; n<(nmhd+nscal); ++n) {
+        prim(m,n,k,j,i) = cons(m,n,k,j,i)/u.d;
+      }
     }
   }, Kokkos::Sum<int>(nfloord_), Kokkos::Sum<int>(nfloore_));
 
-  // store counters
-  pmy_pack->pmesh->ecounter.neos_dfloor += nfloord_;
-  pmy_pack->pmesh->ecounter.neos_efloor += nfloore_;
+  // store appropriate counters
+  if (only_testfloors) {
+    pmy_pack->pmesh->ecounter.nfofc += nfloord_;
+  } else {
+    pmy_pack->pmesh->ecounter.neos_dfloor += nfloord_;
+    pmy_pack->pmesh->ecounter.neos_efloor += nfloore_;
+  }
 
   return;
 }
@@ -129,36 +129,36 @@ void IdealMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real>
   int &nmhd  = pmy_pack->pmhd->nmhd;
   int &nscal = pmy_pack->pmhd->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
-  Real igm1 = 1.0/(eos_data.gamma - 1.0);
 
-  par_for("mhd_prim2con", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
+  par_for("mhd_p2c", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
-    Real& u_d  = cons(m,IDN,k,j,i);
-    Real& u_e  = cons(m,IEN,k,j,i);
-    Real& u_m1 = cons(m,IVX,k,j,i);
-    Real& u_m2 = cons(m,IVY,k,j,i);
-    Real& u_m3 = cons(m,IVZ,k,j,i);
+    // load single state primitive variables
+    MHDPrim1D w;
+    w.d  = prim(m,IDN,k,j,i);
+    w.vx = prim(m,IVX,k,j,i);
+    w.vy = prim(m,IVY,k,j,i);
+    w.vz = prim(m,IVZ,k,j,i);
+    w.e  = prim(m,IEN,k,j,i);
 
-    const Real& w_d  = prim(m,IDN,k,j,i);
-    const Real& w_vx = prim(m,IVX,k,j,i);
-    const Real& w_vy = prim(m,IVY,k,j,i);
-    const Real& w_vz = prim(m,IVZ,k,j,i);
-    const Real& w_e  = prim(m,IEN,k,j,i);
+    // load cell-centered fields into primitive state
+    w.bx = bcc(m,IBX,k,j,i);
+    w.by = bcc(m,IBY,k,j,i);
+    w.bz = bcc(m,IBZ,k,j,i);
 
-    const Real& bcc1 = bcc(m,IBX,k,j,i);
-    const Real& bcc2 = bcc(m,IBY,k,j,i);
-    const Real& bcc3 = bcc(m,IBZ,k,j,i);
+    // call p2c function
+    HydCons1D u;
+    SingleP2C_IdealMHD(w, u);
 
-    u_d  = w_d;
-    u_m1 = w_vx*w_d;
-    u_m2 = w_vy*w_d;
-    u_m3 = w_vz*w_d;
-    u_e  = w_e + 0.5*( w_d*(SQR(w_vx) + SQR(w_vy) + SQR(w_vz)) +
-                           (SQR(bcc1) + SQR(bcc2) + SQR(bcc3)) );
+    // store conserved state in 3D array
+    cons(m,IDN,k,j,i) = u.d;
+    cons(m,IM1,k,j,i) = u.mx;
+    cons(m,IM2,k,j,i) = u.my;
+    cons(m,IM3,k,j,i) = u.mz;
+    cons(m,IEN,k,j,i) = u.e;
 
     // convert scalars (if any), always stored at end of cons and prim arrays.
     for (int n=nmhd; n<(nmhd+nscal); ++n) {
-      cons(m,n,k,j,i) = prim(m,n,k,j,i)*w_d;
+      cons(m,n,k,j,i) = u.d*prim(m,n,k,j,i);
     }
   });
 

@@ -25,7 +25,6 @@ namespace {
 
 KOKKOS_INLINE_FUNCTION
 static void ComputePrimitiveSingle(Real x1v, Real x2v, Real x3v, CoordData coord,
-                                   Real g_[], Real gi_[],
                                    struct bondi_pgen pgen,
                                    Real& rho, Real& pgas,
                                    Real& uu1, Real& uu2, Real& uu3);
@@ -148,7 +147,7 @@ void ProblemGenerator::BondiAccretion(ParameterInput *pin, const bool restart) {
   // Initialize primitive values (HYDRO ONLY)
   par_for("pgen_bondi", DevExeSpace(), 0,(nmb-1),0,(n3-1),0,(n2-1),0,(n1-1),
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
-    Real rho, pgas, uu1, uu2, uu3, g_[NMETRIC], gi_[NMETRIC];
+    Real rho, pgas, uu1, uu2, uu3;
     Real &x1min = size.d_view(m).x1min;
     Real &x1max = size.d_view(m).x1max;
     Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
@@ -161,7 +160,7 @@ void ProblemGenerator::BondiAccretion(ParameterInput *pin, const bool restart) {
     Real &x3max = size.d_view(m).x3max;
     Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
-    ComputePrimitiveSingle(x1v,x2v,x3v,coord,g_,gi_,bondi_,rho,pgas,uu1,uu2,uu3);
+    ComputePrimitiveSingle(x1v,x2v,x3v,coord,bondi_,rho,pgas,uu1,uu2,uu3);
     w0_(m,IDN,k,j,i) = rho;
     w0_(m,IEN,k,j,i) = pgas/gm1;
     w0_(m,IM1,k,j,i) = uu1;
@@ -335,7 +334,6 @@ namespace {
 
 KOKKOS_INLINE_FUNCTION
 static void ComputePrimitiveSingle(Real x1v, Real x2v, Real x3v, CoordData coord,
-                                   Real g_[], Real gi_[],
                                    struct bondi_pgen pgen,
                                    Real& rho, Real& pgas,
                                    Real& uu1, Real& uu2, Real& uu3) {
@@ -349,21 +347,22 @@ static void ComputePrimitiveSingle(Real x1v, Real x2v, Real x3v, CoordData coord
   Real u0(0.0), u1(0.0), u2(0.0), u3(0.0);
   TransformVector(pgen, my_ur, 0.0, 0.0, x1v, x2v, x3v, &u1, &u2, &u3);
 
-  ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, coord.bh_spin, g_, gi_);
+  Real glower[4][4], gupper[4][4];
+  ComputeMetricAndInverse(x1v,x2v,x3v, coord.is_minkowski, coord.bh_spin, glower, gupper);
 
-  Real tmp = g_[I11]*u1*u1 + 2.0*g_[I12]*u1*u2 + 2.0*g_[I13]*u1*u3
-           + g_[I22]*u2*u2 + 2.0*g_[I23]*u2*u3
-           + g_[I33]*u3*u3;
+  Real tmp = glower[1][1]*u1*u1 + 2.0*glower[1][2]*u1*u2 + 2.0*glower[1][3]*u1*u3
+           + glower[2][2]*u2*u2 + 2.0*glower[2][3]*u2*u3
+           + glower[3][3]*u3*u3;
   Real gammasq = 1.0 + tmp;
-  Real b = g_[I01]*u1+g_[I02]*u2+g_[I03]*u3;
-  u0 = (-b - sqrt(fmax(SQR(b) - g_[I00]*gammasq, 0.0)))/g_[I00];
+  Real b = glower[0][1]*u1 + glower[0][2]*u2 + glower[0][3]*u3;
+  u0 = (-b - sqrt(fmax(SQR(b) - glower[0][0]*gammasq, 0.0)))/glower[0][0];
 
   if (r > 1.0) {
     rho = my_rho;
     pgas = my_pgas;
-    uu1 = u1 - gi_[I01]/gi_[I00] * u0;
-    uu2 = u2 - gi_[I02]/gi_[I00] * u0;
-    uu3 = u3 - gi_[I03]/gi_[I00] * u0;
+    uu1 = u1 - gupper[0][1]/gupper[0][0] * u0;
+    uu2 = u2 - gupper[0][2]/gupper[0][0] * u0;
+    uu3 = u3 - gupper[0][3]/gupper[0][0] * u0;
   } else {
     rho = pgen.dexcise;
     pgas = pgen.pexcise;
@@ -614,8 +613,8 @@ void FixedBondiInflow(Mesh *pm) {
   auto u0_ = pm->pmb_pack->phydro->u0;
   auto w0_ = pm->pmb_pack->phydro->w0;
 
-  pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,is-ng,is-1,0,(n2-1),0,(n3-1));
-  pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,ie+1,ie+ng,0,(n2-1),0,(n3-1));
+  pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,false,is-ng,is-1,0,(n2-1),0,(n3-1));
+  pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,false,ie+1,ie+ng,0,(n2-1),0,(n3-1));
   par_for("fixed_x1", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),0,(ng-1),
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     // inner x1 boundary
@@ -631,9 +630,9 @@ void FixedBondiInflow(Mesh *pm) {
     Real &x3max = size.d_view(m).x3max;
     Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
-    Real rho, pgas, uu1, uu2, uu3, g_[NMETRIC], gi_[NMETRIC];
+    Real rho, pgas, uu1, uu2, uu3;
     if (mb_bcs.d_view(m,BoundaryFace::inner_x1) == BoundaryFlag::user) {
-      ComputePrimitiveSingle(x1v,x2v,x3v,coord,g_,gi_,bondi_,rho,pgas,uu1,uu2,uu3);
+      ComputePrimitiveSingle(x1v,x2v,x3v,coord,bondi_,rho,pgas,uu1,uu2,uu3);
       w0_(m,IDN,k,j,i) = rho;
       w0_(m,IEN,k,j,i) = pgas/(bondi_.gm - 1.0);
       w0_(m,IM1,k,j,i) = uu1;
@@ -645,7 +644,7 @@ void FixedBondiInflow(Mesh *pm) {
     x1v = CellCenterX((ie+i+1)-is, indcs.nx1, x1min, x1max);
 
     if (mb_bcs.d_view(m,BoundaryFace::outer_x1) == BoundaryFlag::user) {
-      ComputePrimitiveSingle(x1v,x2v,x3v,coord,g_,gi_,bondi_, rho,pgas,uu1,uu2,uu3);
+      ComputePrimitiveSingle(x1v,x2v,x3v,coord,bondi_, rho,pgas,uu1,uu2,uu3);
       w0_(m,IDN,k,j,(ie+i+1)) = rho;
       w0_(m,IEN,k,j,(ie+i+1)) = pgas/(bondi_.gm - 1.0);
       w0_(m,IM1,k,j,(ie+i+1)) = uu1;
@@ -657,8 +656,8 @@ void FixedBondiInflow(Mesh *pm) {
   pm->pmb_pack->phydro->peos->PrimToCons(w0_,u0_,is-ng,is-1,0,(n2-1),0,(n3-1));
   pm->pmb_pack->phydro->peos->PrimToCons(w0_,u0_,ie+1,ie+ng,0,(n2-1),0,(n3-1));
 
-  pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,0,(n1-1),js-ng,js-1,0,(n3-1));
-  pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,0,(n1-1),je+1,je+ng,0,(n3-1));
+  pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,false,0,(n1-1),js-ng,js-1,0,(n3-1));
+  pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,false,0,(n1-1),je+1,je+ng,0,(n3-1));
   par_for("fixed_x2", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(ng-1),0,(n1-1),
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     // inner x2 boundary
@@ -674,9 +673,9 @@ void FixedBondiInflow(Mesh *pm) {
     Real &x3max = size.d_view(m).x3max;
     Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
-    Real rho, pgas, uu1, uu2, uu3, g_[NMETRIC], gi_[NMETRIC];
+    Real rho, pgas, uu1, uu2, uu3;
     if (mb_bcs.d_view(m,BoundaryFace::inner_x2) == BoundaryFlag::user) {
-      ComputePrimitiveSingle(x1v,x2v,x3v,coord,g_,gi_,bondi_,rho,pgas,uu1,uu2,uu3);
+      ComputePrimitiveSingle(x1v,x2v,x3v,coord,bondi_,rho,pgas,uu1,uu2,uu3);
       w0_(m,IDN,k,j,i) = rho;
       w0_(m,IEN,k,j,i) = pgas/(bondi_.gm - 1.0);
       w0_(m,IM1,k,j,i) = uu1;
@@ -688,7 +687,7 @@ void FixedBondiInflow(Mesh *pm) {
     x2v = CellCenterX((je+j+1)-js, indcs.nx2, x2min, x2max);
 
     if (mb_bcs.d_view(m,BoundaryFace::outer_x2) == BoundaryFlag::user) {
-      ComputePrimitiveSingle(x1v,x2v,x3v,coord,g_,gi_,bondi_,rho,pgas,uu1,uu2,uu3);
+      ComputePrimitiveSingle(x1v,x2v,x3v,coord,bondi_,rho,pgas,uu1,uu2,uu3);
       w0_(m,IDN,k,(je+j+1),i) = rho;
       w0_(m,IEN,k,(je+j+1),i) = pgas/(bondi_.gm - 1.0);
       w0_(m,IM1,k,(je+j+1),i) = uu1;
@@ -699,8 +698,8 @@ void FixedBondiInflow(Mesh *pm) {
   pm->pmb_pack->phydro->peos->PrimToCons(w0_,u0_,0,(n1-1),js-ng,js-1,0,(n3-1));
   pm->pmb_pack->phydro->peos->PrimToCons(w0_,u0_,0,(n1-1),je+1,je+ng,0,(n3-1));
 
-  pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,0,(n1-1),0,(n2-1),ks-ng,ks-1);
-  pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,0,(n1-1),0,(n2-1),ke+1,ke+ng);
+  pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,false,0,(n1-1),0,(n2-1),ks-ng,ks-1);
+  pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,false,0,(n1-1),0,(n2-1),ke+1,ke+ng);
   par_for("fixed_ix3", DevExeSpace(),0,(nmb-1),0,(ng-1),0,(n2-1),0,(n1-1),
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     // inner x3 boundary
@@ -716,9 +715,9 @@ void FixedBondiInflow(Mesh *pm) {
     Real &x3max = size.d_view(m).x3max;
     Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
-    Real rho, pgas, uu1, uu2, uu3, g_[NMETRIC], gi_[NMETRIC];
+    Real rho, pgas, uu1, uu2, uu3;
     if (mb_bcs.d_view(m,BoundaryFace::inner_x3) == BoundaryFlag::user) {
-      ComputePrimitiveSingle(x1v,x2v,x3v,coord,g_,gi_,bondi_,rho,pgas,uu1,uu2,uu3);
+      ComputePrimitiveSingle(x1v,x2v,x3v,coord,bondi_,rho,pgas,uu1,uu2,uu3);
       w0_(m,IDN,k,j,i) = rho;
       w0_(m,IEN,k,j,i) = pgas/(bondi_.gm - 1.0);
       w0_(m,IM1,k,j,i) = uu1;
@@ -730,7 +729,7 @@ void FixedBondiInflow(Mesh *pm) {
     x3v = CellCenterX((ke+k+1)-ks, indcs.nx3, x3min, x3max);
 
     if (mb_bcs.d_view(m,BoundaryFace::outer_x3) == BoundaryFlag::user) {
-      ComputePrimitiveSingle(x1v,x2v,x3v,coord,g_,gi_,bondi_,rho,pgas,uu1,uu2,uu3);
+      ComputePrimitiveSingle(x1v,x2v,x3v,coord,bondi_,rho,pgas,uu1,uu2,uu3);
       w0_(m,IDN,(ke+k+1),j,i) = rho;
       w0_(m,IEN,(ke+k+1),j,i) = pgas/(bondi_.gm - 1.0);
       w0_(m,IM1,(ke+k+1),j,i) = uu1;

@@ -25,45 +25,106 @@ IsothermalHydro::IsothermalHydro(MeshBlockPack *pp, ParameterInput *pin) :
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn void SingleC2P_IsothermalHyd()
+//! \brief Converts single state of conserved variables into primitive variables for
+//! non-relativistic hydrodynamics with an isothermal EOS.
+
+KOKKOS_INLINE_FUNCTION
+void SingleC2P_IsothermalHyd(HydCons1D &u, const Real &dfloor_,
+                             HydPrim1D &w, bool &dfloor_used) {
+  // apply density floor, without changing momentum
+  if (u.d < dfloor_) {
+    u.d = dfloor_;
+    dfloor_used = true;
+  }
+  w.d = u.d;
+  // compute velocities
+  Real di = 1.0/u.d;
+  w.vx = di*u.mx;
+  w.vy = di*u.my;
+  w.vz = di*u.mz;
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void SingleP2C_IsothermalHyd()
+//! \brief Converts single state of primitive variables into conserved variables for
+//! non-relativistic hydrodynamics with an isothermal gas EOS.
+
+KOKKOS_INLINE_FUNCTION
+void SingleP2C_IsothermalHyd(const HydPrim1D &w, HydCons1D &u) {
+  u.d  = w.d;
+  u.mx = w.d*w.vx;
+  u.my = w.d*w.vy;
+  u.mz = w.d*w.vz;
+  return;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn void ConsToPrim()
 //! \brief Converts conserved into primitive variables. Operates over range of cells given
 //! in argument list.
 
 void IsothermalHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
+                                 const bool only_testfloors,
                                  const int il, const int iu, const int jl, const int ju,
                                  const int kl, const int ku) {
   int &nhyd  = pmy_pack->phydro->nhydro;
   int &nscal = pmy_pack->phydro->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
+  auto &fofc_ = pmy_pack->phydro->fofc;
+  Real dfloor = eos_data.dfloor;
 
-  Real &dfloor_ = eos_data.dfloor;
+  const int ni   = (iu - il + 1);
+  const int nji  = (ju - jl + 1)*ni;
+  const int nkji = (ku - kl + 1)*nji;
+  const int nmkji = nmb*nkji;
 
-  par_for("isohyd_con2prim", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
-  KOKKOS_LAMBDA(int m, int k, int j, int i) {
-    Real& u_d  = cons(m,IDN,k,j,i);
-    const Real& u_m1 = cons(m,IM1,k,j,i);
-    const Real& u_m2 = cons(m,IM2,k,j,i);
-    const Real& u_m3 = cons(m,IM3,k,j,i);
+  int nfloord_=0;
+  Kokkos::parallel_reduce("isohyd_c2p",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+  KOKKOS_LAMBDA(const int &idx, int &sumd) {
+    int m = (idx)/nkji;
+    int k = (idx - m*nkji)/nji;
+    int j = (idx - m*nkji - k*nji)/ni;
+    int i = (idx - m*nkji - k*nji - j*ni) + il;
+    j += jl;
+    k += kl;
 
-    Real& w_d  = prim(m,IDN,k,j,i);
-    Real& w_vx = prim(m,IVX,k,j,i);
-    Real& w_vy = prim(m,IVY,k,j,i);
-    Real& w_vz = prim(m,IVZ,k,j,i);
+    // load single state conserved variables
+    HydCons1D u;
+    u.d  = cons(m,IDN,k,j,i);
+    u.mx = cons(m,IM1,k,j,i);
+    u.my = cons(m,IM2,k,j,i);
+    u.mz = cons(m,IM3,k,j,i);
 
-    // apply density floor, without changing momentum or energy
-    u_d = (u_d > dfloor_) ?  u_d : dfloor_;
-    w_d = u_d;
+    // call c2p function
+    HydPrim1D w;
+    bool dfloor_used = false;
+    SingleC2P_IsothermalHyd(u, dfloor, w, dfloor_used);
+    if (dfloor_used) {sumd++;}
 
-    Real di = 1.0/u_d;
-    w_vx = u_m1*di;
-    w_vy = u_m2*di;
-    w_vz = u_m3*di;
-
-    // convert scalars (if any)
-    for (int n=nhyd; n<(nhyd+nscal); ++n) {
-      prim(m,n,k,j,i) = cons(m,n,k,j,i)/u_d;
+    // set FOFC flag and quit loop if this function called only to check floors
+    if (only_testfloors) {
+      if (dfloor_used) {fofc_(m,k,j,i) = true;}
+    } else {
+      // store primitive state in 3D array
+      prim(m,IDN,k,j,i) = w.d;
+      prim(m,IVX,k,j,i) = w.vx;
+      prim(m,IVY,k,j,i) = w.vy;
+      prim(m,IVZ,k,j,i) = w.vz;
+      // convert scalars (if any)
+      for (int n=nhyd; n<(nhyd+nscal); ++n) {
+        prim(m,n,k,j,i) = cons(m,n,k,j,i)/u.d;
+      }
     }
-  });
+  }, Kokkos::Sum<int>(nfloord_));
+
+  // store appropriate counters
+  if (only_testfloors) {
+    pmy_pack->pmesh->ecounter.nfofc += nfloord_;
+  } else {
+    pmy_pack->pmesh->ecounter.neos_dfloor += nfloord_;
+  }
 
   return;
 }
@@ -71,7 +132,7 @@ void IsothermalHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &pri
 //----------------------------------------------------------------------------------------
 //! \fn void PrimToCons()
 //! \brief Converts primitive into conserved variables. Operates over range of cells given
-//! in argument list.
+//! in argument list.  Floors never needed.
 
 void IsothermalHydro::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons,
                                  const int il, const int iu, const int jl, const int ju,
@@ -80,26 +141,28 @@ void IsothermalHydro::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real
   int &nscal = pmy_pack->phydro->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
 
-  par_for("isohyd_prim2con", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
+  par_for("isohyd_p2c", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
-    Real& u_d  = cons(m,IDN,k,j,i);
-    Real& u_m1 = cons(m,IM1,k,j,i);
-    Real& u_m2 = cons(m,IM2,k,j,i);
-    Real& u_m3 = cons(m,IM3,k,j,i);
+    // load single state primitive variables
+    HydPrim1D w;
+    w.d  = prim(m,IDN,k,j,i);
+    w.vx = prim(m,IVX,k,j,i);
+    w.vy = prim(m,IVY,k,j,i);
+    w.vz = prim(m,IVZ,k,j,i);
 
-    const Real& w_d  = prim(m,IDN,k,j,i);
-    const Real& w_vx = prim(m,IVX,k,j,i);
-    const Real& w_vy = prim(m,IVY,k,j,i);
-    const Real& w_vz = prim(m,IVZ,k,j,i);
+    // call p2c function
+    HydCons1D u;
+    SingleP2C_IsothermalHyd(w, u);
 
-    u_d  = w_d;
-    u_m1 = w_vx*w_d;
-    u_m2 = w_vy*w_d;
-    u_m3 = w_vz*w_d;
+    // store conserved state in 3D array
+    cons(m,IDN,k,j,i) = u.d;
+    cons(m,IM1,k,j,i) = u.mx;
+    cons(m,IM2,k,j,i) = u.my;
+    cons(m,IM3,k,j,i) = u.mz;
 
     // convert scalars (if any)
     for (int n=nhyd; n<(nhyd+nscal); ++n) {
-      cons(m,n,k,j,i) = prim(m,n,k,j,i)*w_d;
+      cons(m,n,k,j,i) = u.d*prim(m,n,k,j,i);
     }
   });
 

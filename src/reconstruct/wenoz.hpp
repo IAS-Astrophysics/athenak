@@ -1,25 +1,26 @@
+#ifndef RECONSTRUCT_WENOZ_HPP_
+#define RECONSTRUCT_WENOZ_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file ppm.cpp
-//  \brief WENO-Z reconstruction for a Cartesian-like coordinate with uniform spacing.
-//
-// REFERENCES:
-// Borges R., Carmona M., Costa B., Don W.S. , "An improved weighted essentially
-// non-oscillatory scheme for hyperbolic conservation laws" , JCP, 227, 3191 (2008)
+//! \file wenoz.hpp
+//! \brief WENO-Z reconstruction for a Cartesian-like coordinate with uniform spacing.
+//!
+//! REFERENCES:
+//! Borges R., Carmona M., Costa B., Don W.S. , "An improved weighted essentially
+//! non-oscillatory scheme for hyperbolic conservation laws" , JCP, 227, 3191 (2008)
 
 #include <math.h>
-
 #include <algorithm>    // max()
 
 #include "athena.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \fn WENOZ()
-//  \brief Reconstructs 5th-order polynomial in cell i to compute ql(i+1) and qr(i).
-//  Works for any dimension by passing in the appropriate q_im2,...,q _ip2.
+//! \brief Reconstructs 5th-order polynomial in cell i to compute ql(i+1) and qr(i).
+//! Works for any dimension by passing in the appropriate q_im2,...,q _ip2.
 
 KOKKOS_INLINE_FUNCTION
 void WENOZ(const Real &q_im2, const Real &q_im1, const Real &q_i, const Real &q_ip1,
@@ -82,8 +83,8 @@ void WENOZ(const Real &q_im2, const Real &q_im1, const Real &q_i, const Real &q_
 
 //----------------------------------------------------------------------------------------
 //! \fn WENOZ
-//  \brief Wrapper function for WENOZ reconstruction in x1-direction.
-//  This function should be called over [is-1,ie+1] to get BOTH L/R states over [is,ie]
+//! \brief Wrapper function for WENOZ reconstruction in x1-direction.
+//! This function should be called over [is-1,ie+1] to get BOTH L/R states over [is,ie]
 
 KOKKOS_INLINE_FUNCTION
 void WENOZX1(TeamMember_t const &member,const int m,const int k,const int j,
@@ -101,8 +102,8 @@ void WENOZX1(TeamMember_t const &member,const int m,const int k,const int j,
 
 //----------------------------------------------------------------------------------------
 //! \fn WENOZX2
-//  \brief Wrapper function for WENOZ reconstruction in x1-direction.
-//  This function should be called over [js-1,je+1] to get BOTH L/R states over [js,je]
+//! \brief Wrapper function for WENOZ reconstruction in x1-direction.
+//! This function should be called over [js-1,je+1] to get BOTH L/R states over [js,je]
 
 KOKKOS_INLINE_FUNCTION
 void WENOZX2(TeamMember_t const &member,const int m,const int k,const int j,
@@ -120,8 +121,8 @@ void WENOZX2(TeamMember_t const &member,const int m,const int k,const int j,
 
 //----------------------------------------------------------------------------------------
 //! \fn WENOZX3
-//  \brief Wrapper function for WENOZ reconstruction in x1-direction.
-//  This function should be called over [ks-1,ke+1] to get BOTH L/R states over [ks,ke]
+//! \brief Wrapper function for WENOZ reconstruction in x1-direction.
+//! This function should be called over [ks-1,ke+1] to get BOTH L/R states over [ks,ke]
 
 KOKKOS_INLINE_FUNCTION
 void WENOZX3(TeamMember_t const &member,const int m,const int k,const int j,
@@ -136,3 +137,4 @@ void WENOZX3(TeamMember_t const &member,const int m,const int k,const int j,
   }
   return;
 }
+#endif // RECONSTRUCT_WENOZ_HPP_

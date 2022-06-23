@@ -4,11 +4,10 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file mhd_fluxes.cpp
-//  \brief Calculate fluxes of the conserved variables, and area-averaged electric fields
-//  E = - (v X B) on cell faces for mhd.  Fluxes are stored in face-centered vector
-//  'uflx', while electric fields are stored in individual arrays: e2x1,e3x1 on x1-faces;
-//  e1x2,e3x2 on x2-faces; e1x3,e2x3 on x3-faces.
-//
+//! \brief Calculate fluxes of the conserved variables, and area-averaged electric fields
+//! E = - (v X B) on cell faces for mhd.  Fluxes are stored in face-centered vector
+//! 'uflx', while electric fields are stored in individual arrays: e2x1,e3x1 on x1-faces;
+//! e1x2,e3x2 on x2-faces; e1x3,e2x3 on x3-faces.
 
 #include <iostream>
 
@@ -16,34 +15,29 @@
 #include "mesh/mesh.hpp"
 #include "mhd.hpp"
 #include "eos/eos.hpp"
-#include "diffusion/viscosity.hpp"
-#include "diffusion/resistivity.hpp"
-#include "diffusion/conduction.hpp"
-// include inlined reconstruction methods (yuck...)
-#include "reconstruct/dc.cpp"           // NOLINT(build/include)
-#include "reconstruct/plm.cpp"          // NOLINT(build/include)
-#include "reconstruct/ppm.cpp"          // NOLINT(build/include)
-#include "reconstruct/wenoz.cpp"        // NOLINT(build/include)
-// include inlined Riemann solvers (double yuck...)
-#include "mhd/rsolvers/advect_mhd.cpp"  // NOLINT(build/include)
-#include "mhd/rsolvers/llf_mhd.cpp"     // NOLINT(build/include)
-#include "mhd/rsolvers/hlle_mhd.cpp"    // NOLINT(build/include)
-#include "mhd/rsolvers/hlld_mhd.cpp"    // NOLINT(build/include)
-#include "mhd/rsolvers/llf_srmhd.cpp"   // NOLINT(build/include)
-#include "mhd/rsolvers/hlle_srmhd.cpp"  // NOLINT(build/include)
-#include "mhd/rsolvers/llf_grmhd.cpp"   // NOLINT(build/include)
-#include "mhd/rsolvers/hlle_grmhd.cpp"  // NOLINT(build/include)
-// #include "mhd/rsolvers/roe_mhd.cpp"     // NOLINT(build/include)
+#include "reconstruct/dc.hpp"
+#include "reconstruct/plm.hpp"
+#include "reconstruct/ppm.hpp"
+#include "reconstruct/wenoz.hpp"
+#include "mhd/rsolvers/advect_mhd.hpp"
+#include "mhd/rsolvers/llf_mhd.hpp"
+#include "mhd/rsolvers/hlle_mhd.hpp"
+#include "mhd/rsolvers/hlld_mhd.hpp"
+#include "mhd/rsolvers/llf_srmhd.hpp"
+#include "mhd/rsolvers/hlle_srmhd.hpp"
+#include "mhd/rsolvers/llf_grmhd.hpp"
+#include "mhd/rsolvers/hlle_grmhd.hpp"
+// #include "mhd/rsolvers/roe_mhd.hpp"
 
 namespace mhd {
 //----------------------------------------------------------------------------------------
-//! \fn  void MHD::CalcFlux
+//! \fn void MHD::CalculateFlux
 //! \brief Calculate fluxes of conserved variables, and face-centered area-averaged EMFs
 //! for evolution of magnetic field
 //! Note this function is templated over RS for better performance on GPUs.
 
 template <MHD_RSolver rsolver_method_>
-TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage) {
+void MHD::CalculateFluxes(Driver *pdriver, int stage) {
   RegionIndcs &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
@@ -410,7 +404,7 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage) {
             wim1.vx = w0_(m,IVX,k,j,i-1);
             wim1.vy = w0_(m,IVY,k,j,i-1);
             wim1.vz = w0_(m,IVZ,k,j,i-1);
-            wim1.p  = eos.IdealGasPressure(w0_(m,IEN,k,j,i-1));
+            wim1.e  = w0_(m,IEN,k,j,i-1);
             wim1.by = bcc(m,IBY,k,j,i-1);
             wim1.bz = bcc(m,IBZ,k,j,i-1);
 
@@ -419,13 +413,13 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage) {
             wi.vx = w0_(m,IVX,k,j,i);
             wi.vy = w0_(m,IVY,k,j,i);
             wi.vz = w0_(m,IVZ,k,j,i);
-            wi.p  = eos.IdealGasPressure(w0_(m,IEN,k,j,i));
+            wi.e  = w0_(m,IEN,k,j,i);
             wi.by = bcc(m,IBY,k,j,i);
             wi.bz = bcc(m,IBZ,k,j,i);
             Real bxi = b0_x1(m,k,j,i);
 
             MHDCons1D flux;
-            SingleStateLLF_GR(wim1, wi, bxi, x1f, x2v, x3v, IVX, coord, eos, flux);
+            SingleStateLLF_GRMHD(wim1, wi, bxi, x1f, x2v, x3v, IVX, coord, eos, flux);
 
             fcorr_x1(m,IDN,k,j,i) = flux.d;
             fcorr_x1(m,IM1,k,j,i) = flux.mx;
@@ -441,30 +435,30 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage) {
           if (fc_mask_.x2f(m,k,j,i)) {
             MHDPrim1D wjm1;
             wjm1.d  = w0_(m,IDN,k,j-1,i);
-            wjm1.vx = w0_(m,IVX,k,j-1,i);
-            wjm1.vy = w0_(m,IVY,k,j-1,i);
-            wjm1.vz = w0_(m,IVZ,k,j-1,i);
-            wjm1.p  = eos.IdealGasPressure(w0_(m,IEN,k,j-1,i));
+            wjm1.vx = w0_(m,IVY,k,j-1,i);
+            wjm1.vy = w0_(m,IVZ,k,j-1,i);
+            wjm1.vz = w0_(m,IVX,k,j-1,i);
+            wjm1.e  = w0_(m,IEN,k,j-1,i);
             wjm1.by = bcc(m,IBZ,k,j-1,i);
             wjm1.bz = bcc(m,IBX,k,j-1,i);
 
             MHDPrim1D wj;
             wj.d  = w0_(m,IDN,k,j,i);
-            wj.vx = w0_(m,IVX,k,j,i);
-            wj.vy = w0_(m,IVY,k,j,i);
-            wj.vz = w0_(m,IVZ,k,j,i);
-            wj.p  = eos.IdealGasPressure(w0_(m,IEN,k,j,i));
+            wj.vx = w0_(m,IVY,k,j,i);
+            wj.vy = w0_(m,IVZ,k,j,i);
+            wj.vz = w0_(m,IVX,k,j,i);
+            wj.e  = w0_(m,IEN,k,j,i);
             wj.by = bcc(m,IBZ,k,j,i);
             wj.bz = bcc(m,IBX,k,j,i);
             Real bxi = b0_x2(m,k,j,i);
 
             MHDCons1D flux;
-            SingleStateLLF_GR(wjm1, wj, bxi, x1v, x2f, x3v, IVY, coord, eos, flux);
+            SingleStateLLF_GRMHD(wjm1, wj, bxi, x1v, x2f, x3v, IVY, coord, eos, flux);
 
             fcorr_x2(m,IDN,k,j,i) = flux.d;
-            fcorr_x2(m,IM1,k,j,i) = flux.mx;
-            fcorr_x2(m,IM2,k,j,i) = flux.my;
-            fcorr_x2(m,IM3,k,j,i) = flux.mz;
+            fcorr_x2(m,IM2,k,j,i) = flux.mx;
+            fcorr_x2(m,IM3,k,j,i) = flux.my;
+            fcorr_x2(m,IM1,k,j,i) = flux.mz;
             fcorr_x2(m,IEN,k,j,i) = flux.e;
             fcorr_e12(m,k,j,i)    = flux.by;
             fcorr_e32(m,k,j,i)    = flux.bz;
@@ -475,30 +469,30 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage) {
           if (fc_mask_.x3f(m,k,j,i)) {
             MHDPrim1D wkm1;
             wkm1.d  = w0_(m,IDN,k-1,j,i);
-            wkm1.vx = w0_(m,IVX,k-1,j,i);
-            wkm1.vy = w0_(m,IVY,k-1,j,i);
-            wkm1.vz = w0_(m,IVZ,k-1,j,i);
-            wkm1.p  = eos.IdealGasPressure(w0_(m,IEN,k-1,j,i));
+            wkm1.vx = w0_(m,IVZ,k-1,j,i);
+            wkm1.vy = w0_(m,IVX,k-1,j,i);
+            wkm1.vz = w0_(m,IVY,k-1,j,i);
+            wkm1.e  = w0_(m,IEN,k-1,j,i);
             wkm1.by = bcc(m,IBX,k-1,j,i);
             wkm1.bz = bcc(m,IBY,k-1,j,i);
 
             MHDPrim1D wk;
             wk.d  = w0_(m,IDN,k,j,i);
-            wk.vx = w0_(m,IVX,k,j,i);
-            wk.vy = w0_(m,IVY,k,j,i);
-            wk.vz = w0_(m,IVZ,k,j,i);
-            wk.p  = eos.IdealGasPressure(w0_(m,IEN,k,j,i));
+            wk.vx = w0_(m,IVZ,k,j,i);
+            wk.vy = w0_(m,IVX,k,j,i);
+            wk.vz = w0_(m,IVY,k,j,i);
+            wk.e  = w0_(m,IEN,k,j,i);
             wk.by = bcc(m,IBX,k,j,i);
             wk.bz = bcc(m,IBY,k,j,i);
             Real bxi = b0_x3(m,k,j,i);
 
             MHDCons1D flux;
-            SingleStateLLF_GR(wkm1, wk, bxi, x1v, x2v, x3f, IVZ, coord, eos, flux);
+            SingleStateLLF_GRMHD(wkm1, wk, bxi, x1v, x2v, x3f, IVZ, coord, eos, flux);
 
             fcorr_x3(m,IDN,k,j,i) = flux.d;
-            fcorr_x3(m,IM1,k,j,i) = flux.mx;
-            fcorr_x3(m,IM2,k,j,i) = flux.my;
-            fcorr_x3(m,IM3,k,j,i) = flux.mz;
+            fcorr_x3(m,IM3,k,j,i) = flux.mx;
+            fcorr_x3(m,IM1,k,j,i) = flux.my;
+            fcorr_x3(m,IM2,k,j,i) = flux.mz;
             fcorr_x3(m,IEN,k,j,i) = flux.e;
             fcorr_e23(m,k,j,i)    = flux.by;
             fcorr_e13(m,k,j,i)    = flux.bz;
@@ -507,29 +501,17 @@ TaskStatus MHD::CalcFluxes(Driver *pdriver, int stage) {
       });
     }
   }
-
-  // Add viscous, resistive, heat-flux, etc fluxes
-  if (pvisc != nullptr) {
-    pvisc->IsotropicViscousFlux(w0, pvisc->nu, eos, uflx);
-  }
-  if ((presist != nullptr) && (peos->eos_data.is_ideal)) {
-    presist->OhmicEnergyFlux(b0, uflx);
-  }
-  if (pcond != nullptr) {
-    pcond->IsotropicHeatFlux(w0, pcond->kappa, eos, uflx);
-  }
-
-  return TaskStatus::complete;
+  return;
 }
 
 // function definitions for each template parameter
-template TaskStatus MHD::CalcFluxes<MHD_RSolver::advect>(Driver *pdriver, int stage);
-template TaskStatus MHD::CalcFluxes<MHD_RSolver::llf>(Driver *pdriver, int stage);
-template TaskStatus MHD::CalcFluxes<MHD_RSolver::hlle>(Driver *pdriver, int stage);
-template TaskStatus MHD::CalcFluxes<MHD_RSolver::hlld>(Driver *pdriver, int stage);
-template TaskStatus MHD::CalcFluxes<MHD_RSolver::llf_sr>(Driver *pdriver, int stage);
-template TaskStatus MHD::CalcFluxes<MHD_RSolver::hlle_sr>(Driver *pdriver, int stage);
-template TaskStatus MHD::CalcFluxes<MHD_RSolver::llf_gr>(Driver *pdriver, int stage);
-template TaskStatus MHD::CalcFluxes<MHD_RSolver::hlle_gr>(Driver *pdriver, int stage);
+template void MHD::CalculateFluxes<MHD_RSolver::advect>(Driver *pdriver, int stage);
+template void MHD::CalculateFluxes<MHD_RSolver::llf>(Driver *pdriver, int stage);
+template void MHD::CalculateFluxes<MHD_RSolver::hlle>(Driver *pdriver, int stage);
+template void MHD::CalculateFluxes<MHD_RSolver::hlld>(Driver *pdriver, int stage);
+template void MHD::CalculateFluxes<MHD_RSolver::llf_sr>(Driver *pdriver, int stage);
+template void MHD::CalculateFluxes<MHD_RSolver::hlle_sr>(Driver *pdriver, int stage);
+template void MHD::CalculateFluxes<MHD_RSolver::llf_gr>(Driver *pdriver, int stage);
+template void MHD::CalculateFluxes<MHD_RSolver::hlle_gr>(Driver *pdriver, int stage);
 
 } // namespace mhd

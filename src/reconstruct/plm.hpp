@@ -1,18 +1,20 @@
+#ifndef RECONSTRUCT_PLM_HPP_
+#define RECONSTRUCT_PLM_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file plm.cpp
-//  \brief  piecewise linear reconstruction implemented as inline functions
-//  This version only works with uniform mesh spacing
+//! \file plm.hpp
+//! \brief  piecewise linear reconstruction implemented as inline functions
+//! This version only works with uniform mesh spacing
 
 #include "athena.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \fn PLM()
-//  \brief Reconstructs linear slope in cell i to compute ql(i+1) and qr(i). Works for
-//  reconstruction in any dimension by passing in the appropriate q_im1, q_i, and q_ip1.
+//! \brief Reconstructs linear slope in cell i to compute ql(i+1) and qr(i). Works for
+//! reconstruction in any dimension by passing in the appropriate q_im1, q_i, and q_ip1.
 
 KOKKOS_INLINE_FUNCTION
 void PLM(const Real &q_im1, const Real &q_i, const Real &q_ip1,
@@ -34,8 +36,8 @@ void PLM(const Real &q_im1, const Real &q_i, const Real &q_ip1,
 
 //----------------------------------------------------------------------------------------
 //! \fn PiecewiseLinearX1()
-//  \brief Wrapper function for PLM reconstruction in x1-direction.
-//  This function should be called over [is-1,ie+1] to get BOTH L/R states over [is,ie]
+//! \brief Wrapper function for PLM reconstruction in x1-direction.
+//! This function should be called over [is-1,ie+1] to get BOTH L/R states over [is,ie]
 
 KOKKOS_INLINE_FUNCTION
 void PiecewiseLinearX1(TeamMember_t const &member, const int m, const int k, const int j,
@@ -52,8 +54,8 @@ void PiecewiseLinearX1(TeamMember_t const &member, const int m, const int k, con
 
 //----------------------------------------------------------------------------------------
 //! \fn PiecewiseLinearX2()
-//  \brief Wrapper function for PLM reconstruction in x2-direction.
-//  This function should be called over [js-1,je+1] to get BOTH L/R states over [js,je]
+//! \brief Wrapper function for PLM reconstruction in x2-direction.
+//! This function should be called over [js-1,je+1] to get BOTH L/R states over [js,je]
 
 KOKKOS_INLINE_FUNCTION
 void PiecewiseLinearX2(TeamMember_t const &member, const int m, const int k, const int j,
@@ -70,8 +72,8 @@ void PiecewiseLinearX2(TeamMember_t const &member, const int m, const int k, con
 
 //----------------------------------------------------------------------------------------
 //! \fn PiecewiseLinearX3()
-//  \brief Wrapper function for PLM reconstruction in x3-direction.
-//  This function should be called over [ks-1,ke+1] to get BOTH L/R states over [ks,ke]
+//! \brief Wrapper function for PLM reconstruction in x3-direction.
+//! This function should be called over [ks-1,ke+1] to get BOTH L/R states over [ks,ke]
 
 KOKKOS_INLINE_FUNCTION
 void PiecewiseLinearX3(TeamMember_t const &member, const int m, const int k, const int j,
@@ -85,3 +87,4 @@ void PiecewiseLinearX3(TeamMember_t const &member, const int m, const int k, con
   }
   return;
 }
+#endif // RECONSTRUCT_PLM_HPP_

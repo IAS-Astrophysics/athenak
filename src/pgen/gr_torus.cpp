@@ -123,8 +123,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   torus.r_edge = pin->GetReal("problem", "r_edge");
   torus.r_peak = pin->GetReal("problem", "r_peak");
 
-  torus.b_norm = pin->GetReal("problem", "b_norm");
-
   // local parameters
   Real pert_amp = pin->GetOrAddReal("problem", "pert_amp", 0.0);
 
@@ -303,11 +301,12 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       TransformVector(trs, u0_bl, 0.0, u2_bl, u3_bl,
                       x1v, x2v, x3v, &u0, &u1, &u2, &u3);
 
-      Real g_[NMETRIC], gi_[NMETRIC];
-      ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, coord.bh_spin, g_, gi_);
-      uu1 = u1 - gi_[I01]/gi_[I00] * u0;
-      uu2 = u2 - gi_[I02]/gi_[I00] * u0;
-      uu3 = u3 - gi_[I03]/gi_[I00] * u0;
+      Real glower[4][4], gupper[4][4];
+      ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, coord.bh_spin,
+                              glower, gupper);
+      uu1 = u1 - gupper[0][1]/gupper[0][0] * u0;
+      uu2 = u2 - gupper[0][2]/gupper[0][0] * u0;
+      uu3 = u3 - gupper[0][3]/gupper[0][0] * u0;
     }
 
     // Set primitive values, including random perturbations to pressure
@@ -322,6 +321,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   if (pmbp->pmhd != nullptr) {
     // parse some more parameters from input
+    torus.b_norm = pin->GetReal("problem", "b_norm");
     torus.potential_cutoff = pin->GetReal("problem", "potential_cutoff");
     torus.potential_r_pow = pin->GetReal("problem", "potential_r_pow");
     torus.potential_rho_pow = pin->GetReal("problem", "potential_rho_pow");
@@ -744,13 +744,13 @@ void NoInflowTorus(Mesh *pm) {
   // ConsToPrim over all x1 ghost zones *and* at the innermost/outermost x1-active zones
   // of Meshblocks, even if Meshblock face is not at the edge of computational domain
   if (pm->pmb_pack->phydro != nullptr) {
-    pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,is-ng,is,0,(n2-1),0,(n3-1));
-    pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,ie,ie+ng,0,(n2-1),0,(n3-1));
+    pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,false,is-ng,is,0,(n2-1),0,(n3-1));
+    pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,false,ie,ie+ng,0,(n2-1),0,(n3-1));
   } else if (pm->pmb_pack->pmhd != nullptr) {
     auto &b0 = pm->pmb_pack->pmhd->b0;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
-    pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc,is-ng,is,0,(n2-1),0,(n3-1));
-    pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc,ie,ie+ng,0,(n2-1),0,(n3-1));
+    pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc,false,is-ng,is,0,(n2-1),0,(n3-1));
+    pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc,false,ie,ie+ng,0,(n2-1),0,(n3-1));
   }
   // Set X1-BCs on w0 if Meshblock face is at the edge of computational domain
   par_for("noinflow_hydro_x1", DevExeSpace(),0,(nmb-1),0,(nvar-1),0,(n3-1),0,(n2-1),
@@ -831,13 +831,13 @@ void NoInflowTorus(Mesh *pm) {
   // ConsToPrim over all x2 ghost zones *and* at the innermost/outermost x2-active zones
   // of Meshblocks, even if Meshblock face is not at the edge of computational domain
   if (pm->pmb_pack->phydro != nullptr) {
-    pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,0,(n1-1),js-ng,js,0,(n3-1));
-    pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,0,(n1-1),je,je+ng,0,(n3-1));
+    pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,false,0,(n1-1),js-ng,js,0,(n3-1));
+    pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,false,0,(n1-1),je,je+ng,0,(n3-1));
   } else if (pm->pmb_pack->pmhd != nullptr) {
     auto &b0 = pm->pmb_pack->pmhd->b0;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
-    pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc,0,(n1-1),js-ng,js,0,(n3-1));
-    pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc,0,(n1-1),je,je+ng,0,(n3-1));
+    pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc,false,0,(n1-1),js-ng,js,0,(n3-1));
+    pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc,false,0,(n1-1),je,je+ng,0,(n3-1));
   }
   // Set X2-BCs on w0 if Meshblock face is at the edge of computational domain
   par_for("noinflow_hydro_x2", DevExeSpace(),0,(nmb-1),0,(nvar-1),0,(n3-1),0,(n1-1),
@@ -918,13 +918,13 @@ void NoInflowTorus(Mesh *pm) {
   // ConsToPrim over all x3 ghost zones *and* at the innermost/outermost x3-active zones
   // of Meshblocks, even if Meshblock face is not at the edge of computational domain
   if (pm->pmb_pack->phydro != nullptr) {
-    pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,0,(n1-1),0,(n2-1),ks-ng,ks);
-    pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,0,(n1-1),0,(n2-1),ke,ke+ng);
+    pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,false,0,(n1-1),0,(n2-1),ks-ng,ks);
+    pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,false,0,(n1-1),0,(n2-1),ke,ke+ng);
   } else if (pm->pmb_pack->pmhd != nullptr) {
     auto &b0 = pm->pmb_pack->pmhd->b0;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
-    pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc,0,(n1-1),0,(n2-1),ks-ng,ks);
-    pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc,0,(n1-1),0,(n2-1),ke,ke+ng);
+    pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc,false,0,(n1-1),0,(n2-1),ks-ng,ks);
+    pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc,false,0,(n1-1),0,(n2-1),ke,ke+ng);
   }
   // Set x3-BCs on w0 if Meshblock face is at the edge of computational domain
   par_for("noinflow_hydro_x3", DevExeSpace(),0,(nmb-1),0,(nvar-1),0,(n2-1),0,(n1-1),

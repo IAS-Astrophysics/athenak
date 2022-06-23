@@ -46,9 +46,6 @@ using Real = double;
 enum VariableIndex {IDN=0, IM1=1, IVX=1, IM2=2, IVY=2, IM3=3, IVZ=3, IEN=4, ITM=4};
 // array indices for components of magnetic field
 enum BFieldIndex {IBX=0, IBY=1, IBZ=2};
-// array indices for metric matrices in GR
-enum MetricIndex {I00=0, I01=1, I02=2, I03=3, I11=4, I12=5, I13=6, I22=7, I23=8, I33=9,
-                  NMETRIC=10};
 
 // integer constants to specify reconstruction methods
 enum ReconstructionMethod {dc, plm, ppm, wenoz};
@@ -60,18 +57,18 @@ enum TimeEvolution {tstatic, kinematic, dynamic};
 enum PhysicsModule {HydroDynamics, MagnetoHydroDynamics};
 
 // structs to store primitive/conserved variables in one-dimension
-// (density, velocity/momentum, pressure/(total energy), [transverse magnetic field])
+// (density, velocity/momentum, internal/total energy, [transverse magnetic field])
 struct HydPrim1D {
-  Real d, vx, vy, vz, p;
+  Real d, vx, vy, vz, e;
 };
 struct HydCons1D {
   Real d, mx, my, mz, e;
 };
 struct MHDPrim1D {
-  Real d, vx, vy, vz, p, by, bz;
+  Real d, vx, vy, vz, e, bx, by, bz;
 };
 struct MHDCons1D {
-  Real d, mx, my, mz, e, by, bz;
+  Real d, mx, my, mz, e, bx, by, bz;
 };
 
 //----------------------------------------------------------------------------------------
