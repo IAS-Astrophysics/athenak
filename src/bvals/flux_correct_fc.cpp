@@ -17,7 +17,7 @@
 #include "bvals.hpp"
 
 //----------------------------------------------------------------------------------------
-//! \fn void BoundaryValuesFC::PackAndSendFlux()
+//! \fn void BoundaryValuesFC::PackAndSendFluxFC()
 //! \brief Pack restricted fluxes of face-centered fields at fine/coarse boundaries
 //! into boundary buffers and send to neighbors for flux-correction step. These fluxes
 //! (e.g. EMFs) live at cell edges.
@@ -52,24 +52,19 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
     const int v = (tmember.league_rank() - m*(3*nnghbr) - 3*n);
 
     // Note send buffer flux indices are for the coarse mesh
-    int il = sbuf[n].iflux[v].bis;
-    int iu = sbuf[n].iflux[v].bie;
-    int jl = sbuf[n].iflux[v].bjs;
-    int ju = sbuf[n].iflux[v].bje;
-    int kl = sbuf[n].iflux[v].bks;
-    int ku = sbuf[n].iflux[v].bke;
-    int nv[3];
-    nv[0] = 0;
-    nv[1] = (sbuf[n].iflux[0].bie - sbuf[n].iflux[0].bis + 1)*
-            (sbuf[n].iflux[0].bje - sbuf[n].iflux[0].bjs + 1)*
-            (sbuf[n].iflux[0].bke - sbuf[n].iflux[0].bks + 1);
-    nv[2] = nv[1] + (sbuf[n].iflux[1].bie - sbuf[n].iflux[1].bis + 1)*
-                    (sbuf[n].iflux[1].bje - sbuf[n].iflux[1].bjs + 1)*
-                    (sbuf[n].iflux[1].bke - sbuf[n].iflux[1].bks + 1);
+    const int il = sbuf[n].iflux[v].bis;
+    const int iu = sbuf[n].iflux[v].bie;
+    const int jl = sbuf[n].iflux[v].bjs;
+    const int ju = sbuf[n].iflux[v].bje;
+    const int kl = sbuf[n].iflux[v].bks;
+    const int ku = sbuf[n].iflux[v].bke;
+    const int ndat = sbuf[n].iflux_ndat;
     const int ni = iu - il + 1;
     const int nj = ju - jl + 1;
     const int nk = ku - kl + 1;
+    const int nji  = nj*ni;
     const int nkj  = nk*nj;
+    const int nki  = nk*ni;
 
     // indices of recv'ing (destination) MB and buffer: MB IDs are stored sequentially
     // in MeshBlockPacks, so array index equals (target_id - first_id)
@@ -80,136 +75,7 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
     if ((nghbr.d_view(m,n).gid >=0) && (nghbr.d_view(m,n).lev < mblev.d_view(m))) {
       // x1faces (only load x2e and x3e)
       if (n<8) {
-        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
-          int k = idx / nj;
-          int j = (idx - k * nj) + jl;
-          k += kl;
-          int fj = 2*j - cjs;
-          int fk = 2*k - cks;
-          if (v!=0) {
-            Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-            [&](const int i) {
-              int fi = 2*i - cis;
-              Real rflx;
-              if (v==1) {
-                if (one_d) {
-                  rflx = flx.x2e(m,k,0,fi);
-                } else if (two_d) {
-                  rflx = 0.5*(flx.x2e(m,k,fj,fi) + flx.x2e(m,k,fj+1,fi));
-                } else {
-                  rflx = 0.5*(flx.x2e(m,fk,fj,fi) + flx.x2e(m,fk,fj+1,fi));
-                }
-              } else {
-                if (one_d) {
-                  rflx = flx.x3e(m,0,j,fi);
-                } else if (two_d) {
-                  rflx = flx.x3e(m,0,fj,fi);
-                } else {
-                  rflx = 0.5*(flx.x3e(m,fk,fj,fi) + flx.x3e(m,fk+1,fj,fi));
-                }
-              }
-              // copy directly into recv buffer if MeshBlocks on same rank
-              if (nghbr.d_view(m,n).rank == my_rank) {
-                rbuf[dn].flux(dm, nv[v] + i-il + ni*(j-jl + nj*(k-kl))) = rflx;
-              // else copy into send buffer for MPI communication below
-              } else {
-                sbuf[n].flux(m, nv[v] + i-il + ni*(j-jl + nj*(k-kl))) = rflx;
-              }
-            });
-          }
-        });
-
-      // x2faces (only load x1e and x3e)
-      } else if (n<16) {
-        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
-          int k = idx / nj;
-          int j = (idx - k * nj) + jl;
-          k += kl;
-          int fj = 2*j - cjs;
-          int fk = 2*k - cks;
-          if (v!=1) {
-            Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-            [&](const int i) {
-              int fi = 2*i - cis;
-              Real rflx;
-              if (v==0) {
-                if (two_d) {
-                  rflx = 0.5*(flx.x1e(m,k,fj,fi) + flx.x1e(m,k,fj,fi+1));
-                } else {
-                  rflx = 0.5*(flx.x1e(m,fk,fj,fi) + flx.x1e(m,fk,fj,fi+1));
-                }
-              } else {
-                if (two_d) {
-                  rflx = flx.x3e(m,0,fj,fi);
-                } else {
-                  rflx = 0.5*(flx.x3e(m,fk,fj,fi) + flx.x3e(m,fk+1,fj,fi));
-                }
-              }
-              if (nghbr.d_view(m,n).rank == my_rank) {
-                rbuf[dn].flux(dm, nv[v] + i-il + ni*(j-jl + nj*(k-kl))) = rflx;
-              } else {
-                sbuf[n].flux(m, nv[v] + i-il + ni*(j-jl + nj*(k-kl))) = rflx;
-              }
-            });
-          }
-        });
-
-      // x1x2 edges (only load x3e)
-      } else if (n<24) {
-        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
-          int k = idx / nj;
-          int j = (idx - k * nj) + jl;
-          k += kl;
-          int fj = 2*j - cjs;
-          int fk = 2*k - cks;
-          if (v==2) {
-            Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-            [&](const int i) {
-              int fi = 2*i - cis;
-              Real rflx;
-              if (two_d) {
-                rflx = flx.x3e(m,0,fj,fi);
-              } else {
-                rflx = 0.5*(flx.x3e(m,fk,fj,fi) + flx.x3e(m,fk+1,fj,fi));
-              }
-              if (nghbr.d_view(m,n).rank == my_rank) {
-                rbuf[dn].flux(dm, nv[v] + i-il + ni*(j-jl + nj*(k-kl))) = rflx;
-              } else {
-                sbuf[n].flux(m, nv[v] + i-il + ni*(j-jl + nj*(k-kl))) = rflx;
-              }
-            });
-          }
-        });
-
-      // x3faces
-      } else if (n<32) {
-        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
-          int k = idx / nj;
-          int j = (idx - k * nj) + jl;
-          k += kl;
-          int fj = 2*j - cjs;
-          int fk = 2*k - cks;
-          if (v!=2) {
-            Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-            [&](const int i) {
-              int fi = 2*i - cis;
-              Real rflx;
-              if (v==0) {
-                rflx = 0.5*(flx.x1e(m,fk,fj,fi) + flx.x1e(m,fk,fj,fi+1));
-              } else {
-                rflx = 0.5*(flx.x2e(m,fk,fj,fi) + flx.x2e(m,fk,fj+1,fi));
-              }
-              if (nghbr.d_view(m,n).rank == my_rank) {
-                rbuf[dn].flux(dm, nv[v] + i-il + ni*(j-jl + nj*(k-kl))) = rflx;
-              } else {
-                sbuf[n].flux(m, nv[v] + i-il + ni*(j-jl + nj*(k-kl))) = rflx;
-              }
-            });
-          }
-        });
-
-      // x3x1 edges (only load x2e)
-      } else if (n<40) {
+        int fi = 2*il - cis;
         Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
           int k = idx / nj;
           int j = (idx - k * nj) + jl;
@@ -217,40 +83,163 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
           int fj = 2*j - cjs;
           int fk = 2*k - cks;
           if (v==1) {
-            Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-            [&](const int i) {
-              int fi = 2*i - cis;
-              Real rflx = 0.5*(flx.x2e(m,fk,fj,fi) + flx.x2e(m,fk,fj+1,fi));
-              if (nghbr.d_view(m,n).rank == my_rank) {
-                rbuf[dn].flux(dm, nv[v] + i-il + ni*(j-jl + nj*(k-kl))) = rflx;
-              } else {
-                sbuf[n].flux(m, nv[v] + i-il + ni*(j-jl + nj*(k-kl))) = rflx;
-              }
-            });
+            Real rflx;
+            if (one_d) {
+              rflx = flx.x2e(m,0,0,fi);
+            } else if (two_d) {
+              rflx = 0.5*(flx.x2e(m,0,fj,fi) + flx.x2e(m,0,fj+1,fi));
+            } else {
+              rflx = 0.5*(flx.x2e(m,fk,fj,fi) + flx.x2e(m,fk,fj+1,fi));
+            }
+            // copy directly into recv buffer if MeshBlocks on same rank
+            if (nghbr.d_view(m,n).rank == my_rank) {
+              rbuf[dn].flux(dm, ndat*v + (j-jl + nj*(k-kl))) = rflx;
+            // else copy into send buffer for MPI communication below
+            } else {
+              sbuf[n].flux(m, ndat*v + (j-jl + nj*(k-kl))) = rflx;
+            }
+          } else if (v==2) {
+            Real rflx;
+            if (one_d) {
+              rflx = flx.x3e(m,0,0,fi);
+            } else if (two_d) {
+              rflx = flx.x3e(m,0,fj,fi);
+            } else {
+              rflx = 0.5*(flx.x3e(m,fk,fj,fi) + flx.x3e(m,fk+1,fj,fi));
+            }
+            // copy directly into recv buffer if MeshBlocks on same rank
+            if (nghbr.d_view(m,n).rank == my_rank) {
+              rbuf[dn].flux(dm, ndat*v + (j-jl + nj*(k-kl))) = rflx;
+            // else copy into send buffer for MPI communication below
+            } else {
+              sbuf[n].flux(m, ndat*v + (j-jl + nj*(k-kl))) = rflx;
+            }
           }
         });
 
-      // x2x3 edges (only load x1e)
-      } else if (n<48) {
-        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
-          int k = idx / nj;
-          int j = (idx - k * nj) + jl;
+      // x2faces (only load x1e and x3e)
+      } else if (n<16) {
+        int fj = 2*jl - cjs;
+        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nki), [&](const int idx) {
+          int k = idx / ni;
+          int i = (idx - k * ni) + il;
           k += kl;
-          int fj = 2*j - cjs;
           int fk = 2*k - cks;
+          int fi = 2*i - cis;
           if (v==0) {
-            Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-            [&](const int i) {
-              int fi = 2*i - cis;
-              Real rflx = 0.5*(flx.x1e(m,fk,fj,fi) + flx.x1e(m,fk,fj,fi+1));
-              if (nghbr.d_view(m,n).rank == my_rank) {
-                rbuf[dn].flux(dm, nv[v] + i-il + ni*(j-jl + nj*(k-kl))) = rflx;
-              } else {
-                sbuf[n].flux(m, nv[v] + i-il + ni*(j-jl + nj*(k-kl))) = rflx;
-              }
-            });
+            Real rflx;
+            if (two_d) {
+              rflx = 0.5*(flx.x1e(m,0,fj,fi) + flx.x1e(m,0,fj,fi+1));
+            } else {
+              rflx = 0.5*(flx.x1e(m,fk,fj,fi) + flx.x1e(m,fk,fj,fi+1));
+            }
+            if (nghbr.d_view(m,n).rank == my_rank) {
+              rbuf[dn].flux(dm, ndat*v + i-il + ni*(k-kl)) = rflx;
+            } else {
+              sbuf[n].flux(m, ndat*v + i-il + ni*(k-kl)) = rflx;
+            }
+          } else if (v==2) {
+            Real rflx;
+            if (two_d) {
+              rflx = flx.x3e(m,0,fj,fi);
+            } else {
+              rflx = 0.5*(flx.x3e(m,fk,fj,fi) + flx.x3e(m,fk+1,fj,fi));
+            }
+            if (nghbr.d_view(m,n).rank == my_rank) {
+              rbuf[dn].flux(dm, ndat*v + i-il + ni*(k-kl)) = rflx;
+            } else {
+              sbuf[n].flux(m, ndat*v + i-il + ni*(k-kl)) = rflx;
+            }
           }
         });
+
+      // x1x2 edges (only load x3e)
+      } else if (n<24) {
+/**
+        int fi = 2*il - cis;
+        int fj = 2*jl - cjs;
+        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nk), [&](const int idx) {
+          int k = idx + kl;
+          int fk = 2*k - cks;
+          if (v==2) {
+            Real rflx;
+            if (two_d) {
+              rflx = flx.x3e(m,0,fj,fi);
+            } else {
+              rflx = 0.5*(flx.x3e(m,fk,fj,fi) + flx.x3e(m,fk+1,fj,fi));
+            }
+            if (nghbr.d_view(m,n).rank == my_rank) {
+              rbuf[dn].flux(dm, ndat*v + (k-kl)) = rflx;
+            } else {
+              sbuf[n].flux(m, ndat*v + (k-kl)) = rflx;
+            }
+          }
+        });
+**/
+
+      // x3faces (only load x1e and x2e)
+      } else if (n<32) {
+        int fk = 2*kl - cks;
+        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nji), [&](const int idx) {
+          int j = idx / ni;
+          int i = (idx - j * ni) + il;
+          j += jl;
+          int fi = 2*i - cis;
+          int fj = 2*j - cjs;
+          if (v==0) {
+            Real rflx = 0.5*(flx.x1e(m,fk,fj,fi) + flx.x1e(m,fk,fj,fi+1));
+            if (nghbr.d_view(m,n).rank == my_rank) {
+              rbuf[dn].flux(dm, ndat*v + i-il + ni*(j-jl)) = rflx;
+            } else {
+              sbuf[n].flux(m, ndat*v + i-il + ni*(j-jl)) = rflx;
+            }
+          } else if (v==1) {
+            Real rflx = 0.5*(flx.x2e(m,fk,fj,fi) + flx.x2e(m,fk,fj+1,fi));
+            if (nghbr.d_view(m,n).rank == my_rank) {
+              rbuf[dn].flux(dm, ndat*v + i-il + ni*(j-jl)) = rflx;
+            } else {
+              sbuf[n].flux(m, ndat*v + i-il + ni*(j-jl)) = rflx;
+            }
+          }
+        });
+
+      // x3x1 edges (only load x2e)
+      } else if (n<40) {
+/**
+        int fi = 2*il - cis;
+        int fk = 2*kl - cks;
+        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nj), [&](const int idx) {
+          int j = idx + jl;
+          int fj = 2*j - cjs;
+          if (v==1) {
+            Real rflx = 0.5*(flx.x2e(m,fk,fj,fi) + flx.x2e(m,fk,fj+1,fi));
+            if (nghbr.d_view(m,n).rank == my_rank) {
+              rbuf[dn].flux(dm, ndat*v + (j-jl)) = rflx;
+            } else {
+              sbuf[n].flux(m, ndat*v + (j-jl)) = rflx;
+            }
+          }
+        });
+**/
+
+      // x2x3 edges (only load x1e)
+      } else if (n<48) {
+/**
+        int fj = 2*jl - cjs;
+        int fk = 2*kl - cks;
+        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, ni), [&](const int idx) {
+          int i = idx + il;
+          int fi = 2*i - cis;
+          if (v==0) {
+            Real rflx = 0.5*(flx.x1e(m,fk,fj,fi) + flx.x1e(m,fk,fj,fi+1));
+            if (nghbr.d_view(m,n).rank == my_rank) {
+              rbuf[dn].flux(dm, ndat*v + i-il) = rflx;
+            } else {
+              sbuf[n].flux(m, ndat*v + i-il) = rflx;
+            }
+          }
+        });
+**/
       }
     }  // end if-neighbor-exists block
   });  // end par_for_outer
@@ -298,8 +287,8 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
 }
 
 //----------------------------------------------------------------------------------------
-// \!fn void RecvBuffers()
-// \brief Unpack boundary buffers
+//! \fn void RecvAndUnpackFluxFC()
+//! \brief Unpack boundary buffers for flux correction of FC variables
 
 TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx) {
   // create local references for variables in kernel
@@ -355,24 +344,19 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx) {
     const int v = (tmember.league_rank() - m*(3*nnghbr) - 3*n);
 
     // Recv buffer flux indices are for the regular mesh
-    int il = rbuf[n].iflux[v].bis;
-    int iu = rbuf[n].iflux[v].bie;
-    int jl = rbuf[n].iflux[v].bjs;
-    int ju = rbuf[n].iflux[v].bje;
-    int kl = rbuf[n].iflux[v].bks;
-    int ku = rbuf[n].iflux[v].bke;
-    int nv[3];
-    nv[0] = 0;
-    nv[1] = (rbuf[n].iflux[0].bie - rbuf[n].iflux[0].bis + 1)*
-            (rbuf[n].iflux[0].bje - rbuf[n].iflux[0].bjs + 1)*
-            (rbuf[n].iflux[0].bke - rbuf[n].iflux[0].bks + 1);
-    nv[2] = nv[1] + (rbuf[n].iflux[1].bie - rbuf[n].iflux[1].bis + 1)*
-                    (rbuf[n].iflux[1].bje - rbuf[n].iflux[1].bjs + 1)*
-                    (rbuf[n].iflux[1].bke - rbuf[n].iflux[1].bks + 1);
+    const int il = rbuf[n].iflux[v].bis;
+    const int iu = rbuf[n].iflux[v].bie;
+    const int jl = rbuf[n].iflux[v].bjs;
+    const int ju = rbuf[n].iflux[v].bje;
+    const int kl = rbuf[n].iflux[v].bks;
+    const int ku = rbuf[n].iflux[v].bke;
+    const int ndat = rbuf[n].iflux_ndat;
     const int ni = iu - il + 1;
     const int nj = ju - jl + 1;
     const int nk = ku - kl + 1;
+    const int nji  = nj*ni;
     const int nkj  = nk*nj;
+    const int nki  = nk*ni;
 
     // only unpack buffers for faces and edges when neighbor is at finer level
     if ((nghbr.d_view(m,n).gid >=0) && (nghbr.d_view(m,n).lev > mblev.d_view(m))) {
@@ -383,97 +367,70 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx) {
           int j = (idx - k * nj) + jl;
           k += kl;
           if (v==1) {
-            Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-            [&](const int i) {
-              flx.x2e(m,k,j,i) = rbuf[n].flux(m,nv[v] + i-il + ni*(j-jl + nj*(k-kl)));
-            });
+            flx.x2e(m,k,j,il) = rbuf[n].flux(m,ndat*v + (j-jl + nj*(k-kl)));
           } else if (v==2) {
-            Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-            [&](const int i) {
-              flx.x3e(m,k,j,i) = rbuf[n].flux(m,nv[v] + i-il + ni*(j-jl + nj*(k-kl)));
-            });
+            flx.x3e(m,k,j,il) = rbuf[n].flux(m,ndat*v + (j-jl + nj*(k-kl)));
           }
         });
 
       // x2faces
       } else if (n<16) {
-        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
-          int k = idx / nj;
-          int j = (idx - k * nj) + jl;
+        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nki), [&](const int idx) {
+          int k = idx/ni;
+          int i = (idx - k * ni) + il;
           k += kl;
           if (v==0) {
-            Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-            [&](const int i) {
-              flx.x1e(m,k,j,i) = rbuf[n].flux(m,nv[v] + i-il + ni*(j-jl + nj*(k-kl)));
-            });
+            flx.x1e(m,k,jl,i) = rbuf[n].flux(m,ndat*v + i-il + ni*(k-kl));
           } else if (v==2) {
-            Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-            [&](const int i) {
-              flx.x3e(m,k,j,i) = rbuf[n].flux(m,nv[v] + i-il + ni*(j-jl + nj*(k-kl)));
-            });
+            flx.x3e(m,k,jl,i) = rbuf[n].flux(m,ndat*v + i-il + ni*(k-kl));
           }
         });
 
       // x1x2 edges
       } else if (n<24) {
-        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
-          int k = idx / nj;
-          int j = (idx - k * nj) + jl;
-          k += kl;
+/**
+        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nk), [&](const int idx) {
+          int k = idx + kl;
           if (v==2) {
-            Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-            [&](const int i) {
-              flx.x3e(m,k,j,i) = rbuf[n].flux(m,nv[v] + i-il + ni*(j-jl + nj*(k-kl)));
-            });
+            flx.x3e(m,k,jl,il) = rbuf[n].flux(m,ndat*v + (k-kl));
           }
         });
+**/
 
       // x3faces
       } else if (n<32)  {
-        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
-          int k = idx / nj;
-          int j = (idx - k * nj) + jl;
-          k += kl;
+        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nji), [&](const int idx) {
+          int j = idx / ni;
+          int i = (idx - j * ni) + il;
+          j += jl;
           if (v==0) {
-            Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-            [&](const int i) {
-              flx.x1e(m,k,j,i) = rbuf[n].flux(m,nv[v] + i-il + ni*(j-jl + nj*(k-kl)));
-            });
+            flx.x1e(m,kl,j,i) = rbuf[n].flux(m,ndat*v + i-il + ni*(j-jl));
           } else if (v==1) {
-            Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-            [&](const int i) {
-              flx.x2e(m,k,j,i) = rbuf[n].flux(m,nv[v] + i-il + ni*(j-jl + nj*(k-kl)));
-            });
+            flx.x2e(m,kl,j,i) = rbuf[n].flux(m,ndat*v + i-il + ni*(j-jl));
           }
         });
 
       // x3x1 edges
       } else if (n<40) {
-        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
-          int k = idx / nj;
-          int j = (idx - k * nj) + jl;
-          k += kl;
+/**
+        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nj), [&](const int idx) {
+          int j = idx + jl;
           if (v==1) {
-            Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-            [&](const int i) {
-              flx.x2e(m,k,j,i) = rbuf[n].flux(m,nv[v] + i-il + ni*(j-jl + nj*(k-kl)));
-            });
+            flx.x2e(m,kl,j,il) = rbuf[n].flux(m,ndat*v + (j-jl));
           }
         });
+**/
 
       // x2x3 edges
       } else if (n<48) {
-        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
-          int k = idx / nj;
-          int j = (idx - k * nj) + jl;
-          k += kl;
+/**
+        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, ni), [&](const int idx) {
+          int i = idx + il;
           if (v==0) {
-            Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-            [&](const int i) {
-              flx.x1e(m,k,j,i) = rbuf[n].flux(m,nv[v] + i-il + ni*(j-jl + nj*(k-kl)));
-            });
+            flx.x1e(m,kl,jl,i) = rbuf[n].flux(m,ndat*v + i-il);
           }
         });
+**/
       }
     }  // end if-neighbor-exists block
   });  // end par_for_outer
