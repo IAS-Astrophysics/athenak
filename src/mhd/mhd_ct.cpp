@@ -75,50 +75,6 @@ TaskStatus MHD::CT(Driver *pdriver, int stage) {
     }
   });
 
-  // energy correction from Mignone & Bodo
-  if (use_energy_fix) {
-    Real fact = 0.5;
-    if (pmy_pack->pcoord->is_general_relativistic) {fact = -0.5;}
-    auto e1x2_ = e1x2;
-    auto e1x3_ = e1x3;
-    auto e2x1_ = e2x1;
-    auto e2x3_ = e2x3;
-    auto e3x1_ = e3x1;
-    auto e3x2_ = e3x2;
-    auto u0_ = u0;
-    auto bx1f = b0.x1f;
-    auto bx1f_old = b1.x1f;
-    auto bcc = bcc0;
-    par_for("fix-e", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      // averages of new/old face-centered fields
-      Real bx1 = 0.5*(bx1f(m,k,j,i) + bx1f(m,k,j,i+1));
-      Real bx2 = 0.5*(bx2f(m,k,j,i) + bx2f(m,k,j+1,i));
-      Real bx3 = 0.5*(bx3f(m,k,j,i) + bx3f(m,k+1,j,i));
-      Real bx1_old = 0.5*(bx1f_old(m,k,j,i) + bx1f_old(m,k,j,i+1));
-      Real bx2_old = 0.5*(bx2f_old(m,k,j,i) + bx2f_old(m,k,j+1,i));
-      Real bx3_old = 0.5*(bx3f_old(m,k,j,i) + bx3f_old(m,k+1,j,i));
-
-      // Estimate updated cell-centered fields
-      Real bx1cc = gam0*bcc(m,IBX,k,j,i) + gam1*bx1_old;
-      Real bx2cc = gam0*bcc(m,IBY,k,j,i) + gam1*bx2_old;
-      Real bx3cc = gam0*bcc(m,IBZ,k,j,i) + gam1*bx3_old;
-      bx2cc += beta_dt*(e3x1_(m,k,j,i+1) - e3x1_(m,k,j,i))/mbsize.d_view(m).dx1;
-      bx3cc -= beta_dt*(e2x1_(m,k,j,i+1) - e2x1_(m,k,j,i))/mbsize.d_view(m).dx1;
-      if (multi_d) {
-        bx1cc -= beta_dt*(e3x2_(m,k,j+1,i) - e3x2_(m,k,j,i))/mbsize.d_view(m).dx2;
-        bx3cc += beta_dt*(e1x2_(m,k,j+1,i) - e1x2_(m,k,j,i))/mbsize.d_view(m).dx2;
-      }
-      if (three_d) {
-        bx1cc += beta_dt*(e2x3_(m,k+1,j,i) - e2x3_(m,k,j,i))/mbsize.d_view(m).dx3;
-        bx2cc -= beta_dt*(e1x3_(m,k+1,j,i) - e1x3_(m,k,j,i))/mbsize.d_view(m).dx3;
-      }
-
-      u0_(m,IEN,k,j,i) += fact*( (SQR(bx1)   + SQR(bx2)   + SQR(bx3)) -
-                                 (SQR(bx1cc) + SQR(bx2cc) + SQR(bx3cc)) );
-    });
-  }
-
   return TaskStatus::complete;
 }
 } // namespace mhd

@@ -296,8 +296,6 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
       Kokkos::realloc(bcctest, nmb, 3,    ncells3, ncells2, ncells1);
     }
 
-    // read flag for energy fix in strong fields
-    use_energy_fix = pin->GetOrAddBoolean("mhd","energy_fix",false);
   }
 }
 
