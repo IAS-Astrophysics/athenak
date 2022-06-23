@@ -86,6 +86,7 @@ void IdealSRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
     Real s2 = SQR(u.mx) + SQR(u.my) + SQR(u.mz);
 
     // call c2p function
+    // (inline function in ideal_c2p_hyd.hpp file)
     HydPrim1D w;
     bool dfloor_used=false, efloor_used=false;
     int iter_used=0;

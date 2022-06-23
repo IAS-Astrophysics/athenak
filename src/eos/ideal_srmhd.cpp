@@ -101,6 +101,7 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
     Real rpar = (u.bx*u.mx +  u.by*u.my +  u.bz*u.mz)/u.d;
 
     // call c2p function
+    // (inline function in ideal_c2p_mhd.hpp file)
     HydPrim1D w;
     bool dfloor_used=false, efloor_used=false;
     int iter_used=0;
