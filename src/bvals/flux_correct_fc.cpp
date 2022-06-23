@@ -75,6 +75,7 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
     if ((nghbr.d_view(m,n).gid >=0) && (nghbr.d_view(m,n).lev < mblev.d_view(m))) {
       // x1faces (only load x2e and x3e)
       if (n<8) {
+        // i-index is fixed for flux correction on x1faces
         int fi = 2*il - cis;
         Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
           int k = idx / nj;
@@ -116,9 +117,11 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
             }
           }
         });
+        tmember.team_barrier();
 
       // x2faces (only load x1e and x3e)
       } else if (n<16) {
+        // j-index is fixed for flux correction on x2faces
         int fj = 2*jl - cjs;
         Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nki), [&](const int idx) {
           int k = idx / ni;
@@ -152,16 +155,18 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
             }
           }
         });
+        tmember.team_barrier();
 
       // x1x2 edges (only load x3e)
       } else if (n<24) {
-/**
+        // i/j-index is fixed for flux correction on x1x2 edges
         int fi = 2*il - cis;
         int fj = 2*jl - cjs;
-        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nk), [&](const int idx) {
-          int k = idx + kl;
-          int fk = 2*k - cks;
-          if (v==2) {
+/**
+        if (v==2) {
+          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember,nk),[&](const int idx) {
+            int k = idx + kl;
+            int fk = 2*k - cks;
             Real rflx;
             if (two_d) {
               rflx = flx.x3e(m,0,fj,fi);
@@ -173,12 +178,14 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
             } else {
               sbuf[n].flux(m, ndat*v + (k-kl)) = rflx;
             }
-          }
-        });
+          });
+        }
 **/
+        tmember.team_barrier();
 
       // x3faces (only load x1e and x2e)
       } else if (n<32) {
+        // k-index is fixed for flux correction on x3faces
         int fk = 2*kl - cks;
         Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nji), [&](const int idx) {
           int j = idx / ni;
@@ -202,6 +209,7 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
             }
           }
         });
+        tmember.team_barrier();
 
       // x3x1 edges (only load x2e)
       } else if (n<40) {
@@ -221,6 +229,7 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
           }
         });
 **/
+        tmember.team_barrier();
 
       // x2x3 edges (only load x1e)
       } else if (n<48) {
@@ -240,6 +249,7 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
           }
         });
 **/
+        tmember.team_barrier();
       }
     }  // end if-neighbor-exists block
   });  // end par_for_outer
@@ -372,6 +382,7 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx) {
             flx.x3e(m,k,j,il) = rbuf[n].flux(m,ndat*v + (j-jl + nj*(k-kl)));
           }
         });
+        tmember.team_barrier();
 
       // x2faces
       } else if (n<16) {
@@ -385,17 +396,19 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx) {
             flx.x3e(m,k,jl,i) = rbuf[n].flux(m,ndat*v + i-il + ni*(k-kl));
           }
         });
+        tmember.team_barrier();
 
       // x1x2 edges
       } else if (n<24) {
 /**
-        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nk), [&](const int idx) {
-          int k = idx + kl;
-          if (v==2) {
+        if (v==2) {
+          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember,nk),[&](const int idx) {
+            int k = idx + kl;
             flx.x3e(m,k,jl,il) = rbuf[n].flux(m,ndat*v + (k-kl));
-          }
-        });
+          });
+        }
 **/
+        tmember.team_barrier();
 
       // x3faces
       } else if (n<32)  {
@@ -409,6 +422,7 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx) {
             flx.x2e(m,kl,j,i) = rbuf[n].flux(m,ndat*v + i-il + ni*(j-jl));
           }
         });
+        tmember.team_barrier();
 
       // x3x1 edges
       } else if (n<40) {
@@ -420,6 +434,7 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx) {
           }
         });
 **/
+        tmember.team_barrier();
 
       // x2x3 edges
       } else if (n<48) {
@@ -431,6 +446,7 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx) {
           }
         });
 **/
+        tmember.team_barrier();
       }
     }  // end if-neighbor-exists block
   });  // end par_for_outer
