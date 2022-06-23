@@ -85,7 +85,8 @@ TaskStatus Hydro::InitRecv(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn  void Hydro::CopyCons
-//  \brief  handle RK register logic at given stage
+//! \brief Simple task list function that copies u0 --> u1 in first stage.  Extended to
+//!  handle RK register logic at given stage
 
 TaskStatus Hydro::CopyCons(Driver *pdrive, int stage) {
   if (stage == 1) {
