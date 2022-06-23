@@ -11,7 +11,7 @@
 #include "mesh/mesh.hpp"
 #include "hydro/hydro.hpp"
 #include "eos.hpp"
-#include "eos/ideal_hyd.hpp"
+#include "eos/ideal_c2p_hyd.hpp"
 
 #include "coordinates/coordinates.hpp"
 #include "coordinates/cartesian_ks.hpp"

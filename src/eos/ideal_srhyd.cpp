@@ -11,7 +11,7 @@
 #include "athena.hpp"
 #include "hydro/hydro.hpp"
 #include "eos.hpp"
-#include "eos/ideal_hyd.hpp"
+#include "eos/ideal_c2p_hyd.hpp"
 
 //----------------------------------------------------------------------------------------
 // ctor: also calls EOS base class constructor
