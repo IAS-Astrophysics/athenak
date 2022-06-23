@@ -9,7 +9,7 @@
 #include "athena.hpp"
 #include "mhd/mhd.hpp"
 #include "eos.hpp"
-#include "eos/ideal_mhd.hpp"
+#include "eos/ideal_c2p_mhd.hpp"
 
 //----------------------------------------------------------------------------------------
 // ctor: also calls EOS base class constructor
