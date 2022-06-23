@@ -1,5 +1,5 @@
-#ifndef EOS_IDEAL_MHD_HPP_
-#define EOS_IDEAL_MHD_HPP_
+#ifndef EOS_IDEAL_C2P_MHD_HPP_
+#define EOS_IDEAL_C2P_MHD_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
@@ -323,4 +323,4 @@ void SingleP2C_IdealGRMHD(const Real glower[][4], const Real gupper[][4],
   return;
 }
 
-#endif // EOS_IDEAL_MHD_HPP_
+#endif // EOS_IDEAL_C2P_MHD_HPP_
