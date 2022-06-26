@@ -20,22 +20,22 @@ class GeodesicGrid {
   int nlevel;                         // geodesic nlevel
   int nangles;                        // number of angles
   bool rotate_geo;                    // rotate geodesic mesh
-  int nvertices;                      // number of vertices
-  DualArray4D<Real> amesh_normals;    // normal components (regular faces)
-  DualArray2D<Real> ameshp_normals;   // normal components (at poles)
+  DualArray1D<Real> solid_angle;      // solid angles
+  DualArray2D<Real> polarcoord;       // polar coordinate for grid points
   DualArray3D<Real> amesh_indices;    // indexing (regular faces)
   DualArray1D<Real> ameshp_indices;   // indexing (at poles)
-  DualArray1D<int>  num_neighbors;    // number of neighbors
-  DualArray2D<int>  ind_neighbors;    // indices of neighbors
-  DualArray2D<Real> arc_lengths;      // arc lengths
-  DualArray1D<Real> solid_angle;      // solid angles
-  DualArray2D<Real> nh_c;             // normal vector computed at face center
-  DualArray3D<Real> nh_f;             // normal vector computed at face edges
-  DualArray2D<Real> polarcoord;       // polar coordinate for grid points
+  DualArray4D<Real> amesh_normals;    // normal components (regular faces)
+  DualArray2D<Real> ameshp_normals;   // normal components (at poles)
+  //int nvertices;                      // number of vertices
+  //DualArray1D<int>  num_neighbors;    // number of neighbors
+  //DualArray2D<int>  ind_neighbors;    // indices of neighbors
+  //DualArray2D<Real> arc_lengths;      // arc lengths
+  //DualArray2D<Real> nh_c;             // normal vector computed at face center
+  //DualArray3D<Real> nh_f;             // normal vector computed at face edges
   void InitAngularMesh();
 
   // intensity arrays
-  DvceArray5D<Real> i0;         // intensities
+  //DvceArray5D<Real> i0;         // intensities
 
   // Boundary communication buffers and functions for i
   BoundaryValuesCC *pbval_i;
