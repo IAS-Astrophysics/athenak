@@ -83,17 +83,19 @@ SphericalGrid::SphericalGrid(MeshBlockPack *pmbp, int *nlev, int *nang, bool *ro
     delta[2] = size.h_view(m).dx3;
     
     // Loop over all points to find those belonging to this spherical patch
-    for (int n=0; n<nangles; ++n){
+    for (int n=0; n<nangles; ++n) {
       if (cartcoord.h_view(n,0) >= x1min && cartcoord.h_view(n,0) <= x1max 
         && cartcoord.h_view(n,1) >= x2min && cartcoord.h_view(n,1) <= x2max 
-        && cartcoord.h_view(n,2) >= x3min && cartcoord.h_view(n,3) <= x3max){
+        && cartcoord.h_view(n,2) >= x3min && cartcoord.h_view(n,3) <= x3max) {
         // save which meshblock the nth point on the geodesic grid belongs to
         interp_indices.h_view(n,0) = m;
         // save the index of the closest point in the meshblock (closer on the origin)
-        interp_indices.h_view(n,1) = (int) std::floor((cartcoord.h_view(n,0)-x1min)/delta[0]);
-        interp_indices.h_view(n,2) = (int) std::floor((cartcoord.h_view(n,1)-x2min)/delta[1]);
-        interp_indices.h_view(n,3) = (int) std::floor((cartcoord.h_view(n,2)-x3min)/delta[2]);
+        interp_indices.h_view(n,1) = (int) (cartcoord.h_view(n,0)-x1min)/delta[0];
+        interp_indices.h_view(n,2) = (int) (cartcoord.h_view(n,1)-x2min)/delta[1];
+        interp_indices.h_view(n,3) = (int) (cartcoord.h_view(n,2)-x3min)/delta[2];
       }
     }
   }
+  interp_indices.template modify<HostMemSpace>();
+  interp_indices.template sync<DevExeSpace>();
 }
