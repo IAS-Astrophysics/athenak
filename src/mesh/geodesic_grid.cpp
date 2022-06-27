@@ -22,7 +22,7 @@
 // inline functions for constructing geodesic mesh
 
 // constructor of class GeodesicGrid
-  GeodesicGrid::GeodesicGrid(MeshBlockPack *ppack, int *nlev, int *nang, bool *rotate_g):
+  GeodesicGrid::GeodesicGrid(MeshBlockPack *ppack, int *nlev, bool *rotate_g):
     //nh_c("nh_c",1,1),
     //nh_f("nh_f",1,1,1),
     //arc_lengths("arclen",1,1),
@@ -39,7 +39,7 @@
 
     // Setup angular mesh
     nlevel = *nlev;
-    nangles = *nang;
+    nangles = 10*(nlevel*nlevel) + 2;
     rotate_geo = *rotate_g;
 
     /*

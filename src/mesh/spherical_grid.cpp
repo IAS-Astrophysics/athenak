@@ -14,11 +14,10 @@
 #include "coordinates/cell_locations.hpp"
 #include "mesh/mesh.hpp"
 
-SphericalGrid::SphericalGrid(MeshBlockPack *pmbp, int *nlev, int *nang, bool *rotate_g, Real rad_): 
+SphericalGrid::SphericalGrid(MeshBlockPack *pmbp, int *nlev, bool *rotate_g, Real rad_): 
   cartcoord("cartcoord",1,1),
   interp_indices("interp_indices",1,1),
-  GeodesicGrid(pmbp,nlev,nang,rotate_g) {
-  int nangles = *nang;
+  GeodesicGrid(pmbp,nlev,rotate_g) {
   Kokkos::realloc(cartcoord,nangles,3);
   Kokkos::realloc(interp_indices,nangles,4);
 
@@ -48,6 +47,10 @@ SphericalGrid::SphericalGrid(MeshBlockPack *pmbp, int *nlev, int *nang, bool *ro
 
   // set index for meshblocks and the cells that a gridpoint is in
   auto &size = pmbp->pmb->mb_size;
+  // debug
+  for (int n=0; n<nangles; ++n) {
+    interp_indices.h_view(n,0) = 3;
+  }
 
   for (int m=0; m<(pmbp->nmb_thispack);++m) {
     Real origin[3];
@@ -86,7 +89,7 @@ SphericalGrid::SphericalGrid(MeshBlockPack *pmbp, int *nlev, int *nang, bool *ro
     for (int n=0; n<nangles; ++n) {
       if (cartcoord.h_view(n,0) >= x1min && cartcoord.h_view(n,0) <= x1max 
         && cartcoord.h_view(n,1) >= x2min && cartcoord.h_view(n,1) <= x2max 
-        && cartcoord.h_view(n,2) >= x3min && cartcoord.h_view(n,3) <= x3max) {
+        && cartcoord.h_view(n,2) >= x3min && cartcoord.h_view(n,2) <= x3max) {
         // save which meshblock the nth point on the geodesic grid belongs to
         interp_indices.h_view(n,0) = m;
         // save the index of the closest point in the meshblock (closer on the origin)

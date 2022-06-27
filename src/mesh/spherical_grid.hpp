@@ -21,7 +21,7 @@
 class SphericalGrid: public GeodesicGrid {
   public:
     // Creates a geodetic grid with nlev levels and radius rad
-    SphericalGrid(MeshBlockPack *ppack, int *nlev, int *nang, bool *rotate_g, Real rad_ = 1.0);
+    SphericalGrid(MeshBlockPack *ppack, int *nlev, bool *rotate_g, Real rad_ = 1.0);
     Real rad;                           // radius of a sphere
     DualArray2D<Real> cartcoord;        // cartesian coordinate for grid points
     DualArray2D<int> interp_indices;    // indices of meshblock and the cell with in, for interpolation

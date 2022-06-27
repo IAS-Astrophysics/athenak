@@ -14,7 +14,7 @@
 
 class GeodesicGrid {
  public:
-  GeodesicGrid(MeshBlockPack *ppack, int *nlev, int *nang, bool *rotate_g);
+  GeodesicGrid(MeshBlockPack *ppack, int *nlev, bool *rotate_g);
 
   // Angular mesh parameters and functions
   int nlevel;                         // geodesic nlevel
