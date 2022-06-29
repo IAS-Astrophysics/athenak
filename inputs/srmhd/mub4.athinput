@@ -45,7 +45,7 @@ ndiag       = 1       # cycles between diagostic output
 
 <mhd>
 eos         = ideal
-reconstruct = ppm
+reconstruct = ppmx
 rsolver     = hlle
 gamma       = 1.66666666666667 # ratio of specific heats Gamma
 
@@ -56,7 +56,7 @@ xshock     = 0.0   # position of initial interface
 
 dl = 1.0           # density on left
 pl = 5.0           # pressure
-ul = 0.0           # X-velocity 
+ul = 0.0           # X-velocity
 vl = 0.3           # Y-velocity
 wl = 0.4           # Z-velocity
 bxl = 1.0          # left magnetic field B^x

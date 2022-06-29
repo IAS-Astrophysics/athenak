@@ -110,7 +110,11 @@ void IsothermalMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real
     HydPrim1D w;
     bool dfloor_used = false;
     SingleC2P_IsothermalMHD(u, dfloor, w, dfloor_used);
-    if (dfloor_used) {sumd++;}
+    // update counter, reset conserved if floor was hit
+    if (dfloor_used) {
+      cons(m,IDN,k,j,i) = u.d;
+      sumd++;
+    }
 
     // set FOFC flag and quit loop if this function called only to check floors
     if (only_testfloors) {

@@ -101,7 +101,11 @@ void IsothermalHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &pri
     HydPrim1D w;
     bool dfloor_used = false;
     SingleC2P_IsothermalHyd(u, dfloor, w, dfloor_used);
-    if (dfloor_used) {sumd++;}
+    // update counter, reset conserved if floor was hit
+    if (dfloor_used) {
+      cons(m,IDN,k,j,i) = u.d;
+      sumd++;
+    }
 
     // set FOFC flag and quit loop if this function called only to check floors
     if (only_testfloors) {

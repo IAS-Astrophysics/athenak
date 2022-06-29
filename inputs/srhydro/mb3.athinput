@@ -45,7 +45,7 @@ ndiag       = 1       # cycles between diagostic output
 
 <hydro>
 eos         = ideal
-reconstruct = ppm
+reconstruct = ppmx
 rsolver     = hllc
 gamma       = 1.6666666666666667  # ratio of specific heats Gamma
 
@@ -56,7 +56,7 @@ xshock     = 0.0        # position of initial interface
 
 dl = 10.0               # density on left
 pl = 13.33333333333333  # pressure
-ul = 0.0                # X-velocity 
+ul = 0.0                # X-velocity
 vl = 0.0                # Y-velocity
 wl = 0.0                # Z-velocity
 

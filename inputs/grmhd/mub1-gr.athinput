@@ -49,7 +49,7 @@ minkowski = true
 
 <mhd>
 eos         = ideal
-reconstruct = ppm
+reconstruct = ppmx
 rsolver     = hlle
 gamma       = 2.0     # ratio of specific heats Gamma
 
@@ -60,7 +60,7 @@ xshock     = 0.0   # position of initial interface
 
 dl = 1.0           # density on left
 pl = 1.0           # pressure
-ul = 0.0           # X-velocity 
+ul = 0.0           # X-velocity
 vl = 0.0           # Y-velocity
 wl = 0.0           # Z-velocity
 bxl = 0.5          # left magnetic field B^x

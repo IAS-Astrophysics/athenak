@@ -128,21 +128,21 @@ void ProblemGenerator::Advection(ParameterInput *pin, const bool restart) {
         u0(m,IDN,k,j,i) = 1.0;
       }
       if (flow_dir == 1) {
-        u0(m,IM1,k,j,i) = vel;
+        u0(m,IM1,k,j,i) = vel*u0(m,IDN,k,j,i);
         u0(m,IM2,k,j,i) = 0.0;
         u0(m,IM3,k,j,i) = 0.0;
       } else if (flow_dir == 2) {
         u0(m,IM1,k,j,i) = 0.0;
-        u0(m,IM2,k,j,i) = vel;
+        u0(m,IM2,k,j,i) = vel*u0(m,IDN,k,j,i);
         u0(m,IM3,k,j,i) = 0.0;
         } else {
         u0(m,IM1,k,j,i) = 0.0;
         u0(m,IM2,k,j,i) = 0.0;
-        u0(m,IM3,k,j,i) = vel;
+        u0(m,IM3,k,j,i) = vel*u0(m,IDN,k,j,i);
       }
       // add passive scalars
       for (int n=nhydro; n<(nhydro+nscalars); ++n) {
-        u0(m,n,k,j,i) = f;
+        u0(m,n,k,j,i) = f*u0(m,IDN,k,j,i);
       }
     });
   }  // End initialization of Hydro variables
@@ -207,7 +207,7 @@ void ProblemGenerator::Advection(ParameterInput *pin, const bool restart) {
 
       // Flow in x1-direction
       if (flow_dir == 1) {
-        u0(m,IM1,k,j,i) = vel;
+        u0(m,IM1,k,j,i) = vel*u0(m,IDN,k,j,i);
         u0(m,IM2,k,j,i) = 1.0;
         u0(m,IM3,k,j,i) = 1.0;
 
@@ -222,7 +222,7 @@ void ProblemGenerator::Advection(ParameterInput *pin, const bool restart) {
       // Flow in x2-direction
       } else if (flow_dir == 2) {
         u0(m,IM1,k,j,i) = 1.0;
-        u0(m,IM2,k,j,i) = vel;
+        u0(m,IM2,k,j,i) = vel*u0(m,IDN,k,j,i);
         u0(m,IM3,k,j,i) = 1.0;
 
         // initialize Bx/Bz
@@ -237,7 +237,7 @@ void ProblemGenerator::Advection(ParameterInput *pin, const bool restart) {
       } else {
         u0(m,IM1,k,j,i) = 1.0;
         u0(m,IM2,k,j,i) = 1.0;
-        u0(m,IM3,k,j,i) = vel;
+        u0(m,IM3,k,j,i) = vel*u0(m,IDN,k,j,i);
 
         // initialize Bx/By
         b0.x1f(m,k,j,i) = f;
@@ -250,7 +250,7 @@ void ProblemGenerator::Advection(ParameterInput *pin, const bool restart) {
 
       // add passive scalars
       for (int n=nmhd; n<(nmhd+nscalars); ++n) {
-        u0(m,n,k,j,i) = f;
+        u0(m,n,k,j,i) = f*u0(m,IDN,k,j,i);
       }
     });
   }  // End initialization of MHD variables

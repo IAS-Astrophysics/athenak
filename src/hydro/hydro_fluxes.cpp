@@ -46,6 +46,11 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
   int nvars = nhydro + nscalars;
   int nmb1 = pmy_pack->nmb_thispack - 1;
   const auto recon_method_ = recon_method;
+  bool extrema = false;
+  if (recon_method == ReconstructionMethod::ppmx) {
+    extrema = true;
+  }
+
   auto &eos = peos->eos_data;
   auto &size = pmy_pack->pmb->mb_size;
   auto &coord = pmy_pack->pcoord->coord_data;
@@ -71,11 +76,12 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
       case ReconstructionMethod::plm:
         PiecewiseLinearX1(member, m, k, j, is-1, ie+1, w0_, wl, wr);
         break;
-      case ReconstructionMethod::ppm:
-        PiecewiseParabolicX1(member, m, k, j, is-1, ie+1, w0_, wl, wr);
+      case ReconstructionMethod::ppm4:
+      case ReconstructionMethod::ppmx:
+        PiecewiseParabolicX1(member,eos,extrema,true, m, k, j, is-1, ie+1, w0_, wl, wr);
         break;
       case ReconstructionMethod::wenoz:
-        WENOZX1(member, m, k, j, is-1, ie+1, w0_, wl, wr);
+        WENOZX1(member, eos, true, m, k, j, is-1, ie+1, w0_, wl, wr);
         break;
       default:
         break;
@@ -152,11 +158,12 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
           case ReconstructionMethod::plm:
             PiecewiseLinearX2(member, m, k, j, is, ie, w0_, wl_jp1, wr);
             break;
-          case ReconstructionMethod::ppm:
-            PiecewiseParabolicX2(member, m, k, j, is, ie, w0_, wl_jp1, wr);
+          case ReconstructionMethod::ppm4:
+          case ReconstructionMethod::ppmx:
+            PiecewiseParabolicX2(member,eos,extrema,true,m,k,j,is,ie, w0_, wl_jp1, wr);
             break;
           case ReconstructionMethod::wenoz:
-            WENOZX2(member, m, k, j, is-1, ie+1, w0_, wl_jp1, wr);
+            WENOZX2(member, eos, true, m, k, j, is-1, ie+1, w0_, wl_jp1, wr);
             break;
           default:
             break;
@@ -236,11 +243,12 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
           case ReconstructionMethod::plm:
             PiecewiseLinearX3(member, m, k, j, is, ie, w0_, wl_kp1, wr);
             break;
-          case ReconstructionMethod::ppm:
-            PiecewiseParabolicX3(member, m, k, j, is, ie, w0_, wl_kp1, wr);
+          case ReconstructionMethod::ppm4:
+          case ReconstructionMethod::ppmx:
+            PiecewiseParabolicX3(member,eos,extrema,true,m,k,j,is,ie, w0_, wl_kp1, wr);
             break;
           case ReconstructionMethod::wenoz:
-            WENOZX3(member, m, k, j, is-1, ie+1, w0_, wl_kp1, wr);
+            WENOZX3(member, eos, true, m, k, j, is-1, ie+1, w0_, wl_kp1, wr);
             break;
           default:
             break;
