@@ -14,7 +14,7 @@ import athena_read  # noqa
 athena_read.check_nan_flag = True
 logger = logging.getLogger('athena' + __name__[7:])  # set logger name
 _int = ['rk2', 'rk3']
-_recon = ['plm', 'ppm', 'wenoz']
+_recon = ['plm', 'ppmx', 'wenoz']
 _flux = ['llf', 'hlle', 'hllc', 'roe']
 _wave = ['L-sound', 'R-sound', 'entropy']
 
@@ -77,7 +77,7 @@ def analyze():
         for ri, rv in enumerate(_recon):
             error_threshold = [0.0]*len(_wave)
             conv_threshold = [0.0]*len(_wave)
-            if (iv == 'rk3' and (rv == 'ppm' or rv == 'wenoz')):
+            if (iv == 'rk3' and (rv == 'ppmx' or rv == 'wenoz')):
                 error_threshold[0] = error_threshold[1] = 6.0e-9  # sound
                 error_threshold[2] = 4.5e-9  # entropy
                 conv_threshold[0] = conv_threshold[1] = 0.07  # sound

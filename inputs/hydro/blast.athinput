@@ -42,7 +42,7 @@ ndiag      = 1          # cycles between diagostic output
 
 <hydro>
 eos         = ideal     # EOS type
-reconstruct = ppm       # spatial reconstruction method
+reconstruct = ppmx      # spatial reconstruction method
 rsolver     = hllc      # Riemann-solver to be used
 gamma       = 1.666666666667 # gamma = C_p/C_v
 

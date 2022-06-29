@@ -1,0 +1,79 @@
+# AthenaXXX input file for Hydro advection tests
+
+<comment>
+problem   = Advection 
+
+<job>
+basename  = Advect    # basename of output filenames, serves as problem ID
+
+<mesh>
+nghost    = 3         # Number of ghost cells
+nx1       = 256       # Number of cells in X1-direction
+x1min     = -0.5      # minimum value of X1
+x1max     = 0.5       # maximum value of X1
+ix1_bc    = periodic  # Inner-X1 boundary condition flag
+ox1_bc    = periodic  # Outer-X1 boundary condition flag
+
+nx2       = 1         # Number of cells in X2-direction
+x2min     = -0.5      # minimum value of X2
+x2max     = 0.5       # maximum value of X2
+ix2_bc    = periodic  # Inner-X1 boundary condition flag
+ox2_bc    = periodic  # Outer-X1 boundary condition flag
+
+nx3       = 1         # Number of cells in X3-direction
+x3min     = -0.5      # minimum value of X3
+x3max     = 0.5       # maximum value of X3
+ix3_bc    = periodic  # Inner-X3 boundary condition flag
+ox3_bc    = periodic  # Outer-X3 boundary condition flag
+
+<meshblock>
+nx1       = 256       # Number of cells in each MeshBlock, X1-dir
+nx2       = 1         # Number of cells in each MeshBlock, X2-dir
+nx3       = 1         # Number of cells in each MeshBlock, X3-dir
+
+<time>
+evolution  = kinematic # dynamic/kinematic/static
+integrator = rk2       # time integrator
+cfl_number = 0.2       # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1        # cycle limit (no limit if <0)
+tlim       = 1.0       # time limit
+ndiag      = 1         # cycles between diagostic output
+
+<hydro>
+eos         = isothermal  # EOS type
+reconstruct = ppmx        # spatial reconstruction method
+rsolver     = advect      # Riemann-solver to be used
+iso_sound_speed = 1.0     # isothermal sound speed
+
+# Following <problem> block is setup for density advection tests.
+# To advect passive scalars, set advect_dens=false and add nscalars in <hydro> block
+<problem>
+pgen_name   = advection   # problem generator name
+advect_dens = true        # advect density
+flow_dir    = 1           # Flow Direction -- (1,2,3) = (x1,x2,x3)
+iproblem    = 1           # (1,2,...) = (sine, square, ...)
+velocity    = 1.0         # Flow velocity
+amplitude   = 0.1         # amplitude of advected profile
+
+<output1>   
+file_type   = tab       # tabular data dump
+variable    = hydro_w   # variables to be output
+data_format = %12.5e    # Optional data format string
+dt          = 0.05      # time increment between outputs
+slice_x2    = 0.0       # slice in x2
+slice_x3    = 0.0       # slice in x3
+ghost_zones = false     # switch to output ghost cells
+
+<output2>
+file_type   = tab       # tabular data dump
+variable    = hydro_u   # variables to be output
+data_format = %12.5e    # Optional data format string
+dt          = 0.05      # time increment between outputs
+slice_x2    = 0.0       # slice in x2
+slice_x3    = 0.0       # slice in x3
+ghost_zones = false     # switch to output ghost cells
+
+<output3>
+file_type   = hst       # history data dump
+data_format = %12.5e    # Optional data format string
+dt          = 0.1      # time increment between outputs

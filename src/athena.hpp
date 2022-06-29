@@ -48,7 +48,7 @@ enum VariableIndex {IDN=0, IM1=1, IVX=1, IM2=2, IVY=2, IM3=3, IVZ=3, IEN=4, ITM=
 enum BFieldIndex {IBX=0, IBY=1, IBZ=2};
 
 // integer constants to specify reconstruction methods
-enum ReconstructionMethod {dc, plm, ppm, wenoz};
+enum ReconstructionMethod {dc, plm, ppm4, ppmx, wenoz};
 
 // constants that enumerate time evolution options
 enum TimeEvolution {tstatic, kinematic, dynamic};

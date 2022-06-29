@@ -42,7 +42,7 @@ ndiag      = 1         # cycles between diagostic output
 
 <mhd>
 eos          = ideal   # EOS type
-reconstruct  = ppm     # spatial reconstruction method
+reconstruct  = ppmx    # spatial reconstruction method
 rsolver      = hlld    # Riemann-solver to be used
 shearing_box = true    # enroll shearing box source terms
 qshear       = 1.5     # shear rate

@@ -6,8 +6,10 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file ppm.hpp
-//! \brief piecewise parabolic reconstruction with Collela-Sekora extremum preserving
-//! limiters for a Cartesian-like coordinate with uniform spacing.
+//! \brief piecewise parabolic reconstruction with both Collela-Woodward (CW) limiters
+//! (implemented in the PPM4 inline function) and Collela-Sekora (CS) extremum preserving
+//! limiters (implemented in the PPMX inline function) for a Cartesian-like coordinates
+//! with uniform spacing.
 //!
 //! This version does not include the extensions to the CS limiters described by
 //! McCorquodale et al. and as implemented in Athena++ by K. Felker.  This is to keep the
@@ -33,13 +35,57 @@
 #include "athena.hpp"
 
 //----------------------------------------------------------------------------------------
-//! \fn PPM()
-//! \brief Reconstructs parabolic slope in cell i to compute ql(i+1) and qr(i). Works for
+//! \fn PPM4()
+//! \brief Original PPM (Colella & Woodward) parabolic reconstruction.  Returns
+//! interpolated values at L/R edges of cell i, that is ql(i+1) and qr(i). Works for
 //! reconstruction in any dimension by passing in the appropriate q_im2,...,q _ip2.
 
 KOKKOS_INLINE_FUNCTION
-void PPM(const Real &q_im2, const Real &q_im1, const Real &q_i, const Real &q_ip1,
-         const Real &q_ip2, Real &ql_ip1, Real &qr_i) {
+void PPM4(const Real &q_im2, const Real &q_im1, const Real &q_i, const Real &q_ip1,
+          const Real &q_ip2, Real &ql_ip1, Real &qr_i) {
+  //---- Interpolate L/R values (CS eqn 16, PH 3.26 and 3.27) ----
+  // qlv = q at left  side of cell-center = q[i-1/2] = a_{j,-} in CS
+  // qrv = q at right side of cell-center = q[i+1/2] = a_{j,+} in CS
+  Real qlv = (7.*(q_i + q_im1) - (q_im2 + q_ip1))/12.0;
+  Real qrv = (7.*(q_i + q_ip1) - (q_im1 + q_ip2))/12.0;
+
+  //---- limit qrv and qlv to neighboring cell-centered values (CS eqn 13) ----
+  qlv = fmax(qlv, fmin(q_i, q_im1));
+  qlv = fmin(qlv, fmax(q_i, q_im1));
+  qrv = fmax(qrv, fmin(q_i, q_ip1));
+  qrv = fmin(qrv, fmax(q_i, q_ip1));
+
+  //--- monotonize interpolated L/R states (CS eqns 14, 15) ---
+  Real qc = qrv - q_i;
+  Real qd = qlv - q_i;
+  if ((qc*qd) >= 0.0) {
+    qlv = q_i;
+    qrv = q_i;
+  } else {
+    if (fabs(qc) >= 2.0*fabs(qd)) {
+      qrv = q_i - 2.0*qd;
+    }
+    if (fabs(qd) >= 2.0*fabs(qc)) {
+      qlv = q_i - 2.0*qc;
+    }
+  }
+
+  //---- set L/R states ----
+  ql_ip1 = qrv;
+  qr_i   = qlv;
+  return;
+}
+
+
+//----------------------------------------------------------------------------------------
+//! \fn PPMX()
+//! \brief PPM parabolic reconstruction with Colella & Sekora limiters.  Returns
+//! interpolated values at L/R edges of cell i, that is ql(i+1) and qr(i). Works for
+//! reconstruction in any dimension by passing in the appropriate q_im2,...,q _ip2.
+
+KOKKOS_INLINE_FUNCTION
+void PPMX(const Real &q_im2, const Real &q_im1, const Real &q_i, const Real &q_ip1,
+          const Real &q_ip2, Real &ql_ip1, Real &qr_i) {
   //---- Compute L/R values (CS eqns 12-15, PH 3.26 and 3.27) ----
   // qlv = q at left  side of cell-center = q[i-1/2] = a_{j,-} in CS
   // qrv = q at right side of cell-center = q[i+1/2] = a_{j,+} in CS
@@ -142,15 +188,44 @@ void PPM(const Real &q_im2, const Real &q_im1, const Real &q_i, const Real &q_ip
 //! This function should be called over [is-1,ie+1] to get BOTH L/R states over [is,ie]
 
 KOKKOS_INLINE_FUNCTION
-void PiecewiseParabolicX1(TeamMember_t const &member,const int m,const int k,const int j,
-     const int il, const int iu, const DvceArray5D<Real> &q,
-     ScrArray2D<Real> &ql, ScrArray2D<Real> &qr) {
+void PiecewiseParabolicX1(TeamMember_t const &member,
+     const EOS_Data &eos, const bool extremum_preserving, const bool apply_floors,
+     const int m, const int k, const int j, const int il, const int iu,
+     const DvceArray5D<Real> &q, ScrArray2D<Real> &ql, ScrArray2D<Real> &qr) {
   int nvar = q.extent_int(1);
+  const Real &dfloor_ = eos.dfloor;
+  // TODO(jmstone): ideal gas only for now
+  Real efloor_ = eos.pfloor/(eos.gamma - 1.0);
   for (int n=0; n<nvar; ++n) {
-    par_for_inner(member, il, iu, [&](const int i) {
-      PPM(q(m,n,k,j,i-2), q(m,n,k,j,i-1), q(m,n,k,j,i), q(m,n,k,j,i+1),
-          q(m,n,k,j,i+2), ql(n,i+1), qr(n,i));
-    });
+    if (extremum_preserving) {
+      par_for_inner(member, il, iu, [&](const int i) {
+        Real &qim2 = q(m,n,k,j,i-2);
+        Real &qim1 = q(m,n,k,j,i-1);
+        Real &qi   = q(m,n,k,j,i  );
+        Real &qip1 = q(m,n,k,j,i+1);
+        Real &qip2 = q(m,n,k,j,i+2);
+        PPMX(qim2, qim1, qi, qip1, qip2, ql(n,i+1), qr(n,i));
+        if (apply_floors) {
+          if (n==IDN) {
+            ql(IDN,i+1) = fmax(ql(IDN,i+1), dfloor_);
+            qr(IDN,i  ) = fmax(qr(IDN,i  ), dfloor_);
+          }
+          if (n==IEN) {
+            ql(IEN,i+1) = fmax(ql(IEN,i+1), efloor_);
+            qr(IEN,i  ) = fmax(qr(IEN,i  ), efloor_);
+          }
+        }
+      });
+    } else {
+      par_for_inner(member, il, iu, [&](const int i) {
+        Real &qim2 = q(m,n,k,j,i-2);
+        Real &qim1 = q(m,n,k,j,i-1);
+        Real &qi   = q(m,n,k,j,i  );
+        Real &qip1 = q(m,n,k,j,i+1);
+        Real &qip2 = q(m,n,k,j,i+2);
+        PPM4(qim2, qim1, qi, qip1, qip2, ql(n,i+1), qr(n,i));
+      });
+    }
   }
   return;
 }
@@ -161,15 +236,44 @@ void PiecewiseParabolicX1(TeamMember_t const &member,const int m,const int k,con
 //! This function should be called over [js-1,je+1] to get BOTH L/R states over [js,je]
 
 KOKKOS_INLINE_FUNCTION
-void PiecewiseParabolicX2(TeamMember_t const &member,const int m,const int k,const int j,
-     const int il, const int iu, const DvceArray5D<Real> &q,
-     ScrArray2D<Real> &ql_jp1, ScrArray2D<Real> &qr_j) {
+void PiecewiseParabolicX2(TeamMember_t const &member,
+     const EOS_Data &eos, const bool extremum_preserving, const bool apply_floors,
+     const int m, const int k, const int j, const int il, const int iu,
+     const DvceArray5D<Real> &q, ScrArray2D<Real> &ql_jp1, ScrArray2D<Real> &qr_j) {
   int nvar = q.extent_int(1);
+  const Real &dfloor_ = eos.dfloor;
+  // TODO(jmstone): ideal gas only for now
+  Real efloor_ = eos.pfloor/(eos.gamma - 1.0);
   for (int n=0; n<nvar; ++n) {
-    par_for_inner(member, il, iu, [&](const int i) {
-      PPM(q(m,n,k,j-2,i), q(m,n,k,j-1,i), q(m,n,k,j,i), q(m,n,k,j+1,i),
-          q(m,n,k,j+2,i), ql_jp1(n,i), qr_j(n,i));
-    });
+    if (extremum_preserving) {
+      par_for_inner(member, il, iu, [&](const int i) {
+        Real &qjm2 = q(m,n,k,j-2,i);
+        Real &qjm1 = q(m,n,k,j-1,i);
+        Real &qj   = q(m,n,k,j  ,i);
+        Real &qjp1 = q(m,n,k,j+1,i);
+        Real &qjp2 = q(m,n,k,j+2,i);
+        PPMX(qjm2, qjm1, qj, qjp1, qjp2, ql_jp1(n,i), qr_j(n,i));
+        if (apply_floors) {
+          if (n==IDN) {
+            ql_jp1(IDN,i) = fmax(ql_jp1(IDN,i), dfloor_);
+            qr_j  (IDN,i) = fmax(qr_j  (IDN,i), dfloor_);
+          }
+          if (n==IEN) {
+            ql_jp1(IEN,i) = fmax(ql_jp1(IEN,i), efloor_);
+            qr_j  (IEN,i) = fmax(qr_j  (IEN,i), efloor_);
+          }
+        }
+      });
+    } else {
+      par_for_inner(member, il, iu, [&](const int i) {
+        Real &qjm2 = q(m,n,k,j-2,i);
+        Real &qjm1 = q(m,n,k,j-1,i);
+        Real &qj   = q(m,n,k,j  ,i);
+        Real &qjp1 = q(m,n,k,j+1,i);
+        Real &qjp2 = q(m,n,k,j+2,i);
+        PPM4(qjm2, qjm1, qj, qjp1, qjp2, ql_jp1(n,i), qr_j(n,i));
+      });
+    }
   }
   return;
 }
@@ -180,15 +284,44 @@ void PiecewiseParabolicX2(TeamMember_t const &member,const int m,const int k,con
 //! This function should be called over [ks-1,ke+1] to get BOTH L/R states over [ks,ke]
 
 KOKKOS_INLINE_FUNCTION
-void PiecewiseParabolicX3(TeamMember_t const &member,const int m,const int k,const int j,
-     const int il, const int iu, const DvceArray5D<Real> &q,
-     ScrArray2D<Real> &ql_kp1, ScrArray2D<Real> &qr_k) {
+void PiecewiseParabolicX3(TeamMember_t const &member,
+     const EOS_Data &eos, const bool extremum_preserving, const bool apply_floors,
+     const int m, const int k, const int j, const int il, const int iu,
+     const DvceArray5D<Real> &q, ScrArray2D<Real> &ql_kp1, ScrArray2D<Real> &qr_k) {
   int nvar = q.extent_int(1);
+  const Real &dfloor_ = eos.dfloor;
+  // TODO(jmstone): ideal gas only for now
+  Real efloor_ = eos.pfloor/(eos.gamma - 1.0);
   for (int n=0; n<nvar; ++n) {
-    par_for_inner(member, il, iu, [&](const int i) {
-      PPM(q(m,n,k-2,j,i), q(m,n,k-1,j,i), q(m,n,k,j,i), q(m,n,k+1,j,i),
-          q(m,n,k+2,j,i), ql_kp1(n,i), qr_k(n,i));
-    });
+    if (extremum_preserving) {
+      par_for_inner(member, il, iu, [&](const int i) {
+        Real &qkm2 = q(m,n,k-2,j,i);
+        Real &qkm1 = q(m,n,k-1,j,i);
+        Real &qk   = q(m,n,k  ,j,i);
+        Real &qkp1 = q(m,n,k+1,j,i);
+        Real &qkp2 = q(m,n,k+2,j,i);
+        PPMX(qkm2, qkm1, qk, qkp1, qkp2, ql_kp1(n,i), qr_k(n,i));
+        if (apply_floors) {
+          if (n==IDN) {
+            ql_kp1(IDN,i) = fmax(ql_kp1(IDN,i), dfloor_);
+            qr_k  (IDN,i) = fmax(qr_k  (IDN,i), dfloor_);
+          }
+          if (n==IEN) {
+            ql_kp1(IEN,i) = fmax(ql_kp1(IEN,i), efloor_);
+            qr_k  (IEN,i) = fmax(qr_k  (IEN,i), efloor_);
+          }
+        }
+      });
+    } else {
+      par_for_inner(member, il, iu, [&](const int i) {
+        Real &qkm2 = q(m,n,k-2,j,i);
+        Real &qkm1 = q(m,n,k-1,j,i);
+        Real &qk   = q(m,n,k  ,j,i);
+        Real &qkp1 = q(m,n,k+1,j,i);
+        Real &qkp2 = q(m,n,k+2,j,i);
+        PPM4(qkm2, qkm1, qk, qkp1, qkp2, ql_kp1(n,i), qr_k(n,i));
+      });
+    }
   }
   return;
 }

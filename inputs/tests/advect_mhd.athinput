@@ -1,15 +1,13 @@
-# AthenaXXX input file for advection tests
-# Runs tests for both Hydro and MHD at same time
+# AthenaXXX input file for Hydro advection tests
 
 <comment>
 problem   = Advection 
-reference =
 
 <job>
 basename  = Advect    # basename of output filenames, serves as problem ID
 
 <mesh>
-nghost    = 2         # Number of ghost cells
+nghost    = 3         # Number of ghost cells
 nx1       = 256       # Number of cells in X1-direction
 x1min     = -0.5      # minimum value of X1
 x1max     = 0.5       # maximum value of X1
@@ -41,28 +39,25 @@ nlim       = -1        # cycle limit (no limit if <0)
 tlim       = 1.0       # time limit
 ndiag      = 1         # cycles between diagostic output
 
-<hydro>
-eos         = isothermal  # EOS type
-reconstruct = plm         # spatial reconstruction method
-rsolver     = advect      # Riemann-solver to be used
-iso_sound_speed = 1.0     # isothermal sound speed
-
 <mhd>
 eos         = isothermal  # EOS type
-reconstruct = plm         # spatial reconstruction method
+reconstruct = ppmx        # spatial reconstruction method
 rsolver     = advect      # Riemann-solver to be used
 iso_sound_speed = 1.0     # isothermal sound speed
 
+# Following <problem> block is setup for density advection tests.
+# To advect passive scalars, set advect_dens=false and add nscalars in <hydro> block
 <problem>
-pgen_name  = advection   # problem generator name
-flow_dir   = 1           # Flow Direction -- (1,2,3) = (x1,x2,x3)
-iproblem   = 2           # (1,2,...) = (sine, square, ...)
-velocity   = 1.0         # Flow velocity
-amplitude  = 1.0         # amplitude of advected profile
+pgen_name   = advection   # problem generator name
+advect_dens = true        # advect density
+flow_dir    = 1           # Flow Direction -- (1,2,3) = (x1,x2,x3)
+iproblem    = 1           # (1,2,...) = (sine, square, ...)
+velocity    = 1.0         # Flow velocity
+amplitude   = 0.1         # amplitude of advected profile
 
 <output1>   
 file_type   = tab       # tabular data dump
-variable    = hydro_w   # variables to be output
+variable    = mhd_w   # variables to be output
 data_format = %12.5e    # Optional data format string
 dt          = 0.05      # time increment between outputs
 slice_x2    = 0.0       # slice in x2
@@ -71,7 +66,7 @@ ghost_zones = false     # switch to output ghost cells
 
 <output2>
 file_type   = tab       # tabular data dump
-variable    = mhd_w     # variables to be output
+variable    = mhd_u   # variables to be output
 data_format = %12.5e    # Optional data format string
 dt          = 0.05      # time increment between outputs
 slice_x2    = 0.0       # slice in x2
@@ -79,33 +74,6 @@ slice_x3    = 0.0       # slice in x3
 ghost_zones = false     # switch to output ghost cells
 
 <output3>
-file_type   = tab       # tabular data dump
-variable    = mhd_bcc   # variables to be output
-data_format = %12.5e    # Optional data format string
-dt          = 0.05      # time increment between outputs
-slice_x2    = 0.0       # slice in x2
-slice_x3    = 0.0       # slice in x3
-ghost_zones = true      # switch to output ghost cells
-
-<output4>
-file_type   = vtk       # legacy VTK output
-variable    = hydro_w   # variables to be output
-dt          = 0.05      # time increment between outputs
-ghost_zones = false     # switch to output ghost cells
-
-<output5>
-file_type   = vtk       # legacy VTK output
-variable    = mhd_w     # variables to be output
-dt          = 0.05      # time increment between outputs
-ghost_zones = false     # switch to output ghost cells
-
-<output6>
-file_type   = vtk       # legacy VTK output
-variable    = mhd_bcc   # variables to be output
-dt          = 0.05      # time increment between outputs
-ghost_zones = false     # switch to output ghost cells
-
-<output7>
 file_type   = hst       # history data dump
 data_format = %12.5e    # Optional data format string
 dt          = 0.1      # time increment between outputs

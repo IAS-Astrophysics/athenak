@@ -26,12 +26,12 @@ void Advect(TeamMember_t const &member, const EOS_Data &eos,
     //  Compute upwind fluxes
     if (wl(ivx,i) >= 0.0) {
       flx(m,IDN,k,j,i) = wl(IDN,i)*wl(ivx,i);
-      flx(m,ivx,k,j,i) = 0.0;
+      flx(m,ivx,k,j,i) = wl(IDN,i)*wl(ivx,i)*wl(ivx,i);
       flx(m,ivy,k,j,i) = 0.0;
       flx(m,ivz,k,j,i) = 0.0;
     } else {
       flx(m,IDN,k,j,i) = wr(IDN,i)*wr(ivx,i);
-      flx(m,ivx,k,j,i) = 0.0;
+      flx(m,ivx,k,j,i) = wr(IDN,i)*wr(ivx,i)*wr(ivx,i);
       flx(m,ivy,k,j,i) = 0.0;
       flx(m,ivz,k,j,i) = 0.0;
     }
