@@ -14,7 +14,7 @@
 #include "coordinates/cell_locations.hpp"
 #include "mesh/mesh.hpp"
 
-SphericalGrid::SphericalGrid(MeshBlockPack *pmbp, int *nlev, bool *rotate_g, Real rad_): 
+SphericalGrid::SphericalGrid(MeshBlockPack *pmbp, int *nlev, bool *rotate_g, Real rad_, Real ctr_[3]): 
   cartcoord("cartcoord",1,1),
   interp_indices("interp_indices",1,1),
   GeodesicGrid(pmbp,nlev,rotate_g) {
@@ -26,17 +26,12 @@ SphericalGrid::SphericalGrid(MeshBlockPack *pmbp, int *nlev, bool *rotate_g, Rea
 
   for (int n=0; n<nangles; ++n) {
     // set cartesian coord
-    cartcoord.h_view(n,0) = rad*sin(polarcoord.h_view(n,0))*cos(polarcoord.h_view(n,1));
-    cartcoord.h_view(n,1) = rad*sin(polarcoord.h_view(n,0))*sin(polarcoord.h_view(n,1));
-    cartcoord.h_view(n,2) = rad*cos(polarcoord.h_view(n,0));
+    cartcoord.h_view(n,0) = rad*sin(polarcoord.h_view(n,0))*cos(polarcoord.h_view(n,1)) + ctr_[0];
+    cartcoord.h_view(n,1) = rad*sin(polarcoord.h_view(n,0))*sin(polarcoord.h_view(n,1)) + ctr_[1];
+    cartcoord.h_view(n,2) = rad*cos(polarcoord.h_view(n,0)) + ctr_[2];
 
     // overwrite solid angle (area/weight)
     solid_angle.h_view(n) *= rad*rad;
-    
-    // overwrite arc length
-    //for (int m=0; m<6; ++m){
-    //    arc_lengths.h_view(n,m) *= rad;
-    //}
   }
 
   // sync data
@@ -47,10 +42,6 @@ SphericalGrid::SphericalGrid(MeshBlockPack *pmbp, int *nlev, bool *rotate_g, Rea
 
   // set index for meshblocks and the cells that a gridpoint is in
   auto &size = pmbp->pmb->mb_size;
-  // debug
-  for (int n=0; n<nangles; ++n) {
-    interp_indices.h_view(n,0) = 3;
-  }
 
   for (int m=0; m<(pmbp->nmb_thispack);++m) {
     Real origin[3];

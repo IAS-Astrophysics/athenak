@@ -27,8 +27,8 @@ class GeodesicGrid {
   DualArray4D<Real> amesh_normals;    // normal components (regular faces)
   DualArray2D<Real> ameshp_normals;   // normal components (at poles)
   //int nvertices;                      // number of vertices
-  //DualArray1D<int>  num_neighbors;    // number of neighbors
-  //DualArray2D<int>  ind_neighbors;    // indices of neighbors
+  DualArray1D<int>  num_neighbors;    // number of neighbors
+  DualArray2D<int>  ind_neighbors;    // indices of neighbors
   //DualArray2D<Real> arc_lengths;      // arc lengths
   //DualArray2D<Real> nh_c;             // normal vector computed at face center
   //DualArray3D<Real> nh_f;             // normal vector computed at face edges

@@ -26,8 +26,8 @@
     //nh_c("nh_c",1,1),
     //nh_f("nh_f",1,1,1),
     //arc_lengths("arclen",1,1),
-    //num_neighbors("numneigh",1),
-    //ind_neighbors("indneigh",1,1),
+    num_neighbors("numneigh",1),
+    ind_neighbors("indneigh",1,1),
     //i0("i0",1,1,1,1,1),
     amesh_normals("ameshnorm",1,1,1,1),
     ameshp_normals("ameshpnorm",1,1),
@@ -57,8 +57,8 @@
     Kokkos::realloc(polarcoord,nangles,2);
     Kokkos::realloc(amesh_normals, 5, 2+nlevel, 2+2*nlevel, 3);
     Kokkos::realloc(ameshp_normals, 2, 3);
-    //Kokkos::realloc(num_neighbors, nangles);
-    //Kokkos::realloc(ind_neighbors, nangles, 6);
+    Kokkos::realloc(num_neighbors, nangles);
+    Kokkos::realloc(ind_neighbors, nangles, 6);
     //Kokkos::realloc(arc_lengths, nangles, 6);
     //Kokkos::realloc(nh_c, nangles, 4);
     //Kokkos::realloc(nh_f, nangles, 6, 4);
@@ -262,20 +262,20 @@ void GeodesicGrid::InitAngularMesh() {
     }
 
     // set up geometric factors and neighbor information arrays
-    //auto num_neighbors_ = num_neighbors;
-    //auto ind_neighbors_ = ind_neighbors;
+    auto num_neighbors_ = num_neighbors;
+    auto ind_neighbors_ = ind_neighbors;
     auto solid_angle_ = solid_angle;
     //auto arc_lengths_ = arc_lengths;
     for (int n=0; n<nangles; ++n) {
       Real dual_edge[6];
       int neighbors[6];
-      //num_neighbors_.h_view(n) = Neighbors(n,lev_,aind_,neighbors);
+      num_neighbors_.h_view(n) = Neighbors(n,lev_,aind_,neighbors);
       solid_angle_.h_view(n) = ComputeWeightAndDualEdges(n,lev_,anorm_,apnorm_,
                                                          aind_,dual_edge);
-      //for (int nb=0; nb<6; ++nb) {
-      //  ind_neighbors_.h_view(n,nb) = neighbors[nb];
-      //  arc_lengths_.h_view(n,nb) = dual_edge[nb];
-      //}
+      for (int nb=0; nb<6; ++nb) {
+        ind_neighbors_.h_view(n,nb) = neighbors[nb];
+        //arc_lengths_.h_view(n,nb) = dual_edge[nb];
+      }
     }
 
     // rotate geodesic mesh
@@ -284,35 +284,6 @@ void GeodesicGrid::InitAngularMesh() {
       OptimalAngles(nangles,lev_,anorm_,apnorm_,rotangles);
       RotateGrid(lev_,rotangles[0],rotangles[1],anorm_,apnorm_);
     }
-    /*
-    // set tetrad frame unit normal components
-    auto nh_c_ = nh_c;
-    auto nh_f_ = nh_f;
-    for (int n=0; n<nangles; ++n) {
-      Real x, y, z;
-      GridCartPosition(n,lev_,anorm_,apnorm_,&x,&y,&z);
-      nh_c_.h_view(n,0) = 1.0;
-      nh_c_.h_view(n,1) = x;
-      nh_c_.h_view(n,2) = y;
-      nh_c_.h_view(n,3) = z;
-      int nn = num_neighbors_.h_view(n);
-      for (int nb=0; nb<nn; ++nb) {
-        Real xm, ym, zm;
-        GridCartPositionMid(n,ind_neighbors_.h_view(n,nb),lev_,anorm_,apnorm_,
-                            &xm,&ym,&zm);
-        nh_f_.h_view(n,nb,0) = 1.0;
-        nh_f_.h_view(n,nb,1) = xm;
-        nh_f_.h_view(n,nb,2) = ym;
-        nh_f_.h_view(n,nb,3) = zm;
-      }
-      if (nn==5) {
-        nh_f_.h_view(n,5,0) = (FLT_MAX);
-        nh_f_.h_view(n,5,1) = (FLT_MAX);
-        nh_f_.h_view(n,5,2) = (FLT_MAX);
-        nh_f_.h_view(n,5,3) = (FLT_MAX);
-      }
-    }
-    */
 
     // compute polar coordinate of the mesh
     auto polarcoord_ = polarcoord;
@@ -323,8 +294,10 @@ void GeodesicGrid::InitAngularMesh() {
       polarcoord_.h_view(n,0) = theta;
       polarcoord_.h_view(n,1) = phi;
     }
-    /*
+    
     // guarantee that arc lengths at shared faces are identical
+    // This piece of code requires the normal vectors. Do we need them?
+    /*
     for (int n=0; n<nangles; ++n) {
       for (int nb=0; nb<num_neighbors_.h_view(n); ++nb) {
         bool match_not_found = true;
@@ -348,6 +321,7 @@ void GeodesicGrid::InitAngularMesh() {
       }
     }
     */
+    
     anorm_.template modify<HostMemSpace>();
     anorm_.template sync<DevExeSpace>();
     apnorm_.template modify<HostMemSpace>();
@@ -360,48 +334,25 @@ void GeodesicGrid::InitAngularMesh() {
     solid_angle_.template sync<DevExeSpace>();
     polarcoord.template modify<HostMemSpace>();
     polarcoord.template sync<DevExeSpace>();
-    //num_neighbors_.template modify<HostMemSpace>();
-    //num_neighbors_.template sync<DevExeSpace>();
-    //ind_neighbors_.template modify<HostMemSpace>();
-    //ind_neighbors_.template sync<DevExeSpace>();
+    num_neighbors_.template modify<HostMemSpace>();
+    num_neighbors_.template sync<DevExeSpace>();
+    ind_neighbors_.template modify<HostMemSpace>();
+    ind_neighbors_.template sync<DevExeSpace>();
     //arc_lengths_.template modify<HostMemSpace>();
     //arc_lengths_.template sync<DevExeSpace>();
     //nh_c_.template modify<HostMemSpace>();
     //nh_c_.template sync<DevExeSpace>();
     //nh_f_.template modify<HostMemSpace>();
     //nh_f_.template sync<DevExeSpace>();
-  } else if (lev_==0) {  // one angle per octant mesh (only for testing)
-    //auto nh_c_ = nh_c;
-    //auto nh_f_ = nh_f;
-    auto solid_angle_ = solid_angle;
-    Real zetav[2] = {M_PI/4.0, 3.0*M_PI/4.0};
-    Real psiv[4] = {M_PI/4.0, 3.0*M_PI/4.0, 5.0*M_PI/4.0, 7.0*M_PI/4.0};
-    /*
-    for (int z=0, n=0; z<2; ++z) {
-      for (int p=0; p<4; ++p, ++n) {
-        nh_c_.h_view(n,0) = 1.0;
-        nh_c_.h_view(n,1) = sin(zetav[z])*cos(psiv[p])*sqrt(4.0/3.0);
-        nh_c_.h_view(n,2) = sin(zetav[z])*sin(psiv[p])*sqrt(4.0/3.0);
-        nh_c_.h_view(n,3) = cos(zetav[z])*sqrt(2.0/3.0);
-        solid_angle_.h_view(n) = 4.0*M_PI/nangles;
-      }
-    }
-    nh_c_.template modify<HostMemSpace>();
-    nh_c_.template sync<DevExeSpace>();
-    nh_f_.template modify<HostMemSpace>();
-    nh_f_.template sync<DevExeSpace>();
-    */
-    solid_angle_.template modify<HostMemSpace>();
-    solid_angle_.template sync<DevExeSpace>();
   } else {  // invalid selection for <radiation>/nlevel
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-        << std::endl << "nlevel must be >= 0, "
+        << std::endl << "nlevel must be > 0, "
         << "but nlev = " << lev_ << std::endl;
     std::exit(EXIT_FAILURE);
   }
 
   return;
-  }
+}
 
 
 // find position at face center
