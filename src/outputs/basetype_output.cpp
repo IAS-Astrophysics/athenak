@@ -132,7 +132,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     int nhyd = pm->pmb_pack->phydro->nhydro;
     int nvars = nhyd + pm->pmb_pack->phydro->nscalars;
     for (int n=nhyd; n<nvars; ++n) {
-      char number[2];
+      char number[3];
       std::snprintf(number,sizeof(number),"%02d",(n - nhyd));
       std::string vname;
       vname.assign("r_");
@@ -147,7 +147,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     int nhyd = pm->pmb_pack->phydro->nhydro;
     int nvars = nhyd + pm->pmb_pack->phydro->nscalars;
     for (int n=nhyd; n<nvars; ++n) {
-      char number[2];
+      char number[3];
       std::snprintf(number,sizeof(number),"%02d",(n - nhyd));
       std::string vname;
       vname.assign("s_");
@@ -225,7 +225,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     int nmhd = pm->pmb_pack->pmhd->nmhd;
     int nvars = nmhd + pm->pmb_pack->pmhd->nscalars;
     for (int n=nmhd; n<nvars; ++n) {
-      char number[2];
+      char number[3];
       std::snprintf(number,sizeof(number),"%02d",(n - nmhd));
       std::string vname;
       vname.assign("r_");
@@ -241,7 +241,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     int nmhd = pm->pmb_pack->pmhd->nmhd;
     int nvars = nmhd + pm->pmb_pack->pmhd->nscalars;
     for (int n=nmhd; n<nvars; ++n) {
-      char number[2];
+      char number[3];
       std::snprintf(number,sizeof(number),"%02d",(n - nmhd));
       std::string vname;
       vname.assign("s_");
