@@ -87,14 +87,31 @@ void WENOZ(const Real &q_im2, const Real &q_im1, const Real &q_i, const Real &q_
 //! This function should be called over [is-1,ie+1] to get BOTH L/R states over [is,ie]
 
 KOKKOS_INLINE_FUNCTION
-void WENOZX1(TeamMember_t const &member,const int m,const int k,const int j,
-     const int il, const int iu, const DvceArray5D<Real> &q,
-     ScrArray2D<Real> &ql, ScrArray2D<Real> &qr) {
+void WENOZX1(TeamMember_t const &member, const EOS_Data &eos, const bool apply_floors,
+     const int m, const int k, const int j, const int il, const int iu,
+     const DvceArray5D<Real> &q, ScrArray2D<Real> &ql, ScrArray2D<Real> &qr) {
   int nvar = q.extent_int(1);
+  const Real &dfloor_ = eos.dfloor;
+  // TODO(jmstone): ideal gas only for now
+  Real efloor_ = eos.pfloor/(eos.gamma - 1.0);
   for (int n=0; n<nvar; ++n) {
     par_for_inner(member, il, iu, [&](const int i) {
-      WENOZ(q(m,n,k,j,i-2), q(m,n,k,j,i-1), q(m,n,k,j,i), q(m,n,k,j,i+1),
-            q(m,n,k,j,i+2), ql(n,i+1), qr(n,i));
+      Real &qim2 = q(m,n,k,j,i-2);
+      Real &qim1 = q(m,n,k,j,i-1);
+      Real &qi   = q(m,n,k,j,i  );
+      Real &qip1 = q(m,n,k,j,i+1);
+      Real &qip2 = q(m,n,k,j,i+2);
+      WENOZ(qim2, qim1, qi, qip1, qip2, ql(n,i+1), qr(n,i));
+      if (apply_floors) {
+        if (n==IDN) {
+          ql(IDN,i+1) = fmax(ql(IDN,i+1), dfloor_);
+          qr(IDN,i  ) = fmax(qr(IDN,i  ), dfloor_);
+        }
+        if (n==IEN) {
+          ql(IEN,i+1) = fmax(ql(IEN,i+1), efloor_);
+          qr(IEN,i  ) = fmax(qr(IEN,i  ), efloor_);
+        }
+      }
     });
   }
   return;
@@ -106,14 +123,31 @@ void WENOZX1(TeamMember_t const &member,const int m,const int k,const int j,
 //! This function should be called over [js-1,je+1] to get BOTH L/R states over [js,je]
 
 KOKKOS_INLINE_FUNCTION
-void WENOZX2(TeamMember_t const &member,const int m,const int k,const int j,
-     const int il, const int iu, const DvceArray5D<Real> &q,
-     ScrArray2D<Real> &ql_jp1, ScrArray2D<Real> &qr_j) {
+void WENOZX2(TeamMember_t const &member, const EOS_Data &eos, const bool apply_floors,
+     const int m, const int k, const int j, const int il, const int iu,
+     const DvceArray5D<Real> &q, ScrArray2D<Real> &ql_jp1, ScrArray2D<Real> &qr_j) {
   int nvar = q.extent_int(1);
+  const Real &dfloor_ = eos.dfloor;
+  // TODO(jmstone): ideal gas only for now
+  Real efloor_ = eos.pfloor/(eos.gamma - 1.0);
   for (int n=0; n<nvar; ++n) {
     par_for_inner(member, il, iu, [&](const int i) {
-      WENOZ(q(m,n,k,j-2,i), q(m,n,k,j-1,i), q(m,n,k,j,i), q(m,n,k,j+1,i),
-            q(m,n,k,j+2,i), ql_jp1(n,i), qr_j(n,i));
+      Real &qjm2 = q(m,n,k,j-2,i);
+      Real &qjm1 = q(m,n,k,j-1,i);
+      Real &qj   = q(m,n,k,j  ,i);
+      Real &qjp1 = q(m,n,k,j+1,i);
+      Real &qjp2 = q(m,n,k,j+2,i);
+      WENOZ(qjm2, qjm1, qj, qjp1, qjp2, ql_jp1(n,i), qr_j(n,i));
+      if (apply_floors) {
+        if (n==IDN) {
+          ql_jp1(IDN,i) = fmax(ql_jp1(IDN,i), dfloor_);
+          qr_j  (IDN,i) = fmax(qr_j  (IDN,i), dfloor_);
+        }
+        if (n==IEN) {
+          ql_jp1(IEN,i) = fmax(ql_jp1(IEN,i), efloor_);
+          qr_j  (IEN,i) = fmax(qr_j  (IEN,i), efloor_);
+        }
+      }
     });
   }
   return;
@@ -125,14 +159,31 @@ void WENOZX2(TeamMember_t const &member,const int m,const int k,const int j,
 //! This function should be called over [ks-1,ke+1] to get BOTH L/R states over [ks,ke]
 
 KOKKOS_INLINE_FUNCTION
-void WENOZX3(TeamMember_t const &member,const int m,const int k,const int j,
-     const int il, const int iu, const DvceArray5D<Real> &q,
-     ScrArray2D<Real> &ql_kp1, ScrArray2D<Real> &qr_k) {
+void WENOZX3(TeamMember_t const &member, const EOS_Data &eos, const bool apply_floors,
+     const int m, const int k, const int j, const int il, const int iu,
+     const DvceArray5D<Real> &q, ScrArray2D<Real> &ql_kp1, ScrArray2D<Real> &qr_k) {
   int nvar = q.extent_int(1);
+  const Real &dfloor_ = eos.dfloor;
+  // TODO(jmstone): ideal gas only for now
+  Real efloor_ = eos.pfloor/(eos.gamma - 1.0);
   for (int n=0; n<nvar; ++n) {
     par_for_inner(member, il, iu, [&](const int i) {
-      WENOZ(q(m,n,k-2,j,i), q(m,n,k-1,j,i), q(m,n,k,j,i), q(m,n,k+1,j,i),
-            q(m,n,k+2,j,i), ql_kp1(n,i), qr_k(n,i));
+      Real &qkm2 = q(m,n,k-2,j,i);
+      Real &qkm1 = q(m,n,k-1,j,i);
+      Real &qk   = q(m,n,k  ,j,i);
+      Real &qkp1 = q(m,n,k+1,j,i);
+      Real &qkp2 = q(m,n,k+2,j,i);
+      WENOZ(qkm2, qkm1, qk, qkp1, qkp2, ql_kp1(n,i), qr_k(n,i));
+      if (apply_floors) {
+        if (n==IDN) {
+          ql_kp1(IDN,i) = fmax(ql_kp1(IDN,i), dfloor_);
+          qr_k  (IDN,i) = fmax(qr_k  (IDN,i), dfloor_);
+        }
+        if (n==IEN) {
+          ql_kp1(IEN,i) = fmax(ql_kp1(IEN,i), efloor_);
+          qr_k  (IEN,i) = fmax(qr_k  (IEN,i), efloor_);
+        }
+      }
     });
   }
   return;

@@ -1,4 +1,3 @@
-//========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
@@ -57,14 +56,14 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
        << std::endl << "Input file is likely missing a <hydro> block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar>=16) && (ivar<40) && (pm->pmb_pack->pmhd == nullptr)) {
+  if ((ivar>=16) && (ivar<41) && (pm->pmb_pack->pmhd == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of MHD variable requested in <output> block '"
        << out_params.block_name << "' but no MHD object has been constructed."
        << std::endl << "Input file is likely missing a <mhd> block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar==40) && (pm->pmb_pack->pturb == nullptr)) {
+  if ((ivar==41) && (pm->pmb_pack->pturb == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of Force variable requested in <output> block '"
        << out_params.block_name << "' but no Force object has been constructed."
@@ -74,7 +73,6 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
 
   // Now load STL vector of output variables
   outvars.clear();
-  int ndvars=0;
 
   // hydro (lab-frame) density
   if (out_params.variable.compare("hydro_u_d") == 0 ||
@@ -134,7 +132,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     int nhyd = pm->pmb_pack->phydro->nhydro;
     int nvars = nhyd + pm->pmb_pack->phydro->nscalars;
     for (int n=nhyd; n<nvars; ++n) {
-      char number[2];
+      char number[3];
       std::snprintf(number,sizeof(number),"%02d",(n - nhyd));
       std::string vname;
       vname.assign("r_");
@@ -149,7 +147,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     int nhyd = pm->pmb_pack->phydro->nhydro;
     int nvars = nhyd + pm->pmb_pack->phydro->nscalars;
     for (int n=nhyd; n<nvars; ++n) {
-      char number[2];
+      char number[3];
       std::snprintf(number,sizeof(number),"%02d",(n - nhyd));
       std::string vname;
       vname.assign("s_");
@@ -227,7 +225,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     int nmhd = pm->pmb_pack->pmhd->nmhd;
     int nvars = nmhd + pm->pmb_pack->pmhd->nscalars;
     for (int n=nmhd; n<nvars; ++n) {
-      char number[2];
+      char number[3];
       std::snprintf(number,sizeof(number),"%02d",(n - nmhd));
       std::string vname;
       vname.assign("r_");
@@ -243,7 +241,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     int nmhd = pm->pmb_pack->pmhd->nmhd;
     int nvars = nmhd + pm->pmb_pack->pmhd->nscalars;
     for (int n=nmhd; n<nvars; ++n) {
-      char number[2];
+      char number[3];
       std::snprintf(number,sizeof(number),"%02d",(n - nmhd));
       std::string vname;
       vname.assign("s_");
@@ -276,26 +274,27 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
   if (out_params.variable.compare("hydro_wz") == 0 ||
       out_params.variable.compare("mhd_wz") == 0) {
     outvars.emplace_back(true,"vorz",0,&(derived_var));
-    ndvars++;
   }
 
   // hydro/mhd magnitude of vorticity (useful in 3D)
   if (out_params.variable.compare("hydro_w2") == 0 ||
       out_params.variable.compare("mhd_w2") == 0) {
     outvars.emplace_back(true,"vor2",0,&(derived_var));
-    ndvars++;
   }
 
   // mhd z-component of current density (useful in 2D)
   if (out_params.variable.compare("mhd_jz") == 0) {
     outvars.emplace_back(true,"jz",0,&(derived_var));
-    ndvars++;
   }
 
   // mhd magnitude of current density (useful in 3D)
   if (out_params.variable.compare("mhd_j2") == 0) {
     outvars.emplace_back(true,"j2",0,&(derived_var));
-    ndvars++;
+  }
+
+  // mhd divergence of B
+  if (out_params.variable.compare("mhd_divb") == 0) {
+    outvars.emplace_back(true,"divb",0,&(derived_var));
   }
 
   // turbulent forcing
@@ -303,16 +302,6 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     outvars.emplace_back("force1",0,&(pm->pmb_pack->pturb->force));
     outvars.emplace_back("force2",1,&(pm->pmb_pack->pturb->force));
     outvars.emplace_back("force3",2,&(pm->pmb_pack->pturb->force));
-  }
-
-  if (ndvars > 0) {
-    int nmb = pm->pmb_pack->nmb_thispack;
-    auto &indcs = pm->mb_indcs;
-    int &ng = indcs.ng;
-    int n1 = indcs.nx1 + 2*ng;
-    int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
-    int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
-    Kokkos::realloc(derived_var, nmb, ndvars, n3, n2, n1);
   }
 }
 
@@ -407,7 +396,7 @@ void BaseTypeOutput::LoadOutputData(Mesh *pm) {
   MPI_Allreduce(MPI_IN_PLACE, &noutmbs_max, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
 #endif
 
-  // get number of output vars and MBs, then realloc HostArray
+  // get number of output vars and MBs, then realloc outarray (HostArray)
   int nout_vars = outvars.size();
   int nout_mbs = outmbs.size();
   // note that while ois,oie,etc. can be different on each MB, the number of cells output
@@ -416,10 +405,11 @@ void BaseTypeOutput::LoadOutputData(Mesh *pm) {
     int nout1 = (outmbs[0].oie - outmbs[0].ois + 1);
     int nout2 = (outmbs[0].oje - outmbs[0].ojs + 1);
     int nout3 = (outmbs[0].oke - outmbs[0].oks + 1);
+    // NB: outarray stores all output data on Host
     Kokkos::realloc(outarray, nout_vars, nout_mbs, nout3, nout2, nout1);
   }
 
-  // Now load data over all variables and MeshBlocks
+  // Now copy data to host (outarray) over all variables and MeshBlocks
   for (int n=0; n<nout_vars; ++n) {
     // Calculate derived variable, if required
     if (outvars[n].derived) {

@@ -119,24 +119,23 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
       recon_method = ReconstructionMethod::dc;
     } else if (xorder.compare("plm") == 0) {
       recon_method = ReconstructionMethod::plm;
-    } else if (xorder.compare("ppm") == 0) {
+    } else if (xorder.compare("ppm4") == 0 ||
+               xorder.compare("ppmx") == 0 ||
+               xorder.compare("wenoz") == 0) {
       // check that nghost > 2
       if (indcs.ng < 3) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-          << std::endl << "PPM reconstruction requires at least 3 ghost zones, "
+          << std::endl << xorder << " reconstruction requires at least 3 ghost zones, "
           << "but <mesh>/nghost=" << indcs.ng << std::endl;
         std::exit(EXIT_FAILURE);
       }
-      recon_method = ReconstructionMethod::ppm;
-    } else if (xorder.compare("wenoz") == 0) {
-      // check that nghost > 2
-      if (indcs.ng < 3) {
-        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-            << std::endl << "WENOZ reconstruction requires at least 3 ghost zones, "
-            << "but <mesh>/nghost=" << indcs.ng << std::endl;
-        std::exit(EXIT_FAILURE);
+      if (xorder.compare("ppm4") == 0) {
+        recon_method = ReconstructionMethod::ppm4;
+      } else if (xorder.compare("ppmx") == 0) {
+        recon_method = ReconstructionMethod::ppmx;
+      } else if (xorder.compare("wenoz") == 0) {
+        recon_method = ReconstructionMethod::wenoz;
       }
-      recon_method = ReconstructionMethod::wenoz;
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "<hydro> recon = '" << xorder << "' not implemented"

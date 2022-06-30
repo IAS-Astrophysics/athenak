@@ -74,8 +74,15 @@ void IdealHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
         sumd++;  // use dfloor as counter for when either is true
       }
     } else {
-      if (dfloor_used) {sumd++;}
-      if (efloor_used) {sume++;}
+      // update counter, reset conserved if floor was hit
+      if (dfloor_used) {
+        cons(m,IDN,k,j,i) = u.d;
+        sumd++;
+      }
+      if (efloor_used) {
+        cons(m,IEN,k,j,i) = u.e;
+        sume++;
+      }
       // store primitive state in 3D array
       prim(m,IDN,k,j,i) = w.d;
       prim(m,IVX,k,j,i) = w.vx;

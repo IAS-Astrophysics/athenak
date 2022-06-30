@@ -50,7 +50,7 @@ pexcise     = 0.333e-12  # pressure inside excision
 
 <mhd>
 eos         = ideal      # EOS type
-reconstruct = ppm        # spatial reconstruction method
+reconstruct = ppmx       # spatial reconstruction method
 rsolver     = hlle       # Riemann-solver to be used
 dfloor      = 1.0e-10    # floor on density rho
 pfloor      = 0.333e-12  # floor on gas pressure p_gas

@@ -1,11 +1,11 @@
 # AthenaXXX input file for Shu-Osher shock tube test
- 
+
 <comment>
 problem   = Mach 3 shock interacting with a sine wave in the density (Example 6)
 reference = Shu, C.-W., & Osher, S., JCP 83, pp. 32-78 (1989)
 
 <job>
-basename  = ShuOsher  # problem ID: basename of output filenames 
+basename  = ShuOsher  # problem ID: basename of output filenames
 
 <mesh>
 nghost    = 3         # Number of ghost cells
@@ -37,7 +37,7 @@ ndiag      = 1        # interval for stdout summary info
 
 <hydro>
 eos         = ideal   # EOS type
-reconstruct = ppm     # spatial reconstruction method
+reconstruct = ppmx    # spatial reconstruction method
 rsolver     = llf     # Riemann-solver to be used
 gamma       = 1.4     # gamma = C_p/C_v
 
