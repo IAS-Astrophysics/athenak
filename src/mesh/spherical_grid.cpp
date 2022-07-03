@@ -93,3 +93,4 @@ SphericalGrid::SphericalGrid(MeshBlockPack *pmbp, int *nlev, bool *rotate_g, Rea
   interp_indices.template modify<HostMemSpace>();
   interp_indices.template sync<DevExeSpace>();
 }
+
