@@ -13,33 +13,67 @@
 #include "spherical_grid.hpp"
 #include "coordinates/cell_locations.hpp"
 #include "mesh/mesh.hpp"
+#include "utils/lagrange_interp.hpp"
 
-SphericalGrid::SphericalGrid(MeshBlockPack *pmbp, int *nlev, bool *rotate_g, Real rad_, Real ctr_[3]): 
+SphericalGrid::SphericalGrid(MeshBlockPack *pmbp, int *nlev, bool *rotate_g, Real ctr_[3]): 
   cartcoord("cartcoord",1,1),
   interp_indices("interp_indices",1,1),
+  area("area",1),
+  radius("radius",1),
+  pmbp(pmbp),
   GeodesicGrid(pmbp,nlev,rotate_g) {
+  Kokkos::realloc(area,nangles);
   Kokkos::realloc(cartcoord,nangles,3);
   Kokkos::realloc(interp_indices,nangles,4);
+  ctr[0] = ctr_[0];
+  ctr[1] = ctr_[1];
+  ctr[2] = ctr_[2];
+}
 
-  // set radius
-  rad = rad_;
-
+// set constant radius
+void SphericalGrid::SetRadius(Real rad_) {
+  Real rad = rad_;
   for (int n=0; n<nangles; ++n) {
     // set cartesian coord
-    cartcoord.h_view(n,0) = rad*sin(polarcoord.h_view(n,0))*cos(polarcoord.h_view(n,1)) + ctr_[0];
-    cartcoord.h_view(n,1) = rad*sin(polarcoord.h_view(n,0))*sin(polarcoord.h_view(n,1)) + ctr_[1];
-    cartcoord.h_view(n,2) = rad*cos(polarcoord.h_view(n,0)) + ctr_[2];
-
+    cartcoord.h_view(n,0) = rad*sin(polarcoord.h_view(n,0))*cos(polarcoord.h_view(n,1)) + ctr[0];
+    cartcoord.h_view(n,1) = rad*sin(polarcoord.h_view(n,0))*sin(polarcoord.h_view(n,1)) + ctr[1];
+    cartcoord.h_view(n,2) = rad*cos(polarcoord.h_view(n,0)) + ctr[2];
     // overwrite solid angle (area/weight)
-    solid_angle.h_view(n) *= rad*rad;
+    area.h_view(n) = solid_angle.h_view(n)*rad*rad;
   }
 
   // sync data
   cartcoord.template modify<HostMemSpace>();
   cartcoord.template sync<DevExeSpace>();
-  solid_angle.template modify<HostMemSpace>();
-  solid_angle.template sync<DevExeSpace>();
+  area.template modify<HostMemSpace>();
+  area.template sync<DevExeSpace>();
+}
 
+// set radius for deformed sphere
+void SphericalGrid::SetRadius(DualArray1D<Real> radius_) {\
+  Kokkos::realloc(radius,nangles);
+  for (int n=0; n<nangles; ++n) {
+    radius.h_view(n) = radius_.h_view(n);
+    // set cartesian coord
+    cartcoord.h_view(n,0) = radius.h_view(n)*sin(polarcoord.h_view(n,0))*cos(polarcoord.h_view(n,1)) + ctr[0];
+    cartcoord.h_view(n,1) = radius.h_view(n)*sin(polarcoord.h_view(n,0))*sin(polarcoord.h_view(n,1)) + ctr[1];
+    cartcoord.h_view(n,2) = radius.h_view(n)*cos(polarcoord.h_view(n,0)) + ctr[2];
+    // overwrite solid angle (area/weight)
+    area.h_view(n) = solid_angle.h_view(n)*radius.h_view(n)*radius.h_view(n);
+  }
+
+  // sync data
+  cartcoord.template modify<HostMemSpace>();
+  cartcoord.template sync<DevExeSpace>();
+  area.template modify<HostMemSpace>();
+  area.template sync<DevExeSpace>();
+  radius.template modify<HostMemSpace>();
+  radius.template sync<DevExeSpace>();
+}  
+
+
+
+void SphericalGrid::CalculateIndex() {
   // set index for meshblocks and the cells that a gridpoint is in
   auto &size = pmbp->pmb->mb_size;
 
@@ -84,13 +118,14 @@ SphericalGrid::SphericalGrid(MeshBlockPack *pmbp, int *nlev, bool *rotate_g, Rea
         // save which meshblock the nth point on the geodesic grid belongs to
         interp_indices.h_view(n,0) = m;
         // save the index of the closest point in the meshblock (closer on the origin)
-        interp_indices.h_view(n,1) = (int) (cartcoord.h_view(n,0)-x1min)/delta[0];
-        interp_indices.h_view(n,2) = (int) (cartcoord.h_view(n,1)-x2min)/delta[1];
-        interp_indices.h_view(n,3) = (int) (cartcoord.h_view(n,2)-x3min)/delta[2];
+        interp_indices.h_view(n,1) = (int) (cartcoord.h_view(n,0)-x1min-delta[0]/2)/delta[0];
+        interp_indices.h_view(n,2) = (int) (cartcoord.h_view(n,1)-x2min-delta[1]/2)/delta[1];
+        interp_indices.h_view(n,3) = (int) (cartcoord.h_view(n,2)-x3min-delta[2]/2)/delta[2];
       }
     }
   }
   interp_indices.template modify<HostMemSpace>();
   interp_indices.template sync<DevExeSpace>();
 }
+
 
