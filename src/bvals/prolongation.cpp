@@ -555,7 +555,7 @@ void BoundaryValuesFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb
   } else {
     auto &rbuf = recv_buf;
 
-/***/
+/***
 {int m=5;
 std::cout << std::endl<< "coarseB in MB="<<m <<std::endl;
 for (int k=2; k<=7; ++k) {
@@ -598,7 +598,7 @@ std::cout<< std::scientific << std::setprecision(12) <<"k,j,i= "<<k<<" "<<j<<" "
 }}}
 }
 
-/***/
+***/
 
     // Prolongate b.x1f/b.x2f/b.x3f at all shared coarse/fine cell edges
     // equivalent to code for 3D in MeshRefinement::ProlongateSharedFieldX1/2/3()
@@ -724,7 +724,7 @@ std::cout <<"fk,fj,fi= "<<fk<<" "<<fj<<" "<<fi<<"  b.x3f= "<<b.x3f(m,fk,fj,fi)<<
     });
     }
 
-/****/
+/****
 {int m=5;
 std::cout << std::endl<< "fineB averaged to coarse in MB="<<m <<std::endl;
 for (int k=2; k<=7; ++k) {
@@ -778,7 +778,7 @@ for (int i=1; i<=1; ++i) {
   std::cout<< std::scientific << std::setprecision(12) <<"k,j,i= "<<k<<" "<<j<<" "<<i<<"  divb1/2/3= "<<divb1<<"  "<<divb2<<"  "<<divb3<<"  divb= "<<(divb1+divb2+divb3)<<std::endl;
 }}}
 }
-/****/
+****/
 
 
     // Now prolongate b.x1f/b.x2f/b.x3f at interior fine cells
@@ -786,9 +786,9 @@ for (int i=1; i<=1; ++i) {
     // Note prolongation at shared coarse/fine cell edges must be completed first as
     // interpolation formulae use these values.
 
-/***/
+/***
 std::cout << std::endl << "Interior fields ---"<<std::endl;
-/***/
+***/
 
     // Outer loop over (# of MeshBlocks)*(# of buffers)
     {int nmn = nmb*nnghbr;
@@ -856,11 +856,11 @@ std::cout << std::endl << "Interior fields ---"<<std::endl;
                                     + Uxx + Vxyz - Wxyz;
             b.x1f(m,fk+1,fj+1,fi+1)=0.5*(b.x1f(m,fk+1,fj+1,fi  )+b.x1f(m,fk+1,fj+1,fi+2))
                                     + Uxx + Vxyz + Wxyz;
-/****/
+/****
 if (n==0 && m==5) {
 std::cout <<"fk,fj,fi+1= "<<fk<<" "<<fj<<" "<<fi+1<<"  b.x1f= "<<b.x1f(m,fk,fj,fi+1)<<"  b.x1f_jp1= "<<b.x1f(m,fk,fj+1,fi+1)<<"  b.x1f_kp1= "<<b.x1f(m,fk+1,fj,fi+1)<<"  b.x1f_jkp1= "<<b.x1f(m,fk+1,fj+1,fi+1)<<std::endl;
 }
-/****/
+****/
 
             b.x2f(m,fk  ,fj+1,fi  )=0.5*(b.x2f(m,fk  ,fj  ,fi  )+b.x2f(m,fk  ,fj+2,fi  ))
                                     + Vyy - Uxyz - Wxyz;
@@ -870,11 +870,11 @@ std::cout <<"fk,fj,fi+1= "<<fk<<" "<<fj<<" "<<fi+1<<"  b.x1f= "<<b.x1f(m,fk,fj,f
                                     + Vyy + Uxyz - Wxyz;
             b.x2f(m,fk+1,fj+1,fi+1)=0.5*(b.x2f(m,fk+1,fj  ,fi+1)+b.x2f(m,fk+1,fj+2,fi+1))
                                     + Vyy + Uxyz + Wxyz;
-/****/
+/****
 if (n==0 && m==5) {
 std::cout <<"fk,fj+1,fi= "<<fk<<" "<<fj+1<<" "<<fi<<"  b.x2f= "<<b.x2f(m,fk,fj+1,fi)<<"  b.x2f_ip1= "<<b.x2f(m,fk,fj+1,fi+1)<<"  b.x2f_kp1= "<<b.x2f(m,fk+1,fj+1,fi)<<"  b.x2f_ikp1= "<<b.x2f(m,fk+1,fj+1,fi+1)<<std::endl;
 }
-/****/
+****/
 
             b.x3f(m,fk+1,fj  ,fi  )=0.5*(b.x3f(m,fk+2,fj  ,fi  )+b.x3f(m,fk  ,fj  ,fi  ))
                                     + Wzz - Uxyz - Vxyz;
@@ -884,11 +884,11 @@ std::cout <<"fk,fj+1,fi= "<<fk<<" "<<fj+1<<" "<<fi<<"  b.x2f= "<<b.x2f(m,fk,fj+1
                                     + Wzz + Uxyz - Vxyz;
             b.x3f(m,fk+1,fj+1,fi+1)=0.5*(b.x3f(m,fk+2,fj+1,fi+1)+b.x3f(m,fk  ,fj+1,fi+1))
                                     + Wzz + Uxyz + Vxyz;
-/****/
+/****
 if (n==0 && m==5) {
 std::cout <<"fk+1,fj,fi= "<<fk+1<<" "<<fj<<" "<<fi<<"  b.x3f= "<<b.x3f(m,fk+1,fj,fi)<<"  b.x3f_ip1= "<<b.x3f(m,fk+1,fj,fi+1)<<"  b.x3f_jp1= "<<b.x3f(m,fk+1,fj+1,fi)<<"  b.x3f_ijp1= "<<b.x3f(m,fk+1,fj+1,fi+1)<<std::endl;
 }
-/****/
+****/
           });
         });
       }

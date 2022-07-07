@@ -211,7 +211,6 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
 
       // x3x1 edges (only load x2e)
       } else if (n<40) {
-/**
         int fi = 2*il - cis;
         int fk = 2*kl - cks;
         Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nj), [&](const int idx) {
@@ -226,12 +225,10 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
             }
           }
         });
-**/
         tmember.team_barrier();
 
       // x2x3 edges (only load x1e)
       } else if (n<48) {
-/**
         int fj = 2*jl - cjs;
         int fk = 2*kl - cks;
         Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, ni), [&](const int idx) {
@@ -246,7 +243,6 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
             }
           }
         });
-**/
         tmember.team_barrier();
       }
     }  // end if-neighbor-exists block
@@ -422,26 +418,22 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx) {
 
       // x3x1 edges
       } else if (n<40) {
-/**
         Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nj), [&](const int idx) {
           int j = idx + jl;
           if (v==1) {
             flx.x2e(m,kl,j,il) = rbuf[n].flux(m,ndat*v + (j-jl));
           }
         });
-**/
         tmember.team_barrier();
 
       // x2x3 edges
       } else if (n<48) {
-/**
         Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, ni), [&](const int idx) {
           int i = idx + il;
           if (v==0) {
             flx.x1e(m,kl,jl,i) = rbuf[n].flux(m,ndat*v + i-il);
           }
         });
-**/
         tmember.team_barrier();
       }
     }  // end if-neighbor-exists block

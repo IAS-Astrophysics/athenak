@@ -49,7 +49,7 @@ TaskStatus BoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
   auto &sbuf = send_buf;
   auto &rbuf = recv_buf;
 
-/***/
+/***
 {int m=5;
 std::cout <<std::endl<<"------------- MB="<<m<<" --------"<<std::endl;
 for (int n=0; n<56; ++n) {
@@ -59,7 +59,7 @@ std::cout << "nghbr lev = " << nghbr.h_view(m,n).lev << std::endl;
 std::cout << "nghbr dest = " << nghbr.h_view(m,n).dest << std::endl;
 }
 }
-/***/
+***/
 
 /****
 for (int m=0; m<nmb; ++m) {
@@ -74,7 +74,7 @@ std::cout << "nghbr dest = " << nghbr.h_view(m,n).dest << std::endl;
 
 ***/
 
-/****/
+/****
 
 for (int n=0; n<56; ++n) {
 std::cout << std::endl << "buffer= " << n << std::endl;
@@ -142,7 +142,7 @@ std::cout << "prol[2] = " << rbuf[n].iprol[2].bis <<"  "<< rbuf[n].iprol[2].bie 
                         rbuf[n].iprol[2].bjs <<"  "<< rbuf[n].iprol[2].bje <<"  "<<
                         rbuf[n].iprol[2].bks <<"  "<< rbuf[n].iprol[2].bke << std::endl;
 }
-/***/
+***/
 
 /***
 std::cout << std::endl << "b2 (m=1) and b2 (m=3)" << std::endl;
@@ -326,7 +326,7 @@ std::cout << "v= "<<v<<" index= "<<(nv[2] + i-il + ni*(j-jl + nj*(k-kl)))<<std::
   }); // end par_for_outer
   }
 
-/***/
+/***
 {int m=4;
 std::cout << std::endl<< "coarseB in MB="<<m <<std::endl;
 for (int k=2; k<=7; ++k) {
@@ -354,7 +354,7 @@ std::cout<< std::scientific << std::setprecision(12) <<"k,j,i= "<<k<<" "<<j<<" "
 }}}
 }
 
-/***/
+***/
 
   // Send boundary buffer to neighboring MeshBlocks using MPI
 
