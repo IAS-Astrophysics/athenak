@@ -22,6 +22,8 @@
 #include "pgen/pgen.hpp"
 #include "z4c/z4c.hpp"
 #include "utils/lagrange_interp.hpp"
+#include "geodesic-grid/spherical_grid.hpp"
+
 //----------------------------------------------------------------------------------------
 //! \fn ProblemGenerator::UserProblem_()
 //! \brief Problem Generator for single puncture
@@ -63,56 +65,44 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
     Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
-    u0(m,IDN,k,j,i) = 1.0 + 1.2*std::sin(5.0*M_PI*(x1v))*std::sin(3.0*M_PI*(x2v))*std::sin(3.0*M_PI*(x3v));
+    // test the InterpToSphere using random 3d sin waves
+    u0(m,IDN,k,j,i) = 1.0 + 0.2*std::sin(5.0*M_PI*(x1v))*std::sin(3.0*M_PI*(x2v))*std::sin(3.0*M_PI*(x3v));
   });
   
-  // u0.template modify<HostMemSpace>();
-  // u0.template sync<DevExeSpace>();
+  int nlev = 5;
+  bool rotate_sphere = true;
+  bool fluxes = false;
+  Real origin[3] = {0.,0.,0.};
+  SphericalGrid S = SphericalGrid(pmbp,nlev,origin, rotate_sphere,fluxes);
 
-  int m = 0;
-  Real &x1min = size.d_view(m).x1min;
-  Real &x1max = size.d_view(m).x1max;
-  Real &x2min = size.d_view(m).x2min;
-  Real &x2max = size.d_view(m).x2max;
-  Real &x3min = size.d_view(m).x3min;
-  Real &x3max = size.d_view(m).x3max;
-  int nx1 = indcs.nx1;
-  int nx2 = indcs.nx2;
-  int nx3 = indcs.nx3;
+  // set to constant radius
+  Real radius = 0.2;
+  S.SetRadius(radius);
+  S.CalculateIndex();
+  S.InterpToSphere(u0);
+  int test_ind = 127;
 
-  Real x_interp[3];
-  x_interp[0] = -.13110;
-  x_interp[1] = 0.2661;
-  x_interp[2] = .13489;
+  std::cout << "here" << std::endl;
+  std::cout << S.cartcoord.h_view(test_ind,0) << "    " << S.cartcoord.h_view(test_ind,1) << "    " << S.cartcoord.h_view(test_ind,2) << std::endl; 
+  std::cout << S.interp_indices.h_view(test_ind,0) << "   " << S.interp_indices.h_view(test_ind,1) << "    " << S.interp_indices.h_view(test_ind,2) << "    " << S.interp_indices.h_view(test_ind,3) << std::endl; 
 
-  Real delta1 = size.h_view(m).dx1;
-  Real delta2 = size.h_view(m).dx2;
-  Real delta3 = size.h_view(m).dx3;
+  std::cout << "interpolated value  " << S.intensity.h_view(test_ind) << std::endl;
+  std::cout << "analytical value  " << 1.0 + 0.2*std::sin(5.0*M_PI*(S.cartcoord.h_view(test_ind,0)))*
+    std::sin(3.0*M_PI*(S.cartcoord.h_view(test_ind,1)))*std::sin(3.0*M_PI*(S.cartcoord.h_view(test_ind,2))) << std::endl;
 
-  int coordinate_ind[3];
-  coordinate_ind[0] = (int) std::floor((x_interp[0]-x1min-delta1/2)/delta1);
-  coordinate_ind[1] = (int) std::floor((x_interp[1]-x2min-delta2/2)/delta2);
-  coordinate_ind[2] = (int) std::floor((x_interp[2]-x3min-delta3/2)/delta3);
 
-  int axis[3];
-  axis[0] = 1;
-  axis[1] = 2;
-  axis[2] = 3;
-  LagrangeInterp3D A = LagrangeInterp3D(pmbp, &m, coordinate_ind, x_interp, axis);
 
-  DualArray3D<Real> value;
-  Kokkos::realloc(value,2*(nghost+1),2*(nghost+1),2*(nghost+1));
-  for (int i=0; i<2*nghost+2; i++) {
-    for (int j=0; j<2*nghost+2; j++) {
-      for (int k=0; k<2*nghost+2; k++) {
-        value.h_view(i,j,k) = u0(m,IDN,coordinate_ind[2]-nghost+k+ks,coordinate_ind[1]-nghost+j+js,coordinate_ind[0]-nghost+i+is);
-      }
-    }
+  /*
+  std::ofstream spherical_grid_output;
+  spherical_grid_output.open ("/Users/hawking/Desktop/research/gr/athenak_versions/athenak_geo_mesh/build/spherical_grid_output.txt", std::ios_base::app);
+  for (int i=0;i<A.nangles;++i){
+    spherical_grid_output << A.cartcoord.h_view(i,0) << "\t" << A.cartcoord.h_view(i,1) << "\t" << A.cartcoord.h_view(i,2) << "\t" << A.interp_indices.h_view(i,0) 
+    << "\t" << A.interp_indices.h_view(i,1) << "\t" << A.interp_indices.h_view(i,2) << "\t" << A.interp_indices.h_view(i,3) 
+    << "\t" << A.polarcoord.h_view(i,0) << "\t" << A.polarcoord.h_view(i,1) <<"\n";
   }
+  spherical_grid_output.close();
 
-  std::cout << "expected value  " << 1.000 + 1.2*std::sin(5.0*M_PI*(x_interp[0]))*std::sin(3.0*M_PI*(x_interp[1]))*std::sin(3.0*M_PI*(x_interp[2])) << std::endl; // 
-  
-  std::cout << "interpolated value " << A.Evaluate(pmbp,value) << std::endl;
-
+  std::cout<<"Unit Test for Spherical Grid Implementation Initialized."<<std::endl;
+  */
   return;
 }
