@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <utility>
+#include <iomanip>    // std::setprecision()
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -47,6 +48,108 @@ TaskStatus BoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
   auto &mblev = pmy_pack->pmb->mb_lev;
   auto &sbuf = send_buf;
   auto &rbuf = recv_buf;
+
+/***/
+{int m=5;
+std::cout <<std::endl<<"------------- MB="<<m<<" --------"<<std::endl;
+for (int n=0; n<56; ++n) {
+std::cout << std::endl << "buffer= " << n << std::endl;
+std::cout << "nghbr id = " << nghbr.h_view(m,n).gid << std::endl;
+std::cout << "nghbr lev = " << nghbr.h_view(m,n).lev << std::endl;
+std::cout << "nghbr dest = " << nghbr.h_view(m,n).dest << std::endl;
+}
+}
+/***/
+
+/****
+for (int m=0; m<nmb; ++m) {
+for (int n=0; n<24; ++n) {
+if (nghbr.h_view(m,n).gid >=0) {
+std::cout << std::endl << "MB= " << m << "  buffer= " << n << std::endl;
+std::cout << "nghbr id = " << nghbr.h_view(m,n).gid << std::endl;
+std::cout << "nghbr lev = " << nghbr.h_view(m,n).lev << std::endl;
+std::cout << "nghbr dest = " << nghbr.h_view(m,n).dest << std::endl;
+}
+}}
+
+***/
+
+/****/
+
+for (int n=0; n<56; ++n) {
+std::cout << std::endl << "buffer= " << n << std::endl;
+std::cout << "ssame[0] = " << sbuf[n].isame[0].bis <<"  "<< sbuf[n].isame[0].bie <<"  "<<
+                        sbuf[n].isame[0].bjs <<"  "<< sbuf[n].isame[0].bje <<"  "<<
+                        sbuf[n].isame[0].bks <<"  "<< sbuf[n].isame[0].bke << std::endl;
+std::cout << "ssame[1] = " << sbuf[n].isame[1].bis <<"  "<< sbuf[n].isame[1].bie <<"  "<<
+                        sbuf[n].isame[1].bjs <<"  "<< sbuf[n].isame[1].bje <<"  "<<
+                        sbuf[n].isame[1].bks <<"  "<< sbuf[n].isame[1].bke << std::endl;
+std::cout << "ssame[2] = " << sbuf[n].isame[2].bis <<"  "<< sbuf[n].isame[2].bie <<"  "<<
+                        sbuf[n].isame[2].bjs <<"  "<< sbuf[n].isame[2].bje <<"  "<<
+                        sbuf[n].isame[2].bks <<"  "<< sbuf[n].isame[2].bke << std::endl;
+std::cout << "sfine[0] = " << sbuf[n].ifine[0].bis <<"  "<< sbuf[n].ifine[0].bie <<"  "<<
+                        sbuf[n].ifine[0].bjs <<"  "<< sbuf[n].ifine[0].bje <<"  "<<
+                        sbuf[n].ifine[0].bks <<"  "<< sbuf[n].ifine[0].bke << std::endl;
+std::cout << "sfine[1] = " << sbuf[n].ifine[1].bis <<"  "<< sbuf[n].ifine[1].bie <<"  "<<
+                        sbuf[n].ifine[1].bjs <<"  "<< sbuf[n].ifine[1].bje <<"  "<<
+                        sbuf[n].ifine[1].bks <<"  "<< sbuf[n].ifine[1].bke << std::endl;
+std::cout << "sfine[2] = " << sbuf[n].ifine[2].bis <<"  "<< sbuf[n].ifine[2].bie <<"  "<<
+                        sbuf[n].ifine[2].bjs <<"  "<< sbuf[n].ifine[2].bje <<"  "<<
+                        sbuf[n].ifine[2].bks <<"  "<< sbuf[n].ifine[2].bke << std::endl;
+std::cout << "scoar[0] = " << sbuf[n].icoar[0].bis <<"  "<< sbuf[n].icoar[0].bie <<"  "<<
+                        sbuf[n].icoar[0].bjs <<"  "<< sbuf[n].icoar[0].bje <<"  "<<
+                        sbuf[n].icoar[0].bks <<"  "<< sbuf[n].icoar[0].bke << std::endl;
+std::cout << "scoar[1] = " << sbuf[n].icoar[1].bis <<"  "<< sbuf[n].icoar[1].bie <<"  "<<
+                        sbuf[n].icoar[1].bjs <<"  "<< sbuf[n].icoar[1].bje <<"  "<<
+                        sbuf[n].icoar[1].bks <<"  "<< sbuf[n].icoar[1].bke << std::endl;
+std::cout << "scoar[2] = " << sbuf[n].icoar[2].bis <<"  "<< sbuf[n].icoar[2].bie <<"  "<<
+                        sbuf[n].icoar[2].bjs <<"  "<< sbuf[n].icoar[2].bje <<"  "<<
+                        sbuf[n].icoar[2].bks <<"  "<< sbuf[n].icoar[2].bke << std::endl;
+std::cout << "rsame[0] = " << rbuf[n].isame[0].bis <<"  "<< rbuf[n].isame[0].bie <<"  "<<
+                        rbuf[n].isame[0].bjs <<"  "<< rbuf[n].isame[0].bje <<"  "<<
+                        rbuf[n].isame[0].bks <<"  "<< rbuf[n].isame[0].bke << std::endl;
+std::cout << "rsame[1] = " << rbuf[n].isame[1].bis <<"  "<< rbuf[n].isame[1].bie <<"  "<<
+                        rbuf[n].isame[1].bjs <<"  "<< rbuf[n].isame[1].bje <<"  "<<
+                        rbuf[n].isame[1].bks <<"  "<< rbuf[n].isame[1].bke << std::endl;
+std::cout << "rsame[2] = " << rbuf[n].isame[2].bis <<"  "<< rbuf[n].isame[2].bie <<"  "<<
+                        rbuf[n].isame[2].bjs <<"  "<< rbuf[n].isame[2].bje <<"  "<<
+                        rbuf[n].isame[2].bks <<"  "<< rbuf[n].isame[2].bke << std::endl;
+std::cout << "rfine[0] = " << rbuf[n].ifine[0].bis <<"  "<< rbuf[n].ifine[0].bie <<"  "<<
+                        rbuf[n].ifine[0].bjs <<"  "<< rbuf[n].ifine[0].bje <<"  "<<
+                        rbuf[n].ifine[0].bks <<"  "<< rbuf[n].ifine[0].bke << std::endl;
+std::cout << "rfine[1] = " << rbuf[n].ifine[1].bis <<"  "<< rbuf[n].ifine[1].bie <<"  "<<
+                        rbuf[n].ifine[1].bjs <<"  "<< rbuf[n].ifine[1].bje <<"  "<<
+                        rbuf[n].ifine[1].bks <<"  "<< rbuf[n].ifine[1].bke << std::endl;
+std::cout << "rfine[2] = " << rbuf[n].ifine[2].bis <<"  "<< rbuf[n].ifine[2].bie <<"  "<<
+                        rbuf[n].ifine[2].bjs <<"  "<< rbuf[n].ifine[2].bje <<"  "<<
+                        rbuf[n].ifine[2].bks <<"  "<< rbuf[n].ifine[2].bke << std::endl;
+std::cout << "rcoar[0] = " << rbuf[n].icoar[0].bis <<"  "<< rbuf[n].icoar[0].bie <<"  "<<
+                        rbuf[n].icoar[0].bjs <<"  "<< rbuf[n].icoar[0].bje <<"  "<<
+                        rbuf[n].icoar[0].bks <<"  "<< rbuf[n].icoar[0].bke << std::endl;
+std::cout << "rcoar[1] = " << rbuf[n].icoar[1].bis <<"  "<< rbuf[n].icoar[1].bie <<"  "<<
+                        rbuf[n].icoar[1].bjs <<"  "<< rbuf[n].icoar[1].bje <<"  "<<
+                        rbuf[n].icoar[1].bks <<"  "<< rbuf[n].icoar[1].bke << std::endl;
+std::cout << "rcoar[2] = " << rbuf[n].icoar[2].bis <<"  "<< rbuf[n].icoar[2].bie <<"  "<<
+                        rbuf[n].icoar[2].bjs <<"  "<< rbuf[n].icoar[2].bje <<"  "<<
+                        rbuf[n].icoar[2].bks <<"  "<< rbuf[n].icoar[2].bke << std::endl;
+std::cout << "prol[0] = " << rbuf[n].iprol[0].bis <<"  "<< rbuf[n].iprol[0].bie <<"  "<<
+                        rbuf[n].iprol[0].bjs <<"  "<< rbuf[n].iprol[0].bje <<"  "<<
+                        rbuf[n].iprol[0].bks <<"  "<< rbuf[n].iprol[0].bke << std::endl;
+std::cout << "prol[1] = " << rbuf[n].iprol[1].bis <<"  "<< rbuf[n].iprol[1].bie <<"  "<<
+                        rbuf[n].iprol[1].bjs <<"  "<< rbuf[n].iprol[1].bje <<"  "<<
+                        rbuf[n].iprol[1].bks <<"  "<< rbuf[n].iprol[1].bke << std::endl;
+std::cout << "prol[2] = " << rbuf[n].iprol[2].bis <<"  "<< rbuf[n].iprol[2].bie <<"  "<<
+                        rbuf[n].iprol[2].bjs <<"  "<< rbuf[n].iprol[2].bje <<"  "<<
+                        rbuf[n].iprol[2].bks <<"  "<< rbuf[n].iprol[2].bke << std::endl;
+}
+/***/
+
+/***
+std::cout << std::endl << "b2 (m=1) and b2 (m=3)" << std::endl;
+for (int i=0; i<8; i++) {
+std::cout << std::scientific << std::setprecision(12) << cb.x2f(1,0,18,i) << "  " << cb.x2f(3,0,2,i) << std::endl;
+}
+***/
 
   // load buffers, using 3 levels of hierarchical parallelism
   // Outer loop over (# of MeshBlocks)*(# of buffers)*(three field components)
@@ -130,16 +233,31 @@ TaskStatus BoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
               Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
               [&](const int i) {
                 rbuf[dn].vars(dm,i-il + ni*(j-jl + nj*(k-kl))) = b.x1f(m,k,j,i);
+/***
+if (m==4 && n==4) {
+std::cout << "v= "<<v<<" index= "<<(i-il + ni*(j-jl + nj*(k-kl)))<<std::endl;
+}
+***/
               });
             } else if (v==1) {
               Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
               [&](const int i) {
                 rbuf[dn].vars(dm,nv[1] + i-il + ni*(j-jl + nj*(k-kl))) = b.x2f(m,k,j,i);
+/***
+if (m==4 && n==4) {
+std::cout << "v= "<<v<<" index= "<<(nv[1] + i-il + ni*(j-jl + nj*(k-kl)))<<std::endl;
+}
+***/
               });
             } else {
               Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
               [&](const int i) {
                 rbuf[dn].vars(dm,nv[2] + i-il + ni*(j-jl + nj*(k-kl))) = b.x3f(m,k,j,i);
+/***
+if (m==4 && n==4) {
+std::cout << "v= "<<v<<" index= "<<(nv[2] + i-il + ni*(j-jl + nj*(k-kl)))<<std::endl;
+}
+***/
               });
             }
           // if neighbor is at coarser level, load data from coarse_b0
@@ -207,6 +325,36 @@ TaskStatus BoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
     } // end if-neighbor-exists block
   }); // end par_for_outer
   }
+
+/***/
+{int m=4;
+std::cout << std::endl<< "coarseB in MB="<<m <<std::endl;
+for (int k=2; k<=7; ++k) {
+for (int j=2; j<=7; ++j) {
+for (int i=16; i<=18; ++i) {
+std::cout<< std::scientific << std::setprecision(12) <<"k,j,i= "<<k<<" "<<j<<" "<<i<<"  b.x1f= "<<b.x1f(m,k,j,i)<<std::endl;
+}}}
+for (int k=2; k<=7; ++k) {
+for (int j=2; j<=8; ++j) {
+for (int i=16; i<=17; ++i) {
+std::cout<< std::scientific << std::setprecision(12) <<"k,j,i= "<<k<<" "<<j<<" "<<i<<"  b.x2f= "<<b.x2f(m,k,j,i)<<std::endl;
+}}}
+for (int k=2; k<=8; ++k) {
+for (int j=2; j<=7; ++j) {
+for (int i=16; i<=17; ++i) {
+std::cout<< std::scientific << std::setprecision(12) <<"k,j,i= "<<k<<" "<<j<<" "<<i<<"  b.x3f= "<<b.x3f(m,k,j,i)<<std::endl;
+}}}
+for (int k=2; k<=6; ++k) {
+for (int j=2; j<=6; ++j) {
+for (int i=17; i<=17; ++i) {
+Real divb1 = (b.x1f(m,k,j,i+1) - b.x1f(m,k,j,i));
+Real divb2 = (b.x2f(m,k,j+1,i) - b.x2f(m,k,j,i));
+Real divb3 = (b.x3f(m,k+1,j,i) - b.x3f(m,k,j,i));
+std::cout<< std::scientific << std::setprecision(12) <<"k,j,i= "<<k<<" "<<j<<" "<<i<<"  divb1/2/3= "<<divb1<<"  "<<divb2<<"  "<<divb3<<"  divb= "<<(divb1+divb2+divb3)<<std::endl;
+}}}
+}
+
+/***/
 
   // Send boundary buffer to neighboring MeshBlocks using MPI
 
@@ -399,16 +547,31 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b,
           if (v==0) {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
             [&](const int i) {
+/***
+if (m==5 && n==0) {
+std::cout << "v= "<<v<<" index= "<<(i-il + ni*(j-jl + nj*(k-kl)))<<std::endl;
+}
+***/
               cb.x1f(m,k,j,i) = rbuf[n].vars(m,i-il + ni*(j-jl + nj*(k-kl)));
             });
           } else if (v==1) {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
             [&](const int i) {
+/***
+if (m==5 && n==0) {
+std::cout << "v= "<<v<<" index= "<<(nv[1] + i-il + ni*(j-jl + nj*(k-kl)))<<std::endl;
+}
+***/
               cb.x2f(m,k,j,i) = rbuf[n].vars(m,nv[1] + i-il + ni*(j-jl + nj*(k-kl)));
             });
           } else {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
             [&](const int i) {
+/***
+if (m==5 && n==0) {
+std::cout << "v= "<<v<<" index= "<<(nv[2] + i-il + ni*(j-jl + nj*(k-kl)))<<std::endl;
+}
+***/
               cb.x3f(m,k,j,i) = rbuf[n].vars(m,nv[2] + i-il + ni*(j-jl + nj*(k-kl)));
             });
           }

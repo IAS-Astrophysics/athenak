@@ -162,7 +162,6 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
         // i/j-index is fixed for flux correction on x1x2 edges
         int fi = 2*il - cis;
         int fj = 2*jl - cjs;
-/**
         if (v==2) {
           Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember,nk),[&](const int idx) {
             int k = idx + kl;
@@ -180,7 +179,6 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
             }
           });
         }
-**/
         tmember.team_barrier();
 
       // x3faces (only load x1e and x2e)
@@ -400,14 +398,12 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx) {
 
       // x1x2 edges
       } else if (n<24) {
-/**
         if (v==2) {
           Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember,nk),[&](const int idx) {
             int k = idx + kl;
             flx.x3e(m,k,jl,il) = rbuf[n].flux(m,ndat*v + (k-kl));
           });
         }
-**/
         tmember.team_barrier();
 
       // x3faces

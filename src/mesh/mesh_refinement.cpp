@@ -22,7 +22,7 @@
 //! \fn void Mesh::RestrictCC
 //  \brief Restricts cell-centered variables to coarse mesh
 
-void Mesh::RestrictCC(DvceArray5D<Real> u, DvceArray5D<Real> cu) {
+void Mesh::RestrictCC(DvceArray5D<Real> &u, DvceArray5D<Real> &cu) {
   int nmb  = u.extent_int(0);  // TODO(@user): 1st index from L of in array must be NMB
   int nvar = u.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
 
@@ -71,7 +71,7 @@ void Mesh::RestrictCC(DvceArray5D<Real> u, DvceArray5D<Real> cu) {
 //! \fn void Mesh::RestrictFC
 //  \brief Restricts face-centered variables to coarse mesh
 
-void Mesh::RestrictFC(DvceFaceFld4D<Real> b, DvceFaceFld4D<Real> cb) {
+void Mesh::RestrictFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb) {
   int nmb  = b.x1f.extent_int(0);  // TODO(@user): 1st idx from L of in array must be NMB
 
   auto &cis = mb_indcs.cis;
