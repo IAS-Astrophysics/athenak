@@ -58,10 +58,11 @@ void LagrangeInterp1D::CalculateWeight(MeshBlockPack *pmbp) {
     xmax = size.h_view(mb_ind_).x3max;
     is = indcs.ks;
   }
+  
   for (int i=0;i<2*nghost+2;++i) {
     interp_weight_.h_view(i) = 1.;
     // std::cout << CellCenterX(coord_ind-nghost_+i, nx, xmin, xmax) << std::endl;
-    for (int j=0;j<2*nghost+2;++j){
+    for (int j=0;j<2*nghost+2;++j) {
       if (j!=i) {
         // std::cout << CellCenterX(coord_ind, nx, xmin, xmax) << std::endl;
         // std::cout << coord_ << std::endl;
@@ -142,14 +143,7 @@ Real LagrangeInterp3D::Evaluate(MeshBlockPack *pmbp, DualArray3D<Real> &value) {
       for (int k=0;k<2*nghost+2;++k) {
         int_value += X1.interp_weight.h_view(i)*X2.interp_weight.h_view(j)*X3.interp_weight.h_view(k) * value.h_view(i,j,k);
       }
-      // std::cout << int_value << std::endl;
     }
   }
   return int_value;
 }
-
-/*
-Real LagrangeInterp2D::Evaluate(DualArray2D<Real> *value) {
-
-}
-*/

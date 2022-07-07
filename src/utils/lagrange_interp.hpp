@@ -28,7 +28,6 @@ class LagrangeInterp2D {
     int coord_ind[2];
     int ax[2];
     Real coord[2];
-    //void CalculateWeight(MeshBlockPack *pmbp);
     Real Evaluate(MeshBlockPack *pmbp, DualArray2D<Real> &value);
 };
 
@@ -40,6 +39,5 @@ class LagrangeInterp3D {
     int coord_ind[3];
     int ax[3];
     Real coord[3];
-    //void CalculateWeight(MeshBlockPack *pmbp);
     Real Evaluate(MeshBlockPack *pmbp, DualArray3D<Real> &value);
 };
