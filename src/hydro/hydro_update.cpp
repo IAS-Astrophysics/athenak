@@ -96,6 +96,11 @@ TaskStatus Hydro::ExpRKUpdate(Driver *pdriver, int stage) {
     pmy_pack->pcoord->AddCoordTerms(w0, peos->eos_data, beta_dt, u0);
   }
 
+  // Add user source terms
+  if (pmy_pack->pmesh->pgen->user_srcs) {
+    (pmy_pack->pmesh->pgen->user_srcs_func)(pmy_pack->pmesh, beta_dt);
+  }
+
   return TaskStatus::complete;
 }
 } // namespace hydro
