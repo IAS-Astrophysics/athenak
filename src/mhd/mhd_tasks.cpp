@@ -141,7 +141,7 @@ TaskStatus MHD::Fluxes(Driver *pdrive, int stage) {
     presist->OhmicEnergyFlux(b0, uflx);
   }
   if (pcond != nullptr) {
-    pcond->IsotropicHeatFlux(w0, pcond->kappa, peos->eos_data, uflx);
+    pcond->AddHeatFlux(w0, peos->eos_data, uflx);
   }
 
   // call FOFC if used

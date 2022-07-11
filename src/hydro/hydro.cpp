@@ -74,7 +74,8 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   }
 
   // Thermal conduction (only constructed if needed)
-  if (pin->DoesParameterExist("hydro","conductivity")) {
+  if (pin->DoesParameterExist("hydro","conductivity") ||
+      pin->DoesParameterExist("hydro","tdep_conductivity")) {
     pcond = new Conduction("hydro", ppack, pin);
   } else {
     pcond = nullptr;
