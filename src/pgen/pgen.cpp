@@ -23,6 +23,8 @@
 
 ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
     user_bcs(false),
+    user_srcs(false),
+    user_hist(false),
     pmy_mesh_(pm) {
   // check for user-defined boundary conditions
   for (int dir=0; dir<6; ++dir) {
@@ -30,6 +32,9 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
       user_bcs = true;
     }
   }
+
+  user_srcs = pin->GetOrAddBoolean("problem","user_srcs",false);
+  user_hist = pin->GetOrAddBoolean("problem","user_hist",false);
 
 #if USER_PROBLEM_ENABLED
   // call user-defined problem generator
@@ -72,6 +77,24 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
       exit(EXIT_FAILURE);
     }
   }
+  // Check that user defined srcterms were enrolled if needed
+  if (user_srcs) {
+    if (user_srcs_func == nullptr) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "User SRCs specified in <problem> block, but not "
+                << "enrolled by UserProblem()." << std::endl;
+      exit(EXIT_FAILURE);
+    }
+  }
+  // Check that user defined history outputs were enrolled if needed
+  if (user_hist) {
+    if (user_hist_func == nullptr) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "User history output specified in <problem> block, but "
+                << "not enrolled by UserProblem()." << std::endl;
+      exit(EXIT_FAILURE);
+    }
+  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -84,7 +107,17 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
 
 ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resfile) :
     user_bcs(false),
+    user_srcs(false),
+    user_hist(false),
     pmy_mesh_(pm) {
+  // check for user-defined boundary conditions
+  for (int dir=0; dir<6; ++dir) {
+    if (pm->mesh_bcs[dir] == BoundaryFlag::user) {
+      user_bcs = true;
+    }
+  }
+  user_srcs = pin->GetOrAddBoolean("problem","user_srcs",false);
+  user_hist = pin->GetOrAddBoolean("problem","user_hist",false);
   // root process reads size of CC and FC data arrays from restart file
   IOWrapperSizeT variablesize = 2*sizeof(IOWrapperSizeT);
   char *variabledata = new char[variablesize];
@@ -248,6 +281,24 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "User BCs specified in <mesh> block, but not enrolled "
                 << "during restart by SetProblemData()." << std::endl;
+      exit(EXIT_FAILURE);
+    }
+  }
+  // Check that user defined srcterms were enrolled if needed
+  if (user_srcs) {
+    if (user_srcs_func == nullptr) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "User SRCs specified in <problem> block, but not "
+                << "enrolled by UserProblem()." << std::endl;
+      exit(EXIT_FAILURE);
+    }
+  }
+  // Check that user defined history outputs were enrolled if needed
+  if (user_hist) {
+    if (user_hist_func == nullptr) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "User history output specified in <problem> block, "
+                << "but not enrolled by UserProblem()." << std::endl;
       exit(EXIT_FAILURE);
     }
   }
