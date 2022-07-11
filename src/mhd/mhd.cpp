@@ -99,7 +99,8 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   }
 
   // Thermal conduction (only constructed if needed)
-  if (pin->DoesParameterExist("mhd","conductivity")) {
+  if (pin->DoesParameterExist("mhd","conductivity") ||
+      pin->DoesParameterExist("mhd","tdep_conductivity")) {
     pcond = new Conduction("mhd", ppack, pin);
   } else {
     pcond = nullptr;
