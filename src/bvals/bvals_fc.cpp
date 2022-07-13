@@ -74,7 +74,7 @@ std::cout << "nghbr dest = " << nghbr.h_view(m,n).dest << std::endl;
 
 ***/
 
-/****
+/****/
 
 for (int n=0; n<56; ++n) {
 std::cout << std::endl << "buffer= " << n << std::endl;
@@ -142,7 +142,7 @@ std::cout << "prol[2] = " << rbuf[n].iprol[2].bis <<"  "<< rbuf[n].iprol[2].bie 
                         rbuf[n].iprol[2].bjs <<"  "<< rbuf[n].iprol[2].bje <<"  "<<
                         rbuf[n].iprol[2].bks <<"  "<< rbuf[n].iprol[2].bke << std::endl;
 }
-***/
+/***/
 
 /***
 std::cout << std::endl << "b2 (m=1) and b2 (m=3)" << std::endl;

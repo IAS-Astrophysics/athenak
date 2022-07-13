@@ -49,6 +49,35 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
   auto &sbuf = send_buf;
   auto &rbuf = recv_buf;
 
+/****
+
+for (int n=0; n<56; ++n) {
+std::cout << std::endl << "buffer= " << n << std::endl;
+std::cout << "ssame[0] = " << sbuf[n].isame[0].bis <<"  "<< sbuf[n].isame[0].bie <<"  "<<
+                        sbuf[n].isame[0].bjs <<"  "<< sbuf[n].isame[0].bje <<"  "<<
+                        sbuf[n].isame[0].bks <<"  "<< sbuf[n].isame[0].bke << std::endl;
+std::cout << "sfine[0] = " << sbuf[n].ifine[0].bis <<"  "<< sbuf[n].ifine[0].bie <<"  "<<
+                        sbuf[n].ifine[0].bjs <<"  "<< sbuf[n].ifine[0].bje <<"  "<<
+                        sbuf[n].ifine[0].bks <<"  "<< sbuf[n].ifine[0].bke << std::endl;
+std::cout << "scoar[0] = " << sbuf[n].icoar[0].bis <<"  "<< sbuf[n].icoar[0].bie <<"  "<<
+                        sbuf[n].icoar[0].bjs <<"  "<< sbuf[n].icoar[0].bje <<"  "<<
+                        sbuf[n].icoar[0].bks <<"  "<< sbuf[n].icoar[0].bke << std::endl;
+std::cout << "rsame[0] = " << rbuf[n].isame[0].bis <<"  "<< rbuf[n].isame[0].bie <<"  "<<
+                        rbuf[n].isame[0].bjs <<"  "<< rbuf[n].isame[0].bje <<"  "<<
+                        rbuf[n].isame[0].bks <<"  "<< rbuf[n].isame[0].bke << std::endl;
+std::cout << "rfine[0] = " << rbuf[n].ifine[0].bis <<"  "<< rbuf[n].ifine[0].bie <<"  "<<
+                        rbuf[n].ifine[0].bjs <<"  "<< rbuf[n].ifine[0].bje <<"  "<<
+                        rbuf[n].ifine[0].bks <<"  "<< rbuf[n].ifine[0].bke << std::endl;
+std::cout << "rcoar[0] = " << rbuf[n].icoar[0].bis <<"  "<< rbuf[n].icoar[0].bie <<"  "<<
+                        rbuf[n].icoar[0].bjs <<"  "<< rbuf[n].icoar[0].bje <<"  "<<
+                        rbuf[n].icoar[0].bks <<"  "<< rbuf[n].icoar[0].bke << std::endl;
+std::cout << "prol[0] = " << rbuf[n].iprol[0].bis <<"  "<< rbuf[n].iprol[0].bie <<"  "<<
+                        rbuf[n].iprol[0].bjs <<"  "<< rbuf[n].iprol[0].bje <<"  "<<
+                        rbuf[n].iprol[0].bks <<"  "<< rbuf[n].iprol[0].bke << std::endl;
+}
+***/
+
+
   // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
   int nmnv = nmb*nnghbr*nvar;
   Kokkos::TeamPolicy<> policy(DevExeSpace(), nmnv, Kokkos::AUTO);
