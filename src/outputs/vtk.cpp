@@ -83,8 +83,8 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   int ncoord2 = (nout2 > 1)? nout2+1 : nout2;
   int ncoord3 = (nout3 > 1)? nout3+1 : nout3;
 
-  // create filename: "vtk/file_basename" + "." + "file_id" + "." + XXXXX + ".vtk"
-  // where XXXXX = 5-digit file_number
+  // create filename: "vtk/file_basename"."file_id"."gid"."XXXXX".vtk
+  // where XXXXX = 5-digit file_number, and gid only added if specified
   std::string fname;
   char number[6];
   std::snprintf(number, sizeof(number), "%05d", out_params.file_number);
@@ -94,6 +94,10 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   fname.append(".");
   fname.append(out_params.file_id);
   fname.append(".");
+  if (out_params.gid >= 0) {
+    fname.append(std::to_string(out_params.gid));
+    fname.append(".");
+  }
   fname.append(number);
   fname.append(".vtk");
 
