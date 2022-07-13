@@ -74,7 +74,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   Real &x1max = size.d_view(m).x1max;
   int nx1 = indcs.nx1;
 
-  Real x_interp = .86;
+  Real x_interp = .63481905;
   Real delta = size.h_view(m).dx1;
   std::cout << "x1min " <<x1min << std::endl;
   std::cout << "Physical boundary " << CellCenterX(0, nx1, x1min, x1max) << std::endl;
@@ -86,10 +86,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   LagrangeInterp1D A = LagrangeInterp1D(pmbp, &m, &coordinate_ind, &x_interp, &axis);
   std::cout << coordinate_ind << std::endl;
   DualArray1D<Real> value;
-  Kokkos::realloc(value,2*(nghost+1));
+  Kokkos::realloc(value,2*nghost);
   for (int i=0; i<2*nghost+2; i++) {
-    Real x1v = CellCenterX(coordinate_ind-nghost+i, nx1, x1min, x1max);
-    value.h_view(i) = u0(m,IDN,0,0,coordinate_ind-nghost+i+is);
+    Real x1v = CellCenterX(coordinate_ind-nghost+i+1, nx1, x1min, x1max);
+    value.h_view(i) = u0(m,IDN,0,0,coordinate_ind-nghost+i+is+1);
     //std::cout << x1v << "   " << value.h_view(i) << "   " << A.interp_weight.h_view(i) << std::endl;
   }
 

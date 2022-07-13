@@ -23,7 +23,7 @@ LagrangeInterp1D::LagrangeInterp1D(MeshBlockPack *pmbp, int *meshblock_ind, int 
   // allocate memory for the interpolation weight
   // order of interpolation always match the maximal allowed by the number ghost cell
   // the stencil have size 2*(nghost+1)
-  Kokkos::realloc(interp_weight,2*(nghost+1));
+  Kokkos::realloc(interp_weight,2*nghost);
 
   // calculate weight based on the coord_ind
   LagrangeInterp1D::CalculateWeight(pmbp);
@@ -58,15 +58,15 @@ void LagrangeInterp1D::CalculateWeight(MeshBlockPack *pmbp) {
     xmax = size.h_view(mb_ind_).x3max;
     is = indcs.ks;
   }
-  for (int i=0;i<2*nghost+2;++i) {
+  for (int i=0;i<2*nghost;++i) {
     interp_weight_.h_view(i) = 1.;
     // std::cout << CellCenterX(coord_ind-nghost_+i, nx, xmin, xmax) << std::endl;
-    for (int j=0;j<2*nghost+2;++j){
+    for (int j=0;j<2*nghost;++j){
       if (j!=i) {
         // std::cout << CellCenterX(coord_ind, nx, xmin, xmax) << std::endl;
         // std::cout << coord_ << std::endl;
-        interp_weight_.h_view(i) *= (coord_-CellCenterX(coord_ind-nghost_+j, nx, xmin, xmax))/
-        (CellCenterX(coord_ind-nghost_+i, nx, xmin, xmax)-CellCenterX(coord_ind-nghost_+j, nx, xmin, xmax));
+        interp_weight_.h_view(i) *= (coord_-CellCenterX(coord_ind-nghost_+j+1, nx, xmin, xmax))/
+        (CellCenterX(coord_ind-nghost_+i+1, nx, xmin, xmax)-CellCenterX(coord_ind-nghost_+j+1, nx, xmin, xmax));
       }
     }
   }
@@ -76,7 +76,7 @@ Real LagrangeInterp1D::Evaluate(DualArray1D<Real> &value) {
   int &nghost_ = nghost;
   Real int_value = 0.;
   auto &interp_weight_ = interp_weight;
-  for (int i=0;i<2*nghost+2;++i) {
+  for (int i=0;i<2*nghost;++i) {
     int_value +=interp_weight_.h_view(i) * value.h_view(i);
   }
   return int_value;
@@ -100,9 +100,9 @@ Real LagrangeInterp2D::Evaluate(MeshBlockPack *pmbp, DualArray2D<Real> &value) {
   LagrangeInterp1D X1 = LagrangeInterp1D(pmbp, &mb_ind, &coord_ind[0], &coord[0], &ax[0]);
   LagrangeInterp1D X2 = LagrangeInterp1D(pmbp, &mb_ind, &coord_ind[1], &coord[1], &ax[1]);
   Real int_value = 0; 
-  for (int i=0;i<2*nghost+2;++i) {
+  for (int i=0;i<2*nghost;++i) {
     // std::cout << X2.interp_weight.h_view(i) << std::endl;
-    for (int j=0;j<2*nghost+2;++j) {
+    for (int j=0;j<2*nghost;++j) {
       int_value += X1.interp_weight.h_view(i)*X2.interp_weight.h_view(j) * value.h_view(i,j);
       // std::cout << int_value << std::endl;
     }
@@ -136,9 +136,9 @@ Real LagrangeInterp3D::Evaluate(MeshBlockPack *pmbp, DualArray3D<Real> &value) {
   LagrangeInterp1D X3 = LagrangeInterp1D(pmbp, &mb_ind, &coord_ind[2], &coord[2], &ax[2]);
 
   Real int_value = 0;
-  for (int i=0;i<2*nghost+2;++i) {
-    for (int j=0;j<2*nghost+2;++j) {
-      for (int k=0;k<2*nghost+2;++k) {
+  for (int i=0;i<2*nghost;++i) {
+    for (int j=0;j<2*nghost;++j) {
+      for (int k=0;k<2*nghost;++k) {
         int_value += X1.interp_weight.h_view(i)*X2.interp_weight.h_view(j)*X3.interp_weight.h_view(k) * value.h_view(i,j,k);
       }
       // std::cout << int_value << std::endl;

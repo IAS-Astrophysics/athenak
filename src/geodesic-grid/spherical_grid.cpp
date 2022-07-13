@@ -84,65 +84,7 @@ void SphericalGrid::SetRadius(DualArray1D<Real> radius_) {
   area.template sync<DevExeSpace>();
   radius.template modify<HostMemSpace>();
   radius.template sync<DevExeSpace>();
-}  
-
-
-/*
-void SphericalGrid::CalculateIndex() {
-  // set index for meshblocks and the cells that a gridpoint is in
-  auto &size = pmbp->pmb->mb_size;
-
-  for (int m=0; m<(pmbp->nmb_thispack);++m) {
-    Real origin[3];
-    Real delta[3];
-    int sizes[3];
-
-    auto &indcs = pmbp->pmesh->mb_indcs;
-    int &is = indcs.is; int &ie = indcs.ie;
-    int &js = indcs.js; int &je = indcs.je;
-    int &ks = indcs.ks; int &ke = indcs.ke;
-    int &nghost = indcs.ng;
-    int &nx1 = indcs.nx1;
-    int &nx2 = indcs.nx2;
-    int &nx3 = indcs.nx3;
-
-    auto &x1min = size.h_view(m).x1min;
-    auto &x1max = size.h_view(m).x1max;
-    auto &x2min = size.h_view(m).x2min;
-    auto &x2max = size.h_view(m).x2max;
-    auto &x3min = size.h_view(m).x3min;
-    auto &x3max = size.h_view(m).x3max;
-
-    origin[0] = CellCenterX(is, nx1, x1min, x1max);
-    origin[1] = CellCenterX(js, nx2, x2min, x2max);
-    origin[2] = CellCenterX(ks, nx3, x3min, x3max);
-
-    sizes[0] = nx1 + 2*(nghost);
-    sizes[1] = nx2 + 2*(nghost);
-    sizes[2] = nx3 + 2*(nghost);
-
-    delta[0] = size.h_view(m).dx1;
-    delta[1] = size.h_view(m).dx2;
-    delta[2] = size.h_view(m).dx3;
-    
-    // Loop over all points to find those belonging to this spherical patch
-    for (int n=0; n<nangles; ++n) {
-      if (cartcoord.h_view(n,0) >= x1min && cartcoord.h_view(n,0) <= x1max 
-        && cartcoord.h_view(n,1) >= x2min && cartcoord.h_view(n,1) <= x2max 
-        && cartcoord.h_view(n,2) >= x3min && cartcoord.h_view(n,2) <= x3max) {
-        // save which meshblock the nth point on the geodesic grid belongs to
-        interp_indices.h_view(n,0) = m;
-        // save the index of the closest point in the meshblock (closer on the origin)
-        interp_indices.h_view(n,1) = (int) std::floor((cartcoord.h_view(n,0)-x1min-delta[0]/2)/delta[0]);
-        interp_indices.h_view(n,2) = (int) std::floor((cartcoord.h_view(n,1)-x2min-delta[1]/2)/delta[1]);
-        interp_indices.h_view(n,3) = (int) std::floor((cartcoord.h_view(n,2)-x3min-delta[2]/2)/delta[2]);
-      }
-    }
-  }
-  interp_indices.template modify<HostMemSpace>();
-  interp_indices.template sync<DevExeSpace>();
 }
-*/
 
 
 void SphericalGrid::CalculateIndex() {
@@ -173,14 +115,6 @@ void SphericalGrid::CalculateIndex() {
     auto &x2max = size.d_view(m).x2max;
     auto &x3min = size.d_view(m).x3min;
     auto &x3max = size.d_view(m).x3max;
-
-    origin[0] = CellCenterX(is, nx1, x1min, x1max);
-    origin[1] = CellCenterX(js, nx2, x2min, x2max);
-    origin[2] = CellCenterX(ks, nx3, x3min, x3max);
-
-    sizes[0] = nx1 + 2*(nghost);
-    sizes[1] = nx2 + 2*(nghost);
-    sizes[2] = nx3 + 2*(nghost);
 
     delta[0] = size.d_view(m).dx1;
     delta[1] = size.d_view(m).dx2;
@@ -233,12 +167,13 @@ void SphericalGrid::InterpToSphere(DvceArray5D<Real> &value) {
     axis[0] = 1;
     axis[1] = 2;
     axis[2] = 3;
-
+    std::cout << interp_indices.h_view(n,0) << "  " << interp_indices.h_view(n,3) << std::endl;
     DualArray3D<Real> value_interp;
     Kokkos::realloc(value_interp,2*(nghost+1),2*(nghost+1),2*(nghost+1));
     for (int i=0; i<2*nghost+2; i++) {
       for (int j=0; j<2*nghost+2; j++) {
         for (int k=0; k<2*nghost+2; k++) {
+          std::cout << coordinate_ind[0]-nghost+i+is << " " << coordinate_ind[1]-nghost+j+js << " " << coordinate_ind[2]-nghost+k+ks << std::endl;
           value_interp.h_view(i,j,k) = value(interp_indices.h_view(n,0),IDN,coordinate_ind[2]-nghost+k+ks,coordinate_ind[1]-nghost+j+js,coordinate_ind[0]-nghost+i+is);
         }
       }

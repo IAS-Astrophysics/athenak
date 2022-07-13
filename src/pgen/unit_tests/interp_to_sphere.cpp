@@ -68,7 +68,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     // test the InterpToSphere using random 3d sin waves
     u0(m,IDN,k,j,i) = 1.0 + 0.2*std::sin(5.0*M_PI*(x1v))*std::sin(3.0*M_PI*(x2v))*std::sin(3.0*M_PI*(x3v));
   });
-  
+
   int nlev = 5;
   bool rotate_sphere = true;
   bool fluxes = false;
@@ -79,6 +79,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   Real radius = 0.2;
   S.SetRadius(radius);
   S.CalculateIndex();
+
   S.InterpToSphere(u0);
   int test_ind = 127;
 
