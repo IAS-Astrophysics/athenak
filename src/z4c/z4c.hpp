@@ -113,6 +113,12 @@ class Z4c {
     AthenaTensor<Real, TensorSymm::SYM2, 3, 2> K_dd;
   }; 
   ADM_vars adm;
+
+  struct ADMhost_vars {
+    AthenaHostTensor<Real, TensorSymm::NONE, 3, 0> psi4;
+    AthenaHostTensor<Real, TensorSymm::SYM2, 3, 2> g_dd;
+    AthenaHostTensor<Real, TensorSymm::SYM2, 3, 2> K_dd;
+  }; 
   
   struct Z4c_vars {
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> chi;       // conf. factor

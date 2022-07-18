@@ -30,6 +30,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   if (restart) return;
 
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
+  auto &indcs = pmy_mesh_->mb_indcs;
 
   TwoPunctures_params_set_default();
   std::string set_name = "problem";
@@ -131,7 +132,14 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   data = TwoPunctures_make_initial_data();
   pmbp->pz4c->ADMTwoPunctures(pmbp, data);
   pmbp->pz4c->GaugePreCollapsedLapse(pmbp, pin);
-  pmbp->pz4c->ADMToZ4c(pmbp, pin);
+  switch (indcs.ng) {
+    case 2: pmbp->pz4c->ADMToZ4c<2>(pmbp, pin);
+            break;
+    case 3: pmbp->pz4c->ADMToZ4c<3>(pmbp, pin);
+            break;
+    case 4: pmbp->pz4c->ADMToZ4c<4>(pmbp, pin);
+            break;
+  }
   TwoPunctures_finalise(data);
   std::cout<<"TwoPuncture initialized."<<std::endl;
   return;

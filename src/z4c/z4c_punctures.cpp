@@ -110,7 +110,7 @@ void Z4c::ADMTwoPunctures(MeshBlockPack *pmbp, ini_data *data) {
   auto &u_adm = pmbp->padm->u_adm;
 
   HostArray5D<Real>::HostMirror host_u_adm = create_mirror(u_adm);
-  ADM_vars host_adm;
+  ADMhost_vars host_adm;
   host_adm.psi4.InitWithShallowSlice(host_u_adm, ADM::I_ADM_psi4);
   host_adm.g_dd.InitWithShallowSlice(host_u_adm, ADM::I_ADM_gxx, ADM::I_ADM_gzz);
   host_adm.K_dd.InitWithShallowSlice(host_u_adm, ADM::I_ADM_Kxx, ADM::I_ADM_Kzz);
@@ -128,8 +128,7 @@ void Z4c::ADMTwoPunctures(MeshBlockPack *pmbp, ini_data *data) {
   int ncells2 = indcs.nx2 + 2*(indcs.ng);
   int ncells3 = indcs.nx3 + 2*(indcs.ng);
   int nmb = pmbp->nmb_thispack;
-  Kokkos::parallel_for("pgen two puncture", Kokkos::RangePolicy<>(Kokkos::DefaultHostExecutionSpace(), 0, nmb),
-  KOKKOS_LAMBDA(const int m) {
+  for(int m = 0; m < nmb; ++m) {
     int imin[3] = {0, 0, 0};
 
     int n[3] = {ncells1, ncells2, ncells3};
@@ -207,8 +206,9 @@ void Z4c::ADMTwoPunctures(MeshBlockPack *pmbp, ini_data *data) {
        Kzz   // kzz
        );
 
-    par_for("Two punctures",Kokkos::DefaultHostExecutionSpace(),ksg,keg,jsg,jeg,isg,ieg,
-    KOKKOS_LAMBDA(const int k, const int j, const int i) {
+    for(int k=ksg; k<=keg; k++)
+    for(int j=jsg; j<=jeg; j++)
+    for(int i=isg; i<=ieg; i++) {
       int flat_ix = i + n[0]*(j + n[1]*k);
       host_adm.psi4(m,k,j,i) = std::pow(psi[flat_ix], 4);
 
@@ -225,7 +225,7 @@ void Z4c::ADMTwoPunctures(MeshBlockPack *pmbp, ini_data *data) {
       host_adm.K_dd(m,0, 1, k, j, i) = Kxy[flat_ix];
       host_adm.K_dd(m,0, 2, k, j, i) = Kxz[flat_ix];
       host_adm.K_dd(m,1, 2, k, j, i) = Kyz[flat_ix];
-    });
+    }
 
     free(gxx); free(gyy); free(gzz);
     free(gxy); free(gxz); free(gyz);
@@ -236,8 +236,7 @@ void Z4c::ADMTwoPunctures(MeshBlockPack *pmbp, ini_data *data) {
     free(psi); free(alp);
 
     free(x); free(y); free(z);
-  });
-                               
+  }
   Kokkos::deep_copy(u_adm, host_u_adm);
   return;
 }
