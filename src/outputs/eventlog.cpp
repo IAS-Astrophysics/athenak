@@ -36,10 +36,12 @@ void EventLogOutput::LoadOutputData(Mesh *pm) {
   // perform in-place sum or max over all MPI ranks, depending on counter
   int* pdfloor = &(pm->ecounter.neos_dfloor);
   int* pefloor = &(pm->ecounter.neos_efloor);
+  int* ptfloor = &(pm->ecounter.neos_tfloor);
   int* pmaxit  = &(pm->ecounter.maxit_c2p);
   int* pfofc   = &(pm->ecounter.nfofc);
   MPI_Allreduce(MPI_IN_PLACE, pdfloor, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
   MPI_Allreduce(MPI_IN_PLACE, pefloor, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE, ptfloor, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
   MPI_Allreduce(MPI_IN_PLACE, pmaxit,  1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
   MPI_Allreduce(MPI_IN_PLACE, pfofc,   1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 #endif
@@ -48,6 +50,7 @@ void EventLogOutput::LoadOutputData(Mesh *pm) {
   no_output = true;
   if (pm->ecounter.neos_dfloor > 0 ||
       pm->ecounter.neos_efloor > 0 ||
+      pm->ecounter.neos_tfloor > 0 ||
       pm->ecounter.nfofc > 0 ||
       pm->ecounter.maxit_c2p > 0) {
     no_output=false;
@@ -80,7 +83,7 @@ void EventLogOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     // Write header, if it has not been written already
     if (!(header_written)) {
       std::fprintf(pfile,"# Athena event counter data\n");
-      std::fprintf(pfile,"#  cycle eos_dfloor eos_efloor c2p_it  fofc");
+      std::fprintf(pfile,"#  cycle eos_dfloor eos_efloor eos_tfloor c2p_it  fofc");
       std::fprintf(pfile,"\n");  // terminate line
       header_written = true;
     }
@@ -90,6 +93,7 @@ void EventLogOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
       std::fprintf(pfile, "%8d", pm->ncycle);
       std::fprintf(pfile, " %8d", pm->ecounter.neos_dfloor);
       std::fprintf(pfile, " %8d", pm->ecounter.neos_efloor);
+      std::fprintf(pfile, " %8d", pm->ecounter.neos_tfloor);
       std::fprintf(pfile, " %6d", pm->ecounter.maxit_c2p);
       std::fprintf(pfile, " %8d", pm->ecounter.nfofc);
       std::fprintf(pfile,"\n"); // terminate line
@@ -100,6 +104,7 @@ void EventLogOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   // reset counters
   pm->ecounter.neos_dfloor = 0;
   pm->ecounter.neos_efloor = 0;
+  pm->ecounter.neos_tfloor = 0;
   pm->ecounter.maxit_c2p = 0;
   pm->ecounter.nfofc = 0;
 
