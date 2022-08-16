@@ -371,7 +371,7 @@ void Diagnostic(Mesh *pm, const Real bdt) {
 
 void UserHistOutput(HistoryData *pdata, Mesh *pm) {
   int n0 = pdata->nhist;
-  int nuser = 65;
+  const int nuser = 65;
   pdata->nhist += nuser;
   const char *data_label[nuser] = {
     "Vcnm",  "Vunm",  "Vwnm",  "Vhot",  "Vsh",
