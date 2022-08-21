@@ -150,17 +150,16 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   //--- STEP 3.  All ranks write data over all MeshBlocks (5D arrays) in parallel
   // This data read in ProblemGenerator constructor for restarts
 
-  // total size of all cell-centered variables and face-centered fields to be written by
+  // Number of cell-centered variables and face-centered fields to be written by
   // this rank
-  IOWrapperSizeT ccdata_size = outarray.size()*sizeof(Real);
-  IOWrapperSizeT fcdata_size = 0;
+  IOWrapperSizeT ccdata_cnt = outarray.size();
+  IOWrapperSizeT fcdata_cnt = 0;
   if (pm->pmb_pack->pmhd != nullptr) {
-    fcdata_size = (outfield.x1f.size() + outfield.x2f.size() + outfield.x3f.size())*
-                  (sizeof(Real));
+    fcdata_cnt = outfield.x1f.size() + outfield.x2f.size() + outfield.x3f.size();
   }
   if (global_variable::my_rank == 0) {
-    resfile.Write_bytes(&(ccdata_size), sizeof(IOWrapperSizeT), 1);
-    resfile.Write_bytes(&(fcdata_size), sizeof(IOWrapperSizeT), 1);
+    resfile.Write_bytes(&(ccdata_cnt), sizeof(IOWrapperSizeT), 1);
+    resfile.Write_bytes(&(fcdata_cnt), sizeof(IOWrapperSizeT), 1);
   }
 
   // calculate size of data written in Steps 1-2 above
@@ -170,18 +169,18 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
 
   // write cell-centered variables in parallel
   IOWrapperSizeT myoffset  = step1size + step2size + 2*sizeof(IOWrapperSizeT) +
-                (ccdata_size + fcdata_size)*(pm->gidslist[global_variable::my_rank]);
-  if (resfile.Write_bytes_at_all(outarray.data(), ccdata_size, 1, myoffset) != 1) {
+        (ccdata_cnt + fcdata_cnt)*(pm->gidslist[global_variable::my_rank])*sizeof(Real);
+  if (resfile.Write_Reals_at_all(outarray.data(), ccdata_cnt, myoffset) != ccdata_cnt) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "cell-centered data not written correctly to restart file, "
               << "restart file is broken." << std::endl;
     exit(EXIT_FAILURE);
   }
-  myoffset += ccdata_size;
+  myoffset += ccdata_cnt*sizeof(Real);
 
-  if (fcdata_size > 0) {
-    int fc1size = outfield.x1f.size()*sizeof(Real);
-    if (resfile.Write_bytes_at_all(outfield.x1f.data(),fc1size,1,myoffset) != 1) {
+  if (fcdata_cnt > 0) {
+    int fc1cnt = outfield.x1f.size();
+    if (resfile.Write_Reals_at_all(outfield.x1f.data(),fc1cnt,myoffset) != fc1cnt) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "x1f-data not written correctly to restart file, "
                 << "restart file is broken." << std::endl;
@@ -189,8 +188,8 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     }
     myoffset += outfield.x1f.size()*sizeof(Real);
 
-    int fc2size = outfield.x2f.size()*sizeof(Real);
-    if (resfile.Write_bytes_at_all(outfield.x2f.data(),fc2size,1,myoffset) != 1 ) {
+    int fc2cnt = outfield.x2f.size();
+    if (resfile.Write_Reals_at_all(outfield.x2f.data(),fc2cnt,myoffset) != fc2cnt ) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "x2f-data not written correctly to restart file, "
                 << "restart file is broken." << std::endl;
@@ -198,8 +197,8 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     }
     myoffset += outfield.x2f.size()*sizeof(Real);
 
-    int fc3size = outfield.x3f.size()*sizeof(Real);
-    if (resfile.Write_bytes_at_all(outfield.x3f.data(),fc3size,1,myoffset) != 1) {
+    int fc3cnt = outfield.x3f.size();
+    if (resfile.Write_Reals_at_all(outfield.x3f.data(),fc3cnt,myoffset) != fc3cnt) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "x3f-data not written correctly to restart file, "
                 << "restart file is broken." << std::endl;

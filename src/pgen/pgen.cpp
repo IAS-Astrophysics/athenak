@@ -134,10 +134,11 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   MPI_Bcast(variabledata, variablesize, MPI_CHAR, 0, MPI_COMM_WORLD);
 #endif
 
-  IOWrapperSizeT ccdata_size, fcdata_size, hdos = 0;
-  std::memcpy(&ccdata_size, &(variabledata[hdos]), sizeof(IOWrapperSizeT));
+  // Read number of CC variables and FC fields in restart file
+  IOWrapperSizeT ccdata_cnt, fcdata_cnt, hdos = 0;
+  std::memcpy(&ccdata_cnt, &(variabledata[hdos]), sizeof(IOWrapperSizeT));
   hdos += sizeof(IOWrapperSizeT);
-  std::memcpy(&fcdata_size, &(variabledata[hdos]), sizeof(IOWrapperSizeT));
+  std::memcpy(&fcdata_cnt, &(variabledata[hdos]), sizeof(IOWrapperSizeT));
 
   // get spatial dimensions of arrays, including ghost zones
   auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
@@ -169,7 +170,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
 
   // allocate arrays for CC data
   HostArray5D<Real> ccin("pgen-ccin", nmb, (nhydro_tot + nmhd_tot), nout3, nout2, nout1);
-  if (ccin.size()*sizeof(Real) != ccdata_size) {
+  if (ccin.size() != ccdata_cnt) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "CC data size read from restart file not equal to size "
               << "of Hydro and MHD arrays, restart file is broken." << std::endl;
@@ -178,14 +179,14 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
 
   // read CC data into host array
   int mygids = pm->gidslist[global_variable::my_rank];
-  IOWrapperSizeT myoffset = headeroffset + (ccdata_size+fcdata_size)*mygids;
-  if (resfile.Read_bytes_at_all(ccin.data(), ccdata_size, 1, myoffset) != 1) {
+  IOWrapperSizeT myoffset = headeroffset + (ccdata_cnt+fcdata_cnt)*mygids*sizeof(Real);
+  if (resfile.Read_Reals_at_all(ccin.data(), ccdata_cnt, myoffset) != ccdata_cnt) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "Input hydro data not read correctly from restart file, "
+              << std::endl << "CC data not read correctly from restart file, "
               << "restart file is broken." << std::endl;
     exit(EXIT_FAILURE);
   }
-  myoffset += ccdata_size;
+  myoffset += ccdata_cnt*sizeof(Real);
 
   // copy CC Hydro data to device
   if (phydro != nullptr) {
@@ -208,35 +209,35 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   // allocate arrays for FC data, read face-centered fields, and copy to device
   if (pmhd != nullptr) {
     HostFaceFld4D<Real> fcin("pgen-fcin", nmb, nout3, nout2, nout1);
-    if ((fcin.x1f.size() +fcin.x2f.size() +fcin.x3f.size())*sizeof(Real) != fcdata_size) {
+    if ((fcin.x1f.size() +fcin.x2f.size() +fcin.x3f.size()) != fcdata_cnt) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "FC data size read from restart file not equal to size "
                 << "of MHD field arrays, restart file is broken." << std::endl;
       exit(EXIT_FAILURE);
     }
 
-    IOWrapperSizeT fcin_size = fcin.x1f.size()*sizeof(Real);
-    if (resfile.Read_bytes_at_all(fcin.x1f.data(), fcin_size, 1, myoffset) != 1) {
+    IOWrapperSizeT fcin_cnt = fcin.x1f.size();
+    if (resfile.Read_Reals_at_all(fcin.x1f.data(), fcin_cnt, myoffset) != fcin_cnt) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Input x1f field not read correctly from restart file, "
                 << "restart file is broken." << std::endl;
       exit(EXIT_FAILURE);
     }
     Kokkos::deep_copy(pmhd->b0.x1f, fcin.x1f);
+    myoffset += fcin_cnt*sizeof(Real);
 
-    myoffset += fcin_size;
-    fcin_size = fcin.x2f.size()*sizeof(Real);
-    if (resfile.Read_bytes_at_all(fcin.x2f.data(), fcin_size, 1, myoffset) != 1) {
+    fcin_cnt = fcin.x2f.size();
+    if (resfile.Read_Reals_at_all(fcin.x2f.data(), fcin_cnt, myoffset) != fcin_cnt) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Input x2f field not read correctly from restart file, "
                 << "restart file is broken." << std::endl;
       exit(EXIT_FAILURE);
     }
     Kokkos::deep_copy(pmhd->b0.x2f, fcin.x2f);
+    myoffset += fcin_cnt*sizeof(Real);
 
-    myoffset += fcin_size;
-    fcin_size = fcin.x3f.size()*sizeof(Real);
-    if (resfile.Read_bytes_at_all(fcin.x3f.data(), fcin_size, 1, myoffset) != 1) {
+    fcin_cnt = fcin.x3f.size();
+    if (resfile.Read_Reals_at_all(fcin.x3f.data(), fcin_cnt, myoffset) != fcin_cnt) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Input x3f field not read correctly from restart file, "
                 << "restart file is broken." << std::endl;
