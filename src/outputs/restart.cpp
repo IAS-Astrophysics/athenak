@@ -171,17 +171,40 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   // write cell-centered variables in parallel
   IOWrapperSizeT myoffset  = step1size + step2size + 2*sizeof(IOWrapperSizeT) +
                 (ccdata_size + fcdata_size)*(pm->gidslist[global_variable::my_rank]);
-  resfile.Write_at_all(outarray.data(), ccdata_size, 1, myoffset);
+  if (resfile.Write_at_all(outarray.data(), ccdata_size, 1, myoffset) != 1) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "cell-centered data not written correctly to restart file, "
+              << "restart file is broken." << std::endl;
+    exit(EXIT_FAILURE);
+  }
   myoffset += ccdata_size;
 
   if (fcdata_size > 0) {
-    resfile.Write_at_all(outfield.x1f.data(),outfield.x1f.size()*sizeof(Real),1,myoffset);
+    int fc1size = outfield.x1f.size()*sizeof(Real);
+    if (resfile.Write_at_all(outfield.x1f.data(),fc1size,1,myoffset) != 1) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "x1f-data not written correctly to restart file, "
+                << "restart file is broken." << std::endl;
+      exit(EXIT_FAILURE);
+    }
     myoffset += outfield.x1f.size()*sizeof(Real);
 
-    resfile.Write_at_all(outfield.x2f.data(),outfield.x2f.size()*sizeof(Real),1,myoffset);
+    int fc2size = outfield.x2f.size()*sizeof(Real);
+    if (resfile.Write_at_all(outfield.x2f.data(),fc2size,1,myoffset) != 1 ) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "x2f-data not written correctly to restart file, "
+                << "restart file is broken." << std::endl;
+      exit(EXIT_FAILURE);
+    }
     myoffset += outfield.x2f.size()*sizeof(Real);
 
-    resfile.Write_at_all(outfield.x3f.data(),outfield.x3f.size()*sizeof(Real),1,myoffset);
+    int fc3size = outfield.x3f.size()*sizeof(Real);
+    if (resfile.Write_at_all(outfield.x3f.data(),fc3size,1,myoffset) != 1) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "x3f-data not written correctly to restart file, "
+                << "restart file is broken." << std::endl;
+      exit(EXIT_FAILURE);
+    }
   }
 
   // close file, clean up
