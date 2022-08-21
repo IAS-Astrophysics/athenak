@@ -80,10 +80,10 @@ int IOWrapper::Open(const char* fname, FileMode rw) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn int IOWrapper::Read(void *buf, IOWrapperSizeT size, IOWrapperSizeT count)
+//! \fn int IOWrapper::Read_bytes(void *buf, IOWrapperSizeT size, IOWrapperSizeT count)
 //! \brief wrapper for {MPI_File_read} versus {std::fread}.  Returns number of byte-blocks//! of given "size" actually read.
 
-std::size_t IOWrapper::Read(void *buf, IOWrapperSizeT size, IOWrapperSizeT count) {
+std::size_t IOWrapper::Read_bytes(void *buf, IOWrapperSizeT size, IOWrapperSizeT count) {
 #if MPI_PARALLEL_ENABLED
   MPI_Status status;
   int errcode = MPI_File_read(fh_, buf, count*size, MPI_BYTE, &status);
@@ -95,14 +95,7 @@ std::size_t IOWrapper::Read(void *buf, IOWrapperSizeT size, IOWrapperSizeT count
     return 0;
   }
   int nread;
-  errcode = MPI_Get_count(&status,MPI_BYTE,&nread);
-  if (errcode == MPI_UNDEFINED) {
-    char msg[MPI_MAX_ERROR_STRING];
-    int resultlen;
-    MPI_Error_string(errcode, msg, &resultlen);
-    printf("%.*s\n", resultlen, msg);
-    return 0;
-  }
+  if (MPI_Get_count(&status,MPI_BYTE,&nread) == MPI_UNDEFINED) {return 0;}
   return nread/size;
 #else
   return std::fread(buf,size,count,fh_);
@@ -110,13 +103,13 @@ std::size_t IOWrapper::Read(void *buf, IOWrapperSizeT size, IOWrapperSizeT count
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn int IOWrapper::Read_at_all(void *buf, IOWrapperSizeT size,
-//!                             IOWrapperSizeT count, IOWrapperSizeT offset)
+//! \fn int IOWrapper::Read_bytes_at_all(void *buf, IOWrapperSizeT size,
+//!                                      IOWrapperSizeT count, IOWrapperSizeT offset)
 //! \brief wrapper for {MPI_File_read_at_all} versus {std::fseek+std::fread}
 //! Returns number of byte-blocks of given "size" actually read.
 
-std::size_t IOWrapper::Read_at_all(void *buf, IOWrapperSizeT size,
-                                   IOWrapperSizeT count, IOWrapperSizeT offset) {
+std::size_t IOWrapper::Read_bytes_at_all(void *buf, IOWrapperSizeT size,
+                                         IOWrapperSizeT count, IOWrapperSizeT offset) {
 #if MPI_PARALLEL_ENABLED
   MPI_Status status;
   int errcode = MPI_File_read_at_all(fh_, offset, buf, count*size, MPI_BYTE, &status);
@@ -128,14 +121,7 @@ std::size_t IOWrapper::Read_at_all(void *buf, IOWrapperSizeT size,
     return 0;
   }
   int nread;
-  errcode = MPI_Get_count(&status,MPI_BYTE,&nread);
-  if (errcode == MPI_UNDEFINED) {
-    char msg[MPI_MAX_ERROR_STRING];
-    int resultlen;
-    MPI_Error_string(errcode, msg, &resultlen);
-    printf("%.*s\n", resultlen, msg);
-    return 0;
-  }
+  if (MPI_Get_count(&status,MPI_BYTE,&nread) == MPI_UNDEFINED) {return 0;}
   return nread/size;
 #else
   std::fseek(fh_, offset, SEEK_SET);
@@ -144,14 +130,15 @@ std::size_t IOWrapper::Read_at_all(void *buf, IOWrapperSizeT size,
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn int IOWrapper::Write(const void *buf, IOWrapperSizeT size, IOWrapperSizeT cnt)
+//! \fn int IOWrapper::Write_bytes(const void *buf,IOWrapperSizeT size,IOWrapperSizeT cnt)
 //! \brief wrapper for {MPI_File_write} versus {std::fwrite}
 //! Returns number of byte-blocks of given "size" actually written.
 
-std::size_t IOWrapper::Write(const void *buf, IOWrapperSizeT size, IOWrapperSizeT cnt) {
+std::size_t IOWrapper::Write_bytes(const void *buf, IOWrapperSizeT size,
+                                   IOWrapperSizeT count) {
 #if MPI_PARALLEL_ENABLED
   MPI_Status status;
-  int errcode = MPI_File_write(fh_, buf, cnt*size, MPI_BYTE, &status);
+  int errcode = MPI_File_write(fh_, buf, count*size, MPI_BYTE, &status);
   if (errcode != MPI_SUCCESS) {
     char msg[MPI_MAX_ERROR_STRING];
     int resultlen;
@@ -160,14 +147,7 @@ std::size_t IOWrapper::Write(const void *buf, IOWrapperSizeT size, IOWrapperSize
     return 0;
   }
   int nwrite;
-  errcode = MPI_Get_count(&status,MPI_BYTE,&nwrite);
-  if (errcode == MPI_UNDEFINED) {
-    char msg[MPI_MAX_ERROR_STRING];
-    int resultlen;
-    MPI_Error_string(errcode, msg, &resultlen);
-    printf("%.*s\n", resultlen, msg);
-    return 0;
-  }
+  if (MPI_Get_count(&status,MPI_BYTE,&nwrite) == MPI_UNDEFINED) {return 0;}
   return nwrite/size;
 #else
   return std::fwrite(buf,size,cnt,fh_);
@@ -175,12 +155,12 @@ std::size_t IOWrapper::Write(const void *buf, IOWrapperSizeT size, IOWrapperSize
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn int IOWrapper::Write_at_all(const void *buf, IOWrapperSizeT size,
-//!                                 IOWrapperSizeT cnt, IOWrapperSizeT offset)
+//! \fn int IOWrapper::Write_bytes__at_all(const void *buf, IOWrapperSizeT size,
+//!                                        IOWrapperSizeT cnt, IOWrapperSizeT offset)
 //! \brief wrapper for {MPI_File_write_at_all} versus {std::fseek+std::fwrite}.
 //! Returns number of byte-blocks of given "size" actually written.
 
-std::size_t IOWrapper::Write_at_all(const void *buf, IOWrapperSizeT size,
+std::size_t IOWrapper::Write_bytes_at_all(const void *buf, IOWrapperSizeT size,
                                     IOWrapperSizeT cnt, IOWrapperSizeT offset) {
 #if MPI_PARALLEL_ENABLED
   // create new MPI datatype to avoid exceeding limit of 2^31 elements
@@ -194,15 +174,7 @@ std::size_t IOWrapper::Write_at_all(const void *buf, IOWrapperSizeT size,
     return 0;
   }
   int nwrite;
-  errcode = MPI_Get_count(&status,MPI_BYTE,&nwrite);
-std::cout << "amount written = " << nwrite << std::endl;
-  if (errcode == MPI_UNDEFINED) {
-    char msg[MPI_MAX_ERROR_STRING];
-    int resultlen;
-    MPI_Error_string(errcode, msg, &resultlen);
-    printf("%.*s\n", resultlen, msg);
-    return 0;
-  }
+  if (MPI_Get_count(&status,MPI_BYTE,&nwrite) == MPI_UNDEFINED) {return 0;}
   return nwrite/size;
 #else
   std::fseek(fh_, offset, SEEK_SET);

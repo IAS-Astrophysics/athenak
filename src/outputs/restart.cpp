@@ -126,25 +126,25 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   resfile.Open(fname.c_str(), IOWrapper::FileMode::write);
   if (global_variable::my_rank == 0) {
     // output the input parameters (input file)
-    resfile.Write(sbuf.c_str(),sizeof(char),sbuf.size());
+    resfile.Write_bytes(sbuf.c_str(),sizeof(char),sbuf.size());
 
     // output Mesh information
-    resfile.Write(&(pm->nmb_total), sizeof(int), 1);
-    resfile.Write(&(pm->root_level), sizeof(int), 1);
-    resfile.Write(&(pm->mesh_size), sizeof(RegionSize), 1);
-    resfile.Write(&(pm->mesh_indcs), sizeof(RegionIndcs), 1);
-    resfile.Write(&(pm->mb_indcs), sizeof(RegionIndcs), 1);
-    resfile.Write(&(pm->time), sizeof(Real), 1);
-    resfile.Write(&(pm->dt), sizeof(Real), 1);
-    resfile.Write(&(pm->ncycle), sizeof(int), 1);
+    resfile.Write_bytes(&(pm->nmb_total), sizeof(int), 1);
+    resfile.Write_bytes(&(pm->root_level), sizeof(int), 1);
+    resfile.Write_bytes(&(pm->mesh_size), sizeof(RegionSize), 1);
+    resfile.Write_bytes(&(pm->mesh_indcs), sizeof(RegionIndcs), 1);
+    resfile.Write_bytes(&(pm->mb_indcs), sizeof(RegionIndcs), 1);
+    resfile.Write_bytes(&(pm->time), sizeof(Real), 1);
+    resfile.Write_bytes(&(pm->dt), sizeof(Real), 1);
+    resfile.Write_bytes(&(pm->ncycle), sizeof(int), 1);
   }
 
   //--- STEP 2.  Root process writes list of logical locations and cost of MeshBlocks
   // This data read in Mesh::BuildTreeFromRestart()
 
   if (global_variable::my_rank == 0) {
-    resfile.Write(&(pm->lloclist[0]), (pm->nmb_total)*sizeof(LogicalLocation), 1);
-    resfile.Write(&(pm->costlist[0]), (pm->nmb_total)*sizeof(float), 1);
+    resfile.Write_bytes(&(pm->lloclist[0]), (pm->nmb_total)*sizeof(LogicalLocation), 1);
+    resfile.Write_bytes(&(pm->costlist[0]), (pm->nmb_total)*sizeof(float), 1);
   }
 
   //--- STEP 3.  All ranks write data over all MeshBlocks (5D arrays) in parallel
@@ -159,8 +159,8 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
                   (sizeof(Real));
   }
   if (global_variable::my_rank == 0) {
-    resfile.Write(&(ccdata_size), sizeof(IOWrapperSizeT), 1);
-    resfile.Write(&(fcdata_size), sizeof(IOWrapperSizeT), 1);
+    resfile.Write_bytes(&(ccdata_size), sizeof(IOWrapperSizeT), 1);
+    resfile.Write_bytes(&(fcdata_size), sizeof(IOWrapperSizeT), 1);
   }
 
   // calculate size of data written in Steps 1-2 above
@@ -171,7 +171,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   // write cell-centered variables in parallel
   IOWrapperSizeT myoffset  = step1size + step2size + 2*sizeof(IOWrapperSizeT) +
                 (ccdata_size + fcdata_size)*(pm->gidslist[global_variable::my_rank]);
-  if (resfile.Write_at_all(outarray.data(), ccdata_size, 1, myoffset) != 1) {
+  if (resfile.Write_bytes_at_all(outarray.data(), ccdata_size, 1, myoffset) != 1) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "cell-centered data not written correctly to restart file, "
               << "restart file is broken." << std::endl;
@@ -181,7 +181,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
 
   if (fcdata_size > 0) {
     int fc1size = outfield.x1f.size()*sizeof(Real);
-    if (resfile.Write_at_all(outfield.x1f.data(),fc1size,1,myoffset) != 1) {
+    if (resfile.Write_bytes_at_all(outfield.x1f.data(),fc1size,1,myoffset) != 1) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "x1f-data not written correctly to restart file, "
                 << "restart file is broken." << std::endl;
@@ -190,7 +190,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     myoffset += outfield.x1f.size()*sizeof(Real);
 
     int fc2size = outfield.x2f.size()*sizeof(Real);
-    if (resfile.Write_at_all(outfield.x2f.data(),fc2size,1,myoffset) != 1 ) {
+    if (resfile.Write_bytes_at_all(outfield.x2f.data(),fc2size,1,myoffset) != 1 ) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "x2f-data not written correctly to restart file, "
                 << "restart file is broken." << std::endl;
@@ -199,7 +199,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     myoffset += outfield.x2f.size()*sizeof(Real);
 
     int fc3size = outfield.x3f.size()*sizeof(Real);
-    if (resfile.Write_at_all(outfield.x3f.data(),fc3size,1,myoffset) != 1) {
+    if (resfile.Write_bytes_at_all(outfield.x3f.data(),fc3size,1,myoffset) != 1) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "x3f-data not written correctly to restart file, "
                 << "restart file is broken." << std::endl;

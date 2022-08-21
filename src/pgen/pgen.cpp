@@ -122,7 +122,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   IOWrapperSizeT variablesize = 2*sizeof(IOWrapperSizeT);
   char *variabledata = new char[variablesize];
   if (global_variable::my_rank == 0) { // the master process reads the variables data
-    if (resfile.Read(variabledata, 1, variablesize) != variablesize) {
+    if (resfile.Read_bytes(variabledata, 1, variablesize) != variablesize) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Variable data size read from restart file is incorrect, "
                 << "restart file is broken." << std::endl;
@@ -179,7 +179,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   // read CC data into host array
   int mygids = pm->gidslist[global_variable::my_rank];
   IOWrapperSizeT myoffset = headeroffset + (ccdata_size+fcdata_size)*mygids;
-  if (resfile.Read_at_all(ccin.data(), ccdata_size, 1, myoffset) != 1) {
+  if (resfile.Read_bytes_at_all(ccin.data(), ccdata_size, 1, myoffset) != 1) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "Input hydro data not read correctly from restart file, "
               << "restart file is broken." << std::endl;
@@ -216,7 +216,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
     }
 
     IOWrapperSizeT fcin_size = fcin.x1f.size()*sizeof(Real);
-    if (resfile.Read_at_all(fcin.x1f.data(), fcin_size, 1, myoffset) != 1) {
+    if (resfile.Read_bytes_at_all(fcin.x1f.data(), fcin_size, 1, myoffset) != 1) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Input x1f field not read correctly from restart file, "
                 << "restart file is broken." << std::endl;
@@ -226,7 +226,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
 
     myoffset += fcin_size;
     fcin_size = fcin.x2f.size()*sizeof(Real);
-    if (resfile.Read_at_all(fcin.x2f.data(), fcin_size, 1, myoffset) != 1) {
+    if (resfile.Read_bytes_at_all(fcin.x2f.data(), fcin_size, 1, myoffset) != 1) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Input x2f field not read correctly from restart file, "
                 << "restart file is broken." << std::endl;
@@ -236,7 +236,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
 
     myoffset += fcin_size;
     fcin_size = fcin.x3f.size()*sizeof(Real);
-    if (resfile.Read_at_all(fcin.x3f.data(), fcin_size, 1, myoffset) != 1) {
+    if (resfile.Read_bytes_at_all(fcin.x3f.data(), fcin_size, 1, myoffset) != 1) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Input x3f field not read correctly from restart file, "
                 << "restart file is broken." << std::endl;
