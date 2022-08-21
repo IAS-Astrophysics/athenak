@@ -110,37 +110,6 @@ std::size_t IOWrapper::Read(void *buf, IOWrapperSizeT size, IOWrapperSizeT count
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn int IOWrapper::Read_all(void *buf, IOWrapperSizeT size, IOWrapperSizeT count)
-//! \brief wrapper for {MPI_File_read_all} versus {std::fread}.  Returns number of
-//! byte-blocks of given "size" actually read.
-
-std::size_t IOWrapper::Read_all(void *buf, IOWrapperSizeT size, IOWrapperSizeT count) {
-#if MPI_PARALLEL_ENABLED
-  MPI_Status status;
-  int errcode = MPI_File_read_all(fh_, buf, count*size, MPI_BYTE, &status);
-  if (errcode != MPI_SUCCESS) {
-    char msg[MPI_MAX_ERROR_STRING];
-    int resultlen;
-    MPI_Error_string(errcode, msg, &resultlen);
-    printf("%.*s\n", resultlen, msg);
-    return 0;
-  }
-  int nread;
-  errcode = MPI_Get_count(&status,MPI_BYTE,&nread);
-  if (errcode == MPI_UNDEFINED) {
-    char msg[MPI_MAX_ERROR_STRING];
-    int resultlen;
-    MPI_Error_string(errcode, msg, &resultlen);
-    printf("%.*s\n", resultlen, msg);
-    return 0;
-  }
-  return nread/size;
-#else
-  return std::fread(buf,size,count,fh_);
-#endif
-}
-
-//----------------------------------------------------------------------------------------
 //! \fn int IOWrapper::Read_at_all(void *buf, IOWrapperSizeT size,
 //!                             IOWrapperSizeT count, IOWrapperSizeT offset)
 //! \brief wrapper for {MPI_File_read_at_all} versus {std::fseek+std::fread}
