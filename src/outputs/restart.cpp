@@ -56,9 +56,10 @@ void RestartOutput::LoadOutputData(Mesh *pm) {
   if (pmhd != nullptr) {
     nmhd = pmhd->nmhd + pmhd->nscalars;
   }
+  // Note for restarts, outarray is dimensioned (m,n,k,j,i)
   Kokkos::realloc(outarray, nmb, (nhydro+nmhd), nout3, nout2, nout1);
 
-  // load hydro (CC) data (copy to host)
+  // load hydro (CC) data over all MeshBlocks (copy to host)
   if (phydro != nullptr) {
     DvceArray5D<Real>::HostMirror host_u0 = Kokkos::create_mirror(phydro->u0);
     Kokkos::deep_copy(host_u0,phydro->u0);
@@ -67,7 +68,7 @@ void RestartOutput::LoadOutputData(Mesh *pm) {
     Kokkos::deep_copy(hst_slice,host_u0);
   }
 
-  // load MHD (CC and FC) data (copy to host)
+  // load MHD (CC and FC) data over all MeshBlocks (copy to host)
   if (pmhd != nullptr) {
     DvceArray5D<Real>::HostMirror host_u0 = Kokkos::create_mirror(pmhd->u0);
     Kokkos::deep_copy(host_u0,pmhd->u0);
@@ -158,7 +159,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   //--- STEP 3.  All ranks write data over each MeshBlock sequentially and in parallel
   // This data read in ProblemGenerator constructor for restarts
 
-  // Number of cell-centered variables and face-centered fields in each MeshBlock
+  // Number of cell-centered variables and face-centered fields per MeshBlock
   // to be written by this rank
   IOWrapperSizeT ccdata_cnt = outarray.size()/pm->nmb_thisrank;
   IOWrapperSizeT fcdata_cnt = 0;
@@ -187,7 +188,9 @@ std::cout << "noutmbs_max = " << noutmbs_max << std::endl;
 std::cout << "noutmbs_min = " << noutmbs_min << std::endl;
 std::cout << "rank="<< global_variable::my_rank << " myoffset = " << myoffset << std::endl;
 
-  // write cell-centered variables
+  // write cell-centered variables, one MeshBlock at a time (but parallelized over all
+  // ranks). MeshBlocks are written seperately to reduce number of data elements per write
+  // call, to avoid exceeding 2^31 limit for very large grids per MPI rank.
   for (int m=0;  m<noutmbs_max; ++m) {
     // every rank has a MB to write, so write collectively
     if (m < noutmbs_min) {
@@ -220,7 +223,7 @@ std::cout << "rank="<< global_variable::my_rank << " myoffset = " << myoffset <<
     }
   }
 
-  // write face-centered fields
+  // write face-centered fields, again one MeshBlock at a time on this rank
   if (fcdata_cnt > 0) {
     for (int m=0;  m<noutmbs_max; ++m) {
       // every rank has a MB to write, so write collectively

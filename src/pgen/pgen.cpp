@@ -134,7 +134,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   MPI_Bcast(variabledata, variablesize, MPI_CHAR, 0, MPI_COMM_WORLD);
 #endif
 
-  // Read number of CC variables and FC fields in restart file
+  // Read number of CC variables and FC fields per MeshBlock in restart file
   IOWrapperSizeT ccdata_cnt, fcdata_cnt, hdos = 0;
   std::memcpy(&ccdata_cnt, &(variabledata[hdos]), sizeof(IOWrapperSizeT));
   hdos += sizeof(IOWrapperSizeT);
@@ -170,14 +170,173 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
 
   // allocate arrays for CC data
   HostArray5D<Real> ccin("pgen-ccin", nmb, (nhydro_tot + nmhd_tot), nout3, nout2, nout1);
-  if (ccin.size() != ccdata_cnt) {
+  if (ccin.size() != (nmb*ccdata_cnt)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "CC data size read from restart file not equal to size "
               << "of Hydro and MHD arrays, restart file is broken." << std::endl;
     exit(EXIT_FAILURE);
   }
 
-  // read CC data into host array
+/*****/
+
+  // calculate max/min number of MeshBlocks across all ranks
+  int noutmbs_max = pm->nmblist[0];
+  int noutmbs_min = pm->nmblist[0];
+  for (int i=0; i<(global_variable::nranks); ++i) {
+    noutmbs_max = std::max(noutmbs_max,pm->nmblist[i]);
+    noutmbs_min = std::min(noutmbs_min,pm->nmblist[i]);
+  }
+
+  // read CC data into host array, one MeshBlock at a time to avoid exceeding 2^31 limit
+  // on each read call for very large grids per MPI rank
+  int mygids = pm->gidslist[global_variable::my_rank];
+  IOWrapperSizeT myoffset = headeroffset + (ccdata_cnt+fcdata_cnt)*mygids*sizeof(Real);
+  for (int m=0;  m<noutmbs_max; ++m) {
+    // every rank has a MB to read, so read collectively
+    if (m < noutmbs_min) {
+      // get ptr to cell-centered MeshBlock data
+      auto mbptr = Kokkos::subview(ccin, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
+                                   Kokkos::ALL);
+      int mbcnt = mbptr.size();
+      if (resfile.Read_Reals_at_all(mbptr.data(), mbcnt, myoffset) != mbcnt) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "CC data not read correctly from restart file, "
+                  << "restart file is broken." << std::endl;
+        exit(EXIT_FAILURE);
+      }
+      myoffset += mbcnt*sizeof(Real);
+
+    // some ranks are finished writing, so use non-collective write
+    } else if (m < pm->nmb_thisrank) {
+      // get ptr to MeshBlock data
+      auto mbptr = Kokkos::subview(ccin, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
+                                   Kokkos::ALL);
+      int mbcnt = mbptr.size();
+      if (resfile.Read_Reals_at(mbptr.data(), mbcnt, myoffset) != mbcnt) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "CC data not read correctly from restart file, "
+                  << "restart file is broken." << std::endl;
+        exit(EXIT_FAILURE);
+      }
+      myoffset += mbcnt*sizeof(Real);
+    }
+  }
+
+  // copy CC Hydro data to device
+  if (phydro != nullptr) {
+    DvceArray5D<Real>::HostMirror host_u0 = Kokkos::create_mirror(phydro->u0);
+    auto hst_slice = Kokkos::subview(ccin, Kokkos::ALL, std::make_pair(0,nhydro_tot),
+                                     Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+    Kokkos::deep_copy(host_u0, hst_slice);
+    Kokkos::deep_copy(phydro->u0, host_u0);
+  }
+
+  // copy CC MHD data to device
+  if (pmhd != nullptr) {
+    DvceArray5D<Real>::HostMirror host_u0 = Kokkos::create_mirror(pmhd->u0);
+    auto hst_slice = Kokkos::subview(ccin,Kokkos::ALL,std::make_pair(nhydro_tot,nmhd_tot),
+                                     Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+    Kokkos::deep_copy(host_u0, hst_slice);
+    Kokkos::deep_copy(pmhd->u0, host_u0);
+  }
+
+  // allocate arrays for FC data, read face-centered fields
+  if (pmhd != nullptr) {
+    HostFaceFld4D<Real> fcin("pgen-fcin", nmb, nout3, nout2, nout1);
+    if ((fcin.x1f.size() +fcin.x2f.size() +fcin.x3f.size()) != (nmb*fcdata_cnt)) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "FC data size read from restart file not equal to size "
+                << "of MHD field arrays, restart file is broken." << std::endl;
+      exit(EXIT_FAILURE);
+    }
+
+    // read FC data into host array, again one MeshBlock at a time
+    for (int m=0;  m<noutmbs_max; ++m) {
+      // every rank has a MB to write, so write collectively
+      if (m < noutmbs_min) {
+        // get ptr to x1-face field
+        auto x1fptr = Kokkos::subview(fcin.x1f, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+        int fldcnt = x1fptr.size();
+
+        if (resfile.Read_Reals_at_all(x1fptr.data(), fldcnt, myoffset) != fldcnt) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Input x1f field not read correctly from restart file, "
+                << "restart file is broken." << std::endl;
+          exit(EXIT_FAILURE);
+        }
+        myoffset += fldcnt*sizeof(Real);
+
+        // get ptr to x2-face field
+        auto x2fptr = Kokkos::subview(fcin.x2f, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+        fldcnt = x1fptr.size();
+
+        if (resfile.Read_Reals_at_all(x2fptr.data(), fldcnt, myoffset) != fldcnt) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Input x2f field not read correctly from restart file, "
+                << "restart file is broken." << std::endl;
+          exit(EXIT_FAILURE);
+        }
+        myoffset += fldcnt*sizeof(Real);
+
+        // get ptr to x3-face field
+        auto x3fptr = Kokkos::subview(fcin.x3f, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+        fldcnt = x3fptr.size();
+
+        if (resfile.Read_Reals_at_all(x3fptr.data(), fldcnt, myoffset) != fldcnt) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Input x3f field not read correctly from restart file, "
+                << "restart file is broken." << std::endl;
+          exit(EXIT_FAILURE);
+        }
+        myoffset += fldcnt*sizeof(Real);
+
+      // some ranks are finished writing, so use non-collective write
+      } else if (m < pm->nmb_thisrank) {
+        // get ptr to x1-face field
+        auto x1fptr = Kokkos::subview(fcin.x1f, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+        int fldcnt = x1fptr.size();
+
+        if (resfile.Read_Reals_at(x1fptr.data(), fldcnt, myoffset) != fldcnt) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Input x1f field not read correctly from restart file, "
+                << "restart file is broken." << std::endl;
+          exit(EXIT_FAILURE);
+        }
+        myoffset += fldcnt*sizeof(Real);
+
+        // get ptr to x2-face field
+        auto x2fptr = Kokkos::subview(fcin.x2f, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+        fldcnt = x1fptr.size();
+
+        if (resfile.Read_Reals_at(x2fptr.data(), fldcnt, myoffset) != fldcnt) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Input x2f field not read correctly from restart file, "
+                << "restart file is broken." << std::endl;
+          exit(EXIT_FAILURE);
+        }
+        myoffset += fldcnt*sizeof(Real);
+
+        // get ptr to x3-face field
+        auto x3fptr = Kokkos::subview(fcin.x3f, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+        fldcnt = x3fptr.size();
+
+        if (resfile.Read_Reals_at(x3fptr.data(), fldcnt, myoffset) != fldcnt) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Input x3f field not read correctly from restart file, "
+                << "restart file is broken." << std::endl;
+          exit(EXIT_FAILURE);
+        }
+        myoffset += fldcnt*sizeof(Real);
+      }
+    }
+    Kokkos::deep_copy(pmhd->b0.x1f, fcin.x1f);
+    Kokkos::deep_copy(pmhd->b0.x2f, fcin.x2f);
+    Kokkos::deep_copy(pmhd->b0.x3f, fcin.x3f);
+  }
+
+
+/*****
+  // read CC data into host array,
   int mygids = pm->gidslist[global_variable::my_rank];
   IOWrapperSizeT myoffset = headeroffset + (ccdata_cnt+fcdata_cnt)*mygids*sizeof(Real);
   if (resfile.Read_Reals_at_all(ccin.data(), ccdata_cnt, myoffset) != ccdata_cnt) {
@@ -245,6 +404,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
     }
     Kokkos::deep_copy(pmhd->b0.x3f, fcin.x3f);
   }
+
+*****/
 
   // call problem generator again to re-initialize data, fn ptrs, as needed
 #if USER_PROBLEM_ENABLED

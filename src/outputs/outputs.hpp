@@ -135,7 +135,8 @@ class BaseTypeOutput {
   virtual void WriteOutputFile(Mesh *pm, ParameterInput *pin) = 0;
 
  protected:
-  HostArray5D<Real>   outarray;  // CC output data on host with dims (n,m,k,j,i)
+  HostArray5D<Real>   outarray;  // CC output data on host with dims (n,m,k,j,i) except
+                                 // for restarts, where dims are (m,n,k,j,i)
   HostFaceFld4D<Real> outfield;  // FC output field on host
   int noutmbs_min;            // with MPI, minimum number of output MBs across all ranks
   int noutmbs_max;            // with MPI, maximum number of output MBs across all ranks
