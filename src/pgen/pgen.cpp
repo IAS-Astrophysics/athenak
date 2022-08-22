@@ -4,7 +4,9 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file pgen.cpp
-//  \brief implementation of functions in class ProblemGenerator
+//! \brief Implementation of constructors and functions in class ProblemGenerator.
+//! Default constructor calls problem generator function, while  constructor for restarts
+//! reads data from restart file, as well as re-initializing problem-specific data.
 
 #include <iostream>
 #include <string>
@@ -19,7 +21,7 @@
 #include "pgen.hpp"
 
 //----------------------------------------------------------------------------------------
-// constructor, initializes data structures and parameters
+// default constructor, calls pgen function.
 
 ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
     user_bcs(false),
@@ -177,8 +179,6 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
     exit(EXIT_FAILURE);
   }
 
-/*****/
-
   // calculate max/min number of MeshBlocks across all ranks
   int noutmbs_max = pm->nmblist[0];
   int noutmbs_min = pm->nmblist[0];
@@ -333,79 +333,6 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
     Kokkos::deep_copy(pmhd->b0.x2f, fcin.x2f);
     Kokkos::deep_copy(pmhd->b0.x3f, fcin.x3f);
   }
-
-
-/*****
-  // read CC data into host array,
-  int mygids = pm->gidslist[global_variable::my_rank];
-  IOWrapperSizeT myoffset = headeroffset + (ccdata_cnt+fcdata_cnt)*mygids*sizeof(Real);
-  if (resfile.Read_Reals_at_all(ccin.data(), ccdata_cnt, myoffset) != ccdata_cnt) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "CC data not read correctly from restart file, "
-              << "restart file is broken." << std::endl;
-    exit(EXIT_FAILURE);
-  }
-  myoffset += ccdata_cnt*sizeof(Real);
-
-  // copy CC Hydro data to device
-  if (phydro != nullptr) {
-    DvceArray5D<Real>::HostMirror host_u0 = Kokkos::create_mirror(phydro->u0);
-    auto hst_slice = Kokkos::subview(ccin, Kokkos::ALL, std::make_pair(0,nhydro_tot),
-                                     Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
-    Kokkos::deep_copy(host_u0, hst_slice);
-    Kokkos::deep_copy(phydro->u0, host_u0);
-  }
-
-  // copy CC MHD data to device
-  if (pmhd != nullptr) {
-    DvceArray5D<Real>::HostMirror host_u0 = Kokkos::create_mirror(pmhd->u0);
-    auto hst_slice = Kokkos::subview(ccin,Kokkos::ALL,std::make_pair(nhydro_tot,nmhd_tot),
-                                     Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
-    Kokkos::deep_copy(host_u0, hst_slice);
-    Kokkos::deep_copy(pmhd->u0, host_u0);
-  }
-
-  // allocate arrays for FC data, read face-centered fields, and copy to device
-  if (pmhd != nullptr) {
-    HostFaceFld4D<Real> fcin("pgen-fcin", nmb, nout3, nout2, nout1);
-    if ((fcin.x1f.size() +fcin.x2f.size() +fcin.x3f.size()) != fcdata_cnt) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "FC data size read from restart file not equal to size "
-                << "of MHD field arrays, restart file is broken." << std::endl;
-      exit(EXIT_FAILURE);
-    }
-
-    IOWrapperSizeT fcin_cnt = fcin.x1f.size();
-    if (resfile.Read_Reals_at_all(fcin.x1f.data(), fcin_cnt, myoffset) != fcin_cnt) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "Input x1f field not read correctly from restart file, "
-                << "restart file is broken." << std::endl;
-      exit(EXIT_FAILURE);
-    }
-    Kokkos::deep_copy(pmhd->b0.x1f, fcin.x1f);
-    myoffset += fcin_cnt*sizeof(Real);
-
-    fcin_cnt = fcin.x2f.size();
-    if (resfile.Read_Reals_at_all(fcin.x2f.data(), fcin_cnt, myoffset) != fcin_cnt) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "Input x2f field not read correctly from restart file, "
-                << "restart file is broken." << std::endl;
-      exit(EXIT_FAILURE);
-    }
-    Kokkos::deep_copy(pmhd->b0.x2f, fcin.x2f);
-    myoffset += fcin_cnt*sizeof(Real);
-
-    fcin_cnt = fcin.x3f.size();
-    if (resfile.Read_Reals_at_all(fcin.x3f.data(), fcin_cnt, myoffset) != fcin_cnt) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "Input x3f field not read correctly from restart file, "
-                << "restart file is broken." << std::endl;
-      exit(EXIT_FAILURE);
-    }
-    Kokkos::deep_copy(pmhd->b0.x3f, fcin.x3f);
-  }
-
-*****/
 
   // call problem generator again to re-initialize data, fn ptrs, as needed
 #if USER_PROBLEM_ENABLED
