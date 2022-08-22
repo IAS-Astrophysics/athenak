@@ -81,7 +81,8 @@ int IOWrapper::Open(const char* fname, FileMode rw) {
 
 //----------------------------------------------------------------------------------------
 //! \fn int IOWrapper::Read_bytes(void *buf, IOWrapperSizeT size, IOWrapperSizeT cnt)
-//! \brief wrapper for {MPI_File_read} versus {std::fread}.  Returns number of byte-blocks//! of given "size" actually read.
+//! \brief wrapper for {MPI_File_read} versus {std::fread}.  Returns number of byte-blocks
+//! of given "size" actually read.
 
 std::size_t IOWrapper::Read_bytes(void *buf, IOWrapperSizeT size, IOWrapperSizeT cnt) {
 #if MPI_PARALLEL_ENABLED

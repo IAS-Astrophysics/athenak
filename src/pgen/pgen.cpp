@@ -11,6 +11,7 @@
 #include <iostream>
 #include <string>
 #include <utility>
+#include <algorithm>
 
 #include "athena.hpp"
 #include "globals.hpp"
