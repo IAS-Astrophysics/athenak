@@ -80,13 +80,13 @@ int IOWrapper::Open(const char* fname, FileMode rw) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn int IOWrapper::Read_bytes(void *buf, IOWrapperSizeT size, IOWrapperSizeT count)
+//! \fn int IOWrapper::Read_bytes(void *buf, IOWrapperSizeT size, IOWrapperSizeT cnt)
 //! \brief wrapper for {MPI_File_read} versus {std::fread}.  Returns number of byte-blocks//! of given "size" actually read.
 
-std::size_t IOWrapper::Read_bytes(void *buf, IOWrapperSizeT size, IOWrapperSizeT count) {
+std::size_t IOWrapper::Read_bytes(void *buf, IOWrapperSizeT size, IOWrapperSizeT cnt) {
 #if MPI_PARALLEL_ENABLED
   MPI_Status status;
-  int errcode = MPI_File_read(fh_, buf, count*size, MPI_BYTE, &status);
+  int errcode = MPI_File_read(fh_, buf, cnt*size, MPI_BYTE, &status);
   if (errcode != MPI_SUCCESS) {
     char msg[MPI_MAX_ERROR_STRING];
     int resultlen;
@@ -98,21 +98,21 @@ std::size_t IOWrapper::Read_bytes(void *buf, IOWrapperSizeT size, IOWrapperSizeT
   if (MPI_Get_count(&status,MPI_BYTE,&nread) == MPI_UNDEFINED) {return 0;}
   return nread/size;
 #else
-  return std::fread(buf,size,count,fh_);
+  return std::fread(buf,size,cnt,fh_);
 #endif
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn int IOWrapper::Read_bytes_at_all(void *buf, IOWrapperSizeT size,
-//!                                      IOWrapperSizeT count, IOWrapperSizeT offset)
+//!                                      IOWrapperSizeT cnt, IOWrapperSizeT offset)
 //! \brief wrapper for {MPI_File_read_at_all} versus {std::fseek+std::fread}
 //! Returns number of byte-blocks of given "size" actually read.
 
 std::size_t IOWrapper::Read_bytes_at_all(void *buf, IOWrapperSizeT size,
-                                         IOWrapperSizeT count, IOWrapperSizeT offset) {
+                                         IOWrapperSizeT cnt, IOWrapperSizeT offset) {
 #if MPI_PARALLEL_ENABLED
   MPI_Status status;
-  int errcode = MPI_File_read_at_all(fh_, offset, buf, count*size, MPI_BYTE, &status);
+  int errcode = MPI_File_read_at_all(fh_, offset, buf, cnt*size, MPI_BYTE, &status);
   if (errcode != MPI_SUCCESS) {
     char msg[MPI_MAX_ERROR_STRING];
     int resultlen;
@@ -125,19 +125,19 @@ std::size_t IOWrapper::Read_bytes_at_all(void *buf, IOWrapperSizeT size,
   return nread/size;
 #else
   std::fseek(fh_, offset, SEEK_SET);
-  return std::fread(buf,size,count,fh_);
+  return std::fread(buf,size,cnt,fh_);
 #endif
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn int IOWrapper::Read_Reals(void *buf, IOWrapperSizeT count)
+//! \fn int IOWrapper::Read_Reals(void *buf, IOWrapperSizeT cnt)
 //! \brief wrapper for {MPI_File_read} versus {std::fread} for reading Athena Reals.
 //! Returns number of Reals actually read.
 
-std::size_t IOWrapper::Read_Reals(void *buf, IOWrapperSizeT count) {
+std::size_t IOWrapper::Read_Reals(void *buf, IOWrapperSizeT cnt) {
 #if MPI_PARALLEL_ENABLED
   MPI_Status status;
-  int errcode = MPI_File_read(fh_, buf, count, MPI_ATHENA_REAL, &status);
+  int errcode = MPI_File_read(fh_, buf, cnt, MPI_ATHENA_REAL, &status);
   if (errcode != MPI_SUCCESS) {
     char msg[MPI_MAX_ERROR_STRING];
     int resultlen;
@@ -149,20 +149,20 @@ std::size_t IOWrapper::Read_Reals(void *buf, IOWrapperSizeT count) {
   if (MPI_Get_count(&status,MPI_ATHENA_REAL,&nread) == MPI_UNDEFINED) {return 0;}
   return nread;
 #else
-  return std::fread(buf,sizeof(Real),count,fh_);
+  return std::fread(buf,sizeof(Real),cnt,fh_);
 #endif
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn int IOWrapper::Read_Reals_at(void *buf,IOWrapperSizeT count,IOWrapperSizeT offset)
+//! \fn int IOWrapper::Read_Reals_at(void *buf,IOWrapperSizeT cnt,IOWrapperSizeT offset)
 //! \brief wrapper for {MPI_File_read_at} versus {std::fseek+std::fread} for reading
 //!  Athena Reals in parallel.  Returns number of Reals actually read.
 
-std::size_t IOWrapper::Read_Reals_at(void *buf, IOWrapperSizeT count,
+std::size_t IOWrapper::Read_Reals_at(void *buf, IOWrapperSizeT cnt,
                                      IOWrapperSizeT offset) {
 #if MPI_PARALLEL_ENABLED
   MPI_Status status;
-  int errcode = MPI_File_read_at(fh_, offset, buf, count, MPI_ATHENA_REAL, &status);
+  int errcode = MPI_File_read_at(fh_, offset, buf, cnt, MPI_ATHENA_REAL, &status);
   if (errcode != MPI_SUCCESS) {
     char msg[MPI_MAX_ERROR_STRING];
     int resultlen;
@@ -175,21 +175,21 @@ std::size_t IOWrapper::Read_Reals_at(void *buf, IOWrapperSizeT count,
   return nread;
 #else
   std::fseek(fh_, offset, SEEK_SET);
-  return std::fread(buf,sizeof(Real),count,fh_);
+  return std::fread(buf,sizeof(Real),cnt,fh_);
 #endif
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn int IOWrapper::Read_Reals_at_all(void *buf, IOWrapperSizeT count,
+//! \fn int IOWrapper::Read_Reals_at_all(void *buf, IOWrapperSizeT cnt,
 //!                                      IOWrapperSizeT offset)
 //! \brief wrapper for {MPI_File_read_at_all} versus {std::fseek+std::fread} for reading
 //!  Athena Reals in parallel.  Returns number of Reals actually read.
 
-std::size_t IOWrapper::Read_Reals_at_all(void *buf, IOWrapperSizeT count,
+std::size_t IOWrapper::Read_Reals_at_all(void *buf, IOWrapperSizeT cnt,
                                          IOWrapperSizeT offset) {
 #if MPI_PARALLEL_ENABLED
   MPI_Status status;
-  int errcode = MPI_File_read_at_all(fh_, offset, buf, count, MPI_ATHENA_REAL, &status);
+  int errcode = MPI_File_read_at_all(fh_, offset, buf, cnt, MPI_ATHENA_REAL, &status);
   if (errcode != MPI_SUCCESS) {
     char msg[MPI_MAX_ERROR_STRING];
     int resultlen;
@@ -202,7 +202,7 @@ std::size_t IOWrapper::Read_Reals_at_all(void *buf, IOWrapperSizeT count,
   return nread;
 #else
   std::fseek(fh_, offset, SEEK_SET);
-  return std::fread(buf,sizeof(Real),count,fh_);
+  return std::fread(buf,sizeof(Real),cnt,fh_);
 #endif
 }
 
@@ -212,10 +212,10 @@ std::size_t IOWrapper::Read_Reals_at_all(void *buf, IOWrapperSizeT count,
 //! Returns number of byte-blocks of given "size" actually written.
 
 std::size_t IOWrapper::Write_bytes(const void *buf, IOWrapperSizeT size,
-                                   IOWrapperSizeT count) {
+                                   IOWrapperSizeT cnt) {
 #if MPI_PARALLEL_ENABLED
   MPI_Status status;
-  int errcode = MPI_File_write(fh_, buf, count*size, MPI_BYTE, &status);
+  int errcode = MPI_File_write(fh_, buf, cnt*size, MPI_BYTE, &status);
   if (errcode != MPI_SUCCESS) {
     char msg[MPI_MAX_ERROR_STRING];
     int resultlen;
@@ -264,10 +264,10 @@ std::size_t IOWrapper::Write_bytes_at_all(const void *buf, IOWrapperSizeT size,
 //! \brief wrapper for {MPI_File_write} versus {std::fwrite} for writing Athena Reals
 //! Returns number of Reals actually written.
 
-std::size_t IOWrapper::Write_Reals(const void *buf, IOWrapperSizeT count) {
+std::size_t IOWrapper::Write_Reals(const void *buf, IOWrapperSizeT cnt) {
 #if MPI_PARALLEL_ENABLED
   MPI_Status status;
-  int errcode = MPI_File_write(fh_, buf, count, MPI_ATHENA_REAL, &status);
+  int errcode = MPI_File_write(fh_, buf, cnt, MPI_ATHENA_REAL, &status);
   if (errcode != MPI_SUCCESS) {
     char msg[MPI_MAX_ERROR_STRING];
     int resultlen;
