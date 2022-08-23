@@ -31,8 +31,8 @@
 #include "driver/driver.hpp"
 #include "pgen/pgen.hpp"
 
-// global variable to control computation of initial conditions versus errors
-bool set_initial_conditions = true;
+// function to compute errors in solution at end of run
+void LinearWaveErrors(ParameterInput *pin, Mesh *pm);
 
 // function to compute eigenvectors of linear waves in hydrodynamics
 void HydroEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
@@ -44,8 +44,9 @@ void MHDEigensystem(const Real d, const Real v1, const Real v2, const Real v3,
                     const Real x, const Real y, const EOS_Data &eos,
                     Real eigenvalues[7], Real right_eigenmatrix[7][7]);
 
-// function to compute errors in solution at end of run
-void LinearWaveErrors(ParameterInput *pin, Mesh *pm);
+namespace {
+// global variable to control computation of initial conditions versus errors
+bool set_initial_conditions = true;
 
 //----------------------------------------------------------------------------------------
 //! \struct LinWaveVariables
@@ -97,6 +98,7 @@ Real A3(const Real x1, const Real x2, const Real x3, const LinWaveVariables lw) 
 
   return Az*lw.cos_a2;
 }
+} // end anonymous namespace
 
 //----------------------------------------------------------------------------------------
 //! \fn void ProblemGenerator::LinearWave_()
@@ -277,7 +279,7 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
 
     // set new time limit in ParameterInput (to be read by Driver constructor) based on
     // wave speed of selected mode.
-    // input tlim is interpreted asnumber of wave periods for evolution
+    // input tlim should be interpreted as number of wave periods for evolution
     if (set_initial_conditions) {
       Real tlim = pin->GetReal("time", "tlim");
       pin->SetReal("time", "tlim", tlim*(std::abs(lambda/ev[wave_flag])));
@@ -426,7 +428,7 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
     });
 
     // now compute conserved quantities, as well as face-centered fields
-    par_for("pgen_linwave2", DevExeSpace(), 0,nmb-1,ks,ke,js,je,is,ie,
+    par_for("pgen_linwave3", DevExeSpace(), 0,nmb-1,ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       Real &x1min = size.d_view(m).x1min;
       Real &x1max = size.d_view(m).x1max;

@@ -1,0 +1,78 @@
+# AthenaXXX input file for MHD linear wave tests
+
+<comment>
+problem   = 3D Circularly Polarized Alfven Wave
+reference = G. Toth. JCP, vol. 161, pp. 605-662 (2000).
+
+<job>
+basename  = CPAW       # problem ID: basename of output filenames
+
+<mesh>
+nghost    = 2          # Number of ghost cells
+nx1       = 128        # Number of zones in X1-direction
+x1min     = 0.0        # minimum value of X1
+x1max     = 2.0        # maximum value of X1
+ix1_bc    = periodic   # inner-X1 boundary flag
+ox1_bc    = periodic   # outer-X1 boundary flag
+
+nx2       = 64        # Number of zones in X2-direction
+x2min     = 0.0        # minimum value of X2
+x2max     = 1.0        # maximum value of X2
+ix2_bc    = periodic   # inner-X2 boundary flag
+ox2_bc    = periodic   # outer-X2 boundary flag
+
+nx3       = 64          # Number of zones in X3-direction
+x3min     = 0.0        # minimum value of X3
+x3max     = 1.0        # maximum value of X3
+ix3_bc    = periodic   # inner-X3 boundary flag
+ox3_bc    = periodic   # outer-X3 boundary flag
+
+<meshblock>
+nx1       = 128        # Number of cells in each MeshBlock, X1-dir
+nx2       = 64        # Number of cells in each MeshBlock, X2-dir
+nx3       = 64        # Number of cells in each MeshBlock, X3-dir
+
+<time>
+evolution  = dynamic   # dynamic/kinematic/static
+integrator = rk2       # time integration algorithm
+cfl_number = 0.3       # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1        # cycle limit (no limit if <0)
+tlim       = 5.0       # time limit (measured in wave crossing times)
+ndiag      = 1         # cycles between diagostic output
+
+<mhd>
+eos         = ideal    # EOS type
+reconstruct = plm      # spatial reconstruction method
+rsolver     = llf      # Riemann-solver to be used
+gamma       = 1.66666666667   # gamma = C_p/C_v
+
+<problem>
+pgen_name   = cpaw     # problem generator name
+b_par       = 1.0      # B parallel
+b_perp      = 0.1      # B perpendicular
+pres        = 0.1      # pressure
+v_par       = 0.0      # vpar = {0, 1} -> {traveling, standing} wave
+right_polar = true     # 1: right polarization (whistler wave), 2: left
+along_x1    = false    # set to 'true' for wave along x1-axis
+along_x2    = false    # set to 'true' for wave along x2-axis
+along_x3    = false    # set to 'true' for wave along x3-axis
+
+<output1>
+file_type   = tab       # tabular data dump
+variable    = mhd_bcc   # variables to be output
+data_format = %12.5e    # Optional data format string
+dt          = 0.05      # time increment between outputs
+slice_x2    = 0.5       # slice in x2
+slice_x3    = 0.5       # slice in x3
+ghost_zones = false     # switch to output ghost cells
+
+<output2>
+file_type   = vtk       # legacy VTK output
+variable    = mhd_w_bcc # variables to be output
+dt          = 0.05      # time increment between outputs
+ghost_zones = true     # switch to output ghost cells
+
+<output3>
+file_type   = hst       # history data dump
+data_format = %12.5e    # Optional data format string
+dt          = 0.1       # time increment between outputs

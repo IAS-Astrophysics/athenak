@@ -40,6 +40,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
 
   if (pgen_fun_name.compare("advection") == 0) {
     Advection(pin, false);
+  } else if (pgen_fun_name.compare("cpaw") == 0) {
+    AlfvenWave(pin, false);
   } else if (pgen_fun_name.compare("gr_bondi") == 0) {
     BondiAccretion(pin, false);
   } else if (pgen_fun_name.compare("linear_wave") == 0) {
@@ -220,6 +222,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
 
   if (pgen_fun_name.compare("advection") == 0) {
     Advection(pin, true);
+  } else if (pgen_fun_name.compare("cpaw") == 0) {
+    AlfvenWave(pin, true);
   } else if (pgen_fun_name.compare("gr_bondi") == 0) {
     BondiAccretion(pin, true);
   } else if (pgen_fun_name.compare("linear_wave") == 0) {
