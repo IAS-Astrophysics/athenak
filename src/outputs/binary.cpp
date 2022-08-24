@@ -78,7 +78,7 @@ void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   }
   msg << std::endl;
   if (global_variable::my_rank == 0) {
-    binfile.Write(msg.str().c_str(),sizeof(char),msg.str().size());
+    binfile.Write_bytes(msg.str().c_str(),sizeof(char),msg.str().size());
   }
   header_offset += msg.str().size();}
   {std::stringstream msg;
@@ -88,8 +88,8 @@ void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   std::string sbuf=ost.str();
   msg << "  header offset=" << sbuf.size()*sizeof(char)  << std::endl;
   if (global_variable::my_rank == 0) {
-    binfile.Write(msg.str().c_str(),sizeof(char),msg.str().size());
-    binfile.Write(sbuf.c_str(),sizeof(char),sbuf.size());
+    binfile.Write_bytes(msg.str().c_str(),sizeof(char),msg.str().size());
+    binfile.Write_bytes(sbuf.c_str(),sizeof(char),sbuf.size());
   }
   header_offset += sbuf.size()*sizeof(char);
   header_offset += msg.str().size();}
@@ -176,7 +176,7 @@ void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   }
   // now write binary data in parallel
   std::size_t myoffset=header_offset+data_size*ns_mbs;
-  binfile.Write_at_all(data,data_size,nb_mbs,myoffset);
+  binfile.Write_bytes_at_all(data,data_size,nb_mbs,myoffset);
 
   // close the output file and clean up ptrs to data
   binfile.Close();

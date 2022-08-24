@@ -302,7 +302,7 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile) {
   char *headerdata = new char[headersize];
 
   if (global_variable::my_rank == 0) { // the master process reads the header data
-    if (resfile.Read(headerdata, 1, headersize) != headersize) {
+    if (resfile.Read_bytes(headerdata, 1, headersize) != headersize) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Header size read from restart file is incorrect, "
                 << "restart file is broken." << std::endl;
@@ -377,7 +377,8 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile) {
   IOWrapperSizeT listsize = sizeof(LogicalLocation) + sizeof(float);
   char *idlist = new char[listsize*nmb_total];
   if (global_variable::my_rank == 0) { // only the master process reads the ID list
-    if (resfile.Read(idlist,listsize,nmb_total) != static_cast<unsigned int>(nmb_total)) {
+    if (resfile.Read_bytes(idlist,listsize,nmb_total) !=
+        static_cast<unsigned int>(nmb_total)) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Incorrect number of MeshBlocks in restart file; "
                 << "restart file is broken." << std::endl;
