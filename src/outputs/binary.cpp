@@ -101,7 +101,7 @@ void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   auto &indcs = pm->mb_indcs;
   int cells = indcs.nx1*indcs.nx2*indcs.nx3;
 
-  // il1, il2, il3, level + x1i, x2i, x3i, dx1, dx2, dx3 + data
+  // il1, il2, il3, level + x1min, x1max, x2min, x2max, x3min, x3max + data
   std::size_t data_size = 4*sizeof(int32_t) + 6*sizeof(Real)
                         + (cells*nout_vars)*sizeof(float);
 
@@ -124,7 +124,7 @@ void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     int &oks = outmbs[m].oks;
     int &oke = outmbs[m].oke;
 
-    // logical location first, lx1, lx2, lx3, llevel
+    // logical location lx1, lx2, lx3
     int32_t nx = (int32_t)(loc.lx1);
     memcpy(pdata,&(nx),sizeof(nx));
     pdata+=sizeof(nx);
@@ -134,30 +134,33 @@ void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     nx = (int32_t)(loc.lx3);
     memcpy(pdata,&(nx),sizeof(nx));
     pdata+=sizeof(nx);
-    nx = (int32_t)(loc.level);
+
+    // physical refinement level
+    nx = (int32_t)(loc.level-pm->root_level);
     memcpy(pdata,&(nx),sizeof(nx));
     pdata+=sizeof(nx);
 
-    // now coordinate location.
-    Real xv = outmbs[m].x1i;
+    // coordinate location
+    Real xv = outmbs[m].x1min;
     memcpy(pdata,&(xv),sizeof(xv));
     pdata+=sizeof(xv);
-    xv = outmbs[m].x2i;
+    xv = outmbs[m].x1max;
     memcpy(pdata,&(xv),sizeof(xv));
     pdata+=sizeof(xv);
-    xv = outmbs[m].x3i;
+    xv = outmbs[m].x2min;
     memcpy(pdata,&(xv),sizeof(xv));
     pdata+=sizeof(xv);
-    xv = outmbs[m].dx1;
+    xv = outmbs[m].x2max;
     memcpy(pdata,&(xv),sizeof(xv));
     pdata+=sizeof(xv);
-    xv = outmbs[m].dx2;
+    xv = outmbs[m].x3min;
     memcpy(pdata,&(xv),sizeof(xv));
     pdata+=sizeof(xv);
-    xv = outmbs[m].dx3;
+    xv = outmbs[m].x3max;
     memcpy(pdata,&(xv),sizeof(xv));
     pdata+=sizeof(xv);
 
+    // output variables
     float tmp_data;
     for (int n=0; n<nout_vars; n++) {
       int cnt=0;
@@ -174,6 +177,7 @@ void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
       pdata+=cells*sizeof(float);
     }
   }
+
   // now write binary data in parallel
   std::size_t myoffset=header_offset+data_size*ns_mbs;
   binfile.Write_bytes_at_all(data,data_size,nb_mbs,myoffset);
