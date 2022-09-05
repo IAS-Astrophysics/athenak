@@ -82,13 +82,14 @@ struct OutputVariableInfo {
 struct OutputMeshBlockInfo {
   int mb_gid;                        // gid of output MB
   int ois, oie, ojs, oje, oks, oke;  // start/end indices of data to be output on MB
-  Real x1i, x2i, x3i;                // coordinate location of left-most cell center
-  Real dx1, dx2, dx3;                // cell spacing
+  Real x1min, x1max;  // physical X1 size of output MB
+  Real x2min, x2max;  // physical X2 size of output MB
+  Real x3min, x3max;  // physical X3 size of output MB
   // constructor
   OutputMeshBlockInfo(int id, int is, int ie, int js, int je, int ks, int ke,
-    Real x1i, Real x2i, Real x3i, Real dx1, Real dx2, Real dx3) :
+    Real x1min, Real x1max, Real x2min, Real x2max, Real x3min, Real x3max) :
     mb_gid(id), ois(is), oie(ie), ojs(js), oje(je), oks(ks), oke(ke),
-    x1i(x1i), x2i(x2i), x3i(x3i), dx1(dx1), dx2(dx2), dx3(dx3) {}
+    x1min(x1min), x1max(x1max), x2min(x2min), x2max(x2max), x3min(x3min), x3max(x3max) {}
 };
 
 //----------------------------------------------------------------------------------------
@@ -132,7 +133,8 @@ class BaseTypeOutput {
   virtual void WriteOutputFile(Mesh *pm, ParameterInput *pin) = 0;
 
  protected:
-  HostArray5D<Real>   outarray;  // CC output data on host with dims (n,m,k,j,i)
+  HostArray5D<Real>   outarray;  // CC output data on host with dims (n,m,k,j,i) except
+                                 // for restarts, where dims are (m,n,k,j,i)
   HostFaceFld4D<Real> outfield;  // FC output field on host
   int noutmbs_min;            // with MPI, minimum number of output MBs across all ranks
   int noutmbs_max;            // with MPI, maximum number of output MBs across all ranks
