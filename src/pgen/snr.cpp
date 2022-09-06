@@ -17,8 +17,10 @@
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
+#include "eos/ideal_c2p_hyd.hpp"
 #include "hydro/hydro.hpp"
 #include "coordinates/cell_locations.hpp"
+#include "diffusion/conduction.hpp"
 #include "srcterms/srcterms.hpp"
 #include "srcterms/ismcooling.hpp"
 #include "globals.hpp"
@@ -32,11 +34,16 @@ struct pgen_snr {
   Real t_hot;
   Real v_shell;
   Real v_bubble;
+  bool cooling;
+  Real hrate;
 };
   pgen_snr psnr;
 
-void Diagnostic(Mesh *pm, const Real bdt);
+void AddUserSrcs(Mesh *pm, const Real bdt);
 void UserHistOutput(HistoryData *pdata, Mesh *pm);
+void Diagnostic(Mesh *pm, const Real bdt);
+void AddISMCooling(Mesh *pm, const Real bdt, DvceArray5D<Real> &u0,
+                   const DvceArray5D<Real> &w0, const EOS_Data &eos_data);
 } // namespace
 
 
@@ -45,8 +52,9 @@ void UserHistOutput(HistoryData *pdata, Mesh *pm);
 //! \brief Problem Generator for spherical blast problem
 
 void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
-  user_srcs_func = Diagnostic;
+  user_srcs_func = AddUserSrcs;
   user_hist_func = UserHistOutput;
+  bool add_snr = pin->GetOrAddBoolean("problem", "add_snr", true);
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   Real rout = pin->GetReal("problem", "radius");
   Real rin  = rout - pin->GetOrAddReal("problem", "ramp", 0.0);
@@ -71,6 +79,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   Real t_hot = psnr.t_hot = pin->GetOrAddReal("problem","t_hot",2.81e2);
   psnr.v_shell = pin->GetOrAddReal("problem","v_shell",1.0);
   psnr.v_bubble = pin->GetOrAddReal("problem","v_bubble",psnr.v_shell);
+  psnr.cooling = pin->GetOrAddBoolean("problem","cooling",false);
+  psnr.hrate = pin->GetOrAddReal("problem","hrate",2.0e-26);
 
   // capture variables for the kernel
   auto &indcs = pmbp->pmesh->mb_indcs;
@@ -140,6 +150,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     //std::cout << "  temperature (c.g.s) = " << temp_0 << std::endl;
     //std::cout << "  cooling function (c.g.s) = " << ISMCoolFn(temp_0) << std::endl;
     std::cout << "  hrate = " << hrate << std::endl;
+    std::cout << "  user cooling = " << psnr.cooling << std::endl;
+    std::cout << "  user hrate = " << psnr.hrate << std::endl;
     std::cout << "  t_cold = " << t_cold << std::endl;
     std::cout << "  t_warm = " << t_warm << std::endl;
     std::cout << "  t_hot = " << t_hot << std::endl;
@@ -151,6 +163,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   // TODO(@mhguo): set snr if it is the fisrt restarting, else return
   // if (restart) return;
+  if (!add_snr) return;
 
   // setup uniform ambient medium with spherical over-pressured region in Hydro
   if (pmbp->phydro != nullptr) {
@@ -259,6 +272,130 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 }
 
 namespace {
+
+//----------------------------------------------------------------------------------------
+//! \fn void AddUserSrcs()
+//! \brief Add User Source Terms
+// NOTE source terms must all be computed using primitive (w0) and NOT conserved (u0) vars
+void AddUserSrcs(Mesh *pm, const Real bdt) {
+  DvceArray5D<Real> &u0 = pm->pmb_pack->phydro->u0;
+  const DvceArray5D<Real> &w0 = pm->pmb_pack->phydro->w0;
+  const EOS_Data &eos_data = pm->pmb_pack->phydro->peos->eos_data;
+  if (psnr.cooling) {
+    //std::cout << "AddISMCooling" << std::endl;
+    AddISMCooling(pm,bdt,u0,w0,eos_data);
+  }
+  Diagnostic(pm,bdt);
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void SourceTerms::AddISMCooling()
+//! \brief Add explict ISM cooling and heating source terms in the energy equations.
+// NOTE source terms must all be computed using primitive (w0) and NOT conserved (u0) vars
+void AddISMCooling(Mesh *pm, const Real bdt, DvceArray5D<Real> &u0,
+                   const DvceArray5D<Real> &w0, const EOS_Data &eos_data) {
+  auto pmy_pack = pm->pmb_pack;
+  auto &indcs = pm->mb_indcs;
+  int is = indcs.is, nx1 = indcs.nx1;
+  int js = indcs.js, nx2 = indcs.nx2;
+  int ks = indcs.ks, nx3 = indcs.nx3;
+  int nmb1 = pmy_pack->nmb_thispack - 1;
+  const int nmkji = (pmy_pack->nmb_thispack)*nx3*nx2*nx1;
+  const int nkji = nx3*nx2*nx1;
+  const int nji  = nx2*nx1;
+  Real beta = bdt/pm->dt;
+  Real cfl_no = pm->cfl_no;
+  auto &eos = eos_data;
+  Real use_e = eos_data.use_e;
+  Real gamma = eos_data.gamma;
+  Real gm1 = gamma - 1.0;
+  Real heating_rate = psnr.hrate;
+  Real temp_unit = pmy_pack->punit->temperature_cgs();
+  Real n_unit = pmy_pack->punit->density_cgs()/pmy_pack->punit->mu()
+                /pmy_pack->punit->atomic_mass_unit_cgs;
+  Real cooling_unit = pmy_pack->punit->pressure_cgs()/pmy_pack->punit->time_cgs()
+                      /n_unit/n_unit;
+  Real heating_unit = pmy_pack->punit->pressure_cgs()/pmy_pack->punit->time_cgs()/n_unit;
+
+  int nsubcycle=0, nsubcycle_count=0;
+  Kokkos::parallel_reduce("cooling", Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+  KOKKOS_LAMBDA(const int &idx, int &sum0, int &sum1) {
+    int m = (idx)/nkji;
+    int k = (idx - m*nkji)/nji;
+    int j = (idx - m*nkji - k*nji)/nx1;
+    int i = (idx - m*nkji - k*nji - j*nx1) + is;
+    k += ks;
+    j += js;
+    Real dens=1.0, temp = 1.0, eint = 1.0;
+    dens = w0(m,IDN,k,j,i);
+    if (use_e) {
+      temp = w0(m,IEN,k,j,i)/w0(m,IDN,k,j,i)*gm1;
+      eint = w0(m,IEN,k,j,i);
+    } else {
+      temp = w0(m,ITM,k,j,i);
+      eint = w0(m,ITM,k,j,i)*w0(m,IDN,k,j,i)/gm1;
+    }
+
+    Real gamma_heating = heating_rate/heating_unit;
+    bool sub_cycling = true;
+    bool sub_cycling_used = false;
+    Real bdt_now = 0.0;
+    while (sub_cycling) {
+      Real lambda_cooling = ISMCoolFn(temp*temp_unit)/cooling_unit;
+      Real cooling_heating =  dens * (dens * lambda_cooling - gamma_heating);
+      Real dt_cool = (eint/(FLT_MIN + fabs(cooling_heating)));
+      Real bdt_cool = beta*cfl_no*dt_cool;
+      if (bdt_now+bdt_cool<bdt) {
+        u0(m,IEN,k,j,i) -= bdt_cool * cooling_heating;
+
+        // compute new temperature and internal energy
+        
+        // load single state conserved variables
+        HydCons1D u;
+        u.d  = u0(m,IDN,k,j,i);
+        u.mx = u0(m,IM1,k,j,i);
+        u.my = u0(m,IM2,k,j,i);
+        u.mz = u0(m,IM3,k,j,i);
+        u.e  = u0(m,IEN,k,j,i);
+
+        // call c2p function
+        // (inline function in ideal_c2p_hyd.hpp file)
+        HydPrim1D w;
+        bool dfloor_used=false, efloor_used=false, tfloor_used=false;
+        SingleC2P_IdealHyd(u, eos, w, dfloor_used, efloor_used, tfloor_used);
+        dens = w.d;
+        temp = gm1*w.e/w.d;
+        eint = w.e;
+        sub_cycling_used = true;
+        sum1++;
+      } else {
+        u0(m,IEN,k,j,i) -= (bdt-bdt_now) * cooling_heating;
+        sub_cycling = false;
+      }
+      bdt_now += bdt_cool;
+    }
+    if (sub_cycling_used) {
+      sum0++;
+    }
+  }, Kokkos::Sum<int>(nsubcycle), Kokkos::Sum<int>(nsubcycle_count));
+#if MPI_PARALLEL_ENABLED
+  int* pnsubcycle = &(nsubcycle);
+  int* pnsubcycle_count = &(nsubcycle_count);
+  MPI_Allreduce(MPI_IN_PLACE, pnsubcycle, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE, pnsubcycle_count, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+#endif
+  if (global_variable::my_rank == 0) {
+    if (psnr.ndiag>0 && pm->ncycle % psnr.ndiag == 0) {
+      if (nsubcycle>0 || nsubcycle_count >0) {
+        std::cout << " nsubcycle_cell=" << nsubcycle << std::endl
+                  << " nsubcycle_count=" << nsubcycle_count << std::endl;
+      }
+    }
+  }
+  return;
+}
+
 //----------------------------------------------------------------------------------------
 //! \fn void Diagnostic()
 //! \brief Diagnostics.
@@ -337,19 +474,25 @@ void Diagnostic(Mesh *pm, const Real bdt) {
      Kokkos::Max<Real>(max_vtot),
      Kokkos::Max<Real>(max_temp),
      Kokkos::Max<Real>(max_eint));
+  Real dt_hyd  = pmbp->phydro->dtnew;
+  Real dt_cond = pmbp->phydro->pcond->dtnew;
+  Real dt_src  = pmbp->phydro->psrc->dtnew;
 #if MPI_PARALLEL_ENABLED
-  Real m_min[5] = {dtnew,min_dens,min_vtot,min_temp,min_eint};
+  Real m_min[8] = {dtnew,min_dens,min_vtot,min_temp,min_eint,dt_hyd,dt_cond,dt_src};
   Real m_max[4] = {max_dens,max_vtot,max_temp,max_eint};
-  Real gm_min[5];
+  Real gm_min[8];
   Real gm_max[4];
   //MPI_Allreduce(MPI_IN_PLACE, &dtnew, 1, MPI_ATHENA_REAL, MPI_MIN, MPI_COMM_WORLD);
-  MPI_Allreduce(m_min, gm_min, 5, MPI_ATHENA_REAL, MPI_MIN, MPI_COMM_WORLD);
+  MPI_Allreduce(m_min, gm_min, 8, MPI_ATHENA_REAL, MPI_MIN, MPI_COMM_WORLD);
   MPI_Allreduce(m_max, gm_max, 4, MPI_ATHENA_REAL, MPI_MAX, MPI_COMM_WORLD);
   dtnew = gm_min[0];
   min_dens = gm_min[1];
   min_vtot = gm_min[2];
   min_temp = gm_min[3];
   min_eint = gm_min[4];
+  dt_hyd   = gm_min[5];
+  dt_cond  = gm_min[6];
+  dt_src   = gm_min[7];
   max_dens = gm_max[0];
   max_vtot = gm_max[1];
   max_temp = gm_max[2];
@@ -360,7 +503,8 @@ void Diagnostic(Mesh *pm, const Real bdt) {
               << " min_v=" << min_vtot << " max_v=" << max_vtot << std::endl
               << " min_t=" << min_temp << " max_t=" << max_temp << std::endl
               << " min_e=" << min_eint << " max_e=" << max_eint << std::endl
-              << " dt_cs=" << dtnew << std::endl;
+              << " dt_temp=" << dtnew   << " dt_hyd=" << dt_hyd << std::endl
+              << " dt_cond=" << dt_cond << " dt_src=" << dt_src << std::endl;
   }
   return;
 }
@@ -385,8 +529,8 @@ void UserHistOutput(HistoryData *pdata, Mesh *pm) {
     "Mus1",  "Mus2",  "Mus3",  "Mws0",  "Mws1",
     "Mws2",  "Mws3",  "Mhs0",  "Mhs1",  "Mhs2",
     "Mhs3",  "Mshs0", "Mshs1", "Mshs2", "Mshs3",
-    "Vhv",   "Mhv",   "eihv",  "ekhv",  "ehv",
-    "prhv",  "Mhvs0", "Mhvs1", "Mhvs2", "Mhvs3",
+    "Vsb",   "Msb",   "eisb",  "eksb",  "esb",
+    "prsb",  "Msbs0", "Msbs1", "Msbs2", "Msbs3",
   };
   for (int n=0; n<nuser; ++n) {
     pdata->label[n0+n] = data_label[n];
@@ -473,37 +617,37 @@ void UserHistOutput(HistoryData *pdata, Mesh *pm) {
     Real dv_wnm  = (temp>=t_warm && temp<t_hot)? vol : 0.0;
     Real dv_hot  = (temp>=t_hot)? vol : 0.0;
     Real dv_sh   = (temp<t_hot && velr>v_shell)? vol : 0.0;
-    Real dv_hv   = (vtot>v_bubble)? vol : 0.0;
+    Real dv_sb   = (temp>=t_hot || vtot>v_bubble)? vol : 0.0;
     Real dm_cnm  = dv_cnm*dens;
     Real dm_unm  = dv_unm*dens;
     Real dm_wnm  = dv_wnm*dens;
     Real dm_hot  = dv_hot*dens;
     Real dm_sh   = dv_sh*dens;
-    Real dm_hv   = dv_hv*dens;
+    Real dm_sb   = dv_sb*dens;
     Real dei_cnm = dv_cnm*eint;
     Real dei_unm = dv_unm*eint;
     Real dei_wnm = dv_wnm*eint;
     Real dei_hot = dv_hot*eint;
     Real dei_sh  = dv_sh*eint;
-    Real dei_hv  = dv_hv*eint;
+    Real dei_sb  = dv_sb*eint;
     Real dek_cnm = dv_cnm*ek;
     Real dek_unm = dv_unm*ek;
     Real dek_wnm = dv_wnm*ek;
     Real dek_hot = dv_hot*ek;
     Real dek_sh  = dv_sh*ek;
-    Real dek_hv  = dv_hv*ek;
+    Real dek_sb  = dv_sb*ek;
     Real de_cnm  = dv_cnm*etot;
     Real de_unm  = dv_unm*etot;
     Real de_wnm  = dv_wnm*etot;
     Real de_hot  = dv_hot*etot;
     Real de_sh   = dv_sh*etot;
-    Real de_hv   = dv_hv*etot;
+    Real de_sb   = dv_sb*etot;
     Real dpr_cnm = dm_cnm*velr;
     Real dpr_unm = dm_unm*velr;
     Real dpr_wnm = dm_wnm*velr;
     Real dpr_hot = dm_hot*velr;
     Real dpr_sh  = dm_sh*velr;
-    Real dpr_hv  = dm_hv*velr;
+    Real dpr_sb  = dm_sb*velr;
     Real dmr_sh  = dm_sh*rad;
 
     Real vars[nuser] = {
@@ -518,8 +662,8 @@ void UserHistOutput(HistoryData *pdata, Mesh *pm) {
       0.0,     0.0,     0.0,     0.0,     0.0,
       0.0,     0.0,     0.0,     0.0,     0.0,
       0.0,     0.0,     0.0,     0.0,     0.0,
-      dv_hv,   dm_hv,   dei_hv,  dek_hv,  de_hv,
-      dpr_hv,  0.0,     0.0,     0.0,     0.0,
+      dv_sb,   dm_sb,   dei_sb,  dek_sb,  de_sb,
+      dpr_sb,  0.0,     0.0,     0.0,     0.0,
     };
     if (nscalars > 3) {
       for (int n=0; n<4; ++n) {
@@ -527,7 +671,7 @@ void UserHistOutput(HistoryData *pdata, Mesh *pm) {
         for (int nm=0; nm<5; ++nm){
           vars[35+4*nm+n] = vars[5+nm]*w0(m,nhydro+n,k,j,i);
         }
-        vars[61+n] = dm_hv*w0(m,nhydro+n,k,j,i);
+        vars[61+n] = dm_sb*w0(m,nhydro+n,k,j,i);
       }
     }
     // Hydro conserved variables:

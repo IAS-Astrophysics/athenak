@@ -285,6 +285,11 @@ TaskStatus TurbulenceInit::InitializeModes(int stage) {
   auto amp2_ = amp2;
   auto amp3_ = amp3;
 
+  HostArray1D<Real> amps;
+  Kokkos::realloc(amps, nwave);
+  HostArray2D<Real> ampt;
+  Kokkos::realloc(ampt, 3, nwave);
+
   // TODO(@leva): move this for loop to the host
   for (int n=0; n<=nt-1; n++) {
     int nk1 = n/nw23;
@@ -306,94 +311,67 @@ TaskStatus TurbulenceInit::InitializeModes(int stage) {
 
     if (nsq >= nlow_sq && nsq <= nhigh_sq) {
       // Generate Fourier amplitudes
-      if (nk3 != 0) {
-        Real ikz = 1.0/(dkz*((Real) nk3));
+      // Symmetric method
+      amp1_.h_view(n,0) = RanGaussian(&(seed));
+      amp1_.h_view(n,1) = (nk3 == 0)             ? 0.0 :RanGaussian(&(seed));
+      amp1_.h_view(n,2) = (nk2 == 0)             ? 0.0 :RanGaussian(&(seed));
+      amp1_.h_view(n,3) = (nk2 == 0 || nk3 == 0) ? 0.0 :RanGaussian(&(seed));
+      amp1_.h_view(n,4) = (nk1 == 0)             ? 0.0 :RanGaussian(&(seed));
+      amp1_.h_view(n,5) = (nk1 == 0 || nk3 == 0) ? 0.0 :RanGaussian(&(seed));
+      amp1_.h_view(n,6) = (nk1 == 0 || nk2 == 0) ? 0.0 :RanGaussian(&(seed));
+      amp1_.h_view(n,7) = (nk1 == 0 || nk2 == 0 || nk3 == 0) ? 0.0 :RanGaussian(&(seed));
 
-        amp1_.h_view(n,0) = RanGaussian(&(seed));
-        amp1_.h_view(n,1) = RanGaussian(&(seed));
-        amp1_.h_view(n,2) = (nk2 == 0)             ? 0.0 :RanGaussian(&(seed));
-        amp1_.h_view(n,3) = (nk2 == 0)             ? 0.0 :RanGaussian(&(seed));
-        amp1_.h_view(n,4) = (nk1 == 0)             ? 0.0 :RanGaussian(&(seed));
-        amp1_.h_view(n,5) = (nk1 == 0)             ? 0.0 :RanGaussian(&(seed));
-        amp1_.h_view(n,6) = (nk1 == 0 || nk2 == 0) ? 0.0 :RanGaussian(&(seed));
-        amp1_.h_view(n,7) = (nk1 == 0 || nk2 == 0) ? 0.0 :RanGaussian(&(seed));
+      amp2_.h_view(n,0) = RanGaussian(&(seed));
+      amp2_.h_view(n,1) = (nk3 == 0)             ? 0.0 :RanGaussian(&(seed));
+      amp2_.h_view(n,2) = (nk2 == 0)             ? 0.0 :RanGaussian(&(seed));
+      amp2_.h_view(n,3) = (nk2 == 0 || nk3 == 0) ? 0.0 :RanGaussian(&(seed));
+      amp2_.h_view(n,4) = (nk1 == 0)             ? 0.0 :RanGaussian(&(seed));
+      amp2_.h_view(n,5) = (nk1 == 0 || nk3 == 0) ? 0.0 :RanGaussian(&(seed));
+      amp2_.h_view(n,6) = (nk1 == 0 || nk2 == 0) ? 0.0 :RanGaussian(&(seed));
+      amp2_.h_view(n,7) = (nk1 == 0 || nk2 == 0 || nk3 == 0) ? 0.0 :RanGaussian(&(seed));
 
-        amp2_.h_view(n,0) = RanGaussian(&(seed));
-        amp2_.h_view(n,1) = RanGaussian(&(seed));
-        amp2_.h_view(n,2) = (nk2 == 0)             ? 0.0 :RanGaussian(&(seed));
-        amp2_.h_view(n,3) = (nk2 == 0)             ? 0.0 :RanGaussian(&(seed));
-        amp2_.h_view(n,4) = (nk1 == 0)             ? 0.0 :RanGaussian(&(seed));
-        amp2_.h_view(n,5) = (nk1 == 0)             ? 0.0 :RanGaussian(&(seed));
-        amp2_.h_view(n,6) = (nk1 == 0 || nk2 == 0) ? 0.0 :RanGaussian(&(seed));
-        amp2_.h_view(n,7) = (nk1 == 0 || nk2 == 0) ? 0.0 :RanGaussian(&(seed));
+      amp3_.h_view(n,0) = RanGaussian(&(seed));
+      amp3_.h_view(n,1) = (nk3 == 0)             ? 0.0 :RanGaussian(&(seed));
+      amp3_.h_view(n,2) = (nk2 == 0)             ? 0.0 :RanGaussian(&(seed));
+      amp3_.h_view(n,3) = (nk2 == 0 || nk3 == 0) ? 0.0 :RanGaussian(&(seed));
+      amp3_.h_view(n,4) = (nk1 == 0)             ? 0.0 :RanGaussian(&(seed));
+      amp3_.h_view(n,5) = (nk1 == 0 || nk3 == 0) ? 0.0 :RanGaussian(&(seed));
+      amp3_.h_view(n,6) = (nk1 == 0 || nk2 == 0) ? 0.0 :RanGaussian(&(seed));
+      amp3_.h_view(n,7) = (nk1 == 0 || nk2 == 0 || nk3 == 0) ? 0.0 :RanGaussian(&(seed));
 
-        // incompressibility
-        amp3_.h_view(n,0) =  ikz*( kx*amp1_.h_view(n,5) + ky*amp2_.h_view(n,3));
-        amp3_.h_view(n,1) = -ikz*( kx*amp1_.h_view(n,4) + ky*amp2_.h_view(n,2));
-        amp3_.h_view(n,2) =  ikz*( kx*amp1_.h_view(n,7) - ky*amp2_.h_view(n,1));
-        amp3_.h_view(n,3) =  ikz*(-kx*amp1_.h_view(n,6) + ky*amp2_.h_view(n,0));
-        amp3_.h_view(n,4) =  ikz*(-kx*amp1_.h_view(n,1) + ky*amp2_.h_view(n,7));
-        amp3_.h_view(n,5) =  ikz*( kx*amp1_.h_view(n,0) - ky*amp2_.h_view(n,6));
-        amp3_.h_view(n,6) = -ikz*( kx*amp1_.h_view(n,3) + ky*amp2_.h_view(n,5));
-        amp3_.h_view(n,7) =  ikz*( kx*amp1_.h_view(n,2) + ky*amp2_.h_view(n,4));
-      } else if (nk2 != 0) { // kz == 0
-        Real iky = 1.0/(dky*((Real) nk2));
+      // incompressibility
+      // by compute curl(amp)
+      ampt(0,0) =  ky*amp3_.h_view(n,2) - kz*amp2_.h_view(n,1);
+      ampt(0,1) =  ky*amp3_.h_view(n,3) + kz*amp2_.h_view(n,0);
+      ampt(0,2) = -ky*amp3_.h_view(n,0) - kz*amp2_.h_view(n,3);
+      ampt(0,3) = -ky*amp3_.h_view(n,1) + kz*amp2_.h_view(n,2);
+      ampt(0,4) =  ky*amp3_.h_view(n,6) - kz*amp2_.h_view(n,5);
+      ampt(0,5) =  ky*amp3_.h_view(n,7) + kz*amp2_.h_view(n,4);
+      ampt(0,6) = -ky*amp3_.h_view(n,4) - kz*amp2_.h_view(n,7);
+      ampt(0,7) = -ky*amp3_.h_view(n,5) + kz*amp2_.h_view(n,6);
 
-        amp1_.h_view(n,0) = RanGaussian(&(seed));
-        amp1_.h_view(n,2) = RanGaussian(&(seed));
-        amp1_.h_view(n,4) = (nk1 == 0) ? 0.0 :RanGaussian(&(seed));
-        amp1_.h_view(n,6) = (nk1 == 0) ? 0.0 :RanGaussian(&(seed));
-        amp1_.h_view(n,1) = 0.0;
-        amp1_.h_view(n,3) = 0.0;
-        amp1_.h_view(n,5) = 0.0;
-        amp1_.h_view(n,7) = 0.0;
+      ampt(1,0) =  kz*amp1_.h_view(n,1) - kx*amp3_.h_view(n,4);
+      ampt(1,1) = -kz*amp1_.h_view(n,0) - kx*amp3_.h_view(n,5);
+      ampt(1,2) =  kz*amp1_.h_view(n,3) - kx*amp3_.h_view(n,6);
+      ampt(1,3) = -kz*amp1_.h_view(n,2) - kx*amp3_.h_view(n,7);
+      ampt(1,4) =  kz*amp1_.h_view(n,5) + kx*amp3_.h_view(n,0);
+      ampt(1,5) = -kz*amp1_.h_view(n,4) + kx*amp3_.h_view(n,1);
+      ampt(1,6) =  kz*amp1_.h_view(n,7) + kx*amp3_.h_view(n,2);
+      ampt(1,7) = -kz*amp1_.h_view(n,6) + kx*amp3_.h_view(n,3);
 
-        amp3_.h_view(n,0) = RanGaussian(&(seed));
-        amp3_.h_view(n,2) = RanGaussian(&(seed));
-        amp3_.h_view(n,4) = (nk1 == 0) ? 0.0 : RanGaussian(&(seed));
-        amp3_.h_view(n,6) = (nk1 == 0) ? 0.0 : RanGaussian(&(seed));
-        amp3_.h_view(n,1) = 0.0;
-        amp3_.h_view(n,3) = 0.0;
-        amp3_.h_view(n,5) = 0.0;
-        amp3_.h_view(n,7) = 0.0;
-
-        // incompressibility
-        amp2_.h_view(n,0) =  iky*kx*amp1_.h_view(n,6);
-        amp2_.h_view(n,2) = -iky*kx*amp1_.h_view(n,4);
-        amp2_.h_view(n,4) = -iky*kx*amp1_.h_view(n,2);
-        amp2_.h_view(n,6) =  iky*kx*amp1_.h_view(n,0);
-        amp2_.h_view(n,1) = 0.0;
-        amp2_.h_view(n,3) = 0.0;
-        amp2_.h_view(n,5) = 0.0;
-        amp2_.h_view(n,7) = 0.0;
-      } else {// kz == ky == 0, kx != 0 by initial if statement
-        amp3_.h_view(n,0) = RanGaussian(&(seed));
-        amp3_.h_view(n,4) = RanGaussian(&(seed));
-        amp3_.h_view(n,1) = 0.0;
-        amp3_.h_view(n,2) = 0.0;
-        amp3_.h_view(n,3) = 0.0;
-        amp3_.h_view(n,5) = 0.0;
-        amp3_.h_view(n,6) = 0.0;
-        amp3_.h_view(n,7) = 0.0;
-
-        amp2_.h_view(n,0) = RanGaussian(&(seed));
-        amp2_.h_view(n,4) = RanGaussian(&(seed));
-        amp2_.h_view(n,1) = 0.0;
-        amp2_.h_view(n,2) = 0.0;
-        amp2_.h_view(n,3) = 0.0;
-        amp2_.h_view(n,5) = 0.0;
-        amp2_.h_view(n,6) = 0.0;
-        amp2_.h_view(n,7) = 0.0;
-
-        // incompressibility
-        amp1_.h_view(n,0) = 0.0;
-        amp1_.h_view(n,4) = 0.0;
-        amp1_.h_view(n,1) = 0.0;
-        amp1_.h_view(n,2) = 0.0;
-        amp1_.h_view(n,3) = 0.0;
-        amp1_.h_view(n,5) = 0.0;
-        amp1_.h_view(n,6) = 0.0;
-        amp1_.h_view(n,7) = 0.0;
+      ampt(2,0) =  kx*amp2_.h_view(n,4) - ky*amp1_.h_view(n,2);
+      ampt(2,1) =  kx*amp2_.h_view(n,5) - ky*amp1_.h_view(n,3);
+      ampt(2,2) =  kx*amp2_.h_view(n,6) + ky*amp1_.h_view(n,0);
+      ampt(2,3) =  kx*amp2_.h_view(n,7) + ky*amp1_.h_view(n,1);
+      ampt(2,4) = -kx*amp2_.h_view(n,0) - ky*amp1_.h_view(n,6);
+      ampt(2,5) = -kx*amp2_.h_view(n,1) - ky*amp1_.h_view(n,7);
+      ampt(2,6) = -kx*amp2_.h_view(n,2) + ky*amp1_.h_view(n,4);
+      ampt(2,7) = -kx*amp2_.h_view(n,3) + ky*amp1_.h_view(n,5);
+      
+      for (int i=0; i<8; ++i) {
+        amp1_.h_view(n,i) = (nk2*nk2+nk3*nk3)>0? ampt(0,i)/sqrt(ky*ky+kz*kz) : 0.0;
+        amp2_.h_view(n,i) = (nk3*nk3+nk1*nk1)>0? ampt(1,i)/sqrt(kz*kz+kx*kx) : 0.0;
+        amp3_.h_view(n,i) = (nk1*nk1+nk2*nk2)>0? ampt(2,i)/sqrt(kx*kx+ky*ky) : 0.0;
       }
 
       amp1_.h_view(n,0) *= norm;

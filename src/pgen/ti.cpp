@@ -419,7 +419,7 @@ void FineToCoarse(Mesh *pm, std::string rst_file) {
   char *headerdata = new char[headersize];
 
   if (global_variable::my_rank == 0) { // the master process reads the header data
-    if (resfile.Read(headerdata, 1, headersize) != headersize) {
+    if (resfile.Read_bytes(headerdata, 1, headersize) != headersize) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Header size read from restart file is incorrect, "
                 << "restart file is broken." << std::endl;
@@ -462,7 +462,8 @@ void FineToCoarse(Mesh *pm, std::string rst_file) {
   // TODO(@mhguo): consider whether you can utilize the idlist here
   char *idlist = new char[listsize*nmb_tot];
   if (global_variable::my_rank == 0) { // only the master process reads the ID list
-    if (resfile.Read(idlist,listsize,nmb_tot) != static_cast<unsigned int>(nmb_tot)) {
+    if (resfile.Read_bytes(idlist,listsize,nmb_tot) !=
+        static_cast<unsigned int>(nmb_tot)) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Incorrect number of MeshBlocks in restart file; "
                 << "restart file is broken." << std::endl;
@@ -477,7 +478,7 @@ void FineToCoarse(Mesh *pm, std::string rst_file) {
   IOWrapperSizeT variablesize = 2*sizeof(IOWrapperSizeT);
   char *variabledata = new char[variablesize];
   if (global_variable::my_rank == 0) { // the master process reads the variables data
-    if (resfile.Read(variabledata, 1, variablesize) != variablesize) {
+    if (resfile.Read_bytes(variabledata, 1, variablesize) != variablesize) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Variable data size read from restart file is incorrect, "
                 << "restart file is broken." << std::endl;
@@ -489,12 +490,13 @@ void FineToCoarse(Mesh *pm, std::string rst_file) {
   MPI_Bcast(variabledata, variablesize, MPI_CHAR, 0, MPI_COMM_WORLD);
 #endif
 
-  IOWrapperSizeT ccdata_size, fcdata_size;
+  // Read number of CC variables and FC fields per MeshBlock in restart file
+  IOWrapperSizeT ccdata_cnt, fcdata_cnt;
   hdos = 0;
-  std::memcpy(&ccdata_size, &(variabledata[hdos]), sizeof(IOWrapperSizeT));
+  std::memcpy(&ccdata_cnt, &(variabledata[hdos]), sizeof(IOWrapperSizeT));
   hdos += sizeof(IOWrapperSizeT);
-  std::memcpy(&fcdata_size, &(variabledata[hdos]), sizeof(IOWrapperSizeT));
-
+  std::memcpy(&fcdata_cnt, &(variabledata[hdos]), sizeof(IOWrapperSizeT));
+  
   // calculate total number of CC variables
   hydro::Hydro* phydro = pmbp->phydro;
   mhd::MHD* pmhd = pmbp->pmhd;
@@ -517,13 +519,19 @@ void FineToCoarse(Mesh *pm, std::string rst_file) {
 
   // allocate arrays for CC data
   HostArray5D<Real> ccin("pgen-ccin", nmb, (nhydro_tot + nmhd_tot), nout3, nout2, nout1);
-  if (ccin.size()*sizeof(Real) != ccdata_size) {
+  if (ccin.size() != (nmb*ccdata_cnt)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << " ccin.size=" << ccin.size()*sizeof(Real) 
-              << " ccdata_size=" << ccdata_size << " nmb=" << nmb
               << std::endl << "CC data size read from restart file not equal to size "
               << "of Hydro and MHD arrays, restart file is broken." << std::endl;
     exit(EXIT_FAILURE);
+  }
+
+  // calculate max/min number of MeshBlocks across all ranks
+  int noutmbs_max = pm->nmblist[0];
+  int noutmbs_min = pm->nmblist[0];
+  for (int i=0; i<(global_variable::nranks); ++i) {
+    noutmbs_max = std::max(noutmbs_max,pm->nmblist[i]);
+    noutmbs_min = std::min(noutmbs_min,pm->nmblist[i]);
   }
 
   // allocate arrays for finer data
@@ -553,17 +561,27 @@ void FineToCoarse(Mesh *pm, std::string rst_file) {
     i0 = indcs.nx1/2*(itr%2);
     j0 = indcs.nx2/2*((itr/2)%2);
     k0 = indcs.nx3/2*((itr/4)%2);
-    // read CC data into host array
+    // read CC data into host array, one MeshBlock at a time to avoid exceeding 2^31 limit
+    // on each read call for very large grids per MPI rank
     int mygids = pm->gidslist[global_variable::my_rank];
     int itrgids = mygids*nitr+itr;
-    IOWrapperSizeT myoffset = headeroffset + (ccdata_size+fcdata_size)*itrgids;
-    if (resfile.Read_at_all(ccin.data(), ccdata_size, 1, myoffset) != 1) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "Input hydro data not read correctly from restart file, "
-                << "restart file is broken." << std::endl;
-      exit(EXIT_FAILURE);
+    IOWrapperSizeT myoffset = headeroffset + (ccdata_cnt+fcdata_cnt)*itrgids*sizeof(Real);
+    for (int m=0;  m<noutmbs_max; ++m) {
+      // every rank has a MB to read, so read collectively
+      // get ptr to cell-centered MeshBlock data
+      auto mbptr = Kokkos::subview(ccin, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
+                                  Kokkos::ALL);
+      int mbcnt = mbptr.size();
+      //if (resfile.Read_Reals_at_all(ccin.data(), ccdata_size, 1, myoffset) != 1) {
+      if (resfile.Read_Reals_at_all(mbptr.data(), mbcnt, myoffset) != mbcnt) {
+        
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "CC data not read correctly from restart file, "
+                  << "restart file is broken." << std::endl;
+        exit(EXIT_FAILURE);
+      }
+      myoffset += mbcnt*sizeof(Real);
     }
-    myoffset += ccdata_size;
 
     // copy CC Hydro data to device
     
