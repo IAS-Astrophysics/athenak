@@ -14,6 +14,7 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "pgen.hpp"
+#include "diffusion/conduction.hpp"
 #include "srcterms/srcterms.hpp"
 #include "srcterms/ismcooling.hpp"
 #include "globals.hpp"
@@ -36,7 +37,8 @@ void AddUserSrcs(Mesh *pm, const Real bdt);
 void Diagnostic(Mesh *pm, const Real bdt, DvceArray5D<Real> &u0,
                 const DvceArray5D<Real> &w0, const EOS_Data &eos_data);
 void UserHistOutput(HistoryData *pdata, Mesh *pm);
-void FineToCoarse(Mesh *pm, std::string rst_file);
+void FineToCoarse(Mesh *pm, ParameterInput *pin);
+void CoarseToFine(Mesh *pm, ParameterInput *pin);
 } // namespace
 
 //----------------------------------------------------------------------------------------
@@ -150,12 +152,16 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     }
   }
 
-  // TODO(@mhguo): read data from restart file and load from finer level to coaser level
+  // TODO(@mhguo): read data from restart file and load from finer level to coarser level
   bool rst_flag = pin->GetOrAddBoolean("problem","rst",false);
   //int rst_level = pin->GetOrAddInteger("problem", "rst_level", 0);
   if (rst_flag) {
-    std::string rst_file = pin->GetOrAddString("problem", "rst_file", "none");
-    FineToCoarse(pmy_mesh_, rst_file);
+    int rst_type = pin->GetOrAddInteger("problem","rst_type",0);
+    if (rst_type==1) {
+      CoarseToFine(pmy_mesh_, pin);
+    } else {
+      FineToCoarse(pmy_mesh_, pin);
+    }
   }
   return;
 }
@@ -237,19 +243,25 @@ void Diagnostic(Mesh *pm, const Real bdt, DvceArray5D<Real> &u0,
      Kokkos::Max<Real>(max_vtot),
      Kokkos::Max<Real>(max_temp),
      Kokkos::Max<Real>(max_eint));
+  Real dt_hyd  = pmbp->phydro->dtnew;
+  Real dt_cond = pmbp->phydro->pcond->dtnew;
+  Real dt_src  = pmbp->phydro->psrc->dtnew;
 #if MPI_PARALLEL_ENABLED
-  Real m_min[5] = {dtnew,min_dens,min_vtot,min_temp,min_eint};
+  Real m_min[8] = {dtnew,min_dens,min_vtot,min_temp,min_eint,dt_hyd,dt_cond,dt_src};
   Real m_max[4] = {max_dens,max_vtot,max_temp,max_eint};
-  Real gm_min[5];
+  Real gm_min[8];
   Real gm_max[4];
   //MPI_Allreduce(MPI_IN_PLACE, &dtnew, 1, MPI_ATHENA_REAL, MPI_MIN, MPI_COMM_WORLD);
-  MPI_Allreduce(m_min, gm_min, 5, MPI_ATHENA_REAL, MPI_MIN, MPI_COMM_WORLD);
+  MPI_Allreduce(m_min, gm_min, 8, MPI_ATHENA_REAL, MPI_MIN, MPI_COMM_WORLD);
   MPI_Allreduce(m_max, gm_max, 4, MPI_ATHENA_REAL, MPI_MAX, MPI_COMM_WORLD);
   dtnew = gm_min[0];
   min_dens = gm_min[1];
   min_vtot = gm_min[2];
   min_temp = gm_min[3];
   min_eint = gm_min[4];
+  dt_hyd   = gm_min[5];
+  dt_cond  = gm_min[6];
+  dt_src   = gm_min[7];
   max_dens = gm_max[0];
   max_vtot = gm_max[1];
   max_temp = gm_max[2];
@@ -260,7 +272,8 @@ void Diagnostic(Mesh *pm, const Real bdt, DvceArray5D<Real> &u0,
               << " min_v=" << min_vtot << " max_v=" << max_vtot << std::endl
               << " min_t=" << min_temp << " max_t=" << max_temp << std::endl
               << " min_e=" << min_eint << " max_e=" << max_eint << std::endl
-              << " dt_cs=" << dtnew << std::endl;
+              << " dt_temp=" << dtnew   << " dt_hyd=" << dt_hyd << std::endl
+              << " dt_cond=" << dt_cond << " dt_src=" << dt_src << std::endl;
   }
   return;
 }
@@ -383,7 +396,8 @@ void UserHistOutput(HistoryData *pdata, Mesh *pm) {
   return;
 }
 
-void FineToCoarse(Mesh *pm, std::string rst_file) {
+void FineToCoarse(Mesh *pm, ParameterInput *pin) {
+  std::string rst_file = pin->GetOrAddString("problem", "rst_file", "none");
   MeshBlockPack *pmbp = pm->pmb_pack;
   ParameterInput* pinput = new ParameterInput;
   IOWrapper resfile;
@@ -607,6 +621,245 @@ void FineToCoarse(Mesh *pm, std::string rst_file) {
       // add passive scalars
       for (int n=nhydro; n<(nhydro+nscalars); ++n) {
         u0(cm,n,ck,cj,ci) += fine_u0(m,n,k,j,i)/nitr;
+      }
+    });
+  }
+
+  resfile.Close();
+  delete pinput;
+  return;
+}
+
+void CoarseToFine(Mesh *pm, ParameterInput *pin) {
+  std::string rst_file = pin->GetOrAddString("problem", "rst_file", "none");
+  MeshBlockPack *pmbp = pm->pmb_pack;
+  ParameterInput* pinput = new ParameterInput;
+  IOWrapper resfile;
+
+  //--- STEP 1.  Root process reads header data (input file, critical variables)
+
+  resfile.Open(rst_file.c_str(), IOWrapper::FileMode::read);
+  pinput->LoadFromFile(resfile);
+
+  // capture variables for kernel
+  auto &indcs = pm->mb_indcs;
+  int &is = indcs.is; int &ie = indcs.ie;
+  int &js = indcs.js; int &je = indcs.je;
+  int &ks = indcs.ks; int &ke = indcs.ke;
+  int nmb1 = (pmbp->nmb_thispack-1);
+  // get spatial dimensions of arrays, including ghost zones
+  int nmb = pmbp->nmb_thispack;
+  int rst_nmb = pin->GetOrAddInteger("problem", "rst_nmb", 1);
+  int nout1 = indcs.nx1 + 2*(indcs.ng);
+  int nout2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
+  int nout3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
+
+  //--- STEP 2.  Root process reads list of logical locations and cost of MeshBlocks
+  // Similar to data read in Mesh::BuildTreeFromRestart()
+
+  // At this point, the restartfile is already open and the ParameterInput (input file)
+  // data has already been read. Thus the file pointer is set to after <par_end>
+  IOWrapperSizeT headeroffset = resfile.GetPosition();
+
+  // following must be identical to calculation of headeroffset (excluding size of
+  // ParameterInput data) in restart.cpp
+  IOWrapperSizeT headersize = 3*sizeof(int) + 2*sizeof(Real)
+    + sizeof(RegionSize) + 2*sizeof(RegionIndcs);
+  char *headerdata = new char[headersize];
+
+  if (global_variable::my_rank == 0) { // the master process reads the header data
+    if (resfile.Read_bytes(headerdata, 1, headersize) != headersize) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Header size read from restart file is incorrect, "
+                << "restart file is broken." << std::endl;
+      exit(EXIT_FAILURE);
+    }
+  }
+
+#if MPI_PARALLEL_ENABLED
+  // then broadcast the header data
+  MPI_Bcast(headerdata, headersize, MPI_CHAR, 0, MPI_COMM_WORLD);
+#endif
+
+  // get old mesh data, time and cycle, actually useless here
+  // Now copy mesh data read from restart file into Mesh variables. Order of variables
+  // set by Write()'s in restart.cpp
+  // Note this overwrites size and indices initialized in Mesh constructor.
+  IOWrapperSizeT hdos = 0;
+  int nmb_tot = 0; 
+  std::memcpy(&nmb_tot, &(headerdata[hdos]), sizeof(int));
+  hdos += sizeof(int);
+  //std::memcpy(&root_level, &(headerdata[hdos]), sizeof(int));
+  hdos += sizeof(int);
+  //std::memcpy(&mesh_size, &(headerdata[hdos]), sizeof(RegionSize));
+  hdos += sizeof(RegionSize);
+  //std::memcpy(&mesh_indcs, &(headerdata[hdos]), sizeof(RegionIndcs));
+  hdos += sizeof(RegionIndcs);
+  //std::memcpy(&mb_indcs, &(headerdata[hdos]), sizeof(RegionIndcs));
+  // TODO(@mhguo): consider whether you want old time, dt, and ncycle?
+  hdos += sizeof(RegionIndcs);
+  //std::memcpy(&time, &(headerdata[hdos]), sizeof(Real));
+  hdos += sizeof(Real);
+  //std::memcpy(&dt, &(headerdata[hdos]), sizeof(Real));
+  hdos += sizeof(Real);
+  //std::memcpy(&ncycle, &(headerdata[hdos]), sizeof(int));
+  delete [] headerdata;
+
+  // allocate idlist buffer and read list of logical locations and cost
+  IOWrapperSizeT listsize = sizeof(LogicalLocation) + sizeof(float);
+  // TODO(@mhguo): set right number!
+  // TODO(@mhguo): consider whether you can utilize the idlist here
+  char *idlist = new char[listsize*nmb_tot];
+  if (global_variable::my_rank == 0) { // only the master process reads the ID list
+    if (resfile.Read_bytes(idlist,listsize,nmb_tot) !=
+        static_cast<unsigned int>(nmb_tot)) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Incorrect number of MeshBlocks in restart file; "
+                << "restart file is broken." << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
+
+  //--- STEP 3.  All ranks read data over all MeshBlocks (5D arrays) in parallel
+  // Similar to data read in ProblemGenerator constructor for restarts
+
+  // root process reads size of CC and FC data arrays from restart file
+  IOWrapperSizeT variablesize = 2*sizeof(IOWrapperSizeT);
+  char *variabledata = new char[variablesize];
+  if (global_variable::my_rank == 0) { // the master process reads the variables data
+    if (resfile.Read_bytes(variabledata, 1, variablesize) != variablesize) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Variable data size read from restart file is incorrect, "
+                << "restart file is broken." << std::endl;
+      exit(EXIT_FAILURE);
+    }
+  }
+#if MPI_PARALLEL_ENABLED
+  // then broadcast the datasize information
+  MPI_Bcast(variabledata, variablesize, MPI_CHAR, 0, MPI_COMM_WORLD);
+#endif
+
+  // Read number of CC variables and FC fields per MeshBlock in restart file
+  IOWrapperSizeT ccdata_cnt, fcdata_cnt;
+  hdos = 0;
+  std::memcpy(&ccdata_cnt, &(variabledata[hdos]), sizeof(IOWrapperSizeT));
+  hdos += sizeof(IOWrapperSizeT);
+  std::memcpy(&fcdata_cnt, &(variabledata[hdos]), sizeof(IOWrapperSizeT));
+  
+  // calculate total number of CC variables
+  hydro::Hydro* phydro = pmbp->phydro;
+  mhd::MHD* pmhd = pmbp->pmhd;
+  int nhydro_tot = 0, nmhd_tot = 0;
+  if (phydro != nullptr) {
+    nhydro_tot = phydro->nhydro + phydro->nscalars;
+  }
+  if (pmhd != nullptr) {
+    nmhd_tot = pmhd->nmhd + pmhd->nscalars;
+  }
+
+  // master process gets file offset
+  if (global_variable::my_rank == 0) {
+    headeroffset = resfile.GetPosition();
+  }
+#if MPI_PARALLEL_ENABLED
+  // then broadcasts it
+  MPI_Bcast(&headeroffset, sizeof(IOWrapperSizeT), MPI_CHAR, 0, MPI_COMM_WORLD);
+#endif
+
+  // allocate arrays for CC data
+  HostArray5D<Real> ccin("pgen-ccin", rst_nmb, (nhydro_tot + nmhd_tot), nout3, nout2,
+                         nout1);
+  if (ccin.size() != (rst_nmb*ccdata_cnt)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "CC data size read from restart file not equal to size "
+              << "of Hydro and MHD arrays, restart file is broken." << std::endl;
+    exit(EXIT_FAILURE);
+  }
+
+  // calculate max/min number of MeshBlocks across all ranks
+  int noutmbs_max = pm->nmblist[0];
+  int noutmbs_min = pm->nmblist[0];
+  for (int i=0; i<(global_variable::nranks); ++i) {
+    noutmbs_max = std::max(noutmbs_max,pm->nmblist[i]);
+    noutmbs_min = std::min(noutmbs_min,pm->nmblist[i]);
+  }
+
+  // allocate arrays for coarser data
+  DvceArray5D<Real> coarse_u0;
+  Kokkos::realloc(coarse_u0, rst_nmb, (nhydro_tot), nout3, nout2, nout1);
+
+  // initialize
+  auto &u0 = pmbp->phydro->u0;
+  int &nhydro = pmbp->phydro->nhydro;
+  int &nscalars = pmbp->phydro->nscalars;
+  par_for("c2f_init", DevExeSpace(),0,nmb1,ks,ke,js,je,is,ie,
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    u0(m,IDN,k,j,i) = 0.0;
+    u0(m,IM1,k,j,i) = 0.0;
+    u0(m,IM2,k,j,i) = 0.0;
+    u0(m,IM3,k,j,i) = 0.0;
+    u0(m,IEN,k,j,i) = 0.0;
+    // add passive scalars
+    for (int n=nhydro; n<(nhydro+nscalars); ++n) {
+      u0(m,n,k,j,i) = 0.0;
+    }
+  });
+
+  // TODO(@mhguo): only work for nmb=1 now!
+  // read CC data into host array, one MeshBlock at a time to avoid exceeding 2^31 limit
+  // on each read call for very large grids per MPI rank
+  int mygids = pm->gidslist[global_variable::my_rank];
+  int itrgids = mygids/8;
+  IOWrapperSizeT myoffset = headeroffset + (ccdata_cnt+fcdata_cnt)*itrgids*sizeof(Real);
+  for (int m=0;  m<rst_nmb; ++m) {
+    // every rank has a MB to read, so read collectively
+    // get ptr to cell-centered MeshBlock data
+    auto mbptr = Kokkos::subview(ccin, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
+                                Kokkos::ALL);
+    int mbcnt = mbptr.size();
+    //if (resfile.Read_Reals_at_all(ccin.data(), ccdata_size, 1, myoffset) != 1) {
+    if (resfile.Read_Reals_at_all(mbptr.data(), mbcnt, myoffset) != mbcnt) {
+      
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "CC data not read correctly from restart file, "
+                << "restart file is broken." << std::endl;
+      exit(EXIT_FAILURE);
+    }
+    myoffset += mbcnt*sizeof(Real);
+  }
+
+  // copy CC Hydro data to device
+  //std::cout << "### STEP 3: copy CC Hydro data to device" << std::endl;
+  
+  if (phydro != nullptr) {
+    DvceArray5D<Real>::HostMirror host_u0 = Kokkos::create_mirror(coarse_u0);
+    auto hst_slice = Kokkos::subview(ccin, Kokkos::ALL, std::make_pair(0,nhydro_tot),
+                                      Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+    Kokkos::deep_copy(host_u0, hst_slice);
+    Kokkos::deep_copy(coarse_u0, host_u0);
+  }
+  // Set initial conditions
+  int nitr = 1;
+  for (int itr=0; itr<nitr; itr++) {
+    int idmy = mygids%8;
+    par_for("c2f_set", DevExeSpace(),0,nmb1,ks,ke,js,je,is,ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      int idnow = idmy + m;
+      int i0 = indcs.nx1/2*(idnow%2);
+      int j0 = indcs.nx2/2*((idnow/2)%2);
+      int k0 = indcs.nx3/2*((idnow/4)%2);
+      int cm = 0;
+      int ck = (k-ks)/2+ks+k0;
+      int cj = (j-js)/2+js+j0;
+      int ci = (i-is)/2+is+i0;
+      u0(m,IDN,k,j,i) = coarse_u0(cm,IDN,ck,cj,ci);
+      u0(m,IM1,k,j,i) = coarse_u0(cm,IM1,ck,cj,ci);
+      u0(m,IM2,k,j,i) = coarse_u0(cm,IM2,ck,cj,ci);
+      u0(m,IM3,k,j,i) = coarse_u0(cm,IM3,ck,cj,ci);
+      u0(m,IEN,k,j,i) = coarse_u0(cm,IEN,ck,cj,ci);
+      // add passive scalars
+      for (int n=nhydro; n<(nhydro+nscalars); ++n) {
+        u0(m,n,k,j,i) += coarse_u0(cm,n,ck,cj,ci);
       }
     });
   }

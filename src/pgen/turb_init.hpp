@@ -548,7 +548,7 @@ TaskStatus TurbulenceInit::InitializeModes(int stage) {
 #endif
 
   // TODO(@mhguo): rm this!
-  std::cout<<"m0="<<m0<<"  m1="<<m1<<"  m2="<<m2<<"  m3="<<m3<<std::endl;
+  //std::cout<<"m0="<<m0<<"  m1="<<m1<<"  m2="<<m2<<"  m3="<<m3<<std::endl;
   Real m00 = m0;
   par_for("net_mom_2", DevExeSpace(), 0, nmb-1, ks, ke, js, je, is, ie,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -663,7 +663,7 @@ TaskStatus TurbulenceInit::InitializeModes(int stage) {
   // explicit solution of <sF . (v + sF dt)> = dedt
 
   Real dvol = 1.0/(nx1*nx2*nx3); // old: Lx*Ly*Lz/nx1/nx2/nx3;
-  // (@mhguo) It should be nx of mesh, not meshblocks!
+  // TODO(@mhguo): Note It should be nx of mesh, not meshblocks!
   auto &mesh_indcs = pmy_pack->pmesh->mesh_indcs;
   dvol = 1.0/(mesh_indcs.nx1*mesh_indcs.nx2*mesh_indcs.nx3);
   if (!(pmy_pack->pmesh->multilevel)) {
@@ -681,8 +681,8 @@ TaskStatus TurbulenceInit::InitializeModes(int stage) {
     s = m1/2./m0 + sqrt(m1*m1/4./m0/m0 + dedt/m0);
   }
 
-  // TODO(@mhguo): rm this!
-  std::cout<<"m00="<<m00<<"  m0="<<m0<<"  m1="<<m1<<"  s="<<s<<std::endl;
+  // TODO(@mhguo): rm this cout!
+  //std::cout<<"m00="<<m00<<"  m0="<<m0<<"  m1="<<m1<<"  s="<<s<<std::endl;
 
   // Now normalize new force array
   par_for("OU_process", DevExeSpace(),0,nmb-1,0,2,0,ncells3-1,0,ncells2-1,0,ncells1-1,
@@ -699,7 +699,7 @@ TaskStatus TurbulenceInit::InitializeModes(int stage) {
 TaskStatus TurbulenceInit::AddForcing(int stage) {
   // turb_flag == 1 : decaying turbulence
   // TODO(@mhguo): rm this!
-  std::cout << "turb_count=" << turb_count << std::endl;
+  //std::cout << "turb_count=" << turb_count << std::endl;
   if (turb_flag == 1) {
     if (turb_count == 0) {
       return TaskStatus::complete;
@@ -752,11 +752,12 @@ TaskStatus TurbulenceInit::AddForcing(int stage) {
       Real m2 = u(m,IM2,k,j,i);
       Real m3 = u(m,IM3,k,j,i);
 
-      if (m==0&&k==6&&j==6&&i==6) {
-        printf("den: %.6e\n",u(m,IDN,k,j,i));
-        printf("mom: %.6e %.6e %.6e\n",u(m,IM1,k,j,i),u(m,IM2,k,j,i),u(m,IM3,k,j,i));
-        printf("v: %.6e %.6e %.6e\n",v1,v2,v3);
-      }
+      // TODO(@mhguo): rm this cout!
+      //if (m==0&&k==6&&j==6&&i==6) {
+      //  printf("den: %.6e\n",u(m,IDN,k,j,i));
+      //  printf("mom: %.6e %.6e %.6e\n",u(m,IM1,k,j,i),u(m,IM2,k,j,i),u(m,IM3,k,j,i));
+      //  printf("v: %.6e %.6e %.6e\n",v1,v2,v3);
+      //}
 
       // u(m,IEN,k,j,i) += m1*v1 + m2*v2 + m3*v3 + 0.5*den*(v1*v1+v2*v2+v3*v3);
       // u(m,IEN,k,j,i) += m1*v1 + m2*v2 + m3*v3 + 0.25*den*(v1*v1+v2*v2+v3*v3);
