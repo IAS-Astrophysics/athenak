@@ -1384,27 +1384,56 @@ void CoarseToFine(Mesh *pm, ParameterInput *pin) {
   
   // Set initial conditions
   int idmy = mygids%rst_n;
-  par_for("c2f_set", DevExeSpace(),0,nmb1,ks,ke,js,je,is,ie,
-  KOKKOS_LAMBDA(int m, int k, int j, int i) {
-    int idnow = idmy + m;
-    int i0 = indcs.nx1/2*(idnow%2);
-    int j0 = indcs.nx2/2*((idnow/2)%2);
-    int k0 = indcs.nx3/2*((idnow/4)%2);
-    int cm = m/rst_n;
-    int ck = (k-ks)/2+ks+k0;
-    int cj = (j-js)/2+js+j0;
-    int ci = (i-is)/2+is+i0;
-    u0(m,IDN,k,j,i) = coarse_u0(cm,IDN,ck,cj,ci);
-    u0(m,IM1,k,j,i) = coarse_u0(cm,IM1,ck,cj,ci);
-    u0(m,IM2,k,j,i) = coarse_u0(cm,IM2,ck,cj,ci);
-    u0(m,IM3,k,j,i) = coarse_u0(cm,IM3,ck,cj,ci);
-    u0(m,IEN,k,j,i) = coarse_u0(cm,IEN,ck,cj,ci);
-    // add passive scalars
-    for (int n=nhydro; n<(nhydro+nscalars); ++n) {
-      u0(m,n,k,j,i) += coarse_u0(cm,n,ck,cj,ci);
-    }
-  });
+  int rst_c2f = pin->GetOrAddInteger("problem", "rst_c2f", 0);
+  if (rst_c2f==0) {
+    par_for("c2f_set", DevExeSpace(),0,nmb1,ks,ke,js,je,is,ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      int idnow = idmy + m;
+      int i0 = indcs.nx1/2*(idnow%2);
+      int j0 = indcs.nx2/2*((idnow/2)%2);
+      int k0 = indcs.nx3/2*((idnow/4)%2);
+      int cm = m/rst_n;
+      int ck = (k-ks)/2+ks+k0;
+      int cj = (j-js)/2+js+j0;
+      int ci = (i-is)/2+is+i0;
+      for (int n=0; n<(nhydro+nscalars); ++n) {
+        u0(m,n,k,j,i) = coarse_u0(cm,n,ck,cj,ci);
+      }
+    });
+  } else {
+    par_for("c2f_set", DevExeSpace(),0,nmb1,ks,ke,js,je,is,ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      int idnow = idmy + m;
+      int i0 = indcs.nx1/2*(idnow%2);
+      int j0 = indcs.nx2/2*((idnow/2)%2);
+      int k0 = indcs.nx3/2*((idnow/4)%2);
+      int cm = m/rst_n;
+      int ck = (k-ks)/2+ks+k0;
+      int cj = (j-js)/2+js+j0;
+      int ci = (i-is)/2+is+i0;
+      Real sk = ((k-ks)%2>0) ? 1.0:-1.0;
+      Real sj = ((j-js)%2>0) ? 1.0:-1.0;
+      Real si = ((i-is)%2>0) ? 1.0:-1.0;
+      for (int n=0; n<(nhydro+nscalars); ++n) {
+        int cn = n;
+        // calculate gradient using the min-mod limiter
+        Real dl = coarse_u0(cm,cn,ck,cj,ci  ) - coarse_u0(cm,cn,ck,cj,ci-1);
+        Real dr = coarse_u0(cm,cn,ck,cj,ci+1) - coarse_u0(cm,cn,ck,cj,ci  );
+        Real dvar1 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
 
+        dl = coarse_u0(cm,cn,ck,cj  ,ci) - coarse_u0(cm,cn,ck,cj-1,ci);
+        dr = coarse_u0(cm,cn,ck,cj+1,ci) - coarse_u0(cm,cn,ck,cj  ,ci);
+        Real dvar2 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
+
+        dl = coarse_u0(cm,cn,ck  ,cj,ci) - coarse_u0(cm,cn,ck-1,cj,ci);
+        dr = coarse_u0(cm,cn,ck+1,cj,ci) - coarse_u0(cm,cn,ck  ,cj,ci);
+        Real dvar3 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
+
+        u0(m,n,k,j,i) = coarse_u0(cm,n,ck,cj,ci) + si*dvar1 + sj*dvar2 + sk*dvar3;
+      }
+    });
+  }
+  
   resfile.Close();
   delete pinput;
   return;
