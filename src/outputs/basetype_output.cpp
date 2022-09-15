@@ -76,52 +76,62 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
 
   // hydro (lab-frame) density
   if (out_params.variable.compare("hydro_u_d") == 0 ||
+      out_params.variable.compare("hydro_u_h") == 0 ||
       out_params.variable.compare("hydro_u") == 0) {
     outvars.emplace_back("dens",0,&(pm->pmb_pack->phydro->u0));
   }
 
   // hydro (rest-frame) density
   if (out_params.variable.compare("hydro_w_d") == 0 ||
+      out_params.variable.compare("hydro_w_h") == 0 ||
       out_params.variable.compare("hydro_w") == 0) {
     outvars.emplace_back("dens",0,&(pm->pmb_pack->phydro->w0));
   }
 
   // hydro components of momentum
   if (out_params.variable.compare("hydro_u_m1") == 0 ||
+      out_params.variable.compare("hydro_u_h") == 0 ||
       out_params.variable.compare("hydro_u") == 0) {
     outvars.emplace_back("mom1",1,&(pm->pmb_pack->phydro->u0));
   }
   if (out_params.variable.compare("hydro_u_m2") == 0 ||
+      out_params.variable.compare("hydro_u_h") == 0 ||
       out_params.variable.compare("hydro_u") == 0) {
     outvars.emplace_back("mom2",2,&(pm->pmb_pack->phydro->u0));
   }
   if (out_params.variable.compare("hydro_u_m3") == 0 ||
+      out_params.variable.compare("hydro_u_h") == 0 ||
       out_params.variable.compare("hydro_u") == 0) {
     outvars.emplace_back("mom3",3,&(pm->pmb_pack->phydro->u0));
   }
 
   // hydro components of velocity
   if (out_params.variable.compare("hydro_w_vx") == 0 ||
+      out_params.variable.compare("hydro_w_h") == 0 ||
       out_params.variable.compare("hydro_w") == 0) {
     outvars.emplace_back("velx",1,&(pm->pmb_pack->phydro->w0));
   }
   if (out_params.variable.compare("hydro_w_vy") == 0 ||
+      out_params.variable.compare("hydro_w_h") == 0 ||
       out_params.variable.compare("hydro_w") == 0) {
     outvars.emplace_back("vely",2,&(pm->pmb_pack->phydro->w0));
   }
   if (out_params.variable.compare("hydro_w_vz") == 0 ||
+      out_params.variable.compare("hydro_w_h") == 0 ||
       out_params.variable.compare("hydro_w") == 0) {
     outvars.emplace_back("velz",3,&(pm->pmb_pack->phydro->w0));
   }
 
   // hydro total energy
   if (out_params.variable.compare("hydro_u_e") == 0 ||
+      out_params.variable.compare("hydro_u_h") == 0 ||
       out_params.variable.compare("hydro_u") == 0) {
     outvars.emplace_back("ener",4,&(pm->pmb_pack->phydro->u0));
   }
 
   // hydro internal energy or temperature
   if (out_params.variable.compare("hydro_w_e") == 0 ||
+      out_params.variable.compare("hydro_w_h") == 0 ||
       out_params.variable.compare("hydro_w") == 0) {
     outvars.emplace_back("eint",4,&(pm->pmb_pack->phydro->w0));
   }
@@ -158,6 +168,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
 
   // mhd (lab-frame) density
   if (out_params.variable.compare("mhd_u_d") == 0 ||
+      out_params.variable.compare("mhd_u_m") == 0 ||
       out_params.variable.compare("mhd_u") == 0 ||
       out_params.variable.compare("mhd_u_bcc") == 0) {
     outvars.emplace_back("dens",0,&(pm->pmb_pack->pmhd->u0));
@@ -165,6 +176,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
 
   // mhd (rest-frame) density
   if (out_params.variable.compare("mhd_w_d") == 0 ||
+      out_params.variable.compare("mhd_w_m") == 0 ||
       out_params.variable.compare("mhd_w") == 0 ||
       out_params.variable.compare("mhd_w_bcc") == 0) {
     outvars.emplace_back("dens",0,&(pm->pmb_pack->pmhd->w0));
@@ -172,16 +184,19 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
 
   // mhd components of momentum
   if (out_params.variable.compare("mhd_u_m1") == 0 ||
+      out_params.variable.compare("mhd_u_m") == 0 ||
       out_params.variable.compare("mhd_u") == 0 ||
       out_params.variable.compare("mhd_u_bcc") == 0) {
     outvars.emplace_back("mom1",1,&(pm->pmb_pack->pmhd->u0));
   }
   if (out_params.variable.compare("mhd_u_m2") == 0 ||
+      out_params.variable.compare("mhd_u_m") == 0 ||
       out_params.variable.compare("mhd_u") == 0 ||
       out_params.variable.compare("mhd_u_bcc") == 0) {
     outvars.emplace_back("mom2",2,&(pm->pmb_pack->pmhd->u0));
   }
   if (out_params.variable.compare("mhd_u_m3") == 0 ||
+      out_params.variable.compare("mhd_u_m") == 0 ||
       out_params.variable.compare("mhd_u") == 0 ||
       out_params.variable.compare("mhd_u_bcc") == 0) {
     outvars.emplace_back("mom3",3,&(pm->pmb_pack->pmhd->u0));
@@ -189,16 +204,19 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
 
   // mhd components of velocity
   if (out_params.variable.compare("mhd_w_vx") == 0 ||
+      out_params.variable.compare("mhd_w_m") == 0 ||
       out_params.variable.compare("mhd_w") == 0 ||
       out_params.variable.compare("mhd_w_bcc") == 0) {
     outvars.emplace_back("velx",1,&(pm->pmb_pack->pmhd->w0));
   }
   if (out_params.variable.compare("mhd_w_vy") == 0 ||
+      out_params.variable.compare("mhd_w_m") == 0 ||
       out_params.variable.compare("mhd_w") == 0 ||
       out_params.variable.compare("mhd_w_bcc") == 0) {
     outvars.emplace_back("vely",2,&(pm->pmb_pack->pmhd->w0));
   }
   if (out_params.variable.compare("mhd_w_vz") == 0 ||
+      out_params.variable.compare("mhd_w_m") == 0 ||
       out_params.variable.compare("mhd_w") == 0 ||
       out_params.variable.compare("mhd_w_bcc") == 0) {
     outvars.emplace_back("velz",3,&(pm->pmb_pack->pmhd->w0));
@@ -206,6 +224,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
 
   // mhd total energy
   if (out_params.variable.compare("mhd_u_e") == 0 ||
+      out_params.variable.compare("mhd_u_m") == 0 ||
       out_params.variable.compare("mhd_u") == 0 ||
       out_params.variable.compare("mhd_u_bcc") == 0) {
     outvars.emplace_back("ener",4,&(pm->pmb_pack->pmhd->u0));
@@ -213,6 +232,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
 
   // mhd internal energy or temperature
   if (out_params.variable.compare("mhd_w_e") == 0 ||
+      out_params.variable.compare("mhd_w_m") == 0 ||
       out_params.variable.compare("mhd_w") == 0 ||
       out_params.variable.compare("mhd_w_bcc") == 0) {
     outvars.emplace_back("eint",4,&(pm->pmb_pack->pmhd->w0));
