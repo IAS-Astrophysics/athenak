@@ -59,7 +59,6 @@ add_executable(
         mesh/mesh_refinement.cpp
         
         geodesic-grid/geodesic_grid.cpp
-        geodesic-grid/spherical_grid.cpp
 
         mhd/mhd.cpp
         mhd/mhd_corner_e.cpp
@@ -104,7 +103,6 @@ add_executable(
 
         units/units.cpp
         
-        utils/lagrange_interp.cpp
         utils/change_rundir.cpp
         utils/show_config.cpp
 )

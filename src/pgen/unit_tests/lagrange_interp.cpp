@@ -21,9 +21,7 @@
 #include "hydro/hydro.hpp"
 #include "pgen/pgen.hpp"
 #include "z4c/z4c.hpp"
-#include "utils/lagrange_interp.hpp"
-#include "geodesic-grid/spherical_grid.hpp"
-
+#include "utils/interpolator.hpp"
 //----------------------------------------------------------------------------------------
 //! \fn ProblemGenerator::UserProblem_()
 //! \brief Problem Generator for single puncture
@@ -65,45 +63,37 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
     Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
-    // test the InterpToSphere using random 3d sin waves
-    u0(m,IDN,k,j,i) = 1.0 + 0.2*std::sin(5.0*M_PI*(x1v))*std::sin(3.0*M_PI*(x2v))*std::sin(3.0*M_PI*(x3v));
+    u0(m,IDN,k,j,i) = 1.0 + 1.2*std::sin(5.0*M_PI*(x1v))*std::sin(3.0*M_PI*(x2v))*std::sin(3.0*M_PI*(x3v));
   });
+  
+  // u0.template modify<HostMemSpace>();
+  // u0.template sync<DevExeSpace>();
 
-  int nlev = 5;
-  bool rotate_sphere = true;
-  bool fluxes = false;
-  Real origin[3] = {0.,0.,0.};
-  SphericalGrid S = SphericalGrid(pmbp,nlev,origin, rotate_sphere,fluxes);
+  int m = 0;
+  Real &x1min = size.d_view(m).x1min;
+  Real &x1max = size.d_view(m).x1max;
+  Real &x2min = size.d_view(m).x2min;
+  Real &x2max = size.d_view(m).x2max;
+  Real &x3min = size.d_view(m).x3min;
+  Real &x3max = size.d_view(m).x3max;
+  int nx1 = indcs.nx1;
+  int nx2 = indcs.nx2;
+  int nx3 = indcs.nx3;
 
-  // set to constant radius
-  Real radius = 0.2;
-  S.SetRadius(radius);
-  S.CalculateIndex();
+  Real x_interp[3];
+  x_interp[0] = 0.1;
+  x_interp[1] = 0.2;
+  x_interp[2] = 0.3;
+  
+  Real value = Interpolate(pmbp, IDN, u0, x_interp);
 
-  S.InterpToSphere(u0);
-  int test_ind = 127;
+  std::cout << size.h_view(m).dx1 << std::endl;
 
-  std::cout << "here" << std::endl;
-  std::cout << S.cartcoord.h_view(test_ind,0) << "    " << S.cartcoord.h_view(test_ind,1) << "    " << S.cartcoord.h_view(test_ind,2) << std::endl; 
-  std::cout << S.interp_indices.h_view(test_ind,0) << "   " << S.interp_indices.h_view(test_ind,1) << "    " << S.interp_indices.h_view(test_ind,2) << "    " << S.interp_indices.h_view(test_ind,3) << std::endl; 
+  std::cout << CellCenterX(0, indcs.nx1, x1min, x1max) << std::endl;
 
-  std::cout << "interpolated value  " << S.intensity.h_view(test_ind) << std::endl;
-  std::cout << "analytical value  " << 1.0 + 0.2*std::sin(5.0*M_PI*(S.cartcoord.h_view(test_ind,0)))*
-    std::sin(3.0*M_PI*(S.cartcoord.h_view(test_ind,1)))*std::sin(3.0*M_PI*(S.cartcoord.h_view(test_ind,2))) << std::endl;
+  std::cout << "expected value  " << 1.0 + 1.2*std::sin(5.0*M_PI*(x_interp[0]))*std::sin(3.0*M_PI*(x_interp[1]))*std::sin(3.0*M_PI*(x_interp[2])) << std::endl; // 
+  
+  std::cout << "interpolated value " << value << std::endl;
 
-
-
-  /*
-  std::ofstream spherical_grid_output;
-  spherical_grid_output.open ("/Users/hawking/Desktop/research/gr/athenak_versions/athenak_geo_mesh/build/spherical_grid_output.txt", std::ios_base::app);
-  for (int i=0;i<A.nangles;++i){
-    spherical_grid_output << A.cartcoord.h_view(i,0) << "\t" << A.cartcoord.h_view(i,1) << "\t" << A.cartcoord.h_view(i,2) << "\t" << A.interp_indices.h_view(i,0) 
-    << "\t" << A.interp_indices.h_view(i,1) << "\t" << A.interp_indices.h_view(i,2) << "\t" << A.interp_indices.h_view(i,3) 
-    << "\t" << A.polarcoord.h_view(i,0) << "\t" << A.polarcoord.h_view(i,1) <<"\n";
-  }
-  spherical_grid_output.close();
-
-  std::cout<<"Unit Test for Spherical Grid Implementation Initialized."<<std::endl;
-  */
   return;
 }
