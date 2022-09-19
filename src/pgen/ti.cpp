@@ -158,7 +158,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   //int rst_level = pin->GetOrAddInteger("problem", "rst_level", 0);
   if (rst_flag) {
     int rst_type = pin->GetOrAddInteger("problem","rst_type",0);
-    if (rst_type==1) {
+    if (rst_type==0) {
+      LoadData(pmy_mesh_, pin);
+    }
+    else if (rst_type==1) {
       CoarseToFine(pmy_mesh_, pin);
     } else {
       FineToCoarse(pmy_mesh_, pin);
@@ -510,7 +513,9 @@ void LoadData(Mesh *pm, ParameterInput *pin) {
   hydro::Hydro* phydro = pmbp->phydro;
   int nhydro_tot = 0, nmhd_tot = 0;
   if (phydro != nullptr) {
-    nhydro_tot = phydro->nhydro + phydro->nscalars;
+    int nhydro = phydro->nhydro;
+    int nscalars = pinput->GetOrAddInteger("hydro","nscalars",0);
+    nhydro_tot = nhydro + nscalars;
   }
 
   // master process gets file offset
@@ -577,9 +582,11 @@ void LoadData(Mesh *pm, ParameterInput *pin) {
   // copy CC Hydro data to device
   if (phydro != nullptr) {
     DvceArray5D<Real>::HostMirror host_u0 = Kokkos::create_mirror(phydro->u0);
+    auto u0_slice = Kokkos::subview(host_u0, Kokkos::ALL, std::make_pair(0,nhydro_tot),
+                                    Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
     auto hst_slice = Kokkos::subview(ccin, Kokkos::ALL, std::make_pair(0,nhydro_tot),
-                                      Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
-    Kokkos::deep_copy(host_u0, hst_slice);
+                                     Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+    Kokkos::deep_copy(u0_slice, hst_slice);
     Kokkos::deep_copy(phydro->u0, host_u0);
   }
 

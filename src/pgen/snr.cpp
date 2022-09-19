@@ -234,15 +234,17 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         } else {
           prim = pres/((eos.gamma - 1.0)*den);
         }*/
-        u0(m,IDN,k,j,i) = den;
-        u0(m,IM1,k,j,i) = 0.0;
-        u0(m,IM2,k,j,i) = 0.0;
-        u0(m,IM3,k,j,i) = 0.0;
-        u0(m,IEN,k,j,i) = prim;
+        if (add_snr) {
+          u0(m,IDN,k,j,i) = den;
+          u0(m,IM1,k,j,i) = 0.0;
+          u0(m,IM2,k,j,i) = 0.0;
+          u0(m,IM3,k,j,i) = 0.0;
+          u0(m,IEN,k,j,i) = prim;
+        }
         // add passive scalars
         if (nscalars > 3) u0(m,nhydro+3,k,j,i) = u0(m,IDN,k,j,i);
       } else {
-        if (add_snr) {
+        if (!rst_flag) {
           u0(m,IDN,k,j,i) = damb;
           u0(m,IM1,k,j,i) = 0.0;
           u0(m,IM2,k,j,i) = 0.0;
@@ -860,7 +862,9 @@ void LoadData(Mesh *pm, ParameterInput *pin) {
   hydro::Hydro* phydro = pmbp->phydro;
   int nhydro_tot = 0, nmhd_tot = 0;
   if (phydro != nullptr) {
-    nhydro_tot = phydro->nhydro + phydro->nscalars;
+    int nhydro = phydro->nhydro;
+    int nscalars = pinput->GetOrAddInteger("hydro","nscalars",0);
+    nhydro_tot = nhydro + nscalars;
   }
 
   // master process gets file offset
@@ -927,9 +931,11 @@ void LoadData(Mesh *pm, ParameterInput *pin) {
   // copy CC Hydro data to device
   if (phydro != nullptr) {
     DvceArray5D<Real>::HostMirror host_u0 = Kokkos::create_mirror(phydro->u0);
+    auto u0_slice = Kokkos::subview(host_u0, Kokkos::ALL, std::make_pair(0,nhydro_tot),
+                                    Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
     auto hst_slice = Kokkos::subview(ccin, Kokkos::ALL, std::make_pair(0,nhydro_tot),
-                                      Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
-    Kokkos::deep_copy(host_u0, hst_slice);
+                                     Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+    Kokkos::deep_copy(u0_slice, hst_slice);
     Kokkos::deep_copy(phydro->u0, host_u0);
   }
 
