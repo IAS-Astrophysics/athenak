@@ -641,7 +641,7 @@ void UserHistOutput(HistoryData *pdata, Mesh *pm) {
     Real dv_wnm  = (temp>=t_warm && temp<t_ion)? vol : 0.0;
     Real dv_ig   = (temp>=t_ion && temp<t_hot)? vol : 0.0;
     Real dv_hot  = (temp>=t_hot)? vol : 0.0;
-    Real dv_sh   = (temp<t_hot && velr>v_shell)? vol : 0.0;
+    Real dv_sh   = (temp<t_hot && vtot>v_shell)? vol : 0.0;
     Real dv_sb   = (temp>=t_hot || vtot>v_bubble)? vol : 0.0;
     Real dm_cnm  = dv_cnm*dens;
     Real dm_unm  = dv_unm*dens;
