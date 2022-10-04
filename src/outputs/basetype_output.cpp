@@ -374,18 +374,15 @@ void BaseTypeOutput::LoadOutputData(Mesh *pm) {
     }
 
     // set coordinate geometry information for MB
-    Real x1i = CellCenterX(ois - indcs.is, indcs.nx1, size.h_view(m).x1min,
-                           size.h_view(m).x1max);
-    Real x2i = CellCenterX(ojs - indcs.js, indcs.nx2, size.h_view(m).x2min,
-                           size.h_view(m).x2max);
-    Real x3i = CellCenterX(oks - indcs.ks, indcs.nx3, size.h_view(m).x3min,
-                           size.h_view(m).x3max);
-    Real dx1 = size.h_view(m).dx1;
-    Real dx2 = size.h_view(m).dx2;
-    Real dx3 = size.h_view(m).dx3;
+    Real x1min = size.h_view(m).x1min;
+    Real x1max = size.h_view(m).x1max;
+    Real x2min = size.h_view(m).x2min;
+    Real x2max = size.h_view(m).x2max;
+    Real x3min = size.h_view(m).x3min;
+    Real x3max = size.h_view(m).x3max;
 
     int id = pm->pmb_pack->pmb->mb_gid.h_view(m);
-    outmbs.emplace_back(id,ois,oie,ojs,oje,oks,oke,x1i,x2i,x3i,dx1,dx2,dx3);
+    outmbs.emplace_back(id,ois,oie,ojs,oje,oks,oke,x1min,x1max,x2min,x2max,x3min,x3max);
   }
 
   noutmbs_min = outmbs.size();

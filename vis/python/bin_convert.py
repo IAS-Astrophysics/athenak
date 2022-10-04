@@ -1,5 +1,7 @@
 """
-Functions to convert bin -> athdf(xdmf) with mesh refinement support.
+Functions to:
+  (1) convert bin --> Python dictionary
+  (2) convert Python dictionary --> athdf(xdmf) files
 
 This module contains a collection of helper functions for reading and
 writing athena file data formats. More information is provided in the
@@ -79,6 +81,9 @@ import h5py
 def read_binary(filename):
     """
     Reads a bin file from filename to dictionary.
+
+    Originally written by Lev Arzamasskiy (leva@ias.edu) on 11/15/2021
+    Updated to support mesh refinement by George Wong (gnwong@ias.edu) on 01/27/2022
 
     args:
       filename - string
@@ -224,8 +229,6 @@ def write_athdf(filename, fdata, varsize_bytes=4, locsize_bytes=8):
     """
     Writes an athdf (hdf5) file from a loaded python filedata object.
 
-    (unimplemented) should save various file data information as attributes.
-
     args:
       filename      - string
           filename for output athdf (hdf5) file
@@ -253,7 +256,8 @@ def write_athdf(filename, fdata, varsize_bytes=4, locsize_bytes=8):
     vars_without_b = [v for v in fdata['var_names'] if 'bcc' not in v]
     vars_only_b = [v for v in fdata['var_names'] if v not in vars_without_b]
 
-    B = np.zeros((3, nmb, nx3, nx2, nx1))
+    if len(vars_only_b) > 0:
+        B = np.zeros((3, nmb, nx3, nx2, nx1))
     Levels = np.zeros(nmb)
     LogicalLocations = np.zeros((nmb, 3))
     uov = np.zeros((len(vars_without_b), nmb, nx3, nx2, nx1))
@@ -274,16 +278,20 @@ def write_athdf(filename, fdata, varsize_bytes=4, locsize_bytes=8):
         LogicalLocations[mb] = logical[:3]
         Levels[mb] = logical[-1]
         geometry = fdata['mb_geometry'][mb]
-        x1f[mb] = geometry[0] + (np.arange(nx1+1)-0.5)*geometry[3]
-        x1v[mb] = geometry[0] + np.arange(nx1)*geometry[3]
-        x2f[mb] = geometry[1] + (np.arange(nx2+1)-0.5)*geometry[4]
-        x2v[mb] = geometry[1] + np.arange(nx2)*geometry[4]
-        x3f[mb] = geometry[2] + (np.arange(nx3+1)-0.5)*geometry[5]
-        x3v[mb] = geometry[2] + np.arange(nx3)*geometry[5]
+        x1f[mb] = np.linspace(geometry[0], geometry[1], nx1+1)
+        x1v[mb] = 0.5*(x1f[mb][1:]+x1f[mb][:-1])
+        x2f[mb] = np.linspace(geometry[2], geometry[3], nx2+1)
+        x2v[mb] = 0.5*(x2f[mb][1:]+x2f[mb][:-1])
+        x3f[mb] = np.linspace(geometry[4], geometry[5], nx3+1)
+        x3v[mb] = 0.5*(x3f[mb][1:]+x3f[mb][:-1])
 
-    # write file
+    # Set Attributes
     utf8_type = h5py.string_dtype('utf-8', 30)
-    ascii_type = h5py.string_dtype('ascii', 30)
+    dataset_names = [np.array('uov'.encode("utf-8"), dtype=utf8_type)]
+    dataset_nvars = [len(vars_without_b)]
+    if len(vars_only_b) > 0:
+        dataset_names.append(np.array('B'.encode("utf-8"), dtype=utf8_type))
+        dataset_nvars.append(len(vars_only_b))
     hfp = h5py.File(filename, 'w')
     hfp.attrs['Time'] = fdata['time']
     hfp.attrs['NumCycles'] = fdata['cycle']
@@ -295,11 +303,13 @@ def write_athdf(filename, fdata, varsize_bytes=4, locsize_bytes=8):
     hfp.attrs['RootGridX1'] = [fdata['x1min'], fdata['x1max'], 1.0]
     hfp.attrs['RootGridX2'] = [fdata['x2min'], fdata['x2max'], 1.0]
     hfp.attrs['RootGridX3'] = [fdata['x3min'], fdata['x3max'], 1.0]
-    hfp.attrs['DatasetNames'] = [np.array('uov'.encode("utf-8"), dtype=ascii_type)]
-    hfp.attrs['NumVariables'] = [len(fdata['var_names'])]
-    hfp.attrs['VariableNames'] = [np.array(i.encode("utf-8"), dtype=ascii_type)
+    hfp.attrs['DatasetNames'] = dataset_names
+    hfp.attrs['NumVariables'] = dataset_nvars
+    hfp.attrs['VariableNames'] = [np.array(i.encode("utf-8"), dtype=utf8_type)
                                   for i in fdata['var_names']]
-    hfp.create_dataset('B', data=B, dtype=varfmt)
+    # Create Datasets
+    if len(vars_only_b) > 0:
+        hfp.create_dataset('B', data=B, dtype=varfmt)
     hfp.create_dataset('Levels', data=Levels, dtype='>i4')
     hfp.create_dataset('LogicalLocations', data=LogicalLocations, dtype='>i8')
     hfp.create_dataset('uov', data=uov, dtype=varfmt)
