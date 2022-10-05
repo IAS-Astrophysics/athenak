@@ -22,6 +22,8 @@
 #include "pgen/pgen.hpp"
 #include "z4c/z4c.hpp"
 #include "utils/interpolator.hpp"
+#include "utils/lagrange_interpolator.hpp"
+
 //----------------------------------------------------------------------------------------
 //! \fn ProblemGenerator::UserProblem_()
 //! \brief Problem Generator for single puncture
@@ -81,19 +83,32 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   int nx3 = indcs.nx3;
 
   Real x_interp[3];
-  x_interp[0] = 0.1;
-  x_interp[1] = 0.2;
-  x_interp[2] = 0.3;
+  x_interp[0] = 0.1135;
+  x_interp[1] = 0.5123;
+  x_interp[2] = 0.1134;
+
   
-  Real value = Interpolate(pmbp, IDN, u0, x_interp);
-
-  std::cout << size.h_view(m).dx1 << std::endl;
-
-  std::cout << CellCenterX(0, indcs.nx1, x1min, x1max) << std::endl;
+  LagrangeInterpolator *S = nullptr;
+  S = new LagrangeInterpolator(pmbp,x_interp);
+  Real value = S->Interpolate(u0, IDN);
 
   std::cout << "expected value  " << 1.0 + 1.2*std::sin(5.0*M_PI*(x_interp[0]))*std::sin(3.0*M_PI*(x_interp[1]))*std::sin(3.0*M_PI*(x_interp[2])) << std::endl; // 
   
   std::cout << "interpolated value " << value << std::endl;
+
+  // reset to a different point
+
+  Real x_interp2[3];
+  x_interp2[0] = 0.2135;
+  x_interp2[1] = 0.5123;
+  x_interp2[2] = 0.3134;
+
+  Real value2 = S->ResetPointAndInterpolate(u0, IDN, x_interp2);
+
+  std::cout << "expected value after reset  " << 1.0 + 1.2*std::sin(5.0*M_PI*(x_interp2[0]))*std::sin(3.0*M_PI*(x_interp2[1]))*std::sin(3.0*M_PI*(x_interp2[2])) << std::endl; // 
+  
+  std::cout << "interpolated value after reset  " << value2 << std::endl;
+
 
   return;
 }
