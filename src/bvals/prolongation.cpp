@@ -555,51 +555,6 @@ void BoundaryValuesFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb
   } else {
     auto &rbuf = recv_buf;
 
-/***
-{int m=5;
-std::cout << std::endl<< "coarseB in MB="<<m <<std::endl;
-for (int k=2; k<=7; ++k) {
-for (int j=2; j<=7; ++j) {
-for (int i=1; i<=2; ++i) {
-  int fi = (i - indcs.cis)*2 + indcs.is;  // fine i
-  int fj = (j - indcs.cjs)*2 + indcs.js;  // fine j
-  int fk = (k - indcs.cks)*2 + indcs.ks;  // fine k
-  Real b1f = 0.25*(b.x1f(m,fk,fj,fi) + b.x1f(m,fk,fj+1,fi)
-                   +b.x1f(m,fk+1,fj,fi) + b.x1f(m,fk+1,fj+1,fi));
-std::cout<< std::scientific << std::setprecision(12) <<"k,j,i= "<<k<<" "<<j<<" "<<i<<"  cb.x1f= "<<cb.x1f(m,k,j,i)<<"  "<<b1f<<std::endl;
-}}}
-for (int k=2; k<=7; ++k) {
-for (int j=2; j<=8; ++j) {
-for (int i=1; i<=1; ++i) {
-  int fi = (i - indcs.cis)*2 + indcs.is;  // fine i
-  int fj = (j - indcs.cjs)*2 + indcs.js;  // fine j
-  int fk = (k - indcs.cks)*2 + indcs.ks;  // fine k
-  Real b2f = 0.25*(b.x2f(m,fk,fj,fi) + b.x2f(m,fk,fj,fi+1)
-                   +b.x2f(m,fk+1,fj,fi) + b.x2f(m,fk+1,fj,fi+1));
-std::cout<< std::scientific << std::setprecision(12) <<"k,j,i= "<<k<<" "<<j<<" "<<i<<"  cb.x2f= "<<cb.x2f(m,k,j,i)<<"  "<<b2f<<std::endl;
-}}}
-for (int k=2; k<=8; ++k) {
-for (int j=2; j<=7; ++j) {
-for (int i=1; i<=1; ++i) {
-  int fi = (i - indcs.cis)*2 + indcs.is;  // fine i
-  int fj = (j - indcs.cjs)*2 + indcs.js;  // fine j
-  int fk = (k - indcs.cks)*2 + indcs.ks;  // fine k
-  Real b3f = 0.25*(b.x3f(m,fk,fj,fi) + b.x3f(m,fk,fj,fi+1)
-                   +b.x3f(m,fk,fj+1,fi) + b.x3f(m,fk,fj+1,fi+1));
-std::cout<< std::scientific << std::setprecision(12) <<"k,j,i= "<<k<<" "<<j<<" "<<i<<"  cb.x3f= "<<cb.x3f(m,k,j,i)<<"  "<<b3f<<std::endl;
-}}}
-for (int k=2; k<=6; ++k) {
-for (int j=2; j<=6; ++j) {
-for (int i=1; i<=1; ++i) {
-Real divb1 = (cb.x1f(m,k,j,i+1) - cb.x1f(m,k,j,i));
-Real divb2 = (cb.x2f(m,k,j+1,i) - cb.x2f(m,k,j,i));
-Real divb3 = (cb.x3f(m,k+1,j,i) - cb.x3f(m,k,j,i));
-std::cout<< std::scientific << std::setprecision(12) <<"k,j,i= "<<k<<" "<<j<<" "<<i<<"  divb1/2/3= "<<divb1<<"  "<<divb2<<"  "<<divb3<<"  divb= "<<(divb1+divb2+divb3)<<std::endl;
-}}}
-}
-
-***/
-
     // Prolongate b.x1f/b.x2f/b.x3f at all shared coarse/fine cell edges
     // equivalent to code for 3D in MeshRefinement::ProlongateSharedFieldX1/2/3()
 
@@ -647,12 +602,6 @@ std::cout<< std::scientific << std::setprecision(12) <<"k,j,i= "<<k<<" "<<j<<" "
               b.x1f(m,fk  ,fj+1,fi) = cb.x1f(m,k,j,i) + dvar2 - dvar3;
               b.x1f(m,fk+1,fj  ,fi) = cb.x1f(m,k,j,i) - dvar2 + dvar3;
               b.x1f(m,fk+1,fj+1,fi) = cb.x1f(m,k,j,i) + dvar2 + dvar3;
-/****
-if (n==0 && m==5) {
-std::cout << "dvar2/3= "<<dvar2 << "  " << dvar3 << std::endl;
-std::cout <<"fk,fj,fi= "<<fk<<" "<<fj<<" "<<fi<<"  b.x1f= "<<b.x1f(m,fk,fj,fi)<<"  b.x1f_jp1= "<<b.x1f(m,fk,fj+1,fi)<<"  b.x1f_kp1= "<<b.x1f(m,fk+1,fj,fi)<<"  b.x1f_jkp1= "<<b.x1f(m,fk+1,fj+1,fi)<<std::endl;
-}
-****/
             });
           });
 
@@ -680,11 +629,6 @@ std::cout <<"fk,fj,fi= "<<fk<<" "<<fj<<" "<<fi<<"  b.x1f= "<<b.x1f(m,fk,fj,fi)<<
               b.x2f(m,fk  ,fj,fi+1) = cb.x2f(m,k,j,i) + dvar1 - dvar3;
               b.x2f(m,fk+1,fj,fi  ) = cb.x2f(m,k,j,i) - dvar1 + dvar3;
               b.x2f(m,fk+1,fj,fi+1) = cb.x2f(m,k,j,i) + dvar1 + dvar3;
-/****
-if (n==0 && m==5) {
-std::cout <<"fk,fj,fi= "<<fk<<" "<<fj<<" "<<fi<<"  b.x2f= "<<b.x2f(m,fk,fj,fi)<<"  b.x2f_ip1= "<<b.x2f(m,fk,fj,fi+1)<<"  b.x2f_kp1= "<<b.x2f(m,fk+1,fj,fi)<<"  b.x2f_ikp1= "<<b.x2f(m,fk+1,fj,fi+1)<<std::endl;
-}
-****/
             });
           });
 
@@ -712,11 +656,6 @@ std::cout <<"fk,fj,fi= "<<fk<<" "<<fj<<" "<<fi<<"  b.x2f= "<<b.x2f(m,fk,fj,fi)<<
               b.x3f(m,fk,fj  ,fi+1) = cb.x3f(m,k,j,i) + dvar1 - dvar2;
               b.x3f(m,fk,fj+1,fi  ) = cb.x3f(m,k,j,i) - dvar1 + dvar2;
               b.x3f(m,fk,fj+1,fi+1) = cb.x3f(m,k,j,i) + dvar1 + dvar2;
-/****
-if (n==0 && m==5) {
-std::cout <<"fk,fj,fi= "<<fk<<" "<<fj<<" "<<fi<<"  b.x3f= "<<b.x3f(m,fk,fj,fi)<<"  b.x3f_ip1= "<<b.x3f(m,fk,fj,fi+1)<<"  b.x3f_jp1= "<<b.x3f(m,fk,fj+1,fi)<<"  b.x3f_ijp1= "<<b.x3f(m,fk,fj+1,fi+1)<<std::endl;
-}
-****/
             });
           });
         }
@@ -724,71 +663,10 @@ std::cout <<"fk,fj,fi= "<<fk<<" "<<fj<<" "<<fi<<"  b.x3f= "<<b.x3f(m,fk,fj,fi)<<
     });
     }
 
-/****
-{int m=5;
-std::cout << std::endl<< "fineB averaged to coarse in MB="<<m <<std::endl;
-for (int k=2; k<=7; ++k) {
-for (int j=2; j<=7; ++j) {
-for (int i=1; i<=2; ++i) {
-  int fi = (i - indcs.cis)*2 + indcs.is;  // fine i
-  int fj = (j - indcs.cjs)*2 + indcs.js;  // fine j
-  int fk = (k - indcs.cks)*2 + indcs.ks;  // fine k
-  Real b1f = 0.25*(b.x1f(m,fk,fj,fi) + b.x1f(m,fk,fj+1,fi)
-                   +b.x1f(m,fk+1,fj,fi) + b.x1f(m,fk+1,fj+1,fi));
-std::cout<< std::scientific << std::setprecision(12) <<"k,j,i= "<<k<<" "<<j<<" "<<i<<"  cb.x1f= "<<b1f<<std::endl;
-}}}
-for (int k=2; k<=7; ++k) {
-for (int j=2; j<=8; ++j) {
-for (int i=1; i<=1; ++i) {
-  int fi = (i - indcs.cis)*2 + indcs.is;  // fine i
-  int fj = (j - indcs.cjs)*2 + indcs.js;  // fine j
-  int fk = (k - indcs.cks)*2 + indcs.ks;  // fine k
-  Real b2f = 0.25*(b.x2f(m,fk,fj,fi) + b.x2f(m,fk,fj,fi+1)
-                   +b.x2f(m,fk+1,fj,fi) + b.x2f(m,fk+1,fj,fi+1));
-std::cout<< std::scientific << std::setprecision(12) <<"k,j,i= "<<k<<" "<<j<<" "<<i<<"  cb.x2f= "<<b2f<<std::endl;
-}}}
-for (int k=2; k<=8; ++k) {
-for (int j=2; j<=7; ++j) {
-for (int i=1; i<=1; ++i) {
-  int fi = (i - indcs.cis)*2 + indcs.is;  // fine i
-  int fj = (j - indcs.cjs)*2 + indcs.js;  // fine j
-  int fk = (k - indcs.cks)*2 + indcs.ks;  // fine k
-  Real b3f = 0.25*(b.x3f(m,fk,fj,fi) + b.x3f(m,fk,fj,fi+1)
-                   +b.x3f(m,fk,fj+1,fi) + b.x3f(m,fk,fj+1,fi+1));
-std::cout<< std::scientific << std::setprecision(12) <<"k,j,i= "<<k<<" "<<j<<" "<<i<<"  cb.x3f= "<<b3f<<std::endl;
-}}}
-for (int k=2; k<=6; ++k) {
-for (int j=2; j<=6; ++j) {
-for (int i=1; i<=1; ++i) {
-  int fi = (i - indcs.cis)*2 + indcs.is;  // fine i
-  int fj = (j - indcs.cjs)*2 + indcs.js;  // fine j
-  int fk = (k - indcs.cks)*2 + indcs.ks;  // fine k
-  Real divb1 = 0.25*(b.x1f(m,fk,fj,fi+2) + b.x1f(m,fk,fj+1,fi+2)
-                   +b.x1f(m,fk+1,fj,fi+2) + b.x1f(m,fk+1,fj+1,fi+2)) -
-               0.25*(b.x1f(m,fk,fj,fi) + b.x1f(m,fk,fj+1,fi)
-                   +b.x1f(m,fk+1,fj,fi) + b.x1f(m,fk+1,fj+1,fi));
-  Real divb2 = 0.25*(b.x2f(m,fk,fj+2,fi) + b.x2f(m,fk,fj+2,fi+1)
-                   +b.x2f(m,fk+1,fj+2,fi) + b.x2f(m,fk+1,fj+2,fi+1)) -
-               0.25*(b.x2f(m,fk,fj,fi) + b.x2f(m,fk,fj,fi+1)
-                   +b.x2f(m,fk+1,fj,fi) + b.x2f(m,fk+1,fj,fi+1));
-  Real divb3 = 0.25*(b.x3f(m,fk+2,fj,fi) + b.x3f(m,fk+2,fj,fi+1)
-                   +b.x3f(m,fk+2,fj+1,fi) + b.x3f(m,fk+2,fj+1,fi+1)) -
-               0.25*(b.x3f(m,fk,fj,fi) + b.x3f(m,fk,fj,fi+1)
-                   +b.x3f(m,fk,fj+1,fi) + b.x3f(m,fk,fj+1,fi+1));
-  std::cout<< std::scientific << std::setprecision(12) <<"k,j,i= "<<k<<" "<<j<<" "<<i<<"  divb1/2/3= "<<divb1<<"  "<<divb2<<"  "<<divb3<<"  divb= "<<(divb1+divb2+divb3)<<std::endl;
-}}}
-}
-****/
-
-
     // Now prolongate b.x1f/b.x2f/b.x3f at interior fine cells
     // equivalent to code for 3D in MeshRefinement::ProlongateInternalField()
     // Note prolongation at shared coarse/fine cell edges must be completed first as
     // interpolation formulae use these values.
-
-/***
-std::cout << std::endl << "Interior fields ---"<<std::endl;
-***/
 
     // Outer loop over (# of MeshBlocks)*(# of buffers)
     {int nmn = nmb*nnghbr;
@@ -856,12 +734,6 @@ std::cout << std::endl << "Interior fields ---"<<std::endl;
                                     + Uxx + Vxyz - Wxyz;
             b.x1f(m,fk+1,fj+1,fi+1)=0.5*(b.x1f(m,fk+1,fj+1,fi  )+b.x1f(m,fk+1,fj+1,fi+2))
                                     + Uxx + Vxyz + Wxyz;
-/****
-if (n==0 && m==5) {
-std::cout <<"fk,fj,fi+1= "<<fk<<" "<<fj<<" "<<fi+1<<"  b.x1f= "<<b.x1f(m,fk,fj,fi+1)<<"  b.x1f_jp1= "<<b.x1f(m,fk,fj+1,fi+1)<<"  b.x1f_kp1= "<<b.x1f(m,fk+1,fj,fi+1)<<"  b.x1f_jkp1= "<<b.x1f(m,fk+1,fj+1,fi+1)<<std::endl;
-}
-****/
-
             b.x2f(m,fk  ,fj+1,fi  )=0.5*(b.x2f(m,fk  ,fj  ,fi  )+b.x2f(m,fk  ,fj+2,fi  ))
                                     + Vyy - Uxyz - Wxyz;
             b.x2f(m,fk  ,fj+1,fi+1)=0.5*(b.x2f(m,fk  ,fj  ,fi+1)+b.x2f(m,fk  ,fj+2,fi+1))
@@ -870,12 +742,6 @@ std::cout <<"fk,fj,fi+1= "<<fk<<" "<<fj<<" "<<fi+1<<"  b.x1f= "<<b.x1f(m,fk,fj,f
                                     + Vyy + Uxyz - Wxyz;
             b.x2f(m,fk+1,fj+1,fi+1)=0.5*(b.x2f(m,fk+1,fj  ,fi+1)+b.x2f(m,fk+1,fj+2,fi+1))
                                     + Vyy + Uxyz + Wxyz;
-/****
-if (n==0 && m==5) {
-std::cout <<"fk,fj+1,fi= "<<fk<<" "<<fj+1<<" "<<fi<<"  b.x2f= "<<b.x2f(m,fk,fj+1,fi)<<"  b.x2f_ip1= "<<b.x2f(m,fk,fj+1,fi+1)<<"  b.x2f_kp1= "<<b.x2f(m,fk+1,fj+1,fi)<<"  b.x2f_ikp1= "<<b.x2f(m,fk+1,fj+1,fi+1)<<std::endl;
-}
-****/
-
             b.x3f(m,fk+1,fj  ,fi  )=0.5*(b.x3f(m,fk+2,fj  ,fi  )+b.x3f(m,fk  ,fj  ,fi  ))
                                     + Wzz - Uxyz - Vxyz;
             b.x3f(m,fk+1,fj  ,fi+1)=0.5*(b.x3f(m,fk+2,fj  ,fi+1)+b.x3f(m,fk  ,fj  ,fi+1))
@@ -884,11 +750,6 @@ std::cout <<"fk,fj+1,fi= "<<fk<<" "<<fj+1<<" "<<fi<<"  b.x2f= "<<b.x2f(m,fk,fj+1
                                     + Wzz + Uxyz - Vxyz;
             b.x3f(m,fk+1,fj+1,fi+1)=0.5*(b.x3f(m,fk+2,fj+1,fi+1)+b.x3f(m,fk  ,fj+1,fi+1))
                                     + Wzz + Uxyz + Vxyz;
-/****
-if (n==0 && m==5) {
-std::cout <<"fk+1,fj,fi= "<<fk+1<<" "<<fj<<" "<<fi<<"  b.x3f= "<<b.x3f(m,fk+1,fj,fi)<<"  b.x3f_ip1= "<<b.x3f(m,fk+1,fj,fi+1)<<"  b.x3f_jp1= "<<b.x3f(m,fk+1,fj+1,fi)<<"  b.x3f_ijp1= "<<b.x3f(m,fk+1,fj+1,fi+1)<<std::endl;
-}
-****/
           });
         });
       }
