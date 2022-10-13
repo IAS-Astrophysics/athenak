@@ -160,8 +160,8 @@ class Mesh {
   void PrintMeshDiagnostics();
   void WriteMeshStructure();
   void NewTimeStep(const Real tlim);
-  void RestrictCC(DvceArray5D<Real> a, DvceArray5D<Real> ca);
-  void RestrictFC(DvceFaceFld4D<Real> a, DvceFaceFld4D<Real> ca);
+  void RestrictCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
+  void RestrictFC(DvceFaceFld4D<Real> &a, DvceFaceFld4D<Real> &ca);
   BoundaryFlag GetBoundaryFlag(const std::string& input_string);
   std::string GetBoundaryString(BoundaryFlag input_flag);
 

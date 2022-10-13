@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <utility>
+#include <iomanip>    // std::setprecision()
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -48,7 +49,6 @@ TaskStatus BoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
   auto &sbuf = send_buf;
   auto &rbuf = recv_buf;
 
-  // load buffers, using 3 levels of hierarchical parallelism
   // Outer loop over (# of MeshBlocks)*(# of buffers)*(three field components)
   int nmnv = 3*nmb*nnghbr;
   Kokkos::TeamPolicy<> policy(DevExeSpace(), nmnv, Kokkos::AUTO);

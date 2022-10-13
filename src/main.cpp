@@ -18,9 +18,9 @@
 //!
 //! Athena (Kokkos version) is an outgrowth of the Athena-Parthenon collaboration, and is
 //! a completely new implementation based on the Kokkos performance-portability library
-//! (which is now an external dependency required for this version). It was started
-//! 6/2020 during the pandemic. In order to keep this version small and manageable, only
-//! a fraction of the features of the C++ version are implemented.
+//! (which is an external dependency required for this version). It was started 6/2020
+//! during the pandemic. As part of the keep-it-simple design, only a fraction of the
+//! features of the C++ version are implemented.
 //========================================================================================
 
 // C/C++ headers

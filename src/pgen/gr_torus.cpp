@@ -132,8 +132,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   int n1 = indcs.nx1 + 2*ng;
   int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
   int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
-  int &is = indcs.is; int &js = indcs.js; int &ks = indcs.ks;
-  int nmb1 = pmbp->nmb_thispack - 1;
+  int is = indcs.is, js = indcs.js, ks = indcs.ks;
+  int ie = indcs.ie, je = indcs.je, ke = indcs.ke;
+  int nmb = pmbp->nmb_thispack;
   auto &coord = pmbp->pcoord->coord_data;
 
   // Get ideal gas EOS data
@@ -182,7 +183,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     auto trs = torus;
     auto &size = pmbp->pmb->mb_size;
     Kokkos::Random_XorShift64_Pool<> rand_pool64(pmbp->gids);
-    par_for("pgen_torus0", DevExeSpace(), 0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
+    par_for("pgen_torus0", DevExeSpace(), 0,nmb-1,ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       Real &x1min = size.d_view(m).x1min;
       Real &x1max = size.d_view(m).x1max;
@@ -226,7 +227,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   auto trs = torus;
   auto &size = pmbp->pmb->mb_size;
   Kokkos::Random_XorShift64_Pool<> rand_pool64(pmbp->gids);
-  par_for("pgen_torus1", DevExeSpace(), 0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
+  par_for("pgen_torus1", DevExeSpace(), 0,nmb-1,ks,ke,js,je,js,je,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     Real &x1min = size.d_view(m).x1min;
     Real &x1max = size.d_view(m).x1max;
@@ -326,65 +327,178 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     torus.potential_r_pow = pin->GetReal("problem", "potential_r_pow");
     torus.potential_rho_pow = pin->GetReal("problem", "potential_rho_pow");
 
-    auto &b0 = pmbp->pmhd->b0;
+    // compute vector potential over all faces
+    int ncells1 = indcs.nx1 + 2*(indcs.ng);
+    int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
+    int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
+    DvceArray4D<Real> a1, a2, a3;
+    Kokkos::realloc(a1, nmb,ncells3,ncells2,ncells1);
+    Kokkos::realloc(a2, nmb,ncells3,ncells2,ncells1);
+    Kokkos::realloc(a3, nmb,ncells3,ncells2,ncells1);
+
+    auto &nghbr = pmbp->pmb->nghbr;
+    auto &mblev = pmbp->pmb->mb_lev;
     auto trs = torus;
-    par_for("pgen_torus2", DevExeSpace(), 0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
+
+    par_for("pgen_linwave2", DevExeSpace(), 0,nmb-1,ks,ke+1,js,je+1,is,ie+1,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       Real &x1min = size.d_view(m).x1min;
       Real &x1max = size.d_view(m).x1max;
-      Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+      int nx1 = indcs.nx1;
+      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+      Real x1f   = LeftEdgeX(i  -is, nx1, x1min, x1max);
 
       Real &x2min = size.d_view(m).x2min;
       Real &x2max = size.d_view(m).x2max;
-      Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+      int nx2 = indcs.nx2;
+      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+      Real x2f   = LeftEdgeX(j  -js, nx2, x2min, x2max);
 
       Real &x3min = size.d_view(m).x3min;
       Real &x3max = size.d_view(m).x3max;
-      Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+      int nx3 = indcs.nx3;
+      Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+      Real x3f   = LeftEdgeX(k  -ks, nx3, x3min, x3max);
 
-      // Compute face-centered fields from curl(A).
-      Real x1f   = LeftEdgeX(i  -is, indcs.nx1, x1min, x1max);
-      Real x1fp1 = LeftEdgeX(i+1-is, indcs.nx1, x1min, x1max);
-      Real x2f   = LeftEdgeX(j  -js, indcs.nx2, x2min, x2max);
-      Real x2fp1 = LeftEdgeX(j+1-js, indcs.nx2, x2min, x2max);
-      Real x3f   = LeftEdgeX(k  -ks, indcs.nx3, x3min, x3max);
-      Real x3fp1 = LeftEdgeX(k+1-ks, indcs.nx3, x3min, x3max);
+      Real x1fp1 = LeftEdgeX(i+1-is, nx1, x1min, x1max);
+      Real x2fp1 = LeftEdgeX(j+1-js, nx2, x2min, x2max);
+      Real x3fp1 = LeftEdgeX(k+1-ks, nx3, x3min, x3max);
       Real dx1 = size.d_view(m).dx1;
       Real dx2 = size.d_view(m).dx2;
       Real dx3 = size.d_view(m).dx3;
 
-      b0.x1f(m,k,j,i) = trs.b_norm *
-                        ((A3(trs,x1f,  x2fp1,x3v  ) - A3(trs,x1f,x2f,x3v))/dx2 -
-                         (A2(trs,x1f,  x2v,  x3fp1) - A2(trs,x1f,x2v,x3f))/dx3);
-      b0.x2f(m,k,j,i) = trs.b_norm *
-                        ((A1(trs,x1v,  x2f,  x3fp1) - A1(trs,x1v,x2f,x3f))/dx3 -
-                         (A3(trs,x1fp1,x2f,  x3v  ) - A3(trs,x1f,x2f,x3v))/dx1);
-      b0.x3f(m,k,j,i) = trs.b_norm *
-                        ((A2(trs,x1fp1,x2v,  x3f  ) - A2(trs,x1f,x2v,x3f))/dx1 -
-                         (A1(trs,x1v,  x2fp1,x3f  ) - A1(trs,x1v,x2f,x3f))/dx2);
+      a1(m,k,j,i) = A1(trs, x1v, x2f, x3f);
+      a2(m,k,j,i) = A2(trs, x1f, x2v, x3f);
+      a3(m,k,j,i) = A3(trs, x1f, x2f, x3v);
 
+      // When neighboring MeshBock is at finer level, compute vector potential as sum of
+      // values at fine grid resolution.  This guarantees flux on shared fine/coarse
+      // faces is identical.
+
+      // Correct A1 at x2-faces, x3-faces, and x2x3-edges
+      if ((nghbr.d_view(m,8 ).lev > mblev.d_view(m) && j==js) ||
+          (nghbr.d_view(m,9 ).lev > mblev.d_view(m) && j==js) ||
+          (nghbr.d_view(m,10).lev > mblev.d_view(m) && j==js) ||
+          (nghbr.d_view(m,11).lev > mblev.d_view(m) && j==js) ||
+          (nghbr.d_view(m,12).lev > mblev.d_view(m) && j==je+1) ||
+          (nghbr.d_view(m,13).lev > mblev.d_view(m) && j==je+1) ||
+          (nghbr.d_view(m,14).lev > mblev.d_view(m) && j==je+1) ||
+          (nghbr.d_view(m,15).lev > mblev.d_view(m) && j==je+1) ||
+          (nghbr.d_view(m,24).lev > mblev.d_view(m) && k==ks) ||
+          (nghbr.d_view(m,25).lev > mblev.d_view(m) && k==ks) ||
+          (nghbr.d_view(m,26).lev > mblev.d_view(m) && k==ks) ||
+          (nghbr.d_view(m,27).lev > mblev.d_view(m) && k==ks) ||
+          (nghbr.d_view(m,28).lev > mblev.d_view(m) && k==ke+1) ||
+          (nghbr.d_view(m,29).lev > mblev.d_view(m) && k==ke+1) ||
+          (nghbr.d_view(m,30).lev > mblev.d_view(m) && k==ke+1) ||
+          (nghbr.d_view(m,31).lev > mblev.d_view(m) && k==ke+1) ||
+          (nghbr.d_view(m,40).lev > mblev.d_view(m) && j==js && k==ks) ||
+          (nghbr.d_view(m,41).lev > mblev.d_view(m) && j==js && k==ks) ||
+          (nghbr.d_view(m,42).lev > mblev.d_view(m) && j==je+1 && k==ks) ||
+          (nghbr.d_view(m,43).lev > mblev.d_view(m) && j==je+1 && k==ks) ||
+          (nghbr.d_view(m,44).lev > mblev.d_view(m) && j==js && k==ke+1) ||
+          (nghbr.d_view(m,45).lev > mblev.d_view(m) && j==js && k==ke+1) ||
+          (nghbr.d_view(m,46).lev > mblev.d_view(m) && j==je+1 && k==ke+1) ||
+          (nghbr.d_view(m,47).lev > mblev.d_view(m) && j==je+1 && k==ke+1)) {
+        Real xl = x1v + 0.25*dx1;
+        Real xr = x1v - 0.25*dx1;
+        a1(m,k,j,i) = 0.5*(A1(trs, xl,x2f,x3f) + A1(trs, xr,x2f,x3f));
+      }
+
+      // Correct A2 at x1-faces, x3-faces, and x1x3-edges
+      if ((nghbr.d_view(m,0 ).lev > mblev.d_view(m) && i==is) ||
+          (nghbr.d_view(m,1 ).lev > mblev.d_view(m) && i==is) ||
+          (nghbr.d_view(m,2 ).lev > mblev.d_view(m) && i==is) ||
+          (nghbr.d_view(m,3 ).lev > mblev.d_view(m) && i==is) ||
+          (nghbr.d_view(m,4 ).lev > mblev.d_view(m) && i==ie+1) ||
+          (nghbr.d_view(m,5 ).lev > mblev.d_view(m) && i==ie+1) ||
+          (nghbr.d_view(m,6 ).lev > mblev.d_view(m) && i==ie+1) ||
+          (nghbr.d_view(m,7 ).lev > mblev.d_view(m) && i==ie+1) ||
+          (nghbr.d_view(m,24).lev > mblev.d_view(m) && k==ks) ||
+          (nghbr.d_view(m,25).lev > mblev.d_view(m) && k==ks) ||
+          (nghbr.d_view(m,26).lev > mblev.d_view(m) && k==ks) ||
+          (nghbr.d_view(m,27).lev > mblev.d_view(m) && k==ks) ||
+          (nghbr.d_view(m,28).lev > mblev.d_view(m) && k==ke+1) ||
+          (nghbr.d_view(m,29).lev > mblev.d_view(m) && k==ke+1) ||
+          (nghbr.d_view(m,30).lev > mblev.d_view(m) && k==ke+1) ||
+          (nghbr.d_view(m,31).lev > mblev.d_view(m) && k==ke+1) ||
+          (nghbr.d_view(m,32).lev > mblev.d_view(m) && i==is && k==ks) ||
+          (nghbr.d_view(m,33).lev > mblev.d_view(m) && i==is && k==ks) ||
+          (nghbr.d_view(m,34).lev > mblev.d_view(m) && i==ie+1 && k==ks) ||
+          (nghbr.d_view(m,35).lev > mblev.d_view(m) && i==ie+1 && k==ks) ||
+          (nghbr.d_view(m,36).lev > mblev.d_view(m) && i==is && k==ke+1) ||
+          (nghbr.d_view(m,37).lev > mblev.d_view(m) && i==is && k==ke+1) ||
+          (nghbr.d_view(m,38).lev > mblev.d_view(m) && i==ie+1 && k==ke+1) ||
+          (nghbr.d_view(m,39).lev > mblev.d_view(m) && i==ie+1 && k==ke+1)) {
+        Real xl = x2v + 0.25*dx2;
+        Real xr = x2v - 0.25*dx2;
+        a2(m,k,j,i) = 0.5*(A2(trs, x1f,xl,x3f) + A2(trs, x1f,xr,x3f));
+      }
+
+      // Correct A3 at x1-faces, x2-faces, and x1x2-edges
+      if ((nghbr.d_view(m,0 ).lev > mblev.d_view(m) && i==is) ||
+          (nghbr.d_view(m,1 ).lev > mblev.d_view(m) && i==is) ||
+          (nghbr.d_view(m,2 ).lev > mblev.d_view(m) && i==is) ||
+          (nghbr.d_view(m,3 ).lev > mblev.d_view(m) && i==is) ||
+          (nghbr.d_view(m,4 ).lev > mblev.d_view(m) && i==ie+1) ||
+          (nghbr.d_view(m,5 ).lev > mblev.d_view(m) && i==ie+1) ||
+          (nghbr.d_view(m,6 ).lev > mblev.d_view(m) && i==ie+1) ||
+          (nghbr.d_view(m,7 ).lev > mblev.d_view(m) && i==ie+1) ||
+          (nghbr.d_view(m,8 ).lev > mblev.d_view(m) && j==js) ||
+          (nghbr.d_view(m,9 ).lev > mblev.d_view(m) && j==js) ||
+          (nghbr.d_view(m,10).lev > mblev.d_view(m) && j==js) ||
+          (nghbr.d_view(m,11).lev > mblev.d_view(m) && j==js) ||
+          (nghbr.d_view(m,12).lev > mblev.d_view(m) && j==je+1) ||
+          (nghbr.d_view(m,13).lev > mblev.d_view(m) && j==je+1) ||
+          (nghbr.d_view(m,14).lev > mblev.d_view(m) && j==je+1) ||
+          (nghbr.d_view(m,15).lev > mblev.d_view(m) && j==je+1) ||
+          (nghbr.d_view(m,16).lev > mblev.d_view(m) && i==is && j==js) ||
+          (nghbr.d_view(m,17).lev > mblev.d_view(m) && i==is && j==js) ||
+          (nghbr.d_view(m,18).lev > mblev.d_view(m) && i==ie+1 && j==js) ||
+          (nghbr.d_view(m,19).lev > mblev.d_view(m) && i==ie+1 && j==js) ||
+          (nghbr.d_view(m,20).lev > mblev.d_view(m) && i==is && j==je+1) ||
+          (nghbr.d_view(m,21).lev > mblev.d_view(m) && i==is && j==je+1) ||
+          (nghbr.d_view(m,22).lev > mblev.d_view(m) && i==ie+1 && j==je+1) ||
+          (nghbr.d_view(m,23).lev > mblev.d_view(m) && i==ie+1 && j==je+1)) {
+        Real xl = x3v + 0.25*dx3;
+        Real xr = x3v - 0.25*dx3;
+        a3(m,k,j,i) = 0.5*(A3(trs, x1f,x2f,xl) + A3(trs, x1f,x2f,xr));
+      }
+    });
+
+    auto &b0 = pmbp->pmhd->b0;
+    par_for("pgen_torus2", DevExeSpace(), 0,nmb-1,ks,ke,js,je,is,ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      // Compute face-centered fields from curl(A).
+      Real dx1 = size.d_view(m).dx1;
+      Real dx2 = size.d_view(m).dx2;
+      Real dx3 = size.d_view(m).dx3;
+
+      b0.x1f(m,k,j,i) = trs.b_norm*((a3(m,k,j+1,i) - a3(m,k,j,i))/dx2 -
+                                    (a2(m,k+1,j,i) - a2(m,k,j,i))/dx3);
+      b0.x2f(m,k,j,i) = trs.b_norm*((a1(m,k+1,j,i) - a1(m,k,j,i))/dx3 -
+                                    (a3(m,k,j,i+1) - a3(m,k,j,i))/dx1);
+      b0.x3f(m,k,j,i) = trs.b_norm*((a2(m,k,j,i+1) - a2(m,k,j,i))/dx1 -
+                                    (a1(m,k,j+1,i) - a1(m,k,j,i))/dx2);
 
       // Include extra face-component at edge of block in each direction
-      if (i==(n1-1)) {
-        b0.x1f(m,k,j,i+1) = trs.b_norm *
-                            ((A3(trs,x1fp1,x2fp1,x3v  ) - A3(trs,x1fp1,x2f,x3v))/dx2 -
-                             (A2(trs,x1fp1,x2v,  x3fp1) - A2(trs,x1fp1,x2v,x3f))/dx3);
+      if (i==ie) {
+        b0.x1f(m,k,j,i+1) = trs.b_norm*((a3(m,k,j+1,i+1) - a3(m,k,j,i+1))/dx2 -
+                                        (a2(m,k+1,j,i+1) - a2(m,k,j,i+1))/dx3);
       }
-      if (j==(n2-1)) {
-        b0.x2f(m,k,j+1,i) = trs.b_norm *
-                            ((A1(trs,x1v,  x2fp1,x3fp1) - A1(trs,x1v,x2fp1,x3f))/dx3 -
-                             (A3(trs,x1fp1,x2fp1,x3v  ) - A3(trs,x1f,x2fp1,x3v))/dx1);
+      if (j==je) {
+        b0.x2f(m,k,j+1,i) = trs.b_norm*((a1(m,k+1,j+1,i) - a1(m,k,j+1,i))/dx3 -
+                                        (a3(m,k,j+1,i+1) - a3(m,k,j+1,i))/dx1);
       }
-      if (k==(n3-1)) {
-        b0.x3f(m,k+1,j,i) = trs.b_norm *
-                            ((A2(trs,x1fp1,x2v,  x3fp1) - A2(trs,x1f,x2v,x3fp1))/dx1 -
-                             (A1(trs,x1v,  x2fp1,x3fp1) - A1(trs,x1v,x2f,x3fp1))/dx2);
+      if (k==ke) {
+        b0.x3f(m,k+1,j,i) = trs.b_norm*((a2(m,k+1,j,i+1) - a2(m,k+1,j,i))/dx1 -
+                                        (a1(m,k+1,j+1,i) - a1(m,k+1,j,i))/dx2);
       }
     });
 
     // Compute cell-centered fields
     auto &bcc_ = pmbp->pmhd->bcc0;
-    par_for("pgen_torus2", DevExeSpace(), 0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
+    par_for("pgen_torus2", DevExeSpace(), 0,nmb-1,ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       // cell-centered fields are simple linear average of face-centered fields
       Real& w_bx = bcc_(m,IBX,k,j,i);
@@ -398,10 +512,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   // Convert primitives to conserved
   if (pmbp->phydro != nullptr) {
-    pmbp->phydro->peos->PrimToCons(w0_, u0_, 0, (n1-1), 0, (n2-1), 0, (n3-1));
+    pmbp->phydro->peos->PrimToCons(w0_, u0_, is, ie, js, je, ks, ke);
   } else if (pmbp->pmhd != nullptr) {
     auto &bcc0_ = pmbp->pmhd->bcc0;
-    pmbp->pmhd->peos->PrimToCons(w0_, bcc0_, u0_, 0, (n1-1), 0, (n2-1), 0, (n3-1));
+    pmbp->pmhd->peos->PrimToCons(w0_, bcc0_, u0_, is, ie, js, je, ks, ke);
   }
 
   return;

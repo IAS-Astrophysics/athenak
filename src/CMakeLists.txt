@@ -79,6 +79,7 @@ add_executable(
 
         pgen/pgen.cpp
         pgen/tests/advection.cpp
+        pgen/tests/cpaw.cpp
         pgen/tests/gr_bondi.cpp
         pgen/tests/linear_wave.cpp
         pgen/tests/lw_implode.cpp

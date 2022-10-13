@@ -1,7 +1,6 @@
-# Master CMakeLists.txt file for AthenaNike in root of source directories
+# Master CMakeLists.txt file for Athena++ (Kokkos version)
 #
-
-# ----- start with setting compiler, environment, and build defaults ---------------------
+#------ start with setting various compiler, environment, and build defaults --------------------
 
 cmake_minimum_required(VERSION 3.10)
 project(athena VERSION 0.1 LANGUAGES C CXX)
@@ -14,7 +13,11 @@ endif()
 # Athena++ (and Kokkos) require C++17 standard as minimum
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-# Ensure correct flag is used as deprecated c++1z is not supported by nvcc.
+
+# On Mac OSX, use 64-bit x86 compatibility. Required for compilation on Apple M1 processors
+set(CMAKE_OSX_ARCHITECTURES "x86_64")
+
+# Force flag to denote C++ standard, as deprecated c++1z is not supported by nvcc.
 set(CMAKE_CXX17_STANDARD_COMPILE_OPTION "-std=c++17")
 
 # Kokkos recommends NOT using default compiler extensions
@@ -29,14 +32,14 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
-# ----- default values for compile time options  -----------------------------------------
+#------ default values for compile time options  ------------------------------------------------
 
 option(Athena_SINGLE_PRECISION "Compile for single precision" OFF)
 option(Athena_ENABLE_MPI "Compile with MPI parallelism enabled" OFF)
 option(Athena_ENABLE_OPENMP "Compile with OpenMP parallelism enabled" OFF)
 set(PROBLEM built_in_pgens CACHE STRING "Name of problem generator function")
 
-# ----- set macros exported to config.hpp ------------------------------------------------
+#------ set macros exported to config.hpp -------------------------------------------------------
 
 # set single precision macro (true/false)
 if (Athena_SINGLE_PRECISION)
@@ -77,7 +80,7 @@ else()
   set(OPENMP_PARALLEL_ENABLED 0)
 endif()
 
-#set user problem generaotr flag
+#set user problem generator flag
 if (NOT ${PROBLEM} STREQUAL "built_in_pgens")
   message(STATUS "Including user-specified problem generator file: ${PROBLEM}")
   set(USER_PROBLEM_ENABLED 1)
@@ -85,7 +88,7 @@ else()
   set(USER_PROBLEM_ENABLED 0)
 endif()
 
-# ----- set various Kokkos option --------------------------------------------------------
+#------ set various Kokkos option ---------------------------------------------------------------
 
 # Tell Kokkos to vectorize aggressively
 # Kokkos prefers this capitalization for debugging reasons
@@ -107,9 +110,7 @@ if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
       "Sanity checks on Kokkos DualView")
 endif()
 
-# ----- create configuration header file from template in /src directory -----------------
-
-# configure_file(config.hpp.in config.hpp)
+#------ create configuration header file from template in /src directory -----------------
 
 # add subdirectories for source code and include files
 add_subdirectory(src)
