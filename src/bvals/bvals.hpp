@@ -63,10 +63,11 @@ struct BoundaryBuffer {
   BufferIndcs icoar[3];  // indices for pack/unpack when dest/src at coarser level
   BufferIndcs ifine[3];  // indices for pack/unpack when dest/src at finer level
   BufferIndcs iprol[3];  // indices for prolongation (only used for receives)
-  BufferIndcs iflux[3];  // indices for pack/unpack for flux correction
+  BufferIndcs iflux_same[3];  // indices for pack/unpack for flux correction
+  BufferIndcs iflux_coar[3];  // indices for pack/unpack for flux correction
 
   // Maximum number of data elements (bie-bis+1) across 3 components of above
-  int isame_ndat, icoar_ndat, ifine_ndat, iflux_ndat;
+  int isame_ndat, icoar_ndat, ifine_ndat, iflxs_ndat, iflxc_ndat;
 
   // 3D Views that store buffer data on device
   DvceArray2D<Real> vars, flux;
@@ -82,7 +83,8 @@ struct BoundaryBuffer {
   void AllocateBuffers(int nmb, int nvars) {
     int nmax = std::max(isame_ndat, std::max(icoar_ndat, ifine_ndat) );
     Kokkos::realloc(vars, nmb, (nvars*nmax));
-    Kokkos::realloc(flux, nmb, (nvars*iflux_ndat));
+    nmax = std::max(iflxs_ndat, iflxc_ndat);
+    Kokkos::realloc(flux, nmb, (nvars*nmax));
   }
 };
 
