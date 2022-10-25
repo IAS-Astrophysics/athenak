@@ -53,12 +53,12 @@ TaskStatus BoundaryValuesCC::PackAndSendFluxCC(DvceFaceFld5D<Real> &flx) {
     const int v = (tmember.league_rank() - m*(nnghbr*nvar) - n*nvar);
 
     // Note send buffer flux indices are for the coarse mesh
-    int il = sbuf[n].iflux[0].bis;
-    int iu = sbuf[n].iflux[0].bie;
-    int jl = sbuf[n].iflux[0].bjs;
-    int ju = sbuf[n].iflux[0].bje;
-    int kl = sbuf[n].iflux[0].bks;
-    int ku = sbuf[n].iflux[0].bke;
+    int il = sbuf[n].iflux_coar[0].bis;
+    int iu = sbuf[n].iflux_coar[0].bie;
+    int jl = sbuf[n].iflux_coar[0].bjs;
+    int ju = sbuf[n].iflux_coar[0].bje;
+    int kl = sbuf[n].iflux_coar[0].bks;
+    int ku = sbuf[n].iflux_coar[0].bke;
     const int ni = iu - il + 1;
     const int nj = ju - jl + 1;
     const int nk = ku - kl + 1;
@@ -179,7 +179,7 @@ TaskStatus BoundaryValuesCC::PackAndSendFluxCC(DvceFaceFld5D<Real> &flx) {
           int tag = CreateMPITag(lid, dn);
 
           // get ptr to send buffer for fluxes
-          int data_size = nvar*(send_buf[n].iflux_ndat);
+          int data_size = nvar*(send_buf[n].iflxc_ndat);
           auto send_ptr = Kokkos::subview(send_buf[n].flux, m, Kokkos::ALL);
 
           int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
@@ -255,12 +255,12 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx) {
     const int v = (tmember.league_rank() - m*(nnghbr*nvar) - n*nvar);
 
     // Recv buffer flux indices are for the regular mesh
-    int il = rbuf[n].iflux[0].bis;
-    int iu = rbuf[n].iflux[0].bie;
-    int jl = rbuf[n].iflux[0].bjs;
-    int ju = rbuf[n].iflux[0].bje;
-    int kl = rbuf[n].iflux[0].bks;
-    int ku = rbuf[n].iflux[0].bke;
+    int il = rbuf[n].iflux_coar[0].bis;
+    int iu = rbuf[n].iflux_coar[0].bie;
+    int jl = rbuf[n].iflux_coar[0].bjs;
+    int ju = rbuf[n].iflux_coar[0].bje;
+    int kl = rbuf[n].iflux_coar[0].bks;
+    int ku = rbuf[n].iflux_coar[0].bke;
     const int ni = iu - il + 1;
     const int nj = ju - jl + 1;
     const int nk = ku - kl + 1;
@@ -333,7 +333,7 @@ TaskStatus BoundaryValuesCC::InitFluxRecv(const int nvar) {
           int tag = CreateMPITag(m, n);
 
           // get ptr to recv buffer when neighbor is at coarser/same/fine level
-          int data_size = nvar*(recv_buf[n].iflux_ndat);
+          int data_size = nvar*(recv_buf[n].iflxc_ndat);
           auto recv_ptr = Kokkos::subview(recv_buf[n].flux, m, Kokkos::ALL);
 
           // Post non-blocking receive for this buffer on this MeshBlock
