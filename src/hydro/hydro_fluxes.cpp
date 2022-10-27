@@ -36,13 +36,13 @@ namespace hydro {
 
 template <Hydro_RSolver rsolver_method_>
 void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
-  RegionIndcs &indcs = pmy_pack->pmesh->mb_indcs;
-  int is = indcs.is, ie = indcs.ie;
-  int js = indcs.js, je = indcs.je;
-  int ks = indcs.ks, ke = indcs.ke;
-  int ncells1 = indcs.nx1 + 2*(indcs.ng);
+  RegionIndcs &indcs_ = pmy_pack->pmesh->mb_indcs;
+  int is = indcs_.is, ie = indcs_.ie;
+  int js = indcs_.js, je = indcs_.je;
+  int ks = indcs_.ks, ke = indcs_.ke;
+  int ncells1 = indcs_.nx1 + 2*(indcs_.ng);
 
-  int nhyd  = nhydro;
+  int &nhyd_  = nhydro;
   int nvars = nhydro + nscalars;
   int nmb1 = pmy_pack->nmb_thispack - 1;
   const auto recon_method_ = recon_method;
@@ -51,9 +51,9 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
     extrema = true;
   }
 
-  auto &eos = peos->eos_data;
-  auto &size = pmy_pack->pmb->mb_size;
-  auto &coord = pmy_pack->pcoord->coord_data;
+  auto &eos_ = peos->eos_data;
+  auto &size_ = pmy_pack->pmb->mb_size;
+  auto &coord_ = pmy_pack->pcoord->coord_data;
   auto &w0_ = w0;
 
   //--------------------------------------------------------------------------------------
@@ -61,7 +61,7 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
 
   size_t scr_size = ScrArray2D<Real>::shmem_size(nvars, ncells1) * 2;
   int scr_level = 0;
-  auto flx1 = uflx.x1f;
+  auto &flx1_ = uflx.x1f;
 
   par_for_outer("hflux_x1",DevExeSpace(), scr_size, scr_level, 0, nmb1, ks, ke, js, je,
   KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {
@@ -78,10 +78,10 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
         break;
       case ReconstructionMethod::ppm4:
       case ReconstructionMethod::ppmx:
-        PiecewiseParabolicX1(member,eos,extrema,true, m, k, j, is-1, ie+1, w0_, wl, wr);
+        PiecewiseParabolicX1(member,eos_,extrema,true, m, k, j, is-1, ie+1, w0_, wl, wr);
         break;
       case ReconstructionMethod::wenoz:
-        WENOZX1(member, eos, true, m, k, j, is-1, ie+1, w0_, wl, wr);
+        WENOZX1(member, eos_, true, m, k, j, is-1, ie+1, w0_, wl, wr);
         break;
       default:
         break;
@@ -90,6 +90,12 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
     member.team_barrier();
 
     // compute fluxes over [is,ie+1]
+    // NOTE(@pdmullen): Capture variables prior to if constexpr.  Required for cuda 11.6+.
+    auto eos = eos_;
+    auto indcs = indcs_;
+    auto size = size_;
+    auto coord = coord_;
+    auto flx1 = flx1_;
     if constexpr (rsolver_method_ == Hydro_RSolver::advect) {
       Advect(member, eos, indcs, size, coord, m, k, j, is, ie+1, IVX, wl, wr, flx1);
     } else if constexpr (rsolver_method_ == Hydro_RSolver::llf) {
@@ -114,13 +120,13 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
     member.team_barrier();
 
     // calculate fluxes of scalars (if any)
-    if (nvars > nhyd) {
-      for (int n=nhyd; n<nvars; ++n) {
+    if (nvars > nhyd_) {
+      for (int n=nhyd_; n<nvars; ++n) {
         par_for_inner(member, is, ie+1, [&](const int i) {
-          if (flx1(m,IDN,k,j,i) >= 0.0) {
-            flx1(m,n,k,j,i) = flx1(m,IDN,k,j,i)*wl(n,i);
+          if (flx1_(m,IDN,k,j,i) >= 0.0) {
+            flx1_(m,n,k,j,i) = flx1_(m,IDN,k,j,i)*wl(n,i);
           } else {
-            flx1(m,n,k,j,i) = flx1(m,IDN,k,j,i)*wr(n,i);
+            flx1_(m,n,k,j,i) = flx1_(m,IDN,k,j,i)*wr(n,i);
           }
         });
       }
@@ -132,7 +138,7 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
 
   if (pmy_pack->pmesh->multi_d) {
     scr_size = ScrArray2D<Real>::shmem_size(nvars, ncells1) * 3;
-    auto flx2 = uflx.x2f;
+    auto &flx2_ = uflx.x2f;
 
     par_for_outer("hflux_x2",DevExeSpace(), scr_size, scr_level, 0, nmb1, ks, ke,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k) {
@@ -160,10 +166,10 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
             break;
           case ReconstructionMethod::ppm4:
           case ReconstructionMethod::ppmx:
-            PiecewiseParabolicX2(member,eos,extrema,true,m,k,j,is,ie, w0_, wl_jp1, wr);
+            PiecewiseParabolicX2(member,eos_,extrema,true,m,k,j,is,ie, w0_, wl_jp1, wr);
             break;
           case ReconstructionMethod::wenoz:
-            WENOZX2(member, eos, true, m, k, j, is-1, ie+1, w0_, wl_jp1, wr);
+            WENOZX2(member, eos_, true, m, k, j, is-1, ie+1, w0_, wl_jp1, wr);
             break;
           default:
             break;
@@ -172,6 +178,12 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
 
         // compute fluxes over [js,je+1].  RS returns flux in input wr array
         if (j>(js-1)) {
+          // NOTE(@pdmullen): Capture variables prior to if constexpr.
+          auto eos = eos_;
+          auto indcs = indcs_;
+          auto size = size_;
+          auto coord = coord_;
+          auto flx2 = flx2_;
           if constexpr (rsolver_method_ == Hydro_RSolver::advect) {
             Advect(member, eos, indcs, size, coord, m, k, j, is, ie, IVY, wl, wr, flx2);
           } else if constexpr (rsolver_method_ == Hydro_RSolver::llf) {
@@ -197,13 +209,13 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
         }
 
         // calculate fluxes of scalars (if any)
-        if (nvars > nhyd) {
-          for (int n=nhyd; n<nvars; ++n) {
+        if (nvars > nhyd_) {
+          for (int n=nhyd_; n<nvars; ++n) {
             par_for_inner(member, is, ie, [&](const int i) {
-              if (flx2(m,IDN,k,j,i) >= 0.0) {
-                flx2(m,n,k,j,i) = flx2(m,IDN,k,j,i)*wl(n,i);
+              if (flx2_(m,IDN,k,j,i) >= 0.0) {
+                flx2_(m,n,k,j,i) = flx2_(m,IDN,k,j,i)*wl(n,i);
               } else {
-                flx2(m,n,k,j,i) = flx2(m,IDN,k,j,i)*wr(n,i);
+                flx2_(m,n,k,j,i) = flx2_(m,IDN,k,j,i)*wr(n,i);
               }
             });
           }
@@ -217,7 +229,7 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
 
   if (pmy_pack->pmesh->three_d) {
     scr_size = ScrArray2D<Real>::shmem_size(nvars, ncells1) * 3;
-    auto flx3 = uflx.x3f;
+    auto &flx3_ = uflx.x3f;
 
     par_for_outer("hflux_x3",DevExeSpace(), scr_size, scr_level, 0, nmb1, js, je,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int j) {
@@ -245,10 +257,10 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
             break;
           case ReconstructionMethod::ppm4:
           case ReconstructionMethod::ppmx:
-            PiecewiseParabolicX3(member,eos,extrema,true,m,k,j,is,ie, w0_, wl_kp1, wr);
+            PiecewiseParabolicX3(member,eos_,extrema,true,m,k,j,is,ie, w0_, wl_kp1, wr);
             break;
           case ReconstructionMethod::wenoz:
-            WENOZX3(member, eos, true, m, k, j, is-1, ie+1, w0_, wl_kp1, wr);
+            WENOZX3(member, eos_, true, m, k, j, is-1, ie+1, w0_, wl_kp1, wr);
             break;
           default:
             break;
@@ -257,6 +269,12 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
 
         // compute fluxes over [ks,ke+1].  RS returns flux in input wr array
         if (k>(ks-1)) {
+          // NOTE(@pdmullen): Capture variables prior to if constexpr.
+          auto eos = eos_;
+          auto indcs = indcs_;
+          auto size = size_;
+          auto coord = coord_;
+          auto flx3 = flx3_;
           if constexpr (rsolver_method_ == Hydro_RSolver::advect) {
             Advect(member, eos, indcs, size, coord, m, k, j, is, ie, IVZ, wl, wr, flx3);
           } else if constexpr (rsolver_method_ == Hydro_RSolver::llf) {
@@ -282,13 +300,13 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
         }
 
         // calculate fluxes of scalars (if any)
-        if (nvars > nhyd) {
-          for (int n=nhyd; n<nvars; ++n) {
+        if (nvars > nhyd_) {
+          for (int n=nhyd_; n<nvars; ++n) {
             par_for_inner(member, is, ie, [&](const int i) {
-              if (flx3(m,IDN,k,j,i) >= 0.0) {
-                flx3(m,n,k,j,i) = flx3(m,IDN,k,j,i)*wl(n,i);
+              if (flx3_(m,IDN,k,j,i) >= 0.0) {
+                flx3_(m,n,k,j,i) = flx3_(m,IDN,k,j,i)*wl(n,i);
               } else {
-                flx3(m,n,k,j,i) = flx3(m,IDN,k,j,i)*wr(n,i);
+                flx3_(m,n,k,j,i) = flx3_(m,IDN,k,j,i)*wr(n,i);
               }
             });
           }
@@ -299,27 +317,27 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
 
   // handle excision masks
   if (pmy_pack->pcoord->is_general_relativistic) {
-    if (coord.bh_excise) {
+    if (coord_.bh_excise) {
       auto &fc_mask_ = pmy_pack->pcoord->fc_mask;
 
-      auto fcorr_x1  = uflx.x1f;
-      auto fcorr_x2  = uflx.x2f;
-      auto fcorr_x3  = uflx.x3f;
+      auto &fcorr_x1 = uflx.x1f;
+      auto &fcorr_x2 = uflx.x2f;
+      auto &fcorr_x3 = uflx.x3f;
       par_for("excise_flux",DevExeSpace(), 0, nmb1, ks, ke+1, js, je+1, is, ie+1,
       KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-        Real &x1min = size.d_view(m).x1min;
-        Real &x1max = size.d_view(m).x1max;
-        Real &x2min = size.d_view(m).x2min;
-        Real &x2max = size.d_view(m).x2max;
-        Real &x3min = size.d_view(m).x3min;
-        Real &x3max = size.d_view(m).x3max;
+        Real &x1min = size_.d_view(m).x1min;
+        Real &x1max = size_.d_view(m).x1max;
+        Real &x2min = size_.d_view(m).x2min;
+        Real &x2max = size_.d_view(m).x2max;
+        Real &x3min = size_.d_view(m).x3min;
+        Real &x3max = size_.d_view(m).x3max;
 
-        Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
-        Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
-        Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
-        Real x1f = LeftEdgeX  (i-is, indcs.nx1, x1min, x1max);
-        Real x2f = LeftEdgeX  (j-js, indcs.nx2, x2min, x2max);
-        Real x3f = LeftEdgeX  (k-ks, indcs.nx3, x3min, x3max);
+        Real x1v = CellCenterX(i-is, indcs_.nx1, x1min, x1max);
+        Real x2v = CellCenterX(j-js, indcs_.nx2, x2min, x2max);
+        Real x3v = CellCenterX(k-ks, indcs_.nx3, x3min, x3max);
+        Real x1f = LeftEdgeX  (i-is, indcs_.nx1, x1min, x1max);
+        Real x2f = LeftEdgeX  (j-js, indcs_.nx2, x2min, x2max);
+        Real x3f = LeftEdgeX  (k-ks, indcs_.nx3, x3min, x3max);
 
         if (j<(je+1) && k<(ke+1)) {
           if (fc_mask_.x1f(m,k,j,i)) {
@@ -338,7 +356,7 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
             wi.e  = w0_(m,IEN,k,j,i);
 
             HydCons1D flux;
-            SingleStateLLF_GRHyd(wim1, wi, x1f, x2v, x3v, IVX, coord, eos, flux);
+            SingleStateLLF_GRHyd(wim1, wi, x1f, x2v, x3v, IVX, coord_, eos_, flux);
 
             fcorr_x1(m,IDN,k,j,i) = flux.d;
             fcorr_x1(m,IM1,k,j,i) = flux.mx;
@@ -365,7 +383,7 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
             wj.e  = w0_(m,IEN,k,j,i);
 
             HydCons1D flux;
-            SingleStateLLF_GRHyd(wjm1, wj, x1v, x2f, x3v, IVY, coord, eos, flux);
+            SingleStateLLF_GRHyd(wjm1, wj, x1v, x2f, x3v, IVY, coord_, eos_, flux);
 
             fcorr_x2(m,IDN,k,j,i) = flux.d;
             fcorr_x2(m,IM2,k,j,i) = flux.mx;
@@ -392,7 +410,7 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
             wk.e  = w0_(m,IEN,k,j,i);
 
             HydCons1D flux;
-            SingleStateLLF_GRHyd(wkm1, wk, x1v, x2v, x3f, IVZ, coord, eos, flux);
+            SingleStateLLF_GRHyd(wkm1, wk, x1v, x2v, x3f, IVZ, coord_, eos_, flux);
 
             fcorr_x3(m,IDN,k,j,i) = flux.d;
             fcorr_x3(m,IM3,k,j,i) = flux.mx;
