@@ -44,6 +44,62 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
   auto &one_d = pmy_pack->pmesh->one_d;
   auto &two_d = pmy_pack->pmesh->two_d;
 
+/****
+for (int m=0; m<nmb; ++m) {
+for (int n=0; n<24; ++n) {
+if (nghbr.h_view(m,n).gid >=0) {
+std::cout << std::endl << "MB= " << m << "  buffer= " << n << std::endl;
+std::cout << "nghbr id = " << nghbr.h_view(m,n).gid << std::endl;
+std::cout << "nghbr lev = " << nghbr.h_view(m,n).lev << std::endl;
+std::cout << "nghbr dest = " << nghbr.h_view(m,n).dest << std::endl;
+}
+}}
+***/
+
+
+/****
+for (int n=0; n<56; ++n) {
+std::cout << std::endl << "buffer= " << n << std::endl;
+std::cout << "ssame[0] = " << sbuf[n].iflux_same[0].bis <<"  "<< sbuf[n].iflux_same[0].bie <<"  "<<
+                        sbuf[n].iflux_same[0].bjs <<"  "<< sbuf[n].iflux_same[0].bje <<"  "<<
+                        sbuf[n].iflux_same[0].bks <<"  "<< sbuf[n].iflux_same[0].bke << std::endl;
+std::cout << "ssame[1] = " << sbuf[n].iflux_same[1].bis <<"  "<< sbuf[n].iflux_same[1].bie <<"  "<<
+                        sbuf[n].iflux_same[1].bjs <<"  "<< sbuf[n].iflux_same[1].bje <<"  "<<
+                        sbuf[n].iflux_same[1].bks <<"  "<< sbuf[n].iflux_same[1].bke << std::endl;
+std::cout << "ssame[2] = " << sbuf[n].iflux_same[2].bis <<"  "<< sbuf[n].iflux_same[2].bie <<"  "<<
+                        sbuf[n].iflux_same[2].bjs <<"  "<< sbuf[n].iflux_same[2].bje <<"  "<<
+                        sbuf[n].iflux_same[2].bks <<"  "<< sbuf[n].iflux_same[2].bke << std::endl;
+std::cout << "scoar[0] = " << sbuf[n].iflux_coar[0].bis <<"  "<< sbuf[n].iflux_coar[0].bie <<"  "<<
+                        sbuf[n].iflux_coar[0].bjs <<"  "<< sbuf[n].iflux_coar[0].bje <<"  "<<
+                        sbuf[n].iflux_coar[0].bks <<"  "<< sbuf[n].iflux_coar[0].bke << std::endl;
+std::cout << "scoar[1] = " << sbuf[n].iflux_coar[1].bis <<"  "<< sbuf[n].iflux_coar[1].bie <<"  "<<
+                        sbuf[n].iflux_coar[1].bjs <<"  "<< sbuf[n].iflux_coar[1].bje <<"  "<<
+                        sbuf[n].iflux_coar[1].bks <<"  "<< sbuf[n].iflux_coar[1].bke << std::endl;
+std::cout << "scoar[2] = " << sbuf[n].iflux_coar[2].bis <<"  "<< sbuf[n].iflux_coar[2].bie <<"  "<<
+                        sbuf[n].iflux_coar[2].bjs <<"  "<< sbuf[n].iflux_coar[2].bje <<"  "<<
+                        sbuf[n].iflux_coar[2].bks <<"  "<< sbuf[n].iflux_coar[2].bke << std::endl;
+std::cout << "rsame[0] = " << rbuf[n].iflux_same[0].bis <<"  "<< rbuf[n].iflux_same[0].bie <<"  "<<
+                        rbuf[n].iflux_same[0].bjs <<"  "<< rbuf[n].iflux_same[0].bje <<"  "<<
+                        rbuf[n].iflux_same[0].bks <<"  "<< rbuf[n].iflux_same[0].bke << std::endl;
+std::cout << "rsame[1] = " << rbuf[n].iflux_same[1].bis <<"  "<< rbuf[n].iflux_same[1].bie <<"  "<<
+                        rbuf[n].iflux_same[1].bjs <<"  "<< rbuf[n].iflux_same[1].bje <<"  "<<
+                        rbuf[n].iflux_same[1].bks <<"  "<< rbuf[n].iflux_same[1].bke << std::endl;
+std::cout << "rsame[2] = " << rbuf[n].iflux_same[2].bis <<"  "<< rbuf[n].iflux_same[2].bie <<"  "<<
+                        rbuf[n].iflux_same[2].bjs <<"  "<< rbuf[n].iflux_same[2].bje <<"  "<<
+                        rbuf[n].iflux_same[2].bks <<"  "<< rbuf[n].iflux_same[2].bke << std::endl;
+std::cout << "rcoar[0] = " << rbuf[n].iflux_coar[0].bis <<"  "<< rbuf[n].iflux_coar[0].bie <<"  "<<
+                        rbuf[n].iflux_coar[0].bjs <<"  "<< rbuf[n].iflux_coar[0].bje <<"  "<<
+                        rbuf[n].iflux_coar[0].bks <<"  "<< rbuf[n].iflux_coar[0].bke << std::endl;
+std::cout << "rcoar[1] = " << rbuf[n].iflux_coar[1].bis <<"  "<< rbuf[n].iflux_coar[1].bie <<"  "<<
+                        rbuf[n].iflux_coar[1].bjs <<"  "<< rbuf[n].iflux_coar[1].bje <<"  "<<
+                        rbuf[n].iflux_coar[1].bks <<"  "<< rbuf[n].iflux_coar[1].bke << std::endl;
+std::cout << "rcoar[2] = " << rbuf[n].iflux_coar[2].bis <<"  "<< rbuf[n].iflux_coar[2].bie <<"  "<<
+                        rbuf[n].iflux_coar[2].bjs <<"  "<< rbuf[n].iflux_coar[2].bje <<"  "<<
+                        rbuf[n].iflux_coar[2].bks <<"  "<< rbuf[n].iflux_coar[2].bke << std::endl;
+}
+***/
+
+
   // Outer loop over (# of MeshBlocks)*(# of neighbors)*(3 field components)
   Kokkos::TeamPolicy<> policy(DevExeSpace(), (3*nmb*nnghbr), Kokkos::AUTO);
   Kokkos::parallel_for("RecvBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
@@ -51,32 +107,48 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
     const int n = (tmember.league_rank() - m*(3*nnghbr))/3;
     const int v = (tmember.league_rank() - m*(3*nnghbr) - 3*n);
 
-    // Note send buffer flux indices are for the coarse mesh
-    const int il = sbuf[n].iflux_coar[v].bis;
-    const int iu = sbuf[n].iflux_coar[v].bie;
-    const int jl = sbuf[n].iflux_coar[v].bjs;
-    const int ju = sbuf[n].iflux_coar[v].bje;
-    const int kl = sbuf[n].iflux_coar[v].bks;
-    const int ku = sbuf[n].iflux_coar[v].bke;
-    const int ndat = sbuf[n].iflxc_ndat;
-    const int ni = iu - il + 1;
-    const int nj = ju - jl + 1;
-    const int nk = ku - kl + 1;
-    const int nji  = nj*ni;
-    const int nkj  = nk*nj;
-    const int nki  = nk*ni;
+    // only load buffers when neighbor exists and is at same or coarser level
+    if ((nghbr.d_view(m,n).gid >= 0) && (nghbr.d_view(m,n).lev <= mblev.d_view(m))) {
+/***
+    if ((nghbr.d_view(m,n).gid >= 0) && (nghbr.d_view(m,n).lev < mblev.d_view(m))) {
+***/
+      // if neighbor is at coarser level, use cindices to pack buffer
+      // Note indices can be different for each component of flux
+      int il, iu, jl, ju, kl, ku, ndat;
+      if (nghbr.d_view(m,n).lev < mblev.d_view(m)) {
+        il = sbuf[n].iflux_coar[v].bis;
+        iu = sbuf[n].iflux_coar[v].bie;
+        jl = sbuf[n].iflux_coar[v].bjs;
+        ju = sbuf[n].iflux_coar[v].bje;
+        kl = sbuf[n].iflux_coar[v].bks;
+        ku = sbuf[n].iflux_coar[v].bke;
+        ndat = sbuf[n].iflxc_ndat;
+      // if neighbor is at same level, use sindices to pack buffer
+      } else if (nghbr.d_view(m,n).lev == mblev.d_view(m)) {
+        il = sbuf[n].iflux_same[v].bis;
+        iu = sbuf[n].iflux_same[v].bie;
+        jl = sbuf[n].iflux_same[v].bjs;
+        ju = sbuf[n].iflux_same[v].bje;
+        kl = sbuf[n].iflux_same[v].bks;
+        ku = sbuf[n].iflux_same[v].bke;
+        ndat = sbuf[n].iflxs_ndat;
+      }
+      const int ni = iu - il + 1;
+      const int nj = ju - jl + 1;
+      const int nk = ku - kl + 1;
+      const int nji  = nj*ni;
+      const int nkj  = nk*nj;
+      const int nki  = nk*ni;
 
-    // indices of recv'ing (destination) MB and buffer: MB IDs are stored sequentially
-    // in MeshBlockPacks, so array index equals (target_id - first_id)
-    int dm = nghbr.d_view(m,n).gid - mbgid.d_view(0);
-    int dn = nghbr.d_view(m,n).dest;
+      // indices of recv'ing (destination) MB and buffer: MB IDs are stored sequentially
+      // in MeshBlockPacks, so array index equals (target_id - first_id)
+      int dm = nghbr.d_view(m,n).gid - mbgid.d_view(0);
+      int dn = nghbr.d_view(m,n).dest;
 
-    // only pack buffers when neighbor is at coarser level
-    if ((nghbr.d_view(m,n).gid >=0) && (nghbr.d_view(m,n).lev < mblev.d_view(m))) {
       // x1faces (only load x2e and x3e)
       if (n<8) {
         // i-index is fixed for flux correction on x1faces
-        int fi = 2*il - cis;
+        const int fi = 2*il - cis;
         Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
           int k = idx / nj;
           int j = (idx - k * nj) + jl;
@@ -85,12 +157,18 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
           int fk = 2*k - cks;
           if (v==1) {
             Real rflx;
-            if (one_d) {
-              rflx = flx.x2e(m,0,0,fi);
-            } else if (two_d) {
-              rflx = 0.5*(flx.x2e(m,0,fj,fi) + flx.x2e(m,0,fj+1,fi));
+            // if neighbor is at same level, load x2e directly
+            if (nghbr.d_view(m,n).lev == mblev.d_view(m)) {
+              rflx = flx.x2e(m,k,j,il);
+            // if neighbor is at coarser level, restrict x2e
             } else {
-              rflx = 0.5*(flx.x2e(m,fk,fj,fi) + flx.x2e(m,fk,fj+1,fi));
+              if (one_d) {
+                rflx = flx.x2e(m,0,0,fi);
+              } else if (two_d) {
+                rflx = 0.5*(flx.x2e(m,0,fj,fi) + flx.x2e(m,0,fj+1,fi));
+              } else {
+                rflx = 0.5*(flx.x2e(m,fk,fj,fi) + flx.x2e(m,fk,fj+1,fi));
+              }
             }
             // copy directly into recv buffer if MeshBlocks on same rank
             if (nghbr.d_view(m,n).rank == my_rank) {
@@ -101,17 +179,21 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
             }
           } else if (v==2) {
             Real rflx;
-            if (one_d) {
-              rflx = flx.x3e(m,0,0,fi);
-            } else if (two_d) {
-              rflx = flx.x3e(m,0,fj,fi);
+            // if neighbor is at same level, load x3e directly
+            if (nghbr.d_view(m,n).lev == mblev.d_view(m)) {
+              rflx = flx.x3e(m,k,j,il);
+            // if neighbor is at coarser level, restrict x3e
             } else {
-              rflx = 0.5*(flx.x3e(m,fk,fj,fi) + flx.x3e(m,fk+1,fj,fi));
+              if (one_d) {
+                rflx = flx.x3e(m,0,0,fi);
+              } else if (two_d) {
+                rflx = flx.x3e(m,0,fj,fi);
+              } else {
+                rflx = 0.5*(flx.x3e(m,fk,fj,fi) + flx.x3e(m,fk+1,fj,fi));
+              }
             }
-            // copy directly into recv buffer if MeshBlocks on same rank
             if (nghbr.d_view(m,n).rank == my_rank) {
               rbuf[dn].flux(dm, ndat*v + (j-jl + nj*(k-kl))) = rflx;
-            // else copy into send buffer for MPI communication below
             } else {
               sbuf[n].flux(m, ndat*v + (j-jl + nj*(k-kl))) = rflx;
             }
@@ -120,9 +202,11 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
         tmember.team_barrier();
 
       // x2faces (only load x1e and x3e)
+/***
       } else if (n<16) {
         // j-index is fixed for flux correction on x2faces
-        int fj = 2*jl - cjs;
+        const int j = jl;
+        const int fj = 2*jl - cjs;
         Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nki), [&](const int idx) {
           int k = idx / ni;
           int i = (idx - k * ni) + il;
@@ -131,10 +215,16 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
           int fi = 2*i - cis;
           if (v==0) {
             Real rflx;
-            if (two_d) {
-              rflx = 0.5*(flx.x1e(m,0,fj,fi) + flx.x1e(m,0,fj,fi+1));
+            // if neighbor is at same level, load x1e directly
+            if (nghbr.d_view(m,n).lev == mblev.d_view(m)) {
+              rflx = flx.x1e(m,k,j,i);
+            // if neighbor is at coarser level, restrict x1e
             } else {
-              rflx = 0.5*(flx.x1e(m,fk,fj,fi) + flx.x1e(m,fk,fj,fi+1));
+              if (two_d) {
+                rflx = 0.5*(flx.x1e(m,0,fj,fi) + flx.x1e(m,0,fj,fi+1));
+              } else {
+                rflx = 0.5*(flx.x1e(m,fk,fj,fi) + flx.x1e(m,fk,fj,fi+1));
+              }
             }
             if (nghbr.d_view(m,n).rank == my_rank) {
               rbuf[dn].flux(dm, ndat*v + i-il + ni*(k-kl)) = rflx;
@@ -143,10 +233,16 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
             }
           } else if (v==2) {
             Real rflx;
-            if (two_d) {
-              rflx = flx.x3e(m,0,fj,fi);
+            // if neighbor is at same level, load x3e directly
+            if (nghbr.d_view(m,n).lev == mblev.d_view(m)) {
+              rflx = flx.x3e(m,k,j,i);
+            // if neighbor is at coarser level, restrict x3e
             } else {
-              rflx = 0.5*(flx.x3e(m,fk,fj,fi) + flx.x3e(m,fk+1,fj,fi));
+              if (two_d) {
+                rflx = flx.x3e(m,0,fj,fi);
+              } else {
+                rflx = 0.5*(flx.x3e(m,fk,fj,fi) + flx.x3e(m,fk+1,fj,fi));
+              }
             }
             if (nghbr.d_view(m,n).rank == my_rank) {
               rbuf[dn].flux(dm, ndat*v + i-il + ni*(k-kl)) = rflx;
@@ -160,17 +256,25 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
       // x1x2 edges (only load x3e)
       } else if (n<24) {
         // i/j-index is fixed for flux correction on x1x2 edges
-        int fi = 2*il - cis;
-        int fj = 2*jl - cjs;
+        const int i = il;
+        const int j = jl;
+        const int fi = 2*il - cis;
+        const int fj = 2*jl - cjs;
         if (v==2) {
           Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember,nk),[&](const int idx) {
             int k = idx + kl;
             int fk = 2*k - cks;
             Real rflx;
-            if (two_d) {
-              rflx = flx.x3e(m,0,fj,fi);
+            // if neighbor is at same level, load x3e directly
+            if (nghbr.d_view(m,n).lev == mblev.d_view(m)) {
+              rflx = flx.x3e(m,k,j,i);
+            // if neighbor is at coarser level, restrict x3e
             } else {
-              rflx = 0.5*(flx.x3e(m,fk,fj,fi) + flx.x3e(m,fk+1,fj,fi));
+              if (two_d) {
+                rflx = flx.x3e(m,0,fj,fi);
+              } else {
+                rflx = 0.5*(flx.x3e(m,fk,fj,fi) + flx.x3e(m,fk+1,fj,fi));
+              }
             }
             if (nghbr.d_view(m,n).rank == my_rank) {
               rbuf[dn].flux(dm, ndat*v + (k-kl)) = rflx;
@@ -184,7 +288,8 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
       // x3faces (only load x1e and x2e)
       } else if (n<32) {
         // k-index is fixed for flux correction on x3faces
-        int fk = 2*kl - cks;
+        const int k = kl;
+        const int fk = 2*kl - cks;
         Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nji), [&](const int idx) {
           int j = idx / ni;
           int i = (idx - j * ni) + il;
@@ -192,14 +297,28 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
           int fi = 2*i - cis;
           int fj = 2*j - cjs;
           if (v==0) {
-            Real rflx = 0.5*(flx.x1e(m,fk,fj,fi) + flx.x1e(m,fk,fj,fi+1));
+            Real rflx;
+            // if neighbor is at same level, load x1e directly
+            if (nghbr.d_view(m,n).lev == mblev.d_view(m)) {
+              rflx = flx.x1e(m,k,j,i);
+            // if neighbor is at coarser level, restrict x1e
+            } else {
+              rflx = 0.5*(flx.x1e(m,fk,fj,fi) + flx.x1e(m,fk,fj,fi+1));
+            }
             if (nghbr.d_view(m,n).rank == my_rank) {
               rbuf[dn].flux(dm, ndat*v + i-il + ni*(j-jl)) = rflx;
             } else {
               sbuf[n].flux(m, ndat*v + i-il + ni*(j-jl)) = rflx;
             }
           } else if (v==1) {
-            Real rflx = 0.5*(flx.x2e(m,fk,fj,fi) + flx.x2e(m,fk,fj+1,fi));
+            Real rflx;
+            // if neighbor is at same level, load x2e directly
+            if (nghbr.d_view(m,n).lev == mblev.d_view(m)) {
+              rflx = flx.x2e(m,k,j,i);
+            // if neighbor is at coarser level, restrict x2e
+            } else {
+              rflx = 0.5*(flx.x2e(m,fk,fj,fi) + flx.x2e(m,fk,fj+1,fi));
+            }
             if (nghbr.d_view(m,n).rank == my_rank) {
               rbuf[dn].flux(dm, ndat*v + i-il + ni*(j-jl)) = rflx;
             } else {
@@ -211,13 +330,22 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
 
       // x3x1 edges (only load x2e)
       } else if (n<40) {
-        int fi = 2*il - cis;
-        int fk = 2*kl - cks;
+        const int i = il;
+        const int k = kl;
+        const int fi = 2*il - cis;
+        const int fk = 2*kl - cks;
         Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nj), [&](const int idx) {
           int j = idx + jl;
           int fj = 2*j - cjs;
           if (v==1) {
-            Real rflx = 0.5*(flx.x2e(m,fk,fj,fi) + flx.x2e(m,fk,fj+1,fi));
+            Real rflx;
+            // if neighbor is at same level, load x2e directly
+            if (nghbr.d_view(m,n).lev == mblev.d_view(m)) {
+              rflx = flx.x2e(m,k,j,i);
+            // if neighbor is at coarser level, restrict x2e
+            } else {
+              rflx = 0.5*(flx.x2e(m,fk,fj,fi) + flx.x2e(m,fk,fj+1,fi));
+            }
             if (nghbr.d_view(m,n).rank == my_rank) {
               rbuf[dn].flux(dm, ndat*v + (j-jl)) = rflx;
             } else {
@@ -229,13 +357,22 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
 
       // x2x3 edges (only load x1e)
       } else if (n<48) {
-        int fj = 2*jl - cjs;
-        int fk = 2*kl - cks;
+        const int j = jl;
+        const int k = kl;
+        const int fj = 2*jl - cjs;
+        const int fk = 2*kl - cks;
         Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, ni), [&](const int idx) {
           int i = idx + il;
           int fi = 2*i - cis;
           if (v==0) {
-            Real rflx = 0.5*(flx.x1e(m,fk,fj,fi) + flx.x1e(m,fk,fj,fi+1));
+            Real rflx;
+            // if neighbor is at same level, load x1e directly
+            if (nghbr.d_view(m,n).lev == mblev.d_view(m)) {
+              rflx = flx.x1e(m,k,j,i);
+            // if neighbor is at coarser level, restrict x1e
+            } else {
+              rflx = 0.5*(flx.x1e(m,fk,fj,fi) + flx.x1e(m,fk,fj,fi+1));
+            }
             if (nghbr.d_view(m,n).rank == my_rank) {
               rbuf[dn].flux(dm, ndat*v + i-il) = rflx;
             } else {
@@ -244,6 +381,7 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
           }
         });
         tmember.team_barrier();
+***/
       }
     }  // end if-neighbor-exists block
   });  // end par_for_outer
@@ -347,23 +485,35 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx) {
     const int n = (tmember.league_rank() - m*(3*nnghbr))/3;
     const int v = (tmember.league_rank() - m*(3*nnghbr) - 3*n);
 
-    // Recv buffer flux indices are for the regular mesh
-    const int il = rbuf[n].iflux_coar[v].bis;
-    const int iu = rbuf[n].iflux_coar[v].bie;
-    const int jl = rbuf[n].iflux_coar[v].bjs;
-    const int ju = rbuf[n].iflux_coar[v].bje;
-    const int kl = rbuf[n].iflux_coar[v].bks;
-    const int ku = rbuf[n].iflux_coar[v].bke;
-    const int ndat = rbuf[n].iflxc_ndat;
-    const int ni = iu - il + 1;
-    const int nj = ju - jl + 1;
-    const int nk = ku - kl + 1;
-    const int nji  = nj*ni;
-    const int nkj  = nk*nj;
-    const int nki  = nk*ni;
+    // only unpack buffers when neighbor exists and is at same or finer level
+    if ((nghbr.d_view(m,n).gid >= 0) && (nghbr.d_view(m,n).lev >= mblev.d_view(m))) {
+      // if neighbor is at finer level, use flux_coar indices to unpack buffer
+      int il, iu, jl, ju, kl, ku, ndat;
+      if (nghbr.d_view(m,n).lev > mblev.d_view(m)) {
+        il = rbuf[n].iflux_coar[v].bis;
+        iu = rbuf[n].iflux_coar[v].bie;
+        jl = rbuf[n].iflux_coar[v].bjs;
+        ju = rbuf[n].iflux_coar[v].bje;
+        kl = rbuf[n].iflux_coar[v].bks;
+        ku = rbuf[n].iflux_coar[v].bke;
+        ndat = rbuf[n].iflxc_ndat;
+      // if neighbor is at same level, use sindices to unpack buffer
+      } else if (nghbr.d_view(m,n).lev == mblev.d_view(m)) {
+        il = rbuf[n].iflux_same[v].bis;
+        iu = rbuf[n].iflux_same[v].bie;
+        jl = rbuf[n].iflux_same[v].bjs;
+        ju = rbuf[n].iflux_same[v].bje;
+        kl = rbuf[n].iflux_same[v].bks;
+        ku = rbuf[n].iflux_same[v].bke;
+        ndat = rbuf[n].iflxs_ndat;
+      }
+      const int ni = iu - il + 1;
+      const int nj = ju - jl + 1;
+      const int nk = ku - kl + 1;
+      const int nji  = nj*ni;
+      const int nkj  = nk*nj;
+      const int nki  = nk*ni;
 
-    // only unpack buffers for faces and edges when neighbor is at finer level
-    if ((nghbr.d_view(m,n).gid >=0) && (nghbr.d_view(m,n).lev > mblev.d_view(m))) {
       // x1faces
       if (n<8) {
         Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {

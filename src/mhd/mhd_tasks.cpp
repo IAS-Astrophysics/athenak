@@ -210,29 +210,25 @@ TaskStatus MHD::RecvU(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskStatus MHD::SendE
-//! \brief Wrapper task list function to pack/send restricted values of fluxes of
-//! magnetic fields (i.e. edge-centered electric field E) at fine/coarse boundaries
+//! \brief Wrapper task list function to pack/send fluxes of magnetic fields
+//! (i.e. edge-centered electric field E) at MeshBlock boundaries. This is performed both
+//! at MeshBlock boundaries at the same level (to keep magnetic flux in-sync on different
+//! MeshBlocks), and at fine/coarse boundaries with SMR/AMR using restricted values of E.
 
 TaskStatus MHD::SendE(Driver *pdrive, int stage) {
   TaskStatus tstat = TaskStatus::complete;
-  // Only execute this function with SMR/SMR
-  if (pmy_pack->pmesh->multilevel) {
-    tstat = pbval_b->PackAndSendFluxFC(efld);
-  }
+  tstat = pbval_b->PackAndSendFluxFC(efld);
   return tstat;
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskStatus MHD::RecvE
-//! \brief Wrapper task list function to recv/unpack restricted values of fluxes of
-//! magnetic fields (i.e. edge-centered electric field E) at fine/coarse boundaries
+//! \brief Wrapper task list function to recv/unpack fluxes of magnetic fields
+//! (i.e. edge-centered electric field E) at MeshBlock boundaries
 
 TaskStatus MHD::RecvE(Driver *pdrive, int stage) {
   TaskStatus tstat = TaskStatus::complete;
-  // Only execute this function with SMR/SMR
-  if (pmy_pack->pmesh->multilevel) {
-    tstat = pbval_b->RecvAndUnpackFluxFC(efld);
-  }
+  tstat = pbval_b->RecvAndUnpackFluxFC(efld);
   return tstat;
 }
 
