@@ -38,11 +38,11 @@ namespace mhd {
 
 template <MHD_RSolver rsolver_method_>
 void MHD::CalculateFluxes(Driver *pdriver, int stage) {
-  RegionIndcs &indcs = pmy_pack->pmesh->mb_indcs;
-  int is = indcs.is, ie = indcs.ie;
-  int js = indcs.js, je = indcs.je;
-  int ks = indcs.ks, ke = indcs.ke;
-  int ncells1 = indcs.nx1 + 2*(indcs.ng);
+  RegionIndcs &indcs_ = pmy_pack->pmesh->mb_indcs;
+  int is = indcs_.is, ie = indcs_.ie;
+  int js = indcs_.js, je = indcs_.je;
+  int ks = indcs_.ks, ke = indcs_.ke;
+  int ncells1 = indcs_.nx1 + 2*(indcs_.ng);
 
   int &nmhd_ = nmhd;
   int nvars = nmhd + nscalars;
@@ -53,9 +53,9 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
     extrema = true;
   }
 
-  auto &eos = peos->eos_data;
-  auto &size = pmy_pack->pmb->mb_size;
-  auto &coord = pmy_pack->pcoord->coord_data;
+  auto &eos_ = peos->eos_data;
+  auto &size_ = pmy_pack->pmb->mb_size;
+  auto &coord_ = pmy_pack->pcoord->coord_data;
   auto &w0_ = w0;
   auto &b0_ = bcc0;
 
@@ -65,10 +65,10 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
   size_t scr_size = (ScrArray2D<Real>::shmem_size(nvars, ncells1) +
                      ScrArray2D<Real>::shmem_size(3, ncells1)) * 2;
   int scr_level = 0;
-  auto flx1 = uflx.x1f;
-  auto e31 = e3x1;
-  auto e21 = e2x1;
-  auto &bx = b0.x1f;
+  auto &flx1_ = uflx.x1f;
+  auto &e31_ = e3x1;
+  auto &e21_ = e2x1;
+  auto &bx_ = b0.x1f;
 
   // set the loop limits for 1D/2D/3D problems
   int jl,ju,kl,ku;
@@ -99,12 +99,12 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
         break;
       case ReconstructionMethod::ppm4:
       case ReconstructionMethod::ppmx:
-        PiecewiseParabolicX1(member,eos,extrema, true,  m, k, j, is-1, ie+1, w0_, wl, wr);
-        PiecewiseParabolicX1(member,eos,extrema, false, m, k, j, is-1, ie+1, b0_, bl, br);
+        PiecewiseParabolicX1(member,eos_,extrema,true,  m, k, j, is-1, ie+1, w0_, wl, wr);
+        PiecewiseParabolicX1(member,eos_,extrema,false, m, k, j, is-1, ie+1, b0_, bl, br);
         break;
       case ReconstructionMethod::wenoz:
-        WENOZX1(member, eos, true,  m, k, j, is-1, ie+1, w0_, wl, wr);
-        WENOZX1(member, eos, false, m, k, j, is-1, ie+1, b0_, bl, br);
+        WENOZX1(member, eos_, true,  m, k, j, is-1, ie+1, w0_, wl, wr);
+        WENOZX1(member, eos_, false, m, k, j, is-1, ie+1, b0_, bl, br);
         break;
       default:
         break;
@@ -115,6 +115,15 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
     // compute fluxes over [is,ie+1].  MHD RS also computes electric fields, where
     // (IBY) component of flx = E_{z} = -(v x B)_{z} = -(v1*b2 - v2*b1)
     // (IBZ) component of flx = E_{y} = -(v x B)_{y} =  (v1*b3 - v3*b1)
+    // NOTE(@pdmullen): Capture variables prior to if constexpr.  Required for cuda 11.6+.
+    auto eos = eos_;
+    auto indcs = indcs_;
+    auto size = size_;
+    auto coord = coord_;
+    auto bx = bx_;
+    auto flx1 = flx1_;
+    auto e31 = e31_;
+    auto e21 = e21_;
     if constexpr (rsolver_method_ == MHD_RSolver::advect) {
       Advect(member,eos,indcs,size,coord,m,k,j,is,ie+1,IVX,wl,wr,bl,br,bx,flx1,e31,e21);
     } else if constexpr (rsolver_method_ == MHD_RSolver::llf) {
@@ -138,10 +147,10 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
     if (nvars > nmhd_) {
       for (int n=nmhd_; n<nvars; ++n) {
         par_for_inner(member, is, ie+1, [&](const int i) {
-          if (flx1(m,IDN,k,j,i) >= 0.0) {
-            flx1(m,n,k,j,i) = flx1(m,IDN,k,j,i)*wl(n,i);
+          if (flx1_(m,IDN,k,j,i) >= 0.0) {
+            flx1_(m,n,k,j,i) = flx1_(m,IDN,k,j,i)*wl(n,i);
           } else {
-            flx1(m,n,k,j,i) = flx1(m,IDN,k,j,i)*wr(n,i);
+            flx1_(m,n,k,j,i) = flx1_(m,IDN,k,j,i)*wr(n,i);
           }
         });
       }
@@ -154,10 +163,10 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
   if (pmy_pack->pmesh->multi_d) {
     scr_size = (ScrArray2D<Real>::shmem_size(nvars, ncells1) +
                 ScrArray2D<Real>::shmem_size(3, ncells1)) * 3;
-    auto flx2 = uflx.x2f;
-    auto &by = b0.x2f;
-    auto e12 = e1x2;
-    auto e32 = e3x2;
+    auto &flx2_ = uflx.x2f;
+    auto &by_ = b0.x2f;
+    auto &e12_ = e1x2;
+    auto &e32_ = e3x2;
 
     // set the loop limits for 2D/3D problems
     if (pmy_pack->pmesh->two_d) {
@@ -202,12 +211,12 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
             break;
           case ReconstructionMethod::ppm4:
           case ReconstructionMethod::ppmx:
-            PiecewiseParabolicX2(member,eos,extrema,true, m,k,j,is-1,ie+1,w0_,wl_jp1,wr);
-            PiecewiseParabolicX2(member,eos,extrema,false,m,k,j,is-1,ie+1,b0_,bl_jp1,br);
+            PiecewiseParabolicX2(member,eos_,extrema,true, m,k,j,is-1,ie+1,w0_,wl_jp1,wr);
+            PiecewiseParabolicX2(member,eos_,extrema,false,m,k,j,is-1,ie+1,b0_,bl_jp1,br);
             break;
           case ReconstructionMethod::wenoz:
-            WENOZX2(member, eos, true,  m, k, j, is-1, ie+1, w0_, wl_jp1, wr);
-            WENOZX2(member, eos, false, m, k, j, is-1, ie+1, b0_, bl_jp1, br);
+            WENOZX2(member, eos_, true,  m, k, j, is-1, ie+1, w0_, wl_jp1, wr);
+            WENOZX2(member, eos_, false, m, k, j, is-1, ie+1, b0_, bl_jp1, br);
             break;
           default:
             break;
@@ -218,6 +227,15 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
         // (IBY) component of flx = E_{x} = -(v x B)_{x} = -(v2*b3 - v3*b2)
         // (IBZ) component of flx = E_{z} = -(v x B)_{z} =  (v2*b1 - v1*b2)
         if (j>(js-1)) {
+          // NOTE(@pdmullen): Capture variables prior to if constexpr.
+          auto eos = eos_;
+          auto indcs = indcs_;
+          auto size = size_;
+          auto coord = coord_;
+          auto by = by_;
+          auto flx2 = flx2_;
+          auto e12 = e12_;
+          auto e32 = e32_;
           if constexpr (rsolver_method_ == MHD_RSolver::advect) {
             Advect(member,eos,indcs,size,coord,
                     m,k,j,is-1,ie+1,IVY,wl,wr,bl,br,by,flx2,e12,e32);
@@ -250,10 +268,10 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
         if (nvars > nmhd_) {
           for (int n=nmhd_; n<nvars; ++n) {
             par_for_inner(member, is, ie, [&](const int i) {
-              if (flx2(m,IDN,k,j,i) >= 0.0) {
-                flx2(m,n,k,j,i) = flx2(m,IDN,k,j,i)*wl(n,i);
+              if (flx2_(m,IDN,k,j,i) >= 0.0) {
+                flx2_(m,n,k,j,i) = flx2_(m,IDN,k,j,i)*wl(n,i);
               } else {
-                flx2(m,n,k,j,i) = flx2(m,IDN,k,j,i)*wr(n,i);
+                flx2_(m,n,k,j,i) = flx2_(m,IDN,k,j,i)*wr(n,i);
               }
             });
           }
@@ -268,10 +286,10 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
   if (pmy_pack->pmesh->three_d) {
     scr_size = (ScrArray2D<Real>::shmem_size(nvars, ncells1) +
                 ScrArray2D<Real>::shmem_size(3, ncells1)) * 3;
-    auto flx3 = uflx.x3f;
-    auto &bz = b0.x3f;
-    auto e23 = e2x3;
-    auto e13 = e1x3;
+    auto &flx3_ = uflx.x3f;
+    auto &bz_ = b0.x3f;
+    auto &e23_ = e2x3;
+    auto &e13_ = e1x3;
 
     par_for_outer("mhd_flux3",DevExeSpace(), scr_size, scr_level, 0, nmb1, js-1, je+1,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int j) {
@@ -309,12 +327,12 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
             break;
           case ReconstructionMethod::ppm4:
           case ReconstructionMethod::ppmx:
-            PiecewiseParabolicX3(member,eos,extrema,true, m,k,j,is-1,ie+1,w0_,wl_kp1,wr);
-            PiecewiseParabolicX3(member,eos,extrema,false,m,k,j,is-1,ie+1,b0_,bl_kp1,br);
+            PiecewiseParabolicX3(member,eos_,extrema,true, m,k,j,is-1,ie+1,w0_,wl_kp1,wr);
+            PiecewiseParabolicX3(member,eos_,extrema,false,m,k,j,is-1,ie+1,b0_,bl_kp1,br);
             break;
           case ReconstructionMethod::wenoz:
-            WENOZX3(member, eos, true,  m, k, j, is-1, ie+1, w0_, wl_kp1, wr);
-            WENOZX3(member, eos, false, m, k, j, is-1, ie+1, b0_, bl_kp1, br);
+            WENOZX3(member, eos_, true,  m, k, j, is-1, ie+1, w0_, wl_kp1, wr);
+            WENOZX3(member, eos_, false, m, k, j, is-1, ie+1, b0_, bl_kp1, br);
             break;
           default:
             break;
@@ -325,6 +343,15 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
         // (IBY) component of flx = E_{y} = -(v x B)_{y} = -(v3*b1 - v1*b3)
         // (IBZ) component of flx = E_{x} = -(v x B)_{x} =  (v3*b2 - v2*b3)
         if (k>(ks-1)) {
+          // NOTE(@pdmullen): Capture variables prior to if constexpr.
+          auto eos = eos_;
+          auto indcs = indcs_;
+          auto size = size_;
+          auto coord = coord_;
+          auto bz = bz_;
+          auto flx3 = flx3_;
+          auto e23 = e23_;
+          auto e13 = e13_;
           if constexpr (rsolver_method_ == MHD_RSolver::advect) {
             Advect(member,eos,indcs,size,coord,
                     m,k,j,is-1,ie+1,IVZ,wl,wr,bl,br,bz,flx3,e23,e13);
@@ -357,10 +384,10 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
         if (nvars > nmhd_) {
           for (int n=nmhd_; n<nvars; ++n) {
             par_for_inner(member, is, ie, [&](const int i) {
-              if (flx3(m,IDN,k,j,i) >= 0.0) {
-                flx3(m,n,k,j,i) = flx3(m,IDN,k,j,i)*wl(n,i);
+              if (flx3_(m,IDN,k,j,i) >= 0.0) {
+                flx3_(m,n,k,j,i) = flx3_(m,IDN,k,j,i)*wl(n,i);
               } else {
-                flx3(m,n,k,j,i) = flx3(m,IDN,k,j,i)*wr(n,i);
+                flx3_(m,n,k,j,i) = flx3_(m,IDN,k,j,i)*wr(n,i);
               }
             });
           }
@@ -371,19 +398,19 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
 
   // handle excision masks
   if (pmy_pack->pcoord->is_general_relativistic) {
-    if (coord.bh_excise) {
+    if (coord_.bh_excise) {
       auto &fc_mask_ = pmy_pack->pcoord->fc_mask;
 
-      auto fcorr_x1  = uflx.x1f;
-      auto fcorr_x2  = uflx.x2f;
-      auto fcorr_x3  = uflx.x3f;
+      auto &fcorr_x1 = uflx.x1f;
+      auto &fcorr_x2 = uflx.x2f;
+      auto &fcorr_x3 = uflx.x3f;
 
-      auto fcorr_e31 = e3x1;
-      auto fcorr_e21 = e2x1;
-      auto fcorr_e12 = e1x2;
-      auto fcorr_e32 = e3x2;
-      auto fcorr_e23 = e2x3;
-      auto fcorr_e13 = e1x3;
+      auto &fcorr_e31 = e3x1;
+      auto &fcorr_e21 = e2x1;
+      auto &fcorr_e12 = e1x2;
+      auto &fcorr_e32 = e3x2;
+      auto &fcorr_e23 = e2x3;
+      auto &fcorr_e13 = e1x3;
 
       auto &bcc   = bcc0;
       auto &b0_x1 = b0.x1f;
@@ -391,19 +418,19 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
       auto &b0_x3 = b0.x3f;
       par_for("excise_flux",DevExeSpace(), 0, nmb1, ks-1, ke+1, js-1, je+1, is-1, ie+1,
       KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-        Real &x1min = size.d_view(m).x1min;
-        Real &x1max = size.d_view(m).x1max;
-        Real &x2min = size.d_view(m).x2min;
-        Real &x2max = size.d_view(m).x2max;
-        Real &x3min = size.d_view(m).x3min;
-        Real &x3max = size.d_view(m).x3max;
+        Real &x1min = size_.d_view(m).x1min;
+        Real &x1max = size_.d_view(m).x1max;
+        Real &x2min = size_.d_view(m).x2min;
+        Real &x2max = size_.d_view(m).x2max;
+        Real &x3min = size_.d_view(m).x3min;
+        Real &x3max = size_.d_view(m).x3max;
 
-        Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
-        Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
-        Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
-        Real x1f = LeftEdgeX  (i-is, indcs.nx1, x1min, x1max);
-        Real x2f = LeftEdgeX  (j-js, indcs.nx2, x2min, x2max);
-        Real x3f = LeftEdgeX  (k-ks, indcs.nx3, x3min, x3max);
+        Real x1v = CellCenterX(i-is, indcs_.nx1, x1min, x1max);
+        Real x2v = CellCenterX(j-js, indcs_.nx2, x2min, x2max);
+        Real x3v = CellCenterX(k-ks, indcs_.nx3, x3min, x3max);
+        Real x1f = LeftEdgeX  (i-is, indcs_.nx1, x1min, x1max);
+        Real x2f = LeftEdgeX  (j-js, indcs_.nx2, x2min, x2max);
+        Real x3f = LeftEdgeX  (k-ks, indcs_.nx3, x3min, x3max);
 
         if (i>(is-1)) {
           if (fc_mask_.x1f(m,k,j,i)) {
@@ -427,7 +454,7 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
             Real bxi = b0_x1(m,k,j,i);
 
             MHDCons1D flux;
-            SingleStateLLF_GRMHD(wim1, wi, bxi, x1f, x2v, x3v, IVX, coord, eos, flux);
+            SingleStateLLF_GRMHD(wim1, wi, bxi, x1f, x2v, x3v, IVX, coord_, eos_, flux);
 
             fcorr_x1(m,IDN,k,j,i) = flux.d;
             fcorr_x1(m,IM1,k,j,i) = flux.mx;
@@ -461,7 +488,7 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
             Real bxi = b0_x2(m,k,j,i);
 
             MHDCons1D flux;
-            SingleStateLLF_GRMHD(wjm1, wj, bxi, x1v, x2f, x3v, IVY, coord, eos, flux);
+            SingleStateLLF_GRMHD(wjm1, wj, bxi, x1v, x2f, x3v, IVY, coord_, eos_, flux);
 
             fcorr_x2(m,IDN,k,j,i) = flux.d;
             fcorr_x2(m,IM2,k,j,i) = flux.mx;
@@ -495,7 +522,7 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
             Real bxi = b0_x3(m,k,j,i);
 
             MHDCons1D flux;
-            SingleStateLLF_GRMHD(wkm1, wk, bxi, x1v, x2v, x3f, IVZ, coord, eos, flux);
+            SingleStateLLF_GRMHD(wkm1, wk, bxi, x1v, x2v, x3f, IVZ, coord_, eos_, flux);
 
             fcorr_x3(m,IDN,k,j,i) = flux.d;
             fcorr_x3(m,IM3,k,j,i) = flux.mx;
