@@ -797,69 +797,97 @@ void BoundaryValuesFC::AverageBoundaryFluxes(DvceEdgeFld4D<Real> &flx) {
         });
       }
       tmember.team_barrier();
-    }
 
-/***
-
-      // x2faces
-      } else if (n<16) {
-        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nki), [&](const int idx) {
+    // x2faces
+    } else if (multi_d && (n==8 || n==12)) {
+      if (v==0) {
+        if (three_d) {
+          kl += 1;
+          ku -= 1;
+        }
+        int ni = iu - il + 1;
+        int nk = ku - kl + 1;
+        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nk*ni),[&](const int idx){
           int k = idx/ni;
           int i = (idx - k * ni) + il;
           k += kl;
-          if (v==0) {
-            flx.x1e(m,k,jl,i) = 0.0;
-          } else if (v==2) {
-            flx.x3e(m,k,jl,i) = 0.0;
-          }
+          flx.x1e(m,k,jl,i) *= 0.5;
         });
-        tmember.team_barrier();
+      } else if (v==2) {
+        il += 1;
+        iu -= 1;
+        int ni = iu - il + 1;
+        int nk = ku - kl + 1;
+        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nk*ni),[&](const int idx){
+          int k = idx/ni;
+          int i = (idx - k * ni) + il;
+          k += kl;
+          flx.x3e(m,k,jl,i) *= 0.5;
+        });
+      }
+      tmember.team_barrier();
 
-      // x1x2 edges
-      } else if (n<24) {
-        if (v==2) {
-          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember,nk),[&](const int idx) {
-            int k = idx + kl;
-            flx.x3e(m,k,jl,il) = 0.0;
-          });
-        }
-        tmember.team_barrier();
+    // x1x2 edges
+    } else if (multi_d && (n==16 || n==18 || n==20 || n==22)) {
+      if (v==2) {
+        int nk = ku - kl + 1;
+        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember,nk),[&](const int idx) {
+          int k = idx + kl;
+          flx.x3e(m,k,jl,il) *= 0.25;
+        });
+      }
+      tmember.team_barrier();
 
-      // x3faces
-      } else if (n<32)  {
-        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nji), [&](const int idx) {
+    // x3faces
+    } else if (three_d && (n==24 || n==28))  {
+      if (v==0) {
+        jl += 1;
+        ju -= 1;
+        int ni = iu - il + 1;
+        int nj = ju - jl + 1;
+        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nj*ni),[&](const int idx){
           int j = idx / ni;
           int i = (idx - j * ni) + il;
           j += jl;
-          if (v==0) {
-            flx.x1e(m,kl,j,i) = 0.0;
-          } else if (v==1) {
-            flx.x2e(m,kl,j,i) = 0.0;
-          }
+          flx.x1e(m,kl,j,i) *= 0.5;
         });
-        tmember.team_barrier();
 
-      // x3x1 edges
-      } else if (n<40) {
-        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nj), [&](const int idx) {
-          int j = idx + jl;
-          if (v==1) {
-            flx.x2e(m,kl,j,il) = 0.0;
-          }
+      } else if (v==1) {
+        il += 1;
+        iu -= 1;
+        int ni = iu - il + 1;
+        int nj = ju - jl + 1;
+        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nj*ni),[&](const int idx){
+          int j = idx / ni;
+          int i = (idx - j * ni) + il;
+          j += jl;
+          flx.x2e(m,kl,j,i) *= 0.5;
         });
-        tmember.team_barrier();
-
-      // x2x3 edges
-      } else if (n<48) {
-        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, ni), [&](const int idx) {
-          int i = idx + il;
-          if (v==0) {
-            flx.x1e(m,kl,jl,i) = 0.0;
-          }
-        });
-        tmember.team_barrier();
       }
-***/
+      tmember.team_barrier();
+
+    // x3x1 edges
+    } else if (three_d && (n==32 || n==34 || n==36 || n==38)) {
+      if (v==1) {
+        int nj = ju - jl + 1;
+        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember,nj),[&](const int idx) {
+          int j = idx + jl;
+          flx.x2e(m,kl,j,il) *= 0.25;
+        });
+      }
+      tmember.team_barrier();
+
+    // x2x3 edges
+    } else if (three_d && (n==40 || n==42 || n==44 || n==46)) {
+      if (v==0) {
+        int ni = iu - il + 1;
+        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember,ni),[&](const int idx) {
+          int i = idx + il;
+          flx.x1e(m,kl,jl,i) *= 0.25;
+        });
+      }
+      tmember.team_barrier();
+    }
 
   });  // end par_for_outer
 
