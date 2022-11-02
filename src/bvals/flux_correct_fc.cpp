@@ -44,62 +44,6 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
   auto &one_d = pmy_pack->pmesh->one_d;
   auto &two_d = pmy_pack->pmesh->two_d;
 
-/****
-for (int m=0; m<nmb; ++m) {
-for (int n=0; n<24; ++n) {
-if (nghbr.h_view(m,n).gid >=0) {
-std::cout << std::endl << "MB= " << m << "  buffer= " << n << std::endl;
-std::cout << "nghbr id = " << nghbr.h_view(m,n).gid << std::endl;
-std::cout << "nghbr lev = " << nghbr.h_view(m,n).lev << std::endl;
-std::cout << "nghbr dest = " << nghbr.h_view(m,n).dest << std::endl;
-}
-}}
-***/
-
-
-/****
-for (int n=0; n<56; ++n) {
-std::cout << std::endl << "buffer= " << n << std::endl;
-std::cout << "ssame[0] = " << sbuf[n].iflux_same[0].bis <<"  "<< sbuf[n].iflux_same[0].bie <<"  "<<
-                        sbuf[n].iflux_same[0].bjs <<"  "<< sbuf[n].iflux_same[0].bje <<"  "<<
-                        sbuf[n].iflux_same[0].bks <<"  "<< sbuf[n].iflux_same[0].bke << std::endl;
-std::cout << "ssame[1] = " << sbuf[n].iflux_same[1].bis <<"  "<< sbuf[n].iflux_same[1].bie <<"  "<<
-                        sbuf[n].iflux_same[1].bjs <<"  "<< sbuf[n].iflux_same[1].bje <<"  "<<
-                        sbuf[n].iflux_same[1].bks <<"  "<< sbuf[n].iflux_same[1].bke << std::endl;
-std::cout << "ssame[2] = " << sbuf[n].iflux_same[2].bis <<"  "<< sbuf[n].iflux_same[2].bie <<"  "<<
-                        sbuf[n].iflux_same[2].bjs <<"  "<< sbuf[n].iflux_same[2].bje <<"  "<<
-                        sbuf[n].iflux_same[2].bks <<"  "<< sbuf[n].iflux_same[2].bke << std::endl;
-std::cout << "scoar[0] = " << sbuf[n].iflux_coar[0].bis <<"  "<< sbuf[n].iflux_coar[0].bie <<"  "<<
-                        sbuf[n].iflux_coar[0].bjs <<"  "<< sbuf[n].iflux_coar[0].bje <<"  "<<
-                        sbuf[n].iflux_coar[0].bks <<"  "<< sbuf[n].iflux_coar[0].bke << std::endl;
-std::cout << "scoar[1] = " << sbuf[n].iflux_coar[1].bis <<"  "<< sbuf[n].iflux_coar[1].bie <<"  "<<
-                        sbuf[n].iflux_coar[1].bjs <<"  "<< sbuf[n].iflux_coar[1].bje <<"  "<<
-                        sbuf[n].iflux_coar[1].bks <<"  "<< sbuf[n].iflux_coar[1].bke << std::endl;
-std::cout << "scoar[2] = " << sbuf[n].iflux_coar[2].bis <<"  "<< sbuf[n].iflux_coar[2].bie <<"  "<<
-                        sbuf[n].iflux_coar[2].bjs <<"  "<< sbuf[n].iflux_coar[2].bje <<"  "<<
-                        sbuf[n].iflux_coar[2].bks <<"  "<< sbuf[n].iflux_coar[2].bke << std::endl;
-std::cout << "rsame[0] = " << rbuf[n].iflux_same[0].bis <<"  "<< rbuf[n].iflux_same[0].bie <<"  "<<
-                        rbuf[n].iflux_same[0].bjs <<"  "<< rbuf[n].iflux_same[0].bje <<"  "<<
-                        rbuf[n].iflux_same[0].bks <<"  "<< rbuf[n].iflux_same[0].bke << std::endl;
-std::cout << "rsame[1] = " << rbuf[n].iflux_same[1].bis <<"  "<< rbuf[n].iflux_same[1].bie <<"  "<<
-                        rbuf[n].iflux_same[1].bjs <<"  "<< rbuf[n].iflux_same[1].bje <<"  "<<
-                        rbuf[n].iflux_same[1].bks <<"  "<< rbuf[n].iflux_same[1].bke << std::endl;
-std::cout << "rsame[2] = " << rbuf[n].iflux_same[2].bis <<"  "<< rbuf[n].iflux_same[2].bie <<"  "<<
-                        rbuf[n].iflux_same[2].bjs <<"  "<< rbuf[n].iflux_same[2].bje <<"  "<<
-                        rbuf[n].iflux_same[2].bks <<"  "<< rbuf[n].iflux_same[2].bke << std::endl;
-std::cout << "rcoar[0] = " << rbuf[n].iflux_coar[0].bis <<"  "<< rbuf[n].iflux_coar[0].bie <<"  "<<
-                        rbuf[n].iflux_coar[0].bjs <<"  "<< rbuf[n].iflux_coar[0].bje <<"  "<<
-                        rbuf[n].iflux_coar[0].bks <<"  "<< rbuf[n].iflux_coar[0].bke << std::endl;
-std::cout << "rcoar[1] = " << rbuf[n].iflux_coar[1].bis <<"  "<< rbuf[n].iflux_coar[1].bie <<"  "<<
-                        rbuf[n].iflux_coar[1].bjs <<"  "<< rbuf[n].iflux_coar[1].bje <<"  "<<
-                        rbuf[n].iflux_coar[1].bks <<"  "<< rbuf[n].iflux_coar[1].bke << std::endl;
-std::cout << "rcoar[2] = " << rbuf[n].iflux_coar[2].bis <<"  "<< rbuf[n].iflux_coar[2].bie <<"  "<<
-                        rbuf[n].iflux_coar[2].bjs <<"  "<< rbuf[n].iflux_coar[2].bje <<"  "<<
-                        rbuf[n].iflux_coar[2].bks <<"  "<< rbuf[n].iflux_coar[2].bke << std::endl;
-}
-***/
-
-
   // Outer loop over (# of MeshBlocks)*(# of neighbors)*(3 field components)
   Kokkos::TeamPolicy<> policy(DevExeSpace(), (3*nmb*nnghbr), Kokkos::AUTO);
   Kokkos::parallel_for("RecvBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
@@ -382,12 +326,12 @@ std::cout << "rcoar[2] = " << rbuf[n].iflux_coar[2].bis <<"  "<< rbuf[n].iflux_c
   });  // end par_for_outer
 
   // Send boundary buffer to neighboring MeshBlocks using MPI
-  // Sends only occur to neighbors on faces and edges at a COARSER level
+  // Sends only occur to neighbors on faces and edges at COARSER or SAME level
 
   bool no_errors=true;
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
-      if ( (nghbr.h_view(m,n).gid >=0) && (nghbr.h_view(m,n).lev < mblev.h_view(m)) &&
+      if ( (nghbr.h_view(m,n).gid >=0) && (nghbr.h_view(m,n).lev <= mblev.h_view(m)) &&
            (n<48) ) {
         // index and rank of destination Neighbor
         int dn = nghbr.h_view(m,n).dest;
@@ -407,7 +351,12 @@ std::cout << "rcoar[2] = " << rbuf[n].iflux_coar[2].bis <<"  "<< rbuf[n].iflux_c
           int tag = CreateMPITag(lid, dn);
 
           // get ptr to send buffer for fluxes
-          int data_size = 3*(send_buf[n].iflxc_ndat);
+          int data_size = 3;
+          if ( nghbr.h_view(m,n).lev < pmy_pack->pmb->mb_lev.h_view(m) ) {
+            data_size *= send_buf[n].iflxc_ndat;
+          } else if ( nghbr.h_view(m,n).lev == pmy_pack->pmb->mb_lev.h_view(m) ) {
+            data_size *= send_buf[n].iflxs_ndat;
+          }
           auto send_ptr = Kokkos::subview(send_buf[n].flux, m, Kokkos::ALL);
 
           int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
@@ -448,11 +397,11 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx) {
 #endif
 
   //----- STEP 1: check that recv boundary buffer communications have all completed
-  // receives only occur for neighbors on faces and edges at a FINER level
+  // receives only occur for neighbors on faces and edges at FINER or SAME level
 
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
-      if ( (nghbr.h_view(m,n).gid >=0) && (nghbr.h_view(m,n).lev > mblev.h_view(m)) &&
+      if ( (nghbr.h_view(m,n).gid >=0) && (nghbr.h_view(m,n).lev >= mblev.h_view(m)) &&
            (n<48) ) {
         if (nghbr.h_view(m,n).rank == global_variable::my_rank) {
           if (rbuf[n].flux_stat[m] == BoundaryCommStatus::waiting) {bflag = true;}
@@ -899,7 +848,7 @@ void BoundaryValuesFC::AverageBoundaryFluxes(DvceEdgeFld4D<Real> &flx) {
 //! \brief Posts non-blocking receives (with MPI), and initialize all boundary receive
 //! status flags to waiting (with or without MPI) for boundary communications of fluxes.
 
-TaskStatus BoundaryValuesFC::InitFluxRecv(const int nvar) {
+TaskStatus BoundaryValuesFC::InitFluxRecv(const int nvars) {
   int &nmb = pmy_pack->nmb_thispack;
   int &nnghbr = pmy_pack->pmb->nnghbr;
   auto &nghbr = pmy_pack->pmb->nghbr;
@@ -909,9 +858,9 @@ TaskStatus BoundaryValuesFC::InitFluxRecv(const int nvar) {
   bool no_errors=true;
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
-      // only post receives for neighbors on faces and edges at FINER level
+      // only post receives for neighbors on faces and edges at FINER and SAME levels
       // this is the only thing different from BoundaryValuesCC::InitRecvFlux()
-      if ( (nghbr.h_view(m,n).gid >=0) && (nghbr.h_view(m,n).lev > mblev.h_view(m)) &&
+      if ( (nghbr.h_view(m,n).gid >=0) && (nghbr.h_view(m,n).lev >= mblev.h_view(m)) &&
            (n<48) ) {
 #if MPI_PARALLEL_ENABLED
         // rank of destination buffer
@@ -923,7 +872,12 @@ TaskStatus BoundaryValuesFC::InitFluxRecv(const int nvar) {
           int tag = CreateMPITag(m, n);
 
           // get ptr to recv buffer when neighbor is at coarser/same/fine level
-          int data_size = nvar*(recv_buf[n].iflxc_ndat);
+          int data_size = nvars;
+          if ( nghbr.h_view(m,n).lev < pmy_pack->pmb->mb_lev.h_view(m) ) {
+            data_size *= recv_buf[n].iflxc_ndat;
+          } else if ( nghbr.h_view(m,n).lev == pmy_pack->pmb->mb_lev.h_view(m) ) {
+            data_size *= recv_buf[n].iflxs_ndat;
+          }
           auto recv_ptr = Kokkos::subview(recv_buf[n].flux, m, Kokkos::ALL);
 
           // Post non-blocking receive for this buffer on this MeshBlock
