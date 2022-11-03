@@ -19,28 +19,28 @@
 namespace z4c {
 
 char const * const Z4c::Z4c_names[Z4c::N_Z4c] = {
-  "z4c.chi",
-  "z4c.gxx", "z4c.gxy", "z4c.gxz", "z4c.gyy", "z4c.gyz", "z4c.gzz",
-  "z4c.Khat",
-  "z4c.Axx", "z4c.Axy", "z4c.Axz", "z4c.Ayy", "z4c.Ayz", "z4c.Azz",
-  "z4c.Gamx", "z4c.Gamy", "z4c.Gamz",
-  "z4c.Theta",
-  "z4c.alpha",
-  "z4c.betax", "z4c.betay", "z4c.betaz",
+  "z4c_chi",
+  "z4c_gxx", "z4c_gxy", "z4c_gxz", "z4c_gyy", "z4c_gyz", "z4c_gzz",
+  "z4c_Khat",
+  "z4c_Axx", "z4c_Axy", "z4c_Axz", "z4c_Ayy", "z4c_Ayz", "z4c_Azz",
+  "z4c_Gamx", "z4c_Gamy", "z4c_Gamz",
+  "z4c_Theta",
+  "z4c_alpha",
+  "z4c_betax", "z4c_betay", "z4c_betaz",
 };
 
 char const * const Z4c::Constraint_names[Z4c::N_CON] = {
-  "con.C",
-  "con.H",
-  "con.M",
-  "con.Z",
-  "con.Mx", "con.My", "con.Mz",
+  "con_C",
+  "con_H",
+  "con_M",
+  "con_Z",
+  "con_Mx", "con_My", "con_Mz",
 };
 
 char const * const Z4c::Matter_names[Z4c::N_MAT] = {
-  "mat.rho",
-  "mat.Sx", "mat.Sy", "mat.Sz",
-  "mat.Sxx", "mat.Sxy", "mat.Sxz", "mat.Syy", "mat.Syz", "mat.Szz",
+  "mat_rho",
+  "mat_Sx", "mat_Sy", "mat_Sz",
+  "mat_Sxx", "mat_Sxy", "mat_Sxz", "mat_Syy", "mat_Syz", "mat_Szz",
 };
 
 //----------------------------------------------------------------------------------------

@@ -49,8 +49,6 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     std::exit(EXIT_FAILURE);
   }
 
-  // QUESTION: can we generalize this to work with ADM/Z4c?
-
   // check that appropriate physics is defined for requested output variable
   // TODO(@user): Index limits of variable choices below may change if more choices added
   if ((ivar<16) && (pm->pmb_pack->phydro == nullptr)) {
@@ -74,11 +72,18 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
        << std::endl << "Input file is likely missing a <forcing> block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar>=41) && (ivar<=43) && (pm->pmb_pack->pz4c == nullptr)) {
+  if ((ivar>=41) && (ivar<=58) && (pm->pmb_pack->padm == nullptr)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+       << "Output of ADM variable requested in <output> block '"
+       << out_params.block_name << "' but no ADM object has been constructed."
+       << std::endl << "Input file is likely missing a <adm> block" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  if ((ivar>=58) && (ivar<=100) && (pm->pmb_pack->pz4c == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of Z4c variable requested in <output> block '"
        << out_params.block_name << "' but no Z4c object has been constructed."
-       << std::endl << "Input file is likely missing a <z4c> block" << std::endl;
+       << std::endl << "Input file is likely missing a <adm> block" << std::endl;
     exit(EXIT_FAILURE);
   }
 

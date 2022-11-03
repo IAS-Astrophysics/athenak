@@ -16,10 +16,10 @@
 namespace adm {
 
 char const * const ADM::ADM_names[ADM::N_ADM] = {
-  "adm.gxx", "adm.gxy", "adm.gxz", "adm.gyy", "adm.gyz", "adm.gzz",
-  "adm.Kxx", "adm.Kxy", "adm.Kxz", "adm.Kyy", "adm.Kyz", "adm.Kzz",
-  "adm.psi4",
-  "adm.alpha", "adm.betax", "adm.betay", "adm.betaz",
+  "adm_gxx", "adm_gxy", "adm_gxz", "adm_gyy", "adm_gyz", "adm_gzz",
+  "adm_Kxx", "adm_Kxy", "adm_Kxz", "adm_Kyy", "adm_Kyz", "adm_Kzz",
+  "adm_psi4",
+  "adm_alpha", "adm_betax", "adm_betay", "adm_betaz",
 };
 
 //----------------------------------------------------------------------------------------
