@@ -19,6 +19,7 @@
 class MeshBlock;
 namespace hydro {class Hydro;}
 namespace mhd {class MHD;}
+namespace adm {class ADM;}
 namespace z4c {class Z4c;}
 namespace ion_neutral {class IonNeutral;}
 class TurbulenceDriver;
@@ -52,6 +53,7 @@ class MeshBlockPack {
   // physics (controlled by AddPhysics() function in meshblock_pack.cpp)
   hydro::Hydro *phydro=nullptr;
   mhd::MHD *pmhd=nullptr;
+  adm::ADM *padm=nullptr;
   z4c::Z4c *pz4c=nullptr;
   ion_neutral::IonNeutral *pionn=nullptr;
   TurbulenceDriver *pturb=nullptr;
