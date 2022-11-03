@@ -35,15 +35,15 @@ class ADM {
     static char const * const ADM_names[N_ADM];
 
     struct ADM_vars {
-      AthenaTensorField<Real, TensorSymm::NONE, 3, 0> alpha;     // lapse
-      AthenaTensorField<Real, TensorSymm::NONE, 3, 1> beta_u;    // shift vector
-      AthenaTensorField<Real, TensorSymm::NONE, 3, 0> psi4;      // conformal factor
-      AthenaTensorField<Real, TensorSymm::SYM2, 3, 2> g_dd;      // spatial metric
-      AthenaTensorField<Real, TensorSymm::SYM2, 3, 2> K_dd;      // extrinsic curvature
+      AthenaTensor<Real, TensorSymm::NONE, 3, 0> alpha;     // lapse
+      AthenaTensor<Real, TensorSymm::NONE, 3, 1> beta_u;    // shift vector
+      AthenaTensor<Real, TensorSymm::NONE, 3, 0> psi4;      // conformal factor
+      AthenaTensor<Real, TensorSymm::SYM2, 3, 2> g_dd;      // spatial metric
+      AthenaTensor<Real, TensorSymm::SYM2, 3, 2> K_dd;      // extrinsic curvature
     };
     ADM_vars adm;
 
-    DvceArray5D<Real> u_adm;                                     // adm variables
+    DvceArray5D<Real> u_adm;                                   // adm variables
 
     // TODO: handle regridding
 

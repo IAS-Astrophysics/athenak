@@ -108,40 +108,40 @@ class Z4c {
   DvceArray5D<Real> coarse_u0; // coarse representation of z4c solution
   
   struct ADM_vars {
-    AthenaTensorField<Real, TensorSymm::NONE, 3, 0> psi4;
-    AthenaTensorField<Real, TensorSymm::SYM2, 3, 2> g_dd;
-    AthenaTensorField<Real, TensorSymm::SYM2, 3, 2> K_dd;
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> psi4;
+    AthenaTensor<Real, TensorSymm::SYM2, 3, 2> g_dd;
+    AthenaTensor<Real, TensorSymm::SYM2, 3, 2> K_dd;
   }; 
   ADM_vars adm;
   
   struct Z4c_vars {
-    AthenaTensorField<Real, TensorSymm::NONE, 3, 0> chi;       // conf. factor
-    AthenaTensorField<Real, TensorSymm::NONE, 3, 0> Khat;      // trace extr. curvature
-    AthenaTensorField<Real, TensorSymm::NONE, 3, 0> Theta;     // Theta var in Z4c
-    AthenaTensorField<Real, TensorSymm::NONE, 3, 0> alpha;     // lapse
-    AthenaTensorField<Real, TensorSymm::NONE, 3, 1> Gam_u;     // Gamma functions (BSSN)
-    AthenaTensorField<Real, TensorSymm::NONE, 3, 1> beta_u;    // shift
-    AthenaTensorField<Real, TensorSymm::SYM2, 3, 2> g_dd;      // conf. 3-metric
-    AthenaTensorField<Real, TensorSymm::SYM2, 3, 2> A_dd;      // conf. traceless extr. curvature
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> chi;       // conf. factor
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> Khat;      // trace extr. curvature
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> Theta;     // Theta var in Z4c
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> alpha;     // lapse
+    AthenaTensor<Real, TensorSymm::NONE, 3, 1> Gam_u;     // Gamma functions (BSSN)
+    AthenaTensor<Real, TensorSymm::NONE, 3, 1> beta_u;    // shift
+    AthenaTensor<Real, TensorSymm::SYM2, 3, 2> g_dd;      // conf. 3-metric
+    AthenaTensor<Real, TensorSymm::SYM2, 3, 2> A_dd;      // conf. traceless extr. curvature
   };
   Z4c_vars z4c;
   Z4c_vars rhs;
 
   // aliases for the constraints
   struct Constraint_vars {
-    AthenaTensorField<Real, TensorSymm::NONE, 3, 0> C;         // Z constraint monitor
-    AthenaTensorField<Real, TensorSymm::NONE, 3, 0> H;         // hamiltonian constraint
-    AthenaTensorField<Real, TensorSymm::NONE, 3, 0> M;         // norm squared of M_d
-    AthenaTensorField<Real, TensorSymm::NONE, 3, 0> Z;         // Z constraint violation
-    AthenaTensorField<Real, TensorSymm::NONE, 3, 1> M_d;       // momentum constraint
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> C;         // Z constraint monitor
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> H;         // hamiltonian constraint
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> M;         // norm squared of M_d
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> Z;         // Z constraint violation
+    AthenaTensor<Real, TensorSymm::NONE, 3, 1> M_d;       // momentum constraint
   };
   Constraint_vars con;
 
   // aliases for the matter variables
   struct Matter_vars {
-    AthenaTensorField<Real, TensorSymm::NONE, 3, 0> rho;       // matter energy density
-    AthenaTensorField<Real, TensorSymm::NONE, 3, 1> S_d;       // matter momentum density
-    AthenaTensorField<Real, TensorSymm::SYM2, 3, 2> S_dd;      // matter stress tensor
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> rho;       // matter energy density
+    AthenaTensor<Real, TensorSymm::NONE, 3, 1> S_d;       // matter momentum density
+    AthenaTensor<Real, TensorSymm::SYM2, 3, 2> S_dd;      // matter stress tensor
   };
   Matter_vars mat;
 
@@ -173,7 +173,6 @@ class Z4c {
 
   // following only used for time-evolving flow
   Real dtnew;
-  int  NDIM;
   // container to hold names of TaskIDs
   Z4cTaskIDs id;
 

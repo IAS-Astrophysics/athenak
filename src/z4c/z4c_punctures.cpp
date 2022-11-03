@@ -42,7 +42,6 @@ void Z4c::ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin) {
   Real ADM_mass = pin->GetOrAddReal("problem", "punc_ADM_mass", 1.);
   auto &z4c = pmbp->pz4c->z4c;
   ADM::ADM_vars &adm = pmbp->padm->adm;
-  int &NDIM = pmbp->pz4c->NDIM;
 
   int scr_level = 0;
   size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1);
@@ -61,8 +60,8 @@ void Z4c::ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin) {
     Real &x3max = size.d_view(m).x3max;
     int nx3 = indcs.nx3;
     Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
-    AthenaTensor<Real, TensorSymm::NONE, 1, 0> r;
-    r.NewAthenaTensor(member, scr_level, nx1);
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> r;
+    r.NewAthenaScratchTensor(member, scr_level, nx1);
 
     par_for_inner(member, isg, ieg, [&](const int i) { 
       Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
@@ -70,8 +69,8 @@ void Z4c::ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin) {
     });
 
     // Minkowski spacetime
-    for(int a = 0; a < NDIM; ++a)
-    for(int b = a; b < NDIM; ++b) {
+    for(int a = 0; a < 3; ++a)
+    for(int b = a; b < 3; ++b) {
       par_for_inner(member, isg, ieg, [&](const int i) { 
         adm.g_dd(m,a,b,k,j,i) = (a == b ? 1. : 0.);
       });
@@ -82,8 +81,8 @@ void Z4c::ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin) {
     par_for_inner(member, isg, ieg, [&](const int i) {
       adm.psi4(m,k,j,i) = std::pow(1.0 + 0.5*ADM_mass/r(i),4); // adm.psi4
     });
-    for(int a = 0; a < NDIM; ++a)
-    for(int b = a; b < NDIM; ++b) {
+    for(int a = 0; a < 3; ++a)
+    for(int b = a; b < 3; ++b) {
       par_for_inner(member, isg, ieg, [&](const int i) {
         adm.g_dd(m,a,b,k,j,i) *= adm.psi4(m,k,j,i);
       });
