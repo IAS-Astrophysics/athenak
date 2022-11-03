@@ -454,118 +454,120 @@ void BoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx, const bool sa
   auto &rbuf = recv_buf;
   auto &mblev = pmy_pack->pmb->mb_lev;
 
-  // Outer loop over (# of MeshBlocks)*(# of neighbors)*(3 field components)
-  // Second, sum recieve buffers into EMFs stored on MeshBlocks
-  // Outer loop over (# of MeshBlocks)*(# of neighbors)*(3 field components)
-  Kokkos::TeamPolicy<> policy(DevExeSpace(), (3*nmb*nnghbr), Kokkos::AUTO);
+  // Sum recieve buffers into EMFs stored on MeshBlocks
+  // Outer loop over (# of MeshBlocks)*(3 field components)
+  Kokkos::TeamPolicy<> policy(DevExeSpace(), (3*nmb), Kokkos::AUTO);
   Kokkos::parallel_for("RecvBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
-    const int m = (tmember.league_rank())/(3*nnghbr);
-    const int n = (tmember.league_rank() - m*(3*nnghbr))/3;
-    const int v = (tmember.league_rank() - m*(3*nnghbr) - 3*n);
+    const int m = tmember.league_rank()/3;
+    const int v = tmember.league_rank()%3;
 
-    // only unpack buffers when neighbor exists and is at same or finer level
-    if ((nghbr.d_view(m,n).gid >= 0) && (nghbr.d_view(m,n).lev >= mblev.d_view(m))) {
-      int il, iu, jl, ju, kl, ku, ndat;
-      // if neighbor is at same level, use sindices to unpack buffer
-      if (same_level) {
-        il = rbuf[n].iflux_same[v].bis;
-        iu = rbuf[n].iflux_same[v].bie;
-        jl = rbuf[n].iflux_same[v].bjs;
-        ju = rbuf[n].iflux_same[v].bje;
-        kl = rbuf[n].iflux_same[v].bks;
-        ku = rbuf[n].iflux_same[v].bke;
-        ndat = rbuf[n].iflxs_ndat;
-      // else neighbor is at finer level, use flux_coar indices to unpack buffer
-      } else {
-        il = rbuf[n].iflux_coar[v].bis;
-        iu = rbuf[n].iflux_coar[v].bie;
-        jl = rbuf[n].iflux_coar[v].bjs;
-        ju = rbuf[n].iflux_coar[v].bje;
-        kl = rbuf[n].iflux_coar[v].bks;
-        ku = rbuf[n].iflux_coar[v].bke;
-        ndat = rbuf[n].iflxc_ndat;
-      }
-      const int ni = iu - il + 1;
-      const int nj = ju - jl + 1;
-      const int nk = ku - kl + 1;
-      const int nji  = nj*ni;
-      const int nkj  = nk*nj;
-      const int nki  = nk*ni;
+    // scalar loop over neighbors (except corners) to prevent race condition in sums
+    for (int n=0; n<48; ++n) {
 
-      // x1faces
-      if (n<8) {
-        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
-          int k = idx / nj;
-          int j = (idx - k * nj) + jl;
-          k += kl;
-          if (v==1) {
-            flx.x2e(m,k,j,il) += rbuf[n].flux(m,ndat*v + (j-jl + nj*(k-kl)));
-          } else if (v==2) {
-            flx.x3e(m,k,j,il) += rbuf[n].flux(m,ndat*v + (j-jl + nj*(k-kl)));
-          }
-        });
-        tmember.team_barrier();
+      // only unpack buffers when neighbor exists and is at same or finer level
+      if ((nghbr.d_view(m,n).gid >= 0) && (nghbr.d_view(m,n).lev >= mblev.d_view(m))) {
+        int il, iu, jl, ju, kl, ku, ndat;
+        // if neighbor is at same level, use sindices to unpack buffer
+        if (same_level) {
+          il = rbuf[n].iflux_same[v].bis;
+          iu = rbuf[n].iflux_same[v].bie;
+          jl = rbuf[n].iflux_same[v].bjs;
+          ju = rbuf[n].iflux_same[v].bje;
+          kl = rbuf[n].iflux_same[v].bks;
+          ku = rbuf[n].iflux_same[v].bke;
+          ndat = rbuf[n].iflxs_ndat;
+        // else neighbor is at finer level, use flux_coar indices to unpack buffer
+        } else {
+          il = rbuf[n].iflux_coar[v].bis;
+          iu = rbuf[n].iflux_coar[v].bie;
+          jl = rbuf[n].iflux_coar[v].bjs;
+          ju = rbuf[n].iflux_coar[v].bje;
+          kl = rbuf[n].iflux_coar[v].bks;
+          ku = rbuf[n].iflux_coar[v].bke;
+          ndat = rbuf[n].iflxc_ndat;
+        }
+        const int ni = iu - il + 1;
+        const int nj = ju - jl + 1;
+        const int nk = ku - kl + 1;
+        const int nji  = nj*ni;
+        const int nkj  = nk*nj;
+        const int nki  = nk*ni;
 
-      // x2faces
-      } else if (n<16) {
-        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nki), [&](const int idx) {
-          int k = idx/ni;
-          int i = (idx - k * ni) + il;
-          k += kl;
-          if (v==0) {
-            flx.x1e(m,k,jl,i) += rbuf[n].flux(m,ndat*v + i-il + ni*(k-kl));
-          } else if (v==2) {
-            flx.x3e(m,k,jl,i) += rbuf[n].flux(m,ndat*v + i-il + ni*(k-kl));
-          }
-        });
-        tmember.team_barrier();
+        // x1faces
+        if (n<8) {
+          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj),[&](const int idx){
+            int k = idx / nj;
+            int j = (idx - k * nj) + jl;
+            k += kl;
+            if (v==1) {
+              flx.x2e(m,k,j,il) += rbuf[n].flux(m,ndat*v + (j-jl + nj*(k-kl)));
+            } else if (v==2) {
+              flx.x3e(m,k,j,il) += rbuf[n].flux(m,ndat*v + (j-jl + nj*(k-kl)));
+            }
+          });
+          tmember.team_barrier();
 
-      // x1x2 edges
-      } else if (n<24) {
-        if (v==2) {
-          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember,nk),[&](const int idx) {
+        // x2faces
+        } else if (n<16) {
+          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nki),[&](const int idx){
+            int k = idx/ni;
+            int i = (idx - k * ni) + il;
+            k += kl;
+            if (v==0) {
+              flx.x1e(m,k,jl,i) += rbuf[n].flux(m,ndat*v + i-il + ni*(k-kl));
+            } else if (v==2) {
+              flx.x3e(m,k,jl,i) += rbuf[n].flux(m,ndat*v + i-il + ni*(k-kl));
+            }
+          });
+          tmember.team_barrier();
+
+        // x1x2 edges
+        } else if (n<24) {
+          if (v==2) {
+          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember,nk),[&](const int idx){
             int k = idx + kl;
             flx.x3e(m,k,jl,il) += rbuf[n].flux(m,ndat*v + (k-kl));
           });
         }
         tmember.team_barrier();
 
-      // x3faces
-      } else if (n<32)  {
-        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nji), [&](const int idx) {
-          int j = idx / ni;
-          int i = (idx - j * ni) + il;
-          j += jl;
-          if (v==0) {
-            flx.x1e(m,kl,j,i) += rbuf[n].flux(m,ndat*v + i-il + ni*(j-jl));
-          } else if (v==1) {
-            flx.x2e(m,kl,j,i) += rbuf[n].flux(m,ndat*v + i-il + ni*(j-jl));
-          }
-        });
-        tmember.team_barrier();
+        // x3faces
+        } else if (n<32)  {
+          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nji),[&](const int idx){
+            int j = idx / ni;
+            int i = (idx - j * ni) + il;
+            j += jl;
+            if (v==0) {
+              flx.x1e(m,kl,j,i) += rbuf[n].flux(m,ndat*v + i-il + ni*(j-jl));
+            } else if (v==1) {
+              flx.x2e(m,kl,j,i) += rbuf[n].flux(m,ndat*v + i-il + ni*(j-jl));
+            }
+          });
+          tmember.team_barrier();
 
-      // x3x1 edges
-      } else if (n<40) {
-        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nj), [&](const int idx) {
-          int j = idx + jl;
-          if (v==1) {
-            flx.x2e(m,kl,j,il) += rbuf[n].flux(m,ndat*v + (j-jl));
-          }
-        });
-        tmember.team_barrier();
+        // x3x1 edges
+        } else if (n<40) {
+          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nj),[&](const int idx){
+            int j = idx + jl;
+            if (v==1) {
+              flx.x2e(m,kl,j,il) += rbuf[n].flux(m,ndat*v + (j-jl));
+            }
+          });
+          tmember.team_barrier();
 
-      // x2x3 edges
-      } else if (n<48) {
-        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, ni), [&](const int idx) {
-          int i = idx + il;
-          if (v==0) {
-            flx.x1e(m,kl,jl,i) += rbuf[n].flux(m,ndat*v + i-il);
-          }
-        });
-        tmember.team_barrier();
-      }
-    }  // end if-neighbor-exists block
-  });  // end par_for_outer
+        // x2x3 edges
+        } else if (n<48) {
+          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, ni),[&](const int idx){
+            int i = idx + il;
+            if (v==0) {
+              flx.x1e(m,kl,jl,i) += rbuf[n].flux(m,ndat*v + i-il);
+            }
+          });
+          tmember.team_barrier();
+        }
+      }  // end if-neighbor-exists block
+    }    // end for loop over n
+  });    // end par_for_outer
 
   return;
 }
@@ -688,7 +690,8 @@ void BoundaryValuesFC::ZeroFluxesAtBoundaryWithFiner(DvceEdgeFld4D<Real> &flx) {
 
 //----------------------------------------------------------------------------------------
 //! \fn  void BoundaryValuesFC::AverageBoundaryFluxes
-//! \brief
+//! \brief Applies appropriate averge to summed boundary fluxes, depending on number of
+//! elements being averaged together.
 
 void BoundaryValuesFC::AverageBoundaryFluxes(DvceEdgeFld4D<Real> &flx) {
   // create local references for variables in kernel
@@ -719,60 +722,98 @@ void BoundaryValuesFC::AverageBoundaryFluxes(DvceEdgeFld4D<Real> &flx) {
     // x1faces
     if (n==0 || n==4) {
       if (v==1) {
-        if (three_d) {
-          kl += 1;
-          ku -= 1;
-        }
         int nj = ju - jl + 1;
-        int nk = ku - kl + 1;
-        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nk*nj),[&](const int idx){
-          int k = idx / nj;
-          int j = (idx - k * nj) + jl;
-          k += kl;
-          flx.x2e(m,k,j,il) *= 0.5;
-        });
+        if (nghbr.d_view(m,n).lev == mblev.d_view(m)) { // same; divide all EMFs by 2
+          if (three_d) {
+            kl += 1; ku -= 1;
+          }
+          int nk = ku - kl + 1;
+          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nk*nj),
+          [&](const int idx) {
+            int k = idx / nj;
+            int j = (idx - k * nj) + jl;
+            k += kl;
+            flx.x2e(m,k,j,il) *= 0.5;
+          });
+        } else {   // finer; divide EMFs that overlap at fine faces by 2
+          if (three_d) {
+            int k = kl + (ku - kl + 1)/2;
+            Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nj),
+            [&](const int idx) {
+              int j = idx + jl;
+              flx.x2e(m,k,j,il) *= 0.5;
+            });
+          }
+        }
       } else if (v==2) {
-        if (multi_d) {
-          jl += 1;
-          ju -= 1;
-        }
-        int nj = ju - jl + 1;
         int nk = ku - kl + 1;
-        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nk*nj),[&](const int idx){
-          int k = idx / nj;
-          int j = (idx - k * nj) + jl;
-          k += kl;
-          flx.x3e(m,k,j,il) *= 0.5;
-        });
+        if (nghbr.d_view(m,n).lev == mblev.d_view(m)) { // same; divide all EMFs by 2
+          if (multi_d) {
+            jl += 1; ju -= 1;
+          }
+          int nj = ju - jl + 1;
+          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nk*nj),
+          [&](const int idx) {
+            int k = idx / nj;
+            int j = (idx - k * nj) + jl;
+            k += kl;
+            flx.x3e(m,k,j,il) *= 0.5;
+          });
+        } else {   // finer; divide EMFs that overlap at fine faces by 2
+          int j = jl + (ju - jl + 1)/2;
+          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nk),
+          [&](const int idx) {
+            int k = idx + kl;
+            flx.x3e(m,k,j,il) *= 0.5;
+          });
+        }
       }
       tmember.team_barrier();
 
     // x2faces
     } else if (multi_d && (n==8 || n==12)) {
       if (v==0) {
-        if (three_d) {
-          kl += 1;
-          ku -= 1;
+        int ni = iu - il + 1;
+        if (nghbr.d_view(m,n).lev == mblev.d_view(m)) { // same; divide all EMFs by 2
+          if (three_d) {
+            kl += 1; ku -= 1;
+          }
+          int nk = ku - kl + 1;
+          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nk*ni),
+          [&](const int idx) {
+            int k = idx/ni;
+            int i = (idx - k * ni) + il;
+            k += kl;
+            flx.x1e(m,k,jl,i) *= 0.5;
+          });
+        } else {   // finer; divide EMFs that overlap at fine faces by 2
+          int k = kl + (ku - kl + 1)/2;
+          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, ni),
+          [&](const int idx) {
+            int i = idx + il;
+            flx.x1e(m,k,jl,i) *= 0.5;
+          });
         }
-        int ni = iu - il + 1;
-        int nk = ku - kl + 1;
-        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nk*ni),[&](const int idx){
-          int k = idx/ni;
-          int i = (idx - k * ni) + il;
-          k += kl;
-          flx.x1e(m,k,jl,i) *= 0.5;
-        });
       } else if (v==2) {
-        il += 1;
-        iu -= 1;
-        int ni = iu - il + 1;
         int nk = ku - kl + 1;
-        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nk*ni),[&](const int idx){
-          int k = idx/ni;
-          int i = (idx - k * ni) + il;
-          k += kl;
-          flx.x3e(m,k,jl,i) *= 0.5;
-        });
+        if (nghbr.d_view(m,n).lev == mblev.d_view(m)) { // same; divide all EMFs by 2
+          il += 1; iu -= 1;
+          int ni = iu - il + 1;
+          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nk*ni),
+          [&](const int idx) {
+            int k = idx/ni;
+            int i = (idx - k * ni) + il;
+            k += kl;
+            flx.x3e(m,k,jl,i) *= 0.5;
+          });
+        } else {   // finer; divide EMFs that overlap at fine faces by 2
+          int i = il + (iu - il + 1)/2;
+          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nk),
+          [&](const int idx) {
+            int k = idx + kl;
+            flx.x3e(m,k,jl,i) *= 0.5;
+          });
+        }
       }
       tmember.team_barrier();
 
@@ -790,28 +831,43 @@ void BoundaryValuesFC::AverageBoundaryFluxes(DvceEdgeFld4D<Real> &flx) {
     // x3faces
     } else if (three_d && (n==24 || n==28))  {
       if (v==0) {
-        jl += 1;
-        ju -= 1;
         int ni = iu - il + 1;
-        int nj = ju - jl + 1;
-        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nj*ni),[&](const int idx){
-          int j = idx / ni;
-          int i = (idx - j * ni) + il;
-          j += jl;
-          flx.x1e(m,kl,j,i) *= 0.5;
-        });
-
+        if (nghbr.d_view(m,n).lev == mblev.d_view(m)) { // same; divide all EMFs by 2
+          jl += 1; ju -= 1;
+          int nj = ju - jl + 1;
+          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nj*ni),
+          [&](const int idx) {
+            int j = idx / ni;
+            int i = (idx - j * ni) + il;
+            j += jl;
+            flx.x1e(m,kl,j,i) *= 0.5;
+          });
+        } else {   // finer; divide EMFs that overlap at fine faces by 2
+          int j = jl + (ju - jl + 1)/2;
+          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, ni),[&](const int idx){
+            int i = idx + il;
+            flx.x1e(m,kl,j,i) *= 0.5;
+          });
+        }
       } else if (v==1) {
-        il += 1;
-        iu -= 1;
-        int ni = iu - il + 1;
         int nj = ju - jl + 1;
-        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nj*ni),[&](const int idx){
-          int j = idx / ni;
-          int i = (idx - j * ni) + il;
-          j += jl;
-          flx.x2e(m,kl,j,i) *= 0.5;
-        });
+        if (nghbr.d_view(m,n).lev == mblev.d_view(m)) { // same; divide all EMFs by 2
+          il += 1; iu -= 1;
+          int ni = iu - il + 1;
+          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nj*ni),
+          [&](const int idx) {
+            int j = idx / ni;
+            int i = (idx - j * ni) + il;
+            j += jl;
+            flx.x2e(m,kl,j,i) *= 0.5;
+          });
+        } else {   // finer; divide EMFs that overlap at fine faces by 2
+          int i = il + (iu - il + 1)/2;
+          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nj), [&](const int idx){
+            int j = idx + jl;
+            flx.x2e(m,kl,j,i) *= 0.5;
+          });
+        }
       }
       tmember.team_barrier();
 
