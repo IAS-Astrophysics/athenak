@@ -361,7 +361,8 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
       outvars.emplace_back(z4c::Z4c::Z4c_names[v], v, &(pm->pmb_pack->pz4c->u0));
     }
   }
-   
+
+/*  
   if (ndvars > 0) {
     int nmb = pm->pmb_pack->nmb_thispack;
     auto &indcs = pm->mb_indcs;
@@ -371,6 +372,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
     Kokkos::realloc(derived_var, nmb, ndvars, n3, n2, n1);
   }
+*/
 }
 
 //----------------------------------------------------------------------------------------
