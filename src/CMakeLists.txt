@@ -66,7 +66,17 @@ add_executable(
         mhd/mhd_tasks.cpp
         mhd/mhd_update.cpp
 
-        outputs/io_wrapper.cpp
+	z4c/z4c.cpp
+	z4c/z4c_adm.cpp
+	z4c/z4c_calcrhs.cpp
+	z4c/z4c_newdt.cpp
+        z4c/z4c_tasks.cpp
+        z4c/z4c_update.cpp
+        z4c/z4c_gauge.cpp
+        z4c/z4c_punctures.cpp
+        z4c/z4c_Sbc.cpp
+        
+	outputs/io_wrapper.cpp
         outputs/outputs.cpp
         outputs/basetype_output.cpp
         outputs/derived_variables.cpp

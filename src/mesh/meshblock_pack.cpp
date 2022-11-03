@@ -15,6 +15,7 @@
 #include "driver/driver.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "z4c/z4c.hpp"
 #include "ion-neutral/ion_neutral.hpp"
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
@@ -43,6 +44,7 @@ MeshBlockPack::~MeshBlockPack() {
   delete pcoord;
   if (phydro != nullptr) {delete phydro;}
   if (pmhd   != nullptr) {delete pmhd;}
+  if (pz4c   != nullptr) {delete pz4c;}
   if (pturb  != nullptr) {delete pturb;}
   if (punit  != nullptr) {delete punit;}
 }
@@ -133,6 +135,15 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     pturb = nullptr;
   }
 
+  // (5) Z4c
+  // Create Z4c physics module.
+  if (pin->DoesBlockExist("z4c")) {
+    pz4c = new z4c::Z4c(this, pin);
+    pz4c->AssembleZ4cTasks(start_tl, run_tl, end_tl);
+    nphysics++;
+  } else {
+    pz4c = nullptr;
+  }
   // Units
   // Default units are cgs units
   if (pin->DoesBlockExist("units")) {

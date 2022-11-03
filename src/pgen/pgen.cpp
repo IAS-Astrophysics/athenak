@@ -19,6 +19,7 @@
 #include "mesh/mesh.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "z4c/z4c.hpp"
 #include "pgen.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -155,12 +156,16 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   // calculate total number of CC variables
   hydro::Hydro* phydro = pm->pmb_pack->phydro;
   mhd::MHD* pmhd = pm->pmb_pack->pmhd;
-  int nhydro_tot = 0, nmhd_tot = 0;
+  z4c::Z4c* pz4c = pm->pmb_pack->pz4c;
+  int nhydro_tot = 0, nmhd_tot = 0, nz4c_tot = 0;
   if (phydro != nullptr) {
     nhydro_tot = phydro->nhydro + phydro->nscalars;
   }
   if (pmhd != nullptr) {
     nmhd_tot = pmhd->nmhd + pmhd->nscalars;
+  }
+  if (pz4c != nullptr) {
+    nz4c_tot = pz4c->N_Z4c;
   }
 
   IOWrapperSizeT headeroffset;
@@ -174,11 +179,11 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
 #endif
 
   // allocate arrays for CC data
-  HostArray5D<Real> ccin("pgen-ccin", nmb, (nhydro_tot + nmhd_tot), nout3, nout2, nout1);
-  if (ccin.size() != (nmb*ccdata_cnt)) {
+  HostArray5D<Real> ccin("pgen-ccin", nmb, (nhydro_tot + nmhd_tot + nz4c_tot), nout3, nout2, nout1);
+  if (ccin.size()*sizeof(Real) != ccdata_size) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "CC data size read from restart file not equal to size "
-              << "of Hydro and MHD arrays, restart file is broken." << std::endl;
+              << "of Hydro, MHD and Z4c arrays, restart file is broken." << std::endl;
     exit(EXIT_FAILURE);
   }
 
@@ -241,6 +246,15 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
                                      Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
     Kokkos::deep_copy(host_u0, hst_slice);
     Kokkos::deep_copy(pmhd->u0, host_u0);
+  }
+  
+  // copy CC MHD data to device
+  if (pz4c != nullptr) {
+    DvceArray5D<Real>::HostMirror host_u0 = Kokkos::create_mirror(pz4c->u0);
+    auto hst_slice = Kokkos::subview(ccin,Kokkos::ALL,std::make_pair(nhydro_tot+nmhd_tot,nz4c_tot),
+                                     Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+    Kokkos::deep_copy(host_u0, hst_slice);
+    Kokkos::deep_copy(pz4c->u0, host_u0);
   }
 
   // allocate arrays for FC data, read face-centered fields
