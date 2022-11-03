@@ -4,7 +4,8 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file z4c_punctures.cpp
-//  \brief implementation of functions in the Z4c class for initializing puntures evolution
+//  \brief implementation of functions in the Z4c class for initializing
+//  puntures evolution
 
 // C++ standard headers
 #include <cmath> // pow
@@ -26,7 +27,6 @@ namespace z4c {
 // \brief Initialize ADM vars to single puncture (no spin)
 
 void Z4c::ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin) {
-
   // capture variables for the kernel
   auto &indcs = pmbp->pmesh->mb_indcs;
   auto &size = pmbp->pmb->mb_size;
@@ -44,8 +44,9 @@ void Z4c::ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin) {
 
   int scr_level = 0;
   size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1);
-  par_for_outer("pgen one puncture",DevExeSpace(),scr_size,scr_level,0,nmb-1,ksg,keg,jsg,jeg,
-  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {  
+  par_for_outer("pgen one puncture",
+  DevExeSpace(),scr_size,scr_level,0,nmb-1,ksg,keg,jsg,jeg,
+  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {
     Real &x1min = size.d_view(m).x1min;
     Real &x1max = size.d_view(m).x1max;
     int nx1 = indcs.nx1;
@@ -62,7 +63,7 @@ void Z4c::ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin) {
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> r;
     r.NewAthenaScratchTensor(member, scr_level, nx1);
 
-    par_for_inner(member, isg, ieg, [&](const int i) { 
+    par_for_inner(member, isg, ieg, [&](const int i) {
       Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
       r(i) = std::sqrt(std::pow(x3v,2) + std::pow(x2v,2) + std::pow(x1v,2));
     });
@@ -70,7 +71,7 @@ void Z4c::ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin) {
     // Minkowski spacetime
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
-      par_for_inner(member, isg, ieg, [&](const int i) { 
+      par_for_inner(member, isg, ieg, [&](const int i) {
         adm.g_dd(m,a,b,k,j,i) = (a == b ? 1. : 0.);
       });
     }
@@ -128,7 +129,9 @@ void Z4c::ADMTwoPunctures(MeshBlockPack *pmbp, ini_data *data) {
   int ncells2 = indcs.nx2 + 2*(indcs.ng);
   int ncells3 = indcs.nx3 + 2*(indcs.ng);
   int nmb = pmbp->nmb_thispack;
-  for(int m = 0; m < nmb; ++m) {
+  Kokkos::parallel_for("pgen two puncture", Kokkos::RangePolicy<>\
+  (Kokkos::DefaultHostExecutionSpace(), 0, nmb),
+  KOKKOS_LAMBDA(const int m) {
     int imin[3] = {0, 0, 0};
 
     int n[3] = {ncells1, ncells2, ncells3};
@@ -162,15 +165,15 @@ void Z4c::ADMTwoPunctures(MeshBlockPack *pmbp, ini_data *data) {
     int nx3 = indcs.nx3;
 
     // need to populate coordinates
-    for(int ix_I = isg; ix_I < ieg+1; ix_I++){
+    for(int ix_I = isg; ix_I < ieg+1; ix_I++) {
       x[ix_I] = CellCenterX(ix_I-is, nx1, x1min, x1max);
     }
 
-    for(int ix_J = jsg; ix_J < jeg+1; ix_J++){
+    for(int ix_J = jsg; ix_J < jeg+1; ix_J++) {
       y[ix_J] = CellCenterX(ix_J-js, nx2, x2min, x2max);
     }
 
-    for(int ix_K = ksg; ix_K < keg+1; ix_K++){
+    for(int ix_K = ksg; ix_K < keg+1; ix_K++) {
       z[ix_K] = CellCenterX(ix_K-ks, nx3, x3min, x3max);
     }
     TwoPunctures_Cartesian_interpolation
@@ -236,7 +239,7 @@ void Z4c::ADMTwoPunctures(MeshBlockPack *pmbp, ini_data *data) {
     free(psi); free(alp);
 
     free(x); free(y); free(z);
-  }
+  });
   Kokkos::deep_copy(u_adm, host_u_adm);
   return;
 }

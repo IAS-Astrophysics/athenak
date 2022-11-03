@@ -160,4 +160,4 @@ void SpacetimeUpperMetric(Real const alp,
   u[12] = u[3];
 }
 
-#endif
+#endif  // ADM_ADM_HPP_

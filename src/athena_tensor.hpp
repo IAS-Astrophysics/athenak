@@ -11,8 +11,8 @@
 //  Convention: indices a,b,c,d are tensor indices. Indices n,i,j,k are grid indices.
 
 #include <cassert> // assert
-#include "athena.hpp"
 #include <utility>
+#include "athena.hpp"
 
 // tensor symmetries
 enum class TensorSymm {
@@ -506,7 +506,8 @@ __device__ __host__ AthenaScratchTensor();
     return idxmap_[a][b][c][d];
   }
   KOKKOS_INLINE_FUNCTION
-  decltype(auto) operator()(int const a, int const b, int const c, int const d, int const i) const {
+  decltype(auto) operator()(int const a, int const b,
+                            int const c, int const d, int const i) const {
     return data_(idxmap_[a][b][c][d], i);
   }
   KOKKOS_INLINE_FUNCTION

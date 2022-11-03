@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file z4c_punctures.cpp
-//  \brief implementation of functions in the Z4c class for initializing puntures evolution
+//  \brief implementation of gauge for the Z4c class
 
 // C++ standard headers
 #include <cmath> // pow
@@ -26,7 +26,6 @@ namespace z4c {
 // \brief Initialize ADM vars to single puncture (no spin)
 
 void Z4c::GaugePreCollapsedLapse(MeshBlockPack *pmbp, ParameterInput *pin) {
-
   // capture variables for the kernel
   auto &indcs = pmbp->pmesh->mb_indcs;
   int &is = indcs.is; int &ie = indcs.ie;
@@ -43,11 +42,14 @@ void Z4c::GaugePreCollapsedLapse(MeshBlockPack *pmbp, ParameterInput *pin) {
 
   int scr_level = 0;
   size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1);
-  par_for_outer("pgen one puncture",DevExeSpace(),scr_size,scr_level,0,nmb-1,ksg,keg,jsg,jeg,
-  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) { 
+  par_for_outer("pgen one puncture",
+  DevExeSpace(),scr_size,scr_level,0,nmb-1,ksg,keg,jsg,jeg,
+  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {
     par_for_inner(member, isg, ieg, [&](const int i) {
-      z4c.alpha(m,k,j,i) = std::pow(adm.psi4(m,k,j,i),-0.5); // setting z4c.alpha, which is 0th component of z4c
-    }); 
+      z4c.alpha(m,k,j,i) = std::pow(adm.psi4(m,k,j,i),-0.5); // setting z4c.alpha,
+                                                             // which is 0th component
+                                                             // of z4c
+    });
   });
 }
 

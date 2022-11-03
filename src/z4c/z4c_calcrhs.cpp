@@ -605,7 +605,8 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
         par_for_inner(member, is, ie, [&](const int i) {
           rhs.Gam_u(m,a,k,j,i) -= 2. * A_uu(a,b,i) * dalpha_d(b,i);
     // Matter commented out
-        //rhs.Gam_u(m,a,k,j,i) -= 16.*M_PI * z4c.alpha(m,k,j,i) * g_uu(a,b) * mat.S_d(m,b,k,j,i);
+        //rhs.Gam_u(m,a,k,j,i) -= 16.*M_PI * z4c.alpha(m,k,j,i) 
+	//                      * g_uu(a,b) * mat.S_d(m,b,k,j,i);
         });
       }
     }
@@ -613,11 +614,14 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
       par_for_inner(member, is, ie, [&](const int i) {
-        rhs.g_dd(m,a,b,k,j,i) = - 2. * z4c.alpha(m,k,j,i) * z4c.A_dd(m,a,b,k,j,i) + Lg_dd(a,b,i);
+        rhs.g_dd(m,a,b,k,j,i) = - 2. * z4c.alpha(m,k,j,i) * z4c.A_dd(m,a,b,k,j,i) 
+	                      + Lg_dd(a,b,i);
         rhs.A_dd(m,a,b,k,j,i) = oopsi4(i) *
             (-Ddalpha_dd(a,b,i) + z4c.alpha(m,k,j,i) * (R_dd(a,b,i) + Rphi_dd(a,b,i)));
-        rhs.A_dd(m,a,b,k,j,i) -= (1./3.) * z4c.g_dd(m,a,b,k,j,i) * (-Ddalpha(i) + z4c.alpha(m,k,j,i)*R(i));
-        rhs.A_dd(m,a,b,k,j,i) += z4c.alpha(m,k,j,i) * (K(i)*z4c.A_dd(m,a,b,k,j,i) - 2.*AA_dd(a,b,i));
+        rhs.A_dd(m,a,b,k,j,i) -= (1./3.) * z4c.g_dd(m,a,b,k,j,i)
+                               * (-Ddalpha(i) + z4c.alpha(m,k,j,i)*R(i));
+        rhs.A_dd(m,a,b,k,j,i) += z4c.alpha(m,k,j,i) * (K(i)*z4c.A_dd(m,a,b,k,j,i)
+                               - 2.*AA_dd(a,b,i));
         rhs.A_dd(m,a,b,k,j,i) += LA_dd(a,b,i);
     // Matter commented out
         //rhs.A_dd(m,a,b,k,j,i) -= 8.*M_PI * z4c.alpha(m,k,j,i) *
@@ -626,14 +630,17 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
     }
     // lapse function
     par_for_inner(member, is, ie, [&](const int i) {
-      Real const f = opt.lapse_oplog * opt.lapse_harmonicf + opt.lapse_harmonic * z4c.alpha(m,k,j,i);
-      rhs.alpha(m,k,j,i) = opt.lapse_advect * Lalpha(i) - f * z4c.alpha(m,k,j,i) * z4c.Khat(m,k,j,i);
+      Real const f = opt.lapse_oplog * opt.lapse_harmonicf
+                   + opt.lapse_harmonic * z4c.alpha(m,k,j,i);
+      rhs.alpha(m,k,j,i) = opt.lapse_advect * Lalpha(i)
+                         - f * z4c.alpha(m,k,j,i) * z4c.Khat(m,k,j,i);
     });
 
     // shift vector
     for(int a = 0; a < 3; ++a) {
       par_for_inner(member, is, ie, [&](const int i) {
-        rhs.beta_u(m,a,k,j,i) = opt.shift_Gamma * z4c.Gam_u(m,a,k,j,i) + opt.shift_advect * Lbeta_u(a,i);
+        rhs.beta_u(m,a,k,j,i) = opt.shift_Gamma * z4c.Gam_u(m,a,k,j,i)
+                              + opt.shift_advect * Lbeta_u(a,i);
         rhs.beta_u(m,a,k,j,i) -= opt.shift_eta * z4c.beta_u(m,a,k,j,i);
         // FORCE beta = 0
         //rhs.beta_u(m,a,k,j,i) = 0;
@@ -667,8 +674,10 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
   Real &diss = pmy_pack->pz4c->diss;
   auto &u0 = pmy_pack->pz4c->u0;
   auto &u_rhs = pmy_pack->pz4c->u_rhs;
-  par_for_outer("K-O Dissipation",DevExeSpace(),scr_size,scr_level,0,nmb-1,0,N_Z4c-1,ks,ke,js,je,
-  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int n, const int k, const int j) {
+  par_for_outer("K-O Dissipation",
+  DevExeSpace(),scr_size,scr_level,0,nmb-1,0,N_Z4c-1,ks,ke,js,je,
+  KOKKOS_LAMBDA(TeamMember_t member,
+  const int m, const int n, const int k, const int j) {
   Real idx[] = {size.d_view(m).idx1, size.d_view(m).idx2, size.d_view(m).idx3};
   for(int a = 0; a < 3; ++a) {
     par_for_inner(member, is, ie, [&](const int i) {
@@ -682,4 +691,4 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
 template TaskStatus Z4c::CalcRHS<2>(Driver *pdriver, int stage);
 template TaskStatus Z4c::CalcRHS<3>(Driver *pdriver, int stage);
 template TaskStatus Z4c::CalcRHS<4>(Driver *pdriver, int stage);
-}
+} // namespace z4c
