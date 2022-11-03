@@ -1,10 +1,10 @@
 //========================================================================================
-// AthenaXXX astrophysical plasma code
-// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
-// Licensed under the 3-clause BSD License (the "LICENSE")
-//========================================================================================
-//! \file driver.cpp
-//  \brief implementation of functions in class Driver
+	// AthenaXXX astrophysical plasma code
+	// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
+	// Licensed under the 3-clause BSD License (the "LICENSE")
+	//========================================================================================
+	//! \file driver.cpp
+	//  \brief implementation of functions in class Driver
 
 #include <iostream>
 #include <iomanip>    // std::setprecision()
@@ -16,107 +16,108 @@
 #include "outputs/outputs.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
-#include "z4c/z4c.hpp"
 #include "ion-neutral/ion_neutral.hpp"
 #include "driver.hpp"
 
-//----------------------------------------------------------------------------------------
-// constructor, initializes data structures and parameters
-//
-// First, define each time-integrator by setting weights for each step of the algorithm
-// and the CFL number stability limit when coupled to the single-stage spatial operator.
-// Currently, the explicit, multistage time-integrators must be expressed as 2S-type
-// algorithms as in Ketcheson (2010) Algorithm 3, which incudes 2N (Williamson) and 2R
-// (van der Houwen) popular 2-register low-storage RK methods. The 2S-type integrators
-// depend on a bidiagonally sparse Shu-Osher representation; at each stage l:
-//
-//    U^{l} = a_{l,l-2}*U^{l-2} + a_{l-1}*U^{l-1}
-//          + b_{l,l-2}*dt*Div(F_{l-2}) + b_{l,l-1}*dt*Div(F_{l-1}),
-//
-// where U^{l-1} and U^{l-2} are previous stages and a_{l,l-2}, a_{l,l-1}=(1-a_{l,l-2}),
-// and b_{l,l-2}, b_{l,l-1} are weights that are different for each stage and
-// integrator. Previous timestep U^{0} = U^n is given, and the integrator solves
-// for U^{l} for 1 <= l <= nstages.
-//
-// The 2x RHS evaluations of Div(F) and source terms per stage is avoided by adding
-// another weighted average / caching of these terms each stage. The API and framework
-// is extensible to three register 3S* methods, although none are currently implemented.
+	//----------------------------------------------------------------------------------------
+	// constructor, initializes data structures and parameters
+	//
+	// First, define each time-integrator by setting weights for each step of the algorithm
+	// and the CFL number stability limit when coupled to the single-stage spatial operator.
+	// Currently, the explicit, multistage time-integrators must be expressed as 2S-type
+	// algorithms as in Ketcheson (2010) Algorithm 3, which incudes 2N (Williamson) and 2R
+	// (van der Houwen) popular 2-register low-storage RK methods. The 2S-type integrators
+	// depend on a bidiagonally sparse Shu-Osher representation; at each stage l:
+	//
+	//    U^{l} = a_{l,l-2}*U^{l-2} + a_{l-1}*U^{l-1}
+	//          + b_{l,l-2}*dt*Div(F_{l-2}) + b_{l,l-1}*dt*Div(F_{l-1}),
+	//
+	// where U^{l-1} and U^{l-2} are previous stages and a_{l,l-2}, a_{l,l-1}=(1-a_{l,l-2}),
+	// and b_{l,l-2}, b_{l,l-1} are weights that are different for each stage and
+	// integrator. Previous timestep U^{0} = U^n is given, and the integrator solves
+	// for U^{l} for 1 <= l <= nstages.
+	//
+	// The 2x RHS evaluations of Div(F) and source terms per stage is avoided by adding
+	// another weighted average / caching of these terms each stage. The API and framework
+	// is extensible to three register 3S* methods, although none are currently implemented.
 
-// Notation: exclusively using "stage", equivalent in lit. to "substage" or "substep"
-// (infrequently "step"), to refer to the intermediate values of U^{l} between each
-// "timestep" = "cycle" in explicit, multistage methods.
-//
-// Driver::Execute() invokes the tasklist from stage=1 to stage=ptlist->nstages
+	// Notation: exclusively using "stage", equivalent in lit. to "substage" or "substep"
+	// (infrequently "step"), to refer to the intermediate values of U^{l} between each
+	// "timestep" = "cycle" in explicit, multistage methods.
+	//
+	// Driver::Execute() invokes the tasklist from stage=1 to stage=ptlist->nstages
 
-Driver::Driver(ParameterInput *pin, Mesh *pmesh) :
-  tlim(-1.0), nlim(-1), ndiag(1),
-  impl_src("ru",1,1,1,1,1,1) {
-  // set time-evolution option (no default)
-  {std::string evolution_t = pin->GetString("time","evolution");
-  if (evolution_t.compare("static") == 0) {
-    time_evolution = TimeEvolution::tstatic;  // cannot use 'static' (keyword);
-  } else if (evolution_t.compare("kinematic") == 0) {
-    time_evolution = TimeEvolution::kinematic;
-  } else if (evolution_t.compare("dynamic") == 0) {
-    time_evolution = TimeEvolution::dynamic;
-  } else {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "<hydro> evolution = '" << evolution_t << "' not implemented"
-              << std::endl;
-    std::exit(EXIT_FAILURE);
-  }} // extra brace to limit scope of string
+	Driver::Driver(ParameterInput *pin, Mesh *pmesh) :
+	  tlim(-1.0), nlim(-1), ndiag(1),
+	  impl_src("ru",1,1,1,1,1,1) {
+	  // set time-evolution option (no default)
+	  {std::string evolution_t = pin->GetString("time","evolution");
+	  if (evolution_t.compare("static") == 0) {
+	    time_evolution = TimeEvolution::tstatic;  // cannot use 'static' (keyword);
+	  } else if (evolution_t.compare("kinematic") == 0) {
+	    time_evolution = TimeEvolution::kinematic;
+	  } else if (evolution_t.compare("dynamic") == 0) {
+	    time_evolution = TimeEvolution::dynamic;
+	  } else {
+	    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+		      << "<hydro> evolution = '" << evolution_t << "' not implemented"
+		      << std::endl;
+	    std::exit(EXIT_FAILURE);
+	  }} // extra brace to limit scope of string
 
-  // read <time> parameters controlling driver if run requires time-evolution
-  if (time_evolution != TimeEvolution::tstatic) {
-    integrator = pin->GetOrAddString("time", "integrator", "rk2");
-    tlim = pin->GetReal("time", "tlim");
-    nlim = pin->GetOrAddInteger("time", "nlim", -1);
-    ndiag = pin->GetOrAddInteger("time", "ndiag", 1);
+	  // read <time> parameters controlling driver if run requires time-evolution
+	  if (time_evolution != TimeEvolution::tstatic) {
+	    integrator = pin->GetOrAddString("time", "integrator", "rk2");
+	    tlim = pin->GetReal("time", "tlim");
+	    nlim = pin->GetOrAddInteger("time", "nlim", -1);
+	    ndiag = pin->GetOrAddInteger("time", "ndiag", 1);
 
-    if (integrator == "rk1") {
-      // RK1: first-order Runge-Kutta / the forward Euler (FE) method
-      nimp_stages = 0;
-      nexp_stages = 1;
-      cfl_limit = 1.0;
-      gam0[0] = 0.0;
-      gam1[0] = 1.0;
-      beta[0] = 1.0;
-    } else if (integrator == "rk2") {
-      // Heun's method / SSPRK (2,2): Gottlieb (2009) equation 3.1
-      // Optimal (in error bounds) explicit two-stage, second-order SSPRK
-      nimp_stages = 0;
-      nexp_stages = 2;
-      cfl_limit = 1.0;  // c_eff = c/nstages = 1/2 (Gottlieb (2009), pg 271)
-      gam0[0] = 0.0;
-      gam1[0] = 1.0;
-      beta[0] = 1.0;
+	    if (integrator == "rk1") {
+	      // RK1: first-order Runge-Kutta / the forward Euler (FE) method
+	      nimp_stages = 0;
+	      nexp_stages = 1;
+	      cfl_limit = 1.0;
+	      gam0[0] = 0.0;
+	      gam1[0] = 1.0;
+	      beta[0] = 1.0;
+	    } else if (integrator == "rk2") {
+	      // Heun's method / SSPRK (2,2): Gottlieb (2009) equation 3.1
+	      // Optimal (in error bounds) explicit two-stage, second-order SSPRK
+	      nimp_stages = 0;
+	      nexp_stages = 2;
+	      cfl_limit = 1.0;  // c_eff = c/nstages = 1/2 (Gottlieb (2009), pg 271)
+	      gam0[0] = 0.0;
+	      gam1[0] = 1.0;
+	      beta[0] = 1.0;
 
-      gam0[1] = 0.5;
-      gam1[1] = 0.5;
-      beta[1] = 0.5;
-    } else if (integrator == "rk3") {
-      // SSPRK (3,3): Gottlieb (2009) equation 3.2
-      // Optimal (in error bounds) explicit three-stage, third-order SSPRK
-      nimp_stages = 0;
-      nexp_stages = 3;
-      cfl_limit = 1.0;  // c_eff = c/nstages = 1/3 (Gottlieb (2009), pg 271)
-      gam0[0] = 0.0;
-      gam1[0] = 1.0;
-      beta[0] = 1.0;
+	      gam0[1] = 0.5;
+	      gam1[1] = 0.5;
+	      beta[1] = 0.5;
+	    } else if (integrator == "rk3") {
+	      // SSPRK (3,3): Gottlieb (2009) equation 3.2
+	      // Optimal (in error bounds) explicit three-stage, third-order SSPRK
+	      nimp_stages = 0;
+	      nexp_stages = 3;
+	      cfl_limit = 1.0;  // c_eff = c/nstages = 1/3 (Gottlieb (2009), pg 271)
+	      gam0[0] = 0.0;
+	      gam1[0] = 1.0;
+	      beta[0] = 1.0;
 
-      gam0[1] = 0.25;
-      gam1[1] = 0.75;
-      beta[1] = 0.25;
+	      gam0[1] = 0.25;
+	      gam1[1] = 0.75;
+	      beta[1] = 0.25;
 
-      gam0[2] = 2.0/3.0;
-      gam1[2] = 1.0/3.0;
-      beta[2] = 2.0/3.0;
-    } else if (integrator == "rk4") {
-      // RK4()4[2S] from Table 2 of Ketcheson (2010)
-      // Non-SSP, explicit four-stage, fourth-order RK
-      // Stability properties are similar to classical (non-SSP) RK4
-      // (but ~2x L2 principal error norm).
-      // Refer to Colella (2011) for linear stability analysis of constant coeff.
+	      gam0[2] = 2.0/3.0;
+	      gam1[2] = 1.0/3.0;
+	      beta[2] = 2.0/3.0;
+	    } else if (integrator == "rk4") {
+	      //! - RK4()4[2S] from Table 2 of Ketcheson (2010)
+	      //! - Non-SSP, explicit four-stage, fourth-order RK
+	      //! - Stability properties are similar to classical (non-SSP) RK4
+	      //!   (but ~2x L2 principal error norm).
+	      //! - Refer to Colella (2011) for linear stability analysis of constant
+	      //!   coeff. advection of classical RK4 + 4th or 1st order (limiter engaged) fluxes
+
       nimp_stages = 0;
       nexp_stages = 4;
 
@@ -262,20 +263,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
     (void) pmhd->ConToPrim(this, 0);
   }
 
-  // Initialize Z4c
-  z4c::Z4c *pz4c = pmesh->pmb_pack->pz4c;
-  if (pz4c != nullptr) {
-    // following functions return a TaskStatus, but it is ignored so cast to (void)
-    (void) pz4c->InitRecv(this, 0);  // stage < 0 suppresses InitFluxRecv
-    (void) pz4c->SendU(this, 0);
-    (void) pz4c->ClearSend(this, 0);
-    (void) pz4c->ClearRecv(this, 0);
-    (void) pz4c->RecvU(this, 0);
-    (void) pz4c->Z4cBoundaryRHS(this, 0);
-    (void) pz4c->ApplyPhysicalBCs(this, 0);
-  }
-
-  //---- Step 2.  Compute first time step (if problem involves time evolution)
+  //---- Step 2.  Compute first time step (if problem involves time evolution
 
   if (time_evolution != TimeEvolution::tstatic) {
     if (phydro != nullptr) {
@@ -283,9 +271,6 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
     }
     if (pmhd != nullptr) {
       (void) pmesh->pmb_pack->pmhd->NewTimeStep(this, nexp_stages);
-    }
-    if (pz4c != nullptr) {
-      (void) pmesh->pmb_pack->pz4c->NewTimeStep(this, nexp_stages);
     }
     pmesh->NewTimeStep(tlim);
   }
