@@ -176,9 +176,10 @@ class BoundaryValuesFC : public BoundaryValues {
   void ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
   TaskStatus PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx);
   TaskStatus RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx);
-  void SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx, const bool same_level);
-  void ZeroFluxesAtBoundaryWithFiner(DvceEdgeFld4D<Real> &flx);
-  void AverageBoundaryFluxes(DvceEdgeFld4D<Real> &flx);
+  void SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx, const bool same_level,
+                         DvceArray2D<int> &nflx);
+  void ZeroFluxesAtBoundaryWithFiner(DvceEdgeFld4D<Real> &flx, DvceArray2D<int> &nflx);
+  void AverageBoundaryFluxes(DvceEdgeFld4D<Real> &flx, DvceArray2D<int> &nflx);
 };
 
 #endif // BVALS_BVALS_HPP_
