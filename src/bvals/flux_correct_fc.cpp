@@ -1003,9 +1003,9 @@ TaskStatus BoundaryValuesFC::InitFluxRecv(const int nvars) {
           // create tag using local ID and buffer index of *receiving* MeshBlock
           int tag = CreateMPITag(m, n);
 
-          // get ptr to recv buffer when neighbor is at coarser/same/fine level
+          // get ptr to recv buffer when neighbor is at same/finer level
           int data_size = nvars;
-          if ( nghbr.h_view(m,n).lev < pmy_pack->pmb->mb_lev.h_view(m) ) {
+          if ( nghbr.h_view(m,n).lev > pmy_pack->pmb->mb_lev.h_view(m) ) {
             data_size *= recv_buf[n].iflxc_ndat;
           } else if ( nghbr.h_view(m,n).lev == pmy_pack->pmb->mb_lev.h_view(m) ) {
             data_size *= recv_buf[n].iflxs_ndat;
