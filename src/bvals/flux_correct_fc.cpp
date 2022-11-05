@@ -434,6 +434,16 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx) {
     SumBoundaryFluxes(flx, false, nflx);
   }
 
+
+/***
+      HostArray2D<int>::HostMirror nflx_h = Kokkos::create_mirror(nflx);
+      Kokkos::deep_copy(nflx_h,nflx);
+for (int m=0; m<nmb; ++m) {
+for (int n=0; n<48; ++n) {
+std::cout << "(m,n) = "<<m<<" "<<n<<"  nflx = "<< nflx_h(m,n) << std::endl;
+}}
+****/
+
   // perform appropriate averaging depending on how many fluxes contributed to sums
   AverageBoundaryFluxes(flx, nflx);
 
@@ -463,14 +473,12 @@ void BoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx, const bool sa
 
     // scalar loop over neighbors (except corners) to prevent race condition in sums
     for (int n=0; n<48; ++n) {
-
-      // only unpack buffers when neighbor exists
-      if (nghbr.d_view(m,n).gid >= 0) {
-        // Skip if neighbor not at same level when same_level=true on input
-        // Also skip if neighbor not at finer level when same_level=false on input
-        if (same_level && (nghbr.d_view(m,n).lev != mblev.d_view(m))) {continue;}
-        if ((not same_level) && (nghbr.d_view(m,n).lev <= mblev.d_view(m))) {continue;}
-
+      // only unpack buffers when neighbor exists AND
+      // (neighbor at same level when same_level=true on input) OR
+      // (neighbor at finer level when same_level=false on input)
+      if ( (nghbr.d_view(m,n).gid >= 0) &&
+           (((same_level) && (nghbr.d_view(m,n).lev == mblev.d_view(m))) ||
+            ((not same_level) && (nghbr.d_view(m,n).lev > mblev.d_view(m)))) ) {
         int il, iu, jl, ju, kl, ku, ndat;
         // if neighbor is at same level, use sindices to unpack buffer
         if (same_level) {
@@ -503,10 +511,14 @@ void BoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx, const bool sa
           // always use v=0 thread index in sums to avoid race condition
           if (v==0) {
             if (n==0) {
-              nflx(m,16) += 1; nflx(m,20) += 1; nflx(m,32) += 1; nflx(m,36) += 1;
+              Kokkos::single(Kokkos::PerTeam(tmember), [&] () {
+                nflx(m,16) += 1; nflx(m,20) += 1; nflx(m,32) += 1; nflx(m,36) += 1;
+              });
             }
             if (n==4) {
-              nflx(m,18) += 1; nflx(m,22) += 1; nflx(m,34) += 1; nflx(m,38) += 1;
+              Kokkos::single(Kokkos::PerTeam(tmember), [&] () {
+                nflx(m,18) += 1; nflx(m,22) += 1; nflx(m,34) += 1; nflx(m,38) += 1;
+              });
             }
           } else {
             Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember,nkj),
@@ -520,7 +532,6 @@ void BoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx, const bool sa
                 flx.x3e(m,k,j,il) += rbuf[n].flux(m,ndat*v + (j-jl + nj*(k-kl)));
               }
             });
-            tmember.team_barrier();
           }
 
         // x2faces
@@ -528,10 +539,14 @@ void BoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx, const bool sa
           // always use v=0 thread index in sums to avoid race condition
           if (v==0) {
             if (n==8) {
-              nflx(m,16) += 1; nflx(m,18) += 1; nflx(m,40) += 1; nflx(m,44) += 1;
+              Kokkos::single(Kokkos::PerTeam(tmember), [&] () {
+                nflx(m,16) += 1; nflx(m,18) += 1; nflx(m,40) += 1; nflx(m,44) += 1;
+              });
             }
             if (n==12) {
-              nflx(m,20) += 1; nflx(m,22) += 1; nflx(m,42) += 1; nflx(m,46) += 1;
+              Kokkos::single(Kokkos::PerTeam(tmember), [&] () {
+                nflx(m,20) += 1; nflx(m,22) += 1; nflx(m,42) += 1; nflx(m,46) += 1;
+              });
             }
           }
           Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember,nki),
@@ -545,19 +560,19 @@ void BoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx, const bool sa
               flx.x3e(m,k,jl,i) += rbuf[n].flux(m,ndat*v + i-il + ni*(k-kl));
             }
           });
-          tmember.team_barrier();
 
         // x1x2 edges
         } else if (n<24) {
           // always use v=0 thread index in sums to avoid race condition
           if (v==0) {
-            nflx(m,n) += 1;
+            Kokkos::single(Kokkos::PerTeam(tmember), [&] () {
+              nflx(m,n) += 1;
+            });
           } else if (v==2) {
             Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember,nk),[&](const int idx){
               int k = idx + kl;
               flx.x3e(m,k,jl,il) += rbuf[n].flux(m,ndat*v + (k-kl));
             });
-            tmember.team_barrier();
           }
 
         // x3faces
@@ -565,10 +580,14 @@ void BoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx, const bool sa
           // always use v=0 thread index in sums to avoid race condition
           if (v==0) {
             if (n==24) {
-              nflx(m,32) += 1; nflx(m,34) += 1; nflx(m,40) += 1; nflx(m,42) += 1;
+              Kokkos::single(Kokkos::PerTeam(tmember), [&] () {
+                nflx(m,32) += 1; nflx(m,34) += 1; nflx(m,40) += 1; nflx(m,42) += 1;
+              });
             }
             if (n==28) {
-              nflx(m,36) += 1; nflx(m,38) += 1; nflx(m,44) += 1; nflx(m,46) += 1;
+              Kokkos::single(Kokkos::PerTeam(tmember), [&] () {
+                nflx(m,36) += 1; nflx(m,38) += 1; nflx(m,44) += 1; nflx(m,46) += 1;
+              });
             }
           }
           Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember,nji),
@@ -582,30 +601,31 @@ void BoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx, const bool sa
               flx.x2e(m,kl,j,i) += rbuf[n].flux(m,ndat*v + i-il + ni*(j-jl));
             }
           });
-          tmember.team_barrier();
 
         // x3x1 edges
         } else if (n<40) {
           // always use v=0 thread index in sums to avoid race condition
           if (v==0) {
-            nflx(m,n) += 1;
+            Kokkos::single(Kokkos::PerTeam(tmember), [&] () {
+              nflx(m,n) += 1;
+            });
           } else if (v==1) {
             Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember,nj),[&](const int idx){
               int j = idx + jl;
               flx.x2e(m,kl,j,il) += rbuf[n].flux(m,ndat*v + (j-jl));
             });
-            tmember.team_barrier();
           }
 
         // x2x3 edges
         } else if (n<48) {
           if (v==0) {
-            nflx(m,n) += 1;
+            Kokkos::single(Kokkos::PerTeam(tmember), [&] () {
+              nflx(m,n) += 1;
+            });
             Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember,ni),[&](const int idx){
               int i = idx + il;
               flx.x1e(m,kl,jl,i) += rbuf[n].flux(m,ndat*v + i-il);
             });
-            tmember.team_barrier();
           }
         }
       }  // end if-neighbor-exists block
