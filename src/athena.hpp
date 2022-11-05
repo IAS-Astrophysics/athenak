@@ -402,7 +402,7 @@ KOKKOS_INLINE_FUNCTION void par_for_inner(TeamMember_t tmember, const int il,con
   Kokkos::parallel_for(Kokkos::TeamVectorRange(tmember, il, iu+1), function);
 }
 
-#define NREDUCTION_VARIABLES 20
+#define NREDUCTION_VARIABLES 56
 //----------------------------------------------------------------------------------------
 //! \struct summed_array_type
 // Following code is copied from Kokkos wiki pages on building custom reducers.  It allows
