@@ -383,16 +383,19 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b,
             [&](const int i) {
               b.x1f(m,k,j,i) = rbuf[n].vars(m,i-il + ni*(j-jl + nj*(k-kl)));
             });
+            tmember.team_barrier();
           } else if (v==1) {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
             [&](const int i) {
               b.x2f(m,k,j,i) = rbuf[n].vars(m,nv[1] + i-il + ni*(j-jl + nj*(k-kl)));
             });
+            tmember.team_barrier();
           } else {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
             [&](const int i) {
               b.x3f(m,k,j,i) = rbuf[n].vars(m,nv[2] + i-il + ni*(j-jl + nj*(k-kl)));
             });
+            tmember.team_barrier();
           }
         // if neighbor is at coarser level, load data into coarse_b0 (prolongate below)
         } else {
@@ -401,16 +404,19 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b,
             [&](const int i) {
               cb.x1f(m,k,j,i) = rbuf[n].vars(m,i-il + ni*(j-jl + nj*(k-kl)));
             });
+            tmember.team_barrier();
           } else if (v==1) {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
             [&](const int i) {
               cb.x2f(m,k,j,i) = rbuf[n].vars(m,nv[1] + i-il + ni*(j-jl + nj*(k-kl)));
             });
+            tmember.team_barrier();
           } else {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
             [&](const int i) {
               cb.x3f(m,k,j,i) = rbuf[n].vars(m,nv[2] + i-il + ni*(j-jl + nj*(k-kl)));
             });
+            tmember.team_barrier();
           }
         }
       });

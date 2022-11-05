@@ -504,7 +504,6 @@ void BoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx, const bool sa
           if (v==0) {
             if (n==0) {
               nflx(m,16) += 1; nflx(m,20) += 1; nflx(m,32) += 1; nflx(m,36) += 1;
-              nflx(m,n) = 0;
             }
             if (n==4) {
               nflx(m,18) += 1; nflx(m,22) += 1; nflx(m,34) += 1; nflx(m,38) += 1;
@@ -521,8 +520,8 @@ void BoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx, const bool sa
                 flx.x3e(m,k,j,il) += rbuf[n].flux(m,ndat*v + (j-jl + nj*(k-kl)));
               }
             });
+            tmember.team_barrier();
           }
-          tmember.team_barrier();
 
         // x2faces
         } else if (n<16) {
@@ -558,8 +557,8 @@ void BoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx, const bool sa
               int k = idx + kl;
               flx.x3e(m,k,jl,il) += rbuf[n].flux(m,ndat*v + (k-kl));
             });
+            tmember.team_barrier();
           }
-          tmember.team_barrier();
 
         // x3faces
         } else if (n<32)  {
@@ -595,8 +594,8 @@ void BoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx, const bool sa
               int j = idx + jl;
               flx.x2e(m,kl,j,il) += rbuf[n].flux(m,ndat*v + (j-jl));
             });
+            tmember.team_barrier();
           }
-          tmember.team_barrier();
 
         // x2x3 edges
         } else if (n<48) {
@@ -606,8 +605,8 @@ void BoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx, const bool sa
               int i = idx + il;
               flx.x1e(m,kl,jl,i) += rbuf[n].flux(m,ndat*v + i-il);
             });
+            tmember.team_barrier();
           }
-          tmember.team_barrier();
         }
       }  // end if-neighbor-exists block
     }    // end for loop over n
@@ -678,8 +677,8 @@ void BoundaryValuesFC::ZeroFluxesAtBoundaryWithFiner(DvceEdgeFld4D<Real> &flx,
               flx.x3e(m,k,j,il) = 0.0;
             }
           });
+          tmember.team_barrier();
         }
-        tmember.team_barrier();
 
       // x2faces
       } else if (n<16) {
@@ -703,8 +702,8 @@ void BoundaryValuesFC::ZeroFluxesAtBoundaryWithFiner(DvceEdgeFld4D<Real> &flx,
               flx.x3e(m,k,jl,i) = 0.0;
             }
           });
+          tmember.team_barrier();
         }
-        tmember.team_barrier();
 
       // x1x2 edges
       } else if (n<24) {
@@ -714,8 +713,8 @@ void BoundaryValuesFC::ZeroFluxesAtBoundaryWithFiner(DvceEdgeFld4D<Real> &flx,
             int k = idx + kl;
             flx.x3e(m,k,jl,il) = 0.0;
           });
+          tmember.team_barrier();
         }
-        tmember.team_barrier();
 
       // x3faces
       } else if (n<32)  {
@@ -739,8 +738,8 @@ void BoundaryValuesFC::ZeroFluxesAtBoundaryWithFiner(DvceEdgeFld4D<Real> &flx,
               flx.x2e(m,kl,j,i) = 0.0;
             }
           });
+          tmember.team_barrier();
         }
-        tmember.team_barrier();
 
       // x3x1 edges
       } else if (n<40) {
@@ -750,8 +749,8 @@ void BoundaryValuesFC::ZeroFluxesAtBoundaryWithFiner(DvceEdgeFld4D<Real> &flx,
             int j = idx + jl;
               flx.x2e(m,kl,j,il) = 0.0;
           });
+          tmember.team_barrier();
         }
-        tmember.team_barrier();
 
       // x2x3 edges
       } else if (n<48) {
@@ -761,8 +760,8 @@ void BoundaryValuesFC::ZeroFluxesAtBoundaryWithFiner(DvceEdgeFld4D<Real> &flx,
             int i = idx + il;
               flx.x1e(m,kl,jl,i) = 0.0;
           });
+          tmember.team_barrier();
         }
-        tmember.team_barrier();
       }
     }  // end if-neighbor-exists block
   });  // end par_for_outer
@@ -818,6 +817,7 @@ void BoundaryValuesFC::AverageBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
               k += kl;
               flx.x2e(m,k,j,il) *= 0.5;
             });
+            tmember.team_barrier();
           // finer level; divide EMFs that overlap at edges of fine faces by 2
           } else if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
             if (three_d) {
@@ -827,6 +827,7 @@ void BoundaryValuesFC::AverageBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
                 int j = idx + jl;
                 flx.x2e(m,k,j,il) *= 0.5;
               });
+              tmember.team_barrier();
             }
           }
         } else if (v==2) {
@@ -844,6 +845,7 @@ void BoundaryValuesFC::AverageBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
               k += kl;
               flx.x3e(m,k,j,il) *= 0.5;
             });
+            tmember.team_barrier();
           // finer level; divide EMFs that overlap at edges of fine faces by 2
           } else if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
             int j = jl + (ju - jl + 1)/2;
@@ -852,9 +854,9 @@ void BoundaryValuesFC::AverageBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
               int k = idx + kl;
               flx.x3e(m,k,j,il) *= 0.5;
             });
+            tmember.team_barrier();
           }
         }
-        tmember.team_barrier();
 
       // x2faces
       } else if (multi_d && (n==8 || n==12)) {
@@ -873,6 +875,7 @@ void BoundaryValuesFC::AverageBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
               k += kl;
               flx.x1e(m,k,jl,i) *= 0.5;
             });
+            tmember.team_barrier();
           // finer level; divide EMFs that overlap at edges of fine faces by 2
           } else if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
             int k = kl + (ku - kl + 1)/2;
@@ -881,6 +884,7 @@ void BoundaryValuesFC::AverageBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
               int i = idx + il;
               flx.x1e(m,k,jl,i) *= 0.5;
             });
+            tmember.team_barrier();
           }
         } else if (v==2) {
           int nk = ku - kl + 1;
@@ -895,6 +899,7 @@ void BoundaryValuesFC::AverageBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
               k += kl;
               flx.x3e(m,k,jl,i) *= 0.5;
             });
+            tmember.team_barrier();
           // finer level; divide EMFs that overlap at edges of fine faces by 2
           } else if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
             int i = il + (iu - il + 1)/2;
@@ -903,9 +908,9 @@ void BoundaryValuesFC::AverageBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
               int k = idx + kl;
               flx.x3e(m,k,jl,i) *= 0.5;
             });
+            tmember.team_barrier();
           }
         }
-        tmember.team_barrier();
 
       // x1x2 edges
       } else if (multi_d && (n==16 || n==18 || n==20 || n==22)) {
@@ -915,8 +920,8 @@ void BoundaryValuesFC::AverageBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
             int k = idx + kl;
             flx.x3e(m,k,jl,il) /= static_cast<Real>(nflx(m,n));
           });
+          tmember.team_barrier();
         }
-        tmember.team_barrier();
 
       // x3faces
       } else if (three_d && (n==24 || n==28))  {
@@ -933,6 +938,7 @@ void BoundaryValuesFC::AverageBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
               j += jl;
               flx.x1e(m,kl,j,i) *= 0.5;
             });
+            tmember.team_barrier();
           // finer level; divide EMFs that overlap at edges of fine faces by 2
           } else if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
             int j = jl + (ju - jl + 1)/2;
@@ -940,6 +946,7 @@ void BoundaryValuesFC::AverageBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
               int i = idx + il;
               flx.x1e(m,kl,j,i) *= 0.5;
             });
+            tmember.team_barrier();
           }
         } else if (v==1) {
           int nj = ju - jl + 1;
@@ -954,6 +961,7 @@ void BoundaryValuesFC::AverageBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
               j += jl;
               flx.x2e(m,kl,j,i) *= 0.5;
             });
+            tmember.team_barrier();
           // finer level; divide EMFs that overlap at edges of fine faces by 2
           } else if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
             int i = il + (iu - il + 1)/2;
@@ -961,9 +969,9 @@ void BoundaryValuesFC::AverageBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
               int j = idx + jl;
               flx.x2e(m,kl,j,i) *= 0.5;
             });
+            tmember.team_barrier();
           }
         }
-        tmember.team_barrier();
 
       // x3x1 edges
       } else if (three_d && (n==32 || n==34 || n==36 || n==38)) {
