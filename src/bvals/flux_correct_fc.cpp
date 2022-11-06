@@ -449,7 +449,7 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx) {
 //! fluxes from neighboring MeshBlocks at a finer level into flux array otherwise.
 
 void BoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx, const bool same_level,
-                                         DvceArray2D<int> &nflx){
+                                         DvceArray2D<int> &nflx) {
   // create local references for variables in kernel
   int nmb = pmy_pack->pmb->nmb;
   auto &nghbr = pmy_pack->pmb->nghbr;
@@ -470,7 +470,7 @@ void BoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx, const bool sa
       // (neighbor at finer level when same_level=false on input)
       if ( (nghbr.d_view(m,n).gid >= 0) &&
            (((same_level) && (nghbr.d_view(m,n).lev == mblev.d_view(m))) ||
-            ((not same_level) && (nghbr.d_view(m,n).lev > mblev.d_view(m)))) ) {
+            (!(same_level) && (nghbr.d_view(m,n).lev > mblev.d_view(m)))) ) {
         int il, iu, jl, ju, kl, ku, ndat;
         // if neighbor is at same level, use same indices to unpack buffer
         if (same_level) {
