@@ -100,7 +100,6 @@ TaskStatus BoundaryValuesCC::PackAndSendFluxCC(DvceFaceFld5D<Real> &flx) {
             sbuf[n].flux(m, (j-jl + nj*(k-kl + nk*v)) ) = rflx;
           }
         });
-        tmember.team_barrier();
 
       // x2faces
       } else if (n<16) {
@@ -127,7 +126,6 @@ TaskStatus BoundaryValuesCC::PackAndSendFluxCC(DvceFaceFld5D<Real> &flx) {
             sbuf[n].flux(m, (i-il + ni*(k-kl + nk*v)) ) = rflx;
           }
         });
-        tmember.team_barrier();
 
       // x3faces
       } else if ((n>=24) && (n<32)) {
@@ -149,7 +147,6 @@ TaskStatus BoundaryValuesCC::PackAndSendFluxCC(DvceFaceFld5D<Real> &flx) {
             sbuf[n].flux(m, (i-il + ni*(j-jl + nj*v)) ) = rflx;
           }
         });
-        tmember.team_barrier();
       }
     }  // end if-neighbor-exists block
   });  // end par_for_outer
@@ -160,7 +157,8 @@ TaskStatus BoundaryValuesCC::PackAndSendFluxCC(DvceFaceFld5D<Real> &flx) {
   bool no_errors=true;
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
-      if ( (nghbr.h_view(m,n).gid >=0) && (nghbr.h_view(m,n).lev < mblev.h_view(m)) &&
+      if ( (nghbr.h_view(m,n).gid >=0) &&
+           (nghbr.h_view(m,n).lev < mblev.h_view(m)) &&
            ((n<16) || ((n>=24) && (n<32))) ) {
         // index and rank of destination Neighbor
         int dn = nghbr.h_view(m,n).dest;
@@ -222,7 +220,8 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx) {
 
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
-      if ( (nghbr.h_view(m,n).gid >=0) && (nghbr.h_view(m,n).lev > mblev.h_view(m)) &&
+      if ( (nghbr.h_view(m,n).gid >=0) &&
+           (nghbr.h_view(m,n).lev > mblev.h_view(m)) &&
            ((n<16) || ((n>=24) && (n<32))) ) {
         if (nghbr.h_view(m,n).rank == global_variable::my_rank) {
           if (rbuf[n].flux_stat[m] == BoundaryCommStatus::waiting) {bflag = true;}
