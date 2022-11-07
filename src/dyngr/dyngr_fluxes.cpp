@@ -163,18 +163,18 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         // Reconstruct qR[j] and qL[j+1]
         switch (recon_method_) {
           case ReconstructionMethod::dc:
-            DonorCellX1(member, m, k, j, is, ie, w0_, wl_jp1, wr);
+            DonorCellX2(member, m, k, j, is, ie, w0_, wl_jp1, wr);
             break;
           case ReconstructionMethod::plm:
-            PiecewiseLinearX1(member, m, k, j, is, ie, w0_, wl_jp1, wr);
+            PiecewiseLinearX2(member, m, k, j, is, ie, w0_, wl_jp1, wr);
             break;
           // JF: These higher-order reconstruction methods all need EOS_Data to calculate a floor.
           //case ReconstructionMethod::ppm4:
           //case ReconstructionMethod::ppmx:
-          //  PiecewiseParabolicX1(member,eos,extrema,true, m, k, j, is-1, ie+1, w0_, wl, wr);
+          //  PiecewiseParabolicX2(member,eos,extrema,true, m, k, j, is-1, ie+1, w0_, wl, wr);
           //  break;
           //case ReconstructionMethod::wenoz:
-          //  WENOZX1(member, 
+          //  WENOZX2(member, 
         }
         // Sync all threads in the team so that scratch memory is consistent
         member.team_barrier();
@@ -251,18 +251,18 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         // Reconstruct qR[j] and qL[j+1]
         switch (recon_method_) {
           case ReconstructionMethod::dc:
-            DonorCellX1(member, m, k, j, is, ie, w0_, wl_kp1, wr);
+            DonorCellX3(member, m, k, j, is, ie, w0_, wl_kp1, wr);
             break;
           case ReconstructionMethod::plm:
-            PiecewiseLinearX1(member, m, k, j, is, ie, w0_, wl_kp1, wr);
+            PiecewiseLinearX3(member, m, k, j, is, ie, w0_, wl_kp1, wr);
             break;
           // JF: These higher-order reconstruction methods all need EOS_Data to calculate a floor.
           //case ReconstructionMethod::ppm4:
           //case ReconstructionMethod::ppmx:
-          //  PiecewiseParabolicX1(member,eos,extrema,true, m, k, j, is-1, ie+1, w0_, wl, wr);
+          //  PiecewiseParabolicX3(member,eos,extrema,true, m, k, j, is-1, ie+1, w0_, wl, wr);
           //  break;
           //case ReconstructionMethod::wenoz:
-          //  WENOZX1(member, 
+          //  WENOZX3(member, 
         }
         // Sync all threads in the team so that scratch memory is consistent
         member.team_barrier();
