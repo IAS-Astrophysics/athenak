@@ -185,7 +185,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
 
   // allocate arrays for CC data
   HostArray5D<Real> ccin("pgen-ccin", nmb, (nhydro_tot + nmhd_tot + nz4c_tot + nadm_tot), nout3, nout2, nout1);
-  if (ccin.size()*sizeof(Real) != ccdata_size) {
+  if (ccin.size() != (nmb*ccdata_cnt)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "CC data size read from restart file not equal to size "
               << "of Hydro, MHD and Z4c arrays, restart file is broken." << std::endl;
