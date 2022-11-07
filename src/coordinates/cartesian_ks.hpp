@@ -14,6 +14,7 @@
 #include "athena.hpp"
 #include "globals.hpp"
 #include "mesh/mesh.hpp"
+#include "adm/adm.hpp"
 
 // #define SMALL_NUMBER 1.0e-5
 
@@ -92,6 +93,175 @@ void ComputeMetricAndInverse(Real x, Real y, Real z, bool minkowski, Real a,
 
   return;
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn void ComputeADMDecomposition
+//! \brief computes ADM quantitiese in Cartesian Kerr-Schild coordinates
+
+// QUESTION: doesn't this assume bh_mass to be 1?
+KOKKOS_INLINE_FUNCTION
+void ComputeADMDecomposition(Real x, Real y, Real z, bool minkowski, Real a,
+                             Real * alp,
+                             Real * betax, Real * betay, Real * betaz,
+                             Real * psi4,
+                             Real * gxx, Real * gxy, Real * gxz, Real * gyy, Real * gyz, Real * gzz,
+                             Real * Kxx, Real * Kxy, Real * Kxz, Real * Kyy, Real * Kyz, Real * Kzz) {
+  // See comments above in ComputeMetricAndInverse
+  Real rad = sqrt(SQR(x) + SQR(y) + SQR(z));
+  Real r = sqrt((SQR(rad)-SQR(a)+sqrt(SQR(SQR(rad)-SQR(a))+4.0*SQR(a)*SQR(z)))/2.0);
+  r = fmax(r, 1.0);
+
+  // l covector (spatial components only)
+  Real l_d[3];
+  l_d[0] = (r*x + (a)*y)/( SQR(r) + SQR(a) );
+  l_d[1] = (r*y - (a)*x)/( SQR(r) + SQR(a) );
+  l_d[2] = z/r;
+
+  // l vector (spatial components only)
+  Real l_u[3] = {l_d[0], l_d[1], l_d[2]};
+
+  //
+  // g_nm = 2*H*l_n*l_m + eta_nm, where eta is the Minkowski metric
+  Real H = SQR(r)*r / (SQR(SQR(r)) + SQR(a)*SQR(z));
+  if (minkowski) {H=0.0;}
+
+  *alp = 1.0/sqrt(1. + 2.*H);
+  *betax = 2.*H*(1. + 2.*H)*l_u[0];
+  *betay = 2.*H*(1. + 2.*H)*l_u[1];
+  *betaz = 2.*H*(1. + 2.*H)*l_u[2];
+  Real const beta_d[3] = {2.*H*l_u[0], 2.*H*l_u[1], 2.*H*l_u[2]};
+
+  *gxx = 2.*H*l_d[0]*l_d[0] + 1;
+  *gxy = 2.*H*l_d[0]*l_d[1];
+  *gxz = 2.*H*l_d[0]*l_d[2];
+  *gyy = 2.*H*l_d[1]*l_d[1] + 1;
+  *gyz = 2.*H*l_d[1]*l_d[2];
+  *gzz = 2.*H*l_d[2]*l_d[2] + 1;
+
+  //
+  // conformal factor
+  Real const det = SpatialDet(*gxx, *gxy, *gxz, *gyy, *gyz, *gzz);
+  *psi4 = pow(det, 1./3.);
+
+  //
+  // inverse metric
+  Real uxx, uxy, uxz, uyy, uyz, uzz;
+  SpatialInv(1./det,
+             *gxx, *gxy, *gxz, *gyy, *gyz, *gzz,
+             &uxx, &uxy, &uxz, &uyy, &uyz, &uzz);
+  Real const g_uu[3][3] = {
+    uxx, uxy, uxz,
+    uxy, uyy, uyz,
+    uxz, uyz, uzz
+  };
+
+  //
+  // derivatives of the three metric (expressions taken from below)
+  Real const qa = 2.0*SQR(r) - SQR(rad) + SQR(a);
+  Real const qb = SQR(r) + SQR(a);
+  Real const qc = 3.0*SQR(a * z) - SQR(r)*SQR(r);
+  Real const dH_d[3] = {
+    SQR(H)*x/(pow(r,3)) * ( ( qc ) )/ qa,
+    SQR(H)*y/(pow(r,3)) * ( ( qc ) )/ qa,
+    SQR(H)*z/(pow(r,5)) * ( ( qc * qb ) / qa - 2.0*SQR(a*r))
+  };
+
+  // \partial_i l_k
+  Real const dl_dd[3][3] = {
+    // \partial_x l_k
+    x*r * ( SQR(a)*x - 2.0*a*r*y - SQR(r)*x )/( SQR(qb) * qa ) + r/( qb ),
+    x*r * ( SQR(a)*y + 2.0*a*r*x - SQR(r)*y )/( SQR(qb) * qa ) - a/( qb ),
+    - x*z/(r*qa),
+    // \partial_y l_k
+    y*r * ( SQR(a)*x - 2.0*a*r*y - SQR(r)*x )/( SQR(qb) * qa ) + a/( qb ),
+    y*r * ( SQR(a)*y + 2.0*a*r*x - SQR(r)*y )/( SQR(qb) * qa ) + r/( qb ),
+    - y*z/(r*qa),
+    // \partial_z l_k
+    z/r * ( SQR(a)*x - 2.0*a*r*y - SQR(r)*x )/( (qb) * qa ),
+    z/r * ( SQR(a)*y + 2.0*a*r*x - SQR(r)*y )/( (qb) * qa ),
+    - SQR(z)/(SQR(r)*r) * ( qb )/( qa ) + 1.0/r,
+  };
+
+  Real const dg_ddd[3][3][3] = {
+    // \partial_x g_ik
+    2.*dH_d[0]*l_d[0]*l_d[0] + 2.*H*dl_dd[0][0]*l_d[0] + 2.*H*l_d[0]*dl_dd[0][0],
+    2.*dH_d[0]*l_d[0]*l_d[1] + 2.*H*dl_dd[0][0]*l_d[1] + 2.*H*l_d[0]*dl_dd[0][1],
+    2.*dH_d[0]*l_d[0]*l_d[2] + 2.*H*dl_dd[0][0]*l_d[2] + 2.*H*l_d[0]*dl_dd[0][2],
+    2.*dH_d[0]*l_d[1]*l_d[1] + 2.*H*dl_dd[0][1]*l_d[1] + 2.*H*l_d[1]*dl_dd[0][1],
+    2.*dH_d[0]*l_d[1]*l_d[2] + 2.*H*dl_dd[0][1]*l_d[2] + 2.*H*l_d[1]*dl_dd[0][2],
+    2.*dH_d[0]*l_d[2]*l_d[2] + 2.*H*dl_dd[0][2]*l_d[2] + 2.*H*l_d[2]*dl_dd[0][2],
+    // \partial_y g_ik
+    2.*dH_d[1]*l_d[0]*l_d[0] + 2.*H*dl_dd[1][0]*l_d[0] + 2.*H*l_d[0]*dl_dd[1][0],
+    2.*dH_d[1]*l_d[0]*l_d[1] + 2.*H*dl_dd[1][0]*l_d[1] + 2.*H*l_d[0]*dl_dd[1][1],
+    2.*dH_d[1]*l_d[0]*l_d[2] + 2.*H*dl_dd[1][0]*l_d[2] + 2.*H*l_d[0]*dl_dd[1][2],
+    2.*dH_d[1]*l_d[1]*l_d[1] + 2.*H*dl_dd[1][1]*l_d[1] + 2.*H*l_d[1]*dl_dd[1][1],
+    2.*dH_d[1]*l_d[1]*l_d[2] + 2.*H*dl_dd[1][1]*l_d[2] + 2.*H*l_d[1]*dl_dd[1][2],
+    2.*dH_d[1]*l_d[2]*l_d[2] + 2.*H*dl_dd[1][2]*l_d[2] + 2.*H*l_d[2]*dl_dd[1][2],
+    // \partial_z g_ik
+    2.*dH_d[2]*l_d[0]*l_d[0] + 2.*H*dl_dd[2][0]*l_d[0] + 2.*H*l_d[0]*dl_dd[2][0],
+    2.*dH_d[2]*l_d[0]*l_d[1] + 2.*H*dl_dd[2][0]*l_d[1] + 2.*H*l_d[0]*dl_dd[2][1],
+    2.*dH_d[2]*l_d[0]*l_d[2] + 2.*H*dl_dd[2][0]*l_d[2] + 2.*H*l_d[0]*dl_dd[2][2],
+    2.*dH_d[2]*l_d[1]*l_d[1] + 2.*H*dl_dd[2][1]*l_d[1] + 2.*H*l_d[1]*dl_dd[2][1],
+    2.*dH_d[2]*l_d[1]*l_d[2] + 2.*H*dl_dd[2][1]*l_d[2] + 2.*H*l_d[1]*dl_dd[2][2],
+    2.*dH_d[2]*l_d[2]*l_d[2] + 2.*H*dl_dd[2][2]*l_d[2] + 2.*H*l_d[2]*dl_dd[2][2],
+  };
+
+  //
+  // Compute Christoffel symbols
+  Real Gamma_udd[3][3][3];
+  for (int a = 0; a < 3; ++a) 
+  for (int b = 0; b < 3; ++b) 
+  for (int c = 0; c < 3; ++c) {
+    Gamma_udd[a][b][c] = 0.0;
+    for (int d = 0; d < 3; ++d) {
+      Gamma_udd[a][b][c] += 0.5*g_uu[a][d]*(dg_ddd[c][b][d] + dg_ddd[b][d][c] - dg_ddd[d][b][c]);
+    }
+  }
+
+  //
+  // Derivatives of the shift vector
+  Real const dbeta_dd[3][3] = {
+    // \partial_x \beta_i
+    2.*dH_d[0]*l_d[0] + 2.*H*dl_dd[0][0],
+    2.*dH_d[0]*l_d[1] + 2.*H*dl_dd[0][1],
+    2.*dH_d[0]*l_d[2] + 2.*H*dl_dd[0][2],
+    // \partial_y \beta_i
+    2.*dH_d[1]*l_d[0] + 2.*H*dl_dd[1][0],
+    2.*dH_d[1]*l_d[1] + 2.*H*dl_dd[1][1],
+    2.*dH_d[1]*l_d[2] + 2.*H*dl_dd[1][2],
+    // \partial_z \beta_i
+    2.*dH_d[2]*l_d[0] + 2.*H*dl_dd[2][0],
+    2.*dH_d[2]*l_d[1] + 2.*H*dl_dd[2][1],
+    2.*dH_d[2]*l_d[2] + 2.*H*dl_dd[2][2],
+  };
+
+  //
+  // Covariant derivative of the shift vector
+  Real Dbeta_dd[3][3];
+  for (int a = 0; a < 3; ++a)
+  for (int b = 0; b < 3; ++b) {
+    Dbeta_dd[a][b] = dbeta_dd[a][b];
+    for (int d = 0; d < 3; ++d) {
+      Dbeta_dd[a][b] -= Gamma_udd[d][a][b]*beta_d[d];
+    }
+  }
+
+  //
+  // Extrinsic curvature: K_ab = 1/(2 alp) * (D_a beta_b + D_b beta_a)
+  Real K_dd[3][3];
+  for (int a = 0; a < 3; ++a)
+  for (int b = 0; b < 3; ++b) {
+    K_dd[a][b] = (Dbeta_dd[a][b] + Dbeta_dd[b][a])/(2.*(*alp));
+  }
+
+  *Kxx = K_dd[0][0];
+  *Kxy = K_dd[0][1];
+  *Kxz = K_dd[0][2];
+  *Kyy = K_dd[1][1];
+  *Kyz = K_dd[1][2];
+  *Kzz = K_dd[2][2];
+}
+
 
 //----------------------------------------------------------------------------------------
 //! \fn void ComputeMetricDerivatives

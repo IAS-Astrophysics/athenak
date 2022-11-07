@@ -11,6 +11,8 @@ add_executable(
         globals.cpp
         parameter_input.cpp
 
+        adm/adm.cpp
+
         bvals/bvals.cpp
         bvals/buffs_cc.cpp
         bvals/buffs_fc.cpp
@@ -30,6 +32,9 @@ add_executable(
         diffusion/viscosity.cpp
 
         driver/driver.cpp
+
+        dyngr/dyngr.cpp
+        dyngr/dyngr_fluxes.cpp
 
         eos/eos.cpp
         eos/ideal_hyd.cpp
@@ -65,6 +70,17 @@ add_executable(
         mhd/mhd_newdt.cpp
         mhd/mhd_tasks.cpp
         mhd/mhd_update.cpp
+
+        z4c/z4c.cpp
+        z4c/z4c_adm.cpp
+        z4c/z4c_calcrhs.cpp
+        z4c/z4c_mattersrc.cpp
+        z4c/z4c_newdt.cpp
+        z4c/z4c_tasks.cpp
+        z4c/z4c_update.cpp
+        z4c/z4c_gauge.cpp
+        z4c/z4c_punctures.cpp
+        z4c/z4c_Sbc.cpp
 
         outputs/io_wrapper.cpp
         outputs/outputs.cpp

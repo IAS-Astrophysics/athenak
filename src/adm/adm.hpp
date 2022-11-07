@@ -1,0 +1,275 @@
+#ifndef ADM_ADM_HPP_
+#define ADM_ADM_HPP_
+
+//========================================================================================
+// AthenaXXX astrophysical plasma code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
+// Licensed under the 3-clause BSD License (the "LICENSE")
+//========================================================================================
+//! \file adm.hpp
+//! \brief definitions for ADM class
+
+#include "athena.hpp"
+#include "athena_tensor.hpp"
+#include "parameter_input.hpp"
+#include "mesh/mesh.hpp"
+
+// forward declarations
+struct EOS_Data;
+class MeshBlockPack;
+
+//! \class ADM
+class ADM {
+  public:
+    //! WARNING: The ADM object needs to be allocated after Z4c
+    ADM(MeshBlockPack *ppack, ParameterInput *pin);
+    ~ADM();
+
+    // Indices of ADM variables
+    enum {
+      I_ADM_gxx, I_ADM_gxy, I_ADM_gxz, I_ADM_gyy, I_ADM_gyz, I_ADM_gzz,
+      I_ADM_Kxx, I_ADM_Kxy, I_ADM_Kxz, I_ADM_Kyy, I_ADM_Kyz, I_ADM_Kzz,
+      I_ADM_psi4,
+      I_ADM_alpha, I_ADM_betax, I_ADM_betay, I_ADM_betaz,
+      N_ADM
+    };
+    // Names of ADM variables
+    static char const * const ADM_names[N_ADM];
+
+    // Number of spatial dimensions (3+1 gravity)
+    int const NDIM = 3;
+
+    struct ADM_vars {
+      AthenaTensor<Real, TensorSymm::NONE, 3, 0> alpha;     // lapse
+      AthenaTensor<Real, TensorSymm::NONE, 3, 1> beta_u;    // shift vector
+      AthenaTensor<Real, TensorSymm::NONE, 3, 0> psi4;      // conformal factor
+      AthenaTensor<Real, TensorSymm::SYM2, 3, 2> g_dd;      // spatial metric
+      AthenaTensor<Real, TensorSymm::SYM2, 3, 2> K_dd;      // extrinsic curvature
+    };
+    ADM_vars adm;
+
+    DvceArray5D<Real> u_adm;                                   // adm variables
+
+    template<int NGHOST>
+    void AddCoordTerms(const DvceArray5D<Real> &w0, const EOS_Data &eos, const Real dt,
+                       DvceArray5D<Real> &u0);
+
+    // TODO: handle regridding
+
+  private:
+    MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Z4c
+};
+
+KOKKOS_INLINE_FUNCTION
+Real SpatialDet(Real const gxx, Real const gxy, Real const gxz,
+                Real const gyy, Real const gyz, Real const gzz)
+{
+  return - SQR(gxz)*gyy + 2*gxy*gxz*gyz
+         - SQR(gyz)*gxx
+         - SQR(gxy)*gzz +   gxx*gyy*gzz;
+}
+
+KOKKOS_INLINE_FUNCTION
+Real Trace(Real const detginv,
+           Real const gxx, Real const gxy, Real const gxz,
+           Real const gyy, Real const gyz, Real const gzz,
+           Real const Axx, Real const Axy, Real const Axz,
+           Real const Ayy, Real const Ayz, Real const Azz)
+{
+  return (detginv*(
+       - 2.*Ayz*gxx*gyz + Axx*gyy*gzz +  gxx*(Azz*gyy + Ayy*gzz)
+       + 2.*(gxz*(Ayz*gxy - Axz*gyy + Axy*gyz) + gxy*(Axz*gyz - Axy*gzz))
+       - Azz*SQR(gxy) - Ayy*SQR(gxz) - Axx*SQR(gyz)
+       ));
+}
+
+KOKKOS_INLINE_FUNCTION
+// compute inverse of a 3x3 matrix
+void SpatialInv(Real const detginv,
+                Real const gxx, Real const gxy, Real const gxz,
+                Real const gyy, Real const gyz, Real const gzz,
+                Real * uxx, Real * uxy, Real * uxz,
+                Real * uyy, Real * uyz, Real * uzz)
+{
+  *uxx = (-SQR(gyz) + gyy*gzz)*detginv;
+  *uxy = (gxz*gyz  - gxy*gzz)*detginv;
+  *uyy = (-SQR(gxz) + gxx*gzz)*detginv;
+  *uxz = (-gxz*gyy + gxy*gyz)*detginv;
+  *uyz = (gxy*gxz  - gxx*gyz)*detginv;
+  *uzz = (-SQR(gxy) + gxx*gyy)*detginv;
+  return;
+}
+
+KOKKOS_INLINE_FUNCTION
+void SpacetimeMetric(Real const alp,
+                     Real const betax, Real const betay, Real const betaz,
+                     Real const gxx, Real const gxy, Real const gxz,
+                     Real const gyy, Real const gyz, Real const gzz,
+                     Real g[NMETRIC])
+{
+  g[I11] = gxx;
+  g[I12] = gxy;
+  g[I13] = gxz;
+  g[I22] = gyy;
+  g[I23] = gyz;
+  g[I33] = gzz;
+
+  Real betaup[3] = {betax, betay, betaz};
+  Real betadw[3] = {
+    gxx*betax + gxy*betay + gxz*betaz,
+    gxy*betax + gyy*betay + gyz*betaz,
+    gxz*betax + gyz*betay + gzz*betaz,
+  };
+
+  g[I00] = - SQR(alp) + betadw[0]*betaup[0] + betadw[1]*betaup[1] +
+          betadw[2]*betaup[2];
+
+  g[I01] = betadw[0];
+  g[I02] = betadw[1];
+  g[I03] = betadw[2];
+}
+
+KOKKOS_INLINE_FUNCTION
+void SpacetimeUpperMetric(Real const alp,
+                          Real const betax, Real const betay, Real const betaz,
+                          Real const gxx, Real const gxy, Real const gxz,
+                          Real const gyy, Real const gyz, Real const gzz,
+                          Real u[NMETRIC])
+{
+  u[I00] = - 1.0/SQR(alp);
+
+  Real const det = SpatialDet(gxx, gxy, gxz, gyy, gyz, gzz);
+
+  Real uxx, uxy, uxz, uyy, uyz, uzz;
+  SpatialInv(1.0/det, gxx, gxy, gxz, gyy, gyz, gzz,
+             &uxx, &uxy, &uxz, &uyy, &uyz, &uzz);
+  u[I11] = uxx + betax*betax*u[0];
+  u[I12] = uxy + betax*betay*u[0];
+  u[I13] = uxz + betax*betaz*u[0];
+  u[I22] = uyy + betay*betay*u[0];
+  u[I23] = uyz + betay*betaz*u[0];
+  u[I33] = uzz + betaz*betaz*u[0];
+
+  u[I01] = betax*(-u[0]);
+  u[I02] = betay*(-u[0]);
+  u[I03] = betaz*(-u[0]);
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void Face1Metric
+//! \brief computes components of (dynamically evolved) 3-metric, lapse and 
+//  shift at faces in the x direction for use in Riemann solver
+//check your indices: interface i lives between cells i and i-1
+
+KOKKOS_INLINE_FUNCTION
+void Face1Metric(TeamMember_t const &member, const int m, const int k, const int j, const int is, 
+     const int ie, const AthenaTensor<Real, TensorSymm::SYM2, 3, 2> &g_dd, 
+     const AthenaTensor<Real, TensorSymm::NONE, 3, 1> &beta_u, 
+     const AthenaTensor<Real, TensorSymm::NONE, 3, 0> &alpha,  
+     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> &gface1_dd, 
+     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> &betaface1_u, 
+     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> &alphaface1) {
+
+     
+    par_for_inner(member, is, ie, [&](const int i){ 
+
+         alphaface1(i) = (alpha(m,k,j,i) + alpha(m,k,j,i-1))*0.5;
+    });
+
+     for(int a=0; a < 3; ++a){
+         par_for_inner(member, is, ie, [&](const int i){ 
+             betaface1_u(a,i) = (beta_u(m,a,k,j,i) + beta_u(m,a,k,j,i-1))*0.5;
+         });
+      }
+
+     for(int a=0; a < 3; ++a){
+         for(int b=a; b < 3; ++b){ 
+            par_for_inner(member, is, ie, [&](const int i){
+                gface1_dd(a,b,i) = (g_dd(m,a,b,k,j,i) + g_dd(m,a,b,k,j,i-1))*0.5;
+        
+             });
+          }
+       }
+     
+
+     return;
+}
+
+
+
+//----------------------------------------------------------------------------------------
+//! \fn void Face2Metric
+//! \brief computes components of (dynamically evolved) 3-metric, lapse and 
+//  shift at faces in the y direction for use in Riemann solver
+//check your indices: interface i lives between cells i and i-1
+
+KOKKOS_INLINE_FUNCTION
+void Face2Metric(TeamMember_t const &member, const int m, const int k, const int j, const int is, 
+     const int ie, const AthenaTensor<Real, TensorSymm::SYM2, 3, 2> &g_dd, 
+     const AthenaTensor<Real, TensorSymm::NONE, 3, 1> &beta_u, 
+     const AthenaTensor<Real, TensorSymm::NONE, 3, 0> &alpha,  
+     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> &gface2_dd, 
+     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> &betaface2_u, 
+     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> &alphaface2) {
+
+     
+    par_for_inner(member, is, ie, [&](const int i){ 
+         alphaface2(i) = (alpha(m,k,j,i) + alpha(m,k,j-1,i))*0.5;
+    });
+
+     for(int a=0; a < 3; ++a){
+         par_for_inner(member, is, ie, [&](const int i){ 
+             betaface2_u(a,i) = (beta_u(m,a,k,j,i) + beta_u(m,a,k,j-1,i))*0.5;
+         });
+     }
+     for(int a=0; a < 3; ++a){
+         for(int b=a; b < 3; ++b){ 
+            par_for_inner(member, is, ie, [&](const int i){
+                gface2_dd(a,b,i) = (g_dd(m,a,b,k,j,i) + g_dd(m,a,b,k,j-1,i))*0.5;
+        
+             });
+          }
+       }
+
+
+     return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void Face3Metric
+//! \brief computes components of (dynamically evolved) 3-metric, lapse and 
+//  shift at faces in the y direction for use in Riemann solver
+//check your indices: interface i lives between cells i and i-1
+
+KOKKOS_INLINE_FUNCTION
+void Face3Metric(TeamMember_t const &member, const int m, const int k, const int j, const int is, 
+     const int ie, const AthenaTensor<Real, TensorSymm::SYM2, 3, 2> &g_dd, 
+     const AthenaTensor<Real, TensorSymm::NONE, 3, 1> &beta_u, 
+     const AthenaTensor<Real, TensorSymm::NONE, 3, 0> &alpha,  
+     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> &gface3_dd, 
+     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> &betaface3_u, 
+     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> &alphaface3) {
+
+     
+    par_for_inner(member, is, ie, [&](const int i){ 
+         alphaface3(i) = (alpha(m,k,j,i) + alpha(m,k-1,j,i))*0.5;
+    });
+
+     for(int a=0; a < 3; ++a){
+         par_for_inner(member, is, ie, [&](const int i){ 
+             betaface3_u(a,i) = (beta_u(m,a,k,j,i) + beta_u(m,a,k-1,j,i))*0.5;
+         });
+      }
+     for(int a=0; a < 3; ++a){
+         for(int b=a; b < 3; ++b){ 
+            par_for_inner(member, is, ie, [&](const int i){
+                gface3_dd(a,b,i) = (g_dd(m,a,b,k,j,i) + g_dd(m,a,b,k-1,j,i))*0.5;
+        
+             });
+          }
+       }
+
+
+     return;
+}
+#endif
