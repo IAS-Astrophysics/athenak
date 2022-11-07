@@ -46,6 +46,7 @@ class Coordinates {
   // flags to denote relativistic dynamics in these coordinates
   bool is_special_relativistic = false;
   bool is_general_relativistic = false;
+  bool is_dynamical_relativistic = false;
 
   // data needed to compute metric in GR
   CoordData coord_data;

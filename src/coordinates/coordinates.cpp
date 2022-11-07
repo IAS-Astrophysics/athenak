@@ -23,8 +23,12 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
     excision_floor("excision_floor",1,1,1,1),
     excision_flux("excision_flux",1,1,1,1) {
   // Check for relativistic dynamics
-  is_special_relativistic = pin->GetOrAddBoolean("coord","special_rel",false);
-  is_general_relativistic = pin->GetOrAddBoolean("coord","general_rel",false);
+  // WGC: idea for handling new EOS
+  is_dynamical_relativistic = pin->DoesBlockExist("adm") || pin->DoesBlockExist("z4c");
+  if(!is_dynamical_relativistic) {
+    is_special_relativistic = pin->GetOrAddBoolean("coord","special_rel",false);
+    is_general_relativistic = pin->GetOrAddBoolean("coord","general_rel",false);
+  }
   if (is_special_relativistic && is_general_relativistic) {
     std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
               << "Cannot specify both SR and GR at same time" << std::endl;
@@ -32,7 +36,7 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
   }
 
   // Read properties of metric and excision from input file for GR.
-  if (is_general_relativistic) {
+  if (is_general_relativistic || is_dynamical_relativistic) {
     coord_data.is_minkowski = pin->GetOrAddBoolean("coord","minkowski",false);
     coord_data.bh_mass = pin->GetReal("coord","m");
     coord_data.bh_spin = pin->GetReal("coord","a");
