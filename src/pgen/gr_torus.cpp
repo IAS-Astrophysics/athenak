@@ -239,8 +239,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         Real &x2max = size.d_view(m).x2max;
         Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
 
-        Real &x3min = size.d_view(m).x2min;
-        Real &x3max = size.d_view(m).x2max;
+        Real &x3min = size.d_view(m).x3min;
+        Real &x3max = size.d_view(m).x3max;
         Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
         ComputeADMDecomposition(x1v, x2v, x3v, minkowski, a,
@@ -351,9 +351,12 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     w0_(m,IVX,k,j,i) = uu1;
     w0_(m,IVY,k,j,i) = uu2;
     w0_(m,IVZ,k,j,i) = uu3;
+    /*if (w0_(m,IEN,k,j,i) < 1e-12 && in_torus) {
+      std::cout << "IEN is really weird here!\n";
+    }*/
   });
 
-  // initialize ADM varialbes -----------------------------------------
+  // initialize ADM variables -----------------------------------------
 
   if (pmbp->padm != nullptr) {
     Real a = coord.bh_spin;
@@ -590,7 +593,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     }
   }
   else {
-    pmbp->pdyngr->PrimToConInit(0, (n1-1), 0, (n2-1), 0, (n3-1));
+    //pmbp->pdyngr->PrimToConInit(0, (n1-1), 0, (n2-1), 0, (n3-1));
+    pmbp->pdyngr->PrimToConInit(is, ie, js, je, ks, ke);
   }
 
   return;

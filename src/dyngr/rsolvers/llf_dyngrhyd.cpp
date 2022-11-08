@@ -51,7 +51,7 @@ void LLF_DYNGR(TeamMember_t const &member,
      const AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> &b_u,
      const AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> &alp, DvceArray5D<Real> flx) {
 
-  const Real mb = eos->eos.GetBaryonMass();
+  const Real mb = eos->ps.GetEOS().GetBaryonMass();
 
   auto &nhyd = eos->pmy_pack->phydro->nhydro;
   auto &nscal = eos->pmy_pack->phydro->nscalars;

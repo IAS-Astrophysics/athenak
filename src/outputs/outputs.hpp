@@ -19,7 +19,7 @@
     #error NHISTORY > NREDUCTION in outputs.hpp
 #endif
 
-#define NOUTPUT_CHOICES 42
+#define NOUTPUT_CHOICES 102
 // choices for output variables used in <ouput> blocks in input file
 // TO ADD MORE CHOICES:
 //   - add more strings to array below, change NOUTPUT_CHOICES above appropriately
@@ -35,7 +35,36 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "mhd_u_s",   "mhd_w_s",    "mhd_wz",     "mhd_w2",
   "mhd_bcc1",  "mhd_bcc2",   "mhd_bcc3",   "mhd_bcc",    "mhd_u_bcc", "mhd_w_bcc",
   "mhd_jz",    "mhd_j2",     "mhd_divb",
-  "turb_force"};
+  "turb_force",
+
+  "adm_gxx", "adm_gxy", "adm_gxz", "adm_gyy", "adm_gyz", "adm_gzz",
+  "adm_Kxx", "adm_Kxy", "adm_Kxz", "adm_Kyy", "adm_Kyz", "adm_Kzz",
+  "adm_psi4",
+  "adm_alpha", "adm_betax", "adm_betay", "adm_betaz",
+  "adm",
+
+  "z4c_chi",
+  "z4c_gxx", "z4c_gxy", "z4c_gxz", "z4c_gyy", "z4c_gyz", "z4c_gzz",
+  "z4c_Khat",
+  "z4c_Axx", "z4c_Axy", "z4c_Axz", "z4c_Ayy", "z4c_Ayz", "z4c_Azz",
+  "z4c_Gamx", "z4c_Gamy", "z4c_Gamz",
+  "z4c_Theta",
+  "z4c_alpha",
+  "z4c_betax", "z4c_betay", "z4c_betaz",
+  "z4c",
+
+  "con_C",
+  "con_H",
+  "con_M",
+  "con_Z",
+  "con_Mx", "con_My", "con_Mz",
+  "con",
+
+  "mat_rho",
+  "mat_Sx", "mat_Sy", "mat_Sz",
+  "mat_Sxx", "mat_Sxy", "mat_Sxz", "mat_Syy", "mat_Syz", "mat_Szz",
+  "mat"
+};
 
 // forward declarations
 class Mesh;
@@ -174,6 +203,7 @@ class HistoryOutput : public BaseTypeOutput {
   void LoadOutputData(Mesh *pm) override;
   void LoadHydroHistoryData(HistoryData *pdata, Mesh *pm);
   void LoadMHDHistoryData(HistoryData *pdata, Mesh *pm);
+  void LoadZ4cHistoryData(HistoryData *pdata, Mesh *pm);
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
 };
 

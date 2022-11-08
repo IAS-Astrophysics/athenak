@@ -60,7 +60,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
 
   size_t scr_size = ScrArray2D<Real>::shmem_size(nvars, ncells1) * 2 + ScrArray1D<Real>::shmem_size(ncells1)
                        + ScrArray2D<Real>::shmem_size(3, ncells1) + ScrArray2D<Real>::shmem_size(6, ncells1);
-  int scr_level = 0;
+  int scr_level = 1;
   auto flx1_ = pmy_pack->phydro->uflx.x1f;
 
   par_for_outer("dyngrflux_x1",DevExeSpace(), scr_size, scr_level, 0, nmb1, ks, ke, js, je,
@@ -109,7 +109,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
     const auto rsolver = rsolver_;
     int il = is; int iu = ie+1;
     if constexpr (rsolver == DynGR_RSolver::llf_dyngr) {
-      LLF_DYNGR(member, &eos, indcs, size, coord, m, k, j, il, iu, IVX, wl, wr, gface1_dd, betaface1_u, alphaface1, flx1);
+      LLF_DYNGR(member, &dyn_eos, indcs, size, coord, m, k, j, il, iu, IVX, wl, wr, gface1_dd, betaface1_u, alphaface1, flx1);
     }
     //} else { other Riemann solvers here
     member.team_barrier();
@@ -194,7 +194,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         int il = is; int iu = ie;
         if (j>(js-1)) {
           if constexpr (rsolver == DynGR_RSolver::llf_dyngr) {
-            LLF_DYNGR(member, &eos, indcs, size, coord, m, k, j, il, iu, IVY, wl, wr, gface2_dd, betaface2_u, alphaface2, flx2);
+            LLF_DYNGR(member, &dyn_eos, indcs, size, coord, m, k, j, il, iu, IVY, wl, wr, gface2_dd, betaface2_u, alphaface2, flx2);
           }
           //} else { other Riemann solvers here
         }
@@ -282,7 +282,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         int il = is; int iu = ie;
         if (k>(ks-1)) {
           if constexpr (rsolver == DynGR_RSolver::llf_dyngr) {
-            LLF_DYNGR(member, &eos, indcs, size, coord, m, k, j, il, iu, IVZ, wl, wr, gface3_dd, betaface3_u, alphaface3, flx3);
+            LLF_DYNGR(member, &dyn_eos, indcs, size, coord, m, k, j, il, iu, IVZ, wl, wr, gface3_dd, betaface3_u, alphaface3, flx3);
           }
           //} else { other Riemann solvers here
         }

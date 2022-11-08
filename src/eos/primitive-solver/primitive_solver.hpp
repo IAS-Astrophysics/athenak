@@ -43,7 +43,7 @@ class PrimitiveSolver {
       //  \param[in]  rbsq The square of the product \f$r\cdot b\f$
       //  \param[in]  h_min The minimum enthalpy
       KOKKOS_INLINE_FUNCTION
-      void operator()(Real &f, Real &df, Real mu, Real bsq, Real rsq, Real rbsq, Real min_h) {
+      void operator()(Real &f, Real &df, Real mu, Real bsq, Real rsq, Real rbsq, Real min_h) const {
         const Real x = 1.0/(1.0 + mu*bsq);
         const Real xsq = x*x;
         const Real rbarsq = rsq*xsq + mu*x*(1.0 + x)*rbsq;
@@ -61,7 +61,7 @@ class PrimitiveSolver {
     class MuFromWFunctor {
       public:
       KOKKOS_INLINE_FUNCTION 
-      void operator()(Real &f, Real &df, Real mu, Real bsq, Real rsq, Real rbsq, Real W) {
+      void operator()(Real &f, Real &df, Real mu, Real bsq, Real rsq, Real rbsq, Real W) const {
         const Real musq = mu*mu;
         const Real x = 1.0/(1.0 + mu*bsq);
         const Real xsq = x*x;
@@ -83,7 +83,7 @@ class PrimitiveSolver {
       public:
       KOKKOS_INLINE_FUNCTION 
       Real operator()(Real mu, Real D, Real q, Real bsq, Real rsq, Real rbsq, Real *Y,
-          EOS<EOSPolicy, ErrorPolicy> *const peos, Real* n, Real* T, Real* P) {
+          const EOS<EOSPolicy, ErrorPolicy> * peos, Real* n, Real* T, Real* P) const {
         // We need to get some utility quantities first.
         const Real x = 1.0/(1.0 + mu*bsq);
         const Real xsq = x*x;
@@ -165,7 +165,8 @@ class PrimitiveSolver {
     /// possibility of changing the EOS
     /// during implementation seems both
     /// unlikely and dangerous.
-    EOS<EOSPolicy, ErrorPolicy> *const peos;
+    //EOS<EOSPolicy, ErrorPolicy> *const peos;
+    EOS<EOSPolicy, ErrorPolicy> eos;
 
     /// The root solver.
     NumTools::Root root;
@@ -189,10 +190,13 @@ class PrimitiveSolver {
     //  \param[in]     h_min The minimum enthalpy
     //
     //  \return an Error code, usually RHO_TOO_BIG, RHO_TOO_SMALL, or SUCCESS
-    Error CheckDensityValid(Real& mul, Real& muh, Real D, Real bsq, Real rsq, Real rbsq, Real h_min);
+    KOKKOS_INLINE_FUNCTION
+    Error CheckDensityValid(Real& mul, Real& muh, Real D, Real bsq, 
+                            Real rsq, Real rbsq, Real h_min) const;
   public:
     /// Constructor
-    PrimitiveSolver(EOS<EOSPolicy, ErrorPolicy> *eos) : peos(eos) {
+    //PrimitiveSolver(EOS<EOSPolicy, ErrorPolicy> *eos) : peos(eos) {
+    PrimitiveSolver() {
       //root = NumTools::Root();
       root.tol = 1e-15;
       root.iterations = 30;
@@ -210,8 +214,9 @@ class PrimitiveSolver {
     //  \param[in]     g3u   The 3x3 inverse spatial metric
     //
     //  \return information about the solve
+    KOKKOS_INLINE_FUNCTION
     SolverResult ConToPrim(Real prim[NPRIM], Real cons[NCONS], Real b[NMAG], 
-                           Real g3d[NSPMETRIC], Real g3u[NSPMETRIC]);
+                           Real g3d[NSPMETRIC], Real g3u[NSPMETRIC]) const;
 
     //! \brief Get the conserved variables from the primitive variables.
     //
@@ -221,12 +226,19 @@ class PrimitiveSolver {
     //  \param[in]    g3d   The 3x3 spatial metric
     //
     //  \return an error code
+    KOKKOS_INLINE_FUNCTION
     Error PrimToCon(Real prim[NPRIM], Real cons[NCONS], Real b[NMAG], 
                    Real g3d[NSPMETRIC]) const;
 
     /// Get the EOS used by this PrimitiveSolver.
-    KOKKOS_INLINE_FUNCTION EOS<EOSPolicy, ErrorPolicy> *const GetEOS() const {
+    /*KOKKOS_INLINE_FUNCTION EOS<EOSPolicy, ErrorPolicy> *const GetEOS() const {
       return peos;
+    }*/
+    KOKKOS_INLINE_FUNCTION EOS<EOSPolicy, ErrorPolicy>& GetEOSMutable() {
+      return eos;
+    }
+    KOKKOS_INLINE_FUNCTION const EOS<EOSPolicy, ErrorPolicy>& GetEOS() const {
+      return eos;
     }
 
     /// Get the root solver used by this PrimitiveSolver.
@@ -255,9 +267,9 @@ class PrimitiveSolver {
     //  \param[in,out] cons  The array of conserved variables
     //  \param[in,out] bu    The magnetic field
     //  \param[in]     g3d   The 3x3 spatial metric
-    void HandleFailure(Real prim[NPRIM], Real cons[NCONS], Real bu[NMAG],
-                       Real g3d[NSPMETRIC]) {
-      bool result = peos->DoFailureResponse(prim);
+    KOKKOS_INLINE_FUNCTION void HandleFailure(Real prim[NPRIM], Real cons[NCONS], Real bu[NMAG],
+                       Real g3d[NSPMETRIC]) const {
+      bool result = eos.DoFailureResponse(prim);
       if (result) {
         PrimToCon(prim, cons, bu, g3d);
       }
@@ -268,7 +280,7 @@ class PrimitiveSolver {
 template<typename EOSPolicy, typename ErrorPolicy>
 KOKKOS_INLINE_FUNCTION 
 Error PrimitiveSolver<EOSPolicy, ErrorPolicy>::CheckDensityValid(Real& mul, Real& muh, Real D, 
-      Real bsq, Real rsq, Real rbsq, Real h_min) {
+      Real bsq, Real rsq, Real rbsq, Real h_min) const {
   // There are a few things considered:
   // 1. If D > rho_max, we need to make sure that W isn't too large.
   //    W_max can be estimated by considering the zero-field limit
@@ -283,8 +295,8 @@ Error PrimitiveSolver<EOSPolicy, ErrorPolicy>::CheckDensityValid(Real& mul, Real
   //    - Otherwise, we can bound mu by using W to do a root solve
   //      for mu.
   Real W_max = sqrt(1.0 + rsq/(h_min*h_min));
-  Real rho_max = peos->GetMaximumDensity()*peos->GetBaryonMass();
-  Real rho_min = peos->GetMinimumDensity()*peos->GetBaryonMass();
+  Real rho_max = eos.GetMaximumDensity()*eos.GetBaryonMass();
+  Real rho_min = eos.GetMinimumDensity()*eos.GetBaryonMass();
   if (D > rho_max) {
     Real W = D/rho_max;
     Real f, df;
@@ -301,9 +313,9 @@ Error PrimitiveSolver<EOSPolicy, ErrorPolicy>::CheckDensityValid(Real& mul, Real
         Real muhc = muh;
         // We can tighten up the bounds for mul.
         // The derivative is zero at mu = 0, so we perturb it slightly.
-        if (mu <= root.tol) {
+        /*if (mu <= root.tol) {
           mu += root.tol;
-        }
+        }*/
         bool result = root.NewtonSafe(MuFromW, mulc, muhc, mu, bsq, rsq, rbsq, W);
         if (!result) {
           return Error::BRACKETING_FAILED;
@@ -343,7 +355,7 @@ Error PrimitiveSolver<EOSPolicy, ErrorPolicy>::CheckDensityValid(Real& mul, Real
 template<typename EOSPolicy, typename ErrorPolicy>
 KOKKOS_INLINE_FUNCTION 
 SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM], 
-      Real cons[NCONS], Real b[NMAG], Real g3d[NSPMETRIC], Real g3u[NSPMETRIC]) {
+      Real cons[NCONS], Real b[NMAG], Real g3d[NSPMETRIC], Real g3u[NSPMETRIC]) const {
 
   SolverResult solver_result{Error::SUCCESS, 0, false, false, false};
 
@@ -353,19 +365,19 @@ SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM]
   Real tau = cons[CTA];
   Real B_u[3] = {b[IBX], b[IBY], b[IBZ]};
   // Extract the particle fractions.
-  const int n_species = peos->GetNSpecies();
+  const int n_species = eos.GetNSpecies();
   Real Y[MAX_SPECIES] = {0.0};
   for (int s = 0; s < n_species; s++) {
     Y[s] = cons[CYD + s]/cons[CDN];
   }
   // Apply limits to Y to ensure a physical state
-  peos->ApplySpeciesLimits(Y);
+  eos.ApplySpeciesLimits(Y);
 
   // Check the conserved variables for consistency and do whatever
   // the EOSPolicy wants us to.
-  bool floored = peos->ApplyConservedFloor(D, S_d, tau, Y, SquareVector(B_u, g3d));
+  bool floored = eos.ApplyConservedFloor(D, S_d, tau, Y, SquareVector(B_u, g3d));
   solver_result.cons_floor = floored;
-  if (floored && peos->IsConservedFlooringFailure()) {
+  if (floored && eos.IsConservedFlooringFailure()) {
     HandleFailure(prim, cons, b, g3d);
     solver_result.error = Error::CONS_FLOOR;
     return solver_result;
@@ -400,7 +412,7 @@ SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM]
   }
 
   // Make sure that the magnetic field is physical.
-  Error error = peos->DoMagnetizationResponse(bsqr, b_u);
+  Error error = eos.DoMagnetizationResponse(bsqr, b_u);
   if (error == Error::MAG_TOO_BIG) {
     HandleFailure(prim, cons, b, g3d);
     solver_result.error = Error::MAG_TOO_BIG;
@@ -414,7 +426,7 @@ SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM]
   }
   
   // Bracket the root.
-  Real min_h = peos->GetMinimumEnthalpy();
+  Real min_h = eos.GetMinimumEnthalpy();
   Real mul = 0.0;
   Real muh = 1.0/min_h;
   // Check if a tighter upper bound exists.
@@ -454,7 +466,7 @@ SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM]
   // TODO: This should be done with something like TOMS748 once it's
   // available.
   Real n, P, T, mu;
-  bool result = root.FalsePosition(RootFunction, mul, muh, mu, D, q, bsqr, rsqr, rbsqr, Y, peos, &n, &T, &P);
+  bool result = root.FalsePosition(RootFunction, mul, muh, mu, D, q, bsqr, rsqr, rbsqr, Y, &eos, &n, &T, &P);
   // WARNING: the reported number of iterations is not thread-safe and should only be trusted
   // on single-thread benchmarks.
   solver_result.iterations = root.iterations;
@@ -465,7 +477,7 @@ SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM]
   }
 
   // Retrieve the primitive variables.
-  Real rho = n*peos->GetBaryonMass();
+  Real rho = n*eos.GetBaryonMass();
   Real rbmu = rb*mu;
   Real W = D/rho;
   Real Wmux = W*mu/(1.0 + mu*bsqr);
@@ -479,9 +491,9 @@ SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM]
   Wv_u[2] = Wmux*(r_u[2] + rbmu*b_u[2]);
   
   // Apply the flooring policy to the primitive variables.
-  floored = peos->ApplyPrimitiveFloor(n, Wv_u, P, T, Y);
+  floored = eos.ApplyPrimitiveFloor(n, Wv_u, P, T, Y);
   solver_result.prim_floor = floored;
-  if (floored && peos->IsPrimitiveFlooringFailure()) {
+  if (floored && eos.IsPrimitiveFlooringFailure()) {
     HandleFailure(prim, cons, b, g3d);
     solver_result.error = Error::PRIM_FLOOR;
     return solver_result;
@@ -501,7 +513,7 @@ SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM]
   // If we floored the primitive variables, we should check
   // if the EOS wants us to adjust the conserved variables back
   // in bounds. If that's the case, then we'll do it.
-  if (solver_result.cons_adjusted && peos->KeepPrimAndConConsistent()) {
+  if (solver_result.cons_adjusted && eos.KeepPrimAndConConsistent()) {
     PrimToCon(prim, cons, b, g3d);
   }
   else {
@@ -523,7 +535,7 @@ Error PrimitiveSolver<EOSPolicy, ErrorPolicy>::PrimToCon(Real prim[NPRIM], Real 
   const Real &p   = prim[PPR]; // pressure
   const Real &t   = prim[PTM]; // temperature
   const Real B_u[3] = {bu[IBX], bu[IBY], bu[IBZ]};
-  const int n_species = peos->GetNSpecies();
+  const int n_species = eos.GetNSpecies();
   Real Y[MAX_SPECIES] = {0.0};
   for (int s = 0; s < n_species; s++) {
     Y[s] = prim[PYF + s];
@@ -547,7 +559,7 @@ Error PrimitiveSolver<EOSPolicy, ErrorPolicy>::PrimToCon(Real prim[NPRIM], Real 
   Real Bv = Contract(B_u, v_d);
 
   // Some utility quantities that will be helpful.
-  const Real mb = peos->GetBaryonMass();
+  const Real mb = eos.GetBaryonMass();
 
   // Extract the conserved variables
   Real &D = cons[CDN]; // Relativistic density
@@ -558,7 +570,7 @@ Error PrimitiveSolver<EOSPolicy, ErrorPolicy>::PrimToCon(Real prim[NPRIM], Real 
 
   // Set the conserved quantities.
   // Total enthalpy density
-  Real H = n*peos->GetEnthalpy(n, t, Y)*mb;
+  Real H = n*eos.GetEnthalpy(n, t, Y)*mb;
   Real HWsq = H*Wsq;
   D = n*mb*W;
   for (int s = 0; s < n_species; s++) {

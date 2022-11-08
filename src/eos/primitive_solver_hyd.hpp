@@ -33,19 +33,19 @@ class PrimitiveSolverHydro {
   protected:
     void SetPolicyParams(std::string block, ParameterInput *pin) {
       if constexpr(std::is_same_v<Primitive::IdealGas, EOSPolicy>) {
-        eos.SetGamma(pin->GetOrAddReal(block, "gamma", 5.0/3.0));
+        ps.GetEOSMutable().SetGamma(pin->GetOrAddReal(block, "gamma", 5.0/3.0));
       }
     }
   public:
-    Primitive::EOS<EOSPolicy, ErrorPolicy> eos;
     Primitive::PrimitiveSolver<EOSPolicy, ErrorPolicy> ps;
     MeshBlockPack* pmy_pack;
 
     PrimitiveSolverHydro(std::string block, MeshBlockPack *pp, ParameterInput *pin) :
-        pmy_pack(pp), ps{&eos} {
-      eos.SetDensityFloor(pin->GetOrAddReal(block, "dfloor", (FLT_MIN)));
-      eos.SetPressureFloor(pin->GetOrAddReal(block, "pfloor", (FLT_MIN)));
-      eos.SetThreshold(pin->GetOrAddReal(block, "dthreshold", 1.0));
+//        pmy_pack(pp), ps{&eos} {
+          pmy_pack(pp) {
+      ps.GetEOSMutable().SetDensityFloor(pin->GetOrAddReal(block, "dfloor", (FLT_MIN)));
+      ps.GetEOSMutable().SetPressureFloor(pin->GetOrAddReal(block, "pfloor", (FLT_MIN)));
+      ps.GetEOSMutable().SetThreshold(pin->GetOrAddReal(block, "dthreshold", 1.0));
       SetPolicyParams(block, pin);
     }
 
@@ -55,24 +55,26 @@ class PrimitiveSolverHydro {
     void PrimToConsPt(const ScrArray2D<Real> &w, Real prim_pt[NPRIM], Real cons_pt[NCONS],
                       Real g3d[NSPMETRIC], Real sdetg,
                       const int i, const int &nhyd, const int &nscal) const {
+      auto &eos = ps.GetEOS();
       Real mb = eos.GetBaryonMass();
       Real b[NMAG] = {0.0};
-      prim_pt[PRH] = w(IDN, i)/mb;
-      prim_pt[PVX] = w(IVX, i);
-      prim_pt[PVY] = w(IVY, i);
-      prim_pt[PVZ] = w(IVZ, i);
+      Real prim_pt_old[NPRIM];
+      prim_pt[PRH] = prim_pt_old[PRH] = w(IDN, i)/mb;
+      prim_pt[PVX] = prim_pt_old[PVX] = w(IVX, i);
+      prim_pt[PVY] = prim_pt_old[PVY] = w(IVY, i);
+      prim_pt[PVZ] = prim_pt_old[PVZ] = w(IVZ, i);
       for (int n = 0; n < nscal; n++) {
-        prim_pt[PYF + n] = w(nhyd + n, i);
+        prim_pt[PYF + n] = prim_pt_old[PYF + n] = w(nhyd + n, i);
       }
       // FIXME: Debug only! Use specific energy to validate other
       // hydro functions before breaking things
       Real e = w(IDN, i) + w(IEN, i);
-      prim_pt[PTM] = eos.GetTemperatureFromE(prim_pt[PRH], e, &prim_pt[PYF]);
-      prim_pt[PPR] = eos.GetPressure(prim_pt[PRH], prim_pt[PTM], &prim_pt[PYF]);
+      prim_pt[PTM] = prim_pt_old[PTM] = eos.GetTemperatureFromE(prim_pt[PRH], e, &prim_pt[PYF]);
+      prim_pt[PPR] = prim_pt_old[PPR] = eos.GetPressure(prim_pt[PRH], prim_pt[PTM], &prim_pt[PYF]);
 
       // Apply the floor to make sure these values are physical.
       // FIXME: Is this needed if the first-order flux correction is enabled?
-      bool floor = eos.ApplyPrimitiveFloor(prim_pt[PRH], &prim_pt[PVX],
+      bool floor = ps.GetEOS().ApplyPrimitiveFloor(prim_pt[PRH], &prim_pt[PVX],
                                            prim_pt[PPR], prim_pt[PTM], &prim_pt[PYF]);
       
       ps.PrimToCon(prim_pt, cons_pt, b, g3d);
@@ -90,7 +92,7 @@ class PrimitiveSolverHydro {
         w(IVY, i) = prim_pt[PVY];
         w(IVZ, i) = prim_pt[PVZ];
         // FIXME: Debug only! Switch to temperature or pressure after validating.
-        w(IEN, i) = eos.GetEnergy(prim_pt[PRH], prim_pt[PTM], &prim_pt[PYF]) - w(IDN, i);
+        w(IEN, i) = ps.GetEOS().GetEnergy(prim_pt[PRH], prim_pt[PTM], &prim_pt[PYF]) - w(IDN, i);
         for (int n = 0; n < nscal; n++) {
           w(nhyd + n, i) = prim_pt[PYF + n];
         }
@@ -104,6 +106,8 @@ class PrimitiveSolverHydro {
       int &is = indcs.is, &js = indcs.js, &ks = indcs.ks;
       auto &size = pmy_pack->pmb->mb_size;
       auto &flat = pmy_pack->pcoord->coord_data.is_minkowski;
+      auto &eos_ = ps.GetEOS();
+      auto &ps_  = ps;
 
       auto &adm = pmy_pack->padm->adm;
 
@@ -111,7 +115,7 @@ class PrimitiveSolverHydro {
       int &nscal = pmy_pack->phydro->nscalars;
       int &nmb = pmy_pack->nmb_thispack;
 
-      Real mb = eos.GetBaryonMass();
+      Real mb = eos_.GetBaryonMass();
 
 
       par_for("pshyd_prim2cons", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
@@ -140,14 +144,14 @@ class PrimitiveSolverHydro {
         // FIXME: Debug only! Use specific energy to validate other
         // hydro functions before breaking things.
         Real e = prim(m, IDN, k, j, i) + prim(m, IEN, k, j, i);
-        prim_pt[PTM] = eos.GetTemperatureFromE(prim_pt[PRH], e, &prim_pt[PYF]);
-        prim_pt[PPR] = eos.GetPressure(prim_pt[PRH], prim_pt[PTM], &prim_pt[PYF]);
+        prim_pt[PTM] = eos_.GetTemperatureFromE(prim_pt[PRH], e, &prim_pt[PYF]);
+        prim_pt[PPR] = eos_.GetPressure(prim_pt[PRH], prim_pt[PTM], &prim_pt[PYF]);
 
         // Apply the floor to make sure these values are physical.
-        bool floor = eos.ApplyPrimitiveFloor(prim_pt[PRH], &prim_pt[PVX],
+        bool floor = eos_.ApplyPrimitiveFloor(prim_pt[PRH], &prim_pt[PVX],
                                              prim_pt[PPR], prim_pt[PTM], &prim_pt[PYF]);
         
-        ps.PrimToCon(prim_pt, cons_pt, b, g3d);
+        ps_.PrimToCon(prim_pt, cons_pt, b, g3d);
 
         // Save the densitized conserved variables.
         cons(m, IDN, k, j, i) = cons_pt[CDN]*sdetg;
@@ -165,7 +169,7 @@ class PrimitiveSolverHydro {
           prim(m, IVX, k, j, i) = prim_pt[PVX];
           prim(m, IVY, k, j, i) = prim_pt[PVY];
           prim(m, IVZ, k, j, i) = prim_pt[PVZ];
-          prim(m, IEN, k, j, i) = eos.GetEnergy(prim_pt[PRH], prim_pt[PTM], &prim_pt[PYF]) 
+          prim(m, IEN, k, j, i) = eos_.GetEnergy(prim_pt[PRH], prim_pt[PTM], &prim_pt[PYF]) 
                                   - prim(m, IDN, k, j, i);
           for (int n = 0; n < nscal; n++) {
             prim(m, nhyd + n, k, j, i) = prim_pt[PYF + n];
@@ -193,14 +197,16 @@ class PrimitiveSolverHydro {
       auto &dexcise_ = pmy_pack->pcoord->coord_data.dexcise;
       auto &pexcise_ = pmy_pack->pcoord->coord_data.pexcise;
 
-      auto &adm = pmy_pack->padm->adm;
+      auto &adm  = pmy_pack->padm->adm;
+      auto &eos_ = ps.GetEOS();
+      auto &ps_  = ps;
 
       const int ni = (iu - il + 1);
       const int nji = (ju - jl + 1)*ni;
       const int nkji = (ku - kl + 1)*nji;
       const int nmkji = nmb*nkji;
 
-      Real mb = eos.GetBaryonMass();
+      Real mb = eos_.GetBaryonMass();
 
       Kokkos::parallel_for("pshyd_c2p",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
       KOKKOS_LAMBDA(const int &idx) {
@@ -250,20 +256,20 @@ class PrimitiveSolverHydro {
               // default inside an excised region.
               prim_pt[PYF + n] = cons_pt[CYD]/cons_pt[CDN];
             }
-            prim_pt[PTM] = eos.GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR], &prim_pt[PYF]);
+            prim_pt[PTM] = eos_.GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR], &prim_pt[PYF]);
             result.error = Primitive::Error::SUCCESS;
             result.iterations = 0;
             result.cons_floor = false;
             result.prim_floor = false;
             result.cons_adjusted = true;
-            ps.PrimToCon(prim_pt, cons_pt, b3u, g3d);
+            ps_.PrimToCon(prim_pt, cons_pt, b3u, g3d);
           }
           else {
-            result = ps.ConToPrim(prim_pt, cons_pt, b3u, g3d, g3u);
+            result = ps_.ConToPrim(prim_pt, cons_pt, b3u, g3d, g3u);
           }
         }
         else {
-          result = ps.ConToPrim(prim_pt, cons_pt, b3u, g3d, g3u);
+          result = ps_.ConToPrim(prim_pt, cons_pt, b3u, g3d, g3u);
         }
 
         if (result.error != Primitive::Error::SUCCESS) {
@@ -275,7 +281,7 @@ class PrimitiveSolverHydro {
         prim(m, IVX, k, j, i) = prim_pt[PVX];
         prim(m, IVY, k, j, i) = prim_pt[PVY];
         prim(m, IVZ, k, j, i) = prim_pt[PVZ];
-        prim(m, IEN, k, j, i) = eos.GetEnergy(prim_pt[PRH], prim_pt[PTM], &prim_pt[PYF]) -
+        prim(m, IEN, k, j, i) = eos_.GetEnergy(prim_pt[PRH], prim_pt[PTM], &prim_pt[PYF]) -
                                 prim(m, IDN, k, j, i);
         for (int n = 0; n < nscal; n++) {
           prim(m, nhyd + n, k, j, i);
@@ -310,7 +316,7 @@ class PrimitiveSolverHydro {
       Real vsq = usq/Wsq;
       Real vu[3] = {uu[0]/W, uu[1]/W, uu[2]/W};
 
-      Real cs = eos.GetSoundSpeed(prim[PRH], prim[PTM], &prim[PYF]);
+      Real cs = ps.GetEOS().GetSoundSpeed(prim[PRH], prim[PTM], &prim[PYF]);
       Real csq = cs*cs;
 
       Real iWsq_ad = 1.0 - vsq*csq;

@@ -36,8 +36,13 @@ class IdealGas : public EOSPolicyInterface {
         max_Y[i] = 1.0;
       }
 
-      eos_units = &Nuclear;
+      //eos_units = &Nuclear;
+      eos_units = MakeNuclear();
     }
+
+    /*~IdealGas() {
+      delete eos_units;
+    }*/
 
     /// Calculate the temperature using the ideal gas law.
     KOKKOS_INLINE_FUNCTION Real TemperatureFromE(Real n, Real e, Real *Y) const {
@@ -138,7 +143,7 @@ class IdealGas : public EOSPolicyInterface {
     }
 
     /// Set the EOS unit system.
-    KOKKOS_INLINE_FUNCTION void SetEOSUnitSystem(UnitSystem* units) {
+    KOKKOS_INLINE_FUNCTION void SetEOSUnitSystem(UnitSystem units) {
       eos_units = units;
     }
 };

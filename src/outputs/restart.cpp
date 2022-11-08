@@ -22,6 +22,8 @@
 #include "mesh/mesh.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "adm/adm.hpp"
+#include "z4c/z4c.hpp"
 #include "outputs.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -49,15 +51,24 @@ void RestartOutput::LoadOutputData(Mesh *pm) {
   // calculate total number of CC variables
   hydro::Hydro* phydro = pm->pmb_pack->phydro;
   mhd::MHD* pmhd = pm->pmb_pack->pmhd;
-  int nhydro=0, nmhd=0;
+  ADM* padm = pm->pmb_pack->padm;
+  z4c::Z4c* pz4c = pm->pmb_pack->pz4c;
+  int nhydro=0, nmhd=0, nadm=0, nz4c=0;
   if (phydro != nullptr) {
     nhydro = phydro->nhydro + phydro->nscalars;
   }
   if (pmhd != nullptr) {
     nmhd = pmhd->nmhd + pmhd->nscalars;
   }
+  if (pz4c != nullptr) {
+    nz4c = pz4c->N_Z4c;
+  }
+  // if the spacetime is evolved, we do not need to checkpoint/recover the ADM variables
+  else if (padm != nullptr) {
+    nadm = ADM::N_ADM;
+  }
   // Note for restarts, outarray is dimensioned (m,n,k,j,i)
-  Kokkos::realloc(outarray, nmb, (nhydro+nmhd), nout3, nout2, nout1);
+  Kokkos::realloc(outarray, nmb, (nhydro+nmhd+nadm+nz4c), nout3, nout2, nout1);
 
   // load hydro (CC) data over all MeshBlocks (copy to host)
   if (phydro != nullptr) {
@@ -83,6 +94,24 @@ void RestartOutput::LoadOutputData(Mesh *pm) {
     Kokkos::deep_copy(outfield.x1f,pmhd->b0.x1f);
     Kokkos::deep_copy(outfield.x2f,pmhd->b0.x2f);
     Kokkos::deep_copy(outfield.x3f,pmhd->b0.x3f);
+  }
+
+  // load ADM (CC) data (copy to host)
+  if (nadm > 0) {
+    DvceArray5D<Real>::HostMirror host_u_adm = Kokkos::create_mirror(padm->u_adm);
+    Kokkos::deep_copy(host_u_adm, padm->u_adm);
+    auto hst_slice = Kokkos::subview(outarray, Kokkos::ALL, std::make_pair(nhydro+nmhd,nadm),
+                                     Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+    Kokkos::deep_copy(hst_slice, host_u_adm);
+  }
+
+  // load z4c (CC) data (copy to host)
+  if (pz4c != nullptr) {
+    DvceArray5D<Real>::HostMirror host_u0 = Kokkos::create_mirror(pz4c->u0);
+    Kokkos::deep_copy(host_u0,pz4c->u0);
+    auto hst_slice = Kokkos::subview(outarray, Kokkos::ALL, std::make_pair(nhydro+nmhd,nz4c),
+                                     Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+    Kokkos::deep_copy(hst_slice,host_u0);
   }
 
   // calculate max/min number of MeshBlocks across all ranks
