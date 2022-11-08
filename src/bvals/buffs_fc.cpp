@@ -32,7 +32,7 @@ void BoundaryValuesFC::InitSendIndices(BoundaryBuffer &buf,
   int ng1 = ng - 1;
 
   // set indices for sends to neighbors on SAME level
-  // Formulae taken from LoadBoundaryBufferSameLevel() in src/bvals/fc/bvals_fc.cpp
+  // Formulae same as in LoadBoundaryBufferSameLevel() in src/bvals/fc/bvals_fc.cpp
   // for uniform grid: face-neighbors take care of the overlapping faces
   if ((f1 == 0) && (f2 == 0)) {  // this buffer used for same level (e.g. #0,4,8,12,...)
     auto &isame = buf.isame;       // indices of buffer for neighbor same level
@@ -99,7 +99,7 @@ void BoundaryValuesFC::InitSendIndices(BoundaryBuffer &buf,
   }
 
   // set indices for sends to neighbors on COARSER level (matches recv from FINER)
-  // Formulae taken from LoadBoundaryBufferToCoarser() in src/bvals/fc/bvals_fc.cpp
+  // Formulae same as in LoadBoundaryBufferToCoarser() in src/bvals/fc/bvals_fc.cpp
   // Identical to send indices for same level replacing is,ie,.. with cis,cie,...
   {auto &icoar = buf.icoar;   // indices of buffer for neighbor coarser level
   if (ox1 == 0) {
@@ -162,7 +162,7 @@ void BoundaryValuesFC::InitSendIndices(BoundaryBuffer &buf,
   }
 
   // set indices for sends to neighbors on FINER level (matches recv from COARSER)
-  // Formulae taken from LoadBoundaryBufferToFiner() src/bvals/fc/bvals_fc.cpp
+  // Formulae same as in LoadBoundaryBufferToFiner() in src/bvals/fc/bvals_fc.cpp
   //
   // Subtle issue: shared face fields on edges of MeshBlock (B1 at [is,ie+1],
   // B2 at [js;je+1], B3 at [ks;ke+1]) are communicated, replacing values on coarse mesh
@@ -272,51 +272,101 @@ void BoundaryValuesFC::InitSendIndices(BoundaryBuffer &buf,
   }
   }
 
-  // set indices for sends for FLUX CORRECTION (sends always to COARSER level)
-  {auto &iflux = buf.iflux;    // indices of buffer for flux correction
+  // set indices for sends for FLUX CORRECTION to COARSER level
+  // same as in LoadFluxBoundaryBufferToCoarser() in src/bvals/fc/flux_correction_fc.cpp
+  {auto &iflxc = buf.iflux_coar;    // indices of buffer for flux correction
   if (ox1 == 0) {
-    iflux[0].bis = mb_indcs.cis,          iflux[0].bie = mb_indcs.cie;
-    iflux[1].bis = mb_indcs.cis,          iflux[1].bie = mb_indcs.cie + 1;
-    iflux[2].bis = mb_indcs.cis,          iflux[2].bie = mb_indcs.cie + 1;
+    iflxc[0].bis = mb_indcs.cis,          iflxc[0].bie = mb_indcs.cie;
+    iflxc[1].bis = mb_indcs.cis,          iflxc[1].bie = mb_indcs.cie + 1;
+    iflxc[2].bis = mb_indcs.cis,          iflxc[2].bie = mb_indcs.cie + 1;
   } else if (ox1 > 0) {
-    iflux[0].bis = mb_indcs.cie + 1,      iflux[0].bie = mb_indcs.cie + 1;
-    iflux[1].bis = mb_indcs.cie + 1;      iflux[1].bie = mb_indcs.cie + 1;
-    iflux[2].bis = mb_indcs.cie + 1;      iflux[2].bie = mb_indcs.cie + 1;
+    iflxc[0].bis = mb_indcs.cie + 1,      iflxc[0].bie = mb_indcs.cie + 1;
+    iflxc[1].bis = mb_indcs.cie + 1;      iflxc[1].bie = mb_indcs.cie + 1;
+    iflxc[2].bis = mb_indcs.cie + 1;      iflxc[2].bie = mb_indcs.cie + 1;
   } else {
-    iflux[0].bis = mb_indcs.cis;          iflux[0].bie = mb_indcs.cis;
-    iflux[1].bis = mb_indcs.cis;          iflux[1].bie = mb_indcs.cis;
-    iflux[2].bis = mb_indcs.cis;          iflux[2].bie = mb_indcs.cis;
+    iflxc[0].bis = mb_indcs.cis;          iflxc[0].bie = mb_indcs.cis;
+    iflxc[1].bis = mb_indcs.cis;          iflxc[1].bie = mb_indcs.cis;
+    iflxc[2].bis = mb_indcs.cis;          iflxc[2].bie = mb_indcs.cis;
   }
   if (ox2 == 0) {
-    iflux[0].bjs = mb_indcs.cjs,          iflux[0].bje = mb_indcs.cje + 1;
-    iflux[1].bjs = mb_indcs.cjs,          iflux[1].bje = mb_indcs.cje;
-    iflux[2].bjs = mb_indcs.cjs,          iflux[2].bje = mb_indcs.cje + 1;
+    iflxc[0].bjs = mb_indcs.cjs,          iflxc[0].bje = mb_indcs.cje + 1;
+    iflxc[1].bjs = mb_indcs.cjs,          iflxc[1].bje = mb_indcs.cje;
+    iflxc[2].bjs = mb_indcs.cjs,          iflxc[2].bje = mb_indcs.cje + 1;
   } else if (ox2 > 0) {
-    iflux[0].bjs = mb_indcs.cje + 1;      iflux[0].bje = mb_indcs.cje + 1;
-    iflux[1].bjs = mb_indcs.cje + 1;      iflux[1].bje = mb_indcs.cje + 1;
-    iflux[2].bjs = mb_indcs.cje + 1;      iflux[2].bje = mb_indcs.cje + 1;
+    iflxc[0].bjs = mb_indcs.cje + 1;      iflxc[0].bje = mb_indcs.cje + 1;
+    iflxc[1].bjs = mb_indcs.cje + 1;      iflxc[1].bje = mb_indcs.cje + 1;
+    iflxc[2].bjs = mb_indcs.cje + 1;      iflxc[2].bje = mb_indcs.cje + 1;
   } else {
-    iflux[0].bjs = mb_indcs.cjs;          iflux[0].bje = mb_indcs.cjs;
-    iflux[1].bjs = mb_indcs.cjs;          iflux[1].bje = mb_indcs.cjs;
-    iflux[2].bjs = mb_indcs.cjs;          iflux[2].bje = mb_indcs.cjs;
+    iflxc[0].bjs = mb_indcs.cjs;          iflxc[0].bje = mb_indcs.cjs;
+    iflxc[1].bjs = mb_indcs.cjs;          iflxc[1].bje = mb_indcs.cjs;
+    iflxc[2].bjs = mb_indcs.cjs;          iflxc[2].bje = mb_indcs.cjs;
   }
   if (ox3 == 0) {
-    iflux[0].bks = mb_indcs.cks,          iflux[0].bke = mb_indcs.cke + 1;
-    iflux[1].bks = mb_indcs.cks,          iflux[1].bke = mb_indcs.cke + 1;
-    iflux[2].bks = mb_indcs.cks,          iflux[2].bke = mb_indcs.cke;
+    iflxc[0].bks = mb_indcs.cks,          iflxc[0].bke = mb_indcs.cke + 1;
+    iflxc[1].bks = mb_indcs.cks,          iflxc[1].bke = mb_indcs.cke + 1;
+    iflxc[2].bks = mb_indcs.cks,          iflxc[2].bke = mb_indcs.cke;
   } else if (ox3 > 0) {
-    iflux[0].bks = mb_indcs.cke + 1;      iflux[0].bke = mb_indcs.cke + 1;
-    iflux[1].bks = mb_indcs.cke + 1;      iflux[1].bke = mb_indcs.cke + 1;
-    iflux[2].bks = mb_indcs.cke + 1;      iflux[2].bke = mb_indcs.cke + 1;
+    iflxc[0].bks = mb_indcs.cke + 1;      iflxc[0].bke = mb_indcs.cke + 1;
+    iflxc[1].bks = mb_indcs.cke + 1;      iflxc[1].bke = mb_indcs.cke + 1;
+    iflxc[2].bks = mb_indcs.cke + 1;      iflxc[2].bke = mb_indcs.cke + 1;
   } else {
-    iflux[0].bks = mb_indcs.cks;          iflux[0].bke = mb_indcs.cks;
-    iflux[1].bks = mb_indcs.cks;          iflux[1].bke = mb_indcs.cks;
-    iflux[2].bks = mb_indcs.cks;          iflux[2].bke = mb_indcs.cks;
+    iflxc[0].bks = mb_indcs.cks;          iflxc[0].bke = mb_indcs.cks;
+    iflxc[1].bks = mb_indcs.cks;          iflxc[1].bke = mb_indcs.cks;
+    iflxc[2].bks = mb_indcs.cks;          iflxc[2].bke = mb_indcs.cks;
   }
   for (int i=0; i<=2; ++i) {
-    int ndat = (iflux[i].bie - iflux[i].bis + 1)*(iflux[i].bje - iflux[i].bjs + 1)*
-               (iflux[i].bke - iflux[i].bks + 1);
-    buf.iflux_ndat = std::max(buf.iflux_ndat, ndat);
+    int ndat = (iflxc[i].bie - iflxc[i].bis + 1)*(iflxc[i].bje - iflxc[i].bjs + 1)*
+               (iflxc[i].bke - iflxc[i].bks + 1);
+    buf.iflxc_ndat = std::max(buf.iflxc_ndat, ndat);
+  }
+  }
+
+  // set indices for sends for FLUX CORRECTION to SAME level
+  // same as in LoadFluxBoundaryBufferSameLevel() in src/bvals/fc/flux_correction_fc.cpp
+  {auto &iflxs = buf.iflux_same;    // indices of buffer for flux correction
+  if (ox1 == 0) {
+    iflxs[0].bis = mb_indcs.is,          iflxs[0].bie = mb_indcs.ie;
+    iflxs[1].bis = mb_indcs.is,          iflxs[1].bie = mb_indcs.ie + 1;
+    iflxs[2].bis = mb_indcs.is,          iflxs[2].bie = mb_indcs.ie + 1;
+  } else if (ox1 > 0) {
+    iflxs[0].bis = mb_indcs.ie + 1,      iflxs[0].bie = mb_indcs.ie + 1;
+    iflxs[1].bis = mb_indcs.ie + 1;      iflxs[1].bie = mb_indcs.ie + 1;
+    iflxs[2].bis = mb_indcs.ie + 1;      iflxs[2].bie = mb_indcs.ie + 1;
+  } else {
+    iflxs[0].bis = mb_indcs.is;          iflxs[0].bie = mb_indcs.is;
+    iflxs[1].bis = mb_indcs.is;          iflxs[1].bie = mb_indcs.is;
+    iflxs[2].bis = mb_indcs.is;          iflxs[2].bie = mb_indcs.is;
+  }
+  if (ox2 == 0) {
+    iflxs[0].bjs = mb_indcs.js,          iflxs[0].bje = mb_indcs.je + 1;
+    iflxs[1].bjs = mb_indcs.js,          iflxs[1].bje = mb_indcs.je;
+    iflxs[2].bjs = mb_indcs.js,          iflxs[2].bje = mb_indcs.je + 1;
+  } else if (ox2 > 0) {
+    iflxs[0].bjs = mb_indcs.je + 1;      iflxs[0].bje = mb_indcs.je + 1;
+    iflxs[1].bjs = mb_indcs.je + 1;      iflxs[1].bje = mb_indcs.je + 1;
+    iflxs[2].bjs = mb_indcs.je + 1;      iflxs[2].bje = mb_indcs.je + 1;
+  } else {
+    iflxs[0].bjs = mb_indcs.js;          iflxs[0].bje = mb_indcs.js;
+    iflxs[1].bjs = mb_indcs.js;          iflxs[1].bje = mb_indcs.js;
+    iflxs[2].bjs = mb_indcs.js;          iflxs[2].bje = mb_indcs.js;
+  }
+  if (ox3 == 0) {
+    iflxs[0].bks = mb_indcs.ks,          iflxs[0].bke = mb_indcs.ke + 1;
+    iflxs[1].bks = mb_indcs.ks,          iflxs[1].bke = mb_indcs.ke + 1;
+    iflxs[2].bks = mb_indcs.ks,          iflxs[2].bke = mb_indcs.ke;
+  } else if (ox3 > 0) {
+    iflxs[0].bks = mb_indcs.ke + 1;      iflxs[0].bke = mb_indcs.ke + 1;
+    iflxs[1].bks = mb_indcs.ke + 1;      iflxs[1].bke = mb_indcs.ke + 1;
+    iflxs[2].bks = mb_indcs.ke + 1;      iflxs[2].bke = mb_indcs.ke + 1;
+  } else {
+    iflxs[0].bks = mb_indcs.ks;          iflxs[0].bke = mb_indcs.ks;
+    iflxs[1].bks = mb_indcs.ks;          iflxs[1].bke = mb_indcs.ks;
+    iflxs[2].bks = mb_indcs.ks;          iflxs[2].bke = mb_indcs.ks;
+  }
+  for (int i=0; i<=2; ++i) {
+    int ndat = (iflxs[i].bie - iflxs[i].bis + 1)*(iflxs[i].bje - iflxs[i].bjs + 1)*
+               (iflxs[i].bke - iflxs[i].bks + 1);
+    buf.iflxs_ndat = std::max(buf.iflxs_ndat, ndat);
   }
   }
 
@@ -340,7 +390,7 @@ void BoundaryValuesFC::InitRecvIndices(BoundaryBuffer &buf,
   int ng = mb_indcs.ng;
 
   // set indices for receives from neighbors on SAME level
-  // Formulae taken from SetBoundarySameLevel() in src/bvals/fc/bvals_fc.cpp
+  // Formulae same as in SetBoundarySameLevel() in src/bvals/fc/bvals_fc.cpp
   if ((f1 == 0) && (f2 == 0)) {  // this buffer used for same level (e.g. #0,4,8,12,...)
     auto &isame = buf.isame;       // indices of buffer for neighbor same level
     if (ox1 == 0) {
@@ -406,7 +456,7 @@ void BoundaryValuesFC::InitRecvIndices(BoundaryBuffer &buf,
   }
 
   // set indices for receives from neighbors on COARSER level (matches send to FINER)
-  // Formulae taken from SetBoundaryFromCoarser() in src/bvals/fc/bvals_fc.cpp
+  // Formulae same as in SetBoundaryFromCoarser() in src/bvals/fc/bvals_fc.cpp
   {auto &icoar = buf.icoar;   // indices of buffer for neighbor coarser level
   if (ox1 == 0) {
     icoar[0].bis = mb_indcs.cis,         icoar[0].bie = mb_indcs.cie + 1;
@@ -510,7 +560,7 @@ void BoundaryValuesFC::InitRecvIndices(BoundaryBuffer &buf,
   }
 
   // set indices for receives from neighbors on FINER level (matches send to COARSER)
-  // Formulae taken from SetBoundaryFromFiner() in src/bvals/cc/bvals_cc.cpp
+  // Formulae same as in SetBoundaryFromFiner() in src/bvals/cc/bvals_cc.cpp
   {auto &ifine = buf.ifine;   // indices of buffer for neighbor finer level
   if (ox1 == 0) {
     ifine[0].bis = mb_indcs.is;               ifine[0].bie = mb_indcs.ie + 1;
@@ -627,7 +677,7 @@ void BoundaryValuesFC::InitRecvIndices(BoundaryBuffer &buf,
   }
 
   // set indices for PROLONGATION in coarse cell buffers. Indices refer to coarse cells.
-  // Formulae taken from ProlongateBoundaries() in src/bvals/bvals_refine.cpp
+  // Formulae same as in ProlongateBoundaries() in src/bvals/bvals_refine.cpp
   //
   // Subtle issue: NOT the same as receives from coarser level (with ng --> ng/2) since
   // latter sends face fields on edges of MeshBlock, but prolongation only occurs within
@@ -730,107 +780,158 @@ void BoundaryValuesFC::InitRecvIndices(BoundaryBuffer &buf,
   }
   }
 
-  // set indices for receives for flux-correction.  Similar to send, except data loaded
-  // into appropriate sub-block of coarse buffer (similar to receive from FINER level)
-  {auto &iflux = buf.iflux;   // indices of buffer for flux correction
+  // set indices for receives for flux-correction from FINER level.  Similar to send,
+  // except data loaded into appropriate sub-block of coarse buffer (similar to receive
+  // from FINER level).
+  // Formulae same as in SetFluxBoundaryFromFiner() in src/bvals/fc/flux_correction_fc.cpp
+  {auto &iflxc = buf.iflux_coar;   // indices of buffer for flux correction
   if (ox1 == 0) {
-    iflux[0].bis = mb_indcs.is;             iflux[0].bie = mb_indcs.ie;
-    iflux[1].bis = mb_indcs.is;             iflux[1].bie = mb_indcs.ie + 1;
-    iflux[2].bis = mb_indcs.is;             iflux[2].bie = mb_indcs.ie + 1;
+    iflxc[0].bis = mb_indcs.is;             iflxc[0].bie = mb_indcs.ie;
+    iflxc[1].bis = mb_indcs.is;             iflxc[1].bie = mb_indcs.ie + 1;
+    iflxc[2].bis = mb_indcs.is;             iflxc[2].bie = mb_indcs.ie + 1;
     if (f1 == 1) {
-      iflux[0].bis += mb_indcs.cnx1;
-      iflux[1].bis += mb_indcs.cnx1;
-      iflux[2].bis += mb_indcs.cnx1;
+      iflxc[0].bis += mb_indcs.cnx1;
+      iflxc[1].bis += mb_indcs.cnx1;
+      iflxc[2].bis += mb_indcs.cnx1;
     } else {
-      iflux[0].bie -= mb_indcs.cnx1;
-      iflux[1].bie -= mb_indcs.cnx1;
-      iflux[2].bie -= mb_indcs.cnx1;
+      iflxc[0].bie -= mb_indcs.cnx1;
+      iflxc[1].bie -= mb_indcs.cnx1;
+      iflxc[2].bie -= mb_indcs.cnx1;
     }
   } else if (ox1 > 0) {
-    iflux[0].bis = mb_indcs.ie + 1,         iflux[0].bie = mb_indcs.ie + 1;
-    iflux[1].bis = mb_indcs.ie + 1,         iflux[1].bie = mb_indcs.ie + 1;
-    iflux[2].bis = mb_indcs.ie + 1,         iflux[2].bie = mb_indcs.ie + 1;
+    iflxc[0].bis = mb_indcs.ie + 1,         iflxc[0].bie = mb_indcs.ie + 1;
+    iflxc[1].bis = mb_indcs.ie + 1,         iflxc[1].bie = mb_indcs.ie + 1;
+    iflxc[2].bis = mb_indcs.ie + 1,         iflxc[2].bie = mb_indcs.ie + 1;
   } else {
-    iflux[0].bis = mb_indcs.is,             iflux[0].bie = mb_indcs.is;
-    iflux[1].bis = mb_indcs.is,             iflux[1].bie = mb_indcs.is;
-    iflux[2].bis = mb_indcs.is,             iflux[2].bie = mb_indcs.is;
+    iflxc[0].bis = mb_indcs.is,             iflxc[0].bie = mb_indcs.is;
+    iflxc[1].bis = mb_indcs.is,             iflxc[1].bie = mb_indcs.is;
+    iflxc[2].bis = mb_indcs.is,             iflxc[2].bie = mb_indcs.is;
   }
   if (ox2 == 0) {
-    iflux[0].bjs = mb_indcs.js;             iflux[0].bje = mb_indcs.je + 1;
-    iflux[1].bjs = mb_indcs.js;             iflux[1].bje = mb_indcs.je;
-    iflux[2].bjs = mb_indcs.js;             iflux[2].bje = mb_indcs.je + 1;
+    iflxc[0].bjs = mb_indcs.js;             iflxc[0].bje = mb_indcs.je + 1;
+    iflxc[1].bjs = mb_indcs.js;             iflxc[1].bje = mb_indcs.je;
+    iflxc[2].bjs = mb_indcs.js;             iflxc[2].bje = mb_indcs.je + 1;
     if (mb_indcs.nx2 > 1) {
       if (ox1 != 0) {
         if (f1 == 1) {
-          iflux[0].bjs += mb_indcs.cnx2;
-          iflux[1].bjs += mb_indcs.cnx2;
-          iflux[2].bjs += mb_indcs.cnx2;
+          iflxc[0].bjs += mb_indcs.cnx2;
+          iflxc[1].bjs += mb_indcs.cnx2;
+          iflxc[2].bjs += mb_indcs.cnx2;
         } else {
-          iflux[0].bje -= mb_indcs.cnx2;
-          iflux[1].bje -= mb_indcs.cnx2;
-          iflux[2].bje -= mb_indcs.cnx2;
+          iflxc[0].bje -= mb_indcs.cnx2;
+          iflxc[1].bje -= mb_indcs.cnx2;
+          iflxc[2].bje -= mb_indcs.cnx2;
         }
       } else {
         if (f2 == 1) {
-          iflux[0].bjs += mb_indcs.cnx2;
-          iflux[1].bjs += mb_indcs.cnx2;
-          iflux[2].bjs += mb_indcs.cnx2;
+          iflxc[0].bjs += mb_indcs.cnx2;
+          iflxc[1].bjs += mb_indcs.cnx2;
+          iflxc[2].bjs += mb_indcs.cnx2;
         } else {
-          iflux[0].bje -= mb_indcs.cnx2;
-          iflux[1].bje -= mb_indcs.cnx2;
-          iflux[2].bje -= mb_indcs.cnx2;
+          iflxc[0].bje -= mb_indcs.cnx2;
+          iflxc[1].bje -= mb_indcs.cnx2;
+          iflxc[2].bje -= mb_indcs.cnx2;
         }
       }
     }
   } else if (ox2 > 0) {
-    iflux[0].bjs = mb_indcs.je + 1,         iflux[0].bje = mb_indcs.je + 1;
-    iflux[1].bjs = mb_indcs.je + 1,         iflux[1].bje = mb_indcs.je + 1;
-    iflux[2].bjs = mb_indcs.je + 1,         iflux[2].bje = mb_indcs.je + 1;
+    iflxc[0].bjs = mb_indcs.je + 1,         iflxc[0].bje = mb_indcs.je + 1;
+    iflxc[1].bjs = mb_indcs.je + 1,         iflxc[1].bje = mb_indcs.je + 1;
+    iflxc[2].bjs = mb_indcs.je + 1,         iflxc[2].bje = mb_indcs.je + 1;
   } else {
-    iflux[0].bjs = mb_indcs.js,             iflux[0].bje = mb_indcs.js;
-    iflux[1].bjs = mb_indcs.js,             iflux[1].bje = mb_indcs.js;
-    iflux[2].bjs = mb_indcs.js,             iflux[2].bje = mb_indcs.js;
+    iflxc[0].bjs = mb_indcs.js,             iflxc[0].bje = mb_indcs.js;
+    iflxc[1].bjs = mb_indcs.js,             iflxc[1].bje = mb_indcs.js;
+    iflxc[2].bjs = mb_indcs.js,             iflxc[2].bje = mb_indcs.js;
   }
   if (ox3 == 0) {
-    iflux[0].bks = mb_indcs.ks;             iflux[0].bke = mb_indcs.ke + 1;
-    iflux[1].bks = mb_indcs.ks;             iflux[1].bke = mb_indcs.ke + 1;
-    iflux[2].bks = mb_indcs.ks;             iflux[2].bke = mb_indcs.ke;
+    iflxc[0].bks = mb_indcs.ks;             iflxc[0].bke = mb_indcs.ke + 1;
+    iflxc[1].bks = mb_indcs.ks;             iflxc[1].bke = mb_indcs.ke + 1;
+    iflxc[2].bks = mb_indcs.ks;             iflxc[2].bke = mb_indcs.ke;
     if (mb_indcs.nx3 > 1) {
       if (ox1 != 0 && ox2 != 0) {
         if (f1 == 1) {
-          iflux[0].bks += mb_indcs.cnx3;
-          iflux[1].bks += mb_indcs.cnx3;
-          iflux[2].bks += mb_indcs.cnx3;
+          iflxc[0].bks += mb_indcs.cnx3;
+          iflxc[1].bks += mb_indcs.cnx3;
+          iflxc[2].bks += mb_indcs.cnx3;
         } else {
-          iflux[0].bke -= mb_indcs.cnx3;
-          iflux[1].bke -= mb_indcs.cnx3;
-          iflux[2].bke -= mb_indcs.cnx3;
+          iflxc[0].bke -= mb_indcs.cnx3;
+          iflxc[1].bke -= mb_indcs.cnx3;
+          iflxc[2].bke -= mb_indcs.cnx3;
         }
       } else {
         if (f2 == 1) {
-          iflux[0].bks += mb_indcs.cnx3;
-          iflux[1].bks += mb_indcs.cnx3;
-          iflux[2].bks += mb_indcs.cnx3;
+          iflxc[0].bks += mb_indcs.cnx3;
+          iflxc[1].bks += mb_indcs.cnx3;
+          iflxc[2].bks += mb_indcs.cnx3;
         } else {
-          iflux[0].bke -= mb_indcs.cnx3;
-          iflux[1].bke -= mb_indcs.cnx3;
-          iflux[2].bke -= mb_indcs.cnx3;
+          iflxc[0].bke -= mb_indcs.cnx3;
+          iflxc[1].bke -= mb_indcs.cnx3;
+          iflxc[2].bke -= mb_indcs.cnx3;
         }
       }
     }
   } else if (ox3 > 0) {
-    iflux[0].bks = mb_indcs.ke + 1,      iflux[0].bke = mb_indcs.ke + 1;
-    iflux[1].bks = mb_indcs.ke + 1,      iflux[1].bke = mb_indcs.ke + 1;
-    iflux[2].bks = mb_indcs.ke + 1,      iflux[2].bke = mb_indcs.ke + 1;
+    iflxc[0].bks = mb_indcs.ke + 1,      iflxc[0].bke = mb_indcs.ke + 1;
+    iflxc[1].bks = mb_indcs.ke + 1,      iflxc[1].bke = mb_indcs.ke + 1;
+    iflxc[2].bks = mb_indcs.ke + 1,      iflxc[2].bke = mb_indcs.ke + 1;
   } else {
-    iflux[0].bks = mb_indcs.ks,          iflux[0].bke = mb_indcs.ks;
-    iflux[1].bks = mb_indcs.ks,          iflux[1].bke = mb_indcs.ks;
-    iflux[2].bks = mb_indcs.ks,          iflux[2].bke = mb_indcs.ks;
+    iflxc[0].bks = mb_indcs.ks,          iflxc[0].bke = mb_indcs.ks;
+    iflxc[1].bks = mb_indcs.ks,          iflxc[1].bke = mb_indcs.ks;
+    iflxc[2].bks = mb_indcs.ks,          iflxc[2].bke = mb_indcs.ks;
   }
   for (int i=0; i<=2; ++i) {
-    int ndat = (iflux[i].bie - iflux[i].bis + 1)*(iflux[i].bje - iflux[i].bjs + 1)*
-               (iflux[i].bke - iflux[i].bks + 1);
-    buf.iflux_ndat = std::max(buf.iflux_ndat, ndat);
+    int ndat = (iflxc[i].bie - iflxc[i].bis + 1)*(iflxc[i].bje - iflxc[i].bjs + 1)*
+               (iflxc[i].bke - iflxc[i].bks + 1);
+    buf.iflxc_ndat = std::max(buf.iflxc_ndat, ndat);
+  }
+  }
+
+  // set indices for receives for flux-correction at SAME level.
+  // Formulae same as in SetFluxSameLevel() in src/bvals/fc/flux_correction_fc.cpp
+  {auto &iflxs = buf.iflux_same;   // indices of buffer for flux correction
+  if (ox1 == 0) {
+    iflxs[0].bis = mb_indcs.is;             iflxs[0].bie = mb_indcs.ie;
+    iflxs[1].bis = mb_indcs.is;             iflxs[1].bie = mb_indcs.ie + 1;
+    iflxs[2].bis = mb_indcs.is;             iflxs[2].bie = mb_indcs.ie + 1;
+  } else if (ox1 > 0) {
+    iflxs[0].bis = mb_indcs.ie + 1,         iflxs[0].bie = mb_indcs.ie + 1;
+    iflxs[1].bis = mb_indcs.ie + 1,         iflxs[1].bie = mb_indcs.ie + 1;
+    iflxs[2].bis = mb_indcs.ie + 1,         iflxs[2].bie = mb_indcs.ie + 1;
+  } else {
+    iflxs[0].bis = mb_indcs.is,             iflxs[0].bie = mb_indcs.is;
+    iflxs[1].bis = mb_indcs.is,             iflxs[1].bie = mb_indcs.is;
+    iflxs[2].bis = mb_indcs.is,             iflxs[2].bie = mb_indcs.is;
+  }
+  if (ox2 == 0) {
+    iflxs[0].bjs = mb_indcs.js;             iflxs[0].bje = mb_indcs.je + 1;
+    iflxs[1].bjs = mb_indcs.js;             iflxs[1].bje = mb_indcs.je;
+    iflxs[2].bjs = mb_indcs.js;             iflxs[2].bje = mb_indcs.je + 1;
+  } else if (ox2 > 0) {
+    iflxs[0].bjs = mb_indcs.je + 1,         iflxs[0].bje = mb_indcs.je + 1;
+    iflxs[1].bjs = mb_indcs.je + 1,         iflxs[1].bje = mb_indcs.je + 1;
+    iflxs[2].bjs = mb_indcs.je + 1,         iflxs[2].bje = mb_indcs.je + 1;
+  } else {
+    iflxs[0].bjs = mb_indcs.js,             iflxs[0].bje = mb_indcs.js;
+    iflxs[1].bjs = mb_indcs.js,             iflxs[1].bje = mb_indcs.js;
+    iflxs[2].bjs = mb_indcs.js,             iflxs[2].bje = mb_indcs.js;
+  }
+  if (ox3 == 0) {
+    iflxs[0].bks = mb_indcs.ks;             iflxs[0].bke = mb_indcs.ke + 1;
+    iflxs[1].bks = mb_indcs.ks;             iflxs[1].bke = mb_indcs.ke + 1;
+    iflxs[2].bks = mb_indcs.ks;             iflxs[2].bke = mb_indcs.ke;
+  } else if (ox3 > 0) {
+    iflxs[0].bks = mb_indcs.ke + 1,      iflxs[0].bke = mb_indcs.ke + 1;
+    iflxs[1].bks = mb_indcs.ke + 1,      iflxs[1].bke = mb_indcs.ke + 1;
+    iflxs[2].bks = mb_indcs.ke + 1,      iflxs[2].bke = mb_indcs.ke + 1;
+  } else {
+    iflxs[0].bks = mb_indcs.ks,          iflxs[0].bke = mb_indcs.ks;
+    iflxs[1].bks = mb_indcs.ks,          iflxs[1].bke = mb_indcs.ks;
+    iflxs[2].bks = mb_indcs.ks,          iflxs[2].bke = mb_indcs.ks;
+  }
+  for (int i=0; i<=2; ++i) {
+    int ndat = (iflxs[i].bie - iflxs[i].bis + 1)*(iflxs[i].bje - iflxs[i].bjs + 1)*
+               (iflxs[i].bke - iflxs[i].bks + 1);
+    buf.iflxs_ndat = std::max(buf.iflxs_ndat, ndat);
   }
   }
 }
