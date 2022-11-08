@@ -42,9 +42,9 @@ class EOSPolicyInterface {
     /// minimum Y
     Real max_Y[MAX_SPECIES];
     /// Code unit system
-    UnitSystem* code_units;
+    UnitSystem code_units;
     /// EOS unit system
-    UnitSystem* eos_units;
+    UnitSystem eos_units;
 };
 
 } // namespace

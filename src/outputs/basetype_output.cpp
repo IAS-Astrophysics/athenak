@@ -17,6 +17,8 @@
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "adm/adm.hpp"
+#include "z4c/z4c.hpp"
 #include "srcterms/srcterms.hpp"
 #include "srcterms/turb_driver.hpp"
 #include "outputs.hpp"
@@ -63,16 +65,31 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
        << std::endl << "Input file is likely missing a <mhd> block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar==41) && (pm->pmb_pack->pturb == nullptr)) {
+  if ((ivar==42) && (pm->pmb_pack->pturb == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of Force variable requested in <output> block '"
        << out_params.block_name << "' but no Force object has been constructed."
        << std::endl << "Input file is likely missing a <forcing> block" << std::endl;
     exit(EXIT_FAILURE);
   }
+  if ((ivar>=42) && (ivar<=59) && (pm->pmb_pack->padm == nullptr)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+       << "Output of ADM variable requested in <output> block '"
+       << out_params.block_name << "' but no ADM object has been constructed."
+       << std::endl << "Input file is likely missing a <adm> block" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  if ((ivar>=60) && (ivar<=101) && (pm->pmb_pack->pz4c == nullptr)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+       << "Output of Z4c variable requested in <output> block '"
+       << out_params.block_name << "' but no Z4c object has been constructed."
+       << std::endl << "Input file is likely missing a <adm> block" << std::endl;
+    exit(EXIT_FAILURE);
+  }
 
   // Now load STL vector of output variables
   outvars.clear();
+  int ndvars=0;
 
   // hydro (lab-frame) density
   if (out_params.variable.compare("hydro_u_d") == 0 ||
@@ -302,6 +319,58 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     outvars.emplace_back("force1",0,&(pm->pmb_pack->pturb->force));
     outvars.emplace_back("force2",1,&(pm->pmb_pack->pturb->force));
     outvars.emplace_back("force3",2,&(pm->pmb_pack->pturb->force));
+  }
+
+  // ADM variables, excluding gauge
+  for (int v = 0; v < ADM::N_ADM - 4; ++v) {
+    if (out_params.variable.compare("adm") == 0 ||
+        out_params.variable.compare(ADM::ADM_names[v]) == 0) {
+      outvars.emplace_back(ADM::ADM_names[v], v, &(pm->pmb_pack->padm->u_adm));
+    }
+  }
+
+  // ADM gauge variables
+  if (nullptr == pm->pmb_pack->pz4c) {
+    for (int v = ADM::N_ADM - 4; v < ADM::N_ADM; ++v) {
+      if (out_params.variable.compare("adm") == 0 ||
+          out_params.variable.compare(ADM::ADM_names[v]) == 0) {
+        outvars.emplace_back(ADM::ADM_names[v], v, &(pm->pmb_pack->padm->u_adm));
+      }
+    }
+  }
+
+  // con z4c variables
+  for (int v = 0; v < z4c::Z4c::N_CON; ++v) {
+    if (out_params.variable.compare("con") == 0 ||
+        out_params.variable.compare(z4c::Z4c::Constraint_names[v]) == 0) {
+      outvars.emplace_back(z4c::Z4c::Constraint_names[v], v, &(pm->pmb_pack->pz4c->u_con));
+    }
+  }
+
+  // mat z4c variables
+  for (int v = 0; v < z4c::Z4c::N_MAT; ++v) {
+    if (out_params.variable.compare("mat") == 0 ||
+        out_params.variable.compare(z4c::Z4c::Matter_names[v]) == 0) {
+      outvars.emplace_back(z4c::Z4c::Matter_names[v], v, &(pm->pmb_pack->pz4c->u_mat));
+    }
+  }
+
+  // z4c variables
+  for (int v = 0; v < z4c::Z4c::N_Z4c; ++v) {
+    if (out_params.variable.compare("z4c") == 0 ||
+        out_params.variable.compare(z4c::Z4c::Z4c_names[v]) == 0) {
+      outvars.emplace_back(z4c::Z4c::Z4c_names[v], v, &(pm->pmb_pack->pz4c->u0));
+    }
+  }
+
+  if (ndvars > 0) {
+    int nmb = pm->pmb_pack->nmb_thispack;
+    auto &indcs = pm->mb_indcs;
+    int &ng = indcs.ng;
+    int n1 = indcs.nx1 + 2*ng;
+    int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
+    int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
+    Kokkos::realloc(derived_var, nmb, ndvars, n3, n2, n1);
   }
 }
 

@@ -256,11 +256,12 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
   int nmb = pmy_pack->nmb_thispack;
 
   auto &adm = pmy_pack->padm->adm;
+  auto &eos_ = eos.ps.GetEOS();
 
   int &nhyd = pmy_pack->phydro->nhydro;
   int &nscal = pmy_pack->phydro->nscalars;
 
-  const Real mb = eos.eos.GetBaryonMass();
+  const Real mb = eos.ps.GetEOS().GetBaryonMass();
 
   int scr_level = 0;
   size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1)*2       // scalars
@@ -338,12 +339,12 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
       }
       // FIXME: Go back and change to temperature after validating it all works.
       Real e = prim(m, IEN, k, j, i) + prim(m, IDN, k, j, i);
-      prim_pt[PTM] = eos.eos.GetTemperatureFromE(prim_pt[PRH], e, &prim_pt[PYF]);
-      prim_pt[PPR] = eos.eos.GetPressure(prim_pt[PRH], prim_pt[PTM], &prim_pt[PYF]);
+      prim_pt[PTM] = eos_.GetTemperatureFromE(prim_pt[PRH], e, &prim_pt[PYF]);
+      prim_pt[PPR] = eos_.GetPressure(prim_pt[PRH], prim_pt[PTM], &prim_pt[PYF]);
 
       // Get the conserved variables. Note that we don't use PrimitiveSolver here -- that's
       // because we would need to recalculate quantities used in E and S_d in order to get S_dd.
-      Real H = prim(m, IDN, k, j, i)*eos.eos.GetEnthalpy(prim_pt[PRH], prim_pt[PTM], &prim_pt[PYF]);
+      Real H = prim(m, IDN, k, j, i)*eos_.GetEnthalpy(prim_pt[PRH], prim_pt[PTM], &prim_pt[PYF]);
       Real usq = 0.0;
       for (int a = 0; a < 3; ++a) {
         for (int b = 0; b < 3; ++b) {

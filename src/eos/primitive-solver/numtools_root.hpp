@@ -19,7 +19,7 @@ class Root {
     /// Solver tolerance
     Real tol;
     /// Only used for benchmarking, not thread-safe.
-    int last_count;
+    //int last_count;
 
     Root() : iterations(30), tol(1e-15) {}
 
@@ -44,11 +44,11 @@ class Root {
 
     template<class Functor, class ... Types>
     KOKKOS_INLINE_FUNCTION
-    bool FalsePosition(Functor&& f, Real &lb, Real &ub, Real& x, Types ... args) {
+    bool FalsePosition(Functor&& f, Real &lb, Real &ub, Real& x, Types ... args) const {
       int side = 0;
       Real ftest;
       unsigned int count = 0;
-      last_count = 0;
+      //last_count = 0;
       // Get our initial bracket.
       Real flb = f(lb, args...);
       Real fub = f(ub, args...);
@@ -99,7 +99,7 @@ class Root {
         }
       }
       while (count < iterations);
-      last_count = count;
+      //last_count = count;
 
       // Return success if we're below the tolerance, otherwise report failure.
       return fabs((x-xold)/x) <= tol;
@@ -126,9 +126,9 @@ class Root {
 
     template<class Functor, class ... Types>
     KOKKOS_INLINE_FUNCTION
-    bool Chandrupatla(Functor&& f, Real &lb, Real &ub, Real& x, Types ... args) {
+    bool Chandrupatla(Functor&& f, Real &lb, Real &ub, Real& x, Types ... args) const {
       unsigned int count = 0;
-      last_count = 0;
+      //last_count = 0;
       // Get our initial bracket.
       Real flb = f(lb, args...);
       Real fub = f(ub, args...);
@@ -190,7 +190,7 @@ class Root {
         }
       }
       while (count < iterations);
-      last_count = count;
+      //last_count = count;
 
       // Return success if we're below the tolerance, otherwise report failure.
       return fabs((x-x1)/x) <= tol;
@@ -213,7 +213,7 @@ class Root {
      */
     template<class Functor, class ... Types>
     KOKKOS_INLINE_FUNCTION
-    bool NewtonSafe(Functor&& f, Real &lb, Real &ub, Real& x, Types ... args) {
+    bool NewtonSafe(Functor&& f, Real &lb, Real &ub, Real& x, Types ... args) const {
       Real fx;
       Real dfx;
       Real xold;
