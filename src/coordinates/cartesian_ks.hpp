@@ -131,12 +131,12 @@ void ComputeADMDecomposition(Real x, Real y, Real z, bool minkowski, Real a,
   *betaz = 2.*H*(1. + 2.*H)*l_u[2];
   Real const beta_d[3] = {2.*H*l_u[0], 2.*H*l_u[1], 2.*H*l_u[2]};
 
-  *gxx = 2.*H*l_d[0]*l_d[0] + 1;
+  *gxx = 2.*H*l_d[0]*l_d[0] + 1.;
   *gxy = 2.*H*l_d[0]*l_d[1];
   *gxz = 2.*H*l_d[0]*l_d[2];
-  *gyy = 2.*H*l_d[1]*l_d[1] + 1;
+  *gyy = 2.*H*l_d[1]*l_d[1] + 1.;
   *gyz = 2.*H*l_d[1]*l_d[2];
-  *gzz = 2.*H*l_d[2]*l_d[2] + 1;
+  *gzz = 2.*H*l_d[2]*l_d[2] + 1.;
 
   //
   // conformal factor
@@ -187,22 +187,31 @@ void ComputeADMDecomposition(Real x, Real y, Real z, bool minkowski, Real a,
     2.*dH_d[0]*l_d[0]*l_d[0] + 2.*H*dl_dd[0][0]*l_d[0] + 2.*H*l_d[0]*dl_dd[0][0],
     2.*dH_d[0]*l_d[0]*l_d[1] + 2.*H*dl_dd[0][0]*l_d[1] + 2.*H*l_d[0]*dl_dd[0][1],
     2.*dH_d[0]*l_d[0]*l_d[2] + 2.*H*dl_dd[0][0]*l_d[2] + 2.*H*l_d[0]*dl_dd[0][2],
+    2.*dH_d[0]*l_d[1]*l_d[0] + 2.*H*dl_dd[0][1]*l_d[0] + 2.*H*l_d[1]*dl_dd[0][0],
     2.*dH_d[0]*l_d[1]*l_d[1] + 2.*H*dl_dd[0][1]*l_d[1] + 2.*H*l_d[1]*dl_dd[0][1],
     2.*dH_d[0]*l_d[1]*l_d[2] + 2.*H*dl_dd[0][1]*l_d[2] + 2.*H*l_d[1]*dl_dd[0][2],
+    2.*dH_d[0]*l_d[2]*l_d[0] + 2.*H*dl_dd[0][2]*l_d[0] + 2.*H*l_d[2]*dl_dd[0][0],
+    2.*dH_d[0]*l_d[2]*l_d[1] + 2.*H*dl_dd[0][2]*l_d[1] + 2.*H*l_d[2]*dl_dd[0][1],
     2.*dH_d[0]*l_d[2]*l_d[2] + 2.*H*dl_dd[0][2]*l_d[2] + 2.*H*l_d[2]*dl_dd[0][2],
     // \partial_y g_ik
     2.*dH_d[1]*l_d[0]*l_d[0] + 2.*H*dl_dd[1][0]*l_d[0] + 2.*H*l_d[0]*dl_dd[1][0],
     2.*dH_d[1]*l_d[0]*l_d[1] + 2.*H*dl_dd[1][0]*l_d[1] + 2.*H*l_d[0]*dl_dd[1][1],
     2.*dH_d[1]*l_d[0]*l_d[2] + 2.*H*dl_dd[1][0]*l_d[2] + 2.*H*l_d[0]*dl_dd[1][2],
+    2.*dH_d[1]*l_d[1]*l_d[0] + 2.*H*dl_dd[1][1]*l_d[0] + 2.*H*l_d[1]*dl_dd[1][0],
     2.*dH_d[1]*l_d[1]*l_d[1] + 2.*H*dl_dd[1][1]*l_d[1] + 2.*H*l_d[1]*dl_dd[1][1],
     2.*dH_d[1]*l_d[1]*l_d[2] + 2.*H*dl_dd[1][1]*l_d[2] + 2.*H*l_d[1]*dl_dd[1][2],
+    2.*dH_d[1]*l_d[2]*l_d[0] + 2.*H*dl_dd[1][2]*l_d[0] + 2.*H*l_d[2]*dl_dd[1][0],
+    2.*dH_d[1]*l_d[2]*l_d[1] + 2.*H*dl_dd[1][2]*l_d[1] + 2.*H*l_d[2]*dl_dd[1][1],
     2.*dH_d[1]*l_d[2]*l_d[2] + 2.*H*dl_dd[1][2]*l_d[2] + 2.*H*l_d[2]*dl_dd[1][2],
     // \partial_z g_ik
     2.*dH_d[2]*l_d[0]*l_d[0] + 2.*H*dl_dd[2][0]*l_d[0] + 2.*H*l_d[0]*dl_dd[2][0],
     2.*dH_d[2]*l_d[0]*l_d[1] + 2.*H*dl_dd[2][0]*l_d[1] + 2.*H*l_d[0]*dl_dd[2][1],
     2.*dH_d[2]*l_d[0]*l_d[2] + 2.*H*dl_dd[2][0]*l_d[2] + 2.*H*l_d[0]*dl_dd[2][2],
+    2.*dH_d[2]*l_d[1]*l_d[0] + 2.*H*dl_dd[2][1]*l_d[0] + 2.*H*l_d[1]*dl_dd[2][0],
     2.*dH_d[2]*l_d[1]*l_d[1] + 2.*H*dl_dd[2][1]*l_d[1] + 2.*H*l_d[1]*dl_dd[2][1],
     2.*dH_d[2]*l_d[1]*l_d[2] + 2.*H*dl_dd[2][1]*l_d[2] + 2.*H*l_d[1]*dl_dd[2][2],
+    2.*dH_d[2]*l_d[2]*l_d[0] + 2.*H*dl_dd[2][2]*l_d[0] + 2.*H*l_d[2]*dl_dd[2][0],
+    2.*dH_d[2]*l_d[2]*l_d[1] + 2.*H*dl_dd[2][2]*l_d[1] + 2.*H*l_d[2]*dl_dd[2][1],
     2.*dH_d[2]*l_d[2]*l_d[2] + 2.*H*dl_dd[2][2]*l_d[2] + 2.*H*l_d[2]*dl_dd[2][2],
   };
 
