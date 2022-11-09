@@ -82,6 +82,7 @@ class DynGR {
   DynGR_Error error_policy;
  protected:
   MeshBlockPack *pmy_pack;  // ptr to MeshBlockPack containing this Hydro
+  int scratch_level;
 };
 
 template<class EOSPolicy, class ErrorPolicy>

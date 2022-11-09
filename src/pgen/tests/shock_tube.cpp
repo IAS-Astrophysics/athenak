@@ -187,12 +187,12 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
       adm.g_dd(m, 1, 2, k, j, i) = 0.0;
       adm.g_dd(m, 2, 2, k, j, i) = 1.0;
 
-      adm.K_dd(m, 0, 0, k, j, i) = 1.0;
+      adm.K_dd(m, 0, 0, k, j, i) = 0.0;
       adm.K_dd(m, 0, 1, k, j, i) = 0.0;
       adm.K_dd(m, 0, 2, k, j, i) = 0.0;
-      adm.K_dd(m, 1, 1, k, j, i) = 1.0;
+      adm.K_dd(m, 1, 1, k, j, i) = 0.0;
       adm.K_dd(m, 1, 2, k, j, i) = 0.0;
-      adm.K_dd(m, 2, 2, k, j, i) = 1.0;
+      adm.K_dd(m, 2, 2, k, j, i) = 0.0;
     });
 
     // If we're using the ADM variables, then we've got dynamic GR enabled.
