@@ -43,18 +43,19 @@ void FLUX_PT_DYNGR(const Real prim_pt[NPRIM], Real cons_pt[NCONS],
 template<class EOSPolicy>
 KOKKOS_INLINE_FUNCTION
 void LLF_DYNGR(TeamMember_t const &member, 
-     const PrimitiveSolverHydro<EOSPolicy, Primitive::ResetFloor>* eos,
+     const PrimitiveSolverHydro<EOSPolicy, Primitive::ResetFloor>& eos,
      const RegionIndcs &indcs, const DualArray1D<RegionSize> &size, const CoordData &coord,
      const int m, const int k, const int j, const int il, const int iu, const int ivx,
      const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr,
+     const int& nhyd, const int& nscal,
      const AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> &gamma_dd,
      const AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> &b_u,
      const AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> &alp, DvceArray5D<Real> flx) {
 
-  const Real mb = eos->ps.GetEOS().GetBaryonMass();
+  const Real mb = eos.ps.GetEOS().GetBaryonMass();
 
-  auto &nhyd = eos->pmy_pack->phydro->nhydro;
-  auto &nscal = eos->pmy_pack->phydro->nscalars;
+  //auto &nhyd = eos.pmy_pack->phydro->nhydro;
+  //auto &nscal = eos.pmy_pack->phydro->nscalars;
 
   par_for_inner(member, il, iu, [&](const int i) {
     // Extract metric components
@@ -98,12 +99,12 @@ void LLF_DYNGR(TeamMember_t const &member,
 
     // Extract left primitives and calculate left conserved variables
     Real prim_l[NPRIM], cons_l[NCONS];
-    eos->PrimToConsPt(wl, prim_l, cons_l,
+    eos.PrimToConsPt(wl, prim_l, cons_l,
                       g3d, sdetg, i, nhyd, nscal);
 
     // Extract right primitives and calculate right conserved variables
     Real prim_r[NPRIM], cons_r[NCONS];
-    eos->PrimToConsPt(wr, prim_r, cons_r,
+    eos.PrimToConsPt(wr, prim_r, cons_r,
                       g3d, sdetg, i, nhyd, nscal);
 
     // Calculate the fluxes.
@@ -113,8 +114,8 @@ void LLF_DYNGR(TeamMember_t const &member,
 
     // Get the sound speeds
     Real lambda_lp, lambda_lm, lambda_rp, lambda_rm;
-    eos->GetGRSoundSpeeds(lambda_lp, lambda_lm, prim_l, g3d, beta_u, alpha, g3u[idx], pvx);
-    eos->GetGRSoundSpeeds(lambda_rp, lambda_rm, prim_r, g3d, beta_u, alpha, g3u[idx], pvx);
+    eos.GetGRSoundSpeeds(lambda_lp, lambda_lm, prim_l, g3d, beta_u, alpha, g3u[idx], pvx);
+    eos.GetGRSoundSpeeds(lambda_rp, lambda_rm, prim_r, g3d, beta_u, alpha, g3u[idx], pvx);
 
     // Get the extremal wavespeeds
     Real lambda_l = std::fmin(lambda_lm, lambda_rm);
