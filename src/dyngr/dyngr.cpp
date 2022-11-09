@@ -85,6 +85,7 @@ DynGR::DynGR(MeshBlockPack *pp, ParameterInput *pin) : pmy_pack(pp) {
               << "' not implemented for GR dynamics" << std::endl;
     std::exit(EXIT_FAILURE);
   }
+  scratch_level = pin->GetOrAddInteger("hydro", "dyn_scratch", 0);
 }
 
 DynGR::~DynGR() {
@@ -263,7 +264,7 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
 
   const Real mb = eos.ps.GetEOS().GetBaryonMass();
 
-  int scr_level = 0;
+  int scr_level = scratch_level;
   size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1)*2       // scalars
                   + ScrArray2D<Real>::shmem_size(3, ncells1)*2    // vectors
                   + ScrArray2D<Real>::shmem_size(6, ncells1)*2    // symmetric 2 tensors
@@ -310,6 +311,11 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
 
     // Metric derivatives
     Real idx[] = {size.d_view(m).idx1, size.d_view(m).idx2, size.d_view(m).idx3};
+    for (int a =0; a < 3; ++a) {
+      par_for_inner(member, is, ie, [&](int const i){
+        dalpha_d(a, i) = Dx<NGHOST>(a, idx, adm.alpha, m, k, j, i);
+      });
+    }
     for (int a = 0; a < 3; ++a) {
       for (int b = 0; b < 3; ++b) {
         par_for_inner(member, is, ie, [&](int const i){

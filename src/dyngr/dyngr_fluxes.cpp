@@ -61,7 +61,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
 
   size_t scr_size = ScrArray2D<Real>::shmem_size(nvars, ncells1) * 2 + ScrArray1D<Real>::shmem_size(ncells1)
                        + ScrArray2D<Real>::shmem_size(3, ncells1) + ScrArray2D<Real>::shmem_size(6, ncells1);
-  int scr_level = 1;
+  int scr_level = scratch_level;
   auto flx1_ = pmy_pack->phydro->uflx.x1f;
 
   par_for_outer("dyngrflux_x1",DevExeSpace(), scr_size, scr_level, 0, nmb1, ks, ke, js, je,
