@@ -16,6 +16,8 @@
 #include "outputs/outputs.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "z4c/z4c.hpp"
+#include "dyngr/dyngr.hpp"
 #include "ion-neutral/ion_neutral.hpp"
 #include "driver.hpp"
 
@@ -232,6 +234,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
 
   // Initialize HYDRO: ghost zones and primitive variables (everywhere)
   hydro::Hydro *phydro = pmesh->pmb_pack->phydro;
+  dyngr::DynGR *pdyngr = pmesh->pmb_pack->pdyngr;
   if (phydro != nullptr) {
     // following functions return a TaskStatus, but it is ignored so cast to (void)
     (void) phydro->RestrictU(this, 0);
@@ -241,7 +244,12 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
     (void) phydro->ClearRecv(this, -1);
     (void) phydro->RecvU(this, 0);
     (void) phydro->ApplyPhysicalBCs(this, 0);
-    (void) phydro->ConToPrim(this, 0);
+    if (pdyngr == nullptr) {
+      (void) phydro->ConToPrim(this, 0);
+    }
+    else {
+      pdyngr->ConToPrim(this, 0);
+    }
   }
 
   // Initialize MHD: ghost zones and primitive variables (everywhere)
@@ -261,6 +269,19 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
     (void) pmhd->ConToPrim(this, 0);
   }
 
+  // Initialize Z4c
+  z4c::Z4c *pz4c = pmesh->pmb_pack->pz4c;
+  if (pz4c != nullptr) {
+    // following functions return a TaskStatus, but it is ignored so cast to (void)
+    (void) pz4c->InitRecv(this, 0);  // stage < 0 suppresses InitFluxRecv
+    (void) pz4c->SendU(this, 0);
+    (void) pz4c->ClearSend(this, 0);
+    (void) pz4c->ClearRecv(this, 0);
+    (void) pz4c->RecvU(this, 0);
+    (void) pz4c->Z4cBoundaryRHS(this, 0);
+    (void) pz4c->ApplyPhysicalBCs(this, 0);
+  }
+
   //---- Step 2.  Compute first time step (if problem involves time evolution
 
   if (time_evolution != TimeEvolution::tstatic) {
@@ -269,6 +290,9 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
     }
     if (pmhd != nullptr) {
       (void) pmesh->pmb_pack->pmhd->NewTimeStep(this, nexp_stages);
+    }
+    if (pz4c != nullptr) {
+      (void) pmesh->pmb_pack->pz4c->NewTimeStep(this, nexp_stages);
     }
     pmesh->NewTimeStep(tlim);
   }
