@@ -7,6 +7,7 @@
 //  \brief Calculate 3D fluxes for hydro
 
 #include <iostream>
+//#include <stdio.h>
 
 #include "athena.hpp"
 #include "athena_tensor.hpp"
@@ -99,6 +100,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
     Face1Metric(member, m, k, j, is-1, ie+1, adm.g_dd, adm.beta_u, adm.alpha, gface1_dd, betaface1_u, alphaface1);
 
     // TODO do I need a member team barrier here?
+    member.team_barrier();
 
     // compute fluxes over [is,ie+1]
     auto &dyn_eos = dyn_eos_;
@@ -106,10 +108,13 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
     auto &size = size_;
     auto &coord = coord_;
     auto &flx1 = flx1_;
+    auto &nhyd_ = nhyd;
+    auto nscal_ = nvars - nhyd;
     const auto rsolver = rsolver_;
     int il = is; int iu = ie+1;
     if constexpr (rsolver == DynGR_RSolver::llf_dyngr) {
-      LLF_DYNGR(member, &dyn_eos, indcs, size, coord, m, k, j, il, iu, IVX, wl, wr, gface1_dd, betaface1_u, alphaface1, flx1);
+      LLF_DYNGR(member, dyn_eos, indcs, size, coord, m, k, j, il, iu, IVX, 
+                wl, wr, nhyd_, nscal_, gface1_dd, betaface1_u, alphaface1, flx1);
     }
     //} else { other Riemann solvers here
     member.team_barrier();
@@ -126,6 +131,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         });
       }
     }
+    member.team_barrier();
   });
 
   //--------------------------------------------------------------------------------------
@@ -183,6 +189,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         Face2Metric(member, m, k, j, is, ie, adm.g_dd, adm.beta_u, adm.alpha, gface2_dd, betaface2_u, alphaface2);
 
         // TODO do I need a member team barrier here?
+        member.team_barrier();
 
         // compute fluxes over [is,ie+1]
         auto &dyn_eos = dyn_eos_;
@@ -190,11 +197,14 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         auto &size = size_;
         auto &coord = coord_;
         auto &flx2 = flx2_;
+        auto &nhyd_ = nhyd;
+        auto nscal_ = nvars - nhyd;
         const auto rsolver = rsolver_;
         int il = is; int iu = ie;
         if (j>(js-1)) {
           if constexpr (rsolver == DynGR_RSolver::llf_dyngr) {
-            LLF_DYNGR(member, &dyn_eos, indcs, size, coord, m, k, j, il, iu, IVY, wl, wr, gface2_dd, betaface2_u, alphaface2, flx2);
+            LLF_DYNGR(member, dyn_eos, indcs, size, coord, m, k, j, il, iu, IVY, 
+                      wl, wr, nhyd_, nscal_, gface2_dd, betaface2_u, alphaface2, flx2);
           }
           //} else { other Riemann solvers here
         }
@@ -278,11 +288,14 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         auto &size = size_;
         auto &coord = coord_;
         auto &flx3 = flx3_;
+        auto &nhyd_ = nhyd;
+        auto nscal_ = nvars - nhyd;
         const auto rsolver = rsolver_;
         int il = is; int iu = ie;
         if (k>(ks-1)) {
           if constexpr (rsolver == DynGR_RSolver::llf_dyngr) {
-            LLF_DYNGR(member, &dyn_eos, indcs, size, coord, m, k, j, il, iu, IVZ, wl, wr, gface3_dd, betaface3_u, alphaface3, flx3);
+            LLF_DYNGR(member, dyn_eos, indcs, size, coord, m, k, j, il, iu, IVZ,
+                      wl, wr, nhyd_, nscal_, gface3_dd, betaface3_u, alphaface3, flx3);
           }
           //} else { other Riemann solvers here
         }
