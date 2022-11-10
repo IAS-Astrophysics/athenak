@@ -126,9 +126,9 @@ void ComputeADMDecomposition(Real x, Real y, Real z, bool minkowski, Real a,
   if (minkowski) {H=0.0;}
 
   *alp = 1.0/sqrt(1. + 2.*H);
-  *betax = 2.*H*(1. + 2.*H)*l_u[0];
-  *betay = 2.*H*(1. + 2.*H)*l_u[1];
-  *betaz = 2.*H*(1. + 2.*H)*l_u[2];
+  *betax = 2.*H/(1. + 2.*H)*l_u[0];
+  *betay = 2.*H/(1. + 2.*H)*l_u[1];
+  *betaz = 2.*H/(1. + 2.*H)*l_u[2];
   Real const beta_d[3] = {2.*H*l_u[0], 2.*H*l_u[1], 2.*H*l_u[2]};
 
   *gxx = 2.*H*l_d[0]*l_d[0] + 1.;
@@ -214,6 +214,12 @@ void ComputeADMDecomposition(Real x, Real y, Real z, bool minkowski, Real a,
     2.*dH_d[2]*l_d[2]*l_d[1] + 2.*H*dl_dd[2][2]*l_d[1] + 2.*H*l_d[2]*dl_dd[2][1],
     2.*dH_d[2]*l_d[2]*l_d[2] + 2.*H*dl_dd[2][2]*l_d[2] + 2.*H*l_d[2]*dl_dd[2][2],
   };
+  /*Real dg_ddd[3][3][3] = {0.0};
+  for (int i = 0; i < 3; i++)
+  for (int a = 0; a < 3; a++)
+  for (int b = 0; b < 3; b++) {
+    dg_ddd[i][a][b] = 2.*dH_d[i]*l_d[a]*l_d[b] + 2.*H*dl_dd[i][a]*l_d[b] + 2.*H*l_d[a]*dl_dd[i][b];
+  }*/
 
   //
   // Compute Christoffel symbols
