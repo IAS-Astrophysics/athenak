@@ -49,6 +49,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
   auto coord_ = pmy_pack->pcoord->coord_data;
   auto w0_ = pmy_pack->phydro->w0;
   auto &adm = pmy_pack->padm->adm;
+  auto &eos_ = pmy_pack->phydro->peos->eos_data;
   auto &dyn_eos_ = eos;
   const auto rsolver_ = rsolver_method_;
   bool extrema = false;
@@ -86,12 +87,15 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         PiecewiseLinearX1(member, m, k, j, is-1, ie+1, w0_, wl, wr);
         break;
       // JF: These higher-order reconstruction methods all need EOS_Data to calculate a floor.
-      //case ReconstructionMethod::ppm4:
-      //case ReconstructionMethod::ppmx:
-      //  PiecewiseParabolicX1(member,eos,extrema,true, m, k, j, is-1, ie+1, w0_, wl, wr);
-      //  break;
-      //case ReconstructionMethod::wenoz:
-      //  WENOZX1(member, 
+      case ReconstructionMethod::ppm4:
+      case ReconstructionMethod::ppmx:
+        PiecewiseParabolicX1(member,eos_,extrema,false, m, k, j, is-1, ie+1, w0_, wl, wr);
+        break;
+      case ReconstructionMethod::wenoz:
+        WENOZX1(member, eos_, false, m, k, j, is-1, ie+1, w0_, wl, wr);
+        break;
+      default:
+        break;
     }
     // Sync all threads in the team so that scratch memory is consistent
     member.team_barrier();
@@ -175,12 +179,15 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
             PiecewiseLinearX2(member, m, k, j, is, ie, w0_, wl_jp1, wr);
             break;
           // JF: These higher-order reconstruction methods all need EOS_Data to calculate a floor.
-          //case ReconstructionMethod::ppm4:
-          //case ReconstructionMethod::ppmx:
-          //  PiecewiseParabolicX2(member,eos,extrema,true, m, k, j, is-1, ie+1, w0_, wl, wr);
-          //  break;
-          //case ReconstructionMethod::wenoz:
-          //  WENOZX2(member, 
+          case ReconstructionMethod::ppm4:
+          case ReconstructionMethod::ppmx:
+            PiecewiseParabolicX2(member,eos_,extrema,false, m, k, j, is, ie, w0_, wl_jp1, wr);
+            break;
+          case ReconstructionMethod::wenoz:
+            WENOZX2(member, eos_, false, m, k, j, is-1, ie+1, w0_, wl_jp1, wr);
+            break;
+          default:
+            break;
         }
         // Sync all threads in the team so that scratch memory is consistent
         member.team_barrier();
@@ -267,12 +274,15 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
             PiecewiseLinearX3(member, m, k, j, is, ie, w0_, wl_kp1, wr);
             break;
           // JF: These higher-order reconstruction methods all need EOS_Data to calculate a floor.
-          //case ReconstructionMethod::ppm4:
-          //case ReconstructionMethod::ppmx:
-          //  PiecewiseParabolicX3(member,eos,extrema,true, m, k, j, is-1, ie+1, w0_, wl, wr);
-          //  break;
-          //case ReconstructionMethod::wenoz:
-          //  WENOZX3(member, 
+          case ReconstructionMethod::ppm4:
+          case ReconstructionMethod::ppmx:
+            PiecewiseParabolicX3(member,eos_,extrema,false, m, k, j, is, ie, w0_, wl_kp1, wr);
+            break;
+          case ReconstructionMethod::wenoz:
+            WENOZX3(member, eos_, false, m, k, j, is-1, ie+1, w0_, wl_kp1, wr);
+            break;
+          default:
+            break;
         }
         // Sync all threads in the team so that scratch memory is consistent
         member.team_barrier();
