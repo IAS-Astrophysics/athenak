@@ -452,6 +452,7 @@ void BoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx, const bool sa
                                          DvceArray2D<int> &nflx) {
   // create local references for variables in kernel
   int nmb = pmy_pack->pmb->nmb;
+  int nnghbr = pmy_pack->pmb->nnghbr;
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &rbuf = recv_buf;
   auto &mblev = pmy_pack->pmb->mb_lev;
@@ -464,7 +465,7 @@ void BoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx, const bool sa
     const int v = tmember.league_rank()%3;
 
     // scalar loop over neighbors (except corners) to prevent race condition in sums
-    for (int n=0; n<48; ++n) {
+    for (int n=0; n<nnghbr; ++n) {
       // only unpack buffers when neighbor exists AND
       // (neighbor at same level when same_level=true on input) OR
       // (neighbor at finer level when same_level=false on input)
@@ -872,13 +873,15 @@ void BoundaryValuesFC::AverageBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
           tmember.team_barrier();
         // finer level; divide EMFs that overlap at edges of fine faces by 2
         } else if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
-          int j = jl + (ju - jl + 1)/2;
-          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nk),
-          [&](const int idx) {
-            int k = idx + kl;
-            flx.x3e(m,k,j,il) *= 0.5;
-          });
-          tmember.team_barrier();
+          if (multi_d) {
+            int j = jl + (ju - jl + 1)/2;
+            Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nk),
+            [&](const int idx) {
+              int k = idx + kl;
+              flx.x3e(m,k,j,il) *= 0.5;
+            });
+            tmember.team_barrier();
+          }
         }
       }
 
@@ -902,13 +905,15 @@ void BoundaryValuesFC::AverageBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
           tmember.team_barrier();
         // finer level; divide EMFs that overlap at edges of fine faces by 2
         } else if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
-          int k = kl + (ku - kl + 1)/2;
-          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, ni),
-          [&](const int idx) {
-            int i = idx + il;
-            flx.x1e(m,k,jl,i) *= 0.5;
-          });
-          tmember.team_barrier();
+          if (three_d) {
+            int k = kl + (ku - kl + 1)/2;
+            Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, ni),
+            [&](const int idx) {
+              int i = idx + il;
+              flx.x1e(m,k,jl,i) *= 0.5;
+            });
+            tmember.team_barrier();
+          }
         }
       } else if (v==2) {
         int nk = ku - kl + 1;
