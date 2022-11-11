@@ -98,6 +98,8 @@ class DynGRPS : public DynGR {
   template<DynGR_RSolver T>
   TaskStatus CalcFluxes(Driver *d, int stage);
 
+  //TaskStatus FOFC(Driver *d, int stage);
+
   // functions
   virtual void AssembleDynGRTasks(TaskList &start, TaskList &run, TaskList &end);
 
