@@ -6,7 +6,7 @@
 //! \file llf_grmhd.cpp
 //! \brief LLF Riemann solver for general relativistic hydrodynamics.
 
-#include <cmath>
+#include <math.h>
 
 #include "coordinates/cartesian_ks.hpp"
 #include "coordinates/cell_locations.hpp"
@@ -23,7 +23,7 @@ KOKKOS_INLINE_FUNCTION
 void FLUX_PT_DYNGR(const Real prim_pt[NPRIM], Real cons_pt[NCONS],
                    Real flux_pt[NCONS], Real g3d[NSPMETRIC], Real beta_u,
                    Real alpha, Real sdetg, int pvx, int csx) {
-  Real W = std::sqrt(1.0 + Primitive::SquareVector(&prim_pt[PVX], g3d));
+  Real W = sqrt(1.0 + Primitive::SquareVector(&prim_pt[PVX], g3d));
   Real vi = prim_pt[pvx]/W;
 
   Real v_c = vi - beta_u/alpha;
@@ -34,6 +34,28 @@ void FLUX_PT_DYNGR(const Real prim_pt[NPRIM], Real cons_pt[NCONS],
   flux_pt[CSZ] = alpha*cons_pt[CSZ]*v_c;
   flux_pt[CTA] = alpha*(cons_pt[CTA]*v_c + sdetg*prim_pt[PPR]*vi);
   flux_pt[csx] += alpha*sdetg*prim_pt[PPR];
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void SingleStateLLF_DYNGR
+//! \brief
+template<class EOSPolicy, class ErrorPolicy>
+KOKKOS_INLINE_FUNCTION
+void SingleStateLLF_DYNGR(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
+                          const Real wl[NPRIM], const Real wr[NPRIM], const int& nhyd,
+                          const int& nscal, const Real x1v, const Real x2v, const Real x3v,
+                          const int ivx,
+                          const Real g3d[NSPMETRIC], const Real beta_u[3],
+                          const Real& alpha, const Real flx[NCONS]) {
+  // Cyclic permutation of array indices
+  int ivy = PVX + ((ivx - PVX)+1)%3;
+  int ivz = PVX + ((ivx - PVX)+2)%3;
+
+  // Calculate the inverse metric
+  Real detg = Primitive::GetDeterminant(g3d);
+  Real g3u[NSPMETRIC];
+  Primitive::InvertMatrix(g3u, g3d, detg);
+
 }
 
 //----------------------------------------------------------------------------------------
@@ -67,7 +89,7 @@ void LLF_DYNGR(TeamMember_t const &member,
     g3d[S23] = gamma_dd(1, 2, i);
     g3d[S33] = gamma_dd(2, 2, i);
     Real detg = Primitive::GetDeterminant(g3d);
-    Real sdetg = std::sqrt(detg);
+    Real sdetg = sqrt(detg);
     Real g3u[NSPMETRIC];
     Primitive::InvertMatrix(g3u, g3d, detg);
     int pvx, idx, csx;
@@ -118,9 +140,9 @@ void LLF_DYNGR(TeamMember_t const &member,
     eos.GetGRSoundSpeeds(lambda_rp, lambda_rm, prim_r, g3d, beta_u, alpha, g3u[idx], pvx);
 
     // Get the extremal wavespeeds
-    Real lambda_l = std::fmin(lambda_lm, lambda_rm);
-    Real lambda_r = std::fmax(lambda_lp, lambda_rp);
-    Real lambda = std::fmax(lambda_r, -lambda_l);
+    Real lambda_l = fmin(lambda_lm, lambda_rm);
+    Real lambda_r = fmax(lambda_lp, lambda_rp);
+    Real lambda = fmax(lambda_r, -lambda_l);
     //Real lambda = 1.0;
 
     // Store the complete fluxes.
