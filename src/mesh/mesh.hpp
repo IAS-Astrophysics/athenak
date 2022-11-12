@@ -94,6 +94,7 @@ class Mesh;
 #include "meshblock.hpp"
 #include "meshblock_pack.hpp"
 #include "meshblock_tree.hpp"
+#include "mesh_refinement.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \class Mesh
@@ -141,6 +142,7 @@ class Mesh {
   int *gidslist;       // starting global ID of MeshBlocks in each rank
   int *nmblist;        // number of MeshBlocks on each rank
 
+  MeshRefinement *pmr=nullptr;  // mesh refinement functions (if needed)
   // following 8x arrays allocated with length [nranks] only with AMR
   int *nref, *nderef;
   int *rdisp, *ddisp;
@@ -160,8 +162,6 @@ class Mesh {
   void PrintMeshDiagnostics();
   void WriteMeshStructure();
   void NewTimeStep(const Real tlim);
-  void RestrictCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
-  void RestrictFC(DvceFaceFld4D<Real> &a, DvceFaceFld4D<Real> &ca);
   BoundaryFlag GetBoundaryFlag(const std::string& input_string);
   std::string GetBoundaryString(BoundaryFlag input_flag);
 

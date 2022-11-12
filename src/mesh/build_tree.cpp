@@ -235,7 +235,12 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
 
   gidslist = new int[global_variable::nranks];
   nmblist  = new int[global_variable::nranks];
-  if (adaptive) { // allocate arrays for AMR
+
+  // allocate arrays and MeshRefinement object for SMR/ARM
+  if (multilevel) {
+    pmr = new MeshRefinement(this, pin);
+  }
+  if (adaptive) {
     nref = new int[global_variable::nranks];
     nderef = new int[global_variable::nranks];
     rdisp = new int[global_variable::nranks];

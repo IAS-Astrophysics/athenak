@@ -290,6 +290,9 @@ Mesh::~Mesh() {
   delete [] lloclist;
   delete [] gidslist;
   delete [] nmblist;
+  if (multilevel) {
+    delete pmr;
+  }
   if (adaptive) { // deallocate arrays for AMR
     delete [] nref;
     delete [] nderef;

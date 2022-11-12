@@ -51,6 +51,7 @@ add_executable(
         ion-neutral/ion_neutral.cpp
 
         mesh/build_tree.cpp
+        mesh/load_balance.cpp
         mesh/mesh.cpp
         mesh/meshblock.cpp
         mesh/meshblock_pack.cpp

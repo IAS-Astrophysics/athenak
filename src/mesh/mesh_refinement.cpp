@@ -4,8 +4,8 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file mesh_refinement.cpp
-//! \brief File containing various Mesh functions associated with SMR/AMR, including
-//! restriction and load_balancing.  Note prolongation is part of BVals classes.
+//! \brief Implements constructor and functions in MeshRefinement class.
+//! Note prolongation is part of BVals classes.
 
 #include <iostream>
 
@@ -13,35 +13,46 @@
 #include "globals.hpp"
 #include "parameter_input.hpp"
 #include "mesh.hpp"
+#include "mesh_refinement.hpp"
 
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>
 #endif
 
 //----------------------------------------------------------------------------------------
-//! \fn void Mesh::RestrictCC
-//  \brief Restricts cell-centered variables to coarse mesh
+// Mesh constructor: initializes some mesh variables at start of calculation using
+// parameters in input file.  Most objects in Mesh are constructed in the BuildTree()
+// function, so that they can store a pointer to the Mesh which can be reliably referenced
+// only after the Mesh constructor has finished
 
-void Mesh::RestrictCC(DvceArray5D<Real> &u, DvceArray5D<Real> &cu) {
+MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
+  pmy_mesh(pm) {
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MeshRefinement::RestrictCC
+//!  \brief Restricts cell-centered variables to coarse mesh
+
+void MeshRefinement::RestrictCC(DvceArray5D<Real> &u, DvceArray5D<Real> &cu) {
   int nmb  = u.extent_int(0);  // TODO(@user): 1st index from L of in array must be NMB
   int nvar = u.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
 
-  auto &cis = mb_indcs.cis;
-  auto &cie = mb_indcs.cie;
-  auto &cjs = mb_indcs.cjs;
-  auto &cje = mb_indcs.cje;
-  auto &cks = mb_indcs.cks;
-  auto &cke = mb_indcs.cke;
+  auto &cis = pmy_mesh->mb_indcs.cis;
+  auto &cie = pmy_mesh->mb_indcs.cie;
+  auto &cjs = pmy_mesh->mb_indcs.cjs;
+  auto &cje = pmy_mesh->mb_indcs.cje;
+  auto &cks = pmy_mesh->mb_indcs.cks;
+  auto &cke = pmy_mesh->mb_indcs.cke;
 
   // restrict in 1D
-  if (one_d) {
+  if (pmy_mesh->one_d) {
     par_for("restrict3D",DevExeSpace(),0, nmb-1, 0, nvar-1, cis, cie,
     KOKKOS_LAMBDA(const int m, const int n, const int i) {
       int finei = 2*i - cis;  // correct when cis=is
       cu(m,n,cks,cjs,i) = 0.5*(u(m,n,cks,cjs,finei) + u(m,n,cks,cjs,finei+1));
     });
   // restrict in 2D
-  } else if (two_d) {
+  } else if (pmy_mesh->two_d) {
     par_for("restrict3D",DevExeSpace(),0, nmb-1, 0, nvar-1, cjs, cje, cis, cie,
     KOKKOS_LAMBDA(const int m, const int n, const int j, const int i) {
       int finei = 2*i - cis;  // correct when cis=is
@@ -68,21 +79,21 @@ void Mesh::RestrictCC(DvceArray5D<Real> &u, DvceArray5D<Real> &cu) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void Mesh::RestrictFC
-//  \brief Restricts face-centered variables to coarse mesh
+//! \fn void MeshRefinement::RestrictFC
+//! \brief Restricts face-centered variables to coarse mesh
 
-void Mesh::RestrictFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb) {
+void MeshRefinement::RestrictFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb) {
   int nmb  = b.x1f.extent_int(0);  // TODO(@user): 1st idx from L of in array must be NMB
 
-  auto &cis = mb_indcs.cis;
-  auto &cie = mb_indcs.cie;
-  auto &cjs = mb_indcs.cjs;
-  auto &cje = mb_indcs.cje;
-  auto &cks = mb_indcs.cks;
-  auto &cke = mb_indcs.cke;
+  auto &cis = pmy_mesh->mb_indcs.cis;
+  auto &cie = pmy_mesh->mb_indcs.cie;
+  auto &cjs = pmy_mesh->mb_indcs.cjs;
+  auto &cje = pmy_mesh->mb_indcs.cje;
+  auto &cks = pmy_mesh->mb_indcs.cks;
+  auto &cke = pmy_mesh->mb_indcs.cke;
 
   // restrict in 1D
-  if (one_d) {
+  if (pmy_mesh->one_d) {
     par_for("restrict3D",DevExeSpace(),0, nmb-1, cis, cie,
     KOKKOS_LAMBDA(const int m, const int i) {
       int finei = 2*i - cis;  // correct when cis=is
@@ -102,7 +113,7 @@ void Mesh::RestrictFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb) {
     });
 
   // restrict in 2D
-  } else if (two_d) {
+  } else if (pmy_mesh->two_d) {
     par_for("restrict3D",DevExeSpace(),0, nmb-1, cjs, cje, cis, cie,
     KOKKOS_LAMBDA(const int m, const int j, const int i) {
       int finei = 2*i - cis;  // correct when cis=is
@@ -163,81 +174,4 @@ void Mesh::RestrictFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb) {
     });
   }
   return;
-}
-
-//----------------------------------------------------------------------------------------
-// \!fn void Mesh::LoadBalance(double *clist, int *rlist, int *slist, int *nlist, int nb)
-// \brief Calculate distribution of MeshBlocks based on the cost list
-// input: clist = cost of each MB (array of length nmbtotal)
-//        nb = number of MeshBlocks
-// output: rlist = rank to which each MB is assigned (array of length nmbtotal)
-//         slist =
-//         nlist =
-
-void Mesh::LoadBalance(float *clist, int *rlist, int *slist, int *nlist, int nb) {
-  float min_cost = std::numeric_limits<float>::max();
-  float max_cost = 0.0, totalcost = 0.0;
-
-  // find min/max and total cost in clist
-  for (int i=0; i<nb; i++) {
-    totalcost += clist[i];
-    min_cost = std::min(min_cost,clist[i]);
-    max_cost = std::max(max_cost,clist[i]);
-  }
-
-  int j = (global_variable::nranks) - 1;
-  float targetcost = totalcost/global_variable::nranks;
-  float mycost = 0.0;
-  // create rank list from the end: the master MPI rank should have less load
-  for (int i=nb-1; i>=0; i--) {
-    if (targetcost == 0.0) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "There is at least one process which has no MeshBlock"
-                << std::endl << "Decrease the number of processes or use smaller "
-                << "MeshBlocks." << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    mycost += clist[i];
-    rlist[i] = j;
-    if (mycost >= targetcost && j>0) {
-      j--;
-      totalcost -= mycost;
-      mycost = 0.0;
-      targetcost = totalcost/(j+1);
-    }
-  }
-  slist[0] = 0;
-  j = 0;
-  for (int i=1; i<nb; i++) { // make the list of nbstart and nblocks
-    if (rlist[i] != rlist[i-1]) {
-      nlist[j] = i-slist[j];
-      slist[++j] = i;
-    }
-  }
-  nlist[j] = nb-slist[j];
-
-#if MPI_PARALLEL_ENABLED
-  if (nb % global_variable::nranks != 0
-     && !adaptive && !lb_flag_ && max_cost == min_cost && global_variable::my_rank == 0) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "Number of MeshBlocks cannot be divided evenly by number of MPI ranks. "
-              << "This will result in poor load balancing." << std::endl;
-  }
-#endif
-
-  return;
-}
-
-//----------------------------------------------------------------------------------------
-// \!fn void Mesh::ResetLoadBalanceCounters()
-// \brief reset counters and flags for load balancing
-
-void Mesh::ResetLoadBalanceCounters() {
-  if (lb_automatic_) {
-    for (int m=0; m<pmb_pack->nmb_thispack; ++m) {
-      costlist[pmb_pack->pmb->mb_gid.h_view(m)] = std::numeric_limits<float>::min();
-    }
-  }
-  lb_flag_ = false;
-  cyc_since_lb_ = 0;
 }
