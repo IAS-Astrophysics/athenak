@@ -261,7 +261,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
     (void) pmhd->ConToPrim(this, 0);
   }
 
-  //---- Step 2.  Compute first time step (if problem involves time evolution
+  //---- Step 2.  Compute time step (if problem involves time evolution)
 
   if (time_evolution != TimeEvolution::tstatic) {
     if (phydro != nullptr) {
@@ -405,10 +405,19 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
 
       //-------------------------------
       // (3) Work outside of TaskLists:
-      // increment time, ncycle, etc. Compute new timestep, make outputs
+      // increment time, ncycle, etc. Compute new timestep.
       pmesh->time = pmesh->time + pmesh->dt;
       pmesh->ncycle++;
       nmb_updated_ += pmesh->nmb_total;
+
+      // with AMR, check for mesh refinement
+      if (pmesh->adaptive) {
+        MeshBlockPack* pmbp = pmesh->pmb_pack;
+        bool update_mesh = pmesh->pmr->CheckForRefinement(pmbp);
+        if (update_mesh) pmesh->pmr->AdaptiveMeshRefinement();
+      }
+
+      // once all MeshBlocks refined/de-refined, then compute new timestep
       pmesh->NewTimeStep(tlim);
 
       // Test for/make outputs

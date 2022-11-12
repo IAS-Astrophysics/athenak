@@ -5,7 +5,8 @@
 //========================================================================================
 //! \file mesh_refinement.cpp
 //! \brief Implements constructor and functions in MeshRefinement class.
-//! Note prolongation is part of BVals classes.
+//! Note while restriction functions for CC and FC data are implemented here, prolongation
+//! is part of BVals classes.
 
 #include <iostream>
 
@@ -27,6 +28,48 @@
 
 MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
   pmy_mesh(pm) {
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn bool MeshRefinement::CheckForRefinementCondition()
+//! \brief Check for refinement or de-refinement for all MeshBlocks within a MeshBlockPack
+//! Returns true if any MeshBlock needs to be refined.
+
+bool MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
+  return false;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void Mesh::AdaptiveMeshRefinement(ParameterInput *pin)
+//! \brief Main function for adaptive mesh refinement
+
+void MeshRefinement::AdaptiveMeshRefinement() {
+  int nnew = 0, ndel = 0;
+
+/***
+  amr_updated = false;
+
+  if (adaptive) {
+    UpdateMeshBlockTree(nnew, ndel);
+    nbnew += nnew; nbdel += ndel;
+  }
+
+  lb_flag_ |= lb_automatic_;
+
+  UpdateCostList();
+
+  if (nnew != 0 || ndel != 0) { // at least one (de)refinement happened
+    amr_updated = true;
+    GatherCostListAndCheckBalance();
+    RedistributeAndRefineMeshBlocks(pin, nbtotal + nnew - ndel);
+  } else if (lb_flag_ && step_since_lb >= lb_interval_) {
+    if (!GatherCostListAndCheckBalance()) // load imbalance detected
+      RedistributeAndRefineMeshBlocks(pin, nbtotal);
+    lb_flag_ = false;
+  }
+***/
+
+  return;
 }
 
 //----------------------------------------------------------------------------------------
