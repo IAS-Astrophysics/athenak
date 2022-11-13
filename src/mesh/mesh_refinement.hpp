@@ -22,6 +22,7 @@ class MeshRefinement {
   ~MeshRefinement() {}  // only default destructor needed
 
   // data
+  DualArray1D<int> refine_flag;   // refinement flag for each MeshBlock
 
   // functions
   bool CheckForRefinement(MeshBlockPack* pmbp);
@@ -32,6 +33,8 @@ class MeshRefinement {
  private:
   // data
   Mesh *pmy_mesh;
+  Real d_threshold_, dd_threshold_, dv_threshold_;
+  bool check_cons_;
 };
 
 #endif // MESH_MESH_REFINEMENT_HPP_

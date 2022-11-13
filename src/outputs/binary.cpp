@@ -106,7 +106,7 @@ void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
                         + (cells*nout_vars)*sizeof(float);
 
   int nout_mbs = (outmbs.size());
-  int ns_mbs = pm->gidslist[global_variable::my_rank];
+  int ns_mbs = pm->gidlist[global_variable::my_rank];
   int nb_mbs = pm->nmblist[global_variable::my_rank];
 
   // allocate 1D vector of floats used to convert and output data

@@ -33,9 +33,6 @@ MeshBlockPack::MeshBlockPack(Mesh *pm, int igids, int igide) :
 }
 
 //----------------------------------------------------------------------------------------
-// MeshBlock constructor for restarts
-
-//----------------------------------------------------------------------------------------
 // MeshBlock destructor
 
 MeshBlockPack::~MeshBlockPack() {

@@ -47,7 +47,7 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
 
   // Error check properties of input paraemters for SMR/AMR meshes.
   if (adaptive) {
-    max_level = pin->GetOrAddInteger("mesh", "numlevel", 1) + root_level - 1;
+    max_level = pin->GetOrAddInteger("mesh_refinement", "numlevel", 1) + root_level - 1;
     if (max_level > 31) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Number of refinement levels must be smaller than "
@@ -106,8 +106,8 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
         if (log_ref_lev > max_level) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "Refinement level exceeds maximum allowed ("
-              << max_level << ")" << std::endl << "Reduce/specify 'numlevel' in <mesh> "
-              << "input block if using AMR" << std::endl;
+              << max_level << ")" << std::endl << "Reduce/specify 'numlevel' in "
+              << "<mesh_refinement> input block if using AMR" << std::endl;
           std::exit(EXIT_FAILURE);
         }
         if (   ref_size.x1min > ref_size.x1max
@@ -233,14 +233,9 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
   ranklist = new int[nmb_total];
   lloclist = new LogicalLocation[nmb_total];
 
-  gidslist = new int[global_variable::nranks];
-  nmblist  = new int[global_variable::nranks];
-
-  // allocate arrays and MeshRefinement object for SMR/ARM
-  if (multilevel) {
-    pmr = new MeshRefinement(this, pin);
-  }
-  if (adaptive) {
+  gidlist = new int[global_variable::nranks];
+  nmblist = new int[global_variable::nranks];
+  if (adaptive) {  // allocate arrays for AMR
     nref = new int[global_variable::nranks];
     nderef = new int[global_variable::nranks];
     rdisp = new int[global_variable::nranks];
@@ -266,16 +261,19 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
 
   // initialize cost array with the simplest estimate; all the blocks are equal
   for (int i=0; i<nmb_total; i++) {costlist[i] = 1.0;}
-  LoadBalance(costlist, ranklist, gidslist, nmblist, nmb_total);
+  LoadBalance(costlist, ranklist, gidlist, nmblist, nmb_total);
 
   // create MeshBlockPack for this rank
-  gids = gidslist[global_variable::my_rank];
+  gids = gidlist[global_variable::my_rank];
   gide = gids + nmblist[global_variable::my_rank] - 1;
   nmb_thisrank = nmblist[global_variable::my_rank];
 
   pmb_pack = new MeshBlockPack(this, gids, gide);
   pmb_pack->AddMeshBlocksAndCoordinates(pin, mb_indcs);
   pmb_pack->pmb->SetNeighbors(ptree, ranklist);
+  if (multilevel) {
+    pmr = new MeshRefinement(this, pin);
+  }
 
   ResetLoadBalanceCounters();
   if (global_variable::my_rank == 0) {PrintMeshDiagnostics();}
@@ -365,9 +363,9 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile) {
   ranklist = new int[nmb_total];
   lloclist = new LogicalLocation[nmb_total];
 
-  gidslist = new int[global_variable::nranks];
-  nmblist  = new int[global_variable::nranks];
-  if (adaptive) { // allocate arrays for AMR
+  gidlist = new int[global_variable::nranks];
+  nmblist = new int[global_variable::nranks];
+  if (adaptive) {  // allocate arrays for AMR
     nref = new int[global_variable::nranks];
     nderef = new int[global_variable::nranks];
     rdisp = new int[global_variable::nranks];
@@ -435,16 +433,19 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile) {
   }
 #endif
 
-  LoadBalance(costlist, ranklist, gidslist, nmblist, nmb_total);
+  LoadBalance(costlist, ranklist, gidlist, nmblist, nmb_total);
 
   // create MeshBlockPack for this rank
-  gids = gidslist[global_variable::my_rank];
+  gids = gidlist[global_variable::my_rank];
   gide = gids + nmblist[global_variable::my_rank] - 1;
   nmb_thisrank = nmblist[global_variable::my_rank];
 
   pmb_pack = new MeshBlockPack(this, gids, gide);
   pmb_pack->AddMeshBlocksAndCoordinates(pin, mb_indcs);
   pmb_pack->pmb->SetNeighbors(ptree, ranklist);
+  if (multilevel) {
+    pmr = new MeshRefinement(this, pin);
+  }
 
   ResetLoadBalanceCounters();
   if (global_variable::my_rank == 0) {PrintMeshDiagnostics();}

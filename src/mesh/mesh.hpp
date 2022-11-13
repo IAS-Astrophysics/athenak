@@ -139,8 +139,8 @@ class Mesh {
   LogicalLocation *lloclist;  // LogicalLocations for each MeshBlocks
 
   // following 2x arrays allocated with length [nranks] in BuildTreeFromXXXX()
-  int *gidslist;       // starting global ID of MeshBlocks in each rank
-  int *nmblist;        // number of MeshBlocks on each rank
+  int *gidlist;       // starting global ID of MeshBlocks in each rank
+  int *nmblist;       // number of MeshBlocks on each rank
 
   MeshRefinement *pmr=nullptr;  // mesh refinement functions (if needed)
   // following 8x arrays allocated with length [nranks] only with AMR

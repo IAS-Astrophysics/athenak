@@ -129,10 +129,6 @@ MeshBlock::MeshBlock(MeshBlockPack* ppack, int igids, int nmb) :
 }
 
 //----------------------------------------------------------------------------------------
-// MeshBlock constructor for restarts
-
-
-//----------------------------------------------------------------------------------------
 // \!fn void MeshBlock::SetNeighbors()
 // \brief set information about all the neighboring MeshBlocks.  In 3D with SMR/AMR, that
 // can be up to 56 neighbors, although sometimes edges and/or corners overlap with faces

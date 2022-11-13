@@ -15,28 +15,133 @@
 #include "parameter_input.hpp"
 #include "mesh.hpp"
 #include "mesh_refinement.hpp"
+#include "hydro/hydro.hpp"
+#include "mhd/mhd.hpp"
 
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>
 #endif
 
 //----------------------------------------------------------------------------------------
-// Mesh constructor: initializes some mesh variables at start of calculation using
-// parameters in input file.  Most objects in Mesh are constructed in the BuildTree()
-// function, so that they can store a pointer to the Mesh which can be reliably referenced
-// only after the Mesh constructor has finished
+// MeshRefinement constructor:
 
 MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
-  pmy_mesh(pm) {
+  pmy_mesh(pm),
+  d_threshold_(0.0), dd_threshold_(0.0), dv_threshold_(0.0),
+  check_cons_(false),
+  refine_flag("refine_flag",pm->nmb_thisrank) {
+
+  // read thresholds from <mesh_refinement> block in input file
+  if (pin->DoesParameterExist("mesh_refinement", "dens_max")) {
+    d_threshold_ = pin->GetReal("mesh_refinement", "dens_max");
+    check_cons_ = true;
+  }
+  if (pin->DoesParameterExist("mesh_refinement", "ddens_max")) {
+    dd_threshold_ = pin->GetReal("mesh_refinement", "ddens_max");
+    check_cons_ = true;
+  }
+  if (pin->DoesParameterExist("mesh_refinement", "dvel_max")) {
+    dd_threshold_ = pin->GetReal("mesh_refinement", "dvel_max");
+    check_cons_ = true;
+  }
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn bool MeshRefinement::CheckForRefinementCondition()
-//! \brief Check for refinement or de-refinement for all MeshBlocks within a MeshBlockPack
-//! Returns true if any MeshBlock needs to be refined.
+//! \brief Checks for refinement/de-refinement and sets refine_flag(m) for all MeshBlocks
+//! within a MeshBlockPack.  Also returns true if any MeshBlock needs to be refined.
+//! Default refinement conditions implemented are:
+//!   (1) gradient of density above a threshold value (hydro/MHD)
+//!   (2) shear of velocity above a threshold value (hydro/MHD)
+//!   (3) density max above a threshold value (hydro/MHD)
+//!   (4) current density above a threshold (MHD)
+//! These are controlled by input parameters in the <mesh_refinement> block.
+//! User-defined refinement conditions can also be enrolled in the problem generator
+//! by calling the EnrollUserRefinementCondition() function.
 
 bool MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
-  return false;
+  bool return_flag = false;
+  int nmb = pmbp->pmb->nmb;
+  // zero refine_flag in host space and sync with device
+  for (int m=0; m<nmb; ++m) {
+    refine_flag.h_view(m) = 0;
+  }
+  refine_flag.template modify<HostMemSpace>();
+  refine_flag.template sync<DevExeSpace>();
+
+  // capture variables for kernels
+  auto &multi_d = pmy_mesh->multi_d;
+  auto &three_d = pmy_mesh->three_d;
+  auto &indcs = pmy_mesh->mb_indcs;
+  int &is = indcs.is, &ie = indcs.ie, nx1 = indcs.nx1;
+  int &js = indcs.js, &je = indcs.je, nx2 = indcs.nx2;
+  int &ks = indcs.ks, &ke = indcs.ke, nx3 = indcs.nx3;
+  const int nkji = nx3*nx2*nx1;
+  const int nji  = nx2*nx1;
+
+  // check Hydro/MHD refinement conditions for cons vars over all MeshBlocks in parallel
+  if (((pmbp->phydro != nullptr) || (pmbp->pmhd != nullptr)) && check_cons_) {
+    auto &u0 = (pmbp->phydro != nullptr)? pmbp->phydro->u0 : pmbp->pmhd->u0;
+
+    par_for_outer("HydroRefineCond",DevExeSpace(), 0, 0, 0, (nmb-1),
+    KOKKOS_LAMBDA(TeamMember_t tmember, const int m) {
+      // check density threshold
+      if (d_threshold_ != 0.0) {
+        Real team_dmax=0.0;
+        Kokkos::parallel_reduce(Kokkos::TeamThreadRange(tmember, nkji),
+        [=](const int idx, Real& dmax) {
+          int k = (idx)/nji;
+          int j = (idx - k*nji)/nx1;
+          int i = (idx - k*nji - j*nx1) + is;
+          j += js;
+          k += ks;
+          dmax = fmax(u0(m,IDN,k,j,i), dmax);
+        },Kokkos::Max<Real>(team_dmax));
+
+        // set refinement flag on each MeshBlock if density threshold exceeded
+        if (team_dmax > d_threshold_) {
+          refine_flag.d_view(m) = 1;
+        } else {
+          refine_flag.d_view(m) = -1;
+        }
+      }
+
+      // check density difference threshold
+      if (dd_threshold_ != 0.0) {
+        Real team_ddmax;
+        Kokkos::parallel_reduce(Kokkos::TeamThreadRange(tmember, nkji),
+        [=](const int idx, Real& ddmax) {
+          int k = (idx)/nji;
+          int j = (idx - k*nji)/nx1;
+          int i = (idx - k*nji - j*nx1) + is;
+          j += js;
+          k += ks;
+          Real d2 = SQR(u0(m,IDN,k,j,i+1) - u0(m,IDN,k,j,i-1));
+          if (multi_d) {d2 += SQR(u0(m,IDN,k,j+1,i) - u0(m,IDN,k,j-1,i));}
+          if (three_d) {d2 += SQR(u0(m,IDN,k+1,j,i) - u0(m,IDN,k-1,j,i));}
+          ddmax = fmax((sqrt(d2)/u0(m,IDN,k,j,i)), ddmax);
+        },Kokkos::Max<Real>(team_ddmax));
+
+        // set refinement flag on each MeshBlock if density threshold exceeded
+        if (team_ddmax > dd_threshold_) {refine_flag.d_view(m) = 1;}
+        if (team_ddmax < 0.25*dd_threshold_) {refine_flag.d_view(m) = -1;}
+      }
+    });
+  }
+
+  // Check user-defined refinement condition(s), if any
+  if (pmy_mesh->pgen->user_ref_func != nullptr) {
+    pmy_mesh->pgen->user_ref_func(pmbp);
+  }
+
+  // sync refine_flag and check if any MeshBlocks need to be refined/de-refined
+  refine_flag.template modify<DevExeSpace>();
+  refine_flag.template sync<HostMemSpace>();
+
+  for (int m=0; m<nmb; ++m) {
+    if (refine_flag.h_view(m) != 0) {return_flag = true;}
+  }
+  return return_flag;
 }
 
 //----------------------------------------------------------------------------------------

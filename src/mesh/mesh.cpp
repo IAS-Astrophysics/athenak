@@ -128,10 +128,10 @@ Mesh::Mesh(ParameterInput *pin) :
 
   // set boolean flags indicating type of refinement (if any), and whether mesh is
   // periodic, depending on input strings
-  adaptive =
-    (pin->GetOrAddString("mesh", "refinement", "none") == "adaptive") ? true : false;
-  multilevel =
-    ((adaptive) || (pin->GetString("mesh", "refinement") == "static")) ?  true : false;
+  adaptive = (pin->GetOrAddString("mesh_refinement","refinement","none") == "adaptive")
+    ?  true : false;
+  multilevel = (adaptive || pin->GetString("mesh_refinement","refinement") == "static")
+    ?  true : false;
 
   // error check physical size of mesh (root level) from input file.
   if (mesh_size.x1max <= mesh_size.x1min) {
@@ -288,7 +288,7 @@ Mesh::~Mesh() {
   delete [] costlist;
   delete [] ranklist;
   delete [] lloclist;
-  delete [] gidslist;
+  delete [] gidlist;
   delete [] nmblist;
   if (multilevel) {
     delete pmr;
