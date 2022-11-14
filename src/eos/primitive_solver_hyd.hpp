@@ -182,7 +182,7 @@ class PrimitiveSolverHydro {
 
     void ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
                     const int il, const int iu, const int jl, const int ju,
-                    const int kl, const int ku) {
+                    const int kl, const int ku, bool floors_only=false) {
       auto &indcs = pmy_pack->pmesh->mb_indcs;
       int &is = indcs.is, &js = indcs.js, &ks = indcs.ks;
       auto &size = pmy_pack->pmb->mb_size;
@@ -190,6 +190,7 @@ class PrimitiveSolverHydro {
       int &nhyd = pmy_pack->phydro->nhydro;
       int &nscal = pmy_pack->phydro->nscalars;
       int &nmb = pmy_pack->nmb_thispack;
+      auto &fofc_ = pmy_pack->phydro->fofc;
 
       // Some problem-specific parameters
       auto &excise = pmy_pack->pcoord->coord_data.bh_excise;
@@ -208,8 +209,15 @@ class PrimitiveSolverHydro {
 
       Real mb = eos_.GetBaryonMass();
 
-      Kokkos::parallel_for("pshyd_c2p",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-      KOKKOS_LAMBDA(const int &idx) {
+      // FIXME: This only works for a flooring policy that has these functions!
+      if (floors_only) {
+        ps.GetEOSMutable().SetPrimitiveFloorFailure(true);
+        ps.GetEOSMutable().SetConservedFloorFailure(true);
+      }
+
+      int nfloord_=0;
+      Kokkos::parallel_reduce("pshyd_c2p",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+      KOKKOS_LAMBDA(const int &idx, int &sumd) {
         int m = (idx)/nkji;
         int k = (idx - m*nkji)/nji;
         int j = (idx - m*nkji - k*nji)/ni;
@@ -272,34 +280,45 @@ class PrimitiveSolverHydro {
           result = ps_.ConToPrim(prim_pt, cons_pt, b3u, g3d, g3u);
         }
 
-        if (result.error != Primitive::Error::SUCCESS) {
-          // FIXME: Proper error response needed!
+        if (result.error != Primitive::Error::SUCCESS && floors_only) {
+          fofc_(m,k,j,i) = true;
+          sumd++;
         }
-
-        // Regardless of failure, we need to copy the primitives.
-        prim(m, IDN, k, j, i) = prim_pt[PRH]*mb;
-        prim(m, IVX, k, j, i) = prim_pt[PVX];
-        prim(m, IVY, k, j, i) = prim_pt[PVY];
-        prim(m, IVZ, k, j, i) = prim_pt[PVZ];
-        prim(m, IEN, k, j, i) = eos_.GetEnergy(prim_pt[PRH], prim_pt[PTM], &prim_pt[PYF]) -
-                                prim(m, IDN, k, j, i);
-        for (int n = 0; n < nscal; n++) {
-          prim(m, nhyd + n, k, j, i);
-        }
-
-        // If the conservative variables were floored or adjusted for consistency,
-        // we need to copy the conserved variables, too.
-        if (result.cons_floor || result.cons_adjusted) {
-          cons(m, IDN, k, j, i) = cons_pt[CDN]*sdetg;
-          cons(m, IM1, k, j, i) = cons_pt[CSX]*sdetg;
-          cons(m, IM2, k, j, i) = cons_pt[CSY]*sdetg;
-          cons(m, IM3, k, j, i) = cons_pt[CSZ]*sdetg;
-          cons(m, IEN, k, j, i) = cons_pt[CTA]*sdetg;
+        else {
+          if (result.error != Primitive::Error::SUCCESS) {
+            // TODO: put in a proper error response here.
+          }
+          // Regardless of failure, we need to copy the primitives.
+          prim(m, IDN, k, j, i) = prim_pt[PRH]*mb;
+          prim(m, IVX, k, j, i) = prim_pt[PVX];
+          prim(m, IVY, k, j, i) = prim_pt[PVY];
+          prim(m, IVZ, k, j, i) = prim_pt[PVZ];
+          prim(m, IEN, k, j, i) = eos_.GetEnergy(prim_pt[PRH], prim_pt[PTM], &prim_pt[PYF]) -
+                                  prim(m, IDN, k, j, i);
           for (int n = 0; n < nscal; n++) {
-            cons(m, nhyd + n, k, j, i) = cons_pt[CYD + n]*sdetg;
+            prim(m, nhyd + n, k, j, i);
+          }
+
+          // If the conservative variables were floored or adjusted for consistency,
+          // we need to copy the conserved variables, too.
+          if (result.cons_floor || result.cons_adjusted) {
+            cons(m, IDN, k, j, i) = cons_pt[CDN]*sdetg;
+            cons(m, IM1, k, j, i) = cons_pt[CSX]*sdetg;
+            cons(m, IM2, k, j, i) = cons_pt[CSY]*sdetg;
+            cons(m, IM3, k, j, i) = cons_pt[CSZ]*sdetg;
+            cons(m, IEN, k, j, i) = cons_pt[CTA]*sdetg;
+            for (int n = 0; n < nscal; n++) {
+              cons(m, nhyd + n, k, j, i) = cons_pt[CYD + n]*sdetg;
+            }
           }
         }
-      });
+      }, Kokkos::Sum<int>(nfloord_));
+
+      if (floors_only) {
+        ps.GetEOSMutable().SetPrimitiveFloorFailure(false);
+        ps.GetEOSMutable().SetConservedFloorFailure(false);
+        pmy_pack->pmesh->ecounter.nfofc += nfloord_;
+      }
     }
 
     // Get the transformed sound speeds at a point in a given direction.

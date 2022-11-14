@@ -13,6 +13,7 @@
 #include "athena_tensor.hpp"
 #include "mesh/mesh.hpp"
 #include "dyngr.hpp"
+#include "dyngr_util.hpp"
 #include "adm/adm.hpp"
 #include "eos/eos.hpp"
 #include "diffusion/viscosity.hpp"
@@ -326,6 +327,83 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
       } // end of loop over j
     });
     // TODO: handle excision masks
+  }
+
+  // excision masks
+  if (coord_.bh_excise) {
+    auto &fc_mask_ = pmy_pack->pcoord->fc_mask;
+
+    auto &fcorr_x1 = pmy_pack->phydro->uflx.x1f;
+    auto &fcorr_x2 = pmy_pack->phydro->uflx.x2f;
+    auto &fcorr_x3 = pmy_pack->phydro->uflx.x3f;
+    par_for("excise_flux", DevExeSpace(), 0, nmb1, ks, ke+1, js, je+1, is, ie+1,
+    KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+      if (j<(je+1) && k<(ke+1)) {
+        if (fc_mask_.x1f(m,k,j,i)) {
+          Real wim1[NPRIM];
+          ExtractPrimitives(w0_, wim1, dyn_eos_, nhyd, nvars - nhyd, m, k, j, i-1);
+
+          Real wi[NPRIM];
+          ExtractPrimitives(w0_, wi, dyn_eos_, nhyd, nvars - nhyd, m, k, j, i);
+
+          Real g3d[NSPMETRIC], beta_u[3], alpha;
+          Face1Metric(m, k, j, i, adm.g_dd, adm.beta_u, adm.alpha, g3d, beta_u, alpha);
+
+          Real flux[NCONS];
+          SingleStateLLF_DYNGR(dyn_eos_, wim1, wi, IVX, g3d, beta_u, alpha, flux);
+
+          fcorr_x1(m, IDN, k, j, i) = flux[CDN];
+          fcorr_x1(m, IM1, k, j, i) = flux[CSX];
+          fcorr_x1(m, IM2, k, j, i) = flux[CSY];
+          fcorr_x1(m, IM3, k, j, i) = flux[CSZ];
+          fcorr_x1(m, IEN, k, j, i) = flux[CTA];
+        }
+      }
+
+      if (i<(ie+1) && k<(ke+1)) {
+        if (fc_mask_.x2f(m,k,j,i)) {
+          Real wjm1[NPRIM];
+          ExtractPrimitives(w0_, wjm1, dyn_eos_, nhyd, nvars - nhyd, m, k, j-1, i);
+
+          Real wj[NPRIM];
+          ExtractPrimitives(w0_, wj, dyn_eos_, nhyd, nvars - nhyd, m, k, j, i);
+
+          Real g3d[NSPMETRIC], beta_u[3], alpha;
+          Face2Metric(m, k, j, i, adm.g_dd, adm.beta_u, adm.alpha, g3d, beta_u, alpha);
+
+          Real flux[NCONS];
+          SingleStateLLF_DYNGR(dyn_eos_, wjm1, wj, IVY, g3d, beta_u, alpha, flux);
+
+          fcorr_x2(m, IDN, k, j, i) = flux[CDN];
+          fcorr_x2(m, IM1, k, j, i) = flux[CSX];
+          fcorr_x2(m, IM2, k, j, i) = flux[CSY];
+          fcorr_x2(m, IM3, k, j, i) = flux[CSZ];
+          fcorr_x2(m, IEN, k, j, i) = flux[CTA];
+        }
+      }
+
+      if (i<(ie+1) && j<(je+1)) {
+        if (fc_mask_.x3f(m,k,j,i)) {
+          Real wkm1[NPRIM];
+          ExtractPrimitives(w0_, wkm1, dyn_eos_, nhyd, nvars - nhyd, m, k-1, j, i);
+
+          Real wk[NPRIM];
+          ExtractPrimitives(w0_, wk, dyn_eos_, nhyd, nvars - nhyd, m, k, j, i);
+          
+          Real g3d[NSPMETRIC], beta_u[3], alpha;
+          Face3Metric(m, k, j, i, adm.g_dd, adm.beta_u, adm.alpha, g3d, beta_u, alpha);
+
+          Real flux[NCONS];
+          SingleStateLLF_DYNGR(dyn_eos_, wkm1, wk, IVZ, g3d, beta_u, alpha, flux);
+
+          fcorr_x3(m, IDN, k, j, i) = flux[CDN];
+          fcorr_x3(m, IM1, k, j, i) = flux[CSX];
+          fcorr_x3(m, IM2, k, j, i) = flux[CSY];
+          fcorr_x3(m, IM3, k, j, i) = flux[CSZ];
+          fcorr_x3(m, IEN, k, j, i) = flux[CTA];
+        }
+      }
+    });
   }
   
   return TaskStatus::complete;
