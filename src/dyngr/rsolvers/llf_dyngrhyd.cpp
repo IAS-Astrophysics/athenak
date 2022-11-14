@@ -132,7 +132,7 @@ void LLF_DYNGR(TeamMember_t const &member,
   }
   else if (ivx == IVZ) {
     pvx = PVZ;
-    csx = CSY;
+    csx = CSZ;
     idx = S33;
   }
 
