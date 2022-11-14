@@ -300,7 +300,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
         if (!(use_fofc)) {
           Kokkos::realloc(fofc, nmb, ncells3, ncells2, ncells1);
         }
-        pmy_pack->pcoord->SetFirstOrderMasks(fofc);
+        pmy_pack->pcoord->SetFirstOrderMask(fofc);
       }
     }
   }

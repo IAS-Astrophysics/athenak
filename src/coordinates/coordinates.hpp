@@ -58,8 +58,8 @@ class Coordinates {
                      DvceArray5D<Real> &u0);
   void AddCoordTerms(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc,
                      const EOS_Data &eos, const Real dt, DvceArray5D<Real> &u0);
-  void SetExcisionMasks();
-  void SetFirstOrderMasks(DvceArray4D<int> &fofc);
+  void SetExcisionMask(DvceArray4D<bool> &cc_mask);
+  void SetFirstOrderMask(DvceArray4D<int> &fofc);
 
  private:
   MeshBlockPack* pmy_pack;

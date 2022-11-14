@@ -82,8 +82,22 @@ void Hydro::FOFC(Driver *pdriver, int stage) {
   auto fofc_ = fofc;
   auto &w0_ = w0;
 
+  // Extend indices for excision (first order excision mask is set in ghost zones)
+  int il = is, iu = ie, jl = js, ju = je, kl = ks, ku = ke;
+  if (pmy_pack->pcoord->is_general_relativistic) {
+    if (pmy_pack->pcoord->coord_data.bh_excise) {
+      il = is-1, iu = ie+1;
+      if (pmy_pack->pmesh->multi_d) {
+        jl = js-1, ju = je+1;
+      }
+      if (pmy_pack->pmesh->three_d) {
+        kl = ks-1, ku = ke+1;
+      }
+    }
+  }
+
   // Now replace fluxes with first-order LLF fluxes for any cell where floors needed
-  par_for("FOFC-flx", DevExeSpace(), 0, nmb-1, ks, ke, js, je, is, ie,
+  par_for("FOFC-flx", DevExeSpace(), 0, nmb-1, kl, ku, jl, ju, il, iu,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
     // replace x1-flux at i
     if (fofc_(m,k,j,i)) {

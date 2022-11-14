@@ -38,13 +38,6 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
     coord_data.bh_excise = pin->GetOrAddBoolean("coord","excise",true);
 
     if (coord_data.bh_excise) {
-      // throw error if attempting to excise in 1D/2D
-      if (!(pmy_pack->pmesh->three_d)) {
-        std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__
-                  << std::endl << "Excising only supported in 3D" << std::endl;
-        std::exit(EXIT_FAILURE);
-      }
-
       // Set the density and pressure to which cells inside the excision radius will
       // be reset to.  Primitive velocities will be set to zero.
       coord_data.dexcise = pin->GetReal("coord","dexcise");
@@ -57,6 +50,7 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
       int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
       int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
       Kokkos::realloc(cc_mask, nmb, ncells3, ncells2, ncells1);
+      SetExcisionMask(cc_mask);
     }
   }
 }

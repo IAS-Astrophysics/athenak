@@ -24,7 +24,7 @@ Real KSRX(const Real x1, const Real x2, const Real x3, const Real a) {
 //! \fn void Coordinates::SetExcisionMasks()
 //  \brief Sets boolean masks for the excision radius in CKS
 
-void Coordinates::SetExcisionMasks() {
+void Coordinates::SetExcisionMask(DvceArray4D<bool> &cc_mask) {
   // capture variables for kernel
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is; int js = indcs.js; int ks = indcs.ks;
@@ -37,9 +37,7 @@ void Coordinates::SetExcisionMasks() {
   auto &size = pmy_pack->pmb->mb_size;
   auto &spin = coord_data.bh_spin;
 
-  auto &cc_mask_ = cc_mask;
-  // NOTE(@pdmullen):
-  // cc_mask: if r_ks evaluated at *this cell-center* is <= 1, mask the cell.
+  // NOTE(@pdmullen): if r_ks evaluated at *this cell-center* is <= 1, mask the cell.
   par_for("set_excision", DevExeSpace(), 0, nmb1, 0, (n3-1), 0, (n2-1), 0, (n1-1),
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
     Real &x1min = size.d_view(m).x1min;
@@ -55,7 +53,7 @@ void Coordinates::SetExcisionMasks() {
     Real x3v   = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
     // Set cc_mask
-    cc_mask_(m,k,j,i) = (KSRX(x1v,x2v,x3v,spin) <= 1.0);
+    cc_mask(m,k,j,i) = (KSRX(x1v,x2v,x3v,spin) <= 1.0);
   });
 
   return;
@@ -65,7 +63,7 @@ void Coordinates::SetExcisionMasks() {
 //! \fn void Coordinates::SetFirstOrderMasks(DvceArray5D<short int> &fofc)
 //  \brief Sets tri-state boolean masks for first order fluxes about horizon
 
-void Coordinates::SetFirstOrderMasks(DvceArray4D<int> &fofc) {
+void Coordinates::SetFirstOrderMask(DvceArray4D<int> &fofc) {
   // capture variables for kernel
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is; int js = indcs.js; int ks = indcs.ks;
@@ -78,17 +76,13 @@ void Coordinates::SetFirstOrderMasks(DvceArray4D<int> &fofc) {
   auto &size = pmy_pack->pmb->mb_size;
   auto &spin = coord_data.bh_spin;
 
-  // NOTE(@pdmullen):
-  // cc_mask: if r_ks evaluated at *this cell-center* is <= 1, mask the cell.
-  // fc_mask: if r_ks evaluated at *this face-center* is <=1, or if *any other
-  // portion of grid cells sharing this face* is <=1, mask the cell (added complexity
-  // here as two neighboring cells share a face)
+  // NOTE(@pdmullen): Mask a cell if r_ks evaluated at any of its face-centers is <=1 or
+  // if *any other portion of the neighboring cells sharing this cell's face has r_ks <=1.
   par_for("set_excision_fofc", DevExeSpace(), 0, nmb1, 0, (n3-1), 0, (n2-1), 0, (n1-1),
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
     bool apply_mask=false;
-    // NOTE(@pdmullen):
-    // In some instances, calls to x? will access coordinate information for which
-    // there is *no corresponding logical counterpart*, however, the
+    // NOTE(@pdmullen): In some instances, calls to x? will access coordinate information
+    // for which there is *no corresponding logical counterpart*, however, the
     // LeftEdgeX/CellCenterX functions can handle "out-of-range" queries.
     Real &x1min = size.d_view(m).x1min;
     Real &x1max = size.d_view(m).x1max;
