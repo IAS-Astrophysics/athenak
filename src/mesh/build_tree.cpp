@@ -232,19 +232,8 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
   costlist = new float[nmb_total];
   ranklist = new int[nmb_total];
   lloclist = new LogicalLocation[nmb_total];
-
-  gidlist = new int[global_variable::nranks];
+  gidslist = new int[global_variable::nranks];
   nmblist = new int[global_variable::nranks];
-  if (adaptive) {  // allocate arrays for AMR
-    nref = new int[global_variable::nranks];
-    nderef = new int[global_variable::nranks];
-    rdisp = new int[global_variable::nranks];
-    ddisp = new int[global_variable::nranks];
-    bnref = new int[global_variable::nranks];
-    bnderef = new int[global_variable::nranks];
-    brdisp = new int[global_variable::nranks];
-    bddisp = new int[global_variable::nranks];
-  }
 
   // following returns LogicalLocation list sorted by Z-ordering
   ptree->CreateMeshBlockList(lloclist, nullptr, nmb_total);
@@ -261,10 +250,10 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
 
   // initialize cost array with the simplest estimate; all the blocks are equal
   for (int i=0; i<nmb_total; i++) {costlist[i] = 1.0;}
-  LoadBalance(costlist, ranklist, gidlist, nmblist, nmb_total);
+  LoadBalance(costlist, ranklist, gidslist, nmblist, nmb_total);
 
   // create MeshBlockPack for this rank
-  gids = gidlist[global_variable::my_rank];
+  gids = gidslist[global_variable::my_rank];
   gide = gids + nmblist[global_variable::my_rank] - 1;
   nmb_thisrank = nmblist[global_variable::my_rank];
 
@@ -362,19 +351,8 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile) {
   costlist = new float[nmb_total];
   ranklist = new int[nmb_total];
   lloclist = new LogicalLocation[nmb_total];
-
-  gidlist = new int[global_variable::nranks];
+  gidslist = new int[global_variable::nranks];
   nmblist = new int[global_variable::nranks];
-  if (adaptive) {  // allocate arrays for AMR
-    nref = new int[global_variable::nranks];
-    nderef = new int[global_variable::nranks];
-    rdisp = new int[global_variable::nranks];
-    ddisp = new int[global_variable::nranks];
-    bnref = new int[global_variable::nranks];
-    bnderef = new int[global_variable::nranks];
-    brdisp = new int[global_variable::nranks];
-    bddisp = new int[global_variable::nranks];
-  }
 
   // allocate idlist buffer and read list of logical locations and cost
   IOWrapperSizeT listsize = sizeof(LogicalLocation) + sizeof(float);
@@ -433,10 +411,10 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile) {
   }
 #endif
 
-  LoadBalance(costlist, ranklist, gidlist, nmblist, nmb_total);
+  LoadBalance(costlist, ranklist, gidslist, nmblist, nmb_total);
 
   // create MeshBlockPack for this rank
-  gids = gidlist[global_variable::my_rank];
+  gids = gidslist[global_variable::my_rank];
   gide = gids + nmblist[global_variable::my_rank] - 1;
   nmb_thisrank = nmblist[global_variable::my_rank];
 

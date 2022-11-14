@@ -72,7 +72,7 @@ void Mesh::LoadBalance(float *clist, int *rlist, int *slist, int *nlist, int nb)
 #if MPI_PARALLEL_ENABLED
   if (nb % global_variable::nranks != 0
      && !adaptive && !lb_flag_ && max_cost == min_cost && global_variable::my_rank == 0) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+    std::cout << "### WARNING in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "Number of MeshBlocks cannot be divided evenly by number of MPI ranks. "
               << "This will result in poor load balancing." << std::endl;
   }

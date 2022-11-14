@@ -192,7 +192,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
 
   // read CC data into host array, one MeshBlock at a time to avoid exceeding 2^31 limit
   // on each read call for very large grids per MPI rank
-  int mygids = pm->gidlist[global_variable::my_rank];
+  int mygids = pm->gidslist[global_variable::my_rank];
   IOWrapperSizeT myoffset = headeroffset + (ccdata_cnt+fcdata_cnt)*mygids*sizeof(Real);
   for (int m=0;  m<noutmbs_max; ++m) {
     // every rank has a MB to read, so read collectively

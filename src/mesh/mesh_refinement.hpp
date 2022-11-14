@@ -19,14 +19,22 @@ class MeshRefinement {
 
  public:
   MeshRefinement(Mesh *pm, ParameterInput *pin);
-  ~MeshRefinement() {}  // only default destructor needed
+  ~MeshRefinement();
 
   // data
   DualArray1D<int> refine_flag;   // refinement flag for each MeshBlock
+  // following 8x arrays allocated with length [nranks] only with AMR
+  int *nref, *nderef;
+/**
+  int *rdisp, *ddisp;
+  int *bnref, *bnderef;
+  int *brdisp, *bddisp;
+**/
 
   // functions
   bool CheckForRefinement(MeshBlockPack* pmbp);
   void AdaptiveMeshRefinement();
+  void UpdateMeshBlockTree(int &nnew, int &ndel);
   void RestrictCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
   void RestrictFC(DvceFaceFld4D<Real> &a, DvceFaceFld4D<Real> &ca);
 

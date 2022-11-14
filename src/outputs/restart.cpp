@@ -177,7 +177,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
                              sizeof(RegionSize) + 2*sizeof(RegionIndcs);
   IOWrapperSizeT step2size = (pm->nmb_total)*(sizeof(LogicalLocation) + sizeof(float));
   IOWrapperSizeT myoffset  = step1size + step2size + 2*sizeof(IOWrapperSizeT) +
-        (ccdata_cnt + fcdata_cnt)*(pm->gidlist[global_variable::my_rank])*sizeof(Real);
+        (ccdata_cnt + fcdata_cnt)*(pm->gidslist[global_variable::my_rank])*sizeof(Real);
 
   // write cell-centered variables, one MeshBlock at a time (but parallelized over all
   // ranks). MeshBlocks are written seperately to reduce number of data elements per write

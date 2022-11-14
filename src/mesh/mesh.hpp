@@ -101,10 +101,12 @@ class Mesh;
 //! \brief data/functions associated with the overall mesh
 
 class Mesh {
-  // mesh classes (Mesh, MeshBlock, MeshBlockPack, MeshBlockTree) like to play together
+  // mesh classes (Mesh, MeshBlock, MeshBlockPack, MeshBlockTree, MeshRefinement)
+  // like to play together
   friend class MeshBlock;
   friend class MeshBlockPack;
   friend class MeshBlockTree;
+  friend class MeshRefinement;
 
  public:
   explicit Mesh(ParameterInput *pin);
@@ -139,15 +141,8 @@ class Mesh {
   LogicalLocation *lloclist;  // LogicalLocations for each MeshBlocks
 
   // following 2x arrays allocated with length [nranks] in BuildTreeFromXXXX()
-  int *gidlist;       // starting global ID of MeshBlocks in each rank
+  int *gidslist;      // starting global ID of MeshBlocks in each rank
   int *nmblist;       // number of MeshBlocks on each rank
-
-  MeshRefinement *pmr=nullptr;  // mesh refinement functions (if needed)
-  // following 8x arrays allocated with length [nranks] only with AMR
-  int *nref, *nderef;
-  int *rdisp, *ddisp;
-  int *bnref, *bnderef;
-  int *brdisp, *bddisp;
 
   Real time, dt, cfl_no;
   int ncycle;
@@ -155,6 +150,7 @@ class Mesh {
 
   MeshBlockPack* pmb_pack;                 // container for MeshBlocks on this rank
   std::unique_ptr<ProblemGenerator> pgen;  // class containing functions to set ICs
+  MeshRefinement *pmr=nullptr;             // mesh refinement data/functions (if needed)
 
   // functions
   void BuildTreeFromScratch(ParameterInput *pin);

@@ -44,6 +44,37 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
     dd_threshold_ = pin->GetReal("mesh_refinement", "dvel_max");
     check_cons_ = true;
   }
+
+  if (pm->adaptive) {  // allocate arrays for AMR
+    nref = new int[global_variable::nranks];
+    nderef = new int[global_variable::nranks];
+/**
+    rdisp = new int[global_variable::nranks];
+    ddisp = new int[global_variable::nranks];
+    bnref = new int[global_variable::nranks];
+    bnderef = new int[global_variable::nranks];
+    brdisp = new int[global_variable::nranks];
+    bddisp = new int[global_variable::nranks];
+**/
+  }
+}
+
+//----------------------------------------------------------------------------------------
+// destructor
+
+MeshRefinement::~MeshRefinement() {
+  if (pmy_mesh->adaptive) { // deallocate arrays for AMR
+    delete [] nref;
+    delete [] nderef;
+/**
+    delete [] rdisp;
+    delete [] ddisp;
+    delete [] bnref;
+    delete [] bnderef;
+    delete [] brdisp;
+    delete [] bddisp;
+**/
+  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -173,6 +204,164 @@ void MeshRefinement::AdaptiveMeshRefinement() {
     lb_flag_ = false;
   }
 ***/
+
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MeshRefinement::UpdateMeshBlockTree(int &nnew, int &ndel)
+//! \brief collect refinement flags and manipulate the MeshBlockTree with AMR
+
+void MeshRefinement::UpdateMeshBlockTree(int &nnew, int &ndel) {
+  // compute nleaf= number of leaf MeshBlocks per refined block
+  int nleaf = 2, dim = 1;
+  if (pmy_mesh->two_d) {nleaf = 4, dim = 2;}
+  if (pmy_mesh->three_d) {nleaf = 8, dim = 3;}
+
+  // count the number of the blocks to be (de)refined on this rank
+  nref[global_variable::my_rank] = 0;
+  nderef[global_variable::my_rank] = 0;
+  for (int i=0; i<(pmy_mesh->nmb_thisrank); ++i) {
+    if (refine_flag.h_view(i) ==  1) nref[global_variable::my_rank]++;
+    if (refine_flag.h_view(i) == -1) nderef[global_variable::my_rank]++;
+  }
+#ifdef MPI_PARALLEL
+  MPI_Allgather(MPI_IN_PLACE, 1, MPI_INT, nref,   1, MPI_INT, MPI_COMM_WORLD);
+  MPI_Allgather(MPI_IN_PLACE, 1, MPI_INT, nderef, 1, MPI_INT, MPI_COMM_WORLD);
+#endif
+
+  // count the number of the blocks to be (de)refined over all ranks
+  int tnref = 0, tnderef = 0;
+  for (int n=0; n<global_variable::nranks; n++) {
+    tnref  += nref[n];
+    tnderef += nderef[n];
+  }
+  // nothing to do (only derefine if all MeshBlocks within a leaf are flagged)
+  if (tnref == 0 && tnderef < nleaf) {
+    return;
+  }
+
+/***
+  // count displacement
+  int rd = 0, dd = 0;
+  for (int n=0; n<global_variable::nranks; n++) {
+    rdisp[n] = rd;
+    ddisp[n] = dd;
+    // technically could overflow, since sizeof() operator returns
+    // std::size_t = long unsigned int > int
+    // on many platforms (LP64). However, these are used below in MPI calls for
+    // integer arguments (recvcounts, displs). MPI does not support > 64-bit count ranges
+    bnref[n] = static_cast<int>(nref[n]*sizeof(LogicalLocation));
+    bnderef[n] = static_cast<int>(nderef[n]*sizeof(LogicalLocation));
+    brdisp[n] = static_cast<int>(rd*sizeof(LogicalLocation));
+    bddisp[n] = static_cast<int>(dd*sizeof(LogicalLocation));
+    rd += nref[n];
+    dd += nderef[n];
+  }
+****/
+
+  // allocate memory for logical location arrays over total number refined/derefined
+  LogicalLocation *lref{}, *lderef{}, *clderef{};
+  if (tnref > 0) {
+    lref = new LogicalLocation[tnref];
+  }
+  if (tnderef >= nleaf) {
+    lderef = new LogicalLocation[tnderef];
+    clderef = new LogicalLocation[tnderef/nleaf];
+  }
+
+  // collect logical locations of MBs to be refined/derefined into arrays
+  // calculate starting index in array for updated MBs on this rank (sum of number of
+  // updated MBs on ranks < my_rank
+  int iref = 0, ideref = 0;
+  for (int n=0; n<global_variable::my_rank; n++) {
+    iref += nref[n];
+    ideref += nderef[n];
+  }
+
+  // load logical location arrays for updated MBs in this rank
+  for (int i=0; i<(pmy_mesh->nmb_thisrank); ++i) {
+    int gid = pmy_mesh->pmb_pack->pmb->mb_gid.h_view(i);
+    if (refine_flag.h_view(i) ==  1) {
+      lref[iref++] = pmy_mesh->lloclist[gid];;
+    } else if (refine_flag.h_view(i) == -1 && tnderef >= nleaf) {
+      lderef[ideref++] = pmy_mesh->lloclist[gid];
+    }
+  }
+#ifdef MPI_PARALLEL
+  if (tnref > 0) {
+    MPI_Allgatherv(MPI_IN_PLACE, bnref[global_variable::my_rank],   MPI_BYTE,
+                   lref,   bnref,   brdisp, MPI_BYTE, MPI_COMM_WORLD);
+  }
+  if (tnderef >= nleaf) {
+    MPI_Allgatherv(MPI_IN_PLACE, bnderef[global_variable::my_rank], MPI_BYTE,
+                   lderef, bnderef, bddisp, MPI_BYTE, MPI_COMM_WORLD);
+  }
+#endif
+
+  // calculate the list of the newly derefined blocks
+  int ctnd = 0;
+  if (tnderef >= nleaf) {
+    int lk = 0, lj = 0;
+    if (pmy_mesh->multi_d) lj = 1;
+    if (pmy_mesh->three_d) lk = 1;
+    for (int n=0; n<tnderef; n++) {
+      if ((lderef[n].lx1 & 1) == 0 &&
+          (lderef[n].lx2 & 1) == 0 &&
+          (lderef[n].lx3 & 1) == 0) {
+        int r = n, rr = 0;
+        for (std::int32_t k=0; k<=lk; k++) {
+          for (std::int32_t j=0; j<=lj; j++) {
+            for (std::int32_t i=0; i<=1; i++) {
+              if (r < tnderef) {
+                if ((lderef[n].lx1+i) == lderef[r].lx1 &&
+                    (lderef[n].lx2+j) == lderef[r].lx2 &&
+                    (lderef[n].lx3+k) == lderef[r].lx3 &&
+                     lderef[n].level  == lderef[r].level) {
+                  rr++;
+                }
+                r++;
+              }
+            }
+          }
+        }
+        if (rr == nleaf) {
+          clderef[ctnd].lx1   = lderef[n].lx1 >> 1;
+          clderef[ctnd].lx2   = lderef[n].lx2 >> 1;
+          clderef[ctnd].lx3   = lderef[n].lx3 >> 1;
+          clderef[ctnd].level = lderef[n].level - 1;
+          ctnd++;
+        }
+      }
+    }
+  }
+  // sort the lists by level
+  if (ctnd > 1) {
+    std::sort(clderef, &(clderef[ctnd-1]), LogicalLocation::Greater);
+  }
+
+  if (tnderef >= nleaf) {
+    delete [] lderef;
+  }
+
+  // Now the lists of the blocks to be refined and derefined are completed
+  // Start tree manipulation
+  // Step 1. perform refinement
+  for (int n=0; n<tnref; n++) {
+    MeshBlockTree *bt = pmy_mesh->ptree->FindMeshBlock(lref[n]);
+    bt->Refine(nnew);
+  }
+  if (tnref != 0)
+    delete [] lref;
+
+  // Step 2. perform derefinement
+  for (int n=0; n<ctnd; n++) {
+    MeshBlockTree *bt = pmy_mesh->ptree->FindMeshBlock(clderef[n]);
+    bt->Derefine(ndel);
+  }
+  if (tnderef >= nleaf) {
+    delete [] clderef;
+  }
 
   return;
 }

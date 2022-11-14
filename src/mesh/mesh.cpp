@@ -288,20 +288,10 @@ Mesh::~Mesh() {
   delete [] costlist;
   delete [] ranklist;
   delete [] lloclist;
-  delete [] gidlist;
+  delete [] gidslist;
   delete [] nmblist;
   if (multilevel) {
     delete pmr;
-  }
-  if (adaptive) { // deallocate arrays for AMR
-    delete [] nref;
-    delete [] nderef;
-    delete [] rdisp;
-    delete [] ddisp;
-    delete [] bnref;
-    delete [] bnderef;
-    delete [] brdisp;
-    delete [] bddisp;
   }
 }
 

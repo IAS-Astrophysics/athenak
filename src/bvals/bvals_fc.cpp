@@ -212,7 +212,7 @@ TaskStatus BoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
 #if MPI_PARALLEL_ENABLED
         } else {
           // create tag using local ID and buffer index of *receiving* MeshBlock
-          int lid = nghbr.h_view(m,n).gid - pmy_pack->pmesh->gidlist[drank];
+          int lid = nghbr.h_view(m,n).gid - pmy_pack->pmesh->gidslist[drank];
           int tag = CreateMPITag(lid, dn);
 
           // get ptr to send buffer when neighbor is at coarser/same/fine level

@@ -173,7 +173,7 @@ TaskStatus BoundaryValuesCC::PackAndSendFluxCC(DvceFaceFld5D<Real> &flx) {
         // Send boundary data using MPI
         } else {
           // create tag using local ID and buffer index of *receiving* MeshBlock
-          int lid = nghbr.h_view(m,n).gid - pmy_pack->pmesh->gidlist[drank];
+          int lid = nghbr.h_view(m,n).gid - pmy_pack->pmesh->gidslist[drank];
           int tag = CreateMPITag(lid, dn);
 
           // get ptr to send buffer for fluxes
