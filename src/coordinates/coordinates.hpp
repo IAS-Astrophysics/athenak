@@ -52,7 +52,6 @@ class Coordinates {
 
   // excision masks
   DvceArray4D<bool> cc_mask;          // cell-centered mask for C2P
-  DvceFaceFld4D<bool> fc_mask;        // face-centered mask to enable first-order fluxes
 
   // functions
   void AddCoordTerms(const DvceArray5D<Real> &w0, const EOS_Data &eos, const Real dt,
@@ -60,6 +59,7 @@ class Coordinates {
   void AddCoordTerms(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc,
                      const EOS_Data &eos, const Real dt, DvceArray5D<Real> &u0);
   void SetExcisionMasks();
+  void SetFirstOrderMasks(DvceArray4D<int> &fofc);
 
  private:
   MeshBlockPack* pmy_pack;

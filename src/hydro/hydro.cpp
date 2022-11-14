@@ -247,6 +247,14 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
       Kokkos::realloc(fofc,  nmb, ncells3, ncells2, ncells1);
       Kokkos::realloc(utest, nmb, nhydro, ncells3, ncells2, ncells1);
     }
+    if (pmy_pack->pcoord->is_general_relativistic) {
+      if (pmy_pack->pcoord->coord_data.bh_excise) {
+        if (!(use_fofc)) {
+          Kokkos::realloc(fofc, nmb, ncells3, ncells2, ncells1);
+        }
+        pmy_pack->pcoord->SetFirstOrderMasks(fofc);
+      }
+    }
   }
 }
 

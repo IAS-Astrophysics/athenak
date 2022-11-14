@@ -34,43 +34,46 @@ void Hydro::FOFC(Driver *pdriver, int stage) {
   bool &multi_d = pmy_pack->pmesh->multi_d;
   bool &three_d = pmy_pack->pmesh->three_d;
 
-  Real &gam0 = pdriver->gam0[stage-1];
-  Real &gam1 = pdriver->gam1[stage-1];
-  Real beta_dt = (pdriver->beta[stage-1])*(pmy_pack->pmesh->dt);
   int nmb = pmy_pack->nmb_thispack;
   auto flx1 = uflx.x1f;
   auto flx2 = uflx.x2f;
   auto flx3 = uflx.x3f;
   auto &size = pmy_pack->pmb->mb_size;
 
-  int &nhyd_ = nhydro;
-  auto &u0_ = u0;
-  auto &u1_ = u1;
-  auto &utest_ = utest;
+  if (use_fofc) {
+    Real &gam0 = pdriver->gam0[stage-1];
+    Real &gam1 = pdriver->gam1[stage-1];
+    Real beta_dt = (pdriver->beta[stage-1])*(pmy_pack->pmesh->dt);
 
-  // Estimate updated conserved variables and cell-centered fields
-  par_for("FOFC-newu", DevExeSpace(), 0, nmb-1, ks, ke, js, je, is, ie,
-  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    Real dtodx1 = beta_dt/size.d_view(m).dx1;
-    Real dtodx2 = beta_dt/size.d_view(m).dx2;
-    Real dtodx3 = beta_dt/size.d_view(m).dx3;
+    int &nhyd_ = nhydro;
+    auto &u0_ = u0;
+    auto &u1_ = u1;
+    auto &utest_ = utest;
 
-    // Estimate conserved variables
-    for (int n=0; n<nhyd_; ++n) {
-      Real divf = dtodx1*(flx1(m,n,k,j,i+1) - flx1(m,n,k,j,i));
-      if (multi_d) {
-        divf += dtodx2*(flx2(m,n,k,j+1,i) - flx2(m,n,k,j,i));
+    // Estimate updated conserved variables and cell-centered fields
+    par_for("FOFC-newu", DevExeSpace(), 0, nmb-1, ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+      Real dtodx1 = beta_dt/size.d_view(m).dx1;
+      Real dtodx2 = beta_dt/size.d_view(m).dx2;
+      Real dtodx3 = beta_dt/size.d_view(m).dx3;
+
+      // Estimate conserved variables
+      for (int n=0; n<nhyd_; ++n) {
+        Real divf = dtodx1*(flx1(m,n,k,j,i+1) - flx1(m,n,k,j,i));
+        if (multi_d) {
+          divf += dtodx2*(flx2(m,n,k,j+1,i) - flx2(m,n,k,j,i));
+        }
+        if (three_d) {
+          divf += dtodx3*(flx3(m,n,k+1,j,i) - flx3(m,n,k,j,i));
+        }
+        utest_(m,n,k,j,i) = gam0*u0_(m,n,k,j,i) + gam1*u1_(m,n,k,j,i) - divf;
       }
-      if (three_d) {
-        divf += dtodx3*(flx3(m,n,k+1,j,i) - flx3(m,n,k,j,i));
-      }
-      utest_(m,n,k,j,i) = gam0*u0_(m,n,k,j,i) + gam1*u1_(m,n,k,j,i) - divf;
-    }
-  });
+    });
 
-  // Test whether conversion to primitives requires floors
-  // Note b0 and w0 passed to function, but not used/changed.
-  peos->ConsToPrim(utest_, w0, true, is, ie, js, je, ks, ke);
+    // Test whether conversion to primitives requires floors
+    // Note b0 and w0 passed to function, but not used/changed.
+    peos->ConsToPrim(utest_, w0, true, is, ie, js, je, ks, ke);
+  }
 
   auto &coord = pmy_pack->pcoord->coord_data;
   bool is_sr = pmy_pack->pcoord->is_special_relativistic;
@@ -330,7 +333,10 @@ void Hydro::FOFC(Driver *pdriver, int stage) {
         if (eos.is_ideal) {flx3(m,IEN,k+1,j,i) = flux.e;}
       }
 
-      fofc_(m,k,j,i) = false;
+      // Reset fofc flag if not excision
+      if (fofc_(m,k,j,i) > 0) {
+        fofc_(m,k,j,i) = 0;
+      }
     }
   });
 

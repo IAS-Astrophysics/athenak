@@ -104,8 +104,8 @@ class MHD {
   Real dtnew;
 
   // following used for FOFC algorithm
-  DvceArray4D<bool> fofc;     // flag for each cell to indicate if FOFC is needed
-  bool use_fofc = false;      // flag to enable FOFC
+  DvceArray4D<int> fofc;  // flag for each cell to indicate if FOFC is needed
+  bool use_fofc = false;  // flag to enable FOFC
 
   // container to hold names of TaskIDs
   MHDTaskIDs id;

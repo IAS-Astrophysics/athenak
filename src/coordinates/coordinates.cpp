@@ -20,8 +20,7 @@
 
 Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
     pmy_pack(ppack),
-    cc_mask("cc_mask",1,1,1,1),
-    fc_mask("fc_mask",1,1,1,1) {
+    cc_mask("cc_mask",1,1,1,1) {
   // Check for relativistic dynamics
   is_special_relativistic = pin->GetOrAddBoolean("coord","special_rel",false);
   is_general_relativistic = pin->GetOrAddBoolean("coord","general_rel",false);
@@ -58,9 +57,6 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
       int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
       int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
       Kokkos::realloc(cc_mask, nmb, ncells3, ncells2, ncells1);
-      Kokkos::realloc(fc_mask.x1f, nmb, ncells3, ncells2, ncells1+1);
-      Kokkos::realloc(fc_mask.x2f, nmb, ncells3, ncells2+1, ncells1);
-      Kokkos::realloc(fc_mask.x3f, nmb, ncells3+1, ncells2, ncells1);
     }
   }
 }

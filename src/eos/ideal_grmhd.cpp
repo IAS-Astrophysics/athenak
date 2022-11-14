@@ -121,6 +121,11 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
         w.e = pexcise_/gm1;
         excised = true;
       }
+      if (only_testfloors) {
+        if (fofc_(m,k,j,i) < 0) {
+          excised = true;
+        }
+      }
     }
 
     if (!(excised)) {
@@ -193,7 +198,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
     // set FOFC flag and quit loop if this function called only to check floors
     if (only_testfloors) {
       if (dfloor_used || efloor_used) {
-        fofc_(m,k,j,i) = true;
+        fofc_(m,k,j,i) = 1;
         sumd++;  // use dfloor as counter for when either is true
       }
     } else {
