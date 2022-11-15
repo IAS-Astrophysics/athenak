@@ -288,20 +288,12 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     Kokkos::realloc(e2_cc, nmb, ncells3, ncells2, ncells1);
     Kokkos::realloc(e3_cc, nmb, ncells3, ncells2, ncells1);
 
-    // allocate array of flags used with FOFC and/or excision
+    // allocate array of flags used with FOFC
     use_fofc = pin->GetOrAddBoolean("mhd","fofc",false);
     if (use_fofc) {
       Kokkos::realloc(fofc,    nmb, ncells3, ncells2, ncells1);
       Kokkos::realloc(utest,   nmb, nmhd, ncells3, ncells2, ncells1);
       Kokkos::realloc(bcctest, nmb, 3,    ncells3, ncells2, ncells1);
-    }
-    if (pmy_pack->pcoord->is_general_relativistic) {
-      if (pmy_pack->pcoord->coord_data.bh_excise) {
-        if (!(use_fofc)) {
-          Kokkos::realloc(fofc, nmb, ncells3, ncells2, ncells1);
-        }
-        pmy_pack->pcoord->SetFirstOrderMask(fofc);
-      }
     }
   }
 }

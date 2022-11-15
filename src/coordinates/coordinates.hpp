@@ -51,15 +51,15 @@ class Coordinates {
   CoordData coord_data;
 
   // excision masks
-  DvceArray4D<bool> cc_mask;          // cell-centered mask for C2P
+  DvceArray4D<bool> excision_floor;  // cell-centered mask for C2P flooring about horizon
+  DvceArray4D<bool> excision_flux;   // cell-centered mask for FOFC about horizon
 
   // functions
   void AddCoordTerms(const DvceArray5D<Real> &w0, const EOS_Data &eos, const Real dt,
                      DvceArray5D<Real> &u0);
   void AddCoordTerms(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc,
                      const EOS_Data &eos, const Real dt, DvceArray5D<Real> &u0);
-  void SetExcisionMask(DvceArray4D<bool> &cc_mask);
-  void SetFirstOrderMask(DvceArray4D<int> &fofc);
+  void SetExcisionMasks(DvceArray4D<bool> &floor, DvceArray4D<bool> &flux);
 
  private:
   MeshBlockPack* pmy_pack;

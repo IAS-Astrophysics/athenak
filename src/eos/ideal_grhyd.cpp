@@ -51,7 +51,8 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
   auto &flat = pmy_pack->pcoord->coord_data.is_minkowski;
   auto &spin = pmy_pack->pcoord->coord_data.bh_spin;
   auto &use_excise = pmy_pack->pcoord->coord_data.bh_excise;
-  auto &horizon_mask_ = pmy_pack->pcoord->cc_mask;
+  auto &excision_floor_ = pmy_pack->pcoord->excision_floor;
+  auto &excision_flux_ = pmy_pack->pcoord->excision_flux;
   auto &dexcise_ = pmy_pack->pcoord->coord_data.dexcise;
   auto &pexcise_ = pmy_pack->pcoord->coord_data.pexcise;
 
@@ -101,7 +102,7 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
     // Only execute cons2prim if outside excised region
     bool excised = false;
     if (use_excise) {
-      if (horizon_mask_(m,k,j,i)) {
+      if (excision_floor_(m,k,j,i)) {
         w.d = dexcise_;
         w.vx = 0.0;
         w.vy = 0.0;
@@ -110,7 +111,7 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
         excised = true;
       }
       if (only_testfloors) {
-        if (fofc_(m,k,j,i) < 0) {
+        if (excision_flux_(m,k,j,i)) {
           excised = true;
         }
       }
@@ -173,7 +174,7 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
     // set FOFC flag and quit loop if this function called only to check floors
     if (only_testfloors) {
       if (dfloor_used || efloor_used) {
-        fofc_(m,k,j,i) = 1;
+        fofc_(m,k,j,i) = true;
         sumd++;  // use dfloor as counter for when either is true
       }
     } else {

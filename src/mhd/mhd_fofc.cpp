@@ -23,7 +23,9 @@ namespace mhd {
 //! estimate of the updated conserved variables is made. This estimate is then used to
 //! flag any cell where floors will be required during the conversion to primitives. Then
 //! the fluxes on the faces of flagged cells are replaced with first-order LLF fluxes.
-//! Often this is enough to prevent floors from being needed.
+//! Often this is enough to prevent floors from being needed.  The FOFC infrastructure is
+//! also exploited for BH excision.  If a cell is about the horizon, FOFC is automatically
+//! triggered (without estimating updated conserved variables).
 
 void MHD::FOFC(Driver *pdriver, int stage) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
@@ -106,32 +108,43 @@ void MHD::FOFC(Driver *pdriver, int stage) {
   }
 
   auto &coord = pmy_pack->pcoord->coord_data;
-  bool is_sr = pmy_pack->pcoord->is_special_relativistic;
-  bool is_gr = pmy_pack->pcoord->is_general_relativistic;
+  bool &is_sr = pmy_pack->pcoord->is_special_relativistic;
+  bool &is_gr = pmy_pack->pcoord->is_general_relativistic;
   auto &eos = peos->eos_data;
-  auto fofc_ = fofc;
+  auto &use_fofc_ = use_fofc;
+  auto &fofc_ = fofc;
+  auto &use_excise = pmy_pack->pcoord->coord_data.bh_excise;
+  auto &excision_flux_ = pmy_pack->pcoord->excision_flux;
   auto &w0_ = w0;
   auto &b0_ = b0;
 
-  // Extend indices for excision (first order excision mask is set in ghost zones)
+  // Extend index bounds if GR+excision (excision flux mask is set in ghost zones)
   int il = is, iu = ie, jl = js, ju = je, kl = ks, ku = ke;
-  if (pmy_pack->pcoord->is_general_relativistic) {
-    if (pmy_pack->pcoord->coord_data.bh_excise) {
+  if (is_gr) {
+    if (use_excise) {
       il = is-1, iu = ie+1;
-      if (pmy_pack->pmesh->multi_d) {
-        jl = js-1, ju = je+1;
-      }
-      if (pmy_pack->pmesh->three_d) {
-        kl = ks-1, ku = ke+1;
-      }
+      if (multi_d) { jl = js-1, ju = je+1; }
+      if (three_d) { kl = ks-1, ku = ke+1; }
     }
   }
 
-  // Now replace fluxes with first-order LLF fluxes for any cell where floors needed
+  // Now replace fluxes with first-order LLF fluxes for any cell where floors needed (if
+  // using FOFC) and/or for any cell about the excision (if GR+excising)
   par_for("FOFC-flx", DevExeSpace(), 0, nmb-1, kl, ku, jl, ju, il, iu,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    // replace x1-flux at i
-    if (fofc_(m,k,j,i)) {
+    // Check for FOFC flag
+    bool fofc_flag = false;
+    if (use_fofc_) { fofc_flag = fofc_(m,k,j,i); }
+
+    // Check for GR + excision
+    bool fofc_excision = false;
+    if (is_gr) {
+      if (use_excise) { fofc_excision = excision_flux_(m,k,j,i); }
+    }
+
+    // Apply FOFC
+    if (fofc_flag || fofc_excision) {
+      // replace x1-flux at i
       // load left state
       MHDPrim1D wim1;
       wim1.d  = w0_(m,IDN,k,j,i-1);
@@ -414,10 +427,8 @@ void MHD::FOFC(Driver *pdriver, int stage) {
         e1x3_(m,k+1,j,i) = flux.bz;
       }
 
-      // Reset fofc flag if not excision
-      if (fofc_(m,k,j,i) > 0) {
-        fofc_(m,k,j,i) = 0;
-      }
+      // reset FOFC flag (do not reset excision flag)
+      if (use_fofc_ && fofc_flag) { fofc_(m,k,j,i) = false; }
     }
   });
 

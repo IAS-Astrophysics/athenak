@@ -22,9 +22,10 @@ Real KSRX(const Real x1, const Real x2, const Real x3, const Real a) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void Coordinates::SetExcisionMasks()
-//  \brief Sets boolean masks for the excision radius in CKS
+//  \brief Sets boolean masks for the excision in CKS
 
-void Coordinates::SetExcisionMask(DvceArray4D<bool> &cc_mask) {
+void Coordinates::SetExcisionMasks(DvceArray4D<bool> &excision_floor,
+                                   DvceArray4D<bool> &excision_flux) {
   // capture variables for kernel
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is; int js = indcs.js; int ks = indcs.ks;
@@ -37,50 +38,12 @@ void Coordinates::SetExcisionMask(DvceArray4D<bool> &cc_mask) {
   auto &size = pmy_pack->pmb->mb_size;
   auto &spin = coord_data.bh_spin;
 
-  // NOTE(@pdmullen): if r_ks evaluated at *this cell-center* is <= 1, mask the cell.
+  // NOTE(@pdmullen):
+  // excision_floor: - if r_ks evaluated at this cell-center is <= 1, mask the cell.
+  // excision_flux:  - if r_ks evaluated at any portion of the two cells connecting
+  //                   each face of this cell is <= 1, mask the cell.
   par_for("set_excision", DevExeSpace(), 0, nmb1, 0, (n3-1), 0, (n2-1), 0, (n1-1),
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    Real &x1min = size.d_view(m).x1min;
-    Real &x1max = size.d_view(m).x1max;
-    Real x1v   = CellCenterX(i-is, indcs.nx1, x1min, x1max);
-
-    Real &x2min = size.d_view(m).x2min;
-    Real &x2max = size.d_view(m).x2max;
-    Real x2v   = CellCenterX(j-js, indcs.nx2, x2min, x2max);
-
-    Real &x3min = size.d_view(m).x3min;
-    Real &x3max = size.d_view(m).x3max;
-    Real x3v   = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
-
-    // Set cc_mask
-    cc_mask(m,k,j,i) = (KSRX(x1v,x2v,x3v,spin) <= 1.0);
-  });
-
-  return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void Coordinates::SetFirstOrderMasks(DvceArray5D<short int> &fofc)
-//  \brief Sets tri-state boolean masks for first order fluxes about horizon
-
-void Coordinates::SetFirstOrderMask(DvceArray4D<int> &fofc) {
-  // capture variables for kernel
-  auto &indcs = pmy_pack->pmesh->mb_indcs;
-  int is = indcs.is; int js = indcs.js; int ks = indcs.ks;
-  int &ng = indcs.ng;
-  int n1 = indcs.nx1 + 2*ng;
-  int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
-  int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
-  int nmb1 = pmy_pack->nmb_thispack - 1;
-
-  auto &size = pmy_pack->pmb->mb_size;
-  auto &spin = coord_data.bh_spin;
-
-  // NOTE(@pdmullen): Mask a cell if r_ks evaluated at any of its face-centers is <=1 or
-  // if *any other portion of the neighboring cells sharing this cell's face has r_ks <=1.
-  par_for("set_excision_fofc", DevExeSpace(), 0, nmb1, 0, (n3-1), 0, (n2-1), 0, (n1-1),
-  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    bool apply_mask=false;
     // NOTE(@pdmullen): In some instances, calls to x? will access coordinate information
     // for which there is *no corresponding logical counterpart*, however, the
     // LeftEdgeX/CellCenterX functions can handle "out-of-range" queries.
@@ -115,7 +78,10 @@ void Coordinates::SetFirstOrderMask(DvceArray4D<int> &fofc) {
     Real x3fp1 = LeftEdgeX  (k+1-ks, indcs.nx3, x3min, x3max);
     Real x3fp2 = LeftEdgeX  (k+2-ks, indcs.nx3, x3min, x3max);
 
-    // Check grid cell positions
+    // Set excision floor mask
+    if (KSRX(x1v,x2v,x3v,spin) <= 1.0) excision_floor(m,k,j,i) = true;
+
+    // Set excision flux mask
     Real x1, x2, x3;
 
     // Check face at i
@@ -130,7 +96,7 @@ void Coordinates::SetFirstOrderMask(DvceArray4D<int> &fofc) {
     x3 = x3v;
     x3 = (fabs(x3) < fabs(x3f))   ? x3 : x3f;
     x3 = (fabs(x3) < fabs(x3fp1)) ? x3 : x3fp1;
-    apply_mask = (KSRX(x1,x2,x3,spin) <= 1.0);
+    if (KSRX(x1,x2,x3,spin) <= 1.0) excision_flux(m,k,j,i) = true;
 
     // check face at i+1
     x1 = x1vp1;
@@ -138,7 +104,7 @@ void Coordinates::SetFirstOrderMask(DvceArray4D<int> &fofc) {
     x1 = (fabs(x1) < fabs(x1fp1)) ? x1 : x1fp1;
     x1 = (fabs(x1) < fabs(x1f))   ? x1 : x1f;
     x1 = (fabs(x1) < fabs(x1fp2)) ? x1 : x1fp2;
-    apply_mask = (apply_mask || (KSRX(x1,x2,x3,spin) <= 1.0));
+    if (KSRX(x1,x2,x3,spin) <= 1.0) excision_flux(m,k,j,i) = true;
 
     // Check face at j
     x1 = x1v;
@@ -152,7 +118,7 @@ void Coordinates::SetFirstOrderMask(DvceArray4D<int> &fofc) {
     x3 = x3v;
     x3 = (fabs(x3) < fabs(x3f))   ? x3 : x3f;
     x3 = (fabs(x3) < fabs(x3fp1)) ? x3 : x3fp1;
-    apply_mask = (apply_mask || (KSRX(x1,x2,x3,spin) <= 1.0));
+    if (KSRX(x1,x2,x3,spin) <= 1.0) excision_flux(m,k,j,i) = true;
 
     // Check face at j+1
     x2 = x2vp1;
@@ -160,7 +126,7 @@ void Coordinates::SetFirstOrderMask(DvceArray4D<int> &fofc) {
     x2 = (fabs(x2) < fabs(x2fp1)) ? x2 : x2fp1;
     x2 = (fabs(x2) < fabs(x2f))   ? x2 : x2f;
     x2 = (fabs(x2) < fabs(x2fp2)) ? x2 : x2fp2;
-    apply_mask = (apply_mask || (KSRX(x1,x2,x3,spin) <= 1.0));
+    if (KSRX(x1,x2,x3,spin) <= 1.0) excision_flux(m,k,j,i) = true;
 
     // Check face at k
     x1 = x1v;
@@ -174,7 +140,7 @@ void Coordinates::SetFirstOrderMask(DvceArray4D<int> &fofc) {
     x3 = (fabs(x3) < fabs(x3f))   ? x3 : x3f;
     x3 = (fabs(x3) < fabs(x3fm1)) ? x3 : x3fm1;
     x3 = (fabs(x3) < fabs(x3fp1)) ? x3 : x3fp1;
-    apply_mask = (apply_mask || (KSRX(x1,x2,x3,spin) <= 1.0));
+    if (KSRX(x1,x2,x3,spin) <= 1.0) excision_flux(m,k,j,i) = true;
 
     // Check face at k+1
     x3 = x3vp1;
@@ -182,12 +148,7 @@ void Coordinates::SetFirstOrderMask(DvceArray4D<int> &fofc) {
     x3 = (fabs(x3) < fabs(x3fp1)) ? x3 : x3fp1;
     x3 = (fabs(x3) < fabs(x3f))   ? x3 : x3f;
     x3 = (fabs(x3) < fabs(x3fp2)) ? x3 : x3fp2;
-    apply_mask = (apply_mask || (KSRX(x1,x2,x3,spin) <= 1.0));
-
-    // Set fofc masks
-    if (apply_mask) {
-      fofc(m,k,j,i) = -1;
-    }
+    if (KSRX(x1,x2,x3,spin) <= 1.0) excision_flux(m,k,j,i) = true;
   });
 
   return;
