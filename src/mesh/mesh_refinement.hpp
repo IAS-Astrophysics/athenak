@@ -35,6 +35,7 @@ class MeshRefinement {
   bool CheckForRefinement(MeshBlockPack* pmbp);
   void AdaptiveMeshRefinement();
   void UpdateMeshBlockTree(int &nnew, int &ndel);
+  void RedistributeAndRefineMeshBlocks(int ntot);
   void RestrictCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
   void RestrictFC(DvceFaceFld4D<Real> &a, DvceFaceFld4D<Real> &ca);
 
