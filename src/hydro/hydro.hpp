@@ -83,8 +83,8 @@ class Hydro {
   Real dtnew;
 
   // following used for FOFC
-  DvceArray4D<bool> fofc;     // flag for each cell to indicate if FOFC is needed
-  bool use_fofc = false;      // flag to enable FOFC
+  DvceArray4D<bool> fofc;  // flag for each cell to indicate if FOFC is needed
+  bool use_fofc = false;   // flag to enable FOFC
 
   // container to hold names of TaskIDs
   HydroTaskIDs id;

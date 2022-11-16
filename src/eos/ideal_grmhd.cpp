@@ -50,7 +50,8 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
   auto &flat = pmy_pack->pcoord->coord_data.is_minkowski;
   auto &spin = pmy_pack->pcoord->coord_data.bh_spin;
   auto &use_excise = pmy_pack->pcoord->coord_data.bh_excise;
-  auto &horizon_mask_ = pmy_pack->pcoord->cc_mask;
+  auto &excision_floor_ = pmy_pack->pcoord->excision_floor;
+  auto &excision_flux_ = pmy_pack->pcoord->excision_flux;
   auto &dexcise_ = pmy_pack->pcoord->coord_data.dexcise;
   auto &pexcise_ = pmy_pack->pcoord->coord_data.pexcise;
 
@@ -113,13 +114,18 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
     // Only execute cons2prim if outside excised region
     bool excised = false;
     if (use_excise) {
-      if (horizon_mask_(m,k,j,i)) {
+      if (excision_floor_(m,k,j,i)) {
         w.d = dexcise_;
         w.vx = 0.0;
         w.vy = 0.0;
         w.vz = 0.0;
         w.e = pexcise_/gm1;
         excised = true;
+      }
+      if (only_testfloors) {
+        if (excision_flux_(m,k,j,i)) {
+          excised = true;
+        }
       }
     }
 

@@ -14,6 +14,7 @@
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
 #include "mesh/mesh.hpp"
+#include "coordinates/coordinates.hpp"
 #include "eos/eos.hpp"
 #include "diffusion/viscosity.hpp"
 #include "diffusion/conduction.hpp"
@@ -149,8 +150,14 @@ TaskStatus Hydro::Fluxes(Driver *pdrive, int stage) {
     pcond->AddHeatFlux(w0, peos->eos_data, uflx);
   }
 
-  // call FOFC if used
-  if (use_fofc) {FOFC(pdrive, stage);}
+  // call FOFC if necessary
+  if (use_fofc) {
+    FOFC(pdrive, stage);
+  } else if (pmy_pack->pcoord->is_general_relativistic) {
+    if (pmy_pack->pcoord->coord_data.bh_excise) {
+      FOFC(pdrive, stage);
+    }
+  }
 
   return TaskStatus::complete;
 }

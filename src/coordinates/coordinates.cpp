@@ -20,8 +20,8 @@
 
 Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
     pmy_pack(ppack),
-    cc_mask("cc_mask",1,1,1,1),
-    fc_mask("fc_mask",1,1,1,1) {
+    excision_floor("excision_floor",1,1,1,1),
+    excision_flux("excision_flux",1,1,1,1) {
   // Check for relativistic dynamics
   is_special_relativistic = pin->GetOrAddBoolean("coord","special_rel",false);
   is_general_relativistic = pin->GetOrAddBoolean("coord","general_rel",false);
@@ -39,13 +39,6 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
     coord_data.bh_excise = pin->GetOrAddBoolean("coord","excise",true);
 
     if (coord_data.bh_excise) {
-      // throw error if attempting to excise in 1D/2D
-      if (!(pmy_pack->pmesh->three_d)) {
-        std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__
-                  << std::endl << "Excising only supported in 3D" << std::endl;
-        std::exit(EXIT_FAILURE);
-      }
-
       // Set the density and pressure to which cells inside the excision radius will
       // be reset to.  Primitive velocities will be set to zero.
       coord_data.dexcise = pin->GetReal("coord","dexcise");
@@ -57,10 +50,9 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
       int ncells1 = indcs.nx1 + 2*(indcs.ng);
       int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
       int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
-      Kokkos::realloc(cc_mask, nmb, ncells3, ncells2, ncells1);
-      Kokkos::realloc(fc_mask.x1f, nmb, ncells3, ncells2, ncells1+1);
-      Kokkos::realloc(fc_mask.x2f, nmb, ncells3, ncells2+1, ncells1);
-      Kokkos::realloc(fc_mask.x3f, nmb, ncells3+1, ncells2, ncells1);
+      Kokkos::realloc(excision_floor, nmb, ncells3, ncells2, ncells1);
+      Kokkos::realloc(excision_flux, nmb, ncells3, ncells2, ncells1);
+      SetExcisionMasks(excision_floor, excision_flux);
     }
   }
 }
