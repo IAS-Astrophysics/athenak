@@ -194,7 +194,8 @@ class PrimitiveSolverHydro {
 
       // Some problem-specific parameters
       auto &excise = pmy_pack->pcoord->coord_data.bh_excise;
-      auto &cc_mask_ = pmy_pack->pcoord->cc_mask;
+      auto &excision_floor_ = pmy_pack->pcoord->excision_floor;
+      //auto &excision_flux_ = pmy_pack->pcoord->excision_flux;
       auto &dexcise_ = pmy_pack->pcoord->coord_data.dexcise;
       auto &pexcise_ = pmy_pack->pcoord->coord_data.pexcise;
 
@@ -254,7 +255,7 @@ class PrimitiveSolverHydro {
         // If we're in an excised region, set the primitives to some default value.
         Primitive::SolverResult result;
         if (excise) {
-          if (cc_mask_(m,k,j,i)) {
+          if (excision_floor_(m,k,j,i)) {
             prim_pt[PRH] = dexcise_/mb;
             prim_pt[PVX] = 0.0;
             prim_pt[PVY] = 0.0;
