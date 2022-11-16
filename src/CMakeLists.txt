@@ -41,6 +41,9 @@ add_executable(
         eos/ideal_srmhd.cpp
         eos/ideal_grmhd.cpp
 
+        geodesic-grid/geodesic_grid.cpp
+        geodesic-grid/spherical_grid.cpp
+
         hydro/hydro.cpp
         hydro/hydro_fluxes.cpp
         hydro/hydro_fofc.cpp
