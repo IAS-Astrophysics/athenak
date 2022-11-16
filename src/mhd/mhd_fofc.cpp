@@ -23,7 +23,9 @@ namespace mhd {
 //! estimate of the updated conserved variables is made. This estimate is then used to
 //! flag any cell where floors will be required during the conversion to primitives. Then
 //! the fluxes on the faces of flagged cells are replaced with first-order LLF fluxes.
-//! Often this is enough to prevent floors from being needed.
+//! Often this is enough to prevent floors from being needed.  The FOFC infrastructure is
+//! also exploited for BH excision.  If a cell is about the horizon, FOFC is automatically
+//! triggered (without estimating updated conserved variables).
 
 void MHD::FOFC(Driver *pdriver, int stage) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
@@ -34,22 +36,13 @@ void MHD::FOFC(Driver *pdriver, int stage) {
   bool &multi_d = pmy_pack->pmesh->multi_d;
   bool &three_d = pmy_pack->pmesh->three_d;
 
-  Real &gam0 = pdriver->gam0[stage-1];
-  Real &gam1 = pdriver->gam1[stage-1];
-  Real beta_dt = (pdriver->beta[stage-1])*(pmy_pack->pmesh->dt);
   int nmb = pmy_pack->nmb_thispack;
   auto flx1 = uflx.x1f;
   auto flx2 = uflx.x2f;
   auto flx3 = uflx.x3f;
   auto &size = pmy_pack->pmb->mb_size;
 
-  int &nmhd_ = nmhd;
-  auto &u0_ = u0;
-  auto &u1_ = u1;
-  auto &utest_ = utest;
-  auto &bcctest_ = bcctest;
   auto &bcc0_ = bcc0;
-  auto &b1_ = b1;
   auto &e3x1_ = e3x1;
   auto &e2x1_ = e2x1;
   auto &e1x2_ = e1x2;
@@ -57,63 +50,101 @@ void MHD::FOFC(Driver *pdriver, int stage) {
   auto &e2x3_ = e2x3;
   auto &e1x3_ = e1x3;
 
-  // Estimate updated conserved variables and cell-centered fields
-  par_for("FOFC-newu", DevExeSpace(), 0, nmb-1, ks, ke, js, je, is, ie,
-  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    Real dtodx1 = beta_dt/size.d_view(m).dx1;
-    Real dtodx2 = beta_dt/size.d_view(m).dx2;
-    Real dtodx3 = beta_dt/size.d_view(m).dx3;
+  if (use_fofc) {
+    Real &gam0 = pdriver->gam0[stage-1];
+    Real &gam1 = pdriver->gam1[stage-1];
+    Real beta_dt = (pdriver->beta[stage-1])*(pmy_pack->pmesh->dt);
 
-    // Estimate conserved variables
-    for (int n=0; n<nmhd_; ++n) {
-      Real divf = dtodx1*(flx1(m,n,k,j,i+1) - flx1(m,n,k,j,i));
+    int &nmhd_ = nmhd;
+    auto &u0_ = u0;
+    auto &u1_ = u1;
+    auto &utest_ = utest;
+    auto &bcctest_ = bcctest;
+    auto &b1_ = b1;
+
+    // Estimate updated conserved variables and cell-centered fields
+    par_for("FOFC-newu", DevExeSpace(), 0, nmb-1, ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+      Real dtodx1 = beta_dt/size.d_view(m).dx1;
+      Real dtodx2 = beta_dt/size.d_view(m).dx2;
+      Real dtodx3 = beta_dt/size.d_view(m).dx3;
+
+      // Estimate conserved variables
+      for (int n=0; n<nmhd_; ++n) {
+        Real divf = dtodx1*(flx1(m,n,k,j,i+1) - flx1(m,n,k,j,i));
+        if (multi_d) {
+          divf += dtodx2*(flx2(m,n,k,j+1,i) - flx2(m,n,k,j,i));
+        }
+        if (three_d) {
+          divf += dtodx3*(flx3(m,n,k+1,j,i) - flx3(m,n,k,j,i));
+        }
+        utest_(m,n,k,j,i) = gam0*u0_(m,n,k,j,i) + gam1*u1_(m,n,k,j,i) - divf;
+      }
+
+      // Estimate updated cell-centered fields
+      Real b1old = 0.5*(b1_.x1f(m,k,j,i) + b1_.x1f(m,k,j,i+1));
+      Real b2old = 0.5*(b1_.x2f(m,k,j,i) + b1_.x2f(m,k,j+1,i));
+      Real b3old = 0.5*(b1_.x3f(m,k,j,i) + b1_.x3f(m,k+1,j,i));
+
+      bcctest_(m,IBX,k,j,i) = gam0*bcc0_(m,IBX,k,j,i) + gam1*b1old;
+      bcctest_(m,IBY,k,j,i) = gam0*bcc0_(m,IBY,k,j,i) + gam1*b2old;
+      bcctest_(m,IBZ,k,j,i) = gam0*bcc0_(m,IBZ,k,j,i) + gam1*b3old;
+
+      bcctest_(m,IBY,k,j,i) += dtodx1*(e3x1_(m,k,j,i+1) - e3x1_(m,k,j,i));
+      bcctest_(m,IBZ,k,j,i) -= dtodx1*(e2x1_(m,k,j,i+1) - e2x1_(m,k,j,i));
       if (multi_d) {
-        divf += dtodx2*(flx2(m,n,k,j+1,i) - flx2(m,n,k,j,i));
+        bcctest_(m,IBX,k,j,i) -= dtodx2*(e3x2_(m,k,j+1,i) - e3x2_(m,k,j,i));
+        bcctest_(m,IBZ,k,j,i) += dtodx2*(e1x2_(m,k,j+1,i) - e1x2_(m,k,j,i));
       }
       if (three_d) {
-        divf += dtodx3*(flx3(m,n,k+1,j,i) - flx3(m,n,k,j,i));
+        bcctest_(m,IBX,k,j,i) += dtodx3*(e2x3_(m,k+1,j,i) - e2x3_(m,k,j,i));
+        bcctest_(m,IBY,k,j,i) -= dtodx3*(e1x3_(m,k+1,j,i) - e1x3_(m,k,j,i));
       }
-      utest_(m,n,k,j,i) = gam0*u0_(m,n,k,j,i) + gam1*u1_(m,n,k,j,i) - divf;
-    }
+    });
 
-    // Estimate updated cell-centered fields
-    Real b1old = 0.5*(b1_.x1f(m,k,j,i) + b1_.x1f(m,k,j,i+1));
-    Real b2old = 0.5*(b1_.x2f(m,k,j,i) + b1_.x2f(m,k,j+1,i));
-    Real b3old = 0.5*(b1_.x3f(m,k,j,i) + b1_.x3f(m,k+1,j,i));
-
-    bcctest_(m,IBX,k,j,i) = gam0*bcc0_(m,IBX,k,j,i) + gam1*b1old;
-    bcctest_(m,IBY,k,j,i) = gam0*bcc0_(m,IBY,k,j,i) + gam1*b2old;
-    bcctest_(m,IBZ,k,j,i) = gam0*bcc0_(m,IBZ,k,j,i) + gam1*b3old;
-
-    bcctest_(m,IBY,k,j,i) += dtodx1*(e3x1_(m,k,j,i+1) - e3x1_(m,k,j,i));
-    bcctest_(m,IBZ,k,j,i) -= dtodx1*(e2x1_(m,k,j,i+1) - e2x1_(m,k,j,i));
-    if (multi_d) {
-      bcctest_(m,IBX,k,j,i) -= dtodx2*(e3x2_(m,k,j+1,i) - e3x2_(m,k,j,i));
-      bcctest_(m,IBZ,k,j,i) += dtodx2*(e1x2_(m,k,j+1,i) - e1x2_(m,k,j,i));
-    }
-    if (three_d) {
-      bcctest_(m,IBX,k,j,i) += dtodx3*(e2x3_(m,k+1,j,i) - e2x3_(m,k,j,i));
-      bcctest_(m,IBY,k,j,i) -= dtodx3*(e1x3_(m,k+1,j,i) - e1x3_(m,k,j,i));
-    }
-  });
-
-  // Test whether conversion to primitives requires floors
-  // Note b0 and w0 passed to function, but not used/changed.
-  peos->ConsToPrim(utest_, b0, w0, bcctest_, true, is, ie, js, je, ks, ke);
+    // Test whether conversion to primitives requires floors
+    // Note b0 and w0 passed to function, but not used/changed.
+    peos->ConsToPrim(utest_, b0, w0, bcctest_, true, is, ie, js, je, ks, ke);
+  }
 
   auto &coord = pmy_pack->pcoord->coord_data;
-  bool is_sr = pmy_pack->pcoord->is_special_relativistic;
-  bool is_gr = pmy_pack->pcoord->is_general_relativistic;
+  bool &is_sr = pmy_pack->pcoord->is_special_relativistic;
+  bool &is_gr = pmy_pack->pcoord->is_general_relativistic;
   auto &eos = peos->eos_data;
-  auto fofc_ = fofc;
+  auto &use_fofc_ = use_fofc;
+  auto &fofc_ = fofc;
+  auto &use_excise = pmy_pack->pcoord->coord_data.bh_excise;
+  auto &excision_flux_ = pmy_pack->pcoord->excision_flux;
   auto &w0_ = w0;
   auto &b0_ = b0;
 
-  // Now replace fluxes with first-order LLF fluxes for any cell where floors needed
-  par_for("FOFC-flx", DevExeSpace(), 0, nmb-1, ks, ke, js, je, is, ie,
+  // Extend index bounds if GR+excision (excision flux mask is set in ghost zones)
+  int il = is, iu = ie, jl = js, ju = je, kl = ks, ku = ke;
+  if (is_gr) {
+    if (use_excise) {
+      il = is-1, iu = ie+1;
+      if (multi_d) { jl = js-1, ju = je+1; }
+      if (three_d) { kl = ks-1, ku = ke+1; }
+    }
+  }
+
+  // Now replace fluxes with first-order LLF fluxes for any cell where floors needed (if
+  // using FOFC) and/or for any cell about the excision (if GR+excising)
+  par_for("FOFC-flx", DevExeSpace(), 0, nmb-1, kl, ku, jl, ju, il, iu,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    // replace x1-flux at i
-    if (fofc_(m,k,j,i)) {
+    // Check for FOFC flag
+    bool fofc_flag = false;
+    if (use_fofc_) { fofc_flag = fofc_(m,k,j,i); }
+
+    // Check for GR + excision
+    bool fofc_excision = false;
+    if (is_gr) {
+      if (use_excise) { fofc_excision = excision_flux_(m,k,j,i); }
+    }
+
+    // Apply FOFC
+    if (fofc_flag || fofc_excision) {
+      // replace x1-flux at i
       // load left state
       MHDPrim1D wim1;
       wim1.d  = w0_(m,IDN,k,j,i-1);
@@ -396,7 +427,8 @@ void MHD::FOFC(Driver *pdriver, int stage) {
         e1x3_(m,k+1,j,i) = flux.bz;
       }
 
-      fofc_(m,k,j,i) = false;
+      // reset FOFC flag (do not reset excision flag)
+      if (use_fofc_ && fofc_flag) { fofc_(m,k,j,i) = false; }
     }
   });
 

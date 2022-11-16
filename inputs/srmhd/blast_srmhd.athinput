@@ -50,6 +50,7 @@ rsolver     = hlle      # Riemann-solver to be used
 gamma       = 1.3333333 # gamma = C_p/C_v
 dfloor      = 1.0e-10
 pfloor      = 1.0e-10
+fofc        = true      # Enable first order flux correction
 
 <problem>
 damb        = 1.0e-4    # ambient density
