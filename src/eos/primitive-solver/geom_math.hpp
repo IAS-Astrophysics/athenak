@@ -68,12 +68,13 @@ namespace Primitive {
   //  \param[in]  det  The determinant of m_in
   KOKKOS_INLINE_FUNCTION 
   void InvertMatrix(Real m_out[NSPMETRIC], const Real m_in[NSPMETRIC], const Real det) {
-    m_out[S11] = (m_in[S22]*m_in[S33] - m_in[S23]*m_in[S23])/det;
-    m_out[S12] = (m_in[S13]*m_in[S23] - m_in[S12]*m_in[S33])/det;
-    m_out[S13] = (m_in[S12]*m_in[S23] - m_in[S13]*m_in[S22])/det;
-    m_out[S22] = (m_in[S11]*m_in[S33] - m_in[S13]*m_in[S13])/det;
-    m_out[S23] = (m_in[S12]*m_in[S13] - m_in[S11]*m_in[S23])/det;
-    m_out[S33] = (m_in[S11]*m_in[S22] - m_in[S12]*m_in[S12])/det;
+    Real idet = 1.0/det;
+    m_out[S11] = (m_in[S22]*m_in[S33] - m_in[S23]*m_in[S23])*idet;
+    m_out[S12] = (m_in[S13]*m_in[S23] - m_in[S12]*m_in[S33])*idet;
+    m_out[S13] = (m_in[S12]*m_in[S23] - m_in[S13]*m_in[S22])*idet;
+    m_out[S22] = (m_in[S11]*m_in[S33] - m_in[S13]*m_in[S13])*idet;
+    m_out[S23] = (m_in[S12]*m_in[S13] - m_in[S11]*m_in[S23])*idet;
+    m_out[S33] = (m_in[S11]*m_in[S22] - m_in[S12]*m_in[S12])*idet;
   }
 }
 
