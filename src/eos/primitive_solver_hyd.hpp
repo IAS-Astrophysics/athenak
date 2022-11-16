@@ -235,18 +235,19 @@ class PrimitiveSolverHydro {
         g3d[S33] = adm.g_dd(m, 2, 2, k, j, i);
         detg = Primitive::GetDeterminant(g3d);
         sdetg = sqrt(detg);
+        Real isdetg = 1.0/sdetg;
         SpatialInv(1.0/detg, g3d[S11], g3d[S12], g3d[S13], g3d[S22], g3d[S23], g3d[S33],
                    &g3u[S11], &g3u[S12], &g3u[S13], &g3u[S22], &g3u[S23], &g3u[S33]);
 
         // Extract the conserved variables
         Real cons_pt[NCONS], cons_pt_old[NCONS], prim_pt[NPRIM];
-        cons_pt[CDN] = cons_pt_old[CDN] = cons(m, IDN, k, j, i)/sdetg;
-        cons_pt[CSX] = cons_pt_old[CSX] = cons(m, IM1, k, j, i)/sdetg;
-        cons_pt[CSY] = cons_pt_old[CSY] = cons(m, IM2, k, j, i)/sdetg;
-        cons_pt[CSZ] = cons_pt_old[CSZ] = cons(m, IM3, k, j, i)/sdetg;
-        cons_pt[CTA] = cons_pt_old[CTA] = cons(m, IEN, k, j, i)/sdetg;
+        cons_pt[CDN] = cons_pt_old[CDN] = cons(m, IDN, k, j, i)*isdetg;
+        cons_pt[CSX] = cons_pt_old[CSX] = cons(m, IM1, k, j, i)*isdetg;
+        cons_pt[CSY] = cons_pt_old[CSY] = cons(m, IM2, k, j, i)*isdetg;
+        cons_pt[CSZ] = cons_pt_old[CSZ] = cons(m, IM3, k, j, i)*isdetg;
+        cons_pt[CTA] = cons_pt_old[CTA] = cons(m, IEN, k, j, i)*isdetg;
         for (int n = 0; n < nscal; n++) {
-          cons_pt[CYD + n] = cons(m, nhyd + n, k, j, i)/sdetg;
+          cons_pt[CYD + n] = cons(m, nhyd + n, k, j, i)*isdetg;
         }
         Real b3u[NMAG] = {0.0};
 
@@ -330,16 +331,16 @@ class PrimitiveSolverHydro {
       int index = pvx - PVX;
 
       // Get the Lorentz factor and the 3-velocity.
-      Real Wsq = 1.0 + usq;
-      Real W = sqrt(Wsq);
-      Real vsq = usq/Wsq;
-      Real vu[3] = {uu[0]/W, uu[1]/W, uu[2]/W};
+      Real iWsq = 1.0/(1.0 + usq);
+      Real iW = sqrt(iWsq);
+      Real vsq = usq*iWsq;
+      Real vu[3] = {uu[0]*iW, uu[1]*iW, uu[2]*iW};
 
       Real cs = ps.GetEOS().GetSoundSpeed(prim[PRH], prim[PTM], &prim[PYF]);
       Real csq = cs*cs;
 
       Real iWsq_ad = 1.0 - vsq*csq;
-      Real dis = (csq/Wsq)*(gii*iWsq_ad - vu[index]*vu[index]*(1.0 - csq));
+      Real dis = (csq*iWsq)*(gii*iWsq_ad - vu[index]*vu[index]*(1.0 - csq));
       Real sdis = sqrt(dis);
 
       lambda_p = alpha*(vu[index]*(1.0 - csq) + sdis)/iWsq_ad - beta_u[index];

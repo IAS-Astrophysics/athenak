@@ -149,23 +149,6 @@ void LLF_DYNGR(TeamMember_t const &member,
     Real sdetg = sqrt(detg);
     Real g3u[NSPMETRIC];
     Primitive::InvertMatrix(g3u, g3d, detg);
-    /*int pvx, idx, csx;
-    if (ivx == IVX) {
-      pvx = PVX;
-      csx = CSX;
-      idx = S11;
-    }
-    else if (ivx == IVY) {
-      pvx = PVY;
-      csx = CSY;
-      idx = S22;
-    }
-    else if (ivx == IVZ) {
-      pvx = PVZ;
-      csx = CSY;
-      idx = S33;
-    }*/
-
 
     // Shift vector
     Real beta_u[3] = {0.0};

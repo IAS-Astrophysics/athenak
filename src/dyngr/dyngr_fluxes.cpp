@@ -330,7 +330,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
   }
 
   // excision masks
-  if (coord_.bh_excise) {
+  /*if (coord_.bh_excise) {
     auto &fc_mask_ = pmy_pack->pcoord->fc_mask;
 
     auto &fcorr_x1 = pmy_pack->phydro->uflx.x1f;
@@ -404,7 +404,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         }
       }
     });
-  }
+  }*/
   
   return TaskStatus::complete;
 }
