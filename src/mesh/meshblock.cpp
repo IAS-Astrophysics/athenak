@@ -18,10 +18,11 @@
 
 //----------------------------------------------------------------------------------------
 // MeshBlock constructor:
-//
+// Initializes mb_gid, mb_lev, mb_size, mb_bcs arrays.  The nghbrs array is initialized
+// by SetNeighbors function called by BuildTree***() functions.
 
 MeshBlock::MeshBlock(MeshBlockPack* ppack, int igids, int nmb) :
-  pmy_pack(ppack), nmb(nmb),
+  pmy_pack(ppack),
   mb_gid("mb_gid",nmb),
   mb_lev("mb_lev",nmb),
   mb_size("mbsize",nmb),
@@ -145,6 +146,7 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
   if (pmy_pack->pmesh->three_d) {nnghbr = 56;}
 
   // allocate size of DualArrays
+  int nmb = pmy_pack->nmb_thispack;
   Kokkos::realloc(nghbr, nmb, nnghbr);
 
   // Initialize host view elements of DualViews

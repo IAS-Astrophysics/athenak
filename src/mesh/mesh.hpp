@@ -163,7 +163,7 @@ class Mesh {
 
   // accessors
   int FindMeshBlockIndex(int tgid) {
-    for (int m=0; m<pmb_pack->pmb->nmb; ++m) {
+    for (int m=0; m<pmb_pack->nmb_thispack; ++m) {
       if (pmb_pack->pmb->mb_gid.h_view(m) == tgid) return m;
     }
     return -1;

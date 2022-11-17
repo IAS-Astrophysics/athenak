@@ -92,7 +92,7 @@ MeshRefinement::~MeshRefinement() {
 
 bool MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
   bool return_flag = false;
-  int nmb = pmbp->pmb->nmb;
+  int nmb = pmbp->nmb_thispack;
   // zero refine_flag in host space and sync with device
   for (int m=0; m<nmb; ++m) {
     refine_flag.h_view(m) = 0;
@@ -383,6 +383,7 @@ void MeshRefinement::RedistributeAndRefineMeshBlocks(int ntot) {
   if (pmy_mesh->two_d) nleaf = 4;
   if (pmy_mesh->three_d) nleaf = 8;
 
+/***
   // Step 1. construct new lists
   LogicalLocation *newloc = new LogicalLocation[ntot];
   int *newrank = new int[ntot];
@@ -433,6 +434,7 @@ void MeshRefinement::RedistributeAndRefineMeshBlocks(int ntot) {
   int bnx1 = my_blocks(0)->block_size.nx1;
   int bnx2 = my_blocks(0)->block_size.nx2;
   int bnx3 = my_blocks(0)->block_size.nx3;
+***/
 
 #ifdef MPI_PARALLEL
   // Step 3. count the number of the blocks to be sent / received

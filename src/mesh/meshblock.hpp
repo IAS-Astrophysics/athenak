@@ -33,7 +33,6 @@ class MeshBlock {
   ~MeshBlock() {}  // only default destructor needed
 
   // data
-  int nmb;              // number of MeshBlocks
   int nnghbr;           // maximum number of neighbors for each MeshBlock
 
   // DualArrays are used to store data used on both device and host

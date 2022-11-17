@@ -25,7 +25,7 @@
 
 void BoundaryValuesCC::ProlongCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca) {
   // create local references for variables in kernel
-  int nmb = pmy_pack->pmb->nmb;
+  int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
 
   int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
@@ -208,7 +208,7 @@ void BoundaryValuesCC::ProlongCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca) {
 
 void BoundaryValuesFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb) {
   // create local references for variables in kernel
-  int nmb = pmy_pack->pmb->nmb;
+  int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
 
   auto &nghbr = pmy_pack->pmb->nghbr;

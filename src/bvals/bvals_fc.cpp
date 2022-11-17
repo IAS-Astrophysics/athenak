@@ -39,7 +39,7 @@ BoundaryValuesFC::BoundaryValuesFC(MeshBlockPack *pp, ParameterInput *pin) :
 TaskStatus BoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
                                            DvceFaceFld4D<Real> &cb) {
   // create local references for variables in kernel
-  int nmb = pmy_pack->pmb->nmb;
+  int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
 
   {int &my_rank = global_variable::my_rank;
@@ -246,7 +246,7 @@ TaskStatus BoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
 TaskStatus BoundaryValuesFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b,
                                              DvceFaceFld4D<Real> &cb) {
   // create local references for variables in kernel
-  int nmb = pmy_pack->pmb->nmb;
+  int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
 
   bool bflag = false;
