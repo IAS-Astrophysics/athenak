@@ -235,7 +235,7 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
   gidslist = new int[global_variable::nranks];
   nmblist = new int[global_variable::nranks];
 
-  // following returns LogicalLocation list sorted by Z-ordering
+  // following returns LogicalLocation list sorted by Z-ordering, and total # of MBs
   ptree->CreateMeshBlockList(lloclist, nullptr, nmb_total);
 
 #if MPI_PARALLEL_ENABLED
@@ -390,16 +390,16 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile) {
   ptree->CreateRootGrid();
   for (int i=0; i<nmb_total; i++) {ptree->AddNodeWithoutRefinement(lloclist[i]);}
 
-  // check the tree structure
-  int nnb;
+  // check the tree structure by making sure total # of MBs counted in tree same as the
+  // number read from the restart file.
+  {int nnb;
   ptree->CreateMeshBlockList(lloclist, nullptr, nnb);
-
   if (nnb != nmb_total) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
         << "Tree reconstruction failed. Total number of blocks in reconstructed tree = "
         << nnb << ", number in file = " << nmb_total << std::endl;
     std::exit(EXIT_FAILURE);
-  }
+  }}
 
 #ifdef MPI_PARALLEL_ENABLED
   // check there is at least one MeshBlock per MPI rank

@@ -377,38 +377,53 @@ void MeshRefinement::UpdateMeshBlockTree(int &nnew, int &ndel) {
 //! Input argument is total number of MBs after refinement (current number +/- number of
 //! MBs refined/derefined).
 
-void MeshRefinement::RedistributeAndRefineMeshBlocks(int ntot) {
+void MeshRefinement::RedistributeAndRefineMeshBlocks(int nmb_new) {
   // compute nleaf = number of leaf MeshBlocks per refined block
   int nleaf = 2;
   if (pmy_mesh->two_d) nleaf = 4;
   if (pmy_mesh->three_d) nleaf = 8;
 
-/***
-  // Step 1. construct new lists
-  LogicalLocation *newloc = new LogicalLocation[ntot];
-  int *newrank = new int[ntot];
-  double *newcost = new double[ntot];
-  int *newtoold = new int[ntot];
-  int *oldtonew = new int[nbtotal];
-  int nbtold = nbtotal;
-  pmy_mesh->ptree->GetMeshBlockList(newloc, newtoold, nbtotal);
+  // allocate arrays
+  int nmb_old = pmy_mesh->nmb_total;
+  LogicalLocation *newloc = new LogicalLocation[nmb_new];
+  int *newrank = new int[nmb_new];
+  float *newcost = new float[nmb_new];
+  int *newtoold = new int[nmb_new];
+  int *oldtonew = new int[nmb_old];
+//  int nbtold = nbtotal;
 
-  // create a list mapping the previous gid to the current one
+  // Step 1. construct new lists
+  // create list mapping new MB gid (array index n)-->old gid for all MBs, and reset
+  // nmb_total variable stored in Mesh class.
+  auto &nmb_total_ = pmy_mesh->nmb_total;
+  pmy_mesh->ptree->CreateMeshBlockList(newloc, newtoold, nmb_total_);
+  if (pmy_mesh->nmb_total != nmb_new) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+        << "Number of MeshBlocks in new tree = " << pmy_mesh->nmb_total
+        << " but expected value = " << nmb_new << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
+  // create a list mapping the previous gid to the current one for all MBs
   oldtonew[0] = 0;
   int mb_idx = 1;
-  for (int n=1; n<ntot; n++) {
+  for (int n=1; n<nmb_new; n++) {
     if (newtoold[n] == newtoold[n-1] + 1) { // normal
       oldtonew[mb_idx++] = n;
     } else if (newtoold[n] == newtoold[n-1] + nleaf) { // derefined
-      for (int j=0; j<nleaf-1; j++)
+      for (int j=0; j<nleaf-1; j++) {
         oldtonew[mb_idx++] = n-1;
+      }
       oldtonew[mb_idx++] = n;
     }
   }
   // fill the last block
-  for ( ; mb_idx<nbtold; mb_idx++)
-    oldtonew[mb_idx] = ntot-1;
+  while (mb_idx < nmb_old) {
+    oldtonew[mb_idx] = nmb_new-1;
+    mb_idx++;
+  }
 
+/**
   current_level = 0;
   for (int n=0; n<ntot; n++) {
     // "on" = "old n" = "old gid" = "old global MeshBlock ID"
@@ -424,17 +439,15 @@ void MeshRefinement::RedistributeAndRefineMeshBlocks(int ntot) {
       newcost[n] = acost/nleaf;
     }
   }
+**/
 
   // Step 2. Calculate new load balance
-  pmy_mesh->LoadBalance(newcost, newrank, nslist, nblist, ntot);
+  // initialize cost array with the simplest estimate; all the blocks are equal
+  for (int i=0; i<(pmy_mesh->nmb_total); i++) {newcost[i] = 1.0;}
+  pmy_mesh->LoadBalance(newcost,newrank,pmy_mesh->gidslist,pmy_mesh->nmblist,nmb_total_);
 
-  int nbs = nslist[global_variable::my_rank];
-  int nbe = nbs + nblist[global_variable::my_rank] - 1;
-
-  int bnx1 = my_blocks(0)->block_size.nx1;
-  int bnx2 = my_blocks(0)->block_size.nx2;
-  int bnx3 = my_blocks(0)->block_size.nx3;
-***/
+  int nbs = pmy_mesh->gidslist[global_variable::my_rank];
+  int nbe = nbs + pmy_mesh->nmblist[global_variable::my_rank] - 1;
 
 #ifdef MPI_PARALLEL
   // Step 3. count the number of the blocks to be sent / received
