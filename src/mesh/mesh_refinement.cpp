@@ -8,6 +8,7 @@
 //! Note while restriction functions for CC and FC data are implemented here, prolongation
 //! is part of BVals classes.
 
+#include <cstdint>  // int32_t
 #include <iostream>
 
 #include "athena.hpp"
@@ -102,7 +103,7 @@ bool MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
   const int nkji = nx3*nx2*nx1;
   const int nji  = nx2*nx1;
 
-  // check Hydro/MHD refinement conditions for cons vars over all MeshBlocks in parallel
+  // check Hydro/MHD refinement conditions for cons vars over all MeshBlocks (on device)
   if (((pmbp->phydro != nullptr) || (pmbp->pmhd != nullptr)) && check_cons_) {
     auto &u0 = (pmbp->phydro != nullptr)? pmbp->phydro->u0 : pmbp->pmhd->u0;
 
@@ -152,14 +153,28 @@ bool MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
     });
   }
 
-  // Check user-defined refinement condition(s), if any
+  // Check user-defined refinement condition(s), if any (on device)
   if (pmy_mesh->pgen->user_ref_func != nullptr) {
     pmy_mesh->pgen->user_ref_func(pmbp);
   }
 
-  // sync refine_flag and check if any MeshBlocks need to be refined/de-refined
+  // sync refine_flag on device to host
   refine_flag.template modify<DevExeSpace>();
   refine_flag.template sync<HostMemSpace>();
+
+  // Check (on host) for MeshBlocks at max/root level flagged for refine/derefine
+  for (int m=0; m<nmb; ++m) {
+    if (pmy_mesh->lloclist[m].level == pmy_mesh->max_level) {
+      if (refine_flag.h_view(m) > 0) {refine_flag.h_view(m) = 0;}
+    }
+    if (pmy_mesh->lloclist[m].level == pmy_mesh->root_level) {
+      if (refine_flag.h_view(m) < 0) {refine_flag.h_view(m) = 0;}
+    }
+  }
+
+  // sync refine_flag on host to device
+  refine_flag.template modify<HostMemSpace>();
+  refine_flag.template sync<DevExeSpace>();
 
   for (int m=0; m<nmb; ++m) {
     if (refine_flag.h_view(m) != 0) {return_flag = true;}
@@ -400,24 +415,6 @@ void MeshRefinement::RedistributeAndRefineMeshBlocks(int nmb_new) {
     mb_idx++;
   }
 
-/**
-  current_level = 0;
-  for (int n=0; n<ntot; n++) {
-    // "on" = "old n" = "old gid" = "old global MeshBlock ID"
-    int on = newtoold[n];
-    if (newloc[n].level>current_level) // set the current max level
-      current_level = newloc[n].level;
-    if (newloc[n].level >= loclist[on].level) { // same or refined
-      newcost[n] = costlist[on];
-    } else {
-      double acost = 0.0;
-      for (int l=0; l<nleaf; l++)
-        acost += costlist[on+l];
-      newcost[n] = acost/nleaf;
-    }
-  }
-**/
-
   // Step 2. Calculate new load balance
   // initialize cost array with the simplest estimate; all the blocks are equal
   // TODO (@user): implement variable cost per MeshBlock as needed
@@ -426,6 +423,21 @@ void MeshRefinement::RedistributeAndRefineMeshBlocks(int nmb_new) {
 
   int nbs = pmy_mesh->gidslist[global_variable::my_rank];
   int nbe = nbs + pmy_mesh->nmblist[global_variable::my_rank] - 1;
+
+/***/
+std::cout << std::endl << "nmb_old=" << nmb_old << "  nmb_new=" << nmb_new << "  Old to new:" << std::endl;
+for (int n=0; n<nmb_old; ++n) {
+std::cout << "n=" << n << "  new=" << oldtonew[n] << std::endl;
+}
+/***/
+
+
+/***/
+std::cout << std::endl << "New to old:" << std::endl;
+for (int n=0; n<nmb_new; ++n) {
+std::cout << "n=" << n << "  old=" << newtoold[n] << std::endl;
+}
+/***/
 
 #ifdef MPI_PARALLEL
   // Step 3. count the number of the blocks to be sent / received

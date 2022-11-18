@@ -47,7 +47,7 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
 
   // Error check properties of input paraemters for SMR/AMR meshes.
   if (adaptive) {
-    max_level = pin->GetOrAddInteger("mesh_refinement", "numlevel", 1) + root_level - 1;
+    max_level = pin->GetOrAddInteger("mesh_refinement", "num_levels", 1) + root_level - 1;
     if (max_level > 31) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Number of refinement levels must be smaller than "
@@ -106,7 +106,7 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
         if (log_ref_lev > max_level) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "Refinement level exceeds maximum allowed ("
-              << max_level << ")" << std::endl << "Reduce/specify 'numlevel' in "
+              << max_level << ")" << std::endl << "Reduce/specify 'num_levels' in "
               << "<mesh_refinement> input block if using AMR" << std::endl;
           std::exit(EXIT_FAILURE);
         }
@@ -336,7 +336,7 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile) {
 
   // Error check properties of input paraemters for SMR/AMR meshes.
   if (adaptive) {
-    max_level = pin->GetOrAddInteger("mesh", "numlevel", 1) + root_level - 1;
+    max_level = pin->GetOrAddInteger("mesh", "num_levels", 1) + root_level - 1;
     if (max_level > 31) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Number of refinement levels must be smaller than "

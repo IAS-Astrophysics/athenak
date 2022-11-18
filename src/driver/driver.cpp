@@ -410,8 +410,8 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
       pmesh->ncycle++;
       nmb_updated_ += pmesh->nmb_total;
 
-      // with AMR, check for mesh refinement
-      if (pmesh->adaptive) {
+      // with AMR, check for mesh refinement every ncycle_amr steps
+      if (pmesh->adaptive && ((pmesh->ncycle)%(pmesh->pmr->ncycle_amr) == 0)) {
         MeshBlockPack* pmbp = pmesh->pmb_pack;
         bool update_mesh = pmesh->pmr->CheckForRefinement(pmbp);
         if (update_mesh) pmesh->pmr->AdaptiveMeshRefinement();
