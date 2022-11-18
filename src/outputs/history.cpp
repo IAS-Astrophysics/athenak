@@ -57,6 +57,10 @@ void HistoryOutput::LoadOutputData(Mesh *pm) {
     } else if (data.physics == PhysicsModule::SpaceTimeDynamics) {
       LoadZ4cHistoryData(&data, pm);
     }
+    // user history output
+    if (pm->pgen->user_hist) {
+      (pm->pgen->user_hist_func)(&data, pm);
+    }
   }
 }
 
