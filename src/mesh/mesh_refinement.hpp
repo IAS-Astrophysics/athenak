@@ -22,14 +22,14 @@ class MeshRefinement {
   ~MeshRefinement();
 
   // data
-  DualArray1D<int> refine_flag;   // refinement flag for each MeshBlock
-  // following 8x arrays allocated with length [nranks] only with AMR
+  DualArray1D<int> refine_flag; // refinement flag for each MeshBlock
+  int nmb_created;              // total number of MeshBlocks created via AMR on this rank
+  int nmb_deleted;              // total number of MeshBlocks deleted via AMR on this rank
+  int ncycle_amr;               // # of cycles between AMR refinement/derefinement
+  int ncycle_deref;             // # of cycles MeshBlock lives before it can be derefined
+
+  // following 2x arrays allocated with length [nranks] only with AMR
   int *nref, *nderef;
-/**
-  int *rdisp, *ddisp;
-  int *bnref, *bnderef;
-  int *brdisp, *bddisp;
-**/
 
   // functions
   bool CheckForRefinement(MeshBlockPack* pmbp);

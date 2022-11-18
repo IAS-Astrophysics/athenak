@@ -27,9 +27,17 @@
 
 MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
   pmy_mesh(pm),
+  refine_flag("refine_flag",pm->nmb_thisrank),
+  nmb_created(0), nmb_deleted(0),
+  ncycle_amr(1), ncycle_deref(5),
   d_threshold_(0.0), dd_threshold_(0.0), dv_threshold_(0.0),
-  check_cons_(false),
-  refine_flag("refine_flag",pm->nmb_thisrank) {
+  check_cons_(false) {
+
+  // read interval (in cycles) between check of AMR and derefinement
+  if (pin->DoesBlockExist("mesh_refinement")) {
+    ncycle_amr = pin->GetOrAddReal("mesh_refinement", "ncycle_amr", 1);
+    ncycle_deref = pin->GetOrAddReal("mesh_refinement", "ncycle_deref", 5);
+  }
 
   // read thresholds from <mesh_refinement> block in input file
   if (pin->DoesParameterExist("mesh_refinement", "dens_max")) {
@@ -48,14 +56,6 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
   if (pm->adaptive) {  // allocate arrays for AMR
     nref = new int[global_variable::nranks];
     nderef = new int[global_variable::nranks];
-/**
-    rdisp = new int[global_variable::nranks];
-    ddisp = new int[global_variable::nranks];
-    bnref = new int[global_variable::nranks];
-    bnderef = new int[global_variable::nranks];
-    brdisp = new int[global_variable::nranks];
-    bddisp = new int[global_variable::nranks];
-**/
   }
 }
 
@@ -66,14 +66,6 @@ MeshRefinement::~MeshRefinement() {
   if (pmy_mesh->adaptive) { // deallocate arrays for AMR
     delete [] nref;
     delete [] nderef;
-/**
-    delete [] rdisp;
-    delete [] ddisp;
-    delete [] bnref;
-    delete [] bnderef;
-    delete [] brdisp;
-    delete [] bddisp;
-**/
   }
 }
 
@@ -176,34 +168,19 @@ bool MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void Mesh::AdaptiveMeshRefinement(ParameterInput *pin)
-//! \brief Main function for adaptive mesh refinement
+//! \fn void MeshRefinement::AdaptiveMeshRefinement()
+//! \brief Driver function for adaptive mesh refinement
 
 void MeshRefinement::AdaptiveMeshRefinement() {
   int nnew = 0, ndel = 0;
 
-/***
-  amr_updated = false;
-
-  if (adaptive) {
-    UpdateMeshBlockTree(nnew, ndel);
-    nbnew += nnew; nbdel += ndel;
-  }
-
-  lb_flag_ |= lb_automatic_;
-
-  UpdateCostList();
+  UpdateMeshBlockTree(nnew, ndel);
 
   if (nnew != 0 || ndel != 0) { // at least one (de)refinement happened
-    amr_updated = true;
-    GatherCostListAndCheckBalance();
-    RedistributeAndRefineMeshBlocks(pin, nbtotal + nnew - ndel);
-  } else if (lb_flag_ && step_since_lb >= lb_interval_) {
-    if (!GatherCostListAndCheckBalance()) // load imbalance detected
-      RedistributeAndRefineMeshBlocks(pin, nbtotal);
-    lb_flag_ = false;
+    RedistributeAndRefineMeshBlocks(pmy_mesh->nmb_total + nnew - ndel);
+    nmb_created += nnew;
+    nmb_deleted += ndel;
   }
-***/
 
   return;
 }
@@ -443,7 +420,8 @@ void MeshRefinement::RedistributeAndRefineMeshBlocks(int nmb_new) {
 
   // Step 2. Calculate new load balance
   // initialize cost array with the simplest estimate; all the blocks are equal
-  for (int i=0; i<(pmy_mesh->nmb_total); i++) {newcost[i] = 1.0;}
+  // TODO (@user): implement variable cost per MeshBlock as needed
+  for (int i=0; i<nmb_total_; i++) {newcost[i] = 1.0;}
   pmy_mesh->LoadBalance(newcost,newrank,pmy_mesh->gidslist,pmy_mesh->nmblist,nmb_total_);
 
   int nbs = pmy_mesh->gidslist[global_variable::my_rank];

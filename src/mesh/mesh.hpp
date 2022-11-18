@@ -128,8 +128,6 @@ class Mesh {
   int nmb_rootx1, nmb_rootx2, nmb_rootx3; // # of MeshBlocks at root level in each dir
   int nmb_total;           // total number of MeshBlocks across all levels/ranks
   int nmb_thisrank;        // number of MeshBlocks on this MPI rank (local)
-  int nmb_created;         // number of MeshBlcoks created via AMR during run (per rank?)
-  int nmb_deleted;         // number of MeshBlcoks deleted via AMR during run (per rank?)
 
   int root_level; // logical level of root (physical) grid (e.g. Fig. 3 of method paper)
   int max_level;  // logical level of maximum refinement grid in Mesh
@@ -173,16 +171,9 @@ class Mesh {
   }
 
  private:
-  // variables for load balancing control (not yet implemented)
-  bool lb_flag_, lb_automatic_;
-  int lb_cyc_interval_;
-  int cyc_since_lb_;
-
   std::unique_ptr<MeshBlockTree> ptree;  // pointer to root node in binary/quad/oct-tree
-
   // functions
   void LoadBalance(float *clist, int *rlist, int *slist, int *nlist, int nb);
-  void ResetLoadBalanceCounters();
 };
 
 #endif  // MESH_MESH_HPP_

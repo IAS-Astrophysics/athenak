@@ -249,6 +249,7 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
 #endif
 
   // initialize cost array with the simplest estimate; all the blocks are equal
+  // TODO (@user): implement variable cost per MeshBlock as needed
   for (int i=0; i<nmb_total; i++) {costlist[i] = 1.0;}
   LoadBalance(costlist, ranklist, gidslist, nmblist, nmb_total);
 
@@ -264,7 +265,6 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
     pmr = new MeshRefinement(this, pin);
   }
 
-  ResetLoadBalanceCounters();
   if (global_variable::my_rank == 0) {PrintMeshDiagnostics();}
 
   // set initial time/cycle parameters
@@ -425,7 +425,6 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile) {
     pmr = new MeshRefinement(this, pin);
   }
 
-  ResetLoadBalanceCounters();
   if (global_variable::my_rank == 0) {PrintMeshDiagnostics();}
 
   // set remaining parameters

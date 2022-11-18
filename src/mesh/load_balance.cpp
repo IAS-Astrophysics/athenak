@@ -80,17 +80,3 @@ void Mesh::LoadBalance(float *clist, int *rlist, int *slist, int *nlist, int nb)
 
   return;
 }
-
-//----------------------------------------------------------------------------------------
-//! \fn void Mesh::ResetLoadBalanceCounters()
-//! \brief reset counters and flags for load balancing
-
-void Mesh::ResetLoadBalanceCounters() {
-  if (lb_automatic_) {
-    for (int m=0; m<pmb_pack->nmb_thispack; ++m) {
-      costlist[pmb_pack->pmb->mb_gid.h_view(m)] = std::numeric_limits<float>::min();
-    }
-  }
-  lb_flag_ = false;
-  cyc_since_lb_ = 0;
-}

@@ -475,8 +475,8 @@ void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
 
       if (pmesh->adaptive) {
         std::cout << std::endl << "Current number of MeshBlocks = " << pmesh->nmb_total
-                  << std::endl << pmesh->nmb_created << " MeshBlocks were created, and "
-                  << pmesh->nmb_deleted << " were deleted during this run." << std::endl;
+                  << std::endl << pmesh->pmr->nmb_created << " MeshBlocks created, "
+                  << pmesh->pmr->nmb_deleted << " deleted during this run." << std::endl;
       }
 
       // Calculate and print the zone-cycles/exe-second and wall-second
