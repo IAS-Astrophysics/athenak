@@ -71,17 +71,33 @@ MeshRefinement::~MeshRefinement() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn bool MeshRefinement::CheckForRefinementCondition()
+//! \fn void MeshRefinement::AdaptiveMeshRefinement()
+//! \brief Simple driver function for adaptive mesh refinement
+
+void MeshRefinement::AdaptiveMeshRefinement() {
+  int nnew = 0, ndel = 0;
+  UpdateMeshBlockTree(nnew, ndel);
+
+  if (nnew != 0 || ndel != 0) { // at least one (de)refinement flagged
+    RedistributeAndRefineMeshBlocks(pmy_mesh->nmb_total + nnew - ndel);
+    nmb_created += nnew;
+    nmb_deleted += ndel;
+  }
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn bool MeshRefinement::CheckForRefinement()
 //! \brief Checks for refinement/de-refinement and sets refine_flag(m) for all MeshBlocks
-//! within a MeshBlockPack.  Also returns true if any MeshBlock needs to be refined.
+//! within a MeshBlockPack. Returns true if any MeshBlock needs to be refined.
 //! Default refinement conditions implemented are:
 //!   (1) gradient of density above a threshold value (hydro/MHD)
 //!   (2) shear of velocity above a threshold value (hydro/MHD)
 //!   (3) density max above a threshold value (hydro/MHD)
 //!   (4) current density above a threshold (MHD)
 //! These are controlled by input parameters in the <mesh_refinement> block.
-//! User-defined refinement conditions can also be enrolled in the problem generator
-//! by calling the EnrollUserRefinementCondition() function.
+//! User-defined refinement conditions can also be enrolled by setting the *usr_ref_func
+//! pointer in the problem generator.
 
 bool MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
   bool return_flag = false;
@@ -180,24 +196,6 @@ bool MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
     if (refine_flag.h_view(m) != 0) {return_flag = true;}
   }
   return return_flag;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void MeshRefinement::AdaptiveMeshRefinement()
-//! \brief Driver function for adaptive mesh refinement
-
-void MeshRefinement::AdaptiveMeshRefinement() {
-  int nnew = 0, ndel = 0;
-
-  UpdateMeshBlockTree(nnew, ndel);
-
-  if (nnew != 0 || ndel != 0) { // at least one (de)refinement happened
-    RedistributeAndRefineMeshBlocks(pmy_mesh->nmb_total + nnew - ndel);
-    nmb_created += nnew;
-    nmb_deleted += ndel;
-  }
-
-  return;
 }
 
 //----------------------------------------------------------------------------------------
@@ -372,31 +370,27 @@ void MeshRefinement::UpdateMeshBlockTree(int &nnew, int &ndel) {
 void MeshRefinement::RedistributeAndRefineMeshBlocks(int nmb_new) {
   // compute nleaf = number of leaf MeshBlocks per refined block
   int nleaf = 2;
-  if (pmy_mesh->two_d) nleaf = 4;
-  if (pmy_mesh->three_d) nleaf = 8;
+  Mesh* pm = pmy_mesh;
+  if (pm->two_d) nleaf = 4;
+  if (pm->three_d) nleaf = 8;
 
-  // allocate arrays
-  int nmb_old = pmy_mesh->nmb_total;
-  LogicalLocation *newloc = new LogicalLocation[nmb_new];
-  int *newrank = new int[nmb_new];
-  float *newcost = new float[nmb_new];
+  // Step 1. Create list of logical locations for new MBs, and newtoold list mapping
+  // (new MB gid)-->(old gid) for all MBs.  Index of array is new gid, value is old gid.
+  int nmb_old = pm->nmb_total;
+  LogicalLocation *new_lloclist = new LogicalLocation[nmb_new];
   int *newtoold = new int[nmb_new];
-  int *oldtonew = new int[nmb_old];
-//  int nbtold = nbtotal;
-
-  // Step 1. construct new lists
-  // create list mapping new MB gid (array index n)-->old gid for all MBs, and reset
-  // nmb_total variable stored in Mesh class.
-  auto &nmb_total_ = pmy_mesh->nmb_total;
-  pmy_mesh->ptree->CreateMeshBlockList(newloc, newtoold, nmb_total_);
-  if (pmy_mesh->nmb_total != nmb_new) {
+  int new_nmb_total;
+  pm->ptree->CreateMeshBlockList(new_lloclist, newtoold, new_nmb_total);
+  if (new_nmb_total != nmb_new) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "Number of MeshBlocks in new tree = " << pmy_mesh->nmb_total
-        << " but expected value = " << nmb_new << std::endl;
+        << "Number of MeshBlocks in new tree = " << new_nmb_total << " but expected "
+        << "value = " << nmb_new << std::endl;
     std::exit(EXIT_FAILURE);
   }
 
-  // create a list mapping the previous gid to the current one for all MBs
+  // Step 2.  Create oldtonew list mapping the previous gid to the current one for all MBs
+  // Index of array is old gid, value os new gid.
+  int *oldtonew = new int[nmb_old];
   oldtonew[0] = 0;
   int mb_idx = 1;
   for (int n=1; n<nmb_new; n++) {
@@ -415,14 +409,19 @@ void MeshRefinement::RedistributeAndRefineMeshBlocks(int nmb_new) {
     mb_idx++;
   }
 
-  // Step 2. Calculate new load balance
-  // initialize cost array with the simplest estimate; all the blocks are equal
+  // Step 3. Calculate new load balance.  Initialize new cost array with the simplest
+  // estimate possible: all the blocks are equal
   // TODO (@user): implement variable cost per MeshBlock as needed
-  for (int i=0; i<nmb_total_; i++) {newcost[i] = 1.0;}
-  pmy_mesh->LoadBalance(newcost,newrank,pmy_mesh->gidslist,pmy_mesh->nmblist,nmb_total_);
+  float *new_costlist = new float[nmb_new];
+  int *new_ranklist = new int[nmb_new];
+  int *new_gidslist = new int[global_variable::nranks];
+  int *new_nmblist = new int[global_variable::nranks];
 
-  int nbs = pmy_mesh->gidslist[global_variable::my_rank];
-  int nbe = nbs + pmy_mesh->nmblist[global_variable::my_rank] - 1;
+  for (int i=0; i<nmb_new; i++) {new_costlist[i] = 1.0;}
+  // Return arguments over-write old values of [gidslist, nmblist] with values for new
+  // Mesh. These arrays are dimensioned [nranks] so re-dimensioning not needed
+  pm->LoadBalance(new_costlist, new_ranklist, new_gidslist, new_nmblist, new_nmb_total);
+
 
 /***/
 std::cout << std::endl << "nmb_old=" << nmb_old << "  nmb_new=" << nmb_new << "  Old to new:" << std::endl;
@@ -439,129 +438,55 @@ std::cout << "n=" << n << "  old=" << newtoold[n] << std::endl;
 }
 /***/
 
-#ifdef MPI_PARALLEL
-  // Step 3. count the number of the blocks to be sent / received
+  hydro::Hydro* phydro = pm->pmb_pack->phydro;
+  mhd::MHD* pmhd = pm->pmb_pack->pmhd;
+  auto &nmb = pm->pmb_pack->nmb_thispack;
+  int mbs = pmy_mesh->gidslist[global_variable::my_rank];
+  int mbe = mbs + pmy_mesh->nmblist[global_variable::my_rank] - 1;
 
-#endif // MPI_PARALLEL
+  // Step 4. Restrict evolved variables for MBs flagged for derefinement
 
-/**
-  // Step 7. construct a new MeshBlock list (moving the data within the MPI rank)
-  AthenaArray<MeshBlock*> newlist;
-  newlist.NewAthenaArray(nblist[Globals::my_rank]);
-  RegionSize block_size = my_blocks(0)->block_size;
-
-  for (int n=nbs; n<=nbe; n++) {
-    int on = newtoold[n];
-    if ((ranklist[on] == Globals::my_rank) && (loclist[on].level == newloc[n].level)) {
-      // on the same MPI rank and same level -> just move it
-      MeshBlock* pob = FindMeshBlock(on);
-      pob->gid = n;
-      pob->lid = n - nbs;
-      newlist(n-nbs) = pob;
-      my_blocks(on-gids_) = nullptr;
-    } else {
-      // on a different refinement level or MPI rank - create a new block
-      BoundaryFlag block_bcs[6];
-      SetBlockSizeAndBoundaries(newloc[n], block_size, block_bcs);
-      newlist(n-nbs) = new MeshBlock(n, n-nbs, newloc[n], block_size, block_bcs, this,
-                                     pin, gflag, true);
-      // fill the conservative variables
-      if ((loclist[on].level > newloc[n].level)) { // fine to coarse (f2c)
-        for (int ll=0; ll<nleaf; ll++) {
-          if (ranklist[on+ll] != Globals::my_rank) continue;
-          // fine to coarse on the same MPI rank (different AMR level) - restriction
-          MeshBlock* pob = FindMeshBlock(on+ll);
-          FillSameRankFineToCoarseAMR(pob, newlist(n-nbs), loclist[on+ll]);
-        }
-      } else if ((loclist[on].level < newloc[n].level) && // coarse to fine (c2f)
-                 (ranklist[on] == Globals::my_rank)) {
-        // coarse to fine on the same MPI rank (different AMR level) - prolongation
-        MeshBlock* pob = FindMeshBlock(on);
-        FillSameRankCoarseToFineAMR(pob, newlist(n-nbs), newloc[n]);
+  // Step 5. Move evolved variables within view for any MB in which (new gid) > (old gid)
+  for (int m=0; m<nmb; ++m) {
+    int n = oldtonew[mbs + m] - mbs;
+    if (n > 0) {
+      if (phydro != nullptr) {
+        auto u0 = phydro->u0;
+        auto src = Kokkos::subview(u0,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+        auto dst = Kokkos::subview(u0,n,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+        Kokkos::deep_copy(dst, src);
       }
     }
   }
 
-  // discard remaining MeshBlocks
-  // they could be reused, but for the moment, just throw them away for simplicity
-  for (int n = 0; n<nblocal; n++) {
-    delete my_blocks(n); // OK to delete even if it is nullptr
-    my_blocks(n) = nullptr;
-  }
-
-  // Replace the MeshBlock list
-  my_blocks.ExchangeAthenaArray(newlist);
-  nblocal = nblist[Globals::my_rank];
-  gids_ = nbs;
-  gide_ = nbe;
-
-#ifdef MPI_PARALLEL
-  // Step 8. Receive the data and load into MeshBlocks
-  // This is a test: try MPI_Waitall later.
-  if (nrecv != 0) {
-    int rb_idx = 0;     // recv buffer index
-    for (int n=nbs; n<=nbe; n++) {
-      int on = newtoold[n];
-      LogicalLocation &oloc = loclist[on];
-      LogicalLocation &nloc = newloc[n];
-      MeshBlock *pb = FindMeshBlock(n);
-      if (oloc.level == nloc.level) { // same
-        if (ranklist[on] == Globals::my_rank) continue;
-        MPI_Wait(&(req_recv[rb_idx]), MPI_STATUS_IGNORE);
-        FinishRecvSameLevel(pb, recvbuf[rb_idx]);
-        rb_idx++;
-      } else if (oloc.level > nloc.level) { // f2c
-        for (int l=0; l<nleaf; l++) {
-          if (ranklist[on+l] == Globals::my_rank) continue;
-          MPI_Wait(&(req_recv[rb_idx]), MPI_STATUS_IGNORE);
-          FinishRecvFineToCoarseAMR(pb, recvbuf[rb_idx], loclist[on+l]);
-          rb_idx++;
-        }
-      } else { // c2f
-        if (ranklist[on] == Globals::my_rank) continue;
-        MPI_Wait(&(req_recv[rb_idx]), MPI_STATUS_IGNORE);
-        FinishRecvCoarseToFineAMR(pb, recvbuf[rb_idx]);
-        rb_idx++;
+  // Step 6. Move evolved variables within view for any MB in which (new gid) < (old gid)
+  for (int m=(nmb-1); m >= 0; --m) {
+    int n = oldtonew[mbs + m] - mbs;
+    if (n < 0) {
+      if (phydro != nullptr) {
+        auto u0 = phydro->u0;
+        auto src = Kokkos::subview(u0,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+        auto dst = Kokkos::subview(u0,n,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+        Kokkos::deep_copy(dst, src);
       }
     }
   }
-#endif
 
-  // deallocate arrays
-  delete [] loclist;
-  delete [] ranklist;
-  delete [] costlist;
-  delete [] newtoold;
-  delete [] oldtonew;
-#ifdef MPI_PARALLEL
-  if (nsend != 0) {
-    MPI_Waitall(nsend, req_send, MPI_STATUSES_IGNORE);
-    for (int n=0; n<nsend; n++)
-      delete [] sendbuf[n];
-    delete [] sendbuf;
-    delete [] req_send;
+  // Step 7. Prolongate evolved variables for MBs flagged for refinement.
+  if (phydro != nullptr) {
+    auto u0 = phydro->u0;
+    ProlongateCC(u0);
   }
-  if (nrecv != 0) {
-    for (int n=0; n<nrecv; n++)
-      delete [] recvbuf[n];
-    delete [] recvbuf;
-    delete [] req_recv;
-  }
-#endif
 
-  // update the lists
-  loclist = newloc;
-  ranklist = newrank;
-  costlist = newcost;
-
-  // re-initialize the MeshBlocks
-  for (int i=0; i<nblocal; ++i)
-    my_blocks(i)->pbval->SearchAndSetNeighbors(tree, ranklist, nslist);
-  Initialize(2, pin);
-
-  ResetLoadBalanceVariables();
-
+/***
+  // Set numbers of MBs in Mesh and MeshBlockPack to new values
+  pm->nmb_total = nmb_new;
+  pm->nmb_thisrank = pm->nmblist[global_variable::my_rank];
+  pm->pmbp->gids = gidslist[global_variable::my_rank];
+  pm->pmbp->gide = pm->pmbp->gids + nmblist[global_variable::my_rank] - 1;
+  pm->pmbp->nmb_thispack = pm->pmbp->gids - pm->pmbp->gide + 1;
 ***/
+
   return;
 }
 
@@ -710,5 +635,73 @@ void MeshRefinement::RestrictFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb)
       }
     });
   }
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MeshRefinement::ProlongateCC
+//! \brief prolongates cell-centered variables in input view at any MeshBlock index m that
+//! is flagged for refinement to the m-index locations which are immediately following,
+//! overwriting any data located there. The data in these locations must already have been
+//! copied to another location or sent to another rank via MPI.
+
+void MeshRefinement::ProlongateCC(DvceArray5D<Real> &a) {
+  int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
+
+  auto &indcs = pmy_mesh->mb_indcs;
+  auto &is = indcs.is, &ie = indcs.ie;
+  auto &js = indcs.js, &je = indcs.je;
+  auto &ks = indcs.ks, &ke = indcs.ke;
+  auto &nmb = pmy_mesh->pmb_pack->nmb_thispack;
+  auto &multi_d = pmy_mesh->multi_d;
+  auto &three_d = pmy_mesh->three_d;
+
+  par_for("prolongCC",DevExeSpace(), 0, (nmb-1), 0, nvar-1, ks, ke, js, je, is, ie,
+  KOKKOS_LAMBDA(const int m, const int v, const int k, const int j, const int i) {
+    if (refine_flag.h_view(m) > 0) {
+      // calculate x1-gradient using the min-mod limiter
+      Real dl = a(m,v,k,j,i  ) - a(m,v,k,j,i-1);
+      Real dr = a(m,v,k,j,i+1) - a(m,v,k,j,i  );
+      Real dvar1 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
+
+      // calculate x2-gradient using the min-mod limiter
+      Real dvar2 = 0.0;
+      if (multi_d) {
+        dl = a(m,v,k,j  ,i) - a(m,v,k,j-1,i);
+        dr = a(m,v,k,j+1,i) - a(m,v,k,j  ,i);
+        dvar2 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
+      }
+
+      // calculate x3-gradient using the min-mod limiter
+      Real dvar3 = 0.0;
+      if (three_d) {
+        dl = a(m,v,k  ,j,i) - a(m,v,k-1,j,i);
+        dr = a(m,v,k+1,j,i) - a(m,v,k  ,j,i);
+        dvar3 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
+      }
+
+      // fine indices refer to target array
+      int finei = 2*((i-indcs.is)%(indcs.cnx1)) + indcs.is;
+      int finej = 2*((j-indcs.js)%(indcs.cnx2)) + indcs.js;
+      int finek = 2*((k-indcs.ks)%(indcs.cnx3)) + indcs.ks;
+      int n = m + (i-indcs.is)/(indcs.cnx1) + 2*(j-indcs.js)/(indcs.cnx2) +
+                4*(k-indcs.ks)%(indcs.cnx3);
+
+      // interpolate to the finer grid
+      a(n,v,finek,finej,finei  ) = a(m,v,k,j,i) - dvar1 - dvar2 - dvar3;
+      a(n,v,finek,finej,finei+1) = a(m,v,k,j,i) + dvar1 - dvar2 - dvar3;
+      if (multi_d) {
+        a(n,v,finek,finej+1,finei  ) = a(m,v,k,j,i) - dvar1 + dvar2 - dvar3;
+        a(n,v,finek,finej+1,finei+1) = a(m,v,k,j,i) + dvar1 + dvar2 - dvar3;
+      }
+      if (three_d) {
+        a(n,v,finek+1,finej  ,finei  ) = a(m,v,k,j,i) - dvar1 - dvar2 + dvar3;
+        a(n,v,finek+1,finej  ,finei+1) = a(m,v,k,j,i) + dvar1 - dvar2 + dvar3;
+        a(n,v,finek+1,finej+1,finei  ) = a(m,v,k,j,i) - dvar1 + dvar2 + dvar3;
+        a(n,v,finek+1,finej+1,finei+1) = a(m,v,k,j,i) + dvar1 + dvar2 + dvar3;
+      }
+    }
+  });
+
   return;
 }

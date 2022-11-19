@@ -38,6 +38,7 @@ class MeshRefinement {
   void RedistributeAndRefineMeshBlocks(int ntot);
   void RestrictCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
   void RestrictFC(DvceFaceFld4D<Real> &a, DvceFaceFld4D<Real> &ca);
+  void ProlongateCC(DvceArray5D<Real> &a);
 
  private:
   // data

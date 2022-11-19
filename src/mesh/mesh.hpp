@@ -131,7 +131,7 @@ class Mesh {
 
   int root_level; // logical level of root (physical) grid (e.g. Fig. 3 of method paper)
   int max_level;  // logical level of maximum refinement grid in Mesh
-  int gids, gide; // start/end of global IDs on this MPI rank
+//  int gids, gide; // start/end of global IDs on this MPI rank
 
   // following 3x arrays allocated with length [nmbtotal] in BuildTreeFromXXXX()
   int *ranklist;              // rank of each MeshBlock

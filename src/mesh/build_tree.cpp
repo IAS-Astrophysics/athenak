@@ -254,11 +254,11 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
   LoadBalance(costlist, ranklist, gidslist, nmblist, nmb_total);
 
   // create MeshBlockPack for this rank
-  gids = gidslist[global_variable::my_rank];
-  gide = gids + nmblist[global_variable::my_rank] - 1;
+  int mbp_gids = gidslist[global_variable::my_rank];
+  int mbp_gide = mbp_gids + nmblist[global_variable::my_rank] - 1;
   nmb_thisrank = nmblist[global_variable::my_rank];
 
-  pmb_pack = new MeshBlockPack(this, gids, gide);
+  pmb_pack = new MeshBlockPack(this, mbp_gids, mbp_gide);
   pmb_pack->AddMeshBlocksAndCoordinates(pin, mb_indcs);
   pmb_pack->pmb->SetNeighbors(ptree, ranklist);
   if (multilevel) {
@@ -414,11 +414,11 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile) {
   LoadBalance(costlist, ranklist, gidslist, nmblist, nmb_total);
 
   // create MeshBlockPack for this rank
-  gids = gidslist[global_variable::my_rank];
-  gide = gids + nmblist[global_variable::my_rank] - 1;
+  int mbp_gids = gidslist[global_variable::my_rank];
+  int mbp_gide = mbp_gids + nmblist[global_variable::my_rank] - 1;
   nmb_thisrank = nmblist[global_variable::my_rank];
 
-  pmb_pack = new MeshBlockPack(this, gids, gide);
+  pmb_pack = new MeshBlockPack(this, mbp_gids, mbp_gide);
   pmb_pack->AddMeshBlocksAndCoordinates(pin, mb_indcs);
   pmb_pack->pmb->SetNeighbors(ptree, ranklist);
   if (multilevel) {
