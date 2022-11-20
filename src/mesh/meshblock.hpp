@@ -45,13 +45,12 @@ class MeshBlock {
 
   // function to compute index of 56 neighbors
   int NeighborIndx(int i, int j, int k, int n1, int n2);
+  // function to set data describing neighbors
+  void SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklist);
 
  private:
   // data
   MeshBlockPack* pmy_pack;
-
-  // functions
-  void SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklist);
 };
 
 #endif // MESH_MESHBLOCK_HPP_

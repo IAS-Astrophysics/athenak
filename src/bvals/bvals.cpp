@@ -25,7 +25,10 @@ BoundaryValues::BoundaryValues(MeshBlockPack *pp, ParameterInput *pin) :
   u_in("uin",1,1),
   b_in("bin",1,1) {
   // allocate vector of status flags and MPI requests (if needed)
+  int nmb = std::max((pmy_pack->nmb_thispack), (pmy_pack->pmesh->nmb_max));
+/**
   int nmb = pmy_pack->nmb_thispack;
+**/
   int nnghbr = pmy_pack->pmb->nnghbr;
   for (int n=0; n<nnghbr; ++n) {
     for (int m=0; m<nmb; ++m) {
@@ -98,7 +101,10 @@ void BoundaryValues::InitializeBuffers(const int nvar) {
   }
 
   // x1 faces; NeighborIndex = [0,...,7]
+  int nmb = std::max((pmy_pack->nmb_thispack), (pmy_pack->pmesh->nmb_max));
+/**
   int nmb = pmy_pack->nmb_thispack;
+**/
   for (int n=-1; n<=1; n+=2) {
     for (int fz=0; fz<nfz; fz++) {
       for (int fy = 0; fy<nfy; fy++) {

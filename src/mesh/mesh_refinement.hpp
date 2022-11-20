@@ -22,23 +22,28 @@ class MeshRefinement {
   ~MeshRefinement();
 
   // data
-  DualArray1D<int> refine_flag; // refinement flag for each MeshBlock
+  DualArray1D<int> refine_flag;   // refinement flag for each MeshBlock
+  HostArray1D<int> cyc_since_ref; // # of cycles since MB last refined/derefined
+  int max_nmb;                  // max number of MBs allowed in calculation (memory limit)
   int nmb_created;              // total number of MeshBlocks created via AMR on this rank
   int nmb_deleted;              // total number of MeshBlocks deleted via AMR on this rank
-  int ncycle_amr;               // # of cycles between AMR refinement/derefinement
-  int ncycle_deref;             // # of cycles MeshBlock lives before it can be derefined
+  int ncycle_check_amr;         // # of cycles between checking refinement/derefinement
+  int ncycle_ref_inter;         // # of cycles between allowing refinement/derefinement
 
   // following 2x arrays allocated with length [nranks] only with AMR
   int *nref, *nderef;
+  // following 2x arrays allocated with length [nmb_new] and [nmb_old]] only with AMR
+  int *newtoold, *oldtonew;
 
   // functions
   bool CheckForRefinement(MeshBlockPack* pmbp);
-  void AdaptiveMeshRefinement();
+  void AdaptiveMeshRefinement(Driver *pdrive, ParameterInput *pin);
   void UpdateMeshBlockTree(int &nnew, int &ndel);
-  void RedistributeAndRefineMeshBlocks(int ntot);
+  void RedistributeAndRefineMeshBlocks(ParameterInput *pin, int ntot);
   void RestrictCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
   void RestrictFC(DvceFaceFld4D<Real> &a, DvceFaceFld4D<Real> &ca);
-  void ProlongateCC(DvceArray5D<Real> &a);
+  void RefineCC(int nmb, DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
+  void DerefineCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
 
  private:
   // data

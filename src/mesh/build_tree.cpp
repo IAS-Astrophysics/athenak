@@ -228,6 +228,13 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
 
   // initial mesh hierarchy construction is completed here
   ptree->CountMeshBlock(nmb_total);
+  nmb_max = nmb_total;
+  if (adaptive) {
+    nmb_max = 10*nmb_total; // safe default
+    if (pin->DoesParameterExist("mesh_refinement", "max_num_mbs")) {
+      nmb_max = pin->GetReal("mesh_refinement", "max_num_mbs");
+    }
+  }
 
   costlist = new float[nmb_total];
   ranklist = new int[nmb_total];
@@ -345,6 +352,13 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile) {
     }
   } else {
     max_level = 31;
+  }
+  nmb_max = nmb_total;
+  if (adaptive) {
+    nmb_max = 10*nmb_total; // safe default
+    if (pin->DoesParameterExist("mesh_refinement", "max_num_mbs")) {
+      nmb_max = pin->GetReal("mesh_refinement", "max_num_mbs");
+    }
   }
 
   // allocate memory for lists read from restart

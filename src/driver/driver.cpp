@@ -228,41 +228,11 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh) :
 
 void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
   //---- Step 1.  Set conserved variables in ghost zones for all physics
-  // Note: with MPI, sends on ALL MBs must be complete before receives execute
-
-  // Initialize HYDRO: ghost zones and primitive variables (everywhere)
-  hydro::Hydro *phydro = pmesh->pmb_pack->phydro;
-  if (phydro != nullptr) {
-    // following functions return a TaskStatus, but it is ignored so cast to (void)
-    (void) phydro->RestrictU(this, 0);
-    (void) phydro->InitRecv(this, -1);  // stage < 0 suppresses InitFluxRecv
-    (void) phydro->SendU(this, 0);
-    (void) phydro->ClearSend(this, -1);
-    (void) phydro->ClearRecv(this, -1);
-    (void) phydro->RecvU(this, 0);
-    (void) phydro->ApplyPhysicalBCs(this, 0);
-    (void) phydro->ConToPrim(this, 0);
-  }
-
-  // Initialize MHD: ghost zones and primitive variables (everywhere)
-  // Note this requires communicating BOTH u and B
-  mhd::MHD *pmhd = pmesh->pmb_pack->pmhd;
-  if (pmhd != nullptr) {
-    (void) pmhd->RestrictU(this, 0);
-    (void) pmhd->RestrictB(this, 0);
-    (void) pmhd->InitRecv(this, -1);  // stage < 0 suppresses InitFluxRecv
-    (void) pmhd->SendU(this, 0);
-    (void) pmhd->SendB(this, 0);
-    (void) pmhd->ClearSend(this, -1);
-    (void) pmhd->ClearRecv(this, -1);
-    (void) pmhd->RecvU(this, 0);
-    (void) pmhd->RecvB(this, 0);
-    (void) pmhd->ApplyPhysicalBCs(this, 0);
-    (void) pmhd->ConToPrim(this, 0);
-  }
+  InitBoundaryValuesAndPrimitives(pmesh);
 
   //---- Step 2.  Compute time step (if problem involves time evolution)
-
+  hydro::Hydro *phydro = pmesh->pmb_pack->phydro;
+  mhd::MHD *pmhd = pmesh->pmb_pack->pmhd;
   if (time_evolution != TimeEvolution::tstatic) {
     if (phydro != nullptr) {
       (void) pmesh->pmb_pack->phydro->NewTimeStep(this, nexp_stages);
@@ -274,14 +244,12 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
   }
 
   //---- Step 3.  Cycle through output Types and load data / write files.
-
   for (auto &out : pout->pout_list) {
     out->LoadOutputData(pmesh);
     out->WriteOutputFile(pmesh, pin);
   }
 
   //---- Step 4.  Initialize various counters, timers, etc.
-
   run_time_.reset();
   nmb_updated_ = 0;
 
@@ -308,15 +276,15 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
 
 
 //----------------------------------------------------------------------------------------
-// Driver::Execute()
-// \brief Executes all relevant task lists over all MeshBlockPacks.  For static
-// (non-evolving) problems, currently implemented task lists are:
-//  (1) TODO
-// For dynamic (time-evolving) problems, currently implemented task lists are:
-//  (1) operator split physics (operator_split_tl)
-//  (2) each stage of both explicit and ImEx RK integrators (start_tl, run_tl, end_tl)
-//  [Note for ImEx integrators, the first two fully implicit updates should be performed
-//  at the start of the first stage.]
+//! \fn Driver::Execute()
+//! \brief Executes all relevant task lists over all MeshBlockPacks.  For static
+//! (non-evolving) problems, currently implemented task lists are:
+//!  (1) TODO
+//! For dynamic (time-evolving) problems, currently implemented task lists are:
+//!  (1) operator split physics (operator_split_tl)
+//!  (2) each stage of both explicit and ImEx RK integrators (start_tl, run_tl, end_tl)
+//!  [Note for ImEx integrators, the first two fully implicit updates should be performed
+//!  at the start of the first stage.]
 
 void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
   if (global_variable::my_rank == 0) {
@@ -411,10 +379,10 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
       nmb_updated_ += pmesh->nmb_total;
 
       // with AMR, check for mesh refinement every ncycle_amr steps
-      if (pmesh->adaptive && ((pmesh->ncycle)%(pmesh->pmr->ncycle_amr) == 0)) {
+      if (pmesh->adaptive) {
         MeshBlockPack* pmbp = pmesh->pmb_pack;
         bool update_mesh = pmesh->pmr->CheckForRefinement(pmbp);
-        if (update_mesh) pmesh->pmr->AdaptiveMeshRefinement();
+        if (update_mesh) pmesh->pmr->AdaptiveMeshRefinement(this, pin);
       }
 
       // once all MeshBlocks refined/de-refined, then compute new timestep
@@ -441,9 +409,9 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
 }
 
 //----------------------------------------------------------------------------------------
-// Driver::Finalize()
-// Tasks to be performed after execution of Driver, such as making final output and
-// printing diagnostic messages
+//! \fn Driver::Finalize()
+//! \brief Tasks to be performed after execution of Driver, such as making final output
+//!  and printing diagnostic messages
 
 void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
   // cycle through output Types and load data / write files
@@ -493,7 +461,8 @@ void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
 }
 
 //----------------------------------------------------------------------------------------
-// Driver::OutputCycleDiagnostics()
+//! \fn Driver::OutputCycleDiagnostics()
+//! \brief Simple function to print diagnostics every 'ndiag' cycles to stdout
 
 void Driver::OutputCycleDiagnostics(Mesh *pm) {
 //  const int dtprcsn = std::numeric_limits<Real>::max_digits10 - 1;
@@ -501,6 +470,47 @@ void Driver::OutputCycleDiagnostics(Mesh *pm) {
   if (pm->ncycle % ndiag == 0) {
     std::cout << "cycle=" << pm->ncycle << std::scientific << std::setprecision(dtprcsn)
               << " time=" << pm->time << " dt=" << pm->dt << std::endl;
+  }
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn Driver::InitBoundaryValuesAndPrimitives()
+//! \brief Sets boundary conditions on conserved and initializes primitives.  Used both
+//! on initialization, and when new MBs created with AMR.
+
+void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
+  // Note: with MPI, sends on ALL MBs must be complete before receives execute
+
+  // Initialize HYDRO: ghost zones and primitive variables (everywhere)
+  hydro::Hydro *phydro = pm->pmb_pack->phydro;
+  if (phydro != nullptr) {
+    // following functions return a TaskStatus, but it is ignored so cast to (void)
+    (void) phydro->RestrictU(this, 0);
+    (void) phydro->InitRecv(this, -1);  // stage < 0 suppresses InitFluxRecv
+    (void) phydro->SendU(this, 0);
+    (void) phydro->ClearSend(this, -1);
+    (void) phydro->ClearRecv(this, -1);
+    (void) phydro->RecvU(this, 0);
+    (void) phydro->ApplyPhysicalBCs(this, 0);
+    (void) phydro->ConToPrim(this, 0);
+  }
+
+  // Initialize MHD: ghost zones and primitive variables (everywhere)
+  // Note this requires communicating BOTH u and B
+  mhd::MHD *pmhd = pm->pmb_pack->pmhd;
+  if (pmhd != nullptr) {
+    (void) pmhd->RestrictU(this, 0);
+    (void) pmhd->RestrictB(this, 0);
+    (void) pmhd->InitRecv(this, -1);  // stage < 0 suppresses InitFluxRecv
+    (void) pmhd->SendU(this, 0);
+    (void) pmhd->SendB(this, 0);
+    (void) pmhd->ClearSend(this, -1);
+    (void) pmhd->ClearRecv(this, -1);
+    (void) pmhd->RecvU(this, 0);
+    (void) pmhd->RecvB(this, 0);
+    (void) pmhd->ApplyPhysicalBCs(this, 0);
+    (void) pmhd->ConToPrim(this, 0);
   }
   return;
 }

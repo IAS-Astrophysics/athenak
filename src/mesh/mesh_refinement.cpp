@@ -16,6 +16,7 @@
 #include "parameter_input.hpp"
 #include "mesh.hpp"
 #include "mesh_refinement.hpp"
+
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 
@@ -28,16 +29,17 @@
 
 MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
   pmy_mesh(pm),
-  refine_flag("refine_flag",pm->nmb_thisrank),
+  refine_flag("rflag",pm->nmb_max),
+  cyc_since_ref("cyc_since_ref",pm->nmb_max),
   nmb_created(0), nmb_deleted(0),
-  ncycle_amr(1), ncycle_deref(5),
+  ncycle_check_amr(1), ncycle_ref_inter(5),
   d_threshold_(0.0), dd_threshold_(0.0), dv_threshold_(0.0),
   check_cons_(false) {
 
   // read interval (in cycles) between check of AMR and derefinement
   if (pin->DoesBlockExist("mesh_refinement")) {
-    ncycle_amr = pin->GetOrAddReal("mesh_refinement", "ncycle_amr", 1);
-    ncycle_deref = pin->GetOrAddReal("mesh_refinement", "ncycle_deref", 5);
+    ncycle_check_amr = pin->GetOrAddReal("mesh_refinement", "ncycle_check", 1);
+    ncycle_ref_inter = pin->GetOrAddReal("mesh_refinement", "refine_interval", 5);
   }
 
   // read thresholds from <mesh_refinement> block in input file
@@ -74,12 +76,13 @@ MeshRefinement::~MeshRefinement() {
 //! \fn void MeshRefinement::AdaptiveMeshRefinement()
 //! \brief Simple driver function for adaptive mesh refinement
 
-void MeshRefinement::AdaptiveMeshRefinement() {
+void MeshRefinement::AdaptiveMeshRefinement(Driver *pdrive, ParameterInput *pin) {
   int nnew = 0, ndel = 0;
   UpdateMeshBlockTree(nnew, ndel);
 
   if (nnew != 0 || ndel != 0) { // at least one (de)refinement flagged
-    RedistributeAndRefineMeshBlocks(pmy_mesh->nmb_total + nnew - ndel);
+    RedistributeAndRefineMeshBlocks(pin, pmy_mesh->nmb_total + nnew - ndel);
+    pdrive->InitBoundaryValuesAndPrimitives(pmy_mesh);
     nmb_created += nnew;
     nmb_deleted += ndel;
   }
@@ -88,8 +91,8 @@ void MeshRefinement::AdaptiveMeshRefinement() {
 
 //----------------------------------------------------------------------------------------
 //! \fn bool MeshRefinement::CheckForRefinement()
-//! \brief Checks for refinement/de-refinement and sets refine_flag(m) for all MeshBlocks
-//! within a MeshBlockPack. Returns true if any MeshBlock needs to be refined.
+//! \brief Checks for refinement/de-refinement and sets refine_flag(m) for all
+//! MeshBlocks within a MeshBlockPack. Returns true if any MeshBlock needs to be refined.
 //! Default refinement conditions implemented are:
 //!   (1) gradient of density above a threshold value (hydro/MHD)
 //!   (2) shear of velocity above a threshold value (hydro/MHD)
@@ -102,8 +105,16 @@ void MeshRefinement::AdaptiveMeshRefinement() {
 bool MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
   bool return_flag = false;
   int nmb = pmbp->nmb_thispack;
-  // zero refine_flag in host space and sync with device
   for (int m=0; m<nmb; ++m) {
+    cyc_since_ref(m) += 1;
+  }
+  // Return if not correct cycle for checks
+  if ((pmbp->pmesh->ncycle)%(ncycle_check_amr) != 0) {
+    return return_flag;
+  }
+
+  // zero refine_flag in host space and sync with device
+  for (int m=0; m<(pmbp->pmesh->nmb_max); ++m) {
     refine_flag.h_view(m) = 0;
   }
   refine_flag.template modify<HostMemSpace>();
@@ -186,6 +197,11 @@ bool MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
     if (pmy_mesh->lloclist[m].level == pmy_mesh->root_level) {
       if (refine_flag.h_view(m) < 0) {refine_flag.h_view(m) = 0;}
     }
+  }
+
+  // Check (on host) that MB has not been recently refined
+  for (int m=0; m<nmb; ++m) {
+    if (cyc_since_ref(m) < ncycle_ref_inter) {refine_flag.h_view(m) = 0;}
   }
 
   // sync refine_flag on host to device
@@ -367,7 +383,7 @@ void MeshRefinement::UpdateMeshBlockTree(int &nnew, int &ndel) {
 //! Input argument is total number of MBs after refinement (current number +/- number of
 //! MBs refined/derefined).
 
-void MeshRefinement::RedistributeAndRefineMeshBlocks(int nmb_new) {
+void MeshRefinement::RedistributeAndRefineMeshBlocks(ParameterInput *pin, int nmb_new) {
   // compute nleaf = number of leaf MeshBlocks per refined block
   int nleaf = 2;
   Mesh* pm = pmy_mesh;
@@ -378,7 +394,7 @@ void MeshRefinement::RedistributeAndRefineMeshBlocks(int nmb_new) {
   // (new MB gid)-->(old gid) for all MBs.  Index of array is new gid, value is old gid.
   int nmb_old = pm->nmb_total;
   LogicalLocation *new_lloclist = new LogicalLocation[nmb_new];
-  int *newtoold = new int[nmb_new];
+  newtoold = new int[nmb_new];
   int new_nmb_total;
   pm->ptree->CreateMeshBlockList(new_lloclist, newtoold, new_nmb_total);
   if (new_nmb_total != nmb_new) {
@@ -390,7 +406,7 @@ void MeshRefinement::RedistributeAndRefineMeshBlocks(int nmb_new) {
 
   // Step 2.  Create oldtonew list mapping the previous gid to the current one for all MBs
   // Index of array is old gid, value os new gid.
-  int *oldtonew = new int[nmb_old];
+  oldtonew = new int[nmb_old];
   oldtonew[0] = 0;
   int mb_idx = 1;
   for (int n=1; n<nmb_new; n++) {
@@ -440,21 +456,27 @@ std::cout << "n=" << n << "  old=" << newtoold[n] << std::endl;
 
   hydro::Hydro* phydro = pm->pmb_pack->phydro;
   mhd::MHD* pmhd = pm->pmb_pack->pmhd;
-  auto &nmb = pm->pmb_pack->nmb_thispack;
-  int mbs = pmy_mesh->gidslist[global_variable::my_rank];
-  int mbe = mbs + pmy_mesh->nmblist[global_variable::my_rank] - 1;
+  auto &nmb = pm->pmb_pack->nmb_thispack;                           // old nmb
+  int mbs = pmy_mesh->gidslist[global_variable::my_rank];           // old gids
+  int mbe = mbs + pmy_mesh->nmblist[global_variable::my_rank] - 1;  // old gide
 
   // Step 4. Restrict evolved variables for MBs flagged for derefinement
+/**
+  if (phydro != nullptr) {
+    DerefineCC(phydro->u0, phydro->coarse_u0);
+  }
+***/
 
   // Step 5. Move evolved variables within view for any MB in which (new gid) > (old gid)
   for (int m=0; m<nmb; ++m) {
     int n = oldtonew[mbs + m] - mbs;
-    if (n > 0) {
+    if ((n-m) < 0) {
+// std::cout << "Copy L: (m,n) = "<<m<<" "<<n<<std::endl;
       if (phydro != nullptr) {
         auto u0 = phydro->u0;
         auto src = Kokkos::subview(u0,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
         auto dst = Kokkos::subview(u0,n,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
-        Kokkos::deep_copy(dst, src);
+        Kokkos::deep_copy(DevExeSpace(), dst, src);
       }
     }
   }
@@ -462,31 +484,58 @@ std::cout << "n=" << n << "  old=" << newtoold[n] << std::endl;
   // Step 6. Move evolved variables within view for any MB in which (new gid) < (old gid)
   for (int m=(nmb-1); m >= 0; --m) {
     int n = oldtonew[mbs + m] - mbs;
-    if (n < 0) {
+    if ((n-m) > 0) {
+// std::cout << "Copy R: (m,n) = "<<m<<" "<<n<<std::endl;
       if (phydro != nullptr) {
         auto u0 = phydro->u0;
         auto src = Kokkos::subview(u0,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
         auto dst = Kokkos::subview(u0,n,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
-        Kokkos::deep_copy(dst, src);
+        Kokkos::deep_copy(DevExeSpace(), dst, src);
       }
     }
   }
 
   // Step 7. Prolongate evolved variables for MBs flagged for refinement.
   if (phydro != nullptr) {
-    auto u0 = phydro->u0;
-    ProlongateCC(u0);
+    RefineCC(new_nmb_total, phydro->u0, phydro->coarse_u0);
   }
 
-/***
-  // Set numbers of MBs in Mesh and MeshBlockPack to new values
-  pm->nmb_total = nmb_new;
+  // Update data in Mesh/MeshBlockPack/MeshBlock classes with new grid properties
+  delete [] pm->lloclist;
+  delete [] pm->ranklist;
+  delete [] pm->costlist;
+  delete [] pm->gidslist;
+  delete [] pm->nmblist;
+  pm->lloclist = new_lloclist;
+  pm->ranklist = new_ranklist;
+  pm->costlist = new_costlist;
+  pm->gidslist = new_gidslist;
+  pm->nmblist  = new_nmblist;
+  pm->nmb_total = new_nmb_total;
   pm->nmb_thisrank = pm->nmblist[global_variable::my_rank];
-  pm->pmbp->gids = gidslist[global_variable::my_rank];
-  pm->pmbp->gide = pm->pmbp->gids + nmblist[global_variable::my_rank] - 1;
-  pm->pmbp->nmb_thispack = pm->pmbp->gids - pm->pmbp->gide + 1;
-***/
 
+  pm->pmb_pack->gids = pm->gidslist[global_variable::my_rank];
+  pm->pmb_pack->gide = pm->pmb_pack->gids + pm->nmblist[global_variable::my_rank] - 1;
+  pm->pmb_pack->nmb_thispack = pm->pmb_pack->gide - pm->pmb_pack->gids + 1;
+
+  delete (pm->pmb_pack->pmb);
+  delete (pm->pmb_pack->pcoord);
+  pm->pmb_pack->AddMeshBlocksAndCoordinates(pin, pm->mb_indcs);
+  pm->pmb_pack->pmb->SetNeighbors(pm->ptree, pm->ranklist);
+
+  // Update new number of cycles since refinement
+  HostArray1D<int> new_cyc_since_ref("new_ncyc_ref",pm->nmb_max);
+  for (int m=0; m<(pm->pmb_pack->nmb_thispack); ++m) {
+    if (refine_flag.h_view(newtoold[m]) != 0) {
+      new_cyc_since_ref(m) = 0;
+    } else {
+      new_cyc_since_ref(m) = cyc_since_ref(newtoold[m]);
+    }
+  }
+  Kokkos::deep_copy(cyc_since_ref, new_cyc_since_ref);
+
+  delete [] newtoold;
+  delete [] oldtonew;
   return;
 }
 
@@ -639,69 +688,159 @@ void MeshRefinement::RestrictFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb)
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MeshRefinement::ProlongateCC
-//! \brief prolongates cell-centered variables in input view at any MeshBlock index m that
-//! is flagged for refinement to the m-index locations which are immediately following,
+//! \fn void MeshRefinement::RefineCC
+//! \brief Refines cell-centered variables in input view at any MeshBlock index m that is
+//! flagged for refinement to the m-index locations which are immediately following,
 //! overwriting any data located there. The data in these locations must already have been
 //! copied to another location or sent to another rank via MPI.
 
-void MeshRefinement::ProlongateCC(DvceArray5D<Real> &a) {
+void MeshRefinement::RefineCC(int nmb_new, DvceArray5D<Real> &a, DvceArray5D<Real> &ca) {
   int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
-
+  auto &nmb_old = pmy_mesh->pmb_pack->nmb_thispack;
   auto &indcs = pmy_mesh->mb_indcs;
   auto &is = indcs.is, &ie = indcs.ie;
   auto &js = indcs.js, &je = indcs.je;
   auto &ks = indcs.ks, &ke = indcs.ke;
-  auto &nmb = pmy_mesh->pmb_pack->nmb_thispack;
+  auto &cis = indcs.cis, &cie = indcs.cie;
+  auto &cjs = indcs.cjs, &cje = indcs.cje;
+  auto &cks = indcs.cks, &cke = indcs.cke;
+  auto &cnx1 = indcs.cnx1, &cnx2 = indcs.cnx2, &cnx3 = indcs.cnx3;
   auto &multi_d = pmy_mesh->multi_d;
   auto &three_d = pmy_mesh->three_d;
 
-  par_for("prolongCC",DevExeSpace(), 0, (nmb-1), 0, nvar-1, ks, ke, js, je, is, ie,
-  KOKKOS_LAMBDA(const int m, const int v, const int k, const int j, const int i) {
+  // First copy data in MBs to be refined to coarse arrays in target MBs
+  std::pair kdst = std::make_pair(cks,cke+1);
+  std::pair jdst = std::make_pair(cjs,cje+1);
+  std::pair idst = std::make_pair(cis,cie+1);
+/**
+std::cout << "kdst = "<< kdst.first<<" "<<kdst.second << "  jdst = "<< jdst.first<<" "<<jdst.second <<"  idst = "<< idst.first<<" "<<idst.second << std::endl;
+**/
+  for (int m=0; m<nmb_old; ++m) {
     if (refine_flag.h_view(m) > 0) {
+      int klim=2, jlim=2;
+      if (!three_d) {klim=1;}
+      if (!multi_d) {jlim=1;}
+
+      int newm = oldtonew[m];
+      int newn = newm;
+      for (int k=0; k<klim; ++k) {
+        std::pair ksrc = std::make_pair((ks+k*cnx3), (ks+(k+1)*cnx3));
+        for (int j=0; j<jlim; ++j) {
+          std::pair jsrc = std::make_pair((js+j*cnx2), (js+(j+1)*cnx2));
+          for (int i=0; i<2; ++i) {
+            std::pair isrc = std::make_pair((is+i*cnx1), (is+(i+1)*cnx1));
+/**
+std::cout << "(m,n)= "<<newm <<" "<<newn<<"  ksrc = "<< ksrc.first<<" "<<ksrc.second << "  jsrc = "<< jsrc.first<<" "<<jsrc.second <<"  isrc = "<< isrc.first<<" "<<isrc.second << std::endl;
+**/
+            auto src = Kokkos::subview(a, newm,Kokkos::ALL,ksrc,jsrc,isrc);
+            auto dst = Kokkos::subview(ca,newn,Kokkos::ALL,kdst,jdst,idst);
+            Kokkos::deep_copy(dst, src);
+            ++newn;
+          }
+        }
+      }
+    }
+  }
+
+  // Now prolongate data in coarse arrays to fine arrays for all MBs being refined
+  par_for("prolongCC",DevExeSpace(), 0,(nmb_new-1), 0,nvar-1, cks,cke, cjs,cje, cis,cie,
+  KOKKOS_LAMBDA(const int m, const int v, const int k, const int j, const int i) {
+    if (refine_flag.d_view(newtoold[m]) > 0) {
       // calculate x1-gradient using the min-mod limiter
-      Real dl = a(m,v,k,j,i  ) - a(m,v,k,j,i-1);
-      Real dr = a(m,v,k,j,i+1) - a(m,v,k,j,i  );
+      Real dl = ca(m,v,k,j,i  ) - ca(m,v,k,j,i-1);
+      Real dr = ca(m,v,k,j,i+1) - ca(m,v,k,j,i  );
       Real dvar1 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
 
       // calculate x2-gradient using the min-mod limiter
       Real dvar2 = 0.0;
       if (multi_d) {
-        dl = a(m,v,k,j  ,i) - a(m,v,k,j-1,i);
-        dr = a(m,v,k,j+1,i) - a(m,v,k,j  ,i);
+        dl = ca(m,v,k,j  ,i) - ca(m,v,k,j-1,i);
+        dr = ca(m,v,k,j+1,i) - ca(m,v,k,j  ,i);
         dvar2 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
       }
 
       // calculate x3-gradient using the min-mod limiter
       Real dvar3 = 0.0;
       if (three_d) {
-        dl = a(m,v,k  ,j,i) - a(m,v,k-1,j,i);
-        dr = a(m,v,k+1,j,i) - a(m,v,k  ,j,i);
+        dl = ca(m,v,k  ,j,i) - ca(m,v,k-1,j,i);
+        dr = ca(m,v,k+1,j,i) - ca(m,v,k  ,j,i);
         dvar3 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
       }
 
       // fine indices refer to target array
-      int finei = 2*((i-indcs.is)%(indcs.cnx1)) + indcs.is;
-      int finej = 2*((j-indcs.js)%(indcs.cnx2)) + indcs.js;
-      int finek = 2*((k-indcs.ks)%(indcs.cnx3)) + indcs.ks;
-      int n = m + (i-indcs.is)/(indcs.cnx1) + 2*(j-indcs.js)/(indcs.cnx2) +
-                4*(k-indcs.ks)%(indcs.cnx3);
+      int finei = 2*i - cis;  // correct when cis=is
+      int finej = 2*j - cjs;  // correct when cjs=js
+      int finek = 2*k - cks;  // correct when cks=ks
 
-      // interpolate to the finer grid
-      a(n,v,finek,finej,finei  ) = a(m,v,k,j,i) - dvar1 - dvar2 - dvar3;
-      a(n,v,finek,finej,finei+1) = a(m,v,k,j,i) + dvar1 - dvar2 - dvar3;
+      a(m,v,finek,finej,finei  ) = ca(m,v,k,j,i) - dvar1 - dvar2 - dvar3;
+      a(m,v,finek,finej,finei+1) = ca(m,v,k,j,i) + dvar1 - dvar2 - dvar3;
       if (multi_d) {
-        a(n,v,finek,finej+1,finei  ) = a(m,v,k,j,i) - dvar1 + dvar2 - dvar3;
-        a(n,v,finek,finej+1,finei+1) = a(m,v,k,j,i) + dvar1 + dvar2 - dvar3;
+        a(m,v,finek,finej+1,finei  ) = ca(m,v,k,j,i) - dvar1 + dvar2 - dvar3;
+        a(m,v,finek,finej+1,finei+1) = ca(m,v,k,j,i) + dvar1 + dvar2 - dvar3;
       }
       if (three_d) {
-        a(n,v,finek+1,finej  ,finei  ) = a(m,v,k,j,i) - dvar1 - dvar2 + dvar3;
-        a(n,v,finek+1,finej  ,finei+1) = a(m,v,k,j,i) + dvar1 - dvar2 + dvar3;
-        a(n,v,finek+1,finej+1,finei  ) = a(m,v,k,j,i) - dvar1 + dvar2 + dvar3;
-        a(n,v,finek+1,finej+1,finei+1) = a(m,v,k,j,i) + dvar1 + dvar2 + dvar3;
+        a(m,v,finek+1,finej  ,finei  ) = ca(m,v,k,j,i) - dvar1 - dvar2 + dvar3;
+        a(m,v,finek+1,finej  ,finei+1) = ca(m,v,k,j,i) + dvar1 - dvar2 + dvar3;
+        a(m,v,finek+1,finej+1,finei  ) = ca(m,v,k,j,i) - dvar1 + dvar2 + dvar3;
+        a(m,v,finek+1,finej+1,finei+1) = ca(m,v,k,j,i) + dvar1 + dvar2 + dvar3;
       }
     }
   });
+
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MeshRefinement::DerefineCC
+//! \brief Derefines cell-centered variables in input view at any MeshBlock index m that
+//! is flagged for derefinement to the m-index locations which are immediately following,
+//! overwriting any data located there. The data in these locations must already have been
+//! copied to another location or sent to another rank via MPI.
+
+void MeshRefinement::DerefineCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca) {
+  int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
+  auto &nmb_old = pmy_mesh->pmb_pack->nmb_thispack;
+  auto &indcs = pmy_mesh->mb_indcs;
+  auto &is = indcs.is, &ie = indcs.ie;
+  auto &js = indcs.js, &je = indcs.je;
+  auto &ks = indcs.ks, &ke = indcs.ke;
+  auto &cis = indcs.cis, &cie = indcs.cie;
+  auto &cjs = indcs.cjs, &cje = indcs.cje;
+  auto &cks = indcs.cks, &cke = indcs.cke;
+  auto &cnx1 = indcs.cnx1, &cnx2 = indcs.cnx2, &cnx3 = indcs.cnx3;
+  auto &multi_d = pmy_mesh->multi_d;
+  auto &three_d = pmy_mesh->three_d;
+
+  // Copy data directly from coarse arrays in MBs to be refined to fine array in target MB
+  std::pair ksrc = std::make_pair(cks,cke+1);
+  std::pair jsrc = std::make_pair(cjs,cje+1);
+  std::pair isrc = std::make_pair(cis,cie+1);
+  for (int m=0; m<nmb_old; ++m) {
+    if (refine_flag.h_view(m) < 0) {
+std::cout << "Derefine: m = "<<m<<" flag = "<<refine_flag.h_view(m) << std::endl;
+      int klim=2, jlim=2;
+      if (!three_d) {klim=1;}
+      if (!multi_d) {jlim=1;}
+
+      int newm = oldtonew[m];
+      for (int k=0; k<klim; ++k) {
+        std::pair kdst = std::make_pair((ks+k*cnx3), (ks+(k+1)*cnx3));
+        for (int j=0; j<jlim; ++j) {
+          std::pair jdst = std::make_pair((js+j*cnx2), (js+(j+1)*cnx2));
+          for (int i=0; i<2; ++i) {
+            std::pair idst = std::make_pair((is+i*cnx1), (is+(i+1)*cnx1));
+/**
+std::cout << "(m,n)= "<<newm <<" "<<newn<<"  ksrc = "<< ksrc.first<<" "<<ksrc.second << "  jsrc = "<< jsrc.first<<" "<<jsrc.second <<"  isrc = "<< isrc.first<<" "<<isrc.second << std::endl;
+**/
+            auto src = Kokkos::subview(ca,m,   Kokkos::ALL,ksrc,jsrc,isrc);
+            auto dst = Kokkos::subview(a, newm,Kokkos::ALL,kdst,jdst,idst);
+            Kokkos::deep_copy(dst, src);
+            ++m;
+          }
+        }
+      }
+    }
+  }
 
   return;
 }

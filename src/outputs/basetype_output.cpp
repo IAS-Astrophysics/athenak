@@ -385,6 +385,13 @@ void BaseTypeOutput::LoadOutputData(Mesh *pm) {
     outmbs.emplace_back(id,ois,oie,ojs,oje,oks,oke,x1min,x1max,x2min,x2max,x3min,x3max);
   }
 
+/***
+for (int n=0; n<outmbs.size(); ++n) {
+std::cout << "n= "<<n<<" gid= "<<outmbs[n].mb_gid<<" (is,ie,js,je,ks,ke)= "<<outmbs[n].ois<<" "<<outmbs[n].oie<<" "<<outmbs[n].ojs<<" "<<outmbs[n].oje<<" "<<outmbs[n].oks<<" "<<outmbs[n].oke<<std::endl;
+std::cout <<"x1/2/3min/max = "<<outmbs[n].x1min<<" "<<outmbs[n].x1max<<" "<<outmbs[n].x2min<<" "<<outmbs[n].x2max<<" "<<outmbs[n].x3min<<" "<<outmbs[n].x3max<<std::endl;
+}
+***/
+
   noutmbs_min = outmbs.size();
   noutmbs_max = outmbs.size();
 #if MPI_PARALLEL_ENABLED
@@ -424,8 +431,10 @@ void BaseTypeOutput::LoadOutputData(Mesh *pm) {
 
       // load an output variable on this output MeshBlock
       DvceArray3D<Real> dev_buff("dev_buff",(oke-oks+1),(oje-ojs+1),(oie-ois+1));
-      auto dev_slice = Kokkos::subview(*(outvars[n].data_ptr), mbi, outvars[n].data_index,
+      auto dev_slice = Kokkos::subview(pm->pmb_pack->phydro->u0, mbi, outvars[n].data_index,
         std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
+//      auto dev_slice = Kokkos::subview(*(outvars[n].data_ptr), mbi, outvars[n].data_index,
+//        std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
       Kokkos::deep_copy(dev_buff,dev_slice);
 
       // copy to host mirror array, and then to 5D host View containing all variables
@@ -435,4 +444,17 @@ void BaseTypeOutput::LoadOutputData(Mesh *pm) {
       Kokkos::deep_copy(hst_slice,hst_buff);
     }
   }
+
+
+/***
+for (int j=0; j<pm->pmb_pack->phydro->u0.extent(3); ++j) {
+std::cout << "dens=" << pm->pmb_pack->phydro->u0(0,IDN,0,j,8) << std::endl;
+}
+for (int j=0; j<pm->pmb_pack->phydro->u0.extent(3); ++j) {
+std::cout << "dens=" << pm->pmb_pack->phydro->u0(2,IDN,0,j,8) << std::endl;
+}
+for (int j=0; j<pm->pmb_pack->phydro->u0.extent(3); ++j) {
+std::cout << "dens=" << pm->pmb_pack->phydro->u0(9,IDN,0,j,8) << std::endl;
+}
+**/
 }

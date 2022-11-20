@@ -89,7 +89,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   std::string evolution_t = pin->GetString("time","evolution");
 
   // allocate memory for conserved and primitive variables
-  int nmb = ppack->nmb_thispack;
+  int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_max));
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   {
   int ncells1 = indcs.nx1 + 2*(indcs.ng);
