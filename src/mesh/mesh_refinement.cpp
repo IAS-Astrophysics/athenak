@@ -85,7 +85,7 @@ void MeshRefinement::AdaptiveMeshRefinement(Driver *pdrive, ParameterInput *pin)
   UpdateMeshBlockTree(nnew, ndel);
 
   if (nnew != 0 || ndel != 0) { // at least one (de)refinement flagged
-    RedistributeAndRefineMeshBlocks(pin, pmy_mesh->nmb_total + nnew - ndel);
+    RedistAndRefineMeshBlocks(pin, nnew, ndel);
     pdrive->InitBoundaryValuesAndPrimitives(pmy_mesh);
     nmb_created += nnew;
     nmb_deleted += ndel;
@@ -396,7 +396,11 @@ void MeshRefinement::UpdateMeshBlockTree(int &nnew, int &ndel) {
   for (int n=0; n<ctnd; n++) {
     MeshBlockTree *bt = pmy_mesh->ptree->FindMeshBlock(clderef[n]);
     bt->Derefine(ndel);
+    refine_flag.h_view(bt->GetGID()) = -nleaf;  // flag root node of derefinement
   }
+  refine_flag.template modify<HostMemSpace>();
+  refine_flag.template sync<DevExeSpace>();
+
   if (tnderef >= nleaf) {
     delete [] clderef;
   }
@@ -410,16 +414,17 @@ void MeshRefinement::UpdateMeshBlockTree(int &nnew, int &ndel) {
 //! Input argument is total number of MBs after refinement (current number +/- number of
 //! MBs refined/derefined).
 
-void MeshRefinement::RedistributeAndRefineMeshBlocks(ParameterInput *pin, int nmb_new) {
+void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, int ndel) {
+  Mesh* pm = pmy_mesh;
+  int nmb_old = pm->nmb_total;
+  int nmb_new = nmb_old + nnew - ndel;
   // compute nleaf = number of leaf MeshBlocks per refined block
   int nleaf = 2;
-  Mesh* pm = pmy_mesh;
   if (pm->two_d) nleaf = 4;
   if (pm->three_d) nleaf = 8;
 
   // Step 1. Create list of logical locations for new MBs, and newtoold list mapping
   // (new MB gid)-->(old gid) for all MBs.  Index of array is new gid, value is old gid.
-  int nmb_old = pm->nmb_total;
   LogicalLocation *new_lloclist = new LogicalLocation[nmb_new];
   newtoold = new int[nmb_new];
   int new_nmb_total;
@@ -461,25 +466,23 @@ void MeshRefinement::RedistributeAndRefineMeshBlocks(ParameterInput *pin, int nm
   int *new_nmblist = new int[global_variable::nranks];
 
   for (int i=0; i<nmb_new; i++) {new_costlist[i] = 1.0;}
-  // Return arguments over-write old values of [gidslist, nmblist] with values for new
-  // Mesh. These arrays are dimensioned [nranks] so re-dimensioning not needed
   pm->LoadBalance(new_costlist, new_ranklist, new_gidslist, new_nmblist, new_nmb_total);
 
 
-/***/
+/***
 std::cout << std::endl << "nmb_old=" << nmb_old << "  nmb_new=" << nmb_new << "  Old to new:" << std::endl;
 for (int n=0; n<nmb_old; ++n) {
 std::cout << "n=" << n << "  new=" << oldtonew[n] << std::endl;
 }
-/***/
+***/
 
 
-/***/
+/***
 std::cout << std::endl << "New to old:" << std::endl;
 for (int n=0; n<nmb_new; ++n) {
 std::cout << "n=" << n << "  old=" << newtoold[n] << std::endl;
 }
-/***/
+***/
 
   hydro::Hydro* phydro = pm->pmb_pack->phydro;
   mhd::MHD* pmhd = pm->pmb_pack->pmhd;
@@ -488,17 +491,16 @@ std::cout << "n=" << n << "  old=" << newtoold[n] << std::endl;
   int mbe = mbs + pmy_mesh->nmblist[global_variable::my_rank] - 1;  // old gide
 
   // Step 4. Restrict evolved variables for MBs flagged for derefinement
-/**
-  if (phydro != nullptr) {
-    DerefineCC(phydro->u0, phydro->coarse_u0);
+  if (ndel > 0) {
+    if (phydro != nullptr) {
+      DerefineCC(phydro->u0, phydro->coarse_u0);
+    }
   }
-***/
 
   // Step 5. Move evolved variables within view for any MB in which (new gid) > (old gid)
   for (int m=0; m<nmb; ++m) {
     int n = oldtonew[mbs + m] - mbs;
     if ((n-m) < 0) {
-// std::cout << "Copy L: (m,n) = "<<m<<" "<<n<<std::endl;
       if (phydro != nullptr) {
         auto u0 = phydro->u0;
         auto src = Kokkos::subview(u0,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
@@ -512,7 +514,6 @@ std::cout << "n=" << n << "  old=" << newtoold[n] << std::endl;
   for (int m=(nmb-1); m >= 0; --m) {
     int n = oldtonew[mbs + m] - mbs;
     if ((n-m) > 0) {
-// std::cout << "Copy R: (m,n) = "<<m<<" "<<n<<std::endl;
       if (phydro != nullptr) {
         auto u0 = phydro->u0;
         auto src = Kokkos::subview(u0,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
@@ -523,8 +524,10 @@ std::cout << "n=" << n << "  old=" << newtoold[n] << std::endl;
   }
 
   // Step 7. Prolongate evolved variables for MBs flagged for refinement.
-  if (phydro != nullptr) {
-    RefineCC(new_nmb_total, phydro->u0, phydro->coarse_u0);
+  if (nnew > 0) {
+    if (phydro != nullptr) {
+      RefineCC(new_nmb_total, phydro->u0, phydro->coarse_u0);
+    }
   }
 
   // Update data in Mesh/MeshBlockPack/MeshBlock classes with new grid properties
@@ -821,8 +824,7 @@ std::cout << "(m,n)= "<<newm <<" "<<newn<<"  ksrc = "<< ksrc.first<<" "<<ksrc.se
 //! \fn void MeshRefinement::DerefineCC
 //! \brief Derefines cell-centered variables in input view at any MeshBlock index m that
 //! is flagged for derefinement to the m-index locations which are immediately following,
-//! overwriting any data located there. The data in these locations must already have been
-//! copied to another location or sent to another rank via MPI.
+//! overwriting any data located there.
 
 void MeshRefinement::DerefineCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca) {
   int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
@@ -838,41 +840,23 @@ void MeshRefinement::DerefineCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca) {
   auto &multi_d = pmy_mesh->multi_d;
   auto &three_d = pmy_mesh->three_d;
 
-/***
-  for (int m=0; m<nmb_old; ++m) {
-    if (refine_flag.h_view(m) < 0) {
-      int klim=2, jlim=2, cnt=0;
-      if (!three_d) {klim=1;}
-      if (!multi_d) {jlim=1;}
-      for (int k=0; k<klim; ++k) {
-        for (int j=0; j<jlim; ++j) {
-          for (int i=0; i<2; ++i) {
-            if (refine_flag.h_view(m) < 0) {++cnt;}
-            ++m;
-          }
-        }
-      }
-    }
-    if (cnt == nleaf) {
+/**
+for (int m=0; m<nmb_old; ++m) {
 std::cout << "Derefine: m = "<<m<<" flag = "<<refine_flag.h_view(m) << std::endl;
-    }
-  }
+}
+**/
 
-***/
-
-std::cout << "Derefine: m = "<<m<<" flag = "<<refine_flag.h_view(m) << std::endl;
   // Copy data directly from coarse arrays in MBs to be refined to fine array in target MB
   std::pair ksrc = std::make_pair(cks,cke+1);
   std::pair jsrc = std::make_pair(cjs,cje+1);
   std::pair isrc = std::make_pair(cis,cie+1);
   for (int m=0; m<nmb_old; ++m) {
-    if (refine_flag.h_view(m) < 0) {
-std::cout << "Derefine: m = "<<m<<" flag = "<<refine_flag.h_view(m) << std::endl;
+    if (refine_flag.h_view(m) < -1) {  // only derefine if nleaf blocks flagged
       int klim=2, jlim=2;
       if (!three_d) {klim=1;}
       if (!multi_d) {jlim=1;}
 
-      int newm = oldtonew[m];
+      int newm = m;
       for (int k=0; k<klim; ++k) {
         std::pair kdst = std::make_pair((ks+k*cnx3), (ks+(k+1)*cnx3));
         for (int j=0; j<jlim; ++j) {
@@ -880,7 +864,7 @@ std::cout << "Derefine: m = "<<m<<" flag = "<<refine_flag.h_view(m) << std::endl
           for (int i=0; i<2; ++i) {
             std::pair idst = std::make_pair((is+i*cnx1), (is+(i+1)*cnx1));
 /**
-std::cout << "(m,n)= "<<newm <<" "<<newn<<"  ksrc = "<< ksrc.first<<" "<<ksrc.second << "  jsrc = "<< jsrc.first<<" "<<jsrc.second <<"  isrc = "<< isrc.first<<" "<<isrc.second << std::endl;
+std::cout << "(m,n)= "<<m <<" "<<newm<<"  kdst = "<< kdst.first<<" "<<kdst.second << "  jdst = "<< jdst.first<<" "<<jdst.second <<"  idst = "<< idst.first<<" "<<idst.second << std::endl;
 **/
             auto src = Kokkos::subview(ca,m,   Kokkos::ALL,ksrc,jsrc,isrc);
             auto dst = Kokkos::subview(a, newm,Kokkos::ALL,kdst,jdst,idst);
