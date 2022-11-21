@@ -33,7 +33,7 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
   cyc_since_ref("cyc_since_ref",pm->nmb_max),
   nmb_created(0), nmb_deleted(0),
   ncycle_check_amr(1), ncycle_ref_inter(5),
-  d_threshold_(0.0), dd_threshold_(0.0), dv_threshold_(0.0),
+  d_threshold_(0.0), dd_threshold_(0.0), dp_threshold_(0.0), dv_threshold_(0.0),
   check_cons_(false) {
 
   // read interval (in cycles) between check of AMR and derefinement
@@ -49,6 +49,10 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
   }
   if (pin->DoesParameterExist("mesh_refinement", "ddens_max")) {
     dd_threshold_ = pin->GetReal("mesh_refinement", "ddens_max");
+    check_cons_ = true;
+  }
+  if (pin->DoesParameterExist("mesh_refinement", "dpres_max")) {
+    dp_threshold_ = pin->GetReal("mesh_refinement", "dpres_max");
     check_cons_ = true;
   }
   if (pin->DoesParameterExist("mesh_refinement", "dvel_max")) {
@@ -94,10 +98,11 @@ void MeshRefinement::AdaptiveMeshRefinement(Driver *pdrive, ParameterInput *pin)
 //! \brief Checks for refinement/de-refinement and sets refine_flag(m) for all
 //! MeshBlocks within a MeshBlockPack. Returns true if any MeshBlock needs to be refined.
 //! Default refinement conditions implemented are:
-//!   (1) gradient of density above a threshold value (hydro/MHD)
-//!   (2) shear of velocity above a threshold value (hydro/MHD)
-//!   (3) density max above a threshold value (hydro/MHD)
-//!   (4) current density above a threshold (MHD)
+//!   (1) density max above a threshold value (hydro/MHD)
+//!   (2) gradient of density above a threshold value (hydro/MHD)
+//!   (3) gradient of pressure above a threshold value (hydro/MHD)
+//!   (4) shear of velocity above a threshold value (hydro/MHD)
+//!   (5) current density above a threshold (MHD)
 //! These are controlled by input parameters in the <mesh_refinement> block.
 //! User-defined refinement conditions can also be enrolled by setting the *usr_ref_func
 //! pointer in the problem generator.
@@ -133,10 +138,11 @@ bool MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
   // check Hydro/MHD refinement conditions for cons vars over all MeshBlocks (on device)
   if (((pmbp->phydro != nullptr) || (pmbp->pmhd != nullptr)) && check_cons_) {
     auto &u0 = (pmbp->phydro != nullptr)? pmbp->phydro->u0 : pmbp->pmhd->u0;
+    auto &w0 = (pmbp->phydro != nullptr)? pmbp->phydro->w0 : pmbp->pmhd->w0;
 
     par_for_outer("HydroRefineCond",DevExeSpace(), 0, 0, 0, (nmb-1),
     KOKKOS_LAMBDA(TeamMember_t tmember, const int m) {
-      // check density threshold
+      // density threshold
       if (d_threshold_ != 0.0) {
         Real team_dmax=0.0;
         Kokkos::parallel_reduce(Kokkos::TeamThreadRange(tmember, nkji),
@@ -157,7 +163,7 @@ bool MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
         }
       }
 
-      // check density difference threshold
+      // density gradient threshold
       if (dd_threshold_ != 0.0) {
         Real team_ddmax;
         Kokkos::parallel_reduce(Kokkos::TeamThreadRange(tmember, nkji),
@@ -176,6 +182,27 @@ bool MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
         // set refinement flag on each MeshBlock if density threshold exceeded
         if (team_ddmax > dd_threshold_) {refine_flag.d_view(m) = 1;}
         if (team_ddmax < 0.25*dd_threshold_) {refine_flag.d_view(m) = -1;}
+      }
+
+      // pressure gradient threshold
+      if (dp_threshold_ != 0.0) {
+        Real team_dpmax;
+        Kokkos::parallel_reduce(Kokkos::TeamThreadRange(tmember, nkji),
+        [=](const int idx, Real& dpmax) {
+          int k = (idx)/nji;
+          int j = (idx - k*nji)/nx1;
+          int i = (idx - k*nji - j*nx1) + is;
+          j += js;
+          k += ks;
+          Real d2 = SQR(w0(m,IEN,k,j,i+1) - w0(m,IEN,k,j,i-1));
+          if (multi_d) {d2 += SQR(w0(m,IEN,k,j+1,i) - w0(m,IEN,k,j-1,i));}
+          if (three_d) {d2 += SQR(w0(m,IEN,k+1,j,i) - w0(m,IEN,k-1,j,i));}
+          dpmax = fmax((sqrt(d2)/w0(m,IEN,k,j,i)), dpmax);
+        },Kokkos::Max<Real>(team_dpmax));
+
+        // set refinement flag on each MeshBlock if density threshold exceeded
+        if (team_dpmax > dp_threshold_) {refine_flag.d_view(m) = 1;}
+        if (team_dpmax < 0.25*dp_threshold_) {refine_flag.d_view(m) = -1;}
       }
     });
   }
@@ -811,6 +838,29 @@ void MeshRefinement::DerefineCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca) {
   auto &multi_d = pmy_mesh->multi_d;
   auto &three_d = pmy_mesh->three_d;
 
+/***
+  for (int m=0; m<nmb_old; ++m) {
+    if (refine_flag.h_view(m) < 0) {
+      int klim=2, jlim=2, cnt=0;
+      if (!three_d) {klim=1;}
+      if (!multi_d) {jlim=1;}
+      for (int k=0; k<klim; ++k) {
+        for (int j=0; j<jlim; ++j) {
+          for (int i=0; i<2; ++i) {
+            if (refine_flag.h_view(m) < 0) {++cnt;}
+            ++m;
+          }
+        }
+      }
+    }
+    if (cnt == nleaf) {
+std::cout << "Derefine: m = "<<m<<" flag = "<<refine_flag.h_view(m) << std::endl;
+    }
+  }
+
+***/
+
+std::cout << "Derefine: m = "<<m<<" flag = "<<refine_flag.h_view(m) << std::endl;
   // Copy data directly from coarse arrays in MBs to be refined to fine array in target MB
   std::pair ksrc = std::make_pair(cks,cke+1);
   std::pair jsrc = std::make_pair(cjs,cje+1);
