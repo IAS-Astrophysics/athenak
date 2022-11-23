@@ -38,11 +38,17 @@ The read_*(...) functions return a filedata dictionary-like object with
     filedata['n_mbs'] = int
         total number of meshblocks in the file
     filedata['nx1_mb'] = int
-        number of cells in x1 direction in meshblock
+        number of cells in x1 direction in MeshBlock
     filedata['nx2_mb'] = int
-        number of cells in x2 direction in meshblock
+        number of cells in x2 direction in MeshBlock
     filedata['nx3_mb'] = int
-        number of cells in x3 direction in meshblock
+        number of cells in x3 direction in MeshBlock
+    filedata['nx1_out_mb'] = int
+        number of output cells in x1 direction in MeshBlock (useful for slicing)
+    filedata['nx2_out_mb'] = int
+        number of output cells in x2 direction in MeshBlock (useful for slicing)
+    filedata['nx3_out_mb'] = int
+        number of output cells in x3 direction in MeshBlock (useful for slicing)
     filedata['Nx1'] = int
         total number of cell in x1 direction in root grid
     filedata['Nx2'] = int
@@ -63,8 +69,10 @@ The read_*(...) functions return a filedata dictionary-like object with
         coordinate maximum of root grid in x3 direction
     filedata['nvars'] = int
         number of output variables (including magnetic field if it exists)
+    filedata['mb_index'] = array with shape [n_mbs, 6]
+        is,ie,js,je,ks,ke range for output MeshBlock indexing (useful for slicing)
     filedata['mb_logical'] = array with shape [n_mbs, 4]
-        i,j,k,level coordinates for each meshblock
+        i,j,k,level coordinates for each MeshBlock
     filedata['mb_geometry'] = array with shape [n_mbs, 6]
         x1i,x2i,x3i,dx1,dx2,dx3 including cell-centered location of left-most
         cell and offsets between cells
@@ -172,10 +180,9 @@ def read_binary(filename):
 
     # load data from each meshblock
     n_vars = len(var_list)
-    mb_fstr = f"={nx1*nx2*nx3*n_vars}" + varfmt
-    mb_varsize = varsizebytes*nx1*nx2*nx3*n_vars
     mb_count = 0
 
+    mb_index = []
     mb_logical = []
     mb_geometry = []
 
@@ -184,16 +191,22 @@ def read_binary(filename):
         mb_data[var] = []
 
     while fp.tell() < filesize:
-        mb_count += 1
+        mb_index.append(np.array(struct.unpack('@6i', fp.read(24))))
+        nx1_out = (mb_index[mb_count][1] - mb_index[mb_count][0])+1
+        nx2_out = (mb_index[mb_count][3] - mb_index[mb_count][2])+1
+        nx3_out = (mb_index[mb_count][5] - mb_index[mb_count][4])+1
 
         mb_logical.append(np.array(struct.unpack('@4i', fp.read(16))))
         mb_geometry.append(np.array(struct.unpack('=6'+locfmt,
                                     fp.read(6*locsizebytes))))
 
-        data = np.array(struct.unpack(mb_fstr, fp.read(mb_varsize)))
-        data = data.reshape(nvars, nx3, nx2, nx1)
+        data = np.array(struct.unpack(f"={nx1_out*nx2_out*nx3_out*n_vars}" + varfmt,
+                                      fp.read(varsizebytes *
+                                              nx1_out*nx2_out*nx3_out*n_vars)))
+        data = data.reshape(nvars, nx3_out, nx2_out, nx1_out)
         for vari, var in enumerate(var_list):
             mb_data[var].append(data[vari])
+        mb_count += 1
 
     fp.close()
 
@@ -217,7 +230,11 @@ def read_binary(filename):
     filedata['nx1_mb'] = nx1
     filedata['nx2_mb'] = nx2
     filedata['nx3_mb'] = nx3
+    filedata['nx1_out_mb'] = (mb_index[0][1] - mb_index[0][0])+1
+    filedata['nx2_out_mb'] = (mb_index[0][3] - mb_index[0][2])+1
+    filedata['nx3_out_mb'] = (mb_index[0][5] - mb_index[0][4])+1
 
+    filedata['mb_index'] = np.array(mb_index)
     filedata['mb_logical'] = np.array(mb_logical)
     filedata['mb_geometry'] = np.array(mb_geometry)
     filedata['mb_data'] = mb_data
@@ -251,22 +268,28 @@ def write_athdf(filename, fdata, varsize_bytes=4, locsize_bytes=8):
     nx1 = fdata['nx1_mb']
     nx2 = fdata['nx2_mb']
     nx3 = fdata['nx3_mb']
+    nx1_out = fdata['nx1_out_mb']
+    nx2_out = fdata['nx2_out_mb']
+    nx3_out = fdata['nx3_out_mb']
+    x1slice = (nx1_out == 1)
+    x2slice = (nx2_out == 1)
+    x3slice = (nx3_out == 1)
 
     # keep variable order but separate out magnetic field
     vars_without_b = [v for v in fdata['var_names'] if 'bcc' not in v]
     vars_only_b = [v for v in fdata['var_names'] if v not in vars_without_b]
 
     if len(vars_only_b) > 0:
-        B = np.zeros((3, nmb, nx3, nx2, nx1))
+        B = np.zeros((3, nmb, nx3_out, nx2_out, nx1_out))
     Levels = np.zeros(nmb)
     LogicalLocations = np.zeros((nmb, 3))
-    uov = np.zeros((len(vars_without_b), nmb, nx3, nx2, nx1))
-    x1f = np.zeros((nmb, nx1+1))
-    x1v = np.zeros((nmb, nx1))
-    x2f = np.zeros((nmb, nx2+1))
-    x2v = np.zeros((nmb, nx2))
-    x3f = np.zeros((nmb, nx3+1))
-    x3v = np.zeros((nmb, nx3))
+    uov = np.zeros((len(vars_without_b), nmb, nx3_out, nx2_out, nx1_out))
+    x1f = np.zeros((nmb, nx1_out+1))
+    x1v = np.zeros((nmb, nx1_out))
+    x2f = np.zeros((nmb, nx2_out+1))
+    x2v = np.zeros((nmb, nx2_out))
+    x3f = np.zeros((nmb, nx3_out+1))
+    x3v = np.zeros((nmb, nx3_out))
 
     for ivar, var in enumerate(vars_without_b):
         uov[ivar] = fdata['mb_data'][var]
@@ -278,35 +301,59 @@ def write_athdf(filename, fdata, varsize_bytes=4, locsize_bytes=8):
         LogicalLocations[mb] = logical[:3]
         Levels[mb] = logical[-1]
         geometry = fdata['mb_geometry'][mb]
-        x1f[mb] = np.linspace(geometry[0], geometry[1], nx1+1)
-        x1v[mb] = 0.5*(x1f[mb][1:]+x1f[mb][:-1])
-        x2f[mb] = np.linspace(geometry[2], geometry[3], nx2+1)
-        x2v[mb] = 0.5*(x2f[mb][1:]+x2f[mb][:-1])
-        x3f[mb] = np.linspace(geometry[4], geometry[5], nx3+1)
-        x3v[mb] = 0.5*(x3f[mb][1:]+x3f[mb][:-1])
+        mb_x1f = np.linspace(geometry[0], geometry[1], nx1+1)
+        mb_x1v = 0.5*(mb_x1f[1:]+mb_x1f[:-1])
+        mb_x2f = np.linspace(geometry[2], geometry[3], nx2+1)
+        mb_x2v = 0.5*(mb_x2f[1:]+mb_x2f[:-1])
+        mb_x3f = np.linspace(geometry[4], geometry[5], nx3+1)
+        mb_x3v = 0.5*(mb_x3f[1:]+mb_x3f[:-1])
+        if x1slice:
+            x1f[mb] = np.array(mb_x1f[(fdata['mb_index'][mb][0]):
+                                      (fdata['mb_index'][mb][0]+2)])
+            x1v[mb] = np.array([np.average(mb_x1f)])
+        else:
+            x1f[mb] = mb_x1f
+            x1v[mb] = mb_x1v
+        if x2slice:
+            x2f[mb] = np.array(mb_x2f[(fdata['mb_index'][mb][2]):
+                                      (fdata['mb_index'][mb][2]+2)])
+            x2v[mb] = np.array([np.average(x2f[mb])])
+        else:
+            x2f[mb] = mb_x2f
+            x2v[mb] = mb_x2v
+        if x3slice:
+            x3f[mb] = np.array(mb_x3f[(fdata['mb_index'][mb][4]):
+                                      (fdata['mb_index'][mb][4]+2)])
+            x3v[mb] = np.array([np.average(x3f[mb])])
+        else:
+            x3f[mb] = mb_x3f
+            x3v[mb] = mb_x3v
 
-    # Set Attributes
-    utf8_type = h5py.string_dtype('utf-8', 30)
-    dataset_names = [np.array('uov'.encode("utf-8"), dtype=utf8_type)]
+    # set dataset names and number of variables
+    dataset_names = [np.array('uov', dtype='|S21')]
     dataset_nvars = [len(vars_without_b)]
     if len(vars_only_b) > 0:
-        dataset_names.append(np.array('B'.encode("utf-8"), dtype=utf8_type))
+        dataset_names.append(np.array('B', dtype='|S21'))
         dataset_nvars.append(len(vars_only_b))
+
+    # Set Attributes
     hfp = h5py.File(filename, 'w')
     hfp.attrs['Time'] = fdata['time']
     hfp.attrs['NumCycles'] = fdata['cycle']
-    hfp.attrs['Coordinates'] = np.array('cartesian'.encode("utf-8"), dtype=utf8_type)
+    hfp.attrs['Coordinates'] = np.array('cartesian', dtype='|S11')
     hfp.attrs['NumMeshBlocks'] = fdata['n_mbs']
     hfp.attrs['MaxLevel'] = int(max(Levels))
-    hfp.attrs['MeshBlockSize'] = [fdata['nx1_mb'], fdata['nx2_mb'], fdata['nx3_mb']]
+    hfp.attrs['MeshBlockSize'] = [fdata['nx1_out_mb'], fdata['nx2_out_mb'],
+                                  fdata['nx3_out_mb']]
     hfp.attrs['RootGridSize'] = [fdata['Nx1'], fdata['Nx2'], fdata['Nx3']]
     hfp.attrs['RootGridX1'] = [fdata['x1min'], fdata['x1max'], 1.0]
     hfp.attrs['RootGridX2'] = [fdata['x2min'], fdata['x2max'], 1.0]
     hfp.attrs['RootGridX3'] = [fdata['x3min'], fdata['x3max'], 1.0]
     hfp.attrs['DatasetNames'] = dataset_names
     hfp.attrs['NumVariables'] = dataset_nvars
-    hfp.attrs['VariableNames'] = [np.array(i.encode("utf-8"), dtype=utf8_type)
-                                  for i in fdata['var_names']]
+    hfp.attrs['VariableNames'] = [np.array(i, dtype='|S21') for i in (vars_without_b +
+                                                                      vars_only_b)]
+
     # Create Datasets
     if len(vars_only_b) > 0:
         hfp.create_dataset('B', data=B, dtype=varfmt)
@@ -398,9 +445,9 @@ def write_xdmf_for(xdmfname, dumpname, fdata, mode='auto'):
     vars_without_b = [v for v in fdata['var_names'] if 'bcc' not in v]
     vars_only_b = [v for v in fdata['var_names'] if v not in vars_without_b]
 
-    nx1 = fdata['nx1_mb']
-    nx2 = fdata['nx2_mb']
-    nx3 = fdata['nx3_mb']
+    nx1 = fdata['nx1_out_mb']
+    nx2 = fdata['nx2_out_mb']
+    nx3 = fdata['nx3_out_mb']
     nmb = fdata['n_mbs']
 
     for mb in range(nmb):

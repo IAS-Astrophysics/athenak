@@ -202,7 +202,6 @@ void ProblemGenerator::AlfvenWave(ParameterInput *pin, const bool restart) {
   if (pmbp->pmhd != nullptr) {
     EOS_Data &eos = pmbp->pmhd->peos->eos_data;
     int nmb = pmbp->nmb_thispack;
-    int nmhd_ = pmbp->pmhd->nmhd;
     Real gm1 = eos.gamma - 1.0;
 
     // set new time limit in ParameterInput (to be read by Driver constructor) based on
@@ -249,9 +248,6 @@ void ProblemGenerator::AlfvenWave(ParameterInput *pin, const bool restart) {
       Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
       Real x3f   = LeftEdgeX(k  -ks, nx3, x3min, x3max);
 
-      Real x1fp1 = LeftEdgeX(i+1-is, nx1, x1min, x1max);
-      Real x2fp1 = LeftEdgeX(j+1-js, nx2, x2min, x2max);
-      Real x3fp1 = LeftEdgeX(k+1-ks, nx3, x3min, x3max);
       Real dx1 = size.d_view(m).dx1;
       Real dx2 = size.d_view(m).dx2;
       Real dx3 = size.d_view(m).dx3;

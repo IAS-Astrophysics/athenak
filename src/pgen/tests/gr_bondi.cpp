@@ -391,8 +391,8 @@ static void GetBoyerLindquistCoordinates(struct bondi_pgen pgen,
                         + 4.0*SQR(pgen.spin)*SQR(x3)) ) / sqrt(2.0)), 1.0);
     *pr = r;
     *ptheta = acos(x3/r);
-    *pphi = atan2( (r*x2-pgen.spin*x1)/(SQR(r)+SQR(pgen.spin)),
-                   (pgen.spin*x2+r*x1)/(SQR(r)+SQR(pgen.spin)) );
+    *pphi = atan2(r*x2-pgen.spin*x1, pgen.spin*x2+r*x1) -
+            pgen.spin*r/(SQR(r)-2.0*r+SQR(pgen.spin));
   return;
 }
 
