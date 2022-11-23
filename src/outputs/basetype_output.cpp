@@ -385,13 +385,6 @@ void BaseTypeOutput::LoadOutputData(Mesh *pm) {
     outmbs.emplace_back(id,ois,oie,ojs,oje,oks,oke,x1min,x1max,x2min,x2max,x3min,x3max);
   }
 
-/***
-for (int n=0; n<outmbs.size(); ++n) {
-std::cout << "n= "<<n<<" gid= "<<outmbs[n].mb_gid<<" (is,ie,js,je,ks,ke)= "<<outmbs[n].ois<<" "<<outmbs[n].oie<<" "<<outmbs[n].ojs<<" "<<outmbs[n].oje<<" "<<outmbs[n].oks<<" "<<outmbs[n].oke<<std::endl;
-std::cout <<"x1/2/3min/max = "<<outmbs[n].x1min<<" "<<outmbs[n].x1max<<" "<<outmbs[n].x2min<<" "<<outmbs[n].x2max<<" "<<outmbs[n].x3min<<" "<<outmbs[n].x3max<<std::endl;
-}
-***/
-
   noutmbs_min = outmbs.size();
   noutmbs_max = outmbs.size();
 #if MPI_PARALLEL_ENABLED
@@ -421,40 +414,26 @@ std::cout <<"x1/2/3min/max = "<<outmbs[n].x1min<<" "<<outmbs[n].x1max<<" "<<outm
     }
 
     for (int m=0; m<nout_mbs; ++m) {
-      int &ois = outmbs[m].ois;
-      int &oie = outmbs[m].oie;
-      int &ojs = outmbs[m].ojs;
-      int &oje = outmbs[m].oje;
-      int &oks = outmbs[m].oks;
-      int &oke = outmbs[m].oke;
       int mbi = pm->FindMeshBlockIndex(outmbs[m].mb_gid);
+      std::pair<int,int> irange = std::make_pair(outmbs[m].ois, outmbs[m].oie+1);
+      std::pair<int,int> jrange = std::make_pair(outmbs[m].ojs, outmbs[m].oje+1);
+      std::pair<int,int> krange = std::make_pair(outmbs[m].oks, outmbs[m].oke+1);
 
-      // load an output variable on this output MeshBlock
-      DvceArray3D<Real> dev_buff("dev_buff",(oke-oks+1),(oje-ojs+1),(oie-ois+1));
-      auto dev_slice = Kokkos::subview(pm->pmb_pack->phydro->u0, mbi, outvars[n].data_index,
-        std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
-//      auto dev_slice = Kokkos::subview(*(outvars[n].data_ptr), mbi, outvars[n].data_index,
-//        std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
-      Kokkos::deep_copy(dev_buff,dev_slice);
+      // create subview of single variable on single MeshBlock on device
+      Kokkos::Subview<DvceArray5D<Real>,
+                      int, int, std::pair<int,int>,
+                      std::pair<int,int>, std::pair<int,int>> d_output_var;
 
-      // copy to host mirror array, and then to 5D host View containing all variables
-      DvceArray3D<Real>::HostMirror hst_buff = Kokkos::create_mirror(dev_buff);
-      Kokkos::deep_copy(hst_buff,dev_buff);
-      auto hst_slice = Kokkos::subview(outarray,n,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
-      Kokkos::deep_copy(hst_slice,hst_buff);
+      // load subview from appropriate device data
+      d_output_var = Kokkos::subview(pm->pmb_pack->phydro->u0, mbi, outvars[n].data_index,
+                                     krange,jrange,irange);
+
+      // create host mirror of subview and copy data to host
+      auto h_output_var=Kokkos::create_mirror_view_and_copy(HostMemSpace(), d_output_var);
+
+      // copy data into (n,m) element of 5D host output data array
+      auto h_slice = Kokkos::subview(outarray,n,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+      Kokkos::deep_copy(h_slice,h_output_var);
     }
   }
-
-
-/***
-for (int j=0; j<pm->pmb_pack->phydro->u0.extent(3); ++j) {
-std::cout << "dens=" << pm->pmb_pack->phydro->u0(0,IDN,0,j,8) << std::endl;
-}
-for (int j=0; j<pm->pmb_pack->phydro->u0.extent(3); ++j) {
-std::cout << "dens=" << pm->pmb_pack->phydro->u0(2,IDN,0,j,8) << std::endl;
-}
-for (int j=0; j<pm->pmb_pack->phydro->u0.extent(3); ++j) {
-std::cout << "dens=" << pm->pmb_pack->phydro->u0(9,IDN,0,j,8) << std::endl;
-}
-**/
 }

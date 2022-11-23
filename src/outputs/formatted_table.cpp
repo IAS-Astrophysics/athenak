@@ -24,10 +24,6 @@
 #include "mesh/mesh.hpp"
 #include "outputs.hpp"
 
-/***/
-#include "hydro/hydro.hpp"
-/***/
-
 //----------------------------------------------------------------------------------------
 // ctor: also calls BaseTypeOutput base class constructor
 
@@ -169,10 +165,6 @@ void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
                 std::fprintf(pfile, out_params.data_format.c_str(),
                              outarray(n,m,k-oks,j-ojs,i-ois));
               }
-/**/
-              std::fprintf(pfile, out_params.data_format.c_str(),
-                    pm->pmb_pack->phydro->u0(outmbs[m].mb_gid,IDN,k-oks,j-ojs,i-ois));
-/****/
               std::fprintf(pfile,"\n"); // terminate line
             }
           }
