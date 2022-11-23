@@ -418,20 +418,41 @@ void BaseTypeOutput::LoadOutputData(Mesh *pm) {
       std::pair<int,int> irange = std::make_pair(outmbs[m].ois, outmbs[m].oie+1);
       std::pair<int,int> jrange = std::make_pair(outmbs[m].ojs, outmbs[m].oje+1);
       std::pair<int,int> krange = std::make_pair(outmbs[m].oks, outmbs[m].oke+1);
+    int nout1 = (outmbs[0].oie - outmbs[0].ois + 1);
+    int nout2 = (outmbs[0].oje - outmbs[0].ojs + 1);
+    int nout3 = (outmbs[0].oke - outmbs[0].oks + 1);
 
+/***
       // create subview of single variable on single MeshBlock on device
-      Kokkos::Subview<DvceArray5D<Real>,
-                      int, int, std::pair<int,int>,
-                      std::pair<int,int>, std::pair<int,int>> d_output_var;
+//      Kokkos::Subview<DvceArray5D<Real>,
+//                      int, int, std::pair<int,int>,
+//                      std::pair<int,int>, std::pair<int,int>> d_output_var;
+      DvceArray3D<Real> d_output_var;
 
       // load subview from appropriate device data
       d_output_var = Kokkos::subview(pm->pmb_pack->phydro->u0, mbi, outvars[n].data_index,
                                      krange,jrange,irange);
 
       // create host mirror of subview and copy data to host
-      auto h_output_var=Kokkos::create_mirror_view_and_copy(HostMemSpace(), d_output_var);
+      auto h_output_var=Kokkos::create_mirror_view(d_output_var);
+      Kokkos::deep_copy(h_output_var, d_output_var);
 
       // copy data into (n,m) element of 5D host output data array
+      auto h_slice = Kokkos::subview(outarray,n,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+      Kokkos::deep_copy(h_slice,h_output_var);
+***/
+
+      // load an output variable on this output MeshBlock
+      DvceArray3D<Real> d_output_var("d_out_var",nout3,nout2,nout1);
+
+      auto d_slice = Kokkos::subview(pm->pmb_pack->phydro->u0, mbi, outvars[n].data_index,
+                                     krange,jrange,irange);
+      Kokkos::deep_copy(d_output_var,d_slice);
+
+      // copy to host mirror array, and then to 5D host View containing all variables
+      DvceArray3D<Real>::HostMirror h_output_var = Kokkos::create_mirror(d_output_var);
+      Kokkos::deep_copy(h_output_var,d_output_var);
+
       auto h_slice = Kokkos::subview(outarray,n,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
       Kokkos::deep_copy(h_slice,h_output_var);
     }
