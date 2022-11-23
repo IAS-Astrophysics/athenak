@@ -56,6 +56,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
     LinearWave(pin, false);
   } else if (pgen_fun_name.compare("implode") == 0) {
     LWImplode(pin, false);
+  } else if (pgen_fun_name.compare("gr_monopole") == 0) {
+    Monopole(pin, false);
   } else if (pgen_fun_name.compare("orszag_tang") == 0) {
     OrszagTang(pin, false);
   } else if (pgen_fun_name.compare("shock_tube") == 0) {
@@ -353,6 +355,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
     LinearWave(pin, true);
   } else if (pgen_fun_name.compare("implode") == 0) {
     LWImplode(pin, true);
+  } else if (pgen_fun_name.compare("gr_monopole") == 0) {
+    Monopole(pin, true);
   } else if (pgen_fun_name.compare("orszag_tang") == 0) {
     OrszagTang(pin, true);
   } else if (pgen_fun_name.compare("shock_tube") == 0) {

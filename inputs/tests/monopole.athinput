@@ -1,0 +1,71 @@
+# Athena++ (Kokkos version) input file for the magnetic monopole problem
+
+<comment>
+problem   = GR magnetic monopole
+
+<job>
+basename  = monopole  # problem ID: basename of output filenames
+
+<mesh>
+nghost    = 2      # Number of ghost cells
+nx1       = 256    # Number of zones in X1-direction
+x1min     = -10.0  # minimum value of X1
+x1max     = 10.0   # maximum value of X1
+ix1_bc    = user   # inner-X1 boundary flag
+ox1_bc    = user   # outer-X1 boundary flag
+
+nx2       = 256    # Number of zones in X2-direction
+x2min     = -10.0  # minimum value of X2
+x2max     = 10.0   # maximum value of X2
+ix2_bc    = user   # inner-X2 boundary flag
+ox2_bc    = user   # outer-X2 boundary flag
+
+nx3       = 128    # Number of zones in X3-direction
+x3min     = 0.0    # minimum value of X3
+x3max     = 10.0   # maximum value of X3
+ix3_bc    = user   # inner-X3 boundary flag
+ox3_bc    = user   # outer-X3 boundary flag
+
+<meshblock>
+nx1 = 128
+nx2 = 256
+nx3 = 128
+
+<coord>
+general_rel = true       # general relativity
+m           = 1.0        # black hole mass M
+a           = 0.5        # black hole spin a (0 <= a/M < 1)
+excise      = true       # excise r_ks <= 1.0
+dexcise     = 1.0e-4     # density inside excision
+pexcise     = 0.333e-6   # pressure inside excision
+
+<time>
+evolution  = dynamic  # dynamic/kinematic/static
+integrator = rk2      # time integration algorithm
+cfl_number = 0.3      # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1       # cycle limit
+tlim       = 10.0     # time limit
+ndiag      = 1        # cycles between diagostic output
+
+<mhd>
+eos         = ideal  # EOS type
+reconstruct = plm    # spatial reconstruction method
+rsolver     = hlle   # Riemann-solver to be used
+gamma       = 1.3333333333333  # gamma = C_p/C_v
+dfloor      = 1.0e-6    # density floor
+pfloor      = 0.333e-8  # pressure floor
+fofc        = true      # FOFC
+gamma_max   = 10.0      # ceiling on Lorentz factor
+
+<problem>
+pgen_name = gr_monopole
+nlevel = 10
+sigma_max = 5000.0
+rhomin = 1.0e-6
+umin = 1.0e-8
+a_norm = 1.0
+
+<output1>
+file_type  = vtk        # Binary data dump
+variable   = mhd_w_bcc  # variables to be output
+dt         = 1.0        # time increment between outputs
