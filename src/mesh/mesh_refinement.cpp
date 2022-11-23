@@ -498,9 +498,12 @@ std::cout << "n=" << n << "  old=" << newtoold[n] << std::endl;
   }
 
   // Step 5. Move evolved variables within view for any MB in which (new gid) > (old gid)
-  for (int m=0; m<nmb; ++m) {
-    int n = oldtonew[mbs + m] - mbs;
-    if ((n-m) < 0) {
+  // Start loop at one since first MB cannot be moved. Do not move MBs that have been
+  // de-refined (for which n = nm1).
+  for (int m=1; m<nmb; ++m) {
+    int nm1 = oldtonew[mbs + m - 1] - mbs;
+    int n   = oldtonew[mbs + m] - mbs;
+    if ( ((n-m) < 0) && (n != nm1) ) {
       if (phydro != nullptr) {
         auto u0 = phydro->u0;
         auto src = Kokkos::subview(u0,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
@@ -858,17 +861,14 @@ std::cout << "Derefine: m = "<<m<<" flag = "<<refine_flag.h_view(m) << std::endl
 
       int newm = m;
       for (int k=0; k<klim; ++k) {
-        std::pair kdst = std::make_pair((ks+k*cnx3), (ks+(k+1)*cnx3));
+        std::pair<int,int> kdst = std::make_pair((ks+k*cnx3), (ks+(k+1)*cnx3));
         for (int j=0; j<jlim; ++j) {
-          std::pair jdst = std::make_pair((js+j*cnx2), (js+(j+1)*cnx2));
+          std::pair<int,int> jdst = std::make_pair((js+j*cnx2), (js+(j+1)*cnx2));
           for (int i=0; i<2; ++i) {
-            std::pair idst = std::make_pair((is+i*cnx1), (is+(i+1)*cnx1));
-/**
-std::cout << "(m,n)= "<<m <<" "<<newm<<"  kdst = "<< kdst.first<<" "<<kdst.second << "  jdst = "<< jdst.first<<" "<<jdst.second <<"  idst = "<< idst.first<<" "<<idst.second << std::endl;
-**/
+            std::pair<int,int> idst = std::make_pair((is+i*cnx1), (is+(i+1)*cnx1));
             auto src = Kokkos::subview(ca,m,   Kokkos::ALL,ksrc,jsrc,isrc);
             auto dst = Kokkos::subview(a, newm,Kokkos::ALL,kdst,jdst,idst);
-            Kokkos::deep_copy(dst, src);
+            Kokkos::deep_copy(DevExeSpace(),dst, src);
             ++m;
           }
         }
