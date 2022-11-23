@@ -9,6 +9,10 @@
 //  \brief definitions for ProblemGenerator class
 
 #include <functional>
+#include <memory>
+#include <vector>
+
+#include "geodesic-grid/spherical_grid.hpp"
 #include "parameter_input.hpp"
 
 using ProblemFinalizeFnPtr = void (*)(ParameterInput *pin, Mesh *pm);
@@ -36,6 +40,9 @@ class ProblemGenerator {
 
   // true if user history outputs are specified
   bool user_hist;
+
+  // vector of SphericalGrid objects for analysis
+  std::vector<std::unique_ptr<SphericalGrid>> spherical_grids;
 
   // function pointer for final work after main loop (e.g. compute errors).  Called by
   // Driver::Finalize()

@@ -54,7 +54,7 @@ enum ReconstructionMethod {dc, plm, ppm4, ppmx, wenoz};
 enum TimeEvolution {tstatic, kinematic, dynamic};
 
 // constants that enumerate Physics Modules implemented in code
-enum PhysicsModule {HydroDynamics, MagnetoHydroDynamics};
+enum PhysicsModule {HydroDynamics, MagnetoHydroDynamics, UserDefined};
 
 // structs to store primitive/conserved variables in one-dimension
 // (density, velocity/momentum, internal/total energy, [transverse magnetic field])
@@ -402,7 +402,7 @@ KOKKOS_INLINE_FUNCTION void par_for_inner(TeamMember_t tmember, const int il,con
   Kokkos::parallel_for(Kokkos::TeamVectorRange(tmember, il, iu+1), function);
 }
 
-#define NREDUCTION_VARIABLES 56
+#define NREDUCTION_VARIABLES 20
 //----------------------------------------------------------------------------------------
 //! \struct summed_array_type
 // Following code is copied from Kokkos wiki pages on building custom reducers.  It allows

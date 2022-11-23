@@ -159,6 +159,17 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
         opar.file_id = pin->GetOrAddString(opar.block_name,"id",opar.variable);
       }
 
+      // set optional boolean to output only user-defined history variables
+      if (opar.file_type.compare("hst") == 0) {
+        opar.user_hist_only =pin->GetOrAddBoolean(opar.block_name,"user_hist_only",false);
+        if (opar.user_hist_only && !(pm->pgen->user_hist)) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "User-history file requested in output block '"
+              << opar.block_name << "', but <problem>/user_hist is not true" << std::endl;
+          exit(EXIT_FAILURE);
+        }
+      }
+
       // set optional data format string used in formatted writes
       opar.data_format = pin->GetOrAddString(opar.block_name, "data_format", "%12.5e");
       opar.data_format.insert(0, " "); // prepend with blank to separate columns
