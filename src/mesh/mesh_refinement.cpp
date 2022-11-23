@@ -472,7 +472,7 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
 /***
 std::cout << std::endl << "nmb_old=" << nmb_old << "  nmb_new=" << nmb_new << "  Old to new:" << std::endl;
 for (int n=0; n<nmb_old; ++n) {
-std::cout << "n=" << n << "  new=" << oldtonew[n] << std::endl;
+std::cout << "n=" << n << "  new=" << oldtonew[n] << "  flag=" << refine_flag.h_view(n) << std::endl;
 }
 ***/
 
@@ -859,17 +859,17 @@ std::cout << "Derefine: m = "<<m<<" flag = "<<refine_flag.h_view(m) << std::endl
       if (!three_d) {klim=1;}
       if (!multi_d) {jlim=1;}
 
-      int newm = m;
+      int srcm = m;
       for (int k=0; k<klim; ++k) {
         std::pair<int,int> kdst = std::make_pair((ks+k*cnx3), (ks+(k+1)*cnx3));
         for (int j=0; j<jlim; ++j) {
           std::pair<int,int> jdst = std::make_pair((js+j*cnx2), (js+(j+1)*cnx2));
           for (int i=0; i<2; ++i) {
             std::pair<int,int> idst = std::make_pair((is+i*cnx1), (is+(i+1)*cnx1));
-            auto src = Kokkos::subview(ca,m,   Kokkos::ALL,ksrc,jsrc,isrc);
-            auto dst = Kokkos::subview(a, newm,Kokkos::ALL,kdst,jdst,idst);
+            auto src = Kokkos::subview(ca,srcm,Kokkos::ALL,ksrc,jsrc,isrc);
+            auto dst = Kokkos::subview(a, m,   Kokkos::ALL,kdst,jdst,idst);
             Kokkos::deep_copy(DevExeSpace(),dst, src);
-            ++m;
+            ++srcm;
           }
         }
       }
