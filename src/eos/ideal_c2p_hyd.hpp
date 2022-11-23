@@ -101,7 +101,8 @@ Real EquationC22(Real z, Real &u_d, Real q, Real r, EOS_Data eos) {
 
 KOKKOS_INLINE_FUNCTION
 void SingleC2P_IdealSRHyd(HydCons1D &u, const EOS_Data &eos, const Real s2, HydPrim1D &w,
-                          bool &dfloor_used, bool &efloor_used, int &iter_used) {
+                          bool &dfloor_used, bool &efloor_used, bool &c2p_failure,
+                          int &iter_used) {
   // Parameters
   const int max_iterations = 25;
   const Real tol = 1.0e-12;
@@ -152,12 +153,12 @@ void SingleC2P_IdealSRHyd(HydCons1D &u, const EOS_Data &eos, const Real s2, HydP
 
     // Quit if convergence reached
     // NOTE: both z and f are of order unity
-    if ((fabs(zm-zp) < tol ) || (fabs(f) < tol )) {
+    if ((fabs(zm-zp) < tol) || (fabs(f) < tol)) {
       break;
     }
 
     // assign zm-->zp if root bracketed by [z,zp]
-    if (f * fp < 0.0) {
+    if (f*fp < 0.0) {
       zm = zp;
       fm = fp;
       zp = z;
@@ -169,24 +170,48 @@ void SingleC2P_IdealSRHyd(HydCons1D &u, const EOS_Data &eos, const Real s2, HydP
     }
   }
 
-  // iterations ended, compute primitives from resulting value of z
-  Real const lor = sqrt(1.0 + z*z);       // (C15)
-  w.d = u.d/lor;                    // (C15)
+  // check if convergence is established within max_iterations.  If not, trigger a C2P
+  // failure and return floored density, pressure, and primitive velocities. Future
+  // development may trigger averaging of (successfully inverted) neighbors in the event
+  // of a C2P failure.
+  if (iter_used==max_iterations) {
+    w.d = eos.dfloor;
+    w.e = eos.pfloor/gm1;
+    w.vx = 0.0;
+    w.vy = 0.0;
+    w.vz = 0.0;
+    c2p_failure = true;
+    return;
+  }
 
-  // NOTE(@ermost): The following generalizes to ANY equation of state
+  // iterations ended, compute primitives from resulting value of z
+  Real const lor = sqrt(1.0 + z*z);  // (C15)
+
+  // compute density then apply floor
+  Real dens = u.d/lor;
+  if (dens < eos.dfloor) {
+    dens = eos.dfloor;
+    dfloor_used = true;
+  }
+
+  // compute specific internal energy density then apply floor
   Real eps = lor*q - z*r + (z*z)/(1.0 + lor);   // (C16)
-  Real epsmin = eos.pfloor/(w.d*gm1);
-  if (eps <= epsmin) {                      // C18
+  Real epsmin = eos.pfloor/(dens*gm1);
+  if (eps <= epsmin) {
     eps = epsmin;
     efloor_used = true;
   }
 
-  Real const conv = 1.0/((1.0 + eos.gamma*eps)*u.d); // (C1 and C21)
-  w.vx = conv * u.mx;            // (C26)
-  w.vy = conv * u.my;            // (C26)
-  w.vz = conv * u.mz;            // (C26)
+  // set parameters required for velocity inversion
+  Real const h = 1.0 + eos.gamma*eps;  // (C21)
+  Real const conv = 1.0/h;             // (C26)
 
-  w.e = w.d*eps;
+  // set primitive variables
+  w.d  = dens;
+  w.vx = conv*(u.mx/u.d);  // (C26)
+  w.vy = conv*(u.my/u.d);  // (C26)
+  w.vz = conv*(u.mz/u.d);  // (C26)
+  w.e  = dens*eps;
 
   return;
 }

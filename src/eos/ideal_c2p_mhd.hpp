@@ -104,7 +104,7 @@ Real Equation44(const Real mu, const Real b2, const Real rpar, const Real r, con
   Real w = sqrt(1.+z2);
 
   Real const wd = u_d/w;                           // (34)
-  Real eps = w*(qbar - mu*rbar)+  z2/(w+1.);
+  Real eps = w*(qbar - mu*rbar) + z2/(w+1.);
 
   //NOTE: The following generalizes to ANY equation of state
   Real const gm1 = eos.gamma - 1.0;
@@ -121,8 +121,8 @@ Real Equation44(const Real mu, const Real b2, const Real rpar, const Real r, con
 
 KOKKOS_INLINE_FUNCTION
 void SingleC2P_IdealSRMHD(MHDCons1D &u, const EOS_Data &eos, Real s2, Real b2, Real rpar,
-                          HydPrim1D &w,
-                          bool &dfloor_used, bool &efloor_used, int &max_iter) {
+                          HydPrim1D &w, bool &dfloor_used, bool &efloor_used,
+                          bool &c2p_failure, int &max_iter) {
   // Parameters
   const int max_iterations = 25;
   const Real tol = 1.0e-12;
@@ -143,7 +143,6 @@ void SingleC2P_IdealSRMHD(MHDCons1D &u, const EOS_Data &eos, Real s2, Real b2, R
   // Recast all variables (eq 22-24)
   Real q = u.e/u.d;
   Real r = sqrt(s2)/u.d;
-
   Real isqrtd = 1.0/sqrt(u.d);
   Real bx = u.bx*isqrtd;
   Real by = u.by*isqrtd;
@@ -170,16 +169,16 @@ void SingleC2P_IdealSRMHD(MHDCons1D &u, const EOS_Data &eos, Real s2, Real b2, R
   Real z = 0.5*(zm + zp);
 
   int iter;
-  for (iter=0; iter < iterations; ++iter) {
+  for (iter=0; iter<iterations; ++iter) {
     z =  (zm*fp - zp*fm)/(fp-fm);  // linear interpolation to point f(z)=0
     Real f = Equation49(z, b2, rpar, r, q);
     // Quit if convergence reached
     // NOTE(@ermost): both z and f are of order unity
-    if ((fabs(zm-zp) < tol ) || (fabs(f) < tol )) {
+    if ((fabs(zm-zp) < tol) || (fabs(f) < tol)) {
       break;
     }
     // assign zm-->zp if root bracketed by [z,zp]
-    if (f * fp < 0.0) {
+    if (f*fp < 0.0) {
       zm = zp;
       fm = fp;
       zp = z;
@@ -190,7 +189,7 @@ void SingleC2P_IdealSRMHD(MHDCons1D &u, const EOS_Data &eos, Real s2, Real b2, R
       fp = f;
     }
   }
-  max_iter = (iter > max_iter)? iter : max_iter;
+  max_iter = (iter > max_iter) ? iter : max_iter;
 
   // Found brackets. Now find solution in bounded interval, again using the
   // false position method
@@ -207,16 +206,16 @@ void SingleC2P_IdealSRMHD(MHDCons1D &u, const EOS_Data &eos, Real s2, Real b2, R
   }
   z = 0.5*(zm + zp);
 
-  for (iter=0; iter < iterations; ++iter) {
-    z =  (zm*fp - zp*fm)/(fp-fm);  // linear interpolation to point f(z)=0
+  for (iter=0; iter<iterations; ++iter) {
+    z = (zm*fp - zp*fm)/(fp-fm);  // linear interpolation to point f(z)=0
     Real f = Equation44(z, b2, rpar, r, q, u.d, eos);
     // Quit if convergence reached
     // NOTE: both z and f are of order unity
-    if ((fabs(zm-zp) < tol ) || (fabs(f) < tol )) {
+    if ((fabs(zm-zp) < tol) || (fabs(f) < tol)) {
       break;
     }
     // assign zm-->zp if root bracketed by [z,zp]
-    if (f * fp < 0.0) {
+    if (f*fp < 0.0) {
       zm = zp;
       fm = fp;
       zp = z;
@@ -227,34 +226,55 @@ void SingleC2P_IdealSRMHD(MHDCons1D &u, const EOS_Data &eos, Real s2, Real b2, R
       fp = f;
     }
   }
-  max_iter = (iter > max_iter)? iter : max_iter;
+  max_iter = (iter > max_iter) ? iter : max_iter;
+
+  // check if convergence is established within max_iterations.  If not, trigger a C2P
+  // failure and return floored density, pressure, and primitive velocities. Future
+  // development may trigger averaging of (successfully inverted) neighbors in the event
+  // of a C2P failure.
+  if (max_iter==max_iterations) {
+    w.d = eos.dfloor;
+    w.e = eos.pfloor/gm1;
+    w.vx = 0.0;
+    w.vy = 0.0;
+    w.vz = 0.0;
+    c2p_failure = true;
+    return;
+  }
 
   // iterations ended, compute primitives from resulting value of z
   Real &mu = z;
-  Real const x = 1./(1.+mu*b2);                              // (26)
-  Real rbar = (x*x*r*r + mu*x*(1.+x)*rpar*rpar);             // (38)
-  Real qbar = q - 0.5*b2 - 0.5*(mu*mu*(b2*rbar- rpar*rpar)); // (31)
-
-  Real z2 = (mu*mu*rbar/(fabs(1.- SQR(mu)*rbar)));           // (32)
+  Real const x = 1./(1.+mu*b2);                               // (26)
+  Real rbar = (x*x*r*r + mu*x*(1.+x)*rpar*rpar);              // (38)
+  Real qbar = q - 0.5*b2 - 0.5*(mu*mu*(b2*rbar - rpar*rpar)); // (31)
+  Real z2 = (mu*mu*rbar/(fabs(1.- SQR(mu)*rbar)));            // (32)
   Real lor = sqrt(1.0 + z2);
 
-  w.d = u.d/lor;                                               // (34)
-  Real eps = lor*(qbar - mu*rbar)+  z2/(lor + 1.0);
-  Real epsmin = eos.pfloor/(w.d*gm1);
+  // compute density then apply floor
+  Real dens = u.d/lor;
+  if (dens < eos.dfloor) {
+    dens = eos.dfloor;
+    dfloor_used = true;
+  }
+
+  // compute specific internal energy density then apply floor
+  Real eps = lor*(qbar - mu*rbar) + z2/(lor + 1.0);
+  Real epsmin = eos.pfloor/(dens*gm1);
   if (eps <= epsmin) {
     eps = epsmin;
     efloor_used = true;
   }
 
-  //NOTE: The following generalizes to ANY equation of state
+  // set parameters required for velocity inversion
   Real const h = 1.0 + eos.gamma*eps;  // (43)
+  Real const conv = lor/(h*lor + b2);  // (C26)
 
-  Real const conv = lor/(h*lor + b2); // (C26)
-  w.vx = conv * ( u.mx/u.d + bx * rpar/(h*lor));  // (C26)
-  w.vy = conv * ( u.my/u.d + by * rpar/(h*lor));  // (C26)
-  w.vz = conv * ( u.mz/u.d + bz * rpar/(h*lor));  // (C26)
-
-  w.e = w.d*eps;
+  // set primitive variables
+  w.d  = dens;
+  w.vx = conv*(u.mx/u.d + bx*rpar/(h*lor));  // (C26)
+  w.vy = conv*(u.my/u.d + by*rpar/(h*lor));  // (C26)
+  w.vz = conv*(u.mz/u.d + bz*rpar/(h*lor));  // (C26)
+  w.e  = dens*eps;
 
   return;
 }
