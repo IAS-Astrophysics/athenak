@@ -15,6 +15,7 @@
 #include "coordinates/cell_locations.hpp"
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
+#include "globals.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "srcterms/srcterms.hpp"
@@ -34,6 +35,9 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
   if (out_params.file_type.compare("hst") == 0 ||
       out_params.file_type.compare("rst") == 0 ||
       out_params.file_type.compare("log") == 0) {return;}
+
+  // initialize vector containing number of output MBs per rank
+  noutmbs.assign(global_variable::nranks, 0);
 
   // check for valid choice of variables
   int ivar = -1;
@@ -385,13 +389,14 @@ void BaseTypeOutput::LoadOutputData(Mesh *pm) {
     outmbs.emplace_back(id,ois,oie,ojs,oje,oks,oke,x1min,x1max,x2min,x2max,x3min,x3max);
   }
 
-  noutmbs_min = outmbs.size();
-  noutmbs_max = outmbs.size();
+  std::fill(noutmbs.begin(), noutmbs.end(), 0);
+  noutmbs[global_variable::my_rank] = outmbs.size();
 #if MPI_PARALLEL_ENABLED
-  // get minimum number of output MeshBlocks over all MPI ranks
-  MPI_Allreduce(MPI_IN_PLACE, &noutmbs_min, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
-  MPI_Allreduce(MPI_IN_PLACE, &noutmbs_max, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE, noutmbs.data(), global_variable::nranks,
+                MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 #endif
+  noutmbs_min = *std::min_element(noutmbs.begin(), noutmbs.end());
+  noutmbs_max = *std::max_element(noutmbs.begin(), noutmbs.end());
 
   // get number of output vars and MBs, then realloc outarray (HostArray)
   int nout_vars = outvars.size();

@@ -60,6 +60,7 @@ struct OutputParameters {
   bool include_gzs;
   bool slice1, slice2, slice3;
   Real slice_x1, slice_x2, slice_x3;
+  bool user_hist_only;
 };
 
 //----------------------------------------------------------------------------------------
@@ -139,6 +140,7 @@ class BaseTypeOutput {
   HostArray5D<Real>   outarray;  // CC output data on host with dims (n,m,k,j,i) except
                                  // for restarts, where dims are (m,n,k,j,i)
   HostFaceFld4D<Real> outfield;  // FC output field on host
+  std::vector<int> noutmbs;   // with MPI, number of output MBs across all ranks
   int noutmbs_min;            // with MPI, minimum number of output MBs across all ranks
   int noutmbs_max;            // with MPI, maximum number of output MBs across all ranks
 

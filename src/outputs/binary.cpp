@@ -13,8 +13,10 @@
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
+#include <numeric>
 #include <sstream>
 #include <string>
+#include <vector>
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -40,6 +42,9 @@ BinaryOutput::BinaryOutput(OutputParameters op, Mesh *pm) :
 //   All MeshBlocks are written to the same file.
 
 void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
+  // check if slicing
+  bool bin_slice = (out_params.slice1 || out_params.slice2 || out_params.slice3);
+
   // create filename: "bin/file_basename" + "." + "file_id" + "." + XXXXX + ".bin"
   // where XXXXX = 5-digit file_number
   std::string fname;
@@ -98,14 +103,20 @@ void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   //  in the OutputData doubly linked lists), all in binary floats format
 
   int nout_vars = outvars.size();
-  auto &indcs = pm->mb_indcs;
-  int cells = indcs.nx1*indcs.nx2*indcs.nx3;
+  int nout_mbs = outmbs.size();
+  int cells = 0;
+  if (nout_mbs > 0) {
+    int nout1 = outmbs[0].oie - outmbs[0].ois + 1;
+    int nout2 = outmbs[0].oje - outmbs[0].ojs + 1;
+    int nout3 = outmbs[0].oke - outmbs[0].oks + 1;
+    cells = nout1*nout2*nout3;
+  }
 
-  // il1, il2, il3, level + x1min, x1max, x2min, x2max, x3min, x3max + data
-  std::size_t data_size = 4*sizeof(int32_t) + 6*sizeof(Real)
+  // ois, oie, ojs, oje, oks, oke + il1, il2, il3, level +
+  // x1min, x1max, x2min, x2max, x3min, x3max + data
+  std::size_t data_size = 10*sizeof(int32_t) + 6*sizeof(Real)
                         + (cells*nout_vars)*sizeof(float);
 
-  int nout_mbs = (outmbs.size());
   int ns_mbs = pm->gidslist[global_variable::my_rank];
   int nb_mbs = pm->nmblist[global_variable::my_rank];
 
@@ -124,8 +135,28 @@ void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     int &oks = outmbs[m].oks;
     int &oke = outmbs[m].oke;
 
+    // output indexing for MB
+    int32_t nx = (int32_t)(ois);
+    memcpy(pdata,&(nx),sizeof(nx));
+    pdata+=sizeof(nx);
+    nx = (int32_t)(oie);
+    memcpy(pdata,&(nx),sizeof(nx));
+    pdata+=sizeof(nx);
+    nx = (int32_t)(ojs);
+    memcpy(pdata,&(nx),sizeof(nx));
+    pdata+=sizeof(nx);
+    nx = (int32_t)(oje);
+    memcpy(pdata,&(nx),sizeof(nx));
+    pdata+=sizeof(nx);
+    nx = (int32_t)(oks);
+    memcpy(pdata,&(nx),sizeof(nx));
+    pdata+=sizeof(nx);
+    nx = (int32_t)(oke);
+    memcpy(pdata,&(nx),sizeof(nx));
+    pdata+=sizeof(nx);
+
     // logical location lx1, lx2, lx3
-    int32_t nx = (int32_t)(loc.lx1);
+    nx = (int32_t)(loc.lx1);
     memcpy(pdata,&(nx),sizeof(nx));
     pdata+=sizeof(nx);
     nx = (int32_t)(loc.lx2);
@@ -178,38 +209,53 @@ void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     }
   }
 
-  // check if elements larger than 2^31
-  if (data_size*nb_mbs<=2147483648) {
-    // now write binary data in parallel
-    std::size_t myoffset=header_offset+data_size*ns_mbs;
-    binfile.Write_bytes_at_all(data,data_size,nb_mbs,myoffset);
-  } else {
-    // write data over each MeshBlock sequentially and in parallel
-    // calculate max/min number of MeshBlocks across all ranks
-    noutmbs_max = pm->nmblist[0];
-    noutmbs_min = pm->nmblist[0];
-    for (int i=0; i<(global_variable::nranks); ++i) {
-      noutmbs_max = std::max(noutmbs_max,pm->nmblist[i]);
-      noutmbs_min = std::min(noutmbs_min,pm->nmblist[i]);
+  // now write binary data
+  if (bin_slice) {
+    std::vector<int> rank_offset(global_variable::nranks, 0);
+    std::partial_sum(noutmbs.begin(),std::prev(noutmbs.end()),
+                     std::next(rank_offset.begin()));
+    std::size_t myoffset=header_offset+data_size*rank_offset[global_variable::my_rank];
+    if (noutmbs_min > 0) {
+      binfile.Write_bytes_at_all(data,data_size,nout_mbs,myoffset);
+    } else {
+      if (nout_mbs > 0) {
+        binfile.Write_bytes_at(data,data_size,nout_mbs,myoffset);
+      }
     }
-    for (int m=0;  m<noutmbs_max; ++m) {
-      char *pdata=&(data[m*data_size]);
-      std::size_t myoffset=header_offset+data_size*ns_mbs+data_size*m;
-      // every rank has a MB to write, so write collectively
-      if (m < noutmbs_min) {
-        if (binfile.Write_bytes_at_all(pdata,data_size,1,myoffset) != 1) {
-          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "binary data not written correctly to binary file, "
-              << "binary file is broken." << std::endl;
-          exit(EXIT_FAILURE);
-        }
-      // some ranks are finished writing, so use non-collective write
-      } else if (m < pm->nmb_thisrank) {
-        if (binfile.Write_bytes_at(pdata,data_size,1,myoffset) != 1) {
-          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-               << std::endl << "binary data not written correctly to binary file, "
-               << "binary file is broken." << std::endl;
-          exit(EXIT_FAILURE);
+  } else {
+    // check if elements larger than 2^31
+    if (data_size*nb_mbs<=2147483648) {
+      // now write binary data in parallel
+      std::size_t myoffset=header_offset+data_size*ns_mbs;
+      binfile.Write_bytes_at_all(data,data_size,nb_mbs,myoffset);
+    } else {
+      // write data over each MeshBlock sequentially and in parallel
+      // calculate max/min number of MeshBlocks across all ranks
+      noutmbs_max = pm->nmblist[0];
+      noutmbs_min = pm->nmblist[0];
+      for (int i=0; i<(global_variable::nranks); ++i) {
+        noutmbs_max = std::max(noutmbs_max,pm->nmblist[i]);
+        noutmbs_min = std::min(noutmbs_min,pm->nmblist[i]);
+      }
+      for (int m=0;  m<noutmbs_max; ++m) {
+        char *pdata=&(data[m*data_size]);
+        std::size_t myoffset=header_offset+data_size*ns_mbs+data_size*m;
+        // every rank has a MB to write, so write collectively
+        if (m < noutmbs_min) {
+          if (binfile.Write_bytes_at_all(pdata,data_size,1,myoffset) != 1) {
+            std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "binary data not written correctly to binary file, "
+                << "binary file is broken." << std::endl;
+            exit(EXIT_FAILURE);
+          }
+        // some ranks are finished writing, so use non-collective write
+        } else if (m < pm->nmb_thisrank) {
+          if (binfile.Write_bytes_at(pdata,data_size,1,myoffset) != 1) {
+            std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                 << std::endl << "binary data not written correctly to binary file, "
+                 << "binary file is broken." << std::endl;
+            exit(EXIT_FAILURE);
+          }
         }
       }
     }
