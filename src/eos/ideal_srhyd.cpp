@@ -8,6 +8,8 @@
 //! Conserved to primitive variable inversion using algorithm described in Appendix C
 //! of Galeazzi et al., PhysRevD, 88, 064009 (2013). Equation refs are to this paper.
 
+#include <float.h>
+
 #include "athena.hpp"
 #include "hydro/hydro.hpp"
 #include "eos.hpp"
@@ -23,6 +25,7 @@ IdealSRHydro::IdealSRHydro(MeshBlockPack *pp, ParameterInput *pin) :
   eos_data.iso_cs = 0.0;
   eos_data.use_e = true;  // ideal gas EOS always uses internal energy
   eos_data.use_t = false;
+  eos_data.gamma_max = pin->GetOrAddReal("hydro","gamma_max",(FLT_MAX));  // gamma ceiling
 }
 
 //----------------------------------------------------------------------------------------
@@ -64,9 +67,9 @@ void IdealSRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
   const int nkji = (ku - kl + 1)*nji;
   const int nmkji = nmb*nkji;
 
-  int nfloord_=0, nfloore_=0, maxit_=0;
+  int nfloord_=0, nfloore_=0, nceilv_=0, nfail_=0, maxit_=0;
   Kokkos::parallel_reduce("srhyd_c2p",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-  KOKKOS_LAMBDA(const int &idx, int &sumd, int &sume, int &max_it) {
+  KOKKOS_LAMBDA(const int &idx, int &sumd, int &sume, int &sumv, int &sumf, int &max_it) {
     int m = (idx)/nkji;
     int k = (idx - m*nkji)/nji;
     int j = (idx - m*nkji - k*nji)/ni;
@@ -89,27 +92,42 @@ void IdealSRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
     // (inline function in ideal_c2p_hyd.hpp file)
     HydPrim1D w;
     bool dfloor_used=false, efloor_used=false;
+    bool vceiling_used=false, c2p_failure=false;
     int iter_used=0;
-    SingleC2P_IdealSRHyd(u, eos, s2, w, dfloor_used, efloor_used, iter_used);
+    SingleC2P_IdealSRHyd(u, eos, s2, w,
+                         dfloor_used, efloor_used, c2p_failure, iter_used);
+    // apply velocity ceiling if necessary
+    Real lor = sqrt(1.0+SQR(w.vx)+SQR(w.vy)+SQR(w.vz));
+    if (lor > eos.gamma_max) {
+      vceiling_used = true;
+      Real factor = sqrt((SQR(eos.gamma_max)-1.0)/(SQR(lor)-1.0));
+      w.vx *= factor;
+      w.vy *= factor;
+      w.vz *= factor;
+    }
 
     // set FOFC flag and quit loop if this function called only to check floors
     if (only_testfloors) {
-      if (dfloor_used || efloor_used) {
+      if (dfloor_used || efloor_used || vceiling_used || c2p_failure) {
         fofc_(m,k,j,i) = true;
         sumd++;  // use dfloor as counter for when either is true
       }
     } else {
       if (dfloor_used) {sumd++;}
       if (efloor_used) {sume++;}
+      if (vceiling_used) {sumv++;}
+      if (c2p_failure) {sumf++;}
       max_it = (iter_used > max_it) ? iter_used : max_it;
+
       // store primitive state in 3D array
       prim(m,IDN,k,j,i) = w.d;
       prim(m,IVX,k,j,i) = w.vx;
       prim(m,IVY,k,j,i) = w.vy;
       prim(m,IVZ,k,j,i) = w.vz;
       prim(m,IEN,k,j,i) = w.e;
-      // reset conserved variables if floor is hit
-      if (dfloor_used || efloor_used) {
+
+      // reset conserved variables if floor, ceiling, or failure encountered
+      if (dfloor_used || efloor_used || vceiling_used || c2p_failure) {
         SingleP2C_IdealSRHyd(w, eos.gamma, u);
         cons(m,IDN,k,j,i) = u.d;
         cons(m,IM1,k,j,i) = u.mx;
@@ -122,7 +140,8 @@ void IdealSRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
         prim(m,n,k,j,i) = cons(m,n,k,j,i)/u.d;
       }
     }
-  }, Kokkos::Sum<int>(nfloord_), Kokkos::Sum<int>(nfloore_), Kokkos::Max<int>(maxit_));
+  }, Kokkos::Sum<int>(nfloord_), Kokkos::Sum<int>(nfloore_), Kokkos::Sum<int>(nceilv_),
+     Kokkos::Sum<int>(nfail_), Kokkos::Max<int>(maxit_));
 
   // store appropriate counters
   if (only_testfloors) {
@@ -130,6 +149,8 @@ void IdealSRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
   } else {
     pmy_pack->pmesh->ecounter.neos_dfloor += nfloord_;
     pmy_pack->pmesh->ecounter.neos_efloor += nfloore_;
+    pmy_pack->pmesh->ecounter.neos_vceil  += nceilv_;
+    pmy_pack->pmesh->ecounter.neos_fail   += nfail_;
     pmy_pack->pmesh->ecounter.maxit_c2p = maxit_;
   }
 
