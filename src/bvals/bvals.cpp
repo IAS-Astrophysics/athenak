@@ -23,7 +23,8 @@
 BoundaryValues::BoundaryValues(MeshBlockPack *pp, ParameterInput *pin) :
   pmy_pack(pp),
   u_in("uin",1,1),
-  b_in("bin",1,1) {
+  b_in("bin",1,1),
+  i_in("iin",1,1) {
   // allocate vector of status flags and MPI requests (if needed)
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
@@ -86,6 +87,7 @@ void BoundaryValues::InitializeBuffers(const int nvar) {
   if (!(pmy_pack->pmesh->strictly_periodic)) {
     Kokkos::realloc(u_in, nvar, 6);
     Kokkos::realloc(b_in, 3, 6);   // always 3 components of face-fields
+    Kokkos::realloc(i_in, nvar, 6);
   }
 
   // initialize buffers used for uniform grid and SMR/AMR calculations

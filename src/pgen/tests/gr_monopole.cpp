@@ -56,14 +56,12 @@ Real A3(Real a_norm, Real spin, Real x1, Real x2, Real x3);
 
 //----------------------------------------------------------------------------------------
 //! \fn void ProblemGenerator::Monopole()
-//  \brief Sets initial conditions for Fishbone-Moncrief torus in GR
-//  Compile with '-D PROBLEM=gr_torus' to enroll as user-specific problem generator
-//   references Fishbone & Moncrief 1976, ApJ 207 962 (FM)
-//              Fishbone 1977, ApJ 215 323 (F)
+//  \brief Sets initial conditions for GR Monopole test
 //   assumes x3 is axisymmetric direction
 
 void ProblemGenerator::Monopole(ParameterInput *pin, const bool restart) {
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
+
   if (!(pmbp->pcoord->is_general_relativistic)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "GR monopole problem can only be run when GR defined in <coord> block"

@@ -21,6 +21,7 @@
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
 #include "diffusion/conduction.hpp"
+#include "radiation/radiation.hpp"
 #include "srcterms/srcterms.hpp"
 #include "outputs/io_wrapper.hpp"
 
@@ -555,6 +556,10 @@ void Mesh::NewTimeStep(const Real tlim) {
     if (pmb_pack->pmhd->psrc->source_terms_enabled) {
       dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->psrc->dtnew) );
     }
+  }
+  // Radiation timestep
+  if (pmb_pack->prad != nullptr) {
+    dt = std::min(dt, (cfl_no)*(pmb_pack->prad->dtnew) );
   }
 
 #if MPI_PARALLEL_ENABLED

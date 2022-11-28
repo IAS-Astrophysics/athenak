@@ -1,0 +1,56 @@
+<comment>
+problem = beam of radiation in snake coordinates
+
+<job>
+basename = beam_snake  # name of run
+
+<time>
+evolution  = dynamic  # dynamic/kinematic/static
+integrator = rk2      # time integration algorithm
+cfl_number = 0.5      # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1       # cycle limit
+tlim       = 3.0      # time limit
+
+<mesh>
+nghost = 2        # Number of ghost cells
+nx1    = 128      # Number of zones in X1-direction
+x1min  = -0.5     # minimum value of X1
+x1max  = 0.5      # maximum value of X1
+ix1_bc = outflow  # inner-X1 boundary flag
+ox1_bc = outflow  # outer-X1 boundary flag
+
+nx2    = 256      # Number of zones in X2-direction
+x2min  = -0.05    # minimum value of X2
+x2max  = 2.45     # maximum value of X2
+ix2_bc = outflow  # inner-X2 boundary flag
+ox2_bc = outflow  # outer-X2 boundary flag
+
+nx3    = 1         # Number of zones in X3-direction
+x3min  = -0.5      # minimum value of X3
+x3max  = 0.5       # maximum value of X3
+ix3_bc = periodic  # inner-X3 boundary flag
+ox3_bc = periodic  # outer-X3 boundary flag
+
+<coord>
+general_rel = true    # w/ general relativity
+minkowski = true      # Minkowski flag
+
+<radiation>
+nlevel = 22          # geodesic mesh level
+beam_source = true   # apply beam source term
+dii_dt = 1.0         # injected I per unit time
+
+<problem>
+pos_1  = 0.0       # x-coordinate of beam origin
+pos_2  = 0.0       # y-coordinate of beam origin
+pos_3  = 0.0       # z-coordinate of beam origin
+width  = 0.05      # full proper diameter of beam
+spread = 10.0      # full spread of beam in direction, in degrees
+snake_kym = 2.0    # controls the wavelength of sinusoidal perturb in snake coord
+snake_mag = 0.1    # controls the magnitude  of sinusoidal perturb in snake coord
+snake_tet = false  # controls coordinate system tetrad aligns to
+
+<output1>
+file_type = vtk         # output format
+variable  = rad_coord   # choice of variables to output
+dt        = 4.0         # output cadence
