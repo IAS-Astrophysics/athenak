@@ -56,14 +56,12 @@ Real A3(Real a_norm, Real spin, Real x1, Real x2, Real x3);
 
 //----------------------------------------------------------------------------------------
 //! \fn void ProblemGenerator::Monopole()
-//  \brief Sets initial conditions for Fishbone-Moncrief torus in GR
-//  Compile with '-D PROBLEM=gr_torus' to enroll as user-specific problem generator
-//   references Fishbone & Moncrief 1976, ApJ 207 962 (FM)
-//              Fishbone 1977, ApJ 215 323 (F)
+//  \brief Sets initial conditions for GR Monopole test
 //   assumes x3 is axisymmetric direction
 
 void ProblemGenerator::Monopole(ParameterInput *pin, const bool restart) {
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
+
   if (!(pmbp->pcoord->is_general_relativistic)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "GR monopole problem can only be run when GR defined in <coord> block"
@@ -184,9 +182,6 @@ void ProblemGenerator::Monopole(ParameterInput *pin, const bool restart) {
     Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
     Real x3f   = LeftEdgeX(k  -ks, nx3, x3min, x3max);
 
-    Real x1fp1 = LeftEdgeX(i+1-is, nx1, x1min, x1max);
-    Real x2fp1 = LeftEdgeX(j+1-js, nx2, x2min, x2max);
-    Real x3fp1 = LeftEdgeX(k+1-ks, nx3, x3min, x3max);
     Real dx1 = size.d_view(m).dx1;
     Real dx2 = size.d_view(m).dx2;
     Real dx3 = size.d_view(m).dx3;
@@ -342,7 +337,7 @@ void ProblemGenerator::Monopole(ParameterInput *pin, const bool restart) {
 namespace {
 
 //----------------------------------------------------------------------------------------
-// Function for returning corresponding Boyer-Lindquist coordinates of point
+// Function for returning corresponding Kerr-Schild coordinates of point
 // Inputs:
 //   x1,x2,x3: global coordinates to be converted
 // Outputs:
@@ -722,7 +717,6 @@ void MonopoleDiagnostic(ParameterInput *pin, Mesh *pm) {
     // extract coordinate data at this angle
     Real r = psph->radius;
     Real theta = psph->polar_pos.h_view(n,0);
-    Real phi = psph->polar_pos.h_view(n,1);
     Real x1 = psph->interp_coord.h_view(n,0);
     Real x2 = psph->interp_coord.h_view(n,1);
     Real x3 = psph->interp_coord.h_view(n,2);
@@ -730,11 +724,9 @@ void MonopoleDiagnostic(ParameterInput *pin, Mesh *pm) {
     ComputeMetricAndInverse(x1,x2,x3,flat,spin,glower,gupper);
 
     // extract interpolated primitives
-    Real &int_dn = psph->interp_vals.h_view(n,IDN);
     Real &int_vx = psph->interp_vals.h_view(n,IVX);
     Real &int_vy = psph->interp_vals.h_view(n,IVY);
     Real &int_vz = psph->interp_vals.h_view(n,IVZ);
-    Real &int_ie = psph->interp_vals.h_view(n,IEN);
 
     // extract interpolated field components
     Real &int_bx = interpolated_bcc.h_view(n,IBX);
@@ -753,7 +745,6 @@ void MonopoleDiagnostic(ParameterInput *pin, Mesh *pm) {
     Real u3 = int_vz - alpha * gamma * gupper[0][3];
 
     // Lower vector indices
-    Real u_0 = glower[0][0]*u0 + glower[0][1]*u1 + glower[0][2]*u2 + glower[0][3]*u3;
     Real u_1 = glower[1][0]*u0 + glower[1][1]*u1 + glower[1][2]*u2 + glower[1][3]*u3;
     Real u_2 = glower[2][0]*u0 + glower[2][1]*u1 + glower[2][2]*u2 + glower[2][3]*u3;
     Real u_3 = glower[3][0]*u0 + glower[3][1]*u1 + glower[3][2]*u2 + glower[3][3]*u3;
@@ -772,19 +763,14 @@ void MonopoleDiagnostic(ParameterInput *pin, Mesh *pm) {
     Real drdx = r*x1/(2.0*r2 - rad2 + a2);
     Real drdy = r*x2/(2.0*r2 - rad2 + a2);
     Real drdz = (r*x3 + a2*x3/r)/(2.0*r2-rad2+a2);
-    Real dthdx = x3*drdx/(r2*sth);
-    Real dthdy = x3*drdy/(r2*sth);
-    Real dthdz = (x3*drdz - r)/(r2*sth);
     Real dphdx = (-x2/(SQR(x1)+SQR(x2)) + (spin/(r2 + a2))*drdx);
     Real dphdy = ( x1/(SQR(x1)+SQR(x2)) + (spin/(r2 + a2))*drdy);
     Real dphdz = (spin/(r2 + a2)*drdz);
-    // 4-velocity in spherical KS
+    // r,phi component of 4-velocity in spherical KS
     Real ur  = drdx *u1 + drdy *u2 + drdz *u3;
-    Real uth = dthdx*u1 + dthdy*u2 + dthdz*u3;
     Real uph = dphdx*u1 + dphdy*u2 + dphdz*u3;
-    // 4-magnetic field in spherical KS
+    // r,phi component of 4-magnetic field in spherical KS
     Real br  = drdx *b1 + drdy *b2 + drdz *b3;
-    Real bth = dthdx*b1 + dthdy*b2 + dthdz*b3;
     Real bph = dphdx*b1 + dphdy*b2 + dphdz*b3;
 
     // Compute field rotation rate (in units of rotation rate of horizon)

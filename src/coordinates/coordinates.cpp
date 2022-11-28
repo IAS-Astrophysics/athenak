@@ -34,9 +34,13 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
   // Read properties of metric and excision from input file for GR.
   if (is_general_relativistic) {
     coord_data.is_minkowski = pin->GetOrAddBoolean("coord","minkowski",false);
-    coord_data.bh_mass = pin->GetReal("coord","m");
-    coord_data.bh_spin = pin->GetReal("coord","a");
-    coord_data.bh_excise = pin->GetOrAddBoolean("coord","excise",true);
+    if (!(coord_data.is_minkowski)) {
+      coord_data.bh_spin = pin->GetReal("coord","a");
+      coord_data.bh_excise = pin->GetOrAddBoolean("coord","excise",true);
+    } else {
+      coord_data.bh_spin = 0.0;
+      coord_data.bh_excise = false;
+    }
 
     if (coord_data.bh_excise) {
       // Set the density and pressure to which cells inside the excision radius will

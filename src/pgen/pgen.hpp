@@ -9,6 +9,10 @@
 //  \brief definitions for ProblemGenerator class
 
 #include <functional>
+#include <memory>
+#include <vector>
+
+#include "geodesic-grid/spherical_grid.hpp"
 #include "parameter_input.hpp"
 
 using ProblemFinalizeFnPtr = void (*)(ParameterInput *pin, Mesh *pm);
@@ -37,6 +41,9 @@ class ProblemGenerator {
   // true if user history outputs are specified
   bool user_hist;
 
+  // vector of SphericalGrid objects for analysis
+  std::vector<std::unique_ptr<SphericalGrid>> spherical_grids;
+
   // function pointer for final work after main loop (e.g. compute errors).  Called by
   // Driver::Finalize()
   ProblemFinalizeFnPtr pgen_final_func=nullptr;
@@ -50,11 +57,14 @@ class ProblemGenerator {
   void Advection(ParameterInput *pin, const bool restart);
   void AlfvenWave(ParameterInput *pin, const bool restart);
   void BondiAccretion(ParameterInput *pin, const bool restart);
+  void CheckOrthonormalTetrad(ParameterInput *pin, const bool restart);
+  void Hohlraum(ParameterInput *pin, const bool restart);
   void LinearWave(ParameterInput *pin, const bool restart);
   void LWImplode(ParameterInput *pin, const bool restart);
   void Monopole(ParameterInput *pin, const bool restart);
   void OrszagTang(ParameterInput *pin, const bool restart);
   void ShockTube(ParameterInput *pin, const bool restart);
+  void RadiationLinearWave(ParameterInput *pin, const bool restart);
 
   // template for user-specified problem generator
   void UserProblem(ParameterInput *pin, const bool restart);

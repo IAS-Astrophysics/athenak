@@ -1,0 +1,53 @@
+<comment>
+problem = Hohlraum test in 2D
+
+<job>
+basename = hohlraum_2d  # name of run
+
+<time>
+evolution  = dynamic  # dynamic/kinematic/static
+integrator = rk2      # time integration algorithm
+cfl_number = 0.5      # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1       # cycle limit
+tlim       = 0.75     # time limit
+
+<mesh>
+nghost = 2            # Number of ghost cells
+nx1    = 128          # Number of zones in X1-direction
+x1min  = 0.0          # minimum value of X1
+x1max  = 2.0          # maximum value of X1
+ix1_bc = inflow       # inner-X1 boundary flag
+ox1_bc = outflow      # outer-X1 boundary flag
+
+nx2    = 128          # Number of zones in X2-direction
+x2min  = 0.0          # minimum value of X2
+x2max  = 2.0          # maximum value of X2
+ix2_bc = inflow       # inner-X2 boundary flag
+ox2_bc = outflow      # outer-X2 boundary flag
+
+nx3    = 1            # Number of zones in X3-direction
+x3min  = -0.5         # minimum value of X3
+x3max  = 0.5          # maximum value of X3
+ix3_bc = periodic     # inner-X3 boundary flag
+ox3_bc = periodic     # outer-X3 boundary flag
+
+<meshblock>
+nx1 = 128  # block size in X1-direction
+nx2 = 128  # block size in X2-direction
+nx3 = 1    # block size in X3-direction
+
+<coord>
+general_rel = true   # w/ general relativity
+minkowski = true     # Minkowski flag
+
+<radiation>
+nlevel = 1              # number of levels for geodesic mesh
+angular_fluxes = false  # flag to disable angular fluxes
+
+<problem>
+pgen_name  = hohlraum
+
+<output1>
+file_type   = vtk        # output format
+variable    = rad_coord  # choice of variables to output
+dt          = 1.0        # output cadence
