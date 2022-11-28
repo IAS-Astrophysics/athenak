@@ -12,6 +12,7 @@
 #include <sstream>
 
 #include "athena.hpp"
+#include "globals.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "coordinates/coordinates.hpp"
@@ -54,7 +55,7 @@ KOKKOS_INLINE_FUNCTION
 static Real TemperatureResidual(struct bondi_pgen pgen, Real t, Real r);
 
 struct bondi_pgen {
-  Real mass, spin;          // black hole mass and spin
+  Real spin;                // black hole spin
   Real dexcise, pexcise;    // excision parameters
   Real n_adi, k_adi, gm;    // hydro EOS parameters
   Real r_crit;              // sonic point radius
@@ -79,6 +80,7 @@ void BondiErrors(ParameterInput *pin, Mesh *pm);
 
 void ProblemGenerator::BondiAccretion(ParameterInput *pin, const bool restart) {
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
+
   if (!(pmbp->phydro->peos->eos_data.use_e)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "gr_bondi test requires hydro/use_e=true" << std::endl;
@@ -109,8 +111,7 @@ void ProblemGenerator::BondiAccretion(ParameterInput *pin, const bool restart) {
   bondi.temp_min = 1.0e-2;  // lesser temperature root must be greater than this
   bondi.temp_max = 1.0e1;   // greater temperature root must be less than this
 
-  // Get mass and spin of black hole
-  bondi.mass = pmbp->pcoord->coord_data.bh_mass;
+  // Get spin of black hole
   bondi.spin = pmbp->pcoord->coord_data.bh_spin;
 
   // Get excision parameters
@@ -121,13 +122,13 @@ void ProblemGenerator::BondiAccretion(ParameterInput *pin, const bool restart) {
   bondi.n_adi = 1.0/(bondi.gm - 1.0);
 
   // Prepare various constants for determining primitives
-  Real u_crit_sq = bondi.mass/(2.0*bondi.r_crit);                    // (HSW 71)
+  Real u_crit_sq = 1.0/(2.0*bondi.r_crit);                           // (HSW 71)
   Real u_crit = -sqrt(u_crit_sq);
   Real t_crit = (bondi.n_adi/(bondi.n_adi+1.0)
                  * u_crit_sq/(1.0-(bondi.n_adi+3.0)*u_crit_sq));     // (HSW 74)
   bondi.c1 = pow(t_crit, bondi.n_adi) * u_crit * SQR(bondi.r_crit);  // (HSW 68)
   bondi.c2 = (SQR(1.0 + (bondi.n_adi+1.0) * t_crit)
-              * (1.0 - 3.0*bondi.mass/(2.0*bondi.r_crit)));          // (HSW 69)
+              * (1.0 - 3.0/(2.0*bondi.r_crit)));                     // (HSW 69)
 
   // capture variables for the kernel
   auto &indcs = pmy_mesh_->mb_indcs;
@@ -414,7 +415,7 @@ static void TransformVector(struct bondi_pgen pgen,
   Real rad = sqrt( SQR(x1) + SQR(x2) + SQR(x3) );
   Real r = fmax((sqrt( SQR(rad) - SQR(pgen.spin) + sqrt(SQR(SQR(rad)-SQR(pgen.spin))
                       + 4.0*SQR(pgen.spin)*SQR(x3)) ) / sqrt(2.0)), 1.0);
-  Real delta = SQR(r) - 2.0*pgen.mass*r + SQR(pgen.spin);
+  Real delta = SQR(r) - 2.0*r + SQR(pgen.spin);
   *pa1 = a1_bl * ( (r*x1+pgen.spin*x2)/(SQR(r) + SQR(pgen.spin)) - x2*pgen.spin/delta) +
          a2_bl * x1*x3/r * sqrt((SQR(r) + SQR(pgen.spin))/(SQR(x1) + SQR(x2))) -
          a3_bl * x2;
@@ -584,7 +585,7 @@ static Real TemperatureBisect(struct bondi_pgen pgen, Real r, Real t_min, Real t
 KOKKOS_INLINE_FUNCTION
 static Real TemperatureResidual(struct bondi_pgen pgen, Real t, Real r) {
   return SQR(1.0 + (pgen.n_adi+1.0) * t)
-      * (1.0 - 2.0*pgen.mass/r + SQR(pgen.c1)
+      * (1.0 - 2.0/r + SQR(pgen.c1)
          / (SQR(SQR(r)) * pow(t, 2.0*pgen.n_adi))) - pgen.c2;
 }
 

@@ -105,7 +105,7 @@ class BoundaryValues {
   BoundaryBuffer send_buf[56], recv_buf[56];
 
   // constant inflow states at each face, initialized in problem generator
-  DualArray2D<Real> u_in, b_in;
+  DualArray2D<Real> u_in, b_in, i_in;
 
 #if MPI_PARALLEL_ENABLED
   // unique MPI communicators for variables and fluxes
@@ -127,6 +127,7 @@ class BoundaryValues {
   // BCs associated with various physics modules
   static void HydroBCs(MeshBlockPack *pp, DualArray2D<Real> uin, DvceArray5D<Real> u0);
   static void BFieldBCs(MeshBlockPack *pp, DualArray2D<Real> bin, DvceFaceFld4D<Real> b0);
+  static void RadiationBCs(MeshBlockPack *pp,DualArray2D<Real> iin,DvceArray5D<Real> i0);
 
  protected:
   MeshBlockPack* pmy_pack;

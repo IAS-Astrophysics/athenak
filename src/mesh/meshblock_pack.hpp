@@ -20,6 +20,7 @@ class MeshBlock;
 namespace hydro {class Hydro;}
 namespace mhd {class MHD;}
 namespace ion_neutral {class IonNeutral;}
+namespace radiation {class Radiation;}
 class TurbulenceDriver;
 namespace units {class Units;}
 
@@ -52,6 +53,7 @@ class MeshBlockPack {
   hydro::Hydro *phydro=nullptr;
   mhd::MHD *pmhd=nullptr;
   ion_neutral::IonNeutral *pionn=nullptr;
+  radiation::Radiation *prad=nullptr;
   TurbulenceDriver *pturb=nullptr;
   units::Units *punit=nullptr;
 

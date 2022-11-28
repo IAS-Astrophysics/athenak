@@ -55,7 +55,7 @@ regression_cpu-job:
   script:
     - cd $CI_PROJECT_DIR/tst
     - echo "Running regression script on CPU..."
-    - python3 run_tests.py hydro mhd --log_file=log_file_cpu.txt
+    - python3 run_tests.py hydro mhd radiation --log_file=log_file_cpu.txt
   artifacts:
     when: always
     expire_in: 3 days

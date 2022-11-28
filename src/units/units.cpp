@@ -17,7 +17,21 @@ Units::Units(ParameterInput *pin) :
   length_cgs_(pin->GetOrAddReal("units", "length_cgs", 1.0)),
   mass_cgs_(pin->GetOrAddReal("units", "mass_cgs", 1.0)),
   time_cgs_(pin->GetOrAddReal("units", "time_cgs", 1.0)),
-  mu_(pin->GetOrAddReal("units", "mu", 1.0)) {}
+  mu_(pin->GetOrAddReal("units", "mu", 1.0)) {
+  // NOTE(@pdmullen): In GR, it is oft preferrable to specify the (1) black hole mass and
+  // (2) density unit directly instead of specifying MLT units.  The below resets MLT
+  // units for GR calculations (or sets them if they were omitted from the input file).
+  if (pin->GetOrAddBoolean("coord","general_rel",false)) {
+    // Get input density scale and black hole mass in cgs units
+    Real density_scale = pin->GetReal("units","density_cgs");        // density unit (cgs)
+    Real bhmass_cgs = pin->GetReal("units","bhmass_msun")*msun_cgs;  // BH mass (cgs)
+
+    // (Re)set MLT units
+    length_cgs_ = grav_constant_cgs*bhmass_cgs/SQR(speed_of_light_cgs);  // GM/c^2
+    mass_cgs_ = density_scale*(length_cgs_*length_cgs_*length_cgs_);     // dens_cgs*[L]^3
+    time_cgs_ = length_cgs_/speed_of_light_cgs;                          // GM/c^3
+  }
+}
 
 //----------------------------------------------------------------------------------------
 //! \brief Units destructor

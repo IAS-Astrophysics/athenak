@@ -27,7 +27,6 @@ struct EOS_Data;
 struct CoordData {
   // following data is only used in GR calculations to compute metric
   bool is_minkowski;               // flag to specify Minkowski (flat) space
-  Real bh_mass;                    // needed for GR metric
   Real bh_spin;                    // needed for GR metric
   bool bh_excise;                  // flag to specify excision
   Real dexcise;                    // rest-mass density inside excised region

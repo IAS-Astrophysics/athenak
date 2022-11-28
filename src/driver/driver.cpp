@@ -17,6 +17,7 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "ion-neutral/ion_neutral.hpp"
+#include "radiation/radiation.hpp"
 #include "driver.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -261,6 +262,18 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
     (void) pmhd->ConToPrim(this, 0);
   }
 
+  // Initialize radiation: ghost zones and intensity (everywhere)
+  radiation::Radiation *prad = pmesh->pmb_pack->prad;
+  if (prad != nullptr) {
+    (void) prad->RestrictI(this, 0);
+    (void) prad->InitRecv(this, -1);  // stage < 0 suppresses InitFluxRecv
+    (void) prad->SendI(this, 0);
+    (void) prad->ClearSend(this, -1);
+    (void) prad->ClearRecv(this, -1);
+    (void) prad->RecvI(this, 0);
+    (void) prad->ApplyPhysicalBCs(this, 0);
+  }
+
   //---- Step 2.  Compute first time step (if problem involves time evolution
 
   if (time_evolution != TimeEvolution::tstatic) {
@@ -269,6 +282,9 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
     }
     if (pmhd != nullptr) {
       (void) pmesh->pmb_pack->pmhd->NewTimeStep(this, nexp_stages);
+    }
+    if (prad != nullptr) {
+      (void) pmesh->pmb_pack->prad->NewTimeStep(this, nexp_stages);
     }
     pmesh->NewTimeStep(tlim);
   }
