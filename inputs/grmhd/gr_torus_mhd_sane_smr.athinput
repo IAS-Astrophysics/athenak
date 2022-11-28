@@ -8,12 +8,7 @@ reference = Fishbone & Moncrief 1976, ApJ 207 962
 basename  = torus
 
 <mesh>
-<<<<<<< HEAD:inputs/grmhd/gr_torus_mhd_smr.athinput
-nghost = 2        # Number of ghost cells
-=======
 nghost = 4        # Number of ghost cells
-refinement = static
->>>>>>> master:inputs/grmhd/gr_torus_mhd_sane_smr.athinput
 nx1    = 64       # number of cells in x1-direction
 x1min  = -64.0    # minimum x1
 x1max  = 64.0     # maximum x1
