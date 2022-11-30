@@ -143,6 +143,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   // grids.push_back(std::make_unique<SphericalGrid>(pmbp, 5, 200.0));
   user_hist_func = TorusFluxes;
 
+  // return if restart
+  if (restart) return;
+
   // Select either Hydro or MHD
   DvceArray5D<Real> u0_, w0_;
   if (pmbp->phydro != nullptr) {
