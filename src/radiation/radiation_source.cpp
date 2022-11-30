@@ -252,6 +252,12 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
                          fmax( i0_(m,n,k,j,i)/(n0*n_0)
                                + (di_cm/(4.0*M_PI*SQR(SQR(n0_cm)))), 0.0);
 
+        // compute moments after coupling
+        m_new[0] += (    i0_(m,n,k,j,i)    *solid_angles_.d_view(n));
+        m_new[1] += (n_1*i0_(m,n,k,j,i)/n_0*solid_angles_.d_view(n));
+        m_new[2] += (n_2*i0_(m,n,k,j,i)/n_0*solid_angles_.d_view(n));
+        m_new[3] += (n_3*i0_(m,n,k,j,i)/n_0*solid_angles_.d_view(n));
+
         // handle excision
         // NOTE(@pdmullen): exicision criterion are not finalized.  The below zeroes all
         // intensities within rks <= 1.0 and zeroes intensities within angles where n_0
@@ -259,12 +265,6 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
         if (excise) {
           if (rad_mask_(m,k,j,i) || fabs(n_0) < n_0_floor_) { i0_(m,n,k,j,i) = 0.0; }
         }
-
-        // compute moments after coupling
-        m_new[0] += (    i0_(m,n,k,j,i)    *solid_angles_.d_view(n));
-        m_new[1] += (n_1*i0_(m,n,k,j,i)/n_0*solid_angles_.d_view(n));
-        m_new[2] += (n_2*i0_(m,n,k,j,i)/n_0*solid_angles_.d_view(n));
-        m_new[3] += (n_3*i0_(m,n,k,j,i)/n_0*solid_angles_.d_view(n));
       }
     }
 
