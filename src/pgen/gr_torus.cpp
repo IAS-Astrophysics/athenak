@@ -320,6 +320,12 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                 << " or <problem>/mad=true" << std::endl;
       exit(EXIT_FAILURE);
     }
+    if ((pgen.is_toroidal) && (pgen.psi != 0.0))  {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "GR torus problem does not work for toroidal field"
+                << " configuration with a tilted torus" << std::endl;
+      exit(EXIT_FAILURE);
+    }
 
     // compute vector potential over all faces
     int ncells1 = indcs.nx1 + 2*(indcs.ng);
@@ -902,14 +908,6 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
         aphi = aphi_tilt;
       }
       if (pgen.is_toroidal) {
-        if (pgen.psi != 0.0) {
-          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "GR torus problem does not work for toroidal field"
-                << " configuration with a tilted torus" << std::endl;
-          exit(EXIT_FAILURE);
-        }
-        else {
-          Real pgas = pgas_over_rho*rho;
           Real pgas_cutoff = pgas_over_rho*fmax(rho - pgen.potential_cutoff, 0.0);
           aphi = 0.0;
           atheta = pow(r, pgen.potential_r_pow) * pow(pgas_cutoff, pgen.potential_rho_pow);
