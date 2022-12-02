@@ -320,7 +320,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                 << " or <problem>/mad=true" << std::endl;
       exit(EXIT_FAILURE);
     }
-    if ((torus.is_toroidal) && (pgen.psi != 0.0)){
+    if ((torus.is_toroidal) && (torus.psi != 0.0)){
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "GR torus problem does not work for toroidal field"
                 << " configuration with a tilted torus" << std::endl;
@@ -903,15 +903,16 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
             * (pgen.cos_psi * sin_theta - pgen.sin_psi * cos_theta * cos_phi_ks);
         atheta = dvarphi_dtheta * aphi_tilt;
         aphi = dvarphi_dphi * aphi_tilt;
-      } else {
-        atheta = 0.0;
-        aphi = aphi_tilt;
       }
       if (pgen.is_toroidal) {
           Real pgas_cutoff = pgas_over_rho*fmax(rho - pgen.potential_cutoff, 0.0);
           aphi = 0.0;
           atheta = pow(r, pgen.potential_r_pow) * pow(pgas_cutoff, pgen.potential_rho_pow);
-        }
+      }
+      else {
+        atheta = 0.0;
+        aphi = aphi_tilt;
+      }
       }
     }
   }
