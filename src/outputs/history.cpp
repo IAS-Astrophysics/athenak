@@ -267,13 +267,13 @@ void HistoryOutput::LoadGRMHDHistoryData(HistoryData *pdata, Mesh *pm) {
   // set number of and names of history variables for mhd
   pdata->nhist = 8;
   pdata->label[IDN] = "mass";
-  pdata->label[nmhd_  ] = "T^0_0";
-  pdata->label[nmhd_+1] = "T^0_1";
-  pdata->label[nmhd_+2] = "T^0_2";
-  pdata->label[nmhd_+3] = "T^0_3";
-  pdata->label[nmhd_+4] = "r-ME";
-  pdata->label[nmhd_+5] = "th-ME";
-  pdata->label[nmhd_+6] = "ph-ME";
+  pdata->label[1] = "T^0_0";
+  pdata->label[2] = "T^0_1";
+  pdata->label[3] = "T^0_2";
+  pdata->label[4] = "T^0_3";
+  pdata->label[5] = "r-ME";
+  pdata->label[6] = "th-ME";
+  pdata->label[7] = "ph-ME";
 
   // capture class variables for kernel
   auto &u0_ = pm->pmb_pack->pmhd->u0;
