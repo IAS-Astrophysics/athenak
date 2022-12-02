@@ -904,15 +904,14 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
         atheta = dvarphi_dtheta * aphi_tilt;
         aphi = dvarphi_dphi * aphi_tilt;
       }
-      if (pgen.is_toroidal) {
-          Real pgas_cutoff = pgas_over_rho*fmax(rho - pgen.potential_cutoff, 0.0);
-          aphi = 0.0;
-          atheta = pow(r, pgen.potential_r_pow) * pow(pgas_cutoff, pgen.potential_rho_pow);
-      }
       else {
         atheta = 0.0;
         aphi = aphi_tilt;
       }
+      if (pgen.is_toroidal) {
+          Real pgas_cutoff = pgas_over_rho*fmax(rho - pgen.potential_cutoff, 0.0);
+          aphi = 0.0;
+          atheta = pow(r, pgen.potential_r_pow) * pow(pgas_cutoff, pgen.potential_rho_pow);
       }
     }
   }
