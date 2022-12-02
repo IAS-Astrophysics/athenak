@@ -91,6 +91,7 @@ struct torus_pgen {
   Real psi, sin_psi, cos_psi;                 // tilt parameters
   Real rho_min, rho_pow, pgas_min, pgas_pow;  // background parameters
   bool is_sane, is_mad;                       // init with SANE or MAD config
+  bool is_toroidal;                           // init with purely toroidal field
   Real potential_cutoff, potential_falloff;   // sets region of torus to magnetize
   Real potential_r_pow, potential_rho_pow;    // set how vector potential scales
   Real potential_beta_min;                    // set how vector potential scales (cont.)
@@ -312,6 +313,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     torus.potential_rho_pow  = pin->GetOrAddReal("problem", "potential_rho_pow",  1.0);
     torus.is_sane = pin->GetOrAddBoolean("problem", "sane", false);
     torus.is_mad = pin->GetOrAddBoolean("problem", "mad", false);
+    torus.is_toroidal = pin->GetOrAddBoolean("problem", "toroidal", false);
     if (torus.is_sane==torus.is_mad) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "GR torus problem must specify either <problem>/sane=true"
@@ -898,6 +900,21 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
       } else {
         atheta = 0.0;
         aphi = aphi_tilt;
+      }
+      if (pgen.is_toroidal) {
+        if (pgen.psi != 0.0) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "GR torus problem does not work for toroidal field"
+                << " configuration with a tilted torus" << std::endl;
+          exit(EXIT_FAILURE);
+        }
+        else {
+          Real pgas = pgas_over_rho*rho;
+          Real rho_cutoff = fmax(rho - trs.potential_cutoff, static_cast<Real>(0.0));
+          Real pgas_cutoff = fmax(pgas - pgas_over_rho*trs.potential_cutoff, static_cast<Real>(0.0));
+          aphi = 0.0;
+          atheta = pow(r, trs.potential_r_pow) * pow(pgas_cutoff, trs.potential_rho_pow);
+        }
       }
     }
   }
