@@ -908,10 +908,13 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
         atheta = 0.0;
         aphi = aphi_tilt;
       }
+      // overwrite potential components if in a toroidal configuration
+      // currently only implemented for untilted (psi = 0) disks
       if (pgen.is_toroidal) {
-          Real pgas_cutoff = pgas_over_rho*fmax(rho - pgen.potential_cutoff, 0.0);
+          Real pgas = pgas_over_rho*rho;
           aphi = 0.0;
-          atheta = pow(r, pgen.potential_r_pow) * pow(pgas_cutoff, pgen.potential_rho_pow);
+          atheta = pow(r, pgen.potential_r_pow) *
+                  pow(fmax(pgas - pgen.potential_cutoff, pgen.potential_rho_pow));
       }
     }
   }
