@@ -39,10 +39,10 @@ HistoryOutput::HistoryOutput(OutputParameters op, Mesh *pm) : BaseTypeOutput(op,
     if (pm->pmb_pack->phydro != nullptr) {
       hist_data.emplace_back(PhysicsModule::HydroDynamics);
     }
-    if (pm->pmb_pack->pmhd != nullptr && !(pm->pgen->grmhd_hist)) {
+    if (pm->pmb_pack->pmhd != nullptr && !(pm->pmb_pack->pcoord->is_general_relativistic)) {
       hist_data.emplace_back(PhysicsModule::MagnetoHydroDynamics);
     }
-    if (pm->pgen->grmhd_hist) {
+    if ((pmy->pmb_pack->pcoord->is_general_relativistic)) {
       hist_data.emplace_back(PhysicsModule::GRMagnetoHydroDynamics);
     }
     if (pm->pgen->user_hist) {
@@ -326,8 +326,7 @@ void HistoryOutput::LoadGRMHDHistoryData(HistoryData *pdata, Mesh *pm) {
     Real &x3max = size.d_view(m).x3max;
     Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
     Real glower[4][4], gupper[4][4];
-    ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, coord.bh_spin,
-                            glower, gupper);
+    ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, glower, gupper);
 
     // Extract primitive velocity, magnetic field B^i, and gas pressure
     Real &widn = w0_(m,IDN,k,j,i);
@@ -379,6 +378,7 @@ void HistoryOutput::LoadGRMHDHistoryData(HistoryData *pdata, Mesh *pm) {
     Real theta = (fabs(x3v/r) < 1.0) ? acos(x3v/r) : acos(copysign(1.0, x3v));
     Real phi = atan2(r*x2v-spin*x1v, spin*x2v+r*x1v) - spin*r/(r2-2.0*r+a2);
     Real sth = sin(theta);
+    Real cth = cos(theta);
     Real sph = sin(phi);
     Real cph = cos(phi);
     Real drdx = r*x1v/(2.0*r2 - rad2 + a2);
@@ -404,9 +404,8 @@ void HistoryOutput::LoadGRMHDHistoryData(HistoryData *pdata, Mesh *pm) {
     const Real gamma_prime = eos_data.gamma/(gm1);
     Real wtot = widn + gamma_prime * pgas + bsq;
     Real ptot = pgas + 0.5*bsq;
-    Real q = wtot * u0;
     // T^0_0
-    hvars.the_array[nmhd_  ] = vol*q*u0 - b0*b_0 + ptot;
+    hvars.the_array[nmhd_  ] = vol* (wtot * u0 * u_0 - b0*b_0 + ptot);
     // T^0_1,2,3
     hvars.the_array[nmhd_+1] = vol*(b1*u0 - b0*u1);
     hvars.the_array[nmhd_+2] = vol*(b2*u0 - b0*u2);
