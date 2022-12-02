@@ -400,21 +400,21 @@ void HistoryOutput::LoadGRMHDHistoryData(HistoryData *pdata, Mesh *pm) {
                (-r*sth)*b_3 );
     Real b_ph = (-r*sph-spin*cph)*sth*b_1 + (r*cph-spin*sph)*sth*b_2;
 
-    // GRMHD T^0_\mu
     const Real gamma_prime = eos_data.gamma/(gm1);
     Real wtot = widn + gamma_prime * pgas + bsq;
     Real ptot = pgas + 0.5*bsq;
+
     // T^0_0
-    hvars.the_array[nmhd_  ] = vol* (wtot * u0 * u_0 - b0*b_0 + ptot);
+    hvars.the_array[1] = vol*(wtot * u0 * u_0 + ptot - b0*b_0);
     // T^0_1,2,3
-    hvars.the_array[nmhd_+1] = vol*(b1*u0 - b0*u1);
-    hvars.the_array[nmhd_+2] = vol*(b2*u0 - b0*u2);
-    hvars.the_array[nmhd_+3] = vol*(b3*u0 - b0*u3);
+    hvars.the_array[2] = vol*(wtot * u0 * u_1 + ptot - b0*b_1);
+    hvars.the_array[3] = vol*(wtot * u0 * u_2 + ptot - b0*b_2);
+    hvars.the_array[4] = vol*(wtot * u0 * u_3 + ptot - b0*b_3);
 
     // GRMHD ME r, theta, and phi components
-    hvars.the_array[nmhd_+4] = vol*0.5*(br*b_r);
-    hvars.the_array[nmhd_+5] = vol*0.5*(bth*b_th);
-    hvars.the_array[nmhd_+6] = vol*0.5*(bph*b_ph);
+    hvars.the_array[5] = vol*(br*b_r);
+    hvars.the_array[6] = vol*(bth*b_th);
+    hvars.the_array[7] = vol*(bph*b_ph);
 
     // fill rest of the_array with zeros, if nhist < NHISTORY_VARIABLES
     for (int n=nhist_; n<NHISTORY_VARIABLES; ++n) {
