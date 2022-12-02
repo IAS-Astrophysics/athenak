@@ -320,7 +320,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                 << " or <problem>/mad=true" << std::endl;
       exit(EXIT_FAILURE);
     }
-    if ((pgen.is_toroidal) && (pgen.psi != 0.0))  {
+    if ((torus.is_toroidal) && (pgen.psi != 0.0)){
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "GR torus problem does not work for toroidal field"
                 << " configuration with a tilted torus" << std::endl;
