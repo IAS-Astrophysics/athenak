@@ -58,7 +58,7 @@ enum ReconstructionMethod {dc, plm, ppm4, ppmx, wenoz};
 enum TimeEvolution {tstatic, kinematic, dynamic};
 
 // constants that enumerate Physics Modules implemented in code
-enum PhysicsModule {HydroDynamics, MagnetoHydroDynamics, UserDefined};
+enum PhysicsModule {HydroDynamics, MagnetoHydroDynamics, GRMagnetoHydroDynamics, UserDefined};
 
 // structs to store primitive/conserved variables in one-dimension
 // (density, velocity/momentum, internal/total energy, [transverse magnetic field])
