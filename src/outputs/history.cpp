@@ -42,7 +42,7 @@ HistoryOutput::HistoryOutput(OutputParameters op, Mesh *pm) : BaseTypeOutput(op,
     if (pm->pmb_pack->pmhd != nullptr && !(pm->pmb_pack->pcoord->is_general_relativistic)) {
       hist_data.emplace_back(PhysicsModule::MagnetoHydroDynamics);
     }
-    if ((pmy->pmb_pack->pcoord->is_general_relativistic)) {
+    if ((pm->pmb_pack->pcoord->is_general_relativistic)) {
       hist_data.emplace_back(PhysicsModule::GRMagnetoHydroDynamics);
     }
     if (pm->pgen->user_hist) {
@@ -350,6 +350,7 @@ void HistoryOutput::LoadGRMHDHistoryData(HistoryData *pdata, Mesh *pm) {
     Real u3 = wvz - alpha * lor * gupper[0][3];
 
     // lower vector indices
+    Real u_0 = glower[0][0]*u0 + glower[0][1]*u1 + glower[0][2]*u2 + glower[0][3]*u3;
     Real u_1 = glower[1][0]*u0 + glower[1][1]*u1 + glower[1][2]*u2 + glower[1][3]*u3;
     Real u_2 = glower[2][0]*u0 + glower[2][1]*u1 + glower[2][2]*u2 + glower[2][3]*u3;
     Real u_3 = glower[3][0]*u0 + glower[3][1]*u1 + glower[3][2]*u2 + glower[3][3]*u3;
