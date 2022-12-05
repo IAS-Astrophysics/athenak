@@ -909,6 +909,7 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
         if (pgen.is_toroidal) {
           Real pgas = pgas_over_rho*rho;
           phi = 0.0;
+          aphi = 0.0;
           if (pgas > pgen.potential_cutoff) {
             atheta = pow(r, pgen.potential_r_pow) *
             pow(fmax(pgas - pgen.potential_cutoff, 0.0), pgen.potential_rho_pow);
