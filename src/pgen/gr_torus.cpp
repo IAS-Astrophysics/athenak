@@ -890,13 +890,30 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
     if (log_h >= 0.0) {
       Real pgas_over_rho = (pgen.gamma_adi-1.0)/pgen.gamma_adi * (exp(log_h)-1.0);
       Real rho = pow(pgas_over_rho/pgen.k_adi, 1.0/(pgen.gamma_adi-1.0)) / pgen.rho_peak;
-      Real pgas = pgas_over_rho*rho;
-      phi = 0.0;
-      aphi = 0.0;
-      atheta = 0.0;
-      if (pgas > pgen.potential_cutoff) {
-        atheta = pow(r, pgen.potential_r_pow) *
-        pow(fmax(pgas - pgen.potential_cutoff, 0.0), pgen.potential_rho_pow);
+      if (pgen.is_mad) { // MAD
+          aphi_tilt = (fmax((rho*pow((r/pgen.r_edge)*sin_vartheta_ks, pgen.potential_r_pow)*
+                           exp(-r/pgen.potential_falloff) - pgen.potential_cutoff), 0.0));
+      } else {  // SANE
+        aphi_tilt = (pow(r, pgen.potential_r_pow)*
+                     pow(fmax(rho - pgen.potential_cutoff, 0.0), pgen.potential_rho_pow));
+      }
+      if (pgen.psi != 0.0) {
+        Real dvarphi_dtheta = -pgen.sin_psi * sin_phi_ks / SQR(sin_vartheta_ks);
+        Real dvarphi_dphi = sin_theta / SQR(sin_vartheta_ks)
+            * (pgen.cos_psi * sin_theta - pgen.sin_psi * cos_theta * cos_phi_ks);
+        atheta = dvarphi_dtheta * aphi_tilt;
+        aphi = dvarphi_dphi * aphi_tilt;
+      } else {
+        atheta = 0.0;
+        aphi = aphi_tilt;
+        if (pgen.is_toroidal) {
+          Real pgas = pgas_over_rho*rho;
+          phi = 0.0;
+          if (pgas > pgen.potential_cutoff) {
+            atheta = pow(r, pgen.potential_r_pow) *
+            pow(fmax(pgas - pgen.potential_cutoff, 0.0), pgen.potential_rho_pow);
+          }
+        }
       }
     }
   }
