@@ -263,7 +263,7 @@ TaskStatus Radiation::RestrictI(Driver *pdrive, int stage) {
   // Only execute this function with SMR/SMR
   if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
 
-  pmy_pack->pmesh->RestrictCC(i0, coarse_i0);
+  pmy_pack->pmesh->pmr->RestrictCC(i0, coarse_i0);
   return TaskStatus::complete;
 }
 

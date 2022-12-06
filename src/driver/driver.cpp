@@ -519,7 +519,7 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
   }
 
   // Initialize radiation: ghost zones and intensity (everywhere)
-  radiation::Radiation *prad = pmesh->pmb_pack->prad;
+  radiation::Radiation *prad = pm->pmb_pack->prad;
   if (prad != nullptr) {
     (void) prad->RestrictI(this, 0);
     (void) prad->InitRecv(this, -1);  // stage < 0 suppresses InitFluxRecv
