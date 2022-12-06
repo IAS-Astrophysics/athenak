@@ -91,9 +91,11 @@ struct torus_pgen {
   Real psi, sin_psi, cos_psi;                 // tilt parameters
   Real rho_min, rho_pow, pgas_min, pgas_pow;  // background parameters
   bool is_sane, is_mad;                       // init with SANE or MAD config
-  bool is_toroidal;                           // init with purely toroidal field
+  Real potential_tor_frac;                    // normalization of toroidal component
   Real potential_cutoff, potential_falloff;   // sets region of torus to magnetize
+  Real potential_cutoff_tor;                  // sets region of torus to magnetize toroidal comp.
   Real potential_r_pow, potential_rho_pow;    // set how vector potential scales
+  Real potential_r_pow_tor, potential_pow_tor;// set how toroidal part of vector potential scales
   Real potential_beta_min;                    // set how vector potential scales (cont.)
 };
 
@@ -311,19 +313,16 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     torus.potential_falloff  = pin->GetOrAddReal("problem", "potential_falloff",  400.0);
     torus.potential_r_pow    = pin->GetOrAddReal("problem", "potential_r_pow",    0.0);
     torus.potential_rho_pow  = pin->GetOrAddReal("problem", "potential_rho_pow",  1.0);
+    torus.potential_r_pow_tor= pin->GetOrAddReal("problem", "potential_r_pow_tor",    0.0);
+    torus.potential_pow_tor  = pin->GetOrAddReal("problem", "potential_pow_tor",  1.0);
+    torus.potential_tor_frac = pin->GetOrAddReal("problem", "potential_tor_frac",  0.0);
+    torus.potential_cutoff_tor   = pin->GetOrAddReal("problem", "potential_cutoff_tor",   0.2);
     torus.is_sane = pin->GetOrAddBoolean("problem", "sane", false);
     torus.is_mad = pin->GetOrAddBoolean("problem", "mad", false);
-    torus.is_toroidal = pin->GetOrAddBoolean("problem", "toroidal", false);
     if (torus.is_sane==torus.is_mad) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "GR torus problem must specify either <problem>/sane=true"
                 << " or <problem>/mad=true" << std::endl;
-      exit(EXIT_FAILURE);
-    }
-    if ((torus.is_toroidal) && (torus.psi != 0.0)){
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "GR torus problem does not work for toroidal field"
-                << " configuration with a tilted torus" << std::endl;
       exit(EXIT_FAILURE);
     }
 
@@ -889,32 +888,28 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
     Real aphi_tilt = 0.0;
     if (log_h >= 0.0) {
       Real pgas_over_rho = (pgen.gamma_adi-1.0)/pgen.gamma_adi * (exp(log_h)-1.0);
+      Real pgas = pgas_over_rho*rho;
       Real rho = pow(pgas_over_rho/pgen.k_adi, 1.0/(pgen.gamma_adi-1.0)) / pgen.rho_peak;
       if (pgen.is_mad) { // MAD
           aphi_tilt = (fmax((rho*pow((r/pgen.r_edge)*sin_vartheta_ks, pgen.potential_r_pow)*
                            exp(-r/pgen.potential_falloff) - pgen.potential_cutoff), 0.0));
       } else {  // SANE
-        aphi_tilt = (pow(r, pgen.potential_r_pow)*
+        aphi_tilt = (1.0-pgen.potential_tor_frac)*(pow(r, pgen.potential_r_pow)*
                      pow(fmax(rho - pgen.potential_cutoff, 0.0), pgen.potential_rho_pow));
+        if (pgas > pgen.potential_cutoff_tor) {
+            atheta += pgen.potential_tor_frac *
+              pgen.potential_tor_frac * pow(r, pgen.potential_r_pow_tor) *
+              pow(fmax(pgas - pgen.potential_cutoff_tor, 0.0), pgen.potential_rho_pow_tor);
+        }
       }
       if (pgen.psi != 0.0) {
         Real dvarphi_dtheta = -pgen.sin_psi * sin_phi_ks / SQR(sin_vartheta_ks);
         Real dvarphi_dphi = sin_theta / SQR(sin_vartheta_ks)
             * (pgen.cos_psi * sin_theta - pgen.sin_psi * cos_theta * cos_phi_ks);
-        atheta = dvarphi_dtheta * aphi_tilt;
+        atheta += dvarphi_dtheta * aphi_tilt;
         aphi = dvarphi_dphi * aphi_tilt;
       } else {
-        atheta = 0.0;
         aphi = aphi_tilt;
-        if (pgen.is_toroidal) {
-          Real pgas = pgas_over_rho*rho;
-          phi = 0.0;
-          aphi = 0.0;
-          if (pgas > pgen.potential_cutoff) {
-            atheta = pow(r, pgen.potential_r_pow) *
-            pow(fmax(pgas - pgen.potential_cutoff, 0.0), pgen.potential_rho_pow);
-          }
-        }
       }
     }
   }
