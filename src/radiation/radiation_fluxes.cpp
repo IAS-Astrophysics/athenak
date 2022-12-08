@@ -38,19 +38,16 @@ TaskStatus Radiation::CalculateFluxes(Driver *pdriver, int stage) {
   auto &nh_c_ = nh_c;
   auto &tet_c_ = tet_c;
 
-  auto &use_excise = pmy_pack->pcoord->coord_data.bh_excise;
-  auto &excision_flux_ = pmy_pack->pcoord->excision_flux;
-
   //--------------------------------------------------------------------------------------
   // i-direction
 
-  auto &tet_d1_x1f_ = tet_d1_x1f;
+  auto &t1d1 = tet_d1_x1f;
   auto &flx1 = iflx.x1f;
   par_for("rflux_x1",DevExeSpace(),0,nmb1,0,nang1,ks,ke,js,je,is,ie+1,
   KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
     // calculate n^1 (hence determining upwinding direction)
-    Real n1 = 0.0;
-    for (int d=0; d<4; ++d) { n1 += tet_d1_x1f_(m,d,k,j,i)*nh_c_.d_view(n,d); }
+    Real n1 = t1d1(m,0,k,j,i)*nh_c_.d_view(n,0) + t1d1(m,1,k,j,i)*nh_c_.d_view(n,1)
+            + t1d1(m,2,k,j,i)*nh_c_.d_view(n,2) + t1d1(m,3,k,j,i)*nh_c_.d_view(n,3);
 
     // convert to primitive n_0 I
     Real iim1, iicc, iim2, iip1, iim3, iip2;
@@ -94,24 +91,19 @@ TaskStatus Radiation::CalculateFluxes(Driver *pdriver, int stage) {
 
     // compute x1flux
     flx1(m,n,k,j,i) = n1*iiu;
-    if (use_excise) {
-      if (excision_flux_(m,k,j,i) || excision_flux_(m,k,j,i-1)) {
-        flx1(m,n,k,j,i) = (n1 * ((n1 > 0.0) ? iim1 : iicc));
-      }
-    }
   });
 
   //--------------------------------------------------------------------------------------
   // j-direction
 
   if (pmy_pack->pmesh->multi_d) {
-    auto &tet_d2_x2f_ = tet_d2_x2f;
+    auto &t2d2 = tet_d2_x2f;
     auto &flx2 = iflx.x2f;
     par_for("rflux_x2",DevExeSpace(),0,nmb1,0,nang1,ks,ke,js,je+1,is,ie,
     KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
       // calculate n^2 (hence determining upwinding direction)
-      Real n2 = 0.0;
-      for (int d=0; d<4; ++d) { n2 += tet_d2_x2f_(m,d,k,j,i)*nh_c_.d_view(n,d); }
+      Real n2 = t2d2(m,0,k,j,i)*nh_c_.d_view(n,0) + t2d2(m,1,k,j,i)*nh_c_.d_view(n,1)
+              + t2d2(m,2,k,j,i)*nh_c_.d_view(n,2) + t2d2(m,3,k,j,i)*nh_c_.d_view(n,3);
 
       // convert to primitive n_0 I
       Real iim1, iicc, iim2, iip1, iim3, iip2;
@@ -155,11 +147,6 @@ TaskStatus Radiation::CalculateFluxes(Driver *pdriver, int stage) {
 
       // compute x2flux
       flx2(m,n,k,j,i) = n2*iiu;
-      if (use_excise) {
-        if (excision_flux_(m,k,j,i) || excision_flux_(m,k,j-1,i)) {
-          flx2(m,n,k,j,i) = (n2 * ((n2 > 0.0) ? iim1 : iicc));
-        }
-      }
     });
   }
 
@@ -167,13 +154,13 @@ TaskStatus Radiation::CalculateFluxes(Driver *pdriver, int stage) {
   // k-direction. Note order of k,j loops switched
 
   if (pmy_pack->pmesh->three_d) {
-    auto &tet_d3_x3f_ = tet_d3_x3f;
+    auto &t3d3 = tet_d3_x3f;
     auto &flx3 = iflx.x3f;
     par_for("rflux_x3",DevExeSpace(),0,nmb1,0,nang1,ks,ke+1,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
       // calculate n^3 (hence determining upwinding direction)
-      Real n3 = 0.0;
-      for (int d=0; d<4; ++d) { n3 += tet_d3_x3f_(m,d,k,j,i)*nh_c_.d_view(n,d); }
+      Real n3 = t3d3(m,0,k,j,i)*nh_c_.d_view(n,0) + t3d3(m,1,k,j,i)*nh_c_.d_view(n,1)
+              + t3d3(m,2,k,j,i)*nh_c_.d_view(n,2) + t3d3(m,3,k,j,i)*nh_c_.d_view(n,3);
 
       // convert to primitive n_0 I
       Real iim1, iicc, iim2, iip1, iim3, iip2;
@@ -217,11 +204,6 @@ TaskStatus Radiation::CalculateFluxes(Driver *pdriver, int stage) {
 
       // compute x3flux
       flx3(m,n,k,j,i) = n3*iiu;
-      if (use_excise) {
-        if (excision_flux_(m,k,j,i) || excision_flux_(m,k-1,j,i)) {
-          flx3(m,n,k,j,i) = (n3 * ((n3 > 0.0) ? iim1 : iicc));
-        }
-      }
     });
   }
 

@@ -25,12 +25,18 @@
 #include "radiation/radiation_tetrad.hpp"
 #include "pgen.hpp"
 
+// Prototypes for user-defined BCs
+void ZeroIntensity(Mesh *pm);
+
 //----------------------------------------------------------------------------------------
 //! \fn void MeshBlock::UserProblem(ParameterInput *pin)
-//  \brief Sets initial conditions for GR radiation beam test
+//! \brief Sets initial conditions for GR radiation beam test
 
 void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
+
+  // User boundary function
+  user_bcs_func = ZeroIntensity;
 
   // capture variables for kernel
   auto &indcs = pmy_mesh_->mb_indcs;
@@ -125,3 +131,85 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   return;
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn ZeroIntensity
+//! \brief Sets boundary condition on surfaces of computational domain
+
+void ZeroIntensity(Mesh *pm) {
+  auto &indcs = pm->mb_indcs;
+  int &ng = indcs.ng;
+  int n1 = indcs.nx1 + 2*ng;
+  int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
+  int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
+  int &is = indcs.is;  int &ie  = indcs.ie;
+  int &js = indcs.js;  int &je  = indcs.je;
+  int &ks = indcs.ks;  int &ke  = indcs.ke;
+  auto &mb_bcs = pm->pmb_pack->pmb->mb_bcs;
+
+  // Determine if radiation is enabled
+  bool is_radiation_enabled_ = (pm->pmb_pack->prad != nullptr) ? true : false;
+  DvceArray5D<Real> i0_; int nang1;
+  if (is_radiation_enabled_) {
+    i0_ = pm->pmb_pack->prad->i0;
+    nang1 = pm->pmb_pack->prad->prgeo->nangles - 1;
+  }
+  int nmb = pm->pmb_pack->nmb_thispack;
+
+  // X1-Boundary
+  if (is_radiation_enabled_) {
+    // Set X1-BCs on i0 if Meshblock face is at the edge of computational domain
+    par_for("noinflow_rad_x1", DevExeSpace(),0,(nmb-1),0,nang1,0,(n3-1),0,(n2-1),
+    KOKKOS_LAMBDA(int m, int n, int k, int j) {
+      if (mb_bcs.d_view(m,BoundaryFace::inner_x1) == BoundaryFlag::user) {
+        for (int i=0; i<ng; ++i) {
+          i0_(m,n,k,j,is-i-1) = 0.0;
+        }
+      }
+      if (mb_bcs.d_view(m,BoundaryFace::outer_x1) == BoundaryFlag::user) {
+        for (int i=0; i<ng; ++i) {
+          i0_(m,n,k,j,ie+i+1) = 0.0;
+        }
+      }
+    });
+  }
+
+  // X2-Boundary
+  if (is_radiation_enabled_) {
+    // Set X2-BCs on i0 if Meshblock face is at the edge of computational domain
+    par_for("noinflow_rad_x2", DevExeSpace(),0,(nmb-1),0,nang1,0,(n3-1),0,(n1-1),
+    KOKKOS_LAMBDA(int m, int n, int k, int i) {
+      if (mb_bcs.d_view(m,BoundaryFace::inner_x2) == BoundaryFlag::user) {
+        for (int j=0; j<ng; ++j) {
+          i0_(m,n,k,js-j-1,i) = 0.0;
+        }
+      }
+      if (mb_bcs.d_view(m,BoundaryFace::outer_x2) == BoundaryFlag::user) {
+        for (int j=0; j<ng; ++j) {
+          i0_(m,n,k,je+j+1,i) = 0.0;
+        }
+      }
+    });
+  }
+
+  // x3-Boundary
+  if (is_radiation_enabled_) {
+    // Set x3-BCs on i0 if Meshblock face is at the edge of computational domain
+    par_for("noinflow_rad_x3", DevExeSpace(),0,(nmb-1),0,nang1,0,(n2-1),0,(n1-1),
+    KOKKOS_LAMBDA(int m, int n, int j, int i) {
+      if (mb_bcs.d_view(m,BoundaryFace::inner_x3) == BoundaryFlag::user) {
+        for (int k=0; k<ng; ++k) {
+          i0_(m,n,ks-k-1,j,i) = 0.0;
+        }
+      }
+      if (mb_bcs.d_view(m,BoundaryFace::outer_x3) == BoundaryFlag::user) {
+        for (int k=0; k<ng; ++k) {
+          i0_(m,n,ke+k+1,j,i) = 0.0;
+        }
+      }
+    });
+  }
+
+  return;
+}
+

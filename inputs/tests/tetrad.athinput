@@ -51,7 +51,6 @@ ndiag      = 1        # cycles between diagostic output
 
 <coord>
 general_rel = true    # general relativity
-m           = 1.0     # black hole mass M
 a           = 0.9     # black hole spin a (0 <= a/M < 1)
 excise      = true    # excise r_ks <= 1.0
 dexcise     = 1.0     # density inside excision
