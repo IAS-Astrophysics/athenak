@@ -49,8 +49,8 @@ TaskStatus Radiation::ExpRKUpdate(Driver *pdriver, int stage) {
   auto &flx3 = iflx.x3f;
 
   auto &nh_c_ = nh_c;
-  auto &tet_c_ = tet_c;
-  auto &tetcov_c_ = tetcov_c;
+  auto &tt = tet_c;
+  auto &tc = tetcov_c;
 
   auto &angular_fluxes_ = angular_fluxes;
   auto &divfa_ = divfa;
@@ -75,8 +75,9 @@ TaskStatus Radiation::ExpRKUpdate(Driver *pdriver, int stage) {
     if (angular_fluxes_) { i0_(m,n,k,j,i) -= beta_dt*divfa_(m,n,k,j,i); }
 
     // zero intensity if negative
-    Real n0 = tet_c_(m,0,0,k,j,i); Real n_0 = 0.0;
-    for (int d=0; d<4; ++d) { n_0 += tetcov_c_(m,d,0,k,j,i)*nh_c_.d_view(n,d); }
+    Real n0  = tt(m,0,0,k,j,i);
+    Real n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(n,0) + tc(m,1,0,k,j,i)*nh_c_.d_view(n,1) +
+               tc(m,2,0,k,j,i)*nh_c_.d_view(n,2) + tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
     i0_(m,n,k,j,i) = n0*n_0*fmax((i0_(m,n,k,j,i)/(n0*n_0)), 0.0);
 
     // handle excision

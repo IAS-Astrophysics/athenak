@@ -4,8 +4,8 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file radiation_tasks.cpp
-//  \brief implementation of functions that control Hydro tasks in the four task lists:
-//  stagestart_tl, stagerun_tl, stageend_tl, operatorsplit_tl (currently not used)
+//! \brief functions that control Radiation tasks in the four task lists stored in the
+//! MeshBlockPack: start_tl, run_tl, end_tl, operator_split_tl (currently not used)
 
 #include <iostream>
 
@@ -24,114 +24,96 @@
 namespace radiation {
 //----------------------------------------------------------------------------------------
 //! \fn  void Radiation::AssembleRadiationTasks
-//  \brief Adds radiation tasks to stage start/run/end task lists
-//  Called by MeshBlockPack::AddPhysicsModules() function after Radiation constrctr
-//
-//  Stage start tasks are those that must be cmpleted over all MeshBlocks before EACH
-//  stage can be run (such as posting MPI receives, setting BoundaryCommStatus flags, etc)
-//
-//  Stage run tasks are those performed in EACH stage
-//
-//  Stage end tasks are those that can only be cmpleted after all the stage run tasks are
-//  finished over all MeshBlocks for EACH stage, such as clearing all MPI non-blocking
-//  sends, etc.
+//! \brief Adds radiation tasks to stage start/run/end task lists used by time integrators
+//! Called by MeshBlockPack::AddPhysics() function directly after Radiation constructor
+//! Many of the functions in the task list are implemented in this file because they are
+//! simple, or they are wrappers that call one or more other functions.
 
 void Radiation::AssembleRadiationTasks(TaskList &start, TaskList &run, TaskList &end) {
   TaskID none(0);
   hydro::Hydro *phyd = pmy_pack->phydro;
   mhd::MHD *pmhd = pmy_pack->pmhd;
-  if (pmhd != nullptr && !(fixed_fluid)) {  // radiation MHD
-    // start task list
+
+  // construct task list depending on enabled physics modules and radiation parameters
+  if (pmhd != nullptr && !(fixed_fluid)) {  // radiation magnetohydrodynamics
+    // assemble start task list
     id.rad_irecv = start.AddTask(&Radiation::InitRecv, this, none);
     id.mhd_irecv = start.AddTask(&mhd::MHD::InitRecv, pmhd, none);
 
-    // run task list
+    // assemble run task list
     id.copycons  = run.AddTask(&Radiation::CopyCons, this, none);
-
     id.rad_flux  = run.AddTask(&Radiation::CalculateFluxes, this, id.copycons);
-    id.mhd_flux  = run.AddTask(&mhd::MHD::Fluxes, pmhd, id.rad_flux);
-
-    id.rad_sendf = run.AddTask(&Radiation::SendFlux, this, id.mhd_flux);
+    id.rad_sendf = run.AddTask(&Radiation::SendFlux, this, id.rad_flux);
     id.rad_recvf = run.AddTask(&Radiation::RecvFlux, this, id.rad_sendf);
-    id.mhd_sendf = run.AddTask(&mhd::MHD::SendFlux, pmhd, id.rad_recvf);
+    id.rad_expl  = run.AddTask(&Radiation::ExpRKUpdate, this, id.rad_recvf);
+    id.mhd_flux  = run.AddTask(&mhd::MHD::Fluxes, pmhd, id.rad_expl);
+    id.mhd_sendf = run.AddTask(&mhd::MHD::SendFlux, pmhd, id.mhd_flux);
     id.mhd_recvf = run.AddTask(&mhd::MHD::RecvFlux, pmhd, id.mhd_sendf);
-
-    id.rad_expl  = run.AddTask(&Radiation::ExpRKUpdate, this, id.mhd_recvf);
-    id.mhd_expl  = run.AddTask(&mhd::MHD::ExpRKUpdate, pmhd, id.rad_expl);
-
+    id.mhd_expl  = run.AddTask(&mhd::MHD::ExpRKUpdate, pmhd, id.mhd_recvf);
     id.mhd_efld  = run.AddTask(&mhd::MHD::CornerE, pmhd, id.mhd_expl);
     id.mhd_sende = run.AddTask(&mhd::MHD::SendE, pmhd, id.mhd_efld);
     id.mhd_recve = run.AddTask(&mhd::MHD::RecvE, pmhd, id.mhd_sende);
-
     id.mhd_ct    = run.AddTask(&mhd::MHD::CT, pmhd, id.mhd_recve);
-
     id.rad_src   = run.AddTask(&Radiation::AddRadiationSourceTerm, this, id.mhd_ct);
-
     id.rad_resti = run.AddTask(&Radiation::RestrictI, this, id.rad_src);
-    id.mhd_restu = run.AddTask(&mhd::MHD::RestrictU, pmhd, id.rad_resti);
-    id.mhd_restb = run.AddTask(&mhd::MHD::RestrictB, pmhd, id.mhd_restu);
-
-    id.rad_sendi = run.AddTask(&Radiation::SendI, this, id.mhd_restb);
+    id.rad_sendi = run.AddTask(&Radiation::SendI, this, id.rad_resti);
     id.rad_recvi = run.AddTask(&Radiation::RecvI, this, id.rad_sendi);
-
-    id.mhd_sendu = run.AddTask(&mhd::MHD::SendU, pmhd, id.rad_recvi);
+    id.mhd_restu = run.AddTask(&mhd::MHD::RestrictU, pmhd, id.rad_recvi);
+    id.mhd_sendu = run.AddTask(&mhd::MHD::SendU, pmhd, id.mhd_restu);
     id.mhd_recvu = run.AddTask(&mhd::MHD::RecvU, pmhd, id.mhd_sendu);
-
-    id.mhd_sendb = run.AddTask(&mhd::MHD::SendB, pmhd, id.mhd_recvu);
+    id.mhd_restb = run.AddTask(&mhd::MHD::RestrictB, pmhd, id.mhd_recvu);
+    id.mhd_sendb = run.AddTask(&mhd::MHD::SendB, pmhd, id.mhd_restb);
     id.mhd_recvb = run.AddTask(&mhd::MHD::RecvB, pmhd, id.mhd_sendb);
+    id.bcs       = run.AddTask(&Radiation::ApplyPhysicalBCs, this, id.mhd_recvb);
+    id.mhd_c2p   = run.AddTask(&mhd::MHD::ConToPrim, pmhd, id.bcs);
 
-    id.rad_bcs   = run.AddTask(&Radiation::ApplyPhysicalBCs, this, id.rad_recvi);
-    id.mhd_bcs   = run.AddTask(&mhd::MHD::ApplyPhysicalBCs, pmhd, id.mhd_recvb);
+    // assemble end task list
+    id.rad_csend = end.AddTask(&Radiation::ClearSend, this, none);
+    id.mhd_csend = end.AddTask(&mhd::MHD::ClearSend, pmhd, none);
+    // although RecvFlux/U/E/B functions check that all recvs complete, add ClearRecv to
+    // task list anyways to catch potential bugs in MPI communication logic
+    id.rad_crecv = end.AddTask(&Radiation::ClearRecv, this, id.rad_csend);
+    id.mhd_crecv = end.AddTask(&mhd::MHD::ClearRecv, pmhd, id.mhd_csend);
 
-    id.mhd_c2p   = run.AddTask(&mhd::MHD::ConToPrim, pmhd, id.mhd_bcs);
-
-    // end task list
-    id.rad_clear = end.AddTask(&Radiation::ClearSend, this, none);
-    id.mhd_clear = end.AddTask(&mhd::MHD::ClearSend, pmhd, none);
   } else if (phyd != nullptr && !(fixed_fluid)) {  // radiation hydrodynamics
-    // start task list
+    // assemble start task list
     id.rad_irecv = start.AddTask(&Radiation::InitRecv, this, none);
     id.hyd_irecv = start.AddTask(&hydro::Hydro::InitRecv, phyd, none);
 
-    // run task list
+    // assemble run task list
     id.copycons = run.AddTask(&Radiation::CopyCons, this, none);
-
     id.rad_flux  = run.AddTask(&Radiation::CalculateFluxes, this, id.copycons);
-    id.hyd_flux  = run.AddTask(&hydro::Hydro::Fluxes, phyd, id.rad_flux);
-
-    id.rad_sendf = run.AddTask(&Radiation::SendFlux, this, id.hyd_flux);
+    id.rad_sendf = run.AddTask(&Radiation::SendFlux, this, id.rad_flux);
     id.rad_recvf = run.AddTask(&Radiation::RecvFlux, this, id.rad_sendf);
-    id.hyd_sendf = run.AddTask(&hydro::Hydro::SendFlux, phyd, id.rad_recvf);
+    id.rad_expl  = run.AddTask(&Radiation::ExpRKUpdate, this, id.rad_recvf);
+    id.hyd_flux  = run.AddTask(&hydro::Hydro::Fluxes, phyd, id.rad_expl);
+    id.hyd_sendf = run.AddTask(&hydro::Hydro::SendFlux, phyd, id.hyd_flux);
     id.hyd_recvf = run.AddTask(&hydro::Hydro::RecvFlux, phyd, id.hyd_sendf);
-
-    id.rad_expl  = run.AddTask(&Radiation::ExpRKUpdate, this, id.hyd_recvf);
-    id.hyd_expl  = run.AddTask(&hydro::Hydro::ExpRKUpdate, phyd, id.rad_expl);
-
+    id.hyd_expl  = run.AddTask(&hydro::Hydro::ExpRKUpdate, phyd, id.hyd_recvf);
     id.rad_src   = run.AddTask(&Radiation::AddRadiationSourceTerm, this, id.hyd_expl);
-
     id.rad_resti = run.AddTask(&Radiation::RestrictI, this, id.rad_src);
-    id.hyd_restu = run.AddTask(&hydro::Hydro::RestrictU, phyd, id.rad_src);
-
     id.rad_sendi = run.AddTask(&Radiation::SendI, this, id.rad_resti);
-    id.hyd_sendu = run.AddTask(&hydro::Hydro::SendU, phyd, id.hyd_restu);
-
     id.rad_recvi = run.AddTask(&Radiation::RecvI, this, id.rad_sendi);
+    id.hyd_restu = run.AddTask(&hydro::Hydro::RestrictU, phyd, id.rad_recvi);
+    id.hyd_sendu = run.AddTask(&hydro::Hydro::SendU, phyd, id.hyd_restu);
     id.hyd_recvu = run.AddTask(&hydro::Hydro::RecvU, phyd, id.hyd_sendu);
+    id.bcs       = run.AddTask(&Radiation::ApplyPhysicalBCs, this, id.hyd_recvu);
+    id.hyd_c2p   = run.AddTask(&hydro::Hydro::ConToPrim, phyd, id.bcs);
 
-    id.rad_bcs   = run.AddTask(&Radiation::ApplyPhysicalBCs, this, id.rad_recvi);
-    id.hyd_bcs   = run.AddTask(&hydro::Hydro::ApplyPhysicalBCs, phyd, id.hyd_recvu);
+    // assemble end task list
+    id.rad_csend = end.AddTask(&Radiation::ClearSend, this, none);
+    id.hyd_csend = end.AddTask(&hydro::Hydro::ClearSend, phyd, none);
+    // although RecvFlux/U/E/B functions check that all recvs complete, add ClearRecv to
+    // task list anyways to catch potential bugs in MPI communication logic
+    id.rad_crecv = end.AddTask(&Radiation::ClearRecv, this, id.rad_csend);
+    id.hyd_crecv = end.AddTask(&hydro::Hydro::ClearRecv, phyd, id.hyd_csend);
 
-    id.hyd_c2p   = run.AddTask(&hydro::Hydro::ConToPrim, phyd, id.hyd_bcs);
-
-    // end task list
-    id.rad_clear = end.AddTask(&Radiation::ClearSend, this, none);
-    id.hyd_clear = end.AddTask(&hydro::Hydro::ClearSend, phyd, none);
-  } else {  // radiation
-    // start task list
+  } else {  // radiation transport
+    // assemble start task list
     id.rad_irecv = start.AddTask(&Radiation::InitRecv, this, none);
 
-    // run task list
-    id.copycons  = run.AddTask(&Radiation::CopyCons, this, none);
+    // assemble run task list
+    id.copycons = run.AddTask(&Radiation::CopyCons, this, none);
     id.rad_flux  = run.AddTask(&Radiation::CalculateFluxes, this, id.copycons);
     id.rad_sendf = run.AddTask(&Radiation::SendFlux, this, id.rad_flux);
     id.rad_recvf = run.AddTask(&Radiation::RecvFlux, this, id.rad_sendf);
@@ -140,11 +122,15 @@ void Radiation::AssembleRadiationTasks(TaskList &start, TaskList &run, TaskList 
     id.rad_resti = run.AddTask(&Radiation::RestrictI, this, id.rad_src);
     id.rad_sendi = run.AddTask(&Radiation::SendI, this, id.rad_resti);
     id.rad_recvi = run.AddTask(&Radiation::RecvI, this, id.rad_sendi);
-    id.rad_bcs   = run.AddTask(&Radiation::ApplyPhysicalBCs, this, id.rad_recvi);
+    id.bcs       = run.AddTask(&Radiation::ApplyPhysicalBCs, this, id.rad_recvi);
 
-    // end task list
-    id.rad_clear = end.AddTask(&Radiation::ClearSend, this, none);
+    // assemble end task list
+    id.rad_csend = end.AddTask(&Radiation::ClearSend, this, none);
+    // although RecvFlux/U/E/B functions check that all recvs complete, add ClearRecv to
+    // task list anyways to catch potential bugs in MPI communication logic
+    id.rad_crecv = end.AddTask(&Radiation::ClearRecv, this, id.rad_csend);
   }
+
   return;
 }
 
@@ -154,41 +140,20 @@ void Radiation::AssembleRadiationTasks(TaskList &start, TaskList &run, TaskList 
 //  receive status flags to waiting (with or without MPI) for Radiation variables.
 
 TaskStatus Radiation::InitRecv(Driver *pdrive, int stage) {
+  // post receives for I
   TaskStatus tstat = pbval_i->InitRecv(prgeo->nangles);
   if (tstat != TaskStatus::complete) return tstat;
 
-  if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
-    tstat = pbval_i->InitFluxRecv(prgeo->nangles);
+  // do not post receives for fluxes when stage < 0 (i.e. ICs)
+  if (stage >= 0) {
+    // with SMR/AMR, post receives for fluxes of I
+    if (pmy_pack->pmesh->multilevel) {
+      tstat = pbval_i->InitFluxRecv(prgeo->nangles);
+      if (tstat != TaskStatus::complete) return tstat;
+    }
   }
-  return tstat;
-}
 
-//----------------------------------------------------------------------------------------
-//! \fn  void Radiation::ClearRecv
-//  \brief Waits for all MPI receives to complete before allowing execution to continue
-
-TaskStatus Radiation::ClearRecv(Driver *pdrive, int stage) {
-  TaskStatus tstat = pbval_i->ClearRecv();
-  if (tstat != TaskStatus::complete) return tstat;
-
-  if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
-    tstat = pbval_i->ClearFluxRecv();
-  }
-  return tstat;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn  void Hydro::ClearSend
-//  \brief Waits for all MPI sends to complete before allowing execution to continue
-
-TaskStatus Radiation::ClearSend(Driver *pdrive, int stage) {
-  TaskStatus tstat = pbval_i->ClearSend();
-  if (tstat != TaskStatus::complete) return tstat;
-
-  if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
-    tstat = pbval_i->ClearFluxSend();
-  }
-  return tstat;
+  return TaskStatus::complete;
 }
 
 //----------------------------------------------------------------------------------------
@@ -197,8 +162,10 @@ TaskStatus Radiation::ClearSend(Driver *pdrive, int stage) {
 
 TaskStatus Radiation::CopyCons(Driver *pdrive, int stage) {
   if (stage == 1) {
+    // radiation
     Kokkos::deep_copy(DevExeSpace(), i1, i0);
 
+    // hydro and MHD (if enabled)
     hydro::Hydro *phyd = pmy_pack->phydro;
     mhd::MHD *pmhd = pmy_pack->pmhd;
     if (pmhd != nullptr) {
@@ -214,8 +181,48 @@ TaskStatus Radiation::CopyCons(Driver *pdrive, int stage) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn  void Radiation::SendI
-//  \brief sends cell-centered conserved variables
+//! \fn TaskStatus Radiation::SendFlux
+//! \brief Wrapper task list function to pack/send restricted values of fluxes of
+//! conserved variables at fine/coarse boundaries
+
+TaskStatus Radiation::SendFlux(Driver *pdrive, int stage) {
+  TaskStatus tstat = TaskStatus::complete;
+  // Only execute BoundaryValues function with SMR/SMR
+  if (pmy_pack->pmesh->multilevel)  {
+    tstat = pbval_i->PackAndSendFluxCC(iflx);
+  }
+  return tstat;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskStatus Radiation::RecvFlux
+//! \brief Wrapper task list function to recv/unpack restricted values of fluxes of
+//! conserved variables at fine/coarse boundaries
+
+TaskStatus Radiation::RecvFlux(Driver *pdrive, int stage) {
+  TaskStatus tstat = TaskStatus::complete;
+  // Only execute BoundaryValues function with SMR/SMR
+  if (pmy_pack->pmesh->multilevel) {
+    tstat = pbval_i->RecvAndUnpackFluxCC(iflx);
+  }
+  return tstat;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskStatus Radiation::RestrictI
+//! \brief Wrapper task list function to restrict conserved vars
+
+TaskStatus Radiation::RestrictI(Driver *pdrive, int stage) {
+  // Only execute Mesh function with SMR/AMR
+  if (pmy_pack->pmesh->multilevel) {
+    pmy_pack->pmesh->RestrictCC(i0, coarse_i0);
+  }
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskStatus Radiation::SendI
+//! \brief Wrapper task list function to pack/send cell-centered conserved variables
 
 TaskStatus Radiation::SendI(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_i->PackAndSendCC(i0, coarse_i0);
@@ -223,8 +230,8 @@ TaskStatus Radiation::SendI(Driver *pdrive, int stage) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn  void Radiation::RecvU
-//  \brief receives cell-centered conserved variables
+//! \fn TaskStatus Radiation::RecvI
+//! \brief Wrapper task list function to receive/unpack cell-centered conserved variables
 
 TaskStatus Radiation::RecvI(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_i->RecvAndUnpackCC(i0, coarse_i0);
@@ -232,56 +239,75 @@ TaskStatus Radiation::RecvI(Driver *pdrive, int stage) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn  void Radiation::SendFlux
-//  \brief
+//! \fn TaskStatus Radiation::ApplyPhysicalBCs
+//! \brief Wrapper task list function to call funtions that set physical and user BCs
 
-TaskStatus Radiation::SendFlux(Driver *pdrive, int stage) {
-  // Only execute this function with SMR/SMR
-  if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
+TaskStatus Radiation::ApplyPhysicalBCs(Driver *pdrive, int stage) {
+  // do not apply BCs if domain is strictly periodic
+  if (pmy_pack->pmesh->strictly_periodic) return TaskStatus::complete;
 
-  TaskStatus tstat = pbval_i->PackAndSendFluxCC(iflx);
-  return tstat;
-}
+  // physical BCs on radiation
+  pbval_i->RadiationBCs((pmy_pack), (pbval_i->i_in), i0);
 
-//----------------------------------------------------------------------------------------
-//! \fn  void Radiation::RecvFlux
-//  \brief
+  // physical BCs on (M)HD
+  hydro::Hydro *phyd = pmy_pack->phydro;
+  mhd::MHD *pmhd = pmy_pack->pmhd;
+  if (pmhd != nullptr) {
+    pmhd->pbval_u->HydroBCs((pmy_pack), (pmhd->pbval_u->u_in), pmhd->u0);
+    pmhd->pbval_b->BFieldBCs((pmy_pack), (pmhd->pbval_b->b_in), pmhd->b0);
+  } else if (phyd != nullptr) {
+    phyd->pbval_u->HydroBCs((pmy_pack), (phyd->pbval_u->u_in), phyd->u0);
+  }
 
-TaskStatus Radiation::RecvFlux(Driver *pdrive, int stage) {
-  // Only execute this function with SMR/SMR
-  if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
+  // user BCs
+  if (pmy_pack->pmesh->pgen->user_bcs) {
+    (pmy_pack->pmesh->pgen->user_bcs_func)(pmy_pack->pmesh);
+  }
 
-  TaskStatus tstat = pbval_i->RecvAndUnpackFluxCC(iflx);
-  return tstat;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn  void Radiation::RestrictI
-//  \brief
-
-TaskStatus Radiation::RestrictI(Driver *pdrive, int stage) {
-  // Only execute this function with SMR/SMR
-  if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
-
-  pmy_pack->pmesh->pmr->RestrictCC(i0, coarse_i0);
   return TaskStatus::complete;
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn  void Radiation::ApplyPhysicalBCs
-//  \brief
+//! \fn TaskStatus Radiation::ClearSend
+//! \brief Wrapper task list function that checks all MPI sends have completed.  Called
+//! in end_tl, when all steps in run_tl over all MeshBlocks have completed.
 
-TaskStatus Radiation::ApplyPhysicalBCs(Driver *pdrive, int stage) {
-  // only apply BCs if domain is not strictly periodic
-  if (!(pmy_pack->pmesh->strictly_periodic)) {
-    // physical BCs
-    pbval_i->RadiationBCs((pmy_pack), (pbval_i->i_in), i0);
+TaskStatus Radiation::ClearSend(Driver *pdrive, int stage) {
+  // check sends of I complete
+  TaskStatus tstat = pbval_i->ClearSend();
+  if (tstat != TaskStatus::complete) return tstat;
 
-    // user BCs
-    if (pmy_pack->pmesh->pgen->user_bcs) {
-      (pmy_pack->pmesh->pgen->user_bcs_func)(pmy_pack->pmesh);
+  // do not check flux send for ICs (stage < 0)
+  if (stage >= 0) {
+    // with SMR/AMR check sends of restricted fluxes of U complete
+    if (pmy_pack->pmesh->multilevel) {
+      tstat = pbval_i->ClearFluxSend();
+      if (tstat != TaskStatus::complete) return tstat;
     }
   }
+
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskStatus Radiation::ClearRecv
+//! \brief Wrapper task list function that checks all MPI receives have completed.
+//! Needed in Driver::Initialize to set ghost zones in ICs.
+
+TaskStatus Radiation::ClearRecv(Driver *pdrive, int stage) {
+  // check receives of U complete
+  TaskStatus tstat = pbval_i->ClearRecv();
+  if (tstat != TaskStatus::complete) return tstat;
+
+  // do not check flux receives when stage < 0 (i.e. ICs)
+  if (stage >= 0) {
+    // with SMR/AMR check receives of restricted fluxes of U complete
+    if (pmy_pack->pmesh->multilevel) {
+      tstat = pbval_i->ClearFluxRecv();
+      if (tstat != TaskStatus::complete) return tstat;
+    }
+  }
+
   return TaskStatus::complete;
 }
 
