@@ -270,17 +270,18 @@ void SourceTerms::AddBeamSource(DvceArray5D<Real> &i0, const Real bdt) {
   int nmb1 = (pmy_pack->nmb_thispack-1);
   int nang1 = (pmy_pack->prad->prgeo->nangles-1);
 
-  auto nh_c_ = pmy_pack->prad->nh_c;
-  auto tet_c_ = pmy_pack->prad->tet_c;
-  auto tetcov_c_ = pmy_pack->prad->tetcov_c;
+  auto &nh_c_ = pmy_pack->prad->nh_c;
+  auto &tt = pmy_pack->prad->tet_c;
+  auto &tc = pmy_pack->prad->tetcov_c;
 
   auto &beam_mask_ = pmy_pack->prad->beam_mask;
   Real &dii_dt_ = dii_dt;
   par_for("beam_source",DevExeSpace(),0,nmb1,0,nang1,ks,ke,js,je,is,ie,
   KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
     if (beam_mask_(m,n,k,j,i)) {
-      Real n0 = tet_c_(m,0,0,k,j,i); Real n_0 = 0.0;
-      for (int d=0; d<4; ++d) { n_0 += tetcov_c_(m,d,0,k,j,i)*nh_c_.d_view(n,d); }
+      Real n0 = tt(m,0,0,k,j,i);
+      Real n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(n,0) + tc(m,1,0,k,j,i)*nh_c_.d_view(n,1)
+               + tc(m,2,0,k,j,i)*nh_c_.d_view(n,2) + tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
       i0(m,n,k,j,i) += n0*n_0*dii_dt_*bdt;
     }
   });

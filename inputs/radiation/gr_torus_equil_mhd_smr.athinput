@@ -1,4 +1,4 @@
-# Athena++ (Kokkos version) input file for Hydro GR torus
+# Athena++ (Kokkos version) input file for Radiating MHD GR torus
 
 <comment>
 problem   = Fishbone-Moncrief equilibrium torus
@@ -10,31 +10,31 @@ basename  = torus
 <mesh>
 nghost = 2        # Number of ghost cells
 refinement = static
-nx1    = 64       # number of cells in x1-direction
+nx1    = 128      # number of cells in x1-direction
 x1min  = -50.0    # minimum x1
 x1max  = 50.0     # maximum x1
 ix1_bc = user     # inner boundary
 ox1_bc = user     # outer boundary
 
-nx2    = 64       # number of cells in x2-direction
+nx2    = 128      # number of cells in x2-direction
 x2min  = -50.0    # minimum x2
 x2max  = 50.0     # maximum x2
 ix2_bc = user     # inner boundary
 ox2_bc = user     # outer boundary
 
-nx3    = 64       # number of cells in x3-direction
+nx3    = 128      # number of cells in x3-direction
 x3min  = -50.0    # minimum x3
 x3max  = 50.0     # maximum x3
 ix3_bc = user     # inner boundary
 ox3_bc = user     # outer boundary
 
 <meshblock>
-nx1  = 8          # Number of cells in each MeshBlock, X1-dir
-nx2  = 8          # Number of cells in each MeshBlock, X2-dir
-nx3  = 8          # Number of cells in each MeshBlock, X3-dir
+nx1  = 32         # Number of cells in each MeshBlock, X1-dir
+nx2  = 32         # Number of cells in each MeshBlock, X2-dir
+nx3  = 32         # Number of cells in each MeshBlock, X3-dir
 
 <refinement1>
-level = 4
+level = 2
 x1min = -10.0
 x1max = 10.0
 x2min = -10.0
@@ -74,6 +74,7 @@ rotate_geo = false    # disable geodesic grid rotation
 nlevel = 3            # geodesic level
 power_opacity = true  # absorption opacity related to temperature by power law
 kappa_s = 0.4         # scattering opacity
+n_0_floor = 0.1       # floor on n_0
 
 <units>
 bhmass_msun = 10.0    # black hole mass in solar masses
@@ -105,5 +106,11 @@ variable   = rad_mhd_w_bcc  # variables to be output
 dt         = 1.0            # time increment between outputs
 
 <output2>
-file_type  = rst            # Binary data dump
+file_type  = bin            # Binary data dump
+id         = dump           # output id tag
+variable   = rad_mhd_w_bcc  # variables to be output
+dt         = 1000.0         # time increment between outputs
+
+<output3>
+file_type  = rst            # Restart file
 dt         = 1000.0         # time increment between outputs

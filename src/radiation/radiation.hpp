@@ -26,37 +26,31 @@ class Driver;
 
 struct RadiationTaskIDs {
   TaskID rad_irecv;
-  TaskID hyd_irecv;
   TaskID mhd_irecv;
-
+  TaskID hyd_irecv;
   TaskID copycons;
-
   TaskID rad_flux;
-  TaskID rad_sendf;
-  TaskID rad_recvf;
-  TaskID hyd_flux;
-  TaskID hyd_sendf;
-  TaskID hyd_recvf;
   TaskID mhd_flux;
+  TaskID hyd_flux;
+  TaskID rad_sendf;
   TaskID mhd_sendf;
+  TaskID hyd_sendf;
+  TaskID rad_recvf;
   TaskID mhd_recvf;
-
+  TaskID hyd_recvf;
   TaskID rad_expl;
-  TaskID hyd_expl;
   TaskID mhd_expl;
-
+  TaskID hyd_expl;
   TaskID rad_src;
-
   TaskID rad_resti;
-  TaskID rad_sendi;
-  TaskID rad_recvi;
   TaskID hyd_restu;
-  TaskID hyd_sendu;
-  TaskID hyd_recvu;
   TaskID mhd_restu;
+  TaskID rad_sendi;
   TaskID mhd_sendu;
+  TaskID hyd_sendu;
+  TaskID rad_recvi;
   TaskID mhd_recvu;
-
+  TaskID hyd_recvu;
   TaskID mhd_efld;
   TaskID mhd_sende;
   TaskID mhd_recve;
@@ -64,17 +58,15 @@ struct RadiationTaskIDs {
   TaskID mhd_restb;
   TaskID mhd_sendb;
   TaskID mhd_recvb;
-
-  TaskID rad_bcs;
-  TaskID hyd_bcs;
-  TaskID mhd_bcs;
-
-  TaskID hyd_c2p;
+  TaskID bcs;
   TaskID mhd_c2p;
-
-  TaskID rad_clear;
-  TaskID hyd_clear;
-  TaskID mhd_clear;
+  TaskID hyd_c2p;
+  TaskID rad_csend;
+  TaskID mhd_csend;
+  TaskID hyd_csend;
+  TaskID rad_crecv;
+  TaskID mhd_crecv;
+  TaskID hyd_crecv;
 };
 
 namespace radiation {
@@ -160,8 +152,8 @@ class Radiation {
   TaskStatus ApplyPhysicalBCs(Driver* pdrive, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
   // ...in end task list
-  TaskStatus ClearRecv(Driver *d, int stage);
   TaskStatus ClearSend(Driver *d, int stage);
+  TaskStatus ClearRecv(Driver *d, int stage);
 
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Radiation

@@ -84,8 +84,8 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   Real &kappa_s_ = kappa_s;
   bool &power_opacity_ = power_opacity;
   auto &nh_c_ = nh_c;
-  auto &tet_c_ = tet_c;
-  auto &tetcov_c_ = tetcov_c;
+  auto &tt = tet_c;
+  auto &tc = tetcov_c;
   auto &norm_to_tet_ = norm_to_tet;
   auto &solid_angles_ = prgeo->solid_angles;
 
@@ -170,19 +170,17 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
                 norm_to_tet_(m,3,2,k,j,i)*wvy   + norm_to_tet_(m,3,3,k,j,i)*wvz);
 
     // coordinate component n^0
-    Real n0 = tet_c_(m,0,0,k,j,i);
+    Real n0 = tt(m,0,0,k,j,i);
 
     // Calculate polynomial coefficients
     Real wght_sum = 0.0;
     Real suma1 = 0.0;
     Real suma2 = 0.0;
     for (int n=0; n<=nang1; ++n) {
-      Real n_0 = 0.0;
-      for (int d=0; d<4; ++d) { n_0 += tetcov_c_(m,d,0,k,j,i)*nh_c_.d_view(n,d); }
-      Real un_tet = (u_tet[1]*nh_c_.d_view(n,1) +
-                     u_tet[2]*nh_c_.d_view(n,2) +
-                     u_tet[3]*nh_c_.d_view(n,3));
-      Real n0_cm  = (u_tet[0]*nh_c_.d_view(n,0) - un_tet);
+      Real n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(n,0) + tc(m,1,0,k,j,i)*nh_c_.d_view(n,1) +
+                 tc(m,2,0,k,j,i)*nh_c_.d_view(n,2) + tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
+      Real n0_cm = (u_tet[0]*nh_c_.d_view(n,0) - u_tet[1]*nh_c_.d_view(n,1) -
+                    u_tet[2]*nh_c_.d_view(n,2) - u_tet[3]*nh_c_.d_view(n,3));
       Real omega_cm = solid_angles_.d_view(n)/SQR(n0_cm);
       Real intensity_cm = 4.0*M_PI*(i0_(m,n,k,j,i)/(n0*n_0))*SQR(SQR(n0_cm));
       Real vncsigma = 1.0/(n0 + (dtcsiga + dtcsigs)*n0_cm);
@@ -223,13 +221,14 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
       Real jr_cm = (suma1*emission + suma2)/(1.0 - suma3);
       for (int n=0; n<=nang1; ++n) {
         // compute coordinate normal components
-        Real n_0 = 0.0; Real n_1 = 0.0; Real n_2 = 0.0; Real n_3 = 0.0;
-        for (int d=0; d<4; ++d) {
-          n_0 += tetcov_c_(m,d,0,k,j,i)*nh_c_.d_view(n,d);
-          n_1 += tetcov_c_(m,d,1,k,j,i)*nh_c_.d_view(n,d);
-          n_2 += tetcov_c_(m,d,2,k,j,i)*nh_c_.d_view(n,d);
-          n_3 += tetcov_c_(m,d,3,k,j,i)*nh_c_.d_view(n,d);
-        }
+        Real n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(n,0) + tc(m,1,0,k,j,i)*nh_c_.d_view(n,1)
+                 + tc(m,2,0,k,j,i)*nh_c_.d_view(n,2) + tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
+        Real n_1 = tc(m,0,1,k,j,i)*nh_c_.d_view(n,0) + tc(m,1,1,k,j,i)*nh_c_.d_view(n,1)
+                 + tc(m,2,1,k,j,i)*nh_c_.d_view(n,2) + tc(m,3,1,k,j,i)*nh_c_.d_view(n,3);
+        Real n_2 = tc(m,0,2,k,j,i)*nh_c_.d_view(n,0) + tc(m,1,2,k,j,i)*nh_c_.d_view(n,1)
+                 + tc(m,2,2,k,j,i)*nh_c_.d_view(n,2) + tc(m,3,2,k,j,i)*nh_c_.d_view(n,3);
+        Real n_3 = tc(m,0,3,k,j,i)*nh_c_.d_view(n,0) + tc(m,1,3,k,j,i)*nh_c_.d_view(n,1)
+                 + tc(m,2,3,k,j,i)*nh_c_.d_view(n,2) + tc(m,3,3,k,j,i)*nh_c_.d_view(n,3);
 
         // compute moments before coupling
         m_old[0] += (    i0_(m,n,k,j,i)    *solid_angles_.d_view(n));
@@ -238,19 +237,16 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
         m_old[3] += (n_3*i0_(m,n,k,j,i)/n_0*solid_angles_.d_view(n));
 
         // update intensity
-        Real un_tet = (u_tet[1]*nh_c_.d_view(n,1) +
-                       u_tet[2]*nh_c_.d_view(n,2) +
-                       u_tet[3]*nh_c_.d_view(n,3));
-        Real n0_cm  = (u_tet[0]*nh_c_.d_view(n,0) - un_tet);
-        Real intensity_cm= 4.0*M_PI*(i0_(m,n,k,j,i)/(n0*n_0))*SQR(SQR(n0_cm));
+        Real n0_cm = (u_tet[0]*nh_c_.d_view(n,0) - u_tet[1]*nh_c_.d_view(n,1) -
+                      u_tet[2]*nh_c_.d_view(n,2) - u_tet[3]*nh_c_.d_view(n,3));
+        Real intensity_cm = 4.0*M_PI*(i0_(m,n,k,j,i)/(n0*n_0))*SQR(SQR(n0_cm));
         Real vncsigma = 1.0/(n0 + (dtcsiga + dtcsigs)*n0_cm);
         Real vncsigma2 = n0_cm*vncsigma;
-        Real di_cm = ( (dtcsigs*jr_cm
-                      + dtcsiga*emission
-                      - (dtcsigs+dtcsiga)*intensity_cm)*vncsigma2 );
-        i0_(m,n,k,j,i) = n0*n_0*
-                         fmax( i0_(m,n,k,j,i)/(n0*n_0)
-                               + (di_cm/(4.0*M_PI*SQR(SQR(n0_cm)))), 0.0);
+        Real di_cm = ( (dtcsigs*jr_cm +
+                        dtcsiga*emission -
+                        (dtcsigs+dtcsiga)*intensity_cm)*vncsigma2 );
+        i0_(m,n,k,j,i) = n0*n_0*fmax(i0_(m,n,k,j,i)/(n0*n_0) +
+                                     di_cm/(4.0*M_PI*SQR(SQR(n0_cm))), 0.0);
 
         // compute moments after coupling
         m_new[0] += (    i0_(m,n,k,j,i)    *solid_angles_.d_view(n));
