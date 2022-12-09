@@ -59,8 +59,6 @@ void BoundaryValuesCC::ProlongCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca) {
 
       // only restrict when neighbor exists and is at SAME level
       if ((nghbr.d_view(m,n).gid >= 0) && (nghbr.d_view(m,n).lev == mblev.d_view(m))) {
-//      if (((n==0) || (n==4) || (n==8) || (n==12) || (n==24) || (n==28)) &&
-//          (nghbr.d_view(m,n).gid >= 0) && (nghbr.d_view(m,n).lev == mblev.d_view(m))) {
         // loop over indices for receives at same level, but convert loop limits to
         // coarse array
         int il = (rbuf[n].isame[0].bis + cis)/2;
@@ -70,52 +68,37 @@ void BoundaryValuesCC::ProlongCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca) {
         int kl = (rbuf[n].isame[0].bks + cks)/2;
         int ku = (rbuf[n].isame[0].bke + cks)/2;
 
-//        int il = cis, iu = cie;
-//        if (n==0) {il = cis-1, iu = cis-1;}
-//        if (n==4) {il = cie+1, iu = cie+1;}
-//        int jl = cjs, ju = cje;
-//        if (n==8) {jl = cjs-1, ju = cjs-1;}
-//        if (n==12) {jl = cje+1, ju = cje+1;}
-//        int kl = cks, ku = cke;
-//        if (n==24) {kl = cks-1, ku = cks-1;}
-//        if (n==28) {kl = cke+1, ku = cke+1;}
-
-//        int il = rbuf[n].iprol[0].bis;
-//        int iu = rbuf[n].iprol[0].bie;
-//        int jl = rbuf[n].iprol[0].bjs;
-//        int ju = rbuf[n].iprol[0].bje;
-//        int kl = rbuf[n].iprol[0].bks;
-//        int ku = rbuf[n].iprol[0].bke;
+        const int ni = iu - il + 1;
         const int nj = ju - jl + 1;
         const int nk = ku - kl + 1;
-        const int nkj  = nk*nj;
+        const int nkji = nk*nj*ni;
+        const int nji  = nj*ni;
 
-        // Middle loop over k,j
-        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
-          int k = idx / nj;
-          int j = (idx - k * nj) + jl;
+        // Middle loop over k,j,i
+        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkji),[&](const int idx) {
+          int k = idx/nji;
+          int j = (idx - k*nji)/ni;
+          int i = (idx - k*nji - j*ni) + il;
+          j += jl;
           k += kl;
 
-          Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-          [&](const int i) {
-            // indices refer to coarse array.  So must compute indices for fine array
-            int finei = (i - indcs.cis)*2 + indcs.is;
-            int finej = (j - indcs.cjs)*2 + indcs.js;
-            int finek = (k - indcs.cks)*2 + indcs.ks;
+          // indices refer to coarse array.  So must compute indices for fine array
+          int finei = (i - indcs.cis)*2 + indcs.is;
+          int finej = (j - indcs.cjs)*2 + indcs.js;
+          int finek = (k - indcs.cks)*2 + indcs.ks;
 
-            // restrict in 2D
-            if (two_d) {
-              ca(m,v,kl,j,i) = 0.25*(a(m,v,kl,finej  ,finei) + a(m,v,kl,finej  ,finei+1)
-                                   + a(m,v,kl,finej+1,finei) + a(m,v,kl,finej+1,finei+1));
-            // restrict in 3D
-            } else {
-                ca(m,v,k,j,i) = 0.125*(
-                     a(m,v,finek  ,finej  ,finei) + a(m,v,finek  ,finej  ,finei+1)
-                   + a(m,v,finek  ,finej+1,finei) + a(m,v,finek  ,finej+1,finei+1)
-                   + a(m,v,finek+1,finej,  finei) + a(m,v,finek+1,finej,  finei+1)
-                   + a(m,v,finek+1,finej+1,finei) + a(m,v,finek+1,finej+1,finei+1));
-            }
-          });
+          // restrict in 2D
+          if (two_d) {
+            ca(m,v,kl,j,i) = 0.25*(a(m,v,kl,finej  ,finei) + a(m,v,kl,finej  ,finei+1)
+                                 + a(m,v,kl,finej+1,finei) + a(m,v,kl,finej+1,finei+1));
+          // restrict in 3D
+          } else {
+            ca(m,v,k,j,i) = 0.125*(
+                 a(m,v,finek  ,finej  ,finei) + a(m,v,finek  ,finej  ,finei+1)
+               + a(m,v,finek  ,finej+1,finei) + a(m,v,finek  ,finej+1,finei+1)
+               + a(m,v,finek+1,finej,  finei) + a(m,v,finek+1,finej,  finei+1)
+               + a(m,v,finek+1,finej+1,finei) + a(m,v,finek+1,finej+1,finei+1));
+          }
         });
       }
     });
@@ -140,59 +123,60 @@ void BoundaryValuesCC::ProlongCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca) {
       int ju = rbuf[n].iprol[0].bje;
       int kl = rbuf[n].iprol[0].bks;
       int ku = rbuf[n].iprol[0].bke;
+      const int ni = iu - il + 1;
       const int nj = ju - jl + 1;
       const int nk = ku - kl + 1;
-      const int nkj  = nk*nj;
+      const int nkji = nk*nj*ni;
+      const int nji  = nj*ni;
 
-      // Middle loop over k,j
-      Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
-        int k = idx / nj;
-        int j = (idx - k * nj) + jl;
+      // Middle loop over k,j,i
+      Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkji), [&](const int idx) {
+        int k = idx/nji;
+        int j = (idx - k*nji)/ni;
+        int i = (idx - k*nji - j*ni) + il;
+        j += jl;
         k += kl;
 
-        Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-        [&](const int i) {
-          // indices for prolongation refer to coarse array.  So must compute
-          // indices for fine array
-          int finei = (i - indcs.cis)*2 + indcs.is;
-          int finej = (j - indcs.cjs)*2 + indcs.js;
-          int finek = (k - indcs.cks)*2 + indcs.ks;
+        // indices for prolongation refer to coarse array.  So must compute
+        // indices for fine array
+        int finei = (i - indcs.cis)*2 + indcs.is;
+        int finej = (j - indcs.cjs)*2 + indcs.js;
+        int finek = (k - indcs.cks)*2 + indcs.ks;
 
-          // calculate x1-gradient using the min-mod limiter
-          Real dl = ca(m,v,k,j,i  ) - ca(m,v,k,j,i-1);
-          Real dr = ca(m,v,k,j,i+1) - ca(m,v,k,j,i  );
-          Real dvar1 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
+        // calculate x1-gradient using the min-mod limiter
+        Real dl = ca(m,v,k,j,i  ) - ca(m,v,k,j,i-1);
+        Real dr = ca(m,v,k,j,i+1) - ca(m,v,k,j,i  );
+        Real dvar1 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
 
-          // calculate x2-gradient using the min-mod limiter
-          Real dvar2 = 0.0;
-          if (multi_d) {
-            dl = ca(m,v,k,j  ,i) - ca(m,v,k,j-1,i);
-            dr = ca(m,v,k,j+1,i) - ca(m,v,k,j  ,i);
-            dvar2 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
-          }
+        // calculate x2-gradient using the min-mod limiter
+        Real dvar2 = 0.0;
+        if (multi_d) {
+          dl = ca(m,v,k,j  ,i) - ca(m,v,k,j-1,i);
+          dr = ca(m,v,k,j+1,i) - ca(m,v,k,j  ,i);
+          dvar2 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
+        }
 
-          // calculate x1-gradient using the min-mod limiter
-          Real dvar3 = 0.0;
-          if (three_d) {
-            dl = ca(m,v,k  ,j,i) - ca(m,v,k-1,j,i);
-            dr = ca(m,v,k+1,j,i) - ca(m,v,k  ,j,i);
-            dvar3 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
-          }
+        // calculate x1-gradient using the min-mod limiter
+        Real dvar3 = 0.0;
+        if (three_d) {
+          dl = ca(m,v,k  ,j,i) - ca(m,v,k-1,j,i);
+          dr = ca(m,v,k+1,j,i) - ca(m,v,k  ,j,i);
+          dvar3 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
+        }
 
-          // interpolate to the finer grid
-          a(m,v,finek,finej,finei  ) = ca(m,v,k,j,i) - dvar1 - dvar2 - dvar3;
-          a(m,v,finek,finej,finei+1) = ca(m,v,k,j,i) + dvar1 - dvar2 - dvar3;
-          if (multi_d) {
-            a(m,v,finek,finej+1,finei  ) = ca(m,v,k,j,i) - dvar1 + dvar2 - dvar3;
-            a(m,v,finek,finej+1,finei+1) = ca(m,v,k,j,i) + dvar1 + dvar2 - dvar3;
-          }
-          if (three_d) {
-            a(m,v,finek+1,finej  ,finei  ) = ca(m,v,k,j,i) - dvar1 - dvar2 + dvar3;
-            a(m,v,finek+1,finej  ,finei+1) = ca(m,v,k,j,i) + dvar1 - dvar2 + dvar3;
-            a(m,v,finek+1,finej+1,finei  ) = ca(m,v,k,j,i) - dvar1 + dvar2 + dvar3;
-            a(m,v,finek+1,finej+1,finei+1) = ca(m,v,k,j,i) + dvar1 + dvar2 + dvar3;
-          }
-        });
+        // interpolate to the finer grid
+        a(m,v,finek,finej,finei  ) = ca(m,v,k,j,i) - dvar1 - dvar2 - dvar3;
+        a(m,v,finek,finej,finei+1) = ca(m,v,k,j,i) + dvar1 - dvar2 - dvar3;
+        if (multi_d) {
+          a(m,v,finek,finej+1,finei  ) = ca(m,v,k,j,i) - dvar1 + dvar2 - dvar3;
+          a(m,v,finek,finej+1,finei+1) = ca(m,v,k,j,i) + dvar1 + dvar2 - dvar3;
+        }
+        if (three_d) {
+          a(m,v,finek+1,finej  ,finei  ) = ca(m,v,k,j,i) - dvar1 - dvar2 + dvar3;
+          a(m,v,finek+1,finej  ,finei+1) = ca(m,v,k,j,i) + dvar1 - dvar2 + dvar3;
+          a(m,v,finek+1,finej+1,finei  ) = ca(m,v,k,j,i) - dvar1 + dvar2 + dvar3;
+          a(m,v,finek+1,finej+1,finei+1) = ca(m,v,k,j,i) + dvar1 + dvar2 + dvar3;
+        }
       });
     }
   });
