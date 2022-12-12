@@ -1446,7 +1446,14 @@ void TorusHistory(HistoryData *pdata, Mesh *pm) {
   }
 
   // volume averaged quantities
-  auto &size = pm->pmb_pack->pmb->mb_size;
+  auto &size = pmbp->pmb->mb_size;
+  auto &indcs = pmbp->pmesh->mb_indcs;
+  int is = indcs.is; int nx1 = indcs.nx1;
+  int js = indcs.js; int nx2 = indcs.nx2;
+  int ks = indcs.ks; int nx3 = indcs.nx3;
+  const int nmkji = (pm->pmb_pack->nmb_thispack)*nx3*nx2*nx1;
+  const int nkji = nx3*nx2*nx1;
+  const int nji  = nx2*nx1;
   array_sum::GlobalSum sum_this_mb;
   Kokkos::parallel_reduce("HistSums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
   KOKKOS_LAMBDA(const int &idx, array_sum::GlobalSum &mb_sum) {
@@ -1479,9 +1486,9 @@ void TorusHistory(HistoryData *pdata, Mesh *pm) {
     Real &wvx = w0_(m,IVX,k,j,i);
     Real &wvy = w0_(m,IVY,k,j,i);
     Real &wvz = w0_(m,IVZ,k,j,i);
-    Real &wbx = bcc_(m,IBX,k,j,i);
-    Real &wby = bcc_(m,IBY,k,j,i);
-    Real &wbz = bcc_(m,IBZ,k,j,i);
+    Real &wbx = bcc0_(m,IBX,k,j,i);
+    Real &wby = bcc0_(m,IBY,k,j,i);
+    Real &wbz = bcc0_(m,IBZ,k,j,i);
     Real pgas = gm1*w0_(m,IEN,k,j,i);
 
     // Calculate 4-velocity (exploiting symmetry of metric)
