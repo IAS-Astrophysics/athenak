@@ -184,7 +184,6 @@ class HistoryOutput : public BaseTypeOutput {
   void LoadOutputData(Mesh *pm) override;
   void LoadHydroHistoryData(HistoryData *pdata, Mesh *pm);
   void LoadMHDHistoryData(HistoryData *pdata, Mesh *pm);
-  void LoadGRMHDHistoryData(HistoryData *pdata, Mesh *pm);
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
 };
 
