@@ -102,7 +102,7 @@ struct torus_pgen {
 
 // Prototypes for user-defined BCs and history functions
 void NoInflowTorus(Mesh *pm);
-void TorusFluxes(HistoryData *pdata, Mesh *pm);
+void TorusHistory(HistoryData *pdata, Mesh *pm);
 
 //----------------------------------------------------------------------------------------
 //! \fn void ProblemGenerator::UserProblem()
@@ -141,7 +141,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   // pushing back the grids vector with additional SphericalGrid instances
   // grids.push_back(std::make_unique<SphericalGrid>(pmbp, 5, 20.0));
   // grids.push_back(std::make_unique<SphericalGrid>(pmbp, 5, 200.0));
-  user_hist_func = TorusFluxes;
+  user_hist_func = TorusHistory;
 
   // return if restart
   if (restart) return;
@@ -1267,7 +1267,7 @@ void NoInflowTorus(Mesh *pm) {
 //----------------------------------------------------------------------------------------
 // Function for computing accretion fluxes through constant spherical KS radius surfaces
 
-void TorusFluxes(HistoryData *pdata, Mesh *pm) {
+void TorusHistory(HistoryData *pdata, Mesh *pm) {
   MeshBlockPack *pmbp = pm->pmb_pack;
 
   // extract BH parameters
@@ -1283,11 +1283,12 @@ void TorusFluxes(HistoryData *pdata, Mesh *pm) {
     w0_ = pmbp->phydro->w0;
   } else if (pmbp->pmhd != nullptr) {
     is_mhd = true;
-    nvars = pmbp->pmhd->nmhd + pmbp->pmhd->nscalars;
+    nvars = pmbp->pmhd->nmhd + pmbp->pmhd->nscalars + 4;
     gamma = pmbp->pmhd->peos->eos_data.gamma;
     w0_ = pmbp->pmhd->w0;
     bcc0_ = pmbp->pmhd->bcc0;
   }
+  Real gm1 = gamma-1;
 
   // extract grids, number of radii, number of fluxes, and history appending index
   auto &grids = pm->pgen->spherical_grids;
@@ -1299,7 +1300,11 @@ void TorusFluxes(HistoryData *pdata, Mesh *pm) {
   //  (2) energy flux
   //  (3) angular momentum flux
   //  (4) magnetic flux (iff MHD)
-  pdata->nhist = nradii*nflux;
+
+  //  (5) magnetic energy (r component) (iff MHD)
+  //  (6) magnetic energy (theta component) (iff MHD)
+  //  (7) magnetic energy (phi component) (iff MHD)
+  pdata->nhist = nradii*nflux + 3;
   if (pdata->nhist > NHISTORY_VARIABLES) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "User history function specified pdata->nhist larger than"
@@ -1316,6 +1321,11 @@ void TorusFluxes(HistoryData *pdata, Mesh *pm) {
     if (is_mhd) {
       pdata->label[nflux*g+3] = "phi_" + rad_str;
     }
+  }
+  if (is_mhd) {
+    pdata->label[nflux*(nradii-1)+4] = "ME-r";
+    pdata->label[nflux*(nradii-1)+5] = "ME-th";
+    pdata->label[nflux*(nradii-1)+6] = "ME-phi";
   }
 
   // go through angles at each radii:
@@ -1433,6 +1443,125 @@ void TorusFluxes(HistoryData *pdata, Mesh *pm) {
         pdata->hdata[nflux*g+3] += 0.5*fabs(br*u0 - b0*ur)*sqrtmdet*domega;
       }
     }
+  }
+
+  // volume averaged quantities
+  auto &size = pm->pmb_pack->pmb->mb_size;
+  array_sum::GlobalSum sum_this_mb;
+  Kokkos::parallel_reduce("HistSums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+  KOKKOS_LAMBDA(const int &idx, array_sum::GlobalSum &mb_sum) {
+    // compute n,k,j,i indices of thread
+    int m = (idx)/nkji;
+    int k = (idx - m*nkji)/nji;
+    int j = (idx - m*nkji - k*nji)/nx1;
+    int i = (idx - m*nkji - k*nji - j*nx1) + is;
+    k += ks;
+    j += js;
+
+    Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
+
+    Real &x1min = size.d_view(m).x1min;
+    Real &x1max = size.d_view(m).x1max;
+    Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+    Real &x2min = size.d_view(m).x2min;
+    Real &x2max = size.d_view(m).x2max;
+    Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+    Real &x3min = size.d_view(m).x3min;
+    Real &x3max = size.d_view(m).x3max;
+    Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+
+    Real glower[4][4], gupper[4][4];
+    ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, glower, gupper);
+    // Extract primitive velocity, magnetic field B^i, and gas pressure
+    Real &widn = w0_(m,IDN,k,j,i);
+    Real &wvx = w0_(m,IVX,k,j,i);
+    Real &wvy = w0_(m,IVY,k,j,i);
+    Real &wvz = w0_(m,IVZ,k,j,i);
+    Real &wbx = bcc_(m,IBX,k,j,i);
+    Real &wby = bcc_(m,IBY,k,j,i);
+    Real &wbz = bcc_(m,IBZ,k,j,i);
+    Real pgas = gm1*w0_(m,IEN,k,j,i);
+
+    // Calculate 4-velocity (exploiting symmetry of metric)
+    Real q = glower[1][1]*wvx*wvx +2.0*glower[1][2]*wvx*wvy +2.0*glower[1][3]*wvx*wvz
+           + glower[2][2]*wvy*wvy +2.0*glower[2][3]*wvy*wvz
+           + glower[3][3]*wvz*wvz;
+    Real alpha = sqrt(-1.0/gupper[0][0]);
+    Real lor = sqrt(1.0 + q);
+    Real u0 = lor / alpha;
+    Real u1 = wvx - alpha * lor * gupper[0][1];
+    Real u2 = wvy - alpha * lor * gupper[0][2];
+    Real u3 = wvz - alpha * lor * gupper[0][3];
+
+    // lower vector indices
+    Real u_0 = glower[0][0]*u0 + glower[0][1]*u1 + glower[0][2]*u2 + glower[0][3]*u3;
+    Real u_1 = glower[1][0]*u0 + glower[1][1]*u1 + glower[1][2]*u2 + glower[1][3]*u3;
+    Real u_2 = glower[2][0]*u0 + glower[2][1]*u1 + glower[2][2]*u2 + glower[2][3]*u3;
+    Real u_3 = glower[3][0]*u0 + glower[3][1]*u1 + glower[3][2]*u2 + glower[3][3]*u3;
+
+    // Calculate 4-magnetic field
+    Real b0 = u_1*wbx + u_2*wby + u_3*wbz;
+    Real b1 = (wbx + b0 * u1) / u0;
+    Real b2 = (wby + b0 * u2) / u0;
+    Real b3 = (wbz + b0 * u3) / u0;
+
+    // lower vector indices and compute bsq
+    Real b_0 = glower[0][0]*b0 + glower[0][1]*b1 + glower[0][2]*b2 + glower[0][3]*b3;
+    Real b_1 = glower[1][0]*b0 + glower[1][1]*b1 + glower[1][2]*b2 + glower[1][3]*b3;
+    Real b_2 = glower[2][0]*b0 + glower[2][1]*b1 + glower[2][2]*b2 + glower[2][3]*b3;
+    Real b_3 = glower[3][0]*b0 + glower[3][1]*b1 + glower[3][2]*b2 + glower[3][3]*b3;
+    Real bsq = b0*b_0 + b_1*b1 + b_2*b2 + b_3*b3;
+
+    // Transform CKS 4-velocity and 4-magnetic field to spherical KS
+    Real a2 = SQR(spin);
+    Real rad2 = SQR(x1v)+SQR(x2v)+SQR(x3v);
+
+    // get BL coordinates (r,theta,phi)
+    Real r = fmax((sqrt( rad2 - a2 + sqrt(SQR(rad2-a2)
+              + 4.0*a2*SQR(x3v)) ) / sqrt(2.0)), 1.0);
+    Real r2 = SQR(r);
+    Real theta = (fabs(x3v/r) < 1.0) ? acos(x3v/r) : acos(copysign(1.0, x3v));
+    Real phi = atan2(r*x2v-spin*x1v, spin*x2v+r*x1v) - spin*r/(r2-2.0*r+a2);
+    Real sth = sin(theta);
+    Real cth = cos(theta);
+    Real sph = sin(phi);
+    Real cph = cos(phi);
+    Real drdx = r*x1v/(2.0*r2 - rad2 + a2);
+    Real drdy = r*x2v/(2.0*r2 - rad2 + a2);
+    Real drdz = (r*x3v + a2*x3v/r)/(2.0*r2-rad2+a2);
+    Real dthdx = x3v*drdx/(r2*sth);
+    Real dthdy = x3v*drdy/(r2*sth);
+    Real dthdz = (x3v*drdz - r)/(r2*sth);
+    Real dphdx = (-x2v/(x1v*x1v + x2v*x2v) + (spin/(r2 + a2))*drdx);
+    Real dphdy = ( x1v/(x1v*x1v + x2v*x2v) + (spin/(r2 + a2))*drdy);
+    Real dphdz = (spin/(r2 + a2)*drdz);
+    // contravariant r, theta, phi KS components of 4-magnetic field
+    Real br  = drdx *b1 + drdy *b2 + drdz *b3;
+    Real bth = dthdx*b1 + dthdy*b2 + dthdz*b3;
+    Real bph = dphdx*b1 + dphdy*b2 + dphdz*b3;
+    // covariant r, theta, phi KS components of 4-magnetic field
+    Real b_r  = sth*cph*b_1 + sth*sph*b_2 + cth*b_3;
+    Real b_th = ( (r*cph-spin*sph)*cth*b_1 +  (r*sph+spin*cph)*cth*b_2 + 
+               (-r*sth)*b_3 );
+    Real b_ph = (-r*sph-spin*cph)*sth*b_1 + (r*cph-spin*sph)*sth*b_2;
+
+    // MHD conserved variables:
+    array_sum::GlobalSum hvars;
+
+    // GRMHD averaged sqrt(b_i*b^i) components
+    hvars.the_array[0] = vol*br*b_r;
+    hvars.the_array[1] = vol*bth*b_th;
+    hvars.the_array[2] = vol*bph*b_ph;
+
+    // sum into parallel reduce
+    mb_sum += hvars;
+  }, Kokkos::Sum<array_sum::GlobalSum>(sum_this_mb));
+
+  // store data into hdata array
+  for (int n=nflux*(nradii-1)+3; n<pdata->nhist; ++n) {
+    pdata->hdata[n] = sum_this_mb.the_array[n];
   }
 
   // fill rest of the_array with zeros, if nhist < NHISTORY_VARIABLES
