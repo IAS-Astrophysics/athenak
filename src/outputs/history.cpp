@@ -227,7 +227,7 @@ void HistoryOutput::LoadMHDHistoryData(HistoryData *pdata, Mesh *pm) {
     j += js;
 
     Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
-    Real b1, b_1, b2, b_2, b3, b_3
+    Real b1, b_1, b2, b_2, b3, b_3;
     b1 = b_1 = bcc_(m,IBX,k,j,i);
     b2 = b_2 = bcc_(m,IBY,k,j,i);
     b3 = b_3 = bcc_(m,IBZ,k,j,i);
