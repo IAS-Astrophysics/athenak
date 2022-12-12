@@ -193,7 +193,6 @@ void HistoryOutput::LoadMHDHistoryData(HistoryData *pdata, Mesh *pm) {
     pdata->label[nmhd_+5] = "3-ME";
   }
 
-
   // capture class variabels for kernel
   auto &u0_ = pm->pmb_pack->pmhd->u0;
   auto &bx1f = pm->pmb_pack->pmhd->b0.x1f;
@@ -201,14 +200,12 @@ void HistoryOutput::LoadMHDHistoryData(HistoryData *pdata, Mesh *pm) {
   auto &bx3f = pm->pmb_pack->pmhd->b0.x3f;
   auto &size = pm->pmb_pack->pmb->mb_size;
   int &nhist_ = pdata->nhist;
-  if (gr) {
-    // need coordinate parameters for GR
-    bool &flat = pm->pmb_pack->pcoord->coord_data.is_minkowski;
-    Real &spin = pm->pmb_pack->pcoord->coord_data.bh_spin;
-    // include primitive variables and cell-centered B-fields for GR
-    auto &w0_ = pm->pmb_pack->pmhd->w0;
-    auto &bcc_ = pm->pmb_pack->pmhd->bcc0;
-  }
+  // need coordinate parameters for GR
+  bool &flat = pm->pmb_pack->pcoord->coord_data.is_minkowski;
+  Real &spin = pm->pmb_pack->pcoord->coord_data.bh_spin;
+  // include primitive variables and cell-centered B-fields for GR
+  auto &w0_ = pm->pmb_pack->pmhd->w0;
+  auto &bcc_ = pm->pmb_pack->pmhd->bcc0;
 
   // loop over all MeshBlocks in this pack
   auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
