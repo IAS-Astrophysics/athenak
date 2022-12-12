@@ -39,7 +39,7 @@ HistoryOutput::HistoryOutput(OutputParameters op, Mesh *pm) : BaseTypeOutput(op,
     if (pm->pmb_pack->phydro != nullptr) {
       hist_data.emplace_back(PhysicsModule::HydroDynamics);
     }
-    if (pm->pmb_pack->pmhd != nullptr && !(pm->pmb_pack->pcoord->is_general_relativistic)) {
+    if (pm->pmb_pack->pmhd != nullptr) {
       hist_data.emplace_back(PhysicsModule::MagnetoHydroDynamics);
     }
     if (pm->pgen->user_hist) {
