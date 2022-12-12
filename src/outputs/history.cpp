@@ -227,7 +227,8 @@ void HistoryOutput::LoadMHDHistoryData(HistoryData *pdata, Mesh *pm) {
     j += js;
 
     Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
-
+    Real b1, b_1, b2, b_2, b3, b_3;
+    
     if (gr) {
       Real &x1min = size.d_view(m).x1min;
       Real &x1max = size.d_view(m).x1max;
