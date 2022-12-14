@@ -15,6 +15,7 @@
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "bvals.hpp"
+#include "mesh/prolong.hpp" // implements prolongation operators
 
 //----------------------------------------------------------------------------------------
 //! \fn void ProlongCC()
@@ -34,9 +35,8 @@ void BoundaryValuesCC::ProlongCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca) {
   auto &mblev = pmy_pack->pmb->mb_lev;
   auto &rbuf = recv_buf;
   auto &indcs  = pmy_pack->pmesh->mb_indcs;
-  bool &multi_d = pmy_pack->pmesh->multi_d;
-  bool &two_d = pmy_pack->pmesh->two_d;
-  bool &three_d = pmy_pack->pmesh->three_d;
+  const bool multi_d = pmy_pack->pmesh->multi_d;
+  const bool three_d = pmy_pack->pmesh->three_d;
 
   // First restrict data into coarse array in any boundary filled with data from the same
   // level.  This ensures data in the coarse array at corners where one direction is a
@@ -52,7 +52,7 @@ void BoundaryValuesCC::ProlongCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca) {
     auto &cke = indcs.cke;
     // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
     Kokkos::TeamPolicy<> policy(DevExeSpace(), nmnv, Kokkos::AUTO);
-    Kokkos::parallel_for("ProlSame", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
+    Kokkos::parallel_for("ProlCCSame", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
       const int m = (tmember.league_rank())/(nnghbr*nvar);
       const int n = (tmember.league_rank() - m*(nnghbr*nvar))/nvar;
       const int v = (tmember.league_rank() - m*(nnghbr*nvar) - n*nvar);
@@ -88,7 +88,7 @@ void BoundaryValuesCC::ProlongCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca) {
           int finek = (k - indcs.cks)*2 + indcs.ks;
 
           // restrict in 2D
-          if (two_d) {
+          if (!(three_d)) {
             ca(m,v,kl,j,i) = 0.25*(a(m,v,kl,finej  ,finei) + a(m,v,kl,finej  ,finei+1)
                                  + a(m,v,kl,finej+1,finei) + a(m,v,kl,finej+1,finei+1));
           // restrict in 3D
@@ -109,7 +109,7 @@ void BoundaryValuesCC::ProlongCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca) {
 
   // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
   Kokkos::TeamPolicy<> policy(DevExeSpace(), nmnv, Kokkos::AUTO);
-  Kokkos::parallel_for("RecvBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
+  Kokkos::parallel_for("ProlCC", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
     const int m = (tmember.league_rank())/(nnghbr*nvar);
     const int n = (tmember.league_rank() - m*(nnghbr*nvar))/nvar;
     const int v = (tmember.league_rank() - m*(nnghbr*nvar) - n*nvar);
@@ -139,44 +139,11 @@ void BoundaryValuesCC::ProlongCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca) {
 
         // indices for prolongation refer to coarse array.  So must compute
         // indices for fine array
-        int finei = (i - indcs.cis)*2 + indcs.is;
-        int finej = (j - indcs.cjs)*2 + indcs.js;
-        int finek = (k - indcs.cks)*2 + indcs.ks;
+        int fi = (i - indcs.cis)*2 + indcs.is;
+        int fj = (j - indcs.cjs)*2 + indcs.js;
+        int fk = (k - indcs.cks)*2 + indcs.ks;
 
-        // calculate x1-gradient using the min-mod limiter
-        Real dl = ca(m,v,k,j,i  ) - ca(m,v,k,j,i-1);
-        Real dr = ca(m,v,k,j,i+1) - ca(m,v,k,j,i  );
-        Real dvar1 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
-
-        // calculate x2-gradient using the min-mod limiter
-        Real dvar2 = 0.0;
-        if (multi_d) {
-          dl = ca(m,v,k,j  ,i) - ca(m,v,k,j-1,i);
-          dr = ca(m,v,k,j+1,i) - ca(m,v,k,j  ,i);
-          dvar2 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
-        }
-
-        // calculate x1-gradient using the min-mod limiter
-        Real dvar3 = 0.0;
-        if (three_d) {
-          dl = ca(m,v,k  ,j,i) - ca(m,v,k-1,j,i);
-          dr = ca(m,v,k+1,j,i) - ca(m,v,k  ,j,i);
-          dvar3 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
-        }
-
-        // interpolate to the finer grid
-        a(m,v,finek,finej,finei  ) = ca(m,v,k,j,i) - dvar1 - dvar2 - dvar3;
-        a(m,v,finek,finej,finei+1) = ca(m,v,k,j,i) + dvar1 - dvar2 - dvar3;
-        if (multi_d) {
-          a(m,v,finek,finej+1,finei  ) = ca(m,v,k,j,i) - dvar1 + dvar2 - dvar3;
-          a(m,v,finek,finej+1,finei+1) = ca(m,v,k,j,i) + dvar1 + dvar2 - dvar3;
-        }
-        if (three_d) {
-          a(m,v,finek+1,finej  ,finei  ) = ca(m,v,k,j,i) - dvar1 - dvar2 + dvar3;
-          a(m,v,finek+1,finej  ,finei+1) = ca(m,v,k,j,i) + dvar1 - dvar2 + dvar3;
-          a(m,v,finek+1,finej+1,finei  ) = ca(m,v,k,j,i) - dvar1 + dvar2 + dvar3;
-          a(m,v,finek+1,finej+1,finei+1) = ca(m,v,k,j,i) + dvar1 + dvar2 + dvar3;
-        }
+        ProlongCC2(m,v,k,j,i,fk,fj,fi,multi_d,three_d,ca,a);
       });
     }
   });
@@ -216,15 +183,13 @@ void BoundaryValuesFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb
     auto &cke = indcs.cke;
     // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
     Kokkos::TeamPolicy<> policy(DevExeSpace(), nmnv, Kokkos::AUTO);
-    Kokkos::parallel_for("ProlSame", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
+    Kokkos::parallel_for("ProlFCSame", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
       const int m = (tmember.league_rank())/(3*nnghbr);
       const int n = (tmember.league_rank() - m*(3*nnghbr))/3;
       const int v = (tmember.league_rank() - m*(3*nnghbr) - 3*n);
 
       // only restrict when neighbor exists and is at SAME level
       if ((nghbr.d_view(m,n).gid >= 0) && (nghbr.d_view(m,n).lev == mblev.d_view(m))) {
-//      if (((n==0) || (n==4) || (n==8) || (n==12) || (n==24) || (n==28)) &&
-//          (nghbr.d_view(m,n).gid >= 0) && (nghbr.d_view(m,n).lev == mblev.d_view(m))) {
         // loop over indices for receives at same level, but convert loop limits to
         // coarse array
         int il = (rbuf[n].isame[v].bis + cis)/2;
@@ -234,93 +199,48 @@ void BoundaryValuesFC::ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb
         int kl = (rbuf[n].isame[v].bks + cks)/2;
         int ku = (rbuf[n].isame[v].bke + cks)/2;
 
-//        int il = cis, iu = cie;
-//        if (n==0) {il = cis-1, iu = cis-1;}
-//        if (n==4) {il = cie+1, iu = cie+1;}
-//        int jl = cjs, ju = cje;
-//        if (n==8) {jl = cjs-1, ju = cjs-1;}
-//        if (n==12) {jl = cje+1, ju = cje+1;}
-//        int kl = cks, ku = cke;
-//        if (n==24) {kl = cks-1, ku = cks-1;}
-//        if (n==28) {kl = cke+1, ku = cke+1;}
-//
-//        if (v==0) {iu+=1;}
-//        if (v==1) {ju+=1;}
-//        if (v==2 && three_d) {ku+=1;}
-
-//        int il = rbuf[n].iprol[v].bis;
-//        int iu = rbuf[n].iprol[v].bie;
-//        int jl = rbuf[n].iprol[v].bjs;
-//        int ju = rbuf[n].iprol[v].bje;
-//        int kl = rbuf[n].iprol[v].bks;
-//        int ku = rbuf[n].iprol[v].bke;
+        const int ni = iu - il + 1;
         const int nj = ju - jl + 1;
         const int nk = ku - kl + 1;
-        const int nkj  = nk*nj;
+        const int nkji = nk*nj*ni;
+        const int nji  = nj*ni;
 
-        // Middle loop over k,j
-        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
-          int k = idx / nj;
-          int j = (idx - k * nj) + jl;
+        // Middle loop over k,j,i
+        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkji),[&](const int idx) {
+          int k = idx/nji;
+          int j = (idx - k*nji)/ni;
+          int i = (idx - k*nji - j*ni) + il;
+          j += jl;
           k += kl;
 
           // indices refer to coarse array.  So must compute indices for fine array
-          int fj = (j - indcs.cjs)*2 + indcs.js;
           int fk = (k - indcs.cks)*2 + indcs.ks;
+          int fj = (j - indcs.cjs)*2 + indcs.js;
+          int fi = (i - indcs.cis)*2 + indcs.is;
 
           if (two_d) {
             if (v==0) {
-              // restrict B1
-              Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-              [&](const int i) {
-                int fi = (i - indcs.cis)*2 + indcs.is;
-                cb.x1f(m,kl,j,i) = 0.5*(b.x1f(m,kl,fj,fi) + b.x1f(m,kl,fj+1,fi));
-              });
+              cb.x1f(m,kl,j,i) = 0.5*(b.x1f(m,kl,fj,fi) + b.x1f(m,kl,fj+1,fi));
             } else if (v==1) {
-            // restrict B2
-              Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-              [&](const int i) {
-                int fi = (i - indcs.cis)*2 + indcs.is;
-                cb.x2f(m,kl,j,i) = 0.5*(b.x2f(m,kl,fj,fi) + b.x2f(m,kl,fj,fi+1));
-              });
+              cb.x2f(m,kl,j,i) = 0.5*(b.x2f(m,kl,fj,fi) + b.x2f(m,kl,fj,fi+1));
             } else {
-              // restrict B3
-              Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-              [&](const int i) {
-                int fi = (i - indcs.cis)*2 + indcs.is;
-                Real b3c = 0.25*(b.x3f(m,kl,fj  ,fi) + b.x3f(m,kl,fj  ,fi+1)
-                               + b.x3f(m,kl,fj+1,fi) + b.x3f(m,kl,fj+1,fi+1));
-                cb.x3f(m,kl  ,j,i) = b3c;
-                cb.x3f(m,kl+1,j,i) = b3c;
-              });
+              Real b3c = 0.25*(b.x3f(m,kl,fj  ,fi) + b.x3f(m,kl,fj  ,fi+1)
+                             + b.x3f(m,kl,fj+1,fi) + b.x3f(m,kl,fj+1,fi+1));
+              cb.x3f(m,kl  ,j,i) = b3c;
+              cb.x3f(m,kl+1,j,i) = b3c;
             }
 
           // restrict in 3D
           } else {
             if (v==0) {
-            // restrict B1
-              Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-              [&](const int i) {
-                int fi = (i - indcs.cis)*2 + indcs.is;
-                cb.x1f(m,k,j,i) = 0.25*(b.x1f(m,fk  ,fj,fi) + b.x1f(m,fk  ,fj+1,fi)
-                                      + b.x1f(m,fk+1,fj,fi) + b.x1f(m,fk+1,fj+1,fi));
-              });
+              cb.x1f(m,k,j,i) = 0.25*(b.x1f(m,fk  ,fj,fi) + b.x1f(m,fk  ,fj+1,fi)
+                                    + b.x1f(m,fk+1,fj,fi) + b.x1f(m,fk+1,fj+1,fi));
             } else if (v==1) {
-            // restrict B2
-              Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-              [&](const int i) {
-                int fi = (i - indcs.cis)*2 + indcs.is;
-                cb.x2f(m,k,j,i) = 0.25*(b.x2f(m,fk  ,fj,fi) + b.x2f(m,fk  ,fj,fi+1)
-                                      + b.x2f(m,fk+1,fj,fi) + b.x2f(m,fk+1,fj,fi+1));
-              });
+              cb.x2f(m,k,j,i) = 0.25*(b.x2f(m,fk  ,fj,fi) + b.x2f(m,fk  ,fj,fi+1)
+                                    + b.x2f(m,fk+1,fj,fi) + b.x2f(m,fk+1,fj,fi+1));
             } else {
-            // restrict B3
-              Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-              [&](const int i) {
-                int fi = (i - indcs.cis)*2 + indcs.is;
-                cb.x3f(m,k,j,i) = 0.25*(b.x3f(m,fk,fj  ,fi) + b.x3f(m,fk,fj  ,fi+1)
-                                      + b.x3f(m,fk,fj+1,fi) + b.x3f(m,fk,fj+1,fi+1));
-              });
+              cb.x3f(m,k,j,i) = 0.25*(b.x3f(m,fk,fj  ,fi) + b.x3f(m,fk,fj  ,fi+1)
+                                    + b.x3f(m,fk,fj+1,fi) + b.x3f(m,fk,fj+1,fi+1));
             }
           }
         });
