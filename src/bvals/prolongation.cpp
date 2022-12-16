@@ -143,6 +143,7 @@ void BoundaryValuesCC::ProlongateCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
         int fj = (j - indcs.cjs)*2 + indcs.js;
         int fk = (k - indcs.cks)*2 + indcs.ks;
 
+        // call inlined prolongation operator for CC variables
         ProlongCC(m,v,k,j,i,fk,fj,fi,multi_d,three_d,ca,a);
       });
     }
@@ -290,7 +291,8 @@ void BoundaryValuesFC::ProlongateFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> 
         int fk = (three_d)? ((k - indcs.cks)*2 + indcs.ks) : k;  // fine k
 
 
-        // Prolongate b.x1f (v=0) / b.x2f (v=1) / b.x3f (v=2)
+        // Prolongate face-centered fields at shared faces betwen fine and coarse cells
+        // by calling inlined prolongation operator for FC variables
         if (v==0) {
           ProlongFCSharedX1Face(m,k,j,i,fk,fj,fi,multi_d,three_d,cb.x1f,b.x1f);
         } else if (v==1) {
@@ -345,8 +347,10 @@ void BoundaryValuesFC::ProlongateFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> 
         int fk = (k - indcs.cks)*2 + indcs.ks;   // fine k
 
         if (one_d) {
+          // In 1D, interior face field is trivial
           b.x1f(m,fk,fj,fi+1) = 0.5*(b.x1f(m,fk,fj,fi) + b.x1f(m,fk,fj,fi+2));
         } else {
+          // in multi-D call inlined prolongation operator for FC fields at internal faces
           ProlongFCInternal(m,fk,fj,fi,three_d,b);
         }
       });

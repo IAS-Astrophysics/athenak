@@ -19,6 +19,7 @@
 
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "prolong.hpp"
 
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>
@@ -778,44 +779,13 @@ void MeshRefinement::RefineCC(int nmb_new, DvceArray5D<Real> &a, DvceArray5D<Rea
   par_for("prolongCC",DevExeSpace(), 0,(nmb_new-1), 0,nvar-1, cks,cke, cjs,cje, cis,cie,
   KOKKOS_LAMBDA(const int m, const int v, const int k, const int j, const int i) {
     if (refine_flag_.d_view(new_to_old.d_view(m)) > 0) {
-      // calculate x1-gradient using the min-mod limiter
-      Real dl = ca(m,v,k,j,i  ) - ca(m,v,k,j,i-1);
-      Real dr = ca(m,v,k,j,i+1) - ca(m,v,k,j,i  );
-      Real dvar1 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
-
-      // calculate x2-gradient using the min-mod limiter
-      Real dvar2 = 0.0;
-      if (multi_d) {
-        dl = ca(m,v,k,j  ,i) - ca(m,v,k,j-1,i);
-        dr = ca(m,v,k,j+1,i) - ca(m,v,k,j  ,i);
-        dvar2 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
-      }
-
-      // calculate x3-gradient using the min-mod limiter
-      Real dvar3 = 0.0;
-      if (three_d) {
-        dl = ca(m,v,k  ,j,i) - ca(m,v,k-1,j,i);
-        dr = ca(m,v,k+1,j,i) - ca(m,v,k  ,j,i);
-        dvar3 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
-      }
-
       // fine indices refer to target array
-      int finei = 2*i - cis;  // correct when cis=is
-      int finej = 2*j - cjs;  // correct when cjs=js
-      int finek = 2*k - cks;  // correct when cks=ks
+      int fi = 2*i - cis;  // correct when cis=is
+      int fj = 2*j - cjs;  // correct when cjs=js
+      int fk = 2*k - cks;  // correct when cks=ks
 
-      a(m,v,finek,finej,finei  ) = ca(m,v,k,j,i) - dvar1 - dvar2 - dvar3;
-      a(m,v,finek,finej,finei+1) = ca(m,v,k,j,i) + dvar1 - dvar2 - dvar3;
-      if (multi_d) {
-        a(m,v,finek,finej+1,finei  ) = ca(m,v,k,j,i) - dvar1 + dvar2 - dvar3;
-        a(m,v,finek,finej+1,finei+1) = ca(m,v,k,j,i) + dvar1 + dvar2 - dvar3;
-      }
-      if (three_d) {
-        a(m,v,finek+1,finej  ,finei  ) = ca(m,v,k,j,i) - dvar1 - dvar2 + dvar3;
-        a(m,v,finek+1,finej  ,finei+1) = ca(m,v,k,j,i) + dvar1 - dvar2 + dvar3;
-        a(m,v,finek+1,finej+1,finei  ) = ca(m,v,k,j,i) - dvar1 + dvar2 + dvar3;
-        a(m,v,finek+1,finej+1,finei+1) = ca(m,v,k,j,i) + dvar1 + dvar2 + dvar3;
-      }
+      // call inlined prolongation operator for CC variables
+      ProlongCC(m,v,k,j,i,fk,fj,fi,multi_d,three_d,ca,a);
     }
   });
 
