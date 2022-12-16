@@ -45,11 +45,8 @@ void BoundaryValuesCC::ProlongateCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
 
   if (multi_d) {
     auto &cis = indcs.cis;
-    auto &cie = indcs.cie;
     auto &cjs = indcs.cjs;
-    auto &cje = indcs.cje;
     auto &cks = indcs.cks;
-    auto &cke = indcs.cke;
     // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
     Kokkos::TeamPolicy<> policy(DevExeSpace(), nmnv, Kokkos::AUTO);
     Kokkos::parallel_for("ProlCCSame", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
@@ -178,11 +175,8 @@ void BoundaryValuesFC::ProlongateFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> 
     int nmnv = 3*nmb*nnghbr;
     auto &rbuf = recv_buf;
     auto &cis = indcs.cis;
-    auto &cie = indcs.cie;
     auto &cjs = indcs.cjs;
-    auto &cje = indcs.cje;
     auto &cks = indcs.cks;
-    auto &cke = indcs.cke;
     // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
     Kokkos::TeamPolicy<> policy(DevExeSpace(), nmnv, Kokkos::AUTO);
     Kokkos::parallel_for("ProlFCSame", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
@@ -290,7 +284,6 @@ void BoundaryValuesFC::ProlongateFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> 
         int fj = (multi_d)? ((j - indcs.cjs)*2 + indcs.js) : j;  // fine j
         int fk = (three_d)? ((k - indcs.cks)*2 + indcs.ks) : k;  // fine k
 
-
         // Prolongate face-centered fields at shared faces betwen fine and coarse cells
         // by calling inlined prolongation operator for FC variables
         if (v==0) {
@@ -312,7 +305,6 @@ void BoundaryValuesFC::ProlongateFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> 
   // Outer loop over (# of MeshBlocks)*(# of buffers)
   {int nmn = nmb*nnghbr;
   bool &one_d = pmy_pack->pmesh->one_d;
-  bool &two_d = pmy_pack->pmesh->two_d;
   auto &rbuf = recv_buf;
   Kokkos::TeamPolicy<> policy(DevExeSpace(), nmn, Kokkos::AUTO);
   Kokkos::parallel_for("ProFC-2d-int", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {

@@ -145,7 +145,7 @@ bool MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
     auto &u0 = (pmbp->phydro != nullptr)? pmbp->phydro->u0 : pmbp->pmhd->u0;
     auto &w0 = (pmbp->phydro != nullptr)? pmbp->phydro->w0 : pmbp->pmhd->w0;
 
-    par_for_outer("HydroRefineCond",DevExeSpace(), 0, 0, 0, (nmb-1),
+    par_for_outer("ConsRefineCond",DevExeSpace(), 0, 0, 0, (nmb-1),
     KOKKOS_LAMBDA(TeamMember_t tmember, const int m) {
       // density threshold
       if (dens_thresh!= 0.0) {
@@ -160,11 +160,8 @@ bool MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
           dmax = fmax(u0(m,IDN,k,j,i), dmax);
         },Kokkos::Max<Real>(team_dmax));
 
-        if (team_dmax > dens_thresh) {
-          refine_flag_.d_view(m) = 1;
-        } else {
-          refine_flag_.d_view(m) = -1;
-        }
+        if (team_dmax > dens_thresh) {refine_flag_.d_view(m) = 1;}
+        if (team_dmax < dens_thresh) {refine_flag_.d_view(m) = -1;}
       }
 
       // density gradient threshold
@@ -209,7 +206,7 @@ bool MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
     });
   }
 
-  // Check user-defined refinement condition(s), if any (on device)
+  // Check (on device) user-defined refinement condition(s), if any
   if (pmy_mesh->pgen->user_ref_func != nullptr) {
     pmy_mesh->pgen->user_ref_func(pmbp);
   }
@@ -467,31 +464,19 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   for (int i=0; i<nmb_new; i++) {new_costlist[i] = 1.0;}
   pm->LoadBalance(new_costlist, new_ranklist, new_gidslist, new_nmblist, new_nmb_total);
 
-
-/***
-std::cout << std::endl << "nmb_old=" << nmb_old << "  nmb_new=" << nmb_new << "  Old to new:" << std::endl;
-for (int n=0; n<nmb_old; ++n) {
-std::cout << "n=" << n << "  new=" << oldtonew[n] << "  flag=" << refine_flag.h_view(n) << std::endl;
-}
-***/
-
-
-/***
-std::cout << std::endl << "New to old:" << std::endl;
-for (int n=0; n<nmb_new; ++n) {
-std::cout << "n=" << n << "  old=" << newtoold[n] << std::endl;
-}
-***/
-
   hydro::Hydro* phydro = pm->pmb_pack->phydro;
+  mhd::MHD* pmhd = pm->pmb_pack->pmhd;
   auto &nmb = pm->pmb_pack->nmb_thispack;                           // old nmb
   int mbs = pmy_mesh->gidslist[global_variable::my_rank];           // old gids
-  int mbe = mbs + pmy_mesh->nmblist[global_variable::my_rank] - 1;  // old gide
 
   // Step 4. Restrict evolved variables for MBs flagged for derefinement
   if (ndel > 0) {
     if (phydro != nullptr) {
       DerefineCC(phydro->u0, phydro->coarse_u0);
+    }
+    if (pmhd != nullptr) {
+      DerefineCC(pmhd->u0, pmhd->coarse_u0);
+      DerefineFC(pmhd->b0, pmhd->coarse_b0);
     }
   }
 
@@ -502,27 +487,60 @@ std::cout << "n=" << n << "  old=" << newtoold[n] << std::endl;
     int nm1 = oldtonew[mbs + m - 1] - mbs;
     int n   = oldtonew[mbs + m] - mbs;
     if ( ((n-m) < 0) && (n != nm1) ) {
-//std::cout << "move L, (n,m)="<<n<<" "<<m<<std::endl;
       if (phydro != nullptr) {
         auto u0 = phydro->u0;
         auto src = Kokkos::subview(u0,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
         auto dst = Kokkos::subview(u0,n,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
         Kokkos::deep_copy(DevExeSpace(), dst, src);
       }
+      if (pmhd != nullptr) {
+        auto u0 = pmhd->u0;
+        auto src = Kokkos::subview(u0,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+        auto dst = Kokkos::subview(u0,n,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+        Kokkos::deep_copy(DevExeSpace(), dst, src);
+        auto b1 = pmhd->b0.x1f;
+        auto src1 = Kokkos::subview(b1,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+        auto dst1 = Kokkos::subview(b1,n,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+        Kokkos::deep_copy(DevExeSpace(), dst1, src1);
+        auto b2 = pmhd->b0.x2f;
+        auto src2 = Kokkos::subview(b2,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+        auto dst2 = Kokkos::subview(b2,n,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+        Kokkos::deep_copy(DevExeSpace(), dst2, src2);
+        auto b3 = pmhd->b0.x3f;
+        auto src3 = Kokkos::subview(b3,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+        auto dst3 = Kokkos::subview(b3,n,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+        Kokkos::deep_copy(DevExeSpace(), dst3, src3);
+      }
     }
   }
-
 
   // Step 6. Move evolved variables within view for any MB in which (new gid) < (old gid)
   for (int m=(nmb-1); m >= 0; --m) {
     int n = oldtonew[mbs + m] - mbs;
     if ((n-m) > 0) {
-//std::cout << "move R, (n,m)="<<n<<" "<<m<<std::endl;
       if (phydro != nullptr) {
         auto u0 = phydro->u0;
         auto src = Kokkos::subview(u0,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
         auto dst = Kokkos::subview(u0,n,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
         Kokkos::deep_copy(DevExeSpace(), dst, src);
+      }
+      if (pmhd != nullptr) {
+        auto u0 = pmhd->u0;
+        auto src = Kokkos::subview(u0,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+        auto dst = Kokkos::subview(u0,n,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+        Kokkos::deep_copy(DevExeSpace(), dst, src);
+        auto b1 = pmhd->b0.x1f;
+        auto src1 = Kokkos::subview(b1,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+        auto dst1 = Kokkos::subview(b1,n,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+        Kokkos::deep_copy(DevExeSpace(), dst1, src1);
+        auto b2 = pmhd->b0.x2f;
+        auto src2 = Kokkos::subview(b2,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+        auto dst2 = Kokkos::subview(b2,n,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+        Kokkos::deep_copy(DevExeSpace(), dst2, src2);
+        auto b3 = pmhd->b0.x3f;
+        auto src3 = Kokkos::subview(b3,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+        auto dst3 = Kokkos::subview(b3,n,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+        Kokkos::deep_copy(DevExeSpace(), dst3, src3);
       }
     }
   }
@@ -531,6 +549,10 @@ std::cout << "n=" << n << "  old=" << newtoold[n] << std::endl;
   if (nnew > 0) {
     if (phydro != nullptr) {
       RefineCC(new_nmb_total, phydro->u0, phydro->coarse_u0);
+    }
+    if (pmhd != nullptr) {
+      RefineCC(new_nmb_total, pmhd->u0, pmhd->coarse_u0);
+      RefineFC(new_nmb_total, pmhd->b0, pmhd->coarse_b0);
     }
   }
 
@@ -591,14 +613,14 @@ void MeshRefinement::RestrictCC(DvceArray5D<Real> &u, DvceArray5D<Real> &cu) {
 
   // restrict in 1D
   if (pmy_mesh->one_d) {
-    par_for("restrict3D",DevExeSpace(),0, nmb-1, 0, nvar-1, cis, cie,
+    par_for("restrictCC-1D",DevExeSpace(), 0,nmb-1, 0,nvar-1, cis,cie,
     KOKKOS_LAMBDA(const int m, const int n, const int i) {
       int finei = 2*i - cis;  // correct when cis=is
       cu(m,n,cks,cjs,i) = 0.5*(u(m,n,cks,cjs,finei) + u(m,n,cks,cjs,finei+1));
     });
   // restrict in 2D
   } else if (pmy_mesh->two_d) {
-    par_for("restrict3D",DevExeSpace(),0, nmb-1, 0, nvar-1, cjs, cje, cis, cie,
+    par_for("restrictCC-2D",DevExeSpace(), 0,nmb-1, 0,nvar-1, cjs,cje, cis,cie,
     KOKKOS_LAMBDA(const int m, const int n, const int j, const int i) {
       int finei = 2*i - cis;  // correct when cis=is
       int finej = 2*j - cjs;  // correct when cjs=js
@@ -608,7 +630,7 @@ void MeshRefinement::RestrictCC(DvceArray5D<Real> &u, DvceArray5D<Real> &cu) {
 
   // restrict in 3D
   } else {
-    par_for("restrict3D",DevExeSpace(),0, nmb-1, 0, nvar-1, cks, cke, cjs, cje, cis, cie,
+    par_for("restrictCC-3D",DevExeSpace(), 0,nmb-1, 0,nvar-1, cks,cke, cjs,cje, cis,cie,
     KOKKOS_LAMBDA(const int m, const int n, const int k, const int j, const int i) {
       int finei = 2*i - cis;  // correct when cis=is
       int finej = 2*j - cjs;  // correct when cjs=js
@@ -639,7 +661,7 @@ void MeshRefinement::RestrictFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb)
 
   // restrict in 1D
   if (pmy_mesh->one_d) {
-    par_for("restrict3D",DevExeSpace(),0, nmb-1, cis, cie,
+    par_for("restrictFC-1D",DevExeSpace(), 0,nmb-1, cis,cie,
     KOKKOS_LAMBDA(const int m, const int i) {
       int finei = 2*i - cis;  // correct when cis=is
       // restrict B1
@@ -659,7 +681,7 @@ void MeshRefinement::RestrictFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb)
 
   // restrict in 2D
   } else if (pmy_mesh->two_d) {
-    par_for("restrict3D",DevExeSpace(),0, nmb-1, cjs, cje, cis, cie,
+    par_for("restrictFC-2D",DevExeSpace(), 0,nmb-1, cjs,cje, cis,cie,
     KOKKOS_LAMBDA(const int m, const int j, const int i) {
       int finei = 2*i - cis;  // correct when cis=is
       int finej = 2*j - cjs;  // correct when cjs=js
@@ -684,7 +706,7 @@ void MeshRefinement::RestrictFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb)
 
   // restrict in 3D
   } else {
-    par_for("restrict3D",DevExeSpace(),0, nmb-1, cks, cke, cjs, cje, cis, cie,
+    par_for("restrictFC-3D",DevExeSpace(), 0,nmb-1, cks,cke, cjs,cje, cis,cie,
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
       int finei = 2*i - cis;  // correct when cis=is
       int finej = 2*j - cjs;  // correct when cjs=js
@@ -756,7 +778,7 @@ void MeshRefinement::RefineCC(int nmb_new, DvceArray5D<Real> &a, DvceArray5D<Rea
             std::pair<int,int> isrc = std::make_pair(i,i+cnx1);
             auto src = Kokkos::subview( a,newm,Kokkos::ALL,ksrc,jsrc,isrc);
             auto dst = Kokkos::subview(ca,newn,Kokkos::ALL,kdst,jdst,idst);
-            Kokkos::deep_copy(dst, src);
+            Kokkos::deep_copy(DevExeSpace(), dst, src);
             ++newn;
           }
         }
@@ -776,7 +798,7 @@ void MeshRefinement::RefineCC(int nmb_new, DvceArray5D<Real> &a, DvceArray5D<Rea
   auto &refine_flag_ = refine_flag;
   bool &multi_d = pmy_mesh->multi_d;
   bool &three_d = pmy_mesh->three_d;
-  par_for("prolongCC",DevExeSpace(), 0,(nmb_new-1), 0,nvar-1, cks,cke, cjs,cje, cis,cie,
+  par_for("refineCC",DevExeSpace(), 0,(nmb_new-1), 0,nvar-1, cks,cke, cjs,cje, cis,cie,
   KOKKOS_LAMBDA(const int m, const int v, const int k, const int j, const int i) {
     if (refine_flag_.d_view(new_to_old.d_view(m)) > 0) {
       // fine indices refer to target array
@@ -786,6 +808,133 @@ void MeshRefinement::RefineCC(int nmb_new, DvceArray5D<Real> &a, DvceArray5D<Rea
 
       // call inlined prolongation operator for CC variables
       ProlongCC(m,v,k,j,i,fk,fj,fi,multi_d,three_d,ca,a);
+    }
+  });
+
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MeshRefinement::RefineFC
+//! \brief Refines face-centered variables in input view at any MeshBlock index m that is
+//! flagged for refinement to the m-index locations which are immediately following,
+//! overwriting any data located there. Logic is identical to CC refinement.
+
+void MeshRefinement::RefineFC(int nmb_new, DvceFaceFld4D<Real> &b,
+                              DvceFaceFld4D<Real> &cb) {
+  auto &nmb_old = pmy_mesh->pmb_pack->nmb_thispack;
+  auto &indcs = pmy_mesh->mb_indcs;
+  auto &is = indcs.is, &ie = indcs.ie;
+  auto &js = indcs.js, &je = indcs.je;
+  auto &ks = indcs.ks, &ke = indcs.ke;
+  auto &cis = indcs.cis, &cie = indcs.cie;
+  auto &cjs = indcs.cjs, &cje = indcs.cje;
+  auto &cks = indcs.cks, &cke = indcs.cke;
+  auto &cnx1 = indcs.cnx1, &cnx2 = indcs.cnx2, &cnx3 = indcs.cnx3;
+
+  // First copy data in MBs to be refined to coarse arrays in target MBs
+  std::pair<int,int> kdst  = std::make_pair(cks,cke+1);
+  std::pair<int,int> kdst1 = std::make_pair(cks,cke+2);
+  std::pair<int,int> jdst  = std::make_pair(cjs,cje+1);
+  std::pair<int,int> jdst1 = std::make_pair(cjs,cje+2);
+  std::pair<int,int> idst  = std::make_pair(cis,cie+1);
+  std::pair<int,int> idst1 = std::make_pair(cis,cie+2);
+  for (int m=0; m<nmb_old; ++m) {
+    if (refine_flag.h_view(m) > 0) {
+      int newm = oldtonew[m];
+      int newn = newm;
+      for (int k=ks; k<=ke; k += cnx3) {
+        std::pair<int,int> ksrc  = std::make_pair(k,k+cnx3);
+        std::pair<int,int> ksrc1 = std::make_pair(k,k+cnx3+1);
+        for (int j=js; j<=je; j += cnx2) {
+          std::pair<int,int> jsrc  = std::make_pair(j,j+cnx2);
+          std::pair<int,int> jsrc1 = std::make_pair(j,j+cnx2+1);
+          for (int i=is; i<=ie; i += cnx1) {
+            std::pair<int,int> isrc  = std::make_pair(i,i+cnx1);
+            std::pair<int,int> isrc1 = std::make_pair(i,i+cnx1+1);
+            auto src1 = Kokkos::subview( b.x1f,newm,ksrc,jsrc,isrc1);
+            auto dst1 = Kokkos::subview(cb.x1f,newn,kdst,jdst,idst1);
+            Kokkos::deep_copy(DevExeSpace(), dst1, src1);
+            auto src2 = Kokkos::subview( b.x2f,newm,ksrc,jsrc1,isrc);
+            auto dst2 = Kokkos::subview(cb.x2f,newn,kdst,jdst1,idst);
+            Kokkos::deep_copy(DevExeSpace(), dst2, src2);
+            auto src3 = Kokkos::subview( b.x3f,newm,ksrc1,jsrc,isrc);
+            auto dst3 = Kokkos::subview(cb.x3f,newn,kdst1,jdst,idst);
+            Kokkos::deep_copy(DevExeSpace(), dst3, src3);
+            ++newn;
+          }
+        }
+      }
+    }
+  }
+
+  DualArray1D<int> new_to_old("newtoold",nmb_new);
+  for (int m=0; m<nmb_new; ++m) {
+    new_to_old.h_view(m) = newtoold[m];
+  }
+  new_to_old.template modify<HostMemSpace>();
+  new_to_old.template sync<DevExeSpace>();
+
+  // Now prolongate data in coarse arrays to fine arrays for all MBs being refined
+  // First prolongate face-centered fields at shared faces betwen fine and coarse cells
+  auto &refine_flag_ = refine_flag;
+  bool &multi_d = pmy_mesh->multi_d;
+  bool &three_d = pmy_mesh->three_d;
+
+  // Prolongate x1f
+  par_for("RefineFC1",DevExeSpace(), 0,(nmb_new-1), cks,cke, cjs,cje, cis,cie+1,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    if (refine_flag_.d_view(new_to_old.d_view(m)) > 0) {
+      // fine indices refer to target array
+      int fi = (i - cis)*2 + is;                   // fine i
+      int fj = (multi_d)? ((j - cjs)*2 + js) : j;  // fine j
+      int fk = (three_d)? ((k - cks)*2 + ks) : k;  // fine k
+      ProlongFCSharedX1Face(m,k,j,i,fk,fj,fi,multi_d,three_d,cb.x1f,b.x1f);
+    }
+  });
+
+  // Prolongate x2f
+  par_for("RefineFC2",DevExeSpace(), 0,(nmb_new-1), cks,cke, cjs,cje+1, cis,cie,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    if (refine_flag_.d_view(new_to_old.d_view(m)) > 0) {
+      // fine indices refer to target array
+      int fi = (i - cis)*2 + is;                   // fine i
+      int fj = (multi_d)? ((j - cjs)*2 + js) : j;  // fine j
+      int fk = (three_d)? ((k - cks)*2 + ks) : k;  // fine k
+      ProlongFCSharedX2Face(m,k,j,i,fk,fj,fi,three_d,cb.x2f,b.x2f);
+    }
+  });
+
+  // Prolongate x3f
+  par_for("RefineFC3",DevExeSpace(), 0,(nmb_new-1), cks,cke+1, cjs,cje, cis,cie,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    if (refine_flag_.d_view(new_to_old.d_view(m)) > 0) {
+      // fine indices refer to target array
+      int fi = (i - cis)*2 + is;                   // fine i
+      int fj = (multi_d)? ((j - cjs)*2 + js) : j;  // fine j
+      int fk = (three_d)? ((k - cks)*2 + ks) : k;  // fine k
+      ProlongFCSharedX3Face(m,k,j,i,fk,fj,fi,multi_d,cb.x3f,b.x3f);
+    }
+  });
+
+  // Second prolongate face-centered fields at internal faces of fine cells using
+  // divergence-preserving operator of Toth & Roe (2002)
+  bool &one_d = pmy_mesh->one_d;
+  par_for("RefineFC-int",DevExeSpace(), 0,(nmb_new-1), cks,cke, cjs,cje, cis,cie,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    if (refine_flag_.d_view(new_to_old.d_view(m)) > 0) {
+      // fine indices refer to target array
+      int fi = (i - cis)*2 + is;   // fine i
+      int fj = (j - cjs)*2 + js;   // fine j
+      int fk = (k - cks)*2 + ks;   // fine k
+
+      if (one_d) {
+        // In 1D, interior face field is trivial
+        b.x1f(m,fk,fj,fi+1) = 0.5*(b.x1f(m,fk,fj,fi) + b.x1f(m,fk,fj,fi+2));
+      } else {
+        // in multi-D call inlined prolongation operator for FC fields at internal faces
+        ProlongFCInternal(m,fk,fj,fi,three_d,b);
+      }
     }
   });
 
@@ -825,7 +974,7 @@ void MeshRefinement::DerefineCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca) {
             std::pair<int,int> idst = std::make_pair(i,i+cnx1);
             auto src = Kokkos::subview(ca,srcm,Kokkos::ALL,ksrc,jsrc,isrc);
             auto dst = Kokkos::subview( a,m   ,Kokkos::ALL,kdst,jdst,idst);
-            Kokkos::deep_copy(DevExeSpace(),dst, src);
+            Kokkos::deep_copy(DevExeSpace(), dst, src);
             ++srcm;
           }
         }
@@ -835,3 +984,59 @@ void MeshRefinement::DerefineCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca) {
 
   return;
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn void MeshRefinement::DerefineFC
+//! \brief Derefines face-centered variables in input view at any MeshBlock index m that
+//! is flagged for derefinement to the m-index locations which are immediately following,
+//! overwriting any data located there.  Similar to CC case.
+
+void MeshRefinement::DerefineFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb) {
+  auto &nmb_old = pmy_mesh->pmb_pack->nmb_thispack;
+  auto &indcs = pmy_mesh->mb_indcs;
+  auto &is = indcs.is, &ie = indcs.ie;
+  auto &js = indcs.js, &je = indcs.je;
+  auto &ks = indcs.ks, &ke = indcs.ke;
+  auto &cis = indcs.cis, &cie = indcs.cie;
+  auto &cjs = indcs.cjs, &cje = indcs.cje;
+  auto &cks = indcs.cks, &cke = indcs.cke;
+  auto &cnx1 = indcs.cnx1, &cnx2 = indcs.cnx2, &cnx3 = indcs.cnx3;
+
+  // Copy data directly from coarse arrays in MBs to be refined to fine array in target MB
+  std::pair<int,int> ksrc  = std::make_pair(cks,cke+1);
+  std::pair<int,int> ksrc1 = std::make_pair(cks,cke+2);
+  std::pair<int,int> jsrc  = std::make_pair(cjs,cje+1);
+  std::pair<int,int> jsrc1 = std::make_pair(cjs,cje+2);
+  std::pair<int,int> isrc  = std::make_pair(cis,cie+1);
+  std::pair<int,int> isrc1 = std::make_pair(cis,cie+2);
+  for (int m=0; m<nmb_old; ++m) {
+    if (refine_flag.h_view(m) < -1) {  // only derefine if nleaf blocks flagged
+      int srcm = m;
+      for (int k=ks; k<=ke; k += cnx3) {
+        std::pair<int,int> kdst  = std::make_pair(k,k+cnx3);
+        std::pair<int,int> kdst1 = std::make_pair(k,k+cnx3+1);
+        for (int j=js; j<=je; j += cnx2) {
+          std::pair<int,int> jdst  = std::make_pair(j,j+cnx2);
+          std::pair<int,int> jdst1 = std::make_pair(j,j+cnx2+1);
+          for (int i=is; i<=ie; i += cnx1) {
+            std::pair<int,int> idst  = std::make_pair(i,i+cnx1);
+            std::pair<int,int> idst1 = std::make_pair(i,i+cnx1+1);
+            auto src1 = Kokkos::subview(cb.x1f,srcm,ksrc,jsrc,isrc1);
+            auto dst1 = Kokkos::subview( b.x1f,m   ,kdst,jdst,idst1);
+            Kokkos::deep_copy(DevExeSpace(), dst1, src1);
+            auto src2 = Kokkos::subview(cb.x2f,srcm,ksrc,jsrc1,isrc);
+            auto dst2 = Kokkos::subview( b.x2f,m   ,kdst,jdst1,idst);
+            Kokkos::deep_copy(DevExeSpace(), dst2, src2);
+            auto src3 = Kokkos::subview(cb.x3f,srcm,ksrc1,jsrc,isrc);
+            auto dst3 = Kokkos::subview( b.x3f,m   ,kdst1,jdst,idst);
+            Kokkos::deep_copy(DevExeSpace(), dst3, src3);
+            ++srcm;
+          }
+        }
+      }
+    }
+  }
+
+  return;
+}
+

@@ -40,10 +40,14 @@ class MeshRefinement {
   void AdaptiveMeshRefinement(Driver *pdrive, ParameterInput *pin);
   void UpdateMeshBlockTree(int &nnew, int &ndel);
   void RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, int ndel);
+
   void RestrictCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
-  void RestrictFC(DvceFaceFld4D<Real> &a, DvceFaceFld4D<Real> &ca);
   void RefineCC(int nmb, DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
   void DerefineCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
+
+  void RestrictFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
+  void RefineFC(int nmb, DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
+  void DerefineFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
 
  private:
   // data
