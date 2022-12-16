@@ -150,7 +150,7 @@ class BoundaryValuesCC : public BoundaryValues {
 
   TaskStatus PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
   TaskStatus RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
-  void ProlongCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
+  void ProlongateCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
 
   TaskStatus PackAndSendFluxCC(DvceFaceFld5D<Real> &flx);
   TaskStatus RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx);
@@ -173,8 +173,8 @@ class BoundaryValuesFC : public BoundaryValues {
 
   TaskStatus PackAndSendFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
   TaskStatus RecvAndUnpackFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
+  void ProlongateFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
 
-  void ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
   TaskStatus PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx);
   TaskStatus RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx);
   void SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx, const bool same_level,

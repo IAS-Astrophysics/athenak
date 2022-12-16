@@ -391,7 +391,7 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b,
   //----- STEP 3: Prolongate face-fields when neighbor at coarser level
 
   // Only perform prolongation with SMR/AMR
-  if (pmy_pack->pmesh->multilevel) ProlongFC(b, cb);
+  if (pmy_pack->pmesh->multilevel) ProlongateFC(b, cb);
 
   return TaskStatus::complete;
 }

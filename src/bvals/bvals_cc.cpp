@@ -313,7 +313,7 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
   //----- STEP 3: Prolongate conserved variables when neighbor at coarser level
 
   // Only perform prolongation with SMR/AMR
-  if (pmy_pack->pmesh->multilevel) ProlongCC(a,ca);
+  if (pmy_pack->pmesh->multilevel) ProlongateCC(a,ca);
 
   return TaskStatus::complete;
 }
