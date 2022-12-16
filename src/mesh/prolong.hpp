@@ -160,27 +160,70 @@ void ProlongFCSharedX3Face(const int m, const int k, const int j, const int i,
 //! scheme of Toth & Roe, JCP 180, 736 (2002).
 
 KOKKOS_INLINE_FUNCTION
-void ProlongFCInternal(const int m, const int k, const int j, const int i,
-                       const int fk, const int fj, const int fi,
-                       const bool multi_d,
-                       const DvceArray4D<Real> &cbx3f, const DvceArray4D<Real> &bx3f) {
-  // Prolongate b.x3f (v=2) by interpolating in x1/x2
-  Real dl = cbx3f(m,k,j,i  ) - cbx3f(m,k,j,i-1);
-  Real dr = cbx3f(m,k,j,i+1) - cbx3f(m,k,j,i  );
-  Real dvar1 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
+void ProlongFCInternal(const int m, const int fk, const int fj, const int fi,
+                       const bool three_d, const DvceFaceFld4D<Real> &b) {
+  // Prolongate internal fields in 3D
+  if (three_d) {
+    Real Uxx  = 0.0, Vyy  = 0.0, Wzz  = 0.0;
+    Real Uxyz = 0.0, Vxyz = 0.0, Wxyz = 0.0;
+    for (int jj=0; jj<2; jj++) {
+      int jsgn = 2*jj - 1;
+      int fjj  = fj + jj, fjp = fj + 2*jj;
+      for (int ii=0; ii<2; ii++) {
+        int isgn = 2*ii - 1;
+        int fii = fi + ii, fip = fi + 2*ii;
+        Uxx += isgn*(jsgn*(b.x2f(m,fk  ,fjp,fii) + b.x2f(m,fk+1,fjp,fii)) +
+                          (b.x3f(m,fk+2,fjj,fii) - b.x3f(m,fk  ,fjj,fii)));
 
-  Real dvar2 = 0.0;
-  if (multi_d) {
-    dl = cbx3f(m,k,j  ,i) - cbx3f(m,k,j-1,i);
-    dr = cbx3f(m,k,j+1,i) - cbx3f(m,k,j  ,i);
-    dvar2 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
-  }
+        Vyy += jsgn*(     (b.x3f(m,fk+2,fjj,fii) - b.x3f(m,fk  ,fjj,fii)) +
+                     isgn*(b.x1f(m,fk  ,fjj,fip) + b.x1f(m,fk+1,fjj,fip)));
 
-  bx3f(m,fk,fj  ,fi  ) = cbx3f(m,k,j,i) - dvar1 - dvar2;
-  bx3f(m,fk,fj  ,fi+1) = cbx3f(m,k,j,i) + dvar1 - dvar2;
-  if (multi_d) {
-    bx3f(m,fk,fj+1,fi  ) = cbx3f(m,k,j,i) - dvar1 + dvar2;
-    bx3f(m,fk,fj+1,fi+1) = cbx3f(m,k,j,i) + dvar1 + dvar2;
+        Wzz +=       isgn*(b.x1f(m,fk+1,fjj,fip) - b.x1f(m,fk  ,fjj,fip)) +
+                     jsgn*(b.x2f(m,fk+1,fjp,fii) - b.x2f(m,fk  ,fjp,fii));
+
+        Uxyz += isgn*jsgn*(b.x1f(m,fk+1,fjj,fip) - b.x1f(m,fk  ,fjj,fip));
+        Vxyz += isgn*jsgn*(b.x2f(m,fk+1,fjp,fii) - b.x2f(m,fk  ,fjp,fii));
+        Wxyz += isgn*jsgn*(b.x3f(m,fk+2,fjj,fii) - b.x3f(m,fk  ,fjj,fii));
+      }
+    }
+    Uxx *= 0.125;  Vyy *= 0.125;  Wzz *= 0.125;
+    Uxyz *= 0.0625; Vxyz *= 0.0625; Wxyz *= 0.0625;
+
+    b.x1f(m,fk  ,fj  ,fi+1) = 0.5*(b.x1f(m,fk  ,fj  ,fi  ) + b.x1f(m,fk  ,fj  ,fi+2))
+                            + Uxx - Vxyz - Wxyz;
+    b.x1f(m,fk  ,fj+1,fi+1) = 0.5*(b.x1f(m,fk  ,fj+1,fi  ) + b.x1f(m,fk  ,fj+1,fi+2))
+                            + Uxx - Vxyz + Wxyz;
+    b.x1f(m,fk+1,fj  ,fi+1) = 0.5*(b.x1f(m,fk+1,fj  ,fi  ) + b.x1f(m,fk+1,fj  ,fi+2))
+                            + Uxx + Vxyz - Wxyz;
+    b.x1f(m,fk+1,fj+1,fi+1) = 0.5*(b.x1f(m,fk+1,fj+1,fi  ) + b.x1f(m,fk+1,fj+1,fi+2))
+                            + Uxx + Vxyz + Wxyz;
+    b.x2f(m,fk  ,fj+1,fi  ) = 0.5*(b.x2f(m,fk  ,fj  ,fi  ) + b.x2f(m,fk  ,fj+2,fi  ))
+                            + Vyy - Uxyz - Wxyz;
+    b.x2f(m,fk  ,fj+1,fi+1) = 0.5*(b.x2f(m,fk  ,fj  ,fi+1) + b.x2f(m,fk  ,fj+2,fi+1))
+                            + Vyy - Uxyz + Wxyz;
+    b.x2f(m,fk+1,fj+1,fi  ) = 0.5*(b.x2f(m,fk+1,fj  ,fi  ) + b.x2f(m,fk+1,fj+2,fi  ))
+                            + Vyy + Uxyz - Wxyz;
+    b.x2f(m,fk+1,fj+1,fi+1) = 0.5*(b.x2f(m,fk+1,fj  ,fi+1) + b.x2f(m,fk+1,fj+2,fi+1))
+                            + Vyy + Uxyz + Wxyz;
+    b.x3f(m,fk+1,fj  ,fi  ) = 0.5*(b.x3f(m,fk+2,fj  ,fi  ) + b.x3f(m,fk  ,fj  ,fi  ))
+                            + Wzz - Uxyz - Vxyz;
+    b.x3f(m,fk+1,fj  ,fi+1) = 0.5*(b.x3f(m,fk+2,fj  ,fi+1) + b.x3f(m,fk  ,fj  ,fi+1))
+                            + Wzz - Uxyz + Vxyz;
+    b.x3f(m,fk+1,fj+1,fi  ) = 0.5*(b.x3f(m,fk+2,fj+1,fi  ) + b.x3f(m,fk  ,fj+1,fi  ))
+                            + Wzz + Uxyz - Vxyz;
+    b.x3f(m,fk+1,fj+1,fi+1) = 0.5*(b.x3f(m,fk+2,fj+1,fi+1) + b.x3f(m,fk  ,fj+1,fi+1))
+                            + Wzz + Uxyz + Vxyz;
+
+  // Prolongate internal fields in 2D
+  } else {
+    Real tmp1 = 0.25*(b.x2f(m,fk,fj+2,fi+1) - b.x2f(m,fk,fj,  fi+1)
+                    - b.x2f(m,fk,fj+2,fi  ) + b.x2f(m,fk,fj,  fi  ));
+    Real tmp2 = 0.25*(b.x1f(m,fk,fj,  fi  ) - b.x1f(m,fk,fj,  fi+2)
+                    - b.x1f(m,fk,fj+1,fi  ) + b.x1f(m,fk,fj+1,fi+2));
+    b.x1f(m,fk,fj  ,fi+1) = 0.5*(b.x1f(m,fk,fj,  fi  ) + b.x1f(m,fk,fj,  fi+2)) + tmp1;
+    b.x1f(m,fk,fj+1,fi+1) = 0.5*(b.x1f(m,fk,fj+1,fi  ) + b.x1f(m,fk,fj+1,fi+2)) + tmp1;
+    b.x2f(m,fk,fj+1,fi  ) = 0.5*(b.x2f(m,fk,fj,  fi  ) + b.x2f(m,fk,fj+2,fi  )) + tmp2;
+    b.x2f(m,fk,fj+1,fi+1) = 0.5*(b.x2f(m,fk,fj,  fi+1) + b.x2f(m,fk,fj+2,fi+1)) + tmp2;
   }
   return;
 }
