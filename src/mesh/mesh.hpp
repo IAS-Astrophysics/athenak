@@ -128,7 +128,7 @@ class Mesh {
   int nmb_rootx1, nmb_rootx2, nmb_rootx3; // # of MeshBlocks at root level in each dir
   int nmb_total;           // total number of MeshBlocks across all levels/ranks
   int nmb_thisrank;        // number of MeshBlocks on this MPI rank (local)
-  int nmb_max;             // max number of MBs allowed (memory limit for AMR)
+  int nmb_maxperdevice;    // max allowed number of MBs per device (memory limit for AMR)
 
   int root_level; // logical level of root (physical) grid (e.g. Fig. 3 of method paper)
   int max_level;  // logical level of maximum refinement grid in Mesh
