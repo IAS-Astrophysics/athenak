@@ -8,8 +8,10 @@
 //! Note while restriction functions for CC and FC data are implemented here, prolongation
 //! is part of BVals classes.
 
-#include <cstdint>  // int32_t
+#include <cstdint>   // int32_t
 #include <iostream>
+#include <algorithm> // sort
+#include <utility>   // pair
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -36,13 +38,11 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
   ncycle_check_amr(1), ncycle_ref_inter(5),
   d_threshold_(0.0), dd_threshold_(0.0), dp_threshold_(0.0), dv_threshold_(0.0),
   check_cons_(false) {
-
   // read interval (in cycles) between check of AMR and derefinement
   if (pin->DoesBlockExist("mesh_refinement")) {
     ncycle_check_amr = pin->GetOrAddReal("mesh_refinement", "ncycle_check", 1);
     ncycle_ref_inter = pin->GetOrAddReal("mesh_refinement", "refine_interval", 5);
   }
-
   // read thresholds from <mesh_refinement> block in input file
   if (pin->DoesParameterExist("mesh_refinement", "dens_max")) {
     d_threshold_ = pin->GetReal("mesh_refinement", "dens_max");
@@ -60,7 +60,6 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
     dd_threshold_ = pin->GetReal("mesh_refinement", "dvel_max");
     check_cons_ = true;
   }
-
   if (pm->adaptive) {  // allocate arrays for AMR
     nref = new int[global_variable::nranks];
     nderef = new int[global_variable::nranks];
@@ -102,8 +101,8 @@ void MeshRefinement::AdaptiveMeshRefinement(Driver *pdrive, ParameterInput *pin)
 //!   (1) density max above a threshold value (hydro/MHD)
 //!   (2) gradient of density above a threshold value (hydro/MHD)
 //!   (3) gradient of pressure above a threshold value (hydro/MHD)
-//!   TODO (@user) (4) shear of velocity above a threshold value (hydro/MHD)
-//!   TODO (@user) (5) current density above a threshold (MHD)
+//!   TODO(@user) (4) shear of velocity above a threshold value (hydro/MHD)
+//!   TODO(@user) (5) current density above a threshold (MHD)
 //! These are controlled by input parameters in the <mesh_refinement> block.
 //! User-defined refinement conditions can also be enrolled by setting the *usr_ref_func
 //! pointer in the problem generator.
@@ -455,7 +454,7 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
 
   // Step 3. Calculate new load balance.  Initialize new cost array with the simplest
   // estimate possible: all the blocks are equal
-  // TODO (@user): implement variable cost per MeshBlock as needed
+  // TODO(@user): implement variable cost per MeshBlock as needed
   float *new_costlist = new float[nmb_new];
   int *new_ranklist = new int[nmb_new];
   int *new_gidslist = new int[global_variable::nranks];

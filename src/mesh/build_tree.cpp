@@ -268,7 +268,7 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
 #endif
 
   // initialize cost array with the simplest estimate; all the blocks are equal
-  // TODO (@user): implement variable cost per MeshBlock as needed
+  // TODO(@user): implement variable cost per MeshBlock as needed
   for (int i=0; i<nmb_total; i++) {costlist[i] = 1.0;}
   LoadBalance(costlist, ranklist, gidslist, nmblist, nmb_total);
 
@@ -431,14 +431,16 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile) {
 
   // check the tree structure by making sure total # of MBs counted in tree same as the
   // number read from the restart file.
-  {int nnb;
-  ptree->CreateMeshBlockList(lloclist, nullptr, nnb);
-  if (nnb != nmb_total) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "Tree reconstruction failed. Total number of blocks in reconstructed tree = "
-        << nnb << ", number in file = " << nmb_total << std::endl;
-    std::exit(EXIT_FAILURE);
-  }}
+  {
+    int nnb;
+    ptree->CreateMeshBlockList(lloclist, nullptr, nnb);
+    if (nnb != nmb_total) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+        << std::endl << "Tree reconstruction failed. Total number of blocks in "
+        << "reconstructed tree=" << nnb << ", number in file=" << nmb_total << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
 
 #ifdef MPI_PARALLEL_ENABLED
   // check there is at least one MeshBlock per MPI rank
