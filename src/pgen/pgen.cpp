@@ -144,7 +144,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   hydro::Hydro* phydro = pm->pmb_pack->phydro;
   mhd::MHD* pmhd = pm->pmb_pack->pmhd;
   radiation::Radiation* prad=pm->pmb_pack->prad;
-  int nrad = 0, nhydro = 0, nmhd = 0;
+  TurbulenceDriver* pturb=pm->pmb_pack->pturb;
+  int nrad = 0, nhydro = 0, nmhd = 0, nforce = 3;
   if (phydro != nullptr) {
     nhydro = phydro->nhydro + phydro->nscalars;
   }
@@ -196,6 +197,9 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   }
   if (prad != nullptr) {
     data_size_ += nout1*nout2*nout3*nrad*sizeof(Real);   // rad i0
+  }
+  if (pturb != nullptr) {
+    data_size_ += nout1*nout2*nout3*nforce*sizeof(Real);      // forcing
   }
 
   if (data_size_ != data_size) {
@@ -406,6 +410,41 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
       }
     }
     Kokkos::deep_copy(prad->i0, ccin);
+  }
+
+  if (pturb != nullptr) {
+    Kokkos::realloc(ccin, nmb, nforce, nout3, nout2, nout1);
+    for (int m=0;  m<noutmbs_max; ++m) {
+      // every rank has a MB to read, so read collectively
+      if (m < noutmbs_min) {
+        // get ptr to cell-centered MeshBlock data
+        auto mbptr = Kokkos::subview(ccin, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
+                                   Kokkos::ALL);
+        int mbcnt = mbptr.size();
+        if (resfile.Read_Reals_at_all(mbptr.data(), mbcnt, myoffset) != mbcnt) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                    << std::endl << "CC data not read correctly from restart file, "
+                    << "restart file is broken." << std::endl;
+          exit(EXIT_FAILURE);
+        }
+        myoffset += mbcnt*sizeof(Real);
+      
+      // some ranks are finished writing, so use non-collective write
+      } else if (m < pm->nmb_thisrank) {
+        // get ptr to MeshBlock data
+        auto mbptr = Kokkos::subview(ccin, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
+                                     Kokkos::ALL);
+        int mbcnt = mbptr.size();
+        if (resfile.Read_Reals_at(mbptr.data(), mbcnt, myoffset) != mbcnt) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                    << std::endl << "CC data not read correctly from restart file, "
+                    << "restart file is broken." << std::endl;
+          exit(EXIT_FAILURE);
+        }
+        myoffset += mbcnt*sizeof(Real);
+      }
+    }
+    Kokkos::deep_copy(pturb->force, ccin);
   }
 
   // call problem generator again to re-initialize data, fn ptrs, as needed
