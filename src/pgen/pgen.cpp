@@ -175,6 +175,26 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   IOWrapperSizeT data_size;
   std::memcpy(&data_size, &(variabledata[0]), sizeof(IOWrapperSizeT));
 
+  if (pturb != nullptr) {
+    // root process reads size the random seed
+    char *rng_data = new char[sizeof(RNG_State)];
+
+    if (global_variable::my_rank == 0) { // the master process reads the variables data
+      if (resfile.Read_bytes(rng_data, 1, sizeof(RNG_State)) != sizeof(RNG_State)) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "RNG data size read from restart file is incorrect, "
+                  << "restart file is broken." << std::endl;
+        exit(EXIT_FAILURE);
+      }
+    }
+
+#if MPI_PARALLEL_ENABLED
+    // then broadcast the RNG information
+    MPI_Bcast(rng_data, sizeof(RNG_State), MPI_CHAR, 0, MPI_COMM_WORLD);
+#endif
+    std::memcpy(&(pturb->rstate), &(rng_data[0]), sizeof(RNG_State));
+  }
+
   IOWrapperSizeT headeroffset;
   // master process gets file offset
   if (global_variable::my_rank == 0) {

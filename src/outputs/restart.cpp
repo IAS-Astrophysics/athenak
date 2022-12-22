@@ -203,6 +203,9 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
 
   if (global_variable::my_rank == 0) {
     resfile.Write_bytes(&(data_size), sizeof(IOWrapperSizeT), 1);
+    if (pturb != nullptr) {
+      resfile.Write_bytes(&(pturb->rstate), sizeof(RNG_State), 1);
+    }
   }
 
   // calculate size of data written in Steps 1-2 above
@@ -212,6 +215,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
 
   // write cell-centered variables in parallel
   IOWrapperSizeT myoffset  = step1size + step2size + sizeof(IOWrapperSizeT) +
+                             sizeof(RNG_State) +
                              data_size*(pm->gidslist[global_variable::my_rank]);
 
   // write cell-centered variables, one MeshBlock at a time (but parallelized over all

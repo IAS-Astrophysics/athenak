@@ -21,6 +21,20 @@
 //! initialize; thereafter, do not alter idum between successive deviates in a sequence.
 //! RNMX should appriximate the largest floating-point value that is less than 1.
 
+#define NTAB 32
+
+typedef struct RNG_State {
+  int64_t idum;
+  int64_t idum2;
+  int64_t iy;
+  int64_t iv[NTAB];
+  // For Box-Mueller gaussian generation
+  int iset;
+  double gset;
+} RNG_State;
+
+double ran2st(RNG_State *state);
+
 #define IMR1 2147483563
 #define IMR2 2147483399
 #define AM (1.0/IMR1)
@@ -33,7 +47,6 @@
 #define IR2 3791
 #define NDIV (1+IMM1/NTAB)
 #define RNMX (1.0-DBL_EPSILON)
-#define NTAB 32
 
 KOKKOS_INLINE_FUNCTION
 static Real Ran2(int64_t *idum) {
@@ -77,7 +90,6 @@ static Real Ran2(int64_t *idum) {
     return temp;
 }
 
-#undef NTAB
 #undef IMR1
 #undef IMR2
 #undef AM
