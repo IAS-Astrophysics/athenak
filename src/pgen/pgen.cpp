@@ -21,6 +21,7 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "radiation/radiation.hpp"
+#include "srcterms/turb_driver.hpp"
 #include "pgen.hpp"
 
 //----------------------------------------------------------------------------------------

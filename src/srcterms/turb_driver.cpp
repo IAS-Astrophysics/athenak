@@ -144,7 +144,6 @@ TurbulenceDriver::~TurbulenceDriver() {
 //! \fn  noid Initialize
 //  \brief Function to initialize the driver
 
-
 void TurbulenceDriver::Initialize() {
   Mesh *pm = pmy_pack->pmesh;
   int nmb = pmy_pack->nmb_thispack;
@@ -187,7 +186,6 @@ void TurbulenceDriver::Initialize() {
   dkx = 2.0*M_PI/Lx;
   dky = 2.0*M_PI/Ly;
   dkz = 2.0*M_PI/Lz;
-
 
   int nmode = 0;
   int nkx, nky, nkz;
@@ -319,28 +317,6 @@ void TurbulenceDriver::IncludeAddForcingTask(TaskList &tl, TaskID start) {
 // \brief Initializes driving, and so is only executed once at start of calc.
 // Cannot be included in constructor since (it seems) Kokkos::par_for not allowed in cons.
 
-static double ran_gaussian_st (RNG_State *idum) {
-  static int iset = 0;
-  static double gset;
-  double fac, rsq, v1, v2;
-  if (idum->idum < 0) iset = 0;
-  if (iset == 0) {
-    do {
-      v1 = 2.0 * ran2st(idum) - 1.0;
-      v2 = 2.0 * ran2st(idum) - 1.0;
-      rsq = v1 * v1 + v2 * v2;
-    } while (rsq >=1.0 || rsq == 0.0);
-    fac = sqrt(-2.0*log(rsq)/rsq);
-    gset = v1 * fac;
-    iset = 1;
-    return v2*fac;
-  } else {
-    iset = 0;
-    return gset;
-  }
-}
-
-
 TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage) {
   Mesh *pm = pmy_pack->pmesh;
   auto &indcs = pmy_pack->pmesh->mb_indcs;
@@ -447,23 +423,23 @@ TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage) {
             if(nkz != 0) {
               ikz = 1.0/(dkz*((Real) nkz));
 
-              xccc_.h_view(nmode) = ran_gaussian_st(&(rstate));
-              xccs_.h_view(nmode) = ran_gaussian_st(&(rstate));
-              xcsc_.h_view(nmode) = (nky==0)           ? 0.0:ran_gaussian_st(&(rstate));
-              xcss_.h_view(nmode) = (nky==0)           ? 0.0:ran_gaussian_st(&(rstate));
-              xscc_.h_view(nmode) = (nkx==0)           ? 0.0:ran_gaussian_st(&(rstate));
-              xscs_.h_view(nmode) = (nkx==0)           ? 0.0:ran_gaussian_st(&(rstate));
-              xssc_.h_view(nmode) = (nkx==0 || nky==0) ? 0.0:ran_gaussian_st(&(rstate));
-              xsss_.h_view(nmode) = (nkx==0 || nky==0) ? 0.0:ran_gaussian_st(&(rstate));
+              xccc_.h_view(nmode) = RanGaussianSt(&(rstate));
+              xccs_.h_view(nmode) = RanGaussianSt(&(rstate));
+              xcsc_.h_view(nmode) = (nky==0)           ? 0.0:RanGaussianSt(&(rstate));
+              xcss_.h_view(nmode) = (nky==0)           ? 0.0:RanGaussianSt(&(rstate));
+              xscc_.h_view(nmode) = (nkx==0)           ? 0.0:RanGaussianSt(&(rstate));
+              xscs_.h_view(nmode) = (nkx==0)           ? 0.0:RanGaussianSt(&(rstate));
+              xssc_.h_view(nmode) = (nkx==0 || nky==0) ? 0.0:RanGaussianSt(&(rstate));
+              xsss_.h_view(nmode) = (nkx==0 || nky==0) ? 0.0:RanGaussianSt(&(rstate));
 
-              yccc_.h_view(nmode) = ran_gaussian_st(&(rstate));
-              yccs_.h_view(nmode) = ran_gaussian_st(&(rstate));
-              ycsc_.h_view(nmode) = (nky==0)           ? 0.0:ran_gaussian_st(&(rstate));
-              ycss_.h_view(nmode) = (nky==0)           ? 0.0:ran_gaussian_st(&(rstate));
-              yscc_.h_view(nmode) = (nkx==0)           ? 0.0:ran_gaussian_st(&(rstate));
-              yscs_.h_view(nmode) = (nkx==0)           ? 0.0:ran_gaussian_st(&(rstate));
-              yssc_.h_view(nmode) = (nkx==0 || nky==0) ? 0.0:ran_gaussian_st(&(rstate));
-              ysss_.h_view(nmode) = (nkx==0 || nky==0) ? 0.0:ran_gaussian_st(&(rstate));
+              yccc_.h_view(nmode) = RanGaussianSt(&(rstate));
+              yccs_.h_view(nmode) = RanGaussianSt(&(rstate));
+              ycsc_.h_view(nmode) = (nky==0)           ? 0.0:RanGaussianSt(&(rstate));
+              ycss_.h_view(nmode) = (nky==0)           ? 0.0:RanGaussianSt(&(rstate));
+              yscc_.h_view(nmode) = (nkx==0)           ? 0.0:RanGaussianSt(&(rstate));
+              yscs_.h_view(nmode) = (nkx==0)           ? 0.0:RanGaussianSt(&(rstate));
+              yssc_.h_view(nmode) = (nkx==0 || nky==0) ? 0.0:RanGaussianSt(&(rstate));
+              ysss_.h_view(nmode) = (nkx==0 || nky==0) ? 0.0:RanGaussianSt(&(rstate));
 
               // imcompressibility
               zccc_.h_view(nmode) =  ikz*( kx*xscs_.h_view(nmode)+ky*ycss_.h_view(nmode));
@@ -477,19 +453,19 @@ TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage) {
             } else if(nky != 0) { // kz == 0
               iky = 1.0/(dky*((Real) nky));
 
-              xccc_.h_view(nmode) = ran_gaussian_st(&(rstate));
-              xcsc_.h_view(nmode) = ran_gaussian_st(&(rstate));
-              xscc_.h_view(nmode) = (nkx==0) ? 0.0:ran_gaussian_st(&(rstate));
-              xssc_.h_view(nmode) = (nkx==0) ? 0.0:ran_gaussian_st(&(rstate));
+              xccc_.h_view(nmode) = RanGaussianSt(&(rstate));
+              xcsc_.h_view(nmode) = RanGaussianSt(&(rstate));
+              xscc_.h_view(nmode) = (nkx==0) ? 0.0:RanGaussianSt(&(rstate));
+              xssc_.h_view(nmode) = (nkx==0) ? 0.0:RanGaussianSt(&(rstate));
               xccs_.h_view(nmode) = 0.0;
               xscs_.h_view(nmode) = 0.0;
               xcss_.h_view(nmode) = 0.0;
               xsss_.h_view(nmode) = 0.0;
 
-              zccc_.h_view(nmode) = ran_gaussian_st(&(rstate));
-              zcsc_.h_view(nmode) = ran_gaussian_st(&(rstate));
-              zscc_.h_view(nmode) = (nkx==0) ? 0.0:ran_gaussian_st(&(rstate));
-              zssc_.h_view(nmode) = (nkx==0) ? 0.0:ran_gaussian_st(&(rstate));
+              zccc_.h_view(nmode) = RanGaussianSt(&(rstate));
+              zcsc_.h_view(nmode) = RanGaussianSt(&(rstate));
+              zscc_.h_view(nmode) = (nkx==0) ? 0.0:RanGaussianSt(&(rstate));
+              zssc_.h_view(nmode) = (nkx==0) ? 0.0:RanGaussianSt(&(rstate));
               zccs_.h_view(nmode) = 0.0;
               zcss_.h_view(nmode) = 0.0;
               zscs_.h_view(nmode) = 0.0;
@@ -505,8 +481,8 @@ TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage) {
               yscs_.h_view(nmode) = 0.0;
               ysss_.h_view(nmode) = 0.0;
             } else {// kz == ky == 0, kx != 0 by initial if statement
-              zccc_.h_view(nmode) = ran_gaussian_st(&(rstate));
-              zscc_.h_view(nmode) = ran_gaussian_st(&(rstate));
+              zccc_.h_view(nmode) = RanGaussianSt(&(rstate));
+              zscc_.h_view(nmode) = RanGaussianSt(&(rstate));
               zcsc_.h_view(nmode) = 0.0;
               zssc_.h_view(nmode) = 0.0;
               zccs_.h_view(nmode) = 0.0;
@@ -514,8 +490,8 @@ TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage) {
               zscs_.h_view(nmode) = 0.0;
               zsss_.h_view(nmode) = 0.0;
 
-              yccc_.h_view(nmode) = ran_gaussian_st(&(rstate));
-              yscc_.h_view(nmode) = ran_gaussian_st(&(rstate));
+              yccc_.h_view(nmode) = RanGaussianSt(&(rstate));
+              yscc_.h_view(nmode) = RanGaussianSt(&(rstate));
               ycsc_.h_view(nmode) = 0.0;
               yssc_.h_view(nmode) = 0.0;
               yccs_.h_view(nmode) = 0.0;
@@ -545,14 +521,14 @@ TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage) {
             if(nky != 0) {
               iky = 1.0/(dky*((Real) nky));
 
-              xccc_.h_view(nmode) = ran_gaussian_st(&(rstate));
-              xccs_.h_view(nmode) = ran_gaussian_st(&(rstate));
-              xcsc_.h_view(nmode) = ran_gaussian_st(&(rstate));
-              xcss_.h_view(nmode) = ran_gaussian_st(&(rstate));
-              xscc_.h_view(nmode) = (nkx==0)           ? 0.0:ran_gaussian_st(&(rstate));
-              xscs_.h_view(nmode) = (nkx==0)           ? 0.0:ran_gaussian_st(&(rstate));
-              xssc_.h_view(nmode) = (nkx==0)           ? 0.0:ran_gaussian_st(&(rstate));
-              xsss_.h_view(nmode) = (nkx==0)           ? 0.0:ran_gaussian_st(&(rstate));
+              xccc_.h_view(nmode) = RanGaussianSt(&(rstate));
+              xccs_.h_view(nmode) = RanGaussianSt(&(rstate));
+              xcsc_.h_view(nmode) = RanGaussianSt(&(rstate));
+              xcss_.h_view(nmode) = RanGaussianSt(&(rstate));
+              xscc_.h_view(nmode) = (nkx==0)           ? 0.0:RanGaussianSt(&(rstate));
+              xscs_.h_view(nmode) = (nkx==0)           ? 0.0:RanGaussianSt(&(rstate));
+              xssc_.h_view(nmode) = (nkx==0)           ? 0.0:RanGaussianSt(&(rstate));
+              xsss_.h_view(nmode) = (nkx==0)           ? 0.0:RanGaussianSt(&(rstate));
 
               // incompressibility
               yccc_.h_view(nmode) =  iky*(kx*xssc_.h_view(nmode));
@@ -573,8 +549,8 @@ TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage) {
               zssc_.h_view(nmode) = 0.0;
               zsss_.h_view(nmode) = 0.0;
             } else {// ky == 0
-              yccc_.h_view(nmode) = ran_gaussian_st(&(rstate));
-              yscc_.h_view(nmode) = ran_gaussian_st(&(rstate));
+              yccc_.h_view(nmode) = RanGaussianSt(&(rstate));
+              yscc_.h_view(nmode) = RanGaussianSt(&(rstate));
               ycsc_.h_view(nmode) = 0.0;
               yssc_.h_view(nmode) = 0.0;
               yccs_.h_view(nmode) = 0.0;
@@ -909,7 +885,6 @@ TaskStatus TurbulenceDriver::AddForcing(Driver *pdrive, int stage) {
       }
     }
   );
-
 
   const int nmkji = nmb*nx3*nx2*nx1;
   const int nkji = nx3*nx2*nx1;

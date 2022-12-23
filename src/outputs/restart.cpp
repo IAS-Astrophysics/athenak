@@ -24,6 +24,7 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "radiation/radiation.hpp"
+#include "srcterms/turb_driver.hpp"
 #include "outputs.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -111,7 +112,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   mhd::MHD* pmhd = pm->pmb_pack->pmhd;
   radiation::Radiation* prad = pm->pmb_pack->prad;
   TurbulenceDriver* pturb=pm->pmb_pack->pturb;
-  int nhydro=0, nmhd=0, nrad=0;
+  int nhydro=0, nmhd=0, nrad=0, nforce=3;
   if (phydro != nullptr) {
     nhydro = phydro->nhydro + phydro->nscalars;
   }
