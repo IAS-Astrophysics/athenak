@@ -449,7 +449,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
           exit(EXIT_FAILURE);
         }
         myoffset += mbcnt*sizeof(Real);
- 
+
       // some ranks are finished writing, so use non-collective write
       } else if (m < pm->nmb_thisrank) {
         // get ptr to MeshBlock data
