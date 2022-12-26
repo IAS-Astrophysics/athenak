@@ -113,10 +113,9 @@ def main(**kwargs):
             key, val = line.split('=', 1)
             input_data[section_name][key.strip()] = val.split('#', 1)[0].strip()
 
-        # Extract black hole metadata
+        # Extract black hole metadata (assuming bh_m = 1.0)
         if kwargs['horizon'] or kwargs['ergosphere']:
             try:
-                bh_m = float(input_data['coord']['m'])
                 bh_a = float(input_data['coord']['a'])
             except:  # noqa: E722
                 raise RuntimeError('Unable to find black hole mass and spin in '
@@ -278,7 +277,7 @@ def main(**kwargs):
 
     # Mask horizon
     if kwargs['horizon']:
-        r_hor = bh_m + (bh_m ** 2 - bh_a ** 2) ** 0.5
+        r_hor = 1.0 + (1.0 - bh_a ** 2) ** 0.5
         if kwargs['dimension'] in ('x', 'y') and \
            kwargs['location'] ** 2 < r_hor ** 2 + bh_a ** 2:
             full_width = 2.0 * (r_hor ** 2 + bh_a ** 2 - kwargs['location'] ** 2) ** 0.5
@@ -296,11 +295,11 @@ def main(**kwargs):
 
     # Mark ergosphere
     if kwargs['ergosphere']:
-        r_hor = bh_m + (bh_m ** 2 - bh_a ** 2) ** 0.5
+        r_hor = 1.0 + (1.0 - bh_a ** 2) ** 0.5
         if kwargs['dimension'] in ('x', 'y') and \
-           kwargs['location'] ** 2 < 4.0 * bh_m ** 2 + bh_a ** 2:
+           kwargs['location'] ** 2 < 4.0 + bh_a ** 2:
             xy = np.linspace(abs(kwargs['location']),
-                             (4.0 * bh_m ** 2 + bh_a ** 2) ** 0.5,
+                             (4.0 + bh_a ** 2) ** 0.5,
                              ergosphere_num_points)
             z = np.empty_like(xy)
             for ind, xy_val in enumerate(xy):
@@ -309,11 +308,11 @@ def main(**kwargs):
                     r2 = 0.5 * (rr2 - bh_a ** 2
                                 + ((rr2 - bh_a ** 2) ** 2
                                    + 4.0 * bh_a ** 2 * z_val ** 2) ** 0.5)
-                    return r2 ** 2 - 2.0 * bh_m * r2 ** 1.5 + bh_a ** 2 * z_val ** 2
+                    return r2 ** 2 - 2.0 * r2 ** 1.5 + bh_a ** 2 * z_val ** 2
                 if abs(xy_val) < (r_hor ** 2 + bh_a ** 2) ** 0.5:
-                    z[ind] = brentq(residual, 1.0, 2.0 * bh_m)
+                    z[ind] = brentq(residual, 1.0, 2.0)
                 else:
-                    z[ind] = brentq(residual, 0.0, 2.0 * bh_m)
+                    z[ind] = brentq(residual, 0.0, 2.0)
             xy_plot = np.sqrt(xy ** 2 - kwargs['location'] ** 2)
             xy_plot = np.concatenate((-xy_plot[::-1], xy_plot))
             xy_plot = np.concatenate((xy_plot, xy_plot[::-1]))
@@ -323,8 +322,8 @@ def main(**kwargs):
                      color=kwargs['ergosphere_color'])
         if kwargs['dimension'] == 'z' and abs(kwargs['location']) < r_hor:
             def residual(r):
-                return r ** 4 - 2.0 * bh_m * r ** 3 + bh_a ** 2 * kwargs['location'] ** 2
-            r_ergo = brentq(residual, r_hor, 2.0 * bh_m)
+                return r ** 4 - 2.0 * r ** 3 + bh_a ** 2 * kwargs['location'] ** 2
+            r_ergo = brentq(residual, r_hor, 2.0)
             radius = ((r_ergo ** 2 + bh_a ** 2)
                       * (1.0 - kwargs['location'] ** 2 / r_ergo ** 2)) ** 0.5
             ergosphere = patches.Circle((0.0, 0.0), radius=radius,
