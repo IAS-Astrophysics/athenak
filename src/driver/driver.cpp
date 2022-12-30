@@ -316,7 +316,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
     int ncells1 = indcs.nx1 + 2*(indcs.ng);
     int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
     int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
-    Kokkos::realloc(impl_src, nimp_stages, nmb, 6, ncells3, ncells2, ncells1);
+    Kokkos::realloc(impl_src, nimp_stages, nmb, 8, ncells3, ncells2, ncells1);
   }
 
   return;
