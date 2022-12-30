@@ -54,7 +54,11 @@ class IonNeutral {
   IonNeutral(MeshBlockPack *ppack, ParameterInput *pin);
   ~IonNeutral();
 
-  Real drag_coeff;       // ion-neutral coupling coefficient
+  // F = - gamma rho_i rho_n (u_i - u_n) + xi rho_n u_n - alpha rho_i^2 u_i
+  // G = xi rho_n - alpha rho_i^2
+  Real drag_coeff;       // ion-neutral coupling coefficient, gamma
+  Real ionization_coeff;         // ionization rate, xi
+  Real recombination_coeff;      // recombination rate, alpha
 
   // container to hold names of TaskIDs
   IonNeutralTaskIDs id;
