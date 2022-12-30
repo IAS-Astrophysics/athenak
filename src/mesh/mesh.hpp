@@ -154,6 +154,8 @@ class Mesh {
   MeshBlockPack* pmb_pack;                 // container for MeshBlocks on this rank
   std::unique_ptr<ProblemGenerator> pgen;  // class containing functions to set ICs
 
+  bool res_flag; // true if simulation is run from a restart file
+
   // functions
   void BuildTreeFromScratch(ParameterInput *pin);
   void BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile);
