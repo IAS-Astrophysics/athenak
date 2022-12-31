@@ -175,10 +175,17 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     GetPrimitivesAtPoint(tov_, r, rho, p, mass, alp);
     //printf("Primitives retrieved!\n");
 
+    // Auxiliary metric quantities
+    Real fmet = 0.0;
+    if (r > 0) {
+       // (g_rr - 1)/r^2
+       fmet = (1./(1. - 2*mass/r) - 1.)/(r*r);
+    }
+
     // FIXME: assumes ideal gas!
     // Set hydrodynamic quantities
-    w0_(m,IDN,k,j,i) = rho + tov_.dfloor;
-    w0_(m,IEN,k,j,i) = (p + tov_.pfloor)/(tov_.gamma - 1.0);
+    w0_(m,IDN,k,j,i) = fmax(rho, tov_.dfloor);
+    w0_(m,IEN,k,j,i) = fmax(p, tov_.pfloor)/(tov_.gamma - 1.0);
     w0_(m,IVX,k,j,i) = 0.0;
     w0_(m,IVY,k,j,i) = 0.0;
     w0_(m,IVZ,k,j,i) = 0.0;
@@ -186,9 +193,17 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     // Set ADM variables
     adm.alpha(m,k,j,i) = alp;
     adm.beta_u(m,0,k,j,i) = adm.beta_u(m,1,k,j,i) = adm.beta_u(m,2,k,j,i) = 0.0;
-    adm.psi4(m,k,j,i) = 1.0/sqrt(alp);
-    adm.g_dd(m,0,0,k,j,i) = adm.g_dd(m,1,1,k,j,i) = adm.g_dd(m,2,2,k,j,i) = 1.0/SQR(alp);
-    adm.g_dd(m,0,1,k,j,i) = adm.g_dd(m,0,2,k,j,i) = adm.g_dd(m,1,2,j,j,i) = 0.0;
+    adm.g_dd(m,0,0,k,j,i) = x1v*x1v*fmet + 1.0;
+    adm.g_dd(m,0,1,k,j,i) = x1v*x2v*fmet;
+    adm.g_dd(m,0,2,k,j,i) = x1v*x3v*fmet;
+    adm.g_dd(m,1,1,k,j,i) = x2v*x2v*fmet + 1.0;
+    adm.g_dd(m,1,2,k,j,i) = x2v*x3v*fmet;
+    adm.g_dd(m,2,2,k,j,i) = x3v*x3v*fmet + 1.0;
+    Real det = SpatialDet(
+            adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i),
+            adm.g_dd(m,0,2,k,j,i), adm.g_dd(m,1,1,k,j,i),
+            adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i));
+    adm.psi4(m,k,j,i) = pow(det, 1./3.);
     adm.K_dd(m,0,0,k,j,i) = adm.K_dd(m,0,1,k,j,i) = adm.K_dd(m,0,2,k,j,i) = 0.0;
     adm.K_dd(m,1,1,k,j,i) = adm.K_dd(m,1,2,k,j,i) = adm.K_dd(m,2,2,k,j,i) = 0.0;
   });
