@@ -9,19 +9,19 @@ basename  = LinWave    # problem ID: basename of output filenames
 
 <mesh>
 nghost    = 2          # Number of ghost cells
-nx1       = 64         # Number of zones in X1-direction
+nx1       = 128        # Number of zones in X1-direction
 x1min     = 0.0        # minimum value of X1
 x1max     = 3.0        # maximum value of X1
 ix1_bc    = periodic   # inner-X1 boundary flag
 ox1_bc    = periodic   # outer-X1 boundary flag
 
-nx2       = 32         # Number of zones in X2-direction
+nx2       = 64         # Number of zones in X2-direction
 x2min     = 0.0        # minimum value of X2
 x2max     = 1.5        # maximum value of X2
 ix2_bc    = periodic   # inner-X2 boundary flag
 ox2_bc    = periodic   # outer-X2 boundary flag
 
-nx3       = 32          # Number of zones in X3-direction
+nx3       = 1          # Number of zones in X3-direction
 x3min     = 0.0        # minimum value of X3
 x3max     = 1.5        # maximum value of X3
 ix3_bc    = periodic   # inner-X3 boundary flag
@@ -30,19 +30,13 @@ ox3_bc    = periodic   # outer-X3 boundary flag
 <meshblock>
 nx1       = 16         # Number of cells in each MeshBlock, X1-dir
 nx2       = 8          # Number of cells in each MeshBlock, X2-dir
-nx3       = 8          # Number of cells in each MeshBlock, X3-dir
+nx3       = 1          # Number of cells in each MeshBlock, X3-dir
 
 <mesh_refinement>
-refinement = static    # type of refinement
-
-<refinement1>
-level = 1
-x1min = 1.4
-x1max = 1.6
-x2min = 0.7
-x2max = 0.8
-x3min = 0.7
-x3max = 0.8
+refinement        = adaptive    # type of refinement
+max_nmb_perdevice = 256
+num_levels        = 2
+dens_max          = 1.0004
 
 <time>
 evolution  = dynamic   # dynamic/kinematic/static
@@ -86,20 +80,11 @@ slice_x3    = 1.0       # slice in x3
 ghost_zones = true      # switch to output ghost cells
 
 <output3>
-file_type   = vtk       # legacy VTK output
-variable    = mhd_w     # variables to be output
+file_type   = bin       # legacy VTK output
+variable    = mhd_w_bcc # variables to be output
 dt          = 0.05      # time increment between outputs
-ghost_zones = true      # switch to output ghost cells
-gid         = 4
 
 <output4>
-file_type   = vtk       # legacy VTK output
-variable    = mhd_bcc   # variables to be output
-dt          = 0.05      # time increment between outputs
-ghost_zones = true      # switch to output ghost cells
-gid         = 4
-
-<output5>
 file_type   = hst       # history data dump
 data_format = %12.5e    # Optional data format string
 dt          = 0.1       # time increment between outputs

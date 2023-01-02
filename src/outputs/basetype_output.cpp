@@ -564,25 +564,27 @@ void BaseTypeOutput::LoadOutputData(Mesh *pm) {
   // Now copy data to host (outarray) over all variables and MeshBlocks
   for (int n=0; n<nout_vars; ++n) {
     for (int m=0; m<nout_mbs; ++m) {
-      int &ois = outmbs[m].ois;
-      int &oie = outmbs[m].oie;
-      int &ojs = outmbs[m].ojs;
-      int &oje = outmbs[m].oje;
-      int &oks = outmbs[m].oks;
-      int &oke = outmbs[m].oke;
       int mbi = pm->FindMeshBlockIndex(outmbs[m].mb_gid);
+      std::pair<int,int> irange = std::make_pair(outmbs[m].ois, outmbs[m].oie+1);
+      std::pair<int,int> jrange = std::make_pair(outmbs[m].ojs, outmbs[m].oje+1);
+      std::pair<int,int> krange = std::make_pair(outmbs[m].oks, outmbs[m].oke+1);
+      int nout1 = (outmbs[0].oie - outmbs[0].ois + 1);
+      int nout2 = (outmbs[0].oje - outmbs[0].ojs + 1);
+      int nout3 = (outmbs[0].oke - outmbs[0].oks + 1);
 
-      // load an output variable on this output MeshBlock
-      DvceArray3D<Real> dev_buff("dev_buff",(oke-oks+1),(oje-ojs+1),(oie-ois+1));
-      auto dev_slice = Kokkos::subview(*(outvars[n].data_ptr), mbi, outvars[n].data_index,
-        std::make_pair(oks,oke+1),std::make_pair(ojs,oje+1),std::make_pair(ois,oie+1));
-      Kokkos::deep_copy(dev_buff,dev_slice);
+      // copy output variable to new device View
+      DvceArray3D<Real> d_output_var("d_out_var",nout3,nout2,nout1);
+      auto d_slice = Kokkos::subview(*(outvars[n].data_ptr), mbi, outvars[n].data_index,
+                                     krange,jrange,irange);
+      Kokkos::deep_copy(d_output_var,d_slice);
 
-      // copy to host mirror array, and then to 5D host View containing all variables
-      DvceArray3D<Real>::HostMirror hst_buff = Kokkos::create_mirror(dev_buff);
-      Kokkos::deep_copy(hst_buff,dev_buff);
-      auto hst_slice = Kokkos::subview(outarray,n,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
-      Kokkos::deep_copy(hst_slice,hst_buff);
+      // copy new device View to host mirror View
+      DvceArray3D<Real>::HostMirror h_output_var = Kokkos::create_mirror(d_output_var);
+      Kokkos::deep_copy(h_output_var,d_output_var);
+
+      // copy host mirror to 5D host View containing all output variables
+      auto h_slice = Kokkos::subview(outarray,n,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+      Kokkos::deep_copy(h_slice,h_output_var);
     }
   }
 }

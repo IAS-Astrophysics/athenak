@@ -197,7 +197,7 @@ TaskStatus Hydro::RecvFlux(Driver *pdrive, int stage) {
 TaskStatus Hydro::RestrictU(Driver *pdrive, int stage) {
   // Only execute Mesh function with SMR/SMR
   if (pmy_pack->pmesh->multilevel) {
-    pmy_pack->pmesh->RestrictCC(u0, coarse_u0);
+    pmy_pack->pmesh->pmr->RestrictCC(u0, coarse_u0);
   }
   return TaskStatus::complete;
 }

@@ -215,7 +215,7 @@ TaskStatus Radiation::RecvFlux(Driver *pdrive, int stage) {
 TaskStatus Radiation::RestrictI(Driver *pdrive, int stage) {
   // Only execute Mesh function with SMR/AMR
   if (pmy_pack->pmesh->multilevel) {
-    pmy_pack->pmesh->RestrictCC(i0, coarse_i0);
+    pmy_pack->pmesh->pmr->RestrictCC(i0, coarse_i0);
   }
   return TaskStatus::complete;
 }

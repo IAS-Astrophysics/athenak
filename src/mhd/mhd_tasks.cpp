@@ -194,7 +194,7 @@ TaskStatus MHD::RecvFlux(Driver *pdrive, int stage) {
 TaskStatus MHD::RestrictU(Driver *pdrive, int stage) {
   // Only execute Mesh function with SMR/AMR
   if (pmy_pack->pmesh->multilevel) {
-    pmy_pack->pmesh->RestrictCC(u0, coarse_u0);
+    pmy_pack->pmesh->pmr->RestrictCC(u0, coarse_u0);
   }
   return TaskStatus::complete;
 }
@@ -360,7 +360,7 @@ TaskStatus MHD::ClearRecv(Driver *pdrive, int stage) {
 TaskStatus MHD::RestrictB(Driver *pdrive, int stage) {
   // Only execute Mesh function with SMR/AMR
   if (pmy_pack->pmesh->multilevel) {
-    pmy_pack->pmesh->RestrictFC(b0, coarse_b0);
+    pmy_pack->pmesh->pmr->RestrictFC(b0, coarse_b0);
   }
   return TaskStatus::complete;
 }
