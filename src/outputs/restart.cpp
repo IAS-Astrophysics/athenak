@@ -24,6 +24,7 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "radiation/radiation.hpp"
+#include "srcterms/turb_driver.hpp"
 #include "outputs.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -52,7 +53,8 @@ void RestartOutput::LoadOutputData(Mesh *pm) {
   hydro::Hydro* phydro = pm->pmb_pack->phydro;
   mhd::MHD* pmhd = pm->pmb_pack->pmhd;
   radiation::Radiation* prad = pm->pmb_pack->prad;
-  int nhydro=0, nmhd=0, nrad=0;
+  TurbulenceDriver* pturb=pm->pmb_pack->pturb;
+  int nhydro=0, nmhd=0, nrad=0, nforce=3;
   if (phydro != nullptr) {
     nhydro = phydro->nhydro + phydro->nscalars;
   }
@@ -82,6 +84,10 @@ void RestartOutput::LoadOutputData(Mesh *pm) {
     Kokkos::realloc(outarray_rad, nmb, nrad, nout3, nout2, nout1);
     Kokkos::deep_copy(outarray_rad, prad->i0);
   }
+  if (pturb != nullptr) {
+    Kokkos::realloc(outarray_force, nmb, nforce, nout3, nout2, nout1);
+    Kokkos::deep_copy(outarray_force,pturb->force);
+  }
 
   // calculate max/min number of MeshBlocks across all ranks
   noutmbs_max = pm->nmblist[0];
@@ -105,7 +111,8 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   hydro::Hydro* phydro = pm->pmb_pack->phydro;
   mhd::MHD* pmhd = pm->pmb_pack->pmhd;
   radiation::Radiation* prad = pm->pmb_pack->prad;
-  int nhydro=0, nmhd=0, nrad=0;
+  TurbulenceDriver* pturb=pm->pmb_pack->pturb;
+  int nhydro=0, nmhd=0, nrad=0, nforce=3;
   if (phydro != nullptr) {
     nhydro = phydro->nhydro + phydro->nscalars;
   }
@@ -191,9 +198,15 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   if (prad != nullptr) {
     data_size += nout1*nout2*nout3*nrad*sizeof(Real);   // radiation i0
   }
+  if (pturb != nullptr) {
+    data_size += nout1*nout2*nout3*nforce*sizeof(Real); // forcing
+  }
 
   if (global_variable::my_rank == 0) {
     resfile.Write_bytes(&(data_size), sizeof(IOWrapperSizeT), 1);
+    if (pturb != nullptr) {
+      resfile.Write_bytes(&(pturb->rstate), sizeof(RNG_State), 1);
+    }
   }
 
   // calculate size of data written in Steps 1-2 above
@@ -203,6 +216,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
 
   // write cell-centered variables in parallel
   IOWrapperSizeT myoffset  = step1size + step2size + sizeof(IOWrapperSizeT) +
+                             sizeof(RNG_State) +
                              data_size*(pm->gidslist[global_variable::my_rank]);
 
   // write cell-centered variables, one MeshBlock at a time (but parallelized over all
@@ -366,6 +380,39 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
       } else if (m < pm->nmb_thisrank) {
         // get ptr to MeshBlock data
         auto mbptr = Kokkos::subview(outarray_rad, m, Kokkos::ALL, Kokkos::ALL,
+                                     Kokkos::ALL, Kokkos::ALL);
+        int mbcnt = mbptr.size();
+        if (resfile.Write_Reals_at(mbptr.data(), mbcnt, myoffset) != mbcnt) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+          << std::endl << "cell-centered data not written correctly to restart file, "
+          << "restart file is broken." << std::endl;
+          exit(EXIT_FAILURE);
+        }
+        myoffset += mbcnt*sizeof(Real);
+      }
+    }
+  }
+
+  if (pturb != nullptr) {
+    for (int m=0;  m<noutmbs_max; ++m) {
+      // every rank has a MB to write, so write collectively
+      if (m < noutmbs_min) {
+        // get ptr to cell-centered MeshBlock data
+        auto mbptr = Kokkos::subview(outarray_force, m, Kokkos::ALL, Kokkos::ALL,
+                                     Kokkos::ALL, Kokkos::ALL);
+        int mbcnt = mbptr.size();
+        if (resfile.Write_Reals_at_all(mbptr.data(), mbcnt, myoffset) != mbcnt) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+          << std::endl << "cell-centered data not written correctly to restart file, "
+          << "restart file is broken." << std::endl;
+          exit(EXIT_FAILURE);
+        }
+        myoffset += mbcnt*sizeof(Real);
+
+      // some ranks are finished writing, so use non-collective write
+      } else if (m < pm->nmb_thisrank) {
+        // get ptr to MeshBlock data
+        auto mbptr = Kokkos::subview(outarray_force, m, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
         int mbcnt = mbptr.size();
         if (resfile.Write_Reals_at(mbptr.data(), mbcnt, myoffset) != mbcnt) {

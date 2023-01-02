@@ -12,6 +12,7 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
+#include "utils/random.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \class TurbulenceDriver
@@ -21,31 +22,28 @@ class TurbulenceDriver {
   TurbulenceDriver(MeshBlockPack *pp, ParameterInput *pin);
   ~TurbulenceDriver();
 
-  // data
-  DvceArray5D<Real> force;      // force for driving hydro/mhd variables
-  DvceArray5D<Real> force_new;  // second force register for OU evolution
+  DvceArray5D<Real> force, force_tmp; // arrays used for turb forcing
+  RNG_State rstate; // random state
 
-  DvceArray3D<Real> x1sin;   // array for pre-computed sin(k x)
-  DvceArray3D<Real> x1cos;   // array for pre-computed cos(k x)
-  DvceArray3D<Real> x2sin;   // array for pre-computed sin(k y)
-  DvceArray3D<Real> x2cos;   // array for pre-computed cos(k y)
-  DvceArray3D<Real> x3sin;   // array for pre-computed sin(k z)
-  DvceArray3D<Real> x3cos;   // array for pre-computed cos(k z)
-
-  DualArray2D<Real> amp1, amp2, amp3;
+  DualArray1D<Real> xccc,xccs,xcsc,xcss,xscc,xscs,xssc,xsss;
+  DualArray1D<Real> yccc,yccs,ycsc,ycss,yscc,yscs,yssc,ysss;
+  DualArray1D<Real> zccc,zccs,zcsc,zcss,zscc,zscs,zssc,zsss;
+  DualArray1D<Real> kx_mode, ky_mode, kz_mode;
+  DvceArray3D<Real> Xcos,Xsin,Ycos,Ysin,Zcos,Zsin;
 
   // parameters of driving
-  int nlow,nhigh,ntot,nwave;
+  int nlow,nhigh;
+  int mode_count;
   Real tcorr,dedt;
-  Real expo;
-  Real last_dt;
-  int64_t seed; // for generating amp1,amp2,amp3 arrays
+  Real expo,exp_prl,exp_prp;
+  int driving_type;
 
   // functions
   void IncludeInitializeModesTask(TaskList &tl, TaskID start);
   void IncludeAddForcingTask(TaskList &tl, TaskID start);
   TaskStatus InitializeModes(Driver *pdrive, int stage);
   TaskStatus AddForcing(Driver *pdrive, int stage);
+  void Initialize();
 
  private:
   bool first_time=true;     // flag to enable initialization on first call

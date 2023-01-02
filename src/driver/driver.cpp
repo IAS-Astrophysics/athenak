@@ -249,9 +249,11 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
   }
 
   //---- Step 3.  Cycle through output Types and load data / write files.
-  for (auto &out : pout->pout_list) {
-    out->LoadOutputData(pmesh);
-    out->WriteOutputFile(pmesh, pin);
+  if (!pmesh->res_flag) { // only write outputs at the beginning of the run
+    for (auto &out : pout->pout_list) {
+      out->LoadOutputData(pmesh);
+      out->WriteOutputFile(pmesh, pin);
+    }
   }
 
   //---- Step 4.  Initialize various counters, timers, etc.
