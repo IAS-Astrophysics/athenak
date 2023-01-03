@@ -47,10 +47,21 @@ MeshBlockPack::~MeshBlockPack() {
 }
 
 //----------------------------------------------------------------------------------------
-// \fn MeshBlockPack::AddMeshBlocksAndCoordinates()
+//! \fn MeshBlockPack::AddMeshBlocks(ParameterInput *pin)
+//! \brief Wrapper function for calling MeshBlock constructor inside MeshBlockPack.
+//! Allows for passing of pointer to 'this' pack.
 
-void MeshBlockPack::AddMeshBlocksAndCoordinates(ParameterInput *pin, RegionIndcs indcs) {
+void MeshBlockPack::AddMeshBlocks(ParameterInput *pin) {
   pmb = new MeshBlock(this, gids, nmb_thispack);
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn MeshBlockPack::AddCoordinates(ParameterInput *pin)
+//! \brief Wrapper function for calling Coordinates constructor inside MeshBlockPack.
+//! Allows for passing of pointer to 'this' pack. Must be called BEFORE AddPhysics()
+//! function, since latter uses data inside Coordinates class.
+
+void MeshBlockPack::AddCoordinates(ParameterInput *pin) {
   pcoord = new Coordinates(pin, this);
 }
 

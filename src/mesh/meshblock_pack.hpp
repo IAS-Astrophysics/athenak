@@ -63,7 +63,8 @@ class MeshBlockPack {
 
   // functions
   void AddPhysics(ParameterInput *pin);
-  void AddMeshBlocksAndCoordinates(ParameterInput *pin, RegionIndcs indcs);
+  void AddMeshBlocks(ParameterInput *pin);
+  void AddCoordinates(ParameterInput *pin);
 
  private:
   // data

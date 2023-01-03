@@ -29,7 +29,7 @@ class TurbulenceDriver {
   DualArray1D<Real> yccc,yccs,ycsc,ycss,yscc,yscs,yssc,ysss;
   DualArray1D<Real> zccc,zccs,zcsc,zcss,zscc,zscs,zssc,zsss;
   DualArray1D<Real> kx_mode, ky_mode, kz_mode;
-  DvceArray3D<Real> Xcos,Xsin,Ycos,Ysin,Zcos,Zsin;
+  DvceArray3D<Real> xcos,xsin,ycos,ysin,zcos,zsin;
 
   // parameters of driving
   int nlow,nhigh;

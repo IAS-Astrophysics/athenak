@@ -227,7 +227,7 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh) :
 // Tasks to be performed before execution of Driver, such as setting ghost zones (BCs),
 //  outputting ICs, and computing initial time step
 
-void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
+void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool res_flag) {
   //---- Step 1.  Set conserved variables in ghost zones for all physics
   InitBoundaryValuesAndPrimitives(pmesh);
 
@@ -249,7 +249,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
   }
 
   //---- Step 3.  Cycle through output Types and load data / write files.
-  if (!pmesh->res_flag) { // only write outputs at the beginning of the run
+  if (!res_flag) { // only write outputs at the beginning of the run
     for (auto &out : pout->pout_list) {
       out->LoadOutputData(pmesh);
       out->WriteOutputFile(pmesh, pin);

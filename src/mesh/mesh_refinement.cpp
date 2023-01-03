@@ -575,7 +575,8 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
 
   delete (pm->pmb_pack->pmb);
   delete (pm->pmb_pack->pcoord);
-  pm->pmb_pack->AddMeshBlocksAndCoordinates(pin, pm->mb_indcs);
+  pm->pmb_pack->AddMeshBlocks(pin);
+  pm->pmb_pack->AddCoordinates(pin);
   pm->pmb_pack->pmb->SetNeighbors(pm->ptree, pm->ranklist);
 
   // Update new number of cycles since refinement

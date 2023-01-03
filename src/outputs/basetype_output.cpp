@@ -171,7 +171,9 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
       out_params.variable.compare("hydro_u") == 0 ||
       out_params.variable.compare("rad_hydro_u_e") == 0 ||
       out_params.variable.compare("rad_hydro_u") == 0) {
-    outvars.emplace_back("ener",4,&(pm->pmb_pack->phydro->u0));
+    if (pm->pmb_pack->phydro->peos->eos_data.is_ideal) {
+      outvars.emplace_back("ener",4,&(pm->pmb_pack->phydro->u0));
+    }
   }
 
   // hydro internal energy or temperature
@@ -179,7 +181,9 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
       out_params.variable.compare("hydro_w") == 0 ||
       out_params.variable.compare("rad_hydro_w_e") == 0 ||
       out_params.variable.compare("rad_hydro_w") == 0) {
-    outvars.emplace_back("eint",4,&(pm->pmb_pack->phydro->w0));
+    if (pm->pmb_pack->phydro->peos->eos_data.is_ideal) {
+      outvars.emplace_back("eint",4,&(pm->pmb_pack->phydro->w0));
+    }
   }
 
   // hydro passive scalars mass densities (s*d)
@@ -295,7 +299,9 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
       out_params.variable.compare("rad_mhd_u_e") == 0 ||
       out_params.variable.compare("rad_mhd_u") == 0 ||
       out_params.variable.compare("rad_mhd_u_bcc") == 0) {
-    outvars.emplace_back("ener",4,&(pm->pmb_pack->pmhd->u0));
+    if (pm->pmb_pack->pmhd->peos->eos_data.is_ideal) {
+      outvars.emplace_back("ener",4,&(pm->pmb_pack->pmhd->u0));
+    }
   }
 
   // mhd internal energy or temperature
@@ -305,7 +311,9 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
       out_params.variable.compare("rad_mhd_w_e") == 0 ||
       out_params.variable.compare("rad_mhd_w") == 0 ||
       out_params.variable.compare("rad_mhd_w_bcc") == 0) {
-    outvars.emplace_back("eint",4,&(pm->pmb_pack->pmhd->w0));
+    if (pm->pmb_pack->pmhd->peos->eos_data.is_ideal) {
+      outvars.emplace_back("eint",4,&(pm->pmb_pack->pmhd->w0));
+    }
   }
 
   // mhd passive scalars mass densities (s*d)

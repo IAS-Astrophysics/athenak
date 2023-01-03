@@ -46,7 +46,7 @@ class Driver {
   Real cfl_limit;                  // maximum CFL number for integrator
 
   // functions
-  void Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout);
+  void Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool rflag);
   void Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout);
   void Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout);
   void InitBoundaryValuesAndPrimitives(Mesh *pm);

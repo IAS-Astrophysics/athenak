@@ -38,7 +38,6 @@ max_nmb_perdevice = 256
 num_levels        = 2
 dens_max          = 1.0008
 
-
 <time>
 evolution  = dynamic   # dynamic/kinematic/static
 integrator = rk2       # time integration algorithm

@@ -27,7 +27,6 @@
 //! read from input file.  Also does initial load balance based on simple cost estimate.
 
 void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
-  res_flag = false;
   // calculate the number of MeshBlocks at root level in each dir
   nmb_rootx1 = mesh_indcs.nx1/mb_indcs.nx1;
   nmb_rootx2 = mesh_indcs.nx2/mb_indcs.nx2;
@@ -279,7 +278,7 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
   nmb_thisrank = nmblist[global_variable::my_rank];
 
   pmb_pack = new MeshBlockPack(this, mbp_gids, mbp_gide);
-  pmb_pack->AddMeshBlocksAndCoordinates(pin, mb_indcs);
+  pmb_pack->AddMeshBlocks(pin);
   pmb_pack->pmb->SetNeighbors(ptree, ranklist);
   if (multilevel) {
     pmr = new MeshRefinement(this, pin);
@@ -303,7 +302,6 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
 //! restart file.
 
 void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile) {
-  res_flag = true;
   // At this point, the restartfile is already open and the ParameterInput (input file)
   // data has already been read in main(). Thus the file pointer is set to after <par_end>
   IOWrapperSizeT headeroffset = resfile.GetPosition();
@@ -462,7 +460,7 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile) {
   nmb_thisrank = nmblist[global_variable::my_rank];
 
   pmb_pack = new MeshBlockPack(this, mbp_gids, mbp_gide);
-  pmb_pack->AddMeshBlocksAndCoordinates(pin, mb_indcs);
+  pmb_pack->AddMeshBlocks(pin);
   pmb_pack->pmb->SetNeighbors(ptree, ranklist);
   if (multilevel) {
     pmr = new MeshRefinement(this, pin);

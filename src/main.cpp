@@ -260,10 +260,11 @@ int main(int argc, char *argv[]) {
   }
 
   //--- Step 5. --------------------------------------------------------------------------
-  // Add physics modules to MeshBlockPack, and set initial conditions either by calling
-  // problem generator or by reading restart file. Note these steps must occur after Mesh
-  // (including MeshBlocks and MeshBlockPack) is fully constructed.
+  // Add coordinates and physics modules to MeshBlockPack, and set initial conditions.
+  // Note these steps must occur after Mesh (including MeshBlocks and MeshBlockPack)
+  // is fully constructed.
 
+  pmesh->pmb_pack->AddCoordinates(pinput);
   pmesh->pmb_pack->AddPhysics(pinput);
   if (!res_flag) {
     // set ICs using ProblemGenerator constructor for new runs
@@ -288,7 +289,7 @@ int main(int argc, char *argv[]) {
   //    2. TaskList(s) executed in Driver::Execute()
   //    3. Any final analysis or diagnostics run in Driver::Finalize()
 
-  pdriver->Initialize(pmesh, pinput, pout);
+  pdriver->Initialize(pmesh, pinput, pout, res_flag);
   pdriver->Execute(pmesh, pinput, pout);
   pdriver->Finalize(pmesh, pinput, pout);
 

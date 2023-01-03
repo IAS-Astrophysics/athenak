@@ -35,8 +35,8 @@ TurbulenceDriver::TurbulenceDriver(MeshBlockPack *pp, ParameterInput *pin) :
   zccc("zccc",1),zccs("zccs",1),zcsc("zcsc",1),zcss("zcss",1),
   zscc("zscc",1),zscs("zscs",1),zssc("zssc",1),zsss("zsss",1),
   kx_mode("kx_mode",1),ky_mode("ky_mode",1),kz_mode("kz_mode",1),
-  Xcos("Xcos",1,1,1),Xsin("Xsin",1,1,1),Ycos("Ycos",1,1,1),
-  Ysin("Ysin",1,1,1),Zcos("Zcos",1,1,1),Zsin("Zsin",1,1,1) {
+  xcos("xcos",1,1,1),xsin("xsin",1,1,1),ycos("ycos",1,1,1),
+  ysin("ysin",1,1,1),zcos("zcos",1,1,1),zsin("zsin",1,1,1) {
   // allocate memory for force registers
   int nmb = pmy_pack->nmb_thispack;
   auto &indcs = pmy_pack->pmesh->mb_indcs;
@@ -124,12 +124,12 @@ TurbulenceDriver::TurbulenceDriver(MeshBlockPack *pp, ParameterInput *pin) :
   Kokkos::realloc(ky_mode,mode_count);
   Kokkos::realloc(kz_mode,mode_count);
 
-  Kokkos::realloc(Xcos,nmb,mode_count,ncells1);
-  Kokkos::realloc(Xsin,nmb,mode_count,ncells1);
-  Kokkos::realloc(Ycos,nmb,mode_count,ncells2);
-  Kokkos::realloc(Ysin,nmb,mode_count,ncells2);
-  Kokkos::realloc(Zcos,nmb,mode_count,ncells3);
-  Kokkos::realloc(Zsin,nmb,mode_count,ncells3);
+  Kokkos::realloc(xcos,nmb,mode_count,ncells1);
+  Kokkos::realloc(xsin,nmb,mode_count,ncells1);
+  Kokkos::realloc(ycos,nmb,mode_count,ncells2);
+  Kokkos::realloc(ysin,nmb,mode_count,ncells2);
+  Kokkos::realloc(zcos,nmb,mode_count,ncells3);
+  Kokkos::realloc(zsin,nmb,mode_count,ncells3);
 
   Initialize();
 }
@@ -172,20 +172,20 @@ void TurbulenceDriver::Initialize() {
   auto ky_mode_ = ky_mode;
   auto kz_mode_ = kz_mode;
 
-  auto Xcos_ = Xcos;
-  auto Xsin_ = Xsin;
-  auto Ycos_ = Ycos;
-  auto Ysin_ = Ysin;
-  auto Zcos_ = Zcos;
-  auto Zsin_ = Zsin;
+  auto xcos_ = xcos;
+  auto xsin_ = xsin;
+  auto ycos_ = ycos;
+  auto ysin_ = ysin;
+  auto zcos_ = zcos;
+  auto zsin_ = zsin;
 
   Real dkx, dky, dkz, kx, ky, kz;
-  Real Lx = pm->mesh_size.x1max - pm->mesh_size.x1min;
-  Real Ly = pm->mesh_size.x2max - pm->mesh_size.x2min;
-  Real Lz = pm->mesh_size.x3max - pm->mesh_size.x3min;
-  dkx = 2.0*M_PI/Lx;
-  dky = 2.0*M_PI/Ly;
-  dkz = 2.0*M_PI/Lz;
+  Real lx = pm->mesh_size.x1max - pm->mesh_size.x1min;
+  Real ly = pm->mesh_size.x2max - pm->mesh_size.x2min;
+  Real lz = pm->mesh_size.x3max - pm->mesh_size.x3min;
+  dkx = 2.0*M_PI/lx;
+  dky = 2.0*M_PI/ly;
+  dkz = 2.0*M_PI/lz;
 
   int nmode = 0;
   int nkx, nky, nkz;
@@ -231,43 +231,43 @@ void TurbulenceDriver::Initialize() {
 
   auto &size = pmy_pack->pmb->mb_size;
 
-  par_for("Xsin/Xcos", DevExeSpace(),0,nmb-1,0,mode_count-1,is,ie,
+  par_for("xsin/xcos", DevExeSpace(),0,nmb-1,0,mode_count-1,is,ie,
     KOKKOS_LAMBDA(int m, int n, int i) {
       Real &x1min = size.d_view(m).x1min;
       Real &x1max = size.d_view(m).x1max;
       Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
       Real k1v = kx_mode_.d_view(n);
-      Xsin_(m,n,i) = sin(k1v*x1v);
-      Xcos_(m,n,i) = cos(k1v*x1v);
+      xsin_(m,n,i) = sin(k1v*x1v);
+      xcos_(m,n,i) = cos(k1v*x1v);
     }
   );
 
-  par_for("Ysin/Ycos", DevExeSpace(),0,nmb-1,0,mode_count-1,js,je,
+  par_for("ysin/ycos", DevExeSpace(),0,nmb-1,0,mode_count-1,js,je,
     KOKKOS_LAMBDA(int m, int n, int j) {
       Real &x2min = size.d_view(m).x2min;
       Real &x2max = size.d_view(m).x2max;
       Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
       Real k2v = ky_mode_.d_view(n);
-      Ysin_(m,n,j) = sin(k2v*x2v);
-      Ycos_(m,n,j) = cos(k2v*x2v);
+      ysin_(m,n,j) = sin(k2v*x2v);
+      ycos_(m,n,j) = cos(k2v*x2v);
       if (ncells2-1 == 0) {
-        Ysin_(m,n,j) = 0.0;
-        Ycos_(m,n,j) = 1.0;
+        ysin_(m,n,j) = 0.0;
+        ycos_(m,n,j) = 1.0;
       }
     }
   );
 
-  par_for("Zsin/Zcos", DevExeSpace(),0,nmb-1,0,mode_count-1,ks,ke,
+  par_for("zsin/zcos", DevExeSpace(),0,nmb-1,0,mode_count-1,ks,ke,
     KOKKOS_LAMBDA(int m, int n, int k) {
       Real &x3min = size.d_view(m).x3min;
       Real &x3max = size.d_view(m).x3max;
       Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
       Real k3v = kz_mode_.d_view(n);
-      Zsin_(m,n,k) = sin(k3v*x3v);
-      Zcos_(m,n,k) = cos(k3v*x3v);
+      zsin_(m,n,k) = sin(k3v*x3v);
+      zcos_(m,n,k) = cos(k3v*x3v);
       if (ncells3-1 == 0) {
-        Zsin_(m,n,k) = 0.0;
-        Zcos_(m,n,k) = 1.0;
+        zsin_(m,n,k) = 0.0;
+        zcos_(m,n,k) = 1.0;
       }
     }
   );
@@ -375,12 +375,12 @@ TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage) {
 
   Real dkx, dky, dkz, kx, ky, kz;
   Real iky, ikz;
-  Real Lx = pm->mesh_size.x1max - pm->mesh_size.x1min;
-  Real Ly = pm->mesh_size.x2max - pm->mesh_size.x2min;
-  Real Lz = pm->mesh_size.x3max - pm->mesh_size.x3min;
-  dkx = 2.0*M_PI/Lx;
-  dky = 2.0*M_PI/Ly;
-  dkz = 2.0*M_PI/Lz;
+  Real lx = pm->mesh_size.x1max - pm->mesh_size.x1min;
+  Real ly = pm->mesh_size.x2max - pm->mesh_size.x2min;
+  Real lz = pm->mesh_size.x3max - pm->mesh_size.x3min;
+  dkx = 2.0*M_PI/lx;
+  dky = 2.0*M_PI/ly;
+  dkz = 2.0*M_PI/lz;
 
   Real &ex = expo;
   Real &ex_prp = exp_prp;
@@ -662,42 +662,42 @@ TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage) {
   zsss_.template modify<HostMemSpace>();
   zsss_.template sync<DevExeSpace>();
 
-  auto Xcos_ = Xcos;
-  auto Xsin_ = Xsin;
-  auto Ycos_ = Ycos;
-  auto Ysin_ = Ysin;
-  auto Zcos_ = Zcos;
-  auto Zsin_ = Zsin;
+  auto xcos_ = xcos;
+  auto xsin_ = xsin;
+  auto ycos_ = ycos;
+  auto ysin_ = ysin;
+  auto zcos_ = zcos;
+  auto zsin_ = zsin;
 
   for (int n=0; n<mode_count_; n++) {
     par_for("force_compute", DevExeSpace(),0,nmb-1,ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i) {
-        force_tmp_(m,0,k,j,i) += xccc_.d_view(n)*Xcos_(m,n,i)*Ycos_(m,n,j)*Zcos_(m,n,k);
-        force_tmp_(m,0,k,j,i) += xccs_.d_view(n)*Xcos_(m,n,i)*Ycos_(m,n,j)*Zsin_(m,n,k);
-        force_tmp_(m,0,k,j,i) += xcsc_.d_view(n)*Xcos_(m,n,i)*Ysin_(m,n,j)*Zcos_(m,n,k);
-        force_tmp_(m,0,k,j,i) += xcss_.d_view(n)*Xcos_(m,n,i)*Ysin_(m,n,j)*Zsin_(m,n,k);
-        force_tmp_(m,0,k,j,i) += xscc_.d_view(n)*Xsin_(m,n,i)*Ycos_(m,n,j)*Zcos_(m,n,k);
-        force_tmp_(m,0,k,j,i) += xscs_.d_view(n)*Xsin_(m,n,i)*Ycos_(m,n,j)*Zsin_(m,n,k);
-        force_tmp_(m,0,k,j,i) += xssc_.d_view(n)*Xsin_(m,n,i)*Ysin_(m,n,j)*Zcos_(m,n,k);
-        force_tmp_(m,0,k,j,i) += xsss_.d_view(n)*Xsin_(m,n,i)*Ysin_(m,n,j)*Zsin_(m,n,k);
+        force_tmp_(m,0,k,j,i) += xccc_.d_view(n)*xcos_(m,n,i)*ycos_(m,n,j)*zcos_(m,n,k);
+        force_tmp_(m,0,k,j,i) += xccs_.d_view(n)*xcos_(m,n,i)*ycos_(m,n,j)*zsin_(m,n,k);
+        force_tmp_(m,0,k,j,i) += xcsc_.d_view(n)*xcos_(m,n,i)*ysin_(m,n,j)*zcos_(m,n,k);
+        force_tmp_(m,0,k,j,i) += xcss_.d_view(n)*xcos_(m,n,i)*ysin_(m,n,j)*zsin_(m,n,k);
+        force_tmp_(m,0,k,j,i) += xscc_.d_view(n)*xsin_(m,n,i)*ycos_(m,n,j)*zcos_(m,n,k);
+        force_tmp_(m,0,k,j,i) += xscs_.d_view(n)*xsin_(m,n,i)*ycos_(m,n,j)*zsin_(m,n,k);
+        force_tmp_(m,0,k,j,i) += xssc_.d_view(n)*xsin_(m,n,i)*ysin_(m,n,j)*zcos_(m,n,k);
+        force_tmp_(m,0,k,j,i) += xsss_.d_view(n)*xsin_(m,n,i)*ysin_(m,n,j)*zsin_(m,n,k);
 
-        force_tmp_(m,1,k,j,i) += yccc_.d_view(n)*Xcos_(m,n,i)*Ycos_(m,n,j)*Zcos_(m,n,k);
-        force_tmp_(m,1,k,j,i) += yccs_.d_view(n)*Xcos_(m,n,i)*Ycos_(m,n,j)*Zsin_(m,n,k);
-        force_tmp_(m,1,k,j,i) += ycsc_.d_view(n)*Xcos_(m,n,i)*Ysin_(m,n,j)*Zcos_(m,n,k);
-        force_tmp_(m,1,k,j,i) += ycss_.d_view(n)*Xcos_(m,n,i)*Ysin_(m,n,j)*Zsin_(m,n,k);
-        force_tmp_(m,1,k,j,i) += yscc_.d_view(n)*Xsin_(m,n,i)*Ycos_(m,n,j)*Zcos_(m,n,k);
-        force_tmp_(m,1,k,j,i) += yscs_.d_view(n)*Xsin_(m,n,i)*Ycos_(m,n,j)*Zsin_(m,n,k);
-        force_tmp_(m,1,k,j,i) += yssc_.d_view(n)*Xsin_(m,n,i)*Ysin_(m,n,j)*Zcos_(m,n,k);
-        force_tmp_(m,1,k,j,i) += ysss_.d_view(n)*Xsin_(m,n,i)*Ysin_(m,n,j)*Zsin_(m,n,k);
+        force_tmp_(m,1,k,j,i) += yccc_.d_view(n)*xcos_(m,n,i)*ycos_(m,n,j)*zcos_(m,n,k);
+        force_tmp_(m,1,k,j,i) += yccs_.d_view(n)*xcos_(m,n,i)*ycos_(m,n,j)*zsin_(m,n,k);
+        force_tmp_(m,1,k,j,i) += ycsc_.d_view(n)*xcos_(m,n,i)*ysin_(m,n,j)*zcos_(m,n,k);
+        force_tmp_(m,1,k,j,i) += ycss_.d_view(n)*xcos_(m,n,i)*ysin_(m,n,j)*zsin_(m,n,k);
+        force_tmp_(m,1,k,j,i) += yscc_.d_view(n)*xsin_(m,n,i)*ycos_(m,n,j)*zcos_(m,n,k);
+        force_tmp_(m,1,k,j,i) += yscs_.d_view(n)*xsin_(m,n,i)*ycos_(m,n,j)*zsin_(m,n,k);
+        force_tmp_(m,1,k,j,i) += yssc_.d_view(n)*xsin_(m,n,i)*ysin_(m,n,j)*zcos_(m,n,k);
+        force_tmp_(m,1,k,j,i) += ysss_.d_view(n)*xsin_(m,n,i)*ysin_(m,n,j)*zsin_(m,n,k);
 
-        force_tmp_(m,2,k,j,i) += zccc_.d_view(n)*Xcos_(m,n,i)*Ycos_(m,n,j)*Zcos_(m,n,k);
-        force_tmp_(m,2,k,j,i) += zccs_.d_view(n)*Xcos_(m,n,i)*Ycos_(m,n,j)*Zsin_(m,n,k);
-        force_tmp_(m,2,k,j,i) += zcsc_.d_view(n)*Xcos_(m,n,i)*Ysin_(m,n,j)*Zcos_(m,n,k);
-        force_tmp_(m,2,k,j,i) += zcss_.d_view(n)*Xcos_(m,n,i)*Ysin_(m,n,j)*Zsin_(m,n,k);
-        force_tmp_(m,2,k,j,i) += zscc_.d_view(n)*Xsin_(m,n,i)*Ycos_(m,n,j)*Zcos_(m,n,k);
-        force_tmp_(m,2,k,j,i) += zscs_.d_view(n)*Xsin_(m,n,i)*Ycos_(m,n,j)*Zsin_(m,n,k);
-        force_tmp_(m,2,k,j,i) += zssc_.d_view(n)*Xsin_(m,n,i)*Ysin_(m,n,j)*Zcos_(m,n,k);
-        force_tmp_(m,2,k,j,i) += zsss_.d_view(n)*Xsin_(m,n,i)*Ysin_(m,n,j)*Zsin_(m,n,k);
+        force_tmp_(m,2,k,j,i) += zccc_.d_view(n)*xcos_(m,n,i)*ycos_(m,n,j)*zcos_(m,n,k);
+        force_tmp_(m,2,k,j,i) += zccs_.d_view(n)*xcos_(m,n,i)*ycos_(m,n,j)*zsin_(m,n,k);
+        force_tmp_(m,2,k,j,i) += zcsc_.d_view(n)*xcos_(m,n,i)*ysin_(m,n,j)*zcos_(m,n,k);
+        force_tmp_(m,2,k,j,i) += zcss_.d_view(n)*xcos_(m,n,i)*ysin_(m,n,j)*zsin_(m,n,k);
+        force_tmp_(m,2,k,j,i) += zscc_.d_view(n)*xsin_(m,n,i)*ycos_(m,n,j)*zcos_(m,n,k);
+        force_tmp_(m,2,k,j,i) += zscs_.d_view(n)*xsin_(m,n,i)*ycos_(m,n,j)*zsin_(m,n,k);
+        force_tmp_(m,2,k,j,i) += zssc_.d_view(n)*xsin_(m,n,i)*ysin_(m,n,j)*zcos_(m,n,k);
+        force_tmp_(m,2,k,j,i) += zsss_.d_view(n)*xsin_(m,n,i)*ysin_(m,n,j)*zsin_(m,n,k);
       }
     );
   }
