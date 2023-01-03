@@ -228,21 +228,21 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
 
   // initial mesh hierarchy construction is completed here
   ptree->CountMeshBlock(nmb_total);
-  nmb_maxperdevice = nmb_total;
+  nmb_maxperrank = nmb_total;
   if (adaptive) {
-    if (pin->DoesParameterExist("mesh_refinement", "max_nmb_perdevice")) {
-      nmb_maxperdevice = pin->GetReal("mesh_refinement", "max_nmb_perdevice");
-      if (nmb_maxperdevice < nmb_total) {
+    if (pin->DoesParameterExist("mesh_refinement", "max_nmb_per_rank")) {
+      nmb_maxperrank = pin->GetReal("mesh_refinement", "max_nmb_per_rank");
+      if (nmb_maxperrank < nmb_total) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "Root grid requires more MeshBlocks (nmb_total=" << nmb_total
-          << ") than specified by <mesh_refinement>/max_nmb_perdevice="
-          << nmb_maxperdevice << std::endl;
+          << ") than specified by <mesh_refinement>/max_nmb_per_rank="
+          << nmb_maxperrank << std::endl;
         std::exit(EXIT_FAILURE);
       }
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
         << std::endl << "With AMR maximum number of MeshBlocks per device must be "
-        << "specified in input file using <mesh_refinement>/max_nmb_perdevice"
+        << "specified in input file using <mesh_refinement>/max_nmb_per_rank"
         << std::endl;
       std::exit(EXIT_FAILURE);
     }
@@ -365,22 +365,22 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile) {
   } else {
     max_level = 31;
   }
-  nmb_maxperdevice = nmb_total;
+  nmb_maxperrank = nmb_total;
 
   if (adaptive) {
-    if (pin->DoesParameterExist("mesh_refinement", "max_nmb_perdevice")) {
-      nmb_maxperdevice = pin->GetReal("mesh_refinement", "max_nmb_perdevice");
-      if (nmb_maxperdevice < nmb_total) {
+    if (pin->DoesParameterExist("mesh_refinement", "max_nmb_per_rank")) {
+      nmb_maxperrank = pin->GetReal("mesh_refinement", "max_nmb_per_rank");
+      if (nmb_maxperrank < nmb_total) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "Root grid requires more MeshBlocks (nmb_total=" << nmb_total
-          << ") than specified by <mesh_refinement>/max_nmb_perdevice="
-          << nmb_maxperdevice << std::endl;
+          << ") than specified by <mesh_refinement>/max_nmb_per_rank="
+          << nmb_maxperrank << std::endl;
         std::exit(EXIT_FAILURE);
       }
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
         << std::endl << "With AMR maximum number of MeshBlocks per device must be "
-        << "specified in input file using <mesh_refinement>/max_nmb_perdevice"
+        << "specified in input file using <mesh_refinement>/max_nmb_per_rank"
         << std::endl;
       std::exit(EXIT_FAILURE);
     }

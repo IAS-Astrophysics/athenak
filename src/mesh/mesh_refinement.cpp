@@ -32,8 +32,8 @@
 
 MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
   pmy_mesh(pm),
-  refine_flag("rflag",pm->nmb_maxperdevice),
-  cyc_since_ref("cyc_since_ref",pm->nmb_maxperdevice),
+  refine_flag("rflag",pm->nmb_maxperrank),
+  cyc_since_ref("cyc_since_ref",pm->nmb_maxperrank),
   nmb_created(0), nmb_deleted(0),
   ncycle_check_amr(1), ncycle_ref_inter(5),
   d_threshold_(0.0), dd_threshold_(0.0), dp_threshold_(0.0), dv_threshold_(0.0),
@@ -119,7 +119,7 @@ bool MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
   }
 
   // zero refine_flag in host space and sync with device
-  for (int m=0; m<(pmbp->pmesh->nmb_maxperdevice); ++m) {
+  for (int m=0; m<(pmbp->pmesh->nmb_maxperrank); ++m) {
     refine_flag.h_view(m) = 0;
   }
   refine_flag.template modify<HostMemSpace>();
@@ -580,7 +580,7 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   pm->pmb_pack->pmb->SetNeighbors(pm->ptree, pm->ranklist);
 
   // Update new number of cycles since refinement
-  HostArray1D<int> new_cyc_since_ref("new_ncyc_ref",pm->nmb_maxperdevice);
+  HostArray1D<int> new_cyc_since_ref("new_ncyc_ref",pm->nmb_maxperrank);
   for (int m=0; m<(pm->pmb_pack->nmb_thispack); ++m) {
     if (refine_flag.h_view(newtoold[m]) != 0) {
       new_cyc_since_ref(m) = 0;
