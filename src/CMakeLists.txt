@@ -110,7 +110,10 @@ add_executable(
         units/units.cpp
         utils/change_rundir.cpp
         utils/show_config.cpp
-)
+
+        radiation_femn/radiation_femn.hpp
+        radiation_femn/radiation_femn.cpp
+        radiation_femn/radiation_femn_reader.cpp)
 
 # custom problem generator to be included in compile
 # specify on command line using '-D PROBLEM=file' where 'file' is name of file in
