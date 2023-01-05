@@ -6,10 +6,10 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file mesh.hpp
-//  \brief defines Mesh class.
-//  The Mesh is the overall grid structure, which is divided into local patches called
-//  MeshBlocks (potentially on different levels) that tile the entire domain.  MeshBlocks
-//  are grouped together into MeshBlockPacks for better performance on GPUs.
+//! \brief defines Mesh class.
+//! The Mesh is the overall grid structure, which is divided into local patches called
+//! MeshBlocks (potentially on different levels) that tile the entire domain.  MeshBlocks
+//! are grouped together into MeshBlockPacks for better performance on GPUs.
 
 #include <cstdint>  // int32_t
 #include <memory>
@@ -33,16 +33,16 @@ struct RegionSize {
 //! \brief Cell indices and number of active and ghost cells in a Mesh or a MeshBlock
 
 struct RegionIndcs {
-  int ng;                   // number of ghost cells
-  int nx1, nx2, nx3;        // number of active cells (not including ghost zones)
-  int is,ie,js,je,ks,ke;    // indices of ACTIVE cells
+  int ng;                       // number of ghost cells
+  int nx1, nx2, nx3;            // number of active cells (not including ghost zones)
+  int is,ie,js,je,ks,ke;        // indices of ACTIVE cells
   int cnx1, cnx2, cnx3;         // number of active coarse cells (not including gzs)
   int cis,cie,cjs,cje,cks,cke;  // indices of ACTIVE coarse cells
 };
 
 //----------------------------------------------------------------------------------------
 //! \struct NeighborBlock
-//  \brief Information about neighboring MeshBlocks stored as 2D DualArray in MeshBlock
+//! \brief Information about neighboring MeshBlocks stored as 2D DualArray in MeshBlock
 
 struct NeighborBlock {
   int gid;     // global ID
@@ -53,7 +53,7 @@ struct NeighborBlock {
 
 //----------------------------------------------------------------------------------------
 //! \struct LogicalLocation
-//! \brief stores logical location and level of MeshBlock
+//! \brief logical location and level of MeshBlock stored as POD
 //! lx1/2/3 = logical location in x1/2/3 = index in array of nodes at current level
 //! WARNING: values of lx? can exceed the range of std::int32_t with >30 levels
 //! of AMR, even if the root grid consists of a single MeshBlock, since the corresponding
@@ -61,17 +61,6 @@ struct NeighborBlock {
 
 struct LogicalLocation {
   std::int32_t lx1, lx2, lx3, level;
-  // comparison functions for sorting, and overloaded operator==
-  static bool Lesser(const LogicalLocation &left, const LogicalLocation &right) {
-    return left.level < right.level;
-  }
-  static bool Greater(const LogicalLocation & left, const LogicalLocation &right) {
-    return left.level > right.level;
-  }
-  bool operator==(LogicalLocation const &rhs) const {
-    return ((this->lx1 == rhs.lx1) && (this->lx2 == rhs.lx2) &&
-            (this->lx3 == rhs.lx3) && (this->level == rhs.level));
-  }
 };
 
 //----------------------------------------------------------------------------------------
@@ -159,6 +148,11 @@ class Mesh {
   BoundaryFlag GetBoundaryFlag(const std::string& input_string);
   std::string GetBoundaryString(BoundaryFlag input_flag);
 
+  // comparison function for sorting LogicalLocations based on level
+  static bool GreaterLevel(const LogicalLocation & left, const LogicalLocation &right) {
+    return left.level > right.level;
+  }
+
   // accessors
   int FindMeshBlockIndex(int tgid) {
     for (int m=0; m<pmb_pack->nmb_thispack; ++m) {
@@ -172,8 +166,6 @@ class Mesh {
 
  private:
   std::unique_ptr<MeshBlockTree> ptree;  // pointer to root node in binary/quad/oct-tree
-  // functions
   void LoadBalance(float *clist, int *rlist, int *slist, int *nlist, int nb);
 };
-
 #endif  // MESH_MESH_HPP_

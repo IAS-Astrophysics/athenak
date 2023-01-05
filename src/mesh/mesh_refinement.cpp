@@ -254,7 +254,7 @@ void MeshRefinement::UpdateMeshBlockTree(int &nnew, int &ndel) {
     if (refine_flag.h_view(i) ==  1) nref[global_variable::my_rank]++;
     if (refine_flag.h_view(i) == -1) nderef[global_variable::my_rank]++;
   }
-#ifdef MPI_PARALLEL
+#if MPI_PARALLEL_ENABLED
   MPI_Allgather(MPI_IN_PLACE, 1, MPI_INT, nref,   1, MPI_INT, MPI_COMM_WORLD);
   MPI_Allgather(MPI_IN_PLACE, 1, MPI_INT, nderef, 1, MPI_INT, MPI_COMM_WORLD);
 #endif
@@ -301,7 +301,7 @@ void MeshRefinement::UpdateMeshBlockTree(int &nnew, int &ndel) {
 
   // collect logical locations of MBs to be refined/derefined into arrays
   // calculate starting index in array for updated MBs on this rank (sum of number of
-  // updated MBs on ranks < my_rank
+  // refined/derefined MBs on ranks < my_rank)
   int iref = 0, ideref = 0;
   for (int n=0; n<global_variable::my_rank; n++) {
     iref += nref[n];
@@ -317,7 +317,7 @@ void MeshRefinement::UpdateMeshBlockTree(int &nnew, int &ndel) {
       lderef[ideref++] = pmy_mesh->lloclist[gid];
     }
   }
-#ifdef MPI_PARALLEL
+#if MPI_PARALLEL_ENABLED
   // THIS WILL NOT COMPILE. Look into passing LogicalLocation array elements directly
   // as MPI_Datatype as opposed to sending bytes
 
@@ -369,7 +369,7 @@ void MeshRefinement::UpdateMeshBlockTree(int &nnew, int &ndel) {
   }
   // sort the lists by level
   if (ctnd > 1) {
-    std::sort(clderef, &(clderef[ctnd-1]), LogicalLocation::Greater);
+    std::sort(clderef, &(clderef[ctnd-1]), Mesh::GreaterLevel);
   }
 
   if (tnderef >= nleaf) {

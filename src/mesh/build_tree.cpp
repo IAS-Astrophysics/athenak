@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file build_tree.cpp
-//  \brief Functions to build MeshBlockTreee, both for new runs and restarts
+//! \brief Functions to build MeshBlockTreee, both for new runs and restarts
 
 #include <iostream>
 #include <cinttypes>
@@ -280,17 +280,18 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
   pmb_pack = new MeshBlockPack(this, mbp_gids, mbp_gide);
   pmb_pack->AddMeshBlocks(pin);
   pmb_pack->pmb->SetNeighbors(ptree, ranklist);
+
+  // Create new MeshRefinement object with either SMR or AMR (SMR needs Restrict fns)
   if (multilevel) {
     pmr = new MeshRefinement(this, pin);
   }
 
-  if (global_variable::my_rank == 0) {PrintMeshDiagnostics();}
-
-  // set initial time/cycle parameters
+  // set initial time/cycle parameters, output diagnostics
   time = pin->GetOrAddReal("time", "start_time", 0.0);
   dt   = std::numeric_limits<float>::max();
   cfl_no = pin->GetReal("time", "cfl_number");
   ncycle = 0;
+  if (global_variable::my_rank == 0) {PrintMeshDiagnostics();}
 
   return;
 }
@@ -462,12 +463,13 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile) {
   pmb_pack = new MeshBlockPack(this, mbp_gids, mbp_gide);
   pmb_pack->AddMeshBlocks(pin);
   pmb_pack->pmb->SetNeighbors(ptree, ranklist);
+
+  // Create new MeshRefinement object with either SMR or AMR (SMR needs Restrict fns)
   if (multilevel) {
     pmr = new MeshRefinement(this, pin);
   }
 
-  if (global_variable::my_rank == 0) {PrintMeshDiagnostics();}
-
-  // set remaining parameters
+  // set remaining parameters, output diagnostics
   cfl_no = pin->GetReal("time", "cfl_number");
+  if (global_variable::my_rank == 0) {PrintMeshDiagnostics();}
 }
