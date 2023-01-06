@@ -30,10 +30,14 @@ class MeshRefinement {
   int ncycle_check_amr;         // # of cycles between checking refinement/derefinement
   int ncycle_ref_inter;         // # of cycles between allowing refinement/derefinement
 
-  // following 2x arrays allocated with length [nranks] only with AMR
-  int *nref, *nderef;
+  // following 4x arrays allocated with length [nranks] only with AMR
+  int *nref_eachrank;     // number of MBs refined per rank
+  int *nderef_eachrank;   // number of MBs de-refined per rank
+  int *nref_rsum;         // running sum of number of MBs refined per rank
+  int *nderef_rsum;       // running sum of number of MBs de-refined per rank
   // following 2x arrays allocated with length [nmb_new] and [nmb_old]] only with AMR
-  int *newtoold, *oldtonew;
+  int *newtoold;          // mapping of new gid (index n) to old gid
+  int *oldtonew;          // mapping of old gid (index n) to new gid
 
   // functions
   bool CheckForRefinement(MeshBlockPack* pmbp);
