@@ -15,7 +15,7 @@
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "bvals.hpp"
-#include "mesh/prolong.hpp" // implements prolongation operators
+#include "mesh/prolongation.hpp" // implements prolongation operators
 
 //----------------------------------------------------------------------------------------
 //! \fn void ProlongateCC()

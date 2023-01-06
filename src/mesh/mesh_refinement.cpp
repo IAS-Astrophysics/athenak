@@ -5,8 +5,9 @@
 //========================================================================================
 //! \file mesh_refinement.cpp
 //! \brief Implements constructor and functions in MeshRefinement class.
-//! Note while restriction functions for CC and FC data are implemented here, prolongation
-//! is part of BVals classes.
+//! Note while restriction functions for CC and FC data are implemented in this file,
+//! prolongation operators are implemented as INLINE functions in prolongation.hpp (and
+//! are used both here for AMR and in the BVals class at fine/coarse boundaries).
 
 #include <cstdint>   // int32_t
 #include <iostream>
@@ -21,7 +22,7 @@
 
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
-#include "prolong.hpp"
+#include "prolongation.hpp"
 
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>
