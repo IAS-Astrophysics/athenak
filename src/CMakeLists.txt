@@ -113,7 +113,7 @@ add_executable(
 
         radiation_femn/radiation_femn.hpp
         radiation_femn/radiation_femn.cpp
-        radiation_femn/radiation_femn_reader.cpp radiation_femn/radaition_femn_fluxes.cpp)
+        radiation_femn/radiation_femn_reader.cpp radiation_femn/radaition_femn_fluxes.cpp radiation_femn/radiation_update.cpp radiation_femn/radiation_femn_update.cpp)
 
 # custom problem generator to be included in compile
 # specify on command line using '-D PROBLEM=file' where 'file' is name of file in
