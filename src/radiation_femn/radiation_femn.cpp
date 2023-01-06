@@ -31,6 +31,9 @@ namespace radiationfemn {
             coarse_i0("ci0", 1, 1, 1, 1, 1),
             i1("i1", 1, 1, 1, 1, 1),
             iflx("iflx", 1, 1, 1, 1, 1),
+            itemp("itemp", 1, 1, 1, 1, 1),
+            etemp0("etemp0", 1, 1, 1, 1, 1),
+            etemp1("etemp1", 1, 1, 1, 1, 1),
             mass_matrix("mm", 1, 1),
             stiffness_matrix_x("sx", 1, 1),
             stiffness_matrix_y("sy", 1, 1),
@@ -109,6 +112,13 @@ namespace radiationfemn {
         Kokkos::realloc(iflx.x1f, nmb, nangles, ncells3, ncells2, ncells1);
         Kokkos::realloc(iflx.x2f, nmb, nangles, ncells3, ncells2, ncells1);
         Kokkos::realloc(iflx.x3f, nmb, nangles, ncells3, ncells2, ncells1);
+        Kokkos::realloc(itemp, nmb, nangles, ncells3, ncells2, ncells1);
+
+        // reallocate memory for the temporary intensity matrices if the clipping limiter is on
+        if (limiter_fem == "clp") {
+            Kokkos::realloc(etemp0, nmb, nangles, ncells3, ncells2, ncells1);
+            Kokkos::realloc(etemp1, nmb, nangles, ncells3, ncells2, ncells1);
+        }
 
         // reallocate allocate memory for evolved variables on coarse mesh
         if (ppack->pmesh->multilevel) {

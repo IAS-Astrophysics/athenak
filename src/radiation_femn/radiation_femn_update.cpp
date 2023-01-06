@@ -42,7 +42,6 @@ namespace radiationfemn {
 
         par_for("radiation_femn_update", DevExeSpace(), 0, nmb1, 0, nang1, ks, ke, js, je, is, ie,
                 KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
-                    // spatial fluxes
                     Real divf_s = (flx1(m, n, k, j, i + 1) - flx1(m, n, k, j, i)) / mbsize.d_view(m).dx1;
                     if (multi_d) {
                         divf_s += (flx2(m, n, k, j + 1, i) - flx2(m, n, k, j, i)) / mbsize.d_view(m).dx2;
