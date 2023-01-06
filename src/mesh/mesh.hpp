@@ -122,14 +122,14 @@ class Mesh {
   int root_level; // logical level of root (physical) grid (e.g. Fig. 3 of method paper)
   int max_level;  // logical level of maximum refinement grid in Mesh
 
-  // following 3x arrays allocated with length [nmbtotal] in BuildTreeFromXXXX()
-  int *ranklist;              // rank of each MeshBlock
-  float *costlist;            // cost of each MeshBlock
-  LogicalLocation *lloclist;  // LogicalLocations for each MeshBlocks
+  // following 3x arrays allocated with length [nmb_total] in BuildTreeFromXXXX()
+  float *cost_eachmb;            // cost of each MeshBlock
+  int *rank_eachmb;              // rank of each MeshBlock
+  LogicalLocation *lloc_eachmb;  // LogicalLocations for each MeshBlock
 
   // following 2x arrays allocated with length [nranks] in BuildTreeFromXXXX()
-  int *gidslist;      // starting global ID of MeshBlocks in each rank
-  int *nmblist;       // number of MeshBlocks on each rank
+  int *gids_eachrank;      // starting global ID of MeshBlocks in each rank
+  int *nmb_eachrank;       // number of MeshBlocks on each rank
 
   Real time, dt, cfl_no;
   int ncycle;

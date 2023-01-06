@@ -227,7 +227,7 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
   if (!adaptive) max_level = current_level;
 
   // initial mesh hierarchy construction is completed here
-  ptree->CountMeshBlock(nmb_total);
+  ptree->CountMeshBlocks(nmb_total);
   nmb_maxperrank = nmb_total;
   if (adaptive) {
     if (pin->DoesParameterExist("mesh_refinement", "max_nmb_per_rank")) {
@@ -241,21 +241,21 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
       }
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-        << std::endl << "With AMR maximum number of MeshBlocks per device must be "
+        << std::endl << "With AMR maximum number of MeshBlocks per rank must be "
         << "specified in input file using <mesh_refinement>/max_nmb_per_rank"
         << std::endl;
       std::exit(EXIT_FAILURE);
     }
   }
 
-  costlist = new float[nmb_total];
-  ranklist = new int[nmb_total];
-  lloclist = new LogicalLocation[nmb_total];
-  gidslist = new int[global_variable::nranks];
-  nmblist = new int[global_variable::nranks];
+  cost_eachmb = new float[nmb_total];
+  rank_eachmb = new int[nmb_total];
+  lloc_eachmb = new LogicalLocation[nmb_total];
+  gids_eachrank = new int[global_variable::nranks];
+  nmb_eachrank = new int[global_variable::nranks];
 
   // following returns LogicalLocation list sorted by Z-ordering, and total # of MBs
-  ptree->CreateMeshBlockList(lloclist, nullptr, nmb_total);
+  ptree->CreateZOrderedLLList(lloc_eachmb, nullptr, nmb_total);
 
 #if MPI_PARALLEL_ENABLED
   // check there is at least one MeshBlock per MPI rank
@@ -269,17 +269,17 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
 
   // initialize cost array with the simplest estimate; all the blocks are equal
   // TODO(@user): implement variable cost per MeshBlock as needed
-  for (int i=0; i<nmb_total; i++) {costlist[i] = 1.0;}
-  LoadBalance(costlist, ranklist, gidslist, nmblist, nmb_total);
+  for (int i=0; i<nmb_total; i++) {cost_eachmb[i] = 1.0;}
+  LoadBalance(cost_eachmb, rank_eachmb, gids_eachrank, nmb_eachrank, nmb_total);
 
   // create MeshBlockPack for this rank
-  int mbp_gids = gidslist[global_variable::my_rank];
-  int mbp_gide = mbp_gids + nmblist[global_variable::my_rank] - 1;
-  nmb_thisrank = nmblist[global_variable::my_rank];
+  int mbp_gids = gids_eachrank[global_variable::my_rank];
+  int mbp_gide = mbp_gids + nmb_eachrank[global_variable::my_rank] - 1;
+  nmb_thisrank = nmb_eachrank[global_variable::my_rank];
 
   pmb_pack = new MeshBlockPack(this, mbp_gids, mbp_gide);
   pmb_pack->AddMeshBlocks(pin);
-  pmb_pack->pmb->SetNeighbors(ptree, ranklist);
+  pmb_pack->pmb->SetNeighbors(ptree, rank_eachmb);
 
   // Create new MeshRefinement object with either SMR or AMR (SMR needs Restrict fns)
   if (multilevel) {
@@ -388,11 +388,11 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile) {
   }
 
   // allocate memory for lists read from restart
-  costlist = new float[nmb_total];
-  ranklist = new int[nmb_total];
-  lloclist = new LogicalLocation[nmb_total];
-  gidslist = new int[global_variable::nranks];
-  nmblist = new int[global_variable::nranks];
+  cost_eachmb = new float[nmb_total];
+  rank_eachmb = new int[nmb_total];
+  lloc_eachmb = new LogicalLocation[nmb_total];
+  gids_eachrank = new int[global_variable::nranks];
+  nmb_eachrank = new int[global_variable::nranks];
 
   // allocate idlist buffer and read list of logical locations and cost
   IOWrapperSizeT listsize = sizeof(LogicalLocation) + sizeof(float);
@@ -414,13 +414,13 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile) {
   // everyone sets the logical location and cost lists based on bradcasted data
   int os = 0;
   for (int i=0; i<nmb_total; i++) {
-    std::memcpy(&(lloclist[i]), &(idlist[os]), sizeof(LogicalLocation));
+    std::memcpy(&(lloc_eachmb[i]), &(idlist[os]), sizeof(LogicalLocation));
     os += sizeof(LogicalLocation);
   }
   for (int i=0; i<nmb_total; i++) {
-    std::memcpy(&(costlist[i]), &(idlist[os]), sizeof(float));
+    std::memcpy(&(cost_eachmb[i]), &(idlist[os]), sizeof(float));
     os += sizeof(float);
-    if (lloclist[i].level > current_level) current_level = lloclist[i].level;
+    if (lloc_eachmb[i].level > current_level) current_level = lloc_eachmb[i].level;
   }
   delete [] idlist;
   if (!adaptive) max_level = current_level;
@@ -428,13 +428,13 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile) {
   // rebuild the MeshBlockTree
   ptree = std::make_unique<MeshBlockTree>(this);
   ptree->CreateRootGrid();
-  for (int i=0; i<nmb_total; i++) {ptree->AddNodeWithoutRefinement(lloclist[i]);}
+  for (int i=0; i<nmb_total; i++) {ptree->AddNodeWithoutRefinement(lloc_eachmb[i]);}
 
   // check the tree structure by making sure total # of MBs counted in tree same as the
   // number read from the restart file.
   {
     int nnb;
-    ptree->CreateMeshBlockList(lloclist, nullptr, nnb);
+    ptree->CreateZOrderedLLList(lloc_eachmb, nullptr, nnb);
     if (nnb != nmb_total) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
         << std::endl << "Tree reconstruction failed. Total number of blocks in "
@@ -453,16 +453,16 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile) {
   }
 #endif
 
-  LoadBalance(costlist, ranklist, gidslist, nmblist, nmb_total);
+  LoadBalance(cost_eachmb, rank_eachmb, gids_eachrank, nmb_eachrank, nmb_total);
 
   // create MeshBlockPack for this rank
-  int mbp_gids = gidslist[global_variable::my_rank];
-  int mbp_gide = mbp_gids + nmblist[global_variable::my_rank] - 1;
-  nmb_thisrank = nmblist[global_variable::my_rank];
+  int mbp_gids = gids_eachrank[global_variable::my_rank];
+  int mbp_gide = mbp_gids + nmb_eachrank[global_variable::my_rank] - 1;
+  nmb_thisrank = nmb_eachrank[global_variable::my_rank];
 
   pmb_pack = new MeshBlockPack(this, mbp_gids, mbp_gide);
   pmb_pack->AddMeshBlocks(pin);
-  pmb_pack->pmb->SetNeighbors(ptree, ranklist);
+  pmb_pack->pmb->SetNeighbors(ptree, rank_eachmb);
 
   // Create new MeshRefinement object with either SMR or AMR (SMR needs Restrict fns)
   if (multilevel) {

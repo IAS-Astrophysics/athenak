@@ -214,10 +214,10 @@ bool MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
 
   // Check (on host) for MeshBlocks at max/root level flagged for refine/derefine
   for (int m=0; m<nmb; ++m) {
-    if (pmy_mesh->lloclist[m].level == pmy_mesh->max_level) {
+    if (pmy_mesh->lloc_eachmb[m].level == pmy_mesh->max_level) {
       if (refine_flag.h_view(m) > 0) {refine_flag.h_view(m) = 0;}
     }
-    if (pmy_mesh->lloclist[m].level == pmy_mesh->root_level) {
+    if (pmy_mesh->lloc_eachmb[m].level == pmy_mesh->root_level) {
       if (refine_flag.h_view(m) < 0) {refine_flag.h_view(m) = 0;}
     }
   }
@@ -312,9 +312,9 @@ void MeshRefinement::UpdateMeshBlockTree(int &nnew, int &ndel) {
   for (int i=0; i<(pmy_mesh->nmb_thisrank); ++i) {
     int gid = pmy_mesh->pmb_pack->pmb->mb_gid.h_view(i);
     if (refine_flag.h_view(i) ==  1) {
-      lref[iref++] = pmy_mesh->lloclist[gid];;
+      lref[iref++] = pmy_mesh->lloc_eachmb[gid];;
     } else if (refine_flag.h_view(i) == -1 && tnderef >= nleaf) {
-      lderef[ideref++] = pmy_mesh->lloclist[gid];
+      lderef[ideref++] = pmy_mesh->lloc_eachmb[gid];
     }
   }
 #if MPI_PARALLEL_ENABLED
@@ -418,12 +418,13 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   if (pm->two_d) nleaf = 4;
   if (pm->three_d) nleaf = 8;
 
-  // Step 1. Create list of logical locations for new MBs, and newtoold list mapping
-  // (new MB gid)-->(old gid) for all MBs.  Index of array is new gid, value is old gid.
+  // Step 1. Create Z-ordered list of logical locations for new MBs, and newtoold list
+  // mapping (new MB gid [n])-->(old gid) for all MBs. Index of array [n] is new gid,
+  // value is old gid.
   LogicalLocation *new_lloclist = new LogicalLocation[nmb_new];
   newtoold = new int[nmb_new];
   int new_nmb_total;
-  pm->ptree->CreateMeshBlockList(new_lloclist, newtoold, new_nmb_total);
+  pm->ptree->CreateZOrderedLLList(new_lloclist, newtoold, new_nmb_total);
   if (new_nmb_total != nmb_new) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
         << "Number of MeshBlocks in new tree = " << new_nmb_total << " but expected "
@@ -466,7 +467,7 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   hydro::Hydro* phydro = pm->pmb_pack->phydro;
   mhd::MHD* pmhd = pm->pmb_pack->pmhd;
   auto &nmb = pm->pmb_pack->nmb_thispack;                           // old nmb
-  int mbs = pmy_mesh->gidslist[global_variable::my_rank];           // old gids
+  int mbs = pmy_mesh->gids_eachrank[global_variable::my_rank];      // old gids
 
   // Step 4. Restrict evolved variables for MBs flagged for derefinement
   if (ndel > 0) {
@@ -556,28 +557,28 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   }
 
   // Update data in Mesh/MeshBlockPack/MeshBlock classes with new grid properties
-  delete [] pm->lloclist;
-  delete [] pm->ranklist;
-  delete [] pm->costlist;
-  delete [] pm->gidslist;
-  delete [] pm->nmblist;
-  pm->lloclist = new_lloclist;
-  pm->ranklist = new_ranklist;
-  pm->costlist = new_costlist;
-  pm->gidslist = new_gidslist;
-  pm->nmblist  = new_nmblist;
+  delete [] pm->lloc_eachmb;
+  delete [] pm->rank_eachmb;
+  delete [] pm->cost_eachmb;
+  delete [] pm->gids_eachrank;
+  delete [] pm->nmb_eachrank;
+  pm->lloc_eachmb = new_lloclist;
+  pm->rank_eachmb = new_ranklist;
+  pm->cost_eachmb = new_costlist;
+  pm->gids_eachrank = new_gidslist;
+  pm->nmb_eachrank  = new_nmblist;
   pm->nmb_total = new_nmb_total;
-  pm->nmb_thisrank = pm->nmblist[global_variable::my_rank];
+  pm->nmb_thisrank = pm->nmb_eachrank[global_variable::my_rank];
 
-  pm->pmb_pack->gids = pm->gidslist[global_variable::my_rank];
-  pm->pmb_pack->gide = pm->pmb_pack->gids + pm->nmblist[global_variable::my_rank] - 1;
+  pm->pmb_pack->gids = pm->gids_eachrank[global_variable::my_rank];
+  pm->pmb_pack->gide = pm->pmb_pack->gids + pm->nmb_eachrank[global_variable::my_rank]-1;
   pm->pmb_pack->nmb_thispack = pm->pmb_pack->gide - pm->pmb_pack->gids + 1;
 
   delete (pm->pmb_pack->pmb);
   delete (pm->pmb_pack->pcoord);
   pm->pmb_pack->AddMeshBlocks(pin);
   pm->pmb_pack->AddCoordinates(pin);
-  pm->pmb_pack->pmb->SetNeighbors(pm->ptree, pm->ranklist);
+  pm->pmb_pack->pmb->SetNeighbors(pm->ptree, pm->rank_eachmb);
 
   // Update new number of cycles since refinement
   HostArray1D<int> new_cyc_since_ref("new_ncyc_ref",pm->nmb_maxperrank);
