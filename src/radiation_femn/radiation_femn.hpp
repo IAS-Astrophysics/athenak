@@ -97,6 +97,11 @@ namespace radiationfemn {
         DvceArray5D<Real> coarse_i0;  // intensities on 2x coarser grid (for SMR/AMR)
         DvceFaceFld5D<Real> iflx;     // spatial fluxes on zone faces
 
+        // intermediate arrays needed for limiting
+        DvceArray5D<Real> itemp;
+        DvceArray4D<Real> etemp0;
+        DvceArray4D<Real> etemp1;
+
         // Boundary communication buffers and functions for i
         BoundaryValuesCC *pbval_i;
 
