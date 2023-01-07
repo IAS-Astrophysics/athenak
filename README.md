@@ -52,7 +52,7 @@ cmake3 -DCMAKE_CXX_COMPILER=icpc -D Kokkos_ARCH_BDW=On -D Kokkos_ENABLE_OPENMP=O
 ```
 
 ### Default build for NVIDIA V100 GPU (requires GCC and CUDA Toolkit)
-E.g. `apollo` at IAS
+E.g. `cuda` at IAS:
 ```
 cmake3 -DKokkos_ENABLE_CUDA=On -DKokkos_ARCH_VOLTA70=On -DCMAKE_CXX_COMPILER=${path_to_code}/athenak/kokkos/bin/nvcc_wrapper ../
 ```
