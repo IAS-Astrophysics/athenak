@@ -291,8 +291,8 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
 
     // compute vector potential over all faces
     int ncells1 = indcs.nx1 + 2*(indcs.ng);
-    int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
-    int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
+    int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 2;
+    int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 2;
     DvceArray4D<Real> a1, a2, a3;
     Kokkos::realloc(a1, nmb,ncells3,ncells2,ncells1);
     Kokkos::realloc(a2, nmb,ncells3,ncells2,ncells1);
@@ -321,9 +321,6 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
       Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
       Real x3f   = LeftEdgeX(k  -ks, nx3, x3min, x3max);
 
-      Real x1fp1 = LeftEdgeX(i+1-is, nx1, x1min, x1max);
-      Real x2fp1 = LeftEdgeX(j+1-js, nx2, x2min, x2max);
-      Real x3fp1 = LeftEdgeX(k+1-ks, nx3, x3min, x3max);
       Real dx1 = size.d_view(m).dx1;
       Real dx2 = size.d_view(m).dx2;
       Real dx3 = size.d_view(m).dx3;

@@ -21,8 +21,9 @@
 
 void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   if (restart) return;
-
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
+  auto &indcs = pmy_mesh_->mb_indcs;
+
   if (pmbp->phydro == nullptr && pmbp->pmhd == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Turbulence problem generator can only be run with Hydro and/or MHD, but no "
@@ -31,16 +32,18 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
 
   // capture variables for kernel
-  auto &indcs = pmy_mesh_->mb_indcs;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
 
   Real cs = pin->GetOrAddReal("eos","iso_sound_speed",1.0);
   Real beta = pin->GetOrAddReal("problem","beta",1.0);
+  Real amp0 = pin->GetOrAddReal("problem","amp0",1.0);
 
   // Initialize Hydro variables -------------------------------
   if (pmbp->phydro != nullptr) {
+    Real d_i = pin->GetOrAddReal("problem","d_i",1.0);
+    Real d_n = pin->GetOrAddReal("problem","d_n",1.0);
     auto &u0 = pmbp->phydro->u0;
     EOS_Data &eos = pmbp->phydro->peos->eos_data;
     Real gm1 = eos.gamma - 1.0;
@@ -49,19 +52,23 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     // Set initial conditions
     par_for("pgen_turb", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      u0(m,IDN,k,j,i) = 1.0;
+      u0(m,IDN,k,j,i) = d_n;
       u0(m,IM1,k,j,i) = 0.0;
       u0(m,IM2,k,j,i) = 0.0;
       u0(m,IM3,k,j,i) = 0.0;
       if (eos.is_ideal) {
-        u0(m,IEN,k,j,i) = p0/gm1;
+        u0(m,IEN,k,j,i) = p0/gm1 +
+           0.5*(SQR(u0(m,IM1,k,j,i)) + SQR(u0(m,IM2,k,j,i)) +
+           SQR(u0(m,IM3,k,j,i)))/u0(m,IDN,k,j,i);
       }
     });
   }
 
   // Initialize MHD variables ---------------------------------
   if (pmbp->pmhd != nullptr) {
-    Real B0 = cs*std::sqrt(2.0/beta);
+    Real d_i = pin->GetOrAddReal("problem","d_i",1.0);
+    Real d_n = pin->GetOrAddReal("problem","d_n",1.0);
+    Real B0 = cs*std::sqrt(2.0*d_i/beta);
     auto &u0 = pmbp->pmhd->u0;
     auto &b0 = pmbp->pmhd->b0;
     EOS_Data &eos = pmbp->pmhd->peos->eos_data;
@@ -77,15 +84,17 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       u0(m,IM3,k,j,i) = 0.0;
 
       // initialize B
-      b0.x1f(m,k,j,i) = B0;
+      b0.x1f(m,k,j,i) = 0.0;
       b0.x2f(m,k,j,i) = 0.0;
-      b0.x3f(m,k,j,i) = 0.0;
-      if (i==ie) {b0.x1f(m,k,j,i+1) = B0;}
+      b0.x3f(m,k,j,i) = B0;
+      if (i==ie) {b0.x1f(m,k,j,i+1) = 0.0;}
       if (j==je) {b0.x2f(m,k,j+1,i) = 0.0;}
-      if (k==ke) {b0.x3f(m,k+1,j,i) = 0.0;}
+      if (k==ke) {b0.x3f(m,k+1,j,i) = B0;}
 
       if (eos.is_ideal) {
-        u0(m,IEN,k,j,i) = p0/gm1 + 0.5; // 0.5 comes from B^2/2
+        u0(m,IEN,k,j,i) = p0/gm1 + 0.5*B0*B0 + // fix contribution from dB
+           0.5*(SQR(u0(m,IM1,k,j,i)) + SQR(u0(m,IM2,k,j,i)) +
+           SQR(u0(m,IM3,k,j,i)))/u0(m,IDN,k,j,i);
       }
     });
   }
@@ -112,15 +121,17 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       u0(m,IM3,k,j,i) = 0.0;
 
       // initialize B
-      b0.x1f(m,k,j,i) = B0;
+      b0.x1f(m,k,j,i) = 0.0;
       b0.x2f(m,k,j,i) = 0.0;
-      b0.x3f(m,k,j,i) = 0.0;
-      if (i==ie) {b0.x1f(m,k,j,i+1) = B0;}
+      b0.x3f(m,k,j,i) = B0;
+      if (i==ie) {b0.x1f(m,k,j,i+1) = 0.0;}
       if (j==je) {b0.x2f(m,k,j+1,i) = 0.0;}
-      if (k==ke) {b0.x3f(m,k+1,j,i) = 0.0;}
+      if (k==ke) {b0.x3f(m,k+1,j,i) = B0;}
 
       if (eos.is_ideal) {
-        u0(m,IEN,k,j,i) = p0/gm1 + 0.5; // 0.5 comes from B^2/2
+        u0(m,IEN,k,j,i) = p0/gm1 + 0.5*B0*B0 + // fix contribution from dB
+           0.5*(SQR(u0(m,IM1,k,j,i)) + SQR(u0(m,IM2,k,j,i)) +
+           SQR(u0(m,IM3,k,j,i)))/u0(m,IDN,k,j,i);
       }
     });
     // Hydro
@@ -132,12 +143,14 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     // Set initial conditions
     par_for("pgen_turb_hydro", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      u0_(m,IDN,k,j,i) = d_n; // TODO(@user): replace with neutral density
+      u0_(m,IDN,k,j,i) = d_n;
       u0_(m,IM1,k,j,i) = 0.0;
       u0_(m,IM2,k,j,i) = 0.0;
       u0_(m,IM3,k,j,i) = 0.0;
       if (eos_.is_ideal) {
-        u0_(m,IEN,k,j,i) = p0_/gm1_;
+        u0_(m,IEN,k,j,i) = p0_/gm1_ +
+            0.5*(SQR(u0_(m,IM1,k,j,i)) + SQR(u0_(m,IM2,k,j,i)) +
+            SQR(u0_(m,IM3,k,j,i)))/u0_(m,IDN,k,j,i);
       }
     });
   }

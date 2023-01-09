@@ -63,10 +63,11 @@ struct BoundaryBuffer {
   BufferIndcs icoar[3];  // indices for pack/unpack when dest/src at coarser level
   BufferIndcs ifine[3];  // indices for pack/unpack when dest/src at finer level
   BufferIndcs iprol[3];  // indices for prolongation (only used for receives)
-  BufferIndcs iflux[3];  // indices for pack/unpack for flux correction
+  BufferIndcs iflux_same[3];  // indices for pack/unpack for flux correction
+  BufferIndcs iflux_coar[3];  // indices for pack/unpack for flux correction
 
   // Maximum number of data elements (bie-bis+1) across 3 components of above
-  int isame_ndat, icoar_ndat, ifine_ndat, iflux_ndat;
+  int isame_ndat, icoar_ndat, ifine_ndat, iflxs_ndat, iflxc_ndat;
 
   // 3D Views that store buffer data on device
   DvceArray2D<Real> vars, flux;
@@ -82,7 +83,8 @@ struct BoundaryBuffer {
   void AllocateBuffers(int nmb, int nvars) {
     int nmax = std::max(isame_ndat, std::max(icoar_ndat, ifine_ndat) );
     Kokkos::realloc(vars, nmb, (nvars*nmax));
-    Kokkos::realloc(flux, nmb, (nvars*iflux_ndat));
+    nmax = std::max(iflxs_ndat, iflxc_ndat);
+    Kokkos::realloc(flux, nmb, (nvars*nmax));
   }
 };
 
@@ -103,7 +105,7 @@ class BoundaryValues {
   BoundaryBuffer send_buf[56], recv_buf[56];
 
   // constant inflow states at each face, initialized in problem generator
-  DualArray2D<Real> u_in, b_in;
+  DualArray2D<Real> u_in, b_in, i_in;
 
 #if MPI_PARALLEL_ENABLED
   // unique MPI communicators for variables and fluxes
@@ -125,6 +127,7 @@ class BoundaryValues {
   // BCs associated with various physics modules
   static void HydroBCs(MeshBlockPack *pp, DualArray2D<Real> uin, DvceArray5D<Real> u0);
   static void BFieldBCs(MeshBlockPack *pp, DualArray2D<Real> bin, DvceFaceFld4D<Real> b0);
+  static void RadiationBCs(MeshBlockPack *pp,DualArray2D<Real> iin,DvceArray5D<Real> i0);
 
  protected:
   MeshBlockPack* pmy_pack;
@@ -147,7 +150,7 @@ class BoundaryValuesCC : public BoundaryValues {
 
   TaskStatus PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
   TaskStatus RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
-  void ProlongCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
+  void ProlongateCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
 
   TaskStatus PackAndSendFluxCC(DvceFaceFld5D<Real> &flx);
   TaskStatus RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx);
@@ -170,10 +173,14 @@ class BoundaryValuesFC : public BoundaryValues {
 
   TaskStatus PackAndSendFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
   TaskStatus RecvAndUnpackFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
+  void ProlongateFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
 
-  void ProlongFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
   TaskStatus PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx);
   TaskStatus RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx);
+  void SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx, const bool same_level,
+                         DvceArray2D<int> &nflx);
+  void ZeroFluxesAtBoundaryWithFiner(DvceEdgeFld4D<Real> &flx, DvceArray2D<int> &nflx);
+  void AverageBoundaryFluxes(DvceEdgeFld4D<Real> &flx, DvceArray2D<int> &nflx);
 };
 
 #endif // BVALS_BVALS_HPP_

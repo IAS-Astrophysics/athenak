@@ -80,9 +80,9 @@ struct LogicalLocation {
 //! \brief stores various counters used as diagnostics throughout the code
 
 struct EventCounters {
-  int nfofc, neos_dfloor, neos_efloor, neos_tfloor, maxit_c2p;
-  EventCounters() : nfofc(0), neos_dfloor(0), neos_efloor(0), neos_tfloor(),
-                    maxit_c2p(0) {}
+  int nfofc, neos_dfloor, neos_efloor, neos_tfloor, neos_vceil, neos_fail, maxit_c2p;
+  EventCounters() : nfofc(0), neos_dfloor(0), neos_efloor(0), neos_tfloor(0),
+                    neos_vceil(0), neos_fail(0), maxit_c2p(0) {}
 };
 
 // Forward declarations required due to recursive definitions amongst mesh classes
@@ -95,16 +95,19 @@ class Mesh;
 #include "meshblock.hpp"
 #include "meshblock_pack.hpp"
 #include "meshblock_tree.hpp"
+#include "mesh_refinement.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \class Mesh
 //! \brief data/functions associated with the overall mesh
 
 class Mesh {
-  // mesh classes (Mesh, MeshBlock, MeshBlockPack, MeshBlockTree) like to play together
+  // mesh classes (Mesh, MeshBlock, MeshBlockPack, MeshBlockTree, MeshRefinement)
+  // like to play together
   friend class MeshBlock;
   friend class MeshBlockPack;
   friend class MeshBlockTree;
+  friend class MeshRefinement;
 
  public:
   explicit Mesh(ParameterInput *pin);
@@ -126,12 +129,11 @@ class Mesh {
   int nmb_rootx1, nmb_rootx2, nmb_rootx3; // # of MeshBlocks at root level in each dir
   int nmb_total;           // total number of MeshBlocks across all levels/ranks
   int nmb_thisrank;        // number of MeshBlocks on this MPI rank (local)
-  int nmb_created;         // number of MeshBlcoks created via AMR during run (per rank?)
-  int nmb_deleted;         // number of MeshBlcoks deleted via AMR during run (per rank?)
+  int nmb_maxperdevice;    // max allowed number of MBs per device (memory limit for AMR)
 
   int root_level; // logical level of root (physical) grid (e.g. Fig. 3 of method paper)
   int max_level;  // logical level of maximum refinement grid in Mesh
-  int gids, gide; // start/end of global IDs on this MPI rank
+//  int gids, gide; // start/end of global IDs on this MPI rank
 
   // following 3x arrays allocated with length [nmbtotal] in BuildTreeFromXXXX()
   int *ranklist;              // rank of each MeshBlock
@@ -139,14 +141,8 @@ class Mesh {
   LogicalLocation *lloclist;  // LogicalLocations for each MeshBlocks
 
   // following 2x arrays allocated with length [nranks] in BuildTreeFromXXXX()
-  int *gidslist;       // starting global ID of MeshBlocks in each rank
-  int *nmblist;        // number of MeshBlocks on each rank
-
-  // following 8x arrays allocated with length [nranks] only with AMR
-  int *nref, *nderef;
-  int *rdisp, *ddisp;
-  int *bnref, *bnderef;
-  int *brdisp, *bddisp;
+  int *gidslist;      // starting global ID of MeshBlocks in each rank
+  int *nmblist;       // number of MeshBlocks on each rank
 
   Real time, dt, cfl_no;
   int ncycle;
@@ -154,6 +150,7 @@ class Mesh {
 
   MeshBlockPack* pmb_pack;                 // container for MeshBlocks on this rank
   std::unique_ptr<ProblemGenerator> pgen;  // class containing functions to set ICs
+  MeshRefinement *pmr=nullptr;             // mesh refinement data/functions (if needed)
 
   // functions
   void BuildTreeFromScratch(ParameterInput *pin);
@@ -161,14 +158,12 @@ class Mesh {
   void PrintMeshDiagnostics();
   void WriteMeshStructure();
   void NewTimeStep(const Real tlim);
-  void RestrictCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
-  void RestrictFC(DvceFaceFld4D<Real> &a, DvceFaceFld4D<Real> &ca);
   BoundaryFlag GetBoundaryFlag(const std::string& input_string);
   std::string GetBoundaryString(BoundaryFlag input_flag);
 
   // accessors
   int FindMeshBlockIndex(int tgid) {
-    for (int m=0; m<pmb_pack->pmb->nmb; ++m) {
+    for (int m=0; m<pmb_pack->nmb_thispack; ++m) {
       if (pmb_pack->pmb->mb_gid.h_view(m) == tgid) return m;
     }
     return -1;
@@ -178,16 +173,9 @@ class Mesh {
   }
 
  private:
-  // variables for load balancing control (not yet implemented)
-  bool lb_flag_, lb_automatic_;
-  int lb_cyc_interval_;
-  int cyc_since_lb_;
-
   std::unique_ptr<MeshBlockTree> ptree;  // pointer to root node in binary/quad/oct-tree
-
   // functions
   void LoadBalance(float *clist, int *rlist, int *slist, int *nlist, int nb);
-  void ResetLoadBalanceCounters();
 };
 
 #endif  // MESH_MESH_HPP_

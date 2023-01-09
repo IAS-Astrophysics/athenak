@@ -22,6 +22,7 @@
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
 #include "diffusion/conduction.hpp"
+#include "radiation/radiation.hpp"
 #include "srcterms/srcterms.hpp"
 #include "outputs/io_wrapper.hpp"
 
@@ -41,9 +42,7 @@ Mesh::Mesh(ParameterInput *pin) :
   three_d(false),
   multi_d(false),
   shearing_periodic(false),
-  strictly_periodic(true),
-  lb_flag_(false), lb_automatic_(false),
-  lb_cyc_interval_(10),cyc_since_lb_(0) {
+  strictly_periodic(true) {
   // Set physical size and number of cells in mesh (root level)
   mesh_size.x1min = pin->GetReal("mesh", "x1min");
   mesh_size.x1max = pin->GetReal("mesh", "x1max");
@@ -129,10 +128,10 @@ Mesh::Mesh(ParameterInput *pin) :
 
   // set boolean flags indicating type of refinement (if any), and whether mesh is
   // periodic, depending on input strings
-  adaptive =
-    (pin->GetOrAddString("mesh", "refinement", "none") == "adaptive") ? true : false;
-  multilevel =
-    ((adaptive) || (pin->GetString("mesh", "refinement") == "static")) ?  true : false;
+  adaptive = (pin->GetOrAddString("mesh_refinement","refinement","none") == "adaptive")
+    ?  true : false;
+  multilevel = (adaptive || pin->GetString("mesh_refinement","refinement") == "static")
+    ?  true : false;
 
   // error check physical size of mesh (root level) from input file.
   if (mesh_size.x1max <= mesh_size.x1min) {
@@ -291,15 +290,8 @@ Mesh::~Mesh() {
   delete [] lloclist;
   delete [] gidslist;
   delete [] nmblist;
-  if (adaptive) { // deallocate arrays for AMR
-    delete [] nref;
-    delete [] nderef;
-    delete [] rdisp;
-    delete [] ddisp;
-    delete [] bnref;
-    delete [] bnderef;
-    delete [] brdisp;
-    delete [] bddisp;
+  if (multilevel) {
+    delete pmr;
   }
 }
 
@@ -560,6 +552,9 @@ void Mesh::NewTimeStep(const Real tlim) {
   // z4c timestep
   if (pmb_pack->pz4c != nullptr) {
     dt = std::min(dt, (cfl_no)*(pmb_pack->pz4c->dtnew) );
+  // Radiation timestep
+  if (pmb_pack->prad != nullptr) {
+    dt = std::min(dt, (cfl_no)*(pmb_pack->prad->dtnew) );
   }
 
 #if MPI_PARALLEL_ENABLED

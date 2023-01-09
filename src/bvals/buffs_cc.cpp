@@ -110,7 +110,7 @@ void BoundaryValuesCC::InitSendIndices(BoundaryBuffer &buf,
   }
 
   // set indices for sends for FLUX CORRECTION (sends always to COARSER level)
-  {auto &iflux = buf.iflux[0];    // indices of buffer for flux correction
+  {auto &iflux = buf.iflux_coar[0];    // indices of buffer for flux correction
   if (ox1 == 0) {
     iflux.bis = mb_indcs.cis;           iflux.bie = mb_indcs.cie;
   } else if (ox1 > 0) {
@@ -132,7 +132,7 @@ void BoundaryValuesCC::InitSendIndices(BoundaryBuffer &buf,
   } else {
     iflux.bks = mb_indcs.cks;           iflux.bke = mb_indcs.cks;
   }
-  buf.iflux_ndat = (iflux.bie - iflux.bis + 1)*(iflux.bje - iflux.bjs + 1)*
+  buf.iflxc_ndat = (iflux.bie - iflux.bis + 1)*(iflux.bje - iflux.bjs + 1)*
                    (iflux.bke - iflux.bks + 1);
   }
 }
@@ -376,7 +376,7 @@ void BoundaryValuesCC::InitRecvIndices(BoundaryBuffer &buf,
 
   // set indices for receives for flux-correction.  Similar to send, except data loaded
   // into appropriate sub-block of coarse buffer (similar to receive from FINER level)
-  {auto &iflux = buf.iflux[0];   // indices of buffer for flux correction
+  {auto &iflux = buf.iflux_coar[0];   // indices of buffer for flux correction
   if (ox1 == 0) {
     iflux.bis = mb_indcs.is;           iflux.bie = mb_indcs.ie;
     if (f1 == 1) {
@@ -433,7 +433,7 @@ void BoundaryValuesCC::InitRecvIndices(BoundaryBuffer &buf,
   } else {
     iflux.bks = mb_indcs.ks;           iflux.bke = mb_indcs.ks;
   }
-  buf.iflux_ndat = (iflux.bie - iflux.bis + 1)*(iflux.bje - iflux.bjs + 1)*
+  buf.iflxc_ndat = (iflux.bie - iflux.bis + 1)*(iflux.bje - iflux.bjs + 1)*
                    (iflux.bke - iflux.bks + 1);
   }
 }

@@ -23,6 +23,7 @@ add_executable(
         bvals/prolongation.cpp
         bvals/physics/hydro_bcs.cpp
         bvals/physics/bfield_bcs.cpp
+        bvals/physics/radiation_bcs.cpp
 
         coordinates/coordinates.cpp
         coordinates/excision.cpp
@@ -43,6 +44,9 @@ add_executable(
         eos/ideal_srmhd.cpp
         eos/ideal_grmhd.cpp
 
+        geodesic-grid/geodesic_grid.cpp
+        geodesic-grid/spherical_grid.cpp
+
         hydro/hydro.cpp
         hydro/hydro_fluxes.cpp
         hydro/hydro_fofc.cpp
@@ -53,6 +57,7 @@ add_executable(
         ion-neutral/ion_neutral.cpp
 
         mesh/build_tree.cpp
+        mesh/load_balance.cpp
         mesh/mesh.cpp
         mesh/meshblock.cpp
         mesh/meshblock_pack.cpp
@@ -93,17 +98,28 @@ add_executable(
         pgen/tests/advection.cpp
         pgen/tests/cpaw.cpp
         pgen/tests/gr_bondi.cpp
+        pgen/tests/gr_monopole.cpp
         pgen/tests/linear_wave.cpp
         pgen/tests/lw_implode.cpp
         pgen/tests/orszag_tang.cpp
         pgen/tests/shock_tube.cpp
+        pgen/tests/rad_check_tetrad.cpp
+        pgen/tests/rad_hohlraum.cpp
+        pgen/tests/rad_linear_wave.cpp
+
+        radiation/radiation.cpp
+        radiation/radiation_fluxes.cpp
+        radiation/radiation_newdt.cpp
+        radiation/radiation_source.cpp
+        radiation/radiation_tasks.cpp
+        radiation/radiation_tetrad.cpp
+        radiation/radiation_update.cpp
 
         srcterms/srcterms.cpp
         srcterms/srcterms_newdt.cpp
         srcterms/turb_driver.cpp
 
         units/units.cpp
-
         utils/change_rundir.cpp
         utils/show_config.cpp
 )

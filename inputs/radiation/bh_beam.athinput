@@ -1,0 +1,64 @@
+<comment>
+problem = beam of radiation in GR (Cartesian Kerr-Schild)
+
+<job>
+basename = beam_cks  # name of run
+
+<time>
+evolution  = dynamic  # dynamic/kinematic/static
+integrator = rk2      # time integration algorithm
+cfl_number = 0.3      # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1       # cycle limit
+tlim       = 16.32419427810796  # time limit
+
+<mesh>
+nghost = 2        # Number of ghost cells
+nx1    = 128      # Number of zones in X1-direction
+x1min  = -0.5     # minimum value of X1
+x1max  = 3.5      # maximum value of X1
+ix1_bc = user     # inner-X1 boundary flag
+ox1_bc = user     # outer-X1 boundary flag
+
+nx2    = 144      # Number of zones in X2-direction
+x2min  = -0.5     # minimum value of X2
+x2max  = 4.0      # maximum value of X2
+ix2_bc = user     # inner-X2 boundary flag
+ox2_bc = user     # outer-X2 boundary flag
+
+nx3    = 1         # Number of zones in X3-direction
+x3min  = -0.5      # minimum value of X3
+x3max  = 0.5       # maximum value of X3
+ix3_bc = periodic  # inner-X3 boundary flag
+ox3_bc = periodic  # outer-X3 boundary flag
+
+<meshblock>
+nx1 = 128   # block size in X1-direction
+nx2 = 144   # block size in X2-direction
+nx3 = 1     # block size in X3-direction
+
+<coord>
+general_rel = true   # general relativity
+a           = 0.0    # black hole spin a (0 <= a/M < 1)
+excise      = true   # excise black hole
+dexcise     = -1.0   # excision density
+pexcise     = -1.0   # excision pressure
+
+<radiation>
+nlevel = 10         # geodesic mesh level
+beam_source = true  # apply beam source term
+dii_dt = 1.0        # injected I per unit time
+
+<problem>
+pos_1  = 3.0   # x-coordinate of beam origin
+pos_2  = 0.0   # y-coordinate of beam origin
+pos_3  = 0.0   # z-coordinate of beam origin
+dir_1  = 0.0   # x-coordinate of beam origin
+dir_2  = 1.0   # y-coordinate of beam origin
+dir_3  = 0.0   # z-coordinate of beam origin
+width  = 0.7   # full proper diameter of beam
+spread = 10.0  # full spread of beam in direction, in degrees
+
+<output1>
+file_type = vtk                # output format
+variable  = rad_coord          # choice of variables to output
+dt        = 1.632419427810796  # output cadence

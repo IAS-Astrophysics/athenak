@@ -305,10 +305,10 @@ void MeshBlockTree::Derefine(int &ndel) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void MeshBlockTree::CountMeshBlock(int& count)
-//  \brief counts the number of MeshBlocks in Tree
+//  \brief Returns the number of MeshBlocks in Tree
 
 void MeshBlockTree::CountMeshBlock(int& count) {
-  if (lloc_.level == 0) count = 0;
+  if (lloc_.level == 0) {count = 0;}
 
   if (pleaf_ == nullptr) {
     count++;
@@ -321,12 +321,18 @@ void MeshBlockTree::CountMeshBlock(int& count) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MeshBlockTree::CreateMeshBlockList(LogicalLocation *list,
-//                                           int *pglist, int& count)
-//  \brief creates the Location list sorted by Z-ordering
+//! \fn void MeshBlockTree::CreateMeshBlockList(LogicalLocation *list, int *pg, int& cnt)
+//! \brief Creates the Location list for tree sorted by Z-ordering, and creates new MB ids
+//! based on this order.  Should be called from root of tree. Called in BuildTreeXXX()
+//! functions when tree is constructed for first time, in which case second argument is
+//! 'nullptr' and this function creates gids for all MBs based on Z-ordering. Also called
+//! by ResdistributeAndRefineMeshBlocks() function with AMR with second argument pointing
+//! to an integer array that is used to store old gid of node on old tree, before creating
+//! a new gid based on Z-ordering in the new tree. Thus pglist[n] is a mapping of
+//! (new gid n) --> (old gid). Also returns total number of MBs in tree in third argument.
 
 void MeshBlockTree::CreateMeshBlockList(LogicalLocation *list, int *pglist, int& count) {
-  if (lloc_.level == 0) count=0;
+  if (lloc_.level == 0) {count=0;}
 
   if (pleaf_ == nullptr) {
     list[count]=lloc_;

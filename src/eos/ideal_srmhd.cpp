@@ -6,6 +6,8 @@
 //! \file ideal_srmhd.cpp
 //! \brief derived class that implements ideal gas EOS in special relativistic mhd
 
+#include <float.h>
+
 #include "athena.hpp"
 #include "mhd/mhd.hpp"
 #include "eos.hpp"
@@ -21,6 +23,7 @@ IdealSRMHD::IdealSRMHD(MeshBlockPack *pp, ParameterInput *pin) :
   eos_data.iso_cs = 0.0;
   eos_data.use_e = true;  // ideal gas EOS always uses internal energy
   eos_data.use_t = false;
+  eos_data.gamma_max = pin->GetOrAddReal("mhd","gamma_max",(FLT_MAX));  // gamma ceiling
 }
 
 //----------------------------------------------------------------------------------------
@@ -63,9 +66,9 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
   const int nkji = (ku - kl + 1)*nji;
   const int nmkji = nmb*nkji;
 
-  int nfloord_=0, nfloore_=0, maxit_=0;
+  int nfloord_=0, nfloore_=0, nceilv_=0, nfail_=0, maxit_=0;
   Kokkos::parallel_reduce("srmhd_c2p",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-  KOKKOS_LAMBDA(const int &idx, int &sumd, int &sume, int &max_it) {
+  KOKKOS_LAMBDA(const int &idx, int &sumd, int &sume, int &sumv, int &sumf, int &max_it) {
     int m = (idx)/nkji;
     int k = (idx - m*nkji)/nji;
     int j = (idx - m*nkji - k*nji)/ni;
@@ -96,7 +99,6 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
 
     // Compute (S^i S_i) (eqn C2)
     Real s2 = SQR(u.mx) + SQR(u.my) + SQR(u.mz);
-
     Real b2 = SQR(u.bx) + SQR(u.by) + SQR(u.bz);
     Real rpar = (u.bx*u.mx +  u.by*u.my +  u.bz*u.mz)/u.d;
 
@@ -104,19 +106,33 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
     // (inline function in ideal_c2p_mhd.hpp file)
     HydPrim1D w;
     bool dfloor_used=false, efloor_used=false;
+    bool vceiling_used=false, c2p_failure=false;
     int iter_used=0;
-    SingleC2P_IdealSRMHD(u, eos, s2, b2, rpar, w, dfloor_used, efloor_used, iter_used);
+    SingleC2P_IdealSRMHD(u, eos, s2, b2, rpar, w,
+                         dfloor_used, efloor_used, c2p_failure, iter_used);
+    // apply velocity ceiling if necessary
+    Real lor = sqrt(1.0+SQR(w.vx)+SQR(w.vy)+SQR(w.vz));
+    if (lor > eos.gamma_max) {
+      vceiling_used = true;
+      Real factor = sqrt((SQR(eos.gamma_max)-1.0)/(SQR(lor)-1.0));
+      w.vx *= factor;
+      w.vy *= factor;
+      w.vz *= factor;
+    }
 
     // set FOFC flag and quit loop if this function called only to check floors
     if (only_testfloors) {
-      if (dfloor_used || efloor_used) {
+      if (dfloor_used || efloor_used || vceiling_used || c2p_failure) {
         fofc_(m,k,j,i) = true;
         sumd++;  // use dfloor as counter for when either is true
       }
     } else {
       if (dfloor_used) {sumd++;}
       if (efloor_used) {sume++;}
+      if (vceiling_used) {sumv++;}
+      if (c2p_failure) {sumf++;}
       max_it = (iter_used > max_it) ? iter_used : max_it;
+
       // store primitive state in 3D array
       prim(m,IDN,k,j,i) = w.d;
       prim(m,IVX,k,j,i) = w.vx;
@@ -129,8 +145,8 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       bcc(m,IBY,k,j,i) = u.by;
       bcc(m,IBZ,k,j,i) = u.bz;
 
-      // reset conserved variables if floor is hit
-      if (dfloor_used || efloor_used) {
+      // reset conserved variables if floor, ceiling, or failure encountered
+      if (dfloor_used || efloor_used || vceiling_used || c2p_failure) {
         MHDPrim1D w_in;
         w_in.d  = w.d;
         w_in.vx = w.vx;
@@ -156,7 +172,8 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
         prim(m,n,k,j,i) = cons(m,n,k,j,i)/u.d;
       }
     }
-  }, Kokkos::Sum<int>(nfloord_), Kokkos::Sum<int>(nfloore_), Kokkos::Max<int>(maxit_));
+  }, Kokkos::Sum<int>(nfloord_), Kokkos::Sum<int>(nfloore_), Kokkos::Sum<int>(nceilv_),
+     Kokkos::Sum<int>(nfail_), Kokkos::Max<int>(maxit_));
 
   // store appropriate counters
   if (only_testfloors) {
@@ -164,6 +181,8 @@ void IdealSRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
   } else {
     pmy_pack->pmesh->ecounter.neos_dfloor += nfloord_;
     pmy_pack->pmesh->ecounter.neos_efloor += nfloore_;
+    pmy_pack->pmesh->ecounter.neos_vceil  += nceilv_;
+    pmy_pack->pmesh->ecounter.neos_fail   += nfail_;
     pmy_pack->pmesh->ecounter.maxit_c2p = maxit_;
   }
 

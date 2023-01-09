@@ -30,12 +30,18 @@ HistoryOutput::HistoryOutput(OutputParameters op, Mesh *pm) : BaseTypeOutput(op,
   // cycle through physics modules and add HistoryData struct for each
   hist_data.clear();
 
-  if (pm->pmb_pack->phydro != nullptr) {
-    hist_data.emplace_back(PhysicsModule::HydroDynamics);
-  }
-
-  if (pm->pmb_pack->pmhd != nullptr) {
-    hist_data.emplace_back(PhysicsModule::MagnetoHydroDynamics);
+  if (pm->pgen->user_hist && op.user_hist_only) {
+    hist_data.emplace_back(PhysicsModule::UserDefined);
+  } else {
+    if (pm->pmb_pack->phydro != nullptr) {
+      hist_data.emplace_back(PhysicsModule::HydroDynamics);
+    }
+    if (pm->pmb_pack->pmhd != nullptr) {
+      hist_data.emplace_back(PhysicsModule::MagnetoHydroDynamics);
+    }
+    if (pm->pgen->user_hist) {
+      hist_data.emplace_back(PhysicsModule::UserDefined);
+    }
   }
   
   if (pm->pmb_pack->pz4c != nullptr) {
@@ -56,9 +62,7 @@ void HistoryOutput::LoadOutputData(Mesh *pm) {
       LoadMHDHistoryData(&data, pm);
     } else if (data.physics == PhysicsModule::SpaceTimeDynamics) {
       LoadZ4cHistoryData(&data, pm);
-    }
-    // user history output
-    if (pm->pgen->user_hist) {
+    } else if (data.physics == PhysicsModule::UserDefined) {
       (pm->pgen->user_hist_func)(&data, pm);
     }
   }
@@ -351,6 +355,8 @@ void HistoryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
           break;
         case PhysicsModule::SpaceTimeDynamics:
           fname.append(".z4c");
+        case PhysicsModule::UserDefined:
+          fname.append(".user");
           break;
         default:
           break;
@@ -372,7 +378,7 @@ void HistoryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         std::fprintf(pfile,"#  [%d]=time      ", iout++);
         std::fprintf(pfile,"[%d]=dt       ", iout++);
         for (int n=0; n<data.nhist; ++n) {
-          std::fprintf(pfile,"[%d]=%.5s    ", iout++, data.label[n].c_str());
+          std::fprintf(pfile,"[%d]=%.10s    ", iout++, data.label[n].c_str());
         }
         std::fprintf(pfile,"\n");                              // terminate line
         data.header_written = true;

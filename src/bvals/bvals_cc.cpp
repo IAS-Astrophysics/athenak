@@ -38,7 +38,7 @@ BoundaryValuesCC::BoundaryValuesCC(MeshBlockPack *pp, ParameterInput *pin) :
 
 TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca) {
   // create local references for variables in kernel
-  int nmb = pmy_pack->pmb->nmb;
+  int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
   int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
 
@@ -200,7 +200,7 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
 TaskStatus BoundaryValuesCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
                                              DvceArray5D<Real> &ca) {
   // create local references for variables in kernel
-  int nmb = pmy_pack->pmb->nmb;
+  int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
 
   bool bflag = false;
@@ -296,6 +296,7 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
           [&](const int i) {
             a(m,v,k,j,i) = rbuf[n].vars(m, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) );
           });
+          tmember.team_barrier();
 
         // if neighbor is at coarser level, load data into coarse_u0 (prolongate below)
         } else {
@@ -303,6 +304,7 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
           [&](const int i) {
             ca(m,v,k,j,i) = rbuf[n].vars(m, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) );
           });
+          tmember.team_barrier();
         }
       });
     }  // end if-neighbor-exists block
@@ -311,7 +313,7 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
   //----- STEP 3: Prolongate conserved variables when neighbor at coarser level
 
   // Only perform prolongation with SMR/AMR
-  if (pmy_pack->pmesh->multilevel) ProlongCC(a,ca);
+  if (pmy_pack->pmesh->multilevel) ProlongateCC(a,ca);
 
   return TaskStatus::complete;
 }

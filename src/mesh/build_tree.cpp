@@ -47,7 +47,7 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
 
   // Error check properties of input paraemters for SMR/AMR meshes.
   if (adaptive) {
-    max_level = pin->GetOrAddInteger("mesh", "numlevel", 1) + root_level - 1;
+    max_level = pin->GetOrAddInteger("mesh_refinement", "num_levels", 1) + root_level - 1;
     if (max_level > 31) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Number of refinement levels must be smaller than "
@@ -106,8 +106,8 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
         if (log_ref_lev > max_level) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "Refinement level exceeds maximum allowed ("
-              << max_level << ")" << std::endl << "Reduce/specify 'numlevel' in <mesh> "
-              << "input block if using AMR" << std::endl;
+              << max_level << ")" << std::endl << "Reduce/specify 'num_levels' in "
+              << "<mesh_refinement> input block if using AMR" << std::endl;
           std::exit(EXIT_FAILURE);
         }
         if (   ref_size.x1min > ref_size.x1max
@@ -228,25 +228,33 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
 
   // initial mesh hierarchy construction is completed here
   ptree->CountMeshBlock(nmb_total);
+  nmb_maxperdevice = nmb_total;
+  if (adaptive) {
+    if (pin->DoesParameterExist("mesh_refinement", "max_nmb_perdevice")) {
+      nmb_maxperdevice = pin->GetReal("mesh_refinement", "max_nmb_perdevice");
+      if (nmb_maxperdevice < nmb_total) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+          << std::endl << "Root grid requires more MeshBlocks (nmb_total=" << nmb_total
+          << ") than specified by <mesh_refinement>/max_nmb_perdevice="
+          << nmb_maxperdevice << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+    } else {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+        << std::endl << "With AMR maximum number of MeshBlocks per device must be "
+        << "specified in input file using <mesh_refinement>/max_nmb_perdevice"
+        << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
 
   costlist = new float[nmb_total];
   ranklist = new int[nmb_total];
   lloclist = new LogicalLocation[nmb_total];
-
   gidslist = new int[global_variable::nranks];
-  nmblist  = new int[global_variable::nranks];
-  if (adaptive) { // allocate arrays for AMR
-    nref = new int[global_variable::nranks];
-    nderef = new int[global_variable::nranks];
-    rdisp = new int[global_variable::nranks];
-    ddisp = new int[global_variable::nranks];
-    bnref = new int[global_variable::nranks];
-    bnderef = new int[global_variable::nranks];
-    brdisp = new int[global_variable::nranks];
-    bddisp = new int[global_variable::nranks];
-  }
+  nmblist = new int[global_variable::nranks];
 
-  // following returns LogicalLocation list sorted by Z-ordering
+  // following returns LogicalLocation list sorted by Z-ordering, and total # of MBs
   ptree->CreateMeshBlockList(lloclist, nullptr, nmb_total);
 
 #if MPI_PARALLEL_ENABLED
@@ -260,19 +268,22 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
 #endif
 
   // initialize cost array with the simplest estimate; all the blocks are equal
+  // TODO(@user): implement variable cost per MeshBlock as needed
   for (int i=0; i<nmb_total; i++) {costlist[i] = 1.0;}
   LoadBalance(costlist, ranklist, gidslist, nmblist, nmb_total);
 
   // create MeshBlockPack for this rank
-  gids = gidslist[global_variable::my_rank];
-  gide = gids + nmblist[global_variable::my_rank] - 1;
+  int mbp_gids = gidslist[global_variable::my_rank];
+  int mbp_gide = mbp_gids + nmblist[global_variable::my_rank] - 1;
   nmb_thisrank = nmblist[global_variable::my_rank];
 
-  pmb_pack = new MeshBlockPack(this, gids, gide);
-  pmb_pack->AddMeshBlocksAndCoordinates(pin, mb_indcs);
+  pmb_pack = new MeshBlockPack(this, mbp_gids, mbp_gide);
+  pmb_pack->AddMeshBlocks(pin);
   pmb_pack->pmb->SetNeighbors(ptree, ranklist);
+  if (multilevel) {
+    pmr = new MeshRefinement(this, pin);
+  }
 
-  ResetLoadBalanceCounters();
   if (global_variable::my_rank == 0) {PrintMeshDiagnostics();}
 
   // set initial time/cycle parameters
@@ -344,7 +355,7 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile) {
 
   // Error check properties of input paraemters for SMR/AMR meshes.
   if (adaptive) {
-    max_level = pin->GetOrAddInteger("mesh", "numlevel", 1) + root_level - 1;
+    max_level = pin->GetOrAddInteger("mesh", "num_levels", 1) + root_level - 1;
     if (max_level > 31) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Number of refinement levels must be smaller than "
@@ -354,24 +365,33 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile) {
   } else {
     max_level = 31;
   }
+  nmb_maxperdevice = nmb_total;
+
+  if (adaptive) {
+    if (pin->DoesParameterExist("mesh_refinement", "max_nmb_perdevice")) {
+      nmb_maxperdevice = pin->GetReal("mesh_refinement", "max_nmb_perdevice");
+      if (nmb_maxperdevice < nmb_total) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+          << std::endl << "Root grid requires more MeshBlocks (nmb_total=" << nmb_total
+          << ") than specified by <mesh_refinement>/max_nmb_perdevice="
+          << nmb_maxperdevice << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+    } else {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+        << std::endl << "With AMR maximum number of MeshBlocks per device must be "
+        << "specified in input file using <mesh_refinement>/max_nmb_perdevice"
+        << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
 
   // allocate memory for lists read from restart
   costlist = new float[nmb_total];
   ranklist = new int[nmb_total];
   lloclist = new LogicalLocation[nmb_total];
-
   gidslist = new int[global_variable::nranks];
-  nmblist  = new int[global_variable::nranks];
-  if (adaptive) { // allocate arrays for AMR
-    nref = new int[global_variable::nranks];
-    nderef = new int[global_variable::nranks];
-    rdisp = new int[global_variable::nranks];
-    ddisp = new int[global_variable::nranks];
-    bnref = new int[global_variable::nranks];
-    bnderef = new int[global_variable::nranks];
-    brdisp = new int[global_variable::nranks];
-    bddisp = new int[global_variable::nranks];
-  }
+  nmblist = new int[global_variable::nranks];
 
   // allocate idlist buffer and read list of logical locations and cost
   IOWrapperSizeT listsize = sizeof(LogicalLocation) + sizeof(float);
@@ -409,15 +429,17 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile) {
   ptree->CreateRootGrid();
   for (int i=0; i<nmb_total; i++) {ptree->AddNodeWithoutRefinement(lloclist[i]);}
 
-  // check the tree structure
-  int nnb;
-  ptree->CreateMeshBlockList(lloclist, nullptr, nnb);
-
-  if (nnb != nmb_total) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "Tree reconstruction failed. Total number of blocks in reconstructed tree = "
-        << nnb << ", number in file = " << nmb_total << std::endl;
-    std::exit(EXIT_FAILURE);
+  // check the tree structure by making sure total # of MBs counted in tree same as the
+  // number read from the restart file.
+  {
+    int nnb;
+    ptree->CreateMeshBlockList(lloclist, nullptr, nnb);
+    if (nnb != nmb_total) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+        << std::endl << "Tree reconstruction failed. Total number of blocks in "
+        << "reconstructed tree=" << nnb << ", number in file=" << nmb_total << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
   }
 
 #ifdef MPI_PARALLEL_ENABLED
@@ -433,15 +455,17 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile) {
   LoadBalance(costlist, ranklist, gidslist, nmblist, nmb_total);
 
   // create MeshBlockPack for this rank
-  gids = gidslist[global_variable::my_rank];
-  gide = gids + nmblist[global_variable::my_rank] - 1;
+  int mbp_gids = gidslist[global_variable::my_rank];
+  int mbp_gide = mbp_gids + nmblist[global_variable::my_rank] - 1;
   nmb_thisrank = nmblist[global_variable::my_rank];
 
-  pmb_pack = new MeshBlockPack(this, gids, gide);
-  pmb_pack->AddMeshBlocksAndCoordinates(pin, mb_indcs);
+  pmb_pack = new MeshBlockPack(this, mbp_gids, mbp_gide);
+  pmb_pack->AddMeshBlocks(pin);
   pmb_pack->pmb->SetNeighbors(ptree, ranklist);
+  if (multilevel) {
+    pmr = new MeshRefinement(this, pin);
+  }
 
-  ResetLoadBalanceCounters();
   if (global_variable::my_rank == 0) {PrintMeshDiagnostics();}
 
   // set remaining parameters

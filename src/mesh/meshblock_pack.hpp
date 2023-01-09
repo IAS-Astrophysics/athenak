@@ -22,6 +22,7 @@ namespace hydro {class Hydro;}
 namespace mhd {class MHD;}
 namespace z4c {class Z4c;}
 namespace ion_neutral {class IonNeutral;}
+namespace radiation {class Radiation;}
 class TurbulenceDriver;
 namespace units {class Units;}
 
@@ -56,6 +57,7 @@ class MeshBlockPack {
   ADM *padm=nullptr;
   z4c::Z4c *pz4c=nullptr;
   ion_neutral::IonNeutral *pionn=nullptr;
+  radiation::Radiation *prad=nullptr;
   TurbulenceDriver *pturb=nullptr;
   units::Units *punit=nullptr;
 
@@ -65,7 +67,8 @@ class MeshBlockPack {
 
   // functions
   void AddPhysics(ParameterInput *pin);
-  void AddMeshBlocksAndCoordinates(ParameterInput *pin, RegionIndcs indcs);
+  void AddMeshBlocks(ParameterInput *pin);
+  void AddCoordinates(ParameterInput *pin);
 
  private:
   // data

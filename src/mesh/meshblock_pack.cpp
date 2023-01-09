@@ -20,6 +20,7 @@
 #include "ion-neutral/ion_neutral.hpp"
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
+#include "radiation/radiation.hpp"
 #include "srcterms/turb_driver.hpp"
 #include "units/units.hpp"
 #include "meshblock_pack.hpp"
@@ -35,9 +36,6 @@ MeshBlockPack::MeshBlockPack(Mesh *pm, int igids, int igide) :
 }
 
 //----------------------------------------------------------------------------------------
-// MeshBlock constructor for restarts
-
-//----------------------------------------------------------------------------------------
 // MeshBlock destructor
 
 MeshBlockPack::~MeshBlockPack() {
@@ -47,21 +45,28 @@ MeshBlockPack::~MeshBlockPack() {
   if (pmhd   != nullptr) {delete pmhd;}
   if (padm   != nullptr) {delete padm;}
   if (pz4c   != nullptr) {delete pz4c;}
+  if (prad   != nullptr) {delete prad;}
   if (pturb  != nullptr) {delete pturb;}
   if (punit  != nullptr) {delete punit;}
 }
 
 //----------------------------------------------------------------------------------------
-// \fn MeshBlockPack::AddMeshBlocksAndCoordinates()
+//! \fn MeshBlockPack::AddMeshBlocks(ParameterInput *pin)
+//! \brief Wrapper function for calling MeshBlock constructor inside MeshBlockPack.
+//! Allows for passing of pointer to 'this' pack.
 
-void MeshBlockPack::AddMeshBlocksAndCoordinates(ParameterInput *pin, RegionIndcs indcs) {
+void MeshBlockPack::AddMeshBlocks(ParameterInput *pin) {
   pmb = new MeshBlock(this, gids, nmb_thispack);
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn MeshBlockPack::AddCoordinates(ParameterInput *pin)
+//! \brief Wrapper function for calling Coordinates constructor inside MeshBlockPack.
+//! Allows for passing of pointer to 'this' pack. Must be called BEFORE AddPhysics()
+//! function, since latter uses data inside Coordinates class.
+
+void MeshBlockPack::AddCoordinates(ParameterInput *pin) {
   pcoord = new Coordinates(pin, this);
-  if (pcoord->is_general_relativistic) {
-    if (pcoord->coord_data.bh_excise) {
-      pcoord->SetExcisionMasks();
-    }
-  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -73,32 +78,40 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   int nphysics = 0;
   TaskID none(0);
 
-  // (1) HYDRODYNAMICS
+  // (1) Units
+  // Default units are simply code units
+  if (pin->DoesBlockExist("units")) {
+    punit = new units::Units(pin);
+  } else {
+    punit = nullptr;
+  }
+
+  // (2) HYDRODYNAMICS
   // Create Hydro physics module.  Create TaskLists only for single-fluid hydro
   // (Note TaskLists stored in MeshBlockPack)
   if (pin->DoesBlockExist("hydro")) {
     phydro = new hydro::Hydro(this, pin);
     nphysics++;
-    if (!(pin->DoesBlockExist("mhd"))) {
+    if (!(pin->DoesBlockExist("mhd")) && !(pin->DoesBlockExist("radiation"))) {
       phydro->AssembleHydroTasks(start_tl, run_tl, end_tl);
     }
   } else {
     phydro = nullptr;
   }
 
-  // (2) MHD
+  // (3) MHD
   // Create MHD physics module.  Create TaskLists only for single-fluid MHD
   if (pin->DoesBlockExist("mhd")) {
     pmhd = new mhd::MHD(this, pin);
     nphysics++;
-    if (!(pin->DoesBlockExist("hydro"))) {
+    if (!(pin->DoesBlockExist("hydro")) && !(pin->DoesBlockExist("radiation"))) {
       pmhd->AssembleMHDTasks(start_tl, run_tl, end_tl);
     }
   } else {
     pmhd = nullptr;
   }
 
-  // (3) ION_NEUTRAL (two-fluid) MHD
+  // (4) ION_NEUTRAL (two-fluid) MHD
   // Create Ion-Neutral physics module and TaskLists. Error if <hydro> and <mhd> are not
   // both defined as well.
   if (pin->DoesBlockExist("ion-neutral")) {
@@ -123,7 +136,17 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     pionn = nullptr;
   }
 
-  // (4) TURBULENCE DRIVER
+  // (5) RADIATION
+  // Create radiation physics module.  Create tasklist.
+  if (pin->DoesBlockExist("radiation")) {
+    prad = new radiation::Radiation(this, pin);
+    nphysics++;
+    prad->AssembleRadiationTasks(start_tl, run_tl, end_tl);
+  } else {
+    prad = nullptr;
+  }
+
+  // (6) TURBULENCE DRIVER
   // This is a special module to drive turbulence in hydro, MHD, or both. Cannot be
   // included as a source term since it requires evolving force array via O-U process.
   // Instead, TurbulenceDriver object is stored in MeshBlockPack and tasks for evolving

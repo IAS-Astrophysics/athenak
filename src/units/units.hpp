@@ -43,17 +43,11 @@ class Units {
   static constexpr Real kelvin_cgs = 1.0;                       // k
 
   // PHYSICAL CONSTANTS
-  static constexpr Real k_boltzmann_cgs = 1.3806488e-16;        // erg/k
-  static constexpr Real grav_constant_cgs = 6.67408e-8;         // cm^3/(g*s^2)
-  static constexpr Real speed_of_light_cgs = 2.99792458e10;     // cm/s
-
-  // Specified code scales in cgs units
-  // (Multiply code units to get quantities in cgs units)
-  // (cgs unit per code unit)
-  const Real length_cgs_, mass_cgs_, time_cgs_;
-
-  // mean molecular weight
-  const Real mu_;
+  static constexpr Real k_boltzmann_cgs = 1.3806488e-16;          // erg/k
+  static constexpr Real grav_constant_cgs = 6.67408e-8;           // cm^3/(g*s^2)
+  static constexpr Real speed_of_light_cgs = 2.99792458e10;       // cm/s
+  static constexpr Real rad_constant_cgs = 7.56573325e-15;        // erg/(cm^3*K^4)
+  static constexpr Real kramers_opacity_constant_cgs = 8.0e22;    // R&L
 
   // functions
   // Code scales in cgs
@@ -92,6 +86,15 @@ class Units {
   Real k_boltzmann() const;
   Real grav_constant() const;
   Real speed_of_light() const;
+
+ private:
+  // Specified code scales in cgs units
+  // (Multiply code units to get quantities in cgs units)
+  // (cgs unit per code unit)
+  Real length_cgs_, mass_cgs_, time_cgs_;
+
+  // mean molecular weight
+  const Real mu_;
 };
 
 } // namespace units

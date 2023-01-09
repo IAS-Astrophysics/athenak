@@ -23,9 +23,10 @@
 BoundaryValues::BoundaryValues(MeshBlockPack *pp, ParameterInput *pin) :
   pmy_pack(pp),
   u_in("uin",1,1),
-  b_in("bin",1,1) {
+  b_in("bin",1,1),
+  i_in("iin",1,1) {
   // allocate vector of status flags and MPI requests (if needed)
-  int nmb = pmy_pack->nmb_thispack;
+  int nmb = std::max((pmy_pack->nmb_thispack), (pmy_pack->pmesh->nmb_maxperdevice));
   int nnghbr = pmy_pack->pmb->nnghbr;
   for (int n=0; n<nnghbr; ++n) {
     for (int m=0; m<nmb; ++m) {
@@ -56,11 +57,13 @@ BoundaryValues::BoundaryValues(MeshBlockPack *pp, ParameterInput *pin) :
     send_buf[n].isame_ndat = 0;
     send_buf[n].icoar_ndat = 0;
     send_buf[n].ifine_ndat = 0;
-    send_buf[n].iflux_ndat = 0;
+    send_buf[n].iflxs_ndat = 0;
+    send_buf[n].iflxc_ndat = 0;
     recv_buf[n].isame_ndat = 0;
     recv_buf[n].icoar_ndat = 0;
     recv_buf[n].ifine_ndat = 0;
-    recv_buf[n].iflux_ndat = 0;
+    recv_buf[n].iflxs_ndat = 0;
+    recv_buf[n].iflxc_ndat = 0;
   }
 
 #if MPI_PARALLEL_ENABLED
@@ -84,6 +87,7 @@ void BoundaryValues::InitializeBuffers(const int nvar) {
   if (!(pmy_pack->pmesh->strictly_periodic)) {
     Kokkos::realloc(u_in, nvar, 6);
     Kokkos::realloc(b_in, 3, 6);   // always 3 components of face-fields
+    Kokkos::realloc(i_in, nvar, 6);
   }
 
   // initialize buffers used for uniform grid and SMR/AMR calculations
@@ -96,7 +100,7 @@ void BoundaryValues::InitializeBuffers(const int nvar) {
   }
 
   // x1 faces; NeighborIndex = [0,...,7]
-  int nmb = pmy_pack->nmb_thispack;
+  int nmb = std::max((pmy_pack->nmb_thispack), (pmy_pack->pmesh->nmb_maxperdevice));
   for (int n=-1; n<=1; n+=2) {
     for (int fz=0; fz<nfz; fz++) {
       for (int fy = 0; fy<nfy; fy++) {

@@ -24,8 +24,10 @@ namespace ion_neutral {
 
 IonNeutral::IonNeutral(MeshBlockPack *pp, ParameterInput *pin) :
   pmy_pack(pp) {
-  // Read drag coeff
+  // Read various coefficients
   drag_coeff = pin->GetReal("ion-neutral","drag_coeff");
+  ionization_coeff = pin->GetOrAddReal("ion-neutral","ionization_coeff",0.0);
+  recombination_coeff = pin->GetOrAddReal("ion-neutral","recombination_coeff",0.0);
 }
 
 //----------------------------------------------------------------------------------------
@@ -128,6 +130,7 @@ TaskStatus IonNeutral::FirstTwoImpRK(Driver *pdrive, int stage) {
 //     ru(0) -> ui(IM1)     ru(3) -> un(IM1)
 //     ru(1) -> ui(IM2)     ru(4) -> un(IM2)
 //     ru(2) -> ui(IM3)     ru(5) -> un(IM3)
+//     ru(6) -> ui(IDN)     ru(7) -> un(IDN)
 //  where ui=pmhd->u0 and un=phydro->u0
 
 
@@ -166,6 +169,8 @@ TaskStatus IonNeutral::ImpRKUpdate(Driver *pdriver, int estage) {
           un(m,IM1,k,j,i) += adt*ru_(s,m,3,k,j,i);
           un(m,IM2,k,j,i) += adt*ru_(s,m,4,k,j,i);
           un(m,IM3,k,j,i) += adt*ru_(s,m,5,k,j,i);
+          ui(m,IDN,k,j,i) += adt*ru_(s,m,6,k,j,i);
+          un(m,IDN,k,j,i) += adt*ru_(s,m,7,k,j,i);
         });
       }
     });
@@ -175,28 +180,44 @@ TaskStatus IonNeutral::ImpRKUpdate(Driver *pdriver, int estage) {
   // equations for ion-neutral drag.
   // Only required for istage = (1,2,3,[4])
   if (estage < pdriver->nexp_stages) {
-    Real adt = drag_coeff*(pdriver->a_impl)*(pmy_pack->pmesh->dt);
+    Real gamma_adt = drag_coeff*(pdriver->a_impl)*(pmy_pack->pmesh->dt);
+    Real xi_adt = ionization_coeff*(pdriver->a_impl)*(pmy_pack->pmesh->dt);
+    Real alpha_adt = recombination_coeff*(pdriver->a_impl)*(pmy_pack->pmesh->dt);
     auto ui = pmhd->u0;
     auto un = phyd->u0;
     par_for("imex_imp",DevExeSpace(),0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-      Real denom = 1.0 + adt*(ui(m,IDN,k,j,i) + un(m,IDN,k,j,i));
+      Real rho_i = ui(m,IDN,k,j,i);
+      if (alpha_adt > 0) { // to avoid division by zero
+        Real d = 1./4./alpha_adt/alpha_adt + xi_adt/2./alpha_adt/alpha_adt
+                 + xi_adt*xi_adt/4./alpha_adt/alpha_adt + ui(m,IDN,k,j,i)/alpha_adt +
+                 xi_adt/alpha_adt * (ui(m,IDN,k,j,i)+un(m,IDN,k,j,i));
+        rho_i = -1./2./alpha_adt - xi_adt/2./alpha_adt + sqrt(d);
+      }
+      Real rho_n = ui(m,IDN,k,j,i) + un(m,IDN,k,j,i) - rho_i;
+      ui(m,IDN,k,j,i) = rho_i;
+      un(m,IDN,k,j,i) = rho_n;
+
+      Real denom = 1.0 + gamma_adt*(rho_i+rho_n) + xi_adt + alpha_adt*rho_i;
       // compute new ion/neutral momenta in x1
       Real sum = (ui(m,IM1,k,j,i) + un(m,IM1,k,j,i));
-      Real u_i = (ui(m,IM1,k,j,i) + adt*ui(m,IDN,k,j,i)*sum)/denom;
-      Real u_n = (un(m,IM1,k,j,i) + adt*un(m,IDN,k,j,i)*sum)/denom;
+      Real u_i = (ui(m,IM1,k,j,i) +
+                 (gamma_adt*rho_i + xi_adt)*sum)/denom;
+      Real u_n = sum - u_i;
       ui(m,IM1,k,j,i) = u_i;
       un(m,IM1,k,j,i) = u_n;
       // compute new ion/neutral momenta in x2
       sum = (ui(m,IM2,k,j,i) + un(m,IM2,k,j,i));
-      u_i = (ui(m,IM2,k,j,i) + adt*ui(m,IDN,k,j,i)*sum)/denom;
-      u_n = (un(m,IM2,k,j,i) + adt*un(m,IDN,k,j,i)*sum)/denom;
+      u_i = (ui(m,IM2,k,j,i) +
+                 (gamma_adt*rho_i + xi_adt)*sum)/denom;
+      u_n = sum - u_i;
       ui(m,IM2,k,j,i) = u_i;
       un(m,IM2,k,j,i) = u_n;
       // compute new ion/neutral momenta in x3
       sum = (ui(m,IM3,k,j,i) + un(m,IM3,k,j,i));
-      u_i = (ui(m,IM3,k,j,i) + adt*ui(m,IDN,k,j,i)*sum)/denom;
-      u_n = (un(m,IM3,k,j,i) + adt*un(m,IDN,k,j,i)*sum)/denom;
+      u_i = (ui(m,IM3,k,j,i) +
+                 (gamma_adt*rho_i + xi_adt)*sum)/denom;
+      u_n = sum - u_i;
       ui(m,IM3,k,j,i) = u_i;
       un(m,IM3,k,j,i) = u_n;
     });
@@ -209,27 +230,39 @@ TaskStatus IonNeutral::ImpRKUpdate(Driver *pdriver, int estage) {
     auto ui = pmhd->u0;
     auto un = phyd->u0;
     auto drag = drag_coeff;
+    auto xi = ionization_coeff;
+    auto alpha = recombination_coeff;
     auto ru_ = pdriver->impl_src;
     par_for("imex_rup",DevExeSpace(),0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
       // drag term in IM1 component of ion momentum
       ru_(s,m,0,k,j,i) = drag*(ui(m,IDN,k,j,i)*un(m,IM1,k,j,i) -
-                               un(m,IDN,k,j,i)*ui(m,IM1,k,j,i));
+                              un(m,IDN,k,j,i)*ui(m,IM1,k,j,i)) +
+                              xi*un(m,IM1,k,j,i) - alpha*ui(m,IDN,k,j,i)*ui(m,IM1,k,j,i);
       // drag term in IM2 component of ion momentum
       ru_(s,m,1,k,j,i) = drag*(ui(m,IDN,k,j,i)*un(m,IM2,k,j,i) -
-                               un(m,IDN,k,j,i)*ui(m,IM2,k,j,i));
+                              un(m,IDN,k,j,i)*ui(m,IM2,k,j,i)) +
+                              xi*un(m,IM2,k,j,i) - alpha*ui(m,IDN,k,j,i)*ui(m,IM2,k,j,i);
       // drag term in IM3 component of ion momentum
       ru_(s,m,2,k,j,i) = drag*(ui(m,IDN,k,j,i)*un(m,IM3,k,j,i) -
-                               un(m,IDN,k,j,i)*ui(m,IM3,k,j,i));
+                              un(m,IDN,k,j,i)*ui(m,IM3,k,j,i)) +
+                              xi*un(m,IM3,k,j,i) - alpha*ui(m,IDN,k,j,i)*ui(m,IM3,k,j,i);
       // drag term in IM1 component of neutral momentum
       ru_(s,m,3,k,j,i) = drag*(un(m,IDN,k,j,i)*ui(m,IM1,k,j,i) -
-                               ui(m,IDN,k,j,i)*un(m,IM1,k,j,i));
+                              ui(m,IDN,k,j,i)*un(m,IM1,k,j,i)) -
+                              xi*un(m,IM1,k,j,i) + alpha*ui(m,IDN,k,j,i)*ui(m,IM1,k,j,i);
       // drag term in IM2 component of neutral momentum
       ru_(s,m,4,k,j,i) = drag*(un(m,IDN,k,j,i)*ui(m,IM2,k,j,i) -
-                               ui(m,IDN,k,j,i)*un(m,IM2,k,j,i));
+                              ui(m,IDN,k,j,i)*un(m,IM2,k,j,i)) -
+                              xi*un(m,IM2,k,j,i) + alpha*ui(m,IDN,k,j,i)*ui(m,IM2,k,j,i);
       // drag term in IM3 component of neutral momentum
       ru_(s,m,5,k,j,i) = drag*(un(m,IDN,k,j,i)*ui(m,IM3,k,j,i) -
-                               ui(m,IDN,k,j,i)*un(m,IM3,k,j,i));
+                              ui(m,IDN,k,j,i)*un(m,IM3,k,j,i)) -
+                              xi*un(m,IM3,k,j,i) + alpha*ui(m,IDN,k,j,i)*ui(m,IM3,k,j,i);
+      // drag term in IDN component of ion momentum
+      ru_(s,m,6,k,j,i) = xi*un(m,IDN,k,j,i) - alpha*ui(m,IDN,k,j,i)*ui(m,IDN,k,j,i);
+      // drag term in IDN component of neutral momentum
+      ru_(s,m,7,k,j,i) =-xi*un(m,IDN,k,j,i) + alpha*ui(m,IDN,k,j,i)*ui(m,IDN,k,j,i);
     });
   }
 
