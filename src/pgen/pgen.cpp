@@ -187,7 +187,6 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   std::memcpy(&data_size, &(variabledata[0]), sizeof(IOWrapperSizeT));
   // calculate total number of CC variables
 
-=======
   if (pturb != nullptr) {
     // root process reads size the random seed
     char *rng_data = new char[sizeof(RNG_State)];

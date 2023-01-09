@@ -56,10 +56,9 @@ void RestartOutput::LoadOutputData(Mesh *pm) {
   mhd::MHD* pmhd = pm->pmb_pack->pmhd;
   ADM* padm = pm->pmb_pack->padm;
   z4c::Z4c* pz4c = pm->pmb_pack->pz4c;
-  int nhydro=0, nmhd=0, nadm=0, nz4c=0;
   radiation::Radiation* prad = pm->pmb_pack->prad;
   TurbulenceDriver* pturb=pm->pmb_pack->pturb;
-  int nhydro=0, nmhd=0, nrad=0, nforce=3;
+  int nhydro=0, nmhd=0, nrad=0, nforce=3, nadm=0, nz4c=0;
   if (phydro != nullptr) {
     nhydro = phydro->nhydro + phydro->nscalars;
   }

@@ -199,7 +199,7 @@ TaskStatus Z4c::RestrictU(Driver *pdrive, int stage) {
   // Only execute this function with SMR/SMR
   if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
 
-  pmy_pack->pmesh->RestrictCC(u0, coarse_u0);
+  pmy_pack->pmesh->pmr->RestrictCC(u0, coarse_u0);
   return TaskStatus::complete;
 }
 
