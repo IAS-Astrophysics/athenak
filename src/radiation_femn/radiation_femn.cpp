@@ -147,7 +147,7 @@ namespace radiationfemn {
         }
 
         // allocate boundary buffers for cell-centered variables
-        pbval_i = new BoundaryValuesCC(ppack, pin);
+        pbval_i = new BoundaryValuesCC(ppack, pin, false);
         pbval_i->InitializeBuffers(nangles);
     }
 

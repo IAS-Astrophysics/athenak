@@ -25,6 +25,7 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "radiation/radiation.hpp"
+#include "radiation_femn/radiation_femn.hpp"
 #include "radiation/radiation_tetrad.hpp"
 #include "outputs.hpp"
 
@@ -334,4 +335,29 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       }
     });
   }
+
+    // radiation energy density for FEM_N
+    if(name.compare("rad_femn_E") == 0 and pm->pmb_pack->pradfemn->fpn == 0) {
+        Kokkos::realloc(derived_var, nmb, 1, n3, n2, n1);
+        auto dv = derived_var;
+        auto &i0_ = pm->pmb_pack->pradfemn->i0;
+        auto &mm_ = pm->pmb_pack->pradfemn->mass_matrix;
+        auto nangles = pm->pmb_pack->pradfemn->nangles;
+
+        par_for("rad_femn_E_compute", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie, 0, (nangles-1), 0, (nangles-1),
+                KOKKOS_LAMBDA(int m, int k, int j, int i, int B, int A) {
+                    dv(m,0,k,j,i) += mm_(B,A) * i0_(m,A,k,j,i);
+                });
+    }
+
+    if(name.compare("rad_femn_E") == 0 and pm->pmb_pack->pradfemn->fpn != 0) {
+        Kokkos::realloc(derived_var, nmb, 1, n3, n2, n1);
+        auto dv = derived_var;
+        auto &i0_ = pm->pmb_pack->pradfemn->i0;
+
+        par_for("rad_femn_E_compute_fpn", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+                KOKKOS_LAMBDA(int m, int k, int j, int i) {
+                    dv(m,0,k,j,i) = std::sqrt(4.0*M_PI) * i0_(m,0,k,j,i);
+                });
+    }
 }

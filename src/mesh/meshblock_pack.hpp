@@ -23,6 +23,7 @@ namespace z4c {class Z4c;}
 namespace adm {class ADM;}
 namespace ion_neutral {class IonNeutral;}
 namespace radiation {class Radiation;}
+namespace radiationfemn {class RadiationFEMN;}
 class TurbulenceDriver;
 namespace units {class Units;}
 
@@ -58,6 +59,7 @@ class MeshBlockPack {
   z4c::Z4c *pz4c=nullptr;
   ion_neutral::IonNeutral *pionn=nullptr;
   radiation::Radiation *prad=nullptr;
+  radiationfemn::RadiationFEMN *pradfemn=nullptr;
   TurbulenceDriver *pturb=nullptr;
   units::Units *punit=nullptr;
 

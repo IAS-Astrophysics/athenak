@@ -23,6 +23,7 @@
 #include "diffusion/resistivity.hpp"
 #include "diffusion/conduction.hpp"
 #include "radiation/radiation.hpp"
+#include "radiation_femn/radiation_femn.hpp"
 #include "srcterms/srcterms.hpp"
 #include "outputs/io_wrapper.hpp"
 
@@ -575,6 +576,11 @@ void Mesh::NewTimeStep(const Real tlim) {
   if (pmb_pack->prad != nullptr) {
     dt = std::min(dt, (cfl_no)*(pmb_pack->prad->dtnew) );
   }
+
+    // Radiation FEM_N timestep
+    if (pmb_pack->pradfemn != nullptr) {
+        dt = std::min(dt, (cfl_no) * (pmb_pack->pradfemn->dtnew));
+    }
 
 #if MPI_PARALLEL_ENABLED
   // get minimum dt over all MPI ranks

@@ -20,6 +20,7 @@
 #include "mhd/mhd.hpp"
 #include "ion-neutral/ion_neutral.hpp"
 #include "radiation/radiation.hpp"
+#include "radiation_femn/radiation_femn.hpp"
 #include "z4c/z4c.hpp"
 #include "driver.hpp"
 
@@ -249,6 +250,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
   hydro::Hydro *phydro = pmesh->pmb_pack->phydro;
   mhd::MHD *pmhd = pmesh->pmb_pack->pmhd;
   radiation::Radiation *prad = pmesh->pmb_pack->prad;
+  radiationfemn::RadiationFEMN *pradfemn = pmesh->pmb_pack->pradfemn;
   z4c::Z4c *pz4c = pmesh->pmb_pack->pz4c;
   if (time_evolution != TimeEvolution::tstatic) {
     if (phydro != nullptr) {
@@ -260,10 +262,12 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
     if (prad != nullptr) {
       (void) pmesh->pmb_pack->prad->NewTimeStep(this, nexp_stages);
     }
+    if (pradfemn != nullptr) {
+            (void) pmesh->pmb_pack->pradfemn->NewTimeStep(this, nexp_stages);
+    }
     if (pz4c != nullptr) {
       (void) pmesh->pmb_pack->pz4c->NewTimeStep(this, nexp_stages);
     }
-
     pmesh->NewTimeStep(tlim);
   }
 
@@ -601,6 +605,18 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) pz4c->Z4cBoundaryRHS(this, 0);
     (void) pz4c->ApplyPhysicalBCs(this, 0);
     (void) pz4c->Prolongate(this, 0);
+  }
+
+  // Initialize radiation FEM_N: ghost zones and intensity (everywhere)
+  radiationfemn::RadiationFEMN *pradfemn = pm->pmb_pack->pradfemn;
+  if (pradfemn != nullptr) {
+    (void) pradfemn->RestrictI(this, 0);
+    (void) pradfemn->InitRecv(this, -1);  // stage < 0 suppresses InitFluxRecv
+    (void) pradfemn->SendI(this, 0);
+    (void) pradfemn->ClearSend(this, -1);
+    (void) pradfemn->ClearRecv(this, -1);
+    (void) pradfemn->RecvI(this, 0);
+    (void) pradfemn->ApplyPhysicalBCs(this, 0);
   }
 
   return;
