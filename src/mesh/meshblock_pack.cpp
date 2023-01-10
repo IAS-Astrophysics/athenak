@@ -19,6 +19,7 @@
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
 #include "radiation/radiation.hpp"
+#include "radiation_femn/radiation_femn.hpp"
 #include "srcterms/turb_driver.hpp"
 #include "units/units.hpp"
 #include "meshblock_pack.hpp"
@@ -39,11 +40,12 @@ MeshBlockPack::MeshBlockPack(Mesh *pm, int igids, int igide) :
 MeshBlockPack::~MeshBlockPack() {
   delete pmb;
   delete pcoord;
-  if (phydro != nullptr) {delete phydro;}
-  if (pmhd   != nullptr) {delete pmhd;}
-  if (prad   != nullptr) {delete prad;}
-  if (pturb  != nullptr) {delete pturb;}
-  if (punit  != nullptr) {delete punit;}
+  if (phydro    != nullptr) {delete phydro;}
+  if (pmhd      != nullptr) {delete pmhd;}
+  if (prad      != nullptr) {delete prad;}
+  if (pradfemn  != nullptr) {delete pradfemn;}
+  if (pturb     != nullptr) {delete pturb;}
+  if (punit     != nullptr) {delete punit;}
 }
 
 //----------------------------------------------------------------------------------------
@@ -155,6 +157,16 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   } else {
     pturb = nullptr;
   }
+
+    // (7) RADIATION FEM_N
+    // Create radiation FEM_N physics module.  Create tasklist.
+    if (pin->DoesBlockExist("radiation-femn")) {
+        pradfemn = new radiationfemn::RadiationFEMN(this, pin);
+        nphysics++;
+        pradfemn->AssembleRadiationFEMNTasks(start_tl, run_tl, end_tl);
+    } else {
+        pradfemn = nullptr;
+    }
 
   // Check that at least ONE is requested and initialized.
   // Error if there are no physics blocks in the input file.

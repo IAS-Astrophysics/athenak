@@ -20,6 +20,7 @@
 #include "mhd/mhd.hpp"
 #include "srcterms/srcterms.hpp"
 #include "srcterms/turb_driver.hpp"
+#include "radiation_femn/radiation_femn.hpp"
 #include "outputs.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -107,6 +108,13 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     exit(EXIT_FAILURE);
   }
 
+    if ((ivar >=78) && (ivar < 80) && (pm->pmb_pack->pradfemn == nullptr)) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+                  << "Output of Radiation FEMN variable requested in <output> block '"
+                  << out_params.block_name << "' but no Force object has been constructed."
+                  << std::endl << "Input file is likely missing a <forcing> block" << std::endl;
+        exit(EXIT_FAILURE);
+    }
   // Now load STL vector of output variables
   outvars.clear();
 
@@ -457,6 +465,17 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     outvars.emplace_back("r23_ff",8,&(derived_var));
     outvars.emplace_back("r33_ff",9,&(derived_var));
   }
+
+    // radiation femn evolved variables
+    if (out_params.variable.compare("rad_femn_I") == 0) {
+        for(size_t i=0; i < pm->pmb_pack->pradfemn->nangles; i++) {
+            outvars.emplace_back("I"+std::to_string(i),i,&(pm->pmb_pack->pradfemn->i0));
+        }
+    }
+
+    if (out_params.variable.compare("rad_femn_E") == 0) {
+        outvars.emplace_back("E",0,&(derived_var));
+    }
 
   // initialize vector containing number of output MBs per rank
   noutmbs.assign(global_variable::nranks, 0);
