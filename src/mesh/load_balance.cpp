@@ -4,9 +4,8 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file load_balance.cpp
-//! \brief File containing various Mesh functions associated with load balancing.  Note
-//! these are needed even on a uniform mesh with MPI, and not just for SMR/AMR, which is
-//! why they are part of the Mesh and not MeshRefinement class.
+//! \brief File containing various Mesh and MeshRefinement functions associated with
+//! load balancing with MPI, both for uniform grids and with SMR/AMR.
 
 #include <iostream>
 
@@ -20,12 +19,14 @@
 
 //----------------------------------------------------------------------------------------
 //! \fn void Mesh::LoadBalance(double *clist, int *rlist, int *slist, int *nlist, int nb)
-//! \brief Calculate distribution of MeshBlocks based on the cost list
+//! \brief Calculate distribution of MeshBlocks based on input cost list
 //! input: clist = cost of each MB (array of length nmbtotal)
 //!        nb = number of MeshBlocks
 //! output: rlist = rank to which each MB is assigned (array of length nmbtotal)
 //!         slist =
 //!         nlist =
+//! This function is needed even on a uniform mesh with MPI, and not just for SMR/AMR,
+//! which is why it is part of the Mesh and not MeshRefinement class.
 
 void Mesh::LoadBalance(float *clist, int *rlist, int *slist, int *nlist, int nb) {
   float min_cost = std::numeric_limits<float>::max();
@@ -77,6 +78,71 @@ void Mesh::LoadBalance(float *clist, int *rlist, int *slist, int *nlist, int nb)
               << "This will result in poor load balancing." << std::endl;
   }
 #endif
+  return;
+}
+
+/****
+
+//----------------------------------------------------------------------------------------
+//! \fn void MeshRefinement::InitRecvAMR()
+//! \brief
+
+void MeshRefinement::InitRecvAMR() {
+#if MPI_PARALLEL_ENABLED
+  auto &new_nmb = new_nmb_eachrank[global_variable::my_rank];
+  auto &new_gids = new_gids_eachrank[global_variable::my_rank];
+  // loop over all new MBs on this rank, and check if data is coming from another rank
+  for (int m=0; m<new_nmb; i++) {
+    if (rank_eachmb[newtoold[m+gids]] != global_variable::my_rank) {
+      // post non-blocking recvs for de-refinement
+
+      // post non-blocking recvs for refinement
+
+      // post non-blocking recvs for MBs moved without refinement
+      MPI_Request new_request;
+      MPI
+      int ierr = MPI_Irecv(recv_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
+                           vars_comm, &(recv_buf[n].vars_req[m]));
+      if (ierr != MPI_SUCCESS) {no_errors=false;}
+    }
+  }
+#endif
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MeshRefinement::PackAndSendAMR()
+//! \brief
+
+void MeshRefinement::PackAndSendAMR() {
 
   return;
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn void MeshRefinement::RecvAndUnpackAMR()
+//! \brief
+
+void MeshRefinement::RecvAndUnpackAMR() {
+
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MeshRefinement::ClearSendAMR()
+//! \brief
+
+void MeshRefinement::ClearSendAMR() {
+
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MeshRefinement::ClearRecvAMR()
+//! \brief
+
+void MeshRefinement::ClearRecvAMR() {
+
+  return;
+}
+*****/

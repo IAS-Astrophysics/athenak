@@ -69,7 +69,7 @@ struct BoundaryBuffer {
   // Maximum number of data elements (bie-bis+1) across 3 components of above
   int isame_ndat, icoar_ndat, ifine_ndat, iflxs_ndat, iflxc_ndat;
 
-  // 3D Views that store buffer data on device
+  // 2D Views that store buffer data on device, dimensioned (nmb, ndata)
   DvceArray2D<Real> vars, flux;
 
   // following two 1D arrays only accessed from host, so can use STL vector

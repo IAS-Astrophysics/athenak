@@ -397,19 +397,28 @@ void MeshRefinement::UpdateMeshBlockTree(int &nnew, int &ndel) {
     delete [] cllderef;
   }
 
+/***/
+for (int m=0; m<(pmy_mesh->nmb_thisrank); ++m) {
+std::cout << "m=" << m << " flag="<< refine_flag.h_view(m) << std::endl;
+}
+/***/
+
   return;
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MeshRefinement::RedistributeAndRefineMeshBlocks(int ntot)
+//! \fn void MeshRefinement::RedistAndRefineMeshBlocks()
 //! \brief redistribute MeshBlocks according to the new load balance
-//! Input argument is total number of MBs after refinement (current number +/- number of
-//! MBs refined/derefined).
+//! This requires moving data within the evolved variable arrays for each Physics (e.g.,
+//! hydro, mhd, radiation) both within a rank (using deep copies) and potentially between
+//! ranks (using MPI calls), and applying restriction and prolongation operators as
+//! required. It also requires rebuilding the MB data arrays, coordinates, and neighbors.
+//! Boundary values and primitives are set in calling function: AdaptiveMeshRefinement()
 
 void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, int ndel) {
   Mesh* pm = pmy_mesh;
-  int nmb_old = pm->nmb_total;
-  int nmb_new = nmb_old + nnew - ndel;
+  int old_nmb = pm->nmb_total;
+  int new_nmb = old_nmb + nnew - ndel;
   // compute nleaf = number of leaf MeshBlocks per refined block
   int nleaf = 2;
   if (pm->two_d) nleaf = 4;
@@ -418,23 +427,23 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   // Step 1. Create Z-ordered list of logical locations for new MBs, and newtoold list
   // mapping (new MB gid [n])-->(old gid) for all MBs. Index of array [n] is new gid,
   // value is old gid.
-  LogicalLocation *new_lloclist = new LogicalLocation[nmb_new];
-  newtoold = new int[nmb_new];
+  LogicalLocation *new_lloc_eachmb = new LogicalLocation[new_nmb];
+  newtoold = new int[new_nmb];
   int new_nmb_total;
-  pm->ptree->CreateZOrderedLLList(new_lloclist, newtoold, new_nmb_total);
-  if (new_nmb_total != nmb_new) {
+  pm->ptree->CreateZOrderedLLList(new_lloc_eachmb, newtoold, new_nmb_total);
+  if (new_nmb_total != new_nmb) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
         << "Number of MeshBlocks in new tree = " << new_nmb_total << " but expected "
-        << "value = " << nmb_new << std::endl;
+        << "value = " << new_nmb << std::endl;
     std::exit(EXIT_FAILURE);
   }
 
   // Step 2.  Create oldtonew list mapping the previous gid to the current one for all MBs
-  // Index of array is old gid, value os new gid.
-  oldtonew = new int[nmb_old];
+  // Index of array is old gid, value is new gid.
+  oldtonew = new int[old_nmb];
   oldtonew[0] = 0;
   int mb_idx = 1;
-  for (int n=1; n<nmb_new; n++) {
+  for (int n=1; n<new_nmb; n++) {
     if (newtoold[n] == newtoold[n-1] + 1) { // normal
       oldtonew[mb_idx++] = n;
     } else if (newtoold[n] == newtoold[n-1] + nleaf) { // derefined
@@ -445,28 +454,31 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
     }
   }
   // fill the last block
-  while (mb_idx < nmb_old) {
-    oldtonew[mb_idx] = nmb_new-1;
+  while (mb_idx < old_nmb) {
+    oldtonew[mb_idx] = new_nmb-1;
     mb_idx++;
   }
 
-  // Step 3. Calculate new load balance.  Initialize new cost array with the simplest
-  // estimate possible: all the blocks are equal
+  // Step 3.
+  // Calculate new load balance. Initialize new cost array with the simplest estimate
+  // possible: all the blocks are equal
   // TODO(@user): implement variable cost per MeshBlock as needed
-  float *new_costlist = new float[nmb_new];
-  int *new_ranklist = new int[nmb_new];
-  int *new_gidslist = new int[global_variable::nranks];
-  int *new_nmblist = new int[global_variable::nranks];
+  float *new_cost_eachmb = new float[new_nmb];
+  int *new_rank_eachmb = new int[new_nmb];
+  int *new_gids_eachrank = new int[global_variable::nranks];
+  int *new_nmb_eachrank = new int[global_variable::nranks];
 
-  for (int i=0; i<nmb_new; i++) {new_costlist[i] = 1.0;}
-  pm->LoadBalance(new_costlist, new_ranklist, new_gidslist, new_nmblist, new_nmb_total);
+  for (int i=0; i<new_nmb; i++) {new_cost_eachmb[i] = 1.0;}
+  pm->LoadBalance(new_cost_eachmb, new_rank_eachmb, new_gids_eachrank, new_nmb_eachrank,
+                  new_nmb_total);
 
+  // Step 4.
+  // Restrict evolved variables within each physics for MBs flagged for derefinement
   hydro::Hydro* phydro = pm->pmb_pack->phydro;
   mhd::MHD* pmhd = pm->pmb_pack->pmhd;
   auto &nmb = pm->pmb_pack->nmb_thispack;                           // old nmb
   int mbs = pmy_mesh->gids_eachrank[global_variable::my_rank];      // old gids
-
-  // Step 4. Restrict evolved variables for MBs flagged for derefinement
+  // derefine (if needed)
   if (ndel > 0) {
     if (phydro != nullptr) {
       DerefineCC(phydro->u0, phydro->coarse_u0);
@@ -559,11 +571,11 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   delete [] pm->cost_eachmb;
   delete [] pm->gids_eachrank;
   delete [] pm->nmb_eachrank;
-  pm->lloc_eachmb = new_lloclist;
-  pm->rank_eachmb = new_ranklist;
-  pm->cost_eachmb = new_costlist;
-  pm->gids_eachrank = new_gidslist;
-  pm->nmb_eachrank  = new_nmblist;
+  pm->lloc_eachmb = new_lloc_eachmb;
+  pm->rank_eachmb = new_rank_eachmb;
+  pm->cost_eachmb = new_cost_eachmb;
+  pm->gids_eachrank = new_gids_eachrank;
+  pm->nmb_eachrank  = new_nmb_eachrank;
   pm->nmb_total = new_nmb_total;
   pm->nmb_thisrank = pm->nmb_eachrank[global_variable::my_rank];
 
@@ -748,9 +760,9 @@ void MeshRefinement::RestrictFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb)
 //! overwriting any data located there. The data in these locations must already have been
 //! copied to another location or sent to another rank via MPI.
 
-void MeshRefinement::RefineCC(int nmb_new, DvceArray5D<Real> &a, DvceArray5D<Real> &ca) {
+void MeshRefinement::RefineCC(int new_nmb, DvceArray5D<Real> &a, DvceArray5D<Real> &ca) {
   int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
-  auto &nmb_old = pmy_mesh->pmb_pack->nmb_thispack;
+  auto &old_nmb = pmy_mesh->pmb_pack->nmb_thispack;
   auto &indcs = pmy_mesh->mb_indcs;
   auto &is = indcs.is, &ie = indcs.ie;
   auto &js = indcs.js, &je = indcs.je;
@@ -764,7 +776,7 @@ void MeshRefinement::RefineCC(int nmb_new, DvceArray5D<Real> &a, DvceArray5D<Rea
   std::pair<int,int> kdst = std::make_pair(cks,cke+1);
   std::pair<int,int> jdst = std::make_pair(cjs,cje+1);
   std::pair<int,int> idst = std::make_pair(cis,cie+1);
-  for (int m=0; m<nmb_old; ++m) {
+  for (int m=0; m<old_nmb; ++m) {
     if (refine_flag.h_view(m) > 0) {
       int newm = oldtonew[m];
       int newn = newm;
@@ -784,8 +796,8 @@ void MeshRefinement::RefineCC(int nmb_new, DvceArray5D<Real> &a, DvceArray5D<Rea
     }
   }
 
-  DualArray1D<int> new_to_old("newtoold",nmb_new);
-  for (int m=0; m<nmb_new; ++m) {
+  DualArray1D<int> new_to_old("newtoold",new_nmb);
+  for (int m=0; m<new_nmb; ++m) {
     new_to_old.h_view(m) = newtoold[m];
   }
   new_to_old.template modify<HostMemSpace>();
@@ -796,7 +808,7 @@ void MeshRefinement::RefineCC(int nmb_new, DvceArray5D<Real> &a, DvceArray5D<Rea
   auto &refine_flag_ = refine_flag;
   bool &multi_d = pmy_mesh->multi_d;
   bool &three_d = pmy_mesh->three_d;
-  par_for("refineCC",DevExeSpace(), 0,(nmb_new-1), 0,nvar-1, cks,cke, cjs,cje, cis,cie,
+  par_for("refineCC",DevExeSpace(), 0,(new_nmb-1), 0,nvar-1, cks,cke, cjs,cje, cis,cie,
   KOKKOS_LAMBDA(const int m, const int v, const int k, const int j, const int i) {
     if (refine_flag_.d_view(new_to_old.d_view(m)) > 0) {
       // fine indices refer to target array
@@ -818,9 +830,9 @@ void MeshRefinement::RefineCC(int nmb_new, DvceArray5D<Real> &a, DvceArray5D<Rea
 //! flagged for refinement to the m-index locations which are immediately following,
 //! overwriting any data located there. Logic is identical to CC refinement.
 
-void MeshRefinement::RefineFC(int nmb_new, DvceFaceFld4D<Real> &b,
+void MeshRefinement::RefineFC(int new_nmb, DvceFaceFld4D<Real> &b,
                               DvceFaceFld4D<Real> &cb) {
-  auto &nmb_old = pmy_mesh->pmb_pack->nmb_thispack;
+  auto &old_nmb = pmy_mesh->pmb_pack->nmb_thispack;
   auto &indcs = pmy_mesh->mb_indcs;
   auto &is = indcs.is, &ie = indcs.ie;
   auto &js = indcs.js, &je = indcs.je;
@@ -837,7 +849,7 @@ void MeshRefinement::RefineFC(int nmb_new, DvceFaceFld4D<Real> &b,
   std::pair<int,int> jdst1 = std::make_pair(cjs,cje+2);
   std::pair<int,int> idst  = std::make_pair(cis,cie+1);
   std::pair<int,int> idst1 = std::make_pair(cis,cie+2);
-  for (int m=0; m<nmb_old; ++m) {
+  for (int m=0; m<old_nmb; ++m) {
     if (refine_flag.h_view(m) > 0) {
       int newm = oldtonew[m];
       int newn = newm;
@@ -866,8 +878,8 @@ void MeshRefinement::RefineFC(int nmb_new, DvceFaceFld4D<Real> &b,
     }
   }
 
-  DualArray1D<int> new_to_old("newtoold",nmb_new);
-  for (int m=0; m<nmb_new; ++m) {
+  DualArray1D<int> new_to_old("newtoold",new_nmb);
+  for (int m=0; m<new_nmb; ++m) {
     new_to_old.h_view(m) = newtoold[m];
   }
   new_to_old.template modify<HostMemSpace>();
@@ -880,7 +892,7 @@ void MeshRefinement::RefineFC(int nmb_new, DvceFaceFld4D<Real> &b,
   bool &three_d = pmy_mesh->three_d;
 
   // Prolongate x1f
-  par_for("RefineFC1",DevExeSpace(), 0,(nmb_new-1), cks,cke, cjs,cje, cis,cie+1,
+  par_for("RefineFC1",DevExeSpace(), 0,(new_nmb-1), cks,cke, cjs,cje, cis,cie+1,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
     if (refine_flag_.d_view(new_to_old.d_view(m)) > 0) {
       // fine indices refer to target array
@@ -892,7 +904,7 @@ void MeshRefinement::RefineFC(int nmb_new, DvceFaceFld4D<Real> &b,
   });
 
   // Prolongate x2f
-  par_for("RefineFC2",DevExeSpace(), 0,(nmb_new-1), cks,cke, cjs,cje+1, cis,cie,
+  par_for("RefineFC2",DevExeSpace(), 0,(new_nmb-1), cks,cke, cjs,cje+1, cis,cie,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
     if (refine_flag_.d_view(new_to_old.d_view(m)) > 0) {
       // fine indices refer to target array
@@ -904,7 +916,7 @@ void MeshRefinement::RefineFC(int nmb_new, DvceFaceFld4D<Real> &b,
   });
 
   // Prolongate x3f
-  par_for("RefineFC3",DevExeSpace(), 0,(nmb_new-1), cks,cke+1, cjs,cje, cis,cie,
+  par_for("RefineFC3",DevExeSpace(), 0,(new_nmb-1), cks,cke+1, cjs,cje, cis,cie,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
     if (refine_flag_.d_view(new_to_old.d_view(m)) > 0) {
       // fine indices refer to target array
@@ -918,7 +930,7 @@ void MeshRefinement::RefineFC(int nmb_new, DvceFaceFld4D<Real> &b,
   // Second prolongate face-centered fields at internal faces of fine cells using
   // divergence-preserving operator of Toth & Roe (2002)
   bool &one_d = pmy_mesh->one_d;
-  par_for("RefineFC-int",DevExeSpace(), 0,(nmb_new-1), cks,cke, cjs,cje, cis,cie,
+  par_for("RefineFC-int",DevExeSpace(), 0,(new_nmb-1), cks,cke, cjs,cje, cis,cie,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
     if (refine_flag_.d_view(new_to_old.d_view(m)) > 0) {
       // fine indices refer to target array
@@ -947,7 +959,7 @@ void MeshRefinement::RefineFC(int nmb_new, DvceFaceFld4D<Real> &b,
 
 void MeshRefinement::DerefineCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca) {
   int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
-  auto &nmb_old = pmy_mesh->pmb_pack->nmb_thispack;
+  auto &old_nmb = pmy_mesh->pmb_pack->nmb_thispack;
   auto &indcs = pmy_mesh->mb_indcs;
   auto &is = indcs.is, &ie = indcs.ie;
   auto &js = indcs.js, &je = indcs.je;
@@ -961,7 +973,7 @@ void MeshRefinement::DerefineCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca) {
   std::pair<int,int> ksrc = std::make_pair(cks,cke+1);
   std::pair<int,int> jsrc = std::make_pair(cjs,cje+1);
   std::pair<int,int> isrc = std::make_pair(cis,cie+1);
-  for (int m=0; m<nmb_old; ++m) {
+  for (int m=0; m<old_nmb; ++m) {
     if (refine_flag.h_view(m) < -1) {  // only derefine if nleaf blocks flagged
       int srcm = m;
       for (int k=ks; k<=ke; k += cnx3) {
@@ -990,7 +1002,7 @@ void MeshRefinement::DerefineCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca) {
 //! overwriting any data located there.  Similar to CC case.
 
 void MeshRefinement::DerefineFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb) {
-  auto &nmb_old = pmy_mesh->pmb_pack->nmb_thispack;
+  auto &old_nmb = pmy_mesh->pmb_pack->nmb_thispack;
   auto &indcs = pmy_mesh->mb_indcs;
   auto &is = indcs.is, &ie = indcs.ie;
   auto &js = indcs.js, &je = indcs.je;
@@ -1007,7 +1019,7 @@ void MeshRefinement::DerefineFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb)
   std::pair<int,int> jsrc1 = std::make_pair(cjs,cje+2);
   std::pair<int,int> isrc  = std::make_pair(cis,cie+1);
   std::pair<int,int> isrc1 = std::make_pair(cis,cie+2);
-  for (int m=0; m<nmb_old; ++m) {
+  for (int m=0; m<old_nmb; ++m) {
     if (refine_flag.h_view(m) < -1) {  // only derefine if nleaf blocks flagged
       int srcm = m;
       for (int k=ks; k<=ke; k += cnx3) {
