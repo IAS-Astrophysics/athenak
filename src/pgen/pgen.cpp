@@ -70,7 +70,9 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
   } else if (pgen_fun_name.compare("rad_linear_wave") == 0) {
     RadiationLinearWave(pin, false);
   } else if (pgen_fun_name.compare("shock_tube") == 0) {
-    ShockTube(pin, false);
+      ShockTube(pin, false);
+  } else if (pgen_fun_name.compare("rad_femn_linetest") == 0) {
+      RadiationFEMNLinetest(pin, false);
   // else, name not set on command line or input file, print warning and quit
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
