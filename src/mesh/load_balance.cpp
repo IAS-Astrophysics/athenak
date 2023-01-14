@@ -12,6 +12,8 @@
 #include "athena.hpp"
 #include "globals.hpp"
 #include "mesh.hpp"
+#include "hydro/hydro.hpp"
+#include "mhd/mhd.hpp"
 
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>
@@ -81,30 +83,144 @@ void Mesh::LoadBalance(float *clist, int *rlist, int *slist, int *nlist, int nb)
   return;
 }
 
-/****
 
 //----------------------------------------------------------------------------------------
 //! \fn void MeshRefinement::InitRecvAMR()
-//! \brief
+//! \brief Allocates and initializes receive buffers for communicating MeshBlocks during
+//! load balancing, and posts non-blocking receives. Equivalent to some of the work done
+//! inside MPI_PARALLEL block in the Mesh::RedistributeAndRefineMeshBlocks() function in
+//! amr_loadbalance.cpp
 
-void MeshRefinement::InitRecvAMR() {
+void MeshRefinement::InitRecvAMR(int nleaf) {
 #if MPI_PARALLEL_ENABLED
-  auto &new_nmb = new_nmb_eachrank[global_variable::my_rank];
-  auto &new_gids = new_gids_eachrank[global_variable::my_rank];
-  // loop over all new MBs on this rank, and check if data is coming from another rank
-  for (int m=0; m<new_nmb; i++) {
-    if (rank_eachmb[newtoold[m+gids]] != global_variable::my_rank) {
-      // post non-blocking recvs for de-refinement
-
-      // post non-blocking recvs for refinement
-
-      // post non-blocking recvs for MBs moved without refinement
-      MPI_Request new_request;
-      MPI
-      int ierr = MPI_Irecv(recv_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
-                           vars_comm, &(recv_buf[n].vars_req[m]));
-      if (ierr != MPI_SUCCESS) {no_errors=false;}
+  // count number of MeshBlocks received on this rank (loop over new MBs)
+  nmb_recv = 0;
+  int mbs = new_gids_eachrank[global_variable::my_rank];
+  int mbe = mbs + new_nmb_eachrank[global_variable::my_rank] - 1;
+  for (int m=mbs; m<=mbe; m++) {
+    int oldm = newtoold[m];
+    LogicalLocation &old_lloc = pmy_mesh->lloc_eachmb[oldm];
+    LogicalLocation &new_lloc = new_lloc_eachmb[m];
+    if (old_lloc.level > new_lloc.level) {   // de-refinement
+      for (int l=0; l<nleaf; l++) {
+        if (pmy_mesh->rank_eachmb[oldm+l] != global_variable::my_rank) {
+          nmb_recv++;
+        }
+      }
+    } else {
+      if (pmy_mesh->rank_eachmb[oldm] != global_variable::my_rank) {
+        nmb_recv++;
+      }
     }
+  }
+  if (nmb_recv == 0) return;  // nothing to do
+
+  // allocate array of recv buffers
+  recv_buf = new AMRBuffer[nmb_recv];
+
+  // calculate amount of data to be communicated with given physics modules
+  auto &indcs = pmy_mesh->mb_indcs;
+  int ncells_cc_same = (indcs.nx1)*(indcs.nx2)*(indcs.nx3);
+  int ncells_cc_coar = (indcs.cnx1)*(indcs.cnx2)*(indcs.cnx3);
+  int ncells_fc_same = (indcs.nx1+1)*(indcs.nx2  )*(indcs.nx3  ) +
+                       (indcs.nx1  )*(indcs.nx2+1)*(indcs.nx3  ) +
+                       (indcs.nx1  )*(indcs.nx2  )*(indcs.nx3+1);
+  int ncells_fc_coar = (indcs.cnx1+1)*(indcs.cnx2  )*(indcs.cnx3  ) +
+                       (indcs.cnx1  )*(indcs.cnx2+1)*(indcs.cnx3  ) +
+                       (indcs.cnx1  )*(indcs.cnx2  )*(indcs.cnx3+1);
+  int data_size_same=0, data_size_coar=0;
+  if (pmy_mesh->pmb_pack->phydro != nullptr) {
+    data_size_same += (pmy_mesh->pmb_pack->phydro->nhydro)*ncells_cc_same;
+    data_size_coar += (pmy_mesh->pmb_pack->phydro->nhydro)*ncells_cc_coar;
+  }
+  if (pmy_mesh->pmb_pack->pmhd != nullptr) {
+    data_size_same += (pmy_mesh->pmb_pack->pmhd->nmhd)*ncells_cc_same + ncells_fc_same;
+    data_size_coar += (pmy_mesh->pmb_pack->pmhd->nmhd)*ncells_cc_coar + ncells_fc_coar;
+  }
+
+  // loop over new MBs on this rank, initialize recv buffers, and post non-blocking recvs
+  auto &is = indcs.is, &ie = indcs.ie;
+  auto &js = indcs.js, &je = indcs.je;
+  auto &ks = indcs.ks, &ke = indcs.ke;
+  auto &cis = indcs.cis, &cie = indcs.cie;
+  auto &cjs = indcs.cjs, &cje = indcs.cje;
+  auto &cks = indcs.cks, &cke = indcs.cke;
+  auto &cnx1 = indcs.cnx1, &cnx2 = indcs.cnx2, &cnx3 = indcs.cnx3;
+  int rb_idx = 0;     // recv buffer index
+  bool no_errors=true;
+  for (int m=mbs; m<=mbe; m++) {
+    int oldm = newtoold[m];
+    LogicalLocation &old_lloc = pmy_mesh->lloc_eachmb[oldm];
+    LogicalLocation &new_lloc = new_lloc_eachmb[m];
+    if (old_lloc.level > new_lloc.level) {   // de-refinement
+      for (int l=0; l<nleaf; l++) {
+        if (pmy_mesh->rank_eachmb[oldm+l] == global_variable::my_rank) continue;
+        // initialize AMRBuffer data for de-refinement
+        LogicalLocation &lloc = pmy_mesh->lloc_eachmb[oldm+l];
+        int ox1 = ((lloc.lx1 & 1) == 1);
+        int ox2 = ((lloc.lx2 & 1) == 1);
+        int ox3 = ((lloc.lx3 & 1) == 1);
+        recv_buf[rb_idx].bis = is + ox1*cnx1;
+        recv_buf[rb_idx].bie = is + ox1*cnx1 + cnx1;
+        recv_buf[rb_idx].bjs = js + ox2*cnx2;
+        recv_buf[rb_idx].bje = js + ox2*cnx2 + cnx2;
+        recv_buf[rb_idx].bks = ks + ox3*cnx3;
+        recv_buf[rb_idx].bke = ks + ox3*cnx3 + cnx3;
+        recv_buf[rb_idx].ncells_cc = ncells_cc_coar ;
+        recv_buf[rb_idx].ncells_fc = ncells_fc_coar ;
+        recv_buf[rb_idx].data_size = data_size_coar ;
+        recv_buf[rb_idx].derefine = true;
+        Kokkos::realloc(recv_buf[rb_idx].vars,data_size_coar);
+
+        // post non-blocking receive
+        int tag = CreateAMR_MPI_Tag(m-mbs, ox1, ox2, ox3);
+        int ierr = MPI_Irecv(recv_buf[rb_idx].vars.data(), data_size_coar,
+                   MPI_ATHENA_REAL, pmy_mesh->rank_eachmb[oldm+l], tag, amr_comm,
+                   &(recv_buf[rb_idx].req));
+        if (ierr != MPI_SUCCESS) {no_errors=false;}
+        rb_idx++;
+      }
+    } else {   // same level or refinement
+      if (pmy_mesh->rank_eachmb[oldm] == global_variable::my_rank) continue;
+      if (old_lloc.level == new_lloc.level) { // same level
+        recv_buf[rb_idx].bis = is;
+        recv_buf[rb_idx].bie = ie;
+        recv_buf[rb_idx].bjs = js;
+        recv_buf[rb_idx].bje = je;
+        recv_buf[rb_idx].bks = ks;
+        recv_buf[rb_idx].bke = ke;
+        recv_buf[rb_idx].ncells_cc = ncells_cc_same ;
+        recv_buf[rb_idx].ncells_fc = ncells_fc_same ;
+        recv_buf[rb_idx].data_size = data_size_same ;
+        Kokkos::realloc(recv_buf[rb_idx].vars,data_size_same);
+      } else {                                // refinement
+        recv_buf[rb_idx].bis = cis;
+        recv_buf[rb_idx].bie = cie;
+        recv_buf[rb_idx].bjs = cjs;
+        recv_buf[rb_idx].bje = cje;
+        recv_buf[rb_idx].bks = cks;
+        recv_buf[rb_idx].bke = cke;
+        recv_buf[rb_idx].ncells_cc = ncells_cc_coar ;
+        recv_buf[rb_idx].ncells_fc = ncells_fc_coar ;
+        recv_buf[rb_idx].data_size = data_size_coar ;
+        recv_buf[rb_idx].refine = true;
+        Kokkos::realloc(recv_buf[rb_idx].vars,data_size_coar);
+      }
+      int tag = CreateAMR_MPI_Tag(m-mbs, 0, 0, 0);
+      int ierr = MPI_Irecv(recv_buf[rb_idx].vars.data(), recv_buf[rb_idx].data_size,
+                 MPI_ATHENA_REAL, pmy_mesh->rank_eachmb[oldm], tag, amr_comm,
+                 &(recv_buf[rb_idx].req));
+      if (ierr != MPI_SUCCESS) {no_errors=false;}
+      rb_idx++;
+    }
+  }
+
+  // Quit if MPI error detected
+  if (no_errors == false) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "MPI error in posting non-blocking receives with AMR"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
   }
 #endif
   return;
@@ -112,19 +228,305 @@ void MeshRefinement::InitRecvAMR() {
 
 //----------------------------------------------------------------------------------------
 //! \fn void MeshRefinement::PackAndSendAMR()
+//! \brief Allocates and initializes send buffers for communicating MeshBlocks during
+//! load balancing, calls function to pack data into buffers, and posts non-blocking sends
+//! Equivalent to some of the work done inside MPI_PARALLEL block in the
+//! Mesh::RedistributeAndRefineMeshBlocks() function in amr_loadbalance.cpp
+
+void MeshRefinement::PackAndSendAMR(int nleaf) {
+#if MPI_PARALLEL_ENABLED
+  // count number of MeshBlocks to send on this rank (loop over old MBs)
+  nmb_send = 0;
+  int mbs = pmy_mesh->gids_eachrank[global_variable::my_rank];
+  int mbe = mbs + pmy_mesh->nmb_eachrank[global_variable::my_rank] - 1;
+  for (int m=mbs; m<=mbe; m++) {
+    int newm = oldtonew[m];
+    LogicalLocation &old_lloc = pmy_mesh->lloc_eachmb[m];
+    LogicalLocation &new_lloc = new_lloc_eachmb[newm];
+    if (old_lloc.level < new_lloc.level) {   // refinement
+      for (int l=0; l<nleaf; l++) {
+        if (new_rank_eachmb[newm + l] != global_variable::my_rank) {
+          nmb_send++;
+        }
+      }
+    } else {
+      if (new_rank_eachmb[newm] != global_variable::my_rank) {
+        nmb_send++;
+      }
+    }
+  }
+  if (nmb_send == 0) return;  // nothing to do
+
+  // allocate array of send buffers
+  send_buf = new AMRBuffer[nmb_send];
+
+  // calculate amount of data to be communicated with given physics modules
+  auto &indcs = pmy_mesh->mb_indcs;
+  int ncells_cc_same = (indcs.nx1)*(indcs.nx2)*(indcs.nx3);
+  int ncells_cc_coar = (indcs.cnx1)*(indcs.cnx2)*(indcs.cnx3);
+  int ncells_fc_same = (indcs.nx1+1)*(indcs.nx2  )*(indcs.nx3  ) +
+                       (indcs.nx1  )*(indcs.nx2+1)*(indcs.nx3  ) +
+                       (indcs.nx1  )*(indcs.nx2  )*(indcs.nx3+1);
+  int ncells_fc_coar = (indcs.cnx1+1)*(indcs.cnx2  )*(indcs.cnx3  ) +
+                       (indcs.cnx1  )*(indcs.cnx2+1)*(indcs.cnx3  ) +
+                       (indcs.cnx1  )*(indcs.cnx2  )*(indcs.cnx3+1);
+  int data_size_same=0, data_size_coar=0;
+  if (pmy_mesh->pmb_pack->phydro != nullptr) {
+    data_size_same += (pmy_mesh->pmb_pack->phydro->nhydro)*ncells_cc_same;
+    data_size_coar += (pmy_mesh->pmb_pack->phydro->nhydro)*ncells_cc_coar;
+  }
+  if (pmy_mesh->pmb_pack->pmhd != nullptr) {
+    data_size_same += (pmy_mesh->pmb_pack->pmhd->nmhd)*ncells_cc_same + ncells_fc_same;
+    data_size_coar += (pmy_mesh->pmb_pack->pmhd->nmhd)*ncells_cc_coar + ncells_fc_coar;
+  }
+
+  // loop over old MBs on this rank, initialize send buffers
+  auto &is = indcs.is, &ie = indcs.ie;
+  auto &js = indcs.js, &je = indcs.je;
+  auto &ks = indcs.ks, &ke = indcs.ke;
+  auto &cis = indcs.cis, &cie = indcs.cie;
+  auto &cjs = indcs.cjs, &cje = indcs.cje;
+  auto &cks = indcs.cks, &cke = indcs.cke;
+  auto &cnx1 = indcs.cnx1, &cnx2 = indcs.cnx2, &cnx3 = indcs.cnx3;
+  int rb_idx = 0;     // recv buffer index
+  for (int m=mbs; m<=mbe; m++) {
+    int newm = oldtonew[m];
+    LogicalLocation &old_lloc = pmy_mesh->lloc_eachmb[m];
+    LogicalLocation &new_lloc = new_lloc_eachmb[newm];
+    if (old_lloc.level < new_lloc.level) {   // refinement
+      for (int l=0; l<nleaf; l++) {
+        if (new_rank_eachmb[newm+l] == global_variable::my_rank) continue;
+        // initialize send AMRBuffer data for refinement
+        LogicalLocation &lloc = pmy_mesh->lloc_eachmb[m+l];
+        int ox1 = ((lloc.lx1 & 1) == 1);
+        int ox2 = ((lloc.lx2 & 1) == 1);
+        int ox3 = ((lloc.lx3 & 1) == 1);
+        send_buf[rb_idx].bis = is + ox1*cnx1;
+        send_buf[rb_idx].bie = is + ox1*cnx1 + cnx1;
+        send_buf[rb_idx].bjs = js + ox2*cnx2;
+        send_buf[rb_idx].bje = js + ox2*cnx2 + cnx2;
+        send_buf[rb_idx].bks = ks + ox3*cnx3;
+        send_buf[rb_idx].bke = ks + ox3*cnx3 + cnx3;
+        send_buf[rb_idx].ncells_cc = ncells_cc_coar ;
+        send_buf[rb_idx].ncells_fc = ncells_fc_coar ;
+        send_buf[rb_idx].data_size = data_size_coar ;
+        send_buf[rb_idx].refine = true;
+        Kokkos::realloc(send_buf[rb_idx].vars,data_size_coar);
+        rb_idx++;
+      }
+    } else {   // same level or refinement
+      if (new_rank_eachmb[newm] == global_variable::my_rank) continue;
+      if (old_lloc.level == new_lloc.level) { // same level
+        send_buf[rb_idx].bis = is;
+        send_buf[rb_idx].bie = ie;
+        send_buf[rb_idx].bjs = js;
+        send_buf[rb_idx].bje = je;
+        send_buf[rb_idx].bks = ks;
+        send_buf[rb_idx].bke = ke;
+        send_buf[rb_idx].ncells_cc = ncells_cc_same ;
+        send_buf[rb_idx].ncells_fc = ncells_fc_same ;
+        send_buf[rb_idx].data_size = data_size_same ;
+        Kokkos::realloc(send_buf[rb_idx].vars,data_size_same);
+      } else {                                // de-refinement
+        send_buf[rb_idx].bis = cis;
+        send_buf[rb_idx].bie = cie;
+        send_buf[rb_idx].bjs = cjs;
+        send_buf[rb_idx].bje = cje;
+        send_buf[rb_idx].bks = cks;
+        send_buf[rb_idx].bke = cke;
+        send_buf[rb_idx].ncells_cc = ncells_cc_coar ;
+        send_buf[rb_idx].ncells_fc = ncells_fc_coar ;
+        send_buf[rb_idx].data_size = data_size_coar ;
+        send_buf[rb_idx].refine = true;
+        Kokkos::realloc(send_buf[rb_idx].vars,data_size_coar);
+      }
+      rb_idx++;
+    }
+  }
+
+  // Pack data into send buffers in parallel
+  hydro::Hydro* phydro = pmy_mesh->pmb_pack->phydro;
+  mhd::MHD* pmhd = pmy_mesh->pmb_pack->pmhd;
+  int offset = 0;
+  if (phydro != nullptr) {
+    PackAMRBuffersCC(phydro->u0, phydro->coarse_u0, offset);
+    offset += (phydro->nhydro);
+  }
+
+  // Send data using MPI
+  bool no_errors=true;
+  for (int m=mbs; m<=mbe; m++) {
+    int newm = oldtonew[m];
+    LogicalLocation &old_lloc = pmy_mesh->lloc_eachmb[m];
+    LogicalLocation &new_lloc = new_lloc_eachmb[newm];
+    if (old_lloc.level < new_lloc.level) {   // refinement
+      for (int l=0; l<nleaf; l++) {
+        if (new_rank_eachmb[newm+l] == global_variable::my_rank) continue;
+        LogicalLocation &lloc = pmy_mesh->lloc_eachmb[m+l];
+        int ox1 = ((lloc.lx1 & 1) == 1);
+        int ox2 = ((lloc.lx2 & 1) == 1);
+        int ox3 = ((lloc.lx3 & 1) == 1);
+        // post non-blocking send
+        int tag = CreateAMR_MPI_Tag(m-mbs, ox1, ox2, ox3);
+        int ierr = MPI_Isend(send_buf[rb_idx].vars.data(), data_size_coar,
+                   MPI_ATHENA_REAL, new_rank_eachmb[newm+l], tag, amr_comm,
+                   &(send_buf[rb_idx].req));
+        if (ierr != MPI_SUCCESS) {no_errors=false;}
+        rb_idx++;
+      }
+    } else {   // same level or de-refinement
+      if (new_rank_eachmb[newm] == global_variable::my_rank) continue;
+      // post non-blocking send
+      int tag = CreateAMR_MPI_Tag(m-mbs, 0, 0, 0);
+      int ierr = MPI_Isend(send_buf[rb_idx].vars.data(), send_buf[rb_idx].data_size,
+                 MPI_ATHENA_REAL, new_rank_eachmb[newm], tag, amr_comm,
+                 &(send_buf[rb_idx].req));
+      if (ierr != MPI_SUCCESS) {no_errors=false;}
+      rb_idx++;
+    }
+  }
+
+  // Quit if MPI error detected
+  if (no_errors == false) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "MPI error in posting non-blocking receives with AMR"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+#endif
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MeshRefinement::PackAMRBuffers()
 //! \brief
+//! Equivalent to PrepareSendSameLevel(), PrepareSendCoarseToFineAMR(), and
+//! PrepareSendFineToCoarseAMR() functions in amr_loadbalance.cpp
 
-void MeshRefinement::PackAndSendAMR() {
+void MeshRefinement::PackAMRBuffersCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca,
+                                      int offset) {
+#if MPI_PARALLEL_ENABLED
+  int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
+  auto &sbuf = send_buf;
 
+  // Outer loop over (# of MeshBlocks sent)*(# of variables)
+  int nmv = nmb_send*nvar;
+  Kokkos::TeamPolicy<> policy(DevExeSpace(), nmv, Kokkos::AUTO);
+  Kokkos::parallel_for("SendBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
+    const int m = (tmember.league_rank())/nvar;
+    const int v = (tmember.league_rank() - m*nvar);
+
+    const int il = sbuf[m].bis;
+    const int jl = sbuf[m].bjs;
+    const int kl = sbuf[m].bks;
+    const int ni = sbuf[m].bie - il + 1;
+    const int nj = sbuf[m].bje - jl + 1;
+    const int nk = sbuf[m].bke - kl + 1;
+    const int nkji = nk*nj*ni;
+    const int nji  = nj*ni;
+
+    // Middle loop over k,j,i
+    Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkji), [&](const int idx) {
+      int k = (idx)/nji;
+      int j = (idx - k*nji)/ni;
+      int i = (idx - k*nji - j*ni) + il;
+      k += kl;
+      j += jl;
+      if (sbuf[m].derefine) {
+        // if de-refinement, load data from coarse_a
+        sbuf[m].vars(offset + (i-il + ni*(j-jl + nj*(k-kl + nk*v)))) = ca(m,v,k,j,i);
+      } else {
+        // if refinement or same level, load data from a
+        sbuf[m].vars(offset + (i-il + ni*(j-jl + nj*(k-kl + nk*v)))) = a(m,v,k,j,i);
+      }
+    });
+  }); // end par_for_outer
+#endif
   return;
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn void MeshRefinement::RecvAndUnpackAMR()
 //! \brief
+//! Equivalent to some of the work done inside MPI_PARALLEL block in the
+//! Mesh::RedistributeAndRefineMeshBlocks() function in amr_loadbalance.cpp
 
 void MeshRefinement::RecvAndUnpackAMR() {
+#if MPI_PARALLEL_ENABLED
+  // Wait for all receives to finish
+  bool no_errors=true;
+  for (int n=0; n<nmb_recv; ++n) {
+    int ierr = MPI_Wait(&(recv_buf[n].req), MPI_STATUS_IGNORE);
+    if (ierr != MPI_SUCCESS) {no_errors=false;}
+  }
+  // Quit if MPI error detected
+  if (no_errors == false) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "MPI error in posting non-blocking receives with AMR"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 
+  // Unpack data
+  hydro::Hydro* phydro = pmy_mesh->pmb_pack->phydro;
+  mhd::MHD* pmhd = pmy_mesh->pmb_pack->pmhd;
+  int offset = 0;
+  if (phydro != nullptr) {
+    UnpackAMRBuffersCC(phydro->u0, phydro->coarse_u0, offset);
+    offset += (phydro->nhydro);
+  }
+
+  // recv buffers no longer needed, clean-up
+  delete [] recv_buf;
+#endif
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MeshRefinement::UnpackAMRBuffersCC()
+//! \brief
+//! Equivalent to FinishRecvSameLevel(), FinishRecvCoarseToFineAMR(), and
+//! FinishRecvFineToCoarseAMR() functions in amr_loadbalance.cpp
+
+void MeshRefinement::UnpackAMRBuffersCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca,
+                                        int offset) {
+#if MPI_PARALLEL_ENABLED
+  int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
+  auto &rbuf = recv_buf;
+
+  // Outer loop over (# of MeshBlocks sent)*(# of variables)
+  int nmv = nmb_recv*nvar;
+  Kokkos::TeamPolicy<> policy(DevExeSpace(), nmv, Kokkos::AUTO);
+  Kokkos::parallel_for("SendBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
+    const int m = (tmember.league_rank())/nvar;
+    const int v = (tmember.league_rank() - m*nvar);
+
+    const int il = rbuf[m].bis;
+    const int jl = rbuf[m].bjs;
+    const int kl = rbuf[m].bks;
+    const int ni = rbuf[m].bie - il + 1;
+    const int nj = rbuf[m].bje - jl + 1;
+    const int nk = rbuf[m].bke - kl + 1;
+    const int nkji = nk*nj*ni;
+    const int nji  = nj*ni;
+
+    // Middle loop over k,j,i
+    Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkji), [&](const int idx) {
+      int k = (idx)/nji;
+      int j = (idx - k*nji)/ni;
+      int i = (idx - k*nji - j*ni) + il;
+      k += kl;
+      j += jl;
+      if (rbuf[m].refine) {
+        // if refinement, load data into coarse_a
+        ca(m,v,k,j,i) = rbuf[m].vars(offset + (i-il + ni*(j-jl + nj*(k-kl + nk*v))));
+      } else {
+        // if de-refinement or same level, load data into a
+        a(m,v,k,j,i) = rbuf[m].vars(offset + (i-il + ni*(j-jl + nj*(k-kl + nk*v))));
+      }
+    });
+  }); // end par_for_outer
+#endif
   return;
 }
 
@@ -133,16 +535,22 @@ void MeshRefinement::RecvAndUnpackAMR() {
 //! \brief
 
 void MeshRefinement::ClearSendAMR() {
+  bool no_errors=true;
+#if MPI_PARALLEL_ENABLED
+  for (int n=0; n<nmb_send; ++n) {
+    int ierr = MPI_Wait(&(send_buf[n].req), MPI_STATUS_IGNORE);
+    if (ierr != MPI_SUCCESS) {no_errors=false;}
+  }
+  // Quit if MPI error detected
+  if (no_errors == false) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "MPI error in posting non-blocking receives with AMR"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 
+  // send buffers no longer needed, clean-up
+  delete [] send_buf;
+#endif
   return;
 }
-
-//----------------------------------------------------------------------------------------
-//! \fn void MeshRefinement::ClearRecvAMR()
-//! \brief
-
-void MeshRefinement::ClearRecvAMR() {
-
-  return;
-}
-*****/

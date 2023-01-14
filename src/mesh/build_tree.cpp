@@ -14,7 +14,9 @@
 #include "parameter_input.hpp"
 #include "mesh.hpp"
 #include "coordinates/cell_locations.hpp"
-#include "outputs/io_wrapper.hpp"
+//#include "outputs/io_wrapper.hpp"
+#include "hydro/hydro.hpp"
+#include "mhd/mhd.hpp"
 
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>

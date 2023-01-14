@@ -19,17 +19,12 @@ enum class BoundaryFlag {undef=-1,block, reflect, inflow, outflow, diode, user, 
 enum class BoundaryCommStatus {undef=-1, waiting, sent, received};
 
 //----------------------------------------------------------------------------------------
-//! \fn int CreateMPITag(int lid, int bufid)
-//  \brief calculate an MPI tag for boundary buffer communications
-//  MPI tag = lid (remaining bits) + bufid (6 bits)
-//  Note the convention in Athena++ is lid and bufid are both for the *receiving* process
-//
-// WARNING (KGF): Generating unsigned integer bitfields from signed integer types and
-// converting output to signed integer tags (required by MPI) may lead to unsafe
-// conversions (and overflows from built-in types and MPI_TAG_UB).  Note, the MPI standard
-// requires signed int tag, with MPI_TAG_UB>= 2^15-1 = 32,767 (inclusive)
-
-static int CreateMPITag(int lid, int bufid) {
+//! \fn int CreateBvals_MPI_Tag(int lid, int bufid)
+//! \brief calculate an MPI tag for boundary buffer communications
+//! MPI tag = lid (remaining bits) + bufid (6 bits)
+//! The convention in Athena++ is lid and bufid are both for the *receiving* process.
+//! The MPI standard requires signed int tag, with MPI_TAG_UB>=2^15-1 = 32,767 (inclusive)
+static int CreateBvals_MPI_Tag(int lid, int bufid) {
   return (lid<<6) | bufid;
 }
 

@@ -30,6 +30,7 @@
 
 //----------------------------------------------------------------------------------------
 // MeshRefinement constructor:
+// called from Mesh::BuildTree (before physics modules are enrolled)
 
 MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
   pmy_mesh(pm),
@@ -72,6 +73,11 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
     nref_rsum = new int[global_variable::nranks];
     nderef_rsum = new int[global_variable::nranks];
   }
+
+#if MPI_PARALLEL_ENABLED
+  // create unique communicators for AMR
+  MPI_Comm_dup(MPI_COMM_WORLD, &amr_comm);
+#endif
 }
 
 //----------------------------------------------------------------------------------------
@@ -427,7 +433,7 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   // Step 1. Create Z-ordered list of logical locations for new MBs, and newtoold list
   // mapping (new MB gid [n])-->(old gid) for all MBs. Index of array [n] is new gid,
   // value is old gid.
-  LogicalLocation *new_lloc_eachmb = new LogicalLocation[new_nmb];
+  new_lloc_eachmb = new LogicalLocation[new_nmb];
   newtoold = new int[new_nmb];
   int new_nmb_total;
   pm->ptree->CreateZOrderedLLList(new_lloc_eachmb, newtoold, new_nmb_total);
@@ -463,10 +469,10 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   // Calculate new load balance. Initialize new cost array with the simplest estimate
   // possible: all the blocks are equal
   // TODO(@user): implement variable cost per MeshBlock as needed
-  float *new_cost_eachmb = new float[new_nmb];
-  int *new_rank_eachmb = new int[new_nmb];
-  int *new_gids_eachrank = new int[global_variable::nranks];
-  int *new_nmb_eachrank = new int[global_variable::nranks];
+  new_cost_eachmb = new float[new_nmb];
+  new_rank_eachmb = new int[new_nmb];
+  new_gids_eachrank = new int[global_variable::nranks];
+  new_nmb_eachrank = new int[global_variable::nranks];
 
   for (int i=0; i<new_nmb; i++) {new_cost_eachmb[i] = 1.0;}
   pm->LoadBalance(new_cost_eachmb, new_rank_eachmb, new_gids_eachrank, new_nmb_eachrank,

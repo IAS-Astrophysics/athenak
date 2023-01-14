@@ -228,7 +228,7 @@ TaskStatus BoundaryValues::InitRecv(const int nvars) {
         // post non-blocking receive if neighboring MeshBlock on a different rank
         if (drank != global_variable::my_rank) {
           // create tag using local ID and buffer index of *receiving* MeshBlock
-          int tag = CreateMPITag(m, n);
+          int tag = CreateBvals_MPI_Tag(m, n);
 
           // calculate amount of data to be passed, get pointer to variables
           int data_size = nvars;
