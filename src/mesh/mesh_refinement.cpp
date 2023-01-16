@@ -21,6 +21,7 @@
 
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "z4c/z4c.hpp"
 #include "prolong.hpp"
 
 #if MPI_PARALLEL_ENABLED
@@ -209,6 +210,7 @@ bool MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
   if (pmy_mesh->pgen->user_ref_func != nullptr) {
     pmy_mesh->pgen->user_ref_func(pmbp);
   }
+
   refine_flag.template modify<DevExeSpace>();
   refine_flag.template sync<HostMemSpace>();
 
@@ -233,6 +235,7 @@ bool MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
   for (int m=0; m<nmb; ++m) {
     if (refine_flag.h_view(m) != 0) {return_flag = true;}
   }
+  std::cout << "return flag status: " << return_flag << std::endl;
   return return_flag;
 }
 
@@ -464,6 +467,7 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   pm->LoadBalance(new_costlist, new_ranklist, new_gidslist, new_nmblist, new_nmb_total);
 
   hydro::Hydro* phydro = pm->pmb_pack->phydro;
+  z4c::Z4c* pz4c = pm->pmb_pack->pz4c;
   mhd::MHD* pmhd = pm->pmb_pack->pmhd;
   auto &nmb = pm->pmb_pack->nmb_thispack;                           // old nmb
   int mbs = pmy_mesh->gidslist[global_variable::my_rank];           // old gids
@@ -472,6 +476,9 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   if (ndel > 0) {
     if (phydro != nullptr) {
       DerefineCC(phydro->u0, phydro->coarse_u0);
+    }
+    if (pz4c != nullptr) {
+      DerefineCC(pz4c->u0, pz4c->coarse_u0);
     }
     if (pmhd != nullptr) {
       DerefineCC(pmhd->u0, pmhd->coarse_u0);
@@ -488,6 +495,12 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
     if ( ((n-m) < 0) && (n != nm1) ) {
       if (phydro != nullptr) {
         auto u0 = phydro->u0;
+        auto src = Kokkos::subview(u0,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+        auto dst = Kokkos::subview(u0,n,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+        Kokkos::deep_copy(DevExeSpace(), dst, src);
+      }
+      if (pz4c != nullptr) {
+        auto u0 = pz4c->u0;
         auto src = Kokkos::subview(u0,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
         auto dst = Kokkos::subview(u0,n,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
         Kokkos::deep_copy(DevExeSpace(), dst, src);
@@ -523,6 +536,12 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
         auto dst = Kokkos::subview(u0,n,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
         Kokkos::deep_copy(DevExeSpace(), dst, src);
       }
+      if (pz4c != nullptr) {
+        auto u0 = pz4c->u0;
+        auto src = Kokkos::subview(u0,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+        auto dst = Kokkos::subview(u0,n,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+        Kokkos::deep_copy(DevExeSpace(), dst, src);
+      }
       if (pmhd != nullptr) {
         auto u0 = pmhd->u0;
         auto src = Kokkos::subview(u0,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
@@ -548,6 +567,9 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   if (nnew > 0) {
     if (phydro != nullptr) {
       RefineCC(new_nmb_total, phydro->u0, phydro->coarse_u0);
+    }
+    if (pz4c != nullptr) {
+      RefineCC(new_nmb_total, pz4c->u0, pz4c->coarse_u0);
     }
     if (pmhd != nullptr) {
       RefineCC(new_nmb_total, pmhd->u0, pmhd->coarse_u0);

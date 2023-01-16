@@ -52,7 +52,7 @@ class MeshRefinement {
  private:
   // data
   Mesh *pmy_mesh;
-  Real d_threshold_, dd_threshold_, dp_threshold_, dv_threshold_;
+  Real d_threshold_, dd_threshold_, dp_threshold_, dv_threshold_, d2punc_threshold_;
   bool check_cons_;
 };
 

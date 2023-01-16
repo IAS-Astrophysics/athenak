@@ -40,7 +40,8 @@ void Z4c::AssembleZ4cTasks(TaskList &start, TaskList &run, TaskList &end) {
   id.irecv = start.AddTask(&Z4c::InitRecv, this, none);
 
   // run task list
-  id.copyu = run.AddTask(&Z4c::CopyU, this, none);
+  id.ptrack = run.AddTask(&Z4c::PunctureTracker, this, none);
+  id.copyu = run.AddTask(&Z4c::CopyU, this, id.ptrack);
 
   switch (indcs.ng) {
       case 2: id.crhs  = run.AddTask(&Z4c::CalcRHS<2>, this, id.copyu);
@@ -58,11 +59,15 @@ void Z4c::AssembleZ4cTasks(TaskList &start, TaskList &run, TaskList &end) {
   id.recvu = run.AddTask(&Z4c::RecvU, this, id.sendu);
   id.bcs   = run.AddTask(&Z4c::ApplyPhysicalBCs, this, id.recvu);
   id.algc  = run.AddTask(&Z4c::EnforceAlgConstr, this, id.bcs);
-  id.z4tad = run.AddTask(&Z4c::Z4cToADM_, this, id.algc);
-  id.admc  = run.AddTask(&Z4c::ADMConstraints_, this, id.z4tad);
-  id.newdt = run.AddTask(&Z4c::NewTimeStep, this, id.admc);
+  // id.z4tad = run.AddTask(&Z4c::Z4cToADM_, this, id.algc);
+  // id.admc  = run.AddTask(&Z4c::ADMConstraints_, this, id.z4tad);
+  id.newdt = run.AddTask(&Z4c::NewTimeStep, this, id.algc);
   // end task list
   id.clear = end.AddTask(&Z4c::ClearSend, this, none);
+
+  if (pmy_pack->pmesh->ncycle%64 == 0) {
+    // place holder for horizon finder
+  }
   return;
 }
 
@@ -105,28 +110,31 @@ TaskStatus Z4c::ClearSend(Driver *pdrive, int stage) {
 //  \brief  copy u0 --> u1 in first stage
 
 TaskStatus Z4c::CopyU(Driver *pdrive, int stage) {
-  auto integrator = pdrive->integrator;
-  auto &indcs = pmy_pack->pmesh->mb_indcs;
-  int is = indcs.is, ie = indcs.ie;
-  int js = indcs.js, je = indcs.je;
-  int ks = indcs.ks, ke = indcs.ke;
-  int nmb1 = pmy_pack->nmb_thispack - 1;
-  auto &u0 = pmy_pack->pz4c->u0;
-  auto &u1 = pmy_pack->pz4c->u1;
-
-  // hierarchical parallel loop that updates conserved variables to intermediate step
-  // using weights and fractional time step appropriate to stages of time-integrator.
-  // Important to use vector inner loop for good performance on cpus
   if (stage == 1) {
-    Kokkos::deep_copy(DevExeSpace(), u1, u0);
-  }
-  if (integrator == "rk4") {
-    Real &delta = pdrive->delta[stage-1];
-    if (stage != 1) {
-      par_for("CopyCons", DevExeSpace(),0, nmb1, 0, N_Z4c-1, ks, ke, js, je, is, ie,
-      KOKKOS_LAMBDA(int m, int n, int k, int j, int i){
-        u1(m,n,k,j,i) += delta*u0(m,n,k,j,i);
-      });
+
+    auto integrator = pdrive->integrator;
+    auto &indcs = pmy_pack->pmesh->mb_indcs;
+    int is = indcs.is, ie = indcs.ie;
+    int js = indcs.js, je = indcs.je;
+    int ks = indcs.ks, ke = indcs.ke;
+    int nmb1 = pmy_pack->nmb_thispack - 1;
+    auto &u0 = pmy_pack->pz4c->u0;
+    auto &u1 = pmy_pack->pz4c->u1;
+
+    // hierarchical parallel loop that updates conserved variables to intermediate step
+    // using weights and fractional time step appropriate to stages of time-integrator.
+    // Important to use vector inner loop for good performance on cpus
+    if (stage == 1) {
+      Kokkos::deep_copy(DevExeSpace(), u1, u0);
+    }
+    if (integrator == "rk4") {
+      Real &delta = pdrive->delta[stage-1];
+      if (stage != 1) {
+        par_for("CopyCons", DevExeSpace(),0, nmb1, 0, N_Z4c-1, ks, ke, js, je, is, ie,
+        KOKKOS_LAMBDA(int m, int n, int k, int j, int i){
+          u1(m,n,k,j,i) += delta*u0(m,n,k,j,i);
+        });
+      }
     }
   }
   return TaskStatus::complete;

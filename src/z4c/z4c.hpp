@@ -50,6 +50,7 @@ struct Z4cTaskIDs {
   TaskID admc;
   TaskID clear;
   TaskID restu;
+  TaskID ptrack;
 };
 
 namespace z4c {
@@ -107,6 +108,13 @@ class Z4c {
   DvceArray5D<Real> u_rhs;     // z4c rhs storage
   DvceArray5D<Real> coarse_u0; // coarse representation of z4c solution
   
+  // puncture location
+  Real ppos[3] = {0.1,0.,0.}; // later on initiate from input file
+#if TWO_PUNCTURES
+  // second puncture location
+  Real ppos2[3] = {0.,0.,0.}; // later on initiate from input file
+  void ADMTwoPunctures(MeshBlockPack *pmbp, ini_data *data);
+#endif
   struct ADM_vars {
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> psi4;
     AthenaTensor<Real, TensorSymm::SYM2, 3, 2> g_dd;
@@ -199,7 +207,8 @@ class Z4c {
   TaskStatus ADMConstraints_(Driver *d, int stage);
   TaskStatus Z4cBoundaryRHS(Driver *d, int stage);
   TaskStatus RestrictU(Driver *d, int stage);
-  
+  TaskStatus PunctureTracker(Driver *d, int stage);
+
   template <int NGHOST>
   TaskStatus CalcRHS(Driver *d, int stage);
   template <int NGHOST>
@@ -210,6 +219,7 @@ class Z4c {
   template <int NGHOST>
   void ADMConstraints(MeshBlockPack *pmbp);
   void AlgConstr(MeshBlockPack *pmbp);
+
 #if TWO_PUNCTURES
   void ADMTwoPunctures(MeshBlockPack *pmbp, ini_data *data);
 #endif

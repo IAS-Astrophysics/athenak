@@ -423,7 +423,9 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
       if (pmesh->adaptive) {
         MeshBlockPack* pmbp = pmesh->pmb_pack;
         bool update_mesh = pmesh->pmr->CheckForRefinement(pmbp);
+        std::cout << "update_mesh status: " << update_mesh << std::endl;
         if (update_mesh) pmesh->pmr->AdaptiveMeshRefinement(this, pin);
+        std::cout << "refinement complete" << std::endl;
       }
 
       // once all MeshBlocks refined/de-refined, then compute new timestep
