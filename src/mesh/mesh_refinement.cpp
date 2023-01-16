@@ -632,9 +632,9 @@ void MeshRefinement::DerefineCCSameRank(DvceArray5D<Real> &a, DvceArray5D<Real> 
         int ox1 = ((lloc.lx1 & 1) == 1);
         int ox2 = ((lloc.lx2 & 1) == 1);
         int ox3 = ((lloc.lx3 & 1) == 1);
-        std::pair<int,int> idst = std::make_pair((is+ox1*cnx1),(is+(ox1+1)*cnx1+1));
-        std::pair<int,int> jdst = std::make_pair((js+ox2*cnx2),(js+(ox2+1)*cnx2+1));
-        std::pair<int,int> kdst = std::make_pair((ks+ox3*cnx3),(ks+(ox3+1)*cnx3+1));
+        std::pair<int,int> idst = std::make_pair((is+ox1*cnx1),(is+(ox1+1)*cnx1));
+        std::pair<int,int> jdst = std::make_pair((js+ox2*cnx2),(js+(ox2+1)*cnx2));
+        std::pair<int,int> kdst = std::make_pair((ks+ox3*cnx3),(ks+(ox3+1)*cnx3));
 
         // Copy data directly from coarse arrays in MBs to fine array in target MB
         auto src = Kokkos::subview(ca,(m+l),Kokkos::ALL,ksrc,jsrc,isrc);
@@ -680,12 +680,12 @@ void MeshRefinement::DerefineFCSameRank(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Re
         int ox1 = ((lloc.lx1 & 1) == 1);
         int ox2 = ((lloc.lx2 & 1) == 1);
         int ox3 = ((lloc.lx3 & 1) == 1);
-        std::pair<int,int> idst  = std::make_pair((is+ox1*cnx1),(is+(ox1+1)*cnx1+1));
-        std::pair<int,int> idst1 = std::make_pair((is+ox1*cnx1),(is+(ox1+1)*cnx1+2));
-        std::pair<int,int> jdst  = std::make_pair((js+ox2*cnx2),(js+(ox2+1)*cnx2+1));
-        std::pair<int,int> jdst1 = std::make_pair((js+ox2*cnx2),(js+(ox2+1)*cnx2+2));
-        std::pair<int,int> kdst  = std::make_pair((ks+ox3*cnx3),(ks+(ox3+1)*cnx3+1));
-        std::pair<int,int> kdst1 = std::make_pair((ks+ox3*cnx3),(ks+(ox3+1)*cnx3+2));
+        std::pair<int,int> idst  = std::make_pair((is+ox1*cnx1),(is+(ox1+1)*cnx1  ));
+        std::pair<int,int> idst1 = std::make_pair((is+ox1*cnx1),(is+(ox1+1)*cnx1+1));
+        std::pair<int,int> jdst  = std::make_pair((js+ox2*cnx2),(js+(ox2+1)*cnx2  ));
+        std::pair<int,int> jdst1 = std::make_pair((js+ox2*cnx2),(js+(ox2+1)*cnx2+1));
+        std::pair<int,int> kdst  = std::make_pair((ks+ox3*cnx3),(ks+(ox3+1)*cnx3  ));
+        std::pair<int,int> kdst1 = std::make_pair((ks+ox3*cnx3),(ks+(ox3+1)*cnx3+1));
 
         // Copy data directly from coarse arrays in MBs to fine array in target MB
         auto src1 = Kokkos::subview(cb.x1f,(m+l),ksrc,jsrc,isrc1);
@@ -841,21 +841,20 @@ void MeshRefinement::MoveForRefinementCC(DvceArray5D<Real> &a, DvceArray5D<Real>
   int mbs = pmy_mesh->gids_eachrank[global_variable::my_rank];
   int mbe = mbs + pmy_mesh->nmb_eachrank[global_variable::my_rank] - 1;
   for (int m=mbs; m<=mbe; ++m) {
-    int newm = oldtonew[m];
-    // only move data if target array on this rank
-    if (new_rank_eachmb[newm] != global_variable::my_rank) continue;
-    int msrc = m - mbs;
-    int mdst = newm - new_gids_eachrank[global_variable::my_rank];
     if (refine_flag.h_view(m) > 0) {
+      int newm = oldtonew[m];
+      int msrc = newm - new_gids_eachrank[global_variable::my_rank];
       for (int l=0; l<nleaf; l++) {
-        if ((m+l) > mbe) continue;  // only move if source array on this rank
-        LogicalLocation &lloc = pmy_mesh->lloc_eachmb[m+l];
+        int mdst = msrc + l;
+        // only move data if target array on this rank
+        if (new_rank_eachmb[newm+l] != global_variable::my_rank) continue;
+        LogicalLocation &lloc = new_lloc_eachmb[newm+l];
         int ox1 = ((lloc.lx1 & 1) == 1);
         int ox2 = ((lloc.lx2 & 1) == 1);
         int ox3 = ((lloc.lx3 & 1) == 1);
-        std::pair<int,int> isrc = std::make_pair((is+ox1*cnx1),(is+(ox1+1)*cnx1+1));
-        std::pair<int,int> jsrc = std::make_pair((js+ox2*cnx2),(js+(ox2+1)*cnx2+1));
-        std::pair<int,int> ksrc = std::make_pair((ks+ox3*cnx3),(ks+(ox3+1)*cnx3+1));
+        std::pair<int,int> isrc = std::make_pair((is+ox1*cnx1),(is+(ox1+1)*cnx1));
+        std::pair<int,int> jsrc = std::make_pair((js+ox2*cnx2),(js+(ox2+1)*cnx2));
+        std::pair<int,int> ksrc = std::make_pair((ks+ox3*cnx3),(ks+(ox3+1)*cnx3));
 
         // copy data in MBs to be refined to coarse arrays in target MBs
         auto src = Kokkos::subview( a,msrc,Kokkos::ALL,ksrc,jsrc,isrc);
@@ -891,24 +890,23 @@ void MeshRefinement::MoveForRefinementFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<R
   int mbs = pmy_mesh->gids_eachrank[global_variable::my_rank];
   int mbe = mbs + pmy_mesh->nmb_eachrank[global_variable::my_rank] - 1;
   for (int m=mbs; m<=mbe; ++m) {
-    int newm = oldtonew[m];
-    // only move data if target array on this rank
-    if (new_rank_eachmb[newm] != global_variable::my_rank) continue;
-    int msrc = m - mbs;
-    int mdst = newm - new_gids_eachrank[global_variable::my_rank];
     if (refine_flag.h_view(m) > 0) {
+      int newm = oldtonew[m];
+      int msrc = newm - new_gids_eachrank[global_variable::my_rank];
       for (int l=0; l<nleaf; l++) {
-        if ((m+l) > mbe) continue;  // only move if source array on this rank
-        LogicalLocation &lloc = pmy_mesh->lloc_eachmb[m+l];
+        int mdst = msrc + l;
+        // only move data if target array on this rank
+        if (new_rank_eachmb[newm+l] != global_variable::my_rank) continue;
+        LogicalLocation &lloc = new_lloc_eachmb[newm+l];
         int ox1 = ((lloc.lx1 & 1) == 1);
         int ox2 = ((lloc.lx2 & 1) == 1);
         int ox3 = ((lloc.lx3 & 1) == 1);
-        std::pair<int,int> isrc  = std::make_pair((is+ox1*cnx1),(is+(ox1+1)*cnx1+1));
-        std::pair<int,int> isrc1 = std::make_pair((is+ox1*cnx1),(is+(ox1+1)*cnx1+2));
-        std::pair<int,int> jsrc  = std::make_pair((js+ox2*cnx2),(js+(ox2+1)*cnx2+1));
-        std::pair<int,int> jsrc1 = std::make_pair((js+ox2*cnx2),(js+(ox2+1)*cnx2+2));
-        std::pair<int,int> ksrc  = std::make_pair((ks+ox3*cnx3),(ks+(ox3+1)*cnx3+1));
-        std::pair<int,int> ksrc1 = std::make_pair((ks+ox3*cnx3),(ks+(ox3+1)*cnx3+2));
+        std::pair<int,int> isrc  = std::make_pair((is+ox1*cnx1),(is+(ox1+1)*cnx1  ));
+        std::pair<int,int> isrc1 = std::make_pair((is+ox1*cnx1),(is+(ox1+1)*cnx1+1));
+        std::pair<int,int> jsrc  = std::make_pair((js+ox2*cnx2),(js+(ox2+1)*cnx2  ));
+        std::pair<int,int> jsrc1 = std::make_pair((js+ox2*cnx2),(js+(ox2+1)*cnx2+1));
+        std::pair<int,int> ksrc  = std::make_pair((ks+ox3*cnx3),(ks+(ox3+1)*cnx3  ));
+        std::pair<int,int> ksrc1 = std::make_pair((ks+ox3*cnx3),(ks+(ox3+1)*cnx3+1));
 
         // copy data in MBs to be refined to coarse arrays in target MBs
         auto src1 = Kokkos::subview( b.x1f,msrc,ksrc,jsrc,isrc1);
