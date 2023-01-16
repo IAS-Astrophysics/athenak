@@ -540,8 +540,8 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   // Step 9.
   // Wait for all MPI load balancing communications to finish.  Unpack data.
 #if MPI_PARALLEL_ENABLED
-  RecvAndUnpackAMR();
-  ClearSendAMR();
+  if (nmb_recv > 0) {RecvAndUnpackAMR();}
+  if (nmb_send > 0) {ClearSendAMR();}
 #endif
 
   // Step 10.
