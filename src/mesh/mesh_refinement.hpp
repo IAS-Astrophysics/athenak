@@ -89,14 +89,24 @@ class MeshRefinement {
   void UpdateMeshBlockTree(int &nnew, int &ndel);
   void RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, int ndel);
 
+  void DerefineCCSameRank(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, int nleaf);
+  void DerefineFCSameRank(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb, int nleaf);
+
+  void MoveLeftCC(DvceArray5D<Real> &a);
+  void MoveLeftFC(DvceFaceFld4D<Real> &b);
+  void MoveRightCC(DvceArray5D<Real> &a);
+  void MoveRightFC(DvceFaceFld4D<Real> &b);
+
+  void MoveForRefinementCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, int nleaf);
+  void MoveForRefinementFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb, int nleaf);
+
+  void RefineCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
+  void RefineFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
+
   void RestrictCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
-  void RefineCC(int nmb, DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
-  void DerefineCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
-
   void RestrictFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
-  void RefineFC(int nmb, DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
-  void DerefineFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
 
+  // functions for load balancing (in file load_balance.cpp)
   void InitRecvAMR(int nleaf);
   void PackAndSendAMR(int nleaf);
   void PackAMRBuffersCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, int offset);

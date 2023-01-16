@@ -160,12 +160,12 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
         int ox1 = ((lloc.lx1 & 1) == 1);
         int ox2 = ((lloc.lx2 & 1) == 1);
         int ox3 = ((lloc.lx3 & 1) == 1);
-        recv_buf[rb_idx].bis = is + ox1*cnx1;
-        recv_buf[rb_idx].bie = is + ox1*cnx1 + cnx1;
-        recv_buf[rb_idx].bjs = js + ox2*cnx2;
-        recv_buf[rb_idx].bje = js + ox2*cnx2 + cnx2;
-        recv_buf[rb_idx].bks = ks + ox3*cnx3;
-        recv_buf[rb_idx].bke = ks + ox3*cnx3 + cnx3;
+        recv_buf[rb_idx].bis = is + (ox1  )*cnx1;
+        recv_buf[rb_idx].bie = is + (ox1+1)*cnx1;
+        recv_buf[rb_idx].bjs = js + (ox2  )*cnx2;
+        recv_buf[rb_idx].bje = js + (ox2+1)*cnx2;
+        recv_buf[rb_idx].bks = ks + (ox3  )*cnx3;
+        recv_buf[rb_idx].bke = ks + (ox3+1)*cnx3;
         recv_buf[rb_idx].ncells_cc = ncells_cc_coar ;
         recv_buf[rb_idx].ncells_fc = ncells_fc_coar ;
         recv_buf[rb_idx].data_size = data_size_coar ;
@@ -314,7 +314,7 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
         Kokkos::realloc(send_buf[rb_idx].vars,data_size_coar);
         rb_idx++;
       }
-    } else {   // same level or refinement
+    } else {   // same level or de-refinement
       if (new_rank_eachmb[newm] == global_variable::my_rank) continue;
       if (old_lloc.level == new_lloc.level) { // same level
         send_buf[rb_idx].bis = is;

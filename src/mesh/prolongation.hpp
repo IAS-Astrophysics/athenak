@@ -1,11 +1,11 @@
-#ifndef MESH_PROLONG_HPP_
-#define MESH_PROLONG_HPP_
+#ifndef MESH_PROLONGATION_HPP_
+#define MESH_PROLONGATION_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file prolong.hpp
+//! \file prolongation.hpp
 //! \brief prolongation operators for cell-centered and face-centered variables,
 //! implemented as inline functions so they can be used both in Bval and AMR functions.
 
@@ -227,4 +227,4 @@ void ProlongFCInternal(const int m, const int fk, const int fj, const int fi,
   }
   return;
 }
-#endif // MESH_PROLONG_HPP_
+#endif // MESH_PROLONGATION_HPP_
