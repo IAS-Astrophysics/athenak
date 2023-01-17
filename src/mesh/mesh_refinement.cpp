@@ -34,12 +34,13 @@
 
 MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
   pmy_mesh(pm),
-  refine_flag("rflag",pm->nmb_maxperrank),
-  cyc_since_ref("cyc_since_ref",pm->nmb_maxperrank),
-  nmb_created(0),
-  nmb_deleted(0),
-  ncycle_check_amr(1),
-  ncycle_ref_inter(5),
+  refine_flag("rflag",pm->nmb_thisrank),
+  ncyc_since_ref("cyc_since_ref",pm->nmb_thisrank),
+  nmb_created_thisrank(0),
+  nmb_deleted_thisrank(0),
+  nmb_sent_thisrank(0),
+  ncyc_check_amr(1),
+  refinement_interval(5),
   d_threshold_(0.0),
   dd_threshold_(0.0),
   dp_threshold_(0.0),
@@ -47,8 +48,8 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
   check_cons_(false) {
   // read interval (in cycles) between check of AMR and derefinement
   if (pin->DoesBlockExist("mesh_refinement")) {
-    ncycle_check_amr = pin->GetOrAddReal("mesh_refinement", "ncycle_check", 1);
-    ncycle_ref_inter = pin->GetOrAddReal("mesh_refinement", "refine_interval", 5);
+    ncyc_check_amr = pin->GetOrAddReal("mesh_refinement", "ncycle_check", 1);
+    refinement_interval = pin->GetOrAddReal("mesh_refinement", "refinement_interval", 5);
   }
   // read thresholds from <mesh_refinement> block in input file
   if (pin->DoesParameterExist("mesh_refinement", "dens_max")) {
@@ -67,12 +68,21 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
     dd_threshold_ = pin->GetReal("mesh_refinement", "dvel_max");
     check_cons_ = true;
   }
+
   if (pm->adaptive) {  // allocate arrays for AMR
     nref_eachrank = new int[global_variable::nranks];
     nderef_eachrank = new int[global_variable::nranks];
     nref_rsum = new int[global_variable::nranks];
     nderef_rsum = new int[global_variable::nranks];
   }
+
+  // be sure Views are initialized to zero
+  for (int m=0; m<(pm->nmb_thisrank); ++m) {
+    refine_flag.h_view(m) = 0;
+    ncyc_since_ref(m) = 0;
+  }
+  refine_flag.template modify<HostMemSpace>();
+  refine_flag.template sync<DevExeSpace>();
 
 #if MPI_PARALLEL_ENABLED
   // create unique communicators for AMR
@@ -103,8 +113,8 @@ void MeshRefinement::AdaptiveMeshRefinement(Driver *pdrive, ParameterInput *pin)
   if (nnew != 0 || ndel != 0) { // at least one (de)refinement flagged
     RedistAndRefineMeshBlocks(pin, nnew, ndel);
     pdrive->InitBoundaryValuesAndPrimitives(pmy_mesh);
-    nmb_created += nnew;
-    nmb_deleted += ndel;
+    nmb_created_thisrank += nnew;
+    nmb_deleted_thisrank += ndel;
   }
   return;
 }
@@ -127,15 +137,15 @@ bool MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
   bool return_flag = false;
   int nmb = pmbp->nmb_thispack;
   for (int m=0; m<nmb; ++m) {
-    cyc_since_ref(m) += 1;
+    ncyc_since_ref(m) += 1;
   }
   // Return if not correct cycle for checks
-  if ((pmbp->pmesh->ncycle)%(ncycle_check_amr) != 0) {
+  if ((pmbp->pmesh->ncycle)%(ncyc_check_amr) != 0) {
     return return_flag;
   }
 
   // zero refine_flag in host space and sync with device
-  for (int m=0; m<(pmbp->pmesh->nmb_maxperrank); ++m) {
+  for (int m=0; m<nmb; ++m) {
     refine_flag.h_view(m) = 0;
   }
   refine_flag.template modify<HostMemSpace>();
@@ -240,7 +250,7 @@ bool MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
 
   // Check (on host) that MB has not been recently refined
   for (int m=0; m<nmb; ++m) {
-    if (cyc_since_ref(m) < ncycle_ref_inter) {refine_flag.h_view(m) = 0;}
+    if (ncyc_since_ref(m) < refinement_interval) {refine_flag.h_view(m) = 0;}
   }
   refine_flag.template modify<HostMemSpace>();
   refine_flag.template sync<DevExeSpace>();
@@ -394,7 +404,11 @@ void MeshRefinement::UpdateMeshBlockTree(int &nnew, int &ndel) {
   for (int n=0; n<ctnd; n++) {
     MeshBlockTree *bt = pmy_mesh->ptree->FindMeshBlock(cllderef[n]);
     bt->Derefine(ndel);
-    refine_flag.h_view(bt->GetGID()) = -nleaf;  // flag root node of derefinement
+    // flag root node of genuine derefinements on this MPI rank
+    int indx = bt->GetGID() - pmy_mesh->gids_eachrank[global_variable::my_rank];
+    if ((indx >= 0) && (indx < pmy_mesh->nmb_thisrank)) {
+      refine_flag.h_view(indx) = -nleaf;
+    }
   }
   refine_flag.template modify<HostMemSpace>();
   refine_flag.template sync<DevExeSpace>();
@@ -483,7 +497,10 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   // Pack send buffers for load blancing and send data
 #if MPI_PARALLEL_ENABLED
   InitRecvAMR(nleaf);
+std::cout << "rank="<<global_variable::my_rank<<"here 0"<<std::endl;
   PackAndSendAMR(nleaf);
+std::cout << "rank="<<global_variable::my_rank<<"here 1"<<std::endl;
+std::cout << "rank="<<global_variable::my_rank<<" nrecv/nsend=" <<nmb_recv<<"  "<<nmb_send<<std::endl;
 #endif
 
   // Step 5.
@@ -502,6 +519,7 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
       DerefineFCSameRank(pmhd->b0, pmhd->coarse_b0, nleaf);
     }
   }
+std::cout << "rank="<<global_variable::my_rank<<"here 2"<<std::endl;
 
   // Step 6.
   // Move evolved physics variables within View for MeshBlocks that stay within this rank
@@ -513,6 +531,7 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
     MoveLeftCC(pmhd->u0);
     MoveLeftFC(pmhd->b0);
   }
+std::cout << "rank="<<global_variable::my_rank<<"here 3"<<std::endl;
 
   // Step 7.
   // Move evolved physics variables within View for MeshBlocks that stay within this rank
@@ -524,6 +543,7 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
     MoveRightCC(pmhd->u0);
     MoveRightFC(pmhd->b0);
   }
+std::cout << "rank="<<global_variable::my_rank<<"here 4"<<std::endl;
 
   // Step 8.
   // Move evolved physics variables for MBs flagged for refinement on this rank
@@ -536,12 +556,15 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
       MoveForRefinementFC(pmhd->b0, pmhd->coarse_b0, nleaf);
     }
   }
+std::cout << "rank="<<global_variable::my_rank<<"here 5"<<std::endl;
 
   // Step 9.
   // Wait for all MPI load balancing communications to finish.  Unpack data.
 #if MPI_PARALLEL_ENABLED
   if (nmb_recv > 0) {RecvAndUnpackAMR();}
+std::cout << "rank="<<global_variable::my_rank<<"here 6"<<std::endl;
   if (nmb_send > 0) {ClearSendAMR();}
+std::cout << "rank="<<global_variable::my_rank<<"here 7"<<std::endl;
 #endif
 
   // Step 10.
@@ -555,6 +578,7 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
       RefineFC(pmhd->b0, pmhd->coarse_b0);
     }
   }
+std::cout << "rank="<<global_variable::my_rank<<"here 8"<<std::endl;
 
   // Step 11.
   // Update data in Mesh/MeshBlockPack/MeshBlock classes with new grid properties
@@ -582,15 +606,17 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   pm->pmb_pack->pmb->SetNeighbors(pm->ptree, pm->rank_eachmb);
 
   // Update new number of cycles since refinement
-  HostArray1D<int> new_cyc_since_ref("new_ncyc_ref",pm->nmb_maxperrank);
+  HostArray1D<int> new_ncyc_since_ref("new_ncyc_ref",pm->nmb_thisrank);
   for (int m=0; m<(pm->pmb_pack->nmb_thispack); ++m) {
     if (refine_flag.h_view(newtoold[m]) != 0) {
-      new_cyc_since_ref(m) = 0;
+      new_ncyc_since_ref(m) = 0;
     } else {
-      new_cyc_since_ref(m) = cyc_since_ref(newtoold[m]);
+      new_ncyc_since_ref(m) = ncyc_since_ref(newtoold[m]);
     }
   }
-  Kokkos::deep_copy(cyc_since_ref, new_cyc_since_ref);
+  Kokkos::realloc(ncyc_since_ref, pm->nmb_thisrank);
+  Kokkos::deep_copy(ncyc_since_ref, new_ncyc_since_ref);
+  Kokkos::realloc(refine_flag, pm->nmb_thisrank);
 
   // clean-up and return
   delete [] newtoold;

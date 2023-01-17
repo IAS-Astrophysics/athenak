@@ -20,6 +20,10 @@
 #include "radiation/radiation.hpp"
 #include "driver.hpp"
 
+#if MPI_PARALLEL_ENABLED
+#include <mpi.h>
+#endif
+
 //----------------------------------------------------------------------------------------
 // constructor, initializes data structures and parameters
 //
@@ -307,76 +311,86 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
       MeshBlockPack* pmbp = pmesh->pmb_pack;
       //---------------------------------------
       // (1) Do *** operator split *** TaskList
-      {for (int p=0; p<npacks; ++p) {
-        if (!(pmbp->operator_split_tl.Empty())) {pmbp->operator_split_tl.Reset();}
-      }
-      int npack_left = npacks;
-      while (npack_left > 0) {
-        if (pmbp->operator_split_tl.Empty()) {
-          npack_left--;
-        } else {
-          if (!pmbp->operator_split_tl.IsComplete()) {
-            // note 2nd argument to DoAvailable (stage) is not used, set to 0
-            auto status = pmbp->operator_split_tl.DoAvailable(this, 0);
-            if (status == TaskListStatus::complete) { npack_left--; }
+      {
+        for (int p=0; p<npacks; ++p) {
+          if (!(pmbp->operator_split_tl.Empty())) {pmbp->operator_split_tl.Reset();}
+        }
+        int npack_left = npacks;
+        while (npack_left > 0) {
+          if (pmbp->operator_split_tl.Empty()) {
+            npack_left--;
+          } else {
+            if (!pmbp->operator_split_tl.IsComplete()) {
+              // note 2nd argument to DoAvailable (stage) is not used, set to 0
+              auto status = pmbp->operator_split_tl.DoAvailable(this, 0);
+              if (status == TaskListStatus::complete) { npack_left--; }
+            }
           }
         }
-      }} // extra brace to enclose scope
+      }
 
       //--------------------------------------------------------------
       // (2) Do *** explicit and ImEx RK time-integrator *** TaskLists
       for (int stage=1; stage<=(nexp_stages); ++stage) {
         // (2a) StageStart Tasks
         // tasks that must be completed over all MBPacks at start of each explicit stage
-        {for (int p=0; p<npacks; ++p) {
-          if (!(pmbp->start_tl.Empty())) {pmbp->start_tl.Reset();}
-        }
-        int npack_left = npacks;
-        while (npack_left > 0) {
-          if (pmbp->start_tl.Empty()) {
-            npack_left--;
-          } else {
-            if (!pmbp->start_tl.IsComplete()) {
-              auto status = pmbp->start_tl.DoAvailable(this, stage);
-              if (status == TaskListStatus::complete) { npack_left--; }
+        {
+          for (int p=0; p<npacks; ++p) {
+            if (!(pmbp->start_tl.Empty())) {pmbp->start_tl.Reset();}
+          }
+          int npack_left = npacks;
+          while (npack_left > 0) {
+            if (pmbp->start_tl.Empty()) {
+              npack_left--;
+            } else {
+              if (!pmbp->start_tl.IsComplete()) {
+                auto status = pmbp->start_tl.DoAvailable(this, stage);
+                if (status == TaskListStatus::complete) { npack_left--; }
+              }
             }
           }
-        }} // extra brace to enclose scope
+        }
 
         // (2b) StageRun Tasks
         // tasks in each explicit stage
-        {for (int p=0; p<npacks; ++p) {
-          if (!(pmbp->run_tl.Empty())) {pmbp->run_tl.Reset();}
-        }
-        int npack_left = npacks;
-        while (npack_left > 0) {
-          if (pmbp->run_tl.Empty()) {
-            npack_left--;
-          } else {
-            if (!pmbp->run_tl.IsComplete()) {
-              auto status = pmbp->run_tl.DoAvailable(this, stage);
-              if (status == TaskListStatus::complete) { npack_left--; }
+        {
+          for (int p=0; p<npacks; ++p) {
+            if (!(pmbp->run_tl.Empty())) {pmbp->run_tl.Reset();}
+          }
+          int npack_left = npacks;
+          while (npack_left > 0) {
+            if (pmbp->run_tl.Empty()) {
+              npack_left--;
+            } else {
+              if (!pmbp->run_tl.IsComplete()) {
+                auto status = pmbp->run_tl.DoAvailable(this, stage);
+                if (status == TaskListStatus::complete) { npack_left--; }
+              }
             }
           }
-        }} // extra brace to enclose scope
+        }
 
         // (2c) StageEnd Tasks
         // tasks that must be completed over all MBs at end of each explicit stage
-        {for (int p=0; p<npacks; ++p) {
-          if (!(pmbp->end_tl.Empty())) {pmbp->end_tl.Reset();}
-        }
-        int npack_left = npacks;
-        while (npack_left > 0) {
-          if (pmbp->end_tl.Empty()) {
-            npack_left--;
-          } else {
-            if (!pmbp->end_tl.IsComplete()) {
-              auto status = pmbp->end_tl.DoAvailable(this, stage);
-              if (status == TaskListStatus::complete) { npack_left--; }
+        {
+          for (int p=0; p<npacks; ++p) {
+            if (!(pmbp->end_tl.Empty())) {pmbp->end_tl.Reset();}
+          }
+          int npack_left = npacks;
+          while (npack_left > 0) {
+            if (pmbp->end_tl.Empty()) {
+              npack_left--;
+            } else {
+              if (!pmbp->end_tl.IsComplete()) {
+                auto status = pmbp->end_tl.DoAvailable(this, stage);
+                if (status == TaskListStatus::complete) { npack_left--; }
+              }
             }
           }
-        }} // extra brace to enclose scope
-      } // end of loop over stages
+        }
+      } // end for loop over stages
+std::cout << "rank="<<global_variable::my_rank<<"  done TaskList"<<std::endl;
+
 
       //-------------------------------
       // (3) Work outside of TaskLists:
@@ -389,8 +403,10 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
       if (pmesh->adaptive) {
         MeshBlockPack* pmbp = pmesh->pmb_pack;
         bool update_mesh = pmesh->pmr->CheckForRefinement(pmbp);
+std::cout << "rank="<<global_variable::my_rank<<"  done check refine"<<std::endl;
         if (update_mesh) pmesh->pmr->AdaptiveMeshRefinement(this, pin);
       }
+std::cout << "rank="<<global_variable::my_rank<<"  done AMR"<<std::endl;
 
       // once all MeshBlocks refined/de-refined, then compute new timestep
       pmesh->NewTimeStep(tlim);
@@ -409,9 +425,8 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
           out->WriteOutputFile(pmesh, pin);
         }
       }
-    }
-  }  // end of (time_evolution != tstatic) clause
-
+    }  // end while((t < tlim) && (n < nlim))
+  }    // end of (time_evolution != tstatic) clause
   return;
 }
 
@@ -449,9 +464,19 @@ void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
       std::cout << "tlim=" << tlim << " nlim=" << nlim << std::endl;
 
       if (pmesh->adaptive) {
+#if MPI_PARALLEL_ENABLED
+        MPI_Allreduce(MPI_IN_PLACE, &(pmesh->pmr->nmb_created_thisrank), 1, MPI_INT,
+                      MPI_SUM, MPI_COMM_WORLD);
+        MPI_Allreduce(MPI_IN_PLACE, &(pmesh->pmr->nmb_deleted_thisrank), 1, MPI_INT,
+                      MPI_SUM, MPI_COMM_WORLD);
+        MPI_Allreduce(MPI_IN_PLACE, &(pmesh->pmr->nmb_sent_thisrank), 1, MPI_INT, MPI_SUM,
+                      MPI_COMM_WORLD);
+#endif
         std::cout << std::endl << "Current number of MeshBlocks = " << pmesh->nmb_total
-                  << std::endl << pmesh->pmr->nmb_created << " MeshBlocks created, "
-                  << pmesh->pmr->nmb_deleted << " deleted during this run." << std::endl;
+          << std::endl << pmesh->pmr->nmb_created_thisrank << " MeshBlocks created, "
+          << pmesh->pmr->nmb_deleted_thisrank << " deleted, "
+          << pmesh->pmr->nmb_sent_thisrank << " communicated during load balancing in "
+          << "this run." << std::endl;
       }
 
       // Calculate and print the zone-cycles/exe-second and wall-second
