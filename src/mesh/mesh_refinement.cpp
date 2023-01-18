@@ -107,9 +107,15 @@ MeshRefinement::~MeshRefinement() {
 //! \brief Simple driver function for adaptive mesh refinement
 
 void MeshRefinement::AdaptiveMeshRefinement(Driver *pdrive, ParameterInput *pin) {
+  // first check refinement criteria
+  MeshBlockPack* pmbp = pmy_mesh->pmb_pack;
+  CheckForRefinement(pmbp);
+
+  // then update mesh tree if MeshBlock anywhere (on any rank) is flagged for refinement
   int nnew = 0, ndel = 0;
   UpdateMeshBlockTree(nnew, ndel);
 
+  // Refine/derefine mesh and eveolved data, set boundary conditions on new mesh
   if (nnew != 0 || ndel != 0) { // at least one (de)refinement flagged
     RedistAndRefineMeshBlocks(pin, nnew, ndel);
     pdrive->InitBoundaryValuesAndPrimitives(pmy_mesh);
@@ -133,16 +139,13 @@ void MeshRefinement::AdaptiveMeshRefinement(Driver *pdrive, ParameterInput *pin)
 //! User-defined refinement conditions can also be enrolled by setting the *usr_ref_func
 //! pointer in the problem generator.
 
-bool MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
-  bool return_flag = false;
+void MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
   int nmb = pmbp->nmb_thispack;
   for (int m=0; m<nmb; ++m) {
     ncyc_since_ref(m) += 1;
   }
   // Return if not correct cycle for checks
-  if ((pmbp->pmesh->ncycle)%(ncyc_check_amr) != 0) {
-    return return_flag;
-  }
+  if ((pmbp->pmesh->ncycle)%(ncyc_check_amr) != 0) {return;}
 
   // zero refine_flag in host space and sync with device
   for (int m=0; m<nmb; ++m) {
@@ -255,11 +258,7 @@ bool MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
   refine_flag.template modify<HostMemSpace>();
   refine_flag.template sync<DevExeSpace>();
 
-  // return true if refinement flag set on any MeshBlock
-  for (int m=0; m<nmb; ++m) {
-    if (refine_flag.h_view(m) != 0) {return_flag = true;}
-  }
-  return return_flag;
+  return;
 }
 
 //----------------------------------------------------------------------------------------
@@ -519,7 +518,7 @@ std::cout << "rank="<<global_variable::my_rank<<" nrecv/nsend=" <<nmb_recv<<"  "
       DerefineFCSameRank(pmhd->b0, pmhd->coarse_b0, nleaf);
     }
   }
-std::cout << "rank="<<global_variable::my_rank<<"here 2"<<std::endl;
+std::cout << "rank="<<global_variable::my_rank<<"here 2;  ndel="<<ndel<<std::endl;
 
   // Step 6.
   // Move evolved physics variables within View for MeshBlocks that stay within this rank
@@ -556,7 +555,7 @@ std::cout << "rank="<<global_variable::my_rank<<"here 4"<<std::endl;
       MoveForRefinementFC(pmhd->b0, pmhd->coarse_b0, nleaf);
     }
   }
-std::cout << "rank="<<global_variable::my_rank<<"here 5"<<std::endl;
+std::cout << "rank="<<global_variable::my_rank<<"here 5: nnew="<<nnew<<std::endl;
 
   // Step 9.
   // Wait for all MPI load balancing communications to finish.  Unpack data.
@@ -569,16 +568,39 @@ std::cout << "rank="<<global_variable::my_rank<<"here 7"<<std::endl;
 
   // Step 10.
   // Prolongate (refine) evolved physics variables for all MBs
+
+  // copy newtoold array to DualView so that it can be accessed in kernel
+  DualArray1D<int> new_to_old("newtoold",new_nmb_total);
+  for (int m=0; m<new_nmb_total; ++m) {
+    new_to_old.h_view(m) = newtoold[m];
+  }
+  new_to_old.template modify<HostMemSpace>();
+  new_to_old.template sync<DevExeSpace>();
+
   if (nnew > 0) {
     if (phydro != nullptr) {
-      RefineCC(phydro->u0, phydro->coarse_u0);
+      RefineCC(new_to_old, phydro->u0, phydro->coarse_u0);
     }
     if (pmhd != nullptr) {
-      RefineCC(pmhd->u0, pmhd->coarse_u0);
-      RefineFC(pmhd->b0, pmhd->coarse_b0);
+      RefineCC(new_to_old, pmhd->u0, pmhd->coarse_u0);
+      RefineFC(new_to_old, pmhd->b0, pmhd->coarse_b0);
     }
   }
 std::cout << "rank="<<global_variable::my_rank<<"here 8"<<std::endl;
+
+  // Update new number of cycles since refinement
+  HostArray1D<int> new_ncyc_since_ref("nnref",new_nmb_eachrank[global_variable::my_rank]);
+  for (int m=0; m<(new_nmb_eachrank[global_variable::my_rank]); ++m) {
+    int oldm = newtoold[m] - pm->gids_eachrank[global_variable::my_rank];
+    if (refine_flag.h_view(oldm) != 0) {
+      new_ncyc_since_ref(m) = 0;
+    } else {
+      new_ncyc_since_ref(m) = ncyc_since_ref(oldm);
+    }
+  }
+  Kokkos::realloc(ncyc_since_ref, new_nmb_eachrank[global_variable::my_rank]);
+  Kokkos::deep_copy(ncyc_since_ref, new_ncyc_since_ref);
+  Kokkos::realloc(refine_flag, new_nmb_eachrank[global_variable::my_rank]);
 
   // Step 11.
   // Update data in Mesh/MeshBlockPack/MeshBlock classes with new grid properties
@@ -604,19 +626,6 @@ std::cout << "rank="<<global_variable::my_rank<<"here 8"<<std::endl;
   pm->pmb_pack->AddMeshBlocks(pin);
   pm->pmb_pack->AddCoordinates(pin);
   pm->pmb_pack->pmb->SetNeighbors(pm->ptree, pm->rank_eachmb);
-
-  // Update new number of cycles since refinement
-  HostArray1D<int> new_ncyc_since_ref("new_ncyc_ref",pm->nmb_thisrank);
-  for (int m=0; m<(pm->pmb_pack->nmb_thispack); ++m) {
-    if (refine_flag.h_view(newtoold[m]) != 0) {
-      new_ncyc_since_ref(m) = 0;
-    } else {
-      new_ncyc_since_ref(m) = ncyc_since_ref(newtoold[m]);
-    }
-  }
-  Kokkos::realloc(ncyc_since_ref, pm->nmb_thisrank);
-  Kokkos::deep_copy(ncyc_since_ref, new_ncyc_since_ref);
-  Kokkos::realloc(refine_flag, pm->nmb_thisrank);
 
   // clean-up and return
   delete [] newtoold;
@@ -867,7 +876,7 @@ void MeshRefinement::MoveForRefinementCC(DvceArray5D<Real> &a, DvceArray5D<Real>
   int mbs = pmy_mesh->gids_eachrank[global_variable::my_rank];
   int mbe = mbs + pmy_mesh->nmb_eachrank[global_variable::my_rank] - 1;
   for (int m=mbs; m<=mbe; ++m) {
-    if (refine_flag.h_view(m) > 0) {
+    if (refine_flag.h_view(m-mbs) > 0) {
       int newm = oldtonew[m];
       int msrc = newm - new_gids_eachrank[global_variable::my_rank];
       for (int l=0; l<nleaf; l++) {
@@ -916,7 +925,7 @@ void MeshRefinement::MoveForRefinementFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<R
   int mbs = pmy_mesh->gids_eachrank[global_variable::my_rank];
   int mbe = mbs + pmy_mesh->nmb_eachrank[global_variable::my_rank] - 1;
   for (int m=mbs; m<=mbe; ++m) {
-    if (refine_flag.h_view(m) > 0) {
+    if (refine_flag.h_view(m-mbs) > 0) {
       int newm = oldtonew[m];
       int msrc = newm - new_gids_eachrank[global_variable::my_rank];
       for (int l=0; l<nleaf; l++) {
@@ -957,7 +966,8 @@ void MeshRefinement::MoveForRefinementFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<R
 //! overwriting any data located there. The data in these locations must already have been
 //! copied to another location or sent to another rank via MPI.
 
-void MeshRefinement::RefineCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca) {
+void MeshRefinement::RefineCC(DualArray1D<int> &n2o, DvceArray5D<Real> &a,
+                              DvceArray5D<Real> &ca) {
   int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
   auto &new_nmb = new_nmb_eachrank[global_variable::my_rank];;
   auto &indcs = pmy_mesh->mb_indcs;
@@ -966,21 +976,15 @@ void MeshRefinement::RefineCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca) {
   auto &cks = indcs.cks, &cke = indcs.cke;
   auto &cnx1 = indcs.cnx1, &cnx2 = indcs.cnx2, &cnx3 = indcs.cnx3;
 
-  // copy newtoold array to DualView so that it can be accessed in kernel
-  DualArray1D<int> new_to_old("newtoold",new_nmb);
-  for (int m=0; m<new_nmb; ++m) {
-    new_to_old.h_view(m) = newtoold[m];
-  }
-  new_to_old.template modify<HostMemSpace>();
-  new_to_old.template sync<DevExeSpace>();
-
-  // Now prolongate data in coarse arrays to fine arrays for all MBs being refined
+  // Now prolongate data in coarse arrays to fine arrays for all new MBs being refined
   auto &refine_flag_ = refine_flag;
   bool &multi_d = pmy_mesh->multi_d;
   bool &three_d = pmy_mesh->three_d;
+  auto &ngids_ = new_gids_eachrank[global_variable::my_rank];
+  auto &ogids_ = pmy_mesh->gids_eachrank[global_variable::my_rank];
   par_for("refineCC",DevExeSpace(), 0,(new_nmb-1), 0,nvar-1, cks,cke, cjs,cje, cis,cie,
   KOKKOS_LAMBDA(const int m, const int v, const int k, const int j, const int i) {
-    if (refine_flag_.d_view(new_to_old.d_view(m)) > 0) {
+    if (refine_flag_.d_view(n2o.d_view(m+ngids_) - ogids_) > 0) {
       // fine indices refer to target array
       int fi = 2*i - cis;  // correct when cis=is
       int fj = 2*j - cjs;  // correct when cjs=js
@@ -998,7 +1002,8 @@ void MeshRefinement::RefineCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca) {
 //! \fn void MeshRefinement::RefineFC
 //! \brief Same as RefineCC, except for face-centered arrays
 
-void MeshRefinement::RefineFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb) {
+void MeshRefinement::RefineFC(DualArray1D<int> &n2o, DvceFaceFld4D<Real> &b,
+                              DvceFaceFld4D<Real> &cb) {
   auto &new_nmb = new_nmb_eachrank[global_variable::my_rank];;
   auto &indcs = pmy_mesh->mb_indcs;
   auto &is = indcs.is, &ie = indcs.ie;
@@ -1009,24 +1014,18 @@ void MeshRefinement::RefineFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb) {
   auto &cks = indcs.cks, &cke = indcs.cke;
   auto &cnx1 = indcs.cnx1, &cnx2 = indcs.cnx2, &cnx3 = indcs.cnx3;
 
-  // copy newtoold array to DualView so that it can be accessed in kernel
-  DualArray1D<int> new_to_old("newtoold",new_nmb);
-  for (int m=0; m<new_nmb; ++m) {
-    new_to_old.h_view(m) = newtoold[m];
-  }
-  new_to_old.template modify<HostMemSpace>();
-  new_to_old.template sync<DevExeSpace>();
-
   // Now prolongate data in coarse arrays to fine arrays for all MBs being refined
   // First prolongate face-centered fields at shared faces betwen fine and coarse cells
   auto &refine_flag_ = refine_flag;
   bool &multi_d = pmy_mesh->multi_d;
   bool &three_d = pmy_mesh->three_d;
+  auto &ngids_ = new_gids_eachrank[global_variable::my_rank];
+  auto &ogids_ = pmy_mesh->gids_eachrank[global_variable::my_rank];
 
   // Prolongate x1f
   par_for("RefineFC1",DevExeSpace(), 0,(new_nmb-1), cks,cke, cjs,cje, cis,cie+1,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    if (refine_flag_.d_view(new_to_old.d_view(m)) > 0) {
+    if (refine_flag_.d_view(n2o.d_view(m+ngids_) - ogids_) > 0) {
       // fine indices refer to target array
       int fi = (i - cis)*2 + is;                   // fine i
       int fj = (multi_d)? ((j - cjs)*2 + js) : j;  // fine j
@@ -1038,7 +1037,7 @@ void MeshRefinement::RefineFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb) {
   // Prolongate x2f
   par_for("RefineFC2",DevExeSpace(), 0,(new_nmb-1), cks,cke, cjs,cje+1, cis,cie,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    if (refine_flag_.d_view(new_to_old.d_view(m)) > 0) {
+    if (refine_flag_.d_view(n2o.d_view(m+ngids_) - ogids_) > 0) {
       // fine indices refer to target array
       int fi = (i - cis)*2 + is;                   // fine i
       int fj = (multi_d)? ((j - cjs)*2 + js) : j;  // fine j
@@ -1050,7 +1049,7 @@ void MeshRefinement::RefineFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb) {
   // Prolongate x3f
   par_for("RefineFC3",DevExeSpace(), 0,(new_nmb-1), cks,cke+1, cjs,cje, cis,cie,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    if (refine_flag_.d_view(new_to_old.d_view(m)) > 0) {
+    if (refine_flag_.d_view(n2o.d_view(m+ngids_) - ogids_) > 0) {
       // fine indices refer to target array
       int fi = (i - cis)*2 + is;                   // fine i
       int fj = (multi_d)? ((j - cjs)*2 + js) : j;  // fine j
@@ -1064,7 +1063,7 @@ void MeshRefinement::RefineFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb) {
   bool &one_d = pmy_mesh->one_d;
   par_for("RefineFC-int",DevExeSpace(), 0,(new_nmb-1), cks,cke, cjs,cje, cis,cie,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    if (refine_flag_.d_view(new_to_old.d_view(m)) > 0) {
+    if (refine_flag_.d_view(n2o.d_view(m+ngids_) - ogids_) > 0) {
       // fine indices refer to target array
       int fi = (i - cis)*2 + is;   // fine i
       int fj = (j - cjs)*2 + js;   // fine j

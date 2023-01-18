@@ -10,12 +10,12 @@
 
 //----------------------------------------------------------------------------------------
 //! \fn int CreateAMR_MPI_Tag(int lid, int ox1, int ox2, int ox3)
-//! \brief calculate an MPI tag for AMR communications
-//! MPI tag = lid (remaining bits) + ox1 (1 bit) + ox2 (1 bit) + ox3 (1 bit)
+//! \brief calculate an MPI tag for AMR communications.  Note maximum size of
+//! lid that can be encoded is set by (NUM_BITS_LID) macro.
 //! The convention in Athena++ is lid is for the *receiving* process.
 //! The MPI standard requires signed int tag, with MPI_TAG_UB>=2^15-1 = 32,767 (inclusive)
 static int CreateAMR_MPI_Tag(int lid, int ox1, int ox2, int ox3) {
-  return (lid<<3) | (ox1<<2)| (ox2<<1) | ox3;
+  return (ox1<<(NUM_BITS_LID+2)) | (ox2<<(NUM_BITS_LID+1))| (ox3<<(NUM_BITS_LID)) | lid;
 }
 
 //----------------------------------------------------------------------------------------
@@ -86,7 +86,7 @@ class MeshRefinement {
 #endif
 
   // functions
-  bool CheckForRefinement(MeshBlockPack* pmbp);
+  void CheckForRefinement(MeshBlockPack* pmbp);
   void AdaptiveMeshRefinement(Driver *pdrive, ParameterInput *pin);
   void UpdateMeshBlockTree(int &nnew, int &ndel);
   void RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, int ndel);
@@ -102,8 +102,8 @@ class MeshRefinement {
   void MoveForRefinementCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, int nleaf);
   void MoveForRefinementFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb, int nleaf);
 
-  void RefineCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
-  void RefineFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
+  void RefineCC(DualArray1D<int> &n2o, DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
+  void RefineFC(DualArray1D<int> &n2o, DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
 
   void RestrictCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
   void RestrictFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);

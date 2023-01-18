@@ -56,19 +56,20 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh) :
   tlim(-1.0), nlim(-1), ndiag(1),
   impl_src("ru",1,1,1,1,1,1) {
   // set time-evolution option (no default)
-  {std::string evolution_t = pin->GetString("time","evolution");
-  if (evolution_t.compare("static") == 0) {
-    time_evolution = TimeEvolution::tstatic;  // cannot use 'static' (keyword);
-  } else if (evolution_t.compare("kinematic") == 0) {
-    time_evolution = TimeEvolution::kinematic;
-  } else if (evolution_t.compare("dynamic") == 0) {
-    time_evolution = TimeEvolution::dynamic;
-  } else {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "<hydro> evolution = '" << evolution_t << "' not implemented"
-              << std::endl;
-    std::exit(EXIT_FAILURE);
-  }} // extra brace to limit scope of string
+  {
+    std::string evolution_t = pin->GetString("time","evolution");
+    if (evolution_t.compare("static") == 0) {
+      time_evolution = TimeEvolution::tstatic;  // cannot use 'static' (keyword);
+    } else if (evolution_t.compare("kinematic") == 0) {
+      time_evolution = TimeEvolution::kinematic;
+    } else if (evolution_t.compare("dynamic") == 0) {
+      time_evolution = TimeEvolution::dynamic;
+    } else {
+      std::cout<<"### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+               <<"<hydro> evolution = '"<< evolution_t <<"' not implemented"<< std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  } // extra brace to limit scope of string
 
   // read <time> parameters controlling driver if run requires time-evolution
   if (time_evolution != TimeEvolution::tstatic) {
@@ -389,8 +390,6 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
           }
         }
       } // end for loop over stages
-std::cout << "rank="<<global_variable::my_rank<<"  done TaskList"<<std::endl;
-
 
       //-------------------------------
       // (3) Work outside of TaskLists:
@@ -399,16 +398,9 @@ std::cout << "rank="<<global_variable::my_rank<<"  done TaskList"<<std::endl;
       pmesh->ncycle++;
       nmb_updated_ += pmesh->nmb_total;
 
-      // with AMR, check for mesh refinement every ncycle_amr steps
-      if (pmesh->adaptive) {
-        MeshBlockPack* pmbp = pmesh->pmb_pack;
-        bool update_mesh = pmesh->pmr->CheckForRefinement(pmbp);
-std::cout << "rank="<<global_variable::my_rank<<"  done check refine"<<std::endl;
-        if (update_mesh) pmesh->pmr->AdaptiveMeshRefinement(this, pin);
-      }
-std::cout << "rank="<<global_variable::my_rank<<"  done AMR"<<std::endl;
+      if (pmesh->adaptive) {pmesh->pmr->AdaptiveMeshRefinement(this, pin);}
 
-      // once all MeshBlocks refined/de-refined, then compute new timestep
+      // compute new timestep AFTER all Meshblocks refined/derefined
       pmesh->NewTimeStep(tlim);
 
       // Test for/make outputs
@@ -465,12 +457,15 @@ void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
 
       if (pmesh->adaptive) {
 #if MPI_PARALLEL_ENABLED
+/**
         MPI_Allreduce(MPI_IN_PLACE, &(pmesh->pmr->nmb_created_thisrank), 1, MPI_INT,
                       MPI_SUM, MPI_COMM_WORLD);
         MPI_Allreduce(MPI_IN_PLACE, &(pmesh->pmr->nmb_deleted_thisrank), 1, MPI_INT,
                       MPI_SUM, MPI_COMM_WORLD);
         MPI_Allreduce(MPI_IN_PLACE, &(pmesh->pmr->nmb_sent_thisrank), 1, MPI_INT, MPI_SUM,
                       MPI_COMM_WORLD);
+**/
+std::cout << "rank="<<global_variable::my_rank<<"FINISHED"<<std::endl;
 #endif
         std::cout << std::endl << "Current number of MeshBlocks = " << pmesh->nmb_total
           << std::endl << pmesh->pmr->nmb_created_thisrank << " MeshBlocks created, "
