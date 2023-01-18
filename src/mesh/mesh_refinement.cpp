@@ -602,6 +602,7 @@ std::cout << "rank="<<global_variable::my_rank<<"here 8"<<std::endl;
   Kokkos::deep_copy(ncyc_since_ref, new_ncyc_since_ref);
   Kokkos::realloc(refine_flag, new_nmb_eachrank[global_variable::my_rank]);
 
+std::cout << "rank="<<global_variable::my_rank<<"here 9"<<std::endl;
   // Step 11.
   // Update data in Mesh/MeshBlockPack/MeshBlock classes with new grid properties
   delete [] pm->lloc_eachmb;
@@ -627,6 +628,7 @@ std::cout << "rank="<<global_variable::my_rank<<"here 8"<<std::endl;
   pm->pmb_pack->AddCoordinates(pin);
   pm->pmb_pack->pmb->SetNeighbors(pm->ptree, pm->rank_eachmb);
 
+std::cout << "rank="<<global_variable::my_rank<<"here 10"<<std::endl;
   // clean-up and return
   delete [] newtoold;
   delete [] oldtonew;

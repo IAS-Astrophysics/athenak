@@ -443,6 +443,17 @@ void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
   float exe_time = run_time_.seconds();
 
   if (time_evolution != TimeEvolution::tstatic) {
+#if MPI_PARALLEL_ENABLED
+    // Collect diagnostics across all MeshBlocks with AMR and MPI
+    if (pmesh->adaptive) {
+      MPI_Allreduce(MPI_IN_PLACE, &(pmesh->pmr->nmb_created_thisrank), 1, MPI_INT,
+                    MPI_SUM, MPI_COMM_WORLD);
+      MPI_Allreduce(MPI_IN_PLACE, &(pmesh->pmr->nmb_deleted_thisrank), 1, MPI_INT,
+                    MPI_SUM, MPI_COMM_WORLD);
+      MPI_Allreduce(MPI_IN_PLACE, &(pmesh->pmr->nmb_sent_thisrank), 1, MPI_INT, MPI_SUM,
+                    MPI_COMM_WORLD);
+    }
+#endif
     if (global_variable::my_rank == 0) {
       // Print diagnostic messages related to the end of the simulation
       OutputCycleDiagnostics(pmesh);
@@ -456,22 +467,11 @@ void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
       std::cout << "tlim=" << tlim << " nlim=" << nlim << std::endl;
 
       if (pmesh->adaptive) {
-#if MPI_PARALLEL_ENABLED
-/**
-        MPI_Allreduce(MPI_IN_PLACE, &(pmesh->pmr->nmb_created_thisrank), 1, MPI_INT,
-                      MPI_SUM, MPI_COMM_WORLD);
-        MPI_Allreduce(MPI_IN_PLACE, &(pmesh->pmr->nmb_deleted_thisrank), 1, MPI_INT,
-                      MPI_SUM, MPI_COMM_WORLD);
-        MPI_Allreduce(MPI_IN_PLACE, &(pmesh->pmr->nmb_sent_thisrank), 1, MPI_INT, MPI_SUM,
-                      MPI_COMM_WORLD);
-**/
-std::cout << "rank="<<global_variable::my_rank<<"FINISHED"<<std::endl;
-#endif
         std::cout << std::endl << "Current number of MeshBlocks = " << pmesh->nmb_total
           << std::endl << pmesh->pmr->nmb_created_thisrank << " MeshBlocks created, "
-          << pmesh->pmr->nmb_deleted_thisrank << " deleted, "
-          << pmesh->pmr->nmb_sent_thisrank << " communicated during load balancing in "
-          << "this run." << std::endl;
+          << pmesh->pmr->nmb_deleted_thisrank << " deleted by AMR; "
+          << pmesh->pmr->nmb_sent_thisrank << " communicated for load balancing"
+          << std::endl;
       }
 
       // Calculate and print the zone-cycles/exe-second and wall-second
