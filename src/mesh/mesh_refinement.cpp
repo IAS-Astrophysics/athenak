@@ -500,6 +500,19 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   pm->LoadBalance(new_cost_eachmb, new_rank_eachmb, new_gids_eachrank, new_nmb_eachrank,
                   new_nmb_total);
 
+/***/
+if (global_variable::my_rank == 0) {
+std::cout <<"  CYCLE = "<<pmy_mesh->ncycle<<std::endl;
+for (int i=0; i<old_nmb; ++i) {
+std::cout<<"oldm="<<i<<" rank="<<pm->rank_eachmb[i]<<" flag="<<refine_flag.h_view(i)<<"  old_to_new="<<oldtonew[i]<<std::endl;
+}
+for (int i=0; i<new_nmb; ++i) {
+std::cout<<"newm="<<i<<" rank="<<new_rank_eachmb[i]<<"  new_to_old="<<newtoold[i]<<std::endl;
+}
+}
+MPI_Barrier(MPI_COMM_WORLD);
+/***/
+
   // Step 4.
   // Allocate send/recv buffers for load balancing, post receives.
   // Pack send buffers for load blancing and send data
@@ -879,23 +892,29 @@ void MeshRefinement::MoveForRefinementCC(DvceArray5D<Real> &a, DvceArray5D<Real>
   for (int m=mbs; m<=mbe; ++m) {
     if (refine_flag.h_view(m) > 0) {
       int newm = oldtonew[m];
-      int msrc = newm - new_gids_eachrank[global_variable::my_rank];
-      for (int l=0; l<nleaf; l++) {
-        int mdst = msrc + l;
-        // only move data if target array on this rank
-        if (new_rank_eachmb[newm+l] != global_variable::my_rank) continue;
-        LogicalLocation &lloc = new_lloc_eachmb[newm+l];
-        int ox1 = ((lloc.lx1 & 1) == 1);
-        int ox2 = ((lloc.lx2 & 1) == 1);
-        int ox3 = ((lloc.lx3 & 1) == 1);
-        std::pair<int,int> isrc = std::make_pair((is+ox1*cnx1),(is+(ox1+1)*cnx1));
-        std::pair<int,int> jsrc = std::make_pair((js+ox2*cnx2),(js+(ox2+1)*cnx2));
-        std::pair<int,int> ksrc = std::make_pair((ks+ox3*cnx3),(ks+(ox3+1)*cnx3));
+      // only move data if source array on this rank
+      if (new_rank_eachmb[newm] == global_variable::my_rank) {
+        int msrc = newm - new_gids_eachrank[global_variable::my_rank];
+        for (int l=0; l<nleaf; l++) {
+          int mdst = msrc + l;
+          // only move data if target array on this rank
+          if (new_rank_eachmb[newm+l] != global_variable::my_rank) continue;
+          LogicalLocation &lloc = new_lloc_eachmb[newm+l];
+          int ox1 = ((lloc.lx1 & 1) == 1);
+          int ox2 = ((lloc.lx2 & 1) == 1);
+          int ox3 = ((lloc.lx3 & 1) == 1);
+          std::pair<int,int> isrc = std::make_pair((is+ox1*cnx1),(is+(ox1+1)*cnx1));
+          std::pair<int,int> jsrc = std::make_pair((js+ox2*cnx2),(js+(ox2+1)*cnx2));
+          std::pair<int,int> ksrc = std::make_pair((ks+ox3*cnx3),(ks+(ox3+1)*cnx3));
 
-        // copy data in MBs to be refined to coarse arrays in target MBs
-        auto src = Kokkos::subview( a,msrc,Kokkos::ALL,ksrc,jsrc,isrc);
-        auto dst = Kokkos::subview(ca,mdst,Kokkos::ALL,kdst,jdst,idst);
-        Kokkos::deep_copy(DevExeSpace(), dst, src);
+          // copy data in MBs to be refined to coarse arrays in target MBs
+          auto src = Kokkos::subview( a,msrc,Kokkos::ALL,ksrc,jsrc,isrc);
+          auto dst = Kokkos::subview(ca,mdst,Kokkos::ALL,kdst,jdst,idst);
+          Kokkos::deep_copy(DevExeSpace(), dst, src);
+/***
+std::cout <<"rank="<<global_variable::my_rank<<"  Moved "<<msrc<<" into "<<mdst<<" for refinement"<<std::endl;
+***/
+        }
       }
     }
   }
@@ -982,16 +1001,37 @@ void MeshRefinement::RefineCC(DualArray1D<int> &n2o, DvceArray5D<Real> &a,
   bool &multi_d = pmy_mesh->multi_d;
   bool &three_d = pmy_mesh->three_d;
   auto &ngids_ = new_gids_eachrank[global_variable::my_rank];
-  par_for("refineCC",DevExeSpace(), 0,(new_nmb-1), 0,nvar-1, cks,cke, cjs,cje, cis,cie,
-  KOKKOS_LAMBDA(const int m, const int v, const int k, const int j, const int i) {
-    if (refine_flag_.d_view(n2o.d_view(m+ngids_)) > 0) {
-      // fine indices refer to target array
-      int fi = 2*i - cis;  // correct when cis=is
-      int fj = 2*j - cjs;  // correct when cjs=js
-      int fk = 2*k - cks;  // correct when cks=ks
+  // Outer loop over (# of MeshBlocks sent)*(# of variables)
+  int nmv = new_nmb*nvar;
+  Kokkos::TeamPolicy<> policy(DevExeSpace(), nmv, Kokkos::AUTO);
+  Kokkos::parallel_for("SendBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
+    const int m = (tmember.league_rank())/nvar;
+    const int v = (tmember.league_rank() - m*nvar);
 
-      // call inlined prolongation operator for CC variables
-      ProlongCC(m,v,k,j,i,fk,fj,fi,multi_d,three_d,ca,a);
+    if (refine_flag_.d_view(n2o.d_view(m+ngids_)) > 0) {
+      const int ni = cie - cis + 1;
+      const int nj = cje - cjs + 1;
+      const int nk = cke - cks + 1;
+      const int nkji = nk*nj*ni;
+      const int nji  = nj*ni;
+
+      // Middle loop over k,j,i
+      Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkji), [&](const int idx) {
+        int k = (idx)/nji;
+        int j = (idx - k*nji)/ni;
+        int i = (idx - k*nji - j*ni) + cis;
+        k += cks;
+        j += cjs;
+
+        // fine indices refer to target array
+        int fi = 2*i - cis;  // correct when cis=is
+        int fj = 2*j - cjs;  // correct when cjs=js
+        int fk = 2*k - cks;  // correct when cks=ks
+
+        // call inlined prolongation operator for CC variables
+        ProlongCC(m,v,k,j,i,fk,fj,fi,multi_d,three_d,ca,a);
+      });
+//if (v==0) std::cout <<"rank="<<global_variable::my_rank<<"  Prolongate m="<<m<<std::endl;
     }
   });
 
