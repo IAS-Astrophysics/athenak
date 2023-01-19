@@ -28,6 +28,7 @@ struct AMRBuffer {
   int bis, bie, bjs, bje, bks, bke;
   int ncells_cc, ncells_fc;
   int data_size;
+  int lid;
   bool refine=false, derefine=false;
 
   DvceArray1D<Real> vars;               // View that stores buffer data on device

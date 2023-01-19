@@ -166,9 +166,10 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
         recv_buf[rb_idx].bje = js + (ox2+1)*cnx2;
         recv_buf[rb_idx].bks = ks + (ox3  )*cnx3;
         recv_buf[rb_idx].bke = ks + (ox3+1)*cnx3;
-        recv_buf[rb_idx].ncells_cc = ncells_cc_coar ;
-        recv_buf[rb_idx].ncells_fc = ncells_fc_coar ;
-        recv_buf[rb_idx].data_size = data_size_coar ;
+        recv_buf[rb_idx].ncells_cc = ncells_cc_coar;
+        recv_buf[rb_idx].ncells_fc = ncells_fc_coar;
+        recv_buf[rb_idx].data_size = data_size_coar;
+        recv_buf[rb_idx].lid = m - mbs;
         recv_buf[rb_idx].derefine = true;
         Kokkos::realloc(recv_buf[rb_idx].vars,data_size_coar);
 
@@ -194,6 +195,7 @@ std::cout << "Recv="<<rb_idx<<" size="<<data_size_coar<<" tag="<<tag<<" rank="<<
         recv_buf[rb_idx].ncells_cc = ncells_cc_same ;
         recv_buf[rb_idx].ncells_fc = ncells_fc_same ;
         recv_buf[rb_idx].data_size = data_size_same ;
+        recv_buf[rb_idx].lid = m - mbs;
         Kokkos::realloc(recv_buf[rb_idx].vars,data_size_same);
       } else {                                // refinement
         recv_buf[rb_idx].bis = cis;
@@ -205,6 +207,7 @@ std::cout << "Recv="<<rb_idx<<" size="<<data_size_coar<<" tag="<<tag<<" rank="<<
         recv_buf[rb_idx].ncells_cc = ncells_cc_coar ;
         recv_buf[rb_idx].ncells_fc = ncells_fc_coar ;
         recv_buf[rb_idx].data_size = data_size_coar ;
+        recv_buf[rb_idx].lid = m - mbs;
         recv_buf[rb_idx].refine = true;
         Kokkos::realloc(recv_buf[rb_idx].vars,data_size_coar);
       }
@@ -313,6 +316,7 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
         send_buf[sb_idx].ncells_cc = ncells_cc_coar ;
         send_buf[sb_idx].ncells_fc = ncells_fc_coar ;
         send_buf[sb_idx].data_size = data_size_coar ;
+        send_buf[sb_idx].lid = m - mbs;
         send_buf[sb_idx].refine = true;
         Kokkos::realloc(send_buf[sb_idx].vars,data_size_coar);
         sb_idx++;
@@ -329,6 +333,7 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
         send_buf[sb_idx].ncells_cc = ncells_cc_same ;
         send_buf[sb_idx].ncells_fc = ncells_fc_same ;
         send_buf[sb_idx].data_size = data_size_same ;
+        send_buf[sb_idx].lid = m - mbs;
         Kokkos::realloc(send_buf[sb_idx].vars,data_size_same);
       } else {                                // de-refinement
         send_buf[sb_idx].bis = cis;
@@ -340,6 +345,7 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
         send_buf[sb_idx].ncells_cc = ncells_cc_coar ;
         send_buf[sb_idx].ncells_fc = ncells_fc_coar ;
         send_buf[sb_idx].data_size = data_size_coar ;
+        send_buf[sb_idx].lid = m - mbs;
         send_buf[sb_idx].derefine = true;
         Kokkos::realloc(send_buf[sb_idx].vars,data_size_coar);
       }
@@ -436,20 +442,21 @@ void MeshRefinement::PackAMRBuffersCC(DvceArray5D<Real> &a, DvceArray5D<Real> &c
   auto &sbuf = send_buf;
 
   // Outer loop over (# of MeshBlocks sent)*(# of variables)
-  int nmv = nmb_send*nvar;
-  Kokkos::TeamPolicy<> policy(DevExeSpace(), nmv, Kokkos::AUTO);
+  int nnv = nmb_send*nvar;
+  Kokkos::TeamPolicy<> policy(DevExeSpace(), nnv, Kokkos::AUTO);
   Kokkos::parallel_for("SendBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
-    const int m = (tmember.league_rank())/nvar;
-    const int v = (tmember.league_rank() - m*nvar);
+    const int n = (tmember.league_rank())/nvar;
+    const int v = (tmember.league_rank() - n*nvar);
 
-    const int il = sbuf[m].bis;
-    const int jl = sbuf[m].bjs;
-    const int kl = sbuf[m].bks;
-    const int ni = sbuf[m].bie - il + 1;
-    const int nj = sbuf[m].bje - jl + 1;
-    const int nk = sbuf[m].bke - kl + 1;
+    const int il = sbuf[n].bis;
+    const int jl = sbuf[n].bjs;
+    const int kl = sbuf[n].bks;
+    const int ni = sbuf[n].bie - il + 1;
+    const int nj = sbuf[n].bje - jl + 1;
+    const int nk = sbuf[n].bke - kl + 1;
     const int nkji = nk*nj*ni;
     const int nji  = nj*ni;
+    const int m  = sbuf[n].lid;
 
     // Middle loop over k,j,i
     Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkji), [&](const int idx) {
@@ -458,12 +465,12 @@ void MeshRefinement::PackAMRBuffersCC(DvceArray5D<Real> &a, DvceArray5D<Real> &c
       int i = (idx - k*nji - j*ni) + il;
       k += kl;
       j += jl;
-      if (sbuf[m].derefine) {
+      if (sbuf[n].derefine) {
         // if de-refinement, load data from coarse_a
-        sbuf[m].vars(offset + (i-il + ni*(j-jl + nj*(k-kl + nk*v)))) = ca(m,v,k,j,i);
+        sbuf[n].vars(offset + (i-il + ni*(j-jl + nj*(k-kl + nk*v)))) = ca(m,v,k,j,i);
       } else {
         // if refinement or same level, load data from a
-        sbuf[m].vars(offset + (i-il + ni*(j-jl + nj*(k-kl + nk*v)))) = a(m,v,k,j,i);
+        sbuf[n].vars(offset + (i-il + ni*(j-jl + nj*(k-kl + nk*v)))) = a(m,v,k,j,i);
       }
     });
   }); // end par_for_outer
@@ -521,20 +528,21 @@ void MeshRefinement::UnpackAMRBuffersCC(DvceArray5D<Real> &a, DvceArray5D<Real> 
   auto &rbuf = recv_buf;
 
   // Outer loop over (# of MeshBlocks sent)*(# of variables)
-  int nmv = nmb_recv*nvar;
-  Kokkos::TeamPolicy<> policy(DevExeSpace(), nmv, Kokkos::AUTO);
+  int nnv = nmb_recv*nvar;
+  Kokkos::TeamPolicy<> policy(DevExeSpace(), nnv, Kokkos::AUTO);
   Kokkos::parallel_for("SendBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
-    const int m = (tmember.league_rank())/nvar;
-    const int v = (tmember.league_rank() - m*nvar);
+    const int n = (tmember.league_rank())/nvar;
+    const int v = (tmember.league_rank() - n*nvar);
 
-    const int il = rbuf[m].bis;
-    const int jl = rbuf[m].bjs;
-    const int kl = rbuf[m].bks;
-    const int ni = rbuf[m].bie - il + 1;
-    const int nj = rbuf[m].bje - jl + 1;
-    const int nk = rbuf[m].bke - kl + 1;
+    const int il = rbuf[n].bis;
+    const int jl = rbuf[n].bjs;
+    const int kl = rbuf[n].bks;
+    const int ni = rbuf[n].bie - il + 1;
+    const int nj = rbuf[n].bje - jl + 1;
+    const int nk = rbuf[n].bke - kl + 1;
     const int nkji = nk*nj*ni;
     const int nji  = nj*ni;
+    const int m  = rbuf[n].lid;
 
     // Middle loop over k,j,i
     Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkji), [&](const int idx) {
@@ -543,12 +551,12 @@ void MeshRefinement::UnpackAMRBuffersCC(DvceArray5D<Real> &a, DvceArray5D<Real> 
       int i = (idx - k*nji - j*ni) + il;
       k += kl;
       j += jl;
-      if (rbuf[m].refine) {
+      if (rbuf[n].refine) {
         // if refinement, load data into coarse_a
-        ca(m,v,k,j,i) = rbuf[m].vars(offset + (i-il + ni*(j-jl + nj*(k-kl + nk*v))));
+        ca(m,v,k,j,i) = rbuf[n].vars(offset + (i-il + ni*(j-jl + nj*(k-kl + nk*v))));
       } else {
         // if de-refinement or same level, load data into a
-        a(m,v,k,j,i) = rbuf[m].vars(offset + (i-il + ni*(j-jl + nj*(k-kl + nk*v))));
+        a(m,v,k,j,i) = rbuf[n].vars(offset + (i-il + ni*(j-jl + nj*(k-kl + nk*v))));
       }
     });
   }); // end par_for_outer

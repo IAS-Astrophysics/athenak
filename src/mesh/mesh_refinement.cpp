@@ -416,11 +416,13 @@ void MeshRefinement::UpdateMeshBlockTree(int &nnew, int &ndel) {
     delete [] cllderef;
   }
 
-/***
+/***/
 for (int m=0; m<(pmy_mesh->nmb_thisrank); ++m) {
-std::cout << "m=" << m << " flag="<< refine_flag.h_view(m) << std::endl;
+if (refine_flag.h_view(m) != 0) {
+std::cout <<"rank= "<<global_variable::my_rank<< "  m=" << m << "  flag="<< refine_flag.h_view(m) << std::endl;
 }
-***/
+}
+/***/
 
   return;
 }
@@ -498,6 +500,7 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   InitRecvAMR(nleaf);
 std::cout << "rank="<<global_variable::my_rank<<"here 0"<<std::endl;
   PackAndSendAMR(nleaf);
+  nmb_sent_thisrank += nmb_send;
 std::cout << "rank="<<global_variable::my_rank<<"here 1"<<std::endl;
 std::cout << "rank="<<global_variable::my_rank<<" nrecv/nsend=" <<nmb_recv<<"  "<<nmb_send<<std::endl;
 #endif
@@ -600,6 +603,7 @@ std::cout << "rank="<<global_variable::my_rank<<"here 8"<<std::endl;
   }
   Kokkos::realloc(ncyc_since_ref, new_nmb_eachrank[global_variable::my_rank]);
   Kokkos::deep_copy(ncyc_since_ref, new_ncyc_since_ref);
+  // reallocate refine_flag, will be zeroed out at start of CheckForRefinement
   Kokkos::realloc(refine_flag, new_nmb_eachrank[global_variable::my_rank]);
 
 std::cout << "rank="<<global_variable::my_rank<<"here 9"<<std::endl;
