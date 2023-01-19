@@ -154,71 +154,81 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
     LogicalLocation &new_lloc = new_lloc_eachmb[m];
     if (old_lloc.level > new_lloc.level) {   // de-refinement
       for (int l=0; l<nleaf; l++) {
-        if (pmy_mesh->rank_eachmb[oldm+l] == global_variable::my_rank) continue;
-        // initialize AMRBuffer data for de-refinement
-        LogicalLocation &lloc = pmy_mesh->lloc_eachmb[oldm+l];
-        int ox1 = ((lloc.lx1 & 1) == 1);
-        int ox2 = ((lloc.lx2 & 1) == 1);
-        int ox3 = ((lloc.lx3 & 1) == 1);
-        recv_buf[rb_idx].bis = is + (ox1  )*cnx1;
-        recv_buf[rb_idx].bie = is + (ox1+1)*cnx1;
-        recv_buf[rb_idx].bjs = js + (ox2  )*cnx2;
-        recv_buf[rb_idx].bje = js + (ox2+1)*cnx2;
-        recv_buf[rb_idx].bks = ks + (ox3  )*cnx3;
-        recv_buf[rb_idx].bke = ks + (ox3+1)*cnx3;
-        recv_buf[rb_idx].ncells_cc = ncells_cc_coar;
-        recv_buf[rb_idx].ncells_fc = ncells_fc_coar;
-        recv_buf[rb_idx].data_size = data_size_coar;
-        recv_buf[rb_idx].lid = m - mbs;
-        recv_buf[rb_idx].derefine = true;
-        Kokkos::realloc(recv_buf[rb_idx].vars,data_size_coar);
+        if (pmy_mesh->rank_eachmb[oldm+l] != global_variable::my_rank) {
+          // initialize AMRBuffer data for de-refinement
+          LogicalLocation &lloc = pmy_mesh->lloc_eachmb[oldm+l];
+          int ox1 = ((lloc.lx1 & 1) == 1);
+          int ox2 = ((lloc.lx2 & 1) == 1);
+          int ox3 = ((lloc.lx3 & 1) == 1);
+          recv_buf[rb_idx].bis = is + (ox1  )*cnx1;
+          recv_buf[rb_idx].bie = is + (ox1+1)*cnx1 - 1;
+          recv_buf[rb_idx].bjs = js + (ox2  )*cnx2;
+          recv_buf[rb_idx].bje = js + (ox2+1)*cnx2 - 1;
+          recv_buf[rb_idx].bks = ks + (ox3  )*cnx3;
+          recv_buf[rb_idx].bke = ks + (ox3+1)*cnx3 - 1;
+          recv_buf[rb_idx].ncells_cc = ncells_cc_coar;
+          recv_buf[rb_idx].ncells_fc = ncells_fc_coar;
+          recv_buf[rb_idx].data_size = data_size_coar;
+          recv_buf[rb_idx].lid = m - mbs;
+          recv_buf[rb_idx].derefine = true;
+          Kokkos::realloc(recv_buf[rb_idx].vars,data_size_coar);
 
-        // post non-blocking receive
+          // post non-blocking receive
+          // create tag using local ID of *receiving* MeshBlock
+          int tag = CreateAMR_MPI_Tag(m-mbs, ox1, ox2, ox3);
+          int ierr = MPI_Irecv(recv_buf[rb_idx].vars.data(), data_size_coar,
+                     MPI_ATHENA_REAL, pmy_mesh->rank_eachmb[oldm+l], tag, amr_comm,
+                     &(recv_buf[rb_idx].req));
+/***/
+if (global_variable::my_rank == 2) {
+std::cout <<"rank="<<global_variable::my_rank<<" m="<<m<<" Recv="<<rb_idx<<" size="<<recv_buf[rb_idx].data_size<<" tag="<<tag<<" from rank="<<pmy_mesh->rank_eachmb[oldm+l]<<" ox1/2/3="<<ox1<<" "<<ox2<<" "<<ox3<<std::endl;
+}
+/***/
+          if (ierr != MPI_SUCCESS) {no_errors=false;}
+          rb_idx++;
+        }
+      }
+    } else {   // same level or refinement
+      if (pmy_mesh->rank_eachmb[oldm] != global_variable::my_rank) {
+        if (old_lloc.level == new_lloc.level) { // same level
+          recv_buf[rb_idx].bis = is;
+          recv_buf[rb_idx].bie = ie;
+          recv_buf[rb_idx].bjs = js;
+          recv_buf[rb_idx].bje = je;
+          recv_buf[rb_idx].bks = ks;
+          recv_buf[rb_idx].bke = ke;
+          recv_buf[rb_idx].ncells_cc = ncells_cc_same ;
+          recv_buf[rb_idx].ncells_fc = ncells_fc_same ;
+          recv_buf[rb_idx].data_size = data_size_same ;
+          recv_buf[rb_idx].lid = m - mbs;
+          Kokkos::realloc(recv_buf[rb_idx].vars,data_size_same);
+        } else {                                // refinement
+          recv_buf[rb_idx].bis = cis;
+          recv_buf[rb_idx].bie = cie;
+          recv_buf[rb_idx].bjs = cjs;
+          recv_buf[rb_idx].bje = cje;
+          recv_buf[rb_idx].bks = cks;
+          recv_buf[rb_idx].bke = cke;
+          recv_buf[rb_idx].ncells_cc = ncells_cc_coar ;
+          recv_buf[rb_idx].ncells_fc = ncells_fc_coar ;
+          recv_buf[rb_idx].data_size = data_size_coar ;
+          recv_buf[rb_idx].lid = m - mbs;
+          recv_buf[rb_idx].refine = true;
+          Kokkos::realloc(recv_buf[rb_idx].vars,data_size_coar);
+        }
         // create tag using local ID of *receiving* MeshBlock
-        int tag = CreateAMR_MPI_Tag(m-mbs, ox1, ox2, ox3);
-        int ierr = MPI_Irecv(recv_buf[rb_idx].vars.data(), data_size_coar,
-                   MPI_ATHENA_REAL, pmy_mesh->rank_eachmb[oldm+l], tag, amr_comm,
+        int tag = CreateAMR_MPI_Tag(m-mbs, 0, 0, 0);
+        int ierr = MPI_Irecv(recv_buf[rb_idx].vars.data(), recv_buf[rb_idx].data_size,
+                   MPI_ATHENA_REAL, pmy_mesh->rank_eachmb[oldm], tag, amr_comm,
                    &(recv_buf[rb_idx].req));
-std::cout << "Recv="<<rb_idx<<" size="<<data_size_coar<<" tag="<<tag<<" rank="<<pmy_mesh->rank_eachmb[oldm+l]<<" ox1/2/3="<<ox1<<" "<<ox2<<" "<<ox3<<std::endl;
+/***/
+if (global_variable::my_rank == 2) {
+std::cout <<"rank="<<global_variable::my_rank<<" m="<<m<<" Recv="<<rb_idx<<" size="<<recv_buf[rb_idx].data_size<<" tag="<<tag<<" from rank="<<pmy_mesh->rank_eachmb[oldm]<<std::endl;
+}
+/***/
         if (ierr != MPI_SUCCESS) {no_errors=false;}
         rb_idx++;
       }
-    } else {   // same level or refinement
-      if (pmy_mesh->rank_eachmb[oldm] == global_variable::my_rank) continue;
-      if (old_lloc.level == new_lloc.level) { // same level
-        recv_buf[rb_idx].bis = is;
-        recv_buf[rb_idx].bie = ie;
-        recv_buf[rb_idx].bjs = js;
-        recv_buf[rb_idx].bje = je;
-        recv_buf[rb_idx].bks = ks;
-        recv_buf[rb_idx].bke = ke;
-        recv_buf[rb_idx].ncells_cc = ncells_cc_same ;
-        recv_buf[rb_idx].ncells_fc = ncells_fc_same ;
-        recv_buf[rb_idx].data_size = data_size_same ;
-        recv_buf[rb_idx].lid = m - mbs;
-        Kokkos::realloc(recv_buf[rb_idx].vars,data_size_same);
-      } else {                                // refinement
-        recv_buf[rb_idx].bis = cis;
-        recv_buf[rb_idx].bie = cie;
-        recv_buf[rb_idx].bjs = cjs;
-        recv_buf[rb_idx].bje = cje;
-        recv_buf[rb_idx].bks = cks;
-        recv_buf[rb_idx].bke = cke;
-        recv_buf[rb_idx].ncells_cc = ncells_cc_coar ;
-        recv_buf[rb_idx].ncells_fc = ncells_fc_coar ;
-        recv_buf[rb_idx].data_size = data_size_coar ;
-        recv_buf[rb_idx].lid = m - mbs;
-        recv_buf[rb_idx].refine = true;
-        Kokkos::realloc(recv_buf[rb_idx].vars,data_size_coar);
-      }
-      // create tag using local ID of *receiving* MeshBlock
-      int tag = CreateAMR_MPI_Tag(m-mbs, 0, 0, 0);
-      int ierr = MPI_Irecv(recv_buf[rb_idx].vars.data(), recv_buf[rb_idx].data_size,
-                 MPI_ATHENA_REAL, pmy_mesh->rank_eachmb[oldm], tag, amr_comm,
-                 &(recv_buf[rb_idx].req));
-std::cout << "Recv="<<rb_idx<<" size="<<recv_buf[rb_idx].data_size<<" tag="<<tag<<" rank="<<pmy_mesh->rank_eachmb[oldm]<<std::endl;
-      if (ierr != MPI_SUCCESS) {no_errors=false;}
-      rb_idx++;
     }
   }
 
@@ -303,16 +313,16 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
     if (old_lloc.level < new_lloc.level) {   // refinement
       for (int l=0; l<nleaf; l++) {
         if (new_rank_eachmb[newm+l] == global_variable::my_rank) continue;
-        LogicalLocation &lloc = pmy_mesh->lloc_eachmb[m+l];
-        int ox1 = ((lloc.lx1 & 1) == 1);
-        int ox2 = ((lloc.lx2 & 1) == 1);
-        int ox3 = ((lloc.lx3 & 1) == 1);
-        send_buf[sb_idx].bis = is + ox1*cnx1;
-        send_buf[sb_idx].bie = is + ox1*cnx1 + cnx1;
-        send_buf[sb_idx].bjs = js + ox2*cnx2;
-        send_buf[sb_idx].bje = js + ox2*cnx2 + cnx2;
-        send_buf[sb_idx].bks = ks + ox3*cnx3;
-        send_buf[sb_idx].bke = ks + ox3*cnx3 + cnx3;
+//        LogicalLocation &lloc = pmy_mesh->lloc_eachmb[m+l];
+        int ox1 = ((new_lloc.lx1 & 1) == 1);
+        int ox2 = ((new_lloc.lx2 & 1) == 1);
+        int ox3 = ((new_lloc.lx3 & 1) == 1);
+        send_buf[sb_idx].bis = is + (ox1  )*cnx1;
+        send_buf[sb_idx].bie = is + (ox1+1)*cnx1 - 1;
+        send_buf[sb_idx].bjs = js + (ox2  )*cnx2;
+        send_buf[sb_idx].bje = js + (ox2+1)*cnx2 - 1;
+        send_buf[sb_idx].bks = ks + (ox3  )*cnx3;
+        send_buf[sb_idx].bke = ks + (ox3+1)*cnx3 - 1;
         send_buf[sb_idx].ncells_cc = ncells_cc_coar ;
         send_buf[sb_idx].ncells_fc = ncells_fc_coar ;
         send_buf[sb_idx].data_size = data_size_coar ;
@@ -374,16 +384,20 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
         if (new_rank_eachmb[newm+l] == global_variable::my_rank) continue;
         // create tag using local ID of *receiving* MeshBlock
         LogicalLocation &lloc = pmy_mesh->lloc_eachmb[m+l];
-        int ox1 = ((lloc.lx1 & 1) == 1);
-        int ox2 = ((lloc.lx2 & 1) == 1);
-        int ox3 = ((lloc.lx3 & 1) == 1);
+        int ox1 = ((new_lloc.lx1 & 1) == 1);
+        int ox2 = ((new_lloc.lx2 & 1) == 1);
+        int ox3 = ((new_lloc.lx3 & 1) == 1);
         int lid = (newm + l) - new_gids_eachrank[new_rank_eachmb[newm+l]];
         int tag = CreateAMR_MPI_Tag(lid, 0, 0, 0);
         // post non-blocking send
         int ierr = MPI_Isend(send_buf[sb_idx].vars.data(), data_size_coar,
                    MPI_ATHENA_REAL, new_rank_eachmb[newm+l], tag, amr_comm,
                    &(send_buf[sb_idx].req));
+/***/
+if (global_variable::my_rank == 3) {
 std::cout << "Send="<<sb_idx<<" size="<<data_size_coar<<" tag="<<tag<<" rank="<<new_rank_eachmb[newm+l]<<" ox1/2/3="<<ox1<<" "<<ox2<<" "<<ox3<<std::endl;
+}
+/**/
         if (ierr != MPI_SUCCESS) {no_errors=false;}
         sb_idx++;
       }
@@ -397,7 +411,11 @@ std::cout << "Send="<<sb_idx<<" size="<<data_size_coar<<" tag="<<tag<<" rank="<<
         int ierr = MPI_Isend(send_buf[sb_idx].vars.data(), send_buf[sb_idx].data_size,
                    MPI_ATHENA_REAL, new_rank_eachmb[newm], tag, amr_comm,
                    &(send_buf[sb_idx].req));
+/***/
+if (global_variable::my_rank == 3) {
 std::cout << "Send="<<sb_idx<<" size="<<send_buf[sb_idx].data_size<<" tag="<<tag<<" rank="<<new_rank_eachmb[newm]<<std::endl;
+}
+/***/
         if (ierr != MPI_SUCCESS) {no_errors=false;}
         sb_idx++;
       } else {                                // de-refinement
@@ -411,7 +429,11 @@ std::cout << "Send="<<sb_idx<<" size="<<send_buf[sb_idx].data_size<<" tag="<<tag
         int ierr = MPI_Isend(send_buf[sb_idx].vars.data(), send_buf[sb_idx].data_size,
                    MPI_ATHENA_REAL, new_rank_eachmb[newm], tag, amr_comm,
                    &(send_buf[sb_idx].req));
-std::cout << "Send="<<sb_idx<<" size="<<send_buf[sb_idx].data_size<<" tag="<<tag<<" rank="<<new_rank_eachmb[newm]<<std::endl;
+/***/
+if (global_variable::my_rank == 3) {
+std::cout << "Send="<<sb_idx<<" size="<<send_buf[sb_idx].data_size<<" tag="<<tag<<" rank="<<new_rank_eachmb[newm]<<" ox1/2/3="<<ox1<<" "<<ox2<<" "<<ox3<<std::endl;
+}
+/***/
         if (ierr != MPI_SUCCESS) {no_errors=false;}
         sb_idx++;
       }

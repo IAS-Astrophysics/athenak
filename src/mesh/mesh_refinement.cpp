@@ -500,7 +500,7 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   pm->LoadBalance(new_cost_eachmb, new_rank_eachmb, new_gids_eachrank, new_nmb_eachrank,
                   new_nmb_total);
 
-/***/
+/***
 if (global_variable::my_rank == 0) {
 std::cout <<"  CYCLE = "<<pmy_mesh->ncycle<<std::endl;
 for (int i=0; i<old_nmb; ++i) {
@@ -511,7 +511,7 @@ std::cout<<"newm="<<i<<" rank="<<new_rank_eachmb[i]<<"  new_to_old="<<newtoold[i
 }
 }
 MPI_Barrier(MPI_COMM_WORLD);
-/***/
+***/
 
   // Step 4.
   // Allocate send/recv buffers for load balancing, post receives.
@@ -540,29 +540,8 @@ MPI_Barrier(MPI_COMM_WORLD);
   }
 
   // Step 6.
-  // Move evolved physics variables within View for MeshBlocks that stay within this rank
-  // and for which (new gid) > (old gid) [Move L]
-  if (phydro != nullptr) {
-    MoveLeftCC(phydro->u0);
-  }
-  if (pmhd != nullptr) {
-    MoveLeftCC(pmhd->u0);
-    MoveLeftFC(pmhd->b0);
-  }
-
-  // Step 7.
-  // Move evolved physics variables within View for MeshBlocks that stay within this rank
-  // and for which (new gid) < (old gid) [Move R]
-  if (phydro != nullptr) {
-    MoveRightCC(phydro->u0);
-  }
-  if (pmhd != nullptr) {
-    MoveRightCC(pmhd->u0);
-    MoveRightFC(pmhd->b0);
-  }
-
-  // Step 8.
-  // Move evolved physics variables for MBs flagged for refinement on this rank
+  // Copy evolved physics variables for MBs flagged for refinement from source fine array
+  // to target coarse array, when both are on same rank
   if (nnew > 0) {
     if (phydro != nullptr) {
       MoveForRefinementCC(phydro->u0, phydro->coarse_u0, nleaf);
@@ -573,6 +552,28 @@ MPI_Barrier(MPI_COMM_WORLD);
     }
   }
 
+  // Step 7.
+  // Move evolved physics variables within View for MeshBlocks that stay within this rank
+  // and for which (new gid) > (old gid) [Move L]
+  if (phydro != nullptr) {
+    MoveLeftCC(phydro->u0);
+  }
+  if (pmhd != nullptr) {
+    MoveLeftCC(pmhd->u0);
+    MoveLeftFC(pmhd->b0);
+  }
+
+  // Step 8.
+  // Move evolved physics variables within View for MeshBlocks that stay within this rank
+  // and for which (new gid) < (old gid) [Move R]
+  if (phydro != nullptr) {
+    MoveRightCC(phydro->u0);
+  }
+  if (pmhd != nullptr) {
+    MoveRightCC(pmhd->u0);
+    MoveRightFC(pmhd->b0);
+  }
+
   // Step 9.
   // Wait for all MPI load balancing communications to finish.  Unpack data.
 #if MPI_PARALLEL_ENABLED
@@ -580,8 +581,6 @@ MPI_Barrier(MPI_COMM_WORLD);
   if (nmb_send > 0) {ClearSendAMR();}
 #endif
 
-  // Step 10.
-  // Prolongate (refine) evolved physics variables for all MBs
 
   // copy newtoold array to DualView so that it can be accessed in kernel
   DualArray1D<int> new_to_old("newtoold",new_nmb_total);
@@ -590,6 +589,10 @@ MPI_Barrier(MPI_COMM_WORLD);
   }
   new_to_old.template modify<HostMemSpace>();
   new_to_old.template sync<DevExeSpace>();
+
+  // Step 10.
+  // Coarse arrays are now up-to-date, either through copies on same rank or MPI calls
+  // Prolongate (refine) evolved physics variables for all MBs flagged for refinement.
 
   if (nnew > 0) {
     if (phydro != nullptr) {
@@ -891,15 +894,13 @@ void MeshRefinement::MoveForRefinementCC(DvceArray5D<Real> &a, DvceArray5D<Real>
   int mbe = mbs + pmy_mesh->nmb_eachrank[global_variable::my_rank] - 1;
   for (int m=mbs; m<=mbe; ++m) {
     if (refine_flag.h_view(m) > 0) {
-      int newm = oldtonew[m];
-      // only move data if source array on this rank
-      if (new_rank_eachmb[newm] == global_variable::my_rank) {
-        int msrc = newm - new_gids_eachrank[global_variable::my_rank];
-        for (int l=0; l<nleaf; l++) {
-          int mdst = msrc + l;
-          // only move data if target array on this rank
-          if (new_rank_eachmb[newm+l] != global_variable::my_rank) continue;
-          LogicalLocation &lloc = new_lloc_eachmb[newm+l];
+      int msrc = m - mbs;
+      for (int l=0; l<nleaf; l++) {
+        int newm = oldtonew[m] + l;
+        // only move data if target array on this rank
+        if (new_rank_eachmb[newm] == global_variable::my_rank) {
+          int mdst = newm - new_gids_eachrank[global_variable::my_rank];
+          LogicalLocation &lloc = new_lloc_eachmb[newm];
           int ox1 = ((lloc.lx1 & 1) == 1);
           int ox2 = ((lloc.lx2 & 1) == 1);
           int ox3 = ((lloc.lx3 & 1) == 1);
@@ -946,33 +947,34 @@ void MeshRefinement::MoveForRefinementFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<R
   int mbe = mbs + pmy_mesh->nmb_eachrank[global_variable::my_rank] - 1;
   for (int m=mbs; m<=mbe; ++m) {
     if (refine_flag.h_view(m) > 0) {
-      int newm = oldtonew[m];
-      int msrc = newm - new_gids_eachrank[global_variable::my_rank];
+      int msrc = m - mbs;
       for (int l=0; l<nleaf; l++) {
-        int mdst = msrc + l;
+        int newm = oldtonew[m] + l;
         // only move data if target array on this rank
-        if (new_rank_eachmb[newm+l] != global_variable::my_rank) continue;
-        LogicalLocation &lloc = new_lloc_eachmb[newm+l];
-        int ox1 = ((lloc.lx1 & 1) == 1);
-        int ox2 = ((lloc.lx2 & 1) == 1);
-        int ox3 = ((lloc.lx3 & 1) == 1);
-        std::pair<int,int> isrc  = std::make_pair((is+ox1*cnx1),(is+(ox1+1)*cnx1  ));
-        std::pair<int,int> isrc1 = std::make_pair((is+ox1*cnx1),(is+(ox1+1)*cnx1+1));
-        std::pair<int,int> jsrc  = std::make_pair((js+ox2*cnx2),(js+(ox2+1)*cnx2  ));
-        std::pair<int,int> jsrc1 = std::make_pair((js+ox2*cnx2),(js+(ox2+1)*cnx2+1));
-        std::pair<int,int> ksrc  = std::make_pair((ks+ox3*cnx3),(ks+(ox3+1)*cnx3  ));
-        std::pair<int,int> ksrc1 = std::make_pair((ks+ox3*cnx3),(ks+(ox3+1)*cnx3+1));
+        if (new_rank_eachmb[newm] == global_variable::my_rank) {
+          int mdst = newm - new_gids_eachrank[global_variable::my_rank];
+          LogicalLocation &lloc = new_lloc_eachmb[newm];
+          int ox1 = ((lloc.lx1 & 1) == 1);
+          int ox2 = ((lloc.lx2 & 1) == 1);
+          int ox3 = ((lloc.lx3 & 1) == 1);
+          std::pair<int,int> isrc  = std::make_pair((is+ox1*cnx1),(is+(ox1+1)*cnx1  ));
+          std::pair<int,int> isrc1 = std::make_pair((is+ox1*cnx1),(is+(ox1+1)*cnx1+1));
+          std::pair<int,int> jsrc  = std::make_pair((js+ox2*cnx2),(js+(ox2+1)*cnx2  ));
+          std::pair<int,int> jsrc1 = std::make_pair((js+ox2*cnx2),(js+(ox2+1)*cnx2+1));
+          std::pair<int,int> ksrc  = std::make_pair((ks+ox3*cnx3),(ks+(ox3+1)*cnx3  ));
+          std::pair<int,int> ksrc1 = std::make_pair((ks+ox3*cnx3),(ks+(ox3+1)*cnx3+1));
 
-        // copy data in MBs to be refined to coarse arrays in target MBs
-        auto src1 = Kokkos::subview( b.x1f,msrc,ksrc,jsrc,isrc1);
-        auto dst1 = Kokkos::subview(cb.x1f,mdst,kdst,jdst,idst1);
-        Kokkos::deep_copy(DevExeSpace(), dst1, src1);
-        auto src2 = Kokkos::subview( b.x2f,msrc,ksrc,jsrc1,isrc);
-        auto dst2 = Kokkos::subview(cb.x2f,mdst,kdst,jdst1,idst);
-        Kokkos::deep_copy(DevExeSpace(), dst2, src2);
-        auto src3 = Kokkos::subview( b.x3f,msrc,ksrc1,jsrc,isrc);
-        auto dst3 = Kokkos::subview(cb.x3f,mdst,kdst1,jdst,idst);
-        Kokkos::deep_copy(DevExeSpace(), dst3, src3);
+          // copy data in MBs to be refined to coarse arrays in target MBs
+          auto src1 = Kokkos::subview( b.x1f,msrc,ksrc,jsrc,isrc1);
+          auto dst1 = Kokkos::subview(cb.x1f,mdst,kdst,jdst,idst1);
+          Kokkos::deep_copy(DevExeSpace(), dst1, src1);
+          auto src2 = Kokkos::subview( b.x2f,msrc,ksrc,jsrc1,isrc);
+          auto dst2 = Kokkos::subview(cb.x2f,mdst,kdst,jdst1,idst);
+          Kokkos::deep_copy(DevExeSpace(), dst2, src2);
+          auto src3 = Kokkos::subview( b.x3f,msrc,ksrc1,jsrc,isrc);
+          auto dst3 = Kokkos::subview(cb.x3f,mdst,kdst1,jdst,idst);
+          Kokkos::deep_copy(DevExeSpace(), dst3, src3);
+        }
       }
     }
   }
