@@ -52,11 +52,11 @@ class MeshRefinement {
   ~MeshRefinement();
 
   // data
-  int nmb_created_thisrank;   // # of MeshBlocks created via AMR on this rank
-  int nmb_deleted_thisrank;   // # of MeshBlocks deleted via AMR on this rank
-  int nmb_sent_thisrank;      // # of MeshBlocks sent during load balancing on this rank
-  int ncyc_check_amr;         // # of cycles between checking mesh for ref/derefinement
-  int refinement_interval;    // # of cycles between allowing successive ref/derefinement
+  int nmb_created;           // # of MeshBlocks created via AMR across all ranks
+  int nmb_deleted;           // # of MeshBlocks deleted via AMR across all ranks
+  int nmb_sent_thisrank;     // # of MeshBlocks sent during load balancing on this rank
+  int ncyc_check_amr;        // # of cycles between checking mesh for ref/derefinement
+  int refinement_interval;   // # of cycles between allowing successive ref/derefinement
 
   // following 2x Views are dimensioned [nmb_total]
   DualArray1D<int> refine_flag;    // refinement flag for each MeshBlock

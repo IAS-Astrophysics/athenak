@@ -444,12 +444,8 @@ void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
 
   if (time_evolution != TimeEvolution::tstatic) {
 #if MPI_PARALLEL_ENABLED
-    // Collect diagnostics across all MeshBlocks with AMR and MPI
+    // Collect number of MeshBlocks communicated during load balancing across all ranks
     if (pmesh->adaptive) {
-      MPI_Allreduce(MPI_IN_PLACE, &(pmesh->pmr->nmb_created_thisrank), 1, MPI_INT,
-                    MPI_SUM, MPI_COMM_WORLD);
-      MPI_Allreduce(MPI_IN_PLACE, &(pmesh->pmr->nmb_deleted_thisrank), 1, MPI_INT,
-                    MPI_SUM, MPI_COMM_WORLD);
       MPI_Allreduce(MPI_IN_PLACE, &(pmesh->pmr->nmb_sent_thisrank), 1, MPI_INT, MPI_SUM,
                     MPI_COMM_WORLD);
     }
@@ -468,8 +464,8 @@ void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
 
       if (pmesh->adaptive) {
         std::cout << std::endl << "Current number of MeshBlocks = " << pmesh->nmb_total
-          << std::endl << pmesh->pmr->nmb_created_thisrank << " MeshBlocks created, "
-          << pmesh->pmr->nmb_deleted_thisrank << " deleted by AMR; "
+          << std::endl << pmesh->pmr->nmb_created << " MeshBlocks created, "
+          << pmesh->pmr->nmb_deleted << " deleted by AMR; "
           << pmesh->pmr->nmb_sent_thisrank << " communicated for load balancing"
           << std::endl;
       }
