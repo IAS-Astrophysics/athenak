@@ -53,7 +53,11 @@
 // Driver::Execute() invokes the tasklist from stage=1 to stage=ptlist->nstages
 
 Driver::Driver(ParameterInput *pin, Mesh *pmesh) :
-  tlim(-1.0), nlim(-1), ndiag(1),
+  tlim(-1.0),
+  nlim(-1),
+  ndiag(1),
+  nmb_updated_(0),
+  lb_efficiency_(0),
   impl_src("ru",1,1,1,1,1,1) {
   // set time-evolution option (no default)
   {
@@ -393,11 +397,21 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
 
       //-------------------------------
       // (3) Work outside of TaskLists:
-      // increment time, ncycle, etc. Compute new timestep.
+      // increment time, ncycle, etc.
       pmesh->time = pmesh->time + pmesh->dt;
       pmesh->ncycle++;
       nmb_updated_ += pmesh->nmb_total;
+      // load balancing efficiency
+      if (global_variable::nranks > 1) {
+        int minnmb = std::numeric_limits<int>::max();
+        for (int i=0; i<global_variable::nranks; ++i) {
+          minnmb = std::min(minnmb, pmesh->nmb_eachrank[i]);
+        }
+        lb_efficiency_ += static_cast<float>(minnmb*(global_variable::nranks))/
+            static_cast<float>(pmesh->nmb_total);
+      }
 
+      // AMR
       if (pmesh->adaptive) {pmesh->pmr->AdaptiveMeshRefinement(this, pin);}
 
       // compute new timestep AFTER all Meshblocks refined/derefined
@@ -467,15 +481,15 @@ void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
           << std::endl << pmesh->pmr->nmb_created << " MeshBlocks created, "
           << pmesh->pmr->nmb_deleted << " deleted by AMR; "
           << pmesh->pmr->nmb_sent_thisrank << " communicated for load balancing"
+          << std::endl << "Load balancing efficiency = " << (lb_efficiency_/pmesh->ncycle)
           << std::endl;
       }
 
       // Calculate and print the zone-cycles/exe-second and wall-second
-      std::uint64_t zonecycles = nmb_updated_ *
-          static_cast<std::uint64_t>(pmesh->NumberOfMeshBlockCells());
-      float zcps = static_cast<float>(zonecycles) / exe_time;
+      float zcps = static_cast<float>(nmb_updated_ * pmesh->NumberOfMeshBlockCells())
+                    / exe_time;
 
-      std::cout << std::endl << "zone-cycles = " << zonecycles << std::endl;
+      std::cout << std::endl << "MeshBlock-cycles = " << nmb_updated_ << std::endl;
       std::cout << "cpu time used  = " << exe_time << std::endl;
       std::cout << "zone-cycles/cpu_second = " << zcps << std::endl;
     }

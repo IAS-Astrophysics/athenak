@@ -53,7 +53,8 @@ class Driver {
 
  private:
   Kokkos::Timer run_time_;   // generalized timer for cpu/gpu/etc
-  int nmb_updated_;         // running total of MB updated during run
+  int nmb_updated_;          // running total of MB updated during run
+  float lb_efficiency_;       // measure of how efficient was load balancing
   void OutputCycleDiagnostics(Mesh *pm);
 };
 #endif // DRIVER_DRIVER_HPP_

@@ -179,11 +179,11 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
           int ierr = MPI_Irecv(recv_buf[rb_idx].vars.data(), data_size_coar,
                      MPI_ATHENA_REAL, pmy_mesh->rank_eachmb[oldm+l], tag, amr_comm,
                      &(recv_buf[rb_idx].req));
-/***/
+/***
 if (global_variable::my_rank == 1) {
 std::cout <<"rank="<<global_variable::my_rank<<" m="<<m<<" Recv="<<rb_idx<<" size="<<recv_buf[rb_idx].data_size<<" tag="<<tag<<" from rank="<<pmy_mesh->rank_eachmb[oldm+l]<<" ox1/2/3="<<ox1<<" "<<ox2<<" "<<ox3<<std::endl;
 }
-/***/
+**/
           if (ierr != MPI_SUCCESS) {no_errors=false;}
           rb_idx++;
         }
@@ -221,11 +221,11 @@ std::cout <<"rank="<<global_variable::my_rank<<" m="<<m<<" Recv="<<rb_idx<<" siz
         int ierr = MPI_Irecv(recv_buf[rb_idx].vars.data(), recv_buf[rb_idx].data_size,
                    MPI_ATHENA_REAL, pmy_mesh->rank_eachmb[oldm], tag, amr_comm,
                    &(recv_buf[rb_idx].req));
-/***/
+/***
 if (global_variable::my_rank == 1) {
 std::cout <<"rank="<<global_variable::my_rank<<" m="<<m<<" Recv="<<rb_idx<<" size="<<recv_buf[rb_idx].data_size<<" tag="<<tag<<" from rank="<<pmy_mesh->rank_eachmb[oldm]<<std::endl;
 }
-/***/
+***/
         if (ierr != MPI_SUCCESS) {no_errors=false;}
         rb_idx++;
       }
@@ -393,11 +393,11 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
         int ierr = MPI_Isend(send_buf[sb_idx].vars.data(), data_size_coar,
                    MPI_ATHENA_REAL, new_rank_eachmb[newm+l], tag, amr_comm,
                    &(send_buf[sb_idx].req));
-/***/
+/***
 if (global_variable::my_rank == 0) {
 std::cout << "Send="<<sb_idx<<" size="<<data_size_coar<<" tag="<<tag<<" rank="<<new_rank_eachmb[newm+l]<<" ox1/2/3="<<ox1<<" "<<ox2<<" "<<ox3<<std::endl;
 }
-/**/
+**/
         if (ierr != MPI_SUCCESS) {no_errors=false;}
         sb_idx++;
       }
@@ -411,11 +411,11 @@ std::cout << "Send="<<sb_idx<<" size="<<data_size_coar<<" tag="<<tag<<" rank="<<
         int ierr = MPI_Isend(send_buf[sb_idx].vars.data(), send_buf[sb_idx].data_size,
                    MPI_ATHENA_REAL, new_rank_eachmb[newm], tag, amr_comm,
                    &(send_buf[sb_idx].req));
-/***/
+/***
 if (global_variable::my_rank == 0) {
 std::cout << "Send="<<sb_idx<<" size="<<send_buf[sb_idx].data_size<<" tag="<<tag<<" rank="<<new_rank_eachmb[newm]<<std::endl;
 }
-/***/
+***/
         if (ierr != MPI_SUCCESS) {no_errors=false;}
         sb_idx++;
       } else {                                // de-refinement
@@ -429,11 +429,11 @@ std::cout << "Send="<<sb_idx<<" size="<<send_buf[sb_idx].data_size<<" tag="<<tag
         int ierr = MPI_Isend(send_buf[sb_idx].vars.data(), send_buf[sb_idx].data_size,
                    MPI_ATHENA_REAL, new_rank_eachmb[newm], tag, amr_comm,
                    &(send_buf[sb_idx].req));
-/***/
+/***
 if (global_variable::my_rank == 0) {
 std::cout << "Send="<<sb_idx<<" size="<<send_buf[sb_idx].data_size<<" tag="<<tag<<" rank="<<new_rank_eachmb[newm]<<" ox1/2/3="<<ox1<<" "<<ox2<<" "<<ox3<<std::endl;
 }
-/***/
+***/
         if (ierr != MPI_SUCCESS) {no_errors=false;}
         sb_idx++;
       }
