@@ -180,7 +180,7 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
                      MPI_ATHENA_REAL, pmy_mesh->rank_eachmb[oldm+l], tag, amr_comm,
                      &(recv_buf[rb_idx].req));
 /***/
-if (global_variable::my_rank == 2) {
+if (global_variable::my_rank == 1) {
 std::cout <<"rank="<<global_variable::my_rank<<" m="<<m<<" Recv="<<rb_idx<<" size="<<recv_buf[rb_idx].data_size<<" tag="<<tag<<" from rank="<<pmy_mesh->rank_eachmb[oldm+l]<<" ox1/2/3="<<ox1<<" "<<ox2<<" "<<ox3<<std::endl;
 }
 /***/
@@ -222,7 +222,7 @@ std::cout <<"rank="<<global_variable::my_rank<<" m="<<m<<" Recv="<<rb_idx<<" siz
                    MPI_ATHENA_REAL, pmy_mesh->rank_eachmb[oldm], tag, amr_comm,
                    &(recv_buf[rb_idx].req));
 /***/
-if (global_variable::my_rank == 2) {
+if (global_variable::my_rank == 1) {
 std::cout <<"rank="<<global_variable::my_rank<<" m="<<m<<" Recv="<<rb_idx<<" size="<<recv_buf[rb_idx].data_size<<" tag="<<tag<<" from rank="<<pmy_mesh->rank_eachmb[oldm]<<std::endl;
 }
 /***/
@@ -313,10 +313,10 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
     if (old_lloc.level < new_lloc.level) {   // refinement
       for (int l=0; l<nleaf; l++) {
         if (new_rank_eachmb[newm+l] == global_variable::my_rank) continue;
-//        LogicalLocation &lloc = pmy_mesh->lloc_eachmb[m+l];
-        int ox1 = ((new_lloc.lx1 & 1) == 1);
-        int ox2 = ((new_lloc.lx2 & 1) == 1);
-        int ox3 = ((new_lloc.lx3 & 1) == 1);
+        LogicalLocation &lloc = new_lloc_eachmb[newm+l];
+        int ox1 = ((lloc.lx1 & 1) == 1);
+        int ox2 = ((lloc.lx2 & 1) == 1);
+        int ox3 = ((lloc.lx3 & 1) == 1);
         send_buf[sb_idx].bis = is + (ox1  )*cnx1;
         send_buf[sb_idx].bie = is + (ox1+1)*cnx1 - 1;
         send_buf[sb_idx].bjs = js + (ox2  )*cnx2;
@@ -394,7 +394,7 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
                    MPI_ATHENA_REAL, new_rank_eachmb[newm+l], tag, amr_comm,
                    &(send_buf[sb_idx].req));
 /***/
-if (global_variable::my_rank == 3) {
+if (global_variable::my_rank == 0) {
 std::cout << "Send="<<sb_idx<<" size="<<data_size_coar<<" tag="<<tag<<" rank="<<new_rank_eachmb[newm+l]<<" ox1/2/3="<<ox1<<" "<<ox2<<" "<<ox3<<std::endl;
 }
 /**/
@@ -412,7 +412,7 @@ std::cout << "Send="<<sb_idx<<" size="<<data_size_coar<<" tag="<<tag<<" rank="<<
                    MPI_ATHENA_REAL, new_rank_eachmb[newm], tag, amr_comm,
                    &(send_buf[sb_idx].req));
 /***/
-if (global_variable::my_rank == 3) {
+if (global_variable::my_rank == 0) {
 std::cout << "Send="<<sb_idx<<" size="<<send_buf[sb_idx].data_size<<" tag="<<tag<<" rank="<<new_rank_eachmb[newm]<<std::endl;
 }
 /***/
@@ -430,7 +430,7 @@ std::cout << "Send="<<sb_idx<<" size="<<send_buf[sb_idx].data_size<<" tag="<<tag
                    MPI_ATHENA_REAL, new_rank_eachmb[newm], tag, amr_comm,
                    &(send_buf[sb_idx].req));
 /***/
-if (global_variable::my_rank == 3) {
+if (global_variable::my_rank == 0) {
 std::cout << "Send="<<sb_idx<<" size="<<send_buf[sb_idx].data_size<<" tag="<<tag<<" rank="<<new_rank_eachmb[newm]<<" ox1/2/3="<<ox1<<" "<<ox2<<" "<<ox3<<std::endl;
 }
 /***/
