@@ -43,10 +43,6 @@ struct AMRBuffer {
 //! \brief data/functions associated with SMR/AMR
 
 class MeshRefinement {
-  // mesh classes (Mesh, MeshBlock, MeshBlockPack, MeshBlockTree) like to play together
-//  friend class Mesh;
-//  friend class MeshBlockPack;
-
  public:
   MeshRefinement(Mesh *pm, ParameterInput *pin);
   ~MeshRefinement();
