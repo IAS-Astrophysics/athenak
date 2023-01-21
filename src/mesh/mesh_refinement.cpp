@@ -997,7 +997,6 @@ void MeshRefinement::RefineCC(DualArray1D<int> &n2o, DvceArray5D<Real> &a,
   auto &cks = indcs.cks, &cke = indcs.cke;
   auto &cnx1 = indcs.cnx1, &cnx2 = indcs.cnx2, &cnx3 = indcs.cnx3;
 
-  // Now prolongate data in coarse arrays to fine arrays for all new MBs being refined
   auto &refine_flag_ = refine_flag;
   bool &multi_d = pmy_mesh->multi_d;
   bool &three_d = pmy_mesh->three_d;
@@ -1054,7 +1053,6 @@ void MeshRefinement::RefineFC(DualArray1D<int> &n2o, DvceFaceFld4D<Real> &b,
   auto &cks = indcs.cks, &cke = indcs.cke;
   auto &cnx1 = indcs.cnx1, &cnx2 = indcs.cnx2, &cnx3 = indcs.cnx3;
 
-  // Now prolongate data in coarse arrays to fine arrays for all MBs being refined
   // First prolongate face-centered fields at shared faces betwen fine and coarse cells
   auto &refine_flag_ = refine_flag;
   bool &multi_d = pmy_mesh->multi_d;

@@ -116,24 +116,24 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
   // allocate array of recv buffers
   recv_buf = new AMRBuffer[nmb_recv];
 
-  // calculate amount of data to be communicated with given physics modules
+  // count number of cell- and face-centered data elements to be communicated depending
+  // on physics enrolled
   auto &indcs = pmy_mesh->mb_indcs;
-  int ncells_cc_same = (indcs.nx1)*(indcs.nx2)*(indcs.nx3);
-  int ncells_cc_coar = (indcs.cnx1)*(indcs.cnx2)*(indcs.cnx3);
-  int ncells_fc_same = (indcs.nx1+1)*(indcs.nx2  )*(indcs.nx3  ) +
-                       (indcs.nx1  )*(indcs.nx2+1)*(indcs.nx3  ) +
-                       (indcs.nx1  )*(indcs.nx2  )*(indcs.nx3+1);
-  int ncells_fc_coar = (indcs.cnx1+1)*(indcs.cnx2  )*(indcs.cnx3  ) +
-                       (indcs.cnx1  )*(indcs.cnx2+1)*(indcs.cnx3  ) +
-                       (indcs.cnx1  )*(indcs.cnx2  )*(indcs.cnx3+1);
-  int data_size_same=0, data_size_coar=0;
+  int cntcc_same = (indcs.nx1)*(indcs.nx2)*(indcs.nx3);
+  int cntcc_coar = (indcs.cnx1)*(indcs.cnx2)*(indcs.cnx3);
+  int cntfc_same = (indcs.nx1+1)*(indcs.nx2  )*(indcs.nx3  ) +
+                   (indcs.nx1  )*(indcs.nx2+1)*(indcs.nx3  ) +
+                   (indcs.nx1  )*(indcs.nx2  )*(indcs.nx3+1);
+  int cntfc_coar = (indcs.cnx1+1)*(indcs.cnx2  )*(indcs.cnx3  ) +
+                   (indcs.cnx1  )*(indcs.cnx2+1)*(indcs.cnx3  ) +
+                   (indcs.cnx1  )*(indcs.cnx2  )*(indcs.cnx3+1);
+  int nvarcc=0, nvarfc=0;
   if (pmy_mesh->pmb_pack->phydro != nullptr) {
-    data_size_same += (pmy_mesh->pmb_pack->phydro->nhydro)*ncells_cc_same;
-    data_size_coar += (pmy_mesh->pmb_pack->phydro->nhydro)*ncells_cc_coar;
+    nvarcc += (pmy_mesh->pmb_pack->phydro->nhydro);
   }
   if (pmy_mesh->pmb_pack->pmhd != nullptr) {
-    data_size_same += (pmy_mesh->pmb_pack->pmhd->nmhd)*ncells_cc_same + ncells_fc_same;
-    data_size_coar += (pmy_mesh->pmb_pack->pmhd->nmhd)*ncells_cc_coar + ncells_fc_coar;
+    nvarcc += (pmy_mesh->pmb_pack->pmhd->nmhd);
+    nvarfc += 1;
   }
 
   // loop over new MBs on this rank, initialize recv buffers, and post non-blocking recvs
@@ -164,16 +164,16 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
           recv_buf[rb_idx].bje = js + (ox2+1)*cnx2 - 1;
           recv_buf[rb_idx].bks = ks + (ox3  )*cnx3;
           recv_buf[rb_idx].bke = ks + (ox3+1)*cnx3 - 1;
-          recv_buf[rb_idx].ncells_cc = ncells_cc_coar;
-          recv_buf[rb_idx].ncells_fc = ncells_fc_coar;
-          recv_buf[rb_idx].data_size = data_size_coar;
-          recv_buf[rb_idx].lid = newm - nmbs;
+          recv_buf[rb_idx].cntcc = cntcc_coar;
+          recv_buf[rb_idx].cntfc = cntfc_coar;
+          recv_buf[rb_idx].cnt   = (nvarcc*cntcc_coar + nvarfc*cntfc_coar);
+          recv_buf[rb_idx].lid   = newm - nmbs;
           recv_buf[rb_idx].derefine = true;
-          Kokkos::realloc(recv_buf[rb_idx].vars,data_size_coar);
+          Kokkos::realloc(recv_buf[rb_idx].vars, recv_buf[rb_idx].cnt);
 
           // create tag using local ID of *receiving* MeshBlock, post receive
           int tag = CreateAMR_MPI_Tag(newm-nmbs, ox1, ox2, ox3);
-          int ierr = MPI_Irecv(recv_buf[rb_idx].vars.data(), data_size_coar,
+          int ierr = MPI_Irecv(recv_buf[rb_idx].vars.data(), recv_buf[rb_idx].cnt,
                      MPI_ATHENA_REAL, pmy_mesh->rank_eachmb[oldm+l], tag, amr_comm,
                      &(recv_buf[rb_idx].req));
 /***
@@ -194,11 +194,11 @@ std::cout <<"rank="<<global_variable::my_rank<<" m="<<m<<" Recv="<<rb_idx<<" siz
           recv_buf[rb_idx].bje = je;
           recv_buf[rb_idx].bks = ks;
           recv_buf[rb_idx].bke = ke;
-          recv_buf[rb_idx].ncells_cc = ncells_cc_same ;
-          recv_buf[rb_idx].ncells_fc = ncells_fc_same ;
-          recv_buf[rb_idx].data_size = data_size_same ;
-          recv_buf[rb_idx].lid = newm - nmbs;
-          Kokkos::realloc(recv_buf[rb_idx].vars,data_size_same);
+          recv_buf[rb_idx].cntcc = cntcc_same ;
+          recv_buf[rb_idx].cntfc = cntfc_same ;
+          recv_buf[rb_idx].cnt   = (nvarcc*cntcc_same + nvarfc*cntfc_same);
+          recv_buf[rb_idx].lid   = newm - nmbs;
+          Kokkos::realloc(recv_buf[rb_idx].vars, recv_buf[rb_idx].cnt);
         } else {                                // refinement
           recv_buf[rb_idx].bis = cis;
           recv_buf[rb_idx].bie = cie;
@@ -206,16 +206,16 @@ std::cout <<"rank="<<global_variable::my_rank<<" m="<<m<<" Recv="<<rb_idx<<" siz
           recv_buf[rb_idx].bje = cje;
           recv_buf[rb_idx].bks = cks;
           recv_buf[rb_idx].bke = cke;
-          recv_buf[rb_idx].ncells_cc = ncells_cc_coar ;
-          recv_buf[rb_idx].ncells_fc = ncells_fc_coar ;
-          recv_buf[rb_idx].data_size = data_size_coar ;
-          recv_buf[rb_idx].lid = newm - nmbs;
+          recv_buf[rb_idx].cntcc = cntcc_coar ;
+          recv_buf[rb_idx].cntfc = cntfc_coar ;
+          recv_buf[rb_idx].cnt   = (nvarcc*cntcc_coar + nvarfc*cntfc_coar);
+          recv_buf[rb_idx].lid   = newm - nmbs;
           recv_buf[rb_idx].refine = true;
-          Kokkos::realloc(recv_buf[rb_idx].vars,data_size_coar);
+          Kokkos::realloc(recv_buf[rb_idx].vars, recv_buf[rb_idx].cnt);
         }
         // create tag using local ID of *receiving* MeshBlock, post receive
         int tag = CreateAMR_MPI_Tag(newm-nmbs, 0, 0, 0);
-        int ierr = MPI_Irecv(recv_buf[rb_idx].vars.data(), recv_buf[rb_idx].data_size,
+        int ierr = MPI_Irecv(recv_buf[rb_idx].vars.data(), recv_buf[rb_idx].cnt,
                    MPI_ATHENA_REAL, pmy_mesh->rank_eachmb[oldm], tag, amr_comm,
                    &(recv_buf[rb_idx].req));
 /***
@@ -273,24 +273,24 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
   // allocate array of send buffers
   send_buf = new AMRBuffer[nmb_send];
 
-  // calculate amount of data to be communicated with given physics modules
+  // count number of cell- and face-centered data elements to be communicated depending
+  // on physics enrolled
   auto &indcs = pmy_mesh->mb_indcs;
-  int ncells_cc_same = (indcs.nx1)*(indcs.nx2)*(indcs.nx3);
-  int ncells_cc_coar = (indcs.cnx1)*(indcs.cnx2)*(indcs.cnx3);
-  int ncells_fc_same = (indcs.nx1+1)*(indcs.nx2  )*(indcs.nx3  ) +
-                       (indcs.nx1  )*(indcs.nx2+1)*(indcs.nx3  ) +
-                       (indcs.nx1  )*(indcs.nx2  )*(indcs.nx3+1);
-  int ncells_fc_coar = (indcs.cnx1+1)*(indcs.cnx2  )*(indcs.cnx3  ) +
-                       (indcs.cnx1  )*(indcs.cnx2+1)*(indcs.cnx3  ) +
-                       (indcs.cnx1  )*(indcs.cnx2  )*(indcs.cnx3+1);
-  int data_size_same=0, data_size_coar=0;
+  int cntcc_same = (indcs.nx1)*(indcs.nx2)*(indcs.nx3);
+  int cntcc_coar = (indcs.cnx1)*(indcs.cnx2)*(indcs.cnx3);
+  int cntfc_same = (indcs.nx1+1)*(indcs.nx2  )*(indcs.nx3  ) +
+                   (indcs.nx1  )*(indcs.nx2+1)*(indcs.nx3  ) +
+                   (indcs.nx1  )*(indcs.nx2  )*(indcs.nx3+1);
+  int cntfc_coar = (indcs.cnx1+1)*(indcs.cnx2  )*(indcs.cnx3  ) +
+                   (indcs.cnx1  )*(indcs.cnx2+1)*(indcs.cnx3  ) +
+                   (indcs.cnx1  )*(indcs.cnx2  )*(indcs.cnx3+1);
+  int nvarcc=0, nvarfc=0;
   if (pmy_mesh->pmb_pack->phydro != nullptr) {
-    data_size_same += (pmy_mesh->pmb_pack->phydro->nhydro)*ncells_cc_same;
-    data_size_coar += (pmy_mesh->pmb_pack->phydro->nhydro)*ncells_cc_coar;
+    nvarcc += (pmy_mesh->pmb_pack->phydro->nhydro);
   }
   if (pmy_mesh->pmb_pack->pmhd != nullptr) {
-    data_size_same += (pmy_mesh->pmb_pack->pmhd->nmhd)*ncells_cc_same + ncells_fc_same;
-    data_size_coar += (pmy_mesh->pmb_pack->pmhd->nmhd)*ncells_cc_coar + ncells_fc_coar;
+    nvarcc += (pmy_mesh->pmb_pack->pmhd->nmhd);
+    nvarfc += 1;
   }
 
   // loop over old MBs on this rank, initialize send buffers
@@ -319,12 +319,12 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
           send_buf[sb_idx].bje = js + (ox2+1)*cnx2 - 1;
           send_buf[sb_idx].bks = ks + (ox3  )*cnx3;
           send_buf[sb_idx].bke = ks + (ox3+1)*cnx3 - 1;
-          send_buf[sb_idx].ncells_cc = ncells_cc_coar ;
-          send_buf[sb_idx].ncells_fc = ncells_fc_coar ;
-          send_buf[sb_idx].data_size = data_size_coar ;
-          send_buf[sb_idx].lid = oldm - ombs;
+          send_buf[sb_idx].cntcc = cntcc_coar;
+          send_buf[sb_idx].cntfc = cntfc_coar;
+          send_buf[sb_idx].cnt   = (nvarcc*cntcc_coar + nvarfc*cntfc_coar);
+          send_buf[sb_idx].lid   = oldm - ombs;
           send_buf[sb_idx].refine = true;
-          Kokkos::realloc(send_buf[sb_idx].vars,data_size_coar);
+          Kokkos::realloc(send_buf[sb_idx].vars, send_buf[sb_idx].cnt);
           sb_idx++;
         }
       }
@@ -337,11 +337,11 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
           send_buf[sb_idx].bje = je;
           send_buf[sb_idx].bks = ks;
           send_buf[sb_idx].bke = ke;
-          send_buf[sb_idx].ncells_cc = ncells_cc_same ;
-          send_buf[sb_idx].ncells_fc = ncells_fc_same ;
-          send_buf[sb_idx].data_size = data_size_same ;
-          send_buf[sb_idx].lid = oldm - ombs;
-          Kokkos::realloc(send_buf[sb_idx].vars,data_size_same);
+          send_buf[sb_idx].cntcc = cntcc_same;
+          send_buf[sb_idx].cntcc = cntfc_same;
+          send_buf[sb_idx].cnt   = (nvarcc*cntcc_same + nvarfc*cntfc_same);
+          send_buf[sb_idx].lid   = oldm - ombs;
+          Kokkos::realloc(send_buf[sb_idx].vars,(cntcc_same + cntfc_same));
         } else {                                // de-refinement
           send_buf[sb_idx].bis = cis;
           send_buf[sb_idx].bie = cie;
@@ -349,12 +349,12 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
           send_buf[sb_idx].bje = cje;
           send_buf[sb_idx].bks = cks;
           send_buf[sb_idx].bke = cke;
-          send_buf[sb_idx].ncells_cc = ncells_cc_coar ;
-          send_buf[sb_idx].ncells_fc = ncells_fc_coar ;
-          send_buf[sb_idx].data_size = data_size_coar ;
+          send_buf[sb_idx].cntcc = cntcc_coar;
+          send_buf[sb_idx].cntfc = cntfc_coar;
+          send_buf[sb_idx].cnt   = (nvarcc*cntcc_coar + nvarfc*cntfc_coar);
           send_buf[sb_idx].lid = oldm - ombs;
           send_buf[sb_idx].derefine = true;
-          Kokkos::realloc(send_buf[sb_idx].vars,data_size_coar);
+          Kokkos::realloc(send_buf[sb_idx].vars, send_buf[sb_idx].cnt);
         }
         sb_idx++;
       }
@@ -364,10 +364,17 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
   // Pack data into send buffers in parallel
   hydro::Hydro* phydro = pmy_mesh->pmb_pack->phydro;
   mhd::MHD* pmhd = pmy_mesh->pmb_pack->pmhd;
-  int offset = 0;
+
+  nvarcc = 0; nvarfc = 0;
   if (phydro != nullptr) {
-    PackAMRBuffersCC(phydro->u0, phydro->coarse_u0, offset);
-    offset += (phydro->nhydro);
+    PackAMRBuffersCC(phydro->u0, phydro->coarse_u0, nvarcc, nvarfc);
+    nvarcc += phydro->nhydro;
+  }
+  if (pmhd != nullptr) {
+    PackAMRBuffersCC(pmhd->u0, pmhd->coarse_u0, nvarcc, nvarfc);
+    nvarcc += pmhd->nmhd;
+    PackAMRBuffersFC(pmhd->b0, pmhd->coarse_b0, nvarcc, nvarfc);
+    nvarfc += 1;
   }
 
   // Send data using MPI (loop over old MBs)
@@ -388,7 +395,7 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
           int lid = (newm + l) - new_gids_eachrank[new_rank_eachmb[newm+l]];
           int tag = CreateAMR_MPI_Tag(lid, 0, 0, 0);
           // post non-blocking send
-          int ierr = MPI_Isend(send_buf[sb_idx].vars.data(), data_size_coar,
+          int ierr = MPI_Isend(send_buf[sb_idx].vars.data(), send_buf[sb_idx].cnt,
                      MPI_ATHENA_REAL, new_rank_eachmb[newm+l], tag, amr_comm,
                      &(send_buf[sb_idx].req));
 /***
@@ -407,7 +414,7 @@ std::cout << "Send="<<sb_idx<<" size="<<data_size_coar<<" tag="<<tag<<" rank="<<
           int lid = newm - new_gids_eachrank[new_rank_eachmb[newm]];
           int tag = CreateAMR_MPI_Tag(lid, 0, 0, 0);
           // post non-blocking send
-          int ierr = MPI_Isend(send_buf[sb_idx].vars.data(), send_buf[sb_idx].data_size,
+          int ierr = MPI_Isend(send_buf[sb_idx].vars.data(), send_buf[sb_idx].cnt,
                      MPI_ATHENA_REAL, new_rank_eachmb[newm], tag, amr_comm,
                      &(send_buf[sb_idx].req));
 /***
@@ -425,7 +432,7 @@ std::cout << "Send="<<sb_idx<<" size="<<send_buf[sb_idx].data_size<<" tag="<<tag
           int lid = newm - new_gids_eachrank[new_rank_eachmb[newm]];
           int tag = CreateAMR_MPI_Tag(lid, ox1, ox2, ox3);
           // post non-blocking send
-          int ierr = MPI_Isend(send_buf[sb_idx].vars.data(), send_buf[sb_idx].data_size,
+          int ierr = MPI_Isend(send_buf[sb_idx].vars.data(), send_buf[sb_idx].cnt,
                      MPI_ATHENA_REAL, new_rank_eachmb[newm], tag, amr_comm,
                      &(send_buf[sb_idx].req));
 /***
@@ -458,7 +465,7 @@ std::cout << "Send="<<sb_idx<<" size="<<send_buf[sb_idx].data_size<<" tag="<<tag
 //! PrepareSendFineToCoarseAMR() functions in amr_loadbalance.cpp
 
 void MeshRefinement::PackAMRBuffersCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca,
-                                      int offset) {
+                                      int ncc, int nfc) {
 #if MPI_PARALLEL_ENABLED
   int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
   auto &sbuf = send_buf;
@@ -479,6 +486,7 @@ void MeshRefinement::PackAMRBuffersCC(DvceArray5D<Real> &a, DvceArray5D<Real> &c
     const int nkji = nk*nj*ni;
     const int nji  = nj*ni;
     const int m  = sbuf[n].lid;
+    const int offset = ncc*sbuf[n].cntcc + nfc*sbuf[n].cntfc;
 
     // Middle loop over k,j,i
     Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkji), [&](const int idx) {
@@ -497,6 +505,15 @@ void MeshRefinement::PackAMRBuffersCC(DvceArray5D<Real> &a, DvceArray5D<Real> &c
     });
   }); // end par_for_outer
 #endif
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MeshRefinement::PackAMRBuffersFC()
+//! \brief Packs face-centered data into AMR communication buffers for all MBs being sent
+
+void MeshRefinement::PackAMRBuffersFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb,
+                                      int ncc, int nfc) {
   return;
 }
 
@@ -525,10 +542,16 @@ void MeshRefinement::RecvAndUnpackAMR() {
   // Unpack data
   hydro::Hydro* phydro = pmy_mesh->pmb_pack->phydro;
   mhd::MHD* pmhd = pmy_mesh->pmb_pack->pmhd;
-  int offset = 0;
+  int nvarcc=0, nvarfc=0;
   if (phydro != nullptr) {
-    UnpackAMRBuffersCC(phydro->u0, phydro->coarse_u0, offset);
-    offset += (phydro->nhydro);
+    UnpackAMRBuffersCC(phydro->u0, phydro->coarse_u0, nvarcc, nvarfc);
+    nvarcc += phydro->nhydro;
+  }
+  if (pmhd != nullptr) {
+    UnpackAMRBuffersCC(pmhd->u0, pmhd->coarse_u0, nvarcc, nvarfc);
+    nvarcc += pmhd->nmhd;
+    UnpackAMRBuffersFC(pmhd->b0, pmhd->coarse_b0, nvarcc, nvarfc);
+    nvarfc += 1;
   }
 
   // recv buffers no longer needed, clean-up
@@ -539,13 +562,13 @@ void MeshRefinement::RecvAndUnpackAMR() {
 
 //----------------------------------------------------------------------------------------
 //! \fn void MeshRefinement::UnpackAMRBuffersCC()
-//! \brief Unpacks cell-centered data from AMR communication buffers into appropriate
+//! \brief Unpacks face-centered data from AMR communication buffers into appropriate
 //! coarse or fine arrays for all MBs received during load balancing.
 //! Equivalent to FinishRecvSameLevel(), FinishRecvCoarseToFineAMR(), and
 //! FinishRecvFineToCoarseAMR() functions in amr_loadbalance.cpp
 
 void MeshRefinement::UnpackAMRBuffersCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca,
-                                        int offset) {
+                                        int ncc, int nfc) {
 #if MPI_PARALLEL_ENABLED
   int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
   auto &rbuf = recv_buf;
@@ -566,6 +589,7 @@ void MeshRefinement::UnpackAMRBuffersCC(DvceArray5D<Real> &a, DvceArray5D<Real> 
     const int nkji = nk*nj*ni;
     const int nji  = nj*ni;
     const int m  = rbuf[n].lid;
+    const int offset = ncc*rbuf[n].cntcc + nfc*rbuf[n].cntfc;
 
     // Middle loop over k,j,i
     Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkji), [&](const int idx) {
@@ -584,6 +608,16 @@ void MeshRefinement::UnpackAMRBuffersCC(DvceArray5D<Real> &a, DvceArray5D<Real> 
     });
   }); // end par_for_outer
 #endif
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MeshRefinement::UnpackAMRBuffersFC()
+//! \brief Unpacks face-centered data from AMR communication buffers into appropriate
+//! coarse or fine arrays for all MBs received during load balancing.
+
+void MeshRefinement::UnpackAMRBuffersFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb,
+                                        int ncc, int nfc) {
   return;
 }
 

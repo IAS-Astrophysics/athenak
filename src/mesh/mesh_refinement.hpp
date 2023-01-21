@@ -25,10 +25,10 @@ static int CreateAMR_MPI_Tag(int lid, int ox1, int ox2, int ox3) {
 
 #if MPI_PARALLEL_ENABLED
 struct AMRBuffer {
-  int bis, bie, bjs, bje, bks, bke;
-  int ncells_cc, ncells_fc;
-  int data_size;
-  int lid;
+  int bis, bie, bjs, bje, bks, bke;  // start/end indices of data to be packed/unpacked
+  int cntcc, cntfc;                  // number of elements in CC and FC arrays
+  int cnt;                           // total number of elements stored in buffer
+  int lid;                           // local ID (gid - gids) of MeshBlock on this rank
   bool refine=false, derefine=false;
 
   DvceArray1D<Real> vars;               // View that stores buffer data on device
@@ -108,9 +108,11 @@ class MeshRefinement {
   // functions for load balancing (in file load_balance.cpp)
   void InitRecvAMR(int nleaf);
   void PackAndSendAMR(int nleaf);
-  void PackAMRBuffersCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, int offset);
+  void PackAMRBuffersCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, int ncc, int nfc);
+  void PackAMRBuffersFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb, int ncc, int nfc);
   void RecvAndUnpackAMR();
-  void UnpackAMRBuffersCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, int offset);
+  void UnpackAMRBuffersCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, int ncc, int nfc);
+  void UnpackAMRBuffersFC(DvceFaceFld4D<Real> &b,DvceFaceFld4D<Real> &cb,int ncc,int nfc);
   void ClearSendAMR();
  private:
   // data
