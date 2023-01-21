@@ -467,10 +467,9 @@ std::cout << "Send="<<sb_idx<<" size="<<send_buf[sb_idx].data_size<<" tag="<<tag
 void MeshRefinement::PackAMRBuffersCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca,
                                       int ncc, int nfc) {
 #if MPI_PARALLEL_ENABLED
-  int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
   auto &sbuf = send_buf;
-
   // Outer loop over (# of MeshBlocks sent)*(# of variables)
+  int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
   int nnv = nmb_send*nvar;
   Kokkos::TeamPolicy<> policy(DevExeSpace(), nnv, Kokkos::AUTO);
   Kokkos::parallel_for("SendBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
@@ -514,6 +513,100 @@ void MeshRefinement::PackAMRBuffersCC(DvceArray5D<Real> &a, DvceArray5D<Real> &c
 
 void MeshRefinement::PackAMRBuffersFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb,
                                       int ncc, int nfc) {
+#if MPI_PARALLEL_ENABLED
+  auto &sbuf = send_buf;
+  // Outer loop over (# of MeshBlocks sent)*(3 compnts of field)
+  int nn = 3*nmb_send;
+  Kokkos::TeamPolicy<> policy(DevExeSpace(), nn, Kokkos::AUTO);
+  Kokkos::parallel_for("SendBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
+    const int n = (tmember.league_rank())/3;
+    const int v = (tmember.league_rank() - 3*n);
+
+    const int il = sbuf[n].bis;
+    const int jl = sbuf[n].bjs;
+    const int kl = sbuf[n].bks;
+    const int m  = sbuf[n].lid;
+    const int nicc = sbuf[n].bie - il + 1;
+    const int njcc = sbuf[n].bje - jl + 1;
+    const int nkcc = sbuf[n].bke - kl + 1;
+
+    // pack x1 component
+    if (v==0) {
+      const int offset = (ncc*sbuf[n].cntcc + nfc*sbuf[n].cntfc);
+      const int ni = nicc + 1;  // add b.x1f at (ie+1)
+      const int nj = njcc;
+      const int nk = nkcc;
+      const int nkji = nk*nj*ni;
+      const int nji  = nj*ni;
+
+      // Middle loop over k,j,i
+      Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkji), [&](const int idx) {
+        int k = (idx)/nji;
+        int j = (idx - k*nji)/ni;
+        int i = (idx - k*nji - j*ni) + il;
+        k += kl;
+        j += jl;
+        if (sbuf[n].derefine) {
+          // if de-refinement, load data from coarse_a
+          sbuf[n].vars(offset + (i-il + ni*(j-jl + nj*(k-kl)))) = cb.x1f(m,k,j,i);
+        } else {
+          // if refinement or same level, load data from a
+          sbuf[n].vars(offset + (i-il + ni*(j-jl + nj*(k-kl)))) = b.x1f(m,k,j,i);
+        }
+      });
+
+    // pack x2 component
+    } else if (v==1) {
+      const int offset = (ncc*sbuf[n].cntcc + nfc*sbuf[n].cntfc) + (nicc+1)*njcc*nkcc;
+      const int ni = nicc;
+      const int nj = njcc + 1;  // add b.x2f at (je+1)
+      const int nk = nkcc;
+      const int nkji = nk*nj*ni;
+      const int nji  = nj*ni;
+
+      // Middle loop over k,j,i
+      Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkji), [&](const int idx) {
+        int k = (idx)/nji;
+        int j = (idx - k*nji)/ni;
+        int i = (idx - k*nji - j*ni) + il;
+        k += kl;
+        j += jl;
+        if (sbuf[n].derefine) {
+          // if de-refinement, load data from coarse_a
+          sbuf[n].vars(offset + (i-il + ni*(j-jl + nj*(k-kl)))) = cb.x2f(m,k,j,i);
+        } else {
+          // if refinement or same level, load data from a
+          sbuf[n].vars(offset + (i-il + ni*(j-jl + nj*(k-kl)))) = b.x2f(m,k,j,i);
+        }
+      });
+    // pack x2 component
+    } else {
+      const int offset = (ncc*sbuf[n].cntcc + nfc*sbuf[n].cntfc)
+                          + (nicc+1)*njcc*nkcc + nicc*(njcc+1)*nkcc;
+      const int ni = nicc;
+      const int nj = njcc;
+      const int nk = nkcc + 1;  // add b.x3f at (ke+1)
+      const int nkji = nk*nj*ni;
+      const int nji  = nj*ni;
+
+      // Middle loop over k,j,i
+      Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkji), [&](const int idx) {
+        int k = (idx)/nji;
+        int j = (idx - k*nji)/ni;
+        int i = (idx - k*nji - j*ni) + il;
+        k += kl;
+        j += jl;
+        if (sbuf[n].derefine) {
+          // if de-refinement, load data from coarse_a
+          sbuf[n].vars(offset + (i-il + ni*(j-jl + nj*(k-kl)))) = cb.x3f(m,k,j,i);
+        } else {
+          // if refinement or same level, load data from a
+          sbuf[n].vars(offset + (i-il + ni*(j-jl + nj*(k-kl)))) = b.x3f(m,k,j,i);
+        }
+      });
+    }
+  }); // end par_for_outer
+#endif
   return;
 }
 
@@ -570,10 +663,9 @@ void MeshRefinement::RecvAndUnpackAMR() {
 void MeshRefinement::UnpackAMRBuffersCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca,
                                         int ncc, int nfc) {
 #if MPI_PARALLEL_ENABLED
-  int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
   auto &rbuf = recv_buf;
-
   // Outer loop over (# of MeshBlocks sent)*(# of variables)
+  int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
   int nnv = nmb_recv*nvar;
   Kokkos::TeamPolicy<> policy(DevExeSpace(), nnv, Kokkos::AUTO);
   Kokkos::parallel_for("SendBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
@@ -618,6 +710,101 @@ void MeshRefinement::UnpackAMRBuffersCC(DvceArray5D<Real> &a, DvceArray5D<Real> 
 
 void MeshRefinement::UnpackAMRBuffersFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb,
                                         int ncc, int nfc) {
+#if MPI_PARALLEL_ENABLED
+  auto &rbuf = recv_buf;
+  // Outer loop over (# of MeshBlocks sent)*(3 compnts of field)
+  int nnv = 3*nmb_recv;
+  Kokkos::TeamPolicy<> policy(DevExeSpace(), nnv, Kokkos::AUTO);
+  Kokkos::parallel_for("SendBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
+    const int n = (tmember.league_rank())/3;
+    const int v = (tmember.league_rank() - n*3);
+
+    const int il = rbuf[n].bis;
+    const int jl = rbuf[n].bjs;
+    const int kl = rbuf[n].bks;
+    const int m  = rbuf[n].lid;
+    const int nicc = rbuf[n].bie - il + 1;
+    const int njcc = rbuf[n].bje - jl + 1;
+    const int nkcc = rbuf[n].bke - kl + 1;
+
+    // unpack x1 component
+    if (v==0) {
+      const int offset = (ncc*rbuf[n].cntcc + nfc*rbuf[n].cntfc);
+      const int ni = nicc + 1;  // add b.x1f at (ie+1)
+      const int nj = njcc;
+      const int nk = nkcc;
+      const int nkji = nk*nj*ni;
+      const int nji  = nj*ni;
+
+      // Middle loop over k,j,i
+      Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkji), [&](const int idx) {
+        int k = (idx)/nji;
+        int j = (idx - k*nji)/ni;
+        int i = (idx - k*nji - j*ni) + il;
+        k += kl;
+        j += jl;
+        if (rbuf[n].refine) {
+          // if refinement, load data into coarse_a
+          cb.x1f(m,k,j,i) = rbuf[n].vars(offset + (i-il + ni*(j-jl + nj*(k-kl))));
+        } else {
+          // if de-refinement or same level, load data into a
+          b.x1f(m,k,j,i) = rbuf[n].vars(offset + (i-il + ni*(j-jl + nj*(k-kl))));
+        }
+      });
+
+    // unpack x2 component
+    } else if (v==1) {
+      const int offset = (ncc*rbuf[n].cntcc + nfc*rbuf[n].cntfc) + (nicc+1)*njcc*nkcc;
+      const int ni = nicc;
+      const int nj = njcc + 1;  // add b.x2f at (je+1)
+      const int nk = nkcc;
+      const int nkji = nk*nj*ni;
+      const int nji  = nj*ni;
+
+      // Middle loop over k,j,i
+      Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkji), [&](const int idx) {
+        int k = (idx)/nji;
+        int j = (idx - k*nji)/ni;
+        int i = (idx - k*nji - j*ni) + il;
+        k += kl;
+        j += jl;
+        if (rbuf[n].refine) {
+          // if refinement, load data into coarse_a
+          cb.x2f(m,k,j,i) = rbuf[n].vars(offset + (i-il + ni*(j-jl + nj*(k-kl))));
+        } else {
+          // if de-refinement or same level, load data into a
+          b.x2f(m,k,j,i) = rbuf[n].vars(offset + (i-il + ni*(j-jl + nj*(k-kl))));
+        }
+      });
+
+    // unpack x1 component
+    } else {
+      const int offset = (ncc*rbuf[n].cntcc + nfc*rbuf[n].cntfc)
+                          + (nicc+1)*njcc*nkcc + nicc*(njcc+1)*nkcc;
+      const int ni = nicc;
+      const int nj = njcc;
+      const int nk = nkcc + 1;  // add b.x3f at (ke+1)
+      const int nkji = nk*nj*ni;
+      const int nji  = nj*ni;
+
+      // Middle loop over k,j,i
+      Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkji), [&](const int idx) {
+        int k = (idx)/nji;
+        int j = (idx - k*nji)/ni;
+        int i = (idx - k*nji - j*ni) + il;
+        k += kl;
+        j += jl;
+        if (rbuf[n].refine) {
+          // if refinement, load data into coarse_a
+          cb.x3f(m,k,j,i) = rbuf[n].vars(offset + (i-il + ni*(j-jl + nj*(k-kl))));
+        } else {
+          // if de-refinement or same level, load data into a
+          b.x3f(m,k,j,i) = rbuf[n].vars(offset + (i-il + ni*(j-jl + nj*(k-kl))));
+        }
+      });
+    }
+  }); // end par_for_outer
+#endif
   return;
 }
 
