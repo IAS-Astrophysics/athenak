@@ -16,6 +16,7 @@
 // forward declarations
 class MeshBlockPack;
 
+namespace adm {
 //! \class ADM
 class ADM {
   public:
@@ -160,4 +161,5 @@ void SpacetimeUpperMetric(Real const alp,
   u[12] = u[3];
 }
 
+} // namespace adm
 #endif  // ADM_ADM_HPP_

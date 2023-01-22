@@ -81,7 +81,7 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
     Kt_dd.NewAthenaScratchTensor(member, scr_level, ncells1);
 
     par_for_inner(member, isg, ieg, [&](const int i) { 
-      detg(i) = SpatialDet(adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i), adm.g_dd(m,0,2,k,j,i),
+      detg(i) = adm::SpatialDet(adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i), adm.g_dd(m,0,2,k,j,i),
                            adm.g_dd(m,1,1,k,j,i), adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i));
       oopsi4(i) = std::pow(detg(i), -1./3.);
       z4c.chi(m,k,j,i) = std::pow(detg(i), 1./12.*opt.chi_psi_power);
@@ -96,9 +96,9 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
     }
 
     par_for_inner(member, isg, ieg, [&](const int i) {
-      detg(i) = SpatialDet(z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i), z4c.g_dd(m,0,2,k,j,i),
+      detg(i) = adm::SpatialDet(z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i), z4c.g_dd(m,0,2,k,j,i),
                            z4c.g_dd(m,1,1,k,j,i), z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i));
-      z4c.Khat(m,k,j,i) = Trace(1.0/detg(i),
+      z4c.Khat(m,k,j,i) = adm::Trace(1.0/detg(i),
                                 z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i), z4c.g_dd(m,0,2,k,j,i),
                                 z4c.g_dd(m,1,1,k,j,i), z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i),
                                 Kt_dd(0,0,i), Kt_dd(0,1,i), Kt_dd(0,2,i),
@@ -124,11 +124,11 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
       detg.NewAthenaScratchTensor(member, scr_level, ncells1);
 
     par_for_inner(member, isg, ieg, [&](const int i) { 
-      detg(i) = SpatialDet(z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i), z4c.g_dd(m,0,2,k,j,i),
+      detg(i) = adm::SpatialDet(z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i), z4c.g_dd(m,0,2,k,j,i),
                            z4c.g_dd(m,1,1,k,j,i), z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i));
     });
     par_for_inner(member, isg, ieg, [&](const int i) {
-      SpatialInv(1.0/detg(i),
+	adm::SpatialInv(1.0/detg(i),
                  z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i), z4c.g_dd(m,0,2,k,j,i),
                  z4c.g_dd(m,1,1,k,j,i), z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i),
                  &g_uu(m,0,k,j,i), &g_uu(m,1,k,j,i), &g_uu(m,2,k,j,i),
@@ -339,9 +339,9 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     // inverse metric
     //
     par_for_inner(member, is, ie, [&](const int i) {
-      detg(i) = SpatialDet(adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i), adm.g_dd(m,0,2,k,j,i),
+      detg(i) = adm::SpatialDet(adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i), adm.g_dd(m,0,2,k,j,i),
                            adm.g_dd(m,1,1,k,j,i), adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i));
-      SpatialInv(1./detg(i),
+      adm::SpatialInv(1./detg(i),
                  adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i), adm.g_dd(m,0,2,k,j,i),
                  adm.g_dd(m,1,1,k,j,i), adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i),
                  &g_uu(0,0,i), &g_uu(0,1,i), &g_uu(0,2,i),

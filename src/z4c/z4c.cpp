@@ -12,10 +12,10 @@
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
-#include "adm/adm.hpp"
 #include "mesh/mesh.hpp"
 #include "bvals/bvals.hpp"
 #include "z4c/z4c.hpp"
+#include "adm/adm.hpp"
 
 namespace z4c {
 
@@ -181,7 +181,7 @@ void Z4c::AlgConstr(MeshBlockPack *pmbp)
     oopsi4.NewAthenaScratchTensor(member, scr_level, ncells1);
          A.NewAthenaScratchTensor(member, scr_level, ncells1);
     par_for_inner(member, isg, ieg, [&](const int i) {
-      detg(i) = SpatialDet(z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i), z4c.g_dd(m,0,2,k,j,i),
+      detg(i) = adm::SpatialDet(z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i), z4c.g_dd(m,0,2,k,j,i),
                            z4c.g_dd(m,1,1,k,j,i), z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i));
       
       detg(i) = detg(i) > 0. ? detg(i) : 1.;
@@ -197,7 +197,7 @@ void Z4c::AlgConstr(MeshBlockPack *pmbp)
     // compute trace of A
     // note: here we are assuming that det g = 1, which we enforced above
     par_for_inner(member, isg, ieg, [&](const int i) {
-      A(i) = Trace(1.0,
+      A(i) = adm::Trace(1.0,
                    z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i), z4c.g_dd(m,0,2,k,j,i),
                    z4c.g_dd(m,1,1,k,j,i), z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i),
                    z4c.A_dd(m,0,0,k,j,i), z4c.A_dd(m,0,1,k,j,i), z4c.A_dd(m,0,2,k,j,i),

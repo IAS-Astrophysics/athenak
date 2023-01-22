@@ -25,11 +25,11 @@ enum class TensorSymm {
 
 using sub_DvceArray5D_2D = decltype(Kokkos::subview(
                            std::declval<DvceArray5D<Real>>(),
-                           Kokkos::ALL,std::make_pair(0,5),
+                           Kokkos::ALL,std::make_pair(0,6),
                            Kokkos::ALL,Kokkos::ALL,Kokkos::ALL));
 using sub_DvceArray5D_1D = decltype(Kokkos::subview(
                            std::declval<DvceArray5D<Real>>(),
-                           Kokkos::ALL,std::make_pair(0,2),
+                           Kokkos::ALL,std::make_pair(0,3),
                            Kokkos::ALL,Kokkos::ALL,Kokkos::ALL));
 using sub_DvceArray5D_0D = decltype(Kokkos::subview(
                            std::declval<DvceArray5D<Real>>(),
@@ -38,11 +38,11 @@ using sub_DvceArray5D_0D = decltype(Kokkos::subview(
 
 using sub_HostArray5D_2D = decltype(Kokkos::subview(
                            std::declval<HostArray5D<Real>>(),
-                           Kokkos::ALL,std::make_pair(0,5),
+                           Kokkos::ALL,std::make_pair(0,6),
                            Kokkos::ALL,Kokkos::ALL,Kokkos::ALL));
 using sub_HostArray5D_1D = decltype(Kokkos::subview(
                            std::declval<HostArray5D<Real>>(),
-                           Kokkos::ALL,std::make_pair(0,2),
+                           Kokkos::ALL,std::make_pair(0,3),
                            Kokkos::ALL,Kokkos::ALL,Kokkos::ALL));
 using sub_HostArray5D_0D = decltype(Kokkos::subview(
                            std::declval<HostArray5D<Real>>(),
@@ -102,7 +102,7 @@ class AthenaHostTensor<T, sym, ndim, 2> {
   }
   //KOKKOS_INLINE_FUNCTION
   void InitWithShallowSlice(HostArray5D<Real> src, const int indx1, const int indx2) {
-    data_ = Kokkos::subview(src, Kokkos::ALL, std::make_pair(indx1, indx2),
+    data_ = Kokkos::subview(src, Kokkos::ALL, std::make_pair(indx1, indx2+1),
                                  Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
   }
 
@@ -193,7 +193,7 @@ class AthenaTensor<T, sym, ndim, 1> {
   }
   //KOKKOS_INLINE_FUNCTION
   void InitWithShallowSlice(DvceArray5D<Real> src, const int indx1, const int indx2) {
-    data_ = Kokkos::subview(src, Kokkos::ALL, std::make_pair(indx1, indx2),
+    data_ = Kokkos::subview(src, Kokkos::ALL, std::make_pair(indx1, indx2+1),
                                  Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
   }
  private:
@@ -223,7 +223,7 @@ class AthenaTensor<T, sym, ndim, 2> {
   }
   //KOKKOS_INLINE_FUNCTION
   void InitWithShallowSlice(DvceArray5D<Real> src, const int indx1, const int indx2) {
-    data_ = Kokkos::subview(src, Kokkos::ALL, std::make_pair(indx1, indx2),
+    data_ = Kokkos::subview(src, Kokkos::ALL, std::make_pair(indx1, indx2+1),
                                  Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
   }
 

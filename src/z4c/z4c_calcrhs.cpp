@@ -311,9 +311,9 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
     // Inverse metric
     //
     par_for_inner(member, is, ie, [&](const int i) {
-      detg(i) = SpatialDet(z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i), z4c.g_dd(m,0,2,k,j,i),
+      detg(i) = adm::SpatialDet(z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i), z4c.g_dd(m,0,2,k,j,i),
                            z4c.g_dd(m,1,1,k,j,i), z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i));
-      SpatialInv(1.0/detg(i),
+      adm::SpatialInv(1.0/detg(i),
                  z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i), z4c.g_dd(m,0,2,k,j,i),
                  z4c.g_dd(m,1,1,k,j,i), z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i),
                  &g_uu(0,0,i), &g_uu(0,1,i), &g_uu(0,2,i),

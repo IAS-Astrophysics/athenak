@@ -13,6 +13,7 @@
 #include "mesh/meshblock_pack.hpp"
 #include "z4c/z4c.hpp"
 
+namespace adm {
 char const * const ADM::ADM_names[ADM::N_ADM] = {
   "adm_gxx", "adm_gxy", "adm_gxz", "adm_gyy", "adm_gyz", "adm_gzz",
   "adm_Kxx", "adm_Kxy", "adm_Kxz", "adm_Kyy", "adm_Kyz", "adm_Kzz",
@@ -52,3 +53,5 @@ ADM::ADM(MeshBlockPack *ppack, ParameterInput *pin):
 //----------------------------------------------------------------------------------------
 // destructor
 ADM::~ADM() {}
+
+} // namespace adm
