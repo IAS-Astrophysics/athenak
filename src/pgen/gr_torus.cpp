@@ -505,22 +505,14 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       w_bz = 0.5*(b0.x3f(m,k,j,i) + b0.x3f(m,k+1,j,i));
     });
 
-    // find maximum pressure and maximum bsq
-    Real pgmax = std::numeric_limits<float>::min();
-    Real bsqmax = std::numeric_limits<float>::min();
+    // calculate volume-weighted beta average
+    Real vol_total = 0.0;
+    Real beta_sum = 0.0;
     const int nmkji = (pmbp->nmb_thispack)*indcs.nx3*indcs.nx2*indcs.nx1;
     const int nkji = indcs.nx3*indcs.nx2*indcs.nx1;
     const int nji  = indcs.nx2*indcs.nx1;
-    Kokkos::parallel_reduce("torus_beta",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-    KOKKOS_LAMBDA(const int &idx, Real &max_pgas, Real &max_bsq) {
-      // compute m,k,j,i indices of thread and call function
-      int m = (idx)/nkji;
-      int k = (idx - m*nkji)/nji;
-      int j = (idx - m*nkji - k*nji)/indcs.nx1;
-      int i = (idx - m*nkji - k*nji - j*indcs.nx1) + is;
-      k += ks;
-      j += js;
-
+    par_for("pgen_beta", DevExeSpace(), 0,nmb-1,ks,ke,js,je,is,ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
       // Extract metric components
       Real &x1min = size.d_view(m).x1min;
       Real &x1max = size.d_view(m).x1max;
@@ -575,18 +567,16 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       Real b_3 = glower[3][0]*b0 + glower[3][1]*b1 + glower[3][2]*b2 + glower[3][3]*b3;
       Real bsq = b0*b_0 + b1*b_1 + b2*b_2 + b3*b_3;
 
-      max_pgas = fmax(pgas, max_pgas);
-      max_bsq  = fmax(bsq,  max_bsq);
-    }, Kokkos::Max<Real>(pgmax), Kokkos::Max<Real>(bsqmax));
-
-#if MPI_PARALLEL_ENABLED
-    // get maximum value of pressure and bsq over all MPI ranks
-    MPI_Allreduce(MPI_IN_PLACE, &pgmax, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
-    MPI_Allreduce(MPI_IN_PLACE, &bsqmax, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
-#endif
+      if (bsq > 0) {
+        Real beta = pgas/(0.5*bsq);
+        Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
+        total_vol += vol;
+        beta_sum += beta*vol;
+      }
+    });
 
     // Apply renormalization of magnetic field
-    Real bnorm = sqrt((pgmax/(0.5*bsqmax))/torus.potential_beta_min);
+    Real bnorm = sqrt((beta_sum/total_vol)/torus.potential_beta_min);
     par_for("pgen_normb0", DevExeSpace(), 0,nmb-1,ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       b0.x1f(m,k,j,i) *= bnorm;
