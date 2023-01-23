@@ -465,6 +465,12 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
         << "value = " << new_nmb << std::endl;
     std::exit(EXIT_FAILURE);
   }
+  if (new_nmb_total > pm->nmb_maxperrank) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+        << "Number of MeshBlocks in new tree = " << new_nmb_total << " exceeds maximum "
+        << "allowed per rank = " << pm->nmb_maxperrank << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 
   // Step 2.  Create oldtonew list mapping the previous gid to the current one for all MBs
   // Index of array is old gid, value is new gid.

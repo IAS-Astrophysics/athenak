@@ -579,7 +579,8 @@ void MeshRefinement::PackAMRBuffersFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real
           sbuf[n].vars(offset + (i-il + ni*(j-jl + nj*(k-kl)))) = b.x2f(m,k,j,i);
         }
       });
-    // pack x2 component
+
+    // pack x3 component
     } else {
       const int offset = (ncc*sbuf[n].cntcc + nfc*sbuf[n].cntfc)
                           + (nicc+1)*njcc*nkcc + nicc*(njcc+1)*nkcc;
@@ -777,7 +778,7 @@ void MeshRefinement::UnpackAMRBuffersFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Re
         }
       });
 
-    // unpack x1 component
+    // unpack x3 component
     } else {
       const int offset = (ncc*rbuf[n].cntcc + nfc*rbuf[n].cntfc)
                           + (nicc+1)*njcc*nkcc + nicc*(njcc+1)*nkcc;
