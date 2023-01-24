@@ -54,7 +54,7 @@ void RestartOutput::LoadOutputData(Mesh *pm) {
   // calculate total number of CC variables
   hydro::Hydro* phydro = pm->pmb_pack->phydro;
   mhd::MHD* pmhd = pm->pmb_pack->pmhd;
-  ADM* padm = pm->pmb_pack->padm;
+  adm::ADM* padm = pm->pmb_pack->padm;
   z4c::Z4c* pz4c = pm->pmb_pack->pz4c;
   radiation::Radiation* prad = pm->pmb_pack->prad;
   TurbulenceDriver* pturb=pm->pmb_pack->pturb;
@@ -70,7 +70,7 @@ void RestartOutput::LoadOutputData(Mesh *pm) {
   }
   // if the spacetime is evolved, we do not need to checkpoint/recover the ADM variables
   else if (padm != nullptr) {
-    nadm = ADM::N_ADM;
+    nadm = adm::ADM::N_ADM;
   }
   Kokkos::realloc(outarray, nmb, (nhydro+nmhd+nadm+nz4c), nout3, nout2, nout1);
   if (prad != nullptr) {

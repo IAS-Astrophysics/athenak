@@ -40,7 +40,7 @@ void Z4c::ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin) {
   int ncells1 = indcs.nx1 + 2*(indcs.ng);
   int nmb = pmbp->nmb_thispack;
   Real ADM_mass = pin->GetOrAddReal("problem", "punc_ADM_mass", 1.);
-  ADM::ADM_vars &adm = pmbp->padm->adm;
+  adm::ADM::ADM_vars &adm = pmbp->padm->adm;
 
   int scr_level = 0;
   size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1);
@@ -61,7 +61,7 @@ void Z4c::ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin) {
     int nx3 = indcs.nx3;
     Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> r;
-    r.NewAthenaScratchTensor(member, scr_level, nx1);
+    r.NewAthenaScratchTensor(member, scr_level, ncells1);
 
     par_for_inner(member, isg, ieg, [&](const int i) {
       Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
