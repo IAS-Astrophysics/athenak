@@ -479,10 +479,11 @@ void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
       if (pmesh->adaptive) {
         std::cout << std::endl << "Current number of MeshBlocks = " << pmesh->nmb_total
           << std::endl << pmesh->pmr->nmb_created << " MeshBlocks created, "
-          << pmesh->pmr->nmb_deleted << " deleted by AMR; "
-          << pmesh->pmr->nmb_sent_thisrank << " communicated for load balancing"
-          << std::endl << "Load balancing efficiency = " << (lb_efficiency_/pmesh->ncycle)
-          << std::endl;
+          << pmesh->pmr->nmb_deleted << " deleted by AMR" << std::endl;
+#if MPI_PARALLEL_ENABLED
+        std::cout << pmesh->pmr->nmb_sent_thisrank << " communicated for load balancing, "
+          <<"load balancing efficiency = " << (lb_efficiency_/pmesh->ncycle) << std::endl;
+#endif
       }
 
       // Calculate and print the zone-cycles/exe-second and wall-second

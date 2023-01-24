@@ -886,15 +886,22 @@ void MeshRefinement::MoveRightFC(DvceFaceFld4D<Real> &b) {
 void MeshRefinement::MoveForRefinementCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca,
                                          int nleaf) {
   auto &indcs = pmy_mesh->mb_indcs;
-  auto &is  = indcs.is,  &js  = indcs.js,  &ks  = indcs.ks;
-  auto &cis = indcs.cis, &cjs = indcs.cjs, &cks = indcs.cks;
-  auto &cie = indcs.cie, &cje = indcs.cje, &cke = indcs.cke;
+  auto &ng = indcs.ng;
+  int il = indcs.cis - ng, iu = indcs.cie + ng;
+  int jl = indcs.cjs,      ju = indcs.cje;
+  int kl = indcs.cks,      ku = indcs.cke;
+  if (pmy_mesh->multi_d) {
+    jl -= ng; ju += ng;
+  }
+  if (pmy_mesh->three_d) {
+    kl -= ng; ku += ng;
+  }
   auto &cnx1 = indcs.cnx1, &cnx2 = indcs.cnx2, &cnx3 = indcs.cnx3;
 
   // Set indices of destination (coarse) array
-  std::pair<int,int> idst = std::make_pair(cis,cie+1);
-  std::pair<int,int> jdst = std::make_pair(cjs,cje+1);
-  std::pair<int,int> kdst = std::make_pair(cks,cke+1);
+  std::pair<int,int> idst = std::make_pair(il,iu+1);
+  std::pair<int,int> jdst = std::make_pair(jl,ju+1);
+  std::pair<int,int> kdst = std::make_pair(kl,ku+1);
 
   // loop over old MBs
   int ombs = pmy_mesh->gids_eachrank[global_variable::my_rank];
@@ -911,17 +918,14 @@ void MeshRefinement::MoveForRefinementCC(DvceArray5D<Real> &a, DvceArray5D<Real>
           int ox1 = ((lloc.lx1 & 1) == 1);
           int ox2 = ((lloc.lx2 & 1) == 1);
           int ox3 = ((lloc.lx3 & 1) == 1);
-          std::pair<int,int> isrc = std::make_pair((is+ox1*cnx1),(is+(ox1+1)*cnx1));
-          std::pair<int,int> jsrc = std::make_pair((js+ox2*cnx2),(js+(ox2+1)*cnx2));
-          std::pair<int,int> ksrc = std::make_pair((ks+ox3*cnx3),(ks+(ox3+1)*cnx3));
+          std::pair<int,int> isrc = std::make_pair((il + ox1*cnx1),(iu+1 + ox1*cnx1));
+          std::pair<int,int> jsrc = std::make_pair((jl + ox2*cnx2),(ju+1 + ox2*cnx2));
+          std::pair<int,int> ksrc = std::make_pair((kl + ox3*cnx3),(ku+1 + ox3*cnx3));
 
           // copy data in MBs to be refined to coarse arrays in target MBs
           auto src = Kokkos::subview( a,msrc,Kokkos::ALL,ksrc,jsrc,isrc);
           auto dst = Kokkos::subview(ca,mdst,Kokkos::ALL,kdst,jdst,idst);
           Kokkos::deep_copy(DevExeSpace(), dst, src);
-/***
-std::cout <<"rank="<<global_variable::my_rank<<"  Moved "<<msrc<<" into "<<mdst<<" for refinement"<<std::endl;
-***/
         }
       }
     }
@@ -936,18 +940,25 @@ std::cout <<"rank="<<global_variable::my_rank<<"  Moved "<<msrc<<" into "<<mdst<
 void MeshRefinement::MoveForRefinementFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb,
                                          int nleaf) {
   auto &indcs = pmy_mesh->mb_indcs;
-  auto &is  = indcs.is,  &js  = indcs.js,  &ks  = indcs.ks;
-  auto &cis = indcs.cis, &cjs = indcs.cjs, &cks = indcs.cks;
-  auto &cie = indcs.cie, &cje = indcs.cje, &cke = indcs.cke;
+  auto &ng = indcs.ng;
+  int il = indcs.cis - ng, iu = indcs.cie + ng;
+  int jl = indcs.cjs,      ju = indcs.cje;
+  int kl = indcs.cks,      ku = indcs.cke;
+  if (pmy_mesh->multi_d) {
+    jl -= ng; ju += ng;
+  }
+  if (pmy_mesh->three_d) {
+    kl -= ng; ku += ng;
+  }
   auto &cnx1 = indcs.cnx1, &cnx2 = indcs.cnx2, &cnx3 = indcs.cnx3;
 
   // Set indices of destination (coarse) array
-  std::pair<int,int> idst  = std::make_pair(cis,cie+1);
-  std::pair<int,int> idst1 = std::make_pair(cis,cie+2);
-  std::pair<int,int> jdst  = std::make_pair(cjs,cje+1);
-  std::pair<int,int> jdst1 = std::make_pair(cjs,cje+2);
-  std::pair<int,int> kdst  = std::make_pair(cks,cke+1);
-  std::pair<int,int> kdst1 = std::make_pair(cks,cke+2);
+  std::pair<int,int> idst  = std::make_pair(il,iu+1);
+  std::pair<int,int> idst1 = std::make_pair(il,iu+2);
+  std::pair<int,int> jdst  = std::make_pair(jl,ju+1);
+  std::pair<int,int> jdst1 = std::make_pair(jl,ju+2);
+  std::pair<int,int> kdst  = std::make_pair(kl,ku+1);
+  std::pair<int,int> kdst1 = std::make_pair(kl,ku+2);
 
   // loop over old MBs
   int ombs = pmy_mesh->gids_eachrank[global_variable::my_rank];
@@ -964,12 +975,12 @@ void MeshRefinement::MoveForRefinementFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<R
           int ox1 = ((lloc.lx1 & 1) == 1);
           int ox2 = ((lloc.lx2 & 1) == 1);
           int ox3 = ((lloc.lx3 & 1) == 1);
-          std::pair<int,int> isrc  = std::make_pair((is+ox1*cnx1),(is+(ox1+1)*cnx1  ));
-          std::pair<int,int> isrc1 = std::make_pair((is+ox1*cnx1),(is+(ox1+1)*cnx1+1));
-          std::pair<int,int> jsrc  = std::make_pair((js+ox2*cnx2),(js+(ox2+1)*cnx2  ));
-          std::pair<int,int> jsrc1 = std::make_pair((js+ox2*cnx2),(js+(ox2+1)*cnx2+1));
-          std::pair<int,int> ksrc  = std::make_pair((ks+ox3*cnx3),(ks+(ox3+1)*cnx3  ));
-          std::pair<int,int> ksrc1 = std::make_pair((ks+ox3*cnx3),(ks+(ox3+1)*cnx3+1));
+          std::pair<int,int> isrc  = std::make_pair((il + ox1*cnx1),(iu+1 + ox1*cnx1  ));
+          std::pair<int,int> isrc1 = std::make_pair((il + ox1*cnx1),(iu+1 + ox1*cnx1+1));
+          std::pair<int,int> jsrc  = std::make_pair((jl + ox2*cnx2),(ju+1 + ox2*cnx2  ));
+          std::pair<int,int> jsrc1 = std::make_pair((jl + ox2*cnx2),(ju+1 + ox2*cnx2+1));
+          std::pair<int,int> ksrc  = std::make_pair((kl + ox3*cnx3),(ku+1 + ox3*cnx3  ));
+          std::pair<int,int> ksrc1 = std::make_pair((kl + ox3*cnx3),(ku+1 + ox3*cnx3+1));
 
           // copy data in MBs to be refined to coarse arrays in target MBs
           auto src1 = Kokkos::subview( b.x1f,msrc,ksrc,jsrc,isrc1);
