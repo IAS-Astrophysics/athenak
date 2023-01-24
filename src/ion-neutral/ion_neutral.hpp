@@ -60,6 +60,8 @@ class IonNeutral {
   Real ionization_coeff;         // ionization rate, xi
   Real recombination_coeff;      // recombination rate, alpha
 
+  Real mi_mn; // mass ratio m_i/m_n
+
   // container to hold names of TaskIDs
   IonNeutralTaskIDs id;
 

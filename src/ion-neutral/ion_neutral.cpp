@@ -28,6 +28,7 @@ IonNeutral::IonNeutral(MeshBlockPack *pp, ParameterInput *pin) :
   drag_coeff = pin->GetReal("ion-neutral","drag_coeff");
   ionization_coeff = pin->GetOrAddReal("ion-neutral","ionization_coeff",0.0);
   recombination_coeff = pin->GetOrAddReal("ion-neutral","recombination_coeff",0.0);
+  mi_mn = pin->GetOrAddReal("ion-neutral","mi_mn",1.0);
 }
 
 //----------------------------------------------------------------------------------------
@@ -131,6 +132,7 @@ TaskStatus IonNeutral::FirstTwoImpRK(Driver *pdrive, int stage) {
 //     ru(1) -> ui(IM2)     ru(4) -> un(IM2)
 //     ru(2) -> ui(IM3)     ru(5) -> un(IM3)
 //     ru(6) -> ui(IDN)     ru(7) -> un(IDN)
+//     ru(8) -> ui(IEN)     ru(9) -> un(IEN)
 //  where ui=pmhd->u0 and un=phydro->u0
 
 
@@ -158,6 +160,8 @@ TaskStatus IonNeutral::ImpRKUpdate(Driver *pdriver, int estage) {
     auto &a_twid = pdriver->a_twid;
     Real dt = pmy_pack->pmesh->dt;
     auto ru_ = pdriver->impl_src;
+    EOS_Data &eos_hyd = phyd->peos->eos_data;
+    EOS_Data &eos_mhd = pmhd->peos->eos_data;
     par_for_outer("imex_exp",DevExeSpace(),scr_size,scr_level,0,nmb1,0,(n3-1),0,(n2-1),
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {
       for (int s=0; s<=(istage-2); ++s) {
@@ -171,6 +175,10 @@ TaskStatus IonNeutral::ImpRKUpdate(Driver *pdriver, int estage) {
           un(m,IM3,k,j,i) += adt*ru_(s,m,5,k,j,i);
           ui(m,IDN,k,j,i) += adt*ru_(s,m,6,k,j,i);
           un(m,IDN,k,j,i) += adt*ru_(s,m,7,k,j,i);
+          if (eos_hyd.is_ideal) {
+            ui(m,IEN,k,j,i) += adt*ru_(s,m,8,k,j,i);
+            un(m,IEN,k,j,i) += adt*ru_(s,m,9,k,j,i);
+          }
         });
       }
     });
@@ -185,8 +193,14 @@ TaskStatus IonNeutral::ImpRKUpdate(Driver *pdriver, int estage) {
     Real alpha_adt = recombination_coeff*(pdriver->a_impl)*(pmy_pack->pmesh->dt);
     auto ui = pmhd->u0;
     auto un = phyd->u0;
+    EOS_Data &eos_hyd = phyd->peos->eos_data;
+    EOS_Data &eos_mhd = pmhd->peos->eos_data;
     par_for("imex_imp",DevExeSpace(),0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+      Real kin_prev_i = (ui(m,IM1,k,j,i)*ui(m,IM1,k,j,i)+ui(m,IM2,k,j,i)*ui(m,IM2,k,j,i)+
+                        ui(m,IM3,k,j,i)*ui(m,IM3,k,j,i))/2./ui(m,IDN,k,j,i);
+      Real kin_prev_n = (un(m,IM1,k,j,i)*un(m,IM1,k,j,i)+un(m,IM2,k,j,i)*un(m,IM2,k,j,i)+
+                        un(m,IM3,k,j,i)*un(m,IM3,k,j,i))/2./un(m,IDN,k,j,i);
       Real rho_i = ui(m,IDN,k,j,i);
       if (alpha_adt > 0) { // to avoid division by zero
         Real d = 1./4./alpha_adt/alpha_adt + xi_adt/2./alpha_adt/alpha_adt
@@ -220,6 +234,51 @@ TaskStatus IonNeutral::ImpRKUpdate(Driver *pdriver, int estage) {
       u_n = sum - u_i;
       ui(m,IM3,k,j,i) = u_i;
       un(m,IM3,k,j,i) = u_n;
+
+      if (eos_hyd.is_ideal) {
+        Real kin_i = (ui(m,IM1,k,j,i)*ui(m,IM1,k,j,i)+ui(m,IM2,k,j,i)*ui(m,IM2,k,j,i)+
+                        ui(m,IM3,k,j,i)*ui(m,IM3,k,j,i))/2./ui(m,IDN,k,j,i);
+        Real kin_n = (un(m,IM1,k,j,i)*un(m,IM1,k,j,i)+un(m,IM2,k,j,i)*un(m,IM2,k,j,i)+
+                        un(m,IM3,k,j,i)*un(m,IM3,k,j,i))/2./un(m,IDN,k,j,i);
+        ui(m,IEN,k,j,i) += kin_i-kin_prev_i;
+        un(m,IEN,k,j,i) += kin_n-kin_prev_n;
+        Real fmass = 1./(1.+mi_mn);
+        Real gamma_i = eos_mhd.gamma, gamma_n = eos_hyd.gamma;
+        Real a_i, a_n, b_i, b_n, c_i, c_n;
+        Real u1_i = ui(m,IM1,k,j,i)/rho_i;
+        Real u2_i = ui(m,IM2,k,j,i)/rho_i;
+        Real u3_i = ui(m,IM3,k,j,i)/rho_i;
+        Real u1_n = un(m,IM1,k,j,i)/rho_n;
+        Real u2_n = un(m,IM2,k,j,i)/rho_n;
+        Real u3_n = un(m,IM3,k,j,i)/rho_n;
+        Real usq_i = u1_i*u1_i + u2_i*u2_i + u3_i*u3_i;
+        Real usq_n = u1_n*u1_n + u2_n*u2_n + u3_n*u3_n;
+        Real uav1 = u1_i*(1.-fmass) + u1_n*fmass;
+        Real uav2 = u2_i*(1.-fmass) + u2_n*fmass;
+        Real uav3 = u3_i*(1.-fmass) + u3_n*fmass;
+        Real b1 = pmhd->bcc0(m,0,k,j,i);
+        Real b2 = pmhd->bcc0(m,1,k,j,i);
+        Real b3 = pmhd->bcc0(m,2,k,j,i);
+        Real bsq = b1*b1+b2*b2+b3*b3;
+        a_i = -alpha_adt*rho_i - 3.*gamma_adt*rho_n*(gamma_i-1.)*(1.-fmass);
+        a_n = alpha_adt*rho_i*mi_mn + 3.*gamma_adt*rho_n*(gamma_i-1.)*(1.-fmass);
+        b_i = xi_adt/mi_mn + 3.*gamma_adt*rho_i*(gamma_n-1.)*fmass;
+        b_n = -xi_adt - 3.*gamma_adt*rho_i*(gamma_n-1.)*fmass;
+        c_i = ui(m,IEN,k,j,i) - alpha_adt*rho_i*rho_i*usq_i +
+                                xi_adt*rho_n*(usq_i + usq_n)/2. +
+                                gamma_adt*rho_n*rho_i*((u1_n-u1_i)*uav1+
+                                      (u2_n-u2_i)*uav2+(u3_n-u3_i)*uav3)-
+                                a_i*(rho_i*usq_i/2.+bsq/2.)-
+                                b_i*(rho_n*usq_n/2.);
+        c_n = un(m,IEN,k,j,i) + alpha_adt*rho_i*rho_i*(usq_i + usq_n)/2. -
+                                xi_adt*rho_n*usq_n +
+                                gamma_adt*rho_n*rho_i*((u1_i-u1_n)*uav1 +
+                                      (u2_i-u2_n)*uav2+(u3_i-u3_n)*uav3) -
+                                a_n*(rho_i*usq_i/2.+bsq/2.)-
+                                b_n*(rho_n*usq_n/2.);
+        ui(m,IEN,k,j,i) = (c_i+c_n*b_i-c_i*b_n)/(1.-a_i-b_n+a_i*b_n-a_n*b_i);
+        un(m,IEN,k,j,i) = (c_n+c_i*a_n-c_n*a_i)/(1.-a_i-b_n+a_i*b_n-a_n*b_i);
+      }
     });
   }
 
@@ -229,6 +288,8 @@ TaskStatus IonNeutral::ImpRKUpdate(Driver *pdriver, int estage) {
     int s = istage-1;
     auto ui = pmhd->u0;
     auto un = phyd->u0;
+    EOS_Data &eos_hyd = phyd->peos->eos_data;
+    EOS_Data &eos_mhd = pmhd->peos->eos_data;
     auto drag = drag_coeff;
     auto xi = ionization_coeff;
     auto alpha = recombination_coeff;
@@ -263,6 +324,51 @@ TaskStatus IonNeutral::ImpRKUpdate(Driver *pdriver, int estage) {
       ru_(s,m,6,k,j,i) = xi*un(m,IDN,k,j,i) - alpha*ui(m,IDN,k,j,i)*ui(m,IDN,k,j,i);
       // drag term in IDN component of neutral momentum
       ru_(s,m,7,k,j,i) =-xi*un(m,IDN,k,j,i) + alpha*ui(m,IDN,k,j,i)*ui(m,IDN,k,j,i);
+      if (eos_hyd.is_ideal) {
+        Real gamma_i = eos_mhd.gamma, gamma_n = eos_hyd.gamma;
+        Real fmass = 1./(1.+mi_mn);
+        Real b1 = pmhd->bcc0(m,0,k,j,i);
+        Real b2 = pmhd->bcc0(m,1,k,j,i);
+        Real b3 = pmhd->bcc0(m,2,k,j,i);
+        Real bsq = b1*b1+b2*b2+b3*b3;
+        Real kin_i = (ui(m,IM1,k,j,i)*ui(m,IM1,k,j,i)+ui(m,IM2,k,j,i)*ui(m,IM2,k,j,i)+
+                        ui(m,IM3,k,j,i)*ui(m,IM3,k,j,i))/ui(m,IDN,k,j,i);
+        Real kin_n = (un(m,IM1,k,j,i)*un(m,IM1,k,j,i)+un(m,IM2,k,j,i)*un(m,IM2,k,j,i)+
+                        un(m,IM3,k,j,i)*un(m,IM3,k,j,i))/un(m,IDN,k,j,i);
+        Real f1 = drag*(ui(m,IDN,k,j,i)*un(m,IM1,k,j,i) -
+                        un(m,IDN,k,j,i)*ui(m,IM1,k,j,i)) +
+                        xi*un(m,IM1,k,j,i) - alpha*ui(m,IDN,k,j,i)*ui(m,IM1,k,j,i);
+        Real f2 = drag*(ui(m,IDN,k,j,i)*un(m,IM2,k,j,i) -
+                        un(m,IDN,k,j,i)*ui(m,IM2,k,j,i)) +
+                        xi*un(m,IM2,k,j,i) - alpha*ui(m,IDN,k,j,i)*ui(m,IM2,k,j,i);
+        Real f3 = drag*(ui(m,IDN,k,j,i)*un(m,IM3,k,j,i) -
+                        un(m,IDN,k,j,i)*ui(m,IM3,k,j,i)) +
+                        xi*un(m,IM3,k,j,i) - alpha*ui(m,IDN,k,j,i)*ui(m,IM3,k,j,i);
+        Real fi_ui = (f1*ui(m,IM1,k,j,i)+f2*ui(m,IM2,k,j,i)+
+                      f3*ui(m,IM3,k,j,i))/ui(m,IDN,k,j,i);
+        Real fn_un =-(f1*un(m,IM1,k,j,i)+f2*un(m,IM2,k,j,i)+
+                      f3*un(m,IM3,k,j,i))/un(m,IDN,k,j,i);
+        Real ti_mi = (ui(m,IEN,k,j,i)-kin_i-bsq/2.)*(gamma_i-1)/ui(m,IDN,k,j,i);
+        Real tn_mn = (un(m,IEN,k,j,i)-kin_n)*(gamma_n-1)/un(m,IDN,k,j,i);
+        Real si = xi*un(m,IDN,k,j,i);
+        Real sn = alpha*ui(m,IDN,k,j,i)*ui(m,IDN,k,j,i);
+        Real u1_i = ui(m,IM1,k,j,i)/ui(m,IDN,k,j,i);
+        Real u2_i = ui(m,IM2,k,j,i)/ui(m,IDN,k,j,i);
+        Real u3_i = ui(m,IM3,k,j,i)/ui(m,IDN,k,j,i);
+        Real u1_n = un(m,IM1,k,j,i)/un(m,IDN,k,j,i);
+        Real u2_n = un(m,IM2,k,j,i)/un(m,IDN,k,j,i);
+        Real u3_n = un(m,IM3,k,j,i)/un(m,IDN,k,j,i);
+        Real du_sq = (u1_i-u1_n)*(u1_i-u1_n)+(u2_i-u2_n)*(u2_i-u2_n)+
+                     (u3_i-u3_n)*(u3_i-u3_n);
+        Real gi = si*du_sq/2. + si*tn_mn/mi_mn/(gamma_n-1) - sn*ti_mi/(gamma_i-1) +
+                  drag*ui(m,IDN,k,j,i)*un(m,IDN,k,j,i) *
+                  (3.*(tn_mn*fmass-ti_mi*(1.-fmass)) + fmass*du_sq);
+        Real gn = sn*du_sq/2. + sn*ti_mi*mi_mn/(gamma_i-1) - si*tn_mn/(gamma_n-1) +
+                  drag*ui(m,IDN,k,j,i)*un(m,IDN,k,j,i) *
+                  (-3.*(tn_mn*fmass-ti_mi*(1.-fmass)) + (1.-fmass)*du_sq);
+        ru_(s,m,8,k,j,i) = fi_ui + gi;
+        ru_(s,m,9,k,j,i) = fn_un + gn;
+      }
     });
   }
 

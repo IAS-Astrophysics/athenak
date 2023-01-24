@@ -46,8 +46,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     Real d_n = pin->GetOrAddReal("problem","d_n",1.0);
     auto &u0 = pmbp->phydro->u0;
     EOS_Data &eos = pmbp->phydro->peos->eos_data;
+    Real T_i = pin->GetOrAddReal("problem","T_i",1.0);
+    Real T_n = pin->GetOrAddReal("problem","T_n",1.0);
     Real gm1 = eos.gamma - 1.0;
-    Real p0 = 1.0/eos.gamma;
+    Real p0 = d_n*T_n;
 
     // Set initial conditions
     par_for("pgen_turb", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
@@ -72,13 +74,15 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     auto &u0 = pmbp->pmhd->u0;
     auto &b0 = pmbp->pmhd->b0;
     EOS_Data &eos = pmbp->pmhd->peos->eos_data;
+    Real T_i = pin->GetOrAddReal("problem","T_i",1.0);
+    Real T_n = pin->GetOrAddReal("problem","T_n",1.0);
     Real gm1 = eos.gamma - 1.0;
-    Real p0 = 1.0/eos.gamma;
+    Real p0 = d_i*T_i;
 
     // Set initial conditions
     par_for("pgen_turb", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      u0(m,IDN,k,j,i) = 1.0;
+      u0(m,IDN,k,j,i) = d_i;
       u0(m,IM1,k,j,i) = 0.0;
       u0(m,IM2,k,j,i) = 0.0;
       u0(m,IM3,k,j,i) = 0.0;
@@ -104,13 +108,14 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     Real d_i = pin->GetOrAddReal("problem","d_i",1.0);
     Real d_n = pin->GetOrAddReal("problem","d_n",1.0);
     Real B0 = cs*std::sqrt(2.0*(d_i+d_n)/beta);
-
+    Real T_i = pin->GetOrAddReal("problem","T_i",1.0);
+    Real T_n = pin->GetOrAddReal("problem","T_n",1.0);
     // MHD
     auto &u0 = pmbp->pmhd->u0;
     auto &b0 = pmbp->pmhd->b0;
     EOS_Data &eos = pmbp->pmhd->peos->eos_data;
     Real gm1 = eos.gamma - 1.0;
-    Real p0 = d_i/eos.gamma; // TODO(@user): multiply by ionized density
+    Real p0 = d_i*T_i; // TODO(@user): multiply by ionized density
 
     // Set initial conditions
     par_for("pgen_turb_mhd", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
@@ -138,7 +143,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     auto &u0_ = pmbp->phydro->u0;
     EOS_Data &eos_ = pmbp->phydro->peos->eos_data;
     Real gm1_ = eos_.gamma - 1.0;
-    Real p0_ = d_n/eos_.gamma; // TODO(@user): multiply by neutral density
+    Real p0_ = d_n*T_n; // TODO(@user): multiply by neutral density
 
     // Set initial conditions
     par_for("pgen_turb_hydro", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
