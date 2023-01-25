@@ -116,17 +116,7 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
   // allocate array of recv buffers
   recv_buf = new AMRBuffer[nmb_recv];
 
-  // count number of cell- and face-centered data elements to be communicated depending
-  // on physics enrolled
-  auto &indcs = pmy_mesh->mb_indcs;
-  int cntcc_same = (indcs.nx1)*(indcs.nx2)*(indcs.nx3);
-  int cntcc_coar = (indcs.cnx1)*(indcs.cnx2)*(indcs.cnx3);
-  int cntfc_same = (indcs.nx1+1)*(indcs.nx2  )*(indcs.nx3  ) +
-                   (indcs.nx1  )*(indcs.nx2+1)*(indcs.nx3  ) +
-                   (indcs.nx1  )*(indcs.nx2  )*(indcs.nx3+1);
-  int cntfc_coar = (indcs.cnx1+1)*(indcs.cnx2  )*(indcs.cnx3  ) +
-                   (indcs.cnx1  )*(indcs.cnx2+1)*(indcs.cnx3  ) +
-                   (indcs.cnx1  )*(indcs.cnx2  )*(indcs.cnx3+1);
+  // count number of cell- and face-centered variables communicated depending on physics
   int nvarcc=0, nvarfc=0;
   if (pmy_mesh->pmb_pack->phydro != nullptr) {
     nvarcc += (pmy_mesh->pmb_pack->phydro->nhydro);
@@ -136,7 +126,7 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
     nvarfc += 1;
   }
 
-  // loop over new MBs on this rank, initialize recv buffers, and post non-blocking recvs
+  auto &indcs = pmy_mesh->mb_indcs;
   auto &is = indcs.is, &ie = indcs.ie;
   auto &js = indcs.js, &je = indcs.je;
   auto &ks = indcs.ks, &ke = indcs.ke;
@@ -144,6 +134,19 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
   auto &cjs = indcs.cjs, &cje = indcs.cje;
   auto &cks = indcs.cks, &cke = indcs.cke;
   auto &cnx1 = indcs.cnx1, &cnx2 = indcs.cnx2, &cnx3 = indcs.cnx3;
+  auto &nx1 = indcs.nx1, &nx2 = indcs.nx2, &nx3 = indcs.nx3;
+  auto &ng = indcs.ng;
+  int il = cis - ng, iu = cie + ng;
+  int jl = cjs,      ju = cje;
+  int kl = cks,      ku = cke;
+  if (pmy_mesh->multi_d) {
+    jl -= ng; ju += ng;
+  }
+  if (pmy_mesh->three_d) {
+    kl -= ng; ku += ng;
+  }
+
+  // loop over new MBs on this rank, initialize recv buffers, and post non-blocking recvs
   int rb_idx = 0;     // recv buffer index
   bool no_errors=true;
   for (int newm=nmbs; newm<=nmbe; newm++) {
@@ -158,15 +161,16 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
           int ox1 = ((lloc.lx1 & 1) == 1);
           int ox2 = ((lloc.lx2 & 1) == 1);
           int ox3 = ((lloc.lx3 & 1) == 1);
-          recv_buf[rb_idx].bis = is + (ox1  )*cnx1;
-          recv_buf[rb_idx].bie = is + (ox1+1)*cnx1 - 1;
-          recv_buf[rb_idx].bjs = js + (ox2  )*cnx2;
-          recv_buf[rb_idx].bje = js + (ox2+1)*cnx2 - 1;
-          recv_buf[rb_idx].bks = ks + (ox3  )*cnx3;
-          recv_buf[rb_idx].bke = ks + (ox3+1)*cnx3 - 1;
-          recv_buf[rb_idx].cntcc = cntcc_coar;
-          recv_buf[rb_idx].cntfc = cntfc_coar;
-          recv_buf[rb_idx].cnt   = (nvarcc*cntcc_coar + nvarfc*cntfc_coar);
+          recv_buf[rb_idx].bis = cis + ox1*cnx1;
+          recv_buf[rb_idx].bie = cie + ox1*cnx1;
+          recv_buf[rb_idx].bjs = cjs + ox2*cnx2;
+          recv_buf[rb_idx].bje = cje + ox2*cnx2;
+          recv_buf[rb_idx].bks = cks + ox3*cnx3;
+          recv_buf[rb_idx].bke = cke + ox3*cnx3;
+          recv_buf[rb_idx].cntcc = cnx1*cnx2*cnx3;
+          recv_buf[rb_idx].cntfc = 3*cnx1*cnx2*cnx3 + cnx2*cnx3 + cnx1*cnx3 + cnx1*cnx2;
+          recv_buf[rb_idx].cnt   = nvarcc*recv_buf[rb_idx].cntcc +
+                                   nvarfc*recv_buf[rb_idx].cntfc;
           recv_buf[rb_idx].lid   = newm - nmbs;
           recv_buf[rb_idx].derefine = true;
           Kokkos::realloc(recv_buf[rb_idx].vars, recv_buf[rb_idx].cnt);
@@ -176,11 +180,6 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
           int ierr = MPI_Irecv(recv_buf[rb_idx].vars.data(), recv_buf[rb_idx].cnt,
                      MPI_ATHENA_REAL, pmy_mesh->rank_eachmb[oldm+l], tag, amr_comm,
                      &(recv_buf[rb_idx].req));
-/***
-if (global_variable::my_rank == 1) {
-std::cout <<"rank="<<global_variable::my_rank<<" m="<<m<<" Recv="<<rb_idx<<" size="<<recv_buf[rb_idx].data_size<<" tag="<<tag<<" from rank="<<pmy_mesh->rank_eachmb[oldm+l]<<" ox1/2/3="<<ox1<<" "<<ox2<<" "<<ox3<<std::endl;
-}
-**/
           if (ierr != MPI_SUCCESS) {no_errors=false;}
           rb_idx++;
         }
@@ -194,35 +193,29 @@ std::cout <<"rank="<<global_variable::my_rank<<" m="<<m<<" Recv="<<rb_idx<<" siz
           recv_buf[rb_idx].bje = je;
           recv_buf[rb_idx].bks = ks;
           recv_buf[rb_idx].bke = ke;
-          recv_buf[rb_idx].cntcc = cntcc_same ;
-          recv_buf[rb_idx].cntfc = cntfc_same ;
-          recv_buf[rb_idx].cnt   = (nvarcc*cntcc_same + nvarfc*cntfc_same);
-          recv_buf[rb_idx].lid   = newm - nmbs;
-          Kokkos::realloc(recv_buf[rb_idx].vars, recv_buf[rb_idx].cnt);
+          recv_buf[rb_idx].cntcc = nx1*nx2*nx3;
+          recv_buf[rb_idx].cntfc = 3*nx1*nx2*nx3 + nx2*nx3 + nx1*nx3 + nx1*nx2;
         } else {                                // refinement
-          recv_buf[rb_idx].bis = cis;
-          recv_buf[rb_idx].bie = cie;
-          recv_buf[rb_idx].bjs = cjs;
-          recv_buf[rb_idx].bje = cje;
-          recv_buf[rb_idx].bks = cks;
-          recv_buf[rb_idx].bke = cke;
-          recv_buf[rb_idx].cntcc = cntcc_coar ;
-          recv_buf[rb_idx].cntfc = cntfc_coar ;
-          recv_buf[rb_idx].cnt   = (nvarcc*cntcc_coar + nvarfc*cntfc_coar);
-          recv_buf[rb_idx].lid   = newm - nmbs;
+          recv_buf[rb_idx].bis = il; // note il:iu etc. includes ghost zones
+          recv_buf[rb_idx].bie = iu;
+          recv_buf[rb_idx].bjs = jl;
+          recv_buf[rb_idx].bje = ju;
+          recv_buf[rb_idx].bks = kl;
+          recv_buf[rb_idx].bke = ku;
+          recv_buf[rb_idx].cntcc = (iu-il+1)*(ju-jl+1)*(ku-kl+1);
+          recv_buf[rb_idx].cntfc = (iu-il+2)*(ju-jl+1)*(ku-kl+1) +
+               (iu-il+1)*(ju-jl+2)*(ku-kl+1) + (iu-il+1)*(ju-jl+1)*(ku-kl+2);
           recv_buf[rb_idx].refine = true;
-          Kokkos::realloc(recv_buf[rb_idx].vars, recv_buf[rb_idx].cnt);
         }
+        recv_buf[rb_idx].cnt = nvarcc*recv_buf[rb_idx].cntcc +
+                               nvarfc*recv_buf[rb_idx].cntfc;
+        recv_buf[rb_idx].lid = newm - nmbs;
+        Kokkos::realloc(recv_buf[rb_idx].vars, recv_buf[rb_idx].cnt);
         // create tag using local ID of *receiving* MeshBlock, post receive
         int tag = CreateAMR_MPI_Tag(newm-nmbs, 0, 0, 0);
         int ierr = MPI_Irecv(recv_buf[rb_idx].vars.data(), recv_buf[rb_idx].cnt,
                    MPI_ATHENA_REAL, pmy_mesh->rank_eachmb[oldm], tag, amr_comm,
                    &(recv_buf[rb_idx].req));
-/***
-if (global_variable::my_rank == 1) {
-std::cout <<"rank="<<global_variable::my_rank<<" m="<<m<<" Recv="<<rb_idx<<" size="<<recv_buf[rb_idx].data_size<<" tag="<<tag<<" from rank="<<pmy_mesh->rank_eachmb[oldm]<<std::endl;
-}
-***/
         if (ierr != MPI_SUCCESS) {no_errors=false;}
         rb_idx++;
       }
@@ -273,17 +266,7 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
   // allocate array of send buffers
   send_buf = new AMRBuffer[nmb_send];
 
-  // count number of cell- and face-centered data elements to be communicated depending
-  // on physics enrolled
-  auto &indcs = pmy_mesh->mb_indcs;
-  int cntcc_same = (indcs.nx1)*(indcs.nx2)*(indcs.nx3);
-  int cntcc_coar = (indcs.cnx1)*(indcs.cnx2)*(indcs.cnx3);
-  int cntfc_same = (indcs.nx1+1)*(indcs.nx2  )*(indcs.nx3  ) +
-                   (indcs.nx1  )*(indcs.nx2+1)*(indcs.nx3  ) +
-                   (indcs.nx1  )*(indcs.nx2  )*(indcs.nx3+1);
-  int cntfc_coar = (indcs.cnx1+1)*(indcs.cnx2  )*(indcs.cnx3  ) +
-                   (indcs.cnx1  )*(indcs.cnx2+1)*(indcs.cnx3  ) +
-                   (indcs.cnx1  )*(indcs.cnx2  )*(indcs.cnx3+1);
+  // count number of cell- and face-centered variables communicated depending on physics
   int nvarcc=0, nvarfc=0;
   if (pmy_mesh->pmb_pack->phydro != nullptr) {
     nvarcc += (pmy_mesh->pmb_pack->phydro->nhydro);
@@ -293,7 +276,7 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
     nvarfc += 1;
   }
 
-  // loop over old MBs on this rank, initialize send buffers
+  auto &indcs = pmy_mesh->mb_indcs;
   auto &is = indcs.is, &ie = indcs.ie;
   auto &js = indcs.js, &je = indcs.je;
   auto &ks = indcs.ks, &ke = indcs.ke;
@@ -301,6 +284,19 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
   auto &cjs = indcs.cjs, &cje = indcs.cje;
   auto &cks = indcs.cks, &cke = indcs.cke;
   auto &cnx1 = indcs.cnx1, &cnx2 = indcs.cnx2, &cnx3 = indcs.cnx3;
+  auto &nx1 = indcs.nx1, &nx2 = indcs.nx2, &nx3 = indcs.nx3;
+  auto &ng = indcs.ng;
+  int il = cis - ng, iu = cie + ng;
+  int jl = cjs,      ju = cje;
+  int kl = cks,      ku = cke;
+  if (pmy_mesh->multi_d) {
+    jl -= ng; ju += ng;
+  }
+  if (pmy_mesh->three_d) {
+    kl -= ng; ku += ng;
+  }
+
+  // loop over old MBs on this rank, initialize send buffers
   int sb_idx = 0;     // send buffer index
   for (int oldm=ombs; oldm<=ombe; oldm++) {
     int newm = oldtonew[oldm];
@@ -313,15 +309,17 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
           int ox1 = ((lloc.lx1 & 1) == 1);
           int ox2 = ((lloc.lx2 & 1) == 1);
           int ox3 = ((lloc.lx3 & 1) == 1);
-          send_buf[sb_idx].bis = is + (ox1  )*cnx1;
-          send_buf[sb_idx].bie = is + (ox1+1)*cnx1 - 1;
-          send_buf[sb_idx].bjs = js + (ox2  )*cnx2;
-          send_buf[sb_idx].bje = js + (ox2+1)*cnx2 - 1;
-          send_buf[sb_idx].bks = ks + (ox3  )*cnx3;
-          send_buf[sb_idx].bke = ks + (ox3+1)*cnx3 - 1;
-          send_buf[sb_idx].cntcc = cntcc_coar;
-          send_buf[sb_idx].cntfc = cntfc_coar;
-          send_buf[sb_idx].cnt   = (nvarcc*cntcc_coar + nvarfc*cntfc_coar);
+          send_buf[sb_idx].bis = il + ox1*cnx1;
+          send_buf[sb_idx].bie = iu + ox1*cnx1;
+          send_buf[sb_idx].bjs = jl + ox2*cnx2;
+          send_buf[sb_idx].bje = ju + ox2*cnx2;
+          send_buf[sb_idx].bks = kl + ox3*cnx3;
+          send_buf[sb_idx].bke = ku + ox3*cnx3;
+          send_buf[sb_idx].cntcc = (iu-il+1)*(ju-jl+1)*(ku-kl+1);
+          send_buf[sb_idx].cntfc = (iu-il+2)*(ju-jl+1)*(ku-kl+1) +
+               (iu-il+1)*(ju-jl+2)*(ku-kl+1) + (iu-il+1)*(ju-jl+1)*(ku-kl+2);
+          send_buf[sb_idx].cnt   = nvarcc*send_buf[sb_idx].cntcc +
+                                   nvarfc*send_buf[sb_idx].cntfc;
           send_buf[sb_idx].lid   = oldm - ombs;
           send_buf[sb_idx].refine = true;
           Kokkos::realloc(send_buf[sb_idx].vars, send_buf[sb_idx].cnt);
@@ -337,11 +335,8 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
           send_buf[sb_idx].bje = je;
           send_buf[sb_idx].bks = ks;
           send_buf[sb_idx].bke = ke;
-          send_buf[sb_idx].cntcc = cntcc_same;
-          send_buf[sb_idx].cntcc = cntfc_same;
-          send_buf[sb_idx].cnt   = (nvarcc*cntcc_same + nvarfc*cntfc_same);
-          send_buf[sb_idx].lid   = oldm - ombs;
-          Kokkos::realloc(send_buf[sb_idx].vars,(cntcc_same + cntfc_same));
+          send_buf[sb_idx].cntcc = nx1*nx2*nx3;
+          send_buf[sb_idx].cntfc = 3*nx1*nx2*nx3 + nx2*nx3 + nx1*nx3 + nx1*nx2;
         } else {                                // de-refinement
           send_buf[sb_idx].bis = cis;
           send_buf[sb_idx].bie = cie;
@@ -349,13 +344,14 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
           send_buf[sb_idx].bje = cje;
           send_buf[sb_idx].bks = cks;
           send_buf[sb_idx].bke = cke;
-          send_buf[sb_idx].cntcc = cntcc_coar;
-          send_buf[sb_idx].cntfc = cntfc_coar;
-          send_buf[sb_idx].cnt   = (nvarcc*cntcc_coar + nvarfc*cntfc_coar);
-          send_buf[sb_idx].lid = oldm - ombs;
+          send_buf[sb_idx].cntcc = cnx1*cnx2*cnx3;
+          send_buf[sb_idx].cntfc = 3*cnx1*cnx2*cnx3 + cnx2*cnx3 + cnx1*cnx3 + cnx1*cnx2;
           send_buf[sb_idx].derefine = true;
-          Kokkos::realloc(send_buf[sb_idx].vars, send_buf[sb_idx].cnt);
         }
+        send_buf[sb_idx].cnt = nvarcc*send_buf[sb_idx].cntcc +
+                               nvarfc*send_buf[sb_idx].cntfc;
+        send_buf[sb_idx].lid = oldm - ombs;
+        Kokkos::realloc(send_buf[sb_idx].vars, send_buf[sb_idx].cnt);
         sb_idx++;
       }
     }
