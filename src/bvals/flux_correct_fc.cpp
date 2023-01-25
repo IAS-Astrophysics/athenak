@@ -35,7 +35,7 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
   auto &cjs = pmy_pack->pmesh->mb_indcs.cjs;
   auto &cks = pmy_pack->pmesh->mb_indcs.cks;
 
-  int &my_rank = global_variable::my_rank;
+  int my_rank = global_variable::my_rank;
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &mbgid = pmy_pack->pmb->mb_gid;
   auto &mblev = pmy_pack->pmb->mb_lev;
