@@ -20,8 +20,6 @@ class EquationOfState;
 
 class Coordinates;
 
-class SourceTerms;
-
 class GeodesicGrid;
 
 class Driver;
@@ -74,7 +72,6 @@ namespace radiationfemn {
 
         bool rad_source;                // flag to enable/disable source terms for radiation, disabled by default
         bool beam_source;               // flag to enable/disable beam sources, disabled by default
-        SourceTerms *psrc = nullptr;    // pointer to source term
 
         // matrices for the angular grid
         DvceArray2D<Real> mass_matrix;             // mass matrix
@@ -155,6 +152,8 @@ namespace radiationfemn {
         TaskStatus ApplyFilterLanczos(Driver *pdriver, int stage);
 
         TaskStatus AddRadiationSourceTerm(Driver *d, int stage);
+
+        void AddBeamSource(DvceArray5D<Real> &i0);
 
         TaskStatus RestrictI(Driver *d, int stage);
 

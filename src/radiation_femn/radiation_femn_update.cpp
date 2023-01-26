@@ -52,10 +52,10 @@ namespace radiationfemn {
                     i0_(m, n, k, j, i) = gam0 * i0_(m, n, k, j, i) + gam1 * i1_(m, n, k, j, i) - beta_dt * divf_s;
                 });
 
-        // TODO: add explicit source terms
-        //if (psrc->source_terms_enabled) {
-        //    if (psrc->beam) psrc->AddBeamSource(i0_, beta_dt);
-        //}
+        // Add explicit source terms
+        if (beam_source) {
+            AddBeamSource(i0_);
+        }
 
         return TaskStatus::complete;
     }
