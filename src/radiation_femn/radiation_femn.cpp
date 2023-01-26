@@ -156,7 +156,6 @@ namespace radiationfemn {
 
     RadiationFEMN::~RadiationFEMN() {
         delete pbval_i;
-        if (psrc != nullptr) { delete psrc; }
     }
 
 } // namespace radiationfemn
