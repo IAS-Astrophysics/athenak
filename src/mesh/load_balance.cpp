@@ -91,7 +91,7 @@ void Mesh::LoadBalance(float *clist, int *rlist, int *slist, int *nlist, int nb)
 
 void MeshRefinement::InitRecvAMR(int nleaf) {
 #if MPI_PARALLEL_ENABLED
-  // count number of MeshBlocks received on this rank (loop over new MBs)
+  // count number of MeshBlocks received by this rank (loop over new MBs on this rank)
   nmb_recv = 0;
   int nmbs = new_gids_eachrank[global_variable::my_rank];
   int nmbe = nmbs + new_nmb_eachrank[global_variable::my_rank] - 1;
@@ -99,13 +99,15 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
     int oldm = newtoold[newm];
     LogicalLocation &old_lloc = pmy_mesh->lloc_eachmb[oldm];
     LogicalLocation &new_lloc = new_lloc_eachmb[newm];
-    if (old_lloc.level > new_lloc.level) {   // de-refinement
+    if (old_lloc.level > new_lloc.level) {  // old MB was de-refined
       for (int l=0; l<nleaf; l++) {
-        if (pmy_mesh->rank_eachmb[oldm+l] != global_variable::my_rank) {
+        // recv whenever root MB changes rank, or if any leaf on different rank than root
+        if ((pmy_mesh->rank_eachmb[oldm] != global_variable::my_rank) ||
+            (pmy_mesh->rank_eachmb[oldm+l] != global_variable::my_rank)) {
           nmb_recv++;
         }
       }
-    } else {
+    } else {                                // old MB at same level or was refined
       if (pmy_mesh->rank_eachmb[oldm] != global_variable::my_rank) {
         nmb_recv++;
       }
@@ -147,15 +149,17 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
   }
 
   // loop over new MBs on this rank, initialize recv buffers, and post non-blocking recvs
-  int rb_idx = 0;     // recv buffer index
+  int rb_idx = 0;   // recv buffer index
   bool no_errors=true;
   for (int newm=nmbs; newm<=nmbe; newm++) {
     int oldm = newtoold[newm];
     LogicalLocation &old_lloc = pmy_mesh->lloc_eachmb[oldm];
     LogicalLocation &new_lloc = new_lloc_eachmb[newm];
-    if (old_lloc.level > new_lloc.level) {   // de-refinement
+    if (old_lloc.level > new_lloc.level) {        // old MB was de-refined
       for (int l=0; l<nleaf; l++) {
-        if (pmy_mesh->rank_eachmb[oldm+l] != global_variable::my_rank) {
+        // recv whenever root MB changes rank, or if any leaf on different rank than root
+        if ((pmy_mesh->rank_eachmb[oldm] != global_variable::my_rank) ||
+            (pmy_mesh->rank_eachmb[oldm+l] != global_variable::my_rank)) {
           // initialize AMRBuffer data for de-refinement
           LogicalLocation &lloc = pmy_mesh->lloc_eachmb[oldm+l];
           int ox1 = ((lloc.lx1 & 1) == 1);
@@ -184,9 +188,9 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
           rb_idx++;
         }
       }
-    } else {   // same level or refinement
+    } else {
       if (pmy_mesh->rank_eachmb[oldm] != global_variable::my_rank) {
-        if (old_lloc.level == new_lloc.level) { // same level
+        if (old_lloc.level == new_lloc.level) {   // old MB at same level
           recv_buf[rb_idx].bis = is;
           recv_buf[rb_idx].bie = ie;
           recv_buf[rb_idx].bjs = js;
@@ -195,7 +199,7 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
           recv_buf[rb_idx].bke = ke;
           recv_buf[rb_idx].cntcc = nx1*nx2*nx3;
           recv_buf[rb_idx].cntfc = 3*nx1*nx2*nx3 + nx2*nx3 + nx1*nx3 + nx1*nx2;
-        } else {                                // refinement
+        } else {                                  // old MB was refined
           recv_buf[rb_idx].bis = il; // note il:iu etc. includes ghost zones
           recv_buf[rb_idx].bie = iu;
           recv_buf[rb_idx].bjs = jl;
@@ -241,7 +245,7 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
 
 void MeshRefinement::PackAndSendAMR(int nleaf) {
 #if MPI_PARALLEL_ENABLED
-  // count number of MeshBlocks to send on this rank (loop over old MBs)
+  // count number of MeshBlocks to send on this rank (loop over old MBs on this rank)
   nmb_send = 0;
   int ombs = pmy_mesh->gids_eachrank[global_variable::my_rank];
   int ombe = ombs + pmy_mesh->nmb_eachrank[global_variable::my_rank] - 1;
@@ -249,14 +253,20 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
     int newm = oldtonew[oldm];
     LogicalLocation &old_lloc = pmy_mesh->lloc_eachmb[oldm];
     LogicalLocation &new_lloc = new_lloc_eachmb[newm];
-    if (old_lloc.level < new_lloc.level) {   // refinement
+    if (old_lloc.level < new_lloc.level) {          // old MB was refined
       for (int l=0; l<nleaf; l++) {
         if (new_rank_eachmb[newm + l] != global_variable::my_rank) {
           nmb_send++;
         }
       }
-    } else {
+    } else if (old_lloc.level == new_lloc.level) {  // old MB on same level
       if (new_rank_eachmb[newm] != global_variable::my_rank) {
+        nmb_send++;
+      }
+    } else {                                        // old MB was de-refined
+      // send whenever root MB changes rank, or if any leaf on different rank than root
+      if ((pmy_mesh->rank_eachmb[newtoold[newm]] != global_variable::my_rank) ||
+          (new_rank_eachmb[newm] != global_variable::my_rank)) {
         nmb_send++;
       }
     }
@@ -297,12 +307,12 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
   }
 
   // loop over old MBs on this rank, initialize send buffers
-  int sb_idx = 0;     // send buffer index
+  int sb_idx = 0;   // send buffer index
   for (int oldm=ombs; oldm<=ombe; oldm++) {
     int newm = oldtonew[oldm];
     LogicalLocation &old_lloc = pmy_mesh->lloc_eachmb[oldm];
     LogicalLocation &new_lloc = new_lloc_eachmb[newm];
-    if (old_lloc.level < new_lloc.level) {   // refinement
+    if (old_lloc.level < new_lloc.level) {  // old MB was refined
       for (int l=0; l<nleaf; l++) {
         if (new_rank_eachmb[newm+l] != global_variable::my_rank) {
           LogicalLocation &lloc = new_lloc_eachmb[newm+l];
@@ -327,8 +337,8 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
         }
       }
     } else {   // same level or de-refinement
-      if (new_rank_eachmb[newm] != global_variable::my_rank) {
-        if (old_lloc.level == new_lloc.level) { // same level
+      if (old_lloc.level == new_lloc.level) { // old MB on same level
+        if (new_rank_eachmb[newm] != global_variable::my_rank) {
           send_buf[sb_idx].bis = is;
           send_buf[sb_idx].bie = ie;
           send_buf[sb_idx].bjs = js;
@@ -337,7 +347,16 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
           send_buf[sb_idx].bke = ke;
           send_buf[sb_idx].cntcc = nx1*nx2*nx3;
           send_buf[sb_idx].cntfc = 3*nx1*nx2*nx3 + nx2*nx3 + nx1*nx3 + nx1*nx2;
-        } else {                                // de-refinement
+          send_buf[sb_idx].cnt = nvarcc*send_buf[sb_idx].cntcc +
+                                 nvarfc*send_buf[sb_idx].cntfc;
+          send_buf[sb_idx].lid = oldm - ombs;
+          Kokkos::realloc(send_buf[sb_idx].vars, send_buf[sb_idx].cnt);
+          sb_idx++;
+        }
+      } else {                                // old MB was de-refined
+        // send whenever root MB changes rank, or if any leaf on different rank than root
+        if ((pmy_mesh->rank_eachmb[newtoold[newm]] != global_variable::my_rank) ||
+            (new_rank_eachmb[newm] != global_variable::my_rank)) {
           send_buf[sb_idx].bis = cis;
           send_buf[sb_idx].bie = cie;
           send_buf[sb_idx].bjs = cjs;
@@ -347,12 +366,12 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
           send_buf[sb_idx].cntcc = cnx1*cnx2*cnx3;
           send_buf[sb_idx].cntfc = 3*cnx1*cnx2*cnx3 + cnx2*cnx3 + cnx1*cnx3 + cnx1*cnx2;
           send_buf[sb_idx].derefine = true;
+          send_buf[sb_idx].cnt = nvarcc*send_buf[sb_idx].cntcc +
+                                 nvarfc*send_buf[sb_idx].cntfc;
+          send_buf[sb_idx].lid = oldm - ombs;
+          Kokkos::realloc(send_buf[sb_idx].vars, send_buf[sb_idx].cnt);
+          sb_idx++;
         }
-        send_buf[sb_idx].cnt = nvarcc*send_buf[sb_idx].cntcc +
-                               nvarfc*send_buf[sb_idx].cntfc;
-        send_buf[sb_idx].lid = oldm - ombs;
-        Kokkos::realloc(send_buf[sb_idx].vars, send_buf[sb_idx].cnt);
-        sb_idx++;
       }
     }
   }
@@ -373,14 +392,14 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
     nvarfc += 1;
   }
 
-  // Send data using MPI (loop over old MBs)
+  // Send data using MPI (loop over old MBs on this rank)
   bool no_errors=true;
   sb_idx = 0;     // send buffer index
   for (int oldm=ombs; oldm<=ombe; oldm++) {
     int newm = oldtonew[oldm];
     LogicalLocation &old_lloc = pmy_mesh->lloc_eachmb[oldm];
     LogicalLocation &new_lloc = new_lloc_eachmb[newm];
-    if (old_lloc.level < new_lloc.level) {   // refinement
+    if (old_lloc.level < new_lloc.level) {      // old MB was refined
       for (int l=0; l<nleaf; l++) {
         if (new_rank_eachmb[newm+l] != global_variable::my_rank) {
           // create tag using local ID of *receiving* MeshBlock
@@ -404,8 +423,8 @@ std::cout << "Send="<<sb_idx<<" size="<<data_size_coar<<" tag="<<tag<<" rank="<<
         }
       }
     } else {   // same level or de-refinement
-      if (new_rank_eachmb[newm] != global_variable::my_rank) {
-        if (old_lloc.level == new_lloc.level) {   // same level
+      if (old_lloc.level == new_lloc.level) {   // old MB at same level
+        if (new_rank_eachmb[newm] != global_variable::my_rank) {
           // create tag using local ID of *receiving* MeshBlock
           int lid = newm - new_gids_eachrank[new_rank_eachmb[newm]];
           int tag = CreateAMR_MPI_Tag(lid, 0, 0, 0);
@@ -413,14 +432,13 @@ std::cout << "Send="<<sb_idx<<" size="<<data_size_coar<<" tag="<<tag<<" rank="<<
           int ierr = MPI_Isend(send_buf[sb_idx].vars.data(), send_buf[sb_idx].cnt,
                      MPI_ATHENA_REAL, new_rank_eachmb[newm], tag, amr_comm,
                      &(send_buf[sb_idx].req));
-/***
-if (global_variable::my_rank == 0) {
-std::cout << "Send="<<sb_idx<<" size="<<send_buf[sb_idx].data_size<<" tag="<<tag<<" rank="<<new_rank_eachmb[newm]<<std::endl;
-}
-***/
           if (ierr != MPI_SUCCESS) {no_errors=false;}
           sb_idx++;
-        } else {                                // de-refinement
+        }
+      } else {                                  // old MB was de-refined
+        // send whenever root MB changes rank, or if any leaf on different rank than root
+        if ((pmy_mesh->rank_eachmb[newtoold[newm]] != global_variable::my_rank) ||
+            (new_rank_eachmb[newm] != global_variable::my_rank)) {
           // create tag using local ID of *receiving* MeshBlock
           int ox1 = ((old_lloc.lx1 & 1) == 1);
           int ox2 = ((old_lloc.lx2 & 1) == 1);
@@ -431,11 +449,6 @@ std::cout << "Send="<<sb_idx<<" size="<<send_buf[sb_idx].data_size<<" tag="<<tag
           int ierr = MPI_Isend(send_buf[sb_idx].vars.data(), send_buf[sb_idx].cnt,
                      MPI_ATHENA_REAL, new_rank_eachmb[newm], tag, amr_comm,
                      &(send_buf[sb_idx].req));
-/***
-if (global_variable::my_rank == 0) {
-std::cout << "Send="<<sb_idx<<" size="<<send_buf[sb_idx].data_size<<" tag="<<tag<<" rank="<<new_rank_eachmb[newm]<<" ox1/2/3="<<ox1<<" "<<ox2<<" "<<ox3<<std::endl;
-}
-***/
           if (ierr != MPI_SUCCESS) {no_errors=false;}
           sb_idx++;
         }
@@ -661,7 +674,7 @@ void MeshRefinement::UnpackAMRBuffersCC(DvceArray5D<Real> &a, DvceArray5D<Real> 
                                         int ncc, int nfc) {
 #if MPI_PARALLEL_ENABLED
   auto &rbuf = recv_buf;
-  // Outer loop over (# of MeshBlocks sent)*(# of variables)
+  // Outer loop over (# of MeshBlocks recv)*(# of variables)
   int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
   int nnv = nmb_recv*nvar;
   Kokkos::TeamPolicy<> policy(DevExeSpace(), nnv, Kokkos::AUTO);
@@ -709,7 +722,7 @@ void MeshRefinement::UnpackAMRBuffersFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Re
                                         int ncc, int nfc) {
 #if MPI_PARALLEL_ENABLED
   auto &rbuf = recv_buf;
-  // Outer loop over (# of MeshBlocks sent)*(3 compnts of field)
+  // Outer loop over (# of MeshBlocks recv)*(3 compnts of field)
   int nnv = 3*nmb_recv;
   Kokkos::TeamPolicy<> policy(DevExeSpace(), nnv, Kokkos::AUTO);
   Kokkos::parallel_for("SendBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {

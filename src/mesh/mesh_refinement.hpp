@@ -88,16 +88,14 @@ class MeshRefinement {
   void UpdateMeshBlockTree(int &nnew, int &ndel);
   void RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, int ndel);
 
-  void DerefineCCSameRank(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, int nleaf);
-  void DerefineFCSameRank(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb, int nleaf);
+  void DerefineCCSameRank(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
+  void DerefineFCSameRank(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
 
-  void MoveLeftCC(DvceArray5D<Real> &a);
-  void MoveLeftFC(DvceFaceFld4D<Real> &b);
-  void MoveRightCC(DvceArray5D<Real> &a);
-  void MoveRightFC(DvceFaceFld4D<Real> &b);
+  void CopyCC(DvceArray5D<Real> &a);
+  void CopyFC(DvceFaceFld4D<Real> &b);
 
-  void MoveForRefinementCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, int nleaf);
-  void MoveForRefinementFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb, int nleaf);
+  void CopyForRefinementCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
+  void CopyForRefinementFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
 
   void RefineCC(DualArray1D<int> &n2o, DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
   void RefineFC(DualArray1D<int> &n2o, DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
