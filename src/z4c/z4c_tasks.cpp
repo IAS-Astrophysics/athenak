@@ -40,8 +40,8 @@ void Z4c::AssembleZ4cTasks(TaskList &start, TaskList &run, TaskList &end) {
   id.irecv = start.AddTask(&Z4c::InitRecv, this, none);
 
   // run task list
-  id.ptrack = run.AddTask(&Z4c::PunctureTracker, this, none);
-  id.copyu = run.AddTask(&Z4c::CopyU, this, id.ptrack);
+  // id.ptrack = run.AddTask(&Z4c::PunctureTracker, this, none);
+  id.copyu = run.AddTask(&Z4c::CopyU, this, none); // id.ptrack);
 
   switch (indcs.ng) {
       case 2: id.crhs  = run.AddTask(&Z4c::CalcRHS<2>, this, id.copyu);
@@ -63,7 +63,8 @@ void Z4c::AssembleZ4cTasks(TaskList &start, TaskList &run, TaskList &end) {
   // id.admc  = run.AddTask(&Z4c::ADMConstraints_, this, id.z4tad);
   id.newdt = run.AddTask(&Z4c::NewTimeStep, this, id.algc);
   // end task list
-  id.clear = end.AddTask(&Z4c::ClearSend, this, none);
+  id.csend = end.AddTask(&Z4c::ClearSend, this, none);
+  id.crecv = end.AddTask(&Z4c::ClearRecv, this, id.csend);
 
   if (pmy_pack->pmesh->ncycle%64 == 0) {
     // place holder for horizon finder
@@ -80,6 +81,11 @@ TaskStatus Z4c::InitRecv(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_u->InitRecv(N_Z4c);
   if (tstat != TaskStatus::complete) return tstat;
 
+  // with SMR/AMR post receives for fluxes of U
+  // do not post receives for fluxes when stage < 0 (i.e. ICs)
+  if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
+    tstat = pbval_u->InitFluxRecv(N_Z4c);
+  }
   return tstat;
 }
 
@@ -91,6 +97,11 @@ TaskStatus Z4c::ClearRecv(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_u->ClearRecv();
   if (tstat != TaskStatus::complete) return tstat;
 
+  // with SMR/AMR check receives of restricted fluxes of U complete
+  // do not check flux receives when stage < 0 (i.e. ICs)
+  if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
+    tstat = pbval_u->ClearFluxRecv();
+  }
   return tstat;
 }
 
@@ -102,6 +113,11 @@ TaskStatus Z4c::ClearSend(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_u->ClearSend();
   if (tstat != TaskStatus::complete) return tstat;
 
+  // with SMR/AMR check sends of restricted fluxes of U complete
+  // do not check flux send for ICs (stage < 0)
+  if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
+    tstat = pbval_u->ClearFluxSend();
+  }
   return tstat;
 }
 
@@ -204,10 +220,10 @@ TaskStatus Z4c::ADMConstraints_(Driver *pdrive, int stage) {
 //  \brief
 
 TaskStatus Z4c::RestrictU(Driver *pdrive, int stage) {
-  // Only execute this function with SMR/SMR
-  if (!(pmy_pack->pmesh->multilevel)) return TaskStatus::complete;
-
-  pmy_pack->pmesh->pmr->RestrictCC(u0, coarse_u0);
+  // Only execute Mesh function with SMR/SMR
+  if (pmy_pack->pmesh->multilevel) {
+    pmy_pack->pmesh->pmr->RestrictCC(u0, coarse_u0);
+  }
   return TaskStatus::complete;
 }
 
