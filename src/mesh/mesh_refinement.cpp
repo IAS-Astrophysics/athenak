@@ -899,25 +899,23 @@ void MeshRefinement::CopyForRefinementCC(DvceArray5D<Real> &a, DvceArray5D<Real>
   for (int newm=nmbs; newm<=nmbe; ++newm) {
     int oldm = newtoold[newm];
     if (refine_flag.h_view(oldm) > 0) {
-      // only copy if old location of MB on this rank
-      if (pmy_mesh->rank_eachmb[oldm] == global_variable::my_rank) {
+      // only copy if old and new location of MB on this rank
+      if ((new_rank_eachmb[oldtonew[oldm]] == global_variable::my_rank) &&
+          (new_rank_eachmb[newm] == global_variable::my_rank)) {
         int msrc = oldtonew[oldm] - nmbs;
         int mdst = newm - nmbs;
-        // only copy data if target array on this rank
-        if (new_rank_eachmb[newm] == global_variable::my_rank) {
-          LogicalLocation &lloc = new_lloc_eachmb[newm];
-          int ox1 = ((lloc.lx1 & 1) == 1);
-          int ox2 = ((lloc.lx2 & 1) == 1);
-          int ox3 = ((lloc.lx3 & 1) == 1);
-          std::pair<int,int> isrc = std::make_pair((il + ox1*cnx1),(iu+1 + ox1*cnx1));
-          std::pair<int,int> jsrc = std::make_pair((jl + ox2*cnx2),(ju+1 + ox2*cnx2));
-          std::pair<int,int> ksrc = std::make_pair((kl + ox3*cnx3),(ku+1 + ox3*cnx3));
+        LogicalLocation &lloc = new_lloc_eachmb[newm];
+        int ox1 = ((lloc.lx1 & 1) == 1);
+        int ox2 = ((lloc.lx2 & 1) == 1);
+        int ox3 = ((lloc.lx3 & 1) == 1);
+        std::pair<int,int> isrc = std::make_pair((il + ox1*cnx1),(iu+1 + ox1*cnx1));
+        std::pair<int,int> jsrc = std::make_pair((jl + ox2*cnx2),(ju+1 + ox2*cnx2));
+        std::pair<int,int> ksrc = std::make_pair((kl + ox3*cnx3),(ku+1 + ox3*cnx3));
 
-          // copy data in MBs to be refined to coarse arrays in target MBs
-          auto src = Kokkos::subview( a,msrc,Kokkos::ALL,ksrc,jsrc,isrc);
-          auto dst = Kokkos::subview(ca,mdst,Kokkos::ALL,kdst,jdst,idst);
-          Kokkos::deep_copy(DevExeSpace(), dst, src);
-        }
+        // copy data in MBs to be refined to coarse arrays in target MBs
+        auto src = Kokkos::subview( a,msrc,Kokkos::ALL,ksrc,jsrc,isrc);
+        auto dst = Kokkos::subview(ca,mdst,Kokkos::ALL,kdst,jdst,idst);
+        Kokkos::deep_copy(DevExeSpace(), dst, src);
       }
     }
   }
@@ -956,34 +954,32 @@ void MeshRefinement::CopyForRefinementFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<R
   for (int newm=nmbs; newm<=nmbe; ++newm) {
     int oldm = newtoold[newm];
     if (refine_flag.h_view(oldm) > 0) {
-      // only copy if old location of MB on this rank
-      if (pmy_mesh->rank_eachmb[oldm] == global_variable::my_rank) {
+      // only copy if old and new location of MB on this rank
+      if ((new_rank_eachmb[oldtonew[oldm]] == global_variable::my_rank) &&
+          (new_rank_eachmb[newm] == global_variable::my_rank)) {
         int msrc = oldtonew[oldm] - nmbs;
         int mdst = newm - nmbs;
-        // only copy data if target array on this rank
-        if (new_rank_eachmb[newm] == global_variable::my_rank) {
-          LogicalLocation &lloc = new_lloc_eachmb[newm];
-          int ox1 = ((lloc.lx1 & 1) == 1);
-          int ox2 = ((lloc.lx2 & 1) == 1);
-          int ox3 = ((lloc.lx3 & 1) == 1);
-          std::pair<int,int> isrc  = std::make_pair((il + ox1*cnx1),(iu+1 + ox1*cnx1  ));
-          std::pair<int,int> isrc1 = std::make_pair((il + ox1*cnx1),(iu+1 + ox1*cnx1+1));
-          std::pair<int,int> jsrc  = std::make_pair((jl + ox2*cnx2),(ju+1 + ox2*cnx2  ));
-          std::pair<int,int> jsrc1 = std::make_pair((jl + ox2*cnx2),(ju+1 + ox2*cnx2+1));
-          std::pair<int,int> ksrc  = std::make_pair((kl + ox3*cnx3),(ku+1 + ox3*cnx3  ));
-          std::pair<int,int> ksrc1 = std::make_pair((kl + ox3*cnx3),(ku+1 + ox3*cnx3+1));
+        LogicalLocation &lloc = new_lloc_eachmb[newm];
+        int ox1 = ((lloc.lx1 & 1) == 1);
+        int ox2 = ((lloc.lx2 & 1) == 1);
+        int ox3 = ((lloc.lx3 & 1) == 1);
+        std::pair<int,int> isrc  = std::make_pair((il + ox1*cnx1),(iu+1 + ox1*cnx1  ));
+        std::pair<int,int> isrc1 = std::make_pair((il + ox1*cnx1),(iu+1 + ox1*cnx1+1));
+        std::pair<int,int> jsrc  = std::make_pair((jl + ox2*cnx2),(ju+1 + ox2*cnx2  ));
+        std::pair<int,int> jsrc1 = std::make_pair((jl + ox2*cnx2),(ju+1 + ox2*cnx2+1));
+        std::pair<int,int> ksrc  = std::make_pair((kl + ox3*cnx3),(ku+1 + ox3*cnx3  ));
+        std::pair<int,int> ksrc1 = std::make_pair((kl + ox3*cnx3),(ku+1 + ox3*cnx3+1));
 
-          // copy data in MBs to be refined to coarse arrays in target MBs
-          auto src1 = Kokkos::subview( b.x1f,msrc,ksrc,jsrc,isrc1);
-          auto dst1 = Kokkos::subview(cb.x1f,mdst,kdst,jdst,idst1);
-          Kokkos::deep_copy(DevExeSpace(), dst1, src1);
-          auto src2 = Kokkos::subview( b.x2f,msrc,ksrc,jsrc1,isrc);
-          auto dst2 = Kokkos::subview(cb.x2f,mdst,kdst,jdst1,idst);
-          Kokkos::deep_copy(DevExeSpace(), dst2, src2);
-          auto src3 = Kokkos::subview( b.x3f,msrc,ksrc1,jsrc,isrc);
-          auto dst3 = Kokkos::subview(cb.x3f,mdst,kdst1,jdst,idst);
-          Kokkos::deep_copy(DevExeSpace(), dst3, src3);
-        }
+        // copy data in MBs to be refined to coarse arrays in target MBs
+        auto src1 = Kokkos::subview( b.x1f,msrc,ksrc,jsrc,isrc1);
+        auto dst1 = Kokkos::subview(cb.x1f,mdst,kdst,jdst,idst1);
+        Kokkos::deep_copy(DevExeSpace(), dst1, src1);
+        auto src2 = Kokkos::subview( b.x2f,msrc,ksrc,jsrc1,isrc);
+        auto dst2 = Kokkos::subview(cb.x2f,mdst,kdst,jdst1,idst);
+        Kokkos::deep_copy(DevExeSpace(), dst2, src2);
+        auto src3 = Kokkos::subview( b.x3f,msrc,ksrc1,jsrc,isrc);
+        auto dst3 = Kokkos::subview(cb.x3f,mdst,kdst1,jdst,idst);
+        Kokkos::deep_copy(DevExeSpace(), dst3, src3);
       }
     }
   }

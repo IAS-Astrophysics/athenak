@@ -119,6 +119,11 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
       }
     }
   }
+
+/**
+std::cout<<"Rank="<<global_variable::my_rank<<" nrecv="<<nmb_recv<<std::endl;
+***/
+
   if (nmb_recv == 0) return;  // nothing to do
 
   // allocate array of recv buffers
@@ -291,6 +296,11 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
       }
     }
   }
+
+/**
+std::cout<<"Rank="<<global_variable::my_rank<<" nsend="<<nmb_send<<std::endl;
+***/
+
   if (nmb_send == 0) return;  // nothing to do
 
   // allocate array of send buffers
