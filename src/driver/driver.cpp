@@ -418,14 +418,11 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
       pmesh->time = pmesh->time + pmesh->dt;
       pmesh->ncycle++;
       nmb_updated_ += pmesh->nmb_total;
-
       // with AMR, check for mesh refinement every ncycle_amr steps
       if (pmesh->adaptive) {
         MeshBlockPack* pmbp = pmesh->pmb_pack;
         bool update_mesh = pmesh->pmr->CheckForRefinement(pmbp);
-        std::cout << "update_mesh status: " << update_mesh << std::endl;
         if (update_mesh) pmesh->pmr->AdaptiveMeshRefinement(this, pin);
-        std::cout << "refinement complete" << std::endl;
       }
 
       // once all MeshBlocks refined/de-refined, then compute new timestep
@@ -524,7 +521,6 @@ void Driver::OutputCycleDiagnostics(Mesh *pm) {
 
 void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
   // Note: with MPI, sends on ALL MBs must be complete before receives execute
-
   // Initialize HYDRO: ghost zones and primitive variables (everywhere)
   hydro::Hydro *phydro = pm->pmb_pack->phydro;
   if (phydro != nullptr) {
@@ -566,6 +562,19 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) prad->ClearRecv(this, -1);
     (void) prad->RecvI(this, 0);
     (void) prad->ApplyPhysicalBCs(this, 0);
+  }
+
+  // Initialize Z4c
+  z4c::Z4c *pz4c = pm->pmb_pack->pz4c;
+  if (pz4c != nullptr) {
+    (void) pz4c->RestrictU(this, 0);
+    (void) pz4c->InitRecv(this, -1);  // stage < 0 suppresses InitFluxRecv
+    (void) pz4c->SendU(this, 0);
+    (void) pz4c->ClearSend(this, -1);
+    (void) pz4c->ClearRecv(this, -1);
+    (void) pz4c->RecvU(this, 0);
+    (void) pz4c->Z4cBoundaryRHS(this, 0);
+    (void) pz4c->ApplyPhysicalBCs(this, 0);
   }
   return;
 }

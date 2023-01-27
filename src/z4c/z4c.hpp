@@ -48,7 +48,8 @@ struct Z4cTaskIDs {
   TaskID algc;
   TaskID z4tad;
   TaskID admc;
-  TaskID clear;
+  TaskID csend;
+  TaskID crecv;
   TaskID restu;
   TaskID ptrack;
 };
@@ -109,7 +110,7 @@ class Z4c {
   DvceArray5D<Real> coarse_u0; // coarse representation of z4c solution
   
   // puncture location
-  Real ppos[3] = {0.1,0.,0.}; // later on initiate from input file
+  Real ppos[3] = {0.,0.,0.}; // later on initiate from input file
 #if TWO_PUNCTURES
   // second puncture location
   Real ppos2[3] = {0.,0.,0.}; // later on initiate from input file

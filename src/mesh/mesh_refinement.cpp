@@ -235,7 +235,6 @@ bool MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
   for (int m=0; m<nmb; ++m) {
     if (refine_flag.h_view(m) != 0) {return_flag = true;}
   }
-  std::cout << "return flag status: " << return_flag << std::endl;
   return return_flag;
 }
 
