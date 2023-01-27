@@ -508,7 +508,7 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
     std::exit(EXIT_FAILURE);
   }
 
-/***/
+/***
 if (global_variable::my_rank == 0) {
 std::cout <<"  CYCLE = "<<pmy_mesh->ncycle<<std::endl;
 for (int i=0; i<old_nmb; ++i) {
@@ -519,7 +519,7 @@ std::cout<<"newm="<<i<<" rank="<<new_rank_eachmb[i]<<"  new_to_old="<<newtoold[i
 }
 }
 MPI_Barrier(MPI_COMM_WORLD);
-/***/
+***/
 
   // Step 4.
   // Allocate send/recv buffers for load balancing, post receives.
@@ -875,11 +875,6 @@ void MeshRefinement::CopyFC(DvceFaceFld4D<Real> &b) {
 //! there).  Only operates on MBs on the same rank.
 
 void MeshRefinement::CopyForRefinementCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca){
-  // nleaf = number of leaf MeshBlocks per refined block
-  int nleaf = 2;
-  if (pmy_mesh->two_d) nleaf = 4;
-  if (pmy_mesh->three_d) nleaf = 8;
-
   auto &indcs = pmy_mesh->mb_indcs;
   auto &ng = indcs.ng;
   int il = indcs.cis - ng, iu = indcs.cie + ng;
@@ -898,18 +893,19 @@ void MeshRefinement::CopyForRefinementCC(DvceArray5D<Real> &a, DvceArray5D<Real>
   std::pair<int,int> jdst = std::make_pair(jl,ju+1);
   std::pair<int,int> kdst = std::make_pair(kl,ku+1);
 
-  // loop over old MBs on this rank
-  int ombs = pmy_mesh->gids_eachrank[global_variable::my_rank];
-  int ombe = ombs + pmy_mesh->nmb_eachrank[global_variable::my_rank] - 1;
-  for (int oldm=ombs; oldm<=ombe; ++oldm) {
+  // loop over new MBs on this rank
+  int nmbs = new_gids_eachrank[global_variable::my_rank];
+  int nmbe = nmbs + new_nmb_eachrank[global_variable::my_rank] - 1;
+  for (int newm=nmbs; newm<=nmbe; ++newm) {
+    int oldm = newtoold[newm];
     if (refine_flag.h_view(oldm) > 0) {
-      int newm = oldtonew[oldm];
-      int msrc = newm - new_gids_eachrank[global_variable::my_rank];
-      for (int l=0; l<nleaf; l++) {
-        // only move data if target array on this rank
-        if (new_rank_eachmb[newm + l] == global_variable::my_rank) {
-          int mdst = msrc + l;
-          LogicalLocation &lloc = new_lloc_eachmb[newm + l];
+      // only copy if old location of MB on this rank
+      if (pmy_mesh->rank_eachmb[oldm] == global_variable::my_rank) {
+        int msrc = oldtonew[oldm] - nmbs;
+        int mdst = newm - nmbs;
+        // only copy data if target array on this rank
+        if (new_rank_eachmb[newm] == global_variable::my_rank) {
+          LogicalLocation &lloc = new_lloc_eachmb[newm];
           int ox1 = ((lloc.lx1 & 1) == 1);
           int ox2 = ((lloc.lx2 & 1) == 1);
           int ox3 = ((lloc.lx3 & 1) == 1);
@@ -933,11 +929,6 @@ void MeshRefinement::CopyForRefinementCC(DvceArray5D<Real> &a, DvceArray5D<Real>
 //! \brief Same as CopyForRefinementCC, but for face-centered arrays
 
 void MeshRefinement::CopyForRefinementFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb){
-  // nleaf = number of leaf MeshBlocks per refined block
-  int nleaf = 2;
-  if (pmy_mesh->two_d) nleaf = 4;
-  if (pmy_mesh->three_d) nleaf = 8;
-
   auto &indcs = pmy_mesh->mb_indcs;
   auto &ng = indcs.ng;
   int il = indcs.cis - ng, iu = indcs.cie + ng;
@@ -959,18 +950,19 @@ void MeshRefinement::CopyForRefinementFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<R
   std::pair<int,int> kdst  = std::make_pair(kl,ku+1);
   std::pair<int,int> kdst1 = std::make_pair(kl,ku+2);
 
-  // loop over old MBs on this rank
-  int ombs = pmy_mesh->gids_eachrank[global_variable::my_rank];
-  int ombe = ombs + pmy_mesh->nmb_eachrank[global_variable::my_rank] - 1;
-  for (int oldm=ombs; oldm<=ombe; ++oldm) {
+  // loop over new MBs on this rank
+  int nmbs = new_gids_eachrank[global_variable::my_rank];
+  int nmbe = nmbs + new_nmb_eachrank[global_variable::my_rank] - 1;
+  for (int newm=nmbs; newm<=nmbe; ++newm) {
+    int oldm = newtoold[newm];
     if (refine_flag.h_view(oldm) > 0) {
-      int newm = oldtonew[oldm];
-      int msrc = newm - new_gids_eachrank[global_variable::my_rank];
-      for (int l=0; l<nleaf; l++) {
-        // only move data if target array on this rank
-        if (new_rank_eachmb[newm + l] == global_variable::my_rank) {
-          int mdst = msrc + l;
-          LogicalLocation &lloc = new_lloc_eachmb[newm + l];
+      // only copy if old location of MB on this rank
+      if (pmy_mesh->rank_eachmb[oldm] == global_variable::my_rank) {
+        int msrc = oldtonew[oldm] - nmbs;
+        int mdst = newm - nmbs;
+        // only copy data if target array on this rank
+        if (new_rank_eachmb[newm] == global_variable::my_rank) {
+          LogicalLocation &lloc = new_lloc_eachmb[newm];
           int ox1 = ((lloc.lx1 & 1) == 1);
           int ox2 = ((lloc.lx2 & 1) == 1);
           int ox3 = ((lloc.lx3 & 1) == 1);
