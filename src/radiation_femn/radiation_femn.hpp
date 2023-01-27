@@ -151,6 +151,12 @@ namespace radiationfemn {
 
         TaskStatus ApplyFilterLanczos(Driver *pdriver, int stage);
 
+        template<size_t N>
+        void CGSolve(double (&A)[N][N], double (&b)[N], double (&xinit)[N], double (&x)[N], double tolerance = 1e-6);
+
+        template<size_t N>
+        void CGMatrixInverse(double (&mat)[N][N], double (&guess)[N][N], double (&matinv)[N][N]);
+
         TaskStatus AddRadiationSourceTerm(Driver *d, int stage);
 
         void AddBeamSource(DvceArray5D<Real> &i0);
