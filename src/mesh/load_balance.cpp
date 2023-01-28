@@ -857,8 +857,8 @@ void MeshRefinement::UnpackAMRBuffersFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Re
 //! \brief Checks all non-blocking sends completed, deletes send buffers.
 
 void MeshRefinement::ClearSendAMR() {
-  bool no_errors=true;
 #if MPI_PARALLEL_ENABLED
+  bool no_errors=true;
   for (int n=0; n<nmb_send; ++n) {
     int ierr = MPI_Wait(&(send_buf[n].req), MPI_STATUS_IGNORE);
     if (ierr != MPI_SUCCESS) {no_errors=false;}

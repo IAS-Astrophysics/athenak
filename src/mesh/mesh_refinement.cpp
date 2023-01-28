@@ -1001,7 +1001,6 @@ void MeshRefinement::RefineCC(DualArray1D<int> &n2o, DvceArray5D<Real> &a,
   auto &cis = indcs.cis, &cie = indcs.cie;
   auto &cjs = indcs.cjs, &cje = indcs.cje;
   auto &cks = indcs.cks, &cke = indcs.cke;
-  auto &cnx1 = indcs.cnx1, &cnx2 = indcs.cnx2, &cnx3 = indcs.cnx3;
 
   auto &refine_flag_ = refine_flag;
   bool &multi_d = pmy_mesh->multi_d;
@@ -1051,13 +1050,12 @@ void MeshRefinement::RefineFC(DualArray1D<int> &n2o, DvceFaceFld4D<Real> &b,
                               DvceFaceFld4D<Real> &cb) {
   auto &new_nmb = new_nmb_eachrank[global_variable::my_rank];;
   auto &indcs = pmy_mesh->mb_indcs;
-  auto &is = indcs.is, &ie = indcs.ie;
-  auto &js = indcs.js, &je = indcs.je;
-  auto &ks = indcs.ks, &ke = indcs.ke;
+  auto &is = indcs.is;
+  auto &js = indcs.js;
+  auto &ks = indcs.ks;
   auto &cis = indcs.cis, &cie = indcs.cie;
   auto &cjs = indcs.cjs, &cje = indcs.cje;
   auto &cks = indcs.cks, &cke = indcs.cke;
-  auto &cnx1 = indcs.cnx1, &cnx2 = indcs.cnx2, &cnx3 = indcs.cnx3;
 
   // First prolongate face-centered fields at shared faces betwen fine and coarse cells
   auto &refine_flag_ = refine_flag;
