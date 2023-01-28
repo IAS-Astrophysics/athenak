@@ -244,7 +244,7 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
   }
 
   // Quit if MPI error detected
-  if (no_errors == false) {
+  if (!(no_errors)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
        << std::endl << "MPI error in posting non-blocking receives with AMR" << std::endl;
     std::exit(EXIT_FAILURE);
@@ -475,7 +475,7 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
   }
 
   // Quit if MPI error detected
-  if (no_errors == false) {
+  if (!(no_errors)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "MPI error in posting non-blocking receives with AMR"
               << std::endl;
@@ -653,7 +653,7 @@ void MeshRefinement::RecvAndUnpackAMR() {
     if (ierr != MPI_SUCCESS) {no_errors=false;}
   }
   // Quit if MPI error detected
-  if (no_errors == false) {
+  if (!(no_errors)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "MPI error in posting non-blocking receives with AMR"
               << std::endl;
@@ -848,7 +848,7 @@ void MeshRefinement::ClearSendAMR() {
     if (ierr != MPI_SUCCESS) {no_errors=false;}
   }
   // Quit if MPI error detected
-  if (no_errors == false) {
+  if (!(no_errors)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "MPI error in clearing non-blocking sends with AMR"
               << std::endl;
