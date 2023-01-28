@@ -42,7 +42,7 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
   int nnghbr = pmy_pack->pmb->nnghbr;
   int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
 
-  {int &my_rank = global_variable::my_rank;
+  {int my_rank = global_variable::my_rank;
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &mbgid = pmy_pack->pmb->mb_gid;
   auto &mblev = pmy_pack->pmb->mb_lev;
@@ -143,7 +143,7 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
 
   // Send boundary buffer to neighboring MeshBlocks using MPI
 
-  int &my_rank = global_variable::my_rank;
+  int my_rank = global_variable::my_rank;
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &rbuf = recv_buf;
 
