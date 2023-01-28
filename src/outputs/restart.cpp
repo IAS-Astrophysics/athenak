@@ -216,8 +216,8 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
 
   // write cell-centered variables in parallel
   IOWrapperSizeT myoffset  = step1size + step2size + sizeof(IOWrapperSizeT) +
-                             sizeof(RNG_State) +
                              data_size*(pm->gids_eachrank[global_variable::my_rank]);
+  if (pturb != nullptr) myoffset += sizeof(RNG_State);
 
   // write cell-centered variables, one MeshBlock at a time (but parallelized over all
   // ranks). MeshBlocks are written seperately to reduce number of data elements per write

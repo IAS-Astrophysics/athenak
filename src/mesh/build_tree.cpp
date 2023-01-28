@@ -230,25 +230,6 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
 
   // initial mesh hierarchy construction is completed here
   ptree->CountMeshBlocks(nmb_total);
-  nmb_maxperrank = nmb_total;
-  if (adaptive) {
-    if (pin->DoesParameterExist("mesh_refinement", "max_nmb_per_rank")) {
-      nmb_maxperrank = pin->GetReal("mesh_refinement", "max_nmb_per_rank");
-      if (nmb_maxperrank < nmb_total) {
-        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-          << std::endl << "Root grid requires more MeshBlocks (nmb_total=" << nmb_total
-          << ") than specified by <mesh_refinement>/max_nmb_per_rank="
-          << nmb_maxperrank << std::endl;
-        std::exit(EXIT_FAILURE);
-      }
-    } else {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-        << std::endl << "With AMR maximum number of MeshBlocks per rank must be "
-        << "specified in input file using <mesh_refinement>/max_nmb_per_rank"
-        << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-  }
 
   cost_eachmb = new float[nmb_total];
   rank_eachmb = new int[nmb_total];
@@ -282,6 +263,27 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
   pmb_pack = new MeshBlockPack(this, mbp_gids, mbp_gide);
   pmb_pack->AddMeshBlocks(pin);
   pmb_pack->pmb->SetNeighbors(ptree, rank_eachmb);
+
+  // Fix maximum number of MeshBlocks per rank with AMR
+  nmb_maxperrank = nmb_thisrank;
+  if (adaptive) {
+    if (pin->DoesParameterExist("mesh_refinement", "max_nmb_per_rank")) {
+      nmb_maxperrank = pin->GetReal("mesh_refinement", "max_nmb_per_rank");
+      if (nmb_maxperrank < nmb_thisrank) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+          << std::endl << "On rank=" << global_variable::my_rank << " Root grid requires "
+          << "more MeshBlocks (nmb_thisrank=" << nmb_thisrank << ") than specified by "
+          << "<mesh_refinement>/max_nmb_per_rank=" << nmb_maxperrank << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+    } else {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+        << std::endl << "With AMR maximum number of MeshBlocks per rank must be "
+        << "specified in input file using <mesh_refinement>/max_nmb_per_rank"
+        << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
 
   // Create new MeshRefinement object with either SMR or AMR (SMR needs Restrict fns)
   if (multilevel) {
@@ -368,26 +370,6 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile) {
   } else {
     max_level = 31;
   }
-  nmb_maxperrank = nmb_total;
-
-  if (adaptive) {
-    if (pin->DoesParameterExist("mesh_refinement", "max_nmb_per_rank")) {
-      nmb_maxperrank = pin->GetReal("mesh_refinement", "max_nmb_per_rank");
-      if (nmb_maxperrank < nmb_total) {
-        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-          << std::endl << "Root grid requires more MeshBlocks (nmb_total=" << nmb_total
-          << ") than specified by <mesh_refinement>/max_nmb_per_rank="
-          << nmb_maxperrank << std::endl;
-        std::exit(EXIT_FAILURE);
-      }
-    } else {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-        << std::endl << "With AMR maximum number of MeshBlocks per device must be "
-        << "specified in input file using <mesh_refinement>/max_nmb_per_rank"
-        << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-  }
 
   // allocate memory for lists read from restart
   cost_eachmb = new float[nmb_total];
@@ -465,6 +447,26 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile) {
   pmb_pack = new MeshBlockPack(this, mbp_gids, mbp_gide);
   pmb_pack->AddMeshBlocks(pin);
   pmb_pack->pmb->SetNeighbors(ptree, rank_eachmb);
+
+  // Fix maximum number of MeshBlocks per rank with AMR
+  nmb_maxperrank = nmb_thisrank;
+  if (adaptive) {
+    if (pin->DoesParameterExist("mesh_refinement", "max_nmb_per_rank")) {
+      nmb_maxperrank = pin->GetReal("mesh_refinement", "max_nmb_per_rank");
+      if (nmb_maxperrank < nmb_thisrank) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+          << std::endl << "On rank=" << global_variable::my_rank << " Root grid requires "          << "more MeshBlocks (nmb_thisrank=" << nmb_thisrank << ") than specified by "
+          << "<mesh_refinement>/max_nmb_per_rank=" << nmb_maxperrank << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+    } else {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+        << std::endl << "With AMR maximum number of MeshBlocks per rank must be "
+        << "specified in input file using <mesh_refinement>/max_nmb_per_rank"
+        << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
 
   // Create new MeshRefinement object with either SMR or AMR (SMR needs Restrict fns)
   if (multilevel) {
