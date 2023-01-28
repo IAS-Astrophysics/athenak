@@ -166,7 +166,6 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
         // recv whenever root MB changes rank, or if any leaf on different rank than root
         if ((pmy_mesh->rank_eachmb[oldm] != global_variable::my_rank) ||
             (pmy_mesh->rank_eachmb[oldm+l] != global_variable::my_rank)) {
-          // initialize AMRBuffer data for de-refinement
           LogicalLocation &lloc = pmy_mesh->lloc_eachmb[oldm+l];
           int ox1 = ((lloc.lx1 & 1) == 1);
           int ox2 = ((lloc.lx2 & 1) == 1);
@@ -341,7 +340,7 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
           int ox1 = ((lloc.lx1 & 1) == 1);
           int ox2 = ((lloc.lx2 & 1) == 1);
           int ox3 = ((lloc.lx3 & 1) == 1);
-          send_buf[sb_idx].bis = il + ox1*cnx1;
+          send_buf[sb_idx].bis = il + ox1*cnx1;  // note il:iu etc. includes ghost zones
           send_buf[sb_idx].bie = iu + ox1*cnx1;
           send_buf[sb_idx].bjs = jl + ox2*cnx2;
           send_buf[sb_idx].bje = ju + ox2*cnx2;
