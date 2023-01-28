@@ -8,6 +8,8 @@
 
 #include <iostream>
 #include <iomanip>    // std::setprecision()
+#include <limits>
+#include <algorithm>
 
 #include "athena.hpp"
 #include "globals.hpp"

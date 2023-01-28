@@ -455,7 +455,8 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile) {
       nmb_maxperrank = pin->GetReal("mesh_refinement", "max_nmb_per_rank");
       if (nmb_maxperrank < nmb_thisrank) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-          << std::endl << "On rank=" << global_variable::my_rank << " Root grid requires "          << "more MeshBlocks (nmb_thisrank=" << nmb_thisrank << ") than specified by "
+          << std::endl << "On rank=" << global_variable::my_rank << " Root grid requires "
+          << "more MeshBlocks (nmb_thisrank=" << nmb_thisrank << ") than specified by "
           << "<mesh_refinement>/max_nmb_per_rank=" << nmb_maxperrank << std::endl;
         std::exit(EXIT_FAILURE);
       }

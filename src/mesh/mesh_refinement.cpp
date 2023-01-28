@@ -423,14 +423,6 @@ void MeshRefinement::UpdateMeshBlockTree(int &nnew, int &ndel) {
     delete [] cllderef;
   }
 
-/***
-for (int m=0; m<(pmy_mesh->nmb_thisrank); ++m) {
-if (refine_flag.h_view(m+mbs) != 0) {
-std::cout <<"rank= "<<global_variable::my_rank<< "  m=" << m+mbs << "  flag="<< refine_flag.h_view(m+mbs) << std::endl;
-}
-}
-***/
-
   return;
 }
 
@@ -507,19 +499,6 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
         << pm->nmb_maxperrank << std::endl;
     std::exit(EXIT_FAILURE);
   }
-
-/***
-if (global_variable::my_rank == 0) {
-std::cout <<"  CYCLE = "<<pmy_mesh->ncycle<<std::endl;
-for (int i=0; i<old_nmb; ++i) {
-std::cout<<"oldm="<<i<<" rank="<<pm->rank_eachmb[i]<<" flag="<<refine_flag.h_view(i)<<"  old_to_new="<<oldtonew[i]<<std::endl;
-}
-for (int i=0; i<new_nmb; ++i) {
-std::cout<<"newm="<<i<<" rank="<<new_rank_eachmb[i]<<"  new_to_old="<<newtoold[i]<<std::endl;
-}
-}
-MPI_Barrier(MPI_COMM_WORLD);
-***/
 
   // Step 4.
   // Allocate send/recv buffers for load balancing, post receives.
@@ -874,7 +853,7 @@ void MeshRefinement::CopyFC(DvceFaceFld4D<Real> &b) {
 //! the nleaf-index locations that are immediately following (overwriting any data located
 //! there).  Only operates on MBs on the same rank.
 
-void MeshRefinement::CopyForRefinementCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca){
+void MeshRefinement::CopyForRefinementCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca) {
   auto &indcs = pmy_mesh->mb_indcs;
   auto &ng = indcs.ng;
   int il = indcs.cis - ng, iu = indcs.cie + ng;
@@ -926,7 +905,7 @@ void MeshRefinement::CopyForRefinementCC(DvceArray5D<Real> &a, DvceArray5D<Real>
 //! \fn void MeshRefinement::CopyForRefinementFC
 //! \brief Same as CopyForRefinementCC, but for face-centered arrays
 
-void MeshRefinement::CopyForRefinementFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb){
+void MeshRefinement::CopyForRefinementFC(DvceFaceFld4D<Real> &b,DvceFaceFld4D<Real> &cb) {
   auto &indcs = pmy_mesh->mb_indcs;
   auto &ng = indcs.ng;
   int il = indcs.cis - ng, iu = indcs.cie + ng;

@@ -119,11 +119,6 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
       }
     }
   }
-
-/**
-std::cout<<"Rank="<<global_variable::my_rank<<" nrecv="<<nmb_recv<<std::endl;
-***/
-
   if (nmb_recv == 0) return;  // nothing to do
 
   // allocate array of recv buffers
@@ -296,11 +291,6 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
       }
     }
   }
-
-/**
-std::cout<<"Rank="<<global_variable::my_rank<<" nsend="<<nmb_send<<std::endl;
-***/
-
   if (nmb_send == 0) return;  // nothing to do
 
   // allocate array of send buffers
@@ -447,11 +437,6 @@ std::cout<<"Rank="<<global_variable::my_rank<<" nsend="<<nmb_send<<std::endl;
           int ierr = MPI_Isend(send_buf[sb_idx].vars.data(), send_buf[sb_idx].cnt,
                      MPI_ATHENA_REAL, new_rank_eachmb[newm+l], tag, amr_comm,
                      &(send_buf[sb_idx].req));
-/***
-if (global_variable::my_rank == 0) {
-std::cout << "Send="<<sb_idx<<" size="<<data_size_coar<<" tag="<<tag<<" rank="<<new_rank_eachmb[newm+l]<<" ox1/2/3="<<ox1<<" "<<ox2<<" "<<ox3<<std::endl;
-}
-**/
           if (ierr != MPI_SUCCESS) {no_errors=false;}
           sb_idx++;
         }

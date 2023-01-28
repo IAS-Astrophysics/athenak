@@ -107,16 +107,16 @@ class MeshRefinement {
   void InitRecvAMR(int nleaf);
   void PackAndSendAMR(int nleaf);
   void PackAMRBuffersCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, int ncc, int nfc);
-  void PackAMRBuffersFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb, int ncc, int nfc);
+  void PackAMRBuffersFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb, int ncc,int nfc);
   void RecvAndUnpackAMR();
-  void UnpackAMRBuffersCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, int ncc, int nfc);
+  void UnpackAMRBuffersCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, int ncc,int nfc);
   void UnpackAMRBuffersFC(DvceFaceFld4D<Real> &b,DvceFaceFld4D<Real> &cb,int ncc,int nfc);
   void ClearSendAMR();
+
  private:
   // data
   Mesh *pmy_mesh;
   Real d_threshold_, dd_threshold_, dp_threshold_, dv_threshold_;
   bool check_cons_;
 };
-
 #endif // MESH_MESH_REFINEMENT_HPP_
