@@ -33,11 +33,11 @@ MeshBlock::MeshBlock(MeshBlockPack* ppack, int igids, int nmb) :
   for (int m=0; m<nmb; ++m) {
     // initialize host array elements of gids, levels
     mb_gid.h_view(m) = igids + m;
-    mb_lev.h_view(m) = pm->lloclist[igids+m].level;
+    mb_lev.h_view(m) = pm->lloc_eachmb[igids+m].level;
 
     // calculate physical size and set BCs of each MeshBlock in x1
-    std::int32_t &lx1 = pm->lloclist[igids+m].lx1;
-    std::int32_t &lev = pm->lloclist[igids+m].level;
+    std::int32_t &lx1 = pm->lloc_eachmb[igids+m].lx1;
+    std::int32_t &lev = pm->lloc_eachmb[igids+m].level;
     std::int32_t nmbx1 = pm->nmb_rootx1 << (lev - pm->root_level);
     if (lx1 == 0) {
       mb_size.h_view(m).x1min = ms.x1min;
@@ -63,7 +63,7 @@ MeshBlock::MeshBlock(MeshBlockPack* ppack, int igids, int nmb) :
       mb_bcs.h_view(m,2) = pm->mesh_bcs[BoundaryFace::inner_x2];
       mb_bcs.h_view(m,3) = pm->mesh_bcs[BoundaryFace::outer_x2];
     } else {
-      std::int32_t &lx2 = pm->lloclist[igids+m].lx2;
+      std::int32_t &lx2 = pm->lloc_eachmb[igids+m].lx2;
       std::int32_t nmbx2 = pm->nmb_rootx2 << (lev - pm->root_level);
       if (lx2 == 0) {
         mb_size.h_view(m).x2min = ms.x2min;
@@ -90,7 +90,7 @@ MeshBlock::MeshBlock(MeshBlockPack* ppack, int igids, int nmb) :
       mb_bcs.h_view(m,4) = pm->mesh_bcs[BoundaryFace::inner_x3];
       mb_bcs.h_view(m,5) = pm->mesh_bcs[BoundaryFace::outer_x3];
     } else {
-      std::int32_t &lx3 = pm->lloclist[igids+m].lx3;
+      std::int32_t &lx3 = pm->lloc_eachmb[igids+m].lx3;
       std::int32_t nmbx3 = pm->nmb_rootx3 << (lev - pm->root_level);
       if (lx3 == 0) {
         mb_size.h_view(m).x3min = ms.x3min;
@@ -169,7 +169,7 @@ void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklis
 
   // Search MeshBlock tree and find neighbors
   for (int b=0; b<nmb; ++b) {
-    LogicalLocation lloc = pmy_pack->pmesh->lloclist[mb_gid.h_view(b)];
+    LogicalLocation lloc = pmy_pack->pmesh->lloc_eachmb[mb_gid.h_view(b)];
 
     // find location of this MeshBlock relative to XXXX
     int myox1, myox2 = 0, myox3 = 0, myfx1, myfx2, myfx3;

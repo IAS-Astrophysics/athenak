@@ -211,7 +211,7 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     for (int m=0; m<noutmbs_max; ++m) {
       // if there is a MB to be written, set location in 3D grid of MBs in output file.
       if (m < nout_mbs) {
-        LogicalLocation lloc = pm->lloclist[outmbs[m].mb_gid];
+        LogicalLocation lloc = pm->lloc_eachmb[outmbs[m].mb_gid];
         // calculate indices of this MeshBlock in 3D grid of MBs
         int imb = (out_params.slice1 || (out_params.gid >= 0))? 0 : lloc.lx1;
         int jmb = (out_params.slice2 || (out_params.gid >= 0))? 0 : lloc.lx2;
@@ -290,7 +290,7 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
 
     // Loop over MeshBlocks, insert variable into 3D array
     for (int m=0; m<nout_mbs; ++m) {
-      LogicalLocation lloc = pm->lloclist[outmbs[m].mb_gid];
+      LogicalLocation lloc = pm->lloc_eachmb[outmbs[m].mb_gid];
       // calculate indices of this MeshBlock in 3D grid of MBs
       int imb = (out_params.slice1 || (out_params.gid >= 0))? 0 : lloc.lx1;
       int jmb = (out_params.slice2 || (out_params.gid >= 0))? 0 : lloc.lx2;

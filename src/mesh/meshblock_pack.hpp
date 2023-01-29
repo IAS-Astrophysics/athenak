@@ -25,8 +25,8 @@ class TurbulenceDriver;
 namespace units {class Units;}
 
 //----------------------------------------------------------------------------------------
-//! \class MeshBlock
-//  \brief data/functions associated with a single block
+//! \class MeshBlockPack
+//! \brief data/functions associated with a single block
 
 class MeshBlockPack {
   // mesh classes (Mesh, MeshBlock, MeshBlockPack, MeshBlockTree) like to play together

@@ -18,21 +18,6 @@ enum class BoundaryFlag {undef=-1,block, reflect, inflow, outflow, diode, user, 
 // identifiers for status of MPI boundary communications
 enum class BoundaryCommStatus {undef=-1, waiting, sent, received};
 
-//----------------------------------------------------------------------------------------
-//! \fn int CreateMPITag(int lid, int bufid)
-//  \brief calculate an MPI tag for boundary buffer communications
-//  MPI tag = lid (remaining bits) + bufid (6 bits)
-//  Note the convention in Athena++ is lid and bufid are both for the *receiving* process
-//
-// WARNING (KGF): Generating unsigned integer bitfields from signed integer types and
-// converting output to signed integer tags (required by MPI) may lead to unsafe
-// conversions (and overflows from built-in types and MPI_TAG_UB).  Note, the MPI standard
-// requires signed int tag, with MPI_TAG_UB>= 2^15-1 = 32,767 (inclusive)
-
-static int CreateMPITag(int lid, int bufid) {
-  return (lid<<6) | bufid;
-}
-
 #include <algorithm>
 #include <vector>
 
@@ -40,6 +25,16 @@ static int CreateMPITag(int lid, int bufid) {
 #include "mesh/mesh.hpp"
 #include "coordinates/coordinates.hpp"
 #include "tasklist/task_list.hpp"
+
+//----------------------------------------------------------------------------------------
+//! \fn int CreateBvals_MPI_Tag(int lid, int bufid)
+//! \brief calculate an MPI tag for boundary buffer communications.  Note maximum size of
+//! lid that can be encoded is set by (NUM_BITS_LID) macro.
+//! The convention in Athena++ is lid and bufid are both for the *receiving* process.
+//! The MPI standard requires signed int tag, with MPI_TAG_UB>=2^15-1 = 32,767 (inclusive)
+static int CreateBvals_MPI_Tag(int lid, int bufid) {
+  return (bufid << (NUM_BITS_LID)) | lid;
+}
 
 //----------------------------------------------------------------------------------------
 //! \struct BufferIndcs
@@ -69,7 +64,7 @@ struct BoundaryBuffer {
   // Maximum number of data elements (bie-bis+1) across 3 components of above
   int isame_ndat, icoar_ndat, ifine_ndat, iflxs_ndat, iflxc_ndat;
 
-  // 3D Views that store buffer data on device
+  // 2D Views that store buffer data on device, dimensioned (nmb, ndata)
   DvceArray2D<Real> vars, flux;
 
   // following two 1D arrays only accessed from host, so can use STL vector

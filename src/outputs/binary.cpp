@@ -117,8 +117,8 @@ void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   std::size_t data_size = 10*sizeof(int32_t) + 6*sizeof(Real)
                         + (cells*nout_vars)*sizeof(float);
 
-  int ns_mbs = pm->gidslist[global_variable::my_rank];
-  int nb_mbs = pm->nmblist[global_variable::my_rank];
+  int ns_mbs = pm->gids_eachrank[global_variable::my_rank];
+  int nb_mbs = pm->nmb_eachrank[global_variable::my_rank];
 
   // allocate 1D vector of floats used to convert and output data
   char *data = new char[nb_mbs*data_size];
@@ -127,7 +127,7 @@ void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   // Loop over MeshBlocks
   for (int m=0; m<nout_mbs; ++m) {
     char *pdata=&(data[m*data_size]);
-    LogicalLocation loc = pm->lloclist[outmbs[m].mb_gid];
+    LogicalLocation loc = pm->lloc_eachmb[outmbs[m].mb_gid];
     int &ois = outmbs[m].ois;
     int &oie = outmbs[m].oie;
     int &ojs = outmbs[m].ojs;
@@ -231,11 +231,11 @@ void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     } else {
       // write data over each MeshBlock sequentially and in parallel
       // calculate max/min number of MeshBlocks across all ranks
-      noutmbs_max = pm->nmblist[0];
-      noutmbs_min = pm->nmblist[0];
+      noutmbs_max = pm->nmb_eachrank[0];
+      noutmbs_min = pm->nmb_eachrank[0];
       for (int i=0; i<(global_variable::nranks); ++i) {
-        noutmbs_max = std::max(noutmbs_max,pm->nmblist[i]);
-        noutmbs_min = std::min(noutmbs_min,pm->nmblist[i]);
+        noutmbs_max = std::max(noutmbs_max,pm->nmb_eachrank[i]);
+        noutmbs_min = std::min(noutmbs_min,pm->nmb_eachrank[i]);
       }
       for (int m=0;  m<noutmbs_max; ++m) {
         char *pdata=&(data[m*data_size]);

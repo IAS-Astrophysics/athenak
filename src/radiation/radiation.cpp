@@ -49,6 +49,14 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
     std::exit(EXIT_FAILURE);
   }
 
+  // Check for AMR and exit if enabled.
+  // TODO(@user): Extend AMR and load balancing to work with radiation
+  if (pmy_pack->pmesh->adaptive) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+      << std::endl << "Radiation does not yet work with AMR" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
   // Check for hydrodynamics, mhd, and units
   is_hydro_enabled = pin->DoesBlockExist("hydro");
   is_mhd_enabled = pin->DoesBlockExist("mhd");

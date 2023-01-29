@@ -284,11 +284,11 @@ Mesh::Mesh(ParameterInput *pin) :
 // destructor
 
 Mesh::~Mesh() {
-  delete [] costlist;
-  delete [] ranklist;
-  delete [] lloclist;
-  delete [] gidslist;
-  delete [] nmblist;
+  delete [] cost_eachmb;
+  delete [] rank_eachmb;
+  delete [] lloc_eachmb;
+  delete [] gids_eachrank;
+  delete [] nmb_eachrank;
   if (multilevel) {
     delete pmr;
   }
@@ -318,8 +318,8 @@ void Mesh::PrintMeshDiagnostics() {
       cost_per_plevel[i] = 0.0;
     }
     for (int i=0; i<nmb_total; i++) {
-      nb_per_plevel[(lloclist[i].level - root_level)]++;
-      cost_per_plevel[(lloclist[i].level - root_level)] += costlist[i];
+      nb_per_plevel[(lloc_eachmb[i].level - root_level)]++;
+      cost_per_plevel[(lloc_eachmb[i].level - root_level)] += cost_eachmb[i];
     }
     for (int i=root_level; i<=max_level; i++) {
       if (nb_per_plevel[i-root_level] != 0) {
@@ -340,8 +340,8 @@ void Mesh::PrintMeshDiagnostics() {
       cost_per_rank[i] = 0;
     }
     for (int i=0; i<nmb_total; i++) {
-      nb_per_rank[ranklist[i]]++;
-      cost_per_rank[ranklist[i]] += costlist[i];
+      nb_per_rank[rank_eachmb[i]]++;
+      cost_per_rank[rank_eachmb[i]] += cost_eachmb[i];
     }
     int mincost = std::numeric_limits<int>::max();
     int maxcost = 0, totalcost = 0;
@@ -384,16 +384,16 @@ void Mesh::WriteMeshStructure() {
 
   for (int i=root_level; i<=max_level; i++) {
     for (int j=0; j<nmb_total; j++) {
-      if (lloclist[j].level == i) {
+      if (lloc_eachmb[j].level == i) {
         MeshBlock block(this->pmb_pack, j, 1);
-        std::int32_t &lx1 = lloclist[j].lx1;
-        std::int32_t &lx2 = lloclist[j].lx2;
-        std::int32_t &lx3 = lloclist[j].lx3;
-        std::fprintf(fp,"#MeshBlock %d on rank=%d with cost=%g\n", j, ranklist[j],
-                     costlist[j]);
+        std::int32_t &lx1 = lloc_eachmb[j].lx1;
+        std::int32_t &lx2 = lloc_eachmb[j].lx2;
+        std::int32_t &lx3 = lloc_eachmb[j].lx3;
+        std::fprintf(fp,"#MeshBlock %d on rank=%d with cost=%g\n", j, rank_eachmb[j],
+                     cost_eachmb[j]);
         std::fprintf(
             fp,"#  Logical level %d, location = (%" PRId32 " %" PRId32 " %" PRId32")\n",
-            lloclist[j].level, lx1, lx2, lx3);
+            lloc_eachmb[j].level, lx1, lx2, lx3);
         if (two_d) { // 2D
           Real &x1min = block.mb_size.h_view(0).x1min;
           Real &x1max = block.mb_size.h_view(0).x1max;

@@ -9,13 +9,13 @@ basename  = LinWave    # problem ID: basename of output filenames
 
 <mesh>
 nghost    = 2          # Number of ghost cells
-nx1       = 128        # Number of zones in X1-direction
+nx1       = 256        # Number of zones in X1-direction
 x1min     = 0.0        # minimum value of X1
 x1max     = 3.0        # maximum value of X1
 ix1_bc    = periodic   # inner-X1 boundary flag
 ox1_bc    = periodic   # outer-X1 boundary flag
 
-nx2       = 64         # Number of zones in X2-direction
+nx2       = 128        # Number of zones in X2-direction
 x2min     = 0.0        # minimum value of X2
 x2max     = 1.5        # maximum value of X2
 ix2_bc    = periodic   # inner-X2 boundary flag
@@ -29,14 +29,14 @@ ox3_bc    = periodic   # outer-X3 boundary flag
 
 <meshblock>
 nx1       = 16         # Number of cells in each MeshBlock, X1-dir
-nx2       = 8          # Number of cells in each MeshBlock, X2-dir
+nx2       = 16          # Number of cells in each MeshBlock, X2-dir
 nx3       = 1          # Number of cells in each MeshBlock, X3-dir
 
 <mesh_refinement>
-refinement        = adaptive    # type of refinement
-max_nmb_perdevice = 256
-num_levels        = 2
-dens_max          = 1.0004
+refinement       = adaptive    # type of refinement
+max_nmb_per_rank = 512
+num_levels       = 2
+dens_max         = 1.0004
 
 <time>
 evolution  = dynamic   # dynamic/kinematic/static

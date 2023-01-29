@@ -231,18 +231,18 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   }
 
   // read CC data into host array
-  int mygids = pm->gidslist[global_variable::my_rank];
+  int mygids = pm->gids_eachrank[global_variable::my_rank];
   IOWrapperSizeT myoffset = headeroffset + data_size_*mygids;
 
   HostArray5D<Real> ccin("rst-cc-in", 1, 1, 1, 1, 1);
   HostFaceFld4D<Real> fcin("rst-fc-in", 1, 1, 1, 1);
 
   // calculate max/min number of MeshBlocks across all ranks
-  int noutmbs_max = pm->nmblist[0];
-  int noutmbs_min = pm->nmblist[0];
+  int noutmbs_max = pm->nmb_eachrank[0];
+  int noutmbs_min = pm->nmb_eachrank[0];
   for (int i=0; i<(global_variable::nranks); ++i) {
-    noutmbs_max = std::max(noutmbs_max,pm->nmblist[i]);
-    noutmbs_min = std::min(noutmbs_min,pm->nmblist[i]);
+    noutmbs_max = std::max(noutmbs_max,pm->nmb_eachrank[i]);
+    noutmbs_min = std::min(noutmbs_min,pm->nmb_eachrank[i]);
   }
 
   if (phydro != nullptr) {

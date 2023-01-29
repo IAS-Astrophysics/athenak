@@ -36,6 +36,10 @@ using Real = double;
 //----------------------------------------------------------------------------------------
 // general purpose macros (never modified)
 
+// number of bits needed to store MeshBlock local ID in each rank in an integer.  Thus
+// maximum number of MBs per rank is 2^(NUM_BITS_LID).  Limit is set by MPI tag limit
+#define NUM_BITS_LID 14
+
 #define SQR(x) ( (x)*(x) )
 #define SIGN(x) ( ((x) < 0.0) ? -1.0 : 1.0 )
 

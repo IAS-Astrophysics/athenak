@@ -90,11 +90,11 @@ void RestartOutput::LoadOutputData(Mesh *pm) {
   }
 
   // calculate max/min number of MeshBlocks across all ranks
-  noutmbs_max = pm->nmblist[0];
-  noutmbs_min = pm->nmblist[0];
+  noutmbs_max = pm->nmb_eachrank[0];
+  noutmbs_min = pm->nmb_eachrank[0];
   for (int i=0; i<(global_variable::nranks); ++i) {
-    noutmbs_max = std::max(noutmbs_max,pm->nmblist[i]);
-    noutmbs_min = std::min(noutmbs_min,pm->nmblist[i]);
+    noutmbs_max = std::max(noutmbs_max,pm->nmb_eachrank[i]);
+    noutmbs_min = std::min(noutmbs_min,pm->nmb_eachrank[i]);
   }
 }
 
@@ -176,8 +176,8 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   // This data read in Mesh::BuildTreeFromRestart()
 
   if (global_variable::my_rank == 0) {
-    resfile.Write_bytes(&(pm->lloclist[0]), (pm->nmb_total)*sizeof(LogicalLocation), 1);
-    resfile.Write_bytes(&(pm->costlist[0]), (pm->nmb_total)*sizeof(float), 1);
+    resfile.Write_bytes(&(pm->lloc_eachmb[0]),(pm->nmb_total)*sizeof(LogicalLocation), 1);
+    resfile.Write_bytes(&(pm->cost_eachmb[0]), (pm->nmb_total)*sizeof(float), 1);
   }
 
   //--- STEP 3.  All ranks write data over all MeshBlocks (5D arrays) in parallel
@@ -216,8 +216,8 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
 
   // write cell-centered variables in parallel
   IOWrapperSizeT myoffset  = step1size + step2size + sizeof(IOWrapperSizeT) +
-                             sizeof(RNG_State) +
-                             data_size*(pm->gidslist[global_variable::my_rank]);
+                             data_size*(pm->gids_eachrank[global_variable::my_rank]);
+  if (pturb != nullptr) myoffset += sizeof(RNG_State);
 
   // write cell-centered variables, one MeshBlock at a time (but parallelized over all
   // ranks). MeshBlocks are written seperately to reduce number of data elements per write

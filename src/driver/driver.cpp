@@ -8,6 +8,8 @@
 
 #include <iostream>
 #include <iomanip>    // std::setprecision()
+#include <limits>
+#include <algorithm>
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -19,6 +21,10 @@
 #include "ion-neutral/ion_neutral.hpp"
 #include "radiation/radiation.hpp"
 #include "driver.hpp"
+
+#if MPI_PARALLEL_ENABLED
+#include <mpi.h>
+#endif
 
 //----------------------------------------------------------------------------------------
 // constructor, initializes data structures and parameters
@@ -49,22 +55,27 @@
 // Driver::Execute() invokes the tasklist from stage=1 to stage=ptlist->nstages
 
 Driver::Driver(ParameterInput *pin, Mesh *pmesh) :
-  tlim(-1.0), nlim(-1), ndiag(1),
+  tlim(-1.0),
+  nlim(-1),
+  ndiag(1),
+  nmb_updated_(0),
+  lb_efficiency_(0),
   impl_src("ru",1,1,1,1,1,1) {
   // set time-evolution option (no default)
-  {std::string evolution_t = pin->GetString("time","evolution");
-  if (evolution_t.compare("static") == 0) {
-    time_evolution = TimeEvolution::tstatic;  // cannot use 'static' (keyword);
-  } else if (evolution_t.compare("kinematic") == 0) {
-    time_evolution = TimeEvolution::kinematic;
-  } else if (evolution_t.compare("dynamic") == 0) {
-    time_evolution = TimeEvolution::dynamic;
-  } else {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "<hydro> evolution = '" << evolution_t << "' not implemented"
-              << std::endl;
-    std::exit(EXIT_FAILURE);
-  }} // extra brace to limit scope of string
+  {
+    std::string evolution_t = pin->GetString("time","evolution");
+    if (evolution_t.compare("static") == 0) {
+      time_evolution = TimeEvolution::tstatic;  // cannot use 'static' (keyword);
+    } else if (evolution_t.compare("kinematic") == 0) {
+      time_evolution = TimeEvolution::kinematic;
+    } else if (evolution_t.compare("dynamic") == 0) {
+      time_evolution = TimeEvolution::dynamic;
+    } else {
+      std::cout<<"### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+               <<"<hydro> evolution = '"<< evolution_t <<"' not implemented"<< std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  } // extra brace to limit scope of string
 
   // read <time> parameters controlling driver if run requires time-evolution
   if (time_evolution != TimeEvolution::tstatic) {
@@ -307,92 +318,105 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
       MeshBlockPack* pmbp = pmesh->pmb_pack;
       //---------------------------------------
       // (1) Do *** operator split *** TaskList
-      {for (int p=0; p<npacks; ++p) {
-        if (!(pmbp->operator_split_tl.Empty())) {pmbp->operator_split_tl.Reset();}
-      }
-      int npack_left = npacks;
-      while (npack_left > 0) {
-        if (pmbp->operator_split_tl.Empty()) {
-          npack_left--;
-        } else {
-          if (!pmbp->operator_split_tl.IsComplete()) {
-            // note 2nd argument to DoAvailable (stage) is not used, set to 0
-            auto status = pmbp->operator_split_tl.DoAvailable(this, 0);
-            if (status == TaskListStatus::complete) { npack_left--; }
+      {
+        for (int p=0; p<npacks; ++p) {
+          if (!(pmbp->operator_split_tl.Empty())) {pmbp->operator_split_tl.Reset();}
+        }
+        int npack_left = npacks;
+        while (npack_left > 0) {
+          if (pmbp->operator_split_tl.Empty()) {
+            npack_left--;
+          } else {
+            if (!pmbp->operator_split_tl.IsComplete()) {
+              // note 2nd argument to DoAvailable (stage) is not used, set to 0
+              auto status = pmbp->operator_split_tl.DoAvailable(this, 0);
+              if (status == TaskListStatus::complete) { npack_left--; }
+            }
           }
         }
-      }} // extra brace to enclose scope
+      }
 
       //--------------------------------------------------------------
       // (2) Do *** explicit and ImEx RK time-integrator *** TaskLists
       for (int stage=1; stage<=(nexp_stages); ++stage) {
         // (2a) StageStart Tasks
         // tasks that must be completed over all MBPacks at start of each explicit stage
-        {for (int p=0; p<npacks; ++p) {
-          if (!(pmbp->start_tl.Empty())) {pmbp->start_tl.Reset();}
-        }
-        int npack_left = npacks;
-        while (npack_left > 0) {
-          if (pmbp->start_tl.Empty()) {
-            npack_left--;
-          } else {
-            if (!pmbp->start_tl.IsComplete()) {
-              auto status = pmbp->start_tl.DoAvailable(this, stage);
-              if (status == TaskListStatus::complete) { npack_left--; }
+        {
+          for (int p=0; p<npacks; ++p) {
+            if (!(pmbp->start_tl.Empty())) {pmbp->start_tl.Reset();}
+          }
+          int npack_left = npacks;
+          while (npack_left > 0) {
+            if (pmbp->start_tl.Empty()) {
+              npack_left--;
+            } else {
+              if (!pmbp->start_tl.IsComplete()) {
+                auto status = pmbp->start_tl.DoAvailable(this, stage);
+                if (status == TaskListStatus::complete) { npack_left--; }
+              }
             }
           }
-        }} // extra brace to enclose scope
+        }
 
         // (2b) StageRun Tasks
         // tasks in each explicit stage
-        {for (int p=0; p<npacks; ++p) {
-          if (!(pmbp->run_tl.Empty())) {pmbp->run_tl.Reset();}
-        }
-        int npack_left = npacks;
-        while (npack_left > 0) {
-          if (pmbp->run_tl.Empty()) {
-            npack_left--;
-          } else {
-            if (!pmbp->run_tl.IsComplete()) {
-              auto status = pmbp->run_tl.DoAvailable(this, stage);
-              if (status == TaskListStatus::complete) { npack_left--; }
+        {
+          for (int p=0; p<npacks; ++p) {
+            if (!(pmbp->run_tl.Empty())) {pmbp->run_tl.Reset();}
+          }
+          int npack_left = npacks;
+          while (npack_left > 0) {
+            if (pmbp->run_tl.Empty()) {
+              npack_left--;
+            } else {
+              if (!pmbp->run_tl.IsComplete()) {
+                auto status = pmbp->run_tl.DoAvailable(this, stage);
+                if (status == TaskListStatus::complete) { npack_left--; }
+              }
             }
           }
-        }} // extra brace to enclose scope
+        }
 
         // (2c) StageEnd Tasks
         // tasks that must be completed over all MBs at end of each explicit stage
-        {for (int p=0; p<npacks; ++p) {
-          if (!(pmbp->end_tl.Empty())) {pmbp->end_tl.Reset();}
-        }
-        int npack_left = npacks;
-        while (npack_left > 0) {
-          if (pmbp->end_tl.Empty()) {
-            npack_left--;
-          } else {
-            if (!pmbp->end_tl.IsComplete()) {
-              auto status = pmbp->end_tl.DoAvailable(this, stage);
-              if (status == TaskListStatus::complete) { npack_left--; }
+        {
+          for (int p=0; p<npacks; ++p) {
+            if (!(pmbp->end_tl.Empty())) {pmbp->end_tl.Reset();}
+          }
+          int npack_left = npacks;
+          while (npack_left > 0) {
+            if (pmbp->end_tl.Empty()) {
+              npack_left--;
+            } else {
+              if (!pmbp->end_tl.IsComplete()) {
+                auto status = pmbp->end_tl.DoAvailable(this, stage);
+                if (status == TaskListStatus::complete) { npack_left--; }
+              }
             }
           }
-        }} // extra brace to enclose scope
-      } // end of loop over stages
+        }
+      } // end for loop over stages
 
       //-------------------------------
       // (3) Work outside of TaskLists:
-      // increment time, ncycle, etc. Compute new timestep.
+      // increment time, ncycle, etc.
       pmesh->time = pmesh->time + pmesh->dt;
       pmesh->ncycle++;
       nmb_updated_ += pmesh->nmb_total;
-
-      // with AMR, check for mesh refinement every ncycle_amr steps
-      if (pmesh->adaptive) {
-        MeshBlockPack* pmbp = pmesh->pmb_pack;
-        bool update_mesh = pmesh->pmr->CheckForRefinement(pmbp);
-        if (update_mesh) pmesh->pmr->AdaptiveMeshRefinement(this, pin);
+      // load balancing efficiency
+      if (global_variable::nranks > 1) {
+        int minnmb = std::numeric_limits<int>::max();
+        for (int i=0; i<global_variable::nranks; ++i) {
+          minnmb = std::min(minnmb, pmesh->nmb_eachrank[i]);
+        }
+        lb_efficiency_ += static_cast<float>(minnmb*(global_variable::nranks))/
+            static_cast<float>(pmesh->nmb_total);
       }
 
-      // once all MeshBlocks refined/de-refined, then compute new timestep
+      // AMR
+      if (pmesh->adaptive) {pmesh->pmr->AdaptiveMeshRefinement(this, pin);}
+
+      // compute new timestep AFTER all Meshblocks refined/derefined
       pmesh->NewTimeStep(tlim);
 
       // Test for/make outputs
@@ -409,9 +433,8 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
           out->WriteOutputFile(pmesh, pin);
         }
       }
-    }
-  }  // end of (time_evolution != tstatic) clause
-
+    }  // end while((t < tlim) && (n < nlim))
+  }    // end of (time_evolution != tstatic) clause
   return;
 }
 
@@ -436,6 +459,13 @@ void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
   float exe_time = run_time_.seconds();
 
   if (time_evolution != TimeEvolution::tstatic) {
+#if MPI_PARALLEL_ENABLED
+    // Collect number of MeshBlocks communicated during load balancing across all ranks
+    if (pmesh->adaptive) {
+      MPI_Allreduce(MPI_IN_PLACE, &(pmesh->pmr->nmb_sent_thisrank), 1, MPI_INT, MPI_SUM,
+                    MPI_COMM_WORLD);
+    }
+#endif
     if (global_variable::my_rank == 0) {
       // Print diagnostic messages related to the end of the simulation
       OutputCycleDiagnostics(pmesh);
@@ -450,16 +480,19 @@ void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
 
       if (pmesh->adaptive) {
         std::cout << std::endl << "Current number of MeshBlocks = " << pmesh->nmb_total
-                  << std::endl << pmesh->pmr->nmb_created << " MeshBlocks created, "
-                  << pmesh->pmr->nmb_deleted << " deleted during this run." << std::endl;
+          << std::endl << pmesh->pmr->nmb_created << " MeshBlocks created, "
+          << pmesh->pmr->nmb_deleted << " deleted by AMR" << std::endl;
+#if MPI_PARALLEL_ENABLED
+        std::cout << pmesh->pmr->nmb_sent_thisrank << " communicated for load balancing, "
+          <<"load balancing efficiency = " << (lb_efficiency_/pmesh->ncycle) << std::endl;
+#endif
       }
 
       // Calculate and print the zone-cycles/exe-second and wall-second
-      std::uint64_t zonecycles = nmb_updated_ *
-          static_cast<std::uint64_t>(pmesh->NumberOfMeshBlockCells());
-      float zcps = static_cast<float>(zonecycles) / exe_time;
+      float zcps = static_cast<float>(nmb_updated_ * pmesh->NumberOfMeshBlockCells())
+                    / exe_time;
 
-      std::cout << std::endl << "zone-cycles = " << zonecycles << std::endl;
+      std::cout << std::endl << "MeshBlock-cycles = " << nmb_updated_ << std::endl;
       std::cout << "cpu time used  = " << exe_time << std::endl;
       std::cout << "zone-cycles/cpu_second = " << zcps << std::endl;
     }
