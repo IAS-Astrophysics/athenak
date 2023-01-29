@@ -488,9 +488,11 @@ void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
 #endif
       }
 
-      // Calculate and print the zone-cycles/exe-second and wall-second
-      float zcps = static_cast<float>(nmb_updated_ * pmesh->NumberOfMeshBlockCells())
-                    / exe_time;
+      // Calculate and print the zone-cycles/cpu-second
+      // Note the need for 64-bit integers since nmb_updated can easily exceed 2^32.
+      std::uint64_t zonecycles = nmb_updated_ *
+                                 static_cast<uint64_t>(pmesh->NumberOfMeshBlockCells());
+      float zcps = static_cast<float>(zonecycles) / exe_time;
 
       std::cout << std::endl << "MeshBlock-cycles = " << nmb_updated_ << std::endl;
       std::cout << "cpu time used  = " << exe_time << std::endl;
