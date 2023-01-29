@@ -1451,11 +1451,11 @@ void TorusHistory(HistoryData *pdata, Mesh *pm) {
   int is = indcs.is; int nx1 = indcs.nx1;
   int js = indcs.js; int nx2 = indcs.nx2;
   int ks = indcs.ks; int nx3 = indcs.nx3;
-  const int nmkji = (pm->pmb_pack->nmb_thispack)*nx3*nx2*nx1;
+  const int nmkji = (pmbp->nmb_thispack)*nx3*nx2*nx1;
   const int nkji = nx3*nx2*nx1;
   const int nji  = nx2*nx1;
   array_sum::GlobalSum sum_this_mb;
-  Kokkos::parallel_reduce("HistSums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+  Kokkos::parallel_reduce("TorusHistSums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
   KOKKOS_LAMBDA(const int &idx, array_sum::GlobalSum &mb_sum) {
     // compute n,k,j,i indices of thread
     int m = (idx)/nkji;
@@ -1555,20 +1555,20 @@ void TorusHistory(HistoryData *pdata, Mesh *pm) {
     Real b_ph = (-r*sph-spin*cph)*sth*b_1 + (r*cph-spin*sph)*sth*b_2;
 
     // MHD conserved variables:
-    array_sum::GlobalSum hvars;
+    array_sum::GlobalSum MEvars;
 
     // GRMHD averaged sqrt(b_i*b^i) components
-    hvars.the_array[0] = vol*br*b_r;
-    hvars.the_array[1] = vol*bth*b_th;
-    hvars.the_array[2] = vol*bph*b_ph;
+    MEvars.the_array[0] = vol*br*b_r;
+    MEvars.the_array[1] = vol*bth*b_th;
+    MEvars.the_array[2] = vol*bph*b_ph;
 
     // sum into parallel reduce
-    mb_sum += hvars;
+    mb_sum += MEvars;
   }, Kokkos::Sum<array_sum::GlobalSum>(sum_this_mb));
 
   // store data into hdata array
-  for (int n=nflux*(nradii-1)+3; n<pdata->nhist; ++n) {
-    pdata->hdata[n] = sum_this_mb.the_array[n];
+  for (int n=nflux*(nradii-1)+4; n<pdata->nhist; ++n) {
+    pdata->hdata[n] = sum_this_mb.the_array[n-(nflux*(nradii-1)+4)];
   }
 
   // fill rest of the_array with zeros, if nhist < NHISTORY_VARIABLES
