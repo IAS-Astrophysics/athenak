@@ -51,7 +51,6 @@ void Z4c::AssembleZ4cTasks(TaskList &start, TaskList &run, TaskList &end) {
       case 4: id.crhs  = run.AddTask(&Z4c::CalcRHS<4>, this, id.copyu);
               break;
   }
-  //id.crhs  = run.AddTask(&Z4c::CalcRHS, this, id.copyu);
   id.sombc = run.AddTask(&Z4c::Z4cBoundaryRHS, this, id.crhs);
   id.expl  = run.AddTask(&Z4c::ExpRKUpdate, this, id.sombc);
   id.restu = run.AddTask(&Z4c::RestrictU, this, id.expl);

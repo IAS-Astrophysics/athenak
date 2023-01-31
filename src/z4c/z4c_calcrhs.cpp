@@ -24,9 +24,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
 
-  int ncells1 = indcs.nx1+indcs.ng; // Align scratch buffers with variables
-  int ncells2 = indcs.nx2;
-  int ncells3 = indcs.nx3;
+  int ncells1 = indcs.nx1 + 2*(indcs.ng); // Align scratch buffers with variables
   int nmb = pmy_pack->nmb_thispack;
  
   auto &z4c = pmy_pack->pz4c->z4c;
@@ -34,17 +32,16 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
   auto &opt = pmy_pack->pz4c->opt;
   int scr_level = 1;
   // 2 1D scratch array and 1 2D scratch array
-  size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1)*17   // 0 tensors
-                  + ScrArray2D<Real>::shmem_size(3,ncells1)*13 // vectors
-                  + ScrArray2D<Real>::shmem_size(6,ncells1)*13 // 2D tensor with symm
-                  + ScrArray2D<Real>::shmem_size(9,ncells1)*2  // 2D tensor with no symm
-                  + ScrArray2D<Real>::shmem_size(18,ncells1)*8 // 3D tensor with symm
-                  + ScrArray2D<Real>::shmem_size(36,ncells1);  // 4D tensor with symm
+  size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1)*15   // 0 tensors
+                  + ScrArray2D<Real>::shmem_size(3,ncells1)*10 // vectors
+                  + ScrArray2D<Real>::shmem_size(6,ncells1)*11 // rank 2 tensor with symm
+                  + ScrArray2D<Real>::shmem_size(9,ncells1)*2  // rank 2 tensor with no symm
+                  + ScrArray2D<Real>::shmem_size(18,ncells1)*4 // rank 3 tensor with symm
+                  + ScrArray2D<Real>::shmem_size(36,ncells1);  // rank 4 tensor with symm
   par_for_outer("z4c rhs loop",DevExeSpace(),scr_size,scr_level,0,nmb-1,ks,ke,js,je,
   KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {
     // Define scratch arrays to be used in the following calculations
     // These are spatially 1-D arrays with different ranks for symmetries
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> r;            // radial coordinate
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> detg;         // det(g)
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> chi_guarded;  // bounded version of chi
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> oopsi4;       // 1/psi4
@@ -53,63 +50,48 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> R;            // Ricci scalar
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> Ht;           // tilde H
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> K;            // trace of extrinsic curvature
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> KK;           // K^a_b K^b_a
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> S;            // Trace of S_ik
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> Ddalpha;      // Trace of Ddalpha_dd
 
-              r.NewAthenaScratchTensor(member, scr_level, ncells1);
-           detg.NewAthenaScratchTensor(member, scr_level, ncells1);
+    detg.NewAthenaScratchTensor(member, scr_level, ncells1);
     chi_guarded.NewAthenaScratchTensor(member, scr_level, ncells1);
-         oopsi4.NewAthenaScratchTensor(member, scr_level, ncells1);
-              A.NewAthenaScratchTensor(member, scr_level, ncells1);
-             AA.NewAthenaScratchTensor(member, scr_level, ncells1);
-              R.NewAthenaScratchTensor(member, scr_level, ncells1);
-             Ht.NewAthenaScratchTensor(member, scr_level, ncells1);
-              K.NewAthenaScratchTensor(member, scr_level, ncells1);
-             KK.NewAthenaScratchTensor(member, scr_level, ncells1);
-              S.NewAthenaScratchTensor(member, scr_level, ncells1);
-        Ddalpha.NewAthenaScratchTensor(member, scr_level, ncells1);
+    oopsi4.NewAthenaScratchTensor(member, scr_level, ncells1);
+    A.NewAthenaScratchTensor(member, scr_level, ncells1);
+    AA.NewAthenaScratchTensor(member, scr_level, ncells1);
+    R.NewAthenaScratchTensor(member, scr_level, ncells1);
+    Ht.NewAthenaScratchTensor(member, scr_level, ncells1);
+    K.NewAthenaScratchTensor(member, scr_level, ncells1);
+    S.NewAthenaScratchTensor(member, scr_level, ncells1);
+    Ddalpha.NewAthenaScratchTensor(member, scr_level, ncells1);
 
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> M_u;         // momentum constraint
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> Gamma_u;     // Gamma computed from the metric
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> DA_u;        // Covariant derivative of A
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> s_u;         // x^i/r where r is the coord. radius
 
-        M_u.NewAthenaScratchTensor(member, scr_level, ncells1);
     Gamma_u.NewAthenaScratchTensor(member, scr_level, ncells1);
-       DA_u.NewAthenaScratchTensor(member, scr_level, ncells1);
-        s_u.NewAthenaScratchTensor(member, scr_level, ncells1);
+    DA_u.NewAthenaScratchTensor(member, scr_level, ncells1);
 
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;        // inverse of conf. metric
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> A_uu;        // inverse of A
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> AA_dd;       // g^cd A_ac A_db
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> R_dd;        // Ricci tensor
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> Rphi_dd;     // Ricci tensor, conformal contribution
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> Kt_dd;       // conformal extrinsic curvature
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> K_ud;        // extrinsic curvature
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> Ddalpha_dd;  // 2nd differential of the lapse
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> Ddphi_dd;    // 2nd differential of phi
 
 
-          g_uu.NewAthenaScratchTensor(member, scr_level, ncells1);
-          A_uu.NewAthenaScratchTensor(member, scr_level, ncells1);
-         AA_dd.NewAthenaScratchTensor(member, scr_level, ncells1);
-          R_dd.NewAthenaScratchTensor(member, scr_level, ncells1);
-       Rphi_dd.NewAthenaScratchTensor(member, scr_level, ncells1);
-         Kt_dd.NewAthenaScratchTensor(member, scr_level, ncells1);
-          K_ud.NewAthenaScratchTensor(member, scr_level, ncells1);
+    g_uu.NewAthenaScratchTensor(member, scr_level, ncells1);
+    A_uu.NewAthenaScratchTensor(member, scr_level, ncells1);
+    AA_dd.NewAthenaScratchTensor(member, scr_level, ncells1);
+    R_dd.NewAthenaScratchTensor(member, scr_level, ncells1);
+    Rphi_dd.NewAthenaScratchTensor(member, scr_level, ncells1);
     Ddalpha_dd.NewAthenaScratchTensor(member, scr_level, ncells1);
-      Ddphi_dd.NewAthenaScratchTensor(member, scr_level, ncells1);
+    Ddphi_dd.NewAthenaScratchTensor(member, scr_level, ncells1);
 
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_ddd;   // Christoffel symbols of 1st kind
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_udd;   // Christoffel symbols of 2nd kind
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> DK_ddd;      // differential of K
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> DK_udd;      // differential of K
 
     Gamma_ddd.NewAthenaScratchTensor(member, scr_level, ncells1);
     Gamma_udd.NewAthenaScratchTensor(member, scr_level, ncells1);
-       DK_ddd.NewAthenaScratchTensor(member, scr_level, ncells1);
-       DK_udd.NewAthenaScratchTensor(member, scr_level, ncells1);
 
     // auxiliary derivatives
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> dbeta;       // d_a beta^a
@@ -120,16 +102,14 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> ddbeta_d;    // 2nd "divergence" of beta
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> dchi_d;      // chi 1st drvts
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> dphi_d;      // phi 1st drvts
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> dK_d;        // K 1st drvts
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> dKhat_d;     // Khat 1st drvts
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> dTheta_d;    // Theta 1st drvts
 
     dalpha_d.NewAthenaScratchTensor(member, scr_level, ncells1);
     ddbeta_d.NewAthenaScratchTensor(member, scr_level, ncells1);
-      dchi_d.NewAthenaScratchTensor(member, scr_level, ncells1);
-      dphi_d.NewAthenaScratchTensor(member, scr_level, ncells1);
-        dK_d.NewAthenaScratchTensor(member, scr_level, ncells1);
-     dKhat_d.NewAthenaScratchTensor(member, scr_level, ncells1);
+    dchi_d.NewAthenaScratchTensor(member, scr_level, ncells1);
+    dphi_d.NewAthenaScratchTensor(member, scr_level, ncells1);
+    dKhat_d.NewAthenaScratchTensor(member, scr_level, ncells1);
     dTheta_d.NewAthenaScratchTensor(member, scr_level, ncells1);
 
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> ddalpha_dd;  // lapse 2nd drvts
@@ -138,18 +118,14 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 2> dGam_du;     // Gamma 1st drvts
 
     ddalpha_dd.NewAthenaScratchTensor(member, scr_level, ncells1);
-      dbeta_du.NewAthenaScratchTensor(member, scr_level, ncells1);
-      ddchi_dd.NewAthenaScratchTensor(member, scr_level, ncells1);
-       dGam_du.NewAthenaScratchTensor(member, scr_level, ncells1);
+    dbeta_du.NewAthenaScratchTensor(member, scr_level, ncells1);
+    ddchi_dd.NewAthenaScratchTensor(member, scr_level, ncells1);
+    dGam_du.NewAthenaScratchTensor(member, scr_level, ncells1);
 
     AthenaScratchTensor<Real, TensorSymm::SYM2,  3, 3> dg_ddd;      // metric 1st drvts
-    AthenaScratchTensor<Real, TensorSymm::SYM2,  3, 3> dK_ddd;      // K 1st drvts
-    AthenaScratchTensor<Real, TensorSymm::SYM2,  3, 3> dA_ddd;      // A 1st drvts
     AthenaScratchTensor<Real, TensorSymm::ISYM2, 3, 3> ddbeta_ddu; // shift 2nd drvts
 
-        dg_ddd.NewAthenaScratchTensor(member, scr_level, ncells1);
-        dK_ddd.NewAthenaScratchTensor(member, scr_level, ncells1);
-        dA_ddd.NewAthenaScratchTensor(member, scr_level, ncells1);
+    dg_ddd.NewAthenaScratchTensor(member, scr_level, ncells1);
     ddbeta_ddu.NewAthenaScratchTensor(member, scr_level, ncells1);
 
     AthenaScratchTensor<Real, TensorSymm::SYM22, 3, 4> ddg_dddd;   // metric 2nd drvts
@@ -162,15 +138,15 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> LTheta;      // Lie derivative of Theta
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> Lalpha;      // Lie derivative of the lapse
 
-      Lchi.NewAthenaScratchTensor(member, scr_level, ncells1);
-     LKhat.NewAthenaScratchTensor(member, scr_level, ncells1);
+    Lchi.NewAthenaScratchTensor(member, scr_level, ncells1);
+    LKhat.NewAthenaScratchTensor(member, scr_level, ncells1);
     LTheta.NewAthenaScratchTensor(member, scr_level, ncells1);
     Lalpha.NewAthenaScratchTensor(member, scr_level, ncells1);
 
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> LGam_u;      // Lie derivative of Gamma
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> Lbeta_u;     // Lie derivative of the shift
 
-     LGam_u.NewAthenaScratchTensor(member, scr_level, ncells1);
+    LGam_u.NewAthenaScratchTensor(member, scr_level, ncells1);
     Lbeta_u.NewAthenaScratchTensor(member, scr_level, ncells1);
 
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> Lg_dd;       // Lie derivative of conf. 3-metric
@@ -180,7 +156,6 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
     LA_dd.NewAthenaScratchTensor(member, scr_level, ncells1);
 
     Real idx[] = {size.d_view(m).idx1, size.d_view(m).idx2, size.d_view(m).idx3};
-    int der_ghost = indcs.ng;
     // -----------------------------------------------------------------------------------
     // 1st derivatives
     //
@@ -207,7 +182,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
     for(int c = 0; c < 3; ++c) {
       par_for_inner(member, is, ie, [&](const int i) {
         dg_ddd(c,a,b,i) = Dx<NGHOST>(c, idx, z4c.g_dd, m,a,b,k,j,i);
-        dA_ddd(c,a,b,i) = Dx<NGHOST>(c, idx, z4c.A_dd, m,a,b,k,j,i);
+        // dA_ddd(c,a,b,i) = Dx<NGHOST>(c, idx, z4c.A_dd, m,a,b,k,j,i);
       });
     }
 

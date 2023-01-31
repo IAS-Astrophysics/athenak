@@ -36,7 +36,7 @@ TaskStatus Z4c::ExpRKUpdate(Driver *pdriver, int stage) {
   int nvar = N_Z4c;
 
   int scr_level = 0;
-  int ncells1 = indcs.nx1;
+  int ncells1 = indcs.nx1 + 2*(indcs.ng);
   size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1);
   par_for_outer("z4c RK update",DevExeSpace(),scr_size,scr_level,
                                 0,nmb1,0,nvar-1,ks,ke,js,je,
