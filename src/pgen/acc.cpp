@@ -315,8 +315,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   EOS_Data &eos = (pmbp->pmhd != nullptr) ?
                   pmbp->pmhd->peos->eos_data : pmbp->phydro->peos->eos_data;
 
-  // update problem-specific parameters
-  eos.r_in = acc.r_in;
   acc.tfloor = eos.tfloor;
   acc.gamma = eos.gamma;
   acc.temp_0 = cs_iso*cs_iso;
@@ -1235,13 +1233,6 @@ void AddUserSrcs(Mesh *pm, const Real bdt) {
       acc.r_in = rinn*t_ratio+rino*(1.0-t_ratio);
     } else {
       acc.r_in = acc.r_in_new;
-    }
-    // update problem-specific parameters
-    if (pm->pmb_pack->phydro != nullptr) {
-      pm->pmb_pack->phydro->peos->eos_data.r_in = acc.r_in;
-    }
-    if (pm->pmb_pack->pmhd != nullptr) {
-      pm->pmb_pack->pmhd->peos->eos_data.r_in = acc.r_in;
     }
     if (global_variable::my_rank == 0 && pm->ncycle%acc.ndiag==0) {
       std::cout << " r_in=" << acc.r_in << std::endl;
