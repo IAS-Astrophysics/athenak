@@ -1,0 +1,134 @@
+# Athena++ (Kokkos version) input file for black hole accretion
+
+<comment>
+problem   = accretion
+
+<job>
+basename  = Acc       # problem ID: basename of output filenames
+
+<mesh>
+nghost    = 4         # Number of ghost cells
+nx1       = 128       # Number of zones in X1-direction
+x1min     = -32.0     # minimum value of X1
+x1max     = 32.0      # maximum value of X1
+ix1_bc    = user      # Inner-X1 boundary condition flag
+ox1_bc    = user      # Outer-X1 boundary condition flag
+
+
+nx2       = 128       # Number of zones in X2-direction
+x2min     = -32.0     # minimum value of X2
+x2max     = 32.0      # maximum value of X2
+ix2_bc    = user      # Inner-X2 boundary condition flag
+ox2_bc    = user      # Outer-X2 boundary condition flag
+
+nx3       = 128       # Number of zones in X3-direction
+x3min     = -32.0     # minimum value of X3
+x3max     = 32.0      # maximum value of X3
+ix3_bc    = user      # Inner-X3 boundary condition flag
+ox3_bc    = user      # Outer-X3 boundary condition flag
+
+<meshblock>
+nx1       = 32        # Number of cells in each MeshBlock, X1-dir
+nx2       = 32        # Number of cells in each MeshBlock, X2-dir
+nx3       = 32        # Number of cells in each MeshBlock, X3-dir
+
+<mesh_refinement>
+refinement = static    # type of refinement
+
+<refinement1>
+level = 10
+x1min = -0.000001
+x1max = 0.000001
+x2min = -0.000001
+x2max = 0.000001
+x3min = -0.000001
+x3max = 0.000001
+
+<time>
+evolution  = dynamic  # dynamic/kinematic/static
+integrator = rk2      # time integration algorithm
+cfl_number = 0.3      # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1       # cycle limit
+tlim       = 100.0    # time limit
+ndiag      = 10       # cycles between diagnostic output
+
+<hydro>
+eos         = ideal   # EOS type
+reconstruct = plm     # spatial reconstruction method
+rsolver     = hllc    # Riemann-solver to be used
+gamma       = 1.66666666667   # gamma = C_p/C_v
+use_e       = true    # use temperature as primitives
+fofc        = true    # first-order flux correction
+
+dfloor      = 1e-3    # density floor
+pfloor      = 1e-6    # pressure floor
+tfloor      = 3e-3    # temperature floor
+daverage    = 1e-3    # averaging density (larger than or equal to dfloor)
+rdfloor     = 1e-3    # r-dependent density floor at r=1
+
+<problem>
+potential   = true    # turn on potential
+m_bh        = 4.3e2   # BH mass: 6.5e9 Msun # Mass unit: 1.516e7 Msun
+r_in        = 0.03    # inner radius: 30.0 pc
+m_star      = 2e4     # stellar mass: 3e11 Msun
+r_star      = 2.0     # 2kpc
+m_dm        = 2e6     # DM mass: 3e13 Msun
+r_dm        = 60.0    # 60kpc
+sink_d      = 5e-3    # density of sink cells
+sink_t      = 3e-3    # eint/dens=1/gm1*T: temperature of sink cells
+rad_entry   = 2.0     # radius of entropy core
+dens_entry  = 1e-1    # normalization of density
+k0_entry    = 1.1     # normalization of entropy
+xi_entry    = 1.1     # power law of entropy
+
+rb_out      = 32.0     # user outer boundary for fixed boundary condition
+
+user_srcs   = true    # turn on user source terms
+cooling     = true    # turn on cooling
+heat_beg_time = 5.0   # beginning time of imposing global heating
+heat_sof_time = 10.0  # soft time of imposing global heating
+heating_equ = true    # turn on heating
+rmin_heat   = 0.001   # minimum radius of heating region
+rmax_heat   = 36.0    # maximum radius of heating region
+fac_heat    = 0.98    # factor of global heating
+heat_cycle  = 10      # heating rate updating cycle
+
+ndiag       = 100     # diagnostic information
+
+t_cold      = 0.03    # criterion of cold gas
+tf_hot      = 0.3     # criterion of hot gas
+
+<turb_dens1>
+type  = hydro
+tcorr = 0.0           # ~ L / 2 pi urms
+dedt  = 1e-2          # ~ urms^3 / 2 L
+nlow  = 4
+nhigh = 12
+expo  = 0.0
+n0    = 1             # normalization of wave number
+turb_flag   = 1       # 1 for decaying
+turb_count  = 1       # times of turbulence driving
+
+<units>
+length_cgs  = 3.0856775809623245e+21 # 1 kpc
+mass_cgs    = 3.015012867156497e+40  # number density 1 cm^-3, 1.516e7 Msun
+time_cgs    = 3.15576e+13            # 1 Myr
+mu          = 0.618                  # mean molecular weight
+
+<output1>
+file_type   = hst       # history data dump
+data_format = %12.5e    # Optional data format string
+dt          = 0.01      # time increment between outputs
+
+<output2>
+file_type   = bin       # binary data dump
+variable    = hydro_w   # variables to be output
+dt          = 1.0       # time increment between outputs
+
+<output3>
+file_type   = rst       # restart data dump
+dt          = 1.0       # time increment between outputs
+
+<output4>
+file_type   = log       # diagnostic data
+dcycle      = 10        # cycle increment between outputs
