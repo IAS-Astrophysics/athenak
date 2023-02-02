@@ -44,7 +44,6 @@ TaskStatus Z4c::ExpRKUpdate(Driver *pdriver, int stage) {
   par_for_inner(member, is, ie, [&](const int i) {
     u0(m,n,k,j,i) = gam0*u0(m,n,k,j,i) + gam1*u1(m,n,k,j,i) + beta_dt*u_rhs(m,n,k,j,i);
   });
-  member.team_barrier();
   });
   return TaskStatus::complete;
 }

@@ -86,6 +86,7 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
       oopsi4(i) = std::pow(detg(i), -1./3.);
       z4c.chi(m,k,j,i) = std::pow(detg(i), 1./12.*opt.chi_psi_power);
     });
+    member.team_barrier();
 
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
@@ -94,6 +95,7 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
         Kt_dd(a,b,i)          = oopsi4(i) * adm.K_dd(m,a,b,k,j,i);
       });
     }
+    member.team_barrier();
 
     par_for_inner(member, isg, ieg, [&](const int i) {
       detg(i) = adm::SpatialDet(z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i), z4c.g_dd(m,0,2,k,j,i),
@@ -104,6 +106,7 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
                                 Kt_dd(0,0,i), Kt_dd(0,1,i), Kt_dd(0,2,i),
                                 Kt_dd(1,1,i), Kt_dd(1,2,i), Kt_dd(2,2,i));
     });
+    member.team_barrier();
 
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
@@ -127,8 +130,10 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
       detg(i) = adm::SpatialDet(z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i), z4c.g_dd(m,0,2,k,j,i),
                            z4c.g_dd(m,1,1,k,j,i), z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i));
     });
+    member.team_barrier();
+
     par_for_inner(member, isg, ieg, [&](const int i) {
-	adm::SpatialInv(1.0/detg(i),
+	    adm::SpatialInv(1.0/detg(i),
                  z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i), z4c.g_dd(m,0,2,k,j,i),
                  z4c.g_dd(m,1,1,k,j,i), z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i),
                  &g_uu(m,0,k,j,i), &g_uu(m,1,k,j,i), &g_uu(m,2,k,j,i),
@@ -317,7 +322,7 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
         dK_ddd(c,a,b,i) = Dx<NGHOST>(c, idx, adm.K_dd, m,a,b,k,j,i);
       });
     }
-    
+
     // second derivatives of g
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b)
@@ -348,6 +353,7 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
                  &g_uu(1,1,i), &g_uu(1,2,i), &g_uu(2,2,i));
     
     });
+    member.team_barrier();
 
     // -----------------------------------------------------------------------------------
     // Christoffel symbols
@@ -359,7 +365,8 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
         Gamma_ddd(c,a,b,i) = 0.5*(dg_ddd(a,b,c,i) + dg_ddd(b,a,c,i) - dg_ddd(c,a,b,i));
       });
     }
-    
+    member.team_barrier();
+
     Gamma_udd.ZeroClear();
     for(int c = 0; c < 3; ++c)
     for(int a = 0; a < 3; ++a)
@@ -369,6 +376,7 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
         Gamma_udd(c,a,b,i) += g_uu(c,d,i)*Gamma_ddd(d,a,b,i);
       });
     }
+    member.team_barrier();
 
     Gamma_u.ZeroClear();
     for(int a = 0; a < 3; ++a)
@@ -378,6 +386,7 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
         Gamma_u(a,i) += g_uu(b,c,i)*Gamma_udd(a,b,c,i);
       });
     }
+    member.team_barrier();
 
     // -----------------------------------------------------------------------------------
     // Ricci tensor and Ricci scalar
@@ -402,6 +411,7 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
                 ddg_dddd(a,c,b,d,i) + ddg_dddd(b,c,a,d,i));
         });
       }
+      member.team_barrier();
       par_for_inner(member, is, ie, [&](const int i) {
         R(i) += g_uu(a,b,i) * R_dd(a,b,i);
       });
@@ -475,6 +485,8 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
         });
       }
     }
+    member.team_barrier();
+
     // Momentum constraint (covariant)
     for(int a = 0; a < 3; ++a)
     for(int b = 0; b < 3; ++b) {
@@ -497,6 +509,7 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
                                                     *(z4c.Gam_u(m,b,k,j,i) - Gamma_u(b,i));
       });
     }
+    member.team_barrier();
     // Constraint violation monitor C^2
     par_for_inner(member, is, ie, [&](const int i) {
       con.C(m,k,j,i) = SQR(con.H(m,k,j,i)) + con.M(m,k,j,i) + SQR(z4c.Theta(m,k,j,i)) + 4.0*con.Z(m,k,j,i);
