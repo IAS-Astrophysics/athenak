@@ -26,7 +26,7 @@ BoundaryValues::BoundaryValues(MeshBlockPack *pp, ParameterInput *pin) :
   b_in("bin",1,1),
   i_in("iin",1,1) {
   // allocate vector of status flags and MPI requests (if needed)
-  int nmb = std::max((pmy_pack->nmb_thispack), (pmy_pack->pmesh->nmb_maxperdevice));
+  int nmb = std::max((pmy_pack->nmb_thispack), (pmy_pack->pmesh->nmb_maxperrank));
   int nnghbr = pmy_pack->pmb->nnghbr;
   for (int n=0; n<nnghbr; ++n) {
     for (int m=0; m<nmb; ++m) {
@@ -100,7 +100,7 @@ void BoundaryValues::InitializeBuffers(const int nvar) {
   }
 
   // x1 faces; NeighborIndex = [0,...,7]
-  int nmb = std::max((pmy_pack->nmb_thispack), (pmy_pack->pmesh->nmb_maxperdevice));
+  int nmb = std::max((pmy_pack->nmb_thispack), (pmy_pack->pmesh->nmb_maxperrank));
   for (int n=-1; n<=1; n+=2) {
     for (int fz=0; fz<nfz; fz++) {
       for (int fy = 0; fy<nfy; fy++) {
@@ -228,7 +228,7 @@ TaskStatus BoundaryValues::InitRecv(const int nvars) {
         // post non-blocking receive if neighboring MeshBlock on a different rank
         if (drank != global_variable::my_rank) {
           // create tag using local ID and buffer index of *receiving* MeshBlock
-          int tag = CreateMPITag(m, n);
+          int tag = CreateBvals_MPI_Tag(m, n);
 
           // calculate amount of data to be passed, get pointer to variables
           int data_size = nvars;

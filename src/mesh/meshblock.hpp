@@ -6,12 +6,11 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file meshblock.hpp
-//  \brief defines MeshBlock class, a very lightweight class to store data about
-//  MeshBlocks inside a given MeshBlockPack.
-//
-//  The Mesh is the overall grid structure, MeshBlocks are local patches of data
-//  (potentially on different levels) that tile the entire domain and are stored in
-//  containers called MashBlockPack.
+//! \brief defines MeshBlock class, a very lightweight class to store data about
+//! MeshBlocks inside a given MeshBlockPack.
+//! The Mesh is the overall grid structure while MeshBlocks are local patches of data
+//! (potentially on different levels) that tile the entire domain and are stored in
+//! containers called MashBlockPack.
 
 #include <memory>
 
@@ -20,7 +19,7 @@
 
 //----------------------------------------------------------------------------------------
 //! \class MeshBlock
-//  \brief data/functions associated with each MeshBlock
+//! \brief data/functions associated with each MeshBlock
 
 class MeshBlock {
   // mesh classes (Mesh, MeshBlock, MeshBlockPack, MeshBlockTree) like to play together
@@ -52,5 +51,4 @@ class MeshBlock {
   // data
   MeshBlockPack* pmy_pack;
 };
-
 #endif // MESH_MESHBLOCK_HPP_

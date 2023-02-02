@@ -71,6 +71,7 @@ regression_gpu-job:
     - merge_requests
   script:
     - cd $CI_PROJECT_DIR/tst
+    - export CUDA_VISIBLE_DEVICES=1
     - echo "Running regression script on GPU..."
     - python run_tests.py --log_file=log_file_gpu.txt
       --cmake=-DKokkos_ENABLE_CUDA=On

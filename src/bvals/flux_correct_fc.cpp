@@ -35,7 +35,7 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
   auto &cjs = pmy_pack->pmesh->mb_indcs.cjs;
   auto &cks = pmy_pack->pmesh->mb_indcs.cks;
 
-  int &my_rank = global_variable::my_rank;
+  int my_rank = global_variable::my_rank;
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &mbgid = pmy_pack->pmb->mb_gid;
   auto &mblev = pmy_pack->pmb->mb_lev;
@@ -342,8 +342,8 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
         // Send boundary data using MPI
         } else {
           // create tag using local ID and buffer index of *receiving* MeshBlock
-          int lid = nghbr.h_view(m,n).gid - pmy_pack->pmesh->gidslist[drank];
-          int tag = CreateMPITag(lid, dn);
+          int lid = nghbr.h_view(m,n).gid - pmy_pack->pmesh->gids_eachrank[drank];
+          int tag = CreateBvals_MPI_Tag(lid, dn);
 
           // get ptr to send buffer for fluxes
           int data_size = 3;
@@ -1055,7 +1055,7 @@ TaskStatus BoundaryValuesFC::InitFluxRecv(const int nvars) {
         // post non-blocking receive if neighboring MeshBlock on a different rank
         if (drank != global_variable::my_rank) {
           // create tag using local ID and buffer index of *receiving* MeshBlock
-          int tag = CreateMPITag(m, n);
+          int tag = CreateBvals_MPI_Tag(m, n);
 
           // get ptr to recv buffer when neighbor is at same/finer level
           int data_size = nvars;

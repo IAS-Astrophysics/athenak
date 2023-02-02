@@ -1,13 +1,15 @@
 //========================================================================================
-	// AthenaXXX astrophysical plasma code
-	// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
-	// Licensed under the 3-clause BSD License (the "LICENSE")
-	//========================================================================================
-	//! \file driver.cpp
-	//  \brief implementation of functions in class Driver
+// AthenaXXX astrophysical plasma code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
+// Licensed under the 3-clause BSD License (the "LICENSE")
+//========================================================================================
+//! \file driver.cpp
+//  \brief implementation of functions in class Driver
 
 #include <iostream>
 #include <iomanip>    // std::setprecision()
+#include <limits>
+#include <algorithm>
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -16,110 +18,117 @@
 #include "outputs/outputs.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
-#include "z4c/z4c.hpp"
 #include "ion-neutral/ion_neutral.hpp"
 #include "radiation/radiation.hpp"
+#include "z4c/z4c.hpp"
 #include "driver.hpp"
 
-	//----------------------------------------------------------------------------------------
-	// constructor, initializes data structures and parameters
-	//
-	// First, define each time-integrator by setting weights for each step of the algorithm
-	// and the CFL number stability limit when coupled to the single-stage spatial operator.
-	// Currently, the explicit, multistage time-integrators must be expressed as 2S-type
-	// algorithms as in Ketcheson (2010) Algorithm 3, which incudes 2N (Williamson) and 2R
-	// (van der Houwen) popular 2-register low-storage RK methods. The 2S-type integrators
-	// depend on a bidiagonally sparse Shu-Osher representation; at each stage l:
-	//
-	//    U^{l} = a_{l,l-2}*U^{l-2} + a_{l-1}*U^{l-1}
-	//          + b_{l,l-2}*dt*Div(F_{l-2}) + b_{l,l-1}*dt*Div(F_{l-1}),
-	//
-	// where U^{l-1} and U^{l-2} are previous stages and a_{l,l-2}, a_{l,l-1}=(1-a_{l,l-2}),
-	// and b_{l,l-2}, b_{l,l-1} are weights that are different for each stage and
-	// integrator. Previous timestep U^{0} = U^n is given, and the integrator solves
-	// for U^{l} for 1 <= l <= nstages.
-	//
-	// The 2x RHS evaluations of Div(F) and source terms per stage is avoided by adding
-	// another weighted average / caching of these terms each stage. The API and framework
-	// is extensible to three register 3S* methods, although none are currently implemented.
+#if MPI_PARALLEL_ENABLED
+#include <mpi.h>
+#endif
 
-	// Notation: exclusively using "stage", equivalent in lit. to "substage" or "substep"
-	// (infrequently "step"), to refer to the intermediate values of U^{l} between each
-	// "timestep" = "cycle" in explicit, multistage methods.
-	//
-	// Driver::Execute() invokes the tasklist from stage=1 to stage=ptlist->nstages
+//----------------------------------------------------------------------------------------
+// constructor, initializes data structures and parameters
+//
+// First, define each time-integrator by setting weights for each step of the algorithm
+// and the CFL number stability limit when coupled to the single-stage spatial operator.
+// Currently, the explicit, multistage time-integrators must be expressed as 2S-type
+// algorithms as in Ketcheson (2010) Algorithm 3, which incudes 2N (Williamson) and 2R
+// (van der Houwen) popular 2-register low-storage RK methods. The 2S-type integrators
+// depend on a bidiagonally sparse Shu-Osher representation; at each stage l:
+//
+//    U^{l} = a_{l,l-2}*U^{l-2} + a_{l-1}*U^{l-1}
+//          + b_{l,l-2}*dt*Div(F_{l-2}) + b_{l,l-1}*dt*Div(F_{l-1}),
+//
+// where U^{l-1} and U^{l-2} are previous stages and a_{l,l-2}, a_{l,l-1}=(1-a_{l,l-2}),
+// and b_{l,l-2}, b_{l,l-1} are weights that are different for each stage and
+// integrator. Previous timestep U^{0} = U^n is given, and the integrator solves
+// for U^{l} for 1 <= l <= nstages.
+//
+// The 2x RHS evaluations of Div(F) and source terms per stage is avoided by adding
+// another weighted average / caching of these terms each stage. The API and framework
+// is extensible to three register 3S* methods, although none are currently implemented.
 
-	Driver::Driver(ParameterInput *pin, Mesh *pmesh) :
-	  tlim(-1.0), nlim(-1), ndiag(1),
-	  impl_src("ru",1,1,1,1,1,1) {
-	  // set time-evolution option (no default)
-	  {std::string evolution_t = pin->GetString("time","evolution");
-	  if (evolution_t.compare("static") == 0) {
-	    time_evolution = TimeEvolution::tstatic;  // cannot use 'static' (keyword);
-	  } else if (evolution_t.compare("kinematic") == 0) {
-	    time_evolution = TimeEvolution::kinematic;
-	  } else if (evolution_t.compare("dynamic") == 0) {
-	    time_evolution = TimeEvolution::dynamic;
-	  } else {
-	    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-		      << "<hydro> evolution = '" << evolution_t << "' not implemented"
-		      << std::endl;
-	    std::exit(EXIT_FAILURE);
-	  }} // extra brace to limit scope of string
+// Notation: exclusively using "stage", equivalent in lit. to "substage" or "substep"
+// (infrequently "step"), to refer to the intermediate values of U^{l} between each
+// "timestep" = "cycle" in explicit, multistage methods.
+//
+// Driver::Execute() invokes the tasklist from stage=1 to stage=ptlist->nstages
 
-	  // read <time> parameters controlling driver if run requires time-evolution
-	  if (time_evolution != TimeEvolution::tstatic) {
-	    integrator = pin->GetOrAddString("time", "integrator", "rk2");
-	    tlim = pin->GetReal("time", "tlim");
-	    nlim = pin->GetOrAddInteger("time", "nlim", -1);
-	    ndiag = pin->GetOrAddInteger("time", "ndiag", 1);
+Driver::Driver(ParameterInput *pin, Mesh *pmesh) :
+  tlim(-1.0),
+  nlim(-1),
+  ndiag(1),
+  nmb_updated_(0),
+  lb_efficiency_(0),
+  impl_src("ru",1,1,1,1,1,1) {
+  // set time-evolution option (no default)
+  {
+    std::string evolution_t = pin->GetString("time","evolution");
+    if (evolution_t.compare("static") == 0) {
+      time_evolution = TimeEvolution::tstatic;  // cannot use 'static' (keyword);
+    } else if (evolution_t.compare("kinematic") == 0) {
+      time_evolution = TimeEvolution::kinematic;
+    } else if (evolution_t.compare("dynamic") == 0) {
+      time_evolution = TimeEvolution::dynamic;
+    } else {
+      std::cout<<"### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+               <<"<hydro> evolution = '"<< evolution_t <<"' not implemented"<< std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  } // extra brace to limit scope of string
 
-	    if (integrator == "rk1") {
-	      // RK1: first-order Runge-Kutta / the forward Euler (FE) method
-	      nimp_stages = 0;
-	      nexp_stages = 1;
-	      cfl_limit = 1.0;
-	      gam0[0] = 0.0;
-	      gam1[0] = 1.0;
-	      beta[0] = 1.0;
-	    } else if (integrator == "rk2") {
-	      // Heun's method / SSPRK (2,2): Gottlieb (2009) equation 3.1
-	      // Optimal (in error bounds) explicit two-stage, second-order SSPRK
-	      nimp_stages = 0;
-	      nexp_stages = 2;
-	      cfl_limit = 1.0;  // c_eff = c/nstages = 1/2 (Gottlieb (2009), pg 271)
-	      gam0[0] = 0.0;
-	      gam1[0] = 1.0;
-	      beta[0] = 1.0;
+  // read <time> parameters controlling driver if run requires time-evolution
+  if (time_evolution != TimeEvolution::tstatic) {
+    integrator = pin->GetOrAddString("time", "integrator", "rk2");
+    tlim = pin->GetReal("time", "tlim");
+    nlim = pin->GetOrAddInteger("time", "nlim", -1);
+    ndiag = pin->GetOrAddInteger("time", "ndiag", 1);
 
-	      gam0[1] = 0.5;
-	      gam1[1] = 0.5;
-	      beta[1] = 0.5;
-	    } else if (integrator == "rk3") {
-	      // SSPRK (3,3): Gottlieb (2009) equation 3.2
-	      // Optimal (in error bounds) explicit three-stage, third-order SSPRK
-	      nimp_stages = 0;
-	      nexp_stages = 3;
-	      cfl_limit = 1.0;  // c_eff = c/nstages = 1/3 (Gottlieb (2009), pg 271)
-	      gam0[0] = 0.0;
-	      gam1[0] = 1.0;
-	      beta[0] = 1.0;
+    if (integrator == "rk1") {
+      // RK1: first-order Runge-Kutta / the forward Euler (FE) method
+      nimp_stages = 0;
+      nexp_stages = 1;
+      cfl_limit = 1.0;
+      gam0[0] = 0.0;
+      gam1[0] = 1.0;
+      beta[0] = 1.0;
+    } else if (integrator == "rk2") {
+      // Heun's method / SSPRK (2,2): Gottlieb (2009) equation 3.1
+      // Optimal (in error bounds) explicit two-stage, second-order SSPRK
+      nimp_stages = 0;
+      nexp_stages = 2;
+      cfl_limit = 1.0;  // c_eff = c/nstages = 1/2 (Gottlieb (2009), pg 271)
+      gam0[0] = 0.0;
+      gam1[0] = 1.0;
+      beta[0] = 1.0;
 
-	      gam0[1] = 0.25;
-	      gam1[1] = 0.75;
-	      beta[1] = 0.25;
+      gam0[1] = 0.5;
+      gam1[1] = 0.5;
+      beta[1] = 0.5;
+    } else if (integrator == "rk3") {
+      // SSPRK (3,3): Gottlieb (2009) equation 3.2
+      // Optimal (in error bounds) explicit three-stage, third-order SSPRK
+      nimp_stages = 0;
+      nexp_stages = 3;
+      cfl_limit = 1.0;  // c_eff = c/nstages = 1/3 (Gottlieb (2009), pg 271)
+      gam0[0] = 0.0;
+      gam1[0] = 1.0;
+      beta[0] = 1.0;
 
-	      gam0[2] = 2.0/3.0;
-	      gam1[2] = 1.0/3.0;
-	      beta[2] = 2.0/3.0;
-	    } else if (integrator == "rk4") {
-	      //! - RK4()4[2S] from Table 2 of Ketcheson (2010)
-	      //! - Non-SSP, explicit four-stage, fourth-order RK
-	      //! - Stability properties are similar to classical (non-SSP) RK4
-	      //!   (but ~2x L2 principal error norm).
-	      //! - Refer to Colella (2011) for linear stability analysis of constant
-	      //!   coeff. advection of classical RK4 + 4th or 1st order (limiter engaged) fluxes
+      gam0[1] = 0.25;
+      gam1[1] = 0.75;
+      beta[1] = 0.25;
 
+      gam0[2] = 2.0/3.0;
+      gam1[2] = 1.0/3.0;
+      beta[2] = 2.0/3.0;
+    } else if (integrator == "rk4") {
+      // RK4()4[2S] from Table 2 of Ketcheson (2010)
+      // Non-SSP, explicit four-stage, fourth-order RK
+      // Stability properties are similar to classical (non-SSP) RK4
+      // (but ~2x L2 principal error norm).
+      // Refer to Colella (2011) for linear stability analysis of constant coeff.
       nimp_stages = 0;
       nexp_stages = 4;
 
@@ -237,35 +246,8 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
   //---- Step 2.  Compute time step (if problem involves time evolution)
   hydro::Hydro *phydro = pmesh->pmb_pack->phydro;
   mhd::MHD *pmhd = pmesh->pmb_pack->pmhd;
-  if (pmhd != nullptr) {
-    (void) pmhd->RestrictU(this, 0);
-    (void) pmhd->RestrictB(this, 0);
-    (void) pmhd->InitRecv(this, -1);  // stage < 0 suppresses InitFluxRecv
-    (void) pmhd->SendU(this, 0);
-    (void) pmhd->SendB(this, 0);
-    (void) pmhd->ClearSend(this, -1);
-    (void) pmhd->ClearRecv(this, -1);
-    (void) pmhd->RecvU(this, 0);
-    (void) pmhd->RecvB(this, 0);
-    (void) pmhd->ApplyPhysicalBCs(this, 0);
-    (void) pmhd->ConToPrim(this, 0);
-  }
-  // Initialize Z4c
-  z4c::Z4c *pz4c = pmesh->pmb_pack->pz4c;
-  if (pz4c != nullptr) {
-    // following functions return a TaskStatus, but it is ignored so cast to (void)
-    (void) pz4c->InitRecv(this, 0);  // stage < 0 suppresses InitFluxRecv
-    (void) pz4c->SendU(this, 0);
-    (void) pz4c->ClearSend(this, 0);
-    (void) pz4c->ClearRecv(this, 0);
-    (void) pz4c->RecvU(this, 0);
-    (void) pz4c->Z4cBoundaryRHS(this, 0);
-    (void) pz4c->ApplyPhysicalBCs(this, 0);
-  }
-
-  //---- Step 2.  Compute first time step (if problem involves time evolution
-
   radiation::Radiation *prad = pmesh->pmb_pack->prad;
+  z4c::Z4c *pz4c = pmesh->pmb_pack->pz4c;
   if (time_evolution != TimeEvolution::tstatic) {
     if (phydro != nullptr) {
       (void) pmesh->pmb_pack->phydro->NewTimeStep(this, nexp_stages);
@@ -273,12 +255,13 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
     if (pmhd != nullptr) {
       (void) pmesh->pmb_pack->pmhd->NewTimeStep(this, nexp_stages);
     }
-    if (pz4c != nullptr) {
-      (void) pmesh->pmb_pack->pz4c->NewTimeStep(this, nexp_stages);
-    }
     if (prad != nullptr) {
       (void) pmesh->pmb_pack->prad->NewTimeStep(this, nexp_stages);
     }
+    if (pz4c != nullptr) {
+      (void) pmesh->pmb_pack->pz4c->NewTimeStep(this, nexp_stages);
+    }
+
     pmesh->NewTimeStep(tlim);
   }
 
@@ -341,91 +324,105 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
       MeshBlockPack* pmbp = pmesh->pmb_pack;
       //---------------------------------------
       // (1) Do *** operator split *** TaskList
-      {for (int p=0; p<npacks; ++p) {
-        if (!(pmbp->operator_split_tl.Empty())) {pmbp->operator_split_tl.Reset();}
-      }
-      int npack_left = npacks;
-      while (npack_left > 0) {
-        if (pmbp->operator_split_tl.Empty()) {
-          npack_left--;
-        } else {
-          if (!pmbp->operator_split_tl.IsComplete()) {
-            // note 2nd argument to DoAvailable (stage) is not used, set to 0
-            auto status = pmbp->operator_split_tl.DoAvailable(this, 0);
-            if (status == TaskListStatus::complete) { npack_left--; }
+      {
+        for (int p=0; p<npacks; ++p) {
+          if (!(pmbp->operator_split_tl.Empty())) {pmbp->operator_split_tl.Reset();}
+        }
+        int npack_left = npacks;
+        while (npack_left > 0) {
+          if (pmbp->operator_split_tl.Empty()) {
+            npack_left--;
+          } else {
+            if (!pmbp->operator_split_tl.IsComplete()) {
+              // note 2nd argument to DoAvailable (stage) is not used, set to 0
+              auto status = pmbp->operator_split_tl.DoAvailable(this, 0);
+              if (status == TaskListStatus::complete) { npack_left--; }
+            }
           }
         }
-      }} // extra brace to enclose scope
+      }
 
       //--------------------------------------------------------------
       // (2) Do *** explicit and ImEx RK time-integrator *** TaskLists
       for (int stage=1; stage<=(nexp_stages); ++stage) {
         // (2a) StageStart Tasks
         // tasks that must be completed over all MBPacks at start of each explicit stage
-        {for (int p=0; p<npacks; ++p) {
-          if (!(pmbp->start_tl.Empty())) {pmbp->start_tl.Reset();}
-        }
-        int npack_left = npacks;
-        while (npack_left > 0) {
-          if (pmbp->start_tl.Empty()) {
-            npack_left--;
-          } else {
-            if (!pmbp->start_tl.IsComplete()) {
-              auto status = pmbp->start_tl.DoAvailable(this, stage);
-              if (status == TaskListStatus::complete) { npack_left--; }
+        {
+          for (int p=0; p<npacks; ++p) {
+            if (!(pmbp->start_tl.Empty())) {pmbp->start_tl.Reset();}
+          }
+          int npack_left = npacks;
+          while (npack_left > 0) {
+            if (pmbp->start_tl.Empty()) {
+              npack_left--;
+            } else {
+              if (!pmbp->start_tl.IsComplete()) {
+                auto status = pmbp->start_tl.DoAvailable(this, stage);
+                if (status == TaskListStatus::complete) { npack_left--; }
+              }
             }
           }
-        }} // extra brace to enclose scope
+        }
 
         // (2b) StageRun Tasks
         // tasks in each explicit stage
-        {for (int p=0; p<npacks; ++p) {
-          if (!(pmbp->run_tl.Empty())) {pmbp->run_tl.Reset();}
-        }
-        int npack_left = npacks;
-        while (npack_left > 0) {
-          if (pmbp->run_tl.Empty()) {
-            npack_left--;
-          } else {
-            if (!pmbp->run_tl.IsComplete()) {
-              auto status = pmbp->run_tl.DoAvailable(this, stage);
-              if (status == TaskListStatus::complete) { npack_left--; }
+        {
+          for (int p=0; p<npacks; ++p) {
+            if (!(pmbp->run_tl.Empty())) {pmbp->run_tl.Reset();}
+          }
+          int npack_left = npacks;
+          while (npack_left > 0) {
+            if (pmbp->run_tl.Empty()) {
+              npack_left--;
+            } else {
+              if (!pmbp->run_tl.IsComplete()) {
+                auto status = pmbp->run_tl.DoAvailable(this, stage);
+                if (status == TaskListStatus::complete) { npack_left--; }
+              }
             }
           }
-        }} // extra brace to enclose scope
+        }
 
         // (2c) StageEnd Tasks
         // tasks that must be completed over all MBs at end of each explicit stage
-        {for (int p=0; p<npacks; ++p) {
-          if (!(pmbp->end_tl.Empty())) {pmbp->end_tl.Reset();}
-        }
-        int npack_left = npacks;
-        while (npack_left > 0) {
-          if (pmbp->end_tl.Empty()) {
-            npack_left--;
-          } else {
-            if (!pmbp->end_tl.IsComplete()) {
-              auto status = pmbp->end_tl.DoAvailable(this, stage);
-              if (status == TaskListStatus::complete) { npack_left--; }
+        {
+          for (int p=0; p<npacks; ++p) {
+            if (!(pmbp->end_tl.Empty())) {pmbp->end_tl.Reset();}
+          }
+          int npack_left = npacks;
+          while (npack_left > 0) {
+            if (pmbp->end_tl.Empty()) {
+              npack_left--;
+            } else {
+              if (!pmbp->end_tl.IsComplete()) {
+                auto status = pmbp->end_tl.DoAvailable(this, stage);
+                if (status == TaskListStatus::complete) { npack_left--; }
+              }
             }
           }
-        }} // extra brace to enclose scope
-      } // end of loop over stages
+        }
+      } // end for loop over stages
 
       //-------------------------------
       // (3) Work outside of TaskLists:
-      // increment time, ncycle, etc. Compute new timestep.
+      // increment time, ncycle, etc.
       pmesh->time = pmesh->time + pmesh->dt;
       pmesh->ncycle++;
       nmb_updated_ += pmesh->nmb_total;
-      // with AMR, check for mesh refinement every ncycle_amr steps
-      if (pmesh->adaptive) {
-        MeshBlockPack* pmbp = pmesh->pmb_pack;
-        bool update_mesh = pmesh->pmr->CheckForRefinement(pmbp);
-        if (update_mesh) pmesh->pmr->AdaptiveMeshRefinement(this, pin);
+      // load balancing efficiency
+      if (global_variable::nranks > 1) {
+        int minnmb = std::numeric_limits<int>::max();
+        for (int i=0; i<global_variable::nranks; ++i) {
+          minnmb = std::min(minnmb, pmesh->nmb_eachrank[i]);
+        }
+        lb_efficiency_ += static_cast<float>(minnmb*(global_variable::nranks))/
+            static_cast<float>(pmesh->nmb_total);
       }
 
-      // once all MeshBlocks refined/de-refined, then compute new timestep
+      // AMR
+      if (pmesh->adaptive) {pmesh->pmr->AdaptiveMeshRefinement(this, pin);}
+
+      // compute new timestep AFTER all Meshblocks refined/derefined
       pmesh->NewTimeStep(tlim);
 
       // Test for/make outputs
@@ -442,9 +439,8 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
           out->WriteOutputFile(pmesh, pin);
         }
       }
-    }
-  }  // end of (time_evolution != tstatic) clause
-
+    }  // end while((t < tlim) && (n < nlim))
+  }    // end of (time_evolution != tstatic) clause
   return;
 }
 
@@ -469,6 +465,13 @@ void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
   float exe_time = run_time_.seconds();
 
   if (time_evolution != TimeEvolution::tstatic) {
+#if MPI_PARALLEL_ENABLED
+    // Collect number of MeshBlocks communicated during load balancing across all ranks
+    if (pmesh->adaptive) {
+      MPI_Allreduce(MPI_IN_PLACE, &(pmesh->pmr->nmb_sent_thisrank), 1, MPI_INT, MPI_SUM,
+                    MPI_COMM_WORLD);
+    }
+#endif
     if (global_variable::my_rank == 0) {
       // Print diagnostic messages related to the end of the simulation
       OutputCycleDiagnostics(pmesh);
@@ -483,16 +486,21 @@ void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
 
       if (pmesh->adaptive) {
         std::cout << std::endl << "Current number of MeshBlocks = " << pmesh->nmb_total
-                  << std::endl << pmesh->pmr->nmb_created << " MeshBlocks created, "
-                  << pmesh->pmr->nmb_deleted << " deleted during this run." << std::endl;
+          << std::endl << pmesh->pmr->nmb_created << " MeshBlocks created, "
+          << pmesh->pmr->nmb_deleted << " deleted by AMR" << std::endl;
+#if MPI_PARALLEL_ENABLED
+        std::cout << pmesh->pmr->nmb_sent_thisrank << " communicated for load balancing, "
+          <<"load balancing efficiency = " << (lb_efficiency_/pmesh->ncycle) << std::endl;
+#endif
       }
 
-      // Calculate and print the zone-cycles/exe-second and wall-second
+      // Calculate and print the zone-cycles/cpu-second
+      // Note the need for 64-bit integers since nmb_updated can easily exceed 2^32.
       std::uint64_t zonecycles = nmb_updated_ *
-          static_cast<std::uint64_t>(pmesh->NumberOfMeshBlockCells());
+                                 static_cast<uint64_t>(pmesh->NumberOfMeshBlockCells());
       float zcps = static_cast<float>(zonecycles) / exe_time;
 
-      std::cout << std::endl << "zone-cycles = " << zonecycles << std::endl;
+      std::cout << std::endl << "MeshBlock-cycles = " << nmb_updated_ << std::endl;
       std::cout << "cpu time used  = " << exe_time << std::endl;
       std::cout << "zone-cycles/cpu_second = " << zcps << std::endl;
     }
@@ -521,6 +529,7 @@ void Driver::OutputCycleDiagnostics(Mesh *pm) {
 
 void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
   // Note: with MPI, sends on ALL MBs must be complete before receives execute
+
   // Initialize HYDRO: ghost zones and primitive variables (everywhere)
   hydro::Hydro *phydro = pm->pmb_pack->phydro;
   if (phydro != nullptr) {
@@ -576,5 +585,7 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) pz4c->Z4cBoundaryRHS(this, 0);
     (void) pz4c->ApplyPhysicalBCs(this, 0);
   }
+
   return;
 }
+

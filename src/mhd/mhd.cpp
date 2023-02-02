@@ -117,7 +117,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   // allocate memory for conserved and primitive variables
   // With AMR, maximum size of Views are limited by total device memory through an input
   // parameter, which in turn limits max number of MBs that can be created.
-  int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_maxperdevice));
+  int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_maxperrank));
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   {
   int ncells1 = indcs.nx1 + 2*(indcs.ng);

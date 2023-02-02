@@ -8,7 +8,6 @@ basename  = tetrad  # problem ID: basename of output filenames
 
 <mesh>
 nghost = 2         # Number of ghost cells
-refinement = static
 nx1    = 32        # number of cells in x1-direction
 x1min  = -40.0     # minimum x1
 x1max  = 40.0      # maximum x1
@@ -31,6 +30,9 @@ ox3_bc = periodic  # outer boundary
 nx1  = 8           # Number of cells in each MeshBlock, X1-dir
 nx2  = 8           # Number of cells in each MeshBlock, X2-dir
 nx3  = 8           # Number of cells in each MeshBlock, X3-dir
+
+<mesh_refinement>
+refinement = static  # type of refinement
 
 <refinement1>
 level = 1
