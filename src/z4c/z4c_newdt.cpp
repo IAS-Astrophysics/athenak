@@ -28,9 +28,9 @@ TaskStatus Z4c::NewTimeStep(Driver *pdriver, int stage) {
   }
 
   auto &indcs = pmy_pack->pmesh->mb_indcs;
-  int is = indcs.is, nx1 = indcs.nx1;
-  int js = indcs.js, nx2 = indcs.nx2;
-  int ks = indcs.ks, nx3 = indcs.nx3;
+  int nx1 = indcs.nx1;
+  int nx2 = indcs.nx2;
+  int nx3 = indcs.nx3;
 
   Real dt1 = std::numeric_limits<float>::max();
   Real dt2 = std::numeric_limits<float>::max();
@@ -40,7 +40,6 @@ TaskStatus Z4c::NewTimeStep(Driver *pdriver, int stage) {
   auto &mbsize = pmy_pack->pmb->mb_size;
   const int nmkji = (pmy_pack->nmb_thispack)*nx3*nx2*nx1;
   const int nkji = nx3*nx2*nx1;
-  const int nji  = nx2*nx1;
 
   Kokkos::parallel_reduce("Z4c dt",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
   KOKKOS_LAMBDA(const int &idx, Real &min_dt1, Real &min_dt2, Real &min_dt3) {

@@ -157,61 +157,56 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
 
     Real idx[] = {size.d_view(m).idx1, size.d_view(m).idx2, size.d_view(m).idx3};
     // -----------------------------------------------------------------------------------
-    // 1st derivatives
-    //
-    // Scalars
-    for(int a = 0; a < 3; ++a) {
-      par_for_inner(member, is, ie, [&](const int i) {
-        dalpha_d(a,i) = Dx<NGHOST>(a, idx, z4c.alpha, m,k,j,i);
-        dchi_d  (a,i) = Dx<NGHOST>(a, idx, z4c.chi,   m,k,j,i);
-        dKhat_d (a,i) = Dx<NGHOST>(a, idx, z4c.Khat,  m,k,j,i);
-        dTheta_d(a,i) = Dx<NGHOST>(a, idx, z4c.Theta, m,k,j,i);
-      });
-      member.team_barrier();
-    }
-
-    // Vectors
-    for(int a = 0; a < 3; ++a)
-    for(int b = 0; b < 3; ++b) {
-      par_for_inner(member, is, ie, [&](const int i) {
-        dbeta_du(b,a,i) = Dx<NGHOST>(b, idx, z4c.beta_u, m,a,k,j,i);
-         dGam_du(b,a,i) = Dx<NGHOST>(b, idx, z4c.Gam_u,  m,a,k,j,i);
-      });
-      member.team_barrier();
-    }
-
-    // Tensors
-    for(int a = 0; a < 3; ++a)
-    for(int b = a; b < 3; ++b)
-    for(int c = 0; c < 3; ++c) {
-      par_for_inner(member, is, ie, [&](const int i) {
-        dg_ddd(c,a,b,i) = Dx<NGHOST>(c, idx, z4c.g_dd, m,a,b,k,j,i);
-      });
-      member.team_barrier();
-    }
-
-    // -----------------------------------------------------------------------------------
-    // 2nd derivatives
+    // Derivatives
     //
     // Scalars
     ddalpha_dd.ZeroClear();
     ddchi_dd.ZeroClear();
+    Lalpha.ZeroClear();
+    Lchi.ZeroClear();
+    LKhat.ZeroClear();
+    LTheta.ZeroClear();
     for(int a = 0; a < 3; ++a) {
       par_for_inner(member, is, ie, [&](const int i) {
+        // 1st derivatives
+        dalpha_d(a,i) = Dx<NGHOST>(a, idx, z4c.alpha, m,k,j,i);
+        dchi_d  (a,i) = Dx<NGHOST>(a, idx, z4c.chi,   m,k,j,i);
+        dKhat_d (a,i) = Dx<NGHOST>(a, idx, z4c.Khat,  m,k,j,i);
+        dTheta_d(a,i) = Dx<NGHOST>(a, idx, z4c.Theta, m,k,j,i);
+        // 2nd derivatives
         ddalpha_dd(a,a,i) = Dxx<NGHOST>(a, idx, z4c.alpha, m,k,j,i);
-          ddchi_dd(a,a,i) = Dxx<NGHOST>(a, idx, z4c.chi,   m,k,j,i);
+        ddchi_dd(a,a,i) = Dxx<NGHOST>(a, idx, z4c.chi,   m,k,j,i);
+        // advective derivatives
+        Lalpha(i) += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.alpha, m,a,k,j,i);
+        Lchi(i)   += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.chi,   m,a,k,j,i);
+        LKhat(i)  += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.Khat,  m,a,k,j,i);
+        LTheta(i) += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.Theta, m,a,k,j,i);
       });
-      member.team_barrier();
-
       for(int b = a + 1; b < 3; ++b) {
         par_for_inner(member, is, ie, [&](const int i) {
+          // 2nd derivatives
           ddalpha_dd(a,b,i) = Dxy<NGHOST>(a, b, idx, z4c.alpha, m,k,j,i);
-            ddchi_dd(a,b,i) = Dxy<NGHOST>(a, b, idx, z4c.chi,   m,k,j,i);
+          ddchi_dd(a,b,i) = Dxy<NGHOST>(a, b, idx, z4c.chi,   m,k,j,i);
         });
-        member.team_barrier();
       }
     }
+    member.team_barrier();
+
     // Vectors
+    Lbeta_u.ZeroClear();
+    LGam_u.ZeroClear();
+    for(int a = 0; a < 3; ++a)
+    for(int b = 0; b < 3; ++b) {
+      par_for_inner(member, is, ie, [&](const int i) {
+        // 1st derivatives
+        dbeta_du(b,a,i) = Dx<NGHOST>(b, idx, z4c.beta_u, m,a,k,j,i);
+        dGam_du(b,a,i) = Dx<NGHOST>(b, idx, z4c.Gam_u,  m,a,k,j,i);
+        // advective derivatives
+        Lbeta_u(b,i) += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.beta_u, m,a,b,k,j,i);
+        LGam_u(b,i)  += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.Gam_u,  m,a,b,k,j,i);
+      });
+    }
+    // 2nd derivatives
     ddbeta_ddu.ZeroClear();
     for(int c = 0; c < 3; ++c)
     for(int a = 0; a < 3; ++a)
@@ -220,17 +215,32 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
         par_for_inner(member, is, ie, [&](const int i) {
           ddbeta_ddu(a,b,c,i) = Dxx<NGHOST>(a, idx, z4c.beta_u, m,c,k,j,i);
         });
-        member.team_barrier();
       }
       else {
         par_for_inner(member, is, ie, [&](const int i) {
           ddbeta_ddu(a,b,c,i) = Dxy<NGHOST>(a, b, idx, z4c.beta_u, m,c,k,j,i);
         });
-        member.team_barrier();
       }
     }
+    member.team_barrier();
+
     // Tensors
+    Lg_dd.ZeroClear();
+    LA_dd.ZeroClear();
     ddg_dddd.ZeroClear();
+    for(int a = 0; a < 3; ++a)
+    for(int b = a; b < 3; ++b)
+    for(int c = 0; c < 3; ++c) {
+      par_for_inner(member, is, ie, [&](const int i) {
+        // 1st derivatives
+        dg_ddd(c,a,b,i) = Dx<NGHOST>(c, idx, z4c.g_dd, m,a,b,k,j,i);
+        // advective derivatives
+        Lg_dd(a,b,i) += Lx<NGHOST>(c, idx, z4c.beta_u, z4c.g_dd, m,c,a,b,k,j,i);
+        LA_dd(a,b,i) += Lx<NGHOST>(c, idx, z4c.beta_u, z4c.A_dd, m,c,a,b,k,j,i);
+      });
+    }
+
+    // 2nd derivatives
     for(int c = 0; c < 3; ++c)
     for(int d = c; d < 3; ++d)
     for(int a = 0; a < 3; ++a)
@@ -239,67 +249,20 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
         par_for_inner(member, is, ie, [&](const int i) {
           ddg_dddd(a,b,c,d,i) = Dxx<NGHOST>(a, idx, z4c.g_dd, m,c,d,k,j,i);
         });
-        member.team_barrier();
       }
       else {
         par_for_inner(member, is, ie, [&](const int i) {
           ddg_dddd(a,b,c,d,i) = Dxy<NGHOST>(a, b, idx, z4c.g_dd, m,c,d,k,j,i);
         });
-        member.team_barrier();
       }
     }
-    // -----------------------------------------------------------------------------------
-    // Advective derivatives
-    //
-    // Scalars
-    Lalpha.ZeroClear();
-    Lchi.ZeroClear();
-    LKhat.ZeroClear();
-    LTheta.ZeroClear();
-    for(int a = 0; a < 3; ++a) {
-      par_for_inner(member, is, ie, [&](const int i) {  
-        Lalpha(i) += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.alpha, m,a,k,j,i);
-        Lchi(i)   += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.chi,   m,a,k,j,i);
-        LKhat(i)  += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.Khat,  m,a,k,j,i);
-        LTheta(i) += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.Theta, m,a,k,j,i);
-      });
-      member.team_barrier();
-    }
-    // Vectors
-    Lbeta_u.ZeroClear();
-    LGam_u.ZeroClear();
-    for(int a = 0; a < 3; ++a)
-    for(int b = 0; b < 3; ++b) {
-      par_for_inner(member, is, ie, [&](const int i) {
-        Lbeta_u(b,i) += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.beta_u, m,a,b,k,j,i);
-        LGam_u(b,i)  += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.Gam_u,  m,a,b,k,j,i);
-      });
-      member.team_barrier();
-    }
-    // Tensors
-    Lg_dd.ZeroClear();
-    LA_dd.ZeroClear();
-    for(int a = 0; a < 3; ++a)
-    for(int b = a; b < 3; ++b)
-    for(int c = 0; c < 3; ++c) {
-      par_for_inner(member, is, ie, [&](const int i) {
-        Lg_dd(a,b,i) += Lx<NGHOST>(c, idx, z4c.beta_u, z4c.g_dd, m,c,a,b,k,j,i);
-        LA_dd(a,b,i) += Lx<NGHOST>(c, idx, z4c.beta_u, z4c.A_dd, m,c,a,b,k,j,i);
-      });
-      member.team_barrier();
-    }
-    // -----------------------------------------------------------------------------------
-    // Get K from Khat
-    //
-    par_for_inner(member, is, ie, [&](const int i) {
-      K(i) = z4c.Khat(m,k,j,i) + 2.*z4c.Theta(m,k,j,i);
-    });
     member.team_barrier();
 
     // -----------------------------------------------------------------------------------
-    // Inverse metric
-    //
     par_for_inner(member, is, ie, [&](const int i) {
+      // Get K from Khat
+      K(i) = z4c.Khat(m,k,j,i) + 2.*z4c.Theta(m,k,j,i);
+      // Inverse metric
       detg(i) = adm::SpatialDet(z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i), z4c.g_dd(m,0,2,k,j,i),
                            z4c.g_dd(m,1,1,k,j,i), z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i));
       adm::SpatialInv(1.0/detg(i),
@@ -309,6 +272,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
                  &g_uu(1,1,i), &g_uu(1,2,i), &g_uu(2,2,i));
     });
     member.team_barrier();
+
     // -----------------------------------------------------------------------------------
     // Christoffel symbols
     //
@@ -318,8 +282,9 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
       par_for_inner(member, is, ie, [&](const int i) {
         Gamma_ddd(c,a,b,i) = 0.5*(dg_ddd(a,b,c,i) + dg_ddd(b,a,c,i) - dg_ddd(c,a,b,i));
       });
-      member.team_barrier();
     }
+    member.team_barrier();
+
     Gamma_udd.ZeroClear();
     for(int c = 0; c < 3; ++c)
     for(int a = 0; a < 3; ++a)
@@ -328,8 +293,9 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
       par_for_inner(member, is, ie, [&](const int i) {
         Gamma_udd(c,a,b,i) += g_uu(c,d,i)*Gamma_ddd(d,a,b,i);
       });
-      member.team_barrier();
     }
+    member.team_barrier();
+
     // Gamma's computed from the conformal metric (not evolved)
     Gamma_u.ZeroClear();
     for(int a = 0; a < 3; ++a)
@@ -338,8 +304,8 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
       par_for_inner(member, is, ie, [&](const int i) {
         Gamma_u(a,i) += g_uu(b,c,i)*Gamma_udd(a,b,c,i);
       });
-      member.team_barrier();
     }
+    member.team_barrier();
 
     // -----------------------------------------------------------------------------------
     // Curvature of conformal metric
@@ -388,8 +354,9 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
       par_for_inner(member, is, ie, [&](const int i) {
         dphi_d(a,i) = dchi_d(a,i)/(chi_guarded(i) * opt.chi_psi_power);
       });
-      member.team_barrier();
     }
+    member.team_barrier();
+
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
       par_for_inner(member, is, ie, [&](const int i) {
@@ -402,9 +369,9 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
         par_for_inner(member, is, ie, [&](const int i) {
           Ddphi_dd(a,b,i) -= Gamma_udd(c,a,b,i)*dphi_d(c,i);
         });
-        member.team_barrier();
       }
     }
+    member.team_barrier();
 
     // -----------------------------------------------------------------------------------
     // Curvature contribution from conformal factor
@@ -421,9 +388,9 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
           Rphi_dd(a,b,i) -= 2.*z4c.g_dd(m,a,b,k,j,i) * g_uu(c,d,i)*(Ddphi_dd(c,d,i) +
               2.*dphi_d(c,i)*dphi_d(d,i));
         });
-        member.team_barrier();
       }
     }
+    member.team_barrier();
 
     // -----------------------------------------------------------------------------------
     // Trace of the matter stress tensor
@@ -456,10 +423,10 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
           par_for_inner(member, is, ie, [&](const int i) {
             Ddalpha_dd(a,b,i) += 2.*z4c.g_dd(m,a,b,k,j,i) * g_uu(c,d,i) * dphi_d(c,i) * dalpha_d(d,i);
           });
-          member.team_barrier();
         }
       }
     }
+    member.team_barrier();
 
     Ddalpha.ZeroClear();
     for(int a = 0; a < 3; ++a)
@@ -467,8 +434,8 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
       par_for_inner(member, is, ie, [&](const int i) {
         Ddalpha(i) += oopsi4(i) * g_uu(a,b,i) * Ddalpha_dd(a,b,i);
       });
-      member.team_barrier();
     }
+    member.team_barrier();
 
     // -----------------------------------------------------------------------------------
     // Contractions of A_ab, inverse, and derivatives
@@ -481,16 +448,18 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
       par_for_inner(member, is, ie, [&](const int i) {
         AA_dd(a,b,i) += g_uu(c,d,i) * z4c.A_dd(m,a,c,k,j,i) * z4c.A_dd(m,d,b,k,j,i);
       });
-      member.team_barrier();
     }
+    member.team_barrier();
+
     AA.ZeroClear();
     for(int a = 0; a < 3; ++a)
     for(int b = 0; b < 3; ++b) {
       par_for_inner(member, is, ie, [&](const int i) {
         AA(i) += g_uu(a,b,i) * AA_dd(a,b,i);
       });
-      member.team_barrier();
     }
+    member.team_barrier();
+
     A_uu.ZeroClear();
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b)
@@ -499,8 +468,9 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
       par_for_inner(member, is, ie, [&](const int i) {
         A_uu(a,b,i) += g_uu(a,c,i) * g_uu(b,d,i) * z4c.A_dd(m,c,d,k,j,i);
       });
-      member.team_barrier();
     }
+    member.team_barrier();
+
     DA_u.ZeroClear();
     for(int a = 0; a < 3; ++a) {
       for(int b = 0; b < 3; ++b) {
@@ -508,16 +478,16 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
           DA_u(a,i) -= (3./2.) * A_uu(a,b,i) * dchi_d(b,i) / chi_guarded(i);
           DA_u(a,i) -= (1./3.) * g_uu(a,b,i) * (2.*dKhat_d(b,i) + dTheta_d(b,i));
         });
-        member.team_barrier();
       }
+      member.team_barrier();
       for(int b = 0; b < 3; ++b)
       for(int c = 0; c < 3; ++c) {
         par_for_inner(member, is, ie, [&](const int i) {
           DA_u(a,i) += Gamma_udd(a,b,c,i) * A_uu(b,c,i);
         });
-        member.team_barrier();
       }
     }
+    member.team_barrier();
 
     // -----------------------------------------------------------------------------------
     // Ricci scalar
@@ -528,8 +498,8 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
       par_for_inner(member, is, ie, [&](const int i) {
         R(i) += oopsi4(i) * g_uu(a,b,i) * (R_dd(a,b,i) + Rphi_dd(a,b,i));
       });
-      member.team_barrier();
     }
+    member.team_barrier();
 
     // -----------------------------------------------------------------------------------
     // Hamiltonian constraint
@@ -547,16 +517,18 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
       par_for_inner(member, is, ie, [&](const int i) {
         dbeta(i) += dbeta_du(a,a,i);
       });
-      member.team_barrier();
     }
+    member.team_barrier();
+
     ddbeta_d.ZeroClear();
     for(int a = 0; a < 3; ++a)
     for(int b = 0; b < 3; ++b) {
       par_for_inner(member, is, ie, [&](const int i) {
         ddbeta_d(a,i) += (1./3.) * ddbeta_ddu(a,b,b,i);
       });
-      member.team_barrier();
     }
+    member.team_barrier();
+
     // Finalize Lchi
     par_for_inner(member, is, ie, [&](const int i) {
       Lchi(i) += (1./6.) * opt.chi_psi_power * chi_guarded(i) * dbeta(i);
@@ -577,10 +549,11 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
           par_for_inner(member, is, ie, [&](const int i) {
             LGam_u(a,i) += g_uu(b,c,i) * ddbeta_ddu(b,c,a,i);
           });
-          member.team_barrier();
         }
       }
     }
+    member.team_barrier();
+
     // Finalize Lg_dd and LA_dd
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
@@ -596,9 +569,10 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
           Lg_dd(a,b,i) += dbeta_du(b,c,i) * z4c.g_dd(m,a,c,k,j,i);
           LA_dd(a,b,i) += dbeta_du(a,c,i) * z4c.A_dd(m,b,c,k,j,i);
         });
-        member.team_barrier();
       }
     }
+    member.team_barrier();
+
     // -----------------------------------------------------------------------------------
     // Assemble RHS
     //
@@ -627,13 +601,14 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
       for(int b = 0; b < 3; ++b) {
         par_for_inner(member, is, ie, [&](const int i) {
           rhs.Gam_u(m,a,k,j,i) -= 2. * A_uu(a,b,i) * dalpha_d(b,i);
-    // Matter commented out
+        // Matter commented out
         //rhs.Gam_u(m,a,k,j,i) -= 16.*M_PI * z4c.alpha(m,k,j,i) 
-	//                      * g_uu(a,b) * mat.S_d(m,b,k,j,i);
+	      //                      * g_uu(a,b) * mat.S_d(m,b,k,j,i);
         });
-        member.team_barrier();
       }
     }
+    member.team_barrier();
+
     // g and A
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
@@ -647,12 +622,13 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
         rhs.A_dd(m,a,b,k,j,i) += z4c.alpha(m,k,j,i) * (K(i)*z4c.A_dd(m,a,b,k,j,i)
                                - 2.*AA_dd(a,b,i));
         rhs.A_dd(m,a,b,k,j,i) += LA_dd(a,b,i);
-    // Matter commented out
+        // Matter commented out
         //rhs.A_dd(m,a,b,k,j,i) -= 8.*M_PI * z4c.alpha(m,k,j,i) *
         // (oopsi4*mat.S_dd(m,a,b,k,j,i) - (1./3.)*S(i)*z4c.g_dd(m,a,b,k,j,i));
       });
-      member.team_barrier();
     }
+    member.team_barrier();
+
     // lapse function
     par_for_inner(member, is, ie, [&](const int i) {
       Real const f = opt.lapse_oplog * opt.lapse_harmonicf
@@ -671,8 +647,8 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
         // FORCE beta = 0
         //rhs.beta_u(m,a,k,j,i) = 0;
       });
-      member.team_barrier();
     }
+    member.team_barrier();
 
     // harmonic gauge terms
     if (std::fabs(opt.shift_alpha2Gamma) > 0.0) {
@@ -681,9 +657,10 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
           rhs.beta_u(m,a,k,j,i) += opt.shift_alpha2Gamma *
                                SQR(z4c.alpha(m,k,j,i)) * z4c.Gam_u(m,a,k,j,i);
         });
-        member.team_barrier();
       }
     }
+    member.team_barrier();
+
     if (std::fabs(opt.shift_H) > 0.0) {
       for(int a = 0; a < 3; ++a) {
         for(int b = 0; b < 3; ++b) {
@@ -692,10 +669,10 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
             chi_guarded(i) * (0.5 * z4c.alpha(m,k,j,i) * dchi_d(b,i) -
                               dalpha_d(b,i)) * g_uu(a,b,i);
           });
-          member.team_barrier();
         }
       }
     }
+    member.team_barrier();
   });
   // ===================================================================================
   // Add dissipation for stability

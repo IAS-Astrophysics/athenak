@@ -22,7 +22,6 @@
 
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
-#include "z4c/z4c.hpp"
 #include "prolongation.hpp"
 
 #if MPI_PARALLEL_ENABLED
@@ -240,7 +239,6 @@ void MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
   if (pmy_mesh->pgen->user_ref_func != nullptr) {
     pmy_mesh->pgen->user_ref_func(pmbp);
   }
-
   // sync device array with host
   refine_flag.template modify<DevExeSpace>();
   refine_flag.template sync<HostMemSpace>();
@@ -516,15 +514,11 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   // Simply copies data from coarse arrays in source MBs to appropriate octant of fine
   // array in target MB.
   hydro::Hydro* phydro = pm->pmb_pack->phydro;
-  z4c::Z4c* pz4c = pm->pmb_pack->pz4c;
   mhd::MHD* pmhd = pm->pmb_pack->pmhd;
   // derefine (if needed)
   if (ndel > 0) {
     if (phydro != nullptr) {
       DerefineCCSameRank(phydro->u0, phydro->coarse_u0);
-    }
-    if (pz4c != nullptr) {
-      DerefineCCSameRank(pz4c->u0, pz4c->coarse_u0);
     }
     if (pmhd != nullptr) {
       DerefineCCSameRank(pmhd->u0, pmhd->coarse_u0);
@@ -578,9 +572,6 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   if (nnew > 0) {
     if (phydro != nullptr) {
       RefineCC(new_to_old, phydro->u0, phydro->coarse_u0);
-    }
-    if (pz4c != nullptr) {
-      RefineCC(new_to_old, pz4c->u0, pz4c->coarse_u0);
     }
     if (pmhd != nullptr) {
       RefineCC(new_to_old, pmhd->u0, pmhd->coarse_u0);
@@ -1257,3 +1248,4 @@ void MeshRefinement::RestrictFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb)
   }
   return;
 }
+

@@ -22,7 +22,6 @@ LagrangeInterpolator::LagrangeInterpolator(MeshBlockPack *pmy_pack, Real rcoords
   interp_wghts("interp_wghts",1,1) {
 
   auto &indcs = pmy_pack->pmesh->mb_indcs;
-  int &is = indcs.is; int &js = indcs.js; int &ks = indcs.ks;
   int &ng = indcs.ng;
   Kokkos::realloc(rcoord,3);
   Kokkos::realloc(interp_wghts,2*ng,3);
