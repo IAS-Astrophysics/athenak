@@ -59,9 +59,12 @@ namespace radiationfemn {
 
         ~RadiationFEMN();
 
-        // parfile parameters
-        std::string matrix_path;        // path for mass, stiffness and related matrices for the geodesic grid
-        int nangles;                    // number of points on the geodesic grid, this becomes the total number of (l,m) modes in the FP_N case
+        // parameters
+        int num_ref;                    // number of times the geodesic grid is refined
+        int num_points;                 // number of points on the grid
+        int nangles;                    // num_points or total number of (l,m) modes
+        int num_edges;                  // number of unique edges
+        int num_triangles;              // number of unique triangular elements
         int basis;                      // choice of basis functions on the geodesic grid (1: tent 2: small tent 3: honeycomb 4: small honeycomb)
 
         std::string limiter_dg;         // choice of limiter for DG, set to "minmod2" by default
@@ -72,6 +75,25 @@ namespace radiationfemn {
 
         bool rad_source;                // flag to enable/disable source terms for radiation, disabled by default
         bool beam_source;               // flag to enable/disable beam sources, disabled by default
+
+        // geodesic grid information
+        // cartesian coordinates of the grid vertices
+        DvceArray1D<Real> x;
+        DvceArray1D<Real> y;
+        DvceArray1D<Real> z;
+
+        // corresponding polar coordinates
+        DvceArray1D<Real> r;
+        DvceArray1D<Real> theta;
+        DvceArray1D<Real> phi;
+
+        // edge and triangle information
+        DvceArray2D<int> edges;
+        DvceArray2D<int> triangles;
+
+        // quadrature integration weights
+        DvceArray1D<Real> scheme_weights;
+        DvceArray2D<Real> scheme_points;
 
         // matrices for the angular grid
         DvceArray2D<Real> mass_matrix;             // mass matrix
