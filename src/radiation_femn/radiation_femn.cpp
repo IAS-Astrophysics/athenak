@@ -32,8 +32,8 @@ namespace radiationfemn {
             i1("i1", 1, 1, 1, 1, 1),
             iflx("iflx", 1, 1, 1, 1, 1),
             itemp("itemp", 1, 1, 1, 1, 1),
-            etemp0("etemp0", 1, 1, 1, 1, 1),
-            etemp1("etemp1", 1, 1, 1, 1, 1),
+            etemp0("etemp0", 1, 1, 1, 1),
+            etemp1("etemp1", 1, 1, 1, 1),
             mass_matrix("mm", 1, 1),
             stiffness_matrix_x("sx", 1, 1),
             stiffness_matrix_y("sy", 1, 1),
@@ -68,25 +68,25 @@ namespace radiationfemn {
             scheme_points("scheme_points", 171, 3) {
 
         // set parfile parameters
-        limiter_dg = pin->GetOrAddString("radiation_femn", "limiter_dg", "minmod2");
-        fpn = pin->GetOrAddInteger("radiation_femn", "fpn", 0) == 1;
+        limiter_dg = pin->GetOrAddString("radiation-femn", "limiter_dg", "minmod2");
+        fpn = pin->GetOrAddInteger("radiation-femn", "fpn", 0) == 1;
 
         if (!fpn) {
             lmax = -42;
-            nangles = pin->GetInteger("radiation_femn", "num_angles");
-            basis = pin->GetInteger("radiation_femn", "basis");
+            nangles = pin->GetInteger("radiation-femn", "num_angles");
+            basis = pin->GetInteger("radiation-femn", "basis");
             filter_sigma_eff = -42;
-            limiter_fem = pin->GetOrAddString("radiation_femn", "limiter_fem", "clp");
+            limiter_fem = pin->GetOrAddString("radiation-femn", "limiter_fem", "clp");
         } else {
-            lmax = pin->GetInteger("radiation_femn", "lmax");
+            lmax = pin->GetInteger("radiation-femn", "lmax");
             nangles = (lmax + 1) * (lmax + 1);
             basis = -42;
-            filter_sigma_eff = pin->GetOrAddInteger("radiation_femn", "filter_opacity", 0);
+            filter_sigma_eff = pin->GetOrAddInteger("radiation-femn", "filter_opacity", 0);
             limiter_fem = "-42";
         }
 
-        rad_source = pin->GetOrAddInteger("radiation_femn", "sources", 0) == 1;
-        beam_source = pin->GetOrAddInteger("radiation_femn", "beam_sources", 0) == 1;
+        rad_source = pin->GetOrAddInteger("radiation-femn", "sources", 0) == 1;
+        beam_source = pin->GetOrAddInteger("radiation-femn", "beam_sources", 0) == 1;
 
         // allocate memory for matrices
         Kokkos::realloc(mass_matrix, nangles, nangles);
@@ -204,7 +204,6 @@ namespace radiationfemn {
         edges(29, 0) = 4;
         edges(29, 1) = 8;
 
-
         triangles(0, 0) = 0;
         triangles(0, 1) = 6;
         triangles(0, 2) = 10;
@@ -295,8 +294,8 @@ namespace radiationfemn {
 
         // reallocate memory for the temporary intensity matrices if the clipping limiter is on
         if (limiter_fem == "clp") {
-            Kokkos::realloc(etemp0, nmb, nangles, ncells3, ncells2, ncells1);
-            Kokkos::realloc(etemp1, nmb, nangles, ncells3, ncells2, ncells1);
+            Kokkos::realloc(etemp0, nmb, ncells3, ncells2, ncells1);
+            Kokkos::realloc(etemp1, nmb, ncells3, ncells2, ncells1);
         }
 
         // reallocate allocate memory for evolved variables on coarse mesh
