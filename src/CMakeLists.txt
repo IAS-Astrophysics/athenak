@@ -94,6 +94,8 @@ add_executable(
         pgen/tests/rad_check_tetrad.cpp
         pgen/tests/rad_hohlraum.cpp
         pgen/tests/rad_linear_wave.cpp
+        pgen/tests/rad_femn_linetest.cpp
+        pgen/tests/rad_femn_gridtest.cpp
 
         radiation/radiation.cpp
         radiation/radiation_fluxes.cpp
@@ -116,7 +118,11 @@ add_executable(
         radiation_femn/radiation_femn_reader.cpp
         radiation_femn/radaition_femn_fluxes.cpp
         radiation_femn/radiation_femn_update.cpp
-        radiation_femn/radiation_femn_limiter_filter.cpp radiation_femn/radiation_femn_tasks.cpp radiation_femn/radiation_femn_source.cpp radiation_femn/radiation_femn_newdt.cpp pgen/tests/rad_femn_linetest.cpp radiation_femn/radiation_femn_linalg.cpp)
+        radiation_femn/radiation_femn_limiter_filter.cpp
+        radiation_femn/radiation_femn_tasks.cpp
+        radiation_femn/radiation_femn_source.cpp
+        radiation_femn/radiation_femn_newdt.cpp
+        radiation_femn/radiation_femn_linalg.cpp )
 
 # custom problem generator to be included in compile
 # specify on command line using '-D PROBLEM=file' where 'file' is name of file in
