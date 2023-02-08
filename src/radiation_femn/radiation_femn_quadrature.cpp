@@ -7,13 +7,16 @@
 //! \file radiation_femn_quadrature.cpp
 //  \brief contains T2 quadrature weights. DO NOT EDIT.
 
-#import "radiation_femn/radiation_femn.hpp"
+#include "radiation_femn/radiation_femn.hpp"
 
 namespace radiationfemn {
-    KOKKOS_INLINE_FUNCTION
+    //KOKKOS_INLINE_FUNCTION
     void RadiationFEMN::LoadQuadrature(){
 
         scheme_num_points = 453;
+
+        Kokkos::realloc(scheme_weights, scheme_num_points);
+        Kokkos::realloc(scheme_points, scheme_num_points,3);
 
         scheme_weights(0) = 0.0033286951747132296;
         scheme_weights(1) = 0.0033286951747132296;

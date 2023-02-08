@@ -48,21 +48,28 @@ namespace radiationfemn {
         return result;
     }
 
-    // -----------------------------------------------------------------------
-    // Integrate a function over a spherical triangle whose vertices are given
     KOKKOS_INLINE_FUNCTION
     double
-    RadiationFEMN::IntegrateFunctionSphericaTriangle(double x1, double y1, double z1, double x2, double y2, double z2,
-                                                     double x3, double y3, double z3,
-                                                     std::function<double(double, double, double, double, double,
-                                                                          double, double, double, double, double,
-                                                                          double, double)> func) {
+    RadiationFEMN::IntegratePsiPsiABSphericaTriangle(int a, int b, int t1, int t2, int t3) {
+
+        double x1 = x(t1);
+        double y1 = y(t1);
+        double z1 = z(t1);
+
+        double x2 = x(t2);
+        double y2 = y(t2);
+        double z2 = z(t2);
+
+        double x3 = x(t3);
+        double y3 = y(t3);
+        double z3 = z(t3);
+
         double result{0.};
         for (size_t i = 0; i < scheme_num_points; i++) {
             result += CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0),
                                                    scheme_points(i, 1), scheme_points(i, 2)) *
-                      func(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1),
-                           scheme_points(i, 2)) * scheme_weights(i);
+                      FEMBasisABasisB(a, b, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2),
+                                      basis) * scheme_weights(i);
         }
 
         result = 0.5 * result;
@@ -75,75 +82,33 @@ namespace radiationfemn {
         double result{0.};
 
         bool is_edge{false};
-        FindTriangles(a,b,is_edge);
-
-        if(is_edge) {
-            for (size_t i = 0; i < 6; i++) {
-                if(edge_triangles(i,0) >= 0) {
-                    int triangle_index_1 = edge_triangles(i, 0);
-                    int triangle_index_2 = edge_triangles(i, 1);
-                    int triangle_index_3 = edge_triangles(i, 2);
-
-                    double triangle_vertex_1_x = pmy_pack->pradfemn->x(triangle_index_1);
-                    double triangle_vertex_1_y = pmy_pack->pradfemn->y(triangle_index_1);
-                    double triangle_vertex_1_z = pmy_pack->pradfemn->z(triangle_index_1);
-
-                    double triangle_vertex_2_x = pmy_pack->pradfemn->x(triangle_index_2);
-                    double triangle_vertex_2_y = pmy_pack->pradfemn->y(triangle_index_2);
-                    double triangle_vertex_2_z = pmy_pack->pradfemn->z(triangle_index_2);
-
-                    double triangle_vertex_3_x = pmy_pack->pradfemn->x(triangle_index_3);
-                    double triangle_vertex_3_y = pmy_pack->pradfemn->y(triangle_index_3);
-                    double triangle_vertex_3_z = pmy_pack->pradfemn->z(triangle_index_3);
-
-                    /*double integrated_result = IntegrateFuncSphericalTriangle(triangle_vertex_1_x, triangle_vertex_1_y,
-                                                                              triangle_vertex_1_z, triangle_vertex_2_x,
-                                                                              triangle_vertex_2_y, triangle_vertex_2_z,
-                                                                              triangle_vertex_3_x, triangle_vertex_3_y,
-                                                                              triangle_vertex_3_z,
-                                                                              PsiPsiAB());*/
-                }
-            }
-        }
-    }
-
-    /*
-    void RadiationFEMN::IntegrateBasisBasisAB(int a, int b, double x, double y, double z) {
-        double result{0.};
-        double resultx{0.};
-        double resulty{0.};
-        double resultz{0.};
-
-        bool is_edge = false;
-
         FindTriangles(a, b, is_edge);
 
         if (is_edge) {
             for (size_t i = 0; i < 6; i++) {
-                int triangle_index_1 = edge_triangles(i, 0);
-                int triangle_index_2 = edge_triangles(i, 1);
-                int triangle_index_3 = edge_triangles(i, 2);
+                if (edge_triangles(i, 0) >= 0) {
+                    int triangle_index_1 = edge_triangles(i, 0);
+                    int triangle_index_2 = edge_triangles(i, 1);
+                    int triangle_index_3 = edge_triangles(i, 2);
 
-                double triangle_vertex_1_x = pmy_pack->pradfemn->x(triangle_index_1);
-                double triangle_vertex_1_y = pmy_pack->pradfemn->y(triangle_index_1);
-                double triangle_vertex_1_z = pmy_pack->pradfemn->z(triangle_index_1);
-
-                double triangle_vertex_2_x = pmy_pack->pradfemn->x(triangle_index_2);
-                double triangle_vertex_2_y = pmy_pack->pradfemn->y(triangle_index_2);
-                double triangle_vertex_2_z = pmy_pack->pradfemn->z(triangle_index_2);
-
-                double triangle_vertex_3_x = pmy_pack->pradfemn->x(triangle_index_3);
-                double triangle_vertex_3_y = pmy_pack->pradfemn->y(triangle_index_3);
-                double triangle_vertex_3_z = pmy_pack->pradfemn->z(triangle_index_3);
-
-                double integrated_result_x = IntegrateFuncSphericalTriangle(triangle_vertex_1_x, triangle_vertex_1_y,
-                                                                            triangle_vertex_1_z, triangle_vertex_2_x,
-                                                                            triangle_vertex_2_y, triangle_vertex_2_z,
-                                                                            triangle_vertex_3_x, triangle_vertex_3_y,
-                                                                            triangle_vertex_3_z,
-                                                                            FEMBasisABasisB);
+                    double integrated_result = IntegratePsiPsiABSphericaTriangle(a, b, triangle_index_1,
+                                                                                 triangle_index_2, triangle_index_3);
+                    result += integrated_result;
+                }
             }
         }
 
-    }*/
+        return result;
+    }
+
+    //KOKKOS_INLINE_FUNCTION
+    void RadiationFEMN::PopulateMassMatrix() {
+        Kokkos::realloc(mass_matrix, num_points, num_points);
+
+        par_for("radiation_femn_flux_x", DevExeSpace(), 0, num_points-1, 0, num_points-1,
+                KOKKOS_LAMBDA(const int A, const int B) {
+                    mass_matrix(A, B) = IntegratePsiPsiAB(A, B);
+
+                });
+    }
 }

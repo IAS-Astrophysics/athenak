@@ -17,7 +17,7 @@ namespace radiationfemn {
 //----------------------------------------------------------------------------------------
 //! \fn void RadiationFEMN::LoadMatrix(
 //  \brief Load matrices constructed from the geodesic grid
-
+/*
     void RadiationFEMN::LoadMatrix(int num_angles, int basis, const std::string& matname, DvceArray2D<Real> &mat, const std::string& path) {
         int nvar = nangles;
         HostArray2D<Real> matrix("host_temp_array", nangles, nangles);
@@ -60,5 +60,5 @@ namespace radiationfemn {
         Kokkos::deep_copy(int_psi, matrix);
 
         return;
-    }
+    } */
 }  //namespace radiationfemn

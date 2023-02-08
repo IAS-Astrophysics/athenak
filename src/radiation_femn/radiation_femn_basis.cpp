@@ -174,7 +174,7 @@ namespace radiationfemn {
 
     // -----------------------------------------------------------------------
     // Product of two FEM basis given their index and triangle info
-    KOKKOS_INLINE_FUNCTION
+    //KOKKOS_INLINE_FUNCTION
     double RadiationFEMN::FEMBasisABasisB(int a, int b, int t1, int t2, int t3, double xi1, double xi2, double xi3, int basis_choice) {
 
         int basis_index_a = (a == t1) * 1 + (a == t2) * 2 + (a == t3) * 3;
