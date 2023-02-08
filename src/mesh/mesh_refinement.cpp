@@ -22,6 +22,7 @@
 
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "z4c/z4c.hpp"
 #include "prolongation.hpp"
 
 #if MPI_PARALLEL_ENABLED
@@ -515,6 +516,7 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   // array in target MB.
   hydro::Hydro* phydro = pm->pmb_pack->phydro;
   mhd::MHD* pmhd = pm->pmb_pack->pmhd;
+  z4c::Z4c* pz4c = pm->pmb_pack->pz4c;
   // derefine (if needed)
   if (ndel > 0) {
     if (phydro != nullptr) {
@@ -523,6 +525,9 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
     if (pmhd != nullptr) {
       DerefineCCSameRank(pmhd->u0, pmhd->coarse_u0);
       DerefineFCSameRank(pmhd->b0, pmhd->coarse_b0);
+    }
+    if (pz4c != nullptr) {
+      DerefineCCSameRank(pz4c->u0, pz4c->coarse_u0);
     }
   }
 
@@ -536,7 +541,9 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
     CopyCC(pmhd->u0);
     CopyFC(pmhd->b0);
   }
-
+  if (pz4c != nullptr) {
+    CopyCC(pz4c->u0);
+  }
   // Step 7.
   // Copy evolved physics variables for MBs flagged for refinement from source fine array
   // to target coarse array, when both are on same rank.
@@ -548,8 +555,10 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
       CopyForRefinementCC(pmhd->u0, pmhd->coarse_u0);
       CopyForRefinementFC(pmhd->b0, pmhd->coarse_b0);
     }
+    if (pz4c != nullptr) {
+      CopyForRefinementCC(pz4c->u0, pz4c->coarse_u0);
+    }
   }
-
   // Step 8.
   // Wait for all MPI load balancing communications to finish.  Unpack data.
 #if MPI_PARALLEL_ENABLED
@@ -568,7 +577,6 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   // Step 9.
   // Coarse arrays are now up-to-date, either through copies on same rank or MPI calls
   // So prolongate (refine) evolved physics variables for all MBs flagged for refinement.
-
   if (nnew > 0) {
     if (phydro != nullptr) {
       RefineCC(new_to_old, phydro->u0, phydro->coarse_u0);
@@ -576,6 +584,9 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
     if (pmhd != nullptr) {
       RefineCC(new_to_old, pmhd->u0, pmhd->coarse_u0);
       RefineFC(new_to_old, pmhd->b0, pmhd->coarse_b0);
+    }
+    if (pz4c != nullptr) {
+      RefineCC(new_to_old, pz4c->u0, pz4c->coarse_u0);
     }
   }
 
@@ -593,7 +604,6 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   Kokkos::deep_copy(ncyc_since_ref, new_ncyc_since_ref);
   // reallocate refine_flag, will be zeroed out at start of CheckForRefinement
   Kokkos::realloc(refine_flag, new_nmb_total);
-
   // Step 10.
   // Update data in Mesh/MeshBlockPack/MeshBlock classes with new grid properties
   delete [] pm->lloc_eachmb;

@@ -61,7 +61,8 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   // Then initialize memory and algorithms for reconstruction and Riemann solvers
   std::string evolution_t = pin->GetString("time","evolution");
 
-  int nmb = ppack->nmb_thispack;
+  int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_maxperrank));
+  // int nmb = ppack->nmb_thispack;
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   {
   int ncells1 = indcs.nx1 + 2*(indcs.ng);
