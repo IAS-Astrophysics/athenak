@@ -87,6 +87,22 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
     }
 
     std::cout << std::endl;
+    std::cout << "Print the mass matrix: " << std::endl;
+    auto mass_matrix = pmbp->pradfemn->mass_matrix;
+
+    double mass_matrix_sum{0.};
+    for (size_t i = 0; i < pmbp->pradfemn->num_points; i++) {
+        for (size_t j = 0; j < pmbp->pradfemn->num_points; j++) {
+            std::cout << mass_matrix(i,j) << " ";
+            mass_matrix_sum += mass_matrix(i,j);
+        }
+        std::cout << std::endl;
+    }
+
+    std::cout << std::endl;
+
+    std::cout << "The sum of all the elements of the mass matrix is: " << mass_matrix_sum << std::endl;
+    std::cout << std::endl;
 
     std::cout << "End of information " << std::endl;
 

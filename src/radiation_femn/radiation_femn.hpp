@@ -59,6 +59,7 @@ namespace radiationfemn {
 
         ~RadiationFEMN();
 
+        // ---------------------------------------------------------------------------
         // parameters
         int num_ref;                    // number of times the geodesic grid is refined
         int num_points;                 // number of points on the grid
@@ -76,6 +77,7 @@ namespace radiationfemn {
         bool rad_source;                // flag to enable/disable source terms for radiation, disabled by default
         bool beam_source;               // flag to enable/disable beam sources, disabled by default
 
+        // ---------------------------------------------------------------------------
         // geodesic grid information
         // cartesian coordinates of the grid vertices
         DvceArray1D<Real> x;
@@ -97,6 +99,7 @@ namespace radiationfemn {
         DvceArray1D<Real> scheme_weights;
         DvceArray2D<Real> scheme_points;
 
+        // ---------------------------------------------------------------------------
         // matrices for the angular grid
         DvceArray2D<Real> mass_matrix;             // mass matrix
         DvceArray1D<Real> int_psi;                 // value of the integral of angular basis function over S2
@@ -112,6 +115,7 @@ namespace radiationfemn {
         DvceArray2D<Real> stildemod_matrix_y;      // zero speed mode correction to stilde_y
         DvceArray2D<Real> stildemod_matrix_z;      // zero speed mode correction to stilde_z
 
+        // ---------------------------------------------------------------------------
         // intensity and other arrays
         DvceArray5D<Real> i0;         // intensities
         DvceArray5D<Real> i1;         // intensities at intermediate step
@@ -123,9 +127,11 @@ namespace radiationfemn {
         DvceArray4D<Real> etemp0;
         DvceArray4D<Real> etemp1;
 
+        // ---------------------------------------------------------------------------
         // Boundary communication buffers and functions for i
         BoundaryValuesCC *pbval_i;
 
+        // ---------------------------------------------------------------------------
         // arrays for source terms
         DvceArray4D<Real> eta;          // emissivity
         DvceArray4D<Real> kappa_s;      // scattering coefficient
@@ -145,15 +151,9 @@ namespace radiationfemn {
 
         // functions...
         void AssembleRadiationFEMNTasks(TaskList &start, TaskList &run, TaskList &end);
-
         void CartesianToSpherical();
-
-        void LoadMatrix(int num_angles, int basis, const std::string& matname, DvceArray2D<Real> &mat, const std::string& path);
-
         void CalcIntPsi();
-
         void CalcSourceMatrices(Real dt, int m, int k, int j, int i);
-
         void CalcMatInv(int dim, DvceArray2D<Real> &mat_in, DvceArray2D<Real> &mat_out);
 
         // ...in start task list
@@ -234,38 +234,15 @@ namespace radiationfemn {
 
         double FEMBasisA(int a, int t1, int t2, int t3, double xi1, double xi2, double xi3, int basis_choice);
 
-        double
-        IntegrateFuncSphericalTriangle(double x1, double y1, double z1, double x2, double y2, double z2, double x3,
-                                       double y3,
-                                       double z3,
-                                       std::function<double(double, double, double, double, double, double, double,
-                                                            double,
-                                                            double, double, double, double)> func);
-
-        void IntegratePipsipsiAB(int a, int b, double x, double y, double z);
-
         void FindTriangles(int a, int b, bool &is_edge);
-
-        double
-        IntegrateFEMBasisBasisABSphericalTriangle(double x1, double y1, double z1, double x2, double y2, double z2,
-                                                  double x3,
-                                                  double y3, double z3);
-
-        double
-        IntegrateFunctionSphericaTriangle(double x1, double y1, double z1, double x2, double y2, double z2, double x3,
-                                          double y3, double z3,
-                                          std::function<double(double, double, double, double, double, double, double,
-                                                               double, double)> func);
-
-        double
-        IntegrateFunctionSphericaTriangle(double x1, double y1, double z1, double x2, double y2, double z2, double x3,
-                                          double y3, double z3,
-                                          std::function<double(double, double, double, double, double, double, double,
-                                                               double, double, double, double, double)> func);
 
         double IntegratePsiPsiAB(int a, int b);
 
         void LoadQuadrature();
+
+        double IntegratePsiPsiABSphericaTriangle(int a, int b, int t1, int t2, int t3);
+
+        void PopulateMassMatrix();
     };
 
 } // namespace radiationfemn
