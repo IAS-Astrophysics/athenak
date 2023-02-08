@@ -55,6 +55,39 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
     }
 
     std::cout << std::endl;
+
+    for (size_t j = 0; j < 12; j++) {
+        bool tempval;
+        pmbp->pradfemn->FindTriangles(j,j,tempval);
+        auto etriangles = pmbp->pradfemn->edge_triangles;
+        std::cout << "Finding triangle information for vertex: " << j << std::endl;
+        for (size_t i = 0; i < 6; i++) {
+            std::cout << "[ " << etriangles(i,0) << ", " << etriangles(i,1) << ", " << etriangles(i,2) << " ]" << std::endl;
+        }
+
+        std::cout << std::endl;
+    }
+
+    bool tempval;
+    pmbp->pradfemn->FindTriangles(3,5,tempval);
+    auto etriangles = pmbp->pradfemn->edge_triangles;
+    std::cout << "Finding triangle information for vertex: (3, 5)" << std::endl;
+    for (size_t i = 0; i <6; i++) {
+        std::cout << "[ " << etriangles(i,0) << ", " << etriangles(i,1) << ", " << etriangles(i,2) << " ]" << std::endl;
+    }
+
+    std::cout << std::endl;
+
+    bool tempval2;
+    pmbp->pradfemn->FindTriangles(5,11,tempval2);
+    auto etriangles2 = pmbp->pradfemn->edge_triangles;
+    std::cout << "Finding triangle information for vertex: (5, 11)" << std::endl;
+    for (size_t i = 0; i <6; i++) {
+        std::cout << "[ " << etriangles2(i,0) << ", " << etriangles2(i,1) << ", " << etriangles2(i,2) << " ]" << std::endl;
+    }
+
+    std::cout << std::endl;
+
     std::cout << "End of information " << std::endl;
 
     return;
