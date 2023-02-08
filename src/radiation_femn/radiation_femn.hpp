@@ -56,11 +56,11 @@ namespace radiationfemn {
     class RadiationFEMN {
     public:
         RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin);
-
         ~RadiationFEMN();
 
         // ---------------------------------------------------------------------------
         // parameters
+        // ---------------------------------------------------------------------------
         int num_ref;                    // number of times the geodesic grid is refined
         int num_points;                 // number of points on the grid
         int nangles;                    // num_points or total number of (l,m) modes
@@ -76,9 +76,13 @@ namespace radiationfemn {
 
         bool rad_source;                // flag to enable/disable source terms for radiation, disabled by default
         bool beam_source;               // flag to enable/disable beam sources, disabled by default
+        // end of parameters
+        // ---------------------------------------------------------------------------
+
 
         // ---------------------------------------------------------------------------
-        // geodesic grid information
+        // geodesic grid and T2 quadrature arrays
+        // ---------------------------------------------------------------------------
         // cartesian coordinates of the grid vertices
         DvceArray1D<Real> x;
         DvceArray1D<Real> y;
@@ -92,15 +96,19 @@ namespace radiationfemn {
         // edge and triangle information
         DvceArray2D<int> edges;
         DvceArray2D<int> triangles;
-        DvceArray2D<int> edge_triangles;    // temporary triangle information
+        DvceArray2D<int> edge_triangles;    // temporary triangle information which stores the triangle vertices of triangles sharing an edge
 
         // quadrature information
         int scheme_num_points;
         DvceArray1D<Real> scheme_weights;
         DvceArray2D<Real> scheme_points;
+        // end of geodesic grid and T2 quadrature arrays
+        // ---------------------------------------------------------------------------
+
 
         // ---------------------------------------------------------------------------
         // matrices for the angular grid
+        // ---------------------------------------------------------------------------
         DvceArray2D<Real> mass_matrix;             // mass matrix
         DvceArray1D<Real> int_psi;                 // value of the integral of angular basis function over S2
         DvceArray2D<Real> stiffness_matrix_x;      // x component of the stiffness matrix
@@ -114,9 +122,13 @@ namespace radiationfemn {
         DvceArray2D<Real> stildemod_matrix_x;      // zero speed mode correction to stilde_x
         DvceArray2D<Real> stildemod_matrix_y;      // zero speed mode correction to stilde_y
         DvceArray2D<Real> stildemod_matrix_z;      // zero speed mode correction to stilde_z
+        // end of matrices for the angular grid
+        // ---------------------------------------------------------------------------
+
 
         // ---------------------------------------------------------------------------
-        // intensity and other arrays
+        // intensity, flux and other arrays
+        // ---------------------------------------------------------------------------
         DvceArray5D<Real> i0;         // intensities
         DvceArray5D<Real> i1;         // intensities at intermediate step
         DvceArray5D<Real> coarse_i0;  // intensities on 2x coarser grid (for SMR/AMR)
@@ -126,10 +138,9 @@ namespace radiationfemn {
         DvceArray5D<Real> itemp;
         DvceArray4D<Real> etemp0;
         DvceArray4D<Real> etemp1;
-
+        // end of arrays for intensities and fluxes
         // ---------------------------------------------------------------------------
-        // Boundary communication buffers and functions for i
-        BoundaryValuesCC *pbval_i;
+
 
         // ---------------------------------------------------------------------------
         // arrays for source terms
@@ -142,107 +153,94 @@ namespace radiationfemn {
         DvceArray1D<Real> e_source;     // defined in Eq. (19) of Radice et. al. [arXiv:1209.1634v3]
         DvceArray2D<Real> S_source;     // also defined in Eq. (19)
         DvceArray2D<Real> W_matrix;     // holds the inverse of (delta^A_B - k * S^A_B) where k = dt or dt/2
+        // end of source term arrays
+        // ---------------------------------------------------------------------------
 
-        // timestep
-        Real dtnew;
 
-        // container to hold TaskIDs
-        RadiationFEMNTaskIDs id;
+        // ---------------------------------------------------------------------------
+        // other things
+        BoundaryValuesCC *pbval_i;      // Boundary communication buffers and functions for i
+        Real dtnew;                     // timestep
+        RadiationFEMNTaskIDs id;        // container to hold TaskIDs
+        // end of other things
+        // ---------------------------------------------------------------------------
 
-        // functions...
-        void AssembleRadiationFEMNTasks(TaskList &start, TaskList &run, TaskList &end);
-        void CartesianToSpherical();
-        void CalcIntPsi();
-        void CalcSourceMatrices(Real dt, int m, int k, int j, int i);
-        void CalcMatInv(int dim, DvceArray2D<Real> &mat_in, DvceArray2D<Real> &mat_out);
 
+        // ---------------------------------------------------------------------------
+        // Tasklist & associated functions
         // ...in start task list
         TaskStatus InitRecv(Driver *d, int stage);
-
         // ...in run task list
         TaskStatus CopyCons(Driver *d, int stage);
-
         TaskStatus CalculateFluxes(Driver *d, int stage);
-
         TaskStatus SendFlux(Driver *d, int stage);
-
         TaskStatus RecvFlux(Driver *d, int stage);
-
         TaskStatus ExpRKUpdate(Driver *d, int stage);
-
         TaskStatus ApplyLimiterDG(Driver *pdriver, int stage);
-
         TaskStatus ApplyLimiterFEM(Driver *pdrive, int stage);
-
         TaskStatus ApplyFilterLanczos(Driver *pdriver, int stage);
-
-        template<size_t N>
-        void CGSolve(double (&A)[N][N], double (&b)[N], double (&xinit)[N], double (&x)[N], double tolerance = 1e-6);
-
-        template<size_t N>
-        void CGMatrixInverse(double (&mat)[N][N], double (&guess)[N][N], double (&matinv)[N][N]);
-
         TaskStatus AddRadiationSourceTerm(Driver *d, int stage);
-
         void AddBeamSource(DvceArray5D<Real> &i0);
-
         TaskStatus RestrictI(Driver *d, int stage);
-
         TaskStatus SendI(Driver *d, int stage);
-
         TaskStatus RecvI(Driver *d, int stage);
-
         TaskStatus ApplyPhysicalBCs(Driver *pdrive, int stage);
-
         TaskStatus NewTimeStep(Driver *d, int stage);
-
         // ...in end task list
         TaskStatus ClearSend(Driver *d, int stage);
-
         TaskStatus ClearRecv(Driver *d, int stage);
+        void AssembleRadiationFEMNTasks(TaskList &start, TaskList &run, TaskList &end);
+        // ---------------------------------------------------------------------------
 
-    //private:
+        // ---------------------------------------------------------------------------
+        // Functions for linear algebra
+        template<size_t N>
+        void CGSolve(double (&A)[N][N], double (&b)[N], double (&xinit)[N], double (&x)[N], double tolerance = 1e-6);
+        template<size_t N>
+        void CGMatrixInverse(double (&mat)[N][N], double (&guess)[N][N], double (&matinv)[N][N]);
+        // ---------------------------------------------------------------------------
+
+
+        // ---------------------------------------------------------------------------
+        // Functions for geodesic grid generation
+        void CartesianToSpherical();
+
+        // ---------------------------------------------------------------------------
+
+
+        // ---------------------------------------------------------------------------
+        // Functions for FEM basis on geodesic grid
+        double FEMBasis1Type1(double xi1, double xi2, double xi3);
+        double FEMBasis2Type1(double xi1, double xi2, double xi3);
+        double FEMBasis3Type1(double xi1, double xi2, double xi3);
+        double FEMBasis1Type2(double xi1, double xi2, double xi3);
+        double FEMBasis2Type2(double xi1, double xi2, double xi3);
+        double FEMBasis3Type2(double xi1, double xi2, double xi3);
+        double FEMBasis1Type3(double xi1, double xi2, double xi3);
+        double FEMBasis2Type3(double xi1, double xi2, double xi3);
+        double FEMBasis3Type3(double xi1, double xi2, double xi3);
+        double FEMBasis1Type4(double xi1, double xi2, double xi3);
+        double FEMBasis2Type4(double xi1, double xi2, double xi3);
+        double FEMBasis3Type4(double xi1, double xi2, double xi3);
+        double FEMBasis(double xi1, double xi2, double xi3, int basis_index, int basis_choice);
+        double
+        FEMBasisABasisB(int a, int b, int t1, int t2, int t3, double xi1, double xi2, double xi3, int basis_choice);
+        double FEMBasisA(int a, int t1, int t2, int t3, double xi1, double xi2, double xi3, int basis_choice);
+        void FindTriangles(int a, int b, bool &is_edge);
+        // ---------------------------------------------------------------------------
+
+
+        // ---------------------------------------------------------------------------
+        // Functions for integrating FEM basis on geodesic grid and computing matrices
+        void LoadQuadrature();
+        double IntegratePsiPsiAB(int a, int b);
+        double IntegratePsiPsiABSphericaTriangle(int a, int b, int t1, int t2, int t3);
+        void PopulateMassMatrix();
+        // ---------------------------------------------------------------------------
+
+    private:
         MeshBlockPack *pmy_pack;  // ptr to MeshBlockPack containing this RadiationFEMN
 
-        double FEMBasis1Type1(double xi1, double xi2, double xi3);
-
-        double FEMBasis2Type1(double xi1, double xi2, double xi3);
-
-        double FEMBasis3Type1(double xi1, double xi2, double xi3);
-
-        double FEMBasis1Type2(double xi1, double xi2, double xi3);
-
-        double FEMBasis2Type2(double xi1, double xi2, double xi3);
-
-        double FEMBasis3Type2(double xi1, double xi2, double xi3);
-
-        double FEMBasis1Type3(double xi1, double xi2, double xi3);
-
-        double FEMBasis2Type3(double xi1, double xi2, double xi3);
-
-        double FEMBasis3Type3(double xi1, double xi2, double xi3);
-
-        double FEMBasis1Type4(double xi1, double xi2, double xi3);
-
-        double FEMBasis2Type4(double xi1, double xi2, double xi3);
-
-        double FEMBasis3Type4(double xi1, double xi2, double xi3);
-
-        double FEMBasis(double xi1, double xi2, double xi3, int basis_index, int basis_choice);
-
-        double FEMBasisABasisB(int a, int b, int t1, int t2, int t3, double xi1, double xi2, double xi3, int basis_choice);
-
-        double FEMBasisA(int a, int t1, int t2, int t3, double xi1, double xi2, double xi3, int basis_choice);
-
-        void FindTriangles(int a, int b, bool &is_edge);
-
-        double IntegratePsiPsiAB(int a, int b);
-
-        void LoadQuadrature();
-
-        double IntegratePsiPsiABSphericaTriangle(int a, int b, int t1, int t2, int t3);
-
-        void PopulateMassMatrix();
     };
 
 } // namespace radiationfemn
