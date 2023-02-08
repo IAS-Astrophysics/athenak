@@ -64,6 +64,7 @@ namespace radiationfemn {
             phi("phi", 12),
             edges("edges", 30, 2),
             triangles("triangles", 20, 3),
+            edge_triangles("edge_triangles", 6, 3),
             scheme_weights("scheme_weights", 171),
             scheme_points("scheme_points", 171, 3) {
 
@@ -142,6 +143,8 @@ namespace radiationfemn {
         z(9) = normalization_factor * -1.;
         z(10) = normalization_factor * 1.;
         z(11) = normalization_factor * -1.;
+
+        CartesianToSpherical();
 
         edges(0, 0) = 2;
         edges(0, 1) = 8;

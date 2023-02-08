@@ -90,8 +90,10 @@ namespace radiationfemn {
         // edge and triangle information
         DvceArray2D<int> edges;
         DvceArray2D<int> triangles;
+        DvceArray2D<int> edge_triangles;    // temporary triangle information
 
-        // quadrature integration weights
+        // quadrature information
+        int scheme_num_points;
         DvceArray1D<Real> scheme_weights;
         DvceArray2D<Real> scheme_points;
 
@@ -144,8 +146,9 @@ namespace radiationfemn {
         // functions...
         void AssembleRadiationFEMNTasks(TaskList &start, TaskList &run, TaskList &end);
 
-        void LoadMatrix(int num_angles, int basis, const std::string &matname, DvceArray2D<Real> &mat,
-                        const std::string &path);
+        void CartesianToSpherical();
+
+        void LoadMatrix(int num_angles, int basis, const std::string& matname, DvceArray2D<Real> &mat, const std::string& path);
 
         void CalcIntPsi();
 
@@ -198,8 +201,71 @@ namespace radiationfemn {
 
         TaskStatus ClearRecv(Driver *d, int stage);
 
-    private:
+    //private:
         MeshBlockPack *pmy_pack;  // ptr to MeshBlockPack containing this RadiationFEMN
+
+        double FEMBasis1Type1(double xi1, double xi2, double xi3);
+
+        double FEMBasis2Type1(double xi1, double xi2, double xi3);
+
+        double FEMBasis3Type1(double xi1, double xi2, double xi3);
+
+        double FEMBasis1Type2(double xi1, double xi2, double xi3);
+
+        double FEMBasis2Type2(double xi1, double xi2, double xi3);
+
+        double FEMBasis3Type2(double xi1, double xi2, double xi3);
+
+        double FEMBasis1Type3(double xi1, double xi2, double xi3);
+
+        double FEMBasis2Type3(double xi1, double xi2, double xi3);
+
+        double FEMBasis3Type3(double xi1, double xi2, double xi3);
+
+        double FEMBasis1Type4(double xi1, double xi2, double xi3);
+
+        double FEMBasis2Type4(double xi1, double xi2, double xi3);
+
+        double FEMBasis3Type4(double xi1, double xi2, double xi3);
+
+        double FEMBasis(double xi1, double xi2, double xi3, int basis_index, int basis_choice);
+
+        double FEMBasisABasisB(int a, int b, int t1, int t2, int t3, double xi1, double xi2, double xi3, int basis_choice);
+
+        double FEMBasisA(int a, int t1, int t2, int t3, double xi1, double xi2, double xi3, int basis_choice);
+
+        double
+        IntegrateFuncSphericalTriangle(double x1, double y1, double z1, double x2, double y2, double z2, double x3,
+                                       double y3,
+                                       double z3,
+                                       std::function<double(double, double, double, double, double, double, double,
+                                                            double,
+                                                            double, double, double, double)> func);
+
+        void IntegratePipsipsiAB(int a, int b, double x, double y, double z);
+
+        void FindTriangles(int a, int b, bool &is_edge);
+
+        double
+        IntegrateFEMBasisBasisABSphericalTriangle(double x1, double y1, double z1, double x2, double y2, double z2,
+                                                  double x3,
+                                                  double y3, double z3);
+
+        double
+        IntegrateFunctionSphericaTriangle(double x1, double y1, double z1, double x2, double y2, double z2, double x3,
+                                          double y3, double z3,
+                                          std::function<double(double, double, double, double, double, double, double,
+                                                               double, double)> func);
+
+        double
+        IntegrateFunctionSphericaTriangle(double x1, double y1, double z1, double x2, double y2, double z2, double x3,
+                                          double y3, double z3,
+                                          std::function<double(double, double, double, double, double, double, double,
+                                                               double, double, double, double, double)> func);
+
+        double IntegratePsiPsiAB(int a, int b);
+
+        void LoadQuadrature();
     };
 
 } // namespace radiationfemn
