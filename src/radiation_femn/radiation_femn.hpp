@@ -239,6 +239,9 @@ namespace radiationfemn {
     private:
         MeshBlockPack *pmy_pack;  // ptr to MeshBlockPack containing this RadiationFEMN
 
+        void
+        BarycentricToCartesian(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3,
+                               double z3, double xi1, double xi2, double xi3, double &xval, double &yval, double &zval);
     };
 
 } // namespace radiationfemn

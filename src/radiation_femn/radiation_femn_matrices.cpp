@@ -29,21 +29,18 @@ namespace radiationfemn {
     double CalculateDeterminantJacobian(double x1, double y1, double z1, double x2, double y2, double z2,
                                         double x3, double y3, double z3, double xi1, double xi2,
                                         double xi3) {
-        double result = 0.5 *
-                        pow((x3 * y2 * z1 - x2 * y3 * z1 - x3 * y1 * z2 + x1 * y3 * z2 + x2 * y1 * z3 - x1 * y2 * z3),
-                            2) /
-                        (x1 * x1 * xi1 * xi1 + 2 * x1 * x2 * xi1 * xi2 + x2 * x2 * xi2 * xi2 +
-                         x3 * x3 * (-1 + xi1 + xi2) * (-1 + xi1 + xi2) -
-                         2 * x3 * (-1 + xi1 + xi2) * (x1 * xi1 + x2 * xi2) +
-                         xi1 * xi1 * y1 * y1 + 2 * xi1 * xi2 * y1 * y2 +
-                         xi2 * xi2 * y2 * y2 + 2 * xi1 * y1 * y3 - 2 * xi1 * xi1 * y1 * y3 - 2 * xi1 * xi2 * y1 * y3 +
-                         2 * xi2 * y2 * y3 - 2 * xi1 * xi2 * y2 * y3 - 2 * xi2 * xi2 * y2 * y3 + y3 * y3 -
-                         2 * xi1 * y3 * y3 +
-                         xi1 * xi1 * y3 * y3 - 2 * xi2 * y3 * y3 + 2 * xi1 * xi2 * y3 * y3 + xi2 * xi2 * y3 * y3 +
-                         xi1 * xi1 * z1 * z1 +
-                         2 * xi1 * xi2 * z1 * z2 + xi2 * xi2 * z2 * z2 -
-                         2 * (-1 + xi1 + xi2) * (xi1 * z1 + xi2 * z2) * z3 +
-                         (-1 + xi1 + xi2) * (-1 + xi1 + xi2) * z3 * z3);
+
+        double result =
+                pow(x3 * y2 * z1 - x2 * y3 * z1 - x3 * y1 * z2 + x1 * y3 * z2 + x2 * y1 * z3 - x1 * y2 * z3, 2) /
+                pow(x1 * x1 * xi1 * xi1 + 2. * x1 * x2 * xi1 * xi2 + x2 * x2 * xi2 * xi2 +
+                    x3 * x3 * (-1. + xi1 + xi2) * (-1. + xi1 + xi2) -
+                    2. * x3 * (-1. + xi1 + xi2) * (x1 * xi1 + x2 * xi2) + xi1 * xi1 * y1 * y1 +
+                    2. * xi1 * xi2 * y1 * y2 + xi2 * xi2 * y2 * y2 + 2. * xi1 * y1 * y3 - 2. * xi1 * xi1 * y1 * y3 -
+                    2. * xi1 * xi2 * y1 * y3 + 2. * xi2 * y2 * y3 - 2. * xi1 * xi2 * y2 * y3 -
+                    2. * xi2 * xi2 * y2 * y3 + y3 * y3 - 2. * xi1 * y3 * y3 + xi1 * xi1 * y3 * y3 - 2. * xi2 * y3 * y3 +
+                    2. * xi1 * xi2 * y3 * y3 + xi2 * xi2 * y3 * y3 + xi1 * xi1 * z1 * z1 + 2. * xi1 * xi2 * z1 * z2 +
+                    xi2 * xi2 * z2 * z2 - 2. * (-1. + xi1 + xi2) * (xi1 * z1 + xi2 * z2) * z3 +
+                    (-1. + xi1 + xi2) * (-1. + xi1 + xi2) * z3 * z3, 3);
 
         return result;
     }
@@ -66,8 +63,8 @@ namespace radiationfemn {
 
         double result{0.};
         for (size_t i = 0; i < scheme_num_points; i++) {
-            result += CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0),
-                                                   scheme_points(i, 1), scheme_points(i, 2)) *
+            result += sqrt(abs(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0),
+                                                            scheme_points(i, 1), scheme_points(i, 2)))) *
                       FEMBasisABasisB(a, b, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2),
                                       basis) * scheme_weights(i);
         }
@@ -105,7 +102,7 @@ namespace radiationfemn {
     void RadiationFEMN::PopulateMassMatrix() {
         Kokkos::realloc(mass_matrix, num_points, num_points);
 
-        par_for("radiation_femn_flux_x", DevExeSpace(), 0, num_points-1, 0, num_points-1,
+        par_for("radiation_femn_flux_x", DevExeSpace(), 0, num_points - 1, 0, num_points - 1,
                 KOKKOS_LAMBDA(const int A, const int B) {
                     mass_matrix(A, B) = IntegratePsiPsiAB(A, B);
 

@@ -104,7 +104,7 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
     for (size_t i = 0; i <6; i++) {
         std::cout << "[ " << etriangles2(i,0) << ", " << etriangles2(i,1) << ", " << etriangles2(i,2) << " ]" << std::endl;
     }
-
+    */
     std::cout << std::endl;
     std::cout << "Print the mass matrix: " << std::endl;
     auto mass_matrix = pmbp->pradfemn->mass_matrix;
@@ -122,7 +122,7 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
 
     std::cout << "The sum of all the elements of the mass matrix is: " << mass_matrix_sum << std::endl;
     std::cout << std::endl;
-    */
+
     std::cout << "End of information " << std::endl;
 
     return;
