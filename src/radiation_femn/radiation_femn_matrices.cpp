@@ -87,7 +87,7 @@ namespace radiationfemn {
         if (is_edge) {
             for (size_t i = 0; i < 6; i++) {
                 if (edge_triangles(i, 0) >= 0) {
-                    int triangle_index_1 = edge_triangles(i, 0);
+                    int triangle_index_1 = edge_triangles(i, 0); // @TODO @CHECK
                     int triangle_index_2 = edge_triangles(i, 1);
                     int triangle_index_3 = edge_triangles(i, 2);
 
