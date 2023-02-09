@@ -289,7 +289,7 @@ namespace radiationfemn {
                 }
             }
 
-            //PopulateMassMatrix();
+            PopulateMassMatrix();
 
         } else {
 
