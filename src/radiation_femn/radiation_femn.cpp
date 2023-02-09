@@ -4,7 +4,7 @@
 // AthenaXX copyright(C) James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file radiation_femn.hpp
+//! \file radiation_femn.cpp
 //  \brief implementation of the radiation FEM_N class constructor and other functions
 
 #include <iostream>
@@ -14,10 +14,7 @@
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
-#include "srcterms/srcterms.hpp"
 #include "bvals/bvals.hpp"
-#include "coordinates/coordinates.hpp"
-#include "geodesic-grid/geodesic_grid.hpp"
 #include "units/units.hpp"
 #include "radiation_femn/radiation_femn.hpp"
 
@@ -52,10 +49,6 @@ namespace radiationfemn {
             kappa_a("kappa_a", 1, 1, 1, 1),
             kappa_s("kappa_s", 1, 1, 1, 1),
             beam_mask("beam_mask", 1, 1, 1, 1, 1),
-            num_ref(0),
-            num_points(12),
-            num_edges(30),
-            num_triangles(20),
             x("x", 12),
             y("y", 12),
             z("z", 12),
@@ -70,20 +63,29 @@ namespace radiationfemn {
 
         LoadQuadrature();
 
+        // ---------------------------------------------------------------------------
         // set parfile parameters
+
         limiter_dg = pin->GetOrAddString("radiation-femn", "limiter_dg", "minmod2");
         fpn = pin->GetOrAddInteger("radiation-femn", "fpn", 0) == 1;
 
         if (!fpn) {
             lmax = -42;
-            num_ref = pin->GetInteger("radiation-femn", "num_refinement");
             nangles = 12;
+            num_ref = pin->GetInteger("radiation-femn", "num_refinement");
+            num_points = 12;
+            num_edges = 30;
+            num_triangles = 20;
             basis = pin->GetInteger("radiation-femn", "basis");
             filter_sigma_eff = -42;
             limiter_fem = pin->GetOrAddString("radiation-femn", "limiter_fem", "clp");
         } else {
             lmax = pin->GetInteger("radiation-femn", "lmax");
             nangles = (lmax + 1) * (lmax + 1);
+            num_ref = -42;
+            num_points = -42;
+            num_edges = -42;
+            num_triangles = -42;
             basis = -42;
             filter_sigma_eff = pin->GetOrAddInteger("radiation-femn", "filter_opacity", 0);
             limiter_fem = "-42";
@@ -91,8 +93,12 @@ namespace radiationfemn {
 
         rad_source = pin->GetOrAddInteger("radiation-femn", "sources", 0) == 1;
         beam_source = pin->GetOrAddInteger("radiation-femn", "beam_sources", 0) == 1;
+        // ---------------------------------------------------------------------------
 
-        // allocate memory for matrices
+
+        // ---------------------------------------------------------------------------
+        // allocate memory and populate mass and stiffness matrices
+
         Kokkos::realloc(mass_matrix, nangles, nangles);
         Kokkos::realloc(stiffness_matrix_x, nangles, nangles);
         Kokkos::realloc(stiffness_matrix_y, nangles, nangles);
@@ -104,11 +110,12 @@ namespace radiationfemn {
         Kokkos::realloc(stildemod_matrix_y, nangles, nangles);
         Kokkos::realloc(stildemod_matrix_z, nangles, nangles);
 
-        // initialize the base grid
+
+        if(!fpn) {
+            // initialize the base grid
             double golden_ratio = (1.0 + sqrt(5.0)) / 2.0;
             double normalization_factor = sqrt(1. + golden_ratio * golden_ratio);
 
-        if(!fpn) {
             x(0) = normalization_factor * 0.;
             x(1) = normalization_factor * 0.;
             x(2) = normalization_factor * 0.;
@@ -147,8 +154,6 @@ namespace radiationfemn {
             z(9) = normalization_factor * -1.;
             z(10) = normalization_factor * 1.;
             z(11) = normalization_factor * -1.;
-
-            CartesianToSpherical();
 
             edges(0, 0) = 2;
             edges(0, 1) = 8;

@@ -62,8 +62,8 @@ namespace radiationfemn {
         // parameters
         // ---------------------------------------------------------------------------
         int num_ref;                    // number of times the geodesic grid is refined
-        int num_points;                 // number of points on the grid
         int nangles;                    // num_points or total number of (l,m) modes
+        int num_points;                 // number of points on the grid
         int num_edges;                  // number of unique edges
         int num_triangles;              // number of unique triangular elements
         int basis;                      // choice of basis functions on the geodesic grid (1: tent 2: small tent 3: honeycomb 4: small honeycomb)
@@ -203,8 +203,8 @@ namespace radiationfemn {
 
         // ---------------------------------------------------------------------------
         // Functions for geodesic grid generation
-        void CartesianToSpherical();
-
+        void CartesianToSpherical(double xvar, double yvar, double zvar, double &rvar, double &thetavar, double &phivar);
+        void GeodesicGridRefine();
         // ---------------------------------------------------------------------------
 
 
@@ -241,6 +241,8 @@ namespace radiationfemn {
     private:
         MeshBlockPack *pmy_pack;  // ptr to MeshBlockPack containing this RadiationFEMN
 
+
+        double FindEdgesIndex(int e1, int e2);
     };
 
 } // namespace radiationfemn
