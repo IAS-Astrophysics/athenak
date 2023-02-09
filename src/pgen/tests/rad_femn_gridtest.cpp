@@ -33,7 +33,17 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
         exit(EXIT_FAILURE);
     }
 
-    std::cout << "Coordinates of angles in cartesian and polar:" << std::endl;
+    std::cout << "Geodesic grid metadata: " << std::endl;
+    std::cout << "nangles = " << pmbp->pradfemn->nangles << std::endl;
+    std::cout << "num_points = " << pmbp->pradfemn->num_points << std::endl;
+    std::cout << "num_edges = " << pmbp->pradfemn->num_edges << std::endl;
+    std::cout << "num_triangles = " << pmbp->pradfemn->num_triangles << std::endl;
+
+    std::cout << std::endl;
+    std::cout << "-------------------------------------------------------------" << std::endl;
+    std::cout << std::endl;
+
+    std::cout << "Coordinates of angles in cartesian and polar: " << std::endl;
     std::cout << "x y z r theta phi" << std::endl;
     for (size_t i = 0; i < pmbp->pradfemn->num_points; i++) {
         std::cout << pmbp->pradfemn->x(i) << " " << pmbp->pradfemn->y(i) << " " << pmbp->pradfemn->z(i) << " "
@@ -42,20 +52,29 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
     }
 
     std::cout << std::endl;
+    std::cout << "-------------------------------------------------------------" << std::endl;
+    std::cout << std::endl;
+
     std::cout << "Triangle information:" << std::endl;
     for (size_t i = 0; i < pmbp->pradfemn->num_triangles; i++) {
-        std::cout << "[ " << pmbp->pradfemn->triangles(i, 0) << ", " << pmbp->pradfemn->triangles(i, 1) << ", "
-                  << pmbp->pradfemn->triangles(i, 2) << " ]" << std::endl;
+        std::cout << pmbp->pradfemn->triangles(i, 0) << " " << pmbp->pradfemn->triangles(i, 1) << " "
+                  << pmbp->pradfemn->triangles(i, 2) << std::endl;
     }
 
     std::cout << std::endl;
+    std::cout << "-------------------------------------------------------------" << std::endl;
+    std::cout << std::endl;
+
     std::cout << "Edge information:" << std::endl;
     for (size_t i = 0; i < pmbp->pradfemn->num_edges; i++) {
-        std::cout << "[ " << pmbp->pradfemn->edges(i, 0) << ", " << pmbp->pradfemn->edges(i, 1) << " ]" << std::endl;
+        std::cout << pmbp->pradfemn->edges(i, 0) << " " << pmbp->pradfemn->edges(i, 1) << std::endl;
     }
 
     std::cout << std::endl;
+    std::cout << "-------------------------------------------------------------" << std::endl;
+    std::cout << std::endl;
 
+    /*
     for (size_t j = 0; j < 12; j++) {
         bool tempval;
         pmbp->pradfemn->FindTriangles(j,j,tempval);
@@ -103,7 +122,7 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
 
     std::cout << "The sum of all the elements of the mass matrix is: " << mass_matrix_sum << std::endl;
     std::cout << std::endl;
-
+    */
     std::cout << "End of information " << std::endl;
 
     return;

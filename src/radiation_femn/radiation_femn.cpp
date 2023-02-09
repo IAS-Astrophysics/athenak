@@ -111,10 +111,10 @@ namespace radiationfemn {
         Kokkos::realloc(stildemod_matrix_z, nangles, nangles);
 
 
-        if(!fpn) {
+        if (!fpn) {
             // initialize the base grid
             double golden_ratio = (1.0 + sqrt(5.0)) / 2.0;
-            double normalization_factor = sqrt(1. + golden_ratio * golden_ratio);
+            double normalization_factor = 1.0 / sqrt(1. + golden_ratio * golden_ratio);
 
             x(0) = normalization_factor * 0.;
             x(1) = normalization_factor * 0.;
@@ -155,6 +155,9 @@ namespace radiationfemn {
             z(10) = normalization_factor * 1.;
             z(11) = normalization_factor * -1.;
 
+            for (size_t i = 0; i < num_points; i++) {
+                CartesianToSpherical(x(i), y(i), z(i), r(i), theta(i), phi(i));
+            }
             edges(0, 0) = 2;
             edges(0, 1) = 8;
             edges(1, 0) = 1;
@@ -277,7 +280,9 @@ namespace radiationfemn {
             triangles(19, 1) = 5;
             triangles(19, 2) = 7;
 
-            PopulateMassMatrix();
+            GeodesicGridRefine();
+
+            //PopulateMassMatrix();
 
         } else {
 

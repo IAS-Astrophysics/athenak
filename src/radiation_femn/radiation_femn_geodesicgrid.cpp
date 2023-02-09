@@ -16,6 +16,8 @@
 
 namespace radiationfemn {
 
+    // ------------------------------------------
+    // Convert cartesian to spherical coordinates
     KOKKOS_INLINE_FUNCTION
     void RadiationFEMN::CartesianToSpherical(double xvar, double yvar, double zvar, double &rvar, double &thetavar,
                                              double &phivar) {
@@ -24,18 +26,21 @@ namespace radiationfemn {
         phivar = atan2(yvar, xvar);
     }
 
+    // -------------------------------------------------------------------------------
+    // Given two points of an edge, find the index of the edge array of their location
     KOKKOS_INLINE_FUNCTION
     double RadiationFEMN::FindEdgesIndex(int e1, int e2) {
         int index{-42};
         for (size_t i = 0; i < num_edges; i++) {
-            if ((edges(i, 0) == e1 && edges(i, 1)) || (edges(i, 0) == e1 && edges(i, 1))) {
+            if ((edges(i, 0) == e1 && edges(i, 1) == e2) || (edges(i, 0) == e2 && edges(i, 1) == e1)) {
                 index = i;
+                break;
             }
         }
         return index;
     }
 
-    KOKKOS_INLINE_FUNCTION
+    //KOKKOS_INLINE_FUNCTION
     void RadiationFEMN::GeodesicGridRefine() {
         int new_num_ref = num_ref + 1;
         int new_num_points = 12 * pow(4, new_num_ref);
@@ -54,7 +59,7 @@ namespace radiationfemn {
         DvceArray1D<Real> thetanew("thetanew", new_num_points);
         DvceArray1D<Real> phinew("phinew", new_num_points);
 
-        DvceArray2D<int> edgesnewtemp("edgesnewtemp", 2 * new_num_edges, 2);
+        DvceArray2D<int> edgesnewtemp("edgesnewtemp", 9 * num_triangles, 2);
         DvceArray2D<int> edgesnew("edgesnew", new_num_edges, 2);
         DvceArray2D<int> trianglesnew("trianglesnew", new_num_triangles, 3);
 
@@ -129,31 +134,48 @@ namespace radiationfemn {
             edgesnewtemp(9 * i + 8, 1) = midpoint_index_2;
         }
 
+
         size_t index{0};
-        for (size_t i = 0; i < 2 * new_num_edges; i++) {
-            for (size_t j = 0; j < index; j++) {
-                if ((edgesnewtemp(i, 0) != edgesnew(j, 0) && edgesnewtemp(i, 1) != edgesnew(j, 1)) ||
-                    (edgesnewtemp(i, 0) != edgesnew(j, 1) && edgesnewtemp(i, 1) != edgesnew(j, 0))) {
-                    edgesnew(index, 0) = (edgesnewtemp(i, 0) < edgesnewtemp(i, 1)) * edgesnewtemp(i, 0) +
-                                         (edgesnewtemp(i, 0) > edgesnewtemp(i, 1)) * edgesnewtemp(i, 1);
-                    edgesnew(index, 1) = (edgesnewtemp(i, 0) < edgesnewtemp(i, 1)) * edgesnewtemp(i, 1) +
-                                         (edgesnewtemp(i, 0) > edgesnewtemp(i, 1)) * edgesnewtemp(i, 0);
-                    index++;
+        for (size_t i = 0; i < 9 * num_triangles; i++) {
+            bool is_present{false};
+            for (size_t j = 0; j < new_num_edges; j++) {
+                if ((edgesnew( j, 0) == edgesnewtemp(i, 0) && edgesnew(j, 1) == edgesnewtemp(i, 1)) ||
+                    (edgesnew(j, 0) == edgesnewtemp(i, 1) && edgesnew(j, 1) == edgesnewtemp(i, 0))) {
+                    is_present = true;
                 }
+
+            }
+
+            if (!is_present) {
+                edgesnew(index, 0) = (edgesnewtemp(i, 0) < edgesnewtemp(i, 1)) * edgesnewtemp(i, 0) + (edgesnewtemp(i, 0) > edgesnewtemp(i, 1)) * edgesnewtemp(i, 1);
+                edgesnew(index, 1) = (edgesnewtemp(i, 0) < edgesnewtemp(i, 1)) * edgesnewtemp(i, 1) + (edgesnewtemp(i, 0) > edgesnewtemp(i, 1)) * edgesnewtemp(i, 0);
+                index++;
             }
         }
 
         Kokkos::realloc(x, new_num_points);
         Kokkos::realloc(y, new_num_points);
         Kokkos::realloc(z, new_num_points);
+        Kokkos::realloc(r, new_num_points);
+        Kokkos::realloc(theta, new_num_points);
+        Kokkos::realloc(phi, new_num_points);
         Kokkos::realloc(edges, new_num_edges, 2);
         Kokkos::realloc(triangles, new_num_triangles, 3);
 
         Kokkos::deep_copy(x, xnew);
         Kokkos::deep_copy(y, ynew);
         Kokkos::deep_copy(z, znew);
+        Kokkos::deep_copy(r, rnew);
+        Kokkos::deep_copy(theta, thetanew);
+        Kokkos::deep_copy(phi, phinew);
         Kokkos::deep_copy(edges, edgesnew);
         Kokkos::deep_copy(triangles, trianglesnew);
+
+        num_ref = new_num_ref;
+        num_points = new_num_points;
+        nangles = new_num_points;
+        num_edges = new_num_edges;
+        num_triangles = new_num_triangles;
 
     }
 }
