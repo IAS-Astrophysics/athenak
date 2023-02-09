@@ -14,6 +14,7 @@
 #include "mesh.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "z4c/z4c.hpp"
 
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>
@@ -133,7 +134,9 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
     nvarcc += (pmy_mesh->pmb_pack->pmhd->nmhd);
     nvarfc += 1;
   }
-
+  if (pmy_mesh->pmb_pack->pz4c != nullptr) {
+    nvarcc += (pmy_mesh->pmb_pack->pz4c->N_Z4c);
+  }
   auto &indcs = pmy_mesh->mb_indcs;
   auto &is = indcs.is, &ie = indcs.ie;
   auto &js = indcs.js, &je = indcs.je;
@@ -304,7 +307,9 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
     nvarcc += (pmy_mesh->pmb_pack->pmhd->nmhd);
     nvarfc += 1;
   }
-
+  if (pmy_mesh->pmb_pack->pz4c != nullptr) {
+    nvarcc += (pmy_mesh->pmb_pack->pz4c->N_Z4c);
+  }
   auto &indcs = pmy_mesh->mb_indcs;
   auto &is = indcs.is, &ie = indcs.ie;
   auto &js = indcs.js, &je = indcs.je;
@@ -400,6 +405,7 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
   // Pack data into send buffers in parallel
   hydro::Hydro* phydro = pmy_mesh->pmb_pack->phydro;
   mhd::MHD* pmhd = pmy_mesh->pmb_pack->pmhd;
+  z4c::Z4c* pz4c = pmy_mesh->pmb_pack->pz4c;
 
   nvarcc = 0; nvarfc = 0;
   if (phydro != nullptr) {
@@ -412,7 +418,10 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
     PackAMRBuffersFC(pmhd->b0, pmhd->coarse_b0, nvarcc, nvarfc);
     nvarfc += 1;
   }
-
+  if (pz4c != nullptr) {
+    PackAMRBuffersCC(pz4c->u0, pz4c->coarse_u0, nvarcc, nvarfc);
+    nvarcc += pz4c->N_Z4c;
+  }
   // Send data using MPI (loop over old MBs on this rank)
   bool no_errors=true;
   sb_idx = 0;     // send buffer index
@@ -663,6 +672,8 @@ void MeshRefinement::RecvAndUnpackAMR() {
   // Unpack data
   hydro::Hydro* phydro = pmy_mesh->pmb_pack->phydro;
   mhd::MHD* pmhd = pmy_mesh->pmb_pack->pmhd;
+  z4c::Z4c* pz4c = pmy_mesh->pmb_pack->pz4c;
+
   int nvarcc=0, nvarfc=0;
   if (phydro != nullptr) {
     UnpackAMRBuffersCC(phydro->u0, phydro->coarse_u0, nvarcc, nvarfc);
@@ -674,7 +685,10 @@ void MeshRefinement::RecvAndUnpackAMR() {
     UnpackAMRBuffersFC(pmhd->b0, pmhd->coarse_b0, nvarcc, nvarfc);
     nvarfc += 1;
   }
-
+  if (pz4c != nullptr) {
+    UnpackAMRBuffersCC(pz4c->u0, pz4c->coarse_u0, nvarcc, nvarfc);
+    nvarcc += pz4c->N_Z4c;
+  }
   // recv buffers no longer needed, clean-up
   delete [] recv_buf;
 #endif

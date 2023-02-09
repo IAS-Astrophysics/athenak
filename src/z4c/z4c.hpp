@@ -221,9 +221,6 @@ class Z4c {
   void ADMConstraints(MeshBlockPack *pmbp);
   void AlgConstr(MeshBlockPack *pmbp);
 
-#if TWO_PUNCTURES
-  void ADMTwoPunctures(MeshBlockPack *pmbp, ini_data *data);
-#endif
   // Sommerfeld boundary conditions
 KOKKOS_FUNCTION
   void Z4cSommerfeld(int const m,
