@@ -139,7 +139,7 @@ namespace radiationfemn {
         for (size_t i = 0; i < 9 * num_triangles; i++) {
             bool is_present{false};
             for (size_t j = 0; j < new_num_edges; j++) {
-                if ((edgesnew( j, 0) == edgesnewtemp(i, 0) && edgesnew(j, 1) == edgesnewtemp(i, 1)) ||
+                if ((edgesnew(j, 0) == edgesnewtemp(i, 0) && edgesnew(j, 1) == edgesnewtemp(i, 1)) ||
                     (edgesnew(j, 0) == edgesnewtemp(i, 1) && edgesnew(j, 1) == edgesnewtemp(i, 0))) {
                     is_present = true;
                 }
@@ -147,8 +147,10 @@ namespace radiationfemn {
             }
 
             if (!is_present) {
-                edgesnew(index, 0) = (edgesnewtemp(i, 0) < edgesnewtemp(i, 1)) * edgesnewtemp(i, 0) + (edgesnewtemp(i, 0) > edgesnewtemp(i, 1)) * edgesnewtemp(i, 1);
-                edgesnew(index, 1) = (edgesnewtemp(i, 0) < edgesnewtemp(i, 1)) * edgesnewtemp(i, 1) + (edgesnewtemp(i, 0) > edgesnewtemp(i, 1)) * edgesnewtemp(i, 0);
+                edgesnew(index, 0) = (edgesnewtemp(i, 0) < edgesnewtemp(i, 1)) * edgesnewtemp(i, 0) +
+                                     (edgesnewtemp(i, 0) > edgesnewtemp(i, 1)) * edgesnewtemp(i, 1);
+                edgesnew(index, 1) = (edgesnewtemp(i, 0) < edgesnewtemp(i, 1)) * edgesnewtemp(i, 1) +
+                                     (edgesnewtemp(i, 0) > edgesnewtemp(i, 1)) * edgesnewtemp(i, 0);
                 index++;
             }
         }
@@ -178,4 +180,5 @@ namespace radiationfemn {
         num_triangles = new_num_triangles;
 
     }
+
 }

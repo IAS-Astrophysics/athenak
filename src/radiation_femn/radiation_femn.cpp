@@ -69,10 +69,12 @@ namespace radiationfemn {
         limiter_dg = pin->GetOrAddString("radiation-femn", "limiter_dg", "minmod2");
         fpn = pin->GetOrAddInteger("radiation-femn", "fpn", 0) == 1;
 
+
         if (!fpn) {
             lmax = -42;
             nangles = 12;
-            num_ref = pin->GetInteger("radiation-femn", "num_refinement");
+            refinement_level = pin->GetOrAddInteger("radiation-femn", "num_refinement", 0);
+            num_ref = 0;
             num_points = 12;
             num_edges = 30;
             num_triangles = 20;
@@ -82,6 +84,7 @@ namespace radiationfemn {
         } else {
             lmax = pin->GetInteger("radiation-femn", "lmax");
             nangles = (lmax + 1) * (lmax + 1);
+            refinement_level = -42;
             num_ref = -42;
             num_points = -42;
             num_edges = -42;
@@ -280,7 +283,11 @@ namespace radiationfemn {
             triangles(19, 1) = 5;
             triangles(19, 2) = 7;
 
-            GeodesicGridRefine();
+            if (refinement_level > 0) {
+                for (size_t i = 0; i < refinement_level; i++) {
+                    GeodesicGridRefine();
+                }
+            }
 
             //PopulateMassMatrix();
 
