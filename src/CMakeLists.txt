@@ -122,7 +122,11 @@ add_executable(
         radiation_femn/radiation_femn_tasks.cpp
         radiation_femn/radiation_femn_source.cpp
         radiation_femn/radiation_femn_newdt.cpp
-        radiation_femn/radiation_femn_linalg.cpp radiation_femn/radiation_femn_geodesicgrid.cpp radiation_femn/radiation_femn_basis.cpp radiation_femn/radiation_femn_matrices.cpp radiation_femn/radiation_femn_quadrature.cpp)
+        radiation_femn/radiation_femn_linalg.cpp
+        radiation_femn/radiation_femn_geodesicgrid.cpp
+        radiation_femn/radiation_femn_basis.cpp
+        radiation_femn/radiation_femn_matrices.cpp
+        radiation_femn/radiation_femn_quadrature.cpp)
 
 # custom problem generator to be included in compile
 # specify on command line using '-D PROBLEM=file' where 'file' is name of file in

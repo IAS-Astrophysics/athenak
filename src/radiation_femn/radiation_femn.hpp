@@ -17,11 +17,7 @@
 
 // forward declarations
 class EquationOfState;
-
 class Coordinates;
-
-class GeodesicGrid;
-
 class Driver;
 
 //----------------------------------------------------------------------------------------------
@@ -61,7 +57,8 @@ namespace radiationfemn {
         // ---------------------------------------------------------------------------
         // parameters
         // ---------------------------------------------------------------------------
-        int num_ref;                    // number of times the geodesic grid is refined
+        int refinement_level;           // a parameter which states the level of refinement (does not change)
+        int num_ref;                    // number of times the geodesic grid has been refined (changes internally)
         int nangles;                    // num_points or total number of (l,m) modes
         int num_points;                 // number of points on the grid
         int num_edges;                  // number of unique edges
@@ -204,6 +201,7 @@ namespace radiationfemn {
         // ---------------------------------------------------------------------------
         // Functions for geodesic grid generation
         void CartesianToSpherical(double xvar, double yvar, double zvar, double &rvar, double &thetavar, double &phivar);
+        double FindEdgesIndex(int e1, int e2);
         void GeodesicGridRefine();
         // ---------------------------------------------------------------------------
 
@@ -241,8 +239,6 @@ namespace radiationfemn {
     private:
         MeshBlockPack *pmy_pack;  // ptr to MeshBlockPack containing this RadiationFEMN
 
-
-        double FindEdgesIndex(int e1, int e2);
     };
 
 } // namespace radiationfemn
