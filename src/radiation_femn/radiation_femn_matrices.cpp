@@ -133,6 +133,9 @@ namespace radiationfemn {
     //KOKKOS_INLINE_FUNCTION
     void RadiationFEMN::PopulateMassStiffnessMatrix() {
         Kokkos::realloc(mass_matrix, num_points, num_points);
+        Kokkos::realloc(stiffness_matrix_x, num_points, num_points);
+        Kokkos::realloc(stiffness_matrix_y, num_points, num_points);
+        Kokkos::realloc(stiffness_matrix_z, num_points, num_points);
 
         par_for("radiation_femn_flux_x", DevExeSpace(), 0, num_points - 1, 0, num_points - 1,
                 KOKKOS_LAMBDA(const int A, const int B) {
