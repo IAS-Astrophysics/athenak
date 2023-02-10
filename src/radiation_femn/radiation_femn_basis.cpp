@@ -198,9 +198,9 @@ namespace radiationfemn {
         return result;
     }
 
-    KOKKOS_INLINE_FUNCTION
+    //KOKKOS_INLINE_FUNCTION
     double
-    CosPhiSinTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3,
+    RadiationFEMN::CosPhiSinTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3,
                    double xi1, double xi2, double xi3) {
         double xval, yval, zval;
         BarycentricToCartesian(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, xval, yval, zval);
@@ -212,9 +212,9 @@ namespace radiationfemn {
         return cos(phival) * sin(thetaval);
     }
 
-    KOKKOS_INLINE_FUNCTION
+    //KOKKOS_INLINE_FUNCTION
     double
-    SinPhiSinTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3,
+    RadiationFEMN::SinPhiSinTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3,
                    double xi1, double xi2, double xi3) {
         double xval, yval, zval;
         BarycentricToCartesian(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, xval, yval, zval);
@@ -226,8 +226,8 @@ namespace radiationfemn {
         return sin(phival) * sin(thetaval);
     }
 
-    KOKKOS_INLINE_FUNCTION
-    double CosTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3,
+    //KOKKOS_INLINE_FUNCTION
+    double RadiationFEMN::CosTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3,
                     double xi1, double xi2, double xi3) {
         double xval, yval, zval;
         BarycentricToCartesian(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, xval, yval, zval);
@@ -238,8 +238,8 @@ namespace radiationfemn {
         return cos(thetaval);
     }
 
-    KOKKOS_INLINE_FUNCTION
-    double SinTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3,
+    //KOKKOS_INLINE_FUNCTION
+    double RadiationFEMN::SinTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3,
                     double xi1, double xi2, double xi3) {
         double xval, yval, zval;
         BarycentricToCartesian(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, xval, yval, zval);
