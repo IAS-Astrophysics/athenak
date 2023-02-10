@@ -414,6 +414,7 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
   }
 
   // Send data using MPI (loop over old MBs on this rank)
+  Kokkos::fence();
   bool no_errors=true;
   sb_idx = 0;     // send buffer index
   for (int oldm=ombs; oldm<=ombe; oldm++) {
