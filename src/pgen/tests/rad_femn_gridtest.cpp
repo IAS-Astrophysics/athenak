@@ -49,14 +49,14 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
     std::ofstream fout2(pathdir + filenamepart + "_coords_xyzrthph" + ".txt");
     for (size_t i = 0; i < pmbp->pradfemn->num_points; i++) {
         fout2 << pmbp->pradfemn->x(i) << " " << pmbp->pradfemn->y(i) << " " << pmbp->pradfemn->z(i) << " "
-                  << pmbp->pradfemn->r(i) << " " << pmbp->pradfemn->theta(i) << " " << pmbp->pradfemn->phi(i)
-                  << std::endl;
+              << pmbp->pradfemn->r(i) << " " << pmbp->pradfemn->theta(i) << " " << pmbp->pradfemn->phi(i)
+              << std::endl;
     }
 
     std::ofstream fout3(pathdir + filenamepart + "_triangles" + ".txt");
     for (size_t i = 0; i < pmbp->pradfemn->num_triangles; i++) {
         fout3 << pmbp->pradfemn->triangles(i, 0) << " " << pmbp->pradfemn->triangles(i, 1) << " "
-                  << pmbp->pradfemn->triangles(i, 2) << std::endl;
+              << pmbp->pradfemn->triangles(i, 2) << std::endl;
     }
 
     std::ofstream fout4(pathdir + filenamepart + "_edges" + ".txt");
@@ -74,6 +74,34 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
         }
         fout5 << std::endl;
     }
+
+    std::ofstream fout6(pathdir + filenamepart + "_stiffness_x" + ".txt");
+    auto stiffness_x = pmbp->pradfemn->stiffness_matrix_x;
+    for (size_t i = 0; i < pmbp->pradfemn->num_points; i++) {
+        for (size_t j = 0; j < pmbp->pradfemn->num_points; j++) {
+            fout6 << stiffness_x(i, j) << " ";
+        }
+        fout6 << std::endl;
+    }
+
+    std::ofstream fout7(pathdir + filenamepart + "_stiffness_y" + ".txt");
+    auto stiffness_y = pmbp->pradfemn->stiffness_matrix_y;
+    for (size_t i = 0; i < pmbp->pradfemn->num_points; i++) {
+        for (size_t j = 0; j < pmbp->pradfemn->num_points; j++) {
+            fout7 << stiffness_y(i, j) << " ";
+        }
+        fout7 << std::endl;
+    }
+
+    std::ofstream fout8(pathdir + filenamepart + "_stiffness_z" + ".txt");
+    auto stiffness_z = pmbp->pradfemn->stiffness_matrix_z;
+    for (size_t i = 0; i < pmbp->pradfemn->num_points; i++) {
+        for (size_t j = 0; j < pmbp->pradfemn->num_points; j++) {
+            fout8 << stiffness_z(i, j) << " ";
+        }
+        fout8 << std::endl;
+    }
+
     std::cout << std::endl;
     std::cout << "-------------------------" << std::endl;
     std::cout << "Geodesic grid information" << std::endl;

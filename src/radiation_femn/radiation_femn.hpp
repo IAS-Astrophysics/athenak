@@ -231,17 +231,32 @@ namespace radiationfemn {
         // ---------------------------------------------------------------------------
         // Functions for integrating FEM basis on geodesic grid and computing matrices
         void LoadQuadrature();
-        double IntegratePsiPsiAB(int a, int b);
-        double IntegratePsiPsiABSphericaTriangle(int a, int b, int t1, int t2, int t3);
-        void PopulateMassMatrix();
+        double IntegrateMassStiffnessSphericaTriangle(int a, int b, int t1, int t2, int t3, int matrixnumber);
+        double IntegrateMatrixAB(int a, int b, int matrixchoice);
+        void PopulateMassStiffnessMatrix();
         // ---------------------------------------------------------------------------
 
     private:
         MeshBlockPack *pmy_pack;  // ptr to MeshBlockPack containing this RadiationFEMN
 
-        void
-        BarycentricToCartesian(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3,
-                               double z3, double xi1, double xi2, double xi3, double &xval, double &yval, double &zval);
+        double CosPhiSinTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3,
+                              double z3,
+                              double xi1, double xi2, double xi3);
+
+        double SinPhiSinTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3,
+                              double z3,
+                              double xi1, double xi2, double xi3);
+
+        double
+        CosTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3,
+                 double xi1,
+                 double xi2, double xi3);
+
+        double
+        SinTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3,
+                 double xi1,
+                 double xi2, double xi3);
+
     };
 
 } // namespace radiationfemn

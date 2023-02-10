@@ -289,7 +289,10 @@ namespace radiationfemn {
                 }
             }
 
-            PopulateMassMatrix();
+            Kokkos::realloc(stiffness_matrix_x, num_points, num_points);
+            Kokkos::realloc(stiffness_matrix_y, num_points, num_points);
+            Kokkos::realloc(stiffness_matrix_z, num_points, num_points);
+            PopulateMassStiffnessMatrix();
 
         } else {
 

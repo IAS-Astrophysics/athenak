@@ -47,7 +47,7 @@ namespace radiationfemn {
 
     KOKKOS_INLINE_FUNCTION
     double
-    RadiationFEMN::IntegratePsiPsiABSphericaTriangle(int a, int b, int t1, int t2, int t3) {
+    RadiationFEMN::IntegrateMassStiffnessSphericaTriangle(int a, int b, int t1, int t2, int t3, int matrixnumber) {
 
         double x1 = x(t1);
         double y1 = y(t1);
@@ -62,13 +62,42 @@ namespace radiationfemn {
         double z3 = z(t3);
 
         double result{0.};
-        for (size_t i = 0; i < scheme_num_points; i++) {
-            result += sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0),
+        if (matrixnumber == 0) {
+            for (size_t i = 0; i < scheme_num_points; i++) {
+                result += sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0),
                                                             scheme_points(i, 1), scheme_points(i, 2))) *
-                      FEMBasisABasisB(a, b, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2),
-                                      basis) * scheme_weights(i);
+                          FEMBasisABasisB(a, b, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1),
+                                          scheme_points(i, 2), basis) * scheme_weights(i);
 
 
+            }
+        } else if (matrixnumber == 1) {
+            for (size_t i = 0; i < scheme_num_points; i++) {
+                result += CosPhiSinTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1),
+                                         scheme_points(i, 2)) *
+                          sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0),
+                                                            scheme_points(i, 1), scheme_points(i, 2))) *
+                          FEMBasisABasisB(a, b, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1),
+                                          scheme_points(i, 2), basis) * scheme_weights(i);
+            }
+        } else if (matrixnumber == 2) {
+            for (size_t i = 0; i < scheme_num_points; i++) {
+                result += SinPhiSinTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1),
+                                         scheme_points(i, 2)) *
+                          sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0),
+                                                            scheme_points(i, 1), scheme_points(i, 2))) *
+                          FEMBasisABasisB(a, b, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1),
+                                          scheme_points(i, 2), basis) * scheme_weights(i);
+            }
+        } else if (matrixnumber == 3) {
+            for (size_t i = 0; i < scheme_num_points; i++) {
+                result += CosTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1),
+                                   scheme_points(i, 2)) *
+                          sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0),
+                                                            scheme_points(i, 1), scheme_points(i, 2))) *
+                          FEMBasisABasisB(a, b, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1),
+                                          scheme_points(i, 2), basis) * scheme_weights(i);
+            }
         }
 
         result = 0.5 * result;
@@ -77,7 +106,7 @@ namespace radiationfemn {
     }
 
     KOKKOS_INLINE_FUNCTION
-    double RadiationFEMN::IntegratePsiPsiAB(int a, int b) {
+    double RadiationFEMN::IntegrateMatrixAB(int a, int b, int matrixchoice) {
         double result{0.};
 
         bool is_edge{false};
@@ -90,8 +119,9 @@ namespace radiationfemn {
                     int triangle_index_2 = edge_triangles(i, 1);
                     int triangle_index_3 = edge_triangles(i, 2);
 
-                    double integrated_result = IntegratePsiPsiABSphericaTriangle(a, b, triangle_index_1,
-                                                                                 triangle_index_2, triangle_index_3);
+                    double integrated_result = IntegrateMassStiffnessSphericaTriangle(a, b, triangle_index_1,
+                                                                                      triangle_index_2,
+                                                                                      triangle_index_3, matrixchoice);
                     result += integrated_result;
                 }
             }
@@ -101,13 +131,15 @@ namespace radiationfemn {
     }
 
     //KOKKOS_INLINE_FUNCTION
-    void RadiationFEMN::PopulateMassMatrix() {
+    void RadiationFEMN::PopulateMassStiffnessMatrix() {
         Kokkos::realloc(mass_matrix, num_points, num_points);
 
         par_for("radiation_femn_flux_x", DevExeSpace(), 0, num_points - 1, 0, num_points - 1,
                 KOKKOS_LAMBDA(const int A, const int B) {
-                    mass_matrix(A, B) = IntegratePsiPsiAB(A, B);
-
+                    mass_matrix(A, B) = IntegrateMatrixAB(A, B, 0);
+                    stiffness_matrix_x(A, B) = IntegrateMatrixAB(A, B, 1);
+                    stiffness_matrix_y(A, B) = IntegrateMatrixAB(A, B, 2);
+                    stiffness_matrix_z(A, B) = IntegrateMatrixAB(A, B, 3);
                 });
     }
 }
