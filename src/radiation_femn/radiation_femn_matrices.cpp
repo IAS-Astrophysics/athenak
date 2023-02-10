@@ -63,10 +63,12 @@ namespace radiationfemn {
 
         double result{0.};
         for (size_t i = 0; i < scheme_num_points; i++) {
-            result += sqrt(abs(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0),
-                                                            scheme_points(i, 1), scheme_points(i, 2)))) *
+            result += sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0),
+                                                            scheme_points(i, 1), scheme_points(i, 2))) *
                       FEMBasisABasisB(a, b, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2),
                                       basis) * scheme_weights(i);
+
+
         }
 
         result = 0.5 * result;
