@@ -231,6 +231,7 @@ void HistoryOutput::LoadMHDHistoryData(HistoryData *pdata, Mesh *pm) {
     // sum into parallel reduce
     mb_sum += hvars;
   }, Kokkos::Sum<array_sum::GlobalSum>(sum_this_mb));
+  Kokkos::fence();
 
   // store data into hdata array
   for (int n=0; n<pdata->nhist; ++n) {

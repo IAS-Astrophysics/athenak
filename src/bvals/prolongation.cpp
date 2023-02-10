@@ -97,6 +97,7 @@ void BoundaryValuesCC::ProlongateCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
                + a(m,v,finek+1,finej+1,finei) + a(m,v,finek+1,finej+1,finei+1));
           }
         });
+        tmember.team_barrier();
       }
     });
   }
@@ -143,6 +144,7 @@ void BoundaryValuesCC::ProlongateCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
         // call inlined prolongation operator for CC variables
         ProlongCC(m,v,k,j,i,fk,fj,fi,multi_d,three_d,ca,a);
       });
+      tmember.team_barrier();
     }
   });
 
@@ -241,6 +243,7 @@ void BoundaryValuesFC::ProlongateFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> 
             }
           }
         });
+        tmember.team_barrier();
       }
     });
   }
@@ -294,6 +297,7 @@ void BoundaryValuesFC::ProlongateFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> 
           ProlongFCSharedX3Face(m,k,j,i,fk,fj,fi,multi_d,cb.x3f,b.x3f);
         }
       });
+      tmember.team_barrier();
     }
   });}
 
@@ -346,6 +350,7 @@ void BoundaryValuesFC::ProlongateFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> 
           ProlongFCInternal(m,fk,fj,fi,three_d,b);
         }
       });
+      tmember.team_barrier();
     }
   });}
 

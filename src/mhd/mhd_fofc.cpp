@@ -62,8 +62,13 @@ void MHD::FOFC(Driver *pdriver, int stage) {
     auto &bcctest_ = bcctest;
     auto &b1_ = b1;
 
+    // Index bounds
+    int il = is-1, iu = ie+1, jl = js, ju = je, kl = ks, ku = ke;
+    if (multi_d) { jl = js-1, ju = je+1; }
+    if (three_d) { kl = ks-1, ku = ke+1; }
+
     // Estimate updated conserved variables and cell-centered fields
-    par_for("FOFC-newu", DevExeSpace(), 0, nmb-1, ks, ke, js, je, is, ie,
+    par_for("FOFC-newu", DevExeSpace(), 0, nmb-1, kl, ku, jl, ju, il, iu,
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
       Real dtodx1 = beta_dt/size.d_view(m).dx1;
       Real dtodx2 = beta_dt/size.d_view(m).dx2;
@@ -104,7 +109,7 @@ void MHD::FOFC(Driver *pdriver, int stage) {
 
     // Test whether conversion to primitives requires floors
     // Note b0 and w0 passed to function, but not used/changed.
-    peos->ConsToPrim(utest_, b0, w0, bcctest_, true, is, ie, js, je, ks, ke);
+    peos->ConsToPrim(utest_, b0, w0, bcctest_, true, il, iu, jl, ju, kl, ku);
   }
 
   auto &coord = pmy_pack->pcoord->coord_data;
@@ -118,15 +123,10 @@ void MHD::FOFC(Driver *pdriver, int stage) {
   auto &w0_ = w0;
   auto &b0_ = b0;
 
-  // Extend index bounds if GR+excision (excision flux mask is set in ghost zones)
-  int il = is, iu = ie, jl = js, ju = je, kl = ks, ku = ke;
-  if (is_gr) {
-    if (use_excise) {
-      il = is-1, iu = ie+1;
-      if (multi_d) { jl = js-1, ju = je+1; }
-      if (three_d) { kl = ks-1, ku = ke+1; }
-    }
-  }
+  // Index bounds
+  int il = is-1, iu = ie+1, jl = js, ju = je, kl = ks, ku = ke;
+  if (multi_d) { jl = js-1, ju = je+1; }
+  if (three_d) { kl = ks-1, ku = ke+1; }
 
   // Now replace fluxes with first-order LLF fluxes for any cell where floors needed (if
   // using FOFC) and/or for any cell about the excision (if GR+excising)

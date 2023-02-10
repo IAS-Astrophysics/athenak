@@ -8,7 +8,7 @@ reference = Kommisarov, Mignone & Bodo
 basename  = Blast      # problem ID: basename of output filenames
 
 <mesh>
-nghost    = 2          # Number of ghost cells
+nghost    = 4          # Number of ghost cells
 nx1       = 400        # Number of zones in X1-direction
 x1min     = -6.0       # minimum value of X1
 x1max     = 6.0        # maximum value of X1
@@ -45,7 +45,7 @@ special_rel = true
 
 <mhd>
 eos         = ideal     # EOS type
-reconstruct = plm       # spatial reconstruction method
+reconstruct = ppmx      # spatial reconstruction method
 rsolver     = hlle      # Riemann-solver to be used
 gamma       = 1.3333333 # gamma = C_p/C_v
 dfloor      = 1.0e-10

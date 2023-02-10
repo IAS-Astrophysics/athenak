@@ -26,33 +26,21 @@ BoundaryValues::BoundaryValues(MeshBlockPack *pp, ParameterInput *pin) :
   b_in("bin",1,1),
   i_in("iin",1,1) {
   // allocate vector of status flags and MPI requests (if needed)
-  int nmb = std::max((pmy_pack->nmb_thispack), (pmy_pack->pmesh->nmb_maxperrank));
   int nnghbr = pmy_pack->pmb->nnghbr;
   for (int n=0; n<nnghbr; ++n) {
-    for (int m=0; m<nmb; ++m) {
-      BoundaryCommStatus sendvars_stat = BoundaryCommStatus::undef;
-      BoundaryCommStatus recvvars_stat = BoundaryCommStatus::undef;
-      send_buf[n].vars_stat.push_back(sendvars_stat);
-      recv_buf[n].vars_stat.push_back(recvvars_stat);
-
-      BoundaryCommStatus sendflux_stat = BoundaryCommStatus::undef;
-      BoundaryCommStatus recvflux_stat = BoundaryCommStatus::undef;
-      send_buf[n].flux_stat.push_back(sendflux_stat);
-      recv_buf[n].flux_stat.push_back(recvflux_stat);
 #if MPI_PARALLEL_ENABLED
-      // cannot create Kokkos::View of type MPI_Request (not POD) so use STL vector
-      MPI_Request sendvars_req = MPI_REQUEST_NULL;
-      MPI_Request recvvars_req = MPI_REQUEST_NULL;
-      send_buf[n].vars_req.push_back(sendvars_req);
-      recv_buf[n].vars_req.push_back(recvvars_req);
-
-      MPI_Request sendflux_req = MPI_REQUEST_NULL;
-      MPI_Request recvflux_req = MPI_REQUEST_NULL;
-      send_buf[n].flux_req.push_back(sendflux_req);
-      recv_buf[n].flux_req.push_back(recvflux_req);
-#endif
+    int nmb = std::max((pmy_pack->nmb_thispack), (pmy_pack->pmesh->nmb_maxperrank));
+    send_buf[n].vars_req = new MPI_Request[nmb];
+    send_buf[n].flux_req = new MPI_Request[nmb];
+    recv_buf[n].vars_req = new MPI_Request[nmb];
+    recv_buf[n].flux_req = new MPI_Request[nmb];
+    for (int m=0; m<nmb; ++m) {
+      send_buf[n].vars_req[m] = MPI_REQUEST_NULL;
+      send_buf[n].flux_req[m] = MPI_REQUEST_NULL;
+      recv_buf[n].vars_req[m] = MPI_REQUEST_NULL;
+      recv_buf[n].flux_req[m] = MPI_REQUEST_NULL;
     }
-
+#endif
     // initialize data sizes in each send/recv buffer to zero
     send_buf[n].isame_ndat = 0;
     send_buf[n].icoar_ndat = 0;
@@ -70,6 +58,21 @@ BoundaryValues::BoundaryValues(MeshBlockPack *pp, ParameterInput *pin) :
   // create unique communicators for variables and fluxes in this BoundaryValues object
   MPI_Comm_dup(MPI_COMM_WORLD, &vars_comm);
   MPI_Comm_dup(MPI_COMM_WORLD, &flux_comm);
+#endif
+}
+
+//----------------------------------------------------------------------------------------
+// destructor
+
+BoundaryValues::~BoundaryValues() {
+#if MPI_PARALLEL_ENABLED
+  int nnghbr = pmy_pack->pmb->nnghbr;
+  for (int n=0; n<nnghbr; ++n) {
+    delete [] send_buf[n].vars_req;
+    delete [] send_buf[n].flux_req;
+    delete [] recv_buf[n].vars_req;
+    delete [] recv_buf[n].flux_req;
+  }
 #endif
 }
 
@@ -208,10 +211,10 @@ void BoundaryValues::InitializeBuffers(const int nvar) {
 
 //----------------------------------------------------------------------------------------
 //! \fn  void BoundaryValues::InitRecv
-//! \brief Posts non-blocking receives (with MPI), and initialize all boundary receive
-//! status flags to waiting (with or without MPI) for boundary communications of vars.
+//! \brief Posts non-blocking receives (with MPI) for boundary communications of vars.
 
 TaskStatus BoundaryValues::InitRecv(const int nvars) {
+#if MPI_PARALLEL_ENABLED
   int &nmb = pmy_pack->nmb_thispack;
   int &nnghbr = pmy_pack->pmb->nnghbr;
   auto &nghbr = pmy_pack->pmb->nghbr;
@@ -221,7 +224,6 @@ TaskStatus BoundaryValues::InitRecv(const int nvars) {
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
       if (nghbr.h_view(m,n).gid >= 0) {
-#if MPI_PARALLEL_ENABLED
         // rank of destination buffer
         int drank = nghbr.h_view(m,n).rank;
 
@@ -246,25 +248,27 @@ TaskStatus BoundaryValues::InitRecv(const int nvars) {
                                vars_comm, &(recv_buf[n].vars_req[m]));
           if (ierr != MPI_SUCCESS) {no_errors=false;}
         }
-#endif
-        // initialize boundary receive status flags
-        recv_buf[n].vars_stat[m] = BoundaryCommStatus::waiting;
       }
     }
   }
-  if (no_errors) return TaskStatus::complete;
-
-  return TaskStatus::fail;
+  // Quit if MPI error detected
+  if (!(no_errors)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+       << std::endl << "MPI error in posting non-blocking receives" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+#endif
+  return TaskStatus::complete;
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn  void BoundaryValues::ClearRecv
-//  \brief Waits for all MPI receives associated with boundary communcations
-//  to complete before allowing execution to continue
+//! \brief Waits for all MPI receives associated with communcation of boundary variables
+//! to complete before allowing execution to continue
 
 TaskStatus BoundaryValues::ClearRecv() {
-  bool no_errors=true;
 #if MPI_PARALLEL_ENABLED
+  bool no_errors=true;
   int &nmb = pmy_pack->nmb_thispack;
   int &nnghbr = pmy_pack->pmb->nnghbr;
   auto &nghbr = pmy_pack->pmb->nghbr;
@@ -279,20 +283,24 @@ TaskStatus BoundaryValues::ClearRecv() {
       }
     }
   }
+  // Quit if MPI error detected
+  if (!(no_errors)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+       << std::endl << "MPI error in clearing receives" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 #endif
-  if (no_errors) return TaskStatus::complete;
-
-  return TaskStatus::fail;
+  return TaskStatus::complete;
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn  void BoundaryValues::ClearSend
-//  \brief Waits for all MPI sends associated with boundary communcations to
-//   complete before allowing execution to continue
+//! \brief Waits for all MPI sends associated with communcation of boundary variables
+//! to complete before allowing execution to continue
 
 TaskStatus BoundaryValues::ClearSend() {
-  bool no_errors=true;
 #if MPI_PARALLEL_ENABLED
+  bool no_errors=true;
   int &nmb = pmy_pack->nmb_thispack;
   int &nnghbr = pmy_pack->pmb->nnghbr;
   auto &nghbr = pmy_pack->pmb->nghbr;
@@ -303,6 +311,68 @@ TaskStatus BoundaryValues::ClearSend() {
       if ( (nghbr.h_view(m,n).gid >= 0) &&
            (nghbr.h_view(m,n).rank != global_variable::my_rank) ) {
         int ierr = MPI_Wait(&(send_buf[n].vars_req[m]), MPI_STATUS_IGNORE);
+        if (ierr != MPI_SUCCESS) {no_errors=false;}
+      }
+    }
+  }
+  // Quit if MPI error detected
+  if (!(no_errors)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+       << std::endl << "MPI error in clearing sends" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+#endif
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void BoundaryValues::ClearFluxRecv
+//! \brief Waits for all MPI receives associated with communcation of boundary fluxes
+//! to complete before allowing execution to continue
+
+TaskStatus BoundaryValues::ClearFluxRecv() {
+  bool no_errors=true;
+#if MPI_PARALLEL_ENABLED
+  int &nmb = pmy_pack->nmb_thispack;
+  int &nnghbr = pmy_pack->pmb->nnghbr;
+  auto &nghbr = pmy_pack->pmb->nghbr;
+
+  // wait for all non-blocking receives for fluxes to finish before continuing
+  for (int m=0; m<nmb; ++m) {
+    for (int n=0; n<nnghbr; ++n) {
+      if ( (nghbr.h_view(m,n).gid >= 0) &&
+           (nghbr.h_view(m,n).rank != global_variable::my_rank) &&
+           (recv_buf[n].flux_req[m] != MPI_REQUEST_NULL) ) {
+        int ierr = MPI_Wait(&(recv_buf[n].flux_req[m]), MPI_STATUS_IGNORE);
+        if (ierr != MPI_SUCCESS) {no_errors=false;}
+      }
+    }
+  }
+#endif
+  if (no_errors) return TaskStatus::complete;
+
+  return TaskStatus::fail;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void BoundaryValues::ClearFluxSend
+//! \brief Waits for all MPI sends associated with communcation of boundary fluxes to
+//!  complete before allowing execution to continue
+
+TaskStatus BoundaryValues::ClearFluxSend() {
+  bool no_errors=true;
+#if MPI_PARALLEL_ENABLED
+  int &nmb = pmy_pack->nmb_thispack;
+  int &nnghbr = pmy_pack->pmb->nnghbr;
+  auto &nghbr = pmy_pack->pmb->nghbr;
+
+  // wait for all non-blocking sends for fluxes to finish before continuing
+  for (int m=0; m<nmb; ++m) {
+    for (int n=0; n<nnghbr; ++n) {
+      if ( (nghbr.h_view(m,n).gid >= 0) &&
+           (nghbr.h_view(m,n).rank != global_variable::my_rank) &&
+           (send_buf[n].flux_req[m] != MPI_REQUEST_NULL) ) {
+        int ierr = MPI_Wait(&(send_buf[n].flux_req[m]), MPI_STATUS_IGNORE);
         if (ierr != MPI_SUCCESS) {no_errors=false;}
       }
     }
