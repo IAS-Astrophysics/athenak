@@ -45,7 +45,7 @@ void DChiThreshold(MeshBlockPack* pmbp) {
   int CHI = pmbp->pz4c->I_Z4c_chi;
   auto &u0 = pmbp->pz4c->u0;
 
-  Real dchi_threshold = 1.5;
+  Real dchi_threshold = 0.25;//75;
 
   par_for_outer("MaxDisToPuncture",DevExeSpace(), 0, 0, 0, (nmb-1),
     KOKKOS_LAMBDA(TeamMember_t tmember, const int m) {
