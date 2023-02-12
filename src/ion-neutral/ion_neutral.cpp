@@ -240,8 +240,6 @@ TaskStatus IonNeutral::ImpRKUpdate(Driver *pdriver, int estage) {
                         ui(m,IM3,k,j,i)*ui(m,IM3,k,j,i))/2./ui(m,IDN,k,j,i);
         Real kin_n = (un(m,IM1,k,j,i)*un(m,IM1,k,j,i)+un(m,IM2,k,j,i)*un(m,IM2,k,j,i)+
                         un(m,IM3,k,j,i)*un(m,IM3,k,j,i))/2./un(m,IDN,k,j,i);
-        ui(m,IEN,k,j,i) += kin_i-kin_prev_i;
-        un(m,IEN,k,j,i) += kin_n-kin_prev_n;
         Real fmass = 1./(1.+mi_mn);
         Real gamma_i = eos_mhd.gamma, gamma_n = eos_hyd.gamma;
         Real a_i, a_n, b_i, b_n, c_i, c_n;
