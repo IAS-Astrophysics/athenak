@@ -500,6 +500,22 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
     std::exit(EXIT_FAILURE);
   }
 
+  // UpdateMeshBlockTree function can refine/de-refine MBs to ensure resolution jump is
+  // no more than 2x at boundaries.  Reset refine_flag for these MBs.
+  for (int oldm=0; oldm<old_nmb; oldm++) {
+    int newm = oldtonew[oldm];
+    LogicalLocation &old_lloc = pmy_mesh->lloc_eachmb[oldm];
+    LogicalLocation &new_lloc = new_lloc_eachmb[newm];
+    if (old_lloc.level > new_lloc.level) {          // old MB was de-refined
+      refine_flag.h_view(oldm) = -nleaf;
+    } else if (old_lloc.level < new_lloc.level) {   // old MB was refined
+      refine_flag.h_view(oldm) = 1;
+    }
+  }
+  // sync host view with device
+  refine_flag.template modify<HostMemSpace>();
+  refine_flag.template sync<DevExeSpace>();
+
   // Step 4.
   // Allocate send/recv buffers for load balancing, post receives.
   // Pack send buffers for load blancing and send data
