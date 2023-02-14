@@ -7,7 +7,7 @@ problem   = GR magnetic monopole
 basename  = monopole  # problem ID: basename of output filenames
 
 <mesh>
-nghost    = 2      # Number of ghost cells
+nghost    = 3      # Number of ghost cells
 nx1       = 256    # Number of zones in X1-direction
 x1min     = -10.0  # minimum value of X1
 x1max     = 10.0   # maximum value of X1

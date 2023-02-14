@@ -24,6 +24,10 @@
 #include "srcterms/turb_driver.hpp"
 #include "outputs.hpp"
 
+#if MPI_PARALLEL_ENABLED
+#include <mpi.h>
+#endif
+
 //----------------------------------------------------------------------------------------
 // BaseTypeOutput base class constructor
 // Creates vector of output variable data
