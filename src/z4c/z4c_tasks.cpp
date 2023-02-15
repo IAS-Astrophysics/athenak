@@ -58,9 +58,9 @@ void Z4c::AssembleZ4cTasks(TaskList &start, TaskList &run, TaskList &end) {
   id.recvu = run.AddTask(&Z4c::RecvU, this, id.sendu);
   id.bcs   = run.AddTask(&Z4c::ApplyPhysicalBCs, this, id.recvu);
   id.algc  = run.AddTask(&Z4c::EnforceAlgConstr, this, id.bcs);
-  // id.z4tad = run.AddTask(&Z4c::Z4cToADM_, this, id.algc);
-  // id.admc  = run.AddTask(&Z4c::ADMConstraints_, this, id.z4tad);
-  id.newdt = run.AddTask(&Z4c::NewTimeStep, this, id.algc);
+  id.z4tad = run.AddTask(&Z4c::Z4cToADM_, this, id.algc);
+  id.admc  = run.AddTask(&Z4c::ADMConstraints_, this, id.z4tad);
+  id.newdt = run.AddTask(&Z4c::NewTimeStep, this, id.admc);
   // end task list
   id.csend = end.AddTask(&Z4c::ClearSend, this, none);
   id.crecv = end.AddTask(&Z4c::ClearRecv, this, id.csend);
