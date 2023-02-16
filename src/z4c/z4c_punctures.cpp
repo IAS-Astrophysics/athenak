@@ -109,7 +109,7 @@ void Z4c::ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin) {
 void Z4c::ADMTwoPunctures(MeshBlockPack *pmbp, ini_data *data) {
   // capture variables for the kernel
   auto &u_adm = pmbp->padm->u_adm;
-
+  
   HostArray5D<Real>::HostMirror host_u_adm = create_mirror(u_adm);
   ADMhost_vars host_adm;
   host_adm.psi4.InitWithShallowSlice(host_u_adm, adm::ADM::I_ADM_psi4);
@@ -129,9 +129,7 @@ void Z4c::ADMTwoPunctures(MeshBlockPack *pmbp, ini_data *data) {
   int ncells2 = indcs.nx2 + 2*(indcs.ng);
   int ncells3 = indcs.nx3 + 2*(indcs.ng);
   int nmb = pmbp->nmb_thispack;
-  Kokkos::parallel_for("pgen two puncture", Kokkos::RangePolicy<>\
-  (Kokkos::DefaultHostExecutionSpace(), 0, nmb),
-  KOKKOS_LAMBDA(const int m) {
+  for(int m = 0; m < nmb; ++m) {
     int imin[3] = {0, 0, 0};
 
     int n[3] = {ncells1, ncells2, ncells3};
@@ -152,18 +150,17 @@ void Z4c::ADMTwoPunctures(MeshBlockPack *pmbp, ini_data *data) {
     Real *y = new Real[n[1]];
     Real *z = new Real[n[2]];
 
-    Real &x1min = size.d_view(m).x1min;
-    Real &x1max = size.d_view(m).x1max;
+    Real &x1min = size.h_view(m).x1min;
+    Real &x1max = size.h_view(m).x1max;
     int nx1 = indcs.nx1;
 
-    Real &x2min = size.d_view(m).x2min;
-    Real &x2max = size.d_view(m).x2max;
+    Real &x2min = size.h_view(m).x2min;
+    Real &x2max = size.h_view(m).x2max;
     int nx2 = indcs.nx2;
 
-    Real &x3min = size.d_view(m).x3min;
-    Real &x3max = size.d_view(m).x3max;
+    Real &x3min = size.h_view(m).x3min;
+    Real &x3max = size.h_view(m).x3max;
     int nx3 = indcs.nx3;
-
     // need to populate coordinates
     for(int ix_I = isg; ix_I < ieg+1; ix_I++) {
       x[ix_I] = CellCenterX(ix_I-is, nx1, x1min, x1max);
@@ -239,7 +236,7 @@ void Z4c::ADMTwoPunctures(MeshBlockPack *pmbp, ini_data *data) {
     free(psi); free(alp);
 
     free(x); free(y); free(z);
-  });
+  }
   Kokkos::deep_copy(u_adm, host_u_adm);
   return;
 }
@@ -247,3 +244,4 @@ void Z4c::ADMTwoPunctures(MeshBlockPack *pmbp, ini_data *data) {
 #endif
 
 } // end namespace z4c
+

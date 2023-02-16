@@ -111,12 +111,14 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
             [&](const int i) {
               rbuf[dn].vars(dm, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) ) = a(m,v,k,j,i);
             });
+            tmember.team_barrier();
           // if neighbor is at coarser level, load data from coarse_u0
           } else {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
             [&](const int i) {
               rbuf[dn].vars(dm, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) ) = ca(m,v,k,j,i);
             });
+            tmember.team_barrier();
           }
 
         // else copy into send buffer for MPI communication below
@@ -128,12 +130,14 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
             [&](const int i) {
               sbuf[n].vars(m, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) ) = a(m,v,k,j,i);
             });
+            tmember.team_barrier();
           // if neighbor is at coarser level, load data from coarse_u0
           } else {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
             [&](const int i) {
               sbuf[n].vars(m, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) ) = ca(m,v,k,j,i);
             });
+            tmember.team_barrier();
           }
         }
       });
@@ -141,12 +145,11 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
   }); // end par_for_outer
   }
 
+#if MPI_PARALLEL_ENABLED
   // Send boundary buffer to neighboring MeshBlocks using MPI
-
+  Kokkos::fence();
   int my_rank = global_variable::my_rank;
   auto &nghbr = pmy_pack->pmb->nghbr;
-  auto &rbuf = recv_buf;
-
   bool no_errors=true;
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
@@ -154,17 +157,7 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
         // index and rank of destination Neighbor
         int dn = nghbr.h_view(m,n).dest;
         int drank = nghbr.h_view(m,n).rank;
-
-        // if MeshBlocks are on same rank, data already copied into receive buffer above
-        // So simply set communication status tag as received.
-        if (drank == my_rank) {
-          // index of destination MeshBlock in this MBPack
-          int dm = nghbr.h_view(m,n).gid - pmy_pack->gids;
-          rbuf[dn].vars_stat[dm] = BoundaryCommStatus::received;
-
-#if MPI_PARALLEL_ENABLED
-        // Send boundary data using MPI
-        } else {
+        if (drank != my_rank) {
           // create tag using local ID and buffer index of *receiving* MeshBlock
           int lid = nghbr.h_view(m,n).gid - pmy_pack->pmesh->gids_eachrank[drank];
           int tag = CreateBvals_MPI_Tag(lid, dn);
@@ -183,14 +176,18 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
           int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
                                vars_comm, &(send_buf[n].vars_req[m]));
           if (ierr != MPI_SUCCESS) {no_errors=false;}
-#endif
         }
       }
     }
   }
-  if (no_errors) return TaskStatus::complete;
-
-  return TaskStatus::fail;
+  // Quit if MPI error detected
+  if (!(no_errors)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+       << std::endl << "MPI error in posting sends" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+#endif
+  return TaskStatus::complete;
 }
 
 //----------------------------------------------------------------------------------------
@@ -202,42 +199,37 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
-
-  bool bflag = false;
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &rbuf = recv_buf;
-
 #if MPI_PARALLEL_ENABLED
-  // probe MPI communications.  This is a bit of black magic that seems to promote
-  // communications to top of stack and gets them to complete more quickly
-  int test;
-  int ierr = MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, vars_comm, &test, MPI_STATUS_IGNORE);
-  if (ierr != MPI_SUCCESS) {return TaskStatus::incomplete;}
-#endif
-
   //----- STEP 1: check that recv boundary buffer communications have all completed
 
+  bool bflag = false;
+  bool no_errors=true;
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
       if (nghbr.h_view(m,n).gid >= 0) { // neighbor exists and not a physical boundary
-        if (nghbr.h_view(m,n).rank == global_variable::my_rank) {
-          if (rbuf[n].vars_stat[m] == BoundaryCommStatus::waiting) {bflag = true;}
-#if MPI_PARALLEL_ENABLED
-        } else {
-          MPI_Test(&(rbuf[n].vars_req[m]), &test, MPI_STATUS_IGNORE);
-          if (static_cast<bool>(test)) {
-            rbuf[n].vars_stat[m] = BoundaryCommStatus::received;
-          } else {
+        if (nghbr.h_view(m,n).rank != global_variable::my_rank) {
+          int test;
+          int ierr = MPI_Test(&(rbuf[n].vars_req[m]), &test, MPI_STATUS_IGNORE);
+          if (ierr != MPI_SUCCESS) {no_errors=false;}
+          if (!(static_cast<bool>(test))) {
             bflag = true;
           }
-#endif
         }
       }
     }
   }
-
+  // Quit if MPI error detected
+  if (!(no_errors)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "MPI error in testing non-blocking receives"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   // exit if recv boundary buffer communications have not completed
   if (bflag) {return TaskStatus::incomplete;}
+#endif
 
   //----- STEP 2: buffers have all completed, so unpack
 

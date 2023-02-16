@@ -12,8 +12,10 @@
 #include <algorithm>
 #include <cmath>
 #include <sstream>
+
 #include "parameter_input.hpp"
 #include "athena.hpp"
+#include "globals.hpp"
 #include "mesh/mesh.hpp"
 #include "z4c/z4c.hpp"
 #include "coordinates/cell_locations.hpp"
@@ -25,8 +27,50 @@ static ini_data *data;
 //----------------------------------------------------------------------------------------
 //! \fn ProblemGenerator::UserProblem_()
 //! \brief Problem Generator for spherical blast problem
+void DChiThreshold(MeshBlockPack* pmbp) {
+  auto &refine_flag_ = pmbp->pmesh->pmr->refine_flag;
+  auto &ppos = pmbp->pz4c->ppos;
+  auto &indcs = pmbp->pmesh->mb_indcs;
+  int nmb = pmbp->nmb_thispack;
+  int nx3 = indcs.nx3;
+  int nx2 = indcs.nx2;
+  int nx1 = indcs.nx1;
+  const int nkji = nx3*nx2*nx1;
+  const int nji = nx2*nx1;
+
+  int &is = indcs.is;
+  int &js = indcs.js;
+  int &ks = indcs.ks;
+  int mbs = pmbp->pmesh->gids_eachrank[global_variable::my_rank];
+  int CHI = pmbp->pz4c->I_Z4c_chi;
+  auto &u0 = pmbp->pz4c->u0;
+
+  Real dchi_threshold = 0.25;//75;
+
+  par_for_outer("MaxDisToPuncture",DevExeSpace(), 0, 0, 0, (nmb-1),
+    KOKKOS_LAMBDA(TeamMember_t tmember, const int m) {
+
+      Real team_ddmax;
+      Kokkos::parallel_reduce(Kokkos::TeamThreadRange(tmember, nkji),
+      [=](const int idx, Real& ddmax) {
+        int k = (idx)/nji;
+        int j = (idx - k*nji)/nx1;
+        int i = (idx - k*nji - j*nx1) + is;
+        j += js;
+        k += ks;
+        Real d2 = SQR(u0(m,CHI,k,j,i+1) - u0(m,CHI,k,j,i-1))
+                  + SQR(u0(m,CHI,k,j+1,i) - u0(m,CHI,k,j-1,i))
+                  + SQR(u0(m,CHI,k+1,j,i) - u0(m,CHI,k-1,j,i));
+        ddmax = fmax((sqrt(d2)/u0(m,CHI,k,j,i)), ddmax);
+      },Kokkos::Max<Real>(team_ddmax));
+
+      if (team_ddmax > dchi_threshold) {refine_flag_.d_view(m+mbs) = 1;}
+      if (team_ddmax < 0.25*dchi_threshold) {refine_flag_.d_view(m+mbs) = -1;}
+    });
+}
 
 void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
+  user_ref_func = DChiThreshold;
   if (restart) return;
 
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;

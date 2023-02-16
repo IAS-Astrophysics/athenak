@@ -8,7 +8,7 @@ reference = Fishbone & Moncrief 1976, ApJ 207 962
 basename  = torus
 
 <mesh>
-nghost = 2        # Number of ghost cells
+nghost = 4        # Number of ghost cells
 nx1    = 32       # number of cells in x1-direction
 x1min  = -960.0   # minimum x1
 x1max  = 960.0    # maximum x1
