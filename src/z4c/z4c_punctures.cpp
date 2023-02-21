@@ -67,6 +67,7 @@ void Z4c::ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin) {
       Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
       r(i) = std::sqrt(std::pow(x3v,2) + std::pow(x2v,2) + std::pow(x1v,2));
     });
+    member.team_barrier();
 
     // Minkowski spacetime
     for(int a = 0; a < 3; ++a)
@@ -81,6 +82,8 @@ void Z4c::ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin) {
     par_for_inner(member, isg, ieg, [&](const int i) {
       adm.psi4(m,k,j,i) = std::pow(1.0 + 0.5*ADM_mass/r(i),4); // adm.psi4
     });
+    member.team_barrier();
+
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
       par_for_inner(member, isg, ieg, [&](const int i) {

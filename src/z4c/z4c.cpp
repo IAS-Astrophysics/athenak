@@ -189,12 +189,16 @@ void Z4c::AlgConstr(MeshBlockPack *pmbp)
       Real eps = detg(i) - 1.;
       oopsi4(i) = (eps < opt.eps_floor) ? (1. - opt.eps_floor/3.) : (std::pow(1./detg(i), 1./3.));
     });
+    member.team_barrier();
+
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
       par_for_inner(member, isg, ieg, [&](const int i) {
         z4c.g_dd(m,a,b,k,j,i) *= oopsi4(i);
       });
     }
+    member.team_barrier();
+
     // compute trace of A
     // note: here we are assuming that det g = 1, which we enforced above
     par_for_inner(member, isg, ieg, [&](const int i) {
@@ -204,6 +208,8 @@ void Z4c::AlgConstr(MeshBlockPack *pmbp)
                    z4c.A_dd(m,0,0,k,j,i), z4c.A_dd(m,0,1,k,j,i), z4c.A_dd(m,0,2,k,j,i),
                    z4c.A_dd(m,1,1,k,j,i), z4c.A_dd(m,1,2,k,j,i), z4c.A_dd(m,2,2,k,j,i));
     });
+    member.team_barrier();
+
     // enforce trace of A to be zero
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {

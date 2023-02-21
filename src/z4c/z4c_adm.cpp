@@ -208,6 +208,8 @@ void Z4c::Z4cToADM(MeshBlockPack *pmbp) {
     par_for_inner(member, isg, ieg, [&](const int i) { 
       adm.psi4(m,k,j,i) = std::pow(z4c.chi(m,k,j,i), 4./opt.chi_psi_power);
     });
+    member.team_barrier();
+
     // g_ab
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
@@ -215,6 +217,8 @@ void Z4c::Z4cToADM(MeshBlockPack *pmbp) {
         adm.g_dd(m,a,b,k,j,i) = adm.psi4(m,k,j,i) * z4c.g_dd(m,a,b,k,j,i);
       });
     }
+    member.team_barrier();
+
     // K_ab 
     for(int a = 0; a < 3; ++a) 
     for(int b = a; b < 3; ++b) { 
@@ -322,6 +326,7 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
         dK_ddd(c,a,b,i) = Dx<NGHOST>(c, idx, adm.K_dd, m,a,b,k,j,i);
       });
     }
+    member.team_barrier();
 
     // second derivatives of g
     for(int a = 0; a < 3; ++a)
@@ -339,6 +344,7 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
         });
       }
     }
+    member.team_barrier();
 
     // -----------------------------------------------------------------------------------
     // inverse metric
@@ -416,6 +422,8 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
         R(i) += g_uu(a,b,i) * R_dd(a,b,i);
       });
     }
+    member.team_barrier();
+
     // -----------------------------------------------------------------------------------
     // Extrinsic curvature: traces and derivatives
     //
@@ -429,10 +437,13 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
           });
         }
       }
+      member.team_barrier();
       par_for_inner(member, is, ie, [&](const int i) {
         K(i) += K_ud(a,a,i);
       });
     }
+    member.team_barrier();
+
     // K^a_b K^b_a
     KK.ZeroClear();
     for(int a = 0; a < 3; ++a)
@@ -441,6 +452,7 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
         KK(i) += K_ud(a,b,i) * K_ud(b,a,i);
       });
     }
+    member.team_barrier();
     // Covariant derivative of K
     for(int a = 0; a < 3; ++a)
     for(int b = 0; b < 3; ++b)
@@ -455,6 +467,8 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
         });
       }
     }
+    member.team_barrier();
+
     DK_udd.ZeroClear();
     for(int a = 0; a < 3; ++a)
     for(int b = 0; b < 3; ++b)
@@ -464,6 +478,8 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
         DK_udd(a,b,c,i) += g_uu(a,d,i) * DK_ddd(d,b,c,i);
       });
     }
+    member.team_barrier();
+
     // -----------------------------------------------------------------------------------
     // Actual constraints
     //
@@ -472,6 +488,8 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     par_for_inner(member, is, ie, [&](const int i) {
       con.H(m,k,j,i) = R(i) + SQR(K(i)) - KK(i);// - 16*M_PI * mat.rho(k,j,i);
     });
+    member.team_barrier();
+
     // Momentum constraint (contravariant)
     //
     M_u.ZeroClear();
