@@ -283,12 +283,6 @@ namespace radiationfemn {
             triangles(19, 1) = 5;
             triangles(19, 2) = 7;
 
-            if (refinement_level > 0) {
-                for (size_t i = 0; i < refinement_level; i++) {
-                    GeodesicGridRefine();
-                }
-            }
-
             PopulateMassStiffnessMatrix();
 
         } else {

@@ -4,20 +4,47 @@
 // AthenaXX copyright(C) James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file radiation_femn.hpp
-//  \brief implementation of the radiation FEM_N class constructor and other functions
+//! \file radiation_femn_geodesicgrid.cpp
+//  \brief implementation of functions for generation of a geodesic grid
 
-#include <iostream>
 #include <string>
 
 #include "athena.hpp"
-#include "units/units.hpp"
 #include "radiation_femn/radiation_femn.hpp"
 #include "radiation_femn/radiation_femn_matrices.hpp"
 
 namespace radiationfemn {
 
-    void GeodesicGridBaseGenerate(int &geogrid_level, int &geogrid_num_points, int &geogrid_num_edges, int &geogrid_num_triangles, HostArray1D<Real> x, HostArray1D<Real> y, HostArray1D<Real> z, HostArray1D<Real> r, HostArray1D<Real> theta, HostArray1D<Real> phi, HostArray2D<int> edges, HostArray2D<int> triangles) {
+    // ------------------------------------------
+    // Convert cartesian to spherical coordinates
+    KOKKOS_INLINE_FUNCTION
+    void CartesianToSpherical(double xvar, double yvar, double zvar, double &rvar, double &thetavar,
+                              double &phivar) {
+        rvar = sqrt(xvar * xvar + yvar * yvar + zvar * zvar);
+        thetavar = acos(zvar / rvar);
+        phivar = atan2(yvar, xvar);
+    }
+
+    // -------------------------------------------------------------------------------
+    // Given two points of an edge, find the index of the edge array of their location
+    KOKKOS_INLINE_FUNCTION
+    double FindEdgesIndex(int e1, int e2, HostArray2D<int> &edges) {
+        int index{-42};
+        for (size_t i = 0; i < edges.size() / 2; i++) {
+            if ((edges(i, 0) == e1 && edges(i, 1) == e2) || (edges(i, 0) == e2 && edges(i, 1) == e1)) {
+                index = i;
+                break;
+            }
+        }
+        return index;
+    }
+
+    // -------------------------------
+    // Generate the base geodesic grid
+    void
+    GeodesicGridBaseGenerate(int &geogrid_level, int &geogrid_num_points, int &geogrid_num_edges, int &geogrid_num_triangles, HostArray1D<Real> &x, HostArray1D<Real> &y,
+                             HostArray1D<Real> &z, HostArray1D<Real> &r, HostArray1D<Real> &theta, HostArray1D<Real> &phi, HostArray2D<int> &edges,
+                             HostArray2D<int> &triangles) {
 
         // Geodesic grid metadata
         geogrid_level = 0;
@@ -209,33 +236,11 @@ namespace radiationfemn {
 
     }
 
-    // ------------------------------------------
-    // Convert cartesian to spherical coordinates
-    KOKKOS_INLINE_FUNCTION
-    void CartesianToSpherical(double xvar, double yvar, double zvar, double &rvar, double &thetavar,
-                                             double &phivar) {
-        rvar = sqrt(xvar * xvar + yvar * yvar + zvar * zvar);
-        thetavar = acos(zvar / rvar);
-        phivar = atan2(yvar, xvar);
-    }
+    void GeodesicGridRefine(int &geogrid_level, int &geogrid_num_points, int &geogrid_num_edges, int &geogrid_num_triangles, HostArray1D<Real> &x, HostArray1D<Real> &y,
+                            HostArray1D<Real> &z, HostArray1D<Real> &r, HostArray1D<Real> &theta, HostArray1D<Real> &phi, HostArray2D<int> &edges,
+                            HostArray2D<int> &triangles) {
 
-    // -------------------------------------------------------------------------------
-    // Given two points of an edge, find the index of the edge array of their location
-    KOKKOS_INLINE_FUNCTION
-    double RadiationFEMN::FindEdgesIndex(int e1, int e2) {
-        int index{-42};
-        for (size_t i = 0; i < num_edges; i++) {
-            if ((edges(i, 0) == e1 && edges(i, 1) == e2) || (edges(i, 0) == e2 && edges(i, 1) == e1)) {
-                index = i;
-                break;
-            }
-        }
-        return index;
-    }
-
-    //KOKKOS_INLINE_FUNCTION
-    void RadiationFEMN::GeodesicGridRefine() {
-        int new_num_ref = num_ref + 1;
+        int new_num_ref = geogrid_level + 1;
         int new_num_points = 12 * pow(4, new_num_ref);
         if (new_num_ref != 0) {
             for (size_t i = 0; i < new_num_ref; i++) {
@@ -245,54 +250,53 @@ namespace radiationfemn {
         int new_num_edges = 3 * (new_num_points - 2);
         int new_num_triangles = 2 * (new_num_points - 2);
 
-        DvceArray1D<Real> xnew("xnew", new_num_points);
-        DvceArray1D<Real> ynew("ynew", new_num_points);
-        DvceArray1D<Real> znew("znew", new_num_points);
-        DvceArray1D<Real> rnew("rnew", new_num_points);
-        DvceArray1D<Real> thetanew("thetanew", new_num_points);
-        DvceArray1D<Real> phinew("phinew", new_num_points);
+        HostArray1D<Real> xnew("xnew", new_num_points);
+        HostArray1D<Real> ynew("ynew", new_num_points);
+        HostArray1D<Real> znew("znew", new_num_points);
+        HostArray1D<Real> rnew("rnew", new_num_points);
+        HostArray1D<Real> thetanew("thetanew", new_num_points);
+        HostArray1D<Real> phinew("phinew", new_num_points);
 
-        DvceArray2D<int> edgesnewtemp("edgesnewtemp", 9 * num_triangles, 2);
-        DvceArray2D<int> edgesnew("edgesnew", new_num_edges, 2);
-        DvceArray2D<int> trianglesnew("trianglesnew", new_num_triangles, 3);
+        HostArray2D<int> edgesnewtemp("edgesnewtemp", 9 * geogrid_num_triangles, 2);
+        HostArray2D<int> edgesnew("edgesnew", new_num_edges, 2);
+        HostArray2D<int> trianglesnew("trianglesnew", new_num_triangles, 3);
 
-        for (size_t i = 0; i < num_points; i++) {
+        for (size_t i = 0; i < geogrid_num_points; i++) {
             xnew(i) = x(i);
             ynew(i) = y(i);
             znew(i) = z(i);
         }
 
-        for (size_t i = 0; i < num_edges; i++) {
+        for (size_t i = 0; i < geogrid_num_edges; i++) {
             int e1 = edges(i, 0);
             int e2 = edges(i, 1);
 
-            xnew(num_points + i) = (x(e1) + x(e2)) / 2.0;
-            ynew(num_points + i) = (y(e1) + y(e2)) / 2.0;
-            znew(num_points + i) = (z(e1) + z(e2)) / 2.0;
+            xnew(geogrid_num_points + i) = (x(e1) + x(e2)) / 2.0;
+            ynew(geogrid_num_points + i) = (y(e1) + y(e2)) / 2.0;
+            znew(geogrid_num_points + i) = (z(e1) + z(e2)) / 2.0;
 
-            double mod_point = sqrt(
-                    xnew(num_points + i) * xnew(num_points + i) + ynew(num_points + i) * ynew(num_points + i) +
-                    znew(num_points + i) * znew(num_points + i));
+            double mod_point = sqrt(xnew(geogrid_num_points + i) * xnew(geogrid_num_points + i) + ynew(geogrid_num_points + i) * ynew(geogrid_num_points + i) +
+                                    znew(geogrid_num_points + i) * znew(geogrid_num_points + i));
             double scaling_factor = sqrt(x(0) * x(0) + y(0) * y(0) + z(0) * z(0)) / mod_point;
 
-            xnew(num_points + i) = scaling_factor * xnew(num_points + i);
-            ynew(num_points + i) = scaling_factor * ynew(num_points + i);
-            znew(num_points + i) = scaling_factor * znew(num_points + i);
+            xnew(geogrid_num_points + i) = scaling_factor * xnew(geogrid_num_points + i);
+            ynew(geogrid_num_points + i) = scaling_factor * ynew(geogrid_num_points + i);
+            znew(geogrid_num_points + i) = scaling_factor * znew(geogrid_num_points + i);
 
         }
 
         for (size_t i = 0; i < new_num_points; i++) {
-            //CartesianToSpherical(xnew(i), ynew(i), znew(i), rnew(i), thetanew(i), phinew(i));
+            CartesianToSpherical(xnew(i), ynew(i), znew(i), rnew(i), thetanew(i), phinew(i));
         }
 
-        for (size_t i = 0; i < num_triangles; i++) {
+        for (size_t i = 0; i < geogrid_num_triangles; i++) {
             int t1 = triangles(i, 0);
             int t2 = triangles(i, 1);
             int t3 = triangles(i, 2);
 
-            int midpoint_index_0 = num_points + FindEdgesIndex(t1, t2);
-            int midpoint_index_1 = num_points + FindEdgesIndex(t2, t3);
-            int midpoint_index_2 = num_points + FindEdgesIndex(t1, t3);
+            int midpoint_index_0 = geogrid_num_points + FindEdgesIndex(t1, t2, edges);
+            int midpoint_index_1 = geogrid_num_points + FindEdgesIndex(t2, t3, edges);
+            int midpoint_index_2 = geogrid_num_points + FindEdgesIndex(t1, t3, edges);
 
             trianglesnew(4 * i, 0) = t1;
             trianglesnew(4 * i, 1) = midpoint_index_0;
@@ -329,7 +333,7 @@ namespace radiationfemn {
 
 
         size_t index{0};
-        for (size_t i = 0; i < 9 * num_triangles; i++) {
+        for (size_t i = 0; i < 9 * geogrid_num_triangles; i++) {
             bool is_present{false};
             for (size_t j = 0; j < new_num_edges; j++) {
                 if ((edgesnew(j, 0) == edgesnewtemp(i, 0) && edgesnew(j, 1) == edgesnewtemp(i, 1)) ||
@@ -366,12 +370,10 @@ namespace radiationfemn {
         Kokkos::deep_copy(edges, edgesnew);
         Kokkos::deep_copy(triangles, trianglesnew);
 
-        num_ref = new_num_ref;
-        num_points = new_num_points;
-        nangles = new_num_points;
-        num_edges = new_num_edges;
-        num_triangles = new_num_triangles;
+        geogrid_level = new_num_ref;
+        geogrid_num_points = new_num_points;
+        geogrid_num_edges = new_num_edges;
+        geogrid_num_triangles = new_num_triangles;
 
     }
-
 }

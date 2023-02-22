@@ -20,11 +20,15 @@ namespace radiationfemn {
     // -----------------------
     // Geodesic grid functions
     // -----------------------
-    void GeodesicGridBaseGenerate();    // Generate base geodesic grid
-    void GeodesicGridRefine();          // Refine geodesic grid by one level
-    void GeodesicGridRefineN();         // Refine geodesic grid by N levels
+    void
+    GeodesicGridBaseGenerate(int &geogrid_level, int &geogrid_num_points, int &geogrid_num_edges, int &geogrid_num_triangles, HostArray1D<Real> &x, HostArray1D<Real> &y,
+                             HostArray1D<Real> &z, HostArray1D<Real> &r, HostArray1D<Real> &theta, HostArray1D<Real> &phi, HostArray2D<int> &edges,
+                             HostArray2D<int> &triangles);    // Generate base geodesic grid
+    void GeodesicGridRefine(int &geogrid_level, int &geogrid_num_points, int &geogrid_num_edges, int &geogrid_num_triangles, HostArray1D<Real> &x, HostArray1D<Real> &y,
+                            HostArray1D<Real> &z, HostArray1D<Real> &r, HostArray1D<Real> &theta, HostArray1D<Real> &phi, HostArray2D<int> &edges,
+                            HostArray2D<int> &triangles);          // Refine geodesic grid by one level
     void CartesianToSpherical(double xvar, double yvar, double zvar, double &rvar, double &thetavar, double &phivar);   // Convert from Cartesian to spherical coordinates
-    double FindEdgesIndex(int e1, int e2);  // Given two edge indices, find
+    double FindEdgesIndex(int e1, int e2, HostArray2D<int> &edges);  // Given two edge indices, find
 
     // -------------------
     // FEM basis functions
