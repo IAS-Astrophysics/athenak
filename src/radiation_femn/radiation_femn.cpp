@@ -159,7 +159,7 @@ namespace radiationfemn {
             z(11) = normalization_factor * -1.;
 
             for (size_t i = 0; i < num_points; i++) {
-                CartesianToSpherical(x(i), y(i), z(i), r(i), theta(i), phi(i));
+                //CartesianToSpherical(x(i), y(i), z(i), r(i), theta(i), phi(i));
             }
             edges(0, 0) = 2;
             edges(0, 1) = 8;
