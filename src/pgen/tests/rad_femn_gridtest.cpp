@@ -20,6 +20,7 @@
 #include "mesh/mesh.hpp"
 #include "pgen/pgen.hpp"
 #include "radiation_femn/radiation_femn.hpp"
+#include "radiation_femn/radiation_femn_matrices.hpp"
 
 void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool restart) {
     if (restart) return;
@@ -112,6 +113,55 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
     std::cout << std::endl;
 
     std::cout << "End of information " << std::endl;
+
+    std::cout << "--------------------------------------------" << std::endl;
+    std::cout << "Base geodesic grid on HostArray test" << std::endl;
+    std::cout << "--------------------------------------------" << std::endl;
+
+    int geogrid_level;
+    int geogrid_num_points;
+    int geogrid_num_edges;
+    int geogrid_num_triangles;
+    HostArray1D<Real> x;
+    HostArray1D<Real> y;
+    HostArray1D<Real> z;
+    HostArray1D<Real> r;
+    HostArray1D<Real> theta;
+    HostArray1D<Real> phi;
+    HostArray2D<int> edges;
+    HostArray2D<int> triangles;
+
+    radiationfemn::GeodesicGridBaseGenerate(geogrid_level, geogrid_num_points, geogrid_num_edges, geogrid_num_triangles, x, y, z, r, theta, phi, edges, triangles);
+
+    std::cout << std::endl;
+    std::cout << "x y z r theta phi" << std::endl;
+    for (size_t i = 0; i < geogrid_num_points; i++) {
+        std::cout << x(i) << " " << y(i) << " " << z(i) << " "
+              << r(i) << " " << theta(i) << " " << phi(i)
+              << std::endl;
+    }
+
+    std::cout << std::endl;
+    std::cout << "Number of edges: " << edges.size()/2 << std::endl;
+    std::cout << "Number of triangles: " << triangles.size()/3 << std::endl;
+    std::cout << std::endl;
+
+    radiationfemn::GeodesicGridRefine(geogrid_level, geogrid_num_points, geogrid_num_edges, geogrid_num_triangles, x, y, z, r, theta, phi, edges, triangles);
+
+    std::cout << "Refine the geodesic grid by 1 level" << std::endl;
+    std::cout << std::endl;
+    std::cout << "x y z r theta phi" << std::endl;
+    for (size_t i = 0; i < geogrid_num_points; i++) {
+        std::cout << x(i) << " " << y(i) << " " << z(i) << " "
+                  << r(i) << " " << theta(i) << " " << phi(i)
+                  << std::endl;
+    }
+
+    std::cout << std::endl;
+    std::cout << "Number of edges: " << edges.size()/2 << std::endl;
+    std::cout << "Number of triangles: " << triangles.size()/3 << std::endl;
+    std::cout << std::endl;
+
 
     return;
 }
