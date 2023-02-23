@@ -1,5 +1,5 @@
-#ifndef ATHENA_RADIATION_FEMN_MATRICES_HPP
-#define ATHENA_RADIATION_FEMN_MATRICES_HPP
+#ifndef ATHENA_RADIATION_FEMN_MATRIX_INTEGRATE_HPP
+#define ATHENA_RADIATION_FEMN_MATRIX_INTEGRATE_HPP
 
 //========================================================================================
 // Radiation FEM_N code for Athena
@@ -30,9 +30,12 @@ namespace radiationfemn {
     void CartesianToSpherical(double xvar, double yvar, double zvar, double &rvar, double &thetavar, double &phivar);   // Convert from Cartesian to spherical coordinates
     double FindEdgesIndex(int e1, int e2, HostArray2D<int> &edges);  // Given two edge indices, find
 
-    // -------------------
-    // FEM basis functions
-    // -------------------
+    // -----------------------------
+    // FEM basis functions & helpers
+    // -----------------------------
+    // Barycentric to Cartesian
+    void BarycentricToCartesian(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3,
+                                double &xval, double &yval, double &zval);
     // Type 1: 'Overlapping tent' (Default FEM_N choice)
     double FEMBasis1Type1(double xi1, double xi2, double xi3);
     double FEMBasis2Type1(double xi1, double xi2, double xi3);
@@ -49,8 +52,29 @@ namespace radiationfemn {
     double FEMBasis1Type4(double xi1, double xi2, double xi3);
     double FEMBasis2Type4(double xi1, double xi2, double xi3);
     double FEMBasis3Type4(double xi1, double xi2, double xi3);
+    // FEM basis, pick from type
+    double FEMBasis(double xi1, double xi2, double xi3, int basis_index, int basis_choice);
+    // some other useful functions
+    double FEMBasisABasisB(int a, int b, int t1, int t2, int t3, double xi1, double xi2, double xi3, int basis_choice);
+    double CosPhiSinTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3);
+    double SinPhiSinTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3);
+    double CosTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3);
+    // Find triangles which share an edge
+    void FindTriangles(int a, int b, HostArray2D<int> triangles, HostArray2D<int> edge_triangles, bool &is_edge);
 
+    // ---------------------
+    // Integration functions
+    // ---------------------
+    void LoadQuadrature(int &scheme_num_points, HostArray1D<Real> scheme_weights, HostArray2D<Real> scheme_points);
+    double
+    CalculateDeterminantJacobian(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3);
+    double
+    IntegrateMatrixSphericalTriangle(int a, int b, int basis, int t1, int t2, int t3, const HostArray1D<Real> &x, const HostArray1D<Real> &y, const HostArray1D<Real> &z,
+                                     const HostArray1D<Real> &scheme_weights, const HostArray2D<Real> &scheme_points, int matrixnumber);
+    double
+    IntegrateMatrix(int a, int b, int basis, const HostArray1D<Real> &x, const HostArray1D<Real> &y, const HostArray1D<Real> &z, const HostArray1D<Real> &scheme_weights,
+                    const HostArray2D<Real> &scheme_points, const HostArray2D<int> &triangles, int matrixchoice);
 
 } // namespace radiationfemn
 
-#endif //ATHENA_RADIATION_FEMN_MATRICES_HPP
+#endif //ATHENA_RADIATION_FEMN_MATRIX_INTEGRATE_HPP

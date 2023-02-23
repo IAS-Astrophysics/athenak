@@ -11,7 +11,7 @@
 
 #include "athena.hpp"
 #include "radiation_femn/radiation_femn.hpp"
-#include "radiation_femn/radiation_femn_matrices.hpp"
+#include "radiation_femn/radiation_femn_matrix_integrate.hpp"
 
 namespace radiationfemn {
 
