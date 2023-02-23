@@ -20,12 +20,13 @@ namespace radiationfemn {
         int &is = indcs.is, &ie = indcs.ie;
         int &js = indcs.js, &je = indcs.je;
         int &ks = indcs.ks, &ke = indcs.ke;
-        int nang1 = nangles - 1;
+        int nang1 = num_points - 1;
         int nmb1 = pmy_pack->nmb_thispack - 1;
 
         bool &multi_d = pmy_pack->pmesh->multi_d;
         bool &three_d = pmy_pack->pmesh->three_d;
 
+        /*
         auto &mm_ = mass_matrix;
         auto &stildex_ = stilde_matrix_x;
         auto &stildey_ = stilde_matrix_y;
@@ -138,7 +139,7 @@ namespace radiationfemn {
 
                     });
         }
-
+    */
         return TaskStatus::complete;
     }
 

@@ -342,9 +342,9 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
         auto dv = derived_var;
         auto &i0_ = pm->pmb_pack->pradfemn->i0;
         auto &mm_ = pm->pmb_pack->pradfemn->mass_matrix;
-        auto nangles = pm->pmb_pack->pradfemn->nangles;
+        auto num_points = pm->pmb_pack->pradfemn->num_points;
 
-        par_for("rad_femn_E_compute", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie, 0, (nangles-1), 0, (nangles-1),
+        par_for("rad_femn_E_compute", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie, 0, (num_points - 1), 0, (num_points - 1),
                 KOKKOS_LAMBDA(int m, int k, int j, int i, int B, int A) {
                     dv(m,0,k,j,i) += mm_(B,A) * i0_(m,A,k,j,i);
                 });

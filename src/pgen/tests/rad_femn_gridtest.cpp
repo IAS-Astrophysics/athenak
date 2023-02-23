@@ -33,7 +33,7 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
                   << "<radiation-femn> block in input file" << std::endl;
         exit(EXIT_FAILURE);
     }
-
+    /*
     std::string pathdir = pin->GetString("radiation-femn", "geogrid_savedir");
     std::string filenamepart = "/geogrid_basis_" + std::to_string(pmbp->pradfemn->basis) + "_ref_" +
                                std::to_string(pmbp->pradfemn->num_ref);
@@ -113,7 +113,7 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
     std::cout << std::endl;
 
     std::cout << "End of information " << std::endl;
-
+    */
     std::cout << "--------------------------------------------" << std::endl;
     std::cout << "Base geodesic grid on HostArray test" << std::endl;
     std::cout << "--------------------------------------------" << std::endl;

@@ -34,7 +34,7 @@ namespace radiationfemn {
         int &js = indcs.js, &je = indcs.je;
         int &ks = indcs.ks, &ke = indcs.ke;
         int nmb1 = (pmy_pack->nmb_thispack - 1);
-        int nang1 = (pmy_pack->pradfemn->nangles - 1);
+        int nang1 = (pmy_pack->pradfemn->num_points - 1);
 
         auto &beam_mask_ = pmy_pack->pradfemn->beam_mask;
 
