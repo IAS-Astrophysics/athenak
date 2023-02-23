@@ -20,7 +20,7 @@
 #include "mesh/mesh.hpp"
 #include "pgen/pgen.hpp"
 #include "radiation_femn/radiation_femn.hpp"
-#include "radiation_femn/radiation_femn_matrices.hpp"
+#include "radiation_femn/radiation_femn_matrix_integrate.hpp"
 
 void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool restart) {
     if (restart) return;
