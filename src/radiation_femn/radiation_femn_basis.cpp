@@ -168,6 +168,59 @@ namespace radiationfemn {
         }
     }
 
+    // ----------------------------
+    // Derivatives of Basis 1: 'overlapping tent
+    KOKKOS_INLINE_FUNCTION
+    double dFEMBasis1Type1dxi1(double xi1, double xi2, double xi3) {
+        return 1;
+    }
+
+    KOKKOS_INLINE_FUNCTION
+    double dFEMBasis2Type1dxi1(double xi1, double xi2, double xi3) {
+        return 0;
+    }
+
+    KOKKOS_INLINE_FUNCTION
+    double dFEMBasis3Type1dxi1(double xi1, double xi2, double xi3) {
+        return -1.;
+    }
+
+    KOKKOS_INLINE_FUNCTION
+    double dFEMBasis1Type1dxi2(double xi1, double xi2, double xi3) {
+        return 0;
+    }
+
+    KOKKOS_INLINE_FUNCTION
+    double dFEMBasis2Type1dxi2(double xi1, double xi2, double xi3) {
+        return 1;
+    }
+
+    KOKKOS_INLINE_FUNCTION
+    double dFEMBasis3Type1dxi2(double xi1, double xi2, double xi3) {
+        return -1.;
+    }
+
+    KOKKOS_INLINE_FUNCTION
+    double dFEMBasisdxi(double xi1, double xi2, double xi3, int basis_index, int basis_choice, int xi_index) {
+        if (basis_index == 1 && basis_choice == 1 && xi_index == 1) {
+            return dFEMBasis1Type1dxi1(xi1, xi2, xi3);
+        } else if (basis_index == 2 && basis_choice == 1 && xi_index == 1) {
+            return dFEMBasis2Type1dxi1(xi1, xi2, xi3);
+        } else if (basis_index == 3 && basis_choice == 1 && xi_index == 1) {
+            return dFEMBasis3Type1dxi1(xi1, xi2, xi3);
+        }
+        if (basis_index == 1 && basis_choice == 1 && xi_index == 2) {
+            return dFEMBasis1Type1dxi2(xi1, xi2, xi3);
+        } else if (basis_index == 2 && basis_choice == 1 && xi_index == 2) {
+            return dFEMBasis2Type1dxi2(xi1, xi2, xi3);
+        } else if (basis_index == 3 && basis_choice == 1 && xi_index == 2) {
+            return dFEMBasis3Type1dxi2(xi1, xi2, xi3);
+        } else {
+            std::cout << "Incorrect basis_choice of basis function in radiation-femn block!" << std::endl;
+            exit(EXIT_FAILURE);
+        }
+    }
+
     // -----------------------------------------------------------------------
     // Product of two FEM basis given their index and triangle info
     double FEMBasisABasisB(int a, int b, int t1, int t2, int t3, double xi1, double xi2, double xi3, int basis_choice) {
@@ -228,6 +281,70 @@ namespace radiationfemn {
         double thetaval = acos(zval / rval);
 
         return cos(thetaval);
+    }
+
+    // -------------------------------------------------------------------------
+    // sin Phi Cosec Theta
+    double SinPhiCosecTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3) {
+        double xval, yval, zval;
+        BarycentricToCartesian(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, xval, yval, zval);
+
+        double rval = sqrt(xval * xval + yval * yval + zval * zval);
+        double thetaval = acos(zval / rval);
+        double phival = atan2(yval, xval);
+
+        return sin(phival) / sin(thetaval);
+    }
+
+    // -------------------------------------------------------------------------
+    // Cos Phi Cos Theta
+    double CosPhiCosTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3) {
+        double xval, yval, zval;
+        BarycentricToCartesian(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, xval, yval, zval);
+
+        double rval = sqrt(xval * xval + yval * yval + zval * zval);
+        double thetaval = acos(zval / rval);
+        double phival = atan2(yval, xval);
+
+        return cos(phival) * cos(thetaval);
+    }
+
+    // ------------------------------------------------------------------------
+    // Cos Phi Cosec Theta
+    double CosPhiCosecTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3) {
+        double xval, yval, zval;
+        BarycentricToCartesian(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, xval, yval, zval);
+
+        double rval = sqrt(xval * xval + yval * yval + zval * zval);
+        double thetaval = acos(zval / rval);
+        double phival = atan2(yval, xval);
+
+        return cos(phival) / sin(thetaval);
+    }
+
+    // ------------------------------------------------------------------------
+    // Sin Phi Cos Theta
+    double SinPhiCosTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3) {
+        double xval, yval, zval;
+        BarycentricToCartesian(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, xval, yval, zval);
+
+        double rval = sqrt(xval * xval + yval * yval + zval * zval);
+        double thetaval = acos(zval / rval);
+        double phival = atan2(yval, xval);
+
+        return sin(phival) * cos(thetaval);
+    }
+
+    // ------------------------------------------------------------------------
+    // Sin Theta
+    double SinTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3) {
+        double xval, yval, zval;
+        BarycentricToCartesian(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, xval, yval, zval);
+
+        double rval = sqrt(xval * xval + yval * yval + zval * zval);
+        double thetaval = acos(zval / rval);
+
+        return sin(thetaval);
     }
 
     // ------------------------------------------------------------
@@ -296,8 +413,27 @@ namespace radiationfemn {
                                                                                pow(xi1 * z1 + xi2 * z2 + z3 - (xi1 + xi2) * z3, 2)));
     }
 
-    double PartialFEMBasisB(int ihat, int a, int t1, int t2, int t3, double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3,
+    double PartialFEMBasisAwithoute(int ihat, int a, int t1, int t2, int t3, double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3,
                             double xi1, double xi2, double xi3, int basis_choice) {
-        return 1;
+
+        int basis_index_a = (a == t1) * 1 + (a == t2) * 2 + (a == t3) * 3;
+
+        double dFEMBasisdphi = dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, basis_choice, 1) * pXi1pPhi(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3) +
+                               dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, basis_choice, 2) * pXi2pPhi(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3);
+        double dFEMBasisdtheta = dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, basis_choice, 1) * pXi1pTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3) +
+                                 dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, basis_choice, 2) * pXi2pTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3);
+
+        if (ihat == 1) {
+            return -SinPhiCosecTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3) * dFEMBasisdphi +
+                   CosPhiCosTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3) * dFEMBasisdtheta;
+        } else if (ihat == 2) {
+            return CosPhiCosecTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3) * dFEMBasisdphi +
+                   SinPhiCosTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3) * dFEMBasisdtheta;
+        } else if (ihat == 3) {
+            return -SinTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3) * dFEMBasisdtheta;
+        } else {
+            std::cout << "Incorrect choice of index ihat!" << std::endl;
+            exit(EXIT_FAILURE);
+        }
     }
 }
