@@ -181,6 +181,17 @@ namespace radiationfemn {
         return FEMBasisA * FEMBasisB;
     }
 
+    // -----------------------------------------------------------------------
+    // FEM basis given its index and triangle info
+    double FEMBasisA(int a, int t1, int t2, int t3, double xi1, double xi2, double xi3, int basis_choice) {
+
+        int basis_index_a = (a == t1) * 1 + (a == t2) * 2 + (a == t3) * 3;
+
+        auto FEMBasisA = FEMBasis(xi1, xi2, xi3, basis_index_a, basis_choice);
+
+        return FEMBasisA;
+    }
+
     // -------------------------------------------------------------------------
     // Cos Phi Sin Theta
     double CosPhiSinTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3) {
@@ -217,5 +228,76 @@ namespace radiationfemn {
         double thetaval = acos(zval / rval);
 
         return cos(thetaval);
+    }
+
+    // ------------------------------------------------------------
+    // Momentum contra-vector divided by energy (in comoving frame)
+    double pbye(int mu, double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3) {
+        double result = 0.;
+        if (mu == 0) {
+            result = 1.;
+        } else if (mu == 1) {
+            result = CosPhiSinTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3);
+        } else if (mu == 2) {
+            result = SinPhiSinTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3);
+        } else if (mu == 3) {
+            result = CosTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3);
+        } else {
+            std::cout << "Incorrect choice of index for p^mu/e!" << std::endl;
+            exit(EXIT_FAILURE);
+        }
+
+        return result;
+    }
+
+    // ------------------------------------------------------------------------
+    // partial xi1 / partial phi
+    double pXi1pPhi(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3) {
+        return (pow(x1 * xi1 + x2 * xi2 - x3 * (-1 + xi1 + xi2), 2) + pow(xi1 * y1 + xi2 * y2 + y3 - (xi1 + xi2) * y3, 2)) /
+               (x3 * (y1 - xi2 * y1 + xi2 * y2) + x2 * xi2 * (y1 - y3) - x1 * (xi2 * y2 + y3 - xi2 * y3));
+    }
+
+    // ------------------------------------------------------------------------
+    // partial xi2 / partial phi
+    double pXi2pPhi(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3) {
+        return (pow(x1 * xi1 + x2 * xi2 - x3 * (-1 + xi1 + xi2), 2) + pow(xi1 * y1 + xi2 * y2 + y3 - (xi1 + xi2) * y3, 2)) /
+               (x3 * (xi1 * y1 + y2 - xi1 * y2) + x1 * xi1 * (y2 - y3) - x2 * (xi1 * (y1 - y3) + y3));
+    }
+
+    // ------------------------------------------------------------------------
+    // partial xi1 / partial theta
+    double pXi1pTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3) {
+        return (-2 * pow(pow(x1 * xi1 + x2 * xi2 - x3 * (-1 + xi1 + xi2), 2) + pow(xi1 * y1 + xi2 * y2 + y3 - (xi1 + xi2) * y3, 2) +
+                         pow(xi1 * z1 + xi2 * z2 + z3 - (xi1 + xi2) * z3, 2), 1.5) *
+                sqrt(1 - pow(xi1 * z1 + xi2 * z2 + z3 - (xi1 + xi2) * z3, 2) /
+                         (pow(x1 * xi1 + x2 * xi2 - x3 * (-1 + xi1 + xi2), 2) + pow(xi1 * y1 + xi2 * y2 + y3 - (xi1 + xi2) * y3, 2) +
+                          pow(xi1 * z1 + xi2 * z2 + z3 - (xi1 + xi2) * z3, 2)))) /
+               (-2 * (xi1 * z1 + xi2 * z2 + z3 - (xi1 + xi2) * z3) *
+                ((x1 - x3) * (x1 * xi1 + x2 * xi2 - x3 * (-1 + xi1 + xi2)) + (y1 - y3) * (xi1 * y1 + xi2 * y2 + y3 - (xi1 + xi2) * y3) +
+                 (z1 - z3) * (xi1 * z1 + xi2 * z2 + z3 - (xi1 + xi2) * z3)) + 2 * (z1 - z3) *
+                                                                              (pow(x1 * xi1 + x2 * xi2 - x3 * (-1 + xi1 + xi2), 2) +
+                                                                               pow(xi1 * y1 + xi2 * y2 + y3 - (xi1 + xi2) * y3, 2) +
+                                                                               pow(xi1 * z1 + xi2 * z2 + z3 - (xi1 + xi2) * z3, 2)));
+    }
+
+    // ------------------------------------------------------------------------
+    // partial xi2 / partial theta
+    double pXi2pTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3) {
+        return (-2 * pow(pow(x1 * xi1 + x2 * xi2 - x3 * (-1 + xi1 + xi2), 2) + pow(xi1 * y1 + xi2 * y2 + y3 - (xi1 + xi2) * y3, 2) +
+                         pow(xi1 * z1 + xi2 * z2 + z3 - (xi1 + xi2) * z3, 2), 1.5) *
+                sqrt(1 - pow(xi1 * z1 + xi2 * z2 + z3 - (xi1 + xi2) * z3, 2) /
+                         (pow(x1 * xi1 + x2 * xi2 - x3 * (-1 + xi1 + xi2), 2) + pow(xi1 * y1 + xi2 * y2 + y3 - (xi1 + xi2) * y3, 2) +
+                          pow(xi1 * z1 + xi2 * z2 + z3 - (xi1 + xi2) * z3, 2)))) /
+               (-2 * (xi1 * z1 + xi2 * z2 + z3 - (xi1 + xi2) * z3) *
+                ((x2 - x3) * (x1 * xi1 + x2 * xi2 - x3 * (-1 + xi1 + xi2)) + (y2 - y3) * (xi1 * y1 + xi2 * y2 + y3 - (xi1 + xi2) * y3) +
+                 (z2 - z3) * (xi1 * z1 + xi2 * z2 + z3 - (xi1 + xi2) * z3)) + 2 * (z2 - z3) *
+                                                                              (pow(x1 * xi1 + x2 * xi2 - x3 * (-1 + xi1 + xi2), 2) +
+                                                                               pow(xi1 * y1 + xi2 * y2 + y3 - (xi1 + xi2) * y3, 2) +
+                                                                               pow(xi1 * z1 + xi2 * z2 + z3 - (xi1 + xi2) * z3, 2)));
+    }
+
+    double PartialFEMBasisB(int ihat, int a, int t1, int t2, int t3, double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3,
+                            double xi1, double xi2, double xi3, int basis_choice) {
+        return 1;
     }
 }
