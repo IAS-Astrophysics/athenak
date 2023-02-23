@@ -57,10 +57,16 @@ namespace radiationfemn {
     // some other useful functions
     double FEMBasisABasisB(int a, int b, int t1, int t2, int t3, double xi1, double xi2, double xi3, int basis_choice);
     double FEMBasisA(int a, int t1, int t2, int t3, double xi1, double xi2, double xi3, int basis_choice);
-    double PartialFEMBasisB(int ihat, int a, int t1, int t2, int t3, double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3, int basis_choice);
+    double dFEMBasisdxi(double xi1, double xi2, double xi3, int basis_index, int basis_choice, int xi_index);
+    double PartialFEMBasisBwithoute(int ihat, int a, int t1, int t2, int t3, double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3, int basis_choice);
     double CosPhiSinTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3);
     double SinPhiSinTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3);
     double CosTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3);
+    double SinPhiCosecTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3);
+    double CosPhiCosTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3);
+    double CosPhiCosecTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3);
+    double SinPhiCosTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3);
+    double SinTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3);
     double pbye(int mu, double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3);
     // Find triangles which share an edge
     void FindTriangles(int a, int b, HostArray2D<int> triangles, HostArray2D<int> edge_triangles, bool &is_edge);
