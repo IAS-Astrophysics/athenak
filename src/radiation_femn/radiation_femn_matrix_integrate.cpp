@@ -22,10 +22,11 @@ namespace radiationfemn {
     // 1: Cos Phi Sin Theta Psi_A Psi_B
     // 2: Sin Phi Sin Theta Psi_A Psi_B
     // 3. Cos Theta Psi_A Psi_B
+    // 4. G^nu^mu_ihat
     KOKKOS_INLINE_FUNCTION
     double
     IntegrateMatrixSphericalTriangle(int a, int b, int basis, int t1, int t2, int t3, const HostArray1D<Real> &x, const HostArray1D<Real> &y, const HostArray1D<Real> &z,
-                                     const HostArray1D<Real> &scheme_weights, const HostArray2D<Real> &scheme_points, int matrixnumber) {
+                                     const HostArray1D<Real> &scheme_weights, const HostArray2D<Real> &scheme_points, int matrixnumber, int nu, int mu, int ihat) {
 
         double x1 = x(t1);
         double y1 = y(t1);
@@ -86,6 +87,17 @@ namespace radiationfemn {
                                                             scheme_points(i, 1), scheme_points(i, 2))) *
                           FEMBasisABasisB(a, b, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1),
                                           scheme_points(i, 2), basis) * scheme_weights(i);
+            }
+        }
+
+            // (4) G^nu^mu_ihat
+        else if (matrixnumber == 4) {
+            for (size_t i = 0; i < scheme_points.size(); i++) {
+                result += pbye(nu, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2)) *
+                          pbye(mu, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2)) *
+                sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))) *
+                FEMBasisA(a, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis) *
+                PartialFEMBasisB(ihat, a, t1, t2, t3, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis) * scheme_weights(i);
             }
         }
 

@@ -56,9 +56,12 @@ namespace radiationfemn {
     double FEMBasis(double xi1, double xi2, double xi3, int basis_index, int basis_choice);
     // some other useful functions
     double FEMBasisABasisB(int a, int b, int t1, int t2, int t3, double xi1, double xi2, double xi3, int basis_choice);
+    double FEMBasisA(int a, int t1, int t2, int t3, double xi1, double xi2, double xi3, int basis_choice);
+    double PartialFEMBasisB(int ihat, int a, int t1, int t2, int t3, double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3, int basis_choice);
     double CosPhiSinTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3);
     double SinPhiSinTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3);
     double CosTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3);
+    double pbye(int mu, double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3);
     // Find triangles which share an edge
     void FindTriangles(int a, int b, HostArray2D<int> triangles, HostArray2D<int> edge_triangles, bool &is_edge);
 
@@ -70,7 +73,7 @@ namespace radiationfemn {
     CalculateDeterminantJacobian(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3);
     double
     IntegrateMatrixSphericalTriangle(int a, int b, int basis, int t1, int t2, int t3, const HostArray1D<Real> &x, const HostArray1D<Real> &y, const HostArray1D<Real> &z,
-                                     const HostArray1D<Real> &scheme_weights, const HostArray2D<Real> &scheme_points, int matrixnumber);
+                                     const HostArray1D<Real> &scheme_weights, const HostArray2D<Real> &scheme_points, int matrixnumber,  int nu = -42, int mu = -42, int ihat = -42);
     double
     IntegrateMatrix(int a, int b, int basis, const HostArray1D<Real> &x, const HostArray1D<Real> &y, const HostArray1D<Real> &z, const HostArray1D<Real> &scheme_weights,
                     const HostArray2D<Real> &scheme_points, const HostArray2D<int> &triangles, int matrixchoice);
