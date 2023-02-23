@@ -40,6 +40,7 @@ void ProblemGenerator::RadiationFEMNLinetest(ParameterInput *pin, const bool res
         exit(EXIT_FAILURE);
     }
 
+    /*
     // capture var pmy_mesh_->mb_indcs;
     auto &indcs = pmy_mesh_->mb_indcs;
     auto &size = pmbp->pmb->mb_size;
@@ -73,6 +74,6 @@ void ProblemGenerator::RadiationFEMNLinetest(ParameterInput *pin, const bool res
 
             }
     );
-
+    */
     return;
 }

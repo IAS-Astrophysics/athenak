@@ -82,14 +82,14 @@ namespace radiationfemn {
 
     TaskStatus RadiationFEMN::InitRecv(Driver *pdrive, int stage) {
         // post receives for I
-        TaskStatus tstat = pbval_i->InitRecv(nangles);
+        TaskStatus tstat = pbval_i->InitRecv(num_points);
         if (tstat != TaskStatus::complete) return tstat;
 
         // do not post receives for fluxes when stage < 0 (i.e. ICs)
         if (stage >= 0) {
             // with SMR/AMR, post receives for fluxes of I
             if (pmy_pack->pmesh->multilevel) {
-                tstat = pbval_i->InitFluxRecv(nangles);
+                tstat = pbval_i->InitFluxRecv(num_points);
                 if (tstat != TaskStatus::complete) return tstat;
             }
         }
