@@ -23,6 +23,7 @@ namespace radiationfemn {
     // 2: Sin Phi Sin Theta Psi_A Psi_B
     // 3. Cos Theta Psi_A Psi_B
     // 4. G^nu^mu_ihat
+    // 5. F^nu^mu_ihat
     KOKKOS_INLINE_FUNCTION
     double
     IntegrateMatrixSphericalTriangle(int a, int b, int basis, int t1, int t2, int t3, const HostArray1D<Real> &x, const HostArray1D<Real> &y, const HostArray1D<Real> &z,
@@ -95,9 +96,22 @@ namespace radiationfemn {
             for (size_t i = 0; i < scheme_points.size(); i++) {
                 result += pbye(nu, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2)) *
                           pbye(mu, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2)) *
-                sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))) *
-                FEMBasisA(a, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis) *
-                PartialFEMBasisBwithoute(ihat, a, t1, t2, t3, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis) * scheme_weights(i);
+                          sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))) *
+                          FEMBasisA(a, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis) *
+                          PartialFEMBasisBwithoute(ihat, a, t1, t2, t3, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2),
+                                                   basis) * scheme_weights(i);
+            }
+        }
+
+            // (5) F^nu^mu_ihat
+        else if (matrixnumber == 5) {
+            for (size_t i = 0; i < scheme_points.size(); i++) {
+                result += pbye(nu, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2)) *
+                          pbye(mu, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2)) *
+                          sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))) *
+                          FEMBasisABasisB(a, b, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1),
+                                          scheme_points(i, 2), basis) * scheme_weights(i) *
+                          pbye(ihat, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2)) * scheme_weights(i);
             }
         }
 
