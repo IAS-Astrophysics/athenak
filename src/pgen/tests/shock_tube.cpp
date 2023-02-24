@@ -91,6 +91,9 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
         pmbp->pcoord->is_dynamical_relativistic) {
       u0l = 1.0/sqrt( 1.0 - (SQR(wl.vx) + SQR(wl.vy) + SQR(wl.vz)) );
     }
+    if (pmbp->pcoord->is_dynamical_relativistic) {
+      wl.e = pin->GetReal("problem","pl");
+    }
 
     // Parse right state read from input file: d,vx,vy,vz,[P]
     wr.d  = pin->GetReal("problem","dr");
@@ -102,6 +105,9 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
     Real u0r = 1.0;
     if (pmbp->pcoord->is_special_relativistic || pmbp->pcoord->is_general_relativistic) {
       u0r = 1.0/sqrt( 1.0 - (SQR(wr.vx) + SQR(wr.vy) + SQR(wr.vz)) );
+    }
+    if (pmbp->pcoord->is_dynamical_relativistic) {
+      wr.e = pin->GetReal("problem","pr");
     }
 
     auto &w0 = pmbp->phydro->w0;

@@ -185,7 +185,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     // FIXME: assumes ideal gas!
     // Set hydrodynamic quantities
     w0_(m,IDN,k,j,i) = fmax(rho, tov_.dfloor);
-    w0_(m,IEN,k,j,i) = fmax(p, tov_.pfloor)/(tov_.gamma - 1.0);
+    //w0_(m,IEN,k,j,i) = fmax(p, tov_.pfloor)/(tov_.gamma - 1.0);
+    w0_(m,IPR,k,j,i) = fmax(p, tov_.pfloor);
     w0_(m,IVX,k,j,i) = 0.0;
     w0_(m,IVY,k,j,i) = 0.0;
     w0_(m,IVZ,k,j,i) = 0.0;

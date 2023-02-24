@@ -68,16 +68,26 @@ class PrimitiveSolverHydro {
       }
       // FIXME: Debug only! Use specific energy to validate other
       // hydro functions before breaking things
-      Real e = w(IDN, i) + w(IEN, i);
-      prim_pt[PTM] = prim_pt_old[PTM] = eos.GetTemperatureFromE(prim_pt[PRH], e, &prim_pt[PYF]);
-      prim_pt[PPR] = prim_pt_old[PPR] = eos.GetPressure(prim_pt[PRH], prim_pt[PTM], &prim_pt[PYF]);
+      //Real e = w(IDN, i) + w(IEN, i);
+      //prim_pt[PTM] = prim_pt_old[PTM] = eos.GetTemperatureFromE(prim_pt[PRH], e, &prim_pt[PYF]);
+      //prim_pt[PPR] = prim_pt_old[PPR] = eos.GetPressure(prim_pt[PRH], prim_pt[PTM], &prim_pt[PYF]);
+      prim_pt[PPR] = prim_pt_old[PPR] = w(IPR, i);
 
       // Apply the floor to make sure these values are physical.
       // FIXME: Is this needed if the first-order flux correction is enabled?
-      bool floor = ps.GetEOS().ApplyPrimitiveFloor(prim_pt[PRH], &prim_pt[PVX],
+      bool floored = ps.GetEOS().ApplyPrimitiveFloor(prim_pt[PRH], &prim_pt[PVX],
                                            prim_pt[PPR], prim_pt[PTM], &prim_pt[PYF]);
+
+      prim_pt[PTM] = prim_pt_old[PTM] = eos.GetTemperatureFromP(prim_pt[PRH], 
+                                          prim_pt[PPR], &prim_pt[PYF]);
       
       ps.PrimToCon(prim_pt, cons_pt, b, g3d);
+
+      // Check for NaNs
+      if (CheckForConservedNaNs(cons_pt)) {
+        printf("Location: PrimToConsPt");
+        DumpPrimitiveVars(prim_pt);
+      }
 
       // Densitize the variables
       for (int i = 0; i < nhyd + nscal; i++) {
@@ -86,13 +96,14 @@ class PrimitiveSolverHydro {
 
       // Copy floored primitives back into the original array.
       // TODO: Check if this is necessary
-      if (floor) {
+      if (floored) {
         w(IDN, i) = prim_pt[PRH]*mb;
         w(IVX, i) = prim_pt[PVX];
         w(IVY, i) = prim_pt[PVY];
         w(IVZ, i) = prim_pt[PVZ];
         // FIXME: Debug only! Switch to temperature or pressure after validating.
-        w(IEN, i) = ps.GetEOS().GetEnergy(prim_pt[PRH], prim_pt[PTM], &prim_pt[PYF]) - w(IDN, i);
+        //w(IEN, i) = ps.GetEOS().GetEnergy(prim_pt[PRH], prim_pt[PTM], &prim_pt[PYF]) - w(IDN, i);
+        w(IPR, i) = prim_pt[IPR];
         for (int n = 0; n < nscal; n++) {
           w(nhyd + n, i) = prim_pt[PYF + n];
         }
@@ -143,15 +154,23 @@ class PrimitiveSolverHydro {
         }
         // FIXME: Debug only! Use specific energy to validate other
         // hydro functions before breaking things.
-        Real e = prim(m, IDN, k, j, i) + prim(m, IEN, k, j, i);
-        prim_pt[PTM] = eos_.GetTemperatureFromE(prim_pt[PRH], e, &prim_pt[PYF]);
-        prim_pt[PPR] = eos_.GetPressure(prim_pt[PRH], prim_pt[PTM], &prim_pt[PYF]);
+        //Real e = prim(m, IDN, k, j, i) + prim(m, IEN, k, j, i);
+        //prim_pt[PTM] = eos_.GetTemperatureFromE(prim_pt[PRH], e, &prim_pt[PYF]);
+        //prim_pt[PPR] = eos_.GetPressure(prim_pt[PRH], prim_pt[PTM], &prim_pt[PYF]);
+        prim_pt[PPR] = prim(m, IPR, k, j, i);
 
         // Apply the floor to make sure these values are physical.
         bool floor = eos_.ApplyPrimitiveFloor(prim_pt[PRH], &prim_pt[PVX],
                                              prim_pt[PPR], prim_pt[PTM], &prim_pt[PYF]);
+        prim_pt[PTM] = eos_.GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR], &prim_pt[PYF]);
         
         ps_.PrimToCon(prim_pt, cons_pt, b, g3d);
+
+        // Check for NaNs
+        if (CheckForConservedNaNs(cons_pt)) {
+          printf("Error occurred in PrimToCons at (%d, %d, %d, %d)\n", m, k, j, i);
+          DumpPrimitiveVars(prim_pt);
+        }
 
         // Save the densitized conserved variables.
         cons(m, IDN, k, j, i) = cons_pt[CDN]*sdetg;
@@ -169,8 +188,9 @@ class PrimitiveSolverHydro {
           prim(m, IVX, k, j, i) = prim_pt[PVX];
           prim(m, IVY, k, j, i) = prim_pt[PVY];
           prim(m, IVZ, k, j, i) = prim_pt[PVZ];
-          prim(m, IEN, k, j, i) = eos_.GetEnergy(prim_pt[PRH], prim_pt[PTM], &prim_pt[PYF]) 
-                                  - prim(m, IDN, k, j, i);
+          //prim(m, IEN, k, j, i) = eos_.GetEnergy(prim_pt[PRH], prim_pt[PTM], &prim_pt[PYF]) 
+          //                        - prim(m, IDN, k, j, i);
+          prim(m, IPR, k, j, i) = prim_pt[PPR];
           for (int n = 0; n < nscal; n++) {
             prim(m, nhyd + n, k, j, i) = prim_pt[PYF + n];
           }
@@ -289,14 +309,34 @@ class PrimitiveSolverHydro {
         else {
           if (result.error != Primitive::Error::SUCCESS) {
             // TODO: put in a proper error response here.
+            printf("An error occurred during the primitive solve: %s\n", ErrorToString(result.error));
+            printf("  Location: (%d, %d, %d, %d)\n", m, k, j, i);
+            printf("  Conserved vars: \n");
+            printf("    D   = %g\n",cons_pt_old[CDN]);
+            printf("    Sx  = %g\n",cons_pt_old[CSX]);
+            printf("    Sy  = %g\n",cons_pt_old[CSY]);
+            printf("    Sz  = %g\n",cons_pt_old[CSZ]);
+            printf("    tau = %g\n",cons_pt_old[CTA]);
+            printf("  Metric vars: \n");
+            printf("    detg = %g\n", detg);
+            printf("    g_dd = {%g, %g, %g, %g, %g, %g}\n",g3d[S11], g3d[S12], g3d[S13], 
+                    g3d[S22], g3d[S23], g3d[S33]);
+            printf("    alp  = %g\n", adm.alpha(m, k,j,i));
+            printf("    beta = {%g, %g, %g}\n", adm.beta_u(m, 0, k, j, i), adm.beta_u(m, 1, k, j, i),
+                    adm.beta_u(m, 2, k, j, i));
+            printf("    psi4 = %g\n", adm.psi4(m, k, j, i));
+            printf("    K_dd = {%g, %g, %g, %g, %g, %g}\n", adm.K_dd(m, 0, 0, k, j, i),
+                    adm.K_dd(m, 0, 1, k, j, i), adm.K_dd(m, 0, 2, k, j, i), adm.K_dd(m, 1, 1, k, j, i),
+                    adm.K_dd(m, 1, 2, k, j, i), adm.K_dd(m, 2, 2, k, j, i));
           }
           // Regardless of failure, we need to copy the primitives.
           prim(m, IDN, k, j, i) = prim_pt[PRH]*mb;
           prim(m, IVX, k, j, i) = prim_pt[PVX];
           prim(m, IVY, k, j, i) = prim_pt[PVY];
           prim(m, IVZ, k, j, i) = prim_pt[PVZ];
-          prim(m, IEN, k, j, i) = eos_.GetEnergy(prim_pt[PRH], prim_pt[PTM], &prim_pt[PYF]) -
-                                  prim(m, IDN, k, j, i);
+          //prim(m, IEN, k, j, i) = eos_.GetEnergy(prim_pt[PRH], prim_pt[PTM], &prim_pt[PYF]) -
+          //                        prim(m, IDN, k, j, i);
+          prim(m, IPR, k, j, i) = prim_pt[PPR];
           for (int n = 0; n < nscal; n++) {
             prim(m, nhyd + n, k, j, i);
           }
@@ -343,9 +383,90 @@ class PrimitiveSolverHydro {
       Real iWsq_ad = 1.0 - vsq*csq;
       Real dis = (csq*iWsq)*(gii*iWsq_ad - vu[index]*vu[index]*(1.0 - csq));
       Real sdis = sqrt(dis);
+      if (!isfinite(sdis)) {
+        printf("There's a problem with the sound speed!\n"
+               "  dis = %g\n"
+               "  gii = %g\n"
+               "  csq = %g\n"
+               "  vsq = %g\n"
+               "  usq = %g\n"
+               "  rho = %g\n"
+               "  T   = %g\n", 
+               dis, gii, csq, vsq, usq, prim[PRH], prim[PTM]);
+      }
 
       lambda_p = alpha*(vu[index]*(1.0 - csq) + sdis)/iWsq_ad - beta_u[index];
       lambda_m = alpha*(vu[index]*(1.0 - csq) - sdis)/iWsq_ad - beta_u[index];
+    }
+
+    // A function for converting PrimitiveSolver errors to strings
+    KOKKOS_INLINE_FUNCTION
+    const char * ErrorToString(Primitive::Error e) {
+      switch(e) {
+        case Primitive::Error::SUCCESS:
+          return "SUCCESS";
+          break;
+        case Primitive::Error::RHO_TOO_BIG:
+          return "RHO_TOO_BIG";
+          break;
+        case Primitive::Error::RHO_TOO_SMALL:
+          return "RHO_TOO_SMALL";
+          break;
+        case Primitive::Error::NANS_IN_CONS:
+          return "NANS_IN_CONS";
+          break;
+        case Primitive::Error::MAG_TOO_BIG:
+          return "MAG_TOO_BIG";
+          break;
+        case Primitive::Error::BRACKETING_FAILED:
+          return "BRACKETING_FAILED";
+          break;
+        case Primitive::Error::NO_SOLUTION:
+          return "NO_SOLUTION";
+          break;
+        default:
+          return "OTHER";
+          break;
+      }
+    }
+
+    // A function for checking for NaNs in the conserved variables.
+    KOKKOS_INLINE_FUNCTION
+    int CheckForConservedNaNs(const Real cons_pt[NCONS]) const {
+      int nans = 0;
+      if (!isfinite(cons_pt[CDN])) {
+        printf("D is NaN!\n");
+        nans = 1;
+      }
+      if (!isfinite(cons_pt[CSX])) {
+        printf("Sx is NaN!\n");
+        nans = 1;
+      }
+      if (!isfinite(cons_pt[CSY])) {
+        printf("Sy is NaN!\n");
+        nans = 1;
+      }
+      if (!isfinite(cons_pt[CSZ])) {
+        printf("Sz is NaN!\n");
+        nans = 1;
+      }
+      if (!isfinite(cons_pt[CTA])) {
+        printf("Tau is NaN!\n");
+        nans = 1;
+      }
+
+      return nans;
+    }
+
+    KOKKOS_INLINE_FUNCTION
+    void DumpPrimitiveVars(const Real prim_pt[NPRIM]) const {
+      printf("Primitive vars: \n");
+      printf("  rho = %g", prim_pt[PRH]);
+      printf("  ux  = %g", prim_pt[PVX]);
+      printf("  uy  = %g", prim_pt[PVY]);
+      printf("  uz  = %g", prim_pt[PVZ]);
+      printf("  P   = %g", prim_pt[PPR]);
+      printf("  T   = %g", prim_pt[PTM]);
     }
 };
 #endif

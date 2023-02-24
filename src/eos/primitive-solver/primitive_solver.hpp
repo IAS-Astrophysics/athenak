@@ -420,9 +420,15 @@ SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM]
   }
   else if (error == Error::CONS_ADJUSTED) {
     solver_result.cons_adjusted = true;
-    // We need to recalculate rb if b_u is rescaled.
+    // If b_u is rescaled, we also need to adjust D, which means we'll
+    // have to adjust all our other rescalings, too.
+    Real Bsq = SquareVector(B_u, g3d);
+    D = Bsq/bsqr;
+    r_d[0] = S_d[0]/D; r_d[1] = S_d[1]/D; r_d[2] = S_d[2]/D;
+    RaiseForm(r_u, r_d, g3d);
     rb = Contract(b_u, r_d);
     rbsqr = rb*rb;
+    q = tau/D;
   }
   
   // Bracket the root.

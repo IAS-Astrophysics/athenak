@@ -344,9 +344,15 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
         prim_pt[PYF + i] = prim(m, nhyd + i, k, j, i);
       }
       // FIXME: Go back and change to temperature after validating it all works.
-      Real e = prim(m, IEN, k, j, i) + prim(m, IDN, k, j, i);
-      prim_pt[PTM] = eos_.GetTemperatureFromE(prim_pt[PRH], e, &prim_pt[PYF]);
-      prim_pt[PPR] = eos_.GetPressure(prim_pt[PRH], prim_pt[PTM], &prim_pt[PYF]);
+      //Real e = prim(m, IEN, k, j, i) + prim(m, IDN, k, j, i);
+      //prim_pt[PTM] = eos_.GetTemperatureFromE(prim_pt[PRH], e, &prim_pt[PYF]);
+      //prim_pt[PPR] = eos_.GetPressure(prim_pt[PRH], prim_pt[PTM], &prim_pt[PYF]);
+      prim_pt[PPR] = prim(m, IPR, k, j, i);
+      prim_pt[PTM] = eos_.GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR], &prim_pt[PYF]);
+
+      if (!isfinite(prim_pt[PTM]) || !isfinite(prim_pt[PPR])) {
+        printf("There's a problem with the temperature or pressure in the source terms!\n");
+      }
 
       // Get the conserved variables. Note that we don't use PrimitiveSolver here -- that's
       // because we would need to recalculate quantities used in E and S_d in order to get S_dd.

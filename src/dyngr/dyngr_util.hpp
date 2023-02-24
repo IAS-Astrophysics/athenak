@@ -30,9 +30,11 @@ void ExtractPrimitives(const DvceArray5D<Real>& prim, Real prim_pt[NPRIM],
     prim_pt[PYF + s] = prim(m, nhyd + s, k, j, i);
   }
   // FIXME: Change to pressure later on!
-  Real e = prim(m, IEN, k, j, i) + prim(m, IDN, k, j, i);
-  prim_pt[PTM] = eos.ps.GetEOS().GetTemperatureFromE(prim_pt[PRH], e, &prim_pt[PYF]);
-  prim_pt[PPR] = eos.ps.GetEOS().GetPressure(prim_pt[PRH], prim_pt[PTM], &prim_pt[PYF]);
+  //Real e = prim(m, IEN, k, j, i) + prim(m, IDN, k, j, i);
+  //prim_pt[PTM] = eos.ps.GetEOS().GetTemperatureFromE(prim_pt[PRH], e, &prim_pt[PYF]);
+  //prim_pt[PPR] = eos.ps.GetEOS().GetPressure(prim_pt[PRH], prim_pt[PTM], &prim_pt[PYF]);
+  prim_pt[PPR] = prim(m, IPR, k, j, i);
+  prim_pt[PTM] = eos.ps.GetEOS().GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR], &prim_pt[PYF]);
 }
 
 } // namespace dyngr
