@@ -170,6 +170,7 @@ def read_binary(filename):
     nx1 = int(get_from_header(header, '<meshblock>', 'nx1'))
     nx2 = int(get_from_header(header, '<meshblock>', 'nx2'))
     nx3 = int(get_from_header(header, '<meshblock>', 'nx3'))
+    nghost = int(get_from_header(header, '<mesh>', 'nghost'))
 
     x1min = float(get_from_header(header, '<mesh>', 'x1min'))
     x1max = float(get_from_header(header, '<mesh>', 'x1max'))
@@ -191,7 +192,7 @@ def read_binary(filename):
         mb_data[var] = []
 
     while fp.tell() < filesize:
-        mb_index.append(np.array(struct.unpack('@6i', fp.read(24))))
+        mb_index.append(np.array(struct.unpack('@6i', fp.read(24))) - nghost)
         nx1_out = (mb_index[mb_count][1] - mb_index[mb_count][0])+1
         nx2_out = (mb_index[mb_count][3] - mb_index[mb_count][2])+1
         nx3_out = (mb_index[mb_count][5] - mb_index[mb_count][4])+1
