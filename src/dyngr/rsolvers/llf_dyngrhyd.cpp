@@ -78,6 +78,13 @@ void SingleStateLLF_DYNGR(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eo
   eos.ps.PrimToCon(wl, cons_l, b, g3d);
   eos.ps.PrimToCon(wr, cons_r, b, g3d);
 
+  // Because we directly called the PrimToCon routine in PrimitiveSolver, we need to densitize
+  // the conserved variables.
+  for (int i = 0; i < NCONS; i++) {
+    cons_l[i] *= sdetg;
+    cons_r[i] *= sdetg;
+  }
+
   // Calculate the fluxes
   FLUX_PT_DYNGR(wl, cons_l, fl, g3d, beta_u[pvx - PVX], alpha, sdetg, pvx, csx);
   FLUX_PT_DYNGR(wr, cons_r, fr, g3d, beta_u[pvx - PVX], alpha, sdetg, pvx, csx);

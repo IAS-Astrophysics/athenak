@@ -463,6 +463,8 @@ BoundaryFlag Mesh::GetBoundaryFlag(const std::string& input_string) {
     return BoundaryFlag::outflow;
   } else if (input_string == "inflow") {
     return BoundaryFlag::inflow;
+  } else if (input_string == "vacuum") {
+    return BoundaryFlag::vacuum;
   } else if (input_string == "diode") {
     return BoundaryFlag::diode;
   } else if (input_string == "user") {
