@@ -1,48 +1,87 @@
 # Athena++ (Kokkos version) input file for MHD GR torus
+# Initializes Chakrabarti equilibrium torus extending from r_in=10 to r_out=100, with
+# density peak at r_peak=30.2.  Uses static mesh refinement with  highest resolution 8/M
+# at the horizon and the inner level spanning +/- 4M
 
 <comment>
-problem   = Fishbone-Moncrief equilibrium torus
-reference = Fishbone & Moncrief 1976, ApJ 207 962
+problem   = Chakrabarti equilibrium torus
+reference = Chakrabarti, S. 1985, ApJ 288, 1
 
 <job>
 basename  = torus
 
 <mesh>
 nghost = 4        # Number of ghost cells
-nx1    = 32       # number of cells in x1-direction
-x1min  = -960.0   # minimum x1
-x1max  = 960.0    # maximum x1
+nx1    = 64       # number of cells in x1-direction
+x1min  = -128.0    # minimum x1
+x1max  = 128.0     # maximum x1
 ix1_bc = user     # inner boundary
 ox1_bc = user     # outer boundary
 
-nx2    = 32       # number of cells in x2-direction
-x2min  = -960.0   # minimum x2
-x2max  = 960.0    # maximum x2
+nx2    = 64       # number of cells in x2-direction
+x2min  = -128.0    # minimum x2
+x2max  = 128.0     # maximum x2
 ix2_bc = user     # inner boundary
 ox2_bc = user     # outer boundary
 
-nx3    = 32       # number of cells in x3-direction
-x3min  = -960.0   # minimum x3
-x3max  = 960.0    # maximum x3
+nx3    = 64       # number of cells in x3-direction
+x3min  = -128.0    # minimum x3
+x3max  = 128.0     # maximum x3
 ix3_bc = user     # inner boundary
 ox3_bc = user     # outer boundary
 
 <meshblock>
-nx1  = 8          # Number of cells in each MeshBlock, X1-dir
-nx2  = 8          # Number of cells in each MeshBlock, X2-dir
-nx3  = 8          # Number of cells in each MeshBlock, X3-dir
+nx1  = 16         # Number of cells in each MeshBlock, X1-dir
+nx2  = 16         # Number of cells in each MeshBlock, X2-dir
+nx3  = 16         # Number of cells in each MeshBlock, X3-dir
 
 <mesh_refinement>
 refinement = static    # type of refinement
 
 <refinement1>
-level = 9
+level = 5
 x1min = -4.0
 x1max = 4.0
 x2min = -4.0
 x2max = 4.0
 x3min = -4.0
 x3max = 4.0
+
+<refinement2>
+level = 4
+x1min = -8.0
+x1max = 8.0
+x2min = -8.0
+x2max = 8.0
+x3min = -8.0
+x3max = 8.0
+
+<refinement3>
+level = 3
+x1min = -16.0
+x1max = 16.0
+x2min = -16.0
+x2max = 16.0
+x3min = -16.0
+x3max = 16.0
+
+<refinement4>
+level = 2
+x1min = -32.0
+x1max = 32.0
+x2min = -32.0
+x2max = 32.0
+x3min = -32.0
+x3max = 32.0
+
+<refinement4>
+level = 1
+x1min = -64.0
+x1max = 64.0
+x2min = -64.0
+x2max = 64.0
+x3min = -64.0
+x3max = 64.0
 
 <time>
 evolution  = dynamic     # dynamic/kinematic/static
@@ -56,16 +95,16 @@ ndiag      = 1           # cycles between diagostic output
 general_rel = true       # general relativity
 a           = 0.9375     # black hole spin a (0 <= a/M < 1)
 excise      = true       # excise r_ks <= 1.0
-dexcise     = 1.0e-8     # density inside excision
+dexcise     = 1.0e-8    # density inside excision
 pexcise     = 0.333e-10  # pressure inside excision
 
 <mhd>
 eos         = ideal      # EOS type
-reconstruct = plm        # spatial reconstruction method
+reconstruct = ppm4       # spatial reconstruction method
 rsolver     = hlle       # Riemann-solver to be used
-dfloor      = 1.0e-8     # floor on density rho
+dfloor      = 1.0e-8    # floor on density rho
 pfloor      = 0.333e-10  # floor on gas pressure p_gas
-gamma       = 1.4444444444444444  # ratio of specific heats Gamma
+gamma       = 1.44444444444  # ratio of specific heats Gamma
 fofc        = true       # Enable first order flux correction
 gamma_max   = 20.0       # Enable ceiling on Lorentz factor
 
@@ -77,16 +116,17 @@ pgas_min  = 0.333e-7  # background on p_gas given by pgas_min ...
 pgas_pow  = -2.5      # ... * r^pgas_pow
 rho_max    = 1.0     # if > 0, rescale rho to have this peak; rescale pres by same factor
 k_adi      = 1.0     # adiabat K, p_gas = K * rho^Gamma
-r_edge     = 20.0    # radius of inner edge of disk
-r_peak     = 41.0    # radius of pressure maximum; use l instead if negative
+r_edge     = 10.0     # radius of inner edge of disk
+r_peak     = 30.2    # radius of pressure maximum; use l instead if negative
 l          = 0.0     # constant ang. mom. per unit mass u^t u_phi; only used if r_peak < 0
 tilt_angle = 0.0     # angle (deg) to incl disk spin axis relative to BH spin in dir of x
 pert_amp   = 2.0e-2  # perturbation amplitude
-mad = true                  # vector potential for magnetic field (SANE or MAD config.)
+sane = true                 # vector potential for magnetic field (SANE or MAD config.)
+chakrabarti_torus = true
 potential_beta_min = 100.0  # ratio of gas to magnetic pressure at maxima (diff locations)
 potential_falloff = 400.0   # falloff for exponential in vector potential
 potential_cutoff   = 0.2    # amount to subtract from density when calculating potential
-potential_r_pow    = 3.0    # vector potential proportional to this power of radius
+potential_r_pow    = 0.0    # vector potential proportional to this power of radius
 potential_rho_pow  = 1.0    # vector potential proportional to this power of density
 
 <output1>

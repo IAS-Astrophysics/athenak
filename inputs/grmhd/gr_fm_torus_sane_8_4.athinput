@@ -1,4 +1,7 @@
 # Athena++ (Kokkos version) input file for MHD GR torus
+# Initializes Fishbone-Moncrief equilibrium torus used in EHT code comparison with
+# r_in=6 and r_peak=12 and SANE magnetic field configuration.  Uses static mesh refinement
+# with  highest resolution 8/M at the horizon and the inner level spanning +/- 4M
 
 <comment>
 problem   = Fishbone-Moncrief equilibrium torus
@@ -102,14 +105,15 @@ rho_min   = 1.0e-5    # background on rho given by rho_min ...
 rho_pow   = -1.5      # ... * r^rho_pow
 pgas_min  = 0.333e-7  # background on p_gas given by pgas_min ...
 pgas_pow  = -2.5      # ... * r^pgas_pow
-rho_max    = 1.0     # if > 0, rescale rho to have this peak; rescale pres by same factor
-k_adi      = 1.0     # adiabat K, p_gas = K * rho^Gamma
-r_edge     = 6.0     # radius of inner edge of disk
-r_peak     = 12.0    # radius of pressure maximum; use l instead if negative
-l          = 0.0     # constant ang. mom. per unit mass u^t u_phi; only used if r_peak < 0
-tilt_angle = 0.0     # angle (deg) to incl disk spin axis relative to BH spin in dir of x
-pert_amp   = 2.0e-2  # perturbation amplitude
-sane = true                 # vector potential for magnetic field (SANE or MAD config.)
+rho_max    = 1.0      # if > 0, rescale rho to have this peak; rescale pres by same factor
+k_adi      = 1.0      # adiabat K, p_gas = K * rho^Gamma
+r_edge     = 6.0      # radius of inner edge of disk
+r_peak     = 12.0     # radius of pressure maximum; use l instead if negative
+l          = 0.0      # const ang. mom. per unit mass u^t u_phi; only used if r_peak < 0
+tilt_angle = 0.0      # angle (deg) to incl disk spin axis relative to BH spin in dir of x
+pert_amp   = 2.0e-2   # perturbation amplitude
+sane = true           # vector potential for magnetic field (SANE or MAD config.)
+fm_torus = true       # Fishbone & Moncrief
 potential_beta_min = 100.0  # ratio of gas to magnetic pressure at maxima (diff locations)
 potential_cutoff   = 0.2    # amount to subtract from density when calculating potential
 potential_r_pow    = 0.0    # vector potential proportional to this power of radius
