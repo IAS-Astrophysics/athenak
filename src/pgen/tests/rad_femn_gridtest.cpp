@@ -113,7 +113,7 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
     std::cout << std::endl;
 
     std::cout << "End of information " << std::endl;
-    */
+
     std::cout << "--------------------------------------------" << std::endl;
     std::cout << "Base geodesic grid on HostArray test" << std::endl;
     std::cout << "--------------------------------------------" << std::endl;
@@ -162,6 +162,6 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
     std::cout << "Number of triangles: " << triangles.size()/3 << std::endl;
     std::cout << std::endl;
 
-
+    */
     return;
 }

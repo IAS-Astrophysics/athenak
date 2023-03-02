@@ -7,7 +7,6 @@
 //! \file radiation_femn.cpp
 //  \brief implementation of the radiation FEM_N class constructor and other functions
 
-#include <iostream>
 #include <string>
 
 #include "athena.hpp"
@@ -19,11 +18,16 @@
 #include "radiation_femn/radiation_femn.hpp"
 
 namespace radiationfemn {
-//----------------------------------------------------------------------------------------------
-// class constructor, initialize parameters and data structures
 
+    //----------------------------------------------------------------------------------------------
+    // class constructor, initialize parameters and data structures
     RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
             pmy_pack(ppack),
+            g_dd("spatial_metric", 1, 1, 1, 1, 1, 1),
+            u_mu("fluid_vel_lab", 1, 1, 1, 1, 1),
+            n_mu("normal_vec", 1, 1, 1, 1, 1),
+            Lambda("Lambda", 1, 1, 1, 1),
+            L_mu_muhat("L^mu_muhat", 1, 1, 1, 1, 1, 1),
             i0("i0", 1, 1, 1, 1, 1),
             coarse_i0("ci0", 1, 1, 1, 1, 1),
             i1("i1", 1, 1, 1, 1, 1),
@@ -38,6 +42,8 @@ namespace radiationfemn {
             stiffness_matrix_y("sy", 1, 1),
             stiffness_matrix_z("sz", 1, 1),
             P_matrix("PmuAB", 1, 1, 1),
+            G_matrix("GnumuiAB", 1, 1, 1, 1, 1),
+            F_matrix("FnumuiAB", 1, 1, 1, 1, 1),
             e_source("e_source", 1),
             S_source("S_source", 1, 1),
             W_matrix("W_matrix", 1, 1),
@@ -47,22 +53,25 @@ namespace radiationfemn {
             beam_mask("beam_mask", 1, 1, 1, 1, 1) {
 
         // ---------------------------------------------------------------------------
-        // set parfile parameters
+        // set up from parfile parameters
 
+        // (1) Set limiters for DG and FP_N
         limiter_dg = pin->GetOrAddString("radiation-femn", "limiter_dg", "minmod2");
         fpn = pin->GetOrAddInteger("radiation-femn", "fpn", 0) == 1;
+
+        // (2) Set up the energy grid from [0, energy_max] with num_energy_bins bins.
         num_energy_bins = pin->GetOrAddInteger("radiation_femn", "num_energy_bins", 1);
         energy_max = pin->GetReal("radiation-femn", "energy_max");
-
         Kokkos::realloc(energy_grid, num_energy_bins + 1);
-
         for (size_t i = 0; i < num_energy_bins + 1; i++) {
             energy_grid(i) = i * energy_max / Real(num_energy_bins);
         }
 
+        // (3) Set up FEM_N/FP_N specific parameters (redundant values set to -42)
         if (!fpn) {
             lmax = -42;
             refinement_level = pin->GetOrAddInteger("radiation-femn", "num_refinement", 0);
+            num_ref = refinement_level;
             num_points = 12 * pow(4, refinement_level);
             if (refinement_level != 0) {
                 for (size_t i = 0; i < refinement_level; i++) {
@@ -71,12 +80,13 @@ namespace radiationfemn {
             }
             num_edges = 3 * (num_points - 2);
             num_triangles = 2 * (num_points - 2);
-            basis = pin->GetInteger("radiation-femn", "basis");
+            basis = pin->GetOrAddInteger("radiation-femn", "basis", 1);
             filter_sigma_eff = -42;
             limiter_fem = pin->GetOrAddString("radiation-femn", "limiter_fem", "clp");
         } else {
             lmax = pin->GetInteger("radiation-femn", "lmax");
             refinement_level = -42;
+            num_ref = refinement_level;
             num_points = (lmax + 1) * (lmax + 1);
             num_edges = -42;
             num_triangles = -42;
@@ -85,34 +95,50 @@ namespace radiationfemn {
             limiter_fem = "-42";
         }
 
+        // (3) set up source specific parameters
         rad_source = pin->GetOrAddInteger("radiation-femn", "sources", 0) == 1;
         beam_source = pin->GetOrAddInteger("radiation-femn", "beam_sources", 0) == 1;
+
+        // end of parfile parameters setup
         // ---------------------------------------------------------------------------
 
 
         // ---------------------------------------------------------------------------
-        // allocate memory and populate mass and stiffness matrices
+        // allocate memory and populate matrices for the angular variables
 
         Kokkos::realloc(mass_matrix, num_points, num_points);
         Kokkos::realloc(stiffness_matrix_x, num_points, num_points);
         Kokkos::realloc(stiffness_matrix_y, num_points, num_points);
         Kokkos::realloc(stiffness_matrix_z, num_points, num_points);
 
+        Kokkos::realloc(P_matrix, 4, num_points, num_points);
+        Kokkos::realloc(G_matrix, 4, 4, 3, num_points, num_points);
+        Kokkos::realloc(F_matrix, 4, 4, 3, num_points, num_points);
+
+        Kokkos::realloc(lm_array, num_points, 2);
 
         if (!fpn) {
-            // initialize the base grid
-
+            LoadFEMNMatrices();
         } else {
-            Kokkos::realloc(lm_array, lmax, 2);
 
         }
 
+
+        // Will worry about the rest later
+        // --------------------------------------------------------------------------------------------------------------------------
         // allocate memory for evolved variables
         int nmb = ppack->nmb_thispack;
         auto &indcs = pmy_pack->pmesh->mb_indcs;
         int ncells1 = indcs.nx1 + 2 * (indcs.ng);
         int ncells2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2 * (indcs.ng)) : 1;
         int ncells3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2 * (indcs.ng)) : 1;
+
+        // tetrad quantities
+        Kokkos::realloc(g_dd, nmb, 4, 4, ncells3, ncells2, ncells1);
+        Kokkos::realloc(u_mu, nmb, 4, ncells3, ncells2, ncells1);
+        Kokkos::realloc(n_mu, nmb, 4, ncells3, ncells2, ncells1);
+        Kokkos::realloc(Lambda, nmb, ncells3, ncells2, ncells1);
+        Kokkos::realloc(L_mu_muhat, nmb, 4, 4, ncells3, ncells2, ncells1);
 
         Kokkos::realloc(i0, nmb, num_points, ncells3, ncells2, ncells1);
         Kokkos::realloc(i1, nmb, num_points, ncells3, ncells2, ncells1);
