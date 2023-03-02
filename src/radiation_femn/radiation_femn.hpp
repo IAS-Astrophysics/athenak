@@ -17,9 +17,7 @@
 
 // forward declarations
 class EquationOfState;
-
 class Coordinates;
-
 class Driver;
 
 //----------------------------------------------------------------------------------------------
@@ -48,9 +46,8 @@ struct RadiationFEMNTaskIDs {
 
 namespace radiationfemn {
 
-//----------------------------------------------------------------------------------------------
-//! \class RadiationFEMN
-
+    //----------------------------------------------------------------------------------------------
+    //! \class RadiationFEMN
     class RadiationFEMN {
     public:
         RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin);
@@ -63,6 +60,7 @@ namespace radiationfemn {
         int num_energy_bins;            // number of energy bins
         Real energy_max;                // maximum value of energy
         int num_points;                 // number of points on the grid or total number of (l,m) modes
+        int num_ref;                    // current refinement level of geodesic grid
         int num_edges;                  // number of unique edges
         int num_triangles;              // number of unique triangular elements
         int basis;                      // choice of basis functions on the geodesic grid (1: tent 2: small tent 3: honeycomb 4: small honeycomb)
@@ -82,14 +80,18 @@ namespace radiationfemn {
         // ---------------------------------------------------------------------------
         // matrices for the angular grid
         // ---------------------------------------------------------------------------
-        DvceArray2D<Real> lm_array;               // store the values of (l,m)
+        DvceArray2D<Real> lm_array;               // store the values of (l,m) for FP_N. Alternatively store (phi,theta) for FEM_N
         DvceArray1D<Real> energy_grid;             // array containing the energy grid
-        DvceArray2D<Real> mass_matrix;             // mass matrix
-        DvceArray2D<Real> stiffness_matrix_x;      // x component of the stiffness matrix
-        DvceArray2D<Real> stiffness_matrix_y;      // y component of the stiffness matrix
-        DvceArray2D<Real> stiffness_matrix_z;      // z component of the stiffness matrix
 
-        DvceArray3D <Real> P_matrix;                // P^muhat A_ B
+        DvceArray2D<Real> mass_matrix;             // mass matrix (in the special relativistic case)
+        DvceArray2D<Real> stiffness_matrix_x;      // x component of the stiffness matrix (in the special relativistic case)
+        DvceArray2D<Real> stiffness_matrix_y;      // y component of the stiffness matrix (in the special relativistic case)
+        DvceArray2D<Real> stiffness_matrix_z;      // z component of the stiffness matrix (in the special relativistic case)
+
+        DvceArray3D <Real> P_matrix;                // P ^muhat ^A _B
+        DvceArray5D<Real> G_matrix;                 // G ^nuhat ^muhat _ihat ^A _B
+        DvceArray5D<Real> F_matrix;                 // F ^nuhat ^muhat _ihat ^A _B
+
         // end of matrices for the angular grid
         // ---------------------------------------------------------------------------
 
@@ -103,9 +105,17 @@ namespace radiationfemn {
         DvceFaceFld5D<Real> iflx;     // spatial fluxes on zone faces
 
         // intermediate arrays needed for limiting
-        DvceArray5D <Real> itemp;
+        DvceArray5D<Real> itemp;
         DvceArray4D<Real> etemp0;
         DvceArray4D<Real> etemp1;
+
+        // Arrays for holding tetrad quantities
+        DvceArray6D<Real> g_dd;         // placeholder for spatial metric
+        DvceArray5D<Real> u_mu;         // placeholder for fluid velocity in lab frame
+        DvceArray5D<Real> n_mu;         // placeholder for normal vector to spatial slice
+        DvceArray4D<Real> Lambda;       // placeholder for the Lorentz factor
+        DvceArray6D<Real> L_mu_muhat;   // tetrad quantities
+
         // end of arrays for intensities and fluxes
         // ---------------------------------------------------------------------------
 
@@ -140,6 +150,7 @@ namespace radiationfemn {
         TaskStatus InitRecv(Driver *d, int stage);
         // ...in run task list
         TaskStatus CopyCons(Driver *d, int stage);
+        TaskStatus ComputeTetrad(Driver *d, int stage);
         TaskStatus CalculateFluxes(Driver *d, int stage);
         TaskStatus SendFlux(Driver *d, int stage);
         TaskStatus RecvFlux(Driver *d, int stage);
@@ -158,6 +169,11 @@ namespace radiationfemn {
         TaskStatus ClearSend(Driver *d, int stage);
         TaskStatus ClearRecv(Driver *d, int stage);
         void AssembleRadiationFEMNTasks(TaskList &start, TaskList &run, TaskList &end);
+        // ---------------------------------------------------------------------------
+
+        // ---------------------------------------------------------------------------
+        // Functions for GeodesicGrid
+        void LoadFEMNMatrices();
         // ---------------------------------------------------------------------------
 
         // ---------------------------------------------------------------------------
