@@ -39,8 +39,195 @@ namespace radiationfemn {
                     double b2 = -(sqrt(g_dd(m, 3, 3, k, j, i) - v_d3 * v_d3)) /
                                 sqrt(-g_dd(m, 2, 3, k, j, i) * g_dd(m, 2, 3, k, j, i) - g_dd(m, 3, 3, k, j, i) * v_d2 * v_d2 + 2 * g_dd(m, 2, 3, k, j, i) * v_d2 * v_d3 +
                                      g_dd(m, 2, 2, k, j, i) * (g_dd(m, 3, 3, k, j, i) - v_d3 * v_d3));
-                    double b3 = (g_dd(m, 2, 3, k, j, i) - v_d2 * v_d3) / (sqrt(g_dd(m, 3, 3, k, j, i) - v_d3 * v_d3) * sqrt(-g_dd(m, 2, 3, k, j, i) * g_dd(m, 2, 3, k, j, i) - g_dd(m, 3, 3, k, j, i) * v_d2 * v_d2 + 2 * g_dd(m, 2, 3, k, j, i) * v_d2 * v_d3 +
-                                     g_dd(m, 2, 2, k, j, i) * (g_dd(m, 3, 3, k, j, i) - v_d3 * v_d3)));
+                    double b3 = (g_dd(m, 2, 3, k, j, i) - v_d2 * v_d3) / (sqrt(g_dd(m, 3, 3, k, j, i) - v_d3 * v_d3) *
+                                                                          sqrt(-g_dd(m, 2, 3, k, j, i) * g_dd(m, 2, 3, k, j, i) - g_dd(m, 3, 3, k, j, i) * v_d2 * v_d2 +
+                                                                               2 * g_dd(m, 2, 3, k, j, i) * v_d2 * v_d3 +
+                                                                               g_dd(m, 2, 2, k, j, i) * (g_dd(m, 3, 3, k, j, i) - v_d3 * v_d3)));
+
+                    double a1 = sqrt(pow(g_dd(m, 2, 3, k, j, i) * g_dd(m, 3, 2, k, j, i) - g_dd(m, 2, 2, k, j, i) * g_dd(m, 3, 3, k, j, i) +
+                                         g_dd(m, 3, 3, k, j, i) * pow(v_d2, 2) - (g_dd(m, 2, 3, k, j, i) + g_dd(m, 3, 2, k, j, i)) * v_d2 * v_d3 +
+                                         g_dd(m, 2, 2, k, j, i) * pow(v_d3, 2), 2) /
+                                     (-(pow(g_dd(m, 1, 2, k, j, i), 2) * pow(g_dd(m, 2, 3, k, j, i), 2) * g_dd(m, 3, 3, k, j, i)) +
+                                      2 * pow(g_dd(m, 1, 2, k, j, i), 2) * g_dd(m, 2, 3, k, j, i) * g_dd(m, 3, 2, k, j, i) * g_dd(m, 3, 3, k, j, i) -
+                                      pow(g_dd(m, 1, 2, k, j, i), 2) * g_dd(m, 2, 2, k, j, i) * pow(g_dd(m, 3, 3, k, j, i), 2) -
+                                      pow(g_dd(m, 2, 3, k, j, i), 2) * pow(g_dd(m, 3, 2, k, j, i), 2) * pow(v_d1, 2) +
+                                      2 * g_dd(m, 2, 2, k, j, i) * g_dd(m, 2, 3, k, j, i) * g_dd(m, 3, 2, k, j, i) * g_dd(m, 3, 3, k, j, i) * pow(v_d1, 2) -
+                                      pow(g_dd(m, 2, 2, k, j, i), 2) * pow(g_dd(m, 3, 3, k, j, i), 2) * pow(v_d1, 2) +
+                                      2 * g_dd(m, 1, 2, k, j, i) * pow(g_dd(m, 2, 3, k, j, i), 2) * g_dd(m, 3, 3, k, j, i) * v_d1 * v_d2 -
+                                      4 * g_dd(m, 1, 2, k, j, i) * g_dd(m, 2, 3, k, j, i) * g_dd(m, 3, 2, k, j, i) * g_dd(m, 3, 3, k, j, i) * v_d1 * v_d2 +
+                                      2 * g_dd(m, 1, 2, k, j, i) * g_dd(m, 2, 2, k, j, i) * pow(g_dd(m, 3, 3, k, j, i), 2) * v_d1 * v_d2 +
+                                      pow(g_dd(m, 1, 2, k, j, i), 2) * pow(g_dd(m, 3, 3, k, j, i), 2) * pow(v_d2, 2) -
+                                      pow(g_dd(m, 2, 3, k, j, i), 2) * g_dd(m, 3, 3, k, j, i) * pow(v_d1, 2) * pow(v_d2, 2) +
+                                      g_dd(m, 2, 2, k, j, i) * pow(g_dd(m, 3, 3, k, j, i), 2) * pow(v_d1, 2) * pow(v_d2, 2) -
+                                      2 * g_dd(m, 1, 2, k, j, i) * pow(g_dd(m, 3, 3, k, j, i), 2) * v_d1 * pow(v_d2, 3) + 2 * (-(pow(g_dd(m, 1, 2, k, j, i), 2) *
+                                                                                                                                 g_dd(m, 3, 2, k, j, i) *
+                                                                                                                                 g_dd(m, 3, 3, k, j, i) * v_d2) +
+                                                                                                                               g_dd(m, 3, 2, k, j, i) *
+                                                                                                                               (pow(g_dd(m, 2, 3, k, j, i), 2) -
+                                                                                                                                g_dd(m, 2, 2, k, j, i) *
+                                                                                                                                g_dd(m, 3, 3, k, j, i)) * pow(v_d1, 2) *
+                                                                                                                               v_d2 +
+                                                                                                                               g_dd(m, 1, 2, k, j, i) * v_d1 *
+                                                                                                                               (g_dd(m, 2, 3, k, j, i) *
+                                                                                                                                (pow(g_dd(m, 3, 2, k, j, i), 2) -
+                                                                                                                                 g_dd(m, 2, 2, k, j, i) *
+                                                                                                                                 g_dd(m, 3, 3, k, j, i)) +
+                                                                                                                                (g_dd(m, 2, 3, k, j, i) +
+                                                                                                                                 2 * g_dd(m, 3, 2, k, j, i)) *
+                                                                                                                                g_dd(m, 3, 3, k, j, i) * pow(v_d2, 2))) *
+                                                                                                                          v_d3 +
+                                      (g_dd(m, 2, 2, k, j, i) * (-2 * g_dd(m, 2, 3, k, j, i) * g_dd(m, 3, 2, k, j, i) + pow(g_dd(m, 3, 2, k, j, i), 2) +
+                                                                 g_dd(m, 2, 2, k, j, i) * g_dd(m, 3, 3, k, j, i)) * pow(v_d1, 2) - 2 * g_dd(m, 1, 2, k, j, i) *
+                                                                                                                                   (pow(g_dd(m, 2, 3, k, j, i), 2) +
+                                                                                                                                    pow(g_dd(m, 3, 2, k, j, i), 2) +
+                                                                                                                                    g_dd(m, 2, 2, k, j, i) *
+                                                                                                                                    g_dd(m, 3, 3, k, j, i)) * v_d1 *
+                                                                                                                                   v_d2 +
+                                       pow(g_dd(m, 1, 2, k, j, i), 2) * (pow(g_dd(m, 2, 3, k, j, i), 2) - 2 * g_dd(m, 2, 3, k, j, i) * g_dd(m, 3, 2, k, j, i) +
+                                                                         2 * g_dd(m, 2, 2, k, j, i) * g_dd(m, 3, 3, k, j, i) - g_dd(m, 3, 3, k, j, i) * pow(v_d2, 2))) *
+                                      pow(v_d3, 2) +
+                                      2 * g_dd(m, 1, 2, k, j, i) *
+                                      (g_dd(m, 2, 2, k, j, i) * g_dd(m, 2, 3, k, j, i) * v_d1 + g_dd(m, 1, 2, k, j, i) * g_dd(m, 3, 2, k, j, i) * v_d2) * pow(v_d3, 3) -
+                                      pow(g_dd(m, 1, 2, k, j, i), 2) * g_dd(m, 2, 2, k, j, i) * pow(v_d3, 4) +
+                                      pow(g_dd(m, 1, 3, k, j, i), 2) * (g_dd(m, 2, 2, k, j, i) - pow(v_d2, 2)) *
+                                      (-2 * g_dd(m, 2, 3, k, j, i) * g_dd(m, 3, 2, k, j, i) + pow(g_dd(m, 3, 2, k, j, i), 2) +
+                                       g_dd(m, 2, 2, k, j, i) * g_dd(m, 3, 3, k, j, i) - g_dd(m, 3, 3, k, j, i) * pow(v_d2, 2) +
+                                       2 * g_dd(m, 2, 3, k, j, i) * v_d2 * v_d3 -
+                                       g_dd(m, 2, 2, k, j, i) * pow(v_d3, 2)) + g_dd(m, 1, 1, k, j, i) * pow(g_dd(m, 2, 3, k, j, i) * g_dd(m, 3, 2, k, j, i) -
+                                                                                                             g_dd(m, 2, 2, k, j, i) * g_dd(m, 3, 3, k, j, i) +
+                                                                                                             g_dd(m, 3, 3, k, j, i) * pow(v_d2, 2) -
+                                                                                                             (g_dd(m, 2, 3, k, j, i) + g_dd(m, 3, 2, k, j, i)) * v_d2 *
+                                                                                                             v_d3 + g_dd(m, 2, 2, k, j, i) * pow(v_d3, 2), 2) +
+                                      2 * g_dd(m, 1, 3, k, j, i) * (g_dd(m, 2, 3, k, j, i) - g_dd(m, 3, 2, k, j, i)) * (g_dd(m, 3, 2, k, j, i) - v_d2 * v_d3) *
+                                      (-(g_dd(m, 2, 3, k, j, i) * v_d1 * v_d2) + g_dd(m, 2, 2, k, j, i) * v_d1 * v_d3 +
+                                       g_dd(m, 1, 2, k, j, i) * (g_dd(m, 2, 3, k, j, i) - v_d2 * v_d3))));
+                    double a2 = sqrt(
+                            pow(g_dd(m, 1, 3, k, j, i) * g_dd(m, 3, 2, k, j, i) - g_dd(m, 1, 2, k, j, i) * g_dd(m, 3, 3, k, j, i) + g_dd(m, 3, 3, k, j, i) * v_d1 * v_d2 -
+                                (g_dd(m, 3, 2, k, j, i) * v_d1 + g_dd(m, 1, 3, k, j, i) * v_d2) * v_d3 + g_dd(m, 1, 2, k, j, i) * pow(v_d3, 2), 2) /
+                            (-(pow(g_dd(m, 1, 2, k, j, i), 2) * pow(g_dd(m, 2, 3, k, j, i), 2) * g_dd(m, 3, 3, k, j, i)) +
+                             2 * pow(g_dd(m, 1, 2, k, j, i), 2) * g_dd(m, 2, 3, k, j, i) * g_dd(m, 3, 2, k, j, i) * g_dd(m, 3, 3, k, j, i) -
+                             pow(g_dd(m, 1, 2, k, j, i), 2) * g_dd(m, 2, 2, k, j, i) * pow(g_dd(m, 3, 3, k, j, i), 2) -
+                             pow(g_dd(m, 2, 3, k, j, i), 2) * pow(g_dd(m, 3, 2, k, j, i), 2) * pow(v_d1, 2) +
+                             2 * g_dd(m, 2, 2, k, j, i) * g_dd(m, 2, 3, k, j, i) * g_dd(m, 3, 2, k, j, i) * g_dd(m, 3, 3, k, j, i) * pow(v_d1, 2) -
+                             pow(g_dd(m, 2, 2, k, j, i), 2) * pow(g_dd(m, 3, 3, k, j, i), 2) * pow(v_d1, 2) +
+                             2 * g_dd(m, 1, 2, k, j, i) * pow(g_dd(m, 2, 3, k, j, i), 2) * g_dd(m, 3, 3, k, j, i) * v_d1 * v_d2 -
+                             4 * g_dd(m, 1, 2, k, j, i) * g_dd(m, 2, 3, k, j, i) * g_dd(m, 3, 2, k, j, i) * g_dd(m, 3, 3, k, j, i) * v_d1 * v_d2 +
+                             2 * g_dd(m, 1, 2, k, j, i) * g_dd(m, 2, 2, k, j, i) * pow(g_dd(m, 3, 3, k, j, i), 2) * v_d1 * v_d2 +
+                             pow(g_dd(m, 1, 2, k, j, i), 2) * pow(g_dd(m, 3, 3, k, j, i), 2) * pow(v_d2, 2) -
+                             pow(g_dd(m, 2, 3, k, j, i), 2) * g_dd(m, 3, 3, k, j, i) * pow(v_d1, 2) * pow(v_d2, 2) +
+                             g_dd(m, 2, 2, k, j, i) * pow(g_dd(m, 3, 3, k, j, i), 2) * pow(v_d1, 2) * pow(v_d2, 2) -
+                             2 * g_dd(m, 1, 2, k, j, i) * pow(g_dd(m, 3, 3, k, j, i), 2) * v_d1 * pow(v_d2, 3) + 2 * (-(pow(g_dd(m, 1, 2, k, j, i), 2) *
+                                                                                                                        g_dd(m, 3, 2, k, j, i) * g_dd(m, 3, 3, k, j, i) *
+                                                                                                                        v_d2) + g_dd(m, 3, 2, k, j, i) *
+                                                                                                                                (pow(g_dd(m, 2, 3, k, j, i), 2) -
+                                                                                                                                 g_dd(m, 2, 2, k, j, i) *
+                                                                                                                                 g_dd(m, 3, 3, k, j, i)) * pow(v_d1, 2) *
+                                                                                                                                v_d2 +
+                                                                                                                      g_dd(m, 1, 2, k, j, i) * v_d1 *
+                                                                                                                      (g_dd(m, 2, 3, k, j, i) *
+                                                                                                                       (pow(g_dd(m, 3, 2, k, j, i), 2) -
+                                                                                                                        g_dd(m, 2, 2, k, j, i) * g_dd(m, 3, 3, k, j, i)) +
+                                                                                                                       (g_dd(m, 2, 3, k, j, i) +
+                                                                                                                        2 * g_dd(m, 3, 2, k, j, i)) *
+                                                                                                                       g_dd(m, 3, 3, k, j, i) * pow(v_d2, 2))) * v_d3 +
+                             (g_dd(m, 2, 2, k, j, i) *
+                              (-2 * g_dd(m, 2, 3, k, j, i) * g_dd(m, 3, 2, k, j, i) + pow(g_dd(m, 3, 2, k, j, i), 2) + g_dd(m, 2, 2, k, j, i) * g_dd(m, 3, 3, k, j, i)) *
+                              pow(v_d1, 2) - 2 * g_dd(m, 1, 2, k, j, i) *
+                                             (pow(g_dd(m, 2, 3, k, j, i), 2) + pow(g_dd(m, 3, 2, k, j, i), 2) + g_dd(m, 2, 2, k, j, i) * g_dd(m, 3, 3, k, j, i)) * v_d1 *
+                                             v_d2 +
+                              pow(g_dd(m, 1, 2, k, j, i), 2) * (pow(g_dd(m, 2, 3, k, j, i), 2) - 2 * g_dd(m, 2, 3, k, j, i) * g_dd(m, 3, 2, k, j, i) +
+                                                                2 * g_dd(m, 2, 2, k, j, i) * g_dd(m, 3, 3, k, j, i) - g_dd(m, 3, 3, k, j, i) * pow(v_d2, 2))) *
+                             pow(v_d3, 2) +
+                             2 * g_dd(m, 1, 2, k, j, i) *
+                             (g_dd(m, 2, 2, k, j, i) * g_dd(m, 2, 3, k, j, i) * v_d1 + g_dd(m, 1, 2, k, j, i) * g_dd(m, 3, 2, k, j, i) * v_d2) * pow(v_d3, 3) -
+                             pow(g_dd(m, 1, 2, k, j, i), 2) * g_dd(m, 2, 2, k, j, i) * pow(v_d3, 4) +
+                             pow(g_dd(m, 1, 3, k, j, i), 2) * (g_dd(m, 2, 2, k, j, i) - pow(v_d2, 2)) *
+                             (-2 * g_dd(m, 2, 3, k, j, i) * g_dd(m, 3, 2, k, j, i) + pow(g_dd(m, 3, 2, k, j, i), 2) + g_dd(m, 2, 2, k, j, i) * g_dd(m, 3, 3, k, j, i) -
+                              g_dd(m, 3, 3, k, j, i) * pow(v_d2, 2) + 2 * g_dd(m, 2, 3, k, j, i) * v_d2 * v_d3 -
+                              g_dd(m, 2, 2, k, j, i) * pow(v_d3, 2)) + g_dd(m, 1, 1, k, j, i) * pow(g_dd(m, 2, 3, k, j, i) * g_dd(m, 3, 2, k, j, i) -
+                                                                                                    g_dd(m, 2, 2, k, j, i) * g_dd(m, 3, 3, k, j, i) +
+                                                                                                    g_dd(m, 3, 3, k, j, i) * pow(v_d2, 2) -
+                                                                                                    (g_dd(m, 2, 3, k, j, i) + g_dd(m, 3, 2, k, j, i)) * v_d2 * v_d3 +
+                                                                                                    g_dd(m, 2, 2, k, j, i) * pow(v_d3, 2), 2) +
+                             2 * g_dd(m, 1, 3, k, j, i) * (g_dd(m, 2, 3, k, j, i) - g_dd(m, 3, 2, k, j, i)) * (g_dd(m, 3, 2, k, j, i) - v_d2 * v_d3) *
+                             (-(g_dd(m, 2, 3, k, j, i) * v_d1 * v_d2) + g_dd(m, 2, 2, k, j, i) * v_d1 * v_d3 +
+                              g_dd(m, 1, 2, k, j, i) * (g_dd(m, 2, 3, k, j, i) - v_d2 * v_d3))));
+                    double a3 = sqrt(
+                            pow(g_dd(m, 1, 3, k, j, i) * g_dd(m, 2, 2, k, j, i) - g_dd(m, 1, 2, k, j, i) * g_dd(m, 2, 3, k, j, i) + g_dd(m, 2, 3, k, j, i) * v_d1 * v_d2 -
+                                g_dd(m, 1, 3, k, j, i) * pow(v_d2, 2) - g_dd(m, 2, 2, k, j, i) * v_d1 * v_d3 + g_dd(m, 1, 2, k, j, i) * v_d2 * v_d3, 2) /
+                            (-(pow(g_dd(m, 1, 2, k, j, i), 2) * pow(g_dd(m, 2, 3, k, j, i), 2) * g_dd(m, 3, 3, k, j, i)) +
+                             2 * pow(g_dd(m, 1, 2, k, j, i), 2) * g_dd(m, 2, 3, k, j, i) * g_dd(m, 3, 2, k, j, i) * g_dd(m, 3, 3, k, j, i) -
+                             pow(g_dd(m, 1, 2, k, j, i), 2) * g_dd(m, 2, 2, k, j, i) * pow(g_dd(m, 3, 3, k, j, i), 2) -
+                             pow(g_dd(m, 2, 3, k, j, i), 2) * pow(g_dd(m, 3, 2, k, j, i), 2) * pow(v_d1, 2) +
+                             2 * g_dd(m, 2, 2, k, j, i) * g_dd(m, 2, 3, k, j, i) * g_dd(m, 3, 2, k, j, i) * g_dd(m, 3, 3, k, j, i) * pow(v_d1, 2) -
+                             pow(g_dd(m, 2, 2, k, j, i), 2) * pow(g_dd(m, 3, 3, k, j, i), 2) * pow(v_d1, 2) +
+                             2 * g_dd(m, 1, 2, k, j, i) * pow(g_dd(m, 2, 3, k, j, i), 2) * g_dd(m, 3, 3, k, j, i) * v_d1 * v_d2 -
+                             4 * g_dd(m, 1, 2, k, j, i) * g_dd(m, 2, 3, k, j, i) * g_dd(m, 3, 2, k, j, i) * g_dd(m, 3, 3, k, j, i) * v_d1 * v_d2 +
+                             2 * g_dd(m, 1, 2, k, j, i) * g_dd(m, 2, 2, k, j, i) * pow(g_dd(m, 3, 3, k, j, i), 2) * v_d1 * v_d2 +
+                             pow(g_dd(m, 1, 2, k, j, i), 2) * pow(g_dd(m, 3, 3, k, j, i), 2) * pow(v_d2, 2) -
+                             pow(g_dd(m, 2, 3, k, j, i), 2) * g_dd(m, 3, 3, k, j, i) * pow(v_d1, 2) * pow(v_d2, 2) +
+                             g_dd(m, 2, 2, k, j, i) * pow(g_dd(m, 3, 3, k, j, i), 2) * pow(v_d1, 2) * pow(v_d2, 2) -
+                             2 * g_dd(m, 1, 2, k, j, i) * pow(g_dd(m, 3, 3, k, j, i), 2) * v_d1 * pow(v_d2, 3) + 2 * (-(pow(g_dd(m, 1, 2, k, j, i), 2) *
+                                                                                                                        g_dd(m, 3, 2, k, j, i) * g_dd(m, 3, 3, k, j, i) *
+                                                                                                                        v_d2) + g_dd(m, 3, 2, k, j, i) *
+                                                                                                                                (pow(g_dd(m, 2, 3, k, j, i), 2) -
+                                                                                                                                 g_dd(m, 2, 2, k, j, i) *
+                                                                                                                                 g_dd(m, 3, 3, k, j, i)) * pow(v_d1, 2) *
+                                                                                                                                v_d2 +
+                                                                                                                      g_dd(m, 1, 2, k, j, i) * v_d1 *
+                                                                                                                      (g_dd(m, 2, 3, k, j, i) *
+                                                                                                                       (pow(g_dd(m, 3, 2, k, j, i), 2) -
+                                                                                                                        g_dd(m, 2, 2, k, j, i) * g_dd(m, 3, 3, k, j, i)) +
+                                                                                                                       (g_dd(m, 2, 3, k, j, i) +
+                                                                                                                        2 * g_dd(m, 3, 2, k, j, i)) *
+                                                                                                                       g_dd(m, 3, 3, k, j, i) * pow(v_d2, 2))) * v_d3 +
+                             (g_dd(m, 2, 2, k, j, i) *
+                              (-2 * g_dd(m, 2, 3, k, j, i) * g_dd(m, 3, 2, k, j, i) + pow(g_dd(m, 3, 2, k, j, i), 2) + g_dd(m, 2, 2, k, j, i) * g_dd(m, 3, 3, k, j, i)) *
+                              pow(v_d1, 2) - 2 * g_dd(m, 1, 2, k, j, i) *
+                                             (pow(g_dd(m, 2, 3, k, j, i), 2) + pow(g_dd(m, 3, 2, k, j, i), 2) + g_dd(m, 2, 2, k, j, i) * g_dd(m, 3, 3, k, j, i)) * v_d1 *
+                                             v_d2 +
+                              pow(g_dd(m, 1, 2, k, j, i), 2) * (pow(g_dd(m, 2, 3, k, j, i), 2) - 2 * g_dd(m, 2, 3, k, j, i) * g_dd(m, 3, 2, k, j, i) +
+                                                                2 * g_dd(m, 2, 2, k, j, i) * g_dd(m, 3, 3, k, j, i) - g_dd(m, 3, 3, k, j, i) * pow(v_d2, 2))) *
+                             pow(v_d3, 2) +
+                             2 * g_dd(m, 1, 2, k, j, i) *
+                             (g_dd(m, 2, 2, k, j, i) * g_dd(m, 2, 3, k, j, i) * v_d1 + g_dd(m, 1, 2, k, j, i) * g_dd(m, 3, 2, k, j, i) * v_d2) * pow(v_d3, 3) -
+                             pow(g_dd(m, 1, 2, k, j, i), 2) * g_dd(m, 2, 2, k, j, i) * pow(v_d3, 4) +
+                             pow(g_dd(m, 1, 3, k, j, i), 2) * (g_dd(m, 2, 2, k, j, i) - pow(v_d2, 2)) *
+                             (-2 * g_dd(m, 2, 3, k, j, i) * g_dd(m, 3, 2, k, j, i) + pow(g_dd(m, 3, 2, k, j, i), 2) + g_dd(m, 2, 2, k, j, i) * g_dd(m, 3, 3, k, j, i) -
+                              g_dd(m, 3, 3, k, j, i) * pow(v_d2, 2) + 2 * g_dd(m, 2, 3, k, j, i) * v_d2 * v_d3 -
+                              g_dd(m, 2, 2, k, j, i) * pow(v_d3, 2)) + g_dd(m, 1, 1, k, j, i) * pow(g_dd(m, 2, 3, k, j, i) * g_dd(m, 3, 2, k, j, i) -
+                                                                                                    g_dd(m, 2, 2, k, j, i) * g_dd(m, 3, 3, k, j, i) +
+                                                                                                    g_dd(m, 3, 3, k, j, i) * pow(v_d2, 2) -
+                                                                                                    (g_dd(m, 2, 3, k, j, i) + g_dd(m, 3, 2, k, j, i)) * v_d2 * v_d3 +
+                                                                                                    g_dd(m, 2, 2, k, j, i) * pow(v_d3, 2), 2) +
+                             2 * g_dd(m, 1, 3, k, j, i) * (g_dd(m, 2, 3, k, j, i) - g_dd(m, 3, 2, k, j, i)) * (g_dd(m, 3, 2, k, j, i) - v_d2 * v_d3) *
+                             (-(g_dd(m, 2, 3, k, j, i) * v_d1 * v_d2) + g_dd(m, 2, 2, k, j, i) * v_d1 * v_d3 +
+                              g_dd(m, 1, 2, k, j, i) * (g_dd(m, 2, 3, k, j, i) - v_d2 * v_d3))));
+
+                    double A = v_d1 * a1 + v_d2 * a2 + v_d3 * a3;
+                    double B = v_d1 * b1 + v_d2 * b2 + v_d3 * b3;
+                    double C = v_d1 * c1 + v_d2 * c2 + v_d3 * c3;
+
+                    L_mu_muhat(m, 0, 0, k, j, i) = u_mu(m, 0, k, j, i);
+                    L_mu_muhat(m, 1, 0, k, j, i) = u_mu(m, 1, k, j, i);
+                    L_mu_muhat(m, 2, 0, k, j, i) = u_mu(m, 2, k, j, i);
+                    L_mu_muhat(m, 3, 0, k, j, i) = u_mu(m, 3, k, j, i);
+
+                    L_mu_muhat(m, 0, 1, k, j, i) = A * n_mu(m, 0, k, j, i) + 0.;
+                    L_mu_muhat(m, 1, 1, k, j, i) = A * n_mu(m, 1, k, j, i) + a1;
+                    L_mu_muhat(m, 2, 1, k, j, i) = A * n_mu(m, 2, k, j, i) + a2;
+                    L_mu_muhat(m, 3, 1, k, j, i) = A * n_mu(m, 3, k, j, i) + a3;
+
+                    L_mu_muhat(m, 0, 2, k, j, i) = B * n_mu(m, 0, k, j, i) + 0.;
+                    L_mu_muhat(m, 1, 2, k, j, i) = B * n_mu(m, 1, k, j, i) + b1;
+                    L_mu_muhat(m, 2, 2, k, j, i) = B * n_mu(m, 2, k, j, i) + b2;
+                    L_mu_muhat(m, 3, 2, k, j, i) = B * n_mu(m, 3, k, j, i) + b3;
+
+                    L_mu_muhat(m, 0, 3, k, j, i) = C * n_mu(m, 0, k, j, i) + 0.;
+                    L_mu_muhat(m, 1, 3, k, j, i) = C * n_mu(m, 1, k, j, i) + c1;
+                    L_mu_muhat(m, 2, 3, k, j, i) = C * n_mu(m, 2, k, j, i) + c2;
+                    L_mu_muhat(m, 3, 3, k, j, i) = C * n_mu(m, 3, k, j, i) + c3;
+
                 });
 
         return TaskStatus::complete;
