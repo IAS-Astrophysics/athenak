@@ -30,8 +30,9 @@ def main(**kwargs):
         matplotlib.use('agg')
     if not kwargs['notex']:
         matplotlib.rc('text', usetex=True)
-    import matplotlib.pyplot as plt
+    import matplotlib.colors as colors
     import matplotlib.patches as patches
+    import matplotlib.pyplot as plt
 
     # Plotting parameters
     horizon_line_style = '-'
@@ -207,6 +208,12 @@ def main(**kwargs):
             key, val = line.split('=', 1)
             input_data[section_name][key.strip()] = val.split('#', 1)[0].strip()
 
+        # Extract number of ghost cells from input file metadata
+        try:
+            num_ghost = int(input_data['mesh']['nghost'])
+        except:  # noqa: E722
+            raise RuntimeError('Unable to find number of ghost cells in input file.')
+
         # Extract adiabatic index from input file metadata
         if kwargs['variable'] in \
                 ['derived:' + name for name in ('pgas', 'pgas_rho', 'T', 'prad_pgas')] \
@@ -305,7 +312,7 @@ def main(**kwargs):
         while f.tell() < file_size:
 
             # Read grid structure data
-            block_indices = struct.unpack('@6i', f.read(24))
+            block_indices = np.array(struct.unpack('@6i', f.read(24))) - num_ghost
             block_i, block_j, block_k, block_level = struct.unpack('@4i', f.read(16))
 
             # Process grid structure data
@@ -649,13 +656,25 @@ def main(**kwargs):
     else:
         vmax = kwargs['vmax']
 
+    # Choose colormap norm
+    if kwargs['norm'] == 'linear':
+        norm = colors.Normalize(vmin, vmax)
+        vmin = None
+        vmax = None
+    elif kwargs['norm'] == 'log':
+        norm = colors.LogNorm(vmin, vmax)
+        vmin = None
+        vmax = None
+    else:
+        norm = kwargs['norm']
+
     # Prepare figure
     plt.figure()
 
     # Plot data
     for block_num in range(num_blocks_used):
-        plt.imshow(quantity[block_num], cmap=kwargs['cmap'], norm=kwargs['norm'],
-                   vmin=vmin, vmax=vmax, interpolation='none', origin='lower',
+        plt.imshow(quantity[block_num], cmap=kwargs['cmap'], norm=norm, vmin=vmin,
+                   vmax=vmax, interpolation='none', origin='lower',
                    extent=extents[block_num])
 
     # Make colorbar
