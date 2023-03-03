@@ -225,8 +225,21 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   auto trs = torus;
   auto &size = pmbp->pmb->mb_size;
   Kokkos::Random_XorShift64_Pool<> rand_pool64(pmbp->gids);
-  par_for("pgen_torus1", DevExeSpace(), 0,nmb-1,ks,ke,js,je,is,ie,
-  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+  Real pgmax = std::numeric_limits<float>::min();
+  const int nmkji = (pmbp->nmb_thispack)*indcs.nx3*indcs.nx2*indcs.nx1;
+  const int nkji = indcs.nx3*indcs.nx2*indcs.nx1;
+  const int nji  = indcs.nx2*indcs.nx1;
+
+  Kokkos::parallel_reduce("pgen_torus1", Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+  KOKKOS_LAMBDA(const int &idx, Real &max_pgas) {
+    // compute m,k,j,i indices of thread and call function
+    int m = (idx)/nkji;
+    int k = (idx - m*nkji)/nji;
+    int j = (idx - m*nkji - k*nji)/indcs.nx1;
+    int i = (idx - m*nkji - k*nji - j*indcs.nx1) + is;
+    k += ks;
+    j += js;
+
     Real &x1min = size.d_view(m).x1min;
     Real &x1max = size.d_view(m).x1max;
     Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
@@ -323,7 +336,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     w0_(m,IVX,k,j,i) = uu1;
     w0_(m,IVY,k,j,i) = uu2;
     w0_(m,IVZ,k,j,i) = uu3;
-  });
+
+    max_pgas = fmax(gm1*w0_(m,IEN,k,j,i), max_pgas);
+  }, Kokkos::Max<Real>(pgmax));
 
   // initialize magnetic fields ---------------------------------------
 
@@ -522,14 +537,13 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       w_bz = 0.5*(b0.x3f(m,k,j,i) + b0.x3f(m,k+1,j,i));
     });
 
-    // find maximum pressure and maximum bsq
-    Real pgmax = std::numeric_limits<float>::min();
+    // find maximum bsq
     Real bsqmax = std::numeric_limits<float>::min();
     const int nmkji = (pmbp->nmb_thispack)*indcs.nx3*indcs.nx2*indcs.nx1;
     const int nkji = indcs.nx3*indcs.nx2*indcs.nx1;
     const int nji  = indcs.nx2*indcs.nx1;
-    Kokkos::parallel_reduce("torus_beta",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-    KOKKOS_LAMBDA(const int &idx, Real &max_pgas, Real &max_bsq) {
+    Kokkos::parallel_reduce("torus_beta", Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+    KOKKOS_LAMBDA(const int &idx, Real &max_bsq) {
       // compute m,k,j,i indices of thread and call function
       int m = (idx)/nkji;
       int k = (idx - m*nkji)/nji;
@@ -561,7 +575,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       Real &wbx = bcc_(m,IBX,k,j,i);
       Real &wby = bcc_(m,IBY,k,j,i);
       Real &wbz = bcc_(m,IBZ,k,j,i);
-      Real pgas = gm1*w0_(m,IEN,k,j,i);
 
       // Calculate 4-velocity (exploiting symmetry of metric)
       Real q = glower[1][1]*wvx*wvx +2.0*glower[1][2]*wvx*wvy +2.0*glower[1][3]*wvx*wvz
@@ -592,12 +605,11 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       Real b_3 = glower[3][0]*b0 + glower[3][1]*b1 + glower[3][2]*b2 + glower[3][3]*b3;
       Real bsq = b0*b_0 + b1*b_1 + b2*b_2 + b3*b_3;
 
-      max_pgas = fmax(pgas, max_pgas);
-      max_bsq  = fmax(bsq,  max_bsq);
-    }, Kokkos::Max<Real>(pgmax), Kokkos::Max<Real>(bsqmax));
+      max_bsq = fmax(bsq, max_bsq);
+    }, Kokkos::Max<Real>(bsqmax));
 
 #if MPI_PARALLEL_ENABLED
-    // get maximum value of pressure and bsq over all MPI ranks
+    // get maximum value of gas pressure and bsq over all MPI ranks
     MPI_Allreduce(MPI_IN_PLACE, &pgmax, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
     MPI_Allreduce(MPI_IN_PLACE, &bsqmax, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
 #endif
