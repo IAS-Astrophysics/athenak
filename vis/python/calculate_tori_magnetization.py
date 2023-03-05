@@ -1,10 +1,33 @@
 #! /usr/bin/env python3
 
 """
-Script for calculating averaged plasma sigma and beta^-1 for AthenaK black hole
-data dump.
+Script for calculating average magnetization in an AthenaK GRMHD data dump.
 
-Run "calculate_bh_magnetization.py -h" to see a description of inputs.
+Usage:
+[python3] calculate_tori_magnetization.py <input_file> [options]
+
+Example:
+~/athenak/vis/python/calculate_tori_magnetization.py basename.prim.00000.bin
+
+<input_file> can be any standard AthenaK .bin data dump that uses GR (Cartesian
+Kerr-Schild coordinates) and MHD.
+
+Options include:
+  --r_max: maximum radial coordinate to consider in the analysis
+  --rho_min: minimum code density to consider in the analysis
+
+Run "calculate_tori_magnetization.py -h" to see a full description of inputs.
+
+The results will be printed to screen. The include volume- and mass-weighted
+averages of plasma sigma and beta^{-1} over the region of interest.
+
+The domain extends from the outer horizon to r <= r_max (default: infinity), and
+counts cells with rho >= rho_min (default: 0). Volume weighting weights cells by
+dV = sqrt(-g)*dx*dy*dv = dx*dy*dv. Mass weighting weights cells by dm = rho*dV.
+
+Plasma sigma is defined as sigma = b_mu b^mu / rho. Plasma beta^{-1} is defined
+as beta^{-1} = b_mu b^mu / (2 p_gas). Radiation is not considered in this
+calculation.
 """
 
 # Python standard modules
