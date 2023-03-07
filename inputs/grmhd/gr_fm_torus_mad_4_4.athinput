@@ -1,0 +1,104 @@
+# Athena++ (Kokkos version) input file for MHD GR torus
+# Initializes Fishbone-Moncrief equilibrium torus used in EHT code comparison with
+# r_in=6 and r_peak=12 and MAD magnetic field configuration.  Uses static mesh refinement
+# with  highest resolution 8/M at the horizon and the inner level spanning +/- 4M
+
+<comment>
+problem   = Fishbone-Moncrief equilibrium torus
+reference = Fishbone & Moncrief 1976, ApJ 207 962
+
+<job>
+basename  = torus
+
+<mesh>
+nghost = 4        # Number of ghost cells
+nx1    = 32       # number of cells in x1-direction
+x1min  = -960.0   # minimum x1
+x1max  = 960.0    # maximum x1
+ix1_bc = user     # inner boundary
+ox1_bc = user     # outer boundary
+
+nx2    = 32       # number of cells in x2-direction
+x2min  = -960.0   # minimum x2
+x2max  = 960.0    # maximum x2
+ix2_bc = user     # inner boundary
+ox2_bc = user     # outer boundary
+
+nx3    = 32       # number of cells in x3-direction
+x3min  = -960.0   # minimum x3
+x3max  = 960.0    # maximum x3
+ix3_bc = user     # inner boundary
+ox3_bc = user     # outer boundary
+
+<meshblock>
+nx1  = 8          # Number of cells in each MeshBlock, X1-dir
+nx2  = 8          # Number of cells in each MeshBlock, X2-dir
+nx3  = 8          # Number of cells in each MeshBlock, X3-dir
+
+<mesh_refinement>
+refinement = static    # type of refinement
+
+<refinement1>
+level = 9
+x1min = -4.0
+x1max = 4.0
+x2min = -4.0
+x2max = 4.0
+x3min = -4.0
+x3max = 4.0
+
+<time>
+evolution  = dynamic     # dynamic/kinematic/static
+integrator = rk2         # time integration algorithm
+cfl_number = 0.3         # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1          # cycle limit
+tlim       = 10000.0     # time limit
+ndiag      = 1           # cycles between diagostic output
+
+<coord>
+general_rel = true       # general relativity
+a           = 0.9375     # black hole spin a (0 <= a/M < 1)
+excise      = true       # excise r_ks <= 1.0
+dexcise     = 1.0e-8     # density inside excision
+pexcise     = 0.333e-10  # pressure inside excision
+
+<mhd>
+eos         = ideal      # EOS type
+reconstruct = plm        # spatial reconstruction method
+rsolver     = hlle       # Riemann-solver to be used
+dfloor      = 1.0e-8     # floor on density rho
+pfloor      = 0.333e-10  # floor on gas pressure p_gas
+gamma       = 1.4444444444444444  # ratio of specific heats Gamma
+fofc        = true       # Enable first order flux correction
+gamma_max   = 20.0       # Enable ceiling on Lorentz factor
+
+<problem>
+user_hist = true      # enroll user-defined history function
+rho_min   = 1.0e-5    # background on rho given by rho_min ...
+rho_pow   = -1.5      # ... * r^rho_pow
+pgas_min  = 0.333e-7  # background on p_gas given by pgas_min ...
+pgas_pow  = -2.5      # ... * r^pgas_pow
+rho_max    = 1.0      # if > 0, rescale rho to have this peak; rescale pres by same factor
+k_adi      = 1.0      # adiabat K, p_gas = K * rho^Gamma
+r_edge     = 20.0     # radius of inner edge of disk
+r_peak     = 41.0     # radius of pressure maximum; use l instead if negative
+l          = 0.0      # const ang. mom. per unit mass u^t u_phi; only used if r_peak < 0
+tilt_angle = 0.0      # angle (deg) to incl disk spin axis relative to BH spin in dir of x
+pert_amp   = 2.0e-2   # perturbation amplitude
+mad = true            # vector potential for magnetic field (SANE or MAD config.)
+fm_torus = true       # Fishbone & Moncrief
+potential_beta_min = 100.0  # ratio of gas to magnetic pressure at maxima (diff locations)
+potential_falloff = 400.0   # falloff for exponential in vector potential
+potential_cutoff   = 0.2    # amount to subtract from density when calculating potential
+potential_r_pow    = 3.0    # vector potential proportional to this power of radius
+potential_rho_pow  = 1.0    # vector potential proportional to this power of density
+
+<output1>
+file_type  = hst        # History output
+dt         = 10.0       # time increment between outputs
+user_hist_only = true   # only output user-defined history
+
+<output2>
+file_type  = bin        # Binary data dump
+variable   = mhd_w_bcc  # variables to be output
+dt         = 100.0      # time increment between outputs

@@ -511,6 +511,7 @@ void BaseTypeOutput::LoadOutputData(Mesh *pm) {
       // set index of slice
       ois = CellCenterIndex(out_params.slice_x1, indcs.nx1,
                             size.h_view(m).x1min, size.h_view(m).x1max);
+      ois += indcs.is;
       oie = ois;
     }
 
@@ -521,6 +522,7 @@ void BaseTypeOutput::LoadOutputData(Mesh *pm) {
       // set index of slice
       ojs = CellCenterIndex(out_params.slice_x2, indcs.nx2,
                             size.h_view(m).x2min, size.h_view(m).x2max);
+      ojs += indcs.js;
       oje = ojs;
     }
 
@@ -531,6 +533,7 @@ void BaseTypeOutput::LoadOutputData(Mesh *pm) {
       // set index of slice
       oks = CellCenterIndex(out_params.slice_x3, indcs.nx3,
                             size.h_view(m).x3min, size.h_view(m).x3max);
+      oks += indcs.ks;
       oke = oks;
     }
 

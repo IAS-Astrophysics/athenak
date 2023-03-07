@@ -3,7 +3,75 @@
 """
 Script for plotting a 2D slice from a 2D or 3D AthenaK data dump.
 
-Run "plot_slice.py -h" to see a description of inputs.
+Usage:
+[python3] plot_slice.py <input_file> <quantity_to_plot> <output_file> [options]
+
+Example:
+~/athenak/vis/python/plot_slice.py basename.prim.00100.bin dens image.png
+
+<input_file> can be any standard AthenaK .bin data dump. <output_file> can have
+any extension recognized by Matplotlib (e.g., .png). If <output_file> is simply
+"show", the script will open a live Matplotlib viewing window.
+
+Available quantities include anything found in the input file (e.g., dens, velx,
+eint, bcc1, r00_ff). If an invalid quantity is requested (e.g.,
+"plot_slice.py <input_file> ? show"), the error message will list all available
+quantities in the file.
+
+Additional derived quantities can be computed as well. These are identified by
+prefixing with "derived:". An invalid request (e.g.,
+"plot_slice.py <input_file> derived:? show") will list available options.
+Currently, these include the following:
+  - Quantities related to gas pressure:
+    - pgas: gas pressure
+    - pgas_rho: gas pressure divided by density
+    - T: temperature
+  - Non-relativistic quantities related to magnetic pressure:
+    - pmag_nr: (magnetic pressure) = B^2 / 2
+    - beta_inv_nr: 1 / (plasma beta) = (magnetic pressure) / (gas pressure)
+    - sigma_nr: (plasma sigma) = B^2 / rho
+  - Relativistic quantities related to magnetic pressure:
+    - pmag_rel: (magnetic pressure) = (B^2 - E^2) / 2
+    - beta_inv_rel: 1 / (plasma beta) = (magnetic pressure) / (gas pressure)
+    - sigma_rel: (plasma sigma) = (B^2 - E^2) / rho
+  - Relativistic quantities related to radiation:
+    - prad: (radiation pressure) = (fluid-frame radiation energy density) / 3
+    - prad_pgas: (radiation pressure) / (gas pressure)
+    - pmag_prad: (magnetic pressure) / (radiation pressure)
+  - Relativistic quantities related to velocity:
+    - uut: normal-frame Lorentz factor u^{t'} = tilde{u}^t
+    - ut, ux, uy, uz: contravariant coordinate-frame 4-velocity components u^mu
+    - vx, vy, vz: coordinate-frame 3-velocity components u^i / u^t
+  - Non-relativistic conserved quantities
+    - cons_hydro_nr_t: pure hydrodynamical energy density
+    - cons_hydro_nr_x, cons_hydro_nr_y, cons_hydro_nr_z: momentum density
+    - cons_em_nr_t: pure electromagnetic energy density
+    - cons_mhd_nr_t: MHD energy density
+    - cons_mhd_nr_x, cons_mhd_nr_y, cons_mhd_nr_z: MHD momentum density
+  - Relativistic conserved quantities
+    - cons_hydro_rel_t, : (T_hydro)^t_t
+    - cons_hydro_rel_x, cons_hydro_rel_y, cons_hydro_rel_z: (T_hydro)^t_i
+    - cons_em_rel_t, : (T_EM)^t_t
+    - cons_em_rel_x, cons_em_rel_y, cons_em_rel_z: (T_EM)^t_i
+    - cons_mhd_rel_t, : (T_MHD)^t_t
+    - cons_mhd_rel_x, cons_mhd_rel_y, cons_mhd_rel_z: (T_MHD)^t_i
+
+Only temperature T is in physical units (K); all others are in code units.
+
+Optional inputs include:
+  -d: direction orthogonal to slice of 3D data
+  -l: location of slice of 3D data if not 0
+  --x1_min, --x1_max, --x2_min, --x2_max: horizontal and vertical limits of plot
+  -c: colormap recognized by Matplotlib
+  -n: colormap normalization (e.g., "-n log") if not linear
+  --vmin, --vmax: limits of colorbar if not the full range of data
+  --notex: flag to disable Latex typesetting of labels
+  --horizon: flag for outlining outer event horizon of GR simulation
+  --horizon_mask: flag for covering black hole of GR simulation
+  --ergosphere: flag for outlining boundary of ergosphere in GR simulation
+  --horizon_color, --horizon_mask_color, --ergosphere_color: color choices
+
+Run "plot_slice.py -h" to see a full description of inputs.
 """
 
 # Python standard modules
@@ -30,8 +98,9 @@ def main(**kwargs):
         matplotlib.use('agg')
     if not kwargs['notex']:
         matplotlib.rc('text', usetex=True)
-    import matplotlib.pyplot as plt
+    import matplotlib.colors as colors
     import matplotlib.patches as patches
+    import matplotlib.pyplot as plt
 
     # Plotting parameters
     horizon_line_style = '-'
@@ -207,6 +276,12 @@ def main(**kwargs):
             key, val = line.split('=', 1)
             input_data[section_name][key.strip()] = val.split('#', 1)[0].strip()
 
+        # Extract number of ghost cells from input file metadata
+        try:
+            num_ghost = int(input_data['mesh']['nghost'])
+        except:  # noqa: E722
+            raise RuntimeError('Unable to find number of ghost cells in input file.')
+
         # Extract adiabatic index from input file metadata
         if kwargs['variable'] in \
                 ['derived:' + name for name in ('pgas', 'pgas_rho', 'T', 'prad_pgas')] \
@@ -305,7 +380,7 @@ def main(**kwargs):
         while f.tell() < file_size:
 
             # Read grid structure data
-            block_indices = struct.unpack('@6i', f.read(24))
+            block_indices = np.array(struct.unpack('@6i', f.read(24))) - num_ghost
             block_i, block_j, block_k, block_level = struct.unpack('@4i', f.read(16))
 
             # Process grid structure data
@@ -649,13 +724,25 @@ def main(**kwargs):
     else:
         vmax = kwargs['vmax']
 
+    # Choose colormap norm
+    if kwargs['norm'] == 'linear':
+        norm = colors.Normalize(vmin, vmax)
+        vmin = None
+        vmax = None
+    elif kwargs['norm'] == 'log':
+        norm = colors.LogNorm(vmin, vmax)
+        vmin = None
+        vmax = None
+    else:
+        norm = kwargs['norm']
+
     # Prepare figure
     plt.figure()
 
     # Plot data
     for block_num in range(num_blocks_used):
-        plt.imshow(quantity[block_num], cmap=kwargs['cmap'], norm=kwargs['norm'],
-                   vmin=vmin, vmax=vmax, interpolation='none', origin='lower',
+        plt.imshow(quantity[block_num], cmap=kwargs['cmap'], norm=norm, vmin=vmin,
+                   vmax=vmax, interpolation='none', origin='lower',
                    extent=extents[block_num])
 
     # Make colorbar
