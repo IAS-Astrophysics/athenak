@@ -284,12 +284,14 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
       std::exit(EXIT_FAILURE);
     }
   }
+#if MPI_PARALLEL_ENABLED
   if (nmb_maxperrank > (1 << (NUM_BITS_LID))) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
       << "Maximum number of MeshBlocks per rank cannot exceed 2^(NUM_BITS_LID) due to MPI"
       << " tag limits" << std::endl;
     std::exit(EXIT_FAILURE);
   }
+#endif
 
   // Create new MeshRefinement object with either SMR or AMR (SMR needs Restrict fns)
   if (multilevel) {

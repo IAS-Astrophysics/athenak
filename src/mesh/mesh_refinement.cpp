@@ -495,7 +495,7 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
         << "Number of MeshBlocks in this rank on new tree = "
         << new_nmb_eachrank[global_variable::my_rank] << " on rank = "
-        << global_variable::my_rank <<" exceeds maximum allowed per rank = "
+        << global_variable::my_rank <<" exceeds <mesh_refinement>/max_nmb_per_rank = "
         << pm->nmb_maxperrank << std::endl;
     std::exit(EXIT_FAILURE);
   }

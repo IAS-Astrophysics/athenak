@@ -217,3 +217,14 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
     exit(EXIT_FAILURE);
   }
 }
+
+//----------------------------------------------------------------------------------------
+// destructor
+
+Outputs::~Outputs() {
+  // Must manually delete memory assigned to each OutputType object stored in pout_list
+  for (BaseTypeOutput* pnode : pout_list) {
+    delete pnode;
+  }
+  pout_list.clear();
+}
