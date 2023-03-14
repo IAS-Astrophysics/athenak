@@ -265,16 +265,27 @@ def write_athdf(filename, fdata, varsize_bytes=4, locsize_bytes=8):
     locfmt = '<f4' if locsize_bytes == 4 else '<f8'
     varfmt = '<f4' if varsize_bytes == 4 else '<f8'
 
+    # extract Mesh/MeshBlock parameters
     nmb = fdata['n_mbs']
+    Nx1 = fdata['Nx1']  # noqa: F841
+    Nx2 = fdata['Nx2']
+    Nx3 = fdata['Nx3']
     nx1 = fdata['nx1_mb']
     nx2 = fdata['nx2_mb']
     nx3 = fdata['nx3_mb']
     nx1_out = fdata['nx1_out_mb']
     nx2_out = fdata['nx2_out_mb']
     nx3_out = fdata['nx3_out_mb']
+
+    # check dimensionality/slicing
+    nx1_out = fdata['nx1_out_mb']
+    nx2_out = fdata['nx2_out_mb']
+    nx3_out = fdata['nx3_out_mb']
+    two_d = (Nx2 != 1 and Nx3 == 1)
+    three_d = (Nx3 != 1)
     x1slice = (nx1_out == 1)
-    x2slice = (nx2_out == 1)
-    x3slice = (nx3_out == 1)
+    x2slice = (nx2_out == 1 and (two_d or three_d))
+    x3slice = (nx3_out == 1 and three_d)
 
     # keep variable order but separate out magnetic field
     vars_without_b = [v for v in fdata['var_names'] if 'bcc' not in v]
