@@ -300,6 +300,7 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
                              adm.g_dd(m,1,1,k,j,i), adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i));
       vol(i) = sqrt(detg);
     });
+    member.team_barrier();
 
     par_for_inner(member, is, ie, [&](int const i) {
       SpatialInv(1.0/SQR(vol(i)),
@@ -308,6 +309,7 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
                  &g_uu(0,0,i), &g_uu(0,1,i), &g_uu(0,2,i),
                  &g_uu(1,1,i), &g_uu(1,2,i), &g_uu(2,2,i));
     });
+    member.team_barrier();
 
     // Metric derivatives
     Real idx[] = {size.d_view(m).idx1, size.d_view(m).idx2, size.d_view(m).idx3};
@@ -376,11 +378,12 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
       }
 
       for (int a = 0; a < 3; ++a) {
-        for (int b = a; b < 3; ++b) {
+        for (int b = 0; b < 3; ++b) {
           S_uu(a,b,i) = H*prim_pt[PVX + a]*prim_pt[PVX + b] + prim_pt[PPR]*g_uu(a,b,i);
         }
       }
     });
+    member.team_barrier();
 
     // Assemble energy RHS
     for (int a = 0; a < 3; ++a) {

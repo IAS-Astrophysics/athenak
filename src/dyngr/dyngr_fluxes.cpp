@@ -231,6 +231,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
           }
         }
       } // end of loop over j
+      member.team_barrier();
     });
   }
 
@@ -292,6 +293,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         Face3Metric(member, m, k, j, is, ie, adm.g_dd, adm.beta_u, adm.alpha, gface3_dd, betaface3_u, alphaface3);
 
         // TODO do I need a member team barrier here?
+        member.team_barrier();
 
         // compute fluxes over [ks,ke+1]
         auto &dyn_eos = dyn_eos_;
@@ -325,6 +327,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
           }
         }
       } // end of loop over j
+      member.team_barrier();
     });
     // TODO: handle excision masks
   }
