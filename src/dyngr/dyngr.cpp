@@ -378,7 +378,7 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
       }
 
       for (int a = 0; a < 3; ++a) {
-        for (int b = 0; b < 3; ++b) {
+        for (int b = a; b < 3; ++b) {
           S_uu(a,b,i) = H*prim_pt[PVX + a]*prim_pt[PVX + b] + prim_pt[PPR]*g_uu(a,b,i);
         }
       }
@@ -398,7 +398,7 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
 
     // Assemble momentum RHS
     // TODO: Profile and check loop ordering here.
-    for (int a = 0; a < 3; ++a) {
+    /*for (int a = 0; a < 3; ++a) {
       par_for_inner(member, is, ie, [&](int const i) {
         for (int b = 0; b < 3; ++b) {
           for (int c = 0; c < 3; ++c) {
@@ -407,6 +407,22 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
           }
           rhs(m, IM1 + a, k, j, i) += dt * vol(i) * S_d(b, i) * dbeta_du(a, b, i);
         }
+        rhs(m, IM1 + a, k, j, i) -= dt * vol(i) * E(i) * dalpha_d(a, i);
+      });
+    }*/
+    for (int a = 0; a < 3; ++a) {
+      for (int b = 0; b < 3; ++b) {
+        for (int c = 0; c < 3; ++c) {
+          par_for_inner(member, is, ie, [&](int const i) {
+            rhs(m,IM1+a, k, j, i) += 0.5 * dt * adm.alpha(m,k,j,i) * vol(i) *
+              S_uu(b, c, i) * dg_ddd(a,b,c,i);
+          });
+        }
+        par_for_inner(member, is, ie, [&](int const i) {
+          rhs(m, IM1 + a, k, j, i) += dt * vol(i) *S_d(b, i) * dbeta_du(a, b, i);
+        });
+      }
+      par_for_inner(member, is, ie, [&](int const i) {
         rhs(m, IM1 + a, k, j, i) -= dt * vol(i) * E(i) * dalpha_d(a, i);
       });
     }
