@@ -342,8 +342,8 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
       prim_pt[PVX] = prim(m, IVX, k, j, i);
       prim_pt[PVY] = prim(m, IVY, k, j, i);
       prim_pt[PVZ] = prim(m, IVZ, k, j, i);
-      for (int i = 0; i < nscal; i++) {
-        prim_pt[PYF + i] = prim(m, nhyd + i, k, j, i);
+      for (int s = 0; s < nscal; s++) {
+        prim_pt[PYF + s] = prim(m, nhyd + s, k, j, i);
       }
       // FIXME: Go back and change to temperature after validating it all works.
       //Real e = prim(m, IEN, k, j, i) + prim(m, IDN, k, j, i);
