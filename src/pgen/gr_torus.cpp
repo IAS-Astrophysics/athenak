@@ -109,7 +109,9 @@ struct torus_pgen {
   bool is_sane, is_mad;                       // init with SANE or MAD config
   bool fm_torus, chakrabarti_torus;           // FM versus Chakrabarti torus ICs
   Real potential_cutoff, potential_falloff;   // sets region of torus to magnetize
+  Real potential_cutoff_tor;                  // sets region of torus to magnetize toroidal comp.
   Real potential_r_pow, potential_rho_pow;    // set how vector potential scales
+  Real potential_r_pow_tor, potential_pow_tor;// set how toroidal part of vector potential scales
   Real potential_beta_min;                    // set how vector potential scales (cont.)
 };
 
@@ -349,6 +351,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     torus.potential_falloff  = pin->GetOrAddReal("problem", "potential_falloff",  400.0);
     torus.potential_r_pow    = pin->GetOrAddReal("problem", "potential_r_pow",    0.0);
     torus.potential_rho_pow  = pin->GetOrAddReal("problem", "potential_rho_pow",  1.0);
+    torus.potential_r_pow_tor= pin->GetOrAddReal("problem", "potential_r_pow_tor",    0.0);
+    torus.potential_pow_tor  = pin->GetOrAddReal("problem", "potential_pow_tor",  1.0);
+    torus.potential_tor_frac = pin->GetOrAddReal("problem", "potential_tor_frac",  0.0);
+    torus.potential_cutoff_tor   = pin->GetOrAddReal("problem", "potential_cutoff_tor",   0.2);
     torus.is_sane = pin->GetOrAddBoolean("problem", "sane", false);
     torus.is_mad = pin->GetOrAddBoolean("problem", "mad", false);
     if (torus.is_sane==torus.is_mad) {
@@ -1054,17 +1060,21 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
         aphi_tilt = (fmax((rho*pow((r/pgen.r_edge)*sin_vartheta_ks, pgen.potential_r_pow)*
                            exp(-r/pgen.potential_falloff) - pgen.potential_cutoff), 0.0));
       } else {  // SANE
-        aphi_tilt = (pow(r, pgen.potential_r_pow)*
+        aphi_tilt = (1.0-pgen.potential_tor_frac)*(pow(r, pgen.potential_r_pow)*
                      pow(fmax(rho - pgen.potential_cutoff, 0.0), pgen.potential_rho_pow));
+        if (pgas > pgen.potential_cutoff_tor) {
+            atheta += pgen.potential_tor_frac *
+              pgen.potential_tor_frac * pow(r, pgen.potential_r_pow_tor) *
+              pow(fmax(pgas - pgen.potential_cutoff_tor, 0.0), pgen.potential_pow_tor);
+        }
       }
       if (pgen.psi != 0.0) {
         Real dvarphi_dtheta = -pgen.sin_psi * sin_phi_ks / SQR(sin_vartheta_ks);
         Real dvarphi_dphi = sin_theta / SQR(sin_vartheta_ks)
             * (pgen.cos_psi * sin_theta - pgen.sin_psi * cos_theta * cos_phi_ks);
-        atheta = dvarphi_dtheta * aphi_tilt;
+        atheta += dvarphi_dtheta * aphi_tilt;
         aphi = dvarphi_dphi * aphi_tilt;
       } else {
-        atheta = 0.0;
         aphi = aphi_tilt;
       }
     }
@@ -1380,6 +1390,7 @@ void NoInflowTorus(Mesh *pm) {
 
 //----------------------------------------------------------------------------------------
 // Function for computing accretion fluxes through constant spherical KS radius surfaces
+// and volume-averaged B field components in spehrical KS
 
 void TorusHistory(HistoryData *pdata, Mesh *pm) {
   MeshBlockPack *pmbp = pm->pmb_pack;
