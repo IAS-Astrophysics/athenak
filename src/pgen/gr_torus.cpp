@@ -1045,7 +1045,7 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
     }
 
     // Determine if we are in the torus
-    Real rho;
+    Real rho, pgas;
     Real gm1 = pgen.gamma_adi-1.0;
     bool in_torus = false;
     Real log_h = LogHAux(pgen, r, sin_vartheta_bl) - pgen.log_h_edge;  // (FM 3.6)
@@ -1053,6 +1053,7 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
       in_torus = true;
       Real pgas_over_rho = gm1/pgen.gamma_adi * (exp(log_h) - 1.0);
       rho = pow(pgas_over_rho/pgen.k_adi, 1.0/gm1) / pgen.rho_peak;
+      pgas = pgas_over_rho*rho;
     }
 
     Real aphi_tilt = 0.0;
