@@ -194,8 +194,6 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
     // 2nd derivatives
     //
     // Scalars
-    ddalpha_dd.ZeroClear();
-    ddchi_dd.ZeroClear();
     for(int a = 0; a < 3; ++a) {
       par_for_inner(member, is, ie, [&](const int i) {
         ddalpha_dd(a,a,i) = Dxx<NGHOST>(a, idx, z4c.alpha, m,k,j,i);
@@ -212,7 +210,6 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
       }
     }
     // Vectors
-    ddbeta_ddu.ZeroClear();
     for(int c = 0; c < 3; ++c)
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
@@ -230,7 +227,6 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
       }
     }
     // Tensors
-    ddg_dddd.ZeroClear();
     for(int c = 0; c < 3; ++c)
     for(int d = c; d < 3; ++d)
     for(int a = 0; a < 3; ++a)
@@ -256,6 +252,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
     Lchi.ZeroClear();
     LKhat.ZeroClear();
     LTheta.ZeroClear();
+    member.team_barrier();
     for(int a = 0; a < 3; ++a) {
       par_for_inner(member, is, ie, [&](const int i) {  
         Lalpha(i) += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.alpha, m,a,k,j,i);
@@ -268,6 +265,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
     // Vectors
     Lbeta_u.ZeroClear();
     LGam_u.ZeroClear();
+    member.team_barrier();
     for(int a = 0; a < 3; ++a)
     for(int b = 0; b < 3; ++b) {
       par_for_inner(member, is, ie, [&](const int i) {
@@ -279,6 +277,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
     // Tensors
     Lg_dd.ZeroClear();
     LA_dd.ZeroClear();
+    member.team_barrier();
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b)
     for(int c = 0; c < 3; ++c) {
@@ -321,6 +320,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
       member.team_barrier();
     }
     Gamma_udd.ZeroClear();
+    member.team_barrier();
     for(int c = 0; c < 3; ++c)
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b)
@@ -332,6 +332,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
     }
     // Gamma's computed from the conformal metric (not evolved)
     Gamma_u.ZeroClear();
+    member.team_barrier();
     for(int a = 0; a < 3; ++a)
     for(int b = 0; b < 3; ++b)
     for(int c = 0; c < 3; ++c) {
@@ -345,6 +346,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
     // Curvature of conformal metric
     //
     R_dd.ZeroClear();
+    member.team_barrier();
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
       for(int c = 0; c < 3; ++c) {
@@ -430,6 +432,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
     //
     // Matter commented out
     //S.ZeroClear();
+    //member.team_barrier();
     //for(int a = 0; a < 3; ++a)
     //for(int b = 0; b < 3; ++b) {
     //  ILOOP1(i) {
@@ -462,6 +465,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
     }
 
     Ddalpha.ZeroClear();
+    member.team_barrier();
     for(int a = 0; a < 3; ++a)
     for(int b = 0; b < 3; ++b) {
       par_for_inner(member, is, ie, [&](const int i) {
@@ -474,6 +478,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
     // Contractions of A_ab, inverse, and derivatives
     //
     AA_dd.ZeroClear();
+    member.team_barrier();
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b)
     for(int c = 0; c < 3; ++c)
@@ -484,6 +489,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
       member.team_barrier();
     }
     AA.ZeroClear();
+    member.team_barrier();
     for(int a = 0; a < 3; ++a)
     for(int b = 0; b < 3; ++b) {
       par_for_inner(member, is, ie, [&](const int i) {
@@ -492,6 +498,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
       member.team_barrier();
     }
     A_uu.ZeroClear();
+    member.team_barrier();
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b)
     for(int c = 0; c < 3; ++c)
@@ -502,6 +509,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
       member.team_barrier();
     }
     DA_u.ZeroClear();
+    member.team_barrier();
     for(int a = 0; a < 3; ++a) {
       for(int b = 0; b < 3; ++b) {
         par_for_inner(member, is, ie, [&](const int i) {
@@ -523,6 +531,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
     // Ricci scalar
     //
     R.ZeroClear();
+    member.team_barrier();
     for(int a = 0; a < 3; ++a)
     for(int b = 0; b < 3; ++b) {
       par_for_inner(member, is, ie, [&](const int i) {
@@ -543,6 +552,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
     //
     // Shift vector contractions
     dbeta.ZeroClear();
+    member.team_barrier();
     for(int a = 0; a < 3; ++a) {
       par_for_inner(member, is, ie, [&](const int i) {
         dbeta(i) += dbeta_du(a,a,i);
@@ -550,6 +560,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage)
       member.team_barrier();
     }
     ddbeta_d.ZeroClear();
+    member.team_barrier();
     for(int a = 0; a < 3; ++a)
     for(int b = 0; b < 3; ++b) {
       par_for_inner(member, is, ie, [&](const int i) {

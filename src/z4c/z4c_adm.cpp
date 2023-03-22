@@ -374,6 +374,7 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     member.team_barrier();
 
     Gamma_udd.ZeroClear();
+    member.team_barrier();
     for(int c = 0; c < 3; ++c)
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b)
@@ -385,6 +386,7 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     member.team_barrier();
 
     Gamma_u.ZeroClear();
+    member.team_barrier();
     for(int a = 0; a < 3; ++a)
     for(int b = 0; b < 3; ++b)
     for(int c = 0; c < 3; ++c) {
@@ -399,6 +401,7 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     //
     R.ZeroClear();
     R_dd.ZeroClear();
+    member.team_barrier();
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
       for(int c = 0; c < 3; ++c)
@@ -429,6 +432,7 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     //
     K.ZeroClear();
     K_ud.ZeroClear();
+    member.team_barrier();
     for(int a = 0; a < 3; ++a) {
       for(int b = a; b < 3; ++b) {
         for(int c = 0; c < 3; ++c) {
@@ -446,6 +450,7 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
 
     // K^a_b K^b_a
     KK.ZeroClear();
+    member.team_barrier();
     for(int a = 0; a < 3; ++a)
     for(int b = 0; b < 3; ++b) {
       par_for_inner(member, is, ie, [&](const int i) {
@@ -470,6 +475,7 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     member.team_barrier();
 
     DK_udd.ZeroClear();
+    member.team_barrier();
     for(int a = 0; a < 3; ++a)
     for(int b = 0; b < 3; ++b)
     for(int c = b; c < 3; ++c)
@@ -493,6 +499,7 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     // Momentum constraint (contravariant)
     //
     M_u.ZeroClear();
+    member.team_barrier();
     for(int a = 0; a < 3; ++a)
     for(int b = 0; b < 3; ++b) {
       //M_u(a,i) -= 8*M_PI * g_uu(a,b,i) * mat.S_d(b,k,j,i);
