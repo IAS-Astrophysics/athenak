@@ -72,6 +72,8 @@ add_executable(
         mhd/mhd_tasks.cpp
         mhd/mhd_update.cpp
 
+        tmunu/tmunu.cpp
+
         z4c/z4c.cpp
         z4c/z4c_adm.cpp
         z4c/z4c_calcrhs.cpp

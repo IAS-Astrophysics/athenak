@@ -18,6 +18,7 @@
 // Forward declarations
 class MeshBlock;
 class ADM;
+class Tmunu;
 namespace hydro {class Hydro;}
 namespace mhd {class MHD;}
 namespace z4c {class Z4c;}
@@ -55,6 +56,7 @@ class MeshBlockPack {
   hydro::Hydro *phydro=nullptr;
   mhd::MHD *pmhd=nullptr;
   ADM *padm=nullptr;
+  Tmunu *ptmunu=nullptr;
   z4c::Z4c *pz4c=nullptr;
   dyngr::DynGR *pdyngr=nullptr;
   ion_neutral::IonNeutral *pionn=nullptr;

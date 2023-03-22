@@ -60,10 +60,10 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "con_Mx", "con_My", "con_Mz",
   "con",
 
-  "mat_rho",
-  "mat_Sx", "mat_Sy", "mat_Sz",
-  "mat_Sxx", "mat_Sxy", "mat_Sxz", "mat_Syy", "mat_Syz", "mat_Szz",
-  "mat"
+  "tmunu_E",
+  "tmunu_Sx", "tmunu_Sy", "tmunu_Sz",
+  "tmunu_Sxx", "tmunu_Sxy", "tmunu_Sxz", "tmunu_Syy", "tmunu_Syz", "tmunu_Szz",
+  "tmunu"
 };
 
 // forward declarations

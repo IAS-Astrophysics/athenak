@@ -7,6 +7,7 @@
 //  \brief implementation of functions for DynGR and DynGRPS controlling the task list
 
 #include <iostream>
+#include <math.h>
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -18,6 +19,7 @@
 #include "hydro/hydro.hpp"
 #include "z4c/z4c.hpp"
 #include "adm/adm.hpp"
+#include "tmunu/tmunu.hpp"
 #include "dyngr.hpp"
 
 #include "eos/primitive_solver_hyd.hpp"
@@ -145,9 +147,11 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AssembleDynGRTasks(TaskList &start,
 
 
   // now the rest of the Hydro run tasks
+  id.settmunu = run.AddTask(&DynGR::SetTmunu, this, id.copyu);
   id.sendf = run.AddTask(&Hydro::SendFlux, phyd, id.flux);
   id.recvf = run.AddTask(&Hydro::RecvFlux, phyd, id.sendf);
-  id.expl  = run.AddTask(&Hydro::ExpRKUpdate, phyd, id.recvf); // requires metric in geometric source terms - must happen before z4ctoadm
+  id.rkdep = id.recvf | id.settmunu;
+  id.expl  = run.AddTask(&Hydro::ExpRKUpdate, phyd, id.rkdep); // requires metric in geometric source terms - must happen before z4ctoadm
   id.restu = run.AddTask(&Hydro::RestrictU, phyd, id.expl);
   id.sendu = run.AddTask(&Hydro::SendU, phyd, id.restu);
   id.recvu = run.AddTask(&Hydro::RecvU, phyd, id.sendu);
@@ -242,8 +246,98 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTerms(const DvceArray5D<Real> &pri
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn  TaskStatus DynGR::SetTmunu(Driver *pdrive, int stage)
+//! \brief Add the perfect fluid contribution to the stress-energy tensor. This is assumed
+//!  to be the first contribution, so it sets the values rather than adding.
+TaskStatus DynGR::SetTmunu(Driver *pdrive, int stage) {
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  auto &size  = pmy_pack->pmb->mb_size;
+  int &is = indcs.is; int &ie = indcs.ie;
+  int &js = indcs.js; int &je = indcs.je;
+  int &ks = indcs.ks; int &ke = indcs.ke;
+
+  int ncells1 = indcs.nx1+indcs.ng; // Align scratch buffers with variables
+  int nmb = pmy_pack->nmb_thispack;
+
+  auto &adm = pmy_pack->padm->adm;
+  auto &tmunu = pmy_pack->ptmunu->tmunu;
+  auto &nhyd = pmy_pack->phydro->nhydro;
+  int &nscal = pmy_pack->phydro->nscalars;
+  auto &prim = pmy_pack->phydro->w0;
+  // TODO: double-check that this needs to be u1, not u0!
+  auto &cons = pmy_pack->phydro->u1;
+
+  int scr_level = scratch_level;
+  size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1)*1     // scalars
+                  + ScrArray2D<Real>::shmem_size(3, ncells1)*1; // vectors
+  //size_t scr_size = 0;
+  par_for_outer("dyngr_tmunu_loop",DevExeSpace(),scr_size,scr_level,0,nmb-1,ks,ke,js,je,
+  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {
+    // Scratch space
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> vol;  // sqrt of 3-metric determinant
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> v_d;  // Velocity form
+
+    vol.NewAthenaScratchTensor(member, scr_level, ncells1);
+    v_d.NewAthenaScratchTensor(member, scr_level, ncells1);
+
+    // Calculate the determinant/volume form
+    par_for_inner(member, is, ie, [&](int const i) {
+      Real detg = SpatialDet(adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i), adm.g_dd(m,0,2,k,j,i),
+                             adm.g_dd(m,1,1,k,j,i), adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i));
+      vol(i) = sqrt(detg);
+    });
+    // Calculate the lower velocity components
+    // TODO: a view should be initialized to zero by default, but it would be well
+    // to check that this is actually the case.
+    for (int a = 0; a < 3; ++a) {
+      for (int b = 0; b < 3; ++b) {
+        par_for_inner(member, is, ie, [&](int const i) {
+          v_d(a, i) += prim(m, IVX + b, k, j, i)*adm.g_dd(m, a, b, k, j, i);
+        });
+      }
+    }
+
+    // TODO: member barrier here?
+
+    // Save the fluid quantities
+    par_for_inner(member, is, ie, [&](int const i) {
+      tmunu.E(m, k, j, i) = (cons(m, IDN, k, j, i) + cons(m, IEN, k, j, i))/vol(i);
+    });
+    for (int a = 0; a < 3; ++a) {
+      par_for_inner(member, is, ie, [&](int const i) {
+        tmunu.S_d(m, a, k, j, i) = cons(m, IM1 + a, k, j, i)/vol(i);
+      });
+    }
+    for (int a = 0; a < 3; ++a) {
+      for (int b = a; b < 3; ++b) {
+        par_for_inner(member, is, ie, [&](int const i) {
+          tmunu.S_dd(m, a, b, k, j, i) = cons(m, IM1 + a, k, j, i)/vol(i)*v_d(b, i)
+                                       + prim(m, IPR, k, j, i)*adm.g_dd(m, a, b, k, j, i);
+        });
+      }
+    }
+  });
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn  TaskStatus DynGR::ADMMatterSource_(Driver *pdrive, int stage) {
 //  \brief
+/*template<class EOSPolicy, class ErrorPolicy> template<int NGHOST>
+void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &prim,
+    const Real dt, DvceArray5D<Real> &rhs) {
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  auto &size  = pmy_pack->pmmb->mb_size;
+  int &is = indcs.is; int &ie = indcs.ie;
+  int &js = indcs.js; int &je = indcs.je;
+  int &ks = indcs.ks; int &ke = indcs.ke;
+
+  int ncells1 = indcs.nx1+indcs.ng; // Align scratch buffers with variables
+  int nmb = pmy_pack->nmb_thispack;
+
+  auto &adm = pmy_pack->padm->adm;
+  auto &tmunu = pmy_pack->ptmunu->tmunu;
+}*/
 template<class EOSPolicy, class ErrorPolicy> template<int NGHOST>
 void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &prim, 
     const Real dt, DvceArray5D<Real> &rhs) {
@@ -257,6 +351,7 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
   int nmb = pmy_pack->nmb_thispack;
 
   auto &adm = pmy_pack->padm->adm;
+  auto &tmunu = pmy_pack->ptmunu->tmunu;
   auto &eos_ = eos.ps.GetEOS();
 
   int &nhyd = pmy_pack->phydro->nhydro;
@@ -352,9 +447,9 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
       prim_pt[PPR] = prim(m, IPR, k, j, i);
       prim_pt[PTM] = eos_.GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR], &prim_pt[PYF]);
 
-      if (!isfinite(prim_pt[PTM]) || !isfinite(prim_pt[PPR])) {
+      /*if (!isfinite(prim_pt[PTM]) || !isfinite(prim_pt[PPR])) {
         printf("There's a problem with the temperature or pressure in the source terms!\n");
-      }
+      }*/
 
       // Get the conserved variables. Note that we don't use PrimitiveSolver here -- that's
       // because we would need to recalculate quantities used in E and S_d in order to get S_dd.
@@ -366,7 +461,7 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
         }
       }
       Real const Wsq = 1.0 + usq;
-      Real const W = std::sqrt(Wsq);
+      Real const W = sqrt(Wsq);
 
       E(i) = H*Wsq - prim_pt[PPR];
 
@@ -375,6 +470,11 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
         for (int b = 0; b < 3; ++b) {
           S_d(a, i) += H*W*prim_pt[PVX + b]*adm.g_dd(m, a, b, k, j, i);
         }
+        /*Real eps = (S_d(a, i) - tmunu.S_d(m, a, k, j, i))/S_d(a, i);
+        if (fabs(eps) > 1e-14 && isfinite(eps)) {
+          printf("There's a problem with S_d in Tmunu!\n");
+          printf(" err S_d(a, k, j, i) = %g\n",eps);
+        }*/
       }
 
       for (int a = 0; a < 3; ++a) {
@@ -397,19 +497,6 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
     }
 
     // Assemble momentum RHS
-    // TODO: Profile and check loop ordering here.
-    /*for (int a = 0; a < 3; ++a) {
-      par_for_inner(member, is, ie, [&](int const i) {
-        for (int b = 0; b < 3; ++b) {
-          for (int c = 0; c < 3; ++c) {
-            rhs(m,IM1+a, k, j, i) += 0.5 * dt * adm.alpha(m,k,j,i) * vol(i) *
-              S_uu(b, c, i) * dg_ddd(a,b,c,i);
-          }
-          rhs(m, IM1 + a, k, j, i) += dt * vol(i) * S_d(b, i) * dbeta_du(a, b, i);
-        }
-        rhs(m, IM1 + a, k, j, i) -= dt * vol(i) * E(i) * dalpha_d(a, i);
-      });
-    }*/
     for (int a = 0; a < 3; ++a) {
       for (int b = 0; b < 3; ++b) {
         for (int c = 0; c < 3; ++c) {

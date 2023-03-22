@@ -18,6 +18,7 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "adm/adm.hpp"
+#include "tmunu/tmunu.hpp"
 #include "z4c/z4c.hpp"
 #include "srcterms/srcterms.hpp"
 #include "srcterms/turb_driver.hpp"
@@ -79,10 +80,17 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
        << std::endl << "Input file is likely missing a <adm> block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar>=60) && (ivar<=101) && (pm->pmb_pack->pz4c == nullptr)) {
+  if ((ivar>=60) && (ivar<=90) && (pm->pmb_pack->pz4c == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of Z4c variable requested in <output> block '"
        << out_params.block_name << "' but no Z4c object has been constructed."
+       << std::endl << "Input file is likely missing a <adm> block" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  if ((ivar>=91) && (ivar <=101) && (pm->pmb_pack->ptmunu == nullptr)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+       << "Output of Tmunu variable requested in <output> block '"
+       << out_params.block_name << "' but no Tmunu object has been constructed."
        << std::endl << "Input file is likely missing a <adm> block" << std::endl;
     exit(EXIT_FAILURE);
   }
@@ -348,10 +356,16 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
   }
 
   // mat z4c variables
-  for (int v = 0; v < z4c::Z4c::N_MAT; ++v) {
+  /*for (int v = 0; v < z4c::Z4c::N_MAT; ++v) {
     if (out_params.variable.compare("mat") == 0 ||
         out_params.variable.compare(z4c::Z4c::Matter_names[v]) == 0) {
       outvars.emplace_back(z4c::Z4c::Matter_names[v], v, &(pm->pmb_pack->pz4c->u_mat));
+    }
+  }*/
+  for (int v = 0; v < Tmunu::N_Tmunu; ++v) {
+    if (out_params.variable.compare("tmunu") == 0 ||
+        out_params.variable.compare(Tmunu::Tmunu_names[v]) == 0) {
+      outvars.emplace_back(Tmunu::Tmunu_names[v], v, &(pm->pmb_pack->ptmunu->u_tmunu));
     }
   }
 

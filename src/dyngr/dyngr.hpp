@@ -26,6 +26,7 @@ struct DynGRTaskIDs {
   TaskID irecv;
   TaskID copyu;
   TaskID flux;
+  TaskID settmunu;
   TaskID sendf;
   TaskID recvf;
   TaskID expl;
@@ -54,6 +55,7 @@ struct DynGRTaskIDs {
   TaskID zrestu;
   TaskID zadep;
   TaskID c2pdep;
+  TaskID rkdep;
 };
 
 namespace dyngr {
@@ -67,11 +69,13 @@ class DynGR {
   DynGRTaskIDs id;
 
   TaskStatus ADMMatterSource_(Driver *d, int stage);
+  TaskStatus SetTmunu(Driver *d, int stage);
 
   // functions
   virtual void AssembleDynGRTasks(TaskList &start, TaskList &run, TaskList &end) = 0;
 
   virtual TaskStatus ConToPrim(Driver* pdrive, int stage) = 0;
+  //virtual TaskStatus SetTmunu(Driver* pdrive, int stage) = 0;
   virtual void PrimToConInit(int is, int ie, int js, int je, int ks, int ke) = 0;
 
   virtual void AddCoordTerms(const DvceArray5D<Real> &w0, const Real dt, DvceArray5D<Real> &u0, int nghost) = 0;

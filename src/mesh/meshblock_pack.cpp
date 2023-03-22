@@ -16,6 +16,7 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "adm/adm.hpp"
+#include "tmunu/tmunu.hpp"
 #include "z4c/z4c.hpp"
 #include "dyngr/dyngr.hpp"
 #include "ion-neutral/ion_neutral.hpp"
@@ -47,6 +48,7 @@ MeshBlockPack::~MeshBlockPack() {
   if (phydro != nullptr) {delete phydro;}
   if (pmhd   != nullptr) {delete pmhd;}
   if (padm   != nullptr) {delete padm;}
+  if (ptmunu != nullptr) {delete ptmunu;}
   if (pz4c   != nullptr) {delete pz4c;}
   if (pdyngr != nullptr) {delete pdyngr;}
   if (pturb  != nullptr) {delete pturb;}
@@ -139,11 +141,13 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   if (pin->DoesBlockExist("z4c")) {
     pz4c = new z4c::Z4c(this, pin);
     padm = new ADM(this, pin);
+    ptmunu = new Tmunu(this, pin);
     nphysics++;
   } else {
     pz4c = nullptr;
     if (pin->DoesBlockExist("adm")) {
       padm = new ADM(this, pin);
+      ptmunu = new Tmunu(this, pin);
     }
   }
   if (pin->DoesBlockExist("z4c") && !(pin->DoesBlockExist("mhd")) && !(pin->DoesBlockExist("hydro")) ) {
