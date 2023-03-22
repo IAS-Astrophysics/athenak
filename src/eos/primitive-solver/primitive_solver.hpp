@@ -504,7 +504,7 @@ SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM]
     solver_result.error = Error::PRIM_FLOOR;
     return solver_result;
   }
-  solver_result.cons_adjusted = solver_result.cons_adjusted || floored;
+  solver_result.cons_adjusted = solver_result.cons_adjusted || floored || solver_result.cons_floor;
 
   prim[PRH] = n;
   prim[PPR] = P;
