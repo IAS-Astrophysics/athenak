@@ -111,7 +111,6 @@ struct torus_pgen {
   Real potential_cutoff, potential_falloff;   // sets region of torus to magnetize
   Real potential_r_pow, potential_rho_pow;    // set how vector potential scales
   Real potential_tor_frac;                    // normalization of toroidal component
-  Real potential_cutoff_tor;                  // sets region of torus to magnetize toroidal comp.
   Real potential_r_pow_tor, potential_pow_tor;// set how toroidal part of vector potential scales
   Real potential_beta_min;                    // set how vector potential scales (cont.)
 };
@@ -355,7 +354,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     torus.potential_r_pow_tor= pin->GetOrAddReal("problem", "potential_r_pow_tor", 1.0);
     torus.potential_pow_tor  = pin->GetOrAddReal("problem", "potential_pow_tor",  0.0);
     torus.potential_tor_frac = pin->GetOrAddReal("problem", "potential_tor_frac",  0.0);
-    torus.potential_cutoff_tor   = pin->GetOrAddReal("problem", "potential_cutoff_tor",   0.2);
     torus.is_sane = pin->GetOrAddBoolean("problem", "sane", false);
     torus.is_mad = pin->GetOrAddBoolean("problem", "mad", false);
     if (torus.is_sane==torus.is_mad) {
@@ -1045,7 +1043,7 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
     }
 
     // Determine if we are in the torus
-    Real rho, pgas;
+    Real rho, pgas, potential_cutoff_tor;
     Real gm1 = pgen.gamma_adi-1.0;
     bool in_torus = false;
     Real log_h = LogHAux(pgen, r, sin_vartheta_bl) - pgen.log_h_edge;  // (FM 3.6)
@@ -1054,6 +1052,7 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
       Real pgas_over_rho = gm1/pgen.gamma_adi * (exp(log_h) - 1.0);
       rho = pow(pgas_over_rho/pgen.k_adi, 1.0/gm1) / pgen.rho_peak;
       pgas = pgas_over_rho*rho;
+      potential_cutoff_tor = pgas_over_rho*pgen.potential_cutoff;
     }
 
     Real aphi_tilt = 0.0;
@@ -1064,9 +1063,11 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
       } else {  // SANE
         aphi_tilt =  (1.0-pgen.potential_tor_frac)*(pow(r, pgen.potential_r_pow)*
                      pow(fmax(rho - pgen.potential_cutoff, 0.0), pgen.potential_rho_pow));
-        atheta = pgen.potential_tor_frac *
+        if (pgas > potential_cutoff_tor) {
+		atheta = pgen.potential_tor_frac *
                   pow(r, pgen.potential_r_pow_tor) *
-                  pow(fmax(pgas - pgen.potential_cutoff_tor, 0.0), pgen.potential_pow_tor);
+                  pow(fmax(pgas - potential_cutoff_tor, 0.0), pgen.potential_pow_tor);
+	}
       }
       if (pgen.psi != 0.0) {
         Real dvarphi_dtheta = -pgen.sin_psi * sin_phi_ks / SQR(sin_vartheta_ks);
