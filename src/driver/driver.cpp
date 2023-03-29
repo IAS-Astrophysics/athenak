@@ -281,7 +281,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
           << std::endl;
       std::exit(EXIT_FAILURE);
     }
-    int nmb = pmesh->pmb_pack->nmb_thispack;
+    int nmb = std::max((pmesh->pmb_pack->nmb_thispack), (pmesh->nmb_maxperrank));
     auto &indcs = pmesh->mb_indcs;
     int ncells1 = indcs.nx1 + 2*(indcs.ng);
     int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
