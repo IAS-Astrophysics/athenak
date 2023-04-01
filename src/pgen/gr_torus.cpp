@@ -1065,7 +1065,7 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
         aphi_tilt =  (1.0-pgen.potential_tor_frac)*(pow(r, pgen.potential_r_pow)*
                      pow(fmax(rho - pgen.potential_cutoff, 0.0), pgen.potential_rho_pow));
         Real pgas_cut = pgas/potential_cutoff_tor;
-        if (potential_tor_frac == 1.0) {
+        if (pgen.potential_tor_frac == 1.0) {
           aphi_tilt =  (1.0 + (65. - r)/(65. - pgen.r_edge) * (1 + cos_phi_ks)) / sin_theta;
         }
 
