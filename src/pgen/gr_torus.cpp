@@ -1068,8 +1068,7 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
 	      atheta = pgen.potential_tor_frac *
           pow(r, pgen.potential_r_pow_tor) *
           (1.0 / (1.0 + exp(-pgen.potential_smoothing * (pgas_cut - 0.9))));
-	}
-      }
+	    }
       if (pgen.psi != 0.0) {
         Real dvarphi_dtheta = -pgen.sin_psi * sin_phi_ks / SQR(sin_vartheta_ks);
         Real dvarphi_dphi = sin_theta / SQR(sin_vartheta_ks)
