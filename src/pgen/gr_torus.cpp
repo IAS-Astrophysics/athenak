@@ -1063,10 +1063,18 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
       } else {  // SANE
         aphi_tilt =  (1.0-pgen.potential_tor_frac)*(pow(r, pgen.potential_r_pow)*
                      pow(fmax(rho - pgen.potential_cutoff, 0.0), pgen.potential_rho_pow));
-        if (pgas > potential_cutoff_tor) {
-		atheta = pgen.potential_tor_frac *
-                  pow(r, pgen.potential_r_pow_tor) *
-                  pow(fmax(pgas - potential_cutoff_tor, 0.0), pgen.potential_pow_tor);
+        Real pgas_cut = pgas/potential_cutoff_tor;
+        if (pgas_cut > 1.0) {
+		      atheta = pgen.potential_tor_frac *
+            pow(r, pgen.potential_r_pow_tor) *
+            pow(fmax(pgas - potential_cutoff_tor, 0.0), pgen.potential_pow_tor);
+        }
+        else if ((pgas_cut > 0.8) and (pgas_cut < 1.0)) {
+          atheta = pgen.potential_tor_frac *
+            pow(r, pgen.potential_r_pow_tor) *
+            pow(fmax(pgas - potential_cutoff_tor, 0.0), pgen.potential_pow_tor) *
+            (1.0 / (1.0 + exp(-50. * (pgas_cut - 0.9))));
+        }
 	}
       }
       if (pgen.psi != 0.0) {
