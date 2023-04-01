@@ -111,7 +111,8 @@ struct torus_pgen {
   Real potential_cutoff, potential_falloff;   // sets region of torus to magnetize
   Real potential_r_pow, potential_rho_pow;    // set how vector potential scales
   Real potential_tor_frac;                    // normalization of toroidal component
-  Real potential_r_pow_tor, potential_pow_tor;// set how toroidal part of vector potential scales
+  Real potential_r_pow_tor;                   // set how toroidal part of vector potential scales
+  Real potential_smoothing;                   // window size for atheta smoothing
   Real potential_beta_min;                    // set how vector potential scales (cont.)
 };
 
@@ -352,8 +353,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     torus.potential_r_pow    = pin->GetOrAddReal("problem", "potential_r_pow",    0.0); 
     torus.potential_rho_pow  = pin->GetOrAddReal("problem", "potential_rho_pow",  1.0);
     torus.potential_r_pow_tor= pin->GetOrAddReal("problem", "potential_r_pow_tor", 1.0);
-    torus.potential_pow_tor  = pin->GetOrAddReal("problem", "potential_pow_tor",  0.0);
     torus.potential_tor_frac = pin->GetOrAddReal("problem", "potential_tor_frac",  0.0);
+    torus.potential_smoothing = pin->GetOrAddReal("problem", "potential_smoothing",  20.0);
     torus.is_sane = pin->GetOrAddBoolean("problem", "sane", false);
     torus.is_mad = pin->GetOrAddBoolean("problem", "mad", false);
     if (torus.is_sane==torus.is_mad) {
@@ -1064,17 +1065,9 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
         aphi_tilt =  (1.0-pgen.potential_tor_frac)*(pow(r, pgen.potential_r_pow)*
                      pow(fmax(rho - pgen.potential_cutoff, 0.0), pgen.potential_rho_pow));
         Real pgas_cut = pgas/potential_cutoff_tor;
-        if (pgas_cut > 1.0) {
-		      atheta = pgen.potential_tor_frac *
-            pow(r, pgen.potential_r_pow_tor) *
-            pow(fmax(pgas - potential_cutoff_tor, 0.0), pgen.potential_pow_tor);
-        }
-        else if ((pgas_cut > 0.8) and (pgas_cut < 1.0)) {
-          atheta = pgen.potential_tor_frac *
-            pow(r, pgen.potential_r_pow_tor) *
-            pow(fmax(pgas - potential_cutoff_tor, 0.0), pgen.potential_pow_tor) *
-            (1.0 / (1.0 + exp(-50. * (pgas_cut - 0.9))));
-        }
+	      atheta = pgen.potential_tor_frac *
+          pow(r, pgen.potential_r_pow_tor) *
+          (1.0 / (1.0 + exp(-pgen.potential_smoothing * (pgas_cut - 0.9))));
 	}
       }
       if (pgen.psi != 0.0) {
