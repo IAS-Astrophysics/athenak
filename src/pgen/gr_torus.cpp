@@ -1065,16 +1065,20 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
         aphi_tilt =  (1.0-pgen.potential_tor_frac)*(pow(r, pgen.potential_r_pow)*
                      pow(fmax(rho - pgen.potential_cutoff, 0.0), pgen.potential_rho_pow));
         Real pgas_cut = pgas/potential_cutoff_tor;
-	      if (pgas_cut > 1.0) {
-          atheta = pgen.potential_tor_frac *
-          pow(r, pgen.potential_r_pow_tor) *
-          (1.0 / (1.0 + exp(-pgen.potential_smoothing * (pgas_cut - 0.9))));
+        if (potential_tor_frac == 1.0) {
+          aphi_tilt =  (1.0 + (65. - r)/(65. - pgen.r_edge) * (1 + cos_phi_ks)) / sin_theta;
         }
-        else {
-          atheta = pgen.potential_tor_frac *
-          pow(65.0, pgen.potential_r_pow_tor) *
-          (1.0 / (1.0 + exp(-pgen.potential_smoothing * (pgas_cut - 0.9))));
-        }
+
+	     // if (pgas_cut > 1.0) {
+       //    atheta = pgen.potential_tor_frac *
+       //    pow(r, pgen.potential_r_pow_tor) *
+       //    (1.0 / (1.0 + exp(-pgen.potential_smoothing * (pgas_cut - 0.9))));
+       //  }
+       //  else {
+       //    atheta = pgen.potential_tor_frac *
+       //    pow(65.0, pgen.potential_r_pow_tor) *
+       //    (1.0 / (1.0 + exp(-pgen.potential_smoothing * (pgas_cut - 0.9))));
+       //  }
 	    }
       if (pgen.psi != 0.0) {
         Real dvarphi_dtheta = -pgen.sin_psi * sin_phi_ks / SQR(sin_vartheta_ks);
