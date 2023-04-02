@@ -29,6 +29,8 @@ the athdf file from the xdmf, so please be aware of this requirement.
 
 The read_*(...) functions return a filedata dictionary-like object with
 
+    filedata['header'] = array of strings
+        ordered array of header, including all the header information
     filedata['time'] = float
         time from input file
     filedata['cycle'] = int
@@ -211,6 +213,7 @@ def read_binary(filename):
 
     fp.close()
 
+    filedata['header'] = header
     filedata['time'] = time
     filedata['cycle'] = cycle
     filedata['var_names'] = var_list
@@ -350,6 +353,7 @@ def write_athdf(filename, fdata, varsize_bytes=4, locsize_bytes=8):
 
     # Set Attributes
     hfp = h5py.File(filename, 'w')
+    hfp.attrs['Header'] = fdata['header']
     hfp.attrs['Time'] = fdata['time']
     hfp.attrs['NumCycles'] = fdata['cycle']
     hfp.attrs['Coordinates'] = np.array('cartesian', dtype='|S11')
