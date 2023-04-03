@@ -1067,9 +1067,8 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
         Real pgas_cut = fmax(pgas - potential_cutoff_tor,0.0);
         if (pgen.potential_tor_frac == 1.0) {
           Real r_out = 65.0;
-	  Real r_in = pgen.r_edge;
-	  aphi_tilt =  r*(pow(r_out,-1.0) - pow(r,-1.0)) + 
-		       sqrt(pgas_cut)*(pow(r_out,-2.0) - pow(r,-2.0)) ;
+	        aphi_tilt = 0.0;
+          atheta = r * pow(pgas_cut,0.5);
         }
 
 	     // if (pgas_cut > 1.0) {
