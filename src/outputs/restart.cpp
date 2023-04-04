@@ -72,7 +72,7 @@ void RestartOutput::LoadOutputData(Mesh *pm) {
   else if (padm != nullptr) {
     nadm = adm::ADM::N_ADM;
   }
-  Kokkos::realloc(outarray, nmb, (nhydro+nmhd+nadm+nz4c), nout3, nout2, nout1);
+  Kokkos::realloc(outarray, nmb, (nhydro+nmhd+nz4c), nout3, nout2, nout1);
   if (prad != nullptr) {
     nrad = prad->prgeo->nangles;
   }
@@ -112,11 +112,8 @@ void RestartOutput::LoadOutputData(Mesh *pm) {
 
   // load z4c (CC) data (copy to host)
   if (pz4c != nullptr) {
-    DvceArray5D<Real>::HostMirror host_u0 = Kokkos::create_mirror(pz4c->u0);
-    Kokkos::deep_copy(host_u0,pz4c->u0);
-    auto hst_slice = Kokkos::subview(outarray, Kokkos::ALL, std::make_pair(nhydro+nmhd,nz4c),
-                                     Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
-    Kokkos::deep_copy(hst_slice,host_u0);
+    Kokkos::realloc(outarray_z4c, nmb, nz4c, nout3, nout2, nout1);
+    Kokkos::deep_copy(outarray_z4c, pz4c->u0);
   }
 
   // calculate max/min number of MeshBlocks across all ranks
@@ -142,7 +139,8 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   mhd::MHD* pmhd = pm->pmb_pack->pmhd;
   radiation::Radiation* prad = pm->pmb_pack->prad;
   TurbulenceDriver* pturb=pm->pmb_pack->pturb;
-  int nhydro=0, nmhd=0, nrad=0, nforce=3;
+  z4c::Z4c* pz4c = pm->pmb_pack->pz4c;
+  int nhydro=0, nmhd=0, nrad=0, nforce=3, nz4c=0;
   if (phydro != nullptr) {
     nhydro = phydro->nhydro + phydro->nscalars;
   }
@@ -152,7 +150,9 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   if (prad != nullptr) {
     nrad = prad->prgeo->nangles;
   }
-
+  if (pz4c != nullptr) {
+    nz4c = pz4c->N_Z4c;
+  }
   // create filename: "rst/file_basename" + "." + XXXXX + ".rst"
   // where XXXXX = 5-digit file_number
   std::string fname;
@@ -230,6 +230,9 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   }
   if (pturb != nullptr) {
     data_size += nout1*nout2*nout3*nforce*sizeof(Real); // forcing
+  }
+  if (pz4c != nullptr) {
+    data_size += nout1*nout2*nout3*nz4c*sizeof(Real); // hydro u0
   }
 
   if (global_variable::my_rank == 0) {
@@ -443,6 +446,38 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
       } else if (m < pm->nmb_thisrank) {
         // get ptr to MeshBlock data
         auto mbptr = Kokkos::subview(outarray_force, m, Kokkos::ALL, Kokkos::ALL,
+                                     Kokkos::ALL, Kokkos::ALL);
+        int mbcnt = mbptr.size();
+        if (resfile.Write_Reals_at(mbptr.data(), mbcnt, myoffset) != mbcnt) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+          << std::endl << "cell-centered data not written correctly to restart file, "
+          << "restart file is broken." << std::endl;
+          exit(EXIT_FAILURE);
+        }
+        myoffset += mbcnt*sizeof(Real);
+      }
+    }
+  }
+  if (pz4c != nullptr) {
+    for (int m=0;  m<noutmbs_max; ++m) {
+      // every rank has a MB to write, so write collectively
+      if (m < noutmbs_min) {
+        // get ptr to cell-centered MeshBlock data
+        auto mbptr = Kokkos::subview(outarray_z4c, m, Kokkos::ALL, Kokkos::ALL,
+                                     Kokkos::ALL, Kokkos::ALL);
+        int mbcnt = mbptr.size();
+        if (resfile.Write_Reals_at_all(mbptr.data(), mbcnt, myoffset) != mbcnt) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+          << std::endl << "cell-centered data not written correctly to restart file, "
+          << "restart file is broken." << std::endl;
+          exit(EXIT_FAILURE);
+        }
+        myoffset += mbcnt*sizeof(Real);
+
+      // some ranks are finished writing, so use non-collective write
+      } else if (m < pm->nmb_thisrank) {
+        // get ptr to MeshBlock data
+        auto mbptr = Kokkos::subview(outarray_z4c, m, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
         int mbcnt = mbptr.size();
         if (resfile.Write_Reals_at(mbptr.data(), mbcnt, myoffset) != mbcnt) {

@@ -236,13 +236,15 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   if (pz4c != nullptr) {
     data_size_ += nout1*nout2*nout3*nz4c*sizeof(Real);   // rad i0
   }
+  /*
   if (padm != nullptr) {
     data_size_ += nout1*nout2*nout3*nadm*sizeof(Real);   // rad i0
   }
+  */
   if (data_size_ != data_size) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "CC data size read from restart file not equal to size "
-              << "of Hydro, MHD, and/or Rad arrays, restart file is broken." << std::endl;
+              << "of Hydro, MHD, Rad, and/or Z4c arrays, restart file is broken." << std::endl;
     exit(EXIT_FAILURE);
   }
 
