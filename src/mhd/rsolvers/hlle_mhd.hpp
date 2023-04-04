@@ -34,7 +34,6 @@ void HLLE(TeamMember_t const &member, const EOS_Data &eos,
   int iby = ((ivx-IVX) + 1)%3;
   int ibz = ((ivx-IVX) + 2)%3;
   Real gm1 = eos.gamma - 1.0;
-  Real igm1 = 1.0/gm1;
   Real iso_cs = eos.iso_cs;
 
   par_for_inner(member, il, iu, [&](const int i) {
