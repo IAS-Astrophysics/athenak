@@ -53,8 +53,8 @@ pfloor      = 1.0e-10
 fofc        = true      # Enable first order flux correction
 
 <problem>
-damb        = 1.0e-4    # ambient density
-pamb        = 3.0e-5    # ambient pressure
+di_amb      = 1.0e-4    # ambient density
+pi_amb      = 3.0e-5    # ambient pressure
 bamb        = 0.1       # ambient B-field
 prat        = 33333.333 # Pressure ratio initially
 drat        = 100.      # density ratio initially
