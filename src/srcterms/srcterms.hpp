@@ -6,12 +6,11 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file srcterms.hpp
-//! \brief Data, functions, and classes to implement various source terms in the
-//! hydro and/or MHD equations of motion.  Currently implemented:
+//! \brief Data, functions, and classes to implement various source terms in the hydro
+//! and/or MHD equations of motion.  Currently implemented:
 //!  (1) constant (gravitational) acceleration - for RTI
 //!  (2) shearing box in 2D (x-z), for both hydro and MHD
-//!  (3) random forcing to drive turbulence - implemented in TurbulenceDriver
-//!  class
+//!  (3) random forcing to drive turbulence - implemented in TurbulenceDriver class
 
 #include <map>
 #include <string>
@@ -63,10 +62,8 @@ class SourceTerms {
   Real dii_dt;
 
   // functions
-  void AddConstantAccel(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
-                        const Real dt);
-  void AddShearingBox(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
-                      const Real dt);
+  void AddConstantAccel(DvceArray5D<Real> &u0,const DvceArray5D<Real> &w0,const Real dt);
+  void AddShearingBox(DvceArray5D<Real> &u0,const DvceArray5D<Real> &w0,const Real dt);
   void AddShearingBox(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
                       const DvceArray5D<Real> &bcc, const Real dt);
   void AddSBoxEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &efld);
