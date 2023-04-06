@@ -112,7 +112,7 @@ struct torus_pgen {
   Real potential_r_pow, potential_rho_pow;    // set how vector potential scales
   Real potential_tor_frac;                    // normalization of toroidal component
   Real potential_r_pow_tor;                   // set how toroidal part of vector potential scales
-  Real potential_smoothing;                   // window size for atheta smoothing
+  Real potential_tor_zeronet;                 // boolean specifying zero net flux torus
   Real potential_beta_min;                    // set how vector potential scales (cont.)
 };
 
@@ -354,7 +354,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     torus.potential_rho_pow  = pin->GetOrAddReal("problem", "potential_rho_pow",  1.0);
     torus.potential_r_pow_tor= pin->GetOrAddReal("problem", "potential_r_pow_tor", 1.0);
     torus.potential_tor_frac = pin->GetOrAddReal("problem", "potential_tor_frac",  0.0);
-    torus.potential_smoothing = pin->GetOrAddReal("problem", "potential_smoothing",  20.0);
+    torus.potential_tor_zeronet = pin->GetOrAddBoolean("problem", "potential_tor_zeronet", false);
     torus.is_sane = pin->GetOrAddBoolean("problem", "sane", false);
     torus.is_mad = pin->GetOrAddBoolean("problem", "mad", false);
     if (torus.is_sane==torus.is_mad) {
@@ -1065,23 +1065,11 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
         aphi_tilt =  (1.0-pgen.potential_tor_frac)*(pow(r, pgen.potential_r_pow)*
                      pow(fmax(rho - pgen.potential_cutoff, 0.0), pgen.potential_rho_pow));
         Real pgas_cut = fmax(pgas - potential_cutoff_tor,0.0);
-        if (pgen.potential_tor_frac == 1.0) {
-          Real r_out = 65.0;
-	        aphi_tilt = 0.0;
-          atheta = r * pow(pgas_cut,0.5);
+        atheta = pgen.potential_tor_frac * pow(r,pgen.potential_r_pow_tor);
+	if (pgen.potential_tor_zeronet) {
+          atheta *= pow(pgas_cut,0.5);
         }
-
-	     // if (pgas_cut > 1.0) {
-       //    atheta = pgen.potential_tor_frac *
-       //    pow(r, pgen.potential_r_pow_tor) *
-       //    (1.0 / (1.0 + exp(-pgen.potential_smoothing * (pgas_cut - 0.9))));
-       //  }
-       //  else {
-       //    atheta = pgen.potential_tor_frac *
-       //    pow(65.0, pgen.potential_r_pow_tor) *
-       //    (1.0 / (1.0 + exp(-pgen.potential_smoothing * (pgas_cut - 0.9))));
-       //  }
-	    }
+      }
       if (pgen.psi != 0.0) {
         Real dvarphi_dtheta = -pgen.sin_psi * sin_phi_ks / SQR(sin_vartheta_ks);
         Real dvarphi_dphi = sin_theta / SQR(sin_vartheta_ks)
