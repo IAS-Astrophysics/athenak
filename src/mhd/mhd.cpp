@@ -313,6 +313,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
       Kokkos::realloc(fofc,    nmb, ncells3, ncells2, ncells1);
       Kokkos::realloc(utest,   nmb, nmhd, ncells3, ncells2, ncells1);
       Kokkos::realloc(bcctest, nmb, 3,    ncells3, ncells2, ncells1);
+      Kokkos::deep_copy(fofc, false);
     }
   }
 }

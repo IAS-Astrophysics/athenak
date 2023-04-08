@@ -74,7 +74,7 @@ x2max = 32.0
 x3min = -32.0
 x3max = 32.0
 
-<refinement4>
+<refinement5>
 level = 1
 x1min = -64.0
 x1max = 64.0
