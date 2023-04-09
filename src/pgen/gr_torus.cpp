@@ -112,6 +112,7 @@ struct torus_pgen {
   Real potential_r_pow, potential_rho_pow;    // set how vector potential scales
   Real potential_tor_frac;                    // normalization of toroidal component
   Real potential_r_pow_tor;                   // set how toroidal part of vector potential scales
+  Real potential_rmax;                        // set outer radius for toroidal field w net flux
   Real potential_tor_zeronet;                 // boolean specifying zero net flux torus
   Real potential_beta_min;                    // set how vector potential scales (cont.)
 };
@@ -353,6 +354,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     torus.potential_r_pow    = pin->GetOrAddReal("problem", "potential_r_pow",    0.0); 
     torus.potential_rho_pow  = pin->GetOrAddReal("problem", "potential_rho_pow",  1.0);
     torus.potential_r_pow_tor= pin->GetOrAddReal("problem", "potential_r_pow_tor", 1.0);
+    torus.potential_rmax = pin->GetOrAddReal("problem", "potential_rmax",  65.0);
     torus.potential_tor_frac = pin->GetOrAddReal("problem", "potential_tor_frac",  0.0);
     torus.potential_tor_zeronet = pin->GetOrAddBoolean("problem", "potential_tor_zeronet", false);
     torus.is_sane = pin->GetOrAddBoolean("problem", "sane", false);
@@ -1066,8 +1068,14 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
                      pow(fmax(rho - pgen.potential_cutoff, 0.0), pgen.potential_rho_pow));
         Real pgas_cut = fmax(pgas - potential_cutoff_tor,0.0);
         atheta = pgen.potential_tor_frac * pow(r,pgen.potential_r_pow_tor);
-	if (pgen.potential_tor_zeronet) {
+        if (pgen.potential_tor_zeronet) {
           atheta *= pow(pgas_cut,0.5);
+        }
+        else {
+          if (r > pgen.potential_rmax) {
+            atheta = pgen.potential_tor_frac * pow(pgen.potential_rmax,
+              pgen.potential_r_pow_tor);
+          }
         }
       }
       if (pgen.psi != 0.0) {
@@ -1079,6 +1087,11 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
       } else {
         aphi = aphi_tilt;
       }
+    }
+  }
+  else {
+    if !(pgen.potential_tor_zeronet) {
+      atheta = pgen.potential_tor_frac * pow(pgen.r_edge, pgen.potential_r_pow_tor);
     }
   }
 
