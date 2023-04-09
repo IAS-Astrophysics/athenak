@@ -1090,7 +1090,7 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
     }
   }
   else {
-    if !(pgen.potential_tor_zeronet) {
+    if (!pgen.potential_tor_zeronet) {
       atheta = pgen.potential_tor_frac * pow(pgen.r_edge, pgen.potential_r_pow_tor);
     }
   }
