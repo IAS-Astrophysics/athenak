@@ -1075,7 +1075,9 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
         }
         else {
           Real r_cutoff = fmin(r, pgen.potential_rmax);
-          atheta = pgen.potential_tor_frac * pow(r_cutoff, pgen.potential_r_pow_tor);
+          if (pgas_cut > 0.0) {
+            atheta = pgen.potential_tor_frac * pow(r_cutoff, pgen.potential_r_pow_tor);
+          }
         }
       }
       if (pgen.psi != 0.0) {
