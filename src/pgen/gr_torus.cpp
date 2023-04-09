@@ -1072,10 +1072,8 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
           atheta *= pow(pgas_cut,0.5);
         }
         else {
-          if (r > pgen.potential_rmax) {
-            atheta = pgen.potential_tor_frac * pow(pgen.potential_rmax,
-              pgen.potential_r_pow_tor);
-          }
+          Real r_cutoff = fmin(r, pgen.potential_rmax);
+          atheta = pgen.potential_tor_frac * pow(r_cutoff, pgen.potential_r_pow_tor);
         }
       }
       if (pgen.psi != 0.0) {
@@ -1089,11 +1087,11 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
       }
     }
   }
-  else {
-    if (!pgen.potential_tor_zeronet) {
-      atheta = pgen.potential_tor_frac * pow(pgen.r_edge, pgen.potential_r_pow_tor);
-    }
-  }
+  // else {
+  //   if (!pgen.potential_tor_zeronet) {
+  //     atheta = pgen.potential_tor_frac * pow(pgen.r_edge, pgen.potential_r_pow_tor);
+  //   }
+  // }
 
   *patheta = atheta;
   *paphi = aphi;
