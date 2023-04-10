@@ -1059,13 +1059,9 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
     pgas = pgas_over_rho*rho;
     potential_cutoff_tor = pgas_over_rho*pgen.potential_cutoff;
     Real pgas_cut = fmax(pgas - potential_cutoff_tor,0.0);
+    Real r_cutoff = fmin(r, pgen.potential_rmax);
 
     Real aphi_tilt = 0.0;
-    if ((!pgen.potential_tor_zeronet) and pgen.potential_tor_frac > 0.0) {
-      Real r_cutoff = fmin(r, pgen.potential_rmax);
-      atheta = pgen.potential_tor_frac * (pow(r_cutoff, pgen.potential_r_pow_tor)
-               - pow(pgen.r_edge, pgen.potential_r_pow_tor));
-    }
     if (in_torus) {
       if (pgen.is_mad) {  // MAD
         aphi_tilt = (fmax((rho*pow((r/pgen.r_edge)*sin_vartheta_ks, pgen.potential_r_pow)*
@@ -1077,6 +1073,12 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
           atheta = pgen.potential_tor_frac * pow(r,pgen.potential_r_pow_tor) 
                    * pow(pgas_cut,pgen.potential_pow_tor);
         }
+        else {
+          if (pgas_cut > 0.0) {
+            atheta = pgen.potential_tor_frac * (pow(r_cutoff, pgen.potential_r_pow_tor)
+                - pow(pgen.r_edge, pgen.potential_r_pow_tor));
+          }
+        }
       }
       if (pgen.psi != 0.0) {
         Real dvarphi_dtheta = -pgen.sin_psi * sin_phi_ks / SQR(sin_vartheta_ks);
@@ -1086,6 +1088,13 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
         aphi = dvarphi_dphi * aphi_tilt;
       } else {
         aphi = aphi_tilt;
+      }
+    }
+    // set background atheta for net flux case
+    else {
+      if (!pgen.potential_tor_zeronet) {
+        atheta = pgen.potential_tor_frac * (pow(r_cutoff, pgen.potential_r_pow_tor)
+                - pow(pgen.r_edge, pgen.potential_r_pow_tor));
       }
     }
   }
