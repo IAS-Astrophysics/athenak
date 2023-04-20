@@ -115,15 +115,15 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
   if ((ivar>=79) && (ivar<97) && (pm->pmb_pack->padm == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of ADM variable requested in <output> block '"
-       << out_params.block_name << "' but no ADM object has been constructed."
-       << std::endl << "Input file is likely missing a <adm> block" << std::endl;
+       << out_params.block_name << "' but ADM object not constructed."
+       << std::endl << "Input file is likely missing corresponding block" << std::endl;
     exit(EXIT_FAILURE);
   }
   if ((ivar>=97) && (ivar<139) && (pm->pmb_pack->pz4c == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of Z4c variable requested in <output> block '"
-       << out_params.block_name << "' but no Z4c object has been constructed."
-       << std::endl << "Input file is likely missing a <adm> block" << std::endl;
+       << out_params.block_name << "' but Z4c object not constructed."
+       << std::endl << "Input file is likely missing corresponding block" << std::endl;
     exit(EXIT_FAILURE);
   }
 
