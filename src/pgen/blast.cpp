@@ -30,11 +30,16 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   Real rout = pin->GetReal("problem", "outer_radius");
   Real rin  = rout - pin->GetReal("problem", "inner_radius");
-  Real pa   = pin->GetOrAddReal("problem", "pamb", 1.0);
-  Real da   = pin->GetOrAddReal("problem", "damb", 1.0);
+  // values for neutrals (hydro fluid)
+  Real pn_amb   = pin->GetOrAddReal("problem", "pn_amb", 1.0);
+  Real dn_amb   = pin->GetOrAddReal("problem", "dn_amb", 1.0);
+  // values for ions (hydro fluid)
+  Real pi_amb   = pin->GetOrAddReal("problem", "pi_amb", 1.0);
+  Real di_amb   = pin->GetOrAddReal("problem", "di_amb", 1.0);
+  // ratios in blast (same for both ions and neutrals)
   Real prat = pin->GetReal("problem", "prat");
   Real drat = pin->GetOrAddReal("problem", "drat", 1.0);
-  Real bamb = pin->GetOrAddReal("problem", "bamb", 0.1);
+  Real b_amb = pin->GetOrAddReal("problem", "b_amb", 0.1);
 
   // capture variables for the kernel
   auto &indcs = pmy_mesh_->mb_indcs;
@@ -45,17 +50,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   auto &size = pmbp->pmb->mb_size;
 
   // Select either Hydro or MHD
-  Real gm1;
-  DvceArray5D<Real> u0_, w0_;
-  if (pmbp->phydro != nullptr) {
-    u0_ = pmbp->phydro->u0;
-    w0_ = pmbp->phydro->w0;
-    gm1 = pmbp->phydro->peos->eos_data.gamma - 1.0;
-  } else if (pmbp->pmhd != nullptr) {
-    u0_ = pmbp->pmhd->u0;
-    w0_ = pmbp->pmhd->w0;
-    gm1 = pmbp->pmhd->peos->eos_data.gamma - 1.0;
-  }
+  hydro::Hydro *phydro = pmbp->phydro;
+  mhd::MHD *pmhd = pmbp->pmhd;
 
   par_for("pgen_blast1",DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
   KOKKOS_LAMBDA(int m,int k,int j,int i) {
@@ -76,46 +72,69 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
     Real rad = std::sqrt(SQR(x1v) + SQR(x2v) + SQR(x3v));
 
-    Real den = da;
-    Real pres = pa;
-    if (rad < rout) {
-      if (rad < rin) {
-        den = drat*da;
-        pres = prat*pa;
-      } else {   // add smooth ramp in density
-        Real f = (rad-rin) / (rout-rin);
-        Real log_den = (1.0-f) * log(drat*da) + f * log(da);
-        den = exp(log_den);
-        Real log_pres = (1.0-f) * log(prat*pa) + f * log(pa);
-        pres = exp(log_pres);
+    // initialize Hydro, MHD, or both.
+    if (phydro != nullptr) {
+      Real den = dn_amb;
+      Real pres = pn_amb;
+      if (rad < rout) {
+        if (rad < rin) {
+          den *= drat;
+          pres *= prat;
+        } else {   // add smooth ramp in density
+          Real f = (rad-rin) / (rout-rin);
+          Real log_den = (1.0-f) * log(drat*dn_amb) + f * log(dn_amb);
+          den = exp(log_den);
+          Real log_pres = (1.0-f) * log(prat*pn_amb) + f * log(pn_amb);
+          pres = exp(log_pres);
+        }
       }
+      phydro->w0(m,IDN,k,j,i) = den;
+      phydro->w0(m,IVX,k,j,i) = 0.0;
+      phydro->w0(m,IVY,k,j,i) = 0.0;
+      phydro->w0(m,IVZ,k,j,i) = 0.0;
+      phydro->w0(m,IEN,k,j,i) = pres/(phydro->peos->eos_data.gamma - 1.0);
     }
-
-    w0_(m,IDN,k,j,i) = den;
-    w0_(m,IVX,k,j,i) = 0.0;
-    w0_(m,IVY,k,j,i) = 0.0;
-    w0_(m,IVZ,k,j,i) = 0.0;
-    w0_(m,IEN,k,j,i) = pres/gm1;
+    if (pmhd != nullptr) {
+      Real den = di_amb;
+      Real pres = pi_amb;
+      if (rad < rout) {
+        if (rad < rin) {
+          den *= drat;
+          pres *= prat;
+        } else {   // add smooth ramp in density
+          Real f = (rad-rin) / (rout-rin);
+          Real log_den = (1.0-f) * log(drat*di_amb) + f * log(di_amb);
+          den = exp(log_den);
+          Real log_pres = (1.0-f) * log(prat*pi_amb) + f * log(pi_amb);
+          pres = exp(log_pres);
+        }
+      }
+      pmhd->w0(m,IDN,k,j,i) = den;
+      pmhd->w0(m,IVX,k,j,i) = 0.0;
+      pmhd->w0(m,IVY,k,j,i) = 0.0;
+      pmhd->w0(m,IVZ,k,j,i) = 0.0;
+      pmhd->w0(m,IEN,k,j,i) = pres/(pmhd->peos->eos_data.gamma - 1.0);
+    }
   });
 
   // initialize magnetic fields ---------------------------------------
 
-  if (pmbp->pmhd != nullptr) {
-    auto &b0 = pmbp->pmhd->b0;
+  if (pmhd != nullptr) {
+    auto &b0 = pmhd->b0;
     par_for("pgen_blast2",DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      b0.x1f(m,k,j,i) = bamb;
+      b0.x1f(m,k,j,i) = b_amb;
       b0.x2f(m,k,j,i) = 0.0;
       b0.x3f(m,k,j,i) = 0.0;
 
       // Include extra face-component at edge of block in each direction
-      if (i==ie) {b0.x1f(m,k,j,i+1) = bamb;}
+      if (i==ie) {b0.x1f(m,k,j,i+1) = b_amb;}
       if (j==je) {b0.x2f(m,k,j+1,i) = 0.0;}
       if (k==ke) {b0.x3f(m,k+1,j,i) = 0.0;}
     });
 
     // Compute cell-centered fields
-    auto &bcc_ = pmbp->pmhd->bcc0;
+    auto &bcc_ = pmhd->bcc0;
     par_for("pgen_blast3",DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       // cell-centered fields are simple linear average of face-centered fields
@@ -129,11 +148,11 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
 
   // Convert primitives to conserved
-  if (pmbp->phydro != nullptr) {
-    pmbp->phydro->peos->PrimToCons(w0_, u0_, is, ie, js, je, ks, ke);
-  } else if (pmbp->pmhd != nullptr) {
-    auto &bcc0_ = pmbp->pmhd->bcc0;
-    pmbp->pmhd->peos->PrimToCons(w0_, bcc0_, u0_, is, ie, js, je, ks, ke);
+  if (phydro != nullptr) {
+    phydro->peos->PrimToCons(phydro->w0, phydro->u0, is, ie, js, je, ks, ke);
+  }
+  if (pmhd != nullptr) {
+    pmhd->peos->PrimToCons(pmhd->w0, pmhd->bcc0, pmhd->u0, is, ie, js, je, ks, ke);
   }
 
   return;

@@ -29,6 +29,8 @@ the athdf file from the xdmf, so please be aware of this requirement.
 
 The read_*(...) functions return a filedata dictionary-like object with
 
+    filedata['header'] = array of strings
+        ordered array of header, including all the header information
     filedata['time'] = float
         time from input file
     filedata['cycle'] = int
@@ -170,6 +172,7 @@ def read_binary(filename):
     nx1 = int(get_from_header(header, '<meshblock>', 'nx1'))
     nx2 = int(get_from_header(header, '<meshblock>', 'nx2'))
     nx3 = int(get_from_header(header, '<meshblock>', 'nx3'))
+    nghost = int(get_from_header(header, '<mesh>', 'nghost'))
 
     x1min = float(get_from_header(header, '<mesh>', 'x1min'))
     x1max = float(get_from_header(header, '<mesh>', 'x1max'))
@@ -191,7 +194,7 @@ def read_binary(filename):
         mb_data[var] = []
 
     while fp.tell() < filesize:
-        mb_index.append(np.array(struct.unpack('@6i', fp.read(24))))
+        mb_index.append(np.array(struct.unpack('@6i', fp.read(24))) - nghost)
         nx1_out = (mb_index[mb_count][1] - mb_index[mb_count][0])+1
         nx2_out = (mb_index[mb_count][3] - mb_index[mb_count][2])+1
         nx3_out = (mb_index[mb_count][5] - mb_index[mb_count][4])+1
@@ -210,6 +213,7 @@ def read_binary(filename):
 
     fp.close()
 
+    filedata['header'] = header
     filedata['time'] = time
     filedata['cycle'] = cycle
     filedata['var_names'] = var_list
@@ -264,16 +268,27 @@ def write_athdf(filename, fdata, varsize_bytes=4, locsize_bytes=8):
     locfmt = '<f4' if locsize_bytes == 4 else '<f8'
     varfmt = '<f4' if varsize_bytes == 4 else '<f8'
 
+    # extract Mesh/MeshBlock parameters
     nmb = fdata['n_mbs']
+    Nx1 = fdata['Nx1']  # noqa: F841
+    Nx2 = fdata['Nx2']
+    Nx3 = fdata['Nx3']
     nx1 = fdata['nx1_mb']
     nx2 = fdata['nx2_mb']
     nx3 = fdata['nx3_mb']
     nx1_out = fdata['nx1_out_mb']
     nx2_out = fdata['nx2_out_mb']
     nx3_out = fdata['nx3_out_mb']
+
+    # check dimensionality/slicing
+    nx1_out = fdata['nx1_out_mb']
+    nx2_out = fdata['nx2_out_mb']
+    nx3_out = fdata['nx3_out_mb']
+    two_d = (Nx2 != 1 and Nx3 == 1)
+    three_d = (Nx3 != 1)
     x1slice = (nx1_out == 1)
-    x2slice = (nx2_out == 1)
-    x3slice = (nx3_out == 1)
+    x2slice = (nx2_out == 1 and (two_d or three_d))
+    x3slice = (nx3_out == 1 and three_d)
 
     # keep variable order but separate out magnetic field
     vars_without_b = [v for v in fdata['var_names'] if 'bcc' not in v]
@@ -338,6 +353,7 @@ def write_athdf(filename, fdata, varsize_bytes=4, locsize_bytes=8):
 
     # Set Attributes
     hfp = h5py.File(filename, 'w')
+    hfp.attrs['Header'] = fdata['header']
     hfp.attrs['Time'] = fdata['time']
     hfp.attrs['NumCycles'] = fdata['cycle']
     hfp.attrs['Coordinates'] = np.array('cartesian', dtype='|S11')
