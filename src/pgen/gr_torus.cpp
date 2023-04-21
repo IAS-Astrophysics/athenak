@@ -111,8 +111,7 @@ struct torus_pgen {
   Real potential_cutoff, potential_falloff;   // sets region of torus to magnetize
   Real potential_r_pow, potential_rho_pow;    // set how vector potential scales
   Real potential_tor_frac;                    // normalization of toroidal component
-  Real potential_r_pow_tor, potential_pow_tor;// set how toroidal part of vector potential scales
-  Real potential_rmax;                        // set outer radius for toroidal field w net flux
+  Real potential_r_pow_tor, potential_pow_tor;// set how toroidal part of vector potential scaless
   Real potential_tor_zeronet;                 // boolean specifying zero net flux torus
   Real potential_beta_min;                    // set how vector potential scales (cont.)
 };
@@ -355,7 +354,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     torus.potential_rho_pow  = pin->GetOrAddReal("problem", "potential_rho_pow",  1.0);
     torus.potential_r_pow_tor= pin->GetOrAddReal("problem", "potential_r_pow_tor", 1.0);
     torus.potential_pow_tor= pin->GetOrAddReal("problem", "potential_pow_tor", 0.5);
-    torus.potential_rmax = pin->GetOrAddReal("problem", "potential_rmax",  65.0);
     torus.potential_tor_frac = pin->GetOrAddReal("problem", "potential_tor_frac",  0.0);
     torus.potential_tor_zeronet = pin->GetOrAddBoolean("problem", "potential_tor_zeronet", false);
     torus.is_sane = pin->GetOrAddBoolean("problem", "sane", false);
@@ -1054,15 +1052,14 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
     if (log_h >= 0.0) {
       in_torus = true;
     }
-    Real pgas_over_rho = gm1/pgen.gamma_adi * (exp(log_h) - 1.0);
-    rho = pow(pgas_over_rho/pgen.k_adi, 1.0/gm1) / pgen.rho_peak;
-    pgas = pgas_over_rho*rho;
-    potential_cutoff_tor = pgas_over_rho*pgen.potential_cutoff;
-    Real pgas_cut = fmax(pgas - potential_cutoff_tor,0.0);
-    Real r_cutoff = fmin(r, pgen.potential_rmax);
 
     Real aphi_tilt = 0.0;
     if (in_torus) {
+      Real pgas_over_rho = gm1/pgen.gamma_adi * (exp(log_h) - 1.0);
+      rho = pow(pgas_over_rho/pgen.k_adi, 1.0/gm1) / pgen.rho_peak;
+      pgas = pgas_over_rho*rho;
+      potential_cutoff_tor = pgas_over_rho*pgen.potential_cutoff;
+      Real pgas_cut = fmax(pgas - potential_cutoff_tor,0.0);
       if (pgen.is_mad) {  // MAD
         aphi_tilt = (fmax((rho*pow((r/pgen.r_edge)*sin_vartheta_ks, pgen.potential_r_pow)*
                            exp(-r/pgen.potential_falloff) - pgen.potential_cutoff), 0.0));
@@ -1074,7 +1071,9 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
                    * pow(pgas_cut,pgen.potential_pow_tor);
         }
         else {
-          atheta = pgen.potential_tor_frac * pow(r_cutoff, pgen.potential_r_pow_tor);
+          if (pgas_cut > 0.0) {
+            atheta = pgen.potential_tor_frac * pow(r, pgen.potential_r_pow_tor);
+      	  }
         }
       }
       if (pgen.psi != 0.0) {
@@ -1085,13 +1084,6 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
         aphi = dvarphi_dphi * aphi_tilt;
       } else {
         aphi = aphi_tilt;
-      }
-    }
-    // set background atheta for net flux case
-    else {
-      if (!pgen.potential_tor_zeronet) {
-        atheta = pgen.potential_tor_frac * 
-                pow(pgen.potential_rmax, pgen.potential_r_pow_tor);
       }
     }
   }
