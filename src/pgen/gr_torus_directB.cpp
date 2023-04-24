@@ -354,19 +354,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       exit(EXIT_FAILURE);
     }
 
-    // compute vector potential over all faces
-    int ncells1 = indcs.nx1 + 2*(indcs.ng);
-    int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
-    int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
-    DvceArray4D<Real> a1, a2, a3;
-    Kokkos::realloc(a1, nmb,ncells3,ncells2,ncells1);
-    Kokkos::realloc(a2, nmb,ncells3,ncells2,ncells1);
-    Kokkos::realloc(a3, nmb,ncells3,ncells2,ncells1);
-
-    auto &nghbr = pmbp->pmb->nghbr;
-    auto &mblev = pmbp->pmb->mb_lev;
-    auto trs = torus;
-
     auto &b0 = pmbp->pmhd->b0;
     par_for("pgen_b0", DevExeSpace(), 0,nmb-1,ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -377,6 +364,17 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       b0.x1f(m,k,j,i) = B1(m,k,j,i);
       b0.x2f(m,k,j,i) = B2(m,k,j,i);
       b0.x3f(m,k,j,i) = B3(m,k,j,i);
+
+      // Include extra face-component at edge of block in each direction
+      if (i==ie) {
+        b0.x1f(m,k,j,i+1) = B1(m,k,j,i+1);
+      }
+      if (j==je) {
+        b0.x2f(m,k,j+1,i) = B2(m,k,j,i+1);
+      }
+      if (k==ke) {
+        b0.x3f(m,k+1,j,i) = B3(m,k,j,i+1);
+      }
     });
 
     // Compute cell-centered fields
@@ -915,9 +913,10 @@ static void CalculateFieldInTiltedTorus(struct torus_pgen pgen,
         Real dvarphi_dtheta = -pgen.sin_psi * sin_phi_ks / SQR(sin_vartheta_ks);
         Real dvarphi_dphi = sin_theta / SQR(sin_vartheta_ks)
             * (pgen.cos_psi * sin_theta - pgen.sin_psi * cos_theta * cos_phi_ks);
+        btheta += dvarphi_dtheta * bphi_tilt;
         bphi = dvarphi_dphi * bphi_tilt;
       } else {
-        bphi = aphi_tilt;
+        bphi = bphi_tilt;
       }
     }
   }
