@@ -31,8 +31,8 @@ Tmunu::Tmunu(MeshBlockPack *ppack, ParameterInput *pin):
 
   Kokkos::realloc(u_tmunu, nmb, N_Tmunu, ncells3, ncells2, ncells1);
   tmunu.S_dd.InitWithShallowSlice(u_tmunu, I_Tmunu_Sxx, I_Tmunu_Szz);
-  tmunu.S_d.InitWithShallowSlice(u_tmunu, I_Tmunu_Sx, I_Tmunu_Sz);
   tmunu.E.InitWithShallowSlice(u_tmunu, I_Tmunu_E);
+  tmunu.S_d.InitWithShallowSlice(u_tmunu, I_Tmunu_Sx, I_Tmunu_Sz);
 }
 
 Tmunu::~Tmunu() {}

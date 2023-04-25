@@ -1,3 +1,5 @@
+#ifndef DYNGR_FOFC_CPP_
+#define DYNGR_FOFC_CPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
@@ -15,7 +17,7 @@
 #include "dyngr/rsolvers/llf_dyngrhyd.cpp"
 #include "dyngr/dyngr.hpp"
 #include "dyngr/dyngr_util.hpp"
-#include "hydro.hpp"
+#include "hydro/hydro.hpp"
 
 namespace dyngr {
 //----------------------------------------------------------------------------------------
@@ -104,13 +106,98 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
       SingleStateLLF_DYNGR(eos_, wim1, wi, IVX, g3d, beta_u, alpha, flux);
       
       // Store 1st-order fluxes
-      flx1(m, IDN, k, j, i+1) = flux[CDN];
-      flx1(m, IM1, k, j, i+1) = flux[CSX];
-      flx1(m, IM2, k, j, i+1) = flux[CSY];
-      flx1(m, IM3, k, j, i+1) = flux[CSZ];
-      flx1(m, IEN, k, j, i+1) = flux[CTA];
+      InsertFluxes(flux, flx1, m, k, j, i);
+
+      // Replace x1-flux at i+1
+      // Load right state
+      Real wip1[NPRIM];
+      ExtractPrimitives(w0_, wip1, eos_, nhyd_, nscal_, m, k, j, i+1);
+
+      // Compute the metric terms at the face.
+      Face1Metric(m, k, j, i+1, adm.g_dd, adm.beta_u, adm.alpha, g3d, beta_u, alpha);
+
+      // Compute new 1st-order LLF flux
+      SingleStateLLF_DYNGR(eos_, wi, wip1, IVX, g3d, beta_u, alpha, flux);
+
+      // Store 1st-order fluxes
+      InsertFluxes(flux, flx1, m, k, j, i+1);
+
+      if (multi_d) {
+        // Replace x2-flux at j
+        // Load left state
+        Real wjm1[NPRIM];
+        ExtractPrimitives(w0_, wjm1, eos_, nhyd_, nscal_, m, k, j-1, i);
+
+        // Load right state; because we don't need to permute the states
+        // like the static hydro solver, we can just replace this with wi.
+        Real *wj = wi;
+
+        // Compute the metric terms at the face.
+        Face2Metric(m, k, j, i, adm.g_dd, adm.beta_u, adm.alpha, g3d, beta_u, alpha);
+
+        // Compute new 1st-order LLF flux
+        SingleStateLLF_DYNGR(eos_, wjm1, wj, IVY, g3d, beta_u, alpha, flux);
+
+        // Store 1st-order fluxes
+        InsertFluxes(flux, flx2, m, k, j, i);
+
+        // Replace x2-flux at j+1
+        // Load right state
+        Real wjp1[NPRIM];
+        ExtractPrimitives(w0_, wjp1, eos_, nhyd_, nscal_, m, k, j+1, i);
+
+        // Compute the metric terms at the face.
+        Face2Metric(m, k, j+1, i, adm.g_dd, adm.beta_u, adm.alpha, g3d, beta_u, alpha);
+
+        // Compute new 1st-order LLF flux
+        SingleStateLLF_DYNGR(eos_, wj, wjp1, IVY, g3d, beta_u, alpha, flux);
+
+        // Store 1st-order fluxes
+        InsertFluxes(flux, flx2, m, k, j+1, i);
+      }
+
+      if (three_d) {
+        // Replace x3-flux at k
+        // Load left state
+        Real wkm1[NPRIM];
+        ExtractPrimitives(w0_, wkm1, eos_, nhyd_, nscal_, m, k-1, j, i);
+
+        // Load right state; because we don't need to permute the states
+        // like the static hydro solver, we can just replace this with wi.
+        Real *wk = wi;
+
+        // Compute the metric terms at the face.
+        Face3Metric(m, k, j, i, adm.g_dd, adm.beta_u, adm.alpha, g3d, beta_u, alpha);
+
+        // Compute new 1st-order LLF flux
+        SingleStateLLF_DYNGR(eos_, wkm1, wk, IVZ, g3d, beta_u, alpha, flux);
+
+        // Store 1st-order fluxes
+        InsertFluxes(flux, flx3, m, k, j, i);
+
+        // Replace x3-flux at k+1
+        // Load right state
+        Real wkp1[NPRIM];
+        ExtractPrimitives(w0_, wkp1, eos_, nhyd_, nscal_, m, k+1, j, i);
+
+        // Compute the metric termas at the face.
+        Face3Metric(m, k+1, j, i, adm.g_dd, adm.beta_u, adm.alpha, g3d, beta_u, alpha);
+
+        // Compute new 1st-order LLF flux
+        SingleStateLLF_DYNGR(eos_, wk, wkp1, IVZ, g3d, beta_u, alpha, flux);
+
+        // Store 1st-order fluxes
+        InsertFluxes(flux, flx3, m, k+1, j, i);
+      }
+
+      // reset FOFC flag
+      fofc_(m,k,j,i) = false;
     }
   });
+
+  return;
 }
 
 } // namespace dyngr
+
+#endif

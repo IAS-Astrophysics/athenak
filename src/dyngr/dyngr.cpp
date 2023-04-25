@@ -265,26 +265,28 @@ TaskStatus DynGR::SetTmunu(Driver *pdrive, int stage) {
   int &nscal = pmy_pack->phydro->nscalars;
   auto &prim = pmy_pack->phydro->w0;
   // TODO: double-check that this needs to be u1, not u0!
-  auto &cons = pmy_pack->phydro->u1;
+  auto &cons = pmy_pack->phydro->u0;
 
   int scr_level = scratch_level;
-  size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1)*1     // scalars
+  size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1)*2     // scalars
                   + ScrArray2D<Real>::shmem_size(3, ncells1)*1; // vectors
   //size_t scr_size = 0;
   par_for_outer("dyngr_tmunu_loop",DevExeSpace(),scr_size,scr_level,0,nmb-1,ks,ke,js,je,
   KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {
     // Scratch space
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> vol;  // sqrt of 3-metric determinant
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> v_d;  // Velocity form
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> ivol;  // sqrt of 3-metric determinant
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> iW;     // Lorentz factor
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> v_d;   // Velocity form
 
-    vol.NewAthenaScratchTensor(member, scr_level, ncells1);
+    ivol.NewAthenaScratchTensor(member, scr_level, ncells1);
+    iW.NewAthenaScratchTensor(member, scr_level, ncells1);
     v_d.NewAthenaScratchTensor(member, scr_level, ncells1);
 
     // Calculate the determinant/volume form
     par_for_inner(member, is, ie, [&](int const i) {
       Real detg = SpatialDet(adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i), adm.g_dd(m,0,2,k,j,i),
                              adm.g_dd(m,1,1,k,j,i), adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i));
-      vol(i) = sqrt(detg);
+      ivol(i) = 1.0/sqrt(detg);
     });
     // Calculate the lower velocity components
     // TODO: a view should be initialized to zero by default, but it would be well
@@ -293,25 +295,34 @@ TaskStatus DynGR::SetTmunu(Driver *pdrive, int stage) {
       for (int b = 0; b < 3; ++b) {
         par_for_inner(member, is, ie, [&](int const i) {
           v_d(a, i) += prim(m, IVX + b, k, j, i)*adm.g_dd(m, a, b, k, j, i);
+          iW(i) += prim(m, IVX + a, k, j, i)*prim(m, IVX + b, k, j, i)*adm.g_dd(m, a, b, k, j, i);
         });
       }
     }
+    par_for_inner(member, is, ie, [&](int const i) {
+      iW(i) = 1.0/sqrt(1 + iW(i));
+    });
 
     // TODO: member barrier here?
 
     // Save the fluid quantities
     par_for_inner(member, is, ie, [&](int const i) {
-      tmunu.E(m, k, j, i) = (cons(m, IDN, k, j, i) + cons(m, IEN, k, j, i))/vol(i);
+      tmunu.E(m, k, j, i) = (cons(m, IDN, k, j, i) + cons(m, IEN, k, j, i))*ivol(i);
     });
     for (int a = 0; a < 3; ++a) {
       par_for_inner(member, is, ie, [&](int const i) {
-        tmunu.S_d(m, a, k, j, i) = cons(m, IM1 + a, k, j, i)/vol(i);
+        tmunu.S_d(m, a, k, j, i) = cons(m, IM1 + a, k, j, i)*ivol(i);
       });
     }
+    /*par_for_inner(member, is, ie, [&](int const i) {
+      tmunu.S_d(m, 0, k, j, i) = cons(m, IM1, k, j, i)*ivol(i);
+      tmunu.S_d(m, 1, k, j, i) = cons(m, IM2, k, j, i)*ivol(i);
+      tmunu.S_d(m, 2, k, j, i) = cons(m, IM3, k, j, i)*ivol(i);
+    });*/
     for (int a = 0; a < 3; ++a) {
       for (int b = a; b < 3; ++b) {
         par_for_inner(member, is, ie, [&](int const i) {
-          tmunu.S_dd(m, a, b, k, j, i) = cons(m, IM1 + a, k, j, i)/vol(i)*v_d(b, i)
+          tmunu.S_dd(m, a, b, k, j, i) = cons(m, IM1 + a, k, j, i)*ivol(i)*v_d(b, i)*iW(i)
                                        + prim(m, IPR, k, j, i)*adm.g_dd(m, a, b, k, j, i);
         });
       }
@@ -441,15 +452,8 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
         prim_pt[PYF + s] = prim(m, nhyd + s, k, j, i);
       }
       // FIXME: Go back and change to temperature after validating it all works.
-      //Real e = prim(m, IEN, k, j, i) + prim(m, IDN, k, j, i);
-      //prim_pt[PTM] = eos_.GetTemperatureFromE(prim_pt[PRH], e, &prim_pt[PYF]);
-      //prim_pt[PPR] = eos_.GetPressure(prim_pt[PRH], prim_pt[PTM], &prim_pt[PYF]);
       prim_pt[PPR] = prim(m, IPR, k, j, i);
       prim_pt[PTM] = eos_.GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR], &prim_pt[PYF]);
-
-      /*if (!isfinite(prim_pt[PTM]) || !isfinite(prim_pt[PPR])) {
-        printf("There's a problem with the temperature or pressure in the source terms!\n");
-      }*/
 
       // Get the conserved variables. Note that we don't use PrimitiveSolver here -- that's
       // because we would need to recalculate quantities used in E and S_d in order to get S_dd.
@@ -470,11 +474,6 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
         for (int b = 0; b < 3; ++b) {
           S_d(a, i) += H*W*prim_pt[PVX + b]*adm.g_dd(m, a, b, k, j, i);
         }
-        /*Real eps = (S_d(a, i) - tmunu.S_d(m, a, k, j, i))/S_d(a, i);
-        if (fabs(eps) > 1e-14 && isfinite(eps)) {
-          printf("There's a problem with S_d in Tmunu!\n");
-          printf(" err S_d(a, k, j, i) = %g\n",eps);
-        }*/
       }
 
       for (int a = 0; a < 3; ++a) {
@@ -484,11 +483,45 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
       }
     });
     member.team_barrier();
+    // Raise the indices on S_dd to get S_uu
+    /*for (int a = 0; a < 3; ++a) {
+      for (int b = a; b < 3; ++b) {
+        // TODO: Check that S_uu(a, b, i) is zero here!
+        par_for_inner(member, is, ie, [&](int const i) {
+          S_uu(a, b, i) = 0.0;
+        });
+        for (int c = 0; c < 3; ++c) {
+          for (int d = 0; d < 3; ++d) {
+            par_for_inner(member, is, ie, [&](int const i) {
+              S_uu(a, b, i) += tmunu.S_dd(m, c, d, k, j, i) * g_uu(a, c, i) * g_uu(b, d, i);
+            });
+          }
+        }
+      }
+    }
+    // TODO: Check that this is necessary!
+    member.team_barrier();*/
+    /*for (int a = 0; a < 3; ++a) {
+      for (int b = a; b < 3; ++b) {
+        par_for_inner(member, is, ie, [&](int const i) {
+          S_uu(a, b, i) = 0.0;
+          for (int c = 0; c < 3; ++c) {
+            for (int d = 0; d < 3; ++d) {
+              S_uu(a, b, i) += tmunu.S_dd(m, c, d, k, j, i) * g_uu(a, c, i) * g_uu(b, d, i);
+            }
+          }
+        });
+      }
+    }
+    member.team_barrier();*/
 
     // Assemble energy RHS
     for (int a = 0; a < 3; ++a) {
       for (int b = 0; b < 3; ++b) {
         par_for_inner(member, is, ie, [&](int const i) {
+          /*rhs(m, IEN, k, j, i) += dt * vol(i) * (
+            adm.alpha(m, k, j, i) * adm.K_dd(m, a, b, k, j, i) * S_uu(a, b, i) -
+            g_uu(a, b, i) * tmunu.S_d(m, a, k, j, i) * dalpha_d(b, i));*/
           rhs(m, IEN, k, j, i) += dt * vol(i) * (
             adm.alpha(m, k, j, i) * adm.K_dd(m, a, b, k, j, i) * S_uu(a, b, i) -
             g_uu(a, b, i) * S_d(a, i) * dalpha_d(b, i));
@@ -506,10 +539,12 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
           });
         }
         par_for_inner(member, is, ie, [&](int const i) {
-          rhs(m, IM1 + a, k, j, i) += dt * vol(i) *S_d(b, i) * dbeta_du(a, b, i);
+          //rhs(m, IM1 + a, k, j, i) += dt * vol(i) * tmunu.S_d(m, b, k, j, i) * dbeta_du(a, b, i);
+          rhs(m, IM1 + a, k, j, i) += dt * vol(i) * S_d(b, i) * dbeta_du(a, b, i);
         });
       }
       par_for_inner(member, is, ie, [&](int const i) {
+        //rhs(m, IM1 + a, k, j, i) -= dt * vol(i) * tmunu.E(m, k, j, i) * dalpha_d(a, i);
         rhs(m, IM1 + a, k, j, i) -= dt * vol(i) * E(i) * dalpha_d(a, i);
       });
     }

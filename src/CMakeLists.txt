@@ -35,6 +35,7 @@ add_executable(
 
         dyngr/dyngr.cpp
         dyngr/dyngr_fluxes.cpp
+        dyngr/dyngr_fofc.cpp
 
         eos/eos.cpp
         eos/ideal_hyd.cpp

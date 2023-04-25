@@ -60,9 +60,9 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "con_Mx", "con_My", "con_Mz",
   "con",
 
+  "tmunu_Sxx", "tmunu_Sxy", "tmunu_Sxz", "tmunu_Syy", "tmunu_Syz", "tmunu_Szz",
   "tmunu_E",
   "tmunu_Sx", "tmunu_Sy", "tmunu_Sz",
-  "tmunu_Sxx", "tmunu_Sxy", "tmunu_Sxz", "tmunu_Syy", "tmunu_Syz", "tmunu_Szz",
   "tmunu"
 };
 

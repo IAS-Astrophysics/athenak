@@ -231,7 +231,10 @@ class PrimitiveSolverHydro {
       Real mb = eos_.GetBaryonMass();
 
       // FIXME: This only works for a flooring policy that has these functions!
+      bool prim_failure, cons_failure;
       if (floors_only) {
+        prim_failure = ps.GetEOSMutable().IsPrimitiveFlooringFailure();
+        cons_failure = ps.GetEOSMutable().IsConservedFlooringFailure();
         ps.GetEOSMutable().SetPrimitiveFloorFailure(true);
         ps.GetEOSMutable().SetConservedFloorFailure(true);
       }
@@ -357,8 +360,8 @@ class PrimitiveSolverHydro {
       }, Kokkos::Sum<int>(nfloord_));
 
       if (floors_only) {
-        ps.GetEOSMutable().SetPrimitiveFloorFailure(false);
-        ps.GetEOSMutable().SetConservedFloorFailure(false);
+        ps.GetEOSMutable().SetPrimitiveFloorFailure(prim_failure);
+        ps.GetEOSMutable().SetConservedFloorFailure(cons_failure);
         pmy_pack->pmesh->ecounter.nfofc += nfloord_;
       }
     }

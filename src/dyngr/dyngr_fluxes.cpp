@@ -24,6 +24,7 @@
 #include "reconstruct/wenoz.hpp"
 // include inlined Riemann solvers (double yuck...)
 #include "dyngr/rsolvers/llf_dyngrhyd.cpp" // NOLINT(build/include)
+#include "dyngr/dyngr_fofc.cpp"
 // include PrimitiveSolver stuff
 #include "eos/primitive-solver/idealgas.hpp"
 #include "eos/primitive-solver/reset_floor.hpp"
@@ -330,6 +331,11 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
       member.team_barrier();
     });
     // TODO: handle excision masks
+  }
+
+  // Call FOFC if necessary
+  if (pmy_pack->phydro->use_fofc) {
+    FOFC(pdriver, stage);
   }
 
   // excision masks

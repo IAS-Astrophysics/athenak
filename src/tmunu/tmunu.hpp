@@ -39,7 +39,7 @@ class Tmunu {
     struct Tmunu_vars {
       AthenaTensor<Real, TensorSymm::NONE, 3, 0> E;      // energy density
       AthenaTensor<Real, TensorSymm::NONE, 3, 1> S_d;    // momentum density
-      AthenaTensor<Real, TensorSymm::NONE, 3, 2> S_dd;   // stress tensor
+      AthenaTensor<Real, TensorSymm::SYM2, 3, 2> S_dd;   // stress tensor
     };
 
     Tmunu_vars tmunu;

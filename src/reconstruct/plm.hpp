@@ -10,6 +10,7 @@
 //! This version only works with uniform mesh spacing
 
 #include "athena.hpp"
+#include <math.h>
 
 //----------------------------------------------------------------------------------------
 //! \fn PLM()
@@ -26,6 +27,7 @@ void PLM(const Real &q_im1, const Real &q_i, const Real &q_ip1,
   // Apply limiters for Cartesian-like coordinate with uniform mesh spacing
   Real dq2 = dql*dqr;
   Real dqm = dq2/(dql + dqr);
+  //Real dqm = 0.5*fmin(fabs(dql), fabs(dqr));
   if (dq2 <= 0.0) dqm = 0.0;
 
   // compute ql_(i+1/2) and qr_(i-1/2) using limited slopes

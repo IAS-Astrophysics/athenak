@@ -37,6 +37,16 @@ void ExtractPrimitives(const DvceArray5D<Real>& prim, Real prim_pt[NPRIM],
   prim_pt[PTM] = eos.ps.GetEOS().GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR], &prim_pt[PYF]);
 }
 
+KOKKOS_INLINE_FUNCTION
+void InsertFluxes(const Real flux_pt[NCONS], const DvceArray5D<Real>& flx,
+                  const int m, const int k, const int j, const int i) {
+  flx(m, IDN, k, j, i) = flux_pt[CDN];
+  flx(m, IM1, k, j, i) = flux_pt[CSX];
+  flx(m, IM2, k, j, i) = flux_pt[CSY];
+  flx(m, IM3, k, j, i) = flux_pt[CSZ];
+  flx(m, IEN, k, j, i) = flux_pt[CTA];
+}
+
 } // namespace dyngr
 
 #endif

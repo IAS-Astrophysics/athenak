@@ -1,3 +1,5 @@
+#ifndef LLF_DYNGR_CPP_
+#define LLF_DYNGR_CPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
@@ -203,3 +205,5 @@ void LLF_DYNGR(TeamMember_t const &member,
 }
 
 }
+
+#endif
