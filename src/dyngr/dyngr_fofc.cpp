@@ -89,105 +89,86 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
     // Replace x1-flux at i
     if (fofc_(m,k,j,i)) {
-      // Load left state
-      Real wim1[NPRIM];
-      ExtractPrimitives(w0_, wim1, eos_, nhyd_, nscal_, m, k, j, i-1);
+      Real wrim1[NPRIM], wri[NPRIM], wrip1[NPRIM];
+      Real wli[NPRIM], wlip1[NPRIM], wlip2[NPRIM];
+      // Reconstruct states; note we make this call three times because each call gives
+      // the right side at i-1/2 and the left side at i+1/2.
+      ExtractPrimitivesWithMinmod<IVX>(w0_, wli, wrim1, eos_, nhyd_, nscal_, m, k, j, i-1);
+      ExtractPrimitivesWithMinmod<IVX>(w0_, wlip1, wri, eos_, nhyd_, nscal_, m, k, j, i);
+      ExtractPrimitivesWithMinmod<IVX>(w0_, wlip2, wrip1, eos_, nhyd_, nscal_, m, k, j, i+1);
 
-      // Load right state
-      Real wi[NPRIM];
-      ExtractPrimitives(w0_, wi, eos_, nhyd_, nscal_, m, k, j, i);
-
-      // Compute the metric terms at the face.
+      // Compute the metric terms at i-1/2.
       Real g3d[NSPMETRIC], beta_u[3], alpha;
       Face1Metric(m, k, j, i, adm.g_dd, adm.beta_u, adm.alpha, g3d, beta_u, alpha);
 
       // Compute new 1st-order LLF flux
       Real flux[NCONS];
-      SingleStateLLF_DYNGR(eos_, wim1, wi, IVX, g3d, beta_u, alpha, flux);
-      
-      // Store 1st-order fluxes
+      SingleStateLLF_DYNGR(eos_, wli, wri, IVX, g3d, beta_u, alpha, flux);
+
+      // Store 1st-order fluxes at i-1/2.
       InsertFluxes(flux, flx1, m, k, j, i);
 
-      // Replace x1-flux at i+1
-      // Load right state
-      Real wip1[NPRIM];
-      ExtractPrimitives(w0_, wip1, eos_, nhyd_, nscal_, m, k, j, i+1);
-
-      // Compute the metric terms at the face.
+      // Compute the metric terms at i+1/2.
       Face1Metric(m, k, j, i+1, adm.g_dd, adm.beta_u, adm.alpha, g3d, beta_u, alpha);
 
       // Compute new 1st-order LLF flux
-      SingleStateLLF_DYNGR(eos_, wi, wip1, IVX, g3d, beta_u, alpha, flux);
+      SingleStateLLF_DYNGR(eos_, wlip1, wrip1, IVX, g3d, beta_u, alpha, flux);
 
-      // Store 1st-order fluxes
+      // Store 1st-order fluxes at i+1/2.
       InsertFluxes(flux, flx1, m, k, j, i+1);
 
       if (multi_d) {
-        // Replace x2-flux at j
-        // Load left state
-        Real wjm1[NPRIM];
-        ExtractPrimitives(w0_, wjm1, eos_, nhyd_, nscal_, m, k, j-1, i);
+        Real wrjm1[NPRIM], wrj[NPRIM], wrjp1[NPRIM];
+        Real wlj[NPRIM], wljp1[NPRIM], wljp2[NPRIM];
+        // Reconstruct states
+        ExtractPrimitivesWithMinmod<IVY>(w0_, wlj, wrjm1, eos_, nhyd_, nscal_, m, k, j-1, i);
+        ExtractPrimitivesWithMinmod<IVY>(w0_, wljp1, wrj, eos_, nhyd_, nscal_, m, k, j, i);
+        ExtractPrimitivesWithMinmod<IVY>(w0_, wljp2, wrjp1, eos_, nhyd_, nscal_, m, k, j+1, i);
 
-        // Load right state; because we don't need to permute the states
-        // like the static hydro solver, we can just replace this with wi.
-        Real *wj = wi;
-
-        // Compute the metric terms at the face.
+        // Compute the metric terms at j-1/2.
         Face2Metric(m, k, j, i, adm.g_dd, adm.beta_u, adm.alpha, g3d, beta_u, alpha);
 
-        // Compute new 1st-order LLF flux
-        SingleStateLLF_DYNGR(eos_, wjm1, wj, IVY, g3d, beta_u, alpha, flux);
+        // Compute new 1st-order LLF flux.
+        SingleStateLLF_DYNGR(eos_, wlj, wrj, IVY, g3d, beta_u, alpha, flux);
 
-        // Store 1st-order fluxes
+        // Store 1st-order fluxes at j-1/2.
         InsertFluxes(flux, flx2, m, k, j, i);
 
-        // Replace x2-flux at j+1
-        // Load right state
-        Real wjp1[NPRIM];
-        ExtractPrimitives(w0_, wjp1, eos_, nhyd_, nscal_, m, k, j+1, i);
-
-        // Compute the metric terms at the face.
+        // Compute the metric terms at j+1/2.
         Face2Metric(m, k, j+1, i, adm.g_dd, adm.beta_u, adm.alpha, g3d, beta_u, alpha);
 
-        // Compute new 1st-order LLF flux
-        SingleStateLLF_DYNGR(eos_, wj, wjp1, IVY, g3d, beta_u, alpha, flux);
+        // Compute new 1st-order LLF flux.
+        SingleStateLLF_DYNGR(eos_, wljp1, wrjp1, IVY, g3d, beta_u, alpha, flux);
 
-        // Store 1st-order fluxes
+        // Store 1st-order fluxes at j+1/2.
         InsertFluxes(flux, flx2, m, k, j+1, i);
       }
 
       if (three_d) {
-        // Replace x3-flux at k
-        // Load left state
-        Real wkm1[NPRIM];
-        ExtractPrimitives(w0_, wkm1, eos_, nhyd_, nscal_, m, k-1, j, i);
+        Real wrkm1[NPRIM], wrk[NPRIM], wrkp1[NPRIM];
+        Real wlk[NPRIM], wlkp1[NPRIM], wlkp2[NPRIM];
+        // Reconstruct states
+        ExtractPrimitivesWithMinmod<IVZ>(w0_, wlk, wrkm1, eos_, nhyd_, nscal_, m, k-1, j, i);
+        ExtractPrimitivesWithMinmod<IVZ>(w0_, wlkp1, wrk, eos_, nhyd_, nscal_, m, k, j, i);
+        ExtractPrimitivesWithMinmod<IVZ>(w0_, wlkp2, wrkp1, eos_, nhyd_, nscal_, m, k+1, j, i);
 
-        // Load right state; because we don't need to permute the states
-        // like the static hydro solver, we can just replace this with wi.
-        Real *wk = wi;
-
-        // Compute the metric terms at the face.
+        // Compute the metric terms at k-1/2.
         Face3Metric(m, k, j, i, adm.g_dd, adm.beta_u, adm.alpha, g3d, beta_u, alpha);
 
-        // Compute new 1st-order LLF flux
-        SingleStateLLF_DYNGR(eos_, wkm1, wk, IVZ, g3d, beta_u, alpha, flux);
+        // Compute new 1st-order LLF flux.
+        SingleStateLLF_DYNGR(eos_, wlk, wrk, IVZ, g3d, beta_u, alpha, flux);
 
-        // Store 1st-order fluxes
+        // Store 1st-order fluxes at k-1/2.
         InsertFluxes(flux, flx3, m, k, j, i);
 
-        // Replace x3-flux at k+1
-        // Load right state
-        Real wkp1[NPRIM];
-        ExtractPrimitives(w0_, wkp1, eos_, nhyd_, nscal_, m, k+1, j, i);
-
-        // Compute the metric termas at the face.
+        // Compute the metric terms at k+1/2.
         Face3Metric(m, k+1, j, i, adm.g_dd, adm.beta_u, adm.alpha, g3d, beta_u, alpha);
 
-        // Compute new 1st-order LLF flux
-        SingleStateLLF_DYNGR(eos_, wk, wkp1, IVZ, g3d, beta_u, alpha, flux);
+        // Compute new 1st-order LLF flux.
+        SingleStateLLF_DYNGR(eos_, wlkp1, wrkp1, IVZ, g3d, beta_u, alpha, flux);
 
-        // Store 1st-order fluxes
-        InsertFluxes(flux, flx3, m, k+1, j, i);
+        // Store 1st-order fluxes at k+1/2.
+        InsertFluxes(flux, flx2, m, k+1, j, i);
       }
 
       // reset FOFC flag
