@@ -24,6 +24,7 @@
 
 #include "eos/primitive_solver_hyd.hpp"
 #include "eos/primitive-solver/idealgas.hpp"
+#include "eos/primitive-solver/piecewise_polytrope.hpp"
 #include "eos/primitive-solver/reset_floor.hpp"
 
 namespace dyngr {
@@ -35,6 +36,9 @@ DynGR* SelectDynGREOS(MeshBlockPack *ppack, ParameterInput *pin, DynGR_EOS eos_p
   switch(eos_policy) {
     case DynGR_EOS::eos_ideal:
       dyn_gr = new DynGRPS<Primitive::IdealGas, ErrorPolicy>(ppack, pin);
+      break;
+    case DynGR_EOS::eos_piecewise_poly:
+      dyn_gr = new DynGRPS<Primitive::PiecewisePolytrope, ErrorPolicy>(ppack, pin);
       break;
   }
   return dyn_gr;
@@ -48,6 +52,8 @@ DynGR* BuildDynGR(MeshBlockPack *ppack, ParameterInput *pin) {
 
   if (eos_string.compare("ideal") == 0) {
     eos_policy = DynGR_EOS::eos_ideal;
+  } else if (eos_string.compare("piecewise_poly") == 0) {
+    eos_policy = DynGR_EOS::eos_piecewise_poly;
   } else {
     std::cout << "### FATAL ERROR in " <<__FILE__ << " at line " << __LINE__
               << std::endl << "<hydro> dyn_eos = '" << eos_string
@@ -553,6 +559,7 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
 
 // Instantiated templates
 template class DynGRPS<Primitive::IdealGas, Primitive::ResetFloor>;
+template class DynGRPS<Primitive::PiecewisePolytrope, Primitive::ResetFloor>;
 
 // Macro for defining CoordTerms templates
 #define INSTANTIATE_COORD_TERMS(EOSPolicy, ErrorPolicy) \
@@ -564,6 +571,7 @@ template \
 void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS<4>(const DvceArray5D<Real> &prim, const Real dt, DvceArray5D<Real> &rhs);
 
 INSTANTIATE_COORD_TERMS(Primitive::IdealGas, Primitive::ResetFloor);
+INSTANTIATE_COORD_TERMS(Primitive::PiecewisePolytrope, Primitive::ResetFloor);
 
 #undef INSTANTIATE_COORD_TERMS
 

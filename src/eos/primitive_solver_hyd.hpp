@@ -14,11 +14,14 @@
 #include <float.h>
 #include <math.h>
 #include <type_traits>
+#include <iostream>
+#include <sstream>
 
 // PrimitiveSolver headers
 #include "eos/primitive-solver/eos.hpp"
 #include "eos/primitive-solver/primitive_solver.hpp"
 #include "eos/primitive-solver/idealgas.hpp"
+#include "eos/primitive-solver/piecewise_polytrope.hpp"
 #include "eos/primitive-solver/reset_floor.hpp"
 
 // AthenaK headers
@@ -32,8 +35,48 @@ template<class EOSPolicy, class ErrorPolicy>
 class PrimitiveSolverHydro {
   protected:
     void SetPolicyParams(std::string block, ParameterInput *pin) {
+      // Parameters for an ideal gas
       if constexpr(std::is_same_v<Primitive::IdealGas, EOSPolicy>) {
         ps.GetEOSMutable().SetGamma(pin->GetOrAddReal(block, "gamma", 5.0/3.0));
+      }
+      // Parameters for a piecewise polytrope
+      if constexpr(std::is_same_v<Primitive::PiecewisePolytrope, EOSPolicy>) {
+        // Find out how many pieces we have; exit it if exceeds the maximum number of
+        // polytropes.
+        int npieces = pin->GetOrAddInteger(block, "npieces", 1);
+        const int N = ps.GetEOS().GetMaxPieces();
+        if (npieces > N) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                    << std::endl << "<hydro> npieces = " << npieces
+                    << " too large; MAX_PIECES = " << N << std::endl;
+          std::exit(EXIT_FAILURE);
+        }
+
+        // Collect information about the pressure at the first polytrope division,
+        // the baryon mass, and the minimum density for the EOS.
+        Real P0 = pin->GetOrAddReal(block, "P0", 1.0);
+        Real mb_nuc = pin->GetOrAddReal(block, "mb_nuc", 1.0);
+        Real rho_min = pin->GetOrAddReal(block, "rho_min", 0.1);
+
+        // Collect each individual polytrope
+        Real density_pieces[N];
+        Real gamma_pieces[N];
+        for (int i = 0; i < npieces; i++) {
+          std::stringstream dens_name;
+          dens_name << "density" << (i + 1);
+          std::stringstream gamma_name;
+          gamma_name << "gamma" << (i + 1);
+          density_pieces[i] = pin->GetOrAddReal(block, dens_name.str(), 1.0);
+          gamma_pieces[i] = pin->GetOrAddReal(block, gamma_name.str(), 5.0/3.0);
+        }
+        bool result = ps.GetEOSMutable().InitializeFromData(density_pieces, gamma_pieces, 
+                                                            rho_min, P0, mb_nuc, npieces);
+        if (!result) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                    << std::endl << "There was an error while constructing the EOS." << std::endl;
+          std::exit(EXIT_FAILURE);
+        }
+        ps.GetEOSMutable().SetThermalGamma(pin->GetOrAddReal(block, "gamma_thermal", 1.5));
       }
     }
   public:
