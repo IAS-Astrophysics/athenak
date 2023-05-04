@@ -1,3 +1,5 @@
+# pylint: skip-file
+
 import sys
 
 def string_central(stencil,a=0,b=0):
