@@ -33,7 +33,7 @@ TaskStatus Z4c::ExpRKUpdate(Driver *pdriver, int stage) {
   auto &u1 = pmy_pack->pz4c->u1;
   auto &u_rhs = pmy_pack->pz4c->u_rhs;
   int nmb1 = pmy_pack->nmb_thispack - 1;
-  int nvar = N_Z4c;
+  int nvar = nz4c;
 
   int scr_level = 0;
   int ncells1 = indcs.nx1 + 2*(indcs.ng);

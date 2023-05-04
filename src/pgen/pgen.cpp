@@ -73,6 +73,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
     RadiationLinearWave(pin, false);
   } else if (pgen_fun_name.compare("shock_tube") == 0) {
     ShockTube(pin, false);
+  } else if (pgen_fun_name.compare("adm_linear_wave") == 0) {
+    ADMLinearWave(pin, true);
   // else, name not set on command line or input file, print warning and quit
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
@@ -161,7 +163,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
     nrad = prad->prgeo->nangles;
   }
   if (pz4c != nullptr) {
-    nz4c = pz4c->N_Z4c;
+    nz4c = pz4c->nz4c;
   }
   else if (padm != nullptr) {
     nadm = padm->N_ADM;
@@ -514,6 +516,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
     RadiationLinearWave(pin, true);
   } else if (pgen_fun_name.compare("shock_tube") == 0) {
     ShockTube(pin, true);
+  } else if (pgen_fun_name.compare("linear_wave") == 0) {
+    ADMLinearWave(pin, true);
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
         << "Problem generator name could not be found in <problem> block in input file"

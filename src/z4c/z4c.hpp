@@ -67,38 +67,38 @@ class Z4c {
 
   // Indices of evolved variables
   enum {
-    I_Z4c_chi,
-    I_Z4c_gxx, I_Z4c_gxy, I_Z4c_gxz, I_Z4c_gyy, I_Z4c_gyz, I_Z4c_gzz,
-    I_Z4c_Khat,
-    I_Z4c_Axx, I_Z4c_Axy, I_Z4c_Axz, I_Z4c_Ayy, I_Z4c_Ayz, I_Z4c_Azz,
-    I_Z4c_Gamx, I_Z4c_Gamy, I_Z4c_Gamz,
-    I_Z4c_Theta,
-    I_Z4c_alpha,
-    I_Z4c_betax, I_Z4c_betay, I_Z4c_betaz,
-    N_Z4c
+    I_Z4C_CHI,
+    I_Z4C_GXX, I_Z4C_GXY, I_Z4C_GXZ, I_Z4C_GYY, I_Z4C_GYZ, I_Z4C_GZZ,
+    I_Z4C_KHAT,
+    I_Z4C_AXX, I_Z4C_AXY, I_Z4C_AXZ, IZ4CAYY, IZ4CAYZ, IZ4CAZZ,
+    I_Z4C_GAMX, I_Z4C_GAMY, I_Z4C_GAMZ,
+    I_Z4C_THETA,
+    IZ4CALPHA,
+    I_Z4C_BETAX, I_Z4C_BETAY, I_Z4C_BETAZ,
+    nz4c
   };
   // Names of Z4c variables
-  static char const * const Z4c_names[N_Z4c];
+  static char const * const Z4c_names[nz4c];
   // Indices of Constraint variables
   enum {
     I_CON_C,
     I_CON_H,
     I_CON_M,
     I_CON_Z,
-    I_CON_Mx, I_CON_My, I_CON_Mz,
-    N_CON,
+    I_CON_MX, I_CON_MY, I_CON_MZ,
+    ncon,
   };
   // Names of costraint variables
-  static char const * const Constraint_names[N_CON];
+  static char const * const Constraint_names[ncon];
   // Indices of matter fields
   enum {
-    I_MAT_rho,
-    I_MAT_Sx, I_MAT_Sy, I_MAT_Sz,
-    I_MAT_Sxx, I_MAT_Sxy, I_MAT_Sxz, I_MAT_Syy, I_MAT_Syz, I_MAT_Szz,
-    N_MAT
+    I_MAT_RHO,
+    I_MAT_SX, I_MAT_SY, I_MAT_SZ,
+    I_MAT_SXX, I_MAT_SXY, I_MAT_SXZ, I_MAT_SYY, I_MAT_SYZ, I_MAT_SZZ,
+    nmat
   };
   // Names of matter variables
-  static char const * const Matter_names[N_MAT];
+  static char const * const Matter_names[nmat];
 
   // data
   // flags to denote relativistic dynamics
@@ -119,25 +119,25 @@ class Z4c {
   struct ADM_vars {
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> psi4;
     AthenaTensor<Real, TensorSymm::SYM2, 3, 2> g_dd;
-    AthenaTensor<Real, TensorSymm::SYM2, 3, 2> K_dd;
+    AthenaTensor<Real, TensorSymm::SYM2, 3, 2> kk_dd;
   }; 
   ADM_vars adm;
 
   struct ADMhost_vars {
     AthenaHostTensor<Real, TensorSymm::NONE, 3, 0> psi4;
     AthenaHostTensor<Real, TensorSymm::SYM2, 3, 2> g_dd;
-    AthenaHostTensor<Real, TensorSymm::SYM2, 3, 2> K_dd;
+    AthenaHostTensor<Real, TensorSymm::SYM2, 3, 2> kk_dd;
   }; 
   
   struct Z4c_vars {
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> chi;       // conf. factor
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> Khat;      // trace extr. curvature
-    AthenaTensor<Real, TensorSymm::NONE, 3, 0> Theta;     // Theta var in Z4c
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> ttheta;     // Theta var in Z4c
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> alpha;     // lapse
-    AthenaTensor<Real, TensorSymm::NONE, 3, 1> Gam_u;     // Gamma functions (BSSN)
+    AthenaTensor<Real, TensorSymm::NONE, 3, 1> ggam_u;     // Gamma functions (BSSN)
     AthenaTensor<Real, TensorSymm::NONE, 3, 1> beta_u;    // shift
     AthenaTensor<Real, TensorSymm::SYM2, 3, 2> g_dd;      // conf. 3-metric
-    AthenaTensor<Real, TensorSymm::SYM2, 3, 2> A_dd;      // conf. traceless extr. curvature
+    AthenaTensor<Real, TensorSymm::SYM2, 3, 2> aa_dd;      // conf. traceless extr. curvature
   };
   Z4c_vars z4c;
   Z4c_vars rhs;
@@ -155,8 +155,8 @@ class Z4c {
   // aliases for the matter variables
   struct Matter_vars {
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> rho;       // matter energy density
-    AthenaTensor<Real, TensorSymm::NONE, 3, 1> S_d;       // matter momentum density
-    AthenaTensor<Real, TensorSymm::SYM2, 3, 2> S_dd;      // matter stress tensor
+    AthenaTensor<Real, TensorSymm::NONE, 3, 1> ss_d;       // matter momentum density
+    AthenaTensor<Real, TensorSymm::SYM2, 3, 2> ss_dd;      // matter stress tensor
   };
   Matter_vars mat;
 
@@ -174,9 +174,9 @@ class Z4c {
     Real lapse_harmonic;
     Real lapse_advect;
     // Gauge condition for the shift
-    Real shift_Gamma;
-    Real shift_alpha2Gamma;
-    Real shift_H;
+    Real shift_ggamma;
+    Real shift_alpha2ggamma;
+    Real shift_hh;
     Real shift_advect;
     Real shift_eta;
   };

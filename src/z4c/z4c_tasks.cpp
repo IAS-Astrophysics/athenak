@@ -77,13 +77,13 @@ void Z4c::AssembleZ4cTasks(TaskList &start, TaskList &run, TaskList &end) {
 //  receive status flags to waiting (with or without MPI) for Wave variables.
 
 TaskStatus Z4c::InitRecv(Driver *pdrive, int stage) {
-  TaskStatus tstat = pbval_u->InitRecv(N_Z4c);
+  TaskStatus tstat = pbval_u->InitRecv(nz4c);
   if (tstat != TaskStatus::complete) return tstat;
 
   // with SMR/AMR post receives for fluxes of U
   // do not post receives for fluxes when stage < 0 (i.e. ICs)
   if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
-    tstat = pbval_u->InitFluxRecv(N_Z4c);
+    tstat = pbval_u->InitFluxRecv(nz4c);
   }
   return tstat;
 }
@@ -145,7 +145,7 @@ TaskStatus Z4c::CopyU(Driver *pdrive, int stage) {
     if (integrator == "rk4") {
       Real &delta = pdrive->delta[stage-1];
       if (stage != 1) {
-        par_for("CopyCons", DevExeSpace(),0, nmb1, 0, N_Z4c-1, ks, ke, js, je, is, ie,
+        par_for("CopyCons", DevExeSpace(),0, nmb1, 0, nz4c-1, ks, ke, js, je, is, ie,
         KOKKOS_LAMBDA(int m, int n, int k, int j, int i){
           u1(m,n,k,j,i) += delta*u0(m,n,k,j,i);
         });

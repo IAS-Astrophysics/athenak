@@ -464,7 +464,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
   }
   
   // con z4c variables
-  for (int v = 0; v < z4c::Z4c::N_CON; ++v) {
+  for (int v = 0; v < z4c::Z4c::ncon; ++v) {
     if (out_params.variable.compare("con") == 0 ||
         out_params.variable.compare(z4c::Z4c::Constraint_names[v]) == 0) {
       outvars.emplace_back(z4c::Z4c::Constraint_names[v], v, &(pm->pmb_pack->pz4c->u_con));
@@ -472,7 +472,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
   }
   
   // mat z4c variables
-  for (int v = 0; v < z4c::Z4c::N_MAT; ++v) {
+  for (int v = 0; v < z4c::Z4c::nmat; ++v) {
     if (out_params.variable.compare("mat") == 0 ||
         out_params.variable.compare(z4c::Z4c::Matter_names[v]) == 0) {
       outvars.emplace_back(z4c::Z4c::Matter_names[v], v, &(pm->pmb_pack->pz4c->u_mat));
@@ -480,7 +480,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
   }
   
   // z4c variables
-  for (int v = 0; v < z4c::Z4c::N_Z4c; ++v) {
+  for (int v = 0; v < z4c::Z4c::nz4c; ++v) {
     if (out_params.variable.compare("z4c") == 0 ||
         out_params.variable.compare(z4c::Z4c::Z4c_names[v]) == 0) {
       outvars.emplace_back(z4c::Z4c::Z4c_names[v], v, &(pm->pmb_pack->pz4c->u0));

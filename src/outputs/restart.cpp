@@ -66,7 +66,7 @@ void RestartOutput::LoadOutputData(Mesh *pm) {
     nmhd = pmhd->nmhd + pmhd->nscalars;
   }
   if (pz4c != nullptr) {
-    nz4c = pz4c->N_Z4c;
+    nz4c = pz4c->nz4c;
   }
   // if the spacetime is evolved, we do not need to checkpoint/recover the ADM variables
   else if (padm != nullptr) {
@@ -151,7 +151,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     nrad = prad->prgeo->nangles;
   }
   if (pz4c != nullptr) {
-    nz4c = pz4c->N_Z4c;
+    nz4c = pz4c->nz4c;
   }
   // create filename: "rst/file_basename" + "." + XXXXX + ".rst"
   // where XXXXX = 5-digit file_number

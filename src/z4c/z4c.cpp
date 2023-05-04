@@ -19,7 +19,7 @@
 
 namespace z4c {
 
-char const * const Z4c::Z4c_names[Z4c::N_Z4c] = {
+char const * const Z4c::Z4c_names[Z4c::nz4c] = {
   "z4c_chi",
   "z4c_gxx", "z4c_gxy", "z4c_gxz", "z4c_gyy", "z4c_gyz", "z4c_gzz",
   "z4c_Khat",
@@ -30,7 +30,7 @@ char const * const Z4c::Z4c_names[Z4c::N_Z4c] = {
   "z4c_betax", "z4c_betay", "z4c_betaz",
 };
 
-char const * const Z4c::Constraint_names[Z4c::N_CON] = {
+char const * const Z4c::Constraint_names[Z4c::ncon] = {
   "con_C",
   "con_H",
   "con_M",
@@ -38,7 +38,7 @@ char const * const Z4c::Constraint_names[Z4c::N_CON] = {
   "con_Mx", "con_My", "con_Mz",
 };
 
-char const * const Z4c::Matter_names[Z4c::N_MAT] = {
+char const * const Z4c::Matter_names[Z4c::nmat] = {
   "mat_rho",
   "mat_Sx", "mat_Sy", "mat_Sz",
   "mat_Sxx", "mat_Sxy", "mat_Sxz", "mat_Syy", "mat_Syz", "mat_Szz",
@@ -69,41 +69,41 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
   int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
   Kokkos::Profiling::pushRegion("Tensor fields");
-  Kokkos::realloc(u_con, nmb, (N_CON), ncells3, ncells2, ncells1);
+  Kokkos::realloc(u_con, nmb, (ncon), ncells3, ncells2, ncells1);
   // Matter commented out
   // kokkos::realloc(u_mat, nmb, (N_MAT), ncells3, ncells2, ncells1);
-  Kokkos::realloc(u0,    nmb, (N_Z4c), ncells3, ncells2, ncells1);
-  Kokkos::realloc(u1,    nmb, (N_Z4c), ncells3, ncells2, ncells1);
-  Kokkos::realloc(u_rhs, nmb, (N_Z4c), ncells3, ncells2, ncells1);
+  Kokkos::realloc(u0,    nmb, (nz4c), ncells3, ncells2, ncells1);
+  Kokkos::realloc(u1,    nmb, (nz4c), ncells3, ncells2, ncells1);
+  Kokkos::realloc(u_rhs, nmb, (nz4c), ncells3, ncells2, ncells1);
 
   con.C.InitWithShallowSlice(u_con, I_CON_C);
   con.H.InitWithShallowSlice(u_con, I_CON_H);
   con.M.InitWithShallowSlice(u_con, I_CON_M);
   con.Z.InitWithShallowSlice(u_con, I_CON_Z);
-  con.M_d.InitWithShallowSlice(u_con, I_CON_Mx, I_CON_Mz);
+  con.M_d.InitWithShallowSlice(u_con, I_CON_MX, I_CON_MZ);
 
   // Matter commented out
   //mat.rho.InitWithShallowSlice(u_mat, I_MAT_rho);
   //mat.S_d.InitWithShallowSlice(u_mat, I_MAT_Sx, I_MAT_Sz);
   //mat.S_dd.InitWithShallowSlice(u_mat, I_MAT_Sxx, I_MAT_Szz);
 
-  z4c.alpha.InitWithShallowSlice (u0, I_Z4c_alpha);
-  z4c.beta_u.InitWithShallowSlice(u0, I_Z4c_betax, I_Z4c_betaz);
-  z4c.chi.InitWithShallowSlice   (u0, I_Z4c_chi);
-  z4c.Khat.InitWithShallowSlice  (u0, I_Z4c_Khat);
-  z4c.Theta.InitWithShallowSlice (u0, I_Z4c_Theta);
-  z4c.Gam_u.InitWithShallowSlice (u0, I_Z4c_Gamx, I_Z4c_Gamz);
-  z4c.g_dd.InitWithShallowSlice  (u0, I_Z4c_gxx, I_Z4c_gzz);
-  z4c.A_dd.InitWithShallowSlice  (u0, I_Z4c_Axx, I_Z4c_Azz);
+  z4c.alpha.InitWithShallowSlice (u0, IZ4CALPHA);
+  z4c.beta_u.InitWithShallowSlice(u0, I_Z4C_BETAX, I_Z4C_BETAZ);
+  z4c.chi.InitWithShallowSlice   (u0, I_Z4C_CHI);
+  z4c.Khat.InitWithShallowSlice  (u0, I_Z4C_KHAT);
+  z4c.ttheta.InitWithShallowSlice (u0, I_Z4C_THETA);
+  z4c.ggam_u.InitWithShallowSlice (u0, I_Z4C_GAMX, I_Z4C_GAMZ);
+  z4c.g_dd.InitWithShallowSlice  (u0, I_Z4C_GXX, I_Z4C_GZZ);
+  z4c.aa_dd.InitWithShallowSlice  (u0, I_Z4C_AXX, IZ4CAZZ);
   
-  rhs.alpha.InitWithShallowSlice (u_rhs, I_Z4c_alpha);
-  rhs.beta_u.InitWithShallowSlice(u_rhs, I_Z4c_betax, I_Z4c_betaz);
-  rhs.chi.InitWithShallowSlice   (u_rhs, I_Z4c_chi);
-  rhs.Khat.InitWithShallowSlice  (u_rhs, I_Z4c_Khat);
-  rhs.Theta.InitWithShallowSlice (u_rhs, I_Z4c_Theta);
-  rhs.Gam_u.InitWithShallowSlice (u_rhs, I_Z4c_Gamx, I_Z4c_Gamz);
-  rhs.g_dd.InitWithShallowSlice  (u_rhs, I_Z4c_gxx, I_Z4c_gzz);
-  rhs.A_dd.InitWithShallowSlice  (u_rhs, I_Z4c_Axx, I_Z4c_Azz);
+  rhs.alpha.InitWithShallowSlice (u_rhs, IZ4CALPHA);
+  rhs.beta_u.InitWithShallowSlice(u_rhs, I_Z4C_BETAX, I_Z4C_BETAZ);
+  rhs.chi.InitWithShallowSlice   (u_rhs, I_Z4C_CHI);
+  rhs.Khat.InitWithShallowSlice  (u_rhs, I_Z4C_KHAT);
+  rhs.ttheta.InitWithShallowSlice (u_rhs, I_Z4C_THETA);
+  rhs.ggam_u.InitWithShallowSlice (u_rhs, I_Z4C_GAMX, I_Z4C_GAMZ);
+  rhs.g_dd.InitWithShallowSlice  (u_rhs, I_Z4C_GXX, I_Z4C_GZZ);
+  rhs.aa_dd.InitWithShallowSlice  (u_rhs, I_Z4C_AXX, IZ4CAZZ);
   
   
   
@@ -118,11 +118,11 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   opt.lapse_harmonic = pin->GetOrAddReal("z4c", "lapse_harmonic", 0.0);
   opt.lapse_oplog = pin->GetOrAddReal("z4c", "lapse_oplog", 2.0);
   opt.lapse_advect = pin->GetOrAddReal("z4c", "lapse_advect", 1.0);
-  opt.shift_Gamma = pin->GetOrAddReal("z4c", "shift_Gamma", 1.0);
+  opt.shift_ggamma = pin->GetOrAddReal("z4c", "shift_Gamma", 1.0);
   opt.shift_advect = pin->GetOrAddReal("z4c", "shift_advect", 1.0);
 
-  opt.shift_alpha2Gamma = pin->GetOrAddReal("z4c", "shift_alpha2Gamma", 0.0);
-  opt.shift_H = pin->GetOrAddReal("z4c", "shift_H", 0.0);
+  opt.shift_alpha2ggamma = pin->GetOrAddReal("z4c", "shift_alpha2Gamma", 0.0);
+  opt.shift_hh = pin->GetOrAddReal("z4c", "shift_H", 0.0);
 
   opt.shift_eta = pin->GetOrAddReal("z4c", "shift_eta", 2.0);
 
@@ -136,14 +136,14 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
     int nccells1 = indcs.cnx1 + 2*(indcs.ng);
     int nccells2 = (indcs.cnx2 > 1)? (indcs.cnx2 + 2*(indcs.ng)) : 1;
     int nccells3 = (indcs.cnx3 > 1)? (indcs.cnx3 + 2*(indcs.ng)) : 1;
-    Kokkos::realloc(coarse_u0, nmb, (N_Z4c), nccells3, nccells2, nccells1);
+    Kokkos::realloc(coarse_u0, nmb, (nz4c), nccells3, nccells2, nccells1);
   }
   Kokkos::Profiling::popRegion();
 
   // allocate boundary buffers for conserved (cell-centered) variables
   Kokkos::Profiling::pushRegion("Buffers");
   pbval_u = new BoundaryValuesCC(ppack, pin);
-  pbval_u->InitializeBuffers((N_Z4c));
+  pbval_u->InitializeBuffers((nz4c));
   Kokkos::Profiling::popRegion();
 
 }
@@ -205,8 +205,8 @@ void Z4c::AlgConstr(MeshBlockPack *pmbp)
       A(i) = adm::Trace(1.0,
                    z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i), z4c.g_dd(m,0,2,k,j,i),
                    z4c.g_dd(m,1,1,k,j,i), z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i),
-                   z4c.A_dd(m,0,0,k,j,i), z4c.A_dd(m,0,1,k,j,i), z4c.A_dd(m,0,2,k,j,i),
-                   z4c.A_dd(m,1,1,k,j,i), z4c.A_dd(m,1,2,k,j,i), z4c.A_dd(m,2,2,k,j,i));
+                   z4c.aa_dd(m,0,0,k,j,i), z4c.aa_dd(m,0,1,k,j,i), z4c.aa_dd(m,0,2,k,j,i),
+                   z4c.aa_dd(m,1,1,k,j,i), z4c.aa_dd(m,1,2,k,j,i), z4c.aa_dd(m,2,2,k,j,i));
     });
     member.team_barrier();
 
@@ -214,7 +214,7 @@ void Z4c::AlgConstr(MeshBlockPack *pmbp)
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
       par_for_inner(member, isg, ieg, [&](const int i) {
-        z4c.A_dd(m,a,b,k,j,i) -= (1.0/3.0) * A(i) * z4c.g_dd(m,a,b,k,j,i);
+        z4c.aa_dd(m,a,b,k,j,i) -= (1.0/3.0) * A(i) * z4c.g_dd(m,a,b,k,j,i);
       });
     }
   });

@@ -111,7 +111,7 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
       par_for_inner(member, isg, ieg, [&](const int i) { 
-        z4c.A_dd(m,a,b,k,j,i) = Kt_dd(a,b,i) - (1./3.) * z4c.Khat(m,k,j,i) * z4c.g_dd(m,a,b,k,j,i);
+        z4c.aa_dd(m,a,b,k,j,i) = Kt_dd(a,b,i) - (1./3.) * z4c.Khat(m,k,j,i) * z4c.g_dd(m,a,b,k,j,i);
       });
     }
   });
@@ -143,9 +143,9 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
   // Compute Gammas
   // Compute only for internal points
   // ILOOP
-  int const &I_Z4c_Gamx = pmbp->pz4c->I_Z4c_Gamx;
-  int const &I_Z4c_Gamy = pmbp->pz4c->I_Z4c_Gamy;
-  int const &I_Z4c_Gamz = pmbp->pz4c->I_Z4c_Gamz;
+  int const &IZ4CGAMX = pmbp->pz4c->I_Z4C_GAMX;
+  int const &IZ4CGAMY = pmbp->pz4c->I_Z4C_GAMY;
+  int const &IZ4CGAMZ = pmbp->pz4c->I_Z4C_GAMZ;
   auto              &u0 = pmbp->pz4c->u0;
   sub_DvceArray5D_0D g_00 = Kokkos::subview(g_uu, Kokkos::ALL, 0, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
   sub_DvceArray5D_0D g_01 = Kokkos::subview(g_uu, Kokkos::ALL, 1, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
@@ -162,13 +162,13 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
     Real idx[] = {size.d_view(m).idx1, size.d_view(m).idx2, size.d_view(m).idx3};
     sub_DvceArray5D_0D aux = Kokkos::subview(g_uu, Kokkos::ALL, 0, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
     par_for_inner(member, is, ie, [&](const int i) {
-      u0(m,I_Z4c_Gamx,k,j,i) = -Dx<NGHOST>(0, idx, g_00, m, k, j, i)  // d/dx g00
+      u0(m,IZ4CGAMX,k,j,i) = -Dx<NGHOST>(0, idx, g_00, m, k, j, i)  // d/dx g00
                                -Dx<NGHOST>(1, idx, g_01, m, k, j, i)  // d/dy g01
                                -Dx<NGHOST>(2, idx, g_02, m, k, j, i); // d/dz g02
-      u0(m,I_Z4c_Gamy,k,j,i) = -Dx<NGHOST>(0, idx, g_01, m, k, j, i)  // d/dx g01
+      u0(m,IZ4CGAMY,k,j,i) = -Dx<NGHOST>(0, idx, g_01, m, k, j, i)  // d/dx g01
                                -Dx<NGHOST>(1, idx, g_11, m, k, j, i)  // d/dy g11
                                -Dx<NGHOST>(2, idx, g_12, m, k, j, i); // d/dz g12
-      u0(m,I_Z4c_Gamz,k,j,i) = -Dx<NGHOST>(0, idx, g_02, m, k, j, i)  // d/dx g01
+      u0(m,IZ4CGAMZ,k,j,i) = -Dx<NGHOST>(0, idx, g_02, m, k, j, i)  // d/dx g01
                                -Dx<NGHOST>(1, idx, g_12, m, k, j, i)  // d/dy g11
                                -Dx<NGHOST>(2, idx, g_22, m, k, j, i); // d/dz g12
     });
@@ -223,8 +223,8 @@ void Z4c::Z4cToADM(MeshBlockPack *pmbp) {
     for(int a = 0; a < 3; ++a) 
     for(int b = a; b < 3; ++b) { 
       par_for_inner(member, isg, ieg, [&](const int i) { 
-        adm.K_dd(m,a,b,k,j,i) = adm.psi4(m,k,j,i) * z4c.A_dd(m,a,b,k,j,i) + 
-          (1./3.) * (z4c.Khat(m,k,j,i) + 2.*z4c.Theta(m,k,j,i)) * adm.g_dd(m,a,b,k,j,i); 
+        adm.K_dd(m,a,b,k,j,i) = adm.psi4(m,k,j,i) * z4c.aa_dd(m,a,b,k,j,i) + 
+          (1./3.) * (z4c.Khat(m,k,j,i) + 2.*z4c.ttheta(m,k,j,i)) * adm.g_dd(m,a,b,k,j,i); 
       });
     }
   });
@@ -530,14 +530,14 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     for(int a = 0; a < 3; ++a)
     for(int b = 0; b < 3; ++b) {
       par_for_inner(member, is, ie, [&](const int i) {
-        con.Z(m,k,j,i) += 0.25*adm.g_dd(m,a,b,k,j,i)*(z4c.Gam_u(m,a,k,j,i) - Gamma_u(a,i))
-                                                    *(z4c.Gam_u(m,b,k,j,i) - Gamma_u(b,i));
+        con.Z(m,k,j,i) += 0.25*adm.g_dd(m,a,b,k,j,i)*(z4c.ggam_u(m,a,k,j,i) - Gamma_u(a,i))
+                                                    *(z4c.ggam_u(m,b,k,j,i) - Gamma_u(b,i));
       });
     }
     member.team_barrier();
     // Constraint violation monitor C^2
     par_for_inner(member, is, ie, [&](const int i) {
-      con.C(m,k,j,i) = SQR(con.H(m,k,j,i)) + con.M(m,k,j,i) + SQR(z4c.Theta(m,k,j,i)) + 4.0*con.Z(m,k,j,i);
+      con.C(m,k,j,i) = SQR(con.H(m,k,j,i)) + con.M(m,k,j,i) + SQR(z4c.ttheta(m,k,j,i)) + 4.0*con.Z(m,k,j,i);
     });
 });
 }
