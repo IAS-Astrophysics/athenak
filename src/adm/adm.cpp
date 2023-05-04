@@ -26,7 +26,6 @@ char const * const ADM::ADM_names[ADM::N_ADM] = {
 ADM::ADM(MeshBlockPack *ppack, ParameterInput *pin):
   pmy_pack(ppack),
   u_adm("u_adm",1,1,1,1,1) {
-
   int nmb = ppack->nmb_thispack;
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int ncells1 = indcs.nx1 + 2*(indcs.ng);

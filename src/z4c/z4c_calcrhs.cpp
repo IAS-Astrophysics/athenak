@@ -344,7 +344,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     //
     par_for_inner(member, is, ie, [&](const int i) {
       detg(i) = adm::SpatialDet(z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i),
-                                z4c.g_dd(m,0,2,k,j,i), z4c.g_dd(m,1,1,k,j,i), 
+                                z4c.g_dd(m,0,2,k,j,i), z4c.g_dd(m,1,1,k,j,i),
                                 z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i));
       adm::SpatialInv(1.0/detg(i),
                  z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i), z4c.g_dd(m,0,2,k,j,i),

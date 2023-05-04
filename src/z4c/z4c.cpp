@@ -8,8 +8,8 @@
 
 #include <iostream>
 #include <string>
-#include <Kokkos_Core.hpp>
 #include <algorithm>
+#include <Kokkos_Core.hpp>
 
 #include "athena.hpp"
 #include "parameter_input.hpp"

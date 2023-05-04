@@ -161,7 +161,8 @@ class Z4c {
 
   struct Options {
     Real chi_psi_power;   // chi = psi^N, N = chi_psi_power
-    // puncture's floor value for chi, use max(chi, chi_div_floor) in non-differentiated chi
+    // puncture's floor value for chi, use max(chi, chi_div_floor)
+    // in non-differentiated chi
     Real chi_div_floor;
     Real diss;            // amount of numerical dissipation
     Real eps_floor;       // a small number O(10^-12)
