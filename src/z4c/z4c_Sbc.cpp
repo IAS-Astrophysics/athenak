@@ -21,7 +21,7 @@ namespace z4c {
 TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage) {
 #if 0
   // Ideas:
-  // 1) Implement this with 2 nested multirange. 
+  // 1) Implement this with 2 nested multirange.
   //    This requires definining spatial 0-D tensors.
   // 2) Implement as it is but copy code in every if (generate with python)
   printf("In Z4cBoundaryRHS\n");
@@ -46,7 +46,8 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage) {
                   + ScrArray2D<Real>::shmem_size(9,ncells1)// 2D tensor with no symm
                   + ScrArray2D<Real>::shmem_size(18,ncells1); // 3D tensor with symm
   int scr_level = 1;
-  //par_for_outer("Sommerfeld loop",DevExeSpace(),scr_size,scr_level,0,nmb1,ks_,ke_,js_,je_,
+  // par_for_outer("Sommerfeld loop",DevExeSpace(),
+  // scr_size,scr_level,0,nmb1,ks_,ke_,js_,je_,
   par_for("Sommerfeld loop",DevExeSpace(),0,nmb1,ks_,ke_,js_,je_,
   KOKKOS_LAMBDA(const int m, const int k, const int j) {
     //int is, ie, js, je, ks, ke, p;

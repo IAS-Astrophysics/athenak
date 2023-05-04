@@ -114,8 +114,8 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
 
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
-      par_for_inner(member, isg, ieg, [&](const int i) { 
-        z4c.aa_dd(m,a,b,k,j,i) = Kt_dd(a,b,i) - (1./3.) * 
+      par_for_inner(member, isg, ieg, [&](const int i) {
+        z4c.aa_dd(m,a,b,k,j,i) = Kt_dd(a,b,i) - (1./3.) *
                                   z4c.kkhat(m,k,j,i) * z4c.g_dd(m,a,b,k,j,i);
       });
     }
@@ -124,7 +124,7 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
 
   DvceArray5D<Real> g_uu("g_uu", nmb, 6, ncells3, ncells2, ncells1);
   // GLOOP
-  scr_size = ScrArray1D<Real>::shmem_size(ncells1); 
+  scr_size = ScrArray1D<Real>::shmem_size(ncells1);
   par_for_outer("invert z4c metric",DevExeSpace(),
   scr_size,scr_level,0,nmb-1,ksg,keg,jsg,jeg,
   KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {
@@ -172,7 +172,7 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
     Real &idx2 = size.d_view(m).idx2;
     Real &idx3 = size.d_view(m).idx3;
     Real idx[] = {size.d_view(m).idx1, size.d_view(m).idx2, size.d_view(m).idx3};
-    sub_DvceArray5D_0D aux = Kokkos::subview(g_uu, 
+    sub_DvceArray5D_0D aux = Kokkos::subview(g_uu,
     Kokkos::ALL, 0, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
     par_for_inner(member, is, ie, [&](const int i) {
       u0(m,IZ4CGAMX,k,j,i) = -Dx<NGHOST>(0, idx, g_00, m, k, j, i)  // d/dx g00

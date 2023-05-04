@@ -9,6 +9,7 @@
 #include <iostream>
 #include <string>
 #include <Kokkos_Core.hpp>
+#include <algorithm>
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
@@ -141,7 +142,6 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   pbval_u = new BoundaryValuesCC(ppack, pin);
   pbval_u->InitializeBuffers((nz4c));
   Kokkos::Profiling::popRegion();
-
 }
 
 //----------------------------------------------------------------------------------------
@@ -201,10 +201,10 @@ void Z4c::AlgConstr(MeshBlockPack *pmbp) {
     // note: here we are assuming that det g = 1, which we enforced above
     par_for_inner(member, isg, ieg, [&](const int i) {
       A(i) = adm::Trace(1.0,
-                   z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i), z4c.g_dd(m,0,2,k,j,i),
-                   z4c.g_dd(m,1,1,k,j,i), z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i),
-                   z4c.aa_dd(m,0,0,k,j,i), z4c.aa_dd(m,0,1,k,j,i), z4c.aa_dd(m,0,2,k,j,i),
-                   z4c.aa_dd(m,1,1,k,j,i), z4c.aa_dd(m,1,2,k,j,i), z4c.aa_dd(m,2,2,k,j,i));
+                z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i), z4c.g_dd(m,0,2,k,j,i),
+                z4c.g_dd(m,1,1,k,j,i), z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i),
+                z4c.aa_dd(m,0,0,k,j,i), z4c.aa_dd(m,0,1,k,j,i), z4c.aa_dd(m,0,2,k,j,i),
+                z4c.aa_dd(m,1,1,k,j,i), z4c.aa_dd(m,1,2,k,j,i), z4c.aa_dd(m,2,2,k,j,i));
     });
     member.team_barrier();
 

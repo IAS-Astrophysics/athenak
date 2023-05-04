@@ -117,16 +117,24 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     Gamma_udd.NewAthenaScratchTensor(member, scr_level, ncells1);
 
     // auxiliary derivatives
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> dbeta;   // d_a beta^a
+
+    // d_a beta^a
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> dbeta;
 
     dbeta.NewAthenaScratchTensor(member, scr_level, ncells1);
 
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> dalpha_d;// lapse 1st drvts
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> ddbeta_d;// 2nd "divergence" of beta
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> dchi_d;  // chi 1st drvts
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> dphi_d;  // phi 1st drvts
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> dKhat_d; // Khat 1st drvts
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> dTheta_d;// Theta 1st drvts
+    // lapse 1st drvts
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> dalpha_d;
+    // 2nd "divergence" of beta
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> ddbeta_d;
+    // chi 1st drvts
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> dchi_d;
+    // phi 1st drvts
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> dphi_d;
+    // Khat 1st drvts
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> dKhat_d;
+    // Theta 1st drvts
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> dTheta_d;
 
     dalpha_d.NewAthenaScratchTensor(member, scr_level, ncells1);
     ddbeta_d.NewAthenaScratchTensor(member, scr_level, ncells1);
@@ -135,45 +143,60 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     dKhat_d.NewAthenaScratchTensor(member, scr_level, ncells1);
     dTheta_d.NewAthenaScratchTensor(member, scr_level, ncells1);
 
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> ddalpha_dd;  // lapse 2nd drvts
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 2> dbeta_du;    // shift 1st drvts
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> ddchi_dd;    // chi 2nd drvts
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 2> dGam_du;     // Gamma 1st drvts
+    // lapse 2nd drvts
+    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> ddalpha_dd;
+    // shift 1st drvts
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 2> dbeta_du;
+    // chi 2nd drvts
+    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> ddchi_dd;
+    // Gamma 1st drvts
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 2> dGam_du;
 
     ddalpha_dd.NewAthenaScratchTensor(member, scr_level, ncells1);
     dbeta_du.NewAthenaScratchTensor(member, scr_level, ncells1);
     ddchi_dd.NewAthenaScratchTensor(member, scr_level, ncells1);
     dGam_du.NewAthenaScratchTensor(member, scr_level, ncells1);
 
-    AthenaScratchTensor<Real, TensorSymm::SYM2,  3, 3> dg_ddd; // metric 1st drvts
-    AthenaScratchTensor<Real, TensorSymm::ISYM2, 3, 3> ddbeta_ddu;// shift 2nd drvts
+    // metric 1st drvts
+    AthenaScratchTensor<Real, TensorSymm::SYM2,  3, 3> dg_ddd;
+    // shift 2nd drvts
+    AthenaScratchTensor<Real, TensorSymm::ISYM2, 3, 3> ddbeta_ddu;
 
     dg_ddd.NewAthenaScratchTensor(member, scr_level, ncells1);
     ddbeta_ddu.NewAthenaScratchTensor(member, scr_level, ncells1);
 
-    AthenaScratchTensor<Real, TensorSymm::SYM22, 3, 4> ddg_dddd; // metric 2nd drvts
+    // metric 2nd drvts
+    AthenaScratchTensor<Real, TensorSymm::SYM22, 3, 4> ddg_dddd;
 
     ddg_dddd.NewAthenaScratchTensor(member, scr_level, ncells1);
 
     // auxiliary Lie derivatives along the shift vector
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> Lchi;   // Lie derivative of chi
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> LKhat;  // Lie derivative of Khat
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> LTheta; // Lie derivative of Theta
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> Lalpha; // Lie derivative of the lapse
+    // Lie derivative of chi
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> Lchi;
+    // Lie derivative of Khat
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> LKhat;
+    // Lie derivative of Theta
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> LTheta;
+    // Lie derivative of the lapse
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> Lalpha;
 
     Lchi.NewAthenaScratchTensor(member, scr_level, ncells1);
     LKhat.NewAthenaScratchTensor(member, scr_level, ncells1);
     LTheta.NewAthenaScratchTensor(member, scr_level, ncells1);
     Lalpha.NewAthenaScratchTensor(member, scr_level, ncells1);
 
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> LGam_u; // Lie derivative of Gamma
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> Lbeta_u;// Lie derivative of the shift
+    // Lie derivative of Gamma
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> LGam_u;
+    // Lie derivative of the shift
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> Lbeta_u;
 
     LGam_u.NewAthenaScratchTensor(member, scr_level, ncells1);
     Lbeta_u.NewAthenaScratchTensor(member, scr_level, ncells1);
 
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> Lg_dd;  // Lie derivative of conf. 3-metric
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> LA_dd;  // Lie derivative of A
+    // Lie derivative of conf. 3-metric
+    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> Lg_dd;
+    // Lie derivative of A
+    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> LA_dd;
 
     Lg_dd.NewAthenaScratchTensor(member, scr_level, ncells1);
     LA_dd.NewAthenaScratchTensor(member, scr_level, ncells1);

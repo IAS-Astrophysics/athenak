@@ -105,7 +105,7 @@ void RestartOutput::LoadOutputData(Mesh *pm) {
   if (nadm > 0) {
     DvceArray5D<Real>::HostMirror host_u_adm = Kokkos::create_mirror(padm->u_adm);
     Kokkos::deep_copy(host_u_adm, padm->u_adm);
-    auto hst_slice = Kokkos::subview(outarray, Kokkos::ALL, 
+    auto hst_slice = Kokkos::subview(outarray, Kokkos::ALL,
             std::make_pair(nhydro+nmhd,nadm),Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
     Kokkos::deep_copy(hst_slice, host_u_adm);
   }

@@ -114,7 +114,7 @@ void ProblemGenerator::ADMLinearWave(ParameterInput *pin, const bool restart) {
   ayz = cos(theta)*sin(theta)*cos(phi);
   azz = sqr(sin(theta));
 
-  par_for("pgen_linwave1", DevExeSpace(), 0, (pmbp->nmb_thispack - 1), 
+  par_for("pgen_linwave1", DevExeSpace(), 0, (pmbp->nmb_thispack - 1),
       ks, ke, js, je, is, ie, KOKKOS_LAMBDA(int m, int k, int j, int i) {
         Real &x1min = size.d_view(m).x1min;
         Real &x1max = size.d_view(m).x1max;
@@ -146,7 +146,7 @@ void ProblemGenerator::ADMLinearWave(ParameterInput *pin, const bool restart) {
         u1(m,pz4c->IZ4CAYY,k,j,i) = ayy * amp * coskx;
         u1(m,pz4c->IZ4CAYZ,k,j,i) = ayz * amp * coskx;
         u1(m,pz4c->IZ4CAZZ,k,j,i) = azz * amp * coskx;
-        
+
         u1(m,pz4c->IZ4CALPHA,k,j,k) = 1;
         u1(m,pz4c->I_Z4C_CHI,k,j,k) = 1;
         u1(m,pz4c->I_Z4C_KHAT,k,j,k) = 0;
