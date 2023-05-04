@@ -13,12 +13,12 @@
 #include <fstream>
 
 // Athena++ headers
-#include "parameter_input.hpp" 
-#include "athena.hpp" 
-#include "mesh/mesh.hpp" 
+#include "parameter_input.hpp"
+#include "athena.hpp"
+#include "mesh/mesh.hpp"
 #include "adm/adm.hpp"
-#include "z4c/z4c.hpp" 
-#include "coordinates/cell_locations.hpp" 
+#include "z4c/z4c.hpp"
+#include "coordinates/cell_locations.hpp"
 
 namespace z4c {
 
@@ -60,7 +60,7 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
   int ncells2 = indcs.nx2 + 2*(indcs.ng);
   int ncells3 = indcs.nx3 + 2*(indcs.ng);
   int nmb = pmbp->nmb_thispack;
- 
+
   auto &z4c = pmbp->pz4c->z4c;
   auto &adm = pmbp->padm->adm;
   auto &opt = pmbp->pz4c->opt;
@@ -69,20 +69,22 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
   Kokkos::Profiling::pushRegion("Region1");
   size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1)*2     // 0 tensors
                   + ScrArray2D<Real>::shmem_size(6,ncells1);  // 2D tensor with symm
-  par_for_outer("initialize z4c fields",DevExeSpace(),scr_size,scr_level,0,nmb-1,ksg,keg,jsg,jeg,
-  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {  
+  par_for_outer("initialize z4c fields",DevExeSpace(),
+  scr_size,scr_level,0,nmb-1,ksg,keg,jsg,jeg,
+  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> detg;
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> oopsi4;
-    
+
       detg.NewAthenaScratchTensor(member, scr_level, ncells1);
     oopsi4.NewAthenaScratchTensor(member, scr_level, ncells1);
-    
+
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> Kt_dd;
     Kt_dd.NewAthenaScratchTensor(member, scr_level, ncells1);
 
-    par_for_inner(member, isg, ieg, [&](const int i) { 
-      detg(i) = adm::SpatialDet(adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i), adm.g_dd(m,0,2,k,j,i),
-                           adm.g_dd(m,1,1,k,j,i), adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i));
+    par_for_inner(member, isg, ieg, [&](const int i) {
+      detg(i) = adm::SpatialDet(adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i),
+                                adm.g_dd(m,0,2,k,j,i), adm.g_dd(m,1,1,k,j,i),
+                                adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i));
       oopsi4(i) = std::pow(detg(i), -1./3.);
       z4c.chi(m,k,j,i) = std::pow(detg(i), 1./12.*opt.chi_psi_power);
     });
@@ -90,7 +92,7 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
 
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
-      par_for_inner(member, isg, ieg, [&](const int i) { 
+      par_for_inner(member, isg, ieg, [&](const int i) {
         z4c.g_dd(m,a,b,k,j,i) = oopsi4(i) * adm.g_dd(m,a,b,k,j,i);
         Kt_dd(a,b,i)          = oopsi4(i) * adm.K_dd(m,a,b,k,j,i);
       });
@@ -98,11 +100,13 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
     member.team_barrier();
 
     par_for_inner(member, isg, ieg, [&](const int i) {
-      detg(i) = adm::SpatialDet(z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i), z4c.g_dd(m,0,2,k,j,i),
-                           z4c.g_dd(m,1,1,k,j,i), z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i));
-      z4c.Khat(m,k,j,i) = adm::Trace(1.0/detg(i),
-                                z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i), z4c.g_dd(m,0,2,k,j,i),
-                                z4c.g_dd(m,1,1,k,j,i), z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i),
+      detg(i) = adm::SpatialDet(z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i),
+                                z4c.g_dd(m,0,2,k,j,i), z4c.g_dd(m,1,1,k,j,i),
+                                z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i));
+      z4c.kkhat(m,k,j,i) = adm::Trace(1.0/detg(i),
+                                z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i),
+                                z4c.g_dd(m,0,2,k,j,i), z4c.g_dd(m,1,1,k,j,i),
+                                z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i),
                                 Kt_dd(0,0,i), Kt_dd(0,1,i), Kt_dd(0,2,i),
                                 Kt_dd(1,1,i), Kt_dd(1,2,i), Kt_dd(2,2,i));
     });
@@ -111,7 +115,8 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
       par_for_inner(member, isg, ieg, [&](const int i) { 
-        z4c.aa_dd(m,a,b,k,j,i) = Kt_dd(a,b,i) - (1./3.) * z4c.Khat(m,k,j,i) * z4c.g_dd(m,a,b,k,j,i);
+        z4c.aa_dd(m,a,b,k,j,i) = Kt_dd(a,b,i) - (1./3.) * 
+                                  z4c.kkhat(m,k,j,i) * z4c.g_dd(m,a,b,k,j,i);
       });
     }
   });
@@ -120,20 +125,21 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
   DvceArray5D<Real> g_uu("g_uu", nmb, 6, ncells3, ncells2, ncells1);
   // GLOOP
   scr_size = ScrArray1D<Real>::shmem_size(ncells1); 
-  par_for_outer("invert z4c metric",DevExeSpace(),scr_size,scr_level,0,nmb-1,ksg,keg,jsg,jeg,
-  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {  
+  par_for_outer("invert z4c metric",DevExeSpace(),
+  scr_size,scr_level,0,nmb-1,ksg,keg,jsg,jeg,
+  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> detg;
-    
-      detg.NewAthenaScratchTensor(member, scr_level, ncells1);
+    detg.NewAthenaScratchTensor(member, scr_level, ncells1);
 
-    par_for_inner(member, isg, ieg, [&](const int i) { 
-      detg(i) = adm::SpatialDet(z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i), z4c.g_dd(m,0,2,k,j,i),
-                           z4c.g_dd(m,1,1,k,j,i), z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i));
+    par_for_inner(member, isg, ieg, [&](const int i) {
+      detg(i) = adm::SpatialDet(z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i),
+                                z4c.g_dd(m,0,2,k,j,i), z4c.g_dd(m,1,1,k,j,i),
+                                z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i));
     });
     member.team_barrier();
 
     par_for_inner(member, isg, ieg, [&](const int i) {
-	    adm::SpatialInv(1.0/detg(i),
+      adm::SpatialInv(1.0/detg(i),
                  z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i), z4c.g_dd(m,0,2,k,j,i),
                  z4c.g_dd(m,1,1,k,j,i), z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i),
                  &g_uu(m,0,k,j,i), &g_uu(m,1,k,j,i), &g_uu(m,2,k,j,i),
@@ -147,20 +153,27 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
   int const &IZ4CGAMY = pmbp->pz4c->I_Z4C_GAMY;
   int const &IZ4CGAMZ = pmbp->pz4c->I_Z4C_GAMZ;
   auto              &u0 = pmbp->pz4c->u0;
-  sub_DvceArray5D_0D g_00 = Kokkos::subview(g_uu, Kokkos::ALL, 0, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
-  sub_DvceArray5D_0D g_01 = Kokkos::subview(g_uu, Kokkos::ALL, 1, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
-  sub_DvceArray5D_0D g_02 = Kokkos::subview(g_uu, Kokkos::ALL, 2, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
-  sub_DvceArray5D_0D g_11 = Kokkos::subview(g_uu, Kokkos::ALL, 3, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
-  sub_DvceArray5D_0D g_12 = Kokkos::subview(g_uu, Kokkos::ALL, 4, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
-  sub_DvceArray5D_0D g_22 = Kokkos::subview(g_uu, Kokkos::ALL, 5, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+  sub_DvceArray5D_0D g_00 = Kokkos::subview(g_uu, Kokkos::ALL, 0,
+                            Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+  sub_DvceArray5D_0D g_01 = Kokkos::subview(g_uu, Kokkos::ALL, 1,
+                            Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+  sub_DvceArray5D_0D g_02 = Kokkos::subview(g_uu, Kokkos::ALL, 2,
+                            Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+  sub_DvceArray5D_0D g_11 = Kokkos::subview(g_uu, Kokkos::ALL, 3,
+                            Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+  sub_DvceArray5D_0D g_12 = Kokkos::subview(g_uu, Kokkos::ALL, 4,
+                            Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+  sub_DvceArray5D_0D g_22 = Kokkos::subview(g_uu, Kokkos::ALL, 5,
+                            Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
   par_for_outer("initialize Gamma",DevExeSpace(),scr_size,scr_level,0,nmb-1,ks,ke,js,je,
-  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {  
+  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {
     // Usage of Dx: pmbp->pz4c->Dx(blockn, posvar, k,j,i, dir, nghost, dx, quantity);
     Real &idx1 = size.d_view(m).idx1;
     Real &idx2 = size.d_view(m).idx2;
     Real &idx3 = size.d_view(m).idx3;
     Real idx[] = {size.d_view(m).idx1, size.d_view(m).idx2, size.d_view(m).idx3};
-    sub_DvceArray5D_0D aux = Kokkos::subview(g_uu, Kokkos::ALL, 0, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+    sub_DvceArray5D_0D aux = Kokkos::subview(g_uu, 
+    Kokkos::ALL, 0, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
     par_for_inner(member, is, ie, [&](const int i) {
       u0(m,IZ4CGAMX,k,j,i) = -Dx<NGHOST>(0, idx, g_00, m, k, j, i)  // d/dx g00
                                -Dx<NGHOST>(1, idx, g_01, m, k, j, i)  // d/dy g01
@@ -197,15 +210,16 @@ void Z4c::Z4cToADM(MeshBlockPack *pmbp) {
 
   int ncells1 = indcs.nx1 + 2*(indcs.ng);
   int nmb = pmbp->nmb_thispack;
- 
+
   auto &z4c = pmbp->pz4c->z4c;
   auto &adm = pmbp->padm->adm;
   auto &opt = pmbp->pz4c->opt;
   int scr_level = 0;
   size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1);
-  par_for_outer("initialize z4c fields",DevExeSpace(),scr_size,scr_level,0,nmb-1,ksg,keg,jsg,jeg,
-  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {  
-    par_for_inner(member, isg, ieg, [&](const int i) { 
+  par_for_outer("initialize z4c fields",DevExeSpace(),
+  scr_size,scr_level,0,nmb-1,ksg,keg,jsg,jeg,
+  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {
+    par_for_inner(member, isg, ieg, [&](const int i) {
       adm.psi4(m,k,j,i) = std::pow(z4c.chi(m,k,j,i), 4./opt.chi_psi_power);
     });
     member.team_barrier();
@@ -213,18 +227,18 @@ void Z4c::Z4cToADM(MeshBlockPack *pmbp) {
     // g_ab
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
-      par_for_inner(member, isg, ieg, [&](const int i) { 
+      par_for_inner(member, isg, ieg, [&](const int i) {
         adm.g_dd(m,a,b,k,j,i) = adm.psi4(m,k,j,i) * z4c.g_dd(m,a,b,k,j,i);
       });
     }
     member.team_barrier();
 
-    // K_ab 
-    for(int a = 0; a < 3; ++a) 
-    for(int b = a; b < 3; ++b) { 
-      par_for_inner(member, isg, ieg, [&](const int i) { 
-        adm.K_dd(m,a,b,k,j,i) = adm.psi4(m,k,j,i) * z4c.aa_dd(m,a,b,k,j,i) + 
-          (1./3.) * (z4c.Khat(m,k,j,i) + 2.*z4c.ttheta(m,k,j,i)) * adm.g_dd(m,a,b,k,j,i); 
+    // K_ab
+    for(int a = 0; a < 3; ++a)
+    for(int b = a; b < 3; ++b) {
+      par_for_inner(member, isg, ieg, [&](const int i) {
+        adm.K_dd(m,a,b,k,j,i) = adm.psi4(m,k,j,i) * z4c.aa_dd(m,a,b,k,j,i) +
+          (1./3.) * (z4c.kkhat(m,k,j,i) + 2.*z4c.ttheta(m,k,j,i)) * adm.g_dd(m,a,b,k,j,i);
       });
     }
   });
@@ -255,7 +269,7 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
 
   int ncells1 = indcs.nx1 + 2*(indcs.ng);
   int nmb = pmbp->nmb_thispack;
- 
+
   auto &z4c = pmbp->pz4c->z4c;
   auto &adm = pmbp->padm->adm;
   auto &u_con = pmbp->pz4c->u_con;
@@ -268,13 +282,14 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
                   + ScrArray2D<Real>::shmem_size(6,ncells1)*3  // 2D tensor with symm
                   + ScrArray2D<Real>::shmem_size(18,ncells1)*6 // 3D tensor with symm
                   + ScrArray2D<Real>::shmem_size(36,ncells1); // 3D tensor with symm
-  par_for_outer("ADM constraints loop",DevExeSpace(),scr_size,scr_level,0,nmb-1,ks,ke,js,je,
-  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {  
+  par_for_outer("ADM constraints loop",DevExeSpace(),
+  scr_size,scr_level,0,nmb-1,ks,ke,js,je,
+  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> R;
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> K;
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> KK;
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> detg;
-    
+
        R.NewAthenaScratchTensor(member, scr_level, ncells1);
        K.NewAthenaScratchTensor(member, scr_level, ncells1);
       KK.NewAthenaScratchTensor(member, scr_level, ncells1);
@@ -285,15 +300,15 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
 
     Gamma_u.NewAthenaScratchTensor(member, scr_level, ncells1);
         M_u.NewAthenaScratchTensor(member, scr_level, ncells1);
-    
+
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> R_dd;
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> K_ud;
-    
+
     g_uu.NewAthenaScratchTensor(member, scr_level, ncells1);
     R_dd.NewAthenaScratchTensor(member, scr_level, ncells1);
     K_ud.NewAthenaScratchTensor(member, scr_level, ncells1);
-    
+
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> dg_ddd;
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> dK_ddd;
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_ddd;
@@ -307,12 +322,11 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     Gamma_udd.NewAthenaScratchTensor(member, scr_level, ncells1);
        DK_ddd.NewAthenaScratchTensor(member, scr_level, ncells1);
        DK_udd.NewAthenaScratchTensor(member, scr_level, ncells1);
-    
+
     AthenaScratchTensor<Real, TensorSymm::SYM22, 3, 4> ddg_dddd;
 
     ddg_dddd.NewAthenaScratchTensor(member, scr_level, ncells1);
-    
-    
+
     Real idx[] = {size.d_view(m).idx1, size.d_view(m).idx2, size.d_view(m).idx3};
     // -----------------------------------------------------------------------------------
     // derivatives
@@ -337,8 +351,7 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
         par_for_inner(member, is, ie, [&](const int i) {
           ddg_dddd(a,a,c,d,i) = Dxx<NGHOST>(a, idx, adm.g_dd, m,c,d,k,j,i);
         });
-      }
-      else {
+      } else {
         par_for_inner(member, is, ie, [&](const int i) {
           ddg_dddd(a,b,c,d,i) = Dxy<NGHOST>(a, b, idx, adm.g_dd, m,c,d,k,j,i);
         });
@@ -350,14 +363,14 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     // inverse metric
     //
     par_for_inner(member, is, ie, [&](const int i) {
-      detg(i) = adm::SpatialDet(adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i), adm.g_dd(m,0,2,k,j,i),
-                           adm.g_dd(m,1,1,k,j,i), adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i));
+      detg(i) = adm::SpatialDet(adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i),
+                                adm.g_dd(m,0,2,k,j,i), adm.g_dd(m,1,1,k,j,i),
+                                adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i));
       adm::SpatialInv(1./detg(i),
                  adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i), adm.g_dd(m,0,2,k,j,i),
                  adm.g_dd(m,1,1,k,j,i), adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i),
                  &g_uu(0,0,i), &g_uu(0,1,i), &g_uu(0,2,i),
                  &g_uu(1,1,i), &g_uu(1,2,i), &g_uu(2,2,i));
-    
     });
     member.team_barrier();
 
@@ -530,18 +543,20 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     for(int a = 0; a < 3; ++a)
     for(int b = 0; b < 3; ++b) {
       par_for_inner(member, is, ie, [&](const int i) {
-        con.Z(m,k,j,i) += 0.25*adm.g_dd(m,a,b,k,j,i)*(z4c.ggam_u(m,a,k,j,i) - Gamma_u(a,i))
-                                                    *(z4c.ggam_u(m,b,k,j,i) - Gamma_u(b,i));
+        con.Z(m,k,j,i) += 0.25*adm.g_dd(m,a,b,k,j,i)
+                          *(z4c.ggam_u(m,a,k,j,i) - Gamma_u(a,i))
+                          *(z4c.ggam_u(m,b,k,j,i) - Gamma_u(b,i));
       });
     }
     member.team_barrier();
     // Constraint violation monitor C^2
     par_for_inner(member, is, ie, [&](const int i) {
-      con.C(m,k,j,i) = SQR(con.H(m,k,j,i)) + con.M(m,k,j,i) + SQR(z4c.ttheta(m,k,j,i)) + 4.0*con.Z(m,k,j,i);
+      con.C(m,k,j,i) = SQR(con.H(m,k,j,i)) + con.M(m,k,j,i) +
+      SQR(z4c.ttheta(m,k,j,i)) + 4.0*con.Z(m,k,j,i);
     });
 });
 }
 template void Z4c::ADMConstraints<2>(MeshBlockPack *pmbp);
 template void Z4c::ADMConstraints<3>(MeshBlockPack *pmbp);
 template void Z4c::ADMConstraints<4>(MeshBlockPack *pmbp);
-}
+} // namespace z4c

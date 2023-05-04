@@ -43,7 +43,7 @@ HistoryOutput::HistoryOutput(OutputParameters op, Mesh *pm) : BaseTypeOutput(op,
       hist_data.emplace_back(PhysicsModule::UserDefined);
     }
   }
-  
+
   if (pm->pmb_pack->pz4c != nullptr) {
     hist_data.emplace_back(PhysicsModule::SpaceTimeDynamics);
   }
@@ -203,12 +203,12 @@ void HistoryOutput::LoadZ4cHistoryData(HistoryData *pdata, Mesh *pm) {
     // Hydro conserved variables:
     array_sum::GlobalSum hvars;
     hvars.the_array[0] = vol*SQR(u_con_(m,0,k,j,i)); // ||H||^2
-    hvars.the_array[1] = vol*u_con_(m,1,k,j,i);      // ||M||^2 (comes already squared) 
+    hvars.the_array[1] = vol*u_con_(m,1,k,j,i);      // ||M||^2 (comes already squared)
     hvars.the_array[2] = vol*SQR(u_con_(m,2,k,j,i)); // ||Mx||^2
     hvars.the_array[3] = vol*SQR(u_con_(m,3,k,j,i)); // ||My||^2
     hvars.the_array[4] = vol*u_con_(m,4,k,j,i);      // ||Mz||^2
     hvars.the_array[5] = vol*u_con_(m,5,k,j,i);      // ||Z||^2 (comes already squared)
-    hvars.the_array[6] = vol*SQR(u0_(m,I_Z4c_Theta_,k,j,i)); // ||Theta||^2 
+    hvars.the_array[6] = vol*SQR(u0_(m,I_Z4c_Theta_,k,j,i)); // ||Theta||^2
     hvars.the_array[7] = vol*u_con_(m,6,k,j,i);      // ||C||^2 (comes already squared)
 
     // fill rest of the_array with zeros, if nhist < NHISTORY_VARIABLES

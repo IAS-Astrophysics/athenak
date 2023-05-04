@@ -1,3 +1,5 @@
+#ifndef UTILS_LAGRANGE_INTERPOLATOR_HPP_
+#define UTILS_LAGRANGE_INTERPOLATOR_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
@@ -33,3 +35,5 @@ class LagrangeInterpolator {
   DvceArray1D<int> interp_indcs;   // indices of MeshBlock and zones therein for interp
   DvceArray2D<Real> interp_wghts;  // weights for interpolation
 };
+
+#endif // UTILS_LAGRANGE_INTERPOLATOR_HPP_

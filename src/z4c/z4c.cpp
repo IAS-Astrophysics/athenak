@@ -55,8 +55,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   u0("u0 z4c",1,1,1,1,1),
   coarse_u0("coarse u0 z4c",1,1,1,1,1),
   u1("u1 z4c",1,1,1,1,1),
-  u_rhs("u_rhs z4c",1,1,1,1,1)
-  {
+  u_rhs("u_rhs z4c",1,1,1,1,1) {
   // (1) read time-evolution option [already error checked in driver constructor]
   // Then initialize memory and algorithms for reconstruction and Riemann solvers
   std::string evolution_t = pin->GetString("time","evolution");
@@ -90,23 +89,21 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   z4c.alpha.InitWithShallowSlice (u0, IZ4CALPHA);
   z4c.beta_u.InitWithShallowSlice(u0, I_Z4C_BETAX, I_Z4C_BETAZ);
   z4c.chi.InitWithShallowSlice   (u0, I_Z4C_CHI);
-  z4c.Khat.InitWithShallowSlice  (u0, I_Z4C_KHAT);
+  z4c.kkhat.InitWithShallowSlice  (u0, I_Z4C_KHAT);
   z4c.ttheta.InitWithShallowSlice (u0, I_Z4C_THETA);
   z4c.ggam_u.InitWithShallowSlice (u0, I_Z4C_GAMX, I_Z4C_GAMZ);
   z4c.g_dd.InitWithShallowSlice  (u0, I_Z4C_GXX, I_Z4C_GZZ);
   z4c.aa_dd.InitWithShallowSlice  (u0, I_Z4C_AXX, IZ4CAZZ);
-  
+
   rhs.alpha.InitWithShallowSlice (u_rhs, IZ4CALPHA);
   rhs.beta_u.InitWithShallowSlice(u_rhs, I_Z4C_BETAX, I_Z4C_BETAZ);
   rhs.chi.InitWithShallowSlice   (u_rhs, I_Z4C_CHI);
-  rhs.Khat.InitWithShallowSlice  (u_rhs, I_Z4C_KHAT);
+  rhs.kkhat.InitWithShallowSlice  (u_rhs, I_Z4C_KHAT);
   rhs.ttheta.InitWithShallowSlice (u_rhs, I_Z4C_THETA);
   rhs.ggam_u.InitWithShallowSlice (u_rhs, I_Z4C_GAMX, I_Z4C_GAMZ);
   rhs.g_dd.InitWithShallowSlice  (u_rhs, I_Z4C_GXX, I_Z4C_GZZ);
   rhs.aa_dd.InitWithShallowSlice  (u_rhs, I_Z4C_AXX, IZ4CAZZ);
-  
-  
-  
+
   opt.chi_psi_power = pin->GetOrAddReal("z4c", "chi_psi_power", -4.0);
   opt.chi_div_floor = pin->GetOrAddReal("z4c", "chi_div_floor", -1000.0);
   opt.diss = pin->GetOrAddReal("z4c", "diss", 0.0);
@@ -125,7 +122,6 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   opt.shift_hh = pin->GetOrAddReal("z4c", "shift_H", 0.0);
 
   opt.shift_eta = pin->GetOrAddReal("z4c", "shift_eta", 2.0);
-
 
   diss = opt.diss*pow(2., -2.*indcs.ng)*(indcs.ng % 2 == 0 ? -1. : 1.);
   }
@@ -153,8 +149,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
 // \brief algebraic constraints projection
 //
 // This function operates on all grid points of the MeshBlock
-void Z4c::AlgConstr(MeshBlockPack *pmbp)
-{ 
+void Z4c::AlgConstr(MeshBlockPack *pmbp) {
   // capture variables for the kernel
   auto &indcs = pmbp->pmesh->mb_indcs;
   int &is = indcs.is; int &ie = indcs.ie;
@@ -172,22 +167,25 @@ void Z4c::AlgConstr(MeshBlockPack *pmbp)
   auto &opt = pmbp->pz4c->opt;
   int scr_level = 0;
   size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1)*3;
-  par_for_outer("Alg constr loop",DevExeSpace(),scr_size,scr_level,0,nmb-1,ksg,keg,jsg,jeg,
+  par_for_outer("Alg constr loop",DevExeSpace(),
+  scr_size,scr_level,0,nmb-1,ksg,keg,jsg,jeg,
   KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> detg;
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> oopsi4;
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> A;
-    
+
       detg.NewAthenaScratchTensor(member, scr_level, ncells1);
     oopsi4.NewAthenaScratchTensor(member, scr_level, ncells1);
          A.NewAthenaScratchTensor(member, scr_level, ncells1);
     par_for_inner(member, isg, ieg, [&](const int i) {
-      detg(i) = adm::SpatialDet(z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i), z4c.g_dd(m,0,2,k,j,i),
-                           z4c.g_dd(m,1,1,k,j,i), z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i));
-      
+      detg(i) = adm::SpatialDet(z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i),
+                                z4c.g_dd(m,0,2,k,j,i),z4c.g_dd(m,1,1,k,j,i),
+                                z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i));
+
       detg(i) = detg(i) > 0. ? detg(i) : 1.;
       Real eps = detg(i) - 1.;
-      oopsi4(i) = (eps < opt.eps_floor) ? (1. - opt.eps_floor/3.) : (std::pow(1./detg(i), 1./3.));
+      oopsi4(i) = (eps < opt.eps_floor) ? (1. - opt.eps_floor/3.) :
+                  (std::pow(1./detg(i), 1./3.));
     });
     member.team_barrier();
 

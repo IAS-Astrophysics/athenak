@@ -20,7 +20,6 @@
 #include "z4c/z4c.hpp"
 #include "coordinates/cell_locations.hpp"
 
-
 namespace z4c {
 //----------------------------------------------------------------------------------------
 // \!fn void Z4c::ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin)
@@ -112,12 +111,14 @@ void Z4c::ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin) {
 void Z4c::ADMTwoPunctures(MeshBlockPack *pmbp, ini_data *data) {
   // capture variables for the kernel
   auto &u_adm = pmbp->padm->u_adm;
-  
+
   HostArray5D<Real>::HostMirror host_u_adm = create_mirror(u_adm);
   ADMhost_vars host_adm;
   host_adm.psi4.InitWithShallowSlice(host_u_adm, adm::ADM::I_ADM_psi4);
-  host_adm.g_dd.InitWithShallowSlice(host_u_adm, adm::ADM::I_ADM_gxx, adm::ADM::I_ADM_gzz);
-  host_adm.K_dd.InitWithShallowSlice(host_u_adm, adm::ADM::I_ADM_Kxx, adm::ADM::I_ADM_Kzz);
+  host_adm.g_dd.InitWithShallowSlice(host_u_adm, 
+              adm::ADM::I_ADM_gxx, adm::ADM::I_ADM_gzz);
+  host_adm.K_dd.InitWithShallowSlice(host_u_adm, 
+              adm::ADM::I_ADM_Kxx, adm::ADM::I_ADM_Kzz);
   auto &indcs = pmbp->pmesh->mb_indcs;
   auto &size = pmbp->pmb->mb_size;
   int &is = indcs.is; int &ie = indcs.ie;

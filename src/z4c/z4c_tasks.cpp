@@ -126,7 +126,6 @@ TaskStatus Z4c::ClearSend(Driver *pdrive, int stage) {
 
 TaskStatus Z4c::CopyU(Driver *pdrive, int stage) {
   if (stage == 1) {
-
     auto integrator = pdrive->integrator;
     auto &indcs = pmy_pack->pmesh->mb_indcs;
     int is = indcs.is, ie = indcs.ie;

@@ -12,15 +12,14 @@
 #include "mesh/mesh.hpp"
 #include "athena.hpp"
 #include "lagrange_interpolator.hpp"
-// calculate indices of the mesh block and xyz coordinate indices for the given point whose coordinate 
-// is given by rcoord; results returned in interp_indcs[4]
+// calculate indices of the mesh block and xyz coordinate indices for the given point
+// whose coordinate is given by rcoord; results returned in interp_indcs[4]
 
 LagrangeInterpolator::LagrangeInterpolator(MeshBlockPack *pmy_pack, Real rcoords[3]):
   pmy_pack(pmy_pack),
   rcoord("rccord",1),
   interp_indcs("interp_indcs",1),
   interp_wghts("interp_wghts",1,1) {
-
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int &ng = indcs.ng;
   Kokkos::realloc(rcoord,3);
@@ -54,7 +53,8 @@ Real LagrangeInterpolator::Interpolate(DvceArray5D<Real> &val,int nvars) {
             for (int j=0; j<2*ng; j++) {
                 for (int k=0; k<2*ng; k++) {
                     Real iwght = weights(i,0)*weights(j,1)*weights(k,2);
-                    ivals += iwght*val(ii0,nvars,ii3-(ng-k-ks)+1,ii2-(ng-j-js)+1,ii1-(ng-i-is)+1);
+                    ivals += iwght*val(ii0,nvars,ii3-(ng-k-ks)+1,
+                    ii2-(ng-j-js)+1,ii1-(ng-i-is)+1);
                 }
             }
         }
@@ -81,7 +81,8 @@ Real LagrangeInterpolator::Interpolate(AthenaTensor<Real, TensorSymm::NONE, 3, 1
             for (int j=0; j<2*ng; j++) {
                 for (int k=0; k<2*ng; k++) {
                     Real iwght = weights(i,0)*weights(j,1)*weights(k,2);
-                    ivals += iwght*val(ii0,nvars,ii3-(ng-k-ks)+1,ii2-(ng-j-js)+1,ii1-(ng-i-is)+1);
+                    ivals += iwght*val(ii0,nvars,ii3-(ng-k-ks)+1,
+                    ii2-(ng-j-js)+1,ii1-(ng-i-is)+1);
                 }
             }
         }

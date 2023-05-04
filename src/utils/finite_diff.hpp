@@ -1,3 +1,4 @@
+# flake8: noqa
 #ifndef FINITE_DIFF_HPP_ 
 #define FINITE_DIFF_HPP_
 

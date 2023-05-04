@@ -3,7 +3,7 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file z4c_punctures.cpp
+//! \file z4c_gauge.cpp
 //  \brief implementation of gauge for the Z4c class
 
 // C++ standard headers

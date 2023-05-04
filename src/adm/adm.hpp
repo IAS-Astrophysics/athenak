@@ -19,43 +19,42 @@ class MeshBlockPack;
 namespace adm {
 //! \class ADM
 class ADM {
-  public:
-    //! WARNING: The ADM object needs to be allocated after Z4c
-    ADM(MeshBlockPack *ppack, ParameterInput *pin);
-    ~ADM();
+ public:
+  //! WARNING: The ADM object needs to be allocated after Z4c
+  ADM(MeshBlockPack *ppack, ParameterInput *pin);
+  ~ADM();
 
-    // Indices of ADM variables
-    enum {
-      I_ADM_gxx, I_ADM_gxy, I_ADM_gxz, I_ADM_gyy, I_ADM_gyz, I_ADM_gzz,
-      I_ADM_Kxx, I_ADM_Kxy, I_ADM_Kxz, I_ADM_Kyy, I_ADM_Kyz, I_ADM_Kzz,
-      I_ADM_psi4,
-      I_ADM_alpha, I_ADM_betax, I_ADM_betay, I_ADM_betaz,
-      N_ADM
-    };
-    // Names of ADM variables
-    static char const * const ADM_names[N_ADM];
+  // Indices of ADM variables
+  enum {
+    I_ADM_gxx, I_ADM_gxy, I_ADM_gxz, I_ADM_gyy, I_ADM_gyz, I_ADM_gzz,
+    I_ADM_Kxx, I_ADM_Kxy, I_ADM_Kxz, I_ADM_Kyy, I_ADM_Kyz, I_ADM_Kzz,
+    I_ADM_psi4,
+    I_ADM_alpha, I_ADM_betax, I_ADM_betay, I_ADM_betaz,
+    N_ADM
+  };
+  // Names of ADM variables
+  static char const * const ADM_names[N_ADM];
 
-    struct ADM_vars {
-      AthenaTensor<Real, TensorSymm::NONE, 3, 0> alpha;     // lapse
-      AthenaTensor<Real, TensorSymm::NONE, 3, 1> beta_u;    // shift vector
-      AthenaTensor<Real, TensorSymm::NONE, 3, 0> psi4;      // conformal factor
-      AthenaTensor<Real, TensorSymm::SYM2, 3, 2> g_dd;      // spatial metric
-      AthenaTensor<Real, TensorSymm::SYM2, 3, 2> K_dd;      // extrinsic curvature
-    };
-    ADM_vars adm;
+  struct ADM_vars {
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> alpha;     // lapse
+    AthenaTensor<Real, TensorSymm::NONE, 3, 1> beta_u;    // shift vector
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> psi4;      // conformal factor
+    AthenaTensor<Real, TensorSymm::SYM2, 3, 2> g_dd;      // spatial metric
+    AthenaTensor<Real, TensorSymm::SYM2, 3, 2> K_dd;      // extrinsic curvature
+  };
+  ADM_vars adm;
 
-    DvceArray5D<Real> u_adm;                                   // adm variables
+  DvceArray5D<Real> u_adm;                                   // adm variables
 
-    // TODO: handle regridding
+  // TODO(Francesco): handle regridding
 
-  private:
-    MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Z4c
+ private:
+  MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Z4c
 };
 
 KOKKOS_INLINE_FUNCTION
 Real SpatialDet(Real const gxx, Real const gxy, Real const gxz,
-                Real const gyy, Real const gyz, Real const gzz)
-{
+                Real const gyy, Real const gyz, Real const gzz) {
   return - SQR(gxz)*gyy + 2*gxy*gxz*gyz
          - SQR(gyz)*gxx
          - SQR(gxy)*gzz +   gxx*gyy*gzz;
@@ -66,8 +65,7 @@ Real Trace(Real const detginv,
            Real const gxx, Real const gxy, Real const gxz,
            Real const gyy, Real const gyz, Real const gzz,
            Real const Axx, Real const Axy, Real const Axz,
-           Real const Ayy, Real const Ayz, Real const Azz)
-{
+           Real const Ayy, Real const Ayz, Real const Azz) {
   return (detginv*(
        - 2.*Ayz*gxx*gyz + Axx*gyy*gzz +  gxx*(Azz*gyy + Ayy*gzz)
        + 2.*(gxz*(Ayz*gxy - Axz*gyy + Axy*gyz) + gxy*(Axz*gyz - Axy*gzz))
@@ -81,8 +79,7 @@ void SpatialInv(Real const detginv,
                 Real const gxx, Real const gxy, Real const gxz,
                 Real const gyy, Real const gyz, Real const gzz,
                 Real * uxx, Real * uxy, Real * uxz,
-                Real * uyy, Real * uyz, Real * uzz)
-{
+                Real * uyy, Real * uyz, Real * uzz) {
   *uxx = (-SQR(gyz) + gyy*gzz)*detginv;
   *uxy = (gxz*gyz  - gxy*gzz)*detginv;
   *uyy = (-SQR(gxz) + gxx*gzz)*detginv;
@@ -97,8 +94,7 @@ void SpacetimeMetric(Real const alp,
                      Real const betax, Real const betay, Real const betaz,
                      Real const gxx, Real const gxy, Real const gxz,
                      Real const gyy, Real const gyz, Real const gzz,
-                     Real g[16])
-{
+                     Real g[16]) {
   g[5]  = gxx;
   g[6]  = gxy;
   g[7]  = gxz;
@@ -133,8 +129,7 @@ void SpacetimeUpperMetric(Real const alp,
                           Real const betax, Real const betay, Real const betaz,
                           Real const gxx, Real const gxy, Real const gxz,
                           Real const gyy, Real const gyz, Real const gzz,
-                          Real u[16])
-{
+                          Real u[16]) {
   u[0] = - 1.0/SQR(alp);
 
   Real const det = SpatialDet(gxx, gxy, gxz, gyy, gyz, gzz);

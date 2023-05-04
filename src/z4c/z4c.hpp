@@ -5,7 +5,6 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-// This file has been generated with py/write_FD.py, please do modifications there.
 //! \file z4c.hpp
 //  \brief definitions for Z4c class
 
@@ -103,12 +102,12 @@ class Z4c {
   // data
   // flags to denote relativistic dynamics
   DvceArray5D<Real> u_con;     // constraints fields
-  DvceArray5D<Real> u_mat;    
+  DvceArray5D<Real> u_mat;
   DvceArray5D<Real> u0;        // z4c solution
   DvceArray5D<Real> u1;        // z4c solution at intermediate timestep
   DvceArray5D<Real> u_rhs;     // z4c rhs storage
   DvceArray5D<Real> coarse_u0; // coarse representation of z4c solution
-  
+
   // puncture location
   Real ppos[3] = {0.,0.,0.}; // later on initiate from input file
 #if TWO_PUNCTURES
@@ -120,24 +119,24 @@ class Z4c {
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> psi4;
     AthenaTensor<Real, TensorSymm::SYM2, 3, 2> g_dd;
     AthenaTensor<Real, TensorSymm::SYM2, 3, 2> kk_dd;
-  }; 
+  };
   ADM_vars adm;
 
   struct ADMhost_vars {
     AthenaHostTensor<Real, TensorSymm::NONE, 3, 0> psi4;
     AthenaHostTensor<Real, TensorSymm::SYM2, 3, 2> g_dd;
     AthenaHostTensor<Real, TensorSymm::SYM2, 3, 2> kk_dd;
-  }; 
-  
+  };
+
   struct Z4c_vars {
-    AthenaTensor<Real, TensorSymm::NONE, 3, 0> chi;       // conf. factor
-    AthenaTensor<Real, TensorSymm::NONE, 3, 0> Khat;      // trace extr. curvature
-    AthenaTensor<Real, TensorSymm::NONE, 3, 0> ttheta;     // Theta var in Z4c
-    AthenaTensor<Real, TensorSymm::NONE, 3, 0> alpha;     // lapse
-    AthenaTensor<Real, TensorSymm::NONE, 3, 1> ggam_u;     // Gamma functions (BSSN)
-    AthenaTensor<Real, TensorSymm::NONE, 3, 1> beta_u;    // shift
-    AthenaTensor<Real, TensorSymm::SYM2, 3, 2> g_dd;      // conf. 3-metric
-    AthenaTensor<Real, TensorSymm::SYM2, 3, 2> aa_dd;      // conf. traceless extr. curvature
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> chi;     // conf. factor
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> kkhat;   // trace extr. curvature
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> ttheta;  // Theta var in Z4c
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> alpha;   // lapse
+    AthenaTensor<Real, TensorSymm::NONE, 3, 1> ggam_u;  // Gamma functions (BSSN)
+    AthenaTensor<Real, TensorSymm::NONE, 3, 1> beta_u;  // shift
+    AthenaTensor<Real, TensorSymm::SYM2, 3, 2> g_dd;    // conf. 3-metric
+    AthenaTensor<Real, TensorSymm::SYM2, 3, 2> aa_dd;   // conf. traceless extr. curvature
   };
   Z4c_vars z4c;
   Z4c_vars rhs;
@@ -182,7 +181,7 @@ class Z4c {
   };
   Options opt;
   Real diss;              // Dissipation parameter
- 
+
   // Boundary communication buffers and functions for u
   BoundaryValuesCC *pbval_u;
 
@@ -203,7 +202,7 @@ class Z4c {
   TaskStatus NewTimeStep(Driver *d, int stage);
   TaskStatus ApplyPhysicalBCs(Driver *d, int stage);
   TaskStatus EnforceAlgConstr(Driver *d, int stage);
-  
+
   TaskStatus Z4cToADM_(Driver *d, int stage);
   TaskStatus ADMConstraints_(Driver *d, int stage);
   TaskStatus Z4cBoundaryRHS(Driver *d, int stage);

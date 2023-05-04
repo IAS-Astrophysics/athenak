@@ -38,8 +38,7 @@ namespace {
 bool set_initial_conditions = true;
 } // end anonymous namespace
 
-Real sqr(Real a)
-{
+Real sqr(Real a) {
   return a * a;
 }
 
@@ -51,8 +50,7 @@ void ProblemGenerator::ADMLinearWave(ParameterInput *pin, const bool restart) {
   // if (restart) return;
   std::cout << "Executing LinearWave" << std::endl;
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
-  if (pmbp->pz4c == nullptr)
-  {
+  if (pmbp->pz4c == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "Z4c Wave test can only be run in Z4c, but no <z4c> block "
               << "in input file" << std::endl;
@@ -109,20 +107,15 @@ void ProblemGenerator::ADMLinearWave(ParameterInput *pin, const bool restart) {
 
   // rotated weight for each matrix element
   Real axx, axy, axz, ayy, ayz, azz;
-  axx = -sqr(cos(theta))*cos(2*phi)-sqr(cos(phi))*sqr(sin(theta)); 
-  axy = -0.25*(3+cos(2*theta))*sin(2*phi); 
-  axz = -cos(theta)*sin(theta)*sin(phi); 
-  ayy = sqr(cos(theta))*cos(2*phi)-sqr(sin(theta))*sqr(sin(phi)); 
-  ayz = cos(theta)*sin(theta)*cos(phi); 
+  axx = -sqr(cos(theta))*cos(2*phi)-sqr(cos(phi))*sqr(sin(theta));
+  axy = -0.25*(3+cos(2*theta))*sin(2*phi);
+  axz = -cos(theta)*sin(theta)*sin(phi);
+  ayy = sqr(cos(theta))*cos(2*phi)-sqr(sin(theta))*sqr(sin(phi));
+  ayz = cos(theta)*sin(theta)*cos(phi);
   azz = sqr(sin(theta));
 
-  std::cout << "Time Limit Reset" ;
-  std::cout << tlim2 << std::endl;
-  std::cout << pz4c->I_Z4C_GXX << std::endl;
-  std::cout << IDN << std::endl;
-
-  par_for("pgen_linwave1", DevExeSpace(), 0, (pmbp->nmb_thispack - 1), ks, ke, js, je, is, ie,
-      KOKKOS_LAMBDA(int m, int k, int j, int i) {
+  par_for("pgen_linwave1", DevExeSpace(), 0, (pmbp->nmb_thispack - 1), 
+      ks, ke, js, je, is, ie, KOKKOS_LAMBDA(int m, int k, int j, int i) {
         Real &x1min = size.d_view(m).x1min;
         Real &x1max = size.d_view(m).x1max;
         Real &x2min = size.d_view(m).x2min;
@@ -164,8 +157,7 @@ void ProblemGenerator::ADMLinearWave(ParameterInput *pin, const bool restart) {
         u1(m,pz4c->I_Z4C_GAMZ,k,j,k) = 0;
         // */
         for (int a = 0; a < 3; ++a)
-        for (int b = a; b < 3; ++b)
-        {
+        for (int b = a; b < 3; ++b) {
           z4c.g_dd(m, a, b, k, j, i) = (a == b ? 1. : 0.);
         }
         z4c.g_dd(m, 0, 0, k, j, i) += axx * amp * sinkx;
@@ -182,10 +174,9 @@ void ProblemGenerator::ADMLinearWave(ParameterInput *pin, const bool restart) {
         z4c.aa_dd(m, 2, 2, k, j, i) = azz * amp * coskx;
         z4c.alpha(m, k, j, i) = 1;
         z4c.chi(m, k, j, i) = 1;
-        z4c.Khat(m, k, j, i) = 0;
+        z4c.kkhat(m, k, j, i) = 0;
         z4c.ttheta(m, k, j, i) = 0;
-        for (int a = 0; a < 3; ++a)
-        {
+        for (int a = 0; a < 3; ++a) {
           z4c.ggam_u(m, a, k, j, i) = 0;
         }
       });
@@ -236,19 +227,24 @@ void ADMLinearWaveErrors(ParameterInput *pin, Mesh *pm) {
 
       // g_ij's:
       array_sum::GlobalSum evars;
-      evars.the_array[0] = vol*fabs(u0_(m,pz4c->I_Z4C_GXX,k,j,i) - u1_(m,pz4c->I_Z4C_GXX,k,j,i));
+      evars.the_array[0] = vol*fabs(u0_(m,pz4c->I_Z4C_GXX,k,j,i)
+                          - u1_(m,pz4c->I_Z4C_GXX,k,j,i));
       max_err = fmax(max_err, evars.the_array[0]);
-      evars.the_array[1] = vol*fabs(u0_(m,pz4c->I_Z4C_GXY,k,j,i) - u1_(m,pz4c->I_Z4C_GXY,k,j,i));
+      evars.the_array[1] = vol*fabs(u0_(m,pz4c->I_Z4C_GXY,k,j,i)
+                          - u1_(m,pz4c->I_Z4C_GXY,k,j,i));
       max_err = fmax(max_err, evars.the_array[1]);
-      evars.the_array[2] = vol*fabs(u0_(m,pz4c->I_Z4C_GXZ,k,j,i) - u1_(m,pz4c->I_Z4C_GXZ,k,j,i));
+      evars.the_array[2] = vol*fabs(u0_(m,pz4c->I_Z4C_GXZ,k,j,i)
+                          - u1_(m,pz4c->I_Z4C_GXZ,k,j,i));
       max_err = fmax(max_err, evars.the_array[2]);
-      evars.the_array[3] = vol*fabs(u0_(m,pz4c->I_Z4C_GYY,k,j,i) - u1_(m,pz4c->I_Z4C_GYY,k,j,i));
+      evars.the_array[3] = vol*fabs(u0_(m,pz4c->I_Z4C_GYY,k,j,i)
+                          - u1_(m,pz4c->I_Z4C_GYY,k,j,i));
       max_err = fmax(max_err, evars.the_array[3]);
-      evars.the_array[4] = vol*fabs(u0_(m,pz4c->I_Z4C_GYZ,k,j,i) - u1_(m,pz4c->I_Z4C_GYZ,k,j,i));
+      evars.the_array[4] = vol*fabs(u0_(m,pz4c->I_Z4C_GYZ,k,j,i)
+                          - u1_(m,pz4c->I_Z4C_GYZ,k,j,i));
       max_err = fmax(max_err, evars.the_array[4]);
-      evars.the_array[5] = vol*fabs(u0_(m,pz4c->I_Z4C_GZZ,k,j,i) - u1_(m,pz4c->I_Z4C_GZZ,k,j,i));
+      evars.the_array[5] = vol*fabs(u0_(m,pz4c->I_Z4C_GZZ,k,j,i)
+                          - u1_(m,pz4c->I_Z4C_GZZ,k,j,i));
       max_err = fmax(max_err, evars.the_array[5]);
-
 
       // fill rest of the_array with zeros, if narray < NREDUCTION_VARIABLES
       for (int n=nvars; n<NREDUCTION_VARIABLES; ++n) {

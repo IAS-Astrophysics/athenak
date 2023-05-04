@@ -25,8 +25,8 @@ char const * const ADM::ADM_names[ADM::N_ADM] = {
 // constructor: initializes data structures and parameters
 ADM::ADM(MeshBlockPack *ppack, ParameterInput *pin):
   pmy_pack(ppack),
-  u_adm("u_adm",1,1,1,1,1)
-{
+  u_adm("u_adm",1,1,1,1,1) {
+
   int nmb = ppack->nmb_thispack;
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int ncells1 = indcs.nx1 + 2*(indcs.ng);
@@ -37,8 +37,7 @@ ADM::ADM(MeshBlockPack *ppack, ParameterInput *pin):
     Kokkos::realloc(u_adm, nmb, N_ADM, ncells3, ncells2, ncells1);
     adm.alpha.InitWithShallowSlice(u_adm, I_ADM_alpha);
     adm.beta_u.InitWithShallowSlice(u_adm, I_ADM_betax, I_ADM_betaz);
-  }
-  else {
+  } else {
     // Lapse and shift are stored in the Z4c class
     z4c::Z4c * pz4c = pmy_pack->pz4c;
     Kokkos::realloc(u_adm, nmb, N_ADM - 4, ncells3, ncells2, ncells1);

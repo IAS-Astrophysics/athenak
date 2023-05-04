@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file z4c_two_puncture.cpp
-//  \brief Problem generator for two punctures 
+//  \brief Problem generator for two punctures
 
 #include <algorithm>
 #include <cmath>

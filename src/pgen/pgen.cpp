@@ -164,11 +164,10 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   }
   if (pz4c != nullptr) {
     nz4c = pz4c->nz4c;
-  }
-  else if (padm != nullptr) {
+  } else if (padm != nullptr) {
     nadm = padm->N_ADM;
   }
-  
+
   // root process reads size of CC and FC data arrays from restart file
   IOWrapperSizeT variablesize = sizeof(IOWrapperSizeT);
   char *variabledata = new char[variablesize];
@@ -246,7 +245,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   if (data_size_ != data_size) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "CC data size read from restart file not equal to size "
-              << "of Hydro, MHD, Rad, and/or Z4c arrays, restart file is broken." << std::endl;
+              << "of Hydro, MHD, Rad, and/or Z4c arrays, 
+              restart file is broken." << std::endl;
     exit(EXIT_FAILURE);
   }
 

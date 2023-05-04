@@ -1,3 +1,11 @@
+//========================================================================================
+// AthenaXXX astrophysical plasma code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
+// Licensed under the 3-clause BSD License (the "LICENSE")
+//========================================================================================
+//! \fn TaskStatus Z4c::PunctureTracker
+//! \brief Finds the apparent horizon
+
 //#include <iostream>
 #include <algorithm>
 #include <cinttypes>
@@ -12,11 +20,8 @@
 #include "utils/lagrange_interpolator.hpp"
 
 namespace z4c {
-//----------------------------------------------------------------------------------------
-//! \fn TaskStatus Z4c::PunctureTracker
-//! \brief Finds the apparent horizon
-TaskStatus Z4c::PunctureTracker(Driver *pdriver, int stage)
-{
+
+TaskStatus Z4c::PunctureTracker(Driver *pdriver, int stage) {
   if (stage == 1) {
     // load in the shift vector
     auto &z4c = pmy_pack->pz4c->z4c;
@@ -41,4 +46,4 @@ TaskStatus Z4c::PunctureTracker(Driver *pdriver, int stage)
   }
   return TaskStatus::complete;
 }
-}
+} // namespace z4c

@@ -1,3 +1,9 @@
+//========================================================================================
+// AthenaXXX astrophysical plasma code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
+// Licensed under the 3-clause BSD License (the "LICENSE")
+//========================================================================================
+
 #include <algorithm>
 #include <cinttypes>
 #include <iostream>
@@ -12,11 +18,11 @@ namespace z4c {
 //---------------------------------------------------------------------------------------
 //! \fn TaskStatus Z4c::Z4cBoundaryRHS
 //! \brief Implement the Sommerfield Boundary conditions for z4c
-TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage)
-{
+TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage) {
 #if 0
   // Ideas:
-  // 1) Implement this with 2 nested multirange. This requires definining spatial 0-D tensors.
+  // 1) Implement this with 2 nested multirange. 
+  //    This requires definining spatial 0-D tensors.
   // 2) Implement as it is but copy code in every if (generate with python)
   printf("In Z4cBoundaryRHS\n");
   auto &indcs = pmy_pack->pmesh->mb_indcs;
@@ -37,13 +43,12 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage)
   // 2 1D scratch array and 1 2D scratch array
   size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1)   // 0 tensors
                   + ScrArray2D<Real>::shmem_size(3,ncells1)*3 // vectors
-                  + ScrArray2D<Real>::shmem_size(9,ncells1)  // 2D tensor with no symm
+                  + ScrArray2D<Real>::shmem_size(9,ncells1)// 2D tensor with no symm
                   + ScrArray2D<Real>::shmem_size(18,ncells1); // 3D tensor with symm
   int scr_level = 1;
   //par_for_outer("Sommerfeld loop",DevExeSpace(),scr_size,scr_level,0,nmb1,ks_,ke_,js_,je_,
   par_for("Sommerfeld loop",DevExeSpace(),0,nmb1,ks_,ke_,js_,je_,
-  KOKKOS_LAMBDA(const int m, const int k, const int j)
-    {
+  KOKKOS_LAMBDA(const int m, const int k, const int j) {
     //int is, ie, js, je, ks, ke, p;
       Real idx[] = {size.d_view(m).idx1, size.d_view(m).idx2, size.d_view(m).idx3};
       Real &x1min = size.d_view(m).x1min;
@@ -795,4 +800,4 @@ void Z4c::Z4cSommerfeld(int const m,
   return;
 }
 */
-}
+} // namespace z4c

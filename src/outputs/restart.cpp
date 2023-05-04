@@ -67,11 +67,11 @@ void RestartOutput::LoadOutputData(Mesh *pm) {
   }
   if (pz4c != nullptr) {
     nz4c = pz4c->nz4c;
-  }
-  // if the spacetime is evolved, we do not need to checkpoint/recover the ADM variables
-  else if (padm != nullptr) {
+  } else if (padm != nullptr) {
     nadm = adm::ADM::N_ADM;
   }
+  // if the spacetime is evolved, we do not need to checkpoint/recover the ADM variables
+
   Kokkos::realloc(outarray, nmb, (nhydro+nmhd+nz4c), nout3, nout2, nout1);
   if (prad != nullptr) {
     nrad = prad->prgeo->nangles;
@@ -105,8 +105,8 @@ void RestartOutput::LoadOutputData(Mesh *pm) {
   if (nadm > 0) {
     DvceArray5D<Real>::HostMirror host_u_adm = Kokkos::create_mirror(padm->u_adm);
     Kokkos::deep_copy(host_u_adm, padm->u_adm);
-    auto hst_slice = Kokkos::subview(outarray, Kokkos::ALL, std::make_pair(nhydro+nmhd,nadm),
-                                     Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+    auto hst_slice = Kokkos::subview(outarray, Kokkos::ALL, 
+            std::make_pair(nhydro+nmhd,nadm),Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
     Kokkos::deep_copy(hst_slice, host_u_adm);
   }
 
