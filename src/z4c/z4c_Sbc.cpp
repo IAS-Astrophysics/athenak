@@ -654,10 +654,10 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage) {
 //
 KOKKOS_FUNCTION
 void Z4c::Z4cSommerfeld(int const m,
-		        int const is, int const ie,
+            int const is, int const ie,
                         int const ks, int const k,
                         int const js, int const j,
-			int const parity,
+      int const parity,
                         int const scr_size,
                         int const scr_level,
                         TeamMember_t member)
