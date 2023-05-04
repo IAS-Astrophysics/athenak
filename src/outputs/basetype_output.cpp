@@ -488,7 +488,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     }
   }
 
-/*  
+/*
   if (ndvars > 0) {
     int nmb = pm->pmb_pack->nmb_thispack;
     auto &indcs = pm->mb_indcs;

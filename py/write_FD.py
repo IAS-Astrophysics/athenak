@@ -249,7 +249,7 @@ def generate_central(strings,name_diff,a=0,b=0):
 
     central_code =\
 """
-  // Reminder: this code has been generated with py/{}, please do modifications there. 
+  // Reminder: this code has been generated with py/{}, please do modifications there.
   // 1st derivative {}
   template <int NGHOST, typename TYPE>
 KOKKOS_INLINE_FUNCTION
