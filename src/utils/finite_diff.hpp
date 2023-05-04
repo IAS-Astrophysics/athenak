@@ -1201,9 +1201,9 @@ KOKKOS_INLINE_FUNCTION
   // Reminder: this code has been generated with py/write_FD.py, please do modifications there.
   // 1st advective derivative scalar
   template <int NGHOST, typename TYPE1, typename TYPE2>
-KOKKOS_INLINE_FUNCTION 
+KOKKOS_INLINE_FUNCTION
   Real Lx(int const dir,
-          const Real idx[], const TYPE1 &vx, 
+          const Real idx[], const TYPE1 &vx,
                             const TYPE2 &quant,
           int const m, int const a,
           int const k, int const j, int const i)
@@ -1313,9 +1313,9 @@ KOKKOS_INLINE_FUNCTION
   // Reminder: this code has been generated with py/write_FD.py, please do modifications there.
   // 1st advective derivative vector
   template <int NGHOST, typename TYPE1, typename TYPE2>
-KOKKOS_INLINE_FUNCTION 
+KOKKOS_INLINE_FUNCTION
   Real Lx(int const dir,
-          const Real idx[], const TYPE1 &vx, 
+          const Real idx[], const TYPE1 &vx,
                             const TYPE2 &quant,
           int const m, int const a, int const b,
           int const k, int const j, int const i)
@@ -1425,9 +1425,9 @@ KOKKOS_INLINE_FUNCTION
   // Reminder: this code has been generated with py/write_FD.py, please do modifications there.
   // 1st advective derivative 2D tensor
   template <int NGHOST, typename TYPE1, typename TYPE2>
-KOKKOS_INLINE_FUNCTION 
+KOKKOS_INLINE_FUNCTION
   Real Lx(int const dir,
-          const Real idx[], const TYPE1 &vx, 
+          const Real idx[], const TYPE1 &vx,
                             const TYPE2 &quant,
           int const m, int const a, int const b, int const c,
           int const k, int const j, int const i)

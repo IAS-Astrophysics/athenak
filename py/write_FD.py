@@ -300,9 +300,9 @@ def generate_biased(strings,name_diff,a=0,b=0):
   // Reminder: this code has been generated with py/{}, please do modifications there.
   // 1st advective derivative {}
   template <int NGHOST, typename TYPE1, typename TYPE2>
-KOKKOS_INLINE_FUNCTION 
+KOKKOS_INLINE_FUNCTION
   Real Lx(int const dir,
-          const Real idx[], const TYPE1 &vx, 
+          const Real idx[], const TYPE1 &vx,
                             const TYPE2 &quant,
           int const m, int const a,{}
           int const k, int const j, int const i)
