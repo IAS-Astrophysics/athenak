@@ -86,23 +86,23 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   //mat.S_d.InitWithShallowSlice(u_mat, I_MAT_Sx, I_MAT_Sz);
   //mat.S_dd.InitWithShallowSlice(u_mat, I_MAT_Sxx, I_MAT_Szz);
 
-  z4c.alpha.InitWithShallowSlice (u0, IZ4CALPHA);
+  z4c.alpha.InitWithShallowSlice (u0, I_Z4C_ALPHA);
   z4c.beta_u.InitWithShallowSlice(u0, I_Z4C_BETAX, I_Z4C_BETAZ);
   z4c.chi.InitWithShallowSlice   (u0, I_Z4C_CHI);
   z4c.kkhat.InitWithShallowSlice  (u0, I_Z4C_KHAT);
   z4c.ttheta.InitWithShallowSlice (u0, I_Z4C_THETA);
   z4c.ggam_u.InitWithShallowSlice (u0, I_Z4C_GAMX, I_Z4C_GAMZ);
   z4c.g_dd.InitWithShallowSlice  (u0, I_Z4C_GXX, I_Z4C_GZZ);
-  z4c.aa_dd.InitWithShallowSlice  (u0, I_Z4C_AXX, IZ4CAZZ);
+  z4c.aa_dd.InitWithShallowSlice  (u0, I_Z4C_AXX, I_Z4C_AZZ);
 
-  rhs.alpha.InitWithShallowSlice (u_rhs, IZ4CALPHA);
+  rhs.alpha.InitWithShallowSlice (u_rhs, I_Z4C_ALPHA);
   rhs.beta_u.InitWithShallowSlice(u_rhs, I_Z4C_BETAX, I_Z4C_BETAZ);
   rhs.chi.InitWithShallowSlice   (u_rhs, I_Z4C_CHI);
   rhs.kkhat.InitWithShallowSlice  (u_rhs, I_Z4C_KHAT);
   rhs.ttheta.InitWithShallowSlice (u_rhs, I_Z4C_THETA);
   rhs.ggam_u.InitWithShallowSlice (u_rhs, I_Z4C_GAMX, I_Z4C_GAMZ);
   rhs.g_dd.InitWithShallowSlice  (u_rhs, I_Z4C_GXX, I_Z4C_GZZ);
-  rhs.aa_dd.InitWithShallowSlice  (u_rhs, I_Z4C_AXX, IZ4CAZZ);
+  rhs.aa_dd.InitWithShallowSlice  (u_rhs, I_Z4C_AXX, I_Z4C_AZZ);
 
   opt.chi_psi_power = pin->GetOrAddReal("z4c", "chi_psi_power", -4.0);
   opt.chi_div_floor = pin->GetOrAddReal("z4c", "chi_div_floor", -1000.0);

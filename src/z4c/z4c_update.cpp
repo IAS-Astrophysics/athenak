@@ -5,8 +5,8 @@
 //========================================================================================
 //! \file z4c_update.cpp
 //! \brief Performs update of z4c variables (u0) for each stage of explicit
-//  SSP RK integrators (e.g. RK1, RK2, RK3, RK4). Update uses weighted average and partial time
-//  step appropriate to stage.
+//  SSP RK integrators (e.g. RK1, RK2, RK3, RK4). Update uses weighted average
+//  and partial time step appropriate to stage.
 
 #include "athena.hpp"
 #include "mesh/mesh.hpp"

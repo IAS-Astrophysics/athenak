@@ -161,7 +161,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     pturb = nullptr;
   }
 
-  // (5) Z4c and ADM
+  // (7) Z4c and ADM
   // Create Z4c and ADM physics module.
   if (pin->DoesBlockExist("z4c")) {
     pz4c = new z4c::Z4c(this, pin);

@@ -3,11 +3,9 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file adm_linear_wave.c
-//! \brief Linear wave problem generator for 3D problems. Initializes z4c problem.
-//! Direction of the wavevector is set to be along the grid diagonal in 3D.
-//! This file also contains a function to compute L1 errors in solution, called in
-//! Driver::Finalize().
+//! \file adm_linear_wave.cpp
+//! \brief z4c linear (gravitational) wave test
+
 
 // C/C++ headers
 #include <algorithm> // min, max
@@ -31,24 +29,20 @@
 // function to compute errors in solution at end of run
 void ADMLinearWaveErrors(ParameterInput *pin, Mesh *pm);
 
-
-
 namespace {
 // global variable to control computation of initial conditions versus errors
 bool set_initial_conditions = true;
 } // end anonymous namespace
 
-Real sqr(Real a) {
-  return a * a;
-}
-
 //----------------------------------------------------------------------------------------
-//! \fn ProblemGenerator::UserProblem_()
-//! \brief Problem Generator for ADM Linearized Gravitational Wave
+//! \fn void ProblemGenerator::ADMLinearWave()
+//! \brief Sets initial conditions for gw linear wave tests
+
 void ProblemGenerator::ADMLinearWave(ParameterInput *pin, const bool restart) {
-  // pgen_final_func = ADMLinearWaveErrors;
-  // if (restart) return;
-  std::cout << "Executing LinearWave" << std::endl;
+  pgen_final_func = ADMLinearWaveErrors;
+  if (restart)
+    return;
+
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   if (pmbp->pz4c == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
@@ -80,9 +74,8 @@ void ProblemGenerator::ADMLinearWave(ParameterInput *pin, const bool restart) {
   // Wave amplitude
   Real amp = pin->GetOrAddReal("problem", "amp", 0.001);
 
-  std::cout << set_initial_conditions << std::endl;
   // compute solution in u1 register. For initial conditions, set u1 -> u0.
-  auto &u1 = pmbp->pz4c->u0; //(set_initial_conditions)? pmbp->pz4c->u0 : pmbp->pz4c->u1;
+  auto &u1 = (set_initial_conditions)? pmbp->pz4c->u0 : pmbp->pz4c->u1;
 
   // Initialize wavevector
   Real kx1 = pin->GetOrAddReal("problem", "kx1", 1. / x1size);
@@ -90,9 +83,9 @@ void ProblemGenerator::ADMLinearWave(ParameterInput *pin, const bool restart) {
   Real kx3 = pin->GetOrAddReal("problem", "kx3", 1. / x3size);
 
   // Wavevector length
-  Real knorm = sqrt(sqr(kx1) + sqr(kx2) + sqr(kx3));
+  Real knorm = sqrt(SQR(kx1) + SQR(kx2) + SQR(kx3));
 
-  // Calculate angular offset from Z
+  // Calculate angular offset of the wavevector from zhat
   Real theta = std::atan2(sqrt(kx2 * kx2 + kx1 * kx1), kx3);
   Real phi = std::atan2(kx2, kx1);
 
@@ -103,16 +96,15 @@ void ProblemGenerator::ADMLinearWave(ParameterInput *pin, const bool restart) {
     Real tlim = pin->GetReal("time", "tlim");
     pin->SetReal("time", "tlim", tlim*knorm);
   }
-  Real tlim2 = pin->GetReal("time", "tlim");
 
-  // rotated weight for each matrix element
+  // rotated weight for each tensor element
   Real axx, axy, axz, ayy, ayz, azz;
-  axx = -sqr(cos(theta))*cos(2*phi)-sqr(cos(phi))*sqr(sin(theta));
+  axx = -SQR(cos(theta))*cos(2*phi)-SQR(cos(phi))*SQR(sin(theta));
   axy = -0.25*(3+cos(2*theta))*sin(2*phi);
   axz = -cos(theta)*sin(theta)*sin(phi);
-  ayy = sqr(cos(theta))*cos(2*phi)-sqr(sin(theta))*sqr(sin(phi));
+  ayy = SQR(cos(theta))*cos(2*phi)-SQR(sin(theta))*SQR(sin(phi));
   ayz = cos(theta)*sin(theta)*cos(phi);
-  azz = sqr(sin(theta));
+  azz = SQR(sin(theta));
 
   par_for("pgen_linwave1", DevExeSpace(), 0, (pmbp->nmb_thispack - 1),
       ks, ke, js, je, is, ie, KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -132,7 +124,7 @@ void ProblemGenerator::ADMLinearWave(ParameterInput *pin, const bool restart) {
         Real x3v = CellCenterX(k - ks, nx3, x3min, x3max);
         Real sinkx = sin(2 * PI * (kx1 * x1v + kx2 * x2v + kx3 * x3v));
         Real coskx = knorm * PI * cos(2 * PI * (kx1 * x1v + kx2 * x2v + kx3 * x3v));
-        // /*
+        
         u1(m,pz4c->I_Z4C_GXX,k,j,i) = 1 + axx * amp * sinkx;
         u1(m,pz4c->I_Z4C_GXY,k,j,i) = axy * amp * sinkx;
         u1(m,pz4c->I_Z4C_GXZ,k,j,i) = axz * amp * sinkx;
@@ -143,42 +135,18 @@ void ProblemGenerator::ADMLinearWave(ParameterInput *pin, const bool restart) {
         u1(m,pz4c->I_Z4C_AXX,k,j,i) = axx * amp * coskx;
         u1(m,pz4c->I_Z4C_AXY,k,j,i) = axy * amp * coskx;
         u1(m,pz4c->I_Z4C_AXZ,k,j,i) = axz * amp * coskx;
-        u1(m,pz4c->IZ4CAYY,k,j,i) = ayy * amp * coskx;
-        u1(m,pz4c->IZ4CAYZ,k,j,i) = ayz * amp * coskx;
-        u1(m,pz4c->IZ4CAZZ,k,j,i) = azz * amp * coskx;
+        u1(m,pz4c->I_Z4C_AYY,k,j,i) = ayy * amp * coskx;
+        u1(m,pz4c->I_Z4C_AYZ,k,j,i) = ayz * amp * coskx;
+        u1(m,pz4c->I_Z4C_AZZ,k,j,i) = azz * amp * coskx;
 
-        u1(m,pz4c->IZ4CALPHA,k,j,k) = 1;
-        u1(m,pz4c->I_Z4C_CHI,k,j,k) = 1;
-        u1(m,pz4c->I_Z4C_KHAT,k,j,k) = 0;
-        u1(m,pz4c->I_Z4C_THETA,k,j,k) = 0;
+        u1(m,pz4c->I_Z4C_ALPHA,k,j,i) = 1;
+        u1(m,pz4c->I_Z4C_CHI,k,j,i) = 1;
+        u1(m,pz4c->I_Z4C_KHAT,k,j,i) = 0;
+        u1(m,pz4c->I_Z4C_THETA,k,j,i) = 0;
 
-        u1(m,pz4c->I_Z4C_GAMX,k,j,k) = 0;
-        u1(m,pz4c->I_Z4C_GAMY,k,j,k) = 0;
-        u1(m,pz4c->I_Z4C_GAMZ,k,j,k) = 0;
-        // */
-        for (int a = 0; a < 3; ++a)
-        for (int b = a; b < 3; ++b) {
-          z4c.g_dd(m, a, b, k, j, i) = (a == b ? 1. : 0.);
-        }
-        z4c.g_dd(m, 0, 0, k, j, i) += axx * amp * sinkx;
-        z4c.g_dd(m, 0, 1, k, j, i) += axy * amp * sinkx;
-        z4c.g_dd(m, 0, 2, k, j, i) += axz * amp * sinkx;
-        z4c.g_dd(m, 1, 1, k, j, i) += ayy * amp * sinkx;
-        z4c.g_dd(m, 1, 2, k, j, i) += ayz * amp * sinkx;
-        z4c.g_dd(m, 2, 2, k, j, i) += azz * amp * sinkx;
-        z4c.aa_dd(m, 0, 0, k, j, i) = axx * amp * coskx;
-        z4c.aa_dd(m, 0, 1, k, j, i) = axy * amp * coskx;
-        z4c.aa_dd(m, 0, 2, k, j, i) = axz * amp * coskx;
-        z4c.aa_dd(m, 1, 1, k, j, i) = ayy * amp * coskx;
-        z4c.aa_dd(m, 1, 2, k, j, i) = ayz * amp * coskx;
-        z4c.aa_dd(m, 2, 2, k, j, i) = azz * amp * coskx;
-        z4c.alpha(m, k, j, i) = 1;
-        z4c.chi(m, k, j, i) = 1;
-        z4c.kkhat(m, k, j, i) = 0;
-        z4c.ttheta(m, k, j, i) = 0;
-        for (int a = 0; a < 3; ++a) {
-          z4c.ggam_u(m, a, k, j, i) = 0;
-        }
+        u1(m,pz4c->I_Z4C_GAMX,k,j,i) = 0;
+        u1(m,pz4c->I_Z4C_GAMY,k,j,i) = 0;
+        u1(m,pz4c->I_Z4C_GAMZ,k,j,i) = 0;
       });
   return;
 }

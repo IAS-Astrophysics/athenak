@@ -82,7 +82,6 @@ add_executable(
         z4c/z4c_gauge.cpp
         z4c/z4c_punctures.cpp
         z4c/z4c_Sbc.cpp
-        z4c/z4c_puncture_track.cpp
         
 	outputs/io_wrapper.cpp
         outputs/outputs.cpp
@@ -124,7 +123,6 @@ add_executable(
         units/units.cpp
         utils/change_rundir.cpp
         utils/show_config.cpp
-        utils/lagrange_interpolator.cpp
 )
 
 # custom problem generator to be included in compile

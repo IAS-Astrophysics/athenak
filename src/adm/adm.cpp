@@ -40,7 +40,7 @@ ADM::ADM(MeshBlockPack *ppack, ParameterInput *pin):
     // Lapse and shift are stored in the Z4c class
     z4c::Z4c * pz4c = pmy_pack->pz4c;
     Kokkos::realloc(u_adm, nmb, N_ADM - 4, ncells3, ncells2, ncells1);
-    adm.alpha.InitWithShallowSlice(pz4c->u0, pz4c->IZ4CALPHA);
+    adm.alpha.InitWithShallowSlice(pz4c->u0, pz4c->I_Z4C_ALPHA);
     adm.beta_u.InitWithShallowSlice(pz4c->u0, pz4c->I_Z4C_BETAX, pz4c->I_Z4C_BETAZ);
   }
   adm.psi4.InitWithShallowSlice(u_adm, I_ADM_psi4);
