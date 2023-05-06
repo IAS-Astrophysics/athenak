@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file z4c_gauge.cpp
-//  \brief implementation of gauge for the Z4c class
+//! \brief implementation of gauge for the Z4c class
 
 // C++ standard headers
 #include <cmath> // pow
@@ -22,8 +22,8 @@
 
 namespace z4c {
 //----------------------------------------------------------------------------------------
-// \!fn void Z4c::GaugePreCollapsedLapse(MeshBlockPack *pmbp, ParameterInput *pin)
-// \brief Initialize ADM vars to single puncture (no spin)
+//! \fn void Z4c::GaugePreCollapsedLapse(MeshBlockPack *pmbp, ParameterInput *pin)
+//! \brief set lapse from conformal factor in initial data
 
 void Z4c::GaugePreCollapsedLapse(MeshBlockPack *pmbp, ParameterInput *pin) {
   // capture variables for the kernel

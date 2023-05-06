@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file z4c_tasks.cpp
-//  \brief implementation of functions that control z4c tasks in the task list:
+//! \brief implementation of functions that control z4c tasks in the task list:
 //  stagestart_tl, stagerun_tl, stageend_tl, operatorsplit_tl (currently not used)
 
 #include <iostream>
@@ -20,7 +20,7 @@
 namespace z4c {
 //----------------------------------------------------------------------------------------
 //! \fn  void Z4c::AssembleZ4cTasks
-//  \brief Adds z4c tasks to stage start/run/end task lists
+//! \brief Adds z4c tasks to stage start/run/end task lists
 //  Called by MeshBlockPack::AddPhysics() function directly after Z4c constrctor
 //
 //  Stage start tasks are those that must be completed over all MeshBlocks before EACH
@@ -73,7 +73,7 @@ void Z4c::AssembleZ4cTasks(TaskList &start, TaskList &run, TaskList &end) {
 
 //----------------------------------------------------------------------------------------
 //! \fn  void Wave::InitRecv
-//  \brief function to post non-blocking receives (with MPI), and initialize all boundary
+//! \brief function to post non-blocking receives (with MPI), and initialize all boundary
 //  receive status flags to waiting (with or without MPI) for Wave variables.
 
 TaskStatus Z4c::InitRecv(Driver *pdrive, int stage) {
@@ -90,7 +90,7 @@ TaskStatus Z4c::InitRecv(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn  void Wave::ClearRecv
-//  \brief Waits for all MPI receives to complete before allowing execution to continue
+//! \brief Waits for all MPI receives to complete before allowing execution to continue
 
 TaskStatus Z4c::ClearRecv(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_u->ClearRecv();
@@ -106,7 +106,7 @@ TaskStatus Z4c::ClearRecv(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn  void Z4c::ClearSend
-//  \brief Waits for all MPI sends to complete before allowing execution to continue
+//! \brief Waits for all MPI sends to complete before allowing execution to continue
 
 TaskStatus Z4c::ClearSend(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_u->ClearSend();
@@ -122,7 +122,7 @@ TaskStatus Z4c::ClearSend(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn  void Z4c::CopyU
-//  \brief  copy u0 --> u1 in first stage
+//! \brief  copy u0 --> u1 in first stage
 
 TaskStatus Z4c::CopyU(Driver *pdrive, int stage) {
   if (stage == 1) {
@@ -156,7 +156,7 @@ TaskStatus Z4c::CopyU(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn  void Z4c::SendU
-//  \brief sends cell-centered conserved variables
+//! \brief sends cell-centered conserved variables
 
 TaskStatus Z4c::SendU(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_u->PackAndSendCC(u0, coarse_u0);
@@ -165,7 +165,7 @@ TaskStatus Z4c::SendU(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn  void Z4c::RecvU
-//  \brief receives cell-centered conserved variables
+//! \brief receives cell-centered conserved variables
 
 TaskStatus Z4c::RecvU(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_u->RecvAndUnpackCC(u0, coarse_u0);
@@ -174,7 +174,7 @@ TaskStatus Z4c::RecvU(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn  void Z4c::EnforceAlgConstr
-//  \brief
+//! \brief
 
 TaskStatus Z4c::EnforceAlgConstr(Driver *pdrive, int stage) {
   if (stage == pdrive->nexp_stages) {
@@ -185,7 +185,7 @@ TaskStatus Z4c::EnforceAlgConstr(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn  void Z4c::ADMToZ4c_
-//  \brief
+//! \brief
 
 TaskStatus Z4c::Z4cToADM_(Driver *pdrive, int stage) {
   if (stage == pdrive->nexp_stages) {
@@ -196,7 +196,7 @@ TaskStatus Z4c::Z4cToADM_(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn  void Z4c::ADM_Constraints_
-//  \brief
+//! \brief
 
 TaskStatus Z4c::ADMConstraints_(Driver *pdrive, int stage) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
@@ -215,7 +215,7 @@ TaskStatus Z4c::ADMConstraints_(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn  void Z4c::RestrictU
-//  \brief
+//! \brief
 
 TaskStatus Z4c::RestrictU(Driver *pdrive, int stage) {
   // Only execute Mesh function with SMR/SMR
@@ -227,7 +227,7 @@ TaskStatus Z4c::RestrictU(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn  void Hydro::ApplyPhysicalBCs
-//  \brief
+//! \brief
 
 TaskStatus Z4c::ApplyPhysicalBCs(Driver *pdrive, int stage) {
   // only apply BCs if domain is not strictly periodic

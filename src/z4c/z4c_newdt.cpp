@@ -19,8 +19,8 @@
 namespace z4c {
 
 //----------------------------------------------------------------------------------------
-// \!fn void Z4c::NewTimeStep()
-// \brief calculate the minimum timestep within a MeshBlockPack for z4c problems
+//! \fn void Z4c::NewTimeStep()
+//! \brief calculate the minimum timestep within a MeshBlockPack for z4c problems
 
 TaskStatus Z4c::NewTimeStep(Driver *pdriver, int stage) {
   if (stage != (pdriver->nexp_stages)) {

@@ -6,8 +6,6 @@
 //! \fn TaskStatus Z4c::CalcRHS
 //! \brief Computes the wave equation RHS
 
-
-//#include <iostream>
 #include <algorithm>
 #include <cinttypes>
 #include <iostream>
@@ -22,6 +20,8 @@
 namespace z4c {
 
 template <int NGHOST>
+//! \fn void Z4c::CalcRHS(Driver *pdriver, int stage)
+//! \brief compute rhs of the z4c equations
 TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   auto &size = pmy_pack->pmb->mb_size;

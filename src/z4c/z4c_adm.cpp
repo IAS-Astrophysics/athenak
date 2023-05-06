@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file adm_z4c.cpp
-//  \brief implementation of functions in the Z4c class related to ADM decomposition
+//! \brief implementation of functions in the Z4c class related to ADM decomposition
 
 
 // C++ standard headers
@@ -22,8 +22,8 @@
 
 namespace z4c {
 
-// \!fn void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin)
-// \brief Compute Z4c variables from ADM variables
+//! \fn void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin)
+//! \brief Compute Z4c variables from ADM variables
 //
 // p  = detgbar^(-1/3)
 // p0 = psi^(-4)
@@ -193,8 +193,8 @@ template void Z4c::ADMToZ4c<2>(MeshBlockPack *pmbp, ParameterInput *pin);
 template void Z4c::ADMToZ4c<3>(MeshBlockPack *pmbp, ParameterInput *pin);
 template void Z4c::ADMToZ4c<4>(MeshBlockPack *pmbp, ParameterInput *pin);
 //----------------------------------------------------------------------------------------
-// \!fn void Z4c::Z4cToADM(MeshBlockPack *pmbp)
-// \brief Compute ADM Psi4, g_ij, and K_ij from Z4c variables
+//! \fn void Z4c::Z4cToADM(MeshBlockPack *pmbp)
+//! \brief Compute ADM Psi4, g_ij, and K_ij from Z4c variables
 //
 // This sets the ADM variables everywhere in the MeshBlock
 void Z4c::Z4cToADM(MeshBlockPack *pmbp) {
@@ -245,8 +245,8 @@ void Z4c::Z4cToADM(MeshBlockPack *pmbp) {
   return;
 }
 //----------------------------------------------------------------------------------------
-// \!fn void Z4c::ADMConstraints(AthenaArray<Real> & u_adm, AthenaArray<Real> & u_mat)
-// \brief compute constraints ADM vars
+//! \fn void Z4c::ADMConstraints(AthenaArray<Real> & u_adm, AthenaArray<Real> & u_mat)
+//! \brief compute constraints ADM vars
 //
 // Note: we are assuming that u_adm has been initialized with the correct
 // metric and matter quantities

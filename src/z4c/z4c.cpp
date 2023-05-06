@@ -48,7 +48,6 @@ char const * const Z4c::Matter_names[Z4c::nmat] = {
 //----------------------------------------------------------------------------------------
 // constructor, initializes data structures and parameters
 
-
 Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   pmy_pack(ppack),
   u_con("u_con",1,1,1,1,1),
@@ -145,8 +144,8 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
 }
 
 //----------------------------------------------------------------------------------------
-// \!fn void Z4c::AlgConstr(AthenaArray<Real> & u)
-// \brief algebraic constraints projection
+//! \fn void Z4c::AlgConstr(AthenaArray<Real> & u)
+//! \brief algebraic constraints projection
 //
 // This function operates on all grid points of the MeshBlock
 void Z4c::AlgConstr(MeshBlockPack *pmbp) {

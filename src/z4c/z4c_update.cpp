@@ -4,10 +4,9 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file z4c_update.cpp
-//  \brief Performs update of Hydro conserved variables (u0) for each stage of explicit
-//  SSP RK integrators (e.g. RK1, RK2, RK3). Update uses weighted average and partial time
+//! \brief Performs update of z4c variables (u0) for each stage of explicit
+//  SSP RK integrators (e.g. RK1, RK2, RK3, RK4). Update uses weighted average and partial time
 //  step appropriate to stage.
-//  Both the flux divergence and physical source terms are included in the update.
 
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
@@ -18,7 +17,7 @@
 namespace z4c {
 //----------------------------------------------------------------------------------------
 //! \fn  void Z4c::Update
-//  \brief Explicit RK update
+//! \brief Explicit RK update
 TaskStatus Z4c::ExpRKUpdate(Driver *pdriver, int stage) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;

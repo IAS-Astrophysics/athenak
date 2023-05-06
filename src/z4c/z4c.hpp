@@ -6,7 +6,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file z4c.hpp
-//  \brief definitions for Z4c class
+//! \brief definitions for Z4c class
 
 #include "athena.hpp"
 #include "utils/finite_diff.hpp"
@@ -223,7 +223,7 @@ class Z4c {
   void AlgConstr(MeshBlockPack *pmbp);
 
   // Sommerfeld boundary conditions
-KOKKOS_FUNCTION
+  KOKKOS_FUNCTION
   void Z4cSommerfeld(int const m,
                      int const is, int const ie,
                      int const js, int const j,

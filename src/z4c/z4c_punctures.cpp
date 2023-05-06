@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file z4c_punctures.cpp
-//  \brief implementation of functions in the Z4c class for initializing
+//! \brief implementation of functions in the Z4c class for initializing
 //  puntures evolution
 
 // C++ standard headers
@@ -22,8 +22,8 @@
 
 namespace z4c {
 //----------------------------------------------------------------------------------------
-// \!fn void Z4c::ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin)
-// \brief Initialize ADM vars to single puncture (no spin)
+//! \fn void Z4c::ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin)
+//! \brief Initialize ADM vars to single puncture (no spin)
 
 void Z4c::ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin) {
   // capture variables for the kernel
@@ -32,7 +32,7 @@ void Z4c::ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin) {
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
-  //For GLOOPS
+  // For GLOOPS
   int isg = is-indcs.ng; int ieg = ie+indcs.ng;
   int jsg = js-indcs.ng; int jeg = je+indcs.ng;
   int ksg = ks-indcs.ng; int keg = ke+indcs.ng;
@@ -92,8 +92,8 @@ void Z4c::ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin) {
   });
 }
 
-// \!fn void Z4c::ADMTwoPunctures(MeshBlockPack *pmbp, ini_data *data)
-// \brief Interpolate two puncture initial data in cartesian grid
+//! \fn void Z4c::ADMTwoPunctures(MeshBlockPack *pmbp, ini_data *data)
+//! \brief Interpolate two puncture initial data in cartesian grid
 //
 // p  = detgbar^(-1/3)
 // p0 = psi^(-4)
