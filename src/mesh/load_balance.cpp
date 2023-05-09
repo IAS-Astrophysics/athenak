@@ -427,10 +427,10 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
         if ((new_rank_eachmb[newm] != global_variable::my_rank) ||
             (new_rank_eachmb[newm + l] != global_variable::my_rank)) {
           // create tag using local ID of *receiving* MeshBlock
-          LogicalLocation &lloc = pmy_mesh->lloc_eachmb[oldm+l];
-          int ox1 = ((new_lloc.lx1 & 1) == 1);
-          int ox2 = ((new_lloc.lx2 & 1) == 1);
-          int ox3 = ((new_lloc.lx3 & 1) == 1);
+          // LogicalLocation &lloc = pmy_mesh->lloc_eachmb[oldm+l];
+          // int ox1 = ((new_lloc.lx1 & 1) == 1);
+          // int ox2 = ((new_lloc.lx2 & 1) == 1);
+          // int ox3 = ((new_lloc.lx3 & 1) == 1);
           int lid = (newm + l) - new_gids_eachrank[new_rank_eachmb[newm+l]];
           int tag = CreateAMR_MPI_Tag(lid, 0, 0, 0);
           // post non-blocking send

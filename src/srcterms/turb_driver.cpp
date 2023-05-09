@@ -934,14 +934,15 @@ TaskStatus TurbulenceDriver::AddForcing(Driver *pdrive, int stage) {
         // (inline function in ideal_c2p_mhd.hpp file)
         HydPrim1D w;
         bool dfloor_used = false, efloor_used = false;
-        bool vceiling_used = false, c2p_failure = false;
+        //bool vceiling_used = false;
+        bool c2p_failure = false;
         int iter_used = 0;
         SingleC2P_IdealSRMHD(u, eos, s2, b2, rpar, w, dfloor_used,
                              efloor_used, c2p_failure, iter_used);
         // apply velocity ceiling if necessary
         Real lor = sqrt(1.0 + SQR(w.vx) + SQR(w.vy) + SQR(w.vz));
         if (lor > eos.gamma_max) {
-          vceiling_used = true;
+          //vceiling_used = true;
           Real factor = sqrt((SQR(eos.gamma_max) - 1.0) / (SQR(lor) - 1.0));
           w.vx *= factor;
           w.vy *= factor;
@@ -975,14 +976,15 @@ TaskStatus TurbulenceDriver::AddForcing(Driver *pdrive, int stage) {
         // (inline function in ideal_c2p_mhd.hpp file)
         HydPrim1D w;
         bool dfloor_used = false, efloor_used = false;
-        bool vceiling_used = false, c2p_failure = false;
+        //bool vceiling_used = false;
+        bool c2p_failure = false;
         int iter_used = 0;
         SingleC2P_IdealSRHyd(u, eos, s2, w, dfloor_used, efloor_used,
                              c2p_failure, iter_used);
         // apply velocity ceiling if necessary
         Real lor = sqrt(1.0 + SQR(w.vx) + SQR(w.vy) + SQR(w.vz));
         if (lor > eos.gamma_max) {
-          vceiling_used = true;
+          //vceiling_used = true;
           Real factor = sqrt((SQR(eos.gamma_max) - 1.0) / (SQR(lor) - 1.0));
           w.vx *= factor;
           w.vy *= factor;
