@@ -536,7 +536,8 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     // radiation femn evolved variables
     if (out_params.variable.compare("rad_femn_I") == 0) {
         for(size_t i=0; i < pm->pmb_pack->pradfemn->num_points; i++) {
-            outvars.emplace_back("I"+std::to_string(i),i,&(pm->pmb_pack->pradfemn->i0));
+            //outvars.emplace_back("I"+std::to_string(i),i,&(pm->pmb_pack->pradfemn->f0));
+            // @TODO: Output variables not defined!
         }
     }
 

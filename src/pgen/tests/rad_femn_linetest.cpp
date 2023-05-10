@@ -54,7 +54,7 @@ void ProblemGenerator::RadiationFEMNLinetest(ParameterInput *pin, const bool res
 
     Real omega = 0.03; // Garrett and Hauck's recommendation for the choice of omega
 
-    auto &i0_ = pmbp->pradfemn->i0;
+    auto &i0_ = pmbp->pradfemn->f0;
     par_for("pgen_linetest_radiation_femn", DevExeSpace(), 0, (pmbp->nmb_thispack - 1), 0, nang1, ks, ke, js, je, is,
             ie,
             KOKKOS_LAMBDA(int m, int A, int k, int j, int i) {

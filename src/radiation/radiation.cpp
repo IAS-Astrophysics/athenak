@@ -28,8 +28,8 @@ namespace radiation {
 
 Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
     pmy_pack(ppack),
-    i0("i0",1,1,1,1,1),
-    i1("i1",1,1,1,1,1),
+    i0("f0",1,1,1,1,1),
+    i1("f1",1,1,1,1,1),
     iflx("iflx",1,1,1,1,1),
     divfa("divfa",1,1,1,1,1),
     nh_c("nh_c",1,1),

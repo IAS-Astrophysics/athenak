@@ -113,6 +113,10 @@ class MeshRefinement {
   void RefineFC(DualArray1D<int> &n2o, DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
 
   void RestrictCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
+  void RestrictCC(DvceArray6D<Real> &a, DvceArray6D<Real> &ca);
+  void RefineCC(int nmb, DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
+  void DerefineCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
+
   void RestrictFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
   void HighOrderRestrictCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
 
@@ -135,4 +139,5 @@ class MeshRefinement {
   Real d_threshold_, dd_threshold_, dp_threshold_, dv_threshold_;
   bool check_cons_;
 };
+
 #endif // MESH_MESH_REFINEMENT_HPP_

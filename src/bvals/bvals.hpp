@@ -151,8 +151,10 @@ class BoundaryValuesCC : public BoundaryValues {
   TaskStatus InitFluxRecv(const int nvar) override;
 
   TaskStatus PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
+  TaskStatus PackAndSendCC(DvceArray6D<Real> &a, DvceArray6D<Real> &ca);
   TaskStatus RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
   void FillCoarseInBndryCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
+  TaskStatus RecvAndUnpackCC(DvceArray6D<Real> &a, DvceArray6D<Real> &ca);
   void ProlongateCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
   void ConsToPrimCoarseBndry(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim);
   void PrimToConsFineBndry(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons);

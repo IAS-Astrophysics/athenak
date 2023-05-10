@@ -28,15 +28,15 @@ namespace radiationfemn {
             n_mu("normal_vec", 1, 1, 1, 1, 1),
             Lambda("Lambda", 1, 1, 1, 1),
             L_mu_muhat("L^mu_muhat", 1, 1, 1, 1, 1, 1),
-            i0("i0", 1, 1, 1, 1, 1),
-            coarse_i0("ci0", 1, 1, 1, 1, 1),
-            i1("i1", 1, 1, 1, 1, 1),
+            f0("f0", 1, 1, 1, 1, 1, 1),
+            coarse_f0("ci0", 1, 1, 1, 1, 1, 1),
+            f1("f1", 1, 1, 1, 1, 1, 1),
             iflx("iflx", 1, 1, 1, 1, 1),
-            itemp("itemp", 1, 1, 1, 1, 1),
+            ftemp("ftemp", 1, 1, 1, 1, 1),
             etemp0("etemp0", 1, 1, 1, 1),
             etemp1("etemp1", 1, 1, 1, 1),
             energy_grid("energy_grid", 1),
-            lm_array("lm_array", 1, 1),
+            angular_grid("angular_grid", 1, 1),
             mass_matrix("mm", 1, 1),
             stiffness_matrix_x("sx", 1, 1),
             stiffness_matrix_y("sy", 1, 1),
@@ -99,10 +99,6 @@ namespace radiationfemn {
         rad_source = pin->GetOrAddInteger("radiation-femn", "sources", 0) == 1;
         beam_source = pin->GetOrAddInteger("radiation-femn", "beam_sources", 0) == 1;
 
-        // end of parfile parameters setup
-        // ---------------------------------------------------------------------------
-
-
         // ---------------------------------------------------------------------------
         // allocate memory and populate matrices for the angular variables
 
@@ -115,16 +111,14 @@ namespace radiationfemn {
         Kokkos::realloc(G_matrix, 4, 4, 3, num_points, num_points);
         Kokkos::realloc(F_matrix, 4, 4, 3, num_points, num_points);
 
-        Kokkos::realloc(lm_array, num_points, 2);
+        Kokkos::realloc(angular_grid, num_points, 2);
 
         if (!fpn) {
-            LoadFEMNMatrices();
+            this->LoadFEMNMatrices();
         } else {
-
+            // @TODO: Load FPN matrices
         }
 
-
-        // Will worry about the rest later
         // --------------------------------------------------------------------------------------------------------------------------
         // allocate memory for evolved variables
         int nmb = ppack->nmb_thispack;
@@ -140,12 +134,12 @@ namespace radiationfemn {
         Kokkos::realloc(Lambda, nmb, ncells3, ncells2, ncells1);
         Kokkos::realloc(L_mu_muhat, nmb, 4, 4, ncells3, ncells2, ncells1);
 
-        Kokkos::realloc(i0, nmb, num_points, ncells3, ncells2, ncells1);
-        Kokkos::realloc(i1, nmb, num_points, ncells3, ncells2, ncells1);
+        Kokkos::realloc(f0, nmb, num_energy_bins, num_points, ncells3, ncells2, ncells1);
+        Kokkos::realloc(f1, nmb, num_energy_bins, num_points, ncells3, ncells2, ncells1);
         Kokkos::realloc(iflx.x1f, nmb, num_points, ncells3, ncells2, ncells1);
         Kokkos::realloc(iflx.x2f, nmb, num_points, ncells3, ncells2, ncells1);
         Kokkos::realloc(iflx.x3f, nmb, num_points, ncells3, ncells2, ncells1);
-        Kokkos::realloc(itemp, nmb, num_points, ncells3, ncells2, ncells1);
+        Kokkos::realloc(ftemp, nmb, num_energy_bins, num_points, ncells3, ncells2, ncells1);
 
         // reallocate memory for the temporary intensity matrices if the clipping limiter is on
         if (limiter_fem == "clp") {
@@ -159,7 +153,7 @@ namespace radiationfemn {
             int nccells1 = indcs.cnx1 + 2 * (indcs.ng);
             int nccells2 = (indcs.cnx2 > 1) ? (indcs.cnx2 + 2 * (indcs.ng)) : 1;
             int nccells3 = (indcs.cnx3 > 1) ? (indcs.cnx3 + 2 * (indcs.ng)) : 1;
-            Kokkos::realloc(coarse_i0, nmb, num_points, nccells3, nccells2, nccells1);
+            Kokkos::realloc(coarse_f0, nmb, num_energy_bins, num_points, nccells3, nccells2, nccells1);
         }
 
         // only do if sources are present
@@ -180,15 +174,15 @@ namespace radiationfemn {
         }
 
         // allocate boundary buffers for cell-centered variables
-        pbval_i = new BoundaryValuesCC(ppack, pin, false);
-        pbval_i->InitializeBuffers(num_points);
+        pbval_f = new BoundaryValuesCC(ppack, pin, false);
+        pbval_f->InitializeBuffers(num_points);
     }
 
 //----------------------------------------------------------------------------------------------
 // class constructor, initialize parameters and data structures
 
     RadiationFEMN::~RadiationFEMN() {
-        delete pbval_i;
+        delete pbval_f;
     }
 
 } // namespace radiationfemn

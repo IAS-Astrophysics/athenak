@@ -82,14 +82,14 @@ namespace radiationfemn {
 
     TaskStatus RadiationFEMN::InitRecv(Driver *pdrive, int stage) {
         // post receives for I
-        TaskStatus tstat = pbval_i->InitRecv(num_points);
+        TaskStatus tstat = pbval_f->InitRecv(num_points);
         if (tstat != TaskStatus::complete) return tstat;
 
         // do not post receives for fluxes when stage < 0 (i.e. ICs)
         if (stage >= 0) {
             // with SMR/AMR, post receives for fluxes of I
             if (pmy_pack->pmesh->multilevel) {
-                tstat = pbval_i->InitFluxRecv(num_points);
+                tstat = pbval_f->InitFluxRecv(num_points);
                 if (tstat != TaskStatus::complete) return tstat;
             }
         }
@@ -99,11 +99,11 @@ namespace radiationfemn {
 
 //----------------------------------------------------------------------------------------
 //! \fn  void RadiationFEMN::CopyCons
-//  \brief  copy i0 --> i1 in first stage
+//  \brief  copy f0 --> f1 in first stage
 
     TaskStatus RadiationFEMN::CopyCons(Driver *pdrive, int stage) {
         if (stage == 1) {
-            Kokkos::deep_copy(DevExeSpace(), i1, i0);
+            Kokkos::deep_copy(DevExeSpace(), f1, f0);
         }
         return TaskStatus::complete;
     }
@@ -117,7 +117,7 @@ namespace radiationfemn {
         TaskStatus tstat = TaskStatus::complete;
         // Only execute BoundaryValues function with SMR/SMR
         if (pmy_pack->pmesh->multilevel) {
-            tstat = pbval_i->PackAndSendFluxCC(iflx);
+            tstat = pbval_f->PackAndSendFluxCC(iflx);
         }
         return tstat;
     }
@@ -131,7 +131,7 @@ namespace radiationfemn {
         TaskStatus tstat = TaskStatus::complete;
         // Only execute BoundaryValues function with SMR/SMR
         if (pmy_pack->pmesh->multilevel) {
-            tstat = pbval_i->RecvAndUnpackFluxCC(iflx);
+            tstat = pbval_f->RecvAndUnpackFluxCC(iflx);
         }
         return tstat;
     }
@@ -143,7 +143,7 @@ namespace radiationfemn {
     TaskStatus RadiationFEMN::RestrictI(Driver *pdrive, int stage) {
         // Only execute Mesh function with SMR/AMR
         if (pmy_pack->pmesh->multilevel) {
-            pmy_pack->pmesh->pmr->RestrictCC(i0, coarse_i0);
+            pmy_pack->pmesh->pmr->RestrictCC(f0, coarse_f0);
         }
         return TaskStatus::complete;
     }
@@ -153,7 +153,7 @@ namespace radiationfemn {
 //! \brief Wrapper task list function to pack/send cell-centered conserved variables
 
     TaskStatus RadiationFEMN::SendI(Driver *pdrive, int stage) {
-        TaskStatus tstat = pbval_i->PackAndSendCC(i0, coarse_i0);
+        TaskStatus tstat = pbval_f->PackAndSendCC(f0, coarse_f0);
         return tstat;
     }
 
@@ -162,7 +162,7 @@ namespace radiationfemn {
 //! \brief Wrapper task list function to receive/unpack cell-centered conserved variables
 
     TaskStatus RadiationFEMN::RecvI(Driver *pdrive, int stage) {
-        TaskStatus tstat = pbval_i->RecvAndUnpackCC(i0, coarse_i0);
+        TaskStatus tstat = pbval_f->RecvAndUnpackCC(f0, coarse_f0);
         return tstat;
     }
 
@@ -175,7 +175,8 @@ namespace radiationfemn {
         if (pmy_pack->pmesh->strictly_periodic) return TaskStatus::complete;
 
         // physical BCs on radiation
-        pbval_i->RadiationBCs((pmy_pack), (pbval_i->i_in), i0);
+        // @TODO: Fix radiation BCs now that arrays have energy dependence
+        //pbval_f->RadiationBCs((pmy_pack), (pbval_f->i_in), f0);
 
         // user BCs
         if (pmy_pack->pmesh->pgen->user_bcs) {
@@ -192,14 +193,14 @@ namespace radiationfemn {
 
     TaskStatus RadiationFEMN::ClearSend(Driver *pdrive, int stage) {
         // check sends of I complete
-        TaskStatus tstat = pbval_i->ClearSend();
+        TaskStatus tstat = pbval_f->ClearSend();
         if (tstat != TaskStatus::complete) return tstat;
 
         // do not check flux send for ICs (stage < 0)
         if (stage >= 0) {
             // with SMR/AMR check sends of restricted fluxes of U complete
             if (pmy_pack->pmesh->multilevel) {
-                tstat = pbval_i->ClearFluxSend();
+                tstat = pbval_f->ClearFluxSend();
                 if (tstat != TaskStatus::complete) return tstat;
             }
         }
@@ -214,14 +215,14 @@ namespace radiationfemn {
 
     TaskStatus RadiationFEMN::ClearRecv(Driver *pdrive, int stage) {
         // check receives of U complete
-        TaskStatus tstat = pbval_i->ClearRecv();
+        TaskStatus tstat = pbval_f->ClearRecv();
         if (tstat != TaskStatus::complete) return tstat;
 
         // do not check flux receives when stage < 0 (i.e. ICs)
         if (stage >= 0) {
             // with SMR/AMR check receives of restricted fluxes of U complete
             if (pmy_pack->pmesh->multilevel) {
-                tstat = pbval_i->ClearFluxRecv();
+                tstat = pbval_f->ClearFluxRecv();
                 if (tstat != TaskStatus::complete) return tstat;
             }
         }
