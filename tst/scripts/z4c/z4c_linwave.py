@@ -37,7 +37,7 @@ def run(**kwargs):
                              'meshblock/nx3=' + repr(res),
                              'z4c/diss=1.0',
                              'problem/amp=1.0e-6',
-                             'pgen_name=z4c_linear_wave'
+                             'pgen_name=z4c_linear_wave',
                              'output1/dt=-1.0',
                              'output2/dt=-1.0',
                              'output3/dt=-1.0']
