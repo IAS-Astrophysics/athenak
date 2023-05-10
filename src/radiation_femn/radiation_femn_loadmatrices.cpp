@@ -40,8 +40,8 @@ namespace radiationfemn {
         }
 
         for (size_t i = 0; i < num_points; i++) {
-            lm_array(i, 0) = phi(i);
-            lm_array(i, 1) = theta(i);
+            angular_grid(i, 0) = phi(i);
+            angular_grid(i, 1) = theta(i);
         }
 
         

@@ -5,7 +5,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file radiation_femn_update.cpp
-//  \brief Performs update of Radiation conserved variables (i0) for each stage of
+//  \brief Performs update of Radiation conserved variables (f0) for each stage of
 //   explicit SSP RK integrators (e.g. RK1, RK2, RK3). Update uses weighted average and
 //   partial time step appropriate to stage.
 //  Explicit (not implicit) radiation source terms are included in this update.
@@ -23,6 +23,7 @@ namespace radiationfemn {
         int &js = indcs.js, &je = indcs.je;
         int &ks = indcs.ks, &ke = indcs.ke;
         int nang1 = num_points - 1;
+        int neng1 = num_energy_bins - 1;
         int nmb1 = pmy_pack->nmb_thispack - 1;
         auto &mbsize = pmy_pack->pmb->mb_size;
 
@@ -33,15 +34,15 @@ namespace radiationfemn {
         Real &gam1 = pdriver->gam1[stage - 1];
         Real beta_dt = (pdriver->beta[stage - 1]) * (pmy_pack->pmesh->dt);
 
-        auto i0_ = i0;
-        auto i1_ = i1;
+        auto f0_ = f0;
+        auto f1_ = f1;
         auto &flx1 = iflx.x1f;
         auto &flx2 = iflx.x2f;
         auto &flx3 = iflx.x3f;
 
 
-        par_for("radiation_femn_update", DevExeSpace(), 0, nmb1, 0, nang1, ks, ke, js, je, is, ie,
-                KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
+        par_for("radiation_femn_update", DevExeSpace(), 0, nmb1, 0, neng1, 0, nang1, ks, ke, js, je, is, ie,
+                KOKKOS_LAMBDA(int m, int en, int n, int k, int j, int i) {
                     Real divf_s = (flx1(m, n, k, j, i + 1) - flx1(m, n, k, j, i)) / mbsize.d_view(m).dx1;
                     if (multi_d) {
                         divf_s += (flx2(m, n, k, j + 1, i) - flx2(m, n, k, j, i)) / mbsize.d_view(m).dx2;
@@ -49,12 +50,13 @@ namespace radiationfemn {
                     if (three_d) {
                         divf_s += (flx3(m, n, k + 1, j, i) - flx3(m, n, k, j, i)) / mbsize.d_view(m).dx3;
                     }
-                    i0_(m, n, k, j, i) = gam0 * i0_(m, n, k, j, i) + gam1 * i1_(m, n, k, j, i) - beta_dt * divf_s;
+                    f0_(m, en, n, k, j, i) = gam0 * f0_(m, en, n, k, j, i) + gam1 * f1_(m, en, n, k, j, i) - beta_dt * divf_s;
                 });
 
         // Add explicit source terms
         if (beam_source) {
-            AddBeamSource(i0_);
+            // @TODO: Add beam source support
+            //AddBeamSource(f0_);
         }
 
         return TaskStatus::complete;

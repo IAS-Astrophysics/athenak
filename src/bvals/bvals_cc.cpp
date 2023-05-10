@@ -193,6 +193,12 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
   return TaskStatus::fail;
 }
 
+TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray6D<Real> &a, DvceArray6D<Real> &ca) {
+  // create local references for variables in kernel
+  // @TODO: Needs a lot of work!
+  return TaskStatus::complete;
+}
+
 //----------------------------------------------------------------------------------------
 // \!fn void RecvBuffers()
 // \brief Unpack boundary buffers
@@ -316,4 +322,9 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
   if (pmy_pack->pmesh->multilevel) ProlongateCC(a,ca);
 
   return TaskStatus::complete;
+}
+
+TaskStatus BoundaryValuesCC::RecvAndUnpackCC(DvceArray6D<Real> &a,
+                                             DvceArray6D<Real> &ca) {
+    return TaskStatus::complete;
 }

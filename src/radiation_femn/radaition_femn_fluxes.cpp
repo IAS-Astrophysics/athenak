@@ -35,7 +35,7 @@ namespace radiationfemn {
         auto &stildemody_ = stildemod_matrix_y;
         auto &stildemodz_ = stildemod_matrix_z;
 
-        auto &i0_ = i0;
+        auto &i0_ = f0;
 
         //--------------------------------------------------------------------------------------
         // i-direction

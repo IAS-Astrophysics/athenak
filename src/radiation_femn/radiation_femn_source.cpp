@@ -40,7 +40,8 @@ namespace radiationfemn {
 
         par_for("radiation_femn_beam_source", DevExeSpace(), 0, nmb1, 0, nang1, ks, ke, js, je, is, ie,
                 KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
-                    if (beam_mask_(m, n, k, j, i)) {
+                    // @TODO: Add energy dependence
+                    if (beam_mask_(m, 0, n, k, j, i)) {
 
                         i0(m, n, k, j, i) = 1.0;
 

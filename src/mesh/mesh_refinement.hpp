@@ -42,6 +42,7 @@ class MeshRefinement {
   void RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, int ndel);
 
   void RestrictCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
+  void RestrictCC(DvceArray6D<Real> &a, DvceArray6D<Real> &ca);
   void RefineCC(int nmb, DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
   void DerefineCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
 

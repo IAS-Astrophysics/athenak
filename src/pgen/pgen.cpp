@@ -221,7 +221,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
     data_size_ += nout1*nout2*(nout3+1)*sizeof(Real);    // mhd b0.x3f
   }
   if (prad != nullptr) {
-    data_size_ += nout1*nout2*nout3*nrad*sizeof(Real);   // rad i0
+    data_size_ += nout1*nout2*nout3*nrad*sizeof(Real);   // rad f0
   }
   if (pturb != nullptr) {
     data_size_ += nout1*nout2*nout3*nforce*sizeof(Real);      // forcing
