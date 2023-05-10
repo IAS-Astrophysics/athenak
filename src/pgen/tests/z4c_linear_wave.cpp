@@ -270,9 +270,9 @@ void Z4cLinearWaveErrors(ParameterInput *pin, Mesh *pm) {
                   << std::endl << "Error output file could not be opened" <<std::endl;
         std::exit(EXIT_FAILURE);
       }
-      std::fprintf(pfile, "# Nx1  Nx2  Nx3   Ncycle  RMS-L1    L-infty       ");
-      std::fprintf(pfile,"gxx_L1         gxy_L1         gxz_L1         gyy_L1         gyz_L1");
-      std::fprintf(pfile, "gzz_L1        \n");
+      std::fprintf(pfile, "# Nx1    Nx2   Nx3   Ncycle    RMS-L1    L-infty   ");
+      std::fprintf(pfile, "gxx_L1   gxy_L1    gxz_L1    gyy_L1    ");
+      std::fprintf(pfile, "gyz_L1   gzz_L1    \n");
     }
 
     // write errors
