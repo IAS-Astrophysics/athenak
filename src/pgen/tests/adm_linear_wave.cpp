@@ -124,7 +124,7 @@ void ProblemGenerator::ADMLinearWave(ParameterInput *pin, const bool restart) {
         Real x3v = CellCenterX(k - ks, nx3, x3min, x3max);
         Real sinkx = sin(2 * PI * (kx1 * x1v + kx2 * x2v + kx3 * x3v));
         Real coskx = knorm * PI * cos(2 * PI * (kx1 * x1v + kx2 * x2v + kx3 * x3v));
-        
+
         u1(m,pz4c->I_Z4C_GXX,k,j,i) = 1 + axx * amp * sinkx;
         u1(m,pz4c->I_Z4C_GXY,k,j,i) = axy * amp * sinkx;
         u1(m,pz4c->I_Z4C_GXZ,k,j,i) = axz * amp * sinkx;
@@ -271,8 +271,8 @@ void ADMLinearWaveErrors(ParameterInput *pin, Mesh *pm) {
         std::exit(EXIT_FAILURE);
       }
       std::fprintf(pfile, "# Nx1  Nx2  Nx3   Ncycle  RMS-L1    L-infty       ");
-      std::fprintf(pfile,"d_L1         M1_L1         M2_L1         M3_L1         E_L1");
-      std::fprintf(pfile, "\n");
+      std::fprintf(pfile,"gxx_L1         gxy_L1         gxz_L1         gyy_L1         gyz_L1");
+      std::fprintf(pfile, "gzz_L1        \n");
     }
 
     // write errors
