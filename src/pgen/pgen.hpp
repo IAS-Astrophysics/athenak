@@ -65,7 +65,7 @@ class ProblemGenerator {
   void OrszagTang(ParameterInput *pin, const bool restart);
   void ShockTube(ParameterInput *pin, const bool restart);
   void RadiationLinearWave(ParameterInput *pin, const bool restart);
-  void ADMLinearWave(ParameterInput *pin, const bool restart);
+  void Z4cLinearWave(ParameterInput *pin, const bool restart);
 
   // template for user-specified problem generator
   void UserProblem(ParameterInput *pin, const bool restart);

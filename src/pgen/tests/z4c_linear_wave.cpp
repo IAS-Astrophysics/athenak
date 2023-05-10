@@ -3,7 +3,7 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file adm_linear_wave.cpp
+//! \file z4c_linear_wave.cpp
 //! \brief z4c linear (gravitational) wave test
 
 
@@ -27,7 +27,7 @@
 #include "pgen/pgen.hpp"
 
 // function to compute errors in solution at end of run
-void ADMLinearWaveErrors(ParameterInput *pin, Mesh *pm);
+void Z4cLinearWaveErrors(ParameterInput *pin, Mesh *pm);
 
 namespace {
 // global variable to control computation of initial conditions versus errors
@@ -35,11 +35,11 @@ bool set_initial_conditions = true;
 } // end anonymous namespace
 
 //----------------------------------------------------------------------------------------
-//! \fn void ProblemGenerator::ADMLinearWave()
+//! \fn void ProblemGenerator::Z4cLinearWave()
 //! \brief Sets initial conditions for gw linear wave tests
 
-void ProblemGenerator::ADMLinearWave(ParameterInput *pin, const bool restart) {
-  pgen_final_func = ADMLinearWaveErrors;
+void ProblemGenerator::Z4cLinearWave(ParameterInput *pin, const bool restart) {
+  pgen_final_func = Z4cLinearWaveErrors;
   if (restart)
     return;
 
@@ -150,10 +150,10 @@ void ProblemGenerator::ADMLinearWave(ParameterInput *pin, const bool restart) {
       });
   return;
 }
-void ADMLinearWaveErrors(ParameterInput *pin, Mesh *pm) {
+void Z4cLinearWaveErrors(ParameterInput *pin, Mesh *pm) {
   // calculate reference solution by calling pgen again.
   set_initial_conditions = false;
-  pm->pgen->ADMLinearWave(pin, false);
+  pm->pgen->Z4cLinearWave(pin, false);
 
   Real l1_err[6];
   Real linfty_err=0.0;

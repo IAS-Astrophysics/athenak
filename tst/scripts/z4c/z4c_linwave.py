@@ -16,6 +16,7 @@ logger = logging.getLogger('athena' + __name__[7:])  # set logger name
 _int = ['rk2', 'rk3', 'rk4']
 _ng = ['2', '3', '4']
 
+
 # Run AthenaK
 def run(**kwargs):
     logger.debug('Runnning test ' + __name__)
@@ -24,24 +25,25 @@ def run(**kwargs):
         for ng in _ng:
             for res in (16, 32):
                 arguments = ['job/basename=z4c_lin_wave',
-                                'time/tlim=1.0',
-                                'time/nlim=-1',
-                                'time/integrator=' + iv,
-                                'mesh/nghost=' + ng,
-                                'mesh/nx1=' + repr(res),
-                                'mesh/nx2=' + repr(res),
-                                'mesh/nx3=' + repr(res),
-                                'meshblock/nx1=' + repr(res),
-                                'meshblock/nx2=' + repr(res),
-                                'meshblock/nx3=' + repr(res),
-                                'z4c/diss=1.0',
-                                'problem/amp=1.0e-6',
-                                'pgen_name=adm_linear_wave'
-                                'output1/dt=-1.0',
-                                'output2/dt=-1.0',
-                                'output3/dt=-1.0']
+                             'time/tlim=1.0',
+                             'time/nlim=-1',
+                             'time/integrator=' + iv,
+                             'mesh/nghost=' + ng,
+                             'mesh/nx1=' + repr(res),
+                             'mesh/nx2=' + repr(res),
+                             'mesh/nx3=' + repr(res),
+                             'meshblock/nx1=' + repr(res),
+                             'meshblock/nx2=' + repr(res),
+                             'meshblock/nx3=' + repr(res),
+                             'z4c/diss=1.0',
+                             'problem/amp=1.0e-6',
+                             'pgen_name=z4c_linear_wave'
+                             'output1/dt=-1.0',
+                             'output2/dt=-1.0',
+                             'output3/dt=-1.0']
                 # run test
-                athena.run('tests/linear_wave_adm.athinput', arguments)
+                athena.run('tests/linear_wave_z4c.athinput', arguments)
+
 
 # Analyze outputs
 def analyze():
@@ -56,7 +58,7 @@ def analyze():
         for ng in enumerate(_ng):
             error_threshold = 0.0
             conv_threshold = 0.0
-            if ((iv == 'rk3' or iv=='rk4') and (ng >=3)):
+            if ((iv == 'rk3' or iv == 'rk4') and (ng >= 3)):
                 error_threshold = 6.0e-9
                 conv_threshold = 0.07
             else:
@@ -67,20 +69,19 @@ def analyze():
             l1_rms_n32 = (data[ii][ng][1][4])
             if l1_rms_n32 > error_threshold:
                 logger.warning("z4c wave error too large for {0}+"
-                                "ng={1} configuration, "
-                                "error: {2:g} threshold: {3:g}".
-                                format(iv, ng,
-                                        l1_rms_n32,
-                                        error_threshold))
+                               "ng={1} configuration, "
+                               "error: {2:g} threshold: {3:g}".
+                               format(iv, ng,
+                                      l1_rms_n32,
+                                      error_threshold))
                 analyze_status = False
             if l1_rms_n32/l1_rms_n16 > conv_threshold:
                 logger.warning("z4c wave not converging for {0}+"
-                                "ng={1} configuration, "
-                                "conv: {2:g} threshold: {3:g}".
-                                format(iv, ng,
-                                        l1_rms_n32/l1_rms_n16,
-                                        conv_threshold))
+                               "ng={1} configuration, "
+                               "conv: {2:g} threshold: {3:g}".
+                               format(iv, ng,
+                                      l1_rms_n32/l1_rms_n16,
+                                      conv_threshold))
                 analyze_status = False
-
 
     return analyze_status

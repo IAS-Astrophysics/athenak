@@ -106,7 +106,7 @@ add_executable(
         pgen/tests/rad_check_tetrad.cpp
         pgen/tests/rad_hohlraum.cpp
         pgen/tests/rad_linear_wave.cpp
-        pgen/tests/adm_linear_wave.cpp
+        pgen/tests/z4c_linear_wave.cpp
 
         radiation/radiation.cpp
         radiation/radiation_fluxes.cpp

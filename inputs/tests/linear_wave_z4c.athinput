@@ -44,7 +44,7 @@ ndiag      = 1         # cycles between diagostic output
 diss       = 1
 
 <problem>
-pgen_name = adm_linear_wave # problem generator name
+pgen_name = z4c_linear_wave # problem generator name
 amp       = 1.0e-8      # Wave Amplitude
 kx1  = 1       # set to '1' for wave along x1-axis
 kx2  = 1       # set to '1' for wave along x2-axis
