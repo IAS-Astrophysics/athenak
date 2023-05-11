@@ -99,11 +99,12 @@ namespace radiationfemn {
 
 //----------------------------------------------------------------------------------------
 //! \fn  void RadiationFEMN::CopyCons
-//  \brief  copy f0 --> f1 in first stage
+//  \brief  copy f0 --> f1, L_mu_muhat0 --> L_mu_muhat1 in first stage
 
     TaskStatus RadiationFEMN::CopyCons(Driver *pdrive, int stage) {
         if (stage == 1) {
             Kokkos::deep_copy(DevExeSpace(), f1, f0);
+            Kokkos::deep_copy(DevExeSpace(), L_mu_muhat1, L_mu_muhat0);
         }
         return TaskStatus::complete;
     }

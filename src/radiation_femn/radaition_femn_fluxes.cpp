@@ -21,31 +21,32 @@ namespace radiationfemn {
         int &js = indcs.js, &je = indcs.je;
         int &ks = indcs.ks, &ke = indcs.ke;
         int nang1 = num_points - 1;
+        int neng1 = num_energy_bins - 1;
         int nmb1 = pmy_pack->nmb_thispack - 1;
 
         bool &multi_d = pmy_pack->pmesh->multi_d;
         bool &three_d = pmy_pack->pmesh->three_d;
 
-        /*
-        auto &mm_ = mass_matrix;
-        auto &stildex_ = stilde_matrix_x;
-        auto &stildey_ = stilde_matrix_y;
-        auto &stildez_ = stilde_matrix_z;
-        auto &stildemodx_ = stildemod_matrix_x;
-        auto &stildemody_ = stildemod_matrix_y;
-        auto &stildemodz_ = stildemod_matrix_z;
 
-        auto &i0_ = f0;
+        auto &mm_ = mass_matrix;
+        auto &stiffnessx_ = stiffness_matrix_x;
+        auto &stiffnessy_ = stiffness_matrix_y;
+        auto &stiffnessz_ = stiffness_matrix_z;
+        auto &stiffnessmodx_ = stiffness_matrix_x;
+        auto &stiffnessmody_ = stiffness_matrix_y;
+        auto &stiffnessmodz_ = stiffness_matrix_z;
+
+        auto &f0_ = f0;
 
         //--------------------------------------------------------------------------------------
         // i-direction
-
+        /*
         auto &flx1 = iflx.x1f;
         Kokkos::deep_copy(flx1, 0.);
-        par_for("radiation_femn_flux_x", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, int(ie / 2) + 1, 0, nang1, 0,
+        par_for("radiation_femn_flux_x", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, int(ie / 2) + 1, 0, neng1, 0, nang1, 0,
                 nang1,
-                KOKKOS_LAMBDA(const int m, const int k, const int j, const int i, const int A, const int B) {
-
+                KOKKOS_LAMBDA(const int m, const int k, const int j, const int i, const int ne, const int A, const int B) {
+            
                     auto kk = k;
                     auto jj = j;
                     auto ii = 2 * i - 2;
@@ -68,8 +69,8 @@ namespace radiationfemn {
                     flx1(m, A, kk, jj, ii) += ((1.5) * Fminus - Favg - (0.5) * Fplus) / (2.0);
                     flx1(m, A, kk, jj, ii + 1) += ((0.5) * Fminus + Favg - (1.5) * Fplus) / (2.0);
 
-                });
-
+                }); */
+        /*
         //--------------------------------------------------------------------------------------
         // j-direction
 

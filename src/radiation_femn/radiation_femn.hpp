@@ -102,11 +102,12 @@ namespace radiationfemn {
         DvceArray4D<Real> etemp1;
 
         // Arrays for holding tetrad quantities
+        DvceArray6D<Real> L_mu_muhat0;   // tetrad quantities
+        DvceArray6D<Real> L_mu_muhat1;   // tetrad quantities at intermediate step
+
+        // information from other projects (metric and fluid velocity in lab frame)
         DvceArray6D<Real> g_dd;         // placeholder for spatial metric
         DvceArray5D<Real> u_mu;         // placeholder for fluid velocity in lab frame
-        DvceArray5D<Real> n_mu;         // placeholder for normal vector to spatial slice
-        DvceArray4D<Real> Lambda;       // placeholder for the Lorentz factor
-        DvceArray6D<Real> L_mu_muhat;   // tetrad quantities
 
         // ---------------------------------------------------------------------------
         // arrays for source terms
@@ -136,7 +137,6 @@ namespace radiationfemn {
         TaskStatus InitRecv(Driver *d, int stage);
         // ...in run task list
         TaskStatus CopyCons(Driver *d, int stage);
-        TaskStatus ComputeTetrad(Driver *d, int stage);
         TaskStatus CalculateFluxes(Driver *d, int stage);
         TaskStatus SendFlux(Driver *d, int stage);
         TaskStatus RecvFlux(Driver *d, int stage);
@@ -158,8 +158,9 @@ namespace radiationfemn {
         // ---------------------------------------------------------------------------
 
         // ---------------------------------------------------------------------------
-        // Functions for GeodesicGrid
+        // Functions for GeodesicGrid & tetrad
         void LoadFEMNMatrices();
+        void TetradInitialize();
         // ---------------------------------------------------------------------------
 
         // ---------------------------------------------------------------------------
