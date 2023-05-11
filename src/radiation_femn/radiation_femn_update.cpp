@@ -39,8 +39,11 @@ namespace radiationfemn {
         auto &flx1 = iflx.x1f;
         auto &flx2 = iflx.x2f;
         auto &flx3 = iflx.x3f;
+        auto &L_mu_muhat0_ = L_mu_muhat0;
+        auto &L_mu_muhat1_ = L_mu_muhat1;
+        auto &u_mu_ = u_mu;
 
-
+        // update the distribution function for radiation
         par_for("radiation_femn_update", DevExeSpace(), 0, nmb1, 0, neng1, 0, nang1, ks, ke, js, je, is, ie,
                 KOKKOS_LAMBDA(int m, int en, int n, int k, int j, int i) {
                     Real divf_s = (flx1(m, n, k, j, i + 1) - flx1(m, n, k, j, i)) / mbsize.d_view(m).dx1;
@@ -51,6 +54,19 @@ namespace radiationfemn {
                         divf_s += (flx3(m, n, k + 1, j, i) - flx3(m, n, k, j, i)) / mbsize.d_view(m).dx3;
                     }
                     f0_(m, en, n, k, j, i) = gam0 * f0_(m, en, n, k, j, i) + gam1 * f1_(m, en, n, k, j, i) - beta_dt * divf_s;
+                });
+
+        // update the tetrad quantities
+        par_for("radiation_femn_tetrad_update", DevExeSpace(), 0, nmb1, 0, 4, 0, 4, ks, ke, js, je, is, ie,
+                KOKKOS_LAMBDA(int m, int mu, int muhat, int k, int j, int i) {
+                    Real tetr_rhs = (u_mu_(m, 1, k, j, i)/u_mu_(m, 0, k, j, i)) * (L_mu_muhat1_(m, mu, muhat, k, j, i + 1) - L_mu_muhat1_(m, mu, muhat, k, j, i)) / mbsize.d_view(m).dx1;
+                    if (multi_d) {
+                        tetr_rhs += (u_mu_(m, 2, k, j, i)/u_mu_(m, 0, k, j, i)) * (L_mu_muhat1_(m, mu, muhat, k, j + 1, i) - L_mu_muhat1_(m, mu, muhat, k, j, i)) / mbsize.d_view(m).dx2;
+                    }
+                    if (three_d) {
+                        tetr_rhs += (u_mu_(m, 3, k, j, i)/u_mu_(m, 0, k, j, i)) * (L_mu_muhat1_(m, mu, muhat, k + 1, j, i) - L_mu_muhat1_(m, mu, muhat, k, j, i)) / mbsize.d_view(m).dx3;
+                    }
+                    L_mu_muhat0_(m, mu, muhat, k, j, i) = gam0 * L_mu_muhat0_(m, mu, muhat, k, j, i) + gam1 * L_mu_muhat1_(m, mu, muhat, k, j, i) - beta_dt * tetr_rhs;
                 });
 
         // Add explicit source terms

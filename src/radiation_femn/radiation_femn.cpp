@@ -25,9 +25,8 @@ namespace radiationfemn {
             pmy_pack(ppack),
             g_dd("spatial_metric", 1, 1, 1, 1, 1, 1),
             u_mu("fluid_vel_lab", 1, 1, 1, 1, 1),
-            n_mu("normal_vec", 1, 1, 1, 1, 1),
-            Lambda("Lambda", 1, 1, 1, 1),
-            L_mu_muhat("L^mu_muhat", 1, 1, 1, 1, 1, 1),
+            L_mu_muhat0("L^mu_muhat0", 1, 1, 1, 1, 1, 1),
+            L_mu_muhat1("L^mu_muhat1", 1, 1, 1, 1, 1, 1),
             f0("f0", 1, 1, 1, 1, 1, 1),
             coarse_f0("ci0", 1, 1, 1, 1, 1, 1),
             f1("f1", 1, 1, 1, 1, 1, 1),
@@ -130,10 +129,13 @@ namespace radiationfemn {
         // tetrad quantities
         Kokkos::realloc(g_dd, nmb, 4, 4, ncells3, ncells2, ncells1);
         Kokkos::realloc(u_mu, nmb, 4, ncells3, ncells2, ncells1);
-        Kokkos::realloc(n_mu, nmb, 4, ncells3, ncells2, ncells1);
-        Kokkos::realloc(Lambda, nmb, ncells3, ncells2, ncells1);
-        Kokkos::realloc(L_mu_muhat, nmb, 4, 4, ncells3, ncells2, ncells1);
+        Kokkos::realloc(L_mu_muhat0, nmb, 4, 4, ncells3, ncells2, ncells1);
+        Kokkos::realloc(L_mu_muhat1, nmb, 4, 4, ncells3, ncells2, ncells1);
 
+        // initialize tetrad
+        this->TetradInitialize();
+
+        // state vector and fluxes
         Kokkos::realloc(f0, nmb, num_energy_bins, num_points, ncells3, ncells2, ncells1);
         Kokkos::realloc(f1, nmb, num_energy_bins, num_points, ncells3, ncells2, ncells1);
         Kokkos::realloc(iflx.x1f, nmb, num_points, ncells3, ncells2, ncells1);

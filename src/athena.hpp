@@ -350,6 +350,50 @@ inline void par_for(const std::string &name, DevExeSpace exec_space,
                          });
 }
 
+//------------------------------
+// 7D loop using Kokkos 1D Range
+template <typename Function>
+inline void par_for(const std::string &name, DevExeSpace exec_space,
+                    const int &ql, const int &qu,
+                    const int &pl, const int &pu,
+                    const int &ml, const int &mu,
+                    const int &nl, const int &nu, const int &kl, const int &ku,
+                    const int &jl, const int &ju, const int &il, const int &iu,
+                    const Function &function) {
+    // compute total number of elements and call Kokkos::parallel_for()
+    const int nq = qu - ql + 1;
+    const int np = pu - pl + 1;
+    const int nm = mu - ml + 1;
+    const int nn = nu - nl + 1;
+    const int nk = ku - kl + 1;
+    const int nj = ju - jl + 1;
+    const int ni = iu - il + 1;
+    const int nqpmnkji = nq * np * nm * nn * nk * nj * ni;
+    const int npmnkji  = np * nm * nn * nk * nj * ni;
+    const int nmnkji   = nm * nn * nk * nj * ni;
+    const int nnkji    = nn * nk * nj * ni;
+    const int nkji     = nk * nj * ni;
+    const int nji      = nj * ni;
+    Kokkos::parallel_for(name, Kokkos::RangePolicy<>(exec_space, 0, nqpmnkji),
+                         KOKKOS_LAMBDA(const int &idx) {
+                             // compute p,m,n,k,j,i indices of thread and call function
+                             int q = (idx)/npmnkji;
+                             int p = (idx - q*npmnkji)/nmnkji;
+                             int m = (idx - q*npmnkji - p*nmnkji)/nnkji;
+                             int n = (idx - q*npmnkji - p*nmnkji - m*nnkji)/nkji;
+                             int k = (idx - q*npmnkji - p*nmnkji - m*nnkji - n*nkji)/nji;
+                             int j = (idx - q*npmnkji - p*nmnkji - m*nnkji - n*nkji - k*nji)/ni;
+                             int i = (idx - q*npmnkji - p*nmnkji - m*nnkji - n*nkji - k*nji - j*ni) + il;
+                             q += ql;
+                             p += pl;
+                             m += ml;
+                             n += nl;
+                             k += kl;
+                             j += jl;
+                             function(q, p, m, n, k, j, i);
+                         });
+}
+
 //------------------------------------------
 // 1D outer parallel loop using Kokkos Teams
 template <typename Function>
