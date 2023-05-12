@@ -24,13 +24,14 @@ namespace radiationfemn {
     RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
             pmy_pack(ppack),
             g_dd("spatial_metric", 1, 1, 1, 1, 1, 1),
+            sqrt_det_g("square_root_det_g", 1, 1, 1,1),
             u_mu("fluid_vel_lab", 1, 1, 1, 1, 1),
             L_mu_muhat0("L^mu_muhat0", 1, 1, 1, 1, 1, 1),
             L_mu_muhat1("L^mu_muhat1", 1, 1, 1, 1, 1, 1),
             f0("f0", 1, 1, 1, 1, 1, 1),
             coarse_f0("ci0", 1, 1, 1, 1, 1, 1),
             f1("f1", 1, 1, 1, 1, 1, 1),
-            iflx("iflx", 1, 1, 1, 1, 1),
+            iflx("iflx", 1, 1, 1, 1, 1, 1),
             ftemp("ftemp", 1, 1, 1, 1, 1),
             etemp0("etemp0", 1, 1, 1, 1),
             etemp1("etemp1", 1, 1, 1, 1),
@@ -128,6 +129,7 @@ namespace radiationfemn {
 
         // tetrad quantities
         Kokkos::realloc(g_dd, nmb, 4, 4, ncells3, ncells2, ncells1);
+        Kokkos::realloc(sqrt_det_g, nmb,ncells3, ncells2, ncells1);
         Kokkos::realloc(u_mu, nmb, 4, ncells3, ncells2, ncells1);
         Kokkos::realloc(L_mu_muhat0, nmb, 4, 4, ncells3, ncells2, ncells1);
         Kokkos::realloc(L_mu_muhat1, nmb, 4, 4, ncells3, ncells2, ncells1);
@@ -138,9 +140,9 @@ namespace radiationfemn {
         // state vector and fluxes
         Kokkos::realloc(f0, nmb, num_energy_bins, num_points, ncells3, ncells2, ncells1);
         Kokkos::realloc(f1, nmb, num_energy_bins, num_points, ncells3, ncells2, ncells1);
-        Kokkos::realloc(iflx.x1f, nmb, num_points, ncells3, ncells2, ncells1);
-        Kokkos::realloc(iflx.x2f, nmb, num_points, ncells3, ncells2, ncells1);
-        Kokkos::realloc(iflx.x3f, nmb, num_points, ncells3, ncells2, ncells1);
+        Kokkos::realloc(iflx.x1f, nmb, num_energy_bins, num_points, ncells3, ncells2, ncells1);
+        Kokkos::realloc(iflx.x2f, nmb, num_energy_bins, num_points, ncells3, ncells2, ncells1);
+        Kokkos::realloc(iflx.x3f, nmb, num_energy_bins, num_points, ncells3, ncells2, ncells1);
         Kokkos::realloc(ftemp, nmb, num_energy_bins, num_points, ncells3, ncells2, ncells1);
 
         // reallocate memory for the temporary intensity matrices if the clipping limiter is on
