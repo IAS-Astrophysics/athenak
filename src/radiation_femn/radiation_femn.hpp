@@ -94,7 +94,7 @@ namespace radiationfemn {
         DvceArray6D<Real> f0;         // distribution function
         DvceArray6D<Real> f1;         // distribution at intermediate step
         DvceArray6D<Real> coarse_f0;  // distribution function on 2x coarser grid (for SMR/AMR)
-        DvceFaceFld5D<Real> iflx;      // spatial fluxes on zone faces
+        DvceFaceFld6D<Real> iflx;      // spatial fluxes on zone faces
 
         // intermediate arrays needed for limiting
         DvceArray6D<Real> ftemp;
@@ -107,6 +107,7 @@ namespace radiationfemn {
 
         // information from other projects (metric and fluid velocity in lab frame)
         DvceArray6D<Real> g_dd;         // placeholder for spatial metric
+        DvceArray4D<Real> sqrt_det_g;   // square root of determinant of matrix
         DvceArray5D<Real> u_mu;         // placeholder for fluid velocity in lab frame
 
         // ---------------------------------------------------------------------------

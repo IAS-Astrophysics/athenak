@@ -118,7 +118,7 @@ namespace radiationfemn {
         TaskStatus tstat = TaskStatus::complete;
         // Only execute BoundaryValues function with SMR/SMR
         if (pmy_pack->pmesh->multilevel) {
-            tstat = pbval_f->PackAndSendFluxCC(iflx);
+            // tstat = pbval_f->PackAndSendFluxCC(iflx); @TODO: fix this
         }
         return tstat;
     }
@@ -132,7 +132,7 @@ namespace radiationfemn {
         TaskStatus tstat = TaskStatus::complete;
         // Only execute BoundaryValues function with SMR/SMR
         if (pmy_pack->pmesh->multilevel) {
-            tstat = pbval_f->RecvAndUnpackFluxCC(iflx);
+            // tstat = pbval_f->RecvAndUnpackFluxCC(iflx); @TODO: fix this
         }
         return tstat;
     }

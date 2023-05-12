@@ -46,12 +46,12 @@ namespace radiationfemn {
         // update the distribution function for radiation
         par_for("radiation_femn_update", DevExeSpace(), 0, nmb1, 0, neng1, 0, nang1, ks, ke, js, je, is, ie,
                 KOKKOS_LAMBDA(int m, int en, int n, int k, int j, int i) {
-                    Real divf_s = (flx1(m, n, k, j, i + 1) - flx1(m, n, k, j, i)) / mbsize.d_view(m).dx1;
+                    Real divf_s = (flx1(m, en,n, k, j, i + 1) - flx1(m, en, n, k, j, i)) / mbsize.d_view(m).dx1;
                     if (multi_d) {
-                        divf_s += (flx2(m, n, k, j + 1, i) - flx2(m, n, k, j, i)) / mbsize.d_view(m).dx2;
+                        divf_s += (flx2(m, en, n, k, j + 1, i) - flx2(m, en, n, k, j, i)) / mbsize.d_view(m).dx2;
                     }
                     if (three_d) {
-                        divf_s += (flx3(m, n, k + 1, j, i) - flx3(m, n, k, j, i)) / mbsize.d_view(m).dx3;
+                        divf_s += (flx3(m, en, n, k + 1, j, i) - flx3(m, en, n, k, j, i)) / mbsize.d_view(m).dx3;
                     }
                     f0_(m, en, n, k, j, i) = gam0 * f0_(m, en, n, k, j, i) + gam1 * f1_(m, en, n, k, j, i) - beta_dt * divf_s;
                 });
