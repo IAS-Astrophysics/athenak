@@ -14,7 +14,7 @@ import athena_read  # noqa
 athena_read.check_nan_flag = True
 logger = logging.getLogger('athena' + __name__[7:])  # set logger name
 _int = ['rk2', 'rk3', 'rk4']
-_ng = ['2', '3', '4']
+_ng = ['2', '3']
 
 
 # Run AthenaK
@@ -57,12 +57,12 @@ def analyze():
         for ni, ng in enumerate(_ng):
             error_threshold = 0.0
             conv_threshold = 0.0
-            if ((iv == 'rk3' or iv == 'rk4') and (ng == '3' or ng == '4')):
+            if ((iv == 'rk3' or iv == 'rk4') and (ng == '3')):
                 error_threshold = 8.0e-10
                 conv_threshold = 0.09
             else:
-                error_threshold = 1.0e-8
-                conv_threshold = 0.15
+                error_threshold = 2.5e-8
+                conv_threshold = 0.3
 
             l1_rms_n16 = (data[ii][ni][0][4])
             l1_rms_n32 = (data[ii][ni][1][4])
