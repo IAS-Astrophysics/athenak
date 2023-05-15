@@ -114,11 +114,11 @@ void Z4c::ADMTwoPunctures(MeshBlockPack *pmbp, ini_data *data) {
 
   HostArray5D<Real>::HostMirror host_u_adm = create_mirror(u_adm);
   ADMhost_vars host_adm;
-  host_adm.psi4.InitWithShallowSlice(host_u_adm, adm::ADM::I_ADM_psi4);
+  host_adm.psi4.InitWithShallowSlice(host_u_adm, adm::ADM::I_ADM_PSI4);
   host_adm.g_dd.InitWithShallowSlice(host_u_adm,
-              adm::ADM::I_ADM_gxx, adm::ADM::I_ADM_gzz);
-  host_adm.K_dd.InitWithShallowSlice(host_u_adm,
-              adm::ADM::I_ADM_Kxx, adm::ADM::I_ADM_Kzz);
+              adm::ADM::I_ADM_GXX, adm::ADM::I_ADM_GZZ);
+  host_adm.kk_dd.InitWithShallowSlice(host_u_adm,
+              adm::ADM::I_ADM_KXX, adm::ADM::I_ADM_KZZ);
   auto &indcs = pmbp->pmesh->mb_indcs;
   auto &size = pmbp->pmb->mb_size;
   int &is = indcs.is; int &ie = indcs.ie;
@@ -223,12 +223,12 @@ void Z4c::ADMTwoPunctures(MeshBlockPack *pmbp, ini_data *data) {
       host_adm.g_dd(m,0, 2, k, j, i) = host_adm.psi4(m,k,j,i) * gxz[flat_ix];
       host_adm.g_dd(m,1, 2, k, j, i) = host_adm.psi4(m,k,j,i) * gyz[flat_ix];
 
-      host_adm.K_dd(m,0, 0, k, j, i) = Kxx[flat_ix];
-      host_adm.K_dd(m,1, 1, k, j, i) = Kyy[flat_ix];
-      host_adm.K_dd(m,2, 2, k, j, i) = Kzz[flat_ix];
-      host_adm.K_dd(m,0, 1, k, j, i) = Kxy[flat_ix];
-      host_adm.K_dd(m,0, 2, k, j, i) = Kxz[flat_ix];
-      host_adm.K_dd(m,1, 2, k, j, i) = Kyz[flat_ix];
+      host_adm.kk_dd(m,0, 0, k, j, i) = Kxx[flat_ix];
+      host_adm.kk_dd(m,1, 1, k, j, i) = Kyy[flat_ix];
+      host_adm.kk_dd(m,2, 2, k, j, i) = Kzz[flat_ix];
+      host_adm.kk_dd(m,0, 1, k, j, i) = Kxy[flat_ix];
+      host_adm.kk_dd(m,0, 2, k, j, i) = Kxz[flat_ix];
+      host_adm.kk_dd(m,1, 2, k, j, i) = Kyz[flat_ix];
     }
 
     free(gxx); free(gyy); free(gzz);
