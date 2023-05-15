@@ -57,7 +57,7 @@ def analyze():
         for ni, ng in enumerate(_ng):
             error_threshold = 0.0
             conv_threshold = 0.0
-            if ((iv == 'rk3' or iv == 'rk4') and (ng >= 3)):
+            if ((iv == 'rk3' or iv == 'rk4') and (ng == '3' or ng == '4')):
                 error_threshold = 8.0e-10
                 conv_threshold = 0.09
             else:
