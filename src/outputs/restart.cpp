@@ -68,7 +68,7 @@ void RestartOutput::LoadOutputData(Mesh *pm) {
   if (pz4c != nullptr) {
     nz4c = pz4c->nz4c;
   } else if (padm != nullptr) {
-    nadm = adm::ADM::N_ADM;
+    nadm = adm::ADM::nadm;
   }
   // if the spacetime is evolved, we do not need to checkpoint/recover the ADM variables
 

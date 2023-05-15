@@ -85,6 +85,35 @@ TaskStatus Hydro::InitRecv(Driver *pdrive, int stage) {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn  void Hydro::CopyCons
+//! \brief Simple task list function that copies u0 --> u1 in first stage.  Extended to
+//!  handle RK register logic at given stage
+
+TaskStatus Hydro::CopyCons(Driver *pdrive, int stage) {
+  if (stage == 1) {
+    Kokkos::deep_copy(DevExeSpace(), u1, u0);
+  } else {
+    if (pdrive->integrator == "rk4") {
+      // parallel loop to update u1 with u0 at later stages, only for rk4
+      auto &indcs = pmy_pack->pmesh->mb_indcs;
+      int is = indcs.is, ie = indcs.ie;
+      int js = indcs.js, je = indcs.je;
+      int ks = indcs.ks, ke = indcs.ke;
+      int nmb1 = pmy_pack->nmb_thispack - 1;
+      int nvar = nhydro + nscalars;
+      auto &u0 = pmy_pack->phydro->u0;
+      auto &u1 = pmy_pack->phydro->u1;
+      Real &delta = pdrive->delta[stage-1];
+      par_for("rk4_copy_cons", DevExeSpace(),0, nmb1, 0, nvar-1, ks, ke, js, je, is, ie,
+      KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
+        u1(m,n,k,j,i) += delta*u0(m,n,k,j,i);
+      });
+    }
+  }
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn TaskStatus Hydro::Fluxes
 //! \brief Wrapper task list function that calls everything necessary to compute fluxes
 //! of conserved variables
@@ -129,42 +158,7 @@ TaskStatus Hydro::Fluxes(Driver *pdrive, int stage) {
       FOFC(pdrive, stage);
     }
   }
-  return TaskStatus::complete;
-}
 
-//----------------------------------------------------------------------------------------
-//! \fn  void Hydro::CopyCons
-//  \brief  copy u0 --> u1 in first stage
-TaskStatus Hydro::CopyCons(Driver *pdrive, int stage) {
-  auto integrator = pdrive->integrator;
-
-  auto &indcs = pmy_pack->pmesh->mb_indcs;
-  int is = indcs.is, ie = indcs.ie;
-  int js = indcs.js, je = indcs.je;
-  int ks = indcs.ks, ke = indcs.ke;
-  int nmb1 = pmy_pack->nmb_thispack - 1;
-  int nvar = nhydro + nscalars;
-  auto &u0 = pmy_pack->phydro->u0;
-  auto &u1 = pmy_pack->phydro->u1;
-
-  // hierarchical parallel loop that updates conserved variables to intermediate step
-  // using weights and fractional time step appropriate to stages of time-integrator.
-  // Important to use vector inner loop for good performance on cpus
-  if (integrator == "rk4") {
-    Real &delta = pdrive->delta[stage-1];
-    if (stage == 1) {
-      Kokkos::deep_copy(DevExeSpace(), u1, u0);
-    } else {
-      par_for("CopyCons", DevExeSpace(),0, nmb1, 0, nvar-1, ks, ke, js, je, is, ie,
-      KOKKOS_LAMBDA(int m, int n, int k, int j, int i){
-        u1(m,n,k,j,i) += delta*u0(m,n,k,j,i);
-      });
-    }
-  } else {
-    if (stage == 1) {
-      Kokkos::deep_copy(DevExeSpace(), u1, u0);
-    }
-  }
   return TaskStatus::complete;
 }
 

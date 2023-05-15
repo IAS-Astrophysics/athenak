@@ -14,7 +14,7 @@
 #include "z4c/z4c.hpp"
 
 namespace adm {
-char const * const ADM::ADM_names[ADM::N_ADM] = {
+char const * const ADM::ADM_names[ADM::nadm] = {
   "adm_gxx", "adm_gxy", "adm_gxz", "adm_gyy", "adm_gyz", "adm_gzz",
   "adm_Kxx", "adm_Kxy", "adm_Kxz", "adm_Kyy", "adm_Kyz", "adm_Kzz",
   "adm_psi4",
@@ -33,19 +33,19 @@ ADM::ADM(MeshBlockPack *ppack, ParameterInput *pin):
   int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
 
   if (nullptr == pmy_pack->pz4c) {
-    Kokkos::realloc(u_adm, nmb, N_ADM, ncells3, ncells2, ncells1);
-    adm.alpha.InitWithShallowSlice(u_adm, I_ADM_alpha);
-    adm.beta_u.InitWithShallowSlice(u_adm, I_ADM_betax, I_ADM_betaz);
+    Kokkos::realloc(u_adm, nmb, nadm, ncells3, ncells2, ncells1);
+    adm.alpha.InitWithShallowSlice(u_adm, I_ADM_ALPHA);
+    adm.beta_u.InitWithShallowSlice(u_adm, I_ADM_BETAX, I_ADM_BETAZ);
   } else {
     // Lapse and shift are stored in the Z4c class
     z4c::Z4c * pz4c = pmy_pack->pz4c;
-    Kokkos::realloc(u_adm, nmb, N_ADM - 4, ncells3, ncells2, ncells1);
+    Kokkos::realloc(u_adm, nmb, nadm - 4, ncells3, ncells2, ncells1);
     adm.alpha.InitWithShallowSlice(pz4c->u0, pz4c->I_Z4C_ALPHA);
     adm.beta_u.InitWithShallowSlice(pz4c->u0, pz4c->I_Z4C_BETAX, pz4c->I_Z4C_BETAZ);
   }
-  adm.psi4.InitWithShallowSlice(u_adm, I_ADM_psi4);
-  adm.g_dd.InitWithShallowSlice(u_adm, I_ADM_gxx, I_ADM_gzz);
-  adm.K_dd.InitWithShallowSlice(u_adm, I_ADM_Kxx, I_ADM_Kzz);
+  adm.psi4.InitWithShallowSlice(u_adm, I_ADM_PSI4);
+  adm.g_dd.InitWithShallowSlice(u_adm, I_ADM_GXX, I_ADM_GZZ);
+  adm.kk_dd.InitWithShallowSlice(u_adm, I_ADM_KXX, I_ADM_KZZ);
 }
 
 //----------------------------------------------------------------------------------------

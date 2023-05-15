@@ -446,7 +446,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
   }
 
   // ADM variables, excluding gauge
-  for (int v = 0; v < adm::ADM::N_ADM - 4; ++v) {
+  for (int v = 0; v < adm::ADM::nadm - 4; ++v) {
     if (out_params.variable.compare("adm") == 0 ||
         out_params.variable.compare(adm::ADM::ADM_names[v]) == 0) {
       outvars.emplace_back(adm::ADM::ADM_names[v], v, &(pm->pmb_pack->padm->u_adm));
@@ -455,7 +455,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
 
   // ADM gauge variables
   if (nullptr == pm->pmb_pack->pz4c) {
-    for (int v = adm::ADM::N_ADM - 4; v < adm::ADM::N_ADM; ++v) {
+    for (int v = adm::ADM::nadm - 4; v < adm::ADM::nadm; ++v) {
       if (out_params.variable.compare("adm") == 0 ||
           out_params.variable.compare(adm::ADM::ADM_names[v]) == 0) {
         outvars.emplace_back(adm::ADM::ADM_names[v], v, &(pm->pmb_pack->padm->u_adm));

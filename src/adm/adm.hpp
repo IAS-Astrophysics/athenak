@@ -26,21 +26,21 @@ class ADM {
 
   // Indices of ADM variables
   enum {
-    I_ADM_gxx, I_ADM_gxy, I_ADM_gxz, I_ADM_gyy, I_ADM_gyz, I_ADM_gzz,
-    I_ADM_Kxx, I_ADM_Kxy, I_ADM_Kxz, I_ADM_Kyy, I_ADM_Kyz, I_ADM_Kzz,
-    I_ADM_psi4,
-    I_ADM_alpha, I_ADM_betax, I_ADM_betay, I_ADM_betaz,
-    N_ADM
+    I_ADM_GXX, I_ADM_GXY, I_ADM_GXZ, I_ADM_GYY, I_ADM_GYZ, I_ADM_GZZ,
+    I_ADM_KXX, I_ADM_KXY, I_ADM_KXZ, I_ADM_KYY, I_ADM_KYZ, I_ADM_KZZ,
+    I_ADM_PSI4,
+    I_ADM_ALPHA, I_ADM_BETAX, I_ADM_BETAY, I_ADM_BETAZ,
+    nadm
   };
   // Names of ADM variables
-  static char const * const ADM_names[N_ADM];
+  static char const * const ADM_names[nadm];
 
   struct ADM_vars {
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> alpha;     // lapse
     AthenaTensor<Real, TensorSymm::NONE, 3, 1> beta_u;    // shift vector
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> psi4;      // conformal factor
     AthenaTensor<Real, TensorSymm::SYM2, 3, 2> g_dd;      // spatial metric
-    AthenaTensor<Real, TensorSymm::SYM2, 3, 2> K_dd;      // extrinsic curvature
+    AthenaTensor<Real, TensorSymm::SYM2, 3, 2> kk_dd;      // extrinsic curvature
   };
   ADM_vars adm;
 

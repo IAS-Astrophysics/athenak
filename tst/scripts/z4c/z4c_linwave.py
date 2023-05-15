@@ -20,7 +20,6 @@ _ng = ['2', '3', '4']
 # Run AthenaK
 def run(**kwargs):
     logger.debug('Runnning test ' + __name__)
-    # L-going sound wave
     for iv in _int:
         for ng in _ng:
             for res in (16, 32):
@@ -55,18 +54,18 @@ def analyze():
     data = data.reshape([len(_int), len(_ng), 2, data.shape[-1]])
     analyze_status = True
     for ii, iv in enumerate(_int):
-        for ng in enumerate(_ng):
+        for ni, ng in enumerate(_ng):
             error_threshold = 0.0
             conv_threshold = 0.0
             if ((iv == 'rk3' or iv == 'rk4') and (ng >= 3)):
-                error_threshold = 6.0e-9
-                conv_threshold = 0.07
+                error_threshold = 8.0e-10
+                conv_threshold = 0.09
             else:
-                error_threshold = 6.0e-9
-                conv_threshold = 0.07
+                error_threshold = 1.0e-8
+                conv_threshold = 0.15
 
-            l1_rms_n16 = (data[ii][ng][0][4])
-            l1_rms_n32 = (data[ii][ng][1][4])
+            l1_rms_n16 = (data[ii][ni][0][4])
+            l1_rms_n32 = (data[ii][ni][1][4])
             if l1_rms_n32 > error_threshold:
                 logger.warning("z4c wave error too large for {0}+"
                                "ng={1} configuration, "

@@ -165,7 +165,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   if (pz4c != nullptr) {
     nz4c = pz4c->nz4c;
   } else if (padm != nullptr) {
-    nadm = padm->N_ADM;
+    nadm = padm->nadm;
   }
 
   // root process reads size of CC and FC data arrays from restart file
