@@ -116,18 +116,20 @@ add_executable(
         radiation_femn/radiation_femn.hpp
         radiation_femn/radiation_femn.cpp
         radiation_femn/radiation_femn_reader.cpp
-        radiation_femn/radaition_femn_fluxes.cpp
+        radiation_femn/radiation_femn_fluxes.cpp
         radiation_femn/radiation_femn_update.cpp
         radiation_femn/radiation_femn_limiter_filter.cpp
         radiation_femn/radiation_femn_tasks.cpp
         radiation_femn/radiation_femn_source.cpp
         radiation_femn/radiation_femn_newdt.cpp
         radiation_femn/radiation_femn_linalg.cpp
-        radiation_femn/radiation_femn_geodesicgrid.cpp
-        radiation_femn/radiation_femn_basis.cpp
-        radiation_femn/radiation_femn_matrix_integrate.cpp
-        radiation_femn/radiation_femn_quadrature.cpp
-        radiation_femn/radiation_femn_matrix_integrate.hpp radiation_femn/radiation_femn_loadmatrices.cpp radiation_femn/radiation_femn_tetrad.cpp)
+        radiation_femn/radiation_femn_geodesic_grid.cpp
+        radiation_femn/radiation_femn_geodesic_grid_basis.cpp
+        radiation_femn/radiation_femn_geodesic_grid_matrix_integrate.cpp
+        radiation_femn/radiation_femn_geodesic_grid_quadrature.cpp
+        radiation_femn/radiation_femn_geodesic_grid_matrices.hpp
+        radiation_femn/radiation_femn_loadmatrices.cpp
+        radiation_femn/radiation_femn_tetrad.cpp)
 
 # custom problem generator to be included in compile
 # specify on command line using '-D PROBLEM=file' where 'file' is name of file in

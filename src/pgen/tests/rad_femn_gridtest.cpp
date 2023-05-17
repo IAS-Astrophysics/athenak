@@ -13,6 +13,8 @@
 #include <sstream>
 #include <cmath>        // exp
 #include <algorithm>    // max
+#include <iomanip>
+#include "radiation_femn/radiation_femn_geodesic_grid_matrices.hpp"
 
 // AthenaK headers
 #include "athena.hpp"
@@ -20,7 +22,7 @@
 #include "mesh/mesh.hpp"
 #include "pgen/pgen.hpp"
 #include "radiation_femn/radiation_femn.hpp"
-#include "radiation_femn/radiation_femn_matrix_integrate.hpp"
+#include "radiation_femn/radiation_femn_geodesic_grid_matrices.hpp"
 
 void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool restart) {
     if (restart) return;
@@ -33,6 +35,13 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
                   << "<radiation-femn> block in input file" << std::endl;
         exit(EXIT_FAILURE);
     }
+
+    std::cout << "Testing real spherical harmonics" << std::endl;
+    std::cout << "l = 0, m = 0: " << std::setprecision(14) << radiationfemn::RealSphericalHarmonic(0,0,1,1)<< std::endl;
+    std::cout << "l = 2, m =1: " << std::setprecision(14) << radiationfemn::RealSphericalHarmonic(2,1,2.5,1.2)<< std::endl;
+    std::cout << "l = 6, m = -4: " << std::setprecision(14) << radiationfemn::RealSphericalHarmonic(6,-3,3.6,2.2)<< std::endl;
+    std::cout << std::floor(2.9999999999999999999999999999999999999) << std::endl;
+
     /*
     std::string pathdir = pin->GetString("radiation-femn", "geogrid_savedir");
     std::string filenamepart = "/geogrid_basis_" + std::to_string(pmbp->pradfemn->basis) + "_ref_" +

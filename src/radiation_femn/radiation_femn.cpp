@@ -32,7 +32,7 @@ namespace radiationfemn {
             coarse_f0("ci0", 1, 1, 1, 1, 1, 1),
             f1("f1", 1, 1, 1, 1, 1, 1),
             iflx("iflx", 1, 1, 1, 1, 1, 1),
-            ftemp("ftemp", 1, 1, 1, 1, 1),
+            ftemp("ftemp", 1, 1, 1, 1, 1, 1),
             etemp0("etemp0", 1, 1, 1, 1),
             etemp1("etemp1", 1, 1, 1, 1),
             energy_grid("energy_grid", 1),
@@ -47,11 +47,11 @@ namespace radiationfemn {
             e_source("e_source", 1),
             S_source("S_source", 1, 1),
             W_matrix("W_matrix", 1, 1),
-            eta("eta", 1, 1, 1, 1),
-            kappa_a("kappa_a", 1, 1, 1, 1),
-            kappa_s("kappa_s", 1, 1, 1, 1),
-            beam_mask("beam_mask", 1, 1, 1, 1, 1) {
-
+            eta("eta", 1, 1, 1, 1, 1),
+            kappa_a("kappa_a", 1, 1, 1, 1, 1),
+            kappa_s("kappa_s", 1, 1, 1, 1, 1),
+            beam_mask("beam_mask", 1, 1, 1, 1, 1, 1) {
+/*
         // ---------------------------------------------------------------------------
         // set up from parfile parameters
 
@@ -179,7 +179,7 @@ namespace radiationfemn {
 
         // allocate boundary buffers for cell-centered variables
         pbval_f = new BoundaryValuesCC(ppack, pin);
-        pbval_f->InitializeBuffers(num_points);
+        pbval_f->InitializeBuffers(num_points); */
     }
 
 //----------------------------------------------------------------------------------------------
