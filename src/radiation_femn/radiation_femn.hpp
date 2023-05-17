@@ -159,8 +159,9 @@ namespace radiationfemn {
         // ---------------------------------------------------------------------------
 
         // ---------------------------------------------------------------------------
-        // Functions for GeodesicGrid & tetrad
+        // Functions for angular matrices & tetrad
         void LoadFEMNMatrices();
+        void LoadFPNMatrices();
         void TetradInitialize();
         // ---------------------------------------------------------------------------
 

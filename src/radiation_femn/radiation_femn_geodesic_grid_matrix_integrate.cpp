@@ -336,40 +336,37 @@ double RealSphericalHarmonic(int l, int m, double phi, double theta) {
 // 4. G^nu^mu_ihat
 // 5. F^nu^mu_ihat
 KOKKOS_INLINE_FUNCTION
-double IntegrateMatrixFPN(int a,
-                          int b,
+double IntegrateMatrixFPN(int la,
+                          int ma,
+                          int lb,
+                          int mb,
                           const HostArray1D<Real> &scheme_weights,
                           const HostArray2D<Real> &scheme_points,
                           int matrixchoice) {
-  int l_a = std::floor(a);
-  int m_a = a - l_a * l_a - l_a;
-  int l_b = std::floor(b);
-  int m_b = b - l_b * l_b - l_b;
 
   double result = 0.;
 
   if (matrixchoice == 0) {
-    result = double(a == b);
+    result = double(la == lb);
   } else if (matrixchoice == 1) {
     for (size_t i = 0; i < scheme_weights.size(); i++) {
       result += 4. * M_PI * cos(scheme_points(i, 0)) * sin(scheme_points(i, 1))
-          * RealSphericalHarmonic(l_a, m_a, scheme_points(i, 0), scheme_points(i, 1))
-          * RealSphericalHarmonic(l_b, m_b, scheme_points(i, 0), scheme_points(i, 1)) * scheme_weights(i);
+          * RealSphericalHarmonic(la, ma, scheme_points(i, 0), scheme_points(i, 1))
+          * RealSphericalHarmonic(lb, mb, scheme_points(i, 0), scheme_points(i, 1)) * scheme_weights(i);
     }
   } else if (matrixchoice == 2) {
     for (size_t i = 0; i < scheme_weights.size(); i++) {
       result += 4. * M_PI * sin(scheme_points(i, 0)) * sin(scheme_points(i, 1))
-          * RealSphericalHarmonic(l_a, m_a, scheme_points(i, 0), scheme_points(i, 1))
-          * RealSphericalHarmonic(l_b, m_b, scheme_points(i, 0), scheme_points(i, 1)) * scheme_weights(i);
+          * RealSphericalHarmonic(la, ma, scheme_points(i, 0), scheme_points(i, 1))
+          * RealSphericalHarmonic(lb, mb, scheme_points(i, 0), scheme_points(i, 1)) * scheme_weights(i);
     }
   } else if (matrixchoice == 3) {
     for (size_t i = 0; i < scheme_weights.size(); i++) {
       result += 4. * M_PI * cos(scheme_points(i, 1))
-          * RealSphericalHarmonic(l_a, m_a, scheme_points(i, 0), scheme_points(i, 1))
-          * RealSphericalHarmonic(l_b, m_b, scheme_points(i, 0), scheme_points(i, 1)) * scheme_weights(i);
+          * RealSphericalHarmonic(la, ma, scheme_points(i, 0), scheme_points(i, 1))
+          * RealSphericalHarmonic(lb, mb, scheme_points(i, 0), scheme_points(i, 1)) * scheme_weights(i);
     }
   }
-
   return result;
 }
 } // namespace radiationfemn
