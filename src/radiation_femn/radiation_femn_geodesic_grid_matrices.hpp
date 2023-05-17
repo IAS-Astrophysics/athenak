@@ -268,8 +268,10 @@ double IntegrateMatrix(int a,
                        const HostArray2D<int> &triangles,
                        int matrixchoice);
 double RealSphericalHarmonic(int l, int m, double phi, double theta);
-double IntegrateMatrixFPN(int a,
-                          int b,
+double IntegrateMatrixFPN(int la,
+                          int ma,
+                          int lb,
+                          int mb,
                           const HostArray1D<Real> &scheme_weights,
                           const HostArray2D<Real> &scheme_points,
                           int matrixchoice);

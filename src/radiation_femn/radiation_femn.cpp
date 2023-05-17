@@ -51,7 +51,7 @@ namespace radiationfemn {
             kappa_a("kappa_a", 1, 1, 1, 1, 1),
             kappa_s("kappa_s", 1, 1, 1, 1, 1),
             beam_mask("beam_mask", 1, 1, 1, 1, 1, 1) {
-/*
+
         // ---------------------------------------------------------------------------
         // set up from parfile parameters
 
@@ -116,7 +116,7 @@ namespace radiationfemn {
         if (!fpn) {
             this->LoadFEMNMatrices();
         } else {
-            // @TODO: Load FPN matrices
+            this->LoadFPNMatrices();
         }
 
         // --------------------------------------------------------------------------------------------------------------------------
@@ -179,7 +179,7 @@ namespace radiationfemn {
 
         // allocate boundary buffers for cell-centered variables
         pbval_f = new BoundaryValuesCC(ppack, pin, false);
-        pbval_f->InitializeBuffers(num_points); */
+        pbval_f->InitializeBuffers(num_points);
     }
 
 //----------------------------------------------------------------------------------------------
