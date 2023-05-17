@@ -10,7 +10,7 @@
 #include <iostream>
 
 #include "radiation_femn/radiation_femn.hpp"
-#include "radiation_femn/radiation_femn_matrix_integrate.hpp"
+#include "radiation_femn/radiation_femn_geodesic_grid_matrices.hpp"
 
 namespace radiationfemn {
 

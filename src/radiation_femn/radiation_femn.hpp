@@ -109,7 +109,7 @@ namespace radiationfemn {
         DvceArray6D<Real> g_dd;         // placeholder for spatial metric
         DvceArray4D<Real> sqrt_det_g;   // square root of determinant of matrix
         DvceArray5D<Real> u_mu;         // placeholder for fluid velocity in lab frame
-
+        DvceArray6D<Real> Gamma;        // Christoeffel symbol in lab frame
         // ---------------------------------------------------------------------------
         // arrays for source terms
         // ---------------------------------------------------------------------------

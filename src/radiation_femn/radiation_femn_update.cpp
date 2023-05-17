@@ -42,10 +42,15 @@ namespace radiationfemn {
         auto &L_mu_muhat0_ = L_mu_muhat0;
         auto &L_mu_muhat1_ = L_mu_muhat1;
         auto &u_mu_ = u_mu;
+        auto &Gamma_ = Gamma;
 
         // update the distribution function for radiation
         par_for("radiation_femn_update", DevExeSpace(), 0, nmb1, 0, neng1, 0, nang1, ks, ke, js, je, is, ie,
                 KOKKOS_LAMBDA(int m, int en, int n, int k, int j, int i) {
+
+                    // Compute Christoeffel in fluid frame
+                    double Gamma_fluid = 0;
+
                     Real divf_s = (flx1(m, en,n, k, j, i + 1) - flx1(m, en, n, k, j, i)) / mbsize.d_view(m).dx1;
                     if (multi_d) {
                         divf_s += (flx2(m, en, n, k, j + 1, i) - flx2(m, en, n, k, j, i)) / mbsize.d_view(m).dx2;
