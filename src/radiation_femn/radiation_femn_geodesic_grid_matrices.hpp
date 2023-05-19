@@ -14,6 +14,11 @@
 
 namespace radiationfemn {
 
+// ---------------------------------------------------------------------------
+// Quadrature points and weights (radiation_femn_geodesic_grid_quadrature.cpp)
+void LoadQuadrature(int &scheme_num_points, HostArray1D<Real> &scheme_weights, HostArray2D<Real> &scheme_points);
+void LoadQuadratureSphere(int &scheme_num_points, HostArray1D<Real> &scheme_weights, HostArray2D<Real> &scheme_points);
+
 // ---------------------------------------------------------------------
 // Geodesic grid generation functions (radiation_femn_geodesic_grid.cpp)
 void
@@ -225,11 +230,10 @@ double mom_by_energy(int mu,
                      double xi3);
 
 // Find triangles which share an edge
-void FindTriangles(int a, int b, const HostArray2D<int> &triangles, HostArray2D<int> edge_triangles, bool &is_edge);
+void FindTriangles(int a, int b, const HostArray2D<int> &triangles, HostArray2D<int> &edge_triangles, bool &is_edge);
 
 // -------------------------------------------------------------------------------------------------------------------------------------------
 // Integration routines over geodesic grid (radiation_femn_geodesic_grid_matrix_integrate.cpp and radiation_femn_geodesic_grid_quadrature.cpp)
-void LoadQuadrature(int &scheme_num_points, HostArray1D<Real> scheme_weights, HostArray2D<Real> scheme_points);
 double CalculateDeterminantJacobian(double x1,
                                     double y1,
                                     double z1,
