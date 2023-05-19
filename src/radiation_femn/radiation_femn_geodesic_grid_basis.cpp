@@ -41,7 +41,7 @@ void BarycentricToCartesian(double x1,
 // ------------------------------------------------------------------------------------------------
 // Given index numbers of two vertices, finds if they share an edge and if so, return triangle info
 // If a = b, this return all triangles which share the vertex
-void FindTriangles(int a, int b, const HostArray2D<int> &triangles, HostArray2D<int> edge_triangles, bool &is_edge) {
+void FindTriangles(int a, int b, const HostArray2D<int> &triangles, HostArray2D<int> &edge_triangles, bool &is_edge) {
 
   is_edge = false;
   Kokkos::realloc(edge_triangles, 6, 3);
@@ -235,7 +235,7 @@ double dFEMBasisdxi(double xi1, double xi2, double xi3, int basis_index, int bas
 
 // ------------------------------------------------------------
 // Product of two FEM basis given their index and triangle info
-KOKKOS_INLINE_FUNCTION
+//KOKKOS_INLINE_FUNCTION
 double FEMBasisABasisB(int a, int b, int t1, int t2, int t3, double xi1, double xi2, double xi3, int basis_choice) {
 
   int basis_index_a = (a == t1) * 1 + (a == t2) * 2 + (a == t3) * 3;

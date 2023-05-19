@@ -20,7 +20,7 @@ namespace radiationfemn {
         int &ks = indcs.ks, &ke = indcs.ke;
         int nmb1 = pmy_pack->nmb_thispack - 1;
         auto &mbsize = pmy_pack->pmb->mb_size;
-
+      /*
         par_for("radiation_femn_tetrad_initialize_Lmu_0_L_mu_1", DevExeSpace(), 0, nmb1, 0, 4, ks, ke, js, je, is, ie,
                 KOKKOS_LAMBDA(int m, int mu, int k, int j, int i) {
                     L_mu_muhat0(m, mu, 0, k, j, i) = u_mu(m, mu, k, j, i);
@@ -56,6 +56,6 @@ namespace radiationfemn {
                     Real L_mu_3_norm = sqrt(pow(L_mu_muhat0(m, 0, 3, k, j, i), 2) + pow(L_mu_muhat0(m, 1, 3, k, j, i), 2) +
                                         pow(L_mu_muhat0(m, 3, 1, k, j, i), 2) + pow(L_mu_muhat0(m, 3, 3, k, j, i), 2));
                     L_mu_muhat0(m, mu, 3, k, j, i) = L_mu_muhat0(m, mu, 3, k, j, i)/L_mu_3_norm;
-            });
+            }); */
     }
 }  // namespace radiationfemn

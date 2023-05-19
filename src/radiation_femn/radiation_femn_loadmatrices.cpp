@@ -46,6 +46,29 @@ void RadiationFEMN::LoadFEMNMatrices() {
     angular_grid(i, 1) = theta(i);
   }
 
+  auto &mm_ = mass_matrix;
+  auto &sx_ = stiffness_matrix_x;
+  auto &sy_ = stiffness_matrix_y;
+  auto &sz_ = stiffness_matrix_z;
+
+  //Populate the mass matrix
+  std::cout << "Computing the mass matrix ... " << std::endl;
+  for (int i = 0; i < num_points; i++) {
+    for (int j = 0; j < num_points; j++) {
+      mm_(i, j) = radiationfemn::IntegrateMatrix(i, j, basis, x, y, z, scheme_weights, scheme_points, triangles, 0);
+    }
+  }
+
+  // compute stiffness matrices
+  std::cout << "Computing the stiffness matrices ... " << std::endl;
+  for (int i = 0; i < num_points; i++) {
+    for (int j = 0; j < num_points; j++) {
+      sx_(i, j) = radiationfemn::IntegrateMatrix(i, j, basis, x, y, z, scheme_weights, scheme_points, triangles, 1);
+      sy_(i, j) = radiationfemn::IntegrateMatrix(i, j, basis, x, y, z, scheme_weights, scheme_points, triangles, 2);
+      sz_(i, j) = radiationfemn::IntegrateMatrix(i, j, basis, x, y, z, scheme_weights, scheme_points, triangles, 3);
+    }
+  }
+
 }
 
 // -------------------------------------------------
@@ -64,12 +87,50 @@ void RadiationFEMN::LoadFPNMatrices() {
   }
 
   auto &mm_ = mass_matrix;
-  //Populate the mass matrix
-  for (int i = 0; i < num_points; i++) {
-    for (int j = 0; i < num_points; j++) {
-      mm_(i,j) = IntegrateMatrixFPN(lm_grid_(i,0),lm_grid_(i,1),lm_grid_(j,0),lm_grid_(j,1),scheme_weights,scheme_points,0);
-    }
+  auto &sx_ = stiffness_matrix_x;
+  auto &sy_ = stiffness_matrix_y;
+  auto &sz_ = stiffness_matrix_z;
 
+  //Populate the mass matrix
+  std::cout << "Computing the mass matrix ... " << std::endl;
+  for (int i = 0; i < num_points; i++) {
+    for (int j = 0; j < num_points; j++) {
+      mm_(i, j) = radiationfemn::IntegrateMatrixFPN(int(lm_grid_(i, 0)),
+                                                    int(lm_grid_(i, 1)),
+                                                    int(lm_grid_(j, 0)),
+                                                    int(lm_grid_(j, 1)),
+                                                    scheme_weights,
+                                                    scheme_points,
+                                                    0);
+    }
+  }
+
+  // compute stiffness matrices
+  std::cout << "Computing the stiffness matrices ... " << std::endl;
+  for (int i = 0; i < num_points; i++) {
+    for (int j = 0; j < num_points; j++) {
+      sx_(i, j) = radiationfemn::IntegrateMatrixFPN(int(lm_grid_(i, 0)),
+                                                    int(lm_grid_(i, 1)),
+                                                    int(lm_grid_(j, 0)),
+                                                    int(lm_grid_(j, 1)),
+                                                    scheme_weights,
+                                                    scheme_points,
+                                                    1);
+      sy_(i, j) = radiationfemn::IntegrateMatrixFPN(int(lm_grid_(i, 0)),
+                                                    int(lm_grid_(i, 1)),
+                                                    int(lm_grid_(j, 0)),
+                                                    int(lm_grid_(j, 1)),
+                                                    scheme_weights,
+                                                    scheme_points,
+                                                    2);
+      sz_(i, j) = radiationfemn::IntegrateMatrixFPN(int(lm_grid_(i, 0)),
+                                                    int(lm_grid_(i, 1)),
+                                                    int(lm_grid_(j, 0)),
+                                                    int(lm_grid_(j, 1)),
+                                                    scheme_weights,
+                                                    scheme_points,
+                                                    3);
+    }
   }
 }
 }  // namespace radiationfemn

@@ -74,6 +74,13 @@ namespace radiationfemn {
         bool beam_source;               // flag to enable/disable beam sources, disabled by default
 
         // ---------------------------------------------------------------------------
+        // arrays for numerical quadratures
+        // ---------------------------------------------------------------------------
+        HostArray2D<double> scheme_points;
+        HostArray1D<double> scheme_weights;
+        int scheme_num_points;
+
+        // ---------------------------------------------------------------------------
         // matrices for the angular grid
         // ---------------------------------------------------------------------------
         DvceArray2D<Real> angular_grid;            // store the values of (l,m) for FP_N. Alternatively store (phi,theta) for FEM_N
@@ -85,8 +92,8 @@ namespace radiationfemn {
         DvceArray2D<Real> stiffness_matrix_z;      // z component of the stiffness matrix (in the special relativistic case) [Eqn. 12 of arXiv:2212.01409]
 
         DvceArray3D <Real> P_matrix;                // P ^muhat ^A _B
-        DvceArray5D<Real> G_matrix;                 // G ^nuhat ^muhat _ihat ^A _B
-        DvceArray5D<Real> F_matrix;                 // F ^nuhat ^muhat _ihat ^A _B
+        DvceArray5D<Real>  G_matrix;                 // G ^nuhat ^muhat _ihat ^A _B
+        DvceArray5D<Real>  F_matrix;                 // F ^nuhat ^muhat _ihat ^A _B
 
         // ---------------------------------------------------------------------------
         // distribution function, flux and other arrays

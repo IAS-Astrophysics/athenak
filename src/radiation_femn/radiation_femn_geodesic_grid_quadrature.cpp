@@ -11,7 +11,7 @@
 
 namespace radiationfemn {
 
-void LoadQuadrature(int &scheme_num_points, HostArray1D<Real> scheme_weights, HostArray2D<Real> scheme_points) {
+void LoadQuadrature(int &scheme_num_points, HostArray1D<Real> &scheme_weights, HostArray2D<Real> &scheme_points) {
 
   scheme_num_points = 453;
 
@@ -1835,7 +1835,7 @@ void LoadQuadrature(int &scheme_num_points, HostArray1D<Real> scheme_weights, Ho
   scheme_points(452, 2) = 0.07405907467985091;
 }
 
-void LoadQuadratureSphere(int &scheme_num_points, HostArray1D<Real> scheme_weights, HostArray2D<Real> scheme_points) {
+void LoadQuadratureSphere(int &scheme_num_points, HostArray1D<Real> &scheme_weights, HostArray2D<Real> &scheme_points) {
 
   scheme_num_points = 434;
 

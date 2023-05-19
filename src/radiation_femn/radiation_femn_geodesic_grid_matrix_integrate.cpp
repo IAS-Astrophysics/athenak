@@ -74,7 +74,7 @@ IntegrateMatrixSphericalTriangle(int a,
 
     // (1) Cos Phi Sin Theta Psi_A Psi_B
   else if (matrixnumber == 1) {
-    for (size_t i = 0; i < scheme_points.size(); i++) {
+    for (size_t i = 0; i < scheme_weights.size(); i++) {
       result += CosPhiSinTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1),
                                scheme_points(i, 2)) *
           sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0),
@@ -86,7 +86,7 @@ IntegrateMatrixSphericalTriangle(int a,
 
     // (2) Sin Phi Sin Theta Psi_A Psi_B
   else if (matrixnumber == 2) {
-    for (size_t i = 0; i < scheme_points.size(); i++) {
+    for (size_t i = 0; i < scheme_weights.size(); i++) {
       result += SinPhiSinTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1),
                                scheme_points(i, 2)) *
           sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0),
@@ -98,7 +98,7 @@ IntegrateMatrixSphericalTriangle(int a,
 
     // (3) Cos Theta Psi_A Psi_B
   else if (matrixnumber == 3) {
-    for (size_t i = 0; i < scheme_points.size(); i++) {
+    for (size_t i = 0; i < scheme_weights.size(); i++) {
       result += CosTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1),
                          scheme_points(i, 2)) *
           sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0),
@@ -108,7 +108,7 @@ IntegrateMatrixSphericalTriangle(int a,
     }
   }
 
-    // (4) G^nu^mu_ihat
+   /* // (4) G^nu^mu_ihat
   else if (matrixnumber == 4) {
     for (size_t i = 0; i < scheme_points.size(); i++) {
       result += mom_by_energy(nu,
@@ -228,7 +228,7 @@ IntegrateMatrixSphericalTriangle(int a,
                         scheme_points(i, 1),
                         scheme_points(i, 2)) * scheme_weights(i);
     }
-  }
+  } */
 
   result = 0.5 * result;
 
@@ -269,7 +269,7 @@ CalculateDeterminantJacobian(double x1,
 
 // ---------------------------------------------------------------
 // Find mass/stiffness and other associated matrices for FEM basis
-KOKKOS_INLINE_FUNCTION
+//KOKKOS_INLINE_FUNCTION
 double
 IntegrateMatrix(int a,                                    // matrix row (this is an angle pair index)
                 int b,                                    // matrix column (this is an angle pairindex)
@@ -335,7 +335,7 @@ double RealSphericalHarmonic(int l, int m, double phi, double theta) {
 // 3. Cos Theta Psi_A Psi_B
 // 4. G^nu^mu_ihat
 // 5. F^nu^mu_ihat
-KOKKOS_INLINE_FUNCTION
+//KOKKOS_INLINE_FUNCTION
 double IntegrateMatrixFPN(int la,
                           int ma,
                           int lb,
@@ -347,7 +347,7 @@ double IntegrateMatrixFPN(int la,
   double result = 0.;
 
   if (matrixchoice == 0) {
-    result = double(la == lb);
+    result = double((la == lb) * (ma == mb));
   } else if (matrixchoice == 1) {
     for (size_t i = 0; i < scheme_weights.size(); i++) {
       result += 4. * M_PI * cos(scheme_points(i, 0)) * sin(scheme_points(i, 1))
@@ -366,6 +366,8 @@ double IntegrateMatrixFPN(int la,
           * RealSphericalHarmonic(la, ma, scheme_points(i, 0), scheme_points(i, 1))
           * RealSphericalHarmonic(lb, mb, scheme_points(i, 0), scheme_points(i, 1)) * scheme_weights(i);
     }
+  } else if (matrixchoice == 4) {
+    
   }
   return result;
 }
