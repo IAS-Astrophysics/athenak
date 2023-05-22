@@ -107,7 +107,7 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage) {
         Real b0 = u_1*bx + u_2*by + u_3*bz;
         Real b1 = (bx + b0 * u1) / u0;
         Real b2 = (by + b0 * u2) / u0;
-        Real b3 = (bz + b0 * u3) / u0;
+        //Real b3 = (bz + b0 * u3) / u0;
 
         e3cc_(m,ks,j,i) = b1 * u2 - b2 * u1;
       });
