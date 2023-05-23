@@ -79,6 +79,7 @@ namespace radiationfemn {
         HostArray2D<double> scheme_points;
         HostArray1D<double> scheme_weights;
         int scheme_num_points;
+        std::string scheme_name;
 
         // ---------------------------------------------------------------------------
         // matrices for the angular grid

@@ -55,6 +55,8 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
     fout << std::endl;
     fout << "lmax = " << pmbp->pradfemn->lmax << std::endl;
     fout << "num_points = " << pmbp->pradfemn->num_points << std::endl;
+    fout << "quadrature_num_points = " << pmbp->pradfemn->scheme_num_points << std::endl;
+    fout << "quadrature_name = " << pmbp->pradfemn->scheme_name << std::endl;
     fout << std::endl;
     fout << "l m" << std::endl;
 
@@ -99,6 +101,13 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
       fout5 << std::endl;
     }
 
+    // save quadrature information
+    std::ofstream fout6(pathdir + filenamepart + "_quadrature_info" + ".txt");
+    for (int i = 0; i < pmbp->pradfemn->scheme_num_points; i++) {
+      fout6 << pmbp->pradfemn->scheme_points(i, 0) << " " << pmbp->pradfemn->scheme_points(i, 1) << " "
+            << pmbp->pradfemn->scheme_points(i, 2) << " " << pmbp->pradfemn->scheme_weights(i) << std::endl;
+    }
+
   } else {
     std::string pathdir = pin->GetString("radiation-femn", "savedir");
 
@@ -112,11 +121,13 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
     fout << "num_points = " << pmbp->pradfemn->num_points << std::endl;
     fout << "num_edges = " << pmbp->pradfemn->num_edges << std::endl;
     fout << "num_triangles = " << pmbp->pradfemn->num_triangles << std::endl;
+    fout << "quadrature_num_points = " << pmbp->pradfemn->scheme_num_points << std::endl;
+    fout << "quadrature_name = " << pmbp->pradfemn->scheme_name << std::endl;
 
     std::ofstream fout2(pathdir + filenamepart + "_grid_coordinates" + ".txt");
     fout2 << "phi theta" << std::endl;
     for (size_t i = 0; i < pmbp->pradfemn->num_points; i++) {
-      fout2 << pmbp->pradfemn->angular_grid(i,0) << " " << pmbp->pradfemn->angular_grid(i,1) << std::endl;
+      fout2 << pmbp->pradfemn->angular_grid(i, 0) << " " << pmbp->pradfemn->angular_grid(i, 1) << std::endl;
     }
 
     // save mass matrix
@@ -129,7 +140,7 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
       }
       fout3 << std::endl;
     }
-    fout << "sum of mass matrix = " << sum <<std::endl;
+    fout << "sum of mass matrix = " << sum << std::endl;
 
     // save stiffness-x matrix
     std::ofstream fout4(pathdir + filenamepart + "_stiffness_x" + ".txt");
@@ -156,6 +167,13 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
         fout6 << pmbp->pradfemn->stiffness_matrix_z(i, j) << " ";
       }
       fout6 << std::endl;
+    }
+
+    // save quadrature information
+    std::ofstream fout7(pathdir + filenamepart + "_quadrature_info" + ".txt");
+    for (int i = 0; i < pmbp->pradfemn->scheme_num_points; i++) {
+      fout7 << pmbp->pradfemn->scheme_points(i, 0) << " " << pmbp->pradfemn->scheme_points(i, 1) << " "
+            << pmbp->pradfemn->scheme_points(i, 2) << " " << pmbp->pradfemn->scheme_weights(i) << std::endl;
     }
 
   }

@@ -16,8 +16,7 @@ namespace radiationfemn {
 
 // ---------------------------------------------------------------------------
 // Quadrature points and weights (radiation_femn_geodesic_grid_quadrature.cpp)
-void LoadQuadrature(int &scheme_num_points, HostArray1D<Real> &scheme_weights, HostArray2D<Real> &scheme_points);
-void LoadQuadratureSphere(int &scheme_num_points, HostArray1D<Real> &scheme_weights, HostArray2D<Real> &scheme_points);
+void LoadQuadrature(std::string &scheme_name, int &scheme_num_points, HostArray1D<Real> &scheme_weights, HostArray2D<Real> &scheme_points);
 
 // ---------------------------------------------------------------------
 // Geodesic grid generation functions (radiation_femn_geodesic_grid.cpp)

@@ -117,11 +117,15 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   Kokkos::realloc(angular_grid, num_points, 2);
 
   if (!fpn) {
-    radiationfemn::LoadQuadrature(scheme_num_points, scheme_weights, scheme_points);
+    scheme_num_points = pin->GetOrAddInteger("radiation-femn", "quad_scheme_num_points", 453);
+    scheme_name = pin->GetOrAddString("radiation-femn", "quad_scheme_name", "xiao_gimbutas");
+    radiationfemn::LoadQuadrature(scheme_name, scheme_num_points, scheme_weights, scheme_points);
     this->LoadFEMNMatrices();
 
   } else {
-    radiationfemn::LoadQuadratureSphere(scheme_num_points, scheme_weights, scheme_points);
+    scheme_num_points = pin->GetOrAddInteger("radiation-femn", "quad_scheme_num_points", 2702);
+    scheme_name = pin->GetOrAddString("radiation-femn", "quad_scheme_name", "lebedev");
+    radiationfemn::LoadQuadrature(scheme_name, scheme_num_points, scheme_weights, scheme_points);
     this->LoadFPNMatrices();
   }
 
