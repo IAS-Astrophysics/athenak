@@ -64,7 +64,7 @@ void Z4c::AssembleZ4cTasks(TaskList &start, TaskList &run, TaskList &end) {
   // end task list
   id.csend = end.AddTask(&Z4c::ClearSend, this, none);
   id.crecv = end.AddTask(&Z4c::ClearRecv, this, id.csend);
-  
+
   // if (pmy_pack->pmesh->ncycle%64 == 0) {
     // place holder for horizon finder
   // }
