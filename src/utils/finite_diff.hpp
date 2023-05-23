@@ -1,15 +1,14 @@
 
 // This file has been generated with py/write_FD.py, please do modifications there.
 
-  // Reminder: this code has been generated with py/write_FD.py, please do modifications there.
-  // 1st derivative scalar
-  template <int NGHOST, typename TYPE>
+// Reminder: this code has been generated with py/write_FD.py, please do modifications there.
+// 1st derivative scalar
+template <int NGHOST, typename TYPE>
 KOKKOS_INLINE_FUNCTION
-  Real Dx(int const dir,
-          const Real idx[], TYPE &quant,
-          int const m,
-          int const k, int const j, int const i)
-  {
+Real Dx(int const dir,
+        const Real idx[], TYPE &quant,
+        int const m,
+        int const k, int const j, int const i) {
   int const shiftk = dir==2;
   int const shiftj = dir==1;
   int const shifti = dir==0;
@@ -55,18 +54,17 @@ KOKKOS_INLINE_FUNCTION
                                   i+( 1)*shifti));
   }
   return out*idx[dir];
-  }
+}
 
 
-  // Reminder: this code has been generated with py/write_FD.py, please do modifications there.
-  // 1st derivative vector
-  template <int NGHOST, typename TYPE>
+// Reminder: this code has been generated with py/write_FD.py, please do modifications there.
+// 1st derivative vector
+template <int NGHOST, typename TYPE>
 KOKKOS_INLINE_FUNCTION
-  Real Dx(int const dir,
-          const Real idx[], TYPE &quant,
-          int const m, int const a,
-          int const k, int const j, int const i)
-  {
+Real Dx(int const dir,
+        const Real idx[], TYPE &quant,
+        int const m, int const a,
+        int const k, int const j, int const i) {
   int const shiftk = dir==2;
   int const shiftj = dir==1;
   int const shifti = dir==0;
@@ -112,18 +110,17 @@ KOKKOS_INLINE_FUNCTION
                                     i+( 1)*shifti));
   }
   return out*idx[dir];
-  }
+}
 
 
-  // Reminder: this code has been generated with py/write_FD.py, please do modifications there.
-  // 1st derivative 2D tensor
-  template <int NGHOST, typename TYPE>
+// Reminder: this code has been generated with py/write_FD.py, please do modifications there.
+// 1st derivative 2D tensor
+template <int NGHOST, typename TYPE>
 KOKKOS_INLINE_FUNCTION
-  Real Dx(int const dir,
-          const Real idx[], TYPE &quant,
-          int const m, int const a, int const b,
-          int const k, int const j, int const i)
-  {
+Real Dx(int const dir,
+        const Real idx[], TYPE &quant,
+        int const m, int const a, int const b,
+        int const k, int const j, int const i) {
   int const shiftk = dir==2;
   int const shiftj = dir==1;
   int const shifti = dir==0;
@@ -169,18 +166,17 @@ KOKKOS_INLINE_FUNCTION
                                       i+( 1)*shifti));
   }
   return out*idx[dir];
-  }
+}
 
 
-  // Reminder: this code has been generated with py/write_FD.py, please do modifications there.
-  // 1st derivative scalar
-  template <int NGHOST, typename TYPE>
+// Reminder: this code has been generated with py/write_FD.py, please do modifications there.
+// 1st derivative scalar
+template <int NGHOST, typename TYPE>
 KOKKOS_INLINE_FUNCTION
-  Real Dxx(int const dir,
-          const Real idx[], TYPE &quant,
-          int const m,
-          int const k, int const j, int const i)
-  {
+Real Dxx(int const dir,
+        const Real idx[], TYPE &quant,
+        int const m,
+        int const k, int const j, int const i) {
   int const shiftk = dir==2;
   int const shiftj = dir==1;
   int const shifti = dir==0;
@@ -235,18 +231,17 @@ KOKKOS_INLINE_FUNCTION
                                   i);
   }
   return out*idx[dir]*idx[dir];
-  }
+}
 
 
-  // Reminder: this code has been generated with py/write_FD.py, please do modifications there.
-  // 1st derivative vector
-  template <int NGHOST, typename TYPE>
+// Reminder: this code has been generated with py/write_FD.py, please do modifications there.
+// 1st derivative vector
+template <int NGHOST, typename TYPE>
 KOKKOS_INLINE_FUNCTION
-  Real Dxx(int const dir,
-          const Real idx[], TYPE &quant,
-          int const m, int const a,
-          int const k, int const j, int const i)
-  {
+Real Dxx(int const dir,
+        const Real idx[], TYPE &quant,
+        int const m, int const a,
+        int const k, int const j, int const i) {
   int const shiftk = dir==2;
   int const shiftj = dir==1;
   int const shifti = dir==0;
@@ -301,18 +296,17 @@ KOKKOS_INLINE_FUNCTION
                                     i);
   }
   return out*idx[dir]*idx[dir];
-  }
+}
 
 
-  // Reminder: this code has been generated with py/write_FD.py, please do modifications there.
-  // 1st derivative 2D tensor
-  template <int NGHOST, typename TYPE>
+// Reminder: this code has been generated with py/write_FD.py, please do modifications there.
+// 1st derivative 2D tensor
+template <int NGHOST, typename TYPE>
 KOKKOS_INLINE_FUNCTION
-  Real Dxx(int const dir,
-          const Real idx[], TYPE &quant,
-          int const m, int const a, int const b,
-          int const k, int const j, int const i)
-  {
+Real Dxx(int const dir,
+        const Real idx[], TYPE &quant,
+        int const m, int const a, int const b,
+        int const k, int const j, int const i) {
   int const shiftk = dir==2;
   int const shiftj = dir==1;
   int const shifti = dir==0;
@@ -367,18 +361,17 @@ KOKKOS_INLINE_FUNCTION
                                       i);
   }
   return out*idx[dir]*idx[dir];
-  }
+}
 
 
-  // Reminder: this code has been generated with py/write_FD.py, please do modifications there.
-  // 1st derivative scalar
-  template <int NGHOST, typename TYPE>
+// Reminder: this code has been generated with py/write_FD.py, please do modifications there.
+// 1st derivative scalar
+template <int NGHOST, typename TYPE>
 KOKKOS_INLINE_FUNCTION
-  Real Dxy(int const dirx, int const diry,
-          const Real idx[], TYPE &quant,
-          int const m,
-          int const k, int const j, int const i)
-  {
+Real Dxy(int const dirx, int const diry,
+        const Real idx[], TYPE &quant,
+        int const m,
+        int const k, int const j, int const i) {
   int const shiftxk = dirx==2;
   int const shiftxj = dirx==1;
   int const shiftxi = dirx==0;
@@ -643,18 +636,17 @@ KOKKOS_INLINE_FUNCTION
             );
   }
   return out*idx[dirx]*idx[diry];
-  }
+}
 
 
-  // Reminder: this code has been generated with py/write_FD.py, please do modifications there.
-  // 1st derivative vector
-  template <int NGHOST, typename TYPE>
+// Reminder: this code has been generated with py/write_FD.py, please do modifications there.
+// 1st derivative vector
+template <int NGHOST, typename TYPE>
 KOKKOS_INLINE_FUNCTION
-  Real Dxy(int const dirx, int const diry,
-          const Real idx[], TYPE &quant,
-          int const m, int const a,
-          int const k, int const j, int const i)
-  {
+Real Dxy(int const dirx, int const diry,
+        const Real idx[], TYPE &quant,
+        int const m, int const a,
+        int const k, int const j, int const i) {
   int const shiftxk = dirx==2;
   int const shiftxj = dirx==1;
   int const shiftxi = dirx==0;
@@ -919,18 +911,17 @@ KOKKOS_INLINE_FUNCTION
             );
   }
   return out*idx[dirx]*idx[diry];
-  }
+}
 
 
-  // Reminder: this code has been generated with py/write_FD.py, please do modifications there.
-  // 1st derivative 2D tensor
-  template <int NGHOST, typename TYPE>
+// Reminder: this code has been generated with py/write_FD.py, please do modifications there.
+// 1st derivative 2D tensor
+template <int NGHOST, typename TYPE>
 KOKKOS_INLINE_FUNCTION
-  Real Dxy(int const dirx, int const diry,
-          const Real idx[], TYPE &quant,
-          int const m, int const a, int const b,
-          int const k, int const j, int const i)
-  {
+Real Dxy(int const dirx, int const diry,
+        const Real idx[], TYPE &quant,
+        int const m, int const a, int const b,
+        int const k, int const j, int const i) {
   int const shiftxk = dirx==2;
   int const shiftxj = dirx==1;
   int const shiftxi = dirx==0;
@@ -1195,19 +1186,18 @@ KOKKOS_INLINE_FUNCTION
             );
   }
   return out*idx[dirx]*idx[diry];
-  }
+}
 
 
-  // Reminder: this code has been generated with py/write_FD.py, please do modifications there.
-  // 1st advective derivative scalar
-  template <int NGHOST, typename TYPE1, typename TYPE2>
+// Reminder: this code has been generated with py/write_FD.py, please do modifications there.
+// 1st advective derivative scalar
+template <int NGHOST, typename TYPE1, typename TYPE2>
 KOKKOS_INLINE_FUNCTION
-  Real Lx(int const dir,
-          const Real idx[], const TYPE1 &vx,
-                            const TYPE2 &quant,
-          int const m, int const a,
-          int const k, int const j, int const i)
-  {
+Real Lx(int const dir,
+        const Real idx[], const TYPE1 &vx,
+                        const TYPE2 &quant,
+        int const m, int const a,
+        int const k, int const j, int const i) {
   int const shiftk = dir==2;
   int const shiftj = dir==1;
   int const shifti = dir==0;
@@ -1307,19 +1297,18 @@ KOKKOS_INLINE_FUNCTION
                                        i+(-2)*shifti);
   }
   return ((vx(m,a,k,j,i) < 0) ? (vx(m,a,k,j,i) * dl) : (vx(m,a,k,j,i) * dr)) * idx[dir];
-  }
+}
 
 
-  // Reminder: this code has been generated with py/write_FD.py, please do modifications there.
-  // 1st advective derivative vector
-  template <int NGHOST, typename TYPE1, typename TYPE2>
+// Reminder: this code has been generated with py/write_FD.py, please do modifications there.
+// 1st advective derivative vector
+template <int NGHOST, typename TYPE1, typename TYPE2>
 KOKKOS_INLINE_FUNCTION
-  Real Lx(int const dir,
-          const Real idx[], const TYPE1 &vx,
-                            const TYPE2 &quant,
-          int const m, int const a, int const b,
-          int const k, int const j, int const i)
-  {
+Real Lx(int const dir,
+        const Real idx[], const TYPE1 &vx,
+                        const TYPE2 &quant,
+        int const m, int const a, int const b,
+        int const k, int const j, int const i) {
   int const shiftk = dir==2;
   int const shiftj = dir==1;
   int const shifti = dir==0;
@@ -1419,19 +1408,18 @@ KOKKOS_INLINE_FUNCTION
                                          i+(-2)*shifti);
   }
   return ((vx(m,a,k,j,i) < 0) ? (vx(m,a,k,j,i) * dl) : (vx(m,a,k,j,i) * dr)) * idx[dir];
-  }
+}
 
 
-  // Reminder: this code has been generated with py/write_FD.py, please do modifications there.
-  // 1st advective derivative 2D tensor
-  template <int NGHOST, typename TYPE1, typename TYPE2>
+// Reminder: this code has been generated with py/write_FD.py, please do modifications there.
+// 1st advective derivative 2D tensor
+template <int NGHOST, typename TYPE1, typename TYPE2>
 KOKKOS_INLINE_FUNCTION
-  Real Lx(int const dir,
-          const Real idx[], const TYPE1 &vx,
-                            const TYPE2 &quant,
-          int const m, int const a, int const b, int const c,
-          int const k, int const j, int const i)
-  {
+Real Lx(int const dir,
+        const Real idx[], const TYPE1 &vx,
+                        const TYPE2 &quant,
+        int const m, int const a, int const b, int const c,
+        int const k, int const j, int const i) {
   int const shiftk = dir==2;
   int const shiftj = dir==1;
   int const shifti = dir==0;
@@ -1531,18 +1519,17 @@ KOKKOS_INLINE_FUNCTION
                                            i+(-2)*shifti);
   }
   return ((vx(m,a,k,j,i) < 0) ? (vx(m,a,k,j,i) * dl) : (vx(m,a,k,j,i) * dr)) * idx[dir];
-  }
+}
 
 
-  // Reminder: this code has been generated with py/write_FD.py, please do modifications there.
-  // 1st derivative vector
-  template <int NGHOST, typename TYPE>
+// Reminder: this code has been generated with py/write_FD.py, please do modifications there.
+// 1st derivative vector
+template <int NGHOST, typename TYPE>
 KOKKOS_INLINE_FUNCTION
-  Real Diss(int const dir,
-          const Real idx[], TYPE &quant,
-          int const m, int const a,
-          int const k, int const j, int const i)
-  {
+Real Diss(int const dir,
+        const Real idx[], TYPE &quant,
+        int const m, int const a,
+        int const k, int const j, int const i) {
   int const shiftk = dir==2;
   int const shiftj = dir==1;
   int const shifti = dir==0;
@@ -1615,5 +1602,5 @@ KOKKOS_INLINE_FUNCTION
                                     i);
   }
   return out*idx[dir];
-  }
+}
 
