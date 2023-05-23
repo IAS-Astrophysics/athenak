@@ -89,20 +89,20 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   z4c.alpha.InitWithShallowSlice (u0, I_Z4C_ALPHA);
   z4c.beta_u.InitWithShallowSlice(u0, I_Z4C_BETAX, I_Z4C_BETAZ);
   z4c.chi.InitWithShallowSlice   (u0, I_Z4C_CHI);
-  z4c.kkhat.InitWithShallowSlice  (u0, I_Z4C_KHAT);
-  z4c.ttheta.InitWithShallowSlice (u0, I_Z4C_THETA);
-  z4c.ggam_u.InitWithShallowSlice (u0, I_Z4C_GAMX, I_Z4C_GAMZ);
+  z4c.vKhat.InitWithShallowSlice  (u0, I_Z4C_KHAT);
+  z4c.vTheta.InitWithShallowSlice (u0, I_Z4C_THETA);
+  z4c.vGam_u.InitWithShallowSlice (u0, I_Z4C_GAMX, I_Z4C_GAMZ);
   z4c.g_dd.InitWithShallowSlice  (u0, I_Z4C_GXX, I_Z4C_GZZ);
-  z4c.aa_dd.InitWithShallowSlice  (u0, I_Z4C_AXX, I_Z4C_AZZ);
+  z4c.vA_dd.InitWithShallowSlice  (u0, I_Z4C_AXX, I_Z4C_AZZ);
 
   rhs.alpha.InitWithShallowSlice (u_rhs, I_Z4C_ALPHA);
   rhs.beta_u.InitWithShallowSlice(u_rhs, I_Z4C_BETAX, I_Z4C_BETAZ);
   rhs.chi.InitWithShallowSlice   (u_rhs, I_Z4C_CHI);
-  rhs.kkhat.InitWithShallowSlice  (u_rhs, I_Z4C_KHAT);
-  rhs.ttheta.InitWithShallowSlice (u_rhs, I_Z4C_THETA);
-  rhs.ggam_u.InitWithShallowSlice (u_rhs, I_Z4C_GAMX, I_Z4C_GAMZ);
+  rhs.vKhat.InitWithShallowSlice  (u_rhs, I_Z4C_KHAT);
+  rhs.vTheta.InitWithShallowSlice (u_rhs, I_Z4C_THETA);
+  rhs.vGam_u.InitWithShallowSlice (u_rhs, I_Z4C_GAMX, I_Z4C_GAMZ);
   rhs.g_dd.InitWithShallowSlice  (u_rhs, I_Z4C_GXX, I_Z4C_GZZ);
-  rhs.aa_dd.InitWithShallowSlice  (u_rhs, I_Z4C_AXX, I_Z4C_AZZ);
+  rhs.vA_dd.InitWithShallowSlice  (u_rhs, I_Z4C_AXX, I_Z4C_AZZ);
 
   opt.chi_psi_power = pin->GetOrAddReal("z4c", "chi_psi_power", -4.0);
   opt.chi_div_floor = pin->GetOrAddReal("z4c", "chi_div_floor", -1000.0);
@@ -202,8 +202,8 @@ void Z4c::AlgConstr(MeshBlockPack *pmbp) {
       A(i) = adm::Trace(1.0,
                 z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i), z4c.g_dd(m,0,2,k,j,i),
                 z4c.g_dd(m,1,1,k,j,i), z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i),
-                z4c.aa_dd(m,0,0,k,j,i), z4c.aa_dd(m,0,1,k,j,i), z4c.aa_dd(m,0,2,k,j,i),
-                z4c.aa_dd(m,1,1,k,j,i), z4c.aa_dd(m,1,2,k,j,i), z4c.aa_dd(m,2,2,k,j,i));
+                z4c.vA_dd(m,0,0,k,j,i), z4c.vA_dd(m,0,1,k,j,i), z4c.vA_dd(m,0,2,k,j,i),
+                z4c.vA_dd(m,1,1,k,j,i), z4c.vA_dd(m,1,2,k,j,i), z4c.vA_dd(m,2,2,k,j,i));
     });
     member.team_barrier();
 
@@ -211,7 +211,7 @@ void Z4c::AlgConstr(MeshBlockPack *pmbp) {
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
       par_for_inner(member, isg, ieg, [&](const int i) {
-        z4c.aa_dd(m,a,b,k,j,i) -= (1.0/3.0) * A(i) * z4c.g_dd(m,a,b,k,j,i);
+        z4c.vA_dd(m,a,b,k,j,i) -= (1.0/3.0) * A(i) * z4c.g_dd(m,a,b,k,j,i);
       });
     }
   });

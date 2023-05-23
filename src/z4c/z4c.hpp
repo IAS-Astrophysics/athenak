@@ -110,25 +110,25 @@ class Z4c {
   struct ADM_vars {
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> psi4;
     AthenaTensor<Real, TensorSymm::SYM2, 3, 2> g_dd;
-    AthenaTensor<Real, TensorSymm::SYM2, 3, 2> kk_dd;
+    AthenaTensor<Real, TensorSymm::SYM2, 3, 2> vK_dd;
   };
   ADM_vars adm;
 
   struct ADMhost_vars {
     AthenaHostTensor<Real, TensorSymm::NONE, 3, 0> psi4;
     AthenaHostTensor<Real, TensorSymm::SYM2, 3, 2> g_dd;
-    AthenaHostTensor<Real, TensorSymm::SYM2, 3, 2> kk_dd;
+    AthenaHostTensor<Real, TensorSymm::SYM2, 3, 2> vK_dd;
   };
 
   struct Z4c_vars {
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> chi;     // conf. factor
-    AthenaTensor<Real, TensorSymm::NONE, 3, 0> kkhat;   // trace extr. curvature
-    AthenaTensor<Real, TensorSymm::NONE, 3, 0> ttheta;  // Theta var in Z4c
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> vKhat;   // trace extr. curvature
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> vTheta;  // Theta var in Z4c
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> alpha;   // lapse
-    AthenaTensor<Real, TensorSymm::NONE, 3, 1> ggam_u;  // Gamma functions (BSSN)
+    AthenaTensor<Real, TensorSymm::NONE, 3, 1> vGam_u;  // Gamma functions (BSSN)
     AthenaTensor<Real, TensorSymm::NONE, 3, 1> beta_u;  // shift
     AthenaTensor<Real, TensorSymm::SYM2, 3, 2> g_dd;    // conf. 3-metric
-    AthenaTensor<Real, TensorSymm::SYM2, 3, 2> aa_dd;   // conf. traceless extr. curvature
+    AthenaTensor<Real, TensorSymm::SYM2, 3, 2> vA_dd;   // conf. traceless extr. curvature
   };
   Z4c_vars z4c;
   Z4c_vars rhs;
@@ -146,8 +146,8 @@ class Z4c {
   // aliases for the matter variables
   struct Matter_vars {
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> rho;       // matter energy density
-    AthenaTensor<Real, TensorSymm::NONE, 3, 1> ss_d;       // matter momentum density
-    AthenaTensor<Real, TensorSymm::SYM2, 3, 2> ss_dd;      // matter stress tensor
+    AthenaTensor<Real, TensorSymm::NONE, 3, 1> vS_d;       // matter momentum density
+    AthenaTensor<Real, TensorSymm::SYM2, 3, 2> vS_dd;      // matter stress tensor
   };
   Matter_vars mat;
 

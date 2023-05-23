@@ -40,7 +40,7 @@ class ADM {
     AthenaTensor<Real, TensorSymm::NONE, 3, 1> beta_u;    // shift vector
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> psi4;      // conformal factor
     AthenaTensor<Real, TensorSymm::SYM2, 3, 2> g_dd;      // spatial metric
-    AthenaTensor<Real, TensorSymm::SYM2, 3, 2> kk_dd;      // extrinsic curvature
+    AthenaTensor<Real, TensorSymm::SYM2, 3, 2> vK_dd;      // extrinsic curvature
   };
   ADM_vars adm;
 

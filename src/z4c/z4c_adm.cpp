@@ -94,7 +94,7 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
     for(int b = a; b < 3; ++b) {
       par_for_inner(member, isg, ieg, [&](const int i) {
         z4c.g_dd(m,a,b,k,j,i) = oopsi4(i) * adm.g_dd(m,a,b,k,j,i);
-        Kt_dd(a,b,i)          = oopsi4(i) * adm.kk_dd(m,a,b,k,j,i);
+        Kt_dd(a,b,i)          = oopsi4(i) * adm.vK_dd(m,a,b,k,j,i);
       });
     }
     member.team_barrier();
@@ -103,7 +103,7 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
       detg(i) = adm::SpatialDet(z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i),
                                 z4c.g_dd(m,0,2,k,j,i), z4c.g_dd(m,1,1,k,j,i),
                                 z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i));
-      z4c.kkhat(m,k,j,i) = adm::Trace(1.0/detg(i),
+      z4c.vKhat(m,k,j,i) = adm::Trace(1.0/detg(i),
                                 z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i),
                                 z4c.g_dd(m,0,2,k,j,i), z4c.g_dd(m,1,1,k,j,i),
                                 z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i),
@@ -115,8 +115,8 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
       par_for_inner(member, isg, ieg, [&](const int i) {
-        z4c.aa_dd(m,a,b,k,j,i) = Kt_dd(a,b,i) - (1./3.) *
-                                  z4c.kkhat(m,k,j,i) * z4c.g_dd(m,a,b,k,j,i);
+        z4c.vA_dd(m,a,b,k,j,i) = Kt_dd(a,b,i) - (1./3.) *
+                                  z4c.vKhat(m,k,j,i) * z4c.g_dd(m,a,b,k,j,i);
       });
     }
   });
@@ -234,8 +234,8 @@ void Z4c::Z4cToADM(MeshBlockPack *pmbp) {
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
       par_for_inner(member, isg, ieg, [&](const int i) {
-        adm.kk_dd(m,a,b,k,j,i) = adm.psi4(m,k,j,i) * z4c.aa_dd(m,a,b,k,j,i) +
-          (1./3.) * (z4c.kkhat(m,k,j,i) + 2.*z4c.ttheta(m,k,j,i)) * adm.g_dd(m,a,b,k,j,i);
+        adm.vK_dd(m,a,b,k,j,i) = adm.psi4(m,k,j,i) * z4c.vA_dd(m,a,b,k,j,i) +
+          (1./3.) * (z4c.vKhat(m,k,j,i) + 2.*z4c.vTheta(m,k,j,i)) * adm.g_dd(m,a,b,k,j,i);
       });
     }
   });
@@ -334,7 +334,7 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     for(int b = a; b < 3; ++b) {
       par_for_inner(member, is, ie, [&](const int i) {
         dg_ddd(c,a,b,i) = Dx<NGHOST>(c, idx, adm.g_dd, m,a,b,k,j,i);
-        dK_ddd(c,a,b,i) = Dx<NGHOST>(c, idx, adm.kk_dd, m,a,b,k,j,i);
+        dK_ddd(c,a,b,i) = Dx<NGHOST>(c, idx, adm.vK_dd, m,a,b,k,j,i);
       });
     }
     member.team_barrier();
@@ -447,7 +447,7 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
       for(int b = a; b < 3; ++b) {
         for(int c = 0; c < 3; ++c) {
           par_for_inner(member, is, ie, [&](const int i) {
-            K_ud(a,b,i) += g_uu(a,c,i) * adm.kk_dd(m,c,b,k,j,i);
+            K_ud(a,b,i) += g_uu(a,c,i) * adm.vK_dd(m,c,b,k,j,i);
           });
         }
       }
@@ -477,8 +477,8 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
       });
       for(int d = 0; d < 3; ++d) {
         par_for_inner(member, is, ie, [&](const int i) {
-          DK_ddd(a,b,c,i) -= Gamma_udd(d,a,b,i) * adm.kk_dd(m,d,c,k,j,i);
-          DK_ddd(a,b,c,i) -= Gamma_udd(d,a,c,i) * adm.kk_dd(m,b,d,k,j,i);
+          DK_ddd(a,b,c,i) -= Gamma_udd(d,a,b,i) * adm.vK_dd(m,d,c,k,j,i);
+          DK_ddd(a,b,c,i) -= Gamma_udd(d,a,c,i) * adm.vK_dd(m,b,d,k,j,i);
         });
       }
     }
@@ -541,15 +541,15 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     for(int b = 0; b < 3; ++b) {
       par_for_inner(member, is, ie, [&](const int i) {
         con.Z(m,k,j,i) += 0.25*adm.g_dd(m,a,b,k,j,i)
-                          *(z4c.ggam_u(m,a,k,j,i) - Gamma_u(a,i))
-                          *(z4c.ggam_u(m,b,k,j,i) - Gamma_u(b,i));
+                          *(z4c.vGam_u(m,a,k,j,i) - Gamma_u(a,i))
+                          *(z4c.vGam_u(m,b,k,j,i) - Gamma_u(b,i));
       });
     }
     member.team_barrier();
     // Constraint violation monitor C^2
     par_for_inner(member, is, ie, [&](const int i) {
       con.C(m,k,j,i) = SQR(con.H(m,k,j,i)) + con.M(m,k,j,i) +
-      SQR(z4c.ttheta(m,k,j,i)) + 4.0*con.Z(m,k,j,i);
+      SQR(z4c.vTheta(m,k,j,i)) + 4.0*con.Z(m,k,j,i);
     });
 });
 }

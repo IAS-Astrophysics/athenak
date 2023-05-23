@@ -45,7 +45,7 @@ ADM::ADM(MeshBlockPack *ppack, ParameterInput *pin):
   }
   adm.psi4.InitWithShallowSlice(u_adm, I_ADM_PSI4);
   adm.g_dd.InitWithShallowSlice(u_adm, I_ADM_GXX, I_ADM_GZZ);
-  adm.kk_dd.InitWithShallowSlice(u_adm, I_ADM_KXX, I_ADM_KZZ);
+  adm.vK_dd.InitWithShallowSlice(u_adm, I_ADM_KXX, I_ADM_KZZ);
 }
 
 //----------------------------------------------------------------------------------------
