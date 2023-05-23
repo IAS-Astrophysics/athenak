@@ -119,12 +119,26 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   if (!fpn) {
     scheme_num_points = pin->GetOrAddInteger("radiation-femn", "quad_scheme_num_points", 453);
     scheme_name = pin->GetOrAddString("radiation-femn", "quad_scheme_name", "xiao_gimbutas");
+
+    if (!(scheme_name == "xiao_gimbutas" || scheme_name == "vioreanu_rokhlin")) {
+      std::cout << "Quadrature scheme cannot be " + scheme_name + " for FEM_N" << std::endl;
+      std::cout << "Use xiao_gimbutas or vioreanu_rokhlin instead!" << std::endl;
+      exit(EXIT_FAILURE);
+    }
+
     radiationfemn::LoadQuadrature(scheme_name, scheme_num_points, scheme_weights, scheme_points);
     this->LoadFEMNMatrices();
 
   } else {
     scheme_num_points = pin->GetOrAddInteger("radiation-femn", "quad_scheme_num_points", 2702);
     scheme_name = pin->GetOrAddString("radiation-femn", "quad_scheme_name", "lebedev");
+
+    if (scheme_name != "lebedev") {
+      std::cout << "Quadrature scheme cannot be " + scheme_name + " for FP_N" << std::endl;
+      std::cout << "Use lebedev instead!" << std::endl;
+      exit(EXIT_FAILURE);
+    }
+
     radiationfemn::LoadQuadrature(scheme_name, scheme_num_points, scheme_weights, scheme_points);
     this->LoadFPNMatrices();
   }
