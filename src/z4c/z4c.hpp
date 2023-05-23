@@ -18,14 +18,6 @@
   #include "TwoPunctures.h"
 #endif
 
-#define POW3(x) ( (x)*(x)*(x) )
-#define POW4(x) ( (x)*(x)*(x)*(x))
-#define PI 3.1415926535897932
-#define TWO_PI 6.2831853071795862
-#define SQRT2 1.4142135623730951
-#define SQRT3 1.7320508075688773
-#define SQRT_PI 1.77245385090551603
-
 // forward declarations
 class Coordinates;
 class Driver;

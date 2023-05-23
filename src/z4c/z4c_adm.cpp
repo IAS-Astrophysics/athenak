@@ -168,10 +168,7 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
   par_for_outer("initialize Gamma",DevExeSpace(),scr_size,scr_level,0,nmb-1,ks,ke,js,je,
   KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {
     // Usage of Dx: pmbp->pz4c->Dx(blockn, posvar, k,j,i, dir, nghost, dx, quantity);
-    Real &idx1 = size.d_view(m).idx1;
-    Real &idx2 = size.d_view(m).idx2;
-    Real &idx3 = size.d_view(m).idx3;
-    Real idx[] = {size.d_view(m).idx1, size.d_view(m).idx2, size.d_view(m).idx3};
+    Real idx[] = {1/size.d_view(m).dx1, 1/size.d_view(m).dx2, 1/size.d_view(m).dx3};
     sub_DvceArray5D_0D aux = Kokkos::subview(g_uu,
     Kokkos::ALL, 0, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
     par_for_inner(member, is, ie, [&](const int i) {
@@ -327,7 +324,7 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
 
     ddg_dddd.NewAthenaScratchTensor(member, scr_level, ncells1);
 
-    Real idx[] = {size.d_view(m).idx1, size.d_view(m).idx2, size.d_view(m).idx3};
+    Real idx[] = {1/size.d_view(m).dx1, 1/size.d_view(m).dx2, 1/size.d_view(m).dx3};
     // -----------------------------------------------------------------------------------
     // derivatives
     //

@@ -201,7 +201,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     Lg_dd.NewAthenaScratchTensor(member, scr_level, ncells1);
     LA_dd.NewAthenaScratchTensor(member, scr_level, ncells1);
 
-    Real idx[] = {size.d_view(m).idx1, size.d_view(m).idx2, size.d_view(m).idx3};
+    Real idx[] = {1/size.d_view(m).dx1, 1/size.d_view(m).dx2, 1/size.d_view(m).dx3};
     // -----------------------------------------------------------------------------------
     // 1st derivatives
     //
@@ -767,7 +767,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
   DevExeSpace(),scr_size,scr_level,0,nmb-1,0,nz4c-1,ks,ke,js,je,
   KOKKOS_LAMBDA(TeamMember_t member,
   const int m, const int n, const int k, const int j) {
-  Real idx[] = {size.d_view(m).idx1, size.d_view(m).idx2, size.d_view(m).idx3};
+  Real idx[] = {1/size.d_view(m).dx1, 1/size.d_view(m).dx2, 1/size.d_view(m).dx3};
   for(int a = 0; a < 3; ++a) {
     par_for_inner(member, is, ie, [&](const int i) {
       u_rhs(m,n,k,j,i) += Diss<NGHOST>(a, idx, u0, m, n, k, j, i)*diss;

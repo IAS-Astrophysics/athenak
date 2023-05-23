@@ -32,7 +32,7 @@ ADM::ADM(MeshBlockPack *ppack, ParameterInput *pin):
   int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
   int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
 
-  if (nullptr == pmy_pack->pz4c) {
+  if (pmy_pack->pz4c == nullptr) {
     Kokkos::realloc(u_adm, nmb, nadm, ncells3, ncells2, ncells1);
     adm.alpha.InitWithShallowSlice(u_adm, I_ADM_ALPHA);
     adm.beta_u.InitWithShallowSlice(u_adm, I_ADM_BETAX, I_ADM_BETAZ);

@@ -488,18 +488,6 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     }
   }
 
-/*
-  if (ndvars > 0) {
-    int nmb = pm->pmb_pack->nmb_thispack;
-    auto &indcs = pm->mb_indcs;
-    int &ng = indcs.ng;
-    int n1 = indcs.nx1 + 2*ng;
-    int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
-    int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
-    Kokkos::realloc(derived_var, nmb, ndvars, n3, n2, n1);
-  }
-*/
-
   // radiation moments in coordinate frame
   if (out_params.variable.compare(0, 9, "rad_coord") == 0 ||
       out_params.variable.compare(0, 9, "rad_hydro") == 0 ||
