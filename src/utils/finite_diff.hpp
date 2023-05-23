@@ -1,7 +1,15 @@
+#ifndef UTILS_FINITE_DIFF_HPP_
+#define UTILS_FINITE_DIFF_HPP_
+//========================================================================================
+// AthenaXXX astrophysical plasma code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
+// Licensed under the 3-clause BSD License (the "LICENSE")
+//========================================================================================
+//! \file finite_diff.hpp
+//  \brief high order finite-differencing operators.
 
-// This file has been generated with py/write_FD.py, please do modifications there.
-
-// Reminder: this code has been generated with py/write_FD.py, please do modifications there.
+// Reminder: this code has been generated with py/write_FD.py, 
+// please do modifications there.
 // 1st derivative scalar
 template <int NGHOST, typename TYPE>
 KOKKOS_INLINE_FUNCTION
@@ -57,8 +65,8 @@ Real Dx(int const dir,
 }
 
 
-// Reminder: this code has been generated with py/write_FD.py, please do modifications there.
-// 1st derivative vector
+// Reminder: this code has been generated with py/write_FD.py, 
+// please do modifications there.// 1st derivative vector
 template <int NGHOST, typename TYPE>
 KOKKOS_INLINE_FUNCTION
 Real Dx(int const dir,
@@ -113,8 +121,8 @@ Real Dx(int const dir,
 }
 
 
-// Reminder: this code has been generated with py/write_FD.py, please do modifications there.
-// 1st derivative 2D tensor
+// Reminder: this code has been generated with py/write_FD.py, 
+// please do modifications there.// 1st derivative 2D tensor
 template <int NGHOST, typename TYPE>
 KOKKOS_INLINE_FUNCTION
 Real Dx(int const dir,
@@ -169,8 +177,8 @@ Real Dx(int const dir,
 }
 
 
-// Reminder: this code has been generated with py/write_FD.py, please do modifications there.
-// 1st derivative scalar
+// Reminder: this code has been generated with py/write_FD.py, 
+// please do modifications there.// 1st derivative scalar
 template <int NGHOST, typename TYPE>
 KOKKOS_INLINE_FUNCTION
 Real Dxx(int const dir,
@@ -234,8 +242,8 @@ Real Dxx(int const dir,
 }
 
 
-// Reminder: this code has been generated with py/write_FD.py, please do modifications there.
-// 1st derivative vector
+// Reminder: this code has been generated with py/write_FD.py, 
+// please do modifications there.// 1st derivative vector
 template <int NGHOST, typename TYPE>
 KOKKOS_INLINE_FUNCTION
 Real Dxx(int const dir,
@@ -299,8 +307,8 @@ Real Dxx(int const dir,
 }
 
 
-// Reminder: this code has been generated with py/write_FD.py, please do modifications there.
-// 1st derivative 2D tensor
+// Reminder: this code has been generated with py/write_FD.py, 
+// please do modifications there.// 1st derivative 2D tensor
 template <int NGHOST, typename TYPE>
 KOKKOS_INLINE_FUNCTION
 Real Dxx(int const dir,
@@ -364,8 +372,8 @@ Real Dxx(int const dir,
 }
 
 
-// Reminder: this code has been generated with py/write_FD.py, please do modifications there.
-// 1st derivative scalar
+// Reminder: this code has been generated with py/write_FD.py, 
+// please do modifications there.// 1st derivative scalar
 template <int NGHOST, typename TYPE>
 KOKKOS_INLINE_FUNCTION
 Real Dxy(int const dirx, int const diry,
@@ -639,8 +647,8 @@ Real Dxy(int const dirx, int const diry,
 }
 
 
-// Reminder: this code has been generated with py/write_FD.py, please do modifications there.
-// 1st derivative vector
+// Reminder: this code has been generated with py/write_FD.py, 
+// please do modifications there.// 1st derivative vector
 template <int NGHOST, typename TYPE>
 KOKKOS_INLINE_FUNCTION
 Real Dxy(int const dirx, int const diry,
@@ -914,8 +922,8 @@ Real Dxy(int const dirx, int const diry,
 }
 
 
-// Reminder: this code has been generated with py/write_FD.py, please do modifications there.
-// 1st derivative 2D tensor
+// Reminder: this code has been generated with py/write_FD.py, 
+// please do modifications there.// 1st derivative 2D tensor
 template <int NGHOST, typename TYPE>
 KOKKOS_INLINE_FUNCTION
 Real Dxy(int const dirx, int const diry,
@@ -1189,8 +1197,8 @@ Real Dxy(int const dirx, int const diry,
 }
 
 
-// Reminder: this code has been generated with py/write_FD.py, please do modifications there.
-// 1st advective derivative scalar
+// Reminder: this code has been generated with py/write_FD.py, 
+// please do modifications there.// 1st advective derivative scalar
 template <int NGHOST, typename TYPE1, typename TYPE2>
 KOKKOS_INLINE_FUNCTION
 Real Lx(int const dir,
@@ -1300,8 +1308,8 @@ Real Lx(int const dir,
 }
 
 
-// Reminder: this code has been generated with py/write_FD.py, please do modifications there.
-// 1st advective derivative vector
+// Reminder: this code has been generated with py/write_FD.py, 
+// please do modifications there.// 1st advective derivative vector
 template <int NGHOST, typename TYPE1, typename TYPE2>
 KOKKOS_INLINE_FUNCTION
 Real Lx(int const dir,
@@ -1411,8 +1419,8 @@ Real Lx(int const dir,
 }
 
 
-// Reminder: this code has been generated with py/write_FD.py, please do modifications there.
-// 1st advective derivative 2D tensor
+// Reminder: this code has been generated with py/write_FD.py, 
+// please do modifications there.// 1st advective derivative 2D tensor
 template <int NGHOST, typename TYPE1, typename TYPE2>
 KOKKOS_INLINE_FUNCTION
 Real Lx(int const dir,
@@ -1522,8 +1530,8 @@ Real Lx(int const dir,
 }
 
 
-// Reminder: this code has been generated with py/write_FD.py, please do modifications there.
-// 1st derivative vector
+// Reminder: this code has been generated with py/write_FD.py, 
+// please do modifications there.// 1st derivative vector
 template <int NGHOST, typename TYPE>
 KOKKOS_INLINE_FUNCTION
 Real Diss(int const dir,
@@ -1604,3 +1612,4 @@ Real Diss(int const dir,
   return out*idx[dir];
 }
 
+#endif // UTILS_FINITE_DIFF_HPP_
