@@ -357,7 +357,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     // Compute cell-centered fields
     auto trs = torus;
     auto &bcc_ = pmbp->pmhd->bcc0;
-    par_for("pgen_bcc", DevExeSpace(), 0,nmb-1,ks,ke,js,je,is,ie,
+    par_for("pgen_bcc", DevExeSpace(), 0,nmb-1,ks-1,ke+1,js-1,je+1,is-1,ie+1,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       Real& w_bx = bcc_(m,IBX,k,j,i);
       Real& w_by = bcc_(m,IBY,k,j,i);
