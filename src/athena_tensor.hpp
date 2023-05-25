@@ -134,11 +134,6 @@ AthenaHostTensor<T, sym, ndim, 2>::AthenaHostTensor() {
         idxmap_[b][a] = idxmap_[a][b];
       }
       break;
-#ifndef __CUDA_ARCH__
-    default:
-      assert(false); // you shouldn't be here
-      abort();
-#endif
   }
 }
 
@@ -255,11 +250,6 @@ AthenaTensor<T, sym, ndim, 2>::AthenaTensor() {
         idxmap_[b][a] = idxmap_[a][b];
       }
       break;
-#ifndef __CUDA_ARCH__
-    default:
-      assert(false); // you shouldn't be here
-      abort();
-#endif
   }
 }
 
@@ -334,12 +324,8 @@ class AthenaScratchTensor<T, sym, ndim, 1> {
 template<typename T, TensorSymm sym, int ndim>
 class AthenaScratchTensor<T, sym, ndim, 2> {
  public:
-#ifdef __CUDA_ARCH__
-__device__ __host__ AthenaScratchTensor();
-#else
+  KOKKOS_INLINE_FUNCTION
   AthenaScratchTensor();
-#endif
-
   // the default destructor/copy operators are sufficient
   ~AthenaScratchTensor() = default;
   AthenaScratchTensor(AthenaScratchTensor<T, sym, ndim, 2> const &) = default;
@@ -371,11 +357,7 @@ __device__ __host__ AthenaScratchTensor();
 //----------------------------------------------------------------------------------------
 // Implementation details
 template<typename T, TensorSymm sym, int ndim>
-#ifdef __CUDA_ARCH__
-__device__ __host__ AthenaScratchTensor<T, sym, ndim, 2>::AthenaScratchTensor() {
-#else
-  AthenaScratchTensor<T, sym, ndim, 2>::AthenaScratchTensor() {
-#endif
+AthenaScratchTensor<T, sym, ndim, 2>::AthenaScratchTensor() {
 switch(sym) {
     case TensorSymm::NONE:
       ndof_ = 0;
@@ -393,11 +375,6 @@ switch(sym) {
         idxmap_[b][a] = idxmap_[a][b];
       }
       break;
-#ifndef __CUDA_ARCH__
-    default:
-      assert(false); // you shouldn't be here
-      abort();
-#endif
   }
 }
 
@@ -407,12 +384,8 @@ switch(sym) {
 template<typename T, TensorSymm sym, int ndim>
 class AthenaScratchTensor<T, sym, ndim, 3> {
  public:
-#ifdef __CUDA_ARCH__
-__device__ __host__ AthenaScratchTensor();
-#else
+  KOKKOS_INLINE_FUNCTION
   AthenaScratchTensor();
-#endif
-
   // the default destructor/copy operators are sufficient
   ~AthenaScratchTensor() = default;
   AthenaScratchTensor(AthenaScratchTensor<T, sym, ndim, 3> const &) = default;
@@ -444,11 +417,7 @@ __device__ __host__ AthenaScratchTensor();
 //----------------------------------------------------------------------------------------
 // Implementation details
 template<typename T, TensorSymm sym, int ndim>
-#ifdef __CUDA_ARCH__
-__device__ __host__ AthenaScratchTensor<T, sym, ndim, 3>::AthenaScratchTensor() {
-#else
-  AthenaScratchTensor<T, sym, ndim, 3>::AthenaScratchTensor() {
-#endif
+AthenaScratchTensor<T, sym, ndim, 3>::AthenaScratchTensor() {
   switch(sym) {
     case TensorSymm::NONE:
       ndof_ = 0;
@@ -476,11 +445,6 @@ __device__ __host__ AthenaScratchTensor<T, sym, ndim, 3>::AthenaScratchTensor() 
         idxmap_[b][a][c] = idxmap_[a][b][c];
       }
       break;
-#ifndef __CUDA_ARCH__
-    default:
-      assert(false); // you shouldn't be here
-      abort();
-#endif
   }
 }
 
@@ -490,12 +454,8 @@ __device__ __host__ AthenaScratchTensor<T, sym, ndim, 3>::AthenaScratchTensor() 
 template<typename T, TensorSymm sym, int ndim>
 class AthenaScratchTensor<T, sym, ndim, 4> {
  public:
-#ifdef __CUDA_ARCH__
-__device__ __host__ AthenaScratchTensor();
-#else
+  KOKKOS_INLINE_FUNCTION
   AthenaScratchTensor();
-#endif
-
   // the default destructor/copy operators are sufficient
   ~AthenaScratchTensor() = default;
   AthenaScratchTensor(AthenaScratchTensor<T, sym, ndim, 4> const &) = default;
@@ -528,11 +488,7 @@ __device__ __host__ AthenaScratchTensor();
 //----------------------------------------------------------------------------------------
 // Implementation details
 template<typename T, TensorSymm sym, int ndim>
-#ifdef __CUDA_ARCH__
-__device__ __host__ AthenaScratchTensor<T, sym, ndim, 4>::AthenaScratchTensor() {
-#else
-  AthenaScratchTensor<T, sym, ndim, 4>::AthenaScratchTensor() {
-#endif
+AthenaScratchTensor<T, sym, ndim, 4>::AthenaScratchTensor() {
   switch(sym) {
     case TensorSymm::NONE:
       ndof_ = 0;
@@ -575,11 +531,6 @@ __device__ __host__ AthenaScratchTensor<T, sym, ndim, 4>::AthenaScratchTensor() 
         idxmap_[b][a][d][c] = idxmap_[a][b][c][d];
       }
       break;
-#ifndef __CUDA_ARCH__
-    default:
-      assert(false); // you shouldn't be here
-      abort();
-#endif
   }
 }
 
