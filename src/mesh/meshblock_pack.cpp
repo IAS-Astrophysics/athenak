@@ -173,6 +173,9 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     if (pin->DoesBlockExist("adm")) {
       padm = new adm::ADM(this, pin);
     }
+    else {
+      padm = nullptr;
+    }
   }
 
   // Units
