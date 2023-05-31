@@ -52,7 +52,7 @@ namespace radiationfemn {
 
         auto filtstrength =
                 -(pmy_pack->pmesh->dt) * filter_sigma_eff / log(Lanczos(double(lmax) / (double(lmax) + 1.0)));
-
+        /*
         // @TODO: add energy dependence here
         par_for("radiation_femn_filter_Lanczos", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie, 0, nang1,
                 KOKKOS_LAMBDA(const int m, const int k, const int j, const int i, const int A) {
@@ -60,7 +60,7 @@ namespace radiationfemn {
                     f0_(m, 0, A, k, j, i) =
                             pow(Lanczos(double(lval) / (double(lmax) + 1.0)), filtstrength) * f0_(m, 0, A, k, j, i);
 
-                });
+                }); */
 
         return TaskStatus::complete;
     }
@@ -81,7 +81,7 @@ namespace radiationfemn {
 
         Kokkos::deep_copy(etemp0_, 0.0);
         Kokkos::deep_copy(etemp1_, 0.0);
-
+        /*
         // @TODO: Add energy dependence
         par_for("radiation_femn_etemp_calculate", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie, 0, nang1, 0, nang1,
                 KOKKOS_LAMBDA(const int m, const int k, const int j, const int i, const int B, const int A) {
@@ -96,12 +96,12 @@ namespace radiationfemn {
 
                     f0_(m, 0, A, k, j, i) = theta * fmax(f0_(m, 0, A, k, j, i), 0.0);
 
-                });
+                }); */
 
         return TaskStatus::complete;
     }
 
-    TaskStatus RadiationFEMN::ApplyLimiterDG(Driver *pdriver, int stage) {
+    TaskStatus RadiationFEMN::ApplyLimiterDG(Driver *pdriver, int stage) { /*
         auto &indcs = pmy_pack->pmesh->mb_indcs;
         int is = indcs.is, ie = indcs.ie;
         int js = indcs.js, je = indcs.je;
@@ -322,7 +322,7 @@ namespace radiationfemn {
                     });
         }
 
-        Kokkos::deep_copy(f0_, ftemp_);
+        Kokkos::deep_copy(f0_, ftemp_); */
 
         return TaskStatus::complete;
     }

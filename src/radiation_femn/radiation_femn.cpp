@@ -31,10 +31,10 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
     L_mu_muhat1("L^mu_muhat1", 1, 1, 1, 1, 1, 1),
     scheme_points("scheme_points", 1, 1),
     scheme_weights("scheme_weights", 1),
-    f0("f0", 1, 1, 1, 1, 1, 1),
-    coarse_f0("ci0", 1, 1, 1, 1, 1, 1),
-    f1("f1", 1, 1, 1, 1, 1, 1),
-    iflx("iflx", 1, 1, 1, 1, 1, 1),
+    f0("f0", 1, 1, 1, 1, 1),
+    coarse_f0("ci0", 1, 1, 1, 1, 1),
+    f1("f1", 1, 1, 1, 1, 1),
+    iflx("iflx", 1, 1, 1, 1, 1),
     ftemp("ftemp", 1, 1, 1, 1, 1, 1),
     etemp0("etemp0", 1, 1, 1, 1),
     etemp1("etemp1", 1, 1, 1, 1),
@@ -97,6 +97,8 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
     filter_sigma_eff = pin->GetOrAddInteger("radiation-femn", "filter_opacity", 0);
     limiter_fem = "-42";
   }
+
+  num_points_total = num_energy_bins * num_points;
 
   // (3) set up source specific parameters
   rad_source = pin->GetOrAddInteger("radiation-femn", "sources", 0) == 1;
@@ -162,12 +164,12 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   this->TetradInitialize();
 
   // state vector and fluxes
-  Kokkos::realloc(f0, nmb, num_energy_bins, num_points, ncells3, ncells2, ncells1);
-  Kokkos::realloc(f1, nmb, num_energy_bins, num_points, ncells3, ncells2, ncells1);
-  Kokkos::realloc(iflx.x1f, nmb, num_energy_bins, num_points, ncells3, ncells2, ncells1);
-  Kokkos::realloc(iflx.x2f, nmb, num_energy_bins, num_points, ncells3, ncells2, ncells1);
-  Kokkos::realloc(iflx.x3f, nmb, num_energy_bins, num_points, ncells3, ncells2, ncells1);
-  Kokkos::realloc(ftemp, nmb, num_energy_bins, num_points, ncells3, ncells2, ncells1);
+  Kokkos::realloc(f0, nmb, num_points_total, ncells3, ncells2, ncells1);
+  Kokkos::realloc(f1, nmb, num_points_total, ncells3, ncells2, ncells1);
+  Kokkos::realloc(iflx.x1f, nmb, num_points_total, ncells3, ncells2, ncells1);
+  Kokkos::realloc(iflx.x2f, nmb, num_points_total, ncells3, ncells2, ncells1);
+  Kokkos::realloc(iflx.x3f, nmb, num_points_total, ncells3, ncells2, ncells1);
+  Kokkos::realloc(ftemp, nmb, num_points_total, ncells3, ncells2, ncells1);
 
   // reallocate memory for the temporary intensity matrices if the clipping limiter is on
   if (limiter_fem == "clp") {
@@ -181,7 +183,7 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
     int nccells1 = indcs.cnx1 + 2 * (indcs.ng);
     int nccells2 = (indcs.cnx2 > 1) ? (indcs.cnx2 + 2 * (indcs.ng)) : 1;
     int nccells3 = (indcs.cnx3 > 1) ? (indcs.cnx3 + 2 * (indcs.ng)) : 1;
-    Kokkos::realloc(coarse_f0, nmb, num_energy_bins, num_points, nccells3, nccells2, nccells1);
+    Kokkos::realloc(coarse_f0, nmb, num_points_total, nccells3, nccells2, nccells1);
   }
 
   // only do if sources are present

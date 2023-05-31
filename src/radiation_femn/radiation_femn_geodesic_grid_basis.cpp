@@ -489,6 +489,24 @@ double mom_by_energy(int mu,
   return result;
 }
 
+double mom_by_energy(int mu, double phi, double theta) {
+  double result = 0.;
+  if (mu == 0) {
+    result = 1.;
+  } else if (mu == 1) {
+    result = cos(phi) * sin(theta);
+  } else if (mu == 2) {
+    result = sin(phi) * sin(theta);
+  } else if (mu == 3) {
+    result = cos(theta);
+  } else {
+    std::cout << "Incorrect choice of index for p^mu/e!" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+
+  return result;
+}
+
 // ------------------------------------------------------------------------
 // partial xi1 / partial phi
 double pXi1pPhi(double x1,
