@@ -108,68 +108,68 @@ IntegrateMatrixSphericalTriangle(int a,
     }
   }
 
-   /* // (4) G^nu^mu_ihat
-  else if (matrixnumber == 4) {
-    for (size_t i = 0; i < scheme_points.size(); i++) {
-      result += mom_by_energy(nu,
-                              x1,
-                              y1,
-                              z1,
-                              x2,
-                              y2,
-                              z2,
-                              x3,
-                              y3,
-                              z3,
-                              scheme_points(i, 0),
-                              scheme_points(i, 1),
-                              scheme_points(i, 2)) *
-          mom_by_energy(mu,
-                        x1,
-                        y1,
-                        z1,
-                        x2,
-                        y2,
-                        z2,
-                        x3,
-                        y3,
-                        z3,
-                        scheme_points(i, 0),
-                        scheme_points(i, 1),
-                        scheme_points(i, 2)) *
-          sqrt(CalculateDeterminantJacobian(x1,
-                                            y1,
-                                            z1,
-                                            x2,
-                                            y2,
-                                            z2,
-                                            x3,
-                                            y3,
-                                            z3,
-                                            scheme_points(i, 0),
-                                            scheme_points(i, 1),
-                                            scheme_points(i, 2))) *
-          FEMBasisA(a, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis) *
-          PartialFEMBasisBwithoute(ihat,
-                                   a,
-                                   t1,
-                                   t2,
-                                   t3,
-                                   x1,
-                                   y1,
-                                   z1,
-                                   x2,
-                                   y2,
-                                   z2,
-                                   x3,
-                                   y3,
-                                   z3,
-                                   scheme_points(i, 0),
-                                   scheme_points(i, 1),
-                                   scheme_points(i, 2),
-                                   basis) * scheme_weights(i);
-    }
-  }
+    /* // (4) G^nu^mu_ihat
+   else if (matrixnumber == 4) {
+     for (size_t i = 0; i < scheme_points.size(); i++) {
+       result += mom_by_energy(nu,
+                               x1,
+                               y1,
+                               z1,
+                               x2,
+                               y2,
+                               z2,
+                               x3,
+                               y3,
+                               z3,
+                               scheme_points(i, 0),
+                               scheme_points(i, 1),
+                               scheme_points(i, 2)) *
+           mom_by_energy(mu,
+                         x1,
+                         y1,
+                         z1,
+                         x2,
+                         y2,
+                         z2,
+                         x3,
+                         y3,
+                         z3,
+                         scheme_points(i, 0),
+                         scheme_points(i, 1),
+                         scheme_points(i, 2)) *
+           sqrt(CalculateDeterminantJacobian(x1,
+                                             y1,
+                                             z1,
+                                             x2,
+                                             y2,
+                                             z2,
+                                             x3,
+                                             y3,
+                                             z3,
+                                             scheme_points(i, 0),
+                                             scheme_points(i, 1),
+                                             scheme_points(i, 2))) *
+           FEMBasisA(a, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis) *
+           PartialFEMBasisBwithoute(ihat,
+                                    a,
+                                    t1,
+                                    t2,
+                                    t3,
+                                    x1,
+                                    y1,
+                                    z1,
+                                    x2,
+                                    y2,
+                                    z2,
+                                    x3,
+                                    y3,
+                                    z3,
+                                    scheme_points(i, 0),
+                                    scheme_points(i, 1),
+                                    scheme_points(i, 2),
+                                    basis) * scheme_weights(i);
+     }
+   } */
 
     // (5) F^nu^mu_ihat
   else if (matrixnumber == 5) {
@@ -228,7 +228,7 @@ IntegrateMatrixSphericalTriangle(int a,
                         scheme_points(i, 1),
                         scheme_points(i, 2)) * scheme_weights(i);
     }
-  } */
+  }
 
   result = 0.5 * result;
 
@@ -280,7 +280,10 @@ IntegrateMatrix(int a,                                    // matrix row (this is
                 const HostArray1D<Real> &scheme_weights,  // quadrature weights
                 const HostArray2D<Real> &scheme_points,   // quadrature points
                 const HostArray2D<int> &triangles,        // triangle information
-                int matrixchoice) {                       // choice of matrix
+                int matrixchoice,                         // choice of matrix
+                int nu,
+                int mu,
+                int ihat) {
   double result = 0.;
 
   bool is_edge{false};
@@ -296,7 +299,7 @@ IntegrateMatrix(int a,                                    // matrix row (this is
 
         double integrated_result =
             IntegrateMatrixSphericalTriangle(a, b, basis, triangle_index_1, triangle_index_2, triangle_index_3, x, y, z,
-                                             scheme_weights, scheme_points, matrixchoice);
+                                             scheme_weights, scheme_points, matrixchoice, nu, mu, ihat);
         result += integrated_result;
       }
     }
@@ -342,7 +345,9 @@ double IntegrateMatrixFPN(int la,
                           int mb,
                           const HostArray1D<Real> &scheme_weights,
                           const HostArray2D<Real> &scheme_points,
-                          int matrixchoice) {
+                          int matrixchoice, int nu,
+                          int mu,
+                          int ihat) {
 
   double result = 0.;
 
@@ -367,7 +372,15 @@ double IntegrateMatrixFPN(int la,
           * RealSphericalHarmonic(lb, mb, scheme_points(i, 0), scheme_points(i, 1)) * scheme_weights(i);
     }
   } else if (matrixchoice == 4) {
-    
+
+  } else if (matrixchoice == 5) {
+    for (size_t i = 0; i < scheme_weights.size(); i++) {
+      result += 4. * M_PI * mom_by_energy(nu, scheme_points(i, 0), scheme_points(i, 1)) *
+          mom_by_energy(mu, scheme_points(i, 0), scheme_points(i, 1))
+          * RealSphericalHarmonic(la, ma, scheme_points(i, 0), scheme_points(i, 1))
+          * RealSphericalHarmonic(lb, mb, scheme_points(i, 0), scheme_points(i, 1))
+          * mom_by_energy(ihat, scheme_points(i, 0), scheme_points(i, 1)) * scheme_weights(i);
+    }
   }
   return result;
 }

@@ -347,7 +347,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
         par_for("rad_femn_E_compute", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie, 0, (num_points - 1), 0, (num_points - 1),
                 KOKKOS_LAMBDA(int m, int k, int j, int i, int B, int A) {
                     // @ TODO: Add proper redefinition with energy
-                    dv(m,0,k,j,i) += mm_(B,A) * f0_(m, 0, A, k, j, i);
+                    dv(m,0,k,j,i) += mm_(B,A) * f0_(m, A, k, j, i);
                 });
     }
 
@@ -359,7 +359,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
         par_for("rad_femn_E_compute_fpn", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
                 KOKKOS_LAMBDA(int m, int k, int j, int i) {
                     // @TODO: Fix this expression for FP_N
-                    dv(m,0,k,j,i) = std::sqrt(4.0*M_PI) * f0_(m, 0, 0,k, j, i);
+                    dv(m,0,k,j,i) = std::sqrt(4.0*M_PI) * f0_(m, 0,k, j, i);
                 });
     }
 }

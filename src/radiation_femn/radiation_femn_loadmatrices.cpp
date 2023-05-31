@@ -50,12 +50,25 @@ void RadiationFEMN::LoadFEMNMatrices() {
   auto &sx_ = stiffness_matrix_x;
   auto &sy_ = stiffness_matrix_y;
   auto &sz_ = stiffness_matrix_z;
+  auto &fmatrix_ = F_matrix;
 
   //Populate the mass matrix
   std::cout << "Computing the mass matrix ... " << std::endl;
   for (int i = 0; i < num_points; i++) {
     for (int j = 0; j < num_points; j++) {
-      mm_(i, j) = radiationfemn::IntegrateMatrix(i, j, basis, x, y, z, scheme_weights, scheme_points, triangles, 0);
+      mm_(i, j) = radiationfemn::IntegrateMatrix(i,
+                                                 j,
+                                                 basis,
+                                                 x,
+                                                 y,
+                                                 z,
+                                                 scheme_weights,
+                                                 scheme_points,
+                                                 triangles,
+                                                 0,
+                                                 -42,
+                                                 -42,
+                                                 -42);
     }
   }
 
@@ -63,9 +76,96 @@ void RadiationFEMN::LoadFEMNMatrices() {
   std::cout << "Computing the stiffness matrices ... " << std::endl;
   for (int i = 0; i < num_points; i++) {
     for (int j = 0; j < num_points; j++) {
-      sx_(i, j) = radiationfemn::IntegrateMatrix(i, j, basis, x, y, z, scheme_weights, scheme_points, triangles, 1);
-      sy_(i, j) = radiationfemn::IntegrateMatrix(i, j, basis, x, y, z, scheme_weights, scheme_points, triangles, 2);
-      sz_(i, j) = radiationfemn::IntegrateMatrix(i, j, basis, x, y, z, scheme_weights, scheme_points, triangles, 3);
+      sx_(i, j) = radiationfemn::IntegrateMatrix(i,
+                                                 j,
+                                                 basis,
+                                                 x,
+                                                 y,
+                                                 z,
+                                                 scheme_weights,
+                                                 scheme_points,
+                                                 triangles,
+                                                 1,
+                                                 -42,
+                                                 -42,
+                                                 -42);
+      sy_(i, j) = radiationfemn::IntegrateMatrix(i,
+                                                 j,
+                                                 basis,
+                                                 x,
+                                                 y,
+                                                 z,
+                                                 scheme_weights,
+                                                 scheme_points,
+                                                 triangles,
+                                                 2,
+                                                 -42,
+                                                 -42,
+                                                 -42);
+      sz_(i, j) = radiationfemn::IntegrateMatrix(i,
+                                                 j,
+                                                 basis,
+                                                 x,
+                                                 y,
+                                                 z,
+                                                 scheme_weights,
+                                                 scheme_points,
+                                                 triangles,
+                                                 3,
+                                                 -42,
+                                                 -42,
+                                                 -42);
+    }
+  }
+
+  // compute the F matrices
+  std::cout << "Computing the F matrices ... " << std::endl;
+  for (int i = 0; i < num_points; i++) {
+    for (int j = 0; j < num_points; j++) {
+      for (int nu = 0; nu < 4; nu++) {
+        for (int mu = 0; mu < 4; mu++) {
+          fmatrix_(nu, mu, 0, i, j) =
+              radiationfemn::IntegrateMatrix(i,
+                                             j,
+                                             basis,
+                                             x,
+                                             y,
+                                             z,
+                                             scheme_weights,
+                                             scheme_points,
+                                             triangles,
+                                             5,
+                                             nu,
+                                             mu,
+                                             1);
+          fmatrix_(nu, mu, 1, i, j) = radiationfemn::IntegrateMatrix(i,
+                                                                     j,
+                                                                     basis,
+                                                                     x,
+                                                                     y,
+                                                                     z,
+                                                                     scheme_weights,
+                                                                     scheme_points,
+                                                                     triangles,
+                                                                     5,
+                                                                     nu,
+                                                                     mu,
+                                                                     2);
+          fmatrix_(nu, mu, 2, i, j) = radiationfemn::IntegrateMatrix(i,
+                                                                     j,
+                                                                     basis,
+                                                                     x,
+                                                                     y,
+                                                                     z,
+                                                                     scheme_weights,
+                                                                     scheme_points,
+                                                                     triangles,
+                                                                     5,
+                                                                     nu,
+                                                                     mu,
+                                                                     3);
+        }
+      }
     }
   }
 
@@ -90,6 +190,7 @@ void RadiationFEMN::LoadFPNMatrices() {
   auto &sx_ = stiffness_matrix_x;
   auto &sy_ = stiffness_matrix_y;
   auto &sz_ = stiffness_matrix_z;
+  auto &fmatrix_ = F_matrix;
 
   //Populate the mass matrix
   std::cout << "Computing the mass matrix ... " << std::endl;
@@ -101,7 +202,7 @@ void RadiationFEMN::LoadFPNMatrices() {
                                                     int(lm_grid_(j, 1)),
                                                     scheme_weights,
                                                     scheme_points,
-                                                    0);
+                                                    0, -42, -42, -42);
     }
   }
 
@@ -115,22 +216,54 @@ void RadiationFEMN::LoadFPNMatrices() {
                                                     int(lm_grid_(j, 1)),
                                                     scheme_weights,
                                                     scheme_points,
-                                                    1);
+                                                    1, -42, -42, -42);
       sy_(i, j) = radiationfemn::IntegrateMatrixFPN(int(lm_grid_(i, 0)),
                                                     int(lm_grid_(i, 1)),
                                                     int(lm_grid_(j, 0)),
                                                     int(lm_grid_(j, 1)),
                                                     scheme_weights,
                                                     scheme_points,
-                                                    2);
+                                                    2, -42, -42, -42);
       sz_(i, j) = radiationfemn::IntegrateMatrixFPN(int(lm_grid_(i, 0)),
                                                     int(lm_grid_(i, 1)),
                                                     int(lm_grid_(j, 0)),
                                                     int(lm_grid_(j, 1)),
                                                     scheme_weights,
                                                     scheme_points,
-                                                    3);
+                                                    3, -42, -42, -42);
     }
   }
+
+  // compute the F matrices
+  for (int i = 0; i < num_points; i++) {
+    for (int j = 0; j < num_points; j++) {
+      for (int nu = 0; nu < 4; nu++) {
+        for (int mu = 0; mu < 4; mu++) {
+          fmatrix_(nu, mu, 0, i, j) = radiationfemn::IntegrateMatrixFPN(int(lm_grid_(i, 0)),
+                                                                        int(lm_grid_(i, 1)),
+                                                                        int(lm_grid_(j, 0)),
+                                                                        int(lm_grid_(j, 1)),
+                                                                        scheme_weights,
+                                                                        scheme_points,
+                                                                        5, nu, mu, 1);
+          fmatrix_(nu, mu, 1, i, j) = radiationfemn::IntegrateMatrixFPN(int(lm_grid_(i, 0)),
+                                                                        int(lm_grid_(i, 1)),
+                                                                        int(lm_grid_(j, 0)),
+                                                                        int(lm_grid_(j, 1)),
+                                                                        scheme_weights,
+                                                                        scheme_points,
+                                                                        5, nu, mu, 2);
+          fmatrix_(nu, mu, 2, i, j) = radiationfemn::IntegrateMatrixFPN(int(lm_grid_(i, 0)),
+                                                                        int(lm_grid_(i, 1)),
+                                                                        int(lm_grid_(j, 0)),
+                                                                        int(lm_grid_(j, 1)),
+                                                                        scheme_weights,
+                                                                        scheme_points,
+                                                                        5, nu, mu, 3);
+        }
+      }
+    }
+  }
+
 }
 }  // namespace radiationfemn

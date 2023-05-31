@@ -16,7 +16,10 @@ namespace radiationfemn {
 
 // ---------------------------------------------------------------------------
 // Quadrature points and weights (radiation_femn_geodesic_grid_quadrature.cpp)
-void LoadQuadrature(std::string &scheme_name, int &scheme_num_points, HostArray1D<Real> &scheme_weights, HostArray2D<Real> &scheme_points);
+void LoadQuadrature(std::string &scheme_name,
+                    int &scheme_num_points,
+                    HostArray1D<Real> &scheme_weights,
+                    HostArray2D<Real> &scheme_points);
 
 // ---------------------------------------------------------------------
 // Geodesic grid generation functions (radiation_femn_geodesic_grid.cpp)
@@ -227,7 +230,7 @@ double mom_by_energy(int mu,
                      double xi1,
                      double xi2,
                      double xi3);
-
+double mom_by_energy(int mu, double phi, double theta);
 // Find triangles which share an edge
 void FindTriangles(int a, int b, const HostArray2D<int> &triangles, HostArray2D<int> &edge_triangles, bool &is_edge);
 
@@ -269,7 +272,10 @@ double IntegrateMatrix(int a,
                        const HostArray1D<Real> &scheme_weights,
                        const HostArray2D<Real> &scheme_points,
                        const HostArray2D<int> &triangles,
-                       int matrixchoice);
+                       int matrixchoice,
+                       int nu,
+                       int mu,
+                       int ihat);
 double RealSphericalHarmonic(int l, int m, double phi, double theta);
 double IntegrateMatrixFPN(int la,
                           int ma,
@@ -277,7 +283,10 @@ double IntegrateMatrixFPN(int la,
                           int mb,
                           const HostArray1D<Real> &scheme_weights,
                           const HostArray2D<Real> &scheme_points,
-                          int matrixchoice);
+                          int matrixchoice,
+                          int nu,
+                          int mu,
+                          int ihat);
 } // namespace radiationfemn
 
 #endif //ATHENA_RADIATION_FEMN_GEODESIC_GRID_MATRICES_HPP
