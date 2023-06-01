@@ -22,23 +22,25 @@ class ResetFloor : public ErrorPolicyInterface {
     /// Constructor
     ResetFloor() {
       fail_conserved_floor = false;
+      fail_primitive_floor = false;
+      adjust_conserved = true;
     }
 
     /// Floor for primitive variables
-    KOKKOS_INLINE_FUNCTION bool PrimitiveFloor(Real& n, Real v[3], Real& p, Real *Y, int n_species) const {
+    KOKKOS_INLINE_FUNCTION bool PrimitiveFloor(Real& n, Real v[3], Real& T, Real *Y, int n_species) const {
       if (n < n_atm*n_threshold) {
         n = n_atm;
-        v[0] = 0.0;
-        v[1] = 0.0;
-        v[2] = 0.0;
-        p = p_atm;
+        //v[0] = 0.0;
+        //v[1] = 0.0;
+        //v[2] = 0.0;
+        T = T_atm;
         for (int i = 0; i < n_species; i++) {
           Y[i] = Y_atm[i];
         }
         return true;
       }
-      else if (p < p_atm) {
-        p = p_atm;
+      else if (T < T_atm) {
+        T = T_atm;
         return true;
       }
       return false;
@@ -114,7 +116,7 @@ class ResetFloor : public ErrorPolicyInterface {
       prim[PVX] = 0.0;
       prim[PVY] = 0.0;
       prim[PVZ] = 0.0;
-      prim[PPR] = p_atm;
+      prim[PTM] = T_atm;
       for (int i = 0; i < MAX_SPECIES; i++) {
         prim[PYF + i] = Y_atm[i];
       }

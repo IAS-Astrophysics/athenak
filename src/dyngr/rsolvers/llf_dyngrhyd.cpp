@@ -64,6 +64,10 @@ void SingleStateLLF_DYNGR(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eo
     csx = CSZ;
     idx = S33;
   }
+  else {
+    printf("Unknown direction requested!\n");
+    exit(EXIT_FAILURE);
+  }
 
   const Real mb = eos.ps.GetEOS().GetBaryonMass();
   Real b[3] = {0.0};

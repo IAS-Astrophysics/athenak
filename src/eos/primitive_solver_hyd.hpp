@@ -87,7 +87,7 @@ class PrimitiveSolverHydro {
 //        pmy_pack(pp), ps{&eos} {
           pmy_pack(pp) {
       ps.GetEOSMutable().SetDensityFloor(pin->GetOrAddReal(block, "dfloor", (FLT_MIN)));
-      ps.GetEOSMutable().SetPressureFloor(pin->GetOrAddReal(block, "pfloor", (FLT_MIN)));
+      ps.GetEOSMutable().SetTemperatureFloor(pin->GetOrAddReal(block, "tfloor", (FLT_MIN)));
       ps.GetEOSMutable().SetThreshold(pin->GetOrAddReal(block, "dthreshold", 1.0));
       SetPolicyParams(block, pin);
     }
@@ -118,11 +118,11 @@ class PrimitiveSolverHydro {
 
       // Apply the floor to make sure these values are physical.
       // FIXME: Is this needed if the first-order flux correction is enabled?
+      prim_pt[PTM] = prim_pt_old[PTM] = eos.GetTemperatureFromP(prim_pt[PRH], 
+                                          prim_pt[PPR], &prim_pt[PYF]);
       bool floored = ps.GetEOS().ApplyPrimitiveFloor(prim_pt[PRH], &prim_pt[PVX],
                                            prim_pt[PPR], prim_pt[PTM], &prim_pt[PYF]);
 
-      prim_pt[PTM] = prim_pt_old[PTM] = eos.GetTemperatureFromP(prim_pt[PRH], 
-                                          prim_pt[PPR], &prim_pt[PYF]);
       
       ps.PrimToCon(prim_pt, cons_pt, b, g3d);
 
@@ -146,7 +146,7 @@ class PrimitiveSolverHydro {
         w(IVZ, i) = prim_pt[PVZ];
         // FIXME: Debug only! Switch to temperature or pressure after validating.
         //w(IEN, i) = ps.GetEOS().GetEnergy(prim_pt[PRH], prim_pt[PTM], &prim_pt[PYF]) - w(IDN, i);
-        w(IPR, i) = prim_pt[IPR];
+        w(IPR, i) = prim_pt[PPR];
         for (int n = 0; n < nscal; n++) {
           w(nhyd + n, i) = prim_pt[PYF + n];
         }
@@ -203,9 +203,9 @@ class PrimitiveSolverHydro {
         prim_pt[PPR] = prim(m, IPR, k, j, i);
 
         // Apply the floor to make sure these values are physical.
+        prim_pt[PTM] = eos_.GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR], &prim_pt[PYF]);
         bool floor = eos_.ApplyPrimitiveFloor(prim_pt[PRH], &prim_pt[PVX],
                                              prim_pt[PPR], prim_pt[PTM], &prim_pt[PYF]);
-        prim_pt[PTM] = eos_.GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR], &prim_pt[PYF]);
         
         ps_.PrimToCon(prim_pt, cons_pt, b, g3d);
 
@@ -439,6 +439,7 @@ class PrimitiveSolverHydro {
                "  rho = %g\n"
                "  T   = %g\n", 
                dis, gii, csq, vsq, usq, prim[PRH], prim[PTM]);
+        exit(EXIT_FAILURE);
       }
 
       lambda_p = alpha*(vu[index]*(1.0 - csq) + sdis)/iWsq_ad - beta_u[index];

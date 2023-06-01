@@ -29,14 +29,6 @@ class EOSPolicyInterface {
     Real max_T;
     /// minimum temperature
     Real min_T;
-    /// maximum pressure
-    Real max_P;
-    /// minimum pressure
-    Real min_P;
-    /// maximum energy density
-    Real max_e;
-    /// minimum energy density
-    Real min_e;
     /// maximum Y
     Real min_Y[MAX_SPECIES];
     /// minimum Y

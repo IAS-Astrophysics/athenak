@@ -89,13 +89,18 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
     // Replace x1-flux at i
     if (fofc_(m,k,j,i)) {
-      Real wrim1[NPRIM], wri[NPRIM], wrip1[NPRIM];
-      Real wli[NPRIM], wlip1[NPRIM], wlip2[NPRIM];
+      //Real wrim1[NPRIM], wri[NPRIM], wrip1[NPRIM];
+      //Real wli[NPRIM], wlip1[NPRIM], wlip2[NPRIM];
+      Real wli[NPRIM], wri[NPRIM], wrip1[NPRIM], *wlip1;
       // Reconstruct states; note we make this call three times because each call gives
       // the right side at i-1/2 and the left side at i+1/2.
-      ExtractPrimitivesWithMinmod<IVX>(w0_, wli, wrim1, eos_, nhyd_, nscal_, m, k, j, i-1);
-      ExtractPrimitivesWithMinmod<IVX>(w0_, wlip1, wri, eos_, nhyd_, nscal_, m, k, j, i);
-      ExtractPrimitivesWithMinmod<IVX>(w0_, wlip2, wrip1, eos_, nhyd_, nscal_, m, k, j, i+1);
+      //ExtractPrimitivesWithMinmod<IVX>(w0_, wli, wrim1, eos_, nhyd_, nscal_, m, k, j, i-1);
+      //ExtractPrimitivesWithMinmod<IVX>(w0_, wlip1, wri, eos_, nhyd_, nscal_, m, k, j, i);
+      //ExtractPrimitivesWithMinmod<IVX>(w0_, wlip2, wrip1, eos_, nhyd_, nscal_, m, k, j, i+1);
+      ExtractPrimitives(w0_, wli, eos_, nhyd_, nscal_, m, k, j, i-1);
+      ExtractPrimitives(w0_, wri, eos_, nhyd_, nscal_, m, k, j, i);
+      ExtractPrimitives(w0_, wrip1, eos_, nhyd_, nscal_, m, k, j, i+1);
+      wlip1 = wri;
 
       // Compute the metric terms at i-1/2.
       Real g3d[NSPMETRIC], beta_u[3], alpha;
@@ -118,12 +123,17 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
       InsertFluxes(flux, flx1, m, k, j, i+1);
 
       if (multi_d) {
-        Real wrjm1[NPRIM], wrj[NPRIM], wrjp1[NPRIM];
-        Real wlj[NPRIM], wljp1[NPRIM], wljp2[NPRIM];
+        //Real wrjm1[NPRIM], wrj[NPRIM], wrjp1[NPRIM];
+        //Real wlj[NPRIM], wljp1[NPRIM], wljp2[NPRIM];
+        Real wlj[NPRIM], wrjp1[NPRIM], *wrj, *wljp1;
         // Reconstruct states
-        ExtractPrimitivesWithMinmod<IVY>(w0_, wlj, wrjm1, eos_, nhyd_, nscal_, m, k, j-1, i);
-        ExtractPrimitivesWithMinmod<IVY>(w0_, wljp1, wrj, eos_, nhyd_, nscal_, m, k, j, i);
-        ExtractPrimitivesWithMinmod<IVY>(w0_, wljp2, wrjp1, eos_, nhyd_, nscal_, m, k, j+1, i);
+        //ExtractPrimitivesWithMinmod<IVY>(w0_, wlj, wrjm1, eos_, nhyd_, nscal_, m, k, j-1, i);
+        //ExtractPrimitivesWithMinmod<IVY>(w0_, wljp1, wrj, eos_, nhyd_, nscal_, m, k, j, i);
+        //ExtractPrimitivesWithMinmod<IVY>(w0_, wljp2, wrjp1, eos_, nhyd_, nscal_, m, k, j+1, i);
+        ExtractPrimitives(w0_, wlj, eos_, nhyd_, nscal_, m, k, j-1, i);
+        ExtractPrimitives(w0_, wrjp1, eos_, nhyd_, nscal_, m, k, j+1, i);
+        wrj = wri;
+        wljp1 = wrj;
 
         // Compute the metric terms at j-1/2.
         Face2Metric(m, k, j, i, adm.g_dd, adm.beta_u, adm.alpha, g3d, beta_u, alpha);
@@ -145,12 +155,17 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
       }
 
       if (three_d) {
-        Real wrkm1[NPRIM], wrk[NPRIM], wrkp1[NPRIM];
-        Real wlk[NPRIM], wlkp1[NPRIM], wlkp2[NPRIM];
+        //Real wrkm1[NPRIM], wrk[NPRIM], wrkp1[NPRIM];
+        //Real wlk[NPRIM], wlkp1[NPRIM], wlkp2[NPRIM];
+        Real wlk[NPRIM], wrkp1[NPRIM], *wrk, *wlkp1;
         // Reconstruct states
-        ExtractPrimitivesWithMinmod<IVZ>(w0_, wlk, wrkm1, eos_, nhyd_, nscal_, m, k-1, j, i);
-        ExtractPrimitivesWithMinmod<IVZ>(w0_, wlkp1, wrk, eos_, nhyd_, nscal_, m, k, j, i);
-        ExtractPrimitivesWithMinmod<IVZ>(w0_, wlkp2, wrkp1, eos_, nhyd_, nscal_, m, k+1, j, i);
+        //ExtractPrimitivesWithMinmod<IVZ>(w0_, wlk, wrkm1, eos_, nhyd_, nscal_, m, k-1, j, i);
+        //ExtractPrimitivesWithMinmod<IVZ>(w0_, wlkp1, wrk, eos_, nhyd_, nscal_, m, k, j, i);
+        //ExtractPrimitivesWithMinmod<IVZ>(w0_, wlkp2, wrkp1, eos_, nhyd_, nscal_, m, k+1, j, i);
+        ExtractPrimitives(w0_, wlk, eos_, nhyd_, nscal_, m, k-1, j, i);
+        ExtractPrimitives(w0_, wrkp1, eos_, nhyd_, nscal_, m, k+1, j, i);
+        wrk = wri;
+        wlkp1 = wrk;
 
         // Compute the metric terms at k-1/2.
         Face3Metric(m, k, j, i, adm.g_dd, adm.beta_u, adm.alpha, g3d, beta_u, alpha);

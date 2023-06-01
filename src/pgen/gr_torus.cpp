@@ -180,6 +180,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
 
   // initialize primitive variables for restart ---------------------------------------
+  bool use_dyngr = pmbp->pcoord->is_dynamical_relativistic;
 
   if (restart) {
     auto trs = torus;
@@ -215,7 +216,12 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
       // Set primitive values on restart, to get solution in excise region
       w0_(m,IDN,k,j,i) = rho_bg;
-      w0_(m,IEN,k,j,i) = pgas_bg / gm1;
+      if (!use_dyngr) {
+        w0_(m,IEN,k,j,i) = pgas_bg / gm1;
+      }
+      else {
+        w0_(m,IPR,k,j,i) = pgas_bg;
+      }
       w0_(m,IVX,k,j,i) = 0.0;
       w0_(m,IVY,k,j,i) = 0.0;
       w0_(m,IVZ,k,j,i) = 0.0;
@@ -262,7 +268,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   auto trs = torus;
   auto &size = pmbp->pmb->mb_size;
   Kokkos::Random_XorShift64_Pool<> rand_pool64(pmbp->gids);
-  par_for("pgen_torus1", DevExeSpace(), 0,nmb-1,ks,ke,js,je,js,je,
+  par_for("pgen_torus1", DevExeSpace(), 0,nmb-1,ks,ke,js,je,is,ie,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     Real &x1min = size.d_view(m).x1min;
     Real &x1max = size.d_view(m).x1max;
@@ -347,13 +353,15 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
     // Set primitive values, including random perturbations to pressure
     w0_(m,IDN,k,j,i) = fmax(rho, rho_bg);
-    w0_(m,IEN,k,j,i) = fmax(pgas, pgas_bg) * (1.0 + perturbation) / gm1;
+    if (!use_dyngr) {
+      w0_(m,IEN,k,j,i) = fmax(pgas, pgas_bg) * (1.0 + perturbation) / gm1;
+    }
+    else {
+      w0_(m,IPR,k,j,i) = fmax(pgas, pgas_bg) * (1.0 + perturbation);
+    }
     w0_(m,IVX,k,j,i) = uu1;
     w0_(m,IVY,k,j,i) = uu2;
     w0_(m,IVZ,k,j,i) = uu3;
-    /*if (w0_(m,IEN,k,j,i) < 1e-12 && in_torus) {
-      std::cout << "IEN is really weird here!\n";
-    }*/
   });
 
   // initialize ADM variables -----------------------------------------

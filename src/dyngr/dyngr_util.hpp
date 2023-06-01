@@ -30,10 +30,6 @@ void ExtractPrimitives(const DvceArray5D<Real>& prim, Real prim_pt[NPRIM],
   for (int s = 0; s < nscal; s++) {
     prim_pt[PYF + s] = prim(m, nhyd + s, k, j, i);
   }
-  // FIXME: Change to pressure later on!
-  //Real e = prim(m, IEN, k, j, i) + prim(m, IDN, k, j, i);
-  //prim_pt[PTM] = eos.ps.GetEOS().GetTemperatureFromE(prim_pt[PRH], e, &prim_pt[PYF]);
-  //prim_pt[PPR] = eos.ps.GetEOS().GetPressure(prim_pt[PRH], prim_pt[PTM], &prim_pt[PYF]);
   prim_pt[PPR] = prim(m, IPR, k, j, i);
   prim_pt[PTM] = eos.ps.GetEOS().GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR], &prim_pt[PYF]);
 }
@@ -92,6 +88,9 @@ void ExtractPrimitivesWithMinmod(const DvceArray5D<Real>& prim, Real prim_l[NPRI
   prim_r[PRH] = prim_r[PRH]/mb;
   prim_l[PTM] = eos.ps.GetEOS().GetTemperatureFromP(prim_l[PRH], prim_l[PPR], &prim_l[PYF]);
   prim_r[PTM] = eos.ps.GetEOS().GetTemperatureFromP(prim_r[PRH], prim_r[PPR], &prim_r[PYF]);
+  if (prim_r[PTM] < 0 || prim_l[PTM] < 0) {
+    printf("There's a problem with the temperature!\n");
+  }
   return;
 }
 
