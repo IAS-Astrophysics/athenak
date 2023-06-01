@@ -1,5 +1,5 @@
 //========================================================================================
-// Radiation FEM_N code for Athena
+// GR radiation code for AthenaK with FEM_N & FP_N
 // Copyright (C) 2023 Maitraya Bhattacharyya <mbb6217@psu.edu> and David Radice <dur566@psu.edu>
 // AthenaXX copyright(C) James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
@@ -49,16 +49,13 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
 
             // Compute Christoeffel in fluid frame
             double Gamma_fluid = 0;
-            //RadiationFEMNPhaseIndices idcs = this->Indices(enang);
-            //int en = idcs.eindex;
-            //int n = idcs.angindex;
 
-            Real divf_s = (flx1(m, enang, k, j, i + 1) - flx1(m, enang, k, j, i)) / mbsize.d_view(m).dx1;
+            Real divf_s = flx1(m, enang, k, j, i) / mbsize.d_view(m).dx1;
             if (multi_d) {
-              divf_s += (flx2(m, enang, k, j + 1, i) - flx2(m, enang, k, j, i)) / mbsize.d_view(m).dx2;
+              divf_s += flx2(m, enang, k, j, i) / mbsize.d_view(m).dx2;
             }
             if (three_d) {
-              divf_s += (flx3(m, enang, k + 1, j, i) - flx3(m, enang, k, j, i)) / mbsize.d_view(m).dx3;
+              divf_s += flx3(m, enang, k, j, i) / mbsize.d_view(m).dx3;
             }
             f0_(m, enang, k, j, i) = gam0 * f0_(m, enang, k, j, i) + gam1 * f1_(m, enang, k, j, i) - beta_dt * divf_s;
           });
