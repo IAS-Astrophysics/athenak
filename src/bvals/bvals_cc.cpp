@@ -255,12 +255,6 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
   return TaskStatus::complete;
 }
 
-TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray6D<Real> &a, DvceArray6D<Real> &ca) {
-  // create local references for variables in kernel
-  // @TODO: Needs a lot of work!
-  return TaskStatus::complete;
-}
-
 //----------------------------------------------------------------------------------------
 // \!fn void RecvBuffers()
 // \brief Unpack boundary buffers
@@ -415,9 +409,4 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
   });  // end par_for_outer
 
   return TaskStatus::complete;
-}
-
-TaskStatus BoundaryValuesCC::RecvAndUnpackCC(DvceArray6D<Real> &a,
-                                             DvceArray6D<Real> &ca) {
-    return TaskStatus::complete;
 }
