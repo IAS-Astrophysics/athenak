@@ -14,9 +14,6 @@
 #include "tasklist/task_list.hpp"
 #include "bvals/bvals.hpp"
 #include "athena_tensor.hpp"
-#if TWO_PUNCTURES
-  #include "TwoPunctures.h"
-#endif
 
 // forward declarations
 class Coordinates;
@@ -105,7 +102,6 @@ class Z4c {
 #if TWO_PUNCTURES
   // second puncture location
   Real ppos2[3] = {0.,0.,0.}; // later on initiate from input file
-  void ADMTwoPunctures(MeshBlockPack *pmbp, ini_data *data);
 #endif
   struct ADM_vars {
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> psi4;
@@ -207,7 +203,6 @@ class Z4c {
   TaskStatus CalcRHS(Driver *d, int stage);
   template <int NGHOST>
   void ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin);
-  void ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin);
   void GaugePreCollapsedLapse(MeshBlockPack *pmbp, ParameterInput *pin);
   void Z4cToADM(MeshBlockPack *pmbp);
   template <int NGHOST>

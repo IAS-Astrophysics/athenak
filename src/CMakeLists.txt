@@ -80,7 +80,6 @@ add_executable(
         z4c/z4c_tasks.cpp
         z4c/z4c_update.cpp
         z4c/z4c_gauge.cpp
-        z4c/z4c_punctures.cpp
         z4c/z4c_Sbc.cpp
         
 	outputs/io_wrapper.cpp
