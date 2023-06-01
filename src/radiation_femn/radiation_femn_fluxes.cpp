@@ -1,5 +1,5 @@
 //========================================================================================
-// Radiation FEM_N code for Athena
+// GR radiation code for AthenaK with FEM_N & FP_N
 // Copyright (C) 2023 Maitraya Bhattacharyya <mbb6217@psu.edu> and David Radice <dur566@psu.edu>
 // AthenaXX copyright(C) James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
@@ -27,14 +27,6 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
   bool &multi_d = pmy_pack->pmesh->multi_d;
   bool &three_d = pmy_pack->pmesh->three_d;
 
-  auto &mm_ = mass_matrix;
-  auto &stiffnessx_ = stiffness_matrix_x;
-  auto &stiffnessy_ = stiffness_matrix_y;
-  auto &stiffnessz_ = stiffness_matrix_z;
-  auto &stiffnessmodx_ = stiffness_matrix_x;
-  auto &stiffnessmody_ = stiffness_matrix_y;
-  auto &stiffnessmodz_ = stiffness_matrix_z;
-
   auto &f0_ = f0;
 
   //--------------------------------------------------------------------------------------
@@ -42,86 +34,47 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
 
   auto &flx1 = iflx.x1f;
   Kokkos::deep_copy(flx1, 0.);
-  par_for("radiation_femn_flux_x", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, int(ie / 2) + 1, 0, npts1, 0,
-          nang1, 0, 3,
-          KOKKOS_LAMBDA(const int m,
-                        const int k,
-                        const int j,
-                        const int i,
-                        const int enang,
-                        const int A,
-                        const int muhat) {
-
-            RadiationFEMNPhaseIndices idcs = Indices(enang);
-            int en = idcs.eindex;
-            int B = idcs.angindex;
+  par_for("radiation_femn_flux_x", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, int(ie / 2) + 1, 0, npts1, 0, nang1, 0, 3,
+          KOKKOS_LAMBDA(const int m, const int k, const int j, const int i, const int enang, const int A, const int muhat) {
 
             auto kk = k;
             auto jj = j;
             auto ii = 2 * i - 2;
-            auto Ven = (1. / 3.) * (pow(energy_grid(en), 3) - pow(energy_grid(en - 1), 3));
-            auto Favg = (0.5) * Ven *
-                (P_matrix(muhat, A, B) * f0_(m, enang, kk, jj, ii) *
-                    L_mu_muhat0(m, 1, muhat, kk, jj, ii) * sqrt_det_g(m, kk, jj, ii) +
-                    P_matrix(muhat, A, B) * f0_(m, enang, kk, jj, ii + 1) *
-                        L_mu_muhat0(m, 1, muhat, kk, jj, ii + 1) * sqrt_det_g(m, kk, jj, ii + 1));
 
-            auto Fminus = (0.5) * (1.5 * sqrt_det_g(m, kk, jj, ii) * L_mu_muhat0(m, 1, muhat, kk, jj, ii) -
-                0.5 * sqrt_det_g(m, kk, jj, ii + 1) *
-                    L_mu_muhat0(m, 1, muhat, kk, jj, ii + 1)) * (P_matrix(muhat, A, B) *
-                ((1.5) *
-                    f0_(m, enang, kk, jj, ii) -
-                    (0.5) *
-                        f0_(m, enang, kk, jj, ii + 1) +
-                    (1.5) *
-                        f0_(m, enang, kk, jj, ii - 1) -
-                    (0.5) *
-                        f0_(m, enang, kk, jj, ii - 2))
-                + std::signbit(
-                    1.5 * L_mu_muhat0(m, 1, muhat, kk, jj, ii) -
-                        0.5 * L_mu_muhat0(m, 1, muhat, kk, jj, ii + 1)) * P_matrix(muhat, A, B) *
-                    ((1.5) * f0_(m, enang, kk, jj,
-                                 ii - 1) - (0.5) *
-                        f0_(m,
-                            enang,
-                            kk,
-                            jj,
-                            ii -
-                                2) -
-                        (1.5) *
-                            f0_(m, enang, kk, jj, ii) +
-                        (0.5) * f0_(m, enang, kk, jj,
-                                    ii + 1)));
+            // phase space indices
+            RadiationFEMNPhaseIndices idcs = Indices(enang);
+            int en = idcs.eindex;
+            int B = idcs.angindex;
+            int Abar = en * num_points + A;
 
-            auto Fplus = (0.5) * (-0.5 * sqrt_det_g(m, kk, jj, ii) * L_mu_muhat0(m, 1, muhat, kk, jj, ii) +
-                1.5 * sqrt_det_g(m, kk, jj, ii + 1) *
-                    L_mu_muhat0(m, 1, muhat, kk, jj, ii + 1)) * (P_matrix(muhat, A, B) *
-                ((1.5) *
-                    f0_(m, enang, kk, jj, ii + 2) -
-                    (0.5) *
-                        f0_(m, enang, kk, jj, ii + 3) +
-                    (1.5) *
-                        f0_(m, enang, kk, jj, ii + 1) -
-                    (0.5) *
-                        f0_(m, enang, kk, jj, ii))
-                + std::signbit(
-                    -0.5 * L_mu_muhat0(m, 1, muhat, kk, jj, ii) +
-                        1.5 * L_mu_muhat0(m, 1, muhat, kk, jj, ii + 1)) * P_matrix(muhat, A, B) *
-                    ((1.5) * f0_(m, enang, kk, jj,
-                                 ii + 1) - (0.5) *
-                        f0_(m,
-                            enang,
-                            kk,
-                            jj,
-                            ii) -
-                        (1.5) * f0_(m, enang, kk, jj,
-                                    ii + 2) +
-                        (0.5) * f0_(m, enang, kk, jj,
-                                    ii + 3)));
+            // factor from energy contribution
+            auto Ven = (1. / 3.) * (pow(energy_grid(en + 1), 3) - pow(energy_grid(en), 3));
 
-            int enangindex = en * num_points + A;
-            flx1(m, enangindex, kk, jj, ii) += ((1.5) * Fminus - Favg - (0.5) * Fplus) / (2.0);
-            flx1(m, enangindex, kk, jj, ii + 1) += ((0.5) * Fminus + Favg - (1.5) * Fplus) / (2.0);
+            // compute quantities at the left and right boundaries
+            double sqrt_det_g_L = 1.5 * sqrt_det_g(m, kk, jj, ii) - 0.5 * sqrt_det_g(m, kk, jj, ii + 1);
+            double sqrt_det_g_R = -0.5 * sqrt_det_g(m, kk, jj, ii) + 1.5 * sqrt_det_g(m, kk, jj, ii + 1);
+            double L_mu_muhat0_L = 1.5 * L_mu_muhat0(m, 1, muhat, kk, jj, ii) - 0.5 * L_mu_muhat0(m, 1, muhat, kk, jj, ii + 1);
+            double L_mu_muhat0_R = -0.5 * L_mu_muhat0(m, 1, muhat, kk, jj, ii) + 1.5 * L_mu_muhat0(m, 1, muhat, kk, jj, ii + 1);
+
+            // compute Fbar
+            auto Favg = (0.5) * Ven * (P_matrix(muhat, B, A) * sqrt_det_g(m, kk, jj, ii) * L_mu_muhat0(m, 1, muhat, kk, jj, ii) * f0_(m, Abar, kk, jj, ii)
+                + P_matrix(muhat, B, A) * sqrt_det_g(m, kk, jj, ii + 1) * L_mu_muhat0(m, 1, muhat, kk, jj, ii + 1) * f0_(m, Abar, kk, jj, ii + 1));
+
+            // compute Fminus
+            auto Fminus = (0.5) * Ven * (sqrt_det_g_L * L_mu_muhat0_L) * (P_matrix(muhat, B, A)
+                * ((1.5) * f0_(m, Abar, kk, jj, ii) - (0.5) * f0_(m, Abar, kk, jj, ii + 1) + (1.5) * f0_(m, Abar, kk, jj, ii - 1) - (0.5) * f0_(m, Abar, kk, jj, ii - 2))
+                - std::copysign(1.0, L_mu_muhat0_L) * P_matrix(muhat, B, A)
+                    * ((1.5) * f0_(m, Abar, kk, jj, ii - 1) - (0.5) * f0_(m, Abar, kk, jj, ii - 2) - (1.5) * f0_(m, Abar, kk, jj, ii) + (0.5) * f0_(m, Abar, kk, jj, ii + 1)));
+
+            // compute Fplus
+            auto Fplus = (0.5) * Ven * (sqrt_det_g_R * L_mu_muhat0_R) * (P_matrix(muhat, B, A) *
+                ((1.5) * f0_(m, Abar, kk, jj, ii + 2) - (0.5) * f0_(m, Abar, kk, jj, ii + 3) + (1.5) * f0_(m, Abar, kk, jj, ii + 1) - (0.5) * f0_(m, Abar, kk, jj, ii))
+                - std::copysign(1.0, L_mu_muhat0_R) * P_matrix(muhat, B, A) *
+                    ((1.5) * f0_(m, Abar, kk, jj, ii + 1) - (0.5) * f0_(m, Abar, kk, jj, ii) - (1.5) * f0_(m, Abar, kk, jj, ii + 2) + (0.5) * f0_(m, Abar, kk, jj, ii + 3)));
+
+            // complute fluxes
+            flx1(m, enang, kk, jj, ii) += ((1.5) * Fminus - Favg - (0.5) * Fplus) / (2.0);
+            flx1(m, enang, kk, jj, ii + 1) += ((0.5) * Fminus + Favg - (1.5) * Fplus) / (2.0);
           });
 
 
@@ -131,90 +84,47 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
   auto &flx2 = iflx.x2f;
   Kokkos::deep_copy(flx2, 0.);
   if (multi_d) {
-    par_for("radiation_femn_flux_y", DevExeSpace(), 0, nmb1, ks, ke, js, int(je / 2) + 1, is, ie, 0, npts1, 0,
-            nang1, 0, 3,
-            KOKKOS_LAMBDA(const int m, const int k, const int j, const int i, const int enang,
-                          const int A, const int muhat) {
-
-              RadiationFEMNPhaseIndices idcs = this->Indices(enang);
-              int en = idcs.eindex;
-              int B = idcs.angindex;
+    par_for("radiation_femn_flux_y", DevExeSpace(), 0, nmb1, ks, ke, js, int(je / 2) + 1, is, ie, 0, npts1, 0, nang1, 0, 3,
+            KOKKOS_LAMBDA(const int m, const int k, const int j, const int i, const int enang, const int A, const int muhat) {
 
               auto kk = k;
               auto jj = 2 * j - 2;
               auto ii = i;
 
-              auto Ven = (1. / 3.) * (pow(energy_grid(en), 3) - pow(energy_grid(en - 1), 3));
-              auto Favg = (0.5) * Ven *
-                  (P_matrix(muhat, A, B) * f0_(m, enang, kk, jj, ii) *
-                      L_mu_muhat0(m, 2, muhat, kk, jj, ii) * sqrt_det_g(m, kk, jj, ii) +
-                      P_matrix(muhat, A, B) * f0_(m, enang, kk, jj + 1, ii) *
-                          L_mu_muhat0(m, 2, muhat, kk, jj + 1, ii) * sqrt_det_g(m, kk, jj + 1, ii));
+              // phase space indices
+              RadiationFEMNPhaseIndices idcs = Indices(enang);
+              int en = idcs.eindex;
+              int B = idcs.angindex;
+              int Abar = en * num_points + A;
 
-              auto Fminus = (0.5) * (1.5 * sqrt_det_g(m, kk, jj, ii) * L_mu_muhat0(m, 2, muhat, kk, jj, ii) -
-                  0.5 * sqrt_det_g(m, kk, jj + 1, ii) *
-                      L_mu_muhat0(m, 2, muhat, kk, jj + 1, ii)) * (P_matrix(muhat, A, B) *
-                  ((1.5) *
-                      f0_(m, enang, kk, jj, ii) -
-                      (0.5) *
-                          f0_(m, enang, kk, jj + 1,
-                              ii) +
-                      (1.5) *
-                          f0_(m, enang, kk, jj - 1,
-                              ii) -
-                      (0.5) *
-                          f0_(m, enang, kk, jj - 2,
-                              ii))
-                  + std::signbit(
-                      1.5 * L_mu_muhat0(m, 2, muhat, kk, jj, ii) -
-                          0.5 * L_mu_muhat0(m, 2, muhat, kk, jj + 1, ii)) * P_matrix(muhat, A, B) *
-                      ((1.5) *
-                          f0_(m, enang, kk, jj - 1,
-                              ii) - (0.5) *
-                          f0_(m, enang, kk,
-                              jj - 2,
-                              ii) -
-                          (1.5) *
-                              f0_(m, enang, kk, jj,
-                                  ii) +
-                          (0.5) *
-                              f0_(m, enang, kk, jj + 1,
-                                  ii)));
+              // factor from energy contribution
+              auto Ven = (1. / 3.) * (pow(energy_grid(en + 1), 3) - pow(energy_grid(en), 3));
 
-              auto Fplus = (0.5) * (-0.5 * sqrt_det_g(m, kk, jj, ii) * L_mu_muhat0(m, 2, muhat, kk, jj, ii) +
-                  1.5 * sqrt_det_g(m, kk, jj + 1, ii) *
-                      L_mu_muhat0(m, 2, muhat, kk, jj + 1, ii)) * (P_matrix(muhat, A, B) *
-                  ((1.5) *
-                      f0_(m, enang, kk, jj + 2,
-                          ii) -
-                      (0.5) *
-                          f0_(m, enang, kk, jj + 3,
-                              ii) +
-                      (1.5) *
-                          f0_(m, enang, kk, jj + 1,
-                              ii) -
-                      (0.5) *
-                          f0_(m, enang, kk, jj, ii))
-                  + std::signbit(
-                      -0.5 * L_mu_muhat0(m, 2, muhat, kk, jj, ii) +
-                          1.5 * L_mu_muhat0(m, 2, muhat, kk, jj + 1, ii)) * P_matrix(muhat, A, B) *
-                      ((1.5) *
-                          f0_(m, enang, kk, jj + 1,
-                              ii) - (0.5) *
-                          f0_(m, enang, kk,
-                              jj,
-                              ii) -
-                          (1.5) *
-                              f0_(m, enang, kk, jj + 2,
-                                  ii) +
-                          (0.5) *
-                              f0_(m, enang, kk, jj + 3,
-                                  ii)));
+              // compute quantities at the left and right boundaries
+              double sqrt_det_g_L = 1.5 * sqrt_det_g(m, kk, jj, ii) - 0.5 * sqrt_det_g(m, kk, jj + 1, ii);
+              double sqrt_det_g_R = -0.5 * sqrt_det_g(m, kk, jj, ii) + 1.5 * sqrt_det_g(m, kk, jj + 1, ii);
+              double L_mu_muhat0_L = 1.5 * L_mu_muhat0(m, 2, muhat, kk, jj, ii) - 0.5 * L_mu_muhat0(m, 2, muhat, kk, jj + 1, ii);
+              double L_mu_muhat0_R = -0.5 * L_mu_muhat0(m, 2, muhat, kk, jj, ii) + 1.5 * L_mu_muhat0(m, 2, muhat, kk, jj + 1, ii);
 
-              int enangindex = en * num_points + A;
-              flx2(m, enangindex, kk, jj, ii) += ((1.5) * Fminus - Favg - (0.5) * Fplus) / (2.0);
-              flx2(m, enangindex, kk, jj + 1, ii) += ((0.5) * Fminus + Favg - (1.5) * Fplus) / (2.0);
+              // compute Fbar
+              auto Favg = (0.5) * Ven * (P_matrix(muhat, B, A) * sqrt_det_g(m, kk, jj, ii) * L_mu_muhat0(m, 2, muhat, kk, jj, ii) * f0_(m, Abar, kk, jj, ii)
+                  + P_matrix(muhat, B, A) * sqrt_det_g(m, kk, jj + 1, ii) * L_mu_muhat0(m, 2, muhat, kk, jj + 1, ii) * f0_(m, Abar, kk, jj + 1, ii));
 
+              // compute Fminus
+              auto Fminus = (0.5) * Ven * (sqrt_det_g_L * L_mu_muhat0_L) * (P_matrix(muhat, B, A)
+                  * ((1.5) * f0_(m, Abar, kk, jj, ii) - (0.5) * f0_(m, Abar, kk, jj + 1, ii) + (1.5) * f0_(m, Abar, kk, jj - 1, ii) - (0.5) * f0_(m, Abar, kk, jj - 2, ii))
+                  - std::copysign(1.0, L_mu_muhat0_L) * P_matrix(muhat, B, A)
+                      * ((1.5) * f0_(m, Abar, kk, jj - 1, ii) - (0.5) * f0_(m, Abar, kk, jj - 2, ii) - (1.5) * f0_(m, Abar, kk, jj, ii) + (0.5) * f0_(m, Abar, kk, jj + 1, ii)));
+
+              // compute Fplus
+              auto Fplus = (0.5) * Ven * (sqrt_det_g_R * L_mu_muhat0_R) * (P_matrix(muhat, B, A) *
+                  ((1.5) * f0_(m, Abar, kk, jj + 2, ii) - (0.5) * f0_(m, Abar, kk, jj + 3, ii) + (1.5) * f0_(m, Abar, kk, jj + 1, ii) - (0.5) * f0_(m, Abar, kk, jj, ii))
+                  - std::copysign(1.0, L_mu_muhat0_R) * P_matrix(muhat, B, A) *
+                      ((1.5) * f0_(m, Abar, kk, jj + 1, ii) - (0.5) * f0_(m, Abar, kk, jj, ii) - (1.5) * f0_(m, Abar, kk, jj + 2, ii) + (0.5) * f0_(m, Abar, kk, jj + 3, ii)));
+
+              // complute fluxes
+              flx2(m, enang, kk, jj, ii) += ((1.5) * Fminus - Favg - (0.5) * Fplus) / (2.0);
+              flx2(m, enang, kk, jj + 1, ii) += ((0.5) * Fminus + Favg - (1.5) * Fplus) / (2.0);
             });
   }
 
@@ -224,82 +134,47 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
   auto &flx3 = iflx.x3f;
   Kokkos::deep_copy(flx3, 0.);
   if (three_d) {
-    par_for("radiation_femn_flux_z", DevExeSpace(), 0, nmb1, ks, int(ke / 2) + 1, js, je, is, ie, 0, npts1, 0,
-            nang1, 0, 3,
-            KOKKOS_LAMBDA(const int m, const int k, const int j, const int i, const int enang, const int A,
-                          const int muhat) {
+    par_for("radiation_femn_flux_z", DevExeSpace(), 0, nmb1, ks, int(ke / 2) + 1, js, je, is, ie, 0, npts1, 0, nang1, 0, 3,
+            KOKKOS_LAMBDA(const int m, const int k, const int j, const int i, const int enang, const int A, const int muhat) {
 
-              RadiationFEMNPhaseIndices idcs = this->Indices(enang);
-              int en = idcs.eindex;
-              int B = idcs.angindex;
-
-              auto kk = 2 * k - 1;
+              auto kk = 2 * k - 2;
               auto jj = j;
               auto ii = i;
 
-              auto Ven = (1. / 3.) * (pow(energy_grid(en), 3) - pow(energy_grid(en - 1), 3));
-              auto Favg = (0.5) * Ven *
-                  (P_matrix(muhat, A, B) * f0_(m, enang, kk, jj, ii) *
-                      L_mu_muhat0(m, 3, muhat, kk, jj, ii) * sqrt_det_g(m, kk, jj, ii) +
-                      P_matrix(muhat, A, B) * f0_(m, enang, kk + 1, jj, ii) *
-                          L_mu_muhat0(m, 3, muhat, kk + 1, jj, ii) * sqrt_det_g(m, kk + 1, jj, ii));
+              // phase space indices
+              RadiationFEMNPhaseIndices idcs = Indices(enang);
+              int en = idcs.eindex;
+              int B = idcs.angindex;
+              int Abar = en * num_points + A;
 
-              auto Fminus = (0.5) * (1.5 * sqrt_det_g(m, kk, jj, ii) * L_mu_muhat0(m, 3, muhat, kk, jj, ii) -
-                  0.5 * sqrt_det_g(m, kk + 1, jj, ii) *
-                      L_mu_muhat0(m, 3, muhat, kk + 1, jj, ii)) * (P_matrix(muhat, A, B) *
-                  ((1.5) *
-                      f0_(m, enang, kk, jj, ii) -
-                      (0.5) *
-                          f0_(m, enang, kk + 1, jj, ii) +
-                      (1.5) *
-                          f0_(m, enang, kk - 1, jj, ii) -
-                      (0.5) *
-                          f0_(m, enang, kk - 2, jj, ii))
-                  + std::signbit(
-                      1.5 * L_mu_muhat0(m, 3, muhat, kk, jj, ii) -
-                          0.5 * L_mu_muhat0(m, 3, muhat, kk + 1, jj, ii)) * P_matrix(muhat, A, B) *
-                      ((1.5) * f0_(m, enang, kk - 1, jj,
-                                   ii) - (0.5) *
-                          f0_(m,
-                              enang,
-                              kk - 2,
-                              jj,
-                              ii) -
-                          (1.5) *
-                              f0_(m, enang, kk, jj, ii) +
-                          (0.5) * f0_(m, enang, kk + 1, jj,
-                                      ii)));
+              // factor from energy contribution
+              auto Ven = (1. / 3.) * (pow(energy_grid(en + 1), 3) - pow(energy_grid(en), 3));
 
-              auto Fplus = (0.5) * (-0.5 * sqrt_det_g(m, kk, jj, ii) * L_mu_muhat0(m, 3, muhat, kk, jj, ii) +
-                  1.5 * sqrt_det_g(m, kk + 1, jj, ii) *
-                      L_mu_muhat0(m, 3, muhat, kk + 1, jj, ii)) * (P_matrix(muhat, A, B) *
-                  ((1.5) *
-                      f0_(m, enang, kk + 2, jj, ii) -
-                      (0.5) *
-                          f0_(m, enang, kk + 3, jj, ii) +
-                      (1.5) *
-                          f0_(m, enang, kk + 1, jj, ii) -
-                      (0.5) *
-                          f0_(m, enang, kk, jj, ii))
-                  + std::signbit(
-                      -0.5 * L_mu_muhat0(m, 3, muhat, kk, jj, ii) +
-                          1.5 * L_mu_muhat0(m, 3, muhat, kk + 1, jj, ii)) * P_matrix(muhat, A, B) *
-                      ((1.5) * f0_(m, enang, kk + 1, jj,
-                                   ii) - (0.5) *
-                          f0_(m,
-                              enang,
-                              kk,
-                              jj,
-                              ii) -
-                          (1.5) * f0_(m, enang, kk + 2, jj,
-                                      ii) +
-                          (0.5) * f0_(m, enang, kk + 3, jj,
-                                      ii)));
+              // compute quantities at the left and right boundaries
+              double sqrt_det_g_L = 1.5 * sqrt_det_g(m, kk, jj, ii) - 0.5 * sqrt_det_g(m, kk + 1, jj, ii);
+              double sqrt_det_g_R = -0.5 * sqrt_det_g(m, kk, jj, ii) + 1.5 * sqrt_det_g(m, kk + 1, jj, ii);
+              double L_mu_muhat0_L = 1.5 * L_mu_muhat0(m, 3, muhat, kk, jj, ii) - 0.5 * L_mu_muhat0(m, 3, muhat, kk + 1, jj, ii);
+              double L_mu_muhat0_R = -0.5 * L_mu_muhat0(m, 3, muhat, kk, jj, ii) + 1.5 * L_mu_muhat0(m, 3, muhat, kk + 1, jj, ii);
 
-              int enangindex = en * num_points + A;
-              flx1(m, enangindex, kk, jj, ii) += ((1.5) * Fminus - Favg - (0.5) * Fplus) / (2.0);
-              flx1(m, enangindex, kk + 1, jj, ii) += ((0.5) * Fminus + Favg - (1.5) * Fplus) / (2.0);
+              // compute Fbar
+              auto Favg = (0.5) * Ven * (P_matrix(muhat, B, A) * sqrt_det_g(m, kk, jj, ii) * L_mu_muhat0(m, 3, muhat, kk, jj, ii) * f0_(m, Abar, kk, jj, ii)
+                  + P_matrix(muhat, B, A) * sqrt_det_g(m, kk + 1, jj, ii) * L_mu_muhat0(m, 3, muhat, kk + 1, jj, ii) * f0_(m, Abar, kk + 1, jj, ii));
 
+              // compute Fminus
+              auto Fminus = (0.5) * Ven * (sqrt_det_g_L * L_mu_muhat0_L) * (P_matrix(muhat, B, A)
+                  * ((1.5) * f0_(m, Abar, kk, jj, ii) - (0.5) * f0_(m, Abar, kk + 1, jj, ii) + (1.5) * f0_(m, Abar, kk - 1, jj, ii) - (0.5) * f0_(m, Abar, kk - 2, jj, ii))
+                  - std::copysign(1.0, L_mu_muhat0_L) * P_matrix(muhat, B, A)
+                      * ((1.5) * f0_(m, Abar, kk - 1, jj, ii) - (0.5) * f0_(m, Abar, kk - 2, jj, ii) - (1.5) * f0_(m, Abar, kk, jj, ii) + (0.5) * f0_(m, Abar, kk + 1, jj, ii)));
+
+              // compute Fplus
+              auto Fplus = (0.5) * Ven * (sqrt_det_g_R * L_mu_muhat0_R) * (P_matrix(muhat, B, A) *
+                  ((1.5) * f0_(m, Abar, kk + 2, jj, ii) - (0.5) * f0_(m, Abar, kk + 3, jj, ii) + (1.5) * f0_(m, Abar, kk + 1, jj, ii) - (0.5) * f0_(m, Abar, kk, jj, ii))
+                  - std::copysign(1.0, L_mu_muhat0_R) * P_matrix(muhat, B, A) *
+                      ((1.5) * f0_(m, Abar, kk + 1, jj, ii) - (0.5) * f0_(m, Abar, kk, jj, ii) - (1.5) * f0_(m, Abar, kk + 2, jj, ii) + (0.5) * f0_(m, Abar, kk + 3, jj, ii)));
+
+              // complute fluxes
+              flx3(m, enang, kk, jj, ii) += ((1.5) * Fminus - Favg - (0.5) * Fplus) / (2.0);
+              flx3(m, enang, kk + 1, jj, ii) += ((0.5) * Fminus + Favg - (1.5) * Fplus) / (2.0);
             });
   }
 
