@@ -5,6 +5,7 @@
 //========================================================================================
 //! \file adm.cpp
 //  \brief implementation of ADM class
+#include <algorithm>
 
 #include "adm/adm.hpp"
 #include "athena.hpp"
