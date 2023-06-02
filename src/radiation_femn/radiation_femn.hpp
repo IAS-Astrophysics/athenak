@@ -115,7 +115,7 @@ class RadiationFEMN {
   DvceFaceFld5D<Real> iflx;      // spatial fluxes on zone faces
 
   // intermediate arrays needed for limiting
-  DvceArray6D<Real> ftemp;
+  DvceArray5D<Real> ftemp;
   DvceArray4D<Real> etemp0;
   DvceArray4D<Real> etemp1;
 
