@@ -35,7 +35,7 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
     coarse_f0("ci0", 1, 1, 1, 1, 1),
     f1("f1", 1, 1, 1, 1, 1),
     iflx("iflx", 1, 1, 1, 1, 1),
-    ftemp("ftemp", 1, 1, 1, 1, 1, 1),
+    ftemp("ftemp", 1, 1, 1, 1, 1),
     etemp0("etemp0", 1, 1, 1, 1),
     etemp1("etemp1", 1, 1, 1, 1),
     energy_grid("energy_grid", 1),
