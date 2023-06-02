@@ -44,7 +44,7 @@ RestartOutput::RestartOutput(OutputParameters op, Mesh *pm) :
 // variables, including ghost zones.
 
 void RestartOutput::LoadOutputData(Mesh *pm) {
-  // get spatial dimensions of arrays, including ghost zones
+  // get spatial dimensions of arraynads, including ghost zones
   auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
   int nout1 = indcs.nx1 + 2*(indcs.ng);
   int nout2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
@@ -68,11 +68,11 @@ void RestartOutput::LoadOutputData(Mesh *pm) {
   if (pz4c != nullptr) {
     nz4c = pz4c->nz4c;
   } else if (padm != nullptr) {
-    nadm = adm::ADM::nadm;
+    nadm = padm->nadm;
   }
   // if the spacetime is evolved, we do not need to checkpoint/recover the ADM variables
 
-  Kokkos::realloc(outarray, nmb, (nhydro+nmhd+nz4c), nout3, nout2, nout1);
+  Kokkos::realloc(outarray, nmb, (nhydro+nmhd+nz4c+nadm), nout3, nout2, nout1);
   if (prad != nullptr) {
     nrad = prad->prgeo->nangles;
   }
@@ -101,19 +101,12 @@ void RestartOutput::LoadOutputData(Mesh *pm) {
     Kokkos::deep_copy(outarray_force,pturb->force);
   }
 
-  // load ADM (CC) data (copy to host)
-  if (nadm > 0) {
-    DvceArray5D<Real>::HostMirror host_u_adm = Kokkos::create_mirror(padm->u_adm);
-    Kokkos::deep_copy(host_u_adm, padm->u_adm);
-    auto hst_slice = Kokkos::subview(outarray, Kokkos::ALL,
-            std::make_pair(nhydro+nmhd,nadm),Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
-    Kokkos::deep_copy(hst_slice, host_u_adm);
-  }
-
-  // load z4c (CC) data (copy to host)
   if (pz4c != nullptr) {
     Kokkos::realloc(outarray_z4c, nmb, nz4c, nout3, nout2, nout1);
     Kokkos::deep_copy(outarray_z4c, pz4c->u0);
+  } else if (padm != nullptr) {
+    Kokkos::realloc(outarray_adm, nmb, nadm, nout3, nout2, nout1);
+    Kokkos::deep_copy(outarray_adm, padm->u_adm);
   }
 
   // calculate max/min number of MeshBlocks across all ranks
@@ -140,7 +133,8 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   radiation::Radiation* prad = pm->pmb_pack->prad;
   TurbulenceDriver* pturb=pm->pmb_pack->pturb;
   z4c::Z4c* pz4c = pm->pmb_pack->pz4c;
-  int nhydro=0, nmhd=0, nrad=0, nforce=3, nz4c=0;
+  adm::ADM* padm = pm->pmb_pack->padm;
+  int nhydro=0, nmhd=0, nrad=0, nforce=3, nz4c=0, nadm=0;
   if (phydro != nullptr) {
     nhydro = phydro->nhydro + phydro->nscalars;
   }
@@ -152,6 +146,8 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   }
   if (pz4c != nullptr) {
     nz4c = pz4c->nz4c;
+  } else if (padm != nullptr) {
+    nadm = padm->nadm;
   }
   // create filename: "rst/file_basename" + "." + XXXXX + ".rst"
   // where XXXXX = 5-digit file_number
@@ -232,9 +228,10 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     data_size += nout1*nout2*nout3*nforce*sizeof(Real); // forcing
   }
   if (pz4c != nullptr) {
-    data_size += nout1*nout2*nout3*nz4c*sizeof(Real); // hydro u0
+    data_size += nout1*nout2*nout3*nz4c*sizeof(Real); // z4c u0
+  } else if (padm != nullptr) {
+    data_size += nout1*nout2*nout3*nadm*sizeof(Real); // adm u0
   }
-
   if (global_variable::my_rank == 0) {
     resfile.Write_bytes(&(data_size), sizeof(IOWrapperSizeT), 1);
     if (pturb != nullptr) {
@@ -478,6 +475,37 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
       } else if (m < pm->nmb_thisrank) {
         // get ptr to MeshBlock data
         auto mbptr = Kokkos::subview(outarray_z4c, m, Kokkos::ALL, Kokkos::ALL,
+                                     Kokkos::ALL, Kokkos::ALL);
+        int mbcnt = mbptr.size();
+        if (resfile.Write_Reals_at(mbptr.data(), mbcnt, myoffset) != mbcnt) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+          << std::endl << "cell-centered data not written correctly to restart file, "
+          << "restart file is broken." << std::endl;
+          exit(EXIT_FAILURE);
+        }
+        myoffset += mbcnt*sizeof(Real);
+      }
+    }
+  } else if (padm != nullptr) {
+    for (int m=0;  m<noutmbs_max; ++m) {
+      // every rank has a MB to write, so write collectively
+      if (m < noutmbs_min) {
+        // get ptr to cell-centered MeshBlock data
+        auto mbptr = Kokkos::subview(outarray_adm, m, Kokkos::ALL, Kokkos::ALL,
+                                     Kokkos::ALL, Kokkos::ALL);
+        int mbcnt = mbptr.size();
+        if (resfile.Write_Reals_at_all(mbptr.data(), mbcnt, myoffset) != mbcnt) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+          << std::endl << "cell-centered data not written correctly to restart file, "
+          << "restart file is broken." << std::endl;
+          exit(EXIT_FAILURE);
+        }
+        myoffset += mbcnt*sizeof(Real);
+
+      // some ranks are finished writing, so use non-collective write
+      } else if (m < pm->nmb_thisrank) {
+        // get ptr to MeshBlock data
+        auto mbptr = Kokkos::subview(outarray_adm, m, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
         int mbcnt = mbptr.size();
         if (resfile.Write_Reals_at(mbptr.data(), mbcnt, myoffset) != mbcnt) {

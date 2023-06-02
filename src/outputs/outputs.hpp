@@ -177,7 +177,7 @@ class BaseTypeOutput {
   // for restarts, where dims are (m,n,k,j,i)
   HostArray5D<Real> outarray;
   HostArray5D<Real> outarray_hyd, outarray_mhd, outarray_rad,
-                    outarray_force, outarray_z4c;
+                    outarray_force, outarray_z4c, outarray_adm;
   HostFaceFld4D<Real> outfield;  // FC output field on host
   std::vector<int> noutmbs;   // with MPI, number of output MBs across all ranks
   int noutmbs_min;            // with MPI, minimum number of output MBs across all ranks

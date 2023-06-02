@@ -26,7 +26,7 @@ char const * const ADM::ADM_names[ADM::nadm] = {
 ADM::ADM(MeshBlockPack *ppack, ParameterInput *pin):
   pmy_pack(ppack),
   u_adm("u_adm",1,1,1,1,1) {
-  int nmb = ppack->nmb_thispack;
+  int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_maxperrank));
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int ncells1 = indcs.nx1 + 2*(indcs.ng);
   int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
