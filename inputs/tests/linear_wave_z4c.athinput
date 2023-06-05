@@ -1,8 +1,8 @@
-# AthenaXXX input file for HYDRO linear wave tests
+# AthenaXXX input file for Z4c linear wave tests
 
 <comment>
-problem   = hydro linear waves
-reference = Stone et al, ApJS 178, 137 (2008), sect 8.1
+problem   = z4c linear waves
+reference = e.g. Daverio et al. arxiv:1810.12346 (2018)
 
 <job>
 basename  = z4c_lin_wave    # problem ID: basename of output filenames

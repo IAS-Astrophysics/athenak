@@ -1,7 +1,8 @@
 # Athena++ (Kokkos version) input file for spherical blast problem
 
 <comment>
-problem   = z4c
+problem   = z4c two puncture
+reference = e.g. Cook. Living Rev. Relativ. 3, 5 (2000)
 
 <job>
 basename  = z4c      # problem ID: basename of output filenames
