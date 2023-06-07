@@ -18,6 +18,8 @@
 #include "globals.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "adm/adm.hpp"
+#include "z4c/z4c.hpp"
 #include "srcterms/srcterms.hpp"
 #include "srcterms/turb_driver.hpp"
 #include "outputs.hpp"
@@ -107,6 +109,20 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of Radiation MHD variables requested in <output> block '"
        << out_params.block_name << "' but Radiation and/or MHD object not constructed."
+       << std::endl << "Input file is likely missing corresponding block" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  if ((ivar>=79) && (ivar<97) && (pm->pmb_pack->padm == nullptr)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+       << "Output of ADM variable requested in <output> block '"
+       << out_params.block_name << "' but ADM object not constructed."
+       << std::endl << "Input file is likely missing corresponding block" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  if ((ivar>=97) && (ivar<139) && (pm->pmb_pack->pz4c == nullptr)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+       << "Output of Z4c variable requested in <output> block '"
+       << out_params.block_name << "' but Z4c object not constructed."
        << std::endl << "Input file is likely missing corresponding block" << std::endl;
     exit(EXIT_FAILURE);
   }
@@ -427,6 +443,49 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     outvars.emplace_back("force1",0,&(pm->pmb_pack->pturb->force));
     outvars.emplace_back("force2",1,&(pm->pmb_pack->pturb->force));
     outvars.emplace_back("force3",2,&(pm->pmb_pack->pturb->force));
+  }
+
+  // ADM variables, excluding gauge
+  for (int v = 0; v < adm::ADM::nadm - 4; ++v) {
+    if (out_params.variable.compare("adm") == 0 ||
+        out_params.variable.compare(adm::ADM::ADM_names[v]) == 0) {
+      outvars.emplace_back(adm::ADM::ADM_names[v], v, &(pm->pmb_pack->padm->u_adm));
+    }
+  }
+
+  // ADM gauge variables
+  if (nullptr == pm->pmb_pack->pz4c) {
+    for (int v = adm::ADM::nadm - 4; v < adm::ADM::nadm; ++v) {
+      if (out_params.variable.compare("adm") == 0 ||
+          out_params.variable.compare(adm::ADM::ADM_names[v]) == 0) {
+        outvars.emplace_back(adm::ADM::ADM_names[v], v, &(pm->pmb_pack->padm->u_adm));
+      }
+    }
+  }
+
+  // con z4c variables
+  for (int v = 0; v < z4c::Z4c::ncon; ++v) {
+    if (out_params.variable.compare("con") == 0 ||
+        out_params.variable.compare(z4c::Z4c::Constraint_names[v]) == 0) {
+      outvars.emplace_back(z4c::Z4c::Constraint_names[v], v,
+      &(pm->pmb_pack->pz4c->u_con));
+    }
+  }
+
+  // mat z4c variables
+  for (int v = 0; v < z4c::Z4c::nmat; ++v) {
+    if (out_params.variable.compare("mat") == 0 ||
+        out_params.variable.compare(z4c::Z4c::Matter_names[v]) == 0) {
+      outvars.emplace_back(z4c::Z4c::Matter_names[v], v, &(pm->pmb_pack->pz4c->u_mat));
+    }
+  }
+
+  // z4c variables
+  for (int v = 0; v < z4c::Z4c::nz4c; ++v) {
+    if (out_params.variable.compare("z4c") == 0 ||
+        out_params.variable.compare(z4c::Z4c::Z4c_names[v]) == 0) {
+      outvars.emplace_back(z4c::Z4c::Z4c_names[v], v, &(pm->pmb_pack->pz4c->u0));
+    }
   }
 
   // radiation moments in coordinate frame

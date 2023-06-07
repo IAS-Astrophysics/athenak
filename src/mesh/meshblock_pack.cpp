@@ -15,6 +15,8 @@
 #include "driver/driver.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "adm/adm.hpp"
+#include "z4c/z4c.hpp"
 #include "ion-neutral/ion_neutral.hpp"
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
@@ -40,6 +42,8 @@ MeshBlockPack::~MeshBlockPack() {
   delete pcoord;
   if (phydro != nullptr) {delete phydro;}
   if (pmhd   != nullptr) {delete pmhd;}
+  if (padm   != nullptr) {delete padm;}
+  if (pz4c   != nullptr) {delete pz4c;}
   if (prad   != nullptr) {delete prad;}
   if (pturb  != nullptr) {delete pturb;}
   if (punit  != nullptr) {delete punit;}
@@ -155,6 +159,30 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     pturb->IncludeAddForcingTask(run_tl, none);
   } else {
     pturb = nullptr;
+  }
+
+  // (7) Z4c and ADM
+  // Create Z4c and ADM physics module.
+  if (pin->DoesBlockExist("z4c")) {
+    pz4c = new z4c::Z4c(this, pin);
+    pz4c->AssembleZ4cTasks(start_tl, run_tl, end_tl);
+    padm = new adm::ADM(this, pin);
+    nphysics++;
+  } else {
+    pz4c = nullptr;
+    if (pin->DoesBlockExist("adm")) {
+      padm = new adm::ADM(this, pin);
+    } else {
+      padm = nullptr;
+    }
+  }
+
+  // Units
+  // Default units are cgs units
+  if (pin->DoesBlockExist("units")) {
+    punit = new units::Units(pin);
+  } else {
+    punit = nullptr;
   }
 
   // Check that at least ONE is requested and initialized.

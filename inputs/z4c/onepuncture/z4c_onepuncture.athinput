@@ -1,0 +1,73 @@
+# Athena++ (Kokkos version) input file for spherical blast problem
+
+<comment>
+problem   = z4c one puncture
+reference = e.g. Cook. Living Rev. Relativ. 3, 5 (2000)
+
+<job>
+basename  = z4c      # problem ID: basename of output filenames
+
+<mesh>
+nghost    = 2          # Number of ghost cells
+nx1       = 20        # Number of zones in X1-direction
+x1min     = -20       # minimum value of X1
+x1max     = 20        # maximum value of X1
+ix1_bc    = outflow   # inner-X1 boundary flag
+ox1_bc    = outflow   # outer-X1 boundary flag
+
+nx2       = 20        # Number of zones in X2-direction
+x2min     = -20      # minimum value of X2
+x2max     = 20       # maximum value of X2
+ix2_bc    = outflow   # inner-X2 boundary flag
+ox2_bc    = outflow   # outer-X2 boundary flag
+
+nx3       = 20        # Number of zones in X3-direction
+x3min     = -20       # minimum value of X3
+x3max     = 20        # maximum value of X3
+ix3_bc    = outflow   # inner-X3 boundary flag
+ox3_bc    = outflow   # outer-X3 boundary flag
+
+<meshblock>
+nx1       = 20         # Number of cells in each MeshBlock, X1-dir
+nx2       = 20         # Number of cells in each MeshBlock, X2-dir
+nx3       = 20           # Number of cells in each MeshBlock, X3-dir
+
+<time>
+evolution  = dynamic    # dynamic/kinematic/static
+integrator = rk3        # time integration algorithm
+cfl_number = 0.1        # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = 10         # cycle limit
+tlim       = 100        # time limit
+ndiag      = 1          # cycles between diagostic output
+
+<z4c>
+diss       = 1.
+
+<problem>
+pgen_name = z4c_one_puncture
+punc_ADM_mass = 1.
+
+<output1>
+file_type  = hst        # History data dump
+dt         = 0.1       # time increment between outputs
+
+<output2>
+file_type  = tab        # Binary data dump
+variable   = adm    # variables to be output
+dt         = 0.1       # time increment between outputs
+slice_x2    = 1
+slice_x3    = 1
+
+<output3>
+file_type  = tab        # Binary data dump
+variable   = z4c    # variables to be output
+dt         = 0.1      # time increment between outputs
+slice_x2    = 1
+slice_x3    = 1
+
+<output4>
+file_type  = tab        # Binary data dump
+variable   = con    # variables to be output
+dt         = 0.1      # time increment between outputs
+slice_x2    = 1
+slice_x3    = 1

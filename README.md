@@ -58,6 +58,49 @@ cmake3 -DKokkos_ENABLE_CUDA=On -DKokkos_ARCH_VOLTA70=On -DCMAKE_CXX_COMPILER=${p
 ```
 
 
+   $  cmake3 -DKokkos_ENABLE_CUDA=On -DKokkos_ARCH_AMPERE80=On -DCMAKE_CXX_COMPILER=${path_to_code}/kokkos/bin/nvcc_wrapper ../
+
+### Build One Puncture problem for cpu
+
+   $ cmake ../ -DPROBLEM=z4c_one_puncture 
+
+### Build Two Punctures problem for cpu
+For this you need first to install two external libraries, i.e. `gsl` and `twopuncturesc` initial data solver (in this order)
+#### gsl:
+```
+cd $HOME && mkdir -p usr/gsl && mkdir codes && cd codes
+# grab source
+wget ftp://ftp.gnu.org/gnu/gsl/gsl-2.5.tar.gz
+
+# extract and configure for local install
+tar -zxvf gsl-2.5.tar.gz
+
+cd gsl-2.5
+
+./configure --prefix=--prefix=/installation/path/usr/gsl
+
+make -j8
+# make check
+make install
+
+# link gsl into athenak
+ln -s /installation/path/usr/gsl ${path_to_code}
+```
+#### twopuncturesc:
+```
+cd $HOME && cd usr
+git clone git@bitbucket.org:bernuzzi/twopuncturesc.git
+cd twopuncturesc
+make -j8
+
+# link twopuncturesc into athenak
+ln -s /installation/path/usr/twopunctures ${path_to_code}
+```
+Now create build directory and configure with cmake
+
+```mkdir build_z4c_twopunc && cd build_z4c_twopunc```
+
+   $ cmake ../ -DPROBLEM=z4c_two_puncture
 ### Debug build for NVIDIA A100 GPU (requires GCC and CUDA Toolkit)
 E.g. `apollo` at IAS:
 ```

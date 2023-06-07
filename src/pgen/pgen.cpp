@@ -20,6 +20,8 @@
 #include "mesh/mesh.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "adm/adm.hpp"
+#include "z4c/z4c.hpp"
 #include "radiation/radiation.hpp"
 #include "srcterms/turb_driver.hpp"
 #include "pgen.hpp"
@@ -71,6 +73,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
     RadiationLinearWave(pin, false);
   } else if (pgen_fun_name.compare("shock_tube") == 0) {
     ShockTube(pin, false);
+  } else if (pgen_fun_name.compare("z4c_linear_wave") == 0) {
+    Z4cLinearWave(pin, false);
   // else, name not set on command line or input file, print warning and quit
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
@@ -144,9 +148,11 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   // calculate total number of CC variables
   hydro::Hydro* phydro = pm->pmb_pack->phydro;
   mhd::MHD* pmhd = pm->pmb_pack->pmhd;
+  adm::ADM* padm = pm->pmb_pack->padm;
+  z4c::Z4c* pz4c = pm->pmb_pack->pz4c;
   radiation::Radiation* prad=pm->pmb_pack->prad;
   TurbulenceDriver* pturb=pm->pmb_pack->pturb;
-  int nrad = 0, nhydro = 0, nmhd = 0, nforce = 3;
+  int nrad = 0, nhydro = 0, nmhd = 0, nforce = 3, nz4c = 0, nadm;
   if (phydro != nullptr) {
     nhydro = phydro->nhydro + phydro->nscalars;
   }
@@ -155,6 +161,11 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   }
   if (prad != nullptr) {
     nrad = prad->prgeo->nangles;
+  }
+  if (pz4c != nullptr) {
+    nz4c = pz4c->nz4c;
+  } else if (padm != nullptr) {
+    nadm = padm->nadm;
   }
 
   // root process reads size of CC and FC data arrays from restart file
@@ -175,6 +186,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
 
   IOWrapperSizeT data_size;
   std::memcpy(&data_size, &(variabledata[0]), sizeof(IOWrapperSizeT));
+  // calculate total number of CC variables
 
   if (pturb != nullptr) {
     // root process reads size the random seed
@@ -222,11 +234,15 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   if (pturb != nullptr) {
     data_size_ += nout1*nout2*nout3*nforce*sizeof(Real);      // forcing
   }
+  if (pz4c != nullptr) {
+    data_size_ += nout1*nout2*nout3*nz4c*sizeof(Real);   // rad i0
+  }
 
   if (data_size_ != data_size) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "CC data size read from restart file not equal to size "
-              << "of Hydro, MHD, and/or Rad arrays, restart file is broken." << std::endl;
+              << "of Hydro, MHD, Rad, and/or Z4c arrays, restart file is broken."
+              << std::endl;
     exit(EXIT_FAILURE);
   }
 
@@ -496,6 +512,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
     RadiationLinearWave(pin, true);
   } else if (pgen_fun_name.compare("shock_tube") == 0) {
     ShockTube(pin, true);
+  } else if (pgen_fun_name.compare("z4c_linear_wave") == 0) {
+    Z4cLinearWave(pin, true);
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
         << "Problem generator name could not be found in <problem> block in input file"
