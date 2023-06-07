@@ -217,6 +217,11 @@ def main(**kwargs):
             ax.set_ylabel(yvar)
         Player(fig, update_func, maxi=(nfiles-1))
         plt.show()
+        # to save movie as mp4 use following instead of 'Player'
+        # anim=FuncAnimation(fig, update_func)
+        # plt.show()
+        # FFwriter = animation.FFMpegWriter(fps=20)
+        # anim.save('./animation.mp4', writer = FFwriter)
 
 
 # Execute main function

@@ -40,20 +40,21 @@ nlim       = 100000      # cycle limit
 tlim       = 10.0        # time limit
 ndiag      = 1           # cycles between diagostic output
 
-<hydro>
+<mhd>
 eos             = ideal  # EOS type
 reconstruct     = ppm4   # spatial reconstruction method
-rsolver         = hllc   # Riemann-solver to be used
+rsolver         = hlld   # Riemann-solver to be used
 const_accel     = true   # add constant accleration source term
 const_accel_val = -0.1   # value of constant acceleration
 const_accel_dir = 2      # direction of constant acceleration
-gamma           = 1.4         # gamma = C_p/C_v
+gamma           = 1.4    # gamma = C_p/C_v
 
 <problem>
 iprob = 1                # 1=single mode, 2=random perts
 amp   = 0.01
 drat  = 2.0
 smooth_interface = true
+b0    = 0.00707107
 
 <output1>
 file_type  = hst         # History data dump
@@ -61,6 +62,6 @@ dt         = 0.01        # time increment between outputs
 
 <output2>
 file_type  = vtk         # Binary data dump
-variable   = hydro_w     # variables to be output
+variable   = mhd_w_bcc   # variables to be output
 dt         = 0.1         # time increment between outputs
 
