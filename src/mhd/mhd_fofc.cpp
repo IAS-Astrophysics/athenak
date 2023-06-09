@@ -128,8 +128,8 @@ void MHD::FOFC(Driver *pdriver, int stage) {
   if (multi_d) { jl = js-1, ju = je+1; }
   if (three_d) { kl = ks-1, ku = ke+1; }
 
-  // Now replace fluxes with first-order LLF fluxes for any cell where floors needed (if
-  // using FOFC) and/or for any cell about the excision (if GR+excising)
+  // Replace fluxes with first-order LLF fluxes at i,j,k faces for any cell where FOFC
+  // and/or excision is used (if GR+excising)
   par_for("FOFC-flx", DevExeSpace(), 0, nmb-1, kl, ku, jl, ju, il, iu,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
     // Check for FOFC flag
@@ -187,63 +187,14 @@ void MHD::FOFC(Driver *pdriver, int stage) {
           SingleStateLLF_MHD(wim1, wi, bxi, eos, flux);
         }
 
-        // store 1st-order fluxes. Capture E-field elements for bitwise reproducibility
-        auto e31 = e3x1_(m,k,j,i);
-        auto e21 = e2x1_(m,k,j,i);
+        // store 1st-order fluxes.
         flx1(m,IDN,k,j,i) = flux.d;
         flx1(m,IM1,k,j,i) = flux.mx;
         flx1(m,IM2,k,j,i) = flux.my;
         flx1(m,IM3,k,j,i) = flux.mz;
         if (eos.is_ideal) {flx1(m,IEN,k,j,i) = flux.e;}
-        e31 = flux.by;
-        e21 = flux.bz;
-      }
-
-      // compute new 1st-order LLF flux at i+1, but only if flags not set at i+1
-      if ( (use_fofc_ && !(fofc_(m,k,j,i+1))) ||
-           (use_excise_ && !(excision_flux_(m,k,j,i+1))) ) {
-        // load W_{i+1} state
-        MHDPrim1D wip1;
-        wip1.d  = w0_(m,IDN,k,j,i+1);
-        wip1.vx = w0_(m,IVX,k,j,i+1);
-        wip1.vy = w0_(m,IVY,k,j,i+1);
-        wip1.vz = w0_(m,IVZ,k,j,i+1);
-        if (eos.is_ideal) {wip1.e = w0_(m,IEN,k,j,i+1);}
-        wip1.by = bcc0_(m,IBY,k,j,i+1);
-        wip1.bz = bcc0_(m,IBZ,k,j,i+1);
-
-        // compute new 1st-order LLF flux at (i+1)-face
-        Real bxi = b0_.x1f(m,k,j,i+1);
-        MHDCons1D flux;
-        if (is_gr) {
-          Real &x1min = size.d_view(m).x1min;
-          Real &x1max = size.d_view(m).x1max;
-          Real x1v = LeftEdgeX(i+1-is, nx1, x1min, x1max);
-
-          Real &x2min = size.d_view(m).x2min;
-          Real &x2max = size.d_view(m).x2max;
-          Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
-
-          Real &x3min = size.d_view(m).x3min;
-          Real &x3max = size.d_view(m).x3max;
-          Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
-          SingleStateLLF_GRMHD(wi, wip1, bxi, x1v, x2v, x3v, IVX, coord, eos, flux);
-        } else if (is_sr) {
-          SingleStateLLF_SRMHD(wi, wip1, bxi, eos, flux);
-        } else {
-          SingleStateLLF_MHD(wi, wip1, bxi, eos, flux);
-        }
-
-        // store 1st-order fluxes. Capture E-field elements for bitwise reproducibility
-        auto e31 = e3x1_(m,k,j,i+1);
-        auto e21 = e2x1_(m,k,j,i+1);
-        flx1(m,IDN,k,j,i+1) = flux.d;
-        flx1(m,IM1,k,j,i+1) = flux.mx;
-        flx1(m,IM2,k,j,i+1) = flux.my;
-        flx1(m,IM3,k,j,i+1) = flux.mz;
-        if (eos.is_ideal) {flx1(m,IEN,k,j,i+1) = flux.e;}
-        e31 = flux.by;
-        e21 = flux.bz;
+        e3x1_(m,k,j,i) = flux.by;
+        e2x1_(m,k,j,i) = flux.bz;
       }
 
       if (multi_d) {
@@ -268,88 +219,35 @@ void MHD::FOFC(Driver *pdriver, int stage) {
         wj.bz = bcc0_(m,IBX,k,j,i);
 
         // compute new first-order flux at j-face
-        {
-          Real bxi = b0_.x2f(m,k,j,i);
-          MHDCons1D flux;
-          if (is_gr) {
-            Real &x1min = size.d_view(m).x1min;
-            Real &x1max = size.d_view(m).x1max;
-            Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+        Real bxi = b0_.x2f(m,k,j,i);
+        MHDCons1D flux;
+        if (is_gr) {
+          Real &x1min = size.d_view(m).x1min;
+          Real &x1max = size.d_view(m).x1max;
+          Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
-            Real &x2min = size.d_view(m).x2min;
-            Real &x2max = size.d_view(m).x2max;
-            Real x2v = LeftEdgeX(j-js, nx2, x2min, x2max);
+          Real &x2min = size.d_view(m).x2min;
+          Real &x2max = size.d_view(m).x2max;
+          Real x2v = LeftEdgeX(j-js, nx2, x2min, x2max);
 
-            Real &x3min = size.d_view(m).x3min;
-            Real &x3max = size.d_view(m).x3max;
-            Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
-            SingleStateLLF_GRMHD(wjm1, wj, bxi, x1v, x2v, x3v, IVY, coord, eos, flux);
-          } else if (is_sr) {
-            SingleStateLLF_SRMHD(wjm1, wj, bxi, eos, flux);
-          } else {
-            SingleStateLLF_MHD(wjm1, wj, bxi, eos, flux);
-          }
-
-          // store 1st-order fluxes, permutting indices.
-          // Capture E-field elements for bitwise reproducibility
-          auto e12 = e1x2_(m,k,j,i);
-          auto e32 = e3x2_(m,k,j,i);
-          flx2(m,IDN,k,j,i) = flux.d;
-          flx2(m,IM2,k,j,i) = flux.mx;
-          flx2(m,IM3,k,j,i) = flux.my;
-          flx2(m,IM1,k,j,i) = flux.mz;
-          if (eos.is_ideal) {flx2(m,IEN,k,j,i) = flux.e;}
-          e12 = flux.by;
-          e32 = flux.bz;
+          Real &x3min = size.d_view(m).x3min;
+          Real &x3max = size.d_view(m).x3max;
+          Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+          SingleStateLLF_GRMHD(wjm1, wj, bxi, x1v, x2v, x3v, IVY, coord, eos, flux);
+        } else if (is_sr) {
+          SingleStateLLF_SRMHD(wjm1, wj, bxi, eos, flux);
+        } else {
+          SingleStateLLF_MHD(wjm1, wj, bxi, eos, flux);
         }
 
-        // compute new first-order LLF flux at j+1, but only if flags not set at j+1
-        if ( (use_fofc_ && !(fofc_(m,k,j+1,i))) ||
-             (use_excise_ && !(excision_flux_(m,k,j+1,i))) ) {
-          // load W_{j+1} state, permutting components of vectors
-          MHDPrim1D wjp1;
-          wjp1.d  = w0_(m,IDN,k,j+1,i);
-          wjp1.vx = w0_(m,IVY,k,j+1,i);
-          wjp1.vy = w0_(m,IVZ,k,j+1,i);
-          wjp1.vz = w0_(m,IVX,k,j+1,i);
-          if (eos.is_ideal) {wjp1.e = w0_(m,IEN,k,j+1,i);}
-          wjp1.by = bcc0_(m,IBZ,k,j+1,i);
-          wjp1.bz = bcc0_(m,IBX,k,j+1,i);
-
-          // compute new first-order flux at (j+1)-face
-          Real bxi = b0_.x2f(m,k,j+1,i);
-          MHDCons1D flux;
-          if (is_gr) {
-            Real &x1min = size.d_view(m).x1min;
-            Real &x1max = size.d_view(m).x1max;
-            Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
-
-            Real &x2min = size.d_view(m).x2min;
-            Real &x2max = size.d_view(m).x2max;
-            Real x2v = LeftEdgeX(j+1-js, nx2, x2min, x2max);
-
-            Real &x3min = size.d_view(m).x3min;
-            Real &x3max = size.d_view(m).x3max;
-            Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
-            SingleStateLLF_GRMHD(wj, wjp1, bxi, x1v, x2v, x3v, IVY, coord, eos, flux);
-          } else if (is_sr) {
-            SingleStateLLF_SRMHD(wj, wjp1, bxi, eos, flux);
-          } else {
-            SingleStateLLF_MHD(wj, wjp1, bxi, eos, flux);
-          }
-
-          // store 1st-order fluxes, permutting indices.
-          // Capture E-field elements for bitwise reproducibility
-          auto e12 = e1x2_(m,k,j+1,i);
-          auto e32 = e3x2_(m,k,j+1,i);
-          flx2(m,IDN,k,j+1,i) = flux.d;
-          flx2(m,IM2,k,j+1,i) = flux.mx;
-          flx2(m,IM3,k,j+1,i) = flux.my;
-          flx2(m,IM1,k,j+1,i) = flux.mz;
-          if (eos.is_ideal) {flx2(m,IEN,k,j+1,i) = flux.e;}
-          e12 = flux.by;
-          e32 = flux.bz;
-        }
+        // store 1st-order fluxes, permutting indices.
+        flx2(m,IDN,k,j,i) = flux.d;
+        flx2(m,IM2,k,j,i) = flux.mx;
+        flx2(m,IM3,k,j,i) = flux.my;
+        flx2(m,IM1,k,j,i) = flux.mz;
+        if (eos.is_ideal) {flx2(m,IEN,k,j,i) = flux.e;}
+        e1x2_(m,k,j,i) = flux.by;
+        e3x2_(m,k,j,i) = flux.bz;
       }
 
       if (three_d) {
@@ -374,88 +272,212 @@ void MHD::FOFC(Driver *pdriver, int stage) {
         wk.bz = bcc0_(m,IBY,k,j,i);
 
         // compute new first-order flux at k-face
-        {
-          Real bxi = b0_.x3f(m,k,j,i);
-          MHDCons1D flux;
-          if (is_gr) {
-            Real &x1min = size.d_view(m).x1min;
-            Real &x1max = size.d_view(m).x1max;
-            Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+        Real bxi = b0_.x3f(m,k,j,i);
+        MHDCons1D flux;
+        if (is_gr) {
+          Real &x1min = size.d_view(m).x1min;
+          Real &x1max = size.d_view(m).x1max;
+          Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
-            Real &x2min = size.d_view(m).x2min;
-            Real &x2max = size.d_view(m).x2max;
-            Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+          Real &x2min = size.d_view(m).x2min;
+          Real &x2max = size.d_view(m).x2max;
+          Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
-            Real &x3min = size.d_view(m).x3min;
-            Real &x3max = size.d_view(m).x3max;
-            Real x3v = LeftEdgeX(k-ks, nx3, x3min, x3max);
-            SingleStateLLF_GRMHD(wkm1, wk, bxi, x1v, x2v, x3v, IVZ, coord, eos, flux);
-          } else if (is_sr) {
-            SingleStateLLF_SRMHD(wkm1, wk, bxi, eos, flux);
-          } else {
-            SingleStateLLF_MHD(wkm1, wk, bxi, eos, flux);
-          }
-
-          // store 1st-order fluxes, permutting indices.
-          // Capture E-field elements for bitwise reproducibility
-          auto e23 = e2x3_(m,k,j,i);
-          auto e13 = e1x3_(m,k,j,i);
-          flx3(m,IDN,k,j,i) = flux.d;
-          flx3(m,IM3,k,j,i) = flux.mx;
-          flx3(m,IM1,k,j,i) = flux.my;
-          flx3(m,IM2,k,j,i) = flux.mz;
-          if (eos.is_ideal) {flx3(m,IEN,k,j,i) = flux.e;}
-          e23 = flux.by;
-          e13 = flux.bz;
+          Real &x3min = size.d_view(m).x3min;
+          Real &x3max = size.d_view(m).x3max;
+          Real x3v = LeftEdgeX(k-ks, nx3, x3min, x3max);
+          SingleStateLLF_GRMHD(wkm1, wk, bxi, x1v, x2v, x3v, IVZ, coord, eos, flux);
+        } else if (is_sr) {
+          SingleStateLLF_SRMHD(wkm1, wk, bxi, eos, flux);
+        } else {
+          SingleStateLLF_MHD(wkm1, wk, bxi, eos, flux);
         }
 
-        // compute new first-order LLF flux at k+1, but only if flags not set at k+1
-        if ( (use_fofc_ && !(fofc_(m,k+1,j,i))) ||
-             (use_excise_ && !(excision_flux_(m,k+1,j,i))) ) {
-          // load W_{k+1} state, permutting components of vectors
-          MHDPrim1D wkp1;
-          wkp1.d  = w0_(m,IDN,k+1,j,i);
-          wkp1.vx = w0_(m,IVZ,k+1,j,i);
-          wkp1.vy = w0_(m,IVX,k+1,j,i);
-          wkp1.vz = w0_(m,IVY,k+1,j,i);
-          if (eos.is_ideal) {wkp1.e = w0_(m,IEN,k+1,j,i);}
-          wkp1.by = bcc0_(m,IBX,k+1,j,i);
-          wkp1.bz = bcc0_(m,IBY,k+1,j,i);
+        // store 1st-order fluxes, permutting indices.
+        flx3(m,IDN,k,j,i) = flux.d;
+        flx3(m,IM3,k,j,i) = flux.mx;
+        flx3(m,IM1,k,j,i) = flux.my;
+        flx3(m,IM2,k,j,i) = flux.mz;
+        if (eos.is_ideal) {flx3(m,IEN,k,j,i) = flux.e;}
+        e2x3_(m,k,j,i) = flux.by;
+        e1x3_(m,k,j,i) = flux.bz;
+      }
+    }
+  });
 
-          // compute new first-order flux at (k+1)-face
-          Real bxi = b0_.x3f(m,k+1,j,i);
-          MHDCons1D flux;
-          if (is_gr) {
-            Real &x1min = size.d_view(m).x1min;
-            Real &x1max = size.d_view(m).x1max;
-            Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+  // Replace fluxes with first-order LLF fluxes at i+1,j+1,k+1 faces for any cell where
+  // FOFC and/or excision is used (if GR+excising)
+  par_for("FOFC-flx", DevExeSpace(), 0, nmb-1, kl, ku, jl, ju, il, iu,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    // Check for FOFC flag
+    bool fofc_flag = false;
+    if (use_fofc_) { fofc_flag = fofc_(m,k,j,i); }
 
-            Real &x2min = size.d_view(m).x2min;
-            Real &x2max = size.d_view(m).x2max;
-            Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+    // Check for GR + excision
+    bool fofc_excision = false;
+    if (is_gr) {
+      if (use_excise_) { fofc_excision = excision_flux_(m,k,j,i); }
+    }
 
-            Real &x3min = size.d_view(m).x3min;
-            Real &x3max = size.d_view(m).x3max;
-            Real x3v = LeftEdgeX(k+1-ks, nx3, x3min, x3max);
-            SingleStateLLF_GRMHD(wk, wkp1, bxi, x1v, x2v, x3v, IVZ, coord, eos, flux);
-          } else if (is_sr) {
-            SingleStateLLF_SRMHD(wk, wkp1, bxi, eos, flux);
-          } else {
-            SingleStateLLF_MHD(wk, wkp1, bxi, eos, flux);
-          }
+    // Apply FOFC
+    if (fofc_flag || fofc_excision) {
+      // load W_{i} state
+      MHDPrim1D wi;
+      wi.d  = w0_(m,IDN,k,j,i);
+      wi.vx = w0_(m,IVX,k,j,i);
+      wi.vy = w0_(m,IVY,k,j,i);
+      wi.vz = w0_(m,IVZ,k,j,i);
+      if (eos.is_ideal) {wi.e = w0_(m,IEN,k,j,i);}
+      wi.by = bcc0_(m,IBY,k,j,i);
+      wi.bz = bcc0_(m,IBZ,k,j,i);
 
-          // store 1st-order fluxes, permutting indices.
-          // Capture E-field elements for bitwise reproducibility
-          auto e23 = e2x3_(m,k+1,j,i);
-          auto e13 = e1x3_(m,k+1,j,i);
-          flx3(m,IDN,k+1,j,i) = flux.d;
-          flx3(m,IM3,k+1,j,i) = flux.mx;
-          flx3(m,IM1,k+1,j,i) = flux.my;
-          flx3(m,IM2,k+1,j,i) = flux.mz;
-          if (eos.is_ideal) {flx3(m,IEN,k+1,j,i) = flux.e;}
-          e23 = flux.by;
-          e13 = flux.bz;
+      // load W_{i+1} state
+      MHDPrim1D wip1;
+      wip1.d  = w0_(m,IDN,k,j,i+1);
+      wip1.vx = w0_(m,IVX,k,j,i+1);
+      wip1.vy = w0_(m,IVY,k,j,i+1);
+      wip1.vz = w0_(m,IVZ,k,j,i+1);
+      if (eos.is_ideal) {wip1.e = w0_(m,IEN,k,j,i+1);}
+      wip1.by = bcc0_(m,IBY,k,j,i+1);
+      wip1.bz = bcc0_(m,IBZ,k,j,i+1);
+
+      // compute new 1st-order LLF flux at (i+1)-face
+      {
+        Real bxi = b0_.x1f(m,k,j,i+1);
+        MHDCons1D flux;
+        if (is_gr) {
+          Real &x1min = size.d_view(m).x1min;
+          Real &x1max = size.d_view(m).x1max;
+          Real x1v = LeftEdgeX(i+1-is, nx1, x1min, x1max);
+
+          Real &x2min = size.d_view(m).x2min;
+          Real &x2max = size.d_view(m).x2max;
+          Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+
+          Real &x3min = size.d_view(m).x3min;
+          Real &x3max = size.d_view(m).x3max;
+          Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+          SingleStateLLF_GRMHD(wi, wip1, bxi, x1v, x2v, x3v, IVX, coord, eos, flux);
+        } else if (is_sr) {
+          SingleStateLLF_SRMHD(wi, wip1, bxi, eos, flux);
+        } else {
+          SingleStateLLF_MHD(wi, wip1, bxi, eos, flux);
         }
+
+        // store 1st-order fluxes.
+        flx1(m,IDN,k,j,i+1) = flux.d;
+        flx1(m,IM1,k,j,i+1) = flux.mx;
+        flx1(m,IM2,k,j,i+1) = flux.my;
+        flx1(m,IM3,k,j,i+1) = flux.mz;
+        if (eos.is_ideal) {flx1(m,IEN,k,j,i+1) = flux.e;}
+        e3x1_(m,k,j,i+1) = flux.by;
+        e2x1_(m,k,j,i+1) = flux.bz;
+      }
+
+      if (multi_d) {
+        // load W_{j} state, permutting components of vectors
+        MHDPrim1D wj;
+        wj.d  = w0_(m,IDN,k,j,i);
+        wj.vx = w0_(m,IVY,k,j,i);
+        wj.vy = w0_(m,IVZ,k,j,i);
+        wj.vz = w0_(m,IVX,k,j,i);
+        if (eos.is_ideal) {wj.e = w0_(m,IEN,k,j,i);}
+        wj.by = bcc0_(m,IBZ,k,j,i);
+        wj.bz = bcc0_(m,IBX,k,j,i);
+
+        // load W_{j+1} state, permutting components of vectors
+        MHDPrim1D wjp1;
+        wjp1.d  = w0_(m,IDN,k,j+1,i);
+        wjp1.vx = w0_(m,IVY,k,j+1,i);
+        wjp1.vy = w0_(m,IVZ,k,j+1,i);
+        wjp1.vz = w0_(m,IVX,k,j+1,i);
+        if (eos.is_ideal) {wjp1.e = w0_(m,IEN,k,j+1,i);}
+        wjp1.by = bcc0_(m,IBZ,k,j+1,i);
+        wjp1.bz = bcc0_(m,IBX,k,j+1,i);
+
+        // compute new first-order flux at (j+1)-face
+        Real bxi = b0_.x2f(m,k,j+1,i);
+        MHDCons1D flux;
+        if (is_gr) {
+          Real &x1min = size.d_view(m).x1min;
+          Real &x1max = size.d_view(m).x1max;
+          Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+
+          Real &x2min = size.d_view(m).x2min;
+          Real &x2max = size.d_view(m).x2max;
+          Real x2v = LeftEdgeX(j+1-js, nx2, x2min, x2max);
+
+          Real &x3min = size.d_view(m).x3min;
+          Real &x3max = size.d_view(m).x3max;
+          Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+          SingleStateLLF_GRMHD(wj, wjp1, bxi, x1v, x2v, x3v, IVY, coord, eos, flux);
+        } else if (is_sr) {
+          SingleStateLLF_SRMHD(wj, wjp1, bxi, eos, flux);
+        } else {
+          SingleStateLLF_MHD(wj, wjp1, bxi, eos, flux);
+        }
+
+        // store 1st-order fluxes, permutting indices.
+        flx2(m,IDN,k,j+1,i) = flux.d;
+        flx2(m,IM2,k,j+1,i) = flux.mx;
+        flx2(m,IM3,k,j+1,i) = flux.my;
+        flx2(m,IM1,k,j+1,i) = flux.mz;
+        if (eos.is_ideal) {flx2(m,IEN,k,j+1,i) = flux.e;}
+        e1x2_(m,k,j+1,i) = flux.by;
+        e3x2_(m,k,j+1,i) = flux.bz;
+      }
+
+      if (three_d) {
+        // load W_{k} state, permutting components of vectors
+        MHDPrim1D wk;
+        wk.d  = w0_(m,IDN,k,j,i);
+        wk.vx = w0_(m,IVZ,k,j,i);
+        wk.vy = w0_(m,IVX,k,j,i);
+        wk.vz = w0_(m,IVY,k,j,i);
+        if (eos.is_ideal) {wk.e = w0_(m,IEN,k,j,i);}
+        wk.by = bcc0_(m,IBX,k,j,i);
+        wk.bz = bcc0_(m,IBY,k,j,i);
+
+        // load W_{k+1} state, permutting components of vectors
+        MHDPrim1D wkp1;
+        wkp1.d  = w0_(m,IDN,k+1,j,i);
+        wkp1.vx = w0_(m,IVZ,k+1,j,i);
+        wkp1.vy = w0_(m,IVX,k+1,j,i);
+        wkp1.vz = w0_(m,IVY,k+1,j,i);
+        if (eos.is_ideal) {wkp1.e = w0_(m,IEN,k+1,j,i);}
+        wkp1.by = bcc0_(m,IBX,k+1,j,i);
+        wkp1.bz = bcc0_(m,IBY,k+1,j,i);
+
+        // compute new first-order flux at (k+1)-face
+        Real bxi = b0_.x3f(m,k+1,j,i);
+        MHDCons1D flux;
+        if (is_gr) {
+          Real &x1min = size.d_view(m).x1min;
+          Real &x1max = size.d_view(m).x1max;
+          Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+
+          Real &x2min = size.d_view(m).x2min;
+          Real &x2max = size.d_view(m).x2max;
+          Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+
+          Real &x3min = size.d_view(m).x3min;
+          Real &x3max = size.d_view(m).x3max;
+          Real x3v = LeftEdgeX(k+1-ks, nx3, x3min, x3max);
+          SingleStateLLF_GRMHD(wk, wkp1, bxi, x1v, x2v, x3v, IVZ, coord, eos, flux);
+        } else if (is_sr) {
+          SingleStateLLF_SRMHD(wk, wkp1, bxi, eos, flux);
+        } else {
+          SingleStateLLF_MHD(wk, wkp1, bxi, eos, flux);
+        }
+
+        // store 1st-order fluxes, permutting indices.
+        flx3(m,IDN,k+1,j,i) = flux.d;
+        flx3(m,IM3,k+1,j,i) = flux.mx;
+        flx3(m,IM1,k+1,j,i) = flux.my;
+        flx3(m,IM2,k+1,j,i) = flux.mz;
+        if (eos.is_ideal) {flx3(m,IEN,k+1,j,i) = flux.e;}
+        e2x3_(m,k+1,j,i) = flux.by;
+        e1x3_(m,k+1,j,i) = flux.bz;
       }
     }
   });
