@@ -44,12 +44,12 @@ void Z4c::AssembleZ4cTasks(TaskList &start, TaskList &run, TaskList &end) {
   id.copyu = run.AddTask(&Z4c::CopyU, this, none); // id.ptrack);
 
   switch (indcs.ng) {
-      case 2: id.crhs  = run.AddTask(&Z4c::CalcRHS<2>, this, id.copyu);
-              break;
-      case 3: id.crhs  = run.AddTask(&Z4c::CalcRHS<3>, this, id.copyu);
-              break;
-      case 4: id.crhs  = run.AddTask(&Z4c::CalcRHS<4>, this, id.copyu);
-              break;
+    case 2: id.crhs  = run.AddTask(&Z4c::CalcRHS<2>, this, id.copyu);
+            break;
+    case 3: id.crhs  = run.AddTask(&Z4c::CalcRHS<3>, this, id.copyu);
+            break;
+    case 4: id.crhs  = run.AddTask(&Z4c::CalcRHS<4>, this, id.copyu);
+            break;
   }
   id.sombc = run.AddTask(&Z4c::Z4cBoundaryRHS, this, id.crhs);
   id.expl  = run.AddTask(&Z4c::ExpRKUpdate, this, id.sombc);
@@ -65,8 +65,8 @@ void Z4c::AssembleZ4cTasks(TaskList &start, TaskList &run, TaskList &end) {
   id.csend = end.AddTask(&Z4c::ClearSend, this, none);
   id.crecv = end.AddTask(&Z4c::ClearRecv, this, id.csend);
 
-  // if (pmy_pack->pmesh->ncycle%64 == 0) {
-    // place holder for horizon finder
+  // if (pmy_pack->pmesh->ncycle!=0 && pmy_pack->pmesh->ncycle%2 == 0) {
+  id.weyl_scalar  = end.AddTask(&Z4c::CalcWeylScalar_, this, id.crecv);
   // }
   return;
 }
@@ -204,6 +204,7 @@ TaskStatus Z4c::Z4cToADM_(Driver *pdrive, int stage) {
 TaskStatus Z4c::ADMConstraints_(Driver *pdrive, int stage) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   if (stage == pdrive->nexp_stages) {
+    std::cout << "ADMConstraints!" << std::endl;
     switch (indcs.ng) {
       case 2: ADMConstraints<2>(pmy_pack);
               break;
@@ -212,10 +213,30 @@ TaskStatus Z4c::ADMConstraints_(Driver *pdrive, int stage) {
       case 4: ADMConstraints<4>(pmy_pack);
               break;
     }
+    std::cout << "ADMConstraints Done!" << std::endl;
   }
+
   return TaskStatus::complete;
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn  void Z4c::CalcWeylScalar_
+//! \brief
+
+TaskStatus Z4c::CalcWeylScalar_(Driver *pdrive, int stage) {
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  if (stage == pdrive->nexp_stages) {
+    switch (indcs.ng) {
+      case 2: Z4cWeyl<2>(pmy_pack);
+              break;
+      case 3: Z4cWeyl<3>(pmy_pack);
+              break;
+      case 4: Z4cWeyl<4>(pmy_pack);
+              break;
+    }
+  }
+  return TaskStatus::complete;
+}
 //----------------------------------------------------------------------------------------
 //! \fn  void Z4c::RestrictU
 //! \brief

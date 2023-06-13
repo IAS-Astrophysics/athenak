@@ -27,20 +27,23 @@ namespace z4c {
 // This function operates only on the interior points of the MeshBlock
 template <int NGHOST>
 void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
-  auto &indcs = pmy_pack->pmesh->mb_indcs;
-  auto &size = pmy_pack->pmb->mb_size;
+  // capture variables for the kernel
+  auto &indcs = pmbp->pmesh->mb_indcs;
+  auto &size = pmbp->pmb->mb_size;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
+  //For GLOOPS
 
-  int ncells1 = indcs.nx1+indcs.ng; // Align scratch buffers with variables
-  int ncells2 = indcs.nx2;
-  int ncells3 = indcs.nx3;
-  int nmb = pmy_pack->nmb_thispack;
+  int ncells1 = indcs.nx1 + 2*(indcs.ng);
+  int nmb = pmbp->nmb_thispack;
 
-  auto &z4c = pmy_pack->pz4c->z4c;
-  auto &adm = pmy_pack->pz4c->adm;
-  auto &opt = pmy_pack->pz4c->opt;
+  auto &z4c = pmbp->pz4c->z4c;
+  auto &adm = pmbp->padm->adm;
+  auto &weyl = pmbp->pz4c->weyl;
+  auto &u_weyl = pmbp->pz4c->u_weyl;
+  Kokkos::deep_copy(u_weyl, 0.);
+
   int scr_level = 1;
   // 2 1D scratch array and 1 2D scratch array
   size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1)*6   // 0 tensors
@@ -48,7 +51,8 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
                   + ScrArray2D<Real>::shmem_size(6,ncells1)*4 // 2D tensor with symm
                   + ScrArray2D<Real>::shmem_size(9,ncells1)*0  // 2D tensor with no symm
                   + ScrArray2D<Real>::shmem_size(18,ncells1)*6 // 3D tensor with symm
-                  + ScrArray2D<Real>::shmem_size(36,ncells1)*1;  // 4D tensor with symm
+                  + ScrArray2D<Real>::shmem_size(36,ncells1)*1  // 4D tensor with symm
+                  + ScrArray2D<Real>::shmem_size(256,ncells1)*2;  // 4D tensor without symm
   // Check symmetries of Riemann tensor! Now it is NONE!
   par_for_outer("z4c_weyl_scalar",DevExeSpace(),scr_size,scr_level,0,nmb-1,ks,ke,js,je,
   KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {
@@ -130,7 +134,6 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
    Riemm4_dddd.NewAthenaScratchTensor(member, scr_level, ncells1);    
 
     Real idx[] = {1/size.d_view(m).dx1, 1/size.d_view(m).dx2, 1/size.d_view(m).dx3};
-
     // -----------------------------------------------------------------------------------
     // derivatives
     //
@@ -172,7 +175,6 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
                  &g_uu(0,0,i), &g_uu(0,1,i), &g_uu(0,2,i),
                  &g_uu(1,1,i), &g_uu(1,2,i), &g_uu(2,2,i));
     });
-
 
     // -----------------------------------------------------------------------------------
     // Christoffel symbols
@@ -312,7 +314,6 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
       wvec(2,i) = 0.0;
     });
 
-
     //Gram-Schmidt orthonormalisation with spacetime metric.
     //
     dotp1.ZeroClear();
@@ -410,24 +411,21 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
     Riemm4_ddd.ZeroClear();
     Riemm4_dd.ZeroClear();
     member.team_barrier();
-    for(int a = 0; a < 3; ++a){
-      for(int b = 0; b < 3; ++b){
-        for(int c = 0; c < 3; ++c){
-          for(int d = 0; d < 3; ++d){
-            par_for_inner(member, is, ie, [&](const int i){
-              Riem3_dddd(a,b,c,d,i) = adm.g_dd(m,a,c,k,j,i)*R_dd(b,d,i) 
-	                            + adm.g_dd(m,b,d,k,j,i)*R_dd(a,c,i)
-                                    - adm.g_dd(m,a,d,k,j,i)*R_dd(b,c,i) 
-				    - adm.g_dd(m,b,c,k,j,i)*R_dd(a,d,i)
-                                    - 0.5*R(i)*adm.g_dd(m,a,c,k,j,i)*adm.g_dd(m,b,d,k,j,i)
-                                    + 0.5*R(i)*adm.g_dd(m,a,d,k,j,i)*adm.g_dd(m,b,c,k,j,i);
-              Riemm4_dddd(a,b,c,d,i) = Riem3_dddd(a,b,c,d,i) 
-	                             + adm.vK_dd(m,a,c,k,j,i)*adm.vK_dd(m,b,d,k,j,i)
-                                     - adm.vK_dd(m,a,d,k,j,i)*adm.vK_dd(m,b,c,k,j,i);
-            });
-          }
-        }
-      }
+    for(int a = 0; a < 3; ++a)
+    for(int b = 0; b < 3; ++b)
+    for(int c = 0; c < 3; ++c)
+    for(int d = 0; d < 3; ++d) {
+      par_for_inner(member, is, ie, [&](const int i){
+        Riem3_dddd(a,b,c,d,i) = adm.g_dd(m,a,c,k,j,i)*R_dd(b,d,i) 
+                              + adm.g_dd(m,b,d,k,j,i)*R_dd(a,c,i)
+                              - adm.g_dd(m,a,d,k,j,i)*R_dd(b,c,i) 
+                              - adm.g_dd(m,b,c,k,j,i)*R_dd(a,d,i)
+                              - 0.5*R(i)*adm.g_dd(m,a,c,k,j,i)*adm.g_dd(m,b,d,k,j,i)
+                              + 0.5*R(i)*adm.g_dd(m,a,d,k,j,i)*adm.g_dd(m,b,c,k,j,i);
+        Riemm4_dddd(a,b,c,d,i) = Riem3_dddd(a,b,c,d,i) 
+                          + adm.vK_dd(m,a,c,k,j,i)*adm.vK_dd(m,b,d,k,j,i)
+                                - adm.vK_dd(m,a,d,k,j,i)*adm.vK_dd(m,b,c,k,j,i);
+      });
     }
 
     for(int a = 0; a < 3; ++a){
@@ -490,6 +488,7 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
       }
     }
    });
+
 }
 template void Z4c::Z4cWeyl<2>(MeshBlockPack *pmbp);
 template void Z4c::Z4cWeyl<3>(MeshBlockPack *pmbp);

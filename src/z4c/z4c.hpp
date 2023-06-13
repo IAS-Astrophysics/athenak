@@ -40,6 +40,7 @@ struct Z4cTaskIDs {
   TaskID crecv;
   TaskID restu;
   TaskID ptrack;
+  TaskID weyl_scalar;
 };
 
 namespace z4c {
@@ -205,6 +206,7 @@ class Z4c {
   TaskStatus Z4cBoundaryRHS(Driver *d, int stage);
   TaskStatus RestrictU(Driver *d, int stage);
   TaskStatus PunctureTracker(Driver *d, int stage);
+  TaskStatus CalcWeylScalar_(Driver *d, int stage);
 
   template <int NGHOST>
   TaskStatus CalcRHS(Driver *d, int stage);
@@ -214,9 +216,10 @@ class Z4c {
   void Z4cToADM(MeshBlockPack *pmbp);
   template <int NGHOST>
   void ADMConstraints(MeshBlockPack *pmbp);
-  void AlgConstr(MeshBlockPack *pmbp);
   template <int NGHOST>
   void Z4cWeyl(MeshBlockPack *pmbp);
+  void AlgConstr(MeshBlockPack *pmbp);
+  template <int NGHOST>
 
   // Sommerfeld boundary conditions
   KOKKOS_FUNCTION

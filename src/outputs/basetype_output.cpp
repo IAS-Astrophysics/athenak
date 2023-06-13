@@ -497,7 +497,8 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
 
   // weyl scalars
   if (out_params.variable.compare("weyl") == 0) {
-    outvars.emplace_back("weyl",0, &(pm->pmb_pack->pz4c->u_weyl));
+    outvars.emplace_back("weyl_rpsi4",0,&(pm->pmb_pack->pz4c->u_weyl));
+    outvars.emplace_back("weyl_ipsi4",1,&(pm->pmb_pack->pz4c->u_weyl));
   }
 
   // radiation moments in coordinate frame
