@@ -55,7 +55,8 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   u0("u0 z4c",1,1,1,1,1),
   coarse_u0("coarse u0 z4c",1,1,1,1,1),
   u1("u1 z4c",1,1,1,1,1),
-  u_rhs("u_rhs z4c",1,1,1,1,1) {
+  u_rhs("u_rhs z4c",1,1,1,1,1), 
+  u_weyl("u_weyl",1,1,1,1,1) {
   // (1) read time-evolution option [already error checked in driver constructor]
   // Then initialize memory and algorithms for reconstruction and Riemann solvers
   std::string evolution_t = pin->GetString("time","evolution");
@@ -74,6 +75,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   Kokkos::realloc(u0,    nmb, (nz4c), ncells3, ncells2, ncells1);
   Kokkos::realloc(u1,    nmb, (nz4c), ncells3, ncells2, ncells1);
   Kokkos::realloc(u_rhs, nmb, (nz4c), ncells3, ncells2, ncells1);
+  Kokkos::realloc(u_weyl,    nmb, (2), ncells3, ncells2, ncells1);
 
   con.C.InitWithShallowSlice(u_con, I_CON_C);
   con.H.InitWithShallowSlice(u_con, I_CON_H);
@@ -103,6 +105,9 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   rhs.vGam_u.InitWithShallowSlice (u_rhs, I_Z4C_GAMX, I_Z4C_GAMZ);
   rhs.g_dd.InitWithShallowSlice  (u_rhs, I_Z4C_GXX, I_Z4C_GZZ);
   rhs.vA_dd.InitWithShallowSlice  (u_rhs, I_Z4C_AXX, I_Z4C_AZZ);
+
+  weyl.rpsi4.InitWithShallowSlice (u_weyl, 0);
+  weyl.ipsi4.InitWithShallowSlice (u_weyl, 1);
 
   opt.chi_psi_power = pin->GetOrAddReal("z4c", "chi_psi_power", -4.0);
   opt.chi_div_floor = pin->GetOrAddReal("z4c", "chi_div_floor", -1000.0);

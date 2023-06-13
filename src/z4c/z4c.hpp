@@ -96,6 +96,7 @@ class Z4c {
   DvceArray5D<Real> u1;        // z4c solution at intermediate timestep
   DvceArray5D<Real> u_rhs;     // z4c rhs storage
   DvceArray5D<Real> coarse_u0; // coarse representation of z4c solution
+  DvceArray5D<Real> u_weyl; // weyl scalars
 
   // puncture location
   Real ppos[3] = {0.,0.,0.}; // later on initiate from input file
@@ -115,6 +116,12 @@ class Z4c {
     AthenaHostTensor<Real, TensorSymm::SYM2, 3, 2> g_dd;
     AthenaHostTensor<Real, TensorSymm::SYM2, 3, 2> vK_dd;
   };
+
+  struct Wave_Extr_vars {
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> rpsi4;
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> ipsi4;
+  };
+  Wave_Extr_vars weyl;
 
   struct Z4c_vars {
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> chi;     // conf. factor
@@ -208,6 +215,8 @@ class Z4c {
   template <int NGHOST>
   void ADMConstraints(MeshBlockPack *pmbp);
   void AlgConstr(MeshBlockPack *pmbp);
+  template <int NGHOST>
+  void Z4cWeyl(MeshBlockPack *pmbp);
 
   // Sommerfeld boundary conditions
   KOKKOS_FUNCTION

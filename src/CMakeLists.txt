@@ -81,7 +81,8 @@ add_executable(
         z4c/z4c_update.cpp
         z4c/z4c_gauge.cpp
         z4c/z4c_Sbc.cpp
-        
+        z4c/z4c_calculate_weyl_scalars.cpp
+
 	outputs/io_wrapper.cpp
         outputs/outputs.cpp
         outputs/basetype_output.cpp
