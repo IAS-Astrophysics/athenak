@@ -29,7 +29,7 @@
 #include "mesh/mesh.hpp"
 #include "parameter_input.hpp"
 #include "adm/adm.hpp"
-#include "hydro/hydro.hpp"
+#include "mhd/mhd.hpp"
 
 template<class EOSPolicy, class ErrorPolicy>
 class PrimitiveSolverHydro {
@@ -94,13 +94,20 @@ class PrimitiveSolverHydro {
 
     // The prim to con function used on the reconstructed states inside the Riemann solver.
     // It also extracts the primitives into a form usable by PrimitiveSolver.
+    // TODO: Convert to MHD function
     KOKKOS_INLINE_FUNCTION
-    void PrimToConsPt(const ScrArray2D<Real> &w, Real prim_pt[NPRIM], Real cons_pt[NCONS],
+    void PrimToConsPt(const ScrArray2D<Real> &w, const ScrArray2D<Real> &brc, 
+                      const DvceArray4D<Real> &bx,
+                      Real prim_pt[NPRIM], Real cons_pt[NCONS], Real b[NMAG],
                       Real g3d[NSPMETRIC], Real sdetg,
-                      const int i, const int &nhyd, const int &nscal) const {
+                      const int m, const int k, const int j, const int i,
+                      const int &nhyd, const int &nscal,
+                      const int ibx, const int iby, const int ibz) const {
       auto &eos = ps.GetEOS();
       Real mb = eos.GetBaryonMass();
-      Real b[NMAG] = {0.0};
+      b[ibx] = bx(m, k, j, i);
+      b[iby] = brc(iby, i);
+      b[ibz] = brc(ibz, i);
       Real prim_pt_old[NPRIM];
       prim_pt[PRH] = prim_pt_old[PRH] = w(IDN, i)/mb;
       prim_pt[PVX] = prim_pt_old[PVX] = w(IVX, i);
@@ -153,20 +160,20 @@ class PrimitiveSolverHydro {
       }
     }
 
-    void PrimToCons(DvceArray5D<Real> &prim, DvceArray5D<Real> &cons,
+    void PrimToCons(DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc, DvceArray5D<Real> &cons,
                     const int il, const int iu, const int jl, const int ju,
                     const int kl, const int ku) {
       auto &indcs = pmy_pack->pmesh->mb_indcs;
-      int &is = indcs.is, &js = indcs.js, &ks = indcs.ks;
-      auto &size = pmy_pack->pmb->mb_size;
-      auto &flat = pmy_pack->pcoord->coord_data.is_minkowski;
+      //int &is = indcs.is, &js = indcs.js, &ks = indcs.ks;
+      //auto &size = pmy_pack->pmb->mb_size;
+      //auto &flat = pmy_pack->pcoord->coord_data.is_minkowski;
       auto &eos_ = ps.GetEOS();
       auto &ps_  = ps;
 
       auto &adm = pmy_pack->padm->adm;
 
-      int &nhyd = pmy_pack->phydro->nhydro;
-      int &nscal = pmy_pack->phydro->nscalars;
+      int &nhyd = pmy_pack->pmhd->nmhd;
+      int &nscal = pmy_pack->pmhd->nscalars;
       int &nmb = pmy_pack->nmb_thispack;
 
       Real mb = eos_.GetBaryonMass();
@@ -184,7 +191,7 @@ class PrimitiveSolverHydro {
         g3d[S33] = adm.g_dd(m, 2, 2, k, j, i);
         Real sdetg = sqrt(Primitive::GetDeterminant(g3d));
 
-        Real b[NMAG] = {0.0};
+        Real b[NMAG] = {bcc(m, IBX, k, j, i), bcc(m, IBY, k, j, i), bcc(m, IBZ, k, j, i)};
 
         // Extract primitive variables at a single point
         Real prim_pt[NPRIM], cons_pt[NCONS];
@@ -243,17 +250,17 @@ class PrimitiveSolverHydro {
       return;
     }
 
-    void ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
+    void ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &bcc0, DvceArray5D<Real> &prim,
                     const int il, const int iu, const int jl, const int ju,
                     const int kl, const int ku, bool floors_only=false) {
-      auto &indcs = pmy_pack->pmesh->mb_indcs;
-      int &is = indcs.is, &js = indcs.js, &ks = indcs.ks;
-      auto &size = pmy_pack->pmb->mb_size;
+      //auto &indcs = pmy_pack->pmesh->mb_indcs;
+      //int &is = indcs.is, &js = indcs.js, &ks = indcs.ks;
+      //auto &size = pmy_pack->pmb->mb_size;
 
-      int &nhyd = pmy_pack->phydro->nhydro;
-      int &nscal = pmy_pack->phydro->nscalars;
+      int &nhyd = pmy_pack->pmhd->nmhd;
+      int &nscal = pmy_pack->pmhd->nscalars;
       int &nmb = pmy_pack->nmb_thispack;
-      auto &fofc_ = pmy_pack->phydro->fofc;
+      auto &fofc_ = pmy_pack->pmhd->fofc;
 
       // Some problem-specific parameters
       auto &excise = pmy_pack->pcoord->coord_data.bh_excise;
@@ -316,7 +323,7 @@ class PrimitiveSolverHydro {
         for (int n = 0; n < nscal; n++) {
           cons_pt[CYD + n] = cons(m, nhyd + n, k, j, i)*isdetg;
         }
-        Real b3u[NMAG] = {0.0};
+        Real b3u[NMAG] = {bcc0(m, IBX, k, j, i), bcc0(m, IBY, k, j, i), bcc0(m, IBZ, k, j, i)};
 
         // If we're in an excised region, set the primitives to some default value.
         Primitive::SolverResult result;
@@ -444,6 +451,50 @@ class PrimitiveSolverHydro {
 
       lambda_p = alpha*(vu[index]*(1.0 - csq) + sdis)/iWsq_ad - beta_u[index];
       lambda_m = alpha*(vu[index]*(1.0 - csq) - sdis)/iWsq_ad - beta_u[index];
+    }
+
+    // Get the transformed magnetosonic speeds at a point in a given direction.
+    KOKKOS_INLINE_FUNCTION
+    void GetGRFastMagnetosonicSpeeds(Real& lambda_p, Real& lambda_m, Real prim[NPRIM], Real bsq,
+                                     Real g3d[NSPMETRIC], Real beta_u[3], Real alpha, Real gii,
+                                     int pvx) const {
+      Real uu[3] = {prim[PVX], prim[PVY], prim[PVZ]};
+      Real usq = Primitive::SquareVector(uu, g3d);
+      int index = pvx - PVX;
+
+      // Get the Lorentz factor and the 3-velocity.
+      Real iWsq = 1.0/(1.0 + usq);
+      Real iW = sqrt(iWsq);
+      Real vsq = usq*iWsq;
+      Real vu = uu[index];
+
+      // Calculate the fast magnetosonic speed in the comoving frame.
+      Real cs = ps.GetEOS().GetSoundSpeed(prim[PRH], prim[PTM], &prim[PYF]);
+      Real csq = cs*cs;
+      Real H = ps.GetEOS().GetBaryonMass()*prim[PRH]*
+               ps.GetEOS().GetEnthalpy(prim[PRH], prim[PTM], &prim[PYF]);
+      Real vasq = bsq/(bsq + H);
+      Real cmsq = csq + vasq - csq*vasq;
+
+      Real iWsq_ad = 1.0 - vsq*cmsq;
+      Real dis = (csq*iWsq)*(gii*iWsq_ad - vu*vu*(1.0 - csq));
+      Real sdis = sqrt(dis);
+      if (!isfinite(sdis)) {
+        printf("There's a problem with the magnetosonic speed!\n"
+               "  dis = %g\n"
+               "  gii = %g\n"
+               "  csq = %g\n"
+               "  vsq = %g\n"
+               "  usq = %g\n"
+               "  rho = %g\n"
+               "  T   = %g\n"
+               "  bsq = %g\n", 
+               dis, gii, csq, vsq, usq, prim[PRH], prim[PTM], bsq);
+        //exit(EXIT_FAILURE);
+      }
+
+      lambda_p = alpha*(vu*(1.0 - csq) + sdis)/iWsq_ad - beta_u[index];
+      lambda_m = alpha*(vu*(1.0 - csq) - sdis)/iWsq_ad - beta_u[index];
     }
 
     // A function for converting PrimitiveSolver errors to strings

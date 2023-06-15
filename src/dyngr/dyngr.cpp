@@ -16,7 +16,8 @@
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
 #include "bvals/bvals.hpp"
-#include "hydro/hydro.hpp"
+//#include "hydro/hydro.hpp"
+#include "mhd/mhd.hpp"
 #include "z4c/z4c.hpp"
 #include "adm/adm.hpp"
 #include "tmunu/tmunu.hpp"
@@ -45,8 +46,8 @@ DynGR* SelectDynGREOS(MeshBlockPack *ppack, ParameterInput *pin, DynGR_EOS eos_p
 }
 
 DynGR* BuildDynGR(MeshBlockPack *ppack, ParameterInput *pin) {
-  std::string eos_string = pin->GetString("hydro", "dyn_eos");
-  std::string error_string = pin->GetString("hydro", "dyn_error");
+  std::string eos_string = pin->GetString("mhd", "dyn_eos");
+  std::string error_string = pin->GetString("mhd", "dyn_error");
   DynGR_EOS eos_policy;
   DynGR_Error error_policy;
 
@@ -56,7 +57,7 @@ DynGR* BuildDynGR(MeshBlockPack *ppack, ParameterInput *pin) {
     eos_policy = DynGR_EOS::eos_piecewise_poly;
   } else {
     std::cout << "### FATAL ERROR in " <<__FILE__ << " at line " << __LINE__
-              << std::endl << "<hydro> dyn_eos = '" << eos_string
+              << std::endl << "<mhd> dyn_eos = '" << eos_string
               << "' not implemented for GR dynamics" << std::endl;
     std::exit(EXIT_FAILURE);
   }
@@ -64,7 +65,7 @@ DynGR* BuildDynGR(MeshBlockPack *ppack, ParameterInput *pin) {
     error_policy = DynGR_Error::reset_floor;
   } else {
     std::cout << "### FATAL ERROR in " <<__FILE__ << " at line " << __LINE__
-              << std::endl << "<hydro> dyn_error = '" << error_string
+              << std::endl << "<mhd> dyn_error = '" << error_string
               << "' not implemented for GR dynamics" << std::endl;
     std::exit(EXIT_FAILURE);
   }
@@ -84,16 +85,16 @@ DynGR* BuildDynGR(MeshBlockPack *ppack, ParameterInput *pin) {
 }
 
 DynGR::DynGR(MeshBlockPack *pp, ParameterInput *pin) : pmy_pack(pp) {
-  std::string rsolver = pin->GetString("hydro", "rsolver");
+  std::string rsolver = pin->GetString("mhd", "rsolver");
   if (rsolver.compare("llf") == 0) {
     rsolver_method = DynGR_RSolver::llf_dyngr;
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "<hydro> rsolver = '" << rsolver
+              << std::endl << "<mhd> rsolver = '" << rsolver
               << "' not implemented for GR dynamics" << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  scratch_level = pin->GetOrAddInteger("hydro", "dyn_scratch", 0);
+  scratch_level = pin->GetOrAddInteger("mhd", "dyn_scratch", 0);
 }
 
 DynGR::~DynGR() {
@@ -128,23 +129,23 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AssembleDynGRTasks(TaskList &start,
   TaskID none(0);
   auto &indcs = pmy_pack->pmesh->mb_indcs;
 
-  using namespace hydro;  // NOLINT(build/namespaces)
+  using namespace mhd;  // NOLINT(build/namespaces)
   using namespace z4c;    // NOLINT(build/namespaces)
   Z4c *pz4c = pmy_pack->pz4c;
-  Hydro *phyd = pmy_pack->phydro;
+  MHD *pmhd = pmy_pack->pmhd;
 
   // naming convention: hydro task id names are unchanged, all z4c tasks now have a z at the beginning
 
   // start task list
   // Hydro
-  id.irecv = start.AddTask(&Hydro::InitRecv, phyd, none);
+  id.irecv = start.AddTask(&MHD::InitRecv, pmhd, none);
   // Z4c
   if (pz4c != nullptr) {
     id.zrecv = start.AddTask(&Z4c::InitRecv, pz4c, none);
   }
 
   // run task list
-  id.copyu = run.AddTask(&Hydro::CopyCons, phyd, none);
+  id.copyu = run.AddTask(&MHD::CopyCons, pmhd, none);
   // select which calculate flux function to add based on rsolver_method.
   // Calc flux requires metric in flux - must happen before z4ctoadm updates the metric
   if (rsolver_method == DynGR_RSolver::llf_dyngr) {
@@ -154,14 +155,21 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AssembleDynGRTasks(TaskList &start,
 
   // now the rest of the Hydro run tasks
   id.settmunu = run.AddTask(&DynGR::SetTmunu, this, id.copyu);
-  id.sendf = run.AddTask(&Hydro::SendFlux, phyd, id.flux);
-  id.recvf = run.AddTask(&Hydro::RecvFlux, phyd, id.sendf);
+  id.sendf = run.AddTask(&MHD::SendFlux, pmhd, id.flux);
+  id.recvf = run.AddTask(&MHD::RecvFlux, pmhd, id.sendf);
   id.rkdep = id.recvf | id.settmunu;
-  id.expl  = run.AddTask(&Hydro::ExpRKUpdate, phyd, id.rkdep); // requires metric in geometric source terms - must happen before z4ctoadm
-  id.restu = run.AddTask(&Hydro::RestrictU, phyd, id.expl);
-  id.sendu = run.AddTask(&Hydro::SendU, phyd, id.restu);
-  id.recvu = run.AddTask(&Hydro::RecvU, phyd, id.sendu);
-  id.bcs   = run.AddTask(&Hydro::ApplyPhysicalBCs, phyd, id.recvu);
+  id.expl  = run.AddTask(&MHD::ExpRKUpdate, pmhd, id.rkdep); // requires metric in geometric source terms - must happen before z4ctoadm
+  id.restu = run.AddTask(&MHD::RestrictU, pmhd, id.expl);
+  id.sendu = run.AddTask(&MHD::SendU, pmhd, id.restu);
+  id.recvu = run.AddTask(&MHD::RecvU, pmhd, id.sendu);
+  id.efld = run.AddTask(&MHD::CornerE, pmhd, id.recvu);
+  id.sende = run.AddTask(&MHD::SendE, pmhd, id.efld);
+  id.recve = run.AddTask(&MHD::RecvE, pmhd, id.sende);
+  id.ct = run.AddTask(&MHD::CT, pmhd, id.recve);
+  id.restb = run.AddTask(&MHD::RestrictB, pmhd, id.ct);
+  id.sendb = run.AddTask(&MHD::SendB, pmhd, id.restb);
+  id.recvb = run.AddTask(&MHD::RecvB, pmhd, id.sendb);
+  id.bcs   = run.AddTask(&MHD::ApplyPhysicalBCs, pmhd, id.recvb);
 
   // Z4c
   if (pz4c != nullptr) {
@@ -200,11 +208,11 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AssembleDynGRTasks(TaskList &start,
   // c2p takes time-stepped cons -> time-stepped prims, should use time-stepped metric
   // should happen after z4ctoadm. Prims are now updated so can no longer calculate source
   // for Z4c equations, must happen after calcz4crhs (but this happens before z4ctoadm anyway)
-  id.newdt = run.AddTask(&Hydro::NewTimeStep, phyd, id.c2p); // only need 1 timestep
+  id.newdt = run.AddTask(&MHD::NewTimeStep, pmhd, id.c2p); // only need 1 timestep
 
 
   // end task list
-  id.clear = end.AddTask(&Hydro::ClearSend, phyd, none);
+  id.clear = end.AddTask(&MHD::ClearSend, pmhd, none);
 
   if (pz4c != nullptr) {
     id.zclear = end.AddTask(&Z4c::ClearSend, pz4c, none);
@@ -216,7 +224,7 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AssembleDynGRTasks(TaskList &start,
 //  \brief
 template<class EOSPolicy, class ErrorPolicy>
 void DynGRPS<EOSPolicy, ErrorPolicy>::PrimToConInit(int is, int ie, int js, int je, int ks, int ke) {
-  eos.PrimToCons(pmy_pack->phydro->w0, pmy_pack->phydro->u0, is, ie, js, je, ks, ke);
+  eos.PrimToCons(pmy_pack->pmhd->w0, pmy_pack->pmhd->bcc0, pmy_pack->pmhd->u0, is, ie, js, je, ks, ke);
 }
 
 //----------------------------------------------------------------------------------------
@@ -230,7 +238,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::ConToPrim(Driver *pdrive, int stage)
   int n1m1 = indcs.nx1 + 2*ng - 1;
   int n2m1 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng - 1) : 0;
   int n3m1 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng - 1) : 0;
-  eos.ConsToPrim(pmy_pack->phydro->u0, pmy_pack->phydro->w0,
+  eos.ConsToPrim(pmy_pack->pmhd->u0, pmy_pack->pmhd->bcc0, pmy_pack->pmhd->w0,
                  0, n1m1, 0, n2m1, 0, n3m1, false);
   return TaskStatus::complete;
 }
@@ -240,13 +248,14 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::ConToPrim(Driver *pdrive, int stage)
 //  \brief
 template<class EOSPolicy, class ErrorPolicy>
 void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTerms(const DvceArray5D<Real> &prim,
+    const DvceArray5D<Real> &bcc,
     const Real dt, DvceArray5D<Real> &rhs, int nghost) {
   switch (nghost) {
-    case 2: AddCoordTermsEOS<2>(prim, dt, rhs);
+    case 2: AddCoordTermsEOS<2>(prim, bcc, dt, rhs);
             break;
-    case 3: AddCoordTermsEOS<3>(prim, dt, rhs);
+    case 3: AddCoordTermsEOS<3>(prim, bcc, dt, rhs);
             break;
-    case 4: AddCoordTermsEOS<4>(prim, dt, rhs);
+    case 4: AddCoordTermsEOS<4>(prim, bcc, dt, rhs);
             break;
   }
 }
@@ -257,7 +266,7 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTerms(const DvceArray5D<Real> &pri
 //!  to be the first contribution, so it sets the values rather than adding.
 TaskStatus DynGR::SetTmunu(Driver *pdrive, int stage) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
-  auto &size  = pmy_pack->pmb->mb_size;
+  //auto &size  = pmy_pack->pmb->mb_size;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
@@ -267,22 +276,26 @@ TaskStatus DynGR::SetTmunu(Driver *pdrive, int stage) {
 
   auto &adm = pmy_pack->padm->adm;
   auto &tmunu = pmy_pack->ptmunu->tmunu;
-  auto &nhyd = pmy_pack->phydro->nhydro;
-  int &nscal = pmy_pack->phydro->nscalars;
-  auto &prim = pmy_pack->phydro->w0;
+  //auto &nhyd = pmy_pack->pmhd->nmhd;
+  //int &nscal = pmy_pack->pmhd->nscalars;
+  auto &prim = pmy_pack->pmhd->w0;
   // TODO: double-check that this needs to be u1, not u0!
-  auto &cons = pmy_pack->phydro->u0;
+  auto &cons = pmy_pack->pmhd->u0;
+  auto &bcc = pmy_pack->pmhd->bcc0;
 
   int scr_level = scratch_level;
-  size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1)*2     // scalars
-                  + ScrArray2D<Real>::shmem_size(3, ncells1)*1; // vectors
+  size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1)*4     // scalars
+                  + ScrArray2D<Real>::shmem_size(3, ncells1)*2; // vectors
   //size_t scr_size = 0;
   par_for_outer("dyngr_tmunu_loop",DevExeSpace(),scr_size,scr_level,0,nmb-1,ks,ke,js,je,
   KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {
     // Scratch space
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> ivol;  // sqrt of 3-metric determinant
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> iW;     // Lorentz factor
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> Bv;    // B^i v_i
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> Bsq;   // B^i B_i
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> v_d;   // Velocity form
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> B_d;   // Magnetic field form
 
     ivol.NewAthenaScratchTensor(member, scr_level, ncells1);
     iW.NewAthenaScratchTensor(member, scr_level, ncells1);
@@ -297,17 +310,39 @@ TaskStatus DynGR::SetTmunu(Driver *pdrive, int stage) {
     // Calculate the lower velocity components
     // TODO: a view should be initialized to zero by default, but it would be well
     // to check that this is actually the case.
+    /*par_for_inner(member, is, ie, [&](int const i) {
+      Real invW = 0.0;
+      for (int a = 0; a < 3; ++a) {
+        for (int b = 0; b < 3; ++b) {
+          v_d(a, i) += prim(m, IVX + b, k, j, i)*adm.g_dd(m, a, b, k, j, i);
+          invW += prim(m, IVX + a, k, j, i)*prim(m, IVX + b, k, j, i)*adm.g_dd(m, a, b, k, j, i);
+        }
+      }
+      invW = 1.0/sqrt(1. + invW);
+      for (int a = 0; a < 3; ++a) {
+        v_d(a, i) = v_d(a, i)*invW;
+      }
+    });*/
     for (int a = 0; a < 3; ++a) {
       for (int b = 0; b < 3; ++b) {
         par_for_inner(member, is, ie, [&](int const i) {
           v_d(a, i) += prim(m, IVX + b, k, j, i)*adm.g_dd(m, a, b, k, j, i);
           iW(i) += prim(m, IVX + a, k, j, i)*prim(m, IVX + b, k, j, i)*adm.g_dd(m, a, b, k, j, i);
+          B_d(a, i) += bcc(m, b, k, j, i)*adm.g_dd(m, a, b, k, j, i)*ivol(i);
         });
       }
     }
+    // TODO: need a member barrier here.
+    member.team_barrier();
     par_for_inner(member, is, ie, [&](int const i) {
-      iW(i) = 1.0/sqrt(1 + iW(i));
+      iW(i) = 1.0/sqrt(1. + iW(i));
     });
+    for (int a = 0; a < 3; ++a) {
+      par_for_inner(member, is, ie, [&](int const i) {
+        Bv(i) += bcc(m, a, k, j, i) * v_d(a, i) * ivol(i);
+        Bsq(i) += bcc(m, a, k, j, i) * B_d(a, i) * ivol(i);
+      });
+    }
 
     // TODO: member barrier here?
 
@@ -329,7 +364,10 @@ TaskStatus DynGR::SetTmunu(Driver *pdrive, int stage) {
       for (int b = a; b < 3; ++b) {
         par_for_inner(member, is, ie, [&](int const i) {
           tmunu.S_dd(m, a, b, k, j, i) = cons(m, IM1 + a, k, j, i)*ivol(i)*v_d(b, i)*iW(i)
-                                       + prim(m, IPR, k, j, i)*adm.g_dd(m, a, b, k, j, i);
+                                       - (B_d(a, i)*SQR(iW(i)) + Bv(i)*v_d(a, i))*B_d(b, i)
+                                       + (prim(m, IPR, k, j, i) 
+                                          + 0.5*(Bv(i)*Bv(i)/(iW(i)*iW(i)) + Bsq(i)))
+                                       *adm.g_dd(m, a, b, k, j, i);
         });
       }
     }
@@ -340,23 +378,10 @@ TaskStatus DynGR::SetTmunu(Driver *pdrive, int stage) {
 //----------------------------------------------------------------------------------------
 //! \fn  TaskStatus DynGR::ADMMatterSource_(Driver *pdrive, int stage) {
 //  \brief
-/*template<class EOSPolicy, class ErrorPolicy> template<int NGHOST>
-void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &prim,
-    const Real dt, DvceArray5D<Real> &rhs) {
-  auto &indcs = pmy_pack->pmesh->mb_indcs;
-  auto &size  = pmy_pack->pmmb->mb_size;
-  int &is = indcs.is; int &ie = indcs.ie;
-  int &js = indcs.js; int &je = indcs.je;
-  int &ks = indcs.ks; int &ke = indcs.ke;
-
-  int ncells1 = indcs.nx1+indcs.ng; // Align scratch buffers with variables
-  int nmb = pmy_pack->nmb_thispack;
-
-  auto &adm = pmy_pack->padm->adm;
-  auto &tmunu = pmy_pack->ptmunu->tmunu;
-}*/
+// TODO: Add MHD
 template<class EOSPolicy, class ErrorPolicy> template<int NGHOST>
 void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &prim, 
+    const DvceArray5D<Real> &bcc,
     const Real dt, DvceArray5D<Real> &rhs) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   auto &size  = pmy_pack->pmb->mb_size;
@@ -371,8 +396,8 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
   auto &tmunu = pmy_pack->ptmunu->tmunu;
   auto &eos_ = eos.ps.GetEOS();
 
-  int &nhyd = pmy_pack->phydro->nhydro;
-  int &nscal = pmy_pack->phydro->nscalars;
+  int &nhyd = pmy_pack->pmhd->nmhd;
+  int &nscal = pmy_pack->pmhd->nscalars;
 
   const Real mb = eos.ps.GetEOS().GetBaryonMass();
 
@@ -413,7 +438,7 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
       vol(i) = sqrt(detg);
     });
     member.team_barrier();
-
+    
     par_for_inner(member, is, ie, [&](int const i) {
       SpatialInv(1.0/SQR(vol(i)),
                  adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i), adm.g_dd(m,0,2,k,j,i),
@@ -472,19 +497,37 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
       }
       Real const Wsq = 1.0 + usq;
       Real const W = sqrt(Wsq);
+      Real B_u[NMAG] = {bcc(m, IBX, k, j, i)/vol(i), 
+                        bcc(m, IBY, k, j, i)/vol(i),
+                        bcc(m, IBZ, k, j, i)/vol(i)};
+      Real Bv = 0.0;
+      Real Bsq = 0.0;
+      for (int a = 0; a < 3; ++a) {
+        for (int b = 0; b < 3; ++b) {
+          Bv += adm.g_dd(m,a,b,k,j,i)*prim_pt[PVX + a]*B_u[b];
+          Bsq += adm.g_dd(m,a,b,k,j,i)*B_u[a]*B_u[b];
+        }
+      }
+      Bv = Bv/W;
+      Real bsq = Bv*Bv + Bsq/Wsq;
 
-      E(i) = H*Wsq - prim_pt[PPR];
+      E(i) = (H + Bsq)*Wsq - prim_pt[PPR] - 0.5*bsq;
 
       for (int a = 0; a < 3; ++a) {
         S_d(a, i) = 0.0;
         for (int b = 0; b < 3; ++b) {
-          S_d(a, i) += H*W*prim_pt[PVX + b]*adm.g_dd(m, a, b, k, j, i);
+          S_d(a, i) += ((H*W + Bsq)*prim_pt[PVX + b] - Bv*B_u[b])*
+                        adm.g_dd(m, a, b, k, j, i);
         }
       }
 
       for (int a = 0; a < 3; ++a) {
         for (int b = a; b < 3; ++b) {
-          S_uu(a,b,i) = H*prim_pt[PVX + a]*prim_pt[PVX + b] + prim_pt[PPR]*g_uu(a,b,i);
+          //S_uu(a,b,i) = H*prim_pt[PVX + a]*prim_pt[PVX + b] + prim_pt[PPR]*g_uu(a,b,i);
+          S_uu(a,b,i) = (H + Bsq/Wsq)*prim_pt[PVX + a]*prim_pt[PVX + b] 
+                        - B_u[a]*B_u[b]/Wsq 
+                        - Bv*(B_u[a]*prim_pt[PVX + b] + B_u[b]*prim_pt[PVX + a])/W
+                        + (prim_pt[PPR] + 0.5*bsq)*g_uu(a,b,i);
         }
       }
     });
@@ -564,11 +607,11 @@ template class DynGRPS<Primitive::PiecewisePolytrope, Primitive::ResetFloor>;
 // Macro for defining CoordTerms templates
 #define INSTANTIATE_COORD_TERMS(EOSPolicy, ErrorPolicy) \
 template \
-void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS<2>(const DvceArray5D<Real> &prim, const Real dt, DvceArray5D<Real> &rhs); \
+void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS<2>(const DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc, const Real dt, DvceArray5D<Real> &rhs); \
 template \
-void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS<3>(const DvceArray5D<Real> &prim, const Real dt, DvceArray5D<Real> &rhs); \
+void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS<3>(const DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc, const Real dt, DvceArray5D<Real> &rhs); \
 template \
-void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS<4>(const DvceArray5D<Real> &prim, const Real dt, DvceArray5D<Real> &rhs);
+void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS<4>(const DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc, const Real dt, DvceArray5D<Real> &rhs);
 
 INSTANTIATE_COORD_TERMS(Primitive::IdealGas, Primitive::ResetFloor);
 INSTANTIATE_COORD_TERMS(Primitive::PiecewisePolytrope, Primitive::ResetFloor);

@@ -156,12 +156,14 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
 
   // (6) Dynamical Spacetime and Matter (MHD TODO)
   if ((pin->DoesBlockExist("z4c") || pin->DoesBlockExist("adm")) && (pin->DoesBlockExist("hydro")) ) {
-    pdyngr = dyngr::BuildDynGR(this, pin);
-    pdyngr->AssembleDynGRTasks(start_tl, run_tl, end_tl);
+    std::cout << "Dynamical metric and hydro not compatible; use MHD instead  " << std::endl;
+    std::exit(EXIT_FAILURE);
+    //pdyngr = dyngr::BuildDynGR(this, pin);
+    //pdyngr->AssembleDynGRTasks(start_tl, run_tl, end_tl);
   }
   if ((pin->DoesBlockExist("z4c") || pin->DoesBlockExist("adm")) && (pin->DoesBlockExist("mhd")) ) {
-    std::cout << "Dynamical metric and MHD not implemented yet  " << std::endl;
-    std::exit(EXIT_FAILURE);
+    pdyngr = dyngr::BuildDynGR(this, pin);
+    pdyngr->AssembleDynGRTasks(start_tl, run_tl, end_tl);
   }
 
   // Units

@@ -16,7 +16,6 @@
 #include "eos/eos.hpp"
 #include "srcterms/srcterms.hpp"
 #include "hydro.hpp"
-#include "dyngr/dyngr.hpp"
 
 namespace hydro {
 //----------------------------------------------------------------------------------------
@@ -93,10 +92,8 @@ TaskStatus Hydro::ExpRKUpdate(Driver *pdriver, int stage) {
   }
 
   // Add coordinate source terms in GR.  Again, must be computed with only primitives.
-  if (pmy_pack->pcoord->is_general_relativistic && !pmy_pack->pcoord->is_dynamical_relativistic) {
+  if (pmy_pack->pcoord->is_general_relativistic) {
     pmy_pack->pcoord->AddCoordTerms(w0, peos->eos_data, beta_dt, u0);
-  } else if (pmy_pack->pcoord->is_dynamical_relativistic) {
-    pmy_pack->pdyngr->AddCoordTerms(w0, beta_dt, u0, indcs.ng);
   }
 
   // Add user source terms

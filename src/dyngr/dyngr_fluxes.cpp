@@ -18,13 +18,14 @@
 #include "eos/eos.hpp"
 #include "diffusion/viscosity.hpp"
 #include "diffusion/conduction.hpp"
+#include "mhd/mhd.hpp"
 #include "reconstruct/dc.hpp"
 #include "reconstruct/plm.hpp"
 #include "reconstruct/ppm.hpp"
 #include "reconstruct/wenoz.hpp"
 // include inlined Riemann solvers (double yuck...)
-#include "dyngr/rsolvers/llf_dyngrhyd.cpp" // NOLINT(build/include)
-#include "dyngr/dyngr_fofc.cpp"
+#include "dyngr/rsolvers/llf_dyngrmhd.hpp" // NOLINT(build/include)
+//#include "dyngr/dyngr_fofc.cpp"
 // include PrimitiveSolver stuff
 #include "eos/primitive-solver/idealgas.hpp"
 #include "eos/primitive-solver/reset_floor.hpp"
@@ -43,15 +44,16 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
   int ks = indcs_.ks, ke = indcs_.ke;
   int ncells1 = indcs_.nx1 + 2*(indcs_.ng);
 
-  int nhyd = pmy_pack->phydro->nhydro;
-  int nvars = pmy_pack->phydro->nhydro + pmy_pack->phydro->nscalars;
+  int nhyd = pmy_pack->pmhd->nmhd;
+  int nvars = pmy_pack->pmhd->nmhd + pmy_pack->pmhd->nscalars;
   int nmb1 = pmy_pack->nmb_thispack - 1;
-  const auto recon_method_ = pmy_pack->phydro->recon_method;
+  const auto recon_method_ = pmy_pack->pmhd->recon_method;
   auto size_ = pmy_pack->pmb->mb_size;
   auto coord_ = pmy_pack->pcoord->coord_data;
-  auto w0_ = pmy_pack->phydro->w0;
+  auto &w0_ = pmy_pack->pmhd->w0;
+  auto &b0_ = pmy_pack->pmhd->bcc0;
   auto &adm = pmy_pack->padm->adm;
-  auto &eos_ = pmy_pack->phydro->peos->eos_data;
+  auto &eos_ = pmy_pack->pmhd->peos->eos_data;
   auto &dyn_eos_ = eos;
   const auto rsolver_ = rsolver_method_;
   bool extrema = false;
@@ -62,15 +64,23 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
   //--------------------------------------------------------------------------------------
   // i-direction
 
-  size_t scr_size = ScrArray2D<Real>::shmem_size(nvars, ncells1) * 2 + ScrArray1D<Real>::shmem_size(ncells1)
-                       + ScrArray2D<Real>::shmem_size(3, ncells1) + ScrArray2D<Real>::shmem_size(6, ncells1);
+  size_t scr_size = ScrArray2D<Real>::shmem_size(nvars, ncells1) * 2 + 
+                    ScrArray2D<Real>::shmem_size(3, ncells1) * 2 +
+                    ScrArray1D<Real>::shmem_size(ncells1)
+                       + ScrArray2D<Real>::shmem_size(3, ncells1) + 
+                       ScrArray2D<Real>::shmem_size(6, ncells1);
   int scr_level = scratch_level;
-  auto flx1_ = pmy_pack->phydro->uflx.x1f;
+  auto flx1_ = pmy_pack->pmhd->uflx.x1f;
+  auto &e31_ = pmy_pack->pmhd->e3x1;
+  auto &e21_ = pmy_pack->pmhd->e2x1;
+  auto &bx_  = pmy_pack->pmhd->b0.x1f;
 
   par_for_outer("dyngrflux_x1",DevExeSpace(), scr_size, scr_level, 0, nmb1, ks, ke, js, je,
   KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {
     ScrArray2D<Real> wl(member.team_scratch(scr_level), nvars, ncells1);
     ScrArray2D<Real> wr(member.team_scratch(scr_level), nvars, ncells1);
+    ScrArray2D<Real> bl(member.team_scratch(scr_level), 3, ncells1);
+    ScrArray2D<Real> br(member.team_scratch(scr_level), 3, ncells1);
 
     // scratch memory for metric at faces
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> gface1_dd;
@@ -84,17 +94,21 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
     switch (recon_method_) {
       case ReconstructionMethod::dc:
         DonorCellX1(member, m, k, j, is-1, ie+1, w0_, wl, wr);
+        DonorCellX1(member, m, k, j, is-1, ie+1, b0_, bl, br);
         break;
       case ReconstructionMethod::plm:
         PiecewiseLinearX1(member, m, k, j, is-1, ie+1, w0_, wl, wr);
+        PiecewiseLinearX1(member, m, k, j, is-1, ie+1, b0_, bl, br);
         break;
       // JF: These higher-order reconstruction methods all need EOS_Data to calculate a floor.
       case ReconstructionMethod::ppm4:
       case ReconstructionMethod::ppmx:
         PiecewiseParabolicX1(member,eos_,extrema,false, m, k, j, is-1, ie+1, w0_, wl, wr);
+        PiecewiseParabolicX1(member,eos_,extrema,false, m, k, j, is-1, ie+1, b0_, bl, br);
         break;
       case ReconstructionMethod::wenoz:
         WENOZX1(member, eos_, false, m, k, j, is-1, ie+1, w0_, wl, wr);
+        WENOZX1(member, eos_, false, m, k, j, is-1, ie+1, b0_, bl, br);
         break;
       default:
         break;
@@ -114,13 +128,16 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
     auto &size = size_;
     auto &coord = coord_;
     auto &flx1 = flx1_;
+    auto &bx = bx_;
+    auto &e31 = e31_;
+    auto &e21 = e21_;
     auto &nhyd_ = nhyd;
     auto nscal_ = nvars - nhyd;
     const auto rsolver = rsolver_;
     int il = is; int iu = ie+1;
     if constexpr (rsolver == DynGR_RSolver::llf_dyngr) {
       LLF_DYNGR(member, dyn_eos, indcs, size, coord, m, k, j, il, iu, IVX, 
-                wl, wr, nhyd_, nscal_, gface1_dd, betaface1_u, alphaface1, flx1);
+                wl, wr, bl, br, bx, nhyd_, nscal_, gface1_dd, betaface1_u, alphaface1, flx1, e31, e21);
     }
     //} else { other Riemann solvers here
     member.team_barrier();
@@ -144,15 +161,24 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
   // j-direction
 
   if (pmy_pack->pmesh->multi_d) {
-    scr_size = ScrArray2D<Real>::shmem_size(nvars, ncells1) * 3 + ScrArray1D<Real>::shmem_size(ncells1)
-                         + ScrArray2D<Real>::shmem_size(3, ncells1) + ScrArray2D<Real>::shmem_size(6, ncells1);
-    auto flx2_ = pmy_pack->phydro->uflx.x2f;
+    scr_size = ScrArray2D<Real>::shmem_size(nvars, ncells1) * 3 
+             + ScrArray2D<Real>::shmem_size(3, ncells1) * 3
+             + ScrArray1D<Real>::shmem_size(ncells1)
+             + ScrArray2D<Real>::shmem_size(3, ncells1) 
+             + ScrArray2D<Real>::shmem_size(6, ncells1);
+    auto flx2_ = pmy_pack->pmhd->uflx.x2f;
+    auto &by_ = pmy_pack->pmhd->b0.x2f;
+    auto &e12_ = pmy_pack->pmhd->e1x2;
+    auto &e32_ = pmy_pack->pmhd->e3x2;
 
     par_for_outer("dyngrflux_x2",DevExeSpace(), scr_size, scr_level, 0, nmb1, ks, ke,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k) {
       ScrArray2D<Real> scr1(member.team_scratch(scr_level), nvars, ncells1);
       ScrArray2D<Real> scr2(member.team_scratch(scr_level), nvars, ncells1);
       ScrArray2D<Real> scr3(member.team_scratch(scr_level), nvars, ncells1);
+      ScrArray2D<Real> scr4(member.team_scratch(scr_level), 3, ncells1);
+      ScrArray2D<Real> scr5(member.team_scratch(scr_level), 3, ncells1);
+      ScrArray2D<Real> scr6(member.team_scratch(scr_level), 3, ncells1);
 
       // scratch memory for metric at faces
       AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> gface2_dd;
@@ -167,26 +193,35 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         auto wl     = scr1;
         auto wl_jp1 = scr2;
         auto wr     = scr3;
+        auto bl     = scr4;
+        auto bl_jp1 = scr5;
+        auto br     = scr6;
         if ((j%2) == 0) {
           wl     = scr2;
           wl_jp1 = scr1;
+          bl     = scr5;
+          bl_jp1 = scr4;
         }
 
         // Reconstruct qR[j] and qL[j+1]
         switch (recon_method_) {
           case ReconstructionMethod::dc:
             DonorCellX2(member, m, k, j, is, ie, w0_, wl_jp1, wr);
+            DonorCellX2(member, m, k, j, is, ie, b0_, bl_jp1, br);
             break;
           case ReconstructionMethod::plm:
             PiecewiseLinearX2(member, m, k, j, is, ie, w0_, wl_jp1, wr);
+            PiecewiseLinearX2(member, m, k, j, is, ie, b0_, bl_jp1, br);
             break;
           // JF: These higher-order reconstruction methods all need EOS_Data to calculate a floor.
           case ReconstructionMethod::ppm4:
           case ReconstructionMethod::ppmx:
             PiecewiseParabolicX2(member,eos_,extrema,false, m, k, j, is, ie, w0_, wl_jp1, wr);
+            PiecewiseParabolicX2(member,eos_,extrema,false, m, k, j, is, ie, b0_, bl_jp1, br);
             break;
           case ReconstructionMethod::wenoz:
             WENOZX2(member, eos_, false, m, k, j, is-1, ie+1, w0_, wl_jp1, wr);
+            WENOZX2(member, eos_, false, m, k, j, is-1, ie+1, b0_, bl_jp1, br);
             break;
           default:
             break;
@@ -206,6 +241,9 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         auto &size = size_;
         auto &coord = coord_;
         auto &flx2 = flx2_;
+        auto &by   = by_;
+        auto &e12  = e12_;
+        auto &e32  = e32_;
         auto &nhyd_ = nhyd;
         auto nscal_ = nvars - nhyd;
         const auto rsolver = rsolver_;
@@ -213,7 +251,8 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         if (j>(js-1)) {
           if constexpr (rsolver == DynGR_RSolver::llf_dyngr) {
             LLF_DYNGR(member, dyn_eos, indcs, size, coord, m, k, j, il, iu, IVY, 
-                      wl, wr, nhyd_, nscal_, gface2_dd, betaface2_u, alphaface2, flx2);
+                      wl, wr, bl, br, by, nhyd_, nscal_, gface2_dd, betaface2_u, alphaface2, flx2,
+                      e12, e32);
           }
           //} else { other Riemann solvers here
         }
@@ -240,15 +279,24 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
   // k-direction. Note order of k,j loops switched
 
   if (pmy_pack->pmesh->three_d) {
-    scr_size = ScrArray2D<Real>::shmem_size(nvars, ncells1) * 3 + ScrArray1D<Real>::shmem_size(ncells1)
-                         + ScrArray2D<Real>::shmem_size(3, ncells1) + ScrArray2D<Real>::shmem_size(6, ncells1);
-    auto flx3_ = pmy_pack->phydro->uflx.x3f;
+    scr_size = ScrArray2D<Real>::shmem_size(nvars, ncells1) * 3 
+             + ScrArray2D<Real>::shmem_size(3, ncells1) * 3
+             + ScrArray1D<Real>::shmem_size(ncells1)
+             + ScrArray2D<Real>::shmem_size(3, ncells1) 
+             + ScrArray2D<Real>::shmem_size(6, ncells1);
+    auto &flx3_ = pmy_pack->pmhd->uflx.x3f;
+    auto &bz_   = pmy_pack->pmhd->b0.x3f;
+    auto &e23_  = pmy_pack->pmhd->e2x3;
+    auto &e13_  = pmy_pack->pmhd->e1x3;
 
     par_for_outer("dyngrflux_x3",DevExeSpace(), scr_size, scr_level, 0, nmb1, js, je,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int j) {
       ScrArray2D<Real> scr1(member.team_scratch(scr_level), nvars, ncells1);
       ScrArray2D<Real> scr2(member.team_scratch(scr_level), nvars, ncells1);
       ScrArray2D<Real> scr3(member.team_scratch(scr_level), nvars, ncells1);
+      ScrArray2D<Real> scr4(member.team_scratch(scr_level), 3, ncells1);
+      ScrArray2D<Real> scr5(member.team_scratch(scr_level), 3, ncells1);
+      ScrArray2D<Real> scr6(member.team_scratch(scr_level), 3, ncells1);
 
       // scratch memory for metric at faces
       AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> gface3_dd;
@@ -263,26 +311,35 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         auto wl     = scr1;
         auto wl_kp1 = scr2;
         auto wr     = scr3;
+        auto bl     = scr4;
+        auto bl_kp1 = scr5;
+        auto br     = scr6;
         if ((k%2) == 0) {
           wl     = scr2;
           wl_kp1 = scr1;
+          bl     = scr5;
+          bl_kp1 = scr4;
         }
 
         // Reconstruct qR[j] and qL[j+1]
         switch (recon_method_) {
           case ReconstructionMethod::dc:
             DonorCellX3(member, m, k, j, is, ie, w0_, wl_kp1, wr);
+            DonorCellX3(member, m, k, j, is, ie, b0_, bl_kp1, br);
             break;
           case ReconstructionMethod::plm:
             PiecewiseLinearX3(member, m, k, j, is, ie, w0_, wl_kp1, wr);
+            PiecewiseLinearX3(member, m, k, j, is, ie, b0_, bl_kp1, br);
             break;
           // JF: These higher-order reconstruction methods all need EOS_Data to calculate a floor.
           case ReconstructionMethod::ppm4:
           case ReconstructionMethod::ppmx:
             PiecewiseParabolicX3(member,eos_,extrema,false, m, k, j, is, ie, w0_, wl_kp1, wr);
+            PiecewiseParabolicX3(member,eos_,extrema,false, m, k, j, is, ie, b0_, bl_kp1, br);
             break;
           case ReconstructionMethod::wenoz:
             WENOZX3(member, eos_, false, m, k, j, is-1, ie+1, w0_, wl_kp1, wr);
+            WENOZX3(member, eos_, false, m, k, j, is-1, ie+1, b0_, bl_kp1, br);
             break;
           default:
             break;
@@ -302,6 +359,9 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         auto &size = size_;
         auto &coord = coord_;
         auto &flx3 = flx3_;
+        auto &bz   = bz_;
+        auto &e23  = e23_;
+        auto &e13  = e13_;
         auto &nhyd_ = nhyd;
         auto nscal_ = nvars - nhyd;
         const auto rsolver = rsolver_;
@@ -309,7 +369,8 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         if (k>(ks-1)) {
           if constexpr (rsolver == DynGR_RSolver::llf_dyngr) {
             LLF_DYNGR(member, dyn_eos, indcs, size, coord, m, k, j, il, iu, IVZ,
-                      wl, wr, nhyd_, nscal_, gface3_dd, betaface3_u, alphaface3, flx3);
+                      wl, wr, bl, br, bz, nhyd_, nscal_, gface3_dd, betaface3_u, alphaface3, flx3,
+                      e23, e13);
           }
           //} else { other Riemann solvers here
         }
@@ -334,9 +395,9 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
   }
 
   // Call FOFC if necessary
-  if (pmy_pack->phydro->use_fofc) {
+  /*if (pmy_pack->phydro->use_fofc) {
     FOFC(pdriver, stage);
-  }
+  }*/
 
   return TaskStatus::complete;
 }
