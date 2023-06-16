@@ -299,7 +299,10 @@ TaskStatus DynGR::SetTmunu(Driver *pdrive, int stage) {
 
     ivol.NewAthenaScratchTensor(member, scr_level, ncells1);
     iW.NewAthenaScratchTensor(member, scr_level, ncells1);
+    Bv.NewAthenaScratchTensor(member, scr_level, ncells1);
+    Bsq.NewAthenaScratchTensor(member, scr_level, ncells1);
     v_d.NewAthenaScratchTensor(member, scr_level, ncells1);
+    B_d.NewAthenaScratchTensor(member, scr_level, ncells1);
 
     // Calculate the determinant/volume form
     par_for_inner(member, is, ie, [&](int const i) {

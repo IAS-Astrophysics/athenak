@@ -130,6 +130,17 @@ class PrimitiveSolverHydro {
       bool floored = ps.GetEOS().ApplyPrimitiveFloor(prim_pt[PRH], &prim_pt[PVX],
                                            prim_pt[PPR], prim_pt[PTM], &prim_pt[PYF]);
 
+      if (prim_pt[PTM] < 0) {
+        printf("PrimToConsPt: There's a problem with the temperature!\n"
+               "  rho = %g\n"
+               "  ux  = %g\n"
+               "  uy  = %g\n"
+               "  uz  = %g\n"
+               "  P   = %g\n"
+               "  T   = %g\n",
+               prim_pt[PRH], prim_pt[PVX], prim_pt[PVY], prim_pt[PVZ], 
+               prim_pt[PPR], prim_pt[PTM]);
+      }
       
       ps.PrimToCon(prim_pt, cons_pt, b, g3d);
 
@@ -466,7 +477,7 @@ class PrimitiveSolverHydro {
       Real iWsq = 1.0/(1.0 + usq);
       Real iW = sqrt(iWsq);
       Real vsq = usq*iWsq;
-      Real vu = uu[index];
+      Real vu = uu[index]*iW;
 
       // Calculate the fast magnetosonic speed in the comoving frame.
       Real cs = ps.GetEOS().GetSoundSpeed(prim[PRH], prim[PTM], &prim[PYF]);
@@ -477,7 +488,7 @@ class PrimitiveSolverHydro {
       Real cmsq = csq + vasq - csq*vasq;
 
       Real iWsq_ad = 1.0 - vsq*cmsq;
-      Real dis = (csq*iWsq)*(gii*iWsq_ad - vu*vu*(1.0 - csq));
+      Real dis = (cmsq*iWsq)*(gii*iWsq_ad - vu*vu*(1.0 - cmsq));
       Real sdis = sqrt(dis);
       if (!isfinite(sdis)) {
         printf("There's a problem with the magnetosonic speed!\n"
@@ -487,14 +498,15 @@ class PrimitiveSolverHydro {
                "  vsq = %g\n"
                "  usq = %g\n"
                "  rho = %g\n"
+               "  vu  = %g\n"
                "  T   = %g\n"
                "  bsq = %g\n", 
-               dis, gii, csq, vsq, usq, prim[PRH], prim[PTM], bsq);
+               dis, gii, csq, vsq, usq, prim[PRH], prim[PTM], vu, bsq);
         //exit(EXIT_FAILURE);
       }
 
-      lambda_p = alpha*(vu*(1.0 - csq) + sdis)/iWsq_ad - beta_u[index];
-      lambda_m = alpha*(vu*(1.0 - csq) - sdis)/iWsq_ad - beta_u[index];
+      lambda_p = alpha*(vu*(1.0 - cmsq) + sdis)/iWsq_ad - beta_u[index];
+      lambda_m = alpha*(vu*(1.0 - cmsq) - sdis)/iWsq_ad - beta_u[index];
     }
 
     // A function for converting PrimitiveSolver errors to strings
