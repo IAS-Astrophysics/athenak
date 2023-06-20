@@ -105,14 +105,20 @@ void LLF_DYNGR(TeamMember_t const &member,
     Primitive::LowerVector(udl, uul, g3d);
     Real Wsql = 1.0 + Primitive::Contract(uul, udl);
     Real Wl = sqrt(Wsql);
-    Real vcl = prim_l[ivx]/Wl - beta_u[ivx]/alpha;
+    Real vcl = prim_l[pvx]/Wl - beta_u[ivx-IVX]/alpha;
+    /*if (!isfinite(vcl)) {
+      printf("vcl is not finite!\n"
+             "  vcl = %g\n"
+             "  Wl  = %g\n"
+             "  ul  = %g\n",vcl, Wl, prim_l[pvx]);
+    }*/
 
     // Calculate 4-magnetic field (undensitized) for the left state.
     Real bul0 = Primitive::Contract(Bu_l, udl)/(alpha*sdetg);
-    /*Real bul[3];
-    for (int a = 0; a < 3; a++) {
-      bul[a] = (Bu_l[a]/sdetg + bul0*(alpha*uul[a] - Wl*beta_u[a]))/Wl;
-    }*/
+    //Real bul[3];
+    //for (int a = 0; a < 3; a++) {
+    //  bul[a] = (Bu_l[a]/sdetg + bul0*(alpha*uul[a] - Wl*beta_u[a]))/Wl;
+    //}
     Real bdl[3];
     for (int a = 0; a < 3; a++) {
       bdl[a] = bul0*beta_u[a];
@@ -129,13 +135,19 @@ void LLF_DYNGR(TeamMember_t const &member,
     Real Wsqr = 1.0 + Primitive::Contract(uur, udr);
     Real Wr = sqrt(Wsqr);
     Real vcr = prim_r[pvx]/Wr - beta_u[ivx-IVX]/alpha;
+    /*if (!isfinite(vcr)) {
+      printf("vcr is not finite!\n"
+             "  vcr = %g\n"
+             "  Wr  = %g\n"
+             "  ul  = %g\n",vcr, Wr, prim_r[pvx]);
+    }*/
 
     // Calculate 4-magnetic field (densitized) for the right state.
     Real bur0 = Primitive::Contract(Bu_l, udl)/(alpha*sdetg);
-    /*Real bur[3];
-    for (int a = 0; a < 3; a++) {
-      bur[a] = (Bu_r[a]/sdetg + bur0*(alpha*uur[a] - Wr*beta_u[a]))/Wr;
-    }*/
+    //Real bur[3];
+    //for (int a = 0; a < 3; a++) {
+    //  bur[a] = (Bu_r[a]/sdetg + bur0*(alpha*uur[a] - Wr*beta_u[a]))/Wr;
+    //}
     Real bdr[3];
     for (int a = 0; a < 3; a++) {
       bdr[a] = bur0*beta_u[a];
@@ -152,7 +164,14 @@ void LLF_DYNGR(TeamMember_t const &member,
     fl[CSY] = alpha*(cons_l[CSY]*vcl - bdl[1]*Bu_l[ivx-IVX]/Wl);
     fl[CSZ] = alpha*(cons_l[CSZ]*vcl - bdl[2]*Bu_l[ivx-IVX]/Wl);
     fl[csx] += alpha*sdetg*(prim_l[PPR] + 0.5*bsql);
-    fl[CTA] = alpha*(cons_l[CTA]*vcl - alpha*bul0*Bu_l[ivx-IVX]/Wl);
+    fl[CTA] = alpha*(cons_l[CTA]*vcl - alpha*bul0*Bu_l[ivx-IVX]/Wl 
+            + sdetg*(prim_l[PPR] + 0.5*bsql)*prim_l[ivx]/Wl);
+    /*fl[CDN] = alpha*cons_l[CDN]*vcl;
+    fl[CSX] = alpha*cons_l[CSX]*vcl;
+    fl[CSY] = alpha*cons_l[CSY]*vcl;
+    fl[CSZ] = alpha*cons_l[CSZ]*vcl;
+    fl[csx] += alpha*sdetg*prim_l[PPR];
+    fl[CTA] = alpha*(cons_l[CTA]*vcl + sdetg*prim_l[PPR]*prim_l[ivx]);*/
 
     efl[ibx] = 0.0;
     efl[iby] = Bu_l[iby]*vcl - Bu_l[ibx]*(prim_l[pvy]/Wl - beta_u[pvy - PVX]/alpha);
@@ -165,7 +184,14 @@ void LLF_DYNGR(TeamMember_t const &member,
     fr[CSY] = alpha*(cons_r[CSY]*vcr - bdr[1]*Bu_r[ivx-IVX]/Wr);
     fr[CSZ] = alpha*(cons_r[CSZ]*vcr - bdr[2]*Bu_r[ivx-IVX]/Wr);
     fr[csx] += alpha*sdetg*(prim_r[PPR] + 0.5*bsqr);
-    fr[CTA] = alpha*(cons_r[CTA]*vcr - alpha*bur0*Bu_r[ivx-IVX]/Wr);
+    fr[CTA] = alpha*(cons_r[CTA]*vcr - alpha*bur0*Bu_r[ivx-IVX]/Wr 
+            + sdetg*(prim_r[PPR] + 0.5*bsqr)*prim_r[ivx]/Wl);
+    /*fr[CDN] = alpha*cons_r[CDN]*vcr;
+    fr[CSX] = alpha*cons_r[CSX]*vcr;
+    fr[CSY] = alpha*cons_r[CSY]*vcr;
+    fr[CSZ] = alpha*cons_r[CSZ]*vcr;
+    fr[csx] += alpha*sdetg*prim_r[PPR];
+    fr[CTA] = alpha*(cons_l[CTA]*vcr + sdetg*prim_r[PPR]*prim_r[ivx]);*/
 
     efr[ibx] = 0.0;
     efr[iby] = Bu_r[iby]*vcr - Bu_r[ibx]*(prim_r[pvy]/Wr - beta_u[pvy - PVX]/alpha);
@@ -183,6 +209,7 @@ void LLF_DYNGR(TeamMember_t const &member,
     Real lambda_l = fmin(lambda_ml, lambda_mr);
     Real lambda_r = fmax(lambda_pl, lambda_pr);
     Real lambda = fmax(lambda_r, -lambda_l);
+    //Real lambda = 1.0;
 
     // Calculate the fluxes
     flx(m, IDN, k, j, i) = 0.5 * (fl[CDN] + fr[CDN] - lambda * (cons_r[CDN] - cons_l[CDN]));

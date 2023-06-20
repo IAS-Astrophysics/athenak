@@ -108,6 +108,9 @@ class PrimitiveSolverHydro {
       b[ibx] = bx(m, k, j, i);
       b[iby] = brc(iby, i);
       b[ibz] = brc(ibz, i);
+      /*b[ibx] = 0.0;
+      b[iby] = 0.0;
+      b[ibz] = 0.0;*/
       Real prim_pt_old[NPRIM];
       prim_pt[PRH] = prim_pt_old[PRH] = w(IDN, i)/mb;
       prim_pt[PVX] = prim_pt_old[PVX] = w(IVX, i);
@@ -130,18 +133,6 @@ class PrimitiveSolverHydro {
       bool floored = ps.GetEOS().ApplyPrimitiveFloor(prim_pt[PRH], &prim_pt[PVX],
                                            prim_pt[PPR], prim_pt[PTM], &prim_pt[PYF]);
 
-      if (prim_pt[PTM] < 0) {
-        printf("PrimToConsPt: There's a problem with the temperature!\n"
-               "  rho = %g\n"
-               "  ux  = %g\n"
-               "  uy  = %g\n"
-               "  uz  = %g\n"
-               "  P   = %g\n"
-               "  T   = %g\n",
-               prim_pt[PRH], prim_pt[PVX], prim_pt[PVY], prim_pt[PVZ], 
-               prim_pt[PPR], prim_pt[PTM]);
-      }
-      
       ps.PrimToCon(prim_pt, cons_pt, b, g3d);
 
       // Check for NaNs
@@ -334,7 +325,9 @@ class PrimitiveSolverHydro {
         for (int n = 0; n < nscal; n++) {
           cons_pt[CYD + n] = cons(m, nhyd + n, k, j, i)*isdetg;
         }
-        Real b3u[NMAG] = {bcc0(m, IBX, k, j, i), bcc0(m, IBY, k, j, i), bcc0(m, IBZ, k, j, i)};
+        Real b3u[NMAG] = {bcc0(m, IBX, k, j, i)*isdetg, 
+                          bcc0(m, IBY, k, j, i)*isdetg, 
+                          bcc0(m, IBZ, k, j, i)*isdetg};
 
         // If we're in an excised region, set the primitives to some default value.
         Primitive::SolverResult result;
@@ -373,7 +366,7 @@ class PrimitiveSolverHydro {
         else {
           if (result.error != Primitive::Error::SUCCESS) {
             // TODO: put in a proper error response here.
-            printf("An error occurred during the primitive solve: %s\n", ErrorToString(result.error));
+            /*printf("An error occurred during the primitive solve: %s\n", ErrorToString(result.error));
             printf("  Location: (%d, %d, %d, %d)\n", m, k, j, i);
             printf("  Conserved vars: \n");
             printf("    D   = %g\n",cons_pt_old[CDN]);
@@ -391,7 +384,31 @@ class PrimitiveSolverHydro {
             printf("    psi4 = %g\n", adm.psi4(m, k, j, i));
             printf("    K_dd = {%g, %g, %g, %g, %g, %g}\n", adm.K_dd(m, 0, 0, k, j, i),
                     adm.K_dd(m, 0, 1, k, j, i), adm.K_dd(m, 0, 2, k, j, i), adm.K_dd(m, 1, 1, k, j, i),
-                    adm.K_dd(m, 1, 2, k, j, i), adm.K_dd(m, 2, 2, k, j, i));
+                    adm.K_dd(m, 1, 2, k, j, i), adm.K_dd(m, 2, 2, k, j, i));*/
+            printf("An error occurred during the primitive solve: %s\n"
+                   "  Location: (%d, %d, %d, %d)\n"
+                   "  Conserved vars: \n"
+                   "    D   = %g\n"
+                   "    Sx  = %g\n"
+                   "    Sy  = %g\n"
+                   "    Sz  = %g\n"
+                   "    tau = %g\n"
+                   "  Metric vars: \n"
+                   "    detg = %g\n"
+                   "    g_dd = {%g, %g, %g, %g, %g, %g}\n"
+                   "    alp  = %g\n"
+                   "    beta = {%g, %g, %g}\n"
+                   "    psi4 = %g\n"
+                   "    K_dd = {%g, %g, %g, %g, %g, %g}\n",
+                   ErrorToString(result.error),
+                   m, k, j, i, cons_pt_old[CDN], cons_pt_old[CSX], cons_pt_old[CSY], cons_pt_old[CSZ],
+                   cons_pt_old[CTA], detg, 
+                   g3d[S11], g3d[S12], g3d[S13], g3d[S22], g3d[S23], g3d[S33],
+                   adm.alpha(m, k, j, i), 
+                   adm.beta_u(m, 0, k, j, i), adm.beta_u(m, 1, k, j, i), adm.beta_u(m, 2, k, j, i),
+                   adm.psi4(m, k, j, i),
+                   adm.K_dd(m, 0, 0, k, j, i), adm.K_dd(m, 0, 1, k, j, i), adm.K_dd(m, 0, 2, k, j, i),
+                   adm.K_dd(m, 1, 1, k, j, i), adm.K_dd(m, 1, 2, k, j, i), adm.K_dd(m, 2, 2, k, j, i));
           }
           // Regardless of failure, we need to copy the primitives.
           prim(m, IDN, k, j, i) = prim_pt[PRH]*mb;
@@ -570,13 +587,15 @@ class PrimitiveSolverHydro {
 
     KOKKOS_INLINE_FUNCTION
     void DumpPrimitiveVars(const Real prim_pt[NPRIM]) const {
-      printf("Primitive vars: \n");
-      printf("  rho = %g", prim_pt[PRH]);
-      printf("  ux  = %g", prim_pt[PVX]);
-      printf("  uy  = %g", prim_pt[PVY]);
-      printf("  uz  = %g", prim_pt[PVZ]);
-      printf("  P   = %g", prim_pt[PPR]);
-      printf("  T   = %g", prim_pt[PTM]);
+      printf("Primitive vars: \n"
+             "  rho = %g"
+             "  ux  = %g"
+             "  uy  = %g"
+             "  uz  = %g"
+             "  P   = %g"
+             "  T   = %g",
+             prim_pt[PRH], prim_pt[PVX], prim_pt[PVY], 
+             prim_pt[PVZ], prim_pt[PPR], prim_pt[PTM]);
     }
 };
 #endif
