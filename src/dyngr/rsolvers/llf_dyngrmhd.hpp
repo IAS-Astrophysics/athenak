@@ -166,12 +166,6 @@ void LLF_DYNGR(TeamMember_t const &member,
     fl[csx] += alpha*sdetg*(prim_l[PPR] + 0.5*bsql);
     fl[CTA] = alpha*(cons_l[CTA]*vcl - alpha*bul0*Bu_l[ivx-IVX]/Wl 
             + sdetg*(prim_l[PPR] + 0.5*bsql)*prim_l[ivx]/Wl);
-    /*fl[CDN] = alpha*cons_l[CDN]*vcl;
-    fl[CSX] = alpha*cons_l[CSX]*vcl;
-    fl[CSY] = alpha*cons_l[CSY]*vcl;
-    fl[CSZ] = alpha*cons_l[CSZ]*vcl;
-    fl[csx] += alpha*sdetg*prim_l[PPR];
-    fl[CTA] = alpha*(cons_l[CTA]*vcl + sdetg*prim_l[PPR]*prim_l[ivx]);*/
 
     efl[ibx] = 0.0;
     efl[iby] = Bu_l[iby]*vcl - Bu_l[ibx]*(prim_l[pvy]/Wl - beta_u[pvy - PVX]/alpha);
@@ -186,12 +180,6 @@ void LLF_DYNGR(TeamMember_t const &member,
     fr[csx] += alpha*sdetg*(prim_r[PPR] + 0.5*bsqr);
     fr[CTA] = alpha*(cons_r[CTA]*vcr - alpha*bur0*Bu_r[ivx-IVX]/Wr 
             + sdetg*(prim_r[PPR] + 0.5*bsqr)*prim_r[ivx]/Wl);
-    /*fr[CDN] = alpha*cons_r[CDN]*vcr;
-    fr[CSX] = alpha*cons_r[CSX]*vcr;
-    fr[CSY] = alpha*cons_r[CSY]*vcr;
-    fr[CSZ] = alpha*cons_r[CSZ]*vcr;
-    fr[csx] += alpha*sdetg*prim_r[PPR];
-    fr[CTA] = alpha*(cons_l[CTA]*vcr + sdetg*prim_r[PPR]*prim_r[ivx]);*/
 
     efr[ibx] = 0.0;
     efr[iby] = Bu_r[iby]*vcr - Bu_r[ibx]*(prim_r[pvy]/Wr - beta_u[pvy - PVX]/alpha);
