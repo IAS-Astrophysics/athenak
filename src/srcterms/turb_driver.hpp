@@ -6,9 +6,9 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file turb_driver.hpp
-//  \brief defines turbulence driver class, which implements data and functions
-//  for randomly forced turbulence which evolves via an Ornstein-Uhlenbeck
-//  stochastic process
+//  \brief defines turbulence driver class, which implements data and functions for
+//  randomly forced turbulence which evolves via an Ornstein-Uhlenbeck stochastic process
+
 
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
@@ -47,9 +47,8 @@ class TurbulenceDriver {
   void Initialize();
 
  private:
-  bool first_time = true;  // flag to enable initialization on first call
-  MeshBlockPack
-      *pmy_pack;  // ptr to MeshBlockPack containing this TurbulenceDriver
+  bool first_time = true;   // flag to enable initialization on first call
+  MeshBlockPack *pmy_pack;  // ptr to MeshBlockPack containing this TurbulenceDriver
 };
 
 #endif  // SRCTERMS_TURB_DRIVER_HPP_

@@ -18,6 +18,7 @@
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
+#include "mhd/mhd.hpp"
 #include "pgen.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -31,30 +32,37 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   Real amp   = pin->GetReal("problem","amp");
   Real sigma = pin->GetReal("problem","sigma");
   Real vshear= pin->GetReal("problem","vshear");
-  Real rho0  = pin->GetReal("problem","rho0");
-  Real rho1  = pin->GetReal("problem","rho1");
+  Real rho0  = pin->GetOrAddReal("problem","rho0",1.0);
+  Real rho1  = pin->GetOrAddReal("problem","rho1",1.0);
+  Real drho_rho0 = pin->GetOrAddReal("problem", "drho_rho0", 0.0);
 
   // capture variables for kernel
   auto &indcs = pmy_mesh_->mb_indcs;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
-
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
-  EOS_Data &eos = pmbp->phydro->peos->eos_data;
-  Real gm1 = eos.gamma - 1.0;
-  auto &w0 = pmbp->phydro->w0;
   auto &size = pmbp->pmb->mb_size;
-  int &nhydro = pmbp->phydro->nhydro;
-  int &nscalars = pmbp->phydro->nscalars;
+
+  // Select either Hydro or MHD
+  DvceArray5D<Real> w0_;
+  Real gm1, p0;
+  int nfluid, nscalars;
+  if (pmbp->phydro != nullptr) {
+    w0_ = pmbp->phydro->w0;
+    gm1 = (pmbp->phydro->peos->eos_data.gamma) - 1.0;
+    nfluid = pmbp->phydro->nhydro;
+    nscalars = pmbp->phydro->nscalars;
+  } else if (pmbp->pmhd != nullptr) {
+    w0_ = pmbp->pmhd->w0;
+    gm1 = (pmbp->pmhd->peos->eos_data.gamma) - 1.0;
+    nfluid = pmbp->pmhd->nmhd;
+    nscalars = pmbp->pmhd->nscalars;
+  }
+
   if (nscalars == 0) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "KH test requires nscalars != 0" << std::endl;
-    exit(EXIT_FAILURE);
-  }
-  if (!(eos.use_e)) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "KH test requires hydro/use_e=true" << std::endl;
     exit(EXIT_FAILURE);
   }
 
@@ -71,8 +79,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     int nx2 = indcs.nx2;
     Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
-    w0(m,IEN,k,j,i) = 20.0/gm1;
-    w0(m,IVZ,k,j,i) = 0.0;
+    w0_(m,IEN,k,j,i) = 20.0/gm1;
+    w0_(m,IVZ,k,j,i) = 0.0;
 
     // Lorentz factor (needed to initializve 4-velocity in SR)
     Real u00 = 1.0;
@@ -114,23 +122,69 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         scal = 0.0;
         if (x2v > 0.5) scal = 1.0;
       }
+    // Lecoanet test ICs
+    } else if (iprob == 4) {
+      pres = 10.0;
+      Real a = 0.05;
+      dens = 1.0 + 0.5*drho_rho0*(tanh((x2v + 0.5)/a) - tanh((x2v - 0.5)/a));
+      vx = vshear*(tanh((x2v + 0.5)/a) - tanh((x2v - 0.5)/a) - 1.0);
+      Real ave_sine = sin(2.*M_PI*x1v);
+      if (x1v > 0.0) {
+        ave_sine -= sin(2.*M_PI*(-0.5 + x1v));
+      } else {
+        ave_sine -= sin(2.*M_PI*(0.5 + x1v));
+      }
+      ave_sine /= 2.0;
+
+      // translated x1= x - 1/2 relative to Lecoanet (2015) shifts sine function by pi
+      // (half-period) and introduces U_z sign change:
+      vy = -amp*ave_sine*
+            (exp(-(SQR(x2v + 0.5))/(sigma*sigma)) + exp(-(SQR(x2v - 0.5))/(sigma*sigma)));
+      scal = 0.5*(tanh((x2v + 0.5)/a) - tanh((x2v - 0.5)/a) + 2.0);
+      vz = 0.0;
     }
 
     // set primitives in both newtonian and SR hydro
-    w0(m,IDN,k,j,i) = dens;
-    w0(m,IEN,k,j,i) = pres/gm1;
-    w0(m,IVX,k,j,i) = u00*vx;
-    w0(m,IVY,k,j,i) = u00*vy;
-    w0(m,IVZ,k,j,i) = u00*vz;
+    w0_(m,IDN,k,j,i) = dens;
+    w0_(m,IEN,k,j,i) = pres/gm1;
+    w0_(m,IVX,k,j,i) = u00*vx;
+    w0_(m,IVY,k,j,i) = u00*vy;
+    w0_(m,IVZ,k,j,i) = u00*vz;
     // add passive scalars
-    for (int n=nhydro; n<(nhydro+nscalars); ++n) {
-      w0(m,n,k,j,i) = scal;
+    for (int n=nfluid; n<(nfluid+nscalars); ++n) {
+      w0_(m,n,k,j,i) = scal;
     }
   });
 
+  // initialize magnetic fields if MHD
+  if (pmbp->pmhd != nullptr) {
+    // Read magnetic field strength
+    Real bx = pin->GetReal("problem","b0");
+    auto &b0 = pmbp->pmhd->b0;
+    auto &bcc0 = pmbp->pmhd->bcc0;
+    par_for("pgen_b0", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      b0.x1f(m,k,j,i) = bx;
+      b0.x2f(m,k,j,i) = 0.0;
+      b0.x3f(m,k,j,i) = 0.0;
+      if (i==ie) b0.x1f(m,k,j,i+1) = bx;
+      if (j==je) b0.x2f(m,k,j+1,i) = 0.0;
+      if (k==ke) b0.x3f(m,k+1,j,i) = 0.0;
+      bcc0(m,IBX,k,j,i) = bx;
+      bcc0(m,IBY,k,j,i) = 0.0;
+      bcc0(m,IBZ,k,j,i) = 0.0;
+    });
+  }
+
   // Convert primitives to conserved
-  auto &u0 = pmbp->phydro->u0;
-  pmbp->phydro->peos->PrimToCons(w0, u0, is, ie, js, je, ks, ke);
+  if (pmbp->phydro != nullptr) {
+    auto &u0_ = pmbp->phydro->u0;
+    pmbp->phydro->peos->PrimToCons(w0_, u0_, is, ie, js, je, ks, ke);
+  } else if (pmbp->pmhd != nullptr) {
+    auto &u0_ = pmbp->pmhd->u0;
+    auto &bcc0_ = pmbp->pmhd->bcc0;
+    pmbp->pmhd->peos->PrimToCons(w0_, bcc0_, u0_, is, ie, js, je, ks, ke);
+  }
 
   return;
 }

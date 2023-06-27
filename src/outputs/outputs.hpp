@@ -19,7 +19,7 @@
     #error NHISTORY > NREDUCTION in outputs.hpp
 #endif
 
-#define NOUTPUT_CHOICES 78
+#define NOUTPUT_CHOICES 139
 // choices for output variables used in <ouput> blocks in input file
 // TO ADD MORE CHOICES:
 //   - add more strings to array below, change NOUTPUT_CHOICES above appropriately
@@ -36,14 +36,44 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "mhd_bcc1",  "mhd_bcc2",   "mhd_bcc3",   "mhd_bcc",    "mhd_u_bcc", "mhd_w_bcc",
   "mhd_jz",    "mhd_j2",     "mhd_divb",
   "turb_force",
-  "rad_coord",     "rad_fluid",
+  "rad_coord",     "rad_fluid",      "rad_coord_fluid",
   "rad_hydro_u_d", "rad_hydro_u_m1", "rad_hydro_u_m2", "rad_hydro_u_m3", "rad_hydro_u_e",
   "rad_hydro_u",   "rad_hydro_w_d",  "rad_hydro_w_vx", "rad_hydro_w_vy", "rad_hydro_w_vz",
   "rad_hydro_w_e", "rad_hydro_w",    "rad_hydro_u_s",  "rad_hydro_w_s",
   "rad_mhd_u_d",   "rad_mhd_u_m1",   "rad_mhd_u_m2",   "rad_mhd_u_m3",   "rad_mhd_u_e",
   "rad_mhd_u",     "rad_mhd_w_d",    "rad_mhd_w_vx",   "rad_mhd_w_vy",   "rad_mhd_w_vz",
   "rad_mhd_w_e",   "rad_mhd_w",      "rad_mhd_u_s",    "rad_mhd_w_s",    "rad_mhd_bcc1",
-  "rad_mhd_bcc2",  "rad_mhd_bcc3",   "rad_mhd_bcc",    "rad_mhd_u_bcc",  "rad_mhd_w_bcc"};
+  "rad_mhd_bcc2",  "rad_mhd_bcc3",   "rad_mhd_bcc",    "rad_mhd_u_bcc",  "rad_mhd_w_bcc",
+
+
+  "adm_gxx", "adm_gxy", "adm_gxz", "adm_gyy", "adm_gyz", "adm_gzz",
+  "adm_Kxx", "adm_Kxy", "adm_Kxz", "adm_Kyy", "adm_Kyz", "adm_Kzz",
+  "adm_psi4",
+  "adm_alpha", "adm_betax", "adm_betay", "adm_betaz",
+  "adm",
+
+  "z4c_chi",
+  "z4c_gxx", "z4c_gxy", "z4c_gxz", "z4c_gyy", "z4c_gyz", "z4c_gzz",
+  "z4c_Khat",
+  "z4c_Axx", "z4c_Axy", "z4c_Axz", "z4c_Ayy", "z4c_Ayz", "z4c_Azz",
+  "z4c_Gamx", "z4c_Gamy", "z4c_Gamz",
+  "z4c_Theta",
+  "z4c_alpha",
+  "z4c_betax", "z4c_betay", "z4c_betaz",
+  "z4c",
+
+  "con_C",
+  "con_H",
+  "con_M",
+  "con_Z",
+  "con_Mx", "con_My", "con_Mz",
+  "con",
+
+  "mat_rho",
+  "mat_Sx", "mat_Sy", "mat_Sz",
+  "mat_Sxx", "mat_Sxy", "mat_Sxz", "mat_Syy", "mat_Syz", "mat_Szz",
+  "mat"
+};
 
 // forward declarations
 class Mesh;
@@ -146,7 +176,8 @@ class BaseTypeOutput {
   // CC output data on host with dims (n,m,k,j,i) except
   // for restarts, where dims are (m,n,k,j,i)
   HostArray5D<Real> outarray;
-  HostArray5D<Real> outarray_hyd, outarray_mhd, outarray_rad, outarray_force;
+  HostArray5D<Real> outarray_hyd, outarray_mhd, outarray_rad,
+                    outarray_force, outarray_z4c, outarray_adm;
   HostFaceFld4D<Real> outfield;  // FC output field on host
   std::vector<int> noutmbs;   // with MPI, number of output MBs across all ranks
   int noutmbs_min;            // with MPI, minimum number of output MBs across all ranks
@@ -184,6 +215,7 @@ class HistoryOutput : public BaseTypeOutput {
   void LoadOutputData(Mesh *pm) override;
   void LoadHydroHistoryData(HistoryData *pdata, Mesh *pm);
   void LoadMHDHistoryData(HistoryData *pdata, Mesh *pm);
+  void LoadZ4cHistoryData(HistoryData *pdata, Mesh *pm);
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
 };
 

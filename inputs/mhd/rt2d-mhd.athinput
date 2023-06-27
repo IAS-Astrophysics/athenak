@@ -1,0 +1,67 @@
+# AthenaXXX input file for Liska & Wendroff RTI test
+
+<comment>
+problem   = Rayleigh-Taylor instability
+reference = Liska, R., & Wendroff, B., SIAM J. Sci. Comput., 25, 995-1017 (2003)
+
+<job>
+basename  = RTI          # problem ID: basename of output filenames
+
+<mesh>
+nghost    = 3           # Number of ghost cells
+nx1       = 200         # Number of zones in X1-direction
+x1min     = -0.2        # minimum value of X1
+x1max     = 0.2         # maximum value of X1
+ix1_bc    = periodic    # inner-X1 boundary flag
+ox1_bc    = periodic    # outer-X1 boundary flag
+
+nx2       = 600         # Number of zones in X2-direction
+x2min     = -0.6        # minimum value of X2
+x2max     = 0.6         # maximum value of X2
+ix2_bc    = reflect     # inner-X2 boundary flag
+ox2_bc    = reflect     # outer-X2 boundary flag
+
+nx3       = 1           # Number of zones in X3-direction
+x3min     = -0.5        # minimum value of X3
+x3max     = 0.5         # maximum value of X3
+ix3_bc    = periodic    # inner-X3 boundary flag
+ox3_bc    = periodic    # outer-X3 boundary flag
+
+<meshblock>
+nx1       = 200         # Number of cells in each MeshBlock, X1-dir
+nx2       = 300         # Number of cells in each MeshBlock, X2-dir
+nx3       = 1           # Number of cells in each MeshBlock, X3-dir
+
+<time>
+evolution  = dynamic     # dynamic/kinematic/static
+integrator = rk3         # time integration algorithm
+cfl_number = 0.4         # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = 100000      # cycle limit
+tlim       = 10.0        # time limit
+ndiag      = 1           # cycles between diagostic output
+
+<mhd>
+eos             = ideal  # EOS type
+reconstruct     = ppm4   # spatial reconstruction method
+rsolver         = hlld   # Riemann-solver to be used
+const_accel     = true   # add constant accleration source term
+const_accel_val = -0.1   # value of constant acceleration
+const_accel_dir = 2      # direction of constant acceleration
+gamma           = 1.4    # gamma = C_p/C_v
+
+<problem>
+iprob = 1                # 1=single mode, 2=random perts
+amp   = 0.01
+drat  = 2.0
+smooth_interface = true
+b0    = 0.00707107
+
+<output1>
+file_type  = hst         # History data dump
+dt         = 0.01        # time increment between outputs
+
+<output2>
+file_type  = vtk         # Binary data dump
+variable   = mhd_w_bcc   # variables to be output
+dt         = 0.1         # time increment between outputs
+

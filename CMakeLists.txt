@@ -121,6 +121,18 @@ endif()
 if (ENABLE_OPENMP)
   target_link_libraries(athena PUBLIC OpenMP::OpenMP_CXX)
 endif()
+if (${PROBLEM} STREQUAL "z4c_two_puncture")
+	target_include_directories(athena PRIVATE ${CMAKE_SOURCE_DIR}/twopuncturesc/include)
+	target_link_libraries(athena PUBLIC ${CMAKE_SOURCE_DIR}/twopuncturesc/lib/libTwoPunctures.a)
+	#target_include_directories(athena PRIVATE ${CMAKE_SOURCE_DIR}/gsl/include)
+	#target_link_libraries(athena PUBLIC ${CMAKE_SOURCE_DIR}/gsl/lib/libgsl.a)
+        #target_link_libraries(athena PUBLIC ${CMAKE_SOURCE_DIR}/gsl/lib/libgslcblas.a)
+	find_package(GSL REQUIRED)
+	target_link_libraries(athena PUBLIC GSL::gsl GSL::gslcblas)
+	set(TWO_PUNCTURES 1)
+else()
+	set(TWO_PUNCTURES 0)
+endif()
 
 # enable include of header files created in build directories
 target_include_directories(athena PUBLIC
