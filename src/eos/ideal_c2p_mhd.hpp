@@ -24,6 +24,7 @@ void SingleC2P_IdealMHD(MHDCons1D &u, const EOS_Data &eos,
   const Real &dfloor_ = eos.dfloor;
   Real efloor = eos.pfloor/(eos.gamma - 1.0);
   Real tfloor = eos.tfloor;
+  Real sfloor = eos.sfloor;
   Real gm1 = eos.gamma - 1.0;
 
   // apply density floor, without changing momentum or energy
@@ -54,7 +55,13 @@ void SingleC2P_IdealMHD(MHDCons1D &u, const EOS_Data &eos,
     u.e = w.e + e_k + e_m;
     tfloor_used =true;
   }
-
+  // apply entropy floor
+  Real spe_over_eps = gm1/pow(w.d, gm1);
+  Real spe = spe_over_eps*w.e*di;
+  if (spe <= sfloor) {
+    w.e = w.d*sfloor/spe_over_eps;
+    efloor_used = true;
+  }
   return;
 }
 
@@ -262,6 +269,14 @@ void SingleC2P_IdealSRMHD(MHDCons1D &u, const EOS_Data &eos, Real s2, Real b2, R
   Real epsmin = eos.pfloor/(dens*gm1);
   if (eps <= epsmin) {
     eps = epsmin;
+    efloor_used = true;
+  }
+
+  // compute specific entropy then apply floor
+  Real spe_over_eps = gm1/pow(dens, gm1);
+  Real spe = spe_over_eps*eps;
+  if (spe <= eos.sfloor) {
+    eps = eos.sfloor/spe_over_eps;
     efloor_used = true;
   }
 

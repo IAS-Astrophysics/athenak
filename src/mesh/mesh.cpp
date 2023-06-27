@@ -18,6 +18,7 @@
 #include "coordinates/cell_locations.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "z4c/z4c.hpp"
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
 #include "diffusion/conduction.hpp"
@@ -548,6 +549,10 @@ void Mesh::NewTimeStep(const Real tlim) {
     if (pmb_pack->pmhd->psrc->source_terms_enabled) {
       dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->psrc->dtnew) );
     }
+  }
+  // z4c timestep
+  if (pmb_pack->pz4c != nullptr) {
+    dt = std::min(dt, (cfl_no)*(pmb_pack->pz4c->dtnew) );
   }
   // Radiation timestep
   if (pmb_pack->prad != nullptr) {

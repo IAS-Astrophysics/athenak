@@ -18,6 +18,8 @@
 #include "globals.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "adm/adm.hpp"
+#include "z4c/z4c.hpp"
 #include "srcterms/srcterms.hpp"
 #include "srcterms/turb_driver.hpp"
 #include "outputs.hpp"
@@ -85,7 +87,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
        << std::endl << "Input file is likely missing a <radiation> block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if (ivar==43 &&
+  if ((ivar==43 || ivar==44) &&
       ((pm->pmb_pack->prad == nullptr) ||
        (pm->pmb_pack->phydro == nullptr && pm->pmb_pack->pmhd == nullptr))) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
@@ -94,7 +96,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
        << " constructed, or corresponding Hydro or MHD object missing" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar>=44) && (ivar<58) &&
+  if ((ivar>=45) && (ivar<59) &&
       (pm->pmb_pack->prad == nullptr || pm->pmb_pack->phydro == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of Radiation Hydro variables requested in <output> block '"
@@ -102,11 +104,25 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
        << std::endl << "Input file is likely missing corresponding block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar>=58) && (ivar<78) &&
+  if ((ivar>=59) && (ivar<79) &&
       (pm->pmb_pack->prad == nullptr || pm->pmb_pack->pmhd == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of Radiation MHD variables requested in <output> block '"
        << out_params.block_name << "' but Radiation and/or MHD object not constructed."
+       << std::endl << "Input file is likely missing corresponding block" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  if ((ivar>=79) && (ivar<97) && (pm->pmb_pack->padm == nullptr)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+       << "Output of ADM variable requested in <output> block '"
+       << out_params.block_name << "' but ADM object not constructed."
+       << std::endl << "Input file is likely missing corresponding block" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  if ((ivar>=97) && (ivar<139) && (pm->pmb_pack->pz4c == nullptr)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+       << "Output of Z4c variable requested in <output> block '"
+       << out_params.block_name << "' but Z4c object not constructed."
        << std::endl << "Input file is likely missing corresponding block" << std::endl;
     exit(EXIT_FAILURE);
   }
@@ -429,9 +445,53 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     outvars.emplace_back("force3",2,&(pm->pmb_pack->pturb->force));
   }
 
+  // ADM variables, excluding gauge
+  for (int v = 0; v < adm::ADM::nadm - 4; ++v) {
+    if (out_params.variable.compare("adm") == 0 ||
+        out_params.variable.compare(adm::ADM::ADM_names[v]) == 0) {
+      outvars.emplace_back(adm::ADM::ADM_names[v], v, &(pm->pmb_pack->padm->u_adm));
+    }
+  }
+
+  // ADM gauge variables
+  if (nullptr == pm->pmb_pack->pz4c) {
+    for (int v = adm::ADM::nadm - 4; v < adm::ADM::nadm; ++v) {
+      if (out_params.variable.compare("adm") == 0 ||
+          out_params.variable.compare(adm::ADM::ADM_names[v]) == 0) {
+        outvars.emplace_back(adm::ADM::ADM_names[v], v, &(pm->pmb_pack->padm->u_adm));
+      }
+    }
+  }
+
+  // con z4c variables
+  for (int v = 0; v < z4c::Z4c::ncon; ++v) {
+    if (out_params.variable.compare("con") == 0 ||
+        out_params.variable.compare(z4c::Z4c::Constraint_names[v]) == 0) {
+      outvars.emplace_back(z4c::Z4c::Constraint_names[v], v,
+      &(pm->pmb_pack->pz4c->u_con));
+    }
+  }
+
+  // mat z4c variables
+  for (int v = 0; v < z4c::Z4c::nmat; ++v) {
+    if (out_params.variable.compare("mat") == 0 ||
+        out_params.variable.compare(z4c::Z4c::Matter_names[v]) == 0) {
+      outvars.emplace_back(z4c::Z4c::Matter_names[v], v, &(pm->pmb_pack->pz4c->u_mat));
+    }
+  }
+
+  // z4c variables
+  for (int v = 0; v < z4c::Z4c::nz4c; ++v) {
+    if (out_params.variable.compare("z4c") == 0 ||
+        out_params.variable.compare(z4c::Z4c::Z4c_names[v]) == 0) {
+      outvars.emplace_back(z4c::Z4c::Z4c_names[v], v, &(pm->pmb_pack->pz4c->u0));
+    }
+  }
 
   // radiation moments in coordinate frame
-  if (out_params.variable.compare("rad_coord") == 0) {
+  if (out_params.variable.compare(0, 9, "rad_coord") == 0 ||
+      out_params.variable.compare(0, 9, "rad_hydro") == 0 ||
+      out_params.variable.compare(0, 7, "rad_mhd") == 0) {
     out_params.contains_derived = true;
     outvars.emplace_back("r00",0,&(derived_var));
     outvars.emplace_back("r01",1,&(derived_var));
@@ -447,19 +507,22 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
 
   // radiation moments in fluid frame
   if (out_params.variable.compare("rad_fluid") == 0 ||
+      out_params.variable.compare("rad_coord_fluid") == 0 ||
       out_params.variable.compare(0, 9, "rad_hydro") == 0 ||
       out_params.variable.compare(0, 7, "rad_mhd") == 0) {
+    bool needs_fluid_only = (out_params.variable.compare("rad_fluid") == 0);
+    int moments_offset = !(needs_fluid_only) ? 10 : 0;
     out_params.contains_derived = true;
-    outvars.emplace_back("r00_ff",0,&(derived_var));
-    outvars.emplace_back("r01_ff",1,&(derived_var));
-    outvars.emplace_back("r02_ff",2,&(derived_var));
-    outvars.emplace_back("r03_ff",3,&(derived_var));
-    outvars.emplace_back("r11_ff",4,&(derived_var));
-    outvars.emplace_back("r12_ff",5,&(derived_var));
-    outvars.emplace_back("r13_ff",6,&(derived_var));
-    outvars.emplace_back("r22_ff",7,&(derived_var));
-    outvars.emplace_back("r23_ff",8,&(derived_var));
-    outvars.emplace_back("r33_ff",9,&(derived_var));
+    outvars.emplace_back("r00_ff",moments_offset+0,&(derived_var));
+    outvars.emplace_back("r01_ff",moments_offset+1,&(derived_var));
+    outvars.emplace_back("r02_ff",moments_offset+2,&(derived_var));
+    outvars.emplace_back("r03_ff",moments_offset+3,&(derived_var));
+    outvars.emplace_back("r11_ff",moments_offset+4,&(derived_var));
+    outvars.emplace_back("r12_ff",moments_offset+5,&(derived_var));
+    outvars.emplace_back("r13_ff",moments_offset+6,&(derived_var));
+    outvars.emplace_back("r22_ff",moments_offset+7,&(derived_var));
+    outvars.emplace_back("r23_ff",moments_offset+8,&(derived_var));
+    outvars.emplace_back("r33_ff",moments_offset+9,&(derived_var));
   }
 
   // initialize vector containing number of output MBs per rank
