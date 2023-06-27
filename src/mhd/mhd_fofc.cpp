@@ -172,7 +172,7 @@ void MHD::FOFC(Driver *pdriver, int stage) {
           Real &x1min = size.d_view(m).x1min;
           Real &x1max = size.d_view(m).x1max;
           Real x1v = LeftEdgeX(i-is, nx1, x1min, x1max);
-  
+
           Real &x2min = size.d_view(m).x2min;
           Real &x2max = size.d_view(m).x2max;
           Real x2v = CellCenterX(j-js, nx2, x2min, x2max);

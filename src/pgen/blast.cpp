@@ -59,7 +59,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       Real &x1max = size.d_view(m).x1max;
       int nx1 = indcs.nx1;
       Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
-  
+
       Real &x2min = size.d_view(m).x2min;
       Real &x2max = size.d_view(m).x2max;
       int nx2 = indcs.nx2;
@@ -95,7 +95,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
     // Convert primitives to conserved
     pmbp->phydro->peos->PrimToCons(w0_, pmbp->phydro->u0, is, ie, js, je, ks, ke);
-
   }  // End initialization Hydro variables
 
   // initialize MHD variables ------------------------------------------------------------
@@ -171,7 +170,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
     // Convert primitives to conserved
     pmbp->pmhd->peos->PrimToCons(w0_, bcc_, pmbp->pmhd->u0, is, ie, js, je, ks, ke);
-
   }  // End initialization MHD variables
 
   return;
