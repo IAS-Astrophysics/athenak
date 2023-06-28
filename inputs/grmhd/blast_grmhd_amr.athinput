@@ -21,7 +21,7 @@ x2max     = 6.0        # maximum value of X2
 ix2_bc    = periodic   # inner-X2 boundary flag
 ox2_bc    = periodic   # outer-X2 boundary flag
 
-nx3       = 100          # Number of zones in X3-direction
+nx3       = 100        # Number of zones in X3-direction
 x3min     = -6.0       # minimum value of X3
 x3max     = 6.0        # maximum value of X3
 ix3_bc    = periodic   # inner-X3 boundary flag
@@ -30,7 +30,7 @@ ox3_bc    = periodic   # outer-X3 boundary flag
 <meshblock>
 nx1       = 10         # Number of cells in each MeshBlock, X1-dir
 nx2       = 10         # Number of cells in each MeshBlock, X2-dir
-nx3       = 10           # Number of cells in each MeshBlock, X3-dir
+nx3       = 10         # Number of cells in each MeshBlock, X3-dir
 
 <mesh_refinement>
 refinement = adaptive
@@ -90,4 +90,3 @@ dt         = 0.1        # time increment between outputs
 <output3>
 file_type   = log
 dcycle      = 1
-~                                                                                         

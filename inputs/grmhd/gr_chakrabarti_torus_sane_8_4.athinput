@@ -75,13 +75,13 @@ x3min = -8.0
 x3max = 8.0
 
 <refinement5>
-level = 1
-x1min = -64.0
-x1max = 64.0
-x2min = -64.0
-x2max = 64.0
-x3min = -64.0
-x3max = 64.0
+level = 5
+x1min = -4.0
+x1max = 4.0
+x2min = -4.0
+x2max = 4.0
+x3min = -4.0
+x3max = 4.0
 
 <time>
 evolution  = dynamic     # dynamic/kinematic/static
