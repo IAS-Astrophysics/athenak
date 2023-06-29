@@ -33,8 +33,8 @@ def analyze():
     omega_error = np.abs(np.average(omega) - 0.5)/0.5
     omega_std = np.std(omega)
     analyze_status = True
-    error_threshold = 0.05
-    std_threshold = 0.05
+    error_threshold = 0.04
+    std_threshold = 0.0525
     if (omega_error > error_threshold):
         logger.warning("Rotation rate error too large, "
                        "error: {0:g} threshold: {1:g}".

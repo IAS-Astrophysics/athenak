@@ -9,28 +9,44 @@ basename  = Blast      # problem ID: basename of output filenames
 
 <mesh>
 nghost    = 4          # Number of ghost cells
-nx1       = 400        # Number of zones in X1-direction
+nx1       = 100        # Number of zones in X1-direction
 x1min     = -6.0       # minimum value of X1
 x1max     = 6.0        # maximum value of X1
 ix1_bc    = periodic   # inner-X1 boundary flag
 ox1_bc    = periodic   # outer-X1 boundary flag
 
-nx2       = 400        # Number of zones in X2-direction
+nx2       = 100        # Number of zones in X2-direction
 x2min     = -6.0       # minimum value of X2
 x2max     = 6.0        # maximum value of X2
 ix2_bc    = periodic   # inner-X2 boundary flag
 ox2_bc    = periodic   # outer-X2 boundary flag
 
-nx3       = 1          # Number of zones in X3-direction
-x3min     = -0.5       # minimum value of X3
-x3max     = 0.5        # maximum value of X3
+nx3       = 100        # Number of zones in X3-direction
+x3min     = -6.0       # minimum value of X3
+x3max     = 6.0        # maximum value of X3
 ix3_bc    = periodic   # inner-X3 boundary flag
 ox3_bc    = periodic   # outer-X3 boundary flag
 
 <meshblock>
-nx1       = 400         # Number of cells in each MeshBlock, X1-dir
-nx2       = 400         # Number of cells in each MeshBlock, X2-dir
-nx3       = 1           # Number of cells in each MeshBlock, X3-dir
+nx1       = 10         # Number of cells in each MeshBlock, X1-dir
+nx2       = 10         # Number of cells in each MeshBlock, X2-dir
+nx3       = 10         # Number of cells in each MeshBlock, X3-dir
+
+<mesh_refinement>
+refinement = adaptive
+num_levels = 2
+dpres_max  = 0.25
+refine_interval = 3
+max_nmb_per_rank = 2300
+
+<refinement1>
+x1min = -1.5
+x1max = 1.5
+x2min = -1.5
+x2max = 1.5
+x3min = -1.5
+x3max = 1.5
+level = 1
 
 <time>
 evolution  = dynamic    # dynamic/kinematic/static
@@ -41,11 +57,12 @@ tlim       = 4.0        # time limit
 ndiag      = 1          # cycles between diagostic output
 
 <coord>
-special_rel = true
+general_rel = true
+minkowski = true
 
 <mhd>
 eos         = ideal     # EOS type
-reconstruct = ppmx      # spatial reconstruction method
+reconstruct = ppm4      # spatial reconstruction method
 rsolver     = hlle      # Riemann-solver to be used
 gamma       = 1.3333333 # gamma = C_p/C_v
 dfloor      = 1.0e-10
@@ -66,15 +83,10 @@ file_type  = hst        # History data dump
 dt         = 0.01       # time increment between outputs
 
 <output2>
-file_type  = vtk        # VTK data dump
-variable   = mhd_w      # variables to be output
+file_type  = bin        # binary data dump
+variable   = mhd_w_bcc  # variables to be output
 dt         = 0.1        # time increment between outputs
 
 <output3>
-file_type  = vtk        # VTK data dump
-variable   = mhd_bcc    # variables to be output
-dt         = 0.1        # time increment between outputs
-
-<output4>
 file_type   = log
 dcycle      = 1

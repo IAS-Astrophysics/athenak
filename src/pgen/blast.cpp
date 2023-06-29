@@ -49,31 +49,29 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   auto &size = pmbp->pmb->mb_size;
 
-  // Select either Hydro or MHD
-  hydro::Hydro *phydro = pmbp->phydro;
-  mhd::MHD *pmhd = pmbp->pmhd;
+  // initialize Hydro variables ----------------------------------------------------------
+  if (pmbp->phydro != nullptr) {
+    auto &w0_ = pmbp->phydro->w0;
+    Real gm1 = pmbp->phydro->peos->eos_data.gamma - 1.0;
+    par_for("pgen_blast1",DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
+    KOKKOS_LAMBDA(int m,int k,int j,int i) {
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      int nx1 = indcs.nx1;
+      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
-  par_for("pgen_blast1",DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
-  KOKKOS_LAMBDA(int m,int k,int j,int i) {
-    Real &x1min = size.d_view(m).x1min;
-    Real &x1max = size.d_view(m).x1max;
-    int nx1 = indcs.nx1;
-    Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+      Real &x2min = size.d_view(m).x2min;
+      Real &x2max = size.d_view(m).x2max;
+      int nx2 = indcs.nx2;
+      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
-    Real &x2min = size.d_view(m).x2min;
-    Real &x2max = size.d_view(m).x2max;
-    int nx2 = indcs.nx2;
-    Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+      Real &x3min = size.d_view(m).x3min;
+      Real &x3max = size.d_view(m).x3max;
+      int nx3 = indcs.nx3;
+      Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
-    Real &x3min = size.d_view(m).x3min;
-    Real &x3max = size.d_view(m).x3max;
-    int nx3 = indcs.nx3;
-    Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+      Real rad = std::sqrt(SQR(x1v) + SQR(x2v) + SQR(x3v));
 
-    Real rad = std::sqrt(SQR(x1v) + SQR(x2v) + SQR(x3v));
-
-    // initialize Hydro, MHD, or both.
-    if (phydro != nullptr) {
       Real den = dn_amb;
       Real pres = pn_amb;
       if (rad < rout) {
@@ -88,13 +86,40 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
           pres = exp(log_pres);
         }
       }
-      phydro->w0(m,IDN,k,j,i) = den;
-      phydro->w0(m,IVX,k,j,i) = 0.0;
-      phydro->w0(m,IVY,k,j,i) = 0.0;
-      phydro->w0(m,IVZ,k,j,i) = 0.0;
-      phydro->w0(m,IEN,k,j,i) = pres/(phydro->peos->eos_data.gamma - 1.0);
-    }
-    if (pmhd != nullptr) {
+      w0_(m,IDN,k,j,i) = den;
+      w0_(m,IVX,k,j,i) = 0.0;
+      w0_(m,IVY,k,j,i) = 0.0;
+      w0_(m,IVZ,k,j,i) = 0.0;
+      w0_(m,IEN,k,j,i) = pres/gm1;
+    });
+
+    // Convert primitives to conserved
+    pmbp->phydro->peos->PrimToCons(w0_, pmbp->phydro->u0, is, ie, js, je, ks, ke);
+  }  // End initialization Hydro variables
+
+  // initialize MHD variables ------------------------------------------------------------
+  if (pmbp->pmhd != nullptr) {
+    auto &w0_ = pmbp->pmhd->w0;
+    Real gm1 = pmbp->pmhd->peos->eos_data.gamma - 1.0;
+    par_for("pgen_blast1",DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
+    KOKKOS_LAMBDA(int m,int k,int j,int i) {
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      int nx1 = indcs.nx1;
+      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+
+      Real &x2min = size.d_view(m).x2min;
+      Real &x2max = size.d_view(m).x2max;
+      int nx2 = indcs.nx2;
+      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+
+      Real &x3min = size.d_view(m).x3min;
+      Real &x3max = size.d_view(m).x3max;
+      int nx3 = indcs.nx3;
+      Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+
+      Real rad = std::sqrt(SQR(x1v) + SQR(x2v) + SQR(x3v));
+
       Real den = di_amb;
       Real pres = pi_amb;
       if (rad < rout) {
@@ -109,18 +134,15 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
           pres = exp(log_pres);
         }
       }
-      pmhd->w0(m,IDN,k,j,i) = den;
-      pmhd->w0(m,IVX,k,j,i) = 0.0;
-      pmhd->w0(m,IVY,k,j,i) = 0.0;
-      pmhd->w0(m,IVZ,k,j,i) = 0.0;
-      pmhd->w0(m,IEN,k,j,i) = pres/(pmhd->peos->eos_data.gamma - 1.0);
-    }
-  });
+      w0_(m,IDN,k,j,i) = den;
+      w0_(m,IVX,k,j,i) = 0.0;
+      w0_(m,IVY,k,j,i) = 0.0;
+      w0_(m,IVZ,k,j,i) = 0.0;
+      w0_(m,IEN,k,j,i) = pres/gm1;
+    });
 
-  // initialize magnetic fields ---------------------------------------
-
-  if (pmhd != nullptr) {
-    auto &b0 = pmhd->b0;
+    // initialize magnetic fields
+    auto &b0 = pmbp->pmhd->b0;
     par_for("pgen_blast2",DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       b0.x1f(m,k,j,i) = b_amb;
@@ -134,7 +156,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     });
 
     // Compute cell-centered fields
-    auto &bcc_ = pmhd->bcc0;
+    auto &bcc_ = pmbp->pmhd->bcc0;
     par_for("pgen_blast3",DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       // cell-centered fields are simple linear average of face-centered fields
@@ -145,15 +167,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       w_by = 0.5*(b0.x2f(m,k,j,i) + b0.x2f(m,k,j+1,i));
       w_bz = 0.5*(b0.x3f(m,k,j,i) + b0.x3f(m,k+1,j,i));
     });
-  }
 
-  // Convert primitives to conserved
-  if (phydro != nullptr) {
-    phydro->peos->PrimToCons(phydro->w0, phydro->u0, is, ie, js, je, ks, ke);
-  }
-  if (pmhd != nullptr) {
-    pmhd->peos->PrimToCons(pmhd->w0, pmhd->bcc0, pmhd->u0, is, ie, js, je, ks, ke);
-  }
+    // Convert primitives to conserved
+    pmbp->pmhd->peos->PrimToCons(w0_, bcc_, pmbp->pmhd->u0, is, ie, js, je, ks, ke);
+  }  // End initialization MHD variables
 
   return;
 }
