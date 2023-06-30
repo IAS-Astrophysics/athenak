@@ -75,7 +75,17 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
   auto &e21_ = pmy_pack->pmhd->e2x1;
   auto &bx_  = pmy_pack->pmhd->b0.x1f;
 
-  par_for_outer("dyngrflux_x1",DevExeSpace(), scr_size, scr_level, 0, nmb1, ks, ke, js, je,
+  // set the loop limits for 1D/2D/3D problems
+  int jl, ju, kl, ku;
+  if (pmy_pack->pmesh->one_d) {
+    jl = js, ju = je, kl = ks, ku = ke;
+  } else if (pmy_pack->pmesh->two_d) {
+    jl = js-1, ju = je+1, kl = ks, ku = ke;
+  } else {
+    jl = js-1, ju = je+1, kl = ks-1, ku = ke+1;
+  }
+
+  par_for_outer("dyngrflux_x1",DevExeSpace(), scr_size, scr_level, 0, nmb1, kl, ku, jl, ju,
   KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {
     ScrArray2D<Real> wl(member.team_scratch(scr_level), nvars, ncells1);
     ScrArray2D<Real> wr(member.team_scratch(scr_level), nvars, ncells1);
@@ -136,7 +146,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
     const auto rsolver = rsolver_;
     int il = is; int iu = ie+1;
     if constexpr (rsolver == DynGR_RSolver::llf_dyngr) {
-      LLF_DYNGR(member, dyn_eos, indcs, size, coord, m, k, j, il, iu, IVX, 
+      LLF_DYNGR(member, dyn_eos, indcs, size, coord, m, k, j, is, ie+1, IVX, 
                 wl, wr, bl, br, bx, nhyd_, nscal_, gface1_dd, betaface1_u, alphaface1, flx1, e31, e21);
     }
     //} else { other Riemann solvers here
@@ -171,7 +181,14 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
     auto &e12_ = pmy_pack->pmhd->e1x2;
     auto &e32_ = pmy_pack->pmhd->e3x2;
 
-    par_for_outer("dyngrflux_x2",DevExeSpace(), scr_size, scr_level, 0, nmb1, ks, ke,
+    // set the loop limits for 2D/3D problems
+    if (pmy_pack->pmesh->two_d) {
+      kl = ks, ku = ke;
+    } else { // 3D
+      kl = ks-1, ku = ke+1;
+    }
+
+    par_for_outer("dyngrflux_x2",DevExeSpace(), scr_size, scr_level, 0, nmb1, kl, ku,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k) {
       ScrArray2D<Real> scr1(member.team_scratch(scr_level), nvars, ncells1);
       ScrArray2D<Real> scr2(member.team_scratch(scr_level), nvars, ncells1);
@@ -206,18 +223,18 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         // Reconstruct qR[j] and qL[j+1]
         switch (recon_method_) {
           case ReconstructionMethod::dc:
-            DonorCellX2(member, m, k, j, is, ie, w0_, wl_jp1, wr);
-            DonorCellX2(member, m, k, j, is, ie, b0_, bl_jp1, br);
+            DonorCellX2(member, m, k, j, is-1, ie+1, w0_, wl_jp1, wr);
+            DonorCellX2(member, m, k, j, is-1, ie+1, b0_, bl_jp1, br);
             break;
           case ReconstructionMethod::plm:
-            PiecewiseLinearX2(member, m, k, j, is, ie, w0_, wl_jp1, wr);
-            PiecewiseLinearX2(member, m, k, j, is, ie, b0_, bl_jp1, br);
+            PiecewiseLinearX2(member, m, k, j, is-1, ie+1, w0_, wl_jp1, wr);
+            PiecewiseLinearX2(member, m, k, j, is-1, ie+1, b0_, bl_jp1, br);
             break;
           // JF: These higher-order reconstruction methods all need EOS_Data to calculate a floor.
           case ReconstructionMethod::ppm4:
           case ReconstructionMethod::ppmx:
-            PiecewiseParabolicX2(member,eos_,extrema,false, m, k, j, is, ie, w0_, wl_jp1, wr);
-            PiecewiseParabolicX2(member,eos_,extrema,false, m, k, j, is, ie, b0_, bl_jp1, br);
+            PiecewiseParabolicX2(member,eos_,extrema,false, m, k, j, is-1, ie+1, w0_, wl_jp1, wr);
+            PiecewiseParabolicX2(member,eos_,extrema,false, m, k, j, is-1, ie+1, b0_, bl_jp1, br);
             break;
           case ReconstructionMethod::wenoz:
             WENOZX2(member, eos_, false, m, k, j, is-1, ie+1, w0_, wl_jp1, wr);
@@ -230,7 +247,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         member.team_barrier();
 
         // Calculate metric at faces
-        Face2Metric(member, m, k, j, is, ie, adm.g_dd, adm.beta_u, adm.alpha, gface2_dd, betaface2_u, alphaface2);
+        Face2Metric(member, m, k, j, is-1, ie+1, adm.g_dd, adm.beta_u, adm.alpha, gface2_dd, betaface2_u, alphaface2);
 
         // TODO do I need a member team barrier here?
         member.team_barrier();
@@ -250,7 +267,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         int il = is; int iu = ie;
         if (j>(js-1)) {
           if constexpr (rsolver == DynGR_RSolver::llf_dyngr) {
-            LLF_DYNGR(member, dyn_eos, indcs, size, coord, m, k, j, il, iu, IVY, 
+            LLF_DYNGR(member, dyn_eos, indcs, size, coord, m, k, j, is-1, ie+1, IVY, 
                       wl, wr, bl, br, by, nhyd_, nscal_, gface2_dd, betaface2_u, alphaface2, flx2,
                       e12, e32);
           }
@@ -289,7 +306,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
     auto &e23_  = pmy_pack->pmhd->e2x3;
     auto &e13_  = pmy_pack->pmhd->e1x3;
 
-    par_for_outer("dyngrflux_x3",DevExeSpace(), scr_size, scr_level, 0, nmb1, js, je,
+    par_for_outer("dyngrflux_x3",DevExeSpace(), scr_size, scr_level, 0, nmb1, js-1, je+1,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int j) {
       ScrArray2D<Real> scr1(member.team_scratch(scr_level), nvars, ncells1);
       ScrArray2D<Real> scr2(member.team_scratch(scr_level), nvars, ncells1);
@@ -324,18 +341,18 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         // Reconstruct qR[j] and qL[j+1]
         switch (recon_method_) {
           case ReconstructionMethod::dc:
-            DonorCellX3(member, m, k, j, is, ie, w0_, wl_kp1, wr);
-            DonorCellX3(member, m, k, j, is, ie, b0_, bl_kp1, br);
+            DonorCellX3(member, m, k, j, is-1, ie+1, w0_, wl_kp1, wr);
+            DonorCellX3(member, m, k, j, is-1, ie+1, b0_, bl_kp1, br);
             break;
           case ReconstructionMethod::plm:
-            PiecewiseLinearX3(member, m, k, j, is, ie, w0_, wl_kp1, wr);
-            PiecewiseLinearX3(member, m, k, j, is, ie, b0_, bl_kp1, br);
+            PiecewiseLinearX3(member, m, k, j, is-1, ie+1, w0_, wl_kp1, wr);
+            PiecewiseLinearX3(member, m, k, j, is-1, ie+1, b0_, bl_kp1, br);
             break;
           // JF: These higher-order reconstruction methods all need EOS_Data to calculate a floor.
           case ReconstructionMethod::ppm4:
           case ReconstructionMethod::ppmx:
-            PiecewiseParabolicX3(member,eos_,extrema,false, m, k, j, is, ie, w0_, wl_kp1, wr);
-            PiecewiseParabolicX3(member,eos_,extrema,false, m, k, j, is, ie, b0_, bl_kp1, br);
+            PiecewiseParabolicX3(member,eos_,extrema,false, m, k, j, is-1, ie+1, w0_, wl_kp1, wr);
+            PiecewiseParabolicX3(member,eos_,extrema,false, m, k, j, is-1, ie+1, b0_, bl_kp1, br);
             break;
           case ReconstructionMethod::wenoz:
             WENOZX3(member, eos_, false, m, k, j, is-1, ie+1, w0_, wl_kp1, wr);
@@ -348,7 +365,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         member.team_barrier();
 
         // Calculate metric at faces
-        Face3Metric(member, m, k, j, is, ie, adm.g_dd, adm.beta_u, adm.alpha, gface3_dd, betaface3_u, alphaface3);
+        Face3Metric(member, m, k, j, is-1, ie+1, adm.g_dd, adm.beta_u, adm.alpha, gface3_dd, betaface3_u, alphaface3);
 
         // TODO do I need a member team barrier here?
         member.team_barrier();
@@ -368,7 +385,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         int il = is; int iu = ie;
         if (k>(ks-1)) {
           if constexpr (rsolver == DynGR_RSolver::llf_dyngr) {
-            LLF_DYNGR(member, dyn_eos, indcs, size, coord, m, k, j, il, iu, IVZ,
+            LLF_DYNGR(member, dyn_eos, indcs, size, coord, m, k, j, is-1, ie+1, IVZ,
                       wl, wr, bl, br, bz, nhyd_, nscal_, gface3_dd, betaface3_u, alphaface3, flx3,
                       e23, e13);
           }

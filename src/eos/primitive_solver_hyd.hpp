@@ -105,9 +105,11 @@ class PrimitiveSolverHydro {
                       const int ibx, const int iby, const int ibz) const {
       auto &eos = ps.GetEOS();
       Real mb = eos.GetBaryonMass();
-      b[ibx] = bx(m, k, j, i);
-      b[iby] = brc(iby, i);
-      b[ibz] = brc(ibz, i);
+      // The magnetic field is densitized, but the PrimToCon call 
+      // needs undensitized variables.
+      b[ibx] = bx(m, k, j, i)/sdetg;
+      b[iby] = brc(iby, i)/sdetg;
+      b[ibz] = brc(ibz, i)/sdetg;
       /*b[ibx] = 0.0;
       b[iby] = 0.0;
       b[ibz] = 0.0;*/
@@ -137,7 +139,7 @@ class PrimitiveSolverHydro {
 
       // Check for NaNs
       if (CheckForConservedNaNs(cons_pt)) {
-        printf("Location: PrimToConsPt");
+        printf("Location: PrimToConsPt\n");
         DumpPrimitiveVars(prim_pt);
       }
 
@@ -145,6 +147,9 @@ class PrimitiveSolverHydro {
       for (int i = 0; i < nhyd + nscal; i++) {
         cons_pt[i] *= sdetg;
       }
+      b[ibx] *= sdetg;
+      b[iby] *= sdetg;
+      b[ibz] *= sdetg;
 
       // Copy floored primitives back into the original array.
       // TODO: Check if this is necessary
@@ -193,7 +198,11 @@ class PrimitiveSolverHydro {
         g3d[S33] = adm.g_dd(m, 2, 2, k, j, i);
         Real sdetg = sqrt(Primitive::GetDeterminant(g3d));
 
-        Real b[NMAG] = {bcc(m, IBX, k, j, i), bcc(m, IBY, k, j, i), bcc(m, IBZ, k, j, i)};
+        // The magnetic field is densitized, but the PrimToCon calculation is
+        // done with undensitized variables.
+        Real b[NMAG] = {bcc(m, IBX, k, j, i)/sdetg, 
+                        bcc(m, IBY, k, j, i)/sdetg, 
+                        bcc(m, IBZ, k, j, i)/sdetg};
 
         // Extract primitive variables at a single point
         Real prim_pt[NPRIM], cons_pt[NCONS];
@@ -252,7 +261,8 @@ class PrimitiveSolverHydro {
       return;
     }
 
-    void ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &bcc0, DvceArray5D<Real> &prim,
+    void ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &bfc, 
+                    DvceArray5D<Real> &bcc0, DvceArray5D<Real> &prim,
                     const int il, const int iu, const int jl, const int ju,
                     const int kl, const int ku, bool floors_only=false) {
       //auto &indcs = pmy_pack->pmesh->mb_indcs;
@@ -325,9 +335,23 @@ class PrimitiveSolverHydro {
         for (int n = 0; n < nscal; n++) {
           cons_pt[CYD + n] = cons(m, nhyd + n, k, j, i)*isdetg;
         }
-        Real b3u[NMAG] = {bcc0(m, IBX, k, j, i)*isdetg, 
-                          bcc0(m, IBY, k, j, i)*isdetg, 
-                          bcc0(m, IBZ, k, j, i)*isdetg};
+        // If we're only testing the floors, we can use the CC fields.
+        Real b3u[NMAG];
+        if (floors_only) {
+          b3u[IBX] = bcc0(m, IBX, k, j, i)*isdetg;
+          b3u[IBY] = bcc0(m, IBY, k, j, i)*isdetg;
+          b3u[IBZ] = bcc0(m, IBZ, k, j, i)*isdetg;
+        }
+        // Otherwise we don't have the correct CC fields yet, so use
+        // the FC fields.
+        else {
+          bcc0(m, IBX, k, j, i) = 0.5*(bfc.x1f(m,k,j,i) + bfc.x1f(m,k,j,i+1));
+          bcc0(m, IBY, k, j, i) = 0.5*(bfc.x2f(m,k,j,i) + bfc.x2f(m,k,j,i+1));
+          bcc0(m, IBZ, k, j, i) = 0.5*(bfc.x3f(m,k,j,i) + bfc.x3f(m,k,j,i+1));
+          b3u[IBX] = bcc0(m, IBX, k, j, i)*isdetg;
+          b3u[IBY] = bcc0(m, IBY, k, j, i)*isdetg;
+          b3u[IBZ] = bcc0(m, IBZ, k, j, i)*isdetg;
+        }
 
         // If we're in an excised region, set the primitives to some default value.
         Primitive::SolverResult result;
@@ -366,25 +390,6 @@ class PrimitiveSolverHydro {
         else {
           if (result.error != Primitive::Error::SUCCESS) {
             // TODO: put in a proper error response here.
-            /*printf("An error occurred during the primitive solve: %s\n", ErrorToString(result.error));
-            printf("  Location: (%d, %d, %d, %d)\n", m, k, j, i);
-            printf("  Conserved vars: \n");
-            printf("    D   = %g\n",cons_pt_old[CDN]);
-            printf("    Sx  = %g\n",cons_pt_old[CSX]);
-            printf("    Sy  = %g\n",cons_pt_old[CSY]);
-            printf("    Sz  = %g\n",cons_pt_old[CSZ]);
-            printf("    tau = %g\n",cons_pt_old[CTA]);
-            printf("  Metric vars: \n");
-            printf("    detg = %g\n", detg);
-            printf("    g_dd = {%g, %g, %g, %g, %g, %g}\n",g3d[S11], g3d[S12], g3d[S13], 
-                    g3d[S22], g3d[S23], g3d[S33]);
-            printf("    alp  = %g\n", adm.alpha(m, k,j,i));
-            printf("    beta = {%g, %g, %g}\n", adm.beta_u(m, 0, k, j, i), adm.beta_u(m, 1, k, j, i),
-                    adm.beta_u(m, 2, k, j, i));
-            printf("    psi4 = %g\n", adm.psi4(m, k, j, i));
-            printf("    K_dd = {%g, %g, %g, %g, %g, %g}\n", adm.K_dd(m, 0, 0, k, j, i),
-                    adm.K_dd(m, 0, 1, k, j, i), adm.K_dd(m, 0, 2, k, j, i), adm.K_dd(m, 1, 1, k, j, i),
-                    adm.K_dd(m, 1, 2, k, j, i), adm.K_dd(m, 2, 2, k, j, i));*/
             printf("An error occurred during the primitive solve: %s\n"
                    "  Location: (%d, %d, %d, %d)\n"
                    "  Conserved vars: \n"
@@ -588,12 +593,12 @@ class PrimitiveSolverHydro {
     KOKKOS_INLINE_FUNCTION
     void DumpPrimitiveVars(const Real prim_pt[NPRIM]) const {
       printf("Primitive vars: \n"
-             "  rho = %g"
-             "  ux  = %g"
-             "  uy  = %g"
-             "  uz  = %g"
-             "  P   = %g"
-             "  T   = %g",
+             "  rho = %g\n"
+             "  ux  = %g\n"
+             "  uy  = %g\n"
+             "  uz  = %g\n"
+             "  P   = %g\n"
+             "  T   = %g\n",
              prim_pt[PRH], prim_pt[PVX], prim_pt[PVY], 
              prim_pt[PVZ], prim_pt[PPR], prim_pt[PTM]);
     }

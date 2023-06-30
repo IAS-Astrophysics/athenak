@@ -230,13 +230,16 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage) {
         const Real &b2 = bcc_(m,IBY,k,j,i);
         const Real &b3 = bcc_(m,IBZ,k,j,i);
         Real iW = 1.0/sqrt(1.0
-                    + adm.g_dd(m,0,0,ks,j,i)*ux*ux + 2.0*adm.g_dd(m,0,1,ks,j,i)*ux*uy
-                    + 2.0*adm.g_dd(m,0,2,ks,j,i)*ux*uz + adm.g_dd(m,1,1,ks,j,i)*uy*uy
-                    + 2.0*adm.g_dd(m,1,2,ks,j,i)*uy*uz + adm.g_dd(m,2,2,ks,j,i)*uz*uz);
+                    + adm.g_dd(m,0,0,k,j,i)*ux*ux + 2.0*adm.g_dd(m,0,1,k,j,i)*ux*uy
+                    + 2.0*adm.g_dd(m,0,2,k,j,i)*ux*uz + adm.g_dd(m,1,1,k,j,i)*uy*uy
+                    + 2.0*adm.g_dd(m,1,2,k,j,i)*uy*uz + adm.g_dd(m,2,2,k,j,i)*uz*uz);
         const Real &alpha = adm.alpha(m, k, j, i);
         Real v1a = alpha*ux*iW - adm.beta_u(m, 0, k, j, i);
         Real v2a = alpha*uy*iW - adm.beta_u(m, 1, k, j, i);
         Real v3a = alpha*uz*iW - adm.beta_u(m, 2, k, j, i);
+        //Real v1a = 0.0;
+        //Real v2a = 0.0;
+        //Real v3a = 0.0;
 
         e1cc_(m,k,j,i) = b2 * v3a - b3 * v2a;
         e2cc_(m,k,j,i) = b3 * v1a - b1 * v3a;

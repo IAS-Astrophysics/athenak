@@ -238,7 +238,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::ConToPrim(Driver *pdrive, int stage)
   int n1m1 = indcs.nx1 + 2*ng - 1;
   int n2m1 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng - 1) : 0;
   int n3m1 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng - 1) : 0;
-  eos.ConsToPrim(pmy_pack->pmhd->u0, pmy_pack->pmhd->bcc0, pmy_pack->pmhd->w0,
+  eos.ConsToPrim(pmy_pack->pmhd->u0, pmy_pack->pmhd->b0, pmy_pack->pmhd->bcc0, pmy_pack->pmhd->w0,
                  0, n1m1, 0, n2m1, 0, n3m1, false);
   return TaskStatus::complete;
 }
