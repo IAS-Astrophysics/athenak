@@ -346,8 +346,8 @@ class PrimitiveSolverHydro {
         // the FC fields.
         else {
           bcc0(m, IBX, k, j, i) = 0.5*(bfc.x1f(m,k,j,i) + bfc.x1f(m,k,j,i+1));
-          bcc0(m, IBY, k, j, i) = 0.5*(bfc.x2f(m,k,j,i) + bfc.x2f(m,k,j,i+1));
-          bcc0(m, IBZ, k, j, i) = 0.5*(bfc.x3f(m,k,j,i) + bfc.x3f(m,k,j,i+1));
+          bcc0(m, IBY, k, j, i) = 0.5*(bfc.x2f(m,k,j,i) + bfc.x2f(m,k,j+1,i));
+          bcc0(m, IBZ, k, j, i) = 0.5*(bfc.x3f(m,k,j,i) + bfc.x3f(m,k+1,j,i));
           b3u[IBX] = bcc0(m, IBX, k, j, i)*isdetg;
           b3u[IBY] = bcc0(m, IBY, k, j, i)*isdetg;
           b3u[IBZ] = bcc0(m, IBZ, k, j, i)*isdetg;

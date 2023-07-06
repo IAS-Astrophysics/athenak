@@ -109,6 +109,10 @@ void LLF_DYNGR(TeamMember_t const &member,
 
     // Calculate 4-magnetic field (undensitized) for the left state.
     Real bul0 = Primitive::Contract(Bu_l, udl)/(alpha*sdetg);
+    /*Real bul[3];
+    for (int a = 0; a < 3; a++) {
+      bul[a] = (Bu_l[a] + alpha*bul0*(uul[a] - Wl*beta_u[a]/alpha))/Wl;
+    }*/
     Real bdl[3];
     for (int a = 0; a < 3; a++) {
       bdl[a] = alpha*bul0*udl[a];
@@ -118,6 +122,16 @@ void LLF_DYNGR(TeamMember_t const &member,
       bdl[a] = bdl[a]/Wl;
     }
     Real bsql = (Primitive::SquareVector(Bu_l, g3d)/detg + SQR(alpha*bul0))/(Wsql);
+
+    // DEBUG: recalculate the conserved values using an alternate formulation
+    /*Real hl = eos.ps.GetEOS().GetEnthalpy(prim_l[PRH], prim_l[PTM], &prim_l[PYF]);
+    Real mb = eos.ps.GetEOS().GetBaryonMass();
+    cons_l[CDN] = prim_l[PRH]*mb*Wl;
+    cons_l[CSX] = (prim_l[PRH]*mb*hl + bsql)*Wl*udl[0] - alpha*bul0*bdl[0];
+    cons_l[CSY] = (prim_l[PRH]*mb*hl + bsql)*Wl*udl[1] - alpha*bul0*bdl[1];
+    cons_l[CSZ] = (prim_l[PRH]*mb*hl + bsql)*Wl*udl[2] - alpha*bul0*bdl[2];
+    cons_l[CTA] = (prim_l[PRH]*mb*hl + bsql)*Wsql - (prim_l[PPR] + 0.5*bsql) 
+                - SQR(alpha*bul0) - cons_l[CDN];*/
 
     // Calculate W for the right state.
     Real uur[3] = {prim_r[IVX], prim_r[IVY], prim_r[IVZ]};
@@ -129,6 +143,10 @@ void LLF_DYNGR(TeamMember_t const &member,
 
     // Calculate 4-magnetic field (densitized) for the right state.
     Real bur0 = Primitive::Contract(Bu_r, udr)/(alpha*sdetg);
+    /*Real bur[3];
+    for (int a = 0; a < 3; a++) {
+      bur[a] = (Bu_r[a] + alpha*bur0*(uur[a] - Wr*beta_u[a]/alpha))/Wr;
+    }*/
     Real bdr[3];
     for (int a = 0; a < 3; a++) {
       bdr[a] = alpha*bur0*udr[a];
@@ -139,8 +157,18 @@ void LLF_DYNGR(TeamMember_t const &member,
     }
     Real bsqr = (Primitive::SquareVector(Bu_r, g3d)/detg + SQR(alpha*bur0))/(Wsqr);
 
+    // DEBUG: recalculate the conserved values using an alternate formulation
+    /*Real hr = eos.ps.GetEOS().GetEnthalpy(prim_r[PRH], prim_r[PTM], &prim_r[PYF]);
+    cons_r[CDN] = prim_r[PRH]*mb*Wr;
+    cons_r[CSX] = (prim_r[PRH]*mb*hr + bsqr)*Wr*udr[0] - alpha*bur0*bdr[0];
+    cons_r[CSY] = (prim_r[PRH]*mb*hr + bsqr)*Wr*udr[1] - alpha*bur0*bdr[1];
+    cons_r[CSZ] = (prim_r[PRH]*mb*hr + bsqr)*Wr*udr[2] - alpha*bur0*bdr[2];
+    cons_r[CTA] = (prim_r[PRH]*mb*hr + bsqr)*Wsqr - (prim_r[PPR] + 0.5*bsqr) 
+                - SQR(alpha*bur0) - cons_r[CDN];*/
+
+
     // Calculate fluxes for the left state.
-    Real fl[NCONS], efl[NMAG];
+    Real fl[NCONS], bfl[NMAG];
     fl[CDN] = alpha*cons_l[CDN]*vcl;
     fl[CSX] = alpha*(cons_l[CSX]*vcl - bdl[0]*Bu_l[ibx]/Wl);
     fl[CSY] = alpha*(cons_l[CSY]*vcl - bdl[1]*Bu_l[ibx]/Wl);
@@ -149,12 +177,12 @@ void LLF_DYNGR(TeamMember_t const &member,
     fl[CTA] = alpha*(cons_l[CTA]*vcl - alpha*bul0*Bu_l[ibx]/Wl 
             + sdetg*(prim_l[PPR] + 0.5*bsql)*prim_l[ivx]/Wl);
 
-    efl[ibx] = 0.0;
-    efl[iby] = Bu_l[iby]*vcl - Bu_l[ibx]*(prim_l[pvy]/Wl - beta_u[pvy - PVX]/alpha);
-    efl[ibz] = Bu_l[ibz]*vcl - Bu_l[ibx]*(prim_l[pvz]/Wl - beta_u[pvz - PVX]/alpha);
+    bfl[ibx] = 0.0;
+    bfl[iby] = alpha*(Bu_l[iby]*vcl - Bu_l[ibx]*(prim_l[pvy]/Wl - beta_u[pvy - PVX]/alpha));
+    bfl[ibz] = alpha*(Bu_l[ibz]*vcl - Bu_l[ibx]*(prim_l[pvz]/Wl - beta_u[pvz - PVX]/alpha));
 
     // Calculate fluxes for the right state.
-    Real fr[NCONS], efr[NMAG];
+    Real fr[NCONS], bfr[NMAG];
     fr[CDN] = alpha*cons_r[CDN]*vcr;
     fr[CSX] = alpha*(cons_r[CSX]*vcr - bdr[0]*Bu_r[ibx]/Wr);
     fr[CSY] = alpha*(cons_r[CSY]*vcr - bdr[1]*Bu_r[ibx]/Wr);
@@ -163,9 +191,9 @@ void LLF_DYNGR(TeamMember_t const &member,
     fr[CTA] = alpha*(cons_r[CTA]*vcr - alpha*bur0*Bu_r[ibx]/Wr 
             + sdetg*(prim_r[PPR] + 0.5*bsqr)*prim_r[ivx]/Wr);
 
-    efr[ibx] = 0.0;
-    efr[iby] = Bu_r[iby]*vcr - Bu_r[ibx]*(prim_r[pvy]/Wr - beta_u[pvy - PVX]/alpha);
-    efr[ibz] = Bu_r[ibz]*vcr - Bu_r[ibx]*(prim_r[pvz]/Wr - beta_u[pvz - PVX]/alpha);
+    bfr[ibx] = 0.0;
+    bfr[iby] = alpha*(Bu_r[iby]*vcr - Bu_r[ibx]*(prim_r[pvy]/Wr - beta_u[pvy - PVX]/alpha));
+    bfr[ibz] = alpha*(Bu_r[ibz]*vcr - Bu_r[ibx]*(prim_r[pvz]/Wr - beta_u[pvz - PVX]/alpha));
 
 
     // Calculate the magnetosonic speeds for both states
@@ -187,8 +215,12 @@ void LLF_DYNGR(TeamMember_t const &member,
     flx(m, IVX, k, j, i) = 0.5 * (fl[CSX] + fr[CSX] - lambda * (cons_r[CSX] - cons_l[CSX]));
     flx(m, IVY, k, j, i) = 0.5 * (fl[CSY] + fr[CSY] - lambda * (cons_r[CSY] - cons_l[CSY]));
     flx(m, IVZ, k, j, i) = 0.5 * (fl[CSZ] + fr[CSZ] - lambda * (cons_r[CSZ] - cons_l[CSZ]));
-    ey(m, k, j, i) = - 0.5 * (efl[iby] + efr[iby] - lambda * (Bu_r[iby] - Bu_l[iby]));
-    ez(m, k, j, i) = 0.5 * (efl[ibz] + efr[ibz] - lambda * (Bu_r[ibz] - Bu_l[ibz]));
+    // The notation here is slightly misleading, as it suggests that Ey = -Fx(By) and
+    // Ez = Fx(Bz), rather than Ez = -Fx(By) and Ey = Fx(Bz). However, the appropriate 
+    // containers for ey and ez for each direction are passed in as arguments to this
+    // function, ensuring that the result is entirely consistent.
+    ey(m, k, j, i) = - 0.5 * (bfl[iby] + bfr[iby] - lambda * (Bu_r[iby] - Bu_l[iby]));
+    ez(m, k, j, i) = 0.5 * (bfl[ibz] + bfr[ibz] - lambda * (Bu_r[ibz] - Bu_l[ibz]));
     //ey(m, k, j, i) = 0.0;
     //ez(m, k, j, i) = 0.0;
 
