@@ -91,6 +91,9 @@ struct torus_pgen {
 // prototypes for user-defined BCs
 void NoInflowTorus(Mesh *pm);
 
+// prototype for custom history function
+void TorusHistory(HistoryData *pdata, Mesh *pm);
+
 //----------------------------------------------------------------------------------------
 //! \fn void ProblemGenerator::UserProblem()
 //  \brief Sets initial conditions for Fishbone-Moncrief torus in GR
@@ -109,6 +112,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
 
   user_bcs_func = NoInflowTorus;
+  user_hist_func = &TorusHistory;
 
   // Read problem-specific parameters from input file
   // global parameters
@@ -1204,4 +1208,54 @@ void NoInflowTorus(Mesh *pm) {
   }
 
   return;
+}
+
+void TorusHistory(HistoryData *pdata, Mesh *pm) {
+  // If we don't have access to the magnetic field, then it doesn't
+  // make much sense to track the divergence.
+  if (pdata->physics != PhysicsModule::MagnetoHydroDynamics) {
+    return;
+  }
+  // Otherwise, the first thing to do is increase the number of outputs
+  int &nmhd = pm->pmb_pack->pmhd->nmhd;
+  pdata->nhist += 1;
+  pdata->label[nmhd+6] = "tot-divB";
+
+  // Capture class variables for kernel
+  auto &bx1f = pm->pmb_pack->pmhd->b0.x1f;
+  auto &bx2f = pm->pmb_pack->pmhd->b0.x2f;
+  auto &bx3f = pm->pmb_pack->pmhd->b0.x3f;
+  auto &size = pm->pmb_pack->pmb->mb_size;
+
+  // loop over all MeshBlocks in this pack
+  auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
+  int is = indcs.is; int nx1 = indcs.nx1;
+  int js = indcs.js; int nx2 = indcs.nx2;
+  int ks = indcs.ks; int nx3 = indcs.nx3;
+  const int nmkji = (pm->pmb_pack->nmb_thispack)*nx3*nx2*nx1;
+  const int nkji = nx3*nx2*nx1;
+  const int nji  = nx2*nx1;
+  Real sum_divb;
+  Kokkos::parallel_reduce("HistSums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+  KOKKOS_LAMBDA(const int &idx, Real &mb_sum) {
+    // compute n,k,j,i indices of thread
+    int m = (idx)/nkji;
+    int k = (idx - m*nkji)/nji;
+    int j = (idx - m*nkji - k*nji)/nx1;
+    int i = (idx - m*nkji - k*nji - j*nx1) + is;
+    k += ks;
+    j += js;
+
+    Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
+    Real dx  = size.d_view(m).dx1;
+    Real dy  = size.d_view(m).dx2;
+    Real dz  = size.d_view(m).dx3;
+
+    mb_sum += fabs(vol*( (bx1f(m, k, j, i+1) - bx1f(m, k, j, i))/dx 
+                  + (bx2f(m, k, j+1, i) - bx2f(m, k, j, i))/dy 
+                  + (bx3f(m, k+1, j, i) - bx3f(m, k, j, i))/dz));
+  }, Kokkos::Sum<Real>(sum_divb));
+
+  // Store data in hdata array
+  pdata->hdata[nmhd+6] = sum_divb;
 }
