@@ -173,7 +173,7 @@ IntegrateMatrixSphericalTriangle(int a,
 
     // (5) F^nu^mu_ihat
   else if (matrixnumber == 5) {
-    for (size_t i = 0; i < scheme_points.size(); i++) {
+    for (size_t i = 0; i < scheme_weights.size(); i++) {
       result += mom_by_energy(nu,
                               x1,
                               y1,
