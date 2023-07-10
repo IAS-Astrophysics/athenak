@@ -261,7 +261,7 @@ double FEMBasisA(int a, int t1, int t2, int t3, double xi1, double xi2, double x
 
 // -------------------------------------------------------------------------
 // Cos Phi Sin Theta
-KOKKOS_INLINE_FUNCTION
+//KOKKOS_INLINE_FUNCTION
 double CosPhiSinTheta(double x1,
                       double y1,
                       double z1,
@@ -286,7 +286,7 @@ double CosPhiSinTheta(double x1,
 
 // ------------------------------------------------------------------------
 // Sin Phi Sin Theta
-KOKKOS_INLINE_FUNCTION
+//KOKKOS_INLINE_FUNCTION
 double SinPhiSinTheta(double x1,
                       double y1,
                       double z1,
@@ -311,7 +311,7 @@ double SinPhiSinTheta(double x1,
 
 // ------------------------------------------------------------------------
 // Cos Theta
-KOKKOS_INLINE_FUNCTION
+//KOKKOS_INLINE_FUNCTION
 double CosTheta(double x1,
                 double y1,
                 double z1,
@@ -335,7 +335,7 @@ double CosTheta(double x1,
 
 // -------------------------------------------------------------------------
 // sin Phi Cosec Theta
-KOKKOS_INLINE_FUNCTION
+//KOKKOS_INLINE_FUNCTION
 double SinPhiCosecTheta(double x1,
                         double y1,
                         double z1,
@@ -360,7 +360,7 @@ double SinPhiCosecTheta(double x1,
 
 // -------------------------------------------------------------------------
 // Cos Phi Cos Theta
-KOKKOS_INLINE_FUNCTION
+//KOKKOS_INLINE_FUNCTION
 double CosPhiCosTheta(double x1,
                       double y1,
                       double z1,
@@ -385,7 +385,7 @@ double CosPhiCosTheta(double x1,
 
 // ------------------------------------------------------------------------
 // Cos Phi Cosec Theta
-KOKKOS_INLINE_FUNCTION
+//KOKKOS_INLINE_FUNCTION
 double CosPhiCosecTheta(double x1,
                         double y1,
                         double z1,
@@ -410,7 +410,7 @@ double CosPhiCosecTheta(double x1,
 
 // ------------------------------------------------------------------------
 // Sin Phi Cos Theta
-KOKKOS_INLINE_FUNCTION
+//KOKKOS_INLINE_FUNCTION
 double SinPhiCosTheta(double x1,
                       double y1,
                       double z1,
@@ -435,7 +435,7 @@ double SinPhiCosTheta(double x1,
 
 // ------------------------------------------------------------------------
 // Sin Theta
-KOKKOS_INLINE_FUNCTION
+//KOKKOS_INLINE_FUNCTION
 double SinTheta(double x1,
                 double y1,
                 double z1,
