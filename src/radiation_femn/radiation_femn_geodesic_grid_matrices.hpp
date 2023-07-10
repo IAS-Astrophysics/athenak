@@ -102,191 +102,33 @@ double FEMBasisABasisB(int a, int b, int t1, int t2, int t3, double xi1, double 
 double FEMBasisA(int a, int t1, int t2, int t3, double xi1, double xi2, double xi3, int basis_choice);
 double dFEMBasisdxi(double xi1, double xi2, double xi3, int basis_index, int basis_choice, int xi_index);
 
-double PartialFEMBasisBwithoute(int ihat,
-                                int a,
-                                int t1,
-                                int t2,
-                                int t3,
-                                double x1,
-                                double y1,
-                                double z1,
-                                double x2,
-                                double y2,
-                                double z2,
-                                double x3,
-                                double y3,
-                                double z3,
-                                double xi1,
-                                double xi2,
-                                double xi3,
-                                int basis_choice);
+double PartialFEMBasisBwithoute(int ihat, int a, int t1, int t2, int t3, double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3,
+                                double xi1, double xi2, double xi3, int basis_choice);
 
-double CosPhiSinTheta(double x1,
-                      double y1,
-                      double z1,
-                      double x2,
-                      double y2,
-                      double z2,
-                      double x3,
-                      double y3,
-                      double z3,
-                      double xi1,
-                      double xi2,
-                      double xi3);
-double SinPhiSinTheta(double x1,
-                      double y1,
-                      double z1,
-                      double x2,
-                      double y2,
-                      double z2,
-                      double x3,
-                      double y3,
-                      double z3,
-                      double xi1,
-                      double xi2,
-                      double xi3);
-double CosTheta(double x1,
-                double y1,
-                double z1,
-                double x2,
-                double y2,
-                double z2,
-                double x3,
-                double y3,
-                double z3,
-                double xi1,
-                double xi2,
-                double xi3);
-double SinPhiCosecTheta(double x1,
-                        double y1,
-                        double z1,
-                        double x2,
-                        double y2,
-                        double z2,
-                        double x3,
-                        double y3,
-                        double z3,
-                        double xi1,
-                        double xi2,
-                        double xi3);
-double CosPhiCosTheta(double x1,
-                      double y1,
-                      double z1,
-                      double x2,
-                      double y2,
-                      double z2,
-                      double x3,
-                      double y3,
-                      double z3,
-                      double xi1,
-                      double xi2,
-                      double xi3);
-double CosPhiCosecTheta(double x1,
-                        double y1,
-                        double z1,
-                        double x2,
-                        double y2,
-                        double z2,
-                        double x3,
-                        double y3,
-                        double z3,
-                        double xi1,
-                        double xi2,
-                        double xi3);
-double SinPhiCosTheta(double x1,
-                      double y1,
-                      double z1,
-                      double x2,
-                      double y2,
-                      double z2,
-                      double x3,
-                      double y3,
-                      double z3,
-                      double xi1,
-                      double xi2,
-                      double xi3);
-double SinTheta(double x1,
-                double y1,
-                double z1,
-                double x2,
-                double y2,
-                double z2,
-                double x3,
-                double y3,
-                double z3,
-                double xi1,
-                double xi2,
-                double xi3);
-double mom_by_energy(int mu,
-                     double x1,
-                     double y1,
-                     double z1,
-                     double x2,
-                     double y2,
-                     double z2,
-                     double x3,
-                     double y3,
-                     double z3,
-                     double xi1,
-                     double xi2,
-                     double xi3);
+double CosPhiSinTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3);
+double SinPhiSinTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3);
+double CosTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3);
+double SinPhiCosecTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3);
+double CosPhiCosTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3);
+double CosPhiCosecTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3);
+double SinPhiCosTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3);
+double SinTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3);
+double mom_by_energy(int mu, double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3);
 double mom_by_energy(int mu, double phi, double theta);
 // Find triangles which share an edge
 void FindTriangles(int a, int b, const HostArray2D<int> &triangles, HostArray2D<int> &edge_triangles, bool &is_edge);
 
 // -------------------------------------------------------------------------------------------------------------------------------------------
 // Integration routines over geodesic grid (radiation_femn_geodesic_grid_matrix_integrate.cpp and radiation_femn_geodesic_grid_quadrature.cpp)
-double CalculateDeterminantJacobian(double x1,
-                                    double y1,
-                                    double z1,
-                                    double x2,
-                                    double y2,
-                                    double z2,
-                                    double x3,
-                                    double y3,
-                                    double z3,
-                                    double xi1,
-                                    double xi2,
-                                    double xi3);
-double IntegrateMatrixSphericalTriangle(int a,
-                                        int b,
-                                        int basis,
-                                        int t1,
-                                        int t2,
-                                        int t3,
-                                        const HostArray1D<Real> &x,
-                                        const HostArray1D<Real> &y,
-                                        const HostArray1D<Real> &z,
-                                        const HostArray1D<Real> &scheme_weights,
-                                        const HostArray2D<Real> &scheme_points,
-                                        int matrixnumber,
-                                        int nu = -42,
-                                        int mu = -42,
+double CalculateDeterminantJacobian(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3);
+double IntegrateMatrixSphericalTriangle(int a, int b, int basis, int t1, int t2, int t3, const HostArray1D<Real> &x, const HostArray1D<Real> &y, const HostArray1D<Real> &z,
+                                        const HostArray1D<Real> &scheme_weights, const HostArray2D<Real> &scheme_points, int matrixnumber, int nu = -42, int mu = -42,
                                         int ihat = -42);
-double IntegrateMatrix(int a,
-                       int b,
-                       int basis,
-                       const HostArray1D<Real> &x,
-                       const HostArray1D<Real> &y,
-                       const HostArray1D<Real> &z,
-                       const HostArray1D<Real> &scheme_weights,
-                       const HostArray2D<Real> &scheme_points,
-                       const HostArray2D<int> &triangles,
-                       int matrixchoice,
-                       int nu,
-                       int mu,
-                       int ihat);
+double IntegrateMatrix(int a, int b, int basis, const HostArray1D<Real> &x, const HostArray1D<Real> &y, const HostArray1D<Real> &z, const HostArray1D<Real> &scheme_weights,
+                       const HostArray2D<Real> &scheme_points, const HostArray2D<int> &triangles, int matrixchoice, int nu, int mu, int ihat);
 double RealSphericalHarmonic(int l, int m, double phi, double theta);
-double IntegrateMatrixFPN(int la,
-                          int ma,
-                          int lb,
-                          int mb,
-                          const HostArray1D<Real> &scheme_weights,
-                          const HostArray2D<Real> &scheme_points,
-                          int matrixchoice,
-                          int nu,
-                          int mu,
-                          int ihat);
+double IntegrateMatrixFPN(int la, int ma, int lb, int mb, const HostArray1D<Real> &scheme_weights, const HostArray2D<Real> &scheme_points, int matrixchoice, int nu,
+                          int mu, int ihat);
 } // namespace radiationfemn
 
 #endif //ATHENA_RADIATION_FEMN_GEODESIC_GRID_MATRICES_HPP
