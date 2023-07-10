@@ -13,10 +13,7 @@
 
 namespace radiationfemn {
 
-void LoadQuadrature(std::string &scheme_name,
-                    int &scheme_num_points,
-                    HostArray1D<Real> &scheme_weights,
-                    HostArray2D<Real> &scheme_points) {
+void LoadQuadrature(std::string &scheme_name, int &scheme_num_points, HostArray1D<Real> &scheme_weights, HostArray2D<Real> &scheme_points) {
 
   double value;
   Kokkos::realloc(scheme_weights, scheme_num_points);
