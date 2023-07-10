@@ -36,14 +36,6 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
     exit(EXIT_FAILURE);
   }
 
-  /*
-  std::cout << "Testing real spherical harmonics" << std::endl;
-  std::cout << "l = 0, m = 0: " << std::setprecision(14) << radiationfemn::RealSphericalHarmonic(0,0,1,1)<< std::endl;
-  std::cout << "l = 2, m =1: " << std::setprecision(14) << radiationfemn::RealSphericalHarmonic(2,1,2.5,1.2)<< std::endl;
-  std::cout << "l = 6, m = -4: " << std::setprecision(14) << radiationfemn::RealSphericalHarmonic(6,-3,3.6,2.2)<< std::endl;
-  std::cout << std::floor(2.9999999999999999999999999999999999999) << std::endl;
-  */
-
   if (pmbp->pradfemn->fpn) {
     std::string pathdir = pin->GetString("radiation-femn", "savedir");
 
