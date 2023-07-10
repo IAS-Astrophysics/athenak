@@ -8,7 +8,7 @@
 //  \brief implementation of the radiation FEM_N class constructor and other functions
 
 #include <string>
-
+#include <cmath>
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
@@ -55,121 +55,125 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
     kappa_s("kappa_s", 1, 1, 1, 1, 1),
     beam_mask("beam_mask", 1, 1, 1, 1, 1, 1) {
 
-  // ---------------------------------------------------------------------------
-  // set up from parfile parameters
+  // -----------------------------------------------------------------------------------
+  // set essential parameters from par file and allocate memory to energy, angular grids
 
-  // (1) Set limiters for DG and FP_N
-  limiter_dg = pin->GetOrAddString("radiation-femn", "limiter_dg", "minmod2");
-  fpn = pin->GetOrAddInteger("radiation-femn", "fpn", 0) == 1;
+  limiter_dg = pin->GetOrAddString("radiation-femn", "limiter_dg", "minmod2");      // limiter for DG (default:sawtooth-free minmod2)
+  fpn = pin->GetOrAddInteger("radiation-femn", "fpn", 0) == 1;                      // fpn switch (0: use FEM_N, 1: use FP_N) (default: 0)
 
-  // (2) Set up the energy grid from [0, energy_max] with num_energy_bins bins.
-  num_energy_bins = pin->GetOrAddInteger("radiation_femn", "num_energy_bins", 1);
-  energy_max = pin->GetReal("radiation-femn", "energy_max");
+  num_energy_bins = pin->GetOrAddInteger("radiation_femn", "num_energy_bins", 1);   // number of energy bins (default: 1)
+  energy_max = pin->GetOrAddReal("radiation-femn", "energy_max", 1);                // maximum value of energy (default: 1)
+
+  // set up energy grid
   Kokkos::realloc(energy_grid, num_energy_bins + 1);
-  for (size_t i = 0; i < num_energy_bins + 1; i++) {
+  for (int i = 0; i < num_energy_bins + 1; i++) {
     energy_grid(i) = i * energy_max / Real(num_energy_bins);
   }
 
-  // (3) Set up FEM_N/FP_N specific parameters (redundant values set to -42)
-  if (!fpn) {
-    lmax = -42;
-    refinement_level = pin->GetOrAddInteger("radiation-femn", "num_refinement", 0);
+  if (!fpn) {   // parameters for FEM_N
+    lmax = -42;                                                                     // maximum value of l in spherical harmonics expansion (redundant: set to -42)
+    refinement_level = pin->GetOrAddInteger("radiation-femn", "num_refinement", 0); // refinement level for geodesic grid (default: 0)
+
+    // compute number of points, edges and triangles from refinement level (Note: num_ref can change but never refinement_level)
     num_ref = refinement_level;
     num_points = 12 * pow(4, refinement_level);
     if (refinement_level != 0) {
-      for (size_t i = 0; i < refinement_level; i++) {
+      for (int i = 0; i < refinement_level; i++) {
         num_points -= 6 * pow(4, i);
       }
     }
     num_edges = 3 * (num_points - 2);
     num_triangles = 2 * (num_points - 2);
-    basis = pin->GetOrAddInteger("radiation-femn", "basis", 1);
-    filter_sigma_eff = -42;
-    limiter_fem = pin->GetOrAddString("radiation-femn", "limiter_fem", "clp");
-  } else {
-    lmax = pin->GetInteger("radiation-femn", "lmax");
-    refinement_level = -42;
-    num_ref = refinement_level;
-    num_points = (lmax + 1) * (lmax + 1);
-    num_edges = -42;
-    num_triangles = -42;
-    basis = -42;
-    filter_sigma_eff = pin->GetOrAddInteger("radiation-femn", "filter_opacity", 0);
-    limiter_fem = "-42";
+
+    basis = pin->GetOrAddInteger("radiation-femn", "basis", 1);                     // choice of FEM_N basis (default: 1, that is overlapping tent)
+    filter_sigma_eff = -42;                                                         // redundant: set to -42
+    limiter_fem = pin->GetOrAddString("radiation-femn", "limiter_fem", "clp");      // limiter for angle (default: clipping limiter)
+  } else {  // parameters for FP_N
+    lmax = pin->GetOrAddInteger("radiation-femn", "lmax", 3);                       // maximum value of l in spherical harmonic expansion (default: FP3)
+    refinement_level = -42;                                                         // redundant: set to -42
+    num_ref = refinement_level;                                                     // redundant: set to -42
+    num_points = (lmax + 1) * (lmax + 1);                                           // total number of (l,m) modes
+    num_edges = -42;                                                                // redundant: set to -42
+    num_triangles = -42;                                                            // redundant: set to -42
+    basis = -42;                                                                    // redundant: set to -42
+    filter_sigma_eff = pin->GetOrAddInteger("radiation-femn", "filter_opacity", 0); // filter opacity for FP_N (default: no filter)
+    limiter_fem = "-42";                                                            // redundant: set to -42
   }
 
-  num_points_total = num_energy_bins * num_points;
+  num_points_total = num_energy_bins * num_points;  // total number of points in the phase space grid (num of energy bins x number of angular points)
 
-  // (3) set up source specific parameters
-  rad_source = pin->GetOrAddInteger("radiation-femn", "sources", 0) == 1;
-  beam_source = pin->GetOrAddInteger("radiation-femn", "beam_sources", 0) == 1;
+  rad_source = pin->GetOrAddInteger("radiation-femn", "sources", 0) == 1;           // switch for sources (default: 0)
+  beam_source = pin->GetOrAddInteger("radiation-femn", "beam_sources", 0) == 1;     // switch for beam sources (default: 0)
 
-  // ---------------------------------------------------------------------------
-  // allocate memory and populate matrices for the angular variables
+  // --------------------------------------------------------------------
+  // allocate memory and load angular grid arrays and associated matrices
 
-  Kokkos::realloc(mass_matrix, num_points, num_points);
-  Kokkos::realloc(stiffness_matrix_x, num_points, num_points);
-  Kokkos::realloc(stiffness_matrix_y, num_points, num_points);
-  Kokkos::realloc(stiffness_matrix_z, num_points, num_points);
+  Kokkos::realloc(mass_matrix, num_points, num_points);           // mass matrix from special relativistic case
+  Kokkos::realloc(stiffness_matrix_x, num_points, num_points);    // stiffness-x from special relativistic case
+  Kokkos::realloc(stiffness_matrix_y, num_points, num_points);    // stiffness-y from special relativistic case
+  Kokkos::realloc(stiffness_matrix_z, num_points, num_points);    // stiffness-z from special relativistic case
 
-  Kokkos::realloc(P_matrix, 4, num_points, num_points);
-  Kokkos::realloc(G_matrix, 4, 4, 3, num_points, num_points);
-  Kokkos::realloc(F_matrix, 4, 4, 3, num_points, num_points);
+  Kokkos::realloc(P_matrix, 4, num_points, num_points);           // P^muhat_A^B (no energy)
+  Kokkos::realloc(G_matrix, 4, 4, 3, num_points, num_points);     // G^nuhat^muhat_ihat_A^B (no energy)
+  Kokkos::realloc(F_matrix, 4, 4, 3, num_points, num_points);     // F^nuhat^nuhat_ihat_A^B
 
-  Kokkos::realloc(angular_grid, num_points, 2);
+  Kokkos::realloc(angular_grid, num_points, 2);                   // angular information (phi, theta) or (l, m)
 
-  if (!fpn) {
-    scheme_num_points = pin->GetOrAddInteger("radiation-femn", "quad_scheme_num_points", 453);
-    scheme_name = pin->GetOrAddString("radiation-femn", "quad_scheme_name", "xiao_gimbutas");
+  if (!fpn) {   // populate arrays for FEM_N
+    scheme_num_points = pin->GetOrAddInteger("radiation-femn", "quad_scheme_num_points", 453);  // number of points in numerical integration scheme (default: 453)
+    scheme_name = pin->GetOrAddString("radiation-femn", "quad_scheme_name", "xiao_gimbutas");   // type of quadrature (xioa_gimbutas: default or vioreanu_rokhlin)
 
+    // quadrature check from par file
     if (!(scheme_name == "xiao_gimbutas" || scheme_name == "vioreanu_rokhlin")) {
       std::cout << "Quadrature scheme cannot be " + scheme_name + " for FEM_N" << std::endl;
       std::cout << "Use xiao_gimbutas or vioreanu_rokhlin instead!" << std::endl;
       exit(EXIT_FAILURE);
     }
 
-    radiationfemn::LoadQuadrature(scheme_name, scheme_num_points, scheme_weights, scheme_points);
-    this->LoadFEMNMatrices();
+    radiationfemn::LoadQuadrature(scheme_name, scheme_num_points, scheme_weights, scheme_points); // populate quadrature from disk
+    this->LoadFEMNMatrices();                                                                     // populate all matrices with FEM_N data
 
-  } else {
-    scheme_num_points = pin->GetOrAddInteger("radiation-femn", "quad_scheme_num_points", 2702);
-    scheme_name = pin->GetOrAddString("radiation-femn", "quad_scheme_name", "lebedev");
+  } else {    // populate arrays for FP_N
+    scheme_num_points = pin->GetOrAddInteger("radiation-femn", "quad_scheme_num_points", 2702);   // number of points in numerical integration scheme (default: 2702)
+    scheme_name = pin->GetOrAddString("radiation-femn", "quad_scheme_name", "lebedev");           // type of quadrature (lebedev: default)
 
+    // quadrature check from par file
     if (scheme_name != "lebedev") {
       std::cout << "Quadrature scheme cannot be " + scheme_name + " for FP_N" << std::endl;
       std::cout << "Use lebedev instead!" << std::endl;
       exit(EXIT_FAILURE);
     }
 
-    radiationfemn::LoadQuadrature(scheme_name, scheme_num_points, scheme_weights, scheme_points);
-    this->LoadFPNMatrices();
+    radiationfemn::LoadQuadrature(scheme_name, scheme_num_points, scheme_weights, scheme_points); // populate quadrature from disk
+    this->LoadFPNMatrices();                                                                      // populate all matrices with FP_N data
   }
 
   // --------------------------------------------------------------------------------------------------------------------------
-  // allocate memory for evolved variables
+  // allocate memory for all other variables
+
   int nmb = ppack->nmb_thispack;
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int ncells1 = indcs.nx1 + 2 * (indcs.ng);
   int ncells2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2 * (indcs.ng)) : 1;
   int ncells3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2 * (indcs.ng)) : 1;
 
-  // tetrad quantities
-  Kokkos::realloc(g_dd, nmb, 4, 4, ncells3, ncells2, ncells1);
-  Kokkos::realloc(sqrt_det_g, nmb, ncells3, ncells2, ncells1);
-  Kokkos::realloc(u_mu, nmb, 4, ncells3, ncells2, ncells1);
-  Kokkos::realloc(L_mu_muhat0, nmb, 4, 4, ncells3, ncells2, ncells1);
-  Kokkos::realloc(L_mu_muhat1, nmb, 4, 4, ncells3, ncells2, ncells1);
+  // tetrad and fluid quantities
+  Kokkos::realloc(g_dd, nmb, 4, 4, ncells3, ncells2, ncells1);        // 4-metric from GR
+  Kokkos::realloc(sqrt_det_g, nmb, ncells3, ncells2, ncells1);        // sqrt(-det(4-metric))
+  Kokkos::realloc(u_mu, nmb, 4, ncells3, ncells2, ncells1);           // u^mu: fluid velocity in lab frame
+  Kokkos::realloc(L_mu_muhat0, nmb, 4, 4, ncells3, ncells2, ncells1); // tetrad L^mu_muhat
+  Kokkos::realloc(L_mu_muhat1, nmb, 4, 4, ncells3, ncells2, ncells1); // tetrad L^mu_muhat
 
   // initialize tetrad
   this->TetradInitialize();
 
   // state vector and fluxes
-  Kokkos::realloc(f0, nmb, num_points_total, ncells3, ncells2, ncells1);
-  Kokkos::realloc(f1, nmb, num_points_total, ncells3, ncells2, ncells1);
-  Kokkos::realloc(iflx.x1f, nmb, num_points_total, ncells3, ncells2, ncells1);
-  Kokkos::realloc(iflx.x2f, nmb, num_points_total, ncells3, ncells2, ncells1);
-  Kokkos::realloc(iflx.x3f, nmb, num_points_total, ncells3, ncells2, ncells1);
-  Kokkos::realloc(ftemp, nmb, num_points_total, ncells3, ncells2, ncells1);
+  Kokkos::realloc(f0, nmb, num_points_total, ncells3, ncells2, ncells1);        // distribution function
+  Kokkos::realloc(f1, nmb, num_points_total, ncells3, ncells2, ncells1);        // distribution function
+  Kokkos::realloc(iflx.x1f, nmb, num_points_total, ncells3, ncells2, ncells1);  // spatial flux (x)
+  Kokkos::realloc(iflx.x2f, nmb, num_points_total, ncells3, ncells2, ncells1);  // spatial flux (y)
+  Kokkos::realloc(iflx.x3f, nmb, num_points_total, ncells3, ncells2, ncells1);  // spatial flux (z)
+  Kokkos::realloc(ftemp, nmb, num_points_total, ncells3, ncells2, ncells1);     // distribution function (temp storage)
 
   // reallocate memory for the temporary intensity matrices if the clipping limiter is on
   if (limiter_fem == "clp") {
@@ -186,7 +190,8 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
     Kokkos::realloc(coarse_f0, nmb, num_points_total, nccells3, nccells2, nccells1);
   }
 
-  // only do if sources are present
+  // only do if sources are present @TODO: source implementation unfinished
+  /*
   if (rad_source) {
     //Kokkos::realloc(int_psi, num_points);
     Kokkos::realloc(e_source, num_points);
@@ -202,10 +207,12 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   if (beam_source) {
     Kokkos::realloc(beam_mask, nmb, num_points, ncells3, ncells2, ncells1);
   }
+  */
 
   // allocate boundary buffers for cell-centered variables
   pbval_f = new BoundaryValuesCC(ppack, pin);
   pbval_f->InitializeBuffers(num_points);
+
 }
 
 //----------------------------------------------------------------------------------------------

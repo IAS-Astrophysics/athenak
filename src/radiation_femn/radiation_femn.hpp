@@ -89,8 +89,7 @@ class RadiationFEMN {
   // ---------------------------------------------------------------------------
   // matrices for the angular grid
   // ---------------------------------------------------------------------------
-  DvceArray2D<Real>
-      angular_grid;            // store the values of (l,m) for FP_N. Alternatively store (phi,theta) for FEM_N
+  DvceArray2D<Real> angular_grid;            // store the values of (l,m) for FP_N. Alternatively store (phi,theta) for FEM_N
   DvceArray1D<Real> energy_grid;             // array containing the energy grid
 
   DvceArray2D<Real>
