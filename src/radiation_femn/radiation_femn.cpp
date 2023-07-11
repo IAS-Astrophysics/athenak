@@ -164,6 +164,29 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   Kokkos::realloc(L_mu_muhat0, nmb, 4, 4, ncells3, ncells2, ncells1); // tetrad L^mu_muhat
   Kokkos::realloc(L_mu_muhat1, nmb, 4, 4, ncells3, ncells2, ncells1); // tetrad L^mu_muhat
 
+  // --------------------------------------------------------------------
+  // Hard code metric and fluid velocity
+  // --------------------------------------------------------------------
+  auto &indices = pmy_pack->pmesh->mb_indcs;
+  int &is = indices.is, &ie = indices.ie;
+  int &js = indices.js, &je = indices.je;
+  int &ks = indices.ks, &ke = indices.ke;
+  int nmb1 = pmy_pack->nmb_thispack - 1;
+
+  Kokkos::deep_copy(g_dd, 0.);
+  Kokkos::deep_copy(u_mu, 0.);
+  par_for("radiation_femn_dummy_initialize", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
+          KOKKOS_LAMBDA(int m, int k, int j, int i) {
+            g_dd(m, 0, 0, k, j, i) = -1.;
+            g_dd(m, 1, 1, k, j, i) = 1.;
+            g_dd(m, 2, 2, k, j, i) = 1.;
+            g_dd(m, 3, 3, k, j, i) = 1.;
+            u_mu(m, 0, k, j, i) = 1;
+          });
+  // --------------------------------------------------------------------
+  // End of hard coded metric and fluid velocity
+  // --------------------------------------------------------------------
+
   // initialize tetrad
   this->TetradInitialize();
 
