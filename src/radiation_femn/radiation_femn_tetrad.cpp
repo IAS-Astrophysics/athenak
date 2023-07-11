@@ -80,7 +80,7 @@ void RadiationFEMN::TetradInitialize() {
   // L^mu_3 = p_y - (d_z.L^mu_1) L^mu_1 - (d_z.L^mu_2) L^mu_2 + (d_x.L^mu_0) L^mu_0, d_x = (0,1,0,0), d_y = (0,0,1,0), d_z = (0,0,0,1)
   par_for("radiation_femn_tetrad_initialize_L_mu_3", DevExeSpace(), 0, nmb1, 0, 3, ks, ke, js, je, is, ie,
           KOKKOS_LAMBDA(int m, int mu, int k, int j, int i) {
-            L_mu_muhat0(m, mu, 3, k, j, i) = (m == 3) - (g_dd(m, 3, 0, k, j, i) * L_mu_muhat0(m, 0, 1, k, j, i) + g_dd(m, 3, 1, k, j, i) * L_mu_muhat0(m, 1, 1, k, j, i)
+            L_mu_muhat0(m, mu, 3, k, j, i) = (mu == 3) - (g_dd(m, 3, 0, k, j, i) * L_mu_muhat0(m, 0, 1, k, j, i) + g_dd(m, 3, 1, k, j, i) * L_mu_muhat0(m, 1, 1, k, j, i)
                 + g_dd(m, 3, 2, k, j, i) * L_mu_muhat0(m, 2, 1, k, j, i) + g_dd(m, 3, 3, k, j, i) * L_mu_muhat0(m, 3, 1, k, j, i)) * L_mu_muhat0(m, mu, 1, k, j, i)
                 - (g_dd(m, 3, 0, k, j, i) * L_mu_muhat0(m, 0, 2, k, j, i) + g_dd(m, 3, 1, k, j, i) * L_mu_muhat0(m, 1, 2, k, j, i)
                     + g_dd(m, 3, 2, k, j, i) * L_mu_muhat0(m, 2, 2, k, j, i) + g_dd(m, 3, 3, k, j, i) * L_mu_muhat0(m, 3, 2, k, j, i)) * L_mu_muhat0(m, mu, 2, k, j, i)

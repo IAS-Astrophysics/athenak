@@ -73,6 +73,26 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
             L_mu_muhat0_(m, mu, muhat, k, j, i) = gam0 * L_mu_muhat0_(m, mu, muhat, k, j, i) + gam1 * L_mu_muhat1_(m, mu, muhat, k, j, i) - beta_dt * tetr_rhs;
           });
 
+  // ------------------------------------------------------------------------------------------------------
+  // Dummy output, Remove later
+  // ------------------------------------------------------------------------------------------------------
+  std::cout << "Metric:" << std::endl;
+  std::cout << g_dd(0, 0, 0, 0, 4, 4) << " " << g_dd(0, 0, 1, 0, 4, 4) << " " << g_dd(0, 0, 2, 0, 4, 4) << " " << g_dd(0, 0, 3, 0, 4, 4) << std::endl;
+  std::cout << g_dd(0, 1, 0, 0, 4, 4) << " " << g_dd(0, 1, 1, 0, 4, 4) << " " << g_dd(0, 1, 2, 0, 4, 4) << " " << g_dd(0, 1, 3, 0, 4, 4) << std::endl;
+  std::cout << g_dd(0, 2, 0, 0, 4, 4) << " " << g_dd(0, 2, 1, 0, 4, 4) << " " << g_dd(0, 2, 2, 0, 4, 4) << " " << g_dd(0, 2, 3, 0, 4, 4) << std::endl;
+  std::cout << g_dd(0, 3, 0, 0, 4, 4) << " " << g_dd(0, 3, 1, 0, 4, 4) << " " << g_dd(0, 3, 2, 0, 4, 4) << " " << g_dd(0, 3, 3, 0, 4, 4) << std::endl;
+  std::cout << std::endl;
+  std::cout << "L^mu_0: (" << L_mu_muhat0_(0, 0, 0, 0, 4, 4) << ", " << L_mu_muhat0_(0, 1, 0, 0, 4, 4) << ", " << L_mu_muhat0_(0, 2, 0, 0, 4, 4) << ", "
+            << L_mu_muhat0_(0, 3, 0, 0, 4, 4) << ")" << std::endl;
+  std::cout << "L^mu_1: (" << L_mu_muhat0_(0, 0, 1, 0, 4, 4) << ", " << L_mu_muhat0_(0, 1, 1, 0, 4, 4) << ", " << L_mu_muhat0_(0, 2, 1, 0, 4, 4) << ", "
+            << L_mu_muhat0_(0, 3, 1, 0, 4, 4) << ")" << std::endl;
+  std::cout << "L^mu_2: (" << L_mu_muhat0_(0, 0, 2, 0, 4, 4) << ", " << L_mu_muhat0_(0, 1, 2, 0, 4, 4) << ", " << L_mu_muhat0_(0, 2, 2, 0, 4, 4) << ", "
+            << L_mu_muhat0_(0, 3, 2, 0, 4, 4) << ")" << std::endl;
+  std::cout << "L^mu_3: (" << L_mu_muhat0_(0, 0, 3, 0, 4, 4) << ", " << L_mu_muhat0_(0, 1, 3, 0, 4, 4) << ", " << L_mu_muhat0_(0, 2, 3, 0, 4, 4) << ", "
+            << L_mu_muhat0_(0, 3, 3, 0, 4, 4) << ")" << std::endl;
+  std::cout << std::endl;
+  // ------------------------------------------------------------------------------------------------------
+
   // Add explicit source terms
   if (beam_source) {
     // @TODO: Add beam source support
