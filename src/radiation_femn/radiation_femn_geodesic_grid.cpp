@@ -22,7 +22,7 @@ namespace radiationfemn {
 // Convert single phase index to energy and angle index
 //KOKKOS_INLINE_FUNCTION
 RadiationFEMNPhaseIndices RadiationFEMN::Indices(int n) {
-  RadiationFEMNPhaseIndices idcs = {int(n / num_points), int(n / num_points) - idcs.eindex * num_points};
+  RadiationFEMNPhaseIndices idcs = {int(n / num_points), n - int(n / num_points) * num_points};
   return idcs;
 }
 // ------------------------------------------

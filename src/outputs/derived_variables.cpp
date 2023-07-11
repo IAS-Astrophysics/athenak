@@ -336,30 +336,39 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     });
   }
 
-    // radiation energy density for FEM_N
-    if(name.compare("rad_femn_E") == 0 and pm->pmb_pack->pradfemn->fpn == 0) {
-        Kokkos::realloc(derived_var, nmb, 1, n3, n2, n1);
-        auto dv = derived_var;
-        auto &f0_ = pm->pmb_pack->pradfemn->f0;
-        auto &mm_ = pm->pmb_pack->pradfemn->mass_matrix;
-        auto num_points = pm->pmb_pack->pradfemn->num_points;
+  // radiation energy density for FEM_N
+  if (name.compare("rad_femn_E") == 0 and pm->pmb_pack->pradfemn->fpn == 0) {
+    Kokkos::realloc(derived_var, nmb, 1, n3, n2, n1);
+    auto dv = derived_var;
+    auto &f0_ = pm->pmb_pack->pradfemn->f0;
+    auto &energy_grid_ = pm->pmb_pack->pradfemn->energy_grid;
+    auto &mm_ = pm->pmb_pack->pradfemn->mass_matrix;
+    auto num_points = pm->pmb_pack->pradfemn->num_points;
+    auto num_points_total = pm->pmb_pack->pradfemn->num_points_total;
 
-        par_for("rad_femn_E_compute", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie, 0, (num_points - 1), 0, (num_points - 1),
-                KOKKOS_LAMBDA(int m, int k, int j, int i, int B, int A) {
-                    // @ TODO: Add proper redefinition with energy
-                    dv(m,0,k,j,i) += mm_(B,A) * f0_(m, A, k, j, i);
-                });
-    }
+    // Compute sum_{B} S_n F^nA M_AB where S_n = (e_{n+1}^4 - e_{n}^4)/4
+    par_for("rad_femn_E_compute", DevExeSpace(), 0, (nmb - 1), ks, ke, js, je, is, ie, 0, (num_points - 1), 0, (num_points_total - 1),
+            KOKKOS_LAMBDA(int m, int k, int j, int i, int B, int enang) {
+              int en = int(enang / num_points);
+              int A = enang - en * num_points;
+              auto Sen = (pow(energy_grid_(en + 1), 4) - pow(energy_grid_(en), 4)) / 4.0;
+              dv(m, 0, k, j, i) += Sen * mm_(B, A) * f0_(m, enang, k, j, i);
+            });
+  }
 
-    if(name.compare("rad_femn_E") == 0 and pm->pmb_pack->pradfemn->fpn != 0) {
-        Kokkos::realloc(derived_var, nmb, 1, n3, n2, n1);
-        auto dv = derived_var;
-        auto &f0_ = pm->pmb_pack->pradfemn->f0;
+  if (name.compare("rad_femn_E") == 0 and pm->pmb_pack->pradfemn->fpn != 0) {
+    Kokkos::realloc(derived_var, nmb, 1, n3, n2, n1);
+    auto dv = derived_var;
+    auto &f0_ = pm->pmb_pack->pradfemn->f0;
+    auto neng = pm->pmb_pack->pradfemn->num_energy_bins;
+    auto num_points = pm->pmb_pack->pradfemn->num_points;
+    auto &energy_grid_ = pm->pmb_pack->pradfemn->energy_grid;
 
-        par_for("rad_femn_E_compute_fpn", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-                KOKKOS_LAMBDA(int m, int k, int j, int i) {
-                    // @TODO: Fix this expression for FP_N
-                    dv(m,0,k,j,i) = std::sqrt(4.0*M_PI) * f0_(m, 0,k, j, i);
-                });
-    }
+    // Compute sum_{B} sqrt(4 pi) S_n F^n0 where S_n = (e_{n+1}^4 - e_{n}^4)/4
+    par_for("rad_femn_E_compute_fpn", DevExeSpace(), 0, (nmb - 1), ks, ke, js, je, is, ie, 0, (neng - 1),
+            KOKKOS_LAMBDA(int m, int k, int j, int i, int en) {
+              auto Sen = (pow(energy_grid_(en + 1), 4) - pow(energy_grid_(en), 4)) / 4.0;
+              dv(m, 0, k, j, i) = Sen * std::sqrt(4.0 * M_PI) * f0_(m, 0 + en * num_points, k, j, i);
+            });
+  }
 }
