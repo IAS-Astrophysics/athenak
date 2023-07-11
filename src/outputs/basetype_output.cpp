@@ -540,10 +540,11 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
         }
     }
 
-    // radiation femn tetrad quantity
+    // radiation femn tetrad
     if (out_params.variable.compare("rad_femn_tetrad") == 0) {
       for(int i = 0; i < pm->pmb_pack->pradfemn->num_points; i++) {
-            //outvars.emplace_back("I"+std::to_string(i),i,&(pm->pmb_pack->pradfemn->L_mu_muhat0()));
+          // @TODO: add output for tetrad quantities. Currently only supports 5D arrays but tetrad arrays are 6D!
+          //outvars.emplace_back("I"+std::to_string(i),i,0,&(pm->pmb_pack->pradfemn->L_mu_muhat0()));
         }
     }
 
