@@ -63,22 +63,14 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
   // update the tetrad quantities
   par_for("radiation_femn_tetrad_update", DevExeSpace(), 0, nmb1, 0, 3, 0, 3, ks, ke, js, je, is, ie,
           KOKKOS_LAMBDA(int m, int mu, int muhat, int k, int j, int i) {
-            Real tetr_rhs = (u_mu_(m, 1, k, j, i) / u_mu_(m, 0, k, j, i))
-                * (L_mu_muhat1_(m, mu, muhat, k, j, i + 1) - L_mu_muhat1_(m, mu, muhat, k, j, i))
-                / mbsize.d_view(m).dx1;
+            Real tetr_rhs = (u_mu_(m, 1, k, j, i) / u_mu_(m, 0, k, j, i)) * (L_mu_muhat1_(m, mu, muhat, k, j, i + 1) - L_mu_muhat1_(m, mu, muhat, k, j, i)) / mbsize.d_view(m).dx1;
             if (multi_d) {
-              tetr_rhs += (u_mu_(m, 2, k, j, i) / u_mu_(m, 0, k, j, i))
-                  * (L_mu_muhat1_(m, mu, muhat, k, j + 1, i) - L_mu_muhat1_(m, mu, muhat, k, j, i))
-                  / mbsize.d_view(m).dx2;
+              tetr_rhs += (u_mu_(m, 2, k, j, i) / u_mu_(m, 0, k, j, i)) * (L_mu_muhat1_(m, mu, muhat, k, j + 1, i) - L_mu_muhat1_(m, mu, muhat, k, j, i)) / mbsize.d_view(m).dx2;
             }
             if (three_d) {
-              tetr_rhs += (u_mu_(m, 3, k, j, i) / u_mu_(m, 0, k, j, i))
-                  * (L_mu_muhat1_(m, mu, muhat, k + 1, j, i) - L_mu_muhat1_(m, mu, muhat, k, j, i))
-                  / mbsize.d_view(m).dx3;
+              tetr_rhs += (u_mu_(m, 3, k, j, i) / u_mu_(m, 0, k, j, i)) * (L_mu_muhat1_(m, mu, muhat, k + 1, j, i) - L_mu_muhat1_(m, mu, muhat, k, j, i)) / mbsize.d_view(m).dx3;
             }
-            L_mu_muhat0_(m, mu, muhat, k, j, i) =
-                gam0 * L_mu_muhat0_(m, mu, muhat, k, j, i) + gam1 * L_mu_muhat1_(m, mu, muhat, k, j, i)
-                    - beta_dt * tetr_rhs;
+            L_mu_muhat0_(m, mu, muhat, k, j, i) = gam0 * L_mu_muhat0_(m, mu, muhat, k, j, i) + gam1 * L_mu_muhat1_(m, mu, muhat, k, j, i) - beta_dt * tetr_rhs;
           });
 
   // Add explicit source terms

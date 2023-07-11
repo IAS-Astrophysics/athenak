@@ -5,7 +5,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file radiation_femn_tetrad.cpp
-//  \brief initialize tetrad for radiation FEM_N
+//  \brief construct tetrad for radiation FEM_N
 
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
