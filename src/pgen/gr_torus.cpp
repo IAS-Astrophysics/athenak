@@ -1219,13 +1219,16 @@ void TorusHistory(HistoryData *pdata, Mesh *pm) {
   // Otherwise, the first thing to do is increase the number of outputs
   int &nmhd = pm->pmb_pack->pmhd->nmhd;
   pdata->nhist += 1;
-  pdata->label[nmhd+6] = "tot-divB";
+  pdata->label[nmhd+6] = "|divB|";
 
   // Capture class variables for kernel
   auto &bx1f = pm->pmb_pack->pmhd->b0.x1f;
   auto &bx2f = pm->pmb_pack->pmhd->b0.x2f;
   auto &bx3f = pm->pmb_pack->pmhd->b0.x3f;
   auto &size = pm->pmb_pack->pmb->mb_size;
+  auto &bcc  = pm->pmb_pack->pmhd->bcc0;
+  auto &coord = pm->pmb_pack->pcoord->coord_data;
+  auto &flat = coord.is_minkowski;
 
   // loop over all MeshBlocks in this pack
   auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
@@ -1246,10 +1249,37 @@ void TorusHistory(HistoryData *pdata, Mesh *pm) {
     k += ks;
     j += js;
 
+    Real &x1min = size.d_view(m).x1min;
+    Real &x1max = size.d_view(m).x1max;
+    Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+    Real &x2min = size.d_view(m).x2min;
+    Real &x2max = size.d_view(m).x2max;
+    Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+    Real &x3min = size.d_view(m).x3min;
+    Real &x3max = size.d_view(m).x3max;
+    Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+
     Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
     Real dx  = size.d_view(m).dx1;
     Real dy  = size.d_view(m).dx2;
     Real dz  = size.d_view(m).dx3;
+
+    // What matters the most is actually |div B|/|B|. Therefore, we need to use
+    // the cell-centered field to estimate the average magnitude across the cell.
+    /*Real gdd[4][4], guu[4][4];
+    ComputeMetricAndInverse(x1v, x2v, x3v, flat, coord.bh_spin, gdd, guu);
+    Real g3d[NSPMETRIC] = {gdd[1][1], gdd[1][2], gdd[1][3],
+                           gdd[2][2], gdd[2][3], gdd[3][3]};
+    Real sdetg = sqrt(Primitive::GetDeterminant(g3d));
+    Real B_u[3] = {bcc(m, IBX, k, j, i)/sdetg, 
+                   bcc(m, IBY, k, j, i)/sdetg,
+                   bcc(m, IBZ, k, j, i)/sdetg};
+    Real Bmag = sqrt(Primitive::SquareVector(B_u, g3d)) + 1e-60;
+    if (!isfinite(Bmag)) {
+      printf("There's a problem with Bmag!\n");
+    }*/
 
     mb_sum += fabs(vol*( (bx1f(m, k, j, i+1) - bx1f(m, k, j, i))/dx 
                   + (bx2f(m, k, j+1, i) - bx2f(m, k, j, i))/dy 
