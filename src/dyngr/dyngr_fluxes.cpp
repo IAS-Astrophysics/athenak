@@ -25,6 +25,7 @@
 #include "reconstruct/wenoz.hpp"
 // include inlined Riemann solvers (double yuck...)
 #include "dyngr/rsolvers/llf_dyngrmhd.hpp" // NOLINT(build/include)
+#include "dyngr/rsolvers/hlle_dyngrmhd.hpp" // NOLINT(build/include)
 //#include "dyngr/dyngr_fofc.cpp"
 // include PrimitiveSolver stuff
 #include "eos/primitive-solver/idealgas.hpp"
@@ -149,7 +150,14 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
       LLF_DYNGR(member, dyn_eos, indcs, size, coord, m, k, j, is, ie+1, IVX, 
                 wl, wr, bl, br, bx, nhyd_, nscal_, gface1_dd, betaface1_u, alphaface1, flx1, e31, e21);
     }
-    //} else { other Riemann solvers here
+    else if constexpr (rsolver == DynGR_RSolver::hlle_dyngr) {
+      HLLE_DYNGR(member, dyn_eos, indcs, size, coord, m, k, j, is, ie+1, IVX, 
+                wl, wr, bl, br, bx, nhyd_, nscal_, gface1_dd, betaface1_u, alphaface1, flx1, e31, e21);
+    }
+    //} else if { other Riemann solvers here
+    else {
+      abort();
+    }
     member.team_barrier();
 
     // Calculate fluxes of scalars (if any)
@@ -271,7 +279,15 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
                       wl, wr, bl, br, by, nhyd_, nscal_, gface2_dd, betaface2_u, alphaface2, flx2,
                       e12, e32);
           }
-          //} else { other Riemann solvers here
+          else if constexpr (rsolver == DynGR_RSolver::hlle_dyngr) {
+            HLLE_DYNGR(member, dyn_eos, indcs, size, coord, m, k, j, is-1, ie+1, IVY, 
+                      wl, wr, bl, br, by, nhyd_, nscal_, gface2_dd, betaface2_u, alphaface2, flx2,
+                      e12, e32);
+          }
+          //} else if { other Riemann solvers here
+          else {
+            abort();
+          }
         }
         member.team_barrier();
 
@@ -389,7 +405,15 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
                       wl, wr, bl, br, bz, nhyd_, nscal_, gface3_dd, betaface3_u, alphaface3, flx3,
                       e23, e13);
           }
-          //} else { other Riemann solvers here
+          else if constexpr (rsolver == DynGR_RSolver::hlle_dyngr) {
+            HLLE_DYNGR(member, dyn_eos, indcs, size, coord, m, k, j, is-1, ie+1, IVZ,
+                      wl, wr, bl, br, bz, nhyd_, nscal_, gface3_dd, betaface3_u, alphaface3, flx3,
+                      e23, e13);
+          }
+          //} else if { other Riemann solvers here
+          else {
+            abort();
+          }
         }
         member.team_barrier();
 
@@ -423,7 +447,9 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
 // Macro for instantiating every flux function for each Riemann solver
 #define INSTANTIATE_CALC_FLUXES(EOSPolicy, ErrorPolicy) \
 template \
-TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGR_RSolver::llf_dyngr>(Driver *pdriver, int stage);
+TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGR_RSolver::llf_dyngr>(Driver *pdriver, int stage); \
+template \
+TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGR_RSolver::hlle_dyngr>(Driver *pdriver, int stage);
 
 INSTANTIATE_CALC_FLUXES(Primitive::IdealGas, Primitive::ResetFloor)
 INSTANTIATE_CALC_FLUXES(Primitive::PiecewisePolytrope, Primitive::ResetFloor)

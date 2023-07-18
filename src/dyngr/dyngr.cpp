@@ -88,6 +88,8 @@ DynGR::DynGR(MeshBlockPack *pp, ParameterInput *pin) : pmy_pack(pp) {
   std::string rsolver = pin->GetString("mhd", "rsolver");
   if (rsolver.compare("llf") == 0) {
     rsolver_method = DynGR_RSolver::llf_dyngr;
+  } else if (rsolver.compare("hlle") == 0) {
+    rsolver_method = DynGR_RSolver::hlle_dyngr;
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "<mhd> rsolver = '" << rsolver
@@ -151,7 +153,13 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AssembleDynGRTasks(TaskList &start,
   if (rsolver_method == DynGR_RSolver::llf_dyngr) {
     id.flux = run.AddTask(&DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGR_RSolver::llf_dyngr>,this,id.copyu);
   } // put more rsolvers here
-
+  else if (rsolver_method == DynGR_RSolver::hlle_dyngr) {
+    id.flux = run.AddTask(&DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGR_RSolver::hlle_dyngr>,this,id.copyu);
+  }
+   // put more rsolvers here
+  else{
+    abort();
+  }
 
   // now the rest of the Hydro run tasks
   id.settmunu = run.AddTask(&DynGR::SetTmunu, this, id.copyu);
