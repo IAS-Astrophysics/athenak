@@ -78,7 +78,9 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
   } else if (pgen_fun_name.compare("rad_femn_linetest") == 0) {
     RadiationFEMNLinetest(pin, false);
   }  else if (pgen_fun_name.compare("rad_femn_gridtest") == 0) {
-      RadiationFEMNGridtest(pin, false);
+    RadiationFEMNGridtest(pin, false);
+  } else if (pgen_fun_name.compare("rad_femn_linalgtest") == 0) {
+    RadiationFEMNLinalgtest(pin, false);
   // else, name not set on command line or input file, print warning and quit
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
