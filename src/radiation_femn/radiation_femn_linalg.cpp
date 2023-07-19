@@ -8,107 +8,122 @@
 //  \brief implementation of the matrix inverse routines
 
 #include <cmath>
-#include <stdexcept>
+#include "athena.hpp"
 #include "radiation_femn/radiation_femn.hpp"
 
 namespace radiationfemn {
 
-    template<size_t N>
-    void RadiationFEMN::CGSolve(double (&A)[N][N], double (&b)[N], double (&xinit)[N], double (&x)[N], double tolerance) {
-        /*!
-         * \brief Solve a linear system of equations using the Conjugate gradient method.
-         *
-         * Solves the system:
-         *              A x + b = 0
-         * where A is a positive definite N x N symmetric matrix and x, b are N x 1 column vectors.
-         *
-         * Inputs:
-         *      A: An N x N symmetric positive definite matrix of type double
-         *      b: An N x 1 comlumn vector of type double.
-         *      xinit: The initial guess of the solution, N x 1 column vector of doubles.
-         *      x: The solution of the linear system of equations.
-         *      tolerance: The accuracy upto which the solution is calculated.
-         */
+// Perform LU decomposition on a square matrix
+// Generates a row-wise permutated matrix lu_matrix containing the LU decomposed matrix and the permutation in pivot_indices
+// square_matrix: [NxN] matrix of reals, input matrix
+// lu_matrix:     [NxN] matrix of reals, the row-permuted LU decomposition matrix
+// pivot_indices: [N-1] array of reals, the permutation information
+void LUDecomposition(DvceArray2D<Real> square_matrix, DvceArray2D<Real> lu_matrix, DvceArray1D<int> pivot_indices) {
 
-        double residual[N] = {0.};
-        double residual_norm(0.);
-        double p[N] = {0.};
+  int num_rows = square_matrix.extent(0);
 
-        for (int i = 0; i < N; i++) {
-            for (int j = 0; j < N; j++) {
-                residual[i] += A[i][j] * xinit[j];
-            }
-            residual[i] += - b[i];
+  Kokkos::realloc(pivot_indices, num_rows - 1);
+  Kokkos::deep_copy(lu_matrix, square_matrix);
 
-            p[i] = - residual[i];
-            residual_norm += residual[i] * residual[i];
-            x[i] = xinit[i];
-        }
+  double largest_pivot;
+  double swap_value;
 
-        residual_norm = sqrt(residual_norm);
-        int niters(0);
+  // begin construction of the row shifted square matrix
+  for (int k = 0; k < num_rows - 1; k++) {
 
-        while (residual_norm >= tolerance) {
-
-            double A_dot_p[N] = {0.};
-            double res_dot_res(0.);
-            double p_dot_Ap(0.);
-
-            for (int i = 0; i < N; i++) {
-                for (int j = 0; j < N; j++) {
-                    A_dot_p[i] += A[j][i] * p[j];
-                }
-                res_dot_res += residual[i] * residual[i];
-                p_dot_Ap += p[i] * A_dot_p[i];
-            }
-
-            double alpha = res_dot_res / p_dot_Ap;
-            double res_dot_res_new(0.);
-
-            for (int i = 0; i < N; i++) {
-                x[i] = x[i] + alpha * p[i];
-                residual[i] = residual[i] + alpha * A_dot_p[i];
-                res_dot_res_new += residual[i] * residual[i];
-            }
-
-            double beta = res_dot_res_new / res_dot_res;
-            residual_norm = 0.;
-
-            for (int i = 0; i < N; i++) {
-                p[i] = - residual[i] + beta * p[i];
-                residual_norm += residual[i] * residual[i];
-            }
-
-            residual_norm = sqrt(residual_norm);
-
-            niters++;
-
-            if(niters > 1e3) {
-                throw std::runtime_error("The number of iterations for the Conjugate Gradient method exceeds the maximum allowed number!");
-            }
-        }
-
+    // get the best pivot
+    largest_pivot = 0.;
+    for (int i = k; i < num_rows; i++) {
+      if (fabs(lu_matrix(i, k)) > largest_pivot) {
+        largest_pivot = fabs(lu_matrix(i, k));
+        pivot_indices(k) = i;
+      }
     }
 
-    template<size_t N>
-    void RadiationFEMN::CGMatrixInverse(double (&mat)[N][N], double (&guess)[N][N], double (&matinv)[N][N]) {
-
-        for (int i = 0; i < N; i++) {
-
-            double b[N] = {0.};
-            double xinit[N] = {0.};
-            double x[N] = {0.};
-
-            for (int j = 0; j < N; j++) {
-                b[j] = (i == j);
-                xinit[j] = guess[j][i];
-            }
-
-            CGSolve(mat, b, xinit, x);
-
-            for (int j = 0; j < N; j++) {
-                matinv[j][i] = x[j];
-            }
-        }
+    // if new pivot is found, swap rows
+    if (pivot_indices[k] != k) {
+      for (int j = k; j < num_rows; j++) {
+        swap_value = lu_matrix(pivot_indices[k], j);
+        lu_matrix(pivot_indices[k], j) = lu_matrix(k, j);
+        lu_matrix(k, j) = swap_value;
+      }
     }
+
+    for (int i = k + 1; i < num_rows; i++) {
+      lu_matrix(i, k) = lu_matrix(i, k) / lu_matrix(k, k);
+      for (int j = k + 1; j < num_rows; j++) {
+        lu_matrix(i, j) = lu_matrix(i, j) - lu_matrix(i, k) * lu_matrix(k, j);
+      }
+    }
+  }
+}
+
+// Solve a set of equations A[N,N] x[N] = b[N] using an LU decomposed matrix and pivot information
+// lu_matrix:     [NxN] matrix, the LU decomposed matrix
+// pivot_indices: [N] array, the pivot information
+// b_array:       [N] array, the array b
+// x_array:       [N] array, the solution x
+void LUSolve(const DvceArray2D<Real> lu_matrix, const DvceArray1D<int> pivot_indices, const DvceArray1D<Real> b_array, DvceArray1D<Real> x_array) {
+
+  int num_rows = b_array.extent(0);
+  int index;
+  double swap_value;
+  double temp_value;
+
+  Kokkos::realloc(x_array, num_rows);
+  Kokkos::deep_copy(x_array, b_array);
+
+  // Forward substitution to find solution to L y = b
+  for (int k = 0; k < num_rows - 1; k++) {
+    swap_value = x_array(pivot_indices(k));
+    x_array(pivot_indices(k)) = x_array(k);
+    x_array(k) = swap_value;
+    for (int j = k + 1; j < num_rows; j++) {
+      x_array(j) = x_array(j) - lu_matrix(j, k) * x_array(k);
+    }
+  }
+
+  // Back substitution to find solution to U x = y
+  x_array(num_rows - 1) = x_array(num_rows - 1) / lu_matrix(num_rows - 1, num_rows - 1);
+  for (int k = num_rows - 2; k >= 0; k--) {
+    for (int j = k + 1; j < num_rows; j++) {
+      x_array(k) = x_array(k) - lu_matrix(k, j) * x_array(j);
+    }
+    x_array(k) = x_array(k) / lu_matrix(k, k);
+  }
+
+}
+
+// Compute the inverse of a square matrix
+// A_matrix:          [NxN] a square matrix
+// A_matrix_inverse:  [NxN] the inverse
+void LUInverse(DvceArray2D<Real> A_matrix, DvceArray2D<Real> A_matrix_inverse) {
+
+  int n = A_matrix.extent(0);
+
+  Kokkos::realloc(A_matrix_inverse, n, n);
+  Kokkos::deep_copy(A_matrix_inverse, 0.);
+
+  DvceArray1D<Real> x_array;
+  DvceArray1D<Real> b_array;
+  DvceArray2D<Real> lu_matrix;
+  DvceArray1D<int> pivots;
+
+  Kokkos::realloc(x_array, n);
+  Kokkos::realloc(b_array, n);
+  Kokkos::realloc(lu_matrix, n, n);
+  Kokkos::realloc(pivots, n - 1);
+
+  radiationfemn::LUDecomposition(A_matrix, lu_matrix, pivots);
+
+  for (int i = 0; i < n; i++) {
+    Kokkos::deep_copy(b_array, 0.);
+    b_array(i) = 1.;
+    radiationfemn::LUSolve(lu_matrix, pivots, b_array, x_array);
+    for (int j = 0; j < n; j++) {
+      A_matrix_inverse(j, i) = x_array(j);
+    }
+  }
+
+}
 } // namespace radiationfemn

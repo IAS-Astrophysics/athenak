@@ -187,19 +187,16 @@ class RadiationFEMN {
   void TetradInitialize();
   // ---------------------------------------------------------------------------
 
-  // ---------------------------------------------------------------------------
-  // Functions for linear algebra
-  template<size_t N>
-  void CGSolve(double (&A)[N][N], double (&b)[N], double (&xinit)[N], double (&x)[N], double tolerance = 1e-6);
-  template<size_t N>
-  void CGMatrixInverse(double (&mat)[N][N], double (&guess)[N][N], double (&matinv)[N][N]);
-  // ---------------------------------------------------------------------------
-
  private:
   MeshBlockPack *pmy_pack;  // ptr to MeshBlockPack containing this RadiationFEMN
 
 };
 
+void LUDecomposition(DvceArray2D<Real> square_matrix, DvceArray2D<Real> lu_matrix, DvceArray1D<int> pivot_indices);
+void LUSolve(const DvceArray2D<Real> lu_matrix, const DvceArray1D<int> pivot_indices, const DvceArray1D<Real> b_array, DvceArray1D<Real> x_array);
+void LUInverse(DvceArray2D<Real> A_matrix, DvceArray2D<Real> A_matrix_inverse);
+
 } // namespace radiationfemn
+
 
 #endif //ATHENA_RADIATION_FEMN_HPP
