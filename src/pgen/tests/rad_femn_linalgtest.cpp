@@ -123,6 +123,7 @@ void ProblemGenerator::RadiationFEMNLinalgtest(ParameterInput *pin, const bool r
   std::cout << std::endl;
 
   std::cout << "Test 2: Solve A x = b using LU decomposition" << std::endl;
+  std::cout << std::endl;
   DvceArray1D<Real> b_array;
   DvceArray1D<Real> solution;
   DvceArray1D<Real> solution_correct;
@@ -147,6 +148,7 @@ void ProblemGenerator::RadiationFEMNLinalgtest(ParameterInput *pin, const bool r
 
   std::cout << std::endl;
   std::cout << "Test 3: Compute inverse of the matrix" << std::endl;
+  std::cout << std::endl;
   DvceArray2D<Real> matrix_inverse;
   DvceArray2D<Real> matrix_inverse_answer;
 
