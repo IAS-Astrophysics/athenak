@@ -81,6 +81,8 @@ class DynGR {
   // functions
   virtual void AssembleDynGRTasks(TaskList &start, TaskList &run, TaskList &end) = 0;
 
+  virtual void QueueDynGRTasks() = 0;
+
   virtual TaskStatus ConToPrim(Driver* pdrive, int stage) = 0;
   //virtual TaskStatus SetTmunu(Driver* pdrive, int stage) = 0;
   virtual void PrimToConInit(int is, int ie, int js, int je, int ks, int ke) = 0;
@@ -114,6 +116,8 @@ class DynGRPS : public DynGR {
 
   // functions
   virtual void AssembleDynGRTasks(TaskList &start, TaskList &run, TaskList &end);
+
+  virtual void QueueDynGRTasks();
 
   virtual TaskStatus ConToPrim(Driver* pdrive, int stage);
   virtual void PrimToConInit(int is, int ie, int js, int je, int ks, int ke);

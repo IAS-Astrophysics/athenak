@@ -73,6 +73,8 @@ add_executable(
         mhd/mhd_tasks.cpp
         mhd/mhd_update.cpp
 
+        numerical-relativity/numerical_relativity.cpp
+
         tmunu/tmunu.cpp
 
         z4c/z4c.cpp

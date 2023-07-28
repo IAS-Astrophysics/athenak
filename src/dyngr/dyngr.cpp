@@ -227,6 +227,11 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AssembleDynGRTasks(TaskList &start,
   }
 }
 
+template<class EOSPolicy, class ErrorPolicy>
+void DynGRPS<EOSPolicy, ErrorPolicy>::QueueDynGRTasks() {
+  return;
+}
+
 //----------------------------------------------------------------------------------------
 //! \fn  TaskStatus DynGR::ADMMatterSource_(Driver *pdrive, int stage) {
 //  \brief
@@ -522,12 +527,12 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
       Bv = Bv/W;
       Real bsq = Bv*Bv + Bsq/Wsq;
 
-      E(i) = (H + Bsq)*Wsq - prim_pt[PPR] - 0.5*bsq;
+      E(i) = (H*Wsq + Bsq) - prim_pt[PPR] - 0.5*bsq;
 
       for (int a = 0; a < 3; ++a) {
         S_d(a, i) = 0.0;
         for (int b = 0; b < 3; ++b) {
-          S_d(a, i) += ((H*W + Bsq)*prim_pt[PVX + b] - Bv*B_u[b])*
+          S_d(a, i) += ((H*Wsq + Bsq)*prim_pt[PVX + b]/W - Bv*B_u[b])*
                         adm.g_dd(m, a, b, k, j, i);
         }
       }
