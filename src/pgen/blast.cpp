@@ -19,6 +19,8 @@
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "dyngr/dyngr.hpp"
+#include "adm/adm.hpp"
 #include "coordinates/cell_locations.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -55,6 +57,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     u0_ = pmbp->pmhd->u0;
     w0_ = pmbp->pmhd->w0;
     gm1 = pmbp->pmhd->peos->eos_data.gamma - 1.0;
+  }
+  if (pmbp->pcoord->is_dynamical_relativistic) {
+    gm1 = 1.0; // DynGR uses pressure, not energy.
   }
 
   par_for("pgen_blast1",DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
@@ -129,11 +134,50 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
 
   // Convert primitives to conserved
-  if (pmbp->phydro != nullptr) {
-    pmbp->phydro->peos->PrimToCons(w0_, u0_, is, ie, js, je, ks, ke);
-  } else if (pmbp->pmhd != nullptr) {
-    auto &bcc0_ = pmbp->pmhd->bcc0;
-    pmbp->pmhd->peos->PrimToCons(w0_, bcc0_, u0_, is, ie, js, je, ks, ke);
+  if (!pmbp->pcoord->is_dynamical_relativistic) {
+    if (pmbp->phydro != nullptr) {
+      pmbp->phydro->peos->PrimToCons(w0_, u0_, is, ie, js, je, ks, ke);
+    } else if (pmbp->pmhd != nullptr) {
+      auto &bcc0_ = pmbp->pmhd->bcc0;
+      pmbp->pmhd->peos->PrimToCons(w0_, bcc0_, u0_, is, ie, js, je, ks, ke);
+    }
+  }
+
+  // Initialize ADM variables -----------------------------------------
+  if (pmbp->padm != nullptr) {
+    // Assume Minkowski space
+    auto &adm = pmbp->padm->adm;
+    int nmb1 = pmbp->nmb_thispack - 1;
+    int ng = indcs.ng;
+    int n1 = indcs.nx1 + 2*ng;
+    int n2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2*ng) : 1;
+    int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2*ng) : 1;
+    par_for("pgen_adm_vars", DevExeSpace(), 0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      // Set ADM to flat space
+      adm.alpha(m, k, j, i) = 1.0;
+      adm.beta_u(m, 0, k, j, i) = 0.0;
+      adm.beta_u(m, 1, k, j, i) = 0.0;
+      adm.beta_u(m, 2, k, j, i) = 0.0;
+
+      adm.psi4(m, k, j, i) = 1.0;
+
+      adm.g_dd(m, 0, 0, k, j, i) = 1.0;
+      adm.g_dd(m, 0, 1, k, j, i) = 0.0;
+      adm.g_dd(m, 0, 2, k, j, i) = 0.0;
+      adm.g_dd(m, 1, 1, k, j, i) = 1.0;
+      adm.g_dd(m, 1, 2, k, j, i) = 0.0;
+      adm.g_dd(m, 2, 2, k, j, i) = 1.0;
+
+      adm.K_dd(m, 0, 0, k, j, i) = 0.0;
+      adm.K_dd(m, 0, 1, k, j, i) = 0.0;
+      adm.K_dd(m, 0, 2, k, j, i) = 0.0;
+      adm.K_dd(m, 1, 1, k, j, i) = 0.0;
+      adm.K_dd(m, 1, 2, k, j, i) = 0.0;
+      adm.K_dd(m, 2, 2, k, j, i) = 0.0;
+    });
+
+    pmbp->pdyngr->PrimToConInit(is, ie, js, je, ks, ke);
   }
 
   return;
