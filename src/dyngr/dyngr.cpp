@@ -523,6 +523,18 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
 
   const Real mb = eos.ps.GetEOS().GetBaryonMass();
 
+  // Check the number of dimensions to determine which derivatives we need.
+  int ndim;
+  if (pmy_pack->pmesh->one_d) {
+    ndim = 1;
+  }
+  else if (pmy_pack->pmesh->two_d) {
+    ndim = 2;
+  }
+  else {
+    ndim = 3;
+  }
+
   int scr_level = scratch_level;
   size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1)*2       // scalars
                   + ScrArray2D<Real>::shmem_size(3, ncells1)*2    // vectors
@@ -572,13 +584,13 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
 
     // Metric derivatives
     Real idx[] = {size.d_view(m).idx1, size.d_view(m).idx2, size.d_view(m).idx3};
-    for (int a =0; a < 3; ++a) {
+    for (int a =0; a < ndim; ++a) {
       par_for_inner(member, is, ie, [&](int const i){
         dalpha_d(a, i) = Dx<NGHOST>(a, idx, adm.alpha, m, k, j, i);
       });
     }
     for (int a = 0; a < 3; ++a) {
-      for (int b = 0; b < 3; ++b) {
+      for (int b = 0; b < ndim; ++b) {
         par_for_inner(member, is, ie, [&](int const i){
           dbeta_du(b,a,i) = Dx<NGHOST>(b, idx, adm.beta_u, m, a, k, j, i);
         });
@@ -586,7 +598,7 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
     }
     for (int a = 0; a < 3; ++a) {
       for (int b = 0; b < 3; ++b) {
-        for (int c = 0; c < 3; ++c) {
+        for (int c = 0; c < ndim; ++c) {
           par_for_inner(member, is, ie, [&](int const i) {
             dg_ddd(c,a,b,i) = Dx<NGHOST>(c, idx, adm.g_dd, m, a, b, k, j, i);
           });
@@ -701,7 +713,7 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
     }
 
     // Assemble momentum RHS
-    for (int a = 0; a < 3; ++a) {
+    for (int a = 0; a < ndim; ++a) {
       for (int b = 0; b < 3; ++b) {
         for (int c = 0; c < 3; ++c) {
           par_for_inner(member, is, ie, [&](int const i) {
