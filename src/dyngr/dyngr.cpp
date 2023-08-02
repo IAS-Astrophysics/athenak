@@ -584,6 +584,9 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
 
     // Metric derivatives
     Real idx[] = {size.d_view(m).idx1, size.d_view(m).idx2, size.d_view(m).idx3};
+    dalpha_d.ZeroClear();
+    dbeta_du.ZeroClear();
+    dg_ddd.ZeroClear();
     for (int a =0; a < ndim; ++a) {
       par_for_inner(member, is, ie, [&](int const i){
         dalpha_d(a, i) = Dx<NGHOST>(a, idx, adm.alpha, m, k, j, i);
@@ -713,7 +716,7 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
     }
 
     // Assemble momentum RHS
-    for (int a = 0; a < ndim; ++a) {
+    for (int a = 0; a < 3; ++a) {
       for (int b = 0; b < 3; ++b) {
         for (int c = 0; c < 3; ++c) {
           par_for_inner(member, is, ie, [&](int const i) {
