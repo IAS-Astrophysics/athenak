@@ -34,6 +34,7 @@ enum TaskName {
   MHD_RecvFlux,
   MHD_ExplRK,
   MHD_RestU,
+  MHD_SendU,
   MHD_RecvU,
   MHD_EField,
   MHD_SendE,
@@ -78,9 +79,11 @@ enum TaskLocation {
 };
 
 struct QueuedTask {
-  QueuedTask(TaskName n, bool a, TaskID i, std::vector<TaskName> d) : 
-      name(n), added(a), id(i), dependencies(d) {}
+  QueuedTask(TaskName n, const std::string s, bool a, TaskID i, std::vector<TaskName>& d, 
+             std::function<TaskStatus(Driver *, int)> func) : 
+      name(n), name_string(s), added(a), id(i), dependencies(d), func_(func) {}
   TaskName name;
+  const std::string name_string;
   bool added;
   TaskID id;
   std::vector<TaskName> dependencies;
@@ -95,17 +98,20 @@ class NumericalRelativity {
     // Queue a task to be added to the task list. Filter for dependencies.
     // Task function must have arguments (Driver*, int).
     template <class F>
-    void QueueTask(F func, TaskName name, TaskLocation loc, std::vector<TaskName>& dependencies, 
+    void QueueTask(F func, TaskName name, const std::string name_string,
+                   TaskLocation loc, std::vector<TaskName>& dependencies, 
                    std::vector<TaskName>& optional) {
       // Don't add this task if its physics dependencies aren't met, e.g,
       // don't add Z4c matter source terms if Z4c is disabled.
       if (!DependenciesMet(dependencies)) {
+        //std::cout << "Did not add " << name_string << " due to missing physics dependencies.\n";
         return;
       }
       // Otherwise, check for additional physics and add necessary dependencies.
       AddExtraDependencies(dependencies, optional);
       // Add a new task to the queue.
-      SelectQueue(loc).push_back(QueuedTask(name, false, TaskID(), dependencies,
+      //std::cout << "Queuing " << name_string << "...\n";
+      SelectQueue(loc).push_back(QueuedTask(name, name_string, false, TaskID(), dependencies,
         [=](Driver *d, int s) mutable -> TaskStatus {return func(d,s);}));
     }
     
@@ -113,18 +119,21 @@ class NumericalRelativity {
     // Task function must have arguments (Driver*, int) and must be a member
     // function of class T.
     template <class F, class T>
-    void QueueTask(F func, T *obj, TaskName name, TaskLocation loc,
+    void QueueTask(F func, T *obj, TaskName name, const std::string name_string, TaskLocation loc,
                    std::vector<TaskName>& dependencies, std::vector<TaskName>& optional) {
       // Don't add this task if its physics dependencies aren't met, e.g.,
       // don't add Z4c matter source terms if Z4c is disabled.
       if (!DependenciesMet(dependencies)) {
+        //std::cout << "Did not add " << name_string << " due to missing physics dependencies.\n";
         return;
       }
       // Otherwise, check for additional physics and add necessary dependencies.
       AddExtraDependencies(dependencies, optional);
       // Add a new task to the queue.
-      SelectQueue(loc).push_back(QueuedTask(name, false, TaskID(), dependencies,
-        [=](Driver *d, int s) mutable -> TaskStatus {return (obj->*func(d,s));}));
+      //std::cout << "Queuing " << name_string << "...\n";
+      auto& queue = SelectQueue(loc);
+      SelectQueue(loc).push_back(QueuedTask(name, name_string, false, TaskID(), dependencies,
+        [=](Driver *d, int s) mutable -> TaskStatus {return (obj->*func)(d,s);}));
     }
 
     void AssembleNumericalRelativityTasks(TaskList &start, TaskList &run, TaskList &end);

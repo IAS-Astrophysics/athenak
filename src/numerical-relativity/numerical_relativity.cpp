@@ -17,14 +17,6 @@ namespace numrel {
 
 NumericalRelativity::NumericalRelativity(MeshBlockPack *ppack, ParameterInput *pin) {
   pmy_pack = ppack;
-
-  // Assemble the task lists for all physics modules
-  if (pmy_pack->pdyngr != nullptr) {
-    pmy_pack->pdyngr->QueueDynGRTasks();
-  }
-  /*if (pmy_pack->pz4c != nullptr) {
-    pmy_pack->pdyngr->QueueZ4cTasks();
-  }*/
 }
 
 std::vector<QueuedTask>& NumericalRelativity::SelectQueue(TaskLocation loc) {
@@ -120,9 +112,12 @@ bool NumericalRelativity::AssembleNumericalRelativityTasks(
     int cycle_added = 0;
     for (auto &task : queue) {
       TaskID dep(0);
-      if (DependenciesMet(task, queue, dep)) {
+      if (DependenciesMet(task, queue, dep) && !task.added) {
+        task.added = true;
         list.AddTask(task.func_, dep);
         cycle_added++;
+        added++;
+        //std::cout << "Successfully added " << task.name_string << " to task list!\n";
       }
     }
     if (cycle_added == 0) {
@@ -135,24 +130,32 @@ bool NumericalRelativity::AssembleNumericalRelativityTasks(
 
 void NumericalRelativity::AssembleNumericalRelativityTasks(
     TaskList &start, TaskList &run, TaskList &end) {
+  // Assemble the task lists for all physics modules
+  if (pmy_pack->pdyngr != nullptr) {
+    pmy_pack->pdyngr->QueueDynGRTasks();
+  }
+  /*if (pmy_pack->pz4c != nullptr) {
+    pmy_pack->pdyngr->QueueZ4cTasks();
+  }*/
+
   bool success = AssembleNumericalRelativityTasks(start, start_queue);
   if (!success) {
     std::cout << "NumericalRelativity: Failed to construct start TaskList!\n"
-              << "  Check that there are no cyclical dependencies.\n";
+              << "  Check that there are no cyclical dependencies or missing tasks.\n";
     abort();
   }
 
   success = AssembleNumericalRelativityTasks(run, run_queue);
   if (!success) {
     std::cout << "NumericalRelativity: Failed to construct run TaskList!\n"
-              << "  Check that there are no cyclical dependencies.\n";
+              << "  Check that there are no cyclical dependencies or missing tasks.\n";
     abort();
   }
 
   success = AssembleNumericalRelativityTasks(end, end_queue);
   if (!success) {
     std::cout << "NumericalRelativity: Failed to construct end TaskList!\n"
-              << "  Check that there are no cyclical dependencies.\n";
+              << "  Check that there are no cyclical dependencies or missing tasks.\n";
     abort();
   }
 }

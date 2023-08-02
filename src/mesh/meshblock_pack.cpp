@@ -17,6 +17,7 @@
 #include "mhd/mhd.hpp"
 #include "adm/adm.hpp"
 #include "tmunu/tmunu.hpp"
+#include "numerical-relativity/numerical_relativity.hpp"
 #include "z4c/z4c.hpp"
 #include "dyngr/dyngr.hpp"
 #include "ion-neutral/ion_neutral.hpp"
@@ -51,6 +52,7 @@ MeshBlockPack::~MeshBlockPack() {
   if (ptmunu != nullptr) {delete ptmunu;}
   if (pz4c   != nullptr) {delete pz4c;}
   if (pdyngr != nullptr) {delete pdyngr;}
+  if (pnr    != nullptr) {delete pnr;}
   if (pturb  != nullptr) {delete pturb;}
   if (punit  != nullptr) {delete punit;}
 }
@@ -150,9 +152,9 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
       ptmunu = new Tmunu(this, pin);
     }
   }
-  if (pin->DoesBlockExist("z4c") && !(pin->DoesBlockExist("mhd")) && !(pin->DoesBlockExist("hydro")) ) {
+  /*if (pin->DoesBlockExist("z4c") && !(pin->DoesBlockExist("mhd")) && !(pin->DoesBlockExist("hydro")) ) {
     pz4c->AssembleZ4cTasks(start_tl, run_tl, end_tl);
-  }
+  }*/
 
   // (6) Dynamical Spacetime and Matter (MHD TODO)
   if ((pin->DoesBlockExist("z4c") || pin->DoesBlockExist("adm")) && (pin->DoesBlockExist("hydro")) ) {
@@ -163,7 +165,12 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   }
   if ((pin->DoesBlockExist("z4c") || pin->DoesBlockExist("adm")) && (pin->DoesBlockExist("mhd")) ) {
     pdyngr = dyngr::BuildDynGR(this, pin);
-    pdyngr->AssembleDynGRTasks(start_tl, run_tl, end_tl);
+    //pdyngr->AssembleDynGRTasks(start_tl, run_tl, end_tl);
+  }
+  
+  if (pz4c != nullptr || padm != nullptr) {
+    pnr = new numrel::NumericalRelativity(this, pin);
+    pnr->AssembleNumericalRelativityTasks(start_tl, run_tl, end_tl);
   }
 
   // Units

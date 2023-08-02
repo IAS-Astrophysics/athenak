@@ -24,6 +24,7 @@ namespace mhd {class MHD;}
 namespace z4c {class Z4c;}
 namespace ion_neutral {class IonNeutral;}
 namespace dyngr {class DynGR;}
+namespace numrel {class NumericalRelativity;}
 class TurbulenceDriver;
 namespace units {class Units;}
 
@@ -59,6 +60,7 @@ class MeshBlockPack {
   Tmunu *ptmunu=nullptr;
   z4c::Z4c *pz4c=nullptr;
   dyngr::DynGR *pdyngr=nullptr;
+  numrel::NumericalRelativity *pnr=nullptr;
   ion_neutral::IonNeutral *pionn=nullptr;
   TurbulenceDriver *pturb=nullptr;
   units::Units *punit=nullptr;
