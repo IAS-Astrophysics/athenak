@@ -37,6 +37,10 @@ struct tov_pgen {
   Real dfloor;
   Real pfloor;
 
+  Real b_norm;
+  Real pcut;
+  int magindex;
+
   int npoints; // Number of points in arrays
   Real dr; // Radial spacing for integration
   DualArray1D<Real> R; // Array of radial coordinates
@@ -57,7 +61,13 @@ static void RHS(Real r, Real P, Real m, Real alp, tov_pgen& tov, Real& dP, Real&
 KOKKOS_INLINE_FUNCTION
 static void GetPrimitivesAtPoint(const tov_pgen& pgen, Real r, Real &rho, Real &p, Real &m, Real &alp);
 KOKKOS_INLINE_FUNCTION
+static void GetPandRho(const tov_pgen& pgen, Real r, Real &rho, Real &p);
+KOKKOS_INLINE_FUNCTION
 static Real Interpolate(Real x, const Real x1, const Real x2, const Real y1, const Real y2);
+KOKKOS_INLINE_FUNCTION
+static Real A1(const tov_pgen& pgen, Real x1, Real x2, Real x3);
+KOKKOS_INLINE_FUNCTION
+static Real A2(const tov_pgen& pgen, Real x1, Real x2, Real x3);
 
 void TOVHistory(HistoryData *pdata, Mesh *pm);
 
@@ -122,6 +132,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   int &is = indcs.is;
   int &js = indcs.js;
   int &ks = indcs.ks;
+  int &ie = indcs.ie;
+  int &je = indcs.je;
+  int &ke = indcs.ke;
   int nmb1 = pmbp->nmb_thispack - 1;
   auto &coord = pmbp->pcoord->coord_data;
 
@@ -208,6 +221,169 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     adm.K_dd(m,0,0,k,j,i) = adm.K_dd(m,0,1,k,j,i) = adm.K_dd(m,0,2,k,j,i) = 0.0;
     adm.K_dd(m,1,1,k,j,i) = adm.K_dd(m,1,2,k,j,i) = adm.K_dd(m,2,2,k,j,i) = 0.0;
   });
+
+  if (pmbp->pmhd != nullptr) {
+    // parse some parameters
+    tov.b_norm = pin->GetOrAddReal("problem", "b_norm", 0.0);
+    tov.pcut = pin->GetOrAddReal("problem", "pcut", 1e-6);
+    tov.magindex = pin->GetOrAddReal("problem", "magindex", 2);
+
+    // compute vector potential over all faces
+    int ncells1 = indcs.nx1 + 2*(indcs.ng);
+    int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
+    int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
+    int nmb = pmbp->nmb_thispack;
+    DvceArray4D<Real> a1, a2, a3;
+    Kokkos::realloc(a1, nmb,ncells3,ncells2,ncells1);
+    Kokkos::realloc(a2, nmb,ncells3,ncells2,ncells1);
+    Kokkos::realloc(a3, nmb,ncells3,ncells2,ncells1);
+
+    auto &nghbr = pmbp->pmb->nghbr;
+    auto &mblev = pmbp->pmb->mb_lev;
+
+    par_for("pgen_potential", DevExeSpace(), 0,nmb-1,ks,ke+1,js,je+1,is,ie+1,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      int nx1 = indcs.nx1;
+      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+      Real x1f = LeftEdgeX(i-is,nx1,x1min,x1max);
+
+      Real &x2min = size.d_view(m).x2min;
+      Real &x2max = size.d_view(m).x2max;
+      int nx2 = indcs.nx2;
+      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+      Real x2f = LeftEdgeX(j-js,nx2,x2min,x2max);
+      
+      Real &x3min = size.d_view(m).x3min;
+      Real &x3max = size.d_view(m).x3max;
+      int nx3 = indcs.nx3;
+      Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+      Real x3f = LeftEdgeX(k-ks,nx3,x3min,x3max);
+
+      Real x1fp1 = LeftEdgeX(i+1-is, nx1, x1min, x1max);
+      Real x2fp1 = LeftEdgeX(j+1-js, nx2, x2min, x2max);
+      Real x3fp1 = LeftEdgeX(k+1-ks, nx3, x3min, x3max);
+      Real dx1 = size.d_view(m).dx1;
+      Real dx2 = size.d_view(m).dx2;
+      Real dx3 = size.d_view(m).dx3;
+
+      a1(m,k,j,i) = A1(tov_, x1v, x2f, x3f);
+      a2(m,k,j,i) = A2(tov_, x1f, x2v, x3f);
+      a3(m,k,j,i) = 0.0;
+
+      // When neighboring MeshBock is at finer level, compute vector potential as sum of
+      // values at fine grid resolution.  This guarantees flux on shared fine/coarse
+      // faces is identical.
+
+      // Correct A1 at x2-faces, x3-faces, and x2x3-edges
+      if ((nghbr.d_view(m,8 ).lev > mblev.d_view(m) && j==js) ||
+          (nghbr.d_view(m,9 ).lev > mblev.d_view(m) && j==js) ||
+          (nghbr.d_view(m,10).lev > mblev.d_view(m) && j==js) ||
+          (nghbr.d_view(m,11).lev > mblev.d_view(m) && j==js) ||
+          (nghbr.d_view(m,12).lev > mblev.d_view(m) && j==je+1) ||
+          (nghbr.d_view(m,13).lev > mblev.d_view(m) && j==je+1) ||
+          (nghbr.d_view(m,14).lev > mblev.d_view(m) && j==je+1) ||
+          (nghbr.d_view(m,15).lev > mblev.d_view(m) && j==je+1) ||
+          (nghbr.d_view(m,24).lev > mblev.d_view(m) && k==ks) ||
+          (nghbr.d_view(m,25).lev > mblev.d_view(m) && k==ks) ||
+          (nghbr.d_view(m,26).lev > mblev.d_view(m) && k==ks) ||
+          (nghbr.d_view(m,27).lev > mblev.d_view(m) && k==ks) ||
+          (nghbr.d_view(m,28).lev > mblev.d_view(m) && k==ke+1) ||
+          (nghbr.d_view(m,29).lev > mblev.d_view(m) && k==ke+1) ||
+          (nghbr.d_view(m,30).lev > mblev.d_view(m) && k==ke+1) ||
+          (nghbr.d_view(m,31).lev > mblev.d_view(m) && k==ke+1) ||
+          (nghbr.d_view(m,40).lev > mblev.d_view(m) && j==js && k==ks) ||
+          (nghbr.d_view(m,41).lev > mblev.d_view(m) && j==js && k==ks) ||
+          (nghbr.d_view(m,42).lev > mblev.d_view(m) && j==je+1 && k==ks) ||
+          (nghbr.d_view(m,43).lev > mblev.d_view(m) && j==je+1 && k==ks) ||
+          (nghbr.d_view(m,44).lev > mblev.d_view(m) && j==js && k==ke+1) ||
+          (nghbr.d_view(m,45).lev > mblev.d_view(m) && j==js && k==ke+1) ||
+          (nghbr.d_view(m,46).lev > mblev.d_view(m) && j==je+1 && k==ke+1) ||
+          (nghbr.d_view(m,47).lev > mblev.d_view(m) && j==je+1 && k==ke+1)) {
+        Real xl = x1v + 0.25*dx1;
+        Real xr = x1v - 0.25*dx1;
+        a1(m,k,j,i) = 0.5*(A1(tov_, xl,x2f,x3f) + A1(tov_, xr,x2f,x3f));
+      }
+
+      // Correct A2 at x1-faces, x3-faces, and x1x3-edges
+      if ((nghbr.d_view(m,0 ).lev > mblev.d_view(m) && i==is) ||
+          (nghbr.d_view(m,1 ).lev > mblev.d_view(m) && i==is) ||
+          (nghbr.d_view(m,2 ).lev > mblev.d_view(m) && i==is) ||
+          (nghbr.d_view(m,3 ).lev > mblev.d_view(m) && i==is) ||
+          (nghbr.d_view(m,4 ).lev > mblev.d_view(m) && i==ie+1) ||
+          (nghbr.d_view(m,5 ).lev > mblev.d_view(m) && i==ie+1) ||
+          (nghbr.d_view(m,6 ).lev > mblev.d_view(m) && i==ie+1) ||
+          (nghbr.d_view(m,7 ).lev > mblev.d_view(m) && i==ie+1) ||
+          (nghbr.d_view(m,24).lev > mblev.d_view(m) && k==ks) ||
+          (nghbr.d_view(m,25).lev > mblev.d_view(m) && k==ks) ||
+          (nghbr.d_view(m,26).lev > mblev.d_view(m) && k==ks) ||
+          (nghbr.d_view(m,27).lev > mblev.d_view(m) && k==ks) ||
+          (nghbr.d_view(m,28).lev > mblev.d_view(m) && k==ke+1) ||
+          (nghbr.d_view(m,29).lev > mblev.d_view(m) && k==ke+1) ||
+          (nghbr.d_view(m,30).lev > mblev.d_view(m) && k==ke+1) ||
+          (nghbr.d_view(m,31).lev > mblev.d_view(m) && k==ke+1) ||
+          (nghbr.d_view(m,32).lev > mblev.d_view(m) && i==is && k==ks) ||
+          (nghbr.d_view(m,33).lev > mblev.d_view(m) && i==is && k==ks) ||
+          (nghbr.d_view(m,34).lev > mblev.d_view(m) && i==ie+1 && k==ks) ||
+          (nghbr.d_view(m,35).lev > mblev.d_view(m) && i==ie+1 && k==ks) ||
+          (nghbr.d_view(m,36).lev > mblev.d_view(m) && i==is && k==ke+1) ||
+          (nghbr.d_view(m,37).lev > mblev.d_view(m) && i==is && k==ke+1) ||
+          (nghbr.d_view(m,38).lev > mblev.d_view(m) && i==ie+1 && k==ke+1) ||
+          (nghbr.d_view(m,39).lev > mblev.d_view(m) && i==ie+1 && k==ke+1)) {
+        Real xl = x2v + 0.25*dx2;
+        Real xr = x2v - 0.25*dx2;
+        a2(m,k,j,i) = 0.5*(A2(tov_, x1f,xl,x3f) + A2(tov_, x1f,xr,x3f));
+      }
+
+    });
+
+    auto &b0 = pmbp->pmhd->b0;
+    par_for("pgen_Bfc", DevExeSpace(), 0,nmb-1,ks,ke,js,je,is,ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      // Compute face-centered fields from curl(A).
+      Real dx1 = size.d_view(m).dx1;
+      Real dx2 = size.d_view(m).dx2;
+      Real dx3 = size.d_view(m).dx3;
+
+      b0.x1f(m,k,j,i) = ((a3(m,k,j+1,i) - a3(m,k,j,i))/dx2 -
+                         (a2(m,k+1,j,i) - a2(m,k,j,i))/dx3);
+      b0.x2f(m,k,j,i) = ((a1(m,k+1,j,i) - a1(m,k,j,i))/dx3 -
+                         (a3(m,k,j,i+1) - a3(m,k,j,i))/dx1);
+      b0.x3f(m,k,j,i) = ((a2(m,k,j,i+1) - a2(m,k,j,i))/dx1 -
+                         (a1(m,k,j+1,i) - a1(m,k,j,i))/dx2);
+
+      // Include extra face-component at edge of block in each direction
+      if (i==ie) {
+        b0.x1f(m,k,j,i+1) = ((a3(m,k,j+1,i+1) - a3(m,k,j,i+1))/dx2 -
+                             (a2(m,k+1,j,i+1) - a2(m,k,j,i+1))/dx3);
+      }
+      if (j==je) {
+        b0.x2f(m,k,j+1,i) = ((a1(m,k+1,j+1,i) - a1(m,k,j+1,i))/dx3 -
+                             (a3(m,k,j+1,i+1) - a3(m,k,j+1,i))/dx1);
+      }
+      if (k==ke) {
+        b0.x3f(m,k+1,j,i) = ((a2(m,k+1,j,i+1) - a2(m,k+1,j,i))/dx1 -
+                             (a1(m,k+1,j+1,i) - a1(m,k+1,j,i))/dx2);
+      }
+    });
+
+    // Compute cell-centered fields
+    auto &bcc_ = pmbp->pmhd->bcc0;
+    par_for("pgen_Bcc", DevExeSpace(), 0,nmb-1,ks,ke,js,je,is,ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      // cell-centered fields are simple linear average of face-centered fields
+      Real& w_bx = bcc_(m,IBX,k,j,i);
+      Real& w_by = bcc_(m,IBY,k,j,i);
+      Real& w_bz = bcc_(m,IBZ,k,j,i);
+      w_bx = 0.5*(b0.x1f(m,k,j,i) + b0.x1f(m,k,j,i+1));
+      w_by = 0.5*(b0.x2f(m,k,j,i) + b0.x2f(m,k,j+1,i));
+      w_bz = 0.5*(b0.x3f(m,k,j,i) + b0.x3f(m,k+1,j,i));
+    });
+
+  }
+
+  // If magnetic fields are enabled, 
   std::cout << "Interpolation and assignment complete!\n";
 
   // Convert primitives to conserved
@@ -384,6 +560,38 @@ static void GetPrimitivesAtPoint(const tov_pgen& tov, Real r, Real &rho, Real &p
 }
 
 KOKKOS_INLINE_FUNCTION
+static void GetPandRho(const tov_pgen& tov, Real r, Real &rho, Real &p) {
+  if (r >= tov.R_edge) {
+    rho = 0.;
+    p   = 0.;
+    return;
+  }
+  // Get the lower index for where our point must be located.
+  int idx = (int)(r/tov.dr);
+  const auto &R = tov.R.d_view;
+  const auto &Ps = tov.P.d_view;
+  // Interpolate to get the pressure
+  p = Interpolate(r, R(idx), R(idx+1), Ps(idx), Ps(idx+1));
+  rho = pow(p/tov.kappa, 1.0/tov.gamma);
+}
+
+KOKKOS_INLINE_FUNCTION
+static Real A1(const tov_pgen& tov, Real x1, Real x2, Real x3) {
+  Real r = sqrt(SQR(x1) + SQR(x2) + SQR(x3));
+  Real p, rho;
+  GetPandRho(tov, r, rho, p);
+  return -x2*tov.b_norm*fmax(p - tov.pcut, 0.0)*pow(1.0 - rho/tov.rhoc,tov.magindex);
+}
+
+KOKKOS_INLINE_FUNCTION
+static Real A2(const tov_pgen& tov, Real x1, Real x2, Real x3) {
+  Real r = sqrt(SQR(x1) + SQR(x2) + SQR(x3));
+  Real p, rho;
+  GetPandRho(tov, r, rho, p);
+  return x1*tov.b_norm*fmax(p - tov.pcut, 0.0)*pow(1.0 - rho/tov.rhoc,tov.magindex);
+}
+
+KOKKOS_INLINE_FUNCTION
 static Real Interpolate(Real x, const Real x1, const Real x2, const Real y1, const Real y2) {
   return ((y2 - y1)*x + (y1*x2 - y2*x1))/(x2 - x1);
 }
@@ -397,9 +605,9 @@ void TOVHistory(HistoryData *pdata, Mesh *pm) {
   }
   // Otherwise, the first thing we need to do is increase the number of variables available.
   // Current extra outputs: 
-  int &nhyd = pm->pmb_pack->phydro->nhydro;
+  int &nmhd = pm->pmb_pack->pmhd->nmhd;
   pdata->nhist += 1;
-  pdata->label[nhyd+3] = "rho-max";
+  pdata->label[nmhd+6] = "rho-max";
 
   // capture class variables for kernel
   auto &w0_ = pm->pmb_pack->phydro->w0;
@@ -427,5 +635,5 @@ void TOVHistory(HistoryData *pdata, Mesh *pm) {
   }, Kokkos::Max<Real>(rho_max));
 
   // store data in hdata array
-  pdata->hdata[nhyd+3] = rho_max;
+  pdata->hdata[nmhd+6] = rho_max;
 }
