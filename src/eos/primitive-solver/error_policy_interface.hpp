@@ -19,7 +19,7 @@ class ErrorPolicyInterface {
 
     Real n_atm;
     Real n_threshold;
-    Real p_atm;
+    Real T_atm;
     Real Y_atm[MAX_SPECIES];
     Real v_max;
     Real max_bsq;

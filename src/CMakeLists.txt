@@ -36,6 +36,7 @@ add_executable(
 
         dyngr/dyngr.cpp
         dyngr/dyngr_fluxes.cpp
+        #dyngr/dyngr_fofc.cpp
 
         eos/eos.cpp
         eos/ideal_hyd.cpp
@@ -76,6 +77,10 @@ add_executable(
         mhd/mhd_newdt.cpp
         mhd/mhd_tasks.cpp
         mhd/mhd_update.cpp
+
+        numerical-relativity/numerical_relativity.cpp
+
+        tmunu/tmunu.cpp
 
         z4c/z4c.cpp
         z4c/z4c_adm.cpp

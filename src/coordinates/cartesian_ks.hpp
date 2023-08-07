@@ -35,7 +35,11 @@ void ComputeMetricAndInverse(Real x, Real y, Real z, bool minkowski, Real a,
   // if (fabs(z) < (SMALL_NUMBER)) z = (SMALL_NUMBER);
   Real rad = sqrt(SQR(x) + SQR(y) + SQR(z));
   Real r = sqrt((SQR(rad)-SQR(a)+sqrt(SQR(SQR(rad)-SQR(a))+4.0*SQR(a)*SQR(z)))/2.0);
-  r = fmax(r, 1.0);  // floor r_ks to 0.5*(r_inner + r_outer)
+  Real eps = 1e-6;
+  if (r < eps) {
+    r = 0.5*(eps + r*r/eps);
+  }
+  //r = fmax(r, 1.0);  // floor r_ks to 0.5*(r_inner + r_outer)
 
   // Set covariant components
   // null vector l
@@ -109,7 +113,11 @@ void ComputeADMDecomposition(Real x, Real y, Real z, bool minkowski, Real a,
   // See comments above in ComputeMetricAndInverse
   Real rad = sqrt(SQR(x) + SQR(y) + SQR(z));
   Real r = sqrt((SQR(rad)-SQR(a)+sqrt(SQR(SQR(rad)-SQR(a))+4.0*SQR(a)*SQR(z)))/2.0);
-  r = fmax(r, 1.0);
+  Real eps = 1e-6;
+  if (r < eps) {
+    r = 0.5*(eps + r*r/eps);
+  }
+  //r = fmax(r, 1.0);
 
   // l covector (spatial components only)
   Real l_d[3];
@@ -126,17 +134,17 @@ void ComputeADMDecomposition(Real x, Real y, Real z, bool minkowski, Real a,
   if (minkowski) {H=0.0;}
 
   *alp = 1.0/sqrt(1. + 2.*H);
-  *betax = 2.*H*(1. + 2.*H)*l_u[0];
-  *betay = 2.*H*(1. + 2.*H)*l_u[1];
-  *betaz = 2.*H*(1. + 2.*H)*l_u[2];
+  *betax = 2.*H/(1. + 2.*H)*l_u[0];
+  *betay = 2.*H/(1. + 2.*H)*l_u[1];
+  *betaz = 2.*H/(1. + 2.*H)*l_u[2];
   Real const beta_d[3] = {2.*H*l_u[0], 2.*H*l_u[1], 2.*H*l_u[2]};
 
-  *gxx = 2.*H*l_d[0]*l_d[0] + 1;
+  *gxx = 2.*H*l_d[0]*l_d[0] + 1.;
   *gxy = 2.*H*l_d[0]*l_d[1];
   *gxz = 2.*H*l_d[0]*l_d[2];
-  *gyy = 2.*H*l_d[1]*l_d[1] + 1;
+  *gyy = 2.*H*l_d[1]*l_d[1] + 1.;
   *gyz = 2.*H*l_d[1]*l_d[2];
-  *gzz = 2.*H*l_d[2]*l_d[2] + 1;
+  *gzz = 2.*H*l_d[2]*l_d[2] + 1.;
 
   //
   // conformal factor
@@ -169,42 +177,57 @@ void ComputeADMDecomposition(Real x, Real y, Real z, bool minkowski, Real a,
   // \partial_i l_k
   Real const dl_dd[3][3] = {
     // \partial_x l_k
-    x*r * ( SQR(a)*x - 2.0*a*r*y - SQR(r)*x )/( SQR(qb) * qa ) + r/( qb ),
+    {x*r * ( SQR(a)*x - 2.0*a*r*y - SQR(r)*x )/( SQR(qb) * qa ) + r/( qb ),
     x*r * ( SQR(a)*y + 2.0*a*r*x - SQR(r)*y )/( SQR(qb) * qa ) - a/( qb ),
-    - x*z/(r*qa),
+    - x*z/(r*qa)},
     // \partial_y l_k
-    y*r * ( SQR(a)*x - 2.0*a*r*y - SQR(r)*x )/( SQR(qb) * qa ) + a/( qb ),
+    {y*r * ( SQR(a)*x - 2.0*a*r*y - SQR(r)*x )/( SQR(qb) * qa ) + a/( qb ),
     y*r * ( SQR(a)*y + 2.0*a*r*x - SQR(r)*y )/( SQR(qb) * qa ) + r/( qb ),
-    - y*z/(r*qa),
+    - y*z/(r*qa)},
     // \partial_z l_k
-    z/r * ( SQR(a)*x - 2.0*a*r*y - SQR(r)*x )/( (qb) * qa ),
+    {z/r * ( SQR(a)*x - 2.0*a*r*y - SQR(r)*x )/( (qb) * qa ),
     z/r * ( SQR(a)*y + 2.0*a*r*x - SQR(r)*y )/( (qb) * qa ),
-    - SQR(z)/(SQR(r)*r) * ( qb )/( qa ) + 1.0/r,
+    - SQR(z)/(SQR(r)*r) * ( qb )/( qa ) + 1.0/r},
   };
 
   Real const dg_ddd[3][3][3] = {
     // \partial_x g_ik
-    2.*dH_d[0]*l_d[0]*l_d[0] + 2.*H*dl_dd[0][0]*l_d[0] + 2.*H*l_d[0]*dl_dd[0][0],
+    {{2.*dH_d[0]*l_d[0]*l_d[0] + 2.*H*dl_dd[0][0]*l_d[0] + 2.*H*l_d[0]*dl_dd[0][0],
     2.*dH_d[0]*l_d[0]*l_d[1] + 2.*H*dl_dd[0][0]*l_d[1] + 2.*H*l_d[0]*dl_dd[0][1],
-    2.*dH_d[0]*l_d[0]*l_d[2] + 2.*H*dl_dd[0][0]*l_d[2] + 2.*H*l_d[0]*dl_dd[0][2],
+    2.*dH_d[0]*l_d[0]*l_d[2] + 2.*H*dl_dd[0][0]*l_d[2] + 2.*H*l_d[0]*dl_dd[0][2]},
+    {2.*dH_d[0]*l_d[1]*l_d[0] + 2.*H*dl_dd[0][1]*l_d[0] + 2.*H*l_d[1]*dl_dd[0][0],
     2.*dH_d[0]*l_d[1]*l_d[1] + 2.*H*dl_dd[0][1]*l_d[1] + 2.*H*l_d[1]*dl_dd[0][1],
-    2.*dH_d[0]*l_d[1]*l_d[2] + 2.*H*dl_dd[0][1]*l_d[2] + 2.*H*l_d[1]*dl_dd[0][2],
-    2.*dH_d[0]*l_d[2]*l_d[2] + 2.*H*dl_dd[0][2]*l_d[2] + 2.*H*l_d[2]*dl_dd[0][2],
+    2.*dH_d[0]*l_d[1]*l_d[2] + 2.*H*dl_dd[0][1]*l_d[2] + 2.*H*l_d[1]*dl_dd[0][2]},
+    {2.*dH_d[0]*l_d[2]*l_d[0] + 2.*H*dl_dd[0][2]*l_d[0] + 2.*H*l_d[2]*dl_dd[0][0],
+    2.*dH_d[0]*l_d[2]*l_d[1] + 2.*H*dl_dd[0][2]*l_d[1] + 2.*H*l_d[2]*dl_dd[0][1],
+    2.*dH_d[0]*l_d[2]*l_d[2] + 2.*H*dl_dd[0][2]*l_d[2] + 2.*H*l_d[2]*dl_dd[0][2]}},
     // \partial_y g_ik
-    2.*dH_d[1]*l_d[0]*l_d[0] + 2.*H*dl_dd[1][0]*l_d[0] + 2.*H*l_d[0]*dl_dd[1][0],
+    {{2.*dH_d[1]*l_d[0]*l_d[0] + 2.*H*dl_dd[1][0]*l_d[0] + 2.*H*l_d[0]*dl_dd[1][0],
     2.*dH_d[1]*l_d[0]*l_d[1] + 2.*H*dl_dd[1][0]*l_d[1] + 2.*H*l_d[0]*dl_dd[1][1],
-    2.*dH_d[1]*l_d[0]*l_d[2] + 2.*H*dl_dd[1][0]*l_d[2] + 2.*H*l_d[0]*dl_dd[1][2],
+    2.*dH_d[1]*l_d[0]*l_d[2] + 2.*H*dl_dd[1][0]*l_d[2] + 2.*H*l_d[0]*dl_dd[1][2]},
+    {2.*dH_d[1]*l_d[1]*l_d[0] + 2.*H*dl_dd[1][1]*l_d[0] + 2.*H*l_d[1]*dl_dd[1][0],
     2.*dH_d[1]*l_d[1]*l_d[1] + 2.*H*dl_dd[1][1]*l_d[1] + 2.*H*l_d[1]*dl_dd[1][1],
-    2.*dH_d[1]*l_d[1]*l_d[2] + 2.*H*dl_dd[1][1]*l_d[2] + 2.*H*l_d[1]*dl_dd[1][2],
-    2.*dH_d[1]*l_d[2]*l_d[2] + 2.*H*dl_dd[1][2]*l_d[2] + 2.*H*l_d[2]*dl_dd[1][2],
+    2.*dH_d[1]*l_d[1]*l_d[2] + 2.*H*dl_dd[1][1]*l_d[2] + 2.*H*l_d[1]*dl_dd[1][2]},
+    {2.*dH_d[1]*l_d[2]*l_d[0] + 2.*H*dl_dd[1][2]*l_d[0] + 2.*H*l_d[2]*dl_dd[1][0],
+    2.*dH_d[1]*l_d[2]*l_d[1] + 2.*H*dl_dd[1][2]*l_d[1] + 2.*H*l_d[2]*dl_dd[1][1],
+    2.*dH_d[1]*l_d[2]*l_d[2] + 2.*H*dl_dd[1][2]*l_d[2] + 2.*H*l_d[2]*dl_dd[1][2]}},
     // \partial_z g_ik
-    2.*dH_d[2]*l_d[0]*l_d[0] + 2.*H*dl_dd[2][0]*l_d[0] + 2.*H*l_d[0]*dl_dd[2][0],
+    {{2.*dH_d[2]*l_d[0]*l_d[0] + 2.*H*dl_dd[2][0]*l_d[0] + 2.*H*l_d[0]*dl_dd[2][0],
     2.*dH_d[2]*l_d[0]*l_d[1] + 2.*H*dl_dd[2][0]*l_d[1] + 2.*H*l_d[0]*dl_dd[2][1],
-    2.*dH_d[2]*l_d[0]*l_d[2] + 2.*H*dl_dd[2][0]*l_d[2] + 2.*H*l_d[0]*dl_dd[2][2],
+    2.*dH_d[2]*l_d[0]*l_d[2] + 2.*H*dl_dd[2][0]*l_d[2] + 2.*H*l_d[0]*dl_dd[2][2]},
+    {2.*dH_d[2]*l_d[1]*l_d[0] + 2.*H*dl_dd[2][1]*l_d[0] + 2.*H*l_d[1]*dl_dd[2][0],
     2.*dH_d[2]*l_d[1]*l_d[1] + 2.*H*dl_dd[2][1]*l_d[1] + 2.*H*l_d[1]*dl_dd[2][1],
-    2.*dH_d[2]*l_d[1]*l_d[2] + 2.*H*dl_dd[2][1]*l_d[2] + 2.*H*l_d[1]*dl_dd[2][2],
-    2.*dH_d[2]*l_d[2]*l_d[2] + 2.*H*dl_dd[2][2]*l_d[2] + 2.*H*l_d[2]*dl_dd[2][2],
+    2.*dH_d[2]*l_d[1]*l_d[2] + 2.*H*dl_dd[2][1]*l_d[2] + 2.*H*l_d[1]*dl_dd[2][2]},
+    {2.*dH_d[2]*l_d[2]*l_d[0] + 2.*H*dl_dd[2][2]*l_d[0] + 2.*H*l_d[2]*dl_dd[2][0],
+    2.*dH_d[2]*l_d[2]*l_d[1] + 2.*H*dl_dd[2][2]*l_d[1] + 2.*H*l_d[2]*dl_dd[2][1],
+    2.*dH_d[2]*l_d[2]*l_d[2] + 2.*H*dl_dd[2][2]*l_d[2] + 2.*H*l_d[2]*dl_dd[2][2]}},
   };
+  /*Real dg_ddd[3][3][3] = {0.0};
+  for (int i = 0; i < 3; i++)
+  for (int a = 0; a < 3; a++)
+  for (int b = 0; b < 3; b++) {
+    dg_ddd[i][a][b] = 2.*dH_d[i]*l_d[a]*l_d[b] + 2.*H*dl_dd[i][a]*l_d[b] + 2.*H*l_d[a]*dl_dd[i][b];
+  }*/
 
   //
   // Compute Christoffel symbols
@@ -222,17 +245,17 @@ void ComputeADMDecomposition(Real x, Real y, Real z, bool minkowski, Real a,
   // Derivatives of the shift vector
   Real const dbeta_dd[3][3] = {
     // \partial_x \beta_i
-    2.*dH_d[0]*l_d[0] + 2.*H*dl_dd[0][0],
+    {2.*dH_d[0]*l_d[0] + 2.*H*dl_dd[0][0],
     2.*dH_d[0]*l_d[1] + 2.*H*dl_dd[0][1],
-    2.*dH_d[0]*l_d[2] + 2.*H*dl_dd[0][2],
+    2.*dH_d[0]*l_d[2] + 2.*H*dl_dd[0][2]},
     // \partial_y \beta_i
-    2.*dH_d[1]*l_d[0] + 2.*H*dl_dd[1][0],
+    {2.*dH_d[1]*l_d[0] + 2.*H*dl_dd[1][0],
     2.*dH_d[1]*l_d[1] + 2.*H*dl_dd[1][1],
-    2.*dH_d[1]*l_d[2] + 2.*H*dl_dd[1][2],
+    2.*dH_d[1]*l_d[2] + 2.*H*dl_dd[1][2]},
     // \partial_z \beta_i
-    2.*dH_d[2]*l_d[0] + 2.*H*dl_dd[2][0],
+    {2.*dH_d[2]*l_d[0] + 2.*H*dl_dd[2][0],
     2.*dH_d[2]*l_d[1] + 2.*H*dl_dd[2][1],
-    2.*dH_d[2]*l_d[2] + 2.*H*dl_dd[2][2],
+    2.*dH_d[2]*l_d[2] + 2.*H*dl_dd[2][2]},
   };
 
   //
@@ -248,10 +271,15 @@ void ComputeADMDecomposition(Real x, Real y, Real z, bool minkowski, Real a,
 
   //
   // Extrinsic curvature: K_ab = 1/(2 alp) * (D_a beta_b + D_b beta_a)
+  Real delta[3][3] = {0.};
+  delta[0][0] = 1.;
+  delta[1][1] = 1.;
+  delta[2][2] = 1.;
   Real K_dd[3][3];
   for (int a = 0; a < 3; ++a)
   for (int b = 0; b < 3; ++b) {
-    K_dd[a][b] = (Dbeta_dd[a][b] + Dbeta_dd[b][a])/(2.*(*alp));
+    //K_dd[a][b] = (Dbeta_dd[a][b] + Dbeta_dd[b][a])/(2.*(*alp));
+    K_dd[a][b] = 2*(*alp)/SQR(r)*(delta[a][b] - (2. + 1./r)*l_d[a]*l_d[b]);
   }
 
   *Kxx = K_dd[0][0];
@@ -275,7 +303,11 @@ void ComputeMetricDerivatives(Real x, Real y, Real z, bool minkowski, Real a,
   // if (fabs(z) < (SMALL_NUMBER)) z = (SMALL_NUMBER);
   Real rad = sqrt(SQR(x) + SQR(y) + SQR(z));
   Real r = sqrt((SQR(rad)-SQR(a)+sqrt(SQR(SQR(rad)-SQR(a))+4.0*SQR(a)*SQR(z)))/2.0);
-  r = fmax(r, 1.0);  // floor r_ks to 0.5*(r_inner + r_outer)
+  Real eps = 1e-6;
+  if (r < eps) {
+    r = 0.5*(eps + r*r/eps);
+  }
+  //r = fmax(r, 1.0);  // floor r_ks to 0.5*(r_inner + r_outer)
 
   Real llower[4];
   llower[0] = 1.0;

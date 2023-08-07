@@ -14,8 +14,8 @@
 #include "driver/driver.hpp"
 #include "eos/primitive_solver_hyd.hpp"
 
-enum class DynGR_RSolver {llf_dyngr};           // Riemann solvers for dynamical GR
-enum class DynGR_EOS {eos_ideal};               // EOS policies for dynamical GR
+enum class DynGR_RSolver {llf_dyngr, hlle_dyngr};           // Riemann solvers for dynamical GR
+enum class DynGR_EOS {eos_ideal, eos_piecewise_poly};               // EOS policies for dynamical GR
 enum class DynGR_Error {reset_floor};           // Error policies for dynamical GR
 
 //----------------------------------------------------------------------------------------
@@ -26,12 +26,20 @@ struct DynGRTaskIDs {
   TaskID irecv;
   TaskID copyu;
   TaskID flux;
+  TaskID settmunu;
   TaskID sendf;
   TaskID recvf;
   TaskID expl;
   TaskID restu;
   TaskID sendu;
   TaskID recvu;
+  TaskID efld;
+  TaskID sende;
+  TaskID recve;
+  TaskID ct;
+  TaskID restb;
+  TaskID sendb;
+  TaskID recvb;
   TaskID bcs;
   TaskID c2p;
   TaskID newdt;
@@ -54,6 +62,7 @@ struct DynGRTaskIDs {
   TaskID zrestu;
   TaskID zadep;
   TaskID c2pdep;
+  TaskID rkdep;
 };
 
 namespace dyngr {
@@ -67,14 +76,19 @@ class DynGR {
   DynGRTaskIDs id;
 
   TaskStatus ADMMatterSource_(Driver *d, int stage);
+  TaskStatus SetTmunu(Driver *d, int stage);
 
   // functions
   virtual void AssembleDynGRTasks(TaskList &start, TaskList &run, TaskList &end) = 0;
 
+  virtual void QueueDynGRTasks() = 0;
+
   virtual TaskStatus ConToPrim(Driver* pdrive, int stage) = 0;
+  //virtual TaskStatus SetTmunu(Driver* pdrive, int stage) = 0;
   virtual void PrimToConInit(int is, int ie, int js, int je, int ks, int ke) = 0;
 
-  virtual void AddCoordTerms(const DvceArray5D<Real> &w0, const Real dt, DvceArray5D<Real> &u0, int nghost) = 0;
+  virtual void AddCoordTerms(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc0, const Real dt,
+                             DvceArray5D<Real> &u0, int nghost) = 0;
 
   // DynGR policies
   DynGR_RSolver rsolver_method;
@@ -82,12 +96,13 @@ class DynGR {
   DynGR_Error error_policy;
  protected:
   MeshBlockPack *pmy_pack;  // ptr to MeshBlockPack containing this Hydro
+  int scratch_level;
 };
 
 template<class EOSPolicy, class ErrorPolicy>
 class DynGRPS : public DynGR {
  public:
-  DynGRPS(MeshBlockPack *ppack, ParameterInput *pin) : DynGR(ppack, pin), eos("hydro", ppack, pin) {}
+  DynGRPS(MeshBlockPack *ppack, ParameterInput *pin) : DynGR(ppack, pin), eos("mhd", ppack, pin) {}
   virtual ~DynGRPS() {}
 
   // Dynamical EOS
@@ -97,16 +112,22 @@ class DynGRPS : public DynGR {
   template<DynGR_RSolver T>
   TaskStatus CalcFluxes(Driver *d, int stage);
 
+  void FOFC(Driver *d, int stage);
+
   // functions
   virtual void AssembleDynGRTasks(TaskList &start, TaskList &run, TaskList &end);
+
+  virtual void QueueDynGRTasks();
 
   virtual TaskStatus ConToPrim(Driver* pdrive, int stage);
   virtual void PrimToConInit(int is, int ie, int js, int je, int ks, int ke);
 
-  virtual void AddCoordTerms(const DvceArray5D<Real> &w0, const Real dt, DvceArray5D<Real> &u0, int nghost);
+  virtual void AddCoordTerms(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc0, const Real dt,
+                             DvceArray5D<Real> &u0, int nghost);
 
   template<int NGHOST>
-  void AddCoordTermsEOS(const DvceArray5D<Real> &w0, const Real dt, DvceArray5D<Real> &u0);
+  void AddCoordTermsEOS(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc0, const Real dt, 
+                        DvceArray5D<Real> &u0);
 };
 
 // Factory function for generating DynGR based on parameter input.

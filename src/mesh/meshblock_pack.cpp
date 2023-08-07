@@ -16,6 +16,8 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "adm/adm.hpp"
+#include "tmunu/tmunu.hpp"
+#include "numerical-relativity/numerical_relativity.hpp"
 #include "z4c/z4c.hpp"
 #include "dyngr/dyngr.hpp"
 #include "ion-neutral/ion_neutral.hpp"
@@ -44,9 +46,11 @@ MeshBlockPack::~MeshBlockPack() {
   if (phydro != nullptr) {delete phydro;}
   if (pmhd   != nullptr) {delete pmhd;}
   if (padm   != nullptr) {delete padm;}
+  if (ptmunu != nullptr) {delete ptmunu;}
   if (pz4c   != nullptr) {delete pz4c;}
   if (prad   != nullptr) {delete prad;}
   if (pdyngr != nullptr) {delete pdyngr;}
+  if (pnr    != nullptr) {delete pnr;}
   if (pturb  != nullptr) {delete pturb;}
   if (punit  != nullptr) {delete punit;}
   // must be last, since it calls ~BoundaryValues() which (MPI) uses pmy_pack->pmb->nnghbr
@@ -170,27 +174,36 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   if (pin->DoesBlockExist("z4c")) {
     pz4c = new z4c::Z4c(this, pin);
     padm = new adm::ADM(this, pin);
+    ptmunu = new Tmunu(this, pin);
     nphysics++;
   } else {
     pz4c = nullptr;
     if (pin->DoesBlockExist("adm")) {
       padm = new adm::ADM(this, pin);
+      ptmunu = new Tmunu(this, pin);
     } else {
       padm = nullptr;
     }
   }
-  if (pin->DoesBlockExist("z4c") && !(pin->DoesBlockExist("mhd")) && !(pin->DoesBlockExist("hydro")) ) {
+  /*if (pin->DoesBlockExist("z4c") && !(pin->DoesBlockExist("mhd")) && !(pin->DoesBlockExist("hydro")) ) {
     pz4c->AssembleZ4cTasks(start_tl, run_tl, end_tl);
-  }
+  }*/
 
   // (8) Dynamical Spacetime and Matter (MHD TODO)
   if ((pin->DoesBlockExist("z4c") || pin->DoesBlockExist("adm")) && (pin->DoesBlockExist("hydro")) ) {
-    pdyngr = dyngr::BuildDynGR(this, pin);
-    pdyngr->AssembleDynGRTasks(start_tl, run_tl, end_tl);
+    std::cout << "Dynamical metric and hydro not compatible; use MHD instead  " << std::endl;
+    std::exit(EXIT_FAILURE);
+    //pdyngr = dyngr::BuildDynGR(this, pin);
+    //pdyngr->AssembleDynGRTasks(start_tl, run_tl, end_tl);
   }
   if ((pin->DoesBlockExist("z4c") || pin->DoesBlockExist("adm")) && (pin->DoesBlockExist("mhd")) ) {
-    std::cout << "Dynamical metric and MHD not implemented yet  " << std::endl;
-    std::exit(EXIT_FAILURE);
+    pdyngr = dyngr::BuildDynGR(this, pin);
+    //pdyngr->AssembleDynGRTasks(start_tl, run_tl, end_tl);
+  }
+  
+  if (pz4c != nullptr || padm != nullptr) {
+    pnr = new numrel::NumericalRelativity(this, pin);
+    pnr->AssembleNumericalRelativityTasks(start_tl, run_tl, end_tl);
   }
 
   // Units

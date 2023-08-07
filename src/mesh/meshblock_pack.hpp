@@ -18,6 +18,7 @@
 // Forward declarations
 class MeshBlock;
 class ADM;
+class Tmunu;
 namespace hydro {class Hydro;}
 namespace mhd {class MHD;}
 namespace z4c {class Z4c;}
@@ -25,6 +26,7 @@ namespace adm {class ADM;}
 namespace ion_neutral {class IonNeutral;}
 namespace radiation {class Radiation;}
 namespace dyngr {class DynGR;}
+namespace numrel {class NumericalRelativity;}
 class TurbulenceDriver;
 namespace units {class Units;}
 
@@ -57,8 +59,10 @@ class MeshBlockPack {
   hydro::Hydro *phydro=nullptr;
   mhd::MHD *pmhd=nullptr;
   adm::ADM *padm=nullptr;
+  Tmunu *ptmunu=nullptr;
   z4c::Z4c *pz4c=nullptr;
   dyngr::DynGR *pdyngr=nullptr;
+  numrel::NumericalRelativity *pnr=nullptr;
   ion_neutral::IonNeutral *pionn=nullptr;
   radiation::Radiation *prad=nullptr;
   TurbulenceDriver *pturb=nullptr;
