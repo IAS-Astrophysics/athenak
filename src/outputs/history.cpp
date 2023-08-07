@@ -47,6 +47,10 @@ HistoryOutput::HistoryOutput(OutputParameters op, Mesh *pm) : BaseTypeOutput(op,
   if (pm->pmb_pack->pz4c != nullptr) {
     hist_data.emplace_back(PhysicsModule::SpaceTimeDynamics);
   }
+  
+  if (pm->pmb_pack->pz4c != nullptr) {
+    hist_data.emplace_back(PhysicsModule::SpaceTimeDynamics);
+  }
 }
 
 //----------------------------------------------------------------------------------------

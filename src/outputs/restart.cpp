@@ -27,7 +27,7 @@
 #include "z4c/z4c.hpp"
 #include "radiation/radiation.hpp"
 #include "srcterms/turb_driver.hpp"
-#include "outputs.hpp"
+//#include "outputs.hpp"
 
 //----------------------------------------------------------------------------------------
 // ctor: also calls BaseTypeOutput base class constructor
@@ -113,6 +113,24 @@ void RestartOutput::LoadOutputData(Mesh *pm) {
     Kokkos::realloc(outarray_adm, nmb, nadm, nout3, nout2, nout1);
     Kokkos::deep_copy(outarray_adm, Kokkos::subview(padm->u_adm, std::make_pair(0,nmb),
                       Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL));
+  }
+
+  // load ADM (CC) data (copy to host)
+  if (nadm > 0) {
+    DvceArray5D<Real>::HostMirror host_u_adm = Kokkos::create_mirror(padm->u_adm);
+    Kokkos::deep_copy(host_u_adm, padm->u_adm);
+    auto hst_slice = Kokkos::subview(outarray, Kokkos::ALL, std::make_pair(nhydro+nmhd,nadm),
+                                     Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+    Kokkos::deep_copy(hst_slice, host_u_adm);
+  }
+
+  // load z4c (CC) data (copy to host)
+  if (pz4c != nullptr) {
+    DvceArray5D<Real>::HostMirror host_u0 = Kokkos::create_mirror(pz4c->u0);
+    Kokkos::deep_copy(host_u0,pz4c->u0);
+    auto hst_slice = Kokkos::subview(outarray, Kokkos::ALL, std::make_pair(nhydro+nmhd,nz4c),
+                                     Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+    Kokkos::deep_copy(hst_slice,host_u0);
   }
 
   // calculate max/min number of MeshBlocks across all ranks

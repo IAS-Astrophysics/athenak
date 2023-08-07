@@ -54,3 +54,4 @@ ADM::ADM(MeshBlockPack *ppack, ParameterInput *pin):
 ADM::~ADM() {}
 
 } // namespace adm
+

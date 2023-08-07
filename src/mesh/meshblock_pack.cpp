@@ -17,6 +17,7 @@
 #include "mhd/mhd.hpp"
 #include "adm/adm.hpp"
 #include "z4c/z4c.hpp"
+#include "dyngr/dyngr.hpp"
 #include "ion-neutral/ion_neutral.hpp"
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
@@ -45,6 +46,7 @@ MeshBlockPack::~MeshBlockPack() {
   if (padm   != nullptr) {delete padm;}
   if (pz4c   != nullptr) {delete pz4c;}
   if (prad   != nullptr) {delete prad;}
+  if (pdyngr != nullptr) {delete pdyngr;}
   if (pturb  != nullptr) {delete pturb;}
   if (punit  != nullptr) {delete punit;}
   // must be last, since it calls ~BoundaryValues() which (MPI) uses pmy_pack->pmb->nnghbr
@@ -93,7 +95,8 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   if (pin->DoesBlockExist("hydro")) {
     phydro = new hydro::Hydro(this, pin);
     nphysics++;
-    if (!(pin->DoesBlockExist("mhd")) && !(pin->DoesBlockExist("radiation"))) {
+    if (!(pin->DoesBlockExist("mhd")) && !(pin->DoesBlockExist("radiation")) &&
+        !(pin->DoesBlockExist("adm")) && !(pin->DoesBlockExist("z4c")) ) {
       phydro->AssembleHydroTasks(start_tl, run_tl, end_tl);
     }
   } else {
@@ -105,7 +108,8 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   if (pin->DoesBlockExist("mhd")) {
     pmhd = new mhd::MHD(this, pin);
     nphysics++;
-    if (!(pin->DoesBlockExist("hydro")) && !(pin->DoesBlockExist("radiation"))) {
+    if (!(pin->DoesBlockExist("hydro")) && !(pin->DoesBlockExist("radiation")) &&
+        !(pin->DoesBlockExist("adm")) && !(pin->DoesBlockExist("z4c")) ) {
       pmhd->AssembleMHDTasks(start_tl, run_tl, end_tl);
     }
   } else {
@@ -117,7 +121,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   // both defined as well.
   if (pin->DoesBlockExist("ion-neutral")) {
     pionn = new ion_neutral::IonNeutral(this, pin);   // construct new MHD object
-    if (pin->DoesBlockExist("hydro") && pin->DoesBlockExist("mhd")) {
+    if (pin->DoesBlockExist("hydro") && pin->DoesBlockExist("mhd") && !(pin->DoesBlockExist("adm")) && !(pin->DoesBlockExist("z4c")) ) {
       pionn->AssembleIonNeutralTasks(start_tl, run_tl, end_tl);
       nphysics++;
     } else {
@@ -165,7 +169,6 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   // Create Z4c and ADM physics module.
   if (pin->DoesBlockExist("z4c")) {
     pz4c = new z4c::Z4c(this, pin);
-    pz4c->AssembleZ4cTasks(start_tl, run_tl, end_tl);
     padm = new adm::ADM(this, pin);
     nphysics++;
   } else {
@@ -175,6 +178,19 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     } else {
       padm = nullptr;
     }
+  }
+  if (pin->DoesBlockExist("z4c") && !(pin->DoesBlockExist("mhd")) && !(pin->DoesBlockExist("hydro")) ) {
+    pz4c->AssembleZ4cTasks(start_tl, run_tl, end_tl);
+  }
+
+  // (8) Dynamical Spacetime and Matter (MHD TODO)
+  if ((pin->DoesBlockExist("z4c") || pin->DoesBlockExist("adm")) && (pin->DoesBlockExist("hydro")) ) {
+    pdyngr = dyngr::BuildDynGR(this, pin);
+    pdyngr->AssembleDynGRTasks(start_tl, run_tl, end_tl);
+  }
+  if ((pin->DoesBlockExist("z4c") || pin->DoesBlockExist("adm")) && (pin->DoesBlockExist("mhd")) ) {
+    std::cout << "Dynamical metric and MHD not implemented yet  " << std::endl;
+    std::exit(EXIT_FAILURE);
   }
 
   // Units

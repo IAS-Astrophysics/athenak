@@ -22,6 +22,8 @@
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "dyngr/dyngr.hpp"
+#include "adm/adm.hpp"
 #include "pgen/pgen.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -85,7 +87,8 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
     wl.e  = (pin->GetReal("problem","pl"))/(eos.gamma - 1.0);
     // compute Lorentz factor (needed for SR/GR)
     Real u0l = 1.0;
-    if (pmbp->pcoord->is_special_relativistic || pmbp->pcoord->is_general_relativistic) {
+    if (pmbp->pcoord->is_special_relativistic || pmbp->pcoord->is_general_relativistic || 
+        pmbp->pcoord->is_dynamical_relativistic) {
       u0l = 1.0/sqrt( 1.0 - (SQR(wl.vx) + SQR(wl.vy) + SQR(wl.vz)) );
     }
 
@@ -140,8 +143,63 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
 
     // Convert primitives to conserved
     auto &u0 = pmbp->phydro->u0;
-    pmbp->phydro->peos->PrimToCons(w0, u0, is, ie, js, je, ks, ke);
+    if (pmbp->padm == nullptr) {
+      pmbp->phydro->peos->PrimToCons(w0, u0, is, ie, js, je, ks, ke);
+    }
   } // End initialization of Hydro variables
+
+  // Initialize ADM variables -------------------------------
+  if (pmbp->padm != nullptr) {
+    // Assume Minkowski space for now
+    auto &adm = pmbp->padm->adm;
+    auto &size = pmbp->pmb->mb_size;
+    int nmb1 = pmbp->nmb_thispack - 1;
+    int ng = indcs.ng;
+    int n1 = indcs.nx1 + 2*ng;
+    int n2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2*ng) : 1;
+    int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2*ng) : 1;
+    par_for("pgen_adm_vars", DevExeSpace(), 0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+      Real &x2min = size.d_view(m).x2min;
+      Real &x2max = size.d_view(m).x2max;
+      Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+      Real &x3min = size.d_view(m).x3min;
+      Real &x3max = size.d_view(m).x3max;
+      Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+
+      // Set ADM to flat space
+      adm.alpha(m, k, j, i) = 1.0;
+      adm.beta_u(m, 0, k, j, i) = 0.0;
+      adm.beta_u(m, 1, k, j, i) = 0.0;
+      adm.beta_u(m, 2, k, j, i) = 0.0;
+
+      adm.psi4(m, k, j, i) = 1.0;
+
+      adm.g_dd(m, 0, 0, k, j, i) = 1.0;
+      adm.g_dd(m, 0, 1, k, j, i) = 0.0;
+      adm.g_dd(m, 0, 2, k, j, i) = 0.0;
+      adm.g_dd(m, 1, 1, k, j, i) = 1.0;
+      adm.g_dd(m, 1, 2, k, j, i) = 0.0;
+      adm.g_dd(m, 2, 2, k, j, i) = 1.0;
+
+      adm.vK_dd(m, 0, 0, k, j, i) = 1.0;
+      adm.vK_dd(m, 0, 1, k, j, i) = 0.0;
+      adm.vK_dd(m, 0, 2, k, j, i) = 0.0;
+      adm.vK_dd(m, 1, 1, k, j, i) = 1.0;
+      adm.vK_dd(m, 1, 2, k, j, i) = 0.0;
+      adm.vK_dd(m, 2, 2, k, j, i) = 1.0;
+    });
+
+    // If we're using the ADM variables, then we've got dynamic GR enabled.
+    // Because we need the metric, we can't initialize the conserved variables
+    // until we've filled out the ADM variables.
+    pmbp->pdyngr->PrimToConInit(is, ie, js, je, ks, ke);
+  }
 
   // Initialize MHD variables -------------------------------
   if (pmbp->pmhd != nullptr) {

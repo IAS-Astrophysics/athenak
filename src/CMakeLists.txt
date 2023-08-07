@@ -34,6 +34,9 @@ add_executable(
 
         driver/driver.cpp
 
+        dyngr/dyngr.cpp
+        dyngr/dyngr_fluxes.cpp
+
         eos/eos.cpp
         eos/ideal_hyd.cpp
         eos/ideal_mhd.cpp
@@ -43,6 +46,7 @@ add_executable(
         eos/ideal_grhyd.cpp
         eos/ideal_srmhd.cpp
         eos/ideal_grmhd.cpp
+        eos/primitive-solver/unit_system.cpp
 
         geodesic-grid/geodesic_grid.cpp
         geodesic-grid/spherical_grid.cpp
@@ -73,16 +77,16 @@ add_executable(
         mhd/mhd_tasks.cpp
         mhd/mhd_update.cpp
 
-	z4c/z4c.cpp
-	z4c/z4c_adm.cpp
-	z4c/z4c_calcrhs.cpp
-	z4c/z4c_newdt.cpp
+        z4c/z4c.cpp
+        z4c/z4c_adm.cpp
+        z4c/z4c_calcrhs.cpp
+        z4c/z4c_newdt.cpp
         z4c/z4c_tasks.cpp
         z4c/z4c_update.cpp
         z4c/z4c_gauge.cpp
         z4c/z4c_Sbc.cpp
-        
-	outputs/io_wrapper.cpp
+
+        outputs/io_wrapper.cpp
         outputs/outputs.cpp
         outputs/basetype_output.cpp
         outputs/derived_variables.cpp

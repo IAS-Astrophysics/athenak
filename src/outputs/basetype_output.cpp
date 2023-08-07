@@ -129,6 +129,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
 
   // Now load STL vector of output variables
   outvars.clear();
+  int ndvars=0;
 
   // hydro (lab-frame) density
   if (out_params.variable.compare("hydro_u_d") == 0 ||

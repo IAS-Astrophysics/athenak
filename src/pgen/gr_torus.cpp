@@ -33,6 +33,7 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
+#include "adm/adm.hpp"
 #include "coordinates/coordinates.hpp"
 #include "coordinates/cartesian_ks.hpp"
 #include "coordinates/cell_locations.hpp"
@@ -42,6 +43,7 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "radiation/radiation.hpp"
+#include "dyngr/dyngr.hpp"
 
 #include <Kokkos_Random.hpp>
 
@@ -134,7 +136,7 @@ void TorusFluxes(HistoryData *pdata, Mesh *pm);
 
 void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
-  if (!pmbp->pcoord->is_general_relativistic) {
+  if (!pmbp->pcoord->is_general_relativistic && !pmbp->pcoord->is_dynamical_relativistic) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "GR torus problem can only be run when GR defined in <coord> block"
               << std::endl;
@@ -408,6 +410,41 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     if (is_radiation_enabled) ptot += urad/3.0;
     max_ptot = fmax(ptot, max_ptot);
   }, Kokkos::Max<Real>(ptotmax));
+
+  // initialize ADM variables -----------------------------------------
+
+  if (pmbp->padm != nullptr) {
+    Real a = coord.bh_spin;
+    bool minkowski = coord.is_minkowski;
+    auto &adm = pmbp->padm->adm;
+    auto trs = torus;
+    auto &size = pmbp->pmb->mb_size;
+    Kokkos::Random_XorShift64_Pool<> rand_pool64(pmbp->gids);
+    par_for("pgen_adm_vars", DevExeSpace(), 0,nmb-1,0,(n3-1),0,(n2-1),0,(n1-1),
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+      Real &x2min = size.d_view(m).x2min;
+      Real &x2max = size.d_view(m).x2max;
+      Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+      Real &x3min = size.d_view(m).x3min;
+      Real &x3max = size.d_view(m).x3max;
+      Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+
+      ComputeADMDecomposition(x1v, x2v, x3v, minkowski, a,
+        &adm.alpha(m,k,j,i),
+        &adm.beta_u(m,0,k,j,i), &adm.beta_u(m,1,k,j,i), &adm.beta_u(m,2,k,j,i),
+        &adm.psi4(m,k,j,i),
+        &adm.g_dd(m,0,0,k,j,i), &adm.g_dd(m,0,1,k,j,i), &adm.g_dd(m,0,2,k,j,i),
+        &adm.g_dd(m,1,1,k,j,i), &adm.g_dd(m,1,2,k,j,i), &adm.g_dd(m,2,2,k,j,i),
+        &adm.K_dd(m,0,0,k,j,i), &adm.K_dd(m,0,1,k,j,i), &adm.K_dd(m,0,2,k,j,i),
+        &adm.K_dd(m,1,1,k,j,i), &adm.K_dd(m,1,2,k,j,i), &adm.K_dd(m,2,2,k,j,i));
+    });
+
+  }
 
   // initialize magnetic fields ---------------------------------------
 
@@ -708,11 +745,17 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
 
   // Convert primitives to conserved
-  if (pmbp->phydro != nullptr) {
-    pmbp->phydro->peos->PrimToCons(w0_, u0_, is, ie, js, je, ks, ke);
-  } else if (pmbp->pmhd != nullptr) {
-    auto &bcc0_ = pmbp->pmhd->bcc0;
-    pmbp->pmhd->peos->PrimToCons(w0_, bcc0_, u0_, is, ie, js, je, ks, ke);
+  if (pmbp->padm == nullptr) {
+    if (pmbp->phydro != nullptr) {
+      pmbp->phydro->peos->PrimToCons(w0_, u0_, is, ie, js, je, ks, ke);
+    } else if (pmbp->pmhd != nullptr) {
+      auto &bcc0_ = pmbp->pmhd->bcc0;
+      pmbp->pmhd->peos->PrimToCons(w0_, bcc0_, u0_, is, ie, js, je, ks, ke);
+    }
+  }
+  else {
+    //pmbp->pdyngr->PrimToConInit(0, (n1-1), 0, (n2-1), 0, (n3-1));
+    pmbp->pdyngr->PrimToConInit(is, ie, js, je, ks, ke);
   }
 
   return;
@@ -1258,6 +1301,7 @@ Real A3(struct torus_pgen pgen, Real x1, Real x2, Real x3) {
 //----------------------------------------------------------------------------------------
 //! \fn NoInflowTorus
 //  \brief Sets boundary condition on surfaces of computational domain
+// FIXME: Boundaries need to be adjusted for DynGR
 
 void NoInflowTorus(Mesh *pm) {
   auto &indcs = pm->mb_indcs;
