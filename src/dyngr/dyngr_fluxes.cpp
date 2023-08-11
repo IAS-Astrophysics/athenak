@@ -255,7 +255,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         member.team_barrier();
 
         // Calculate metric at faces
-        adm::Face2Metric(member, m, k, j, is, ie, adm.g_dd, adm.beta_u, adm.alpha, gface2_dd, betaface2_u, alphaface2);
+        adm::Face2Metric(member, m, k, j, is-1, ie+1, adm.g_dd, adm.beta_u, adm.alpha, gface2_dd, betaface2_u, alphaface2);
 
         // TODO do I need a member team barrier here?
         member.team_barrier();
@@ -381,7 +381,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         member.team_barrier();
 
         // Calculate metric at faces
-        adm::Face3Metric(member, m, k, j, is, ie, adm.g_dd, adm.beta_u, adm.alpha, gface3_dd, betaface3_u, alphaface3);
+        adm::Face3Metric(member, m, k, j, is-1, ie+1, adm.g_dd, adm.beta_u, adm.alpha, gface3_dd, betaface3_u, alphaface3);
 
         // TODO do I need a member team barrier here?
         member.team_barrier();
