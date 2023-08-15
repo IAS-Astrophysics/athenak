@@ -38,12 +38,12 @@ void SourceTerms::NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos_d
     Real gm1 = gamma - 1.0;
     Real heating_rate = hrate;
     Real temp_unit = pmy_pack->punit->temperature_cgs();
-    Real n_unit = pmy_pack->punit->density_cgs()/pmy_pack->punit->mu()
-                  / pmy_pack->punit->atomic_mass_unit_cgs;
+    Real n_h_unit = pmy_pack->punit->density_cgs()/mu_h
+                    /pmy_pack->punit->atomic_mass_unit_cgs;
     Real cooling_unit = pmy_pack->punit->pressure_cgs()/pmy_pack->punit->time_cgs()
-                        / n_unit/n_unit;
+                        /n_h_unit/n_h_unit;
     Real heating_unit = pmy_pack->punit->pressure_cgs()/pmy_pack->punit->time_cgs()
-                        / n_unit;
+                        /n_h_unit;
 
     // find smallest (e/cooling_rate) in each cell
     Kokkos::parallel_reduce("srcterms_cooling_newdt",

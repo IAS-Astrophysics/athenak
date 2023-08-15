@@ -61,6 +61,7 @@ SourceTerms::SourceTerms(std::string block, MeshBlockPack *pp, ParameterInput *p
   if (ism_cooling) {
     source_terms_enabled = true;
     hrate = pin->GetReal(block, "hrate");
+    mu_h = pin->GetReal(block, "mu_h");
   }
 
   // (4) beam source (radiation)
@@ -245,11 +246,12 @@ void SourceTerms::AddISMCooling(DvceArray5D<Real> &u0, const DvceArray5D<Real> &
   Real gm1 = gamma - 1.0;
   Real heating_rate = hrate;
   Real temp_unit = pmy_pack->punit->temperature_cgs();
-  Real n_unit = pmy_pack->punit->density_cgs()/pmy_pack->punit->mu()
-                /pmy_pack->punit->atomic_mass_unit_cgs;
+  Real n_h_unit = pmy_pack->punit->density_cgs()/mu_h
+                  /pmy_pack->punit->atomic_mass_unit_cgs;
   Real cooling_unit = pmy_pack->punit->pressure_cgs()/pmy_pack->punit->time_cgs()
-                      /n_unit/n_unit;
-  Real heating_unit = pmy_pack->punit->pressure_cgs()/pmy_pack->punit->time_cgs()/n_unit;
+                      /n_h_unit/n_h_unit;
+  Real heating_unit = pmy_pack->punit->pressure_cgs()/pmy_pack->punit->time_cgs()
+                      /n_h_unit;
 
   par_for("cooling", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
