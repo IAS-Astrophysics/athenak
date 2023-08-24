@@ -197,6 +197,7 @@ void LUSolve(const DvceArray2D<Real> lu_matrix, const DvceArray1D<int> pivot_ind
 void LUInverse(DvceArray2D<Real> A_matrix, DvceArray2D<Real> A_matrix_inverse);
 void MatMultiply(DvceArray2D <Real> A_matrix, DvceArray2D <Real> B_matrix, DvceArray2D <Real> result);
 void MatEig(std::vector<std::vector<double>> &matrix, std::vector<std::complex<double>> &eigval, std::vector<std::vector<std::complex<double>>> &eigvec);
+void ZeroSpeedCorrection(DvceArray2D<Real> matrix, DvceArray2D<Real> matrix_corrected, double v);
 
 } // namespace radiationfemn
 
