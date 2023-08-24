@@ -8,8 +8,10 @@
 //  \brief implementation of the matrix inverse routines
 
 #include <cmath>
+#include <complex>
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_eigen.h>
+#include <gsl/gsl_linalg.h>
 #include "athena.hpp"
 #include "radiation_femn/radiation_femn.hpp"
 
@@ -162,8 +164,12 @@ void MatEig(std::vector<std::vector<double>> &matrix, std::vector<std::complex<d
     }
   }
 
-  gsl_matrix_view matview = gsl_matrix_view_array(matrix_flattened, N, N);
+  for (int i = 0; i < N*N; i++) {
+    std::cout << matrix_flattened[i] << " " << std::flush;
+  }
+  std::cout << std::endl;
 
+  gsl_matrix_view matview = gsl_matrix_view_array(matrix_flattened, N, N);
   gsl_vector_complex *eigval_gsl = gsl_vector_complex_alloc(N);
   gsl_matrix_complex *eigvec_gsl = gsl_matrix_complex_alloc(N, N);
   gsl_eigen_nonsymmv_workspace *nonsymw = gsl_eigen_nonsymmv_alloc(N);
@@ -188,5 +194,75 @@ void MatEig(std::vector<std::vector<double>> &matrix, std::vector<std::complex<d
 
   gsl_vector_complex_free(eigval_gsl);
   gsl_matrix_complex_free(eigvec_gsl);
+}
+
+// Compute the correction for the zero speed modes
+// matrix:            [NxN] a real square matrix
+// matrix_corrected:  [NxN] the corrected square matrix
+// v:                       the zero speed mode correction factor
+void ZeroSpeedCorrection(DvceArray2D<Real> matrix, DvceArray2D<Real> matrix_corrected, double v) {
+
+  // store the matrix in a vector<vecto> for use with MatEig
+  std::vector<Real> mat_row(matrix.extent(0));
+  std::vector<std::vector<Real>> mat(matrix.extent(1), mat_row);
+  for (int i = 0; i < matrix.extent(0); i++) {
+    for (int j = 0; j < matrix.extent(1); j++) {
+      mat[i][j] = matrix(i, j);
+    }
+  }
+
+  // compute eigenvalues and eigenvectors of matrix
+  std::vector<std::complex<double>> eigval;
+  std::vector<std::vector<std::complex<double>>> eigvec;
+  MatEig(mat, eigval, eigvec);
+
+  // print eigenvalues
+  for (int i = 0; i < matrix.extent(0); i++) {
+    std::cout << eigval[i] << " " << std::flush;
+    std::cout << std::endl;
+  }
+
+  // print eigenvectors
+  std::cout << std::endl;
+  double eigvec_data[matrix.extent(0) * matrix.extent(1) * 2];
+  int index = 0;
+  for (int i = 0; i < matrix.extent(0); i++) {
+    for (int j = 0; j < matrix.extent(1); j++) {
+      std::cout << eigvec[i][j] << " " << std::flush;
+      eigvec_data[index] = std::real(eigvec[j][i]);
+      eigvec_data[index + 1] = std::imag(eigvec[j][i]);
+      index = index + 2;
+    }
+    std::cout << std::endl;
+  }
+  std::cout << std::endl;
+
+  // print eigenvector data
+  for (int i = 0; i < matrix.extent(0) * matrix.extent(1) * 2; i++) {
+    std::cout << eigvec_data[i] << " " << std::flush;
+  }
+  std::cout << std::endl;
+
+  // calculate the matrix of left eigenvectors
+  double size = matrix.extent(0);
+  gsl_matrix_complex_view m = gsl_matrix_complex_view_array(eigvec_data, size, size);
+  gsl_matrix_complex *minv = gsl_matrix_complex_alloc(size, size);
+  gsl_permutation *p = gsl_permutation_alloc(size);
+  int s;
+  gsl_linalg_complex_LU_decomp(&m.matrix, p, &s);
+  gsl_linalg_complex_LU_invert(&m.matrix, p, minv);
+
+  std::cout << std::endl;
+  for (int i = 0; i < size; i++) {
+    for (int j = 0; j < size; j++) {
+      gsl_complex z = gsl_matrix_complex_get(minv, i, j);
+      std::cout << GSL_REAL(z) << " + " << GSL_IMAG(z) << "j \t\t" << std::flush;
+    }
+    std::cout << std::endl;
+  }
+  gsl_permutation_free(p);
+
+  // print left eigenvectos
+
 }
 } // namespace radiationfemn

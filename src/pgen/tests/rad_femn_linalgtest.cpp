@@ -277,7 +277,7 @@ void ProblemGenerator::RadiationFEMNLinalgtest(ParameterInput *pin, const bool r
   std::cout << "Matrix:" << std::endl;
   for (int i = 0; i < mat.size(); i++) {
     for (int j = 0; j < mat[0].size(); j++) {
-      std::cout << mat[j][i] << " " << std::flush;
+      std::cout << mat[i][j] << " " << std::flush;
     }
     std::cout << std::endl;
   }
@@ -296,6 +296,28 @@ void ProblemGenerator::RadiationFEMNLinalgtest(ParameterInput *pin, const bool r
     }
     std::cout << std::endl;
   }
+
+  std::cout << std::endl;
+  std::cout << "Test 6: Compute the zero speed mode corrections" << std::endl;
+
+  DvceArray2D<Real> zerosp_matrix;
+  DvceArray2D<Real> zerosp_matrix_corrected;
+
+  Kokkos::realloc(zerosp_matrix, 3, 3);
+  Kokkos::realloc(zerosp_matrix_corrected, 3, 3);
+  double v = 1./ sqrt(3);
+
+  zerosp_matrix(0,0) = 2.1;
+  zerosp_matrix(0,1) = 3.;
+  zerosp_matrix(0,2) = 4.5;
+  zerosp_matrix(1,0) = 5.3;
+  zerosp_matrix(1,1) = 6.9;
+  zerosp_matrix(1,2) = 7.1;
+  zerosp_matrix(2,0) = 1.1;
+  zerosp_matrix(2,1) = 3.4;
+  zerosp_matrix(2,2) = 5.6;
+
+  radiationfemn::ZeroSpeedCorrection(zerosp_matrix, zerosp_matrix_corrected, v);
 
   return;
 }
