@@ -364,7 +364,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   }
 
   // radiation energy density for FEM_N
-  if (name.compare("rad_femn_E") == 0 and pm->pmb_pack->pradfemn->fpn == 0) {
+  if (name.compare("rad_femn_E") == 0 && pm->pmb_pack->pradfemn->fpn == 0) {
     Kokkos::realloc(derived_var, nmb, 1, n3, n2, n1);
     auto dv = derived_var;
     auto &f0_ = pm->pmb_pack->pradfemn->f0;
@@ -383,7 +383,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
             });
   }
 
-  if (name.compare("rad_femn_E") == 0 and pm->pmb_pack->pradfemn->fpn != 0) {
+  if (name.compare("rad_femn_E") == 0 && pm->pmb_pack->pradfemn->fpn != 0) {
     Kokkos::realloc(derived_var, nmb, 1, n3, n2, n1);
     auto dv = derived_var;
     auto &f0_ = pm->pmb_pack->pradfemn->f0;

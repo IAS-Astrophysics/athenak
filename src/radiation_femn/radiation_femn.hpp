@@ -195,6 +195,7 @@ class RadiationFEMN {
 void LUDecomposition(DvceArray2D<Real> square_matrix, DvceArray2D<Real> lu_matrix, DvceArray1D<int> pivot_indices);
 void LUSolve(const DvceArray2D<Real> lu_matrix, const DvceArray1D<int> pivot_indices, const DvceArray1D<Real> b_array, DvceArray1D<Real> x_array);
 void LUInverse(DvceArray2D<Real> A_matrix, DvceArray2D<Real> A_matrix_inverse);
+void MatMultiply(DvceArray2D <Real> A_matrix, DvceArray2D <Real> B_matrix, DvceArray2D <Real> result);
 
 } // namespace radiationfemn
 
