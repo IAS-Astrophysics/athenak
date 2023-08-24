@@ -357,6 +357,7 @@ class AthenaScratchTensor<T, sym, ndim, 2> {
 //----------------------------------------------------------------------------------------
 // Implementation details
 template<typename T, TensorSymm sym, int ndim>
+KOKKOS_INLINE_FUNCTION
 AthenaScratchTensor<T, sym, ndim, 2>::AthenaScratchTensor() {
 switch(sym) {
     case TensorSymm::NONE:
@@ -417,6 +418,7 @@ class AthenaScratchTensor<T, sym, ndim, 3> {
 //----------------------------------------------------------------------------------------
 // Implementation details
 template<typename T, TensorSymm sym, int ndim>
+KOKKOS_INLINE_FUNCTION
 AthenaScratchTensor<T, sym, ndim, 3>::AthenaScratchTensor() {
   switch(sym) {
     case TensorSymm::NONE:
@@ -488,6 +490,7 @@ class AthenaScratchTensor<T, sym, ndim, 4> {
 //----------------------------------------------------------------------------------------
 // Implementation details
 template<typename T, TensorSymm sym, int ndim>
+KOKKOS_INLINE_FUNCTION
 AthenaScratchTensor<T, sym, ndim, 4>::AthenaScratchTensor() {
   switch(sym) {
     case TensorSymm::NONE:

@@ -43,12 +43,12 @@ void MHD::FOFC(Driver *pdriver, int stage) {
   auto &size = pmy_pack->pmb->mb_size;
 
   auto &bcc0_ = bcc0;
-  auto e3x1_ = e3x1;
-  auto e2x1_ = e2x1;
-  auto e1x2_ = e1x2;
-  auto e3x2_ = e3x2;
-  auto e2x3_ = e2x3;
-  auto e1x3_ = e1x3;
+  auto &e3x1_ = e3x1;
+  auto &e2x1_ = e2x1;
+  auto &e1x2_ = e1x2;
+  auto &e3x2_ = e3x2;
+  auto &e2x3_ = e2x3;
+  auto &e1x3_ = e1x3;
 
   if (use_fofc) {
     Real &gam0 = pdriver->gam0[stage-1];
