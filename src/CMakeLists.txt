@@ -157,3 +157,6 @@ endif()
 
 # enable include of header files with /src/ as root of path
 target_include_directories(athena PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
+find_package(GSL)
+target_link_libraries(athena PUBLIC ${GSL_LIBRARIES})

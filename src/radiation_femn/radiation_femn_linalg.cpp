@@ -8,6 +8,8 @@
 //  \brief implementation of the matrix inverse routines
 
 #include <cmath>
+#include <gsl/gsl_math.h>
+#include <gsl/gsl_eigen.h>
 #include "athena.hpp"
 #include "radiation_femn/radiation_femn.hpp"
 
@@ -18,7 +20,7 @@ namespace radiationfemn {
 // square_matrix: [NxN] matrix of reals, input matrix
 // lu_matrix:     [NxN] matrix of reals, the row-permuted LU decomposition matrix
 // pivot_indices: [N-1] array of reals, the permutation information
-void LUDecomposition(DvceArray2D <Real> square_matrix, DvceArray2D <Real> lu_matrix, DvceArray1D<int> pivot_indices) {
+void LUDecomposition(DvceArray2D<Real> square_matrix, DvceArray2D<Real> lu_matrix, DvceArray1D<int> pivot_indices) {
 
   int num_rows = square_matrix.extent(0);
 
@@ -63,7 +65,7 @@ void LUDecomposition(DvceArray2D <Real> square_matrix, DvceArray2D <Real> lu_mat
 // pivot_indices: [N] array, the pivot information
 // b_array:       [N] array, the array b
 // x_array:       [N] array, the solution x
-void LUSolve(const DvceArray2D <Real> lu_matrix, const DvceArray1D<int> pivot_indices, const DvceArray1D <Real> b_array, DvceArray1D <Real> x_array) {
+void LUSolve(const DvceArray2D<Real> lu_matrix, const DvceArray1D<int> pivot_indices, const DvceArray1D<Real> b_array, DvceArray1D<Real> x_array) {
 
   int num_rows = b_array.extent(0);
   int index;
@@ -97,16 +99,16 @@ void LUSolve(const DvceArray2D <Real> lu_matrix, const DvceArray1D<int> pivot_in
 // Compute the inverse of a square matrix
 // A_matrix:          [NxN] a square matrix
 // A_matrix_inverse:  [NxN] the inverse
-void LUInverse(DvceArray2D <Real> A_matrix, DvceArray2D <Real> A_matrix_inverse) {
+void LUInverse(DvceArray2D<Real> A_matrix, DvceArray2D<Real> A_matrix_inverse) {
 
   int n = A_matrix.extent(0);
 
   Kokkos::realloc(A_matrix_inverse, n, n);
   Kokkos::deep_copy(A_matrix_inverse, 0.);
 
-  DvceArray1D <Real> x_array;
-  DvceArray1D <Real> b_array;
-  DvceArray2D <Real> lu_matrix;
+  DvceArray1D<Real> x_array;
+  DvceArray1D<Real> b_array;
+  DvceArray2D<Real> lu_matrix;
   DvceArray1D<int> pivots;
 
   Kokkos::realloc(x_array, n);
@@ -131,7 +133,7 @@ void LUInverse(DvceArray2D <Real> A_matrix, DvceArray2D <Real> A_matrix_inverse)
 // A_matrix:          [NxN] a square matrix
 // B_matrix:          [NxN] a square matrix
 // result:            [NxN] the product
-void MatMultiply(DvceArray2D <Real> A_matrix, DvceArray2D <Real> B_matrix, DvceArray2D <Real> result) {
+void MatMultiply(DvceArray2D<Real> A_matrix, DvceArray2D<Real> B_matrix, DvceArray2D<Real> result) {
 
   int N = A_matrix.extent(0);
 
@@ -139,8 +141,52 @@ void MatMultiply(DvceArray2D <Real> A_matrix, DvceArray2D <Real> B_matrix, DvceA
   par_for("radiation_femn_matrix_multiply", DevExeSpace(), 0, N - 1, 0, N - 1, 0, N - 1,
           KOKKOS_LAMBDA(const int i, const int j, const int k) {
 
-    result(i, j) += A_matrix(i, k) * B_matrix(k, j);
-  });
+            result(i, j) += A_matrix(i, k) * B_matrix(k, j);
+          });
 }
 
+// Compute eigenvalues and eigenvectors of a real square matrix (GSL)
+// matrix:        [NxN] square matrix
+// eigval:        [N] complex array of eigenvalues
+// eigvec:        [NxN] complex array of eigenvectors
+void MatEig(std::vector<std::vector<double>> &matrix, std::vector<std::complex<double>> &eigval, std::vector<std::vector<std::complex<double>>> &eigvec) {
+
+  int N = matrix.size();
+  double matrix_flattened[N * N];
+
+  int idx = 0;
+  for (int i = 0; i < N; i++) {
+    for (int j = 0; j < N; j++) {
+      matrix_flattened[idx] = matrix[i][j];
+      idx++;
+    }
+  }
+
+  gsl_matrix_view matview = gsl_matrix_view_array(matrix_flattened, N, N);
+
+  gsl_vector_complex *eigval_gsl = gsl_vector_complex_alloc(N);
+  gsl_matrix_complex *eigvec_gsl = gsl_matrix_complex_alloc(N, N);
+  gsl_eigen_nonsymmv_workspace *nonsymw = gsl_eigen_nonsymmv_alloc(N);
+
+  gsl_eigen_nonsymmv(&matview.matrix, eigval_gsl, eigvec_gsl, nonsymw);
+  gsl_eigen_nonsymmv_sort(eigval_gsl, eigvec_gsl, GSL_EIGEN_SORT_ABS_DESC);
+  gsl_eigen_nonsymmv_free(nonsymw);
+
+  for (int i = 0; i < N; i++) {
+    gsl_complex eval_i = gsl_vector_complex_get(eigval_gsl, i);
+    gsl_vector_complex_view evec_i = gsl_matrix_complex_column(eigvec_gsl, i);
+
+    eigval.push_back(std::complex<double>(GSL_REAL(eval_i), GSL_IMAG(eval_i)));
+
+    std::vector<std::complex<double>> eigvecs_vec;
+    for (int j = 0; j < N; j++) {
+      gsl_complex evec_ij = gsl_vector_complex_get(&evec_i.vector, j);
+      eigvecs_vec.push_back(std::complex<double>(GSL_REAL(evec_ij), GSL_IMAG(evec_ij)));
+    }
+    eigvec.push_back(eigvecs_vec);
+  }
+
+  gsl_vector_complex_free(eigval_gsl);
+  gsl_matrix_complex_free(eigvec_gsl);
+}
 } // namespace radiationfemn
