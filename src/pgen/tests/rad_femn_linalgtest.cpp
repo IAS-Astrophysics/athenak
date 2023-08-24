@@ -261,5 +261,41 @@ void ProblemGenerator::RadiationFEMNLinalgtest(ParameterInput *pin, const bool r
   std::cout << std::endl;
   std::cout << "Maximum error in computing product: " << error << std::endl;
 
+  std::cout << std::endl;
+  std::cout << "Test 5: Compute eigenvalues and eigenvectors" << std::endl;
+
+  std::vector<std::vector<double>> mat = {{-1.0, 1.0, -1.0, 1.0},
+                                          {-8.0, 4.0, -2.0, 1.0},
+                                          {27.0, 9.0, 3.0, 1.0},
+                                          {64.0, 16.0, 4.0, 1.0 }};
+
+  std::vector<std::complex<double>> eigval;
+  std::vector<std::vector<std::complex<double>>> eigvec;
+  radiationfemn::MatEig(mat, eigval, eigvec);
+
+  std::cout << std::endl;
+  std::cout << "Matrix:" << std::endl;
+  for (int i = 0; i < mat.size(); i++) {
+    for (int j = 0; j < mat[0].size(); j++) {
+      std::cout << mat[j][i] << " " << std::flush;
+    }
+    std::cout << std::endl;
+  }
+
+  std::cout << std::endl;
+  std::cout << "Eigenvalues: " << std::endl;
+  for (int i = 0; i < eigval.size(); i++){
+    std::cout << eigval[i] << std::endl;
+  }
+
+  std::cout << std::endl;
+  std::cout << "Eigenvectors (column wise):" << std::endl;
+  for (int i = 0; i < eigvec.size(); i++) {
+    for (int j = 0; j < eigvec[0].size(); j++) {
+      std::cout << eigvec[j][i] << " " << std::flush;
+    }
+    std::cout << std::endl;
+  }
+
   return;
 }
