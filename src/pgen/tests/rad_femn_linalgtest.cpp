@@ -36,9 +36,9 @@ void ProblemGenerator::RadiationFEMNLinalgtest(ParameterInput *pin, const bool r
 
   std::cout << "Entered Linear algebra test problem. " << std::endl;
 
-  DvceArray2D<Real> matrix;
-  DvceArray2D<Real> matrix_answer;
-  DvceArray2D<Real> lm_matrix;
+  DvceArray2D <Real> matrix;
+  DvceArray2D <Real> matrix_answer;
+  DvceArray2D <Real> lm_matrix;
   DvceArray1D<int> pivots;
 
   // Test 1: Check the matrix from Golub & Van Loan example 3.4.1
@@ -124,9 +124,9 @@ void ProblemGenerator::RadiationFEMNLinalgtest(ParameterInput *pin, const bool r
 
   std::cout << "Test 2: Solve A x = b using LU decomposition" << std::endl;
   std::cout << std::endl;
-  DvceArray1D<Real> b_array;
-  DvceArray1D<Real> solution;
-  DvceArray1D<Real> solution_correct;
+  DvceArray1D <Real> b_array;
+  DvceArray1D <Real> solution;
+  DvceArray1D <Real> solution_correct;
   Kokkos::realloc(b_array, 3);
   Kokkos::realloc(solution, 3);
   Kokkos::realloc(solution_correct, 3);
@@ -135,35 +135,35 @@ void ProblemGenerator::RadiationFEMNLinalgtest(ParameterInput *pin, const bool r
   b_array(1) = 9.;
   b_array(2) = 6.;
 
-  solution_correct(0) = 247./24.;
-  solution_correct(1) = -55./24.;
-  solution_correct(2) = 29./24.;
+  solution_correct(0) = 247. / 24.;
+  solution_correct(1) = -55. / 24.;
+  solution_correct(2) = 29. / 24.;
 
   radiationfemn::LUSolve(lm_matrix, pivots, b_array, solution);
 
   std::cout << "Solution \t Correct solution \t |Difference|: " << std::endl;
   for (int i = 0; i < 3; i++) {
-    std::cout << solution(i) << " \t " << solution_correct(i) << " \t\t " << fabs(solution(i)-solution_correct(i)) << std::endl;
+    std::cout << solution(i) << " \t " << solution_correct(i) << " \t\t " << fabs(solution(i) - solution_correct(i)) << std::endl;
   }
 
   std::cout << std::endl;
   std::cout << "Test 3: Compute inverse of the matrix" << std::endl;
   std::cout << std::endl;
-  DvceArray2D<Real> matrix_inverse;
-  DvceArray2D<Real> matrix_inverse_answer;
+  DvceArray2D <Real> matrix_inverse;
+  DvceArray2D <Real> matrix_inverse_answer;
 
   Kokkos::realloc(matrix_inverse, 3, 3);
   Kokkos::realloc(matrix_inverse_answer, 3, 3);
 
-  matrix_inverse_answer(0,0) = -6./144.;
-  matrix_inverse_answer(0,1) = 192./144.;
-  matrix_inverse_answer(0,2) = -37./144.;
-  matrix_inverse_answer(1,0) = 6./144.;
-  matrix_inverse_answer(1,1) = -48./144.;
-  matrix_inverse_answer(1,2) = 13./144.;
-  matrix_inverse_answer(2,0) = 6./144.;
-  matrix_inverse_answer(2,1) = 24./144.;
-  matrix_inverse_answer(2,2) = -11./144.;
+  matrix_inverse_answer(0, 0) = -6. / 144.;
+  matrix_inverse_answer(0, 1) = 192. / 144.;
+  matrix_inverse_answer(0, 2) = -37. / 144.;
+  matrix_inverse_answer(1, 0) = 6. / 144.;
+  matrix_inverse_answer(1, 1) = -48. / 144.;
+  matrix_inverse_answer(1, 2) = 13. / 144.;
+  matrix_inverse_answer(2, 0) = 6. / 144.;
+  matrix_inverse_answer(2, 1) = 24. / 144.;
+  matrix_inverse_answer(2, 2) = -11. / 144.;
 
   radiationfemn::LUInverse(matrix, matrix_inverse);
 
@@ -172,8 +172,8 @@ void ProblemGenerator::RadiationFEMNLinalgtest(ParameterInput *pin, const bool r
   for (int i = 0; i < matrix_inverse.extent(0); i++) {
     for (int j = 0; j < matrix_inverse.extent(1); j++) {
       std::cout << matrix_inverse(i, j) << " " << std::flush;
-      if(fabs(matrix_inverse(i,j)-matrix_inverse_answer(i,j)) > error) {
-        error = fabs(matrix_inverse(i,j)-matrix_inverse_answer(i,j));
+      if (fabs(matrix_inverse(i, j) - matrix_inverse_answer(i, j)) > error) {
+        error = fabs(matrix_inverse(i, j) - matrix_inverse_answer(i, j));
       }
     }
     std::cout << std::endl;
@@ -190,6 +190,76 @@ void ProblemGenerator::RadiationFEMNLinalgtest(ParameterInput *pin, const bool r
 
   std::cout << std::endl;
   std::cout << "Maximum error in computing inverse: " << error << std::endl;
+
+  std::cout << std::endl;
+  std::cout << "Test 4: Compute product of two square matrices" << std::endl;
+  std::cout << std::endl;
+
+  DvceArray2D <Real> mat_a;
+  DvceArray2D <Real> mat_b;
+  DvceArray2D <Real> mat_ab;
+  DvceArray2D <Real> mat_ab_correct;
+
+  Kokkos::realloc(mat_a, 3, 3);
+  Kokkos::realloc(mat_b, 3, 3);
+  Kokkos::realloc(mat_ab, 3, 3);
+  Kokkos::realloc(mat_ab_correct, 3, 3);
+
+  mat_ab_correct(0, 0) = 23;
+  mat_ab_correct(0, 1) = 13;
+  mat_ab_correct(0, 2) = 14;
+  mat_ab_correct(1, 0) = 21;
+  mat_ab_correct(1, 1) = 21;
+  mat_ab_correct(1, 2) = 33;
+  mat_ab_correct(2, 0) = 9;
+  mat_ab_correct(2, 1) = 6;
+  mat_ab_correct(2, 2) = 4;
+
+  mat_a(0, 0) = 2;
+  mat_a(0, 1) = 7;
+  mat_a(0, 2) = 3;
+  mat_a(1, 0) = 1;
+  mat_a(1, 1) = 5;
+  mat_a(1, 2) = 8;
+  mat_a(2, 0) = 0;
+  mat_a(2, 1) = 4;
+  mat_a(2, 2) = 1;
+
+  mat_b(0, 0) = 3;
+  mat_b(0, 1) = 0;
+  mat_b(0, 2) = 1;
+  mat_b(1, 0) = 2;
+  mat_b(1, 1) = 1;
+  mat_b(1, 2) = 0;
+  mat_b(2, 0) = 1;
+  mat_b(2, 1) = 2;
+  mat_b(2, 2) = 4;
+
+  radiationfemn::MatMultiply(mat_a, mat_b, mat_ab);
+
+  error = -42.;
+  std::cout << "Product:" << std::endl;
+  for (int i = 0; i < mat_ab.extent(0); i++) {
+    for (int j = 0; j < mat_ab.extent(1); j++) {
+      std::cout << mat_ab(i, j) << " " << std::flush;
+      if (fabs(mat_ab(i, j) - mat_ab_correct(i, j)) > error) {
+        error = fabs(mat_ab(i, j) - mat_ab_correct(i, j));
+      }
+    }
+    std::cout << std::endl;
+  }
+
+  std::cout << std::endl;
+  std::cout << "Correct Product:" << std::endl;
+  for (int i = 0; i < mat_ab.extent(0); i++) {
+    for (int j = 0; j < mat_ab.extent(1); j++) {
+      std::cout << mat_ab_correct(i, j) << " " << std::flush;
+    }
+    std::cout << std::endl;
+  }
+
+  std::cout << std::endl;
+  std::cout << "Maximum error in computing product: " << error << std::endl;
 
   return;
 }

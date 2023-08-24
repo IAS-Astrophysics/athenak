@@ -18,7 +18,7 @@ namespace radiationfemn {
 // square_matrix: [NxN] matrix of reals, input matrix
 // lu_matrix:     [NxN] matrix of reals, the row-permuted LU decomposition matrix
 // pivot_indices: [N-1] array of reals, the permutation information
-void LUDecomposition(DvceArray2D<Real> square_matrix, DvceArray2D<Real> lu_matrix, DvceArray1D<int> pivot_indices) {
+void LUDecomposition(DvceArray2D <Real> square_matrix, DvceArray2D <Real> lu_matrix, DvceArray1D<int> pivot_indices) {
 
   int num_rows = square_matrix.extent(0);
 
@@ -63,7 +63,7 @@ void LUDecomposition(DvceArray2D<Real> square_matrix, DvceArray2D<Real> lu_matri
 // pivot_indices: [N] array, the pivot information
 // b_array:       [N] array, the array b
 // x_array:       [N] array, the solution x
-void LUSolve(const DvceArray2D<Real> lu_matrix, const DvceArray1D<int> pivot_indices, const DvceArray1D<Real> b_array, DvceArray1D<Real> x_array) {
+void LUSolve(const DvceArray2D <Real> lu_matrix, const DvceArray1D<int> pivot_indices, const DvceArray1D <Real> b_array, DvceArray1D <Real> x_array) {
 
   int num_rows = b_array.extent(0);
   int index;
@@ -97,16 +97,16 @@ void LUSolve(const DvceArray2D<Real> lu_matrix, const DvceArray1D<int> pivot_ind
 // Compute the inverse of a square matrix
 // A_matrix:          [NxN] a square matrix
 // A_matrix_inverse:  [NxN] the inverse
-void LUInverse(DvceArray2D<Real> A_matrix, DvceArray2D<Real> A_matrix_inverse) {
+void LUInverse(DvceArray2D <Real> A_matrix, DvceArray2D <Real> A_matrix_inverse) {
 
   int n = A_matrix.extent(0);
 
   Kokkos::realloc(A_matrix_inverse, n, n);
   Kokkos::deep_copy(A_matrix_inverse, 0.);
 
-  DvceArray1D<Real> x_array;
-  DvceArray1D<Real> b_array;
-  DvceArray2D<Real> lu_matrix;
+  DvceArray1D <Real> x_array;
+  DvceArray1D <Real> b_array;
+  DvceArray2D <Real> lu_matrix;
   DvceArray1D<int> pivots;
 
   Kokkos::realloc(x_array, n);
@@ -126,4 +126,21 @@ void LUInverse(DvceArray2D<Real> A_matrix, DvceArray2D<Real> A_matrix_inverse) {
   }
 
 }
+
+// Multiply two matrices
+// A_matrix:          [NxN] a square matrix
+// B_matrix:          [NxN] a square matrix
+// result:            [NxN] the product
+void MatMultiply(DvceArray2D <Real> A_matrix, DvceArray2D <Real> B_matrix, DvceArray2D <Real> result) {
+
+  int N = A_matrix.extent(0);
+
+  Kokkos::deep_copy(result, 0.);
+  par_for("radiation_femn_matrix_multiply", DevExeSpace(), 0, N - 1, 0, N - 1, 0, N - 1,
+          KOKKOS_LAMBDA(const int i, const int j, const int k) {
+
+    result(i, j) += A_matrix(i, k) * B_matrix(k, j);
+  });
+}
+
 } // namespace radiationfemn
