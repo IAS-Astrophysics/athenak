@@ -549,6 +549,7 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
   // Initialize MHD: ghost zones and primitive variables (everywhere)
   // Note this requires communicating BOTH u and B
   mhd::MHD *pmhd = pm->pmb_pack->pmhd;
+  dyngr::DynGR *pdyngr = pm->pmb_pack->pdyngr;
   if (pmhd != nullptr) {
     (void) pmhd->RestrictU(this, 0);
     (void) pmhd->RestrictB(this, 0);
@@ -560,7 +561,12 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) pmhd->RecvU(this, 0);
     (void) pmhd->RecvB(this, 0);
     (void) pmhd->ApplyPhysicalBCs(this, 0);
-    (void) pmhd->ConToPrim(this, 0);
+    if (pdyngr == nullptr) {
+      (void) pmhd->ConToPrim(this, 0);
+    }
+    else {
+      pdyngr->ConToPrim(this, 0);
+    }
   }
 
   // Initialize radiation: ghost zones and intensity (everywhere)
