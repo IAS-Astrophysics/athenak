@@ -33,9 +33,6 @@ void BoundaryValues::HydroBCs(MeshBlockPack *ppack, DualArray2D<Real> u_in,
   int nvar = u0.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
   int nmb = ppack->nmb_thispack;
 
-  //const Real dfloor = ppack->phydro->peos->eos_data.dfloor;
-  //const Real pfloor = ppack->phydro->peos->eos_data.pfloor;
-
   // only apply BCs if not periodic
   if (pm->mesh_bcs[BoundaryFace::inner_x1] != BoundaryFlag::periodic) {
     int &is = indcs.is;
@@ -63,19 +60,6 @@ void BoundaryValues::HydroBCs(MeshBlockPack *ppack, DualArray2D<Real> u_in,
             u0(m,n,k,j,is-i-1) = u_in.d_view(n,BoundaryFace::inner_x1);
           }
           break;
-        /*case BoundaryFlag::vacuum:
-          for (int i=0; i<ng; ++i) {
-            if (n==(IDN)) {
-              u0(m,n,k,j,is-i-1) = dfloor;
-            }
-            else if (n==(IPR)) {
-              u0(m,n,k,j,is-i-1) = pfloor;
-            }
-            else {
-              u0(m,n,k,j,is-i-1) = 0.0;
-            }
-          }
-          break;*/
         case BoundaryFlag::diode:
           for (int i=0; i<ng; ++i) {
             if (n==(IVX)) {
@@ -110,19 +94,6 @@ void BoundaryValues::HydroBCs(MeshBlockPack *ppack, DualArray2D<Real> u_in,
             u0(m,n,k,j,ie+i+1) = u_in.d_view(n,BoundaryFace::outer_x1);
           }
           break;
-        /*case BoundaryFlag::vacuum:
-          for (int i=0; i<ng; ++i) {
-            if (n==(IDN)) {
-              u0(m,n,k,j,ie+i+1) = dfloor;
-            }
-            else if (n==(IPR)) {
-              u0(m,n,k,j,ie+i+1) = pfloor;
-            }
-            else {
-              u0(m,n,k,j,ie+i+1) = 0.0;
-            }
-          }
-          break;*/
         case BoundaryFlag::diode:
           for (int i=0; i<ng; ++i) {
             if (n==(IVX)) {
@@ -166,19 +137,6 @@ void BoundaryValues::HydroBCs(MeshBlockPack *ppack, DualArray2D<Real> u_in,
             u0(m,n,k,js-j-1,i) = u_in.d_view(n,BoundaryFace::inner_x2);
           }
           break;
-        /*case BoundaryFlag::vacuum:
-          for (int j=0; j<ng; ++j) {
-            if (n==(IDN)) {
-              u0(m,n,k,js-j-1,i) = dfloor;
-            }
-            else if (n==(IPR)) {
-              u0(m,n,k,js-j-1,i) = pfloor;
-            }
-            else {
-              u0(m,n,k,js-j-1,i) = 0.0;
-            }
-          }
-          break;*/
         case BoundaryFlag::diode:
           for (int j=0; j<ng; ++j) {
             if (n==(IVY)) {
@@ -212,19 +170,6 @@ void BoundaryValues::HydroBCs(MeshBlockPack *ppack, DualArray2D<Real> u_in,
             u0(m,n,k,je+j+1,i) = u_in.d_view(n,BoundaryFace::outer_x2);
           }
           break;
-        /*case BoundaryFlag::vacuum:
-          for (int j=0; j<ng; ++j) {
-            if (n==(IDN)) {
-              u0(m,n,k,je+j+1,i) = dfloor;
-            }
-            else if (n==(IPR)) {
-              u0(m,n,k,je+j+1,i) = pfloor;
-            }
-            else {
-              u0(m,n,k,je+j+1,i) = 0.0;
-            }
-          }
-          break;*/
         case BoundaryFlag::diode:
           for (int j=0; j<ng; ++j) {
             if (n==(IVY)) {
@@ -267,19 +212,6 @@ void BoundaryValues::HydroBCs(MeshBlockPack *ppack, DualArray2D<Real> u_in,
           u0(m,n,ks-k-1,j,i) = u_in.d_view(n,BoundaryFace::inner_x3);
         }
         break;
-      /*case BoundaryFlag::vacuum:
-        for (int k=0; k<ng; ++k) {
-          if(n==(IDN)) {
-            u0(m,n,ks-k-1,j,i) = dfloor;
-          }
-          if(n==(IPR)) {
-            u0(m,n,ks-k-1,j,i) = pfloor;
-          }
-          else {
-            u0(m,n,ks-k-1,j,i) = 0.0;
-          }
-        }
-        break;*/
       case BoundaryFlag::diode:
         for (int k=0; k<ng; ++k) {
           if (n==(IVZ)) {
@@ -314,19 +246,6 @@ void BoundaryValues::HydroBCs(MeshBlockPack *ppack, DualArray2D<Real> u_in,
           u0(m,n,ke+k+1,j,i) = u_in.d_view(n,BoundaryFace::outer_x3);
         }
         break;
-      /*case BoundaryFlag::vacuum:
-        for (int k=0; k<ng; ++k) {
-          if(n==(IDN)) {
-            u0(m,n,ke+k+1,j,i) = dfloor;
-          }
-          if(n==(IPR)) {
-            u0(m,n,ke+k+1,j,i) = pfloor;
-          }
-          else {
-            u0(m,n,ke+k+1,j,i) = 0.0;
-          }
-        }
-        break;*/
       case BoundaryFlag::diode:
         for (int k=0; k<ng; ++k) {
           if (n==(IVZ)) {

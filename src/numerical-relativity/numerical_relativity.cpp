@@ -135,7 +135,7 @@ void NumericalRelativity::AssembleNumericalRelativityTasks(
     pmy_pack->pdyngr->QueueDynGRTasks();
   }
   /*if (pmy_pack->pz4c != nullptr) {
-    pmy_pack->pdyngr->QueueZ4cTasks();
+    pmy_pack->pz4c->QueueZ4cTasks();
   }*/
 
   bool success = AssembleNumericalRelativityTasks(start, start_queue);

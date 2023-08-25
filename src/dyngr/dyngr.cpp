@@ -6,8 +6,8 @@
 //! \file dyngr.cpp
 //  \brief implementation of functions for DynGR and DynGRPS controlling the task list
 
-#include <iostream>
 #include <math.h>
+#include <iostream>
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -101,7 +101,6 @@ DynGR::DynGR(MeshBlockPack *pp, ParameterInput *pin) : pmy_pack(pp) {
 }
 
 DynGR::~DynGR() {
-
 }
 
 //----------------------------------------------------------------------------------------
@@ -127,7 +126,7 @@ TaskStatus DynGR::ADMMatterSource_(Driver *pdrive, int stage) {
 //  finished over all MeshBlocks for EACH stage, such as clearing all MPI non-blocking
 //  sends, etc.
 template<class EOSPolicy, class ErrorPolicy>
-void DynGRPS<EOSPolicy, ErrorPolicy>::AssembleDynGRTasks(TaskList &start, 
+void DynGRPS<EOSPolicy, ErrorPolicy>::AssembleDynGRTasks(TaskList &start,
     TaskList &run, TaskList &end) {
   TaskID none(0);
   auto &indcs = pmy_pack->pmesh->mb_indcs;
@@ -137,7 +136,8 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AssembleDynGRTasks(TaskList &start,
   Z4c *pz4c = pmy_pack->pz4c;
   MHD *pmhd = pmy_pack->pmhd;
 
-  // naming convention: hydro task id names are unchanged, all z4c tasks now have a z at the beginning
+  // naming convention: hydro task id names are unchanged, all z4c tasks now
+  // have a z at the beginning
 
   // start task list
   // Hydro
@@ -152,13 +152,14 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AssembleDynGRTasks(TaskList &start,
   // select which calculate flux function to add based on rsolver_method.
   // Calc flux requires metric in flux - must happen before z4ctoadm updates the metric
   if (rsolver_method == DynGR_RSolver::llf_dyngr) {
-    id.flux = run.AddTask(&DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGR_RSolver::llf_dyngr>,this,id.copyu);
-  } // put more rsolvers here
-  else if (rsolver_method == DynGR_RSolver::hlle_dyngr) {
-    id.flux = run.AddTask(&DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGR_RSolver::hlle_dyngr>,this,id.copyu);
-  }
-   // put more rsolvers here
-  else{
+    id.flux =
+      run.AddTask(&DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGR_RSolver::llf_dyngr>,
+                  this,id.copyu);
+  } else if (rsolver_method == DynGR_RSolver::hlle_dyngr) {
+    id.flux =
+      run.AddTask(&DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGR_RSolver::hlle_dyngr>,
+                  this,id.copyu);
+  } else { // put more rsolvers here
     abort();
   }
 
@@ -167,7 +168,8 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AssembleDynGRTasks(TaskList &start,
   id.sendf = run.AddTask(&MHD::SendFlux, pmhd, id.flux);
   id.recvf = run.AddTask(&MHD::RecvFlux, pmhd, id.sendf);
   id.rkdep = id.recvf | id.settmunu;
-  id.expl  = run.AddTask(&MHD::ExpRKUpdate, pmhd, id.rkdep); // requires metric in geometric source terms - must happen before z4ctoadm
+  // requires metric in geometric source terms - must happen before z4ctoadm
+  id.expl  = run.AddTask(&MHD::ExpRKUpdate, pmhd, id.rkdep);
   id.restu = run.AddTask(&MHD::RestrictU, pmhd, id.expl);
   id.sendu = run.AddTask(&MHD::SendU, pmhd, id.restu);
   id.recvu = run.AddTask(&MHD::RecvU, pmhd, id.sendu);
@@ -182,7 +184,8 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AssembleDynGRTasks(TaskList &start,
 
   // Z4c
   if (pz4c != nullptr) {
-    id.zmattersrc = run.AddTask(&DynGR::ADMMatterSource_, this, none); // must happen before c2p, must happen before CalcRHS
+    // must happen before c2p, must happen before CalcRHS
+    id.zmattersrc = run.AddTask(&DynGR::ADMMatterSource_, this, none);
     id.zcopyu = run.AddTask(&Z4c::CopyU, pz4c, none);
     id.zcrhsdep = id.zcopyu | id.zmattersrc;
     switch (indcs.ng) {
@@ -194,18 +197,20 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AssembleDynGRTasks(TaskList &start,
               break;
     }
     id.zsombc = run.AddTask(&Z4c::Z4cBoundaryRHS, pz4c, id.zcrhs);
-    id.zexpl  = run.AddTask(&Z4c::ExpRKUpdate, pz4c, id.zsombc); // after this point z4c variables are timestepped
+    // after this point z4c variables are timestepped
+    id.zexpl  = run.AddTask(&Z4c::ExpRKUpdate, pz4c, id.zsombc);
     id.zrestu = run.AddTask(&Z4c::RestrictU, pz4c, id.zexpl);
     id.zsendu = run.AddTask(&Z4c::SendU, pz4c, id.zrestu);
     id.zrecvu = run.AddTask(&Z4c::RecvU, pz4c, id.zsendu);
     id.zbcs   = run.AddTask(&Z4c::ApplyPhysicalBCs, pz4c, id.zrecvu);
     id.zalgc  = run.AddTask(&Z4c::EnforceAlgConstr, pz4c, id.zbcs);
     id.zadep  = id.zalgc | id.flux | id.expl;
-    id.z4tad  = run.AddTask(&Z4c::Z4cToADM_, pz4c, id.zadep); // after this point ADM variables are updated - now cannot calcualte geometric source terms/fluxes etc.
+    // after this point ADM variables are updated - now cannot calcualte geometric
+    // source terms/fluxes etc.
+    id.z4tad  = run.AddTask(&Z4c::Z4cToADM_, pz4c, id.zadep);
     id.zadmc  = run.AddTask(&Z4c::ADMConstraints_, pz4c, id.z4tad);
     id.znewdt = run.AddTask(&Z4c::NewTimeStep, pz4c, id.zadmc); // only need 1 time step
   }
-  // TODO MHD
 
   if (pz4c != nullptr) {
     id.c2pdep = id.bcs | id.z4tad;
@@ -216,7 +221,8 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AssembleDynGRTasks(TaskList &start,
 
   // c2p takes time-stepped cons -> time-stepped prims, should use time-stepped metric
   // should happen after z4ctoadm. Prims are now updated so can no longer calculate source
-  // for Z4c equations, must happen after calcz4crhs (but this happens before z4ctoadm anyway)
+  // for Z4c equations, must happen after calcz4crhs (but this happens before
+  // z4ctoadm anyway)
   id.newdt = run.AddTask(&MHD::NewTimeStep, pmhd, id.c2p); // only need 1 timestep
 
 
@@ -251,29 +257,31 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::QueueDynGRTasks() {
   // CalcFlux requires metric in flux - must happen before z4ctoadm updates the metric
   dep.push_back(MHD_CopyU);
   if (rsolver_method == DynGR_RSolver::llf_dyngr) {
-    pnr->QueueTask(&DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGR_RSolver::llf_dyngr>, this,
-                   MHD_Flux, "MHD_Flux", Task_Run, dep, none);
-  }
-  else if (rsolver_method == DynGR_RSolver::hlle_dyngr) {
-    pnr->QueueTask(&DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGR_RSolver::hlle_dyngr>, this,
-                   MHD_Flux, "MHD_Flux", Task_Run, dep, none);
-  }
-  // put more rsolvers here
-  else {
+    pnr->QueueTask(
+           &DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGR_RSolver::llf_dyngr>,
+           this, MHD_Flux, "MHD_Flux", Task_Run, dep, none);
+  } else if (rsolver_method == DynGR_RSolver::hlle_dyngr) {
+    pnr->QueueTask(
+           &DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGR_RSolver::hlle_dyngr>,
+           this, MHD_Flux, "MHD_Flux", Task_Run, dep, none);
+  } else { // put more rsolvers here
     abort();
   }
 
   // Now the rest of the MHD run tasks
   if (pz4c != nullptr) {
-    pnr->QueueTask(&DynGR::SetTmunu, this, MHD_SetTmunu, "MHD_SetTmunu", Task_Run, dep, none);
+    pnr->QueueTask(&DynGR::SetTmunu, this, MHD_SetTmunu, "MHD_SetTmunu",
+                   Task_Run, dep, none);
   }
   dep.clear();
   dep.push_back(MHD_Flux);
-  pnr->QueueTask(&MHD::SendFlux, pmhd, MHD_SendFlux, "MHD_SendFlux", Task_Run, dep, none);
+  pnr->QueueTask(&MHD::SendFlux, pmhd, MHD_SendFlux, "MHD_SendFlux",
+                 Task_Run, dep, none);
 
   dep.clear();
   dep.push_back(MHD_SendFlux);
-  pnr->QueueTask(&MHD::RecvFlux, pmhd, MHD_RecvFlux, "MHD_RecvFlux", Task_Run, dep, none);
+  pnr->QueueTask(&MHD::RecvFlux, pmhd, MHD_RecvFlux, "MHD_RecvFlux",
+                 Task_Run, dep, none);
 
   dep.clear();
   dep.push_back(MHD_RecvFlux);
@@ -329,7 +337,8 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::QueueDynGRTasks() {
   dep.clear();
   dep.push_back(MHD_BCS);
   opt.push_back(Z4c_Z4c2ADM);
-  pnr->QueueTask(&DynGRPS<EOSPolicy, ErrorPolicy>::ConToPrim, this, MHD_C2P, "MHD_C2P", Task_Run, dep, opt);
+  pnr->QueueTask(&DynGRPS<EOSPolicy, ErrorPolicy>::ConToPrim, this, MHD_C2P, "MHD_C2P",
+                 Task_Run, dep, opt);
 
   dep.clear();
   dep.push_back(MHD_C2P);
@@ -342,8 +351,10 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::QueueDynGRTasks() {
 //! \fn  TaskStatus DynGR::ADMMatterSource_(Driver *pdrive, int stage) {
 //  \brief
 template<class EOSPolicy, class ErrorPolicy>
-void DynGRPS<EOSPolicy, ErrorPolicy>::PrimToConInit(int is, int ie, int js, int je, int ks, int ke) {
-  eos.PrimToCons(pmy_pack->pmhd->w0, pmy_pack->pmhd->bcc0, pmy_pack->pmhd->u0, is, ie, js, je, ks, ke);
+void DynGRPS<EOSPolicy, ErrorPolicy>::PrimToConInit(int is, int ie, int js, int je,
+                                                    int ks, int ke) {
+  eos.PrimToCons(pmy_pack->pmhd->w0, pmy_pack->pmhd->bcc0, pmy_pack->pmhd->u0,
+                 is, ie, js, je, ks, ke);
 }
 
 //----------------------------------------------------------------------------------------
@@ -357,8 +368,8 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::ConToPrim(Driver *pdrive, int stage)
   int n1m1 = indcs.nx1 + 2*ng - 1;
   int n2m1 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng - 1) : 0;
   int n3m1 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng - 1) : 0;
-  eos.ConsToPrim(pmy_pack->pmhd->u0, pmy_pack->pmhd->b0, pmy_pack->pmhd->bcc0, pmy_pack->pmhd->w0,
-                 0, n1m1, 0, n2m1, 0, n3m1, false);
+  eos.ConsToPrim(pmy_pack->pmhd->u0, pmy_pack->pmhd->b0, pmy_pack->pmhd->bcc0,
+                 pmy_pack->pmhd->w0, 0, n1m1, 0, n2m1, 0, n3m1, false);
   return TaskStatus::complete;
 }
 
@@ -398,7 +409,7 @@ TaskStatus DynGR::SetTmunu(Driver *pdrive, int stage) {
   //auto &nhyd = pmy_pack->pmhd->nmhd;
   //int &nscal = pmy_pack->pmhd->nscalars;
   auto &prim = pmy_pack->pmhd->w0;
-  // TODO: double-check that this needs to be u1, not u0!
+  // TODO(JMF): double-check that this needs to be u1, not u0!
   auto &cons = pmy_pack->pmhd->u0;
   auto &bcc = pmy_pack->pmhd->bcc0;
 
@@ -409,7 +420,7 @@ TaskStatus DynGR::SetTmunu(Driver *pdrive, int stage) {
   par_for_outer("dyngr_tmunu_loop",DevExeSpace(),scr_size,scr_level,0,nmb-1,ks,ke,js,je,
   KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {
     // Scratch space
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> ivol;  // sqrt of 3-metric determinant
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> ivol;  // sqrt of 3-metric det
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> iW;     // Lorentz factor
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> Bv;    // B^i v_i
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> Bsq;   // B^i B_i
@@ -425,19 +436,21 @@ TaskStatus DynGR::SetTmunu(Driver *pdrive, int stage) {
 
     // Calculate the determinant/volume form
     par_for_inner(member, is, ie, [&](int const i) {
-      Real detg = adm::SpatialDet(adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i), adm.g_dd(m,0,2,k,j,i),
-                             adm.g_dd(m,1,1,k,j,i), adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i));
+      Real detg = adm::SpatialDet(adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i),
+                                  adm.g_dd(m,0,2,k,j,i), adm.g_dd(m,1,1,k,j,i),
+                                  adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i));
       ivol(i) = 1.0/sqrt(detg);
     });
     // Calculate the lower velocity components
-    // TODO: a view should be initialized to zero by default, but it would be well
+    // TODO(JMF): a view should be initialized to zero by default, but it would be well
     // to check that this is actually the case.
     /*par_for_inner(member, is, ie, [&](int const i) {
       Real invW = 0.0;
       for (int a = 0; a < 3; ++a) {
         for (int b = 0; b < 3; ++b) {
           v_d(a, i) += prim(m, IVX + b, k, j, i)*adm.g_dd(m, a, b, k, j, i);
-          invW += prim(m, IVX + a, k, j, i)*prim(m, IVX + b, k, j, i)*adm.g_dd(m, a, b, k, j, i);
+          invW += prim(m, IVX + a, k, j, i)*prim(m, IVX + b, k, j, i)*
+                    adm.g_dd(m, a, b, k, j, i);
         }
       }
       invW = 1.0/sqrt(1. + invW);
@@ -449,12 +462,12 @@ TaskStatus DynGR::SetTmunu(Driver *pdrive, int stage) {
       for (int b = 0; b < 3; ++b) {
         par_for_inner(member, is, ie, [&](int const i) {
           v_d(a, i) += prim(m, IVX + b, k, j, i)*adm.g_dd(m, a, b, k, j, i);
-          iW(i) += prim(m, IVX + a, k, j, i)*prim(m, IVX + b, k, j, i)*adm.g_dd(m, a, b, k, j, i);
+          iW(i) += prim(m, IVX + a, k, j, i)*prim(m, IVX + b, k, j, i)*
+                     adm.g_dd(m, a, b, k, j, i);
           B_d(a, i) += bcc(m, b, k, j, i)*adm.g_dd(m, a, b, k, j, i)*ivol(i);
         });
       }
     }
-    // TODO: need a member barrier here.
     member.team_barrier();
     par_for_inner(member, is, ie, [&](int const i) {
       iW(i) = 1.0/sqrt(1. + iW(i));
@@ -466,7 +479,7 @@ TaskStatus DynGR::SetTmunu(Driver *pdrive, int stage) {
       });
     }
 
-    // TODO: member barrier here?
+    // TODO(JMF): member barrier here?
 
     // Save the fluid quantities
     par_for_inner(member, is, ie, [&](int const i) {
@@ -485,11 +498,11 @@ TaskStatus DynGR::SetTmunu(Driver *pdrive, int stage) {
     for (int a = 0; a < 3; ++a) {
       for (int b = a; b < 3; ++b) {
         par_for_inner(member, is, ie, [&](int const i) {
-          tmunu.S_dd(m, a, b, k, j, i) = cons(m, IM1 + a, k, j, i)*ivol(i)*v_d(b, i)*iW(i)
-                                       - (B_d(a, i)*SQR(iW(i)) + Bv(i)*v_d(a, i))*B_d(b, i)
-                                       + (prim(m, IPR, k, j, i) 
-                                          + 0.5*(Bv(i)*Bv(i)/(iW(i)*iW(i)) + Bsq(i)))
-                                       *adm.g_dd(m, a, b, k, j, i);
+          tmunu.S_dd(m, a, b, k, j, i) =
+                cons(m, IM1 + a, k, j, i)*ivol(i)*v_d(b, i)*iW(i)
+                - (B_d(a, i)*SQR(iW(i)) + Bv(i)*v_d(a, i))*B_d(b, i)
+                + (prim(m, IPR, k, j, i) + 0.5*(Bv(i)*Bv(i)/(iW(i)*iW(i)) + Bsq(i)))
+                  *adm.g_dd(m, a, b, k, j, i);
         });
       }
     }
@@ -498,9 +511,11 @@ TaskStatus DynGR::SetTmunu(Driver *pdrive, int stage) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn  TaskStatus DynGR::ADMMatterSource_(Driver *pdrive, int stage) {
+//! \fn  template<class EOSPolicy, class ErrorPolicy> template<int NGHOST>
+//       void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(
+//       const DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,
+//       const Real dt, DvceArray5D<Real> &rhs)
 //  \brief
-// TODO: Add MHD
 template<class EOSPolicy, class ErrorPolicy> template<int NGHOST>
 void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &prim, 
     const DvceArray5D<Real> &bcc,

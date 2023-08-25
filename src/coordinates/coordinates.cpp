@@ -24,8 +24,8 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
     excision_flux("excision_flux",1,1,1,1) {
   // Check for relativistic dynamics
   // WGC: idea for handling new EOS
-  is_dynamical_relativistic = (pin->DoesBlockExist("adm") || pin->DoesBlockExist("z4c")) &&
-                              (pin->DoesBlockExist("hydro") || pin->DoesBlockExist("mhd"));
+  is_dynamical_relativistic = (pin->DoesBlockExist("adm") || pin->DoesBlockExist("z4c"))
+                         && (pin->DoesBlockExist("hydro") || pin->DoesBlockExist("mhd"));
   if(!is_dynamical_relativistic) {
     is_special_relativistic = pin->GetOrAddBoolean("coord","special_rel",false);
     is_general_relativistic = pin->GetOrAddBoolean("coord","general_rel",false);

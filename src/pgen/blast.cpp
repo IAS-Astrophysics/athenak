@@ -108,7 +108,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   if (pmbp->pmhd != nullptr) {
     auto &w0_ = pmbp->pmhd->w0;
     Real gm1 = pmbp->pmhd->peos->eos_data.gamma - 1.0;
-    if (pbmp->pcoord->is_dynamical_relativistic) {
+    if (pmbp->pcoord->is_dynamical_relativistic) {
       gm1 = 1.0; // DynGR uses pressure, not energy.
     }
     par_for("pgen_blast1",DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
@@ -210,12 +210,12 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       adm.g_dd(m, 1, 2, k, j, i) = 0.0;
       adm.g_dd(m, 2, 2, k, j, i) = 1.0;
 
-      adm.K_dd(m, 0, 0, k, j, i) = 0.0;
-      adm.K_dd(m, 0, 1, k, j, i) = 0.0;
-      adm.K_dd(m, 0, 2, k, j, i) = 0.0;
-      adm.K_dd(m, 1, 1, k, j, i) = 0.0;
-      adm.K_dd(m, 1, 2, k, j, i) = 0.0;
-      adm.K_dd(m, 2, 2, k, j, i) = 0.0;
+      adm.vK_dd(m, 0, 0, k, j, i) = 0.0;
+      adm.vK_dd(m, 0, 1, k, j, i) = 0.0;
+      adm.vK_dd(m, 0, 2, k, j, i) = 0.0;
+      adm.vK_dd(m, 1, 1, k, j, i) = 0.0;
+      adm.vK_dd(m, 1, 2, k, j, i) = 0.0;
+      adm.vK_dd(m, 2, 2, k, j, i) = 0.0;
     });
 
     pmbp->pdyngr->PrimToConInit(is, ie, js, je, ks, ke);

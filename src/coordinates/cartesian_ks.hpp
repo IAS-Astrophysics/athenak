@@ -105,11 +105,11 @@ void ComputeMetricAndInverse(Real x, Real y, Real z, bool minkowski, Real a,
 // QUESTION: doesn't this assume bh_mass to be 1?
 KOKKOS_INLINE_FUNCTION
 void ComputeADMDecomposition(Real x, Real y, Real z, bool minkowski, Real a,
-                             Real * alp,
-                             Real * betax, Real * betay, Real * betaz,
-                             Real * psi4,
-                             Real * gxx, Real * gxy, Real * gxz, Real * gyy, Real * gyz, Real * gzz,
-                             Real * Kxx, Real * Kxy, Real * Kxz, Real * Kyy, Real * Kyz, Real * Kzz) {
+               Real * alp,
+               Real * betax, Real * betay, Real * betaz,
+               Real * psi4,
+               Real * gxx, Real * gxy, Real * gxz, Real * gyy, Real * gyz, Real * gzz,
+               Real * Kxx, Real * Kxy, Real * Kxz, Real * Kyy, Real * Kyz, Real * Kzz) {
   // See comments above in ComputeMetricAndInverse
   Real rad = sqrt(SQR(x) + SQR(y) + SQR(z));
   Real r = sqrt((SQR(rad)-SQR(a)+sqrt(SQR(SQR(rad)-SQR(a))+4.0*SQR(a)*SQR(z)))/2.0);
@@ -232,12 +232,13 @@ void ComputeADMDecomposition(Real x, Real y, Real z, bool minkowski, Real a,
   //
   // Compute Christoffel symbols
   Real Gamma_udd[3][3][3];
-  for (int a = 0; a < 3; ++a) 
-  for (int b = 0; b < 3; ++b) 
+  for (int a = 0; a < 3; ++a)
+  for (int b = 0; b < 3; ++b)
   for (int c = 0; c < 3; ++c) {
     Gamma_udd[a][b][c] = 0.0;
     for (int d = 0; d < 3; ++d) {
-      Gamma_udd[a][b][c] += 0.5*g_uu[a][d]*(dg_ddd[c][b][d] + dg_ddd[b][d][c] - dg_ddd[d][b][c]);
+      Gamma_udd[a][b][c] += 0.5*g_uu[a][d]*
+                            (dg_ddd[c][b][d] + dg_ddd[b][d][c] - dg_ddd[d][b][c]);
     }
   }
 

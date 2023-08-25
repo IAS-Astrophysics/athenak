@@ -22,7 +22,6 @@
 #include "dyngr/dyngr.hpp"
 #include "ion-neutral/ion_neutral.hpp"
 #include "radiation/radiation.hpp"
-#include "z4c/z4c.hpp"
 #include "driver.hpp"
 
 #if MPI_PARALLEL_ENABLED
@@ -563,8 +562,7 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) pmhd->ApplyPhysicalBCs(this, 0);
     if (pdyngr == nullptr) {
       (void) pmhd->ConToPrim(this, 0);
-    }
-    else {
+    } else {
       pdyngr->ConToPrim(this, 0);
     }
   }
