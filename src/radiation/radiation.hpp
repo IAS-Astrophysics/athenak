@@ -59,6 +59,9 @@ struct RadiationTaskIDs {
   TaskID mhd_sendb;
   TaskID mhd_recvb;
   TaskID bcs;
+  TaskID rad_prol;
+  TaskID mhd_prol;
+  TaskID hyd_prol;
   TaskID mhd_c2p;
   TaskID hyd_c2p;
   TaskID rad_csend;
@@ -150,6 +153,7 @@ class Radiation {
   TaskStatus SendI(Driver *d, int stage);
   TaskStatus RecvI(Driver *d, int stage);
   TaskStatus ApplyPhysicalBCs(Driver* pdrive, int stage);
+  TaskStatus Prolongate(Driver* pdrive, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
   // ...in end task list
   TaskStatus ClearSend(Driver *d, int stage);

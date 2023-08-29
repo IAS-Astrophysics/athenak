@@ -54,6 +54,7 @@ struct MHDTaskIDs {
   TaskID sendb;
   TaskID recvb;
   TaskID bcs;
+  TaskID prol;
   TaskID c2p;
   TaskID newdt;
   TaskID csend;
@@ -83,6 +84,7 @@ class MHD {
   DvceArray5D<Real> bcc0;  // cell-centered magnetic fields
 
   DvceArray5D<Real> coarse_u0;    // conserved variables on 2x coarser grid (for SMR/AMR)
+  DvceArray5D<Real> coarse_w0;    // primitive variables on 2x coarser grid (for SMR/AMR)
   DvceFaceFld4D<Real> coarse_b0;  // face-centered B-field on 2x coarser grid
 
   // Objects containing boundary communication buffers and routines for u and b
@@ -130,7 +132,8 @@ class MHD {
   TaskStatus RestrictB(Driver *d, int stage);
   TaskStatus SendB(Driver *d, int stage);
   TaskStatus RecvB(Driver *d, int stage);
-  TaskStatus ApplyPhysicalBCs(Driver* pdrive, int stage); // file in mhd/bvals dir
+  TaskStatus ApplyPhysicalBCs(Driver* pdrive, int stage);
+  TaskStatus Prolongate(Driver* pdrive, int stage);
   TaskStatus ConToPrim(Driver *d, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
   // ...in end task list

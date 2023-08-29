@@ -251,6 +251,62 @@ void SingleP2C_IdealSRHyd(const HydPrim1D &w, const Real gam, HydCons1D &u) {
   return;
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn void TransformToSRHyd()
+//! \brief Converts single state of conserved variables in GR hydro into conserved
+//! variables for special relativistic hydrodynamics with an ideal gas EOS. This allows
+//! the ConsToPrim() function in GR Hydro to use SinceP2C_IdealSrHyd() function.
+
+KOKKOS_INLINE_FUNCTION
+void TransformToSRHyd(const HydCons1D &u, Real glower[][4], Real gupper[][4],
+                      Real &s2, HydCons1D &u_sr) {
+  // Need to multiply the conserved density by alpha, so that it
+  // contains a lorentz factor
+  Real alpha = sqrt(-1.0/gupper[0][0]);
+  u_sr.d = u.d*alpha;
+
+  // We are evolving T^t_t, but the SR C2P algorithm is only consistent with
+  // alpha^2 T^{tt}.  Therefore compute T^{tt} = g^0\mu T^t_\mu
+  // We are also evolving T^t_t + D as conserved variable, so must convert to E
+  u_sr.e = gupper[0][0]*(u.e - u.d) +
+           gupper[0][1]*u.mx + gupper[0][2]*u.my + gupper[0][3]*u.mz;
+
+  // This is only true if sqrt{-g}=1!
+  u_sr.e *= (-1./gupper[0][0]);  // Multiply by alpha^2
+
+  // Subtract density for consistency with the rest of the algorithm
+  u_sr.e -= u_sr.d;
+
+  // Need to treat the conserved momenta. Also they lack an alpha
+  // This is only true if sqrt{-g}=1!
+  Real m1l = u.mx*alpha;
+  Real m2l = u.my*alpha;
+  Real m3l = u.mz*alpha;
+
+  // Need to raise indices on u_sr, which transforms using the spatial 3-metric.
+  // This is slightly more involved
+  //
+  // Gourghoulon says: g^ij = gamma^ij - beta^i beta^j/alpha^2
+  //       g^0i = beta^i/alpha^2
+  //       g^00 = -1/ alpha^2
+  // Hence gamma^ij =  g^ij - g^0i g^0j/g^00
+  u_sr.mx = ((gupper[1][1] - gupper[0][1]*gupper[0][1]/gupper[0][0])*m1l +
+             (gupper[1][2] - gupper[0][1]*gupper[0][2]/gupper[0][0])*m2l +
+             (gupper[1][3] - gupper[0][1]*gupper[0][3]/gupper[0][0])*m3l);  // (C26)
+
+  u_sr.my = ((gupper[2][1] - gupper[0][2]*gupper[0][1]/gupper[0][0])*m1l +
+             (gupper[2][2] - gupper[0][2]*gupper[0][2]/gupper[0][0])*m2l +
+             (gupper[2][3] - gupper[0][2]*gupper[0][3]/gupper[0][0])*m3l);  // (C26)
+
+  u_sr.mz = ((gupper[3][1] - gupper[0][3]*gupper[0][1]/gupper[0][0])*m1l +
+             (gupper[3][2] - gupper[0][3]*gupper[0][2]/gupper[0][0])*m2l +
+             (gupper[3][3] - gupper[0][3]*gupper[0][3]/gupper[0][0])*m3l);  // (C26)
+
+  // Return s2 = (S^i S_i) (eqn C2)
+  s2 = ((m1l*u_sr.mx) + (m2l*u_sr.my) + (m3l*u_sr.mz));
+  return;
+}
+
 //--------------------------------------------------------------------------------------
 //! \fn void SingleP2C_IdealGRHyd()
 //! \brief Converts single set of primitive into conserved variables.

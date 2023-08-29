@@ -62,7 +62,6 @@ void ProblemGenerator::Z4cLinearWave(ParameterInput *pin, const bool restart) {
   int &je = indcs.je;
   int &ks = indcs.ks;
   int &ke = indcs.ke;
-  auto &z4c = pmbp->pz4c->z4c;
   auto &pz4c = pmbp->pz4c;
 
   // Code below will automatically calculate wavevector along grid diagonal, imposing the

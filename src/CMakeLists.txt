@@ -21,6 +21,7 @@ add_executable(
         bvals/flux_correct_cc.cpp
         bvals/flux_correct_fc.cpp
         bvals/prolongation.cpp
+        bvals/prolong_prims.cpp
         bvals/physics/hydro_bcs.cpp
         bvals/physics/bfield_bcs.cpp
         bvals/physics/radiation_bcs.cpp

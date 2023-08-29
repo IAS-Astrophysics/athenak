@@ -540,6 +540,7 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) phydro->ClearRecv(this, -1);
     (void) phydro->RecvU(this, 0);
     (void) phydro->ApplyPhysicalBCs(this, 0);
+    (void) phydro->Prolongate(this, 0);
     (void) phydro->ConToPrim(this, 0);
   }
 
@@ -557,6 +558,7 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) pmhd->RecvU(this, 0);
     (void) pmhd->RecvB(this, 0);
     (void) pmhd->ApplyPhysicalBCs(this, 0);
+    (void) pmhd->Prolongate(this, 0);
     (void) pmhd->ConToPrim(this, 0);
   }
 
@@ -570,6 +572,7 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) prad->ClearRecv(this, -1);
     (void) prad->RecvI(this, 0);
     (void) prad->ApplyPhysicalBCs(this, 0);
+    (void) prad->Prolongate(this, 0);
   }
 
   // Initialize Z4c
@@ -587,4 +590,3 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
 
   return;
 }
-

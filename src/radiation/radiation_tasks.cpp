@@ -65,7 +65,9 @@ void Radiation::AssembleRadiationTasks(TaskList &start, TaskList &run, TaskList 
     id.mhd_sendb = run.AddTask(&mhd::MHD::SendB, pmhd, id.mhd_restb);
     id.mhd_recvb = run.AddTask(&mhd::MHD::RecvB, pmhd, id.mhd_sendb);
     id.bcs       = run.AddTask(&Radiation::ApplyPhysicalBCs, this, id.mhd_recvb);
-    id.mhd_c2p   = run.AddTask(&mhd::MHD::ConToPrim, pmhd, id.bcs);
+    id.rad_prol  = run.AddTask(&Radiation::Prolongate, this, id.bcs);
+    id.mhd_prol  = run.AddTask(&mhd::MHD::Prolongate, pmhd, id.rad_prol);
+    id.mhd_c2p   = run.AddTask(&mhd::MHD::ConToPrim, pmhd, id.mhd_prol);
 
     // assemble end task list
     id.rad_csend = end.AddTask(&Radiation::ClearSend, this, none);
@@ -98,7 +100,9 @@ void Radiation::AssembleRadiationTasks(TaskList &start, TaskList &run, TaskList 
     id.hyd_sendu = run.AddTask(&hydro::Hydro::SendU, phyd, id.hyd_restu);
     id.hyd_recvu = run.AddTask(&hydro::Hydro::RecvU, phyd, id.hyd_sendu);
     id.bcs       = run.AddTask(&Radiation::ApplyPhysicalBCs, this, id.hyd_recvu);
-    id.hyd_c2p   = run.AddTask(&hydro::Hydro::ConToPrim, phyd, id.bcs);
+    id.rad_prol  = run.AddTask(&Radiation::Prolongate, this, id.bcs);
+    id.hyd_prol  = run.AddTask(&hydro::Hydro::Prolongate, phyd, id.rad_prol);
+    id.hyd_c2p   = run.AddTask(&hydro::Hydro::ConToPrim, phyd, id.hyd_prol);
 
     // assemble end task list
     id.rad_csend = end.AddTask(&Radiation::ClearSend, this, none);
@@ -123,6 +127,7 @@ void Radiation::AssembleRadiationTasks(TaskList &start, TaskList &run, TaskList 
     id.rad_sendi = run.AddTask(&Radiation::SendI, this, id.rad_resti);
     id.rad_recvi = run.AddTask(&Radiation::RecvI, this, id.rad_sendi);
     id.bcs       = run.AddTask(&Radiation::ApplyPhysicalBCs, this, id.rad_recvi);
+    id.rad_prol  = run.AddTask(&Radiation::Prolongate, this, id.bcs);
 
     // assemble end task list
     id.rad_csend = end.AddTask(&Radiation::ClearSend, this, none);
@@ -264,6 +269,20 @@ TaskStatus Radiation::ApplyPhysicalBCs(Driver *pdrive, int stage) {
     (pmy_pack->pmesh->pgen->user_bcs_func)(pmy_pack->pmesh);
   }
 
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskList Radiation::Prolongate
+//! \brief Wrapper task list function to prolongate conserved (or primitive) variables
+//! at fine/coarse bundaries with SMR/AMR
+
+TaskStatus Radiation::Prolongate(Driver *pdrive, int stage) {
+  if (pmy_pack->pmesh->multilevel) {  // only prolongate with SMR/AMR
+    // prolongate specific intensity
+    pbval_i->FillCoarseInBndryCC(i0, coarse_i0);
+    pbval_i->ProlongateCC(i0, coarse_i0);
+  }
   return TaskStatus::complete;
 }
 

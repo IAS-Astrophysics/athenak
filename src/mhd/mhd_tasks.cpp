@@ -53,7 +53,8 @@ void MHD::AssembleMHDTasks(TaskList &start, TaskList &run, TaskList &end) {
   id.sendb = run.AddTask(&MHD::SendB, this, id.restb);
   id.recvb = run.AddTask(&MHD::RecvB, this, id.sendb);
   id.bcs   = run.AddTask(&MHD::ApplyPhysicalBCs, this, id.recvb);
-  id.c2p   = run.AddTask(&MHD::ConToPrim, this, id.bcs);
+  id.prol  = run.AddTask(&MHD::Prolongate, this, id.bcs);
+  id.c2p   = run.AddTask(&MHD::ConToPrim, this, id.prol);
   id.newdt = run.AddTask(&MHD::NewTimeStep, this, id.c2p);
 
   // assemble end task list
@@ -276,6 +277,28 @@ TaskStatus MHD::ApplyPhysicalBCs(Driver *pdrive, int stage) {
     (pmy_pack->pmesh->pgen->user_bcs_func)(pmy_pack->pmesh);
   }
 
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskList MHD::Prolongate
+//! \brief Wrapper task list function to prolongate conserved (or primitive) variables
+//! at fine/coarse bundaries with SMR/AMR
+
+TaskStatus MHD::Prolongate(Driver *pdrive, int stage) {
+  if (pmy_pack->pmesh->multilevel) {  // only prolongate with SMR/AMR
+    pbval_u->FillCoarseInBndryCC(u0, coarse_u0);
+    pbval_b->FillCoarseInBndryFC(b0, coarse_b0);
+    if (pmy_pack->pmesh->pmr->prolong_prims) {
+      pbval_u->ConsToPrimCoarseBndry(coarse_u0, coarse_b0, coarse_w0);
+      pbval_u->ProlongateCC(w0, coarse_w0);
+      pbval_b->ProlongateFC(b0, coarse_b0);
+      pbval_u->PrimToConsFineBndry(w0, b0, u0);
+    } else {
+      pbval_u->ProlongateCC(u0, coarse_u0);
+      pbval_b->ProlongateFC(b0, coarse_b0);
+    }
+  }
   return TaskStatus::complete;
 }
 
