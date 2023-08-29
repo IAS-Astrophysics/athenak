@@ -29,6 +29,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
     u0("cons",1,1,1,1,1),
     w0("prim",1,1,1,1,1),
     coarse_u0("ccons",1,1,1,1,1),
+    coarse_w0("cprim",1,1,1,1,1),
     u1("cons1",1,1,1,1,1),
     uflx("uflx",1,1,1,1,1),
     utest("utest",1,1,1,1,1),
@@ -109,6 +110,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
     int nccells2 = (indcs.cnx2 > 1)? (indcs.cnx2 + 2*(indcs.ng)) : 1;
     int nccells3 = (indcs.cnx3 > 1)? (indcs.cnx3 + 2*(indcs.ng)) : 1;
     Kokkos::realloc(coarse_u0, nmb, (nhydro+nscalars), nccells3, nccells2, nccells1);
+    Kokkos::realloc(coarse_w0, nmb, (nhydro+nscalars), nccells3, nccells2, nccells1);
   }
 
   // allocate boundary buffers for conserved (cell-centered) variables

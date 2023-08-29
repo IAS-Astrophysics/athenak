@@ -32,6 +32,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     b0("B_fc",1,1,1,1),
     bcc0("B_cc",1,1,1,1,1),
     coarse_u0("ccons",1,1,1,1,1),
+    coarse_w0("cprim",1,1,1,1,1),
     coarse_b0("cB_fc",1,1,1,1),
     u1("cons1",1,1,1,1,1),
     b1("B_fc1",1,1,1,1),
@@ -140,6 +141,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     int nccells2 = (indcs.cnx2 > 1)? (indcs.cnx2 + 2*(indcs.ng)) : 1;
     int nccells3 = (indcs.cnx3 > 1)? (indcs.cnx3 + 2*(indcs.ng)) : 1;
     Kokkos::realloc(coarse_u0, nmb, (nmhd+nscalars), nccells3, nccells2, nccells1);
+    Kokkos::realloc(coarse_w0, nmb, (nmhd+nscalars), nccells3, nccells2, nccells1);
     Kokkos::realloc(coarse_b0.x1f, nmb, nccells3, nccells2, nccells1+1);
     Kokkos::realloc(coarse_b0.x2f, nmb, nccells3, nccells2+1, nccells1);
     Kokkos::realloc(coarse_b0.x3f, nmb, nccells3+1, nccells2, nccells1);

@@ -43,6 +43,8 @@ struct IonNeutralTaskIDs {
   TaskID recvb;
   TaskID i_bcs;
   TaskID n_bcs;
+  TaskID i_prol;
+  TaskID n_prol;
   TaskID i_c2p;
   TaskID n_c2p;
   TaskID i_newdt;

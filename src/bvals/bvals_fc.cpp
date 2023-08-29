@@ -4,8 +4,9 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file bvals_fc.cpp
-//! \brief functions to pack/send and recv/unpack/prolongate boundary values for
-//! face-centered variables, implemented as part of the BValFC class.
+//! \brief functions to pack/send and recv/unpack boundary values for face-centered (FC)
+//! variables.
+//! Prolongation of FC variables  occurs in ProlongateFC() function called from task list
 
 #include <cstdlib>
 #include <iostream>
@@ -337,7 +338,7 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b,
             }
           });
           tmember.team_barrier();
-        // if neighbor is at coarser level, load data into coarse_b0 (prolongate below)
+        // if neighbor is at coarser level, load data into coarse_b0
         } else {
           Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkji),
           [&](const int idx) {
@@ -359,11 +360,6 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b,
       }  // end if-neighbor-exists block
     }
   });  // end par_for_outer
-
-  //----- STEP 3: Prolongate face-fields when neighbor at coarser level
-
-  // Only perform prolongation with SMR/AMR
-  if (pmy_pack->pmesh->multilevel) ProlongateFC(b, cb);
 
   return TaskStatus::complete;
 }

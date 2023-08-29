@@ -53,6 +53,7 @@ class MeshRefinement {
   int nmb_sent_thisrank;     // # of MeshBlocks sent during load balancing on this rank
   int ncyc_check_amr;        // # of cycles between checking mesh for ref/derefinement
   int refinement_interval;   // # of cycles between allowing successive ref/derefinement
+  bool prolong_prims;        // flag to enable prolongation of primitive vars
 
   // following 2x Views are dimensioned [nmb_total]
   DualArray1D<int> refine_flag;    // refinement flag for each MeshBlock
