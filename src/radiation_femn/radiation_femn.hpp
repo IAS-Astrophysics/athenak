@@ -95,6 +95,8 @@ class RadiationFEMN {
   DvceArray2D<Real>
       mass_matrix;             // mass matrix (in the special relativistic case) [Eqn. 12 of arXiv:2212.01409]
   DvceArray2D<Real>
+      mass_matrix_lumped;      // lumped mass matrix (in the special relativistic case)
+  DvceArray2D<Real>
       stiffness_matrix_x;      // x component of the stiffness matrix (in the special relativistic case) [Eqn. 12 of arXiv:2212.01409]
   DvceArray2D<Real>
       stiffness_matrix_y;      // y component of the stiffness matrix (in the special relativistic case) [Eqn. 12 of arXiv:2212.01409]
@@ -184,6 +186,7 @@ class RadiationFEMN {
   // Functions for angular matrices & tetrad
   void LoadFEMNMatrices();
   void LoadFPNMatrices();
+  void ComputePMatrix();
   void TetradInitialize();
   // ---------------------------------------------------------------------------
 

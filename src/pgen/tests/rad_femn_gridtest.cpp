@@ -168,7 +168,56 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
             << pmbp->pradfemn->scheme_points(i, 2) << " " << pmbp->pradfemn->scheme_weights(i) << std::endl;
     }
 
+    // save lumped mass matrix
+    sum = 0.;
+    std::ofstream fout8(pathdir + filenamepart + "_mass_matrix_lumped" + ".txt");
+    for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
+      for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
+        fout8 << pmbp->pradfemn->mass_matrix_lumped(i, j) << " ";
+        sum += pmbp->pradfemn->mass_matrix(i, j);
+      }
+      fout8 << std::endl;
+    }
+    fout << "sum of lumped mass matrix = " << sum << std::endl;
+
+    // save P matrix 0
+    std::ofstream fout9(pathdir + filenamepart + "_P_matrix_0" + ".txt");
+    for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
+      for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
+        fout9 << pmbp->pradfemn->P_matrix(0, i, j) << " ";
+      }
+      fout9 << std::endl;
+    }
+
+    // save P matrix 1
+    std::ofstream fout10(pathdir + filenamepart + "_P_matrix_1" + ".txt");
+    for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
+      for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
+        fout10 << pmbp->pradfemn->P_matrix(1, i, j) << " ";
+      }
+      fout10 << std::endl;
+    }
+
+    // save P matrix 2
+    std::ofstream fout11(pathdir + filenamepart + "_P_matrix_2" + ".txt");
+    for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
+      for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
+        fout11 << pmbp->pradfemn->P_matrix(2, i, j) << " ";
+      }
+      fout11 << std::endl;
+    }
+
+    // save P matrix 3
+    std::ofstream fout12(pathdir + filenamepart + "_P_matrix_3" + ".txt");
+    for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
+      for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
+        fout12 << pmbp->pradfemn->P_matrix(3, i, j) << " ";
+      }
+      fout12 << std::endl;
+    }
+
   }
+
   /*
   std::string pathdir = pin->GetString("radiation-femn", "geogrid_savedir");
   std::string filenamepart = "/geogrid_basis_" + std::to_string(pmbp->pradfemn->basis) + "_ref_" +
