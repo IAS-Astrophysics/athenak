@@ -41,6 +41,7 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
     energy_grid("energy_grid", 1),
     angular_grid("angular_grid", 1, 1),
     mass_matrix("mm", 1, 1),
+    mass_matrix_lumped("mm_lumped", 1, 1),
     stiffness_matrix_x("sx", 1, 1),
     stiffness_matrix_y("sy", 1, 1),
     stiffness_matrix_z("sz", 1, 1),
@@ -109,6 +110,7 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   // allocate memory and load angular grid arrays and associated matrices
 
   Kokkos::realloc(mass_matrix, num_points, num_points);           // mass matrix from special relativistic case
+  Kokkos::realloc(mass_matrix_lumped, num_points, num_points);           // lumped mass matrix from special relativistic case
   Kokkos::realloc(stiffness_matrix_x, num_points, num_points);    // stiffness-x from special relativistic case
   Kokkos::realloc(stiffness_matrix_y, num_points, num_points);    // stiffness-y from special relativistic case
   Kokkos::realloc(stiffness_matrix_z, num_points, num_points);    // stiffness-z from special relativistic case
@@ -147,6 +149,11 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
     radiationfemn::LoadQuadrature(scheme_name, scheme_num_points, scheme_weights, scheme_points); // populate quadrature from disk
     this->LoadFPNMatrices();                                                                      // populate all matrices with FP_N data
   }
+
+  // compute lumped mass matrix
+  radiationfemn::MatLumping(mass_matrix, mass_matrix_lumped);
+  // compute P matrices
+  this->ComputePMatrix();
 
   // --------------------------------------------------------------------------------------------------------------------------
   // allocate memory for all other variables
