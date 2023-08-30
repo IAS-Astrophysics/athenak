@@ -549,6 +549,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     }
 
     if (out_params.variable.compare("rad_femn_E") == 0) {
+        out_params.contains_derived = true;
         outvars.emplace_back("E",0,&(derived_var));
     }
 
