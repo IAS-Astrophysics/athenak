@@ -12,9 +12,11 @@
 //  \f$P_\textrm{therm} = nk_B T\f$
 
 #include <math.h>
+#include <stdio.h>
+#include <float.h>
+
 #include <stdexcept>
 #include <limits>
-#include <stdio.h>
 
 #include "ps_types.hpp"
 #include "eos_policy_interface.hpp"
@@ -241,7 +243,7 @@ class PiecewisePolytrope : public EOSPolicyInterface {
       // Because we're adding in a finite-temperature component via the ideal gas,
       // the only restriction on our temperature is that it needs to be nonnegative.
       min_T = 0.0;
-      max_T = std::numeric_limits<Real>::max();
+      max_T = DBL_MAX;
 
       initialized = true;
       return true;
