@@ -147,6 +147,20 @@ void MatMultiply(DvceArray2D<Real> A_matrix, DvceArray2D<Real> B_matrix, DvceArr
           });
 }
 
+// Support for mass lumping
+// A_matrix:          [NxN] a square matrix
+// result:            [NxN] the lumped A_matrix
+void MatLumping(DvceArray2D<Real> A_matrix, DvceArray2D<Real> result) {
+
+  int N = A_matrix.extent(0);
+
+  Kokkos::deep_copy(result, 0.);
+  par_for("radiation_femn_matrix_lumping", DevExeSpace(), 0, N - 1, 0, N - 1,
+          KOKKOS_LAMBDA(const int i, const int j) {
+            result(i, i) += A_matrix(i, j);
+          });
+}
+
 // Compute eigenvalues and eigenvectors of a real square matrix (GSL)
 // matrix:        [NxN] square matrix
 // eigval:        [N] complex array of eigenvalues
@@ -164,7 +178,7 @@ void MatEig(std::vector<std::vector<double>> &matrix, std::vector<std::complex<d
     }
   }
 
-  for (int i = 0; i < N*N; i++) {
+  for (int i = 0; i < N * N; i++) {
     std::cout << matrix_flattened[i] << " " << std::flush;
   }
   std::cout << std::endl;

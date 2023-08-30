@@ -147,12 +147,14 @@ void ProblemGenerator::RadiationFEMNLinalgtest(ParameterInput *pin, const bool r
   }
 
   std::cout << std::endl;
-  std::cout << "Test 3: Compute inverse of the matrix" << std::endl;
+  std::cout << "Test 3: Compute inverse of the matrix and lumped matrix" << std::endl;
   std::cout << std::endl;
   DvceArray2D <Real> matrix_inverse;
+  DvceArray2D <Real> matrix_lumped;
   DvceArray2D <Real> matrix_inverse_answer;
 
   Kokkos::realloc(matrix_inverse, 3, 3);
+  Kokkos::realloc(matrix_lumped, 3, 3);
   Kokkos::realloc(matrix_inverse_answer, 3, 3);
 
   matrix_inverse_answer(0, 0) = -6. / 144.;
@@ -190,6 +192,30 @@ void ProblemGenerator::RadiationFEMNLinalgtest(ParameterInput *pin, const bool r
 
   std::cout << std::endl;
   std::cout << "Maximum error in computing inverse: " << error << std::endl;
+
+  radiationfemn::MatLumping(matrix, matrix_lumped);
+
+  DvceArray2D<Real> matrix_lumped_correct;
+  Kokkos::realloc(matrix_lumped_correct,3,3);
+  Kokkos::deep_copy(matrix_lumped_correct, 0.);
+
+  matrix_lumped_correct(0, 0) = 3.+17.+10.;
+  matrix_lumped_correct(1, 1) = 2.+4.-2.;
+  matrix_lumped_correct(2, 2) = 6.+18.-12.;
+
+  std::cout << std::endl;
+  error = -42.;
+  std::cout << "Lumped matrix:" << std::endl;
+  for (int i = 0; i < matrix_lumped.extent(0); i++) {
+    for (int j = 0; j < matrix_lumped.extent(1); j++) {
+      std::cout << matrix_lumped(i, j) << " " << std::flush;
+      error = fabs(matrix_lumped(i, j) - matrix_lumped_correct(i, j));
+    }
+    std::cout << std::endl;
+  }
+
+  std::cout << std::endl;
+  std::cout << "Maximum error in computing lumped mass matrix: " << error << std::endl;
 
   std::cout << std::endl;
   std::cout << "Test 4: Compute product of two square matrices" << std::endl;
