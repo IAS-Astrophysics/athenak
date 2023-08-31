@@ -300,7 +300,7 @@ void ProblemGenerator::RadiationFEMNLinalgtest(ParameterInput *pin, const bool r
   radiationfemn::MatEig(mat, eigval, eigvec);
 
   std::cout << std::endl;
-  std::cout << "Matrix:" << std::endl;
+  std::cout << "Matrix (for which we compute eigenvalues/eigenvectors):" << std::endl;
   for (int i = 0; i < mat.size(); i++) {
     for (int j = 0; j < mat[0].size(); j++) {
       std::cout << mat[i][j] << " " << std::flush;
@@ -328,9 +328,11 @@ void ProblemGenerator::RadiationFEMNLinalgtest(ParameterInput *pin, const bool r
 
   DvceArray2D<Real> zerosp_matrix;
   DvceArray2D<Real> zerosp_matrix_corrected;
+  DvceArray2D<Real> zerosp_answer;
 
   Kokkos::realloc(zerosp_matrix, 3, 3);
   Kokkos::realloc(zerosp_matrix_corrected, 3, 3);
+  Kokkos::realloc(zerosp_answer, 3, 3);
   double v = 1./ sqrt(3);
 
   zerosp_matrix(0,0) = 2.1;
@@ -343,7 +345,31 @@ void ProblemGenerator::RadiationFEMNLinalgtest(ParameterInput *pin, const bool r
   zerosp_matrix(2,1) = 3.4;
   zerosp_matrix(2,2) = 5.6;
 
+  zerosp_answer(0,0) = 2.76788416;
+  zerosp_answer(0,1) = 2.99146524;
+  zerosp_answer(0,2) = 3.89624893;
+  zerosp_answer(1,0) = 3.77051678;
+  zerosp_answer(1,1) = 7.13741257;
+  zerosp_answer(1,2) = 8.06392804;
+  zerosp_answer(2,0) = 1.96201983;
+  zerosp_answer(2,1) = 3.22170985;
+  zerosp_answer(2,2) = 5.14221535;
+
   radiationfemn::ZeroSpeedCorrection(zerosp_matrix, zerosp_matrix_corrected, v);
+
+  error = -42.;
+  std::cout << std::endl;
+  std::cout << "Zero speed mode correct matrix:" << std::endl;
+  for (int i = 0; i < zerosp_matrix.extent(0); i++) {
+    for (int j = 0; j < zerosp_matrix.extent(0); j++) {
+      std::cout << zerosp_matrix_corrected(i,j) << " " << std::flush;
+      error = fabs(zerosp_matrix_corrected(i, j) - zerosp_answer(i, j));
+    }
+    std::cout << std::endl;
+  }
+
+  std::cout << std::endl;
+  std::cout << "Maximum error in computing zero speed corrected matrices: " << error << std::endl;
 
   return;
 }

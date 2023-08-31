@@ -147,6 +147,32 @@ void MatMultiply(DvceArray2D<Real> A_matrix, DvceArray2D<Real> B_matrix, DvceArr
           });
 }
 
+// Multiply two complex matrices
+// A_matrix:          [NxN] a square matrix
+// B_matrix:          [NxN] a square matrix
+// result:            [NxN] the product
+void MatMultiplyComplex(std::vector<std::vector<std::complex<double>>> &A_matrix,
+                        std::vector<std::vector<std::complex<double>>> &B_matrix,
+                        std::vector<std::vector<std::complex<double>>> &result) {
+
+  int N = A_matrix.size();
+
+  for (int i = 0; i < N; i++) {
+    for (int j = 0; j < N; j++) {
+        result[i][j] = 0.;
+    }
+  }
+
+  for (int i = 0; i < N; i++) {
+    for (int j = 0; j < N; j++) {
+      for (int k = 0; k < N; k++) {
+        result[i][j] += A_matrix[i][k] * B_matrix[k][j];
+      }
+    }
+  }
+
+}
+
 // Support for mass lumping
 // A_matrix:          [NxN] a square matrix
 // result:            [NxN] the lumped A_matrix
@@ -178,9 +204,6 @@ void MatEig(std::vector<std::vector<double>> &matrix, std::vector<std::complex<d
     }
   }
 
-  for (int i = 0; i < N * N; i++) {
-    std::cout << matrix_flattened[i] << " " << std::flush;
-  }
   std::cout << std::endl;
 
   gsl_matrix_view matview = gsl_matrix_view_array(matrix_flattened, N, N);
@@ -216,7 +239,7 @@ void MatEig(std::vector<std::vector<double>> &matrix, std::vector<std::complex<d
 // v:                       the zero speed mode correction factor
 void ZeroSpeedCorrection(DvceArray2D<Real> matrix, DvceArray2D<Real> matrix_corrected, double v) {
 
-  // store the matrix in a vector<vecto> for use with MatEig
+  // store the matrix in a vector<vector> for use with MatEig
   std::vector<Real> mat_row(matrix.extent(0));
   std::vector<std::vector<Real>> mat(matrix.extent(1), mat_row);
   for (int i = 0; i < matrix.extent(0); i++) {
@@ -230,19 +253,12 @@ void ZeroSpeedCorrection(DvceArray2D<Real> matrix, DvceArray2D<Real> matrix_corr
   std::vector<std::vector<std::complex<double>>> eigvec;
   MatEig(mat, eigval, eigvec);
 
-  // print eigenvalues
-  for (int i = 0; i < matrix.extent(0); i++) {
-    std::cout << eigval[i] << " " << std::flush;
-    std::cout << std::endl;
-  }
-
-  // print eigenvectors
   std::cout << std::endl;
   double eigvec_data[matrix.extent(0) * matrix.extent(1) * 2];
   int index = 0;
   for (int i = 0; i < matrix.extent(0); i++) {
     for (int j = 0; j < matrix.extent(1); j++) {
-      std::cout << eigvec[i][j] << " " << std::flush;
+      std::cout << eigvec[j][i] << " " << std::flush;
       eigvec_data[index] = std::real(eigvec[j][i]);
       eigvec_data[index + 1] = std::imag(eigvec[j][i]);
       index = index + 2;
@@ -258,25 +274,92 @@ void ZeroSpeedCorrection(DvceArray2D<Real> matrix, DvceArray2D<Real> matrix_corr
   std::cout << std::endl;
 
   // calculate the matrix of left eigenvectors
-  double size = matrix.extent(0);
+  int size = matrix.extent(0);
   gsl_matrix_complex_view m = gsl_matrix_complex_view_array(eigvec_data, size, size);
   gsl_matrix_complex *minv = gsl_matrix_complex_alloc(size, size);
   gsl_permutation *p = gsl_permutation_alloc(size);
   int s;
+
   gsl_linalg_complex_LU_decomp(&m.matrix, p, &s);
   gsl_linalg_complex_LU_invert(&m.matrix, p, minv);
+  gsl_permutation_free(p);
+
+  // compute the matrix of left eigenvectors (std::vector<std::vector<std::complex<double>>>)
+  std::vector<std::complex<double>> lefteigvec_row(matrix.extent(0));
+  std::vector<std::vector<std::complex<double>>> lefteigvec(matrix.extent(1), lefteigvec_row);
+  std::cout << std::endl;
+  for (int i = 0; i < size; i++) {
+    for (int j = 0; j < size; j++) {
+      gsl_complex minv_ij = gsl_matrix_complex_get(minv, i, j);
+      lefteigvec[i][j] = std::complex<double>(GSL_REAL(minv_ij), GSL_IMAG(minv_ij));
+      std::cout << GSL_REAL(minv_ij) << " + " << GSL_IMAG(minv_ij) << "j \t\t" << std::flush;
+    }
+    std::cout << std::endl;
+  }
 
   std::cout << std::endl;
   for (int i = 0; i < size; i++) {
     for (int j = 0; j < size; j++) {
-      gsl_complex z = gsl_matrix_complex_get(minv, i, j);
-      std::cout << GSL_REAL(z) << " + " << GSL_IMAG(z) << "j \t\t" << std::flush;
+      std::cout << lefteigvec[i][j] << " " << std::flush;
     }
     std::cout << std::endl;
   }
-  gsl_permutation_free(p);
 
-  // print left eigenvectos
+  // construct the matrix of right eigenvectors (std::vector<std::vector<std::complex<double>>>)
+  std::vector<std::complex<double>> righteigvec_row(matrix.extent(0));
+  std::vector<std::vector<std::complex<double>>> righteigvec(matrix.extent(1), righteigvec_row);
+  for (int i = 0; i < size; i++) {
+    for (int j = 0; j < size; j++) {
+      righteigvec[i][j] = eigvec[j][i];
+    }
+  }
+
+  std::cout << std::endl;
+  for (int i = 0; i < size; i++) {
+    for (int j = 0; j < size; j++) {
+      std::cout << righteigvec[i][j] << " " << std::flush;
+    }
+    std::cout << std::endl;
+  }
+
+  // construct the zero speed mode corrected eigenvalue matrix
+  std::vector<std::complex<double>> eigval_corrected_row(matrix.extent(0));
+  std::vector<std::vector<std::complex<double>>> eigval_corrected(matrix.extent(1), eigval_corrected_row);
+  for (int i = 0; i < size; i++) {
+    for (int j = 0; j < size; j++) {
+      eigval_corrected[i][j] = std::complex<double>(0., 0.);
+      if (i == j) {
+        eigval_corrected[i][i] = std::max<double>(v, std::abs(eigval[i]));
+        std::cout << "eigval: " << eigval[i] << " Abs: " << " " << std::abs(eigval[i]) << " Corrected: " << eigval_corrected[i][i] << " | " << std::endl;
+      }
+    }
+  }
+
+  // reconstruct the corrected matrix
+  std::vector<std::complex<double>> temp_reconstruction_row(matrix.extent(0));
+  std::vector<std::vector<std::complex<double>>> temp_reconstruction(matrix.extent(1), temp_reconstruction_row);
+
+  MatMultiplyComplex(righteigvec, eigval_corrected, temp_reconstruction);
+
+  std::cout << std::endl;
+  std::cout << "Product of right eigenvector matrix with modified eigenvalue matrix:" << std::endl;
+  for (int i = 0; i < size; i++) {
+    for (int j = 0; j < size; j++) {
+      std::cout << temp_reconstruction[i][j] << " " << std::flush;
+    }
+    std::cout << std::endl;
+  }
+
+  std::vector<std::complex<double>> temp_reconstruction_row_2(matrix.extent(0));
+  std::vector<std::vector<std::complex<double>>> temp_reconstruction_2(matrix.extent(1), temp_reconstruction_row_2);
+
+  MatMultiplyComplex(temp_reconstruction, lefteigvec, temp_reconstruction_2);
+
+  for (int i = 0; i < size; i++) {
+    for (int j = 0; j < size; j++) {
+      matrix_corrected(i,j) = std::real(temp_reconstruction_2[i][j]);
+    }
+  }
 
 }
 } // namespace radiationfemn
