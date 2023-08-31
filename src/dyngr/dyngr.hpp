@@ -79,6 +79,7 @@ class DynGR {
   TaskStatus SetTmunu(Driver *d, int stage);
 
   // functions
+  [[deprecated("Use QueueDynGRTasks and NumericalRelativity class instead")]]
   virtual void AssembleDynGRTasks(TaskList &start, TaskList &run, TaskList &end) = 0;
 
   virtual void QueueDynGRTasks() = 0;

@@ -47,10 +47,6 @@ HistoryOutput::HistoryOutput(OutputParameters op, Mesh *pm) : BaseTypeOutput(op,
   if (pm->pmb_pack->pz4c != nullptr) {
     hist_data.emplace_back(PhysicsModule::SpaceTimeDynamics);
   }
-  
-  if (pm->pmb_pack->pz4c != nullptr) {
-    hist_data.emplace_back(PhysicsModule::SpaceTimeDynamics);
-  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -67,10 +63,6 @@ void HistoryOutput::LoadOutputData(Mesh *pm) {
     } else if (data.physics == PhysicsModule::SpaceTimeDynamics) {
       LoadZ4cHistoryData(&data, pm);
     } else if (data.physics == PhysicsModule::UserDefined) {
-      (pm->pgen->user_hist_func)(&data, pm);
-    }
-    // user history output
-    if (pm->pgen->user_hist) {
       (pm->pgen->user_hist_func)(&data, pm);
     }
   }

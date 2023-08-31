@@ -182,6 +182,7 @@ class Z4c {
 
   // functions
   void AssembleZ4cTasks(TaskList &start, TaskList &run, TaskList &end);
+  void QueueZ4cTasks();
   TaskStatus InitRecv(Driver *d, int stage);
   TaskStatus ClearRecv(Driver *d, int stage);
   TaskStatus ClearSend(Driver *d, int stage);

@@ -185,9 +185,9 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
       padm = nullptr;
     }
   }
-  if (pin->DoesBlockExist("z4c") && !(pin->DoesBlockExist("mhd")) && !(pin->DoesBlockExist("hydro")) ) {
+  /*if (pin->DoesBlockExist("z4c") && !(pin->DoesBlockExist("mhd")) && !(pin->DoesBlockExist("hydro")) ) {
     pz4c->AssembleZ4cTasks(start_tl, run_tl, end_tl);
-  }
+  }*/
 
   // (8) Dynamical Spacetime and Matter (MHD TODO)
   if ((pin->DoesBlockExist("z4c") || pin->DoesBlockExist("adm")) && (pin->DoesBlockExist("hydro")) ) {

@@ -16,6 +16,7 @@
 #include "mesh/mesh.hpp"
 #include "bvals/bvals.hpp"
 #include "z4c/z4c.hpp"
+#include <numerical-relativity/numerical_relativity.hpp>
 
 namespace z4c {
 //----------------------------------------------------------------------------------------
@@ -69,6 +70,94 @@ void Z4c::AssembleZ4cTasks(TaskList &start, TaskList &run, TaskList &end) {
     // place holder for horizon finder
   // }
   return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void Z4c::QueueZ4cTasks
+//! \brief queue Z4c tasks into NumericalRelativity
+void Z4c::QueueZ4cTasks() {
+  using namespace mhd;     // NOLINT(build/namespaces)
+  using namespace numrel;  // NOLINT(build/namespaces)
+  NumericalRelativity *pnr = pmy_pack->pnr;
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+
+  std::vector<TaskName> none;
+  std::vector<TaskName> dep;
+  std::vector<TaskName> opt;
+
+  // Start task list
+  pnr->QueueTask(&Z4c::InitRecv, this, Z4c_Recv, "Z4c_Recv", Task_Start, none, none);
+
+  // Run task list
+  pnr->QueueTask(&Z4c::CopyU, this, Z4c_CopyU, "Z4c_CopyU", Task_Run, none, none);
+
+  dep.push_back(Z4c_Recv);
+  opt.push_back(MHD_SetTmunu);
+  switch (indcs.ng) {
+    case 2:
+      pnr->QueueTask(&Z4c::CalcRHS<2>, this, Z4c_CalcRHS, "Z4c_CalcRHS", 
+                     Task_Run, dep, opt);
+      break;
+    case 3:
+      pnr->QueueTask(&Z4c::CalcRHS<3>, this, Z4c_CalcRHS, "Z4c_CalcRHS", 
+                     Task_Run, dep, opt);
+      break;
+    case 4:
+      pnr->QueueTask(&Z4c::CalcRHS<4>, this, Z4c_CalcRHS, "Z4c_CalcRHS", 
+                     Task_Run, dep, opt);
+      break;
+  }
+  opt.clear();
+  dep.clear();
+
+  dep.push_back(Z4c_CalcRHS);
+  pnr->QueueTask(&Z4c::Z4cBoundaryRHS, this, Z4c_SomBC, "Z4c_SomBC", Task_Run, dep, none);
+  dep.clear();
+
+  dep.push_back(Z4c_SomBC);
+  pnr->QueueTask(&Z4c::ExpRKUpdate, this, Z4c_ExplRK, "Z4c_ExplRK", Task_Run, dep, none);
+  dep.clear();
+
+  dep.push_back(Z4c_ExplRK);
+  pnr->QueueTask(&Z4c::RestrictU, this, Z4c_RestU, "Z4c_RestU", Task_Run, dep, none);
+  dep.clear();
+
+  dep.push_back(Z4c_RestU);
+  pnr->QueueTask(&Z4c::SendU, this, Z4c_SendU, "Z4c_SendU", Task_Run, dep, none);
+  dep.clear();
+
+  dep.push_back(Z4c_SendU);
+  pnr->QueueTask(&Z4c::RecvU, this, Z4c_RecvU, "Z4c_RecvU", Task_Run, dep, none);
+  dep.clear();
+
+  dep.push_back(Z4c_RecvU);
+  pnr->QueueTask(&Z4c::ApplyPhysicalBCs, this, Z4c_BCS, "Z4c_BCS", Task_Run, dep, none);
+  dep.clear();
+
+  dep.push_back(Z4c_BCS);
+  pnr->QueueTask(&Z4c::EnforceAlgConstr, this, Z4c_AlgC, "Z4c_AlgC", Task_Run, dep, none);
+  dep.clear();
+
+  dep.push_back(Z4c_AlgC);
+  opt.push_back(MHD_Flux);
+  opt.push_back(MHD_ExplRK);
+  pnr->QueueTask(&Z4c::Z4cToADM_, this, Z4c_Z4c2ADM, "Z4c_Z4c2ADM", Task_Run, dep, opt);
+  opt.clear();
+  dep.clear();
+
+  dep.push_back(Z4c_Z4c2ADM);
+  pnr->QueueTask(&Z4c::ADMConstraints_, this, Z4c_ADMC, "Z4c_ADMC", Task_Run, dep, none);
+  dep.clear();
+
+  dep.push_back(Z4c_ADMC);
+  pnr->QueueTask(&Z4c::NewTimeStep, this, Z4c_Newdt, "Z4c_Newdt", Task_Run, dep, none);
+  dep.clear();
+
+  // End task list
+  pnr->QueueTask(&Z4c::ClearSend, this, Z4c_ClearS, "Z4c_ClearS", Task_End, none, none);
+  dep.push_back(Z4c_ClearS);
+  pnr->QueueTask(&Z4c::ClearRecv, this, Z4c_ClearR, "Z4c_ClearR", Task_End, none, none);
+
 }
 
 //----------------------------------------------------------------------------------------

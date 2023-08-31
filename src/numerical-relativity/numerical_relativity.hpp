@@ -51,18 +51,19 @@ enum TaskName {
 
   Z4c_Recv,
   Z4c_CopyU,
-  Z4c_MatterSrc,
   Z4c_CalcRHS,
   Z4c_SomBC,
   Z4c_ExplRK,
   Z4c_SendU,
+  Z4c_RestU,
   Z4c_RecvU,
   Z4c_Newdt,
   Z4c_BCS,
   Z4c_AlgC,
   Z4c_Z4c2ADM,
   Z4c_ADMC,
-  Z4c_Clear,
+  Z4c_ClearS,
+  Z4c_ClearR,
   Z4c_NTASKS
 };
 

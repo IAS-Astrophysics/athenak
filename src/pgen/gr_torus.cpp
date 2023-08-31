@@ -449,8 +449,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         &adm.psi4(m,k,j,i),
         &adm.g_dd(m,0,0,k,j,i), &adm.g_dd(m,0,1,k,j,i), &adm.g_dd(m,0,2,k,j,i),
         &adm.g_dd(m,1,1,k,j,i), &adm.g_dd(m,1,2,k,j,i), &adm.g_dd(m,2,2,k,j,i),
-        &adm.K_dd(m,0,0,k,j,i), &adm.K_dd(m,0,1,k,j,i), &adm.K_dd(m,0,2,k,j,i),
-        &adm.K_dd(m,1,1,k,j,i), &adm.K_dd(m,1,2,k,j,i), &adm.K_dd(m,2,2,k,j,i));
+        &adm.vK_dd(m,0,0,k,j,i), &adm.vK_dd(m,0,1,k,j,i), &adm.vK_dd(m,0,2,k,j,i),
+        &adm.vK_dd(m,1,1,k,j,i), &adm.vK_dd(m,1,2,k,j,i), &adm.vK_dd(m,2,2,k,j,i));
     });
 
   }

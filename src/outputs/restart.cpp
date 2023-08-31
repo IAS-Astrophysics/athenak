@@ -115,26 +115,6 @@ void RestartOutput::LoadOutputData(Mesh *pm) {
                       Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL));
   }
 
-  // load ADM (CC) data (copy to host)
-  if (nadm > 0) {
-    DvceArray5D<Real>::HostMirror host_u_adm = Kokkos::create_mirror(padm->u_adm);
-    Kokkos::deep_copy(host_u_adm, padm->u_adm);
-    auto hst_slice = Kokkos::subview(outarray, Kokkos::ALL, 
-                                     std::make_pair(nhydro+nmhd,nhydro+nmhd+nadm),
-                                     Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
-    Kokkos::deep_copy(hst_slice, host_u_adm);
-  }
-
-  // load z4c (CC) data (copy to host)
-  if (pz4c != nullptr) {
-    DvceArray5D<Real>::HostMirror host_u0 = Kokkos::create_mirror(pz4c->u0);
-    Kokkos::deep_copy(host_u0,pz4c->u0);
-    auto hst_slice = Kokkos::subview(outarray, Kokkos::ALL, 
-                                     std::make_pair(nhydro+nmhd,nhydro+nmhd+nz4c),
-                                     Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
-    Kokkos::deep_copy(hst_slice,host_u0);
-  }
-
   // calculate max/min number of MeshBlocks across all ranks
   noutmbs_max = pm->nmb_eachrank[0];
   noutmbs_min = pm->nmb_eachrank[0];
