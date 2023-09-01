@@ -52,7 +52,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   Real beta  = pin->GetReal("problem","beta");
   int nwx    = pin->GetOrAddInteger("problem","nwx",1);
   int ifield = pin->GetOrAddInteger("problem","ifield",1);
-  int iprob  = pin->GetOrAddInteger("problem","iprob",2);
 
   // background density, pressure, and magnetic field
   Real d0 = 1.0;
@@ -77,12 +76,15 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                 << std::endl
                 << "Shearing box source terms not enabled for mri2d problem" << std::endl;
       exit(EXIT_FAILURE);
-    } else if (!(pmbp->pmhd->psrc->shearing_box)) {
+    }
+    if (!pmbp->pmhd->psrc->shearing_box || pmbp->pmhd->psrc->shearing_box_r_phi) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl
-                << "Shearing box source terms not enabled for mri2d problem" << std::endl;
+                << "hb3 problem generator only works in 2D (x-z) shearing box"
+                << std::endl;
       exit(EXIT_FAILURE);
     }
+
     // Initialize magnetic field first, so entire arrays are initialized before adding
     // magnetic energy to conserved variables in next loop.  For 2D shearing box
     // B1=Bx, B2=Bz, B3=By
@@ -114,7 +116,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     });
   }
 
-
   // Initialize conserved variables in Hydro
   // Only sets up uniform motion in x1-direction -- epicycle test
   if (pmbp->phydro != nullptr) {
@@ -124,14 +125,14 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                 << std::endl
                 << "Shearing box source terms not enabled for mri2d problem" << std::endl;
       exit(EXIT_FAILURE);
-    } else if (!(pmbp->phydro->psrc->shearing_box)) {
+    }
+    if (!pmbp->phydro->psrc->shearing_box || pmbp->phydro->psrc->shearing_box_r_phi) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl
-                << "Shearing box source terms not enabled for mri2d problem" << std::endl;
+                << "hb3 problem generator only works in 2D (x-z) shearing box"
+                << std::endl;
       exit(EXIT_FAILURE);
     }
-    Real qshear = pin->GetReal("hydro","qshear");
-    Real omega0 = pin->GetReal("hydro","omega0");
     EOS_Data &eos = pmbp->phydro->peos->eos_data;
     Real gm1 = eos.gamma - 1.0;
     auto u0 = pmbp->phydro->u0;
@@ -148,8 +149,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   // Initialize conserved variables in MHD
   // Only sets up random perturbations in pressure to seed MRI
   if (pmbp->pmhd != nullptr) {
-    Real qshear = pin->GetReal("mhd","qshear");
-    Real omega0 = pin->GetReal("mhd","omega0");
     EOS_Data &eos = pmbp->pmhd->peos->eos_data;
     Real gm1 = eos.gamma - 1.0;
     auto b0 = pmbp->pmhd->b0;

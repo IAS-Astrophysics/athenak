@@ -11,7 +11,6 @@
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
 #include "driver/driver.hpp"
-#include "srcterms/srcterms.hpp"
 #include "diffusion/resistivity.hpp"
 #include "mhd.hpp"
 
@@ -366,13 +365,6 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage) {
       e3(m,k,j,i) = 0.25*(e3_l1 + e3_r1 + e3_l2 + e3_r2 +
                 e3x2_(m,k,j,i-1) + e3x2_(m,k,j,i) + e3x1_(m,k,j-1,i) + e3x1_(m,k,j,i));
     });
-  }
-
-  // Add shearing box electric field in 2D (if needed)
-  if (pmy_pack->pmesh->two_d) {
-    if (psrc != nullptr) {
-      if (psrc->shearing_box) psrc->AddSBoxEField(b0, efld);
-    }
   }
 
   // Add resistive electric field (if needed)
