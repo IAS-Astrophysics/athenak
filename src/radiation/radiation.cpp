@@ -82,7 +82,16 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
   if (rad_source) {
     kappa_s = pin->GetReal("radiation","kappa_s");
     power_opacity = pin->GetOrAddBoolean("radiation","power_opacity",false);
-    if (!(power_opacity)) { kappa_a = pin->GetReal("radiation","kappa_a"); }
+    if (!(power_opacity)) {
+      kappa_a = pin->GetReal("radiation","kappa_a");
+      kappa_p = pin->GetReal("radiation","kappa_p");
+    }
+    is_compton_enabled = pin->GetOrAddBoolean("radiation","compton",false);
+    if (is_compton_enabled && !(are_units_enabled)) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+        << std::endl << "Compton requires enabling units" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
     if (are_units_enabled) {
       arad = (pmy_pack->punit->rad_constant_cgs*
               SQR(SQR(pmy_pack->punit->temperature_cgs()))/

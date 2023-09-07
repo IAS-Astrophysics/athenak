@@ -150,12 +150,13 @@ reconstruct = plm     # reconstruction method
 rotate_geo = false    # geodesic grid rotation
 nlevel = 3            # geodesic level
 power_opacity = true  # absorption opacity related to temperature by power law
-kappa_s = 0.4         # scattering opacity
+compton = true        # flag to enable compton
+kappa_s = 0.34        # scattering opacity
 n_0_floor = 0.1       # floor on n_0
 
 <units>
 bhmass_msun = 10.0    # black hole mass in solar masses
-density_cgs = 5.0e-5  # density unit (cgs)
+density_cgs = 1.0e-4  # density unit (cgs)
 mu = 0.5              # mean molecular weight
 
 <problem>

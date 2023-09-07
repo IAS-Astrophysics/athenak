@@ -387,6 +387,10 @@ void SourceTerms::AddBeamSource(DvceArray5D<Real> &i0, const Real bdt) {
   auto &tt = pmy_pack->prad->tet_c;
   auto &tc = pmy_pack->prad->tetcov_c;
 
+  auto &excise = pmy_pack->pcoord->coord_data.bh_excise;
+  auto &rad_mask_ = pmy_pack->pcoord->excision_floor;
+  Real &n_0_floor_ = pmy_pack->prad->n_0_floor;
+
   auto &beam_mask_ = pmy_pack->prad->beam_mask;
   Real &dii_dt_ = dii_dt;
   par_for("beam_source",DevExeSpace(),0,nmb1,0,nang1,ks,ke,js,je,is,ie,
@@ -396,6 +400,13 @@ void SourceTerms::AddBeamSource(DvceArray5D<Real> &i0, const Real bdt) {
       Real n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(n,0) + tc(m,1,0,k,j,i)*nh_c_.d_view(n,1)
                + tc(m,2,0,k,j,i)*nh_c_.d_view(n,2) + tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
       i0(m,n,k,j,i) += n0*n_0*dii_dt_*bdt;
+      // handle excision
+      // NOTE(@pdmullen): exicision criterion are not finalized.  The below zeroes all
+      // intensities within rks <= 1.0 and zeroes intensities within angles where n_0
+      // is about zero.  This needs future attention.
+      if (excise) {
+        if (rad_mask_(m,k,j,i) || fabs(n_0) < n_0_floor_) { i0(m,n,k,j,i) = 0.0; }
+      }
     }
   });
 

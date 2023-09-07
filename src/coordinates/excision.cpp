@@ -34,14 +34,14 @@ void Coordinates::SetExcisionMasks(DvceArray4D<bool> &excision_floor,
   int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
   int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
   int nmb1 = pmy_pack->nmb_thispack - 1;
-
   auto &size = pmy_pack->pmb->mb_size;
   auto &spin = coord_data.bh_spin;
+  auto &excision_radius = coord_data.rexcise;
 
   // NOTE(@pdmullen):
-  // excision_floor: - if r_ks evaluated at this cell-center is <= 1, mask the cell.
+  // excision_floor: - if r_ks evaluated at this CC is <= excision_radius, mask the cell.
   // excision_flux:  - if r_ks evaluated at any portion of the two cells connecting
-  //                   each face of this cell is <= 1, mask the cell.
+  //                   each face of this cell is <= excision_radius, mask the cell.
   par_for("set_excision", DevExeSpace(), 0, nmb1, 0, (n3-1), 0, (n2-1), 0, (n1-1),
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
     // NOTE(@pdmullen): In some instances, calls to x? will access coordinate information
@@ -79,7 +79,7 @@ void Coordinates::SetExcisionMasks(DvceArray4D<bool> &excision_floor,
     Real x3fp2 = LeftEdgeX  (k+2-ks, indcs.nx3, x3min, x3max);
 
     // Set excision floor mask
-    if (KSRX(x1v,x2v,x3v,spin) <= 1.0) excision_floor(m,k,j,i) = true;
+    if (KSRX(x1v,x2v,x3v,spin) <= excision_radius) excision_floor(m,k,j,i) = true;
 
     // Set excision flux mask
     Real x1, x2, x3;
@@ -96,7 +96,7 @@ void Coordinates::SetExcisionMasks(DvceArray4D<bool> &excision_floor,
     x3 = x3v;
     x3 = (fabs(x3) < fabs(x3f))   ? x3 : x3f;
     x3 = (fabs(x3) < fabs(x3fp1)) ? x3 : x3fp1;
-    if (KSRX(x1,x2,x3,spin) <= 1.0) excision_flux(m,k,j,i) = true;
+    if (KSRX(x1,x2,x3,spin) <= excision_radius) excision_flux(m,k,j,i) = true;
 
     // check face at i+1
     x1 = x1vp1;
@@ -104,7 +104,7 @@ void Coordinates::SetExcisionMasks(DvceArray4D<bool> &excision_floor,
     x1 = (fabs(x1) < fabs(x1fp1)) ? x1 : x1fp1;
     x1 = (fabs(x1) < fabs(x1f))   ? x1 : x1f;
     x1 = (fabs(x1) < fabs(x1fp2)) ? x1 : x1fp2;
-    if (KSRX(x1,x2,x3,spin) <= 1.0) excision_flux(m,k,j,i) = true;
+    if (KSRX(x1,x2,x3,spin) <= excision_radius) excision_flux(m,k,j,i) = true;
 
     // Check face at j
     x1 = x1v;
@@ -118,7 +118,7 @@ void Coordinates::SetExcisionMasks(DvceArray4D<bool> &excision_floor,
     x3 = x3v;
     x3 = (fabs(x3) < fabs(x3f))   ? x3 : x3f;
     x3 = (fabs(x3) < fabs(x3fp1)) ? x3 : x3fp1;
-    if (KSRX(x1,x2,x3,spin) <= 1.0) excision_flux(m,k,j,i) = true;
+    if (KSRX(x1,x2,x3,spin) <= excision_radius) excision_flux(m,k,j,i) = true;
 
     // Check face at j+1
     x2 = x2vp1;
@@ -126,7 +126,7 @@ void Coordinates::SetExcisionMasks(DvceArray4D<bool> &excision_floor,
     x2 = (fabs(x2) < fabs(x2fp1)) ? x2 : x2fp1;
     x2 = (fabs(x2) < fabs(x2f))   ? x2 : x2f;
     x2 = (fabs(x2) < fabs(x2fp2)) ? x2 : x2fp2;
-    if (KSRX(x1,x2,x3,spin) <= 1.0) excision_flux(m,k,j,i) = true;
+    if (KSRX(x1,x2,x3,spin) <= excision_radius) excision_flux(m,k,j,i) = true;
 
     // Check face at k
     x1 = x1v;
@@ -140,7 +140,7 @@ void Coordinates::SetExcisionMasks(DvceArray4D<bool> &excision_floor,
     x3 = (fabs(x3) < fabs(x3f))   ? x3 : x3f;
     x3 = (fabs(x3) < fabs(x3fm1)) ? x3 : x3fm1;
     x3 = (fabs(x3) < fabs(x3fp1)) ? x3 : x3fp1;
-    if (KSRX(x1,x2,x3,spin) <= 1.0) excision_flux(m,k,j,i) = true;
+    if (KSRX(x1,x2,x3,spin) <= excision_radius) excision_flux(m,k,j,i) = true;
 
     // Check face at k+1
     x3 = x3vp1;
@@ -148,7 +148,7 @@ void Coordinates::SetExcisionMasks(DvceArray4D<bool> &excision_floor,
     x3 = (fabs(x3) < fabs(x3fp1)) ? x3 : x3fp1;
     x3 = (fabs(x3) < fabs(x3f))   ? x3 : x3f;
     x3 = (fabs(x3) < fabs(x3fp2)) ? x3 : x3fp2;
-    if (KSRX(x1,x2,x3,spin) <= 1.0) excision_flux(m,k,j,i) = true;
+    if (KSRX(x1,x2,x3,spin) <= excision_radius) excision_flux(m,k,j,i) = true;
   });
 
   return;
