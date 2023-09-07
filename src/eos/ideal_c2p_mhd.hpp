@@ -98,26 +98,23 @@ Real Equation49(const Real mu, const Real b2, const Real rp, const Real r, const
 //----------------------------------------------------------------------------------------
 //! \fn Real Equation44()
 //! \brief Inline function to compute function f(mu) defined in eq. 44 of Kastaun et al.
-//! The ConsToPRim algorithms finds the root of this function f(mu)=0
+//! The ConsToPrim algorithms finds the root of this function f(mu)=0
 
 KOKKOS_INLINE_FUNCTION
 Real Equation44(const Real mu, const Real b2, const Real rpar, const Real r, const Real q,
                 const Real u_d,  EOS_Data eos) {
-  Real const x = 1./(1.+mu*b2);                  // (26)
-  Real rbar = (x*x*r*r + mu*x*(1.+x)*rpar*rpar); // (38)
+  Real const x = 1./(1.+mu*b2);                    // (26)
+  Real rbar = (x*x*r*r + mu*x*(1.+x)*rpar*rpar);   // (38)
   Real qbar = q - 0.5*b2 - 0.5*(mu*mu*(b2*rbar- rpar*rpar)); // (31)
-
   Real z2 = (mu*mu*rbar/(fabs(1.- SQR(mu)*rbar))); // (32)
   Real w = sqrt(1.+z2);
-
   Real const wd = u_d/w;                           // (34)
   Real eps = w*(qbar - mu*rbar) + z2/(w+1.);
-
-  //NOTE: The following generalizes to ANY equation of state
   Real const gm1 = eos.gamma - 1.0;
-  eps = fmax(eos.pfloor/(wd*gm1), eps);
-  Real const h = 1.0 + eos.gamma*eps;     // (43)
-  return mu - 1./(h/w + rbar*mu);         // (45)
+  Real epsmin = fmax(eos.pfloor/(wd*gm1), eos.sfloor*pow(wd, gm1)/gm1);
+  eps = fmax(eps, epsmin);
+  Real const h = 1.0 + eos.gamma*eps;              // (43)
+  return mu - 1./(h/w + rbar*mu);                  // (45)
 }
 
 //----------------------------------------------------------------------------------------
@@ -264,19 +261,11 @@ void SingleC2P_IdealSRMHD(MHDCons1D &u, const EOS_Data &eos, Real s2, Real b2, R
     dfloor_used = true;
   }
 
-  // compute specific internal energy density then apply floor
+  // compute specific internal energy density then apply floors
   Real eps = lor*(qbar - mu*rbar) + z2/(lor + 1.0);
-  Real epsmin = eos.pfloor/(dens*gm1);
+  Real epsmin = fmax(eos.pfloor/(dens*gm1), eos.sfloor*pow(dens, gm1)/gm1);
   if (eps <= epsmin) {
     eps = epsmin;
-    efloor_used = true;
-  }
-
-  // compute specific entropy then apply floor
-  Real spe_over_eps = gm1/pow(dens, gm1);
-  Real spe = spe_over_eps*eps;
-  if (spe <= eos.sfloor) {
-    eps = eos.sfloor/spe_over_eps;
     efloor_used = true;
   }
 

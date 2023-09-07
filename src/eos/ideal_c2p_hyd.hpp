@@ -94,9 +94,8 @@ Real EquationC22(Real z, Real &u_d, Real q, Real r, EOS_Data eos) {
   Real const w = sqrt(1.0 + z*z);         // (C15)
   Real const wd = u_d/w;                  // (C15)
   Real eps = w*q - z*r + (z*z)/(1.0 + w); // (C16)
-
-  //NOTE: The following generalizes to ANY equation of state
-  eps = fmax(eos.pfloor/(wd*gm1), eps);   // (C18)
+  Real epsmin = fmax(eos.pfloor/(wd*gm1), eos.sfloor*pow(wd, gm1)/gm1);
+  eps = fmax(eps, epsmin);                // (C18)
   Real const h = 1.0 + eos.gamma*eps;     // (C1) & (C21)
   return (z - r/h); // (C22)
 }
@@ -203,17 +202,9 @@ void SingleC2P_IdealSRHyd(HydCons1D &u, const EOS_Data &eos, const Real s2, HydP
 
   // compute specific internal energy density then apply floor
   Real eps = lor*q - z*r + (z*z)/(1.0 + lor);   // (C16)
-  Real epsmin = eos.pfloor/(dens*gm1);
+  Real epsmin = fmax(eos.pfloor/(dens*gm1), eos.sfloor*pow(dens, gm1)/gm1);
   if (eps <= epsmin) {
     eps = epsmin;
-    efloor_used = true;
-  }
-
-  // compute specific entropy then apply floor
-  Real spe_over_eps = gm1/pow(dens, gm1);
-  Real spe = spe_over_eps*eps;
-  if (spe <= eos.sfloor) {
-    eps = eos.sfloor/spe_over_eps;
     efloor_used = true;
   }
 

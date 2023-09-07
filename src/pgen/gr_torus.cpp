@@ -155,10 +155,14 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   // Extract BH parameters
   torus.spin = coord.bh_spin;
+  const Real r_excise = coord.rexcise;
+  const bool is_radiation_enabled = (pmbp->prad != nullptr);
 
   // Spherical Grid for user-defined history
   auto &grids = spherical_grids;
-  grids.push_back(std::make_unique<SphericalGrid>(pmbp,5, 1.0+sqrt(1.0-SQR(torus.spin))));
+  const Real rflux =
+    (is_radiation_enabled) ? ceil(r_excise + 1.0) : 1.0 + sqrt(1.0 - SQR(torus.spin));
+  grids.push_back(std::make_unique<SphericalGrid>(pmbp, 5, rflux));
   // NOTE(@pdmullen): Enroll additional radii for flux analysis by
   // pushing back the grids vector with additional SphericalGrid instances
   grids.push_back(std::make_unique<SphericalGrid>(pmbp, 5, 12.0));
@@ -179,13 +183,11 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
 
   // Extract radiation parameters if enabled
-  bool is_radiation_enabled = false;
   int nangles_;
   DualArray2D<Real> nh_c_;
   DvceArray6D<Real> norm_to_tet_, tet_c_, tetcov_c_;
   DvceArray5D<Real> i0_;
-  if (pmbp->prad != nullptr) {
-    is_radiation_enabled = true;
+  if (is_radiation_enabled) {
     nangles_ = pmbp->prad->prgeo->nangles;
     nh_c_ = pmbp->prad->nh_c;
     norm_to_tet_ = pmbp->prad->norm_to_tet;
@@ -1394,10 +1396,9 @@ void NoInflowTorus(Mesh *pm) {
   int nvar = u0_.extent_int(1);
 
   // Determine if radiation is enabled
-  bool is_radiation_enabled = false;
+  const bool is_radiation_enabled = (pm->pmb_pack->prad != nullptr);
   DvceArray5D<Real> i0_; int nang1;
-  if (pm->pmb_pack->prad != nullptr) {
-    is_radiation_enabled = true;
+  if (is_radiation_enabled) {
     i0_ = pm->pmb_pack->prad->i0;
     nang1 = pm->pmb_pack->prad->prgeo->nangles - 1;
   }
