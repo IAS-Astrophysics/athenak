@@ -61,4 +61,67 @@ void RadiationFEMN::ComputePMatrix() {
   }
 
 }
+
+void RadiationFEMN::ComputePtildeMatrix() {
+  std::cout << "Computing Ptilde matrices ..." << std::endl;
+
+  Kokkos::deep_copy(Pmod_matrix, 0.);
+
+  DvceArray2D<Real> P_temp_array;
+  DvceArray2D<Real> P_temp_array_corrected;
+  Kokkos::realloc(P_temp_array, num_points, num_points);
+  Kokkos::realloc(P_temp_array_corrected, num_points, num_points);
+
+  // mass-matrix index (indentity matrix)
+  for (int i = 0; i < num_points; i++) {
+    Pmod_matrix(0, i, i) = P_matrix(0, i, i);
+  }
+
+  // stilde-x corrected matrix index
+  Kokkos::deep_copy(P_temp_array, 0.);
+  Kokkos::deep_copy(P_temp_array_corrected, 0.);
+  for (int i = 0; i < num_points; i++) {
+    for (int j = 0; j < num_points; j++) {
+      P_temp_array(i,j) = P_matrix(1,i,j);
+    }
+  }
+  radiationfemn::ZeroSpeedCorrection(P_temp_array, P_temp_array_corrected, 1./ sqrt(3.));
+  for (int i = 0; i < num_points; i++) {
+    for (int j = 0; j < num_points; j++) {
+      Pmod_matrix(1, i, j) = P_temp_array_corrected(i, j);
+    }
+  }
+
+  // stilde-y corrected matrix index
+  Kokkos::deep_copy(P_temp_array, 0.);
+  Kokkos::deep_copy(P_temp_array_corrected, 0.);
+  for (int i = 0; i < num_points; i++) {
+    for (int j = 0; j < num_points; j++) {
+      P_temp_array(i,j) = P_matrix(2,i,j);
+    }
+  }
+  radiationfemn::ZeroSpeedCorrection(P_temp_array, P_temp_array_corrected, 1./ sqrt(3.));
+  for (int i = 0; i < num_points; i++) {
+    for (int j = 0; j < num_points; j++) {
+      Pmod_matrix(2, i, j) = P_temp_array_corrected(i, j);
+    }
+  }
+
+  // stilde-z corrected matrix index
+  Kokkos::deep_copy(P_temp_array, 0.);
+  Kokkos::deep_copy(P_temp_array_corrected, 0.);
+  for (int i = 0; i < num_points; i++) {
+    for (int j = 0; j < num_points; j++) {
+      P_temp_array(i,j) = P_matrix(3,i,j);
+    }
+  }
+  radiationfemn::ZeroSpeedCorrection(P_temp_array, P_temp_array_corrected, 1./ sqrt(3.));
+  for (int i = 0; i < num_points; i++) {
+    for (int j = 0; j < num_points; j++) {
+      Pmod_matrix(3, i, j) = P_temp_array_corrected(i, j);
+    }
+  }
+
+}
+
 }

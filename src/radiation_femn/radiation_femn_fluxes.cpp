@@ -63,13 +63,13 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
             // compute Fminus
             auto Fminus = (0.5) * Ven * (sqrt_det_g_L * L_mu_muhat0_L) * (P_matrix(muhat, B, A)
                 * ((1.5) * f0_(m, Abar, kk, jj, ii) - (0.5) * f0_(m, Abar, kk, jj, ii + 1) + (1.5) * f0_(m, Abar, kk, jj, ii - 1) - (0.5) * f0_(m, Abar, kk, jj, ii - 2))
-                - std::copysign(1.0, L_mu_muhat0_L) * P_matrix(muhat, B, A)
+                - std::copysign(1.0, L_mu_muhat0_L) * Pmod_matrix(muhat, B, A)
                     * ((1.5) * f0_(m, Abar, kk, jj, ii - 1) - (0.5) * f0_(m, Abar, kk, jj, ii - 2) - (1.5) * f0_(m, Abar, kk, jj, ii) + (0.5) * f0_(m, Abar, kk, jj, ii + 1)));
 
             // compute Fplus
             auto Fplus = (0.5) * Ven * (sqrt_det_g_R * L_mu_muhat0_R) * (P_matrix(muhat, B, A) *
                 ((1.5) * f0_(m, Abar, kk, jj, ii + 2) - (0.5) * f0_(m, Abar, kk, jj, ii + 3) + (1.5) * f0_(m, Abar, kk, jj, ii + 1) - (0.5) * f0_(m, Abar, kk, jj, ii))
-                - std::copysign(1.0, L_mu_muhat0_R) * P_matrix(muhat, B, A) *
+                - std::copysign(1.0, L_mu_muhat0_R) * Pmod_matrix(muhat, B, A) *
                     ((1.5) * f0_(m, Abar, kk, jj, ii + 1) - (0.5) * f0_(m, Abar, kk, jj, ii) - (1.5) * f0_(m, Abar, kk, jj, ii + 2) + (0.5) * f0_(m, Abar, kk, jj, ii + 3)));
 
             // complute fluxes
@@ -113,13 +113,13 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
               // compute Fminus
               auto Fminus = (0.5) * Ven * (sqrt_det_g_L * L_mu_muhat0_L) * (P_matrix(muhat, B, A)
                   * ((1.5) * f0_(m, Abar, kk, jj, ii) - (0.5) * f0_(m, Abar, kk, jj + 1, ii) + (1.5) * f0_(m, Abar, kk, jj - 1, ii) - (0.5) * f0_(m, Abar, kk, jj - 2, ii))
-                  - std::copysign(1.0, L_mu_muhat0_L) * P_matrix(muhat, B, A)
+                  - std::copysign(1.0, L_mu_muhat0_L) * Pmod_matrix(muhat, B, A)
                       * ((1.5) * f0_(m, Abar, kk, jj - 1, ii) - (0.5) * f0_(m, Abar, kk, jj - 2, ii) - (1.5) * f0_(m, Abar, kk, jj, ii) + (0.5) * f0_(m, Abar, kk, jj + 1, ii)));
 
               // compute Fplus
               auto Fplus = (0.5) * Ven * (sqrt_det_g_R * L_mu_muhat0_R) * (P_matrix(muhat, B, A) *
                   ((1.5) * f0_(m, Abar, kk, jj + 2, ii) - (0.5) * f0_(m, Abar, kk, jj + 3, ii) + (1.5) * f0_(m, Abar, kk, jj + 1, ii) - (0.5) * f0_(m, Abar, kk, jj, ii))
-                  - std::copysign(1.0, L_mu_muhat0_R) * P_matrix(muhat, B, A) *
+                  - std::copysign(1.0, L_mu_muhat0_R) * Pmod_matrix(muhat, B, A) *
                       ((1.5) * f0_(m, Abar, kk, jj + 1, ii) - (0.5) * f0_(m, Abar, kk, jj, ii) - (1.5) * f0_(m, Abar, kk, jj + 2, ii) + (0.5) * f0_(m, Abar, kk, jj + 3, ii)));
 
               // complute fluxes
@@ -163,13 +163,13 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
               // compute Fminus
               auto Fminus = (0.5) * Ven * (sqrt_det_g_L * L_mu_muhat0_L) * (P_matrix(muhat, B, A)
                   * ((1.5) * f0_(m, Abar, kk, jj, ii) - (0.5) * f0_(m, Abar, kk + 1, jj, ii) + (1.5) * f0_(m, Abar, kk - 1, jj, ii) - (0.5) * f0_(m, Abar, kk - 2, jj, ii))
-                  - std::copysign(1.0, L_mu_muhat0_L) * P_matrix(muhat, B, A)
+                  - std::copysign(1.0, L_mu_muhat0_L) * Pmod_matrix(muhat, B, A)
                       * ((1.5) * f0_(m, Abar, kk - 1, jj, ii) - (0.5) * f0_(m, Abar, kk - 2, jj, ii) - (1.5) * f0_(m, Abar, kk, jj, ii) + (0.5) * f0_(m, Abar, kk + 1, jj, ii)));
 
               // compute Fplus
               auto Fplus = (0.5) * Ven * (sqrt_det_g_R * L_mu_muhat0_R) * (P_matrix(muhat, B, A) *
                   ((1.5) * f0_(m, Abar, kk + 2, jj, ii) - (0.5) * f0_(m, Abar, kk + 3, jj, ii) + (1.5) * f0_(m, Abar, kk + 1, jj, ii) - (0.5) * f0_(m, Abar, kk, jj, ii))
-                  - std::copysign(1.0, L_mu_muhat0_R) * P_matrix(muhat, B, A) *
+                  - std::copysign(1.0, L_mu_muhat0_R) * Pmod_matrix(muhat, B, A) *
                       ((1.5) * f0_(m, Abar, kk + 1, jj, ii) - (0.5) * f0_(m, Abar, kk, jj, ii) - (1.5) * f0_(m, Abar, kk + 2, jj, ii) + (0.5) * f0_(m, Abar, kk + 3, jj, ii)));
 
               // complute fluxes
