@@ -315,6 +315,7 @@ void ZeroSpeedCorrection(DvceArray2D<Real> matrix, DvceArray2D<Real> matrix_corr
   }
 
   std::cout << std::endl;
+  std::cout << "Right eigenvectors: " << std::endl;
   for (int i = 0; i < size; i++) {
     for (int j = 0; j < size; j++) {
       std::cout << righteigvec[i][j] << " " << std::flush;
@@ -325,12 +326,14 @@ void ZeroSpeedCorrection(DvceArray2D<Real> matrix, DvceArray2D<Real> matrix_corr
   // construct the zero speed mode corrected eigenvalue matrix
   std::vector<std::complex<double>> eigval_corrected_row(matrix.extent(0));
   std::vector<std::vector<std::complex<double>>> eigval_corrected(matrix.extent(1), eigval_corrected_row);
+  std::cout << std::endl;
+  std::cout << "Eigenvalues and corrections: " << std::endl;
   for (int i = 0; i < size; i++) {
     for (int j = 0; j < size; j++) {
       eigval_corrected[i][j] = std::complex<double>(0., 0.);
       if (i == j) {
         eigval_corrected[i][i] = std::max<double>(v, std::abs(eigval[i]));
-        std::cout << "eigval: " << eigval[i] << " Abs: " << " " << std::abs(eigval[i]) << " Corrected: " << eigval_corrected[i][i] << " | " << std::endl;
+        std::cout << "Eigenvalue : " << eigval[i] << " Corrected: " << eigval_corrected[i][i] << " | " << std::endl;
       }
     }
   }
@@ -341,13 +344,13 @@ void ZeroSpeedCorrection(DvceArray2D<Real> matrix, DvceArray2D<Real> matrix_corr
 
   MatMultiplyComplex(righteigvec, eigval_corrected, temp_reconstruction);
 
-  std::cout << std::endl;
-  std::cout << "Product of right eigenvector matrix with modified eigenvalue matrix:" << std::endl;
+  //std::cout << std::endl;
+  //std::cout << "Product of right eigenvector matrix with modified eigenvalue matrix:" << std::endl;
   for (int i = 0; i < size; i++) {
     for (int j = 0; j < size; j++) {
-      std::cout << temp_reconstruction[i][j] << " " << std::flush;
+      //std::cout << temp_reconstruction[i][j] << " " << std::flush;
     }
-    std::cout << std::endl;
+    //std::cout << std::endl;
   }
 
   std::vector<std::complex<double>> temp_reconstruction_row_2(matrix.extent(0));

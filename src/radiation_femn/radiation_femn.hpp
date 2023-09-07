@@ -103,7 +103,8 @@ class RadiationFEMN {
   DvceArray2D<Real>
       stiffness_matrix_z;      // z component of the stiffness matrix (in the special relativistic case) [Eqn. 12 of arXiv:2212.01409]
 
-  DvceArray3D<Real> P_matrix;                // P ^muhat ^A _B
+  DvceArray3D<Real> P_matrix;                 // P ^muhat ^A _B
+  DvceArray3D<Real> Pmod_matrix;              // Zero speed mode corrected P_matrix
   DvceArray5D<Real> G_matrix;                 // G ^nuhat ^muhat _ihat ^A _B
   DvceArray5D<Real> F_matrix;                 // F ^nuhat ^muhat _ihat ^A _B
 
@@ -187,6 +188,7 @@ class RadiationFEMN {
   void LoadFEMNMatrices();
   void LoadFPNMatrices();
   void ComputePMatrix();
+  void ComputePtildeMatrix();
   void TetradInitialize();
   // ---------------------------------------------------------------------------
 

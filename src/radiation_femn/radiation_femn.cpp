@@ -46,6 +46,7 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
     stiffness_matrix_y("sy", 1, 1),
     stiffness_matrix_z("sz", 1, 1),
     P_matrix("PmuAB", 1, 1, 1),
+    Pmod_matrix("PmodmuAB", 1, 1, 1),
     G_matrix("GnumuiAB", 1, 1, 1, 1, 1),
     F_matrix("FnumuiAB", 1, 1, 1, 1, 1),
     e_source("e_source", 1),
@@ -114,8 +115,8 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   Kokkos::realloc(stiffness_matrix_x, num_points, num_points);    // stiffness-x from special relativistic case
   Kokkos::realloc(stiffness_matrix_y, num_points, num_points);    // stiffness-y from special relativistic case
   Kokkos::realloc(stiffness_matrix_z, num_points, num_points);    // stiffness-z from special relativistic case
-
   Kokkos::realloc(P_matrix, 4, num_points, num_points);           // P^muhat_A^B (no energy)
+  Kokkos::realloc(Pmod_matrix, 4, num_points, num_points);
   Kokkos::realloc(G_matrix, 4, 4, 3, num_points, num_points);     // G^nuhat^muhat_ihat_A^B (no energy)
   Kokkos::realloc(F_matrix, 4, 4, 3, num_points, num_points);     // F^nuhat^nuhat_ihat_A^B
 
@@ -154,7 +155,7 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   radiationfemn::MatLumping(mass_matrix, mass_matrix_lumped);
   // compute P matrices
   this->ComputePMatrix();
-
+  this->ComputePtildeMatrix();
   // --------------------------------------------------------------------------------------------------------------------------
   // allocate memory for all other variables
 
