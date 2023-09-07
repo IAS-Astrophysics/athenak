@@ -182,6 +182,7 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   int nmb1 = pmy_pack->nmb_thispack - 1;
 
   Kokkos::deep_copy(g_dd, 0.);
+  Kokkos::deep_copy(sqrt_det_g, 1.);
   Kokkos::deep_copy(u_mu, 0.);
   par_for("radiation_femn_dummy_initialize", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
           KOKKOS_LAMBDA(int m, int k, int j, int i) {
