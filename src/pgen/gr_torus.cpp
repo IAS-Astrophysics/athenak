@@ -715,6 +715,94 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     pmbp->pmhd->peos->PrimToCons(w0_, bcc0_, u0_, is, ie, js, je, ks, ke);
   }
 
+
+
+  // load opacity table if needed
+  if(is_radiation_enabled){
+    if(!pmbp->prad->table_opacity){
+      int &ross_table_len_x_ = pmbp->prad->ross_table_len_x;
+      int &ross_table_len_y_ = pmbp->prad->ross_table_len_y;
+      int &planck_table_len_x_ = pmbp->prad->planck_table_len_x;
+      int &planck_table_len_y_ = pmbp->prad->planck_table_len_y;
+
+      // open the file
+
+      FILE *fkappa, *flogt, *flogr, *fplanck;
+      if ( (fkappa=fopen("./aveopacity.txt","r"))==NULL ){
+        printf("Open input file error");
+        return;
+      }
+
+      if ( (fplanck=fopen("./PlanckOpacity.txt","r"))==NULL ){
+        printf("Open input file error");
+        return;
+      }
+
+      if ( (flogt=fopen("./logT.txt","r"))==NULL ){
+        printf("Open input file error");
+        return;
+      }
+
+      if ( (flogr=fopen("./logRhoT.txt","r"))==NULL ){
+        printf("Open input file error");
+        return;
+      }
+
+      // load the data
+      for(int i=0; i<ross_table_len_x_; ++i){
+        fscanf(flogr,"%lf",&(pmbp->prad->ross_rho.h_view(i)));
+      }
+
+
+      for(int i=0; i<ross_table_len_y_; ++i){
+        fscanf(flogt,"%lf",&(pmbp->prad->ross_t.h_view(i)));
+      }
+
+      for(int j=0; j<ross_table_len_y_; ++j){
+        for(int i=0; i<ross_table_len_x_; ++i){
+          fscanf(fkappa,"%lf",&(pmbp->prad->ross_table.h_view(j,i)));
+        }
+      }
+
+      for(int j=0; j<ross_table_len_y_; ++j){
+        for(int i=0; i<ross_table_len_x_; ++i){
+          fscanf(fplanck,"%lf",&(pmbp->prad->planck_table.h_view(j,i)));
+        }
+      }
+
+
+      fclose(fkappa);
+      fclose(flogt);
+      fclose(flogr);
+      fclose(fplanck);
+
+      for(int i=0; i<ross_table_len_x_; ++i)
+        pmbp->prad->planck_rho.h_view(i) = pmbp->prad->ross_rho.h_view(i);
+
+      for(int i=0; i<ross_table_len_y_; ++i)
+        pmbp->prad->planck_t.h_view(i) = pmbp->prad->ross_t.h_view(i);
+
+
+
+      //synchronize host and device
+      pmbp->prad->ross_rho.template modify<HostMemSpace>();
+      pmbp->prad->ross_rho.template sync<DevExeSpace>();
+
+      pmbp->prad->ross_t.template modify<HostMemSpace>();
+      pmbp->prad->ross_t.template sync<DevExeSpace>();
+
+      pmbp->prad->planck_rho.template modify<HostMemSpace>();
+      pmbp->prad->planck_rho.template sync<DevExeSpace>();
+
+      pmbp->prad->planck_t.template modify<HostMemSpace>();
+      pmbp->prad->planck_t.template sync<DevExeSpace>();
+
+    }
+
+  }
+
+
+
   return;
 }
 
@@ -1290,6 +1378,7 @@ void NoInflowTorus(Mesh *pm) {
     i0_ = pm->pmb_pack->prad->i0;
     nang1 = pm->pmb_pack->prad->prgeo->nangles - 1;
   }
+
 
   // X1-Boundary
   // Set X1-BCs on b0 if Meshblock face is at the edge of computational domain

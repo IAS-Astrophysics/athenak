@@ -150,13 +150,29 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
     Real u0 = gamma/alpha;
 
     // set opacities
-    Real sigma_a, sigma_s;
-    OpacityFunction(wdn, density_scale_, tgas, temperature_scale_,
+    Real sigma_a, sigma_s, sigma_p, sigma_pe;
+    if(table_opacity){
+      TableOpacity(wdn, density_scale_, tgas, temperature_scale_,
+                  length_scale_, op_table_use_r, ross_rho, ross_t,
+                  planck_rho, planck_t, ross_table, planck_table, kappa_s_,
+                  sigma_a, sigma_s, sigma_p, sigma_pe);
+
+    }else{
+      OpacityFunction(wdn, density_scale_, tgas, temperature_scale_,
                     length_scale_, power_opacity_, kramers_constant_,
                     kappa_a_, kappa_s_, sigma_a, sigma_s);
+    }
+
+
     Real dtcsiga = dt_*sigma_a;
     Real dtcsigs = dt_*sigma_s;
+    Real dtcsigp = dt_*sigma_p;
+    Real dtcsigpe = dt_*sigma_pe;
+
     Real dtaucsiga = dtcsiga/u0;
+    Real dtaucsigs = dtcsigs/u0;
+    Real dtaucsigp = dtcsigp/u0;
+    Real dtaucsigpe = dtcsigpe/u0;
 
     // compute fluid velocity in tetrad frame
     Real u_tet[4];
@@ -192,13 +208,13 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
     }
     suma1 /= wght_sum;
     suma2 /= wght_sum;
-    Real suma3 = suma1*dtcsigs;
-    suma1 *= dtcsiga;
+    Real suma3 = suma1*(dtcsigs+dtcsiga-dtcsigpe);
+    suma1 *= (dtcsigp);
 
     // compute coefficients
     Real coef[2];
-    coef[1] = (dtaucsiga-dtaucsiga*suma1/(1.0-suma3))*arad_*gm1/wdn;
-    coef[0] = -tgas-dtaucsiga*suma2*gm1/(wdn*(1.0-suma3));
+    coef[1] = (dtaucsigp-dtaucsigpe*suma1/(1.0-suma3))*arad_*gm1/wdn;
+    coef[0] = -tgas-dtaucsigpe*suma2*gm1/(wdn*(1.0-suma3));
 
     // Calculate new gas temperature
     Real tgasnew = tgas;
@@ -242,8 +258,8 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
         Real intensity_cm = 4.0*M_PI*(i0_(m,n,k,j,i)/(n0*n_0))*SQR(SQR(n0_cm));
         Real vncsigma = 1.0/(n0 + (dtcsiga + dtcsigs)*n0_cm);
         Real vncsigma2 = n0_cm*vncsigma;
-        Real di_cm = ( (dtcsigs*jr_cm +
-                        dtcsiga*emission -
+        Real di_cm = ( ((dtcsigs+dtcsiga-dtcsigpe)*jr_cm +
+                        dtcsigp*emission -
                         (dtcsigs+dtcsiga)*intensity_cm)*vncsigma2 );
         i0_(m,n,k,j,i) = n0*n_0*fmax(i0_(m,n,k,j,i)/(n0*n_0) +
                                      di_cm/(4.0*M_PI*SQR(SQR(n0_cm))), 0.0);

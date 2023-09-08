@@ -40,6 +40,12 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
     tet_d2_x2f("tet_d2_x2f",1,1,1,1,1),
     tet_d3_x3f("tet_d3_x3f",1,1,1,1,1),
     na("na",1,1,1,1,1,1),
+    ross_rho("ross_rho",1),
+    ross_t("ross_t",1),
+    planck_rho("planck_rho",1),
+    planck_t("planck_t",1),
+    ross_table("ross_table",1,1),
+    planck_table("planck_table",1,1),
     norm_to_tet("norm_to_tet",1,1,1,1,1,1),
     beam_mask("beam_mask",1,1,1,1,1) {
   // Check for general relativity
@@ -91,6 +97,7 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
       arad = pin->GetReal("radiation","arad");
     }
     affect_fluid = pin->GetOrAddBoolean("radiation","affect_fluid",true);
+
   }
 
   // Check for fluid evolution
@@ -200,6 +207,44 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
       Kokkos::realloc(beam_mask,nmb,prgeo->nangles,ncells3,ncells2,ncells1);
     }
   }
+
+  table_opacity = pin->GetOrAddBoolean("radiation","table_opacity",false);
+
+  if (!(table_opacity)){
+    op_table_use_r = pin->GetOrAddBoolean("radiation","table_use_r",false);
+    ross_table_len_x = pin->GetOrAddInteger("radiation","ross_table_x",0);
+    ross_table_len_y = pin->GetOrAddInteger("radiation","ross_table_y",0);
+    planck_table_len_x = pin->GetOrAddInteger("radiation","planck_table_x",0);
+    planck_table_len_y = pin->GetOrAddInteger("radiation","planck_table_y",0);
+
+    if(ross_table_len_x * ross_table_len_y
+      * planck_table_len_x * planck_table_len_y == 0){
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+      << std::endl << "Opacity table size needs to be provided "
+      << ross_table_len_y << ross_table_len_x
+      << planck_table_len_x << planck_table_len_y << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+
+    {
+
+
+      int ncells1 = indcs.nx1 + 2*(indcs.ng);
+      int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
+      int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
+      //load rho
+      Kokkos::realloc(ross_rho, ross_table_len_x);
+      Kokkos::realloc(ross_t, ross_table_len_y);
+      Kokkos::realloc(ross_table, ross_table_len_y,ross_table_len_x);
+
+      Kokkos::realloc(planck_rho, planck_table_len_x);
+      Kokkos::realloc(planck_t, planck_table_len_y);
+      Kokkos::realloc(planck_table, planck_table_len_y,planck_table_len_x);
+
+    }
+  }
+
+
 }
 
 //----------------------------------------------------------------------------------------

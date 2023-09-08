@@ -95,6 +95,13 @@ class Radiation {
   Real kappa_a;        // constant Rosseland mean absoprtion coefficient
   Real kappa_s;        // constant scattering coefficient
   bool power_opacity;  // flag to enable Kramer's law opacity for kappa_a
+  bool table_opacity;  // flag to use opacity table or not
+  bool op_table_use_r; // flag to use t and R for the opacity table
+
+  int ross_table_len_x; //length of rossleand mean table: No. of cols
+  int ross_table_len_y; // length of rosseland mean table: No. of rows
+  int planck_table_len_x; // planck mean table: No. of cols
+  int planck_table_len_y; // planck mean table: No. of rows
 
   // Extra physics (i.e., other srcterms)
   bool beam_source;
@@ -121,6 +128,14 @@ class Radiation {
   // intensity arrays
   DvceArray5D<Real> i0;         // intensities
   DvceArray5D<Real> coarse_i0;  // intensities on 2x coarser grid (for SMR/AMR)
+
+  // array to host opacity table
+  DualArray1D<Real> ross_rho;
+  DualArray1D<Real> ross_t;
+  DualArray1D<Real> planck_rho;
+  DualArray1D<Real> planck_t;
+  DualArray2D<Real> ross_table;
+  DualArray2D<Real> planck_table;
 
   // Boundary communication buffers and functions for i
   BoundaryValuesCC *pbval_i;
