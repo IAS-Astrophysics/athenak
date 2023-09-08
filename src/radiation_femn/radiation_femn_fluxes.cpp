@@ -73,8 +73,8 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                     ((1.5) * f0_(m, Abar, kk, jj, ii + 1) - (0.5) * f0_(m, Abar, kk, jj, ii) - (1.5) * f0_(m, Abar, kk, jj, ii + 2) + (0.5) * f0_(m, Abar, kk, jj, ii + 3)));
 
             // complute fluxes
-            flx1(m, enang, kk, jj, ii) += ((1.5) * Fminus - Favg - (0.5) * Fplus) / (2.0);
-            flx1(m, enang, kk, jj, ii + 1) += ((0.5) * Fminus + Favg - (1.5) * Fplus) / (2.0);
+            flx1(m, enang, kk, jj, ii) += ((1.5) * Fminus - Favg - (0.5) * Fplus);
+            flx1(m, enang, kk, jj, ii + 1) += ((0.5) * Fminus + Favg - (1.5) * Fplus);
           });
 
 
@@ -123,8 +123,8 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                       ((1.5) * f0_(m, Abar, kk, jj + 1, ii) - (0.5) * f0_(m, Abar, kk, jj, ii) - (1.5) * f0_(m, Abar, kk, jj + 2, ii) + (0.5) * f0_(m, Abar, kk, jj + 3, ii)));
 
               // complute fluxes
-              flx2(m, enang, kk, jj, ii) += ((1.5) * Fminus - Favg - (0.5) * Fplus) / (2.0);
-              flx2(m, enang, kk, jj + 1, ii) += ((0.5) * Fminus + Favg - (1.5) * Fplus) / (2.0);
+              flx2(m, enang, kk, jj, ii) += ((1.5) * Fminus - Favg - (0.5) * Fplus);
+              flx2(m, enang, kk, jj + 1, ii) += ((0.5) * Fminus + Favg - (1.5) * Fplus);
             });
   }
 
@@ -173,8 +173,8 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                       ((1.5) * f0_(m, Abar, kk + 1, jj, ii) - (0.5) * f0_(m, Abar, kk, jj, ii) - (1.5) * f0_(m, Abar, kk + 2, jj, ii) + (0.5) * f0_(m, Abar, kk + 3, jj, ii)));
 
               // complute fluxes
-              flx3(m, enang, kk, jj, ii) += ((1.5) * Fminus - Favg - (0.5) * Fplus) / (2.0);
-              flx3(m, enang, kk + 1, jj, ii) += ((0.5) * Fminus + Favg - (1.5) * Fplus) / (2.0);
+              flx3(m, enang, kk, jj, ii) += ((1.5) * Fminus - Favg - (0.5) * Fplus);
+              flx3(m, enang, kk + 1, jj, ii) += ((0.5) * Fminus + Favg - (1.5) * Fplus);
             });
   }
 

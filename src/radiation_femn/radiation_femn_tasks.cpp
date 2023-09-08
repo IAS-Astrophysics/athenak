@@ -50,7 +50,7 @@ void RadiationFEMN::AssembleRadiationFEMNTasks(TaskList &start, TaskList &run, T
     id.rad_limdg = id.rad_expl;
   }
 
-  if (fpn && limiter_fem == "clp") {
+  if (!fpn && limiter_fem == "clp") {
     id.rad_limfem = run.AddTask(&RadiationFEMN::ApplyLimiterFEM, this, id.rad_limdg);
     id.rad_filterfpn = run.AddTask(&RadiationFEMN::ApplyFilterLanczos, this, id.rad_limfem);
   } else if (fpn) {
