@@ -69,33 +69,39 @@ TaskStatus RadiationFEMN::ApplyLimiterFEM(Driver *pdriver, int stage) {
   int &is = indcs.is, &ie = indcs.ie;
   int &js = indcs.js, &je = indcs.je;
   int &ks = indcs.ks, &ke = indcs.ke;
-  int nang1 = num_points - 1;
-  int neng1 = num_energy_bins - 1;
+  int nengang1 = num_points_total - 1;
   int nmb1 = pmy_pack->nmb_thispack - 1;
   auto &mbsize = pmy_pack->pmb->mb_size;
   auto &f0_ = f0;
+  auto &energy_grid_ = pmy_pack->pradfemn->energy_grid;
   auto &mm_ = mass_matrix;
   auto &etemp0_ = etemp0;
   auto &etemp1_ = etemp1;
 
   Kokkos::deep_copy(etemp0_, 0.0);
   Kokkos::deep_copy(etemp1_, 0.0);
-  /*
-  // @TODO: Add energy dependence
-  par_for("radiation_femn_etemp_calculate", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie, 0, nang1, 0, nang1,
-          KOKKOS_LAMBDA(const int m, const int k, const int j, const int i, const int B, const int A) {
-              etemp0_(m, k, j, i) += mm_(B, A) * f0_(m, 0, A, k, j, i);
-              etemp1_(m, k, j, i) += mm_(B, A) * fmax(f0_(m, 0, A, k, j, i), 0.0);
+
+  assert(num_energy_bins == 1);
+
+  // @TODO: Add energy dependence (later)
+  par_for("radiation_femn_etemp_calculate", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie, 0, nengang1, 0, nengang1,
+          KOKKOS_LAMBDA(const int m, const int k, const int j, const int i, const int B, const int enang) {
+              int en = int(enang / num_points);
+              int A = enang - en * num_points;
+              auto Sen = (pow(energy_grid_(en + 1), 4) - pow(energy_grid_(en), 4)) / 4.0;
+
+              etemp0_(m, k, j, i) += Sen * mm_(B, A) * f0_(m, A, k, j, i);
+              etemp1_(m, k, j, i) += Sen * mm_(B, A) * fmax(f0_(m, A, k, j, i), 0.0);
           });
 
-  par_for("radiation_femn_limiter_clp", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie, 0, nang1,
+  par_for("radiation_femn_limiter_clp", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie, 0, nengang1,
           KOKKOS_LAMBDA(const int m, const int k, const int j, const int i, const int A) {
               auto theta = (etemp0_(m, k, j, i) > 0 && etemp1_(m, k, j, i) != 0) ? (etemp0_(m, k, j, i) /
                                                                                     etemp1_(m, k, j, i)) : 0.0;
 
-              f0_(m, 0, A, k, j, i) = theta * fmax(f0_(m, 0, A, k, j, i), 0.0);
+              f0_(m, A, k, j, i) = theta * fmax(f0_(m, A, k, j, i), 0.0);
 
-          }); */
+          });
 
   return TaskStatus::complete;
 }
