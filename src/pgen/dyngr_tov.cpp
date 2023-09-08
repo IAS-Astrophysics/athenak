@@ -69,6 +69,7 @@ static Real A1(const tov_pgen& pgen, Real x1, Real x2, Real x3);
 KOKKOS_INLINE_FUNCTION
 static Real A2(const tov_pgen& pgen, Real x1, Real x2, Real x3);
 
+// Prototypes for user-defined BCs and history
 void TOVHistory(HistoryData *pdata, Mesh *pm);
 
 //----------------------------------------------------------------------------------------
@@ -87,7 +88,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   tov_pgen tov;
   // FIXME: Set boundary condition function?
-  // user_bcs_func = NoInflowTOV
+  //user_bcs_func = VacuumBoundary;
 
   // Read problem-specific parameters from input file
   // global parameters
@@ -592,16 +593,14 @@ static Real A2(const tov_pgen& tov, Real x1, Real x2, Real x3) {
 }
 
 KOKKOS_INLINE_FUNCTION
-static Real Interpolate(Real x, const Real x1, const Real x2, const Real y1, const Real y2) {
+static Real Interpolate(Real x, const Real x1, const Real x2, 
+                        const Real y1, const Real y2) {
   return ((y2 - y1)*x + (y1*x2 - y2*x1))/(x2 - x1);
 }
 
 // History function
 void TOVHistory(HistoryData *pdata, Mesh *pm) {
-  // All the functions we need are in the hydro variables; return early if
-  // the data isn't hydro data.
-  // Otherwise, the first thing we need to do is increase the number of variables available.
-  // Current extra outputs: 
+  // Select the number of outputs and create labels for them.
   int &nmhd = pm->pmb_pack->pmhd->nmhd;
   pdata->nhist = 1;
   pdata->label[0] = "rho-max";
@@ -632,5 +631,5 @@ void TOVHistory(HistoryData *pdata, Mesh *pm) {
   }, Kokkos::Max<Real>(rho_max));
 
   // store data in hdata array
-  pdata->hdata[nmhd+6] = rho_max;
+  pdata->hdata[0] = rho_max;
 }

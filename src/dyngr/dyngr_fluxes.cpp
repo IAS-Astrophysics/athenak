@@ -23,9 +23,8 @@
 #include "reconstruct/plm.hpp"
 #include "reconstruct/ppm.hpp"
 #include "reconstruct/wenoz.hpp"
-// include inlined Riemann solvers (double yuck...)
-#include "dyngr/rsolvers/llf_dyngrmhd.hpp" // NOLINT(build/include)
-#include "dyngr/rsolvers/hlle_dyngrmhd.hpp" // NOLINT(build/include)
+#include "dyngr/rsolvers/llf_dyngrmhd.hpp"
+#include "dyngr/rsolvers/hlle_dyngrmhd.hpp"
 //#include "dyngr/dyngr_fofc.cpp"
 // include PrimitiveSolver stuff
 #include "eos/primitive-solver/idealgas.hpp"
