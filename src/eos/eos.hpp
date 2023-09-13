@@ -28,8 +28,8 @@ struct EOS_Data {
   Real iso_cs;       // isothermal sound speed
   bool is_ideal;     // flag to denote ideal gas EOS
   bool use_e, use_t; // use internal energy density (e) or temperature (t) as primitive
-  Real dfloor, pfloor, tfloor;  // density, pressure, and temperature floors
-  Real gamma_max;               // ceiling on Lorentz factor in SR/GR
+  Real dfloor, pfloor, tfloor, sfloor;  // density, pressure, temperature, entropy floors
+  Real gamma_max;    // ceiling on Lorentz factor in SR/GR
 
   // IDEAL GAS PRESSURE: converts primitive variable (either internal energy density e
   // or temperature e/d) into pressure.

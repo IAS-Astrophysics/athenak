@@ -89,6 +89,7 @@ TaskStatus MHD::ExpRKUpdate(Driver *pdriver, int stage) {
     if (psrc->const_accel)  psrc->AddConstantAccel(u0, w0, beta_dt);
     if (psrc->shearing_box) psrc->AddShearingBox(u0, w0, bcc0, beta_dt);
     if (psrc->ism_cooling) psrc->AddISMCooling(u0, w0, peos->eos_data, beta_dt);
+    if (psrc->rel_cooling) psrc->AddRelCooling(u0, w0, peos->eos_data, beta_dt);
   }
 
   // Add coordinate source terms in GR.  Again, must be computed with only primitives.

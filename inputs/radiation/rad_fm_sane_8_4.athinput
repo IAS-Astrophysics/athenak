@@ -1,0 +1,205 @@
+# Athena++ (Kokkos version) input file for MHD GR torus
+# Initializes radiating Fishbone-Moncrief equilibrium torus with r_in=20 and r_peak=41 and
+# SANE magnetic field configuration.  Uses static mesh refinement with highest resolution
+# 8/M at the horizon and the inner level spanning +/- 4M
+
+<comment>
+problem   = Fishbone-Moncrief equilibrium torus
+reference = Fishbone & Moncrief 1976, ApJ 207 962
+
+<job>
+basename  = torus
+
+<mesh>
+nghost = 4        # Number of ghost cells
+nx1    = 32       # number of cells in x1-direction
+x1min  = -1024.0  # minimum x1
+x1max  = 1024.0   # maximum x1
+ix1_bc = user     # inner boundary
+ox1_bc = user     # outer boundary
+
+nx2    = 32       # number of cells in x2-direction
+x2min  = -1024.0  # minimum x2
+x2max  = 1024.0   # maximum x2
+ix2_bc = user     # inner boundary
+ox2_bc = user     # outer boundary
+
+nx3    = 32       # number of cells in x3-direction
+x3min  = -1024.0  # minimum x3
+x3max  = 1024.0   # maximum x3
+ix3_bc = user     # inner boundary
+ox3_bc = user     # outer boundary
+
+<meshblock>
+nx1  = 8          # Number of cells in each MeshBlock, X1-dir
+nx2  = 8          # Number of cells in each MeshBlock, X2-dir
+nx3  = 8          # Number of cells in each MeshBlock, X3-dir
+
+<mesh_refinement>
+refinement = static  # type of refinement
+
+<refinement1>
+level = 1
+x1min = -512.0
+x1max = 512.0
+x2min = -512.0
+x2max = 512.0
+x3min = -512.0
+x3max = 512.0
+
+<refinement2>
+level = 2
+x1min = -256.0
+x1max = 256.0
+x2min = -256.0
+x2max = 256.0
+x3min = -256.0
+x3max = 256.0
+
+<refinement3>
+level = 3
+x1min = -128.0
+x1max = 128.0
+x2min = -128.0
+x2max = 128.0
+x3min = -128.0
+x3max = 128.0
+
+<refinement4>
+level = 4
+x1min = -64.0
+x1max = 64.0
+x2min = -64.0
+x2max = 64.0
+x3min = -64.0
+x3max = 64.0
+
+<refinement5>
+level = 5
+x1min = -64.0
+x1max = 64.0
+x2min = -64.0
+x2max = 64.0
+x3min = -64.0
+x3max = 64.0
+
+<refinement6>
+level = 6
+x1min = -32.0
+x1max = 32.0
+x2min = -32.0
+x2max = 32.0
+x3min = -32.0
+x3max = 32.0
+
+<refinement7>
+level = 7
+x1min = -16.0
+x1max = 16.0
+x2min = -16.0
+x2max = 16.0
+x3min = -16.0
+x3max = 16.0
+
+<refinement8>
+level = 8
+x1min = -8.0
+x1max = 8.0
+x2min = -8.0
+x2max = 8.0
+x3min = -8.0
+x3max = 8.0
+
+<refinement9>
+level = 9
+x1min = -4.0
+x1max = 4.0
+x2min = -4.0
+x2max = 4.0
+x3min = -4.0
+x3max = 4.0
+
+<time>
+evolution  = dynamic     # dynamic/kinematic/static
+integrator = rk2         # time integration algorithm
+cfl_number = 0.3         # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1          # cycle limit
+tlim       = 10000.0     # time limit
+ndiag      = 1           # cycles between diagostic output
+
+<coord>
+general_rel = true       # general relativity
+a           = 0.9375     # black hole spin a (0 <= a/M < 1)
+excise      = true       # excise r_ks <= 1.0
+dexcise     = 1.0e-8     # density inside excision
+pexcise     = 0.333e-10  # pressure inside excision
+
+<mhd>
+eos         = ideal      # EOS type
+reconstruct = ppm4       # spatial reconstruction method
+rsolver     = hlle       # Riemann-solver to be used
+dfloor      = 1.0e-8     # floor on density rho
+pfloor      = 0.333e-10  # floor on gas pressure p_gas
+sfloor      = 5.0e-7     # floor on gas specific entropy s
+gamma       = 1.4444444444444444  # ratio of specific heats Gamma
+fofc        = true       # Enable first order flux correction
+gamma_max   = 20.0       # Enable ceiling on Lorentz factor
+
+<radiation>
+reconstruct = plm     # reconstruction method
+rotate_geo = false    # geodesic grid rotation
+nlevel = 3            # geodesic level
+power_opacity = true  # absorption opacity related to temperature by power law
+compton = true        # flag to enable compton
+kappa_s = 0.34        # scattering opacity
+n_0_floor = 0.1       # floor on n_0
+
+<units>
+bhmass_msun = 10.0    # black hole mass in solar masses
+density_cgs = 1.0e-4  # density unit (cgs)
+mu = 0.5              # mean molecular weight
+
+<problem>
+fm_torus   = true  # Fishbone & Moncrief
+r_edge     = 20.0  # radius of inner edge of disk
+r_peak     = 41.0  # radius of pressure maximum; use l instead if negative
+tilt_angle = 0.0   # angle (deg) to incl disk spin axis relative to BH spin in dir of x
+potential_beta_min = 100.0  # ratio of gas to magnetic pressure at maxima (diff locations)
+potential_cutoff   = 0.2    # amount to subtract from density when calculating potential
+potential_rho_pow = 1.0     # dependence of the vector potential on density rho
+rho_min   = 1.0e-5    # background on rho given by rho_min ...
+rho_pow   = -1.5      # ... * r^rho_pow
+pgas_min  = 0.333e-7  # background on p_gas given by pgas_min ...
+pgas_pow  = -2.5      # ... * r^pgas_pow
+rho_max   = 1.0       # if > 0, rescale rho to have this peak; rescale pres by same factor
+l         = 0.0       # const. ang. mom. per unit mass u^t u_phi; only used if r_peak < 0
+pert_amp  = 2.0e-2    # perturbation amplitude
+user_hist = true      # enroll user-defined history function
+
+<output1>
+file_type  = hst        # History output
+dt         = 10.0       # time increment between outputs
+user_hist_only = true   # only output user-defined history
+
+<output2>
+file_type  = bin            # Binary data dump
+variable   = rad_mhd_w_bcc  # variables to be output
+dt         = 500.0          # time increment between outputs
+
+<output3>
+file_type  = bin            # Binary data dump
+slice_x1   = 0.0            # slice in X1 plane
+id         = slice_x1       # output id tag
+variable   = rad_mhd_w_bcc  # variables to be output
+dt         = 10.0           # time increment between outputs
+
+<output4>
+file_type  = bin            # Binary data dump
+slice_x3   = 0.0            # slice in X3 plane
+id         = slice_x3       # output id tag
+variable   = rad_mhd_w_bcc  # variables to be output
+dt         = 10.0           # time increment between outputs
+
+<output5>
+file_type  = rst    # Binary data dump
+dt         = 500.0  # time increment between outputs

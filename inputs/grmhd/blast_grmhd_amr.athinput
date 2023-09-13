@@ -1,0 +1,92 @@
+# Athena++ (Kokkos version) input file for strongly magnetized blast problem
+
+<comment>
+problem   = spherical blast wave
+reference = Kommisarov, Mignone & Bodo
+
+<job>
+basename  = Blast      # problem ID: basename of output filenames
+
+<mesh>
+nghost    = 4          # Number of ghost cells
+nx1       = 100        # Number of zones in X1-direction
+x1min     = -6.0       # minimum value of X1
+x1max     = 6.0        # maximum value of X1
+ix1_bc    = periodic   # inner-X1 boundary flag
+ox1_bc    = periodic   # outer-X1 boundary flag
+
+nx2       = 100        # Number of zones in X2-direction
+x2min     = -6.0       # minimum value of X2
+x2max     = 6.0        # maximum value of X2
+ix2_bc    = periodic   # inner-X2 boundary flag
+ox2_bc    = periodic   # outer-X2 boundary flag
+
+nx3       = 100        # Number of zones in X3-direction
+x3min     = -6.0       # minimum value of X3
+x3max     = 6.0        # maximum value of X3
+ix3_bc    = periodic   # inner-X3 boundary flag
+ox3_bc    = periodic   # outer-X3 boundary flag
+
+<meshblock>
+nx1       = 10         # Number of cells in each MeshBlock, X1-dir
+nx2       = 10         # Number of cells in each MeshBlock, X2-dir
+nx3       = 10         # Number of cells in each MeshBlock, X3-dir
+
+<mesh_refinement>
+refinement = adaptive
+num_levels = 2
+dpres_max  = 0.25
+refine_interval = 3
+max_nmb_per_rank = 2300
+
+<refinement1>
+x1min = -1.5
+x1max = 1.5
+x2min = -1.5
+x2max = 1.5
+x3min = -1.5
+x3max = 1.5
+level = 1
+
+<time>
+evolution  = dynamic    # dynamic/kinematic/static
+integrator = rk2        # time integration algorithm
+cfl_number = 0.3        # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1         # cycle limit
+tlim       = 4.0        # time limit
+ndiag      = 1          # cycles between diagostic output
+
+<coord>
+general_rel = true
+minkowski = true
+
+<mhd>
+eos         = ideal     # EOS type
+reconstruct = ppm4      # spatial reconstruction method
+rsolver     = hlle      # Riemann-solver to be used
+gamma       = 1.3333333 # gamma = C_p/C_v
+dfloor      = 1.0e-10
+pfloor      = 1.0e-10
+fofc        = true      # Enable first order flux correction
+
+<problem>
+di_amb      = 1.0e-4    # ambient density
+pi_amb      = 3.0e-5    # ambient pressure
+bamb        = 0.1       # ambient B-field
+prat        = 33333.333 # Pressure ratio initially
+drat        = 100.      # density ratio initially
+inner_radius  = 0.8     # Radius of the inner sphere
+outer_radius  = 1.0     # Radius of the outer sphere
+
+<output1>
+file_type  = hst        # History data dump
+dt         = 0.01       # time increment between outputs
+
+<output2>
+file_type  = bin        # binary data dump
+variable   = mhd_w_bcc  # variables to be output
+dt         = 0.1        # time increment between outputs
+
+<output3>
+file_type   = log
+dcycle      = 1

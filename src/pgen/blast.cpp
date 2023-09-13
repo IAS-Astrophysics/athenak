@@ -30,11 +30,16 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   Real rout = pin->GetReal("problem", "outer_radius");
   Real rin  = rout - pin->GetReal("problem", "inner_radius");
-  Real pa   = pin->GetOrAddReal("problem", "pamb", 1.0);
-  Real da   = pin->GetOrAddReal("problem", "damb", 1.0);
+  // values for neutrals (hydro fluid)
+  Real pn_amb   = pin->GetOrAddReal("problem", "pn_amb", 1.0);
+  Real dn_amb   = pin->GetOrAddReal("problem", "dn_amb", 1.0);
+  // values for ions (hydro fluid)
+  Real pi_amb   = pin->GetOrAddReal("problem", "pi_amb", 1.0);
+  Real di_amb   = pin->GetOrAddReal("problem", "di_amb", 1.0);
+  // ratios in blast (same for both ions and neutrals)
   Real prat = pin->GetReal("problem", "prat");
   Real drat = pin->GetOrAddReal("problem", "drat", 1.0);
-  Real bamb = pin->GetOrAddReal("problem", "bamb", 0.1);
+  Real b_amb = pin->GetOrAddReal("problem", "b_amb", 0.1);
 
   // capture variables for the kernel
   auto &indcs = pmy_mesh_->mb_indcs;
@@ -44,72 +49,108 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   auto &size = pmbp->pmb->mb_size;
 
-  // Select either Hydro or MHD
-  Real gm1;
-  DvceArray5D<Real> u0_, w0_;
+  // initialize Hydro variables ----------------------------------------------------------
   if (pmbp->phydro != nullptr) {
-    u0_ = pmbp->phydro->u0;
-    w0_ = pmbp->phydro->w0;
-    gm1 = pmbp->phydro->peos->eos_data.gamma - 1.0;
-  } else if (pmbp->pmhd != nullptr) {
-    u0_ = pmbp->pmhd->u0;
-    w0_ = pmbp->pmhd->w0;
-    gm1 = pmbp->pmhd->peos->eos_data.gamma - 1.0;
-  }
+    auto &w0_ = pmbp->phydro->w0;
+    Real gm1 = pmbp->phydro->peos->eos_data.gamma - 1.0;
+    par_for("pgen_blast1",DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
+    KOKKOS_LAMBDA(int m,int k,int j,int i) {
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      int nx1 = indcs.nx1;
+      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
-  par_for("pgen_blast1",DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
-  KOKKOS_LAMBDA(int m,int k,int j,int i) {
-    Real &x1min = size.d_view(m).x1min;
-    Real &x1max = size.d_view(m).x1max;
-    int nx1 = indcs.nx1;
-    Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+      Real &x2min = size.d_view(m).x2min;
+      Real &x2max = size.d_view(m).x2max;
+      int nx2 = indcs.nx2;
+      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
-    Real &x2min = size.d_view(m).x2min;
-    Real &x2max = size.d_view(m).x2max;
-    int nx2 = indcs.nx2;
-    Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+      Real &x3min = size.d_view(m).x3min;
+      Real &x3max = size.d_view(m).x3max;
+      int nx3 = indcs.nx3;
+      Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
-    Real &x3min = size.d_view(m).x3min;
-    Real &x3max = size.d_view(m).x3max;
-    int nx3 = indcs.nx3;
-    Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+      Real rad = std::sqrt(SQR(x1v) + SQR(x2v) + SQR(x3v));
 
-    Real rad = std::sqrt(SQR(x1v) + SQR(x2v) + SQR(x3v));
-
-    Real den = da;
-    Real pres = pa;
-    if (rad < rout) {
-      if (rad < rin) {
-        den = drat*da;
-        pres = prat*pa;
-      } else {   // add smooth ramp in density
-        Real f = (rad-rin) / (rout-rin);
-        Real log_den = (1.0-f) * log(drat*da) + f * log(da);
-        den = exp(log_den);
-        Real log_pres = (1.0-f) * log(prat*pa) + f * log(pa);
-        pres = exp(log_pres);
+      Real den = dn_amb;
+      Real pres = pn_amb;
+      if (rad < rout) {
+        if (rad < rin) {
+          den *= drat;
+          pres *= prat;
+        } else {   // add smooth ramp in density
+          Real f = (rad-rin) / (rout-rin);
+          Real log_den = (1.0-f) * log(drat*dn_amb) + f * log(dn_amb);
+          den = exp(log_den);
+          Real log_pres = (1.0-f) * log(prat*pn_amb) + f * log(pn_amb);
+          pres = exp(log_pres);
+        }
       }
-    }
+      w0_(m,IDN,k,j,i) = den;
+      w0_(m,IVX,k,j,i) = 0.0;
+      w0_(m,IVY,k,j,i) = 0.0;
+      w0_(m,IVZ,k,j,i) = 0.0;
+      w0_(m,IEN,k,j,i) = pres/gm1;
+    });
 
-    w0_(m,IDN,k,j,i) = den;
-    w0_(m,IVX,k,j,i) = 0.0;
-    w0_(m,IVY,k,j,i) = 0.0;
-    w0_(m,IVZ,k,j,i) = 0.0;
-    w0_(m,IEN,k,j,i) = pres/gm1;
-  });
+    // Convert primitives to conserved
+    pmbp->phydro->peos->PrimToCons(w0_, pmbp->phydro->u0, is, ie, js, je, ks, ke);
+  }  // End initialization Hydro variables
 
-  // initialize magnetic fields ---------------------------------------
-
+  // initialize MHD variables ------------------------------------------------------------
   if (pmbp->pmhd != nullptr) {
+    auto &w0_ = pmbp->pmhd->w0;
+    Real gm1 = pmbp->pmhd->peos->eos_data.gamma - 1.0;
+    par_for("pgen_blast1",DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
+    KOKKOS_LAMBDA(int m,int k,int j,int i) {
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      int nx1 = indcs.nx1;
+      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+
+      Real &x2min = size.d_view(m).x2min;
+      Real &x2max = size.d_view(m).x2max;
+      int nx2 = indcs.nx2;
+      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+
+      Real &x3min = size.d_view(m).x3min;
+      Real &x3max = size.d_view(m).x3max;
+      int nx3 = indcs.nx3;
+      Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+
+      Real rad = std::sqrt(SQR(x1v) + SQR(x2v) + SQR(x3v));
+
+      Real den = di_amb;
+      Real pres = pi_amb;
+      if (rad < rout) {
+        if (rad < rin) {
+          den *= drat;
+          pres *= prat;
+        } else {   // add smooth ramp in density
+          Real f = (rad-rin) / (rout-rin);
+          Real log_den = (1.0-f) * log(drat*di_amb) + f * log(di_amb);
+          den = exp(log_den);
+          Real log_pres = (1.0-f) * log(prat*pi_amb) + f * log(pi_amb);
+          pres = exp(log_pres);
+        }
+      }
+      w0_(m,IDN,k,j,i) = den;
+      w0_(m,IVX,k,j,i) = 0.0;
+      w0_(m,IVY,k,j,i) = 0.0;
+      w0_(m,IVZ,k,j,i) = 0.0;
+      w0_(m,IEN,k,j,i) = pres/gm1;
+    });
+
+    // initialize magnetic fields
     auto &b0 = pmbp->pmhd->b0;
     par_for("pgen_blast2",DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      b0.x1f(m,k,j,i) = bamb;
+      b0.x1f(m,k,j,i) = b_amb;
       b0.x2f(m,k,j,i) = 0.0;
       b0.x3f(m,k,j,i) = 0.0;
 
       // Include extra face-component at edge of block in each direction
-      if (i==ie) {b0.x1f(m,k,j,i+1) = bamb;}
+      if (i==ie) {b0.x1f(m,k,j,i+1) = b_amb;}
       if (j==je) {b0.x2f(m,k,j+1,i) = 0.0;}
       if (k==ke) {b0.x3f(m,k+1,j,i) = 0.0;}
     });
@@ -126,15 +167,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       w_by = 0.5*(b0.x2f(m,k,j,i) + b0.x2f(m,k,j+1,i));
       w_bz = 0.5*(b0.x3f(m,k,j,i) + b0.x3f(m,k+1,j,i));
     });
-  }
 
-  // Convert primitives to conserved
-  if (pmbp->phydro != nullptr) {
-    pmbp->phydro->peos->PrimToCons(w0_, u0_, is, ie, js, je, ks, ke);
-  } else if (pmbp->pmhd != nullptr) {
-    auto &bcc0_ = pmbp->pmhd->bcc0;
-    pmbp->pmhd->peos->PrimToCons(w0_, bcc0_, u0_, is, ie, js, je, ks, ke);
-  }
+    // Convert primitives to conserved
+    pmbp->pmhd->peos->PrimToCons(w0_, bcc_, pmbp->pmhd->u0, is, ie, js, je, ks, ke);
+  }  // End initialization MHD variables
 
   return;
 }

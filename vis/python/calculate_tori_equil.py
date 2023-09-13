@@ -64,7 +64,7 @@ def main(**kwargs):
     # Prepare Figure
     fig = plt.figure(figsize=(18, 18))
     r_hor = 1.0 + (1.0 - a**2)**0.5
-    plt.rc('text', usetex=True)
+    plt.rc('text')
     plt.rc('font', family='serif', size=22)
 
     # Make Chakrabarti Density Plot

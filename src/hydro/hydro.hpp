@@ -41,6 +41,7 @@ struct HydroTaskIDs {
   TaskID sendu;
   TaskID recvu;
   TaskID bcs;
+  TaskID prol;
   TaskID c2p;
   TaskID newdt;
   TaskID csend;
@@ -68,6 +69,7 @@ class Hydro {
   DvceArray5D<Real> w0;   // primitive variables
 
   DvceArray5D<Real> coarse_u0;  // conserved variables on 2x coarser grid (for SMR/AMR)
+  DvceArray5D<Real> coarse_w0;  // primitive variables on 2x coarser grid (for SMR/AMR)
 
   // Boundary communication buffers and functions for u
   BoundaryValuesCC *pbval_u;
@@ -102,7 +104,8 @@ class Hydro {
   TaskStatus RestrictU(Driver *d, int stage);
   TaskStatus SendU(Driver *d, int stage);
   TaskStatus RecvU(Driver *d, int stage);
-  TaskStatus ApplyPhysicalBCs(Driver* pdrive, int stage);  // file in hydro/bvals dir
+  TaskStatus ApplyPhysicalBCs(Driver* pdrive, int stage);
+  TaskStatus Prolongate(Driver* pdrive, int stage);
   TaskStatus ConToPrim(Driver *d, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
   // ...in end task list

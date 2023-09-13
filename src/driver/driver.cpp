@@ -20,6 +20,7 @@
 #include "mhd/mhd.hpp"
 #include "ion-neutral/ion_neutral.hpp"
 #include "radiation/radiation.hpp"
+#include "z4c/z4c.hpp"
 #include "driver.hpp"
 
 #if MPI_PARALLEL_ENABLED
@@ -246,6 +247,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
   hydro::Hydro *phydro = pmesh->pmb_pack->phydro;
   mhd::MHD *pmhd = pmesh->pmb_pack->pmhd;
   radiation::Radiation *prad = pmesh->pmb_pack->prad;
+  z4c::Z4c *pz4c = pmesh->pmb_pack->pz4c;
   if (time_evolution != TimeEvolution::tstatic) {
     if (phydro != nullptr) {
       (void) pmesh->pmb_pack->phydro->NewTimeStep(this, nexp_stages);
@@ -256,6 +258,10 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
     if (prad != nullptr) {
       (void) pmesh->pmb_pack->prad->NewTimeStep(this, nexp_stages);
     }
+    if (pz4c != nullptr) {
+      (void) pmesh->pmb_pack->pz4c->NewTimeStep(this, nexp_stages);
+    }
+
     pmesh->NewTimeStep(tlim);
   }
 
@@ -281,7 +287,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
           << std::endl;
       std::exit(EXIT_FAILURE);
     }
-    int nmb = pmesh->pmb_pack->nmb_thispack;
+    int nmb = std::max((pmesh->pmb_pack->nmb_thispack), (pmesh->nmb_maxperrank));
     auto &indcs = pmesh->mb_indcs;
     int ncells1 = indcs.nx1 + 2*(indcs.ng);
     int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
@@ -415,7 +421,6 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
 
       // AMR
       if (pmesh->adaptive) {pmesh->pmr->AdaptiveMeshRefinement(this, pin);}
-
       // compute new timestep AFTER all Meshblocks refined/derefined
       pmesh->NewTimeStep(tlim);
 
@@ -535,6 +540,7 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) phydro->ClearRecv(this, -1);
     (void) phydro->RecvU(this, 0);
     (void) phydro->ApplyPhysicalBCs(this, 0);
+    (void) phydro->Prolongate(this, 0);
     (void) phydro->ConToPrim(this, 0);
   }
 
@@ -552,6 +558,7 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) pmhd->RecvU(this, 0);
     (void) pmhd->RecvB(this, 0);
     (void) pmhd->ApplyPhysicalBCs(this, 0);
+    (void) pmhd->Prolongate(this, 0);
     (void) pmhd->ConToPrim(this, 0);
   }
 
@@ -565,6 +572,21 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) prad->ClearRecv(this, -1);
     (void) prad->RecvI(this, 0);
     (void) prad->ApplyPhysicalBCs(this, 0);
+    (void) prad->Prolongate(this, 0);
   }
+
+  // Initialize Z4c
+  z4c::Z4c *pz4c = pm->pmb_pack->pz4c;
+  if (pz4c != nullptr) {
+    (void) pz4c->RestrictU(this, 0);
+    (void) pz4c->InitRecv(this, -1);  // stage < 0 suppresses InitFluxRecv
+    (void) pz4c->SendU(this, 0);
+    (void) pz4c->ClearSend(this, -1);
+    (void) pz4c->ClearRecv(this, -1);
+    (void) pz4c->RecvU(this, 0);
+    (void) pz4c->Z4cBoundaryRHS(this, 0);
+    (void) pz4c->ApplyPhysicalBCs(this, 0);
+  }
+
   return;
 }

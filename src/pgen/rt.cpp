@@ -39,9 +39,12 @@
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
+#include "mhd/mhd.hpp"
 #include "srcterms/srcterms.hpp"
 #include "utils/random.hpp"
 #include "pgen.hpp"
+
+#include <Kokkos_Random.hpp>
 
 //----------------------------------------------------------------------------------------
 //! \fn void ProblemGenerator::UserProblem()
@@ -64,7 +67,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   Real amp = pin->GetReal("problem","amp");
   int iprob = pin->GetInteger("problem","iprob");
   Real drat = pin->GetOrAddReal("problem","drat",3.0);
-  Real grav_acc = pin->GetReal("hydro","const_accel_val");
+  bool smooth_interface = pin->GetOrAddBoolean("problem","smooth_interface",false);
 
   // capture variables for kernel
   auto &indcs = pmy_mesh_->mb_indcs;
@@ -74,84 +77,115 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   auto &size = pmbp->pmb->mb_size;
 
-  // initialize Hydro variables ----------------------------------------------------------
+  // Select either Hydro or MHD
+  DvceArray5D<Real> u0_;
+  Real gm1, p0;
+  Real grav_acc;
   if (pmbp->phydro != nullptr) {
-    EOS_Data &eos = pmbp->phydro->peos->eos_data;
-    Real gm1 = eos.gamma - 1.0;
-    Real p0 = 1.0/eos.gamma;
+    grav_acc = pin->GetReal("hydro","const_accel_val");
+    u0_ = pmbp->phydro->u0;
+    gm1 = (pmbp->phydro->peos->eos_data.gamma) - 1.0;
+    p0 = 1.0/(pmbp->phydro->peos->eos_data.gamma);
+  } else if (pmbp->pmhd != nullptr) {
+    grav_acc = pin->GetReal("mhd","const_accel_val");
+    u0_ = pmbp->pmhd->u0;
+    gm1 = (pmbp->pmhd->peos->eos_data.gamma) - 1.0;
+    p0 = 1.0/(pmbp->pmhd->peos->eos_data.gamma);
+  }
 
-    // 2D PROBLEM
+  // 2D PROBLEM ----------------------------------------------------------------
 
-    if (pmbp->pmesh->two_d) {
-      auto u0 = pmbp->phydro->u0;
-      par_for("rt2d", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
-      KOKKOS_LAMBDA(int m, int k, int j, int i) {
-        Real &x1min = size.d_view(m).x1min;
-        Real &x1max = size.d_view(m).x1max;
-        int nx1 = indcs.nx1;
-        Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+  if (pmbp->pmesh->two_d) {
+    Kokkos::Random_XorShift64_Pool<> rand_pool64(pmbp->gids);
+    par_for("rt2d", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      int nx1 = indcs.nx1;
+      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
-        Real &x2min = size.d_view(m).x2min;
-        Real &x2max = size.d_view(m).x2max;
-        int nx2 = indcs.nx2;
-        Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+      Real &x2min = size.d_view(m).x2min;
+      Real &x2max = size.d_view(m).x2max;
+      int nx2 = indcs.nx2;
+      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
-        Real den=1.0;
+      Real den=1.0;
+      Real sigma = 0.01;
+      if (smooth_interface) {
+        den = 0.5*((drat + 1.0) + (drat - 1.0)*tanh(x2v/sigma));
+      } else {
         if (x2v > 0.0) den *= drat;
+      }
 
-        if (iprob == 1) {
-          u0(m,IM2,k,j,i) = (1.0 + cos(kx*x1v))*(1.0 + cos(ky*x2v))/4.0;
-        } else {
-          u0(m,IM2,k,j,i) = ((Ran2((int64_t*)iseed)-0.5) *  // NOLINT
-                             (1.0 + cos(ky*x2v)));
-        }
+      if (iprob == 1) {
+        u0_(m,IM2,k,j,i) = (1.0 + cos(kx*x1v))*(1.0 + cos(ky*x2v))/4.0;
+      } else {
+        auto rand_gen = rand_pool64.get_state();  // get random number state this thread
+        u0_(m,IM2,k,j,i) = (rand_gen.frand()-0.5)*(1.0 + cos(ky*x2v))/4.0;
+        rand_pool64.free_state(rand_gen);  // free state for use by other threads
+      }
 
-        u0(m,IDN,k,j,i) = den;
-        u0(m,IM1,k,j,i) = 0.0;
-        u0(m,IM2,k,j,i) *= (den*amp);
-        u0(m,IM3,k,j,i) = 0.0;
-        u0(m,IEN,k,j,i) = (p0 + grav_acc*den*x2v)/gm1 + 0.5*SQR(u0(m,IM2,k,j,i))/den;
-      });
+      u0_(m,IDN,k,j,i) = den;
+      u0_(m,IM1,k,j,i) = 0.0;
+      u0_(m,IM2,k,j,i) *= (den*amp);
+      u0_(m,IM3,k,j,i) = 0.0;
+      u0_(m,IEN,k,j,i) = (p0 + grav_acc*den*x2v)/gm1 + 0.5*SQR(u0_(m,IM2,k,j,i))/den;
+    });
 
-    // 3D PROBLEM ----------------------------------------------------------------
-
-    } else {
-      auto u0 = pmbp->phydro->u0;
-      par_for("rt2d", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
+    // initialize magnetic fields if MHD
+    if (pmbp->pmhd != nullptr) {
+      // Read magnetic field strength
+      Real bx = pin->GetReal("problem","b0");
+      auto &b0 = pmbp->pmhd->b0;
+      par_for("pgen_b0", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i) {
-        Real &x1min = size.d_view(m).x1min;
-        Real &x1max = size.d_view(m).x1max;
-        int nx1 = indcs.nx1;
-        Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
-
-        Real &x2min = size.d_view(m).x2min;
-        Real &x2max = size.d_view(m).x2max;
-        int nx2 = indcs.nx2;
-        Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
-
-        Real &x3min = size.d_view(m).x3min;
-        Real &x3max = size.d_view(m).x3max;
-        int nx3 = indcs.nx3;
-        Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
-
-        Real den=1.0;
-        if (x3v > 0.0) den *= drat;
-
-        if (iprob == 1) {
-          u0(m,IM3,k,j,i) = (1.0+cos(kx*x1v))*(1.0+cos(ky*x2v))*(1.0+cos(kz*x3v))/8.0;
-        } else {
-          u0(m,IM3,k,j,i) = (amp*(Ran2((int64_t*)iseed)-0.5) *  // NOLINT
-                             (1.0 + cos(kz*x3v)));
-        }
-
-        u0(m,IDN,k,j,i) = den;
-        u0(m,IM1,k,j,i) = 0.0;
-        u0(m,IM2,k,j,i) = 0.0;
-        u0(m,IM3,k,j,i) *= (den*amp);
-        u0(m,IEN,k,j,i) = (p0 + grav_acc*den*x3v)/gm1 + 0.5*SQR(u0(m,IM3,k,j,i))/den;
+        b0.x1f(m,k,j,i) = bx;
+        b0.x2f(m,k,j,i) = 0.0;
+        b0.x3f(m,k,j,i) = 0.0;
+        if (i==ie) b0.x1f(m,k,j,i+1) = bx;
+        if (j==je) b0.x2f(m,k,j+1,i) = 0.0;
+        if (k==ke) b0.x3f(m,k+1,j,i) = 0.0;
+        u0_(m,IEN,k,j,i) += 0.5*bx*bx;
       });
     }
-  } // end of Hydro initialization
+
+  // 3D PROBLEM ----------------------------------------------------------------
+
+  } else {
+    par_for("rt2d", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      int nx1 = indcs.nx1;
+      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+
+      Real &x2min = size.d_view(m).x2min;
+      Real &x2max = size.d_view(m).x2max;
+      int nx2 = indcs.nx2;
+      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+
+      Real &x3min = size.d_view(m).x3min;
+      Real &x3max = size.d_view(m).x3max;
+      int nx3 = indcs.nx3;
+      Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+
+      Real den=1.0;
+      if (x3v > 0.0) den *= drat;
+
+      if (iprob == 1) {
+        u0_(m,IM3,k,j,i) = (1.0+cos(kx*x1v))*(1.0+cos(ky*x2v))*(1.0+cos(kz*x3v))/8.0;
+      } else {
+        u0_(m,IM3,k,j,i) = (amp*(Ran2((int64_t*)iseed)-0.5) *  // NOLINT
+                           (1.0 + cos(kz*x3v)));
+      }
+
+      u0_(m,IDN,k,j,i) = den;
+      u0_(m,IM1,k,j,i) = 0.0;
+      u0_(m,IM2,k,j,i) = 0.0;
+      u0_(m,IM3,k,j,i) *= (den*amp);
+      u0_(m,IEN,k,j,i) = (p0 + grav_acc*den*x3v)/gm1 + 0.5*SQR(u0_(m,IM3,k,j,i))/den;
+    });
+  }
 
   return;
 }

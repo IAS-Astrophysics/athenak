@@ -41,32 +41,37 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
   nmb_sent_thisrank(0),
   ncyc_check_amr(1),
   refinement_interval(5),
+  prolong_prims(false),
   d_threshold_(0.0),
   dd_threshold_(0.0),
   dp_threshold_(0.0),
   dv_threshold_(0.0),
   check_cons_(false) {
-  // read interval (in cycles) between check of AMR and derefinement
   if (pin->DoesBlockExist("mesh_refinement")) {
+    // read interval (in cycles) between check of AMR and derefinement
     ncyc_check_amr = pin->GetOrAddReal("mesh_refinement", "ncycle_check", 1);
     refinement_interval = pin->GetOrAddReal("mesh_refinement", "refinement_interval", 5);
-  }
-  // read thresholds from <mesh_refinement> block in input file
-  if (pin->DoesParameterExist("mesh_refinement", "dens_max")) {
-    d_threshold_ = pin->GetReal("mesh_refinement", "dens_max");
-    check_cons_ = true;
-  }
-  if (pin->DoesParameterExist("mesh_refinement", "ddens_max")) {
-    dd_threshold_ = pin->GetReal("mesh_refinement", "ddens_max");
-    check_cons_ = true;
-  }
-  if (pin->DoesParameterExist("mesh_refinement", "dpres_max")) {
-    dp_threshold_ = pin->GetReal("mesh_refinement", "dpres_max");
-    check_cons_ = true;
-  }
-  if (pin->DoesParameterExist("mesh_refinement", "dvel_max")) {
-    dd_threshold_ = pin->GetReal("mesh_refinement", "dvel_max");
-    check_cons_ = true;
+    // read prolongate primitives flag
+    if (pin->DoesParameterExist("mesh_refinement", "prolong_primitives")) {
+      prolong_prims = pin->GetBoolean("mesh_refinement", "prolong_primitives");
+    }
+    // read refinement criteria thresholds
+    if (pin->DoesParameterExist("mesh_refinement", "dens_max")) {
+      d_threshold_ = pin->GetReal("mesh_refinement", "dens_max");
+      check_cons_ = true;
+    }
+    if (pin->DoesParameterExist("mesh_refinement", "ddens_max")) {
+      dd_threshold_ = pin->GetReal("mesh_refinement", "ddens_max");
+      check_cons_ = true;
+    }
+    if (pin->DoesParameterExist("mesh_refinement", "dpres_max")) {
+      dp_threshold_ = pin->GetReal("mesh_refinement", "dpres_max");
+      check_cons_ = true;
+    }
+    if (pin->DoesParameterExist("mesh_refinement", "dvel_max")) {
+      dd_threshold_ = pin->GetReal("mesh_refinement", "dvel_max");
+      check_cons_ = true;
+    }
   }
 
   if (pm->adaptive) {  // allocate arrays for AMR

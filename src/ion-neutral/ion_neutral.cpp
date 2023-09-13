@@ -47,30 +47,39 @@ void IonNeutral::AssembleIonNeutralTasks(TaskList &start, TaskList &run, TaskLis
   id.n_irecv = start.AddTask(&Hydro::InitRecv, phyd, none);
 
   // assemble run task list
-  id.impl_2x = run.AddTask(&IonNeutral::FirstTwoImpRK, this, none);
+  id.impl_2x = run.AddTask(&IonNeutral::FirstTwoImpRK, this, none);  // does CopyCons
 
-  id.i_flux = run.AddTask(&MHD::Fluxes, pmhd, id.impl_2x);
-  id.i_expl = run.AddTask(&MHD::ExpRKUpdate, pmhd, id.i_flux);
+  id.i_flux  = run.AddTask(&MHD::Fluxes, pmhd, id.impl_2x);
+  id.i_sendf = run.AddTask(&MHD::SendFlux, pmhd, id.i_flux);
+  id.i_recvf = run.AddTask(&MHD::RecvFlux, pmhd, id.i_sendf);
+  id.i_expl  = run.AddTask(&MHD::ExpRKUpdate, pmhd, id.i_recvf);
 
   id.n_flux = run.AddTask(&Hydro::Fluxes, phyd, id.i_expl);
-  id.n_expl = run.AddTask(&Hydro::ExpRKUpdate, phyd, id.n_flux);
+  id.n_sendf = run.AddTask(&Hydro::SendFlux, phyd, id.n_flux);
+  id.n_recvf = run.AddTask(&Hydro::RecvFlux, phyd, id.n_sendf);
+  id.n_expl = run.AddTask(&Hydro::ExpRKUpdate, phyd, id.n_recvf);
 
   id.impl = run.AddTask(&IonNeutral::ImpRKUpdate, this, id.n_expl);
+  id.i_restu = run.AddTask(&MHD::RestrictU, pmhd, id.impl);
+  id.n_restu = run.AddTask(&Hydro::RestrictU, phyd, id.i_restu);
 
-  id.i_sendu = run.AddTask(&MHD::SendU, pmhd, id.impl);
-  id.n_sendu = run.AddTask(&Hydro::SendU, phyd, id.impl);
+  id.i_sendu = run.AddTask(&MHD::SendU, pmhd, id.n_restu);
+  id.n_sendu = run.AddTask(&Hydro::SendU, phyd, id.n_restu);
   id.i_recvu = run.AddTask(&MHD::RecvU, pmhd, id.i_sendu);
   id.n_recvu = run.AddTask(&Hydro::RecvU, phyd, id.n_sendu);
 
   id.efld  = run.AddTask(&MHD::CornerE, pmhd, id.i_recvu);
   id.ct    = run.AddTask(&MHD::CT, pmhd, id.efld);
-  id.sendb = run.AddTask(&MHD::SendB, pmhd, id.ct);
+  id.restb = run.AddTask(&MHD::RestrictB, pmhd, id.ct);
+  id.sendb = run.AddTask(&MHD::SendB, pmhd, id.restb);
   id.recvb  = run.AddTask(&MHD::RecvB, pmhd, id.sendb);
 
   id.i_bcs   = run.AddTask(&MHD::ApplyPhysicalBCs, pmhd, id.recvb);
   id.n_bcs   = run.AddTask(&Hydro::ApplyPhysicalBCs, phyd, id.n_recvu);
-  id.i_c2p   = run.AddTask(&MHD::ConToPrim, pmhd, id.i_bcs);
-  id.n_c2p   = run.AddTask(&Hydro::ConToPrim, phyd, id.n_bcs);
+  id.i_prol  = run.AddTask(&MHD::Prolongate, pmhd, id.i_bcs);
+  id.n_prol  = run.AddTask(&Hydro::Prolongate, phyd, id.n_bcs);
+  id.i_c2p   = run.AddTask(&MHD::ConToPrim, pmhd, id.i_prol);
+  id.n_c2p   = run.AddTask(&Hydro::ConToPrim, phyd, id.n_prol);
   id.i_newdt = run.AddTask(&MHD::NewTimeStep, pmhd, id.i_c2p);
   id.n_newdt = run.AddTask(&Hydro::NewTimeStep, phyd, id.n_c2p);
 

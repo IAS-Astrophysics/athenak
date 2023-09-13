@@ -2,7 +2,8 @@ variables:
   GIT_SUBMODULE_STRATEGY: recursive
 
 before_script:
-  - module load python3 rh/devtoolset/7 cuda cudatoolkit
+  - module load rh/devtoolset/8 cuda/9.2 cudatoolkit/11.7
+  - python3 -m pip install --user flake8 numpy
 
 stages:
   - lint_python
@@ -19,7 +20,6 @@ lint_python-job:
     - merge_requests
   script:
     - cd $CI_PROJECT_DIR
-    - python3 -m pip install --user flake8
     - echo "Running flake8..."
     - python3 -m flake8 2>&1 | tee $CI_PROJECT_DIR/tst/lint_python_log.txt
   artifacts:
@@ -73,7 +73,7 @@ regression_gpu-job:
     - cd $CI_PROJECT_DIR/tst
     - export CUDA_VISIBLE_DEVICES=1
     - echo "Running regression script on GPU..."
-    - python run_tests.py --log_file=log_file_gpu.txt
+    - python3 run_tests.py --log_file=log_file_gpu.txt
       --cmake=-DKokkos_ENABLE_CUDA=On
       --cmake=-DKokkos_ARCH_VOLTA70=On
       --cmake=-DCMAKE_CXX_COMPILER=$CI_PROJECT_DIR/kokkos/bin/nvcc_wrapper

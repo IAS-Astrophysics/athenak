@@ -14,7 +14,7 @@
 
 namespace mhd {
 
-#define HLLD_SMALL_NUMBER 1.0e-8
+#define HLLD_SMALL_NUMBER 1.0e-4
 
 //----------------------------------------------------------------------------------------
 //! \fn

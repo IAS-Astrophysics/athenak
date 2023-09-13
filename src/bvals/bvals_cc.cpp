@@ -4,8 +4,9 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file bvals_cc.cpp
-//! \brief functions to pack/send and recv/unpack/prolongate boundary values for
-//! cell-centered variables, implemented as part of the BValCC class.
+//! \brief functions to pack/send and recv/unpack boundary values for cell-centered (CC)
+//! variables.
+//! Prolongation of CC variables  occurs in ProlongateCC() function called from task list
 
 #include <cstdlib>
 #include <iostream>
@@ -290,7 +291,7 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
           });
           tmember.team_barrier();
 
-        // if neighbor is at coarser level, load data into coarse_u0 (prolongate below)
+        // if neighbor is at coarser level, load data into coarse_u0
         } else {
           Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
           [&](const int i) {
@@ -301,11 +302,6 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
       });
     }  // end if-neighbor-exists block
   });  // end par_for_outer
-
-  //----- STEP 3: Prolongate conserved variables when neighbor at coarser level
-
-  // Only perform prolongation with SMR/AMR
-  if (pmy_pack->pmesh->multilevel) ProlongateCC(a,ca);
 
   return TaskStatus::complete;
 }

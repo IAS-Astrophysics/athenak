@@ -154,64 +154,40 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     });
   }
 
-  // radiation moments evaluated in the coordinate frame
-  if (name.compare("rad_coord") == 0) {
-    Kokkos::realloc(derived_var, nmb, 10, n3, n2, n1);
+  // radiation moments
+  if (name.compare(0, 3, "rad") == 0) {
+    // Determine if coordinate and/or fluid frame moments required
+    bool needs_coord_only = (name.compare("rad_coord") == 0);
+    bool needs_fluid_only = (name.compare("rad_fluid") == 0);
+    bool needs_both = !(needs_coord_only || needs_fluid_only);
+    int mom_var_size = (needs_both) ? 20 : 10;
+    int moments_offset = (needs_both) ? 10 : 0;
+    Kokkos::realloc(derived_var, nmb, mom_var_size, n3, n2, n1);
     auto dv = derived_var;
-    int nang1 = pm->pmb_pack->prad->prgeo->nangles - 1;
-    auto nh_c_ = pm->pmb_pack->prad->nh_c;
-    auto tet_c_ = pm->pmb_pack->prad->tet_c;
-    auto tetcov_c_ = pm->pmb_pack->prad->tetcov_c;
-    auto i0_ = pm->pmb_pack->prad->i0;
-    auto solid_angles_ = pm->pmb_pack->prad->prgeo->solid_angles;
-    par_for("moments_coord",DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),0,(n1-1),
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real n0 = tet_c_(m,0,0,k,j,i);
-      for (int n1=0, n12=0; n1<4; ++n1) {
-        for (int n2=n1; n2<4; ++n2, ++n12) {
-          dv(m,n12,k,j,i) = 0.0;
-          for (int n=0; n<=nang1; ++n) {
-            Real nmun1 = 0.0; Real nmun2 = 0.0; Real n_0 = 0.0;
-            for (int d=0; d<4; ++d) {
-              nmun1 += tet_c_   (m,d,n1,k,j,i)*nh_c_.d_view(n,d);
-              nmun2 += tet_c_   (m,d,n2,k,j,i)*nh_c_.d_view(n,d);
-              n_0   += tetcov_c_(m,d,0, k,j,i)*nh_c_.d_view(n,d);
-            }
-            dv(m,n12,k,j,i) += (nmun1*nmun2*(i0_(m,n,k,j,i)/(n0*n_0))*
-                                solid_angles_.d_view(n));
-          }
-        }
-      }
-    });
-  }
 
-  // radiation moments evaluated in the coordinate frame
-  if (name.compare("rad_fluid") == 0 ||
-      name.compare(0, 9, "rad_hydro") == 0 ||
-      name.compare(0, 7, "rad_mhd") == 0) {
-    Kokkos::realloc(derived_var, nmb, 10, n3, n2, n1);
-    auto dv = derived_var;
-    int nang1 = pm->pmb_pack->prad->prgeo->nangles - 1;
-    auto nh_c_ = pm->pmb_pack->prad->nh_c;
-    auto tet_c_ = pm->pmb_pack->prad->tet_c;
-    auto tetcov_c_ = pm->pmb_pack->prad->tetcov_c;
-    auto solid_angles_ = pm->pmb_pack->prad->prgeo->solid_angles;
-
+    // Coordinates
     auto &coord = pm->pmb_pack->pcoord->coord_data;
     bool &flat = coord.is_minkowski;
     Real &spin = coord.bh_spin;
 
-    // Select either Hydro or MHD
+    // Radiation
+    int nang1 = pm->pmb_pack->prad->prgeo->nangles - 1;
+    auto nh_c_ = pm->pmb_pack->prad->nh_c;
+    auto tet_c_ = pm->pmb_pack->prad->tet_c;
+    auto tetcov_c_ = pm->pmb_pack->prad->tetcov_c;
+    auto solid_angles_ = pm->pmb_pack->prad->prgeo->solid_angles;
+    auto i0_ = pm->pmb_pack->prad->i0;
+    auto norm_to_tet_ = pm->pmb_pack->prad->norm_to_tet;
+
+    // Select either Hydro or MHD (if fluid enabled)
     DvceArray5D<Real> w0_;
     if (pm->pmb_pack->phydro != nullptr) {
       w0_ = pm->pmb_pack->phydro->w0;
     } else if (pm->pmb_pack->pmhd != nullptr) {
       w0_ = pm->pmb_pack->pmhd->w0;
     }
-    auto i0_ = pm->pmb_pack->prad->i0;
-    auto norm_to_tet_ = pm->pmb_pack->prad->norm_to_tet;
 
-    par_for("moments_fluid",DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),0,(n1-1),
+    par_for("moments",DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),0,(n1-1),
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       Real &x1min = size.d_view(m).x1min;
       Real &x1max = size.d_view(m).x1max;
@@ -249,105 +225,109 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
         }
       }
 
-      // stash coordinate frame moments
-      Real moments_coord[4][4];
-      moments_coord[0][0] = dv(m,0,k,j,i);
-      moments_coord[0][1] = dv(m,1,k,j,i);
-      moments_coord[0][2] = dv(m,2,k,j,i);
-      moments_coord[0][3] = dv(m,3,k,j,i);
-      moments_coord[1][1] = dv(m,4,k,j,i);
-      moments_coord[1][2] = dv(m,5,k,j,i);
-      moments_coord[1][3] = dv(m,6,k,j,i);
-      moments_coord[2][2] = dv(m,7,k,j,i);
-      moments_coord[2][3] = dv(m,8,k,j,i);
-      moments_coord[3][3] = dv(m,9,k,j,i);
-      moments_coord[1][0] = moments_coord[0][1];
-      moments_coord[2][0] = moments_coord[0][2];
-      moments_coord[3][0] = moments_coord[0][3];
-      moments_coord[2][1] = moments_coord[1][2];
-      moments_coord[3][1] = moments_coord[1][3];
-      moments_coord[3][2] = moments_coord[2][3];
+      if (needs_fluid_only || needs_both) {
+        // stash coordinate frame moments
+        Real moments_coord[4][4];
+        moments_coord[0][0] = dv(m,0,k,j,i);
+        moments_coord[0][1] = dv(m,1,k,j,i);
+        moments_coord[0][2] = dv(m,2,k,j,i);
+        moments_coord[0][3] = dv(m,3,k,j,i);
+        moments_coord[1][1] = dv(m,4,k,j,i);
+        moments_coord[1][2] = dv(m,5,k,j,i);
+        moments_coord[1][3] = dv(m,6,k,j,i);
+        moments_coord[2][2] = dv(m,7,k,j,i);
+        moments_coord[2][3] = dv(m,8,k,j,i);
+        moments_coord[3][3] = dv(m,9,k,j,i);
+        moments_coord[1][0] = moments_coord[0][1];
+        moments_coord[2][0] = moments_coord[0][2];
+        moments_coord[3][0] = moments_coord[0][3];
+        moments_coord[2][1] = moments_coord[1][2];
+        moments_coord[3][1] = moments_coord[1][3];
+        moments_coord[3][2] = moments_coord[2][3];
 
-      // fluid velocity in tetrad frame
-      Real uu1 = w0_(m,IVX,k,j,i);
-      Real uu2 = w0_(m,IVY,k,j,i);
-      Real uu3 = w0_(m,IVZ,k,j,i);
-      Real q = glower[1][1]*uu1*uu1 + 2.0*glower[1][2]*uu1*uu2 + 2.0*glower[1][3]*uu1*uu3
-             + glower[2][2]*uu2*uu2 + 2.0*glower[2][3]*uu2*uu3
-             + glower[3][3]*uu3*uu3;
-      Real uu0 = sqrt(1.0 + q);
-      Real u_tet_[4];
-      u_tet_[0] = (norm_to_tet_(m,0,0,k,j,i)*uu0 + norm_to_tet_(m,0,1,k,j,i)*uu1 +
-                   norm_to_tet_(m,0,2,k,j,i)*uu2 + norm_to_tet_(m,0,3,k,j,i)*uu3);
-      u_tet_[1] = (norm_to_tet_(m,1,0,k,j,i)*uu0 + norm_to_tet_(m,1,1,k,j,i)*uu1 +
-                   norm_to_tet_(m,1,2,k,j,i)*uu2 + norm_to_tet_(m,1,3,k,j,i)*uu3);
-      u_tet_[2] = (norm_to_tet_(m,2,0,k,j,i)*uu0 + norm_to_tet_(m,2,1,k,j,i)*uu1 +
-                   norm_to_tet_(m,2,2,k,j,i)*uu2 + norm_to_tet_(m,2,3,k,j,i)*uu3);
-      u_tet_[3] = (norm_to_tet_(m,3,0,k,j,i)*uu0 + norm_to_tet_(m,3,1,k,j,i)*uu1 +
-                   norm_to_tet_(m,3,2,k,j,i)*uu2 + norm_to_tet_(m,3,3,k,j,i)*uu3);
+        // fluid velocity in tetrad frame
+        Real uu1 = w0_(m,IVX,k,j,i);
+        Real uu2 = w0_(m,IVY,k,j,i);
+        Real uu3 = w0_(m,IVZ,k,j,i);
+        Real q = glower[1][1]*uu1*uu1+2.0*glower[1][2]*uu1*uu2+2.0*glower[1][3]*uu1*uu3
+               + glower[2][2]*uu2*uu2+2.0*glower[2][3]*uu2*uu3
+               + glower[3][3]*uu3*uu3;
+        Real uu0 = sqrt(1.0 + q);
+        Real u_tet_[4];
+        u_tet_[0] = (norm_to_tet_(m,0,0,k,j,i)*uu0 + norm_to_tet_(m,0,1,k,j,i)*uu1 +
+                     norm_to_tet_(m,0,2,k,j,i)*uu2 + norm_to_tet_(m,0,3,k,j,i)*uu3);
+        u_tet_[1] = (norm_to_tet_(m,1,0,k,j,i)*uu0 + norm_to_tet_(m,1,1,k,j,i)*uu1 +
+                     norm_to_tet_(m,1,2,k,j,i)*uu2 + norm_to_tet_(m,1,3,k,j,i)*uu3);
+        u_tet_[2] = (norm_to_tet_(m,2,0,k,j,i)*uu0 + norm_to_tet_(m,2,1,k,j,i)*uu1 +
+                     norm_to_tet_(m,2,2,k,j,i)*uu2 + norm_to_tet_(m,2,3,k,j,i)*uu3);
+        u_tet_[3] = (norm_to_tet_(m,3,0,k,j,i)*uu0 + norm_to_tet_(m,3,1,k,j,i)*uu1 +
+                     norm_to_tet_(m,3,2,k,j,i)*uu2 + norm_to_tet_(m,3,3,k,j,i)*uu3);
 
-      // Construct Lorentz boost from tetrad frame to orthonormal fluid frame
-      Real tet_to_fluid[4][4];
-      tet_to_fluid[0][0] =  u_tet_[0];
-      tet_to_fluid[0][1] = -u_tet_[1];
-      tet_to_fluid[0][2] = -u_tet_[2];
-      tet_to_fluid[0][3] = -u_tet_[3];
-      tet_to_fluid[1][1] = u_tet_[1]*u_tet_[1]/(1.0 + u_tet_[0]) + 1.0;
-      tet_to_fluid[1][2] = u_tet_[1]*u_tet_[2]/(1.0 + u_tet_[0]);
-      tet_to_fluid[1][3] = u_tet_[1]*u_tet_[3]/(1.0 + u_tet_[0]);
-      tet_to_fluid[2][2] = u_tet_[2]*u_tet_[2]/(1.0 + u_tet_[0]) + 1.0;
-      tet_to_fluid[2][3] = u_tet_[2]*u_tet_[3]/(1.0 + u_tet_[0]);
-      tet_to_fluid[3][3] = u_tet_[3]*u_tet_[3]/(1.0 + u_tet_[0]) + 1.0;
-      tet_to_fluid[1][0] = tet_to_fluid[0][1];
-      tet_to_fluid[2][0] = tet_to_fluid[0][2];
-      tet_to_fluid[3][0] = tet_to_fluid[0][3];
-      tet_to_fluid[2][1] = tet_to_fluid[1][2];
-      tet_to_fluid[3][1] = tet_to_fluid[1][3];
-      tet_to_fluid[3][2] = tet_to_fluid[2][3];
+        // Construct Lorentz boost from tetrad frame to orthonormal fluid frame
+        Real tet_to_fluid[4][4];
+        tet_to_fluid[0][0] =  u_tet_[0];
+        tet_to_fluid[0][1] = -u_tet_[1];
+        tet_to_fluid[0][2] = -u_tet_[2];
+        tet_to_fluid[0][3] = -u_tet_[3];
+        tet_to_fluid[1][1] = u_tet_[1]*u_tet_[1]/(1.0 + u_tet_[0]) + 1.0;
+        tet_to_fluid[1][2] = u_tet_[1]*u_tet_[2]/(1.0 + u_tet_[0]);
+        tet_to_fluid[1][3] = u_tet_[1]*u_tet_[3]/(1.0 + u_tet_[0]);
+        tet_to_fluid[2][2] = u_tet_[2]*u_tet_[2]/(1.0 + u_tet_[0]) + 1.0;
+        tet_to_fluid[2][3] = u_tet_[2]*u_tet_[3]/(1.0 + u_tet_[0]);
+        tet_to_fluid[3][3] = u_tet_[3]*u_tet_[3]/(1.0 + u_tet_[0]) + 1.0;
+        tet_to_fluid[1][0] = tet_to_fluid[0][1];
+        tet_to_fluid[2][0] = tet_to_fluid[0][2];
+        tet_to_fluid[3][0] = tet_to_fluid[0][3];
+        tet_to_fluid[2][1] = tet_to_fluid[1][2];
+        tet_to_fluid[3][1] = tet_to_fluid[1][3];
+        tet_to_fluid[3][2] = tet_to_fluid[2][3];
 
-      // set tetrad frame moments
-      for (int n1=0, n12=0; n1<4; ++n1) {
-        for (int n2=n1; n2<4; ++n2, ++n12) {
-          dv(m,n12,k,j,i) = 0.0;
-          for (int m1=0; m1<4; ++m1) {
-            for (int m2=0; m2<4; ++m2) {
-              dv(m,n12,k,j,i) += (tetcov_c_(m,n1,m1,k,j,i)*tetcov_c_(m,n2,m2,k,j,i)
-                                  *moments_coord[m1][m2]);
+        // set tetrad frame moments
+        for (int n1=0, n12=0; n1<4; ++n1) {
+          for (int n2=n1; n2<4; ++n2, ++n12) {
+            dv(m,moments_offset+n12,k,j,i) = 0.0;
+            for (int m1=0; m1<4; ++m1) {
+              for (int m2=0; m2<4; ++m2) {
+                dv(m,moments_offset+n12,k,j,i) += (tetcov_c_(m,n1,m1,k,j,i)*
+                                                   tetcov_c_(m,n2,m2,k,j,i)*
+                                                   moments_coord[m1][m2]);
+              }
             }
           }
         }
-      }
-      dv(m,1,k,j,i) *= -1.0;
-      dv(m,2,k,j,i) *= -1.0;
-      dv(m,3,k,j,i) *= -1.0;
+        dv(m,moments_offset+1,k,j,i) *= -1.0;
+        dv(m,moments_offset+2,k,j,i) *= -1.0;
+        dv(m,moments_offset+3,k,j,i) *= -1.0;
 
-      // stash tetrad frame moments
-      Real moments_tetrad[4][4];
-      moments_tetrad[0][0] = dv(m,0,k,j,i);
-      moments_tetrad[0][1] = dv(m,1,k,j,i);
-      moments_tetrad[0][2] = dv(m,2,k,j,i);
-      moments_tetrad[0][3] = dv(m,3,k,j,i);
-      moments_tetrad[1][1] = dv(m,4,k,j,i);
-      moments_tetrad[1][2] = dv(m,5,k,j,i);
-      moments_tetrad[1][3] = dv(m,6,k,j,i);
-      moments_tetrad[2][2] = dv(m,7,k,j,i);
-      moments_tetrad[2][3] = dv(m,8,k,j,i);
-      moments_tetrad[3][3] = dv(m,9,k,j,i);
-      moments_tetrad[1][0] = moments_tetrad[0][1];
-      moments_tetrad[2][0] = moments_tetrad[0][2];
-      moments_tetrad[3][0] = moments_tetrad[0][3];
-      moments_tetrad[2][1] = moments_tetrad[1][2];
-      moments_tetrad[3][1] = moments_tetrad[1][3];
-      moments_tetrad[3][2] = moments_tetrad[2][3];
+        // stash tetrad frame moments
+        Real moments_tetrad[4][4];
+        moments_tetrad[0][0] = dv(m,moments_offset+0,k,j,i);
+        moments_tetrad[0][1] = dv(m,moments_offset+1,k,j,i);
+        moments_tetrad[0][2] = dv(m,moments_offset+2,k,j,i);
+        moments_tetrad[0][3] = dv(m,moments_offset+3,k,j,i);
+        moments_tetrad[1][1] = dv(m,moments_offset+4,k,j,i);
+        moments_tetrad[1][2] = dv(m,moments_offset+5,k,j,i);
+        moments_tetrad[1][3] = dv(m,moments_offset+6,k,j,i);
+        moments_tetrad[2][2] = dv(m,moments_offset+7,k,j,i);
+        moments_tetrad[2][3] = dv(m,moments_offset+8,k,j,i);
+        moments_tetrad[3][3] = dv(m,moments_offset+9,k,j,i);
+        moments_tetrad[1][0] = moments_tetrad[0][1];
+        moments_tetrad[2][0] = moments_tetrad[0][2];
+        moments_tetrad[3][0] = moments_tetrad[0][3];
+        moments_tetrad[2][1] = moments_tetrad[1][2];
+        moments_tetrad[3][1] = moments_tetrad[1][3];
+        moments_tetrad[3][2] = moments_tetrad[2][3];
 
-      // set R^{\mu \nu} (fluid frame)
-      for (int n1=0, n12=0; n1<4; ++n1) {
-        for (int n2=n1; n2<4; ++n2, ++n12) {
-          dv(m,n12,k,j,i) = 0.0;
-          for (int m1=0; m1<4; ++m1) {
-            for (int m2=0; m2<4; ++m2) {
-              dv(m,n12,k,j,i) += (tet_to_fluid[n1][m1]*tet_to_fluid[n2][m2]
-                                  *moments_tetrad[m1][m2]);
+        // set R^{\mu \nu} (fluid frame)
+        for (int n1=0, n12=0; n1<4; ++n1) {
+          for (int n2=n1; n2<4; ++n2, ++n12) {
+            dv(m,moments_offset+n12,k,j,i) = 0.0;
+            for (int m1=0; m1<4; ++m1) {
+              for (int m2=0; m2<4; ++m2) {
+                dv(m,moments_offset+n12,k,j,i) += (tet_to_fluid[n1][m1]*
+                                                   tet_to_fluid[n2][m2]*
+                                                   moments_tetrad[m1][m2]);
+              }
             }
           }
         }

@@ -29,12 +29,16 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
     u0("cons",1,1,1,1,1),
     w0("prim",1,1,1,1,1),
     coarse_u0("ccons",1,1,1,1,1),
+    coarse_w0("cprim",1,1,1,1,1),
     u1("cons1",1,1,1,1,1),
     uflx("uflx",1,1,1,1,1),
     utest("utest",1,1,1,1,1),
     fofc("fofc",1,1,1,1) {
+  // Total number of MeshBlocks on this rank to be used in array dimensioning
+  int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_maxperrank));
+
   // (1) construct EOS object (no default)
-  {std::string eqn_of_state = pin->GetString("hydro","eos");
+  std::string eqn_of_state = pin->GetString("hydro","eos");
   // ideal gas EOS
   if (eqn_of_state.compare("ideal") == 0) {
     if (pmy_pack->pcoord->is_special_relativistic) {
@@ -61,7 +65,6 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "<hydro>/eos = '" << eqn_of_state << "' not implemented" << std::endl;
     std::exit(EXIT_FAILURE);
-  }
   }
 
   // (2) Initialize scalars, diffusion, source terms
@@ -92,23 +95,23 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   // allocate memory for conserved and primitive variables
   // With AMR, maximum size of Views are limited by total device memory through an input
   // parameter, which in turn limits max number of MBs that can be created.
-  int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_maxperrank));
-  auto &indcs = pmy_pack->pmesh->mb_indcs;
   {
-  int ncells1 = indcs.nx1 + 2*(indcs.ng);
-  int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
-  int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
-  Kokkos::realloc(u0, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
-  Kokkos::realloc(w0, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
+    auto &indcs = pmy_pack->pmesh->mb_indcs;
+    int ncells1 = indcs.nx1 + 2*(indcs.ng);
+    int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
+    int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
+    Kokkos::realloc(u0, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
+    Kokkos::realloc(w0, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
   }
 
   // allocate memory for conserved variables on coarse mesh
   if (ppack->pmesh->multilevel) {
     auto &indcs = pmy_pack->pmesh->mb_indcs;
-    int nccells1 = indcs.cnx1 + 2*(indcs.ng);
-    int nccells2 = (indcs.cnx2 > 1)? (indcs.cnx2 + 2*(indcs.ng)) : 1;
-    int nccells3 = (indcs.cnx3 > 1)? (indcs.cnx3 + 2*(indcs.ng)) : 1;
-    Kokkos::realloc(coarse_u0, nmb, (nhydro+nscalars), nccells3, nccells2, nccells1);
+    int n_ccells1 = indcs.cnx1 + 2*(indcs.ng);
+    int n_ccells2 = (indcs.cnx2 > 1)? (indcs.cnx2 + 2*(indcs.ng)) : 1;
+    int n_ccells3 = (indcs.cnx3 > 1)? (indcs.cnx3 + 2*(indcs.ng)) : 1;
+    Kokkos::realloc(coarse_u0, nmb, (nhydro+nscalars), n_ccells3, n_ccells2, n_ccells1);
+    Kokkos::realloc(coarse_w0, nmb, (nhydro+nscalars), n_ccells3, n_ccells2, n_ccells1);
   }
 
   // allocate boundary buffers for conserved (cell-centered) variables
@@ -121,12 +124,13 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
     use_fofc = pin->GetOrAddBoolean("hydro","fofc",false);
 
     // select reconstruction method (default PLM)
-    {std::string xorder = pin->GetOrAddString("hydro","reconstruct","plm");
+    std::string xorder = pin->GetOrAddString("hydro","reconstruct","plm");
     if (xorder.compare("dc") == 0) {
       recon_method = ReconstructionMethod::dc;
     } else if (xorder.compare("plm") == 0) {
       recon_method = ReconstructionMethod::plm;
       // check that nghost > 2 with PLM+FOFC
+      auto &indcs = pmy_pack->pmesh->mb_indcs;
       if (use_fofc && indcs.ng < 3) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "FOFC and " << xorder << " reconstruction requires at "
@@ -137,6 +141,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
                xorder.compare("ppmx") == 0 ||
                xorder.compare("wenoz") == 0) {
       // check that nghost > 2
+      auto &indcs = pmy_pack->pmesh->mb_indcs;
       if (indcs.ng < 3) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << xorder << " reconstruction requires at least 3 ghost zones, "
@@ -163,10 +168,9 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
                 << std::endl;
       std::exit(EXIT_FAILURE);
     }
-    }
 
     // select Riemann solver (no default).  Test for compatibility of options
-    {std::string rsolver = pin->GetString("hydro","rsolver");
+    std::string rsolver = pin->GetString("hydro","rsolver");
     // Special relativistic dynamic solvers
     if (pmy_pack->pcoord->is_special_relativistic) {
       if (evolution_t.compare("dynamic") == 0) {
@@ -250,21 +254,24 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
         std::exit(EXIT_FAILURE);
       }
     }
-    }
 
-    // allocate second registers, fluxes
-    int ncells1 = indcs.nx1 + 2*(indcs.ng);
-    int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
-    int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
-    Kokkos::realloc(u1,       nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
-    Kokkos::realloc(uflx.x1f, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
-    Kokkos::realloc(uflx.x2f, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
-    Kokkos::realloc(uflx.x3f, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
+    // Final memory allocations
+    {
+      // allocate second registers, fluxes
+      auto &indcs = pmy_pack->pmesh->mb_indcs;
+      int ncells1 = indcs.nx1 + 2*(indcs.ng);
+      int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
+      int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
+      Kokkos::realloc(u1,       nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
+      Kokkos::realloc(uflx.x1f, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
+      Kokkos::realloc(uflx.x2f, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
+      Kokkos::realloc(uflx.x3f, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
 
-    // allocate array of flags used with FOFC
-    if (use_fofc) {
-      Kokkos::realloc(fofc,  nmb, ncells3, ncells2, ncells1);
-      Kokkos::realloc(utest, nmb, nhydro, ncells3, ncells2, ncells1);
+      // allocate array of flags used with FOFC
+      if (use_fofc) {
+        Kokkos::realloc(fofc,  nmb, ncells3, ncells2, ncells1);
+        Kokkos::realloc(utest, nmb, nhydro, ncells3, ncells2, ncells1);
+      }
     }
   }
 }

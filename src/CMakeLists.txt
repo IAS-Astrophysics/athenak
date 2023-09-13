@@ -11,6 +11,8 @@ add_executable(
         globals.cpp
         parameter_input.cpp
 
+        adm/adm.cpp
+
         bvals/bvals.cpp
         bvals/buffs_cc.cpp
         bvals/buffs_fc.cpp
@@ -19,6 +21,7 @@ add_executable(
         bvals/flux_correct_cc.cpp
         bvals/flux_correct_fc.cpp
         bvals/prolongation.cpp
+        bvals/prolong_prims.cpp
         bvals/physics/hydro_bcs.cpp
         bvals/physics/bfield_bcs.cpp
         bvals/physics/radiation_bcs.cpp
@@ -71,7 +74,16 @@ add_executable(
         mhd/mhd_tasks.cpp
         mhd/mhd_update.cpp
 
-        outputs/io_wrapper.cpp
+	z4c/z4c.cpp
+	z4c/z4c_adm.cpp
+	z4c/z4c_calcrhs.cpp
+	z4c/z4c_newdt.cpp
+        z4c/z4c_tasks.cpp
+        z4c/z4c_update.cpp
+        z4c/z4c_gauge.cpp
+        z4c/z4c_Sbc.cpp
+        
+	outputs/io_wrapper.cpp
         outputs/outputs.cpp
         outputs/basetype_output.cpp
         outputs/derived_variables.cpp
@@ -94,6 +106,7 @@ add_executable(
         pgen/tests/rad_check_tetrad.cpp
         pgen/tests/rad_hohlraum.cpp
         pgen/tests/rad_linear_wave.cpp
+        pgen/tests/z4c_linear_wave.cpp
 
         radiation/radiation.cpp
         radiation/radiation_fluxes.cpp

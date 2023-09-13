@@ -31,7 +31,6 @@ void HLLC_SR(TeamMember_t const &member, const EOS_Data &eos,
   int ivy = IVX + ((ivx-IVX)+1)%3;
   int ivz = IVX + ((ivx-IVX)+2)%3;
   const Real gamma_prime = eos.gamma/(eos.gamma - 1.0);
-  Real gm1 = eos.gamma - 1.0;
 
   par_for_inner(member, il, iu, [&](const int i) {
     // Create local references for L/R states (helps compiler vectorize)
