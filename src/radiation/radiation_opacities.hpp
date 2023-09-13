@@ -9,7 +9,6 @@
 //! \brief implements functions for computing opacities
 
 #include <math.h>
-#include <iostream>
 
 #include "athena.hpp"
 
@@ -35,7 +34,7 @@ void OpacityFunction(const Real dens, const Real density_scale,
   return;
 }
 
-
+KOKKOS_INLINE_FUNCTION
 void GetArrayLocation(const Real value, const DualArray1D<Real> &in_arr,
                       int &loc_l, int &loc_r){
   int arr_size = in_arr.extent_int(1) - 1;
@@ -56,7 +55,7 @@ void GetArrayLocation(const Real value, const DualArray1D<Real> &in_arr,
   return;
 }
 
-
+KOKKOS_INLINE_FUNCTION
 void BilinearInterpolation(const Real in_x, const Real in_y,
                            const int nx_l, const int nx_r,
                            const int ny_l, const int ny_r,
@@ -107,7 +106,7 @@ void BilinearInterpolation(const Real in_x, const Real in_y,
 // when use_t_r is true, the table will be [temperature, R]
 // ross_table and planck_table use two separate independent arrays
 // ross_rho, ross_t, planck_rho, planck_t. But they can be the same
-
+KOKKOS_INLINE_FUNCTION
 void TableOpacity(const Real dens, const Real density_scale,
                   const Real temp, const Real temperature_scale,
                   const Real length_scale, const bool use_t_r,
@@ -133,11 +132,8 @@ void TableOpacity(const Real dens, const Real density_scale,
 
   // check the tables size match
   if((dim_x != dim_ross_tab_x) || (dim_y != dim_ross_tab_y)){
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "Size of Rosseland mean Opacity Table " << dim_ross_tab_x << dim_ross_tab_y
-        << " does not match temperature" << dim_y << "and density size" <<
-        dim_x << std::endl;
-    std::exit(EXIT_FAILURE);
+    printf("Size of Rosseland mean Opacity Table %d %d does not match temperature %d density %d size\n",
+          dim_ross_tab_x,dim_ross_tab_y,dim_y,dim_x);
   }
 
   // get rosseland mean opacity

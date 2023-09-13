@@ -89,6 +89,17 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   auto &norm_to_tet_ = norm_to_tet;
   auto &solid_angles_ = prgeo->solid_angles;
 
+
+  // variables related to opacity table
+  auto ross_rho_ = ross_rho;
+  auto ross_t_ = ross_t;
+  auto planck_rho_ = planck_rho;
+  auto planck_t_ = planck_t;
+  auto ross_table_ = ross_table;
+  auto planck_table_ = planck_table;
+  bool &table_opacity_ = table_opacity;
+  bool &op_table_use_r_ = op_table_use_r;
+
   // Extract hydro/mhd quantities
   DvceArray5D<Real> u0_, w0_;
   if (is_hydro_enabled_) {
@@ -151,10 +162,10 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
 
     // set opacities
     Real sigma_a, sigma_s, sigma_p, sigma_pe;
-    if(table_opacity){
+    if(table_opacity_){
       TableOpacity(wdn, density_scale_, tgas, temperature_scale_,
-                  length_scale_, op_table_use_r, ross_rho, ross_t,
-                  planck_rho, planck_t, ross_table, planck_table, kappa_s_,
+                  length_scale_, op_table_use_r_, ross_rho_, ross_t_,
+                  planck_rho_, planck_t_, ross_table_, planck_table_, kappa_s_,
                   sigma_a, sigma_s, sigma_p, sigma_pe);
 
     }else{
