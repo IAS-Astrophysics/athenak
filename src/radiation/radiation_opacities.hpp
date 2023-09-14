@@ -130,11 +130,6 @@ void TableOpacity(const Real dens, const Real density_scale,
   int dim_ross_tab_x = ross_table.extent_int(1);
   int dim_ross_tab_y = ross_table.extent_int(2);
 
-  // check the tables size match
-  if((dim_x != dim_ross_tab_x) || (dim_y != dim_ross_tab_y)){
-    printf("Size of Rosseland mean Opacity Table %d %d does not match temperature %d density %d size\n",
-          dim_ross_tab_x,dim_ross_tab_y,dim_y,dim_x);
-  }
 
   // get rosseland mean opacity
   Real kappa_ross = 0.0;
