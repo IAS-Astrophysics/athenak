@@ -369,7 +369,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     auto dv = derived_var;
     auto &f0_ = pm->pmb_pack->pradfemn->f0;
     auto &energy_grid_ = pm->pmb_pack->pradfemn->energy_grid;
-    auto &mm_ = pm->pmb_pack->pradfemn->mass_matrix;
+    auto &mm_ = pm->pmb_pack->pradfemn->mass_matrix_lumped;
     auto num_points = pm->pmb_pack->pradfemn->num_points;
     auto num_points_total = pm->pmb_pack->pradfemn->num_points_total;
 

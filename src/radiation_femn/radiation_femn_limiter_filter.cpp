@@ -74,7 +74,7 @@ TaskStatus RadiationFEMN::ApplyLimiterFEM(Driver *pdriver, int stage) {
   auto &mbsize = pmy_pack->pmb->mb_size;
   auto &f0_ = f0;
   auto &energy_grid_ = pmy_pack->pradfemn->energy_grid;
-  auto &mm_ = mass_matrix;
+  auto &mm_ = mass_matrix_lumped;
   auto &etemp0_ = etemp0;
   auto &etemp1_ = etemp1;
 
