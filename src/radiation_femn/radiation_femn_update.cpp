@@ -50,12 +50,16 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
             // Compute Christoeffel in fluid frame
             double Gamma_fluid = 0;
 
-            Real divf_s = flx1(m, enang, k, j, i) / (2. * mbsize.d_view(m).dx1);
+            RadiationFEMNPhaseIndices idcs = Indices(enang);
+            int en = idcs.eindex;
+            auto Ven = (1. / 3.) * (pow(energy_grid(en + 1), 3) - pow(energy_grid(en), 3));
+
+            Real divf_s = flx1(m, enang, k, j, i) / (2. * mbsize.d_view(m).dx1 * Ven);
             if (multi_d) {
-              divf_s += flx2(m, enang, k, j, i) / (2. * mbsize.d_view(m).dx2);
+              divf_s += flx2(m, enang, k, j, i) / (2. * mbsize.d_view(m).dx2 * Ven);
             }
             if (three_d) {
-              divf_s += flx3(m, enang, k, j, i) / (2. * mbsize.d_view(m).dx3);
+              divf_s += flx3(m, enang, k, j, i) / (2. * mbsize.d_view(m).dx3 * Ven);
             }
             f0_(m, enang, k, j, i) = gam0 * f0_(m, enang, k, j, i) + gam1 * f1_(m, enang, k, j, i) - beta_dt * divf_s;
           });
