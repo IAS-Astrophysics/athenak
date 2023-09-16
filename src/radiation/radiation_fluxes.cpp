@@ -29,10 +29,11 @@ TaskStatus Radiation::CalculateFluxes(Driver *pdriver, int stage) {
   int &is = indcs.is, &ie = indcs.ie;
   int &js = indcs.js, &je = indcs.je;
   int &ks = indcs.ks, &ke = indcs.ke;
+  // int ncells1 = indcs.nx1 + 2*(indcs.ng);
+
   int nang1 = prgeo->nangles - 1;
   int nmb1 = pmy_pack->nmb_thispack - 1;
-
-  const auto &recon_method_ = recon_method;
+  const auto recon_method_ = recon_method;
 
   auto &i0_ = i0;
   auto &nh_c_ = nh_c;
@@ -40,6 +41,75 @@ TaskStatus Radiation::CalculateFluxes(Driver *pdriver, int stage) {
 
   //--------------------------------------------------------------------------------------
   // i-direction
+
+  // size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1)*3;
+  // int scr_level = 0;
+  // auto &t1d1 = tet_d1_x1f;
+  // auto &flx1 = iflx.x1f;
+  // par_for_outer("rflux_x1",DevExeSpace(), scr_size, scr_level, 0, nmb1, 0, nang1, ks, ke, js, je,
+  // KOKKOS_LAMBDA(TeamMember_t member, const int m, const int n, const int k, const int j) {
+  //   // assign scratch memory
+  //   ScrArray1D<Real> ii(member.team_scratch(scr_level),  ncells1);
+  //   ScrArray1D<Real> iil(member.team_scratch(scr_level), ncells1);
+  //   ScrArray1D<Real> iir(member.team_scratch(scr_level), ncells1);
+  //
+  //   // compute from is-3 to ie+3 for high-order reconstruction
+  //   par_for_inner(member, is-3, ie+3, [&](const int i) {
+  //     // convert to primitive n_0 I
+  //     ii(i) = i0_(m,n,k,j,i)/tet_c_(m,0,0,k,j,i);
+  //   });
+  //   // Sync all threads in the team so that scratch memory is consistent
+  //   member.team_barrier();
+  //
+  //   // reconstruct primitive intensity
+  //   switch (recon_method_) {
+  //     case ReconstructionMethod::dc:
+  //       par_for_inner(member, is-1, ie+1, [&](const int i) {
+  //         iil(i+1) = ii(i);
+  //         iir(i  ) = ii(i);
+  //       });
+  //       break;
+  //     case ReconstructionMethod::plm:
+  //       par_for_inner(member, is-1, ie+1, [&](const int i) {
+  //         PLM(ii(i-1), ii(i), ii(i+1), iil(i+1), iir(i));
+  //       });
+  //       break;
+  //     case ReconstructionMethod::ppm4:
+  //       par_for_inner(member, is-1, ie+1, [&](const int i) {
+  //         PPM4(ii(i-2), ii(i-1), ii(i), ii(i+1), ii(i+2), iil(i+1), iir(i));
+  //       });
+  //       break;
+  //     case ReconstructionMethod::ppmx:
+  //       par_for_inner(member, is-1, ie+1, [&](const int i) {
+  //         PPMX(ii(i-2), ii(i-1), ii(i), ii(i+1), ii(i+2), iil(i+1), iir(i));
+  //       });
+  //       break;
+  //     case ReconstructionMethod::wenoz:
+  //       par_for_inner(member, is-1, ie+1, [&](const int i) {
+  //         WENOZ(ii(i-2), ii(i-1), ii(i), ii(i+1), ii(i+2), iil(i+1), iir(i));
+  //       });
+  //       break;
+  //     default:
+  //       break;
+  //   }
+  //   // Sync all threads in the team so that scratch memory is consistent
+  //   member.team_barrier();
+  //
+  //   Real nh_c_0 = nh_c_.d_view(n,0);
+  //   Real nh_c_1 = nh_c_.d_view(n,1);
+  //   Real nh_c_2 = nh_c_.d_view(n,2);
+  //   Real nh_c_3 = nh_c_.d_view(n,3);
+  //   par_for_inner(member, is, ie+1, [&](const int i) {
+  //     // calculate n^1 (hence determining upwinding direction)
+  //     Real n1 = t1d1(m,0,k,j,i)*nh_c_0 + t1d1(m,1,k,j,i)*nh_c_1
+  //             + t1d1(m,2,k,j,i)*nh_c_2 + t1d1(m,3,k,j,i)*nh_c_3;
+  //     // compute x1flux
+  //     flx1(m,n,k,j,i) = n1 > 0.0 ? n1*iil(i) : n1*iir(i);
+  //   });
+  //
+  // }); // endfor_outer
+
+
 
   auto &t1d1 = tet_d1_x1f;
   auto &flx1 = iflx.x1f;
@@ -91,7 +161,8 @@ TaskStatus Radiation::CalculateFluxes(Driver *pdriver, int stage) {
 
     // compute x1flux
     flx1(m,n,k,j,i) = n1*iiu;
-  });
+  }); // endfor
+
 
   //--------------------------------------------------------------------------------------
   // j-direction
