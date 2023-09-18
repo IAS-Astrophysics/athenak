@@ -323,5 +323,34 @@ void Face3Metric(TeamMember_t const &member, const int m, const int k, const int
      return;
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn void Face3Metric
+//! \brief computes components of (dynamically evolved) 3-metric, lapse and
+//  shift at faces in the z direction for use in Riemann solver for a single point
+//check your indices: interface k lives between cells k and k-1
+
+KOKKOS_INLINE_FUNCTION
+void Face3Metric(const int m, const int k, const int j, const int i,
+     const AthenaTensor<Real, TensorSymm::SYM2, 3, 2> &g_dd,
+     const AthenaTensor<Real, TensorSymm::NONE, 3, 1> &beta_u,
+     const AthenaTensor<Real, TensorSymm::NONE, 3, 0> &alpha,
+     Real gface3_dd[NSPMETRIC], Real betaface3_u[3], Real &alphaface3) {
+  alphaface3 = (alpha(m,k,j,i) + alpha(m,k-1,j,i))*0.5;
+
+  for (int a = 0; a < 3; ++a) {
+    betaface3_u[i] = (beta_u(m,a,k,j,i) + beta_u(m,a,k-1,j,i))*0.5;
+  }
+
+  gface3_dd[S11] = (g_dd(m,0,0,k,j,i) + g_dd(m,0,0,k-1,j,i))*0.5;
+  gface3_dd[S12] = (g_dd(m,0,1,k,j,i) + g_dd(m,0,1,k-1,j,i))*0.5;
+  gface3_dd[S13] = (g_dd(m,0,2,k,j,i) + g_dd(m,0,2,k-1,j,i))*0.5;
+  gface3_dd[S22] = (g_dd(m,1,1,k,j,i) + g_dd(m,1,1,k-1,j,i))*0.5;
+  gface3_dd[S23] = (g_dd(m,1,2,k,j,i) + g_dd(m,1,2,k-1,j,i))*0.5;
+  gface3_dd[S33] = (g_dd(m,2,2,k,j,i) + g_dd(m,2,2,k-1,j,i))*0.5;
+
+  return;
+}
+
+
 } // namespace adm
 #endif // ADM_ADM_HPP_
