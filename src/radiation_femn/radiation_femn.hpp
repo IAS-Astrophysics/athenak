@@ -44,6 +44,7 @@ struct RadiationFEMNTaskIDs {
 };
 
 struct RadiationFEMNPhaseIndices {
+  int enangindex;
   int eindex;
   int angindex;
 };
@@ -181,8 +182,9 @@ class RadiationFEMN {
   // ---------------------------------------------------------------------------
   // Structures/functions for the internal index conversion
   int num_points_total;
-  RadiationFEMNPhaseIndices Indices(int n);
-
+  RadiationFEMNPhaseIndices IndicesComponent(int n);
+  RadiationFEMNPhaseIndices IndicesUnified(int eindex, int angindex);
+  
   // ---------------------------------------------------------------------------
   // Functions for angular matrices & tetrad
   void LoadFEMNMatrices();

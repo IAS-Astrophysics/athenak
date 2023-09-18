@@ -54,7 +54,7 @@ TaskStatus RadiationFEMN::ApplyFilterLanczos(Driver *pdriver, int stage) {
   par_for("radiation_femn_filter_Lanczos", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie, 0, npts1,
           KOKKOS_LAMBDA(const int m, const int k, const int j, const int i, const int enang) {
 
-            RadiationFEMNPhaseIndices idcs = Indices(enang);
+            RadiationFEMNPhaseIndices idcs = IndicesComponent(enang);
             int B = idcs.angindex;
             auto lval = angular_grid(B, 0);
 

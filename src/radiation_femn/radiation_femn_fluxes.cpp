@@ -42,10 +42,11 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
             auto ii = 2 * i - 2;
 
             // phase space indices
-            RadiationFEMNPhaseIndices idcs = Indices(enang);
+            RadiationFEMNPhaseIndices idcs = IndicesComponent(enang);
             int en = idcs.eindex;
             int B = idcs.angindex;
-            int Abar = en * num_points + A;
+            RadiationFEMNPhaseIndices idcs_2 = IndicesUnified(en, B);
+            int Abar = idcs_2.enangindex;
 
             // factor from energy contribution
             auto Ven = (1. / 3.) * (pow(energy_grid(en + 1), 3) - pow(energy_grid(en), 3));
@@ -92,10 +93,12 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
               auto ii = i;
 
               // phase space indices
-              RadiationFEMNPhaseIndices idcs = Indices(enang);
+              RadiationFEMNPhaseIndices idcs = IndicesComponent(enang);
               int en = idcs.eindex;
               int B = idcs.angindex;
-              int Abar = en * num_points + A;
+              RadiationFEMNPhaseIndices idcs_2 = IndicesUnified(en, B);
+              int Abar = idcs_2.enangindex;
+
 
               // factor from energy contribution
               auto Ven = (1. / 3.) * (pow(energy_grid(en + 1), 3) - pow(energy_grid(en), 3));
@@ -142,10 +145,11 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
               auto ii = i;
 
               // phase space indices
-              RadiationFEMNPhaseIndices idcs = Indices(enang);
+              RadiationFEMNPhaseIndices idcs = IndicesComponent(enang);
               int en = idcs.eindex;
               int B = idcs.angindex;
-              int Abar = en * num_points + A;
+              RadiationFEMNPhaseIndices idcs_2 = IndicesUnified(en, B);
+              int Abar = idcs_2.enangindex;
 
               // factor from energy contribution
               auto Ven = (1. / 3.) * (pow(energy_grid(en + 1), 3) - pow(energy_grid(en), 3));

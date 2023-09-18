@@ -20,11 +20,18 @@ namespace radiationfemn {
 
 // ----------------------------------------------------
 // Convert single phase index to energy and angle index
-//KOKKOS_INLINE_FUNCTION
-RadiationFEMNPhaseIndices RadiationFEMN::Indices(int n) {
-  RadiationFEMNPhaseIndices idcs = {int(n / num_points), n - int(n / num_points) * num_points};
+RadiationFEMNPhaseIndices RadiationFEMN::IndicesComponent(int n) {
+  RadiationFEMNPhaseIndices idcs = {.enangindex = n, .eindex = int(n / num_points), .angindex = n - int(n / num_points) * num_points};
   return idcs;
 }
+
+// ------------------------------------------------------
+// Convert energy and angle index to multiple phase index
+RadiationFEMNPhaseIndices RadiationFEMN::IndicesUnified(int eindex, int angindex) {
+  RadiationFEMNPhaseIndices idcs = {.enangindex = eindex * num_points + angindex, .eindex = eindex, .angindex = angindex};
+  return idcs;
+}
+
 // ------------------------------------------
 // Convert cartesian to spherical coordinates
 KOKKOS_INLINE_FUNCTION

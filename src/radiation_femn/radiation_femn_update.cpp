@@ -50,7 +50,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
             // Compute Christoeffel in fluid frame
             double Gamma_fluid = 0;
 
-            RadiationFEMNPhaseIndices idcs = Indices(enang);
+            RadiationFEMNPhaseIndices idcs = IndicesComponent(enang);
             int en = idcs.eindex;
             auto Ven = (1. / 3.) * (pow(energy_grid(en + 1), 3) - pow(energy_grid(en), 3));
 
