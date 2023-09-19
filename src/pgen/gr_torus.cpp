@@ -156,6 +156,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   int ie = indcs.ie, je = indcs.je, ke = indcs.ke;
   int nmb = pmbp->nmb_thispack;
   auto &coord = pmbp->pcoord->coord_data;
+  bool use_dyngr = (pmbp->pdyngr != nullptr);
 
   // Extract BH parameters
   torus.spin = coord.bh_spin;
@@ -428,6 +429,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     auto &adm = pmbp->padm->adm;
     auto trs = torus;
     auto &size = pmbp->pmb->mb_size;
+    int &ng = indcs.ng;
+    int n1 = indcs.nx1 + 2*ng;
+    int n2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2*ng) : 1;
+    int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2*ng) : 1;
     Kokkos::Random_XorShift64_Pool<> rand_pool64(pmbp->gids);
     par_for("pgen_adm_vars", DevExeSpace(), 0,nmb-1,0,(n3-1),0,(n2-1),0,(n1-1),
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
