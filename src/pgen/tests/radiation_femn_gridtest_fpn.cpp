@@ -107,7 +107,7 @@ void ProblemGenerator::RadiationFEMNGridtestFPN(ParameterInput *pin, const bool 
   int ihat = 1;
   int mu = 0;
   int nu = 2;
-  std::ofstream fout7(pathdir + filenamepart + "_F_matrix" + ".txt");
+  std::ofstream fout7(pathdir + filenamepart + "_F_matrix_" +std::to_string(nu)+"_"+std::to_string(mu)+"_"+std::to_string(ihat)+ ".txt");
   for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
     for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
       fout7 << pmbp->pradfemn->F_matrix(nu, mu, ihat, i, j) << " ";

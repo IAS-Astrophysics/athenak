@@ -48,12 +48,7 @@ void GeodesicGridRefine(int &geogrid_level,
                         HostArray1D<Real> &phi,
                         HostArray2D<int> &edges,
                         HostArray2D<int> &triangles);          // Refine geodesic grid by one level
-void CartesianToSpherical(Real xvar,
-                          Real yvar,
-                          Real zvar,
-                          Real &rvar,
-                          Real &thetavar,
-                          Real &phivar);   // Convert from Cartesian to spherical coordinates
+
 int FindEdgesIndex(int e1, int e2, HostArray2D<int> &edges);  // Given two edge indices, find
 
 // ---------------------------------------------------------------------------
@@ -99,6 +94,8 @@ Real FEMBasis(Real xi1, Real xi2, Real xi3, int basis_index, int basis_choice);
 
 // FPN basis
 Real FPNBasis(int l, int m, Real phi, Real theta);
+Real dFPNBasisdOmega(int l, int m, Real phi, Real theta, int var_index);
+Real PtildehatJac(Real phi, Real theta, int tilde_index, int hat_index);
 
 // some other useful functions
 Real FEMBasisABasisB(int a, int b, int t1, int t2, int t3, Real xi1, Real xi2, Real xi3, int basis_choice);

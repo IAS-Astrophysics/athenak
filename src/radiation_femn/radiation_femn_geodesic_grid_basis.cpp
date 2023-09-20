@@ -277,6 +277,45 @@ Real FPNBasis(int l, int m, Real phi, Real theta) {
   return result;
 }
 
+KOKKOS_INLINE_FUNCTION Real dFPNBasisdphi(int l, int m, Real phi, Real theta) {
+  return m * FPNBasis(l, -m, phi, theta);
+}
+
+KOKKOS_INLINE_FUNCTION Real dFPNBasisdtheta(int l, int m, Real phi, Real theta) {
+  return 0;
+}
+
+Real dFPNBasisdOmega(int l, int m, Real phi, Real theta, int var_index) {
+  if (var_index == 1) {
+    return dFPNBasisdphi(l, m, phi, theta);
+  } else if (var_index == 2){
+    return dFPNBasisdtheta(l, m, phi, theta);
+  } else {
+    std::cout << "Incorrect choice of variable index in radiation-femn block!" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+}
+
+Real PtildehatJac(Real phi, Real theta, int tilde_index, int hat_index) {
+  if (tilde_index == 1 && hat_index == 1) {
+    return -sin(phi) / sin(theta);
+  } else if (tilde_index == 1 && hat_index == 2) {
+    return cos(phi) / sin(theta);
+  } else if (tilde_index == 1 && hat_index == 3) {
+    return 0.;
+  } else if (tilde_index == 2 && hat_index == 1) {
+    return cos(phi) * cos(theta);
+  } else if (tilde_index == 2 && hat_index == 2) {
+    return sin(phi) * cos(theta);
+  } else if (tilde_index == 2 && hat_index == 3) {
+    return -sin(theta);
+  } else {
+    std::cout << "Incorrect choice of index in radiation-femn block!" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+}
+
+
 // -------------------------------------------------------------------------
 // Cos Phi Sin Theta
 //KOKKOS_INLINE_FUNCTION
