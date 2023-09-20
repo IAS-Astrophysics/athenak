@@ -278,27 +278,32 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
     int n2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2*ng) : 1;
     int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2*ng) : 1;
     if (!schwarzschild) {
+      Real lapse_pow = pin->GetOrAddReal("problem", "lapse_pow", 0.0);
+      Real lapse     = pin->GetOrAddReal("problem", "lapse", 1.0);
+      Real gshock    = pin->GetOrAddReal("problem", "gshock", 1.0);
+      Real gshock_pow= pin->GetOrAddReal("problem", "gshock_pow", 0.0);
       par_for("pgen_adm_vars", DevExeSpace(), 0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
       KOKKOS_LAMBDA(int m, int k, int j, int i) {
+        Real r[3] = {0.,0.,0.};
         Real &x1min = size.d_view(m).x1min;
         Real &x1max = size.d_view(m).x1max;
-        Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+        r[0] = CellCenterX(i-is, indcs.nx1, x1min, x1max);
 
         Real &x2min = size.d_view(m).x2min;
         Real &x2max = size.d_view(m).x2max;
-        Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+        r[1] = CellCenterX(j-js, indcs.nx2, x2min, x2max);
 
         Real &x3min = size.d_view(m).x3min;
         Real &x3max = size.d_view(m).x3max;
-        Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+        r[2] = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
         // Set ADM to flat space
-        adm.alpha(m, k, j, i) = 1.0;
+        adm.alpha(m, k, j, i) = pow(r[shk_dir-1],lapse_pow)*lapse;
         adm.beta_u(m, 0, k, j, i) = 0.0;
         adm.beta_u(m, 1, k, j, i) = 0.0;
         adm.beta_u(m, 2, k, j, i) = 0.0;
 
-        adm.psi4(m, k, j, i) = 1.0;
+        adm.psi4(m, k, j, i) = 1.0/sqrt(adm.alpha(m, k, j, i));
 
         adm.g_dd(m, 0, 0, k, j, i) = 1.0;
         adm.g_dd(m, 0, 1, k, j, i) = 0.0;
@@ -306,6 +311,8 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
         adm.g_dd(m, 1, 1, k, j, i) = 1.0;
         adm.g_dd(m, 1, 2, k, j, i) = 0.0;
         adm.g_dd(m, 2, 2, k, j, i) = 1.0;
+
+        adm.g_dd(m, shk_dir-1, shk_dir-1, k, j, i) = gshock*pow(r[shk_dir-1],gshock_pow);
 
         adm.vK_dd(m, 0, 0, k, j, i) = 0.0;
         adm.vK_dd(m, 0, 1, k, j, i) = 0.0;
