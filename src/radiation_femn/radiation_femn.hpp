@@ -210,7 +210,16 @@ void MatLumping(DvceArray2D<Real> A_matrix, DvceArray2D<Real> result);
 void MatEig(std::vector<std::vector<double>> &matrix, std::vector<std::complex<double>> &eigval, std::vector<std::vector<std::complex<double>>> &eigvec);
 void ZeroSpeedCorrection(DvceArray2D<Real> matrix, DvceArray2D<Real> matrix_corrected, double v);
 
+KOKKOS_INLINE_FUNCTION void ApplyClosure() {
+
+};
+
+KOKKOS_INLINE_FUNCTION void ApplyRestriction() {
+
+};
+
 } // namespace radiationfemn
+
 
 
 #endif //ATHENA_RADIATION_FEMN_HPP
