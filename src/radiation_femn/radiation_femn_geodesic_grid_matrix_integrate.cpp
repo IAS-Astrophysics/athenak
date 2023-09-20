@@ -356,11 +356,11 @@ Real IntegrateMatrixFPN(int la, int ma, int lb, int mb, const HostArray1D<Real> 
 
   } else if (matrixchoice == 5) {
     for (size_t i = 0; i < scheme_weights.size(); i++) {
-      /* result += 4. * M_PI * mom_by_energy(nu, scheme_points(i, 0), scheme_points(i, 1)) *
+       result += 4. * M_PI * mom_by_energy(nu, scheme_points(i, 0), scheme_points(i, 1)) *
           mom_by_energy(mu, scheme_points(i, 0), scheme_points(i, 1))
           * FPNBasis(la, ma, scheme_points(i, 0), scheme_points(i, 1))
           * FPNBasis(lb, mb, scheme_points(i, 0), scheme_points(i, 1))
-          * mom_by_energy(ihat, scheme_points(i, 0), scheme_points(i, 1)) * scheme_weights(i); */
+          * mom_by_energy(ihat, scheme_points(i, 0), scheme_points(i, 1)) * scheme_weights(i);
     }
   }
   return result;
