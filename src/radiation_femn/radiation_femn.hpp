@@ -82,8 +82,8 @@ class RadiationFEMN {
   // ---------------------------------------------------------------------------
   // arrays for numerical quadratures
   // ---------------------------------------------------------------------------
-  HostArray2D<double> scheme_points;
-  HostArray1D<double> scheme_weights;
+  HostArray2D<Real> scheme_points;
+  HostArray1D<Real> scheme_weights;
   int scheme_num_points;
   std::string scheme_name;
 
@@ -93,16 +93,11 @@ class RadiationFEMN {
   DvceArray2D<Real> angular_grid;            // store the values of (l,m) for FP_N. Alternatively store (phi,theta) for FEM_N
   DvceArray1D<Real> energy_grid;             // array containing the energy grid
 
-  DvceArray2D<Real>
-      mass_matrix;             // mass matrix (in the special relativistic case) [Eqn. 12 of arXiv:2212.01409]
-  DvceArray2D<Real>
-      mass_matrix_lumped;      // lumped mass matrix (in the special relativistic case)
-  DvceArray2D<Real>
-      stiffness_matrix_x;      // x component of the stiffness matrix (in the special relativistic case) [Eqn. 12 of arXiv:2212.01409]
-  DvceArray2D<Real>
-      stiffness_matrix_y;      // y component of the stiffness matrix (in the special relativistic case) [Eqn. 12 of arXiv:2212.01409]
-  DvceArray2D<Real>
-      stiffness_matrix_z;      // z component of the stiffness matrix (in the special relativistic case) [Eqn. 12 of arXiv:2212.01409]
+  DvceArray2D<Real> mass_matrix;             // mass matrix (in the special relativistic case) [Eqn. 12 of arXiv:2212.01409]
+  DvceArray2D<Real> mass_matrix_lumped;      // lumped mass matrix (in the special relativistic case)
+  DvceArray2D<Real> stiffness_matrix_x;      // x component of the stiffness matrix (in the special relativistic case) [Eqn. 12 of arXiv:2212.01409]
+  DvceArray2D<Real> stiffness_matrix_y;      // y component of the stiffness matrix (in the special relativistic case) [Eqn. 12 of arXiv:2212.01409]
+  DvceArray2D<Real> stiffness_matrix_z;      // z component of the stiffness matrix (in the special relativistic case) [Eqn. 12 of arXiv:2212.01409]
 
   DvceArray3D<Real> P_matrix;                 // P ^muhat ^A _B
   DvceArray3D<Real> Pmod_matrix;              // Zero speed mode corrected P_matrix
@@ -203,12 +198,12 @@ void LUDecomposition(DvceArray2D<Real> square_matrix, DvceArray2D<Real> lu_matri
 void LUSolve(const DvceArray2D<Real> lu_matrix, const DvceArray1D<int> pivot_indices, const DvceArray1D<Real> b_array, DvceArray1D<Real> x_array);
 void LUInverse(DvceArray2D<Real> A_matrix, DvceArray2D<Real> A_matrix_inverse);
 void MatMultiply(DvceArray2D <Real> A_matrix, DvceArray2D <Real> B_matrix, DvceArray2D <Real> result);
-void MatMultiplyComplex(std::vector<std::vector<std::complex<double>>> &A_matrix,
-                        std::vector<std::vector<std::complex<double>>> &B_matrix,
-                        std::vector<std::vector<std::complex<double>>> &result);
+void MatMultiplyComplex(std::vector<std::vector<std::complex<Real>>> &A_matrix,
+                        std::vector<std::vector<std::complex<Real>>> &B_matrix,
+                        std::vector<std::vector<std::complex<Real>>> &result);
 void MatLumping(DvceArray2D<Real> A_matrix, DvceArray2D<Real> result);
-void MatEig(std::vector<std::vector<double>> &matrix, std::vector<std::complex<double>> &eigval, std::vector<std::vector<std::complex<double>>> &eigvec);
-void ZeroSpeedCorrection(DvceArray2D<Real> matrix, DvceArray2D<Real> matrix_corrected, double v);
+void MatEig(std::vector<std::vector<Real>> &matrix, std::vector<std::complex<Real>> &eigval, std::vector<std::vector<std::complex<Real>>> &eigvec);
+void ZeroSpeedCorrection(DvceArray2D<Real> matrix, DvceArray2D<Real> matrix_corrected, Real v);
 
 KOKKOS_INLINE_FUNCTION void ApplyClosure() {
 

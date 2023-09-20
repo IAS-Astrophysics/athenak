@@ -48,87 +48,89 @@ void GeodesicGridRefine(int &geogrid_level,
                         HostArray1D<Real> &phi,
                         HostArray2D<int> &edges,
                         HostArray2D<int> &triangles);          // Refine geodesic grid by one level
-void CartesianToSpherical(double xvar,
-                          double yvar,
-                          double zvar,
-                          double &rvar,
-                          double &thetavar,
-                          double &phivar);   // Convert from Cartesian to spherical coordinates
+void CartesianToSpherical(Real xvar,
+                          Real yvar,
+                          Real zvar,
+                          Real &rvar,
+                          Real &thetavar,
+                          Real &phivar);   // Convert from Cartesian to spherical coordinates
 int FindEdgesIndex(int e1, int e2, HostArray2D<int> &edges);  // Given two edge indices, find
 
 // ---------------------------------------------------------------------------
 // basis functions & helper functions (radiation_femn_geodesic_grid_basis.cpp)
-void BarycentricToCartesian(double x1,
-                            double y1,
-                            double z1,
-                            double x2,
-                            double y2,
-                            double z2,
-                            double x3,
-                            double y3,
-                            double z3,
-                            double xi1,
-                            double xi2,
-                            double xi3,
-                            double &xval,
-                            double &yval,
-                            double &zval);
+void BarycentricToCartesian(Real x1,
+                            Real y1,
+                            Real z1,
+                            Real x2,
+                            Real y2,
+                            Real z2,
+                            Real x3,
+                            Real y3,
+                            Real z3,
+                            Real xi1,
+                            Real xi2,
+                            Real xi3,
+                            Real &xval,
+                            Real &yval,
+                            Real &zval);
 
 // Type 1: 'Overlapping tent' (Default FEM_N choice)
-double FEMBasis1Type1(double xi1, double xi2, double xi3);
-double FEMBasis2Type1(double xi1, double xi2, double xi3);
-double FEMBasis3Type1(double xi1, double xi2, double xi3);
+Real FEMBasis1Type1(Real xi1, Real xi2, Real xi3);
+Real FEMBasis2Type1(Real xi1, Real xi2, Real xi3);
+Real FEMBasis3Type1(Real xi1, Real xi2, Real xi3);
 
 // Type 2: 'Non-overlapping tent'
-double FEMBasis1Type2(double xi1, double xi2, double xi3);
-double FEMBasis2Type2(double xi1, double xi2, double xi3);
-double FEMBasis3Type2(double xi1, double xi2, double xi3);
+Real FEMBasis1Type2(Real xi1, Real xi2, Real xi3);
+Real FEMBasis2Type2(Real xi1, Real xi2, Real xi3);
+Real FEMBasis3Type2(Real xi1, Real xi2, Real xi3);
 
 // Type 3: 'Overlapping honeycomb'
-double FEMBasis1Type3(double xi1, double xi2, double xi3);
-double FEMBasis2Type3(double xi1, double xi2, double xi3);
-double FEMBasis3Type3(double xi1, double xi2, double xi3);
+Real FEMBasis1Type3(Real xi1, Real xi2, Real xi3);
+Real FEMBasis2Type3(Real xi1, Real xi2, Real xi3);
+Real FEMBasis3Type3(Real xi1, Real xi2, Real xi3);
 
 // Type 4: 'Non-overlapping honeycomb' (S_N choice)
-double FEMBasis1Type4(double xi1, double xi2, double xi3);
-double FEMBasis2Type4(double xi1, double xi2, double xi3);
-double FEMBasis3Type4(double xi1, double xi2, double xi3);
+Real FEMBasis1Type4(Real xi1, Real xi2, Real xi3);
+Real FEMBasis2Type4(Real xi1, Real xi2, Real xi3);
+Real FEMBasis3Type4(Real xi1, Real xi2, Real xi3);
 
 // FEM basis, pick from type
-double FEMBasis(double xi1, double xi2, double xi3, int basis_index, int basis_choice);
+Real FEMBasis(Real xi1, Real xi2, Real xi3, int basis_index, int basis_choice);
+
+// FPN basis
+Real FPNBasis(int l, int m, Real phi, Real theta);
 
 // some other useful functions
-double FEMBasisABasisB(int a, int b, int t1, int t2, int t3, double xi1, double xi2, double xi3, int basis_choice);
-double FEMBasisA(int a, int t1, int t2, int t3, double xi1, double xi2, double xi3, int basis_choice);
-double dFEMBasisdxi(double xi1, double xi2, double xi3, int basis_index, int basis_choice, int xi_index);
+Real FEMBasisABasisB(int a, int b, int t1, int t2, int t3, Real xi1, Real xi2, Real xi3, int basis_choice);
+Real FEMBasisA(int a, int t1, int t2, int t3, Real xi1, Real xi2, Real xi3, int basis_choice);
+Real dFEMBasisdxi(Real xi1, Real xi2, Real xi3, int basis_index, int basis_choice, int xi_index);
 
-double PartialFEMBasisBwithoute(int ihat, int a, int t1, int t2, int t3, double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3,
-                                double xi1, double xi2, double xi3, int basis_choice);
+Real PartialFEMBasisBwithoute(int ihat, int a, int t1, int t2, int t3, Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3,
+                                Real xi1, Real xi2, Real xi3, int basis_choice);
 
-double CosPhiSinTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3);
-double SinPhiSinTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3);
-double CosTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3);
-double SinPhiCosecTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3);
-double CosPhiCosTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3);
-double CosPhiCosecTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3);
-double SinPhiCosTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3);
-double SinTheta(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3);
-double mom_by_energy(int mu, double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3);
-double mom_by_energy(int mu, double phi, double theta);
+Real CosPhiSinTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3);
+Real SinPhiSinTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3);
+Real CosTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3);
+Real SinPhiCosecTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3);
+Real CosPhiCosTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3);
+Real CosPhiCosecTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3);
+Real SinPhiCosTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3);
+Real SinTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3);
+Real mom_by_energy(int mu, Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3);
+Real mom_by_energy(int mu, Real phi, Real theta);
 // Find triangles which share an edge
 void FindTriangles(int a, int b, const HostArray2D<int> &triangles, HostArray2D<int> &edge_triangles, bool &is_edge);
 
 // -------------------------------------------------------------------------------------------------------------------------------------------
 // Integration routines over geodesic grid (radiation_femn_geodesic_grid_matrix_integrate.cpp and radiation_femn_geodesic_grid_quadrature.cpp)
-double CalculateDeterminantJacobian(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double xi1, double xi2, double xi3);
-double IntegrateMatrixSphericalTriangle(int a, int b, int basis, int t1, int t2, int t3, const HostArray1D<Real> &x, const HostArray1D<Real> &y, const HostArray1D<Real> &z,
+Real CalculateDeterminantJacobian(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3);
+Real IntegrateMatrixSphericalTriangle(int a, int b, int basis, int t1, int t2, int t3, const HostArray1D<Real> &x, const HostArray1D<Real> &y, const HostArray1D<Real> &z,
                                         const HostArray1D<Real> &scheme_weights, const HostArray2D<Real> &scheme_points, int matrixnumber, int nu = -42, int mu = -42,
                                         int ihat = -42);
-double IntegrateMatrix(int a, int b, int basis, const HostArray1D<Real> &x, const HostArray1D<Real> &y, const HostArray1D<Real> &z, const HostArray1D<Real> &scheme_weights,
-                       const HostArray2D<Real> &scheme_points, const HostArray2D<int> &triangles, int matrixchoice, int nu, int mu, int ihat);
-double RealSphericalHarmonic(int l, int m, double phi, double theta);
-double IntegrateMatrixFPN(int la, int ma, int lb, int mb, const HostArray1D<Real> &scheme_weights, const HostArray2D<Real> &scheme_points, int matrixchoice, int nu,
-                          int mu, int ihat);
+Real IntegrateMatrixFEMN(int a, int b, int basis, const HostArray1D<Real> &x, const HostArray1D<Real> &y, const HostArray1D<Real> &z, const HostArray1D<Real> &scheme_weights,
+                         const HostArray2D<Real> &scheme_points, const HostArray2D<int> &triangles, int matrixchoice, int nu, int mu, int ihat);
+Real IntegrateMatrixFPN(int la, int ma, int lb, int mb, const HostArray1D<Real> &scheme_weights, const HostArray2D<Real> &scheme_points,
+                          int matrixchoice, int nu, int mu, int ihat);
 } // namespace radiationfemn
 
 #endif //ATHENA_RADIATION_FEMN_GEODESIC_GRID_MATRICES_HPP

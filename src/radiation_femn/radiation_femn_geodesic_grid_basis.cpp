@@ -118,36 +118,51 @@ KOKKOS_INLINE_FUNCTION Real FEMBasis3Type2(Real xi1, Real xi2, Real xi3) {
   return (xi3 >= 0.5) * (xi3 - xi1 - xi2);
 }
 
-// --------------------------------------------------------------------
-// Basis 3: 'overlapping honeycomb'
+/* FEM basis functions: 'overlapping honeycomb'
+ *
+ * Basis is given in barycentric coordinates
+ */
+
+// Overlapping honeycomb basis 1
 KOKKOS_INLINE_FUNCTION Real FEMBasis1Type3(Real xi1, Real xi2, Real xi3) {
   return 1.;
 }
 
+// Overlapping honeycomb basis 2
 KOKKOS_INLINE_FUNCTION Real FEMBasis2Type3(Real xi1, Real xi2, Real xi3) {
   return 1.;
 }
 
+// Overlapping honeycomb basis 3
 KOKKOS_INLINE_FUNCTION Real FEMBasis3Type3(Real xi1, Real xi2, Real xi3) {
   return 1.;
 }
 
-// -------------------------------------------------------------------
-// Basis 4: 'non-overlapping honeycomb'
+/* FEM basis functions: 'non-overlapping honeycomb'
+ *
+ * Basis is given in barycentric coordinates
+ */
+
+// Non-overlapping honeycomb basis 1
 KOKKOS_INLINE_FUNCTION Real FEMBasis1Type4(Real xi1, Real xi2, Real xi3) {
   return (xi1 >= xi2) * (xi1 > xi3) * 1.;
 }
 
+// Non-overlapping honeycomb basis 2
 KOKKOS_INLINE_FUNCTION Real FEMBasis2Type4(Real xi1, Real xi2, Real xi3) {
   return (xi2 >= xi3) * (xi2 > xi1) * 1.;
 }
 
+// Non-overlapping honeycomb basis 3
 KOKKOS_INLINE_FUNCTION Real FEMBasis3Type4(Real xi1, Real xi2, Real xi3) {
   return (xi3 >= xi1) * (xi3 > xi2) * 1.;
 }
 
-// ---------------------------------------------------------------------
-// FEM basis in barycentric coordinates
+/* Main FEM basis function in barycentric coordinates: allows choice of basis number and basis type
+ *
+ * choice: [1] overlapping tent [2] small tent [3] overlapping honeycomb [4] small honeycomb
+ * basis_index: [1]: basis peaked at xi1 = 1 [2], basis peaked at xi2 = 1 [3] basis peaked at xi3 = 1
+ */
 KOKKOS_INLINE_FUNCTION Real FEMBasis(Real xi1, Real xi2, Real xi3, int basis_index, int basis_choice) {
   if (basis_index == 1 && basis_choice == 1) {
     return FEMBasis1Type1(xi1, xi2, xi3);
@@ -205,21 +220,25 @@ KOKKOS_INLINE_FUNCTION Real dFEMBasis3Type1dxi2(Real xi1, Real xi2, Real xi3) {
   return 1.;
 }
 
-// ------------------------------------------------------------------
-// Derivative of 'overlapping tent' basis wrt barycentric coordinates
-KOKKOS_INLINE_FUNCTION Real dFEMBasisdxi(Real xi1, Real xi2, Real xi3, int basis_index, int basis_choice, int xi_index) {
-  if (basis_index == 1 && basis_choice == 1 && xi_index == 1) {
+/* Derivative of 'overlapping tent' basis functions with respect to barycentric coordinates
+ *
+ * Note: basis_choice is set to 1. Do not use any other number
+ *
+ * (xi1, xi2, xi3) is the point at which the derivative is taken
+ */
+KOKKOS_INLINE_FUNCTION Real dFEMBasisdxi(Real xi1, Real xi2, Real xi3, int basis_index, int xi_index) {
+  if (basis_index == 1 && xi_index == 1) {
     return dFEMBasis1Type1dxi1(xi1, xi2, xi3);
-  } else if (basis_index == 2 && basis_choice == 1 && xi_index == 1) {
+  } else if (basis_index == 2 && xi_index == 1) {
     return dFEMBasis2Type1dxi1(xi1, xi2, xi3);
-  } else if (basis_index == 3 && basis_choice == 1 && xi_index == 1) {
+  } else if (basis_index == 3 && xi_index == 1) {
     return dFEMBasis3Type1dxi1(xi1, xi2, xi3);
   }
-  if (basis_index == 1 && basis_choice == 1 && xi_index == 2) {
+  if (basis_index == 1 && xi_index == 2) {
     return dFEMBasis1Type1dxi2(xi1, xi2, xi3);
-  } else if (basis_index == 2 && basis_choice == 1 && xi_index == 2) {
+  } else if (basis_index == 2 && xi_index == 2) {
     return dFEMBasis2Type1dxi2(xi1, xi2, xi3);
-  } else if (basis_index == 3 && basis_choice == 1 && xi_index == 2) {
+  } else if (basis_index == 3 && xi_index == 2) {
     return dFEMBasis3Type1dxi2(xi1, xi2, xi3);
   } else {
     std::cout << "Incorrect basis_choice of basis function in radiation-femn block!" << std::endl;
@@ -241,20 +260,11 @@ Real FEMBasisABasisB(int a, int b, int t1, int t2, int t3, Real xi1, Real xi2, R
   return FEMBasisA * FEMBasisB;
 }
 
-// -----------------------------------------------------------------------
-// FEM basis given its index and triangle info
-KOKKOS_INLINE_FUNCTION Real FEMBasisA(int a, int t1, int t2, int t3, Real xi1, Real xi2, Real xi3, int basis_choice) {
-
-  int basis_index_a = (a == t1) * 1 + (a == t2) * 2 + (a == t3) * 3;
-
-  auto FEMBasisA = FEMBasis(xi1, xi2, xi3, basis_index_a, basis_choice);
-
-  return FEMBasisA;
-}
-
-// -----------------------------------------------------------------------
-// FP_N basis: real spherical harmonics
-Real Ylm(int l, int m, Real phi, Real theta) {
+/* FPN basis function: real spherical harmonics
+ *
+ * Calculated for (l,m) at point (phi, theta) on the sphere
+ */
+Real FPNBasis(int l, int m, Real phi, Real theta) {
   Real result = 0.;
   if(m > 0) {
     result = sqrt(2.) * cos(m * phi) * gsl_sf_legendre_sphPlm(l,m,cos(theta));
@@ -414,7 +424,7 @@ Real mom_by_energy(int mu, Real phi, Real theta) {
 
   return result;
 }
-
+/*
 // ------------------------------------------------------------------------
 // partial xi1 / partial phi
 Real pXi1pPhi(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
@@ -479,5 +489,5 @@ Real PartialFEMBasisAwithoute(int ihat, int a, int t1, int t2, int t3, Real x1, 
     std::cout << "Incorrect choice of index ihat!" << std::endl;
     exit(EXIT_FAILURE);
   }
-}
+}*/
 } // namespace radiationfemn

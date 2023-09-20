@@ -124,10 +124,10 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
             auto Ven = (1. / 3.) * (pow(energy_grid(en + 1), 3) - pow(energy_grid(en), 3));
 
             // compute quantities at the left and right boundaries
-            double sqrt_det_g_L = 1.5 * sqrt_det_g(m, kk, jj, ii) - 0.5 * sqrt_det_g(m, kk, jj, ii + 1);
-            double sqrt_det_g_R = -0.5 * sqrt_det_g(m, kk, jj, ii) + 1.5 * sqrt_det_g(m, kk, jj, ii + 1);
-            double L_mu_muhat0_L = 1.5 * L_mu_muhat0(m, 1, muhat, kk, jj, ii) - 0.5 * L_mu_muhat0(m, 1, muhat, kk, jj, ii + 1);
-            double L_mu_muhat0_R = -0.5 * L_mu_muhat0(m, 1, muhat, kk, jj, ii) + 1.5 * L_mu_muhat0(m, 1, muhat, kk, jj, ii + 1);
+            Real sqrt_det_g_L = 1.5 * sqrt_det_g(m, kk, jj, ii) - 0.5 * sqrt_det_g(m, kk, jj, ii + 1);
+            Real sqrt_det_g_R = -0.5 * sqrt_det_g(m, kk, jj, ii) + 1.5 * sqrt_det_g(m, kk, jj, ii + 1);
+            Real L_mu_muhat0_L = 1.5 * L_mu_muhat0(m, 1, muhat, kk, jj, ii) - 0.5 * L_mu_muhat0(m, 1, muhat, kk, jj, ii + 1);
+            Real L_mu_muhat0_R = -0.5 * L_mu_muhat0(m, 1, muhat, kk, jj, ii) + 1.5 * L_mu_muhat0(m, 1, muhat, kk, jj, ii + 1);
 
             // compute Fbar
             auto Favg = (0.5) * Ven * (P_matrix(muhat, B, A) * sqrt_det_g(m, kk, jj, ii) * L_mu_muhat0(m, 1, muhat, kk, jj, ii) * f0_(m, Abar, kk, jj, ii)
@@ -176,10 +176,10 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
               auto Ven = (1. / 3.) * (pow(energy_grid(en + 1), 3) - pow(energy_grid(en), 3));
 
               // compute quantities at the left and right boundaries
-              double sqrt_det_g_L = 1.5 * sqrt_det_g(m, kk, jj, ii) - 0.5 * sqrt_det_g(m, kk, jj + 1, ii);
-              double sqrt_det_g_R = -0.5 * sqrt_det_g(m, kk, jj, ii) + 1.5 * sqrt_det_g(m, kk, jj + 1, ii);
-              double L_mu_muhat0_L = 1.5 * L_mu_muhat0(m, 2, muhat, kk, jj, ii) - 0.5 * L_mu_muhat0(m, 2, muhat, kk, jj + 1, ii);
-              double L_mu_muhat0_R = -0.5 * L_mu_muhat0(m, 2, muhat, kk, jj, ii) + 1.5 * L_mu_muhat0(m, 2, muhat, kk, jj + 1, ii);
+              Real sqrt_det_g_L = 1.5 * sqrt_det_g(m, kk, jj, ii) - 0.5 * sqrt_det_g(m, kk, jj + 1, ii);
+              Real sqrt_det_g_R = -0.5 * sqrt_det_g(m, kk, jj, ii) + 1.5 * sqrt_det_g(m, kk, jj + 1, ii);
+              Real L_mu_muhat0_L = 1.5 * L_mu_muhat0(m, 2, muhat, kk, jj, ii) - 0.5 * L_mu_muhat0(m, 2, muhat, kk, jj + 1, ii);
+              Real L_mu_muhat0_R = -0.5 * L_mu_muhat0(m, 2, muhat, kk, jj, ii) + 1.5 * L_mu_muhat0(m, 2, muhat, kk, jj + 1, ii);
 
               // compute Fbar
               auto Favg = (0.5) * Ven * (P_matrix(muhat, B, A) * sqrt_det_g(m, kk, jj, ii) * L_mu_muhat0(m, 2, muhat, kk, jj, ii) * f0_(m, Abar, kk, jj, ii)
@@ -227,10 +227,10 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
               auto Ven = (1. / 3.) * (pow(energy_grid(en + 1), 3) - pow(energy_grid(en), 3));
 
               // compute quantities at the left and right boundaries
-              double sqrt_det_g_L = 1.5 * sqrt_det_g(m, kk, jj, ii) - 0.5 * sqrt_det_g(m, kk + 1, jj, ii);
-              double sqrt_det_g_R = -0.5 * sqrt_det_g(m, kk, jj, ii) + 1.5 * sqrt_det_g(m, kk + 1, jj, ii);
-              double L_mu_muhat0_L = 1.5 * L_mu_muhat0(m, 3, muhat, kk, jj, ii) - 0.5 * L_mu_muhat0(m, 3, muhat, kk + 1, jj, ii);
-              double L_mu_muhat0_R = -0.5 * L_mu_muhat0(m, 3, muhat, kk, jj, ii) + 1.5 * L_mu_muhat0(m, 3, muhat, kk + 1, jj, ii);
+              Real sqrt_det_g_L = 1.5 * sqrt_det_g(m, kk, jj, ii) - 0.5 * sqrt_det_g(m, kk + 1, jj, ii);
+              Real sqrt_det_g_R = -0.5 * sqrt_det_g(m, kk, jj, ii) + 1.5 * sqrt_det_g(m, kk + 1, jj, ii);
+              Real L_mu_muhat0_L = 1.5 * L_mu_muhat0(m, 3, muhat, kk, jj, ii) - 0.5 * L_mu_muhat0(m, 3, muhat, kk + 1, jj, ii);
+              Real L_mu_muhat0_R = -0.5 * L_mu_muhat0(m, 3, muhat, kk, jj, ii) + 1.5 * L_mu_muhat0(m, 3, muhat, kk + 1, jj, ii);
 
               // compute Fbar
               auto Favg = (0.5) * Ven * (P_matrix(muhat, B, A) * sqrt_det_g(m, kk, jj, ii) * L_mu_muhat0(m, 3, muhat, kk, jj, ii) * f0_(m, Abar, kk, jj, ii)
