@@ -8,29 +8,23 @@
 //  \brief implementation of the radiation FEM_N basis functions and helper functions
 
 #include <iostream>
+#include <gsl/gsl_sf_legendre.h>
 #include "athena.hpp"
 #include "radiation_femn/radiation_femn_geodesic_grid_matrices.hpp"
 
 namespace radiationfemn {
 
-// -----------------------------------------------------------------------------------
-// Convert Barycentric coordinates to Cartesian coordinates given vertices of triangle
-KOKKOS_INLINE_FUNCTION
-void BarycentricToCartesian(double x1,
-                            double y1,
-                            double z1,
-                            double x2,
-                            double y2,
-                            double z2,
-                            double x3,
-                            double y3,
-                            double z3,
-                            double xi1,
-                            double xi2,
-                            double xi3,
-                            double &xval,
-                            double &yval,
-                            double &zval) {
+/* Convert Barycentric coordinates to Cartesian coordinates given vertices of triangle
+ *
+ * Inputs:
+ * (x1,y1,z1), (x2,y2,z2), (x3,y3,z3):  the three triangle vertices in cartesian coordinates
+ * (xi1, xi2, xi3):the barycentric coordinates of a point inside the triangle
+ *
+ * Output:
+ * (xval, yval, zval): the cartesian coordinates of the point
+ */
+KOKKOS_INLINE_FUNCTION void BarycentricToCartesian(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3,
+                                                   Real xi1, Real xi2, Real xi3, Real &xval, Real &yval, Real &zval) {
 
   xval = xi1 * x1 + xi2 * x2 + xi3 * x3;
   yval = xi1 * y1 + xi2 * y2 + xi3 * y3;
@@ -38,9 +32,18 @@ void BarycentricToCartesian(double x1,
 
 }
 
-// ------------------------------------------------------------------------------------------------
-// Given index numbers of two vertices, finds if they share an edge and if so, return triangle info
-// If a = b, this return all triangles which share the vertex
+/* Given index numbers of two vertices, finds if they share an edge and if so, return triangle info
+ *
+ * If a = b, this return all triangles which share the vertex
+ *
+ * Inputs:
+ * a, b: index number of vertices
+ * triangles: triangle information of the geodesic grid
+ *
+ * Outputs:
+ * edge_triangles: the vertex information of shared edge(s)
+ * is_edge: bool for if the vertices share an edge or not
+ */
 void FindTriangles(int a, int b, const HostArray2D<int> &triangles, HostArray2D<int> &edge_triangles, bool &is_edge) {
 
   is_edge = false;
@@ -63,9 +66,8 @@ void FindTriangles(int a, int b, const HostArray2D<int> &triangles, HostArray2D<
   } else if (a != b) {
     size_t index{0};
     for (size_t i = 0; i < triangles.size() / 3; i++) {
-      if ((triangles(i, 0) == a && triangles(i, 1) == b) || (triangles(i, 0) == a && triangles(i, 2) == b) ||
-          (triangles(i, 0) == b && triangles(i, 1) == a) || (triangles(i, 0) == b && triangles(i, 2) == a) ||
-          (triangles(i, 1) == a && triangles(i, 2) == b) || (triangles(i, 1) == b && triangles(i, 2) == a)) {
+      if ((triangles(i, 0) == a && triangles(i, 1) == b) || (triangles(i, 0) == a && triangles(i, 2) == b) || (triangles(i, 0) == b && triangles(i, 1) == a)
+          || (triangles(i, 0) == b && triangles(i, 2) == a) || (triangles(i, 1) == a && triangles(i, 2) == b) || (triangles(i, 1) == b && triangles(i, 2) == a)) {
         is_edge = true;
         edge_triangles(index, 0) = triangles(i, 0);
         edge_triangles(index, 1) = triangles(i, 1);
@@ -76,78 +78,77 @@ void FindTriangles(int a, int b, const HostArray2D<int> &triangles, HostArray2D<
   }
 }
 
-// --------------------------------------------------------------------
-// Basis 1: 'overlapping tent
-KOKKOS_INLINE_FUNCTION
-double FEMBasis1Type1(double xi1, double xi2, double xi3) {
+/* FEM basis functions: 'overlapping tent'
+ *
+ * Basis is given in barycentric coordinates
+ */
+
+// Overlapping tent basis 1
+KOKKOS_INLINE_FUNCTION Real FEMBasis1Type1(Real xi1, Real xi2, Real xi3) {
   return 2. * xi1 + xi2 + xi3 - 1.;
 }
 
-KOKKOS_INLINE_FUNCTION
-double FEMBasis2Type1(double xi1, double xi2, double xi3) {
+// Overlapping tent basis 2
+KOKKOS_INLINE_FUNCTION Real FEMBasis2Type1(Real xi1, Real xi2, Real xi3) {
   return xi1 + 2. * xi2 + xi3 - 1.;
 }
 
-KOKKOS_INLINE_FUNCTION
-double FEMBasis3Type1(double xi1, double xi2, double xi3) {
+// Overlapping tent basis 1
+KOKKOS_INLINE_FUNCTION Real FEMBasis3Type1(Real xi1, Real xi2, Real xi3) {
   return xi1 + xi2 + 2. * xi3 - 1.;
 }
 
-// -------------------------------------------------------------------
-// Basis 2: 'small tent'
-KOKKOS_INLINE_FUNCTION
-double FEMBasis1Type2(double xi1, double xi2, double xi3) {
+/* FEM basis functions: 'small tent'
+ *
+ * Basis is given in barycentric coordinates
+ */
+
+// Small tent basis 1
+KOKKOS_INLINE_FUNCTION Real FEMBasis1Type2(Real xi1, Real xi2, Real xi3) {
   return (xi1 >= 0.5) * (xi1 - xi2 - xi3);
 }
 
-KOKKOS_INLINE_FUNCTION
-double FEMBasis2Type2(double xi1, double xi2, double xi3) {
+// Small tent basis 2
+KOKKOS_INLINE_FUNCTION Real FEMBasis2Type2(Real xi1, Real xi2, Real xi3) {
   return (xi2 >= 0.5) * (xi2 - xi3 - xi1);
 }
 
-KOKKOS_INLINE_FUNCTION
-double FEMBasis3Type2(double xi1, double xi2, double xi3) {
+// Small tent basis 3
+KOKKOS_INLINE_FUNCTION Real FEMBasis3Type2(Real xi1, Real xi2, Real xi3) {
   return (xi3 >= 0.5) * (xi3 - xi1 - xi2);
 }
 
 // --------------------------------------------------------------------
 // Basis 3: 'overlapping honeycomb'
-KOKKOS_INLINE_FUNCTION
-double FEMBasis1Type3(double xi1, double xi2, double xi3) {
+KOKKOS_INLINE_FUNCTION Real FEMBasis1Type3(Real xi1, Real xi2, Real xi3) {
   return 1.;
 }
 
-KOKKOS_INLINE_FUNCTION
-double FEMBasis2Type3(double xi1, double xi2, double xi3) {
+KOKKOS_INLINE_FUNCTION Real FEMBasis2Type3(Real xi1, Real xi2, Real xi3) {
   return 1.;
 }
 
-KOKKOS_INLINE_FUNCTION
-double FEMBasis3Type3(double xi1, double xi2, double xi3) {
+KOKKOS_INLINE_FUNCTION Real FEMBasis3Type3(Real xi1, Real xi2, Real xi3) {
   return 1.;
 }
 
 // -------------------------------------------------------------------
 // Basis 4: 'non-overlapping honeycomb'
-KOKKOS_INLINE_FUNCTION
-double FEMBasis1Type4(double xi1, double xi2, double xi3) {
+KOKKOS_INLINE_FUNCTION Real FEMBasis1Type4(Real xi1, Real xi2, Real xi3) {
   return (xi1 >= xi2) * (xi1 > xi3) * 1.;
 }
 
-KOKKOS_INLINE_FUNCTION
-double FEMBasis2Type4(double xi1, double xi2, double xi3) {
+KOKKOS_INLINE_FUNCTION Real FEMBasis2Type4(Real xi1, Real xi2, Real xi3) {
   return (xi2 >= xi3) * (xi2 > xi1) * 1.;
 }
 
-KOKKOS_INLINE_FUNCTION
-double FEMBasis3Type4(double xi1, double xi2, double xi3) {
+KOKKOS_INLINE_FUNCTION Real FEMBasis3Type4(Real xi1, Real xi2, Real xi3) {
   return (xi3 >= xi1) * (xi3 > xi2) * 1.;
 }
 
 // ---------------------------------------------------------------------
 // FEM basis in barycentric coordinates
-KOKKOS_INLINE_FUNCTION
-double FEMBasis(double xi1, double xi2, double xi3, int basis_index, int basis_choice) {
+KOKKOS_INLINE_FUNCTION Real FEMBasis(Real xi1, Real xi2, Real xi3, int basis_index, int basis_choice) {
   if (basis_index == 1 && basis_choice == 1) {
     return FEMBasis1Type1(xi1, xi2, xi3);
   } else if (basis_index == 1 && basis_choice == 2) {
@@ -180,40 +181,33 @@ double FEMBasis(double xi1, double xi2, double xi3, int basis_index, int basis_c
 
 // ---------------------------------------------------------------------------------------
 // Partial derivatives of 'overlapping tent' basis with respect to Barycentric coordinates
-KOKKOS_INLINE_FUNCTION
-double dFEMBasis1Type1dxi1(double xi1, double xi2, double xi3) {
+KOKKOS_INLINE_FUNCTION Real dFEMBasis1Type1dxi1(Real xi1, Real xi2, Real xi3) {
   return 2.;
 }
 
-KOKKOS_INLINE_FUNCTION
-double dFEMBasis2Type1dxi1(double xi1, double xi2, double xi3) {
+KOKKOS_INLINE_FUNCTION Real dFEMBasis2Type1dxi1(Real xi1, Real xi2, Real xi3) {
   return 1.;
 }
 
-KOKKOS_INLINE_FUNCTION
-double dFEMBasis3Type1dxi1(double xi1, double xi2, double xi3) {
+KOKKOS_INLINE_FUNCTION Real dFEMBasis3Type1dxi1(Real xi1, Real xi2, Real xi3) {
   return 1.;
 }
 
-KOKKOS_INLINE_FUNCTION
-double dFEMBasis1Type1dxi2(double xi1, double xi2, double xi3) {
+KOKKOS_INLINE_FUNCTION Real dFEMBasis1Type1dxi2(Real xi1, Real xi2, Real xi3) {
   return 1.;
 }
 
-KOKKOS_INLINE_FUNCTION
-double dFEMBasis2Type1dxi2(double xi1, double xi2, double xi3) {
+KOKKOS_INLINE_FUNCTION Real dFEMBasis2Type1dxi2(Real xi1, Real xi2, Real xi3) {
   return 2.;
 }
 
-KOKKOS_INLINE_FUNCTION
-double dFEMBasis3Type1dxi2(double xi1, double xi2, double xi3) {
+KOKKOS_INLINE_FUNCTION Real dFEMBasis3Type1dxi2(Real xi1, Real xi2, Real xi3) {
   return 1.;
 }
 
 // ------------------------------------------------------------------
 // Derivative of 'overlapping tent' basis wrt barycentric coordinates
-KOKKOS_INLINE_FUNCTION
-double dFEMBasisdxi(double xi1, double xi2, double xi3, int basis_index, int basis_choice, int xi_index) {
+KOKKOS_INLINE_FUNCTION Real dFEMBasisdxi(Real xi1, Real xi2, Real xi3, int basis_index, int basis_choice, int xi_index) {
   if (basis_index == 1 && basis_choice == 1 && xi_index == 1) {
     return dFEMBasis1Type1dxi1(xi1, xi2, xi3);
   } else if (basis_index == 2 && basis_choice == 1 && xi_index == 1) {
@@ -236,7 +230,7 @@ double dFEMBasisdxi(double xi1, double xi2, double xi3, int basis_index, int bas
 // ------------------------------------------------------------
 // Product of two FEM basis given their index and triangle info
 //KOKKOS_INLINE_FUNCTION
-double FEMBasisABasisB(int a, int b, int t1, int t2, int t3, double xi1, double xi2, double xi3, int basis_choice) {
+Real FEMBasisABasisB(int a, int b, int t1, int t2, int t3, Real xi1, Real xi2, Real xi3, int basis_choice) {
 
   int basis_index_a = (a == t1) * 1 + (a == t2) * 2 + (a == t3) * 3;
   int basis_index_b = (b == t1) * 1 + (b == t2) * 2 + (b == t3) * 3;
@@ -249,8 +243,7 @@ double FEMBasisABasisB(int a, int b, int t1, int t2, int t3, double xi1, double 
 
 // -----------------------------------------------------------------------
 // FEM basis given its index and triangle info
-KOKKOS_INLINE_FUNCTION
-double FEMBasisA(int a, int t1, int t2, int t3, double xi1, double xi2, double xi3, int basis_choice) {
+KOKKOS_INLINE_FUNCTION Real FEMBasisA(int a, int t1, int t2, int t3, Real xi1, Real xi2, Real xi3, int basis_choice) {
 
   int basis_index_a = (a == t1) * 1 + (a == t2) * 2 + (a == t3) * 3;
 
@@ -259,27 +252,31 @@ double FEMBasisA(int a, int t1, int t2, int t3, double xi1, double xi2, double x
   return FEMBasisA;
 }
 
+// -----------------------------------------------------------------------
+// FP_N basis: real spherical harmonics
+Real Ylm(int l, int m, Real phi, Real theta) {
+  Real result = 0.;
+  if(m > 0) {
+    result = sqrt(2.) * cos(m * phi) * gsl_sf_legendre_sphPlm(l,m,cos(theta));
+  } else if (m == 0) {
+    result = gsl_sf_legendre_sphPlm(l,0,cos(theta));
+  } else {
+    result = sqrt(2.) * sin(abs(m) * phi) * gsl_sf_legendre_sphPlm(l,abs(m),cos(theta));
+  }
+
+  return result;
+}
+
 // -------------------------------------------------------------------------
 // Cos Phi Sin Theta
 //KOKKOS_INLINE_FUNCTION
-double CosPhiSinTheta(double x1,
-                      double y1,
-                      double z1,
-                      double x2,
-                      double y2,
-                      double z2,
-                      double x3,
-                      double y3,
-                      double z3,
-                      double xi1,
-                      double xi2,
-                      double xi3) {
-  double xval, yval, zval;
+Real CosPhiSinTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
+  Real xval, yval, zval;
   BarycentricToCartesian(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, xval, yval, zval);
 
-  double rval = sqrt(xval * xval + yval * yval + zval * zval);
-  double thetaval = acos(zval / rval);
-  double phival = atan2(yval, xval);
+  Real rval = sqrt(xval * xval + yval * yval + zval * zval);
+  Real thetaval = acos(zval / rval);
+  Real phival = atan2(yval, xval);
 
   return cos(phival) * sin(thetaval);
 }
@@ -287,24 +284,13 @@ double CosPhiSinTheta(double x1,
 // ------------------------------------------------------------------------
 // Sin Phi Sin Theta
 //KOKKOS_INLINE_FUNCTION
-double SinPhiSinTheta(double x1,
-                      double y1,
-                      double z1,
-                      double x2,
-                      double y2,
-                      double z2,
-                      double x3,
-                      double y3,
-                      double z3,
-                      double xi1,
-                      double xi2,
-                      double xi3) {
-  double xval, yval, zval;
+Real SinPhiSinTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
+  Real xval, yval, zval;
   BarycentricToCartesian(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, xval, yval, zval);
 
-  double rval = sqrt(xval * xval + yval * yval + zval * zval);
-  double thetaval = acos(zval / rval);
-  double phival = atan2(yval, xval);
+  Real rval = sqrt(xval * xval + yval * yval + zval * zval);
+  Real thetaval = acos(zval / rval);
+  Real phival = atan2(yval, xval);
 
   return sin(phival) * sin(thetaval);
 }
@@ -312,23 +298,12 @@ double SinPhiSinTheta(double x1,
 // ------------------------------------------------------------------------
 // Cos Theta
 //KOKKOS_INLINE_FUNCTION
-double CosTheta(double x1,
-                double y1,
-                double z1,
-                double x2,
-                double y2,
-                double z2,
-                double x3,
-                double y3,
-                double z3,
-                double xi1,
-                double xi2,
-                double xi3) {
-  double xval, yval, zval;
+Real CosTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
+  Real xval, yval, zval;
   BarycentricToCartesian(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, xval, yval, zval);
 
-  double rval = sqrt(xval * xval + yval * yval + zval * zval);
-  double thetaval = acos(zval / rval);
+  Real rval = sqrt(xval * xval + yval * yval + zval * zval);
+  Real thetaval = acos(zval / rval);
 
   return cos(thetaval);
 }
@@ -336,24 +311,13 @@ double CosTheta(double x1,
 // -------------------------------------------------------------------------
 // sin Phi Cosec Theta
 //KOKKOS_INLINE_FUNCTION
-double SinPhiCosecTheta(double x1,
-                        double y1,
-                        double z1,
-                        double x2,
-                        double y2,
-                        double z2,
-                        double x3,
-                        double y3,
-                        double z3,
-                        double xi1,
-                        double xi2,
-                        double xi3) {
-  double xval, yval, zval;
+Real SinPhiCosecTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
+  Real xval, yval, zval;
   BarycentricToCartesian(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, xval, yval, zval);
 
-  double rval = sqrt(xval * xval + yval * yval + zval * zval);
-  double thetaval = acos(zval / rval);
-  double phival = atan2(yval, xval);
+  Real rval = sqrt(xval * xval + yval * yval + zval * zval);
+  Real thetaval = acos(zval / rval);
+  Real phival = atan2(yval, xval);
 
   return sin(phival) / sin(thetaval);
 }
@@ -361,24 +325,13 @@ double SinPhiCosecTheta(double x1,
 // -------------------------------------------------------------------------
 // Cos Phi Cos Theta
 //KOKKOS_INLINE_FUNCTION
-double CosPhiCosTheta(double x1,
-                      double y1,
-                      double z1,
-                      double x2,
-                      double y2,
-                      double z2,
-                      double x3,
-                      double y3,
-                      double z3,
-                      double xi1,
-                      double xi2,
-                      double xi3) {
-  double xval, yval, zval;
+Real CosPhiCosTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
+  Real xval, yval, zval;
   BarycentricToCartesian(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, xval, yval, zval);
 
-  double rval = sqrt(xval * xval + yval * yval + zval * zval);
-  double thetaval = acos(zval / rval);
-  double phival = atan2(yval, xval);
+  Real rval = sqrt(xval * xval + yval * yval + zval * zval);
+  Real thetaval = acos(zval / rval);
+  Real phival = atan2(yval, xval);
 
   return cos(phival) * cos(thetaval);
 }
@@ -386,24 +339,13 @@ double CosPhiCosTheta(double x1,
 // ------------------------------------------------------------------------
 // Cos Phi Cosec Theta
 //KOKKOS_INLINE_FUNCTION
-double CosPhiCosecTheta(double x1,
-                        double y1,
-                        double z1,
-                        double x2,
-                        double y2,
-                        double z2,
-                        double x3,
-                        double y3,
-                        double z3,
-                        double xi1,
-                        double xi2,
-                        double xi3) {
-  double xval, yval, zval;
+Real CosPhiCosecTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
+  Real xval, yval, zval;
   BarycentricToCartesian(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, xval, yval, zval);
 
-  double rval = sqrt(xval * xval + yval * yval + zval * zval);
-  double thetaval = acos(zval / rval);
-  double phival = atan2(yval, xval);
+  Real rval = sqrt(xval * xval + yval * yval + zval * zval);
+  Real thetaval = acos(zval / rval);
+  Real phival = atan2(yval, xval);
 
   return cos(phival) / sin(thetaval);
 }
@@ -411,24 +353,13 @@ double CosPhiCosecTheta(double x1,
 // ------------------------------------------------------------------------
 // Sin Phi Cos Theta
 //KOKKOS_INLINE_FUNCTION
-double SinPhiCosTheta(double x1,
-                      double y1,
-                      double z1,
-                      double x2,
-                      double y2,
-                      double z2,
-                      double x3,
-                      double y3,
-                      double z3,
-                      double xi1,
-                      double xi2,
-                      double xi3) {
-  double xval, yval, zval;
+Real SinPhiCosTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
+  Real xval, yval, zval;
   BarycentricToCartesian(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, xval, yval, zval);
 
-  double rval = sqrt(xval * xval + yval * yval + zval * zval);
-  double thetaval = acos(zval / rval);
-  double phival = atan2(yval, xval);
+  Real rval = sqrt(xval * xval + yval * yval + zval * zval);
+  Real thetaval = acos(zval / rval);
+  Real phival = atan2(yval, xval);
 
   return sin(phival) * cos(thetaval);
 }
@@ -436,43 +367,20 @@ double SinPhiCosTheta(double x1,
 // ------------------------------------------------------------------------
 // Sin Theta
 //KOKKOS_INLINE_FUNCTION
-double SinTheta(double x1,
-                double y1,
-                double z1,
-                double x2,
-                double y2,
-                double z2,
-                double x3,
-                double y3,
-                double z3,
-                double xi1,
-                double xi2,
-                double xi3) {
-  double xval, yval, zval;
+Real SinTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
+  Real xval, yval, zval;
   BarycentricToCartesian(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, xval, yval, zval);
 
-  double rval = sqrt(xval * xval + yval * yval + zval * zval);
-  double thetaval = acos(zval / rval);
+  Real rval = sqrt(xval * xval + yval * yval + zval * zval);
+  Real thetaval = acos(zval / rval);
 
   return sin(thetaval);
 }
 
 // ------------------------------------------------------------
 // Momentum contra-vector divided by energy (in comoving frame)
-double mom_by_energy(int mu,
-                     double x1,
-                     double y1,
-                     double z1,
-                     double x2,
-                     double y2,
-                     double z2,
-                     double x3,
-                     double y3,
-                     double z3,
-                     double xi1,
-                     double xi2,
-                     double xi3) {
-  double result = 0.;
+Real mom_by_energy(int mu, Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
+  Real result = 0.;
   if (mu == 0) {
     result = 1.;
   } else if (mu == 1) {
@@ -489,8 +397,8 @@ double mom_by_energy(int mu,
   return result;
 }
 
-double mom_by_energy(int mu, double phi, double theta) {
-  double result = 0.;
+Real mom_by_energy(int mu, Real phi, Real theta) {
+  Real result = 0.;
   if (mu == 0) {
     result = 1.;
   } else if (mu == 1) {
@@ -509,134 +417,62 @@ double mom_by_energy(int mu, double phi, double theta) {
 
 // ------------------------------------------------------------------------
 // partial xi1 / partial phi
-double pXi1pPhi(double x1,
-                double y1,
-                double z1,
-                double x2,
-                double y2,
-                double z2,
-                double x3,
-                double y3,
-                double z3,
-                double xi1,
-                double xi2,
-                double xi3) {
-  return (pow(x1 * xi1 + x2 * xi2 - x3 * (-1 + xi1 + xi2), 2) + pow(xi1 * y1 + xi2 * y2 + y3 - (xi1 + xi2) * y3, 2)) /
-      (x3 * (y1 - xi2 * y1 + xi2 * y2) + x2 * xi2 * (y1 - y3) - x1 * (xi2 * y2 + y3 - xi2 * y3));
+Real pXi1pPhi(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
+  return (pow(x1 * xi1 + x2 * xi2 - x3 * (-1 + xi1 + xi2), 2) + pow(xi1 * y1 + xi2 * y2 + y3 - (xi1 + xi2) * y3, 2))
+      / (x3 * (y1 - xi2 * y1 + xi2 * y2) + x2 * xi2 * (y1 - y3) - x1 * (xi2 * y2 + y3 - xi2 * y3));
 }
 
 // ------------------------------------------------------------------------
 // partial xi2 / partial phi
-double pXi2pPhi(double x1,
-                double y1,
-                double z1,
-                double x2,
-                double y2,
-                double z2,
-                double x3,
-                double y3,
-                double z3,
-                double xi1,
-                double xi2,
-                double xi3) {
-  return (pow(x1 * xi1 + x2 * xi2 - x3 * (-1 + xi1 + xi2), 2) + pow(xi1 * y1 + xi2 * y2 + y3 - (xi1 + xi2) * y3, 2)) /
-      (x3 * (xi1 * y1 + y2 - xi1 * y2) + x1 * xi1 * (y2 - y3) - x2 * (xi1 * (y1 - y3) + y3));
+Real pXi2pPhi(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
+  return (pow(x1 * xi1 + x2 * xi2 - x3 * (-1 + xi1 + xi2), 2) + pow(xi1 * y1 + xi2 * y2 + y3 - (xi1 + xi2) * y3, 2))
+      / (x3 * (xi1 * y1 + y2 - xi1 * y2) + x1 * xi1 * (y2 - y3) - x2 * (xi1 * (y1 - y3) + y3));
 }
 
 // ------------------------------------------------------------------------
 // partial xi1 / partial theta
-double pXi1pTheta(double x1,
-                  double y1,
-                  double z1,
-                  double x2,
-                  double y2,
-                  double z2,
-                  double x3,
-                  double y3,
-                  double z3,
-                  double xi1,
-                  double xi2,
-                  double xi3) {
-  return (-2
-      * pow(pow(x1 * xi1 + x2 * xi2 - x3 * (-1 + xi1 + xi2), 2) + pow(xi1 * y1 + xi2 * y2 + y3 - (xi1 + xi2) * y3, 2) +
-          pow(xi1 * z1 + xi2 * z2 + z3 - (xi1 + xi2) * z3, 2), 1.5) *
-      sqrt(1 - pow(xi1 * z1 + xi2 * z2 + z3 - (xi1 + xi2) * z3, 2) /
-          (pow(x1 * xi1 + x2 * xi2 - x3 * (-1 + xi1 + xi2), 2) + pow(xi1 * y1 + xi2 * y2 + y3 - (xi1 + xi2) * y3, 2) +
-              pow(xi1 * z1 + xi2 * z2 + z3 - (xi1 + xi2) * z3, 2)))) /
-      (-2 * (xi1 * z1 + xi2 * z2 + z3 - (xi1 + xi2) * z3) *
-          ((x1 - x3) * (x1 * xi1 + x2 * xi2 - x3 * (-1 + xi1 + xi2))
-              + (y1 - y3) * (xi1 * y1 + xi2 * y2 + y3 - (xi1 + xi2) * y3) +
-              (z1 - z3) * (xi1 * z1 + xi2 * z2 + z3 - (xi1 + xi2) * z3)) + 2 * (z1 - z3) *
-          (pow(x1 * xi1 + x2 * xi2 - x3 * (-1 + xi1 + xi2), 2) +
-              pow(xi1 * y1 + xi2 * y2 + y3 - (xi1 + xi2) * y3, 2) +
-              pow(xi1 * z1 + xi2 * z2 + z3 - (xi1 + xi2) * z3, 2)));
+Real pXi1pTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
+  return (-2 * pow(
+      pow(x1 * xi1 + x2 * xi2 - x3 * (-1 + xi1 + xi2), 2) + pow(xi1 * y1 + xi2 * y2 + y3 - (xi1 + xi2) * y3, 2) + pow(xi1 * z1 + xi2 * z2 + z3 - (xi1 + xi2) * z3, 2),
+      1.5) * sqrt(1 - pow(xi1 * z1 + xi2 * z2 + z3 - (xi1 + xi2) * z3, 2)
+      / (pow(x1 * xi1 + x2 * xi2 - x3 * (-1 + xi1 + xi2), 2) + pow(xi1 * y1 + xi2 * y2 + y3 - (xi1 + xi2) * y3, 2)
+          + pow(xi1 * z1 + xi2 * z2 + z3 - (xi1 + xi2) * z3, 2)))) / (-2 * (xi1 * z1 + xi2 * z2 + z3 - (xi1 + xi2) * z3)
+      * ((x1 - x3) * (x1 * xi1 + x2 * xi2 - x3 * (-1 + xi1 + xi2)) + (y1 - y3) * (xi1 * y1 + xi2 * y2 + y3 - (xi1 + xi2) * y3)
+          + (z1 - z3) * (xi1 * z1 + xi2 * z2 + z3 - (xi1 + xi2) * z3)) + 2 * (z1 - z3)
+      * (pow(x1 * xi1 + x2 * xi2 - x3 * (-1 + xi1 + xi2), 2) + pow(xi1 * y1 + xi2 * y2 + y3 - (xi1 + xi2) * y3, 2)
+          + pow(xi1 * z1 + xi2 * z2 + z3 - (xi1 + xi2) * z3, 2)));
 }
 
 // ------------------------------------------------------------------------
 // partial xi2 / partial theta
-double pXi2pTheta(double x1,
-                  double y1,
-                  double z1,
-                  double x2,
-                  double y2,
-                  double z2,
-                  double x3,
-                  double y3,
-                  double z3,
-                  double xi1,
-                  double xi2,
-                  double xi3) {
-  return (-2
-      * pow(pow(x1 * xi1 + x2 * xi2 - x3 * (-1 + xi1 + xi2), 2) + pow(xi1 * y1 + xi2 * y2 + y3 - (xi1 + xi2) * y3, 2) +
-          pow(xi1 * z1 + xi2 * z2 + z3 - (xi1 + xi2) * z3, 2), 1.5) *
-      sqrt(1 - pow(xi1 * z1 + xi2 * z2 + z3 - (xi1 + xi2) * z3, 2) /
-          (pow(x1 * xi1 + x2 * xi2 - x3 * (-1 + xi1 + xi2), 2) + pow(xi1 * y1 + xi2 * y2 + y3 - (xi1 + xi2) * y3, 2) +
-              pow(xi1 * z1 + xi2 * z2 + z3 - (xi1 + xi2) * z3, 2)))) /
-      (-2 * (xi1 * z1 + xi2 * z2 + z3 - (xi1 + xi2) * z3) *
-          ((x2 - x3) * (x1 * xi1 + x2 * xi2 - x3 * (-1 + xi1 + xi2))
-              + (y2 - y3) * (xi1 * y1 + xi2 * y2 + y3 - (xi1 + xi2) * y3) +
-              (z2 - z3) * (xi1 * z1 + xi2 * z2 + z3 - (xi1 + xi2) * z3)) + 2 * (z2 - z3) *
-          (pow(x1 * xi1 + x2 * xi2 - x3 * (-1 + xi1 + xi2), 2) +
-              pow(xi1 * y1 + xi2 * y2 + y3 - (xi1 + xi2) * y3, 2) +
-              pow(xi1 * z1 + xi2 * z2 + z3 - (xi1 + xi2) * z3, 2)));
+Real pXi2pTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
+  return (-2 * pow(
+      pow(x1 * xi1 + x2 * xi2 - x3 * (-1 + xi1 + xi2), 2) + pow(xi1 * y1 + xi2 * y2 + y3 - (xi1 + xi2) * y3, 2) + pow(xi1 * z1 + xi2 * z2 + z3 - (xi1 + xi2) * z3, 2),
+      1.5) * sqrt(1 - pow(xi1 * z1 + xi2 * z2 + z3 - (xi1 + xi2) * z3, 2)
+      / (pow(x1 * xi1 + x2 * xi2 - x3 * (-1 + xi1 + xi2), 2) + pow(xi1 * y1 + xi2 * y2 + y3 - (xi1 + xi2) * y3, 2)
+          + pow(xi1 * z1 + xi2 * z2 + z3 - (xi1 + xi2) * z3, 2)))) / (-2 * (xi1 * z1 + xi2 * z2 + z3 - (xi1 + xi2) * z3)
+      * ((x2 - x3) * (x1 * xi1 + x2 * xi2 - x3 * (-1 + xi1 + xi2)) + (y2 - y3) * (xi1 * y1 + xi2 * y2 + y3 - (xi1 + xi2) * y3)
+          + (z2 - z3) * (xi1 * z1 + xi2 * z2 + z3 - (xi1 + xi2) * z3)) + 2 * (z2 - z3)
+      * (pow(x1 * xi1 + x2 * xi2 - x3 * (-1 + xi1 + xi2), 2) + pow(xi1 * y1 + xi2 * y2 + y3 - (xi1 + xi2) * y3, 2)
+          + pow(xi1 * z1 + xi2 * z2 + z3 - (xi1 + xi2) * z3, 2)));
 }
 
-double PartialFEMBasisAwithoute(int ihat,
-                                int a,
-                                int t1,
-                                int t2,
-                                int t3,
-                                double x1,
-                                double y1,
-                                double z1,
-                                double x2,
-                                double y2,
-                                double z2,
-                                double x3,
-                                double y3,
-                                double z3,
-                                double xi1,
-                                double xi2,
-                                double xi3,
-                                int basis_choice) {
+Real PartialFEMBasisAwithoute(int ihat, int a, int t1, int t2, int t3, Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3,
+                              Real xi1, Real xi2, Real xi3, int basis_choice) {
 
   int basis_index_a = (a == t1) * 1 + (a == t2) * 2 + (a == t3) * 3;
 
-  double dFEMBasisdphi = dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, basis_choice, 1)
-      * pXi1pPhi(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3) +
-      dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, basis_choice, 2)
-          * pXi2pPhi(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3);
-  double dFEMBasisdtheta = dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, basis_choice, 1)
-      * pXi1pTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3) +
-      dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, basis_choice, 2)
-          * pXi2pTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3);
+  Real dFEMBasisdphi = dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, basis_choice, 1) * pXi1pPhi(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3)
+      + dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, basis_choice, 2) * pXi2pPhi(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3);
+  Real dFEMBasisdtheta = dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, basis_choice, 1) * pXi1pTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3)
+      + dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, basis_choice, 2) * pXi2pTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3);
 
   if (ihat == 1) {
-    return -SinPhiCosecTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3) * dFEMBasisdphi +
-        CosPhiCosTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3) * dFEMBasisdtheta;
+    return -SinPhiCosecTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3) * dFEMBasisdphi
+        + CosPhiCosTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3) * dFEMBasisdtheta;
   } else if (ihat == 2) {
-    return CosPhiCosecTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3) * dFEMBasisdphi +
-        SinPhiCosTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3) * dFEMBasisdtheta;
+    return CosPhiCosecTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3) * dFEMBasisdphi
+        + SinPhiCosTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3) * dFEMBasisdtheta;
   } else if (ihat == 3) {
     return -SinTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3) * dFEMBasisdtheta;
   } else {
