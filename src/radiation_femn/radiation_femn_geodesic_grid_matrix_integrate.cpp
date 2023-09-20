@@ -353,7 +353,13 @@ Real IntegrateMatrixFPN(int la, int ma, int lb, int mb, const HostArray1D<Real> 
           * FPNBasis(lb, mb, scheme_points(i, 0), scheme_points(i, 1)) * scheme_weights(i);
     }
   } else if (matrixchoice == 4) {
-
+    for (size_t i = 0; i < scheme_weights.size(); i++) {
+       result += 4. * M_PI * mom_by_energy(nu, scheme_points(i, 0), scheme_points(i, 1)) *
+          mom_by_energy(mu, scheme_points(i, 0), scheme_points(i, 1))
+          * FPNBasis(la, ma, scheme_points(i, 0), scheme_points(i, 1))
+          * (PtildehatJac(scheme_points(i, 0), scheme_points(i, 1), 1, ihat) * dFPNBasisdOmega(lb, mb, scheme_points(i, 0), scheme_points(i, 1),1)
+          + PtildehatJac(scheme_points(i, 0), scheme_points(i, 1), 2, ihat) * dFPNBasisdOmega(lb, mb, scheme_points(i, 0), scheme_points(i, 1),2));
+    }
   } else if (matrixchoice == 5) {
     for (size_t i = 0; i < scheme_weights.size(); i++) {
        result += 4. * M_PI * mom_by_energy(nu, scheme_points(i, 0), scheme_points(i, 1)) *
