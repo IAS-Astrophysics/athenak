@@ -141,9 +141,9 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
     scheme_name = pin->GetOrAddString("radiation-femn", "quad_scheme_name", "lebedev");           // type of quadrature (lebedev: default)
 
     // quadrature check from par file
-    if (scheme_name != "lebedev") {
+    if (!(scheme_name == "lebedev" || scheme_name == "gauss_legendre")) {
       std::cout << "Quadrature scheme cannot be " + scheme_name + " for FP_N" << std::endl;
-      std::cout << "Use lebedev instead!" << std::endl;
+      std::cout << "Use lebedev or gauss_legendre instead!" << std::endl;
       exit(EXIT_FAILURE);
     }
 

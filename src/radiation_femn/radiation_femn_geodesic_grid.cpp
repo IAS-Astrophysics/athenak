@@ -35,7 +35,7 @@ RadiationFEMNPhaseIndices RadiationFEMN::IndicesUnified(int eindex, int angindex
 // ------------------------------------------
 // Convert cartesian to spherical coordinates
 KOKKOS_INLINE_FUNCTION
-void CartesianToSpherical(double xvar, double yvar, double zvar, double &rvar, double &thetavar, double &phivar) {
+void CartesianToSpherical(Real xvar, Real yvar, Real zvar, Real &rvar, Real &thetavar, Real &phivar) {
   rvar = sqrt(xvar * xvar + yvar * yvar + zvar * zvar);
   thetavar = acos(zvar / rvar);
   phivar = atan2(yvar, xvar);
@@ -94,8 +94,8 @@ GeodesicGridBaseGenerate(int &geogrid_level,
   Kokkos::realloc(edges, geogrid_num_edges, 2);
   Kokkos::realloc(triangles, geogrid_num_triangles, 3);
 
-  double golden_ratio{(1.0 + sqrt(5.0)) / 2.0};
-  double normalization_factor{1.0 / sqrt(1. + golden_ratio * golden_ratio)};
+  Real golden_ratio{(1.0 + sqrt(5.0)) / 2.0};
+  Real normalization_factor{1.0 / sqrt(1. + golden_ratio * golden_ratio)};
 
   x(0) = normalization_factor * 0.;
   x(1) = normalization_factor * 0.;
@@ -315,10 +315,10 @@ void GeodesicGridRefine(int &geogrid_level,
     ynew(geogrid_num_points + i) = (y(e1) + y(e2)) / 2.0;
     znew(geogrid_num_points + i) = (z(e1) + z(e2)) / 2.0;
 
-    double mod_point = sqrt(xnew(geogrid_num_points + i) * xnew(geogrid_num_points + i) +
+    Real mod_point = sqrt(xnew(geogrid_num_points + i) * xnew(geogrid_num_points + i) +
         ynew(geogrid_num_points + i) * ynew(geogrid_num_points + i) +
         znew(geogrid_num_points + i) * znew(geogrid_num_points + i));
-    double scaling_factor = sqrt(x(0) * x(0) + y(0) * y(0) + z(0) * z(0)) / mod_point;
+    Real scaling_factor = sqrt(x(0) * x(0) + y(0) * y(0) + z(0) * z(0)) / mod_point;
 
     xnew(geogrid_num_points + i) = scaling_factor * xnew(geogrid_num_points + i);
     ynew(geogrid_num_points + i) = scaling_factor * ynew(geogrid_num_points + i);

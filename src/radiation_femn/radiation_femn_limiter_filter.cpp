@@ -17,7 +17,7 @@
 namespace radiationfemn {
 
 KOKKOS_INLINE_FUNCTION
-double Lanczos(double eta) {
+Real Lanczos(Real eta) {
   return eta == 0 ? 1 : sin(eta) / eta;
 }
 
@@ -49,7 +49,7 @@ TaskStatus RadiationFEMN::ApplyFilterLanczos(Driver *pdriver, int stage) {
   int nmb1 = pmy_pack->nmb_thispack - 1;
   auto &f0_ = f0;
 
-  auto filtstrength = -(pmy_pack->pmesh->dt) * filter_sigma_eff / log(Lanczos(double(lmax) / (double(lmax) + 1.0)));
+  auto filtstrength = -(pmy_pack->pmesh->dt) * filter_sigma_eff / log(Lanczos(Real(lmax) / (Real(lmax) + 1.0)));
 
   par_for("radiation_femn_filter_Lanczos", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie, 0, npts1,
           KOKKOS_LAMBDA(const int m, const int k, const int j, const int i, const int enang) {
@@ -58,7 +58,7 @@ TaskStatus RadiationFEMN::ApplyFilterLanczos(Driver *pdriver, int stage) {
             int B = idcs.angindex;
             auto lval = angular_grid(B, 0);
 
-            f0_(m, enang, k, j, i) = pow(Lanczos(double(lval) / (double(lmax) + 1.0)), filtstrength) * f0_(m, enang, k, j, i);
+            f0_(m, enang, k, j, i) = pow(Lanczos(Real(lval) / (Real(lmax) + 1.0)), filtstrength) * f0_(m, enang, k, j, i);
           });
 
   return TaskStatus::complete;

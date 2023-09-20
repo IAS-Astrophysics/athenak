@@ -13,9 +13,18 @@
 
 namespace radiationfemn {
 
+/* Load a quadrature data file from disk:
+ *
+ * Inputs:
+ * scheme_name: 'lebedev', 'vioreanu_rokhlin', 'xiao_gimbutas'
+ * scheme_num_points: number of quadrature points/weights
+ *
+ * Outputs:
+ * scheme_weights and scheme_points: HostArrays which contains the quadrature weights and points
+ */
 void LoadQuadrature(std::string &scheme_name, int &scheme_num_points, HostArray1D<Real> &scheme_weights, HostArray2D<Real> &scheme_points) {
 
-  double value;
+  Real value;
   Kokkos::realloc(scheme_weights, scheme_num_points);
   Kokkos::realloc(scheme_points, scheme_num_points, 3);
 
