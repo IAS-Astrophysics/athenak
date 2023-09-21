@@ -266,12 +266,12 @@ Real FEMBasisABasisB(int a, int b, int t1, int t2, int t3, Real xi1, Real xi2, R
  */
 Real FPNBasis(int l, int m, Real phi, Real theta) {
   Real result = 0.;
-  if(m > 0) {
-    result = sqrt(2.) * cos(m * phi) * gsl_sf_legendre_sphPlm(l,m,cos(theta));
+  if (m > 0) {
+    result = sqrt(2.) * cos(m * phi) * gsl_sf_legendre_sphPlm(l, m, cos(theta));
   } else if (m == 0) {
-    result = gsl_sf_legendre_sphPlm(l,0,cos(theta));
+    result = gsl_sf_legendre_sphPlm(l, 0, cos(theta));
   } else {
-    result = sqrt(2.) * sin(abs(m) * phi) * gsl_sf_legendre_sphPlm(l,abs(m),cos(theta));
+    result = sqrt(2.) * sin(abs(m) * phi) * gsl_sf_legendre_sphPlm(l, abs(m), cos(theta));
   }
 
   return result;
@@ -282,13 +282,27 @@ KOKKOS_INLINE_FUNCTION Real dFPNBasisdphi(int l, int m, Real phi, Real theta) {
 }
 
 KOKKOS_INLINE_FUNCTION Real dFPNBasisdtheta(int l, int m, Real phi, Real theta) {
-  return 0;
+  Real result = 0.;
+
+  Real der_legendre =
+      -sin(theta) * ((m - l - 1.) * gsl_sf_legendre_sphPlm(l + 1, abs(m), cos(theta)) - (l + 1) * cos(theta) * gsl_sf_legendre_sphPlm(l, abs(m), cos(theta)))
+          / (1. - cos(theta) * cos(theta));
+
+  if (m > 0) {
+    result = sqrt(2.) * cos(m * phi) * der_legendre;
+  } else if (m == 0) {
+    result = der_legendre;
+  } else {
+    result = sqrt(2.) * sin(abs(m) * phi) * der_legendre;
+  }
+
+  return result;
 }
 
 Real dFPNBasisdOmega(int l, int m, Real phi, Real theta, int var_index) {
   if (var_index == 1) {
     return dFPNBasisdphi(l, m, phi, theta);
-  } else if (var_index == 2){
+  } else if (var_index == 2) {
     return dFPNBasisdtheta(l, m, phi, theta);
   } else {
     std::cout << "Incorrect choice of variable index in radiation-femn block!" << std::endl;
@@ -314,7 +328,6 @@ Real PtildehatJac(Real phi, Real theta, int tilde_index, int hat_index) {
     exit(EXIT_FAILURE);
   }
 }
-
 
 // -------------------------------------------------------------------------
 // Cos Phi Sin Theta
