@@ -103,7 +103,7 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                   flx1(m, B, kk, jj, ii + 1) = ((0.5) * Fminus + Favg - (1.5) * Fplus);
                 });
   */
-  /*
+
   auto &flx1 = iflx.x1f;
   Kokkos::deep_copy(flx1, 0.);
   par_for("radiation_femn_flux_x", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, int(ie / 2) + 1, 0, npts1, 0, nang1, 0, 3,
@@ -253,7 +253,7 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
               flx3(m, enang, kk + 1, jj, ii) += ((0.5) * Fminus + Favg - (1.5) * Fplus);
             });
   }
-  */
+
   return TaskStatus::complete;
 }
 
