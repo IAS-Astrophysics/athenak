@@ -51,123 +51,61 @@ void RadiationFEMN::LoadFEMNMatrices() {
   auto &sy_ = stiffness_matrix_y;
   auto &sz_ = stiffness_matrix_z;
   auto &fmatrix_ = F_matrix;
+  auto &gmatrix_ = G_matrix;
 
-  //Populate the mass matrix
-  std::cout << "Computing the mass matrix ... " << std::endl;
+  // temporary host arrays
+  HostArray2D<Real> temp_matrix;
+  HostArray2D<Real> temp_matrix_2;
+  HostArray2D<Real> temp_matrix_3;
+  HostArray5D<Real> temp_array_5d;
+  Kokkos::realloc(temp_matrix, num_points, num_points);
+  Kokkos::realloc(temp_matrix_2, num_points, num_points);
+  Kokkos::realloc(temp_matrix_3, num_points, num_points);
+  Kokkos::realloc(temp_array_5d, 4, 4, 3, num_points, num_points);
+
+  // compute mass matrix
+  std::cout << "Computing the mass matrix (FEM) ... " << std::endl;
   for (int i = 0; i < num_points; i++) {
     for (int j = 0; j < num_points; j++) {
-      mm_(i, j) = radiationfemn::IntegrateMatrixFEMN(i,
-                                                     j,
-                                                     basis,
-                                                     x,
-                                                     y,
-                                                     z,
-                                                     scheme_weights,
-                                                     scheme_points,
-                                                     triangles,
-                                                     0,
-                                                     -42,
-                                                     -42,
-                                                     -42);
+      temp_matrix(i, j) = radiationfemn::IntegrateMatrixFEMN(i, j, basis, x, y, z, scheme_weights, scheme_points, triangles, 0, -42, -42, -42);
     }
   }
+  Kokkos::deep_copy(mm_, temp_matrix);
 
   // compute stiffness matrices
-  std::cout << "Computing the stiffness matrices ... " << std::endl;
+  std::cout << "Computing the stiffness matrices (FEM) ... " << std::endl;
   for (int i = 0; i < num_points; i++) {
     for (int j = 0; j < num_points; j++) {
-      sx_(i, j) = radiationfemn::IntegrateMatrixFEMN(i,
-                                                     j,
-                                                     basis,
-                                                     x,
-                                                     y,
-                                                     z,
-                                                     scheme_weights,
-                                                     scheme_points,
-                                                     triangles,
-                                                     1,
-                                                     -42,
-                                                     -42,
-                                                     -42);
-      sy_(i, j) = radiationfemn::IntegrateMatrixFEMN(i,
-                                                     j,
-                                                     basis,
-                                                     x,
-                                                     y,
-                                                     z,
-                                                     scheme_weights,
-                                                     scheme_points,
-                                                     triangles,
-                                                     2,
-                                                     -42,
-                                                     -42,
-                                                     -42);
-      sz_(i, j) = radiationfemn::IntegrateMatrixFEMN(i,
-                                                     j,
-                                                     basis,
-                                                     x,
-                                                     y,
-                                                     z,
-                                                     scheme_weights,
-                                                     scheme_points,
-                                                     triangles,
-                                                     3,
-                                                     -42,
-                                                     -42,
-                                                     -42);
+      temp_matrix(i, j) = radiationfemn::IntegrateMatrixFEMN(i, j, basis, x, y, z, scheme_weights, scheme_points, triangles, 1, -42, -42, -42);
+
+      temp_matrix_2(i, j) = radiationfemn::IntegrateMatrixFEMN(i, j, basis, x, y, z, scheme_weights, scheme_points, triangles, 2, -42, -42, -42);
+
+      temp_matrix_3(i, j) = radiationfemn::IntegrateMatrixFEMN(i, j, basis, x, y, z, scheme_weights, scheme_points, triangles, 3, -42, -42, -42);
     }
   }
+  Kokkos::deep_copy(sx_, temp_matrix);
+  Kokkos::deep_copy(sy_, temp_matrix_2);
+  Kokkos::deep_copy(sz_, temp_matrix_3);
 
   // compute the F matrices
-  std::cout << "Computing the F matrices ... " << std::endl;
+  std::cout << "Computing the F matrices (FEM) ... " << std::endl;
   for (int i = 0; i < num_points; i++) {
     for (int j = 0; j < num_points; j++) {
       for (int nu = 0; nu < 4; nu++) {
-        for (int mu = 0; mu < 4; mu++) {
-          fmatrix_(nu, mu, 0, i, j) =
-              radiationfemn::IntegrateMatrixFEMN(i,
-                                                 j,
-                                                 basis,
-                                                 x,
-                                                 y,
-                                                 z,
-                                                 scheme_weights,
-                                                 scheme_points,
-                                                 triangles,
-                                                 5,
-                                                 nu,
-                                                 mu,
-                                                 1);
-          fmatrix_(nu, mu, 1, i, j) = radiationfemn::IntegrateMatrixFEMN(i,
-                                                                         j,
-                                                                         basis,
-                                                                         x,
-                                                                         y,
-                                                                         z,
-                                                                         scheme_weights,
-                                                                         scheme_points,
-                                                                         triangles,
-                                                                         5,
-                                                                         nu,
-                                                                         mu,
-                                                                         2);
-          fmatrix_(nu, mu, 2, i, j) = radiationfemn::IntegrateMatrixFEMN(i,
-                                                                         j,
-                                                                         basis,
-                                                                         x,
-                                                                         y,
-                                                                         z,
-                                                                         scheme_weights,
-                                                                         scheme_points,
-                                                                         triangles,
-                                                                         5,
-                                                                         nu,
-                                                                         mu,
-                                                                         3);
+        for (int mu = nu; mu < 4; mu++) {
+          temp_array_5d(nu, mu, 0, i, j) = radiationfemn::IntegrateMatrixFEMN(i, j, basis, x, y, z, scheme_weights, scheme_points, triangles, 5, nu, mu, 1);
+          temp_array_5d(mu, nu, 0, i, j) = temp_array_5d(nu, mu, 0, i, j);
+
+          temp_array_5d(nu, mu, 1, i, j) = radiationfemn::IntegrateMatrixFEMN(i, j, basis, x, y, z, scheme_weights, scheme_points, triangles, 5, nu, mu, 2);
+          temp_array_5d(mu, nu, 1, i, j) = temp_array_5d(nu, mu, 1, i, j);
+
+          fmatrix_(nu, mu, 2, i, j) = radiationfemn::IntegrateMatrixFEMN(i, j, basis, x, y, z, scheme_weights, scheme_points, triangles, 5, nu, mu, 3);
+          fmatrix_(mu, nu, 2, i, j) = fmatrix_(nu, mu, 2, i, j);
         }
       }
     }
   }
+  Kokkos::deep_copy(temp_array_5d, fmatrix_);
 
 }
 
@@ -184,6 +122,7 @@ void RadiationFEMN::LoadFPNMatrices() {
   auto &sy_ = stiffness_matrix_y;
   auto &sz_ = stiffness_matrix_z;
   auto &fmatrix_ = F_matrix;
+  auto &gmatrix_ = G_matrix;
 
   // populate angular grid with (l,m) values
   auto &lm_grid_ = angular_grid;
@@ -274,5 +213,7 @@ void RadiationFEMN::LoadFPNMatrices() {
       }
     }
   }
+  Kokkos::deep_copy(gmatrix_, temp_array_5d);
+
 }
 }  // namespace radiationfemn

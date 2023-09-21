@@ -18,33 +18,28 @@
 
 namespace radiationfemn {
 
-// ----------------------------------------------
-// ONLY MODIFY THIS FUNCTION TO ADD NEW CASES
-// Integrate a function over a spherical triangle
-// Implemented functions:
-// 0: Psi_A Psi_B
-// 1: Cos Phi Sin Theta Psi_A Psi_B
-// 2: Sin Phi Sin Theta Psi_A Psi_B
-// 3. Cos Theta Psi_A Psi_B
-// 4. G^nu^mu_ihat
-// 5. F^nu^mu_ihat
+/* Top level function to integrate functions over a finite element spherical triangle element
+ *
+ * Choice of matrix is to be provided in matrixchoice:
+ * [0] Psi_A Psi_B: mass matrix
+ * [1] Cos Phi Sin Theta Psi_A Psi_B: stiffness matrix x
+ * [2] Sin Phi Sin Theta Psi_A Psi_B: stiffness matrix y
+ * [3] Cos Theta Psi_A Psi_B: stffness matrix z
+ * [4] G^nu^mu_ihat
+ * [5] F^nu^mu_ihat
+ *
+ * Inputs:
+ * a,b: basis vector indices
+ * t1, t2, t3: cartesian coordinates of the triangle vertices
+ * x, y, z: cartesian coordinates of all vertices of the geodesic grid
+ * scheme_weights: quadrature weights
+ * scheme_points: quadrature points
+ * matrixchoice: choice of matrix
+ * nu, mu, ihat: optional for some matrices
+ */
 KOKKOS_INLINE_FUNCTION
-Real
-IntegrateMatrixSphericalTriangle(int a,
-                                 int b,
-                                 int basis,
-                                 int t1,
-                                 int t2,
-                                 int t3,
-                                 const HostArray1D<Real> &x,
-                                 const HostArray1D<Real> &y,
-                                 const HostArray1D<Real> &z,
-                                 const HostArray1D<Real> &scheme_weights,
-                                 const HostArray2D<Real> &scheme_points,
-                                 int matrixnumber,
-                                 int nu,
-                                 int mu,
-                                 int ihat) {
+Real IntegrateMatrixSphericalTriangle(int a, int b, int basis, int t1, int t2, int t3, const HostArray1D<Real> &x, const HostArray1D<Real> &y, const HostArray1D<Real> &z,
+                                      const HostArray1D<Real> &scheme_weights, const HostArray2D<Real> &scheme_points, int matrixnumber, int nu, int mu, int ihat) {
 
   Real x1 = x(t1);
   Real y1 = y(t1);
@@ -60,172 +55,45 @@ IntegrateMatrixSphericalTriangle(int a,
 
   Real result{0.};
 
-  // (0) Psi_A Psi_B
   if (matrixnumber == 0) {
     for (size_t i = 0; i < scheme_weights.size(); i++) {
-      result += sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0),
-                                                  scheme_points(i, 1), scheme_points(i, 2))) *
-          FEMBasisABasisB(a, b, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1),
-                          scheme_points(i, 2), basis) * scheme_weights(i);
-
+      result += sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2)))
+          * FEMBasisABasisB(a, b, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis) * scheme_weights(i);
     }
-  }
-
-    // (1) Cos Phi Sin Theta Psi_A Psi_B
-  else if (matrixnumber == 1) {
+  } else if (matrixnumber == 1) {
     for (size_t i = 0; i < scheme_weights.size(); i++) {
-      result += CosPhiSinTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1),
-                               scheme_points(i, 2)) *
-          sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0),
-                                            scheme_points(i, 1), scheme_points(i, 2))) *
-          FEMBasisABasisB(a, b, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1),
-                          scheme_points(i, 2), basis) * scheme_weights(i);
+      result += CosPhiSinTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
+          * sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))) *
+          FEMBasisABasisB(a, b, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis) * scheme_weights(i);
     }
-  }
-
-    // (2) Sin Phi Sin Theta Psi_A Psi_B
-  else if (matrixnumber == 2) {
+  } else if (matrixnumber == 2) {
     for (size_t i = 0; i < scheme_weights.size(); i++) {
-      result += SinPhiSinTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1),
-                               scheme_points(i, 2)) *
-          sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0),
-                                            scheme_points(i, 1), scheme_points(i, 2))) *
-          FEMBasisABasisB(a, b, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1),
-                          scheme_points(i, 2), basis) * scheme_weights(i);
+      result += SinPhiSinTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
+          * sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))) *
+          FEMBasisABasisB(a, b, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis) * scheme_weights(i);
     }
-  }
-
-    // (3) Cos Theta Psi_A Psi_B
-  else if (matrixnumber == 3) {
+  } else if (matrixnumber == 3) {
     for (size_t i = 0; i < scheme_weights.size(); i++) {
-      result += CosTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1),
-                         scheme_points(i, 2)) *
-          sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0),
-                                            scheme_points(i, 1), scheme_points(i, 2))) *
-          FEMBasisABasisB(a, b, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1),
-                          scheme_points(i, 2), basis) * scheme_weights(i);
+      result += CosTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
+          * sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))) *
+          FEMBasisABasisB(a, b, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis) * scheme_weights(i);
     }
-  }
-
-    /* // (4) G^nu^mu_ihat
-   else if (matrixnumber == 4) {
-     for (size_t i = 0; i < scheme_points.size(); i++) {
-       result += mom_by_energy(nu,
-                               x1,
-                               y1,
-                               z1,
-                               x2,
-                               y2,
-                               z2,
-                               x3,
-                               y3,
-                               z3,
-                               scheme_points(i, 0),
-                               scheme_points(i, 1),
-                               scheme_points(i, 2)) *
-           mom_by_energy(mu,
-                         x1,
-                         y1,
-                         z1,
-                         x2,
-                         y2,
-                         z2,
-                         x3,
-                         y3,
-                         z3,
-                         scheme_points(i, 0),
-                         scheme_points(i, 1),
-                         scheme_points(i, 2)) *
-           sqrt(CalculateDeterminantJacobian(x1,
-                                             y1,
-                                             z1,
-                                             x2,
-                                             y2,
-                                             z2,
-                                             x3,
-                                             y3,
-                                             z3,
-                                             scheme_points(i, 0),
-                                             scheme_points(i, 1),
-                                             scheme_points(i, 2))) *
-           FEMBasisA(a, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis) *
-           PartialFEMBasisBwithoute(ihat,
-                                    a,
-                                    t1,
-                                    t2,
-                                    t3,
-                                    x1,
-                                    y1,
-                                    z1,
-                                    x2,
-                                    y2,
-                                    z2,
-                                    x3,
-                                    y3,
-                                    z3,
-                                    scheme_points(i, 0),
-                                    scheme_points(i, 1),
-                                    scheme_points(i, 2),
-                                    basis) * scheme_weights(i);
-     }
-   } */
-
-    // (5) F^nu^mu_ihat
-  else if (matrixnumber == 5) {
+  } else if (matrixnumber == 4) {
+    for (size_t i = 0; i < scheme_points.size(); i++) {
+      result += mom_by_energy(nu, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
+          * mom_by_energy(mu, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
+          * sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2)))
+          * FEMBasisA(a, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis)
+          * PartialFEMBasiswithoute(ihat, b, t1, t2, t3, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis)
+          * scheme_weights(i);
+    }
+  } else if (matrixnumber == 5) {
     for (size_t i = 0; i < scheme_weights.size(); i++) {
-      result += mom_by_energy(nu,
-                              x1,
-                              y1,
-                              z1,
-                              x2,
-                              y2,
-                              z2,
-                              x3,
-                              y3,
-                              z3,
-                              scheme_points(i, 0),
-                              scheme_points(i, 1),
-                              scheme_points(i, 2)) *
-          mom_by_energy(mu,
-                        x1,
-                        y1,
-                        z1,
-                        x2,
-                        y2,
-                        z2,
-                        x3,
-                        y3,
-                        z3,
-                        scheme_points(i, 0),
-                        scheme_points(i, 1),
-                        scheme_points(i, 2)) *
-          sqrt(CalculateDeterminantJacobian(x1,
-                                            y1,
-                                            z1,
-                                            x2,
-                                            y2,
-                                            z2,
-                                            x3,
-                                            y3,
-                                            z3,
-                                            scheme_points(i, 0),
-                                            scheme_points(i, 1),
-                                            scheme_points(i, 2))) *
-          FEMBasisABasisB(a, b, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1),
-                          scheme_points(i, 2), basis) * scheme_weights(i) *
-          mom_by_energy(ihat,
-                        x1,
-                        y1,
-                        z1,
-                        x2,
-                        y2,
-                        z2,
-                        x3,
-                        y3,
-                        z3,
-                        scheme_points(i, 0),
-                        scheme_points(i, 1),
-                        scheme_points(i, 2)) * scheme_weights(i);
+      result += mom_by_energy(nu, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
+          * mom_by_energy(mu, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
+          * sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2)))
+          * FEMBasisABasisB(a, b, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis) * scheme_weights(i) *
+          mom_by_energy(ihat, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2)) * scheme_weights(i);
     }
   }
 
@@ -271,18 +139,18 @@ CalculateDeterminantJacobian(Real x1,
 //KOKKOS_INLINE_FUNCTION
 Real
 IntegrateMatrixFEMN(int a,                                    // matrix row (this is an angle pair index)
-                int b,                                    // matrix column (this is an angle pairindex)
-                int basis,                                // the choice of basis (1: 'overlapping tent FEM basis')
-                const HostArray1D<Real> &x,               // cartesian x-coordinate of geodesic grid (can be anything when spherical harmonics is chosen)
-                const HostArray1D<Real> &y,               // cartesian y-coordinate of geodesic grid (can be anything when spherical harmonics is chosen)
-                const HostArray1D<Real> &z,               // cartesian z-coordinate of geodesic grid (can be anything when spherical harmonics is chosen)
-                const HostArray1D<Real> &scheme_weights,  // quadrature weights
-                const HostArray2D<Real> &scheme_points,   // quadrature points
-                const HostArray2D<int> &triangles,        // triangle information
-                int matrixchoice,                         // choice of matrix
-                int nu,
-                int mu,
-                int ihat) {
+                    int b,                                    // matrix column (this is an angle pairindex)
+                    int basis,                                // the choice of basis (1: 'overlapping tent FEM basis')
+                    const HostArray1D<Real> &x,               // cartesian x-coordinate of geodesic grid (can be anything when spherical harmonics is chosen)
+                    const HostArray1D<Real> &y,               // cartesian y-coordinate of geodesic grid (can be anything when spherical harmonics is chosen)
+                    const HostArray1D<Real> &z,               // cartesian z-coordinate of geodesic grid (can be anything when spherical harmonics is chosen)
+                    const HostArray1D<Real> &scheme_weights,  // quadrature weights
+                    const HostArray2D<Real> &scheme_points,   // quadrature points
+                    const HostArray2D<int> &triangles,        // triangle information
+                    int matrixchoice,                         // choice of matrix
+                    int nu,
+                    int mu,
+                    int ihat) {
   Real result = 0.;
 
   bool is_edge{false};
@@ -325,7 +193,7 @@ IntegrateMatrixFEMN(int a,                                    // matrix row (thi
  * nu, mu, ihat: optional for some matrices
  */
 Real IntegrateMatrixFPN(int la, int ma, int lb, int mb, const HostArray1D<Real> &scheme_weights, const HostArray2D<Real> &scheme_points,
-                          int matrixchoice, int nu, int mu, int ihat) {
+                        int matrixchoice, int nu, int mu, int ihat) {
 
   Real result = 0.;
 
@@ -354,15 +222,15 @@ Real IntegrateMatrixFPN(int la, int ma, int lb, int mb, const HostArray1D<Real> 
     }
   } else if (matrixchoice == 4) {
     for (size_t i = 0; i < scheme_weights.size(); i++) {
-       result += 4. * M_PI * mom_by_energy(nu, scheme_points(i, 0), scheme_points(i, 1)) *
+      result += 4. * M_PI * mom_by_energy(nu, scheme_points(i, 0), scheme_points(i, 1)) *
           mom_by_energy(mu, scheme_points(i, 0), scheme_points(i, 1))
           * FPNBasis(la, ma, scheme_points(i, 0), scheme_points(i, 1))
-          * (PtildehatJac(scheme_points(i, 0), scheme_points(i, 1), 1, ihat) * dFPNBasisdOmega(lb, mb, scheme_points(i, 0), scheme_points(i, 1),1)
-          + PtildehatJac(scheme_points(i, 0), scheme_points(i, 1), 2, ihat) * dFPNBasisdOmega(lb, mb, scheme_points(i, 0), scheme_points(i, 1),2));
+          * (PtildehatJac(scheme_points(i, 0), scheme_points(i, 1), 1, ihat) * dFPNBasisdOmega(lb, mb, scheme_points(i, 0), scheme_points(i, 1), 1)
+              + PtildehatJac(scheme_points(i, 0), scheme_points(i, 1), 2, ihat) * dFPNBasisdOmega(lb, mb, scheme_points(i, 0), scheme_points(i, 1), 2));
     }
   } else if (matrixchoice == 5) {
     for (size_t i = 0; i < scheme_weights.size(); i++) {
-       result += 4. * M_PI * mom_by_energy(nu, scheme_points(i, 0), scheme_points(i, 1)) *
+      result += 4. * M_PI * mom_by_energy(nu, scheme_points(i, 0), scheme_points(i, 1)) *
           mom_by_energy(mu, scheme_points(i, 0), scheme_points(i, 1))
           * FPNBasis(la, ma, scheme_points(i, 0), scheme_points(i, 1))
           * FPNBasis(lb, mb, scheme_points(i, 0), scheme_points(i, 1))
