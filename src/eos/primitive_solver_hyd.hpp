@@ -322,7 +322,7 @@ class PrimitiveSolverHydro {
         detg = Primitive::GetDeterminant(g3d);
         sdetg = sqrt(detg);
         Real isdetg = 1.0/sdetg;
-        adm::SpatialInv(isdetg, g3d[S11], g3d[S12], g3d[S13], g3d[S22], g3d[S23], g3d[S33],
+        adm::SpatialInv(1.0/detg, g3d[S11], g3d[S12], g3d[S13], g3d[S22], g3d[S23], g3d[S33],
                    &g3u[S11], &g3u[S12], &g3u[S13], &g3u[S22], &g3u[S23], &g3u[S33]);
 
         // Extract the conserved variables
