@@ -260,6 +260,15 @@ Real FEMBasisABasisB(int a, int b, int t1, int t2, int t3, Real xi1, Real xi2, R
   return FEMBasisA * FEMBasisB;
 }
 
+Real FEMBasisA(int a, int t1, int t2, int t3, Real xi1, Real xi2, Real xi3, int basis_choice) {
+
+  int basis_index_a = (a == t1) * 1 + (a == t2) * 2 + (a == t3) * 3;
+
+  auto FEMBasisA = FEMBasis(xi1, xi2, xi3, basis_index_a, basis_choice);
+
+  return FEMBasisA;
+}
+
 /* FPN basis function: real spherical harmonics
  *
  * Calculated for (l,m) at point (phi, theta) on the sphere
@@ -476,7 +485,7 @@ Real mom_by_energy(int mu, Real phi, Real theta) {
 
   return result;
 }
-/*
+
 // ------------------------------------------------------------------------
 // partial xi1 / partial phi
 Real pXi1pPhi(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
@@ -519,7 +528,10 @@ Real pXi2pTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, R
           + pow(xi1 * z1 + xi2 * z2 + z3 - (xi1 + xi2) * z3, 2)));
 }
 
-Real PartialFEMBasisAwithoute(int ihat, int a, int t1, int t2, int t3, Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3,
+Real dFEMBasisdxi(Real xi1, Real xi2, Real xi3, int basis_index, int basis_choice, int xi_index) {
+  return 0.;
+}
+Real PartialFEMBasiswithoute(int ihat, int a, int t1, int t2, int t3, Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3,
                               Real xi1, Real xi2, Real xi3, int basis_choice) {
 
   int basis_index_a = (a == t1) * 1 + (a == t2) * 2 + (a == t3) * 3;
@@ -541,5 +553,5 @@ Real PartialFEMBasisAwithoute(int ihat, int a, int t1, int t2, int t3, Real x1, 
     std::cout << "Incorrect choice of index ihat!" << std::endl;
     exit(EXIT_FAILURE);
   }
-}*/
+}
 } // namespace radiationfemn
