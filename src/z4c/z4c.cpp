@@ -39,11 +39,11 @@ char const * const Z4c::Constraint_names[Z4c::ncon] = {
   "con_Mx", "con_My", "con_Mz",
 };
 
-char const * const Z4c::Matter_names[Z4c::nmat] = {
+/*char const * const Z4c::Matter_names[Z4c::nmat] = {
   "mat_rho",
   "mat_Sx", "mat_Sy", "mat_Sz",
   "mat_Sxx", "mat_Sxy", "mat_Sxz", "mat_Syy", "mat_Syz", "mat_Szz",
-};
+};*/
 
 //----------------------------------------------------------------------------------------
 // constructor, initializes data structures and parameters
@@ -51,7 +51,7 @@ char const * const Z4c::Matter_names[Z4c::nmat] = {
 Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   pmy_pack(ppack),
   u_con("u_con",1,1,1,1,1),
-  u_mat("u_mat",1,1,1,1,1),
+  //u_mat("u_mat",1,1,1,1,1),
   u0("u0 z4c",1,1,1,1,1),
   coarse_u0("coarse u0 z4c",1,1,1,1,1),
   u1("u1 z4c",1,1,1,1,1),

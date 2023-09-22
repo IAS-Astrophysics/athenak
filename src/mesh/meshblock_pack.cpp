@@ -180,7 +180,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     pz4c = nullptr;
     if (pin->DoesBlockExist("adm")) {
       padm = new adm::ADM(this, pin);
-      ptmunu = new Tmunu(this, pin);
+      //ptmunu = new Tmunu(this, pin);
     } else {
       padm = nullptr;
     }

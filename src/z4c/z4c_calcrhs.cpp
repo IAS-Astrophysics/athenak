@@ -15,6 +15,7 @@
 #include "mesh/mesh.hpp"
 #include "adm/adm.hpp"
 #include "z4c/z4c.hpp"
+#include "tmunu/tmunu.hpp"
 #include "coordinates/cell_locations.hpp"
 
 namespace z4c {
@@ -33,6 +34,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
   int nmb = pmy_pack->nmb_thispack;
 
   auto &z4c = pmy_pack->pz4c->z4c;
+  auto &tmunu = pmy_pack->ptmunu->tmunu;
   auto &rhs = pmy_pack->pz4c->rhs;
   auto &opt = pmy_pack->pz4c->opt;
   int scr_level = 1;
@@ -473,6 +475,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
       }
     }
 
+    // TODO(JMF): Update with Tmunu terms.
     // -----------------------------------------------------------------------------------
     // Trace of the matter stress tensor
     //
@@ -485,6 +488,14 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     //    S(i) += oopsi4(i) * g_uu(a,b,i) * mat.S_dd(m,a,b,k,j,i);
     //  }
     //}
+    S.ZeroClear();
+    member.team_barrier();
+    for (int a = 0; a < 3; ++a)
+    for (int b = 0; b < 3; ++b) {
+      par_for_inner(member, is, ie, [&](const int i) {
+        S(i) += oopsi4(i) * g_uu(a,b,i) * tmunu.S_dd(m,a,b,k,j,i);
+      });
+    }
 
     // -----------------------------------------------------------------------------------
     // 2nd covariant derivative of the lapse
@@ -587,11 +598,12 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
       member.team_barrier();
     }
 
+    // TODO(JMF): Update with source terms
     // -----------------------------------------------------------------------------------
     // Hamiltonian constraint
     //
     par_for_inner(member, is, ie, [&](const int i) {
-      Ht(i) = R(i) + (2./3.)*SQR(K(i)) - AA(i);
+      Ht(i) = R(i) + (2./3.)*SQR(K(i)) - AA(i) - 16.*M_PI*tmunu.E(m,k,j,i);
     });
     member.team_barrier();
     // -----------------------------------------------------------------------------------
@@ -657,6 +669,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
         member.team_barrier();
       }
     }
+    // TODO(JMF): Update with matter source terms.
     // -----------------------------------------------------------------------------------
     // Assemble RHS
     //
@@ -666,13 +679,13 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
         * (AA(i) + (1./3.)*SQR(K(i))) +
         LKhat(i) + opt.damp_kappa1*(1 - opt.damp_kappa2)
         * z4c.alpha(m,k,j,i) * z4c.vTheta(m,k,j,i);
-    // Matter commented out
-      //rhs.Khat(m,k,j,i) += 4*M_PI * z4c.alpha(m,k,j,i) * (S(i) + mat.rho(m,k,j,i));
+    // Matter term
+      rhs.vKhat(m,k,j,i) += 4*M_PI * z4c.alpha(m,k,j,i) * (S(i) + tmunu.E(m,k,j,i));
       rhs.chi(m,k,j,i) = Lchi(i) - (1./6.) * opt.chi_psi_power *
         chi_guarded(i) * z4c.alpha(m,k,j,i) * K(i);
       rhs.vTheta(m,k,j,i) = LTheta(i) + z4c.alpha(m,k,j,i) * (
           0.5*Ht(i) - (2. + opt.damp_kappa2) * opt.damp_kappa1 * z4c.vTheta(m,k,j,i));
-    // Matter commented out
+    // Matter commented out -- JMF: this should already be in the Hamiltonian constraint.
       //rhs.Theta(m,k,j,i) -= 8.*M_PI * z4c.alpha(m,k,j,i) * mat.rho(m,k,j,i);
     });
     member.team_barrier();
@@ -687,9 +700,9 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
       for(int b = 0; b < 3; ++b) {
         par_for_inner(member, is, ie, [&](const int i) {
           rhs.vGam_u(m,a,k,j,i) -= 2. * A_uu(a,b,i) * dalpha_d(b,i);
-    // Matter commented out
-    // rhs.Gam_u(m,a,k,j,i) -= 16.*M_PI * z4c.alpha(m,k,j,i)
-    //                      * g_uu(a,b) * mat.S_d(m,b,k,j,i);
+       // Matter term
+       rhs.vGam_u(m,a,k,j,i) -= 16.*M_PI * z4c.alpha(m,k,j,i)
+                            * g_uu(a,b,i) * tmunu.S_d(m,b,k,j,i);
         });
         member.team_barrier();
       }
@@ -707,9 +720,9 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
         rhs.vA_dd(m,a,b,k,j,i) += z4c.alpha(m,k,j,i) * (K(i)*z4c.vA_dd(m,a,b,k,j,i)
                                - 2.*AA_dd(a,b,i));
         rhs.vA_dd(m,a,b,k,j,i) += LA_dd(a,b,i);
-    // Matter commented out
-        //rhs.A_dd(m,a,b,k,j,i) -= 8.*M_PI * z4c.alpha(m,k,j,i) *
-        // (oopsi4*mat.S_dd(m,a,b,k,j,i) - (1./3.)*S(i)*z4c.g_dd(m,a,b,k,j,i));
+        // Matter term
+        rhs.vA_dd(m,a,b,k,j,i) -= 8.*M_PI * z4c.alpha(m,k,j,i) *
+         (oopsi4(i)*tmunu.S_dd(m,a,b,k,j,i) - (1./3.)*S(i)*z4c.g_dd(m,a,b,k,j,i));
       });
       member.team_barrier();
     }

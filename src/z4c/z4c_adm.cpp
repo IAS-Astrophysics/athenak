@@ -18,6 +18,7 @@
 #include "mesh/mesh.hpp"
 #include "adm/adm.hpp"
 #include "z4c/z4c.hpp"
+#include "tmunu/tmunu.hpp"
 #include "coordinates/cell_locations.hpp"
 
 namespace z4c {
@@ -269,6 +270,7 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
 
   auto &z4c = pmbp->pz4c->z4c;
   auto &adm = pmbp->padm->adm;
+  auto &tmunu = pmbp->ptmunu->tmunu;
   auto &u_con = pmbp->pz4c->u_con;
   Kokkos::deep_copy(u_con, 0.);
   auto &con = pmbp->pz4c->con;
@@ -502,7 +504,7 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     // Hamiltonian constraint
     //
     par_for_inner(member, is, ie, [&](const int i) {
-      con.H(m,k,j,i) = R(i) + SQR(K(i)) - KK(i);// - 16*M_PI * mat.rho(k,j,i);
+      con.H(m,k,j,i) = R(i) + SQR(K(i)) - KK(i) - 16*M_PI * tmunu.E(m,k,j,i);
     });
     member.team_barrier();
 
@@ -512,7 +514,9 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     member.team_barrier();
     for(int a = 0; a < 3; ++a)
     for(int b = 0; b < 3; ++b) {
-      //M_u(a,i) -= 8*M_PI * g_uu(a,b,i) * mat.S_d(b,k,j,i);
+      par_for_inner(member, is, ie, [&](const int i) {
+        M_u(a,i) -= 8*M_PI * g_uu(a,b,i) * tmunu.S_d(m,b,k,j,i);
+      });
       for(int c = 0; c < 3; ++c) {
         par_for_inner(member, is, ie, [&](const int i) {
           M_u(a,i) += g_uu(a,b,i) * DK_udd(c,b,c,i);

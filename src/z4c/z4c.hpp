@@ -79,14 +79,14 @@ class Z4c {
   // Names of costraint variables
   static char const * const Constraint_names[ncon];
   // Indices of matter fields
-  enum {
+  /*enum {
     I_MAT_RHO,
     I_MAT_SX, I_MAT_SY, I_MAT_SZ,
     I_MAT_SXX, I_MAT_SXY, I_MAT_SXZ, I_MAT_SYY, I_MAT_SYZ, I_MAT_SZZ,
     nmat
   };
   // Names of matter variables
-  static char const * const Matter_names[nmat];
+  static char const * const Matter_names[nmat];*/
 
   // data
   // flags to denote relativistic dynamics
@@ -140,12 +140,12 @@ class Z4c {
   Constraint_vars con;
 
   // aliases for the matter variables
-  struct Matter_vars {
+  /*struct Matter_vars {
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> rho;       // matter energy density
     AthenaTensor<Real, TensorSymm::NONE, 3, 1> vS_d;       // matter momentum density
     AthenaTensor<Real, TensorSymm::SYM2, 3, 2> vS_dd;      // matter stress tensor
   };
-  Matter_vars mat;
+  Matter_vars mat;*/
 
   struct Options {
     Real chi_psi_power;   // chi = psi^N, N = chi_psi_power
