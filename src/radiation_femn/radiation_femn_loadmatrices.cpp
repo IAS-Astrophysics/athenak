@@ -193,7 +193,7 @@ void RadiationFEMN::LoadFPNMatrices() {
   Kokkos::deep_copy(fmatrix_, temp_array_5d);
 
   // compute the G matrices
-  std::cout << "Computing the G matrices ... " << std::endl;
+  std::cout << "Computing the G matrices (FPN) ... " << std::endl;
   for (int i = 0; i < num_points; i++) {
     for (int j = 0; j < num_points; j++) {
       for (int nu = 0; nu < 4; nu++) {
