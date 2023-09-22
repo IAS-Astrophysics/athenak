@@ -135,7 +135,7 @@ void LUInverse(DvceArray2D<Real> A_matrix, DvceArray2D<Real> A_matrix_inverse) {
 // A_matrix:          [NxN] a square matrix
 // B_matrix:          [NxN] a square matrix
 // result:            [NxN] the product
-void MatMultiply(DvceArray2D<Real> A_matrix, DvceArray2D<Real> B_matrix, DvceArray2D<Real> result) {
+void MatMultiply(HostArray2D<Real> A_matrix, HostArray2D<Real> B_matrix, HostArray2D<Real> result) {
 
   int N = A_matrix.extent(0);
 
@@ -175,16 +175,18 @@ void MatMultiplyComplex(std::vector<std::vector<std::complex<double>>> &A_matrix
 
 // Support for mass lumping
 // A_matrix:          [NxN] a square matrix
-// result:            [NxN] the lumped A_matrix
-void MatLumping(DvceArray2D<Real> A_matrix, DvceArray2D<Real> result) {
+void MatLumping(DvceArray2D<Real> A_matrix) {
 
   int N = A_matrix.extent(0);
 
+  DvceArray2D<Real> result;
+  Kokkos::realloc(result, N, N);
   Kokkos::deep_copy(result, 0.);
   par_for("radiation_femn_matrix_lumping", DevExeSpace(), 0, N - 1, 0, N - 1,
           KOKKOS_LAMBDA(const int i, const int j) {
             result(i, i) += A_matrix(i, j);
           });
+  Kokkos::deep_copy(A_matrix, result);
 }
 
 // Compute eigenvalues and eigenvectors of a real square matrix (GSL)
@@ -237,7 +239,7 @@ void MatEig(std::vector<std::vector<double>> &matrix, std::vector<std::complex<d
 // matrix:            [NxN] a real square matrix
 // matrix_corrected:  [NxN] the corrected square matrix
 // v:                       the zero speed mode correction factor
-void ZeroSpeedCorrection(DvceArray2D<Real> matrix, DvceArray2D<Real> matrix_corrected, double v) {
+void ZeroSpeedCorrection(HostArray2D<Real> matrix, HostArray2D<Real> matrix_corrected, double v) {
 
   // store the matrix in a vector<vector> for use with MatEig
   std::vector<Real> mat_row(matrix.extent(0));

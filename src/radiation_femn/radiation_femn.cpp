@@ -41,7 +41,6 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
     energy_grid("energy_grid", 1),
     angular_grid("angular_grid", 1, 1),
     mass_matrix("mm", 1, 1),
-    mass_matrix_lumped("mm_lumped", 1, 1),
     stiffness_matrix_x("sx", 1, 1),
     stiffness_matrix_y("sy", 1, 1),
     stiffness_matrix_z("sz", 1, 1),
@@ -59,6 +58,8 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // -----------------------------------------------------------------------------------
   // set essential parameters from par file and allocate memory to energy, angular grids
+
+  mass_lumping = pin->GetOrAddInteger("radiation-femn", "mass_lumping", 1) == 1;
 
   limiter_dg = pin->GetOrAddString("radiation-femn", "limiter_dg", "minmod2");      // limiter for DG (default:sawtooth-free minmod2)
   fpn = pin->GetOrAddInteger("radiation-femn", "fpn", 0) == 1;                      // fpn switch (0: use FEM_N, 1: use FP_N) (default: 0)
@@ -111,7 +112,6 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   // allocate memory and load angular grid arrays and associated matrices
 
   Kokkos::realloc(mass_matrix, num_points, num_points);           // mass matrix from special relativistic case
-  Kokkos::realloc(mass_matrix_lumped, num_points, num_points);           // lumped mass matrix from special relativistic case
   Kokkos::realloc(stiffness_matrix_x, num_points, num_points);    // stiffness-x from special relativistic case
   Kokkos::realloc(stiffness_matrix_y, num_points, num_points);    // stiffness-y from special relativistic case
   Kokkos::realloc(stiffness_matrix_z, num_points, num_points);    // stiffness-z from special relativistic case
@@ -152,10 +152,15 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   }
 
   // compute lumped mass matrix
-  radiationfemn::MatLumping(mass_matrix, mass_matrix_lumped);
+
+  if (mass_lumping) {
+    std::cout << "Mass Lumping switched on ..." << std::endl;
+    radiationfemn::MatLumping(mass_matrix);
+  }
+
   // compute P matrices
-  this->ComputePMatrix();
-  this->ComputePtildeMatrix();
+  this->ComputePMatrices();
+  //this->ComputePtildeMatrix();
   // --------------------------------------------------------------------------------------------------------------------------
   // allocate memory for all other variables
 
