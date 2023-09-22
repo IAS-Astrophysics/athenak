@@ -287,7 +287,7 @@ Real FPNBasis(int l, int m, Real phi, Real theta) {
 }
 
 KOKKOS_INLINE_FUNCTION Real dFPNBasisdphi(int l, int m, Real phi, Real theta) {
-  return m * FPNBasis(l, -m, phi, theta);
+  return - m * FPNBasis(l, -m, phi, theta);
 }
 
 KOKKOS_INLINE_FUNCTION Real dFPNBasisdtheta(int l, int m, Real phi, Real theta) {
@@ -319,6 +319,10 @@ Real dFPNBasisdOmega(int l, int m, Real phi, Real theta, int var_index) {
   }
 }
 
+/* Jacobian P^Omega_ihat (energy = 1)
+ *
+ * Omega = (phi, theta), ihat = (x, y, z)
+ */
 Real PtildehatJac(Real phi, Real theta, int tilde_index, int hat_index) {
   if (tilde_index == 1 && hat_index == 1) {
     return -sin(phi) / sin(theta);
