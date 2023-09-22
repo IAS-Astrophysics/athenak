@@ -206,7 +206,7 @@ void MatEig(std::vector<std::vector<double>> &matrix, std::vector<std::complex<d
     }
   }
 
-  std::cout << std::endl;
+  //std::cout << std::endl;
 
   gsl_matrix_view matview = gsl_matrix_view_array(matrix_flattened, N, N);
   gsl_vector_complex *eigval_gsl = gsl_vector_complex_alloc(N);
@@ -255,25 +255,26 @@ void ZeroSpeedCorrection(HostArray2D<Real> matrix, HostArray2D<Real> matrix_corr
   std::vector<std::vector<std::complex<double>>> eigvec;
   MatEig(mat, eigval, eigvec);
 
-  std::cout << std::endl;
+  //std::cout << std::endl;
   double eigvec_data[matrix.extent(0) * matrix.extent(1) * 2];
   int index = 0;
   for (int i = 0; i < matrix.extent(0); i++) {
     for (int j = 0; j < matrix.extent(1); j++) {
-      std::cout << eigvec[j][i] << " " << std::flush;
+      //std::cout << eigvec[j][i] << " " << std::flush;
       eigvec_data[index] = std::real(eigvec[j][i]);
       eigvec_data[index + 1] = std::imag(eigvec[j][i]);
       index = index + 2;
     }
-    std::cout << std::endl;
+    //std::cout << std::endl;
   }
-  std::cout << std::endl;
+  //std::cout << std::endl;
 
   // print eigenvector data
+  /*
   for (int i = 0; i < matrix.extent(0) * matrix.extent(1) * 2; i++) {
     std::cout << eigvec_data[i] << " " << std::flush;
   }
-  std::cout << std::endl;
+  std::cout << std::endl; */
 
   // calculate the matrix of left eigenvectors
   int size = matrix.extent(0);
@@ -289,23 +290,24 @@ void ZeroSpeedCorrection(HostArray2D<Real> matrix, HostArray2D<Real> matrix_corr
   // compute the matrix of left eigenvectors (std::vector<std::vector<std::complex<double>>>)
   std::vector<std::complex<double>> lefteigvec_row(matrix.extent(0));
   std::vector<std::vector<std::complex<double>>> lefteigvec(matrix.extent(1), lefteigvec_row);
-  std::cout << std::endl;
+  //std::cout << std::endl;
   for (int i = 0; i < size; i++) {
     for (int j = 0; j < size; j++) {
       gsl_complex minv_ij = gsl_matrix_complex_get(minv, i, j);
       lefteigvec[i][j] = std::complex<double>(GSL_REAL(minv_ij), GSL_IMAG(minv_ij));
-      std::cout << GSL_REAL(minv_ij) << " + " << GSL_IMAG(minv_ij) << "j \t\t" << std::flush;
+      //std::cout << GSL_REAL(minv_ij) << " + " << GSL_IMAG(minv_ij) << "j \t\t" << std::flush;
     }
-    std::cout << std::endl;
+    //std::cout << std::endl;
   }
 
+  /*
   std::cout << std::endl;
   for (int i = 0; i < size; i++) {
     for (int j = 0; j < size; j++) {
       std::cout << lefteigvec[i][j] << " " << std::flush;
     }
     std::cout << std::endl;
-  }
+  }*/
 
   // construct the matrix of right eigenvectors (std::vector<std::vector<std::complex<double>>>)
   std::vector<std::complex<double>> righteigvec_row(matrix.extent(0));
@@ -316,6 +318,7 @@ void ZeroSpeedCorrection(HostArray2D<Real> matrix, HostArray2D<Real> matrix_corr
     }
   }
 
+  /*
   std::cout << std::endl;
   std::cout << "Right eigenvectors: " << std::endl;
   for (int i = 0; i < size; i++) {
@@ -323,19 +326,19 @@ void ZeroSpeedCorrection(HostArray2D<Real> matrix, HostArray2D<Real> matrix_corr
       std::cout << righteigvec[i][j] << " " << std::flush;
     }
     std::cout << std::endl;
-  }
+  }*/
 
   // construct the zero speed mode corrected eigenvalue matrix
   std::vector<std::complex<double>> eigval_corrected_row(matrix.extent(0));
   std::vector<std::vector<std::complex<double>>> eigval_corrected(matrix.extent(1), eigval_corrected_row);
-  std::cout << std::endl;
-  std::cout << "Eigenvalues and corrections: " << std::endl;
+  //std::cout << std::endl;
+  //std::cout << "Eigenvalues and corrections: " << std::endl;
   for (int i = 0; i < size; i++) {
     for (int j = 0; j < size; j++) {
       eigval_corrected[i][j] = std::complex<double>(0., 0.);
       if (i == j) {
         eigval_corrected[i][i] = std::max<double>(v, std::abs(eigval[i]));
-        std::cout << "Eigenvalue : " << eigval[i] << " Corrected: " << eigval_corrected[i][i] << " | " << std::endl;
+        //std::cout << "Eigenvalue : " << eigval[i] << " Corrected: " << eigval_corrected[i][i] << " | " << std::endl;
       }
     }
   }
