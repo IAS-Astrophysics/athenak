@@ -173,7 +173,7 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
     std::ofstream fout8(pathdir + filenamepart + "_mass_matrix_lumped" + ".txt");
     for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
       for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
-        fout8 << pmbp->pradfemn->mass_matrix_lumped(i, j) << " ";
+        fout8 << pmbp->pradfemn->mass_matrix(i, j) << " ";
         sum += pmbp->pradfemn->mass_matrix(i, j);
       }
       fout8 << std::endl;

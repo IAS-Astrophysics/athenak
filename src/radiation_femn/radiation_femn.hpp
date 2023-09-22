@@ -69,7 +69,7 @@ class RadiationFEMN {
   int num_edges;                  // number of unique edges
   int num_triangles;              // number of unique triangular elements
   int basis;                      // choice of basis functions on the geodesic grid (1: tent - FEM_N)
-
+  bool mass_lumping;               // flag for mass lumping
   std::string limiter_dg;         // choice of limiter for DG, set to "minmod2" by default
   std::string limiter_fem;        // choice of limiter for FEM, set to "clp" by default (FEM_N)
   bool fpn;                       // flag to enable/disable FP_N, disabled by default (FP_N)
@@ -94,7 +94,6 @@ class RadiationFEMN {
   DvceArray1D<Real> energy_grid;             // array containing the energy grid
 
   DvceArray2D<Real> mass_matrix;             // mass matrix (in the special relativistic case) [Eqn. 12 of arXiv:2212.01409]
-  DvceArray2D<Real> mass_matrix_lumped;      // lumped mass matrix (in the special relativistic case)
   DvceArray2D<Real> stiffness_matrix_x;      // x component of the stiffness matrix (in the special relativistic case) [Eqn. 12 of arXiv:2212.01409]
   DvceArray2D<Real> stiffness_matrix_y;      // y component of the stiffness matrix (in the special relativistic case) [Eqn. 12 of arXiv:2212.01409]
   DvceArray2D<Real> stiffness_matrix_z;      // z component of the stiffness matrix (in the special relativistic case) [Eqn. 12 of arXiv:2212.01409]
@@ -184,8 +183,7 @@ class RadiationFEMN {
   // Functions for angular matrices & tetrad
   void LoadFEMNMatrices();
   void LoadFPNMatrices();
-  void ComputePMatrix();
-  void ComputePtildeMatrix();
+  void ComputePMatrices();
   void TetradInitialize();
   // ---------------------------------------------------------------------------
 
@@ -195,15 +193,15 @@ class RadiationFEMN {
 };
 
 void LUDecomposition(DvceArray2D<Real> square_matrix, DvceArray2D<Real> lu_matrix, DvceArray1D<int> pivot_indices);
-void LUSolve(const DvceArray2D<Real> lu_matrix, const DvceArray1D<int> pivot_indices, const DvceArray1D<Real> b_array, DvceArray1D<Real> x_array);
+void LUSolve(DvceArray2D<Real> lu_matrix, DvceArray1D<int> pivot_indices, DvceArray1D<Real> b_array, DvceArray1D<Real> x_array);
 void LUInverse(DvceArray2D<Real> A_matrix, DvceArray2D<Real> A_matrix_inverse);
-void MatMultiply(DvceArray2D <Real> A_matrix, DvceArray2D <Real> B_matrix, DvceArray2D <Real> result);
+void MatMultiply(HostArray2D <Real> A_matrix, HostArray2D <Real> B_matrix, HostArray2D <Real> result);
 void MatMultiplyComplex(std::vector<std::vector<std::complex<Real>>> &A_matrix,
                         std::vector<std::vector<std::complex<Real>>> &B_matrix,
                         std::vector<std::vector<std::complex<Real>>> &result);
-void MatLumping(DvceArray2D<Real> A_matrix, DvceArray2D<Real> result);
+void MatLumping(DvceArray2D<Real> A_matrix);
 void MatEig(std::vector<std::vector<Real>> &matrix, std::vector<std::complex<Real>> &eigval, std::vector<std::vector<std::complex<Real>>> &eigvec);
-void ZeroSpeedCorrection(DvceArray2D<Real> matrix, DvceArray2D<Real> matrix_corrected, Real v);
+void ZeroSpeedCorrection(HostArray2D<Real> matrix, HostArray2D<Real> matrix_corrected, Real v);
 
 KOKKOS_INLINE_FUNCTION void ApplyClosure() {
 

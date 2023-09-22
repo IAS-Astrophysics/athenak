@@ -144,7 +144,7 @@ void RadiationFEMN::LoadFPNMatrices() {
   Kokkos::realloc(temp_array_5d, 4, 4, 3, num_points, num_points);
 
   // Compute the mass matrix
-  std::cout << "Computing the mass matrix ... " << std::endl;
+  std::cout << "Computing the mass matrix (FPN) ... " << std::endl;
   for (int i = 0; i < num_points; i++) {
     for (int j = 0; j < num_points; j++) {
       temp_matrix(i, j) = radiationfemn::IntegrateMatrixFPN(int(lm_grid_(i, 0)), int(lm_grid_(i, 1)), int(lm_grid_(j, 0)), int(lm_grid_(j, 1)),
@@ -154,7 +154,7 @@ void RadiationFEMN::LoadFPNMatrices() {
   Kokkos::deep_copy(mm_, temp_matrix);
 
   // compute stiffness matrices
-  std::cout << "Computing the stiffness matrices ... " << std::endl;
+  std::cout << "Computing the stiffness matrices (FPN) ... " << std::endl;
   for (int i = 0; i < num_points; i++) {
     for (int j = 0; j < num_points; j++) {
       temp_matrix(i, j) = radiationfemn::IntegrateMatrixFPN(int(lm_grid_(i, 0)), int(lm_grid_(i, 1)), int(lm_grid_(j, 0)), int(lm_grid_(j, 1)),

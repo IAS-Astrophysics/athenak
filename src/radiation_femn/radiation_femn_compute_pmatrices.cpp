@@ -4,7 +4,7 @@
 // AthenaXX copyright(C) James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file radiation_femn_loadmatrices.cpp
+//! \file radiation_femn_compute_pmatrices.cpp
 //  \brief generate and load matrices for the angular grid
 
 #include <iostream>
@@ -14,113 +14,67 @@
 
 namespace radiationfemn {
 
-void RadiationFEMN::ComputePMatrix() {
-  std::cout << "Computing P matrices ..." << std::endl;
+void RadiationFEMN::ComputePMatrices() {
+  std::cout << "Computing P matrices and modified P matrices ..." << std::endl;
 
-  Kokkos::deep_copy(P_matrix, 0.);
+  HostArray2D<Real> mass_temp;
+  HostArray2D<Real> mass_inv_temp;
+  HostArray2D<Real> stiff_x_temp;
+  HostArray2D<Real> stiff_y_temp;
+  HostArray2D<Real> stiff_z_temp;
+  HostArray2D<Real> temp_array;
+  HostArray2D<Real> temp_array_corrected;
 
-  DvceArray2D<Real> temp_array;
-  DvceArray2D<Real> temp_array_2;
+  Kokkos::realloc(mass_temp, num_points, num_points);
+  Kokkos::realloc(mass_inv_temp, num_points, num_points);
+  Kokkos::realloc(stiff_x_temp, num_points, num_points);
+  Kokkos::realloc(stiff_y_temp, num_points, num_points);
+  Kokkos::realloc(stiff_z_temp, num_points, num_points);
   Kokkos::realloc(temp_array, num_points, num_points);
-  Kokkos::realloc(temp_array_2, num_points, num_points);
-  Kokkos::deep_copy(temp_array, 0.);
+  Kokkos::realloc(temp_array_corrected, num_points, num_points);
+
+  Kokkos::deep_copy(mass_temp, mass_matrix);
+  Kokkos::deep_copy(stiff_x_temp, stiffness_matrix_x);
+  Kokkos::deep_copy(stiff_y_temp, stiffness_matrix_y);
+  Kokkos::deep_copy(stiff_z_temp, stiffness_matrix_z);
 
   // store inverse of lumped mass matrix in temp_array
-  radiationfemn::LUInverse(mass_matrix_lumped, temp_array);
+  radiationfemn::LUInverse(mass_temp, mass_inv_temp);
 
-  // mass-matrix index (indentity matrix)
-  for (int i = 0; i < num_points; i++) {
-    P_matrix(0,i,i) = 1.;
-  }
+  // M^-1 M
+  radiationfemn::MatMultiply(mass_inv_temp, mass_temp, temp_array);
+  auto P_matrix_0 = Kokkos::subview(P_matrix, 0, Kokkos::ALL, Kokkos::ALL);
+  Kokkos::deep_copy(P_matrix_0, temp_array);
 
-  // stilde-x matrix index
-  Kokkos::deep_copy(temp_array_2, 0.);
-  radiationfemn::MatMultiply(temp_array, stiffness_matrix_x, temp_array_2);
-  for (int i = 0; i < num_points; i++) {
-    for (int j = 0; j < num_points; j++) {
-      P_matrix(1,i,j) = temp_array_2(i,j);
-    }
-  }
+  auto Pmod_matrix_0 = Kokkos::subview(Pmod_matrix, 0, Kokkos::ALL, Kokkos::ALL);
+  Kokkos::deep_copy(Pmod_matrix_0, temp_array);
 
-  // stilde-y matrix index
-  Kokkos::deep_copy(temp_array_2, 0.);
-  radiationfemn::MatMultiply(temp_array, stiffness_matrix_y, temp_array_2);
-  for (int i = 0; i < num_points; i++) {
-    for (int j = 0; j < num_points; j++) {
-      P_matrix(2,i,j) = temp_array_2(i,j);
-    }
-  }
+  // stilde-x matrix
+  radiationfemn::MatMultiply(mass_inv_temp, stiff_x_temp, temp_array);
+  auto P_matrix_1 = Kokkos::subview(P_matrix, 1, Kokkos::ALL, Kokkos::ALL);
+  Kokkos::deep_copy(P_matrix_1, temp_array);
+
+  radiationfemn::ZeroSpeedCorrection(temp_array, temp_array_corrected, 1. / sqrt(3.));
+  auto Pmod_matrix_1 = Kokkos::subview(Pmod_matrix, 1, Kokkos::ALL, Kokkos::ALL);
+  Kokkos::deep_copy(Pmod_matrix_1, temp_array_corrected);
+
+  // stilde-y matrix
+  radiationfemn::MatMultiply(mass_inv_temp, stiff_y_temp, temp_array);
+  auto P_matrix_2 = Kokkos::subview(P_matrix, 2, Kokkos::ALL, Kokkos::ALL);
+  Kokkos::deep_copy(P_matrix_2, temp_array);
+
+  radiationfemn::ZeroSpeedCorrection(temp_array, temp_array_corrected, 1. / sqrt(3.));
+  auto Pmod_matrix_2 = Kokkos::subview(Pmod_matrix, 2, Kokkos::ALL, Kokkos::ALL);
+  Kokkos::deep_copy(Pmod_matrix_2, temp_array_corrected);
 
   // stilde-z matrix index
-  Kokkos::deep_copy(temp_array_2, 0.);
-  radiationfemn::MatMultiply(temp_array, stiffness_matrix_z, temp_array_2);
-  for (int i = 0; i < num_points; i++) {
-    for (int j = 0; j < num_points; j++) {
-      P_matrix(3,i,j) = temp_array_2(i,j);
-    }
-  }
+  radiationfemn::MatMultiply(mass_inv_temp, stiff_z_temp, temp_array);
+  auto P_matrix_3 = Kokkos::subview(P_matrix, 3, Kokkos::ALL, Kokkos::ALL);
+  Kokkos::deep_copy(P_matrix_3, temp_array);
 
-}
-
-void RadiationFEMN::ComputePtildeMatrix() {
-  std::cout << "Computing Ptilde matrices ..." << std::endl;
-
-  Kokkos::deep_copy(Pmod_matrix, 0.);
-
-  DvceArray2D<Real> P_temp_array;
-  DvceArray2D<Real> P_temp_array_corrected;
-  Kokkos::realloc(P_temp_array, num_points, num_points);
-  Kokkos::realloc(P_temp_array_corrected, num_points, num_points);
-
-  // mass-matrix index (indentity matrix)
-  for (int i = 0; i < num_points; i++) {
-    Pmod_matrix(0, i, i) = P_matrix(0, i, i);
-  }
-
-  // stilde-x corrected matrix index
-  Kokkos::deep_copy(P_temp_array, 0.);
-  Kokkos::deep_copy(P_temp_array_corrected, 0.);
-  for (int i = 0; i < num_points; i++) {
-    for (int j = 0; j < num_points; j++) {
-      P_temp_array(i,j) = P_matrix(1,i,j);
-    }
-  }
-  radiationfemn::ZeroSpeedCorrection(P_temp_array, P_temp_array_corrected, 1./ sqrt(3.));
-  for (int i = 0; i < num_points; i++) {
-    for (int j = 0; j < num_points; j++) {
-      Pmod_matrix(1, i, j) = P_temp_array_corrected(i, j);
-    }
-  }
-
-  // stilde-y corrected matrix index
-  Kokkos::deep_copy(P_temp_array, 0.);
-  Kokkos::deep_copy(P_temp_array_corrected, 0.);
-  for (int i = 0; i < num_points; i++) {
-    for (int j = 0; j < num_points; j++) {
-      P_temp_array(i,j) = P_matrix(2,i,j);
-    }
-  }
-  radiationfemn::ZeroSpeedCorrection(P_temp_array, P_temp_array_corrected, 1./ sqrt(3.));
-  for (int i = 0; i < num_points; i++) {
-    for (int j = 0; j < num_points; j++) {
-      Pmod_matrix(2, i, j) = P_temp_array_corrected(i, j);
-    }
-  }
-
-  // stilde-z corrected matrix index
-  Kokkos::deep_copy(P_temp_array, 0.);
-  Kokkos::deep_copy(P_temp_array_corrected, 0.);
-  for (int i = 0; i < num_points; i++) {
-    for (int j = 0; j < num_points; j++) {
-      P_temp_array(i,j) = P_matrix(3,i,j);
-    }
-  }
-  radiationfemn::ZeroSpeedCorrection(P_temp_array, P_temp_array_corrected, 1./ sqrt(3.));
-  for (int i = 0; i < num_points; i++) {
-    for (int j = 0; j < num_points; j++) {
-      Pmod_matrix(3, i, j) = P_temp_array_corrected(i, j);
-    }
-  }
+  radiationfemn::ZeroSpeedCorrection(temp_array, temp_array_corrected, 1. / sqrt(3.));
+  auto Pmod_matrix_3 = Kokkos::subview(Pmod_matrix, 3, Kokkos::ALL, Kokkos::ALL);
+  Kokkos::deep_copy(Pmod_matrix_3, temp_array_corrected);
 
 }
 

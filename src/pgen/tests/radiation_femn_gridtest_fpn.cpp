@@ -114,5 +114,78 @@ void ProblemGenerator::RadiationFEMNGridtestFPN(ParameterInput *pin, const bool 
     }
     fout7 << std::endl;
   }
+
+  // save P matrix 0
+  std::ofstream fout8(pathdir + filenamepart + "_P_matrix_0.txt");
+  for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
+    for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
+      fout8 << pmbp->pradfemn->P_matrix(0, i, j) << " ";
+    }
+    fout8 << std::endl;
+  }
+
+  // save P matrix 1
+  std::ofstream fout9(pathdir + filenamepart + "_P_matrix_1.txt");
+  for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
+    for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
+      fout9 << pmbp->pradfemn->P_matrix(1, i, j) << " ";
+    }
+    fout9 << std::endl;
+  }
+
+  // save P matrix 2
+  std::ofstream fout10(pathdir + filenamepart + "_P_matrix_2.txt");
+  for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
+    for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
+      fout10 << pmbp->pradfemn->P_matrix(2, i, j) << " ";
+    }
+    fout10 << std::endl;
+  }
+
+  // save P matrix 3
+  std::ofstream fout11(pathdir + filenamepart + "_P_matrix_3.txt");
+  for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
+    for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
+      fout11 << pmbp->pradfemn->P_matrix(3, i, j) << " ";
+    }
+    fout11 << std::endl;
+  }
+
+  // save Pmod matrix 0
+  std::ofstream fout12(pathdir + filenamepart + "_Pmod_matrix_0.txt");
+  for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
+    for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
+      fout12 << pmbp->pradfemn->Pmod_matrix(0, i, j) << " ";
+    }
+    fout12 << std::endl;
+  }
+
+  // save Pmod matrix 1
+  std::ofstream fout13(pathdir + filenamepart + "_Pmod_matrix_1.txt");
+  for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
+    for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
+      fout13 << pmbp->pradfemn->Pmod_matrix(1, i, j) << " ";
+    }
+    fout13 << std::endl;
+  }
+
+  // save Pmod matrix 2
+  std::ofstream fout14(pathdir + filenamepart + "_Pmod_matrix_2.txt");
+  for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
+    for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
+      fout14 << pmbp->pradfemn->Pmod_matrix(2, i, j) << " ";
+    }
+    fout14 << std::endl;
+  }
+
+  // save Pmod matrix 3
+  std::ofstream fout15(pathdir + filenamepart + "_Pmod_matrix_3.txt");
+  for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
+    for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
+      fout15 << pmbp->pradfemn->Pmod_matrix(3, i, j) << " ";
+    }
+    fout15 << std::endl;
+  }
+
   return;
 }

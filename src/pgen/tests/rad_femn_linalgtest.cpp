@@ -193,7 +193,7 @@ void ProblemGenerator::RadiationFEMNLinalgtest(ParameterInput *pin, const bool r
   std::cout << std::endl;
   std::cout << "Maximum error in computing inverse: " << error << std::endl;
 
-  radiationfemn::MatLumping(matrix, matrix_lumped);
+  radiationfemn::MatLumping(matrix);
 
   DvceArray2D<Real> matrix_lumped_correct;
   Kokkos::realloc(matrix_lumped_correct,3,3);
