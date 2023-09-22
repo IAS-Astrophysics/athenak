@@ -368,7 +368,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     par_for("rad_femn_E_compute_fpn", DevExeSpace(), 0, (nmb - 1), ks, ke, js, je, is, ie, 0, (neng - 1),
             KOKKOS_LAMBDA(int m, int k, int j, int i, int en) {
               auto Sen = (pow(energy_grid_(en + 1), 4) - pow(energy_grid_(en), 4)) / 4.0;
-              dv(m, 0, k, j, i) = Sen * std::sqrt(4.0 * M_PI) * f0_(m, 0 + en * num_points, k, j, i);
+              dv(m, 0, k, j, i) = Sen * std::sqrt(4.0 * M_PI) * f0_(m, 0, k, j, i);
             });
   }
 }
