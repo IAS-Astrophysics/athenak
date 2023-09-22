@@ -80,8 +80,8 @@ Real IntegrateMatrixSphericalTriangle(int a, int b, int basis, int t1, int t2, i
     }
   } else if (matrixnumber == 4) {
     for (size_t i = 0; i < scheme_points.size(); i++) {
-      result += mom_by_energy(nu, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
-          * mom_by_energy(mu, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
+      result += MomentumUnitEnergy(nu, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
+          * MomentumUnitEnergy(mu, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
           * sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2)))
           * FEMBasisA(a, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis)
           * PartialFEMBasiswithoute(ihat, b, t1, t2, t3, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis)
@@ -89,11 +89,11 @@ Real IntegrateMatrixSphericalTriangle(int a, int b, int basis, int t1, int t2, i
     }
   } else if (matrixnumber == 5) {
     for (size_t i = 0; i < scheme_weights.size(); i++) {
-      result += mom_by_energy(nu, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
-          * mom_by_energy(mu, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
+      result += MomentumUnitEnergy(nu, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
+          * MomentumUnitEnergy(mu, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
           * sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2)))
           * FEMBasisABasisB(a, b, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis) * scheme_weights(i) *
-          mom_by_energy(ihat, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2)) * scheme_weights(i);
+          MomentumUnitEnergy(ihat, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2)) * scheme_weights(i);
     }
   }
 
@@ -222,19 +222,19 @@ Real IntegrateMatrixFPN(int la, int ma, int lb, int mb, const HostArray1D<Real> 
     }
   } else if (matrixchoice == 4) {
     for (size_t i = 0; i < scheme_weights.size(); i++) {
-      result += 4. * M_PI * mom_by_energy(nu, scheme_points(i, 0), scheme_points(i, 1)) *
-          mom_by_energy(mu, scheme_points(i, 0), scheme_points(i, 1))
+      result += 4. * M_PI * MomentumUnitEnergy(nu, scheme_points(i, 0), scheme_points(i, 1)) *
+          MomentumUnitEnergy(mu, scheme_points(i, 0), scheme_points(i, 1))
           * FPNBasis(la, ma, scheme_points(i, 0), scheme_points(i, 1))
           * (PtildehatJac(scheme_points(i, 0), scheme_points(i, 1), 1, ihat) * dFPNBasisdOmega(lb, mb, scheme_points(i, 0), scheme_points(i, 1), 1)
               + PtildehatJac(scheme_points(i, 0), scheme_points(i, 1), 2, ihat) * dFPNBasisdOmega(lb, mb, scheme_points(i, 0), scheme_points(i, 1), 2));
     }
   } else if (matrixchoice == 5) {
     for (size_t i = 0; i < scheme_weights.size(); i++) {
-      result += 4. * M_PI * mom_by_energy(nu, scheme_points(i, 0), scheme_points(i, 1)) *
-          mom_by_energy(mu, scheme_points(i, 0), scheme_points(i, 1))
+      result += 4. * M_PI * MomentumUnitEnergy(nu, scheme_points(i, 0), scheme_points(i, 1)) *
+          MomentumUnitEnergy(mu, scheme_points(i, 0), scheme_points(i, 1))
           * FPNBasis(la, ma, scheme_points(i, 0), scheme_points(i, 1))
           * FPNBasis(lb, mb, scheme_points(i, 0), scheme_points(i, 1))
-          * mom_by_energy(ihat, scheme_points(i, 0), scheme_points(i, 1)) * scheme_weights(i);
+          * MomentumUnitEnergy(ihat, scheme_points(i, 0), scheme_points(i, 1)) * scheme_weights(i);
     }
   }
   return result;

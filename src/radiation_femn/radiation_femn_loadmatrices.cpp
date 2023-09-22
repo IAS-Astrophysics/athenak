@@ -170,7 +170,7 @@ void RadiationFEMN::LoadFPNMatrices() {
   Kokkos::deep_copy(sz_, temp_matrix_3);
 
   // compute the F matrices
-  std::cout << "Computing the F matrices ... " << std::endl;
+  std::cout << "Computing the F matrices (FPN) ... " << std::endl;
   for (int i = 0; i < num_points; i++) {
     for (int j = 0; j < num_points; j++) {
       for (int nu = 0; nu < 4; nu++) {

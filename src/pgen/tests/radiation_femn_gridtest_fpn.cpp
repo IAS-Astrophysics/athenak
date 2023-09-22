@@ -104,9 +104,9 @@ void ProblemGenerator::RadiationFEMNGridtestFPN(ParameterInput *pin, const bool 
   }
 
   // save F matrix
-  int ihat = 1;
-  int mu = 0;
-  int nu = 2;
+  int ihat = pin->GetInteger("radiation-femn", "ihat");
+  int mu = pin->GetInteger("radiation-femn", "nu");
+  int nu = pin->GetInteger("radiation-femn", "mu");
   std::ofstream fout7(pathdir + filenamepart + "_F_matrix_" +std::to_string(nu)+"_"+std::to_string(mu)+"_"+std::to_string(ihat)+ ".txt");
   for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
     for (int j = 0; j < pmbp->pradfemn->num_points; j++) {

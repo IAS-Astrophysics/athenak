@@ -152,15 +152,14 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   }
 
   // compute lumped mass matrix
-
   if (mass_lumping) {
     std::cout << "Mass Lumping switched on ..." << std::endl;
     radiationfemn::MatLumping(mass_matrix);
   }
 
-  // compute P matrices
+  // compute P and Pmod matrices
   this->ComputePMatrices();
-  //this->ComputePtildeMatrix();
+
   // --------------------------------------------------------------------------------------------------------------------------
   // allocate memory for all other variables
 

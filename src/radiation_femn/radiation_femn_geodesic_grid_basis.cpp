@@ -450,7 +450,7 @@ Real SinTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Rea
 
 // ------------------------------------------------------------
 // Momentum contra-vector divided by energy (in comoving frame)
-Real mom_by_energy(int mu, Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
+Real MomentumUnitEnergy(int mu, Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
   Real result = 0.;
   if (mu == 0) {
     result = 1.;
@@ -468,7 +468,7 @@ Real mom_by_energy(int mu, Real x1, Real y1, Real z1, Real x2, Real y2, Real z2,
   return result;
 }
 
-Real mom_by_energy(int mu, Real phi, Real theta) {
+Real MomentumUnitEnergy(int mu, Real phi, Real theta) {
   Real result = 0.;
   if (mu == 0) {
     result = 1.;
