@@ -226,7 +226,8 @@ Real IntegrateMatrixFPN(int la, int ma, int lb, int mb, const HostArray1D<Real> 
           MomentumUnitEnergy(mu, scheme_points(i, 0), scheme_points(i, 1))
           * FPNBasis(la, ma, scheme_points(i, 0), scheme_points(i, 1))
           * (PtildehatJac(scheme_points(i, 0), scheme_points(i, 1), 1, ihat) * dFPNBasisdOmega(lb, mb, scheme_points(i, 0), scheme_points(i, 1), 1)
-              + PtildehatJac(scheme_points(i, 0), scheme_points(i, 1), 2, ihat) * dFPNBasisdOmega(lb, mb, scheme_points(i, 0), scheme_points(i, 1), 2));
+              + PtildehatJac(scheme_points(i, 0), scheme_points(i, 1), 2, ihat) * dFPNBasisdOmega(lb, mb, scheme_points(i, 0), scheme_points(i, 1), 2))
+          * scheme_weights(i);
     }
   } else if (matrixchoice == 5) {
     for (size_t i = 0; i < scheme_weights.size(); i++) {
