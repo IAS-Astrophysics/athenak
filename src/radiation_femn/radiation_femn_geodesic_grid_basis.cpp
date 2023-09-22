@@ -271,6 +271,8 @@ Real FEMBasisA(int a, int t1, int t2, int t3, Real xi1, Real xi2, Real xi3, int 
 
 /* FPN basis function: real spherical harmonics
  *
+ * gsl_sf_legendre_sphPlm computes sqrt((2l+1)/(4 pi)) sqrt((l-m)!/(l+m)!) P_m^l(x)
+ *
  * Calculated for (l,m) at point (phi, theta) on the sphere
  */
 Real FPNBasis(int l, int m, Real phi, Real theta) {
@@ -286,15 +288,27 @@ Real FPNBasis(int l, int m, Real phi, Real theta) {
   return result;
 }
 
+/* Phi derivative of FPN basis function
+ *
+ * dYlm/dphi = - m Yl-m
+ *
+ * Calculated for (l,m) at point (phi, theta) on the sphere
+ */
 KOKKOS_INLINE_FUNCTION Real dFPNBasisdphi(int l, int m, Real phi, Real theta) {
   return - m * FPNBasis(l, -m, phi, theta);
 }
 
+/* Theta derivative of FPN basis function
+ *
+ * Use (1-x^2) dP^m_l/dx = (m-l-1) P^m_l+1 + (l+1)xP^m_l
+ *
+ * Calculated for (l,m) at point (phi, theta) on the sphere
+ */
 KOKKOS_INLINE_FUNCTION Real dFPNBasisdtheta(int l, int m, Real phi, Real theta) {
   Real result = 0.;
 
   Real der_legendre =
-      -sin(theta) * ((m - l - 1.) * gsl_sf_legendre_sphPlm(l + 1, abs(m), cos(theta)) - (l + 1) * cos(theta) * gsl_sf_legendre_sphPlm(l, abs(m), cos(theta)))
+      -sin(theta) * ((m - l - 1.) * gsl_sf_legendre_sphPlm(l + 1, abs(m), cos(theta)) + (l + 1) * cos(theta) * gsl_sf_legendre_sphPlm(l, abs(m), cos(theta)))
           / (1. - cos(theta) * cos(theta));
 
   if (m > 0) {
@@ -308,6 +322,10 @@ KOKKOS_INLINE_FUNCTION Real dFPNBasisdtheta(int l, int m, Real phi, Real theta) 
   return result;
 }
 
+/* Derivative of FPN basis wrt angle
+ *
+ * Omega = ([1] phi, [2] theta)
+ */
 Real dFPNBasisdOmega(int l, int m, Real phi, Real theta, int var_index) {
   if (var_index == 1) {
     return dFPNBasisdphi(l, m, phi, theta);
