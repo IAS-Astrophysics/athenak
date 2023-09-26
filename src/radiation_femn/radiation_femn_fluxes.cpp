@@ -31,164 +31,6 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
 
   //--------------------------------------------------------------------------------------
   // i-direction
-  /*
-  int scr_level = 0;
-  int scr_size = ScrArray1D<Real>::shmem_size(num_points) * 6;
-  auto &flx1 = iflx.x1f;
-  Kokkos::deep_copy(flx1, 0.);
-  par_for_outer("radiation_femn_flux_x", DevExeSpace(), scr_size, scr_level, 0, nmb1, 0, npts1, ks, ke, js, je, is, int(ie / 2) + 1,
-                KOKKOS_LAMBDA(TeamMember_t member, const int m, const int enang, const int k, const int j, const int i) {
-
-                  // index corresponding to a team member
-                  RadiationFEMNPhaseIndices idcs_Bbar = IndicesComponent(enang);
-                  int en = idcs_Bbar.eindex;
-                  int B = idcs_Bbar.angindex;
-
-                  auto kk = k;
-                  auto jj = j;
-                  auto ii = 2 * i - 2;
-
-                  // ---------------------------------------------------
-                  ScrArray1D<Real> f0_scratch = ScrArray1D<Real>(member.team_scratch(scr_level), num_points);
-                  ScrArray1D<Real> f0_scratch_p1 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points);
-                  ScrArray1D<Real> f0_scratch_p2 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points);
-                  ScrArray1D<Real> f0_scratch_p3 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points);
-                  ScrArray1D<Real> f0_scratch_m1 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points);
-                  ScrArray1D<Real> f0_scratch_m2 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points);
-
-                  par_for_inner(member, 0, num_points - 1, [&](const int idx) {
-                    f0_scratch(idx) = f0_(m, en * num_points + idx, kk, jj, ii);
-                    f0_scratch_p1(idx) = f0_(m, en * num_points + idx, kk, jj, ii + 1);
-                    f0_scratch_p2(idx) = f0_(m, en * num_points + idx, kk, jj, ii + 2);
-                    f0_scratch_p3(idx) = f0_(m, en * num_points + idx, kk, jj, ii + 3);
-                    f0_scratch_m1(idx) = f0_(m, en * num_points + idx, kk, jj, ii - 1);
-                    f0_scratch_m2(idx) = f0_(m, en * num_points + idx, kk, jj, ii - 2);
-                  });
-                  member.team_barrier();
-                  // -----------------------------------------------------
-
-                  // Compute fluxes
-                  Real Favg = 0.;
-                  Real Fminus = 0.;
-                  Real Fplus = 0.;
-
-                  int muhat = 0;
-                  par_for_inner(member, 0, num_points, [&](const int A) {
-
-                    auto Ven = (1. / 3.) * (pow(energy_grid(en + 1), 3) - pow(energy_grid(en), 3));
-                    double sqrt_det_g_L = 1.5 * sqrt_det_g(m, kk, jj, ii) - 0.5 * sqrt_det_g(m, kk, jj, ii + 1);
-                    double sqrt_det_g_R = -0.5 * sqrt_det_g(m, kk, jj, ii) + 1.5 * sqrt_det_g(m, kk, jj, ii + 1);
-                    double L_mu_muhat0_L = 1.5 * L_mu_muhat0(m, 1, muhat, kk, jj, ii) - 0.5 * L_mu_muhat0(m, 1, muhat, kk, jj, ii + 1);
-                    double L_mu_muhat0_R = -0.5 * L_mu_muhat0(m, 1, muhat, kk, jj, ii) + 1.5 * L_mu_muhat0(m, 1, muhat, kk, jj, ii + 1);
-
-                    //Favg += (0.5) * Ven * (P_matrix(muhat, B, A) * sqrt_det_g(m, kk, jj, ii) * L_mu_muhat0(m, 1, muhat, kk, jj, ii) * f0_scratch(A)
-                    //    + P_matrix(muhat, B, A) * sqrt_det_g(m, kk, jj, ii + 1) * L_mu_muhat0(m, 1, muhat, kk, jj, ii + 1) * f0_scratch_p1(A));
-
-                    Favg += (0.5) * Ven * (P_matrix(muhat, B, A) * sqrt_det_g(m, kk, jj, ii) * L_mu_muhat0(m, 1, muhat, kk, jj, ii) * f0_scratch(A)
-                        + P_matrix(muhat, B, A) * sqrt_det_g(m, kk, jj, ii + 1) * L_mu_muhat0(m, 1, muhat, kk, jj, ii + 1) * f0_scratch(A));
-
-                    Fminus += (0.5) * Ven * (sqrt_det_g_L * L_mu_muhat0_L) * (P_matrix(muhat, B, A)
-                        * ((1.5) * f0_scratch(A) - (0.5) * f0_scratch_p1(A) + (1.5) * f0_scratch_m1(A) - (0.5) * f0_scratch_m2(A))
-                        - std::copysign(1.0, L_mu_muhat0_L) * Pmod_matrix(muhat, B, A)
-                            * ((1.5) * f0_scratch_m1(A) - (0.5) * f0_scratch_m2(A) - (1.5) * f0_scratch(A) + (0.5) * f0_scratch_p1(A)));
-
-                    Fplus += (0.5) * Ven * (sqrt_det_g_R * L_mu_muhat0_R) * (P_matrix(muhat, B, A) *
-                        ((1.5) * f0_scratch_p2(A) - (0.5) * f0_scratch_p3(3) + (1.5) * f0_scratch_p1(A) - (0.5) * f0_scratch(A))
-                        - std::copysign(1.0, L_mu_muhat0_R) * Pmod_matrix(muhat, B, A) *
-                            ((1.5) * f0_scratch_p1(A) - (0.5) * f0_scratch(A) - (1.5) * f0_scratch_p2(A) + (0.5) * f0_scratch_p3(A)));
-
-                  });
-                  member.team_barrier();
-
-                  muhat = 1;
-                  par_for_inner(member, 0, num_points, [&](const int A) {
-
-                    auto Ven = (1. / 3.) * (pow(energy_grid(en + 1), 3) - pow(energy_grid(en), 3));
-                    double sqrt_det_g_L = 1.5 * sqrt_det_g(m, kk, jj, ii) - 0.5 * sqrt_det_g(m, kk, jj, ii + 1);
-                    double sqrt_det_g_R = -0.5 * sqrt_det_g(m, kk, jj, ii) + 1.5 * sqrt_det_g(m, kk, jj, ii + 1);
-                    double L_mu_muhat0_L = 1.5 * L_mu_muhat0(m, 1, muhat, kk, jj, ii) - 0.5 * L_mu_muhat0(m, 1, muhat, kk, jj, ii + 1);
-                    double L_mu_muhat0_R = -0.5 * L_mu_muhat0(m, 1, muhat, kk, jj, ii) + 1.5 * L_mu_muhat0(m, 1, muhat, kk, jj, ii + 1);
-
-                    //Favg += (0.5) * Ven * (P_matrix(muhat, B, A) * sqrt_det_g(m, kk, jj, ii) * L_mu_muhat0(m, 1, muhat, kk, jj, ii) * f0_scratch(A)
-                    //    + P_matrix(muhat, B, A) * sqrt_det_g(m, kk, jj, ii + 1) * L_mu_muhat0(m, 1, muhat, kk, jj, ii + 1) * f0_scratch_p1(A));
-
-                    Favg += (0.5) * Ven * (P_matrix(muhat, B, A) * sqrt_det_g(m, kk, jj, ii) * L_mu_muhat0(m, 1, muhat, kk, jj, ii) * f0_scratch(A)
-                        + P_matrix(muhat, B, A) * sqrt_det_g(m, kk, jj, ii + 1) * L_mu_muhat0(m, 1, muhat, kk, jj, ii + 1) * f0_scratch(A));
-
-                    Fminus += (0.5) * Ven * (sqrt_det_g_L * L_mu_muhat0_L) * (P_matrix(muhat, B, A)
-                        * ((1.5) * f0_scratch(A) - (0.5) * f0_scratch_p1(A) + (1.5) * f0_scratch_m1(A) - (0.5) * f0_scratch_m2(A))
-                        - std::copysign(1.0, L_mu_muhat0_L) * Pmod_matrix(muhat, B, A)
-                            * ((1.5) * f0_scratch_m1(A) - (0.5) * f0_scratch_m2(A) - (1.5) * f0_scratch(A) + (0.5) * f0_scratch_p1(A)));
-
-                    Fplus += (0.5) * Ven * (sqrt_det_g_R * L_mu_muhat0_R) * (P_matrix(muhat, B, A) *
-                        ((1.5) * f0_scratch_p2(A) - (0.5) * f0_scratch_p3(3) + (1.5) * f0_scratch_p1(A) - (0.5) * f0_scratch(A))
-                        - std::copysign(1.0, L_mu_muhat0_R) * Pmod_matrix(muhat, B, A) *
-                            ((1.5) * f0_scratch_p1(A) - (0.5) * f0_scratch(A) - (1.5) * f0_scratch_p2(A) + (0.5) * f0_scratch_p3(A)));
-
-                  });
-                  member.team_barrier();
-
-                  muhat = 2;
-                  par_for_inner(member, 0, num_points, [&](const int A) {
-
-                    auto Ven = (1. / 3.) * (pow(energy_grid(en + 1), 3) - pow(energy_grid(en), 3));
-                    double sqrt_det_g_L = 1.5 * sqrt_det_g(m, kk, jj, ii) - 0.5 * sqrt_det_g(m, kk, jj, ii + 1);
-                    double sqrt_det_g_R = -0.5 * sqrt_det_g(m, kk, jj, ii) + 1.5 * sqrt_det_g(m, kk, jj, ii + 1);
-                    double L_mu_muhat0_L = 1.5 * L_mu_muhat0(m, 1, muhat, kk, jj, ii) - 0.5 * L_mu_muhat0(m, 1, muhat, kk, jj, ii + 1);
-                    double L_mu_muhat0_R = -0.5 * L_mu_muhat0(m, 1, muhat, kk, jj, ii) + 1.5 * L_mu_muhat0(m, 1, muhat, kk, jj, ii + 1);
-
-                    //Favg += (0.5) * Ven * (P_matrix(muhat, B, A) * sqrt_det_g(m, kk, jj, ii) * L_mu_muhat0(m, 1, muhat, kk, jj, ii) * f0_scratch(A)
-                    //    + P_matrix(muhat, B, A) * sqrt_det_g(m, kk, jj, ii + 1) * L_mu_muhat0(m, 1, muhat, kk, jj, ii + 1) * f0_scratch_p1(A));
-
-                    Favg += (0.5) * Ven * (P_matrix(muhat, B, A) * sqrt_det_g(m, kk, jj, ii) * L_mu_muhat0(m, 1, muhat, kk, jj, ii) * f0_scratch(A)
-                        + P_matrix(muhat, B, A) * sqrt_det_g(m, kk, jj, ii + 1) * L_mu_muhat0(m, 1, muhat, kk, jj, ii + 1) * f0_scratch(A));
-
-                    Fminus += (0.5) * Ven * (sqrt_det_g_L * L_mu_muhat0_L) * (P_matrix(muhat, B, A)
-                        * ((1.5) * f0_scratch(A) - (0.5) * f0_scratch_p1(A) + (1.5) * f0_scratch_m1(A) - (0.5) * f0_scratch_m2(A))
-                        - std::copysign(1.0, L_mu_muhat0_L) * Pmod_matrix(muhat, B, A)
-                            * ((1.5) * f0_scratch_m1(A) - (0.5) * f0_scratch_m2(A) - (1.5) * f0_scratch(A) + (0.5) * f0_scratch_p1(A)));
-
-                    Fplus += (0.5) * Ven * (sqrt_det_g_R * L_mu_muhat0_R) * (P_matrix(muhat, B, A) *
-                        ((1.5) * f0_scratch_p2(A) - (0.5) * f0_scratch_p3(3) + (1.5) * f0_scratch_p1(A) - (0.5) * f0_scratch(A))
-                        - std::copysign(1.0, L_mu_muhat0_R) * Pmod_matrix(muhat, B, A) *
-                            ((1.5) * f0_scratch_p1(A) - (0.5) * f0_scratch(A) - (1.5) * f0_scratch_p2(A) + (0.5) * f0_scratch_p3(A)));
-
-                  });
-                  member.team_barrier();
-
-                  muhat = 3;
-                  par_for_inner(member, 0, num_points, [&](const int A) {
-
-                    auto Ven = (1. / 3.) * (pow(energy_grid(en + 1), 3) - pow(energy_grid(en), 3));
-                    double sqrt_det_g_L = 1.5 * sqrt_det_g(m, kk, jj, ii) - 0.5 * sqrt_det_g(m, kk, jj, ii + 1);
-                    double sqrt_det_g_R = -0.5 * sqrt_det_g(m, kk, jj, ii) + 1.5 * sqrt_det_g(m, kk, jj, ii + 1);
-                    double L_mu_muhat0_L = 1.5 * L_mu_muhat0(m, 1, muhat, kk, jj, ii) - 0.5 * L_mu_muhat0(m, 1, muhat, kk, jj, ii + 1);
-                    double L_mu_muhat0_R = -0.5 * L_mu_muhat0(m, 1, muhat, kk, jj, ii) + 1.5 * L_mu_muhat0(m, 1, muhat, kk, jj, ii + 1);
-
-                    //Favg += (0.5) * Ven * (P_matrix(muhat, B, A) * sqrt_det_g(m, kk, jj, ii) * L_mu_muhat0(m, 1, muhat, kk, jj, ii) * f0_scratch(A)
-                    //    + P_matrix(muhat, B, A) * sqrt_det_g(m, kk, jj, ii + 1) * L_mu_muhat0(m, 1, muhat, kk, jj, ii + 1) * f0_scratch_p1(A));
-
-                    Favg += (0.5) * Ven * (P_matrix(muhat, B, A) * sqrt_det_g(m, kk, jj, ii) * L_mu_muhat0(m, 1, muhat, kk, jj, ii) * f0_scratch(A)
-                        + P_matrix(muhat, B, A) * sqrt_det_g(m, kk, jj, ii + 1) * L_mu_muhat0(m, 1, muhat, kk, jj, ii + 1) * f0_scratch(A));
-
-                    Fminus += (0.5) * Ven * (sqrt_det_g_L * L_mu_muhat0_L) * (P_matrix(muhat, B, A)
-                        * ((1.5) * f0_scratch(A) - (0.5) * f0_scratch_p1(A) + (1.5) * f0_scratch_m1(A) - (0.5) * f0_scratch_m2(A))
-                        - std::copysign(1.0, L_mu_muhat0_L) * Pmod_matrix(muhat, B, A)
-                            * ((1.5) * f0_scratch_m1(A) - (0.5) * f0_scratch_m2(A) - (1.5) * f0_scratch(A) + (0.5) * f0_scratch_p1(A)));
-
-                    Fplus += (0.5) * Ven * (sqrt_det_g_R * L_mu_muhat0_R) * (P_matrix(muhat, B, A) *
-                        ((1.5) * f0_scratch_p2(A) - (0.5) * f0_scratch_p3(3) + (1.5) * f0_scratch_p1(A) - (0.5) * f0_scratch(A))
-                        - std::copysign(1.0, L_mu_muhat0_R) * Pmod_matrix(muhat, B, A) *
-                            ((1.5) * f0_scratch_p1(A) - (0.5) * f0_scratch(A) - (1.5) * f0_scratch_p2(A) + (0.5) * f0_scratch_p3(A)));
-
-                  });
-                  member.team_barrier();
-
-                  flx1(m, enang, kk, jj, ii) = ((1.5) * Fminus - Favg - (0.5) * Fplus);
-                  flx1(m, enang, kk, jj, ii + 1) = ((0.5) * Fminus + Favg - (1.5) * Fplus);
-                }
-  );
-*/
 
   int scr_level = 0;
   int scr_size = ScrArray1D<Real>::shmem_size(num_points) * 6;
@@ -277,121 +119,96 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                   flx1(m, enang, kk, jj, ii + 1) = ((0.5) * Fminus + Favg - (1.5) * Fplus);
                 });
 
-
-/*
-auto &flx1 = iflx.x1f;
-Kokkos::deep_copy(flx1, 0.);
-par_for("radiation_femn_flux_x", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, int(ie / 2) + 1, 0, npts1, 0, nang1, 0, 3,
-        KOKKOS_LAMBDA(const int m, const int k, const int j, const int i, const int enang, const int A, const int muhat) {
-
-          auto kk = k;
-          auto jj = j;
-          auto ii = 2 * i - 2;
-
-          // phase space indices
-          RadiationFEMNPhaseIndices idcs = IndicesComponent(enang);
-          int en = idcs.eindex;
-          int B = idcs.angindex;
-          int Abar = en * num_points + A;
-
-          // factor from energy contribution
-          auto Ven = (1. / 3.) * (pow(energy_grid(en + 1), 3) - pow(energy_grid(en), 3));
-
-          // compute quantities at the left and right boundaries
-          double sqrt_det_g_L = 1.5 * sqrt_det_g(m, kk, jj, ii) - 0.5 * sqrt_det_g(m, kk, jj, ii + 1);
-          double sqrt_det_g_R = -0.5 * sqrt_det_g(m, kk, jj, ii) + 1.5 * sqrt_det_g(m, kk, jj, ii + 1);
-          double L_mu_muhat0_L = 1.5 * L_mu_muhat0(m, 1, muhat, kk, jj, ii) - 0.5 * L_mu_muhat0(m, 1, muhat, kk, jj, ii + 1);
-          double L_mu_muhat0_R = -0.5 * L_mu_muhat0(m, 1, muhat, kk, jj, ii) + 1.5 * L_mu_muhat0(m, 1, muhat, kk, jj, ii + 1);
-
-          // compute Fbar
-          auto Favg = (0.5) * Ven * (P_matrix(muhat, B, A) * sqrt_det_g(m, kk, jj, ii) * L_mu_muhat0(m, 1, muhat, kk, jj, ii) * f0_(m, Abar, kk, jj, ii)
-              + P_matrix(muhat, B, A) * sqrt_det_g(m, kk, jj, ii + 1) * L_mu_muhat0(m, 1, muhat, kk, jj, ii + 1) * f0_(m, Abar, kk, jj, ii + 1));
-
-          // compute Fminus
-          auto Fminus = (0.5) * Ven * (sqrt_det_g_L * L_mu_muhat0_L) * (P_matrix(muhat, B, A)
-              * ((1.5) * f0_(m, Abar, kk, jj, ii) - (0.5) * f0_(m, Abar, kk, jj, ii + 1) + (1.5) * f0_(m, Abar, kk, jj, ii - 1) - (0.5) * f0_(m, Abar, kk, jj, ii - 2))
-              -  std::copysign(1.0, L_mu_muhat0_L) * Pmod_matrix(muhat, B, A)
-                  * ((1.5) * f0_(m, Abar, kk, jj, ii - 1) - (0.5) * f0_(m, Abar, kk, jj, ii - 2) - (1.5) * f0_(m, Abar, kk, jj, ii) + (0.5) * f0_(m, Abar, kk, jj, ii + 1)));
-
-          // compute Fplus
-          auto Fplus = (0.5) * Ven * (sqrt_det_g_R * L_mu_muhat0_R) * (P_matrix(muhat, B, A) *
-              ((1.5) * f0_(m, Abar, kk, jj, ii + 2) - (0.5) * f0_(m, Abar, kk, jj, ii + 3) + (1.5) * f0_(m, Abar, kk, jj, ii + 1) - (0.5) * f0_(m, Abar, kk, jj, ii))
-              -  std::copysign(1.0, L_mu_muhat0_R) * Pmod_matrix(muhat, B, A) *
-                  ((1.5) * f0_(m, Abar, kk, jj, ii + 1) - (0.5) * f0_(m, Abar, kk, jj, ii) - (1.5) * f0_(m, Abar, kk, jj, ii + 2) + (0.5) * f0_(m, Abar, kk, jj, ii + 3)));
-
-          // complute fluxes
-          flx1(m, enang, kk, jj, ii) += ((1.5) * Fminus - Favg - (0.5) * Fplus);
-          flx1(m, enang, kk, jj, ii + 1) += ((0.5) * Fminus + Favg - (1.5) * Fplus);
-        });
-
-*/
 //--------------------------------------------------------------------------------------
 // j-direction
 
+  scr_level = 0;
+  scr_size = ScrArray1D<Real>::shmem_size(num_points) * 6;
   auto &flx2 = iflx.x2f;
-  Kokkos::deep_copy(flx2,
-                    0.);
+  Kokkos::deep_copy(flx2, 0.);
   if (multi_d) {
-    par_for("radiation_femn_flux_y",
-            DevExeSpace(),
-            0, nmb1, ks, ke, js,
-            int(je
-                    / 2) + 1, is, ie, 0, npts1, 0, nang1, 0, 3,
-            KOKKOS_LAMBDA(
-                const int m,
-                const int k,
-                const int j,
-                const int i,
-                const int enang,
-                const int A,
-                const int muhat
-            ) {
+    par_for_outer("radiation_femn_flux_y", DevExeSpace(), scr_size, scr_level, 0, nmb1, 0, npts1, ks, ke, js, int(je / 2) + 1, is, ie,
+                  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int enang, const int k, const int j, const int i) {
 
-              auto kk = k;
-              auto jj = 2 * j - 2;
-              auto ii = i;
+                    auto kk = k;
+                    auto jj = 2 * j - 2;
+                    auto ii = i;
 
-// phase space indices
-              RadiationFEMNPhaseIndices idcs = IndicesComponent(enang);
-              int en = idcs.eindex;
-              int B = idcs.angindex;
-              int Abar = en * num_points + A;
+                    RadiationFEMNPhaseIndices idcs = IndicesComponent(enang);
+                    int en = idcs.eindex;
+                    int B = idcs.angindex;
 
-// factor from energy contribution
-              auto Ven = (1. / 3.) * (pow(energy_grid(en + 1), 3) - pow(energy_grid(en), 3));
+                    // ---------------------------------------------------
+                    // Replace by Closure function later
+                    ScrArray1D<Real> f0_scratch = ScrArray1D<Real>(member.team_scratch(scr_level), num_points);
+                    ScrArray1D<Real> f0_scratch_p1 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points);
+                    ScrArray1D<Real> f0_scratch_p2 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points);
+                    ScrArray1D<Real> f0_scratch_p3 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points);
+                    ScrArray1D<Real> f0_scratch_m1 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points);
+                    ScrArray1D<Real> f0_scratch_m2 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points);
 
-// compute quantities at the left and right boundaries
-              double sqrt_det_g_L = 1.5 * sqrt_det_g(m, kk, jj, ii) - 0.5 * sqrt_det_g(m, kk, jj + 1, ii);
-              double sqrt_det_g_R = -0.5 * sqrt_det_g(m, kk, jj, ii) + 1.5 * sqrt_det_g(m, kk, jj + 1, ii);
-              double L_mu_muhat0_L = 1.5 * L_mu_muhat0(m, 2, muhat, kk, jj, ii) - 0.5 * L_mu_muhat0(m, 2, muhat, kk, jj + 1, ii);
-              double L_mu_muhat0_R = -0.5 * L_mu_muhat0(m, 2, muhat, kk, jj, ii) + 1.5 * L_mu_muhat0(m, 2, muhat, kk, jj + 1, ii);
+                    par_for_inner(member, 0, nang1, [&](const int idx) {
+                      f0_scratch(idx) = f0_(m, en * num_points + idx, kk, jj, ii);
+                      f0_scratch_p1(idx) = f0_(m, en * num_points + idx, kk, jj + 1, ii);
+                      f0_scratch_p2(idx) = f0_(m, en * num_points + idx, kk, jj + 2, ii);
+                      f0_scratch_p3(idx) = f0_(m, en * num_points + idx, kk, jj + 3, ii);
+                      f0_scratch_m1(idx) = f0_(m, en * num_points + idx, kk, jj - 1, ii);
+                      f0_scratch_m2(idx) = f0_(m, en * num_points + idx, kk, jj - 2, ii);
+                    });
+                    member.team_barrier();
+                    // ----------------------------------------------------
 
-// compute Fbar
-              auto Favg = (0.5) * Ven * (P_matrix(muhat, B, A) * sqrt_det_g(m, kk, jj, ii) * L_mu_muhat0(m, 2, muhat, kk, jj, ii) * f0_(m, Abar, kk, jj, ii)
-                  + P_matrix(muhat, B, A) * sqrt_det_g(m, kk, jj + 1, ii) * L_mu_muhat0(m, 2, muhat, kk, jj + 1, ii) * f0_(m, Abar, kk, jj + 1, ii));
+                    // factor from energy contribution
+                    Real Ven = (1. / 3.) * (pow(energy_grid(en + 1), 3) - pow(energy_grid(en), 3));
 
-// compute Fminus
-              auto Fminus = (0.5) * Ven * (sqrt_det_g_L * L_mu_muhat0_L) * (P_matrix(muhat, B, A)
-                  * ((1.5) * f0_(m, Abar, kk, jj, ii) - (0.5) * f0_(m, Abar, kk, jj + 1, ii) + (1.5) * f0_(m, Abar, kk, jj - 1, ii)
-                      - (0.5) * f0_(m, Abar, kk, jj - 2, ii))
-                  - std::copysign(1.0, L_mu_muhat0_L) * Pmod_matrix(muhat, B, A)
-                      * ((1.5) * f0_(m, Abar, kk, jj - 1, ii) - (0.5) * f0_(m, Abar, kk, jj - 2, ii) - (1.5) * f0_(m, Abar, kk, jj, ii)
-                          + (0.5) * f0_(m, Abar, kk, jj + 1, ii)));
+                    // compute quantities at the left and right boundaries
+                    Real sqrt_det_g_L = 1.5 * sqrt_det_g(m, kk, jj, ii) - 0.5 * sqrt_det_g(m, kk, jj + 1, ii);
+                    Real sqrt_det_g_R = -0.5 * sqrt_det_g(m, kk, jj, ii) + 1.5 * sqrt_det_g(m, kk, jj + 1, ii);
 
-// compute Fplus
-              auto Fplus = (0.5) * Ven * (sqrt_det_g_R * L_mu_muhat0_R) * (P_matrix(muhat, B, A) *
-                  ((1.5) * f0_(m, Abar, kk, jj + 2, ii) - (0.5) * f0_(m, Abar, kk, jj + 3, ii) + (1.5) * f0_(m, Abar, kk, jj + 1, ii) - (0.5) * f0_(m, Abar, kk, jj, ii))
-                  - std::copysign(1.0, L_mu_muhat0_R) * Pmod_matrix(muhat, B, A) *
-                      ((1.5) * f0_(m, Abar, kk, jj + 1, ii) - (0.5) * f0_(m, Abar, kk, jj, ii) - (1.5) * f0_(m, Abar, kk, jj + 2, ii)
-                          + (0.5) * f0_(m, Abar, kk, jj + 3, ii)));
+                    Real Favg = 0.;
+                    Kokkos::parallel_reduce(Kokkos::TeamVectorRange(member, 0, nang1 + 1), [&](const int A, Real &partial_sum) {
+                      Real temp_sum_muhat = 0.;
+                      for (int muhat = 0; muhat < 4; muhat++) {
+                        temp_sum_muhat += (0.5) * Ven * (P_matrix(muhat, B, A) * sqrt_det_g(m, kk, jj, ii) * L_mu_muhat0(m, 2, muhat, kk, jj, ii) * f0_scratch(A)
+                            + P_matrix(muhat, B, A) * sqrt_det_g(m, kk, jj + 1, ii) * L_mu_muhat0(m, 2, muhat, kk, jj + 1, ii) * f0_scratch_p1(A));
+                      }
+                      partial_sum += temp_sum_muhat;
+                    }, Favg);
+                    member.team_barrier();
 
-// complute fluxes
-              flx2(m, enang, kk, jj, ii
-              ) += ((1.5) * Fminus - Favg - (0.5) * Fplus);
-              flx2(m, enang, kk, jj
-                  + 1, ii) += ((0.5) * Fminus + Favg - (1.5) * Fplus);
-            }
-    );
+                    Real Fminus = 0.;
+                    Kokkos::parallel_reduce(Kokkos::TeamVectorRange(member, 0, nang1 + 1), [&](const int A, Real &partial_sum) {
+                      Real temp_sum_muhat = 0.;
+                      for (int muhat = 0; muhat < 4; muhat++) {
+                        Real L_mu_muhat0_L = 1.5 * L_mu_muhat0(m, 2, muhat, kk, jj, ii) - 0.5 * L_mu_muhat0(m, 2, muhat, kk, jj + 1, ii);
+
+                        temp_sum_muhat += (0.5) * Ven * (sqrt_det_g_L * L_mu_muhat0_L) * (P_matrix(muhat, B, A)
+                            * ((1.5) * f0_scratch(A) - (0.5) * f0_scratch_p1(A) + (1.5) * f0_scratch_m1(A) - (0.5) * f0_scratch_m2(A))
+                            - std::copysign(1.0, L_mu_muhat0_L) * Pmod_matrix(muhat, B, A)
+                                * ((1.5) * f0_scratch_m1(A) - (0.5) * f0_scratch_m2(A) - (1.5) * f0_scratch(A) + (0.5) * f0_scratch_p1(A)));
+                      }
+                      partial_sum += temp_sum_muhat;
+                    }, Fminus);
+                    member.team_barrier();
+
+                    Real Fplus = 0.;
+                    Kokkos::parallel_reduce(Kokkos::TeamVectorRange(member, 0, nang1 + 1), [&](const int A, Real &partial_sum) {
+                      Real temp_sum_muhat = 0.;
+                      for (int muhat = 0; muhat < 4; muhat++) {
+                        Real L_mu_muhat0_R = -0.5 * L_mu_muhat0(m, 2, muhat, kk, jj, ii) + 1.5 * L_mu_muhat0(m, 2, muhat, kk, jj + 1, ii);
+
+                        temp_sum_muhat += (0.5) * Ven * (sqrt_det_g_R * L_mu_muhat0_R) * (P_matrix(muhat, B, A) *
+                            ((1.5) * f0_scratch_p2(A) - (0.5) * f0_scratch_p3(A) + (1.5) * f0_scratch_p1(A) - (0.5) * f0_scratch(A))
+                            - std::copysign(1.0, L_mu_muhat0_R) * Pmod_matrix(muhat, B, A) *
+                                ((1.5) * f0_scratch_p1(A) - (0.5) * f0_scratch(A) - (1.5) * f0_scratch_p2(A) + (0.5) * f0_scratch_p3(A)));
+                      }
+                      partial_sum += temp_sum_muhat;
+                    }, Fplus);
+                    member.team_barrier();
+
+                    flx1(m, enang, kk, jj, ii) += ((1.5) * Fminus - Favg - (0.5) * Fplus);
+                    flx1(m, enang, kk, jj + 1, ii) += ((0.5) * Fminus + Favg - (1.5) * Fplus);
+                  });
   }
 
 //--------------------------------------------------------------------------------------
