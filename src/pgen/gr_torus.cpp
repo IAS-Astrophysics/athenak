@@ -31,6 +31,7 @@
 #include <vector>
 
 #include "athena.hpp"
+#include "globals.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "coordinates/coordinates.hpp"
@@ -166,62 +167,82 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
 
   // load opacity table if needed
+  // load from file for rank 0 only
   if(!pmbp->prad->table_opacity){
-    int &ross_table_len_x_ = pmbp->prad->ross_table_len_x;
-    int &ross_table_len_y_ = pmbp->prad->ross_table_len_y;
-    int &planck_table_len_x_ = pmbp->prad->planck_table_len_x;
-    int &planck_table_len_y_ = pmbp->prad->planck_table_len_y;
+      int &ross_table_len_x_ = pmbp->prad->ross_table_len_x;
+      int &ross_table_len_y_ = pmbp->prad->ross_table_len_y;
+      int &planck_table_len_x_ = pmbp->prad->planck_table_len_x;
+      int &planck_table_len_y_ = pmbp->prad->planck_table_len_y;
 
       // open the file
+    if(global_variable::my_rank == 0){
 
-    FILE *fkappa, *flogt, *flogr, *fplanck;
-    if ( (fkappa=fopen("./aveopacity.txt","r"))==NULL ){
-      printf("Open input file error");
-      return;
-    }
+      FILE *fkappa, *flogt, *flogr, *fplanck;
+      if ( (fkappa=fopen("./aveopacity.txt","r"))==NULL ){
+        printf("Open input file error");
+        return;
+      }
 
-    if ( (fplanck=fopen("./PlanckOpacity.txt","r"))==NULL ){
-      printf("Open input file error");
-      return;
-    }
+      if ( (fplanck=fopen("./PlanckOpacity.txt","r"))==NULL ){
+        printf("Open input file error");
+        return;
+      }
 
-    if ( (flogt=fopen("./logT.txt","r"))==NULL ){
-      printf("Open input file error");
-      return;
-    }
+      if ( (flogt=fopen("./logT.txt","r"))==NULL ){
+        printf("Open input file error");
+        return;
+      }
 
-    if ( (flogr=fopen("./logRhoT.txt","r"))==NULL ){
-      printf("Open input file error");
-      return;
-    }
+      if ( (flogr=fopen("./logRhoT.txt","r"))==NULL ){
+        printf("Open input file error");
+        return;
+      }
 
       // load the data
-    for(int i=0; i<ross_table_len_x_; ++i){
-      fscanf(flogr,"%lf",&(pmbp->prad->ross_rho.h_view(i)));
-    }
-
-
-    for(int i=0; i<ross_table_len_y_; ++i){
-      fscanf(flogt,"%lf",&(pmbp->prad->ross_t.h_view(i)));
-    }
-
-    for(int j=0; j<ross_table_len_y_; ++j){
       for(int i=0; i<ross_table_len_x_; ++i){
-        fscanf(fkappa,"%lf",&(pmbp->prad->ross_table.h_view(j,i)));
+        fscanf(flogr,"%lf",&(pmbp->prad->ross_rho.h_view(i)));
       }
-    }
 
-    for(int j=0; j<ross_table_len_y_; ++j){
-      for(int i=0; i<ross_table_len_x_; ++i){
-        fscanf(fplanck,"%lf",&(pmbp->prad->planck_table.h_view(j,i)));
+
+      for(int i=0; i<ross_table_len_y_; ++i){
+        fscanf(flogt,"%lf",&(pmbp->prad->ross_t.h_view(i)));
       }
+
+      for(int j=0; j<ross_table_len_y_; ++j){
+        for(int i=0; i<ross_table_len_x_; ++i){
+          fscanf(fkappa,"%lf",&(pmbp->prad->ross_table.h_view(j,i)));
+        }
+      }
+
+      for(int j=0; j<ross_table_len_y_; ++j){
+        for(int i=0; i<ross_table_len_x_; ++i){
+          fscanf(fplanck,"%lf",&(pmbp->prad->planck_table.h_view(j,i)));
+        }
+      }
+
+
+      fclose(fkappa);
+      fclose(flogt);
+      fclose(flogr);
+      fclose(fplanck);
+
+      // MPI broad cast the data to different ranks
+#if MPI_PARALLEL_ENABLED
+
+      MPI_Bcast(&(pmbp->prad->ross_rho.h_view(0)), ross_table_len_x_,
+                                   MPI_ATHENA_REAL, 0, MPI_COMM_WORLD);
+      MPI_Bcast(&(pmbp->prad->ross_t.h_view(0)), ross_table_len_y_,
+                                    MPI_ATHENA_REAL, 0, MPI_COMM_WORLD);
+      MPI_Bcast(&(pmbp->prad->ross_table.h_view(0,0)),
+                  ross_table_len_y_*ross_table_len_x_,
+                  MPI_ATHENA_REAL, 0, MPI_COMM_WORLD);
+
+      MPI_Bcast(&(pmbp->prad->planck_table.h_view(0,0)),
+                  ross_table_len_y_*ross_table_len_x_,
+                  MPI_ATHENA_REAL, 0, MPI_COMM_WORLD);
+#endif
+
     }
-
-
-    fclose(fkappa);
-    fclose(flogt);
-    fclose(flogr);
-    fclose(fplanck);
 
     for(int i=0; i<ross_table_len_x_; ++i)
       pmbp->prad->planck_rho.h_view(i) = pmbp->prad->ross_rho.h_view(i);
@@ -229,22 +250,27 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     for(int i=0; i<ross_table_len_y_; ++i)
       pmbp->prad->planck_t.h_view(i) = pmbp->prad->ross_t.h_view(i);
 
-
-
       //synchronize host and device
-    pmbp->prad->ross_rho.template modify<HostMemSpace>();
-    pmbp->prad->ross_rho.template sync<DevExeSpace>();
+      pmbp->prad->ross_rho.template modify<HostMemSpace>();
+      pmbp->prad->ross_rho.template sync<DevExeSpace>();
 
-    pmbp->prad->ross_t.template modify<HostMemSpace>();
-    pmbp->prad->ross_t.template sync<DevExeSpace>();
+      pmbp->prad->ross_t.template modify<HostMemSpace>();
+      pmbp->prad->ross_t.template sync<DevExeSpace>();
 
-    pmbp->prad->planck_rho.template modify<HostMemSpace>();
-    pmbp->prad->planck_rho.template sync<DevExeSpace>();
+      pmbp->prad->planck_rho.template modify<HostMemSpace>();
+      pmbp->prad->planck_rho.template sync<DevExeSpace>();
 
-    pmbp->prad->planck_t.template modify<HostMemSpace>();
-    pmbp->prad->planck_t.template sync<DevExeSpace>();
+      pmbp->prad->planck_t.template modify<HostMemSpace>();
+      pmbp->prad->planck_t.template sync<DevExeSpace>();
+
+      pmbp->prad->ross_table.template modify<HostMemSpace>();
+      pmbp->prad->ross_table.template sync<DevExeSpace>();
+
+      pmbp->prad->planck_table.template modify<HostMemSpace>();
+      pmbp->prad->planck_table.template sync<DevExeSpace>();
 
   }
+
 
 
 
