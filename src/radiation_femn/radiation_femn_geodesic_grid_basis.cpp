@@ -295,7 +295,7 @@ Real FPNBasis(int l, int m, Real phi, Real theta) {
  * Calculated for (l,m) at point (phi, theta) on the sphere
  */
 KOKKOS_INLINE_FUNCTION Real dFPNBasisdphi(int l, int m, Real phi, Real theta) {
-  return - m * FPNBasis(l, -m, phi, theta);
+  return -m * FPNBasis(l, -m, phi, theta);
 }
 
 /* Theta derivative of FPN basis function
@@ -536,6 +536,18 @@ Real pXi1pTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, R
           + pow(xi1 * z1 + xi2 * z2 + z3 - (xi1 + xi2) * z3, 2)));
 }
 
+// partial xi1 / partial theta (alternate implementation)
+Real pXi1pThetaAlt(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
+  return -((pow(pow(x1 * xi1 + x2 * xi2 + x3 * xi3, 2) + pow(xi1 * y1 + xi2 * y2 + xi3 * y3, 2) + pow(xi1 * z1 + xi2 * z2 + xi3 * z3, 2), 1.5) *
+      sqrt(1 - pow(xi1 * z1 + xi2 * z2 + xi3 * z3, 2)
+          / (pow(x1 * xi1 + x2 * xi2 + x3 * xi3, 2) + pow(xi1 * y1 + xi2 * y2 + xi3 * y3, 2) + pow(xi1 * z1 + xi2 * z2 + xi3 * z3, 2)))) /
+      (pow(x2, 2) * pow(xi2, 2) * z1 + 2 * x2 * x3 * xi2 * xi3 * z1 + pow(x3, 2) * pow(xi3, 2) * z1 + xi1 * xi2 * y1 * y2 * z1 + pow(xi2, 2) * pow(y2, 2) * z1
+          + xi1 * xi3 * y1 * y3 * z1 +
+          2 * xi2 * xi3 * y2 * y3 * z1 + pow(xi3, 2) * pow(y3, 2) * z1 - xi1 * xi2 * pow(y1, 2) * z2 - pow(xi2, 2) * y1 * y2 * z2 - xi2 * xi3 * y1 * y3 * z2
+          - xi3 * y1 * (xi1 * y1 + xi2 * y2 + xi3 * y3) * z3 -
+          pow(x1, 2) * xi1 * (xi2 * z2 + xi3 * z3) - x1 * (x2 * xi2 + x3 * xi3) * (-(xi1 * z1) + xi2 * z2 + xi3 * z3)));
+}
+
 // ------------------------------------------------------------------------
 // partial xi2 / partial theta
 Real pXi2pTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
@@ -553,8 +565,8 @@ Real pXi2pTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, R
 Real dFEMBasisdxi(Real xi1, Real xi2, Real xi3, int basis_index, int basis_choice, int xi_index) {
   return 0.;
 }
-Real PartialFEMBasiswithoute(int ihat, int a, int t1, int t2, int t3, Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3,
-                              Real xi1, Real xi2, Real xi3, int basis_choice) {
+Real PdFEMBasisdOmega(int ihat, int a, int t1, int t2, int t3, Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3,
+                      Real xi1, Real xi2, Real xi3, int basis_choice) {
 
   int basis_index_a = (a == t1) * 1 + (a == t2) * 2 + (a == t3) * 3;
 
