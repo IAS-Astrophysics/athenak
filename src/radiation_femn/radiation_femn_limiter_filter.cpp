@@ -41,7 +41,7 @@ Real minmod2(Real a, Real b, Real c) {
 }
 
 TaskStatus RadiationFEMN::ApplyFilterLanczos(Driver *pdriver, int stage) {
-  /*auto &indcs = pmy_pack->pmesh->mb_indcs;
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
   int &is = indcs.is, &ie = indcs.ie;
   int &js = indcs.js, &je = indcs.je;
   int &ks = indcs.ks, &ke = indcs.ke;
@@ -59,7 +59,7 @@ TaskStatus RadiationFEMN::ApplyFilterLanczos(Driver *pdriver, int stage) {
             auto lval = angular_grid(B, 0);
 
             f0_(m, enang, k, j, i) = pow(Lanczos(Real(lval) / (Real(lmax) + 1.0)), filtstrength) * f0_(m, enang, k, j, i);
-          });*/
+          });
 
   return TaskStatus::complete;
 }
