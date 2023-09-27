@@ -58,26 +58,45 @@ void ProblemGenerator::RadiationFEMNLinetest(ParameterInput *pin, const bool res
     exit(EXIT_FAILURE);
   }
   Real omega = 0.03; // Garrett and Hauck's recommendation for the choice of omega
-
   auto &f0_ = pmbp->pradfemn->f0;
-  par_for("pgen_linetest_radiation_femn", DevExeSpace(), 0, (pmbp->nmb_thispack - 1), 0, npts1, ks, ke, js, je, is, ie,
-          KOKKOS_LAMBDA(int m, int A, int k, int j, int i) {
 
-            Real &x1min = size.d_view(m).x1min;
-            Real &x1max = size.d_view(m).x1max;
-            int nx1 = indcs.nx1;
-            Real x1 = CellCenterX(i - is, nx1, x1min, x1max);
+  if(pmbp->pradfemn->fpn == 0) {
+    par_for("pgen_linetest_radiation_femn", DevExeSpace(), 0, (pmbp->nmb_thispack - 1), 0, npts1, ks, ke, js, je, is, ie,
+            KOKKOS_LAMBDA(int m, int A, int k, int j, int i) {
 
-            Real &x2min = size.d_view(m).x2min;
-            Real &x2max = size.d_view(m).x2max;
-            int nx2 = indcs.nx2;
-            Real x2 = CellCenterX(j - js, nx2, x2min, x2max);
+              Real &x1min = size.d_view(m).x1min;
+              Real &x1max = size.d_view(m).x1max;
+              int nx1 = indcs.nx1;
+              Real x1 = CellCenterX(i - is, nx1, x1min, x1max);
 
-            // Implement Eqn. (58) of Garrett & Hauck 2013 (DOI: 10.1080/00411450.2014.910226)
-            f0_(m, A, k, j, i) = std::max(exp(-(x1 * x1 + x2 * x2) / (2.0 * omega * omega)) / (8.0 * M_PI * omega * omega), 1e-4);
+              Real &x2min = size.d_view(m).x2min;
+              Real &x2max = size.d_view(m).x2max;
+              int nx2 = indcs.nx2;
+              Real x2 = CellCenterX(j - js, nx2, x2min, x2max);
 
-          }
-  );
+              // Implement Eqn. (58) of Garrett & Hauck 2013 (DOI: 10.1080/00411450.2014.910226)
+              f0_(m, A, k, j, i) = std::max(exp(-(x1 * x1 + x2 * x2) / (2.0 * omega * omega)) / (8.0 * M_PI * omega * omega), 1e-4);
+
+            });
+  } else {
+    par_for("pgen_linetest_radiation_fpn", DevExeSpace(), 0, (pmbp->nmb_thispack - 1), ks, ke, js, je, is, ie,
+            KOKKOS_LAMBDA(int m, int k, int j, int i) {
+
+              Real &x1min = size.d_view(m).x1min;
+              Real &x1max = size.d_view(m).x1max;
+              int nx1 = indcs.nx1;
+              Real x1 = CellCenterX(i - is, nx1, x1min, x1max);
+
+              Real &x2min = size.d_view(m).x2min;
+              Real &x2max = size.d_view(m).x2max;
+              int nx2 = indcs.nx2;
+              Real x2 = CellCenterX(j - js, nx2, x2min, x2max);
+
+              // Implement Eqn. (58) of Garrett & Hauck 2013 (DOI: 10.1080/00411450.2014.910226)
+              f0_(m, 0, k, j, i) = std::max(exp(-(x1 * x1 + x2 * x2) / (2.0 * omega * omega)) / (8.0 * M_PI * omega * omega), 1e-4);
+
+            });
+  }
 
   return;
 }
