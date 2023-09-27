@@ -64,6 +64,8 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                     f0_scratch_m1(idx) = f0_(m, en * num_points + idx, kk, jj, ii - 1);
                     f0_scratch_m2(idx) = f0_(m, en * num_points + idx, kk, jj, ii - 2);
                   });
+
+                  //ApplyClosure(member, num_points, m, en, kk, jj, ii, f0_, f0_scratch, f0_scratch_p1, f0_scratch_p2, f0_scratch_p3, f0_scratch_m1, f0_scratch_m2);
                   member.team_barrier();
                   // ----------------------------------------------------
 
@@ -302,72 +304,6 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                     flx3(m, enang, kk + 1, jj, ii) = ((0.5) * Fminus + Favg - (1.5) * Fplus);
                   });
   }
-
-  /*
-  auto &flx3 = iflx.x3f;
-  Kokkos::deep_copy(flx3,
-                    0.);
-  if (three_d) {
-    par_for("radiation_femn_flux_z",
-            DevExeSpace(),
-            0, nmb1, ks,
-            int(ke
-                    / 2) + 1, js, je, is, ie, 0, npts1, 0, nang1, 0, 3,
-            KOKKOS_LAMBDA(
-                const int m,
-                const int k,
-                const int j,
-                const int i,
-                const int enang,
-                const int A,
-                const int muhat
-            ) {
-
-              auto kk = 2 * k - 2;
-              auto jj = j;
-              auto ii = i;
-
-// phase space indices
-              RadiationFEMNPhaseIndices idcs = IndicesComponent(enang);
-              int en = idcs.eindex;
-              int B = idcs.angindex;
-              int Abar = en * num_points + A;
-
-// factor from energy contribution
-              auto Ven = (1. / 3.) * (pow(energy_grid(en + 1), 3) - pow(energy_grid(en), 3));
-
-// compute quantities at the left and right boundaries
-              double sqrt_det_g_L = 1.5 * sqrt_det_g(m, kk, jj, ii) - 0.5 * sqrt_det_g(m, kk + 1, jj, ii);
-              double sqrt_det_g_R = -0.5 * sqrt_det_g(m, kk, jj, ii) + 1.5 * sqrt_det_g(m, kk + 1, jj, ii);
-              double L_mu_muhat0_L = 1.5 * L_mu_muhat0(m, 3, muhat, kk, jj, ii) - 0.5 * L_mu_muhat0(m, 3, muhat, kk + 1, jj, ii);
-              double L_mu_muhat0_R = -0.5 * L_mu_muhat0(m, 3, muhat, kk, jj, ii) + 1.5 * L_mu_muhat0(m, 3, muhat, kk + 1, jj, ii);
-
-// compute Fbar
-              auto Favg = (0.5) * Ven * (P_matrix(muhat, B, A) * sqrt_det_g(m, kk, jj, ii) * L_mu_muhat0(m, 3, muhat, kk, jj, ii) * f0_(m, Abar, kk, jj, ii)
-                  + P_matrix(muhat, B, A) * sqrt_det_g(m, kk + 1, jj, ii) * L_mu_muhat0(m, 3, muhat, kk + 1, jj, ii) * f0_(m, Abar, kk + 1, jj, ii));
-
-// compute Fminus
-              auto Fminus = (0.5) * Ven * (sqrt_det_g_L * L_mu_muhat0_L) * (P_matrix(muhat, B, A)
-                  * ((1.5) * f0_(m, Abar, kk, jj, ii) - (0.5) * f0_(m, Abar, kk + 1, jj, ii) + (1.5) * f0_(m, Abar, kk - 1, jj, ii)
-                      - (0.5) * f0_(m, Abar, kk - 2, jj, ii))
-                  - std::copysign(1.0, L_mu_muhat0_L) * Pmod_matrix(muhat, B, A)
-                      * ((1.5) * f0_(m, Abar, kk - 1, jj, ii) - (0.5) * f0_(m, Abar, kk - 2, jj, ii) - (1.5) * f0_(m, Abar, kk, jj, ii)
-                          + (0.5) * f0_(m, Abar, kk + 1, jj, ii)));
-
-// compute Fplus
-              auto Fplus = (0.5) * Ven * (sqrt_det_g_R * L_mu_muhat0_R) * (P_matrix(muhat, B, A) *
-                  ((1.5) * f0_(m, Abar, kk + 2, jj, ii) - (0.5) * f0_(m, Abar, kk + 3, jj, ii) + (1.5) * f0_(m, Abar, kk + 1, jj, ii) - (0.5) * f0_(m, Abar, kk, jj, ii))
-                  - std::copysign(1.0, L_mu_muhat0_R) * Pmod_matrix(muhat, B, A) *
-                      ((1.5) * f0_(m, Abar, kk + 1, jj, ii) - (0.5) * f0_(m, Abar, kk, jj, ii) - (1.5) * f0_(m, Abar, kk + 2, jj, ii)
-                          + (0.5) * f0_(m, Abar, kk + 3, jj, ii)));
-
-// complute fluxes
-              flx3(m, enang, kk, jj, ii
-              ) += ((1.5) * Fminus - Favg - (0.5) * Fplus);
-              flx3(m, enang, kk
-                  + 1, jj, ii) += ((0.5) * Fminus + Favg - (1.5) * Fplus);
-            });
-  } */
 
   return TaskStatus::complete;
 }

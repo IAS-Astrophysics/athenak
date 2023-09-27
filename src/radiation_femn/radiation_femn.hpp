@@ -186,6 +186,7 @@ class RadiationFEMN {
   void ComputePMatrices();
   void TetradInitialize();
   // ---------------------------------------------------------------------------
+  // Functions for closures
 
  private:
   MeshBlockPack *pmy_pack;  // ptr to MeshBlockPack containing this RadiationFEMN
@@ -203,14 +204,10 @@ void MatLumping(DvceArray2D<Real> A_matrix);
 void MatEig(std::vector<std::vector<Real>> &matrix, std::vector<std::complex<Real>> &eigval, std::vector<std::vector<std::complex<Real>>> &eigvec);
 void ZeroSpeedCorrection(HostArray2D<Real> matrix, HostArray2D<Real> matrix_corrected, Real v);
 
-KOKKOS_INLINE_FUNCTION void ApplyClosure() {
-
-};
-
-KOKKOS_INLINE_FUNCTION void ApplyRestriction() {
-
-};
-
+KOKKOS_INLINE_FUNCTION
+void ApplyClosure(TeamMember_t member, int num_points, int m, int en, int kk, int jj, int ii, DvceArray5D<Real> f0, ScrArray1D<Real> f0_scratch, ScrArray1D<Real> f0_scratch_p1,
+                                         ScrArray1D<Real> f0_scratch_p2, ScrArray1D<Real> f0_scratch_p3, ScrArray1D<Real> f0_scratch_m1,
+                                         ScrArray1D<Real> f0_scratch_m2);
 } // namespace radiationfemn
 
 
