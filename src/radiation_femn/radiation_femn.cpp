@@ -119,6 +119,8 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   Kokkos::realloc(Pmod_matrix, 4, num_points, num_points);
   Kokkos::realloc(G_matrix, 4, 4, 3, num_points, num_points);     // G^nuhat^muhat_ihat_A^B (no energy)
   Kokkos::realloc(F_matrix, 4, 4, 3, num_points, num_points);     // F^nuhat^nuhat_ihat_A^B
+  Kokkos::realloc(e_source, num_points);
+  Kokkos::realloc(S_source, num_points, num_points);
 
   Kokkos::realloc(angular_grid, num_points, 2);                   // angular information (phi, theta) or (l, m)
 
@@ -227,8 +229,6 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   }
 
   if(rad_source) {
-    Kokkos::realloc(e_source, num_points);
-    Kokkos::realloc(S_source, num_points, num_points);
 
     Kokkos::realloc(eta, nmb, ncells3, ncells2, ncells1);
     Kokkos::realloc(kappa_a, nmb, ncells3, ncells2, ncells1);

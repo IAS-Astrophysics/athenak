@@ -196,5 +196,10 @@ void ProblemGenerator::RadiationFEMNGridtestFPN(ParameterInput *pin, const bool 
     fout15 << std::endl;
   }
 
+  // save e-matrix
+  std::ofstream fout16(pathdir + filenamepart + "_e_matrix" + ".txt");
+  for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
+    fout16 << pmbp->pradfemn->e_source(i) << std::endl;
+  }
   return;
 }

@@ -30,323 +30,131 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
 
   if (pmbp->pradfemn == nullptr) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "The radiation FEM_N grid test can only be run with radiation-femn, but no "
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl << "The radiation FEM_N grid test can only be run with radiation-femn, but no "
               << "<radiation-femn> block in input file" << std::endl;
     exit(EXIT_FAILURE);
   }
 
-  if (pmbp->pradfemn->fpn) {
-    std::string pathdir = pin->GetString("radiation-femn", "savedir");
+  std::string pathdir = pin->GetString("radiation-femn", "savedir");
 
-    std::string filenamepart = "/fpn_lmax_" + std::to_string(pmbp->pradfemn->lmax);
+  std::string filenamepart = "/femn_" + std::to_string(pmbp->pradfemn->num_points);
 
-    // save metadata
-    std::ofstream fout(pathdir + filenamepart + "_metadata" + ".txt");
-    fout << "FP_N metadata: " << std::endl;
-    fout << std::endl;
-    fout << "lmax = " << pmbp->pradfemn->lmax << std::endl;
-    fout << "num_points = " << pmbp->pradfemn->num_points << std::endl;
-    fout << "quadrature_num_points = " << pmbp->pradfemn->scheme_num_points << std::endl;
-    fout << "quadrature_name = " << pmbp->pradfemn->scheme_name << std::endl;
-    fout << std::endl;
-    fout << "l m" << std::endl;
-
-    for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
-      fout << pmbp->pradfemn->angular_grid(i, 0) << " " << pmbp->pradfemn->angular_grid(i, 1) << std::endl;
-    }
-
-    // save mass matrix
-    std::ofstream fout2(pathdir + filenamepart + "_mass_matrix" + ".txt");
-
-    for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
-      for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
-        fout2 << pmbp->pradfemn->mass_matrix(i, j) << " ";
-      }
-      fout2 << std::endl;
-    }
-
-    // save stiffness-x matrix
-    std::ofstream fout3(pathdir + filenamepart + "_stiffness_x" + ".txt");
-    for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
-      for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
-        fout3 << pmbp->pradfemn->stiffness_matrix_x(i, j) << " ";
-      }
-      fout3 << std::endl;
-    }
-
-    // save stiffness-y matrix
-    std::ofstream fout4(pathdir + filenamepart + "_stiffness_y" + ".txt");
-    for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
-      for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
-        fout4 << pmbp->pradfemn->stiffness_matrix_y(i, j) << " ";
-      }
-      fout4 << std::endl;
-    }
-
-    // save stiffness-z matrix
-    std::ofstream fout5(pathdir + filenamepart + "_stiffness_z" + ".txt");
-    for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
-      for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
-        fout5 << pmbp->pradfemn->stiffness_matrix_z(i, j) << " ";
-      }
-      fout5 << std::endl;
-    }
-
-    // save quadrature information
-    std::ofstream fout6(pathdir + filenamepart + "_quadrature_info" + ".txt");
-    for (int i = 0; i < pmbp->pradfemn->scheme_num_points; i++) {
-      fout6 << pmbp->pradfemn->scheme_points(i, 0) << " " << pmbp->pradfemn->scheme_points(i, 1) << " "
-            << pmbp->pradfemn->scheme_points(i, 2) << " " << pmbp->pradfemn->scheme_weights(i) << std::endl;
-    }
-
-  } else {
-    std::string pathdir = pin->GetString("radiation-femn", "savedir");
-
-    std::string filenamepart = "/femn_" + std::to_string(pmbp->pradfemn->num_points);
-
-    // save metadata
-    std::ofstream fout(pathdir + filenamepart + "_metadata" + ".txt");
-    fout << "FEMN_N metadata: " << std::endl;
-    fout << std::endl;
-    fout << "num_ref = " << pmbp->pradfemn->num_ref << std::endl;
-    fout << "num_points = " << pmbp->pradfemn->num_points << std::endl;
-    fout << "num_edges = " << pmbp->pradfemn->num_edges << std::endl;
-    fout << "num_triangles = " << pmbp->pradfemn->num_triangles << std::endl;
-    fout << "quadrature_num_points = " << pmbp->pradfemn->scheme_num_points << std::endl;
-    fout << "quadrature_name = " << pmbp->pradfemn->scheme_name << std::endl;
-
-    std::ofstream fout2(pathdir + filenamepart + "_grid_coordinates" + ".txt");
-    fout2 << "phi theta" << std::endl;
-    for (size_t i = 0; i < pmbp->pradfemn->num_points; i++) {
-      fout2 << pmbp->pradfemn->angular_grid(i, 0) << " " << pmbp->pradfemn->angular_grid(i, 1) << std::endl;
-    }
-
-    // save mass matrix
-    double sum = 0.;
-    std::ofstream fout3(pathdir + filenamepart + "_mass_matrix" + ".txt");
-    for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
-      for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
-        fout3 << pmbp->pradfemn->mass_matrix(i, j) << " ";
-        sum += pmbp->pradfemn->mass_matrix(i, j);
-      }
-      fout3 << std::endl;
-    }
-    fout << "sum of mass matrix = " << sum << std::endl;
-
-    // save stiffness-x matrix
-    std::ofstream fout4(pathdir + filenamepart + "_stiffness_x" + ".txt");
-    for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
-      for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
-        fout4 << pmbp->pradfemn->stiffness_matrix_x(i, j) << " ";
-      }
-      fout4 << std::endl;
-    }
-
-    // save stiffness-y matrix
-    std::ofstream fout5(pathdir + filenamepart + "_stiffness_y" + ".txt");
-    for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
-      for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
-        fout5 << pmbp->pradfemn->stiffness_matrix_y(i, j) << " ";
-      }
-      fout5 << std::endl;
-    }
-
-    // save stiffness-z matrix
-    std::ofstream fout6(pathdir + filenamepart + "_stiffness_z" + ".txt");
-    for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
-      for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
-        fout6 << pmbp->pradfemn->stiffness_matrix_z(i, j) << " ";
-      }
-      fout6 << std::endl;
-    }
-
-    // save quadrature information
-    std::ofstream fout7(pathdir + filenamepart + "_quadrature_info" + ".txt");
-    for (int i = 0; i < pmbp->pradfemn->scheme_num_points; i++) {
-      fout7 << pmbp->pradfemn->scheme_points(i, 0) << " " << pmbp->pradfemn->scheme_points(i, 1) << " "
-            << pmbp->pradfemn->scheme_points(i, 2) << " " << pmbp->pradfemn->scheme_weights(i) << std::endl;
-    }
-
-    // save lumped mass matrix
-    sum = 0.;
-    std::ofstream fout8(pathdir + filenamepart + "_mass_matrix_lumped" + ".txt");
-    for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
-      for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
-        fout8 << pmbp->pradfemn->mass_matrix(i, j) << " ";
-        sum += pmbp->pradfemn->mass_matrix(i, j);
-      }
-      fout8 << std::endl;
-    }
-    fout << "sum of lumped mass matrix = " << sum << std::endl;
-
-    // save P matrix 0
-    std::ofstream fout9(pathdir + filenamepart + "_P_matrix_0" + ".txt");
-    for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
-      for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
-        fout9 << pmbp->pradfemn->P_matrix(0, i, j) << " ";
-      }
-      fout9 << std::endl;
-    }
-
-    // save P matrix 1
-    std::ofstream fout10(pathdir + filenamepart + "_P_matrix_1" + ".txt");
-    for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
-      for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
-        fout10 << pmbp->pradfemn->P_matrix(1, i, j) << " ";
-      }
-      fout10 << std::endl;
-    }
-
-    // save P matrix 2
-    std::ofstream fout11(pathdir + filenamepart + "_P_matrix_2" + ".txt");
-    for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
-      for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
-        fout11 << pmbp->pradfemn->P_matrix(2, i, j) << " ";
-      }
-      fout11 << std::endl;
-    }
-
-    // save P matrix 3
-    std::ofstream fout12(pathdir + filenamepart + "_P_matrix_3" + ".txt");
-    for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
-      for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
-        fout12 << pmbp->pradfemn->P_matrix(3, i, j) << " ";
-      }
-      fout12 << std::endl;
-    }
-
-  }
-
-  /*
-  std::string pathdir = pin->GetString("radiation-femn", "geogrid_savedir");
-  std::string filenamepart = "/geogrid_basis_" + std::to_string(pmbp->pradfemn->basis) + "_ref_" +
-                             std::to_string(pmbp->pradfemn->num_ref);
-
+  // save metadata
   std::ofstream fout(pathdir + filenamepart + "_metadata" + ".txt");
-  fout << "Geodesic grid metadata: " << std::endl;
-  fout << "basis = " << pmbp->pradfemn->basis << std::endl;
+  fout << "FEMN_N metadata: " << std::endl;
+  fout << std::endl;
   fout << "num_ref = " << pmbp->pradfemn->num_ref << std::endl;
-  fout << "nangles = " << pmbp->pradfemn->nangles << std::endl;
   fout << "num_points = " << pmbp->pradfemn->num_points << std::endl;
   fout << "num_edges = " << pmbp->pradfemn->num_edges << std::endl;
   fout << "num_triangles = " << pmbp->pradfemn->num_triangles << std::endl;
+  fout << "quadrature_num_points = " << pmbp->pradfemn->scheme_num_points << std::endl;
+  fout << "quadrature_name = " << pmbp->pradfemn->scheme_name << std::endl;
 
-  std::ofstream fout2(pathdir + filenamepart + "_coords_xyzrthph" + ".txt");
+  std::ofstream fout2(pathdir + filenamepart + "_grid_coordinates" + ".txt");
+  fout2 << "phi theta" << std::endl;
   for (size_t i = 0; i < pmbp->pradfemn->num_points; i++) {
-      fout2 << pmbp->pradfemn->x(i) << " " << pmbp->pradfemn->y(i) << " " << pmbp->pradfemn->z(i) << " "
-            << pmbp->pradfemn->r(i) << " " << pmbp->pradfemn->theta(i) << " " << pmbp->pradfemn->phi(i)
-            << std::endl;
+    fout2 << pmbp->pradfemn->angular_grid(i, 0) << " " << pmbp->pradfemn->angular_grid(i, 1) << std::endl;
   }
 
-  std::ofstream fout3(pathdir + filenamepart + "_triangles" + ".txt");
-  for (size_t i = 0; i < pmbp->pradfemn->num_triangles; i++) {
-      fout3 << pmbp->pradfemn->triangles(i, 0) << " " << pmbp->pradfemn->triangles(i, 1) << " "
-            << pmbp->pradfemn->triangles(i, 2) << std::endl;
+  // save mass matrix
+  double sum = 0.;
+  std::ofstream fout3(pathdir + filenamepart + "_mass_matrix" + ".txt");
+  for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
+    for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
+      fout3 << pmbp->pradfemn->mass_matrix(i, j) << " ";
+      sum += pmbp->pradfemn->mass_matrix(i, j);
+    }
+    fout3 << std::endl;
+  }
+  fout << "sum of mass matrix = " << sum << std::endl;
+
+  // save stiffness-x matrix
+  std::ofstream fout4(pathdir + filenamepart + "_stiffness_x" + ".txt");
+  for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
+    for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
+      fout4 << pmbp->pradfemn->stiffness_matrix_x(i, j) << " ";
+    }
+    fout4 << std::endl;
   }
 
-  std::ofstream fout4(pathdir + filenamepart + "_edges" + ".txt");
-  for (size_t i = 0; i < pmbp->pradfemn->num_edges; i++) {
-      fout4 << pmbp->pradfemn->edges(i, 0) << " " << pmbp->pradfemn->edges(i, 1) << std::endl;
+  // save stiffness-y matrix
+  std::ofstream fout5(pathdir + filenamepart + "_stiffness_y" + ".txt");
+  for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
+    for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
+      fout5 << pmbp->pradfemn->stiffness_matrix_y(i, j) << " ";
+    }
+    fout5 << std::endl;
   }
 
-  std::ofstream fout5(pathdir + filenamepart + "_massmatrix" + ".txt");
-  auto mass_matrix = pmbp->pradfemn->mass_matrix;
-  double mass_matrix_sum{0.};
-  for (size_t i = 0; i < pmbp->pradfemn->num_points; i++) {
-      for (size_t j = 0; j < pmbp->pradfemn->num_points; j++) {
-          fout5 << mass_matrix(i, j) << " ";
-          mass_matrix_sum += mass_matrix(i, j);
-      }
-      fout5 << std::endl;
+  // save stiffness-z matrix
+  std::ofstream fout6(pathdir + filenamepart + "_stiffness_z" + ".txt");
+  for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
+    for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
+      fout6 << pmbp->pradfemn->stiffness_matrix_z(i, j) << " ";
+    }
+    fout6 << std::endl;
   }
 
-  std::ofstream fout6(pathdir + filenamepart + "_stiffness_x" + ".txt");
-  auto stiffness_x = pmbp->pradfemn->stiffness_matrix_x;
-  for (size_t i = 0; i < pmbp->pradfemn->num_points; i++) {
-      for (size_t j = 0; j < pmbp->pradfemn->num_points; j++) {
-          fout6 << stiffness_x(i, j) << " ";
-      }
-      fout6 << std::endl;
+  // save quadrature information
+  std::ofstream fout7(pathdir + filenamepart + "_quadrature_info" + ".txt");
+  for (int i = 0; i < pmbp->pradfemn->scheme_num_points; i++) {
+    fout7 << pmbp->pradfemn->scheme_points(i, 0) << " " << pmbp->pradfemn->scheme_points(i, 1) << " " << pmbp->pradfemn->scheme_points(i, 2) << " "
+          << pmbp->pradfemn->scheme_weights(i) << std::endl;
   }
 
-  std::ofstream fout7(pathdir + filenamepart + "_stiffness_y" + ".txt");
-  auto stiffness_y = pmbp->pradfemn->stiffness_matrix_y;
-  for (size_t i = 0; i < pmbp->pradfemn->num_points; i++) {
-      for (size_t j = 0; j < pmbp->pradfemn->num_points; j++) {
-          fout7 << stiffness_y(i, j) << " ";
-      }
-      fout7 << std::endl;
+  // save lumped mass matrix
+  sum = 0.;
+  std::ofstream fout8(pathdir + filenamepart + "_mass_matrix_lumped" + ".txt");
+  for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
+    for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
+      fout8 << pmbp->pradfemn->mass_matrix(i, j) << " ";
+      sum += pmbp->pradfemn->mass_matrix(i, j);
+    }
+    fout8 << std::endl;
+  }
+  fout << "sum of lumped mass matrix = " << sum << std::endl;
+
+  // save P matrix 0
+  std::ofstream fout9(pathdir + filenamepart + "_P_matrix_0" + ".txt");
+  for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
+    for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
+      fout9 << pmbp->pradfemn->P_matrix(0, i, j) << " ";
+    }
+    fout9 << std::endl;
   }
 
-  std::ofstream fout8(pathdir + filenamepart + "_stiffness_z" + ".txt");
-  auto stiffness_z = pmbp->pradfemn->stiffness_matrix_z;
-  for (size_t i = 0; i < pmbp->pradfemn->num_points; i++) {
-      for (size_t j = 0; j < pmbp->pradfemn->num_points; j++) {
-          fout8 << stiffness_z(i, j) << " ";
-      }
-      fout8 << std::endl;
+  // save P matrix 1
+  std::ofstream fout10(pathdir + filenamepart + "_P_matrix_1" + ".txt");
+  for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
+    for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
+      fout10 << pmbp->pradfemn->P_matrix(1, i, j) << " ";
+    }
+    fout10 << std::endl;
   }
 
-  std::cout << std::endl;
-  std::cout << "-------------------------" << std::endl;
-  std::cout << "Geodesic grid information" << std::endl;
-  std::cout << "-------------------------" << std::endl;
-  std::cout << "Choice of basis: " << pmbp->pradfemn->basis << std::endl;
-  std::cout << "Refinement level: " << pmbp->pradfemn->num_ref << std::endl;
-  std::cout << "The sum of all the elements of the mass matrix is: " << mass_matrix_sum << std::endl;
-  std::cout << std::endl;
-
-  std::cout << "End of information " << std::endl;
-
-  std::cout << "--------------------------------------------" << std::endl;
-  std::cout << "Base geodesic grid on HostArray test" << std::endl;
-  std::cout << "--------------------------------------------" << std::endl;
-
-  int geogrid_level;
-  int geogrid_num_points;
-  int geogrid_num_edges;
-  int geogrid_num_triangles;
-  HostArray1D<Real> x;
-  HostArray1D<Real> y;
-  HostArray1D<Real> z;
-  HostArray1D<Real> r;
-  HostArray1D<Real> theta;
-  HostArray1D<Real> phi;
-  HostArray2D<int> edges;
-  HostArray2D<int> triangles;
-
-  radiationfemn::GeodesicGridBaseGenerate(geogrid_level, geogrid_num_points, geogrid_num_edges, geogrid_num_triangles, x, y, z, r, theta, phi, edges, triangles);
-
-  std::cout << std::endl;
-  std::cout << "x y z r theta phi" << std::endl;
-  for (size_t i = 0; i < geogrid_num_points; i++) {
-      std::cout << x(i) << " " << y(i) << " " << z(i) << " "
-            << r(i) << " " << theta(i) << " " << phi(i)
-            << std::endl;
+  // save P matrix 2
+  std::ofstream fout11(pathdir + filenamepart + "_P_matrix_2" + ".txt");
+  for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
+    for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
+      fout11 << pmbp->pradfemn->P_matrix(2, i, j) << " ";
+    }
+    fout11 << std::endl;
   }
 
-  std::cout << std::endl;
-  std::cout << "Number of edges: " << edges.size()/2 << std::endl;
-  std::cout << "Number of triangles: " << triangles.size()/3 << std::endl;
-  std::cout << std::endl;
-
-  radiationfemn::GeodesicGridRefine(geogrid_level, geogrid_num_points, geogrid_num_edges, geogrid_num_triangles, x, y, z, r, theta, phi, edges, triangles);
-
-  std::cout << "Refine the geodesic grid by 1 level" << std::endl;
-  std::cout << std::endl;
-  std::cout << "x y z r theta phi" << std::endl;
-  for (size_t i = 0; i < geogrid_num_points; i++) {
-      std::cout << x(i) << " " << y(i) << " " << z(i) << " "
-                << r(i) << " " << theta(i) << " " << phi(i)
-                << std::endl;
+  // save P matrix 3
+  std::ofstream fout12(pathdir + filenamepart + "_P_matrix_3" + ".txt");
+  for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
+    for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
+      fout12 << pmbp->pradfemn->P_matrix(3, i, j) << " ";
+    }
+    fout12 << std::endl;
   }
 
-  std::cout << std::endl;
-  std::cout << "Number of edges: " << edges.size()/2 << std::endl;
-  std::cout << "Number of triangles: " << triangles.size()/3 << std::endl;
-  std::cout << std::endl;
+  // save e-matrix
+  std::ofstream fout13(pathdir + filenamepart + "_e_matrix" + ".txt");
+  for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
+    fout13 << pmbp->pradfemn->e_source(i) << std::endl;
+  }
 
-  */
   return;
 }
