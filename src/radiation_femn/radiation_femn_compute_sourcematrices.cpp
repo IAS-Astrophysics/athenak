@@ -18,15 +18,39 @@ void RadiationFEMN::ComputeSourceMatrices() {
   std::cout << "Computing source matrices ..." << std::endl;
 
   auto mm_ = pmy_pack->pradfemn->mass_matrix;
+  auto e_source_ = pmy_pack->pradfemn->e_source;
+  auto S_source_ = pmy_pack->pradfemn->S_source;
 
   HostArray2D<Real> mass_inv_temp;
   Kokkos::realloc(mass_inv_temp, num_points, num_points);
   radiationfemn::LUInverse(mm_, mass_inv_temp);
 
   HostArray1D<Real> e_source_temp;
-  Kokkos::realloc(e_source_temp, num_points);
+  HostArray1D<Real> e_source_temp_mod;
   HostArray2D<Real> S_source_temp;
+  HostArray2D<Real> S_source_temp_mod;
+  Kokkos::realloc(e_source_temp, num_points);
+  Kokkos::realloc(e_source_temp_mod, num_points);
   Kokkos::realloc(S_source_temp, num_points, num_points);
+  Kokkos::realloc(S_source_temp_mod, num_points, num_points);
+
+  Kokkos::deep_copy(e_source_temp, e_source_);
+
+  Kokkos::deep_copy(e_source_temp_mod, 0.);
+  Kokkos::deep_copy(S_source_temp, 0.);
+  Kokkos::deep_copy(S_source_temp_mod, 0.);
+
+  std::cout << "Constructing the source matrices ..." << std::endl;
+  for (int i = 0; i < num_points; i++) {
+    for (int j = 0; j < num_points; j++) {
+      e_source_temp_mod(i) += mass_inv_temp(i,j) * e_source_temp(j);
+      S_source_temp(i,j) = e_source_temp(i) * e_source_temp(j);
+    }
+  }
+  radiationfemn::MatMultiply(mass_inv_temp, S_source_temp, S_source_temp_mod);
+
+  Kokkos::deep_copy(e_source_, e_source_temp_mod);
+  Kokkos::deep_copy(S_source_, S_source_temp_mod);
 
 }
 
