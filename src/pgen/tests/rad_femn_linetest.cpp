@@ -93,7 +93,7 @@ void ProblemGenerator::RadiationFEMNLinetest(ParameterInput *pin, const bool res
               Real x2 = CellCenterX(j - js, nx2, x2min, x2max);
 
               // Implement Eqn. (58) of Garrett & Hauck 2013 (DOI: 10.1080/00411450.2014.910226)
-              f0_(m, 0, k, j, i) = std::max(exp(-(x1 * x1 + x2 * x2) / (2.0 * omega * omega)) / (8.0 * M_PI * omega * omega), 1e-4);
+              f0_(m, 0, k, j, i) = 2. * sqrt(M_PI) * std::max(exp(-(x1 * x1 + x2 * x2) / (2.0 * omega * omega)) / (8.0 * M_PI * omega * omega), 1e-4);
 
             });
   }

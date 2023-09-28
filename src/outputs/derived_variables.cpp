@@ -373,7 +373,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       Real Eval = 0.;
       Kokkos::parallel_reduce(Kokkos::TeamVectorRange(member, 0, neng), [&](const int en, Real &partial_sum) {
         Real Sen = (pow(energy_grid_(en + 1), 4) - pow(energy_grid_(en), 4)) / 4.0;
-        partial_sum += Sen * 4. * M_PI * f0_(m, en * nmodes, k, j, i);
+        partial_sum += Sen * 2. * sqrt(M_PI) * f0_(m, en * nmodes, k, j, i);
         }, Eval);
         member.team_barrier();
 
