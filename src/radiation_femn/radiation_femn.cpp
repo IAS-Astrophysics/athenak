@@ -51,9 +51,9 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
     e_source("e_source", 1),
     S_source("S_source", 1, 1),
     W_matrix("W_matrix", 1, 1),
-    eta("eta", 1, 1, 1, 1, 1),
-    kappa_a("kappa_a", 1, 1, 1, 1, 1),
-    kappa_s("kappa_s", 1, 1, 1, 1, 1),
+    eta("eta", 1, 1, 1, 1),
+    kappa_a("kappa_a", 1, 1, 1, 1),
+    kappa_s("kappa_s", 1, 1, 1, 1),
     beam_mask("beam_mask", 1, 1, 1, 1, 1, 1) {
 
   // -----------------------------------------------------------------------------------
@@ -226,20 +226,18 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
     Kokkos::realloc(coarse_f0, nmb, num_points_total, nccells3, nccells2, nccells1);
   }
 
-  // only do if sources are present @TODO: source implementation unfinished
-  /*
-  if (rad_source) {
-    //Kokkos::realloc(int_psi, num_points);
+  if(rad_source) {
     Kokkos::realloc(e_source, num_points);
     Kokkos::realloc(S_source, num_points, num_points);
-    Kokkos::realloc(W_matrix, num_points, num_points);
-    //  this->CalcIntPsi(); @TODO: fix during sources
 
     Kokkos::realloc(eta, nmb, ncells3, ncells2, ncells1);
     Kokkos::realloc(kappa_a, nmb, ncells3, ncells2, ncells1);
     Kokkos::realloc(kappa_s, nmb, ncells3, ncells2, ncells1);
+
+    this->ComputeSourceMatrices();
   }
 
+  /*
   if (beam_source) {
     Kokkos::realloc(beam_mask, nmb, num_points, ncells3, ncells2, ncells1);
   }

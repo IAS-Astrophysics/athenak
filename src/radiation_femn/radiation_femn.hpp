@@ -128,9 +128,9 @@ class RadiationFEMN {
   // ---------------------------------------------------------------------------
   // arrays for source terms
   // ---------------------------------------------------------------------------
-  DvceArray5D<Real> eta;          // emissivity [assume isotropic]
-  DvceArray5D<Real> kappa_s;      // scattering coefficient [assume isotropic]
-  DvceArray5D<Real> kappa_a;      // absorption coefficient [assume isotropic]
+  DvceArray4D<Real> eta;          // emissivity [assume isotropic]
+  DvceArray4D<Real> kappa_s;      // scattering coefficient [assume isotropic]
+  DvceArray4D<Real> kappa_a;      // absorption coefficient [assume isotropic]
 
   DvceArray6D<bool> beam_mask;    // boolean mask used for beam source term
 
@@ -184,6 +184,7 @@ class RadiationFEMN {
   void LoadFEMNMatrices();
   void LoadFPNMatrices();
   void ComputePMatrices();
+  void ComputeSourceMatrices();
   void TetradInitialize();
   // ---------------------------------------------------------------------------
   // Functions for closures
