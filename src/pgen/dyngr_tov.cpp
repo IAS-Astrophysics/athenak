@@ -21,6 +21,7 @@
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "adm/adm.hpp"
+#include "z4c/z4c.hpp"
 #include "coordinates/coordinates.hpp"
 #include "coordinates/cell_locations.hpp"
 #include "eos/eos.hpp"
@@ -393,6 +394,17 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
   else {
     pmbp->pdyngr->PrimToConInit(0, (n1-1), 0, (n2-1), 0, (n3-1));
+  }
+
+  if (pmbp->pz4c != nullptr) {
+    switch (indcs.ng) {
+      case 2: pmbp->pz4c->ADMToZ4c<2>(pmbp, pin);
+              break;
+      case 3: pmbp->pz4c->ADMToZ4c<3>(pmbp, pin);
+              break;
+      case 4: pmbp->pz4c->ADMToZ4c<4>(pmbp, pin);
+              break;
+    }
   }
 
   return;

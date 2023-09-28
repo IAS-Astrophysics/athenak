@@ -441,42 +441,33 @@ TaskStatus DynGR::SetTmunu(Driver *pdrive, int stage) {
                                   adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i));
       ivol(i) = 1.0/sqrt(detg);
     });
+    member.team_barrier();
     // Calculate the lower velocity components
-    // TODO(JMF): a view should be initialized to zero by default, but it would be well
-    // to check that this is actually the case.
-    /*par_for_inner(member, is, ie, [&](int const i) {
-      Real invW = 0.0;
-      for (int a = 0; a < 3; ++a) {
-        for (int b = 0; b < 3; ++b) {
-          v_d(a, i) += prim(m, IVX + b, k, j, i)*adm.g_dd(m, a, b, k, j, i);
-          invW += prim(m, IVX + a, k, j, i)*prim(m, IVX + b, k, j, i)*
-                    adm.g_dd(m, a, b, k, j, i);
-        }
-      }
-      invW = 1.0/sqrt(1. + invW);
-      for (int a = 0; a < 3; ++a) {
-        v_d(a, i) = v_d(a, i)*invW;
-      }
-    });*/
+    v_d.ZeroClear();
+    iW.ZeroClear();
+    B_d.ZeroClear();
     for (int a = 0; a < 3; ++a) {
       for (int b = 0; b < 3; ++b) {
         par_for_inner(member, is, ie, [&](int const i) {
           v_d(a, i) += prim(m, IVX + b, k, j, i)*adm.g_dd(m, a, b, k, j, i);
           iW(i) += prim(m, IVX + a, k, j, i)*prim(m, IVX + b, k, j, i)*
                      adm.g_dd(m, a, b, k, j, i);
-          B_d(a, i) += bcc(m, b, k, j, i)*adm.g_dd(m, a, b, k, j, i)*ivol(i);
+          B_d(a, i) += bcc(m, a, k, j, i)*adm.g_dd(m, a, b, k, j, i)*ivol(i);
         });
+        member.team_barrier();
       }
     }
-    member.team_barrier();
     par_for_inner(member, is, ie, [&](int const i) {
       iW(i) = 1.0/sqrt(1. + iW(i));
     });
+    Bv.ZeroClear();
+    Bsq.ZeroClear();
     for (int a = 0; a < 3; ++a) {
       par_for_inner(member, is, ie, [&](int const i) {
         Bv(i) += bcc(m, a, k, j, i) * v_d(a, i) * ivol(i);
         Bsq(i) += bcc(m, a, k, j, i) * B_d(a, i) * ivol(i);
       });
+      member.team_barrier();
     }
 
     // TODO(JMF): member barrier here?
@@ -490,22 +481,23 @@ TaskStatus DynGR::SetTmunu(Driver *pdrive, int stage) {
         tmunu.S_d(m, a, k, j, i) = cons(m, IM1 + a, k, j, i)*ivol(i);
       });
     }
-    /*par_for_inner(member, is, ie, [&](int const i) {
-      tmunu.S_d(m, 0, k, j, i) = cons(m, IM1, k, j, i)*ivol(i);
-      tmunu.S_d(m, 1, k, j, i) = cons(m, IM2, k, j, i)*ivol(i);
-      tmunu.S_d(m, 2, k, j, i) = cons(m, IM3, k, j, i)*ivol(i);
-    });*/
     for (int a = 0; a < 3; ++a) {
       for (int b = a; b < 3; ++b) {
         par_for_inner(member, is, ie, [&](int const i) {
-          tmunu.S_dd(m, a, b, k, j, i) =
+          /*tmunu.S_dd(m, a, b, k, j, i) =
                 cons(m, IM1 + a, k, j, i)*ivol(i)*v_d(b, i)*iW(i)
                 - (B_d(a, i)*SQR(iW(i)) + Bv(i)*v_d(a, i))*B_d(b, i)
                 + (prim(m, IPR, k, j, i) + 0.5*(Bv(i)*Bv(i)/(iW(i)*iW(i)) + Bsq(i)))
+                  *adm.g_dd(m, a, b, k, j, i);*/
+          tmunu.S_dd(m, a, b, k, j, i) = 
+                cons(m, IM1 + a, k, j, i)*ivol(i)*v_d(b, i)*iW(i)
+                - (B_d(a, i) + Bv(i)*v_d(a, i))*SQR(iW(i))*B_d(b, i)
+                + (prim(m, IPR, k, j, i) + 0.5*(Bsq(i) + Bv(i)*Bv(i))*(iW(i)*iW(i)))
                   *adm.g_dd(m, a, b, k, j, i);
         });
       }
     }
+    member.team_barrier();
   });
   return TaskStatus::complete;
 }
@@ -749,6 +741,7 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
         rhs(m, IM1 + a, k, j, i) -= dt * vol(i) * E(i) * dalpha_d(a, i);
       });
     }
+    member.team_barrier();
   });
 }
 

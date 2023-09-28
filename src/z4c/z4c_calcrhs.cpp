@@ -6,10 +6,12 @@
 //! \fn TaskStatus Z4c::CalcRHS
 //! \brief Computes the wave equation RHS
 
-#include <algorithm>
-#include <cinttypes>
+#include <math.h>
+
+//#include <algorithm>
+//#include <cinttypes>
 #include <iostream>
-#include <limits>
+//#include <limits>
 
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
@@ -430,7 +432,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     par_for_inner(member, is, ie, [&](const int i) {
       chi_guarded(i) = (z4c.chi(m,k,j,i)>opt.chi_div_floor)
                       ? z4c.chi(m,k,j,i) : opt.chi_div_floor;
-      oopsi4(i) = std::pow(chi_guarded(i), -4./opt.chi_psi_power);
+      oopsi4(i) = pow(chi_guarded(i), -4./opt.chi_psi_power);
     });
     member.team_barrier();
 
@@ -495,6 +497,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
       par_for_inner(member, is, ie, [&](const int i) {
         S(i) += oopsi4(i) * g_uu(a,b,i) * tmunu.S_dd(m,a,b,k,j,i);
       });
+      member.team_barrier();
     }
 
     // -----------------------------------------------------------------------------------
@@ -679,13 +682,13 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
         * (AA(i) + (1./3.)*SQR(K(i))) +
         LKhat(i) + opt.damp_kappa1*(1 - opt.damp_kappa2)
         * z4c.alpha(m,k,j,i) * z4c.vTheta(m,k,j,i);
-    // Matter term
+      // Matter term
       rhs.vKhat(m,k,j,i) += 4*M_PI * z4c.alpha(m,k,j,i) * (S(i) + tmunu.E(m,k,j,i));
       rhs.chi(m,k,j,i) = Lchi(i) - (1./6.) * opt.chi_psi_power *
         chi_guarded(i) * z4c.alpha(m,k,j,i) * K(i);
       rhs.vTheta(m,k,j,i) = LTheta(i) + z4c.alpha(m,k,j,i) * (
           0.5*Ht(i) - (2. + opt.damp_kappa2) * opt.damp_kappa1 * z4c.vTheta(m,k,j,i));
-    // Matter commented out -- JMF: this should already be in the Hamiltonian constraint.
+      // Matter commented out -- JMF: this should already be in the Hamiltonian constraint.
       //rhs.Theta(m,k,j,i) -= 8.*M_PI * z4c.alpha(m,k,j,i) * mat.rho(m,k,j,i);
     });
     member.team_barrier();
@@ -700,9 +703,9 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
       for(int b = 0; b < 3; ++b) {
         par_for_inner(member, is, ie, [&](const int i) {
           rhs.vGam_u(m,a,k,j,i) -= 2. * A_uu(a,b,i) * dalpha_d(b,i);
-       // Matter term
-       rhs.vGam_u(m,a,k,j,i) -= 16.*M_PI * z4c.alpha(m,k,j,i)
-                            * g_uu(a,b,i) * tmunu.S_d(m,b,k,j,i);
+          // Matter term
+          //rhs.vGam_u(m,a,k,j,i) -= 16.*M_PI * z4c.alpha(m,k,j,i)
+          //                  * g_uu(a,b,i) * tmunu.S_d(m,b,k,j,i);
         });
         member.team_barrier();
       }
@@ -748,7 +751,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     }
 
     // harmonic gauge terms
-    if (std::fabs(opt.shift_alpha2ggamma) > 0.0) {
+    if (fabs(opt.shift_alpha2ggamma) > 0.0) {
       for(int a = 0; a < 3; ++a) {
         par_for_inner(member, is, ie, [&](const int i) {
           rhs.beta_u(m,a,k,j,i) += opt.shift_alpha2ggamma *
@@ -757,7 +760,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
         member.team_barrier();
       }
     }
-    if (std::fabs(opt.shift_hh) > 0.0) {
+    if (fabs(opt.shift_hh) > 0.0) {
       for(int a = 0; a < 3; ++a) {
         for(int b = 0; b < 3; ++b) {
           par_for_inner(member, is, ie, [&](const int i) {
