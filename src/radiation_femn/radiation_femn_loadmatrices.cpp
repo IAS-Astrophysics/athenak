@@ -52,6 +52,7 @@ void RadiationFEMN::LoadFEMNMatrices() {
   auto &sz_ = stiffness_matrix_z;
   auto &fmatrix_ = F_matrix;
   auto &gmatrix_ = G_matrix;
+  auto &e_source_ = e_source;
 
   // temporary host arrays
   HostArray2D<Real> temp_matrix;
@@ -107,6 +108,15 @@ void RadiationFEMN::LoadFEMNMatrices() {
   }
   Kokkos::deep_copy(temp_array_5d, fmatrix_);
 
+  HostArray1D<Real> e_source_temp;
+  Kokkos::realloc(e_source_temp, num_points);
+
+  std::cout << "Computing the e-matrix (FEM) ... " << std::endl;
+  for (int i = 0; i < num_points; i++) {
+      e_source_temp(i) = radiationfemn::IntegrateMatrixFEMN(i, i, basis, x, y, z, scheme_weights, scheme_points, triangles, 6, -42, -42, -42);
+  }
+  Kokkos::deep_copy(e_source_, e_source_temp);
+
 }
 
 /* Generate matrices which are needed for the FP_N scheme
@@ -123,6 +133,7 @@ void RadiationFEMN::LoadFPNMatrices() {
   auto &sz_ = stiffness_matrix_z;
   auto &fmatrix_ = F_matrix;
   auto &gmatrix_ = G_matrix;
+  auto &e_source_ = e_source;
 
   // populate angular grid with (l,m) values
   auto &lm_grid_ = angular_grid;
@@ -214,6 +225,16 @@ void RadiationFEMN::LoadFPNMatrices() {
     }
   }
   Kokkos::deep_copy(gmatrix_, temp_array_5d);
+
+  HostArray1D<Real> e_source_temp;
+  Kokkos::realloc(e_source_temp, num_points);
+
+  std::cout << "Computing the e-matrix (FPN) ... " << std::endl;
+  for (int i = 0; i < num_points; i++) {
+      e_source_temp(i) = radiationfemn::IntegrateMatrixFPN(int(lm_grid_(i, 0)), int(lm_grid_(i, 1)), int(lm_grid_(i, 0)), int(lm_grid_(i, 1)),
+                                                    scheme_weights, scheme_points, 6, -42, -42, -42);
+  }
+  Kokkos::deep_copy(e_source_, e_source_temp);
 
 }
 }  // namespace radiationfemn
