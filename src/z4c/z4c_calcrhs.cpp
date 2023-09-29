@@ -688,7 +688,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
         chi_guarded(i) * z4c.alpha(m,k,j,i) * K(i);
       rhs.vTheta(m,k,j,i) = LTheta(i) + z4c.alpha(m,k,j,i) * (
           0.5*Ht(i) - (2. + opt.damp_kappa2) * opt.damp_kappa1 * z4c.vTheta(m,k,j,i));
-      // Matter commented out -- JMF: this should already be in the Hamiltonian constraint.
+      // Matter commented out -- JMF: this is already in the Hamiltonian constraint.
       //rhs.Theta(m,k,j,i) -= 8.*M_PI * z4c.alpha(m,k,j,i) * mat.rho(m,k,j,i);
     });
     member.team_barrier();

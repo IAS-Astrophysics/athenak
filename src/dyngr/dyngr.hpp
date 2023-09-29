@@ -1,5 +1,5 @@
-#ifndef DYNAMICAL_GR_DYNAMICAL_GR_HPP_
-#define DYNAMICAL_GR_DYNAMICAL_GR_HPP_
+#ifndef DYNGR_DYNGR_HPP_
+#define DYNGR_DYNGR_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
@@ -14,9 +14,9 @@
 #include "driver/driver.hpp"
 #include "eos/primitive_solver_hyd.hpp"
 
-enum class DynGR_RSolver {llf_dyngr, hlle_dyngr};           // Riemann solvers for dynamical GR
-enum class DynGR_EOS {eos_ideal, eos_piecewise_poly};               // EOS policies for dynamical GR
-enum class DynGR_Error {reset_floor};           // Error policies for dynamical GR
+enum class DynGR_RSolver {llf_dyngr, hlle_dyngr};     // Riemann solvers for dynamical GR
+enum class DynGR_EOS {eos_ideal, eos_piecewise_poly}; // EOS policies for dynamical GR
+enum class DynGR_Error {reset_floor};                 // Error policies for dynamical GR
 
 //----------------------------------------------------------------------------------------
 //! \struct DynGRTaskIDs
@@ -86,13 +86,14 @@ class DynGR {
   //virtual TaskStatus SetTmunu(Driver* pdrive, int stage) = 0;
   virtual void PrimToConInit(int is, int ie, int js, int je, int ks, int ke) = 0;
 
-  virtual void AddCoordTerms(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc0, const Real dt,
-                             DvceArray5D<Real> &u0, int nghost) = 0;
+  virtual void AddCoordTerms(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc0,
+                             const Real dt, DvceArray5D<Real> &u0, int nghost) = 0;
 
   // DynGR policies
   DynGR_RSolver rsolver_method;
   DynGR_EOS eos_policy;
   DynGR_Error error_policy;
+
  protected:
   MeshBlockPack *pmy_pack;  // ptr to MeshBlockPack containing this Hydro
   int scratch_level;
@@ -101,7 +102,8 @@ class DynGR {
 template<class EOSPolicy, class ErrorPolicy>
 class DynGRPS : public DynGR {
  public:
-  DynGRPS(MeshBlockPack *ppack, ParameterInput *pin) : DynGR(ppack, pin), eos("mhd", ppack, pin) {}
+  DynGRPS(MeshBlockPack *ppack, ParameterInput *pin) :
+      DynGR(ppack, pin), eos("mhd", ppack, pin) {}
   virtual ~DynGRPS() {}
 
   // Dynamical EOS
@@ -119,12 +121,12 @@ class DynGRPS : public DynGR {
   virtual TaskStatus ConToPrim(Driver* pdrive, int stage);
   virtual void PrimToConInit(int is, int ie, int js, int je, int ks, int ke);
 
-  virtual void AddCoordTerms(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc0, const Real dt,
-                             DvceArray5D<Real> &u0, int nghost);
+  virtual void AddCoordTerms(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc0,
+                             const Real dt, DvceArray5D<Real> &u0, int nghost);
 
   template<int NGHOST>
-  void AddCoordTermsEOS(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc0, const Real dt, 
-                        DvceArray5D<Real> &u0);
+  void AddCoordTermsEOS(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc0,
+                        const Real dt, DvceArray5D<Real> &u0);
 };
 
 // Factory function for generating DynGR based on parameter input.
@@ -133,4 +135,4 @@ DynGR* BuildDynGR(MeshBlockPack *ppack, ParameterInput *pin);
 
 } // namespace dyngr
 
-#endif
+#endif  // DYNGR_DYNGR_HPP_

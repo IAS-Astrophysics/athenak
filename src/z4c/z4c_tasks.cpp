@@ -95,15 +95,15 @@ void Z4c::QueueZ4cTasks() {
   opt.push_back(MHD_SetTmunu);
   switch (indcs.ng) {
     case 2:
-      pnr->QueueTask(&Z4c::CalcRHS<2>, this, Z4c_CalcRHS, "Z4c_CalcRHS", 
+      pnr->QueueTask(&Z4c::CalcRHS<2>, this, Z4c_CalcRHS, "Z4c_CalcRHS",
                      Task_Run, dep, opt);
       break;
     case 3:
-      pnr->QueueTask(&Z4c::CalcRHS<3>, this, Z4c_CalcRHS, "Z4c_CalcRHS", 
+      pnr->QueueTask(&Z4c::CalcRHS<3>, this, Z4c_CalcRHS, "Z4c_CalcRHS",
                      Task_Run, dep, opt);
       break;
     case 4:
-      pnr->QueueTask(&Z4c::CalcRHS<4>, this, Z4c_CalcRHS, "Z4c_CalcRHS", 
+      pnr->QueueTask(&Z4c::CalcRHS<4>, this, Z4c_CalcRHS, "Z4c_CalcRHS",
                      Task_Run, dep, opt);
       break;
   }
@@ -157,7 +157,6 @@ void Z4c::QueueZ4cTasks() {
   pnr->QueueTask(&Z4c::ClearSend, this, Z4c_ClearS, "Z4c_ClearS", Task_End, none, none);
   dep.push_back(Z4c_ClearS);
   pnr->QueueTask(&Z4c::ClearRecv, this, Z4c_ClearR, "Z4c_ClearR", Task_End, none, none);
-
 }
 
 //----------------------------------------------------------------------------------------

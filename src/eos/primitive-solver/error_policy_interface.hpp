@@ -1,5 +1,10 @@
-#ifndef ERROR_POLICY_INTERFACE_HPP
-#define ERROR_POLICY_INTERFACE_HPP
+#ifndef EOS_PRIMITIVE_SOLVER_ERROR_POLICY_INTERFACE_HPP_
+#define EOS_PRIMITIVE_SOLVER_ERROR_POLICY_INTERFACE_HPP_
+//========================================================================================
+// PrimitiveSolver equation-of-state framework
+// Copyright(C) 2023 Jacob M. Fields <jmf6719@psu.edu>
+// Licensed under the 3-clause BSD License (the "LICENSE")
+//========================================================================================
 //! \file error_policy_interface.hpp
 //  \brief Defines a class that provides all the basic members
 //         needed by an ErrorPolicy.
@@ -13,21 +18,21 @@
 namespace Primitive {
 
 class ErrorPolicyInterface {
-  protected:
-    ErrorPolicyInterface() = default;
-    ~ErrorPolicyInterface() = default;
+ protected:
+  ErrorPolicyInterface() = default;
+  ~ErrorPolicyInterface() = default;
 
-    Real n_atm;
-    Real n_threshold;
-    Real T_atm;
-    Real Y_atm[MAX_SPECIES];
-    Real v_max;
-    Real max_bsq;
-    bool fail_conserved_floor;
-    bool fail_primitive_floor;
-    bool adjust_conserved;
+  Real n_atm;
+  Real n_threshold;
+  Real T_atm;
+  Real Y_atm[MAX_SPECIES];
+  Real v_max;
+  Real max_bsq;
+  bool fail_conserved_floor;
+  bool fail_primitive_floor;
+  bool adjust_conserved;
 };
 
-} // namespace
+} // namespace Primitive
 
-#endif
+#endif  // EOS_PRIMITIVE_SOLVER_ERROR_POLICY_INTERFACE_HPP_

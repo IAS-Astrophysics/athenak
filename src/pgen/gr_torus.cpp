@@ -139,7 +139,8 @@ void TorusHistory(HistoryData *pdata, Mesh *pm);
 
 void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
-  if (!pmbp->pcoord->is_general_relativistic && !pmbp->pcoord->is_dynamical_relativistic) {
+  if (!pmbp->pcoord->is_general_relativistic &&
+      !pmbp->pcoord->is_dynamical_relativistic) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "GR torus problem can only be run when GR defined in <coord> block"
               << std::endl;
@@ -377,8 +378,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     w0_(m,IDN,k,j,i) = fmax(rho, rho_bg);
     if (!use_dyngr) {
       w0_(m,IEN,k,j,i) = fmax(pgas, pgas_bg) * (1.0 + perturbation) / gm1;
-    }
-    else {
+    } else {
       w0_(m,IPR,k,j,i) = fmax(pgas, pgas_bg) * (1.0 + perturbation);
     }
     w0_(m,IVX,k,j,i) = uu1;
@@ -457,7 +457,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         &adm.vK_dd(m,0,0,k,j,i), &adm.vK_dd(m,0,1,k,j,i), &adm.vK_dd(m,0,2,k,j,i),
         &adm.vK_dd(m,1,1,k,j,i), &adm.vK_dd(m,1,2,k,j,i), &adm.vK_dd(m,2,2,k,j,i));
     });
-
   }
 
   // initialize magnetic fields ---------------------------------------
@@ -766,8 +765,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       auto &bcc0_ = pmbp->pmhd->bcc0;
       pmbp->pmhd->peos->PrimToCons(w0_, bcc0_, u0_, is, ie, js, je, ks, ke);
     }
-  }
-  else {
+  } else {
     //pmbp->pdyngr->PrimToConInit(0, (n1-1), 0, (n2-1), 0, (n3-1));
     pmbp->pdyngr->PrimToConInit(is, ie, js, je, ks, ke);
   }
@@ -1857,8 +1855,8 @@ void TorusHistory(HistoryData *pdata, Mesh *pm) {
       printf("There's a problem with Bmag!\n");
     }*/
 
-    mb_sum += fabs(vol*( (bx1f(m, k, j, i+1) - bx1f(m, k, j, i))/dx 
-                  + (bx2f(m, k, j+1, i) - bx2f(m, k, j, i))/dy 
+    mb_sum += fabs(vol*( (bx1f(m, k, j, i+1) - bx1f(m, k, j, i))/dx
+                  + (bx2f(m, k, j+1, i) - bx2f(m, k, j, i))/dy
                   + (bx3f(m, k+1, j, i) - bx3f(m, k, j, i))/dz));
   }, Kokkos::Sum<Real>(sum_divb));
 

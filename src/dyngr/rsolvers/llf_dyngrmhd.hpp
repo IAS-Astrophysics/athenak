@@ -1,5 +1,5 @@
-#ifndef LLF_DYNGR_HPP_
-#define LLF_DYNGR_HPP_
+#ifndef DYNGR_RSOLVERS_LLF_DYNGRMHD_HPP_
+#define DYNGR_RSOLVERS_LLF_DYNGRMHD_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
@@ -26,9 +26,10 @@ namespace dyngr {
 //  may not be needed.
 template<class EOSPolicy, class ErrorPolicy>
 KOKKOS_INLINE_FUNCTION
-void LLF_DYNGR(TeamMember_t const &member, 
+void LLF_DYNGR(TeamMember_t const &member,
      const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
-     const RegionIndcs &indcs, const DualArray1D<RegionSize> &size, const CoordData &coord,
+     const RegionIndcs &indcs, const DualArray1D<RegionSize> &size,
+     const CoordData &coord,
      const int m, const int k, const int j, const int il, const int iu, const int ivx,
      const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr,
      const ScrArray2D<Real> &bl, const ScrArray2D<Real> &br, const DvceArray4D<Real> &bx,
@@ -174,12 +175,14 @@ void LLF_DYNGR(TeamMember_t const &member,
     fl[CSY] = alpha*(cons_l[CSY]*vcl - bdl[1]*Bu_l[ibx]/Wl);
     fl[CSZ] = alpha*(cons_l[CSZ]*vcl - bdl[2]*Bu_l[ibx]/Wl);
     fl[csx] += alpha*sdetg*(prim_l[PPR] + 0.5*bsql);
-    fl[CTA] = alpha*(cons_l[CTA]*vcl - alpha*bul0*Bu_l[ibx]/Wl 
+    fl[CTA] = alpha*(cons_l[CTA]*vcl - alpha*bul0*Bu_l[ibx]/Wl
             + sdetg*(prim_l[PPR] + 0.5*bsql)*prim_l[ivx]/Wl);
 
     bfl[ibx] = 0.0;
-    bfl[iby] = alpha*(Bu_l[iby]*vcl - Bu_l[ibx]*(prim_l[pvy]/Wl - beta_u[pvy - PVX]/alpha));
-    bfl[ibz] = alpha*(Bu_l[ibz]*vcl - Bu_l[ibx]*(prim_l[pvz]/Wl - beta_u[pvz - PVX]/alpha));
+    bfl[iby] = alpha*(Bu_l[iby]*vcl -
+                      Bu_l[ibx]*(prim_l[pvy]/Wl - beta_u[pvy - PVX]/alpha));
+    bfl[ibz] = alpha*(Bu_l[ibz]*vcl -
+                      Bu_l[ibx]*(prim_l[pvz]/Wl - beta_u[pvz - PVX]/alpha));
 
     // Calculate fluxes for the right state.
     Real fr[NCONS], bfr[NMAG];
@@ -188,21 +191,23 @@ void LLF_DYNGR(TeamMember_t const &member,
     fr[CSY] = alpha*(cons_r[CSY]*vcr - bdr[1]*Bu_r[ibx]/Wr);
     fr[CSZ] = alpha*(cons_r[CSZ]*vcr - bdr[2]*Bu_r[ibx]/Wr);
     fr[csx] += alpha*sdetg*(prim_r[PPR] + 0.5*bsqr);
-    fr[CTA] = alpha*(cons_r[CTA]*vcr - alpha*bur0*Bu_r[ibx]/Wr 
+    fr[CTA] = alpha*(cons_r[CTA]*vcr - alpha*bur0*Bu_r[ibx]/Wr
             + sdetg*(prim_r[PPR] + 0.5*bsqr)*prim_r[ivx]/Wr);
 
     bfr[ibx] = 0.0;
-    bfr[iby] = alpha*(Bu_r[iby]*vcr - Bu_r[ibx]*(prim_r[pvy]/Wr - beta_u[pvy - PVX]/alpha));
-    bfr[ibz] = alpha*(Bu_r[ibz]*vcr - Bu_r[ibx]*(prim_r[pvz]/Wr - beta_u[pvz - PVX]/alpha));
+    bfr[iby] = alpha*(Bu_r[iby]*vcr -
+                      Bu_r[ibx]*(prim_r[pvy]/Wr - beta_u[pvy - PVX]/alpha));
+    bfr[ibz] = alpha*(Bu_r[ibz]*vcr -
+                      Bu_r[ibx]*(prim_r[pvz]/Wr - beta_u[pvz - PVX]/alpha));
 
 
     // Calculate the magnetosonic speeds for both states
     Real lambda_pl, lambda_pr, lambda_ml, lambda_mr;
-    eos.GetGRFastMagnetosonicSpeeds(lambda_pl, lambda_ml, prim_l, bsql, 
+    eos.GetGRFastMagnetosonicSpeeds(lambda_pl, lambda_ml, prim_l, bsql,
                                     g3d, beta_u, alpha, g3d[idx], pvx);
-    eos.GetGRFastMagnetosonicSpeeds(lambda_pr, lambda_mr, prim_r, bsqr, 
+    eos.GetGRFastMagnetosonicSpeeds(lambda_pr, lambda_mr, prim_r, bsqr,
                                     g3d, beta_u, alpha, g3d[idx], pvx);
-    
+
     // Get the extremal wavespeeds
     Real lambda_l = fmin(lambda_ml, lambda_mr);
     Real lambda_r = fmax(lambda_pl, lambda_pr);
@@ -210,24 +215,28 @@ void LLF_DYNGR(TeamMember_t const &member,
     //Real lambda = 1.0;
 
     // Calculate the fluxes
-    flx(m, IDN, k, j, i) = 0.5 * (fl[CDN] + fr[CDN] - lambda * (cons_r[CDN] - cons_l[CDN]));
-    flx(m, IEN, k, j, i) = 0.5 * (fl[CTA] + fr[CTA] - lambda * (cons_r[CTA] - cons_l[CTA]));
-    flx(m, IVX, k, j, i) = 0.5 * (fl[CSX] + fr[CSX] - lambda * (cons_r[CSX] - cons_l[CSX]));
-    flx(m, IVY, k, j, i) = 0.5 * (fl[CSY] + fr[CSY] - lambda * (cons_r[CSY] - cons_l[CSY]));
-    flx(m, IVZ, k, j, i) = 0.5 * (fl[CSZ] + fr[CSZ] - lambda * (cons_r[CSZ] - cons_l[CSZ]));
+    flx(m, IDN, k, j, i) = 0.5 * (fl[CDN] + fr[CDN] -
+                                  lambda * (cons_r[CDN] - cons_l[CDN]));
+    flx(m, IEN, k, j, i) = 0.5 * (fl[CTA] + fr[CTA] -
+                                  lambda * (cons_r[CTA] - cons_l[CTA]));
+    flx(m, IVX, k, j, i) = 0.5 * (fl[CSX] + fr[CSX] -
+                                  lambda * (cons_r[CSX] - cons_l[CSX]));
+    flx(m, IVY, k, j, i) = 0.5 * (fl[CSY] + fr[CSY] -
+                                  lambda * (cons_r[CSY] - cons_l[CSY]));
+    flx(m, IVZ, k, j, i) = 0.5 * (fl[CSZ] + fr[CSZ] -
+                                  lambda * (cons_r[CSZ] - cons_l[CSZ]));
     // The notation here is slightly misleading, as it suggests that Ey = -Fx(By) and
-    // Ez = Fx(Bz), rather than Ez = -Fx(By) and Ey = Fx(Bz). However, the appropriate 
+    // Ez = Fx(Bz), rather than Ez = -Fx(By) and Ey = Fx(Bz). However, the appropriate
     // containers for ey and ez for each direction are passed in as arguments to this
     // function, ensuring that the result is entirely consistent.
     ey(m, k, j, i) = - 0.5 * (bfl[iby] + bfr[iby] - lambda * (Bu_r[iby] - Bu_l[iby]));
     ez(m, k, j, i) = 0.5 * (bfl[ibz] + bfr[ibz] - lambda * (Bu_r[ibz] - Bu_l[ibz]));
     //ey(m, k, j, i) = 0.0;
     //ez(m, k, j, i) = 0.0;
-
   });
 }
 
 
-}
+} // namespace dyngr
 
-#endif
+#endif  // DYNGR_RSOLVERS_LLF_DYNGRMHD_HPP_

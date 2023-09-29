@@ -84,9 +84,8 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage) {
         e3cc_(m,ks,j,i) = bcc_(m,IBX,ks,j,i)*(alpha*v2 - adm.beta_u(m, 1, ks, j, i))
                         - bcc_(m,IBY,ks,j,i)*(alpha*v1 - adm.beta_u(m, 0, ks, j, i));
       });
-    }
-    // compute cell-centered EMF in GR MHD
-    else if (pmy_pack->pcoord->is_general_relativistic) {
+    } else if (pmy_pack->pcoord->is_general_relativistic) {
+      // compute cell-centered EMF in GR MHD
       par_for("e_cc_2d", DevExeSpace(), 0, nmb1, js-1, je+1, is-1, ie+1,
       KOKKOS_LAMBDA(int m, int j, int i) {
         // Extract components of metric
@@ -242,9 +241,8 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage) {
         e2cc_(m,k,j,i) = bz * v1c - bx * v3c;
         e3cc_(m,k,j,i) = bx * v2c - by * v1c;
       });
-    }
-    // compute cell-centered EMFs in GR MHD
-    else if (pmy_pack->pcoord->is_general_relativistic) {
+    } else if (pmy_pack->pcoord->is_general_relativistic) {
+      // compute cell-centered EMFs in GR MHD
       par_for("e_cc_3d", DevExeSpace(), 0, nmb1, ks-1, ke+1, js-1, je+1, is-1, ie+1,
       KOKKOS_LAMBDA(int m, int k, int j, int i) {
         // Extract components of metric

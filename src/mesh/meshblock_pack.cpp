@@ -125,7 +125,8 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   // both defined as well.
   if (pin->DoesBlockExist("ion-neutral")) {
     pionn = new ion_neutral::IonNeutral(this, pin);   // construct new MHD object
-    if (pin->DoesBlockExist("hydro") && pin->DoesBlockExist("mhd") && !(pin->DoesBlockExist("adm")) && !(pin->DoesBlockExist("z4c")) ) {
+    if (pin->DoesBlockExist("hydro") && pin->DoesBlockExist("mhd") &&
+        !(pin->DoesBlockExist("adm")) && !(pin->DoesBlockExist("z4c")) ) {
       pionn->AssembleIonNeutralTasks(start_tl, run_tl, end_tl);
       nphysics++;
     } else {
@@ -185,22 +186,19 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
       padm = nullptr;
     }
   }
-  /*if (pin->DoesBlockExist("z4c") && !(pin->DoesBlockExist("mhd")) && !(pin->DoesBlockExist("hydro")) ) {
-    pz4c->AssembleZ4cTasks(start_tl, run_tl, end_tl);
-  }*/
 
   // (8) Dynamical Spacetime and Matter (MHD TODO)
-  if ((pin->DoesBlockExist("z4c") || pin->DoesBlockExist("adm")) && (pin->DoesBlockExist("hydro")) ) {
-    std::cout << "Dynamical metric and hydro not compatible; use MHD instead  " << std::endl;
+  if ((pin->DoesBlockExist("z4c") || pin->DoesBlockExist("adm")) &&
+      (pin->DoesBlockExist("hydro")) ) {
+    std::cout << "Dynamical metric and hydro not compatible; use MHD instead  "
+              << std::endl;
     std::exit(EXIT_FAILURE);
-    //pdyngr = dyngr::BuildDynGR(this, pin);
-    //pdyngr->AssembleDynGRTasks(start_tl, run_tl, end_tl);
   }
-  if ((pin->DoesBlockExist("z4c") || pin->DoesBlockExist("adm")) && (pin->DoesBlockExist("mhd")) ) {
+  if ((pin->DoesBlockExist("z4c") || pin->DoesBlockExist("adm")) &&
+      (pin->DoesBlockExist("mhd")) ) {
     pdyngr = dyngr::BuildDynGR(this, pin);
-    //pdyngr->AssembleDynGRTasks(start_tl, run_tl, end_tl);
   }
-  
+
   if (pz4c != nullptr || padm != nullptr) {
     pnr = new numrel::NumericalRelativity(this, pin);
     pnr->AssembleNumericalRelativityTasks(start_tl, run_tl, end_tl);

@@ -1,5 +1,5 @@
-#ifndef DYNGR_UTIL_HPP_
-#define DYNGR_UTIL_HPP_
+#ifndef DYNGR_DYNGR_UTIL_HPP_
+#define DYNGR_DYNGR_UTIL_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
@@ -31,12 +31,14 @@ void ExtractPrimitives(const DvceArray5D<Real>& prim, Real prim_pt[NPRIM],
     prim_pt[PYF + s] = prim(m, nhyd + s, k, j, i);
   }
   prim_pt[PPR] = prim(m, IPR, k, j, i);
-  prim_pt[PTM] = eos.ps.GetEOS().GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR], &prim_pt[PYF]);
+  prim_pt[PTM] = eos.ps.GetEOS().GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR],
+                                                     &prim_pt[PYF]);
 }
 
 template<int dir, class EOSPolicy, class ErrorPolicy>
 KOKKOS_INLINE_FUNCTION
-void ExtractPrimitivesWithMinmod(const DvceArray5D<Real>& prim, Real prim_l[NPRIM], Real prim_r[NPRIM],
+void ExtractPrimitivesWithMinmod(const DvceArray5D<Real>& prim,
+                                 Real prim_l[NPRIM], Real prim_r[NPRIM],
                                  const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
                                  const int& nhyd, const int& nscal,
                                  const int m, const int k, const int j, const int i) {
@@ -64,9 +66,9 @@ void ExtractPrimitivesWithMinmod(const DvceArray5D<Real>& prim, Real prim_l[NPRI
       break;
   }
   Real mb = eos.ps.GetEOS().GetBaryonMass();
-  // Reconstruct all the interfaces for each primitive variable. A loop would be more elegant,
-  // but the primitive variables aren't necessarily indexed the same between PrimitiveSolver
-  // and AthenaK.
+  // Reconstruct all the interfaces for each primitive variable. A loop would be more
+  // elegant, but the primitive variables aren't necessarily indexed the same between
+  // PrimitiveSolver and AthenaK.
   Minmod(prim(m, IDN, km1, jm1, im1), prim(m, IDN, k, j, i), prim(m, IDN, kp1, jp1, ip1),
          prim_l[PRH], prim_r[PRH]);
   Minmod(prim(m, IVX, km1, jm1, im1), prim(m, IVX, k, j, i), prim(m, IVX, kp1, jp1, ip1),
@@ -86,8 +88,10 @@ void ExtractPrimitivesWithMinmod(const DvceArray5D<Real>& prim, Real prim_l[NPRI
   // Convert the density to number density and calculate the reconstructed temperature
   prim_l[PRH] = prim_l[PRH]/mb;
   prim_r[PRH] = prim_r[PRH]/mb;
-  prim_l[PTM] = eos.ps.GetEOS().GetTemperatureFromP(prim_l[PRH], prim_l[PPR], &prim_l[PYF]);
-  prim_r[PTM] = eos.ps.GetEOS().GetTemperatureFromP(prim_r[PRH], prim_r[PPR], &prim_r[PYF]);
+  prim_l[PTM] = eos.ps.GetEOS().GetTemperatureFromP(prim_l[PRH], prim_l[PPR],
+                                                    &prim_l[PYF]);
+  prim_r[PTM] = eos.ps.GetEOS().GetTemperatureFromP(prim_r[PRH], prim_r[PPR],
+                                                    &prim_r[PYF]);
   if (prim_r[PTM] < 0 || prim_l[PTM] < 0) {
     printf("There's a problem with the temperature!\n");
   }
@@ -106,4 +110,4 @@ void InsertFluxes(const Real flux_pt[NCONS], const DvceArray5D<Real>& flx,
 
 } // namespace dyngr
 
-#endif
+#endif  // DYNGR_DYNGR_UTIL_HPP_

@@ -1,3 +1,8 @@
+//========================================================================================
+// PrimitiveSolver equation-of-state framework
+// Copyright(C) 2023 Jacob M. Fields <jmf6719@psu.edu>
+// Licensed under the 3-clause BSD License (the "LICENSE")
+//========================================================================================
 //! \file unit_system.cpp
 //  \brief Defines functions for making new unit systems.
 #include "unit_system.hpp"
@@ -57,7 +62,6 @@ Primitive::UnitSystem Primitive::MakeGeometricSolar() {
     PS_CUBE( CGS.G/(CGS.c*CGS.c) ) * PS_SQR( CGS.Msun/(CGS.c) ), // pressure, Msun^-2
     CGS.kb / (CGS.Msun * CGS.c*CGS.c), // temperature, Msun
   };
- 
 }
 
 Primitive::UnitSystem Primitive::MakeNuclear() {
@@ -76,7 +80,6 @@ Primitive::UnitSystem Primitive::MakeNuclear() {
     1e-39/CGS.MeV, // pressure, MeV/fm^3
     CGS.kb/CGS.MeV, // temperature, MeV
   };
-
 }
 
 #undef PS_SQR

@@ -1,6 +1,10 @@
-#ifndef PS_ERROR_HPP
-#define PS_ERROR_HPP
-
+#ifndef EOS_PRIMITIVE_SOLVER_PS_ERROR_HPP_
+#define EOS_PRIMITIVE_SOLVER_PS_ERROR_HPP_
+//========================================================================================
+// PrimitiveSolver equation-of-state framework
+// Copyright(C) 2023 Jacob M. Fields <jmf6719@psu.edu>
+// Licensed under the 3-clause BSD License (the "LICENSE")
+//========================================================================================
 //! \file ps_error.hpp
 //  \brief defines an enumerator struct for error types.
 
@@ -26,6 +30,6 @@ struct SolverResult {
   bool cons_adjusted;
 };
 
-} // namespace
+} // namespace Primitive
 
-#endif
+#endif  // EOS_PRIMITIVE_SOLVER_PS_ERROR_HPP_

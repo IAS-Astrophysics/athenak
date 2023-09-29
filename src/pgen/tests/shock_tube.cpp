@@ -87,7 +87,7 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
     wl.e  = (pin->GetReal("problem","pl"))/(eos.gamma - 1.0);
     // compute Lorentz factor (needed for SR/GR)
     Real u0l = 1.0;
-    if (pmbp->pcoord->is_special_relativistic || pmbp->pcoord->is_general_relativistic || 
+    if (pmbp->pcoord->is_special_relativistic || pmbp->pcoord->is_general_relativistic ||
         pmbp->pcoord->is_dynamical_relativistic) {
       u0l = 1.0/sqrt( 1.0 - (SQR(wl.vx) + SQR(wl.vy) + SQR(wl.vz)) );
     }
@@ -321,8 +321,7 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
         adm.vK_dd(m, 1, 2, k, j, i) = 0.0;
         adm.vK_dd(m, 2, 2, k, j, i) = 0.0;
       });
-    }
-    else {
+    } else {
       par_for("pgen_adm_vars", DevExeSpace(), 0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
       KOKKOS_LAMBDA(int m, int k, int j, int i) {
         Real &x1min = size.d_view(m).x1min;
@@ -341,11 +340,9 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
         Real r = 0;
         if (shk_dir == 1) {
           r = x1v;
-        }
-        else if (shk_dir == 2) {
+        } else if (shk_dir == 2) {
           r = x2v;
-        }
-        else if (shk_dir == 3) {
+        } else if (shk_dir == 3) {
           r = x3v;
         }
         Real fac = 1. - 2./r;

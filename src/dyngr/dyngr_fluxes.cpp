@@ -64,10 +64,10 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
   //--------------------------------------------------------------------------------------
   // i-direction
 
-  size_t scr_size = ScrArray2D<Real>::shmem_size(nvars, ncells1) * 2 + 
+  size_t scr_size = ScrArray2D<Real>::shmem_size(nvars, ncells1) * 2 +
                     ScrArray2D<Real>::shmem_size(3, ncells1) * 2 +
                     ScrArray1D<Real>::shmem_size(ncells1)
-                       + ScrArray2D<Real>::shmem_size(3, ncells1) + 
+                       + ScrArray2D<Real>::shmem_size(3, ncells1) +
                        ScrArray2D<Real>::shmem_size(6, ncells1);
   int scr_level = scratch_level;
   auto flx1_ = pmy_pack->pmhd->uflx.x1f;
@@ -85,7 +85,8 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
     jl = js-1, ju = je+1, kl = ks-1, ku = ke+1;
   }
 
-  par_for_outer("dyngrflux_x1",DevExeSpace(), scr_size, scr_level, 0, nmb1, kl, ku, jl, ju,
+  par_for_outer("dyngrflux_x1",DevExeSpace(), scr_size, scr_level,
+      0, nmb1, kl, ku, jl, ju,
   KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {
     ScrArray2D<Real> wl(member.team_scratch(scr_level), nvars, ncells1);
     ScrArray2D<Real> wr(member.team_scratch(scr_level), nvars, ncells1);
@@ -110,7 +111,8 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         PiecewiseLinearX1(member, m, k, j, is-1, ie+1, w0_, wl, wr);
         PiecewiseLinearX1(member, m, k, j, is-1, ie+1, b0_, bl, br);
         break;
-      // JF: These higher-order reconstruction methods all need EOS_Data to calculate a floor.
+      // JF: These higher-order reconstruction methods all need EOS_Data to calculate a
+      // floor. However, it isn't used by DynGR at all.
       case ReconstructionMethod::ppm4:
       case ReconstructionMethod::ppmx:
         PiecewiseParabolicX1(member,eos_,extrema,false, m, k, j, is-1, ie+1, w0_, wl, wr);
@@ -127,9 +129,11 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
     member.team_barrier();
 
     // Calculate metric at faces
-    adm::Face1Metric(member, m, k, j, is-1, ie+1, adm.g_dd, adm.beta_u, adm.alpha, gface1_dd, betaface1_u, alphaface1);
+    adm::Face1Metric(member, m, k, j, is-1, ie+1,
+                     adm.g_dd, adm.beta_u, adm.alpha,
+                     gface1_dd, betaface1_u, alphaface1);
 
-    // TODO do I need a member team barrier here?
+    // TODO(JF): do I need a member team barrier here?
     member.team_barrier();
 
     // compute fluxes over [is,ie+1]
@@ -146,15 +150,15 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
     const auto rsolver = rsolver_;
     int il = is; int iu = ie+1;
     if constexpr (rsolver == DynGR_RSolver::llf_dyngr) {
-      LLF_DYNGR(member, dyn_eos, indcs, size, coord, m, k, j, is, ie+1, IVX, 
-                wl, wr, bl, br, bx, nhyd_, nscal_, gface1_dd, betaface1_u, alphaface1, flx1, e31, e21);
-    }
-    else if constexpr (rsolver == DynGR_RSolver::hlle_dyngr) {
-      HLLE_DYNGR(member, dyn_eos, indcs, size, coord, m, k, j, is, ie+1, IVX, 
-                wl, wr, bl, br, bx, nhyd_, nscal_, gface1_dd, betaface1_u, alphaface1, flx1, e31, e21);
-    }
+      LLF_DYNGR(member, dyn_eos, indcs, size, coord, m, k, j, is, ie+1, IVX,
+                wl, wr, bl, br, bx, nhyd_, nscal_, gface1_dd, betaface1_u, alphaface1,
+                flx1, e31, e21);
+    } else if constexpr (rsolver == DynGR_RSolver::hlle_dyngr) {
+      HLLE_DYNGR(member, dyn_eos, indcs, size, coord, m, k, j, is, ie+1, IVX,
+                wl, wr, bl, br, bx, nhyd_, nscal_, gface1_dd, betaface1_u, alphaface1,
+                flx1, e31, e21);
     //} else if { other Riemann solvers here
-    else {
+    } else {
       abort();
     }
     member.team_barrier();
@@ -178,10 +182,10 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
   // j-direction
 
   if (pmy_pack->pmesh->multi_d) {
-    scr_size = ScrArray2D<Real>::shmem_size(nvars, ncells1) * 3 
+    scr_size = ScrArray2D<Real>::shmem_size(nvars, ncells1) * 3
              + ScrArray2D<Real>::shmem_size(3, ncells1) * 3
              + ScrArray1D<Real>::shmem_size(ncells1)
-             + ScrArray2D<Real>::shmem_size(3, ncells1) 
+             + ScrArray2D<Real>::shmem_size(3, ncells1)
              + ScrArray2D<Real>::shmem_size(6, ncells1);
     auto flx2_ = pmy_pack->pmhd->uflx.x2f;
     auto &by_ = pmy_pack->pmhd->b0.x2f;
@@ -237,11 +241,14 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
             PiecewiseLinearX2(member, m, k, j, is-1, ie+1, w0_, wl_jp1, wr);
             PiecewiseLinearX2(member, m, k, j, is-1, ie+1, b0_, bl_jp1, br);
             break;
-          // JF: These higher-order reconstruction methods all need EOS_Data to calculate a floor.
+          // JF: These higher-order reconstruction methods all need EOS_Data to calculate
+          // a floor. However, it isn't used by DynGR.
           case ReconstructionMethod::ppm4:
           case ReconstructionMethod::ppmx:
-            PiecewiseParabolicX2(member,eos_,extrema,false, m, k, j, is-1, ie+1, w0_, wl_jp1, wr);
-            PiecewiseParabolicX2(member,eos_,extrema,false, m, k, j, is-1, ie+1, b0_, bl_jp1, br);
+            PiecewiseParabolicX2(member,eos_,extrema,false, m, k, j, is-1, ie+1,
+                                 w0_, wl_jp1, wr);
+            PiecewiseParabolicX2(member,eos_,extrema,false, m, k, j, is-1, ie+1,
+                                 b0_, bl_jp1, br);
             break;
           case ReconstructionMethod::wenoz:
             WENOZX2(member, eos_, false, m, k, j, is-1, ie+1, w0_, wl_jp1, wr);
@@ -254,9 +261,10 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         member.team_barrier();
 
         // Calculate metric at faces
-        adm::Face2Metric(member, m, k, j, is-1, ie+1, adm.g_dd, adm.beta_u, adm.alpha, gface2_dd, betaface2_u, alphaface2);
+        adm::Face2Metric(member, m, k, j, is-1, ie+1, adm.g_dd, adm.beta_u, adm.alpha,
+                         gface2_dd, betaface2_u, alphaface2);
 
-        // TODO do I need a member team barrier here?
+        // TODO(JF): do I need a member team barrier here?
         member.team_barrier();
 
         // compute fluxes over [is,ie+1]
@@ -274,17 +282,15 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         int il = is; int iu = ie;
         if (j>(js-1)) {
           if constexpr (rsolver == DynGR_RSolver::llf_dyngr) {
-            LLF_DYNGR(member, dyn_eos, indcs, size, coord, m, k, j, is-1, ie+1, IVY, 
-                      wl, wr, bl, br, by, nhyd_, nscal_, gface2_dd, betaface2_u, alphaface2, flx2,
-                      e12, e32);
-          }
-          else if constexpr (rsolver == DynGR_RSolver::hlle_dyngr) {
-            HLLE_DYNGR(member, dyn_eos, indcs, size, coord, m, k, j, is-1, ie+1, IVY, 
-                      wl, wr, bl, br, by, nhyd_, nscal_, gface2_dd, betaface2_u, alphaface2, flx2,
-                      e12, e32);
-          }
+            LLF_DYNGR(member, dyn_eos, indcs, size, coord, m, k, j, is-1, ie+1, IVY,
+                      wl, wr, bl, br, by, nhyd_, nscal_,
+                      gface2_dd, betaface2_u, alphaface2, flx2, e12, e32);
+          } else if constexpr (rsolver == DynGR_RSolver::hlle_dyngr) {
+            HLLE_DYNGR(member, dyn_eos, indcs, size, coord, m, k, j, is-1, ie+1, IVY,
+                      wl, wr, bl, br, by, nhyd_, nscal_,
+                      gface2_dd, betaface2_u, alphaface2, flx2, e12, e32);
           //} else if { other Riemann solvers here
-          else {
+          } else {
             abort();
           }
         }
@@ -311,10 +317,10 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
   // k-direction. Note order of k,j loops switched
 
   if (pmy_pack->pmesh->three_d) {
-    scr_size = ScrArray2D<Real>::shmem_size(nvars, ncells1) * 3 
+    scr_size = ScrArray2D<Real>::shmem_size(nvars, ncells1) * 3
              + ScrArray2D<Real>::shmem_size(3, ncells1) * 3
              + ScrArray1D<Real>::shmem_size(ncells1)
-             + ScrArray2D<Real>::shmem_size(3, ncells1) 
+             + ScrArray2D<Real>::shmem_size(3, ncells1)
              + ScrArray2D<Real>::shmem_size(6, ncells1);
     auto &flx3_ = pmy_pack->pmhd->uflx.x3f;
     auto &bz_   = pmy_pack->pmhd->b0.x3f;
@@ -363,11 +369,14 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
             PiecewiseLinearX3(member, m, k, j, is-1, ie+1, w0_, wl_kp1, wr);
             PiecewiseLinearX3(member, m, k, j, is-1, ie+1, b0_, bl_kp1, br);
             break;
-          // JF: These higher-order reconstruction methods all need EOS_Data to calculate a floor.
+          // JF: These higher-order reconstruction methods all need EOS_Data to calculate
+          // a floor. However, it isn't used by DynGR.
           case ReconstructionMethod::ppm4:
           case ReconstructionMethod::ppmx:
-            PiecewiseParabolicX3(member,eos_,extrema,false, m, k, j, is-1, ie+1, w0_, wl_kp1, wr);
-            PiecewiseParabolicX3(member,eos_,extrema,false, m, k, j, is-1, ie+1, b0_, bl_kp1, br);
+            PiecewiseParabolicX3(member,eos_,extrema,false, m, k, j, is-1, ie+1,
+                                 w0_, wl_kp1, wr);
+            PiecewiseParabolicX3(member,eos_,extrema,false, m, k, j, is-1, ie+1,
+                                 b0_, bl_kp1, br);
             break;
           case ReconstructionMethod::wenoz:
             WENOZX3(member, eos_, false, m, k, j, is-1, ie+1, w0_, wl_kp1, wr);
@@ -380,9 +389,10 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         member.team_barrier();
 
         // Calculate metric at faces
-        adm::Face3Metric(member, m, k, j, is-1, ie+1, adm.g_dd, adm.beta_u, adm.alpha, gface3_dd, betaface3_u, alphaface3);
+        adm::Face3Metric(member, m, k, j, is-1, ie+1, adm.g_dd, adm.beta_u, adm.alpha,
+                         gface3_dd, betaface3_u, alphaface3);
 
-        // TODO do I need a member team barrier here?
+        // TODO(JF): do I need a member team barrier here?
         member.team_barrier();
 
         // compute fluxes over [ks,ke+1]
@@ -401,16 +411,14 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         if (k>(ks-1)) {
           if constexpr (rsolver == DynGR_RSolver::llf_dyngr) {
             LLF_DYNGR(member, dyn_eos, indcs, size, coord, m, k, j, is-1, ie+1, IVZ,
-                      wl, wr, bl, br, bz, nhyd_, nscal_, gface3_dd, betaface3_u, alphaface3, flx3,
-                      e23, e13);
-          }
-          else if constexpr (rsolver == DynGR_RSolver::hlle_dyngr) {
+                      wl, wr, bl, br, bz, nhyd_, nscal_,
+                      gface3_dd, betaface3_u, alphaface3, flx3, e23, e13);
+          } else if constexpr (rsolver == DynGR_RSolver::hlle_dyngr) {
             HLLE_DYNGR(member, dyn_eos, indcs, size, coord, m, k, j, is-1, ie+1, IVZ,
-                      wl, wr, bl, br, bz, nhyd_, nscal_, gface3_dd, betaface3_u, alphaface3, flx3,
-                      e23, e13);
-          }
+                      wl, wr, bl, br, bz, nhyd_, nscal_,
+                      gface3_dd, betaface3_u, alphaface3, flx3, e23, e13);
           //} else if { other Riemann solvers here
-          else {
+          } else {
             abort();
           }
         }
@@ -431,7 +439,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
       } // end of loop over j
       member.team_barrier();
     });
-    // TODO: handle excision masks
+    // TODO(JF): handle excision masks
   }
 
   // Call FOFC if necessary
@@ -446,9 +454,11 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
 // Macro for instantiating every flux function for each Riemann solver
 #define INSTANTIATE_CALC_FLUXES(EOSPolicy, ErrorPolicy) \
 template \
-TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGR_RSolver::llf_dyngr>(Driver *pdriver, int stage); \
+TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::\
+            CalcFluxes<DynGR_RSolver::llf_dyngr>(Driver *pdriver, int stage); \
 template \
-TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGR_RSolver::hlle_dyngr>(Driver *pdriver, int stage);
+TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::\
+            CalcFluxes<DynGR_RSolver::hlle_dyngr>(Driver *pdriver, int stage);
 
 INSTANTIATE_CALC_FLUXES(Primitive::IdealGas, Primitive::ResetFloor)
 INSTANTIATE_CALC_FLUXES(Primitive::PiecewisePolytrope, Primitive::ResetFloor)

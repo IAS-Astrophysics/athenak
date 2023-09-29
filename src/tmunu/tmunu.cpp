@@ -13,7 +13,7 @@
 #include "mesh/mesh.hpp"
 
 char const * const Tmunu::Tmunu_names[Tmunu::N_Tmunu] = {
-  "tmunu_Sxx", "tmunu_Sxy", "tmunu_Sxz", "tmunu_Syy", "tmunu_Syz", "tmunu_Szz", 
+  "tmunu_Sxx", "tmunu_Sxy", "tmunu_Sxz", "tmunu_Syy", "tmunu_Syz", "tmunu_Szz",
   "tmunu_E", "tmunu_Sx", "tmunu_Sy", "tmunu_Sz",
 };
 
@@ -21,8 +21,7 @@ char const * const Tmunu::Tmunu_names[Tmunu::N_Tmunu] = {
 // constructor: initializes data structures and parameters
 Tmunu::Tmunu(MeshBlockPack *ppack, ParameterInput *pin):
   pmy_pack(ppack),
-  u_tmunu("u_tmunu",1,1,1,1,1)
-{
+  u_tmunu("u_tmunu",1,1,1,1,1) {
   int nmb = ppack->nmb_thispack;
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int ncells1 = indcs.nx1 + 2*(indcs.ng);

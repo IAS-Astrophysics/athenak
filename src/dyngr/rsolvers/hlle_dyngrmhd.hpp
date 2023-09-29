@@ -1,5 +1,5 @@
-#ifndef HLLE_DYNGR_HPP_
-#define HLLE_DYNGR_HPP_
+#ifndef DYNGR_RSOLVERS_HLLE_DYNGRMHD_HPP_
+#define DYNGR_RSOLVERS_HLLE_DYNGRMHD_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
@@ -28,7 +28,8 @@ template<class EOSPolicy, class ErrorPolicy>
 KOKKOS_INLINE_FUNCTION
 void HLLE_DYNGR(TeamMember_t const &member,
      const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
-     const RegionIndcs &indcs, const DualArray1D<RegionSize> &size, const CoordData &coord,
+     const RegionIndcs &indcs, const DualArray1D<RegionSize> &size,
+     const CoordData &coord,
      const int m, const int k, const int j, const int il, const int iu, const int ivx,
      const ScrArray2D<Real> &wl, const ScrArray2D<Real> &wr,
      const ScrArray2D<Real> &bl, const ScrArray2D<Real> &br, const DvceArray4D<Real> &bx,
@@ -159,8 +160,10 @@ void HLLE_DYNGR(TeamMember_t const &member,
             + sdetg*(prim_l[PPR] + 0.5*bsql)*prim_l[ivx]/Wl);
 
     bfl[ibx] = 0.0;
-    bfl[iby] = alpha*(Bu_l[iby]*vcl - Bu_l[ibx]*(prim_l[pvy]/Wl - beta_u[pvy - PVX]/alpha));
-    bfl[ibz] = alpha*(Bu_l[ibz]*vcl - Bu_l[ibx]*(prim_l[pvz]/Wl - beta_u[pvz - PVX]/alpha));
+    bfl[iby] = alpha*(Bu_l[iby]*vcl -
+                      Bu_l[ibx]*(prim_l[pvy]/Wl - beta_u[pvy - PVX]/alpha));
+    bfl[ibz] = alpha*(Bu_l[ibz]*vcl -
+                      Bu_l[ibx]*(prim_l[pvz]/Wl - beta_u[pvz - PVX]/alpha));
 
     // Calculate fluxes for the right state.
     Real fr[NCONS], bfr[NMAG];
@@ -173,8 +176,10 @@ void HLLE_DYNGR(TeamMember_t const &member,
             + sdetg*(prim_r[PPR] + 0.5*bsqr)*prim_r[ivx]/Wr);
 
     bfr[ibx] = 0.0;
-    bfr[iby] = alpha*(Bu_r[iby]*vcr - Bu_r[ibx]*(prim_r[pvy]/Wr - beta_u[pvy - PVX]/alpha));
-    bfr[ibz] = alpha*(Bu_r[ibz]*vcr - Bu_r[ibx]*(prim_r[pvz]/Wr - beta_u[pvz - PVX]/alpha));
+    bfr[iby] = alpha*(Bu_r[iby]*vcr -
+                      Bu_r[ibx]*(prim_r[pvy]/Wr - beta_u[pvy - PVX]/alpha));
+    bfr[ibz] = alpha*(Bu_r[ibz]*vcr -
+                      Bu_r[ibx]*(prim_r[pvz]/Wr - beta_u[pvz - PVX]/alpha));
 
 
     // Calculate the magnetosonic speeds for both states
@@ -192,14 +197,21 @@ void HLLE_DYNGR(TeamMember_t const &member,
     Real qa = lambda_r*lambda_l;
     Real qb = 1.0/(lambda_r - lambda_l);
     Real f_hll[NCONS], bf_hll[NMAG];
-    f_hll[CDN] = (lambda_r*fl[CDN] - lambda_l*fr[CDN] + qa*(cons_r[CDN] - cons_l[CDN])) * qb;
-    f_hll[CSX] = (lambda_r*fl[CSX] - lambda_l*fr[CSX] + qa*(cons_r[CSX] - cons_l[CSX])) * qb;
-    f_hll[CSY] = (lambda_r*fl[CSY] - lambda_l*fr[CSY] + qa*(cons_r[CSY] - cons_l[CSY])) * qb;
-    f_hll[CSZ] = (lambda_r*fl[CSZ] - lambda_l*fr[CSZ] + qa*(cons_r[CSZ] - cons_l[CSZ])) * qb;
-    f_hll[CTA] = (lambda_r*fl[CTA] - lambda_l*fr[CTA] + qa*(cons_r[CTA] - cons_l[CTA])) * qb;
+    f_hll[CDN] = (lambda_r*fl[CDN] - lambda_l*fr[CDN] +
+                  qa*(cons_r[CDN] - cons_l[CDN])) * qb;
+    f_hll[CSX] = (lambda_r*fl[CSX] - lambda_l*fr[CSX] +
+                  qa*(cons_r[CSX] - cons_l[CSX])) * qb;
+    f_hll[CSY] = (lambda_r*fl[CSY] - lambda_l*fr[CSY] +
+                  qa*(cons_r[CSY] - cons_l[CSY])) * qb;
+    f_hll[CSZ] = (lambda_r*fl[CSZ] - lambda_l*fr[CSZ] +
+                  qa*(cons_r[CSZ] - cons_l[CSZ])) * qb;
+    f_hll[CTA] = (lambda_r*fl[CTA] - lambda_l*fr[CTA] +
+                  qa*(cons_r[CTA] - cons_l[CTA])) * qb;
     bf_hll[ibx] = 0.0;
-    bf_hll[iby] = (lambda_r*bfl[iby] - lambda_l*bfr[iby] + qa*(Bu_r[iby] - Bu_l[iby])) * qb;
-    bf_hll[ibz] = (lambda_r*bfl[ibz] - lambda_l*bfr[ibz] + qa*(Bu_r[ibz] - Bu_l[ibz])) * qb;
+    bf_hll[iby] = (lambda_r*bfl[iby] - lambda_l*bfr[iby] +
+                   qa*(Bu_r[iby] - Bu_l[iby])) * qb;
+    bf_hll[ibz] = (lambda_r*bfl[ibz] - lambda_l*bfr[ibz] +
+                   qa*(Bu_r[ibz] - Bu_l[ibz])) * qb;
 
 
     // Flux at the interface
@@ -207,12 +219,10 @@ void HLLE_DYNGR(TeamMember_t const &member,
     if (lambda_l >= 0) {        // L region
       f_interface = &fl[0];
       bf_interface = &bfl[0];
-    }
-    else if (lambda_r <= 0) {   // R region
+    } else if (lambda_r <= 0) {   // R region
       f_interface = &fr[0];
       bf_interface = &bfr[0];
-    }
-    else {                      // HLL region
+    } else {                      // HLL region
       f_interface = &f_hll[0];
       bf_interface = &bf_hll[0];
     }
@@ -233,4 +243,4 @@ void HLLE_DYNGR(TeamMember_t const &member,
 
 } // namespace dyngr
 
-#endif
+#endif  // DYNGR_RSOLVERS_HLLE_DYNGRMHD_HPP_

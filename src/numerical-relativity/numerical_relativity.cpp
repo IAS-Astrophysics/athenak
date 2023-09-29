@@ -38,11 +38,9 @@ std::vector<QueuedTask>& NumericalRelativity::SelectQueue(TaskLocation loc) {
 PhysicsDependency NumericalRelativity::NeedsPhysics(TaskName task) {
   if (task < MHD_NTASKS) {
     return Phys_MHD;
-  }
-  else if (task < Z4c_NTASKS) {
+  } else if (task < Z4c_NTASKS) {
     return Phys_Z4c;
-  }
-  else {
+  } else {
     return Phys_None;
   }
 }
@@ -72,7 +70,8 @@ bool NumericalRelativity::DependenciesMet(std::vector<TaskName>& tasks) {
   return true;
 }
 
-bool NumericalRelativity::DependenciesMet(QueuedTask& task, std::vector<QueuedTask>& queue, 
+bool NumericalRelativity::DependenciesMet(QueuedTask& task,
+                                          std::vector<QueuedTask>& queue,
                                           TaskID& dependencies) {
   for (auto& test_task : queue) {
     if (HasDependency(test_task.name, task.dependencies)) {
@@ -85,7 +84,8 @@ bool NumericalRelativity::DependenciesMet(QueuedTask& task, std::vector<QueuedTa
   return true;
 }
 
-bool NumericalRelativity::HasDependency(TaskName task, std::vector<TaskName>& dependencies) {
+bool NumericalRelativity::HasDependency(TaskName task,
+                                        std::vector<TaskName>& dependencies) {
   for (TaskName test_task : dependencies) {
     if (task == test_task) {
       return true;
@@ -94,7 +94,7 @@ bool NumericalRelativity::HasDependency(TaskName task, std::vector<TaskName>& de
   return false;
 }
 
-void NumericalRelativity::AddExtraDependencies(std::vector<TaskName>& required, 
+void NumericalRelativity::AddExtraDependencies(std::vector<TaskName>& required,
                                                std::vector<TaskName>& optional) {
   for (auto& task : optional) {
     PhysicsDependency phys = NeedsPhysics(task);
@@ -160,4 +160,4 @@ void NumericalRelativity::AssembleNumericalRelativityTasks(
   }
 }
 
-}
+} // namespace numrel

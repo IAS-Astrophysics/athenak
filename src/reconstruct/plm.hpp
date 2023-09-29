@@ -9,8 +9,8 @@
 //! \brief  piecewise linear reconstruction implemented as inline functions
 //! This version only works with uniform mesh spacing
 
-#include "athena.hpp"
 #include <math.h>
+#include "athena.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \fn PLM()

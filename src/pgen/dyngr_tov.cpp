@@ -7,9 +7,9 @@
 //  \brief Problem generator for TOV star. Only works when ADM is enabled.
 
 #include <stdio.h>
+#include <math.h>     // abs(), cos(), exp(), log(), NAN, pow(), sin(), sqrt()
 
 #include <algorithm>  // max(), max_element(), min(), min_element()
-#include <math.h>     // abs(), cos(), exp(), log(), NAN, pow(), sin(), sqrt()
 #include <iostream>   // endl
 #include <limits>     // numeric_limits::max()
 #include <sstream>    // stringstream
@@ -58,13 +58,16 @@ struct tov_pgen {
 
 // Prototypes for functions used internally in this pgen.
 static void ConstructTOV(tov_pgen& pgen);
-static void RHS(Real r, Real P, Real m, Real alp, tov_pgen& tov, Real& dP, Real& dm, Real& dalp);
+static void RHS(Real r, Real P, Real m, Real alp,
+                tov_pgen& tov, Real& dP, Real& dm, Real& dalp);
 KOKKOS_INLINE_FUNCTION
-static void GetPrimitivesAtPoint(const tov_pgen& pgen, Real r, Real &rho, Real &p, Real &m, Real &alp);
+static void GetPrimitivesAtPoint(const tov_pgen& pgen, Real r,
+                                 Real &rho, Real &p, Real &m, Real &alp);
 KOKKOS_INLINE_FUNCTION
 static void GetPandRho(const tov_pgen& pgen, Real r, Real &rho, Real &p);
 KOKKOS_INLINE_FUNCTION
-static Real Interpolate(Real x, const Real x1, const Real x2, const Real y1, const Real y2);
+static Real Interpolate(Real x,
+                        const Real x1, const Real x2, const Real y1, const Real y2);
 KOKKOS_INLINE_FUNCTION
 static Real A1(const tov_pgen& pgen, Real x1, Real x2, Real x3);
 KOKKOS_INLINE_FUNCTION
@@ -109,8 +112,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     u0_ = pmbp->phydro->u0;
     w0_ = pmbp->phydro->w0;
     block = std::string("hydro");
-  }
-  else if (pmbp->pmhd != nullptr) {
+  } else if (pmbp->pmhd != nullptr) {
     u0_ = pmbp->pmhd->u0;
     w0_ = pmbp->pmhd->w0;
     block = std::string("mhd");
@@ -141,7 +143,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   auto &coord = pmbp->pcoord->coord_data;
 
   // initialize primitive variables for restart ----------------------------------------
-  
   // FIXME: need to load data on restart?
   if (restart) {
     auto &size = pmbp->pmb->mb_size;
@@ -181,7 +182,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     Real &x3max = size.d_view(m).x3max;
     Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
-    // Calculate the rest-mass density, pressure, and mass for a specific isotropic 
+    // Calculate the rest-mass density, pressure, and mass for a specific isotropic
     // radial coordinate.
     Real r = sqrt(SQR(x1v) + SQR(x2v) + SQR(x3v));
     Real s = sqrt(SQR(x1v) + SQR(x2v));
@@ -256,7 +257,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       int nx2 = indcs.nx2;
       Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
       Real x2f = LeftEdgeX(j-js,nx2,x2min,x2max);
-      
+
       Real &x3min = size.d_view(m).x3min;
       Real &x3max = size.d_view(m).x3max;
       int nx3 = indcs.nx3;
@@ -337,7 +338,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         Real xr = x2v - 0.25*dx2;
         a2(m,k,j,i) = 0.5*(A2(tov_, x1f,xl,x3f) + A2(tov_, x1f,xr,x3f));
       }
-
     });
 
     auto &b0 = pmbp->pmhd->b0;
@@ -382,17 +382,14 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       w_by = 0.5*(b0.x2f(m,k,j,i) + b0.x2f(m,k,j+1,i));
       w_bz = 0.5*(b0.x3f(m,k,j,i) + b0.x3f(m,k+1,j,i));
     });
-
   }
 
-  // If magnetic fields are enabled, 
   std::cout << "Interpolation and assignment complete!\n";
 
   // Convert primitives to conserved
   if (pmbp->padm == nullptr) {
     // Complain about something here, because this is a dynamic GR test.
-  }
-  else {
+  } else {
     pmbp->pdyngr->PrimToConInit(0, (n1-1), 0, (n2-1), 0, (n3-1));
   }
 
@@ -410,7 +407,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   return;
 }
 
-static void RHS(Real r, Real P, Real m, Real alp, tov_pgen& tov, Real& dP, Real& dm, Real& dalp) {
+static void RHS(Real r, Real P, Real m, Real alp,
+                tov_pgen& tov, Real& dP, Real& dm, Real& dalp) {
   // In our units, the equations take the form
   // dP/dr = -(e + P)/(1 - 2m/r) (m + 4\pi r^3 P)/r^2
   // dm/dr = 4\pi r^2 e
@@ -549,7 +547,8 @@ static void ConstructTOV(tov_pgen& tov) {
 }
 
 KOKKOS_INLINE_FUNCTION
-static void GetPrimitivesAtPoint(const tov_pgen& tov, Real r, Real &rho, Real &p, Real &m, Real &alp) {
+static void GetPrimitivesAtPoint(const tov_pgen& tov, Real r,
+                                 Real &rho, Real &p, Real &m, Real &alp) {
   // Check if we're past the edge of the star.
   // If so, we just return atmosphere with Schwarzschild.
   if (r >= tov.R_edge) {
@@ -560,7 +559,7 @@ static void GetPrimitivesAtPoint(const tov_pgen& tov, Real r, Real &rho, Real &p
     return;
   }
   // Get the lower index for where our point must be located.
-  int idx = (int)(r/tov.dr);
+  int idx = static_cast<int>(r/tov.dr);
   const auto &R = tov.R.d_view;
   const auto &Ps = tov.P.d_view;
   const auto &alps = tov.alp.d_view;
@@ -580,7 +579,7 @@ static void GetPandRho(const tov_pgen& tov, Real r, Real &rho, Real &p) {
     return;
   }
   // Get the lower index for where our point must be located.
-  int idx = (int)(r/tov.dr);
+  int idx = static_cast<int>(r/tov.dr);
   const auto &R = tov.R.d_view;
   const auto &Ps = tov.P.d_view;
   // Interpolate to get the pressure
@@ -605,7 +604,7 @@ static Real A2(const tov_pgen& tov, Real x1, Real x2, Real x3) {
 }
 
 KOKKOS_INLINE_FUNCTION
-static Real Interpolate(Real x, const Real x1, const Real x2, 
+static Real Interpolate(Real x, const Real x1, const Real x2,
                         const Real y1, const Real y2) {
   return ((y2 - y1)*x + (y1*x2 - y2*x1))/(x2 - x1);
 }

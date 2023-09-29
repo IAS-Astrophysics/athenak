@@ -1,11 +1,15 @@
-#ifndef EOS_UNITS_HPP
-#define EOS_UNITS_HPP
-
+#ifndef EOS_PRIMITIVE_SOLVER_UNIT_SYSTEM_HPP_
+#define EOS_PRIMITIVE_SOLVER_UNIT_SYSTEM_HPP_
+//========================================================================================
+// PrimitiveSolver equation-of-state framework
+// Copyright(C) 2023 Jacob M. Fields <jmf6719@psu.edu>
+// Licensed under the 3-clause BSD License (the "LICENSE")
+//========================================================================================
 //! \file eos_units.hpp
 //  \brief contains unit definitions and conversion for the EOS solver.
-//  
+//
 //  Each unit system is defined as its own struct inside the EOSUnits namespace.
-//  TODO: Check that these conversions are correct.
+// TODO(JF): Check that these conversions are correct.
 
 #include "ps_types.hpp"
 
@@ -147,7 +151,7 @@ UnitSystem MakeNuclear();
   CGS.kb/CGS.MeV, // temperature, MeV
 };*/
 
-} // namespace
+} // namespace Primitive
 
 
-#endif
+#endif  // EOS_PRIMITIVE_SOLVER_UNIT_SYSTEM_HPP_
