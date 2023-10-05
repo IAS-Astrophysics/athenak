@@ -17,9 +17,9 @@ namespace radiationfemn {
 void RadiationFEMN::ComputeSourceMatrices() {
   std::cout << "Computing source matrices ..." << std::endl;
 
-  auto mm_ = pmy_pack->pradfemn->mass_matrix;
-  auto e_source_ = pmy_pack->pradfemn->e_source;
-  auto S_source_ = pmy_pack->pradfemn->S_source;
+  auto mm_ = mass_matrix;
+  auto e_source_ = e_source;
+  auto S_source_ = S_source;
 
   HostArray2D<Real> mass_inv_temp;
   Kokkos::realloc(mass_inv_temp, num_points, num_points);

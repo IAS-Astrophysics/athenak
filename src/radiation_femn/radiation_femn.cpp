@@ -105,8 +105,8 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
 
   num_points_total = num_energy_bins * num_points;  // total number of points in the phase space grid (num of energy bins x number of angular points)
 
-  rad_source = pin->GetOrAddInteger("radiation-femn", "sources", 0) == 1;           // switch for sources (default: 0)
-  beam_source = pin->GetOrAddInteger("radiation-femn", "beam_sources", 0) == 1;     // switch for beam sources (default: 0)
+  rad_source = pin->GetOrAddBoolean("radiation-femn", "sources", false);           // switch for sources (default: false)
+  beam_source = pin->GetOrAddBoolean("radiation-femn", "beam_sources", false);     // switch for beam sources (default: false)
 
   // --------------------------------------------------------------------
   // allocate memory and load angular grid arrays and associated matrices
@@ -159,8 +159,9 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
     radiationfemn::MatLumping(mass_matrix);
   }
 
-  // compute P and Pmod matrices
+  // compute P, Pmod matrices, source matrices
   this->ComputePMatrices();
+  this->ComputeSourceMatrices();
 
   // --------------------------------------------------------------------------------------------------------------------------
   // allocate memory for all other variables
@@ -234,7 +235,6 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
     Kokkos::realloc(kappa_a, nmb, ncells3, ncells2, ncells1);
     Kokkos::realloc(kappa_s, nmb, ncells3, ncells2, ncells1);
 
-    this->ComputeSourceMatrices();
   }
 
   /*

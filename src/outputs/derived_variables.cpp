@@ -347,13 +347,33 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     auto num_points_total = pm->pmb_pack->pradfemn->num_points_total;
 
     // Compute sum_{B} S_n F^nA M_AB where S_n = (e_{n+1}^4 - e_{n}^4)/4
+    int scr_level = 0;
+    int scr_size = 1;
+    par_for_outer("rad_femn_E_compute_femn", DevExeSpace(), scr_size, scr_level, 0, nmb - 1, 0, num_points_total -1, ks, ke, js, je, is, ie,
+                KOKKOS_LAMBDA(TeamMember_t member, const int m, const int enang, const int k, const int j, const int i) {
+
+      RadiationFEMNPhaseIndices idcs = pm->pmb_pack->pradfemn->IndicesComponent(enang);
+      int en = idcs.eindex;
+      int B = idcs.angindex;
+
+      Real temp_sum = 0.;
+      Kokkos::parallel_reduce(Kokkos::TeamVectorRange(member, 0, num_points), [&](const int A, Real &partial_sum) {
+        Real Sen = (pow(energy_grid_(en + 1), 4) - pow(energy_grid_(en), 4)) / 4.0;
+        partial_sum += Sen * mm_(B, A) * f0_(m, enang, k, j, i);
+        }, temp_sum);
+        member.team_barrier();
+
+        dv(m, 0, k, j, i) += temp_sum;
+    });
+
+    /*
     par_for("rad_femn_E_compute", DevExeSpace(), 0, (nmb - 1), ks, ke, js, je, is, ie, 0, (num_points - 1), 0, (num_points_total - 1),
             KOKKOS_LAMBDA(int m, int k, int j, int i, int B, int enang) {
               int en = int(enang / num_points);
               int A = enang - en * num_points;
               auto Sen = (pow(energy_grid_(en + 1), 4) - pow(energy_grid_(en), 4)) / 4.0;
               dv(m, 0, k, j, i) += Sen * mm_(B, A) * f0_(m, enang, k, j, i);
-            });
+            }); */
   }
 
   if (name.compare("rad_femn_E") == 0 && pm->pmb_pack->pradfemn->fpn != 0) {
