@@ -52,7 +52,9 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
 
             RadiationFEMNPhaseIndices idcs = IndicesComponent(enang);
             int en = idcs.eindex;
+            int B = idcs.angindex;
             auto Ven = (1. / 3.) * (pow(energy_grid(en + 1), 3) - pow(energy_grid(en), 3));
+            auto ln_en_factor = (1. / 3.) * (log(energy_grid(en + 1)) - log(energy_grid(en)));
 
             Real divf_s = flx1(m, enang, k, j, i) / (2. * mbsize.d_view(m).dx1 * Ven);
             if (multi_d) {
@@ -61,18 +63,28 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
             if (three_d) {
               divf_s += flx3(m, enang, k, j, i) / (2. * mbsize.d_view(m).dx3 * Ven);
             }
-            f0_(m, enang, k, j, i) = gam0 * f0_(m, enang, k, j, i) + gam1 * f1_(m, enang, k, j, i) - beta_dt * divf_s;
+
+            if(!rad_source) {
+              f0_(m, enang, k, j, i) = gam0 * f0_(m, enang, k, j, i) + gam1 * f1_(m, enang, k, j, i) - beta_dt * divf_s;
+            } else {
+              f0_(m, enang, k, j, i) = gam0 * f0_(m, enang, k, j, i) + gam1 * f1_(m, enang, k, j, i) - beta_dt * divf_s
+                                      + sqrt_det_g(m, k, j, i) * beta_dt * eta(m, k, j, i) * e_source(B)
+                                      - sqrt_det_g(m, k, j, i) * beta_dt * (kappa_s(m, k, j, i) + kappa_a(m,k,j,i)) * f0_(m, enang, k, j, i);
+            }
           });
 
   // update the tetrad quantities
   par_for("radiation_femn_tetrad_update", DevExeSpace(), 0, nmb1, 0, 3, 0, 3, ks, ke, js, je, is, ie,
           KOKKOS_LAMBDA(int m, int mu, int muhat, int k, int j, int i) {
-            Real tetr_rhs = (u_mu_(m, 1, k, j, i) / u_mu_(m, 0, k, j, i)) * (L_mu_muhat1_(m, mu, muhat, k, j, i + 1) - L_mu_muhat1_(m, mu, muhat, k, j, i)) / mbsize.d_view(m).dx1;
+            Real tetr_rhs =
+                (u_mu_(m, 1, k, j, i) / u_mu_(m, 0, k, j, i)) * (L_mu_muhat1_(m, mu, muhat, k, j, i + 1) - L_mu_muhat1_(m, mu, muhat, k, j, i)) / mbsize.d_view(m).dx1;
             if (multi_d) {
-              tetr_rhs += (u_mu_(m, 2, k, j, i) / u_mu_(m, 0, k, j, i)) * (L_mu_muhat1_(m, mu, muhat, k, j + 1, i) - L_mu_muhat1_(m, mu, muhat, k, j, i)) / mbsize.d_view(m).dx2;
+              tetr_rhs +=
+                  (u_mu_(m, 2, k, j, i) / u_mu_(m, 0, k, j, i)) * (L_mu_muhat1_(m, mu, muhat, k, j + 1, i) - L_mu_muhat1_(m, mu, muhat, k, j, i)) / mbsize.d_view(m).dx2;
             }
             if (three_d) {
-              tetr_rhs += (u_mu_(m, 3, k, j, i) / u_mu_(m, 0, k, j, i)) * (L_mu_muhat1_(m, mu, muhat, k + 1, j, i) - L_mu_muhat1_(m, mu, muhat, k, j, i)) / mbsize.d_view(m).dx3;
+              tetr_rhs +=
+                  (u_mu_(m, 3, k, j, i) / u_mu_(m, 0, k, j, i)) * (L_mu_muhat1_(m, mu, muhat, k + 1, j, i) - L_mu_muhat1_(m, mu, muhat, k, j, i)) / mbsize.d_view(m).dx3;
             }
             L_mu_muhat0_(m, mu, muhat, k, j, i) = gam0 * L_mu_muhat0_(m, mu, muhat, k, j, i) + gam1 * L_mu_muhat1_(m, mu, muhat, k, j, i) - beta_dt * tetr_rhs;
           });

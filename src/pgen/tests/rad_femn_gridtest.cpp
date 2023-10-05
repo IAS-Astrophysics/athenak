@@ -156,5 +156,14 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
     fout13 << pmbp->pradfemn->e_source(i) << std::endl;
   }
 
+  // save S-matrix
+  std::ofstream fout14(pathdir + filenamepart + "_s_matrix.txt");
+  for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
+    for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
+      fout14 << pmbp->pradfemn->S_source(i, j) << " ";
+    }
+    fout14 << std::endl;
+  }
+
   return;
 }
