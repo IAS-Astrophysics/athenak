@@ -35,6 +35,7 @@ void RadiationFEMN::ComputeSourceMatrices() {
   Kokkos::realloc(S_source_temp_mod, num_points, num_points);
 
   Kokkos::deep_copy(e_source_temp, e_source_);
+  Kokkos::deep_copy(e_source_nominv, e_source_);
 
   Kokkos::deep_copy(e_source_temp_mod, 0.);
   Kokkos::deep_copy(S_source_temp, 0.);

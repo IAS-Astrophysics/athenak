@@ -135,6 +135,7 @@ class RadiationFEMN {
   DvceArray6D<bool> beam_mask;    // boolean mask used for beam source term
 
   DvceArray1D<Real> e_source;     // [Eq. (19) of Radice et. al. arXiv:1209.1634v3]
+  DvceArray1D<Real> e_source_nominv;
   DvceArray2D<Real> S_source;     // [Eq. (19) of Radice et. al. arXiv:1209.1634v3]
   DvceArray2D<Real> W_matrix;     // holds the inverse of (delta^A_B - k * S^A_B) where k = dt or dt/2
 
