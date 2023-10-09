@@ -68,13 +68,46 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
             } else {
               f0_(m, enang, k, j, i) = gam0 * f0_(m, enang, k, j, i) + gam1 * f1_(m, enang, k, j, i) - beta_dt * divf_s
                   + sqrt_det_g(m, k, j, i) * beta_dt * eta(m, k, j, i) * e_source(B);
-                  //- sqrt_det_g(m, k, j, i) * beta_dt * (kappa_s(m, k, j, i) + kappa_a(m, k, j, i)) * f0_(m, enang, k, j, i);
             }
           });
 
-
   int scr_size = ScrArray2D<Real>::shmem_size(num_points, num_points) * 2;
   int scr_level = 0;
+
+  par_for_outer("radiation_femn_update_energy_terms_1", DevExeSpace(), scr_size, scr_level, 0, nmb1, 0, npts1, ks, ke, js, je, is, ie,
+                KOKKOS_LAMBDA(TeamMember_t member, int m, int enang, int k, int j, int i) {
+
+                  RadiationFEMNPhaseIndices idcs = IndicesComponent(enang);
+                  int en = idcs.eindex;
+                  int B = idcs.angindex;
+
+                  Real sum_1 = 0.;
+                  Kokkos::parallel_reduce(Kokkos::TeamVectorRange(member, 0, 16 * num_points), [=](const int numuA, Real &partial_sum) {
+                    int nu = 0;
+                    int mu = 0;
+                    int A = 0;
+                    partial_sum += -3. * F_matrix(nu, mu, 1, A, B) * 0 * f0(m, en * num_points + A, k, j, i)
+                        - 3. * F_matrix(nu, mu, 2, A, B) * 0 * f0(m, en * num_points + A, k, j, i)
+                        - 3. * F_matrix(nu, mu, 2, A, B) * 0 * f0(m, en * num_points + A, k, j, i);
+                  }, sum_1);
+                  member.team_barrier();
+
+                  Real sum_2 = 0.;
+                  Kokkos::parallel_reduce(Kokkos::TeamVectorRange(member, 0, 16 * num_points), [=](const int numuA, Real &partial_sum) {
+                    int nu = 0;
+                    int mu = 0;
+                    int A = 0;
+                    partial_sum += G_matrix(nu, mu, 1, A, B) * 0 * f0(m, en * num_points + A, k, j, i)
+                        + G_matrix(nu, mu, 2, A, B) * 0 * f0(m, en * num_points + A, k, j, i)
+                        + G_matrix(nu, mu, 2, A, B) * 0 * f0(m, en * num_points + A, k, j, i);
+                  }, sum_2);
+                  member.team_barrier();
+
+                  f0_(m, enang, k, j, i) = sum_1 + sum_2;
+                });
+
+  scr_size = ScrArray2D<Real>::shmem_size(num_points, num_points) * 2;
+  scr_level = 0;
   par_for_outer("radiation_femn_update_matinv", DevExeSpace(), scr_size, scr_level, 0, nmb1, 0, npts1, ks, ke, js, je, is, ie,
                 KOKKOS_LAMBDA(TeamMember_t member, int m, int enang, int k, int j, int i) {
 
@@ -96,14 +129,14 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                         + L_mu_muhat0_(m, 0, 1, k, j, i) * P_matrix(1, row, col) + L_mu_muhat0_(m, 0, 2, k, j, i) * P_matrix(2, row, col)
                         + L_mu_muhat0_(m, 0, 3, k, j, i) * P_matrix(3, row, col)
                         + beta_dt * (kappa_s(m, k, j, i) + kappa_a(m, k, j, i)) * (row == col)
-                        + beta_dt * (1./(4.*M_PI)) * S_source(row, col));
+                        + beta_dt * (1. / (4. * M_PI)) * S_source(row, col));
                   });
                   member.team_barrier();
                   radiationfemn::LUInverse(Q_matrix, Qinv_matrix);
 
-                  Real final_result;
+                  Real final_result = 0.;
                   Kokkos::parallel_reduce(Kokkos::TeamVectorRange(member, 0, num_points), [&](const int A, Real &partial_sum) {
-                      partial_sum += Qinv_matrix(B,A) * f0_(m, en*num_points+A, k, j, i);
+                    partial_sum += Qinv_matrix(B, A) * f0_(m, en * num_points + A, k, j, i);
                   }, final_result);
                   member.team_barrier();
 

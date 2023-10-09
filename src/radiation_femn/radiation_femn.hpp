@@ -108,6 +108,7 @@ class RadiationFEMN {
   // ---------------------------------------------------------------------------
   DvceArray5D<Real> f0;         // distribution function
   DvceArray5D<Real> f1;         // distribution at intermediate step
+  DvceArray5D<Real> g0;         // obtain f0 from here
   DvceArray5D<Real> coarse_f0;  // distribution function on 2x coarser grid (for SMR/AMR)
   DvceFaceFld5D<Real> iflx;      // spatial fluxes on zone faces
 
@@ -124,7 +125,7 @@ class RadiationFEMN {
   DvceArray6D<Real> g_dd;         // placeholder for spatial metric
   DvceArray4D<Real> sqrt_det_g;   // square root of determinant of matrix
   DvceArray5D<Real> u_mu;         // placeholder for fluid velocity in lab frame
-  DvceArray6D<Real> Gamma;        // Christoeffel symbol in lab frame
+  DvceArray6D<Real> Gamma;        // Christoeffel symbol in fluid frame
   // ---------------------------------------------------------------------------
   // arrays for source terms
   // ---------------------------------------------------------------------------
