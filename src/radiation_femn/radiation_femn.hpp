@@ -79,6 +79,7 @@ class RadiationFEMN {
   bool rad_source;                // flag to enable/disable source terms for radiation, disabled by default
   bool beam_source;               // flag to enable/disable beam sources, disabled by default
 
+  Real energy_par = 1.;
   // ---------------------------------------------------------------------------
   // arrays for numerical quadratures
   // ---------------------------------------------------------------------------
@@ -180,7 +181,7 @@ class RadiationFEMN {
   int num_points_total;
   RadiationFEMNPhaseIndices IndicesComponent(int n);
   RadiationFEMNPhaseIndices IndicesUnified(int eindex, int angindex);
-  
+
   // ---------------------------------------------------------------------------
   // Functions for angular matrices & tetrad
   void LoadFEMNMatrices();
@@ -199,7 +200,7 @@ class RadiationFEMN {
 void LUDecomposition(DvceArray2D<Real> square_matrix, DvceArray2D<Real> lu_matrix, DvceArray1D<int> pivot_indices);
 void LUSolve(DvceArray2D<Real> lu_matrix, DvceArray1D<int> pivot_indices, DvceArray1D<Real> b_array, DvceArray1D<Real> x_array);
 void LUInverse(DvceArray2D<Real> A_matrix, DvceArray2D<Real> A_matrix_inverse);
-void MatMultiply(HostArray2D <Real> A_matrix, HostArray2D <Real> B_matrix, HostArray2D <Real> result);
+void MatMultiply(HostArray2D<Real> A_matrix, HostArray2D<Real> B_matrix, HostArray2D<Real> result);
 void MatMultiplyComplex(std::vector<std::vector<std::complex<Real>>> &A_matrix,
                         std::vector<std::vector<std::complex<Real>>> &B_matrix,
                         std::vector<std::vector<std::complex<Real>>> &result);
@@ -208,9 +209,20 @@ void MatEig(std::vector<std::vector<Real>> &matrix, std::vector<std::complex<Rea
 void ZeroSpeedCorrection(HostArray2D<Real> matrix, HostArray2D<Real> matrix_corrected, Real v);
 
 KOKKOS_INLINE_FUNCTION
-void ApplyClosure(TeamMember_t member, int num_points, int m, int en, int kk, int jj, int ii, DvceArray5D<Real> f0, ScrArray1D<Real> f0_scratch, ScrArray1D<Real> f0_scratch_p1,
-                                         ScrArray1D<Real> f0_scratch_p2, ScrArray1D<Real> f0_scratch_p3, ScrArray1D<Real> f0_scratch_m1,
-                                         ScrArray1D<Real> f0_scratch_m2);
+void ApplyClosure(TeamMember_t member,
+                  int num_points,
+                  int m,
+                  int en,
+                  int kk,
+                  int jj,
+                  int ii,
+                  DvceArray5D<Real> f0,
+                  ScrArray1D<Real> f0_scratch,
+                  ScrArray1D<Real> f0_scratch_p1,
+                  ScrArray1D<Real> f0_scratch_p2,
+                  ScrArray1D<Real> f0_scratch_p3,
+                  ScrArray1D<Real> f0_scratch_m1,
+                  ScrArray1D<Real> f0_scratch_m2);
 } // namespace radiationfemn
 
 
