@@ -97,6 +97,8 @@ class Radiation {
   bool power_opacity;  // flag to enable Kramer's law opacity for kappa_a
   bool table_opacity;  // flag to use opacity table or not
   bool op_table_use_r; // flag to use t and R for the opacity table
+  bool is_compton_enabled; // flag to enable/disable compton
+
 
   int ross_table_len_x; //length of rossleand mean table: No. of cols
   int ross_table_len_y; // length of rosseland mean table: No. of rows

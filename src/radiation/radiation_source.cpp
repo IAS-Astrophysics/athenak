@@ -48,6 +48,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   bool &is_hydro_enabled_ = is_hydro_enabled;
   bool &is_mhd_enabled_ = is_mhd_enabled;
   bool &are_units_enabled_ = are_units_enabled;
+  bool &is_compton_enabled_ = is_compton_enabled;
   bool &fixed_fluid_ = fixed_fluid;
   bool &affect_fluid_ = affect_fluid;
 
@@ -286,17 +287,120 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
         // intensities within rks <= 1.0 and zeroes intensities within angles where n_0
         // is about zero.  This needs future attention.
         if (excise) {
-          if (rad_mask_(m,k,j,i) || fabs(n_0) < n_0_floor_) { i0_(m,n,k,j,i) = 0.0; }
+          bool apply_excision = (rad_mask_(m,k,j,i) ||
+                                 (!(is_compton_enabled_) && fabs(n_0) < n_0_floor_));
+          if (apply_excision) { i0_(m,n,k,j,i) = 0.0; }
         }
+      }
+
+    // update conserved fluid variables
+      if (affect_fluid_) {
+        u0_(m,IEN,k,j,i) += (m_old[0] - m_new[0]);
+        u0_(m,IM1,k,j,i) += (m_old[1] - m_new[1]);
+        u0_(m,IM2,k,j,i) += (m_old[2] - m_new[2]);
+        u0_(m,IM3,k,j,i) += (m_old[3] - m_new[3]);
       }
     }
 
-    // update conserved fluid variables
-    if (affect_fluid_) {
-      u0_(m,IEN,k,j,i) += (m_old[0] - m_new[0]);
-      u0_(m,IM1,k,j,i) += (m_old[1] - m_new[1]);
-      u0_(m,IM2,k,j,i) += (m_old[2] - m_new[2]);
-      u0_(m,IM3,k,j,i) += (m_old[3] - m_new[3]);
+    // compton scattering
+    if (is_compton_enabled_) {
+      // use partially updated gas temperature
+      tgas = tgasnew;
+
+      // compute polynomial coefficients using partially updated gas temp and intensity
+      suma1 = 0.0;
+      Real jr_cm = 0.0;
+      for (int n=0; n<=nang1; ++n) {
+        Real n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(n,0) + tc(m,1,0,k,j,i)*nh_c_.d_view(n,1) +
+                   tc(m,2,0,k,j,i)*nh_c_.d_view(n,2) + tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
+        Real n0_cm = (u_tet[0]*nh_c_.d_view(n,0) - u_tet[1]*nh_c_.d_view(n,1) -
+                      u_tet[2]*nh_c_.d_view(n,2) - u_tet[3]*nh_c_.d_view(n,3));
+        Real wght_cm = solid_angles_.d_view(n)/SQR(n0_cm)/wght_sum;
+        Real intensity_cm = 4.0*M_PI*(i0_(m,n,k,j,i)/(n0*n_0))*SQR(SQR(n0_cm));
+        Real ir_weight = intensity_cm*wght_cm;
+        jr_cm += ir_weight;
+        suma1 += (n0_cm/n0)*4.0*dtcsigs*inv_t_electron_*wght_cm;
+      }
+      suma2 = 4.0*dtaucsigs*inv_t_electron_*gm1/wdn;
+
+      // compute partially updated radiation temperature
+      Real trad = sqrt(sqrt(jr_cm/arad_));
+      const bool temp_equil = (fabs(trad - tgas) < 1.0e-12);
+
+      // Calculate new gas temperature due to Compton
+      Real tradnew = trad;
+      badcell = false;
+      if (!(temp_equil)) {
+        coef[1] = (1.0 + suma2*jr_cm)/(suma1*jr_cm)*arad_;
+        coef[0] = -(1.0 + suma2*jr_cm)/suma1 - tgas;
+        bool flag = FourthPolyRoot(coef[1], coef[0], tradnew);
+        if (!(flag) || !(isfinite(tradnew))) {
+          badcell = true;
+        }
+      }
+
+      // Update the specific intensity
+      if (!(badcell) && !(temp_equil)) {
+        // Compute updated gas temperature
+        tgasnew = (arad_*SQR(SQR(tradnew)) - jr_cm)/(suma1*jr_cm) + tradnew;
+        Real m_old[4] = {0.0}; Real m_new[4] = {0.0};
+        for (int n=0; n<=nang1; ++n) {
+          // compute coordinate normal components
+          Real n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(n,0)+tc(m,1,0,k,j,i)*nh_c_.d_view(n,1)
+                   + tc(m,2,0,k,j,i)*nh_c_.d_view(n,2)+tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
+          Real n_1 = tc(m,0,1,k,j,i)*nh_c_.d_view(n,0)+tc(m,1,1,k,j,i)*nh_c_.d_view(n,1)
+                   + tc(m,2,1,k,j,i)*nh_c_.d_view(n,2)+tc(m,3,1,k,j,i)*nh_c_.d_view(n,3);
+          Real n_2 = tc(m,0,2,k,j,i)*nh_c_.d_view(n,0)+tc(m,1,2,k,j,i)*nh_c_.d_view(n,1)
+                   + tc(m,2,2,k,j,i)*nh_c_.d_view(n,2)+tc(m,3,2,k,j,i)*nh_c_.d_view(n,3);
+          Real n_3 = tc(m,0,3,k,j,i)*nh_c_.d_view(n,0)+tc(m,1,3,k,j,i)*nh_c_.d_view(n,1)
+                   + tc(m,2,3,k,j,i)*nh_c_.d_view(n,2)+tc(m,3,3,k,j,i)*nh_c_.d_view(n,3);
+
+          // compute moments before coupling
+          m_old[0] += (    i0_(m,n,k,j,i)    *solid_angles_.d_view(n));
+          m_old[1] += (n_1*i0_(m,n,k,j,i)/n_0*solid_angles_.d_view(n));
+          m_old[2] += (n_2*i0_(m,n,k,j,i)/n_0*solid_angles_.d_view(n));
+          m_old[3] += (n_3*i0_(m,n,k,j,i)/n_0*solid_angles_.d_view(n));
+
+          // update intensity
+          Real n0_cm = (u_tet[0]*nh_c_.d_view(n,0) - u_tet[1]*nh_c_.d_view(n,1) -
+                        u_tet[2]*nh_c_.d_view(n,2) - u_tet[3]*nh_c_.d_view(n,3));
+          Real di_cm = (n0_cm/n0)*dtcsigs*4.0*jr_cm*inv_t_electron_*(tgasnew - tradnew);
+          i0_(m,n,k,j,i) = n0*n_0*fmax(i0_(m,n,k,j,i)/(n0*n_0) +
+                                       di_cm/(4.0*M_PI*SQR(SQR(n0_cm))), 0.0);
+
+          // compute moments after coupling
+          m_new[0] += (    i0_(m,n,k,j,i)    *solid_angles_.d_view(n));
+          m_new[1] += (n_1*i0_(m,n,k,j,i)/n_0*solid_angles_.d_view(n));
+          m_new[2] += (n_2*i0_(m,n,k,j,i)/n_0*solid_angles_.d_view(n));
+          m_new[3] += (n_3*i0_(m,n,k,j,i)/n_0*solid_angles_.d_view(n));
+
+          // handle excision (see notes above)
+          if (excise) {
+            if (rad_mask_(m,k,j,i) || fabs(n_0) < n_0_floor_) { i0_(m,n,k,j,i) = 0.0; }
+          }
+        }
+
+        // feedback on fluid
+        if (affect_fluid_) {
+          u0_(m,IEN,k,j,i) += (m_old[0] - m_new[0]);
+          u0_(m,IM1,k,j,i) += (m_old[1] - m_new[1]);
+          u0_(m,IM2,k,j,i) += (m_old[2] - m_new[2]);
+          u0_(m,IM3,k,j,i) += (m_old[3] - m_new[3]);
+        }
+      } else {
+        // NOTE(@pdmullen): At this point, it is possible that excision has not been
+        // entirely applied if Compton is enabled and a badcell or temperature equilibrium
+        // was encountered.. apply excision
+        if (excise) {
+          for (int n=0; n<=nang1; ++n) {
+            Real n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(n,0)+
+                       tc(m,1,0,k,j,i)*nh_c_.d_view(n,1)+
+                       tc(m,2,0,k,j,i)*nh_c_.d_view(n,2)+
+                       tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
+            if (rad_mask_(m,k,j,i) || fabs(n_0) < n_0_floor_) { i0_(m,n,k,j,i) = 0.0; }
+          }
+        }
+      }
     }
   });
 
