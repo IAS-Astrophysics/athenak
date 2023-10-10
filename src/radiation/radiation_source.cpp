@@ -64,11 +64,13 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   Real &arad_ = arad;
   Real density_scale_ = 1.0, temperature_scale_ = 1.0, length_scale_  = 1.0;
   Real kramers_constant_ = 1.0;
+  Real inv_t_electron_ = 1.0;
   if (are_units_enabled_) {
     density_scale_ = pmy_pack->punit->density_cgs();
     temperature_scale_ = pmy_pack->punit->temperature_cgs();
     length_scale_ = pmy_pack->punit->length_cgs();
     kramers_constant_ = pmy_pack->punit->kramers_opacity_constant_cgs;
+    inv_t_electron_ = temperature_scale_/pmy_pack->punit->electron_rest_mass_energy_cgs;
   }
 
   // Extract adiabatic index

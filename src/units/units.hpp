@@ -47,6 +47,7 @@ class Units {
   static constexpr Real grav_constant_cgs = 6.67408e-8;           // cm^3/(g*s^2)
   static constexpr Real speed_of_light_cgs = 2.99792458e10;       // cm/s
   static constexpr Real rad_constant_cgs = 7.56573325e-15;        // erg/(cm^3*K^4)
+  static constexpr Real electron_rest_mass_energy_cgs = 5.93e9;   // k
   static constexpr Real kramers_opacity_constant_cgs = 8.0e22;    // R&L
 
   // functions
