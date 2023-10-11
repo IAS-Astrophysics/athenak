@@ -135,7 +135,8 @@ add_executable(
         pgen/tests/radiation_femn_gridtest_fpn.cpp
         radiation_femn/radiation_femn_closure.cpp
         radiation_femn/radiation_femn_compute_sourcematrices.cpp
-        pgen/tests/rad_femn_latticetest.cpp)
+        pgen/tests/rad_femn_latticetest.cpp
+        radiation_femn/radiation_femn_tetrad_compute.cpp)
 
 # custom problem generator to be included in compile
 # specify on command line using '-D PROBLEM=file' where 'file' is name of file in
