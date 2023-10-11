@@ -134,6 +134,16 @@ else()
 	set(TWO_PUNCTURES 0)
 endif()
 
+if (${PROBLEM} STREQUAL "elliptica_bns")
+  target_include_directories(athena PRIVATE
+      ${CMAKE_SOURCE_DIR}/Elliptica_ID_Reader/include)
+  target_link_libraries(athena PUBLIC
+      ${CMAKE_SOURCE_DIR}/Elliptica_ID_Reader/lib/libelliptica_id_reader.a)
+  set(ELLIPTICA 1)
+else()
+  set(ELLIPTICA 0)
+endif()
+
 # enable include of header files created in build directories
 target_include_directories(athena PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}

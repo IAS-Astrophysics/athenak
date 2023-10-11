@@ -443,9 +443,9 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
   }
 
   // Call FOFC if necessary
-  /*if (pmy_pack->phydro->use_fofc) {
+  if (pmy_pack->pmhd->use_fofc || pmy_pack->pcoord->coord_data.bh_excise) {
     FOFC(pdriver, stage);
-  }*/
+  }
 
   return TaskStatus::complete;
 }

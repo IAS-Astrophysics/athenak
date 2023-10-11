@@ -148,11 +148,11 @@ class MHD {
   // first-order flux correction
   void FOFC(Driver *d, int stage);
 
+  DvceArray5D<Real> utest, bcctest;  // scratch arrays for FOFC
  private:
   MeshBlockPack* pmy_pack;   // ptr to MeshBlockPack containing this MHD
   // temporary variables used to store face-centered electric fields returned by RS
   DvceArray4D<Real> e1_cc, e2_cc, e3_cc;
-  DvceArray5D<Real> utest, bcctest;  // scratch arrays for FOFC
 };
 
 } // namespace mhd

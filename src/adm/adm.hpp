@@ -46,6 +46,14 @@ class ADM {
   };
   ADM_vars adm;
 
+  struct ADMhost_vars {
+    AthenaHostTensor<Real, TensorSymm::NONE, 3, 0> alpha;
+    AthenaHostTensor<Real, TensorSymm::NONE, 3, 1> beta_u;
+    AthenaHostTensor<Real, TensorSymm::NONE, 3, 0> psi4;
+    AthenaHostTensor<Real, TensorSymm::SYM2, 3, 2> g_dd;
+    AthenaHostTensor<Real, TensorSymm::SYM2, 3, 2> vK_dd;
+  };
+
   DvceArray5D<Real> u_adm;                                   // adm variables
 
   // TODO(Francesco): handle regridding

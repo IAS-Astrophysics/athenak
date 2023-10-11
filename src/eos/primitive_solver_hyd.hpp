@@ -142,8 +142,8 @@ class PrimitiveSolverHydro {
     }
 
     // Densitize the variables
-    for (int i = 0; i < nhyd + nscal; i++) {
-      cons_pt[i] *= sdetg;
+    for (int n = 0; n < nhyd + nscal; n++) {
+      cons_pt[n] *= sdetg;
     }
     b[ibx] *= sdetg;
     b[iby] *= sdetg;

@@ -18,7 +18,7 @@ namespace dyngr {
 
 template<class EOSPolicy, class ErrorPolicy>
 KOKKOS_INLINE_FUNCTION
-void ExtractPrimitives(const DvceArray5D<Real>& prim, Real prim_pt[NPRIM],
+void ExtractPrimitives(Real prim_pt[NPRIM], const DvceArray5D<Real>& prim,
                        const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
                        const int& nhyd, const int& nscal,
                        const int m, const int k, const int j, const int i) {
@@ -33,6 +33,14 @@ void ExtractPrimitives(const DvceArray5D<Real>& prim, Real prim_pt[NPRIM],
   prim_pt[PPR] = prim(m, IPR, k, j, i);
   prim_pt[PTM] = eos.ps.GetEOS().GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR],
                                                      &prim_pt[PYF]);
+}
+
+KOKKOS_INLINE_FUNCTION
+void ExtractBField(Real bu_pt[NMAG], const DvceArray5D<Real> bcc,
+                   int ibx, int iby, int ibz,
+                   const int m, const int k, const int j, const int i) {
+  bu_pt[iby] = bcc(m, iby, k, j, i);
+  bu_pt[ibz] = bcc(m, ibz, k, j, i);
 }
 
 template<int dir, class EOSPolicy, class ErrorPolicy>

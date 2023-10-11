@@ -1630,6 +1630,12 @@ void TorusFluxes(HistoryData *pdata, Mesh *pm) {
     bcc0_ = pmbp->pmhd->bcc0;
   }
 
+  // Calculate conversion for P to e if using DynGR.
+  Real to_ien = 1.;
+  if (pmbp->pdyngr != nullptr) {
+    to_ien = 1.0 / (gamma - 1.);
+  }
+
   // extract grids, number of radii, number of fluxes, and history appending index
   auto &grids = pm->pgen->spherical_grids;
   int nradii = grids.size();
@@ -1695,7 +1701,7 @@ void TorusFluxes(HistoryData *pdata, Mesh *pm) {
       Real &int_vx = grids[g]->interp_vals.h_view(n,IVX);
       Real &int_vy = grids[g]->interp_vals.h_view(n,IVY);
       Real &int_vz = grids[g]->interp_vals.h_view(n,IVZ);
-      Real &int_ie = grids[g]->interp_vals.h_view(n,IEN);
+      Real int_ie = grids[g]->interp_vals.h_view(n,IEN)*to_ien;
 
       // extract interpolated field components (iff is_mhd)
       Real int_bx = 0.0, int_by = 0.0, int_bz = 0.0;

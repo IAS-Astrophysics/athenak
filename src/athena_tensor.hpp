@@ -54,7 +54,6 @@ using sub_HostArray5D_0D = decltype(Kokkos::subview(
 template<typename T, TensorSymm sym, int ndim, int rank>
 class AthenaHostTensor;
 
-
 //----------------------------------------------------------------------------------------
 // rank 0 AthenaHostTensor: 3D scalar fields
 // This is simply a DvceArray3D
@@ -76,8 +75,34 @@ class AthenaHostTensor<T, sym, ndim, 0> {
   void InitWithShallowSlice(HostArray5D<Real> src, const int indx) {
     data_ = Kokkos::subview(src,Kokkos::ALL,indx,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
   }
+
  private:
   sub_HostArray5D_0D data_;
+};
+//----------------------------------------------------------------------------------------
+// rank 1 AthenaTensor, e.g., the lapse
+template<typename T, TensorSymm sym, int ndim>
+class AthenaHostTensor<T, sym, ndim, 1> {
+ public:
+  // the default constructor/destructor/copy operators are sufficient
+  AthenaHostTensor() = default;
+  ~AthenaHostTensor() = default;
+  AthenaHostTensor(AthenaHostTensor<T, sym, ndim, 1> const &) = default;
+  AthenaHostTensor<T, sym, ndim, 1> & operator =
+  (AthenaHostTensor<T, sym, ndim, 1> const &) = default;
+  // operators to access the data
+  KOKKOS_INLINE_FUNCTION
+  decltype(auto) operator() (int const m, int const a,
+                             int const k, int const j, int const i) const {
+    return data_(m,a,k,j,i);
+  }
+  void InitWithShallowSlice(HostArray5D<Real> src, const int indx1, const int indx2) {
+    data_ = Kokkos::subview(src, Kokkos::ALL, std::make_pair(indx1, indx2+1),
+                                 Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+  }
+
+ private:
+  sub_HostArray5D_1D data_;
 };
 //----------------------------------------------------------------------------------------
 // rank 2 AthenaTensor, e.g., the metric or the extrinsic curvature
@@ -137,11 +162,11 @@ AthenaHostTensor<T, sym, ndim, 2>::AthenaHostTensor() {
   }
 }
 
+
 // this is the abstract base class
 // This now works only for spatially 3D data
 template<typename T, TensorSymm sym, int ndim, int rank>
 class AthenaTensor;
-
 
 //----------------------------------------------------------------------------------------
 // rank 0 AthenaTensor: 3D scalar fields

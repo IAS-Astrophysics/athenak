@@ -19,6 +19,156 @@
 namespace dyngr {
 
 //----------------------------------------------------------------------------------------
+//! \fn void SingleStateLLF_DYNGR
+//! \brief inline function for calculating GRMHD fluxes via Lax-Friedrichs
+//! TODO: This could potentially be sped up by calculating the conserved variables without
+//  the help of PrimitiveSolver; there are redundant calculations with B^i v_i and W that
+//  may not be needed.
+template<class EOSPolicy, class ErrorPolicy>
+KOKKOS_INLINE_FUNCTION
+void SingleStateLLF_DYNGR(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
+    Real prim_l[NPRIM], Real prim_r[NPRIM], Real Bu_l[NPRIM], Real Bu_r[NPRIM],
+    const int ivx, const int nmhd, const int nscal,
+    Real g3d[NSPMETRIC], Real beta_u[3], Real alpha,
+    Real flux[NCONS], Real bflux[NMAG]) {
+  int pvx, pvy, pvz;
+  int idx;
+  int csx;
+  int ibx, iby, ibz;
+
+  int diag[3] = {S11, S22, S33};
+
+  pvx = PVX + (ivx - IVX);
+  pvy = PVX + ((ivx - IVX) + 1)%3;
+  pvz = PVX + ((ivx - IVX) + 2)%3;
+
+  csx = CSX + (ivx - IVX);
+
+  idx = diag[ivx - IVX];
+
+  ibx = ivx - IVX;
+  iby = ((ivx - IVX) + 1)%3;
+  ibz = ((ivx - IVX) + 2)%3;
+
+  Real detg = Primitive::GetDeterminant(g3d);
+  Real sdetg = sqrt(detg);
+  Real g3u[NSPMETRIC];
+  Primitive::InvertMatrix(g3u, g3d, detg);
+
+  // TODO(JMF): We shouldn't need to call the floor here, but that's probably something
+  // that should be confirmed.
+
+  // Undensitize the magnetic field before calculating the conserved variables
+  for (int n = 0; n < NMAG; n++) {
+    Bu_l[n] /= sdetg;
+    Bu_r[n] /= sdetg;
+  }
+  // Calculate conserved variables
+  Real cons_l[NCONS], cons_r[NCONS];
+  eos.ps.PrimToCon(prim_l, cons_l, Bu_l, g3d);
+  eos.ps.PrimToCon(prim_r, cons_r, Bu_r, g3d);
+  // Densitize the conserved variables
+  for (int n = 0; n < nmhd + nscal; n++) {
+    cons_l[n] *= sdetg;
+    cons_r[n] *= sdetg;
+  }
+  for (int n = 0; n < NMAG; n++) {
+    Bu_l[n] *= sdetg;
+    Bu_r[n] *= sdetg;
+  }
+
+  // Calculate W for the left state.
+  Real uul[3] = {prim_l[IVX], prim_l[IVY], prim_l[IVZ]};
+  Real udl[3];
+  Primitive::LowerVector(udl, uul, g3d);
+  Real Wsql = 1.0 + Primitive::Contract(uul, udl);
+  Real Wl = sqrt(Wsql);
+  Real vcl = prim_l[pvx]/Wl - beta_u[ivx-IVX]/alpha;
+
+  // Calculate 4-magnetic field (undensitized) for the left state.
+  Real bul0 = Primitive::Contract(Bu_l, udl)/(alpha*sdetg);
+  Real bdl[3], Bd_l[3];
+  Primitive::LowerVector(Bd_l, Bu_l, g3d);
+  for (int a = 0; a < 3; a++) {
+    bdl[a] = (alpha*bul0*udl[a] + Bd_l[a]/sdetg)/Wl;
+  }
+  Real bsql = (Primitive::SquareVector(Bu_l, g3d)/detg + SQR(alpha*bul0))/(Wsql);
+
+  // Calculate W for the right state.
+  Real uur[3] = {prim_r[IVX], prim_r[IVY], prim_r[IVZ]};
+  Real udr[3];
+  Primitive::LowerVector(udr, uur, g3d);
+  Real Wsqr = 1.0 + Primitive::Contract(uur, udr);
+  Real Wr = sqrt(Wsqr);
+  Real vcr = prim_r[pvx]/Wr - beta_u[ivx-IVX]/alpha;
+
+  // Calculate 4-magnetic field (densitized) for the right state.
+  Real bur0 = Primitive::Contract(Bu_r, udr)/(alpha*sdetg);
+  Real bdr[3], Bd_r[3];
+  Primitive::LowerVector(Bd_r, Bu_r, g3d);
+  for (int a = 0; a < 3; a++) {
+    bdr[a] = (alpha*bur0*udr[a] + Bd_r[a]/sdetg)/Wr;
+  }
+  Real bsqr = (Primitive::SquareVector(Bu_r, g3d)/detg + SQR(alpha*bur0))/(Wsqr);
+
+  // Calculate fluxes for the left state.
+  Real fl[NCONS], bfl[NMAG];
+  fl[CDN] = alpha*cons_l[CDN]*vcl;
+  fl[CSX] = alpha*(cons_l[CSX]*vcl - bdl[0]*Bu_l[ibx]/Wl);
+  fl[CSY] = alpha*(cons_l[CSY]*vcl - bdl[1]*Bu_l[ibx]/Wl);
+  fl[CSZ] = alpha*(cons_l[CSZ]*vcl - bdl[2]*Bu_l[ibx]/Wl);
+  fl[csx] += alpha*sdetg*(prim_l[PPR] + 0.5*bsql);
+  fl[CTA] = alpha*(cons_l[CTA]*vcl - alpha*bul0*Bu_l[ibx]/Wl
+          + sdetg*(prim_l[PPR] + 0.5*bsql)*prim_l[ivx]/Wl);
+
+  bfl[ibx] = 0.0;
+  bfl[iby] = alpha*(Bu_l[iby]*vcl -
+                    Bu_l[ibx]*(prim_l[pvy]/Wl - beta_u[pvy - PVX]/alpha));
+  bfl[ibz] = alpha*(Bu_l[ibz]*vcl -
+                    Bu_l[ibx]*(prim_l[pvz]/Wl - beta_u[pvz - PVX]/alpha));
+
+  // Calculate fluxes for the right state.
+  Real fr[NCONS], bfr[NMAG];
+  fr[CDN] = alpha*cons_r[CDN]*vcr;
+  fr[CSX] = alpha*(cons_r[CSX]*vcr - bdr[0]*Bu_r[ibx]/Wr);
+  fr[CSY] = alpha*(cons_r[CSY]*vcr - bdr[1]*Bu_r[ibx]/Wr);
+  fr[CSZ] = alpha*(cons_r[CSZ]*vcr - bdr[2]*Bu_r[ibx]/Wr);
+  fr[csx] += alpha*sdetg*(prim_r[PPR] + 0.5*bsqr);
+  fr[CTA] = alpha*(cons_r[CTA]*vcr - alpha*bur0*Bu_r[ibx]/Wr
+          + sdetg*(prim_r[PPR] + 0.5*bsqr)*prim_r[ivx]/Wr);
+
+  bfr[ibx] = 0.0;
+  bfr[iby] = alpha*(Bu_r[iby]*vcr -
+                    Bu_r[ibx]*(prim_r[pvy]/Wr - beta_u[pvy - PVX]/alpha));
+  bfr[ibz] = alpha*(Bu_r[ibz]*vcr -
+                    Bu_r[ibx]*(prim_r[pvz]/Wr - beta_u[pvz - PVX]/alpha));
+
+
+  // Calculate the magnetosonic speeds for both states
+  Real lambda_pl, lambda_pr, lambda_ml, lambda_mr;
+  eos.GetGRFastMagnetosonicSpeeds(lambda_pl, lambda_ml, prim_l, bsql,
+                                  g3d, beta_u, alpha, g3d[idx], pvx);
+  eos.GetGRFastMagnetosonicSpeeds(lambda_pr, lambda_mr, prim_r, bsqr,
+                                  g3d, beta_u, alpha, g3d[idx], pvx);
+
+  // Get the extremal wavespeeds
+  Real lambda_l = fmin(lambda_ml, lambda_mr);
+  Real lambda_r = fmax(lambda_pl, lambda_pr);
+  Real lambda = fmax(lambda_r, -lambda_l);
+
+  // Calculate the fluxes
+  flux[CDN] = 0.5*(fl[CDN] + fr[CDN] - lambda*(cons_r[CDN] - cons_l[CDN]));
+  flux[CSX] = 0.5*(fl[CSX] + fr[CSX] - lambda*(cons_r[CSX] - cons_l[CSX]));
+  flux[CSY] = 0.5*(fl[CSY] + fr[CSY] - lambda*(cons_r[CSY] - cons_l[CSY]));
+  flux[CSZ] = 0.5*(fl[CSZ] + fr[CSZ] - lambda*(cons_r[CSZ] - cons_l[CSZ]));
+  flux[CTA] = 0.5*(fl[CTA] + fr[CTA] - lambda*(cons_r[CTA] - cons_l[CTA]));
+
+  bflux[IBY] = - 0.5 * (bfl[iby] + bfr[iby] - lambda * (Bu_r[iby] - Bu_l[iby]));
+  bflux[IBZ] = 0.5 * (bfl[ibz] + bfr[ibz] - lambda * (Bu_r[ibz] - Bu_l[ibz]));
+}
+
+
+//----------------------------------------------------------------------------------------
 //! \fn void LLF_DYNGR
 //! \brief inline function for calculating GRMHD fluxes via Lax-Friedrichs
 //! TODO: This could potentially be sped up by calculating the conserved variables without
