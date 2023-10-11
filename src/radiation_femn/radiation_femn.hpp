@@ -26,6 +26,7 @@ class Driver;
 struct RadiationFEMNTaskIDs {
   TaskID rad_irecv;
   TaskID copycons;
+  TaskID rad_tetrad;
   TaskID rad_flux;
   TaskID rad_sendf;
   TaskID rad_recvf;
@@ -164,6 +165,7 @@ class RadiationFEMN {
   TaskStatus ApplyLimiterFEM(Driver *pdrive, int stage);
   TaskStatus ApplyFilterLanczos(Driver *pdriver, int stage);
   TaskStatus AddRadiationSourceTerm(Driver *d, int stage);
+  TaskStatus TetradOrthogonalize(Driver *pdriver, int stage);
   void AddBeamSource(DvceArray5D<Real> &i0);
   TaskStatus RestrictI(Driver *d, int stage);
   TaskStatus SendI(Driver *d, int stage);
