@@ -48,7 +48,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
   auto &u_mu_ = u_mu;
 
   size_t scr_size = ScrArray2D<Real>::shmem_size(num_points, num_points) * 2 + ScrArray1D<Real>::shmem_size(num_points) * 2
-      + ScrArray2D<Real>::shmem_size(num_points, num_points);
+      + ScrArray2D<Real>::shmem_size(18,1) + ScrArray2D<Real>::shmem_size(64,1);
   int scr_level = 0;
   par_for_outer("radiation_femn_update_energy", DevExeSpace(), scr_size, scr_level, 0, nmb1, 0, npts1, ks, ke, js, je, is, ie,
                 KOKKOS_LAMBDA(TeamMember_t member, int m, int enang, int k, int j, int i) {
@@ -242,7 +242,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                 });
 
   // update the tetrad quantities
-  par_for("radiation_femn_tetrad_update", DevExeSpace(), 0, nmb1, 0, 3, 0, 3, ks, ke, js, je, is, ie,
+  par_for("radiation_femn_tetrad_update", DevExeSpace(), 0, nmb1, 0, 3, 1, 3, ks, ke, js, je, is, ie,
           KOKKOS_LAMBDA(int m, int mu, int muhat, int k, int j, int i) {
             Real tetr_rhs =
                 (u_mu_(m, 1, k, j, i) / u_mu_(m, 0, k, j, i)) * (L_mu_muhat1_(m, mu, muhat, k, j, i + 1) - L_mu_muhat1_(m, mu, muhat, k, j, i))
