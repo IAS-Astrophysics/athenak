@@ -296,6 +296,8 @@ class PrimitiveSolverHydro {
       ps.GetEOSMutable().SetConservedFloorFailure(true);
     }
 
+    // FIXME(JMF): We can short-circuit the primitive solve if FOFC is already enabled
+    // due to a maximum principle violation.
     int nfloord_=0;
     Kokkos::parallel_reduce("pshyd_c2p",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
     KOKKOS_LAMBDA(const int &idx, int &sumd) {

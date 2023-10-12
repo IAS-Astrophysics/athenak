@@ -45,33 +45,29 @@ void ExtractBField(Real bu_pt[NMAG], const DvceArray5D<Real> bcc,
 
 template<int dir, class EOSPolicy, class ErrorPolicy>
 KOKKOS_INLINE_FUNCTION
-void ExtractPrimitivesWithMinmod(const DvceArray5D<Real>& prim,
-                                 Real prim_l[NPRIM], Real prim_r[NPRIM],
+void ExtractPrimitivesWithMinmod(Real prim_l[NPRIM], Real prim_r[NPRIM],
+                                 const DvceArray5D<Real>& prim,
                                  const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
                                  const int& nhyd, const int& nscal,
                                  const int m, const int k, const int j, const int i) {
   int im1, jm1, km1;
   int ip1, jp1, kp1;
   // Modify the extraction indices based on direction.
-  switch(dir) {
-    case IVX:
-      im1 = i-1;
-      ip1 = i+1;
-      jm1 = jp1 = j;
-      km1 = kp1 = k;
-      break;
-    case IVY:
-      im1 = ip1 = i;
-      jm1 = j-1;
-      jp1 = j+1;
-      km1 = kp1 = k;
-      break;
-    case IVZ:
-      im1 = ip1 = i;
-      jm1 = jp1 = j;
-      km1 = k-1;
-      kp1 = k+1;
-      break;
+  if constexpr (dir == IVX) {
+    im1 = i-1;
+    ip1 = i+1;
+    jm1 = jp1 = j;
+    km1 = kp1 = k;
+  } else if (dir == IVY) {
+    im1 = ip1 = i;
+    jm1 = j-1;
+    jp1 = j+1;
+    km1 = kp1 = k;
+  } else if (dir == IVZ) {
+    im1 = ip1 = i;
+    jm1 = jp1 = j;
+    km1 = k-1;
+    kp1 = k+1;
   }
   Real mb = eos.ps.GetEOS().GetBaryonMass();
   // Reconstruct all the interfaces for each primitive variable. A loop would be more
@@ -103,6 +99,44 @@ void ExtractPrimitivesWithMinmod(const DvceArray5D<Real>& prim,
   if (prim_r[PTM] < 0 || prim_l[PTM] < 0) {
     printf("There's a problem with the temperature!\n");
   }
+  return;
+}
+
+template<int dir>
+KOKKOS_INLINE_FUNCTION
+void ExtractBFieldWithMinmod(Real Bu_l[NMAG], Real Bu_r[NMAG],
+                             const DvceArray5D<Real>& bcc,
+                             const int m, const int k, const int j, const int i) {
+  int iby, ibz;
+  int im1, jm1, km1;
+  int ip1, jp1, kp1;
+  // Modify the extraction indices based on direction.
+  if constexpr (dir == IVX) {
+    im1 = i-1;
+    ip1 = i+1;
+    jm1 = jp1 = j;
+    km1 = kp1 = k;
+    iby = IBY;
+    ibz = IBZ;
+  } else if (dir == IVY) {
+    im1 = ip1 = i;
+    jm1 = j-1;
+    jp1 = j+1;
+    km1 = kp1 = k;
+    iby = IBZ;
+    ibz = IBX;
+  } else if (dir == IVZ) {
+    im1 = ip1 = i;
+    jm1 = jp1 = j;
+    km1 = k-1;
+    kp1 = k+1;
+    iby = IBX;
+    ibz = IBY;
+  }
+  Minmod(bcc(m, iby, km1, jm1, im1), bcc(m, iby, k, j, i), bcc(m, ibz, k, j, i),
+         Bu_l[iby], Bu_r[iby]);
+  Minmod(bcc(m, ibz, km1, jm1, im1), bcc(m, ibz, k, j, i), bcc(m, ibz, k, j, i),
+         Bu_l[ibz], Bu_r[ibz]);
   return;
 }
 

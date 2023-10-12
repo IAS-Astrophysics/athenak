@@ -100,6 +100,8 @@ DynGR::DynGR(MeshBlockPack *pp, ParameterInput *pin) : pmy_pack(pp) {
     std::exit(EXIT_FAILURE);
   }
   scratch_level = pin->GetOrAddInteger("mhd", "dyn_scratch", 0);
+  enforce_maximum = pin->GetOrAddBoolean("mhd", "enforce_maximum", true);
+  dmp_M = pin->GetOrAddReal("mhd", "dmp_M", 1.2);
 }
 
 DynGR::~DynGR() {

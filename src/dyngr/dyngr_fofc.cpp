@@ -6,6 +6,8 @@
 //! \file mhd_fofc.cpp
 //! \brief Implements functions for first-order flux correction (FOFC) algorithm.
 
+#include <limits>
+
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
 #include "driver/driver.hpp"
@@ -67,6 +69,11 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
     auto &utest_ = pmy_pack->pmhd->utest;
     auto &bcctest_ = pmy_pack->pmhd->bcctest;
     auto &b1_ = pmy_pack->pmhd->b1;
+    auto fofc_ = pmy_pack->pmhd->fofc;
+
+    bool &max_ = enforce_maximum;
+    Real Rmax = std::numeric_limits<Real>::max();
+    Real &dmp_M_ = dmp_M;
 
     // Index bounds
     int il = is-1, iu = ie+1, jl = js, ju = je, kl = ks, ku = ke;
@@ -92,6 +99,28 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         utest_(m,n,k,j,i) = gam0*u0_(m,n,k,j,i) + gam1*u1_(m,n,k,j,i) - divf;
       }
 
+      // Enforce maximum principle
+      const int nvars = 2;
+      int indcs[nvars] = {IDN, IEN};
+      if (max_) {
+        for (int n = 0; n < nvars; ++n) {
+          Real varmax = -Rmax;
+          Real varmin = Rmax;
+          for (int kt = k-1; kt <= k+1; kt++) {
+            for (int jt = j-1; jt <= j+1; jt++) {
+              for (int it = i-1; it <= i+1; it++) {
+                varmax = fmax(varmax, u1_(m,indcs[n],kt,jt,it));
+                varmin = fmin(varmin, u1_(m,indcs[n],kt,jt,it));
+              }
+            }
+          }
+          if (utest_(m,indcs[n],k,j,i) > dmp_M_*varmax || 
+              utest_(m,indcs[n],k,j,i) < varmin/dmp_M_) {
+            fofc_(m,k,j,i) = true;
+          }
+        }
+      }
+
       // Estimate updated cell-centered fields
       Real b1old = 0.5*(b1_.x1f(m,k,j,i) + b1_.x1f(m,k,j,i+1));
       Real b2old = 0.5*(b1_.x2f(m,k,j,i) + b1_.x2f(m,k,j+1,i));
@@ -111,6 +140,27 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         bcctest_(m,IBX,k,j,i) += dtodx3*(e2x3_(m,k+1,j,i) - e2x3_(m,k,j,i));
         bcctest_(m,IBY,k,j,i) -= dtodx3*(e1x3_(m,k+1,j,i) - e1x3_(m,k,j,i));
       }
+
+      // Enforce maximum principle
+      // FIXME(JMF): Find a better way to set the minima and maxima.
+      /*if (max_) {
+        for (int n = 0; n < 3; ++n) {
+          Real varmax = -Rmax.;
+          Real varmin = Rmax;
+          for (int kt = k-1; kt <= k+1; kt++) {
+            for (int jt = j-1; jt <= j+1; jt++) {
+              for (int it = i-1; it <= i+1; it++) {
+                varmax = fmax(varmax, u1_(m,n,kt,jt,it));
+                varmin = fmin(varmin, u1_(m,n,kt,jt,it));
+              }
+            }
+          }
+          if (utest_(m,n,k,j,i) > varmax || utest_(m,n,k,j,i) < varmin) {
+            fofc_(m,k,j,i) = true;
+          }
+        }
+      }*/
+
     });
 
     // Test whether conversion to primitives requires floors
@@ -155,6 +205,8 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
       ExtractPrimitives(wri, w0_, eos_, nmhd_, nscal_, m, k, j, i);
       ExtractBField(bli, bcc0_, IBX, IBY, IBZ, m, k, j, i-1);
       ExtractBField(bri, bcc0_, IBX, IBY, IBZ, m, k, j, i);
+      /*ExtractPrimitivesWithMinmod<IVX>(wli, wri, w0_, eos_, nmhd_, nscal_, m, k, j, i);
+      ExtractBFieldWithMinmod<IVX>(bli, bri, bcc0_, m, k, j, i);*/
       bli[IBX] = bri[IBX] = b0_.x1f(m, k, j, i);
 
       // Compute the metric terms at i-1/2
@@ -173,12 +225,15 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
       if (multi_d) {
         Real wlj[NPRIM], *wrj;
+        //Real wlj[NPRIM], wrj[NPRIM];
         Real blj[NMAG], brj[NMAG];
         // Reconstruct states
         ExtractPrimitives(wlj, w0_, eos_, nmhd_, nscal_, m, k, j-1, i);
         wrj = wri;
         ExtractBField(blj, bcc0_, IBY, IBZ, IBX, m, k, j-1, i);
         ExtractBField(brj, bcc0_, IBY, IBZ, IBX, m, k, j, i);
+        /*ExtractPrimitivesWithMinmod<IVY>(wlj, wrj, w0_, eos_, nmhd_, nscal_, m, k, j, i);
+        ExtractBFieldWithMinmod<IVY>(bli, bri, bcc0_, m, k, j, i);*/
         blj[IBY] = brj[IBY] = b0_.x2f(m, k, j, i);
 
         // Compute the metric terms at j-1/2
@@ -196,12 +251,15 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
       if (three_d) {
         Real wmk[NPRIM], *wpk;
+        //Real wmk[NPRIM], wpk[NPRIM];
         Real bmk[NPRIM], bpk[NMAG];
         // Reconstruct states
         ExtractPrimitives(wmk, w0_, eos_, nmhd_, nscal_, m, k-1, j, i);
         wpk = wri;
         ExtractBField(bmk, bcc0_, IBZ, IBX, IBY, m, k-1, j, i);
         ExtractBField(bpk, bcc0_, IBZ, IBX, IBY, m, k, j, i);
+        /*ExtractPrimitivesWithMinmod<IVZ>(wlk, wrk, w0_, eos_, nmhd_, nscal_, m, k, j, i);
+        ExtractBFieldWithMinmod<IVZ>(bli, bri, bcc0_, m, k, j, i);*/
         bmk[IBZ] = bpk[IBZ] = b0_.x3f(m, k, j, i);
 
         // Compute the metric terms at k-1/2
@@ -240,6 +298,8 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
       ExtractPrimitives(wri, w0_, eos_, nmhd_, nscal_, m, k, j, i+1);
       ExtractBField(bli, bcc0_, IBX, IBY, IBZ, m, k, j, i);
       ExtractBField(bri, bcc0_, IBX, IBY, IBZ, m, k, j, i+1);
+      /*ExtractPrimitivesWithMinmod<IVX>(wli, wri, w0_, eos_, nmhd_, nscal_, m, k, j, i+1);
+      ExtractBFieldWithMinmod<IVX>(bli, bri, bcc0_, m, k, j, i+1);*/
       bli[IBX] = bri[IBX] = b0_.x1f(m, k, j, i+1);
 
       // Compute the metric terms at i+1/2
@@ -258,12 +318,16 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
       if (multi_d) {
         Real *wlj, wrj[NPRIM];
+        //Real wlj[NPRIM], wrj[NPRIM];
         Real blj[NMAG], brj[NMAG];
         // Reconstruct states
         wlj = wli;
         ExtractPrimitives(wrj, w0_, eos_, nmhd_, nscal_, m, k, j+1, i);
         ExtractBField(blj, bcc0_, IBY, IBZ, IBX, m, k, j, i);
         ExtractBField(brj, bcc0_, IBY, IBZ, IBX, m, k, j+1, i);
+        /*ExtractPrimitivesWithMinmod<IVY>(wlj, wrj, w0_,
+                                         eos_, nmhd_, nscal_, m, k, j+1, i);
+        ExtractBFieldWithMinmod<IVY>(blj, brj, bcc0_, m, k, j+1, i);*/
         blj[IBY] = brj[IBY] = b0_.x2f(m, k, j+1, i);
 
         // Compute the metric terms at j+1/2
@@ -281,12 +345,16 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
       if (three_d) {
         Real *wmk, wpk[NPRIM];
+        //Real wmk[NPRIM], wpk[NPRIM];
         Real bmk[NPRIM], bpk[NMAG];
         // Reconstruct states
         wmk = wli;
         ExtractPrimitives(wpk, w0_, eos_, nmhd_, nscal_, m, k+1, j, i);
         ExtractBField(bmk, bcc0_, IBZ, IBX, IBY, m, k, j, i);
         ExtractBField(bpk, bcc0_, IBZ, IBX, IBY, m, k+1, j, i);
+        /*ExtractPrimitivesWithMinmod<IVZ>(wlk, wrk, w0_,
+                                         eos_, nmhd_, nscal_, m, k+1, j, i);
+        ExtractBFieldWithMinmod<IVZ>(blk, brk, bcc0_, m, k+1, j, i);*/
         bmk[IBZ] = bpk[IBZ] = b0_.x3f(m, k+1, j, i);
 
         // Compute the metric terms at k-1/2
