@@ -190,7 +190,7 @@ class RadiationFEMN {
   void LoadFPNMatrices();
   void ComputePMatrices();
   void ComputeSourceMatrices();
-  void TetradInitialize();
+
   // ---------------------------------------------------------------------------
   // Functions for closures
 
