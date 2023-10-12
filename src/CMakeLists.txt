@@ -135,7 +135,8 @@ add_executable(
         radiation_femn/radiation_femn_closure.cpp
         radiation_femn/radiation_femn_compute_sourcematrices.cpp
         pgen/tests/rad_femn_latticetest.cpp
-        radiation_femn/radiation_femn_tetrad.cpp)
+        radiation_femn/radiation_femn_tetrad.cpp
+        athena_tensor.hpp)
 
 # custom problem generator to be included in compile
 # specify on command line using '-D PROBLEM=file' where 'file' is name of file in

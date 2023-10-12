@@ -11,6 +11,7 @@
 //  \brief definitions for Radiation FEM_N class
 
 #include "athena.hpp"
+#include "athena_tensor.hpp"
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
 #include "bvals/bvals.hpp"
@@ -127,7 +128,7 @@ class RadiationFEMN {
   DvceArray6D<Real> g_dd;         // placeholder for spatial metric
   DvceArray4D<Real> sqrt_det_g;   // square root of determinant of matrix
   DvceArray5D<Real> u_mu;         // placeholder for fluid velocity in lab frame
-  DvceArray6D<Real> Gamma;        // Christoeffel symbol in fluid frame
+
   // ---------------------------------------------------------------------------
   // arrays for source terms
   // ---------------------------------------------------------------------------
