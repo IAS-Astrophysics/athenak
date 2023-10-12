@@ -38,6 +38,8 @@ struct tov_pgen {
   Real dfloor;
   Real pfloor;
 
+  Real v_pert; // Amplitude of radial velocity perturbation, v^r = U/2(3x - x^3), x = r/R
+
   Real b_norm;
   Real pcut;
   int magindex;
@@ -120,6 +122,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   tov.gamma = pin->GetOrAddReal(block, "gamma", 5.0/3.0);
   tov.dfloor = pin->GetOrAddReal(block, "dfloor", (FLT_MIN));
   tov.pfloor = pin->GetOrAddReal(block, "pfloor", (FLT_MIN));
+  tov.v_pert = pin->GetOrAddReal("problem" , "v_pert", 0.0);
 
   // Set the history function for a TOV star
   user_hist_func = &TOVHistory;
@@ -191,6 +194,12 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     GetPrimitivesAtPoint(tov_, r, rho, p, mass, alp);
     //printf("Primitives retrieved!\n");
 
+    Real vr = 0.;
+    if (r <= tov.R_edge) {
+      Real x = r/tov.R_edge;
+      vr = 0.5*tov_.v_pert*(3.0*x - x*x*x);
+    }
+
     // Auxiliary metric quantities
     Real fmet = 0.0;
     if (r > 0) {
@@ -203,9 +212,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     w0_(m,IDN,k,j,i) = fmax(rho, tov_.dfloor);
     //w0_(m,IEN,k,j,i) = fmax(p, tov_.pfloor)/(tov_.gamma - 1.0);
     w0_(m,IPR,k,j,i) = fmax(p, tov_.pfloor);
-    w0_(m,IVX,k,j,i) = 0.0;
-    w0_(m,IVY,k,j,i) = 0.0;
-    w0_(m,IVZ,k,j,i) = 0.0;
+    w0_(m,IVX,k,j,i) = vr*x1v/r;
+    w0_(m,IVY,k,j,i) = vr*x2v/r;
+    w0_(m,IVZ,k,j,i) = vr*x3v/r;
 
     // Set ADM variables
     adm.alpha(m,k,j,i) = alp;
