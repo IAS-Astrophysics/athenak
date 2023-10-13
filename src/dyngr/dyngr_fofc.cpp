@@ -205,8 +205,6 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
       ExtractPrimitives(wri, w0_, eos_, nmhd_, nscal_, m, k, j, i);
       ExtractBField(bli, bcc0_, IBX, IBY, IBZ, m, k, j, i-1);
       ExtractBField(bri, bcc0_, IBX, IBY, IBZ, m, k, j, i);
-      /*ExtractPrimitivesWithMinmod<IVX>(wli, wri, w0_, eos_, nmhd_, nscal_, m, k, j, i);
-      ExtractBFieldWithMinmod<IVX>(bli, bri, bcc0_, m, k, j, i);*/
       bli[IBX] = bri[IBX] = b0_.x1f(m, k, j, i);
 
       // Compute the metric terms at i-1/2
@@ -225,15 +223,12 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
       if (multi_d) {
         Real wlj[NPRIM], *wrj;
-        //Real wlj[NPRIM], wrj[NPRIM];
         Real blj[NMAG], brj[NMAG];
         // Reconstruct states
         ExtractPrimitives(wlj, w0_, eos_, nmhd_, nscal_, m, k, j-1, i);
         wrj = wri;
         ExtractBField(blj, bcc0_, IBY, IBZ, IBX, m, k, j-1, i);
         ExtractBField(brj, bcc0_, IBY, IBZ, IBX, m, k, j, i);
-        /*ExtractPrimitivesWithMinmod<IVY>(wlj, wrj, w0_, eos_, nmhd_, nscal_, m, k, j, i);
-        ExtractBFieldWithMinmod<IVY>(bli, bri, bcc0_, m, k, j, i);*/
         blj[IBY] = brj[IBY] = b0_.x2f(m, k, j, i);
 
         // Compute the metric terms at j-1/2
@@ -251,15 +246,12 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
       if (three_d) {
         Real wmk[NPRIM], *wpk;
-        //Real wmk[NPRIM], wpk[NPRIM];
         Real bmk[NPRIM], bpk[NMAG];
         // Reconstruct states
         ExtractPrimitives(wmk, w0_, eos_, nmhd_, nscal_, m, k-1, j, i);
         wpk = wri;
         ExtractBField(bmk, bcc0_, IBZ, IBX, IBY, m, k-1, j, i);
         ExtractBField(bpk, bcc0_, IBZ, IBX, IBY, m, k, j, i);
-        /*ExtractPrimitivesWithMinmod<IVZ>(wlk, wrk, w0_, eos_, nmhd_, nscal_, m, k, j, i);
-        ExtractBFieldWithMinmod<IVZ>(bli, bri, bcc0_, m, k, j, i);*/
         bmk[IBZ] = bpk[IBZ] = b0_.x3f(m, k, j, i);
 
         // Compute the metric terms at k-1/2
@@ -298,8 +290,6 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
       ExtractPrimitives(wri, w0_, eos_, nmhd_, nscal_, m, k, j, i+1);
       ExtractBField(bli, bcc0_, IBX, IBY, IBZ, m, k, j, i);
       ExtractBField(bri, bcc0_, IBX, IBY, IBZ, m, k, j, i+1);
-      /*ExtractPrimitivesWithMinmod<IVX>(wli, wri, w0_, eos_, nmhd_, nscal_, m, k, j, i+1);
-      ExtractBFieldWithMinmod<IVX>(bli, bri, bcc0_, m, k, j, i+1);*/
       bli[IBX] = bri[IBX] = b0_.x1f(m, k, j, i+1);
 
       // Compute the metric terms at i+1/2
@@ -318,20 +308,16 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
       if (multi_d) {
         Real *wlj, wrj[NPRIM];
-        //Real wlj[NPRIM], wrj[NPRIM];
         Real blj[NMAG], brj[NMAG];
         // Reconstruct states
         wlj = wli;
         ExtractPrimitives(wrj, w0_, eos_, nmhd_, nscal_, m, k, j+1, i);
         ExtractBField(blj, bcc0_, IBY, IBZ, IBX, m, k, j, i);
         ExtractBField(brj, bcc0_, IBY, IBZ, IBX, m, k, j+1, i);
-        /*ExtractPrimitivesWithMinmod<IVY>(wlj, wrj, w0_,
-                                         eos_, nmhd_, nscal_, m, k, j+1, i);
-        ExtractBFieldWithMinmod<IVY>(blj, brj, bcc0_, m, k, j+1, i);*/
         blj[IBY] = brj[IBY] = b0_.x2f(m, k, j+1, i);
 
         // Compute the metric terms at j+1/2
-        adm::Face2Metric(m, k, j, i+1, adm.g_dd, adm.beta_u, adm.alpha, g3d, beta_u, alpha);
+        adm::Face2Metric(m, k, j+1, i, adm.g_dd, adm.beta_u, adm.alpha, g3d, beta_u, alpha);
 
         // Compute new 1st-order LLF flux at j-face
         SingleStateLLF_DYNGR(eos_, wlj, wrj, blj, brj, IVY, nmhd_, nscal_,
@@ -345,20 +331,16 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
       if (three_d) {
         Real *wmk, wpk[NPRIM];
-        //Real wmk[NPRIM], wpk[NPRIM];
         Real bmk[NPRIM], bpk[NMAG];
         // Reconstruct states
         wmk = wli;
         ExtractPrimitives(wpk, w0_, eos_, nmhd_, nscal_, m, k+1, j, i);
         ExtractBField(bmk, bcc0_, IBZ, IBX, IBY, m, k, j, i);
         ExtractBField(bpk, bcc0_, IBZ, IBX, IBY, m, k+1, j, i);
-        /*ExtractPrimitivesWithMinmod<IVZ>(wlk, wrk, w0_,
-                                         eos_, nmhd_, nscal_, m, k+1, j, i);
-        ExtractBFieldWithMinmod<IVZ>(blk, brk, bcc0_, m, k+1, j, i);*/
         bmk[IBZ] = bpk[IBZ] = b0_.x3f(m, k+1, j, i);
 
-        // Compute the metric terms at k-1/2
-        adm::Face3Metric(m, k, j, i, adm.g_dd, adm.beta_u, adm.alpha, g3d, beta_u, alpha);
+        // Compute the metric terms at k+1/2
+        adm::Face3Metric(m, k+1, j, i, adm.g_dd, adm.beta_u, adm.alpha, g3d, beta_u, alpha);
 
         // Compute new 1st-order LLF flux at k-face
         SingleStateLLF_DYNGR(eos_, wmk, wpk, bmk, bpk, IVZ, nmhd_, nscal_,
