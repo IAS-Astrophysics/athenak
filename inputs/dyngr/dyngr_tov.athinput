@@ -11,20 +11,20 @@ nghost = 3       # Number of ghost cells
 nx1    = 128     # number of cells in x1-direction
 x1min  = -20.0   # minimum x1
 x1max  = 20.0    # maximum x1
-ix1_bc = vacuum  # inner boundary
-ox1_bc = vacuum  # outer boundary
+ix1_bc = diode   # inner boundary
+ox1_bc = diode   # outer boundary
 
 nx2    = 128     # number of cells in x2-direction
 x2min  = -20.0   # minimum x2
 x2max  = 20.0    # maximum x2
-ix2_bc = vacuum  # inner boundary
-ox2_bc = vacuum  # outer boundary
+ix2_bc = diode   # inner boundary
+ox2_bc = diode   # outer boundary
 
 nx3    = 128     # number of cells in x3-direction
 x3min  = -20.0   # minimum x3
 x3max  = 20.0    # maximum x3
-ix3_bc = vacuum  # inner boundary
-ox3_bc = vacuum  # outer boundary
+ix3_bc = diode   # inner boundary
+ox3_bc = diode   # outer boundary
 
 <meshblock>
 nx1  = 32        # Number of cells in each MeshBlock, X1-dir
