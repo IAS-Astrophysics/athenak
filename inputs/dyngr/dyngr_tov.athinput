@@ -27,16 +27,16 @@ ix3_bc = diode   # inner boundary
 ox3_bc = diode   # outer boundary
 
 <meshblock>
-nx1  = 32        # Number of cells in each MeshBlock, X1-dir
-nx2  = 32        # Number of cells in each MeshBlock, X2-dir
-nx3  = 32        # Number of cells in each MeshBlock, X3-dir
+nx1  = 64        # Number of cells in each MeshBlock, X1-dir
+nx2  = 64        # Number of cells in each MeshBlock, X2-dir
+nx3  = 64        # Number of cells in each MeshBlock, X3-dir
 
 <time>
 evolution  = dynamic    # dynamic/kinematic/static
-integrator = rk2        # time integration algorithm
+integrator = rk3        # time integration algorithm
 cfl_number = 0.1
 nlim       = -1
-tlim       = 10
+tlim       = 100
 ndiag      = 1          # cycles between diagnostic output
 
 <coord>
@@ -45,18 +45,19 @@ m           = 1.0
 a           = 0.0
 excise      = false
 
-<hydro>
+<mhd>
 eos         = ideal     # EOS type
 dyn_eos     = ideal     # EOS type
 dyn_error   = reset_floor # error policy
-reconstruct = wenoz     # spatial reconstruction method
+reconstruct = ppm4      # spatial reconstruction method
 rsolver     = llf       # Riemann solver to be used
 dfloor      = 1.28e-13  # floor on density rho
 pfloor      = 1.6384e-24 # floor on gas pressure p_gas
+tfloor      = 1.28e-11
 dthreshold  = 1.e2      # Threshold for flooring
 gamma       = 2.0       # ratio of specific heats Gamma
 dyn_scratch = 1
-fofc        = true
+fofc        = false
 
 <adm>
 
@@ -65,6 +66,9 @@ rhoc        = 1.28e-3 # Central density
 kappa       = 100.0    # P = kappa*rho^gamma
 npoints     = 10000.0  # buffer points for TOV calculation
 dr          = 1e-3     # radial step for TOV calculation
+b_norm      = 1.0 
+pcut        = 1e-6
+magindex    = 1
 user_hist   = true
 
 <output1>
@@ -73,7 +77,7 @@ dt          = 0.00001  # time increment between outputs
 
 <output2>
 file_type   = vtk      # Binary data dump
-variable    = hydro_w  # variables to be output
+variable    = mhd_w_bcc  # variables to be output
 dt          = 1.0      # time increment between outputs
 
 <output3>
@@ -83,14 +87,21 @@ dt          = 1.0
 
 <output4>
 file_type   = vtk
-variable    = hydro_u
+variable    = mhd_divb
 dt          = 1.0
 
 <output5>
-file_type   = vtk
-variable    = tmunu
-dt          = 1.0
+file_type   = tab
+variable    = mhd_w_bcc
+dt          = 0.00001
+slice_x2    = 0.0
+slice_x3    = 0.0
 
 <output6>
 file_type   = rst
 dt          = 10.0
+
+<output7>
+file_type   = vtk
+variable    = mhd_u
+dt          = 0.00001
