@@ -217,7 +217,7 @@ void Face1Metric(const int m, const int k, const int j, const int i,
   alphaface1 = (alpha(m,k,j,i) + alpha(m,k,j,i-1))*0.5;
 
   for (int a = 0; a < 3; ++a) {
-    betaface1_u[i] = (beta_u(m,a,k,j,i) + beta_u(m,a,k,j,i-1))*0.5;
+    betaface1_u[a] = (beta_u(m,a,k,j,i) + beta_u(m,a,k,j,i-1))*0.5;
   }
 
   gface1_dd[S11] = (g_dd(m,0,0,k,j,i) + g_dd(m,0,0,k,j,i-1))*0.5;
@@ -282,7 +282,7 @@ void Face2Metric(const int m, const int k, const int j, const int i,
   alphaface2 = (alpha(m,k,j,i) + alpha(m,k,j-1,i))*0.5;
 
   for (int a = 0; a < 3; ++a) {
-    betaface2_u[i] = (beta_u(m,a,k,j,i) + beta_u(m,a,k,j-1,i))*0.5;
+    betaface2_u[a] = (beta_u(m,a,k,j,i) + beta_u(m,a,k,j-1,i))*0.5;
   }
 
   gface2_dd[S11] = (g_dd(m,0,0,k,j,i) + g_dd(m,0,0,k,j-1,i))*0.5;
@@ -346,7 +346,7 @@ void Face3Metric(const int m, const int k, const int j, const int i,
   alphaface3 = (alpha(m,k,j,i) + alpha(m,k-1,j,i))*0.5;
 
   for (int a = 0; a < 3; ++a) {
-    betaface3_u[i] = (beta_u(m,a,k,j,i) + beta_u(m,a,k-1,j,i))*0.5;
+    betaface3_u[a] = (beta_u(m,a,k,j,i) + beta_u(m,a,k-1,j,i))*0.5;
   }
 
   gface3_dd[S11] = (g_dd(m,0,0,k,j,i) + g_dd(m,0,0,k-1,j,i))*0.5;
