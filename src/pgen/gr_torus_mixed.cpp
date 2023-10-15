@@ -681,7 +681,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     });
 
     // Compute cell-centered fields
-    auto &bcc_ = pmbp->pmhd->bcc0;
     par_for("pgen_bcc", DevExeSpace(), 0,nmb-1,ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       // cell-centered fields are simple linear average of face-centered fields
