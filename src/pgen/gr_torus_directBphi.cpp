@@ -1223,7 +1223,11 @@ static void CalculateFieldInTiltedTorus(struct torus_pgen pgen,
         scaling_param *= exp(-r/pgen.potential_falloff);
       }
       bphi_tilt = 1.0*scaling_param;
-      bphi_tilt -= pgen.potential_cutoff;
+      Real rho = pow(ptot_over_rho, 1.0/gm1) / pgen.rho_peak;
+      if (rho < pgen.potential_cutoff) {
+	bphi_tilt = 0.0;
+      }
+      // bphi_tilt -= pgen.potential_cutoff;
       if (pgen.psi != 0.0) {
         Real dvarphi_dtheta = -pgen.sin_psi * sin_phi / SQR(sin_vartheta);
         Real dvarphi_dphi = sin_theta / SQR(sin_vartheta)
