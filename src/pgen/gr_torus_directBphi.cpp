@@ -3,11 +3,12 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file gr_torus.cpp
+//! \file gr_torus_directBphi.cpp
 //! \brief Problem generator to initialize rotational equilibrium tori in GR, using either
 //! Fishbone-Moncrief (1976) or Chakrabarti (1985) ICs, specialized for cartesian
 //! Kerr-Schild coordinates.  Based on gr_torus.cpp in Athena++, with edits by CJW and SR.
-//! Simplified and implemented in Kokkos by JMS.
+//! Simplified and implemented in Kokkos by JMS. This version is for purely a toroidal
+//! field configuration, written by GH.
 //!
 //! References:
 //!    Fishbone & Moncrief 1976, ApJ 207 962 (FM)
