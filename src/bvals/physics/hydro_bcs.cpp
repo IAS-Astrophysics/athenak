@@ -44,9 +44,9 @@ void BoundaryValues::HydroBCs(MeshBlockPack *ppack, DualArray2D<Real> u_in,
         case BoundaryFlag::reflect:
           for (int i=0; i<ng; ++i) {
             if (n==(IVX)) {
-              u0(m,n,k,j,is-i-1) = -u0(m,n,k,j,is);
+              u0(m,n,k,j,is-i-1) = -u0(m,n,k,j,is+i);
             } else {
-              u0(m,n,k,j,is-i-1) =  u0(m,n,k,j,is);
+              u0(m,n,k,j,is-i-1) =  u0(m,n,k,j,is+i);
             }
           }
           break;
