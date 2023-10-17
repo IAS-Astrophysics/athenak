@@ -87,6 +87,7 @@ TaskStatus MHD::ExpRKUpdate(Driver *pdriver, int stage) {
   // variables (u0) have already been partially updated.
   if (psrc->source_terms_enabled) {
     if (psrc->const_accel)  psrc->AddConstantAccel(u0, w0, beta_dt);
+    if (psrc->pbi_const_accel)  psrc->AddPBIConstantAccel(u0, w0, peos->eos_data, beta_dt);
     if (psrc->shearing_box) psrc->AddShearingBox(u0, w0, bcc0, beta_dt);
     if (psrc->ism_cooling) psrc->AddISMCooling(u0, w0, peos->eos_data, beta_dt);
     if (psrc->rel_cooling) psrc->AddRelCooling(u0, w0, peos->eos_data, beta_dt);

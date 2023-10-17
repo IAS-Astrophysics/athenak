@@ -39,6 +39,7 @@ class SourceTerms {
   bool ism_cooling;
   bool rel_cooling;
   bool beam;
+  bool pbi_const_accel; // gravitational acceleration for pbi test
 
   // new timestep
   Real dtnew;
@@ -46,6 +47,10 @@ class SourceTerms {
   // magnitude and direction of constant accel
   Real const_accel_val;
   int const_accel_dir;
+
+  // magnitude and direction of gravitational acceleration for pbi test
+  Real pbi_const_accel_val;
+  int pbi_const_accel_dir;
 
   // heating rate used with ISM cooling
   Real hrate;
@@ -64,6 +69,8 @@ class SourceTerms {
 
   // functions
   void AddConstantAccel(DvceArray5D<Real> &u0,const DvceArray5D<Real> &w0,const Real dt);
+  void AddPBIConstantAccel(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
+                          const EOS_Data &eos, const Real dt);
   void AddShearingBox(DvceArray5D<Real> &u0,const DvceArray5D<Real> &w0,const Real dt);
   void AddShearingBox(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
                       const DvceArray5D<Real> &bcc, const Real dt);

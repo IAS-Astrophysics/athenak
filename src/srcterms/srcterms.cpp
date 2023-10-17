@@ -97,6 +97,19 @@ SourceTerms::SourceTerms(std::string block, MeshBlockPack *pp, ParameterInput *p
     crate_rel = pin->GetReal(block, "crate_rel");
     cpower_rel = pin->GetOrAddReal(block, "cpower_rel", 1.);
   }
+
+  // (6) gravitational acceleration for pbi test
+  pbi_const_accel = pin->GetOrAddBoolean(block, "pbi_const_accel", false);
+  if (pbi_const_accel) {
+    source_terms_enabled = true;
+    pbi_const_accel_val = pin->GetReal(block, "pbi_const_accel_val");
+    pbi_const_accel_dir = pin->GetInteger(block, "pbi_const_accel_dir");
+    if (pbi_const_accel_dir < 1 || pbi_const_accel_dir > 3) {
+      std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
+                << "sr_const_accle_dir must be 1,2, or 3" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -408,6 +421,51 @@ void SourceTerms::AddBeamSource(DvceArray5D<Real> &i0, const Real bdt) {
         if (rad_mask_(m,k,j,i) || fabs(n_0) < n_0_floor_) { i0(m,n,k,j,i) = 0.0; }
       }
     }
+  });
+
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn
+// Add mock-up SR gravitational acceleration in AddSRConstantAccel
+// NOTE source terms must all be computed using primitive (w0) and NOT conserved (u0) vars
+// Reference: Appendix B in Zhang, Blaes & Jiang (2021), MNRAS 508, 617
+
+void SourceTerms::AddPBIConstantAccel(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
+                        const EOS_Data &eos_data, const Real bdt) {
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  int is = indcs.is, ie = indcs.ie;
+  int js = indcs.js, je = indcs.je;
+  int ks = indcs.ks, ke = indcs.ke;
+  int nmb1 = pmy_pack->nmb_thispack - 1;
+  Real gamma = eos_data.gamma;
+  Real gm1 = gamma - 1.0;
+
+  Real &g = pbi_const_accel_val;
+  int &dir = pbi_const_accel_dir;
+
+  par_for("pbi_const_acc", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    Real gcc = g; // in case to include positional dependence in the future
+    Real rho = w0(m,IDN,k,j,i);
+    Real uux = w0(m,IVX,k,j,i);
+    Real uuy = w0(m,IVY,k,j,i);
+    Real uuz = w0(m,IVZ,k,j,i);
+    Real uu0 = sqrt(1.0+SQR(uux)+SQR(uuy)+SQR(uuz));
+    Real wg  = rho + gamma*w0(m,IEN,k,j,i);
+
+    Real uu_dir = uux;
+    if (dir == 2) uu_dir = uuy;
+    if (dir == 3) uu_dir = uuz;
+
+    Real src1 = (2*SQR(uu0)+1) * rho*uu_dir*gcc;
+    Real src2 = 2*(2*SQR(uu0)+1) * wg*SQR(uu_dir)*gcc - (2*SQR(uu0)-1)*wg*gcc;
+    Real src3 = 2*uu0*(2*SQR(uu0)-1) * wg*uu_dir*gcc;
+
+    // u0(m,IDN,k,j,i) -= bdt*src1;
+    u0(m,dir,k,j,i) -= bdt*src2;
+    // if ((u0.extent_int(1) - 1) == IEN) { u0(m,IEN,k,j,i) -= bdt*src3; }
   });
 
   return;

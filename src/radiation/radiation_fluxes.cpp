@@ -29,7 +29,9 @@ TaskStatus Radiation::CalculateFluxes(Driver *pdriver, int stage) {
   int &is = indcs.is, &ie = indcs.ie;
   int &js = indcs.js, &je = indcs.je;
   int &ks = indcs.ks, &ke = indcs.ke;
-  // int ncells1 = indcs.nx1 + 2*(indcs.ng);
+  int ncells1 = indcs.nx1 + 2*(indcs.ng);
+  // int ncells2 = indcs.nx2 + 2*(indcs.ng);
+  // int ncells3 = indcs.nx3 + 2*(indcs.ng);
 
   int nang1 = prgeo->nangles - 1;
   int nmb1 = pmy_pack->nmb_thispack - 1;
@@ -53,8 +55,11 @@ TaskStatus Radiation::CalculateFluxes(Driver *pdriver, int stage) {
   //   ScrArray1D<Real> iil(member.team_scratch(scr_level), ncells1);
   //   ScrArray1D<Real> iir(member.team_scratch(scr_level), ncells1);
   //
-  //   // compute from is-3 to ie+3 for high-order reconstruction
-  //   par_for_inner(member, is-3, ie+3, [&](const int i) {
+  //   // compute from is-deln to ie+deln for high-order reconstruction
+  //   Real deln = 1;
+  //   if (recon_method_ > 0) deln=2;
+  //   if (recon_method_ > 1) deln=3;
+  //   par_for_inner(member, is-deln, ie+deln, [&](const int i) {
   //     // convert to primitive n_0 I
   //     ii(i) = i0_(m,n,k,j,i)/tet_c_(m,0,0,k,j,i);
   //   });
@@ -108,7 +113,6 @@ TaskStatus Radiation::CalculateFluxes(Driver *pdriver, int stage) {
   //   });
   //
   // }); // endfor_outer
-
 
 
   auto &t1d1 = tet_d1_x1f;
