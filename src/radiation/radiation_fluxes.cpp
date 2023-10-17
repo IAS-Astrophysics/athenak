@@ -209,16 +209,14 @@ TaskStatus Radiation::CalculateFluxes(Driver *pdriver, int stage) {
 
   //--------------------------------------------------------------------------------------
   // Angular Fluxes
-
   if (angular_fluxes) {
     auto &numn = prgeo->num_neighbors;
     auto &indn = prgeo->ind_neighbors;
     auto &arcl = prgeo->arc_lengths;
     auto &solid_angles_ = prgeo->solid_angles;
-
     auto &na_ = na;
     auto &divfa_ = divfa;
-    
+
     par_for("rflux_angular",DevExeSpace(),0,nmb1,0,nang1,ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
       Real divfa_tmp = 0.0;
@@ -237,7 +235,6 @@ TaskStatus Radiation::CalculateFluxes(Driver *pdriver, int stage) {
       }
       divfa_(m,n,k,j,i) = divfa_tmp;
     });
-
   } // endif angular_fluxes
 
   return TaskStatus::complete;
