@@ -431,7 +431,44 @@ SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM]
     rb = Contract(b_u, r_d);
     rbsqr = rb*rb;
     q = tau/D;
+    rsqr = Contract(r_u, r_d);
   }
+
+  // If rsqr is identically zero, we can solve the problem analytically.
+  /*if (rsqr == 0.0 || rsqr == -0.0) {
+    Real n = D/eos.GetBaryonMass();
+    prim[PRH] = n;
+    prim[PVX] = prim[PVY] = prim[PVZ] = 0.0;
+    Real e = tau + (1.0 - 0.5*bsqr)*D;
+    prim[PTM] = eos.GetTemperatureFromE(n, e, Y);
+    prim[PPR] = eos.GetPressure(n, prim[PTM], Y);
+    for (int s = 0; s < n_species; s++) {
+      prim[PYF + s] = Y[s];
+    }
+    if (solver_result.cons_floor || solver_result.cons_adjusted) {
+      cons[CDN] = D;
+      cons[CSX] = cons[CSY] = cons[CSZ] = 0.0;
+      cons[CTA] = tau;
+      for (int s = 0; s < n_species; s++) {
+        cons[CYD + s] = D*Y[s];
+      }
+    }
+    return solver_result;
+  }*/
+
+  // Ensure that the dominant energy condition is obeyed.
+  // FIXME(JMF): This should become part of the error response!
+  /*Real rsqr_max = (1.0 + q)*(1.0 + q);
+  if (rsqr >= rsqr_max) {
+    solver_result.cons_adjusted = true;
+    // We need to rescale S^2 so that it sits *below* (tau + D)^2.
+    Real factor = sqrt(rsqr_max/rsqr)*(1.0 - 1e-10);
+    r_d[0] = r_d[0]*factor; r_d[1] = r_d[1]*factor; r_d[2] = r_d[2]*factor;
+    RaiseForm(r_u, r_d, g3d);
+    // We also need to rescale rb and rsqr
+    rb *= factor;
+    rsqr *= (factor*factor);
+  }*/
 
   // Bracket the root.
   Real min_h = eos.GetMinimumEnthalpy();

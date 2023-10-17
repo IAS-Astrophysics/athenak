@@ -77,8 +77,9 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
     // Index bounds
     int il = is-1, iu = ie+1, jl = js, ju = je, kl = ks, ku = ke;
-    if (multi_d) { jl = js-1, ju = je+1; }
-    if (three_d) { kl = ks-1, ku = ke+1; }
+    int jadd = 0, kadd = 0;
+    if (multi_d) { jl = js-1, ju = je+1, jadd = 1; }
+    if (three_d) { kl = ks-1, ku = ke+1, kadd = 1; }
 
     // Estimate updated conserved variables and cell-centered fields
     par_for("FOFC-newu", DevExeSpace(), 0, nmb-1, kl, ku, jl, ju, il, iu,
@@ -106,8 +107,8 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         for (int n = 0; n < nvars; ++n) {
           Real varmax = -Rmax;
           Real varmin = Rmax;
-          for (int kt = k-1; kt <= k+1; kt++) {
-            for (int jt = j-1; jt <= j+1; jt++) {
+          for (int kt = k - kadd; kt <= k + kadd; kt++) {
+            for (int jt = j - jadd; jt <= j + jadd; jt++) {
               for (int it = i-1; it <= i+1; it++) {
                 varmax = fmax(varmax, u1_(m,indcs[n],kt,jt,it));
                 varmin = fmin(varmin, u1_(m,indcs[n],kt,jt,it));
@@ -325,8 +326,8 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
         // Store 1st-order fluxes at j+1/2
         InsertFluxes(flux, flx2, m, k, j+1, i);
-        e1x2_(m,k,j,i+1) = bflux[IBY];
-        e3x2_(m,k,j,i+1) = bflux[IBZ];
+        e1x2_(m,k,j+1,i) = bflux[IBY];
+        e3x2_(m,k,j+1,i) = bflux[IBZ];
       }
 
       if (three_d) {

@@ -77,6 +77,7 @@ static Real A2(const tov_pgen& pgen, Real x1, Real x2, Real x3);
 
 // Prototypes for user-defined BCs and history
 void TOVHistory(HistoryData *pdata, Mesh *pm);
+void VacuumBC(Mesh *pm);
 
 //----------------------------------------------------------------------------------------
 //! \fn void ProblemGenerator::UserProblem()
@@ -94,7 +95,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   tov_pgen tov;
   // FIXME: Set boundary condition function?
-  //user_bcs_func = VacuumBoundary;
+  user_bcs_func = VacuumBC;
 
   // Read problem-specific parameters from input file
   // global parameters
@@ -616,6 +617,130 @@ KOKKOS_INLINE_FUNCTION
 static Real Interpolate(Real x, const Real x1, const Real x2,
                         const Real y1, const Real y2) {
   return ((y2 - y1)*x + (y1*x2 - y2*x1))/(x2 - x1);
+}
+
+// Boundary function
+void VacuumBC(Mesh *pm) {
+  auto &indcs = pm->mb_indcs;
+  int &ng = indcs.ng;
+  int n1 = indcs.nx1 + 2*ng;
+  int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
+  int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
+  int &is = indcs.is;  int &ie  = indcs.ie;
+  int &js = indcs.js;  int &je  = indcs.je;
+  int &ks = indcs.ks;  int &ke  = indcs.ke;
+  auto &mb_bcs = pm->pmb_pack->pmb->mb_bcs;
+  
+  DvceArray5D<Real> u0_, w0_;
+  u0_ = pm->pmb_pack->pmhd->u0;
+  w0_ = pm->pmb_pack->pmhd->w0;
+  auto &b0 = pm->pmb_pack->pmhd->b0;
+  int nmb = pm->pmb_pack->nmb_thispack;
+  int nvar = u0_.extent_int(1);
+
+  Real &dfloor = pm->pmb_pack->pmhd->peos->eos_data.dfloor;
+  
+  // X1-Boundary
+  // Set X1-BCs on b0 if Meshblock face is at the edge of the computational domain.
+  par_for("noinflow_x1", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),
+  KOKKOS_LAMBDA(int m, int k, int j) {
+    if (mb_bcs.d_view(m,BoundaryFace::inner_x1) == BoundaryFlag::user) {
+      for (int i=0; i<ng; ++i) {
+        b0.x1f(m,k,j,is-i-1) = b0.x1f(m,k,j,is);
+        b0.x2f(m,k,j,is-i-1) = b0.x2f(m,k,j,is);
+        if (j == n2-1) {b0.x2f(m,k,j+1,is-i-1) = b0.x2f(m,k,j+1,is);}
+        b0.x3f(m,k,j,is-i-1) = b0.x3f(m,k,j,is);
+        if (k == n3-1) {b0.x3f(m,k+1,j,is-i-1) = b0.x3f(m,k+1,j,is);}
+        u0_(m, IDN, k, j, is-i-1) = dfloor;
+        u0_(m, IM1, k, j, is-i-1) = 0.0;
+        u0_(m, IM2, k, j, is-i-1) = 0.0;
+        u0_(m, IM3, k, j, is-i-1) = 0.0;
+        u0_(m, IEN, k, j, is-i-1) = 0.0;
+      }
+    }
+    if (mb_bcs.d_view(m,BoundaryFace::outer_x1) == BoundaryFlag::user) {
+      for (int i=0; i<ng; ++i) {
+        b0.x1f(m,k,j,ie+i+2) = b0.x1f(m,k,j,ie+1);
+        b0.x2f(m,k,j,ie+i+1) = b0.x2f(m,k,j,ie);
+        if (j == n2-1) {b0.x2f(m,k,j+1,ie+i+1) = b0.x2f(m,k,j+1,ie);}
+        b0.x3f(m,k,j,ie+i+1) = b0.x3f(m,k,j,ie);
+        if (k == n3-1) {b0.x3f(m,k+1,j,ie+i+1) = b0.x3f(m,k+1,j,ie);}
+        u0_(m, IDN, k, j, ie+i+1) = dfloor;
+        u0_(m, IM1, k, j, ie+i+1) = 0.0;
+        u0_(m, IM2, k, j, ie+i+1) = 0.0;
+        u0_(m, IM3, k, j, ie+i+1) = 0.0;
+        u0_(m, IEN, k, j, ie+i+1) = 0.0;
+      }
+    }
+  });
+
+  // X2-Boundary
+  // Set X2-BCs on b0 if Meshblock face is at the edge of computational domain
+  par_for("noinflow_field_x2", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n1-1),
+  KOKKOS_LAMBDA(int m, int k, int i) {
+    if (mb_bcs.d_view(m,BoundaryFace::inner_x2) == BoundaryFlag::user) {
+      for (int j=0; j<ng; ++j) {
+        b0.x1f(m,k,js-j-1,i) = b0.x1f(m,k,js,i);
+        if (i == n1-1) {b0.x1f(m,k,js-j-1,i+1) = b0.x1f(m,k,js,i+1);}
+        b0.x2f(m,k,js-j-1,i) = b0.x2f(m,k,js,i);
+        b0.x3f(m,k,js-j-1,i) = b0.x3f(m,k,js,i);
+        if (k == n3-1) {b0.x3f(m,k+1,js-j-1,i) = b0.x3f(m,k+1,js,i);}
+        u0_(m, IDN, k, js-j-1, i) = dfloor;
+        u0_(m, IM1, k, js-j-1, i) = 0.0;
+        u0_(m, IM2, k, js-j-1, i) = 0.0;
+        u0_(m, IM3, k, js-j-1, i) = 0.0;
+        u0_(m, IEN, k, js-j-1, i) = 0.0;
+      }
+    }
+    if (mb_bcs.d_view(m,BoundaryFace::outer_x2) == BoundaryFlag::user) {
+      for (int j=0; j<ng; ++j) {
+        b0.x1f(m,k,je+j+1,i) = b0.x1f(m,k,je,i);
+        if (i == n1-1) {b0.x1f(m,k,je+j+1,i+1) = b0.x1f(m,k,je,i+1);}
+        b0.x2f(m,k,je+j+2,i) = b0.x2f(m,k,je+1,i);
+        b0.x3f(m,k,je+j+1,i) = b0.x3f(m,k,je,i);
+        if (k == n3-1) {b0.x3f(m,k+1,je+j+1,i) = b0.x3f(m,k+1,je,i);}
+        u0_(m, IDN, k, je+j+1, i) = dfloor;
+        u0_(m, IM1, k, je+j+1, i) = 0.0;
+        u0_(m, IM2, k, je+j+1, i) = 0.0;
+        u0_(m, IM3, k, je+j+1, i) = 0.0;
+        u0_(m, IEN, k, je+j+1, i) = 0.0;
+      }
+    }
+  });
+
+  // X3-Boundary
+  // Set X3-BCs on b0 if Meshblock face is at the edge of computational domain
+  par_for("noinflow_field_x3", DevExeSpace(),0,(nmb-1),0,(n2-1),0,(n1-1),
+  KOKKOS_LAMBDA(int m, int j, int i) {
+    if (mb_bcs.d_view(m,BoundaryFace::inner_x3) == BoundaryFlag::user) {
+      for (int k=0; k<ng; ++k) {
+        b0.x1f(m,ks-k-1,j,i) = b0.x1f(m,ks,j,i);
+        if (i == n1-1) {b0.x1f(m,ks-k-1,j,i+1) = b0.x1f(m,ks,j,i+1);}
+        b0.x2f(m,ks-k-1,j,i) = b0.x2f(m,ks,j,i);
+        if (j == n2-1) {b0.x2f(m,ks-k-1,j+1,i) = b0.x2f(m,ks,j+1,i);}
+        b0.x3f(m,ks-k-1,j,i) = b0.x3f(m,ks,j,i);
+        u0_(m, IDN, ks-k-1, j, i) = dfloor;
+        u0_(m, IM1, ks-k-1, j, i) = 0.0;
+        u0_(m, IM2, ks-k-1, j, i) = 0.0;
+        u0_(m, IM3, ks-k-1, j, i) = 0.0;
+        u0_(m, IEN, ks-k-1, j, i) = 0.0;
+      }
+    }
+    if (mb_bcs.d_view(m,BoundaryFace::outer_x3) == BoundaryFlag::user) {
+      for (int k=0; k<ng; ++k) {
+        b0.x1f(m,ke+k+1,j,i) = b0.x1f(m,ke,j,i);
+        if (i == n1-1) {b0.x1f(m,ke+k+1,j,i+1) = b0.x1f(m,ke,j,i+1);}
+        b0.x2f(m,ke+k+1,j,i) = b0.x2f(m,ke,j,i);
+        if (j == n2-1) {b0.x2f(m,ke+k+1,j+1,i) = b0.x2f(m,ke,j+1,i);}
+        b0.x3f(m,ke+k+2,j,i) = b0.x3f(m,ke+1,j,i);
+        u0_(m, IDN, ke+k+1, j, i) = dfloor;
+        u0_(m, IM1, ke+k+1, j, i) = 0.0;
+        u0_(m, IM2, ke+k+1, j, i) = 0.0;
+        u0_(m, IM3, ke+k+1, j, i) = 0.0;
+        u0_(m, IEN, ke+k+1, j, i) = 0.0;
+      }
+    }
+  });
 }
 
 // History function
