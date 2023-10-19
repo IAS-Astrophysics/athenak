@@ -382,7 +382,7 @@ class PrimitiveSolverHydro {
       if (result.error != Primitive::Error::SUCCESS && floors_only) {
         fofc_(m,k,j,i) = true;
         sumd++;
-      } else {
+      } else if (!floors_only) {
         if (result.error != Primitive::Error::SUCCESS) {
           // TODO(JF): put in a proper error response here.
           printf("An error occurred during the primitive solve: %s\n"
