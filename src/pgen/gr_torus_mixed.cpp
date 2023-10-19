@@ -486,33 +486,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     auto &nghbr = pmbp->pmb->nghbr;
     auto &mblev = pmbp->pmb->mb_lev;
     auto trs = torus;
-    auto &bcc_ = pmbp->pmhd->bcc0;
-
-    par_for("pgen_bcc", DevExeSpace(), 0,nmb-1,ks-1,ke+1,js-1,je+1,is-1,ie+1,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real& w_bx = bcc_(m,IBX,k,j,i);
-      Real& w_by = bcc_(m,IBY,k,j,i);
-      Real& w_bz = bcc_(m,IBZ,k,j,i);
-
-      Real &x1min = size.d_view(m).x1min;
-      Real &x1max = size.d_view(m).x1max;
-      int nx1 = indcs.nx1;
-      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
-
-      Real &x2min = size.d_view(m).x2min;
-      Real &x2max = size.d_view(m).x2max;
-      int nx2 = indcs.nx2;
-      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
-
-      Real &x3min = size.d_view(m).x3min;
-      Real &x3max = size.d_view(m).x3max;
-      int nx3 = indcs.nx3;
-      Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
-
-      w_bx = B1(trs, x1v, x2v, x3v);
-      w_by = B2(trs, x1v, x2v, x3v);
-      w_bz = B3(trs, x1v, x2v, x3v);
-    });
 
     par_for("pgen_vector_potential", DevExeSpace(), 0,nmb-1,ks,ke+1,js,je+1,is,ie+1,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -542,9 +515,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       a2(m,k,j,i) = A2(trs, x1f, x2v, x3f);
       a3(m,k,j,i) = A3(trs, x1f, x2f, x3v);
 
-      b1(m,k,j,i) = 0.5*(bcc_(m,IBX,k,j,i-1) + bcc_(m,IBX,k,j,i));
-      b2(m,k,j,i) = 0.5*(bcc_(m,IBY,k,j-1,i) + bcc_(m,IBY,k,j,i));
-      b3(m,k,j,i) = 0.5*(bcc_(m,IBZ,k-1,j,i) + bcc_(m,IBZ,k,j,i));
+      b1(m,k,j,i) = B1(trs, x1v, x2f, x3f);
+      b2(m,k,j,i) = B2(trs, x1f, x2v, x3f);
+      b3(m,k,j,i) = B3(trs, x1f, x2f, x3v);
 
       // When neighboring MeshBock is at finer level, compute vector potential as sum of
       // values at fine grid resolution.  This guarantees flux on shared fine/coarse
@@ -666,20 +639,21 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       if (i==ie) {
         b0.x1f(m,k,j,i+1) = ((a3(m,k,j+1,i+1) - a3(m,k,j,i+1))/dx2 -
                              (a2(m,k+1,j,i+1) - a2(m,k,j,i+1))/dx3) +
-                             0.5*(bcc_(m,IBX,k,j,i) + bcc_(m,IBX,k,j,i+1));
+                             trs.ampl_tor_to_pol*b1(m,k,j,i+1);
       }
       if (j==je) {
         b0.x2f(m,k,j+1,i) = ((a1(m,k+1,j+1,i) - a1(m,k,j+1,i))/dx3 -
                              (a3(m,k,j+1,i+1) - a3(m,k,j+1,i))/dx1) +
-                             0.5*(bcc_(m,IBY,k,j,i) + bcc_(m,IBY,k,j+1,i));
+                             trs.ampl_tor_to_pol*b2(m,k,j+1,i);
       }
       if (k==ke) {
         b0.x3f(m,k+1,j,i) = ((a2(m,k+1,j,i+1) - a2(m,k+1,j,i))/dx1 -
                              (a1(m,k+1,j+1,i) - a1(m,k+1,j,i))/dx2) +
-                             0.5*(bcc_(m,IBZ,k,j,i) + bcc_(m,IBZ,k+1,j,i));
+                             trs.ampl_tor_to_pol*b3(m,k+1,j,i);
       }
     });
 
+    auto &bcc_ = pmbp->pmhd->bcc0;
     // Compute cell-centered fields
     par_for("pgen_bcc", DevExeSpace(), 0,nmb-1,ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
