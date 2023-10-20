@@ -482,6 +482,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     Kokkos::realloc(a1, nmb,ncells3,ncells2,ncells1);
     Kokkos::realloc(a2, nmb,ncells3,ncells2,ncells1);
     Kokkos::realloc(a3, nmb,ncells3,ncells2,ncells1);
+    Kokkos::realloc(b1, nmb,ncells3,ncells2,ncells1);
+    Kokkos::realloc(b2, nmb,ncells3,ncells2,ncells1);
+    Kokkos::realloc(b3, nmb,ncells3,ncells2,ncells1);
 
     auto &nghbr = pmbp->pmb->nghbr;
     auto &mblev = pmbp->pmb->mb_lev;
