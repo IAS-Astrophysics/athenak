@@ -482,6 +482,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     Kokkos::realloc(a1, nmb,ncells3,ncells2,ncells1);
     Kokkos::realloc(a2, nmb,ncells3,ncells2,ncells1);
     Kokkos::realloc(a3, nmb,ncells3,ncells2,ncells1);
+    Kokkos::realloc(b1, nmb,ncells3,ncells2,ncells1);
+    Kokkos::realloc(b2, nmb,ncells3,ncells2,ncells1);
+    Kokkos::realloc(b3, nmb,ncells3,ncells2,ncells1);
 
     auto &nghbr = pmbp->pmb->nghbr;
     auto &mblev = pmbp->pmb->mb_lev;
@@ -617,7 +620,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       }
     });
 
-    auto trs = torus;
     auto &b0 = pmbp->pmhd->b0;
     par_for("pgen_b0", DevExeSpace(), 0,nmb-1,ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -626,7 +628,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       Real dx2 = size.d_view(m).dx2;
       Real dx3 = size.d_view(m).dx3;
 
-      std::cout << "Toroidal to poloidal ratio: " << trs.ampl_tor_to_pol << std::endl;
       b0.x1f(m,k,j,i) = ((a3(m,k,j+1,i) - a3(m,k,j,i))/dx2 -
                          (a2(m,k+1,j,i) - a2(m,k,j,i))/dx3)
                          + trs.ampl_tor_to_pol*b1(m,k,j,i);
