@@ -201,11 +201,13 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     Lg_dd.NewAthenaScratchTensor(member, scr_level, ncells1);
     LA_dd.NewAthenaScratchTensor(member, scr_level, ncells1);
 
-    // -----------------------------------------------------------------------------------
-    // Initialize everything to zero
-    //
-    // Scalars
+    Real idx[] = {1/size.d_view(m).dx1, 1/size.d_view(m).dx2, 1/size.d_view(m).dx3};
+
     par_for_inner(member, is, ie, [&](const int i) {
+      // -----------------------------------------------------------------------------------
+      // Initialize everything to zero
+      //
+      // Scalars
       Lalpha(i) = 0.0;
       Lchi(i) = 0.0;
       LKhat(i) = 0.0;
@@ -214,182 +216,127 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
       AA(i) = 0.0;
       R(i) = 0.0;
       dbeta(i) = 0.0;
-    });
 
-    //
-    // Vectors
-    for (int a = 0; a < 3; ++a) {
-      par_for_inner(member, is, ie, [&](const int i) {
+      //
+      // Vectors
+      for (int a = 0; a < 3; ++a) {
         Lbeta_u(a,i) = 0.0;
         LGam_u(a,i) = 0.0;
         Gamma_u(a,i) = 0.0;
         DA_u(a,i) = 0.0;
         ddbeta_d(a,i) = 0.0;
-      });
-    }
+      }
 
-    //
-    // Symmetric tensors
-    for (int a = 0; a < 3; ++a)
-    for (int b = a; b < 3; ++b) {
-      par_for_inner(member, is, ie, [&](const int i) {
+      //
+      // Symmetric tensors
+      for (int a = 0; a < 3; ++a)
+      for (int b = a; b < 3; ++b) {
         Lg_dd(a,b,i) = 0.0;
         LA_dd(a,b,i) = 0.0;
         AA_dd(a,b,i) = 0.0;
         R_dd(a,b,i) = 0.0;
         A_uu(a,b,i) = 0.0;
-      });
-      for (int c = 0; c < 3; ++c) {
-        par_for_inner(member, is, ie, [&](const int i) {
-          Gamma_udd(c,a,b,i) = 0.0;
-        });
+        for (int c = 0; c < 3; ++c) {
+            Gamma_udd(c,a,b,i) = 0.0;
+        }
       }
-    }
 
-    member.team_barrier();
-
-    Real idx[] = {1/size.d_view(m).dx1, 1/size.d_view(m).dx2, 1/size.d_view(m).dx3};
-    // -----------------------------------------------------------------------------------
-    // 1st derivatives
-    //
-    // Scalars
-    for(int a = 0; a < 3; ++a) {
-      par_for_inner(member, is, ie, [&](const int i) {
+      // -----------------------------------------------------------------------------------
+      // 1st derivatives
+      //
+      // Scalars
+      for(int a = 0; a < 3; ++a) {
         dalpha_d(a,i) = Dx<NGHOST>(a, idx, z4c.alpha, m,k,j,i);
-      });
-      par_for_inner(member, is, ie, [&](const int i) {
         dchi_d  (a,i) = Dx<NGHOST>(a, idx, z4c.chi,   m,k,j,i);
-      });
-      par_for_inner(member, is, ie, [&](const int i) {
         dKhat_d (a,i) = Dx<NGHOST>(a, idx, z4c.vKhat,  m,k,j,i);
-      });
-      par_for_inner(member, is, ie, [&](const int i) {
         dTheta_d(a,i) = Dx<NGHOST>(a, idx, z4c.vTheta, m,k,j,i);
-      });
-    }
+      }
 
-    // Vectors
-    for(int a = 0; a < 3; ++a)
-    for(int b = 0; b < 3; ++b) {
-      par_for_inner(member, is, ie, [&](const int i) {
+      // Vectors
+      for(int a = 0; a < 3; ++a)
+      for(int b = 0; b < 3; ++b) {
         dbeta_du(b,a,i) = Dx<NGHOST>(b, idx, z4c.beta_u, m,a,k,j,i);
-      });
-      par_for_inner(member, is, ie, [&](const int i) {
         dGam_du(b,a,i) = Dx<NGHOST>(b, idx, z4c.vGam_u,  m,a,k,j,i);
-      });
-    }
+      }
 
-    // Tensors
-    for(int a = 0; a < 3; ++a)
-    for(int b = a; b < 3; ++b)
-    for(int c = 0; c < 3; ++c) {
-      par_for_inner(member, is, ie, [&](const int i) {
+      // Tensors
+      for(int a = 0; a < 3; ++a)
+      for(int b = a; b < 3; ++b)
+      for(int c = 0; c < 3; ++c) {
         dg_ddd(c,a,b,i) = Dx<NGHOST>(c, idx, z4c.g_dd, m,a,b,k,j,i);
-      });
-    }
+      }
 
-    // -----------------------------------------------------------------------------------
-    // 2nd derivatives
-    //
-    // Scalars
-    for(int a = 0; a < 3; ++a) {
-      par_for_inner(member, is, ie, [&](const int i) {
+      // -----------------------------------------------------------------------------------
+      // 2nd derivatives
+      //
+      // Scalars
+      for(int a = 0; a < 3; ++a) {
         ddalpha_dd(a,a,i) = Dxx<NGHOST>(a, idx, z4c.alpha, m,k,j,i);
-      });
-      par_for_inner(member, is, ie, [&](const int i) {
         ddchi_dd(a,a,i) = Dxx<NGHOST>(a, idx, z4c.chi,   m,k,j,i);
-      });
 
-      for(int b = a + 1; b < 3; ++b) {
-        par_for_inner(member, is, ie, [&](const int i) {
+        for(int b = a + 1; b < 3; ++b) {
           ddalpha_dd(a,b,i) = Dxy<NGHOST>(a, b, idx, z4c.alpha, m,k,j,i);
-        });
-        par_for_inner(member, is, ie, [&](const int i) {
           ddchi_dd(a,b,i) = Dxy<NGHOST>(a, b, idx, z4c.chi,   m,k,j,i);
-        });
+        }
       }
-    }
-    // Vectors
-    for(int c = 0; c < 3; ++c)
-    for(int a = 0; a < 3; ++a) {
-      par_for_inner(member, is, ie, [&](const int i) {
+
+      // Vectors
+      for(int c = 0; c < 3; ++c)
+      for(int a = 0; a < 3; ++a) {
         ddbeta_ddu(a,a,c,i) = Dxx<NGHOST>(a, idx, z4c.beta_u, m,c,k,j,i);
-      });
-      for(int b = a + 1; b < 3; ++b) {
-        par_for_inner(member, is, ie, [&](const int i) {
+        for(int b = a + 1; b < 3; ++b) {
           ddbeta_ddu(a,b,c,i) = Dxy<NGHOST>(a, b, idx, z4c.beta_u, m,c,k,j,i);
-        });
+        }
       }
-    }
-    // Tensors
-    for(int c = 0; c < 3; ++c)
-    for(int d = c; d < 3; ++d)
-    for(int a = 0; a < 3; ++a) {
-      par_for_inner(member, is, ie, [&](const int i) {
+
+      // Tensors
+      for(int c = 0; c < 3; ++c)
+      for(int d = c; d < 3; ++d)
+      for(int a = 0; a < 3; ++a) {
         ddg_dddd(a,a,c,d,i) = Dxx<NGHOST>(a, idx, z4c.g_dd, m,c,d,k,j,i);
-      });
-      for(int b = a + 1; b < 3; ++b) {
-        par_for_inner(member, is, ie, [&](const int i) {
+        for(int b = a + 1; b < 3; ++b) {
           ddg_dddd(a,b,c,d,i) = Dxy<NGHOST>(a, b, idx, z4c.g_dd, m,c,d,k,j,i);
-        });
+        }
       }
-    }
-    // -----------------------------------------------------------------------------------
-    // Advective derivatives
-    //
 
-    //
-    // Scalars
-    for(int a = 0; a < 3; ++a) {
-      par_for_inner(member, is, ie, [&](const int i) {
+      // -----------------------------------------------------------------------------------
+      // Advective derivatives
+      //
+
+      //
+      // Scalars
+      for(int a = 0; a < 3; ++a) {
         Lalpha(i) += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.alpha, m,a,k,j,i);
-      });
-      par_for_inner(member, is, ie, [&](const int i) {
         Lchi(i)   += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.chi,   m,a,k,j,i);
-      });
-      par_for_inner(member, is, ie, [&](const int i) {
         LKhat(i)  += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.vKhat,  m,a,k,j,i);
-      });
-      par_for_inner(member, is, ie, [&](const int i) {
         LTheta(i) += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.vTheta, m,a,k,j,i);
-      });
-    }
+      }
 
-    //
-    // Vectors
-    for(int a = 0; a < 3; ++a)
-    for(int b = 0; b < 3; ++b) {
-      par_for_inner(member, is, ie, [&](const int i) {
+      //
+      // Vectors
+      for(int a = 0; a < 3; ++a)
+      for(int b = 0; b < 3; ++b) {
         Lbeta_u(b,i) += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.beta_u, m,a,b,k,j,i);
-      });
-      par_for_inner(member, is, ie, [&](const int i) {
         LGam_u(b,i)  += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.vGam_u,  m,a,b,k,j,i);
-      });
-    }
+      }
 
-    //
-    // Tensors
-    for(int a = 0; a < 3; ++a)
-    for(int b = a; b < 3; ++b)
-    for(int c = 0; c < 3; ++c) {
-      par_for_inner(member, is, ie, [&](const int i) {
+      //
+      // Tensors
+      for(int a = 0; a < 3; ++a)
+      for(int b = a; b < 3; ++b)
+      for(int c = 0; c < 3; ++c) {
         Lg_dd(a,b,i) += Lx<NGHOST>(c, idx, z4c.beta_u, z4c.g_dd, m,c,a,b,k,j,i);
-      });
-      par_for_inner(member, is, ie, [&](const int i) {
         LA_dd(a,b,i) += Lx<NGHOST>(c, idx, z4c.beta_u, z4c.vA_dd, m,c,a,b,k,j,i);
-      });
-    }
-    // -----------------------------------------------------------------------------------
-    // Get K from Khat
-    //
-    par_for_inner(member, is, ie, [&](const int i) {
+      }
+
+      // -----------------------------------------------------------------------------------
+      // Get K from Khat
+      //
       K(i) = z4c.vKhat(m,k,j,i) + 2.*z4c.vTheta(m,k,j,i);
-    });
 
     // -----------------------------------------------------------------------------------
     // Inverse metric
     //
-    par_for_inner(member, is, ie, [&](const int i) {
       detg(i) = adm::SpatialDet(z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i),
                                 z4c.g_dd(m,0,2,k,j,i), z4c.g_dd(m,1,1,k,j,i),
                                 z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i));
@@ -398,45 +345,33 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
                  z4c.g_dd(m,1,1,k,j,i), z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i),
                  &g_uu(0,0,i), &g_uu(0,1,i), &g_uu(0,2,i),
                  &g_uu(1,1,i), &g_uu(1,2,i), &g_uu(2,2,i));
-    });
 
     // -----------------------------------------------------------------------------------
     // Christoffel symbols
     //
-    member.team_barrier();
-    for(int c = 0; c < 3; ++c)
-    for(int a = 0; a < 3; ++a)
-    for(int b = a; b < 3; ++b) {
-      par_for_inner(member, is, ie, [&](const int i) {
+      for(int c = 0; c < 3; ++c)
+      for(int a = 0; a < 3; ++a)
+      for(int b = a; b < 3; ++b) {
         Gamma_ddd(c,a,b,i) = 0.5*(dg_ddd(a,b,c,i) + dg_ddd(b,a,c,i) - dg_ddd(c,a,b,i));
-      });
-    }
-    member.team_barrier();
-    for(int c = 0; c < 3; ++c)
-    for(int a = 0; a < 3; ++a)
-    for(int b = a; b < 3; ++b)
-    for(int d = 0; d < 3; ++d) {
-      par_for_inner(member, is, ie, [&](const int i) {
+      }
+      for(int c = 0; c < 3; ++c)
+      for(int a = 0; a < 3; ++a)
+      for(int b = a; b < 3; ++b)
+      for(int d = 0; d < 3; ++d) {
         Gamma_udd(c,a,b,i) += g_uu(c,d,i)*Gamma_ddd(d,a,b,i);
-      });
-    }
-    member.team_barrier();
-    // Gamma's computed from the conformal metric (not evolved)
-    for(int a = 0; a < 3; ++a)
-    for(int b = 0; b < 3; ++b)
-    for(int c = 0; c < 3; ++c) {
-      par_for_inner(member, is, ie, [&](const int i) {
+      }
+      // Gamma's computed from the conformal metric (not evolved)
+      for(int a = 0; a < 3; ++a)
+      for(int b = 0; b < 3; ++b)
+      for(int c = 0; c < 3; ++c) {
         Gamma_u(a,i) += g_uu(b,c,i)*Gamma_udd(a,b,c,i);
-      });
-    }
+      }
 
-    // -----------------------------------------------------------------------------------
-    // Curvature of conformal metric
-    //
-    member.team_barrier();
-    for(int a = 0; a < 3; ++a)
-    for(int b = a; b < 3; ++b) {
-      par_for_inner(member, is, ie, [&](const int i) {
+      // -----------------------------------------------------------------------------------
+      // Curvature of conformal metric
+      //
+      for(int a = 0; a < 3; ++a)
+      for(int b = a; b < 3; ++b) {
         for(int c = 0; c < 3; ++c) {
           R_dd(a,b,i) += 0.5*(z4c.g_dd(m,c,a,k,j,i)*dGam_du(b,c,i) +
                               z4c.g_dd(m,c,b,k,j,i)*dGam_du(a,c,i) +
@@ -454,13 +389,11 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
               Gamma_udd(e,c,b,i)*Gamma_ddd(a,e,d,i) +
               Gamma_udd(e,a,d,i)*Gamma_ddd(e,c,b,i));
         }
-      });
-    }
+      }
 
-    // -----------------------------------------------------------------------------------
-    // Derivatives of conformal factor phi
-    //
-    par_for_inner(member, is, ie, [&](const int i) {
+      // -----------------------------------------------------------------------------------
+      // Derivatives of conformal factor phi
+      //
       chi_guarded(i) = (z4c.chi(m,k,j,i)>opt.chi_div_floor)
                       ? z4c.chi(m,k,j,i) : opt.chi_div_floor;
       oopsi4(i) = std::pow(chi_guarded(i), -4./opt.chi_psi_power);
@@ -476,43 +409,38 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
           Ddphi_dd(a,b,i) -= Gamma_udd(c,a,b,i)*dphi_d(c,i);
         }
       }
-    });
 
-    // -----------------------------------------------------------------------------------
-    // Curvature contribution from conformal factor
-    //
-    member.team_barrier();
-    for(int a = 0; a < 3; ++a)
-    for(int b = a; b < 3; ++b) {
-      par_for_inner(member, is, ie, [&](const int i) {
+      // -----------------------------------------------------------------------------------
+      // Curvature contribution from conformal factor
+      //
+      for(int a = 0; a < 3; ++a)
+      for(int b = a; b < 3; ++b) {
         Rphi_dd(a,b,i) = 4.*dphi_d(a,i)*dphi_d(b,i) - 2.*Ddphi_dd(a,b,i);
         for(int c = 0; c < 3; ++c)
         for(int d = 0; d < 3; ++d) {
           Rphi_dd(a,b,i) -= 2.*z4c.g_dd(m,a,b,k,j,i) * g_uu(c,d,i)*(Ddphi_dd(c,d,i) +
               2.*dphi_d(c,i)*dphi_d(d,i));
         }
-      });
-    }
+      }
 
-    // -----------------------------------------------------------------------------------
-    // Trace of the matter stress tensor
-    //
-    // Matter commented out
-    //S.ZeroClear();
-    //member.team_barrier();
-    //for(int a = 0; a < 3; ++a)
-    //for(int b = 0; b < 3; ++b) {
-    //  ILOOP1(i) {
-    //    S(i) += oopsi4(i) * g_uu(a,b,i) * mat.S_dd(m,a,b,k,j,i);
-    //  }
-    //}
+      // -----------------------------------------------------------------------------------
+      // Trace of the matter stress tensor
+      //
+      // Matter commented out
+      //S.ZeroClear();
+      //member.team_barrier();
+      //for(int a = 0; a < 3; ++a)
+      //for(int b = 0; b < 3; ++b) {
+      //  ILOOP1(i) {
+      //    S(i) += oopsi4(i) * g_uu(a,b,i) * mat.S_dd(m,a,b,k,j,i);
+      //  }
+      //}
 
-    // -----------------------------------------------------------------------------------
-    // 2nd covariant derivative of the lapse
-    //
-    for(int a = 0; a < 3; ++a)
-    for(int b = 0; b < 3; ++b) {
-      par_for_inner(member, is, ie, [&](const int i) {
+      // -----------------------------------------------------------------------------------
+      // 2nd covariant derivative of the lapse
+      //
+      for(int a = 0; a < 3; ++a)
+      for(int b = 0; b < 3; ++b) {
         Ddalpha_dd(a,b,i) = ddalpha_dd(a,b,i)
                          - 2.*(dphi_d(a,i)*dalpha_d(b,i) + dphi_d(b,i)*dalpha_d(a,i));
         for(int c = 0; c < 3; ++c) {
@@ -522,46 +450,33 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
               * dphi_d(c,i) * dalpha_d(d,i);
           }
         }
-      });
-    }
+      }
 
-    member.team_barrier();
-    for(int a = 0; a < 3; ++a)
-    for(int b = 0; b < 3; ++b) {
-      par_for_inner(member, is, ie, [&](const int i) {
+      for(int a = 0; a < 3; ++a)
+      for(int b = 0; b < 3; ++b) {
         Ddalpha(i) += oopsi4(i) * g_uu(a,b,i) * Ddalpha_dd(a,b,i);
-      });
-    }
+      }
 
-    // -----------------------------------------------------------------------------------
-    // Contractions of A_ab, inverse, and derivatives
-    //
-    for(int a = 0; a < 3; ++a)
-    for(int b = a; b < 3; ++b)
-    for(int c = 0; c < 3; ++c)
-    for(int d = 0; d < 3; ++d) {
-      par_for_inner(member, is, ie, [&](const int i) {
+      // -----------------------------------------------------------------------------------
+      // Contractions of A_ab, inverse, and derivatives
+      //
+      for(int a = 0; a < 3; ++a)
+      for(int b = a; b < 3; ++b)
+      for(int c = 0; c < 3; ++c)
+      for(int d = 0; d < 3; ++d) {
         AA_dd(a,b,i) += g_uu(c,d,i) * z4c.vA_dd(m,a,c,k,j,i) * z4c.vA_dd(m,d,b,k,j,i);
-      });
-    }
-    member.team_barrier();
-    for(int a = 0; a < 3; ++a)
-    for(int b = 0; b < 3; ++b) {
-      par_for_inner(member, is, ie, [&](const int i) {
+      }
+      for(int a = 0; a < 3; ++a)
+      for(int b = 0; b < 3; ++b) {
         AA(i) += g_uu(a,b,i) * AA_dd(a,b,i);
-      });
-    }
-    for(int a = 0; a < 3; ++a)
-    for(int b = a; b < 3; ++b)
-    for(int c = 0; c < 3; ++c)
-    for(int d = 0; d < 3; ++d) {
-      par_for_inner(member, is, ie, [&](const int i) {
+      }
+      for(int a = 0; a < 3; ++a)
+      for(int b = a; b < 3; ++b)
+      for(int c = 0; c < 3; ++c)
+      for(int d = 0; d < 3; ++d) {
         A_uu(a,b,i) += g_uu(a,c,i) * g_uu(b,d,i) * z4c.vA_dd(m,c,d,k,j,i);
-      });
-    }
-    member.team_barrier();
-    for(int a = 0; a < 3; ++a) {
-      par_for_inner(member, is, ie, [&](const int i) {
+      }
+      for(int a = 0; a < 3; ++a) {
         for(int b = 0; b < 3; ++b) {
             DA_u(a,i) -= (3./2.) * A_uu(a,b,i) * dchi_d(b,i) / chi_guarded(i);
             DA_u(a,i) -= (1./3.) * g_uu(a,b,i) * (2.*dKhat_d(b,i) + dTheta_d(b,i));
@@ -570,50 +485,37 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
         for(int c = 0; c < 3; ++c) {
           DA_u(a,i) += Gamma_udd(a,b,c,i) * A_uu(b,c,i);
         }
-      });
-    }
+      }
 
-    // -----------------------------------------------------------------------------------
-    // Ricci scalar
-    //
-    for(int a = 0; a < 3; ++a)
-    for(int b = 0; b < 3; ++b) {
-      par_for_inner(member, is, ie, [&](const int i) {
+      // -----------------------------------------------------------------------------------
+      // Ricci scalar
+      //
+      for(int a = 0; a < 3; ++a)
+      for(int b = 0; b < 3; ++b) {
         R(i) += oopsi4(i) * g_uu(a,b,i) * (R_dd(a,b,i) + Rphi_dd(a,b,i));
-      });
-    }
+      }
 
-    // -----------------------------------------------------------------------------------
-    // Hamiltonian constraint
-    //
-    par_for_inner(member, is, ie, [&](const int i) {
+      // -----------------------------------------------------------------------------------
+      // Hamiltonian constraint
+      //
       Ht(i) = R(i) + (2./3.)*SQR(K(i)) - AA(i);
-    });
 
-    // -----------------------------------------------------------------------------------
-    // Finalize advective (Lie) derivatives
-    //
-    // Shift vector contractions
-    for(int a = 0; a < 3; ++a) {
-      par_for_inner(member, is, ie, [&](const int i) {
+      // -----------------------------------------------------------------------------------
+      // Finalize advective (Lie) derivatives
+      //
+      // Shift vector contractions
+      for(int a = 0; a < 3; ++a) {
         dbeta(i) += dbeta_du(a,a,i);
-      });
-    }
-    for(int a = 0; a < 3; ++a)
-    for(int b = 0; b < 3; ++b) {
-      par_for_inner(member, is, ie, [&](const int i) {
+      }
+      for(int a = 0; a < 3; ++a)
+      for(int b = 0; b < 3; ++b) {
         ddbeta_d(a,i) += (1./3.) * ddbeta_ddu(a,b,b,i);
-      });
-    }
+      }
 
-    // Finalize Lchi
-    par_for_inner(member, is, ie, [&](const int i) {
+      // Finalize Lchi
       Lchi(i) += (1./6.) * opt.chi_psi_power * chi_guarded(i) * dbeta(i);
-    });
 
-    // Finalize LGam_u (note that this is not a real Lie derivative)
-    member.team_barrier();
-    par_for_inner(member, is, ie, [&](const int i) {
+      // Finalize LGam_u (note that this is not a real Lie derivative)
       for(int a = 0; a < 3; ++a) {
         LGam_u(a,i) += (2./3.) * Gamma_u(a,i) * dbeta(i);
         for(int b = 0; b < 3; ++b) {
@@ -623,74 +525,56 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
           }
         }
       }
-    });
 
-    // Finalize Lg_dd and LA_dd
-    for(int a = 0; a < 3; ++a)
-    for(int b = a; b < 3; ++b) {
-      par_for_inner(member, is, ie, [&](const int i) {
+      // Finalize Lg_dd and LA_dd
+      for(int a = 0; a < 3; ++a)
+      for(int b = a; b < 3; ++b) {
         Lg_dd(a,b,i) -= (2./3.) * z4c.g_dd(m,a,b,k,j,i) * dbeta(i);
         for(int c = 0; c < 3; ++c) {
           Lg_dd(a,b,i) += dbeta_du(a,c,i) * z4c.g_dd(m,b,c,k,j,i);
           Lg_dd(a,b,i) += dbeta_du(b,c,i) * z4c.g_dd(m,a,c,k,j,i);
         }
-      });
-    }
-    for(int a = 0; a < 3; ++a)
-    for(int b = a; b < 3; ++b) {
-      par_for_inner(member, is, ie, [&](const int i) {
+      }
+      for(int a = 0; a < 3; ++a)
+      for(int b = a; b < 3; ++b) {
         LA_dd(a,b,i) -= (2./3.) * z4c.vA_dd(m,a,b,k,j,i) * dbeta(i);
         for(int c = 0; c < 3; ++c) {
           LA_dd(a,b,i) += dbeta_du(b,c,i) * z4c.vA_dd(m,a,c,k,j,i);
           LA_dd(a,b,i) += dbeta_du(a,c,i) * z4c.vA_dd(m,b,c,k,j,i);
         }
-      });
-    }
+      }
 
-    member.team_barrier();
-
-    // -----------------------------------------------------------------------------------
-    // Assemble RHS
-    //
-    // Khat, chi, and Theta
-    par_for_inner(member, is, ie, [&](const int i) {
+      // -----------------------------------------------------------------------------------
+      // Assemble RHS
+      //
+      // Khat, chi, and Theta
       rhs.vKhat(m,k,j,i) = - Ddalpha(i) + z4c.alpha(m,k,j,i)
         * (AA(i) + (1./3.)*SQR(K(i))) +
         LKhat(i) + opt.damp_kappa1*(1 - opt.damp_kappa2)
         * z4c.alpha(m,k,j,i) * z4c.vTheta(m,k,j,i);
-    });
-    // Matter commented out
+      // Matter commented out
       //rhs.Khat(m,k,j,i) += 4*M_PI * z4c.alpha(m,k,j,i) * (S(i) + mat.rho(m,k,j,i));
-    par_for_inner(member, is, ie, [&](const int i) {
       rhs.chi(m,k,j,i) = Lchi(i) - (1./6.) * opt.chi_psi_power *
         chi_guarded(i) * z4c.alpha(m,k,j,i) * K(i);
-    });
-    par_for_inner(member, is, ie, [&](const int i) {
       rhs.vTheta(m,k,j,i) = LTheta(i) + z4c.alpha(m,k,j,i) * (
           0.5*Ht(i) - (2. + opt.damp_kappa2) * opt.damp_kappa1 * z4c.vTheta(m,k,j,i));
-    // Matter commented out
+      // Matter commented out
       //rhs.Theta(m,k,j,i) -= 8.*M_PI * z4c.alpha(m,k,j,i) * mat.rho(m,k,j,i);
-    });
-    // Gamma's
-    for(int a = 0; a < 3; ++a) {
-      par_for_inner(member, is, ie, [&](const int i) {
+      // Gamma's
+      for(int a = 0; a < 3; ++a) {
         rhs.vGam_u(m,a,k,j,i) = 2.*z4c.alpha(m,k,j,i)*DA_u(a,i) + LGam_u(a,i);
         rhs.vGam_u(m,a,k,j,i) -= 2.*z4c.alpha(m,k,j,i) * opt.damp_kappa1 *
             (z4c.vGam_u(m,a,k,j,i) - Gamma_u(a,i));
         for(int b = 0; b < 3; ++b) {
           rhs.vGam_u(m,a,k,j,i) -= 2. * A_uu(a,b,i) * dalpha_d(b,i);
         }
-      });
-    }
+      }
 
-    // g and A
-    for(int a = 0; a < 3; ++a)
-    for(int b = a; b < 3; ++b) {
-      par_for_inner(member, is, ie, [&](const int i) {
+      // g and A
+      for(int a = 0; a < 3; ++a)
+      for(int b = a; b < 3; ++b) {
         rhs.g_dd(m,a,b,k,j,i) = - 2. * z4c.alpha(m,k,j,i) * z4c.vA_dd(m,a,b,k,j,i)
                         + Lg_dd(a,b,i);
-      });
-      par_for_inner(member, is, ie, [&](const int i) {
         rhs.vA_dd(m,a,b,k,j,i) = oopsi4(i) *
             (-Ddalpha_dd(a,b,i) + z4c.alpha(m,k,j,i) * (R_dd(a,b,i) + Rphi_dd(a,b,i)));
         rhs.vA_dd(m,a,b,k,j,i) -= (1./3.) * z4c.g_dd(m,a,b,k,j,i)
@@ -698,33 +582,27 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
         rhs.vA_dd(m,a,b,k,j,i) += z4c.alpha(m,k,j,i) * (K(i)*z4c.vA_dd(m,a,b,k,j,i)
                                - 2.*AA_dd(a,b,i));
         rhs.vA_dd(m,a,b,k,j,i) += LA_dd(a,b,i);
-    // Matter commented out
+        // Matter commented out
         //rhs.A_dd(m,a,b,k,j,i) -= 8.*M_PI * z4c.alpha(m,k,j,i) *
         // (oopsi4*mat.S_dd(m,a,b,k,j,i) - (1./3.)*S(i)*z4c.g_dd(m,a,b,k,j,i));
-      });
-    }
-    // lapse function
-    par_for_inner(member, is, ie, [&](const int i) {
+      }
+      // lapse function
       Real const f = opt.lapse_oplog * opt.lapse_harmonicf
                    + opt.lapse_harmonic * z4c.alpha(m,k,j,i);
       rhs.alpha(m,k,j,i) = opt.lapse_advect * Lalpha(i)
                          - f * z4c.alpha(m,k,j,i) * z4c.vKhat(m,k,j,i);
-    });
 
-    // shift vector
-    for(int a = 0; a < 3; ++a) {
-      par_for_inner(member, is, ie, [&](const int i) {
+      // shift vector
+      for(int a = 0; a < 3; ++a) {
         rhs.beta_u(m,a,k,j,i) = opt.shift_ggamma * z4c.vGam_u(m,a,k,j,i)
                               + opt.shift_advect * Lbeta_u(a,i);
         rhs.beta_u(m,a,k,j,i) -= opt.shift_eta * z4c.beta_u(m,a,k,j,i);
         // FORCE beta = 0
         //rhs.beta_u(m,a,k,j,i) = 0;
-      });
-    }
+      }
 
-    // harmonic gauge terms
-    for(int a = 0; a < 3; ++a) {
-      par_for_inner(member, is, ie, [&](const int i) {
+      // harmonic gauge terms
+      for(int a = 0; a < 3; ++a) {
         rhs.beta_u(m,a,k,j,i) += opt.shift_alpha2ggamma *
                             SQR(z4c.alpha(m,k,j,i)) * z4c.vGam_u(m,a,k,j,i);
         for(int b = 0; b < 3; ++b) {
@@ -732,8 +610,8 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
             chi_guarded(i) * (0.5 * z4c.alpha(m,k,j,i) * dchi_d(b,i) -
                               dalpha_d(b,i)) * g_uu(a,b,i);
         }
-      });
-    }
+      }
+    });
   });
 
   // ===================================================================================
