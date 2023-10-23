@@ -51,7 +51,6 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
-  //For GLOOPS
   int isg = is-indcs.ng; int ieg = ie+indcs.ng;
   int jsg = js-indcs.ng; int jeg = je+indcs.ng;
   int ksg = ks-indcs.ng; int keg = ke+indcs.ng;
@@ -65,7 +64,6 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
   auto &adm = pmbp->padm->adm;
   auto &opt = pmbp->pz4c->opt;
   // 2 1D scratch array and 1 2D scratch array
-  Kokkos::Profiling::pushRegion("Region1");
   par_for("initialize z4c fields",DevExeSpace(),
   0,nmb-1,ksg,keg,jsg,jeg,isg,ieg,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
@@ -98,7 +96,6 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
                                 z4c.vKhat(m,k,j,i) * z4c.g_dd(m,a,b,k,j,i);
     }
   });
-  Kokkos::Profiling::popRegion();
 
   DvceArray5D<Real> g_uu("g_uu", nmb, 6, ncells3, ncells2, ncells1);
   // GLOOP
@@ -171,38 +168,27 @@ void Z4c::Z4cToADM(MeshBlockPack *pmbp) {
   int jsg = js-indcs.ng; int jeg = je+indcs.ng;
   int ksg = ks-indcs.ng; int keg = ke+indcs.ng;
 
-  int ncells1 = indcs.nx1 + 2*(indcs.ng);
   int nmb = pmbp->nmb_thispack;
 
   auto &z4c = pmbp->pz4c->z4c;
   auto &adm = pmbp->padm->adm;
   auto &opt = pmbp->pz4c->opt;
-  int scr_level = 0;
-  size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1);
-  par_for_outer("initialize z4c fields",DevExeSpace(),
-  scr_size,scr_level,0,nmb-1,ksg,keg,jsg,jeg,
-  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {
-    par_for_inner(member, isg, ieg, [&](const int i) {
-      adm.psi4(m,k,j,i) = std::pow(z4c.chi(m,k,j,i), 4./opt.chi_psi_power);
-    });
-    member.team_barrier();
+  par_for("initialize z4c fields",DevExeSpace(),
+  0,nmb-1,ksg,keg,jsg,jeg,isg,ieg,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    adm.psi4(m,k,j,i) = std::pow(z4c.chi(m,k,j,i), 4./opt.chi_psi_power);
 
     // g_ab
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
-      par_for_inner(member, isg, ieg, [&](const int i) {
-        adm.g_dd(m,a,b,k,j,i) = adm.psi4(m,k,j,i) * z4c.g_dd(m,a,b,k,j,i);
-      });
+      adm.g_dd(m,a,b,k,j,i) = adm.psi4(m,k,j,i) * z4c.g_dd(m,a,b,k,j,i);
     }
-    member.team_barrier();
 
     // K_ab
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
-      par_for_inner(member, isg, ieg, [&](const int i) {
-        adm.vK_dd(m,a,b,k,j,i) = adm.psi4(m,k,j,i) * z4c.vA_dd(m,a,b,k,j,i) +
-          (1./3.) * (z4c.vKhat(m,k,j,i) + 2.*z4c.vTheta(m,k,j,i)) * adm.g_dd(m,a,b,k,j,i);
-      });
+      adm.vK_dd(m,a,b,k,j,i) = adm.psi4(m,k,j,i) * z4c.vA_dd(m,a,b,k,j,i) +
+        (1./3.) * (z4c.vKhat(m,k,j,i) + 2.*z4c.vTheta(m,k,j,i)) * adm.g_dd(m,a,b,k,j,i);
     }
   });
   return;

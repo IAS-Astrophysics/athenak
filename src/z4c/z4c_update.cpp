@@ -34,15 +34,10 @@ TaskStatus Z4c::ExpRKUpdate(Driver *pdriver, int stage) {
   int nmb1 = pmy_pack->nmb_thispack - 1;
   int nvar = nz4c;
 
-  int scr_level = 0;
-  int ncells1 = indcs.nx1 + 2*(indcs.ng);
-  size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1);
-  par_for_outer("z4c RK update",DevExeSpace(),scr_size,scr_level,
-                                0,nmb1,0,nvar-1,ks,ke,js,je,
-  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int n, const int k, const int j) {
-  par_for_inner(member, is, ie, [&](const int i) {
+  par_for("z4c RK update",DevExeSpace(),
+      0,nmb1,0,nvar-1,ks,ke,js,je,is,ie,
+  KOKKOS_LAMBDA(const int m, const int n, const int k, const int j, const int i) {
     u0(m,n,k,j,i) = gam0*u0(m,n,k,j,i) + gam1*u1(m,n,k,j,i) + beta_dt*u_rhs(m,n,k,j,i);
-  });
   });
   return TaskStatus::complete;
 }
