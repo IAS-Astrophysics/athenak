@@ -159,7 +159,6 @@ void Z4c::AlgConstr(MeshBlockPack *pmbp) {
   int jsg = js-indcs.ng; int jeg = je+indcs.ng;
   int ksg = ks-indcs.ng; int keg = ke+indcs.ng;
 
-  int ncells1 = indcs.nx1 + 2*(indcs.ng);
   int nmb = pmbp->nmb_thispack;
 
   auto &z4c = pmbp->pz4c->z4c;
