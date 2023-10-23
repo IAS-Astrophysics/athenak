@@ -1293,7 +1293,6 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
           atheta = 0.0;
           aphi = aphi_tilt;
         }
->>>>>>> master
       }
     }
   }
