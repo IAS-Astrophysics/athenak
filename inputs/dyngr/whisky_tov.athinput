@@ -66,10 +66,11 @@ rhoc        = 1.28e-3 # Central density
 kappa       = 100.0    # P = kappa*rho^gamma
 npoints     = 10000.0  # buffer points for TOV calculation
 dr          = 1e-3     # radial step for TOV calculation
-b_norm      = 1.0 
+b_norm      = 0.0
 pcut        = 1e-6
 magindex    = 1
 user_hist   = true
+v_pert      = -0.024
 
 <output1>
 file_type   = rst
