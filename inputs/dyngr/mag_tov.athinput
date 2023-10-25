@@ -74,6 +74,7 @@ user_hist   = true
 <output1>
 file_type   = hst      # History data dump
 dt          = 0.00001  # time increment between outputs
+data_format = %20.15e
 
 <output2>
 file_type   = bin      # Binary data dump
