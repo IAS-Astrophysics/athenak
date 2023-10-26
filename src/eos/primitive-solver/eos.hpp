@@ -362,7 +362,7 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   //! \fn void SetThreshold(Real threshold)
   //  \brief Set the threshold factor for the density floor.
   KOKKOS_INLINE_FUNCTION void SetThreshold(Real threshold) {
-    threshold = (threshold >= 0.0) ? threshold : 0.0;
+    n_threshold = (threshold >= 0.0) ? threshold : 0.0;
   }
 
   //! \fn Real GetMaxVelocity() const
