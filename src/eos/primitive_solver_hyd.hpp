@@ -136,10 +136,10 @@ class PrimitiveSolverHydro {
     ps.PrimToCon(prim_pt, cons_pt, b, g3d);
 
     // Check for NaNs
-    if (CheckForConservedNaNs(cons_pt)) {
+    /*if (CheckForConservedNaNs(cons_pt)) {
       printf("Location: PrimToConsPt\n");
       DumpPrimitiveVars(prim_pt);
-    }
+    }*/
 
     // Densitize the variables
     for (int n = 0; n < nhyd + nscal; n++) {
@@ -149,18 +149,9 @@ class PrimitiveSolverHydro {
     b[iby] *= sdetg;
     b[ibz] *= sdetg;
 
-    // Copy floored primitives back into the original array.
-    // TODO(JF): Check if this is necessary
-    if (floored) {
-      w(IDN, i) = prim_pt[PRH]*mb;
-      w(IVX, i) = prim_pt[PVX];
-      w(IVY, i) = prim_pt[PVY];
-      w(IVZ, i) = prim_pt[PVZ];
-      w(IPR, i) = prim_pt[PPR];
-      for (int n = 0; n < nscal; n++) {
-        w(nhyd + n, i) = prim_pt[PYF + n];
-      }
-    }
+    // Previously we checked if the floor was applied and copied these variables back
+    // into the original array. However, this is pointless because only the extracted
+    // variables in the C-style array are used from this point forward.
   }
 
   void PrimToCons(DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc,
@@ -272,7 +263,7 @@ class PrimitiveSolverHydro {
     // Some problem-specific parameters
     auto &excise = pmy_pack->pcoord->coord_data.bh_excise;
     auto &excision_floor_ = pmy_pack->pcoord->excision_floor;
-    //auto &excision_flux_ = pmy_pack->pcoord->excision_flux;
+    auto &excision_flux_ = pmy_pack->pcoord->excision_flux;
     auto &dexcise_ = pmy_pack->pcoord->coord_data.dexcise;
     auto &pexcise_ = pmy_pack->pcoord->coord_data.pexcise;
 
@@ -307,6 +298,11 @@ class PrimitiveSolverHydro {
       int i = (idx - m*nkji - k*nji - j*ni) + il;
       j += jl;
       k += kl;
+
+      // Add in a short circuit where FOFC is guaranteed.
+      if (floors_only && (fofc_(m, k, j, i) || excision_flux_(m, k, j, i))) {
+        return;
+      }
 
       // Extract the metric
       Real g3d[NSPMETRIC], g3u[NSPMETRIC], detg, sdetg;
@@ -446,44 +442,6 @@ class PrimitiveSolverHydro {
     }
   }
 
-  // Get the transformed sound speeds at a point in a given direction.
-  KOKKOS_INLINE_FUNCTION
-  void GetGRSoundSpeeds(Real& lambda_p, Real& lambda_m,
-                        Real prim[NPRIM], Real g3d[NSPMETRIC],
-                        Real beta_u[3], Real alpha, Real gii, int pvx) const {
-    Real uu[3] = {prim[PVX], prim[PVY], prim[PVZ]};
-    Real usq = Primitive::SquareVector(uu, g3d);
-    int index = pvx - PVX;
-
-    // Get the Lorentz factor and the 3-velocity.
-    Real iWsq = 1.0/(1.0 + usq);
-    Real iW = sqrt(iWsq);
-    Real vsq = usq*iWsq;
-    Real vu[3] = {uu[0]*iW, uu[1]*iW, uu[2]*iW};
-
-    Real cs = ps.GetEOS().GetSoundSpeed(prim[PRH], prim[PTM], &prim[PYF]);
-    Real csq = cs*cs;
-
-    Real iWsq_ad = 1.0 - vsq*csq;
-    Real dis = (csq*iWsq)*(gii*iWsq_ad - vu[index]*vu[index]*(1.0 - csq));
-    Real sdis = sqrt(dis);
-    if (!isfinite(sdis)) {
-      printf("There's a problem with the sound speed!\n"
-             "  dis = %g\n"
-             "  gii = %g\n"
-             "  csq = %g\n"
-             "  vsq = %g\n"
-             "  usq = %g\n"
-             "  rho = %g\n"
-             "  T   = %g\n",
-             dis, gii, csq, vsq, usq, prim[PRH], prim[PTM]);
-      exit(EXIT_FAILURE);
-    }
-
-    lambda_p = alpha*(vu[index]*(1.0 - csq) + sdis)/iWsq_ad - beta_u[index];
-    lambda_m = alpha*(vu[index]*(1.0 - csq) - sdis)/iWsq_ad - beta_u[index];
-  }
-
   // Get the transformed magnetosonic speeds at a point in a given direction.
   KOKKOS_INLINE_FUNCTION
   void GetGRFastMagnetosonicSpeeds(Real& lambda_p, Real& lambda_m,
@@ -510,8 +468,7 @@ class PrimitiveSolverHydro {
 
     Real iWsq_ad = 1.0 - vsq*cmsq;
     Real dis = (cmsq*iWsq)*(gii*iWsq_ad - vu*vu*(1.0 - cmsq));
-    Real sdis = sqrt(dis);
-    if (!isfinite(sdis)) {
+    if (dis < 0.) {
       printf("There's a problem with the magnetosonic speed!\n"
              "  dis = %g\n"
              "  gii = %g\n"
@@ -525,6 +482,7 @@ class PrimitiveSolverHydro {
              dis, gii, csq, vsq, usq, prim[PRH], prim[PTM], vu, bsq);
       //exit(EXIT_FAILURE);
     }
+    Real sdis = sqrt(dis);
 
     lambda_p = alpha*(vu*(1.0 - cmsq) + sdis)/iWsq_ad - beta_u[index];
     lambda_m = alpha*(vu*(1.0 - cmsq) - sdis)/iWsq_ad - beta_u[index];
