@@ -279,8 +279,8 @@ void ComputeADMDecomposition(Real x, Real y, Real z, bool minkowski, Real a,
   Real K_dd[3][3];
   for (int a = 0; a < 3; ++a)
   for (int b = 0; b < 3; ++b) {
-    //K_dd[a][b] = (Dbeta_dd[a][b] + Dbeta_dd[b][a])/(2.*(*alp));
-    K_dd[a][b] = 2*(*alp)/SQR(r)*(delta[a][b] - (2. + 1./r)*l_d[a]*l_d[b]);
+    K_dd[a][b] = (Dbeta_dd[a][b] + Dbeta_dd[b][a])/(2.*(*alp));
+    //K_dd[a][b] = 2*(*alp)/SQR(r)*(delta[a][b] - (2. + 1./r)*l_d[a]*l_d[b]);
   }
 
   *Kxx = K_dd[0][0];
