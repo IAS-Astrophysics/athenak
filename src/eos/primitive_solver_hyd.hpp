@@ -110,12 +110,11 @@ class PrimitiveSolverHydro {
     Real mb = eos.GetBaryonMass();
     // The magnetic field is densitized, but the PrimToCon call
     // needs undensitized variables.
-    b[ibx] = bx(m, k, j, i)/sdetg;
-    b[iby] = brc(iby, i)/sdetg;
-    b[ibz] = brc(ibz, i)/sdetg;
-    /*b[ibx] = 0.0;
-    b[iby] = 0.0;
-    b[ibz] = 0.0;*/
+    Real isdetg = 1.0/sdetg;
+    Real bin[NMAG];
+    bin[ibx] = bx(m, k, j, i)*isdetg;
+    bin[iby] = brc(iby, i)*isdetg;
+    bin[ibz] = brc(ibz, i)*isdetg;
     Real prim_pt_old[NPRIM];
     prim_pt[PRH] = prim_pt_old[PRH] = w(IDN, i)/mb;
     prim_pt[PVX] = prim_pt_old[PVX] = w(IVX, i);
@@ -133,7 +132,7 @@ class PrimitiveSolverHydro {
     bool floored = ps.GetEOS().ApplyPrimitiveFloor(prim_pt[PRH], &prim_pt[PVX],
                                          prim_pt[PPR], prim_pt[PTM], &prim_pt[PYF]);
 
-    ps.PrimToCon(prim_pt, cons_pt, b, g3d);
+    ps.PrimToCon(prim_pt, cons_pt, bin, g3d);
 
     // Check for NaNs
     /*if (CheckForConservedNaNs(cons_pt)) {
@@ -145,9 +144,9 @@ class PrimitiveSolverHydro {
     for (int n = 0; n < nhyd + nscal; n++) {
       cons_pt[n] *= sdetg;
     }
-    b[ibx] *= sdetg;
-    b[iby] *= sdetg;
-    b[ibz] *= sdetg;
+    b[ibx] = bx(m, k, j, i);
+    b[iby] = brc(iby, i);
+    b[ibz] = brc(ibz, i);
 
     // Previously we checked if the floor was applied and copied these variables back
     // into the original array. However, this is pointless because only the extracted

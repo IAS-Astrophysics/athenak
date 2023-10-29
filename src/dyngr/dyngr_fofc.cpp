@@ -141,27 +141,6 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         bcctest_(m,IBX,k,j,i) += dtodx3*(e2x3_(m,k+1,j,i) - e2x3_(m,k,j,i));
         bcctest_(m,IBY,k,j,i) -= dtodx3*(e1x3_(m,k+1,j,i) - e1x3_(m,k,j,i));
       }
-
-      // Enforce maximum principle
-      // FIXME(JMF): Find a better way to set the minima and maxima.
-      /*if (max_) {
-        for (int n = 0; n < 3; ++n) {
-          Real varmax = -Rmax.;
-          Real varmin = Rmax;
-          for (int kt = k-1; kt <= k+1; kt++) {
-            for (int jt = j-1; jt <= j+1; jt++) {
-              for (int it = i-1; it <= i+1; it++) {
-                varmax = fmax(varmax, u1_(m,n,kt,jt,it));
-                varmin = fmin(varmin, u1_(m,n,kt,jt,it));
-              }
-            }
-          }
-          if (utest_(m,n,k,j,i) > varmax || utest_(m,n,k,j,i) < varmin) {
-            fofc_(m,k,j,i) = true;
-          }
-        }
-      }*/
-
     });
 
     // Test whether conversion to primitives requires floors
@@ -214,8 +193,8 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
       // compute new 1st-order LLF flux at i-face
       Real flux[NCONS], bflux[NMAG];
-      SingleStateLLF_DYNGR(eos_, wli, wri, bli, bri, IVX, nmhd_, nscal_,
-                           g3d, beta_u, alpha, flux, bflux);
+      SingleStateLLF_DYNGR<IVX>(eos_, wli, wri, bli, bri, nmhd_, nscal_,
+                                g3d, beta_u, alpha, flux, bflux);
 
       // Store 1st-order fluxes at i-1/2
       InsertFluxes(flux, flx1, m, k, j, i);
@@ -227,7 +206,7 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         Real blj[NMAG], brj[NMAG];
         // Reconstruct states
         ExtractPrimitives(wlj, w0_, eos_, nmhd_, nscal_, m, k, j-1, i);
-        wrj = wri;
+        wrj = &wri[0];
         ExtractBField(blj, bcc0_, IBY, IBZ, IBX, m, k, j-1, i);
         ExtractBField(brj, bcc0_, IBY, IBZ, IBX, m, k, j, i);
         blj[IBY] = brj[IBY] = b0_.x2f(m, k, j, i);
@@ -236,8 +215,8 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         adm::Face2Metric(m, k, j, i, adm.g_dd, adm.beta_u, adm.alpha, g3d, beta_u, alpha);
 
         // Compute new 1st-order LLF flux at j-face
-        SingleStateLLF_DYNGR(eos_, wlj, wrj, blj, brj, IVY, nmhd_, nscal_,
-                             g3d, beta_u, alpha, flux, bflux);
+        SingleStateLLF_DYNGR<IVY>(eos_, wlj, wrj, blj, brj, nmhd_, nscal_,
+                                  g3d, beta_u, alpha, flux, bflux);
 
         // Store 1st-order fluxes at j-1/2
         InsertFluxes(flux, flx2, m, k, j, i);
@@ -250,7 +229,7 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         Real bmk[NPRIM], bpk[NMAG];
         // Reconstruct states
         ExtractPrimitives(wmk, w0_, eos_, nmhd_, nscal_, m, k-1, j, i);
-        wpk = wri;
+        wpk = &wri[0];
         ExtractBField(bmk, bcc0_, IBZ, IBX, IBY, m, k-1, j, i);
         ExtractBField(bpk, bcc0_, IBZ, IBX, IBY, m, k, j, i);
         bmk[IBZ] = bpk[IBZ] = b0_.x3f(m, k, j, i);
@@ -259,8 +238,8 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         adm::Face3Metric(m, k, j, i, adm.g_dd, adm.beta_u, adm.alpha, g3d, beta_u, alpha);
 
         // Compute new 1st-order LLF flux at k-face
-        SingleStateLLF_DYNGR(eos_, wmk, wpk, bmk, bpk, IVZ, nmhd_, nscal_,
-                             g3d, beta_u, alpha, flux, bflux);
+        SingleStateLLF_DYNGR<IVZ>(eos_, wmk, wpk, bmk, bpk, nmhd_, nscal_,
+                                  g3d, beta_u, alpha, flux, bflux);
 
         // Store 1st-order fluxes at k-1/2
         InsertFluxes(flux, flx3, m, k, j, i);
@@ -299,7 +278,7 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
       // compute new 1st-order LLF flux at (i+1)-face
       Real flux[NCONS], bflux[NMAG];
-      SingleStateLLF_DYNGR(eos_, wli, wri, bli, bri, IVX, nmhd_, nscal_,
+      SingleStateLLF_DYNGR<IVX>(eos_, wli, wri, bli, bri, nmhd_, nscal_,
                            g3d, beta_u, alpha, flux, bflux);
 
       // Store 1st-order fluxes at i+1/2
@@ -311,7 +290,7 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         Real *wlj, wrj[NPRIM];
         Real blj[NMAG], brj[NMAG];
         // Reconstruct states
-        wlj = wli;
+        wlj = &wli[0];
         ExtractPrimitives(wrj, w0_, eos_, nmhd_, nscal_, m, k, j+1, i);
         ExtractBField(blj, bcc0_, IBY, IBZ, IBX, m, k, j, i);
         ExtractBField(brj, bcc0_, IBY, IBZ, IBX, m, k, j+1, i);
@@ -321,8 +300,8 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         adm::Face2Metric(m, k, j+1, i, adm.g_dd, adm.beta_u, adm.alpha, g3d, beta_u, alpha);
 
         // Compute new 1st-order LLF flux at j-face
-        SingleStateLLF_DYNGR(eos_, wlj, wrj, blj, brj, IVY, nmhd_, nscal_,
-                             g3d, beta_u, alpha, flux, bflux);
+        SingleStateLLF_DYNGR<IVY>(eos_, wlj, wrj, blj, brj, nmhd_, nscal_,
+                                  g3d, beta_u, alpha, flux, bflux);
 
         // Store 1st-order fluxes at j+1/2
         InsertFluxes(flux, flx2, m, k, j+1, i);
@@ -334,7 +313,7 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         Real *wmk, wpk[NPRIM];
         Real bmk[NPRIM], bpk[NMAG];
         // Reconstruct states
-        wmk = wli;
+        wmk = &wli[0];
         ExtractPrimitives(wpk, w0_, eos_, nmhd_, nscal_, m, k+1, j, i);
         ExtractBField(bmk, bcc0_, IBZ, IBX, IBY, m, k, j, i);
         ExtractBField(bpk, bcc0_, IBZ, IBX, IBY, m, k+1, j, i);
@@ -344,8 +323,8 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         adm::Face3Metric(m, k+1, j, i, adm.g_dd, adm.beta_u, adm.alpha, g3d, beta_u, alpha);
 
         // Compute new 1st-order LLF flux at k-face
-        SingleStateLLF_DYNGR(eos_, wmk, wpk, bmk, bpk, IVZ, nmhd_, nscal_,
-                             g3d, beta_u, alpha, flux, bflux);
+        SingleStateLLF_DYNGR<IVZ>(eos_, wmk, wpk, bmk, bpk, nmhd_, nscal_,
+                                  g3d, beta_u, alpha, flux, bflux);
 
         // Store 1st-order fluxes at k+1/2
         InsertFluxes(flux, flx3, m, k+1, j, i);
