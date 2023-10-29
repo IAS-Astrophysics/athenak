@@ -25,7 +25,6 @@
 #include "reconstruct/wenoz.hpp"
 #include "dyngr/rsolvers/llf_dyngrmhd.hpp"
 #include "dyngr/rsolvers/hlle_dyngrmhd.hpp"
-//#include "dyngr/dyngr_fofc.cpp"
 // include PrimitiveSolver stuff
 #include "eos/primitive-solver/idealgas.hpp"
 #include "eos/primitive-solver/reset_floor.hpp"
@@ -66,9 +65,6 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
 
   size_t scr_size = ScrArray2D<Real>::shmem_size(nvars, ncells1) * 2 +
                     ScrArray2D<Real>::shmem_size(3, ncells1) * 2;
-                    /*ScrArray1D<Real>::shmem_size(ncells1)
-                       + ScrArray2D<Real>::shmem_size(3, ncells1) +
-                       ScrArray2D<Real>::shmem_size(6, ncells1);*/
   int scr_level = scratch_level;
   auto flx1_ = pmy_pack->pmhd->uflx.x1f;
   auto &e31_ = pmy_pack->pmhd->e3x1;
@@ -93,14 +89,6 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
     ScrArray2D<Real> bl(member.team_scratch(scr_level), 3, ncells1);
     ScrArray2D<Real> br(member.team_scratch(scr_level), 3, ncells1);
 
-    // scratch memory for metric at faces
-    /*AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> gface1_dd;
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> betaface1_u;
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> alphaface1;
-
-    gface1_dd.NewAthenaScratchTensor(member, scr_level, ncells1);
-    betaface1_u.NewAthenaScratchTensor(member, scr_level, ncells1);
-    alphaface1.NewAthenaScratchTensor(member, scr_level, ncells1);*/
     // Reconstruct qR[i] and qL[i+1]
     switch (recon_method_) {
       case ReconstructionMethod::dc:
@@ -127,14 +115,6 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
     }
     // Sync all threads in the team so that scratch memory is consistent
     member.team_barrier();
-
-    // Calculate metric at faces
-    /*adm::Face1Metric(member, m, k, j, is-1, ie+1,
-                     adm.g_dd, adm.beta_u, adm.alpha,
-                     gface1_dd, betaface1_u, alphaface1);*/
-
-    // TODO(JF): do I need a member team barrier here?
-    //member.team_barrier();
 
     // compute fluxes over [is,ie+1]
     auto &dyn_eos = dyn_eos_;
@@ -182,9 +162,6 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
   if (pmy_pack->pmesh->multi_d) {
     scr_size = ScrArray2D<Real>::shmem_size(nvars, ncells1) * 3
              + ScrArray2D<Real>::shmem_size(3, ncells1) * 3;
-             /*+ ScrArray1D<Real>::shmem_size(ncells1)
-             + ScrArray2D<Real>::shmem_size(3, ncells1)
-             + ScrArray2D<Real>::shmem_size(6, ncells1);*/
     auto flx2_ = pmy_pack->pmhd->uflx.x2f;
     auto &by_ = pmy_pack->pmhd->b0.x2f;
     auto &e12_ = pmy_pack->pmhd->e1x2;
@@ -206,14 +183,6 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
       ScrArray2D<Real> scr5(member.team_scratch(scr_level), 3, ncells1);
       ScrArray2D<Real> scr6(member.team_scratch(scr_level), 3, ncells1);
 
-      // scratch memory for metric at faces
-      /*AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> gface2_dd;
-      AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> betaface2_u;
-      AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> alphaface2;
-
-      gface2_dd.NewAthenaScratchTensor(member, scr_level, ncells1);
-      betaface2_u.NewAthenaScratchTensor(member, scr_level, ncells1);
-      alphaface2.NewAthenaScratchTensor(member, scr_level, ncells1);*/
       for (int j=js-1; j<=je+1; ++j) {
         // Permute scratch arrays.
         auto wl     = scr1;
@@ -257,13 +226,6 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         }
         // Sync all threads in the team so that scratch memory is consistent
         member.team_barrier();
-
-        // Calculate metric at faces
-        /*adm::Face2Metric(member, m, k, j, is-1, ie+1, adm.g_dd, adm.beta_u, adm.alpha,
-                         gface2_dd, betaface2_u, alphaface2);
-
-        // TODO(JF): do I need a member team barrier here?
-        member.team_barrier();*/
 
         // compute fluxes over [is,ie+1]
         auto &dyn_eos = dyn_eos_;
@@ -313,9 +275,6 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
   if (pmy_pack->pmesh->three_d) {
     scr_size = ScrArray2D<Real>::shmem_size(nvars, ncells1) * 3
              + ScrArray2D<Real>::shmem_size(3, ncells1) * 3;
-             /*+ ScrArray1D<Real>::shmem_size(ncells1)
-             + ScrArray2D<Real>::shmem_size(3, ncells1)
-             + ScrArray2D<Real>::shmem_size(6, ncells1);*/
     auto &flx3_ = pmy_pack->pmhd->uflx.x3f;
     auto &bz_   = pmy_pack->pmhd->b0.x3f;
     auto &e23_  = pmy_pack->pmhd->e2x3;
@@ -330,14 +289,6 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
       ScrArray2D<Real> scr5(member.team_scratch(scr_level), 3, ncells1);
       ScrArray2D<Real> scr6(member.team_scratch(scr_level), 3, ncells1);
 
-      // scratch memory for metric at faces
-      /*AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> gface3_dd;
-      AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> betaface3_u;
-      AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> alphaface3;
-
-      gface3_dd.NewAthenaScratchTensor(member, scr_level, ncells1);
-      betaface3_u.NewAthenaScratchTensor(member, scr_level, ncells1);
-      alphaface3.NewAthenaScratchTensor(member, scr_level, ncells1);*/
       for (int k=ks-1; k<=ke+1; ++k) {
         // Permute scratch arrays.
         auto wl     = scr1;
@@ -382,13 +333,6 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         // Sync all threads in the team so that scratch memory is consistent
         member.team_barrier();
 
-        // Calculate metric at faces
-        /*adm::Face3Metric(member, m, k, j, is-1, ie+1, adm.g_dd, adm.beta_u, adm.alpha,
-                         gface3_dd, betaface3_u, alphaface3);
-
-        // TODO(JF): do I need a member team barrier here?
-        member.team_barrier();*/
-
         // compute fluxes over [ks,ke+1]
         auto &dyn_eos = dyn_eos_;
         auto &indcs = indcs_;
@@ -429,7 +373,6 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
       } // end of loop over j
       member.team_barrier();
     });
-    // TODO(JF): handle excision masks
   }
 
   // Call FOFC if necessary
