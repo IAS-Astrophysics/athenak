@@ -38,28 +38,12 @@ void SingleStateFlux(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
   constexpr int iby = ((ivx - IVX) + 1)%3;
   constexpr int ibz = ((ivx - IVX) + 2)%3;
 
-  //Real detg = Primitive::GetDeterminant(g3d);
-  //Real sdetg = sqrt(detg);
-  //Real isdetg = 1.0/sqrt(detg);
   const Real ialpha = 1.0/alpha;
 
-  // TODO(JMF): We shouldn't need to call the floor here, but that's probably something
-  // that should be confirmed.
-
-  // Undensitize the magnetic field before calculating the conserved variables
-  /*Real Bu_lund[NMAG], Bu_rund[NMAG];
-  for (int n = 0; n < NMAG; n++) {
-    Bu_lund[n] = Bu_l[n]*isdetg;
-    Bu_rund[n] = Bu_r[n]*isdetg;
-  }*/
   // Calculate conserved variables
   eos.ps.PrimToCon(prim_l, cons_l, Bu_l, g3d);
   eos.ps.PrimToCon(prim_r, cons_r, Bu_r, g3d);
   // Densitize the conserved variables
-  /*for (int n = 0; n < nmhd + nscal; n++) {
-    cons_l[n] *= sdetg;
-    cons_r[n] *= sdetg;
-  }*/
 
   // Calculate W for the left state.
   Real uul[3] = {prim_l[IVX], prim_l[IVY], prim_l[IVZ]};

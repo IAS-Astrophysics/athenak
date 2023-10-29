@@ -74,11 +74,11 @@ void SingleStateLLF_DYNGR(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eo
   Real vol = sdetg*alpha;
 
   // Calculate the fluxes
-  flux[CDN] = 0.5*(fl[CDN] + fr[CDN] - lambda*(cons_r[CDN] - cons_l[CDN]));
-  flux[CSX] = 0.5*(fl[CSX] + fr[CSX] - lambda*(cons_r[CSX] - cons_l[CSX]));
-  flux[CSY] = 0.5*(fl[CSY] + fr[CSY] - lambda*(cons_r[CSY] - cons_l[CSY]));
-  flux[CSZ] = 0.5*(fl[CSZ] + fr[CSZ] - lambda*(cons_r[CSZ] - cons_l[CSZ]));
-  flux[CTA] = 0.5*(fl[CTA] + fr[CTA] - lambda*(cons_r[CTA] - cons_l[CTA]));
+  flux[CDN] = 0.5*vol*(fl[CDN] + fr[CDN] - lambda*(cons_r[CDN] - cons_l[CDN]));
+  flux[CSX] = 0.5*vol*(fl[CSX] + fr[CSX] - lambda*(cons_r[CSX] - cons_l[CSX]));
+  flux[CSY] = 0.5*vol*(fl[CSY] + fr[CSY] - lambda*(cons_r[CSY] - cons_l[CSY]));
+  flux[CSZ] = 0.5*vol*(fl[CSZ] + fr[CSZ] - lambda*(cons_r[CSZ] - cons_l[CSZ]));
+  flux[CTA] = 0.5*vol*(fl[CTA] + fr[CTA] - lambda*(cons_r[CTA] - cons_l[CTA]));
 
   bflux[IBY] = - 0.5 * vol *
                (bfl[iby] + bfr[iby] - lambda * (Bu_rund[iby] - Bu_lund[iby]));
