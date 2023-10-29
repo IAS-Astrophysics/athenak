@@ -15,12 +15,6 @@
 
 namespace dyngr {
 
-KOKKOS_INLINE_FUNCTION
-void bob() {
-  printf("wut");
-  return;
-}
-
 //----------------------------------------------------------------------------------------
 //! \fn void SingleStateFlux
 //! \brief inline function for calculating GRMHD fluxes
