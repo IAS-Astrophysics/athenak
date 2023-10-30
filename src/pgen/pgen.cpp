@@ -81,6 +81,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
     RadiationFEMNLinalgtest(pin, false);
   } else if (pgen_fun_name.compare("rad_femn_latticetest") == 0) {
     RadiationFEMNLatticetest(pin, false);
+  } else if (pgen_fun_name.compare("rad_femn_spheretest") == 0) {
+    RadiationFEMNSpheretest(pin, false);
   // else, name not set on command line or input file, print warning and quit
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
