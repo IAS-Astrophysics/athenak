@@ -75,16 +75,18 @@ class DynGR {
   // container to hold names of TaskIDs
   DynGRTaskIDs id;
 
-  TaskStatus ADMMatterSource_(Driver *d, int stage);
   TaskStatus SetTmunu(Driver *d, int stage);
+  TaskStatus ApplyPhysicalBCs(Driver *d, int stage);
 
   // functions
 
   virtual void QueueDynGRTasks() = 0;
 
   virtual TaskStatus ConToPrim(Driver* pdrive, int stage) = 0;
-  //virtual TaskStatus SetTmunu(Driver* pdrive, int stage) = 0;
+  virtual void ConToPrimBC(int is, int ie, int js, int je, int ks, int ke) = 0;
   virtual void PrimToConInit(int is, int ie, int js, int je, int ks, int ke) = 0;
+  virtual void ConvertInternalEnergyToPressure(int is, int ie,
+                                               int js, int je, int ks, int ke) = 0;
 
   virtual void AddCoordTerms(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc0,
                              const Real dt, DvceArray5D<Real> &u0, int nghost) = 0;
@@ -121,7 +123,10 @@ class DynGRPS : public DynGR {
   virtual void QueueDynGRTasks();
 
   virtual TaskStatus ConToPrim(Driver* pdrive, int stage);
+  virtual void ConToPrimBC(int is, int ie, int js, int je, int ks, int ke);
   virtual void PrimToConInit(int is, int ie, int js, int je, int ks, int ke);
+  virtual void ConvertInternalEnergyToPressure(int is, int ie,
+                                               int js, int je, int ks, int ke);
 
   virtual void AddCoordTerms(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc0,
                              const Real dt, DvceArray5D<Real> &u0, int nghost);

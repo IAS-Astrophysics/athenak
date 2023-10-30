@@ -107,15 +107,6 @@ DynGR::DynGR(MeshBlockPack *pp, ParameterInput *pin) : pmy_pack(pp) {
 DynGR::~DynGR() {
 }
 
-//----------------------------------------------------------------------------------------
-//! \fn  TaskStatus DynGR::ADMMatterSource_(Driver *pdrive, int stage) {
-//  \brief
-TaskStatus DynGR::ADMMatterSource_(Driver *pdrive, int stage) {
-  //pmy_pack->pz4c->ADMMatterSource(pmy_pack);
-
-  return TaskStatus::complete;
-}
-
 template<class EOSPolicy, class ErrorPolicy>
 void DynGRPS<EOSPolicy, ErrorPolicy>::QueueDynGRTasks() {
   using namespace mhd;  // NOLINT(build/namespaces)
@@ -215,6 +206,7 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::QueueDynGRTasks() {
   dep.clear();
   dep.push_back(MHD_RecvB);
   pnr->QueueTask(&MHD::ApplyPhysicalBCs, pmhd, MHD_BCS, "MHD_BCS", Task_Run, dep, none);
+  //pnr->QueueTask(&DynGR::ApplyPhysicalBCs, this, MHD_BCS, "MHD_BCS", Task_Run, dep, none);
 
   dep.clear();
   dep.push_back(MHD_BCS);
@@ -240,6 +232,33 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::PrimToConInit(int is, int ie, int js, int 
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn  void DynGR::ConvertInternalEnergyToPressure
+//  \brief
+template<class EOSPolicy, class ErrorPolicy>
+void DynGRPS<EOSPolicy, ErrorPolicy>::ConvertInternalEnergyToPressure(int is, int ie,
+    int js, int je, int ks, int ke) {
+  int nmb = pmy_pack->nmb_thispack;
+  auto &prim = pmy_pack->pmhd->w0;
+  auto &eos_ = eos.ps.GetEOS();
+  int &nmhd  = pmy_pack->pmhd->nmhd;
+  int &nscal = pmy_pack->pmhd->nscalars;
+
+  const Real mb = eos_.GetBaryonMass();
+
+  par_for("coord_src", DevExeSpace(), 0, nmb-1, ks, ke, js, je, is, ie,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    Real n = prim(m, IDN, k, j, i) / mb;
+    Real egas = mb*n + prim(m, IEN, k, j, i);
+    Real Y[MAX_SPECIES] = {0.};
+    for (int s = 0; s < nscal; s++) {
+      Y[s] = prim(m, nmhd + s, k, j, i);
+    }
+    Real T = eos_.GetTemperatureFromE(n, egas, Y);
+    prim(m, IPR, k, j, i) = eos_.GetPressure(n, T, Y);
+  });
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn  TaskStatus DynGR::ADMMatterSource_(Driver *pdrive, int stage) {
 //  \brief
 template<class EOSPolicy, class ErrorPolicy>
@@ -253,6 +272,16 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::ConToPrim(Driver *pdrive, int stage)
   eos.ConsToPrim(pmy_pack->pmhd->u0, pmy_pack->pmhd->b0, pmy_pack->pmhd->bcc0,
                  pmy_pack->pmhd->w0, 0, n1m1, 0, n2m1, 0, n3m1, false);
   return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void DynGRPS::ConToPrimBC(int is, int ie, int js, int je, int ks, int ke)
+//  \brief
+template<class EOSPolicy, class ErrorPolicy>
+void DynGRPS<EOSPolicy, ErrorPolicy>::ConToPrimBC(int is, int ie, int js, int je,
+                                                int ks, int ke) {
+  eos.ConsToPrim(pmy_pack->pmhd->u0, pmy_pack->pmhd->b0, pmy_pack->pmhd->bcc0,
+                 pmy_pack->pmhd->w0, is, ie, js, je, ks, ke, false);
 }
 
 //----------------------------------------------------------------------------------------
@@ -270,6 +299,66 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTerms(const DvceArray5D<Real> &pri
     case 4: AddCoordTermsEOS<4>(prim, bcc, dt, rhs);
             break;
   }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  TaskStatus DynGR::ApplyPhysicalBCs(Driver *pdrive, int stage)
+//  \brief
+TaskStatus DynGR::ApplyPhysicalBCs(Driver *pdrive, int stage) {
+  // do not apply BCs if domain is strictly periodic
+  if (pmy_pack->pmesh->strictly_periodic) return TaskStatus::complete;
+
+  // We need the first physical point on all the boundaries in order to calculate
+  // the boundaries. So, we need to perform a ConToPrim at these points.
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  auto pm = pmy_pack->pmesh;
+  auto pmhd = pmy_pack->pmhd;
+  int &ng = indcs.ng;
+  int n1 = indcs.nx1 + 2*ng;
+  int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
+  int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
+  int &is = indcs.is;  int &ie  = indcs.ie;
+  int &js = indcs.js;  int &je  = indcs.je;
+  int &ks = indcs.ks;  int &ke  = indcs.ke;
+  // X1-boundary 
+  ConToPrimBC(is-ng, is+ng, 0, (n2-1), 0, (n3-1));
+  ConToPrimBC(ie-ng, ie+ng, 0, (n2-1), 0, (n3-1));
+  // X2-boundary
+  if (pm->multi_d) {
+    ConToPrimBC(0, (n1-1), js-ng, js+ng, 0, (n3-1));
+    ConToPrimBC(0, (n1-1), je-ng, je+ng, 0, (n3-1));
+  }
+  // X3-boundary
+  if (pm->three_d) {
+    ConToPrimBC(0, (n1-1), 0, (n2-1), ks-ng, ks+ng);
+    ConToPrimBC(0, (n1-1), 0, (n2-1), ke-ng, ke+ng);
+  }
+
+  // Physical boundaries
+  pmhd->pbval_u->HydroBCs((pmy_pack), (pmhd->pbval_u->u_in), pmhd->w0);
+  pmhd->pbval_b->BFieldBCs((pmy_pack), (pmhd->pbval_b->b_in), pmhd->b0);
+
+  // User BCs
+  if (pmy_pack->pmesh->pgen->user_bcs) {
+    (pmy_pack->pmesh->pgen->user_bcs_func)(pmy_pack->pmesh);
+  }
+
+  // We now need to do a PrimToCon on all these boundary points.
+  // X1-boundary 
+  PrimToConInit(is-ng, is, 0, (n2-1), 0, (n3-1));
+  PrimToConInit(ie, ie+ng, 0, (n2-1), 0, (n3-1));
+  // X2-boundary
+  if (pm->multi_d) {
+    PrimToConInit(0, (n1-1), js-ng, js, 0, (n3-1));
+    PrimToConInit(0, (n1-1), je, je+ng, 0, (n3-1));
+  }
+  // X3-boundary
+  if (pm->three_d) {
+    PrimToConInit(0, (n1-1), 0, (n2-1), ks-ng, ks);
+    PrimToConInit(0, (n1-1), 0, (n2-1), ke, ke+ng);
+  }
+
+  return TaskStatus::complete;
 }
 
 //----------------------------------------------------------------------------------------
@@ -384,12 +473,6 @@ TaskStatus DynGR::SetTmunu(Driver *pdrive, int stage) {
   return TaskStatus::complete;
 }
 
-//----------------------------------------------------------------------------------------
-//! \fn  template<class EOSPolicy, class ErrorPolicy> template<int NGHOST>
-//       void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(
-//       const DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,
-//       const Real dt, DvceArray5D<Real> &rhs)
-//  \brief
 template<class EOSPolicy, class ErrorPolicy> template<int NGHOST>
 void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &prim,
     const DvceArray5D<Real> &bcc,
@@ -400,17 +483,16 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
 
-  int ncells1 = indcs.nx1+indcs.ng; // Align scratch buffers with variables
   int nmb = pmy_pack->nmb_thispack;
 
   auto &adm = pmy_pack->padm->adm;
-  auto &tmunu = pmy_pack->ptmunu->tmunu;
   auto &eos_ = eos.ps.GetEOS();
 
-  int &nhyd = pmy_pack->pmhd->nmhd;
+  int &nhyd  = pmy_pack->pmhd->nmhd;
   int &nscal = pmy_pack->pmhd->nscalars;
 
   const Real mb = eos.ps.GetEOS().GetBaryonMass();
+  const int imap[3][3] = {{S11, S12, S13}, {S12, S22, S23}, {S13, S23, S33}};
 
   // Check the number of dimensions to determine which derivatives we need.
   int ndim;
@@ -422,172 +504,113 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
     ndim = 3;
   }
 
-  int scr_level = scratch_level;
-  size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1)*2       // scalars
-                  + ScrArray2D<Real>::shmem_size(3, ncells1)*2    // vectors
-                  + ScrArray2D<Real>::shmem_size(6, ncells1)*2    // symmetric 2 tensors
-                  + ScrArray2D<Real>::shmem_size(9, ncells1)*1    // general 2 tensors
-                  + ScrArray2D<Real>::shmem_size(18, ncells1)*1;  // symmetric 3 tensors
-  par_for_outer("dyngr_coord_terms_loop",DevExeSpace(),scr_size,scr_level,
-                0,nmb-1,ks,ke,js,je,
-  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {
-    // Scratch space
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> vol;      // sqrt of det of gam_ij
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> E;        // fluid energy density
+  par_for("coord_src", DevExeSpace(), 0, nmb-1, ks, ke, js, je, is, ie,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    // Extract the metric and coordinate quantities.
+    Real g3d[NSPMETRIC] = {adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i),
+                           adm.g_dd(m,0,2,k,j,i), adm.g_dd(m,1,1,k,j,i),
+                           adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i)};
+    const Real& alpha = adm.alpha(m, k, j, i);
+    Real beta_u[3] = {adm.beta_u(m,0,k,j,i), 
+                      adm.beta_u(m,1,k,j,i), adm.beta_u(m,2,k,j,i)};
+    Real detg = adm::SpatialDet(g3d[S11], g3d[S12], g3d[S13],
+                                g3d[S22], g3d[S23], g3d[S33]);
+    Real vol = sqrt(detg);
+    Real g3u[NSPMETRIC] = {0.};
+    adm::SpatialInv(1.0/detg, g3d[S11], g3d[S12], g3d[S13], g3d[S22], g3d[S23], g3d[S33],
+                    &g3u[S11], &g3u[S12], &g3u[S13], &g3u[S22], &g3u[S23], &g3u[S33]);
 
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> dalpha_d; // lapse 1st drvts
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> S_d;      // matter momentum
-
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;     // inverse metric
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> S_uu;     // spatial component of T
-
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 2> dbeta_du; // drvts of the shift
-
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> dg_ddd;   // metric 1st drvts
-
-    vol.NewAthenaScratchTensor(member, scr_level, ncells1);
-    E.NewAthenaScratchTensor(member, scr_level, ncells1);
-    dalpha_d.NewAthenaScratchTensor(member, scr_level, ncells1);
-    S_d.NewAthenaScratchTensor(member, scr_level, ncells1);
-    dbeta_du.NewAthenaScratchTensor(member, scr_level, ncells1);
-    g_uu.NewAthenaScratchTensor(member, scr_level, ncells1);
-    S_uu.NewAthenaScratchTensor(member, scr_level, ncells1);
-    dg_ddd.NewAthenaScratchTensor(member, scr_level, ncells1);
-
-    par_for_inner(member, is, ie, [&](int const i) {
-      Real detg = adm::SpatialDet(adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i),
-                                  adm.g_dd(m,0,2,k,j,i), adm.g_dd(m,1,1,k,j,i),
-                                  adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i));
-      vol(i) = sqrt(detg);
-    });
-    member.team_barrier();
-
-    par_for_inner(member, is, ie, [&](int const i) {
-      adm::SpatialInv(1.0/SQR(vol(i)),
-                 adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i), adm.g_dd(m,0,2,k,j,i),
-                 adm.g_dd(m,1,1,k,j,i), adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i),
-                 &g_uu(0,0,i), &g_uu(0,1,i), &g_uu(0,2,i),
-                 &g_uu(1,1,i), &g_uu(1,2,i), &g_uu(2,2,i));
-    });
-    member.team_barrier();
-
-    // Metric derivatives
+    // Calculate the metric derivatives
     Real idx[] = {size.d_view(m).idx1, size.d_view(m).idx2, size.d_view(m).idx3};
-    dalpha_d.ZeroClear();
-    dbeta_du.ZeroClear();
-    dg_ddd.ZeroClear();
-    for (int a =0; a < ndim; ++a) {
-      par_for_inner(member, is, ie, [&](int const i){
-        dalpha_d(a, i) = Dx<NGHOST>(a, idx, adm.alpha, m, k, j, i);
-      });
+    Real dalpha_d[3] = {0.};
+    for (int a = 0; a < ndim; a++) {
+      dalpha_d[a] = Dx<NGHOST>(a, idx, adm.alpha, m, k, j, i);
     }
-    for (int a = 0; a < 3; ++a) {
-      for (int b = 0; b < ndim; ++b) {
-        par_for_inner(member, is, ie, [&](int const i){
-          dbeta_du(b,a,i) = Dx<NGHOST>(b, idx, adm.beta_u, m, a, k, j, i);
-        });
+    Real dbeta_du[3][3] = {0.};
+    for (int a = 0; a < 3; a++) {
+      for (int b = 0; b < ndim; b++) {
+        dbeta_du[b][a] = Dx<NGHOST>(b, idx, adm.beta_u, m, a, k, j, i);
       }
     }
+    Real dg_ddd[3][3][3] = {0.};
     for (int a = 0; a < 3; ++a) {
       for (int b = 0; b < 3; ++b) {
         for (int c = 0; c < ndim; ++c) {
-          par_for_inner(member, is, ie, [&](int const i) {
-            dg_ddd(c,a,b,i) = Dx<NGHOST>(c, idx, adm.g_dd, m, a, b, k, j, i);
-          });
+          dg_ddd[c][a][b] = Dx<NGHOST>(c, idx, adm.g_dd, m, a, b, k, j, i);
         }
       }
     }
 
     // Fluid quantities
-    par_for_inner(member, is, ie, [&](int const i) {
-      Real prim_pt[NPRIM] = {0.0};
-      prim_pt[PRH] = prim(m, IDN, k, j, i)/mb;
-      prim_pt[PVX] = prim(m, IVX, k, j, i);
-      prim_pt[PVY] = prim(m, IVY, k, j, i);
-      prim_pt[PVZ] = prim(m, IVZ, k, j, i);
-      for (int s = 0; s < nscal; s++) {
-        prim_pt[PYF + s] = prim(m, nhyd + s, k, j, i);
-      }
-      prim_pt[PPR] = prim(m, IPR, k, j, i);
-      prim_pt[PTM] = eos_.GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR], &prim_pt[PYF]);
+    Real prim_pt[NPRIM] = {0.0};
+    prim_pt[PRH] = prim(m, IDN, k, j, i)/mb;
+    prim_pt[PVX] = prim(m, IVX, k, j, i);
+    prim_pt[PVY] = prim(m, IVY, k, j, i);
+    prim_pt[PVZ] = prim(m, IVZ, k, j, i);
+    for (int s = 0; s < nscal; s++) {
+      prim_pt[PYF + s] = prim(m, nhyd + s, k, j, i);
+    }
+    prim_pt[PPR] = prim(m, IPR, k, j, i);
+    prim_pt[PTM] = eos_.GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR], &prim_pt[PYF]);
 
-      // Get the conserved variables. Note that we don't use PrimitiveSolver here --
-      // that's because we would need to recalculate quantities used in E and S_d in order
-      // to get S_dd.
-      Real H =
-        prim(m, IDN, k, j, i)*eos_.GetEnthalpy(prim_pt[PRH], prim_pt[PTM], &prim_pt[PYF]);
-      Real usq = 0.0;
-      for (int a = 0; a < 3; ++a) {
-        for (int b = 0; b < 3; ++b) {
-          usq += adm.g_dd(m,a,b,k,j,i)*prim_pt[PVX + a]*prim_pt[PVX + b];
-        }
+    // Get the conserved variables. Note that we don't use PrimitiveSolver here --
+    // that's because we would need to recalculate quantities used in E and S_d in order
+    // to get S_dd.
+    Real H =
+      prim(m, IDN, k, j, i)*eos_.GetEnthalpy(prim_pt[PRH], prim_pt[PTM], &prim_pt[PYF]);
+    Real usq = Primitive::SquareVector(&prim_pt[PVX], g3d);
+    Real const Wsq = 1.0 + usq;
+    Real const W = sqrt(Wsq);
+    Real B_u[NMAG] = {bcc(m, IBX, k, j, i)/vol,
+                      bcc(m, IBY, k, j, i)/vol,
+                      bcc(m, IBZ, k, j, i)/vol};
+    Real Bv = 0.0;
+    for (int a = 0; a < 3; a++) {
+      for (int b = 0; b < 3; b++) {
+        Bv += adm.g_dd(m,a,b,k,j,i)*prim_pt[PVX + a]*B_u[b];
       }
-      Real const Wsq = 1.0 + usq;
-      Real const W = sqrt(Wsq);
-      Real B_u[NMAG] = {bcc(m, IBX, k, j, i)/vol(i),
-                        bcc(m, IBY, k, j, i)/vol(i),
-                        bcc(m, IBZ, k, j, i)/vol(i)};
-      Real Bv = 0.0;
-      Real Bsq = 0.0;
-      for (int a = 0; a < 3; ++a) {
-        for (int b = 0; b < 3; ++b) {
-          Bv += adm.g_dd(m,a,b,k,j,i)*prim_pt[PVX + a]*B_u[b];
-          Bsq += adm.g_dd(m,a,b,k,j,i)*B_u[a]*B_u[b];
-        }
-      }
-      Bv = Bv/W;
-      Real bsq = Bv*Bv + Bsq/Wsq;
+    }
+    Real Bsq = Primitive::SquareVector(B_u, g3d);
+    Bv = Bv/W;
+    Real bsq = Bv*Bv + Bsq/Wsq;
 
-      E(i) = (H*Wsq + Bsq) - prim_pt[PPR] - 0.5*bsq;
+    Real E = (H*Wsq + Bsq) - prim_pt[PPR] - 0.5*bsq;
 
-      for (int a = 0; a < 3; ++a) {
-        S_d(a, i) = 0.0;
-        for (int b = 0; b < 3; ++b) {
-          S_d(a, i) += ((H*Wsq + Bsq)*prim_pt[PVX + b]/W - Bv*B_u[b])*
-                        adm.g_dd(m, a, b, k, j, i);
-        }
+    Real S_d[3] = {0.0};
+    for (int a = 0; a < 3; a++) {
+      for (int b = 0; b < 3; b++) {
+        S_d[a] += ((H*Wsq + Bsq)*prim_pt[PVX + b]/W - Bv*B_u[b])*g3d[imap[a][b]];
       }
+    }
 
-      for (int a = 0; a < 3; ++a) {
-        for (int b = a; b < 3; ++b) {
-          S_uu(a,b,i) = (H + Bsq/Wsq)*prim_pt[PVX + a]*prim_pt[PVX + b]
-                        - B_u[a]*B_u[b]/Wsq
-                        - Bv*(B_u[a]*prim_pt[PVX + b] + B_u[b]*prim_pt[PVX + a])/W
-                        + (prim_pt[PPR] + 0.5*bsq)*g_uu(a,b,i);
-        }
+    Real S_uu[3][3];
+    for (int a = 0; a < 3; a++) {
+      for (int b = 0; b < 3; b++) {
+        S_uu[a][b] = (H + Bsq/Wsq)*prim_pt[PVX + a]*prim_pt[PVX + b]
+                      - B_u[a]*B_u[b]/Wsq
+                      - Bv*(B_u[a]*prim_pt[PVX + b] + B_u[b]*prim_pt[PVX + a])/W
+                      + (prim_pt[PPR] + 0.5*bsq)*g3u[imap[a][b]];
       }
-    });
-    member.team_barrier();
+    }
 
     // Assemble energy RHS
-    for (int a = 0; a < 3; ++a) {
-      for (int b = 0; b < 3; ++b) {
-        par_for_inner(member, is, ie, [&](int const i) {
-          rhs(m, IEN, k, j, i) += dt * vol(i) * (
-            adm.alpha(m, k, j, i) * adm.vK_dd(m, a, b, k, j, i) * S_uu(a, b, i) -
-            g_uu(a, b, i) * S_d(a, i) * dalpha_d(b, i));
-        });
+    for (int a = 0; a < 3; a++) {
+      for (int b = 0; b < 3; b++) {
+        rhs(m, IEN, k, j, i) += dt*vol*(alpha*adm.vK_dd(m, a, b, k, j, i)*S_uu[a][b] -
+            g3u[imap[a][b]] * S_d[a]*dalpha_d[b]);
       }
     }
 
     // Assemble momentum RHS
-    for (int a = 0; a < 3; ++a) {
-      for (int b = 0; b < 3; ++b) {
-        for (int c = 0; c < 3; ++c) {
-          par_for_inner(member, is, ie, [&](int const i) {
-            rhs(m,IM1+a, k, j, i) += 0.5 * dt * adm.alpha(m,k,j,i) * vol(i) *
-              S_uu(b, c, i) * dg_ddd(a,b,c,i);
-          });
+    for (int a = 0; a < 3; a++) {
+      for (int b = 0; b < 3; b++) {
+        for (int c = 0; c < 3; c++) {
+          rhs(m,IM1+a, k, j, i) += 0.5*dt*alpha*vol*S_uu[b][c]*dg_ddd[a][b][c];
         }
-        par_for_inner(member, is, ie, [&](int const i) {
-          rhs(m, IM1 + a, k, j, i) += dt * vol(i) * S_d(b, i) * dbeta_du(a, b, i);
-        });
+        rhs(m, IM1+a, k, j, i) += dt*vol*S_d[b]*dbeta_du[a][b];
       }
-      par_for_inner(member, is, ie, [&](int const i) {
-        rhs(m, IM1 + a, k, j, i) -= dt * vol(i) * E(i) * dalpha_d(a, i);
-      });
+      rhs(m, IM1+a, k, j, i) -= dt*vol*E*dalpha_d[a];
     }
-    member.team_barrier();
   });
 }
 

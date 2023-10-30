@@ -144,6 +144,31 @@ else()
   set(ELLIPTICA 0)
 endif()
 
+if (${PROBLEM} STREQUAL "lorene_bns")
+  # FIXME(user): The way the Fortran libraries here are linked is not great. Because these
+  # are implicit libraries, we shouldn't have to add them manually, but at least on some
+  # machines this seems to be necessary. We should find out if there's a better way to
+  # do this.
+  enable_language(Fortran)
+  include(FortranCInterface)
+  FortranCInterface_VERIFY(CXX)
+  find_package(BLAS REQUIRED)
+  find_package(LAPACK REQUIRED)
+  find_package(GSL REQUIRED)
+  target_include_directories(athena PRIVATE
+      ${CMAKE_SOURCE_DIR}/Lorene/Export/C++/Include
+      ${CMAKE_SOURCE_DIR}/Lorene/C++/Include)
+  target_link_libraries(athena PUBLIC
+      ${CMAKE_SOURCE_DIR}/Lorene/Lib/liblorene_export.a
+      ${CMAKE_SOURCE_DIR}/Lorene/Lib/liblorene.a
+      ${CMAKE_SOURCE_DIR}/Lorene/Lib/liblorenef77.a
+      ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES}
+      GSL::gsl ${CMAKE_Fortran_IMPLICIT_LINK_LIBRARIES})
+  set(LORENE 1)
+else()
+  set(LORENE 0)
+endif()
+
 # enable include of header files created in build directories
 target_include_directories(athena PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}
