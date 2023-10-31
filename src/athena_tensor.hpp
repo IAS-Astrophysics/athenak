@@ -108,7 +108,7 @@ class AthenaHostTensor<T, sym, ndim, 2> {
 
  private:
   sub_HostArray5D_2D data_;
-  int idxmap_[3][3];
+  int idxmap_[ndim][ndim];
   int ndof_;
 };
 
@@ -224,7 +224,7 @@ class AthenaTensor<T, sym, ndim, 2> {
 
  private:
   sub_DvceArray5D_2D data_;
-  int idxmap_[3][3];
+  int idxmap_[ndim][ndim];
   int ndof_;
 };
 
@@ -287,9 +287,8 @@ class AthenaScratchTensor<T, sym, ndim, 1> {
       data_[i] = 0;
     }
   }
-
  private:
-  Real data_[3];
+  Real data_[ndim];
 };
 
 //----------------------------------------------------------------------------------------
@@ -325,8 +324,8 @@ class AthenaScratchTensor<T, sym, ndim, 2> {
   }
 
  private:
-  Real data_[9];
-  int idxmap_[3][3];
+  Real data_[ndim*ndim];
+  int idxmap_[ndim][ndim];
   int ndof_;
 };
 
@@ -388,8 +387,8 @@ class AthenaScratchTensor<T, sym, ndim, 3> {
   }
 
  private:
-  Real data_[27];
-  int idxmap_[3][3][3];
+  Real data_[ndim*ndim*ndim];
+  int idxmap_[ndim][ndim][ndim];
   int ndof_;
 };
 
@@ -457,14 +456,15 @@ class AthenaScratchTensor<T, sym, ndim, 4> {
   }
   KOKKOS_INLINE_FUNCTION
   void ZeroClear() {
+    Kokkos::Experimental::local_deep_copy(data_, 0);
     for (int i = 0; i < ndim*ndim*ndim*ndim; ++i) {
       data_[i] = 0.0;
     }
   }
 
  private:
-  Real data_[81];
-  int idxmap_[3][3][3][3];
+  Real data_[ndim*ndim*ndim*ndim];
+  int idxmap_[ndim][ndim][ndim][ndim];
   int ndof_;
 };
 
