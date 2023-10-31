@@ -1,7 +1,6 @@
 //========================================================================================
-// GR radiation code for AthenaK with FEM_N & FP_N
-// Copyright (C) 2023 Maitraya Bhattacharyya <mbb6217@psu.edu> and David Radice <dur566@psu.edu>
-// AthenaXX copyright(C) James M. Stone <jmstone@ias.edu> and the Athena code team
+// AthenaXXX astrophysical plasma code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file radiation_femn_closure.cpp
@@ -64,6 +63,10 @@ void ApplyM1Closure(TeamMember_t member, int num_points, int m, int en, int kk, 
   f_scratch(7) = -sqrt(60 * M_PI) * Pxz / (4 * M_PI);           // (2, 1)
   f_scratch(8) = sqrt(15 * M_PI) * (Pxx - Pyy) / (4 * M_PI);    // (2, 2)
 
+}
+
+void RadiationFEMN::ApplyClosure(TeamMember_t member, int num_points, int m, int en, int kk, int jj, int ii, DvceArray5D<Real> f, ScrArray1D<Real> f_scratch) {
+  ApplyFEMNFPNClosure(member, num_points, m, en, kk, jj, ii, f, f_scratch);
 }
 
 }

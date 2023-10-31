@@ -10,6 +10,7 @@
 #include <float.h>
 
 #include "athena.hpp"
+#include "athena_tensor.hpp"
 #include "mesh/mesh.hpp"
 #include "radiation_femn/radiation_femn.hpp"
 
@@ -56,16 +57,12 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                   ScrArray1D<Real> f0_scratch_m1 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points);
                   ScrArray1D<Real> f0_scratch_m2 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points);
 
-                  par_for_inner(member, 0, nang1, [&](const int idx) {
-                    f0_scratch(idx) = f0_(m, en * num_points + idx, kk, jj, ii);
-                    f0_scratch_p1(idx) = f0_(m, en * num_points + idx, kk, jj, ii + 1);
-                    f0_scratch_p2(idx) = f0_(m, en * num_points + idx, kk, jj, ii + 2);
-                    f0_scratch_p3(idx) = f0_(m, en * num_points + idx, kk, jj, ii + 3);
-                    f0_scratch_m1(idx) = f0_(m, en * num_points + idx, kk, jj, ii - 1);
-                    f0_scratch_m2(idx) = f0_(m, en * num_points + idx, kk, jj, ii - 2);
-                  });
-
-                  //ApplyClosure(member, num_points, m, en, kk, jj, ii, f0_, f0_scratch, f0_scratch_p1, f0_scratch_p2, f0_scratch_p3, f0_scratch_m1, f0_scratch_m2);
+                  ApplyClosure(member, num_points, m, en, kk, jj, ii, f0_, f0_scratch);
+                  ApplyClosure(member, num_points, m, en, kk, jj, ii + 1, f0_, f0_scratch_p1);
+                  ApplyClosure(member, num_points, m, en, kk, jj, ii + 2, f0_, f0_scratch_p2);
+                  ApplyClosure(member, num_points, m, en, kk, jj, ii + 3, f0_, f0_scratch_p3);
+                  ApplyClosure(member, num_points, m, en, kk, jj, ii - 1, f0_, f0_scratch_m1);
+                  ApplyClosure(member, num_points, m, en, kk, jj, ii - 2, f0_, f0_scratch_m2);
                   member.team_barrier();
                   // ----------------------------------------------------
 
@@ -149,14 +146,12 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                     ScrArray1D<Real> f0_scratch_m1 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points);
                     ScrArray1D<Real> f0_scratch_m2 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points);
 
-                    par_for_inner(member, 0, nang1, [&](const int idx) {
-                      f0_scratch(idx) = f0_(m, en * num_points + idx, kk, jj, ii);
-                      f0_scratch_p1(idx) = f0_(m, en * num_points + idx, kk, jj + 1, ii);
-                      f0_scratch_p2(idx) = f0_(m, en * num_points + idx, kk, jj + 2, ii);
-                      f0_scratch_p3(idx) = f0_(m, en * num_points + idx, kk, jj + 3, ii);
-                      f0_scratch_m1(idx) = f0_(m, en * num_points + idx, kk, jj - 1, ii);
-                      f0_scratch_m2(idx) = f0_(m, en * num_points + idx, kk, jj - 2, ii);
-                    });
+                    ApplyClosure(member, num_points, m, en, kk, jj, ii, f0_, f0_scratch);
+                    ApplyClosure(member, num_points, m, en, kk, jj + 1, ii, f0_, f0_scratch_p1);
+                    ApplyClosure(member, num_points, m, en, kk, jj + 2, ii, f0_, f0_scratch_p2);
+                    ApplyClosure(member, num_points, m, en, kk, jj + 3, ii, f0_, f0_scratch_p3);
+                    ApplyClosure(member, num_points, m, en, kk, jj - 1, ii, f0_, f0_scratch_m1);
+                    ApplyClosure(member, num_points, m, en, kk, jj - 2, ii, f0_, f0_scratch_m2);
                     member.team_barrier();
                     // ----------------------------------------------------
 
@@ -220,8 +215,8 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
   scr_size = ScrArray1D<Real>::shmem_size(num_points) * 6;
   auto &flx3 = iflx.x3f;
   Kokkos::deep_copy(flx3, 0.);
-  if(three_d) {
-    par_for_outer("radiation_femn_flux_z", DevExeSpace(), scr_size, scr_level, 0, nmb1, 0, npts1, ks, int(ke/2) + 1, js, je, is, ie,
+  if (three_d) {
+    par_for_outer("radiation_femn_flux_z", DevExeSpace(), scr_size, scr_level, 0, nmb1, 0, npts1, ks, int(ke / 2) + 1, js, je, is, ie,
                   KOKKOS_LAMBDA(TeamMember_t member, const int m, const int enang, const int k, const int j, const int i) {
 
                     auto kk = 2 * k - 2;
@@ -241,15 +236,14 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                     ScrArray1D<Real> f0_scratch_m1 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points);
                     ScrArray1D<Real> f0_scratch_m2 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points);
 
-                    par_for_inner(member, 0, nang1, [&](const int idx) {
-                      f0_scratch(idx) = f0_(m, en * num_points + idx, kk, jj, ii);
-                      f0_scratch_p1(idx) = f0_(m, en * num_points + idx, kk + 1, jj, ii);
-                      f0_scratch_p2(idx) = f0_(m, en * num_points + idx, kk + 2, jj, ii);
-                      f0_scratch_p3(idx) = f0_(m, en * num_points + idx, kk + 3, jj, ii);
-                      f0_scratch_m1(idx) = f0_(m, en * num_points + idx, kk - 1, jj, ii);
-                      f0_scratch_m2(idx) = f0_(m, en * num_points + idx, kk - 2, jj, ii);
-                    });
+                    ApplyClosure(member, num_points, m, en, kk, jj, ii, f0_, f0_scratch);
+                    ApplyClosure(member, num_points, m, en, kk + 1, jj, ii, f0_, f0_scratch_p1);
+                    ApplyClosure(member, num_points, m, en, kk + 2, jj, ii, f0_, f0_scratch_p2);
+                    ApplyClosure(member, num_points, m, en, kk + 3, jj, ii, f0_, f0_scratch_p3);
+                    ApplyClosure(member, num_points, m, en, kk - 1, jj, ii, f0_, f0_scratch_m1);
+                    ApplyClosure(member, num_points, m, en, kk - 2, jj, ii, f0_, f0_scratch_m2);
                     member.team_barrier();
+
                     // ----------------------------------------------------
 
                     // factor from energy contribution

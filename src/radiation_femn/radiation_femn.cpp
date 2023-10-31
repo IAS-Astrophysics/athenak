@@ -164,9 +164,9 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   }
 
   if (m1_flag) {
-
+    //this->& ApplyClosure = radiationfemn::ApplyM1Closure;
   } else {
-
+    //this->& ApplyClosure = radiationfemn::ApplyFEMNFPNClosure;
   }
   // compute P, Pmod matrices, source matrices
   this->ComputePMatrices();
