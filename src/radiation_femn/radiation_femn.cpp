@@ -164,7 +164,10 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   }
 
   if (m1_flag) {
-    //this->& ApplyClosure = radiationfemn::ApplyM1Closure;
+    if (lmax != 2) {
+      std::cout << " To run M1 you must have FP_N on with lmax = 2!" << std::endl;
+      exit(EXIT_FAILURE);
+    }
   } else {
     //this->& ApplyClosure = radiationfemn::ApplyFEMNFPNClosure;
   }
