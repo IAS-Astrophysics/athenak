@@ -38,7 +38,6 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
   int ncells3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2 * (indcs.ng)) : 1;
 
   auto f0_ = f0;
-  auto g0_ = g0;
   auto f1_ = f1;
   auto &flx1 = iflx.x1f;
   auto &flx2 = iflx.x2f;
@@ -230,10 +229,10 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
               }
 
               if (!rad_source) {
-                g0_(m, enang, k, j, i) = gam0 * f0_(m, enang, k, j, i) + gam1 * f1_(m, enang, k, j, i) - beta_dt * divf_s;
+                //g0_(m, enang, k, j, i) = gam0 * f0_(m, enang, k, j, i) + gam1 * f1_(m, enang, k, j, i) - beta_dt * divf_s;
               } else {
-                g0_(m, enang, k, j, i) = gam0 * f0_(m, enang, k, j, i) + gam1 * f1_(m, enang, k, j, i) - beta_dt * divf_s
-                    + sqrt_det_g(m, k, j, i) * beta_dt * eta(m, k, j, i) * e_source(B);
+                //g0_(m, enang, k, j, i) = gam0 * f0_(m, enang, k, j, i) + gam1 * f1_(m, enang, k, j, i) - beta_dt * divf_s
+                //+ sqrt_det_g(m, k, j, i) * beta_dt * eta(m, k, j, i) * e_source(B);
                 //- sqrt_det_g(m, k, j, i) * beta_dt * (kappa_s(m, k, j, i) + kappa_a(m, k, j, i)) * f0_(m, enang, k, j, i);
               }
             });
@@ -265,9 +264,9 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                     radiationfemn::LUInverse(Q_matrix, Qinv_matrix);
 
                     Real final_result = 0.;
-                    Kokkos::parallel_reduce(Kokkos::TeamVectorRange(member, 0, num_points), [&](const int A, Real &partial_sum) {
-                      partial_sum += Qinv_matrix(B, A) * g0_(m, en * num_points + A, k, j, i);
-                    }, final_result);
+                    //Kokkos::parallel_reduce(Kokkos::TeamVectorRange(member, 0, num_points), [&](const int A, Real &partial_sum) {
+                    //  partial_sum += Qinv_matrix(B, A) * g0_(m, en * num_points + A, k, j, i);
+                    //}, final_result);
                     member.team_barrier();
 
                     f0_(m, enang, k, j, i) = final_result;
@@ -296,26 +295,90 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
 
 
   // update the distribution function for radiation
-  par_for("radiation_femn_update", DevExeSpace(), 0, nmb1, 0, npts1, ks, ke, js, je, is, ie,
-          KOKKOS_LAMBDA(int m, int enang, int k, int j, int i) {
+  if (true) {
+    par_for("radiation_femn_update", DevExeSpace(), 0, nmb1, 0, npts1, ks, ke, js, je, is, ie,
+            KOKKOS_LAMBDA(int m, int enang, int k, int j, int i) {
 
-            // Compute Christoeffel in fluid frame
-            double Gamma_fluid = 0;
+              // Compute Christoeffel in fluid frame
+              double Gamma_fluid = 0;
 
-            RadiationFEMNPhaseIndices idcs = IndicesComponent(enang);
-            int en = idcs.eindex;
-            auto Ven = (1. / 3.) * (pow(energy_grid(en + 1), 3) - pow(energy_grid(en), 3));
+              RadiationFEMNPhaseIndices idcs = IndicesComponent(enang);
+              int en = idcs.eindex;
+              auto Ven = (1. / 3.) * (pow(energy_grid(en + 1), 3) - pow(energy_grid(en), 3));
 
-            Real divf_s = flx1(m, enang, k, j, i) / (2. * mbsize.d_view(m).dx1 * Ven);
-            if (multi_d) {
-              divf_s += flx2(m, enang, k, j, i) / (2. * mbsize.d_view(m).dx2 * Ven);
-            }
-            if (three_d) {
-              divf_s += flx3(m, enang, k, j, i) / (2. * mbsize.d_view(m).dx3 * Ven);
-            }
-            f0_(m, enang, k, j, i) = gam0 * f0_(m, enang, k, j, i) + gam1 * f1_(m, enang, k, j, i) - beta_dt * divf_s;
-          });
+              Real divf_s = flx1(m, enang, k, j, i) / (2. * mbsize.d_view(m).dx1 * Ven);
+              if (multi_d) {
+                divf_s += flx2(m, enang, k, j, i) / (2. * mbsize.d_view(m).dx2 * Ven);
+              }
+              if (three_d) {
+                divf_s += flx3(m, enang, k, j, i) / (2. * mbsize.d_view(m).dx3 * Ven);
+              }
+              f0_(m, enang, k, j, i) = gam0 * f0_(m, enang, k, j, i) + gam1 * f1_(m, enang, k, j, i) - beta_dt * divf_s;
+            });
+  }
 
+  if(false) {
+    size_t scr_size = ScrArray2D<Real>::shmem_size(num_points, num_points) * 2 + ScrArray1D<Real>::shmem_size(num_points) * 2
+        + ScrArray2D<Real>::shmem_size(18, 1) + ScrArray2D<Real>::shmem_size(64, 1);
+    int scr_level = 0;
+    par_for_outer("radiation_femn_update_semi_implicit", DevExeSpace(), scr_size, scr_level, 0, nmb1, 0, num_energy_bins, ks, ke, js, je, is, ie,
+                  KOKKOS_LAMBDA(TeamMember_t member, int m, int en, int k, int j, int i) {
+
+                    // (1) Form the Q matrix and it's inverse (this will be used to go from G to F at the end)
+                    DvceArray2D<Real> Q_matrix;
+                    DvceArray2D<Real> Qinv_matrix;
+                    Kokkos::realloc(Q_matrix, num_points, num_points);
+                    Kokkos::realloc(Qinv_matrix, num_points, num_points);
+
+                    par_for_inner(member, 0, num_points * num_points - 1, [&](const int idx) {
+                      int row = int(idx / num_points);
+                      int col = idx - row * num_points;
+                      Q_matrix(row, col) = sqrt_det_g(m, k, j, i) * (L_mu_muhat0_(m, 0, 0, k, j, i) * P_matrix(0, row, col)
+                          + L_mu_muhat0_(m, 0, 1, k, j, i) * P_matrix(1, row, col) + L_mu_muhat0_(m, 0, 2, k, j, i) * P_matrix(2, row, col)
+                          + L_mu_muhat0_(m, 0, 3, k, j, i) * P_matrix(3, row, col));
+                      //+ beta_dt * (kappa_s(m, k, j, i) + kappa_a(m, k, j, i)) * (row == col)
+                      //+ beta_dt * (1. / (4. * M_PI)) * S_source(row, col));
+                    });
+                    member.team_barrier();
+                    //radiationfemn::LUInverse(Q_matrix, Qinv_matrix);
+
+                    // (2) Compute derivative terms for all angles and store in scratch array g_rhs_scratch(num_angles)
+                    ScrArray1D<Real> g_rhs_scratch = ScrArray1D<Real>(member.team_scratch(scr_level), num_points);
+                    auto Ven = (1. / 3.) * (pow(energy_grid(en + 1), 3) - pow(energy_grid(en), 3));
+
+                    par_for_inner(member, 0, num_points, [&](const int idx) {
+                      int enangidx = en * num_points + idx;
+
+                      Real divf_s = flx1(m, enangidx, k, j, i) / (2. * mbsize.d_view(m).dx1 * Ven);
+
+                      if (multi_d) {
+                        divf_s += flx2(m, enangidx + idx, k, j, i) / (2. * mbsize.d_view(m).dx2 * Ven);
+                      }
+
+                      if (three_d) {
+                        divf_s += flx3(m, enangidx, k, j, i) / (2. * mbsize.d_view(m).dx3 * Ven);
+                      }
+
+                      g_rhs_scratch(idx) = gam0 * f0_(m, enangidx, k, j, i) + gam1 * f1_(m, enangidx, k, j, i) - beta_dt * divf_s;
+
+                    });
+                    member.team_barrier();
+
+                    // (3) F from G
+                    Kokkos::parallel_for(Kokkos::TeamThreadRange(member, 0, num_points), [=](const int idx) {
+
+                      /*
+                      Real final_result = 0.;
+                      Kokkos::parallel_reduce(Kokkos::ThreadVectorRange(member, 0, num_points), [&](const int A, Real &partial_sum) {
+                        partial_sum += Qinv_matrix(idx, A) *  g_rhs_scratch(A);
+                      }, final_result);
+                      member.team_barrier(); */
+
+                      f0_(m, en * num_points * idx, k, j, i) = g_rhs_scratch(idx);
+                    });
+                    member.team_barrier();
+                  });
+  }
 
   // Add explicit source terms
   if (beam_source) {

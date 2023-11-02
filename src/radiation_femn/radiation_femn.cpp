@@ -32,7 +32,6 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
     scheme_points("scheme_points", 1, 1),
     scheme_weights("scheme_weights", 1),
     f0("f0", 1, 1, 1, 1, 1),
-    g0("g0", 1, 1, 1, 1, 1),
     coarse_f0("ci0", 1, 1, 1, 1, 1),
     f1("f1", 1, 1, 1, 1, 1),
     iflx("iflx", 1, 1, 1, 1, 1),
@@ -217,7 +216,6 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // state vector and fluxes
   Kokkos::realloc(f0, nmb, num_points_total, ncells3, ncells2, ncells1);        // distribution function
-  Kokkos::realloc(g0, nmb, num_points_total, ncells3, ncells2, ncells1);
   Kokkos::realloc(f1, nmb, num_points_total, ncells3, ncells2, ncells1);        // distribution function
   Kokkos::realloc(iflx.x1f, nmb, num_points_total, ncells3, ncells2, ncells1);  // spatial flux (x)
   Kokkos::realloc(iflx.x2f, nmb, num_points_total, ncells3, ncells2, ncells1);  // spatial flux (y)
