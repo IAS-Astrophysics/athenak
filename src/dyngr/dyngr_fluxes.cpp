@@ -27,6 +27,7 @@
 #include "dyngr/rsolvers/hlle_dyngrmhd.hpp"
 // include PrimitiveSolver stuff
 #include "eos/primitive-solver/idealgas.hpp"
+#include "eos/primitive-solver/polytrope.hpp"
 #include "eos/primitive-solver/reset_floor.hpp"
 
 namespace dyngr {
@@ -395,5 +396,6 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::\
 
 INSTANTIATE_CALC_FLUXES(Primitive::IdealGas, Primitive::ResetFloor)
 INSTANTIATE_CALC_FLUXES(Primitive::PiecewisePolytrope, Primitive::ResetFloor)
+INSTANTIATE_CALC_FLUXES(Primitive::Polytrope, Primitive::ResetFloor)
 
 } // namespace dyngr

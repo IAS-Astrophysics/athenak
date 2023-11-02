@@ -103,10 +103,12 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   tov.kappa = pin->GetReal("problem", "kappa");
   tov.npoints = pin->GetReal("problem", "npoints");
   tov.dr    = pin->GetReal("problem", "dr");
-  if (pmbp->pdyngr->eos_policy != DynGR_EOS::eos_ideal) {
+  if (pmbp->pdyngr->eos_policy != DynGR_EOS::eos_ideal &&
+      pmbp->pdyngr->eos_policy != DynGR_EOS::eos_poly) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "TOV star problem currently only compatible with eos_ideal"
+              << "TOV star problem currently only compatible with eos_ideal and eos_poly"
               << std::endl;
+    exit(EXIT_FAILURE);
   }
   // Select either Hydro or MHD
   std::string block;

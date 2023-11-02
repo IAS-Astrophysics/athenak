@@ -24,6 +24,7 @@
 #include "eos/primitive-solver/primitive_solver.hpp"
 #include "eos/primitive-solver/idealgas.hpp"
 #include "eos/primitive-solver/piecewise_polytrope.hpp"
+#include "eos/primitive-solver/polytrope.hpp"
 #include "eos/primitive-solver/reset_floor.hpp"
 
 // AthenaK headers
@@ -40,6 +41,11 @@ class PrimitiveSolverHydro {
     // Parameters for an ideal gas
     if constexpr(std::is_same_v<Primitive::IdealGas, EOSPolicy>) {
       ps.GetEOSMutable().SetGamma(pin->GetOrAddReal(block, "gamma", 5.0/3.0));
+    }
+    // Parameters for a simple polytrope
+    if constexpr(std::is_same_v<Primitive::Polytrope, EOSPolicy>) {
+      ps.GetEOSMutable().SetGamma(pin->GetOrAddReal(block, "gamma", 2.0));
+      ps.GetEOSMutable().SetKappa(pin->GetOrAddReal(block, "K", 100.0));
     }
     // Parameters for a piecewise polytrope
     if constexpr(std::is_same_v<Primitive::PiecewisePolytrope, EOSPolicy>) {

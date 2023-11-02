@@ -350,5 +350,8 @@ void DynGRPS<Primitive::IdealGas, Primitive::ResetFloor>::
 template
 void DynGRPS<Primitive::PiecewisePolytrope, Primitive::ResetFloor>::
   FOFC(Driver *pdriver, int stage);
+template
+void DynGRPS<Primitive::Polytrope, Primitive::ResetFloor>::
+  FOFC(Driver *pdriver, int stage);
 
 } // namespace mhd
