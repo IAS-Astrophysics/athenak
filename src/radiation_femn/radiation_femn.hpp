@@ -112,7 +112,6 @@ class RadiationFEMN {
   // ---------------------------------------------------------------------------
   DvceArray5D<Real> f0;         // distribution function
   DvceArray5D<Real> f1;         // distribution at intermediate step
-  DvceArray5D<Real> g0;         // obtain f0 from here
   DvceArray5D<Real> coarse_f0;  // distribution function on 2x coarser grid (for SMR/AMR)
   DvceFaceFld5D<Real> iflx;      // spatial fluxes on zone faces
 
