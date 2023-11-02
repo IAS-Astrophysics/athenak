@@ -130,11 +130,11 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
     auto &adm_ = adm;
     const auto rsolver = rsolver_;
     int il = is; int iu = ie+1;
-    if constexpr (rsolver == DynGR_RSolver::llf_dyngr) {
+    if constexpr (rsolver_method_ == DynGR_RSolver::llf_dyngr) {
       LLF_DYNGR<IVX>(member, dyn_eos, indcs, size, coord, m, k, j, is, ie+1,
                 wl, wr, bl, br, bx, nhyd_, nscal_, adm_,
                 flx1, e31, e21);
-    } else if constexpr (rsolver == DynGR_RSolver::hlle_dyngr) {
+    } else if constexpr (rsolver_method_ == DynGR_RSolver::hlle_dyngr) {
       HLLE_DYNGR<IVX>(member, dyn_eos, indcs, size, coord, m, k, j, is, ie+1,
                 wl, wr, bl, br, bx, nhyd_, nscal_, adm_,
                 flx1, e31, e21);
@@ -242,10 +242,10 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         const auto rsolver = rsolver_;
         int il = is; int iu = ie;
         if (j>(js-1)) {
-          if constexpr (rsolver == DynGR_RSolver::llf_dyngr) {
+          if constexpr (rsolver_method_ == DynGR_RSolver::llf_dyngr) {
             LLF_DYNGR<IVY>(member, dyn_eos, indcs, size, coord, m, k, j, is-1, ie+1,
                       wl, wr, bl, br, by, nhyd_, nscal_, adm_, flx2, e12, e32);
-          } else if constexpr (rsolver == DynGR_RSolver::hlle_dyngr) {
+          } else if constexpr (rsolver_method_ == DynGR_RSolver::hlle_dyngr) {
             HLLE_DYNGR<IVY>(member, dyn_eos, indcs, size, coord, m, k, j, is-1, ie+1,
                       wl, wr, bl, br, by, nhyd_, nscal_, adm_, flx2, e12, e32);
           }
@@ -348,10 +348,10 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         const auto rsolver = rsolver_;
         int il = is; int iu = ie;
         if (k>(ks-1)) {
-          if constexpr (rsolver == DynGR_RSolver::llf_dyngr) {
+          if constexpr (rsolver_method_ == DynGR_RSolver::llf_dyngr) {
             LLF_DYNGR<IVZ>(member, dyn_eos, indcs, size, coord, m, k, j, is-1, ie+1,
                       wl, wr, bl, br, bz, nhyd_, nscal_, adm_, flx3, e23, e13);
-          } else if constexpr (rsolver == DynGR_RSolver::hlle_dyngr) {
+          } else if constexpr (rsolver_method_ == DynGR_RSolver::hlle_dyngr) {
             HLLE_DYNGR<IVZ>(member, dyn_eos, indcs, size, coord, m, k, j, is-1, ie+1,
                       wl, wr, bl, br, bz, nhyd_, nscal_, adm_, flx3, e23, e13);
           }
