@@ -1,11 +1,10 @@
 //========================================================================================
-// Radiation FEM_N code for Athena
-// Copyright (C) 2023 Maitraya Bhattacharyya <mbb6217@psu.edu> and David Radice <dur566@psu.edu>
-// AthenaXX copyright(C) James M. Stone <jmstone@ias.edu> and the Athena code team
+// AthenaXXX astrophysical plasma code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file radiation_femn_linetest.cpp
-//! \brief the 2d linetest problem with FEM_N
+//! \brief the 2d linetest problem with FEM_N/FP_N/M1
 
 // C++ headers
 #include <iostream>

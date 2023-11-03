@@ -1,7 +1,6 @@
 //========================================================================================
-// GR radiation code for AthenaK with FEM_N & FP_N
-// Copyright (C) 2023 Maitraya Bhattacharyya <mbb6217@psu.edu> and David Radice <dur566@psu.edu>
-// AthenaXX copyright(C) James M. Stone <jmstone@ias.edu> and the Athena code team
+// AthenaXXX astrophysical plasma code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file radiation_femn_update.cpp
@@ -208,70 +207,6 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                   });
     */
 
-    // update the distribution function for radiation
-    par_for("radiation_femn_update", DevExeSpace(), 0, nmb1, 0, npts1, ks, ke, js, je, is, ie,
-            KOKKOS_LAMBDA(int m, int enang, int k, int j, int i) {
-
-              // Compute Christoeffel in fluid frame
-              double Gamma_fluid = 0;
-
-              RadiationFEMNPhaseIndices idcs = IndicesComponent(enang);
-              int en = idcs.eindex;
-              int B = idcs.angindex;
-              auto Ven = (1. / 3.) * (pow(energy_grid(en + 1), 3) - pow(energy_grid(en), 3));
-
-              Real divf_s = flx1(m, enang, k, j, i) / (2. * mbsize.d_view(m).dx1 * Ven);
-              if (multi_d) {
-                divf_s += flx2(m, enang, k, j, i) / (2. * mbsize.d_view(m).dx2 * Ven);
-              }
-              if (three_d) {
-                divf_s += flx3(m, enang, k, j, i) / (2. * mbsize.d_view(m).dx3 * Ven);
-              }
-
-              if (!rad_source) {
-                //g0_(m, enang, k, j, i) = gam0 * f0_(m, enang, k, j, i) + gam1 * f1_(m, enang, k, j, i) - beta_dt * divf_s;
-              } else {
-                //g0_(m, enang, k, j, i) = gam0 * f0_(m, enang, k, j, i) + gam1 * f1_(m, enang, k, j, i) - beta_dt * divf_s
-                //+ sqrt_det_g(m, k, j, i) * beta_dt * eta(m, k, j, i) * e_source(B);
-                //- sqrt_det_g(m, k, j, i) * beta_dt * (kappa_s(m, k, j, i) + kappa_a(m, k, j, i)) * f0_(m, enang, k, j, i);
-              }
-            });
-
-    par_for_outer("radiation_femn_update_matinv", DevExeSpace(), scr_size, scr_level, 0, nmb1, 0, npts1, ks, ke, js, je, is, ie,
-                  KOKKOS_LAMBDA(TeamMember_t member, int m, int enang, int k, int j, int i) {
-
-                    RadiationFEMNPhaseIndices idcs = IndicesComponent(enang);
-                    int en = idcs.eindex;
-                    int B = idcs.angindex;
-
-                    //ScrArray2D<Real> Q_matrix = ScrArray2D<Real>(member.team_scratch(scr_level), num_points, num_points);
-                    //ScrArray2D<Real> Qinv_matrix = ScrArray2D<Real>(member.team_scratch(scr_level), num_points, num_points);
-                    DvceArray2D<Real> Q_matrix;
-                    DvceArray2D<Real> Qinv_matrix;
-                    Kokkos::realloc(Q_matrix, num_points, num_points);
-                    Kokkos::realloc(Qinv_matrix, num_points, num_points);
-
-                    par_for_inner(member, 0, num_points * num_points - 1, [&](const int idx) {
-                      int row = int(idx / num_points);
-                      int col = idx - row * num_points;
-                      Q_matrix(row, col) = sqrt_det_g(m, k, j, i) * (L_mu_muhat0_(m, 0, 0, k, j, i) * P_matrix(0, row, col)
-                          + L_mu_muhat0_(m, 0, 1, k, j, i) * P_matrix(1, row, col) + L_mu_muhat0_(m, 0, 2, k, j, i) * P_matrix(2, row, col)
-                          + L_mu_muhat0_(m, 0, 3, k, j, i) * P_matrix(3, row, col)
-                          + beta_dt * (kappa_s(m, k, j, i) + kappa_a(m, k, j, i)) * (row == col)
-                          + beta_dt * (1. / (4. * M_PI)) * S_source(row, col));
-                    });
-                    member.team_barrier();
-                    radiationfemn::LUInverse(Q_matrix, Qinv_matrix);
-
-                    Real final_result = 0.;
-                    //Kokkos::parallel_reduce(Kokkos::TeamVectorRange(member, 0, num_points), [&](const int A, Real &partial_sum) {
-                    //  partial_sum += Qinv_matrix(B, A) * g0_(m, en * num_points + A, k, j, i);
-                    //}, final_result);
-                    member.team_barrier();
-
-                    f0_(m, enang, k, j, i) = final_result;
-                  });
-
     // update the tetrad quantities
     par_for("radiation_femn_tetrad_update", DevExeSpace(), 0, nmb1, 0, 3, 1, 3, ks, ke, js, je, is, ie,
             KOKKOS_LAMBDA(int m, int mu, int muhat, int k, int j, int i) {
@@ -293,92 +228,155 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
             });
   }
 
+  size_t scr_size = ScrArray2D<Real>::shmem_size(num_points, num_points) * 2 + ScrArray1D<Real>::shmem_size(num_points) * 2
+      + ScrArray2D<Real>::shmem_size(18, 1) + ScrArray2D<Real>::shmem_size(64, 1);
+  int scr_level = 0;
+  par_for_outer("radiation_femn_update_semi_implicit", DevExeSpace(), scr_size, scr_level, 0, nmb1, 0, num_energy_bins - 1, ks, ke, js, je, is, ie,
+                KOKKOS_LAMBDA(TeamMember_t member, int m, int en, int k, int j, int i) {
 
-  // update the distribution function for radiation
-  if (true) {
-    par_for("radiation_femn_update", DevExeSpace(), 0, nmb1, 0, npts1, ks, ke, js, je, is, ie,
-            KOKKOS_LAMBDA(int m, int enang, int k, int j, int i) {
+                  // (1) Form the Q matrix and it's inverse (this will be used to go from G to F at the end)
+                  DvceArray2D<Real> Q_matrix;
+                  DvceArray2D<Real> Qinv_matrix;
+                  Kokkos::realloc(Q_matrix, num_points, num_points);
+                  Kokkos::realloc(Qinv_matrix, num_points, num_points);
 
-              // Compute Christoeffel in fluid frame
-              double Gamma_fluid = 0;
-
-              RadiationFEMNPhaseIndices idcs = IndicesComponent(enang);
-              int en = idcs.eindex;
-              auto Ven = (1. / 3.) * (pow(energy_grid(en + 1), 3) - pow(energy_grid(en), 3));
-
-              Real divf_s = flx1(m, enang, k, j, i) / (2. * mbsize.d_view(m).dx1 * Ven);
-              if (multi_d) {
-                divf_s += flx2(m, enang, k, j, i) / (2. * mbsize.d_view(m).dx2 * Ven);
-              }
-              if (three_d) {
-                divf_s += flx3(m, enang, k, j, i) / (2. * mbsize.d_view(m).dx3 * Ven);
-              }
-              f0_(m, enang, k, j, i) = gam0 * f0_(m, enang, k, j, i) + gam1 * f1_(m, enang, k, j, i) - beta_dt * divf_s;
-            });
-  }
-
-  if(false) {
-    size_t scr_size = ScrArray2D<Real>::shmem_size(num_points, num_points) * 2 + ScrArray1D<Real>::shmem_size(num_points) * 2
-        + ScrArray2D<Real>::shmem_size(18, 1) + ScrArray2D<Real>::shmem_size(64, 1);
-    int scr_level = 0;
-    par_for_outer("radiation_femn_update_semi_implicit", DevExeSpace(), scr_size, scr_level, 0, nmb1, 0, num_energy_bins, ks, ke, js, je, is, ie,
-                  KOKKOS_LAMBDA(TeamMember_t member, int m, int en, int k, int j, int i) {
-
-                    // (1) Form the Q matrix and it's inverse (this will be used to go from G to F at the end)
-                    DvceArray2D<Real> Q_matrix;
-                    DvceArray2D<Real> Qinv_matrix;
-                    Kokkos::realloc(Q_matrix, num_points, num_points);
-                    Kokkos::realloc(Qinv_matrix, num_points, num_points);
-
-                    par_for_inner(member, 0, num_points * num_points - 1, [&](const int idx) {
-                      int row = int(idx / num_points);
-                      int col = idx - row * num_points;
-                      Q_matrix(row, col) = sqrt_det_g(m, k, j, i) * (L_mu_muhat0_(m, 0, 0, k, j, i) * P_matrix(0, row, col)
-                          + L_mu_muhat0_(m, 0, 1, k, j, i) * P_matrix(1, row, col) + L_mu_muhat0_(m, 0, 2, k, j, i) * P_matrix(2, row, col)
-                          + L_mu_muhat0_(m, 0, 3, k, j, i) * P_matrix(3, row, col));
-                      //+ beta_dt * (kappa_s(m, k, j, i) + kappa_a(m, k, j, i)) * (row == col)
-                      //+ beta_dt * (1. / (4. * M_PI)) * S_source(row, col));
-                    });
-                    member.team_barrier();
-                    //radiationfemn::LUInverse(Q_matrix, Qinv_matrix);
-
-                    // (2) Compute derivative terms for all angles and store in scratch array g_rhs_scratch(num_angles)
-                    ScrArray1D<Real> g_rhs_scratch = ScrArray1D<Real>(member.team_scratch(scr_level), num_points);
-                    auto Ven = (1. / 3.) * (pow(energy_grid(en + 1), 3) - pow(energy_grid(en), 3));
-
-                    par_for_inner(member, 0, num_points, [&](const int idx) {
-                      int enangidx = en * num_points + idx;
-
-                      Real divf_s = flx1(m, enangidx, k, j, i) / (2. * mbsize.d_view(m).dx1 * Ven);
-
-                      if (multi_d) {
-                        divf_s += flx2(m, enangidx + idx, k, j, i) / (2. * mbsize.d_view(m).dx2 * Ven);
-                      }
-
-                      if (three_d) {
-                        divf_s += flx3(m, enangidx, k, j, i) / (2. * mbsize.d_view(m).dx3 * Ven);
-                      }
-
-                      g_rhs_scratch(idx) = gam0 * f0_(m, enangidx, k, j, i) + gam1 * f1_(m, enangidx, k, j, i) - beta_dt * divf_s;
-
-                    });
-                    member.team_barrier();
-
-                    // (3) F from G
-                    Kokkos::parallel_for(Kokkos::TeamThreadRange(member, 0, num_points), [=](const int idx) {
-
-                      /*
-                      Real final_result = 0.;
-                      Kokkos::parallel_reduce(Kokkos::ThreadVectorRange(member, 0, num_points), [&](const int A, Real &partial_sum) {
-                        partial_sum += Qinv_matrix(idx, A) *  g_rhs_scratch(A);
-                      }, final_result);
-                      member.team_barrier(); */
-
-                      f0_(m, en * num_points * idx, k, j, i) = g_rhs_scratch(idx);
-                    });
-                    member.team_barrier();
+                  par_for_inner(member, 0, num_points * num_points - 1, [&](const int idx) {
+                    int row = int(idx / num_points);
+                    int col = idx - row * num_points;
+                    Q_matrix(row, col) = sqrt_det_g(m, k, j, i) * (L_mu_muhat0_(m, 0, 0, k, j, i) * P_matrix(0, row, col)
+                        + L_mu_muhat0_(m, 0, 1, k, j, i) * P_matrix(1, row, col) + L_mu_muhat0_(m, 0, 2, k, j, i) * P_matrix(2, row, col)
+                        + L_mu_muhat0_(m, 0, 3, k, j, i) * P_matrix(3, row, col)
+                        + beta_dt * (kappa_s(m, k, j, i) + kappa_a(m, k, j, i)) * (row == col)
+                        + beta_dt * (1. / (4. * M_PI)) * S_source(row, col));
                   });
-  }
+                  member.team_barrier();
+                  radiationfemn::LUInverse(Q_matrix, Qinv_matrix);
+
+                  // (2) Compute derivative terms for all angles and store in scratch array g_rhs_scratch [num_angles]
+                  ScrArray1D<Real> g_rhs_scratch = ScrArray1D<Real>(member.team_scratch(scr_level), num_points);
+                  auto Ven = (1. / 3.) * (pow(energy_grid(en + 1), 3) - pow(energy_grid(en), 3));
+
+                  par_for_inner(member, 0, num_points, [&](const int idx) {
+                    int enangidx = en * num_points + idx;
+
+                    Real divf_s = flx1(m, enangidx, k, j, i) / (2. * mbsize.d_view(m).dx1 * Ven);
+
+                    if (multi_d) {
+                      divf_s += flx2(m, enangidx, k, j, i) / (2. * mbsize.d_view(m).dx2 * Ven);
+                    }
+
+                    if (three_d) {
+                      divf_s += flx3(m, enangidx, k, j, i) / (2. * mbsize.d_view(m).dx3 * Ven);
+                    }
+
+                    g_rhs_scratch(idx) = gam0 * f0_(m, enangidx, k, j, i) + gam1 * f1_(m, enangidx, k, j, i) - beta_dt * divf_s
+                        + sqrt_det_g(m, k, j, i) * beta_dt * eta(m, k, j, i) * e_source(idx)
+                        - sqrt_det_g(m, k, j, i) * beta_dt * (kappa_s(m, k, j, i) + kappa_a(m, k, j, i)) * f0_(m, enangidx, k, j, i);
+
+                  });
+                  member.team_barrier();
+
+                  // (3) Compute matrix F_{ihat}^{nuhat muhat}_{A}^{B} Gamma^{ihat}_{nuhat muhat} [num_angles x num_angles]
+                  AthenaScratchTensor<Real, TensorSymm::NONE, 3, 3> Gamma_fluid_udd;
+                  Gamma_fluid_udd.ZeroClear();
+
+                  // scratch arrays for F_{ihat}^{nuhat muhat}_{A}^{B} Gamma^{ihat}_{nuhat muhat} [num_angles x num_angles]
+                  ScrArray2D<Real> F_Gamma_AB = ScrArray2D<Real>(member.team_scratch(scr_level), num_points, num_points);
+                  ScrArray2D<Real> G_Gamma_AB = ScrArray2D<Real>(member.team_scratch(scr_level), num_points, num_points);
+
+                  Kokkos::parallel_for(Kokkos::TeamThreadRange(member, 0, num_points * num_points), [&](const int idx) {
+                    int row = int(idx / num_points);
+                    int col = idx - row * num_points;
+
+                    Kokkos::parallel_reduce(Kokkos::ThreadVectorRange(member, 0, 16), [&](const int nuhatmuhat, Real &sum_nuhatmuhat) {
+                      int nuhat = int(nuhatmuhat / 4);
+                      int muhat = nuhatmuhat - nuhat * 4;
+                      sum_nuhatmuhat += F_matrix(nuhat, muhat, 1, row, col) * Gamma_fluid_udd(1, nuhat, muhat)
+                          + F_matrix(nuhat, muhat, 2, row, col) * Gamma_fluid_udd(2, nuhat, muhat)
+                          + F_matrix(nuhat, muhat, 3, row, col) * Gamma_fluid_udd(3, nuhat, muhat);
+                    }, F_Gamma_AB(row, col));
+
+                    Kokkos::parallel_reduce(Kokkos::ThreadVectorRange(member, 0, 16), [&](const int nuhatmuhat, Real &sum_nuhatmuhat) {
+                      int nuhat = int(nuhatmuhat / 4);
+                      int muhat = nuhatmuhat - nuhat * 4;
+                      sum_nuhatmuhat += G_matrix(nuhat, muhat, 1, row, col) * Gamma_fluid_udd(1, nuhat, muhat)
+                          + G_matrix(nuhat, muhat, 2, row, col) * Gamma_fluid_udd(2, nuhat, muhat)
+                          + G_matrix(nuhat, muhat, 3, row, col) * Gamma_fluid_udd(3, nuhat, muhat);
+                    }, G_Gamma_AB(row, col));
+
+                  });
+                  member.team_barrier();
+
+                  // (4) Compute Lax Friedrich's const K from Frobenius norm of F_Gamma_AB
+                  Real K = 0.;
+                  Kokkos::parallel_reduce(Kokkos::TeamVectorRange(member, 0, num_points * num_points), [&](const int idx, Real &frob_norm) {
+                    int row = int(idx / num_points);
+                    int col = idx - row * num_points;
+
+                    frob_norm += F_Gamma_AB(row, col) * F_Gamma_AB(row, col);
+                  }, K);
+                  member.team_barrier();
+                  K = sqrt(K);
+
+                  // (5) Compute the coupling term
+                  /*
+                  Real energy_coupling_term = 0;
+                  Kokkos::parallel_reduce(Kokkos::TeamVectorRange(member, num_points), [=](const int A, Real &partial_sum) {
+
+                      Real fn = f0(m, en * num_points + A, k, j, i);
+                      Real fnm1 = (en - 1 >= 0 && en - 1 < num_energy_bins) ? f0(m, (en - 1) * num_points + A, k, j, i) : 0.;
+                      Real fnm2 = (en - 2 >= 0 && en - 2 < num_energy_bins) ? f0(m, (en - 2) * num_points + A, k, j, i) : 0.;
+                      Real fnp1 = (en + 1 >= 0 && en + 1 < num_energy_bins) ? f0(m, (en + 1) * num_points + A, k, j, i) : 0.;
+                      Real fnp2 = (en + 2 >= 0 && en + 2 < num_energy_bins) ? f0(m, (en + 2) * num_points + A, k, j, i) : 0.;
+
+                      // assume uniform energy grid spacing
+                      Real deltae = energy_grid(1) - energy_grid(0);
+
+                      Real Dmfn = (fn - fnm1) / deltae;
+                      Real Dpfn = (fnp1 - fn) / deltae;
+                      Real Dfn = (fnp1 - fnm1) / (2. * deltae);
+
+                      Real Dmfnm1 = (fnm1 - fnm2) / deltae;
+                      Real Dpfnm1 = (fn - fnm1) / deltae;
+                      Real Dfnm1 = (fn - fnm2) / (2. * deltae);
+
+                      Real Dmfnp1 = (fnp1 - fn) / deltae;
+                      Real Dpfnp1 = (fnp2 - fnp1) / deltae;
+                      Real Dfnp1 = (fnp2 - fn) / (2. * deltae);
+
+                      Real theta_np12 = (Dfn < energy_par * deltae || Dmfn * Dpfn > 0.) ? 0. : 1.;
+                      Real theta_nm12 = (Dfnm1 < energy_par * deltae || Dmfnm1 * Dpfnm1 > 0.) ? 0. : 1.;
+                      Real theta_np32 = (Dfnp1 < energy_par * deltae || Dmfnp1 * Dpfnp1 > 0.) ? 0. : 1.;
+
+                      Real theta_n = (theta_nm12 > theta_np12) ? theta_nm12 : theta_np12;
+                      Real theta_np1 = (theta_np12 > theta_np32) ? theta_np12 : theta_np32;
+
+                      Real f_term1_np1 = 0.5 * (fnp1 + fn);
+                      Real f_term2_np1 = fn - fnp1;
+
+                      Real f_term1_n = 0.5 * (fn + fnm1);
+                      Real f_term2_n = (fnm1 - fn);
+
+                      partial_sum += energy_grid(en + 1) * energy_grid(en + 1) * energy_grid(en + 1) * (F_Gamma_B(A) * f_term1_np1 - theta_np1 * K * f_term2_np1 / 2.)
+                          - energy_grid(en) * energy_grid(en) * energy_grid(en) * (F_Gamma_B(A) * f_term1_n - theta_n * K * f_term2_n / 2.);
+                    }, energy_coupling_term);
+                    member.team_barrier();
+                    */
+
+                  // (6) F from G
+                  Kokkos::parallel_for(Kokkos::TeamThreadRange(member, 0, num_points), [=](const int idx) {
+
+                    Real final_result = 0.;
+                    Kokkos::parallel_reduce(Kokkos::ThreadVectorRange(member, 0, num_points), [&](const int A, Real &partial_sum) {
+                      partial_sum += Qinv_matrix(idx, A) * g_rhs_scratch(A);
+                    }, final_result);
+                    member.team_barrier();
+
+                    f0_(m, en * num_points + idx, k, j, i) = final_result;
+                  });
+                  member.team_barrier();
+                });
+
 
   // Add explicit source terms
   if (beam_source) {
