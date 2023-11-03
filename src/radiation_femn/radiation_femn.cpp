@@ -1,7 +1,6 @@
 //========================================================================================
-// GR radiation code for AthenaK with FEM_N & FP_N
-// Copyright (C) 2023 Maitraya Bhattacharyya <mbb6217@psu.edu> and David Radice <dur566@psu.edu>
-// AthenaXX copyright(C) James M. Stone <jmstone@ias.edu> and the Athena code team
+// AthenaXXX astrophysical plasma code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file radiation_femn.cpp
@@ -167,9 +166,8 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
       std::cout << " To run M1 you must have FP_N on with lmax = 2!" << std::endl;
       exit(EXIT_FAILURE);
     }
-  } else {
-    //this->& ApplyClosure = radiationfemn::ApplyFEMNFPNClosure;
   }
+
   // compute P, Pmod matrices, source matrices
   this->ComputePMatrices();
   this->ComputeSourceMatrices();
@@ -237,13 +235,12 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
     Kokkos::realloc(coarse_f0, nmb, num_points_total, nccells3, nccells2, nccells1);
   }
 
-  if (rad_source) {
 
-    Kokkos::realloc(eta, nmb, ncells3, ncells2, ncells1);
-    Kokkos::realloc(kappa_a, nmb, ncells3, ncells2, ncells1);
-    Kokkos::realloc(kappa_s, nmb, ncells3, ncells2, ncells1);
 
-  }
+  // sources
+  Kokkos::realloc(eta, nmb, ncells3, ncells2, ncells1);
+  Kokkos::realloc(kappa_a, nmb, ncells3, ncells2, ncells1);
+  Kokkos::realloc(kappa_s, nmb, ncells3, ncells2, ncells1);
 
   /*
   if (beam_source) {
