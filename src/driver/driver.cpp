@@ -55,12 +55,14 @@
 //
 // Driver::Execute() invokes the tasklist from stage=1 to stage=ptlist->nstages
 
-Driver::Driver(ParameterInput *pin, Mesh *pmesh) :
+Driver::Driver(ParameterInput *pin, Mesh *pmesh, Real wtlim, Kokkos::Timer* ptimer) :
   tlim(-1.0),
   nlim(-1),
   ndiag(1),
   nmb_updated_(0),
   lb_efficiency_(0),
+  pwall_clock_(ptimer),
+  wall_time(wtlim),
   impl_src("ru",1,1,1,1,1,1) {
   // set time-evolution option (no default)
   {
@@ -318,7 +320,12 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
   if (time_evolution == TimeEvolution::tstatic) {
     // TODO(@user): add work for time static problems here
   } else {
-    while ((pmesh->time < tlim) && (pmesh->ncycle < nlim || nlim < 0)) {
+    Real elapsed_time = -1.;
+    if (wall_time > 0.) {
+      elapsed_time = pwall_clock_->seconds();
+    }
+    while ((pmesh->time < tlim) && (pmesh->ncycle < nlim || nlim < 0) &&
+           (elapsed_time < wall_time)) {
       if (global_variable::my_rank == 0) {OutputCycleDiagnostics(pmesh);}
       int npacks = 1;  // TODO(@user): extend for multiple MeshBlockPacks
       MeshBlockPack* pmbp = pmesh->pmb_pack;
@@ -438,7 +445,12 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
           out->WriteOutputFile(pmesh, pin);
         }
       }
-    }  // end while((t < tlim) && (n < nlim))
+
+      // Update wall clock time if needed.
+      if (wall_time > 0.) {
+        elapsed_time = pwall_clock_->seconds();
+      }
+    }  // end while((t < tlim) && (n < nlim) && (elapsed_time < wall_time))
   }    // end of (time_evolution != tstatic) clause
   return;
 }
@@ -476,8 +488,10 @@ void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
       OutputCycleDiagnostics(pmesh);
       if (pmesh->ncycle == nlim) {
         std::cout << std::endl << "Terminating on cycle limit" << std::endl;
-      } else {
+      } else if (pmesh->time >= tlim) {
         std::cout << std::endl << "Terminating on time limit" << std::endl;
+      } else {
+        std::cout << std::endl << "Terminating on wall clock limit" << std::endl;
       }
 
       std::cout << "time=" << pmesh->time << " cycle=" << pmesh->ncycle << std::endl;
