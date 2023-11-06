@@ -41,6 +41,10 @@ void HLLE_DYNGR(TeamMember_t const &member,
 
     constexpr int diag[3] = {S11, S22, S33};
     constexpr int idx = diag[ivx - IVX];
+    constexpr int offdiag[3] = {S23, S13, S12};
+    constexpr int offidx = offdiag[ivx - IVX];
+    constexpr int idxy = diag[(ivx - IVX + 1) % 3];
+    constexpr int idxz = diag[(ivx - IVX + 2) % 3];
 
     constexpr int pvx = PVX + (ivx - IVX);
 
@@ -106,10 +110,11 @@ void HLLE_DYNGR(TeamMember_t const &member,
 
     // Calculate the magnetosonic speeds for both states
     Real lambda_pl, lambda_pr, lambda_ml, lambda_mr;
+    Real gii = (g3d[idxy]*g3d[idxz] - g3d[offidx]*g3d[offidx])*(isdetg*isdetg);
     eos.GetGRFastMagnetosonicSpeeds(lambda_pl, lambda_ml, prim_l, bsql,
-                                    g3d, beta_u, alpha, g3d[idx], pvx);
+                                    g3d, beta_u, alpha, gii, pvx);
     eos.GetGRFastMagnetosonicSpeeds(lambda_pr, lambda_mr, prim_r, bsqr,
-                                    g3d, beta_u, alpha, g3d[idx], pvx);
+                                    g3d, beta_u, alpha, gii, pvx);
 
     // Get the extremal wavespeeds
     Real lambda_l = fmin(lambda_ml, lambda_mr);

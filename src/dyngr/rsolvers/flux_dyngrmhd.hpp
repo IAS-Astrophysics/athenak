@@ -53,7 +53,7 @@ void SingleStateFlux(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
   Real iWl = 1./sqrt(Wsql);
   Real vcl = prim_l[pvx]*iWl - beta_u[ivx-IVX]*ialpha;
 
-  // Calculate 4-magnetic field (undensitized) for the left state.
+  // Calculate 4-magnetic field for the left state.
   Real bul0 = Primitive::Contract(Bu_l, udl)*ialpha;
   Real bdl[3], Bd_l[3];
   Primitive::LowerVector(Bd_l, Bu_l, g3d);
@@ -70,7 +70,7 @@ void SingleStateFlux(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
   Real iWr = 1.0/sqrt(Wsqr);
   Real vcr = prim_r[pvx]*iWr - beta_u[ivx-IVX]*ialpha;
 
-  // Calculate 4-magnetic field (densitized) for the right state.
+  // Calculate 4-magnetic field for the right state.
   Real bur0 = Primitive::Contract(Bu_r, udr)*ialpha;
   Real bdr[3], Bd_r[3];
   Primitive::LowerVector(Bd_r, Bu_r, g3d);
