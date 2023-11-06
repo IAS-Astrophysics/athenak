@@ -113,6 +113,22 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   // Source terms (constructor parses input file to initialize only srcterms needed)
   psrc = new SourceTerms("mhd", ppack, pin);
 
+  // Entropy fix
+  c2p_test = pin->GetOrAddBoolean("mhd","c2p_test",false);
+  if (pin->DoesParameterExist("mhd","entropy_fix")) {
+    if (pmy_pack->pcoord->is_general_relativistic) {
+      entropy_fix = pin->GetBoolean("mhd","entropy_fix");
+      beta_cold_min = pin->GetOrAddReal("mhd","beta_cold_min", 1.e-4);
+    } else {
+      std::cout <<"### FATAL ERROR in "<< __FILE__ <<" at line "<< __LINE__ << std::endl
+                <<"<mhd> entropy fix only works in general relativity"<< std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    // add an extra scalar if entropyfix is enabled
+    // and use the last scalar as total entropy
+    if (entropy_fix) nscalars += 1;
+  }
+
   // (3) read time-evolution option [already error checked in driver constructor]
   // Then initialize memory and algorithms for reconstruction and Riemann solvers
   std::string evolution_t = pin->GetString("time","evolution");

@@ -47,6 +47,10 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
   int &nscal = pmy_pack->pmhd->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
   auto &fofc_ = pmy_pack->pmhd->fofc;
+  auto &entropy_fix_   = pmy_pack->pmhd->entropy_fix;
+  auto &beta_cold_min_ = pmy_pack->pmhd->beta_cold_min;
+  auto c2p_test_ = pmy_pack->pmhd->c2p_test;
+  int entropyIdx = (entropy_fix_) ? nmhd+nscal-1 : -1;
   auto eos = eos_data;
   Real gm1 = eos_data.gamma - 1.0;
 
@@ -83,7 +87,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
 
     // load cell-centered fields into conserved state
     // use input CC fields if only testing floors with FOFC
-    if (only_testfloors) {
+    if ((only_testfloors) || (c2p_test_)) {
       u.bx = bcc(m,IBX,k,j,i);
       u.by = bcc(m,IBY,k,j,i);
       u.bz = bcc(m,IBZ,k,j,i);
@@ -143,6 +147,22 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       // (inline function in ideal_c2p_mhd.hpp file)
       SingleC2P_IdealSRMHD(u_sr, eos, s2, b2, rpar, w,
                            dfloor_used, efloor_used, c2p_failure, iter_used);
+
+      // apply entropy fix
+      if (entropy_fix_) {
+        Real beta_cold = (eos.gamma-1)*w.e / (0.5*(SQR(u.bx)+SQR(u.by)+SQR(u.bz)));
+        if (beta_cold < beta_cold_min_) {
+          HydPrim1D w_old;
+          w_old.d  = prim(m,IDN,k,j,i);
+          w_old.vx = prim(m,IVX,k,j,i);
+          w_old.vy = prim(m,IVY,k,j,i);
+          w_old.vz = prim(m,IVZ,k,j,i);
+          w_old.e  = prim(m,IEN,k,j,i);
+          Real &s_tot = cons(m,entropyIdx,k,j,i);
+          SingleC2P_IdealSRMHD_EntropyFix(u_sr, s_tot, eos, s2, b2, rpar, w, w_old,
+                                          dfloor_used, efloor_used, c2p_failure, iter_used);
+        }
+      } // endif entropy_fix_
 
       // apply velocity ceiling if necessary
       Real tmp = glower[1][1]*SQR(w.vx)
@@ -246,6 +266,8 @@ void IdealGRMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Rea
   int &nscal = pmy_pack->pmhd->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
   Real &gamma = eos_data.gamma;
+  auto &entropy_fix_ = pmy_pack->pmhd->entropy_fix;
+  int n_var = (entropy_fix_) ? nmhd+nscal-1 : nmhd+nscal;
 
   par_for("grmhd_p2c", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -290,7 +312,7 @@ void IdealGRMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Rea
     cons(m,IEN,k,j,i) = u.e;
 
     // convert scalars (if any)
-    for (int n=nmhd; n<(nmhd+nscal); ++n) {
+    for (int n=nmhd; n<n_var; ++n) {
       cons(m,n,k,j,i) = u.d*prim(m,n,k,j,i);
     }
   });

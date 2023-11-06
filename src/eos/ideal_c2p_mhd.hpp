@@ -424,4 +424,217 @@ void SingleP2C_IdealGRMHD(const Real glower[][4], const Real gupper[][4],
   return;
 }
 
+///----------------------------------------------------------------------------------------
+//! \fn bool GetPrimEntropyFix()
+//! \brief Inline function to compute density, pressure, and Lorentz factor from total entropy.
+//! See details in Appendix~C of the thesis by Lizhong Zhang (LZ).
+
+KOKKOS_INLINE_FUNCTION
+bool GetPrimEntropyFix(const MHDCons1D &u, const Real s_tot, EOS_Data eos,
+                       const Real s2, const Real b2, const Real rpar,
+                       const Real ll, Real &rho, Real &pgas, Real &gamma)
+{
+  Real tt = rpar * u.d; // (LZ C9)
+  Real v_sq = ( s2*SQR(ll) + SQR(tt)*(2*ll+b2) ) / SQR(ll*(ll+b2)); // (LZ C12)
+  const Real v_sq_max = 1. - 1./SQR(eos.gamma_max);
+  if (v_sq > v_sq_max) {
+    // Adopt zero velocity for initial guess if velocity ceiling is reached.
+    // The velocity ceiling as initial guess is usually less numerically stable
+    // due to the existence of some local minimums in ultra-relativistic regime.
+    v_sq = 0.;
+  }
+  v_sq  = fmax(v_sq, static_cast<Real>(0.0));
+  gamma = 1./sqrt(1-v_sq);
+  rho   = u.d/gamma;
+  pgas  = s_tot/u.d * pow(rho, eos.gamma);
+  if (isfinite(rho)  && (rho > 0)
+   && isfinite(pgas) && (pgas > 0)
+   && isfinite(gamma)) {
+    // primitives are physical
+    return true;
+  } else {
+    return false;
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn bool GetVelEntropyFix()
+//! \brief Inline function to compute velocity in entropy fix
+//! See details in Appendix~C of LZ's thesis and Newman & Hamlin (NH, 2014)
+
+KOKKOS_INLINE_FUNCTION
+bool GetVelEntropyFix(const MHDCons1D &u, const Real b2, const Real rpar,
+                      const Real ll, const Real gamma, Real &u1, Real &u2, Real &u3) {
+  Real tt = rpar * u.d; // (LZ C9)
+  Real v1 = (u.mx + tt*u.bx/ll) / (ll + b2); // (NH 3.7, 4.6, 4.7, 4.8 & 5.1)
+  Real v2 = (u.my + tt*u.by/ll) / (ll + b2); // (NH 3.7, 4.6, 4.7, 4.8 & 5.1)
+  Real v3 = (u.mz + tt*u.bz/ll) / (ll + b2); // (NH 3.7, 4.6, 4.7, 4.8 & 5.1)
+  u1 = gamma * v1;
+  u2 = gamma * v2;
+  u3 = gamma * v3;
+  if (isfinite(u1) && isfinite(u2) && isfinite(u3)
+      && (SQR(v1)+SQR(v2)+SQR(v3) < 1)) {
+    // velocity is physical
+    return true;
+  } else return false;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn bool EquationC13()
+//! \brief Inline function to compute target function for Newton-Raphson iteration
+//! See details in Appendix~C of LZ's thesis
+
+KOKKOS_INLINE_FUNCTION
+bool EquationC13(const MHDCons1D &u, const Real s_tot, EOS_Data eos,
+                 const Real s2, const Real b2, const Real rpar,
+                 const Real rho, const Real pgas, const Real gamma,
+                 const Real ll, Real &ff, Real &dff)
+{
+  Real tt = rpar * u.d; // (LZ C9)
+  Real gamma_adi = eos.gamma;
+  Real gm1 = gamma_adi - 1;
+  Real gp1 = gamma_adi + 1;
+
+  Real v_sq = 1. - 1./SQR(gamma);
+  ff = u.d*pgas / pow(rho, gamma_adi) - s_tot;                      // (LZ C13)
+  Real dv_sq = -2. / pow(ll*(ll+b2), 3);                            // (LZ C14d)
+  dv_sq *= SQR(tt) * (3*ll*(ll+b2) + SQR(b2)) + s2*pow(ll, 3);      // (LZ C14d)
+  Real dpgas = gm1/gamma_adi * (1-v_sq + (0.5*u.d*gamma-ll)*dv_sq); // (LZ C14b)
+  Real drho = -0.5*u.d*gamma*dv_sq;                                 // (LZ C14c)
+  dff = u.d/pow(rho, gamma_adi)*dpgas;                              // (LZ C14a)
+  dff -= gamma_adi*u.d*pgas/pow(rho, gp1)*drho;                     // (LZ C14a)
+
+  if (isfinite(ff) && isfinite(dff)) {
+  	return true;
+  } else return false;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void SingleC2P_IdealSRMHD_EntropyFix()
+//! \brief Converts single state of entropy-based conserved variables into primitive variables for
+//! special relativistic MHD with an ideal gas EOS. Note input CONSERVED state contains
+//! cell-centered magnetic fields, but PRIMITIVE state returned via arguments does not.
+//! The algorithm follows Mignone & McKinney (MM, 2007) but modified for the entropy case by LZ.
+
+KOKKOS_INLINE_FUNCTION
+void SingleC2P_IdealSRMHD_EntropyFix(MHDCons1D &u, Real& s_tot, const EOS_Data &eos,
+                                     Real s2, Real b2, Real rpar, HydPrim1D &w, HydPrim1D &w_old,
+                                     bool &dfloor_used, bool &efloor_used,
+                                     bool &c2p_failure, int &max_iter) {
+  // Parameters
+  const int max_iterations = 25;
+  const Real tol = 1.0e-12;
+  const Real gm1 = eos.gamma - 1.0;
+
+  // Initialize variables
+  bool flag = false;
+  Real ll_;
+  Real rho_, pgas_, gamma_, u1_, u2_, u3_;
+
+  // Apply density floor, without changing momentum or energy
+  if (u.d < eos.dfloor) {
+    u.d = eos.dfloor;
+    dfloor_used = true;
+  }
+
+  // Apply energy floor
+  if (u.e < (eos.pfloor/gm1 + 0.5*b2)) {
+    u.e = eos.pfloor/gm1 + 0.5*b2;
+    efloor_used = true;
+  }
+
+  // Step 1: Set up initial guess
+  if (!c2p_failure) {
+    // use the previously computed velocity for initial guess
+    u1_ = w.vx;
+    u2_ = w.vy;
+    u3_ = w.vz;
+  } else {
+    // use the old-timestep velocity for initial guess
+    u1_ = w_old.vx;
+    u2_ = w_old.vy;
+    u3_ = w_old.vz;
+  }
+  gamma_ = sqrt(1+SQR(u1_)+SQR(u2_)+SQR(u3_));
+  rho_   = u.d/gamma_;
+  pgas_  = s_tot * pow(u.d, gm1) / pow(gamma_, gm1+1);
+  ll_ = u.d*gamma_ + (gm1+1)/gm1 * pgas_ * SQR(gamma_);
+  if (isfinite(ll_) && (ll_ > 0)
+      && isfinite(rho_) && (rho_ > 0)
+      && isfinite(pgas_) && (pgas_ > 0)){
+    flag = true;
+  }
+
+  // backup initial guess
+  if (!flag) {
+    // this guess is based on (d, m^i, e): (MM A27) set f=0 and assume v=1
+    Real c2 = 3.;
+    Real c1 = 4. * (b2 - u.e);
+    Real c0 = s2 + SQR(b2) - 2*b2*u.e;
+
+    Real ll_a, ll_b;
+    Real delta_sq = SQR(c1)-4*c2*c0;
+    if (delta_sq >= 0) { // (dens, mom^i, etot) have real solution
+      Real delta = sqrt(delta_sq);
+      if (c1 >= 0) {
+        ll_a = (-c1 - delta) / (2*c2);
+        ll_b = (2*c0) / (-c1 - delta);
+      } else {
+        ll_a = (2*c0) / (-c1 + delta);
+        ll_b = (-c1 + delta) / (2*c2);
+      }
+      ll_ = fmax(ll_a, ll_b);
+      if (isfinite(ll_) && (ll_ > 0)) {
+        // ll_ is physical
+        flag = GetPrimEntropyFix(u, s_tot, eos, s2, b2, rpar, ll_, rho_, pgas_, gamma_);
+      }
+    } // endif
+  } // endif backup initial guess
+
+  // Step 2: Newton-Raphson iteration to solve primitives
+  if (flag) {
+  	int n;
+    for (n = 0; n < max_iterations; ++n) {
+      Real ff_, dff_;
+      flag = EquationC13(u, s_tot, eos, s2, b2, rpar, rho_, pgas_, gamma_, ll_, ff_, dff_);
+      if (!flag) break; // ff_ and dff_ are invalid
+
+      Real ll_new = ll_ - ff_/dff_;
+      flag = GetPrimEntropyFix(u, s_tot, eos, s2, b2, rpar, ll_new, rho_, pgas_, gamma_);
+      if (!flag) break; // new primitives are not physical
+
+      if (fabs(ll_new-ll_) < tol) {
+        // converging within tolerance
+        ll_ = ll_new;
+        break;
+      } else ll_ = ll_new; // continue iteration
+    } // endfor
+    if (n == max_iterations) flag = false; // maximum iteration
+    max_iter = n;
+  } // endif
+  if (flag) flag = GetVelEntropyFix(u, b2, rpar, ll_, gamma_, u1_, u2_, u3_);
+
+  // Step 3: Apply density and energy floors
+  if (rho_ < eos.dfloor) {
+    rho_ = eos.dfloor;
+    dfloor_used = true;
+  }
+
+  Real pgas_min = fmax(eos.pfloor, eos.sfloor*pow(rho_, eos.gamma));
+  if (pgas_ < pgas_min) {
+    pgas_ = pgas_min;
+    efloor_used = true;
+  }
+
+  // Step 4: Save primitive variables
+  w.d  = rho_;
+  w.e  = pgas_/gm1;
+  w.vx = u1_;
+  w.vy = u2_;
+  w.vz = u3_;
+  c2p_failure = !flag;
+
+  return;
+}
+
 #endif // EOS_IDEAL_C2P_MHD_HPP_

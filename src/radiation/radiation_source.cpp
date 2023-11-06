@@ -84,6 +84,17 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
     gm1 = pmy_pack->pmhd->peos->eos_data.gamma - 1.0;
   }
 
+  // Extract entropy fix flag
+  bool entropy_fix_ = false;
+  int entropyIdx = -1;
+  // Entropy fix only works in GRMHD
+  if (is_mhd_enabled_) {
+    entropy_fix_ = pmy_pack->pmhd->entropy_fix;
+    int nmhd = pmy_pack->pmhd->nmhd;
+    int nscal = pmy_pack->pmhd->nscalars;
+    if (entropy_fix_) entropyIdx = nmhd+nscal-1;
+  }
+
   // Extract radiation, radiation frame, and radiation angular mesh data
   auto &i0_ = i0;
   Real &kappa_a_ = kappa_a;
@@ -278,12 +289,32 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
           if (apply_excision) { i0_(m,n,k,j,i) = 0.0; }
         }
       }
+
       // update conserved fluid variables
       if (affect_fluid_) {
         u0_(m,IEN,k,j,i) += (m_old[0] - m_new[0]);
         u0_(m,IM1,k,j,i) += (m_old[1] - m_new[1]);
         u0_(m,IM2,k,j,i) += (m_old[2] - m_new[2]);
         u0_(m,IM3,k,j,i) += (m_old[3] - m_new[3]);
+      }
+
+      // update total entropy if entropy fix is enabled
+      if (entropy_fix_) {
+        // total entropy must be assigned as the first passive scalar
+        Real src0 = m_new[0] - m_old[0];
+        Real src1 = m_new[1] - m_old[1];
+        Real src2 = m_new[2] - m_old[2];
+        Real src3 = m_new[3] - m_old[3];
+
+        // compute coord-frame 4-velocity
+        Real u1  = wvx - alpha * gamma * gupper[0][1];;
+        Real u2  = wvy - alpha * gamma * gupper[0][2];;
+        Real u3  = wvz - alpha * gamma * gupper[0][3];;
+        Real rho = wdn;
+
+        // add source term to total entropy
+        Real src = gm1 * (u0*src0+u1*src1+u2*src2+u3*src3) / std::pow(rho, gm1);
+        u0_(m,entropyIdx,k,j,i) += src;
       }
     }
 
@@ -371,6 +402,25 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
           u0_(m,IM1,k,j,i) += (m_old[1] - m_new[1]);
           u0_(m,IM2,k,j,i) += (m_old[2] - m_new[2]);
           u0_(m,IM3,k,j,i) += (m_old[3] - m_new[3]);
+        }
+
+        // update total entropy if entropy fix is enabled
+        if (entropy_fix_) {
+          // total entropy must be assigned as the first passive scalar
+          Real src0 = m_new[0] - m_old[0];
+          Real src1 = m_new[1] - m_old[1];
+          Real src2 = m_new[2] - m_old[2];
+          Real src3 = m_new[3] - m_old[3];
+
+          // compute coord-frame 4-velocity
+          Real u1  = wvx - alpha * gamma * gupper[0][1];;
+          Real u2  = wvy - alpha * gamma * gupper[0][2];;
+          Real u3  = wvz - alpha * gamma * gupper[0][3];;
+          Real rho = wdn;
+
+          // add source term to total entropy
+          Real src = gm1 * (u0*src0+u1*src1+u2*src2+u3*src3) / std::pow(rho, gm1);
+          u0_(m,entropyIdx,k,j,i) += src;
         }
       } else {
         // NOTE(@pdmullen): At this point, it is possible that excision has not been

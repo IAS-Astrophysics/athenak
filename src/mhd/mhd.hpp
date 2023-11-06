@@ -109,6 +109,11 @@ class MHD {
   DvceArray4D<bool> fofc;  // flag for each cell to indicate if FOFC is needed
   bool use_fofc = false;   // flag to enable FOFC
 
+  // following only used for entropy fix
+  bool entropy_fix = false;
+  bool c2p_test = false;
+  Real beta_cold_min;
+
   // container to hold names of TaskIDs
   MHDTaskIDs id;
 
@@ -146,6 +151,9 @@ class MHD {
 
   // first-order flux correction
   void FOFC(Driver *d, int stage);
+
+  // reset entropy for entropy fix
+  void EntropyReset();
 
  private:
   MeshBlockPack* pmy_pack;   // ptr to MeshBlockPack containing this MHD
