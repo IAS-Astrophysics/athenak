@@ -318,7 +318,6 @@ KOKKOS_INLINE_FUNCTION Real dFPNBasisdtheta(int l, int m, Real phi, Real theta) 
   } else {
     result = sqrt(2.) * sin(abs(m) * phi) * der_legendre;
   }
-
   return result;
 }
 

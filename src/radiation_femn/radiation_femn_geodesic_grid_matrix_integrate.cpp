@@ -227,12 +227,14 @@ Real IntegrateMatrixFPN(int la, int ma, int lb, int mb, const HostArray1D<Real> 
     }
   } else if (matrixchoice == 4) {
     for (size_t i = 0; i < scheme_weights.size(); i++) {
-      result += 4. * M_PI * MomentumUnitEnergy(nu, scheme_points(i, 0), scheme_points(i, 1)) *
-          MomentumUnitEnergy(mu, scheme_points(i, 0), scheme_points(i, 1))
-          * FPNBasis(la, ma, scheme_points(i, 0), scheme_points(i, 1))
-          * (PtildehatJac(scheme_points(i, 0), scheme_points(i, 1), 1, ihat) * dFPNBasisdOmega(lb, mb, scheme_points(i, 0), scheme_points(i, 1), 1)
-              + PtildehatJac(scheme_points(i, 0), scheme_points(i, 1), 2, ihat) * dFPNBasisdOmega(lb, mb, scheme_points(i, 0), scheme_points(i, 1), 2))
-          * scheme_weights(i);
+      if (!(fabs(scheme_points(i, 0) - 0.) < 1e-14 || fabs(scheme_points(i, 0) - M_PI) < 1e-14)) { // basis derivatives vanish at 0 and pi
+        result += 4. * M_PI * MomentumUnitEnergy(nu, scheme_points(i, 0), scheme_points(i, 1)) *
+            MomentumUnitEnergy(mu, scheme_points(i, 0), scheme_points(i, 1))
+            * FPNBasis(la, ma, scheme_points(i, 0), scheme_points(i, 1))
+            * (PtildehatJac(scheme_points(i, 0), scheme_points(i, 1), 1, ihat) * dFPNBasisdOmega(lb, mb, scheme_points(i, 0), scheme_points(i, 1), 1)
+                + PtildehatJac(scheme_points(i, 0), scheme_points(i, 1), 2, ihat) * dFPNBasisdOmega(lb, mb, scheme_points(i, 0), scheme_points(i, 1), 2))
+            * scheme_weights(i);
+      }
     }
   } else if (matrixchoice == 5) {
     for (size_t i = 0; i < scheme_weights.size(); i++) {
