@@ -76,19 +76,19 @@ void SingleStateLLF_DYNGR(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eo
   Real lambda_r = fmax(lambda_pl, lambda_pr);
   Real lambda = fmax(lambda_r, -lambda_l);
 
-  Real vol = sdetg*alpha;
+  //Real vol = sdetg*alpha;
 
   // Calculate the fluxes
-  flux[CDN] = 0.5*vol*(fl[CDN] + fr[CDN] - lambda*(cons_r[CDN] - cons_l[CDN]));
-  flux[CSX] = 0.5*vol*(fl[CSX] + fr[CSX] - lambda*(cons_r[CSX] - cons_l[CSX]));
-  flux[CSY] = 0.5*vol*(fl[CSY] + fr[CSY] - lambda*(cons_r[CSY] - cons_l[CSY]));
-  flux[CSZ] = 0.5*vol*(fl[CSZ] + fr[CSZ] - lambda*(cons_r[CSZ] - cons_l[CSZ]));
-  flux[CTA] = 0.5*vol*(fl[CTA] + fr[CTA] - lambda*(cons_r[CTA] - cons_l[CTA]));
+  flux[CDN] = 0.5*sdetg*(alpha*(fl[CDN] + fr[CDN]) - lambda*(cons_r[CDN] - cons_l[CDN]));
+  flux[CSX] = 0.5*sdetg*(alpha*(fl[CSX] + fr[CSX]) - lambda*(cons_r[CSX] - cons_l[CSX]));
+  flux[CSY] = 0.5*sdetg*(alpha*(fl[CSY] + fr[CSY]) - lambda*(cons_r[CSY] - cons_l[CSY]));
+  flux[CSZ] = 0.5*sdetg*(alpha*(fl[CSZ] + fr[CSZ]) - lambda*(cons_r[CSZ] - cons_l[CSZ]));
+  flux[CTA] = 0.5*sdetg*(alpha*(fl[CTA] + fr[CTA]) - lambda*(cons_r[CTA] - cons_l[CTA]));
 
-  bflux[IBY] = - 0.5 * vol *
-               (bfl[iby] + bfr[iby] - lambda * (Bu_rund[iby] - Bu_lund[iby]));
-  bflux[IBZ] = 0.5 * vol *
-               (bfl[ibz] + bfr[ibz] - lambda * (Bu_rund[ibz] - Bu_lund[ibz]));
+  bflux[IBY] = - 0.5 * sdetg *
+               (alpha*(bfl[iby] + bfr[iby]) - lambda * (Bu_rund[iby] - Bu_lund[iby]));
+  bflux[IBZ] = 0.5 * sdetg *
+               (alpha*(bfl[ibz] + bfr[ibz]) - lambda * (Bu_rund[ibz] - Bu_lund[ibz]));
 }
 
 //----------------------------------------------------------------------------------------
@@ -196,25 +196,27 @@ void LLF_DYNGR(TeamMember_t const &member,
     Real lambda_r = fmax(lambda_pl, lambda_pr);
     Real lambda = fmax(lambda_r, -lambda_l);
 
-    Real vol = sdetg*alpha;
+    //Real vol = sdetg*alpha;
 
     // Calculate the fluxes
-    flx(m, IDN, k, j, i) = 0.5 * vol * (fl[CDN] + fr[CDN] -
+    flx(m, IDN, k, j, i) = 0.5 * sdetg * (alpha*(fl[CDN] + fr[CDN]) -
                                   lambda * (cons_r[CDN] - cons_l[CDN]));
-    flx(m, IEN, k, j, i) = 0.5 * vol * (fl[CTA] + fr[CTA] -
+    flx(m, IEN, k, j, i) = 0.5 * sdetg * (alpha*(fl[CTA] + fr[CTA]) -
                                   lambda * (cons_r[CTA] - cons_l[CTA]));
-    flx(m, IVX, k, j, i) = 0.5 * vol * (fl[CSX] + fr[CSX] -
+    flx(m, IVX, k, j, i) = 0.5 * sdetg * (alpha*(fl[CSX] + fr[CSX]) -
                                   lambda * (cons_r[CSX] - cons_l[CSX]));
-    flx(m, IVY, k, j, i) = 0.5 * vol * (fl[CSY] + fr[CSY] -
+    flx(m, IVY, k, j, i) = 0.5 * sdetg * (alpha*(fl[CSY] + fr[CSY]) -
                                   lambda * (cons_r[CSY] - cons_l[CSY]));
-    flx(m, IVZ, k, j, i) = 0.5 * vol * (fl[CSZ] + fr[CSZ] -
+    flx(m, IVZ, k, j, i) = 0.5 * sdetg * (alpha*(fl[CSZ] + fr[CSZ]) -
                                   lambda * (cons_r[CSZ] - cons_l[CSZ]));
     // The notation here is slightly misleading, as it suggests that Ey = -Fx(By) and
     // Ez = Fx(Bz), rather than Ez = -Fx(By) and Ey = Fx(Bz). However, the appropriate
     // containers for ey and ez for each direction are passed in as arguments to this
     // function, ensuring that the result is entirely consistent.
-    ey(m, k, j, i) = -0.5*vol*(bfl[iby] + bfr[iby] - lambda * (Bu_r[iby] - Bu_l[iby]));
-    ez(m, k, j, i) = 0.5*vol*(bfl[ibz] + bfr[ibz] - lambda * (Bu_r[ibz] - Bu_l[ibz]));
+    ey(m, k, j, i) = -0.5*sdetg*(alpha*(bfl[iby] + bfr[iby]) - 
+                          lambda * (Bu_r[iby] - Bu_l[iby]));
+    ez(m, k, j, i) = 0.5*sdetg*(alpha*(bfl[ibz] + bfr[ibz]) -
+                          lambda * (Bu_r[ibz] - Bu_l[ibz]));
   });
 }
 
