@@ -300,7 +300,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
 
       // update total entropy if entropy fix is enabled
       if (entropy_fix_) {
-        // total entropy must be assigned as the first passive scalar
+        // total entropy must be assigned as the last passive scalar
         Real src0 = m_new[0] - m_old[0];
         Real src1 = m_new[1] - m_old[1];
         Real src2 = m_new[2] - m_old[2];
@@ -406,7 +406,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
 
         // update total entropy if entropy fix is enabled
         if (entropy_fix_) {
-          // total entropy must be assigned as the first passive scalar
+          // total entropy must be assigned as the last passive scalar
           Real src0 = m_new[0] - m_old[0];
           Real src1 = m_new[1] - m_old[1];
           Real src2 = m_new[2] - m_old[2];
