@@ -77,6 +77,17 @@ class MeshRefinement {
   int *new_gids_eachrank;      // starting global ID of MeshBlocks in each rank
   int *new_nmb_eachrank;       // number of MeshBlocks on each rank
 
+  // Lagrange Interpolation weights for prolongation and restriction operators
+  // naming convention: {prolong/restrict}_{order of interpolation}_{optional index}
+  struct InterpWeight {
+    DualArray1D<Real> prolong_2nd;
+    DualArray1D<Real> restrict_2nd;
+    DualArray1D<Real> prolong_4th;
+    DualArray1D<Real> restrict_4th_edge;
+    DualArray1D<Real> restrict_4th;
+  };
+  InterpWeight weights;
+
 #if MPI_PARALLEL_ENABLED
   int nmb_send, nmb_recv;
   MPI_Comm amr_comm;                  // unique communicator for AMR
@@ -103,6 +114,7 @@ class MeshRefinement {
 
   void RestrictCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
   void RestrictFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
+  void HighOrderRestrictCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
 
   // functions for load balancing (in file load_balance.cpp)
   void InitRecvAMR(int nleaf);
@@ -113,6 +125,9 @@ class MeshRefinement {
   void UnpackAMRBuffersCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, int ncc,int nfc);
   void UnpackAMRBuffersFC(DvceFaceFld4D<Real> &b,DvceFaceFld4D<Real> &cb,int ncc,int nfc);
   void ClearSendAMR();
+
+  // initialize interpolation weights
+  void InitInterpWghts();
 
  private:
   // data

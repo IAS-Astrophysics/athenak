@@ -62,6 +62,7 @@ void ProblemGenerator::Z4cLinearWave(ParameterInput *pin, const bool restart) {
   int &je = indcs.je;
   int &ks = indcs.ks;
   int &ke = indcs.ke;
+  auto &z4c = pmbp->pz4c->z4c;
   auto &pz4c = pmbp->pz4c;
 
   // Code below will automatically calculate wavevector along grid diagonal, imposing the
@@ -86,7 +87,7 @@ void ProblemGenerator::Z4cLinearWave(ParameterInput *pin, const bool restart) {
 
   // Calculate angular offset of the wavevector from zhat
   Real theta = std::atan2(sqrt(kx2 * kx2 + kx1 * kx1), kx3);
-  Real phi = std::atan2(kx2, kx1);
+  Real phi = std::atan2(kx1, kx2);
 
   // set new time limit in ParameterInput (to be read by Driver constructor) based on
   // wave speed of selected mode.

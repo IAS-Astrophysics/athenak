@@ -23,7 +23,7 @@
 // BValFC constructor:
 
 BoundaryValuesFC::BoundaryValuesFC(MeshBlockPack *pp, ParameterInput *pin) :
-  BoundaryValues(pp, pin) {
+  BoundaryValues(pp, pin, false) {
 }
 
 //----------------------------------------------------------------------------------------
