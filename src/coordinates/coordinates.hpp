@@ -31,6 +31,7 @@ struct CoordData {
   bool bh_excise;                  // flag to specify excision
   Real dexcise;                    // rest-mass density inside excised region
   Real pexcise;                    // pressure inside excised region
+  Real flux_excise_r;              // reduce to first-order inside this radius
 };
 
 //----------------------------------------------------------------------------------------

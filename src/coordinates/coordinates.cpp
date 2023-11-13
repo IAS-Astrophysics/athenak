@@ -52,6 +52,7 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
       // be reset to.  Primitive velocities will be set to zero.
       coord_data.dexcise = pin->GetReal("coord","dexcise");
       coord_data.pexcise = pin->GetReal("coord","pexcise");
+      coord_data.flux_excise_r = pin->GetOrAddReal("coord","flux_excise_r",1.0);
 
       // boolean masks allocation
       int nmb = ppack->nmb_thispack;

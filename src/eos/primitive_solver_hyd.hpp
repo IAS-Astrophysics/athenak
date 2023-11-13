@@ -92,13 +92,16 @@ class PrimitiveSolverHydro {
  public:
   Primitive::PrimitiveSolver<EOSPolicy, ErrorPolicy> ps;
   MeshBlockPack* pmy_pack;
+  unsigned int nerrs;
+  unsigned int errcap;
 
   PrimitiveSolverHydro(std::string block, MeshBlockPack *pp, ParameterInput *pin) :
 //        pmy_pack(pp), ps{&eos} {
-        pmy_pack(pp) {
+        pmy_pack(pp), nerrs(0) {
     ps.GetEOSMutable().SetDensityFloor(pin->GetOrAddReal(block, "dfloor", (FLT_MIN)));
     ps.GetEOSMutable().SetTemperatureFloor(pin->GetOrAddReal(block, "tfloor", (FLT_MIN)));
     ps.GetEOSMutable().SetThreshold(pin->GetOrAddReal(block, "dthreshold", 1.0));
+    errcap = pin->GetOrAddInteger(block, "c2perrs", 10000);
     SetPolicyParams(block, pin);
   }
 
@@ -384,8 +387,9 @@ class PrimitiveSolverHydro {
         fofc_(m,k,j,i) = true;
         sumd++;
       } else if (!floors_only) {
-        if (result.error != Primitive::Error::SUCCESS) {
+        if (result.error != Primitive::Error::SUCCESS && nerrs < errcap) {
           // TODO(JF): put in a proper error response here.
+          nerrs++;
           printf("An error occurred during the primitive solve: %s\n"
                  "  Location: (%d, %d, %d, %d)\n"
                  "  Conserved vars: \n"
@@ -414,6 +418,10 @@ class PrimitiveSolverHydro {
                  adm.vK_dd(m, 0, 2, k, j, i),
                  adm.vK_dd(m, 1, 1, k, j, i), adm.vK_dd(m, 1, 2, k, j, i),
                  adm.vK_dd(m, 2, 2, k, j, i));
+          if (nerrs == errcap) {
+            printf("%d C2P errors have been detected. All future C2P errors will be \n"
+                   "suppressed. Fix your code!\n",nerrs);
+          }
         }
         // Regardless of failure, we need to copy the primitives.
         prim(m, IDN, k, j, i) = prim_pt[PRH]*mb;
@@ -448,7 +456,7 @@ class PrimitiveSolverHydro {
   }
 
   // Get the transformed magnetosonic speeds at a point in a given direction.
-  KOKKOS_INLINE_FUNCTION
+  /*KOKKOS_INLINE_FUNCTION
   void GetGRFastMagnetosonicSpeeds(Real& lambda_p, Real& lambda_m,
                                    Real prim[NPRIM], Real bsq, Real g3d[NSPMETRIC],
                                    Real beta_u[3], Real alpha, Real gii,
@@ -491,6 +499,45 @@ class PrimitiveSolverHydro {
 
     lambda_p = alpha*(vu*(1.0 - cmsq) + sdis)/iWsq_ad - beta_u[index];
     lambda_m = alpha*(vu*(1.0 - cmsq) - sdis)/iWsq_ad - beta_u[index];
+  }*/
+
+  KOKKOS_INLINE_FUNCTION
+  void GetGRFastMagnetosonicSpeeds(Real& lambda_p, Real& lambda_m,
+                                   Real prim[NPRIM], Real bsq, Real g3d[NSPMETRIC],
+                                   Real beta_u[3], Real alpha, Real gii,
+                                   int pvx) const {
+    Real uu[3] = {prim[PVX], prim[PVY], prim[PVZ]};
+    Real usq = Primitive::SquareVector(uu, g3d);
+    int index = pvx - PVX;
+
+    // Get spacetime quantities
+    Real Wsq = 1.0 + usq;
+    Real ialpha = 1.0/alpha;
+    Real W = sqrt(Wsq);
+    Real u0 = W*ialpha;
+    Real u1 = uu[index] - u0*beta_u[index];
+    Real g00 = -ialpha*ialpha;
+    Real g01 = -g00*beta_u[index];
+    Real g11 = gii - g01*beta_u[index];
+
+    // Calculate the sound speed and the Alfven speed
+    Real cs = ps.GetEOS().GetSoundSpeed(prim[PRH], prim[PTM], &prim[PYF]);
+    Real csq = cs*cs;
+    Real H = ps.GetEOS().GetBaryonMass()*prim[PRH]*
+             ps.GetEOS().GetEnthalpy(prim[PRH], prim[PTM], &prim[PYF]);
+    Real vasq = bsq/(bsq + H);
+    Real cmsq = csq + vasq - csq*vasq;
+
+    // Set fast magnetosonic speed in appropriate coordinates
+    Real a = u0*u0 - (g00 + u0*u0)*cmsq;
+    Real b = -2.0 * (u0 * u1 - (g01 + u0 * u1) *cmsq);
+    Real c = u1*u1 - (gii + u1*u1)*cmsq;
+    Real a1 = b / a;
+    Real a0 = c / a;
+    Real s = fmax(a1*a1 - 4.0 * a0, 0.0);
+    s = sqrt(s);
+    lambda_p = (a1 >= 0.0) ? -2.0 * a0 / (a1 + s) : (-a1 + s) / 2.0;
+    lambda_m = (a1 >= 0.0) ? (-a1 - s) / 2.0 : -2.0 * a0 / (a1 - s);
   }
 
   // A function for converting PrimitiveSolver errors to strings

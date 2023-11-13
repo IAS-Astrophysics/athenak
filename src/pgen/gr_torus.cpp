@@ -285,6 +285,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     Real &x3max = size.d_view(m).x3max;
     Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
+    Real &dx1 = size.d_view(m).dx1;
+    Real &dx2 = size.d_view(m).dx2;
+    Real &dx3 = size.d_view(m).dx3;
+
     // Extract metric and inverse
     Real glower[4][4], gupper[4][4];
     ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, coord.bh_spin,
@@ -321,9 +325,16 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       }
     }
 
-    // Calculate background primitives
+    // Calculate background primitives -- to be consistent with the excision algorithm,
+    // we have to recalculate r; we try to avoid excising cells within the horizon which
+    // might have a corner sticking out of the horizon.
+    Real r_excise, theta_excise, phi_excise;
+    GetBoyerLindquistCoordinates(trs, x1v + copysign(0.5*dx1,x1v),
+                                      x2v + copysign(0.5*dx2,x2v),
+                                      x3v + copysign(0.5*dx3,x3v), &r_excise,
+                                      &theta_excise, &phi_excise);
     Real rho_bg, pgas_bg;
-    if (r > 1.0) {
+    if (r_excise > 1.0) {
       rho_bg = trs.rho_min * pow(r, trs.rho_pow);
       pgas_bg = trs.pgas_min * pow(r, trs.pgas_pow);
     } else {
