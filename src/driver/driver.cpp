@@ -600,6 +600,7 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) pz4c->RecvU(this, 0);
     (void) pz4c->Z4cBoundaryRHS(this, 0);
     (void) pz4c->ApplyPhysicalBCs(this, 0);
+    (void) pz4c->Prolongate(this, 0);
   }
 
   return;
