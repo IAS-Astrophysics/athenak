@@ -23,6 +23,7 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "prolongation.hpp"
+#include "restriction.hpp"
 
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>
@@ -41,32 +42,37 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
   nmb_sent_thisrank(0),
   ncyc_check_amr(1),
   refinement_interval(5),
+  prolong_prims(false),
   d_threshold_(0.0),
   dd_threshold_(0.0),
   dp_threshold_(0.0),
   dv_threshold_(0.0),
   check_cons_(false) {
-  // read interval (in cycles) between check of AMR and derefinement
   if (pin->DoesBlockExist("mesh_refinement")) {
+    // read interval (in cycles) between check of AMR and derefinement
     ncyc_check_amr = pin->GetOrAddReal("mesh_refinement", "ncycle_check", 1);
     refinement_interval = pin->GetOrAddReal("mesh_refinement", "refinement_interval", 5);
-  }
-  // read thresholds from <mesh_refinement> block in input file
-  if (pin->DoesParameterExist("mesh_refinement", "dens_max")) {
-    d_threshold_ = pin->GetReal("mesh_refinement", "dens_max");
-    check_cons_ = true;
-  }
-  if (pin->DoesParameterExist("mesh_refinement", "ddens_max")) {
-    dd_threshold_ = pin->GetReal("mesh_refinement", "ddens_max");
-    check_cons_ = true;
-  }
-  if (pin->DoesParameterExist("mesh_refinement", "dpres_max")) {
-    dp_threshold_ = pin->GetReal("mesh_refinement", "dpres_max");
-    check_cons_ = true;
-  }
-  if (pin->DoesParameterExist("mesh_refinement", "dvel_max")) {
-    dd_threshold_ = pin->GetReal("mesh_refinement", "dvel_max");
-    check_cons_ = true;
+    // read prolongate primitives flag
+    if (pin->DoesParameterExist("mesh_refinement", "prolong_primitives")) {
+      prolong_prims = pin->GetBoolean("mesh_refinement", "prolong_primitives");
+    }
+    // read refinement criteria thresholds
+    if (pin->DoesParameterExist("mesh_refinement", "dens_max")) {
+      d_threshold_ = pin->GetReal("mesh_refinement", "dens_max");
+      check_cons_ = true;
+    }
+    if (pin->DoesParameterExist("mesh_refinement", "ddens_max")) {
+      dd_threshold_ = pin->GetReal("mesh_refinement", "ddens_max");
+      check_cons_ = true;
+    }
+    if (pin->DoesParameterExist("mesh_refinement", "dpres_max")) {
+      dp_threshold_ = pin->GetReal("mesh_refinement", "dpres_max");
+      check_cons_ = true;
+    }
+    if (pin->DoesParameterExist("mesh_refinement", "dvel_max")) {
+      dd_threshold_ = pin->GetReal("mesh_refinement", "dvel_max");
+      check_cons_ = true;
+    }
   }
 
   if (pm->adaptive) {  // allocate arrays for AMR
@@ -83,6 +89,9 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
   }
   refine_flag.template modify<HostMemSpace>();
   refine_flag.template sync<DevExeSpace>();
+
+  // initialize interpolation weights for prolongation and restriction
+  InitInterpWghts();
 
 #if MPI_PARALLEL_ENABLED
   // create unique communicators for AMR
@@ -991,11 +1000,18 @@ void MeshRefinement::CopyForRefinementFC(DvceFaceFld4D<Real> &b,DvceFaceFld4D<Re
 void MeshRefinement::RefineCC(DualArray1D<int> &n2o, DvceArray5D<Real> &a,
                               DvceArray5D<Real> &ca) {
   int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
-  auto &new_nmb = new_nmb_eachrank[global_variable::my_rank];;
+  auto &new_nmb = new_nmb_eachrank[global_variable::my_rank];
+  MeshBlockPack* pmbp = pmy_mesh->pmb_pack;
+  z4c::Z4c* pz4c = pmbp->pz4c;
   auto &indcs = pmy_mesh->mb_indcs;
   auto &cis = indcs.cis, &cie = indcs.cie;
   auto &cjs = indcs.cjs, &cje = indcs.cje;
   auto &cks = indcs.cks, &cke = indcs.cke;
+  auto &nx1 = indcs.nx1;
+  auto &nx2 = indcs.nx2;
+  auto &nx3 = indcs.nx3;
+  auto& prolong_2nd = weights.prolong_2nd;
+  auto& prolong_4th = weights.prolong_4th;
 
   auto &refine_flag_ = refine_flag;
   bool &multi_d = pmy_mesh->multi_d;
@@ -1029,7 +1045,18 @@ void MeshRefinement::RefineCC(DualArray1D<int> &n2o, DvceArray5D<Real> &a,
         int fk = 2*k - cks;  // correct when cks=ks
 
         // call inlined prolongation operator for CC variables
-        ProlongCC(m,v,k,j,i,fk,fj,fi,multi_d,three_d,ca,a);
+        if (pz4c==nullptr) {
+          ProlongCC(m,v,k,j,i,fk,fj,fi,multi_d,three_d,ca,a);
+        } else {
+          switch (indcs.ng) {
+            case 2: HighOrderProlongCC<2>(m,v,k,j,i,fk,fj,fi,nx1,nx2,nx3,
+                                          ca,a,prolong_2nd);
+                    break;
+            case 4: HighOrderProlongCC<4>(m,v,k,j,i,fk,fj,fi,nx1,nx2,nx3,
+                                          ca,a,prolong_4th);
+                    break;
+          }
+        }
       });
     }
   });
@@ -1126,13 +1153,18 @@ void MeshRefinement::RestrictCC(DvceArray5D<Real> &u, DvceArray5D<Real> &cu) {
   int nmb  = u.extent_int(0);  // TODO(@user): 1st index from L of in array must be NMB
   int nvar = u.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
 
-  auto &cis = pmy_mesh->mb_indcs.cis;
-  auto &cie = pmy_mesh->mb_indcs.cie;
-  auto &cjs = pmy_mesh->mb_indcs.cjs;
-  auto &cje = pmy_mesh->mb_indcs.cje;
-  auto &cks = pmy_mesh->mb_indcs.cks;
-  auto &cke = pmy_mesh->mb_indcs.cke;
-
+  MeshBlockPack* pmbp = pmy_mesh->pmb_pack;
+  z4c::Z4c* pz4c = pmbp->pz4c;
+  auto &indcs = pmy_mesh->mb_indcs;
+  auto &cis = indcs.cis, &cie = indcs.cie;
+  auto &cjs = indcs.cjs, &cje = indcs.cje;
+  auto &cks = indcs.cks, &cke = indcs.cke;
+  auto &nx1 = indcs.nx1;
+  auto &nx2 = indcs.nx2;
+  auto &nx3 = indcs.nx3;
+  auto& restrict_2nd = weights.restrict_2nd;
+  auto& restrict_4th = weights.restrict_4th;
+  auto& restrict_4th_edge = weights.restrict_4th_edge;
   // restrict in 1D
   if (pmy_mesh->one_d) {
     par_for("restrictCC-1D",DevExeSpace(), 0,nmb-1, 0,nvar-1, cis,cie,
@@ -1157,11 +1189,22 @@ void MeshRefinement::RestrictCC(DvceArray5D<Real> &u, DvceArray5D<Real> &cu) {
       int finei = 2*i - cis;  // correct when cis=is
       int finej = 2*j - cjs;  // correct when cjs=js
       int finek = 2*k - cks;  // correct when cks=ks
-      cu(m,n,k,j,i) =
-          0.125*(u(m,n,finek  ,finej  ,finei) + u(m,n,finek  ,finej  ,finei+1)
-               + u(m,n,finek  ,finej+1,finei) + u(m,n,finek  ,finej+1,finei+1)
-               + u(m,n,finek+1,finej,  finei) + u(m,n,finek+1,finej,  finei+1)
-               + u(m,n,finek+1,finej+1,finei) + u(m,n,finek+1,finej+1,finei+1));
+      if (pz4c==nullptr) {
+        cu(m,n,k,j,i) =
+            0.125*(u(m,n,finek  ,finej  ,finei) + u(m,n,finek  ,finej  ,finei+1)
+                + u(m,n,finek  ,finej+1,finei) + u(m,n,finek  ,finej+1,finei+1)
+                + u(m,n,finek+1,finej,  finei) + u(m,n,finek+1,finej,  finei+1)
+                + u(m,n,finek+1,finej+1,finei) + u(m,n,finek+1,finej+1,finei+1));
+      } else {
+        switch (indcs.ng) {
+          case 2: cu(m,n,k,j,i) = RestrictInterpolation<2>(m,n,finek,finej,finei,
+                          nx1,nx2,nx3,u,restrict_2nd,restrict_4th,restrict_4th_edge);
+                  break;
+          case 4: cu(m,n,k,j,i) = RestrictInterpolation<4>(m,n,finek,finej,finei,
+                          nx1,nx2,nx3,u,restrict_2nd,restrict_4th,restrict_4th_edge);
+                  break;
+        }
+      }
     });
   }
   return;
@@ -1263,4 +1306,66 @@ void MeshRefinement::RestrictFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb)
     });
   }
   return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MeshRefinement::InitInterpWghts()
+//! \brief interpolation weights for prolongation and restriction
+//
+void MeshRefinement::InitInterpWghts() {
+  auto &pro_2nd = weights.prolong_2nd;
+  auto &res_2nd = weights.restrict_2nd;
+  auto &pro_4th = weights.prolong_4th;
+  auto &res_4th = weights.restrict_4th;
+  auto &res_4th_e = weights.restrict_4th_edge;
+
+  // Allocate memory for the arrays
+  Kokkos::realloc(pro_2nd,3);
+  Kokkos::realloc(res_2nd,3);
+  Kokkos::realloc(pro_4th,5);
+  Kokkos::realloc(res_4th,5);
+  Kokkos::realloc(res_4th_e,5);
+
+  // 2nd order prolongation weights
+  pro_2nd.h_view(0) = 0.15625;
+  pro_2nd.h_view(1) = 0.9375;
+  pro_2nd.h_view(2) = -0.09375;
+
+  // 2nd order restriction weights
+  res_2nd.h_view(0) = 0.375;
+  res_2nd.h_view(1) = 0.75;
+  res_2nd.h_view(2) = -0.125;
+
+  // 4th order prolongation weights
+  pro_4th.h_view(0) = -0.02197265625;
+  pro_4th.h_view(1) = 0.205078125;
+  pro_4th.h_view(2) = 0.9228515625;
+  pro_4th.h_view(3) = -0.123046875;
+  pro_4th.h_view(4) = 0.01708984375;
+
+  // 4th order restriction weights
+  res_4th.h_view(0) = -0.0390625;
+  res_4th.h_view(1) = 0.46875;
+  res_4th.h_view(2) = 0.703125;
+  res_4th.h_view(3) = -0.15625;
+  res_4th.h_view(4) = 0.0234375;
+
+  // 4th order restriction weights at edge
+  res_4th_e.h_view(0) = 0.2734375;
+  res_4th_e.h_view(1) = 1.09375;
+  res_4th_e.h_view(2) = -0.546875;
+  res_4th_e.h_view(3) = 0.21875;
+  res_4th_e.h_view(4) = -0.0390625;
+
+  // sync dual arrays
+  pro_2nd.template modify<HostMemSpace>();
+  pro_2nd.template sync<DevExeSpace>();
+  res_2nd.template modify<HostMemSpace>();
+  res_2nd.template sync<DevExeSpace>();
+  pro_4th.template modify<HostMemSpace>();
+  pro_4th.template sync<DevExeSpace>();
+  res_4th.template modify<HostMemSpace>();
+  res_4th.template sync<DevExeSpace>();
+  res_4th_e.template modify<HostMemSpace>();
+  res_4th_e.template sync<DevExeSpace>();
 }

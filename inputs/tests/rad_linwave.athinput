@@ -48,6 +48,7 @@ angular_fluxes = false     # disable angular fluxes
 reconstruct = plm          # reconstruction method
 kappa_a = 10.0             # absorption opacity
 kappa_s = 10.0             # scattering opacity
+kappa_p = 0.0              # planck minus rosseland opacity
 arad = 19.253382731290966  # radiation constant
 
 <problem>

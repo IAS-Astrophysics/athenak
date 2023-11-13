@@ -158,8 +158,6 @@ void HistoryOutput::LoadHydroHistoryData(HistoryData *pdata, Mesh *pm) {
 //  Data is stored in a Real array defined in derived class.
 
 void HistoryOutput::LoadZ4cHistoryData(HistoryData *pdata, Mesh *pm) {
-  int &nhydro_ = pm->pmb_pack->phydro->nhydro;
-
   // set number of and names of history variables for z4c
   pdata->nhist = 8;
   pdata->label[0] = "H-norm2";

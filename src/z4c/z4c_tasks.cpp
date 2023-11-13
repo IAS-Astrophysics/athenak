@@ -58,7 +58,8 @@ void Z4c::AssembleZ4cTasks(TaskList &start, TaskList &run, TaskList &end) {
   id.sendu = run.AddTask(&Z4c::SendU, this, id.restu);
   id.recvu = run.AddTask(&Z4c::RecvU, this, id.sendu);
   id.bcs   = run.AddTask(&Z4c::ApplyPhysicalBCs, this, id.recvu);
-  id.algc  = run.AddTask(&Z4c::EnforceAlgConstr, this, id.bcs);
+  id.prol  = run.AddTask(&Z4c::Prolongate, this, id.bcs);
+  id.algc  = run.AddTask(&Z4c::EnforceAlgConstr, this, id.prol);
   id.z4tad = run.AddTask(&Z4c::Z4cToADM_, this, id.algc);
   id.admc  = run.AddTask(&Z4c::ADMConstraints_, this, id.z4tad);
   id.newdt = run.AddTask(&Z4c::NewTimeStep, this, id.admc);
@@ -135,6 +136,10 @@ void Z4c::QueueZ4cTasks() {
   dep.clear();
 
   dep.push_back(Z4c_BCS);
+  pnr->QueueTask(&Z4c::Prolongate, this, Z4c_Prolong, "Z4c_Prolong", Task_Run, dep, none);
+  dep.clear();
+
+  dep.push_back(Z4c_Prolong);
   pnr->QueueTask(&Z4c::EnforceAlgConstr, this, Z4c_AlgC, "Z4c_AlgC", Task_Run, dep, none);
   dep.clear();
 
@@ -312,6 +317,19 @@ TaskStatus Z4c::RestrictU(Driver *pdrive, int stage) {
   // Only execute Mesh function with SMR/SMR
   if (pmy_pack->pmesh->multilevel) {
     pmy_pack->pmesh->pmr->RestrictCC(u0, coarse_u0);
+  }
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskList Z4c::Prolongate
+//! \brief Wrapper task list function to prolongate conserved (or primitive) variables
+//! at fine/coarse boundaries with SMR/AMR
+
+TaskStatus Z4c::Prolongate(Driver *pdrive, int stage) {
+  if (pmy_pack->pmesh->multilevel) {  // only prolongate with SMR/AMR
+//    pbval_u->FillCoarseInBndryCC(u0, coarse_u0);
+    pbval_u->ProlongateCC(u0, coarse_u0, true);
   }
   return TaskStatus::complete;
 }

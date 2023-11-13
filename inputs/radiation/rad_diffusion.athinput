@@ -48,6 +48,7 @@ affect_fluid = false     # coupling to fluid
 arad = 1.0               # radiation constant
 kappa_s = 100.0          # scattering opacity
 kappa_a = 0.0            # absorption opacity
+kappa_p = 0.0            # planck minus rosseland opacity
 
 <problem>
 v1 = 0.1   # 1-component of 4-velocity (as a fraction of c)

@@ -9,6 +9,8 @@
 //! \brief prolongation operators for cell-centered and face-centered variables,
 //! implemented as inline functions so they can be used both in Bval and AMR functions.
 
+#include "z4c/z4c.hpp"
+
 //----------------------------------------------------------------------------------------
 //! \fn ProlongCC()
 //! \brief 2nd-order (piecewise-linear) prolongation operator for cell-centered variables
@@ -227,5 +229,80 @@ void ProlongFCInternal(const int m, const int fk, const int fj, const int fi,
   }
   return;
 }
+
+template <int NGHOST>
+KOKKOS_INLINE_FUNCTION
+Real ProlongInterpolation(const int m, const int v, int k, int j, int i,
+                            const int nx1, const int nx2, const int nx3,
+                            const bool offsetk, const bool offsetj, const bool offseti,
+                        const DvceArray5D<Real> &ca, const DualArray1D<Real> &weights) {
+  // interpolated value at new grid point
+  Real ivals = 0;
+
+  if (NGHOST==2) {
+    for (int ii=0; ii<NGHOST+1; ii++) {
+      for (int jj=0; jj<NGHOST+1; jj++) {
+        for (int kk=0; kk<NGHOST+1; kk++) {
+          int wghti = (offseti) ? NGHOST-ii : ii;
+          int wghtj = (offsetj) ? NGHOST-jj : jj;
+          int wghtk = (offsetk) ? NGHOST-kk : kk;
+          Real iwght = weights.d_view(wghti)
+                      *weights.d_view(wghtj)
+                      *weights.d_view(wghtk);
+          ivals += iwght*ca(m,v,k-NGHOST/2+kk,j-NGHOST/2+jj,i-NGHOST/2+ii);
+        }
+      }
+    }
+  }
+
+  if (NGHOST==4) {
+    for (int ii=0; ii<NGHOST+1; ii++) {
+      for (int jj=0; jj<NGHOST+1; jj++) {
+        for (int kk=0; kk<NGHOST+1; kk++) {
+          int wghti = (offseti) ? NGHOST-ii : ii;
+          int wghtj = (offsetj) ? NGHOST-jj : jj;
+          int wghtk = (offsetk) ? NGHOST-kk : kk;
+          Real iwght = weights.d_view(wghti)
+                      *weights.d_view(wghtj)
+                      *weights.d_view(wghtk);
+          ivals += iwght*ca(m,v,k-NGHOST/2+kk,j-NGHOST/2+jj,i-NGHOST/2+ii);
+        }
+      }
+    }
+  }
+
+  return ivals;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn HighOrderProlongCC()
+//! \brief high-order prolongation operator for cell-centered variables
+
+template <int NGHOST>
+KOKKOS_INLINE_FUNCTION
+void HighOrderProlongCC(const int m, const int v, const int k, const int j, const int i,
+               const int fk, const int fj, const int fi, const int nx1, const int nx2,
+               const int nx3, const DvceArray5D<Real> &ca, const DvceArray5D<Real> &a,
+               const DualArray1D<Real> &weights) {
+  // stencil size for interpolator
+  a(m,v,fk  ,fj  ,fi  ) = ProlongInterpolation<NGHOST>(m,v,k,j,i, nx1, nx2, nx3,
+                                                        false,false,false, ca, weights);
+  a(m,v,fk  ,fj  ,fi+1) = ProlongInterpolation<NGHOST>(m,v,k,j,i, nx1, nx2, nx3,
+                                                        false,false, true, ca, weights);
+  a(m,v,fk  ,fj+1,fi  ) = ProlongInterpolation<NGHOST>(m,v,k,j,i, nx1, nx2, nx3,
+                                                        false, true,false, ca, weights);
+  a(m,v,fk  ,fj+1,fi+1) = ProlongInterpolation<NGHOST>(m,v,k,j,i, nx1, nx2, nx3,
+                                                        false, true, true, ca, weights);
+  a(m,v,fk+1,fj  ,fi  ) = ProlongInterpolation<NGHOST>(m,v,k,j,i, nx1, nx2, nx3,
+                                                         true,false,false, ca, weights);
+  a(m,v,fk+1,fj  ,fi+1) = ProlongInterpolation<NGHOST>(m,v,k,j,i, nx1, nx2, nx3,
+                                                         true,false, true, ca, weights);
+  a(m,v,fk+1,fj+1,fi  ) = ProlongInterpolation<NGHOST>(m,v,k,j,i, nx1, nx2, nx3,
+                                                         true, true,false, ca, weights);
+  a(m,v,fk+1,fj+1,fi+1) = ProlongInterpolation<NGHOST>(m,v,k,j,i, nx1, nx2, nx3,
+                                                         true, true, true, ca, weights);
+  return;
+}
+
 #endif // MESH_PROLONGATION_HPP_
 

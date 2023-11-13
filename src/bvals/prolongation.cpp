@@ -5,7 +5,7 @@
 //========================================================================================
 //! \file prolongation.cpp
 //! \brief functions to prolongate data at boundaries for cell-centered and face-centered
-//! values.  Functions are members of either BValCC or BValFC classes.
+//! variables. Functions are members of BoundaryValuesCC or BoundaryValuesFC classes.
 
 #include <cstdlib>
 #include <iostream>
@@ -16,18 +16,22 @@
 #include "mesh/mesh.hpp"
 #include "bvals.hpp"
 #include "mesh/prolongation.hpp" // implements prolongation operators
+#include "mesh/restriction.hpp" // implements restriction operators
 
+#include "coordinates/cell_locations.hpp"
 //----------------------------------------------------------------------------------------
-//! \fn void ProlongateCC()
-//! \brief Prolongate data at boundaries for cell-centered data. To ensure that the
-//! coarse array is up-to-date in all neighboring cells touched by the prolongation
-//! interpolation stencil, data is also restricted to coarse array in boundaries
-//! between MeshBlocks at the same level.
+//! \fn void FillCoarseInBndryCC()
+//! \brief To ensure that the coarse array is up-to-date in all neighboring cells touched
+//! by the prolongation interpolation stencil, data is restricted to coarse array in
+//! boundaries between MeshBlocks at the same level.
 
-void BoundaryValuesCC::ProlongateCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca) {
+void BoundaryValuesCC::FillCoarseInBndryCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca,
+    bool is_z4c) {
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
+  MeshBlockPack* pmbp = pmy_pack->pmesh->pmb_pack;
+  z4c::Z4c* pz4c = pmbp->pz4c;
 
   int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
   int nmnv = nmb*nnghbr*nvar;
@@ -37,8 +41,14 @@ void BoundaryValuesCC::ProlongateCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
   auto &indcs  = pmy_pack->pmesh->mb_indcs;
   const bool multi_d = pmy_pack->pmesh->multi_d;
   const bool three_d = pmy_pack->pmesh->three_d;
+  auto &nx1 = pmy_pack->pmesh->mb_indcs.nx1;
+  auto &nx2 = pmy_pack->pmesh->mb_indcs.nx2;
+  auto &nx3 = pmy_pack->pmesh->mb_indcs.nx3;
+  auto& restrict_2nd = pmy_pack->pmesh->pmr->weights.restrict_2nd;
+  auto& restrict_4th = pmy_pack->pmesh->pmr->weights.restrict_4th;
+  auto& restrict_4th_edge = pmy_pack->pmesh->pmr->weights.restrict_4th_edge;
 
-  // First restrict data into coarse array in any boundary filled with data from the same
+  // Restrict data into coarse array in any boundary filled with data from the same
   // level.  This ensures data in the coarse array at corners where one direction is a
   // coarser level and the other the same level is filled properly.
   // (Only needed in multidimensions)
@@ -90,20 +100,59 @@ void BoundaryValuesCC::ProlongateCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
                                  + a(m,v,kl,finej+1,finei) + a(m,v,kl,finej+1,finei+1));
           // restrict in 3D
           } else {
-            ca(m,v,k,j,i) = 0.125*(
-                 a(m,v,finek  ,finej  ,finei) + a(m,v,finek  ,finej  ,finei+1)
-               + a(m,v,finek  ,finej+1,finei) + a(m,v,finek  ,finej+1,finei+1)
-               + a(m,v,finek+1,finej,  finei) + a(m,v,finek+1,finej,  finei+1)
-               + a(m,v,finek+1,finej+1,finei) + a(m,v,finek+1,finej+1,finei+1));
+            if (!is_z4c) {
+              ca(m,v,k,j,i) = 0.125*(
+                  a(m,v,finek  ,finej  ,finei) + a(m,v,finek  ,finej  ,finei+1)
+                + a(m,v,finek  ,finej+1,finei) + a(m,v,finek  ,finej+1,finei+1)
+                + a(m,v,finek+1,finej,  finei) + a(m,v,finek+1,finej,  finei+1)
+                + a(m,v,finek+1,finej+1,finei) + a(m,v,finek+1,finej+1,finei+1));
+            } else {
+                switch (indcs.ng) {
+                  case 2: ca(m,v,k,j,i) = RestrictInterpolation<2>(m,v,finek,finej,finei,
+                              nx1,nx2,nx3,a,restrict_2nd,restrict_4th,restrict_4th_edge);
+                          break;
+                  case 4: ca(m,v,k,j,i) = RestrictInterpolation<4>(m,v,finek,finej,finei,
+                              nx1,nx2,nx3,a,restrict_2nd,restrict_4th,restrict_4th_edge);
+                          break;
+                }
+            }
           }
         });
         tmember.team_barrier();
       }
     });
   }
+  return;
+}
 
-  // Now prolongate cell-centered variables.
-  // Code here is based on MeshRefinement::ProlongateCellCenteredValues() in C++ version
+//----------------------------------------------------------------------------------------
+//! \fn void ProlongateCC()
+//! \brief Prolongate data at boundaries for cell-centered data.
+//! Code here is based on MeshRefinement::ProlongateCellCenteredValues() in C++ version
+
+void BoundaryValuesCC::ProlongateCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca,
+    bool is_z4c) {
+  // create local references for variables in kernel
+  int nmb = pmy_pack->nmb_thispack;
+  int nnghbr = pmy_pack->pmb->nnghbr;
+
+  // ptr to z4c, which requires different prolongation/restriction scheme
+  MeshBlockPack* pmbp = pmy_pack->pmesh->pmb_pack;
+  z4c::Z4c* pz4c = pmbp->pz4c;
+
+  int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
+  int nmnv = nmb*nnghbr*nvar;
+  auto &nghbr = pmy_pack->pmb->nghbr;
+  auto &mblev = pmy_pack->pmb->mb_lev;
+  auto &rbuf = recv_buf;
+  auto &indcs  = pmy_pack->pmesh->mb_indcs;
+  const bool multi_d = pmy_pack->pmesh->multi_d;
+  const bool three_d = pmy_pack->pmesh->three_d;
+  auto &nx1 = indcs.nx1;
+  auto &nx2 = indcs.nx2;
+  auto &nx3 = indcs.nx3;
+  auto& prolong_2nd = pmy_pack->pmesh->pmr->weights.prolong_2nd;
+  auto& prolong_4th = pmy_pack->pmesh->pmr->weights.prolong_4th;
 
   // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
   Kokkos::TeamPolicy<> policy(DevExeSpace(), nmnv, Kokkos::AUTO);
@@ -140,26 +189,35 @@ void BoundaryValuesCC::ProlongateCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
         int fi = (i - indcs.cis)*2 + indcs.is;
         int fj = (j - indcs.cjs)*2 + indcs.js;
         int fk = (k - indcs.cks)*2 + indcs.ks;
-
         // call inlined prolongation operator for CC variables
-        ProlongCC(m,v,k,j,i,fk,fj,fi,multi_d,three_d,ca,a);
+        if (!is_z4c) {
+          ProlongCC(m,v,k,j,i,fk,fj,fi,multi_d,three_d,ca,a);
+        } else {
+          switch (indcs.ng) {
+            case 2: HighOrderProlongCC<2>(m,v,k,j,i,fk,fj,fi,nx1,nx2,nx3,
+                                          ca,a,prolong_2nd);
+                    break;
+            case 4: HighOrderProlongCC<4>(m,v,k,j,i,fk,fj,fi,nx1,nx2,nx3,
+                                          ca,a,prolong_4th);
+                    break;
+          }
+        }
       });
       tmember.team_barrier();
     }
   });
-
   return;
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void ProlongateFC()
-//! \brief Prolongate data at boundaries for face-centered data (e.g. magnetic fields).
-//! As in the case of cell-centered variables, to ensure that the coarse field is
+//! \fn void FillCoarseInBndryFC()
+//! \brief As in the case of cell-centered variables, to ensure that the coarse field is
 //! up-to-date in all neighboring cells touched by the prolongation interpolation stencil,
 //! data is also restricted to coarse array in boundaries between MeshBlocks at the same
 //! level.
 
-void BoundaryValuesFC::ProlongateFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb) {
+void BoundaryValuesFC::FillCoarseInBndryFC(DvceFaceFld4D<Real> &b,
+                                           DvceFaceFld4D<Real> &cb) {
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
@@ -170,7 +228,7 @@ void BoundaryValuesFC::ProlongateFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> 
   bool &multi_d = pmy_pack->pmesh->multi_d;
   bool &three_d = pmy_pack->pmesh->three_d;
 
-  // First restrict data into coarse array in any boundary filled with data from the same
+  // Restrict data into coarse array in any boundary filled with data from the same
   // level. (Only needed in multidimensions)
 
   if (multi_d) {
@@ -247,8 +305,25 @@ void BoundaryValuesFC::ProlongateFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> 
       }
     });
   }
+  return;
+}
 
-  // Now prolongate b.x1f/b.x2f/b.x3f at all shared coarse/fine cell edges
+//----------------------------------------------------------------------------------------
+//! \fn void ProlongateFC()
+//! \brief Prolongate data at boundaries for face-centered data (e.g. magnetic fields).
+
+void BoundaryValuesFC::ProlongateFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb) {
+  // create local references for variables in kernel
+  int nmb = pmy_pack->nmb_thispack;
+  int nnghbr = pmy_pack->pmb->nnghbr;
+
+  auto &nghbr = pmy_pack->pmb->nghbr;
+  auto &indcs  = pmy_pack->pmesh->mb_indcs;
+  auto &mblev = pmy_pack->pmb->mb_lev;
+  bool &multi_d = pmy_pack->pmesh->multi_d;
+  bool &three_d = pmy_pack->pmesh->three_d;
+
+  // Prolongate b.x1f/b.x2f/b.x3f at all shared coarse/fine cell edges
   // Code here is based on MeshRefinement::ProlongateSharedFieldX1/2/3() and
   // MeshRefinement::ProlongateInternalField() in C++ version
 

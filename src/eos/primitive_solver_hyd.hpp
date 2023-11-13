@@ -29,6 +29,7 @@
 
 // AthenaK headers
 #include "athena.hpp"
+#include "globals.hpp"
 #include "mesh/mesh.hpp"
 #include "parameter_input.hpp"
 #include "adm/adm.hpp"
@@ -101,7 +102,7 @@ class PrimitiveSolverHydro {
     ps.GetEOSMutable().SetDensityFloor(pin->GetOrAddReal(block, "dfloor", (FLT_MIN)));
     ps.GetEOSMutable().SetTemperatureFloor(pin->GetOrAddReal(block, "tfloor", (FLT_MIN)));
     ps.GetEOSMutable().SetThreshold(pin->GetOrAddReal(block, "dthreshold", 1.0));
-    errcap = pin->GetOrAddInteger(block, "c2perrs", 10000);
+    errcap = pin->GetOrAddInteger(block, "c2perrs", 1000);
     SetPolicyParams(block, pin);
   }
 
@@ -284,6 +285,10 @@ class PrimitiveSolverHydro {
     const int nkji = (ku - kl + 1)*nji;
     const int nmkji = nmb*nkji;
 
+    const int rank = global_variable::my_rank;
+    const int nerrs_ = nerrs;
+    const int errcap_ = errcap;
+
     Real mb = eos_.GetBaryonMass();
 
     // FIXME: This only works for a flooring policy that has these functions!
@@ -297,9 +302,9 @@ class PrimitiveSolverHydro {
 
     // FIXME(JMF): We can short-circuit the primitive solve if FOFC is already enabled
     // due to a maximum principle violation.
-    int nfloord_=0;
+    int count_errs=0;
     Kokkos::parallel_reduce("pshyd_c2p",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-    KOKKOS_LAMBDA(const int &idx, int &sumd) {
+    KOKKOS_LAMBDA(const int &idx, int &sumerrs) {
       int m = (idx)/nkji;
       int k = (idx - m*nkji)/nji;
       int j = (idx - m*nkji - k*nji)/ni;
@@ -385,11 +390,10 @@ class PrimitiveSolverHydro {
 
       if (result.error != Primitive::Error::SUCCESS && floors_only) {
         fofc_(m,k,j,i) = true;
-        sumd++;
       } else if (!floors_only) {
-        if (result.error != Primitive::Error::SUCCESS && nerrs < errcap) {
+        if (result.error != Primitive::Error::SUCCESS && (nerrs_ + sumerrs < errcap_)) {
           // TODO(JF): put in a proper error response here.
-          nerrs++;
+          sumerrs++;
           printf("An error occurred during the primitive solve: %s\n"
                  "  Location: (%d, %d, %d, %d)\n"
                  "  Conserved vars: \n"
@@ -418,9 +422,10 @@ class PrimitiveSolverHydro {
                  adm.vK_dd(m, 0, 2, k, j, i),
                  adm.vK_dd(m, 1, 1, k, j, i), adm.vK_dd(m, 1, 2, k, j, i),
                  adm.vK_dd(m, 2, 2, k, j, i));
-          if (nerrs == errcap) {
-            printf("%d C2P errors have been detected. All future C2P errors will be \n"
-                   "suppressed. Fix your code!\n",nerrs);
+          if (nerrs_ + sumerrs == errcap_) {
+            printf("%d C2P errors have been detected on rank %d. All future C2P errors\n"
+                   "on this rank will be suppressed. Fix your code!\n",
+                   nerrs_ + sumerrs,rank);
           }
         }
         // Regardless of failure, we need to copy the primitives.
@@ -446,17 +451,19 @@ class PrimitiveSolverHydro {
           }
         }
       }
-    }, Kokkos::Sum<int>(nfloord_));
+    }, Kokkos::Sum<int>(count_errs));
 
     if (floors_only) {
       ps.GetEOSMutable().SetPrimitiveFloorFailure(prim_failure);
       ps.GetEOSMutable().SetConservedFloorFailure(cons_failure);
-      pmy_pack->pmesh->ecounter.nfofc += nfloord_;
+    }
+    else {
+      nerrs += count_errs;
     }
   }
 
   // Get the transformed magnetosonic speeds at a point in a given direction.
-  /*KOKKOS_INLINE_FUNCTION
+  KOKKOS_INLINE_FUNCTION
   void GetGRFastMagnetosonicSpeeds(Real& lambda_p, Real& lambda_m,
                                    Real prim[NPRIM], Real bsq, Real g3d[NSPMETRIC],
                                    Real beta_u[3], Real alpha, Real gii,
@@ -499,9 +506,9 @@ class PrimitiveSolverHydro {
 
     lambda_p = alpha*(vu*(1.0 - cmsq) + sdis)/iWsq_ad - beta_u[index];
     lambda_m = alpha*(vu*(1.0 - cmsq) - sdis)/iWsq_ad - beta_u[index];
-  }*/
+  }
 
-  KOKKOS_INLINE_FUNCTION
+  /*KOKKOS_INLINE_FUNCTION
   void GetGRFastMagnetosonicSpeeds(Real& lambda_p, Real& lambda_m,
                                    Real prim[NPRIM], Real bsq, Real g3d[NSPMETRIC],
                                    Real beta_u[3], Real alpha, Real gii,
@@ -538,7 +545,7 @@ class PrimitiveSolverHydro {
     s = sqrt(s);
     lambda_p = (a1 >= 0.0) ? -2.0 * a0 / (a1 + s) : (-a1 + s) / 2.0;
     lambda_m = (a1 >= 0.0) ? (-a1 - s) / 2.0 : -2.0 * a0 / (a1 - s);
-  }
+  }*/
 
   // A function for converting PrimitiveSolver errors to strings
   KOKKOS_INLINE_FUNCTION

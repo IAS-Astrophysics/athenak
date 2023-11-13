@@ -34,16 +34,16 @@ void Coordinates::SetExcisionMasks(DvceArray4D<bool> &excision_floor,
   int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
   int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
   int nmb1 = pmy_pack->nmb_thispack - 1;
-
   auto &size = pmy_pack->pmb->mb_size;
   auto &spin = coord_data.bh_spin;
+  auto &excision_radius = coord_data.rexcise;
 
   auto &flux_excise_r = coord_data.flux_excise_r;
 
   // NOTE(@pdmullen):
-  // excision_floor: - if r_ks evaluated at this cell-center is <= 1, mask the cell.
+  // excision_floor: - if r_ks evaluated at this CC is <= excision_radius, mask the cell.
   // excision_flux:  - if r_ks evaluated at any portion of the two cells connecting
-  //                   each face of this cell is <= 1, mask the cell.
+  //                   each face of this cell is <= excision_radius, mask the cell.
   par_for("set_excision", DevExeSpace(), 0, nmb1, 0, (n3-1), 0, (n2-1), 0, (n1-1),
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
     // NOTE(@pdmullen): In some instances, calls to x? will access coordinate information
@@ -87,9 +87,10 @@ void Coordinates::SetExcisionMasks(DvceArray4D<bool> &excision_floor,
     Real x3fp2 = LeftEdgeX  (k+2-ks, indcs.nx3, x3min, x3max);
 
     // Set excision floor mask
-    if (KSRX(x1v + copysign(0.5*dx1, x1v),
-             x2v + copysign(0.5*dx2, x2v),
-             x3v + copysign(0.5*dx3, x3v),spin) <= 1.0) excision_floor(m,k,j,i) = true;
+    if (KSRX(x1v,
+             x2v,
+             x3v,
+             spin) <= excision_radius) excision_floor(m,k,j,i) = true;
 
     // Set excision flux mask
     Real x1, x2, x3;

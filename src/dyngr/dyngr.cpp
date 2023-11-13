@@ -216,6 +216,10 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::QueueDynGRTasks() {
 
   dep.clear();
   dep.push_back(MHD_BCS);
+  pnr->QueueTask(&MHD::Prolongate, pmhd, MHD_Prolong, "MHD_Prolong", Task_Run, dep, none);
+
+  dep.clear();
+  dep.push_back(MHD_Prolong);
   opt.push_back(Z4c_Z4c2ADM);
   pnr->QueueTask(&DynGRPS<EOSPolicy, ErrorPolicy>::ConToPrim, this, MHD_C2P, "MHD_C2P",
                  Task_Run, dep, opt);
@@ -394,7 +398,47 @@ TaskStatus DynGR::SetTmunu(Driver *pdrive, int stage) {
   size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1)*4     // scalars
                   + ScrArray2D<Real>::shmem_size(3, ncells1)*2; // vectors
   //size_t scr_size = 0;
-  par_for_outer("dyngr_tmunu_loop",DevExeSpace(),scr_size,scr_level,0,nmb-1,ks,ke,js,je,
+  par_for("dyngr_tmunu_loop",DevExeSpace(),0,nmb-1,ks,ke,js,je,is,ie,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    // Calculate the determinant/volume form
+    Real detg = adm::SpatialDet(adm.g_dd(m,0,0,k,j,i),adm.g_dd(m,0,1,k,j,i),
+                                adm.g_dd(m,0,2,k,j,i),adm.g_dd(m,1,1,k,j,i),
+                                adm.g_dd(m,1,2,k,j,i),adm.g_dd(m,2,2,k,j,i));
+    Real ivol = 1.0/sqrt(detg);
+
+    // Calculate the lower velocity components
+    Real v_d[3] = {0.0};
+    Real iW = 0.;
+    Real B_d[3] = {0.0};
+    for (int a = 0; a < 3; ++a) {
+      for (int b = 0; b < 3; ++b) {
+        v_d[a] += prim(m, IVX + b, k, j, i)*adm.g_dd(m, a, b, k, j, i);
+        iW += prim(m, IVX + a, k, j, i)*prim(m, IVX + b, k, j, i) *
+                adm.g_dd(m, a, b, k, j, i);
+        B_d[a] += bcc(m, a, k, j, i)*adm.g_dd(m, a, b, k, j, i)*ivol;
+      }
+    }
+    iW = 1.0/sqrt(1. + iW);
+    Real Bv = 0.;
+    Real Bsq = 0.;
+    for (int a = 0; a < 3; ++a) {
+      Bv += bcc(m, a, k, j, i) * v_d[a]*ivol;
+      Bsq += bcc(m, a, k, j, i) * B_d[a];
+    }
+
+    tmunu.E(m, k, j, i) = (cons(m, IEN, k, j, i) + cons(m, IDN, k, j, i))*ivol;
+    for (int a = 0; a < 3; ++a) {
+      tmunu.S_d(m, a, k, j, i) = cons(m, IM1 + a, k, j, i)*ivol;
+      for (int b = a; b < 3; ++b) {
+        tmunu.S_dd(m, a, b, k, j, i) =
+              cons(m, IM1 + a, k, j, i)*ivol*v_d[b]*iW
+              - (B_d[a] + Bv*v_d[a])*SQR(iW)*B_d[b]
+              + (prim(m, IPR, k, j, i) + 0.5*(Bsq + Bv*Bv)*(iW*iW))
+                *adm.g_dd(m, a, b, k, j, i);
+      }
+    }
+  });
+  /*par_for_outer("dyngr_tmunu_loop",DevExeSpace(),scr_size,scr_level,0,nmb-1,ks,ke,js,je,
   KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {
     // Scratch space
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> ivol;  // sqrt of 3-metric det
@@ -461,11 +505,6 @@ TaskStatus DynGR::SetTmunu(Driver *pdrive, int stage) {
     for (int a = 0; a < 3; ++a) {
       for (int b = a; b < 3; ++b) {
         par_for_inner(member, is, ie, [&](int const i) {
-          /*tmunu.S_dd(m, a, b, k, j, i) =
-                cons(m, IM1 + a, k, j, i)*ivol(i)*v_d(b, i)*iW(i)
-                - (B_d(a, i)*SQR(iW(i)) + Bv(i)*v_d(a, i))*B_d(b, i)
-                + (prim(m, IPR, k, j, i) + 0.5*(Bv(i)*Bv(i)/(iW(i)*iW(i)) + Bsq(i)))
-                  *adm.g_dd(m, a, b, k, j, i);*/
           tmunu.S_dd(m, a, b, k, j, i) =
                 cons(m, IM1 + a, k, j, i)*ivol(i)*v_d(b, i)*iW(i)
                 - (B_d(a, i) + Bv(i)*v_d(a, i))*SQR(iW(i))*B_d(b, i)
@@ -475,7 +514,7 @@ TaskStatus DynGR::SetTmunu(Driver *pdrive, int stage) {
       }
     }
     member.team_barrier();
-  });
+  });*/
   return TaskStatus::complete;
 }
 
