@@ -227,7 +227,7 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
           if ( nghbr.h_view(m,n).lev < pmy_pack->pmb->mb_lev.h_view(m) ) {
             data_size *= send_buf[n].icoar_ndat;
           } else if ( nghbr.h_view(m,n).lev == pmy_pack->pmb->mb_lev.h_view(m) ) {
-            if (is_z4c) {
+            if (is_z4c_) {
               data_size *= send_buf[n].isame_z4c_ndat;
             } else {
               data_size *= send_buf[n].isame_ndat;
