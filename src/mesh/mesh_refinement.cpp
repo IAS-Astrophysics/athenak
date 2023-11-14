@@ -73,6 +73,10 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
       dd_threshold_ = pin->GetReal("mesh_refinement", "dvel_max");
       check_cons_ = true;
     }
+    if (pin->DoesParameterExist("mesh_refinement", "chi_min")) {
+      chi_threshold_ = pin->GetReal("mesh_refinement", "chi_min");
+      check_cons_ = true;
+    }
   }
 
   if (pm->adaptive) {  // allocate arrays for AMR
@@ -177,6 +181,7 @@ void MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
   auto &dens_thresh  = d_threshold_;
   auto &ddens_thresh = dd_threshold_;
   auto &dpres_thresh = dp_threshold_;
+  auto &chi_thresh = chi_threshold_;
   int nmb = pmbp->nmb_thispack;
   int mbs = pmy_mesh->gids_eachrank[global_variable::my_rank];
   if (((pmbp->phydro != nullptr) || (pmbp->pmhd != nullptr)) && check_cons_) {
@@ -240,6 +245,28 @@ void MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
 
         if (team_dpmax > dpres_thresh) {refine_flag_.d_view(m+mbs) = 1;}
         if (team_dpmax < 0.25*dpres_thresh) {refine_flag_.d_view(m+mbs) = -1;}
+      }
+    });
+  } else if (pmbp->pz4c != nullptr) {
+    auto &u0 = pmbp->pz4c->u0;
+    int I_Z4C_CHI = pmbp->pz4c->I_Z4C_CHI;
+    par_for_outer("ConsRefineCond",DevExeSpace(), 0, 0, 0, (nmb-1),
+    KOKKOS_LAMBDA(TeamMember_t tmember, const int m) {
+      // chi threshold
+      if (chi_thresh!= 0.0) {
+        Real team_dmin = 100;
+        Kokkos::parallel_reduce(Kokkos::TeamThreadRange(tmember, nkji),
+        [=](const int idx, Real& dmin) {
+          int k = (idx)/nji;
+          int j = (idx - k*nji)/nx1;
+          int i = (idx - k*nji - j*nx1) + is;
+          j += js;
+          k += ks;
+          dmin = fmin(abs(u0(m,I_Z4C_CHI,k,j,i)), dmin);
+        },Kokkos::Min<Real>(team_dmin));
+
+        if (team_dmin < chi_thresh) {refine_flag_.d_view(m+mbs) = 1;}
+        if (team_dmin > 1.25*chi_thresh) {refine_flag_.d_view(m+mbs) = -1;}
       }
     });
   }
@@ -540,6 +567,7 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   // array in target MB.
   hydro::Hydro* phydro = pm->pmb_pack->phydro;
   mhd::MHD* pmhd = pm->pmb_pack->pmhd;
+  z4c::Z4c* pz4c = pm->pmb_pack->pz4c;
   // derefine (if needed)
   if (ndel > 0) {
     if (phydro != nullptr) {
@@ -548,6 +576,9 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
     if (pmhd != nullptr) {
       DerefineCCSameRank(pmhd->u0, pmhd->coarse_u0);
       DerefineFCSameRank(pmhd->b0, pmhd->coarse_b0);
+    }
+    if (pz4c != nullptr) {
+      DerefineCCSameRank(pz4c->u0, pz4c->coarse_u0);
     }
   }
 
@@ -561,7 +592,9 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
     CopyCC(pmhd->u0);
     CopyFC(pmhd->b0);
   }
-
+  if (pz4c != nullptr) {
+    CopyCC(pz4c->u0);
+  }
   // Step 7.
   // Copy evolved physics variables for MBs flagged for refinement from source fine array
   // to target coarse array, when both are on same rank.
@@ -572,6 +605,9 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
     if (pmhd != nullptr) {
       CopyForRefinementCC(pmhd->u0, pmhd->coarse_u0);
       CopyForRefinementFC(pmhd->b0, pmhd->coarse_b0);
+    }
+    if (pz4c != nullptr) {
+      CopyForRefinementCC(pz4c->u0, pz4c->coarse_u0);
     }
   }
 
@@ -601,6 +637,9 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
     if (pmhd != nullptr) {
       RefineCC(new_to_old, pmhd->u0, pmhd->coarse_u0);
       RefineFC(new_to_old, pmhd->b0, pmhd->coarse_b0);
+    }
+    if (pz4c != nullptr) {
+      RefineCC(new_to_old, pz4c->u0, pz4c->coarse_u0);
     }
   }
 
