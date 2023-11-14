@@ -35,6 +35,7 @@ void MHD::EntropyReset() {
   auto &u0_ = u0;
   auto &w0_ = w0;
   int entropyIdx = nmhd+nscalars-1;
+  Real gm1 = peos->eos_data.gamma-1;
 
   par_for("entropy_reset",DevExeSpace(),0,nmb1,ks,ke,js,je,is,ie,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -57,7 +58,6 @@ void MHD::EntropyReset() {
     Real alpha = sqrt(-1.0/gupper[0][0]);
 
     // compute total entropy
-    Real gm1 = peos->eos_data.gamma-1;
     Real &wdn = w0_(m,IDN,k,j,i);
     Real &wvx = w0_(m,IVX,k,j,i);
     Real &wvy = w0_(m,IVY,k,j,i);
