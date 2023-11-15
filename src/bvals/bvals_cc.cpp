@@ -156,7 +156,7 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
       int il, iu, jl, ju, kl, ku;
       // If neighbor is at same level and data is for Z4c module, append data from coarse
       // array for higher-order prolongation
-      if ((nghbr.d_view(m,n).lev == mblev.d_view(m)) && (is_z4c)) {
+      if ((nghbr.d_view(m,n).lev == mblev.d_view(m)) && (is_z4c_)) {
         il = sbuf[n].isame_z4c.bis;
         iu = sbuf[n].isame_z4c.bie;
         jl = sbuf[n].isame_z4c.bjs;
@@ -377,7 +377,7 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
       int il, iu, jl, ju, kl, ku;
       // If neighbor is at same level and data is for Z4c module, unpack data from coarse
       // array for higher-order prolongation
-      if ((nghbr.d_view(m,n).lev == mblev.d_view(m)) && (is_z4c)) {
+      if ((nghbr.d_view(m,n).lev == mblev.d_view(m)) && (is_z4c_)) {
         il = rbuf[n].isame_z4c.bis;
         iu = rbuf[n].isame_z4c.bie;
         jl = rbuf[n].isame_z4c.bjs;
