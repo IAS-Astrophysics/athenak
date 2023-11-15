@@ -108,7 +108,7 @@ class AthenaHostTensor<T, sym, ndim, 2> {
 
  private:
   sub_HostArray5D_2D data_;
-  int idxmap_[ndim][ndim];
+  int idxmap_[3][3];
   int ndof_;
 };
 
@@ -224,7 +224,7 @@ class AthenaTensor<T, sym, ndim, 2> {
 
  private:
   sub_DvceArray5D_2D data_;
-  int idxmap_[ndim][ndim];
+  int idxmap_[3][3];
   int ndof_;
 };
 
@@ -288,7 +288,7 @@ class AthenaScratchTensor<T, sym, ndim, 1> {
     }
   }
  private:
-  Real data_[ndim];
+  Real data_[3];
 };
 
 //----------------------------------------------------------------------------------------
@@ -324,8 +324,8 @@ class AthenaScratchTensor<T, sym, ndim, 2> {
   }
 
  private:
-  Real data_[ndim*ndim];
-  int idxmap_[ndim][ndim];
+  Real data_[9];
+  int idxmap_[3][3];
   int ndof_;
 };
 
@@ -387,8 +387,8 @@ class AthenaScratchTensor<T, sym, ndim, 3> {
   }
 
  private:
-  Real data_[ndim*ndim*ndim];
-  int idxmap_[ndim][ndim][ndim];
+  Real data_[27];
+  int idxmap_[3][3][3];
   int ndof_;
 };
 
@@ -463,8 +463,8 @@ class AthenaScratchTensor<T, sym, ndim, 4> {
   }
 
  private:
-  Real data_[ndim*ndim*ndim*ndim];
-  int idxmap_[ndim][ndim][ndim][ndim];
+  Real data_[81];
+  int idxmap_[3][3][3][3];
   int ndof_;
 };
 

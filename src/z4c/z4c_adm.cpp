@@ -407,7 +407,7 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     }
 
     // Constraint violation monitor C^2
-    con.C(m,k,j,i) = SQR(con.H(m,k,j,i)) + con.M(m,k,j,i) + 
+    con.C(m,k,j,i) = SQR(con.H(m,k,j,i)) + con.M(m,k,j,i) +
                      SQR(z4c.vTheta(m,k,j,i)) + 4.0*con.Z(m,k,j,i);
 });
 }

@@ -34,7 +34,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
   auto &z4c = pmy_pack->pz4c->z4c;
   auto &rhs = pmy_pack->pz4c->rhs;
   auto &opt = pmy_pack->pz4c->opt;
-  
+
   // ===================================================================================
   // Main RHS calculation
   //
@@ -267,7 +267,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
 
     // -----------------------------------------------------------------------------------
     // Inverse metric
-    
+
     detg = adm::SpatialDet(z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i),
                               z4c.g_dd(m,0,2,k,j,i), z4c.g_dd(m,1,1,k,j,i),
                               z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i));
@@ -279,7 +279,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
 
     // -----------------------------------------------------------------------------------
     // Christoffel symbols
-    
+
     for(int c = 0; c < 3; ++c)
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
