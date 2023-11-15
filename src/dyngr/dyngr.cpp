@@ -105,6 +105,17 @@ DynGR::DynGR(MeshBlockPack *pp, ParameterInput *pin) : pmy_pack(pp) {
               << "' not implemented for GR dynamics" << std::endl;
     std::exit(EXIT_FAILURE);
   }
+  std::string fofc = pin->GetOrAddString("mhd", "fofc_method", "llf");
+  if (fofc.compare("llf") == 0) {
+    fofc_method = DynGR_RSolver::llf_dyngr;
+  } else if (fofc.compare("hlle") == 0) {
+    fofc_method == DynGR_RSolver::hlle_dyngr;
+  } else {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "<mhd> fofc_method = '" << fofc
+              << "' not implemented for FOFC" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   scratch_level = pin->GetOrAddInteger("mhd", "dyn_scratch", 0);
   enforce_maximum = pin->GetOrAddBoolean("mhd", "enforce_maximum", true);
   dmp_M = pin->GetOrAddReal("mhd", "dmp_M", 1.2);

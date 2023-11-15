@@ -19,8 +19,105 @@
 namespace dyngr {
 
 //----------------------------------------------------------------------------------------
+//! \fn void SingleStateHLLE_DYNGR
+template<int ivx, class EOSPolicy, class ErrorPolicy>
+KOKKOS_INLINE_FUNCTION
+void SingleStateHLLE_DYNGR(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
+    Real prim_l[NPRIM], Real prim_r[NPRIM], Real Bu_l[NPRIM], Real Bu_r[NPRIM],
+    const int nmhd, const int nscal,
+    Real g3d[NSPMETRIC], Real beta_u[3], Real alpha,
+    Real flux[NCONS], Real bflux[NMAG]) {
+  constexpr int ibx = ivx - IVX;
+  constexpr int iby = ((ivx - IVX) + 1)%3;
+  constexpr int ibz = ((ivx - IVX) + 2)%3;
+
+  constexpr int diag[3] = {S11, S22, S33};
+  constexpr int idx = diag[ivx - IVX];
+  constexpr int offdiag[3] = {S23, S13, S12};
+  constexpr int offidx = offdiag[ivx - IVX];
+  constexpr int idxy = diag[(ivx - IVX + 1) % 3];
+  constexpr int idxz = diag[(ivx - IVX + 2) % 3];
+
+  constexpr int pvx = PVX + (ivx - IVX);
+
+  Real sdetg = sqrt(Primitive::GetDeterminant(g3d));
+  Real isdetg = 1.0/sdetg;
+
+  // Undensitize the magnetic field before calculating the conserved variables
+  Real Bu_lund[NMAG], Bu_rund[NMAG];
+  for (int n = 0; n < NMAG; n++) {
+    Bu_lund[n] = Bu_l[n]*isdetg;
+    Bu_rund[n] = Bu_r[n]*isdetg;
+  }
+
+  // Calculate the left and right fluxes
+  Real cons_l[NCONS], cons_r[NCONS];
+  Real fl[NCONS], fr[NCONS], bfl[NMAG], bfr[NMAG];
+  Real bsql, bsqr;
+  SingleStateFlux<ivx>(eos, prim_l, prim_r, Bu_lund, Bu_rund, nmhd, nscal, g3d, beta_u,
+                       alpha, cons_l, cons_r, fl, fr, bfl, bfr, bsql, bsqr);
+  
+
+  // Calculate the magnetosonic speeds for both states
+  Real lambda_pl, lambda_pr, lambda_ml, lambda_mr;
+  Real gii = (g3d[idxy]*g3d[idxz] - g3d[offidx]*g3d[offidx])*(isdetg*isdetg);
+  eos.GetGRFastMagnetosonicSpeeds(lambda_pl, lambda_ml, prim_l, bsql,
+                                  g3d, beta_u, alpha, gii, pvx);
+  eos.GetGRFastMagnetosonicSpeeds(lambda_pr, lambda_mr, prim_r, bsqr,
+                                  g3d, beta_u, alpha, gii, pvx);
+
+  // Get the extremal wavespeeds
+  Real lambda_l = fmin(lambda_ml, lambda_mr);
+  Real lambda_r = fmax(lambda_pl, lambda_pr);
+
+  // Calculate fluxes in HLL region
+  Real qa = lambda_r*lambda_l/alpha;
+  Real qb = 1.0/(lambda_r - lambda_l);
+  Real f_hll[NCONS], bf_hll[NMAG];
+  f_hll[CDN] = (lambda_r*fl[CDN] - lambda_l*fr[CDN] +
+                qa*(cons_r[CDN] - cons_l[CDN])) * qb;
+  f_hll[CSX] = (lambda_r*fl[CSX] - lambda_l*fr[CSX] +
+                qa*(cons_r[CSX] - cons_l[CSX])) * qb;
+  f_hll[CSY] = (lambda_r*fl[CSY] - lambda_l*fr[CSY] +
+                qa*(cons_r[CSY] - cons_l[CSY])) * qb;
+  f_hll[CSZ] = (lambda_r*fl[CSZ] - lambda_l*fr[CSZ] +
+                qa*(cons_r[CSZ] - cons_l[CSZ])) * qb;
+  f_hll[CTA] = (lambda_r*fl[CTA] - lambda_l*fr[CTA] +
+                qa*(cons_r[CTA] - cons_l[CTA])) * qb;
+  bf_hll[ibx] = 0.0;
+  bf_hll[iby] = (lambda_r*bfl[iby] - lambda_l*bfr[iby] +
+                 qa*(Bu_r[iby] - Bu_l[iby])) * qb;
+  bf_hll[ibz] = (lambda_r*bfl[ibz] - lambda_l*bfr[ibz] +
+                 qa*(Bu_r[ibz] - Bu_l[ibz])) * qb;
+
+  Real *f_interface, *bf_interface;
+  if (lambda_l >= 0.) {
+    f_interface = &fl[0];
+    bf_interface = &bfl[0];
+  } else if (lambda_r <= 0.) {
+    f_interface = &fr[0];
+    bf_interface = &bfr[0];
+  } else {
+    f_interface = &f_hll[0];
+    bf_interface = &bf_hll[0];
+  }
+
+  Real vol = sdetg*alpha;
+
+  // Calculate the fluxes
+  flux[CDN] = vol * f_interface[CDN];
+  flux[CSX] = vol * f_interface[CSX];
+  flux[CSY] = vol * f_interface[CSY];
+  flux[CSZ] = vol * f_interface[CSZ];
+  flux[CTA] = vol * f_interface[CTA];
+
+  bflux[IBY] = - vol * bf_interface[iby];
+  bflux[IBZ] = vol * bf_interface[ibz];
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn void HLLE_DYNGR
-//! \brief inline function for calculating GRMHD fluxes via Lax-Friedrichs
+//! \brief inline function for calculating GRMHD fluxes via HLLE
 //----------------------------------------------------------------------------------------
 template<int ivx, class EOSPolicy, class ErrorPolicy>
 KOKKOS_INLINE_FUNCTION

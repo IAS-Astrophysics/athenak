@@ -94,6 +94,7 @@ class DynGR {
 
   // DynGR policies
   DynGR_RSolver rsolver_method;
+  DynGR_RSolver fofc_method;
   DynGR_EOS eos_policy;
   DynGR_Error error_policy;
 
@@ -118,6 +119,7 @@ class DynGRPS : public DynGR {
   template<DynGR_RSolver T>
   TaskStatus CalcFluxes(Driver *d, int stage);
 
+  template<DynGR_RSolver T>
   void FOFC(Driver *d, int stage);
 
   // functions
