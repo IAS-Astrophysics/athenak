@@ -194,14 +194,14 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
 
                   // (7) Compute F from G
                   Kokkos::parallel_for(Kokkos::TeamThreadRange(member, 0, num_points), [=](const int idx) {
-
+                    /*
                     Real final_result = 0.;
                     Kokkos::parallel_reduce(Kokkos::ThreadVectorRange(member, 0, num_points), [&](const int A, Real &partial_sum) {
                       partial_sum += Qinv_matrix(idx, A) * (g_rhs_scratch(A) + energy_terms(A));
                     }, final_result);
-                    member.team_barrier();
+                    member.team_barrier(); */
 
-                    f0_(m, en * num_points + idx, k, j, i) = final_result;
+                    f0_(m, en * num_points + idx, k, j, i) = g_rhs_scratch(idx);
                   });
                   member.team_barrier();
                 });
@@ -227,14 +227,6 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                 gam0 * L_mu_muhat0_(m, mu, muhat, k, j, i) + gam1 * L_mu_muhat1_(m, mu, muhat, k, j, i) - beta_dt * tetr_rhs;
           }); */
 
-
-// Add explicit source terms
-  if (beam_source) {
-// @TODO: Add beam source support
-//AddBeamSource(f0_);
-  }
-
-  return
-      TaskStatus::complete;
+  return TaskStatus::complete;
 }
 } // namespace radiationfemn

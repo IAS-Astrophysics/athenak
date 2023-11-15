@@ -64,7 +64,7 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   limiter_dg = pin->GetOrAddString("radiation-femn", "limiter_dg", "minmod2");      // limiter for DG (default:sawtooth-free minmod2)
   fpn = pin->GetOrAddInteger("radiation-femn", "fpn", 0) == 1;                      // fpn switch (0: use FEM_N, 1: use FP_N) (default: 0)
 
-  num_energy_bins = pin->GetOrAddInteger("radiation_femn", "num_energy_bins", 1);   // number of energy bins (default: 1)
+  num_energy_bins = pin->GetOrAddInteger("radiation-femn", "num_energy_bins", 1);   // number of energy bins (default: 1)
   energy_max = pin->GetOrAddReal("radiation-femn", "energy_max", 1);                // maximum value of energy (default: 1)
 
   // set up energy grid
@@ -108,6 +108,11 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   m1_flag = pin->GetOrAddBoolean("radiation-femn", "m1", false);
   rad_source = pin->GetOrAddBoolean("radiation-femn", "sources", false);           // switch for sources (default: false)
   beam_source = pin->GetOrAddBoolean("radiation-femn", "beam_sources", false);     // switch for beam sources (default: false)
+  num_beams = pin->GetOrAddInteger("radiation-femn", "num_beam_sources", 0);
+  beam_source_1_a = pin->GetOrAddReal("radiation-femn", "beam_source_1_a", -42.);
+  beam_source_1_b = pin->GetOrAddReal("radiation-femn", "beam_source_1_b", -42.);
+  beam_source_2_a = pin->GetOrAddReal("radiation-femn", "beam_source_2_a", -42.);
+  beam_source_2_b = pin->GetOrAddReal("radiation-femn", "beam_source_2_b", -42.);
 
   // --------------------------------------------------------------------
   // allocate memory and load angular grid arrays and associated matrices
