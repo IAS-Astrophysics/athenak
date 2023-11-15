@@ -777,6 +777,17 @@ void TOVHistory(HistoryData *pdata, Mesh *pm) {
     mb_max = fmax(mb_max, w0_(m,IDN,k,j,i));
   }, Kokkos::Max<Real>(rho_max));
 
+  // Currently AthenaK only supports MPI_SUM operations between ranks, but we need an
+  // MPI_MAX operation instead. This is a cheap hack to make it work as intended.
+#if MPI_PARALLEL_ENABLED
+  if (global_variable::my_rank == 0) {
+    MPI_Reduce(MPI_IN_PLACE, &rho_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+  } else {
+    MPI_Reduce(&rho_max, &rho_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+    rho_max = 0.;
+  }
+#endif
+
   // store data in hdata array
   pdata->hdata[0] = rho_max;
 }
