@@ -456,7 +456,6 @@ class AthenaScratchTensor<T, sym, ndim, 4> {
   }
   KOKKOS_INLINE_FUNCTION
   void ZeroClear() {
-    Kokkos::Experimental::local_deep_copy(data_, 0);
     for (int i = 0; i < ndim*ndim*ndim*ndim; ++i) {
       data_[i] = 0.0;
     }
