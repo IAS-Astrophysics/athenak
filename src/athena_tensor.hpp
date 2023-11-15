@@ -287,6 +287,7 @@ class AthenaScratchTensor<T, sym, ndim, 1> {
       data_[i] = 0;
     }
   }
+
  private:
   Real data_[3];
 };
