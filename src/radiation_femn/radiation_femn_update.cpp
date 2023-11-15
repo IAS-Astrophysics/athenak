@@ -46,7 +46,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
   auto &u_mu_ = u_mu;
 
   size_t scr_size = ScrArray2D<Real>::shmem_size(num_points, num_points) * 2 + ScrArray1D<Real>::shmem_size(num_points) * 1
-      + ScrArray1D<Real>::shmem_size(4*4*4) * 2;
+      + ScrArray1D<Real>::shmem_size(4 * 4 * 4) * 2;
   int scr_level = 0;
   par_for_outer("radiation_femn_update_semi_implicit", DevExeSpace(), scr_size, scr_level, 0, nmb1, 0, num_energy_bins - 1, ks, ke, js, je, is, ie,
                 KOKKOS_LAMBDA(TeamMember_t member, int m, int en, int k, int j, int i) {
@@ -165,9 +165,9 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                       Real theta_np1 = (theta_np12 > theta_np32) ? theta_np12 : theta_np32;
 
                       part_sum += G_Gamma_AB(A, idx) * f0_(m, en * num_points + A, k, j, i);
-                          //-
-                          //    (energy_grid(en + 1) * energy_grid(en + 1) * energy_grid(en + 1) * (F_Gamma_AB(A, idx) * f_term1_np1 - theta_np1 * K * f_term2_np1 / 2.)
-                          //        - energy_grid(en) * energy_grid(en) * energy_grid(en) * (F_Gamma_AB(A, idx) * f_term1_n - theta_n * K * f_term2_n / 2.));
+                      //-
+                      //    (energy_grid(en + 1) * energy_grid(en + 1) * energy_grid(en + 1) * (F_Gamma_AB(A, idx) * f_term1_np1 - theta_np1 * K * f_term2_np1 / 2.)
+                      //        - energy_grid(en) * energy_grid(en) * energy_grid(en) * (F_Gamma_AB(A, idx) * f_term1_n - theta_n * K * f_term2_n / 2.));
                     }, part_sum_idx);
 
                     energy_terms(idx) = part_sum_idx;
@@ -194,14 +194,14 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
 
                   // (7) Compute F from G
                   Kokkos::parallel_for(Kokkos::TeamThreadRange(member, 0, num_points), [=](const int idx) {
-                    /*
+
                     Real final_result = 0.;
                     Kokkos::parallel_reduce(Kokkos::ThreadVectorRange(member, 0, num_points), [&](const int A, Real &partial_sum) {
                       partial_sum += Qinv_matrix(idx, A) * (g_rhs_scratch(A) + energy_terms(A));
                     }, final_result);
-                    member.team_barrier(); */
+                    member.team_barrier();
 
-                    f0_(m, en * num_points + idx, k, j, i) = g_rhs_scratch(idx);
+                    f0_(m, en * num_points + idx, k, j, i) = final_result;
                   });
                   member.team_barrier();
                 });

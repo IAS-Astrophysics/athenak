@@ -159,7 +159,7 @@ void MatMultiplyComplex(std::vector<std::vector<std::complex<double>>> &A_matrix
 
   for (int i = 0; i < N; i++) {
     for (int j = 0; j < N; j++) {
-        result[i][j] = 0.;
+      result[i][j] = 0.;
     }
   }
 
@@ -182,10 +182,15 @@ void MatLumping(DvceArray2D<Real> A_matrix) {
   DvceArray2D<Real> result;
   Kokkos::realloc(result, N, N);
   Kokkos::deep_copy(result, 0.);
-  par_for("radiation_femn_matrix_lumping", DevExeSpace(), 0, N - 1, 0, N - 1,
-          KOKKOS_LAMBDA(const int i, const int j) {
-            result(i, i) += A_matrix(i, j);
-          });
+
+  int scr_size = 0;
+  int scr_level = 0;
+  par_for_outer("radiation_femn_flux_x", DevExeSpace(), scr_size, scr_level, 0, N - 1,
+                KOKKOS_LAMBDA(TeamMember_t member, const int i) {
+                  Kokkos::parallel_reduce(Kokkos::TeamVectorRange(member, 0, N), [&](const int j, Real &partial_sum) {
+                    partial_sum += A_matrix(i, j);
+                  }, result(i, i));
+                });
   Kokkos::deep_copy(A_matrix, result);
 }
 
@@ -365,7 +370,7 @@ void ZeroSpeedCorrection(HostArray2D<Real> matrix, HostArray2D<Real> matrix_corr
 
   for (int i = 0; i < size; i++) {
     for (int j = 0; j < size; j++) {
-      matrix_corrected(i,j) = std::real(temp_reconstruction_2[i][j]);
+      matrix_corrected(i, j) = std::real(temp_reconstruction_2[i][j]);
     }
   }
 
