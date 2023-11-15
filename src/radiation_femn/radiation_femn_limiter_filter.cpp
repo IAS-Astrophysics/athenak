@@ -83,7 +83,7 @@ TaskStatus RadiationFEMN::ApplyLimiterFEM(Driver *pdriver, int stage) {
 
   assert(num_energy_bins == 1);
 
-  // @TODO: Add energy dependence (later)
+  // @TODO: Add energy dependence (later) // @TODO: fix race here
   par_for("radiation_femn_etemp_calculate", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie, 0, nengang1, 0, nengang1,
           KOKKOS_LAMBDA(const int m, const int k, const int j, const int i, const int B, const int enang) {
               int en = int(enang / num_points);

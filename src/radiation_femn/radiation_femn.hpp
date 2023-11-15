@@ -82,6 +82,14 @@ class RadiationFEMN {
   bool rad_source;                // flag to enable/disable source terms for radiation, disabled by default
   bool beam_source;               // flag to enable/disable beam sources, disabled by default
 
+  int num_beams;                  // number of beams, defaults to zero
+  Real beam_source_1_a;
+  Real beam_source_1_b;
+  Real beam_source_2_a;
+  Real beam_source_2_b;
+  std::string beam_source_1_pos;
+  std::string beam_source_2_pos;
+
   Real energy_par = 1.;
   // ---------------------------------------------------------------------------
   // arrays for numerical quadratures
@@ -167,7 +175,7 @@ class RadiationFEMN {
   TaskStatus ApplyFilterLanczos(Driver *pdriver, int stage);
   TaskStatus AddRadiationSourceTerm(Driver *d, int stage);
   TaskStatus TetradOrthogonalize(Driver *pdriver, int stage);
-  void AddBeamSource(DvceArray5D<Real> &i0);
+  TaskStatus BeamsSourcesFEMN(Driver *pdriver, int stage);
   TaskStatus RestrictI(Driver *d, int stage);
   TaskStatus SendI(Driver *d, int stage);
   TaskStatus RecvI(Driver *d, int stage);
@@ -194,6 +202,7 @@ class RadiationFEMN {
   void LoadFPNMatrices();
   void ComputePMatrices();
   void ComputeSourceMatrices();
+  void AddBeams();
 
   // ---------------------------------------------------------------------------
   // Functions for closures
