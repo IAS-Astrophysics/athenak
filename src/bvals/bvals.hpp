@@ -58,9 +58,12 @@ struct BoundaryBuffer {
   BufferIndcs iprol[3];  // indices for prolongation (only used for receives)
   BufferIndcs iflux_same[3];  // indices for pack/unpack for flux correction
   BufferIndcs iflux_coar[3];  // indices for pack/unpack for flux correction
+  // With Z4c higher-order prolongation/rstriction, must also send coarse data between
+  // MeshBlocks at the same level, which requires an additional indices array
+  BufferIndcs isame_z4c;  // indices for pack/unpack with z4c when dest/src at same level
 
   // Maximum number of data elements (bie-bis+1) across 3 components of above
-  int isame_ndat, icoar_ndat, ifine_ndat, iflxs_ndat, iflxc_ndat;
+  int isame_ndat, isame_z4c_ndat, icoar_ndat, ifine_ndat, iflxs_ndat, iflxc_ndat;
 
   // 2D Views that store buffer data on device, dimensioned (nmb, ndata)
   DvceArray2D<Real> vars, flux;
@@ -73,10 +76,16 @@ struct BoundaryBuffer {
 
   // function to allocate memory for buffers for variables and their fluxes
   // Must only be called after BufferIndcs above are initialized
-  void AllocateBuffers(int nmb, int nvars) {
-    int nmax = std::max(isame_ndat, std::max(icoar_ndat, ifine_ndat) );
-    Kokkos::realloc(vars, nmb, (nvars*nmax));
-    nmax = std::max(iflxs_ndat, iflxc_ndat);
+  void AllocateBuffers(int nmb, int nvars, bool is_z4c) {
+    // With Z4c, buffers may contain BOTH same and coarse data
+    if (is_z4c) {
+      int nmax = std::max(isame_z4c_ndat, std::max(icoar_ndat, ifine_ndat) );
+      Kokkos::realloc(vars, nmb, (nvars*nmax));
+    } else {
+      int nmax = std::max(isame_ndat, std::max(icoar_ndat, ifine_ndat) );
+      Kokkos::realloc(vars, nmb, (nvars*nmax));
+    }
+    int nmax = std::max(iflxs_ndat, iflxc_ndat);
     Kokkos::realloc(flux, nmb, (nvars*nmax));
   }
 };
@@ -90,7 +99,7 @@ class MeshBlockPack;
 
 class BoundaryValues {
  public:
-  BoundaryValues(MeshBlockPack *ppack, ParameterInput *pin);
+  BoundaryValues(MeshBlockPack *ppack, ParameterInput *pin, bool z4c);
   ~BoundaryValues();
 
   // data for all 56 buffers in most general 3D case. Not all elements used in most cases.
@@ -125,6 +134,7 @@ class BoundaryValues {
 
  protected:
   MeshBlockPack* pmy_pack;
+  bool is_z4c_;   // flag to denote if this BoundaryValues is for Z4c module
 };
 
 //----------------------------------------------------------------------------------------
@@ -133,7 +143,7 @@ class BoundaryValues {
 
 class BoundaryValuesCC : public BoundaryValues {
  public:
-  BoundaryValuesCC(MeshBlockPack *ppack, ParameterInput *pin);
+  BoundaryValuesCC(MeshBlockPack *ppack, ParameterInput *pin, bool z4c);
 
   //functions
   void InitSendIndices(BoundaryBuffer &buf, int o1, int o2,int o3,int f1,int f2) override;

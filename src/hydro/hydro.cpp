@@ -115,7 +115,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   }
 
   // allocate boundary buffers for conserved (cell-centered) variables
-  pbval_u = new BoundaryValuesCC(ppack, pin);
+  pbval_u = new BoundaryValuesCC(ppack, pin, false);
   pbval_u->InitializeBuffers((nhydro+nscalars));
 
   // for time-evolving problems, continue to construct methods, allocate arrays

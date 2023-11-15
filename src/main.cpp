@@ -57,6 +57,7 @@ int main(int argc, char *argv[]) {
   bool marg_flag = false;  // set to true if -m        argument is on cmdline
   bool narg_flag = false;  // set to true if -n        argument is on cmdline
   bool  res_flag = false;  // set to true if -r <file> argument is on cmdline
+  Real wtlim = 0;
 
   //--- Step 1. --------------------------------------------------------------------------
   // Initialize environment (must initialize MPI first, then Kokkos)
@@ -155,6 +156,11 @@ int main(int argc, char *argv[]) {
         case 'm':
           marg_flag = true;
           break;
+        case 't':                      // -t <hh:mm:ss>
+          int wth, wtm, wts;
+          std::sscanf(argv[++i], "%d:%d:%d", &wth, &wtm, &wts);
+          wtlim = static_cast<Real>(wth*3600 + wtm*60 + wts);
+          break;
         case 'c':
           if (global_variable::my_rank == 0) ShowConfig();
           Kokkos::finalize();
@@ -176,6 +182,7 @@ int main(int argc, char *argv[]) {
             std::cout << "  -n              parse input file and quit\n";
             std::cout << "  -c              show configuration and quit\n";
             std::cout << "  -m              output mesh structure and quit\n";
+            std::cout << "  -t hh:mm:ss     wall time limit for final output\n";
             std::cout << "  -h              this help\n";
             ShowConfig();
           }
@@ -201,6 +208,10 @@ int main(int argc, char *argv[]) {
 #endif
     return(0);
   }
+
+  // Start the wall clock timer. This is done here rather than in the Driver to ensure
+  // that the time taken in ProblemGenerator is also captured.
+  Kokkos::Timer timer;
 
   //--- Step 3. --------------------------------------------------------------------------
   // Construct ParameterInput object and load data either from restart or input file.
@@ -277,9 +288,9 @@ int main(int argc, char *argv[]) {
 
   //--- Step 6. --------------------------------------------------------------------------
   // Construct Driver and Outputs. Actual outputs (including initial conditions) are made
-  // in Driver.Initialize()
+  // in Driver.Initialize(). Add wall clock timer to Driver if necessary.
 
-  Driver* pdriver = new Driver(pinput, pmesh);
+  Driver* pdriver = new Driver(pinput, pmesh, wtlim, &timer);
   ChangeRunDir(run_dir);
   Outputs* pout = new Outputs(pinput, pmesh);
 

@@ -149,7 +149,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   }
 
   // allocate boundary buffers for conserved (cell-centered) variables
-  pbval_u = new BoundaryValuesCC(ppack, pin);
+  pbval_u = new BoundaryValuesCC(ppack, pin, false);
   pbval_u->InitializeBuffers((nmhd+nscalars));
 
   // allocate boundary buffers for face-centered magnetic field
