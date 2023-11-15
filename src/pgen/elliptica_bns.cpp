@@ -244,7 +244,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   printf("Host mirrors filled.\n");
 
   // Cleanup
-  //elliptica_id_reader_free(idr);
+  elliptica_id_reader_free(idr);
 
   printf("Elliptica freed.\n");
 
