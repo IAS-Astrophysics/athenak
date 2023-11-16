@@ -112,7 +112,7 @@ class MeshRefinement {
   void RefineCC(DualArray1D<int> &n2o, DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
   void RefineFC(DualArray1D<int> &n2o, DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
 
-  void RestrictCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
+  void RestrictCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, bool is_z4c=false);
   void RestrictFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
   void HighOrderRestrictCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
 

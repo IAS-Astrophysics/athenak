@@ -316,7 +316,7 @@ TaskStatus Z4c::ADMConstraints_(Driver *pdrive, int stage) {
 TaskStatus Z4c::RestrictU(Driver *pdrive, int stage) {
   // Only execute Mesh function with SMR/SMR
   if (pmy_pack->pmesh->multilevel) {
-    pmy_pack->pmesh->pmr->RestrictCC(u0, coarse_u0);
+    pmy_pack->pmesh->pmr->RestrictCC(u0, coarse_u0, true);
   }
   return TaskStatus::complete;
 }
@@ -342,7 +342,7 @@ TaskStatus Z4c::ApplyPhysicalBCs(Driver *pdrive, int stage) {
   // only apply BCs if domain is not strictly periodic
   if (!(pmy_pack->pmesh->strictly_periodic)) {
     // physical BCs
-    pbval_u->HydroBCs((pmy_pack), (pbval_u->u_in), u0);
+    pbval_u->Z4cBCs((pmy_pack), (pbval_u->u_in), u0);
 
     // user BCs
     if (pmy_pack->pmesh->pgen->user_bcs) {
