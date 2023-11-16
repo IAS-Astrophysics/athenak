@@ -507,8 +507,6 @@ SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM]
 
 
   // Do the root solve.
-  // TODO(JF): This should be done with something like TOMS748 once it's
-  // available.
   Real n, P, T, mu;
   bool result = root.FalsePosition(RootFunction, mul, muh, mu, D, q, bsqr, rsqr, rbsqr,
                                    Y, &eos, &n, &T, &P);

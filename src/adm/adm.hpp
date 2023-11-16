@@ -172,7 +172,7 @@ void SpacetimeUpperMetric(Real const alp,
 //  shift at faces in the x direction for use in Riemann solver
 //check your indices: interface i lives between cells i and i-1
 
-KOKKOS_INLINE_FUNCTION
+/*KOKKOS_INLINE_FUNCTION
 void Face1Metric(TeamMember_t const &member, const int m, const int k, const int j,
      const int is,
      const int ie, const AthenaTensor<Real, TensorSymm::SYM2, 3, 2> &g_dd,
@@ -200,7 +200,7 @@ void Face1Metric(TeamMember_t const &member, const int m, const int k, const int
        }
 
      return;
-}
+}*/
 
 //----------------------------------------------------------------------------------------
 //! \fn void Face1Metric
@@ -238,7 +238,7 @@ void Face1Metric(const int m, const int k, const int j, const int i,
 //  shift at faces in the y direction for use in Riemann solver
 //check your indices: interface i lives between cells i and i-1
 
-KOKKOS_INLINE_FUNCTION
+/*KOKKOS_INLINE_FUNCTION
 void Face2Metric(TeamMember_t const &member, const int m, const int k, const int j,
      const int is,
      const int ie, const AthenaTensor<Real, TensorSymm::SYM2, 3, 2> &g_dd,
@@ -265,7 +265,7 @@ void Face2Metric(TeamMember_t const &member, const int m, const int k, const int
        }
 
      return;
-}
+}*/
 
 //----------------------------------------------------------------------------------------
 //! \fn void Face2Metric
@@ -302,7 +302,7 @@ void Face2Metric(const int m, const int k, const int j, const int i,
 //  shift at faces in the y direction for use in Riemann solver
 //check your indices: interface i lives between cells i and i-1
 
-KOKKOS_INLINE_FUNCTION
+/*KOKKOS_INLINE_FUNCTION
 void Face3Metric(TeamMember_t const &member, const int m, const int k, const int j,
      const int is,
      const int ie, const AthenaTensor<Real, TensorSymm::SYM2, 3, 2> &g_dd,
@@ -329,7 +329,7 @@ void Face3Metric(TeamMember_t const &member, const int m, const int k, const int
        }
 
      return;
-}
+}*/
 
 //----------------------------------------------------------------------------------------
 //! \fn void Face3Metric
