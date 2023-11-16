@@ -66,19 +66,17 @@ void ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin) {
   int isg = is-indcs.ng; int ieg = ie+indcs.ng;
   int jsg = js-indcs.ng; int jeg = je+indcs.ng;
   int ksg = ks-indcs.ng; int keg = ke+indcs.ng;
-  int ncells1 = indcs.nx1 + 2*(indcs.ng);
   int nmb = pmbp->nmb_thispack;
   Real ADM_mass = pin->GetOrAddReal("problem", "punc_ADM_mass", 1.);
   adm::ADM::ADM_vars &adm = pmbp->padm->adm;
 
-  int scr_level = 0;
-  size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1);
-  par_for_outer("pgen one puncture",
-  DevExeSpace(),scr_size,scr_level,0,nmb-1,ksg,keg,jsg,jeg,
-  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {
+  par_for("pgen one puncture",
+  DevExeSpace(),0,nmb-1,ksg,keg,jsg,jeg,isg,ieg,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
     Real &x1min = size.d_view(m).x1min;
     Real &x1max = size.d_view(m).x1max;
     int nx1 = indcs.nx1;
+    Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
     Real &x2min = size.d_view(m).x2min;
     Real &x2max = size.d_view(m).x2max;
@@ -89,35 +87,22 @@ void ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin) {
     Real &x3max = size.d_view(m).x3max;
     int nx3 = indcs.nx3;
     Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> r;
-    r.NewAthenaScratchTensor(member, scr_level, ncells1);
 
-    par_for_inner(member, isg, ieg, [&](const int i) {
-      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
-      r(i) = std::sqrt(std::pow(x3v,2) + std::pow(x2v,2) + std::pow(x1v,2));
-    });
-    member.team_barrier();
+    Real r = std::sqrt(std::pow(x3v,2) + std::pow(x2v,2) + std::pow(x1v,2));
 
     // Minkowski spacetime
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
-      par_for_inner(member, isg, ieg, [&](const int i) {
-        adm.g_dd(m,a,b,k,j,i) = (a == b ? 1. : 0.);
-      });
+      adm.g_dd(m,a,b,k,j,i) = (a == b ? 1. : 0.);
     }
     // admK_dd is automatically set to 0 when is initialized as Kokkos View
 
     // ADMOnePuncture
-    par_for_inner(member, isg, ieg, [&](const int i) {
-      adm.psi4(m,k,j,i) = std::pow(1.0 + 0.5*ADM_mass/r(i),4); // adm.psi4
-    });
-    member.team_barrier();
+    adm.psi4(m,k,j,i) = std::pow(1.0 + 0.5*ADM_mass/r,4); // adm.psi4
 
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
-      par_for_inner(member, isg, ieg, [&](const int i) {
-        adm.g_dd(m,a,b,k,j,i) *= adm.psi4(m,k,j,i);
-      });
+      adm.g_dd(m,a,b,k,j,i) *= adm.psi4(m,k,j,i);
     }
   });
 }
