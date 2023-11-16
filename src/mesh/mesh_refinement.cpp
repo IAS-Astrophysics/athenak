@@ -11,6 +11,7 @@
 
 #include <cstdint>   // int32_t
 #include <iostream>
+#include <cmath>     // abs
 #include <algorithm> // sort
 #include <utility>   // pair
 
@@ -254,7 +255,7 @@ void MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
     KOKKOS_LAMBDA(TeamMember_t tmember, const int m) {
       // chi threshold
       if (chi_thresh!= 0.0) {
-        Real team_dmin = 100;
+        Real team_dmin;
         Kokkos::parallel_reduce(Kokkos::TeamThreadRange(tmember, nkji),
         [=](const int idx, Real& dmin) {
           int k = (idx)/nji;
@@ -262,7 +263,7 @@ void MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
           int i = (idx - k*nji - j*nx1) + is;
           j += js;
           k += ks;
-          dmin = fmin(abs(u0(m,I_Z4C_CHI,k,j,i)), dmin);
+          dmin = fmin(u0(m,I_Z4C_CHI,k,j,i), dmin);
         },Kokkos::Min<Real>(team_dmin));
 
         if (team_dmin < chi_thresh) {refine_flag_.d_view(m+mbs) = 1;}
