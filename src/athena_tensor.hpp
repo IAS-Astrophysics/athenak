@@ -108,7 +108,7 @@ class AthenaHostTensor<T, sym, ndim, 2> {
 
  private:
   sub_HostArray5D_2D data_;
-  int idxmap_[ndim][ndim];
+  int idxmap_[3][3];
   int ndof_;
 };
 
@@ -224,7 +224,7 @@ class AthenaTensor<T, sym, ndim, 2> {
 
  private:
   sub_DvceArray5D_2D data_;
-  int idxmap_[ndim][ndim];
+  int idxmap_[3][3];
   int ndof_;
 };
 
@@ -261,35 +261,6 @@ template<typename T, TensorSymm sym, int ndim, int rank>
 class AthenaScratchTensor;
 
 //----------------------------------------------------------------------------------------
-// rank 0 AthenaScratchTensor: spatially 0D vector and co-vector fields
-// This is a 1D AthenaScratchTensor
-template<typename T, TensorSymm sym, int ndim>
-class AthenaScratchTensor<T, sym, ndim, 0> {
- public:
-  // the default constructor/destructor/copy operators are sufficient
-  AthenaScratchTensor() = default;
-  ~AthenaScratchTensor() = default;
-  AthenaScratchTensor(AthenaScratchTensor<T, sym, ndim, 0> const &) = default;
-  AthenaScratchTensor<T, sym, ndim, 0> & operator=
-  (AthenaScratchTensor<T, sym, ndim, 0> const &) = default;
-
-  KOKKOS_INLINE_FUNCTION
-  decltype(auto) operator()(int const i) const {
-    return data_(i);
-  }
-  KOKKOS_INLINE_FUNCTION
-  void NewAthenaScratchTensor(const TeamMember_t &member, int scr_level, int nx) {
-    data_ = ScrArray1D<T>(member.team_scratch(scr_level), nx);
-  }
-  KOKKOS_INLINE_FUNCTION
-  void ZeroClear() {
-    Kokkos::Experimental::local_deep_copy(data_, 0.);
-  }
- private:
-  ScrArray1D<T> data_;
-};
-
-//----------------------------------------------------------------------------------------
 // rank 1 AthenaScratchTensor: spatially 0D vector and co-vector fields
 // This is a 1D AthenaScratchTensor
 template<typename T, TensorSymm sym, int ndim>
@@ -303,24 +274,27 @@ class AthenaScratchTensor<T, sym, ndim, 1> {
   (AthenaScratchTensor<T, sym, ndim, 1> const &) = default;
 
   KOKKOS_INLINE_FUNCTION
-  decltype(auto) operator()(int const a, int const i) const {
-    return data_(a, i);
+  Real operator()(int const a) const {
+    return data_[a];
   }
   KOKKOS_INLINE_FUNCTION
-  void NewAthenaScratchTensor(const TeamMember_t & member, int scr_level, int nx) {
-    data_ = ScrArray2D<T>(member.team_scratch(scr_level), ndim, nx);
+  Real & operator()(int const a) {
+    return data_[a];
   }
   KOKKOS_INLINE_FUNCTION
   void ZeroClear() {
-    Kokkos::Experimental::local_deep_copy(data_, 0.);
+    for (int i = 0; i < ndim; ++i) {
+      data_[i] = 0;
+    }
   }
+
  private:
-  ScrArray2D<T> data_;
+  Real data_[3];
 };
 
 //----------------------------------------------------------------------------------------
 // rank 2 AthenaScratchTensor
-// This is a 1D AthenaScratchTensor
+// This is a 0D AthenaScratchTensor
 template<typename T, TensorSymm sym, int ndim>
 class AthenaScratchTensor<T, sym, ndim, 2> {
  public:
@@ -336,21 +310,23 @@ class AthenaScratchTensor<T, sym, ndim, 2> {
     return idxmap_[a][b];
   }
   KOKKOS_INLINE_FUNCTION
-  decltype(auto) operator()(int const a, int const b, int const i) const {
-    return data_(idxmap_[a][b], i);
+  Real operator()(int const a, int const b) const {
+    return data_[idxmap_[a][b]];
   }
   KOKKOS_INLINE_FUNCTION
-  void NewAthenaScratchTensor(const TeamMember_t & member, int scr_level, int nx) {
-    data_ = ScrArray2D<T>(member.team_scratch(scr_level), ndof_, nx);
+  Real & operator()(int const a, int const b) {
+    return data_[idxmap_[a][b]];
   }
   KOKKOS_INLINE_FUNCTION
   void ZeroClear() {
-    Kokkos::Experimental::local_deep_copy(data_, 0);
+    for (int i = 0; i < ndim*ndim; ++i) {
+      data_[i] = 0.0;
+    }
   }
 
  private:
-  ScrArray2D<T> data_;
-  int idxmap_[ndim][ndim];
+  Real data_[9];
+  int idxmap_[3][3];
   int ndof_;
 };
 
@@ -381,7 +357,7 @@ switch(sym) {
 
 //----------------------------------------------------------------------------------------
 // rank 3 AthenaScratchTensor
-// This is a 1D AthenaScratchTensor
+// This is a 0D AthenaScratchTensor
 template<typename T, TensorSymm sym, int ndim>
 class AthenaScratchTensor<T, sym, ndim, 3> {
  public:
@@ -397,21 +373,23 @@ class AthenaScratchTensor<T, sym, ndim, 3> {
     return idxmap_[a][b][c];
   }
   KOKKOS_INLINE_FUNCTION
-  decltype(auto) operator()(int const a, int const b, int const c, int const i) const {
-    return data_(idxmap_[a][b][c], i);
+  Real operator()(int const a, int const b, int const c) const {
+    return data_[idxmap_[a][b][c]];
   }
   KOKKOS_INLINE_FUNCTION
-  void NewAthenaScratchTensor(const TeamMember_t & member, int scr_level, int nx) {
-    data_ = ScrArray2D<T>(member.team_scratch(scr_level), ndof_, nx);
+  Real & operator()(int const a, int const b, int const c) {
+    return data_[idxmap_[a][b][c]];
   }
   KOKKOS_INLINE_FUNCTION
   void ZeroClear() {
-    Kokkos::Experimental::local_deep_copy(data_, 0);
+    for (int i = 0; i < ndim*ndim*ndim; ++i) {
+      data_[i] = 0.0;
+    }
   }
 
  private:
-  ScrArray2D<T> data_;
-  int idxmap_[ndim][ndim][ndim];
+  Real data_[27];
+  int idxmap_[3][3][3];
   int ndof_;
 };
 
@@ -452,7 +430,7 @@ AthenaScratchTensor<T, sym, ndim, 3>::AthenaScratchTensor() {
 
 //----------------------------------------------------------------------------------------
 // rank 4 AthenaScratchTensor
-// This is a 1D AthenaScratchTensor
+// This is a 0D AthenaScratchTensor
 template<typename T, TensorSymm sym, int ndim>
 class AthenaScratchTensor<T, sym, ndim, 4> {
  public:
@@ -468,22 +446,25 @@ class AthenaScratchTensor<T, sym, ndim, 4> {
     return idxmap_[a][b][c][d];
   }
   KOKKOS_INLINE_FUNCTION
-  decltype(auto) operator()(int const a, int const b,
-                            int const c, int const d, int const i) const {
-    return data_(idxmap_[a][b][c][d], i);
+  Real operator()(int const a, int const b,
+                  int const c, int const d) const {
+    return data_[idxmap_[a][b][c][d]];
   }
   KOKKOS_INLINE_FUNCTION
-  void NewAthenaScratchTensor(const TeamMember_t & member, int scr_level, int nx) {
-    data_ = ScrArray2D<T>(member.team_scratch(scr_level), ndof_, nx);
+  Real & operator()(int const a, int const b,
+                    int const c, int const d) {
+    return data_[idxmap_[a][b][c][d]];
   }
   KOKKOS_INLINE_FUNCTION
   void ZeroClear() {
-    Kokkos::Experimental::local_deep_copy(data_, 0);
+    for (int i = 0; i < ndim*ndim*ndim*ndim; ++i) {
+      data_[i] = 0.0;
+    }
   }
 
  private:
-  ScrArray2D<T> data_;
-  int idxmap_[ndim][ndim][ndim][ndim];
+  Real data_[81];
+  int idxmap_[3][3][3][3];
   int ndof_;
 };
 
