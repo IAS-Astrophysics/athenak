@@ -31,7 +31,6 @@ void Z4c::GaugePreCollapsedLapse(MeshBlockPack *pmbp, ParameterInput *pin) {
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
-  //For GLOOPS
   int isg = is-indcs.ng; int ieg = ie+indcs.ng;
   int jsg = js-indcs.ng; int jeg = je+indcs.ng;
   int ksg = ks-indcs.ng; int keg = ke+indcs.ng;
@@ -40,18 +39,13 @@ void Z4c::GaugePreCollapsedLapse(MeshBlockPack *pmbp, ParameterInput *pin) {
   auto &z4c = pmbp->pz4c->z4c;
   auto &adm = pmbp->padm->adm;
 
-  int scr_level = 0;
-  size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1);
-  par_for_outer("pgen one puncture",
-  DevExeSpace(),scr_size,scr_level,0,nmb-1,ksg,keg,jsg,jeg,
-  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {
-    par_for_inner(member, isg, ieg, [&](const int i) {
-      z4c.alpha(m,k,j,i) = std::pow(adm.psi4(m,k,j,i),-0.5); // setting z4c.alpha,
-                                                             // which is 0th component
-                                                             // of z4c
-    });
+  par_for("GaugePreCollapsedLapse",
+  DevExeSpace(),0,nmb-1,ksg,keg,jsg,jeg,isg,ieg,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    z4c.alpha(m,k,j,i) = std::pow(adm.psi4(m,k,j,i),-0.5); // setting z4c.alpha,
+                                                           // which is 0th component
+                                                           // of z4c
   });
 }
-
 
 } // end namespace z4c

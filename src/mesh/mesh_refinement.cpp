@@ -1002,7 +1002,7 @@ void MeshRefinement::RefineCC(DualArray1D<int> &n2o, DvceArray5D<Real> &a,
   int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
   auto &new_nmb = new_nmb_eachrank[global_variable::my_rank];
   MeshBlockPack* pmbp = pmy_mesh->pmb_pack;
-  z4c::Z4c* pz4c = pmbp->pz4c;
+  bool not_z4c = (pmbp->pz4c == nullptr)? true : false;
   auto &indcs = pmy_mesh->mb_indcs;
   auto &cis = indcs.cis, &cie = indcs.cie;
   auto &cjs = indcs.cjs, &cje = indcs.cje;
@@ -1045,7 +1045,7 @@ void MeshRefinement::RefineCC(DualArray1D<int> &n2o, DvceArray5D<Real> &a,
         int fk = 2*k - cks;  // correct when cks=ks
 
         // call inlined prolongation operator for CC variables
-        if (pz4c==nullptr) {
+        if (not_z4c) {
           ProlongCC(m,v,k,j,i,fk,fj,fi,multi_d,three_d,ca,a);
         } else {
           switch (indcs.ng) {
@@ -1154,7 +1154,7 @@ void MeshRefinement::RestrictCC(DvceArray5D<Real> &u, DvceArray5D<Real> &cu) {
   int nvar = u.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
 
   MeshBlockPack* pmbp = pmy_mesh->pmb_pack;
-  z4c::Z4c* pz4c = pmbp->pz4c;
+  bool not_z4c = (pmbp->pz4c == nullptr)? true : false;
   auto &indcs = pmy_mesh->mb_indcs;
   auto &cis = indcs.cis, &cie = indcs.cie;
   auto &cjs = indcs.cjs, &cje = indcs.cje;
@@ -1189,7 +1189,7 @@ void MeshRefinement::RestrictCC(DvceArray5D<Real> &u, DvceArray5D<Real> &cu) {
       int finei = 2*i - cis;  // correct when cis=is
       int finej = 2*j - cjs;  // correct when cjs=js
       int finek = 2*k - cks;  // correct when cks=ks
-      if (pz4c==nullptr) {
+      if (not_z4c) {
         cu(m,n,k,j,i) =
             0.125*(u(m,n,finek  ,finej  ,finei) + u(m,n,finek  ,finej  ,finei+1)
                 + u(m,n,finek  ,finej+1,finei) + u(m,n,finek  ,finej+1,finei+1)
