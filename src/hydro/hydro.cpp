@@ -25,15 +25,15 @@ namespace hydro {
 // constructor, initializes data structures and parameters
 
 Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
-    pmy_pack(ppack),
     u0("cons",1,1,1,1,1),
     w0("prim",1,1,1,1,1),
     coarse_u0("ccons",1,1,1,1,1),
     coarse_w0("cprim",1,1,1,1,1),
     u1("cons1",1,1,1,1,1),
     uflx("uflx",1,1,1,1,1),
+    fofc("fofc",1,1,1,1),
     utest("utest",1,1,1,1,1),
-    fofc("fofc",1,1,1,1) {
+    pmy_pack(ppack) {
   // Total number of MeshBlocks on this rank to be used in array dimensioning
   int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_maxperrank));
 

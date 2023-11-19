@@ -14,15 +14,16 @@
 //! lid that can be encoded is set by (NUM_BITS_LID) macro.
 //! The convention in Athena++ is lid is for the *receiving* process.
 //! The MPI standard requires signed int tag, with MPI_TAG_UB>=2^15-1 = 32,767 (inclusive)
-static int CreateAMR_MPI_Tag(int lid, int ox1, int ox2, int ox3) {
+#if MPI_PARALLEL_ENABLED
+[[maybe_unused]] static int CreateAMR_MPI_Tag(int lid, int ox1, int ox2, int ox3) {
   return (ox1<<(NUM_BITS_LID+2)) | (ox2<<(NUM_BITS_LID+1))| (ox3<<(NUM_BITS_LID)) | lid;
 }
+#endif
 
 //----------------------------------------------------------------------------------------
 //! \struct AMRBuffer
 //! \brief container for index ranges, storage, and flags for AMR buffers used with load
 //! balancing.
-
 #if MPI_PARALLEL_ENABLED
 struct AMRBuffer {
   int bis, bie, bjs, bje, bks, bke;  // start/end indices of data to be packed/unpacked

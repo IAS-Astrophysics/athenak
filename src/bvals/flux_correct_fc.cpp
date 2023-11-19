@@ -65,7 +65,7 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
         ku = sbuf[n].iflux_coar[v].bke;
         ndat = sbuf[n].iflxc_ndat;
       // if neighbor is at same level, use sindices to pack buffer
-      } else if (nghbr.d_view(m,n).lev == mblev.d_view(m)) {
+      } else {
         il = sbuf[n].iflux_same[v].bis;
         iu = sbuf[n].iflux_same[v].bie;
         jl = sbuf[n].iflux_same[v].bjs;

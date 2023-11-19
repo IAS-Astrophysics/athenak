@@ -19,9 +19,9 @@
 // constructor, initializes coordinates data
 
 Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
-    pmy_pack(ppack),
     excision_floor("excision_floor",1,1,1,1),
-    excision_flux("excision_flux",1,1,1,1) {
+    excision_flux("excision_flux",1,1,1,1),
+    pmy_pack(ppack) {
   // Check for relativistic dynamics
   is_special_relativistic = pin->GetOrAddBoolean("coord","special_rel",false);
   is_general_relativistic = pin->GetOrAddBoolean("coord","general_rel",false);

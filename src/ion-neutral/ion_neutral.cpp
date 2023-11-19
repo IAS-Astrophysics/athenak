@@ -23,12 +23,17 @@ namespace ion_neutral {
 // constructor, parses input file and initializes data structures and parameters
 
 IonNeutral::IonNeutral(MeshBlockPack *pp, ParameterInput *pin) :
-  pmy_pack(pp) {
+    pmy_pack(pp) {
   // Read various coefficients
   drag_coeff = pin->GetReal("ion-neutral","drag_coeff");
   ionization_coeff = pin->GetOrAddReal("ion-neutral","ionization_coeff",0.0);
   recombination_coeff = pin->GetOrAddReal("ion-neutral","recombination_coeff",0.0);
 }
+
+//----------------------------------------------------------------------------------------
+//! \brief IonNeutral destructor
+//IonNeutral::~IonNeutral() {
+//}
 
 //----------------------------------------------------------------------------------------
 //! \fn  void IonNeutral::AssembleIonNeutralTasks
@@ -109,10 +114,10 @@ TaskStatus IonNeutral::FirstTwoImpRK(Driver *pdrive, int stage) {
   Kokkos::deep_copy(DevExeSpace(), pmhd->b1.x3f, pmhd->b0.x3f);
 
   // Solve implicit equations first time (nexp_stage = -1)
-  auto status = ImpRKUpdate(pdrive, -1);
+  (void) ImpRKUpdate(pdrive, -1);
 
   // Solve implicit equations second time (nexp_stage = 0)
-  status = ImpRKUpdate(pdrive, 0);
+  (void) ImpRKUpdate(pdrive, 0);
 
   // update primitive variables for both hydro and MHD
   auto &indcs = pmy_pack->pmesh->mb_indcs;
@@ -141,7 +146,6 @@ TaskStatus IonNeutral::FirstTwoImpRK(Driver *pdrive, int stage) {
 //     ru(2) -> ui(IM3)     ru(5) -> un(IM3)
 //     ru(6) -> ui(IDN)     ru(7) -> un(IDN)
 //  where ui=pmhd->u0 and un=phydro->u0
-
 
 TaskStatus IonNeutral::ImpRKUpdate(Driver *pdriver, int estage) {
   // # of implicit stage (1,2,3,4,[5]).  Note estage=(# of explicit stage)=(1,2,[3])

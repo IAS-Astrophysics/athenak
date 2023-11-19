@@ -140,8 +140,8 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     Real Ht = 0.0;
     // trace of extrinsic curvature
     Real K = 0.0;
-    // Trace of S_ik
-    Real S = 0.0;
+    // Trace of S_ik (not used)
+    // Real S = 0.0;
     // Trace of Ddalpha_dd
     Real Ddalpha = 0.0;
 

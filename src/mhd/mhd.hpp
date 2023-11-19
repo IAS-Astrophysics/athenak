@@ -106,8 +106,9 @@ class MHD {
   Real dtnew;
 
   // following used for FOFC algorithm
-  DvceArray4D<bool> fofc;  // flag for each cell to indicate if FOFC is needed
-  bool use_fofc = false;   // flag to enable FOFC
+  DvceArray4D<bool> fofc;            // flag for each cell to indicate if FOFC is needed
+  bool use_fofc = false;             // flag to enable FOFC
+  DvceArray5D<Real> utest, bcctest;  // scratch arrays for FOFC
 
   // container to hold names of TaskIDs
   MHDTaskIDs id;
@@ -154,7 +155,6 @@ class MHD {
   DvceArray4D<Real> e1x2, e3x2;
   DvceArray4D<Real> e2x3, e1x3;
   DvceArray4D<Real> e1_cc, e2_cc, e3_cc;
-  DvceArray5D<Real> utest, bcctest;  // scratch arrays for FOFC
 };
 
 } // namespace mhd

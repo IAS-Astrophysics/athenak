@@ -22,7 +22,7 @@ namespace units {
 class Units {
  public:
   explicit Units(ParameterInput *pin);
-  ~Units();
+  ~Units() = default;
 
   // data
   // CGS unit per X

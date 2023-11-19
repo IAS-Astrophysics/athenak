@@ -30,14 +30,15 @@ enum class BoundaryFlag {undef=-1,block, reflect, inflow, outflow, diode, user, 
 //! lid that can be encoded is set by (NUM_BITS_LID) macro.
 //! The convention in Athena++ is lid and bufid are both for the *receiving* process.
 //! The MPI standard requires signed int tag, with MPI_TAG_UB>=2^15-1 = 32,767 (inclusive)
-static int CreateBvals_MPI_Tag(int lid, int bufid) {
+#if MPI_PARALLEL_ENABLED
+[[maybe_unused]] static int CreateBvals_MPI_Tag(int lid, int bufid) {
   return (bufid << (NUM_BITS_LID)) | lid;
 }
+#endif
 
 //----------------------------------------------------------------------------------------
 //! \struct BufferIndcs
 //! \brief indices for range of cells packed/unpacked into boundary buffers
-
 struct BufferIndcs {
   int bis,bie,bjs,bje,bks,bke;  // start/end buffer ("b") indices in each dir
   BufferIndcs() :
@@ -47,7 +48,6 @@ struct BufferIndcs {
 //----------------------------------------------------------------------------------------
 //! \struct BoundaryBuffer
 //! \brief container for index ranges, storage, and flags for boundary buffers
-
 struct BoundaryBuffer {
   // fixed-length-3 arrays used to store indices of each buffer for cell-centered vars, or
   // each component of a face-centered vector field ([0,1,2] --> [x1f, x2f, x3f]). For
@@ -100,7 +100,7 @@ class MeshBlockPack;
 class BoundaryValues {
  public:
   BoundaryValues(MeshBlockPack *ppack, ParameterInput *pin, bool z4c);
-  ~BoundaryValues();
+  virtual ~BoundaryValues();  // destructor must be virtual since this is an ABC
 
   // data for all 56 buffers in most general 3D case. Not all elements used in most cases.
   // However each BoundaryBuffer is lightweight, so the convenience of fixed array

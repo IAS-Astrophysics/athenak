@@ -197,7 +197,7 @@ struct EOS_Data {
 class EquationOfState {
  public:
   EquationOfState(std::string block, MeshBlockPack *pp, ParameterInput *pin);
-  virtual ~EquationOfState() = default;
+  virtual ~EquationOfState() = default; // destructor must be virtual since this is an ABC
 
   MeshBlockPack* pmy_pack;
   EOS_Data eos_data;

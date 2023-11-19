@@ -56,14 +56,14 @@
 // Driver::Execute() invokes the tasklist from stage=1 to stage=ptlist->nstages
 
 Driver::Driver(ParameterInput *pin, Mesh *pmesh, Real wtlim, Kokkos::Timer* ptimer) :
-  tlim(-1.0),
-  nlim(-1),
-  ndiag(1),
-  nmb_updated_(0),
-  lb_efficiency_(0),
-  pwall_clock_(ptimer),
-  wall_time(wtlim),
-  impl_src("ru",1,1,1,1,1,1) {
+    impl_src("ru",1,1,1,1,1,1),
+    tlim(-1.0),
+    nlim(-1),
+    ndiag(1),
+    pwall_clock_(ptimer),
+    wall_time(wtlim),
+    nmb_updated_(0),
+    lb_efficiency_(0) {
   // set time-evolution option (no default)
   {
     std::string evolution_t = pin->GetString("time","evolution");

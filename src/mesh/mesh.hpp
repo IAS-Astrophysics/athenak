@@ -21,7 +21,6 @@
 //----------------------------------------------------------------------------------------
 //! \struct RegionSize
 //! \brief physical size in a Mesh or a MeshBlock
-
 struct RegionSize {
   Real x1min, x2min, x3min;
   Real x1max, x2max, x3max;
@@ -31,7 +30,6 @@ struct RegionSize {
 //----------------------------------------------------------------------------------------
 //! \struct RegionIndcs
 //! \brief Cell indices and number of active and ghost cells in a Mesh or a MeshBlock
-
 struct RegionIndcs {
   int ng;                       // number of ghost cells
   int nx1, nx2, nx3;            // number of active cells (not including ghost zones)
@@ -43,7 +41,6 @@ struct RegionIndcs {
 //----------------------------------------------------------------------------------------
 //! \struct NeighborBlock
 //! \brief Information about neighboring MeshBlocks stored as 2D DualArray in MeshBlock
-
 struct NeighborBlock {
   int gid;     // global ID
   int lev;     // logical level
@@ -58,7 +55,6 @@ struct NeighborBlock {
 //! WARNING: values of lx? can exceed the range of std::int32_t with >30 levels
 //! of AMR, even if the root grid consists of a single MeshBlock, since the corresponding
 //! max index = 1*2^31 > INT_MAX = 2^31 -1 for most 32-bit signed integer types
-
 struct LogicalLocation {
   std::int32_t lx1, lx2, lx3, level;
 };
@@ -66,7 +62,6 @@ struct LogicalLocation {
 //----------------------------------------------------------------------------------------
 //! \struct EventCounters
 //! \brief stores various counters used as diagnostics throughout the code
-
 struct EventCounters {
   int nfofc, neos_dfloor, neos_efloor, neos_tfloor, neos_vceil, neos_fail, maxit_c2p;
   EventCounters() : nfofc(0), neos_dfloor(0), neos_efloor(0), neos_tfloor(0),

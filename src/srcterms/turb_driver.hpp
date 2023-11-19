@@ -16,6 +16,16 @@
 #include "utils/random.hpp"
 
 //----------------------------------------------------------------------------------------
+//! \struct TurbDriverTaskIDs
+//  \brief container to hold TaskIDs of all turbulence driver tasks
+struct TurbDriverTaskIDs {
+  TaskID imodes;
+  TaskID iforce;
+  TaskID addf;
+};
+
+
+//----------------------------------------------------------------------------------------
 //! \class TurbulenceDriver
 
 class TurbulenceDriver {
@@ -39,6 +49,9 @@ class TurbulenceDriver {
   Real expo, exp_prl, exp_prp;
   int driving_type;
 
+  // container to hold names of TaskIDs
+  TurbDriverTaskIDs id;
+
   // functions
   void IncludeInitializeModesTask(TaskList &tl, TaskID start);
   void IncludeAddForcingTask(TaskList &tl, TaskID start);
@@ -47,7 +60,6 @@ class TurbulenceDriver {
   void Initialize();
 
  private:
-  bool first_time = true;   // flag to enable initialization on first call
   MeshBlockPack *pmy_pack;  // ptr to MeshBlockPack containing this TurbulenceDriver
 };
 

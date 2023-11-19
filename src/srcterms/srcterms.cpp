@@ -33,8 +33,8 @@
 // requested, 'source_terms_enabled' flag is false.
 
 SourceTerms::SourceTerms(std::string block, MeshBlockPack *pp, ParameterInput *pin) :
-  pmy_pack(pp),
-  source_terms_enabled(false) {
+    source_terms_enabled(false),
+    pmy_pack(pp) {
   // (1) (constant) gravitational acceleration
   const_accel = pin->GetOrAddBoolean(block, "const_accel", false);
   if (const_accel) {

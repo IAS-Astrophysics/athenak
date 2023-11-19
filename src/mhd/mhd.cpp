@@ -26,7 +26,6 @@ namespace mhd {
 // constructor, initializes data structures and parameters
 
 MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
-    pmy_pack(ppack),
     u0("cons",1,1,1,1,1),
     w0("prim",1,1,1,1,1),
     b0("B_fc",1,1,1,1),
@@ -38,6 +37,10 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     b1("B_fc1",1,1,1,1),
     uflx("uflx",1,1,1,1,1),
     efld("efld",1,1,1,1),
+    fofc("fofc",1,1,1,1),
+    utest("utest",1,1,1,1,1),
+    bcctest("bcctest",1,1,1,1,1),
+    pmy_pack(ppack),
     e3x1("e3x1",1,1,1,1),
     e2x1("e2x1",1,1,1,1),
     e1x2("e1x2",1,1,1,1),
@@ -46,10 +49,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     e1x3("e1x3",1,1,1,1),
     e1_cc("e1_cc",1,1,1,1),
     e2_cc("e2_cc",1,1,1,1),
-    e3_cc("e3_cc",1,1,1,1),
-    utest("utest",1,1,1,1,1),
-    bcctest("bcctest",1,1,1,1,1),
-    fofc("fofc",1,1,1,1) {
+    e3_cc("e3_cc",1,1,1,1) {
   // Total number of MeshBlocks on this rank to be used in array dimensioning
   int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_maxperrank));
 

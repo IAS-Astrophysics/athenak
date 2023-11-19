@@ -34,11 +34,6 @@ Units::Units(ParameterInput *pin) :
 }
 
 //----------------------------------------------------------------------------------------
-//! \brief Units destructor
-Units::~Units() {
-}
-
-//----------------------------------------------------------------------------------------
 // Code scales in cgs units
 Real Units::length_cgs() const { return length_cgs_; }
 Real Units::mass_cgs() const { return mass_cgs_; }

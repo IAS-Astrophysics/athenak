@@ -28,18 +28,18 @@
 // constructor, initializes data structures and parameters
 
 TurbulenceDriver::TurbulenceDriver(MeshBlockPack *pp, ParameterInput *pin) :
-  pmy_pack(pp),
-  force("force",1,1,1,1,1),
-  force_tmp("force_tmp",1,1,1,1,1),
-  xccc("xccc",1),xccs("xccs",1),xcsc("xcsc",1),xcss("xcss",1),
-  xscc("xscc",1),xscs("xscs",1),xssc("xssc",1),xsss("xsss",1),
-  yccc("yccc",1),yccs("yccs",1),ycsc("ycsc",1),ycss("ycss",1),
-  yscc("yscc",1),yscs("yscs",1),yssc("yssc",1),ysss("ysss",1),
-  zccc("zccc",1),zccs("zccs",1),zcsc("zcsc",1),zcss("zcss",1),
-  zscc("zscc",1),zscs("zscs",1),zssc("zssc",1),zsss("zsss",1),
-  kx_mode("kx_mode",1),ky_mode("ky_mode",1),kz_mode("kz_mode",1),
-  xcos("xcos",1,1,1),xsin("xsin",1,1,1),ycos("ycos",1,1,1),
-  ysin("ysin",1,1,1),zcos("zcos",1,1,1),zsin("zsin",1,1,1) {
+    force("force",1,1,1,1,1),
+    force_tmp("force_tmp",1,1,1,1,1),
+    xccc("xccc",1),xccs("xccs",1),xcsc("xcsc",1),xcss("xcss",1),
+    xscc("xscc",1),xscs("xscs",1),xssc("xssc",1),xsss("xsss",1),
+    yccc("yccc",1),yccs("yccs",1),ycsc("ycsc",1),ycss("ycss",1),
+    yscc("yscc",1),yscs("yscs",1),yssc("yssc",1),ysss("ysss",1),
+    zccc("zccc",1),zccs("zccs",1),zcsc("zcsc",1),zcss("zcss",1),
+    zscc("zscc",1),zscs("zscs",1),zssc("zssc",1),zsss("zsss",1),
+    kx_mode("kx_mode",1),ky_mode("ky_mode",1),kz_mode("kz_mode",1),
+    xcos("xcos",1,1,1),xsin("xsin",1,1,1),ycos("ycos",1,1,1),
+    ysin("ysin",1,1,1),zcos("zcos",1,1,1),zsin("zsin",1,1,1),
+    pmy_pack(pp) {
   // allocate memory for force registers
   int nmb = pmy_pack->nmb_thispack;
   auto &indcs = pmy_pack->pmesh->mb_indcs;
@@ -280,8 +280,8 @@ void TurbulenceDriver::Initialize() {
 //  Called by MeshBlockPack::AddPhysics() function
 
 void TurbulenceDriver::IncludeInitializeModesTask(TaskList &tl, TaskID start) {
-  auto id_init = tl.AddTask(&TurbulenceDriver::InitializeModes, this, start);
-  auto id_add = tl.AddTask(&TurbulenceDriver::AddForcing, this, id_init);
+  id.imodes = tl.AddTask(&TurbulenceDriver::InitializeModes, this, start);
+  id.iforce = tl.AddTask(&TurbulenceDriver::AddForcing, this, id.imodes);
   return;
 }
 
@@ -295,15 +295,15 @@ void TurbulenceDriver::IncludeAddForcingTask(TaskList &tl, TaskID start) {
   // These must be inserted after update task, but before send_u
   if (pmy_pack->pionn == nullptr) {
     if (pmy_pack->phydro != nullptr) {
-      auto id = tl.InsertTask(&TurbulenceDriver::AddForcing, this,
+      id.addf = tl.InsertTask(&TurbulenceDriver::AddForcing, this,
                               pmy_pack->phydro->id.flux, pmy_pack->phydro->id.expl);
     }
     if (pmy_pack->pmhd != nullptr) {
-      auto id = tl.InsertTask(&TurbulenceDriver::AddForcing, this,
+      id.addf = tl.InsertTask(&TurbulenceDriver::AddForcing, this,
                               pmy_pack->pmhd->id.flux, pmy_pack->pmhd->id.expl);
     }
   } else {
-    auto id = tl.InsertTask(&TurbulenceDriver::AddForcing, this,
+    id.addf = tl.InsertTask(&TurbulenceDriver::AddForcing, this,
                             pmy_pack->pionn->id.n_flux, pmy_pack->pionn->id.n_expl);
   }
 
@@ -1079,10 +1079,9 @@ TaskStatus TurbulenceDriver::AddForcing(Driver *pdrive, int stage) {
 
         Real dens = u_out.d;
 
-        auto &w = u;
-
-        Real lorentz = sqrt(1. + w.vx*w.vx + w.vy*w.vy + w.vz*w.vz);
-        Real beta = sqrt(w.vx*w.vx + w.vy*w.vy + w.vz*w.vz)/lorentz;
+        //auto &w = u;
+        //Real lorentz = sqrt(1. + w.vx*w.vx + w.vy*w.vy + w.vz*w.vz);
+        //Real beta = sqrt(w.vx*w.vx + w.vy*w.vy + w.vz*w.vz)/lorentz;
 
         u0(m,IDN,k,j,i) = dens;  // *uA_0*(1.-beta*betaA);
 
@@ -1123,10 +1122,9 @@ TaskStatus TurbulenceDriver::AddForcing(Driver *pdrive, int stage) {
 
         Real dens = u_out.d;
 
-        auto &w = u;
-
-        Real lorentz = sqrt(1. + w.vx*w.vx + w.vy*w.vy + w.vz*w.vz);
-        Real beta = sqrt(w.vx*w.vx + w.vy*w.vy + w.vz*w.vz)/lorentz;
+        //auto &w = u;
+        //Real lorentz = sqrt(1. + w.vx*w.vx + w.vy*w.vy + w.vz*w.vz);
+        //Real beta = sqrt(w.vx*w.vx + w.vy*w.vy + w.vz*w.vz)/lorentz;
 
         u0(m,IDN,k,j,i) = dens;  //*uA_0*(1.-beta*betaA);
 

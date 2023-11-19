@@ -37,11 +37,11 @@
 // only after the Mesh constructor has finished
 
 Mesh::Mesh(ParameterInput *pin) :
-  one_d(false),
-  two_d(false),
-  three_d(false),
-  multi_d(false),
-  strictly_periodic(true) {
+    strictly_periodic(true),
+    one_d(false),
+    two_d(false),
+    three_d(false),
+    multi_d(false) {
   // Set physical size and number of cells in mesh (root level)
   mesh_size.x1min = pin->GetReal("mesh", "x1min");
   mesh_size.x1max = pin->GetReal("mesh", "x1max");

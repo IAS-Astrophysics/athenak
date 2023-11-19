@@ -5,6 +5,8 @@
 //========================================================================================
 //! \file radiation_source.cpp
 
+#include <cmath>
+
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
 #include "driver/driver.hpp"
@@ -77,7 +79,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   }
 
   // Extract adiabatic index
-  Real gm1;
+  Real gm1 = nan("");
   if (is_hydro_enabled_) {
     gm1 = pmy_pack->phydro->peos->eos_data.gamma - 1.0;
   } else if (is_mhd_enabled_) {

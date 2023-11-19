@@ -49,13 +49,13 @@ char const * const Z4c::Matter_names[Z4c::nmat] = {
 // constructor, initializes data structures and parameters
 
 Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
-  pmy_pack(ppack),
-  u_con("u_con",1,1,1,1,1),
-  u_mat("u_mat",1,1,1,1,1),
-  u0("u0 z4c",1,1,1,1,1),
-  coarse_u0("coarse u0 z4c",1,1,1,1,1),
-  u1("u1 z4c",1,1,1,1,1),
-  u_rhs("u_rhs z4c",1,1,1,1,1) {
+    u_con("u_con",1,1,1,1,1),
+    u_mat("u_mat",1,1,1,1,1),
+    u0("u0 z4c",1,1,1,1,1),
+    u1("u1 z4c",1,1,1,1,1),
+    u_rhs("u_rhs z4c",1,1,1,1,1),
+    coarse_u0("coarse u0 z4c",1,1,1,1,1),
+    pmy_pack(ppack) {
   // (1) read time-evolution option [already error checked in driver constructor]
   // Then initialize memory and algorithms for reconstruction and Riemann solvers
   std::string evolution_t = pin->GetString("time","evolution");

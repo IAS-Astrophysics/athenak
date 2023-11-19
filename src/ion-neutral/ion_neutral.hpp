@@ -61,7 +61,7 @@ namespace ion_neutral {
 class IonNeutral {
  public:
   IonNeutral(MeshBlockPack *ppack, ParameterInput *pin);
-  ~IonNeutral();
+  ~IonNeutral() = default;
 
   // F = - gamma rho_i rho_n (u_i - u_n) + xi rho_n u_n - alpha rho_i^2 u_i
   // G = xi rho_n - alpha rho_i^2

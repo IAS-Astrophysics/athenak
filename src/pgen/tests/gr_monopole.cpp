@@ -716,7 +716,6 @@ void MonopoleDiagnostic(ParameterInput *pin, Mesh *pm) {
   for (int n=0; n<psph->nangles; ++n) {
     // extract coordinate data at this angle
     Real r = psph->radius;
-    Real theta = psph->polar_pos.h_view(n,0);
     Real x1 = psph->interp_coord.h_view(n,0);
     Real x2 = psph->interp_coord.h_view(n,1);
     Real x3 = psph->interp_coord.h_view(n,2);
@@ -759,7 +758,6 @@ void MonopoleDiagnostic(ParameterInput *pin, Mesh *pm) {
     Real a2 = SQR(spin);
     Real rad2 = SQR(x1)+SQR(x2)+SQR(x3);
     Real r2 = SQR(r);
-    Real sth = sin(theta);
     Real drdx = r*x1/(2.0*r2 - rad2 + a2);
     Real drdy = r*x2/(2.0*r2 - rad2 + a2);
     Real drdz = (r*x3 + a2*x3/r)/(2.0*r2-rad2+a2);

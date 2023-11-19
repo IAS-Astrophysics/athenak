@@ -34,20 +34,20 @@
 // called from Mesh::BuildTree (before physics modules are enrolled)
 
 MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
-  pmy_mesh(pm),
-  refine_flag("rflag",pm->nmb_total),
-  ncyc_since_ref("cyc_since_ref",pm->nmb_total),
-  nmb_created(0),
-  nmb_deleted(0),
-  nmb_sent_thisrank(0),
-  ncyc_check_amr(1),
-  refinement_interval(5),
-  prolong_prims(false),
-  d_threshold_(0.0),
-  dd_threshold_(0.0),
-  dp_threshold_(0.0),
-  dv_threshold_(0.0),
-  check_cons_(false) {
+    nmb_created(0),
+    nmb_deleted(0),
+    nmb_sent_thisrank(0),
+    ncyc_check_amr(1),
+    refinement_interval(5),
+    prolong_prims(false),
+    refine_flag("rflag",pm->nmb_total),
+    ncyc_since_ref("cyc_since_ref",pm->nmb_total),
+    pmy_mesh(pm),
+    d_threshold_(0.0),
+    dd_threshold_(0.0),
+    dp_threshold_(0.0),
+    dv_threshold_(0.0),
+    check_cons_(false) {
   if (pin->DoesBlockExist("mesh_refinement")) {
     // read interval (in cycles) between check of AMR and derefinement
     ncyc_check_amr = pin->GetOrAddReal("mesh_refinement", "ncycle_check", 1);
