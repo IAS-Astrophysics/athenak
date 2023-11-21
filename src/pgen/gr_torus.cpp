@@ -168,7 +168,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   // load opacity table if needed
   // load from file for rank 0 only
-  if(!pmbp->prad->table_opacity){
+  if(pmbp->prad->table_opacity){
       int &ross_table_len_x_ = pmbp->prad->ross_table_len_x;
       int &ross_table_len_y_ = pmbp->prad->ross_table_len_y;
       int &planck_table_len_x_ = pmbp->prad->planck_table_len_x;
