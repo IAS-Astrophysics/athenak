@@ -59,6 +59,10 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
   if (recon_method_ == ReconstructionMethod::ppmx) {
     extrema = true;
   }
+  // Short-circuit the flux calculation if everything is to be fixed.
+  if (fixed_evolution) {
+    return TaskStatus::complete;
+  }
 
   //--------------------------------------------------------------------------------------
   // i-direction
