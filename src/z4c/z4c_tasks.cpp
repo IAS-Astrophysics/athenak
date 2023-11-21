@@ -342,7 +342,7 @@ TaskStatus Z4c::ApplyPhysicalBCs(Driver *pdrive, int stage) {
   // only apply BCs if domain is not strictly periodic
   if (!(pmy_pack->pmesh->strictly_periodic)) {
     // physical BCs
-    pbval_u->Z4cBCs((pmy_pack), (pbval_u->u_in), u0);
+    pbval_u->Z4cBCs((pmy_pack), (pbval_u->u_in), u0, coarse_u0);
 
     // user BCs
     if (pmy_pack->pmesh->pgen->user_bcs) {

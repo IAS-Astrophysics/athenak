@@ -13,30 +13,59 @@
 #include "mesh/mesh.hpp"
 #include "z4c/z4c.hpp"
 
+void BCHelper(MeshBlockPack *ppack, DualArray2D<Real> u_in, DvceArray5D<Real> u0,
+              int is, int ie, int js, int je, int ks, int ke, int n1, int n2, int n3);
+
 //----------------------------------------------------------------------------------------
 // \!fn void BoundaryValues::Z4cBCs()
 // \brief Apply physical boundary conditions for all Z4c variables at faces of MB which
 //  are at the edge of the computational domain
-
 void BoundaryValues::Z4cBCs(MeshBlockPack *ppack, DualArray2D<Real> u_in,
-                            DvceArray5D<Real> u0) {
-  // loop over all MeshBlocks in this MeshBlockPack
+                            DvceArray5D<Real> u0, DvceArray5D<Real> coarse_u0) {
   auto &pm = ppack->pmesh;
   auto &indcs = ppack->pmesh->mb_indcs;
   int &ng = indcs.ng;
-  auto &mb_bcs = ppack->pmb->mb_bcs;
-
+  
   int n1 = indcs.nx1 + 2*ng;
   int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
   int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
+  int is = indcs.is;
+  int ie = indcs.ie;
+  int js = indcs.js;
+  int je = indcs.je;
+  int ks = indcs.ks;
+  int ke = indcs.ke;
+
+  BCHelper(ppack, u_in, u0, is, ie, js, je, ks, ke, n1, n2, n3);
+  if (pm->multilevel) {
+    int cn1 = indcs.cnx1 + 2*ng;
+    int cn2 = (indcs.cnx2 > 1)? (indcs.cnx2 + 2*ng) : 1;
+    int cn3 = (indcs.cnx3 > 1)? (indcs.cnx3 + 2*ng) : 1;
+    int cis = indcs.cis;
+    int cie = indcs.cie;
+    int cjs = indcs.cjs;
+    int cje = indcs.cje;
+    int cks = indcs.cks;
+    int cke = indcs.cke;
+    BCHelper(ppack, u_in, coarse_u0, cis, cie, cjs, cje, cks, cke, cn1, cn2, cn3);
+  }
+}
+
+//void BoundaryValues::Z4cBCs(MeshBlockPack *ppack, DualArray2D<Real> u_in,
+//                            DvceArray5D<Real> u0) {
+void BCHelper(MeshBlockPack *ppack, DualArray2D<Real> u_in, DvceArray5D<Real> u0,
+              int is, int ie, int js, int je, int ks, int ke, int n1, int n2, int n3) {
+  // loop over all MeshBlocks in this MeshBlockPack
+  auto &pm = ppack->pmesh;
+  int &ng = ppack->pmesh->mb_indcs.ng;
+  auto &mb_bcs = ppack->pmb->mb_bcs;
+
   int nvar = u0.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
   int nmb = ppack->nmb_thispack;
 
   // only apply BCs unless periodic or shear_periodic
   if (pm->mesh_bcs[BoundaryFace::inner_x1] != BoundaryFlag::periodic
       && pm->mesh_bcs[BoundaryFace::inner_x1] != BoundaryFlag::shear_periodic) {
-    int &is = indcs.is;
-    int &ie = indcs.ie;
     par_for("z4cbc_x1", DevExeSpace(), 0,(nmb-1),0,(nvar-1),0,(n3-1),0,(n2-1),
     KOKKOS_LAMBDA(int m, int n, int k, int j) {
       // apply physical boundaries to inner_x1
@@ -101,8 +130,6 @@ void BoundaryValues::Z4cBCs(MeshBlockPack *ppack, DualArray2D<Real> u_in,
 
   // only apply BCs if not periodic
   if (pm->mesh_bcs[BoundaryFace::inner_x2] != BoundaryFlag::periodic) {
-    int &js = indcs.js;
-    int &je = indcs.je;
     par_for("z4cbc_x2", DevExeSpace(), 0,(nmb-1),0,(nvar-1),0,(n3-1),0,(n1-1),
     KOKKOS_LAMBDA(int m, int n, int k, int i) {
       // apply physical boundaries to inner_x2
@@ -166,8 +193,6 @@ void BoundaryValues::Z4cBCs(MeshBlockPack *ppack, DualArray2D<Real> u_in,
 
   // only apply BCs if not periodic
   if (pm->mesh_bcs[BoundaryFace::inner_x3] == BoundaryFlag::periodic) return;
-  int &ks = indcs.ks;
-  int &ke = indcs.ke;
   par_for("z4cbc_x3", DevExeSpace(), 0,(nmb-1),0,(nvar-1),0,(n2-1),0,(n1-1),
   KOKKOS_LAMBDA(int m, int n, int j, int i) {
     // apply physical boundaries to inner_x3
