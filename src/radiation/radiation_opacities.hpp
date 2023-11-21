@@ -37,7 +37,7 @@ void OpacityFunction(const Real dens, const Real density_scale,
 KOKKOS_INLINE_FUNCTION
 void GetArrayLocation(const Real value, const DualArray1D<Real> &in_arr,
                       int &loc_l, int &loc_r){
-  int arr_size = in_arr.extent_int(1) - 1;
+  int arr_size = in_arr.extent_int(0) - 1;
 
   loc_l = 0;
   loc_r = 0;
@@ -125,10 +125,10 @@ void TableOpacity(const Real dens, const Real density_scale,
   }
   // get the length of rho array and t array
 
-  int dim_x = ross_rho.extent_int(1);
-  int dim_y = ross_t.extent_int(1);
+  int dim_x = ross_rho.extent_int(0);
+  int dim_y = ross_t.extent_int(0);
   int dim_ross_tab_x = ross_table.extent_int(1);
-  int dim_ross_tab_y = ross_table.extent_int(2);
+  int dim_ross_tab_y = ross_table.extent_int(0);
 
 
   // get rosseland mean opacity
