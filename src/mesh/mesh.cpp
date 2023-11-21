@@ -328,7 +328,7 @@ void Mesh::PrintMeshDiagnostics() {
   if ((max_level - root_level) > 1) {
     int nb_per_plevel[max_level];      // NOLINT(runtime/arrays)
     float cost_per_plevel[max_level];  // NOLINT(runtime/arrays)
-    for (int i=0; i<=max_level; ++i) {
+    for (int i=0; i<max_level; ++i) {
       nb_per_plevel[i] = 0;
       cost_per_plevel[i] = 0.0;
     }
