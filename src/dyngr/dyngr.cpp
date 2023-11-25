@@ -252,6 +252,9 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::PrimToConInit(int is, int ie, int js, int 
                                                     int ks, int ke) {
   eos.PrimToCons(pmy_pack->pmhd->w0, pmy_pack->pmhd->bcc0, pmy_pack->pmhd->u0,
                  is, ie, js, je, ks, ke);
+  fixed_evolution = false;
+  SetTmunu(nullptr, 0);
+  fixed_evolution = true;
 }
 
 //----------------------------------------------------------------------------------------
@@ -396,6 +399,9 @@ TaskStatus DynGR::ApplyPhysicalBCs(Driver *pdrive, int stage) {
 //! \brief Add the perfect fluid contribution to the stress-energy tensor. This is assumed
 //!  to be the first contribution, so it sets the values rather than adding.
 TaskStatus DynGR::SetTmunu(Driver *pdrive, int stage) {
+  if (fixed_evolution) {
+    return TaskStatus::complete;
+  }
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   //auto &size  = pmy_pack->pmb->mb_size;
   int &is = indcs.is; int &ie = indcs.ie;
@@ -431,7 +437,7 @@ TaskStatus DynGR::SetTmunu(Driver *pdrive, int stage) {
         v_d[a] += prim(m, IVX + b, k, j, i)*adm.g_dd(m, a, b, k, j, i);
         iW += prim(m, IVX + a, k, j, i)*prim(m, IVX + b, k, j, i) *
                 adm.g_dd(m, a, b, k, j, i);
-        B_d[a] += bcc(m, a, k, j, i)*adm.g_dd(m, a, b, k, j, i)*ivol;
+        B_d[a] += bcc(m, b, k, j, i)*adm.g_dd(m, a, b, k, j, i)*ivol;
       }
     }
     iW = 1.0/sqrt(1. + iW);
@@ -441,6 +447,7 @@ TaskStatus DynGR::SetTmunu(Driver *pdrive, int stage) {
       Bv += bcc(m, a, k, j, i) * v_d[a]*ivol;
       Bsq += bcc(m, a, k, j, i) * B_d[a];
     }
+    Real bsq = (Bsq + Bv*Bv)*(iW*iW);
 
     tmunu.E(m, k, j, i) = (cons(m, IEN, k, j, i) + cons(m, IDN, k, j, i))*ivol;
     for (int a = 0; a < 3; ++a) {
@@ -449,8 +456,7 @@ TaskStatus DynGR::SetTmunu(Driver *pdrive, int stage) {
         tmunu.S_dd(m, a, b, k, j, i) =
               cons(m, IM1 + a, k, j, i)*ivol*v_d[b]*iW
               - (B_d[a] + Bv*v_d[a])*SQR(iW)*B_d[b]
-              + (prim(m, IPR, k, j, i) + 0.5*(Bsq + Bv*Bv)*(iW*iW))
-                *adm.g_dd(m, a, b, k, j, i);
+              + (prim(m, IPR, k, j, i) + 0.5*bsq)*adm.g_dd(m, a, b, k, j, i);
       }
     }
   });
