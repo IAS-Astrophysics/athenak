@@ -252,9 +252,11 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::PrimToConInit(int is, int ie, int js, int 
                                                     int ks, int ke) {
   eos.PrimToCons(pmy_pack->pmhd->w0, pmy_pack->pmhd->bcc0, pmy_pack->pmhd->u0,
                  is, ie, js, je, ks, ke);
-  fixed_evolution = false;
-  SetTmunu(nullptr, 0);
-  fixed_evolution = true;
+  if (pmy_pack->ptmunu != nullptr) {
+    fixed_evolution = false;
+    SetTmunu(nullptr, 0);
+    fixed_evolution = true;
+  }
 }
 
 //----------------------------------------------------------------------------------------
