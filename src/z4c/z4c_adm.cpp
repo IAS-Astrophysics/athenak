@@ -381,10 +381,12 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     //
     for(int a = 0; a < 3; ++a) {
       M_u(a) = 0.0;
-      for(int b = 0; b < 3; ++b)
-      for(int c = 0; c < 3; ++c) {
-        M_u(a) += g_uu(a,b) * DK_udd(c,b,c);
-        M_u(a) -= g_uu(b,c) * DK_udd(a,b,c);
+      for(int b = 0; b < 3; ++b) {
+        M_u(a) -= 8*M_PI * g_uu(a,b) * tmunu.S_d(m,b,k,j,i);
+        for(int c = 0; c < 3; ++c) {
+          M_u(a) += g_uu(a,b) * DK_udd(c,b,c);
+          M_u(a) -= g_uu(b,c) * DK_udd(a,b,c);
+        }
       }
     }
 
@@ -393,7 +395,6 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
       for(int b = 0; b < 3; ++b) {
         con.M_d(m,a,k,j,i) += adm.g_dd(m,a,b,k,j,i) * M_u(b);
       }
-      con.M_d(m,a,k,j,i) -= 8.*M_PI * tmunu.S_d(m,a,k,j,i);
     }
 
     // Momentum constraint (norm squared)

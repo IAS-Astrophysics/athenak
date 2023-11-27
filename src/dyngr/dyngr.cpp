@@ -447,7 +447,7 @@ TaskStatus DynGR::SetTmunu(Driver *pdrive, int stage) {
     Real Bsq = 0.;
     for (int a = 0; a < 3; ++a) {
       Bv += bcc(m, a, k, j, i) * v_d[a]*ivol;
-      Bsq += bcc(m, a, k, j, i) * B_d[a];
+      Bsq += bcc(m, a, k, j, i) * B_d[a]*ivol;
     }
     Real bsq = (Bsq + Bv*Bv)*(iW*iW);
 

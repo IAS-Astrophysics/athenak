@@ -437,7 +437,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     // -----------------------------------------------------------------------------------
     // Hamiltonian constraint
     //
-    Ht = R + (2./3.)*SQR(K) - AA - 16.*M_PI*tmunu.E(m,k,j,i);
+    Ht = R + (2./3.)*SQR(K) - AA;// - 16.*M_PI*tmunu.E(m,k,j,i);
 
     // -----------------------------------------------------------------------------------
     // Finalize advective (Lie) derivatives
@@ -499,6 +499,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
         0.5*Ht - (2. + opt.damp_kappa2) * opt.damp_kappa1 * z4c.vTheta(m,k,j,i));
     // Matter commented out -- JMF: this is already in the Hamiltonian constraint.
     //rhs.Theta(m,k,j,i) -= 8.*M_PI * z4c.alpha(m,k,j,i) * mat.rho(m,k,j,i);
+    rhs.vTheta(m,k,j,i) -= 8.*M_PI * z4c.alpha(m,k,j,i) * tmunu.E(m,k,j,i);
     // Gamma's
     for(int a = 0; a < 3; ++a) {
       rhs.vGam_u(m,a,k,j,i) = 2.*z4c.alpha(m,k,j,i)*DA_u(a) + LGam_u(a);
