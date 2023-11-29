@@ -48,7 +48,6 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
   int &nmb = pmy_pack->nmb_thispack;
   auto &fofc_ = pmy_pack->pmhd->fofc;
   auto &entropy_fix_   = pmy_pack->pmhd->entropy_fix;
-  auto &beta_cold_min_ = pmy_pack->pmhd->beta_cold_min;
   auto c2p_test_ = pmy_pack->pmhd->c2p_test;
   int entropyIdx = (entropy_fix_) ? nmhd+nscal-1 : -1;
   auto eos = eos_data;
@@ -150,18 +149,56 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
 
       // apply entropy fix
       if (entropy_fix_) {
-        Real beta_cold = (eos.gamma-1)*w.e / (0.5*(SQR(u.bx)+SQR(u.by)+SQR(u.bz)));
-        if (beta_cold < beta_cold_min_) {
-          HydPrim1D w_old;
+        if (dfloor_used || efloor_used || c2p_failure) {
+          bool dfloor_used_in_fix=false, efloor_used_in_fix=false;
+          bool c2p_failure_in_fix=c2p_failure;
+          int iter_used_in_fix=0;
+          HydPrim1D w_old, w_fix;
           w_old.d  = prim(m,IDN,k,j,i);
           w_old.vx = prim(m,IVX,k,j,i);
           w_old.vy = prim(m,IVY,k,j,i);
           w_old.vz = prim(m,IVZ,k,j,i);
           w_old.e  = prim(m,IEN,k,j,i);
+          w_fix.d  = w.d;
+          w_fix.vx = w.vx;
+          w_fix.vy = w.vy;
+          w_fix.vz = w.vz;
+          w_fix.e  = w.e;
           Real &s_tot = cons(m,entropyIdx,k,j,i);
-          SingleC2P_IdealSRMHD_EntropyFix(u_sr, s_tot, eos, s2, b2, rpar, w, w_old,
-                                          dfloor_used, efloor_used, c2p_failure, iter_used);
-        }
+          SingleC2P_IdealSRMHD_EntropyFix(u_sr, s_tot, eos, s2, b2, rpar, w_fix, w_old,
+                                          dfloor_used_in_fix, efloor_used_in_fix,
+                                          c2p_failure_in_fix, iter_used_in_fix);
+          if (c2p_failure_in_fix) {
+            // fail entropy-fixed c2p
+            if (c2p_failure) {
+              // use the old values if fail original c2p
+              w.d  = w_old.d;
+              w.vx = w_old.vx;
+              w.vy = w_old.vy;
+              w.vz = w_old.vz;
+              w.e  = w_old.e;
+            }
+          } else {
+            // successful entropy-fixed c2p
+            w.e = w_fix.e;
+            efloor_used = efloor_used_in_fix;
+
+            if (dfloor_used) {
+              w.d  = w_fix.d;
+              dfloor_used = dfloor_used_in_fix;
+            }
+
+            if (c2p_failure) {
+              // fail original c2p
+              w.vx = w_fix.vx;
+              w.vy = w_fix.vy;
+              w.vz = w_fix.vz;
+            }
+
+            c2p_failure = c2p_failure_in_fix;
+            iter_used = iter_used_in_fix;
+          } // endelse
+        } // endif (dfloor_used || efloor_used || c2p_failure)
       } // endif entropy_fix_
 
       // apply velocity ceiling if necessary

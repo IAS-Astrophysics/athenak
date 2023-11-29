@@ -112,7 +112,6 @@ class MHD {
   // following only used for entropy fix
   bool entropy_fix = false;
   bool c2p_test = false;
-  Real beta_cold_min;
 
   // container to hold names of TaskIDs
   MHDTaskIDs id;

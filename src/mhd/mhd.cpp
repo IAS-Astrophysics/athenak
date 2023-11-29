@@ -118,7 +118,6 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   if (pin->DoesParameterExist("mhd","entropy_fix")) {
     if (pmy_pack->pcoord->is_general_relativistic) {
       entropy_fix = pin->GetBoolean("mhd","entropy_fix");
-      beta_cold_min = pin->GetOrAddReal("mhd","beta_cold_min", 1.e-4);
     } else {
       std::cout <<"### FATAL ERROR in "<< __FILE__ <<" at line "<< __LINE__ << std::endl
                 <<"<mhd> entropy fix only works in general relativity"<< std::endl;
