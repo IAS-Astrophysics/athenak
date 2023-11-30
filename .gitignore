@@ -1,5 +1,7 @@
 # build directories
 build/
+build2/
+build3/
 
 # Athena output files
 *.tab
