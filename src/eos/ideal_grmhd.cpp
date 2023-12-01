@@ -190,9 +190,9 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
 
             if (c2p_failure) {
               // fail original c2p
-              w.vx = w_fix.vx;
-              w.vy = w_fix.vy;
-              w.vz = w_fix.vz;
+              w.vx = w_old.vx;
+              w.vy = w_old.vy;
+              w.vz = w_old.vz;
             }
 
             c2p_failure = c2p_failure_in_fix;
