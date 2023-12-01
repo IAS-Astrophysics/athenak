@@ -556,8 +556,9 @@ void SingleC2P_IdealSRMHD_EntropyFix(MHDCons1D &u, Real& s_tot, const EOS_Data &
     u3_ = w_old.vz;
   }
   gamma_ = sqrt(1+SQR(u1_)+SQR(u2_)+SQR(u3_));
-  rho_   = u.d/gamma_;
+  rho_   = fmax(u.d/gamma_, eos.dfloor);
   pgas_  = s_tot * pow(u.d, gm1) / pow(gamma_, gm1+1);
+  pgas_  = fmax(pgas_, eos.pfloor);
   ll_ = u.d*gamma_ + (gm1+1)/gm1 * pgas_ * SQR(gamma_);
   if (isfinite(ll_) && (ll_ > 0)
       && isfinite(rho_) && (rho_ > 0)

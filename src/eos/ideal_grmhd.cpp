@@ -180,14 +180,10 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
             // }
           } else {
             // successful entropy-fixed c2p
+            w.d = w_fix.d;
             w.e = w_fix.e;
+            dfloor_used = dfloor_used_in_fix;
             efloor_used = efloor_used_in_fix;
-
-            // if (dfloor_used) {
-            //   w.d  = w_fix.d;
-            //   dfloor_used = dfloor_used_in_fix;
-            // }
-            //
             // if (c2p_failure) {
             //   // fail original c2p
             //   w.vx = w_fix.vx;
