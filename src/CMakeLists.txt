@@ -153,5 +153,10 @@ endif()
 # enable include of header files with /src/ as root of path
 target_include_directories(athena PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
+# Append the GSL library paths from LD_LIBRARY_PATH
+list(APPEND CMAKE_PREFIX_PATH
+    /storage/icds/RISE/sw8/gsl-2.7.1
+)
+
 find_package(GSL)
 target_link_libraries(athena PUBLIC ${GSL_LIBRARIES})
