@@ -38,16 +38,22 @@ void RadiationFEMN::AssembleRadiationFEMNTasks(TaskList &start, TaskList &run, T
 
   // assemble run task list
   id.copycons = run.AddTask(&RadiationFEMN::CopyCons, this, none);
-  id.rad_flux = run.AddTask(&RadiationFEMN::CalculateFluxes, this, id.copycons);
+  id.rad_tetrad = run.AddTask(&RadiationFEMN::CalculateFluxes, this, id.copycons);
+  id.rad_flux = run.AddTask(&RadiationFEMN::TetradOrthogonalize, this, id.rad_tetrad);
   id.rad_sendf = run.AddTask(&RadiationFEMN::SendFlux, this, id.rad_flux);
   id.rad_recvf = run.AddTask(&RadiationFEMN::RecvFlux, this, id.rad_sendf);
   id.rad_expl = run.AddTask(&RadiationFEMN::ExpRKUpdate, this, id.rad_recvf);
-  id.rad_src = run.AddTask(&RadiationFEMN::AddRadiationSourceTerm, this, id.rad_expl);
+
+  if(beam_source && !fpn) {
+    id.rad_src = run.AddTask(&RadiationFEMN::BeamsSourcesFEMN, this, id.rad_expl);
+  } else {
+    id.rad_src = id.rad_expl;
+  }
 
   if (limiter_dg == "minmod2") {
-    id.rad_limdg = run.AddTask(&RadiationFEMN::ApplyLimiterDG, this, id.rad_expl);
+    id.rad_limdg = run.AddTask(&RadiationFEMN::ApplyLimiterDG, this, id.rad_src);
   } else {
-    id.rad_limdg = id.rad_expl;
+    id.rad_limdg = id.rad_src;
   }
 
   if (!fpn && limiter_fem == "clp") {

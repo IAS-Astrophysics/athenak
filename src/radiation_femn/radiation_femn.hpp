@@ -11,6 +11,7 @@
 //  \brief definitions for Radiation FEM_N class
 
 #include "athena.hpp"
+#include "athena_tensor.hpp"
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
 #include "bvals/bvals.hpp"
@@ -26,6 +27,7 @@ class Driver;
 struct RadiationFEMNTaskIDs {
   TaskID rad_irecv;
   TaskID copycons;
+  TaskID rad_tetrad;
   TaskID rad_flux;
   TaskID rad_sendf;
   TaskID rad_recvf;
@@ -69,7 +71,8 @@ class RadiationFEMN {
   int num_edges;                  // number of unique edges
   int num_triangles;              // number of unique triangular elements
   int basis;                      // choice of basis functions on the geodesic grid (1: tent - FEM_N)
-  bool mass_lumping;               // flag for mass lumping
+  bool mass_lumping;              // flag for mass lumping
+  bool m1_flag;                   // flag for M1
   std::string limiter_dg;         // choice of limiter for DG, set to "minmod2" by default
   std::string limiter_fem;        // choice of limiter for FEM, set to "clp" by default (FEM_N)
   bool fpn;                       // flag to enable/disable FP_N, disabled by default (FP_N)
@@ -79,6 +82,15 @@ class RadiationFEMN {
   bool rad_source;                // flag to enable/disable source terms for radiation, disabled by default
   bool beam_source;               // flag to enable/disable beam sources, disabled by default
 
+  int num_beams;                  // number of beams, defaults to zero
+  Real beam_source_1_a;
+  Real beam_source_1_b;
+  Real beam_source_2_a;
+  Real beam_source_2_b;
+  std::string beam_source_1_pos;
+  std::string beam_source_2_pos;
+
+  Real energy_par = 1.;
   // ---------------------------------------------------------------------------
   // arrays for numerical quadratures
   // ---------------------------------------------------------------------------
@@ -124,7 +136,7 @@ class RadiationFEMN {
   DvceArray6D<Real> g_dd;         // placeholder for spatial metric
   DvceArray4D<Real> sqrt_det_g;   // square root of determinant of matrix
   DvceArray5D<Real> u_mu;         // placeholder for fluid velocity in lab frame
-  DvceArray6D<Real> Gamma;        // Christoeffel symbol in lab frame
+
   // ---------------------------------------------------------------------------
   // arrays for source terms
   // ---------------------------------------------------------------------------
@@ -162,7 +174,8 @@ class RadiationFEMN {
   TaskStatus ApplyLimiterFEM(Driver *pdrive, int stage);
   TaskStatus ApplyFilterLanczos(Driver *pdriver, int stage);
   TaskStatus AddRadiationSourceTerm(Driver *d, int stage);
-  void AddBeamSource(DvceArray5D<Real> &i0);
+  TaskStatus TetradOrthogonalize(Driver *pdriver, int stage);
+  TaskStatus BeamsSourcesFEMN(Driver *pdriver, int stage);
   TaskStatus RestrictI(Driver *d, int stage);
   TaskStatus SendI(Driver *d, int stage);
   TaskStatus RecvI(Driver *d, int stage);
@@ -175,18 +188,22 @@ class RadiationFEMN {
   // ---------------------------------------------------------------------------
 
   // ---------------------------------------------------------------------------
+  void ApplyClosure(TeamMember_t member, int num_points, int m, int en, int kk, int jj, int ii, DvceArray5D<Real> f, ScrArray1D<Real> f_scratch);
+  // ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   // Structures/functions for the internal index conversion
   int num_points_total;
   RadiationFEMNPhaseIndices IndicesComponent(int n);
   RadiationFEMNPhaseIndices IndicesUnified(int eindex, int angindex);
-  
+
   // ---------------------------------------------------------------------------
   // Functions for angular matrices & tetrad
   void LoadFEMNMatrices();
   void LoadFPNMatrices();
   void ComputePMatrices();
   void ComputeSourceMatrices();
-  void TetradInitialize();
+  void AddBeams();
+
   // ---------------------------------------------------------------------------
   // Functions for closures
 
@@ -198,7 +215,7 @@ class RadiationFEMN {
 void LUDecomposition(DvceArray2D<Real> square_matrix, DvceArray2D<Real> lu_matrix, DvceArray1D<int> pivot_indices);
 void LUSolve(DvceArray2D<Real> lu_matrix, DvceArray1D<int> pivot_indices, DvceArray1D<Real> b_array, DvceArray1D<Real> x_array);
 void LUInverse(DvceArray2D<Real> A_matrix, DvceArray2D<Real> A_matrix_inverse);
-void MatMultiply(HostArray2D <Real> A_matrix, HostArray2D <Real> B_matrix, HostArray2D <Real> result);
+void MatMultiply(HostArray2D<Real> A_matrix, HostArray2D<Real> B_matrix, HostArray2D<Real> result);
 void MatMultiplyComplex(std::vector<std::vector<std::complex<Real>>> &A_matrix,
                         std::vector<std::vector<std::complex<Real>>> &B_matrix,
                         std::vector<std::vector<std::complex<Real>>> &result);
@@ -206,10 +223,9 @@ void MatLumping(DvceArray2D<Real> A_matrix);
 void MatEig(std::vector<std::vector<Real>> &matrix, std::vector<std::complex<Real>> &eigval, std::vector<std::vector<std::complex<Real>>> &eigvec);
 void ZeroSpeedCorrection(HostArray2D<Real> matrix, HostArray2D<Real> matrix_corrected, Real v);
 
-KOKKOS_INLINE_FUNCTION
-void ApplyClosure(TeamMember_t member, int num_points, int m, int en, int kk, int jj, int ii, DvceArray5D<Real> f0, ScrArray1D<Real> f0_scratch, ScrArray1D<Real> f0_scratch_p1,
-                                         ScrArray1D<Real> f0_scratch_p2, ScrArray1D<Real> f0_scratch_p3, ScrArray1D<Real> f0_scratch_m1,
-                                         ScrArray1D<Real> f0_scratch_m2);
+void ApplyM1Closure(TeamMember_t member, int num_points, int m, int en, int kk, int jj, int ii, DvceArray5D<Real> f, ScrArray1D<Real> f_scratch);
+void ApplyFEMNFPNClosure(TeamMember_t member, int num_points, int m, int en, int kk, int jj, int ii, DvceArray5D<Real> f, ScrArray1D<Real> f_scratch);
+
 } // namespace radiationfemn
 
 

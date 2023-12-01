@@ -74,6 +74,7 @@ TaskStatus RadiationFEMN::ApplyLimiterFEM(Driver *pdriver, int stage) {
   auto &mbsize = pmy_pack->pmb->mb_size;
   auto &f0_ = f0;
   auto &energy_grid_ = pmy_pack->pradfemn->energy_grid;
+  auto &e_source_nominv_ = pmy_pack->pradfemn->e_source_nominv;
   auto &mm_ = mass_matrix;
   auto &etemp0_ = etemp0;
   auto &etemp1_ = etemp1;
@@ -84,22 +85,47 @@ TaskStatus RadiationFEMN::ApplyLimiterFEM(Driver *pdriver, int stage) {
   assert(num_energy_bins == 1);
 
   // @TODO: Add energy dependence (later)
-  par_for("radiation_femn_etemp_calculate", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie, 0, nengang1, 0, nengang1,
-          KOKKOS_LAMBDA(const int m, const int k, const int j, const int i, const int B, const int enang) {
-              int en = int(enang / num_points);
-              int A = enang - en * num_points;
-              auto Sen = (pow(energy_grid_(en + 1), 4) - pow(energy_grid_(en), 4)) / 4.0;
+  int scr_level = 0;
+    int scr_size = 1;
+    par_for_outer("rad_femn_E_compute_femn", DevExeSpace(), scr_size, scr_level, 0, nmb1, ks, ke, js, je, is, ie,
+                  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j, const int i) {
 
-              etemp0_(m, k, j, i) += Sen * mm_(B, A) * f0_(m, A, k, j, i);
-              etemp1_(m, k, j, i) += Sen * mm_(B, A) * fmax(f0_(m, A, k, j, i), 0.0);
-          });
+                    Real temp_sum = 0.;
+                    Kokkos::parallel_reduce(Kokkos::TeamThreadRange(member, 0, num_energy_bins), [=](const int en, Real &partial_sum) {
+                      Real Sen = (pow(energy_grid_(en + 1), 4) - pow(energy_grid_(en), 4)) / 4.0;
+
+                      Real temp_sum_angle = 0.;
+                      Kokkos::parallel_reduce(Kokkos::ThreadVectorRange(member, 0, num_points), [=](const int A, Real &partial_sum_angle) {
+                        partial_sum_angle += e_source_nominv_(A) * f0_(m, en * num_energy_bins + A, k, j, i);
+                      }, temp_sum_angle);
+                      member.team_barrier();
+
+                      partial_sum += Sen * temp_sum_angle;
+                    }, temp_sum);
+
+                    Real temp_sum_2 = 0.;
+                    Kokkos::parallel_reduce(Kokkos::TeamThreadRange(member, 0, num_energy_bins), [=](const int en, Real &partial_sum) {
+                      Real Sen = (pow(energy_grid_(en + 1), 4) - pow(energy_grid_(en), 4)) / 4.0;
+
+                      Real temp_sum_angle = 0.;
+                      Kokkos::parallel_reduce(Kokkos::ThreadVectorRange(member, 0, num_points), [=](const int A, Real &partial_sum_angle) {
+                        partial_sum_angle += e_source_nominv_(A) *  fmax(f0_(m, en * num_energy_bins + A, k, j, i), 0.0);
+                      }, temp_sum_angle);
+                      member.team_barrier();
+
+                      partial_sum += Sen * temp_sum_angle;
+                    }, temp_sum_2);
+
+                    etemp0_(m, k, j, i) = temp_sum;
+                    etemp1_(m, k, j, i) = temp_sum_2;
+                  });
 
   par_for("radiation_femn_limiter_clp", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie, 0, nengang1,
           KOKKOS_LAMBDA(const int m, const int k, const int j, const int i, const int A) {
-              auto theta = (etemp0_(m, k, j, i) > 0 && etemp1_(m, k, j, i) != 0) ? (etemp0_(m, k, j, i) /
-                                                                                    etemp1_(m, k, j, i)) : 0.0;
+            auto theta = (etemp0_(m, k, j, i) > 0 && etemp1_(m, k, j, i) != 0) ? (etemp0_(m, k, j, i) /
+                etemp1_(m, k, j, i)) : 0.0;
 
-              f0_(m, A, k, j, i) = theta * fmax(f0_(m, A, k, j, i), 0.0);
+            f0_(m, A, k, j, i) = theta * fmax(f0_(m, A, k, j, i), 0.0);
 
           });
 
@@ -165,10 +191,14 @@ TaskStatus RadiationFEMN::ApplyLimiterDG(Driver *pdriver, int stage) {
               auto ii = 2 * i - 2;
 
               auto f0_cellavg = (0.25) * (f0_(m, enang, kk, jj, ii) + f0_(m, enang, kk, jj, ii + 1) + f0_(m, enang, kk, jj + 1, ii) + f0_(m, enang, kk, jj + 1, ii + 1));
-              auto f0_cellavg_mx = (0.25) * (f0_(m, enang, kk, jj, ii - 2) + f0_(m, enang, kk, jj, ii - 1) + f0_(m, enang, kk, jj + 1, ii - 2) + f0_(m, enang, kk, jj + 1, ii - 1));
-              auto f0_cellavg_px = (0.25) * (f0_(m, enang, kk, jj, ii + 2) + f0_(m, enang, kk, jj, ii + 3) + f0_(m, enang, kk, jj + 1, ii + 2) + f0_(m, enang, kk, jj + 1, ii + 3));
-              auto f0_cellavg_my = (0.25) * (f0_(m, enang, kk, jj - 2, ii) + f0_(m, enang, kk, jj - 2, ii + 1) + f0_(m, enang, kk, jj - 1, ii) + f0_(m, enang, kk, jj - 1, ii + 1));
-              auto f0_cellavg_py = (0.25) * (f0_(m, enang, kk, jj + 2, ii) + f0_(m, enang, kk, jj + 2, ii + 1) + f0_(m, enang, kk, jj + 3, ii) + f0_(m, enang, kk, jj + 3, ii + 1));
+              auto f0_cellavg_mx =
+                  (0.25) * (f0_(m, enang, kk, jj, ii - 2) + f0_(m, enang, kk, jj, ii - 1) + f0_(m, enang, kk, jj + 1, ii - 2) + f0_(m, enang, kk, jj + 1, ii - 1));
+              auto f0_cellavg_px =
+                  (0.25) * (f0_(m, enang, kk, jj, ii + 2) + f0_(m, enang, kk, jj, ii + 3) + f0_(m, enang, kk, jj + 1, ii + 2) + f0_(m, enang, kk, jj + 1, ii + 3));
+              auto f0_cellavg_my =
+                  (0.25) * (f0_(m, enang, kk, jj - 2, ii) + f0_(m, enang, kk, jj - 2, ii + 1) + f0_(m, enang, kk, jj - 1, ii) + f0_(m, enang, kk, jj - 1, ii + 1));
+              auto f0_cellavg_py =
+                  (0.25) * (f0_(m, enang, kk, jj + 2, ii) + f0_(m, enang, kk, jj + 2, ii + 1) + f0_(m, enang, kk, jj + 3, ii) + f0_(m, enang, kk, jj + 3, ii + 1));
 
               auto dminusx = (f0_cellavg - f0_cellavg_mx) / (2.0 * mbsize.d_view(m).dx1);
               auto dplusx = (f0_cellavg_px - f0_cellavg) / (2.0 * mbsize.d_view(m).dx1);
@@ -214,20 +244,25 @@ TaskStatus RadiationFEMN::ApplyLimiterDG(Driver *pdriver, int stage) {
               auto ii = 2 * i - 2;
 
               auto f0_cellavg = (1.0 / 8.0)
-                  * (f0_(m, enang, kk, jj, ii) + f0_(m, enang, kk, jj, ii + 1) + f0_(m, enang, kk, jj + 1, ii) + f0_(m, enang, kk, jj + 1, ii + 1) + f0_(m, enang, kk + 1, jj, ii)
+                  * (f0_(m, enang, kk, jj, ii) + f0_(m, enang, kk, jj, ii + 1) + f0_(m, enang, kk, jj + 1, ii) + f0_(m, enang, kk, jj + 1, ii + 1)
+                      + f0_(m, enang, kk + 1, jj, ii)
                       + f0_(m, enang, kk + 1, jj, ii + 1) + f0_(m, enang, kk + 1, jj + 1, ii) + f0_(m, enang, kk + 1, jj + 1, ii + 1));
               auto f0_cellavg_mx =
                   (1.0 / 8.0) * (f0_(m, enang, kk, jj, ii - 2) + f0_(m, enang, kk, jj, ii - 1) + f0_(m, enang, kk, jj + 1, ii - 2) + f0_(m, enang, kk, jj + 1, ii - 1)
-                      + f0_(m, enang, kk + 1, jj, ii - 2) + f0_(m, enang, kk + 1, jj, ii - 1) + f0_(m, enang, kk + 1, jj + 1, ii - 2) + f0_(m, enang, kk + 1, jj + 1, ii - 1));
+                      + f0_(m, enang, kk + 1, jj, ii - 2) + f0_(m, enang, kk + 1, jj, ii - 1) + f0_(m, enang, kk + 1, jj + 1, ii - 2)
+                      + f0_(m, enang, kk + 1, jj + 1, ii - 1));
               auto f0_cellavg_px = (1.0 / 8.0)
                   * (f0_(m, enang, kk, jj, ii + 2) + f0_(m, enang, kk, jj, ii + 3) + f0_(m, enang, kk, jj + 1, ii + 2) + f0_(m, enang, kk, jj + 1, ii + 3)
-                      + f0_(m, enang, kk + 1, jj, ii + 2) + f0_(m, enang, kk + 1, jj, ii + 3) + f0_(m, enang, kk + 1, jj + 1, ii + 2) + f0_(m, enang, kk + 1, jj + 1, ii + 3));
+                      + f0_(m, enang, kk + 1, jj, ii + 2) + f0_(m, enang, kk + 1, jj, ii + 3) + f0_(m, enang, kk + 1, jj + 1, ii + 2)
+                      + f0_(m, enang, kk + 1, jj + 1, ii + 3));
               auto f0_cellavg_my = (1.0 / 8.0)
                   * (f0_(m, enang, kk, jj - 2, ii) + f0_(m, enang, kk, jj - 2, ii + 1) + f0_(m, enang, kk, jj - 1, ii) + f0_(m, enang, kk, jj - 1, ii + 1)
-                      + f0_(m, enang, kk + 1, jj - 2, ii) + f0_(m, enang, kk + 1, jj - 2, ii + 1) + f0_(m, enang, kk + 1, jj - 1, ii) + f0_(m, enang, kk + 1, jj - 1, ii + 1));
+                      + f0_(m, enang, kk + 1, jj - 2, ii) + f0_(m, enang, kk + 1, jj - 2, ii + 1) + f0_(m, enang, kk + 1, jj - 1, ii)
+                      + f0_(m, enang, kk + 1, jj - 1, ii + 1));
               auto f0_cellavg_py = (1.0 / 8.0)
                   * (f0_(m, enang, kk, jj + 2, ii) + f0_(m, enang, kk, jj + 2, ii + 1) + f0_(m, enang, kk, jj + 3, ii) + f0_(m, enang, kk, jj + 3, ii + 1)
-                      + f0_(m, enang, kk + 1, jj + 2, ii) + f0_(m, enang, kk + 1, jj + 2, ii + 1) + f0_(m, enang, kk + 1, jj + 3, ii) + f0_(m, enang, kk + 1, jj + 3, ii + 1));
+                      + f0_(m, enang, kk + 1, jj + 2, ii) + f0_(m, enang, kk + 1, jj + 2, ii + 1) + f0_(m, enang, kk + 1, jj + 3, ii)
+                      + f0_(m, enang, kk + 1, jj + 3, ii + 1));
               auto f0_cellavg_mz = (1.0 / 8.0)
                   * (f0_(m, enang, kk - 2, jj, ii) + f0_(m, enang, kk - 2, jj, ii + 1) + f0_(m, enang, kk - 2, jj + 1, ii) + f0_(m, enang, kk - 2, jj + 1, ii + 1)
                       + f0_(m, enang, kk - 1, jj, ii) + f0_(m, enang, kk - 1, jj, ii + 1) + f0_(m, enang, kk - 1, jj + 1, ii) + f0_(m, enang, kk - 1, jj + 1, ii + 1));

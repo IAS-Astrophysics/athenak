@@ -130,13 +130,15 @@ add_executable(
         radiation_femn/radiation_femn_geodesic_grid_quadrature.cpp
         radiation_femn/radiation_femn_geodesic_grid_matrices.hpp
         radiation_femn/radiation_femn_loadmatrices.cpp
-        radiation_femn/radiation_femn_tetrad.cpp
         pgen/tests/rad_femn_linalgtest.cpp
         radiation_femn/radiation_femn_compute_pmatrices.cpp
         pgen/tests/radiation_femn_gridtest_fpn.cpp
         radiation_femn/radiation_femn_closure.cpp
         radiation_femn/radiation_femn_compute_sourcematrices.cpp
-        pgen/tests/rad_femn_latticetest.cpp)
+        pgen/tests/rad_femn_latticetest.cpp
+        radiation_femn/radiation_femn_tetrad.cpp
+        athena_tensor.hpp
+        radiation_femn/radiation_femn_beams.cpp)
 
 # custom problem generator to be included in compile
 # specify on command line using '-D PROBLEM=file' where 'file' is name of file in
@@ -151,6 +153,11 @@ endif()
 
 # enable include of header files with /src/ as root of path
 target_include_directories(athena PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
+# Append the GSL library paths from LD_LIBRARY_PATH
+list(APPEND CMAKE_PREFIX_PATH
+    /storage/icds/RISE/sw8/gsl-2.7.1
+)
 
 find_package(GSL)
 target_link_libraries(athena PUBLIC ${GSL_LIBRARIES})
