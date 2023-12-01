@@ -168,31 +168,25 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
           SingleC2P_IdealSRMHD_EntropyFix(u_sr, s_tot, eos, s2, b2, rpar, w_fix, w_old,
                                           dfloor_used_in_fix, efloor_used_in_fix,
                                           c2p_failure_in_fix, iter_used_in_fix);
-          if (c2p_failure_in_fix) {
-            // fail entropy-fixed c2p
-            if (c2p_failure) {
-              // use the old values if fail original c2p
-              w.d  = w_old.d;
-              w.vx = w_old.vx;
-              w.vy = w_old.vy;
-              w.vz = w_old.vz;
-              w.e  = w_old.e;
-            }
-          } else {
+
+          if (c2p_failure) {
+            // use the old values as the final fallback state
+            w.d  = w_old.d;
+            w.vx = w_old.vx;
+            w.vy = w_old.vy;
+            w.vz = w_old.vz;
+            w.e  = w_old.e;
+          }
+
+          if (!c2p_failure_in_fix) {
             // successful entropy-fixed c2p
-            w.d = w_fix.d;
-            w.e = w_fix.e;
-            dfloor_used = dfloor_used_in_fix;
-            efloor_used = efloor_used_in_fix;
-            if (c2p_failure) {
-              // fail original c2p
-              w.vx = w_fix.vx;
-              w.vy = w_fix.vy;
-              w.vz = w_fix.vz;
+            Real e_to_d_fix = w_fix.e/w_fix.d; // temperature
+            w.e = w.d * e_to_d_fix;
+            if (w.e < eos.pfloor/gm1) {
+              w.e = eos.pfloor/gm1;
+              efloor_used = true;
             }
-            c2p_failure = c2p_failure_in_fix;
-            iter_used = iter_used_in_fix;
-          } // endelse
+          } // !c2p_failure_in_fix
         } // endif (dfloor_used || efloor_used || c2p_failure)
       } // endif entropy_fix_
 
