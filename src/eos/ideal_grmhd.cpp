@@ -170,27 +170,26 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
                                           c2p_failure_in_fix, iter_used_in_fix);
           if (c2p_failure_in_fix) {
             // fail entropy-fixed c2p
-            // if (c2p_failure) {
-            //   // use the old values if fail original c2p
-            //   w.d  = w_old.d;
-            //   w.vx = w_old.vx;
-            //   w.vy = w_old.vy;
-            //   w.vz = w_old.vz;
-            //   w.e  = w_old.e;
-            // }
+            if (c2p_failure) {
+              // use the old values if fail original c2p
+              w.d  = w_old.d;
+              w.vx = w_old.vx;
+              w.vy = w_old.vy;
+              w.vz = w_old.vz;
+              w.e  = w_old.e;
+            }
           } else {
             // successful entropy-fixed c2p
             w.d = w_fix.d;
             w.e = w_fix.e;
             dfloor_used = dfloor_used_in_fix;
             efloor_used = efloor_used_in_fix;
-            // if (c2p_failure) {
-            //   // fail original c2p
-            //   w.vx = w_fix.vx;
-            //   w.vy = w_fix.vy;
-            //   w.vz = w_fix.vz;
-            // }
-            //
+            if (c2p_failure) {
+              // fail original c2p
+              w.vx = w_fix.vx;
+              w.vy = w_fix.vy;
+              w.vz = w_fix.vz;
+            }
             c2p_failure = c2p_failure_in_fix;
             iter_used = iter_used_in_fix;
           } // endelse
