@@ -149,25 +149,25 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
 
       // apply entropy fix
       if (entropy_fix_) {
-        if (dfloor_used || efloor_used || c2p_failure) {
-          bool dfloor_used_in_fix=false, efloor_used_in_fix=false;
-          bool c2p_failure_in_fix=c2p_failure;
-          int iter_used_in_fix=0;
-          HydPrim1D w_old, w_fix;
-          w_old.d  = prim(m,IDN,k,j,i);
-          w_old.vx = prim(m,IVX,k,j,i);
-          w_old.vy = prim(m,IVY,k,j,i);
-          w_old.vz = prim(m,IVZ,k,j,i);
-          w_old.e  = prim(m,IEN,k,j,i);
-          w_fix.d  = w.d;
-          w_fix.vx = w.vx;
-          w_fix.vy = w.vy;
-          w_fix.vz = w.vz;
-          w_fix.e  = w.e;
-          Real &s_tot = cons(m,entropyIdx,k,j,i);
-          SingleC2P_IdealSRMHD_EntropyFix(u_sr, s_tot, eos, s2, b2, rpar, w_fix, w_old,
-                                          dfloor_used_in_fix, efloor_used_in_fix,
-                                          c2p_failure_in_fix, iter_used_in_fix);
+        // if (dfloor_used || efloor_used || c2p_failure) {
+        //   bool dfloor_used_in_fix=false, efloor_used_in_fix=false;
+        //   bool c2p_failure_in_fix=c2p_failure;
+        //   int iter_used_in_fix=0;
+        //   HydPrim1D w_old, w_fix;
+        //   w_old.d  = prim(m,IDN,k,j,i);
+        //   w_old.vx = prim(m,IVX,k,j,i);
+        //   w_old.vy = prim(m,IVY,k,j,i);
+        //   w_old.vz = prim(m,IVZ,k,j,i);
+        //   w_old.e  = prim(m,IEN,k,j,i);
+        //   w_fix.d  = w.d;
+        //   w_fix.vx = w.vx;
+        //   w_fix.vy = w.vy;
+        //   w_fix.vz = w.vz;
+        //   w_fix.e  = w.e;
+        //   Real &s_tot = cons(m,entropyIdx,k,j,i);
+        //   SingleC2P_IdealSRMHD_EntropyFix(u_sr, s_tot, eos, s2, b2, rpar, w_fix, w_old,
+        //                                   dfloor_used_in_fix, efloor_used_in_fix,
+        //                                   c2p_failure_in_fix, iter_used_in_fix);
 
           if (c2p_failure) {
             // use the old values as the final fallback state
@@ -178,15 +178,15 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
             w.e  = w_old.e;
           }
 
-          if (!c2p_failure_in_fix) {
-            // successful entropy-fixed c2p
-            Real e_to_d_fix = w_fix.e/w_fix.d; // temperature
-            w.e = w.d * e_to_d_fix;
-            if (w.e < eos.pfloor/gm1) {
-              w.e = eos.pfloor/gm1;
-              efloor_used = true;
-            }
-          } // !c2p_failure_in_fix
+          // if (!c2p_failure_in_fix) {
+          //   // successful entropy-fixed c2p
+          //   Real e_to_d_fix = w_fix.e/w_fix.d; // temperature
+          //   w.e = w.d * e_to_d_fix;
+          //   if (w.e < eos.pfloor/gm1) {
+          //     w.e = eos.pfloor/gm1;
+          //     efloor_used = true;
+          //   }
+          // } // !c2p_failure_in_fix
         } // endif (dfloor_used || efloor_used || c2p_failure)
       } // endif entropy_fix_
 
