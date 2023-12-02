@@ -187,7 +187,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
           //     efloor_used = true;
           //   }
           // } // !c2p_failure_in_fix
-        } // endif (dfloor_used || efloor_used || c2p_failure)
+        // } // endif (dfloor_used || efloor_used || c2p_failure)
       } // endif entropy_fix_
 
       // apply velocity ceiling if necessary
