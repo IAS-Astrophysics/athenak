@@ -54,7 +54,8 @@ void Hydro::AssembleHydroTasks(TaskList &start, TaskList &run, TaskList &end) {
   id.sendu = run.AddTask(&Hydro::SendU, this, id.restu);
   id.recvu = run.AddTask(&Hydro::RecvU, this, id.sendu);
   id.bcs   = run.AddTask(&Hydro::ApplyPhysicalBCs, this, id.recvu);
-  id.c2p   = run.AddTask(&Hydro::ConToPrim, this, id.bcs);
+  id.prol  = run.AddTask(&Hydro::Prolongate, this, id.bcs);
+  id.c2p   = run.AddTask(&Hydro::ConToPrim, this, id.prol);
   id.newdt = run.AddTask(&Hydro::NewTimeStep, this, id.c2p);
 
   // assemble end task list
@@ -222,7 +223,7 @@ TaskStatus Hydro::RecvU(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskList Hydro::ApplyPhysicalBCs
-//! \brief Wrapper task list function to call funtions that set physical and user BCs
+//! \brief Wrapper task list function to call funtions that set physical and user BCs,
 
 TaskStatus Hydro::ApplyPhysicalBCs(Driver *pdrive, int stage) {
   // do not apply BCs if domain is strictly periodic
@@ -235,7 +236,25 @@ TaskStatus Hydro::ApplyPhysicalBCs(Driver *pdrive, int stage) {
   if (pmy_pack->pmesh->pgen->user_bcs) {
     (pmy_pack->pmesh->pgen->user_bcs_func)(pmy_pack->pmesh);
   }
+  return TaskStatus::complete;
+}
 
+//----------------------------------------------------------------------------------------
+//! \fn TaskList Hydro::Prolongate
+//! \brief Wrapper task list function to prolongate conserved (or primitive) variables
+//! at fine/coarse boundaries with SMR/AMR
+
+TaskStatus Hydro::Prolongate(Driver *pdrive, int stage) {
+  if (pmy_pack->pmesh->multilevel) {  // only prolongate with SMR/AMR
+    pbval_u->FillCoarseInBndryCC(u0, coarse_u0);
+    if (pmy_pack->pmesh->pmr->prolong_prims) {
+      pbval_u->ConsToPrimCoarseBndry(coarse_u0, coarse_w0);
+      pbval_u->ProlongateCC(w0, coarse_w0);
+      pbval_u->PrimToConsFineBndry(w0, u0);
+    } else {
+      pbval_u->ProlongateCC(u0, coarse_u0);
+    }
+  }
   return TaskStatus::complete;
 }
 

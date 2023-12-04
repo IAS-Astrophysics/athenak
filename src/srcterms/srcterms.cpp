@@ -49,11 +49,31 @@ SourceTerms::SourceTerms(std::string block, MeshBlockPack *pp, ParameterInput *p
   }
 
   // (2) shearing box (hydro and MHD)
-  shearing_box = pin->GetOrAddBoolean(block, "shearing_box", false);
+  shearing_box = pin->GetOrAddBoolean("problem", "shearing_box", false);
+  shearing_box_r_phi = pin->GetOrAddBoolean("problem", "shearing_box_r_phi", false);
+  if (pmy_pack->pmesh->mesh_bcs[BoundaryFace::inner_x1] == BoundaryFlag::shear_periodic) {
+    if (!shearing_box) {
+      std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
+                << "shear_periodic boundaries require shearing_box" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
+
+  if (!shearing_box && shearing_box_r_phi) {
+    std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
+              << "shearing_box must be true when shearing_box_r_phi = true " << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
   if (shearing_box) {
+    if (pmy_pack->pmesh->three_d && !shearing_box_r_phi) {
+      std::cout << "### WARNING! in " << __FILE__ << " at line " << __LINE__ << std::endl
+                << "shearing_box_r_phi parameter changes true in 3D" << std::endl;
+      shearing_box_r_phi = true;
+    }
     source_terms_enabled = true;
-    qshear = pin->GetReal(block, "qshear");
-    omega0 = pin->GetReal(block, "omega0");
+    qshear = pin->GetReal("problem", "qshear");
+    omega0 = pin->GetReal("problem", "omega0");
   }
 
   // (3) Optically thin (ISM) cooling
@@ -124,21 +144,39 @@ void SourceTerms::AddShearingBox(DvceArray5D<Real> &u0, const DvceArray5D<Real> 
   int ks = indcs.ks, ke = indcs.ke;
   int nmb1 = pmy_pack->nmb_thispack - 1;
 
-  //  Terms are implemented with orbital advection, so that v3 represents the perturbation
-  //  from the Keplerian flow v_{K} = - q \Omega x
-  Real &omega0_ = omega0;
-  Real &qshear_ = qshear;
-  Real qo  = qshear*omega0;
-
-  par_for("sbox", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
-  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    Real &den = w0(m,IDN,k,j,i);
-    Real mom1 = den*w0(m,IVX,k,j,i);
-    Real mom3 = den*w0(m,IVZ,k,j,i);
-    u0(m,IM1,k,j,i) += 2.0*bdt*(omega0_*mom3);
-    u0(m,IM3,k,j,i) += (qshear_ - 2.0)*bdt*omega0_*mom1;
-    if ((u0.extent_int(1) - 1) == IEN) { u0(m,IEN,k,j,i) += qo*bdt*(mom1*mom3/den); }
-  });
+  if (shearing_box_r_phi) {
+    Real coef1 = 2.0*bdt*omega0;
+    Real coef2 = (2.0-qshear)*bdt*omega0;
+    Real qo = qshear*omega0;
+    par_for("sbox", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+      Real &den = w0(m,IDN,k,j,i);
+      Real mom1 = den*w0(m,IVX,k,j,i);
+      Real mom2 = den*w0(m,IVY,k,j,i);
+      u0(m,IM1,k,j,i) += coef1*mom2;
+      u0(m,IM2,k,j,i) -= coef2*mom1;
+      if ((u0.extent_int(1) - 1) == IEN) {
+        // For more accuracy, better to use flux values
+        u0(m,IEN,k,j,i) += bdt*mom1*mom2/den*qo;
+      }
+    });
+  } else {
+    Real coef1 = 2.0*bdt*omega0;
+    Real coef3 = (2.0-qshear)*bdt*omega0;
+    Real qo = qshear*omega0;
+    par_for("sbox", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+      Real &den = w0(m,IDN,k,j,i);
+      Real mom1 = den*w0(m,IVX,k,j,i);
+      Real mom3 = den*w0(m,IVZ,k,j,i);
+      u0(m,IM1,k,j,i) += coef1*mom3;
+      u0(m,IM3,k,j,i) -= coef3*mom1;
+      if ((u0.extent_int(1) - 1) == IEN) {
+        // For more accuracy, better to use flux values
+        u0(m,IEN,k,j,i) += bdt*mom1*mom3/den*qo;
+      }
+    });
+  }
 
   return;
 }
@@ -156,23 +194,39 @@ void SourceTerms::AddShearingBox(DvceArray5D<Real> &u0, const DvceArray5D<Real> 
   int ks = indcs.ks, ke = indcs.ke;
   int nmb1 = pmy_pack->nmb_thispack - 1;
 
-  //  Terms are implemented with orbital advection, so that v3 represents the perturbation
-  //  from the Keplerian flow v_{K} = - q \Omega x
-  Real &omega0_ = omega0;
-  Real &qshear_ = qshear;
-  Real qo  = qshear*omega0;
-
-  par_for("sbox", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
-  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    Real &den = w0(m,IDN,k,j,i);
-    Real mom1 = den*w0(m,IVX,k,j,i);
-    Real mom3 = den*w0(m,IVZ,k,j,i);
-    u0(m,IM1,k,j,i) += 2.0*bdt*(omega0_*mom3);
-    u0(m,IM3,k,j,i) += (qshear_ - 2.0)*bdt*omega0_*mom1;
-    if ((u0.extent_int(1) - 1) == IEN) {
-      u0(m,IEN,k,j,i) -= qo*bdt*(bcc0(m,IBX,k,j,i)*bcc0(m,IBZ,k,j,i) - mom1*mom3/den);
-    }
-  });
+  if (shearing_box_r_phi) {
+    Real coef1 = 2.0*bdt*omega0;
+    Real coef2 = (2.0-qshear)*bdt*omega0;
+    Real qo = qshear*omega0;
+    par_for("sbox", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+      Real &den = w0(m,IDN,k,j,i);
+      Real mom1 = den*w0(m,IVX,k,j,i);
+      Real mom2 = den*w0(m,IVY,k,j,i);
+      u0(m,IM1,k,j,i) += coef1*mom2;
+      u0(m,IM2,k,j,i) -= coef2*mom1;
+      if ((u0.extent_int(1) - 1) == IEN) {
+        // For more accuracy, better to use flux values
+        u0(m,IEN,k,j,i) += bdt*(mom1*mom2/den-bcc0(m,IBX,k,j,i)*bcc0(m,IBY,k,j,i))*qo;
+      }
+    });
+  } else {
+    Real coef1 = 2.0*bdt*omega0;
+    Real coef3 = (2.0-qshear)*bdt*omega0;
+    Real qo = qshear*omega0;
+    par_for("sbox", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+      Real &den = w0(m,IDN,k,j,i);
+      Real mom1 = den*w0(m,IVX,k,j,i);
+      Real mom3 = den*w0(m,IVZ,k,j,i);
+      u0(m,IM1,k,j,i) += coef1*mom3;
+      u0(m,IM3,k,j,i) -= coef3*mom1;
+      if ((u0.extent_int(1) - 1) == IEN) {
+        // For more accuracy, better to use flux values
+        u0(m,IEN,k,j,i) += bdt*(mom1*mom3/den-bcc0(m,IBX,k,j,i)*bcc0(m,IBZ,k,j,i))*qo;
+      }
+    });
+  }
 
   return;
 }
@@ -190,7 +244,6 @@ void SourceTerms::AddSBoxEField(const DvceFaceFld4D<Real> &b0,
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
-
   Real qomega = qshear*omega0;
 
   int nmb1 = pmy_pack->nmb_thispack - 1;
@@ -334,6 +387,10 @@ void SourceTerms::AddBeamSource(DvceArray5D<Real> &i0, const Real bdt) {
   auto &tt = pmy_pack->prad->tet_c;
   auto &tc = pmy_pack->prad->tetcov_c;
 
+  auto &excise = pmy_pack->pcoord->coord_data.bh_excise;
+  auto &rad_mask_ = pmy_pack->pcoord->excision_floor;
+  Real &n_0_floor_ = pmy_pack->prad->n_0_floor;
+
   auto &beam_mask_ = pmy_pack->prad->beam_mask;
   Real &dii_dt_ = dii_dt;
   par_for("beam_source",DevExeSpace(),0,nmb1,0,nang1,ks,ke,js,je,is,ie,
@@ -343,6 +400,13 @@ void SourceTerms::AddBeamSource(DvceArray5D<Real> &i0, const Real bdt) {
       Real n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(n,0) + tc(m,1,0,k,j,i)*nh_c_.d_view(n,1)
                + tc(m,2,0,k,j,i)*nh_c_.d_view(n,2) + tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
       i0(m,n,k,j,i) += n0*n_0*dii_dt_*bdt;
+      // handle excision
+      // NOTE(@pdmullen): exicision criterion are not finalized.  The below zeroes all
+      // intensities within rks <= 1.0 and zeroes intensities within angles where n_0
+      // is about zero.  This needs future attention.
+      if (excise) {
+        if (rad_mask_(m,k,j,i) || fabs(n_0) < n_0_floor_) { i0(m,n,k,j,i) = 0.0; }
+      }
     }
   });
 

@@ -13,7 +13,8 @@
 enum BoundaryFace {undef=-1, inner_x1, outer_x1, inner_x2, outer_x2, inner_x3, outer_x3};
 
 // identifiers for boundary conditions
-enum class BoundaryFlag {undef=-1,block, reflect, inflow, outflow, diode, user, periodic};
+enum class BoundaryFlag {undef=-1,block, reflect, inflow, outflow, diode, user, periodic,
+                         shear_periodic};
 
 #include <algorithm>
 #include <vector>
@@ -57,9 +58,12 @@ struct BoundaryBuffer {
   BufferIndcs iprol[3];  // indices for prolongation (only used for receives)
   BufferIndcs iflux_same[3];  // indices for pack/unpack for flux correction
   BufferIndcs iflux_coar[3];  // indices for pack/unpack for flux correction
+  // With Z4c higher-order prolongation/rstriction, must also send coarse data between
+  // MeshBlocks at the same level, which requires an additional indices array
+  BufferIndcs isame_z4c;  // indices for pack/unpack with z4c when dest/src at same level
 
   // Maximum number of data elements (bie-bis+1) across 3 components of above
-  int isame_ndat, icoar_ndat, ifine_ndat, iflxs_ndat, iflxc_ndat;
+  int isame_ndat, isame_z4c_ndat, icoar_ndat, ifine_ndat, iflxs_ndat, iflxc_ndat;
 
   // 2D Views that store buffer data on device, dimensioned (nmb, ndata)
   DvceArray2D<Real> vars, flux;
@@ -72,10 +76,16 @@ struct BoundaryBuffer {
 
   // function to allocate memory for buffers for variables and their fluxes
   // Must only be called after BufferIndcs above are initialized
-  void AllocateBuffers(int nmb, int nvars) {
-    int nmax = std::max(isame_ndat, std::max(icoar_ndat, ifine_ndat) );
-    Kokkos::realloc(vars, nmb, (nvars*nmax));
-    nmax = std::max(iflxs_ndat, iflxc_ndat);
+  void AllocateBuffers(int nmb, int nvars, bool is_z4c) {
+    // With Z4c, buffers may contain BOTH same and coarse data
+    if (is_z4c) {
+      int nmax = std::max(isame_z4c_ndat, std::max(icoar_ndat, ifine_ndat) );
+      Kokkos::realloc(vars, nmb, (nvars*nmax));
+    } else {
+      int nmax = std::max(isame_ndat, std::max(icoar_ndat, ifine_ndat) );
+      Kokkos::realloc(vars, nmb, (nvars*nmax));
+    }
+    int nmax = std::max(iflxs_ndat, iflxc_ndat);
     Kokkos::realloc(flux, nmb, (nvars*nmax));
   }
 };
@@ -89,7 +99,7 @@ class MeshBlockPack;
 
 class BoundaryValues {
  public:
-  BoundaryValues(MeshBlockPack *ppack, ParameterInput *pin);
+  BoundaryValues(MeshBlockPack *ppack, ParameterInput *pin, bool z4c);
   ~BoundaryValues();
 
   // data for all 56 buffers in most general 3D case. Not all elements used in most cases.
@@ -124,6 +134,7 @@ class BoundaryValues {
 
  protected:
   MeshBlockPack* pmy_pack;
+  bool is_z4c_;   // flag to denote if this BoundaryValues is for Z4c module
 };
 
 //----------------------------------------------------------------------------------------
@@ -132,7 +143,7 @@ class BoundaryValues {
 
 class BoundaryValuesCC : public BoundaryValues {
  public:
-  BoundaryValuesCC(MeshBlockPack *ppack, ParameterInput *pin);
+  BoundaryValuesCC(MeshBlockPack *ppack, ParameterInput *pin, bool z4c);
 
   //functions
   void InitSendIndices(BoundaryBuffer &buf, int o1, int o2,int o3,int f1,int f2) override;
@@ -141,7 +152,14 @@ class BoundaryValuesCC : public BoundaryValues {
 
   TaskStatus PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
   TaskStatus RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
+  void FillCoarseInBndryCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
   void ProlongateCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
+  void ConsToPrimCoarseBndry(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim);
+  void PrimToConsFineBndry(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons);
+  void ConsToPrimCoarseBndry(const DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
+                             DvceArray5D<Real> &prim);
+  void PrimToConsFineBndry(const DvceArray5D<Real> &prim, const DvceFaceFld4D<Real> &b,
+                           DvceArray5D<Real> &cons);
 
   TaskStatus PackAndSendFluxCC(DvceFaceFld5D<Real> &flx);
   TaskStatus RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx);
@@ -162,6 +180,7 @@ class BoundaryValuesFC : public BoundaryValues {
 
   TaskStatus PackAndSendFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
   TaskStatus RecvAndUnpackFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
+  void FillCoarseInBndryFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
   void ProlongateFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
 
   TaskStatus PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx);

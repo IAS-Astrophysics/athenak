@@ -20,8 +20,9 @@
 //----------------------------------------------------------------------------------------
 // BoundaryValues constructor:
 
-BoundaryValues::BoundaryValues(MeshBlockPack *pp, ParameterInput *pin) :
+BoundaryValues::BoundaryValues(MeshBlockPack *pp, ParameterInput *pin, bool z4c) :
   pmy_pack(pp),
+  is_z4c_(z4c),
   u_in("uin",1,1),
   b_in("bin",1,1),
   i_in("iin",1,1) {
@@ -43,11 +44,13 @@ BoundaryValues::BoundaryValues(MeshBlockPack *pp, ParameterInput *pin) :
 #endif
     // initialize data sizes in each send/recv buffer to zero
     send_buf[n].isame_ndat = 0;
+    send_buf[n].isame_z4c_ndat = 0;
     send_buf[n].icoar_ndat = 0;
     send_buf[n].ifine_ndat = 0;
     send_buf[n].iflxs_ndat = 0;
     send_buf[n].iflxc_ndat = 0;
     recv_buf[n].isame_ndat = 0;
+    recv_buf[n].isame_z4c_ndat = 0;
     recv_buf[n].icoar_ndat = 0;
     recv_buf[n].ifine_ndat = 0;
     recv_buf[n].iflxs_ndat = 0;
@@ -93,7 +96,6 @@ void BoundaryValues::InitializeBuffers(const int nvar) {
     Kokkos::realloc(i_in, nvar, 6);
   }
 
-  // initialize buffers used for uniform grid and SMR/AMR calculations
   // set number of subblocks in x2- and x3-dirs
   int nfx = 1, nfy = 1, nfz = 1;
   if (pmy_pack->pmesh->multilevel) {
@@ -101,6 +103,8 @@ void BoundaryValues::InitializeBuffers(const int nvar) {
     if (pmy_pack->pmesh->multi_d) nfy = 2;
     if (pmy_pack->pmesh->three_d) nfz = 2;
   }
+
+  // initialize buffers used for uniform grid and SMR/AMR calculations
 
   // x1 faces; NeighborIndex = [0,...,7]
   int nmb = std::max((pmy_pack->nmb_thispack), (pmy_pack->pmesh->nmb_maxperrank));
@@ -110,8 +114,8 @@ void BoundaryValues::InitializeBuffers(const int nvar) {
         int indx = pmy_pack->pmb->NeighborIndx(n,0,0,fy,fz);
         InitSendIndices(send_buf[indx],n, 0, 0, fy, fz);
         InitRecvIndices(recv_buf[indx],n, 0, 0, fy, fz);
-        send_buf[indx].AllocateBuffers(nmb, nvar);
-        recv_buf[indx].AllocateBuffers(nmb, nvar);
+        send_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
+        recv_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
         indx++;
       }
     }
@@ -126,8 +130,8 @@ void BoundaryValues::InitializeBuffers(const int nvar) {
           int indx = pmy_pack->pmb->NeighborIndx(0,m,0,fx,fz);
           InitSendIndices(send_buf[indx],0, m, 0, fx, fz);
           InitRecvIndices(recv_buf[indx],0, m, 0, fx, fz);
-          send_buf[indx].AllocateBuffers(nmb, nvar);
-          recv_buf[indx].AllocateBuffers(nmb, nvar);
+          send_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
+          recv_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
           indx++;
         }
       }
@@ -140,8 +144,8 @@ void BoundaryValues::InitializeBuffers(const int nvar) {
           int indx = pmy_pack->pmb->NeighborIndx(n,m,0,fz,0);
           InitSendIndices(send_buf[indx],n, m, 0, fz, 0);
           InitRecvIndices(recv_buf[indx],n, m, 0, fz, 0);
-          send_buf[indx].AllocateBuffers(nmb, nvar);
-          recv_buf[indx].AllocateBuffers(nmb, nvar);
+          send_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
+          recv_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
           indx++;
         }
       }
@@ -157,8 +161,8 @@ void BoundaryValues::InitializeBuffers(const int nvar) {
           int indx = pmy_pack->pmb->NeighborIndx(0,0,l,fx,fy);
           InitSendIndices(send_buf[indx],0, 0, l, fx, fy);
           InitRecvIndices(recv_buf[indx],0, 0, l, fx, fy);
-          send_buf[indx].AllocateBuffers(nmb, nvar);
-          recv_buf[indx].AllocateBuffers(nmb, nvar);
+          send_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
+          recv_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
           indx++;
         }
       }
@@ -171,8 +175,8 @@ void BoundaryValues::InitializeBuffers(const int nvar) {
           int indx = pmy_pack->pmb->NeighborIndx(n,0,l,fy,0);
           InitSendIndices(send_buf[indx],n, 0, l, fy, 0);
           InitRecvIndices(recv_buf[indx],n, 0, l, fy, 0);
-          send_buf[indx].AllocateBuffers(nmb, nvar);
-          recv_buf[indx].AllocateBuffers(nmb, nvar);
+          send_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
+          recv_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
           indx++;
         }
       }
@@ -185,8 +189,8 @@ void BoundaryValues::InitializeBuffers(const int nvar) {
           int indx = pmy_pack->pmb->NeighborIndx(0,m,l,fx,0);
           InitSendIndices(send_buf[indx],0, m, l, fx, 0);
           InitRecvIndices(recv_buf[indx],0, m, l, fx, 0);
-          send_buf[indx].AllocateBuffers(nmb, nvar);
-          recv_buf[indx].AllocateBuffers(nmb, nvar);
+          send_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
+          recv_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
           indx++;
         }
       }
@@ -199,8 +203,8 @@ void BoundaryValues::InitializeBuffers(const int nvar) {
           int indx = pmy_pack->pmb->NeighborIndx(n,m,l,0,0);
           InitSendIndices(send_buf[indx],n, m, l, 0, 0);
           InitRecvIndices(recv_buf[indx],n, m, l, 0, 0);
-          send_buf[indx].AllocateBuffers(nmb, nvar);
-          recv_buf[indx].AllocateBuffers(nmb, nvar);
+          send_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
+          recv_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
         }
       }
     }
@@ -237,7 +241,11 @@ TaskStatus BoundaryValues::InitRecv(const int nvars) {
           if ( nghbr.h_view(m,n).lev < pmy_pack->pmb->mb_lev.h_view(m) ) {
             data_size *= recv_buf[n].icoar_ndat;
           } else if ( nghbr.h_view(m,n).lev == pmy_pack->pmb->mb_lev.h_view(m) ) {
-            data_size *= recv_buf[n].isame_ndat;
+            if (is_z4c_) {
+              data_size *= recv_buf[n].isame_z4c_ndat;
+            } else {
+              data_size *= recv_buf[n].isame_ndat;
+            }
           } else {
             data_size *= recv_buf[n].ifine_ndat;
           }

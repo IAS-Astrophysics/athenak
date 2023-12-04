@@ -57,7 +57,8 @@ void Z4c::AssembleZ4cTasks(TaskList &start, TaskList &run, TaskList &end) {
   id.sendu = run.AddTask(&Z4c::SendU, this, id.restu);
   id.recvu = run.AddTask(&Z4c::RecvU, this, id.sendu);
   id.bcs   = run.AddTask(&Z4c::ApplyPhysicalBCs, this, id.recvu);
-  id.algc  = run.AddTask(&Z4c::EnforceAlgConstr, this, id.bcs);
+  id.prol  = run.AddTask(&Z4c::Prolongate, this, id.bcs);
+  id.algc  = run.AddTask(&Z4c::EnforceAlgConstr, this, id.prol);
   id.z4tad = run.AddTask(&Z4c::Z4cToADM_, this, id.algc);
   id.admc  = run.AddTask(&Z4c::ADMConstraints_, this, id.z4tad);
   id.newdt = run.AddTask(&Z4c::NewTimeStep, this, id.admc);
@@ -79,12 +80,6 @@ void Z4c::AssembleZ4cTasks(TaskList &start, TaskList &run, TaskList &end) {
 TaskStatus Z4c::InitRecv(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_u->InitRecv(nz4c);
   if (tstat != TaskStatus::complete) return tstat;
-
-  // with SMR/AMR post receives for fluxes of U
-  // do not post receives for fluxes when stage < 0 (i.e. ICs)
-  if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
-    tstat = pbval_u->InitFluxRecv(nz4c);
-  }
   return tstat;
 }
 
@@ -95,12 +90,6 @@ TaskStatus Z4c::InitRecv(Driver *pdrive, int stage) {
 TaskStatus Z4c::ClearRecv(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_u->ClearRecv();
   if (tstat != TaskStatus::complete) return tstat;
-
-  // with SMR/AMR check receives of restricted fluxes of U complete
-  // do not check flux receives when stage < 0 (i.e. ICs)
-  if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
-    tstat = pbval_u->ClearFluxRecv();
-  }
   return tstat;
 }
 
@@ -111,12 +100,6 @@ TaskStatus Z4c::ClearRecv(Driver *pdrive, int stage) {
 TaskStatus Z4c::ClearSend(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_u->ClearSend();
   if (tstat != TaskStatus::complete) return tstat;
-
-  // with SMR/AMR check sends of restricted fluxes of U complete
-  // do not check flux send for ICs (stage < 0)
-  if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
-    tstat = pbval_u->ClearFluxSend();
-  }
   return tstat;
 }
 
@@ -245,6 +228,19 @@ TaskStatus Z4c::RestrictU(Driver *pdrive, int stage) {
   // Only execute Mesh function with SMR/SMR
   if (pmy_pack->pmesh->multilevel) {
     pmy_pack->pmesh->pmr->RestrictCC(u0, coarse_u0);
+  }
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskList Z4c::Prolongate
+//! \brief Wrapper task list function to prolongate conserved (or primitive) variables
+//! at fine/coarse boundaries with SMR/AMR
+
+TaskStatus Z4c::Prolongate(Driver *pdrive, int stage) {
+  if (pmy_pack->pmesh->multilevel) {  // only prolongate with SMR/AMR
+//    pbval_u->FillCoarseInBndryCC(u0, coarse_u0);
+    pbval_u->ProlongateCC(u0, coarse_u0);
   }
   return TaskStatus::complete;
 }

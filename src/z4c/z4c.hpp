@@ -33,6 +33,7 @@ struct Z4cTaskIDs {
   TaskID recvu;
   TaskID newdt;
   TaskID bcs;
+  TaskID prol;
   TaskID algc;
   TaskID z4tad;
   TaskID admc;
@@ -196,6 +197,7 @@ class Z4c {
   TaskStatus CopyU(Driver *d, int stage);
   TaskStatus SendU(Driver *d, int stage);
   TaskStatus RecvU(Driver *d, int stage);
+  TaskStatus Prolongate(Driver *pdrive, int stage);
   TaskStatus ExpRKUpdate(Driver *d, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
   TaskStatus ApplyPhysicalBCs(Driver *d, int stage);

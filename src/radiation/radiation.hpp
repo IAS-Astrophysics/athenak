@@ -59,6 +59,9 @@ struct RadiationTaskIDs {
   TaskID mhd_sendb;
   TaskID mhd_recvb;
   TaskID bcs;
+  TaskID rad_prol;
+  TaskID mhd_prol;
+  TaskID hyd_prol;
   TaskID mhd_c2p;
   TaskID hyd_c2p;
   TaskID rad_csend;
@@ -85,13 +88,15 @@ class Radiation {
   bool are_units_enabled;
 
   // Radiation source term parameters
-  bool rad_source;     // flag to enable/disable radiation source term
-  bool fixed_fluid;    // flag to enable/disable fluid integration
-  bool affect_fluid;   // flag to enable/disable feedback of rad field on fluid
-  Real arad;           // radiation constant
-  Real kappa_a;        // constant Rosseland mean absoprtion coefficient
-  Real kappa_s;        // constant scattering coefficient
-  bool power_opacity;  // flag to enable Kramer's law opacity for kappa_a
+  bool rad_source;          // flag to enable/disable radiation source term
+  bool fixed_fluid;         // flag to enable/disable fluid integration
+  bool affect_fluid;        // flag to enable/disable feedback of rad field on fluid
+  Real arad;                // radiation constant
+  Real kappa_a;             // constant Rosseland mean absoprtion coefficient
+  Real kappa_s;             // constant scattering coefficient
+  Real kappa_p;             // Planck - Rosseland mean coefficient
+  bool power_opacity;       // flag to enable Kramer's law opacity for kappa_a
+  bool is_compton_enabled;  // flag to enable/disable compton
 
   // Extra physics (i.e., other srcterms)
   bool beam_source;
@@ -150,6 +155,7 @@ class Radiation {
   TaskStatus SendI(Driver *d, int stage);
   TaskStatus RecvI(Driver *d, int stage);
   TaskStatus ApplyPhysicalBCs(Driver* pdrive, int stage);
+  TaskStatus Prolongate(Driver* pdrive, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
   // ...in end task list
   TaskStatus ClearSend(Driver *d, int stage);

@@ -51,9 +51,9 @@ rsolver     = hllc      # Riemann-solver to be used
 gamma       = 1.3333333333333 # gamma = C_p/C_v
 
 <problem>
-pamb        = 5.0e-3    # ambient pressure
+pn_amb      = 5.0e-3    # ambient pressure
 prat        = 200.      # Pressure ratio initially
-damb        = 1.0e-4    # ambient pressure
+dn_amb      = 1.0e-4    # ambient pressure
 drat        = 100.      # Pressure ratio initially
 radius      = 0.8    # Radius of the inner sphere
 

@@ -98,26 +98,23 @@ Real Equation49(const Real mu, const Real b2, const Real rp, const Real r, const
 //----------------------------------------------------------------------------------------
 //! \fn Real Equation44()
 //! \brief Inline function to compute function f(mu) defined in eq. 44 of Kastaun et al.
-//! The ConsToPRim algorithms finds the root of this function f(mu)=0
+//! The ConsToPrim algorithms finds the root of this function f(mu)=0
 
 KOKKOS_INLINE_FUNCTION
 Real Equation44(const Real mu, const Real b2, const Real rpar, const Real r, const Real q,
                 const Real u_d,  EOS_Data eos) {
-  Real const x = 1./(1.+mu*b2);                  // (26)
-  Real rbar = (x*x*r*r + mu*x*(1.+x)*rpar*rpar); // (38)
+  Real const x = 1./(1.+mu*b2);                    // (26)
+  Real rbar = (x*x*r*r + mu*x*(1.+x)*rpar*rpar);   // (38)
   Real qbar = q - 0.5*b2 - 0.5*(mu*mu*(b2*rbar- rpar*rpar)); // (31)
-
   Real z2 = (mu*mu*rbar/(fabs(1.- SQR(mu)*rbar))); // (32)
   Real w = sqrt(1.+z2);
-
   Real const wd = u_d/w;                           // (34)
   Real eps = w*(qbar - mu*rbar) + z2/(w+1.);
-
-  //NOTE: The following generalizes to ANY equation of state
   Real const gm1 = eos.gamma - 1.0;
-  eps = fmax(eos.pfloor/(wd*gm1), eps);
-  Real const h = 1.0 + eos.gamma*eps;     // (43)
-  return mu - 1./(h/w + rbar*mu);         // (45)
+  Real epsmin = fmax(eos.pfloor/(wd*gm1), eos.sfloor*pow(wd, gm1)/gm1);
+  eps = fmax(eps, epsmin);
+  Real const h = 1.0 + eos.gamma*eps;              // (43)
+  return mu - 1./(h/w + rbar*mu);                  // (45)
 }
 
 //----------------------------------------------------------------------------------------
@@ -264,19 +261,11 @@ void SingleC2P_IdealSRMHD(MHDCons1D &u, const EOS_Data &eos, Real s2, Real b2, R
     dfloor_used = true;
   }
 
-  // compute specific internal energy density then apply floor
+  // compute specific internal energy density then apply floors
   Real eps = lor*(qbar - mu*rbar) + z2/(lor + 1.0);
-  Real epsmin = eos.pfloor/(dens*gm1);
+  Real epsmin = fmax(eos.pfloor/(dens*gm1), eos.sfloor*pow(dens, gm1)/gm1);
   if (eps <= epsmin) {
     eps = epsmin;
-    efloor_used = true;
-  }
-
-  // compute specific entropy then apply floor
-  Real spe_over_eps = gm1/pow(dens, gm1);
-  Real spe = spe_over_eps*eps;
-  if (spe <= eos.sfloor) {
-    eps = eos.sfloor/spe_over_eps;
     efloor_used = true;
   }
 
@@ -319,6 +308,74 @@ void SingleP2C_IdealSRMHD(const MHDPrim1D &w, const Real gam, HydCons1D &u) {
   u.mz = wtot_u02 * w.vz / u0 - b0 * b3;
   return;
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn void TransformToSRMHD()
+//! \brief Converts single state of conserved variables in GR MHD into conserved
+//! variables for special relativistic MHD with an ideal gas EOS. This allows
+//! the ConsToPrim() function in GR MHD to use SingleP2C_IdealSRMHD() function.
+
+KOKKOS_INLINE_FUNCTION
+void TransformToSRMHD(const MHDCons1D &u, Real glower[][4], Real gupper[][4],
+                      Real &s2, Real &b2, Real &rpar, MHDCons1D &u_sr) {
+  // Need to multiply the conserved density by alpha, so that it
+  // contains a lorentz factor
+  Real alpha = sqrt(-1.0/gupper[0][0]);
+  u_sr.d = u.d*alpha;
+
+  // We are evolving T^t_t, but the SR C2P algorithm is only consistent with
+  // alpha^2 T^{tt}.  Therefore compute T^{tt} = g^0\mu T^t_\mu
+  // We are also evolving T^t_t + D as conserved variable, so must convert to E
+  u_sr.e = gupper[0][0]*(u.e - u.d) +
+           gupper[0][1]*u.mx + gupper[0][2]*u.my + gupper[0][3]*u.mz;
+
+  // This is only true if sqrt{-g}=1!
+  u_sr.e *= (-1./gupper[0][0]);  // Multiply by alpha^2
+
+  // Subtract density for consistency with the rest of the algorithm
+  u_sr.e -= u_sr.d;
+
+  // Need to treat the conserved momenta. Also they lack an alpha
+  // This is only true if sqrt{-g}=1!
+  Real m1l = u.mx*alpha;
+  Real m2l = u.my*alpha;
+  Real m3l = u.mz*alpha;
+
+  // Need to raise indices on u_m1, which transforms using the spatial 3-metric.
+  // Store in u_sr.  This is slightly more involved
+  //
+  // Gourghoulon says: g^ij = gamma^ij - beta^i beta^j/alpha^2
+  //       g^0i = beta^i/alpha^2
+  //       g^00 = -1/ alpha^2
+  // Hence gamma^ij =  g^ij - g^0i g^0j/g^00
+  u_sr.mx = ((gupper[1][1] - gupper[0][1]*gupper[0][1]/gupper[0][0])*m1l +
+             (gupper[1][2] - gupper[0][1]*gupper[0][2]/gupper[0][0])*m2l +
+             (gupper[1][3] - gupper[0][1]*gupper[0][3]/gupper[0][0])*m3l);  // (C26)
+
+  u_sr.my = ((gupper[2][1] - gupper[0][2]*gupper[0][1]/gupper[0][0])*m1l +
+             (gupper[2][2] - gupper[0][2]*gupper[0][2]/gupper[0][0])*m2l +
+             (gupper[2][3] - gupper[0][2]*gupper[0][3]/gupper[0][0])*m3l);  // (C26)
+
+  u_sr.mz = ((gupper[3][1] - gupper[0][3]*gupper[0][1]/gupper[0][0])*m1l +
+             (gupper[3][2] - gupper[0][3]*gupper[0][2]/gupper[0][0])*m2l +
+             (gupper[3][3] - gupper[0][3]*gupper[0][3]/gupper[0][0])*m3l);  // (C26)
+
+  // Compute (S^i S_i) (eqn C2)
+  s2 = (m1l*u_sr.mx) + (m2l*u_sr.my) + (m3l*u_sr.mz);
+
+  // load magnetic fields into SR conserved state. Also they lack an alpha
+  // This is only true if sqrt{-g}=1!
+  u_sr.bx = alpha*u.bx;
+  u_sr.by = alpha*u.by;
+  u_sr.bz = alpha*u.bz;
+
+  b2 = glower[1][1]*SQR(u_sr.bx) + glower[2][2]*SQR(u_sr.by) + glower[3][3]*SQR(u_sr.bz) +
+       2.0*(u_sr.bx*(glower[1][2]*u_sr.by + glower[1][3]*u_sr.bz) +
+                     glower[2][3]*u_sr.by*u_sr.bz);
+  rpar = (u_sr.bx*m1l +  u_sr.by*m2l +  u_sr.bz*m3l)/u_sr.d;
+  return;
+}
+
 
 //--------------------------------------------------------------------------------------
 //! \fn voidSingleP2C_IdealGRMHD()

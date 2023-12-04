@@ -143,7 +143,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // allocate boundary buffers for conserved (cell-centered) variables
   Kokkos::Profiling::pushRegion("Buffers");
-  pbval_u = new BoundaryValuesCC(ppack, pin);
+  pbval_u = new BoundaryValuesCC(ppack, pin, true);
   pbval_u->InitializeBuffers((nz4c));
   Kokkos::Profiling::popRegion();
 }
@@ -164,60 +164,38 @@ void Z4c::AlgConstr(MeshBlockPack *pmbp) {
   int jsg = js-indcs.ng; int jeg = je+indcs.ng;
   int ksg = ks-indcs.ng; int keg = ke+indcs.ng;
 
-  int ncells1 = indcs.nx1 + 2*(indcs.ng);
   int nmb = pmbp->nmb_thispack;
 
   auto &z4c = pmbp->pz4c->z4c;
   auto &opt = pmbp->pz4c->opt;
-  int scr_level = 0;
-  size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1)*3;
-  par_for_outer("Alg constr loop",DevExeSpace(),
-  scr_size,scr_level,0,nmb-1,ksg,keg,jsg,jeg,
-  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> detg;
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> oopsi4;
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> A;
-
-      detg.NewAthenaScratchTensor(member, scr_level, ncells1);
-    oopsi4.NewAthenaScratchTensor(member, scr_level, ncells1);
-         A.NewAthenaScratchTensor(member, scr_level, ncells1);
-    par_for_inner(member, isg, ieg, [&](const int i) {
-      detg(i) = adm::SpatialDet(z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i),
-                                z4c.g_dd(m,0,2,k,j,i),z4c.g_dd(m,1,1,k,j,i),
-                                z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i));
-
-      detg(i) = detg(i) > 0. ? detg(i) : 1.;
-      Real eps = detg(i) - 1.;
-      oopsi4(i) = (eps < opt.eps_floor) ? (1. - opt.eps_floor/3.) :
-                  (std::pow(1./detg(i), 1./3.));
-    });
-    member.team_barrier();
+  par_for("Alg constr loop",DevExeSpace(),
+  0,nmb-1,ksg,keg,jsg,jeg,isg,ieg,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    Real detg = adm::SpatialDet(z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i),
+                              z4c.g_dd(m,0,2,k,j,i),z4c.g_dd(m,1,1,k,j,i),
+                              z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i));
+    detg = detg > 0. ? detg : 1.;
+    Real eps = detg - 1.;
+    Real oopsi4 = (eps < opt.eps_floor) ? (1. - opt.eps_floor/3.) :
+                (std::pow(1./detg, 1./3.));
 
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
-      par_for_inner(member, isg, ieg, [&](const int i) {
-        z4c.g_dd(m,a,b,k,j,i) *= oopsi4(i);
-      });
+      z4c.g_dd(m,a,b,k,j,i) *= oopsi4;
     }
-    member.team_barrier();
 
     // compute trace of A
     // note: here we are assuming that det g = 1, which we enforced above
-    par_for_inner(member, isg, ieg, [&](const int i) {
-      A(i) = adm::Trace(1.0,
-                z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i), z4c.g_dd(m,0,2,k,j,i),
-                z4c.g_dd(m,1,1,k,j,i), z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i),
-                z4c.vA_dd(m,0,0,k,j,i), z4c.vA_dd(m,0,1,k,j,i), z4c.vA_dd(m,0,2,k,j,i),
-                z4c.vA_dd(m,1,1,k,j,i), z4c.vA_dd(m,1,2,k,j,i), z4c.vA_dd(m,2,2,k,j,i));
-    });
-    member.team_barrier();
+    Real A = adm::Trace(1.0,
+              z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i), z4c.g_dd(m,0,2,k,j,i),
+              z4c.g_dd(m,1,1,k,j,i), z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i),
+              z4c.vA_dd(m,0,0,k,j,i), z4c.vA_dd(m,0,1,k,j,i), z4c.vA_dd(m,0,2,k,j,i),
+              z4c.vA_dd(m,1,1,k,j,i), z4c.vA_dd(m,1,2,k,j,i), z4c.vA_dd(m,2,2,k,j,i));
 
     // enforce trace of A to be zero
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
-      par_for_inner(member, isg, ieg, [&](const int i) {
-        z4c.vA_dd(m,a,b,k,j,i) -= (1.0/3.0) * A(i) * z4c.g_dd(m,a,b,k,j,i);
-      });
+      z4c.vA_dd(m,a,b,k,j,i) -= (1.0/3.0) * A * z4c.g_dd(m,a,b,k,j,i);
     }
   });
 }

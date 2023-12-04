@@ -12,21 +12,21 @@ basename  = torus
 
 <mesh>
 nghost = 4        # Number of ghost cells
-nx1    = 256      # number of cells in x1-direction
-x1min  = -50.0    # minimum x1
-x1max  = 50.0     # maximum x1
+nx1    = 128      # number of cells in x1-direction
+x1min  = -64.0    # minimum x1
+x1max  = 64.0     # maximum x1
 ix1_bc = user     # inner boundary
 ox1_bc = user     # outer boundary
 
-nx2    = 256      # number of cells in x2-direction
-x2min  = -50.0    # minimum x2
-x2max  = 50.0     # maximum x2
+nx2    = 128      # number of cells in x2-direction
+x2min  = -64.0    # minimum x2
+x2max  = 64.0     # maximum x2
 ix2_bc = user     # inner boundary
 ox2_bc = user     # outer boundary
 
-nx3    = 256      # number of cells in x3-direction
-x3min  = -50.0    # minimum x3
-x3max  = 50.0     # maximum x3
+nx3    = 128      # number of cells in x3-direction
+x3min  = -64.0    # minimum x3
+x3max  = 64.0     # maximum x3
 ix3_bc = user     # inner boundary
 ox3_bc = user     # outer boundary
 
@@ -34,6 +34,37 @@ ox3_bc = user     # outer boundary
 nx1  = 32         # Number of cells in each MeshBlock, X1-dir
 nx2  = 32         # Number of cells in each MeshBlock, X2-dir
 nx3  = 32         # Number of cells in each MeshBlock, X3-dir
+
+<mesh_refinement>
+refinement = static        # type of refinement
+prolong_primitives = true  # prolongate primitives
+
+<refinement1>
+level = 1
+x1min = -32.0
+x1max = 32.0
+x2min = -32.0
+x2max = 32.0
+x3min = -32.0
+x3max = 32.0
+
+<refinement2>
+level = 2
+x1min = -16.0
+x1max = 16.0
+x2min = -16.0
+x2max = 16.0
+x3min = -16.0
+x3max = 16.0
+
+<refinement3>
+level = 3
+x1min = -4.0
+x1max = 4.0
+x2min = -4.0
+x2max = 4.0
+x3min = -4.0
+x3max = 4.0
 
 <time>
 evolution  = dynamic     # dynamic/kinematic/static
@@ -61,6 +92,7 @@ fofc        = true       # Enable first order flux correction
 gamma_max   = 20.0       # Enable ceiling on Lorentz factor
 
 <problem>
+user_hist = true      # enroll user-defined history function
 fm_torus   = true     # Fishbone & Moncrief
 r_edge     = 6.0      # radius of inner edge of disk
 r_peak     = 12.0     # radius of pressure maximum; use l instead if negative
@@ -72,7 +104,6 @@ pgas_pow  = -2.5      # ... * r^pgas_pow
 rho_max   = 1.0       # if > 0, rescale rho to have this peak; rescale pres by same factor
 l         = 0.0       # const. ang. mom. per unit mass u^t u_phi; only used if r_peak < 0
 pert_amp  = 2.0e-2    # perturbation amplitude
-user_hist = true      # enroll user-defined history function
 
 <output1>
 file_type  = hst        # History output
@@ -83,3 +114,10 @@ user_hist_only = true   # only output user-defined history
 file_type  = bin        # Binary data dump
 variable   = hydro_w    # variables to be output
 dt         = 100.0      # time increment between outputs
+
+<output3>
+file_type  = bin        # Binary data dump
+slice_x1   = 0.0        # slice in X1 plane
+id         = slice_x1   # output id tag
+variable   = hydro_w    # variables to be output
+dt         = 10.0       # time increment between outputs

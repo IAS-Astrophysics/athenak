@@ -150,22 +150,23 @@ reconstruct = plm     # reconstruction method
 rotate_geo = false    # geodesic grid rotation
 nlevel = 3            # geodesic level
 power_opacity = true  # absorption opacity related to temperature by power law
-kappa_s = 0.4         # scattering opacity
+compton = true        # flag to enable compton
+kappa_s = 0.34        # scattering opacity
 n_0_floor = 0.1       # floor on n_0
 
 <units>
 bhmass_msun = 10.0    # black hole mass in solar masses
-density_cgs = 5.0e-5  # density unit (cgs)
+density_cgs = 1.0e-4  # density unit (cgs)
 mu = 0.5              # mean molecular weight
 
 <problem>
 fm_torus   = true  # Fishbone & Moncrief
-sane       = true  # vector potential for magnetic field (SANE or MAD config.)
 r_edge     = 20.0  # radius of inner edge of disk
 r_peak     = 41.0  # radius of pressure maximum; use l instead if negative
 tilt_angle = 0.0   # angle (deg) to incl disk spin axis relative to BH spin in dir of x
 potential_beta_min = 100.0  # ratio of gas to magnetic pressure at maxima (diff locations)
 potential_cutoff   = 0.2    # amount to subtract from density when calculating potential
+potential_rho_pow = 1.0     # dependence of the vector potential on density rho
 rho_min   = 1.0e-5    # background on rho given by rho_min ...
 rho_pow   = -1.5      # ... * r^rho_pow
 pgas_min  = 0.333e-7  # background on p_gas given by pgas_min ...

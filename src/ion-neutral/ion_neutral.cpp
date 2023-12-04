@@ -76,8 +76,10 @@ void IonNeutral::AssembleIonNeutralTasks(TaskList &start, TaskList &run, TaskLis
 
   id.i_bcs   = run.AddTask(&MHD::ApplyPhysicalBCs, pmhd, id.recvb);
   id.n_bcs   = run.AddTask(&Hydro::ApplyPhysicalBCs, phyd, id.n_recvu);
-  id.i_c2p   = run.AddTask(&MHD::ConToPrim, pmhd, id.i_bcs);
-  id.n_c2p   = run.AddTask(&Hydro::ConToPrim, phyd, id.n_bcs);
+  id.i_prol  = run.AddTask(&MHD::Prolongate, pmhd, id.i_bcs);
+  id.n_prol  = run.AddTask(&Hydro::Prolongate, phyd, id.n_bcs);
+  id.i_c2p   = run.AddTask(&MHD::ConToPrim, pmhd, id.i_prol);
+  id.n_c2p   = run.AddTask(&Hydro::ConToPrim, phyd, id.n_prol);
   id.i_newdt = run.AddTask(&MHD::NewTimeStep, pmhd, id.i_c2p);
   id.n_newdt = run.AddTask(&Hydro::NewTimeStep, phyd, id.n_c2p);
 

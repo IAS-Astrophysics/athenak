@@ -110,12 +110,12 @@ gamma_max   = 20.0       # Enable ceiling on Lorentz factor
 
 <problem>
 chakrabarti_torus = true  # Chakrabarti
-sane              = true  # vector potential for magnetic field (SANE or MAD config.)
 r_edge            = 10.0  # radius of inner edge of disk
 r_peak            = 30.2  # radius of pressure maximum; use l instead if negative
 tilt_angle        = 0.0   # angle (deg) to incl disk spin axis rel. to BH spin in dir of x
 potential_beta_min = 100.0  # ratio of gas to magnetic pressure at maxima (diff locations)
 potential_cutoff   = 0.2    # amount to subtract from density when calculating potential
+potential_rho_pow = 1.0     # dependence of the vector potential on density rho
 rho_min   = 1.0e-5    # background on rho given by rho_min ...
 rho_pow   = -1.5      # ... * r^rho_pow
 pgas_min  = 0.333e-7  # background on p_gas given by pgas_min ...

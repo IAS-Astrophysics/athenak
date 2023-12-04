@@ -56,6 +56,7 @@ affect_fluid = false    # radiation affects fluid
 arad = 1.0              # radiation constant
 power_opacity = true    # use power law opacity
 kappa_s = 0.0           # scattering opacity
+kappa_p = 0.0           # planck minus rosseland opacity
 
 <output1>
 file_type   = vtk        # output format
