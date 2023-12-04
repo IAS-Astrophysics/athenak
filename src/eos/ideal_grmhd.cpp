@@ -48,6 +48,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
   int &nmb = pmy_pack->nmb_thispack;
   auto &fofc_ = pmy_pack->pmhd->fofc;
   auto &entropy_fix_ = pmy_pack->pmhd->entropy_fix;
+  auto &entropy_fix_turnoff_ = pmy_pack->pmhd->entropy_fix_turnoff;
   auto &sigma_cold_cut_ = pmy_pack->pmhd->sigma_cold_cut;
   auto c2p_test_ = pmy_pack->pmhd->c2p_test;
   int entropyIdx = (entropy_fix_) ? nmhd+nscal-1 : -1;
@@ -149,7 +150,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
                            dfloor_used, efloor_used, c2p_failure, iter_used);
 
       // apply entropy fix
-      if (entropy_fix_) {
+      if (entropy_fix_ && !entropy_fix_turnoff) {
         // compute sigma_cold = 2*pmag/rho
         Real sigma_cold = 0.0;
         if (!c2p_failure) {
