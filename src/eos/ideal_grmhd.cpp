@@ -169,10 +169,10 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
           Real u_3 = glower[3][0]*u0 + glower[3][1]*u1 + glower[3][2]*u2 + glower[3][3]*u3;
 
           // Calculate 4-magnetic field
-          Real b0_ = u_1*w.bx + u_2*w.by + u_3*w.bz;
-          Real b1_ = (w.bx + b0_ * u1) / u0;
-          Real b2_ = (w.by + b0_ * u2) / u0;
-          Real b3_ = (w.bz + b0_ * u3) / u0;
+          Real b0_ = u_1*u.bx + u_2*u.by + u_3*u.bz;
+          Real b1_ = (u.bx + b0_ * u1) / u0;
+          Real b2_ = (u.by + b0_ * u2) / u0;
+          Real b3_ = (u.bz + b0_ * u3) / u0;
 
           // lower vector indices
           Real b_0 = glower[0][0]*b0_ + glower[0][1]*b1_ + glower[0][2]*b2_ + glower[0][3]*b3_;
