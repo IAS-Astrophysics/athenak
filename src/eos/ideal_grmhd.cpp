@@ -47,7 +47,8 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
   int &nscal = pmy_pack->pmhd->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
   auto &fofc_ = pmy_pack->pmhd->fofc;
-  auto &entropy_fix_   = pmy_pack->pmhd->entropy_fix;
+  auto &entropy_fix_ = pmy_pack->pmhd->entropy_fix;
+  auto &sigma_cold_cut_ = pmy_pack->pmhd->sigma_cold_cut;
   auto c2p_test_ = pmy_pack->pmhd->c2p_test;
   int entropyIdx = (entropy_fix_) ? nmhd+nscal-1 : -1;
   auto eos = eos_data;
@@ -149,45 +150,86 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
 
       // apply entropy fix
       if (entropy_fix_) {
-        if (dfloor_used || efloor_used || c2p_failure) {
-          // bool dfloor_used_in_fix=false, efloor_used_in_fix=false;
-          // bool c2p_failure_in_fix=c2p_failure;
-          // int iter_used_in_fix=0;
+        // compute sigma_cold = 2*pmag/rho
+        Real sigma_cold = 0.0;
+        if (!c2p_failure) {
+          Real qq = glower[1][1]*w.vx*w.vx +2.0*glower[1][2]*w.vx*w.vy +2.0*glower[1][3]*w.vx*w.vz
+                  + glower[2][2]*w.vy*w.vy +2.0*glower[2][3]*w.vy*w.vz
+                  + glower[3][3]*w.vz*w.vz;
+          Real alpha = sqrt(-1.0/gupper[0][0]);
+          Real u0_norm = sqrt(1.0 + qq);
+          Real u0 = u0_norm / alpha;
+          Real u1 = w.vx - alpha * u0_norm * gupper[0][1];
+          Real u2 = w.vy - alpha * u0_norm * gupper[0][2];
+          Real u3 = w.vz - alpha * u0_norm * gupper[0][3];
+
+          // lower vector indices
+          Real u_1 = glower[1][0]*u0 + glower[1][1]*u1 + glower[1][2]*u2 + glower[1][3]*u3;
+          Real u_2 = glower[2][0]*u0 + glower[2][1]*u1 + glower[2][2]*u2 + glower[2][3]*u3;
+          Real u_3 = glower[3][0]*u0 + glower[3][1]*u1 + glower[3][2]*u2 + glower[3][3]*u3;
+
+          // Calculate 4-magnetic field
+          Real b0_ = u_1*w.bx + u_2*w.by + u_3*w.bz;
+          Real b1_ = (w.bx + b0_ * u1) / u0;
+          Real b2_ = (w.by + b0_ * u2) / u0;
+          Real b3_ = (w.bz + b0_ * u3) / u0;
+
+          // lower vector indices
+          Real b_0 = glower[0][0]*b0_ + glower[0][1]*b1_ + glower[0][2]*b2_ + glower[0][3]*b3_;
+          Real b_1 = glower[1][0]*b0_ + glower[1][1]*b1_ + glower[1][2]*b2_ + glower[1][3]*b3_;
+          Real b_2 = glower[2][0]*b0_ + glower[2][1]*b1_ + glower[2][2]*b2_ + glower[2][3]*b3_;
+          Real b_3 = glower[3][0]*b0_ + glower[3][1]*b1_ + glower[3][2]*b2_ + glower[3][3]*b3_;
+          Real b_sq = b0_*b_0 + b1_*b_1 + b2_*b_2 + b3_*b_3;
+
+          sigma_cold = b_sq/w.d;
+        }
+
+        // fix the region that fails the variable inversion or strongly magnetized
+        if (c2p_failure || (sigma_cold > sigma_cold_cut_)) {
+          bool dfloor_used_in_fix=false, efloor_used_in_fix=false;
+          bool c2p_failure_in_fix=c2p_failure;
+          int iter_used_in_fix=0;
           HydPrim1D w_old, w_fix;
           w_old.d  = prim(m,IDN,k,j,i);
           w_old.vx = prim(m,IVX,k,j,i);
           w_old.vy = prim(m,IVY,k,j,i);
           w_old.vz = prim(m,IVZ,k,j,i);
           w_old.e  = prim(m,IEN,k,j,i);
-          // w_fix.d  = w.d;
-          // w_fix.vx = w.vx;
-          // w_fix.vy = w.vy;
-          // w_fix.vz = w.vz;
-          // w_fix.e  = w.e;
-          // Real &s_tot = cons(m,entropyIdx,k,j,i);
-          // SingleC2P_IdealSRMHD_EntropyFix(u_sr, s_tot, eos, s2, b2, rpar, w_fix, w_old,
-          //                                 dfloor_used_in_fix, efloor_used_in_fix,
-          //                                 c2p_failure_in_fix, iter_used_in_fix);
-
+          w_fix.d  = w.d;
+          w_fix.vx = w.vx;
+          w_fix.vy = w.vy;
+          w_fix.vz = w.vz;
+          w_fix.e  = w.e;
+          Real &s_tot = cons(m,entropyIdx,k,j,i);
+          SingleC2P_IdealSRMHD_EntropyFix(u_sr, s_tot, eos, s2, b2, rpar, w_fix, w_old,
+                                          dfloor_used_in_fix, efloor_used_in_fix,
+                                          c2p_failure_in_fix, iter_used_in_fix);
           if (c2p_failure) {
-            // use the old values as the final fallback state
+            // if c2p fails, use the old values as the fallback state
             w.d  = w_old.d;
             w.vx = w_old.vx;
             w.vy = w_old.vy;
             w.vz = w_old.vz;
             w.e  = w_old.e;
-          }
+          } // otherwise, use the c2p results as the fallback state
 
-          // if (!c2p_failure_in_fix) {
-          //   // successful entropy-fixed c2p
-          //   Real e_to_d_fix = w_fix.e/w_fix.d; // temperature
-          //   w.e = w.d * e_to_d_fix;
-          //   if (w.e < eos.pfloor/gm1) {
-          //     w.e = eos.pfloor/gm1;
-          //     efloor_used = true;
-          //   }
-          // } // !c2p_failure_in_fix
-        } // endif (dfloor_used || efloor_used || c2p_failure)
+          if (!c2p_failure_in_fix) {
+            // successful entropy-fixed c2p
+            Real lorz = sqrt(1.0 + SQR(w_fix.vx) + SQR(w_fix.vy) + SQR(w_fix.vz));
+            if (lorz <= 1.25) {
+              // inversion of entropy fix cannot be trusted when |v| > 0.6c
+              w.d  = w_fix.d;
+              w.e  = w_fix.e;
+              w.vx = w_fix.vx;
+              w.vy = w_fix.vy;
+              w.vz = w_fix.vz;
+              dfloor_used = dfloor_used_in_fix;
+              efloor_used = efloor_used_in_fix;
+              c2p_failure = c2p_failure_in_fix;
+              iter_used_in_fix = iter_used;
+            }
+          } // !c2p_failure_in_fix
+        } // endif (c2p_failure || (sigma_cold > sigma_cold_cut_))
       } // endif entropy_fix_
 
       // apply velocity ceiling if necessary

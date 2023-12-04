@@ -111,6 +111,7 @@ class MHD {
 
   // following only used for entropy fix
   bool entropy_fix = false;
+  Real sigma_cold_cut;
   bool c2p_test = false;
 
   // container to hold names of TaskIDs
