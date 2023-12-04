@@ -150,7 +150,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
                            dfloor_used, efloor_used, c2p_failure, iter_used);
 
       // apply entropy fix
-      if (entropy_fix_ && !entropy_fix_turnoff) {
+      if (entropy_fix_ && !entropy_fix_turnoff_) {
         // compute sigma_cold = 2*pmag/rho
         Real sigma_cold = 0.0;
         if (!c2p_failure) {
