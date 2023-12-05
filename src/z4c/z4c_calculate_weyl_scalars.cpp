@@ -225,7 +225,6 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
 
     //Gram-Schmidt orthonormalisation with spacetime metric.
     //
-    /*
     for(int a = 0; a<3; ++a){
 	    for(int b = 0; b<3; ++b){
           dotp1 += adm.g_dd(m,a,b,k,j,i)*wvec(a)*wvec(b);
@@ -234,7 +233,6 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
     for(int a =0; a<3; ++a){
 	      wvec(a) = wvec(a)/std::sqrt(dotp1);
     }
-    printf("%f \n", dotp1);
 
     dotp1 = 0;
     for(int a = 0; a<3; ++a){
@@ -245,7 +243,6 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
     for(int a = 0; a<3; ++a){
 	    uvec(a) -= dotp1*wvec(a);
     }
-    printf("%f \n", dotp1);
 
     dotp1 = 0;
     for(int a = 0; a<3; ++a){
@@ -257,7 +254,6 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
     for(int a =0; a<3; ++a){
 	      uvec(a) = uvec(a)/std::sqrt(dotp1);
     }
-    printf("%f \n", dotp1);
 
     dotp1 = 0;
     for(int a = 0; a<3; ++a){
@@ -275,7 +271,6 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
     for(int a = 0; a<3; ++a){
 	    vvec(a) -= dotp1*wvec(a)+dotp2*uvec(a);
     }
-    printf("%f \n", dotp1);
 
     dotp1 = 0;
     for(int a = 0; a<3; ++a){
@@ -287,9 +282,7 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
     for(int a =0; a<3; ++a){
 	    vvec(a) = vvec(a)/std::sqrt(dotp1);
     }
-    printf("%f \n", dotp1);
-    printf("%f \n", dotp2);
-    */
+
     //   Riem3_dddd = Riemann tensor of spacelike hypersurface
     //   Riemm4_dddd = Riemann tensor of 4D spacetime
     //   Riemm4_ddd  = Riemann tensor of 4D spacetime contracted once with n
