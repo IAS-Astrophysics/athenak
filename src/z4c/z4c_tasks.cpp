@@ -187,7 +187,6 @@ TaskStatus Z4c::Z4cToADM_(Driver *pdrive, int stage) {
 TaskStatus Z4c::ADMConstraints_(Driver *pdrive, int stage) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   if (stage == pdrive->nexp_stages) {
-    std::cout << "ADMConstraints!" << std::endl;
     switch (indcs.ng) {
       case 2: ADMConstraints<2>(pmy_pack);
               break;
@@ -196,9 +195,7 @@ TaskStatus Z4c::ADMConstraints_(Driver *pdrive, int stage) {
       case 4: ADMConstraints<4>(pmy_pack);
               break;
     }
-    std::cout << "ADMConstraints Done!" << std::endl;
   }
-
   return TaskStatus::complete;
 }
 

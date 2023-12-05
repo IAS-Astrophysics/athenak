@@ -12,6 +12,7 @@
 #include <cinttypes>
 #include <iostream>
 #include <limits>
+#include <stdio.h>
 
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
@@ -33,9 +34,6 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
-  //For GLOOPS
-
-  int ncells1 = indcs.nx1 + 2*(indcs.ng);
   int nmb = pmbp->nmb_thispack;
 
   auto &z4c = pmbp->pz4c->z4c;
@@ -44,18 +42,8 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
   auto &u_weyl = pmbp->pz4c->u_weyl;
   Kokkos::deep_copy(u_weyl, 0.);
 
-  int scr_level = 1;
-  // 2 1D scratch array and 1 2D scratch array
-  size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1)*6   // 0 tensors
-                  + ScrArray2D<Real>::shmem_size(3,ncells1)*4 // vectors
-                  + ScrArray2D<Real>::shmem_size(6,ncells1)*4 // 2D tensor with symm
-                  + ScrArray2D<Real>::shmem_size(9,ncells1)*0  // 2D tensor with no symm
-                  + ScrArray2D<Real>::shmem_size(18,ncells1)*6 // 3D tensor with symm
-                  + ScrArray2D<Real>::shmem_size(36,ncells1)*1  // 4D tensor with symm
-                  + ScrArray2D<Real>::shmem_size(256,ncells1)*2;  // 4D tensor without symm
-  // Check symmetries of Riemann tensor! Now it is NONE!
-  par_for_outer("z4c_weyl_scalar",DevExeSpace(),scr_size,scr_level,0,nmb-1,ks,ke,js,je,
-  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {
+  par_for("z4c_weyl_scalar",DevExeSpace(),0,nmb-1,ks,ke,js,je,is,ie,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
     // Simplify constants (2 & sqrt 2 factors) featured in re/im[psi4]
     const Real FR4 = 0.25;
     Real &x1min = size.d_view(m).x1min;
@@ -72,41 +60,22 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
     int nx3 = indcs.nx3;
     Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> detg;         // det(g)
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> R;
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> dotp1;
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> dotp2;
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> K;            // trace of extrinsic curvature
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> KK;           // K^a_b K^b_a
-
-
-    detg.NewAthenaScratchTensor(member, scr_level, ncells1);
-       R.NewAthenaScratchTensor(member, scr_level, ncells1);
-       K.NewAthenaScratchTensor(member, scr_level, ncells1);
-   dotp1.NewAthenaScratchTensor(member, scr_level, ncells1);
-   dotp2.NewAthenaScratchTensor(member, scr_level, ncells1);
-      KK.NewAthenaScratchTensor(member, scr_level, ncells1);
+    Real detg = 0.0;         // det(g)
+    Real R = 0.0;
+    Real dotp1 = 0.0;
+    Real dotp2 = 0.0;
+    Real K = 0.0;            // trace of extrinsic curvature
+    Real KK = 0.0;           // K^a_b K^b_a
 
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> Gamma_u;
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> uvec;
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> vvec;
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> wvec;
 
- Gamma_u.NewAthenaScratchTensor(member, scr_level, ncells1);
-    uvec.NewAthenaScratchTensor(member, scr_level, ncells1);
-    vvec.NewAthenaScratchTensor(member, scr_level, ncells1);
-    wvec.NewAthenaScratchTensor(member, scr_level, ncells1);
-
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;        // inverse of conf. metric
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> R_dd;        // Ricci tensor
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> K_ud;        // extrinsic curvature
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 2> Riemm4_dd;   // 4D Riemann *n^a*n^c
-
-
-         g_uu.NewAthenaScratchTensor(member, scr_level, ncells1);
-         R_dd.NewAthenaScratchTensor(member, scr_level, ncells1);
-         K_ud.NewAthenaScratchTensor(member, scr_level, ncells1);
-    Riemm4_dd.NewAthenaScratchTensor(member, scr_level, ncells1);
 
     AthenaScratchTensor<Real, TensorSymm::SYM2,  3, 3> dg_ddd;      // metric 1st drvts
     AthenaScratchTensor<Real, TensorSymm::SYM2,  3, 3> dK_ddd;      // K 1st drvts
@@ -116,22 +85,9 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> DK_udd;      // differential of K
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 3> Riemm4_ddd;  // 4D Riemann * n^a
 
-
-       dg_ddd.NewAthenaScratchTensor(member, scr_level, ncells1);
-       dK_ddd.NewAthenaScratchTensor(member, scr_level, ncells1);
-    Gamma_ddd.NewAthenaScratchTensor(member, scr_level, ncells1);
-    Gamma_udd.NewAthenaScratchTensor(member, scr_level, ncells1);
-       DK_ddd.NewAthenaScratchTensor(member, scr_level, ncells1);
-       DK_udd.NewAthenaScratchTensor(member, scr_level, ncells1);
-   Riemm4_ddd.NewAthenaScratchTensor(member, scr_level, ncells1);
-
      AthenaScratchTensor<Real, TensorSymm::SYM22, 3, 4> ddg_dddd;   // metric 2nd drvts
      AthenaScratchTensor<Real, TensorSymm::NONE, 3, 4> Riem3_dddd;  // 3D Riemann tensor
      AthenaScratchTensor<Real, TensorSymm::NONE, 3, 4> Riemm4_dddd; // 4D Riemann tensor
-
-      ddg_dddd.NewAthenaScratchTensor(member, scr_level, ncells1);    
-    Riem3_dddd.NewAthenaScratchTensor(member, scr_level, ncells1);    
-   Riemm4_dddd.NewAthenaScratchTensor(member, scr_level, ncells1);    
 
     Real idx[] = {1/size.d_view(m).dx1, 1/size.d_view(m).dx2, 1/size.d_view(m).dx3};
     // -----------------------------------------------------------------------------------
@@ -141,10 +97,8 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
     for(int c = 0; c < 3; ++c)
     for(int a = 0; a < 3; ++a)
     for(int b = 0; b < 3; ++b) {
-      par_for_inner(member, is, ie, [&](const int i) {
-        dg_ddd(c,a,b,i) = Dx<NGHOST>(c, idx, adm.g_dd, m,a,b,k,j,i);
-        dK_ddd(c,a,b,i) = Dx<NGHOST>(c, idx, adm.vK_dd, m,a,b,k,j,i);
-      });
+      dg_ddd(c,a,b) = Dx<NGHOST>(c, idx, adm.g_dd, m,a,b,k,j,i);
+      dK_ddd(c,a,b) = Dx<NGHOST>(c, idx, adm.vK_dd, m,a,b,k,j,i);
     }
     // second derivatives of g
     for(int a = 0; a < 3; ++a)
@@ -152,29 +106,23 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
     for(int c = 0; c < 3; ++c)
     for(int d = 0; d < 3; ++d) {
       if(a == b) {
-        par_for_inner(member, is, ie, [&](const int i) {
-          ddg_dddd(a,a,c,d,i) = Dxx<NGHOST>(a, idx, adm.g_dd, m,c,d,k,j,i);
-        });
+        ddg_dddd(a,a,c,d) = Dxx<NGHOST>(a, idx, adm.g_dd, m,c,d,k,j,i);
       }
       else {
-        par_for_inner(member, is, ie, [&](const int i) {
-          ddg_dddd(a,b,c,d,i) = Dxy<NGHOST>(a, b, idx, adm.g_dd, m,c,d,k,j,i);
-        });
+        ddg_dddd(a,b,c,d) = Dxy<NGHOST>(a, b, idx, adm.g_dd, m,c,d,k,j,i);
       }
     }
 
     // -----------------------------------------------------------------------------------
     // inverse metric
     //
-    par_for_inner(member, is, ie, [&](const int i) {
-      detg(i) = adm::SpatialDet(adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i), adm.g_dd(m,0,2,k,j,i),
-                           adm.g_dd(m,1,1,k,j,i), adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i));
-      adm::SpatialInv(1.0/detg(i),
-                 adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i), adm.g_dd(m,0,2,k,j,i),
-                 adm.g_dd(m,1,1,k,j,i), adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i),
-                 &g_uu(0,0,i), &g_uu(0,1,i), &g_uu(0,2,i),
-                 &g_uu(1,1,i), &g_uu(1,2,i), &g_uu(2,2,i));
-    });
+    detg = adm::SpatialDet(adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i), adm.g_dd(m,0,2,k,j,i),
+                          adm.g_dd(m,1,1,k,j,i), adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i));
+    adm::SpatialInv(1.0/detg,
+                adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i), adm.g_dd(m,0,2,k,j,i),
+                adm.g_dd(m,1,1,k,j,i), adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i),
+                &g_uu(0,0), &g_uu(0,1), &g_uu(0,2),
+                &g_uu(1,1), &g_uu(1,2), &g_uu(2,2));
 
     // -----------------------------------------------------------------------------------
     // Christoffel symbols
@@ -182,111 +130,74 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
     for(int c = 0; c < 3; ++c)
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
-      par_for_inner(member, is, ie, [&](const int i) {
-        Gamma_ddd(c,a,b,i) = 0.5*(dg_ddd(a,b,c,i) + dg_ddd(b,a,c,i) - dg_ddd(c,a,b,i));
-      });
+      Gamma_ddd(c,a,b) = 0.5*(dg_ddd(a,b,c) + dg_ddd(b,a,c) - dg_ddd(c,a,b));
     }
 
-    Gamma_udd.ZeroClear();
-    member.team_barrier();
     for(int c = 0; c < 3; ++c)
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b)
     for(int d = 0; d < 3; ++d) {
-      par_for_inner(member, is, ie, [&](const int i) {
-        Gamma_udd(c,a,b,i) += g_uu(c,d,i)*Gamma_ddd(d,a,b,i);
-      });
+      Gamma_udd(c,a,b) += g_uu(c,d)*Gamma_ddd(d,a,b);
     }
 
-    Gamma_u.ZeroClear();
-    member.team_barrier();
     for(int a = 0; a < 3; ++a)
     for(int b = 0; b < 3; ++b)
     for(int c = 0; c < 3; ++c) {
-      par_for_inner(member, is, ie, [&](const int i) {
-        Gamma_u(a,i) += g_uu(b,c,i)*Gamma_udd(a,b,c,i);
-      });
+      Gamma_u(a) += g_uu(b,c)*Gamma_udd(a,b,c);
     }
 
     // -----------------------------------------------------------------------------------
     // Ricci tensor and Ricci scalar
     //
-    R.ZeroClear();
-    R_dd.ZeroClear();
-    member.team_barrier();
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
       for(int c = 0; c < 3; ++c)
       for(int d = 0; d < 3; ++d) {
         // Part with the Christoffel symbols
         for(int e = 0; e < 3; ++e) {
-          par_for_inner(member, is, ie, [&](const int i) {
-            R_dd(a,b,i) += g_uu(c,d,i) * Gamma_udd(e,a,c,i) * Gamma_ddd(e,b,d,i);
-            R_dd(a,b,i) -= g_uu(c,d,i) * Gamma_udd(e,a,b,i) * Gamma_ddd(e,c,d,i);
-          });
+          R_dd(a,b) += g_uu(c,d) * Gamma_udd(e,a,c) * Gamma_ddd(e,b,d);
+          R_dd(a,b) -= g_uu(c,d) * Gamma_udd(e,a,b) * Gamma_ddd(e,c,d);
         }
         // Wave operator part of the Ricci
-        par_for_inner(member, is, ie, [&](const int i) {
-          R_dd(a,b,i) += 0.5*g_uu(c,d,i)*(
-              - ddg_dddd(c,d,a,b,i) - ddg_dddd(a,b,c,d,i) +
-                ddg_dddd(a,c,b,d,i) + ddg_dddd(b,c,a,d,i));
-        });
+        R_dd(a,b) += 0.5*g_uu(c,d)*(
+            - ddg_dddd(c,d,a,b) - ddg_dddd(a,b,c,d) +
+              ddg_dddd(a,c,b,d) + ddg_dddd(b,c,a,d));
       }
-      par_for_inner(member, is, ie, [&](const int i) {
-        R(i) += g_uu(a,b,i) * R_dd(a,b,i);
-      });
+        R += g_uu(a,b) * R_dd(a,b);
     }
 
     // -----------------------------------------------------------------------------------
     // Extrinsic curvature: traces and derivatives
     //
-    K.ZeroClear();
-    K_ud.ZeroClear();
-    member.team_barrier();
+
     for(int a = 0; a < 3; ++a) {
       for(int b = 0; b < 3; ++b) {
         for(int c = 0; c < 3; ++c) {
-          par_for_inner(member, is, ie, [&](const int i) {
-            K_ud(a,b,i) += g_uu(a,c,i) * adm.vK_dd(m,c,b,k,j,i);
-          });
+          K_ud(a,b) += g_uu(a,c) * adm.vK_dd(m,c,b,k,j,i);
         }
       }
-      par_for_inner(member, is, ie, [&](const int i) {
-        K(i) += K_ud(a,a,i);
-      });
+      K += K_ud(a,a);
     }
     // K^a_b K^b_a
-    KK.ZeroClear();
-    member.team_barrier();
     for(int a = 0; a < 3; ++a)
     for(int b = 0; b < 3; ++b) {
-      par_for_inner(member, is, ie, [&](const int i) {
-        KK(i) += K_ud(a,b,i) * K_ud(b,a,i);
-      });
+      KK += K_ud(a,b) * K_ud(b,a);
     }
     // Covariant derivative of K
     for(int a = 0; a < 3; ++a)
     for(int b = 0; b < 3; ++b)
     for(int c = 0; c < 3; ++c) {
-      par_for_inner(member, is, ie, [&](const int i) {
-        DK_ddd(a,b,c,i) = dK_ddd(a,b,c,i);
-      });
+        DK_ddd(a,b,c) = dK_ddd(a,b,c);
       for(int d = 0; d < 3; ++d) {
-        par_for_inner(member, is, ie, [&](const int i) {
-          DK_ddd(a,b,c,i) -= Gamma_udd(d,a,b,i) * adm.vK_dd(m,d,c,k,j,i);
-          DK_ddd(a,b,c,i) -= Gamma_udd(d,a,c,i) * adm.vK_dd(m,b,d,k,j,i);
-        });
+          DK_ddd(a,b,c) -= Gamma_udd(d,a,b) * adm.vK_dd(m,d,c,k,j,i);
+          DK_ddd(a,b,c) -= Gamma_udd(d,a,c) * adm.vK_dd(m,b,d,k,j,i);
       }
     }
-    DK_udd.ZeroClear();
-    member.team_barrier();
     for(int a = 0; a < 3; ++a)
     for(int b = 0; b < 3; ++b)
     for(int c = 0; c < 3; ++c)
     for(int d = 0; d < 3; ++d) {
-      par_for_inner(member, is, ie, [&](const int i) {
-        DK_udd(a,b,c,i) += g_uu(a,d,i) * DK_ddd(d,b,c,i);
-      });
+      DK_udd(a,b,c) += g_uu(a,d) * DK_ddd(d,b,c);
     }
 
     //------------------------------------------------------------------------------------
@@ -298,158 +209,123 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
     //     uvec = radial vec
     //     vvec = theta vec
     //     wvec = phi vec
-    par_for_inner(member, is, ie, [&](const int i){
-      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
-      Real xx = x1v;
-      if(SQR(x1v) +  SQR(x2v) < 1e-10)
-        xx = xx + 1e-8;
-      uvec(0,i) = xx;
-      uvec(1,i) = x2v;
-      uvec(2,i) = x3v;
-      vvec(0,i) = xx*x3v;
-      vvec(1,i) = x2v*x3v;
-      vvec(2,i) = -SQR(xx)-SQR(x2v);
-      wvec(0,i) = x2v*-1.0;
-      wvec(1,i) = xx;
-      wvec(2,i) = 0.0;
-    });
+    Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+    Real xx = x1v;
+    if(SQR(x1v) +  SQR(x2v) < 1e-10)
+      xx = xx + 1e-8;
+    uvec(0) = xx;
+    uvec(1) = x2v;
+    uvec(2) = x3v;
+    vvec(0) = xx*x3v;
+    vvec(1) = x2v*x3v;
+    vvec(2) = -SQR(xx)-SQR(x2v);
+    wvec(0) = x2v*-1.0;
+    wvec(1) = xx;
+    wvec(2) = 0.0;
 
     //Gram-Schmidt orthonormalisation with spacetime metric.
     //
-    dotp1.ZeroClear();
-    member.team_barrier();
+    /*
     for(int a = 0; a<3; ++a){
 	    for(int b = 0; b<3; ++b){
-	      par_for_inner(member, is, ie, [&](const int i){
-          dotp1(i) += adm.g_dd(m,a,b,k,j,i)*wvec(a,i)*wvec(b,i);
-	      });
+          dotp1 += adm.g_dd(m,a,b,k,j,i)*wvec(a)*wvec(b);
 	    }
     }
     for(int a =0; a<3; ++a){
-      par_for_inner(member, is, ie, [&](const int i){
-	      wvec(a,i) = wvec(a,i)/std::sqrt(dotp1(i));
-      });
+	      wvec(a) = wvec(a)/std::sqrt(dotp1);
     }
+    printf("%f \n", dotp1);
 
-    dotp1.ZeroClear();
-    member.team_barrier();
+    dotp1 = 0;
     for(int a = 0; a<3; ++a){
       for( int b = 0; b<3; ++b){
-	      par_for_inner(member, is, ie, [&](const int i){
-	        dotp1(i) += adm.g_dd(m,a,b,k,j,i)*wvec(a,i)*uvec(b,i);
-	      });
+	      dotp1 += adm.g_dd(m,a,b,k,j,i)*wvec(a)*uvec(b);
       }
     }
     for(int a = 0; a<3; ++a){
-      par_for_inner(member, is, ie, [&](const int i){
-	      uvec(a,i) -= dotp1(i)*wvec(a,i);
-	    });
+	    uvec(a) -= dotp1*wvec(a);
     }
-    dotp1.ZeroClear();
-    member.team_barrier();
+    printf("%f \n", dotp1);
+
+    dotp1 = 0;
     for(int a = 0; a<3; ++a){
 	    for(int b = 0; b<3; ++b) {
-	      par_for_inner(member, is, ie, [&](const int i){
-	        dotp1(i) += adm.g_dd(m,a,b,k,j,i)*uvec(a,i)*uvec(b,i);
-	      });
+	        dotp1 += adm.g_dd(m,a,b,k,j,i)*uvec(a)*uvec(b);
 	    }
     }
 
     for(int a =0; a<3; ++a){
-	    par_for_inner(member, is, ie, [&](const int i){
-	      uvec(a,i) = uvec(a,i)/std::sqrt(dotp1(i));
-	    });
+	      uvec(a) = uvec(a)/std::sqrt(dotp1);
     }
+    printf("%f \n", dotp1);
 
-    dotp1.ZeroClear();
-    member.team_barrier();
+    dotp1 = 0;
     for(int a = 0; a<3; ++a){
       for(int b = 0; b<3; ++b) {
-	      par_for_inner(member, is, ie, [&](const int i){
-	        dotp1(i) += adm.g_dd(m,a,b,k,j,i)*wvec(a,i)*vvec(b,i);
-	      });
-	    }
-    }
-    dotp2.ZeroClear();
-    member.team_barrier();
-    for(int a = 0; a<3; ++a){
-	    for( int b = 0; b<3; ++b) {
-	      par_for_inner(member, is, ie, [&](const int i){
-	        dotp2(i) += adm.g_dd(m,a,b,k,j,i)*uvec(a,i)*vvec(b,i);
-	      });
+	      dotp1 += adm.g_dd(m,a,b,k,j,i)*wvec(a)*vvec(b);
 	    }
     }
 
     for(int a = 0; a<3; ++a){
-	    par_for_inner(member, is, ie, [&](const int i){
-	      vvec(a,i) -= dotp1(i)*wvec(a,i)+dotp2(i)*uvec(a,i);
-	    });
+	    for( int b = 0; b<3; ++b) {
+	      dotp2 += adm.g_dd(m,a,b,k,j,i)*uvec(a)*vvec(b);
+	    }
     }
 
-    dotp1.ZeroClear();
-    member.team_barrier();
+    for(int a = 0; a<3; ++a){
+	    vvec(a) -= dotp1*wvec(a)+dotp2*uvec(a);
+    }
+    printf("%f \n", dotp1);
+
+    dotp1 = 0;
     for(int a = 0; a<3; ++a){
 	    for( int b = 0; b<3; ++b) {
-	      par_for_inner(member, is, ie, [&](const int i){
-	        dotp1(i) += adm.g_dd(m,a,b,k,j,i)*vvec(a,i)*vvec(b,i);
-	      });
+	      dotp1 += adm.g_dd(m,a,b,k,j,i)*vvec(a)*vvec(b);
 	    }
     }
 
     for(int a =0; a<3; ++a){
-	    par_for_inner(member, is, ie, [&](const int i){
-	      vvec(a,i) = vvec(a,i)/std::sqrt(dotp1(i));
-	    });
+	    vvec(a) = vvec(a)/std::sqrt(dotp1);
     }
-
+    printf("%f \n", dotp1);
+    printf("%f \n", dotp2);
+    */
     //   Riem3_dddd = Riemann tensor of spacelike hypersurface
     //   Riemm4_dddd = Riemann tensor of 4D spacetime
     //   Riemm4_ddd  = Riemann tensor of 4D spacetime contracted once with n
     //   Riemm4_dd  = Riemann tensor of 4D spacetime contracted twice with n
-    Riem3_dddd.ZeroClear();
-    Riemm4_dddd.ZeroClear();
-    Riemm4_ddd.ZeroClear();
-    Riemm4_dd.ZeroClear();
-    member.team_barrier();
+
     for(int a = 0; a < 3; ++a)
     for(int b = 0; b < 3; ++b)
     for(int c = 0; c < 3; ++c)
     for(int d = 0; d < 3; ++d) {
-      par_for_inner(member, is, ie, [&](const int i){
-        Riem3_dddd(a,b,c,d,i) = adm.g_dd(m,a,c,k,j,i)*R_dd(b,d,i) 
-                              + adm.g_dd(m,b,d,k,j,i)*R_dd(a,c,i)
-                              - adm.g_dd(m,a,d,k,j,i)*R_dd(b,c,i) 
-                              - adm.g_dd(m,b,c,k,j,i)*R_dd(a,d,i)
-                              - 0.5*R(i)*adm.g_dd(m,a,c,k,j,i)*adm.g_dd(m,b,d,k,j,i)
-                              + 0.5*R(i)*adm.g_dd(m,a,d,k,j,i)*adm.g_dd(m,b,c,k,j,i);
-        Riemm4_dddd(a,b,c,d,i) = Riem3_dddd(a,b,c,d,i) 
-                          + adm.vK_dd(m,a,c,k,j,i)*adm.vK_dd(m,b,d,k,j,i)
-                                - adm.vK_dd(m,a,d,k,j,i)*adm.vK_dd(m,b,c,k,j,i);
-      });
+      Riem3_dddd(a,b,c,d) = adm.g_dd(m,a,c,k,j,i)*R_dd(b,d)
+                            + adm.g_dd(m,b,d,k,j,i)*R_dd(a,c)
+                            - adm.g_dd(m,a,d,k,j,i)*R_dd(b,c)
+                            - adm.g_dd(m,b,c,k,j,i)*R_dd(a,d)
+                            - 0.5*R*adm.g_dd(m,a,c,k,j,i)*adm.g_dd(m,b,d,k,j,i)
+                            + 0.5*R*adm.g_dd(m,a,d,k,j,i)*adm.g_dd(m,b,c,k,j,i);
+      Riemm4_dddd(a,b,c,d) = Riem3_dddd(a,b,c,d)
+                        + adm.vK_dd(m,a,c,k,j,i)*adm.vK_dd(m,b,d,k,j,i)
+                              - adm.vK_dd(m,a,d,k,j,i)*adm.vK_dd(m,b,c,k,j,i);
     }
 
-    for(int a = 0; a < 3; ++a){
-      for(int b = 0; b < 3; ++b){
-        for(int c = 0; c < 3; ++c){
-          par_for_inner(member, is, ie, [&](const int i){
-            Riemm4_ddd(a,b,c,i) = - (DK_ddd(c,a,b,i) - DK_ddd(b,a,c,i));
-          });
+    for(int a = 0; a < 3; ++a) {
+      for(int b = 0; b < 3; ++b) {
+        for(int c = 0; c < 3; ++c) {
+          Riemm4_ddd(a,b,c) = - (DK_ddd(c,a,b) - DK_ddd(b,a,c));
         }
       }
     }
 
 
-    for(int a = 0; a < 3; ++a){
-      for(int b = 0; b < 3; ++b){
-        par_for_inner(member, is, ie, [&](const int i){
-          Riemm4_dd(a,b,i) = R_dd(a,b,i) + K(i)*adm.vK_dd(m,a,b,k,j,i);
-        });
-        for(int c = 0; c < 3; ++c){
-          for(int d = 0; d < 3; ++d){
-            par_for_inner(member, is, ie, [&](const int i){
-              Riemm4_dd(a,b,i) += - g_uu(c,d,i)*adm.vK_dd(m,a,c,k,j,i)
-	                                       *adm.vK_dd(m,d,b,k,j,i);
-            });
+    for(int a = 0; a < 3; ++a) {
+      for(int b = 0; b < 3; ++b) {
+        Riemm4_dd(a,b) = R_dd(a,b) + K*adm.vK_dd(m,a,b,k,j,i);
+        for(int c = 0; c < 3; ++c) {
+          for(int d = 0; d < 3; ++d) {
+            Riemm4_dd(a,b) += - g_uu(c,d)*adm.vK_dd(m,a,c,k,j,i)
+                                        *adm.vK_dd(m,d,b,k,j,i);
           }
         }
       }
@@ -457,32 +333,26 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
 
     for(int a = 0; a < 3; ++a){
       for(int b = 0; b < 3; ++b){
-        par_for_inner(member, is, ie, [&](const int i){
-          weyl.rpsi4(m,k,j,i) += - FR4 * Riemm4_dd(a,b,i) * (
-            vvec(a,i) * vvec(b,i) - (-wvec(a,i) * (-wvec(b,i)))
-          );
-          weyl.ipsi4(m,k,j,i) += - FR4 * Riemm4_dd(a,b,i) * (
-            -vvec(a,i) * wvec(b,i) - wvec(a,i)*vvec(b,i)
-          );
-        });
+        weyl.rpsi4(m,k,j,i) += - FR4 * Riemm4_dd(a,b) * (
+          vvec(a) * vvec(b) - (-wvec(a) * (-wvec(b)))
+        );
+        weyl.ipsi4(m,k,j,i) += - FR4 * Riemm4_dd(a,b) * (
+          -vvec(a) * wvec(b) - wvec(a)*vvec(b)
+        );
         for(int c = 0; c < 3; ++c){
-          par_for_inner(member, is, ie, [&](const int i){
-            weyl.rpsi4(m,k,j,i) += 0.5 * Riemm4_ddd(a,c,b,i) * uvec(c,i) * (
-              vvec(a,i) * vvec(b,i) - (-wvec(a,i)*(-wvec(b,i)))
-            );
-            weyl.ipsi4(m,k,j,i) += 0.5 * Riemm4_ddd(a,c,b,i) * uvec(c,i) * (
-              -vvec(a,i) * wvec(b,i) - wvec(a,i)*vvec(b,i)
-            );
-          });
+          weyl.rpsi4(m,k,j,i) += 0.5 * Riemm4_ddd(a,c,b) * uvec(c) * (
+            vvec(a) * vvec(b) - (-wvec(a)*(-wvec(b)))
+          );
+          weyl.ipsi4(m,k,j,i) += 0.5 * Riemm4_ddd(a,c,b) * uvec(c) * (
+            -vvec(a) * wvec(b) - wvec(a)*vvec(b)
+          );
           for(int d = 0; d < 3; ++d){
-            par_for_inner(member, is, ie, [&](const int i){
-              weyl.rpsi4(m,k,j,i) += -FR4 * (Riemm4_dddd(d,a,c,b,i) * uvec(d,i) * uvec(c,i)) * (
-                vvec(a,i) * vvec(b,i) - (-wvec(a,i)*(-wvec(b,i)))
-              );
-              weyl.ipsi4(m,k,j,i) += -FR4 * (Riemm4_dddd(d,a,c,b,i) * uvec(d,i) * uvec(c,i)) * (
-                -vvec(a,i) * wvec(b,i) - wvec(a,i)*vvec(b,i)
-              );
-            });
+            weyl.rpsi4(m,k,j,i) += -FR4 * (Riemm4_dddd(d,a,c,b) * uvec(d) * uvec(c)) * (
+              vvec(a) * vvec(b) - (-wvec(a)*(-wvec(b)))
+            );
+            weyl.ipsi4(m,k,j,i) += -FR4 * (Riemm4_dddd(d,a,c,b) * uvec(d) * uvec(c)) * (
+              -vvec(a) * wvec(b) - wvec(a)*vvec(b)
+            );
           }
         }
       }
