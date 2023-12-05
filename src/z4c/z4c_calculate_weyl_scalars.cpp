@@ -60,13 +60,6 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
     int nx3 = indcs.nx3;
     Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
-    Real detg = 0.0;         // det(g)
-    Real R = 0.0;
-    Real dotp1 = 0.0;
-    Real dotp2 = 0.0;
-    Real K = 0.0;            // trace of extrinsic curvature
-    Real KK = 0.0;           // K^a_b K^b_a
-
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> Gamma_u;
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> uvec;
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> vvec;
@@ -85,9 +78,59 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> DK_udd;      // differential of K
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 3> Riemm4_ddd;  // 4D Riemann * n^a
 
-     AthenaScratchTensor<Real, TensorSymm::SYM22, 3, 4> ddg_dddd;   // metric 2nd drvts
-     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 4> Riem3_dddd;  // 3D Riemann tensor
-     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 4> Riemm4_dddd; // 4D Riemann tensor
+    AthenaScratchTensor<Real, TensorSymm::SYM22, 3, 4> ddg_dddd;   // metric 2nd drvts
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 4> Riem3_dddd;  // 3D Riemann tensor
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 4> Riemm4_dddd; // 4D Riemann tensor
+
+    // Scalars
+    Real detg = 0.0;         // det(g)
+    Real R = 0.0;
+    Real dotp1 = 0.0;
+    Real dotp2 = 0.0;
+    Real K = 0.0;            // trace of extrinsic curvature
+    Real KK = 0.0;           // K^a_b K^b_a
+
+    // Vectors
+    for (int a = 0; a < 3; ++a) {
+      Gamma_u(a) = 0.0;
+      uvec(a) = 0.0;
+      vvec(a) = 0.0;
+      wvec(a) = 0.0;
+    }
+
+    //
+    // Symmetric tensors
+    for (int a = 0; a < 3; ++a)
+    for (int b = a; b < 3; ++b) {
+      g_uu(a,b) = 0.0;
+      R_dd(a,b) = 0.0;
+      K_ud(a,b) = 0.0;
+      for (int c = 0; c < 3; ++c) {
+        dg_ddd(c,a,b) = 0.0;
+        dK_ddd(c,a,b) = 0.0;
+        Gamma_ddd(c,a,b) = 0.0;
+        Gamma_udd(c,a,b) = 0.0;
+        DK_ddd(c,a,b) = 0.0;
+        DK_udd(c,a,b) = 0.0;
+        for (int d = c; d < 3; ++d) {
+          ddg_dddd(c,d,a,b) = 0.0;
+        }
+      }
+    }
+
+    // Generic tensors
+    for (int a = 0; a < 3; ++a)
+    for (int b = 0; b < 3; ++b) {
+      Riemm4_dd(a,b) = 0.0;
+      for (int c = 0; c < 3; ++c) {
+        Riemm4_ddd(c,a,b) = 0.0;
+        for (int d = 0; d < 3; ++d) {
+          Riem3_dddd(a,b,c,d) = 0.0;
+          Riemm4_dddd(a,b,c,d) = 0.0;
+        }
+      }
+    }
+
 
     Real idx[] = {1/size.d_view(m).dx1, 1/size.d_view(m).dx2, 1/size.d_view(m).dx3};
     // -----------------------------------------------------------------------------------
@@ -225,38 +268,38 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
 
     //Gram-Schmidt orthonormalisation with spacetime metric.
     //
-    for(int a = 0; a<3; ++a){
+    for(int a = 0; a<3; ++a) {
 	    for(int b = 0; b<3; ++b){
           dotp1 += adm.g_dd(m,a,b,k,j,i)*wvec(a)*wvec(b);
 	    }
     }
-    for(int a =0; a<3; ++a){
+    for(int a =0; a<3; ++a) {
 	      wvec(a) = wvec(a)/std::sqrt(dotp1);
     }
 
     dotp1 = 0;
-    for(int a = 0; a<3; ++a){
+    for(int a = 0; a<3; ++a) {
       for( int b = 0; b<3; ++b){
 	      dotp1 += adm.g_dd(m,a,b,k,j,i)*wvec(a)*uvec(b);
       }
     }
-    for(int a = 0; a<3; ++a){
+    for(int a = 0; a<3; ++a) {
 	    uvec(a) -= dotp1*wvec(a);
     }
 
     dotp1 = 0;
-    for(int a = 0; a<3; ++a){
+    for(int a = 0; a<3; ++a) {
 	    for(int b = 0; b<3; ++b) {
 	        dotp1 += adm.g_dd(m,a,b,k,j,i)*uvec(a)*uvec(b);
 	    }
     }
 
-    for(int a =0; a<3; ++a){
+    for(int a =0; a<3; ++a) {
 	      uvec(a) = uvec(a)/std::sqrt(dotp1);
     }
 
     dotp1 = 0;
-    for(int a = 0; a<3; ++a){
+    for(int a = 0; a<3; ++a) {
       for(int b = 0; b<3; ++b) {
 	      dotp1 += adm.g_dd(m,a,b,k,j,i)*wvec(a)*vvec(b);
 	    }
