@@ -213,7 +213,7 @@ class Z4c {
   void AlgConstr(MeshBlockPack *pmbp);
 
   // Sommerfeld boundary conditions
-  KOKKOS_FUNCTION
+  /*KOKKOS_FUNCTION
   void Z4cSommerfeld(int const m,
                      int const is, int const ie,
                      int const js, int const j,
@@ -221,12 +221,15 @@ class Z4c {
                      int const parity,
                      int const scr_size,
                      int const scr_level,
-                     TeamMember_t member);
-
+                     TeamMember_t member);*/
+  /*void Z4cSommerfeld(const int m, const int k, const int j, const int i, const int ng,
+                     const int dir, const int parity);*/
 
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Z4c
 };
+
+
 
 } // namespace z4c
 #endif //Z4C_Z4C_HPP_
