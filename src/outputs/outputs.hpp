@@ -74,7 +74,7 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "mat_Sxx", "mat_Sxy", "mat_Sxz", "mat_Syy", "mat_Syz", "mat_Szz",
   "mat",
 
-  "rad_femn_I", "rad_femn_E"
+  "rad_femn_F", "rad_femn_E"
 };
 
 // forward declarations
