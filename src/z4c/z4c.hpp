@@ -169,6 +169,8 @@ class Z4c {
     Real shift_hh;
     Real shift_advect;
     Real shift_eta;
+    // Enable BSSN if false (disable theta)
+    bool use_z4c;
   };
   Options opt;
   Real diss;              // Dissipation parameter

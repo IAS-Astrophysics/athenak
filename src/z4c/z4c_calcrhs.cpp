@@ -331,7 +331,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     //
     chi_guarded = (z4c.chi(m,k,j,i)>opt.chi_div_floor)
                     ? z4c.chi(m,k,j,i) : opt.chi_div_floor;
-    oopsi4 = std::pow(chi_guarded, -4./opt.chi_psi_power);
+    oopsi4 = pow(chi_guarded, -4./opt.chi_psi_power);
     for(int a = 0; a < 3; ++a) {
       dphi_d(a) = dchi_d(a)/(chi_guarded * opt.chi_psi_power);
     }
@@ -377,7 +377,8 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
 
     // -----------------------------------------------------------------------------------
     // 2nd covariant derivative of the lapse
-    //
+    // TODO(JMF): This could potentially be sped up by calculating d_i phi d^i alpha
+    // beforehand.
     for(int a = 0; a < 3; ++a)
     for(int b = 0; b < 3; ++b) {
       Ddalpha_dd(a,b) = ddalpha_dd(a,b)
@@ -415,6 +416,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     for(int d = 0; d < 3; ++d) {
       A_uu(a,b) += g_uu(a,c) * g_uu(b,d) * z4c.vA_dd(m,c,d,k,j,i);
     }
+    // TODO(JMF): dchi_d/chi_guarded is opt.chi_psi_power * dphi_d.
     for(int a = 0; a < 3; ++a) {
       for(int b = 0; b < 3; ++b) {
           DA_u(a) -= (3./2.) * A_uu(a,b) * dchi_d(b) / chi_guarded;
@@ -492,14 +494,15 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
       LKhat + opt.damp_kappa1*(1 - opt.damp_kappa2)
       * z4c.alpha(m,k,j,i) * z4c.vTheta(m,k,j,i);
     // Matter term
-    rhs.vKhat(m,k,j,i) += 4*M_PI * z4c.alpha(m,k,j,i) * (S + tmunu.E(m,k,j,i));
+    rhs.vKhat(m,k,j,i) += 4.*M_PI * z4c.alpha(m,k,j,i) * (S + tmunu.E(m,k,j,i));
     rhs.chi(m,k,j,i) = Lchi - (1./6.) * opt.chi_psi_power *
       chi_guarded * z4c.alpha(m,k,j,i) * K;
     rhs.vTheta(m,k,j,i) = LTheta + z4c.alpha(m,k,j,i) * (
         0.5*Ht - (2. + opt.damp_kappa2) * opt.damp_kappa1 * z4c.vTheta(m,k,j,i));
     // Matter commented out -- JMF: this is already in the Hamiltonian constraint.
-    //rhs.Theta(m,k,j,i) -= 8.*M_PI * z4c.alpha(m,k,j,i) * mat.rho(m,k,j,i);
     rhs.vTheta(m,k,j,i) -= 8.*M_PI * z4c.alpha(m,k,j,i) * tmunu.E(m,k,j,i);
+    // If BSSN is enabled, theta is disabled.
+    rhs.vTheta(m,k,j,i) *= opt.use_z4c;
     // Gamma's
     for(int a = 0; a < 3; ++a) {
       rhs.vGam_u(m,a,k,j,i) = 2.*z4c.alpha(m,k,j,i)*DA_u(a) + LGam_u(a);

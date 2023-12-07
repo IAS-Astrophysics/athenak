@@ -6,6 +6,8 @@
 //! \file z4c.cpp
 //! \brief implementation of Z4c class constructor and assorted other functions
 
+#include <math.h>
+
 #include <iostream>
 #include <string>
 #include <algorithm>
@@ -123,6 +125,8 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
 
   opt.shift_eta = pin->GetOrAddReal("z4c", "shift_eta", 2.0);
 
+  opt.use_z4c = pin->GetOrAddBoolean("z4c", "use_z4c", true);
+
   diss = opt.diss*pow(2., -2.*indcs.ng)*(indcs.ng % 2 == 0 ? -1. : 1.);
   }
 
@@ -172,7 +176,7 @@ void Z4c::AlgConstr(MeshBlockPack *pmbp) {
     detg = detg > 0. ? detg : 1.;
     Real eps = detg - 1.;
     Real oopsi4 = (eps < opt.eps_floor) ? (1. - opt.eps_floor/3.) :
-                (std::pow(1./detg, 1./3.));
+                (pow(1./detg, 1./3.));
 
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
