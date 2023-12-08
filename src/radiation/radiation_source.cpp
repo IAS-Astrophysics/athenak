@@ -292,7 +292,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
       Real chi_p = wdn * (kappa_p_ + kappa_a_);
       Real chi_s = wdn * kappa_s_;
       Real chi_a = wdn * (kappa_a_ + kappa_s_);
-      Real emissivity = chi_p*arad_*SQR(SQR(tgas)) + chi_s*erad_f_; 
+      Real emissivity = chi_p*arad_*SQR(SQR(tgas)) + chi_s*erad_f_;
       if (is_compton_enabled_) {
         Real trad = sqrt(sqrt(erad_f_/arad_));
         emissivity += chi_s*4*(tgas-trad)*inv_t_electron_*erad_f_;
@@ -310,9 +310,9 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
       Real frac1 = (mgas_rad_tet1==mgas_tet1) ? 0.0 : dmgas_tet1 / (mgas_rad_tet1 - mgas_tet1);
       Real frac2 = (mgas_rad_tet2==mgas_tet2) ? 0.0 : dmgas_tet2 / (mgas_rad_tet2 - mgas_tet2);
       Real frac3 = (mgas_rad_tet3==mgas_tet3) ? 0.0 : dmgas_tet3 / (mgas_rad_tet3 - mgas_tet3);
-      frac1 = std::min(std::max(frac1, 0.0), 1.0);
-      frac2 = std::min(std::max(frac2, 0.0), 1.0);
-      frac3 = std::min(std::max(frac3, 0.0), 1.0);
+      frac1 = min(max(frac1, 0.0), 1.0);
+      frac2 = min(max(frac2, 0.0), 1.0);
+      frac3 = min(max(frac3, 0.0), 1.0);
       u_tet[1] = (1.0-frac1)*u_tet[1] + frac1*urad_tet1;
       u_tet[2] = (1.0-frac2)*u_tet[2] + frac2*urad_tet2;
       u_tet[3] = (1.0-frac3)*u_tet[3] + frac3*urad_tet3;
