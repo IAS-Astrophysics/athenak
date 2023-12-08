@@ -78,10 +78,13 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
 
   // Extract adiabatic index
   Real gm1;
+  Real v_sq_max;
   if (is_hydro_enabled_) {
     gm1 = pmy_pack->phydro->peos->eos_data.gamma - 1.0;
+    v_sq_max = 1. - 1./SQR(pmy_pack->phydro->peos->eos_data.gamma_max);
   } else if (is_mhd_enabled_) {
     gm1 = pmy_pack->pmhd->peos->eos_data.gamma - 1.0;
+    v_sq_max = 1. - 1./SQR(pmy_pack->pmhd->peos->eos_data.gamma_max);
   }
 
   // Extract entropy fix flag
@@ -195,6 +198,126 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
 
     // coordinate component n^0
     Real n0 = tt(m,0,0,k,j,i);
+
+    // Modify velocity in radiation-dominated regime
+    // NOTE(@lzhang): In radiation-dominated regime, the gas-radiation momentum
+    // coupling without accounting the sharp change of the gas velocity can
+    // result in overestimated high gas temperature because the overestimated
+    // velocity leads to the low density. This turns out to be extremely dangerous
+    // because it can generate enormous radiation through the thermal coupling or
+    // Compton process.
+
+    // calculate radiation energy density in fluid frame
+    Real erad_f_ = 0.0;
+    Real omega_hat_tot = 0.0; Real omega_cm_tot = 0.0;
+    for (int n=0; n<=nang1; ++n) {
+      // compute coordinate normal components
+      Real n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(n,0) + tc(m,1,0,k,j,i)*nh_c_.d_view(n,1)
+               + tc(m,2,0,k,j,i)*nh_c_.d_view(n,2) + tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
+
+      // compute quantites in fluid frame
+      Real n0_cm = (u_tet[0]*nh_c_.d_view(n,0) - u_tet[1]*nh_c_.d_view(n,1) -
+                    u_tet[2]*nh_c_.d_view(n,2) - u_tet[3]*nh_c_.d_view(n,3));
+
+      Real i0_cm = i0_(m,n,k,j,i)/(n0*n_0)*SQR(SQR(n0_cm));
+      Real omega_cm = solid_angles_.d_view(n)/SQR(n0_cm);
+      omega_hat_tot += solid_angles_.d_view(n);
+      omega_cm_tot += omega_cm;
+      erad_f_ += i0_cm*omega_cm;
+    }
+    erad_f_ *= omega_hat_tot/omega_cm_tot;
+
+    // apply velocity modification
+    if (erad_f_ > wdn + wen) {
+      // compute radiation moments in terad frame
+      Real rr_tet00 = 0.0;
+      Real rr_tet01 = 0.0; Real rr_tet02 = 0.0; Real rr_tet03 = 0.0;
+      Real rr_tet11 = 0.0; Real rr_tet22 = 0.0; Real rr_tet33 = 0.0;
+      Real rr_tet12 = 0.0; Real rr_tet13 = 0.0; Real rr_tet23 = 0.0;
+      for (int n=0; n<=nang1; ++n) {
+        // tetrad normal components
+        Real nh0 = nh_c_.d_view(n,0);
+        Real nh1 = nh_c_.d_view(n,1);
+        Real nh2 = nh_c_.d_view(n,2);
+        Real nh3 = nh_c_.d_view(n,3);
+
+        // coordinate normal components
+        Real n_0 = tc(m,0,0,k,j,i)*nh0 + tc(m,1,0,k,j,i)*nh1 + tc(m,2,0,k,j,i)*nh2 + tc(m,3,0,k,j,i)*nh3;
+        Real n_1 = tc(m,0,1,k,j,i)*nh0 + tc(m,1,1,k,j,i)*nh1 + tc(m,2,1,k,j,i)*nh2 + tc(m,3,1,k,j,i)*nh3;
+        Real n_2 = tc(m,0,2,k,j,i)*nh0 + tc(m,1,2,k,j,i)*nh1 + tc(m,2,2,k,j,i)*nh2 + tc(m,3,2,k,j,i)*nh3;
+        Real n_3 = tc(m,0,3,k,j,i)*nh0 + tc(m,1,3,k,j,i)*nh1 + tc(m,2,3,k,j,i)*nh2 + tc(m,3,3,k,j,i)*nh3;
+
+        // radiation moments in terad frame
+        rr_tet00 += (        i0_(m,n,k,j,i)/(n0*n_0)*solid_angles_.d_view(n));
+        rr_tet01 += (    nh1*i0_(m,n,k,j,i)/(n0*n_0)*solid_angles_.d_view(n));
+        rr_tet02 += (    nh2*i0_(m,n,k,j,i)/(n0*n_0)*solid_angles_.d_view(n));
+        rr_tet03 += (    nh3*i0_(m,n,k,j,i)/(n0*n_0)*solid_angles_.d_view(n));
+        rr_tet11 += (nh1*nh1*i0_(m,n,k,j,i)/(n0*n_0)*solid_angles_.d_view(n));
+        rr_tet22 += (nh2*nh2*i0_(m,n,k,j,i)/(n0*n_0)*solid_angles_.d_view(n));
+        rr_tet33 += (nh3*nh3*i0_(m,n,k,j,i)/(n0*n_0)*solid_angles_.d_view(n));
+        rr_tet12 += (nh1*nh2*i0_(m,n,k,j,i)/(n0*n_0)*solid_angles_.d_view(n));
+        rr_tet13 += (nh1*nh3*i0_(m,n,k,j,i)/(n0*n_0)*solid_angles_.d_view(n));
+        rr_tet23 += (nh2*nh3*i0_(m,n,k,j,i)/(n0*n_0)*solid_angles_.d_view(n));
+      } // endfor n
+
+      // calculate radiation velocity in tetrad frame
+      Real vrad_tet1 = rr_tet01 / rr_tet00;
+      Real vrad_tet2 = rr_tet02 / rr_tet00;
+      Real vrad_tet3 = rr_tet03 / rr_tet00;
+      Real vrad_sq = SQR(vrad_tet1) + SQR(vrad_tet2) + SQR(vrad_tet3);
+      if (vrad_sq > v_sq_max) {
+        Real ratio = sqrt(v_sq_max / vrad_sq);
+        vrad_tet1 *= ratio;
+        vrad_tet2 *= ratio;
+        vrad_tet3 *= ratio;
+        vrad_sq = v_sq_max;
+      }
+      Real urad_tet0 = 1.0 / sqrt(1.0 - vrad_sq);
+      Real urad_tet1 = urad_tet0 * vrad_tet1;
+      Real urad_tet2 = urad_tet0 * vrad_tet2;
+      Real urad_tet3 = urad_tet0 * vrad_tet3;
+
+      // calculate current fluid momentum
+      Real wgas = wdn + wen + pgas;
+      Real mgas_tet1 = wgas * u_tet[0] * u_tet[1];
+      Real mgas_tet2 = wgas * u_tet[0] * u_tet[2];
+      Real mgas_tet3 = wgas * u_tet[0] * u_tet[3];
+
+      // calculate fluid momentum if accelerated to radiation frame
+      Real mgas_rad_tet1 = wgas * urad_tet0 * urad_tet1;
+      Real mgas_rad_tet2 = wgas * urad_tet0 * urad_tet2;
+      Real mgas_rad_tet3 = wgas * urad_tet0 * urad_tet3;
+
+      // calculate the gas-radiation coupling force
+      Real chi_p = wdn * (kappa_p_ + kappa_a_);
+      Real chi_s = wdn * kappa_s_;
+      Real chi_a = wdn * (kappa_a_ + kappa_s_);
+      Real emissivity = chi_p*arad_*SQR(SQR(tgas)) + chi_s*erad_f_; 
+      if (is_compton_enabled_) {
+        Real trad = sqrt(sqrt(erad_f_/arad_));
+        emissivity += chi_s*4*(tgas-trad)*inv_t_electron_*erad_f_;
+      }
+      Real gg_tet1 = -emissivity*u_tet[1] - chi_a*(-u_tet[0]*rr_tet01 + u_tet[1]*rr_tet11 + u_tet[2]*rr_tet12 + u_tet[3]*rr_tet13);
+      Real gg_tet2 = -emissivity*u_tet[2] - chi_a*(-u_tet[0]*rr_tet02 + u_tet[1]*rr_tet12 + u_tet[2]*rr_tet22 + u_tet[3]*rr_tet23);
+      Real gg_tet3 = -emissivity*u_tet[3] - chi_a*(-u_tet[0]*rr_tet03 + u_tet[1]*rr_tet13 + u_tet[2]*rr_tet23 + u_tet[3]*rr_tet33);
+
+      // estimate change in fluid momentum from source terms
+      Real dmgas_tet1 = gg_tet1 * dt_ / u_tet[0];
+      Real dmgas_tet2 = gg_tet2 * dt_ / u_tet[0];
+      Real dmgas_tet3 = gg_tet3 * dt_ / u_tet[0];
+
+      // estimate new fluid velocity
+      Real frac1 = (mgas_rad_tet1==mgas_tet1) ? 0.0 : dmgas_tet1 / (mgas_rad_tet1 - mgas_tet1);
+      Real frac2 = (mgas_rad_tet2==mgas_tet2) ? 0.0 : dmgas_tet2 / (mgas_rad_tet2 - mgas_tet2);
+      Real frac3 = (mgas_rad_tet3==mgas_tet3) ? 0.0 : dmgas_tet3 / (mgas_rad_tet3 - mgas_tet3);
+      frac1 = std::min(std::max(frac1, 0.0), 1.0);
+      frac2 = std::min(std::max(frac2, 0.0), 1.0);
+      frac3 = std::min(std::max(frac3, 0.0), 1.0);
+      u_tet[1] = (1.0-frac1)*u_tet[1] + frac1*urad_tet1;
+      u_tet[2] = (1.0-frac2)*u_tet[2] + frac2*urad_tet2;
+      u_tet[3] = (1.0-frac3)*u_tet[3] + frac3*urad_tet3;
+      u_tet[0] = sqrt(1.0 + SQR(u_tet[1]) + SQR(u_tet[2]) + SQR(u_tet[3]));
+    } // endif velocity modification done
 
     // Calculate polynomial coefficients
     Real wght_sum = 0.0;
