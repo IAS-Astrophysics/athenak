@@ -310,9 +310,9 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
       Real frac1 = (mgas_rad_tet1==mgas_tet1) ? 0.0 : dmgas_tet1 / (mgas_rad_tet1 - mgas_tet1);
       Real frac2 = (mgas_rad_tet2==mgas_tet2) ? 0.0 : dmgas_tet2 / (mgas_rad_tet2 - mgas_tet2);
       Real frac3 = (mgas_rad_tet3==mgas_tet3) ? 0.0 : dmgas_tet3 / (mgas_rad_tet3 - mgas_tet3);
-      frac1 = min(max(frac1, 0.0), 1.0);
-      frac2 = min(max(frac2, 0.0), 1.0);
-      frac3 = min(max(frac3, 0.0), 1.0);
+      frac1 = fmin(fmax(frac1, 0.0), 1.0);
+      frac2 = fmin(fmax(frac2, 0.0), 1.0);
+      frac3 = fmin(fmax(frac3, 0.0), 1.0);
       u_tet[1] = (1.0-frac1)*u_tet[1] + frac1*urad_tet1;
       u_tet[2] = (1.0-frac2)*u_tet[2] + frac2*urad_tet2;
       u_tet[3] = (1.0-frac3)*u_tet[3] + frac3*urad_tet3;

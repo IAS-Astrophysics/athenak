@@ -637,4 +637,168 @@ void SingleC2P_IdealSRMHD_EntropyFix(MHDCons1D &u, Real& s_tot, const EOS_Data &
   return;
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn void SingleC2P_IdealSRMHD_NH()
+//! \brief Converts single state of conserved variables into primitive variables for
+//! special relativistic MHD with an ideal gas EOS. Note input CONSERVED state contains
+//! cell-centered magnetic fields, but PRIMITIVE state returned via arguments does not.
+//! The implemented algorithm follows Newman & Hamlin (2014).
+
+KOKKOS_INLINE_FUNCTION
+void SingleC2P_IdealSRMHD_NH(MHDCons1D &u, const EOS_Data &eos, Real s2, Real b2, Real rpar,
+                             HydPrim1D &w, HydPrim1D &w_old, bool &dfloor_used, bool &efloor_used,
+                             bool &c2p_failure, int &max_iter) {
+  // parameters
+  const int max_iterations = 25;
+  const Real a_min = 1.0e-12; // a>0 due to its definition a=ee+pgas+0.5*bb_sq
+  const Real rr_max = 1.0 - 1.0e-12; // allowed maximum of Lipshitz parameter
+  const Real tol = 1.0e-12;
+  c2p_failure = false;
+  const Real gm1 = eos.gamma - 1.0;
+  const Real v_sq_max = 1. - 1./SQR(eos.gamma_max);
+
+  // apply density floor, without changing momentum or energy
+  if (u.d < eos.dfloor) {
+    u.d = eos.dfloor;
+    dfloor_used = true;
+  }
+
+  // apply energy floor
+  if (u.e < (eos.pfloor/gm1 + 0.5*b2)) {
+    u.e = eos.pfloor/gm1 + 0.5*b2;
+    efloor_used = true;
+  }
+
+  // extract conserved values
+  const Real &dd  = u.d;
+  const Real &ee  = u.e;
+  const Real &mm1 = u.mx;
+  const Real &mm2 = u.my;
+  const Real &mm3 = u.mz;
+  const Real &bb1 = u.bx;
+  const Real &bb2 = u.by;
+  const Real &bb3 = u.bz;
+  const Real &mm_sq = s2;
+  const Real &bb_sq = b2;
+  const Real tt = rpar * u.d;
+
+  // calculate functions of conserved quantities
+  Real d = 0.5 * (mm_sq * bb_sq - SQR(tt)); // (NH 5.7)
+  d = fmax(d, 0.0);
+  Real pgas_min = cbrt(27.0/4.0 * d) - ee - 0.5*bb_sq;
+  pgas_min = fmax(pgas_min, eos.pfloor);
+
+  // iterate until convergence
+  Real pgas[3];
+  pgas[0] = fmax(gm1*w_old.e, pgas_min);
+  int n;
+  for (n = 0; n < max_iterations; ++n) {
+    Real a;
+    Real phi, eee, ll, v_sq;
+    if (n%3 != 2) {
+      // Step 1: Calculate cubic coefficients
+      a = ee + pgas[n%3] + 0.5*bb_sq;  // (NH 5.7)
+      a = fmax(a, a_min);
+
+      // Step 2: Calculate correct root of cubic equation
+      phi = acos(1.0/a * sqrt(27.0*d/(4.0*a)));                               // (NH 5.10)
+      eee = a/3.0 - 2.0/3.0 * a * cos(2.0/3.0 * (phi+M_PI));                  // (NH 5.11)
+      ll = eee - bb_sq;                                                       // (NH 5.5)
+      v_sq = (mm_sq*SQR(ll) + SQR(tt)*(bb_sq+2.0*ll)) / SQR(ll * (bb_sq+ll)); // (NH 5.2)
+      v_sq = fmin(fmax(v_sq, static_cast<Real>(0.0)), v_sq_max);
+      Real gamma_sq = 1.0/(1.0-v_sq);                                         // (NH 3.1)
+      Real gamma = sqrt(gamma_sq);                                            // (NH 3.1)
+      Real wgas = ll/gamma_sq;                                                // (NH 5.1)
+      Real rho = dd/gamma;                                                    // (NH 4.5)
+      pgas[(n+1)%3] = gm1/(gm1+1) * (wgas - rho);               // (NH 4.1)
+      pgas[(n+1)%3] = fmax(pgas[(n+1)%3], pgas_min);
+
+      // Step 3: Check for convergence
+      if (pgas[(n+1)%3] > pgas_min && fabs(pgas[(n+1)%3]-pgas[n%3]) < tol) {
+        break;
+      }
+    }
+
+    // Step 4: Calculate Aitken accelerant and check for convergence
+    if (n%3 == 2) {
+      Real rr = (pgas[2] - pgas[1]) / (pgas[1] - pgas[0]);  // (NH 7.1)
+      if (!isfinite(rr) || fabs(rr) > rr_max) {
+        continue; // invalid Lipshitz parameter, start with next loop
+      }
+      pgas[0] = pgas[1] + (pgas[2] - pgas[1]) / (1.0 - rr); // (NH 7.2)
+      pgas[0] = fmax(pgas[0], pgas_min);
+      if (pgas[0] > pgas_min && fabs(pgas[0]-pgas[2]) < tol) {
+        break;
+      }
+    }
+  } // endfor n
+  max_iter = n;
+
+  // Step 5: Set primitives
+  if (n >= max_iterations-1) {
+    c2p_failure = true; // reach max iteration number
+  }
+  Real pgas_ret = pgas[(n+1)%3];
+  if (!isfinite(pgas_ret) || (pgas_ret<=0)) {
+    c2p_failure = true; // solution is not physical
+  }
+  Real a = ee + pgas_ret + 0.5*bb_sq;                                          // (NH 5.7)
+  a = fmax(a, a_min);
+  Real phi = acos(1.0/a * std::sqrt(27.0*d/(4.0*a)));                          // (NH 5.10)
+  Real eee = a/3.0 - 2.0/3.0 * a * cos(2.0/3.0 * (phi+M_PI));                    // (NH 5.11)
+  Real ll = eee - bb_sq;                                                       // (NH 5.5)
+  Real v_sq = (mm_sq*SQR(ll) + SQR(tt)*(bb_sq+2.0*ll)) / SQR(ll * (bb_sq+ll)); // (NH 5.2)
+  v_sq = fmin(fmax(v_sq, static_cast<Real>(0.0)), v_sq_max);
+  Real gamma_sq = 1.0/(1.0-v_sq);                                              // (NH 3.1)
+  Real gamma = sqrt(gamma_sq);                                                 // (NH 3.1)
+  Real rho_ret = dd/gamma;                                                          // (NH 4.5)
+  if (!isfinite(rho_ret) || (rho_ret <= 0)) {
+    c2p_failure = true; // solution is not physical
+  }
+  Real ss = tt/ll;                          // (NH 4.8)
+  Real v1 = (mm1 + ss*bb1) / (ll + bb_sq);  // (NH 4.6)
+  Real v2 = (mm2 + ss*bb2) / (ll + bb_sq);  // (NH 4.6)
+  Real v3 = (mm3 + ss*bb3) / (ll + bb_sq);  // (NH 4.6)
+  Real u1_ret = gamma*v1;                   // (NH 3.3)
+  Real u2_ret = gamma*v2;                   // (NH 3.3)
+  Real u3_ret = gamma*v3;                   // (NH 3.3)
+  if (!isfinite(u1_ret) || !isfinite(u2_ret) || !isfinite(u3_ret)
+      || (SQR(v1)+SQR(v2)+SQR(v3) > 1)) {
+    c2p_failure = true; // solution is not physical
+  }
+
+  // if c2p fails, return floored density, pressure, and primitive velocities.
+  if (c2p_failure) {
+    w.d = eos.dfloor;
+    w.e = eos.pfloor/gm1;
+    w.vx = 0.0;
+    w.vy = 0.0;
+    w.vz = 0.0;
+    return;
+  }
+
+  // compute density then apply floor
+  if (rho_ret < eos.dfloor) {
+    rho_ret = eos.dfloor;
+    dfloor_used = true;
+  }
+
+  // compute specific internal energy density then apply floors
+  Real eps = pgas_ret/gm1/rho_ret;
+  Real epsmin = fmax(eos.pfloor/(rho_ret*gm1), eos.sfloor*pow(rho_ret, gm1)/gm1);
+  if (eps <= epsmin) {
+    eps = epsmin;
+    efloor_used = true;
+  }
+
+  // set primitive variables
+  w.d  = rho_ret;
+  w.vx = u1_ret;
+  w.vy = u2_ret;
+  w.vz = u3_ret;
+  w.e  = rho_ret*eps;
+
+  return;
+}
+
 #endif // EOS_IDEAL_C2P_MHD_HPP_
