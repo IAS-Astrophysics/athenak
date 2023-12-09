@@ -735,7 +735,7 @@ void SingleC2P_IdealSRMHD_NH(MHDCons1D &u, const EOS_Data &eos, Real s2, Real b2
   max_iter = n;
 
   // Step 5: Set primitives
-  if (n >= max_iterations-1) {
+  if (n == max_iterations) {
     c2p_failure = true; // reach max iteration number
   }
   Real pgas_ret = pgas[(n+1)%3];
@@ -744,14 +744,14 @@ void SingleC2P_IdealSRMHD_NH(MHDCons1D &u, const EOS_Data &eos, Real s2, Real b2
   }
   Real a = ee + pgas_ret + 0.5*bb_sq;                                          // (NH 5.7)
   a = fmax(a, a_min);
-  Real phi = acos(1.0/a * std::sqrt(27.0*d/(4.0*a)));                          // (NH 5.10)
-  Real eee = a/3.0 - 2.0/3.0 * a * cos(2.0/3.0 * (phi+M_PI));                    // (NH 5.11)
+  Real phi = acos(1.0/a * sqrt(27.0*d/(4.0*a)));                               // (NH 5.10)
+  Real eee = a/3.0 - 2.0/3.0 * a * cos(2.0/3.0 * (phi+M_PI));                  // (NH 5.11)
   Real ll = eee - bb_sq;                                                       // (NH 5.5)
   Real v_sq = (mm_sq*SQR(ll) + SQR(tt)*(bb_sq+2.0*ll)) / SQR(ll * (bb_sq+ll)); // (NH 5.2)
   v_sq = fmin(fmax(v_sq, static_cast<Real>(0.0)), v_sq_max);
   Real gamma_sq = 1.0/(1.0-v_sq);                                              // (NH 3.1)
   Real gamma = sqrt(gamma_sq);                                                 // (NH 3.1)
-  Real rho_ret = dd/gamma;                                                          // (NH 4.5)
+  Real rho_ret = dd/gamma;                                                     // (NH 4.5)
   if (!isfinite(rho_ret) || (rho_ret <= 0)) {
     c2p_failure = true; // solution is not physical
   }
@@ -784,7 +784,7 @@ void SingleC2P_IdealSRMHD_NH(MHDCons1D &u, const EOS_Data &eos, Real s2, Real b2
   }
 
   // compute specific internal energy density then apply floors
-  Real eps = pgas_ret/gm1/rho_ret;
+  Real eps = pgas_ret/(rho_ret*gm1);
   Real epsmin = fmax(eos.pfloor/(rho_ret*gm1), eos.sfloor*pow(rho_ret, gm1)/gm1);
   if (eps <= epsmin) {
     eps = epsmin;
