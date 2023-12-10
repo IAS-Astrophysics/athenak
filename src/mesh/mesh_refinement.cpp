@@ -1210,52 +1210,6 @@ void MeshRefinement::RestrictCC(DvceArray5D<Real> &u, DvceArray5D<Real> &cu) {
   return;
 }
 
-void MeshRefinement::RestrictCC(DvceArray6D<Real> &u, DvceArray6D<Real> &cu) {
-  int nmb  = u.extent_int(0);  // TODO(@user): 1st index from L of in array must be NMB
-  int neng = u.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NENG
-  int nvar = u.extent_int(2);  // TODO(@user): 2nd index from L of in array must be NVAR
-
-  auto &cis = pmy_mesh->mb_indcs.cis;
-  auto &cie = pmy_mesh->mb_indcs.cie;
-  auto &cjs = pmy_mesh->mb_indcs.cjs;
-  auto &cje = pmy_mesh->mb_indcs.cje;
-  auto &cks = pmy_mesh->mb_indcs.cks;
-  auto &cke = pmy_mesh->mb_indcs.cke;
-
-  // restrict in 1D
-  if (pmy_mesh->one_d) {
-    par_for("restrictCC-1D",DevExeSpace(), 0,nmb-1, 0, neng,0,nvar-1, cis,cie,
-    KOKKOS_LAMBDA(const int m, const int ne, const int n, const int i) {
-      int finei = 2*i - cis;  // correct when cis=is
-      cu(m,ne,n,cks,cjs,i) = 0.5*(u(m,ne,n,cks,cjs,finei) + u(m,ne,n,cks,cjs,finei+1));
-    });
-  // restrict in 2D
-  } else if (pmy_mesh->two_d) {
-    par_for("restrictCC-2D",DevExeSpace(), 0,nmb-1, 0, neng-1,0,nvar-1, cjs,cje, cis,cie,
-    KOKKOS_LAMBDA(const int m, const int ne, const int n, const int j, const int i) {
-      int finei = 2*i - cis;  // correct when cis=is
-      int finej = 2*j - cjs;  // correct when cjs=js
-      cu(m,ne,n,cks,j,i) = 0.25*(u(m,ne,n,cks,finej  ,finei) + u(m,ne,n,cks,finej  ,finei+1)
-                            + u(m,ne,n,cks,finej+1,finei) + u(m,ne,n,cks,finej+1,finei+1));
-    });
-
-  // restrict in 3D
-  } else {
-    par_for("restrictCC-3D",DevExeSpace(), 0,nmb-1, 0, neng-1,0,nvar-1, cks,cke, cjs,cje, cis,cie,
-    KOKKOS_LAMBDA(const int m, const int ne, const int n, const int k, const int j, const int i) {
-      int finei = 2*i - cis;  // correct when cis=is
-      int finej = 2*j - cjs;  // correct when cjs=js
-      int finek = 2*k - cks;  // correct when cks=ks
-      cu(m,ne,n,k,j,i) =
-          0.125*(u(m,ne,n,finek  ,finej  ,finei) + u(m,ne,n,finek  ,finej  ,finei+1)
-               + u(m,ne,n,finek  ,finej+1,finei) + u(m,ne,n,finek  ,finej+1,finei+1)
-               + u(m,ne,n,finek+1,finej,  finei) + u(m,ne,n,finek+1,finej,  finei+1)
-               + u(m,ne,n,finek+1,finej+1,finei) + u(m,ne,n,finek+1,finej+1,finei+1));
-    });
-  }
-  return;
-}
-
 //----------------------------------------------------------------------------------------
 //! \fn void MeshRefinement::RestrictFC
 //! \brief Restricts face-centered variables to coarse mesh
