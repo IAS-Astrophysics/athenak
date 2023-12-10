@@ -74,16 +74,16 @@ add_executable(
         mhd/mhd_tasks.cpp
         mhd/mhd_update.cpp
 
-	z4c/z4c.cpp
-	z4c/z4c_adm.cpp
-	z4c/z4c_calcrhs.cpp
-	z4c/z4c_newdt.cpp
+		z4c/z4c.cpp
+		z4c/z4c_adm.cpp
+		z4c/z4c_calcrhs.cpp
+		z4c/z4c_newdt.cpp
         z4c/z4c_tasks.cpp
         z4c/z4c_update.cpp
         z4c/z4c_gauge.cpp
         z4c/z4c_Sbc.cpp
 
-	outputs/io_wrapper.cpp
+		outputs/io_wrapper.cpp
         outputs/outputs.cpp
         outputs/basetype_output.cpp
         outputs/derived_variables.cpp
@@ -110,8 +110,8 @@ add_executable(
         pgen/tests/rad_femn_gridtest.cpp
         pgen/tests/radiation_femn_gridtest_fpn.cpp
         pgen/tests/rad_femn_linetest.cpp
-	pgen/tests/rad_femn_linalgtest.cpp
-	pgen/tests/rad_femn_latticetest.cpp
+		pgen/tests/rad_femn_linalgtest.cpp
+		pgen/tests/rad_femn_latticetest.cpp
 	
         radiation/radiation.cpp
         radiation/radiation_fluxes.cpp
@@ -149,7 +149,6 @@ add_executable(
         radiation_femn/radiation_femn_closure.cpp
         radiation_femn/radiation_femn_compute_sourcematrices.cpp
         radiation_femn/radiation_femn_tetrad.cpp
-        athena_tensor.hpp
         radiation_femn/radiation_femn_beams.cpp)
 
 # custom problem generator to be included in compile

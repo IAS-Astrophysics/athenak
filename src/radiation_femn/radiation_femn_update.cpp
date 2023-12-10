@@ -78,8 +78,9 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
 
                   // (2) Compute matrix FG_{A}^{B} = F_{ihat}^{nuhat muhat}_{A}^{B} Gamma^{ihat}_{nuhat muhat} [num_angles x num_angles]
                   //     and GG_{A}^{B} = G_{ihat}^{nuhat muhat}_{A}^{B} Gamma^{ihat}_{nuhat muhat} [num_angles x num_angles]
-                  AthenaScratchTensor<Real, TensorSymm::NONE, 4, 3> Gamma_fluid_udd;
-                  Gamma_fluid_udd.ZeroClear();
+                  DvceArray3D<Real> Gamma_fluid_udd;
+                  Kokkos::realloc(Gamma_fluid_udd, 4, 4, 4);
+                  Kokkos::deep_copy(Gamma_fluid_udd, 0.);
 
                   // scratch arrays for F_{ihat}^{nuhat muhat}_{A}^{B} Gamma^{ihat}_{nuhat muhat} [num_angles x num_angles]
                   ScrArray2D<Real> F_Gamma_AB = ScrArray2D<Real>(member.team_scratch(scr_level), num_points, num_points);

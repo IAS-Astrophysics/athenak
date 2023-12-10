@@ -156,7 +156,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   }
 
   // radiation moments
-  if (name.compare(0, 3, "rad") == 0) {
+  if (name.compare(0, 3, "rad") == 0 && pm->pmb_pack->pradfemn == NULL) {
     // Determine if coordinate and/or fluid frame moments required
     bool needs_coord_only = (name.compare("rad_coord") == 0);
     bool needs_fluid_only = (name.compare("rad_fluid") == 0);
