@@ -213,14 +213,14 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
           SingleC2P_IdealSRMHD_EntropyFix(u_sr, s_tot, eos, s2, b2, rpar, w_fix, w_old,
                                           dfloor_used_in_fix, efloor_used_in_fix,
                                           c2p_failure_in_fix, iter_used_in_fix);
-          if (c2p_failure) {
+          // if (c2p_failure) {
             // if c2p fails, use the old values as the fallback state
-            w.d  = w_old.d;
-            w.vx = w_old.vx;
-            w.vy = w_old.vy;
-            w.vz = w_old.vz;
-            w.e  = w_old.e;
-          } // otherwise, use the c2p results as the fallback state
+          w.d  = w_old.d;
+          w.vx = w_old.vx;
+          w.vy = w_old.vy;
+          w.vz = w_old.vz;
+          w.e  = w_old.e;
+          // } // otherwise, use the c2p results as the fallback state
 
           if (!c2p_failure_in_fix) {
             // successful entropy-fixed c2p
@@ -234,6 +234,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
             c2p_failure = c2p_failure_in_fix;
             iter_used_in_fix = iter_used;
           } // !c2p_failure_in_fix
+
         } // endif (c2p_failure || (sigma_cold > sigma_cold_cut_))
       } // endif entropy_fix_
       // TODO: try fofc_(m,k,j,i)
