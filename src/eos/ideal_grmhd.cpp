@@ -194,46 +194,48 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
         }
 
         // fix the region that fails the variable inversion or strongly magnetized
+        fofc_(m,k,j,i) = false;
         if (c2p_failure || (sigma_cold > sigma_cold_cut_)) {
-          bool dfloor_used_in_fix=false, efloor_used_in_fix=false;
-          bool c2p_failure_in_fix=c2p_failure;
-          int iter_used_in_fix=0;
-          HydPrim1D w_fix;
-          // w_fix.d  = w.d;
-          // w_fix.vx = w.vx;
-          // w_fix.vy = w.vy;
-          // w_fix.vz = w.vz;
-          // w_fix.e  = w.e;
-          w_fix.d  = w_old.d;
-          w_fix.vx = w_old.vx;
-          w_fix.vy = w_old.vy;
-          w_fix.vz = w_old.vz;
-          w_fix.e  = w_old.e;
-          Real &s_tot = cons(m,entropyIdx,k,j,i);
-          SingleC2P_IdealSRMHD_EntropyFix(u_sr, s_tot, eos, s2, b2, rpar, w_fix, w_old,
-                                          dfloor_used_in_fix, efloor_used_in_fix,
-                                          c2p_failure_in_fix, iter_used_in_fix);
-          // if (c2p_failure) {
-            // if c2p fails, use the old values as the fallback state
-          w.d  = w_old.d;
-          w.vx = w_old.vx;
-          w.vy = w_old.vy;
-          w.vz = w_old.vz;
-          w.e  = w_old.e;
-          // } // otherwise, use the c2p results as the fallback state
-
-          if (!c2p_failure_in_fix) {
-            // successful entropy-fixed c2p
-            w.d  = w_fix.d;
-            w.e  = w_fix.e;
-            w.vx = w_fix.vx;
-            w.vy = w_fix.vy;
-            w.vz = w_fix.vz;
-            dfloor_used = dfloor_used_in_fix;
-            efloor_used = efloor_used_in_fix;
-            c2p_failure = c2p_failure_in_fix;
-            iter_used_in_fix = iter_used;
-          } // !c2p_failure_in_fix
+          fofc_(m,k,j,i) = true;
+          // bool dfloor_used_in_fix=false, efloor_used_in_fix=false;
+          // bool c2p_failure_in_fix=c2p_failure;
+          // int iter_used_in_fix=0;
+          // HydPrim1D w_fix;
+          // // w_fix.d  = w.d;
+          // // w_fix.vx = w.vx;
+          // // w_fix.vy = w.vy;
+          // // w_fix.vz = w.vz;
+          // // w_fix.e  = w.e;
+          // w_fix.d  = w_old.d;
+          // w_fix.vx = w_old.vx;
+          // w_fix.vy = w_old.vy;
+          // w_fix.vz = w_old.vz;
+          // w_fix.e  = w_old.e;
+          // Real &s_tot = cons(m,entropyIdx,k,j,i);
+          // SingleC2P_IdealSRMHD_EntropyFix(u_sr, s_tot, eos, s2, b2, rpar, w_fix, w_old,
+          //                                 dfloor_used_in_fix, efloor_used_in_fix,
+          //                                 c2p_failure_in_fix, iter_used_in_fix);
+          // // if (c2p_failure) {
+          //   // if c2p fails, use the old values as the fallback state
+          // w.d  = w_old.d;
+          // w.vx = w_old.vx;
+          // w.vy = w_old.vy;
+          // w.vz = w_old.vz;
+          // w.e  = w_old.e;
+          // // } // otherwise, use the c2p results as the fallback state
+          //
+          // if (!c2p_failure_in_fix) {
+          //   // successful entropy-fixed c2p
+          //   w.d  = w_fix.d;
+          //   w.e  = w_fix.e;
+          //   w.vx = w_fix.vx;
+          //   w.vy = w_fix.vy;
+          //   w.vz = w_fix.vz;
+          //   dfloor_used = dfloor_used_in_fix;
+          //   efloor_used = efloor_used_in_fix;
+          //   c2p_failure = c2p_failure_in_fix;
+          //   iter_used_in_fix = iter_used;
+          // } // !c2p_failure_in_fix
 
         } // endif (c2p_failure || (sigma_cold > sigma_cold_cut_))
       } // endif entropy_fix_
