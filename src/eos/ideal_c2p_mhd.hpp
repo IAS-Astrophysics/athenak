@@ -770,13 +770,13 @@ void SingleC2P_IdealSRMHD_NH(MHDCons1D &u, const EOS_Data &eos, Real s2, Real b2
     c2p_failure = true; // solution is not physical
   }
 
-  // if c2p fails, return floored density, pressure, and primitive velocities.
+  // if c2p fails, return old prim.
   if (c2p_failure) {
-    w.d = eos.dfloor;
-    w.e = eos.pfloor/gm1;
-    w.vx = 0.0;
-    w.vy = 0.0;
-    w.vz = 0.0;
+    w.d = w_old.d;
+    w.e = w_old.e;
+    w.vx = w_old.vx;
+    w.vy = w_old.vy;
+    w.vz = w_old.vz;
     return;
   }
 
