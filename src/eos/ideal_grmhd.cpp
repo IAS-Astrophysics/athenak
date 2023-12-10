@@ -145,7 +145,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       TransformToSRMHD(u,glower,gupper,s2,b2,rpar,u_sr);
 
       // call c2p function
-      (inline function in ideal_c2p_mhd.hpp file)
+      // (inline function in ideal_c2p_mhd.hpp file)
       SingleC2P_IdealSRMHD(u_sr, eos, s2, b2, rpar, w,
                            dfloor_used, efloor_used, c2p_failure, iter_used);
       HydPrim1D w_old;
