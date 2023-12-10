@@ -566,11 +566,12 @@ void SingleC2P_IdealSRMHD_EntropyFix(MHDCons1D &u, Real& s_tot, const EOS_Data &
   }
 
   // backup initial guess
+  Real ee = u.e + u.d;
   if (!flag) {
     // this guess is based on (d, m^i, e): (MM A27) set f=0 and assume v=1
     Real c2 = 3.;
-    Real c1 = 4. * (b2 - u.e);
-    Real c0 = s2 + SQR(b2) - 2*b2*u.e;
+    Real c1 = 4. * (b2 - ee);
+    Real c0 = s2 + SQR(b2) - 2*b2*ee;
 
     Real ll_a, ll_b;
     Real delta_sq = SQR(c1)-4*c2*c0;
@@ -657,6 +658,17 @@ void SingleC2P_IdealSRMHD_NH(MHDCons1D &u, const EOS_Data &eos, Real s2, Real b2
   const Real gm1 = eos.gamma - 1.0;
   const Real v_sq_max = 1. - 1./SQR(eos.gamma_max);
 
+  // extract conserved values
+  const Real &mm1 = u.mx;
+  const Real &mm2 = u.my;
+  const Real &mm3 = u.mz;
+  const Real &bb1 = u.bx;
+  const Real &bb2 = u.by;
+  const Real &bb3 = u.bz;
+  const Real &mm_sq = s2;
+  const Real &bb_sq = b2;
+  const Real tt = rpar * u.d;
+
   // apply density floor, without changing momentum or energy
   if (u.d < eos.dfloor) {
     u.d = eos.dfloor;
@@ -669,18 +681,9 @@ void SingleC2P_IdealSRMHD_NH(MHDCons1D &u, const EOS_Data &eos, Real s2, Real b2
     efloor_used = true;
   }
 
-  // extract conserved values
+  // extract the rest of conserved values
   const Real &dd  = u.d;
-  const Real &ee  = u.e;
-  const Real &mm1 = u.mx;
-  const Real &mm2 = u.my;
-  const Real &mm3 = u.mz;
-  const Real &bb1 = u.bx;
-  const Real &bb2 = u.by;
-  const Real &bb3 = u.bz;
-  const Real &mm_sq = s2;
-  const Real &bb_sq = b2;
-  const Real tt = rpar * u.d;
+  const Real ee  = u.e + u.d;
 
   // calculate functions of conserved quantities
   Real d = 0.5 * (mm_sq * bb_sq - SQR(tt)); // (NH 5.7)
@@ -710,14 +713,14 @@ void SingleC2P_IdealSRMHD_NH(MHDCons1D &u, const EOS_Data &eos, Real s2, Real b2
       Real gamma = sqrt(gamma_sq);                                            // (NH 3.1)
       Real wgas = ll/gamma_sq;                                                // (NH 5.1)
       Real rho = dd/gamma;                                                    // (NH 4.5)
-      pgas[(n+1)%3] = gm1/(gm1+1) * (wgas - rho);               // (NH 4.1)
+      pgas[(n+1)%3] = gm1/(gm1+1) * (wgas - rho);                             // (NH 4.1)
       pgas[(n+1)%3] = fmax(pgas[(n+1)%3], pgas_min);
 
       // Step 3: Check for convergence
       if (pgas[(n+1)%3] > pgas_min && fabs(pgas[(n+1)%3]-pgas[n%3]) < tol) {
         break;
       }
-    }
+    } // endfor n
 
     // Step 4: Calculate Aitken accelerant and check for convergence
     if (n%3 == 2) {

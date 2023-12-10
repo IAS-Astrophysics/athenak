@@ -146,16 +146,16 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
 
       // call c2p function
       // (inline function in ideal_c2p_mhd.hpp file)
-      // SingleC2P_IdealSRMHD(u_sr, eos, s2, b2, rpar, w,
-      //                      dfloor_used, efloor_used, c2p_failure, iter_used);
+      SingleC2P_IdealSRMHD(u_sr, eos, s2, b2, rpar, w,
+                           dfloor_used, efloor_used, c2p_failure, iter_used);
       HydPrim1D w_old;
       w_old.d  = prim(m,IDN,k,j,i);
       w_old.vx = prim(m,IVX,k,j,i);
       w_old.vy = prim(m,IVY,k,j,i);
       w_old.vz = prim(m,IVZ,k,j,i);
       w_old.e  = prim(m,IEN,k,j,i);
-      SingleC2P_IdealSRMHD_NH(u_sr, eos, s2, b2, rpar, w, w_old,
-                              dfloor_used, efloor_used, c2p_failure, iter_used);
+      // SingleC2P_IdealSRMHD_NH(u_sr, eos, s2, b2, rpar, w, w_old,
+      //                         dfloor_used, efloor_used, c2p_failure, iter_used);
 
       // apply entropy fix
       if (entropy_fix_ && !entropy_fix_turnoff_) {
@@ -219,19 +219,15 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
 
           if (!c2p_failure_in_fix) {
             // successful entropy-fixed c2p
-            Real lorz = sqrt(1.0 + SQR(w_fix.vx) + SQR(w_fix.vy) + SQR(w_fix.vz));
-            if (lorz <= 1.25) {
-              // inversion of entropy fix cannot be trusted when |v| > 0.6c
-              w.d  = w_fix.d;
-              w.e  = w_fix.e;
-              w.vx = w_fix.vx;
-              w.vy = w_fix.vy;
-              w.vz = w_fix.vz;
-              dfloor_used = dfloor_used_in_fix;
-              efloor_used = efloor_used_in_fix;
-              c2p_failure = c2p_failure_in_fix;
-              iter_used_in_fix = iter_used;
-            }
+            w.d  = w_fix.d;
+            w.e  = w_fix.e;
+            w.vx = w_fix.vx;
+            w.vy = w_fix.vy;
+            w.vz = w_fix.vz;
+            dfloor_used = dfloor_used_in_fix;
+            efloor_used = efloor_used_in_fix;
+            c2p_failure = c2p_failure_in_fix;
+            iter_used_in_fix = iter_used;
           } // !c2p_failure_in_fix
         } // endif (c2p_failure || (sigma_cold > sigma_cold_cut_))
       } // endif entropy_fix_
