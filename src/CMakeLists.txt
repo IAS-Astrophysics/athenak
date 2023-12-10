@@ -107,9 +107,12 @@ add_executable(
         pgen/tests/rad_hohlraum.cpp
         pgen/tests/rad_linear_wave.cpp
         pgen/tests/z4c_linear_wave.cpp
-        pgen/tests/rad_femn_linetest.cpp
         pgen/tests/rad_femn_gridtest.cpp
-
+        pgen/tests/radiation_femn_gridtest_fpn.cpp
+        pgen/tests/rad_femn_linetest.cpp
+	pgen/tests/rad_femn_linalgtest.cpp
+	pgen/tests/rad_femn_latticetest.cpp
+	
         radiation/radiation.cpp
         radiation/radiation_fluxes.cpp
         radiation/radiation_newdt.cpp
@@ -142,12 +145,9 @@ add_executable(
         radiation_femn/radiation_femn_geodesic_grid_quadrature.cpp
         radiation_femn/radiation_femn_geodesic_grid_matrices.hpp
         radiation_femn/radiation_femn_loadmatrices.cpp
-        pgen/tests/rad_femn_linalgtest.cpp
         radiation_femn/radiation_femn_compute_pmatrices.cpp
-        pgen/tests/radiation_femn_gridtest_fpn.cpp
         radiation_femn/radiation_femn_closure.cpp
         radiation_femn/radiation_femn_compute_sourcematrices.cpp
-        pgen/tests/rad_femn_latticetest.cpp
         radiation_femn/radiation_femn_tetrad.cpp
         athena_tensor.hpp
         radiation_femn/radiation_femn_beams.cpp)
