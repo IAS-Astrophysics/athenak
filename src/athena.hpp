@@ -165,16 +165,6 @@ struct DvceFaceFld5D {
 };
 
 template <typename T>
-struct DvceFaceFld6D {
-  DvceArray6D<T> x1f, x2f, x3f;  // name indicates both direction and location
-  DvceFaceFld6D(const std::string &label, int nmb, int ne, int nvar, int n3, int n2, int n1) :
-    x1f(label + ".x1f", nmb, ne, nvar, n3, n2, n1+1),
-    x2f(label + ".x2f", nmb, ne, nvar, n3, n2+1, n1),
-    x3f(label + ".x3f", nmb, ne, nvar, n3+1, n2, n1) {}
-  ~DvceFaceFld6D() = default;
-};
-
-template <typename T>
 struct HostFaceFld4D {
   HostArray4D<T> x1f, x2f, x3f;  // name indicates both direction and location
   HostFaceFld4D(const std::string &label, int nmb, int n3, int n2, int n1) :
@@ -357,50 +347,6 @@ inline void par_for(const std::string &name, DevExeSpace exec_space,
                              k += kl;
                              j += jl;
                              function(p, m, n, k, j, i);
-                         });
-}
-
-//------------------------------
-// 7D loop using Kokkos 1D Range
-template <typename Function>
-inline void par_for(const std::string &name, DevExeSpace exec_space,
-                    const int &ql, const int &qu,
-                    const int &pl, const int &pu,
-                    const int &ml, const int &mu,
-                    const int &nl, const int &nu, const int &kl, const int &ku,
-                    const int &jl, const int &ju, const int &il, const int &iu,
-                    const Function &function) {
-    // compute total number of elements and call Kokkos::parallel_for()
-    const int nq = qu - ql + 1;
-    const int np = pu - pl + 1;
-    const int nm = mu - ml + 1;
-    const int nn = nu - nl + 1;
-    const int nk = ku - kl + 1;
-    const int nj = ju - jl + 1;
-    const int ni = iu - il + 1;
-    const int nqpmnkji = nq * np * nm * nn * nk * nj * ni;
-    const int npmnkji  = np * nm * nn * nk * nj * ni;
-    const int nmnkji   = nm * nn * nk * nj * ni;
-    const int nnkji    = nn * nk * nj * ni;
-    const int nkji     = nk * nj * ni;
-    const int nji      = nj * ni;
-    Kokkos::parallel_for(name, Kokkos::RangePolicy<>(exec_space, 0, nqpmnkji),
-                         KOKKOS_LAMBDA(const int &idx) {
-                             // compute p,m,n,k,j,i indices of thread and call function
-                             int q = (idx)/npmnkji;
-                             int p = (idx - q*npmnkji)/nmnkji;
-                             int m = (idx - q*npmnkji - p*nmnkji)/nnkji;
-                             int n = (idx - q*npmnkji - p*nmnkji - m*nnkji)/nkji;
-                             int k = (idx - q*npmnkji - p*nmnkji - m*nnkji - n*nkji)/nji;
-                             int j = (idx - q*npmnkji - p*nmnkji - m*nnkji - n*nkji - k*nji)/ni;
-                             int i = (idx - q*npmnkji - p*nmnkji - m*nnkji - n*nkji - k*nji - j*ni) + il;
-                             q += ql;
-                             p += pl;
-                             m += ml;
-                             n += nl;
-                             k += kl;
-                             j += jl;
-                             function(q, p, m, n, k, j, i);
                          });
 }
 
