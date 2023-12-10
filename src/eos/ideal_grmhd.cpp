@@ -145,17 +145,17 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       TransformToSRMHD(u,glower,gupper,s2,b2,rpar,u_sr);
 
       // call c2p function
-      // (inline function in ideal_c2p_mhd.hpp file)
-      // SingleC2P_IdealSRMHD(u_sr, eos, s2, b2, rpar, w,
-      //                      dfloor_used, efloor_used, c2p_failure, iter_used);
+      (inline function in ideal_c2p_mhd.hpp file)
+      SingleC2P_IdealSRMHD(u_sr, eos, s2, b2, rpar, w,
+                           dfloor_used, efloor_used, c2p_failure, iter_used);
       HydPrim1D w_old;
       w_old.d  = prim(m,IDN,k,j,i);
       w_old.vx = prim(m,IVX,k,j,i);
       w_old.vy = prim(m,IVY,k,j,i);
       w_old.vz = prim(m,IVZ,k,j,i);
       w_old.e  = prim(m,IEN,k,j,i);
-      SingleC2P_IdealSRMHD_NH(u_sr, eos, s2, b2, rpar, w, w_old,
-                              dfloor_used, efloor_used, c2p_failure, iter_used);
+      // SingleC2P_IdealSRMHD_NH(u_sr, eos, s2, b2, rpar, w, w_old,
+      //                         dfloor_used, efloor_used, c2p_failure, iter_used);
 
       // apply entropy fix
       if (entropy_fix_ && !entropy_fix_turnoff_) {
@@ -199,11 +199,16 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
           bool c2p_failure_in_fix=c2p_failure;
           int iter_used_in_fix=0;
           HydPrim1D w_fix;
-          w_fix.d  = w.d;
-          w_fix.vx = w.vx;
-          w_fix.vy = w.vy;
-          w_fix.vz = w.vz;
-          w_fix.e  = w.e;
+          // w_fix.d  = w.d;
+          // w_fix.vx = w.vx;
+          // w_fix.vy = w.vy;
+          // w_fix.vz = w.vz;
+          // w_fix.e  = w.e;
+          w_fix.d  = w_old.d;
+          w_fix.vx = w_old.vx;
+          w_fix.vy = w_old.vy;
+          w_fix.vz = w_old.vz;
+          w_fix.e  = w_old.e;
           Real &s_tot = cons(m,entropyIdx,k,j,i);
           SingleC2P_IdealSRMHD_EntropyFix(u_sr, s_tot, eos, s2, b2, rpar, w_fix, w_old,
                                           dfloor_used_in_fix, efloor_used_in_fix,
@@ -231,6 +236,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
           } // !c2p_failure_in_fix
         } // endif (c2p_failure || (sigma_cold > sigma_cold_cut_))
       } // endif entropy_fix_
+      // TODO: try fofc_(m,k,j,i)
 
       // apply velocity ceiling if necessary
       Real tmp = glower[1][1]*SQR(w.vx)
