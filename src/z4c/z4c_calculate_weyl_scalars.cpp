@@ -49,6 +49,7 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
     Real &x1min = size.d_view(m).x1min;
     Real &x1max = size.d_view(m).x1max;
     int nx1 = indcs.nx1;
+    Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
     Real &x2min = size.d_view(m).x2min;
     Real &x2max = size.d_view(m).x2max;
@@ -60,28 +61,6 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
     int nx3 = indcs.nx3;
     Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> Gamma_u;
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> uvec;
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> vvec;
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> wvec;
-
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;        // inverse of conf. metric
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> R_dd;        // Ricci tensor
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> K_ud;        // extrinsic curvature
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 2> Riemm4_dd;   // 4D Riemann *n^a*n^c
-
-    AthenaScratchTensor<Real, TensorSymm::SYM2,  3, 3> dg_ddd;      // metric 1st drvts
-    AthenaScratchTensor<Real, TensorSymm::SYM2,  3, 3> dK_ddd;      // K 1st drvts
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_ddd;   // Christoffel symbols of 1st kind
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_udd;   // Christoffel symbols of 2nd kind
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> DK_ddd;      // differential of K
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> DK_udd;      // differential of K
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 3> Riemm4_ddd;  // 4D Riemann * n^a
-
-    AthenaScratchTensor<Real, TensorSymm::SYM22, 3, 4> ddg_dddd;   // metric 2nd drvts
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 4> Riem3_dddd;  // 3D Riemann tensor
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 4> Riemm4_dddd; // 4D Riemann tensor
-
     // Scalars
     Real detg = 0.0;         // det(g)
     Real R = 0.0;
@@ -91,6 +70,10 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
     Real KK = 0.0;           // K^a_b K^b_a
 
     // Vectors
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> Gamma_u;
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> uvec;
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> vvec;
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> wvec;
     for (int a = 0; a < 3; ++a) {
       Gamma_u(a) = 0.0;
       uvec(a) = 0.0;
@@ -98,8 +81,22 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
       wvec(a) = 0.0;
     }
 
-    //
     // Symmetric tensors
+    // Rank 2
+    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;        // inverse of conf. metric
+    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> R_dd;        // Ricci tensor
+    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> K_ud;        // extrinsic curvature
+
+    // Rank 3
+    AthenaScratchTensor<Real, TensorSymm::SYM2,  3, 3> dg_ddd;      // metric 1st drvts
+    AthenaScratchTensor<Real, TensorSymm::SYM2,  3, 3> dK_ddd;      // K 1st drvts
+    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_ddd;   // Christoffel symbols of 1st kind
+    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_udd;   // Christoffel symbols of 2nd kind
+    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> DK_ddd;      // differential of K
+    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> DK_udd;      // differential of K
+
+    // Rank 4
+    AthenaScratchTensor<Real, TensorSymm::SYM22, 3, 4> ddg_dddd;   // metric 2nd drvts
     for (int a = 0; a < 3; ++a)
     for (int b = a; b < 3; ++b) {
       g_uu(a,b) = 0.0;
@@ -119,6 +116,10 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
     }
 
     // Generic tensors
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 2> Riemm4_dd;   // 4D Riemann *n^a*n^c
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 3> Riemm4_ddd;  // 4D Riemann * n^a
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 4> Riem3_dddd;  // 3D Riemann tensor
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 4> Riemm4_dddd; // 4D Riemann tensor
     for (int a = 0; a < 3; ++a)
     for (int b = 0; b < 3; ++b) {
       Riemm4_dd(a,b) = 0.0;
@@ -130,7 +131,6 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
         }
       }
     }
-
 
     Real idx[] = {1/size.d_view(m).dx1, 1/size.d_view(m).dx2, 1/size.d_view(m).dx3};
     // -----------------------------------------------------------------------------------
@@ -145,11 +145,11 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
     }
     // second derivatives of g
     for(int a = 0; a < 3; ++a)
-    for(int b = 0; b < 3; ++b)
+    for(int b = a; b < 3; ++b)
     for(int c = 0; c < 3; ++c)
-    for(int d = 0; d < 3; ++d) {
+    for(int d = c; d < 3; ++d) {
       if(a == b) {
-        ddg_dddd(a,a,c,d) = Dxx<NGHOST>(a, idx, adm.g_dd, m,c,d,k,j,i);
+        ddg_dddd(a,b,c,d) = Dxx<NGHOST>(a, idx, adm.g_dd, m,c,d,k,j,i);
       }
       else {
         ddg_dddd(a,b,c,d) = Dxy<NGHOST>(a, b, idx, adm.g_dd, m,c,d,k,j,i);
@@ -252,7 +252,6 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
     //     uvec = radial vec
     //     vvec = theta vec
     //     wvec = phi vec
-    Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
     Real xx = x1v;
     if(SQR(x1v) +  SQR(x2v) < 1e-10)
       xx = xx + 1e-8;
@@ -267,9 +266,10 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
     wvec(2) = 0.0;
 
     //Gram-Schmidt orthonormalisation with spacetime metric.
-    //
+    
+    // (1) normalize phi vec
     for(int a = 0; a<3; ++a) {
-	    for(int b = 0; b<3; ++b){
+	    for(int b = 0; b<3; ++b) {
           dotp1 += adm.g_dd(m,a,b,k,j,i)*wvec(a)*wvec(b);
 	    }
     }
@@ -277,9 +277,10 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
 	      wvec(a) = wvec(a)/std::sqrt(dotp1);
     }
 
+    // (2) make radial vec orthogonal to phi vec
     dotp1 = 0;
     for(int a = 0; a<3; ++a) {
-      for( int b = 0; b<3; ++b){
+      for( int b = 0; b<3; ++b) {
 	      dotp1 += adm.g_dd(m,a,b,k,j,i)*wvec(a)*uvec(b);
       }
     }
@@ -287,6 +288,7 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
 	    uvec(a) -= dotp1*wvec(a);
     }
 
+    // (3) normalize radial vec
     dotp1 = 0;
     for(int a = 0; a<3; ++a) {
 	    for(int b = 0; b<3; ++b) {
@@ -298,6 +300,7 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
 	      uvec(a) = uvec(a)/std::sqrt(dotp1);
     }
 
+    // (4) make theta vec orthogonal to both radial and phi vec
     dotp1 = 0;
     for(int a = 0; a<3; ++a) {
       for(int b = 0; b<3; ++b) {
@@ -305,24 +308,26 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
 	    }
     }
 
-    for(int a = 0; a<3; ++a){
+    dotp2 = 0;
+    for(int a = 0; a<3; ++a) {
 	    for( int b = 0; b<3; ++b) {
 	      dotp2 += adm.g_dd(m,a,b,k,j,i)*uvec(a)*vvec(b);
 	    }
     }
 
-    for(int a = 0; a<3; ++a){
+    for(int a = 0; a<3; ++a) {
 	    vvec(a) -= dotp1*wvec(a)+dotp2*uvec(a);
     }
 
+    // (3) normalize theta vec
     dotp1 = 0;
-    for(int a = 0; a<3; ++a){
+    for(int a = 0; a<3; ++a) {
 	    for( int b = 0; b<3; ++b) {
 	      dotp1 += adm.g_dd(m,a,b,k,j,i)*vvec(a)*vvec(b);
 	    }
     }
 
-    for(int a =0; a<3; ++a){
+    for(int a =0; a<3; ++a) {
 	    vvec(a) = vvec(a)/std::sqrt(dotp1);
     }
 
@@ -342,8 +347,8 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
                             - 0.5*R*adm.g_dd(m,a,c,k,j,i)*adm.g_dd(m,b,d,k,j,i)
                             + 0.5*R*adm.g_dd(m,a,d,k,j,i)*adm.g_dd(m,b,c,k,j,i);
       Riemm4_dddd(a,b,c,d) = Riem3_dddd(a,b,c,d)
-                        + adm.vK_dd(m,a,c,k,j,i)*adm.vK_dd(m,b,d,k,j,i)
-                              - adm.vK_dd(m,a,d,k,j,i)*adm.vK_dd(m,b,c,k,j,i);
+                            + adm.vK_dd(m,a,c,k,j,i)*adm.vK_dd(m,b,d,k,j,i)
+                            - adm.vK_dd(m,a,d,k,j,i)*adm.vK_dd(m,b,c,k,j,i);
     }
 
     for(int a = 0; a < 3; ++a) {
@@ -367,15 +372,15 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
       }
     }
 
-    for(int a = 0; a < 3; ++a){
-      for(int b = 0; b < 3; ++b){
+    for(int a = 0; a < 3; ++a) {
+      for(int b = 0; b < 3; ++b) {
         weyl.rpsi4(m,k,j,i) += - FR4 * Riemm4_dd(a,b) * (
           vvec(a) * vvec(b) - (-wvec(a) * (-wvec(b)))
         );
         weyl.ipsi4(m,k,j,i) += - FR4 * Riemm4_dd(a,b) * (
           -vvec(a) * wvec(b) - wvec(a)*vvec(b)
         );
-        for(int c = 0; c < 3; ++c){
+        for(int c = 0; c < 3; ++c) {
           weyl.rpsi4(m,k,j,i) += 0.5 * Riemm4_ddd(a,c,b) * uvec(c) * (
             vvec(a) * vvec(b) - (-wvec(a)*(-wvec(b)))
           );

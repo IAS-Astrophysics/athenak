@@ -59,15 +59,14 @@ void Z4c::AssembleZ4cTasks(TaskList &start, TaskList &run, TaskList &end) {
   id.bcs   = run.AddTask(&Z4c::ApplyPhysicalBCs, this, id.recvu);
   id.prol  = run.AddTask(&Z4c::Prolongate, this, id.bcs);
   id.algc  = run.AddTask(&Z4c::EnforceAlgConstr, this, id.prol);
-  id.z4tad = run.AddTask(&Z4c::Z4cToADM_, this, id.algc);
-  id.admc  = run.AddTask(&Z4c::ADMConstraints_, this, id.z4tad);
-  id.newdt = run.AddTask(&Z4c::NewTimeStep, this, id.admc);
+  id.newdt = run.AddTask(&Z4c::NewTimeStep, this, id.algc);
   // end task list
   id.csend = end.AddTask(&Z4c::ClearSend, this, none);
   id.crecv = end.AddTask(&Z4c::ClearRecv, this, id.csend);
-
   // if (pmy_pack->pmesh->ncycle!=0 && pmy_pack->pmesh->ncycle%2 == 0) {
-  id.weyl_scalar  = end.AddTask(&Z4c::CalcWeylScalar_, this, id.crecv);
+  id.z4tad = end.AddTask(&Z4c::Z4cToADM_, this, id.crecv);
+  id.admc  = end.AddTask(&Z4c::ADMConstraints_, this, id.z4tad);
+  id.weyl_scalar  = end.AddTask(&Z4c::CalcWeylScalar_, this, id.admc);
   // }
   return;
 }
