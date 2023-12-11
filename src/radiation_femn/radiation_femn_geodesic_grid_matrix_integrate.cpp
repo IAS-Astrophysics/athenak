@@ -27,6 +27,10 @@ namespace radiationfemn {
  * [3] Cos Theta Psi_A Psi_B: stffness matrix z
  * [4] G^nu^mu_ihat
  * [5] F^nu^mu_ihat
+ * [6]
+ * [7] Cos Phi Sin Theta Psi_A
+ * [8] Sin Phi Sin Theta Psi_A
+ * [9] Cos Theta Psi_A
  *
  * Inputs:
  * a,b: basis vector indices
@@ -99,6 +103,24 @@ Real IntegrateMatrixSphericalTriangle(int a, int b, int basis, int t1, int t2, i
     for (size_t i = 0; i < scheme_weights.size(); i++) {
       result += sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2)))
           * FEMBasisA(a, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis) * scheme_weights(i);
+    }
+  } else if (matrixnumber == 7) {
+    for (size_t i = 0; i < scheme_weights.size(); i++) {
+      result += CosPhiSinTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
+          * sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))) *
+          FEMBasisA(a, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis) * scheme_weights(i);
+    }
+  } else if (matrixnumber == 8) {
+    for (size_t i = 0; i < scheme_weights.size(); i++) {
+      result += SinPhiSinTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
+          * sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))) *
+          FEMBasisA(a, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis) * scheme_weights(i);
+    }
+  } else if (matrixnumber == 9) {
+    for (size_t i = 0; i < scheme_weights.size(); i++) {
+      result += CosTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
+          * sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))) *
+          FEMBasisA(a, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis) * scheme_weights(i);
     }
   }
 

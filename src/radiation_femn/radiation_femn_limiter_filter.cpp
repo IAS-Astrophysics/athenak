@@ -1,9 +1,8 @@
 //========================================================================================
-// GR radiation code for AthenaK with FEM_N & FP_N
-// Copyright (C) 2023 Maitraya Bhattacharyya <mbb6217@psu.edu> and David Radice <dur566@psu.edu>
-// AthenaXX copyright(C) James M. Stone <jmstone@ias.edu> and the Athena code team
+// AthenaXXX astrophysical plasma code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
-//==============================================================================================
+//========================================================================================
 //! \file radiation_femn_limiter_filter.cpp
 //! \brief implementation of limiters and filters for FEM_N and FP_N
 
@@ -64,70 +63,48 @@ TaskStatus RadiationFEMN::ApplyFilterLanczos(Driver *pdriver, int stage) {
   return TaskStatus::complete;
 }
 
+/* \fn RadiationFEMN::ApplyLimiterFEM
+ *
+ * \brief Applies a clipping limiter pointwise to the distribution function for each
+ * energy bin which conserves the particle number density in the Eulerian frame.
+ */
 TaskStatus RadiationFEMN::ApplyLimiterFEM(Driver *pdriver, int stage) {
+
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int &is = indcs.is, &ie = indcs.ie;
   int &js = indcs.js, &je = indcs.je;
   int &ks = indcs.ks, &ke = indcs.ke;
-  int nengang1 = num_points_total - 1;
+  int nouter1 = num_energy_bins - 1;
   int nmb1 = pmy_pack->nmb_thispack - 1;
-  auto &mbsize = pmy_pack->pmb->mb_size;
   auto &f0_ = f0;
-  auto &energy_grid_ = pmy_pack->pradfemn->energy_grid;
-  auto &e_source_nominv_ = pmy_pack->pradfemn->e_source_nominv;
-  auto &mm_ = mass_matrix;
-  auto &etemp0_ = etemp0;
-  auto &etemp1_ = etemp1;
+  auto &L_mu_muhat_ = L_mu_muhat0;
 
-  Kokkos::deep_copy(etemp0_, 0.0);
-  Kokkos::deep_copy(etemp1_, 0.0);
-
-  assert(num_energy_bins == 1);
-
-  // @TODO: Add energy dependence (later)
   int scr_level = 0;
-    int scr_size = 1;
-    par_for_outer("rad_femn_E_compute_femn", DevExeSpace(), scr_size, scr_level, 0, nmb1, ks, ke, js, je, is, ie,
-                  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j, const int i) {
+  int scr_size = 1;
+  par_for_outer("rad_femn_compute_clp_femn", DevExeSpace(), scr_size, scr_level, 0, nmb1, 0, nouter1, ks, ke, js, je, is, ie,
+                KOKKOS_LAMBDA(TeamMember_t member, const int m, const int outervar, const int k, const int j, const int i) {
 
-                    Real temp_sum = 0.;
-                    Kokkos::parallel_reduce(Kokkos::TeamThreadRange(member, 0, num_energy_bins), [=](const int en, Real &partial_sum) {
-                      Real Sen = (pow(energy_grid_(en + 1), 4) - pow(energy_grid_(en), 4)) / 4.0;
+                  Real numerator = 0.;
+                  Kokkos::parallel_reduce(Kokkos::ThreadVectorRange(member, 0, num_points), [=](const int A, Real &partial_sum_angle) {
+                    partial_sum_angle += f0_(m, outervar * num_energy_bins + A, k, j, i) * (Q_matrix(0, A) * L_mu_muhat_(m, 0, 0, k, j, i)
+                        + Q_matrix(1, A) * L_mu_muhat_(m, 0, 1, k, j, i) + Q_matrix(2, A) * L_mu_muhat_(m, 0, 2, k, j, i) + Q_matrix(3, A) * L_mu_muhat_(m, 0, 3, k, j, i));
+                  }, numerator);
 
-                      Real temp_sum_angle = 0.;
-                      Kokkos::parallel_reduce(Kokkos::ThreadVectorRange(member, 0, num_points), [=](const int A, Real &partial_sum_angle) {
-                        partial_sum_angle += e_source_nominv_(A) * f0_(m, en * num_energy_bins + A, k, j, i);
-                      }, temp_sum_angle);
-                      member.team_barrier();
+                  Real denominator = 0.;
+                  Kokkos::parallel_reduce(Kokkos::ThreadVectorRange(member, 0, num_points), [=](const int A, Real &partial_sum_angle) {
+                    partial_sum_angle += fmax(0, f0_(m, outervar * num_energy_bins + A, k, j, i)) * (Q_matrix(0, A) * L_mu_muhat_(m, 0, 0, k, j, i)
+                        + Q_matrix(1, A) * L_mu_muhat_(m, 0, 1, k, j, i) + Q_matrix(2, A) * L_mu_muhat_(m, 0, 2, k, j, i) + Q_matrix(3, A) * L_mu_muhat_(m, 0, 3, k, j, i));
+                  }, denominator);
+                  member.team_barrier();
 
-                      partial_sum += Sen * temp_sum_angle;
-                    }, temp_sum);
+                  Real correction_factor = (numerator > 0 && denominator != 0) ? (numerator / denominator) : 0.0;
 
-                    Real temp_sum_2 = 0.;
-                    Kokkos::parallel_reduce(Kokkos::TeamThreadRange(member, 0, num_energy_bins), [=](const int en, Real &partial_sum) {
-                      Real Sen = (pow(energy_grid_(en + 1), 4) - pow(energy_grid_(en), 4)) / 4.0;
-
-                      Real temp_sum_angle = 0.;
-                      Kokkos::parallel_reduce(Kokkos::ThreadVectorRange(member, 0, num_points), [=](const int A, Real &partial_sum_angle) {
-                        partial_sum_angle += e_source_nominv_(A) *  fmax(f0_(m, en * num_energy_bins + A, k, j, i), 0.0);
-                      }, temp_sum_angle);
-                      member.team_barrier();
-
-                      partial_sum += Sen * temp_sum_angle;
-                    }, temp_sum_2);
-
-                    etemp0_(m, k, j, i) = temp_sum;
-                    etemp1_(m, k, j, i) = temp_sum_2;
+                  par_for_inner(member, 0, num_points - 1, [&](const int A) {
+                    f0_(m, outervar * num_energy_bins + A, k, j, i) = correction_factor * fmax(f0_(m, outervar * num_energy_bins + A, k, j, i),0.);
                   });
+                  member.team_barrier();
 
-  par_for("radiation_femn_limiter_clp", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie, 0, nengang1,
-          KOKKOS_LAMBDA(const int m, const int k, const int j, const int i, const int A) {
-            auto theta = (etemp0_(m, k, j, i) > 0 && etemp1_(m, k, j, i) != 0) ? (etemp0_(m, k, j, i) /
-                etemp1_(m, k, j, i)) : 0.0;
-
-            f0_(m, A, k, j, i) = theta * fmax(f0_(m, A, k, j, i), 0.0);
-
-          });
+                });
 
   return TaskStatus::complete;
 }

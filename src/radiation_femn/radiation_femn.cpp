@@ -35,8 +35,6 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
     f1("f1", 1, 1, 1, 1, 1),
     iflx("iflx", 1, 1, 1, 1, 1),
     ftemp("ftemp", 1, 1, 1, 1, 1),
-    etemp0("etemp0", 1, 1, 1, 1),
-    etemp1("etemp1", 1, 1, 1, 1),
     energy_grid("energy_grid", 1),
     angular_grid("angular_grid", 1, 1),
     mass_matrix("mm", 1, 1),
@@ -47,6 +45,7 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
     Pmod_matrix("PmodmuAB", 1, 1, 1),
     G_matrix("GnumuiAB", 1, 1, 1, 1, 1),
     F_matrix("FnumuiAB", 1, 1, 1, 1, 1),
+    Q_matrix("QmuhatA", 1, 1),
     e_source("e_source", 1),
     e_source_nominv("e_source_nominv", 1),
     S_source("S_source", 1, 1),
@@ -125,6 +124,7 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   Kokkos::realloc(Pmod_matrix, 4, num_points, num_points);
   Kokkos::realloc(G_matrix, 4, 4, 3, num_points, num_points);     // G^nuhat^muhat_ihat_A^B (no energy)
   Kokkos::realloc(F_matrix, 4, 4, 3, num_points, num_points);     // F^nuhat^nuhat_ihat_A^B
+  Kokkos::realloc(Q_matrix, 4, num_points);
   Kokkos::realloc(e_source, num_points);
   Kokkos::realloc(e_source_nominv, num_points);
   Kokkos::realloc(S_source, num_points, num_points);
@@ -143,7 +143,7 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
     }
 
     radiationfemn::LoadQuadrature(scheme_name, scheme_num_points, scheme_weights, scheme_points); // populate quadrature from disk
-    this->LoadFEMNMatrices();                                                                     // populate all matrices with FEM_N data
+    this->LoadFEMNMatrices(); // populate all matrices with FEM_N data
 
   } else {    // populate arrays for FP_N
     scheme_num_points = pin->GetOrAddInteger("radiation-femn", "quad_scheme_num_points", 2702);   // number of points in numerical integration scheme (default: 2702)
@@ -224,12 +224,6 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   Kokkos::realloc(iflx.x2f, nmb, num_points_total, ncells3, ncells2, ncells1);  // spatial flux (y)
   Kokkos::realloc(iflx.x3f, nmb, num_points_total, ncells3, ncells2, ncells1);  // spatial flux (z)
   Kokkos::realloc(ftemp, nmb, num_points_total, ncells3, ncells2, ncells1);     // distribution function (temp storage)
-
-  // reallocate memory for the temporary intensity matrices if the clipping limiter is on
-  if (limiter_fem == "clp") {
-    Kokkos::realloc(etemp0, nmb, ncells3, ncells2, ncells1);
-    Kokkos::realloc(etemp1, nmb, ncells3, ncells2, ncells1);
-  }
 
   // reallocate allocate memory for evolved variables on coarse mesh
   if (ppack->pmesh->multilevel) {

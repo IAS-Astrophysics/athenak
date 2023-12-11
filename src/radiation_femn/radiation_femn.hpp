@@ -114,7 +114,7 @@ class RadiationFEMN {
   DvceArray3D<Real> Pmod_matrix;              // Zero speed mode corrected P_matrix
   DvceArray5D<Real> G_matrix;                 // G ^nuhat ^muhat _ihat ^A _B
   DvceArray5D<Real> F_matrix;                 // F ^nuhat ^muhat _ihat ^A _B
-
+  DvceArray2D<Real> Q_matrix;                 // Q ^muhat _A
   // ---------------------------------------------------------------------------
   // distribution function, flux and other arrays
   // ---------------------------------------------------------------------------
@@ -125,8 +125,6 @@ class RadiationFEMN {
 
   // intermediate arrays needed for limiting
   DvceArray5D<Real> ftemp;
-  DvceArray4D<Real> etemp0;
-  DvceArray4D<Real> etemp1;
 
   // Arrays for holding tetrad quantities
   DvceArray6D<Real> L_mu_muhat0;   // tetrad quantities
