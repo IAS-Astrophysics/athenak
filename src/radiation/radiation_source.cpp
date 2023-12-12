@@ -120,19 +120,31 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
     w0_ = pmy_pack->pmhd->w0;
   }
 
+  DvceArray5D<Real> wv0_;
+  int ncells1 = indcs.nx1 + 2*(indcs.ng);
+  int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
+  int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
+  Kokkos::realloc(wv0_,nmb1+1,3,ncells3,ncells2,ncells1);
+  par_for("radiation_source",DevExeSpace(),0,nmb1,ks,ke,js,je,is,ie,
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    wv0_(m,0,k,j,i) = w0_(m,IVX,k,j,i);
+    wv0_(m,1,k,j,i) = w0_(m,IVY,k,j,i);
+    wv0_(m,2,k,j,i) = w0_(m,IVZ,k,j,i);
+  });
+
   // Extract timestep
   Real dt_ = (pdriver->beta[stage-1])*(pmy_pack->pmesh->dt);
 
   // Call ConsToPrim over active zones prior to source term application
-  // if (!(fixed_fluid_)) {
-  //   if (is_hydro_enabled_) {
-  //     pmy_pack->phydro->peos->ConsToPrim(u0_,w0_,false,is,ie,js,je,ks,ke);
-  //   } else if (is_mhd_enabled_) {
-  //     auto &b0_ = pmy_pack->pmhd->b0;
-  //     auto &bcc0_ = pmy_pack->pmhd->bcc0;
-  //     pmy_pack->pmhd->peos->ConsToPrim(u0_,b0_,w0_,bcc0_,false,is,ie,js,je,ks,ke);
-  //   }
-  // }
+  if (!(fixed_fluid_)) {
+    if (is_hydro_enabled_) {
+      pmy_pack->phydro->peos->ConsToPrim(u0_,w0_,false,is,ie,js,je,ks,ke);
+    } else if (is_mhd_enabled_) {
+      auto &b0_ = pmy_pack->pmhd->b0;
+      auto &bcc0_ = pmy_pack->pmhd->bcc0;
+      pmy_pack->pmhd->peos->ConsToPrim(u0_,b0_,w0_,bcc0_,false,is,ie,js,je,ks,ke);
+    }
+  }
 
   // compute implicit source term
   par_for("radiation_source",DevExeSpace(),0,nmb1,ks,ke,js,je,is,ie,
@@ -156,9 +168,12 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
 
     // fluid state
     Real &wdn = w0_(m,IDN,k,j,i);
-    Real &wvx = w0_(m,IVX,k,j,i);
-    Real &wvy = w0_(m,IVY,k,j,i);
-    Real &wvz = w0_(m,IVZ,k,j,i);
+    // Real &wvx = w0_(m,IVX,k,j,i);
+    // Real &wvy = w0_(m,IVY,k,j,i);
+    // Real &wvz = w0_(m,IVZ,k,j,i);
+    Real &wvx = wv0_(m,0,k,j,i);
+    Real &wvy = wv0_(m,1,k,j,i);
+    Real &wvz = wv0_(m,2,k,j,i);
     Real &wen = w0_(m,IEN,k,j,i);
 
     // derived quantities
