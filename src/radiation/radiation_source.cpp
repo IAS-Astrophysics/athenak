@@ -124,15 +124,15 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   Real dt_ = (pdriver->beta[stage-1])*(pmy_pack->pmesh->dt);
 
   // Call ConsToPrim over active zones prior to source term application
-  if (!(fixed_fluid_)) {
-    if (is_hydro_enabled_) {
-      pmy_pack->phydro->peos->ConsToPrim(u0_,w0_,false,is,ie,js,je,ks,ke);
-    } else if (is_mhd_enabled_) {
-      auto &b0_ = pmy_pack->pmhd->b0;
-      auto &bcc0_ = pmy_pack->pmhd->bcc0;
-      pmy_pack->pmhd->peos->ConsToPrim(u0_,b0_,w0_,bcc0_,false,is,ie,js,je,ks,ke);
-    }
-  }
+  // if (!(fixed_fluid_)) {
+  //   if (is_hydro_enabled_) {
+  //     pmy_pack->phydro->peos->ConsToPrim(u0_,w0_,false,is,ie,js,je,ks,ke);
+  //   } else if (is_mhd_enabled_) {
+  //     auto &b0_ = pmy_pack->pmhd->b0;
+  //     auto &bcc0_ = pmy_pack->pmhd->bcc0;
+  //     pmy_pack->pmhd->peos->ConsToPrim(u0_,b0_,w0_,bcc0_,false,is,ie,js,je,ks,ke);
+  //   }
+  // }
 
   // compute implicit source term
   par_for("radiation_source",DevExeSpace(),0,nmb1,ks,ke,js,je,is,ie,
