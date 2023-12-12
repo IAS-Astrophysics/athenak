@@ -228,6 +228,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
         } // endif (!c2p_failure && (sigma_cold > sigma_cold_cut_))
 
       } // endif entropy_fix_
+      c2p_flag(m,k,j,i) = !c2p_failure;
 
       // apply velocity ceiling if necessary
       Real tmp = glower[1][1]*SQR(w.vx)

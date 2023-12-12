@@ -109,9 +109,11 @@ class MHD {
   DvceArray4D<bool> fofc;  // flag for each cell to indicate if FOFC is needed
   bool use_fofc = false;   // flag to enable FOFC
 
-  // following only used for entropy fix
+  // following used for gas-radiation coupling
   DvceArray4D<bool> c2p_flag; // flag for each cell to indicate if c2p succeeds
-  DvceArray5D<Real> w0_old;   // old primitive variables for radiation source term calculation
+  DvceArray5D<Real> w0_old;   // save old primitive variables for rad source calculation
+
+  // following only used for entropy fix
   bool entropy_fix = false;
   bool entropy_fix_turnoff = false;
   Real sigma_cold_cut;

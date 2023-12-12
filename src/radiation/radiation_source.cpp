@@ -115,7 +115,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   if (is_hydro_enabled_) {
     u0_ = pmy_pack->phydro->u0;
     w0_ = pmy_pack->phydro->w0;
-    // TODO: implement w0_old for hydro case
+    w0_old_ = pmy_pack->phydro->w0; // TODO: implement w0_old for hydro
   } else if (is_mhd_enabled_) {
     u0_ = pmy_pack->pmhd->u0;
     w0_ = pmy_pack->pmhd->w0;
@@ -136,6 +136,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
       pmy_pack->pmhd->peos->ConsToPrim(u0_,b0_,w0_,bcc0_,false,is,ie,js,je,ks,ke);
     }
   }
+  if (stage<1) Kokkos::deep_copy(DevExeSpace(), w0_old_, w0_);
 
   // compute implicit source term
   par_for("radiation_source",DevExeSpace(),0,nmb1,ks,ke,js,je,is,ie,
