@@ -21,14 +21,14 @@ void RadiationFEMN::ComputeSourceMatrices() {
   auto e_source_ = e_source;
   auto S_source_ = S_source;
 
-  HostArray2D<Real> mass_inv_temp;
+  DvceArray2D<Real> mass_inv_temp;
   Kokkos::realloc(mass_inv_temp, num_points, num_points);
   radiationfemn::LUInverse(mm_, mass_inv_temp);
 
-  HostArray1D<Real> e_source_temp;
-  HostArray1D<Real> e_source_temp_mod;
-  HostArray2D<Real> S_source_temp;
-  HostArray2D<Real> S_source_temp_mod;
+  DvceArray1D<Real> e_source_temp;
+  DvceArray1D<Real> e_source_temp_mod;
+  DvceArray2D<Real> S_source_temp;
+  DvceArray2D<Real> S_source_temp_mod;
   Kokkos::realloc(e_source_temp, num_points);
   Kokkos::realloc(e_source_temp_mod, num_points);
   Kokkos::realloc(S_source_temp, num_points, num_points);
@@ -48,7 +48,7 @@ void RadiationFEMN::ComputeSourceMatrices() {
       S_source_temp(i,j) = e_source_temp(i) * e_source_temp(j);
     }
   }
-  radiationfemn::MatMultiply(mass_inv_temp, S_source_temp, S_source_temp_mod);
+  radiationfemn::MatMultiplyDvce(mass_inv_temp, S_source_temp, S_source_temp_mod);
 
   Kokkos::deep_copy(e_source_, e_source_temp_mod);
   Kokkos::deep_copy(S_source_, S_source_temp_mod);

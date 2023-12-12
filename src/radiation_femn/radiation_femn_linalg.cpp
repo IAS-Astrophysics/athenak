@@ -135,7 +135,19 @@ void LUInverse(DvceArray2D<Real> A_matrix, DvceArray2D<Real> A_matrix_inverse) {
 // A_matrix:          [NxN] a square matrix
 // B_matrix:          [NxN] a square matrix
 // result:            [NxN] the product
-void MatMultiply(HostArray2D<Real> A_matrix, HostArray2D<Real> B_matrix, HostArray2D<Real> result) {
+void MatMultiplyHost(HostArray2D<Real> A_matrix, HostArray2D<Real> B_matrix, HostArray2D<Real> result) {
+
+  int N = A_matrix.extent(0);
+
+  Kokkos::deep_copy(result, 0.);
+  par_for("radiation_femn_matrix_multiply", DevExeSpace(), 0, N - 1, 0, N - 1, 0, N - 1,
+          KOKKOS_LAMBDA(const int i, const int j, const int k) {
+
+            result(i, j) += A_matrix(i, k) * B_matrix(k, j);
+          });
+}
+
+void MatMultiplyDvce(DvceArray2D<Real> A_matrix, DvceArray2D<Real> B_matrix, DvceArray2D<Real> result) {
 
   int N = A_matrix.extent(0);
 

@@ -231,7 +231,8 @@ class RadiationFEMN {
 void LUDecomposition(DvceArray2D<Real> square_matrix, DvceArray2D<Real> lu_matrix, DvceArray1D<int> pivot_indices);
 void LUSolve(DvceArray2D<Real> lu_matrix, DvceArray1D<int> pivot_indices, DvceArray1D<Real> b_array, DvceArray1D<Real> x_array);
 void LUInverse(DvceArray2D<Real> A_matrix, DvceArray2D<Real> A_matrix_inverse);
-void MatMultiply(HostArray2D<Real> A_matrix, HostArray2D<Real> B_matrix, HostArray2D<Real> result);
+void MatMultiplyHost(HostArray2D<Real> A_matrix, HostArray2D<Real> B_matrix, HostArray2D<Real> result);
+void MatMultiplyDvce(DvceArray2D<Real> A_matrix, DvceArray2D<Real> B_matrix, DvceArray2D<Real> result);
 void MatMultiplyComplex(std::vector<std::vector<std::complex<Real>>> &A_matrix,
                         std::vector<std::vector<std::complex<Real>>> &B_matrix,
                         std::vector<std::vector<std::complex<Real>>> &result);

@@ -261,7 +261,7 @@ void ProblemGenerator::RadiationFEMNLinalgtest(ParameterInput *pin, const bool r
   mat_b(2, 1) = 2;
   mat_b(2, 2) = 4;
 
-  radiationfemn::MatMultiply(mat_a, mat_b, mat_ab);
+  radiationfemn::MatMultiplyHost(mat_a, mat_b, mat_ab);
 
   error = -42.;
   std::cout << "Product:" << std::endl;
