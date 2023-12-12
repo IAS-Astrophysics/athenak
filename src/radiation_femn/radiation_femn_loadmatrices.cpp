@@ -41,10 +41,13 @@ void RadiationFEMN::LoadFEMNMatrices() {
     }
   }
 
+  HostArray2D<Real> temp_angular_grid;
+  Kokkos::realloc(temp_angular_grid, num_points, 2);
   for (size_t i = 0; i < num_points; i++) {
-    angular_grid(i, 0) = phi(i);
-    angular_grid(i, 1) = theta(i);
+    temp_angular_grid(i, 0) = phi(i);
+    temp_angular_grid(i, 1) = theta(i);
   }
+  Kokkos::deep_copy(angular_grid, temp_angular_grid);
 
   auto &mm_ = mass_matrix;
   auto &sx_ = stiffness_matrix_x;
@@ -101,8 +104,8 @@ void RadiationFEMN::LoadFEMNMatrices() {
           temp_array_5d(nu, mu, 1, i, j) = radiationfemn::IntegrateMatrixFEMN(i, j, basis, x, y, z, scheme_weights, scheme_points, triangles, 5, nu, mu, 2);
           temp_array_5d(mu, nu, 1, i, j) = temp_array_5d(nu, mu, 1, i, j);
 
-          fmatrix_(nu, mu, 2, i, j) = radiationfemn::IntegrateMatrixFEMN(i, j, basis, x, y, z, scheme_weights, scheme_points, triangles, 5, nu, mu, 3);
-          fmatrix_(mu, nu, 2, i, j) = fmatrix_(nu, mu, 2, i, j);
+          temp_array_5d(nu, mu, 2, i, j) = radiationfemn::IntegrateMatrixFEMN(i, j, basis, x, y, z, scheme_weights, scheme_points, triangles, 5, nu, mu, 3);
+          temp_array_5d(mu, nu, 2, i, j) = temp_array_5d(nu, mu, 2, i, j);
         }
       }
     }
@@ -150,12 +153,15 @@ void RadiationFEMN::LoadFPNMatrices() {
 
   // populate angular grid with (l,m) values
   auto &lm_grid_ = angular_grid;
+  HostArray2D<Real> temp_angular_grid;
+  Kokkos::realloc(temp_angular_grid, num_points, 2);
   for (int l = 0; l <= lmax; l++) {
     for (int m = -l; m <= l; m++) {
-      lm_grid_(l * l + (l + m), 0) = l;
-      lm_grid_(l * l + (l + m), 1) = m;
+      temp_angular_grid(l * l + (l + m), 0) = l;
+      temp_angular_grid(l * l + (l + m), 1) = m;
     }
   }
+  Kokkos::deep_copy(angular_grid, temp_angular_grid);
 
   // temporary host arrays
   HostArray2D<Real> temp_matrix;

@@ -69,10 +69,13 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   num_species = pin->GetOrAddInteger("radiation-femn", "num_species", 1);       // number of neutrino species (default: 1)
 
   // set up energy grid
+  HostArray1D<Real> temp_array;
   Kokkos::realloc(energy_grid, num_energy_bins + 1);
+  Kokkos::realloc(temp_array, num_energy_bins + 1);
   for (int i = 0; i < num_energy_bins + 1; i++) {
-    energy_grid(i) = i * energy_max / Real(num_energy_bins);
+    temp_array(i) = i * energy_max / Real(num_energy_bins);
   }
+  Kokkos::deep_copy(energy_grid, temp_array);
 
   if (!fpn) {   // parameters for FEM_N
     lmax = -42;                                                                     // maximum value of l in spherical harmonics expansion (redundant: set to -42)
@@ -203,19 +206,33 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   int &js = indices.js, &je = indices.je;
   int &ks = indices.ks, &ke = indices.ke;
   int nmb1 = pmy_pack->nmb_thispack - 1;
-  auto &g_dd_ = pmy_pack->pradfemn->g_dd;
-  auto &u_mu_ = pmy_pack->pradfemn->u_mu;
 
   Kokkos::deep_copy(g_dd, 0.);
   Kokkos::deep_copy(sqrt_det_g, 1.);
-  Kokkos::deep_copy(u_mu, 0.); /*
+  Kokkos::deep_copy(u_mu, 0.);
+
+  for (int m = 0; m <= nmb1; m++) {
+    for (int k = ks; k <= ke; k++) {
+      for (int j = js; j < je; j++) {
+        for (int i = is; i < ie; i++) {
+          g_dd(m, 0, 0, k, j, i) = -1.;
+          g_dd(m, 1, 1, k, j, i) = 1.;
+          g_dd(m, 2, 2, k, j, i) = 1.;
+          g_dd(m, 3, 3, k, j, i) = 1.;
+          u_mu(m, 0, k, j, i) = 1;
+        }
+      }
+    }
+  }
+
+  /*
   par_for("radiation_femn_dummy_initialize", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
-          [&](int m, int k, int j, int i) {
-            g_dd_(m, 0, 0, k, j, i) = -1.;
-            g_dd_(m, 1, 1, k, j, i) = 1.;
-            g_dd_(m, 2, 2, k, j, i) = 1.;
-            g_dd_(m, 3, 3, k, j, i) = 1.;
-            u_mu_(m, 0, k, j, i) = 1;
+          KOKKOS_LAMBDA(int m, int k, int j, int i) {
+            g_dd(m, 0, 0, k, j, i) = -1.;
+            g_dd(m, 1, 1, k, j, i) = 1.;
+            g_dd(m, 2, 2, k, j, i) = 1.;
+            g_dd(m, 3, 3, k, j, i) = 1.;
+            u_mu(m, 0, k, j, i) = 1;
           }); */
 
   // --------------------------------------------------------------------
