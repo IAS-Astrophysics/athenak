@@ -111,26 +111,17 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   auto &solid_angles_ = prgeo->solid_angles;
 
   // Extract hydro/mhd quantities
-  DvceArray5D<Real> u0_, w0_;
+  DvceArray5D<Real> u0_, w0_, w0_old_;
   if (is_hydro_enabled_) {
     u0_ = pmy_pack->phydro->u0;
     w0_ = pmy_pack->phydro->w0;
+    // TODO: implement w0_old for hydro case
   } else if (is_mhd_enabled_) {
     u0_ = pmy_pack->pmhd->u0;
     w0_ = pmy_pack->pmhd->w0;
+    w0_old_ = pmy_pack->pmhd->w0_old;
   }
-
-  DvceArray5D<Real> wv0_;
-  int ncells1 = indcs.nx1 + 2*(indcs.ng);
-  int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
-  int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
-  Kokkos::realloc(wv0_,nmb1+1,3,ncells3,ncells2,ncells1);
-  par_for("assign_vel_for_rad_source",DevExeSpace(),0,nmb1,ks,ke,js,je,is,ie,
-  KOKKOS_LAMBDA(int m, int k, int j, int i) {
-    wv0_(m,0,k,j,i) = w0_(m,IVX,k,j,i);
-    wv0_(m,1,k,j,i) = w0_(m,IVY,k,j,i);
-    wv0_(m,2,k,j,i) = w0_(m,IVZ,k,j,i);
-  });
+  if (stage==1) Kokkos::deep_copy(DevExeSpace(), w0_old_, w0_);
 
   // Extract timestep
   Real dt_ = (pdriver->beta[stage-1])*(pmy_pack->pmesh->dt);
@@ -171,9 +162,9 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
     // Real &wvx = w0_(m,IVX,k,j,i);
     // Real &wvy = w0_(m,IVY,k,j,i);
     // Real &wvz = w0_(m,IVZ,k,j,i);
-    Real &wvx = wv0_(m,0,k,j,i);
-    Real &wvy = wv0_(m,1,k,j,i);
-    Real &wvz = wv0_(m,2,k,j,i);
+    Real &wvx = w0_old_(m,IVX,k,j,i);
+    Real &wvy = w0_old_(m,IVY,k,j,i);
+    Real &wvz = w0_old_(m,IVZ,k,j,i);
     Real &wen = w0_(m,IEN,k,j,i);
 
     // derived quantities

@@ -110,6 +110,8 @@ class MHD {
   bool use_fofc = false;   // flag to enable FOFC
 
   // following only used for entropy fix
+  DvceArray4D<bool> c2p_flag; // flag for each cell to indicate if c2p succeeds
+  DvceArray5D<Real> w0_old;   // primitive variables at previous time step
   bool entropy_fix = false;
   bool entropy_fix_turnoff = false;
   Real sigma_cold_cut;
