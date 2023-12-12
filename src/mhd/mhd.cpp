@@ -153,7 +153,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     Kokkos::realloc(b0.x2f, nmb, ncells3, ncells2+1, ncells1);
     Kokkos::realloc(b0.x3f, nmb, ncells3+1, ncells2, ncells1);
 
-    // allocate array to store old prim values
+    // allocate array to store old prim values for radiation source term calculation
     Kokkos::realloc(w0_old, nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
 
     // allocate array of flags for c2p status
