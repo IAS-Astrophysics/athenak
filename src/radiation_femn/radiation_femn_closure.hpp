@@ -45,7 +45,7 @@ void ApplyM1Closure(TeamMember_t member, int num_points, int m, int en, int kk, 
     Real fy = Fy / E;
     Real fz = Fz / E;
     Real fnorm = Fnorm / E;
-    Real fixed_fnorm = std::min(1.0, fnorm);
+    Real fixed_fnorm = fmin(1.0, fnorm);
 
     // Flux direction
     Real nx = fx / fnorm;

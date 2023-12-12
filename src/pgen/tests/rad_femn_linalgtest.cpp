@@ -221,10 +221,10 @@ void ProblemGenerator::RadiationFEMNLinalgtest(ParameterInput *pin, const bool r
   std::cout << "Test 4: Compute product of two square matrices" << std::endl;
   std::cout << std::endl;
 
-  DvceArray2D <Real> mat_a;
-  DvceArray2D <Real> mat_b;
-  DvceArray2D <Real> mat_ab;
-  DvceArray2D <Real> mat_ab_correct;
+  HostArray2D <Real> mat_a;
+  HostArray2D <Real> mat_b;
+  HostArray2D <Real> mat_ab;
+  HostArray2D <Real> mat_ab_correct;
 
   Kokkos::realloc(mat_a, 3, 3);
   Kokkos::realloc(mat_b, 3, 3);
@@ -326,9 +326,9 @@ void ProblemGenerator::RadiationFEMNLinalgtest(ParameterInput *pin, const bool r
   std::cout << std::endl;
   std::cout << "Test 6: Compute the zero speed mode corrections" << std::endl;
 
-  DvceArray2D<Real> zerosp_matrix;
-  DvceArray2D<Real> zerosp_matrix_corrected;
-  DvceArray2D<Real> zerosp_answer;
+  HostArray2D<Real> zerosp_matrix;
+  HostArray2D<Real> zerosp_matrix_corrected;
+  HostArray2D<Real> zerosp_answer;
 
   Kokkos::realloc(zerosp_matrix, 3, 3);
   Kokkos::realloc(zerosp_matrix_corrected, 3, 3);

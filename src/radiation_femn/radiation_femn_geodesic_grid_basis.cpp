@@ -189,7 +189,7 @@ KOKKOS_INLINE_FUNCTION Real FEMBasis(Real xi1, Real xi2, Real xi3, int basis_ind
   } else if (basis_index == 3 && basis_choice == 4) {
     return FEMBasis3Type4(xi1, xi2, xi3);
   } else {
-    std::cout << "Incorrect basis_choice of basis function in radiation-femn block!" << std::endl;
+    // std::cout << "Incorrect basis_choice of basis function in radiation-femn block!" << std::endl;
     exit(EXIT_FAILURE);
   }
 }
@@ -241,7 +241,7 @@ KOKKOS_INLINE_FUNCTION Real dFEMBasisdxi(Real xi1, Real xi2, Real xi3, int basis
   } else if (basis_index == 3 && xi_index == 2) {
     return dFEMBasis3Type1dxi2(xi1, xi2, xi3);
   } else {
-    std::cout << "Incorrect basis_choice of basis function in radiation-femn block!" << std::endl;
+    // std::cout << "Incorrect basis_choice of basis function in radiation-femn block!" << std::endl;
     exit(EXIT_FAILURE);
   }
 }
@@ -331,7 +331,7 @@ Real dFPNBasisdOmega(int l, int m, Real phi, Real theta, int var_index) {
   } else if (var_index == 2) {
     return dFPNBasisdtheta(l, m, phi, theta);
   } else {
-    std::cout << "Incorrect choice of variable index in radiation-femn block!" << std::endl;
+    // std::cout << "Incorrect choice of variable index in radiation-femn block!" << std::endl;
     exit(EXIT_FAILURE);
   }
 }
@@ -354,7 +354,7 @@ Real PtildehatJac(Real phi, Real theta, int tilde_index, int hat_index) {
   } else if (tilde_index == 2 && hat_index == 3) {
     return -sin(theta);
   } else {
-    std::cout << "Incorrect choice of index in radiation-femn block!" << std::endl;
+    // std::cout << "Incorrect choice of index in radiation-femn block!" << std::endl;
     exit(EXIT_FAILURE);
   }
 }
@@ -482,7 +482,7 @@ Real MomentumUnitEnergy(int mu, Real x1, Real y1, Real z1, Real x2, Real y2, Rea
   } else if (mu == 3) {
     result = CosTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3);
   } else {
-    std::cout << "Incorrect choice of index for p^mu/e!" << std::endl;
+    // std::cout << "Incorrect choice of index for p^mu/e!" << std::endl;
     exit(EXIT_FAILURE);
   }
 
@@ -500,7 +500,7 @@ Real MomentumUnitEnergy(int mu, Real phi, Real theta) {
   } else if (mu == 3) {
     result = cos(theta);
   } else {
-    std::cout << "Incorrect choice of index for p^mu/e!" << std::endl;
+    // std::cout << "Incorrect choice of index for p^mu/e!" << std::endl;
     exit(EXIT_FAILURE);
   }
 
@@ -583,7 +583,7 @@ Real PdFEMBasisdOmega(int ihat, int a, int t1, int t2, int t3, Real x1, Real y1,
   } else if (ihat == 3) {
     return -SinTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3) * dFEMBasisdtheta;
   } else {
-    std::cout << "Incorrect choice of index ihat!" << std::endl;
+    // std::cout << "Incorrect choice of index ihat!" << std::endl;
     exit(EXIT_FAILURE);
   }
 }

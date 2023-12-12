@@ -343,10 +343,8 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     auto &f0_ = pm->pmb_pack->pradfemn->f0;
     auto &e_source_nominv_ = pm->pmb_pack->pradfemn->e_source_nominv;
     auto &energy_grid_ = pm->pmb_pack->pradfemn->energy_grid;
-    auto &mm_ = pm->pmb_pack->pradfemn->mass_matrix;
-    auto num_points = pm->pmb_pack->pradfemn->num_points;
-    auto num_points_total = pm->pmb_pack->pradfemn->num_points_total;
-    auto num_energy_bins = pm->pmb_pack->pradfemn->num_energy_bins;
+    auto &num_points_ = pm->pmb_pack->pradfemn->num_points;
+    auto &num_energy_bins_ = pm->pmb_pack->pradfemn->num_energy_bins;
 
     // Compute sum_{B} S_n F^nA M_AB where S_n = (e_{n+1}^4 - e_{n}^4)/4
     int scr_level = 0;
@@ -355,12 +353,12 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
                   KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j, const int i) {
 
                     Real temp_sum = 0.;
-                    Kokkos::parallel_reduce(Kokkos::TeamThreadRange(member, 0, num_energy_bins), [=](const int en, Real &partial_sum) {
+                    Kokkos::parallel_reduce(Kokkos::TeamThreadRange(member, 0, num_energy_bins_), [=](const int en, Real &partial_sum) {
                       Real Sen = (pow(energy_grid_(en + 1), 4) - pow(energy_grid_(en), 4)) / 4.0;
 
                       Real temp_sum_angle = 0.;
-                      Kokkos::parallel_reduce(Kokkos::ThreadVectorRange(member, 0, num_points), [=](const int A, Real &partial_sum_angle) {
-                        partial_sum_angle += e_source_nominv_(A) * f0_(m, en * num_energy_bins + A, k, j, i);
+                      Kokkos::parallel_reduce(Kokkos::ThreadVectorRange(member, 0, num_points_), [=](const int A, Real &partial_sum_angle) {
+                        partial_sum_angle += e_source_nominv_(A) * f0_(m, en * num_energy_bins_ + A, k, j, i);
                       }, temp_sum_angle);
                       member.team_barrier();
 

@@ -17,13 +17,13 @@ namespace radiationfemn {
 void RadiationFEMN::ComputePMatrices() {
   std::cout << "Computing P matrices and modified P matrices ..." << std::endl;
 
-  HostArray2D<Real> mass_temp;
-  HostArray2D<Real> mass_inv_temp;
-  HostArray2D<Real> stiff_x_temp;
-  HostArray2D<Real> stiff_y_temp;
-  HostArray2D<Real> stiff_z_temp;
-  HostArray2D<Real> temp_array;
-  HostArray2D<Real> temp_array_corrected;
+  DvceArray2D<Real> mass_temp;
+  DvceArray2D<Real> mass_inv_temp;
+  DvceArray2D<Real> stiff_x_temp;
+  DvceArray2D<Real> stiff_y_temp;
+  DvceArray2D<Real> stiff_z_temp;
+  DvceArray2D<Real> temp_array;
+  DvceArray2D<Real> temp_array_corrected;
 
   Kokkos::realloc(mass_temp, num_points, num_points);
   Kokkos::realloc(mass_inv_temp, num_points, num_points);

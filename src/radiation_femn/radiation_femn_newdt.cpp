@@ -45,9 +45,9 @@ namespace radiationfemn {
 
         Kokkos::parallel_reduce("RadFEMNDt", Kokkos::RangePolicy<>(DevExeSpace(), 0, nmb1),
                                 KOKKOS_LAMBDA(const int &m, Real &min_dt1, Real &min_dt2, Real &min_dt3) {
-                                    min_dt1 = std::min(mbsize.d_view(m).dx1, min_dt1);
-                                    min_dt2 = std::min(mbsize.d_view(m).dx2, min_dt2);
-                                    min_dt3 = std::min(mbsize.d_view(m).dx3, min_dt3);
+                                    min_dt1 = fmin(mbsize.d_view(m).dx1, min_dt1);
+                                    min_dt2 = fmin(mbsize.d_view(m).dx2, min_dt2);
+                                    min_dt3 = fmin(mbsize.d_view(m).dx3, min_dt3);
                                 }, Kokkos::Min<Real>(dt1), Kokkos::Min<Real>(dt2), Kokkos::Min<Real>(dt3));
 
         // compute minimum of dt1/dt2/dt3 for 1D/2D/3D problems
