@@ -18,13 +18,6 @@
 
 namespace radiationfemn {
 
-// ------------------------------------------------------
-// Convert energy and angle index to multiple phase index
-RadiationFEMNPhaseIndices RadiationFEMN::IndicesUnified(int eindex, int angindex) {
-  RadiationFEMNPhaseIndices idcs = {.enangindex = eindex * num_points + angindex, .eindex = eindex, .angindex = angindex};
-  return idcs;
-}
-
 // ------------------------------------------
 // Convert cartesian to spherical coordinates
 KOKKOS_INLINE_FUNCTION

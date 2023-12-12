@@ -66,6 +66,8 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   num_energy_bins = pin->GetOrAddInteger("radiation-femn", "num_energy_bins", 1);   // number of energy bins (default: 1)
   energy_max = pin->GetOrAddReal("radiation-femn", "energy_max", 1);                // maximum value of energy (default: 1)
 
+  num_species = pin->GetOrAddInteger("radiation-femn", "num_species", 1);       // number of neutrino species (default: 1)
+
   // set up energy grid
   Kokkos::realloc(energy_grid, num_energy_bins + 1);
   for (int i = 0; i < num_energy_bins + 1; i++) {
@@ -102,7 +104,7 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
     limiter_fem = "-42";                                                            // redundant: set to -42
   }
 
-  num_points_total = num_energy_bins * num_points;  // total number of points in the phase space grid (num of energy bins x number of angular points)
+  num_points_total = num_species * num_energy_bins * num_points;
 
   m1_flag = pin->GetOrAddBoolean("radiation-femn", "m1", false);
   rad_source = pin->GetOrAddBoolean("radiation-femn", "sources", false);           // switch for sources (default: false)

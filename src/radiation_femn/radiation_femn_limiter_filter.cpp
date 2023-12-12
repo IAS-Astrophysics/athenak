@@ -53,16 +53,16 @@ TaskStatus RadiationFEMN::ApplyFilterLanczos(Driver *pdriver, int stage) {
   int nmb1 = pmy_pack->nmb_thispack - 1;
   auto &f0_ = f0;
 
-  auto filtstrength = -(pmy_pack->pmesh->dt) * filter_sigma_eff / log(Lanczos(Real(lmax) / (Real(lmax) + 1.0)));
+  Real filtstrength = -(pmy_pack->pmesh->dt) * filter_sigma_eff / log(Lanczos(Real(lmax) / (Real(lmax) + 1.0)));
 
   par_for("radiation_femn_filter_Lanczos", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie, 0, npts1,
-          KOKKOS_LAMBDA(const int m, const int k, const int j, const int i, const int enang) {
+          KOKKOS_LAMBDA(const int m, const int k, const int j, const int i, const int nuenang) {
 
-            RadiationFEMNPhaseIndices idcs = IndicesComponent(enang, num_points);
-            int B = idcs.angindex;
+            RadiationFEMNPhaseIndices idcs = IndicesComponent(nuenang, num_points, num_energy_bins, num_species);
+            int B = idcs.angidx;
             auto lval = angular_grid(B, 0);
 
-            f0_(m, enang, k, j, i) = pow(Lanczos(Real(lval) / (Real(lmax) + 1.0)), filtstrength) * f0_(m, enang, k, j, i);
+            f0_(m, nuenang, k, j, i) = pow(Lanczos(Real(lval) / (Real(lmax) + 1.0)), filtstrength) * f0_(m, nuenang, k, j, i);
           });
 
   return TaskStatus::complete;
@@ -79,7 +79,7 @@ TaskStatus RadiationFEMN::ApplyLimiterFEM(Driver *pdriver, int stage) {
   int &is = indcs.is, &ie = indcs.ie;
   int &js = indcs.js, &je = indcs.je;
   int &ks = indcs.ks, &ke = indcs.ke;
-  int nouter1 = num_energy_bins - 1;
+  int nouter1 = num_species * num_energy_bins - 1;
   int nmb1 = pmy_pack->nmb_thispack - 1;
   auto &f0_ = f0;
   auto &L_mu_muhat_ = L_mu_muhat0;

@@ -46,9 +46,10 @@ struct RadiationFEMNTaskIDs {
 };
 
 struct RadiationFEMNPhaseIndices {
-  int enangindex;
-  int eindex;
-  int angindex;
+  int combinedidx;
+  int nuidx;
+  int enidx;
+  int angidx;
 };
 
 namespace radiationfemn {
@@ -67,6 +68,7 @@ class RadiationFEMN {
   int num_energy_bins;            // number of energy bins
   Real energy_max;                // maximum value of energy
   int num_points;                 // number of points on the angular grid (FEM_n) or total number of (l,m) modes (FP_N)
+  int num_species;                // number of neutrino species
   int num_ref;                    // current refinement level of geodesic grid
   int num_edges;                  // number of unique edges
   int num_triangles;              // number of unique triangular elements
@@ -91,6 +93,7 @@ class RadiationFEMN {
   std::string beam_source_2_pos;
 
   Real energy_par = 1.;
+  int num_points_total;
   // ---------------------------------------------------------------------------
   // arrays for numerical quadratures
   // ---------------------------------------------------------------------------
@@ -190,44 +193,54 @@ class RadiationFEMN {
   // ---------------------------------------------------------------------------
   // ---------------------------------------------------------------------------
   // Structures/functions for the internal index conversion
-  int num_points_total;
-  //RadiationFEMNPhaseIndices IndicesComponent(int n);
-  RadiationFEMNPhaseIndices IndicesUnified(int eindex, int angindex);
 
   KOKKOS_INLINE_FUNCTION
-  RadiationFEMNPhaseIndices IndicesComponent(int n, int num_points) {
-  RadiationFEMNPhaseIndices idcs = {.enangindex = n, .eindex = int(n / num_points), .angindex = n - int(n / num_points) * num_points};
-  return idcs;
+  RadiationFEMNPhaseIndices IndicesComponent(int n, int num_points, int num_energy_bins = 1, int num_species = 1) {
+    RadiationFEMNPhaseIndices idcs = {.combinedidx = n,
+                                    .nuidx = int(n / (num_energy_bins * num_points)),
+                                    .enidx = int((n - int(n / (num_energy_bins * num_points)) * num_energy_bins * num_points) / num_points),
+                                    .angidx = n - int(n / (num_energy_bins * num_points)) * num_energy_bins * num_points
+                                            - int((n - int(n / (num_energy_bins * num_points)) * num_energy_bins * num_points) / num_points) * num_points};
+        return idcs;
+    }
+
+  KOKKOS_INLINE_FUNCTION
+  Real IndicesUnited(int nuidx, int enidx, int angidx, int num_species, int num_energy_bins, int num_points) {
+
+    Real combinedidx = angidx  + nuidx * num_energy_bins * num_points + enidx * num_points;
+
+    return combinedidx;
   }
-  // ---------------------------------------------------------------------------
-  // Functions for angular matrices & tetrad
-  void LoadFEMNMatrices();
-  void LoadFPNMatrices();
-  void ComputePMatrices();
-  void ComputeSourceMatrices();
-  void AddBeams();
 
-  // ---------------------------------------------------------------------------
-  // Functions for closures
+    // ---------------------------------------------------------------------------
+    // Functions for angular matrices & tetrad
+    void LoadFEMNMatrices();
+    void LoadFPNMatrices();
+    void ComputePMatrices();
+    void ComputeSourceMatrices();
+    void AddBeams();
 
- private:
-  MeshBlockPack *pmy_pack;  // ptr to MeshBlockPack containing this RadiationFEMN
+    // ---------------------------------------------------------------------------
+    // Functions for closures
 
-};
+    private:
+    MeshBlockPack *pmy_pack;  // ptr to MeshBlockPack containing this RadiationFEMN
 
-void LUDecomposition(DvceArray2D<Real> square_matrix, DvceArray2D<Real> lu_matrix, DvceArray1D<int> pivot_indices);
-void LUSolve(DvceArray2D<Real> lu_matrix, DvceArray1D<int> pivot_indices, DvceArray1D<Real> b_array, DvceArray1D<Real> x_array);
-void LUInverse(DvceArray2D<Real> A_matrix, DvceArray2D<Real> A_matrix_inverse);
-void MatMultiply(HostArray2D<Real> A_matrix, HostArray2D<Real> B_matrix, HostArray2D<Real> result);
-void MatMultiplyComplex(std::vector<std::vector<std::complex<Real>>> &A_matrix,
-                        std::vector<std::vector<std::complex<Real>>> &B_matrix,
-                        std::vector<std::vector<std::complex<Real>>> &result);
-void MatLumping(DvceArray2D<Real> A_matrix);
-void MatEig(std::vector<std::vector<Real>> &matrix, std::vector<std::complex<Real>> &eigval, std::vector<std::vector<std::complex<Real>>> &eigvec);
-void ZeroSpeedCorrection(HostArray2D<Real> matrix, HostArray2D<Real> matrix_corrected, Real v);
+  };
 
-void ApplyM1Closure(TeamMember_t member, int num_points, int m, int en, int kk, int jj, int ii, DvceArray5D<Real> f, ScrArray1D<Real> f_scratch);
-void ApplyFEMNFPNClosure(TeamMember_t member, int num_points, int m, int en, int kk, int jj, int ii, DvceArray5D<Real> f, ScrArray1D<Real> f_scratch);
+  void LUDecomposition(DvceArray2D<Real> square_matrix, DvceArray2D<Real> lu_matrix, DvceArray1D<int> pivot_indices);
+  void LUSolve(DvceArray2D<Real> lu_matrix, DvceArray1D<int> pivot_indices, DvceArray1D<Real> b_array, DvceArray1D<Real> x_array);
+  void LUInverse(DvceArray2D<Real> A_matrix, DvceArray2D<Real> A_matrix_inverse);
+  void MatMultiply(HostArray2D<Real> A_matrix, HostArray2D<Real> B_matrix, HostArray2D<Real> result);
+  void MatMultiplyComplex(std::vector<std::vector<std::complex<Real>>> &A_matrix,
+                          std::vector<std::vector<std::complex<Real>>> &B_matrix,
+                          std::vector<std::vector<std::complex<Real>>> &result);
+  void MatLumping(DvceArray2D<Real> A_matrix);
+  void MatEig(std::vector<std::vector<Real>> &matrix, std::vector<std::complex<Real>> &eigval, std::vector<std::vector<std::complex<Real>>> &eigvec);
+  void ZeroSpeedCorrection(HostArray2D<Real> matrix, HostArray2D<Real> matrix_corrected, Real v);
+
+  void ApplyM1Closure(TeamMember_t member, int num_points, int m, int en, int kk, int jj, int ii, DvceArray5D<Real> f, ScrArray1D<Real> f_scratch);
+  void ApplyFEMNFPNClosure(TeamMember_t member, int num_points, int m, int en, int kk, int jj, int ii, DvceArray5D<Real> f, ScrArray1D<Real> f_scratch);
 
 } // namespace radiationfemn
 
