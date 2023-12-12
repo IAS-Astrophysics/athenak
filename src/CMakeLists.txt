@@ -146,8 +146,7 @@ add_executable(
         radiation_femn/radiation_femn_geodesic_grid_matrices.hpp
         radiation_femn/radiation_femn_loadmatrices.cpp
         radiation_femn/radiation_femn_compute_pmatrices.cpp
-        radiation_femn/radiation_femn_closure.cpp
-        radiation_femn/radiation_femn_compute_sourcematrices.cpp
+		radiation_femn/radiation_femn_compute_sourcematrices.cpp
         radiation_femn/radiation_femn_tetrad.cpp
         radiation_femn/radiation_femn_beams.cpp)
 

@@ -1,16 +1,15 @@
-//========================================================================================
-// AthenaXXX astrophysical plasma code
-// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
-// Licensed under the 3-clause BSD License (the "LICENSE")
-//========================================================================================
-//! \file radiation_femn_closure.cpp
-//  \brief Calculate closures for M1
+//
+// Created by maitraya on 12/12/23.
+//
+
+#ifndef ATHENA_SRC_RADIATION_FEMN_RADIATION_FEMN_CLOSURE_HPP_
+#define ATHENA_SRC_RADIATION_FEMN_RADIATION_FEMN_CLOSURE_HPP_
 
 #include "athena.hpp"
-#include "radiation_femn/radiation_femn.hpp"
 
 namespace radiationfemn {
 
+KOKKOS_INLINE_FUNCTION
 void ApplyFEMNFPNClosure(TeamMember_t member, int num_points, int m, int en, int kk, int jj, int ii, DvceArray5D<Real> f, ScrArray1D<Real> f_scratch) {
 
   int nang1 = num_points - 1;
@@ -20,6 +19,7 @@ void ApplyFEMNFPNClosure(TeamMember_t member, int num_points, int m, int en, int
 
 }
 
+KOKKOS_INLINE_FUNCTION
 void ApplyM1Closure(TeamMember_t member, int num_points, int m, int en, int kk, int jj, int ii, DvceArray5D<Real> f, ScrArray1D<Real> f_scratch) {
 
   Real E = sqrt(4. * M_PI) * f(m, en * num_points + 0, kk, jj, ii);          // (0,0)
@@ -78,7 +78,8 @@ void ApplyM1Closure(TeamMember_t member, int num_points, int m, int en, int kk, 
 
 }
 
-void RadiationFEMN::ApplyClosure(TeamMember_t member, int num_points, int m, int en, int kk, int jj, int ii, DvceArray5D<Real> f, ScrArray1D<Real> f_scratch) {
+KOKKOS_INLINE_FUNCTION
+void ApplyClosure(TeamMember_t member, int num_points, int m, int en, int kk, int jj, int ii, DvceArray5D<Real> f, ScrArray1D<Real> f_scratch, bool m1_flag) {
   if (m1_flag) {
     ApplyM1Closure(member, num_points, m, en, kk, jj, ii, f, f_scratch);
   } else {
@@ -87,3 +88,4 @@ void RadiationFEMN::ApplyClosure(TeamMember_t member, int num_points, int m, int
 }
 
 }
+#endif //ATHENA_SRC_RADIATION_FEMN_RADIATION_FEMN_CLOSURE_HPP_

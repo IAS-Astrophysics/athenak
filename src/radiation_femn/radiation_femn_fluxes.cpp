@@ -13,6 +13,7 @@
 #include "athena_tensor.hpp"
 #include "mesh/mesh.hpp"
 #include "radiation_femn/radiation_femn.hpp"
+#include "radiation_femn/radiation_femn_closure.hpp"
 
 namespace radiationfemn {
 
@@ -44,7 +45,7 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                   auto jj = j;
                   auto ii = 2 * i - 2;
 
-                  RadiationFEMNPhaseIndices idcs = IndicesComponent(enang, num_points);
+                  RadiationFEMNPhaseIndices idcs = IndicesComponent(enang, num_points, num_energy_bins, num_species);
                   int en = idcs.enidx;
                   int B = idcs.angidx;
 
@@ -58,12 +59,12 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                   ScrArray1D<Real> f0_scratch_m1 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points);
                   ScrArray1D<Real> f0_scratch_m2 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points);
 
-                  ApplyClosure(member, num_points, m, en, kk, jj, ii, f0_, f0_scratch);
-                  ApplyClosure(member, num_points, m, en, kk, jj, ii + 1, f0_, f0_scratch_p1);
-                  ApplyClosure(member, num_points, m, en, kk, jj, ii + 2, f0_, f0_scratch_p2);
-                  ApplyClosure(member, num_points, m, en, kk, jj, ii + 3, f0_, f0_scratch_p3);
-                  ApplyClosure(member, num_points, m, en, kk, jj, ii - 1, f0_, f0_scratch_m1);
-                  ApplyClosure(member, num_points, m, en, kk, jj, ii - 2, f0_, f0_scratch_m2);
+                  ApplyClosure(member, num_points, m, en, kk, jj, ii, f0_, f0_scratch, m1_flag);
+                  ApplyClosure(member, num_points, m, en, kk, jj, ii + 1, f0_, f0_scratch_p1, m1_flag);
+                  ApplyClosure(member, num_points, m, en, kk, jj, ii + 2, f0_, f0_scratch_p2, m1_flag);
+                  ApplyClosure(member, num_points, m, en, kk, jj, ii + 3, f0_, f0_scratch_p3, m1_flag);
+                  ApplyClosure(member, num_points, m, en, kk, jj, ii - 1, f0_, f0_scratch_m1, m1_flag);
+                  ApplyClosure(member, num_points, m, en, kk, jj, ii - 2, f0_, f0_scratch_m2, m1_flag);
                   member.team_barrier();
                   // ----------------------------------------------------
 
@@ -132,7 +133,7 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                     auto jj = 2 * j - 2;
                     auto ii = i;
 
-                    RadiationFEMNPhaseIndices idcs = IndicesComponent(enang, num_points);
+                    RadiationFEMNPhaseIndices idcs = IndicesComponent(enang, num_points, num_energy_bins, num_species);
                     int en = idcs.enidx;
                     int B = idcs.angidx;
 
@@ -145,12 +146,12 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                     ScrArray1D<Real> f0_scratch_m1 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points);
                     ScrArray1D<Real> f0_scratch_m2 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points);
 
-                    ApplyClosure(member, num_points, m, en, kk, jj, ii, f0_, f0_scratch);
-                    ApplyClosure(member, num_points, m, en, kk, jj + 1, ii, f0_, f0_scratch_p1);
-                    ApplyClosure(member, num_points, m, en, kk, jj + 2, ii, f0_, f0_scratch_p2);
-                    ApplyClosure(member, num_points, m, en, kk, jj + 3, ii, f0_, f0_scratch_p3);
-                    ApplyClosure(member, num_points, m, en, kk, jj - 1, ii, f0_, f0_scratch_m1);
-                    ApplyClosure(member, num_points, m, en, kk, jj - 2, ii, f0_, f0_scratch_m2);
+                    ApplyClosure(member, num_points, m, en, kk, jj, ii, f0_, f0_scratch, m1_flag);
+                    ApplyClosure(member, num_points, m, en, kk, jj + 1, ii, f0_, f0_scratch_p1, m1_flag);
+                    ApplyClosure(member, num_points, m, en, kk, jj + 2, ii, f0_, f0_scratch_p2, m1_flag);
+                    ApplyClosure(member, num_points, m, en, kk, jj + 3, ii, f0_, f0_scratch_p3, m1_flag);
+                    ApplyClosure(member, num_points, m, en, kk, jj - 1, ii, f0_, f0_scratch_m1, m1_flag);
+                    ApplyClosure(member, num_points, m, en, kk, jj - 2, ii, f0_, f0_scratch_m2, m1_flag);
                     member.team_barrier();
                     // ----------------------------------------------------
 
@@ -222,7 +223,7 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                     auto jj = j;
                     auto ii = i;
 
-                    RadiationFEMNPhaseIndices idcs = IndicesComponent(enang, num_points);
+                    RadiationFEMNPhaseIndices idcs = IndicesComponent(enang, num_points, num_energy_bins, num_species);
                     int en = idcs.enidx;
                     int B = idcs.angidx;
 
@@ -236,12 +237,12 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                     ScrArray1D<Real> f0_scratch_m1 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points);
                     ScrArray1D<Real> f0_scratch_m2 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points);
 
-                    ApplyClosure(member, num_points, m, en, kk, jj, ii, f0_, f0_scratch);
-                    ApplyClosure(member, num_points, m, en, kk + 1, jj, ii, f0_, f0_scratch_p1);
-                    ApplyClosure(member, num_points, m, en, kk + 2, jj, ii, f0_, f0_scratch_p2);
-                    ApplyClosure(member, num_points, m, en, kk + 3, jj, ii, f0_, f0_scratch_p3);
-                    ApplyClosure(member, num_points, m, en, kk - 1, jj, ii, f0_, f0_scratch_m1);
-                    ApplyClosure(member, num_points, m, en, kk - 2, jj, ii, f0_, f0_scratch_m2);
+                    ApplyClosure(member, num_points, m, en, kk, jj, ii, f0_, f0_scratch, m1_flag);
+                    ApplyClosure(member, num_points, m, en, kk + 1, jj, ii, f0_, f0_scratch_p1, m1_flag);
+                    ApplyClosure(member, num_points, m, en, kk + 2, jj, ii, f0_, f0_scratch_p2, m1_flag);
+                    ApplyClosure(member, num_points, m, en, kk + 3, jj, ii, f0_, f0_scratch_p3, m1_flag);
+                    ApplyClosure(member, num_points, m, en, kk - 1, jj, ii, f0_, f0_scratch_m1, m1_flag);
+                    ApplyClosure(member, num_points, m, en, kk - 2, jj, ii, f0_, f0_scratch_m2, m1_flag);
                     member.team_barrier();
 
                     // ----------------------------------------------------
