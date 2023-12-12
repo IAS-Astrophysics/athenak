@@ -23,7 +23,8 @@ void RadiationFEMN::ComputePMatrices() {
   DvceArray2D<Real> stiff_y_temp;
   DvceArray2D<Real> stiff_z_temp;
   DvceArray2D<Real> temp_array;
-  DvceArray2D<Real> temp_array_corrected;
+  HostArray2D<Real> temp_array_host;
+  HostArray2D<Real> temp_array_corrected;
 
   Kokkos::realloc(mass_temp, num_points, num_points);
   Kokkos::realloc(mass_inv_temp, num_points, num_points);
@@ -31,6 +32,7 @@ void RadiationFEMN::ComputePMatrices() {
   Kokkos::realloc(stiff_y_temp, num_points, num_points);
   Kokkos::realloc(stiff_z_temp, num_points, num_points);
   Kokkos::realloc(temp_array, num_points, num_points);
+  Kokkos::realloc(temp_array_host, num_points, num_points);
   Kokkos::realloc(temp_array_corrected, num_points, num_points);
 
   Kokkos::deep_copy(mass_temp, mass_matrix);
@@ -42,7 +44,7 @@ void RadiationFEMN::ComputePMatrices() {
   radiationfemn::LUInverse(mass_temp, mass_inv_temp);
 
   // M^-1 M
-  radiationfemn::MatMultiplyHost(mass_inv_temp, mass_temp, temp_array);
+  radiationfemn::MatMultiplyDvce(mass_inv_temp, mass_temp, temp_array);
   auto P_matrix_0 = Kokkos::subview(P_matrix, 0, Kokkos::ALL, Kokkos::ALL);
   Kokkos::deep_copy(P_matrix_0, temp_array);
 
@@ -50,29 +52,32 @@ void RadiationFEMN::ComputePMatrices() {
   Kokkos::deep_copy(Pmod_matrix_0, temp_array);
 
   // stilde-x matrix
-  radiationfemn::MatMultiplyHost(mass_inv_temp, stiff_x_temp, temp_array);
+  radiationfemn::MatMultiplyDvce(mass_inv_temp, stiff_x_temp, temp_array);
   auto P_matrix_1 = Kokkos::subview(P_matrix, 1, Kokkos::ALL, Kokkos::ALL);
   Kokkos::deep_copy(P_matrix_1, temp_array);
+  Kokkos::deep_copy(temp_array_host, temp_array);
 
-  radiationfemn::ZeroSpeedCorrection(temp_array, temp_array_corrected, 1. / sqrt(3.));
+  radiationfemn::ZeroSpeedCorrection(temp_array_host, temp_array_corrected, 1. / sqrt(3.));
   auto Pmod_matrix_1 = Kokkos::subview(Pmod_matrix, 1, Kokkos::ALL, Kokkos::ALL);
   Kokkos::deep_copy(Pmod_matrix_1, temp_array_corrected);
 
   // stilde-y matrix
-  radiationfemn::MatMultiplyHost(mass_inv_temp, stiff_y_temp, temp_array);
+  radiationfemn::MatMultiplyDvce(mass_inv_temp, stiff_y_temp, temp_array);
   auto P_matrix_2 = Kokkos::subview(P_matrix, 2, Kokkos::ALL, Kokkos::ALL);
   Kokkos::deep_copy(P_matrix_2, temp_array);
+  Kokkos::deep_copy(temp_array_host, temp_array);
 
-  radiationfemn::ZeroSpeedCorrection(temp_array, temp_array_corrected, 1. / sqrt(3.));
+  radiationfemn::ZeroSpeedCorrection(temp_array_host, temp_array_corrected, 1. / sqrt(3.));
   auto Pmod_matrix_2 = Kokkos::subview(Pmod_matrix, 2, Kokkos::ALL, Kokkos::ALL);
   Kokkos::deep_copy(Pmod_matrix_2, temp_array_corrected);
 
   // stilde-z matrix index
-  radiationfemn::MatMultiplyHost(mass_inv_temp, stiff_z_temp, temp_array);
+  radiationfemn::MatMultiplyDvce(mass_inv_temp, stiff_z_temp, temp_array);
   auto P_matrix_3 = Kokkos::subview(P_matrix, 3, Kokkos::ALL, Kokkos::ALL);
   Kokkos::deep_copy(P_matrix_3, temp_array);
+  Kokkos::deep_copy(temp_array_host, temp_array);
 
-  radiationfemn::ZeroSpeedCorrection(temp_array, temp_array_corrected, 1. / sqrt(3.));
+  radiationfemn::ZeroSpeedCorrection(temp_array_host, temp_array_corrected, 1. / sqrt(3.));
   auto Pmod_matrix_3 = Kokkos::subview(Pmod_matrix, 3, Kokkos::ALL, Kokkos::ALL);
   Kokkos::deep_copy(Pmod_matrix_3, temp_array_corrected);
 
