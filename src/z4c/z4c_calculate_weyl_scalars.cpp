@@ -398,9 +398,12 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
         }
       }
     }
+    Real r = std::sqrt(SQR(x1v) +  SQR(x2v) + SQR(x3v));
+    weyl.rpsi4(m,k,j,i) *= r;
+    weyl.ipsi4(m,k,j,i) *= r;
    });
-
 }
+
 template void Z4c::Z4cWeyl<2>(MeshBlockPack *pmbp);
 template void Z4c::Z4cWeyl<3>(MeshBlockPack *pmbp);
 template void Z4c::Z4cWeyl<4>(MeshBlockPack *pmbp);
