@@ -191,9 +191,14 @@ class RadiationFEMN {
   // ---------------------------------------------------------------------------
   // Structures/functions for the internal index conversion
   int num_points_total;
-  RadiationFEMNPhaseIndices IndicesComponent(int n);
+  //RadiationFEMNPhaseIndices IndicesComponent(int n);
   RadiationFEMNPhaseIndices IndicesUnified(int eindex, int angindex);
 
+  KOKKOS_INLINE_FUNCTION
+  RadiationFEMNPhaseIndices IndicesComponent(int n, int num_points) {
+  RadiationFEMNPhaseIndices idcs = {.enangindex = n, .eindex = int(n / num_points), .angindex = n - int(n / num_points) * num_points};
+  return idcs;
+  }
   // ---------------------------------------------------------------------------
   // Functions for angular matrices & tetrad
   void LoadFEMNMatrices();

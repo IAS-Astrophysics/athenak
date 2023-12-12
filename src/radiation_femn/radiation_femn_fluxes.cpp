@@ -44,7 +44,7 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                   auto jj = j;
                   auto ii = 2 * i - 2;
 
-                  RadiationFEMNPhaseIndices idcs = IndicesComponent(enang);
+                  RadiationFEMNPhaseIndices idcs = IndicesComponent(enang, num_points);
                   int en = idcs.eindex;
                   int B = idcs.angindex;
 
@@ -132,7 +132,7 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                     auto jj = 2 * j - 2;
                     auto ii = i;
 
-                    RadiationFEMNPhaseIndices idcs = IndicesComponent(enang);
+                    RadiationFEMNPhaseIndices idcs = IndicesComponent(enang, num_points);
                     int en = idcs.eindex;
                     int B = idcs.angindex;
 
@@ -222,7 +222,7 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                     auto jj = j;
                     auto ii = i;
 
-                    RadiationFEMNPhaseIndices idcs = IndicesComponent(enang);
+                    RadiationFEMNPhaseIndices idcs = IndicesComponent(enang, num_points);
                     int en = idcs.eindex;
                     int B = idcs.angindex;
 

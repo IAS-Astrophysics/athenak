@@ -39,6 +39,11 @@ Real minmod2(Real a, Real b, Real c) {
   return result;
 }
 
+/* \fn RadiationFEMN::ApplyFilterLanczos
+ *
+ * \brief Applies a Lanczos for all angles in each energy bin for
+ * FP_N solutions.
+ */
 TaskStatus RadiationFEMN::ApplyFilterLanczos(Driver *pdriver, int stage) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int &is = indcs.is, &ie = indcs.ie;
@@ -53,7 +58,7 @@ TaskStatus RadiationFEMN::ApplyFilterLanczos(Driver *pdriver, int stage) {
   par_for("radiation_femn_filter_Lanczos", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie, 0, npts1,
           KOKKOS_LAMBDA(const int m, const int k, const int j, const int i, const int enang) {
 
-            RadiationFEMNPhaseIndices idcs = IndicesComponent(enang);
+            RadiationFEMNPhaseIndices idcs = IndicesComponent(enang, num_points);
             int B = idcs.angindex;
             auto lval = angular_grid(B, 0);
 

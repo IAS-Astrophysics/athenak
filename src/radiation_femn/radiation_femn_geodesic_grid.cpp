@@ -18,13 +18,6 @@
 
 namespace radiationfemn {
 
-// ----------------------------------------------------
-// Convert single phase index to energy and angle index
-RadiationFEMNPhaseIndices RadiationFEMN::IndicesComponent(int n) {
-  RadiationFEMNPhaseIndices idcs = {.enangindex = n, .eindex = int(n / num_points), .angindex = n - int(n / num_points) * num_points};
-  return idcs;
-}
-
 // ------------------------------------------------------
 // Convert energy and angle index to multiple phase index
 RadiationFEMNPhaseIndices RadiationFEMN::IndicesUnified(int eindex, int angindex) {
