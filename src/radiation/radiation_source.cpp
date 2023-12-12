@@ -125,7 +125,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
   int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
   Kokkos::realloc(wv0_,nmb1+1,3,ncells3,ncells2,ncells1);
-  par_for("radiation_source",DevExeSpace(),0,nmb1,ks,ke,js,je,is,ie,
+  par_for("assign_vel_for_rad_source",DevExeSpace(),0,nmb1,ks,ke,js,je,is,ie,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     wv0_(m,0,k,j,i) = w0_(m,IVX,k,j,i);
     wv0_(m,1,k,j,i) = w0_(m,IVY,k,j,i);
