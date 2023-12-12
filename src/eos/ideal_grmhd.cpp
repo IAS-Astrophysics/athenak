@@ -47,6 +47,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
   int &nscal = pmy_pack->pmhd->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
   auto &fofc_ = pmy_pack->pmhd->fofc;
+  auto &c2p_flag_ = pmy_pack->pmhd->c2p_flag;
   auto &entropy_fix_ = pmy_pack->pmhd->entropy_fix;
   auto &entropy_fix_turnoff_ = pmy_pack->pmhd->entropy_fix_turnoff;
   auto &sigma_cold_cut_ = pmy_pack->pmhd->sigma_cold_cut;
@@ -228,7 +229,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
         } // endif (!c2p_failure && (sigma_cold > sigma_cold_cut_))
 
       } // endif entropy_fix_
-      c2p_flag(m,k,j,i) = !c2p_failure;
+      c2p_flag_(m,k,j,i) = !c2p_failure;
 
       // apply velocity ceiling if necessary
       Real tmp = glower[1][1]*SQR(w.vx)
