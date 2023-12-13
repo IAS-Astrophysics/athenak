@@ -120,10 +120,9 @@ void RadiationFEMN::LoadFEMNMatrices() {
   std::cout << "Computing the e-matrix (FEM) ... " << std::endl;
   for (int i = 0; i < num_points; i++) {
     e_source_temp(i) = radiationfemn::IntegrateMatrixFEMN(i, i, basis, x, y, z, scheme_weights, scheme_points, triangles, 6, -42, -42, -42);
-    Q_matrix_temp(0,i) = e_source_temp(i);
+    Q_matrix_temp(0, i) = e_source_temp(i);
   }
   Kokkos::deep_copy(e_source_, e_source_temp);
-
 
   std::cout << "Computing the matrices for clp limiter (FEM) ... " << std::endl;
   for (int i = 0; i < num_points; i++) {
@@ -177,8 +176,9 @@ void RadiationFEMN::LoadFPNMatrices() {
   std::cout << "Computing the mass matrix (FPN) ... " << std::endl;
   for (int i = 0; i < num_points; i++) {
     for (int j = 0; j < num_points; j++) {
-      temp_matrix(i, j) = radiationfemn::IntegrateMatrixFPN(int(lm_grid_(i, 0)), int(lm_grid_(i, 1)), int(lm_grid_(j, 0)), int(lm_grid_(j, 1)),
-                                                            scheme_weights, scheme_points, 0, -42, -42, -42);
+      temp_matrix(i, j) =
+          radiationfemn::IntegrateMatrixFPN(int(temp_angular_grid(i, 0)), int(temp_angular_grid(i, 1)), int(temp_angular_grid(j, 0)), int(temp_angular_grid(j, 1)),
+                                            scheme_weights, scheme_points, 0, -42, -42, -42);
     }
   }
   Kokkos::deep_copy(mm_, temp_matrix);
@@ -187,12 +187,15 @@ void RadiationFEMN::LoadFPNMatrices() {
   std::cout << "Computing the stiffness matrices (FPN) ... " << std::endl;
   for (int i = 0; i < num_points; i++) {
     for (int j = 0; j < num_points; j++) {
-      temp_matrix(i, j) = radiationfemn::IntegrateMatrixFPN(int(lm_grid_(i, 0)), int(lm_grid_(i, 1)), int(lm_grid_(j, 0)), int(lm_grid_(j, 1)),
-                                                            scheme_weights, scheme_points, 1, -42, -42, -42);
-      temp_matrix_2(i, j) = radiationfemn::IntegrateMatrixFPN(int(lm_grid_(i, 0)), int(lm_grid_(i, 1)), int(lm_grid_(j, 0)), int(lm_grid_(j, 1)),
-                                                              scheme_weights, scheme_points, 2, -42, -42, -42);
-      temp_matrix_3(i, j) = radiationfemn::IntegrateMatrixFPN(int(lm_grid_(i, 0)), int(lm_grid_(i, 1)), int(lm_grid_(j, 0)), int(lm_grid_(j, 1)),
-                                                              scheme_weights, scheme_points, 3, -42, -42, -42);
+      temp_matrix(i, j) =
+          radiationfemn::IntegrateMatrixFPN(int(temp_angular_grid(i, 0)), int(temp_angular_grid(i, 1)), int(temp_angular_grid(j, 0)), int(temp_angular_grid(j, 1)),
+                                            scheme_weights, scheme_points, 1, -42, -42, -42);
+      temp_matrix_2(i, j) =
+          radiationfemn::IntegrateMatrixFPN(int(temp_angular_grid(i, 0)), int(temp_angular_grid(i, 1)), int(temp_angular_grid(j, 0)), int(temp_angular_grid(j, 1)),
+                                            scheme_weights, scheme_points, 2, -42, -42, -42);
+      temp_matrix_3(i, j) =
+          radiationfemn::IntegrateMatrixFPN(int(temp_angular_grid(i, 0)), int(temp_angular_grid(i, 1)), int(temp_angular_grid(j, 0)), int(temp_angular_grid(j, 1)),
+                                            scheme_weights, scheme_points, 3, -42, -42, -42);
     }
   }
   Kokkos::deep_copy(sx_, temp_matrix);
@@ -205,16 +208,19 @@ void RadiationFEMN::LoadFPNMatrices() {
     for (int j = 0; j < num_points; j++) {
       for (int nu = 0; nu < 4; nu++) {
         for (int mu = nu; mu < 4; mu++) {
-          temp_array_5d(nu, mu, 0, i, j) = radiationfemn::IntegrateMatrixFPN(int(lm_grid_(i, 0)), int(lm_grid_(i, 1)), int(lm_grid_(j, 0)), int(lm_grid_(j, 1)),
-                                                                             scheme_weights, scheme_points, 5, nu, mu, 1);
+          temp_array_5d(nu, mu, 0, i, j) =
+              radiationfemn::IntegrateMatrixFPN(int(temp_angular_grid(i, 0)), int(temp_angular_grid(i, 1)), int(temp_angular_grid(j, 0)), int(temp_angular_grid(j, 1)),
+                                                scheme_weights, scheme_points, 5, nu, mu, 1);
           temp_array_5d(mu, nu, 0, i, j) = temp_array_5d(nu, mu, 0, i, j);
 
-          temp_array_5d(nu, mu, 1, i, j) = radiationfemn::IntegrateMatrixFPN(int(lm_grid_(i, 0)), int(lm_grid_(i, 1)), int(lm_grid_(j, 0)), int(lm_grid_(j, 1)),
-                                                                             scheme_weights, scheme_points, 5, nu, mu, 2);
+          temp_array_5d(nu, mu, 1, i, j) =
+              radiationfemn::IntegrateMatrixFPN(int(temp_angular_grid(i, 0)), int(temp_angular_grid(i, 1)), int(temp_angular_grid(j, 0)), int(temp_angular_grid(j, 1)),
+                                                scheme_weights, scheme_points, 5, nu, mu, 2);
           temp_array_5d(mu, nu, 1, i, j) = temp_array_5d(nu, mu, 1, i, j);
 
-          temp_array_5d(nu, mu, 2, i, j) = radiationfemn::IntegrateMatrixFPN(int(lm_grid_(i, 0)), int(lm_grid_(i, 1)), int(lm_grid_(j, 0)), int(lm_grid_(j, 1)),
-                                                                             scheme_weights, scheme_points, 5, nu, mu, 3);
+          temp_array_5d(nu, mu, 2, i, j) =
+              radiationfemn::IntegrateMatrixFPN(int(temp_angular_grid(i, 0)), int(temp_angular_grid(i, 1)), int(temp_angular_grid(j, 0)), int(temp_angular_grid(j, 1)),
+                                                scheme_weights, scheme_points, 5, nu, mu, 3);
           temp_array_5d(mu, nu, 2, i, j) = temp_array_5d(nu, mu, 2, i, j);
         }
       }
@@ -228,16 +234,19 @@ void RadiationFEMN::LoadFPNMatrices() {
     for (int j = 0; j < num_points; j++) {
       for (int nu = 0; nu < 4; nu++) {
         for (int mu = nu; mu < 4; mu++) {
-          temp_array_5d(nu, mu, 0, i, j) = radiationfemn::IntegrateMatrixFPN(int(lm_grid_(i, 0)), int(lm_grid_(i, 1)), int(lm_grid_(j, 0)), int(lm_grid_(j, 1)),
-                                                                             scheme_weights, scheme_points, 4, nu, mu, 1);
+          temp_array_5d(nu, mu, 0, i, j) =
+              radiationfemn::IntegrateMatrixFPN(int(temp_angular_grid(i, 0)), int(temp_angular_grid(i, 1)), int(temp_angular_grid(j, 0)), int(temp_angular_grid(j, 1)),
+                                                scheme_weights, scheme_points, 4, nu, mu, 1);
           temp_array_5d(mu, nu, 0, i, j) = temp_array_5d(nu, mu, 0, i, j);
 
-          temp_array_5d(nu, mu, 1, i, j) = radiationfemn::IntegrateMatrixFPN(int(lm_grid_(i, 0)), int(lm_grid_(i, 1)), int(lm_grid_(j, 0)), int(lm_grid_(j, 1)),
-                                                                             scheme_weights, scheme_points, 4, nu, mu, 2);
+          temp_array_5d(nu, mu, 1, i, j) =
+              radiationfemn::IntegrateMatrixFPN(int(temp_angular_grid(i, 0)), int(temp_angular_grid(i, 1)), int(temp_angular_grid(j, 0)), int(temp_angular_grid(j, 1)),
+                                                scheme_weights, scheme_points, 4, nu, mu, 2);
           temp_array_5d(mu, nu, 1, i, j) = temp_array_5d(nu, mu, 1, i, j);
 
-          temp_array_5d(nu, mu, 2, i, j) = radiationfemn::IntegrateMatrixFPN(int(lm_grid_(i, 0)), int(lm_grid_(i, 1)), int(lm_grid_(j, 0)), int(lm_grid_(j, 1)),
-                                                                             scheme_weights, scheme_points, 4, nu, mu, 3);
+          temp_array_5d(nu, mu, 2, i, j) =
+              radiationfemn::IntegrateMatrixFPN(int(temp_angular_grid(i, 0)), int(temp_angular_grid(i, 1)), int(temp_angular_grid(j, 0)), int(temp_angular_grid(j, 1)),
+                                                scheme_weights, scheme_points, 4, nu, mu, 3);
           temp_array_5d(mu, nu, 2, i, j) = temp_array_5d(nu, mu, 2, i, j);
         }
       }
@@ -250,8 +259,9 @@ void RadiationFEMN::LoadFPNMatrices() {
 
   std::cout << "Computing the e-matrix (FPN) ... " << std::endl;
   for (int i = 0; i < num_points; i++) {
-    e_source_temp(i) = radiationfemn::IntegrateMatrixFPN(int(lm_grid_(i, 0)), int(lm_grid_(i, 1)), int(lm_grid_(i, 0)), int(lm_grid_(i, 1)),
-                                                         scheme_weights, scheme_points, 6, -42, -42, -42);
+    e_source_temp(i) =
+        radiationfemn::IntegrateMatrixFPN(int(temp_angular_grid(i, 0)), int(temp_angular_grid(i, 1)), int(temp_angular_grid(i, 0)), int(temp_angular_grid(i, 1)),
+                                          scheme_weights, scheme_points, 6, -42, -42, -42);
   }
   Kokkos::deep_copy(e_source_, e_source_temp);
 

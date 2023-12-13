@@ -210,7 +210,7 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   Kokkos::deep_copy(g_dd, 0.);
   Kokkos::deep_copy(sqrt_det_g, 1.);
   Kokkos::deep_copy(u_mu, 0.);
-
+/*
   par_for("radiation_femn_dummy_initialize", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
           KOKKOS_LAMBDA(int m, int k, int j, int i) {
             g_dd(m, 0, 0, k, j, i) = -1.;
@@ -218,7 +218,7 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
             g_dd(m, 2, 2, k, j, i) = 1.;
             g_dd(m, 3, 3, k, j, i) = 1.;
             u_mu(m, 0, k, j, i) = 1;
-          });
+          }); */
 
   // --------------------------------------------------------------------
   // End of hard coded metric and fluid velocity
