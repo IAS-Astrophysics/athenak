@@ -88,7 +88,7 @@ class Radiation {
   bool are_units_enabled;
 
   // flag to use intermediate velocity for source term update
-  bool update_prim_in_rad_source;
+  bool update_vel_in_rad_source;
 
   // Radiation source term parameters
   bool rad_source;          // flag to enable/disable radiation source term
