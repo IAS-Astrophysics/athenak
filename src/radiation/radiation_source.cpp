@@ -115,7 +115,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   if (is_hydro_enabled_) {
     u0_ = pmy_pack->phydro->u0;
     w0_ = pmy_pack->phydro->w0;
-    w0_old_ = pmy_pack->pmhd->w0_; // TODO: implement w0_old in hydro
+    w0_old_ = pmy_pack->pmhd->w0; // TODO: implement w0_old in hydro
   } else if (is_mhd_enabled_) {
     u0_ = pmy_pack->pmhd->u0;
     w0_ = pmy_pack->pmhd->w0;
