@@ -68,6 +68,9 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
   }
   are_units_enabled = pin->DoesBlockExist("units");
 
+  // Check if use intermediate velocity for source term update
+  update_prim_in_rad_source = pin->GetOrAddBoolean("radiation","update_prim_in_rad_source",true);
+
   // Enable radiation source term (radiation+(M)HD) by default if hydro or mhd enabled
   // Otherwise, disable radiation source term.  The former can be overriden by
   // specification in the input file.

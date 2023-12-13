@@ -115,13 +115,15 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   if (is_hydro_enabled_) {
     u0_ = pmy_pack->phydro->u0;
     w0_ = pmy_pack->phydro->w0;
-    w0_old_ = pmy_pack->phydro->w0; // TODO: implement w0_old for hydro
+    w0_old_ = pmy_pack->pmhd->w0_; // TODO: implement w0_old in hydro
   } else if (is_mhd_enabled_) {
     u0_ = pmy_pack->pmhd->u0;
     w0_ = pmy_pack->pmhd->w0;
     w0_old_ = pmy_pack->pmhd->w0_old;
   }
-  if (stage==1) Kokkos::deep_copy(DevExeSpace(), w0_old_, w0_);
+
+  // update w0_old_ at the beginning of the cycle
+  if (!update_prim_in_rad_source && (stage==1)) Kokkos::deep_copy(DevExeSpace(), w0_old_, w0_);
 
   // Extract timestep
   Real dt_ = (pdriver->beta[stage-1])*(pmy_pack->pmesh->dt);
@@ -136,7 +138,9 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
       pmy_pack->pmhd->peos->ConsToPrim(u0_,b0_,w0_,bcc0_,false,is,ie,js,je,ks,ke);
     }
   }
-  if (stage<1) Kokkos::deep_copy(DevExeSpace(), w0_old_, w0_);
+
+  // initialize w0_old_
+  if (!update_prim_in_rad_source && (stage<1)) Kokkos::deep_copy(DevExeSpace(), w0_old_, w0_);
 
   // compute implicit source term
   par_for("radiation_source",DevExeSpace(),0,nmb1,ks,ke,js,je,is,ie,
@@ -160,12 +164,9 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
 
     // fluid state
     Real &wdn = w0_(m,IDN,k,j,i);
-    // Real &wvx = w0_(m,IVX,k,j,i);
-    // Real &wvy = w0_(m,IVY,k,j,i);
-    // Real &wvz = w0_(m,IVZ,k,j,i);
-    Real &wvx = w0_old_(m,IVX,k,j,i);
-    Real &wvy = w0_old_(m,IVY,k,j,i);
-    Real &wvz = w0_old_(m,IVZ,k,j,i);
+    Real &wvx = update_prim_in_rad_source ? w0_(m,IVX,k,j,i) : w0_old_(m,IVX,k,j,i);
+    Real &wvy = update_prim_in_rad_source ? w0_(m,IVY,k,j,i) : w0_old_(m,IVY,k,j,i);
+    Real &wvz = update_prim_in_rad_source ? w0_(m,IVZ,k,j,i) : w0_old_(m,IVZ,k,j,i);
     Real &wen = w0_(m,IEN,k,j,i);
 
     // derived quantities
