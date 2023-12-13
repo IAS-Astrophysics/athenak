@@ -20,7 +20,7 @@ namespace radiationfemn {
 
 // ------------------------------------------
 // Convert cartesian to spherical coordinates
-KOKKOS_INLINE_FUNCTION
+inline
 void CartesianToSpherical(Real xvar, Real yvar, Real zvar, Real &rvar, Real &thetavar, Real &phivar) {
   rvar = sqrt(xvar * xvar + yvar * yvar + zvar * zvar);
   thetavar = acos(zvar / rvar);
@@ -30,7 +30,7 @@ void CartesianToSpherical(Real xvar, Real yvar, Real zvar, Real &rvar, Real &the
 // -------------------------------------------------------------------------------
 // Given two points of an edge, find the index of the edge array of their location
 // Two vertex indices e1 and e2 goes in along with the edge information array --> return -42 if they don't share an edge, otherwise return index in edge array
-KOKKOS_INLINE_FUNCTION
+inline
 int FindEdgesIndex(int e1, int e2, HostArray2D<int> &edges) {
   int index{-42};
   for (int i = 0; i < edges.size() / 2; i++) {

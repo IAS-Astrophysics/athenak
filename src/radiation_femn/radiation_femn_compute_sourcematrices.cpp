@@ -42,6 +42,7 @@ void RadiationFEMN::ComputeSourceMatrices() {
   Kokkos::deep_copy(S_source_temp_mod, 0.);
 
   std::cout << "Constructing the source matrices ..." << std::endl;
+
   for (int i = 0; i < num_points; i++) {
     for (int j = 0; j < num_points; j++) {
       e_source_temp_mod(i) += mass_inv_temp(i,j) * e_source_temp(j);

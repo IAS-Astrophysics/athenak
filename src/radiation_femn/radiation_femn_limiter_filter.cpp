@@ -49,20 +49,24 @@ TaskStatus RadiationFEMN::ApplyFilterLanczos(Driver *pdriver, int stage) {
   int &is = indcs.is, &ie = indcs.ie;
   int &js = indcs.js, &je = indcs.je;
   int &ks = indcs.ks, &ke = indcs.ke;
-  int npts1 = num_points_total - 1;
+  int npts1 = pmy_pack->pradfemn->num_points_total - 1;
+  auto &num_points_ = pmy_pack->pradfemn->num_points;
+  auto &num_energy_bins_ = pmy_pack->pradfemn->num_energy_bins;
+  auto &num_species_ = pmy_pack->pradfemn->num_species;
+  auto &lmax_ = pmy_pack->pradfemn->lmax;
   int nmb1 = pmy_pack->nmb_thispack - 1;
-  auto &f0_ = f0;
-
+  auto &f0_ = pmy_pack->pradfemn->f0;
+  auto &angular_grid_ = pmy_pack->pradfemn->angular_grid;
   Real filtstrength = -(pmy_pack->pmesh->dt) * filter_sigma_eff / log(Lanczos(Real(lmax) / (Real(lmax) + 1.0)));
 
   par_for("radiation_femn_filter_Lanczos", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie, 0, npts1,
           KOKKOS_LAMBDA(const int m, const int k, const int j, const int i, const int nuenang) {
 
-            RadiationFEMNPhaseIndices idcs = IndicesComponent(nuenang, num_points, num_energy_bins, num_species);
+            RadiationFEMNPhaseIndices idcs = IndicesComponent(nuenang, num_points_, num_energy_bins_, num_species_);
             int B = idcs.angidx;
-            auto lval = angular_grid(B, 0);
+            auto lval = angular_grid_(B, 0);
 
-            f0_(m, nuenang, k, j, i) = pow(Lanczos(Real(lval) / (Real(lmax) + 1.0)), filtstrength) * f0_(m, nuenang, k, j, i);
+            f0_(m, nuenang, k, j, i) = pow(Lanczos(Real(lval) / (Real(lmax_) + 1.0)), filtstrength) * f0_(m, nuenang, k, j, i);
           });
 
   return TaskStatus::complete;
@@ -79,10 +83,15 @@ TaskStatus RadiationFEMN::ApplyLimiterFEM(Driver *pdriver, int stage) {
   int &is = indcs.is, &ie = indcs.ie;
   int &js = indcs.js, &je = indcs.je;
   int &ks = indcs.ks, &ke = indcs.ke;
-  int nouter1 = num_species * num_energy_bins - 1;
+  auto &num_points_ = pmy_pack->pradfemn->num_points;
+  auto &num_energy_bins_ = pmy_pack->pradfemn->num_energy_bins;
+  auto &num_species_ = pmy_pack->pradfemn->num_species;
+  int nouter1 = pmy_pack->pradfemn->num_species * pmy_pack->pradfemn->num_energy_bins - 1;
   int nmb1 = pmy_pack->nmb_thispack - 1;
-  auto &f0_ = f0;
-  auto &L_mu_muhat_ = L_mu_muhat0;
+
+  auto &f0_ = pmy_pack->pradfemn->f0;
+  auto &L_mu_muhat_ = pmy_pack->pradfemn->L_mu_muhat0;
+  auto &Q_matrix_ = pmy_pack->pradfemn->Q_matrix;
 
   int scr_level = 0;
   int scr_size = 1;
@@ -90,22 +99,22 @@ TaskStatus RadiationFEMN::ApplyLimiterFEM(Driver *pdriver, int stage) {
                 KOKKOS_LAMBDA(TeamMember_t member, const int m, const int outervar, const int k, const int j, const int i) {
 
                   Real numerator = 0.;
-                  Kokkos::parallel_reduce(Kokkos::ThreadVectorRange(member, 0, num_points), [=](const int A, Real &partial_sum_angle) {
-                    partial_sum_angle += f0_(m, outervar * num_energy_bins + A, k, j, i) * (Q_matrix(0, A) * L_mu_muhat_(m, 0, 0, k, j, i)
-                        + Q_matrix(1, A) * L_mu_muhat_(m, 0, 1, k, j, i) + Q_matrix(2, A) * L_mu_muhat_(m, 0, 2, k, j, i) + Q_matrix(3, A) * L_mu_muhat_(m, 0, 3, k, j, i));
+                  Kokkos::parallel_reduce(Kokkos::ThreadVectorRange(member, 0, num_points_), [=](const int A, Real &partial_sum_angle) {
+                    partial_sum_angle += f0_(m, outervar * num_energy_bins_ + A, k, j, i) * (Q_matrix_(0, A) * L_mu_muhat_(m, 0, 0, k, j, i)
+                        + Q_matrix_(1, A) * L_mu_muhat_(m, 0, 1, k, j, i) + Q_matrix_(2, A) * L_mu_muhat_(m, 0, 2, k, j, i) + Q_matrix_(3, A) * L_mu_muhat_(m, 0, 3, k, j, i));
                   }, numerator);
 
                   Real denominator = 0.;
-                  Kokkos::parallel_reduce(Kokkos::ThreadVectorRange(member, 0, num_points), [=](const int A, Real &partial_sum_angle) {
-                    partial_sum_angle += fmax(0, f0_(m, outervar * num_energy_bins + A, k, j, i)) * (Q_matrix(0, A) * L_mu_muhat_(m, 0, 0, k, j, i)
-                        + Q_matrix(1, A) * L_mu_muhat_(m, 0, 1, k, j, i) + Q_matrix(2, A) * L_mu_muhat_(m, 0, 2, k, j, i) + Q_matrix(3, A) * L_mu_muhat_(m, 0, 3, k, j, i));
+                  Kokkos::parallel_reduce(Kokkos::ThreadVectorRange(member, 0, num_points_), [=](const int A, Real &partial_sum_angle) {
+                    partial_sum_angle += fmax(0, f0_(m, outervar * num_energy_bins_ + A, k, j, i)) * (Q_matrix_(0, A) * L_mu_muhat_(m, 0, 0, k, j, i)
+                        + Q_matrix_(1, A) * L_mu_muhat_(m, 0, 1, k, j, i) + Q_matrix_(2, A) * L_mu_muhat_(m, 0, 2, k, j, i) + Q_matrix_(3, A) * L_mu_muhat_(m, 0, 3, k, j, i));
                   }, denominator);
                   member.team_barrier();
 
                   Real correction_factor = (numerator > 0 && denominator != 0) ? (numerator / denominator) : 0.0;
 
-                  par_for_inner(member, 0, num_points - 1, [&](const int A) {
-                    f0_(m, outervar * num_energy_bins + A, k, j, i) = correction_factor * fmax(f0_(m, outervar * num_energy_bins + A, k, j, i),0.);
+                  par_for_inner(member, 0, num_points_ - 1, [&](const int A) {
+                    f0_(m, outervar * num_energy_bins_ + A, k, j, i) = correction_factor * fmax(f0_(m, outervar * num_energy_bins_ + A, k, j, i),0.);
                   });
                   member.team_barrier();
 
@@ -119,7 +128,7 @@ TaskStatus RadiationFEMN::ApplyLimiterDG(Driver *pdriver, int stage) {
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
-  int npts1 = num_points_total - 1;
+  int npts1 = pmy_pack->pradfemn->num_points_total - 1;
   int nmb1 = pmy_pack->nmb_thispack - 1;
   auto &mbsize = pmy_pack->pmb->mb_size;
 
@@ -127,8 +136,8 @@ TaskStatus RadiationFEMN::ApplyLimiterDG(Driver *pdriver, int stage) {
   bool &two_d = pmy_pack->pmesh->multi_d;
   bool &three_d = pmy_pack->pmesh->three_d;
 
-  auto &f0_ = f0;
-  auto &ftemp_ = ftemp;
+  auto &f0_ = pmy_pack->pradfemn->f0;
+  auto &ftemp_ = pmy_pack->pradfemn->ftemp;
 
   Kokkos::deep_copy(ftemp_, 0.);
 

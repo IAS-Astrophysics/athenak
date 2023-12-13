@@ -41,7 +41,7 @@ namespace radiationfemn {
  * matrixchoice: choice of matrix
  * nu, mu, ihat: optional for some matrices
  */
-KOKKOS_INLINE_FUNCTION
+inline
 Real IntegrateMatrixSphericalTriangle(int a, int b, int basis, int t1, int t2, int t3, const HostArray1D<Real> &x, const HostArray1D<Real> &y, const HostArray1D<Real> &z,
                                       const HostArray1D<Real> &scheme_weights, const HostArray2D<Real> &scheme_points, int matrixnumber, int nu, int mu, int ihat) {
 
@@ -131,7 +131,7 @@ Real IntegrateMatrixSphericalTriangle(int a, int b, int basis, int t1, int t2, i
 
 // --------------------------------------------
 // Calculate determinant of Jacobian term
-KOKKOS_INLINE_FUNCTION
+inline
 Real
 CalculateDeterminantJacobian(Real x1,
                              Real y1,
