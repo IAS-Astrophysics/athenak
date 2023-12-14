@@ -195,8 +195,8 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
         }
 
         // fix the region that fails the variable inversion
-        fofc_(m,k,j,i) = false;
-        if (c2p_failure) fofc_(m,k,j,i) = true;
+        // fofc_(m,k,j,i) = false;
+        // if (c2p_failure) fofc_(m,k,j,i) = true;
 
         // fix the variable inversion in strongly magnetized region
         if (!c2p_failure && (sigma_cold > sigma_cold_cut_)) {
@@ -225,7 +225,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
             efloor_used = efloor_used_in_fix;
             c2p_failure = c2p_failure_in_fix;
             iter_used_in_fix = iter_used;
-          } else fofc_(m,k,j,i) = true;
+          } //else fofc_(m,k,j,i) = true;
         } // endif (!c2p_failure && (sigma_cold > sigma_cold_cut_))
 
       } // endif entropy_fix_
