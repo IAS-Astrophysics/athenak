@@ -152,11 +152,11 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
                            dfloor_used, efloor_used, c2p_failure, iter_used);
 
       if (c2p_failure) {
-        w.d  = w0_old_[m,IDN,k,j,i];
-        w.e  = w0_old_[m,IEN,k,j,i];
-        w.vx = w0_old_[m,IVX,k,j,i];
-        w.vy = w0_old_[m,IVY,k,j,i];
-        w.vz = w0_old_[m,IVZ,k,j,i];
+        w.d  = w0_old_(m,IDN,k,j,i);
+        w.e  = w0_old_(m,IEN,k,j,i);
+        w.vx = w0_old_(m,IVX,k,j,i);
+        w.vy = w0_old_(m,IVY,k,j,i);
+        w.vz = w0_old_(m,IVZ,k,j,i);
       }
 
       HydPrim1D w_old;
