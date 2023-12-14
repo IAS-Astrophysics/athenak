@@ -105,6 +105,7 @@ TaskStatus MHD::InitRecv(Driver *pdrive, int stage) {
 TaskStatus MHD::CopyCons(Driver *pdrive, int stage) {
   if (stage == 1) {
     if (entropy_fix) EntropyReset();
+    Kokkos::deep_copy(DevExeSpace(), w0_old, w0);
     Kokkos::deep_copy(DevExeSpace(), u1, u0);
     Kokkos::deep_copy(DevExeSpace(), b1.x1f, b0.x1f);
     Kokkos::deep_copy(DevExeSpace(), b1.x2f, b0.x2f);
