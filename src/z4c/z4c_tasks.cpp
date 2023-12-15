@@ -67,6 +67,7 @@ void Z4c::AssembleZ4cTasks(TaskList &start, TaskList &run, TaskList &end) {
   id.z4tad = end.AddTask(&Z4c::Z4cToADM_, this, id.crecv);
   id.admc  = end.AddTask(&Z4c::ADMConstraints_, this, id.z4tad);
   id.weyl_scalar  = end.AddTask(&Z4c::CalcWeylScalar_, this, id.admc);
+  id.waveform  = end.AddTask(&Z4c::CalcWaveForm_, this, id.weyl_scalar);
   // }
   return;
 }
@@ -213,6 +214,16 @@ TaskStatus Z4c::CalcWeylScalar_(Driver *pdrive, int stage) {
       case 4: Z4cWeyl<4>(pmy_pack);
               break;
     }
+  }
+  return TaskStatus::complete;
+}
+//----------------------------------------------------------------------------------------
+//! \fn  void Z4c::CalcWaveForm_
+//! \brief
+
+TaskStatus Z4c::CalcWaveForm_(Driver *pdrive, int stage) {
+  if (stage == pdrive->nexp_stages) {
+    WaveExtr(pmy_pack);
   }
   return TaskStatus::complete;
 }

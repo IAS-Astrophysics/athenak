@@ -44,6 +44,7 @@ struct Z4cTaskIDs {
   TaskID restu;
   TaskID ptrack;
   TaskID weyl_scalar;
+  TaskID waveform;
 };
 
 namespace z4c {
@@ -216,6 +217,7 @@ class Z4c {
   TaskStatus RestrictU(Driver *d, int stage);
   TaskStatus PunctureTracker(Driver *d, int stage);
   TaskStatus CalcWeylScalar_(Driver *d, int stage);
+  TaskStatus CalcWaveForm_(Driver *d, int stage);
 
   template <int NGHOST>
   TaskStatus CalcRHS(Driver *d, int stage);

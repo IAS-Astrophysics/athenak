@@ -56,7 +56,8 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   coarse_u0("coarse u0 z4c",1,1,1,1,1),
   u1("u1 z4c",1,1,1,1,1),
   u_rhs("u_rhs z4c",1,1,1,1,1), 
-  u_weyl("u_weyl",1,1,1,1,1) {
+  u_weyl("u_weyl",1,1,1,1,1),
+  psi_out("psi_out",1,1,1) {
   // (1) read time-evolution option [already error checked in driver constructor]
   // Then initialize memory and algorithms for reconstruction and Riemann solvers
   std::string evolution_t = pin->GetString("time","evolution");
@@ -153,6 +154,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   grids.push_back(std::make_unique<SphericalGrid>(ppack, 5, 5));
   grids.push_back(std::make_unique<SphericalGrid>(ppack, 5, 10));
   grids.push_back(std::make_unique<SphericalGrid>(ppack, 5, 20));
+  Kokkos::realloc(psi_out,3,77,2);
 }
 
 //----------------------------------------------------------------------------------------
