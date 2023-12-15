@@ -146,6 +146,13 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   pbval_u = new BoundaryValuesCC(ppack, pin, true);
   pbval_u->InitializeBuffers((nz4c));
   Kokkos::Profiling::popRegion();
+
+  // wave extraction spheres
+  // TODO(@hzhu): Read radii from input file
+  auto &grids = spherical_grids;
+  grids.push_back(std::make_unique<SphericalGrid>(ppack, 5, 5));
+  grids.push_back(std::make_unique<SphericalGrid>(ppack, 5, 10));
+  grids.push_back(std::make_unique<SphericalGrid>(ppack, 5, 20));
 }
 
 //----------------------------------------------------------------------------------------

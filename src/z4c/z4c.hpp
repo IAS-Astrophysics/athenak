@@ -14,6 +14,8 @@
 #include "tasklist/task_list.hpp"
 #include "bvals/bvals.hpp"
 #include "athena_tensor.hpp"
+#include "geodesic-grid/geodesic_grid.hpp"
+#include "geodesic-grid/spherical_grid.hpp"
 
 // forward declarations
 class Coordinates;
@@ -189,6 +191,11 @@ class Z4c {
   // container to hold names of TaskIDs
   Z4cTaskIDs id;
 
+  // geodesic grid for wave extr
+  std::vector<std::unique_ptr<SphericalGrid>> spherical_grids;
+  // array storing waveform at each radii
+  HostArray3D<Real> psi_out;
+
   // functions
   void AssembleZ4cTasks(TaskList &start, TaskList &run, TaskList &end);
   TaskStatus InitRecv(Driver *d, int stage);
@@ -220,6 +227,7 @@ class Z4c {
   void ADMConstraints(MeshBlockPack *pmbp);
   template <int NGHOST>
   void Z4cWeyl(MeshBlockPack *pmbp);
+  void WaveExtr(MeshBlockPack *pmbp);
   void AlgConstr(MeshBlockPack *pmbp);
   template <int NGHOST>
 

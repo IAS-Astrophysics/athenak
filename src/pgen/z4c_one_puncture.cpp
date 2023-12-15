@@ -27,9 +27,6 @@
 
 void ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin);
 
-// Prototypes for user-defined history functions
-void GWExtract(HistoryData *pdata, Mesh *pm);
-
 //----------------------------------------------------------------------------------------
 //! \fn ProblemGenerator::UserProblem_()
 //! \brief Problem Generator for single puncture
@@ -43,14 +40,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
               << "in input file" << std::endl;
     exit(EXIT_FAILURE);
   }
-
-  std::cout << "defining spherical grids" << std::endl; 
-  // Spherical Grid for user-defined history
-  auto &grids = spherical_grids;
-  grids.push_back(std::make_unique<SphericalGrid>(pmbp, 5, 10.0));
-  grids.push_back(std::make_unique<SphericalGrid>(pmbp, 5, 15.0));
-  grids.push_back(std::make_unique<SphericalGrid>(pmbp, 5, 20.0));
-  user_hist_func = GWExtract;
 
   ADMOnePuncture(pmbp, pin);
   pmbp->pz4c->GaugePreCollapsedLapse(pmbp, pin);
@@ -130,65 +119,4 @@ void ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin) {
       adm.g_dd(m,a,b,k,j,i) *= adm.psi4(m,k,j,i);
     }
   });
-}
-
-//----------------------------------------------------------------------------------------
-// Function for computing gravitational wave
-
-void GWExtract(HistoryData *pdata, Mesh *pm) {
-  MeshBlockPack *pmbp = pm->pmb_pack;
-  std::cout << "Here" << std::endl;
-  DvceArray5D<Real> u_weyl_;
-  u_weyl_ = pmbp->pz4c->u_weyl;
-  int nvars = 2;
-  // extract grids, number of radii, number of fluxes, and history appending index
-  auto &grids = pm->pgen->spherical_grids;
-  int nradii = grids.size();
-  int nflux = 2;
-
-  // set number of and names of history variables for z4c
-  //  (1) real part of psi4
-  //  (2) imaginary part of psi4
-
-  pdata->nhist = nradii*nflux;
-  if (pdata->nhist > NHISTORY_VARIABLES) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "User history function specified pdata->nhist larger than"
-              << " NHISTORY_VARIABLES" << std::endl;
-    exit(EXIT_FAILURE);
-  }
-  for (int g=0; g<nradii; ++g) {
-    std::stringstream stream;
-    stream << std::fixed << std::setprecision(1) << grids[g]->radius;
-    std::string rad_str = stream.str();
-    pdata->label[nflux*g+0] = "rpsi4_" + rad_str;
-    pdata->label[nflux*g+1] = "ipsi4_" + rad_str;
-  }
-
-  // go through angles at each radii:
-  for (int g=0; g<nradii; ++g) {
-    // zero fluxes at this radius
-    pdata->hdata[nflux*g+0] = 0.0;
-    pdata->hdata[nflux*g+1] = 0.0;
-
-    // interpolate primitives (and cell-centered magnetic fields iff mhd)
-    grids[g]->InterpolateToSphere(nvars, u_weyl_);
-
-    for (int n=0; n<grids[g]->nangles; ++n) {
-      Real &int_rpsi4 = grids[g]->interp_vals.h_view(n,0);
-      Real &int_ipsi4 = grids[g]->interp_vals.h_view(n,1);
-
-      // integrate rpsi4
-      pdata->hdata[nflux*g+0] += int_rpsi4;
-      // integrate ipsi4
-      pdata->hdata[nflux*g+1] += int_ipsi4;
-    }
-
-  // fill rest of the_array with zeros, if nhist < NHISTORY_VARIABLES
-  for (int n=pdata->nhist; n<NHISTORY_VARIABLES; ++n) {
-    pdata->hdata[n] = 0.0;
-  }
-
-  return;
-}
 }
