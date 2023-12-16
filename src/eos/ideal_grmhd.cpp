@@ -151,20 +151,12 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       SingleC2P_IdealSRMHD(u_sr, eos, s2, b2, rpar, w,
                            dfloor_used, efloor_used, c2p_failure, iter_used);
 
-      // if (c2p_failure) {
-      //   w.d  = w0_old_(m,IDN,k,j,i);
-      //   w.e  = w0_old_(m,IEN,k,j,i);
-      //   w.vx = w0_old_(m,IVX,k,j,i);
-      //   w.vy = w0_old_(m,IVY,k,j,i);
-      //   w.vz = w0_old_(m,IVZ,k,j,i);
-      // }
-
       HydPrim1D w_old;
-      w_old.d  = prim(m,IDN,k,j,i);
-      w_old.vx = prim(m,IVX,k,j,i);
-      w_old.vy = prim(m,IVY,k,j,i);
-      w_old.vz = prim(m,IVZ,k,j,i);
-      w_old.e  = prim(m,IEN,k,j,i);
+      w_old.d  = w0_old_(m,IDN,k,j,i);
+      w_old.vx = w0_old_(m,IVX,k,j,i);
+      w_old.vy = w0_old_(m,IVY,k,j,i);
+      w_old.vz = w0_old_(m,IVZ,k,j,i);
+      w_old.e  = w0_old_(m,IEN,k,j,i);
       // SingleC2P_IdealSRMHD_NH(u_sr, eos, s2, b2, rpar, w, w_old,
       //                         dfloor_used, efloor_used, c2p_failure, iter_used);
 
@@ -209,7 +201,8 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
         // if (c2p_failure) fofc_(m,k,j,i) = true;
 
         // fix the variable inversion in strongly magnetized region
-        if (!c2p_failure && (sigma_cold > sigma_cold_cut_)) {
+        // if (!c2p_failure && (sigma_cold > sigma_cold_cut_)) {
+        if (c2p_failure || (sigma_cold > sigma_cold_cut_)) {
           // fofc_(m,k,j,i) = true;
           bool dfloor_used_in_fix=false, efloor_used_in_fix=false;
           bool c2p_failure_in_fix=c2p_failure;
@@ -224,9 +217,19 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
           SingleC2P_IdealSRMHD_EntropyFix(u_sr, s_tot, eos, s2, b2, rpar, w_fix, w_old,
                                           dfloor_used_in_fix, efloor_used_in_fix,
                                           c2p_failure_in_fix, iter_used_in_fix);
-          if (!c2p_failure_in_fix && (w_fix.e/w_fix.d < w.e/w.d)) {
+
+          // final fallback state
+          w.d  = w_old.d;
+          w.e  = w_old.e;
+          w.vx = w_old.vx;
+          w.vy = w_old.vy;
+          w.vz = w_old.vz;
+
+          // if (!c2p_failure_in_fix && (w_fix.e/w_fix.d < w.e/w.d)) {
+          if ( (!c2p_failure_in_fix && !c2p_failure && (w_fix.e/w_fix.d < w.e/w.d)) ||
+               (!c2p_failure_in_fix &&  c2p_failure && (w_fix.e/w_fix.d < w_old.e/w_old.d)) ) {
             // successful entropy-fixed c2p
-            // only apply fix when original gas temperature is overestimated
+            // only apply fix when gas temperature is overestimated
             w.d  = w_fix.d;
             w.e  = w_fix.e;
             w.vx = w_fix.vx;
@@ -236,7 +239,8 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
             efloor_used = efloor_used_in_fix;
             c2p_failure = c2p_failure_in_fix;
             iter_used_in_fix = iter_used;
-          } //else fofc_(m,k,j,i) = true;
+          } // else fofc_(m,k,j,i) = true;
+
         } // endif (!c2p_failure && (sigma_cold > sigma_cold_cut_))
 
 
