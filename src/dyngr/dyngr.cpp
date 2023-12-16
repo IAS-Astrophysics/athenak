@@ -253,9 +253,10 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::PrimToConInit(int is, int ie, int js, int 
   eos.PrimToCons(pmy_pack->pmhd->w0, pmy_pack->pmhd->bcc0, pmy_pack->pmhd->u0,
                  is, ie, js, je, ks, ke);
   if (pmy_pack->ptmunu != nullptr) {
+    bool fixed = fixed_evolution;
     fixed_evolution = false;
     SetTmunu(nullptr, 0);
-    fixed_evolution = true;
+    fixed_evolution = fixed;
   }
 }
 
@@ -482,6 +483,7 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
 
   auto &adm = pmy_pack->padm->adm;
   auto &eos_ = eos.ps.GetEOS();
+  //auto &tmunu = pmy_pack->ptmunu->tmunu;
 
   int &nhyd  = pmy_pack->pmhd->nmhd;
   int &nscal = pmy_pack->pmhd->nscalars;
@@ -570,9 +572,11 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
     Real bsq = Bv*Bv + Bsq/Wsq;
 
     Real E = (H*Wsq + Bsq) - prim_pt[PPR] - 0.5*bsq;
+    //Real E = tmunu.E(m,k,j,i);
 
     Real S_d[3] = {0.0};
     for (int a = 0; a < 3; a++) {
+      //S_d[a] = tmunu.S_d(m,a,k,j,i);
       for (int b = 0; b < 3; b++) {
         S_d[a] += ((H*Wsq + Bsq)*prim_pt[PVX + b]/W - Bv*B_u[b])*g3d[imap[a][b]];
       }
@@ -580,11 +584,18 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
 
     Real S_uu[3][3];
     for (int a = 0; a < 3; a++) {
-      for (int b = 0; b < 3; b++) {
+      for (int b = 0; b <= a; b++) {
         S_uu[a][b] = (H + Bsq/Wsq)*prim_pt[PVX + a]*prim_pt[PVX + b]
                       - B_u[a]*B_u[b]/Wsq
                       - Bv*(B_u[a]*prim_pt[PVX + b] + B_u[b]*prim_pt[PVX + a])/W
                       + (prim_pt[PPR] + 0.5*bsq)*g3u[imap[a][b]];
+        /*S_uu[a][b] = 0.0;
+        for (int c = 0; c < 3; c++) {
+          for (int d = 0; d < 3; d++) {
+            S_uu[a][b] += tmunu.S_dd(m,c,d,k,j,i)*g3u[imap[a][c]]*g3u[imap[b][d]];
+          }
+        }*/
+        S_uu[b][a] = S_uu[a][b];
       }
     }
 
