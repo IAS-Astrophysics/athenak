@@ -423,12 +423,12 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
       }
 
       // update conserved fluid variables
-      // if (affect_fluid_) {
-      //   u0_(m,IEN,k,j,i) += (m_old[0] - m_new[0]);
-      //   u0_(m,IM1,k,j,i) += (m_old[1] - m_new[1]);
-      //   u0_(m,IM2,k,j,i) += (m_old[2] - m_new[2]);
-      //   u0_(m,IM3,k,j,i) += (m_old[3] - m_new[3]);
-      // }
+      if (affect_fluid_) {
+        u0_(m,IEN,k,j,i) += (m_old[0] - m_new[0]);
+        u0_(m,IM1,k,j,i) += (m_old[1] - m_new[1]);
+        u0_(m,IM2,k,j,i) += (m_old[2] - m_new[2]);
+        u0_(m,IM3,k,j,i) += (m_old[3] - m_new[3]);
+      }
 
       // update total entropy if entropy fix is enabled
       if (entropy_fix_) {
