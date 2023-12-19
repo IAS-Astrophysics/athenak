@@ -221,9 +221,9 @@ RadiationFEMNPhaseIndices IndicesComponent(int n, int num_points, int num_energy
 }
 
 KOKKOS_INLINE_FUNCTION
-Real IndicesUnited(int nuidx, int enidx, int angidx, int num_species, int num_energy_bins, int num_points) {
+int IndicesUnited(int nuidx, int enidx, int angidx, int num_species, int num_energy_bins, int num_points) {
 
-  Real combinedidx = angidx + nuidx * num_energy_bins * num_points + enidx * num_points;
+  int combinedidx = angidx + nuidx * num_energy_bins * num_points + enidx * num_points;
 
   return combinedidx;
 }
