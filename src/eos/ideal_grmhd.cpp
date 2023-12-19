@@ -224,7 +224,8 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
                                           dfloor_used_in_fix, efloor_used_in_fix,
                                           c2p_failure_in_fix, iter_used_in_fix);
 
-          if (!c2p_failure_in_fix && (w_fix.e/w_fix.d < w.e/w.d)) {
+          // if (!c2p_failure_in_fix && (w_fix.e/w_fix.d < w.e/w.d)) {
+          if (!c2p_failure_in_fix)) {
             // successful entropy-fixed c2p
             // only apply fix when gas temperature is overestimated
             w.d  = w_fix.d;
