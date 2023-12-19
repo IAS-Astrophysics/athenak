@@ -109,7 +109,7 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
     }
     if (g==0) {
       // Output file name
-      std::string filename = "/Users/hengrui/Desktop/research/gr/athenak/build/out.tab";
+      std::string filename = "waveforms/out.tab";
 
       // Check if the file already exists
       std::ifstream fileCheck(filename);

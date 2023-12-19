@@ -6,6 +6,7 @@
 //! \file z4c.cpp
 //! \brief implementation of Z4c class constructor and assorted other functions
 
+#include <sys/stat.h>  // mkdir
 #include <iostream>
 #include <string>
 #include <algorithm>
@@ -151,6 +152,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   // wave extraction spheres
   // TODO(@hzhu): Read radii from input file
   auto &grids = spherical_grids;
+  mkdir("waveforms",0775);
   grids.push_back(std::make_unique<SphericalGrid>(ppack, 5, 5));
   grids.push_back(std::make_unique<SphericalGrid>(ppack, 5, 10));
   grids.push_back(std::make_unique<SphericalGrid>(ppack, 5, 20));
