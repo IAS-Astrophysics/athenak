@@ -231,20 +231,6 @@ class Z4c {
   void Z4cWeyl(MeshBlockPack *pmbp);
   void WaveExtr(MeshBlockPack *pmbp);
   void AlgConstr(MeshBlockPack *pmbp);
-  template <int NGHOST>
-
-  // Sommerfeld boundary conditions
-  /*KOKKOS_FUNCTION
-  void Z4cSommerfeld(int const m,
-                     int const is, int const ie,
-                     int const js, int const j,
-                     int const ks, int const k,
-                     int const parity,
-                     int const scr_size,
-                     int const scr_level,
-                     TeamMember_t member);*/
-  /*void Z4cSommerfeld(const int m, const int k, const int j, const int i, const int ng,
-                     const int dir, const int parity);*/
 
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Z4c
