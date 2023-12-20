@@ -139,6 +139,7 @@ add_executable(
         radiation_femn/radiation_femn_source.cpp
         radiation_femn/radiation_femn_newdt.cpp
         radiation_femn/radiation_femn_linalg.cpp
+		radiation_femn/radiation_femn_matinv.cpp
         radiation_femn/radiation_femn_geodesic_grid.cpp
         radiation_femn/radiation_femn_geodesic_grid_basis.cpp
         radiation_femn/radiation_femn_geodesic_grid_matrix_integrate.cpp

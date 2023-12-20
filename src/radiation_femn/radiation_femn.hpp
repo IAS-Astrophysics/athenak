@@ -240,6 +240,13 @@ void MatLumping(DvceArray2D<Real> A_matrix);
 void MatEig(std::vector<std::vector<Real>> &matrix, std::vector<std::complex<Real>> &eigval, std::vector<std::vector<std::complex<Real>>> &eigvec);
 void ZeroSpeedCorrection(HostArray2D<Real> matrix, HostArray2D<Real> matrix_corrected, Real v);
 
+template<typename T1, typename T3>
+KOKKOS_INLINE_FUNCTION void LUDec(T1 square_matrix, T1 lu_matrix, T3 pivot_indices);
+template <typename T1, typename T2, typename T3>
+KOKKOS_INLINE_FUNCTION void LUSolve(const T1 lu_matrix, const T3 pivot_indices, const T2 b_array, T2 x_array);
+template <typename T1, typename T2, typename T3>
+KOKKOS_INLINE_FUNCTION void LUInv(TeamMember_t member, T1 A_matrix, T1 A_matrix_inverse, T1 lu_matrix, T2 x_array, T2 b_array, T3 pivots);
+
 } // namespace radiationfemn
 
 
