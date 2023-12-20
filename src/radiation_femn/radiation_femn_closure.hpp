@@ -110,7 +110,58 @@ void ApplyClosureX(TeamMember_t member, int num_species, int num_energy_bins, in
       f0_scratch_m1(idx) = f(m, nuenang, kk, jj, ii - 1);
       f0_scratch_m2(idx) = f(m, nuenang, kk, jj, ii - 2);
     });
+  }
+}
 
+KOKKOS_INLINE_FUNCTION
+void ApplyClosureY(TeamMember_t member, int num_species, int num_energy_bins, int num_points, int m, int nuidx, int enidx, int kk, int jj, int ii, DvceArray5D<Real> f,
+                   ScrArray1D<Real> f0_scratch, ScrArray1D<Real> f0_scratch_p1, ScrArray1D<Real> f0_scratch_p2, ScrArray1D<Real> f0_scratch_p3,
+                   ScrArray1D<Real> f0_scratch_m1, ScrArray1D<Real> f0_scratch_m2, bool m1_flag) {
+  if (m1_flag) {
+    int nuen = nuidx * num_energy_bins * num_points + enidx * num_points;
+    ApplyM1Closure(member, num_points, m, nuen, kk, jj, ii, f, f0_scratch);
+    ApplyM1Closure(member, num_points, m, nuen, kk, jj + 1, ii, f, f0_scratch_p1);
+    ApplyM1Closure(member, num_points, m, nuen, kk, jj + 2, ii, f, f0_scratch_p2);
+    ApplyM1Closure(member, num_points, m, nuen, kk, jj + 3, ii, f, f0_scratch_p3);
+    ApplyM1Closure(member, num_points, m, nuen, kk, jj - 1, ii, f, f0_scratch_m1);
+    ApplyM1Closure(member, num_points, m, nuen, kk, jj - 2, ii, f, f0_scratch_m2);
+  } else {
+    int nang1 = num_points - 1;
+    par_for_inner(member, 0, nang1, [&](const int idx) {
+      int nuenang = IndicesUnited(nuidx, enidx, idx, num_species, num_energy_bins, num_points);
+      f0_scratch(idx) = f(m, nuenang, kk, jj, ii);
+      f0_scratch_p1(idx) = f(m, nuenang, kk, jj + 1, ii);
+      f0_scratch_p2(idx) = f(m, nuenang, kk, jj + 2, ii);
+      f0_scratch_p3(idx) = f(m, nuenang, kk, jj + 3, ii);
+      f0_scratch_m1(idx) = f(m, nuenang, kk, jj - 1, ii);
+      f0_scratch_m2(idx) = f(m, nuenang, kk, jj - 2, ii);
+    });
+  }
+}
+
+KOKKOS_INLINE_FUNCTION
+void ApplyClosureZ(TeamMember_t member, int num_species, int num_energy_bins, int num_points, int m, int nuidx, int enidx, int kk, int jj, int ii, DvceArray5D<Real> f,
+                   ScrArray1D<Real> f0_scratch, ScrArray1D<Real> f0_scratch_p1, ScrArray1D<Real> f0_scratch_p2, ScrArray1D<Real> f0_scratch_p3,
+                   ScrArray1D<Real> f0_scratch_m1, ScrArray1D<Real> f0_scratch_m2, bool m1_flag) {
+  if (m1_flag) {
+    int nuen = nuidx * num_energy_bins * num_points + enidx * num_points;
+    ApplyM1Closure(member, num_points, m, nuen, kk, jj, ii, f, f0_scratch);
+    ApplyM1Closure(member, num_points, m, nuen, kk + 1, jj, ii, f, f0_scratch_p1);
+    ApplyM1Closure(member, num_points, m, nuen, kk + 2, jj, ii, f, f0_scratch_p2);
+    ApplyM1Closure(member, num_points, m, nuen, kk + 3, jj, ii, f, f0_scratch_p3);
+    ApplyM1Closure(member, num_points, m, nuen, kk - 1, jj, ii, f, f0_scratch_m1);
+    ApplyM1Closure(member, num_points, m, nuen, kk - 2, jj, ii, f, f0_scratch_m2);
+  } else {
+    int nang1 = num_points - 1;
+    par_for_inner(member, 0, nang1, [&](const int idx) {
+      int nuenang = IndicesUnited(nuidx, enidx, idx, num_species, num_energy_bins, num_points);
+      f0_scratch(idx) = f(m, nuenang, kk, jj, ii);
+      f0_scratch_p1(idx) = f(m, nuenang, kk + 1, jj, ii);
+      f0_scratch_p2(idx) = f(m, nuenang, kk + 2, jj, ii);
+      f0_scratch_p3(idx) = f(m, nuenang, kk + 3, jj, ii);
+      f0_scratch_m1(idx) = f(m, nuenang, kk - 1, jj, ii);
+      f0_scratch_m2(idx) = f(m, nuenang, kk - 2, jj, ii);
+    });
   }
 }
 

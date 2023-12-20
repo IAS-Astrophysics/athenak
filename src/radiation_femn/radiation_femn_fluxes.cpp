@@ -44,7 +44,7 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
   int scr_level = 0;
   int scr_size = ScrArray1D<Real>::shmem_size(num_points) * 6;
   auto &flx1 = iflx.x1f;
-  Kokkos::deep_copy(flx1, 0.); /*
+  Kokkos::deep_copy(flx1, 0.);
   par_for_outer("radiation_femn_flux_x", DevExeSpace(), scr_size, scr_level, 0, nmb1, 0, npts1, ks, ke, js, je, is, int(ie / 2) + 1,
                 KOKKOS_LAMBDA(TeamMember_t member, const int m, const int nuenang, const int k, const int j, const int i) {
 
@@ -118,7 +118,7 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
 
                   flx1(m, nuenang, kk, jj, ii) = ((1.5) * Fminus - Favg - (0.5) * Fplus);
                   flx1(m, nuenang, kk, jj, ii + 1) = ((0.5) * Fminus + Favg - (1.5) * Fplus);
-                }); */
+                });
 
 //--------------------------------------------------------------------------------------
 // j-direction
@@ -136,26 +136,19 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                     auto ii = i;
 
                     RadiationFEMNPhaseIndices idcs = IndicesComponent(enang, num_points_, num_energy_bins_, num_species_);
+                    int species = idcs.nuidx;
                     int en = idcs.enidx;
                     int B = idcs.angidx;
 
-                    // ---------------------------------------------------
-                    // Replace by Closure function later
+                    // load scratch arrays using closure
                     ScrArray1D<Real> f0_scratch = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
                     ScrArray1D<Real> f0_scratch_p1 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
                     ScrArray1D<Real> f0_scratch_p2 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
                     ScrArray1D<Real> f0_scratch_p3 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
                     ScrArray1D<Real> f0_scratch_m1 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
                     ScrArray1D<Real> f0_scratch_m2 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
-
-                    ApplyClosure(member, num_points_, m, en, kk, jj, ii, f0_, f0_scratch, m1_flag_);
-                    ApplyClosure(member, num_points_, m, en, kk, jj + 1, ii, f0_, f0_scratch_p1, m1_flag_);
-                    ApplyClosure(member, num_points_, m, en, kk, jj + 2, ii, f0_, f0_scratch_p2, m1_flag_);
-                    ApplyClosure(member, num_points_, m, en, kk, jj + 3, ii, f0_, f0_scratch_p3, m1_flag_);
-                    ApplyClosure(member, num_points_, m, en, kk, jj - 1, ii, f0_, f0_scratch_m1, m1_flag_);
-                    ApplyClosure(member, num_points_, m, en, kk, jj - 2, ii, f0_, f0_scratch_m2, m1_flag_);
+                    ApplyClosureY(member, num_species_, num_energy_bins_, num_points_, m, species, en, kk, jj, ii, f0_, f0_scratch, f0_scratch_p1, f0_scratch_p2, f0_scratch_p3, f0_scratch_m1, f0_scratch_m2, m1_flag_);
                     member.team_barrier();
-                    // ----------------------------------------------------
 
                     // factor from energy contribution
                     Real Ven = (1. / 3.) * (pow(energy_grid_(en + 1), 3) - pow(energy_grid_(en), 3));
@@ -164,6 +157,7 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                     Real sqrt_det_g_L = 1.5 * sqrt_det_g_(m, kk, jj, ii) - 0.5 * sqrt_det_g_(m, kk, jj + 1, ii);
                     Real sqrt_det_g_R = -0.5 * sqrt_det_g_(m, kk, jj, ii) + 1.5 * sqrt_det_g_(m, kk, jj + 1, ii);
 
+                    // average flux of element
                     Real Favg = 0.;
                     Kokkos::parallel_reduce(Kokkos::TeamVectorRange(member, 0, 4 * num_points_), [&](const int muhatA, Real &partial_sum) {
                       int muhat = int(muhatA / num_points_);
@@ -175,6 +169,7 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                     }, Favg);
                     member.team_barrier();
 
+                    // flux at left boundary
                     Real Fminus = 0.;
                     Kokkos::parallel_reduce(Kokkos::TeamVectorRange(member, 0, 4 * num_points_), [&](const int muhatA, Real &partial_sum) {
                       int muhat = int(muhatA / num_points_);
@@ -190,6 +185,7 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                     }, Fminus);
                     member.team_barrier();
 
+                    // flux at right boundary
                     Real Fplus = 0.;
                     Kokkos::parallel_reduce(Kokkos::TeamVectorRange(member, 0, 4 * num_points_), [&](const int muhatA, Real &partial_sum) {
                       int muhat = int(muhatA / num_points_);
@@ -226,28 +222,19 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                     auto ii = i;
 
                     RadiationFEMNPhaseIndices idcs = IndicesComponent(enang, num_points_, num_energy_bins_, num_species_);
+                    int species = idcs.nuidx;
                     int en = idcs.enidx;
                     int B = idcs.angidx;
 
-                    // ---------------------------------------------------
-                    // Replace by Closure function later
-
+                    // load scratch arrays using closure
                     ScrArray1D<Real> f0_scratch = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
                     ScrArray1D<Real> f0_scratch_p1 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
                     ScrArray1D<Real> f0_scratch_p2 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
                     ScrArray1D<Real> f0_scratch_p3 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
                     ScrArray1D<Real> f0_scratch_m1 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
                     ScrArray1D<Real> f0_scratch_m2 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
-
-                    ApplyClosure(member, num_points_, m, en, kk, jj, ii, f0_, f0_scratch, m1_flag_);
-                    ApplyClosure(member, num_points_, m, en, kk + 1, jj, ii, f0_, f0_scratch_p1, m1_flag_);
-                    ApplyClosure(member, num_points_, m, en, kk + 2, jj, ii, f0_, f0_scratch_p2, m1_flag_);
-                    ApplyClosure(member, num_points_, m, en, kk + 3, jj, ii, f0_, f0_scratch_p3, m1_flag_);
-                    ApplyClosure(member, num_points_, m, en, kk - 1, jj, ii, f0_, f0_scratch_m1, m1_flag_);
-                    ApplyClosure(member, num_points_, m, en, kk - 2, jj, ii, f0_, f0_scratch_m2, m1_flag_);
+                    ApplyClosureZ(member, num_species_, num_energy_bins_, num_points_, m, species, en, kk, jj, ii, f0_, f0_scratch, f0_scratch_p1, f0_scratch_p2, f0_scratch_p3, f0_scratch_m1, f0_scratch_m2, m1_flag_);
                     member.team_barrier();
-
-                    // ----------------------------------------------------
 
                     // factor from energy contribution
                     Real Ven = (1. / 3.) * (pow(energy_grid_(en + 1), 3) - pow(energy_grid_(en), 3));
@@ -256,6 +243,7 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                     Real sqrt_det_g_L = 1.5 * sqrt_det_g_(m, kk, jj, ii) - 0.5 * sqrt_det_g_(m, kk + 1, jj, ii);
                     Real sqrt_det_g_R = -0.5 * sqrt_det_g_(m, kk, jj, ii) + 1.5 * sqrt_det_g_(m, kk + 1, jj, ii);
 
+                    // average flux of element
                     Real Favg = 0.;
                     Kokkos::parallel_reduce(Kokkos::TeamVectorRange(member, 0, 4 * num_points_), [&](const int muhatA, Real &partial_sum) {
                       int muhat = int(muhatA / num_points_);
@@ -267,6 +255,7 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                     }, Favg);
                     member.team_barrier();
 
+                    // flux at left boundary
                     Real Fminus = 0.;
                     Kokkos::parallel_reduce(Kokkos::TeamVectorRange(member, 0, 4 * num_points_), [&](const int muhatA, Real &partial_sum) {
                       int muhat = int(muhatA / num_points_);
@@ -281,6 +270,7 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                     }, Fminus);
                     member.team_barrier();
 
+                    // flux at right boundary
                     Real Fplus = 0.;
                     Kokkos::parallel_reduce(Kokkos::TeamVectorRange(member, 0, 4 * num_points_), [&](const int muhatA, Real &partial_sum) {
                       int muhat = int(muhatA / num_points_);
