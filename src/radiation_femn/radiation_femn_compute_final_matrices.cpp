@@ -1,15 +1,15 @@
 //========================================================================================
-// GR radiation code for AthenaK with FEM_N & FP_N
-// Copyright (C) 2023 Maitraya Bhattacharyya <mbb6217@psu.edu> and David Radice <dur566@psu.edu>
-// AthenaXX copyright(C) James M. Stone <jmstone@ias.edu> and the Athena code team
+// AthenaXXX astrophysical plasma code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file radiation_femn_compute_pmatrices.cpp
-//  \brief generate and load matrices for the angular grid
+//  \brief generate final matrices for evolution equations. These are independent of angular scheme.
 
 #include <iostream>
 
 #include "radiation_femn/radiation_femn.hpp"
+#include "radiation_femn/radiation_femn_linalg.hpp"
 #include "radiation_femn/radiation_femn_geodesic_grid_matrices.hpp"
 #include "radiation_femn_matinv.hpp"
 
@@ -45,7 +45,7 @@ void RadiationFEMN::ComputeMassInverse() {
   Kokkos::deep_copy(mass_matrix_inv, mass_matrix_inv_host);
 
 }
-// compute P and Pmod matrices (on host, then copy to device)
+// compute P and Pmod matrices (multiplied by M^-1)
 void RadiationFEMN::ComputePMatrices() {
 
   std::cout << "Computing P matrices and modified P matrices ..." << std::endl;
@@ -59,41 +59,75 @@ void RadiationFEMN::ComputePMatrices() {
   Kokkos::realloc(temp_array_corrected, num_points, num_points);
 
   // M^-1 M
-  radiationfemn::MatMultiplyDvce(mass_matrix_inv, mass_matrix, temp_array);
+  radiationfemn::MatMatMultiply(mass_matrix_inv, mass_matrix, temp_array);
   auto P_matrix_0 = Kokkos::subview(P_matrix, 0, Kokkos::ALL, Kokkos::ALL);
   Kokkos::deep_copy(P_matrix_0, temp_array);
   auto Pmod_matrix_0 = Kokkos::subview(Pmod_matrix, 0, Kokkos::ALL, Kokkos::ALL);
   Kokkos::deep_copy(Pmod_matrix_0, temp_array);
 
   // stilde-x matrix
-  radiationfemn::MatMultiplyDvce(mass_matrix_inv, stiffness_matrix_x, temp_array);
+  radiationfemn::MatMatMultiply(mass_matrix_inv, stiffness_matrix_x, temp_array);
   auto P_matrix_1 = Kokkos::subview(P_matrix, 1, Kokkos::ALL, Kokkos::ALL);
   Kokkos::deep_copy(P_matrix_1, temp_array);
   Kokkos::deep_copy(temp_array_host, temp_array);
 
+  // stilde-x mod matrix
   radiationfemn::ZeroSpeedCorrection(temp_array_host, temp_array_corrected, 1. / sqrt(3.));
   auto Pmod_matrix_1 = Kokkos::subview(Pmod_matrix, 1, Kokkos::ALL, Kokkos::ALL);
   Kokkos::deep_copy(Pmod_matrix_1, temp_array_corrected);
 
   // stilde-y matrix
-  radiationfemn::MatMultiplyDvce(mass_matrix_inv, stiffness_matrix_y, temp_array);
+  radiationfemn::MatMatMultiply(mass_matrix_inv, stiffness_matrix_y, temp_array);
   auto P_matrix_2 = Kokkos::subview(P_matrix, 2, Kokkos::ALL, Kokkos::ALL);
   Kokkos::deep_copy(P_matrix_2, temp_array);
   Kokkos::deep_copy(temp_array_host, temp_array);
 
+  // stilde-y mod matrix
   radiationfemn::ZeroSpeedCorrection(temp_array_host, temp_array_corrected, 1. / sqrt(3.));
   auto Pmod_matrix_2 = Kokkos::subview(Pmod_matrix, 2, Kokkos::ALL, Kokkos::ALL);
   Kokkos::deep_copy(Pmod_matrix_2, temp_array_corrected);
 
-  // stilde-z matrix index
-  radiationfemn::MatMultiplyDvce(mass_matrix_inv, stiffness_matrix_z, temp_array);
+  // stilde-z matrix
+  radiationfemn::MatMatMultiply(mass_matrix_inv, stiffness_matrix_z, temp_array);
   auto P_matrix_3 = Kokkos::subview(P_matrix, 3, Kokkos::ALL, Kokkos::ALL);
   Kokkos::deep_copy(P_matrix_3, temp_array);
   Kokkos::deep_copy(temp_array_host, temp_array);
 
+  // stilde-z mod matrix
   radiationfemn::ZeroSpeedCorrection(temp_array_host, temp_array_corrected, 1. / sqrt(3.));
   auto Pmod_matrix_3 = Kokkos::subview(Pmod_matrix, 3, Kokkos::ALL, Kokkos::ALL);
   Kokkos::deep_copy(Pmod_matrix_3, temp_array_corrected);
+
+}
+
+// compute the final source matrices (multiplied by M^-1)
+void RadiationFEMN::ComputeSourceMatrices() {
+
+  std::cout << "Constructing the final source matrices ..." << std::endl;
+
+  DvceArray1D<Real> e_source_temp;
+  DvceArray1D<Real> e_source_temp_mod;
+  DvceArray2D<Real> S_source_temp;
+  DvceArray2D<Real> S_source_temp_mod;
+
+  Kokkos::realloc(e_source_temp, num_points);
+  Kokkos::realloc(e_source_temp_mod, num_points);
+  Kokkos::realloc(S_source_temp, num_points, num_points);
+  Kokkos::realloc(S_source_temp_mod, num_points, num_points);
+
+  Kokkos::deep_copy(e_source_temp, e_source);
+  Kokkos::deep_copy(e_source_nominv, e_source);
+
+  radiationfemn::MatVecMultiply(mass_matrix_inv, e_source, e_source_temp_mod);
+  Kokkos::deep_copy(e_source, e_source_temp_mod);
+
+  par_for("radiation_femn_compute_source_smatrix", DevExeSpace(), 0, num_points - 1, 0, num_points - 1,
+          KOKKOS_LAMBDA(const int j, const int i) {
+            S_source_temp(i, j) = e_source_temp(i) * e_source_temp(j);
+          });
+
+  radiationfemn::MatMatMultiply(mass_matrix_inv, S_source_temp, S_source_temp_mod);
+  Kokkos::deep_copy(S_source, S_source_temp_mod);
 
 }
 

@@ -1,3 +1,6 @@
+#ifndef ATHENA_SRC_RADIATION_FEMN_RADIATION_FEMN_MATINV_HPP_
+#define ATHENA_SRC_RADIATION_FEMN_RADIATION_FEMN_MATINV_HPP_
+
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
@@ -144,3 +147,5 @@ KOKKOS_INLINE_FUNCTION void LUInv(T1 A_matrix, T1 A_matrix_inverse, T1 lu_matrix
 }
 
 }
+
+#endif //ATHENA_SRC_RADIATION_FEMN_RADIATION_FEMN_MATINV_HPP_
