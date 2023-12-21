@@ -22,9 +22,6 @@ KOKKOS_INLINE_FUNCTION void LUDec(T1 square_matrix, T1 lu_matrix, T3 pivot_indic
 
   int num_rows = square_matrix.extent(0);
 
-  Kokkos::realloc(pivot_indices, num_rows - 1);
-  Kokkos::deep_copy(lu_matrix, square_matrix);
-
   double largest_pivot;
   double swap_value;
 
@@ -69,9 +66,6 @@ KOKKOS_INLINE_FUNCTION void LUSolve(const T1 lu_matrix, const T3 pivot_indices, 
   int num_rows = b_array.extent(0);
   double swap_value;
 
-  Kokkos::realloc(x_array, num_rows);
-  Kokkos::deep_copy(x_array, b_array);
-
   // Forward substitution to find solution to L y = b
   for (int k = 0; k < num_rows - 1; k++) {
     swap_value = x_array(pivot_indices(k));
@@ -103,9 +97,12 @@ KOKKOS_INLINE_FUNCTION void LUInv(TeamMember_t member, T1 A_matrix, T1 A_matrix_
 
   radiationfemn::LUDec<T1, T3>(A_matrix, lu_matrix, pivots);
 
-  par_for_inner(member, 0, n, [&](const int i) {
+  par_for_inner(member, 0, n - 1, [&](const int i) {
     Kokkos::deep_copy(b_array, 0.);
+    Kokkos::deep_copy(x_array, 0.);
     b_array(i) = 1.;
+    x_array(i) = 1;
+
     radiationfemn::LUSolve<T1, T2, T3>(lu_matrix, pivots, b_array, x_array);
     for (int j = 0; j < n; j++) {
       A_matrix_inverse(j, i) = x_array(j);

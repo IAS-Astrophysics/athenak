@@ -13,6 +13,7 @@
 #include "mesh/mesh.hpp"
 #include "driver/driver.hpp"
 #include "radiation_femn/radiation_femn.hpp"
+#include "radiation_femn/radiation_femn_matinv.hpp"
 
 namespace radiationfemn {
 
@@ -60,8 +61,8 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
   auto &P_matrix_ = pmy_pack->pradfemn->P_matrix;
   auto &S_source_ = pmy_pack->pradfemn->S_source;
 
-  size_t scr_size = ScrArray2D<Real>::shmem_size(num_points_, num_points_) * 2 + ScrArray1D<Real>::shmem_size(num_points_) * 1
-      + ScrArray1D<Real>::shmem_size(4 * 4 * 4) * 2;
+  size_t scr_size = ScrArray2D<Real>::shmem_size(num_points_, num_points_) * 5 + ScrArray1D<Real>::shmem_size(num_points_) * 5
+      + ScrArray1D<int>::shmem_size(num_points_ - 1) * 1 + +ScrArray1D<Real>::shmem_size(4 * 4 * 4) * 2;
   int scr_level = 0;
   par_for_outer("radiation_femn_update_semi_implicit", DevExeSpace(), scr_size, scr_level, 0, nmb1, 0, num_energy_bins_ - 1, ks, ke, js, je, is, ie,
                 KOKKOS_LAMBDA(TeamMember_t member, int m, int en, int k, int j, int i) {
@@ -191,10 +192,27 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                   member.team_barrier();
 
                   // (6) Form the Q matrix and it's inverse, this is needed to go from G to F
+
+                  ScrArray2D<Real> Q_matrix = ScrArray2D<Real>(member.team_scratch(scr_level), num_points_, num_points_);
+                  ScrArray2D<Real> Qinv_matrix = ScrArray2D<Real>(member.team_scratch(scr_level), num_points_, num_points_);
+                  ScrArray2D<Real> lu_matrix = ScrArray2D<Real>(member.team_scratch(scr_level), num_points_, num_points_);
+                  ScrArray1D<Real> x_array = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
+                  ScrArray1D<Real> b_array = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
+                  ScrArray1D<int> pivots = ScrArray1D<int>(member.team_scratch(scr_level), num_points_ - 1);
+/*
                   DvceArray2D<Real> Q_matrix;
                   DvceArray2D<Real> Qinv_matrix;
+                  DvceArray1D<Real> x_array;
+                  DvceArray1D<Real> b_array;
+                  DvceArray2D<Real> lu_matrix;
+                  DvceArray1D<int> pivots;
+
+                  Kokkos::realloc(x_array, num_points_);
+                  Kokkos::realloc(b_array, num_points_);
+                  Kokkos::realloc(lu_matrix, num_points_, num_points_);
+                  Kokkos::realloc(pivots, num_points_ - 1);
                   Kokkos::realloc(Q_matrix, num_points_, num_points_);
-                  Kokkos::realloc(Qinv_matrix, num_points_, num_points_);
+                  Kokkos::realloc(Qinv_matrix, num_points_, num_points_); */
 
                   par_for_inner(member, 0, num_points_ * num_points_ - 1, [&](const int idx) {
                     int row = int(idx / num_points_);
@@ -204,9 +222,14 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                         + L_mu_muhat0_(m, 0, 3, k, j, i) * P_matrix_(3, row, col)
                         + beta_dt * (kappa_s_(m, k, j, i) + kappa_a_(m, k, j, i)) * (row == col)
                         + beta_dt * (1. / (4. * M_PI)) * S_source_(row, col));
+                    lu_matrix(row, col) = Q_matrix(row, col);
                   });
                   member.team_barrier();
-                  radiationfemn::LUInverse(Q_matrix, Qinv_matrix);
+                  // radiationfemn::LUInverse(Q_matrix, Qinv_matrix);
+                  radiationfemn::LUInv<ScrArray2D<Real>, ScrArray1D<Real>, ScrArray1D<int>>(member, Q_matrix, Qinv_matrix, lu_matrix, x_array, b_array, pivots);
+                  //radiationfemn::LUInv<DvceArray2D<Real>, DvceArray1D<Real>, DvceArray1D<int>>(member, Q_matrix, Qinv_matrix, lu_matrix, x_array, b_array, pivots);
+
+                  member.team_barrier();
 
                   // (7) Compute F from G
                   Kokkos::parallel_for(Kokkos::TeamThreadRange(member, 0, num_points_), [=](const int idx) {
