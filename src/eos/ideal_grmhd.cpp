@@ -17,6 +17,8 @@
 #include "coordinates/cartesian_ks.hpp"
 #include "coordinates/cell_locations.hpp"
 
+#include "radiation/radiation.hpp"
+
 //----------------------------------------------------------------------------------------
 // ctor: also calls EOS base class constructor
 
