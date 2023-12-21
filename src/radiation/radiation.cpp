@@ -41,7 +41,7 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
     tet_d3_x3f("tet_d3_x3f",1,1,1,1,1),
     na("na",1,1,1,1,1,1),
     norm_to_tet("norm_to_tet",1,1,1,1,1,1),
-    beam_mask("beam_mask",1,1,1,1,1)
+    beam_mask("beam_mask",1,1,1,1,1),
     tgas_old("tgas_old",1,1,1,1) {
   // Check for general relativity
   if (!(pmy_pack->pcoord->is_general_relativistic)) {
