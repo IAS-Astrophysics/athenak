@@ -66,7 +66,7 @@ KOKKOS_INLINE_FUNCTION void LUDec(T1 square_matrix, T1 lu_matrix, T3 pivot_indic
 // pivot_indices: [N] array, the pivot information
 // b_array:       [N] array, the array b
 // x_array:       [N] array, the solution x
-template <typename T1, typename T2, typename T3>
+template<typename T1, typename T2, typename T3>
 KOKKOS_INLINE_FUNCTION void LUSolve(const T1 lu_matrix, const T3 pivot_indices, const T2 b_array, T2 x_array) {
 
   int num_rows = b_array.extent(0);
@@ -100,7 +100,7 @@ KOKKOS_INLINE_FUNCTION void LUSolve(const T1 lu_matrix, const T3 pivot_indices, 
 // b_array:           [N] the rhs of linear equations
 // x_array:           [N] a copy of b_array
 // pivots:            [N-1] an integer array
-template <typename T1, typename T2, typename T3>
+template<typename T1, typename T2, typename T3>
 KOKKOS_INLINE_FUNCTION void LUInv(TeamMember_t member, T1 A_matrix, T1 A_matrix_inverse, T1 lu_matrix, T2 x_array, T2 b_array, T3 pivots) {
 
   int n = A_matrix.extent(0);
@@ -108,8 +108,8 @@ KOKKOS_INLINE_FUNCTION void LUInv(TeamMember_t member, T1 A_matrix, T1 A_matrix_
   radiationfemn::LUDec<T1, T3>(A_matrix, lu_matrix, pivots);
 
   par_for_inner(member, 0, n - 1, [&](const int i) {
-    Kokkos::deep_copy(b_array, 0.);
-    Kokkos::deep_copy(x_array, 0.);
+    //Kokkos::deep_copy(b_array, 0.);
+    //Kokkos::deep_copy(x_array, 0.);
     b_array(i) = 1.;
     x_array(i) = 1;
 
@@ -121,5 +121,26 @@ KOKKOS_INLINE_FUNCTION void LUInv(TeamMember_t member, T1 A_matrix, T1 A_matrix_
 
 }
 
+template<typename T1, typename T2, typename T3>
+KOKKOS_INLINE_FUNCTION void LUInv(T1 A_matrix, T1 A_matrix_inverse, T1 lu_matrix, T2 x_array, T2 b_array, T3 pivots) {
+
+  int n = A_matrix.extent(0);
+
+  radiationfemn::LUDec<T1, T3>(A_matrix, lu_matrix, pivots);
+
+  for (int i = 0; i <= n - 1; i++) {
+    b_array(i) = 1.;
+    x_array(i) = 1;
+
+    radiationfemn::LUSolve<T1, T2, T3>(lu_matrix, pivots, b_array, x_array);
+    for (int j = 0; j < n; j++) {
+      A_matrix_inverse(j, i) = x_array(j);
+    }
+
+    b_array(i) = 0.;
+    x_array(i) = 0.;
+  }
+
+}
 
 }

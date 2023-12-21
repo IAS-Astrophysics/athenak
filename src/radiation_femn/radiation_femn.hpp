@@ -109,6 +109,7 @@ class RadiationFEMN {
   DvceArray1D<Real> energy_grid;             // array containing the energy grid
 
   DvceArray2D<Real> mass_matrix;             // mass matrix (in the special relativistic case) [Eqn. 12 of arXiv:2212.01409]
+  DvceArray2D<Real> mass_matrix_inv;         // inverse of the mass matrix
   DvceArray2D<Real> stiffness_matrix_x;      // x component of the stiffness matrix (in the special relativistic case) [Eqn. 12 of arXiv:2212.01409]
   DvceArray2D<Real> stiffness_matrix_y;      // y component of the stiffness matrix (in the special relativistic case) [Eqn. 12 of arXiv:2212.01409]
   DvceArray2D<Real> stiffness_matrix_z;      // z component of the stiffness matrix (in the special relativistic case) [Eqn. 12 of arXiv:2212.01409]
@@ -198,6 +199,7 @@ class RadiationFEMN {
   // Functions for angular matrices & tetrad
   void LoadFEMNMatrices();
   void LoadFPNMatrices();
+  void ComputeMassInverse();
   void ComputePMatrices();
   void ComputeSourceMatrices();
   void AddBeams();

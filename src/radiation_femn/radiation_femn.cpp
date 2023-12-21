@@ -118,23 +118,20 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   beam_source_2_a = pin->GetOrAddReal("radiation-femn", "beam_source_2_a", -42.);
   beam_source_2_b = pin->GetOrAddReal("radiation-femn", "beam_source_2_b", -42.);
 
-  // --------------------------------------------------------------------
-  // allocate memory and load angular grid arrays and associated matrices
-
-  Kokkos::realloc(mass_matrix, num_points, num_points);           // mass matrix from special relativistic case
-  Kokkos::realloc(stiffness_matrix_x, num_points, num_points);    // stiffness-x from special relativistic case
-  Kokkos::realloc(stiffness_matrix_y, num_points, num_points);    // stiffness-y from special relativistic case
-  Kokkos::realloc(stiffness_matrix_z, num_points, num_points);    // stiffness-z from special relativistic case
-  Kokkos::realloc(P_matrix, 4, num_points, num_points);           // P^muhat_A^B (no energy)
+  Kokkos::realloc(mass_matrix, num_points, num_points);
+  Kokkos::realloc(mass_matrix_inv, num_points, num_points);
+  Kokkos::realloc(stiffness_matrix_x, num_points, num_points);
+  Kokkos::realloc(stiffness_matrix_y, num_points, num_points);
+  Kokkos::realloc(stiffness_matrix_z, num_points, num_points);
+  Kokkos::realloc(P_matrix, 4, num_points, num_points);
   Kokkos::realloc(Pmod_matrix, 4, num_points, num_points);
-  Kokkos::realloc(G_matrix, 4, 4, 3, num_points, num_points);     // G^nuhat^muhat_ihat_A^B (no energy)
-  Kokkos::realloc(F_matrix, 4, 4, 3, num_points, num_points);     // F^nuhat^nuhat_ihat_A^B
+  Kokkos::realloc(G_matrix, 4, 4, 3, num_points, num_points);
+  Kokkos::realloc(F_matrix, 4, 4, 3, num_points, num_points);
   Kokkos::realloc(Q_matrix, 4, num_points);
   Kokkos::realloc(e_source, num_points);
   Kokkos::realloc(e_source_nominv, num_points);
   Kokkos::realloc(S_source, num_points, num_points);
-
-  Kokkos::realloc(angular_grid, num_points, 2);                   // angular information (phi, theta) or (l, m)
+  Kokkos::realloc(angular_grid, num_points, 2);
 
   if (!fpn) {   // populate arrays for FEM_N
     scheme_num_points = pin->GetOrAddInteger("radiation-femn", "quad_scheme_num_points", 453);  // number of points in numerical integration scheme (default: 453)
@@ -170,6 +167,8 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
     std::cout << "Mass Lumping switched on ..." << std::endl;
     radiationfemn::MatLumping(mass_matrix);
   }
+
+  this->ComputeMassInverse();
 
   if (m1_flag) {
     if (lmax != 2) {
@@ -210,7 +209,7 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   Kokkos::deep_copy(g_dd, 0.);
   Kokkos::deep_copy(sqrt_det_g, 1.);
   Kokkos::deep_copy(u_mu, 0.);
-
+  /*
   par_for("radiation_femn_dummy_initialize", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
           KOKKOS_LAMBDA(int m, int k, int j, int i) {
             g_dd(m, 0, 0, k, j, i) = -1.;
@@ -218,7 +217,7 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
             g_dd(m, 2, 2, k, j, i) = 1.;
             g_dd(m, 3, 3, k, j, i) = 1.;
             u_mu(m, 0, k, j, i) = 1;
-          });
+          }); */
 
   // --------------------------------------------------------------------
   // End of hard coded metric and fluid velocity

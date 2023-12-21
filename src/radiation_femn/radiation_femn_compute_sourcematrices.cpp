@@ -16,14 +16,14 @@ namespace radiationfemn {
 
 void RadiationFEMN::ComputeSourceMatrices() {
   std::cout << "Computing source matrices ..." << std::endl;
-
+ /*
   auto mm_ = mass_matrix;
   auto e_source_ = e_source;
   auto S_source_ = S_source;
 
   DvceArray2D<Real> mass_inv_temp;
   Kokkos::realloc(mass_inv_temp, num_points, num_points);
-  radiationfemn::LUInverse(mm_, mass_inv_temp);
+  //radiationfemn::LUInverse(mm_, mass_inv_temp);
 
   DvceArray1D<Real> e_source_temp;
   DvceArray1D<Real> e_source_temp_mod;
@@ -53,7 +53,7 @@ void RadiationFEMN::ComputeSourceMatrices() {
 
   Kokkos::deep_copy(e_source_, e_source_temp_mod);
   Kokkos::deep_copy(S_source_, S_source_temp_mod);
-
+*/
 }
 
 }
