@@ -117,6 +117,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // Entropy fix
   c2p_test = pin->GetOrAddBoolean("mhd","c2p_test",false);
+  is_radiation_enabled = pin->DoesBlockExist("radiation");
   if (pin->DoesParameterExist("mhd","entropy_fix")) {
     if (pmy_pack->pcoord->is_general_relativistic) {
       entropy_fix = pin->GetBoolean("mhd","entropy_fix");

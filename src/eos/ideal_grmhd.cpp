@@ -56,6 +56,8 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
   auto eos = eos_data;
   Real gm1 = eos_data.gamma - 1.0;
   auto &w0_old_ = pmy_pack->pmhd->w0_old;
+  auto &is_radiation_enabled_ = pmy_pack->pmhd->is_radiation_enabled;
+  auto &tgas_old_ = (is_radiation_enabled_) ? pmy_pack->prad->tgas_old : nullptr;
 
   auto &flat = pmy_pack->pcoord->coord_data.is_minkowski;
   auto &spin = pmy_pack->pcoord->coord_data.bh_spin;
@@ -162,7 +164,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
 
       // apply entropy fix
       if (entropy_fix_ && !entropy_fix_turnoff_) {
-        // compute sigma_cold = 2*pmag/rho
+        // compute sigma_cold (2*pmag/rho) to decide whether turn on the fix
         Real sigma_cold = 0.0;
         if (!c2p_failure) {
           Real qq = glower[1][1]*w.vx*w.vx +2.0*glower[1][2]*w.vx*w.vy +2.0*glower[1][3]*w.vx*w.vz
@@ -196,20 +198,9 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
           sigma_cold = b_sq/w.d;
         }
 
-        // fix the region that fails the variable inversion
-        // fofc_(m,k,j,i) = false;
-        // if (c2p_failure) fofc_(m,k,j,i) = true;
-        if (c2p_failure) {
-          w.d  = w_old.d;
-          w.e  = w_old.e;
-          w.vx = w_old.vx;
-          w.vy = w_old.vy;
-          w.vz = w_old.vz;
-        }
-
-        // fix the variable inversion in strongly magnetized region
-        if (!c2p_failure && (sigma_cold > sigma_cold_cut_)) {
-          // fofc_(m,k,j,i) = true;
+        // fix the prim in strongly magnetized region or cells that fail the variable inversion
+        if (c2p_failure || (sigma_cold > sigma_cold_cut_)) {
+          // compute the entropy fix
           bool dfloor_used_in_fix=false, efloor_used_in_fix=false;
           bool c2p_failure_in_fix=c2p_failure;
           int iter_used_in_fix=0;
@@ -224,23 +215,48 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
                                           dfloor_used_in_fix, efloor_used_in_fix,
                                           c2p_failure_in_fix, iter_used_in_fix);
 
-          // if (!c2p_failure_in_fix && (w_fix.e/w_fix.d < w.e/w.d)) {
-          if (!c2p_failure_in_fix)) {
-            // successful entropy-fixed c2p
-            // only apply fix when gas temperature is overestimated
-            w.d  = w_fix.d;
-            w.e  = w_fix.e;
-            w.vx = w_fix.vx;
-            w.vy = w_fix.vy;
-            w.vz = w_fix.vz;
-            dfloor_used = dfloor_used_in_fix;
-            efloor_used = efloor_used_in_fix;
-            c2p_failure = c2p_failure_in_fix;
-            iter_used_in_fix = iter_used;
-          } // else fofc_(m,k,j,i) = true;
+          // set the fallback state using old prim
+          if (c2p_failure) {
+            w.d  = w_old.d;
+            w.e  = w_old.e;
+            w.vx = w_old.vx;
+            w.vy = w_old.vy;
+            w.vz = w_old.vz;
+          }
 
-        } // endif (!c2p_failure && (sigma_cold > sigma_cold_cut_))
+          // gas-radiation temperature coupling fix
+          if (is_radiation_enabled_) {
+            Real pgas_ = w.d*tgas_old_(m,k,j,i);
+            Real pgas_min = fmax(eos.pfloor, eos.sfloor*pow(w.d, eos.gamma));
+            if (pgas_ < pgas_min) {
+              pgas_ = pgas_min;
+              efloor_used = true;
+            }
+            w.e = pgas_/gm1;
+          }
 
+          // entropy fix
+          // if (!c2p_failure_in_fix) {
+          //   // successful entropy-fixed c2p
+          //   // only apply fix when gas temperature is overestimated
+          //   w.d  = w_fix.d;
+          //   w.e  = w_fix.e;
+          //   w.vx = w_fix.vx;
+          //   w.vy = w_fix.vy;
+          //   w.vz = w_fix.vz;
+          //   dfloor_used = dfloor_used_in_fix;
+          //   efloor_used = efloor_used_in_fix;
+          //   c2p_failure = c2p_failure_in_fix;
+          //   iter_used_in_fix = iter_used;
+          // } else {
+          //   w.d  = w_old.d;
+          //   w.e  = w_old.e;
+          //   w.vx = w_old.vx;
+          //   w.vy = w_old.vy;
+          //   w.vz = w_old.vz;
+          // }
+
+        } // endif (c2p_failure || (sigma_cold > sigma_cold_cut_))
 
       } // endif entropy_fix_
       c2p_flag_(m,k,j,i) = !c2p_failure;

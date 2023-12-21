@@ -110,6 +110,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   auto &tc = tetcov_c;
   auto &norm_to_tet_ = norm_to_tet;
   auto &solid_angles_ = prgeo->solid_angles;
+  auto &tgas_old_ = tgas_old;
 
   // Extract hydro/mhd quantities
   DvceArray5D<Real> u0_, w0_, w0_old_;
@@ -122,9 +123,6 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
     w0_ = pmy_pack->pmhd->w0;
     w0_old_ = pmy_pack->pmhd->w0_old;
   }
-
-  // update w0_old_ at the beginning of the cycle
-  if (!update_vel_in_rad_source_ && (stage==1)) Kokkos::deep_copy(DevExeSpace(), w0_old_, w0_);
 
   // Extract timestep
   Real dt_ = (pdriver->beta[stage-1])*(pmy_pack->pmesh->dt);
@@ -139,9 +137,6 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
       pmy_pack->pmhd->peos->ConsToPrim(u0_,b0_,w0_,bcc0_,false,is,ie,js,je,ks,ke);
     }
   }
-
-  // initialize w0_old_
-  if (!update_vel_in_rad_source_ && (stage<1)) Kokkos::deep_copy(DevExeSpace(), w0_old_, w0_);
 
   // compute implicit source term
   par_for("radiation_source",DevExeSpace(),0,nmb1,ks,ke,js,je,is,ie,
@@ -369,6 +364,9 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
       tgasnew = -coef[0];
     }
 
+    // Save updated gas temperature
+    if (!(badcell)) tgas_old_(m,k,j,i) = tgasnew;
+
     // Update the specific intensity
     if (!(badcell)) {
       // Calculate emission coefficient and updated jr_cm
@@ -527,6 +525,9 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
             if (rad_mask_(m,k,j,i) || fabs(n_0) < n_0_floor_) { i0_(m,n,k,j,i) = 0.0; }
           }
         }
+
+        // Save updated gas temperature
+        if (!(badcell) && !(temp_equil)) tgas_old_(m,k,j,i) = tgasnew;
 
         // feedback on fluid
         if (affect_fluid_) {

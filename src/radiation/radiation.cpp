@@ -41,7 +41,8 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
     tet_d3_x3f("tet_d3_x3f",1,1,1,1,1),
     na("na",1,1,1,1,1,1),
     norm_to_tet("norm_to_tet",1,1,1,1,1,1),
-    beam_mask("beam_mask",1,1,1,1,1) {
+    beam_mask("beam_mask",1,1,1,1,1)
+    tgas_old("tgas_old",1,1,1,1) {
   // Check for general relativity
   if (!(pmy_pack->pcoord->is_general_relativistic)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -150,6 +151,9 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
   int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
   Kokkos::realloc(i0,nmb,prgeo->nangles,ncells3,ncells2,ncells1);
   }
+
+  // allocate memory for gas temperature
+  Kokkos::realloc(tgas_old,nmb,ncells3,ncells2,ncells1);
 
   // allocate memory for conserved variables on coarse mesh
   if (ppack->pmesh->multilevel) {

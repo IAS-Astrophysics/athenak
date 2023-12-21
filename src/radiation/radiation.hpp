@@ -137,6 +137,9 @@ class Radiation {
   DvceArray5D<bool> beam_mask;  // boolean mask used for beam source term
   Real dtnew;
 
+  // save the updated gas temperature computed from source term
+  DvceArray4D<Real> tgas_old;
+
   // reconstruction method
   ReconstructionMethod recon_method;
 
