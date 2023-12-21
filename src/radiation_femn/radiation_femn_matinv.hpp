@@ -14,6 +14,9 @@ namespace radiationfemn {
 
 // Perform LU decomposition on a square matrix
 // Generates a row-wise permutated matrix lu_matrix containing the LU decomposed matrix and the permutation in pivot_indices
+//
+// Note: lu_matrix and square_matrix should be the same before using this function!
+//
 // square_matrix: [NxN] matrix of reals, input matrix
 // lu_matrix:     [NxN] matrix of reals, the row-permuted LU decomposition matrix
 // pivot_indices: [N-1] array of reals, the permutation information
@@ -56,6 +59,9 @@ KOKKOS_INLINE_FUNCTION void LUDec(T1 square_matrix, T1 lu_matrix, T3 pivot_indic
 }
 
 // Solve a set of equations A[N,N] x[N] = b[N] using an LU decomposed matrix and pivot information
+//
+// Note: b_array and x_array should be the same before using this function!
+//
 // lu_matrix:     [NxN] matrix, the LU decomposed matrix
 // pivot_indices: [N] array, the pivot information
 // b_array:       [N] array, the array b
@@ -90,6 +96,10 @@ KOKKOS_INLINE_FUNCTION void LUSolve(const T1 lu_matrix, const T3 pivot_indices, 
 // Compute the inverse of a square matrix
 // A_matrix:          [NxN] a square matrix
 // A_matrix_inverse:  [NxN] the inverse
+// lu_matrix:         [NxN] a copy of A_matrix
+// b_array:           [N] the rhs of linear equations
+// x_array:           [N] a copy of b_array
+// pivots:            [N-1] an integer array
 template <typename T1, typename T2, typename T3>
 KOKKOS_INLINE_FUNCTION void LUInv(TeamMember_t member, T1 A_matrix, T1 A_matrix_inverse, T1 lu_matrix, T2 x_array, T2 b_array, T3 pivots) {
 
