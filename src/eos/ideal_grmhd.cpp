@@ -59,8 +59,9 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
   Real gm1 = eos_data.gamma - 1.0;
   auto &w0_old_ = pmy_pack->pmhd->w0_old;
   auto &is_radiation_enabled_ = pmy_pack->pmhd->is_radiation_enabled;
-  auto &tgas_old_ = (is_radiation_enabled_) ? pmy_pack->prad->tgas_old : nullptr;
-
+  DvceArray4D<Real> tgas_old_;
+  if (is_radiation_enabled_) tgas_old_ = pmy_pack->prad->tgas_old;
+  
   auto &flat = pmy_pack->pcoord->coord_data.is_minkowski;
   auto &spin = pmy_pack->pcoord->coord_data.bh_spin;
   auto &use_excise = pmy_pack->pcoord->coord_data.bh_excise;
