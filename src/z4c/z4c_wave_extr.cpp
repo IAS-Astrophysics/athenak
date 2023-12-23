@@ -64,9 +64,6 @@ int LmIndex(int l,int m) {
 // This function operates only on the interior points of the MeshBlock
 void Z4c::WaveExtr(MeshBlockPack *pmbp) {
 
-  #ifdef MPI_PARALLEL_ENABLED
-  if (0 == global_variable::my_rank) {
-  #endif
   // Spherical Grid for user-defined history
   auto &grids = pmbp->pz4c->spherical_grids;
   auto &u_weyl = pmbp->pz4c->u_weyl;
@@ -107,63 +104,87 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
         psi_out(g,LmIndex(l,m),1) = psilmI;
       }
     }
-    // Output file names
-    std::string filename = "waveforms/rpsi4_real_";
-    std::string filename2 = "waveforms/rpsi4_imag_";
-    std::stringstream strObj;
-    strObj << std::setfill('0') << std::setw(4) << grids[g]->radius;
-    filename += strObj.str();
-    filename += ".txt";
-    filename2 += strObj.str();
-    filename2 += ".txt";
+  }
 
-    // Check if the file already exists
-    std::ifstream fileCheck(filename);
-    bool fileExists = fileCheck.good();
-    fileCheck.close();
-    std::ifstream fileCheck2(filename2);
-    bool fileExists2 = fileCheck2.good();
-    fileCheck2.close();
-
-    // If the file doesn't exist, create it
-    if (!fileExists) {
-        std::ofstream createFile(filename);
-        createFile.close();
-    }
-    if (!fileExists2) {
-        std::ofstream createFile(filename2);
-        createFile.close();
-    }
-
-    // Open a file stream for writing
-    std::ofstream outFile;
-    std::ofstream outFile2;
-
-    // append mode
-    outFile.open(filename, std::ios::out | std::ios::app);
-    outFile2.open(filename2, std::ios::out | std::ios::app);
-
-    // first append time
-    outFile << pmbp->pmesh->time << "\t";
-    outFile2 << pmbp->pmesh->time << "\t";
-
-    // append waveform
-    for (int l = 2; l < lmax+1; ++l) {
-      for (int m = -l; m < l+1 ; ++m) {
-        outFile << psi_out(g,LmIndex(l,m),0) << '\t';
-        outFile2 << psi_out(g,LmIndex(l,m),1) << '\t';
+  // write output
+  #ifdef MPI_PARALLEL
+  if (0 == Globals::my_rank) {
+    for (int g=0; g<nradii; ++g) {
+      for(int l=2;l<lmax+1;++l) {
+        for(int m=-l;m<l+1;++m) {
+        MPI_Reduce(MPI_IN_PLACE, &psi_out(g,LmIndex(l,m),0), 1, MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
+        MPI_Reduce(MPI_IN_PLACE, &psi_out(g,LmIndex(l,m),1), 1, MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
+        }
       }
     }
-    outFile << '\n';
-    outFile2 << '\n';
-
-    // Close the file stream
-    outFile.close();
-    outFile2.close();
-  }
-  #ifdef MPI_PARALLEL_ENABLED
+  } else {
+    for (int g=0; g<nradii; ++g) {
+      for(int l=2;l<lmax+1;++l) {
+        for(int m=-l;m<l+1;++m) {
+        MPI_Reduce(&psi_out(g,LmIndex(l,m),0), &psi_out(g,LmIndex(l,m),0), 1, MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
+        MPI_Reduce(&psi_out(g,LmIndex(l,m),1), &psi_out(g,LmIndex(l,m),1), 1, MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
+        }
+      }
+    }
   }
   #endif
+  if (0 == global_variable::my_rank) {
+    for (int g=0; g<nradii; ++g) {
+      // Output file names
+      std::string filename = "waveforms/rpsi4_real_";
+      std::string filename2 = "waveforms/rpsi4_imag_";
+      std::stringstream strObj;
+      strObj << std::setfill('0') << std::setw(4) << grids[g]->radius;
+      filename += strObj.str();
+      filename += ".txt";
+      filename2 += strObj.str();
+      filename2 += ".txt";
+
+      // Check if the file already exists
+      std::ifstream fileCheck(filename);
+      bool fileExists = fileCheck.good();
+      fileCheck.close();
+      std::ifstream fileCheck2(filename2);
+      bool fileExists2 = fileCheck2.good();
+      fileCheck2.close();
+
+      // If the file doesn't exist, create it
+      if (!fileExists) {
+          std::ofstream createFile(filename);
+          createFile.close();
+      }
+      if (!fileExists2) {
+          std::ofstream createFile(filename2);
+          createFile.close();
+      }
+
+      // Open a file stream for writing
+      std::ofstream outFile;
+      std::ofstream outFile2;
+
+      // append mode
+      outFile.open(filename, std::ios::out | std::ios::app);
+      outFile2.open(filename2, std::ios::out | std::ios::app);
+
+      // first append time
+      outFile << pmbp->pmesh->time << "\t";
+      outFile2 << pmbp->pmesh->time << "\t";
+
+      // append waveform
+      for (int l = 2; l < lmax+1; ++l) {
+        for (int m = -l; m < l+1 ; ++m) {
+          outFile << psi_out(g,LmIndex(l,m),0) << '\t';
+          outFile2 << psi_out(g,LmIndex(l,m),1) << '\t';
+        }
+      }
+      outFile << '\n';
+      outFile2 << '\n';
+
+      // Close the file stream
+      outFile.close();
+      outFile2.close();
+    }
+  }
 }
 
 
