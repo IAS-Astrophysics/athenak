@@ -248,6 +248,9 @@ class PrimitiveSolver {
   }
 
   /// Get the root solver used by this PrimitiveSolver.
+  KOKKOS_INLINE_FUNCTION NumTools::Root& GetRootSolverMutable() {
+    return root;
+  }
   KOKKOS_INLINE_FUNCTION const NumTools::Root& GetRootSolver() const {
     return root;
   }
