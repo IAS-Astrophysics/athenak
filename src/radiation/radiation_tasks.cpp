@@ -167,15 +167,20 @@ TaskStatus Radiation::InitRecv(Driver *pdrive, int stage) {
 
 TaskStatus Radiation::CopyCons(Driver *pdrive, int stage) {
   /***** TODO: use a separate task function for the following in the future *****/
-  mhd::MHD *pmhd = pmy_pack->pmhd;
-  if (pmhd != nullptr) {
-    // reset entropy for entropy fix
-    if ((pmhd->entropy_fix) && (stage == 1)) pmhd->EntropyReset();
-
+  mhd::MHD *pmhd_ = pmy_pack->pmhd;
+  if (pmhd_ != nullptr) {
     // initialize fallback state of prim in the beginning
-    if (stage < 1) Kokkos::deep_copy(DevExeSpace(), pmhd->w0_old, pmhd->w0);
+    if (stage < 1) {
+      auto &indcs = pmy_pack->pmesh->mb_indcs;
+      int &ng = indcs.ng;
+      int n1m1 = indcs.nx1 + 2*ng - 1;
+      int n2m1 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng - 1) : 0;
+      int n3m1 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng - 1) : 0;
+      peos->ConsToPrim(pmhd_->u0, pmhd_->b0, pmhd_->w0, pmhd_->bcc0, false, 0, n1m1, 0, n2m1, 0, n3m1);
+      Kokkos::deep_copy(DevExeSpace(), pmhd_->w0_old, pmhd_->w0);
+    }
   }
-
+  
   if (stage == 1) {
     // radiation
     Kokkos::deep_copy(DevExeSpace(), i1, i0);
@@ -184,10 +189,16 @@ TaskStatus Radiation::CopyCons(Driver *pdrive, int stage) {
     hydro::Hydro *phyd = pmy_pack->phydro;
     mhd::MHD *pmhd = pmy_pack->pmhd;
     if (pmhd != nullptr) {
+      // reset entropy for entropy fix
+      if (pmhd->entropy_fix) pmhd->EntropyReset();
+
       Kokkos::deep_copy(DevExeSpace(), pmhd->u1, pmhd->u0);
       Kokkos::deep_copy(DevExeSpace(), pmhd->b1.x1f, pmhd->b0.x1f);
       Kokkos::deep_copy(DevExeSpace(), pmhd->b1.x2f, pmhd->b0.x2f);
       Kokkos::deep_copy(DevExeSpace(), pmhd->b1.x3f, pmhd->b0.x3f);
+
+      // copy the prim as the fallback state
+      Kokkos::deep_copy(DevExeSpace(), pmhd->w0_old, pmhd->w0);
     } else if (phyd != nullptr) {
       Kokkos::deep_copy(DevExeSpace(), phyd->u1, phyd->u0);
     }
