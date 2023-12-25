@@ -104,14 +104,11 @@ TaskStatus MHD::InitRecv(Driver *pdrive, int stage) {
 
 TaskStatus MHD::CopyCons(Driver *pdrive, int stage) {
   /***** TODO: use a separate task function for the following in the future *****/
-  {
-    // reset entropy for entropy fix
-    if (entropy_fix && (stage == 1)) EntropyReset();
+  // reset entropy for entropy fix
+  if (entropy_fix && (stage == 1)) EntropyReset();
 
-    // initialize fallback state of prim in the beginning
-    if (stage < 1) Kokkos::deep_copy(DevExeSpace(), w0_old, w0);
-
-  }
+  // initialize fallback state of prim in the beginning
+  if (stage < 1) Kokkos::deep_copy(DevExeSpace(), w0_old, w0);
 
   if (stage == 1) {
     Kokkos::deep_copy(DevExeSpace(), u1, u0);
@@ -325,7 +322,7 @@ TaskStatus MHD::ConToPrim(Driver *pdrive, int stage) {
   int n3m1 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng - 1) : 0;
   peos->ConsToPrim(u0, b0, w0, bcc0, false, 0, n1m1, 0, n2m1, 0, n3m1);
   // copy the prim as the fallback state
-  if (stage == 2) Kokkos::deep_copy(DevExeSpace(), w0_old, w0);
+  Kokkos::deep_copy(DevExeSpace(), w0_old, w0);
   return TaskStatus::complete;
 }
 
