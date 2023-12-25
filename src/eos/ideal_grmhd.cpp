@@ -219,13 +219,13 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
                                           c2p_failure_in_fix, iter_used_in_fix);
 
           // set the fallback state using old prim
-          if (c2p_failure) {
-            w.d  = w_old.d;
-            w.e  = w_old.e;
-            w.vx = w_old.vx;
-            w.vy = w_old.vy;
-            w.vz = w_old.vz;
-          }
+          // if (c2p_failure) {
+          //   w.d  = w_old.d;
+          //   w.e  = w_old.e;
+          //   w.vx = w_old.vx;
+          //   w.vy = w_old.vy;
+          //   w.vz = w_old.vz;
+          // }
 
           // gas-radiation temperature coupling fix
           // if (is_radiation_enabled_) {
@@ -251,13 +251,14 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
             efloor_used = efloor_used_in_fix;
             c2p_failure = c2p_failure_in_fix;
             iter_used_in_fix = iter_used;
-          } else {
-            w.d  = w_old.d;
-            w.e  = w_old.e;
-            w.vx = w_old.vx;
-            w.vy = w_old.vy;
-            w.vz = w_old.vz;
           }
+          // else {
+          //   w.d  = w_old.d;
+          //   w.e  = w_old.e;
+          //   w.vx = w_old.vx;
+          //   w.vy = w_old.vy;
+          //   w.vz = w_old.vz;
+          // }
 
         } // endif (c2p_failure || (sigma_cold > sigma_cold_cut_))
 
