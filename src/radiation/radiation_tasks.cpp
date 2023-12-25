@@ -166,6 +166,21 @@ TaskStatus Radiation::InitRecv(Driver *pdrive, int stage) {
 //  \brief  copy u0 --> u1 in first stage
 
 TaskStatus Radiation::CopyCons(Driver *pdrive, int stage) {
+  /***** TODO: use a separate task function for the following in the future *****/
+  {
+    mhd::MHD *pmhd = pmy_pack->pmhd;
+    if (pmhd != nullptr) {
+      // reset entropy for entropy fix
+      if (pmhd->entropy_fix) pmhd->EntropyReset();
+
+      // initialize fallback state of prim in the beginning
+      if (stage < 1) Kokkos::deep_copy(DevExeSpace(), pmhd->w0_old, pmhd->w0);
+
+      // copy the prim as the fallback state
+      if (stage == 1) Kokkos::deep_copy(DevExeSpace(), pmhd->w0_old, pmhd->w0);
+    }
+  }
+  
   if (stage == 1) {
     // radiation
     Kokkos::deep_copy(DevExeSpace(), i1, i0);
@@ -181,16 +196,6 @@ TaskStatus Radiation::CopyCons(Driver *pdrive, int stage) {
     } else if (phyd != nullptr) {
       Kokkos::deep_copy(DevExeSpace(), phyd->u1, phyd->u0);
     }
-  }
-
-  /***** TODO: use a separate task function for the following in the future *****/
-  mhd::MHD *pmhd = pmy_pack->pmhd;
-  if (pmhd != nullptr) {
-    // reset entropy for entropy fix
-    if (pmhd->entropy_fix) pmhd->EntropyReset();
-
-    // initialize fallback state of prim in the beginning
-    if (stage < 1) Kokkos::deep_copy(DevExeSpace(), pmhd->w0_old, pmhd->w0);
   }
 
   return TaskStatus::complete;

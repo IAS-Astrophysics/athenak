@@ -103,19 +103,24 @@ TaskStatus MHD::InitRecv(Driver *pdrive, int stage) {
 //! \brief Simple task list function that copies u0 --> u1, and b0 --> b1 in first stage
 
 TaskStatus MHD::CopyCons(Driver *pdrive, int stage) {
+  /***** TODO: use a separate task function for the following in the future *****/
+  {
+    // reset entropy for entropy fix
+    if (entropy_fix) EntropyReset();
+
+    // initialize fallback state of prim in the beginning
+    if (stage < 1) Kokkos::deep_copy(DevExeSpace(), w0_old, w0);
+
+    // copy the prim as the fallback state
+    if (stage == 1) Kokkos::deep_copy(DevExeSpace(), w0_old, w0);
+  }
+
   if (stage == 1) {
     Kokkos::deep_copy(DevExeSpace(), u1, u0);
     Kokkos::deep_copy(DevExeSpace(), b1.x1f, b0.x1f);
     Kokkos::deep_copy(DevExeSpace(), b1.x2f, b0.x2f);
     Kokkos::deep_copy(DevExeSpace(), b1.x3f, b0.x3f);
   }
-
-  /***** TODO: use a separate task function for the following in the future *****/
-  // reset entropy for entropy fix
-  if (entropy_fix) EntropyReset();
-
-  // initialize fallback state of prim in the beginning
-  if (stage < 1) Kokkos::deep_copy(DevExeSpace(), w0_old, w0);
 
   return TaskStatus::complete;
 }
@@ -321,8 +326,6 @@ TaskStatus MHD::ConToPrim(Driver *pdrive, int stage) {
   int n2m1 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng - 1) : 0;
   int n3m1 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng - 1) : 0;
   peos->ConsToPrim(u0, b0, w0, bcc0, false, 0, n1m1, 0, n2m1, 0, n3m1);
-  // copy the prim as the fallback state
-  Kokkos::deep_copy(DevExeSpace(), w0_old, w0);
   return TaskStatus::complete;
 }
 
