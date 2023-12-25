@@ -111,8 +111,6 @@ TaskStatus MHD::CopyCons(Driver *pdrive, int stage) {
     // initialize fallback state of prim in the beginning
     if (stage < 1) Kokkos::deep_copy(DevExeSpace(), w0_old, w0);
 
-    // copy the prim as the fallback state
-    if (stage == 1) Kokkos::deep_copy(DevExeSpace(), w0_old, w0);
   }
 
   if (stage == 1) {
@@ -326,6 +324,8 @@ TaskStatus MHD::ConToPrim(Driver *pdrive, int stage) {
   int n2m1 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng - 1) : 0;
   int n3m1 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng - 1) : 0;
   peos->ConsToPrim(u0, b0, w0, bcc0, false, 0, n1m1, 0, n2m1, 0, n3m1);
+  // copy the prim as the fallback state
+  if (stage == 2) Kokkos::deep_copy(DevExeSpace(), w0_old, w0);
   return TaskStatus::complete;
 }
 
