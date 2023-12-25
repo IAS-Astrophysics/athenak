@@ -204,19 +204,19 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
         // fix the prim in strongly magnetized region or cells that fail the variable inversion
         if (c2p_failure || (sigma_cold > sigma_cold_cut_)) {
           // compute the entropy fix
-          bool dfloor_used_in_fix=false, efloor_used_in_fix=false;
-          bool c2p_failure_in_fix=c2p_failure;
-          int iter_used_in_fix=0;
-          HydPrim1D w_fix;
-          w_fix.d  = w.d;
-          w_fix.vx = w.vx;
-          w_fix.vy = w.vy;
-          w_fix.vz = w.vz;
-          w_fix.e  = w.e;
-          Real &s_tot = cons(m,entropyIdx,k,j,i);
-          SingleC2P_IdealSRMHD_EntropyFix(u_sr, s_tot, eos, s2, b2, rpar, w_fix, w_old,
-                                          dfloor_used_in_fix, efloor_used_in_fix,
-                                          c2p_failure_in_fix, iter_used_in_fix);
+          // bool dfloor_used_in_fix=false, efloor_used_in_fix=false;
+          // bool c2p_failure_in_fix=c2p_failure;
+          // int iter_used_in_fix=0;
+          // HydPrim1D w_fix;
+          // w_fix.d  = w.d;
+          // w_fix.vx = w.vx;
+          // w_fix.vy = w.vy;
+          // w_fix.vz = w.vz;
+          // w_fix.e  = w.e;
+          // Real &s_tot = cons(m,entropyIdx,k,j,i);
+          // SingleC2P_IdealSRMHD_EntropyFix(u_sr, s_tot, eos, s2, b2, rpar, w_fix, w_old,
+          //                                 dfloor_used_in_fix, efloor_used_in_fix,
+          //                                 c2p_failure_in_fix, iter_used_in_fix);
 
           // set the fallback state using old prim
           if (c2p_failure) {
