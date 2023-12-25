@@ -228,15 +228,15 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
           }
 
           // gas-radiation temperature coupling fix
-          // if (is_radiation_enabled_) {
-          //   Real pgas_ = w.d*tgas_old_(m,k,j,i);
-          //   Real pgas_min = fmax(eos.pfloor, eos.sfloor*pow(w.d, eos.gamma));
-          //   if (pgas_ < pgas_min) {
-          //     pgas_ = pgas_min;
-          //     efloor_used = true;
-          //   }
-          //   w.e = pgas_/gm1;
-          // }
+          if (is_radiation_enabled_) {
+            Real pgas_ = w.d*tgas_old_(m,k,j,i);
+            Real pgas_min = fmax(eos.pfloor, eos.sfloor*pow(w.d, eos.gamma));
+            if (pgas_ < pgas_min) {
+              pgas_ = pgas_min;
+              efloor_used = true;
+            }
+            w.e = pgas_/gm1;
+          }
 
           // entropy fix
           // if (!c2p_failure_in_fix) {
