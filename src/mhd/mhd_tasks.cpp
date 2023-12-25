@@ -106,7 +106,7 @@ TaskStatus MHD::CopyCons(Driver *pdrive, int stage) {
   /***** TODO: use a separate task function for the following in the future *****/
   {
     // reset entropy for entropy fix
-    if (entropy_fix) EntropyReset();
+    if (entropy_fix && (stage == 1)) EntropyReset();
 
     // initialize fallback state of prim in the beginning
     if (stage < 1) Kokkos::deep_copy(DevExeSpace(), w0_old, w0);
