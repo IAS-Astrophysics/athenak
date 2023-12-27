@@ -1,11 +1,10 @@
 //========================================================================================
-// Radiation FEM_N code for Athena
-// Copyright (C) 2023 Maitraya Bhattacharyya <mbb6217@psu.edu> and David Radice <dur566@psu.edu>
-// AthenaXX copyright(C) James M. Stone <jmstone@ias.edu> and the Athena code team
+// AthenaXXX astrophysical plasma code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file radiation_femn_linetest.cpp
-//! \brief the 2d linetest problem with FEM_N
+//! \brief initializes the 2d linetest problem with FEM_N/FP_N/M1
 
 // C++ headers
 #include <iostream>
@@ -33,15 +32,19 @@ void ProblemGenerator::RadiationFEMNLinetest(ParameterInput *pin, const bool res
     exit(EXIT_FAILURE);
   }
 
-  if (pmbp->pmesh->two_d == false) {
+  if (!pmbp->pmesh->two_d) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "The 2d line source problem generator can only be run with two dimensions, but parfile"
               << "grid setup is not in 2d" << std::endl;
     exit(EXIT_FAILURE);
   }
 
+  if (pmbp->pradfemn->num_energy_bins != 1) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "The 2d line source problem generator can only be run with one energy bin!" << std::endl;
+    exit(EXIT_FAILURE);
+  }
 
-  // capture var pmy_mesh_->mb_indcs;
   auto &indcs = pmy_mesh_->mb_indcs;
   auto &size = pmbp->pmb->mb_size;
   int &is = indcs.is;
@@ -52,15 +55,10 @@ void ProblemGenerator::RadiationFEMNLinetest(ParameterInput *pin, const bool res
   int &ke = indcs.ke;
   int npts1 = pmbp->pradfemn->num_points_total - 1;
 
-  if (pmbp->pradfemn->num_energy_bins != 1) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "The 2d line source problem generator can only be run with one energy bin!" << std::endl;
-    exit(EXIT_FAILURE);
-  }
-  Real omega = 0.03; // Garrett and Hauck's recommendation for the choice of omega
+  Real omega = 0.03; //  Eqn. (58) of Garrett & Hauck 2013 (DOI: 10.1080/00411450.2014.910226)
   auto &f0_ = pmbp->pradfemn->f0;
 
-  if(pmbp->pradfemn->fpn == 0) {
+  if (!pmbp->pradfemn->fpn) {
     par_for("pgen_linetest_radiation_femn", DevExeSpace(), 0, (pmbp->nmb_thispack - 1), 0, npts1, ks, ke, js, je, is, ie,
             KOKKOS_LAMBDA(int m, int A, int k, int j, int i) {
 
@@ -74,7 +72,6 @@ void ProblemGenerator::RadiationFEMNLinetest(ParameterInput *pin, const bool res
               int nx2 = indcs.nx2;
               Real x2 = CellCenterX(j - js, nx2, x2min, x2max);
 
-              // Implement Eqn. (58) of Garrett & Hauck 2013 (DOI: 10.1080/00411450.2014.910226)
               f0_(m, A, k, j, i) = fmax(exp(-(x1 * x1 + x2 * x2) / (2.0 * omega * omega)) / (8.0 * M_PI * omega * omega), 1e-4);
 
             });
@@ -92,11 +89,9 @@ void ProblemGenerator::RadiationFEMNLinetest(ParameterInput *pin, const bool res
               int nx2 = indcs.nx2;
               Real x2 = CellCenterX(j - js, nx2, x2min, x2max);
 
-              // Implement Eqn. (58) of Garrett & Hauck 2013 (DOI: 10.1080/00411450.2014.910226)
               f0_(m, 0, k, j, i) = 2. * sqrt(M_PI) * fmax(exp(-(x1 * x1 + x2 * x2) / (2.0 * omega * omega)) / (8.0 * M_PI * omega * omega), 1e-4);
 
             });
   }
 
-  return;
 }

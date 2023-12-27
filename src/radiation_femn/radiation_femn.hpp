@@ -2,9 +2,8 @@
 #define ATHENA_RADIATION_FEMN_HPP
 
 //========================================================================================
-// GR radiation code for AthenaK with FEM_N & FP_N
-// Copyright (C) 2023 Maitraya Bhattacharyya <mbb6217@psu.edu> and David Radice <dur566@psu.edu>
-// AthenaXX copyright(C) James M. Stone <jmstone@ias.edu> and the Athena code team
+// AthenaXXX astrophysical plasma code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file radiation_femn.hpp
@@ -187,21 +186,13 @@ class RadiationFEMN {
   TaskStatus ClearSend(Driver *d, int stage);
   TaskStatus ClearRecv(Driver *d, int stage);
   void AssembleRadiationFEMNTasks(TaskList &start, TaskList &run, TaskList &end);
-  // ---------------------------------------------------------------------------
 
-  // ---------------------------------------------------------------------------
-  //void ApplyClosure(TeamMember_t member, int num_points, int m, int en, int kk, int jj, int ii, DvceArray5D<Real> f, ScrArray1D<Real> f_scratch);
-  // ---------------------------------------------------------------------------
-  // ---------------------------------------------------------------------------
-  // Structures/functions for the internal index conversion
-
-  // ---------------------------------------------------------------------------
-  // Functions for angular matrices & tetrad
   void LoadFEMNMatrices();
   void LoadFPNMatrices();
   void ComputeMassInverse();
   void ComputePMatrices();
   void ComputeSourceMatrices();
+  void InitializeMetricFluid();
   void AddBeams();
 
   // ---------------------------------------------------------------------------

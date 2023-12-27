@@ -120,6 +120,9 @@ KOKKOS_INLINE_FUNCTION void LUInv(TeamMember_t member, T1 A_matrix, T1 A_matrix_
     for (int j = 0; j < n; j++) {
       A_matrix_inverse(j, i) = x_array(j);
     }
+
+    b_array(i) = 0.;
+    x_array(i) = 0.;
   });
 
 }

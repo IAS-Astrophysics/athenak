@@ -147,7 +147,8 @@ add_executable(
         radiation_femn/radiation_femn_loadmatrices.cpp
 		radiation_femn/radiation_femn_compute_final_matrices.cpp
         radiation_femn/radiation_femn_tetrad.cpp
-        radiation_femn/radiation_femn_beams.cpp)
+        radiation_femn/radiation_femn_beams.cpp
+		radiation_femn/radiation_femn_initialize.cpp)
 
 # custom problem generator to be included in compile
 # specify on command line using '-D PROBLEM=file' where 'file' is name of file in
