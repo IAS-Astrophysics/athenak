@@ -100,8 +100,8 @@ KOKKOS_INLINE_FUNCTION void LUSolve(const T1 lu_matrix, const T3 pivot_indices, 
 // A_matrix:          [NxN] a square matrix
 // A_matrix_inverse:  [NxN] the inverse
 // lu_matrix:         [NxN] a copy of A_matrix
-// b_array:           [N] the rhs of linear equations
-// x_array:           [N] a copy of b_array
+// b_array:           [N] must be populated with 0
+// x_array:           [N] must be populated with 0
 // pivots:            [N-1] an integer array
 template<typename T1, typename T2, typename T3>
 KOKKOS_INLINE_FUNCTION void LUInv(TeamMember_t member, T1 A_matrix, T1 A_matrix_inverse, T1 lu_matrix, T2 x_array, T2 b_array, T3 pivots) {
@@ -111,8 +111,10 @@ KOKKOS_INLINE_FUNCTION void LUInv(TeamMember_t member, T1 A_matrix, T1 A_matrix_
   radiationfemn::LUDec<T1, T3>(A_matrix, lu_matrix, pivots);
 
   par_for_inner(member, 0, n - 1, [&](const int i) {
-    //Kokkos::deep_copy(b_array, 0.);
-    //Kokkos::deep_copy(x_array, 0.);
+    for (int j = 0; j < n; j++) {
+      b_array(j) = 0.;
+      x_array(j) = 0.;
+    }
     b_array(i) = 1.;
     x_array(i) = 1;
 
@@ -121,8 +123,6 @@ KOKKOS_INLINE_FUNCTION void LUInv(TeamMember_t member, T1 A_matrix, T1 A_matrix_
       A_matrix_inverse(j, i) = x_array(j);
     }
 
-    b_array(i) = 0.;
-    x_array(i) = 0.;
   });
 
 }
@@ -135,6 +135,10 @@ KOKKOS_INLINE_FUNCTION void LUInv(T1 A_matrix, T1 A_matrix_inverse, T1 lu_matrix
   radiationfemn::LUDec<T1, T3>(A_matrix, lu_matrix, pivots);
 
   for (int i = 0; i <= n - 1; i++) {
+    for (int j = 0; j < n; j++) {
+      b_array(j) = 0.;
+      x_array(j) = 0.;
+    }
     b_array(i) = 1.;
     x_array(i) = 1;
 
@@ -143,8 +147,6 @@ KOKKOS_INLINE_FUNCTION void LUInv(T1 A_matrix, T1 A_matrix_inverse, T1 lu_matrix
       A_matrix_inverse(j, i) = x_array(j);
     }
 
-    b_array(i) = 0.;
-    x_array(i) = 0.;
   }
 
 }

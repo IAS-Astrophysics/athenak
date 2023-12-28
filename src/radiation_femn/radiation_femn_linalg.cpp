@@ -139,12 +139,14 @@ void MatMultiplyHost(HostArray2D<Real> A_matrix, HostArray2D<Real> B_matrix, Hos
 
   int N = A_matrix.extent(0);
 
-  Kokkos::deep_copy(result, 0.);
-  par_for("radiation_femn_matrix_multiply", DevExeSpace(), 0, N - 1, 0, N - 1, 0, N - 1,
-          KOKKOS_LAMBDA(const int i, const int j, const int k) {
-
-            result(i, j) += A_matrix(i, k) * B_matrix(k, j);
-          });
+  int scr_size = 0;
+  int scr_level = 0;
+  par_for_outer("radiation_femn_matrix_multiply", DevExeSpace(), scr_size, scr_level, 0, N - 1, 0, N - 1,
+                KOKKOS_LAMBDA(TeamMember_t member, const int i, const int j) {
+                  Kokkos::parallel_reduce(Kokkos::TeamVectorRange(member, 0, N), [&](const int k, Real &partial_sum) {
+                    partial_sum += A_matrix(i, k) * B_matrix(k, j);
+                  }, result(i, j));
+                });
 }
 
 // multiply two square matrices
