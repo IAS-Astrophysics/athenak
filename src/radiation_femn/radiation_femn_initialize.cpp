@@ -36,7 +36,7 @@ void RadiationFEMN::InitializeMetricFluid() {
   Kokkos::deep_copy(sqrt_det_g_host, 1.);
   Kokkos::deep_copy(u_mu_host, 0.);
 
-  par_for("radiation_femn_dummy_initialize", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
+  par_for("radiation_femn_dummy_initialize_1", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
           KOKKOS_LAMBDA(int m, int k, int j, int i) {
             g_dd_host(m, 0, 0, k, j, i) = -1.;
             g_dd_host(m, 1, 1, k, j, i) = 1.;
@@ -47,6 +47,7 @@ void RadiationFEMN::InitializeMetricFluid() {
 
   Kokkos::deep_copy(g_dd, g_dd_host);
   Kokkos::deep_copy(u_mu, u_mu_host);
-
+  Kokkos::deep_copy(sqrt_det_g, sqrt_det_g_host);
+  
 }
 }

@@ -201,7 +201,6 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   // Hardcode metric fluid quantities @TODO: change this later
   this->InitializeMetricFluid();
 
-
   // state vector and fluxes
   Kokkos::realloc(f0, nmb, num_points_total, ncells3, ncells2, ncells1);        // distribution function
   Kokkos::realloc(f1, nmb, num_points_total, ncells3, ncells2, ncells1);        // distribution function
