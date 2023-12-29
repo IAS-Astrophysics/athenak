@@ -76,20 +76,19 @@ void HLLE(TeamMember_t const &member, const EOS_Data &eos,
     Real wroe_ivy = (sqrtdl*wl_ivy + sqrtdr*wr_ivy)*isdlpdr;
     Real wroe_ivz = (sqrtdl*wl_ivz + sqrtdr*wr_ivz)*isdlpdr;
 
-    // Following Roe(1981), the enthalpy H=(E+P)/d is averaged for ideal gas EOS,
-    // rather than E or P directly.  sqrtdl*hl = sqrtdl*(el+pl)/dl = (el+pl)/sqrtdl
-    Real el,er,hroe;
-    if (eos.is_ideal) {
-      el = wl_ipr*igm1 + 0.5*wl_idn*(SQR(wl_ivx) + SQR(wl_ivy) + SQR(wl_ivz));
-      er = wr_ipr*igm1 + 0.5*wr_idn*(SQR(wr_ivx) + SQR(wr_ivy) + SQR(wr_ivz));
-      hroe = ((el + wl_ipr)/sqrtdl + (er + wr_ipr)/sqrtdr)*isdlpdr;
-    }
-
     //--- Step 3.  Compute sound speed in L,R, and Roe-averaged states
 
+    Real el = 0.0;
+    Real er = 0.0;
     Real qa,qb;
     Real a  = iso_cs;
     if (eos.is_ideal) {
+      // Following Roe(1981), the enthalpy H=(E+P)/d is averaged for ideal gas EOS,
+      // rather than E or P directly.  sqrtdl*hl = sqrtdl*(el+pl)/dl = (el+pl)/sqrtdl
+      el = wl_ipr*igm1 + 0.5*wl_idn*(SQR(wl_ivx) + SQR(wl_ivy) + SQR(wl_ivz));
+      er = wr_ipr*igm1 + 0.5*wr_idn*(SQR(wr_ivx) + SQR(wr_ivy) + SQR(wr_ivz));
+      Real hroe = ((el + wl_ipr)/sqrtdl + (er + wr_ipr)/sqrtdr)*isdlpdr;
+
       qa = eos.IdealHydroSoundSpeed(wl_idn, wl_ipr);
       qb = eos.IdealHydroSoundSpeed(wr_idn, wr_ipr);
       a = hroe - 0.5*(SQR(wroe_ivx) + SQR(wroe_ivy) + SQR(wroe_ivz));

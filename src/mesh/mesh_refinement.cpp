@@ -315,7 +315,7 @@ void MeshRefinement::UpdateMeshBlockTree(int &nnew, int &ndel) {
   }
 
   // allocate memory for logical location arrays over total number MBs refined/derefined
-  LogicalLocation *llref, *llderef, *cllderef;
+  LogicalLocation *llref(nullptr), *llderef(nullptr), *cllderef(nullptr);
   if (tnref > 0) {
     llref = new LogicalLocation[tnref];
   }

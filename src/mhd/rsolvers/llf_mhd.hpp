@@ -61,7 +61,7 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos,
     flx(m,ivx,k,j,i) = flux.mx;
     flx(m,ivy,k,j,i) = flux.my;
     flx(m,ivz,k,j,i) = flux.mz;
-    if (eos.is_ideal) {flx(m,IEN,k,j,i) = flux.e;}
+    flx(m,IEN,k,j,i) = (eos.is_ideal)? flux.e : 0.0;
     ey(m,k,j,i) = flux.by;
     ez(m,k,j,i) = flux.bz;
   });

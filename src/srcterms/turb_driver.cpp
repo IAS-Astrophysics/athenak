@@ -835,11 +835,11 @@ TaskStatus TurbulenceDriver::AddForcing(Driver *pdrive, int stage) {
     gcorr = std::sqrt(1.0 - fcorr*fcorr);
   }
 
-  EquationOfState *peos;
+  EquationOfState *peos(nullptr);
 
   DvceArray5D<Real> u0, u0_;
   DvceArray5D<Real> w0;
-  DvceFaceFld4D<Real> *bcc0;
+  DvceFaceFld4D<Real> *bcc0(nullptr);
   if (pmy_pack->phydro != nullptr) u0 = (pmy_pack->phydro->u0);
   if (pmy_pack->phydro != nullptr) peos = (pmy_pack->phydro->peos);
   if (pmy_pack->pmhd != nullptr) u0 = (pmy_pack->pmhd->u0);

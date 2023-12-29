@@ -26,7 +26,7 @@
 //   - add code to load new variables in BaseOutputType constructor
 //   - may need to change index limits that test whether physics is defined for
 //     requested output variable near start of BaseOutputType constructor
-static const char *var_choice[NOUTPUT_CHOICES] = {
+[[maybe_unused]] static const char *var_choice[NOUTPUT_CHOICES] = {
   "hydro_u_d", "hydro_u_m1", "hydro_u_m2", "hydro_u_m3", "hydro_u_e", "hydro_u",
   "hydro_w_d", "hydro_w_vx", "hydro_w_vy", "hydro_w_vz", "hydro_w_e", "hydro_w",
   "hydro_u_s", "hydro_w_s",  "hydro_wz",   "hydro_w2",

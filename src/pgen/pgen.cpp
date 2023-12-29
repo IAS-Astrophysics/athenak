@@ -208,7 +208,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
     std::memcpy(&(pturb->rstate), &(rng_data[0]), sizeof(RNG_State));
   }
 
-  IOWrapperSizeT headeroffset;
+  IOWrapperSizeT headeroffset(0);
   // master process gets file offset
   if (global_variable::my_rank == 0) {
     headeroffset = resfile.GetPosition();
@@ -272,7 +272,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         // get ptr to cell-centered MeshBlock data
         auto mbptr = Kokkos::subview(ccin, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL);
-        int mbcnt = mbptr.size();
+        unsigned int mbcnt = mbptr.size();
         if (resfile.Read_Reals_at_all(mbptr.data(), mbcnt, myoffset) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "CC hydro data not read correctly from rst file, "
@@ -286,7 +286,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         // get ptr to MeshBlock data
         auto mbptr = Kokkos::subview(ccin, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL);
-        int mbcnt = mbptr.size();
+        unsigned int mbcnt = mbptr.size();
         if (resfile.Read_Reals_at(mbptr.data(), mbcnt, myoffset) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "CC hydro data not read correctly from rst file, "
@@ -310,7 +310,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         // get ptr to cell-centered MeshBlock data
         auto mbptr = Kokkos::subview(ccin, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
                                    Kokkos::ALL);
-        int mbcnt = mbptr.size();
+        unsigned int mbcnt = mbptr.size();
         if (resfile.Read_Reals_at_all(mbptr.data(), mbcnt, myoffset) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "CC mhd data not read correctly from rst file, "
@@ -323,7 +323,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         // get ptr to MeshBlock data
         auto mbptr = Kokkos::subview(ccin, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL);
-        int mbcnt = mbptr.size();
+        unsigned int mbcnt = mbptr.size();
         if (resfile.Read_Reals_at(mbptr.data(), mbcnt, myoffset) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "CC mhd data not read correctly from rst file, "
@@ -347,7 +347,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
       if (m < noutmbs_min) {
         // get ptr to x1-face field
         auto x1fptr = Kokkos::subview(fcin.x1f, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
-        int fldcnt = x1fptr.size();
+        unsigned int fldcnt = x1fptr.size();
 
         if (resfile.Read_Reals_at_all(x1fptr.data(), fldcnt, myoffset) != fldcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -385,7 +385,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
       } else if (m < pm->nmb_thisrank) {
         // get ptr to x1-face field
         auto x1fptr = Kokkos::subview(fcin.x1f, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
-        int fldcnt = x1fptr.size();
+        unsigned int fldcnt = x1fptr.size();
 
         if (resfile.Read_Reals_at(x1fptr.data(), fldcnt, myoffset) != fldcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -442,7 +442,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         // get ptr to cell-centered MeshBlock data
         auto mbptr = Kokkos::subview(ccin, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL);
-        int mbcnt = mbptr.size();
+        unsigned int mbcnt = mbptr.size();
         if (resfile.Read_Reals_at_all(mbptr.data(), mbcnt, myoffset) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "CC rad data not read correctly from rst file, "
@@ -456,7 +456,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         // get ptr to MeshBlock data
         auto mbptr = Kokkos::subview(ccin, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL);
-        int mbcnt = mbptr.size();
+        unsigned int mbcnt = mbptr.size();
         if (resfile.Read_Reals_at(mbptr.data(), mbcnt, myoffset) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "CC rad data not read correctly from rst file, "
@@ -480,7 +480,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         // get ptr to cell-centered MeshBlock data
         auto mbptr = Kokkos::subview(ccin, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL);
-        int mbcnt = mbptr.size();
+        unsigned int mbcnt = mbptr.size();
         if (resfile.Read_Reals_at_all(mbptr.data(), mbcnt, myoffset) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "CC turb data not read correctly from rst file, "
@@ -494,7 +494,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         // get ptr to MeshBlock data
         auto mbptr = Kokkos::subview(ccin, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL);
-        int mbcnt = mbptr.size();
+        unsigned int mbcnt = mbptr.size();
         if (resfile.Read_Reals_at(mbptr.data(), mbcnt, myoffset) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "CC turb data not read correctly from rst file, "
@@ -518,7 +518,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         // get ptr to cell-centered MeshBlock data
         auto mbptr = Kokkos::subview(ccin, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL);
-        int mbcnt = mbptr.size();
+        unsigned int mbcnt = mbptr.size();
         if (resfile.Read_Reals_at_all(mbptr.data(), mbcnt, myoffset) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "CC z4c data not read correctly from rst file, "
@@ -532,7 +532,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         // get ptr to MeshBlock data
         auto mbptr = Kokkos::subview(ccin, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL);
-        int mbcnt = mbptr.size();
+        unsigned int mbcnt = mbptr.size();
         if (resfile.Read_Reals_at(mbptr.data(), mbcnt, myoffset) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "CC z4c data not read correctly from rst file, "
@@ -554,7 +554,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         // get ptr to cell-centered MeshBlock data
         auto mbptr = Kokkos::subview(ccin, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL);
-        int mbcnt = mbptr.size();
+        unsigned int mbcnt = mbptr.size();
         if (resfile.Read_Reals_at_all(mbptr.data(), mbcnt, myoffset) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "CC adm data not read correctly from rst file, "
@@ -568,7 +568,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         // get ptr to MeshBlock data
         auto mbptr = Kokkos::subview(ccin, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL);
-        int mbcnt = mbptr.size();
+        unsigned int mbcnt = mbptr.size();
         if (resfile.Read_Reals_at(mbptr.data(), mbcnt, myoffset) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "CC adm data not read correctly from rst file, "

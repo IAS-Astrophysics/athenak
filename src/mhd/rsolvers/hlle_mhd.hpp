@@ -54,11 +54,8 @@ void HLLE(TeamMember_t const &member, const EOS_Data &eos,
     Real &wr_iby = br(iby,i);
     Real &wr_ibz = br(ibz,i);
 
-    Real wl_ipr, wr_ipr;
-    if (eos.is_ideal) {
-      wl_ipr = eos.IdealGasPressure(wl(IEN,i));
-      wr_ipr = eos.IdealGasPressure(wr(IEN,i));
-    }
+    Real wl_ipr = (eos.is_ideal)? eos.IdealGasPressure(wl(IEN,i)) : 0.0;
+    Real wr_ipr = (eos.is_ideal)? eos.IdealGasPressure(wr(IEN,i)) : 0.0;
 
     Real bxi = bx(m,k,j,i);
 
@@ -82,7 +79,7 @@ void HLLE(TeamMember_t const &member, const EOS_Data &eos,
     // rather than E or P directly. sqrtdl*hl = sqrtdl*(el+pl)/dl = (el+pl)/sqrtdl
     Real pbl = 0.5*(bxi*bxi + SQR(wl_iby) + SQR(wl_ibz));
     Real pbr = 0.5*(bxi*bxi + SQR(wr_iby) + SQR(wr_ibz));
-    Real el,er,hroe,cl,cr;
+    Real el(0.0),er(0.0),hroe(0.0),cl,cr;
     if (eos.is_ideal) {
       el = wl_ipr*igm1 + 0.5*wl_idn*(SQR(wl_ivx)+SQR(wl_ivy)+SQR(wl_ivz)) + pbl;
       er = wr_ipr*igm1 + 0.5*wr_idn*(SQR(wr_ivx)+SQR(wr_ivy)+SQR(wr_ivz)) + pbr;
