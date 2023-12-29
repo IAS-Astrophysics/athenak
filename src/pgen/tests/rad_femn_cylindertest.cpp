@@ -3,8 +3,8 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file radiation_femn_latticetest.cpp
-//! \brief the 2d latticetest problem with FEM_N/FP_N/M1
+//! \file radiation_femn_cylindertest.cpp
+//! \brief the 2d cylindertest problem with FEM_N/FP_N/M1
 
 // C++ headers
 #include <iostream>
@@ -20,21 +20,21 @@
 #include "pgen/pgen.hpp"
 #include "radiation_femn/radiation_femn.hpp"
 
-void ProblemGenerator::RadiationFEMNLatticetest(ParameterInput *pin, const bool restart) {
+void ProblemGenerator::RadiationFEMNCylindertest(ParameterInput *pin, const bool restart) {
   if (restart) return;
 
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
 
   if (pmbp->pradfemn == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "The 2d line source problem generator can only be run with radiation-femn, but no "
+              << "The 2d cylinder problem generator can only be run with radiation-femn, but no "
               << "<radiation-femn> block in input file" << std::endl;
     exit(EXIT_FAILURE);
   }
 
   if (pmbp->pmesh->two_d == false) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "The 2d line source problem generator can only be run with two dimensions, but parfile"
+              << "The 2d cylinder source problem generator can only be run with two dimensions, but parfile"
               << "grid setup is not in 2d" << std::endl;
     exit(EXIT_FAILURE);
   }
@@ -52,13 +52,13 @@ void ProblemGenerator::RadiationFEMNLatticetest(ParameterInput *pin, const bool 
 
   if (pmbp->pradfemn->num_energy_bins != 1) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "The 2d lattice source problem generator can only be run with one energy bin!" << std::endl;
+              << "The 2d cylinder source problem generator can only be run with one energy bin!" << std::endl;
     exit(EXIT_FAILURE);
   }
 
   if (pmbp->pradfemn->rad_source == false) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "The 2d lattice source problem generator needs sources!" << std::endl;
+              << "The 2d cylinder source problem generator needs sources!" << std::endl;
     exit(EXIT_FAILURE);
   }
 
@@ -80,19 +80,11 @@ void ProblemGenerator::RadiationFEMNLatticetest(ParameterInput *pin, const bool 
             int nx2 = indcs.nx2;
             Real x2 = CellCenterX(j - js, nx2, x2min, x2max);
 
-            if (x1 >= 3 && x1 <= 4 && x2 >= 3 && x2 <= 4) {
-              eta_(m, k, j, i) = Ven * 1. / (4. * M_PI);
-            }
-
-            if ((x1 >= 1 && x1 <= 2 && x2 >= 1 && x2 <= 2) || (x1 >= 3 && x1 <= 4 && x2 >= 1 && x2 <= 2) || (x1 >= 5 && x1 <= 6 && x2 >= 1 && x2 <= 2) ||
-                (x1 >= 2 && x1 <= 3 && x2 >= 2 && x2 <= 3) || (x1 >= 4 && x1 <= 5 && x2 >= 2 && x2 <= 3) || (x1 >= 1 && x1 <= 2 && x2 >= 3 && x2 <= 4) ||
-                (x1 >= 5 && x1 <= 6 && x2 >= 3 && x2 <= 4) || (x1 >= 2 && x1 <= 3 && x2 >= 4 && x2 <= 5) || (x1 >= 4 && x1 <= 5 && x2 >= 4 && x2 <= 5) ||
-                (x1 >= 1 && x1 <= 2 && x2 >= 5 && x2 <= 6) || (x1 >= 5 && x1 <= 6 && x2 >= 5 && x2 <= 6)) {
-
+            if (x1 * x1 + x2 * x2 <= 1) {
+              eta_(m, k, j, i) = Ven * 10.;
               kappa_a_(m, k, j, i) = Ven * 10.;
-            } else {
-              kappa_s_(m, k, j, i) = Ven * 1.;
             }
+
           });
 
   return;

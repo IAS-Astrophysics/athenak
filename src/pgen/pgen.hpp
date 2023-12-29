@@ -71,7 +71,7 @@ class ProblemGenerator {
   void RadiationFEMNGridtestFPN(ParameterInput *pin, const bool restart);
   void RadiationFEMNLinalgtest(ParameterInput *pin, const bool restart);
   void RadiationFEMNLatticetest(ParameterInput *pin, const bool restart);
-
+  void RadiationFEMNCylindertest(ParameterInput *pin, const bool restart);
   // template for user-specified problem generator
   void UserProblem(ParameterInput *pin, const bool restart);
 
