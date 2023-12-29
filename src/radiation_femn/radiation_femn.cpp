@@ -111,7 +111,7 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   num_points_total = num_species * num_energy_bins * num_points;
 
   m1_flag = pin->GetOrAddBoolean("radiation-femn", "m1", false);
-  rad_source = pin->GetOrAddBoolean("radiation-femn", "sources", false);           // switch for sources (default: false)
+  rad_source = pin->GetOrAddBoolean("radiation-femn", "source_terms", false);           // switch for sources (default: false)
   beam_source = pin->GetOrAddBoolean("radiation-femn", "beam_sources", false);     // switch for beam sources (default: false)
   num_beams = pin->GetOrAddInteger("radiation-femn", "num_beam_sources", 0);
   beam_source_1_a = pin->GetOrAddReal("radiation-femn", "beam_source_1_a", -42.);

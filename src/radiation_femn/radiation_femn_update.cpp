@@ -116,7 +116,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                   radiationfemn::LUInv<ScrArray2D<Real>, ScrArray1D<Real>, ScrArray1D<int>>(member, Q_matrix, Qinv_matrix, lu_matrix, x_array, b_array, pivots);
                   member.team_barrier();
 
-                  Kokkos::parallel_for(Kokkos::TeamThreadRange(member, 0, num_points_), [=](const int idx) {
+                  Kokkos::parallel_for(Kokkos::TeamThreadRange(member, 0, num_points_), [&](const int idx) {
 
                     Real final_result = 0.;
                     Kokkos::parallel_reduce(Kokkos::ThreadVectorRange(member, 0, num_points_), [&](const int A, Real &partial_sum) {
