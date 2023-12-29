@@ -500,7 +500,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
       if (!(badcell) && !(temp_equil)) {
         // Compute updated gas temperature
         // tgasnew = (arad_*SQR(SQR(tradnew)) - jr_cm)/(suma1*jr_cm) + tradnew;
-        tgasnew = -(arad_*SQR(SQR(tradnew)) - jr_cm)*gm1/wdn + tgas // LZ mod
+        tgasnew = -(arad_*SQR(SQR(tradnew)) - jr_cm)*gm1/wdn + tgas; // LZ mod
         Real m_old[4] = {0.0}; Real m_new[4] = {0.0};
         for (int n=0; n<=nang1; ++n) {
           // compute coordinate normal components
