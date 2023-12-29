@@ -131,7 +131,8 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                     }, final_result);
                     member.team_barrier();
 
-                    f0_(m, en * num_points_ + idx, k, j, i) = final_result;
+                    auto unifiedidx = IndicesUnited(nu, en, idx, num_species_, num_energy_bins_, num_points_);
+                    f0_(m, unifiedidx, k, j, i) = final_result;
                   });
                   member.team_barrier();
                 });
