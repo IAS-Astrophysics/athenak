@@ -65,10 +65,10 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
   size_t scr_size = ScrArray2D<Real>::shmem_size(num_points_, num_points_) * 5 + ScrArray1D<Real>::shmem_size(num_points_) * 5
       + ScrArray1D<int>::shmem_size(num_points_ - 1) * 1 + +ScrArray1D<Real>::shmem_size(4 * 4 * 4) * 2;
   int scr_level = 0;
-  par_for_outer("radiation_femn_update_semi_implicit", DevExeSpace(), scr_size, scr_level, 0, nmb1, 0, num_species_energy - 1, ks, ke, js, je, is, ie,
+  par_for_outer("radiation_femn_update", DevExeSpace(), scr_size, scr_level, 0, nmb1, 0, num_species_energy - 1, ks, ke, js, je, is, ie,
                 KOKKOS_LAMBDA(TeamMember_t member, int m, int nuen, int k, int j, int i) {
 
-                  int nu = int(nuen/num_energy_bins_);
+                  int nu = int(nuen / num_energy_bins_);
                   int en = nuen - nu * num_energy_bins_;
 
                   // derivative terms
@@ -100,28 +100,21 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                   ScrArray1D<Real> x_array = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
                   ScrArray1D<Real> b_array = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
                   ScrArray1D<int> pivots = ScrArray1D<int>(member.team_scratch(scr_level), num_points_ - 1);
-                  /*
+
                   par_for_inner(member, 0, num_points_ * num_points_ - 1, [&](const int idx) {
                     int row = int(idx / num_points_);
                     int col = idx - row * num_points_;
                     Q_matrix(row, col) = sqrt_det_g_(m, k, j, i) * (L_mu_muhat0_(m, 0, 0, k, j, i) * P_matrix_(0, row, col)
                         + L_mu_muhat0_(m, 0, 1, k, j, i) * P_matrix_(1, row, col) + L_mu_muhat0_(m, 0, 2, k, j, i) * P_matrix_(2, row, col)
-                        + L_mu_muhat0_(m, 0, 3, k, j, i) * P_matrix_(3, row, col)
-                        + beta_dt * (kappa_s_(m, k, j, i) + kappa_a_(m, k, j, i)) * (row == col)
-                        + beta_dt * kappa_s_(m, k, j, i) * (1. / (4. * M_PI)) * S_source_(row, col));
+                        + L_mu_muhat0_(m, 0, 3, k, j, i) * P_matrix_(3, row, col))
+                        + sqrt_det_g_(m, k, j, i) * beta_dt * (kappa_s_(m, k, j, i) + kappa_a_(m, k, j, i)) * (row == col) / Ven
+                        - sqrt_det_g_(m, k, j, i) * beta_dt * (1. / (4. * M_PI)) * kappa_s_(m, k, j, i) * S_source_(row, col) / Ven;
                     lu_matrix(row, col) = Q_matrix(row, col);
                   });
                   member.team_barrier();
 
                   radiationfemn::LUInv<ScrArray2D<Real>, ScrArray1D<Real>, ScrArray1D<int>>(member, Q_matrix, Qinv_matrix, lu_matrix, x_array, b_array, pivots);
-                  member.team_barrier(); */
-
-                  par_for_inner(member, 0, num_points_ * num_points_ - 1, [&](const int idx) {
-                    int row = int(idx / num_points_);
-                    int col = idx - row * num_points_;
-
-                    Qinv_matrix(row,col) = row == col;
-                  });
+                  member.team_barrier();
 
                   Kokkos::parallel_for(Kokkos::TeamThreadRange(member, 0, num_points_), [=](const int idx) {
 
