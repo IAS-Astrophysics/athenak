@@ -73,23 +73,57 @@ void ProblemGenerator::RadiationFEMNSpheretest(ParameterInput *pin, const bool r
               Real &x1min = size.d_view(m).x1min;
               Real &x1max = size.d_view(m).x1max;
               int nx1 = indcs.nx1;
+              Real dx = (x1max - x1min) / static_cast<Real>(nx1);
               Real x1 = CellCenterX(i - is, nx1, x1min, x1max);
 
               Real &x2min = size.d_view(m).x2min;
               Real &x2max = size.d_view(m).x2max;
               int nx2 = indcs.nx2;
+              Real dy = (x2max - x2min) / static_cast<Real>(nx2);
               Real x2 = CellCenterX(j - js, nx2, x2min, x2max);
 
               Real &x3min = size.d_view(m).x3min;
               Real &x3max = size.d_view(m).x3max;
               int nx3 = indcs.nx3;
+              Real dz = (x3max - x3min) / static_cast<Real>(nx3);
               Real x3 = CellCenterX(k - ks, nx3, x3min, x3max);
 
-              if (x1 * x1 + x2 * x2 + x3 * x3 <= 1.0) { // Inside the sphere
-                  kappa_a_(m, k, j, i) = 10.0;  
-                  eta_(m, k, j, i) = 10.0;
-              } else {
-                  kappa_a_(m, k, j, i) = 0;  // Outside the sphere
+              Real const R = 1.0;  // Sphere radius
+
+              if (pmbp->pradfemn->sphere_test_fractional == false) {
+
+                  if (x1 * x1 + x2 * x2 + x3 * x3 <= R*R) { // Inside the sphere
+                      kappa_a_(m, k, j, i) = 10.0;  
+                      eta_(m, k, j, i) = 10.0;
+                  } else {
+                      kappa_a_(m, k, j, i) = 0;  // Outside the sphere
+                  }    
+
+              } else {          
+                
+                  int const NPOINTS = 10;
+                  int inside = 0;
+                  int count = 0;
+
+                  for (int ii = 0; ii < NPOINTS; ++ii) {
+                      Real const myx = (x1 - dx/2.) + (ii + 0.5)*(dx/NPOINTS);
+                      for (int jj = 0; jj < NPOINTS; ++jj) {
+                          Real const myy = (x2 - dy/2.) + (jj + 0.5)*(dy/NPOINTS);
+                          for (int kk = 0; kk < NPOINTS; ++kk) {
+                              Real const myz = (x3 - dz/2.) + (kk + 0.5)*(dz/NPOINTS);
+                              count++;
+                              if (myx*myx + myy*myy + myz*myz <= R*R) {
+                                  inside++;
+                              }
+                          }
+                      }
+                  }
+
+                  Real fraction_inside_sphere = static_cast<Real>(inside) / static_cast<Real>(count);
+
+                  // Apply the coefficient to kappa_a and eta
+                  kappa_a_(m, k, j, i) = fraction_inside_sphere * 10.0;
+                  eta_(m, k, j, i) = fraction_inside_sphere * 10.0;
               }
             });
 

@@ -82,6 +82,7 @@ class RadiationFEMN {
   bool rad_source;                // flag to enable/disable source terms for radiation, disabled by default
   bool beam_source;               // flag to enable/disable beam sources, disabled by default
 
+  bool sphere_test_fractional;                // flag to enable/disable fractional volume coefficient to kappa_a and eta for the radiation_femn_sphere_test
   int num_beams;                  // number of beams, defaults to zero
   Real beam_source_1_a;
   Real beam_source_1_b;

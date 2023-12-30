@@ -113,6 +113,7 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   beam_source_1_b = pin->GetOrAddReal("radiation-femn", "beam_source_1_b", -42.);
   beam_source_2_a = pin->GetOrAddReal("radiation-femn", "beam_source_2_a", -42.);
   beam_source_2_b = pin->GetOrAddReal("radiation-femn", "beam_source_2_b", -42.);
+  sphere_test_fractional = pin->GetOrAddBoolean("radiation-femn", "sphere_test_fractional", false); // whether to apply the coefficient to kappa_a and eta using fractional volume (default: false)
 
   // --------------------------------------------------------------------
   // allocate memory and load angular grid arrays and associated matrices
