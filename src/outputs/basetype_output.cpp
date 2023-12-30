@@ -486,6 +486,11 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
         outvars.emplace_back("E",0,&(derived_var));
     }
 
+    if (out_params.variable.compare("rad_femn_eta") == 0) {
+        out_params.contains_derived = true;
+        outvars.emplace_back("eta", 0, &(derived_var));
+    }
+
   // initialize vector containing number of output MBs per rank
   noutmbs.assign(global_variable::nranks, 0);
 }

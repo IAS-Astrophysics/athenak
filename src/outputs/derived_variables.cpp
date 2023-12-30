@@ -449,4 +449,13 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
                     dv(m, 0, k, j, i) = Eval;
                   });
   }
+  if (name.compare("rad_femn_eta") == 0) {
+    Kokkos::realloc(derived_var, nmb, 1, n3, n2, n1);
+    auto dv = derived_var;
+    auto &eta_ = pm->pmb_pack->pradfemn->eta;
+
+    par_for("rad_femn_eta_output", DevExeSpace(), 0, (nmb - 1), ks, ke, js, je, is, ie,
+                KOKKOS_LAMBDA(int m, int k, int j, int i) {
+                    dv(m, 0, k, j, i) = eta_(m, k, j, i);});
+  }
 }
