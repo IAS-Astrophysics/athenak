@@ -300,6 +300,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
       if (is_compton_enabled_) {
         Real trad = sqrt(sqrt(erad_f_/arad_));
         emissivity += chi_s*4*(tgas-trad)*inv_t_electron_*erad_f_;
+        emissivity += chi_s*16*SQR(tgas*inv_t_electron_)*erad_f_;
       }
       Real gg_tet1 = -emissivity*u_tet[1] - chi_a*(-u_tet[0]*rr_tet01 + u_tet[1]*rr_tet11 + u_tet[2]*rr_tet12 + u_tet[3]*rr_tet13);
       Real gg_tet2 = -emissivity*u_tet[2] - chi_a*(-u_tet[0]*rr_tet02 + u_tet[1]*rr_tet12 + u_tet[2]*rr_tet22 + u_tet[3]*rr_tet23);
@@ -471,13 +472,13 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
       }
       // suma2 = 4.0*dtaucsigs*inv_t_electron_*gm1/wdn;
 
-      // Real sumb1 = suma1/inv_t_electron_;
-      // Real sumb2 = sumb1/suma2;
-      // Real sumb3 = wdn*tgas/(gm1*sumb1*jr_cm) + sqrt(sqrt(jr_cm/arad_))*inv_t_electron_;
-      // sumb3 = 1.0 + 4*sumb3 / SQR(sumb2/(sumb1*jr_cm) + 1.0);
-      // sumb3 = max(sqrt(sumb3), 1.0);
-      // sumb3 = 1.0 + 0.5*(sumb3 - 1.0);
-      Real sumb3 = 1.0;
+      Real sumb1 = suma1/inv_t_electron_;
+      Real sumb2 = sumb1/suma2;
+      Real sumb3 = wdn*tgas/(gm1*sumb1*jr_cm) + sqrt(sqrt(jr_cm/arad_))*inv_t_electron_;
+      sumb3 = 1.0 + 4*sumb3 / SQR(sumb2/(sumb1*jr_cm) + 1.0);
+      sumb3 = max(sqrt(sumb3), 1.0);
+      sumb3 = 1.0 + 0.5*(sumb3 - 1.0);
+      // Real sumb3 = 1.0;
       // compute partially updated radiation temperature
       Real trad = sqrt(sqrt(jr_cm/arad_));
       const bool temp_equil = (fabs(trad - tgas) < 1.0e-12);
@@ -522,8 +523,8 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
           // update intensity
           Real n0_cm = (u_tet[0]*nh_c_.d_view(n,0) - u_tet[1]*nh_c_.d_view(n,1) -
                         u_tet[2]*nh_c_.d_view(n,2) - u_tet[3]*nh_c_.d_view(n,3));
-          Real di_cm = (n0_cm/n0)*dtcsigs*4.0*jr_cm*inv_t_electron_*(tgasnew - tradnew);
-          // Real di_cm = (n0_cm/n0)*dtcsigs*4.0*jr_cm * (inv_t_electron_*(tgasnew - tradnew) + 16.0*SQR(tgasnew*inv_t_electron_)); // LZ mod
+          // Real di_cm = (n0_cm/n0)*dtcsigs*4.0*jr_cm*inv_t_electron_*(tgasnew - tradnew);
+          Real di_cm = (n0_cm/n0)*dtcsigs*4.0*jr_cm * (inv_t_electron_*(tgasnew - tradnew) + 4.0*SQR(tgasnew*inv_t_electron_)); // LZ mod
 
           i0_(m,n,k,j,i) = n0*n_0*fmax(i0_(m,n,k,j,i)/(n0*n_0) +
                                        di_cm/(4.0*M_PI*SQR(SQR(n0_cm))), 0.0);
