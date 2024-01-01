@@ -489,8 +489,9 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
       if (!(temp_equil)) {
         // coef[1] = (1.0 + suma2*jr_cm)/(suma1*jr_cm)*arad_;
         // coef[0] = -(1.0 + suma2*jr_cm)/suma1 - tgas;
+        Real a2_jr = min(1e12, max(suma2*jr_cm, 1e-12));
         coef[1] = sumb3*(1.0 + suma2*jr_cm)/(suma1*jr_cm)*arad_; // LZ mod
-        coef[0] = -sumb3*(1.0 + suma2*jr_cm)/suma1 - tgas*(1.0 + (sumb3-1)*(1.0+1./(suma2*jr_cm))); // LZ mod
+        coef[0] = -sumb3*(1.0 + a2_jr)/suma1 - tgas*(1.0 + (sumb3-1)*(1.0+1./a2_jr)); // LZ mod
         bool flag = FourthPolyRoot(coef[1], coef[0], tradnew);
         if (!(flag) || !(isfinite(tradnew))) {
           badcell = true;
