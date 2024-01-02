@@ -160,10 +160,22 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
 
     // fluid state
     Real &wdn = w0_(m,IDN,k,j,i);
-    Real &wvx = update_vel_in_rad_source_ ? w0_(m,IVX,k,j,i) : w0_old_(m,IVX,k,j,i);
-    Real &wvy = update_vel_in_rad_source_ ? w0_(m,IVY,k,j,i) : w0_old_(m,IVY,k,j,i);
-    Real &wvz = update_vel_in_rad_source_ ? w0_(m,IVZ,k,j,i) : w0_old_(m,IVZ,k,j,i);
+    // Real &wvx = update_vel_in_rad_source_ ? w0_(m,IVX,k,j,i) : w0_old_(m,IVX,k,j,i);
+    // Real &wvy = update_vel_in_rad_source_ ? w0_(m,IVY,k,j,i) : w0_old_(m,IVY,k,j,i);
+    // Real &wvz = update_vel_in_rad_source_ ? w0_(m,IVZ,k,j,i) : w0_old_(m,IVZ,k,j,i);
     Real &wen = w0_(m,IEN,k,j,i);
+
+    Real wvx = w0_(m,IVX,k,j,i);
+    Real wvy = w0_(m,IVY,k,j,i);
+    Real wvz = w0_(m,IVZ,k,j,i);
+    if (!update_vel_in_rad_source_ && (w0_old_(m,IVX,k,j,i)!=0) && (w0_old_(m,IVY,k,j,i)!=0) && (w0_old_(m,IVZ,k,j,i)!=0)) {
+      wvx = w0_old_(m,IVX,k,j,i);
+      wvy = w0_old_(m,IVY,k,j,i);
+      wvz = w0_old_(m,IVZ,k,j,i);
+    }
+
+
+
 
     // derived quantities
     Real pgas = gm1*wen;
