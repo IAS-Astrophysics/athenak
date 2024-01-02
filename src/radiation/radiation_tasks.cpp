@@ -181,7 +181,7 @@ TaskStatus Radiation::CopyCons(Driver *pdrive, int stage) {
     }
 
     // copy the prim as the fallback state
-    Kokkos::deep_copy(DevExeSpace(), pmhd->w0_old, pmhd->w0);
+    Kokkos::deep_copy(DevExeSpace(), pmhd_->w0_old, pmhd_->w0);
   }
 
   if (stage == 1) {
