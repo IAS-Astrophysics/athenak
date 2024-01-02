@@ -179,6 +179,9 @@ TaskStatus Radiation::CopyCons(Driver *pdrive, int stage) {
       pmhd_->peos->ConsToPrim(pmhd_->u0, pmhd_->b0, pmhd_->w0, pmhd_->bcc0, false, 0, n1m1, 0, n2m1, 0, n3m1);
       Kokkos::deep_copy(DevExeSpace(), pmhd_->w0_old, pmhd_->w0);
     }
+
+    // copy the prim as the fallback state
+    Kokkos::deep_copy(DevExeSpace(), pmhd->w0_old, pmhd->w0);
   }
 
   if (stage == 1) {
@@ -198,7 +201,7 @@ TaskStatus Radiation::CopyCons(Driver *pdrive, int stage) {
       Kokkos::deep_copy(DevExeSpace(), pmhd->b1.x3f, pmhd->b0.x3f);
 
       // copy the prim as the fallback state
-      Kokkos::deep_copy(DevExeSpace(), pmhd->w0_old, pmhd->w0);
+      // Kokkos::deep_copy(DevExeSpace(), pmhd->w0_old, pmhd->w0);
     } else if (phyd != nullptr) {
       Kokkos::deep_copy(DevExeSpace(), phyd->u1, phyd->u0);
     }
