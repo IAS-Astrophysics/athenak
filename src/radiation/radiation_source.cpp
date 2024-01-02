@@ -300,7 +300,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
       if (is_compton_enabled_) {
         Real trad = sqrt(sqrt(erad_f_/arad_));
         emissivity += chi_s*4*(tgas-trad)*inv_t_electron_*erad_f_;
-        emissivity += chi_s*16*SQR(tgas*inv_t_electron_)*erad_f_;
+        // emissivity += chi_s*16*SQR(tgas*inv_t_electron_)*erad_f_;
       }
       Real gg_tet1 = -emissivity*u_tet[1] - chi_a*(-u_tet[0]*rr_tet01 + u_tet[1]*rr_tet11 + u_tet[2]*rr_tet12 + u_tet[3]*rr_tet13);
       Real gg_tet2 = -emissivity*u_tet[2] - chi_a*(-u_tet[0]*rr_tet02 + u_tet[1]*rr_tet12 + u_tet[2]*rr_tet22 + u_tet[3]*rr_tet23);
@@ -472,13 +472,13 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
       }
       // suma2 = 4.0*dtaucsigs*inv_t_electron_*gm1/wdn;
 
-      Real sumb1 = suma1/inv_t_electron_;
-      Real sumb2 = sumb1/suma2;
-      Real sumb3 = wdn*tgas/(gm1*sumb1*jr_cm) + sqrt(sqrt(jr_cm/arad_))*inv_t_electron_;
-      sumb3 = 1.0 + 4*sumb3 / SQR(sumb2/(sumb1*jr_cm) + 1.0);
-      sumb3 = max(sqrt(sumb3), 1.0);
-      sumb3 = 1.0 + 0.5*(sumb3 - 1.0);
-      // Real sumb3 = 1.0;
+      // Real sumb1 = suma1/inv_t_electron_;
+      // Real sumb2 = sumb1/suma2;
+      // Real sumb3 = wdn*tgas/(gm1*sumb1*jr_cm) + sqrt(sqrt(jr_cm/arad_))*inv_t_electron_;
+      // sumb3 = 1.0 + 4*sumb3 / SQR(sumb2/(sumb1*jr_cm) + 1.0);
+      // sumb3 = max(sqrt(sumb3), 1.0);
+      // sumb3 = 1.0 + 0.5*(sumb3 - 1.0);
+      Real sumb3 = 1.0;
       // compute partially updated radiation temperature
       Real trad = sqrt(sqrt(jr_cm/arad_));
       const bool temp_equil = (fabs(trad - tgas) < 1.0e-12);
@@ -489,7 +489,8 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
       if (!(temp_equil)) {
         // coef[1] = (1.0 + suma2*jr_cm)/(suma1*jr_cm)*arad_;
         // coef[0] = -(1.0 + suma2*jr_cm)/suma1 - tgas;
-        Real a2_jr = min(1e12, max(suma2*jr_cm, 1e-12));
+        // Real a2_jr = min(1e12, max(suma2*jr_cm, 1e-12));
+        Real a2_jr = suma2*jr_cm;
         coef[1] = sumb3*(1.0 + suma2*jr_cm)/(suma1*jr_cm)*arad_; // LZ mod
         coef[0] = -sumb3*(1.0 + a2_jr)/suma1 - tgas*(1.0 + (sumb3-1)*(1.0+1./a2_jr)); // LZ mod
         bool flag = FourthPolyRoot(coef[1], coef[0], tradnew);
