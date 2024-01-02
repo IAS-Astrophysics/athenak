@@ -180,7 +180,7 @@ TaskStatus Radiation::CopyCons(Driver *pdrive, int stage) {
       Kokkos::deep_copy(DevExeSpace(), pmhd_->w0_old, pmhd_->w0);
     }
 
-    // copy the prim as the fallback state
+    // copy the prim for rad source term calculation
     Kokkos::deep_copy(DevExeSpace(), pmhd_->w0_old, pmhd_->w0);
   }
 

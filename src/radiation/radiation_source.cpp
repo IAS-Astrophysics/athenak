@@ -463,16 +463,19 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
 
     // compton scattering
     if (is_compton_enabled_) {
-      // artificial term for test
-      // Real scale_fac = 1./(1.+exp(-10.*(log10(wdn)+4.5)));
+      bool second_order_correction = false;
+      bool use_old_energy_coupling = false;
+      bool use_artificial_mask = false;
+
+      // artificial mask for applying compton term
       Real scale_fac = 1.0;
+      if (use_artificial_mask) scale_fac = 1./(1.+exp(-10.*(log10(wdn)+4.5)));
 
       // use partially updated gas temperature
       tgas = tgasnew;
 
       // compute polynomial coefficients using partially updated gas temp and intensity
       suma1 = 0.0;
-      suma2 = 0.0; // LZ mod
       Real jr_cm = 0.0;
       for (int n=0; n<=nang1; ++n) {
         Real n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(n,0) + tc(m,1,0,k,j,i)*nh_c_.d_view(n,1) +
@@ -484,19 +487,21 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
         Real ir_weight = intensity_cm*wght_cm;
         jr_cm += ir_weight; // note this is actually er_cm
         suma1 += (n0_cm/n0)*4.0*dtcsigs*inv_t_electron_*wght_cm;
-        suma2 += (n0_cm/n0)*wght_cm*4.0*dtcsigs*inv_t_electron_*gm1/wdn; // LZ mod
       }
-      // suma2 = 4.0*dtaucsigs*inv_t_electron_*gm1/wdn;
+      suma2 = (use_old_energy_coupling) ? 4.0*dtaucsigs*inv_t_electron_*gm1/wdn : suma1*gm1/wdn;
       suma1 *= scale_fac;
       suma2 *= scale_fac;
 
-      // Real sumb1 = suma1/inv_t_electron_;
-      // Real sumb2 = sumb1/suma2;
-      // Real sumb3 = wdn*tgas/(gm1*sumb1*jr_cm) + sqrt(sqrt(jr_cm/arad_))*inv_t_electron_;
-      // sumb3 = 1.0 + 4*sumb3 / SQR(sumb2/(sumb1*jr_cm) + 1.0);
-      // sumb3 = max(sqrt(sumb3), 1.0);
-      // sumb3 = 1.0 + 0.5*(sumb3 - 1.0);
       Real sumb3 = 1.0;
+      if (second_order_correction) {
+        Real sumb1 = suma1/inv_t_electron_;
+        Real sumb2 = sumb1/suma2;
+        Real sumb3 = wdn*tgas/(gm1*sumb1*jr_cm) + sqrt(sqrt(jr_cm/arad_))*inv_t_electron_;
+        sumb3 = 1.0 + 4*sumb3 / SQR(sumb2/(sumb1*jr_cm) + 1.0);
+        sumb3 = max(sqrt(sumb3), 1.0);
+        sumb3 = 1.0 + 0.5*(sumb3 - 1.0);
+      }
+
       // compute partially updated radiation temperature
       Real trad = sqrt(sqrt(jr_cm/arad_));
       const bool temp_equil = (fabs(trad - tgas) < 1.0e-12);
@@ -505,12 +510,14 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
       Real tradnew = trad;
       badcell = false;
       if (!(temp_equil)) {
-        // coef[1] = (1.0 + suma2*jr_cm)/(suma1*jr_cm)*arad_;
-        // coef[0] = -(1.0 + suma2*jr_cm)/suma1 - tgas;
-        // Real a2_jr = min(1e12, max(suma2*jr_cm, 1e-12));
-        Real a2_jr = suma2*jr_cm;
-        coef[1] = sumb3*(1.0 + suma2*jr_cm)/(suma1*jr_cm)*arad_; // LZ mod
-        coef[0] = -sumb3*(1.0 + a2_jr)/suma1 - tgas*(1.0 + (sumb3-1)*(1.0+1./a2_jr)); // LZ mod
+        if (second_order_correction) {
+          Real a2_jr = suma2*jr_cm;
+          coef[1] = sumb3*(1.0 + suma2*jr_cm)/(suma1*jr_cm)*arad_;
+          coef[0] = -sumb3*(1.0 + a2_jr)/suma1 - tgas*(1.0 + (sumb3-1)*(1.0+1./a2_jr));
+        } else {
+          coef[1] = (1.0 + suma2*jr_cm)/(suma1*jr_cm)*arad_;
+          coef[0] = -(1.0 + suma2*jr_cm)/suma1 - tgas;
+        }
         bool flag = FourthPolyRoot(coef[1], coef[0], tradnew);
         if (!(flag) || !(isfinite(tradnew))) {
           badcell = true;
@@ -520,8 +527,9 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
       // Update the specific intensity
       if (!(badcell) && !(temp_equil)) {
         // Compute updated gas temperature
-        // tgasnew = (arad_*SQR(SQR(tradnew)) - jr_cm)/(suma1*jr_cm) + tradnew;
-        tgasnew = -(arad_*SQR(SQR(tradnew)) - jr_cm)*gm1/wdn + tgas; // LZ mod
+        if (use_old_energy_coupling) tgasnew = (arad_*SQR(SQR(tradnew)) - jr_cm)/(suma1*jr_cm) + tradnew;
+        else tgasnew = -(arad_*SQR(SQR(tradnew)) - jr_cm)*gm1/wdn + tgas;
+
         Real m_old[4] = {0.0}; Real m_new[4] = {0.0};
         for (int n=0; n<=nang1; ++n) {
           // compute coordinate normal components
@@ -544,7 +552,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
           Real n0_cm = (u_tet[0]*nh_c_.d_view(n,0) - u_tet[1]*nh_c_.d_view(n,1) -
                         u_tet[2]*nh_c_.d_view(n,2) - u_tet[3]*nh_c_.d_view(n,3));
           Real di_cm = (n0_cm/n0)*dtcsigs*4.0*jr_cm*inv_t_electron_*(tgasnew - tradnew);
-          // Real di_cm = (n0_cm/n0)*dtcsigs*4.0*jr_cm * (inv_t_electron_*(tgasnew - tradnew) + 4.0*SQR(tgasnew*inv_t_electron_)); // LZ mod
+          if (second_order_correction) di_cm = (n0_cm/n0)*dtcsigs*4.0*jr_cm * (inv_t_electron_*(tgasnew - tradnew) + 4.0*SQR(tgasnew*inv_t_electron_));
           di_cm *= scale_fac;
 
           i0_(m,n,k,j,i) = n0*n_0*fmax(i0_(m,n,k,j,i)/(n0*n_0) +
