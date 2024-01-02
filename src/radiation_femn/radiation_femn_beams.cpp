@@ -24,4 +24,10 @@ TaskStatus RadiationFEMN::BeamsSourcesFEMN(Driver *pdriver, int stage) {
   std::cout << "Hello! I am beam sources!" << std::endl;
   return TaskStatus::complete;
 }
+
+TaskStatus RadiationFEMN::BeamsSourcesFPN(Driver *pdriver, int stage) {
+
+  std::cout << "Hello! I am beam sources!" << std::endl;
+  return TaskStatus::complete;
+}
 }

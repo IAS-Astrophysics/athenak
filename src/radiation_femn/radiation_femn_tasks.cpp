@@ -37,7 +37,15 @@ void RadiationFEMN::AssembleRadiationFEMNTasks(TaskList &start, TaskList &run, T
   id.rad_irecv = start.AddTask(&RadiationFEMN::InitRecv, this, none);
 
   // assemble run task list
-  id.copycons = run.AddTask(&RadiationFEMN::CopyCons, this, none);
+  if (beam_source && !fpn) {
+    id.rad_beams = run.AddTask(&RadiationFEMN::BeamsSourcesFEMN, this, none);
+    id.copycons = run.AddTask(&RadiationFEMN::CopyCons, this, id.rad_beams);
+  } else if (beam_source && fpn) {
+    id.rad_beams = run.AddTask(&RadiationFEMN::BeamsSourcesFPN, this, none);
+    id.copycons = run.AddTask(&RadiationFEMN::CopyCons, this, id.rad_beams);
+  } else {
+    id.copycons = run.AddTask(&RadiationFEMN::CopyCons, this, none);
+  }
   id.rad_tetrad = run.AddTask(&RadiationFEMN::CalculateFluxes, this, id.copycons);
   id.rad_flux = run.AddTask(&RadiationFEMN::TetradOrthogonalize, this, id.rad_tetrad);
   id.rad_sendf = run.AddTask(&RadiationFEMN::SendFlux, this, id.rad_flux);

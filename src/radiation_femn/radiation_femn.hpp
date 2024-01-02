@@ -25,6 +25,7 @@ class Driver;
 //  \brief container to hold TaskIDs of all radiation FEM_N tasks
 struct RadiationFEMNTaskIDs {
   TaskID rad_irecv;
+  TaskID rad_beams;
   TaskID copycons;
   TaskID rad_tetrad;
   TaskID rad_flux;
@@ -177,6 +178,7 @@ class RadiationFEMN {
   TaskStatus AddRadiationSourceTerm(Driver *d, int stage);
   TaskStatus TetradOrthogonalize(Driver *pdriver, int stage);
   TaskStatus BeamsSourcesFEMN(Driver *pdriver, int stage);
+  TaskStatus BeamsSourcesFPN(Driver *pdriver, int stage);
   TaskStatus RestrictI(Driver *d, int stage);
   TaskStatus SendI(Driver *d, int stage);
   TaskStatus RecvI(Driver *d, int stage);
