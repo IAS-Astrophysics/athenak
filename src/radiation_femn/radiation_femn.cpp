@@ -47,6 +47,8 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
     G_matrix("GnumuiAB", 1, 1, 1, 1, 1),
     F_matrix("FnumuiAB", 1, 1, 1, 1, 1),
     Q_matrix("QmuhatA", 1, 1),
+    beam_source_1_vals("beam_source_1_vals", 1),
+    beam_source_2_vals("beam_source_2_vals", 1),
     e_source("e_source", 1),
     e_source_nominv("e_source_nominv", 1),
     S_source("S_source", 1, 1),
@@ -112,12 +114,17 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
 
   m1_flag = pin->GetOrAddBoolean("radiation-femn", "m1", false);
   rad_source = pin->GetOrAddBoolean("radiation-femn", "source_terms", false);           // switch for sources (default: false)
+
   beam_source = pin->GetOrAddBoolean("radiation-femn", "beam_sources", false);     // switch for beam sources (default: false)
   num_beams = pin->GetOrAddInteger("radiation-femn", "num_beam_sources", 0);
-  beam_source_1_a = pin->GetOrAddReal("radiation-femn", "beam_source_1_a", -42.);
-  beam_source_1_b = pin->GetOrAddReal("radiation-femn", "beam_source_1_b", -42.);
-  beam_source_2_a = pin->GetOrAddReal("radiation-femn", "beam_source_2_a", -42.);
-  beam_source_2_b = pin->GetOrAddReal("radiation-femn", "beam_source_2_b", -42.);
+  beam_source_1_y1 = pin->GetOrAddReal("radiation-femn", "beam_source_1_y1", -42.);
+  beam_source_1_y2 = pin->GetOrAddReal("radiation-femn", "beam_source_1_y2", -42.);
+  beam_source_1_phi = pin->GetOrAddReal("radiation-femn", "beam_source_1_phi", -42.);
+  beam_source_1_theta = pin->GetOrAddReal("radiation-femn", "beam_source_1_theta", -42.);
+  beam_source_2_y1 = pin->GetOrAddReal("radiation-femn", "beam_source_2_y1", -42.);
+  beam_source_2_y2 = pin->GetOrAddReal("radiation-femn", "beam_source_2_y2", -42.);
+  beam_source_2_phi = pin->GetOrAddReal("radiation-femn", "beam_source_2_phi", -42.);
+  beam_source_2_theta = pin->GetOrAddReal("radiation-femn", "beam_source_2_theta", -42.);
 
   Kokkos::realloc(mass_matrix, num_points, num_points);
   Kokkos::realloc(mass_matrix_inv, num_points, num_points);
@@ -218,7 +225,18 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
     Kokkos::realloc(coarse_f0, nmb, num_points_total, nccells3, nccells2, nccells1);
   }
 
+  // beam sources
+  if(beam_source && fpn) {
+    Kokkos::realloc(beam_source_1_vals, num_points_total);
+    Kokkos::realloc(beam_source_2_vals, num_points_total);
+    this->InitializeBeamsSourcesFPN();
+  }
 
+  if(beam_source && !fpn) {
+    Kokkos::realloc(beam_source_1_vals, 3);
+    Kokkos::realloc(beam_source_2_vals, 3);
+    this->InitializeBeamsSourcesFEMN();
+  }
 
   // sources
   Kokkos::realloc(eta, nmb, ncells3, ncells2, ncells1);

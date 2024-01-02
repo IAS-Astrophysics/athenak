@@ -85,12 +85,16 @@ class RadiationFEMN {
   bool beam_source;               // flag to enable/disable beam sources, disabled by default
 
   int num_beams;                  // number of beams, defaults to zero
-  Real beam_source_1_a;
-  Real beam_source_1_b;
-  Real beam_source_2_a;
-  Real beam_source_2_b;
-  std::string beam_source_1_pos;
-  std::string beam_source_2_pos;
+  Real beam_source_1_y1;
+  Real beam_source_1_y2;
+  Real beam_source_2_y1;
+  Real beam_source_2_y2;
+  Real beam_source_1_phi;
+  Real beam_source_1_theta;
+  Real beam_source_2_phi;
+  Real beam_source_2_theta;
+  DvceArray1D<Real> beam_source_1_vals;
+  DvceArray1D<Real> beam_source_2_vals;
 
   Real energy_par = 1.;
   int num_points_total;
@@ -195,7 +199,8 @@ class RadiationFEMN {
   void ComputePMatrices();
   void ComputeSourceMatrices();
   void InitializeMetricFluid();
-  void AddBeams();
+  void InitializeBeamsSourcesFEMN();
+  void InitializeBeamsSourcesFPN();
 
   // ---------------------------------------------------------------------------
   // Functions for closures
