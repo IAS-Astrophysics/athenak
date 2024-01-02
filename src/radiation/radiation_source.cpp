@@ -463,6 +463,10 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
 
     // compton scattering
     if (is_compton_enabled_) {
+      // artificial term for test
+      // Real scale_fac = 1./(1.+exp(-10.*(log10(wdn)+4.5)));
+      Real scale_fac = 1.0;
+
       // use partially updated gas temperature
       tgas = tgasnew;
 
@@ -483,6 +487,8 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
         suma2 += (n0_cm/n0)*wght_cm*4.0*dtcsigs*inv_t_electron_*gm1/wdn; // LZ mod
       }
       // suma2 = 4.0*dtaucsigs*inv_t_electron_*gm1/wdn;
+      suma1 *= scale_fac;
+      suma2 *= scale_fac;
 
       // Real sumb1 = suma1/inv_t_electron_;
       // Real sumb2 = sumb1/suma2;
@@ -537,8 +543,9 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
           // update intensity
           Real n0_cm = (u_tet[0]*nh_c_.d_view(n,0) - u_tet[1]*nh_c_.d_view(n,1) -
                         u_tet[2]*nh_c_.d_view(n,2) - u_tet[3]*nh_c_.d_view(n,3));
-          // Real di_cm = (n0_cm/n0)*dtcsigs*4.0*jr_cm*inv_t_electron_*(tgasnew - tradnew);
-          Real di_cm = (n0_cm/n0)*dtcsigs*4.0*jr_cm * (inv_t_electron_*(tgasnew - tradnew) + 4.0*SQR(tgasnew*inv_t_electron_)); // LZ mod
+          Real di_cm = (n0_cm/n0)*dtcsigs*4.0*jr_cm*inv_t_electron_*(tgasnew - tradnew);
+          // Real di_cm = (n0_cm/n0)*dtcsigs*4.0*jr_cm * (inv_t_electron_*(tgasnew - tradnew) + 4.0*SQR(tgasnew*inv_t_electron_)); // LZ mod
+          di_cm *= scale_fac;
 
           i0_(m,n,k,j,i) = n0*n_0*fmax(i0_(m,n,k,j,i)/(n0*n_0) +
                                        di_cm/(4.0*M_PI*SQR(SQR(n0_cm))), 0.0);
