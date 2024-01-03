@@ -46,8 +46,13 @@ void RadiationFEMN::LoadFEMNMatrices() {
   for (size_t i = 0; i < num_points; i++) {
     temp_angular_grid(i, 0) = phi(i);
     temp_angular_grid(i, 1) = theta(i);
+
+    angular_grid_cartesian(i,0) = x(i);
+    angular_grid_cartesian(i,1) = y(i);
+    angular_grid_cartesian(i,2) = z(i);
   }
   Kokkos::deep_copy(angular_grid, temp_angular_grid);
+  Kokkos::deep_copy(triangle_information, triangles);
 
   auto &mm_ = mass_matrix;
   auto &sx_ = stiffness_matrix_x;

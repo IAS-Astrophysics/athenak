@@ -95,6 +95,7 @@ class RadiationFEMN {
   Real beam_source_2_theta;
   DvceArray1D<Real> beam_source_1_vals;
   DvceArray1D<Real> beam_source_2_vals;
+  DvceArray1D<Real> beam_source_idcs;
 
   Real energy_par = 1.;
   int num_points_total;
@@ -110,6 +111,8 @@ class RadiationFEMN {
   // matrices for the angular grid
   // ---------------------------------------------------------------------------
   DvceArray2D<Real> angular_grid;            // store the values of (l,m) for FP_N. Alternatively store (phi,theta) for FEM_N
+  HostArray2D<Real> angular_grid_cartesian;
+  HostArray2D<int> triangle_information;
   DvceArray1D<Real> energy_grid;             // array containing the energy grid
 
   DvceArray2D<Real> mass_matrix;             // mass matrix (in the special relativistic case) [Eqn. 12 of arXiv:2212.01409]

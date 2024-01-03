@@ -38,6 +38,8 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
     ftemp("ftemp", 1, 1, 1, 1, 1),
     energy_grid("energy_grid", 1),
     angular_grid("angular_grid", 1, 1),
+    angular_grid_cartesian("angular_grid_cartesian", 1, 1),
+    triangle_information("triangle_information", 1, 1),
     mass_matrix("mm", 1, 1),
     stiffness_matrix_x("sx", 1, 1),
     stiffness_matrix_y("sy", 1, 1),
@@ -49,6 +51,7 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
     Q_matrix("QmuhatA", 1, 1),
     beam_source_1_vals("beam_source_1_vals", 1),
     beam_source_2_vals("beam_source_2_vals", 1),
+    beam_source_idcs("beam_source_idcs", 1),
     e_source("e_source", 1),
     e_source_nominv("e_source_nominv", 1),
     S_source("S_source", 1, 1),
@@ -140,6 +143,8 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   Kokkos::realloc(e_source_nominv, num_points);
   Kokkos::realloc(S_source, num_points, num_points);
   Kokkos::realloc(angular_grid, num_points, 2);
+  Kokkos::realloc(angular_grid_cartesian, num_points, 3);
+  Kokkos::realloc(triangle_information, num_triangles, 3);
 
   if (!fpn) {   // populate arrays for FEM_N
     scheme_num_points = pin->GetOrAddInteger("radiation-femn", "quad_scheme_num_points", 453);  // number of points in numerical integration scheme (default: 453)
@@ -235,6 +240,7 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   if(beam_source && !fpn) {
     Kokkos::realloc(beam_source_1_vals, 3);
     Kokkos::realloc(beam_source_2_vals, 3);
+    Kokkos::realloc(beam_source_idcs, 6);
     this->InitializeBeamsSourcesFEMN();
   }
 

@@ -111,6 +111,55 @@ void RadiationFEMN::InitializeBeamsSourcesFPN() {
 
 void RadiationFEMN::InitializeBeamsSourcesFEMN() {
 
+  HostArray1D<Real> psi_basis;
+  Kokkos::realloc(psi_basis, num_points);
+  Kokkos::deep_copy(psi_basis, 0);
+
+  int beamidx = 0;
+  Real x0, y0, z0;
+  for (int beams = 0; beams < num_beams; beams++) {
+    if (beamidx == 0) {
+      x0 = sin(beam_source_1_theta) * cos(beam_source_1_phi);
+      y0 = sin(beam_source_1_theta) * sin(beam_source_1_phi);
+      z0 = cos(beam_source_1_theta);
+    } else {
+      x0 = sin(beam_source_2_theta) * cos(beam_source_2_phi);
+      y0 = sin(beam_source_2_theta) * sin(beam_source_2_phi);
+      z0 = cos(beam_source_2_theta);
+    }
+    for (int i = 0; i < num_triangles; i++) {
+      Real x1 = angular_grid_cartesian(triangle_information(i, 0), 0);
+      Real y1 = angular_grid_cartesian(triangle_information(i, 0), 1);
+      Real z1 = angular_grid_cartesian(triangle_information(i, 0), 2);
+
+      Real x2 = angular_grid_cartesian(triangle_information(i, 1), 0);
+      Real y2 = angular_grid_cartesian(triangle_information(i, 1), 1);
+      Real z2 = angular_grid_cartesian(triangle_information(i, 1), 2);
+
+      Real x3 = angular_grid_cartesian(triangle_information(i, 2), 0);
+      Real y3 = angular_grid_cartesian(triangle_information(i, 2), 1);
+      Real z3 = angular_grid_cartesian(triangle_information(i, 2), 2);
+
+      Real a = (x3 * y2 * z0 - x2 * y3 * z0 - x3 * y0 * z2 + x0 * y3 * z2 + x2 * y0 * z3 - x0 * y2 * z3)
+          / (x3 * y2 * z1 - x2 * y3 * z1 - x3 * y1 * z2 + x1 * y3 * z2 + x2 * y1 * z3 - x1 * y2 * z3);
+      Real b = (x3 * y1 * z0 - x1 * y3 * z0 - x3 * y0 * z1 + x0 * y3 * z1 + x1 * y0 * z3 - x0 * y1 * z3)
+          / (-(x3 * y2 * z1) + x2 * y3 * z1 + x3 * y1 * z2 - x1 * y3 * z2 - x2 * y1 * z3 + x1 * y2 * z3);
+      Real c = (x2 * y1 * z0 - x1 * y2 * z0 - x2 * y0 * z1 + x0 * y2 * z1 + x1 * y0 * z2 - x0 * y1 * z2)
+          / (x3 * y2 * z1 - x2 * y3 * z1 - x3 * y1 * z2 + x1 * y3 * z2 + x2 * y1 * z3 - x1 * y2 * z3);
+
+      Real lam = 1. / (a + b + c);
+
+      if (a >= 0 && b >= 0 && c >= 0 && lam > 0) {
+        Real xi1 = a * lam;
+        Real xi2 = b * lam;
+        Real xi3 = c * lam;
+        psi_basis(triangle_information(i, 0)) = 2. * xi1 + xi2 + xi3 - 1.;
+        psi_basis(triangle_information(i, 1)) = xi1 + 2. * xi2 + xi3 - 1.;
+        psi_basis(triangle_information(i, 2)) = xi1 + xi2 + 2. * xi3 - 1.;
+        beamidx++;
+      }
+    }
+  }
   std::cout << "Initializing beam sources for FEMN" << std::endl;
 
 }
