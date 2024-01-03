@@ -181,7 +181,7 @@ TaskStatus Radiation::CopyCons(Driver *pdrive, int stage) {
     }
 
     // copy the prim for rad source term calculation
-    Kokkos::deep_copy(DevExeSpace(), pmhd_->w0_old, pmhd_->w0);
+    // Kokkos::deep_copy(DevExeSpace(), pmhd_->w0_old, pmhd_->w0);
   }
 
   if (stage == 1) {
@@ -201,7 +201,7 @@ TaskStatus Radiation::CopyCons(Driver *pdrive, int stage) {
       Kokkos::deep_copy(DevExeSpace(), pmhd->b1.x3f, pmhd->b0.x3f);
 
       // copy the prim as the fallback state
-      // Kokkos::deep_copy(DevExeSpace(), pmhd->w0_old, pmhd->w0);
+      Kokkos::deep_copy(DevExeSpace(), pmhd->w0_old, pmhd->w0);
     } else if (phyd != nullptr) {
       Kokkos::deep_copy(DevExeSpace(), phyd->u1, phyd->u0);
     }
