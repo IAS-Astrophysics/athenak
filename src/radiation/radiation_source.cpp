@@ -52,6 +52,9 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   bool &fixed_fluid_ = fixed_fluid;
   bool &affect_fluid_ = affect_fluid;
   bool &update_vel_in_rad_source_ = update_vel_in_rad_source;
+  bool second_order_correction = false;
+  bool use_old_energy_coupling = true;
+  bool use_artificial_mask = false;
 
   // Extract coordinate/excision data
   auto &coord = pmy_pack->pcoord->coord_data;
@@ -309,7 +312,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
       if (is_compton_enabled_) {
         Real trad = sqrt(sqrt(erad_f_/arad_));
         emissivity += chi_s*4*(tgas-trad)*inv_t_electron_*erad_f_;
-        // emissivity += chi_s*16*SQR(tgas*inv_t_electron_)*erad_f_;
+        if (second_order_correction) emissivity += chi_s*16*SQR(tgas*inv_t_electron_)*erad_f_;
       }
       Real gg_tet1 = -emissivity*u_tet[1] - chi_a*(-u_tet[0]*rr_tet01 + u_tet[1]*rr_tet11 + u_tet[2]*rr_tet12 + u_tet[3]*rr_tet13);
       Real gg_tet2 = -emissivity*u_tet[2] - chi_a*(-u_tet[0]*rr_tet02 + u_tet[1]*rr_tet12 + u_tet[2]*rr_tet22 + u_tet[3]*rr_tet23);
@@ -460,10 +463,6 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
 
     // compton scattering
     if (is_compton_enabled_) {
-      bool second_order_correction = false;
-      bool use_old_energy_coupling = false;
-      bool use_artificial_mask = false;
-
       // artificial mask for applying compton term
       Real scale_fac = 1.0;
       if (use_artificial_mask) scale_fac = 1./(1.+exp(-10.*(log10(wdn)+4.5)));
