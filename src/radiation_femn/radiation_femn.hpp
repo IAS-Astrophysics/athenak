@@ -95,7 +95,6 @@ class RadiationFEMN {
   Real beam_source_2_theta;
   DvceArray1D<Real> beam_source_1_vals;
   DvceArray1D<Real> beam_source_2_vals;
-  DvceArray1D<Real> beam_source_idcs;
 
   Real energy_par = 1.;
   int num_points_total;
@@ -153,8 +152,6 @@ class RadiationFEMN {
   DvceArray4D<Real> kappa_s;      // scattering coefficient [assume isotropic]
   DvceArray4D<Real> kappa_a;      // absorption coefficient [assume isotropic]
 
-  DvceArray6D<bool> beam_mask;    // boolean mask used for beam source term
-
   DvceArray1D<Real> e_source;     // [Eq. (19) of Radice et. al. arXiv:1209.1634v3]
   DvceArray1D<Real> e_source_nominv;
   DvceArray2D<Real> S_source;     // [Eq. (19) of Radice et. al. arXiv:1209.1634v3]
@@ -185,7 +182,6 @@ class RadiationFEMN {
   TaskStatus AddRadiationSourceTerm(Driver *d, int stage);
   TaskStatus TetradOrthogonalize(Driver *pdriver, int stage);
   TaskStatus BeamsSourcesFEMN(Driver *pdriver, int stage);
-  TaskStatus BeamsSourcesFPN(Driver *pdriver, int stage);
   TaskStatus RestrictI(Driver *d, int stage);
   TaskStatus SendI(Driver *d, int stage);
   TaskStatus RecvI(Driver *d, int stage);

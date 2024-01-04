@@ -51,15 +51,13 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
     Q_matrix("QmuhatA", 1, 1),
     beam_source_1_vals("beam_source_1_vals", 1),
     beam_source_2_vals("beam_source_2_vals", 1),
-    beam_source_idcs("beam_source_idcs", 1),
     e_source("e_source", 1),
     e_source_nominv("e_source_nominv", 1),
     S_source("S_source", 1, 1),
     W_matrix("W_matrix", 1, 1),
     eta("eta", 1, 1, 1, 1),
     kappa_a("kappa_a", 1, 1, 1, 1),
-    kappa_s("kappa_s", 1, 1, 1, 1),
-    beam_mask("beam_mask", 1, 1, 1, 1, 1, 1) {
+    kappa_s("kappa_s", 1, 1, 1, 1) {
 
   // -----------------------------------------------------------------------------------
   // set essential parameters from par file and allocate memory to energy, angular grids
@@ -232,15 +230,14 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // beam sources
   if(beam_source && fpn) {
-    Kokkos::realloc(beam_source_1_vals, num_points_total);
-    Kokkos::realloc(beam_source_2_vals, num_points_total);
+    Kokkos::realloc(beam_source_1_vals, num_points);
+    Kokkos::realloc(beam_source_2_vals, num_points);
     this->InitializeBeamsSourcesFPN();
   }
 
   if(beam_source && !fpn) {
-    Kokkos::realloc(beam_source_1_vals, 3);
-    Kokkos::realloc(beam_source_2_vals, 3);
-    Kokkos::realloc(beam_source_idcs, 6);
+    Kokkos::realloc(beam_source_1_vals, num_points);
+    Kokkos::realloc(beam_source_2_vals, num_points);
     this->InitializeBeamsSourcesFEMN();
   }
 
