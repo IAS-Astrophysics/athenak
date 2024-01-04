@@ -141,10 +141,10 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   Kokkos::realloc(e_source_nominv, num_points);
   Kokkos::realloc(S_source, num_points, num_points);
   Kokkos::realloc(angular_grid, num_points, 2);
-  Kokkos::realloc(angular_grid_cartesian, num_points, 3);
-  Kokkos::realloc(triangle_information, num_triangles, 3);
 
   if (!fpn) {   // populate arrays for FEM_N
+    Kokkos::realloc(angular_grid_cartesian, num_points, 3);
+    Kokkos::realloc(triangle_information, num_triangles, 3);
     scheme_num_points = pin->GetOrAddInteger("radiation-femn", "quad_scheme_num_points", 453);  // number of points in numerical integration scheme (default: 453)
     scheme_name = pin->GetOrAddString("radiation-femn", "quad_scheme_name", "xiao_gimbutas");   // type of quadrature (xioa_gimbutas: default or vioreanu_rokhlin)
 
