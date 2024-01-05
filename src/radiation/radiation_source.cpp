@@ -70,6 +70,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   Real mean_mol_weight_ = 1.0;
   Real rosseland_coef_ = 1.0, planck_minus_rosseland_coef_ = 0.0;
   Real inv_t_electron_ = 1.0;
+  Real telec_cgs_ = pmy_pack->punit->electron_rest_mass_energy_cgs;
   if (are_units_enabled_) {
     density_scale_ = pmy_pack->punit->density_cgs();
     temperature_scale_ = pmy_pack->punit->temperature_cgs();
@@ -466,7 +467,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
       // artificial mask for applying compton term
       Real scale_fac = 1.0;
       // if (use_artificial_mask) scale_fac = 1./(1.+exp(-10.*(log10(wdn)+4.5)));
-      if (use_artificial_mask) scale_fac = 1. - 1./(1.+exp(-10.*(log10(tgasnew*temperature_scale_)-log10(pmy_pack->punit->electron_rest_mass_energy_cgs))));
+      if (use_artificial_mask) scale_fac = 1. - 1./(1.+exp(-10.*(log10(tgasnew*temperature_scale_)-log10(telec_cgs_))));
 
       // use partially updated gas temperature
       tgas = tgasnew;
