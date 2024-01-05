@@ -54,7 +54,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   bool &update_vel_in_rad_source_ = update_vel_in_rad_source;
   bool second_order_correction = false;
   bool use_old_energy_coupling = true;
-  bool use_artificial_mask = false;
+  bool use_artificial_mask = true;
 
   // Extract coordinate/excision data
   auto &coord = pmy_pack->pcoord->coord_data;
@@ -465,7 +465,8 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
     if (is_compton_enabled_) {
       // artificial mask for applying compton term
       Real scale_fac = 1.0;
-      if (use_artificial_mask) scale_fac = 1./(1.+exp(-10.*(log10(wdn)+4.5)));
+      // if (use_artificial_mask) scale_fac = 1./(1.+exp(-10.*(log10(wdn)+4.5)));
+      if (use_artificial_mask) scale_fac = 1. - 1./(1.+exp(-10.*(log10(tgasnew*temperature_scale_)-log10(pmy_pack->punit->electron_rest_mass_energy_cgs))));
 
       // use partially updated gas temperature
       tgas = tgasnew;

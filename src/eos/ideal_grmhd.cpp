@@ -54,13 +54,14 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
   auto &entropy_fix_turnoff_ = pmy_pack->pmhd->entropy_fix_turnoff;
   auto &sigma_cold_cut_ = pmy_pack->pmhd->sigma_cold_cut;
   auto c2p_test_ = pmy_pack->pmhd->c2p_test;
-  int entropyIdx = (entropy_fix_) ? nmhd+nscal-1 : -1;
+  // int entropyIdx = (entropy_fix_) ? nmhd+nscal-1 : -1;
   auto eos = eos_data;
   Real gm1 = eos_data.gamma - 1.0;
   auto &w0_old_ = pmy_pack->pmhd->w0_old;
   auto &is_radiation_enabled_ = pmy_pack->pmhd->is_radiation_enabled;
   DvceArray4D<Real> tgas_old_;
   if (is_radiation_enabled_) tgas_old_ = pmy_pack->prad->tgas_old;
+  bool use_cellavg_fix = false;
 
   auto &flat = pmy_pack->pcoord->coord_data.is_minkowski;
   auto &spin = pmy_pack->pcoord->coord_data.bh_spin;
@@ -349,7 +350,6 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
   }
 
   // variable inversion fallback using cell-averaged primitives
-  bool use_cellavg_fix = true;
   if (use_cellavg_fix) {
     par_for("cellavg_fallback", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
