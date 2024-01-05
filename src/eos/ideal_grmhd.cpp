@@ -391,9 +391,9 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
 
         // Add the primitives of valid adjacent cells
         int n_count = 0;
-        for (int kk=km1; kk<=kp1; +kk) {
-          for (int jj=jm1; jj<=jp1; +jj) {
-            for (int ii=im1; ii<=ip1; +ii) {
+        for (int kk=km1; kk<=kp1; ++kk) {
+          for (int jj=jm1; jj<=jp1; ++jj) {
+            for (int ii=im1; ii<=ip1; ++ii) {
               if (c2p_flag_(m,kk,jj,ii) && !(excised)) {
                 w.d  = w.d  + prim(m,IDN,kk,jj,ii);
                 w.vx = w.vx + prim(m,IVX,kk,jj,ii);
