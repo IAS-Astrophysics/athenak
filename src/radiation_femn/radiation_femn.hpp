@@ -200,6 +200,7 @@ class RadiationFEMN {
   void InitializeMetricFluid();
   void InitializeBeamsSourcesFEMN();
   void InitializeBeamsSourcesFPN();
+  void InitializeBeamsSourcesM1();
 
   // ---------------------------------------------------------------------------
   // Functions for closures

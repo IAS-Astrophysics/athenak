@@ -229,13 +229,17 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   }
 
   // beam sources
-  if(beam_source && fpn) {
+  if (beam_source && fpn) {
     Kokkos::realloc(beam_source_1_vals, num_points);
     Kokkos::realloc(beam_source_2_vals, num_points);
-    this->InitializeBeamsSourcesFPN();
+    if (m1_flag) {
+      this->InitializeBeamsSourcesM1();
+    } else {
+      this->InitializeBeamsSourcesFPN();
+    }
   }
 
-  if(beam_source && !fpn) {
+  if (beam_source && !fpn) {
     Kokkos::realloc(beam_source_1_vals, num_points);
     Kokkos::realloc(beam_source_2_vals, num_points);
     this->InitializeBeamsSourcesFEMN();
