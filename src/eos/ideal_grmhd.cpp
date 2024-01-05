@@ -145,6 +145,8 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       }
     }
 
+    if (excised) c2p_flag_(m,k,j,i) = true;
+
     if (!(excised)) {
       // calculate SR conserved quantities
       MHDCons1D u_sr;
@@ -345,6 +347,112 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
     pmy_pack->pmesh->ecounter.neos_fail   += nfail_;
     pmy_pack->pmesh->ecounter.maxit_c2p = maxit_;
   }
+
+  // variable inversion fallback using cell-averaged primitives
+  bool use_cellavg_fix = true;
+  if (use_cellavg_fix) {
+    par_for("cellavg_fallback", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      // Check if the cell is in excised region
+      bool excised = false;
+      if (use_excise) {
+        if (excision_floor_(m,k,j,i)) {
+          excised = true;
+        }
+        if (only_testfloors) {
+          if (excision_flux_(m,k,j,i)) {
+            excised = true;
+          }
+        }
+      }
+
+      // Assign fallback state if inversion fails
+      if (!c2p_flag_(m,k,j,i) && !(excised)) {
+        // Set indices around the problematic cell
+        int km1 = max(k-1, kl); int kp1 = min(k+1, ku);
+        int jm1 = max(j-1, jl); int jp1 = min(j+1, ju);
+        int im1 = max(i-1, il); int ip1 = min(i+1, iu);
+
+        // initialize primitive fallback
+        MHDPrim1D w;
+        w.d = 0.0; w.vx = 0.0; w.vy = 0.0; w.vz = 0.0; w.e = 0.0;
+        // Load cell-centered fields
+        if ((only_testfloors) || (c2p_test_)) {
+          // use input CC fields if only testing floors with FOFC
+          w.bx = bcc(m,IBX,k,j,i);
+          w.by = bcc(m,IBY,k,j,i);
+          w.bz = bcc(m,IBZ,k,j,i);
+        } else {
+          // else use simple linear average of face-centered fields
+          w.bx = 0.5*(b.x1f(m,k,j,i) + b.x1f(m,k,j,i+1));
+          w.by = 0.5*(b.x2f(m,k,j,i) + b.x2f(m,k,j+1,i));
+          w.bz = 0.5*(b.x3f(m,k,j,i) + b.x3f(m,k+1,j,i));
+        }
+
+        // Add the primitives of valid adjacent cells
+        int n_count = 0;
+        for (int kk=km1; kk<=kp1; +kk) {
+          for (int jj=jm1; jj<=jp1; +jj) {
+            for (int ii=im1; ii<=ip1; +ii) {
+              if (c2p_flag_(m,kk,jj,ii) && !(excised)) {
+                w.d  = w.d  + prim(m,IDN,kk,jj,ii);
+                w.vx = w.vx + prim(m,IVX,kk,jj,ii);
+                w.vy = w.vy + prim(m,IVY,kk,jj,ii);
+                w.vz = w.vz + prim(m,IVZ,kk,jj,ii);
+                w.e  = w.e  + prim(m,IEN,kk,jj,ii);
+                n_count += 1;
+              } // endif c2p_flag_(m,kk,jj,ii)
+            } // endfor ii
+          } // endfor jj
+        } // endfor kk
+
+        // Assign the fallback state
+        if (n_count == 0) {
+          w.d  = w0_old_(m,IDN,k,j,i);
+          w.vx = w0_old_(m,IVX,k,j,i);
+          w.vy = w0_old_(m,IVY,k,j,i);
+          w.vz = w0_old_(m,IVZ,k,j,i);
+          w.e  = w0_old_(m,IEN,k,j,i);
+        } else {
+          w.d  = w.d/n_count;
+          w.vx = w.vx/n_count;
+          w.vy = w.vy/n_count;
+          w.vz = w.vz/n_count;
+          w.e  = w.e/n_count;
+        }
+        prim(m,IDN,k,j,i) = w.d;
+        prim(m,IVX,k,j,i) = w.vx;
+        prim(m,IVY,k,j,i) = w.vy;
+        prim(m,IVZ,k,j,i) = w.vz;
+        prim(m,IEN,k,j,i) = w.e;
+
+        // Extract components of metric
+        Real &x1min = size.d_view(m).x1min;
+        Real &x1max = size.d_view(m).x1max;
+        Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+        Real &x2min = size.d_view(m).x2min;
+        Real &x2max = size.d_view(m).x2max;
+        Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+        Real &x3min = size.d_view(m).x3min;
+        Real &x3max = size.d_view(m).x3max;
+        Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+
+        Real glower[4][4], gupper[4][4];
+        ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, glower, gupper);
+
+        // Reset conserved variables
+        HydCons1D u;
+        SingleP2C_IdealGRMHD(glower, gupper, w, eos.gamma, u);
+        cons(m,IDN,k,j,i) = u.d;
+        cons(m,IM1,k,j,i) = u.mx;
+        cons(m,IM2,k,j,i) = u.my;
+        cons(m,IM3,k,j,i) = u.mz;
+        cons(m,IEN,k,j,i) = u.e;
+      } // endif (!c2p_flag_(m,k,j,i) && !(excised))
+    }); // end_par_for cellavg_fallback
+  } // endif use_cellavg_fix
 
   return;
 }
