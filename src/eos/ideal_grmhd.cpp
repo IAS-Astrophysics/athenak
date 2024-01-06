@@ -61,7 +61,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
   auto &is_radiation_enabled_ = pmy_pack->pmhd->is_radiation_enabled;
   DvceArray4D<Real> tgas_old_;
   if (is_radiation_enabled_) tgas_old_ = pmy_pack->prad->tgas_old;
-  bool use_cellavg_fix = true;
+  bool use_cellavg_fallback = false;
 
   auto &flat = pmy_pack->pcoord->coord_data.is_minkowski;
   auto &spin = pmy_pack->pcoord->coord_data.bh_spin;
@@ -350,7 +350,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
   }
 
   // variable inversion fallback using cell-averaged primitives
-  if (use_cellavg_fix) {
+  if (use_cellavg_fallback) {
     par_for("cellavg_fallback", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       // Check if the cell is in excised region
@@ -452,7 +452,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
         cons(m,IEN,k,j,i) = u.e;
       } // endif (!c2p_flag_(m,k,j,i) && !(excised))
     }); // end_par_for cellavg_fallback
-  } // endif use_cellavg_fix
+  } // endif use_cellavg_fallback
 
   return;
 }
