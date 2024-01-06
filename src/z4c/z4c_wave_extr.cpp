@@ -107,8 +107,8 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
   }
 
   // write output
-  #ifdef MPI_PARALLEL
-  if (0 == Globals::my_rank) {
+  #if MPI_PARALLEL_ENABLED
+  if (0 == global_variable::my_rank) {
     for (int g=0; g<nradii; ++g) {
       for(int l=2;l<lmax+1;++l) {
         for(int m=-l;m<l+1;++m) {
