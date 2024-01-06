@@ -54,7 +54,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   bool &update_vel_in_rad_source_ = update_vel_in_rad_source;
   bool second_order_correction = false;
   bool use_old_energy_coupling = true;
-  bool use_artificial_mask = true;
+  bool use_artificial_mask = false;
 
   // Extract coordinate/excision data
   auto &coord = pmy_pack->pcoord->coord_data;

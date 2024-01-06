@@ -61,7 +61,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
   auto &is_radiation_enabled_ = pmy_pack->pmhd->is_radiation_enabled;
   DvceArray4D<Real> tgas_old_;
   if (is_radiation_enabled_) tgas_old_ = pmy_pack->prad->tgas_old;
-  bool use_cellavg_fix = false;
+  bool use_cellavg_fix = true;
 
   auto &flat = pmy_pack->pcoord->coord_data.is_minkowski;
   auto &spin = pmy_pack->pcoord->coord_data.bh_spin;
