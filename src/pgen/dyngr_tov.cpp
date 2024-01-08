@@ -550,7 +550,7 @@ static void ConstructTOV(tov_pgen& tov) {
     P_pt = fmax(P(i) + dr*dP3,0.0);
     m_pt = M(i) + dr*dm3;
     alp_pt = alp(i) + dr*dalp3;
-    R_pt = R_iso(i) + 0.5*dr*dR3;
+    R_pt = R_iso(i) + dr*dR3;
     RHS(r, P_pt, m_pt, alp_pt, R_pt, tov, dP4, dm4, dalp4, dR4);
 
     // Combine all the stages together
