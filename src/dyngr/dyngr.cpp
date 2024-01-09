@@ -109,7 +109,7 @@ DynGR::DynGR(MeshBlockPack *pp, ParameterInput *pin) : pmy_pack(pp) {
   if (fofc.compare("llf") == 0) {
     fofc_method = DynGR_RSolver::llf_dyngr;
   } else if (fofc.compare("hlle") == 0) {
-    fofc_method == DynGR_RSolver::hlle_dyngr;
+    fofc_method = DynGR_RSolver::hlle_dyngr;
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "<mhd> fofc_method = '" << fofc
