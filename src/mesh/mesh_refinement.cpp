@@ -124,10 +124,24 @@ void MeshRefinement::AdaptiveMeshRefinement(Driver *pdrive, ParameterInput *pin)
   int nnew = 0, ndel = 0;
   UpdateMeshBlockTree(nnew, ndel);
 
-  // Refine/derefine mesh and eveolved data, set boundary conditions on new mesh
+  // Refine/derefine mesh and evolved data, set boundary conditions/timestep on new mesh
   if (nnew != 0 || ndel != 0) { // at least one (de)refinement flagged
     RedistAndRefineMeshBlocks(pin, nnew, ndel);
     pdrive->InitBoundaryValuesAndPrimitives(pmy_mesh);
+
+    if (pmbp->phydro != nullptr) {
+      (void) pmbp->phydro->NewTimeStep(pdrive, pdrive->nexp_stages);
+    }
+    if (pmbp->pmhd != nullptr) {
+      (void) pmbp->pmhd->NewTimeStep(pdrive, pdrive->nexp_stages);
+    }
+    if (ppmbp->rad != nullptr) {
+      (void) pmbp->prad->NewTimeStep(pdrive, pdrive->nexp_stages);
+    }
+    if (ppmbp->z4c != nullptr) {
+      (void) pmbp->pz4c->NewTimeStep(pdrive, pdrive->nexp_stages);
+    }
+
     nmb_created += nnew;
     nmb_deleted += ndel;
   }
@@ -267,7 +281,7 @@ void MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
     if (ncyc_since_ref(m+mbs) < refinement_interval) {refine_flag.h_view(m+mbs) = 0;}
   }
 #if MPI_PARALLEL_ENABLED
-  // Pass refine_glag between all ranks
+  // Pass refine_flag between all ranks
     MPI_Allgatherv(MPI_IN_PLACE, pmy_mesh->nmb_eachrank[global_variable::my_rank],
                    MPI_INT, refine_flag.h_view.data(), pmy_mesh->nmb_eachrank,
                    pmy_mesh->gids_eachrank, MPI_INT, MPI_COMM_WORLD);
