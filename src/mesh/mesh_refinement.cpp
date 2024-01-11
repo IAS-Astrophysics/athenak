@@ -165,18 +165,18 @@ void MeshRefinement::AdaptiveMeshRefinement(Driver *pdrive, ParameterInput *pin)
 //! pointer in the problem generator.
 
 void MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
-  // increment cycle counter for each MB
-  for (int m=0; m<(pmy_mesh->nmb_total); ++m) {
-    ncyc_since_ref(m) += 1;
-  }
-  if ((pmbp->pmesh->ncycle)%(ncyc_check_amr) != 0) {return;}  // not cycle to check
-
   // zero refine_flag in host space and sync with device
   for (int m=0; m<(pmy_mesh->nmb_total); ++m) {
     refine_flag.h_view(m) = 0;
   }
   refine_flag.template modify<HostMemSpace>();
   refine_flag.template sync<DevExeSpace>();
+
+  // increment cycle counter for each MB
+  for (int m=0; m<(pmy_mesh->nmb_total); ++m) {
+    ncyc_since_ref(m) += 1;
+  }
+  if ((pmbp->pmesh->ncycle)%(ncyc_check_amr) != 0) {return;}  // not cycle to check
 
   // capture variables for kernels
   auto &multi_d = pmy_mesh->multi_d;
@@ -440,6 +440,12 @@ void MeshRefinement::UpdateMeshBlockTree(int &nnew, int &ndel) {
     bt->Derefine(ndel);
     refine_flag.h_view(bt->GetGID()) = -nleaf; // flag root node of derefinements
   }
+#if MPI_PARALLEL_ENABLED
+  // Pass refine_flag between all ranks
+    MPI_Allgatherv(MPI_IN_PLACE, pmy_mesh->nmb_eachrank[global_variable::my_rank],
+                   MPI_INT, refine_flag.h_view.data(), pmy_mesh->nmb_eachrank,
+                   pmy_mesh->gids_eachrank, MPI_INT, MPI_COMM_WORLD);
+#endif
   // sync host view with device
   refine_flag.template modify<HostMemSpace>();
   refine_flag.template sync<DevExeSpace>();
@@ -537,6 +543,12 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
       refine_flag.h_view(oldm) = 1;
     }
   }
+#if MPI_PARALLEL_ENABLED
+  // Pass refine_flag between all ranks
+  MPI_Allgatherv(MPI_IN_PLACE, pmy_mesh->nmb_eachrank[global_variable::my_rank],
+                 MPI_INT, refine_flag.h_view.data(), pmy_mesh->nmb_eachrank,
+                 pmy_mesh->gids_eachrank, MPI_INT, MPI_COMM_WORLD);
+#endif
   // sync host view with device
   refine_flag.template modify<HostMemSpace>();
   refine_flag.template sync<DevExeSpace>();
@@ -594,7 +606,9 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   // Step 8.
   // Wait for all MPI load balancing communications to finish.  Unpack data.
 #if MPI_PARALLEL_ENABLED
+  Kokkos::fence();
   if (nmb_recv > 0) {RecvAndUnpackAMR();}
+  Kokkos::fence();
   if (nmb_send > 0) {ClearSendAMR();}
 #endif
 
