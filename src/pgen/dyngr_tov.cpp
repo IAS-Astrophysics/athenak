@@ -810,13 +810,13 @@ void VacuumBC(Mesh *pm) {
         u0_(m, IM3, k, j, is-i-1) = 0.0;
         u0_(m, IEN, k, j, is-i-1) = 0.0;
       }
-      if (use_z4c) {
+      /*if (use_z4c) {
         for (int i = 0; i < ng; ++i) {
           for (int n = 0; n < nz4c; n++) {
             z4c(m,n,k,j,is-i-1) = z4c(m,n,k,j,is);
           }
         }
-      }
+      }*/
     }
     if (mb_bcs.d_view(m,BoundaryFace::outer_x1) == BoundaryFlag::user) {
       for (int i=0; i<ng; ++i) {
@@ -831,13 +831,13 @@ void VacuumBC(Mesh *pm) {
         u0_(m, IM3, k, j, ie+i+1) = 0.0;
         u0_(m, IEN, k, j, ie+i+1) = 0.0;
       }
-      if (use_z4c) {
+      /*if (use_z4c) {
         for (int i = 0; i < ng; ++i) {
           for (int n = 0; n < nz4c; n++) {
             z4c(m,n,k,j,ie+i+1) = z4c(m,n,k,j,ie);
           }
         }
-      }
+      }*/
     }
   });
 
@@ -858,13 +858,13 @@ void VacuumBC(Mesh *pm) {
         u0_(m, IM3, k, js-j-1, i) = 0.0;
         u0_(m, IEN, k, js-j-1, i) = 0.0;
       }
-      if (use_z4c) {
+      /*if (use_z4c) {
         for (int j = 0; j < ng; ++j) {
           for (int n = 0; n < nz4c; ++n) {
             z4c(m,n,k,js-j-1,i) = z4c(m,n,k,js,i);
           }
         }
-      }
+      }*/
     }
     if (mb_bcs.d_view(m,BoundaryFace::outer_x2) == BoundaryFlag::user) {
       for (int j=0; j<ng; ++j) {
@@ -879,13 +879,13 @@ void VacuumBC(Mesh *pm) {
         u0_(m, IM3, k, je+j+1, i) = 0.0;
         u0_(m, IEN, k, je+j+1, i) = 0.0;
       }
-      if (use_z4c) {
+      /*if (use_z4c) {
         for (int j = 0; j < ng; ++j) {
           for (int n = 0; n < nz4c; ++n) {
             z4c(m,n,k,je+j+1,i) = z4c(m,n,k,je,i);
           }
         }
-      }
+      }*/
     }
   });
 
@@ -906,13 +906,13 @@ void VacuumBC(Mesh *pm) {
         u0_(m, IM3, ks-k-1, j, i) = 0.0;
         u0_(m, IEN, ks-k-1, j, i) = 0.0;
       }
-      if (use_z4c) {
+      /*if (use_z4c) {
         for (int k = 0; k < ng; ++k) {
           for (int n = 0; n < nz4c; ++n) {
             z4c(m,n,ks-k-1,j,i) = z4c(m,n,ks,j,i);
           }
         }
-      }
+      }*/
     }
     if (mb_bcs.d_view(m,BoundaryFace::outer_x3) == BoundaryFlag::user) {
       for (int k=0; k<ng; ++k) {
@@ -927,13 +927,13 @@ void VacuumBC(Mesh *pm) {
         u0_(m, IM3, ke+k+1, j, i) = 0.0;
         u0_(m, IEN, ke+k+1, j, i) = 0.0;
       }
-      if (use_z4c) {
+      /*if (use_z4c) {
         for (int k = 0; k < ng; ++k) {
           for (int n = 0; n < nz4c; ++n) {
             z4c(m,n,ke+k+1,j,i) = z4c(m,n,ke,j,i);
           }
         }
-      }
+      }*/
     }
   });
 }
