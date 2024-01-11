@@ -14,6 +14,7 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
+#include "mhd/mhd.hpp"
 #include "eos/eos.hpp"
 #include "srcterms/srcterms.hpp"
 #include "bvals/bvals.hpp"
@@ -160,8 +161,8 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // allocate memory to save non-updated gas primitive variables
   if (is_mhd_enabled) {
-    int nmhd_ = pmy_pack->pmhd->nmhd;
-    int nscalars_ = pmy_pack->pmhd->nscalars;
+    int &nmhd_ = pmy_pack->pmhd->nmhd;
+    int &nscalars_ = pmy_pack->pmhd->nscalars;
     if (!update_vel_in_rad_source) Kokkos::realloc(w_noupdate,nmb,(nmhd_+nscalars_),ncells3,ncells2,ncells1);
   }
 
