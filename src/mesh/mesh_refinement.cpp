@@ -22,6 +22,8 @@
 
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "radiation/radiation.hpp"
+#include "z4c/z4c.hpp"
 #include "prolongation.hpp"
 #include "restriction.hpp"
 
@@ -135,10 +137,10 @@ void MeshRefinement::AdaptiveMeshRefinement(Driver *pdrive, ParameterInput *pin)
     if (pmbp->pmhd != nullptr) {
       (void) pmbp->pmhd->NewTimeStep(pdrive, pdrive->nexp_stages);
     }
-    if (ppmbp->rad != nullptr) {
+    if (pmbp->prad != nullptr) {
       (void) pmbp->prad->NewTimeStep(pdrive, pdrive->nexp_stages);
     }
-    if (ppmbp->z4c != nullptr) {
+    if (pmbp->pz4c != nullptr) {
       (void) pmbp->pz4c->NewTimeStep(pdrive, pdrive->nexp_stages);
     }
 

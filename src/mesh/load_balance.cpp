@@ -187,6 +187,8 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
           if (rb_idx > 0) {
             recv_buf.h_view(rb_idx).offset = recv_buf.h_view((rb_idx-1)).offset +
                                              recv_buf.h_view((rb_idx-1)).cnt;
+          } else {
+            recv_buf.h_view(rb_idx).offset = 0;
           }
           rb_idx++;
         }
@@ -207,6 +209,8 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
         if (rb_idx > 0) {
           recv_buf.h_view(rb_idx).offset = recv_buf.h_view((rb_idx-1)).offset +
                                              recv_buf.h_view((rb_idx-1)).cnt;
+        } else {
+          recv_buf.h_view(rb_idx).offset = 0;
         }
         rb_idx++;
       }
@@ -230,6 +234,8 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
         if (rb_idx > 0) {
           recv_buf.h_view(rb_idx).offset = recv_buf.h_view((rb_idx-1)).offset +
                                            recv_buf.h_view((rb_idx-1)).cnt;
+        } else {
+          recv_buf.h_view(rb_idx).offset = 0;
         }
         rb_idx++;
       }
@@ -426,6 +432,8 @@ std::cout <<"Rank="<<global_variable::my_rank<<"  recv="<<nmb_recv<<"  send="<<n
           if (sb_idx > 0) {
             send_buf.h_view(sb_idx).offset = send_buf.h_view((sb_idx-1)).offset +
                                              send_buf.h_view((sb_idx-1)).cnt;
+          } else {
+            send_buf.h_view(sb_idx).offset = 0;
           }
           sb_idx++;
         }
@@ -447,6 +455,8 @@ std::cout <<"Rank="<<global_variable::my_rank<<"  recv="<<nmb_recv<<"  send="<<n
           if (sb_idx > 0) {
             send_buf.h_view(sb_idx).offset = send_buf.h_view((sb_idx-1)).offset +
                                              send_buf.h_view((sb_idx-1)).cnt;
+          } else {
+            send_buf.h_view(sb_idx).offset = 0;
           }
           sb_idx++;
         }
@@ -470,6 +480,8 @@ std::cout <<"Rank="<<global_variable::my_rank<<"  recv="<<nmb_recv<<"  send="<<n
           if (sb_idx > 0) {
             send_buf.h_view(sb_idx).offset = send_buf.h_view((sb_idx-1)).offset +
                                              send_buf.h_view((sb_idx-1)).cnt;
+          } else {
+            send_buf.h_view(sb_idx).offset = 0;
           }
           sb_idx++;
         }
