@@ -113,12 +113,14 @@ class MHD {
   DvceArray4D<bool> c2p_flag; // flag for each cell to indicate if c2p succeeds
   DvceArray5D<Real> w0_old;   // save old primitive variables for rad source calculation
 
-  // following used for entropy fix
+  // flags and variables for ad hoc fixes
   bool entropy_fix = false;
   bool entropy_fix_turnoff = false;
   Real sigma_cold_cut;
   bool c2p_test = false;
-  bool is_radiation_enabled = false; 
+  bool is_radiation_enabled = false;
+  bool use_temperature_fix = false;
+  bool cellavg_fix_turn_on;
 
   // container to hold names of TaskIDs
   MHDTaskIDs id;

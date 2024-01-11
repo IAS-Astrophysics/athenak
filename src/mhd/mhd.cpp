@@ -115,7 +115,8 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   // Source terms (constructor parses input file to initialize only srcterms needed)
   psrc = new SourceTerms("mhd", ppack, pin);
 
-  // Entropy fix
+  // Ad hoc fixes
+  cellavg_fix_turn_on = pin->GetOrAddBoolean("mhd","cellavg_fix_turn_on",true);
   c2p_test = pin->GetOrAddBoolean("mhd","c2p_test",false);
   is_radiation_enabled = pin->DoesBlockExist("radiation");
   if (pin->DoesParameterExist("mhd","entropy_fix")) {

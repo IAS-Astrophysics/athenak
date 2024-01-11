@@ -49,19 +49,24 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
   int &nscal = pmy_pack->pmhd->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
   auto &fofc_ = pmy_pack->pmhd->fofc;
-  auto &c2p_flag_ = pmy_pack->pmhd->c2p_flag;
-  auto &entropy_fix_ = pmy_pack->pmhd->entropy_fix;
-  auto &entropy_fix_turnoff_ = pmy_pack->pmhd->entropy_fix_turnoff;
-  auto &sigma_cold_cut_ = pmy_pack->pmhd->sigma_cold_cut;
-  auto c2p_test_ = pmy_pack->pmhd->c2p_test;
-  // int entropyIdx = (entropy_fix_) ? nmhd+nscal-1 : -1;
   auto eos = eos_data;
   Real gm1 = eos_data.gamma - 1.0;
+
+  // flags and variables for ad hoc fixes
+  auto &c2p_flag_ = pmy_pack->pmhd->c2p_flag;
   auto &w0_old_ = pmy_pack->pmhd->w0_old;
   auto &is_radiation_enabled_ = pmy_pack->pmhd->is_radiation_enabled;
-  DvceArray4D<Real> tgas_old_;
-  if (is_radiation_enabled_) tgas_old_ = pmy_pack->prad->tgas_old;
-  bool use_cellavg_fallback = false;
+  auto &use_temperature_fix_ = pmy_pack->pmhd->use_temperature_fix;
+  DvceArray4D<Real> tgas_radsource_;
+  if (is_radiation_enabled_) tgas_radsource_ = pmy_pack->prad->tgas_radsource;
+  bool &cellavg_fix_turn_on_ = pmy_pack->pmhd->cellavg_fix_turn_on;
+
+  // flags and variables for entropy fix
+  auto &entropy_fix_ = pmy_pack->pmhd->entropy_fix;
+  auto &entropy_fix_turnoff_ = pmy_pack->pmhd->entropy_fix_turnoff;
+  int entropyIdx = (entropy_fix_) ? nmhd+nscal-1 : -1;
+  auto c2p_test_ = pmy_pack->pmhd->c2p_test;
+  auto &sigma_cold_cut_ = pmy_pack->pmhd->sigma_cold_cut;
 
   auto &flat = pmy_pack->pcoord->coord_data.is_minkowski;
   auto &spin = pmy_pack->pcoord->coord_data.bh_spin;
@@ -168,103 +173,97 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       // SingleC2P_IdealSRMHD_NH(u_sr, eos, s2, b2, rpar, w, w_old,
       //                         dfloor_used, efloor_used, c2p_failure, iter_used);
 
+      // apply old value fix
+      if (c2p_failure) {
+        w.d  = w_old.d;
+        w.e  = w_old.e;
+        w.vx = w_old.vx;
+        w.vy = w_old.vy;
+        w.vz = w_old.vz;
+      }
+
+      // compute sigma_cold (2*pmag/rho) to decide whether turn on the fixes
+      Real sigma_cold = 0.0;
+      if (!c2p_failure) {
+        Real qq = glower[1][1]*w.vx*w.vx +2.0*glower[1][2]*w.vx*w.vy +2.0*glower[1][3]*w.vx*w.vz
+                + glower[2][2]*w.vy*w.vy +2.0*glower[2][3]*w.vy*w.vz
+                + glower[3][3]*w.vz*w.vz;
+        Real alpha = sqrt(-1.0/gupper[0][0]);
+        Real u0_norm = sqrt(1.0 + qq);
+        Real u0 = u0_norm / alpha;
+        Real u1 = w.vx - alpha * u0_norm * gupper[0][1];
+        Real u2 = w.vy - alpha * u0_norm * gupper[0][2];
+        Real u3 = w.vz - alpha * u0_norm * gupper[0][3];
+
+        // lower vector indices
+        Real u_1 = glower[1][0]*u0 + glower[1][1]*u1 + glower[1][2]*u2 + glower[1][3]*u3;
+        Real u_2 = glower[2][0]*u0 + glower[2][1]*u1 + glower[2][2]*u2 + glower[2][3]*u3;
+        Real u_3 = glower[3][0]*u0 + glower[3][1]*u1 + glower[3][2]*u2 + glower[3][3]*u3;
+
+        // calculate 4-magnetic field
+        Real b0_ = u_1*u.bx + u_2*u.by + u_3*u.bz;
+        Real b1_ = (u.bx + b0_ * u1) / u0;
+        Real b2_ = (u.by + b0_ * u2) / u0;
+        Real b3_ = (u.bz + b0_ * u3) / u0;
+
+        // lower vector indices
+        Real b_0 = glower[0][0]*b0_ + glower[0][1]*b1_ + glower[0][2]*b2_ + glower[0][3]*b3_;
+        Real b_1 = glower[1][0]*b0_ + glower[1][1]*b1_ + glower[1][2]*b2_ + glower[1][3]*b3_;
+        Real b_2 = glower[2][0]*b0_ + glower[2][1]*b1_ + glower[2][2]*b2_ + glower[2][3]*b3_;
+        Real b_3 = glower[3][0]*b0_ + glower[3][1]*b1_ + glower[3][2]*b2_ + glower[3][3]*b3_;
+        Real b_sq = b0_*b_0 + b1_*b_1 + b2_*b_2 + b3_*b_3;
+
+        sigma_cold = b_sq/w.d;
+      }
+
+      // apply temperature fix
+      if (is_radiation_enabled_ && use_temperature_fix_) {
+        if (sigma_cold > sigma_cold_cut_) { // different criterion can be used here
+          Real pgas_ = w.d*tgas_radsource_(m,k,j,i);
+          Real pgas_min = fmax(eos.pfloor, eos.sfloor*pow(w.d, eos.gamma));
+          if (pgas_ < pgas_min) {
+            pgas_ = pgas_min;
+            efloor_used = true;
+          }
+          w.e = pgas_/gm1;
+        }
+      } // endif temperature fix
+
       // apply entropy fix
       if (entropy_fix_ && !entropy_fix_turnoff_) {
-        // compute sigma_cold (2*pmag/rho) to decide whether turn on the fix
-        Real sigma_cold = 0.0;
-        if (!c2p_failure) {
-          Real qq = glower[1][1]*w.vx*w.vx +2.0*glower[1][2]*w.vx*w.vy +2.0*glower[1][3]*w.vx*w.vz
-                  + glower[2][2]*w.vy*w.vy +2.0*glower[2][3]*w.vy*w.vz
-                  + glower[3][3]*w.vz*w.vz;
-          Real alpha = sqrt(-1.0/gupper[0][0]);
-          Real u0_norm = sqrt(1.0 + qq);
-          Real u0 = u0_norm / alpha;
-          Real u1 = w.vx - alpha * u0_norm * gupper[0][1];
-          Real u2 = w.vy - alpha * u0_norm * gupper[0][2];
-          Real u3 = w.vz - alpha * u0_norm * gupper[0][3];
-
-          // lower vector indices
-          Real u_1 = glower[1][0]*u0 + glower[1][1]*u1 + glower[1][2]*u2 + glower[1][3]*u3;
-          Real u_2 = glower[2][0]*u0 + glower[2][1]*u1 + glower[2][2]*u2 + glower[2][3]*u3;
-          Real u_3 = glower[3][0]*u0 + glower[3][1]*u1 + glower[3][2]*u2 + glower[3][3]*u3;
-
-          // calculate 4-magnetic field
-          Real b0_ = u_1*u.bx + u_2*u.by + u_3*u.bz;
-          Real b1_ = (u.bx + b0_ * u1) / u0;
-          Real b2_ = (u.by + b0_ * u2) / u0;
-          Real b3_ = (u.bz + b0_ * u3) / u0;
-
-          // lower vector indices
-          Real b_0 = glower[0][0]*b0_ + glower[0][1]*b1_ + glower[0][2]*b2_ + glower[0][3]*b3_;
-          Real b_1 = glower[1][0]*b0_ + glower[1][1]*b1_ + glower[1][2]*b2_ + glower[1][3]*b3_;
-          Real b_2 = glower[2][0]*b0_ + glower[2][1]*b1_ + glower[2][2]*b2_ + glower[2][3]*b3_;
-          Real b_3 = glower[3][0]*b0_ + glower[3][1]*b1_ + glower[3][2]*b2_ + glower[3][3]*b3_;
-          Real b_sq = b0_*b_0 + b1_*b_1 + b2_*b_2 + b3_*b_3;
-
-          sigma_cold = b_sq/w.d;
-        }
-
         // fix the prim in strongly magnetized region or cells that fail the variable inversion
         if (c2p_failure || (sigma_cold > sigma_cold_cut_)) {
           // compute the entropy fix
-          // bool dfloor_used_in_fix=false, efloor_used_in_fix=false;
-          // bool c2p_failure_in_fix=c2p_failure;
-          // int iter_used_in_fix=0;
-          // HydPrim1D w_fix;
-          // w_fix.d  = w.d;
-          // w_fix.vx = w.vx;
-          // w_fix.vy = w.vy;
-          // w_fix.vz = w.vz;
-          // w_fix.e  = w.e;
-          // Real &s_tot = cons(m,entropyIdx,k,j,i);
-          // SingleC2P_IdealSRMHD_EntropyFix(u_sr, s_tot, eos, s2, b2, rpar, w_fix, w_old,
-          //                                 dfloor_used_in_fix, efloor_used_in_fix,
-          //                                 c2p_failure_in_fix, iter_used_in_fix);
-
-          // set the fallback state using old prim
-          if (c2p_failure) {
-            w.d  = w_old.d;
-            w.e  = w_old.e;
-            w.vx = w_old.vx;
-            w.vy = w_old.vy;
-            w.vz = w_old.vz;
-          }
-
-          // gas-radiation temperature coupling fix
-          // if (is_radiation_enabled_) {
-          //   Real pgas_ = w.d*tgas_old_(m,k,j,i);
-          //   Real pgas_min = fmax(eos.pfloor, eos.sfloor*pow(w.d, eos.gamma));
-          //   if (pgas_ < pgas_min) {
-          //     pgas_ = pgas_min;
-          //     efloor_used = true;
-          //   }
-          //   w.e = pgas_/gm1;
-          // }
-
+          bool dfloor_used_in_fix=false, efloor_used_in_fix=false;
+          bool c2p_failure_in_fix=c2p_failure;
+          int iter_used_in_fix=0;
+          HydPrim1D w_fix;
+          w_fix.d  = w.d;
+          w_fix.vx = w.vx;
+          w_fix.vy = w.vy;
+          w_fix.vz = w.vz;
+          w_fix.e  = w.e;
+          Real &s_tot = cons(m,entropyIdx,k,j,i);
+          SingleC2P_IdealSRMHD_EntropyFix(u_sr, s_tot, eos, s2, b2, rpar, w_fix, w_old,
+                                          dfloor_used_in_fix, efloor_used_in_fix,
+                                          c2p_failure_in_fix, iter_used_in_fix);
           // entropy fix
-          // if (!c2p_failure_in_fix) {
-          //   // successful entropy-fixed c2p
-          //   // only apply fix when gas temperature is overestimated
-          //   w.d  = w_fix.d;
-          //   w.e  = w_fix.e;
-          //   w.vx = w_fix.vx;
-          //   w.vy = w_fix.vy;
-          //   w.vz = w_fix.vz;
-          //   dfloor_used = dfloor_used_in_fix;
-          //   efloor_used = efloor_used_in_fix;
-          //   c2p_failure = c2p_failure_in_fix;
-          //   iter_used_in_fix = iter_used;
-          // } else {
-          //   w.d  = w_old.d;
-          //   w.e  = w_old.e;
-          //   w.vx = w_old.vx;
-          //   w.vy = w_old.vy;
-          //   w.vz = w_old.vz;
-          // }
-
+          if (!c2p_failure_in_fix) {
+            // successful entropy-fixed c2p
+            w.d  = w_fix.d;
+            w.e  = w_fix.e;
+            w.vx = w_fix.vx;
+            w.vy = w_fix.vy;
+            w.vz = w_fix.vz;
+            dfloor_used = dfloor_used_in_fix;
+            efloor_used = efloor_used_in_fix;
+            c2p_failure = c2p_failure_in_fix;
+            iter_used_in_fix = iter_used;
+          }
         } // endif (c2p_failure || (sigma_cold > sigma_cold_cut_))
-
       } // endif entropy_fix_
+
+      // flag the cell if c2p succeeds or fails
       c2p_flag_(m,k,j,i) = !c2p_failure;
 
       // apply velocity ceiling if necessary
@@ -349,9 +348,9 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
     pmy_pack->pmesh->ecounter.maxit_c2p = maxit_;
   }
 
-  // variable inversion fallback using cell-averaged primitives
-  if (use_cellavg_fallback) {
-    par_for("cellavg_fallback", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
+  // fallback for the failure of variable inversion that uses the average of the valid primitives in adjacent cells
+  if (cellavg_fix_turn_on_) {
+    par_for("adjacent_cellavg_fix", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       // Check if the cell is in excised region
       bool excised = false;
@@ -451,8 +450,8 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
         cons(m,IM3,k,j,i) = u.mz;
         cons(m,IEN,k,j,i) = u.e;
       } // endif (!c2p_flag_(m,k,j,i) && !(excised))
-    }); // end_par_for cellavg_fallback
-  } // endif use_cellavg_fallback
+    }); // end_par_for 'adjacent_cellavg_fix'
+  } // endif (cellavg_fix_turn_on_)
 
   return;
 }

@@ -42,7 +42,8 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
     na("na",1,1,1,1,1,1),
     norm_to_tet("norm_to_tet",1,1,1,1,1,1),
     beam_mask("beam_mask",1,1,1,1,1),
-    tgas_old("tgas_old",1,1,1,1) {
+    w_noupdate("w_noupdate",1,1,1,1,1),
+    tgas_radsource("tgas_radsource",1,1,1,1) {
   // Check for general relativity
   if (!(pmy_pack->pcoord->is_general_relativistic)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -69,8 +70,14 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
   }
   are_units_enabled = pin->DoesBlockExist("units");
 
-  // Check if use intermediate velocity for source term update
+  // Check flags for ad hoc fixes
   update_vel_in_rad_source = pin->GetOrAddBoolean("radiation","update_vel_in_rad_source",true);
+  correct_vel_in_rad_source = pin->GetOrAddBoolean("radiation","correct_vel_in_rad_source",true);
+  use_old_coupling_in_rad_source = pin->GetOrAddBoolean("radiation","use_old_coupling_in_rad_source",true);
+  compton_second_order_correction = pin->GetOrAddBoolean("radiation","compton_second_order_correction",false);
+  compton_use_artificial_mask = pin->GetOrAddBoolean("radiation","compton_use_artificial_mask",false);
+  temperature_fix_turn_on = pin->GetOrAddBoolean("radiation","temperature_fix_turn_on",false);
+  if (!is_mhd_enabled) update_vel_in_rad_source=true; // non-updated velocity is only saved for MHD
 
   // Enable radiation source term (radiation+(M)HD) by default if hydro or mhd enabled
   // Otherwise, disable radiation source term.  The former can be overriden by
@@ -151,8 +158,15 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
   int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
   Kokkos::realloc(i0,nmb,prgeo->nangles,ncells3,ncells2,ncells1);
 
-  // allocate memory for gas temperature
-  Kokkos::realloc(tgas_old,nmb,ncells3,ncells2,ncells1);
+  // allocate memory to save non-updated gas primitive variables
+  if (is_mhd_enabled) {
+    int &nmhd_ = pmy_pack->pmhd->nmhd;
+    int &nscalars_ = pmy_pack->pmhd->nscalars;
+    if (!update_vel_in_rad_source) Kokkos::realloc(w_noupdate,nmb,(nmhd_+nscalars_),ncells3,ncells2,ncells1);
+  }
+
+  // allocate memory to save updated gas temperature
+  Kokkos::realloc(tgas_radsource,nmb,ncells3,ncells2,ncells1);
   }
 
   // allocate memory for conserved variables on coarse mesh

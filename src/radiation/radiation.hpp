@@ -87,8 +87,13 @@ class Radiation {
   bool is_mhd_enabled;
   bool are_units_enabled;
 
-  // flag to use intermediate velocity for source term update
-  bool update_vel_in_rad_source;
+  // flags for ad hoc fixes
+  bool update_vel_in_rad_source;        // use updated velocity before computing the source term update
+  bool correct_vel_in_rad_source;       // correct velocity in radiation-dominated regime
+  bool use_old_coupling_in_rad_source;  // use old-style gas-radiation energy coupling
+  bool compton_second_order_correction; // adopt second-order relativistic correction in Compton process
+  bool compton_use_artificial_mask;     // adopt an artificial mask function for Compton term
+  bool temperature_fix_turn_on;         // adopt temperature fix after radiation source term
 
   // Radiation source term parameters
   bool rad_source;          // flag to enable/disable radiation source term
@@ -138,7 +143,8 @@ class Radiation {
   Real dtnew;
 
   // save the updated gas temperature computed from source term
-  DvceArray4D<Real> tgas_old;
+  DvceArray4D<Real> tgas_radsource;
+  DvceArray5D<Real> w_noupdate;
 
   // reconstruction method
   ReconstructionMethod recon_method;

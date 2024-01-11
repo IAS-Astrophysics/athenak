@@ -181,7 +181,7 @@ TaskStatus Radiation::CopyCons(Driver *pdrive, int stage) {
     }
 
     // copy the prim for rad source term calculation
-    // Kokkos::deep_copy(DevExeSpace(), pmhd_->w0_old, pmhd_->w0);
+    if (!update_vel_in_rad_source) Kokkos::deep_copy(DevExeSpace(), w_noupdate, pmhd_->w0);
   }
 
   if (stage == 1) {
