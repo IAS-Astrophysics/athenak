@@ -213,6 +213,11 @@ class EquationOfState {
                           const bool only_testfloors,
                           const int il, const int iu, const int jl, const int ju,
                           const int kl, const int ku);
+  virtual void ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
+                          DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc,
+                          const bool only_testfloors, const bool temperature_fix,
+                          const int il, const int iu, const int jl, const int ju,
+                          const int kl, const int ku);
 
   // virtual functions to convert prim to cons in either Hydro or MHD (depending on
   // arguments), overwritten in derived eos classes.
@@ -380,7 +385,7 @@ class IdealGRMHD : public EquationOfState {
   IdealGRMHD(MeshBlockPack *pp, ParameterInput *pin);
   void ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
                   DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc,
-                  const bool only_testfloors,
+                  const bool only_testfloors, const bool temperature_fix,
                   const int il, const int iu, const int jl, const int ju,
                   const int kl, const int ku) override;
   void PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,

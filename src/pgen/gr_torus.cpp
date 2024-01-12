@@ -1437,8 +1437,8 @@ void NoInflowTorus(Mesh *pm) {
   } else if (pm->pmb_pack->pmhd != nullptr) {
     auto &b0 = pm->pmb_pack->pmhd->b0;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
-    pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc,false,is-ng,is,0,(n2-1),0,(n3-1));
-    pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc,false,ie,ie+ng,0,(n2-1),0,(n3-1));
+    pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc,false,false,is-ng,is,0,(n2-1),0,(n3-1));
+    pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc,false,false,ie,ie+ng,0,(n2-1),0,(n3-1));
   }
   // Set X1-BCs on w0 if Meshblock face is at the edge of computational domain
   par_for("noinflow_hydro_x1", DevExeSpace(),0,(nmb-1),0,(nvar-1),0,(n3-1),0,(n2-1),
@@ -1522,8 +1522,8 @@ void NoInflowTorus(Mesh *pm) {
   } else if (pm->pmb_pack->pmhd != nullptr) {
     auto &b0 = pm->pmb_pack->pmhd->b0;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
-    pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc,false,0,(n1-1),js-ng,js,0,(n3-1));
-    pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc,false,0,(n1-1),je,je+ng,0,(n3-1));
+    pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc,false,false,0,(n1-1),js-ng,js,0,(n3-1));
+    pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc,false,false,0,(n1-1),je,je+ng,0,(n3-1));
   }
   // Set X2-BCs on w0 if Meshblock face is at the edge of computational domain
   par_for("noinflow_hydro_x2", DevExeSpace(),0,(nmb-1),0,(nvar-1),0,(n3-1),0,(n1-1),
@@ -1607,8 +1607,8 @@ void NoInflowTorus(Mesh *pm) {
   } else if (pm->pmb_pack->pmhd != nullptr) {
     auto &b0 = pm->pmb_pack->pmhd->b0;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
-    pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc,false,0,(n1-1),0,(n2-1),ks-ng,ks);
-    pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc,false,0,(n1-1),0,(n2-1),ke,ke+ng);
+    pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc,false,false,0,(n1-1),0,(n2-1),ks-ng,ks);
+    pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc,false,false,0,(n1-1),0,(n2-1),ke,ke+ng);
   }
   // Set X3-BCs on w0 if Meshblock face is at the edge of computational domain
   par_for("noinflow_hydro_x3", DevExeSpace(),0,(nmb-1),0,(nvar-1),0,(n2-1),0,(n1-1),

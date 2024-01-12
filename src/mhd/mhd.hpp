@@ -119,7 +119,6 @@ class MHD {
   Real sigma_cold_cut;
   bool c2p_test = false;
   bool is_radiation_enabled = false;
-  bool use_temperature_fix = false;
   bool cellavg_fix_turn_on;
 
   // container to hold names of TaskIDs

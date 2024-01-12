@@ -137,11 +137,11 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   // Call ConsToPrim over active zones prior to source term application
   if (!(fixed_fluid_)) {
     if (is_hydro_enabled_) {
-      pmy_pack->phydro->peos->ConsToPrim(u0_,w0_,false,is,ie,js,je,ks,ke);
+      pmy_pack->phydro->peos->ConsToPrim(u0_,w0_,false,false,is,ie,js,je,ks,ke);
     } else if (is_mhd_enabled_) {
       auto &b0_ = pmy_pack->pmhd->b0;
       auto &bcc0_ = pmy_pack->pmhd->bcc0;
-      pmy_pack->pmhd->peos->ConsToPrim(u0_,b0_,w0_,bcc0_,false,is,ie,js,je,ks,ke);
+      pmy_pack->pmhd->peos->ConsToPrim(u0_,b0_,w0_,bcc0_,false,false,is,ie,js,je,ks,ke);
     }
   }
 
@@ -620,11 +620,9 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   if (temperature_fix_turn_on) {
     // temperature fix currently only works with MHD
     if (!(fixed_fluid_) && is_mhd_enabled_) {
-        pmy_pack->pmhd->use_temperature_fix = true;
         auto &b0_ = pmy_pack->pmhd->b0;
         auto &bcc0_ = pmy_pack->pmhd->bcc0;
-        pmy_pack->pmhd->peos->ConsToPrim(u0_,b0_,w0_,bcc0_,false,is,ie,js,je,ks,ke);
-        pmy_pack->pmhd->use_temperature_fix = false;
+        pmy_pack->pmhd->peos->ConsToPrim(u0_,b0_,w0_,bcc0_,false,true,is,ie,js,je,ks,ke);
     }
   } // endif temperature_fix_turn_on
 

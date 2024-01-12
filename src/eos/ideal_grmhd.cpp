@@ -39,7 +39,7 @@ IdealGRMHD::IdealGRMHD(MeshBlockPack *pp, ParameterInput *pin) :
 
 void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
                             DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc,
-                            const bool only_testfloors,
+                            const bool only_testfloors, const bool temperature_fix,
                             const int il, const int iu, const int jl, const int ju,
                             const int kl, const int ku) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
@@ -56,7 +56,6 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
   auto &c2p_flag_ = pmy_pack->pmhd->c2p_flag;
   auto &w0_old_ = pmy_pack->pmhd->w0_old;
   auto &is_radiation_enabled_ = pmy_pack->pmhd->is_radiation_enabled;
-  auto &use_temperature_fix_ = pmy_pack->pmhd->use_temperature_fix;
   DvceArray4D<Real> tgas_radsource_;
   if (is_radiation_enabled_) tgas_radsource_ = pmy_pack->prad->tgas_radsource;
   bool &cellavg_fix_turn_on_ = pmy_pack->pmhd->cellavg_fix_turn_on;
@@ -217,8 +216,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       }
 
       // apply temperature fix
-      // if (is_radiation_enabled_ && use_temperature_fix_) {
-      if (is_radiation_enabled_) {
+      if (is_radiation_enabled_ && temperature_fix) {
         if (sigma_cold > sigma_cold_cut_) { // different criterion can be used here
           Real pgas_ = w.d*tgas_radsource_(m,k,j,i);
           Real pgas_min = fmax(eos.pfloor, eos.sfloor*pow(w.d, eos.gamma));
