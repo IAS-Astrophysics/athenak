@@ -53,7 +53,7 @@ IdealSRHydro::IdealSRHydro(MeshBlockPack *pp, ParameterInput *pin) :
 //! This function operates over range of cells given in argument list.
 
 void IdealSRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
-                              const bool only_testfloors, const bool temperature_fix,
+                              const bool only_testfloors,
                               const int il, const int iu, const int jl, const int ju,
                               const int kl, const int ku) {
   int &nhyd  = pmy_pack->phydro->nhydro;
