@@ -142,7 +142,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
     } else if (is_mhd_enabled_) {
       auto &b0_ = pmy_pack->pmhd->b0;
       auto &bcc0_ = pmy_pack->pmhd->bcc0;
-      pmy_pack->pmhd->peos->ConsToPrim(u0_,b0_,w0_,bcc0_,false,false,is,ie,js,je,ks,ke);
+      pmy_pack->pmhd->peos->ConsToPrim(u0_,b0_,w0_,bcc0_,false,true,is,ie,js,je,ks,ke);
     }
   }
 
