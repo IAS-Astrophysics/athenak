@@ -69,7 +69,7 @@ void SingleP2C_IsothermalMHD(const HydPrim1D &w, HydCons1D &u) {
 
 void IsothermalMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
                                DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc,
-                               const bool only_testfloors,
+                               const bool only_testfloors, const bool temperature_fix,
                                const int il, const int iu, const int jl, const int ju,
                                const int kl, const int ku) {
   int &nmhd  = pmy_pack->pmhd->nmhd;

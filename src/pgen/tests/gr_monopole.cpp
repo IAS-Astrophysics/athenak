@@ -466,8 +466,8 @@ void ReflectingMonopole(Mesh *pm) {
   // X1-Boundary
   // ConsToPrim over all x1 ghost zones *and* at the innermost/outermost x1-active zones
   // of Meshblocks, even if Meshblock face is not at the edge of computational domain
-  pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc_,false,is-ng,is,0,(n2-1),0,(n3-1));
-  pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc_,false,ie,ie+ng,0,(n2-1),0,(n3-1));
+  pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc_,false,false,is-ng,is,0,(n2-1),0,(n3-1));
+  pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc_,false,false,ie,ie+ng,0,(n2-1),0,(n3-1));
   // Set X1-BCs on w0 if Meshblock face is at the edge of computational domain
   par_for("noinflow_hydro_x1", DevExeSpace(),0,(nmb-1),0,(nvar-1),0,(n3-1),0,(n2-1),
   KOKKOS_LAMBDA(int m, int n, int k, int j) {
@@ -537,8 +537,8 @@ void ReflectingMonopole(Mesh *pm) {
   // X2-Boundary
   // ConsToPrim over all x2 ghost zones *and* at the innermost/outermost x2-active zones
   // of Meshblocks, even if Meshblock face is not at the edge of computational domain
-  pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc_,false,0,(n1-1),js-ng,js,0,(n3-1));
-  pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc_,false,0,(n1-1),je,je+ng,0,(n3-1));
+  pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc_,false,false,0,(n1-1),js-ng,js,0,(n3-1));
+  pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc_,false,false,0,(n1-1),je,je+ng,0,(n3-1));
   // Set X2-BCs on w0 if Meshblock face is at the edge of computational domain
   par_for("noinflow_hydro_x2", DevExeSpace(),0,(nmb-1),0,(nvar-1),0,(n3-1),0,(n1-1),
   KOKKOS_LAMBDA(int m, int n, int k, int i) {
@@ -608,8 +608,8 @@ void ReflectingMonopole(Mesh *pm) {
   // x3-Boundary
   // ConsToPrim over all x3 ghost zones *and* at the innermost/outermost x3-active zones
   // of Meshblocks, even if Meshblock face is not at the edge of computational domain
-  pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc_,false,0,(n1-1),0,(n2-1),ks-ng,ks);
-  pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc_,false,0,(n1-1),0,(n2-1),ke,ke+ng);
+  pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc_,false,false,0,(n1-1),0,(n2-1),ks-ng,ks);
+  pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc_,false,false,0,(n1-1),0,(n2-1),ke,ke+ng);
   // Set x3-BCs on w0 if Meshblock face is at the edge of computational domain
   par_for("noinflow_hydro_x3", DevExeSpace(),0,(nmb-1),0,(nvar-1),0,(n2-1),0,(n1-1),
   KOKKOS_LAMBDA(int m, int n, int j, int i) {

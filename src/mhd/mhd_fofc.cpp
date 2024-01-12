@@ -109,7 +109,7 @@ void MHD::FOFC(Driver *pdriver, int stage) {
 
     // Test whether conversion to primitives requires floors
     // Note b0 and w0 passed to function, but not used/changed.
-    peos->ConsToPrim(utest_, b0, w0, bcctest_, true, il, iu, jl, ju, kl, ku);
+    peos->ConsToPrim(utest_, b0, w0, bcctest_, true, false, il, iu, jl, ju, kl, ku);
   }
 
   auto &coord = pmy_pack->pcoord->coord_data;
