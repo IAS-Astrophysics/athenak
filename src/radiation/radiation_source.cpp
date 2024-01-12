@@ -499,7 +499,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
         Real sumb2 = sumb1/suma2;
         Real sumb3 = wdn*tgas/(gm1*sumb1*jr_cm) + sqrt(sqrt(jr_cm/arad_))*inv_t_electron_;
         sumb3 = 1.0 + 4*sumb3 / SQR(sumb2/(sumb1*jr_cm) + 1.0);
-        sumb3 = 1.0 + 0.5*(max(sqrt(sumb3), 1.0) - 1.0);
+        sumb3 = 1.0 + 0.5*(fmax(sqrt(sumb3), 1.0) - 1.0);
       }
 
       // compute partially updated radiation temperature

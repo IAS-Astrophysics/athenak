@@ -368,9 +368,12 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       // Assign fallback state if inversion fails
       if (!c2p_flag_(m,k,j,i) && !(excised)) {
         // Set indices around the problematic cell
-        int km1 = max(k-1, kl); int kp1 = min(k+1, ku);
-        int jm1 = max(j-1, jl); int jp1 = min(j+1, ju);
-        int im1 = max(i-1, il); int ip1 = min(i+1, iu);
+        int km1 = (k-1 < kl) ? kl : k-1;
+        int kp1 = (k+1 > ku) ? ku : k+1;
+        int jm1 = (j-1 < jl) ? jl : j-1;
+        int jp1 = (j+1 > ju) ? ju : j+1;
+        int im1 = (i-1 < il) ? il : i-1;
+        int ip1 = (i+1 > iu) ? iu : i+1;
 
         // initialize primitive fallback
         MHDPrim1D w;
