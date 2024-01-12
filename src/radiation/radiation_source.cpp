@@ -137,7 +137,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   // Call ConsToPrim over active zones prior to source term application
   if (!(fixed_fluid_)) {
     if (is_hydro_enabled_) {
-      pmy_pack->phydro->peos->ConsToPrim(u0_,w0_,false,false,is,ie,js,je,ks,ke);
+      pmy_pack->phydro->peos->ConsToPrim(u0_,w0_,false,is,ie,js,je,ks,ke);
     } else if (is_mhd_enabled_) {
       auto &b0_ = pmy_pack->pmhd->b0;
       auto &bcc0_ = pmy_pack->pmhd->bcc0;
