@@ -352,7 +352,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }); // end par_for
 
   // variable inversion
-  pmbp->pmhd->peos->ConsToPrim(u0, b0, w0, bcc0, false, is, ie, js, je, ks, ke);
+  pmbp->pmhd->peos->ConsToPrim(u0, b0, w0, bcc0, false, false, is, ie, js, je, ks, ke);
   // printf("rho_ini=%e, egas_ini=%e \n", rho_ctr, rho_ctr*tgas_ctr/gm1);
   // printf("rho_inv=%e, egas_inv=%e \n", w0(0,IDN,0,100,100), w0(0,IEN,0,100,100));
 
