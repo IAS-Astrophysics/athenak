@@ -58,6 +58,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   bool &use_old_coupling_in_rad_source_ = use_old_coupling_in_rad_source;
   bool &compton_second_order_correction_ = compton_second_order_correction;
   bool &compton_use_artificial_mask_ = compton_use_artificial_mask;
+  bool &temperature_fix_turn_on_ = temperature_fix_turn_on;
   auto &tgas_radsource_ = tgas_radsource; // for saving final gas temperature
 
   // Extract coordinate/excision data
@@ -617,7 +618,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   }); // end par_for 'radiation_source'
 
   // Call ConsToPrim over active zones with temperature fix
-  if (temperature_fix_turn_on) {
+  if (temperature_fix_turn_on_) {
     // temperature fix currently only works with MHD
     if (!(fixed_fluid_) && is_mhd_enabled_) {
         auto &b0_ = pmy_pack->pmhd->b0;

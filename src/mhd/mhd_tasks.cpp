@@ -331,7 +331,7 @@ TaskStatus MHD::ConToPrim(Driver *pdrive, int stage) {
   int n1m1 = indcs.nx1 + 2*ng - 1;
   int n2m1 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng - 1) : 0;
   int n3m1 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng - 1) : 0;
-  peos->ConsToPrim(u0, b0, w0, bcc0, false, false, 0, n1m1, 0, n2m1, 0, n3m1);
+  peos->ConsToPrim(u0, b0, w0, bcc0, false, true, 0, n1m1, 0, n2m1, 0, n3m1);
   return TaskStatus::complete;
 }
 
