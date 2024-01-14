@@ -117,10 +117,9 @@ MeshRefinement::~MeshRefinement() {
 //! \fn void MeshRefinement::AdaptiveMeshRefinement()
 //! \brief Simple driver function for adaptive mesh refinement
 
-void MeshRefinement::AdaptiveMeshRefinement(Driver *pdrive, ParameterInput *pin) {
+void MeshRefinement::AdaptiveMeshRefinement(Driver *pdriver, ParameterInput *pin) {
   // first check refinement criteria
-  MeshBlockPack* pmbp = pmy_mesh->pmb_pack;
-  CheckForRefinement(pmbp);
+  CheckForRefinement(pmy_mesh->pmb_pack);
 
   // then update mesh tree if MeshBlock anywhere (on any rank) is flagged for refinement
   int nnew = 0, ndel = 0;
@@ -129,19 +128,20 @@ void MeshRefinement::AdaptiveMeshRefinement(Driver *pdrive, ParameterInput *pin)
   // Refine/derefine mesh and evolved data, set boundary conditions/timestep on new mesh
   if (nnew != 0 || ndel != 0) { // at least one (de)refinement flagged
     RedistAndRefineMeshBlocks(pin, nnew, ndel);
-    pdrive->InitBoundaryValuesAndPrimitives(pmy_mesh);
+    pdriver->InitBoundaryValuesAndPrimitives(pmy_mesh);
 
+    MeshBlockPack* pmbp = pmy_mesh->pmb_pack;
     if (pmbp->phydro != nullptr) {
-      (void) pmbp->phydro->NewTimeStep(pdrive, pdrive->nexp_stages);
+      (void) pmbp->phydro->NewTimeStep(pdriver, pdriver->nexp_stages);
     }
     if (pmbp->pmhd != nullptr) {
-      (void) pmbp->pmhd->NewTimeStep(pdrive, pdrive->nexp_stages);
+      (void) pmbp->pmhd->NewTimeStep(pdriver, pdriver->nexp_stages);
     }
     if (pmbp->prad != nullptr) {
-      (void) pmbp->prad->NewTimeStep(pdrive, pdrive->nexp_stages);
+      (void) pmbp->prad->NewTimeStep(pdriver, pdriver->nexp_stages);
     }
     if (pmbp->pz4c != nullptr) {
-      (void) pmbp->pz4c->NewTimeStep(pdrive, pdrive->nexp_stages);
+      (void) pmbp->pz4c->NewTimeStep(pdriver, pdriver->nexp_stages);
     }
 
     nmb_created += nnew;
@@ -165,7 +165,8 @@ void MeshRefinement::AdaptiveMeshRefinement(Driver *pdrive, ParameterInput *pin)
 //! pointer in the problem generator.
 
 void MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
-  // zero refine_flag in host space and sync with device
+  // reallocate and zero refine_flag in host space and sync with device
+  Kokkos::realloc(refine_flag, pmy_mesh->nmb_total);
   for (int m=0; m<(pmy_mesh->nmb_total); ++m) {
     refine_flag.h_view(m) = 0;
   }
@@ -632,8 +633,6 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   }
   Kokkos::realloc(ncyc_since_ref, new_nmb_total);
   Kokkos::deep_copy(ncyc_since_ref, new_ncyc_since_ref);
-  // reallocate refine_flag, will be zeroed out at start of CheckForRefinement
-  Kokkos::realloc(refine_flag, new_nmb_total);
 
   // Step 10.
   // Update data in Mesh/MeshBlockPack/MeshBlock classes with new grid properties
