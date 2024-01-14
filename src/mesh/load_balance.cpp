@@ -366,9 +366,6 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
       }
     }
   }
-/**/
-std::cout <<"Rank="<<global_variable::my_rank<<"  recv="<<nmb_recv<<"  send="<<nmb_send<<std::endl;
-/**/
 
   if (nmb_send == 0) return;  // nothing to do
 
