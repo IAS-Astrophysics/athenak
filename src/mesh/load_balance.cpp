@@ -124,6 +124,10 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
 
   // allocate array of recv buffers
   Kokkos::realloc(recv_buf, nmb_recv);
+  recv_req = new MPI_Request[nmb_recv];
+  for (int n=0; n<nmb_recv; ++n) {
+    recv_req[n] = MPI_REQUEST_NULL;
+  }
 
   // count number of cell- and face-centered variables communicated depending on physics
   int ncc_tosend=0, nfc_tosend=0;
@@ -183,7 +187,7 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
           recv_buf.h_view(rb_idx).cnt   = ncc_tosend*(recv_buf.h_view(rb_idx).cntcc) +
                                           nfc_tosend*(recv_buf.h_view(rb_idx).cntfc);
           recv_buf.h_view(rb_idx).lid   = newm - nmbs;
-          recv_buf.h_view(rb_idx).derefine = true;
+          recv_buf.h_view(rb_idx).use_coarse = false;
           if (rb_idx > 0) {
             recv_buf.h_view(rb_idx).offset = recv_buf.h_view((rb_idx-1)).offset +
                                              recv_buf.h_view((rb_idx-1)).cnt;
@@ -206,9 +210,10 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
         recv_buf.h_view(rb_idx).cnt = ncc_tosend*(recv_buf.h_view(rb_idx).cntcc) +
                                       nfc_tosend*(recv_buf.h_view(rb_idx).cntfc);
         recv_buf.h_view(rb_idx).lid = newm - nmbs;
+        recv_buf.h_view(rb_idx).use_coarse = false;
         if (rb_idx > 0) {
           recv_buf.h_view(rb_idx).offset = recv_buf.h_view((rb_idx-1)).offset +
-                                             recv_buf.h_view((rb_idx-1)).cnt;
+                                           recv_buf.h_view((rb_idx-1)).cnt;
         } else {
           recv_buf.h_view(rb_idx).offset = 0;
         }
@@ -230,7 +235,7 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
         recv_buf.h_view(rb_idx).cnt = ncc_tosend*(recv_buf.h_view(rb_idx).cntcc) +
                                       nfc_tosend*(recv_buf.h_view(rb_idx).cntfc);
         recv_buf.h_view(rb_idx).lid = newm - nmbs;
-        recv_buf.h_view(rb_idx).refine = true;
+        recv_buf.h_view(rb_idx).use_coarse = true;
         if (rb_idx > 0) {
           recv_buf.h_view(rb_idx).offset = recv_buf.h_view((rb_idx-1)).offset +
                                            recv_buf.h_view((rb_idx-1)).cnt;
@@ -275,7 +280,7 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
           // post non-blocking receive
           int ierr = MPI_Irecv(pdata.data(), recv_buf.h_view(rb_idx).cnt,
                      MPI_ATHENA_REAL, pmy_mesh->rank_eachmb[oldm+l], tag, amr_comm,
-                     &(recv_buf.h_view(rb_idx).req));
+                     &(recv_req[rb_idx]));
           if (ierr != MPI_SUCCESS) {no_errors=false;}
           rb_idx++;
         }
@@ -290,7 +295,7 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
         // post non-blocking receive
         int ierr = MPI_Irecv(pdata.data(), recv_buf.h_view(rb_idx).cnt, MPI_ATHENA_REAL,
                    pmy_mesh->rank_eachmb[oldm], tag, amr_comm,
-                   &(recv_buf.h_view(rb_idx).req));
+                   &(recv_req[rb_idx]));
         if (ierr != MPI_SUCCESS) {no_errors=false;}
         rb_idx++;
       }
@@ -306,7 +311,7 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
         // post non-blocking receive
         int ierr = MPI_Irecv(pdata.data(), recv_buf.h_view(rb_idx).cnt, MPI_ATHENA_REAL,
                    pmy_mesh->rank_eachmb[oldm], tag, amr_comm,
-                   &(recv_buf.h_view(rb_idx).req));
+                   &(recv_req[rb_idx]));
         if (ierr != MPI_SUCCESS) {no_errors=false;}
         rb_idx++;
       }
@@ -369,6 +374,10 @@ std::cout <<"Rank="<<global_variable::my_rank<<"  recv="<<nmb_recv<<"  send="<<n
 
   // allocate array of send buffers
   Kokkos::realloc(send_buf, nmb_send);
+  send_req = new MPI_Request[nmb_send];
+  for (int n=0; n<nmb_send; ++n) {
+    send_req[n] = MPI_REQUEST_NULL;
+  }
 
   // count number of cell- and face-centered variables communicated depending on physics
   int ncc_tosend=0, nfc_tosend=0;
@@ -428,7 +437,7 @@ std::cout <<"Rank="<<global_variable::my_rank<<"  recv="<<nmb_recv<<"  send="<<n
           send_buf.h_view(sb_idx).cnt   = ncc_tosend*(send_buf.h_view(sb_idx).cntcc) +
                                           nfc_tosend*(send_buf.h_view(sb_idx).cntfc);
           send_buf.h_view(sb_idx).lid   = oldm - ombs;
-          send_buf.h_view(sb_idx).refine = true;
+          send_buf.h_view(sb_idx).use_coarse = false;
           if (sb_idx > 0) {
             send_buf.h_view(sb_idx).offset = send_buf.h_view((sb_idx-1)).offset +
                                              send_buf.h_view((sb_idx-1)).cnt;
@@ -452,6 +461,7 @@ std::cout <<"Rank="<<global_variable::my_rank<<"  recv="<<nmb_recv<<"  send="<<n
           send_buf.h_view(sb_idx).cnt = ncc_tosend*(send_buf.h_view(sb_idx).cntcc) +
                                         nfc_tosend*(send_buf.h_view(sb_idx).cntfc);
           send_buf.h_view(sb_idx).lid = oldm - ombs;
+          send_buf.h_view(sb_idx).use_coarse = false;
           if (sb_idx > 0) {
             send_buf.h_view(sb_idx).offset = send_buf.h_view((sb_idx-1)).offset +
                                              send_buf.h_view((sb_idx-1)).cnt;
@@ -473,7 +483,7 @@ std::cout <<"Rank="<<global_variable::my_rank<<"  recv="<<nmb_recv<<"  send="<<n
           send_buf.h_view(sb_idx).cntcc = cnx1*cnx2*cnx3;
           send_buf.h_view(sb_idx).cntfc = 3*cnx1*cnx2*cnx3 + cnx2*cnx3 + cnx1*cnx3
                                           + cnx1*cnx2;
-          send_buf.h_view(sb_idx).derefine = true;
+          send_buf.h_view(sb_idx).use_coarse = true;
           send_buf.h_view(sb_idx).cnt = ncc_tosend*(send_buf.h_view(sb_idx).cntcc) +
                                         nfc_tosend*(send_buf.h_view(sb_idx).cntfc);
           send_buf.h_view(sb_idx).lid = oldm - ombs;
@@ -537,7 +547,7 @@ std::cout <<"Rank="<<global_variable::my_rank<<"  recv="<<nmb_recv<<"  send="<<n
           // post non-blocking send
           int ierr = MPI_Isend(pdata.data(), send_buf.h_view(sb_idx).cnt, MPI_ATHENA_REAL,
                      new_rank_eachmb[newm+l], tag, amr_comm,
-                     &(send_buf.h_view(sb_idx).req));
+                     &(send_req[sb_idx]));
           if (ierr != MPI_SUCCESS) {no_errors=false;}
           sb_idx++;
         }
@@ -554,7 +564,7 @@ std::cout <<"Rank="<<global_variable::my_rank<<"  recv="<<nmb_recv<<"  send="<<n
           // post non-blocking send
           int ierr = MPI_Isend(pdata.data(), send_buf.h_view(sb_idx).cnt, MPI_ATHENA_REAL,
                      new_rank_eachmb[newm], tag, amr_comm,
-                     &(send_buf.h_view(sb_idx).req));
+                     &(send_req[sb_idx]));
           if (ierr != MPI_SUCCESS) {no_errors=false;}
           sb_idx++;
         }
@@ -574,7 +584,7 @@ std::cout <<"Rank="<<global_variable::my_rank<<"  recv="<<nmb_recv<<"  send="<<n
           // post non-blocking send
           int ierr = MPI_Isend(pdata.data(), send_buf.h_view(sb_idx).cnt, MPI_ATHENA_REAL,
                      new_rank_eachmb[newm], tag, amr_comm,
-                     &(send_buf.h_view(sb_idx).req));
+                     &(send_req[sb_idx]));
           if (ierr != MPI_SUCCESS) {no_errors=false;}
           sb_idx++;
         }
@@ -631,7 +641,7 @@ void MeshRefinement::PackAMRBuffersCC(DvceArray5D<Real> &a, DvceArray5D<Real> &c
       int i = (idx - k*nji - j*ni) + il;
       k += kl;
       j += jl;
-      if (sbuf.d_view(n).derefine) {
+      if (sbuf.d_view(n).use_coarse) {
         // if de-refinement, load data from coarse_a
         sdata(offset + (i-il + ni*(j-jl + nj*(k-kl + nk*v)))) = ca(m,v,k,j,i);
       } else {
@@ -685,7 +695,7 @@ void MeshRefinement::PackAMRBuffersFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real
         int i = (idx - k*nji - j*ni) + il;
         k += kl;
         j += jl;
-        if (sbuf.d_view(n).derefine) {
+        if (sbuf.d_view(n).use_coarse) {
           // if de-refinement, load data from coarse_a
           sdata(offset + (i-il + ni*(j-jl + nj*(k-kl)))) = cb.x1f(m,k,j,i);
         } else {
@@ -712,7 +722,7 @@ void MeshRefinement::PackAMRBuffersFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real
         int i = (idx - k*nji - j*ni) + il;
         k += kl;
         j += jl;
-        if (sbuf.d_view(n).derefine) {
+        if (sbuf.d_view(n).use_coarse) {
           // if de-refinement, load data from coarse_a
           sdata(offset + (i-il + ni*(j-jl + nj*(k-kl)))) = cb.x2f(m,k,j,i);
         } else {
@@ -739,7 +749,7 @@ void MeshRefinement::PackAMRBuffersFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real
         int i = (idx - k*nji - j*ni) + il;
         k += kl;
         j += jl;
-        if (sbuf.d_view(n).derefine) {
+        if (sbuf.d_view(n).use_coarse) {
           // if de-refinement, load data from coarse_a
           sdata(offset + (i-il + ni*(j-jl + nj*(k-kl)))) = cb.x3f(m,k,j,i);
         } else {
@@ -754,17 +764,17 @@ void MeshRefinement::PackAMRBuffersFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MeshRefinement::RecvAndUnpackAMR()
+//! \fn void MeshRefinement::ClearRecvAndUnpackAMR()
 //! \brief Checks non-blocking receives have finished, calls function to unpack buffers,
 //! deletes receive buffers. Equivalent to some of the work done inside MPI_PARALLEL block
 //! in the Mesh::RedistributeAndRefineMeshBlocks() function in amr_loadbalance.cpp
 
-void MeshRefinement::RecvAndUnpackAMR() {
+void MeshRefinement::ClearRecvAndUnpackAMR() {
 #if MPI_PARALLEL_ENABLED
   // Wait for all receives to finish
   bool no_errors=true;
   for (int n=0; n<nmb_recv; ++n) {
-    int ierr = MPI_Wait(&(recv_buf.h_view(n).req), MPI_STATUS_IGNORE);
+    int ierr = MPI_Wait(&(recv_req[n]), MPI_STATUS_IGNORE);
     if (ierr != MPI_SUCCESS) {no_errors=false;}
   }
   // Quit if MPI error detected
@@ -774,6 +784,7 @@ void MeshRefinement::RecvAndUnpackAMR() {
               << std::endl;
     std::exit(EXIT_FAILURE);
   }
+  delete [] recv_req;
 
   // Unpack data
   hydro::Hydro* phydro = pmy_mesh->pmb_pack->phydro;
@@ -832,7 +843,7 @@ void MeshRefinement::UnpackAMRBuffersCC(DvceArray5D<Real> &a, DvceArray5D<Real> 
       int i = (idx - k*nji - j*ni) + il;
       k += kl;
       j += jl;
-      if (rbuf.d_view(n).refine) {
+      if (rbuf.d_view(n).use_coarse) {
         // if refinement, load data into coarse_a
         ca(m,v,k,j,i) = rdata(offset + (i-il + ni*(j-jl + nj*(k-kl + nk*v))));
       } else {
@@ -887,7 +898,7 @@ void MeshRefinement::UnpackAMRBuffersFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Re
         int i = (idx - k*nji - j*ni) + il;
         k += kl;
         j += jl;
-        if (rbuf.d_view(n).refine) {
+        if (rbuf.d_view(n).use_coarse) {
           // if refinement, load data into coarse_a
           cb.x1f(m,k,j,i) = rdata(offset + (i-il + ni*(j-jl + nj*(k-kl))));
         } else {
@@ -914,7 +925,7 @@ void MeshRefinement::UnpackAMRBuffersFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Re
         int i = (idx - k*nji - j*ni) + il;
         k += kl;
         j += jl;
-        if (rbuf.d_view(n).refine) {
+        if (rbuf.d_view(n).use_coarse) {
           // if refinement, load data into coarse_a
           cb.x2f(m,k,j,i) = rdata(offset + (i-il + ni*(j-jl + nj*(k-kl))));
         } else {
@@ -941,7 +952,7 @@ void MeshRefinement::UnpackAMRBuffersFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Re
         int i = (idx - k*nji - j*ni) + il;
         k += kl;
         j += jl;
-        if (rbuf.d_view(n).refine) {
+        if (rbuf.d_view(n).use_coarse) {
           // if refinement, load data into coarse_a
           cb.x3f(m,k,j,i) = rdata(offset + (i-il + ni*(j-jl + nj*(k-kl))));
         } else {
@@ -963,7 +974,7 @@ void MeshRefinement::ClearSendAMR() {
 #if MPI_PARALLEL_ENABLED
   bool no_errors=true;
   for (int n=0; n<nmb_send; ++n) {
-    int ierr = MPI_Wait(&(send_buf.h_view(n).req), MPI_STATUS_IGNORE);
+    int ierr = MPI_Wait(&(send_req[n]), MPI_STATUS_IGNORE);
     if (ierr != MPI_SUCCESS) {no_errors=false;}
   }
   // Quit if MPI error detected
@@ -973,6 +984,7 @@ void MeshRefinement::ClearSendAMR() {
               << std::endl;
     std::exit(EXIT_FAILURE);
   }
+  delete [] send_req;
 #endif
   return;
 }

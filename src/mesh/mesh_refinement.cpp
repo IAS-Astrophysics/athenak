@@ -424,7 +424,8 @@ void MeshRefinement::UpdateMeshBlockTree(int &nnew, int &ndel) {
   }
 
   // Now the lists of the blocks to be refined and derefined are completed
-  // Start tree manipulation
+  // Start tree manipulation.  Note all ranks manipulate entire tree, so each rank has
+  // a complete and updated copy of the entire tree.
   // Step 1. perform refinement
   for (int n=0; n<tnref; n++) {
     MeshBlockTree *bt = pmy_mesh->ptree->FindMeshBlock(llref[n]);
@@ -438,17 +439,7 @@ void MeshRefinement::UpdateMeshBlockTree(int &nnew, int &ndel) {
   for (int n=0; n<ctnd; n++) {
     MeshBlockTree *bt = pmy_mesh->ptree->FindMeshBlock(cllderef[n]);
     bt->Derefine(ndel);
-    refine_flag.h_view(bt->GetGID()) = -nleaf; // flag root node of derefinements
   }
-#if MPI_PARALLEL_ENABLED
-  // Pass refine_flag between all ranks
-    MPI_Allgatherv(MPI_IN_PLACE, pmy_mesh->nmb_eachrank[global_variable::my_rank],
-                   MPI_INT, refine_flag.h_view.data(), pmy_mesh->nmb_eachrank,
-                   pmy_mesh->gids_eachrank, MPI_INT, MPI_COMM_WORLD);
-#endif
-  // sync host view with device
-  refine_flag.template modify<HostMemSpace>();
-  refine_flag.template sync<DevExeSpace>();
 
   if (tnderef >= nleaf) {
     delete [] cllderef;
@@ -532,7 +523,8 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   }
 
   // UpdateMeshBlockTree function can refine/de-refine MBs to ensure resolution jump is
-  // no more than 2x at boundaries.  Reset refine_flag for these MBs.
+  // no more than 2x at boundaries, even if refine flag not set in these MBs.  So loop
+  // over entire list of MBs on all ranks, reset refine_flag
   for (int oldm=0; oldm<old_nmb; oldm++) {
     int newm = oldtonew[oldm];
     LogicalLocation &old_lloc = pmy_mesh->lloc_eachmb[oldm];
@@ -541,15 +533,11 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
       refine_flag.h_view(oldm) = -nleaf;
     } else if (old_lloc.level < new_lloc.level) {   // old MB was refined
       refine_flag.h_view(oldm) = 1;
+    } else {
+      refine_flag.h_view(oldm) = 0;
     }
   }
-#if MPI_PARALLEL_ENABLED
-  // Pass refine_flag between all ranks
-  MPI_Allgatherv(MPI_IN_PLACE, pmy_mesh->nmb_eachrank[global_variable::my_rank],
-                 MPI_INT, refine_flag.h_view.data(), pmy_mesh->nmb_eachrank,
-                 pmy_mesh->gids_eachrank, MPI_INT, MPI_COMM_WORLD);
-#endif
-  // sync host view with device
+  //  All ranks have copy of refine_flag over all MBs. So just sync host view with device
   refine_flag.template modify<HostMemSpace>();
   refine_flag.template sync<DevExeSpace>();
 
@@ -606,10 +594,8 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   // Step 8.
   // Wait for all MPI load balancing communications to finish.  Unpack data.
 #if MPI_PARALLEL_ENABLED
-  Kokkos::fence();
-  if (nmb_recv > 0) {RecvAndUnpackAMR();}
-  Kokkos::fence();
   if (nmb_send > 0) {ClearSendAMR();}
+  if (nmb_recv > 0) {ClearRecvAndUnpackAMR();}
 #endif
 
   // copy newtoold array to DualView so that it can be accessed in kernel
