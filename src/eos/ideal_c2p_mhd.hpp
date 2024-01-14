@@ -56,6 +56,9 @@ void SingleC2P_IdealMHD(MHDCons1D &u, const EOS_Data &eos,
     tfloor_used =true;
   }
   // apply entropy floor
+  Real log10_sfloor_local = log10(eos.sfloor1) + (log10(w.d)-log10(eos.rho1)) * (log10(eos.sfloor2)-log10(eos.sfloor1))/(log10(eos.rho2)-log10(eos.rho1));
+  Real sfloor_local = pow(10.0, log10_sfloor_local);
+  sfloor = fmax(sfloor, sfloor_local);
   Real spe_over_eps = gm1/pow(w.d, gm1);
   Real spe = spe_over_eps*w.e*di;
   if (spe <= sfloor) {
@@ -111,7 +114,10 @@ Real Equation44(const Real mu, const Real b2, const Real rpar, const Real r, con
   Real const wd = u_d/w;                           // (34)
   Real eps = w*(qbar - mu*rbar) + z2/(w+1.);
   Real const gm1 = eos.gamma - 1.0;
-  Real epsmin = fmax(eos.pfloor/(wd*gm1), eos.sfloor*pow(wd, gm1)/gm1);
+  Real log10_sfloor_local = log10(eos.sfloor1) + (log10(wd)-log10(eos.rho1)) * (log10(eos.sfloor2)-log10(eos.sfloor1))/(log10(eos.rho2)-log10(eos.rho1));
+  Real sfloor_local = pow(10.0, log10_sfloor_local);
+  Real sfloor_ = fmax(eos.sfloor, sfloor_local);
+  Real epsmin = fmax(eos.pfloor/(wd*gm1), sfloor_*pow(wd, gm1)/gm1);
   eps = fmax(eps, epsmin);
   Real const h = 1.0 + eos.gamma*eps;              // (43)
   return mu - 1./(h/w + rbar*mu);                  // (45)
@@ -263,7 +269,10 @@ void SingleC2P_IdealSRMHD(MHDCons1D &u, const EOS_Data &eos, Real s2, Real b2, R
 
   // compute specific internal energy density then apply floors
   Real eps = lor*(qbar - mu*rbar) + z2/(lor + 1.0);
-  Real epsmin = fmax(eos.pfloor/(dens*gm1), eos.sfloor*pow(dens, gm1)/gm1);
+  Real log10_sfloor_local = log10(eos.sfloor1) + (log10(dens)-log10(eos.rho1)) * (log10(eos.sfloor2)-log10(eos.sfloor1))/(log10(eos.rho2)-log10(eos.rho1));
+  Real sfloor_local = pow(10.0, log10_sfloor_local);
+  Real sfloor_ = fmax(eos.sfloor, sfloor_local);
+  Real epsmin = fmax(eos.pfloor/(dens*gm1), sfloor_*pow(dens, gm1)/gm1);
   if (eps <= epsmin) {
     eps = epsmin;
     efloor_used = true;
@@ -621,7 +630,10 @@ void SingleC2P_IdealSRMHD_EntropyFix(MHDCons1D &u, Real& s_tot, const EOS_Data &
     dfloor_used = true;
   }
 
-  Real pgas_min = fmax(eos.pfloor, eos.sfloor*pow(rho_, eos.gamma));
+  Real log10_sfloor_local = log10(eos.sfloor1) + (log10(rho_)-log10(eos.rho1)) * (log10(eos.sfloor2)-log10(eos.sfloor1))/(log10(eos.rho2)-log10(eos.rho1));
+  Real sfloor_local = pow(10.0, log10_sfloor_local);
+  Real sfloor_ = fmax(eos.sfloor, sfloor_local);
+  Real pgas_min = fmax(eos.pfloor, sfloor_*pow(rho_, eos.gamma));
   if (pgas_ < pgas_min) {
     pgas_ = pgas_min;
     efloor_used = true;
@@ -787,8 +799,11 @@ void SingleC2P_IdealSRMHD_EntropyFix(MHDCons1D &u, Real& s_tot, const EOS_Data &
 //   }
 //
 //   // compute specific internal energy density then apply floors
+//   Real log10_sfloor_local = log10(eos.sfloor1) + (log10(rho_ret)-log10(eos.rho1)) * (log10(eos.sfloor2)-log10(eos.sfloor1))/(log10(eos.rho2)-log10(eos.rho1));
+//   Real sfloor_local = pow(10.0, log10_sfloor_local);
+//   Real sfloor_ = fmax(eos.sfloor, sfloor_local);
 //   Real eps = pgas_ret/(rho_ret*gm1);
-//   Real epsmin = fmax(eos.pfloor/(rho_ret*gm1), eos.sfloor*pow(rho_ret, gm1)/gm1);
+//   Real epsmin = fmax(eos.pfloor/(rho_ret*gm1), sfloor_*pow(rho_ret, gm1)/gm1);
 //   if (eps <= epsmin) {
 //     eps = epsmin;
 //     efloor_used = true;

@@ -218,8 +218,11 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       // apply temperature fix
       if (is_radiation_enabled_ && temperature_fix) {
         if (sigma_cold > sigma_cold_cut_) { // different criterion can be used here
+          Real log10_sfloor_local = log10(eos.sfloor1) + (log10(w.d)-log10(eos.rho1)) * (log10(eos.sfloor2)-log10(eos.sfloor1))/(log10(eos.rho2)-log10(eos.rho1));
+          Real sfloor_local = pow(10.0, log10_sfloor_local);
+          Real sfloor_ = fmax(eos.sfloor, sfloor_local);
           Real pgas_ = w.d*tgas_radsource_(m,k,j,i);
-          Real pgas_min = fmax(eos.pfloor, eos.sfloor*pow(w.d, eos.gamma));
+          Real pgas_min = fmax(eos.pfloor, sfloor_*pow(w.d, eos.gamma));
           if (pgas_ < pgas_min) {
             pgas_ = pgas_min;
             efloor_used = true;
