@@ -29,6 +29,8 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
   if(!is_dynamical_relativistic) {
     is_special_relativistic = pin->GetOrAddBoolean("coord","special_rel",false);
     is_general_relativistic = pin->GetOrAddBoolean("coord","general_rel",false);
+  } else {
+    is_special_relativistic = is_general_relativistic = false;
   }
   if (is_special_relativistic && is_general_relativistic) {
     std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl

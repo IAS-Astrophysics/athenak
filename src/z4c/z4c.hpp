@@ -171,6 +171,8 @@ class Z4c {
     Real shift_eta;
     // Enable BSSN if false (disable theta)
     bool use_z4c;
+    // Apply the Sommerfeld condition for user BCs.
+    bool user_Sbc;
   };
   Options opt;
   Real diss;              // Dissipation parameter

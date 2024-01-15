@@ -65,14 +65,14 @@ class PiecewisePolytrope : public EOSPolicyInterface {
   KOKKOS_INLINE_FUNCTION Real TemperatureFromE(Real n, Real e, Real *Y) const {
     int p = FindPiece(n);
     Real e_cold = GetColdEnergy(n, p);
-    return fmax((e - e_cold)*(gamma_thermal - 1.0)/n, 0.0);
+    return (e - e_cold)*(gamma_thermal - 1.0)/n;
   }
 
   /// Calculate the temperature using the ideal gas law.
   KOKKOS_INLINE_FUNCTION Real TemperatureFromP(Real n, Real p, Real *Y) const {
     int i = FindPiece(n);
     Real p_cold = GetColdPressure(n, i);
-    return fmax((p - p_cold)/n, 0.0);
+    return (p - p_cold)/n;
   }
 
   /// Calculate the energy density using the ideal gas law.

@@ -127,6 +127,8 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
 
   opt.use_z4c = pin->GetOrAddBoolean("z4c", "use_z4c", true);
 
+  opt.user_Sbc = pin->GetOrAddBoolean("z4c", "user_Sbc", false);
+
   diss = opt.diss*pow(2., -2.*indcs.ng)*(indcs.ng % 2 == 0 ? -1. : 1.);
   }
 
