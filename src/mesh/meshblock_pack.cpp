@@ -17,7 +17,7 @@
 #include "mhd/mhd.hpp"
 #include "adm/adm.hpp"
 #include "z4c/z4c.hpp"
-#include "ion-neutral/ion_neutral.hpp"
+#include "ion-neutral/ion-neutral.hpp"
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
 #include "radiation/radiation.hpp"

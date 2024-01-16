@@ -18,7 +18,7 @@
 #include "outputs/outputs.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
-#include "ion-neutral/ion_neutral.hpp"
+#include "ion-neutral/ion-neutral.hpp"
 #include "radiation/radiation.hpp"
 #include "z4c/z4c.hpp"
 #include "driver.hpp"
