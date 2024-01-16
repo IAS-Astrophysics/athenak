@@ -226,7 +226,7 @@ inline Real dFEMBasis3Type1dxi2(Real xi1, Real xi2, Real xi3) {
  *
  * (xi1, xi2, xi3) is the point at which the derivative is taken
  */
-inline Real dFEMBasisdxi(Real xi1, Real xi2, Real xi3, int basis_index, int xi_index) {
+Real dFEMBasisdxi(Real xi1, Real xi2, Real xi3, int basis_index, int xi_index) {
   if (basis_index == 1 && xi_index == 1) {
     return dFEMBasis1Type1dxi1(xi1, xi2, xi3);
   } else if (basis_index == 2 && xi_index == 1) {
@@ -555,27 +555,31 @@ Real pXi3pTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, R
           2 * z3 * (pow(x1 * xi1 + x2 * xi2 + x3 * xi3, 2) + pow(xi1 * y1 + xi2 * y2 + xi3 * y3, 2) + pow(xi1 * z1 + xi2 * z2 + xi3 * z3, 2)));
 }
 
-Real dFEMBasisdxi(Real xi1, Real xi2, Real xi3, int basis_index, int basis_choice, int xi_index) {
-  return 0.;
+inline Real dFEMBasisdphi(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3, int basis_index) {
+  return dFEMBasisdxi(xi1, xi2, xi3, basis_index, 1) * pXi1pPhi(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3)
+      + dFEMBasisdxi(xi1, xi2, xi3, basis_index, 2) * pXi2pPhi(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3)
+      + dFEMBasisdxi(xi1, xi2, xi3, basis_index, 3) * pXi3pPhi(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3);
 }
+
+inline Real dFEMBasisdtheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3, int basis_index) {
+  return dFEMBasisdxi(xi1, xi2, xi3, basis_index, 1) * pXi1pTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3)
+      + dFEMBasisdxi(xi1, xi2, xi3, basis_index, 2) * pXi2pTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3)
+      + dFEMBasisdxi(xi1, xi2, xi3, basis_index, 3) * pXi3pTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3);
+}
+
 Real PdFEMBasisdOmega(int ihat, int a, int t1, int t2, int t3, Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3,
                       Real xi1, Real xi2, Real xi3, int basis_choice) {
 
   int basis_index_a = (a == t1) * 1 + (a == t2) * 2 + (a == t3) * 3;
 
-  Real dFEMBasisdphi = dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, basis_choice, 1) * pXi1pPhi(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3)
-      + dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, basis_choice, 2) * pXi2pPhi(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3);
-  Real dFEMBasisdtheta = dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, basis_choice, 1) * pXi1pTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3)
-      + dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, basis_choice, 2) * pXi2pTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3);
-
   if (ihat == 1) {
-    return -SinPhiCosecTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3) * dFEMBasisdphi
-        + CosPhiCosTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3) * dFEMBasisdtheta;
+    return -SinPhiCosecTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3) * dFEMBasisdphi(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, basis_index_a)
+        + CosPhiCosTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3) * dFEMBasisdtheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, basis_index_a);
   } else if (ihat == 2) {
-    return CosPhiCosecTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3) * dFEMBasisdphi
-        + SinPhiCosTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3) * dFEMBasisdtheta;
+    return CosPhiCosecTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3) * dFEMBasisdphi(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, basis_index_a)
+        + SinPhiCosTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3) * dFEMBasisdtheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, basis_index_a);
   } else if (ihat == 3) {
-    return -SinTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3) * dFEMBasisdtheta;
+    return -SinTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3) * dFEMBasisdtheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, basis_index_a);
   } else {
     // std::cout << "Incorrect choice of index ihat!" << std::endl;
     exit(EXIT_FAILURE);
