@@ -100,7 +100,6 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     phydro = new hydro::Hydro(this, pin);
     nphysics++;
     if (!(pin->DoesBlockExist("mhd")) && !(pin->DoesBlockExist("radiation"))) {
-      phydro->AssembleHydroTasks(start_tl, run_tl, end_tl);
       phydro->AssembleHydroTasks(tl_map);
     }
   } else {
@@ -113,7 +112,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     pmhd = new mhd::MHD(this, pin);
     nphysics++;
     if (!(pin->DoesBlockExist("hydro")) && !(pin->DoesBlockExist("radiation"))) {
-      pmhd->AssembleMHDTasks(start_tl, run_tl, end_tl);
+      pmhd->AssembleMHDTasks(tl_map);
     }
   } else {
     pmhd = nullptr;
@@ -125,7 +124,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   if (pin->DoesBlockExist("ion-neutral")) {
     pionn = new ion_neutral::IonNeutral(this, pin);   // construct new MHD object
     if (pin->DoesBlockExist("hydro") && pin->DoesBlockExist("mhd")) {
-      pionn->AssembleIonNeutralTasks(start_tl, run_tl, end_tl);
+      pionn->AssembleIonNeutralTasks(tl_map);
       nphysics++;
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -149,7 +148,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   if (pin->DoesBlockExist("radiation")) {
     prad = new radiation::Radiation(this, pin);
     nphysics++;
-    prad->AssembleRadiationTasks(start_tl, run_tl, end_tl);
+    prad->AssembleRadTasks(tl_map);
   } else {
     prad = nullptr;
   }
@@ -162,8 +161,8 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   // task lists respectively.
   if (pin->DoesBlockExist("turb_driving")) {
     pturb = new TurbulenceDriver(this, pin);
-    pturb->IncludeInitializeModesTask(operator_split_tl, none);
-    pturb->IncludeAddForcingTask(run_tl, none);
+    pturb->IncludeInitializeModesTask(tl_map["before_timeintegrator_tl"], none);
+    pturb->IncludeAddForcingTask(tl_map["stagen_tl"], none);
   } else {
     pturb = nullptr;
   }
@@ -172,7 +171,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   // Create Z4c and ADM physics module.
   if (pin->DoesBlockExist("z4c")) {
     pz4c = new z4c::Z4c(this, pin);
-    pz4c->AssembleZ4cTasks(start_tl, run_tl, end_tl);
+    pz4c->AssembleZ4cTasks(tl_map);
     padm = new adm::ADM(this, pin);
     nphysics++;
   } else {

@@ -182,7 +182,7 @@ class Z4c {
   Z4cTaskIDs id;
 
   // functions
-  void AssembleZ4cTasks(TaskList &start, TaskList &run, TaskList &end);
+  void AssembleZ4cTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
   TaskStatus InitRecv(Driver *d, int stage);
   TaskStatus ClearRecv(Driver *d, int stage);
   TaskStatus ClearSend(Driver *d, int stage);
