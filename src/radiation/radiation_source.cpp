@@ -519,11 +519,17 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
           coef[1] = (1.0 + suma2*jr_cm)/(suma1*jr_cm)*arad_;
           coef[0] = -(1.0 + suma2*jr_cm)/suma1 - tgas;
         }
-        bool flag = FourthPolyRoot(coef[1], coef[0], tradnew);
-        if (!(flag) || !(isfinite(tradnew))) {
-          badcell = true;
+
+        if (fabs(coef[1]) > 1.0e-20) {
+          bool flag = FourthPolyRoot(coef[1], coef[0], tradnew);
+          if (!(flag) || !(isfinite(tradnew))) {
+            badcell = true;
+            tgasnew = tgas;
+          }
+        } else {
+          tgasnew = -coef[0];
         }
-      }
+      } // endif !(temp_equil)
 
       // Update the specific intensity
       if (!(badcell) && !(temp_equil)) {
