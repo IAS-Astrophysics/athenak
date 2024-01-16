@@ -33,6 +33,12 @@ MeshBlockPack::MeshBlockPack(Mesh *pm, int igids, int igide) :
   gids(igids),
   gide(igide),
   nmb_thispack(igide - igids + 1) {
+  // create map for task lists
+  tl_map.insert(std::make_pair("before_timeintegrator_tl",std::make_shared<TaskList>()));
+  tl_map.insert(std::make_pair("after_timeintegrator_tl",std::make_shared<TaskList>()));
+  tl_map.insert(std::make_pair("before_stagen_tl",std::make_shared<TaskList>()));
+  tl_map.insert(std::make_pair("stagen_tl",std::make_shared<TaskList>()));
+  tl_map.insert(std::make_pair("after_stagen_tl",std::make_shared<TaskList>()));
 }
 
 //----------------------------------------------------------------------------------------
@@ -95,6 +101,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     nphysics++;
     if (!(pin->DoesBlockExist("mhd")) && !(pin->DoesBlockExist("radiation"))) {
       phydro->AssembleHydroTasks(start_tl, run_tl, end_tl);
+      phydro->AssembleHydroTasks(tl_map);
     }
   } else {
     phydro = nullptr;

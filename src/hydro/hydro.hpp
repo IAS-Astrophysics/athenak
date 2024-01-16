@@ -93,6 +93,7 @@ class Hydro {
 
   // functions...
   void AssembleHydroTasks(TaskList &start, TaskList &run, TaskList &end);
+  void AssembleHydroTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
   // ...in start task list
   TaskStatus InitRecv(Driver *d, int stage);
   // ...in run task list

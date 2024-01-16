@@ -68,6 +68,38 @@ void Hydro::AssembleHydroTasks(TaskList &start, TaskList &run, TaskList &end) {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn  void Hydro::AssembleHydroTasks
+
+void Hydro::AssembleHydroTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) {
+  TaskID none(0);
+
+  // assemble start task list
+  id.irecv = tl["before_stagen_tl"]->AddTask(&Hydro::InitRecv, this, none);
+
+  // assemble run task list
+  id.copyu = tl["stagen_tl"]->AddTask(&Hydro::CopyCons, this, none);
+  id.flux  = tl["stagen_tl"]->AddTask(&Hydro::Fluxes,this,id.copyu);
+  id.sendf = tl["stagen_tl"]->AddTask(&Hydro::SendFlux, this, id.flux);
+  id.recvf = tl["stagen_tl"]->AddTask(&Hydro::RecvFlux, this, id.sendf);
+  id.expl  = tl["stagen_tl"]->AddTask(&Hydro::ExpRKUpdate, this, id.recvf);
+  id.restu = tl["stagen_tl"]->AddTask(&Hydro::RestrictU, this, id.expl);
+  id.sendu = tl["stagen_tl"]->AddTask(&Hydro::SendU, this, id.restu);
+  id.recvu = tl["stagen_tl"]->AddTask(&Hydro::RecvU, this, id.sendu);
+  id.bcs   = tl["stagen_tl"]->AddTask(&Hydro::ApplyPhysicalBCs, this, id.recvu);
+  id.prol  = tl["stagen_tl"]->AddTask(&Hydro::Prolongate, this, id.bcs);
+  id.c2p   = tl["stagen_tl"]->AddTask(&Hydro::ConToPrim, this, id.prol);
+  id.newdt = tl["stagen_tl"]->AddTask(&Hydro::NewTimeStep, this, id.c2p);
+
+  // assemble end task list
+  id.csend = tl["after_stagen_tl"]->AddTask(&Hydro::ClearSend, this, none);
+  // although RecvFlux/U functions check that all recvs complete, add ClearRecv to
+  // task list anyways to catch potential bugs in MPI communication logic
+  id.crecv = tl["after_stagen_tl"]->AddTask(&Hydro::ClearRecv, this, id.csend);
+
+  return;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn TaskList Hydro::InitRecv
 //! \brief Wrapper task list function to post non-blocking receives (with MPI), and
 //! initialize all boundary receive status flags to waiting (with or without MPI).
