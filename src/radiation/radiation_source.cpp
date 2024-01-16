@@ -60,6 +60,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   bool &compton_use_artificial_mask_ = compton_use_artificial_mask;
   bool &temperature_fix_turn_on_ = temperature_fix_turn_on;
   auto &tgas_radsource_ = tgas_radsource; // for saving final gas temperature
+  bool cellavg_rad_source_ = true;
 
   // Extract coordinate/excision data
   auto &coord = pmy_pack->pcoord->coord_data;
@@ -167,11 +168,48 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
     Real alpha = sqrt(-1.0/gupper[0][0]);
 
     // fluid state
-    Real &wdn = w0_(m,IDN,k,j,i);
+    Real wdn = w0_(m,IDN,k,j,i);
     Real &wvx = update_vel_in_rad_source_ ? w0_(m,IVX,k,j,i) : w_noupdate_(m,IVX,k,j,i);
     Real &wvy = update_vel_in_rad_source_ ? w0_(m,IVY,k,j,i) : w_noupdate_(m,IVY,k,j,i);
     Real &wvz = update_vel_in_rad_source_ ? w0_(m,IVZ,k,j,i) : w_noupdate_(m,IVZ,k,j,i);
-    Real &wen = w0_(m,IEN,k,j,i);
+    Real wen = w0_(m,IEN,k,j,i);
+
+    // apply cell-averaged profile
+    if (cellavg_rad_source_ && !excise) {
+      int km1 = (k-1 < kl) ? kl : k-1;
+      int kp1 = (k+1 > ku) ? ku : k+1;
+      int jm1 = (j-1 < jl) ? jl : j-1;
+      int jp1 = (j+1 > ju) ? ju : j+1;
+      int im1 = (i-1 < il) ? il : i-1;
+      int ip1 = (i+1 > iu) ? iu : i+1;
+
+      Real wdn_avg = 0.0;
+      Real wen_avg = 0.0;
+      int n_count = 0;
+      for (int kk=km1; kk<=kp1; ++kk) {
+        for (int jj=jm1; jj<=jp1; ++jj) {
+          for (int ii=im1; ii<=ip1; ++ii) {
+            if (!excise) {
+              wdn_avg += w0_(m,IDN,kk,jj,ii);
+              wen_avg += w0_(m,IEN,kk,jj,ii);
+              n_count += 1;
+            } // endif c2p_flag_(m,kk,jj,ii)
+          } // endfor ii
+        } // endfor jj
+      } // endfor kk
+
+      if (n_count == 0) {
+        wdn_avg = w0_(m,IDN,k,j,i);
+        wen_avg = w0_(m,IEN,k,j,i);
+      } else {
+        wdn_avg = wdn_avg/n_count;
+        wen_avg = wen_avg/n_count;
+      }
+
+      // assign cell-averaged density and pressure
+      wdn = wdn_avg;
+      wen = wen_avg;
+    }
 
     // derived quantities
     Real pgas = gm1*wen;
@@ -519,17 +557,11 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
           coef[1] = (1.0 + suma2*jr_cm)/(suma1*jr_cm)*arad_;
           coef[0] = -(1.0 + suma2*jr_cm)/suma1 - tgas;
         }
-
-        if (fabs(coef[1]) > 1.0e-20) {
-          bool flag = FourthPolyRoot(coef[1], coef[0], tradnew);
-          if (!(flag) || !(isfinite(tradnew))) {
-            badcell = true;
-            tgasnew = tgas;
-          }
-        } else {
-          tgasnew = -coef[0];
+        bool flag = FourthPolyRoot(coef[1], coef[0], tradnew);
+        if (!(flag) || !(isfinite(tradnew))) {
+          badcell = true;
         }
-      } // endif !(temp_equil)
+      }
 
       // Update the specific intensity
       if (!(badcell) && !(temp_equil)) {
