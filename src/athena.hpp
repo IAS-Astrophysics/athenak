@@ -203,6 +203,20 @@ struct DvceEdgeFld4D {
 // 1D-range, and thread teams for use with inner vector threads. Experiments in K-Athena
 // and Parthenon indicate that 1D-range policy is generally faster than multidimensional
 // MD-range policy, so the latter is not used.
+//------------------------------
+// 1D loop using Kokkos 1D Range
+template <typename Function>
+inline void par_for(const std::string &name, DevExeSpace exec_space,
+                    const int &il, const int &iu, const Function &function) {
+  // compute total number of elements and call Kokkos::parallel_for()
+  const int ni = iu - il + 1;
+  Kokkos::parallel_for(name, Kokkos::RangePolicy<>(exec_space, 0, ni),
+  KOKKOS_LAMBDA(const int &idx) {
+    // compute i indices of thread and call function
+    int i = (idx) + il;
+    function(i);
+  });
+}
 
 //------------------------------
 // 2D loop using Kokkos 1D Range
