@@ -25,43 +25,43 @@
 namespace mhd {
 //----------------------------------------------------------------------------------------
 //! \fn void MHD::AssembleMHDTasks
-//! \brief Adds mhd tasks to stage start/run/end task lists used by time integrators
+//! \brief Adds mhd tasks to appropriate task lists used by time integrators.
 //! Called by MeshBlockPack::AddPhysics() function directly after MHD constructor
 //! Many of the functions in the task list are implemented in this file because they are
 //! simple, or they are wrappers that call one or more other functions.
 
-void MHD::AssembleMHDTasks(TaskList &start, TaskList &run, TaskList &end) {
+void MHD::AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) {
   TaskID none(0);
 
-  // assemble start task list
-  id.irecv = start.AddTask(&MHD::InitRecv, this, none);
+  // assemble "before_stagen_tl" task list
+  id.irecv = tl["before_stagen_tl"]->AddTask(&MHD::InitRecv, this, none);
 
-  // assemble run task list
-  id.copyu = run.AddTask(&MHD::CopyCons, this, none);
-  id.flux  = run.AddTask(&MHD::Fluxes, this, id.copyu);
-  id.sendf = run.AddTask(&MHD::SendFlux, this, id.flux);
-  id.recvf = run.AddTask(&MHD::RecvFlux, this, id.sendf);
-  id.expl  = run.AddTask(&MHD::ExpRKUpdate, this, id.recvf);
-  id.restu = run.AddTask(&MHD::RestrictU, this, id.expl);
-  id.sendu = run.AddTask(&MHD::SendU, this, id.restu);
-  id.recvu = run.AddTask(&MHD::RecvU, this, id.sendu);
-  id.efld  = run.AddTask(&MHD::CornerE, this, id.recvu);
-  id.sende = run.AddTask(&MHD::SendE, this, id.efld);
-  id.recve = run.AddTask(&MHD::RecvE, this, id.sende);
-  id.ct    = run.AddTask(&MHD::CT, this, id.recve);
-  id.restb = run.AddTask(&MHD::RestrictB, this, id.ct);
-  id.sendb = run.AddTask(&MHD::SendB, this, id.restb);
-  id.recvb = run.AddTask(&MHD::RecvB, this, id.sendb);
-  id.bcs   = run.AddTask(&MHD::ApplyPhysicalBCs, this, id.recvb);
-  id.prol  = run.AddTask(&MHD::Prolongate, this, id.bcs);
-  id.c2p   = run.AddTask(&MHD::ConToPrim, this, id.prol);
-  id.newdt = run.AddTask(&MHD::NewTimeStep, this, id.c2p);
+  // assemble "stagen_tl" task list
+  id.copyu = tl["stagen_tl"]->AddTask(&MHD::CopyCons, this, none);
+  id.flux  = tl["stagen_tl"]->AddTask(&MHD::Fluxes, this, id.copyu);
+  id.sendf = tl["stagen_tl"]->AddTask(&MHD::SendFlux, this, id.flux);
+  id.recvf = tl["stagen_tl"]->AddTask(&MHD::RecvFlux, this, id.sendf);
+  id.expl  = tl["stagen_tl"]->AddTask(&MHD::ExpRKUpdate, this, id.recvf);
+  id.restu = tl["stagen_tl"]->AddTask(&MHD::RestrictU, this, id.expl);
+  id.sendu = tl["stagen_tl"]->AddTask(&MHD::SendU, this, id.restu);
+  id.recvu = tl["stagen_tl"]->AddTask(&MHD::RecvU, this, id.sendu);
+  id.efld  = tl["stagen_tl"]->AddTask(&MHD::CornerE, this, id.recvu);
+  id.sende = tl["stagen_tl"]->AddTask(&MHD::SendE, this, id.efld);
+  id.recve = tl["stagen_tl"]->AddTask(&MHD::RecvE, this, id.sende);
+  id.ct    = tl["stagen_tl"]->AddTask(&MHD::CT, this, id.recve);
+  id.restb = tl["stagen_tl"]->AddTask(&MHD::RestrictB, this, id.ct);
+  id.sendb = tl["stagen_tl"]->AddTask(&MHD::SendB, this, id.restb);
+  id.recvb = tl["stagen_tl"]->AddTask(&MHD::RecvB, this, id.sendb);
+  id.bcs   = tl["stagen_tl"]->AddTask(&MHD::ApplyPhysicalBCs, this, id.recvb);
+  id.prol  = tl["stagen_tl"]->AddTask(&MHD::Prolongate, this, id.bcs);
+  id.c2p   = tl["stagen_tl"]->AddTask(&MHD::ConToPrim, this, id.prol);
+  id.newdt = tl["stagen_tl"]->AddTask(&MHD::NewTimeStep, this, id.c2p);
 
-  // assemble end task list
-  id.csend = end.AddTask(&MHD::ClearSend, this, none);
+  // assemble "after_stagen_tl" task list
+  id.csend = tl["after_stagen_tl"]->AddTask(&MHD::ClearSend, this, none);
   // although RecvFlux/U/E/B functions check that all recvs complete, add ClearRecv to
   // task list anyways to catch potential bugs in MPI communication logic
-  id.crecv = end.AddTask(&MHD::ClearRecv, this, id.csend);
+  id.crecv = tl["after_stagen_tl"]->AddTask(&MHD::ClearRecv, this, id.csend);
 
   return;
 }
