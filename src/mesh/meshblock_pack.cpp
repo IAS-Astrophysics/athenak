@@ -34,11 +34,11 @@ MeshBlockPack::MeshBlockPack(Mesh *pm, int igids, int igide) :
   gide(igide),
   nmb_thispack(igide - igids + 1) {
   // create map for task lists
-  tl_map.insert(std::make_pair("before_timeintegrator_tl",std::make_shared<TaskList>()));
-  tl_map.insert(std::make_pair("after_timeintegrator_tl",std::make_shared<TaskList>()));
-  tl_map.insert(std::make_pair("before_stagen_tl",std::make_shared<TaskList>()));
-  tl_map.insert(std::make_pair("stagen_tl",std::make_shared<TaskList>()));
-  tl_map.insert(std::make_pair("after_stagen_tl",std::make_shared<TaskList>()));
+  tl_map.insert(std::make_pair("before_timeintegrator",std::make_shared<TaskList>()));
+  tl_map.insert(std::make_pair("after_timeintegrator",std::make_shared<TaskList>()));
+  tl_map.insert(std::make_pair("before_stagen",std::make_shared<TaskList>()));
+  tl_map.insert(std::make_pair("stagen",std::make_shared<TaskList>()));
+  tl_map.insert(std::make_pair("after_stagen",std::make_shared<TaskList>()));
 }
 
 //----------------------------------------------------------------------------------------
@@ -161,8 +161,8 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   // task lists respectively.
   if (pin->DoesBlockExist("turb_driving")) {
     pturb = new TurbulenceDriver(this, pin);
-    pturb->IncludeInitializeModesTask(tl_map["before_timeintegrator_tl"], none);
-    pturb->IncludeAddForcingTask(tl_map["stagen_tl"], none);
+    pturb->IncludeInitializeModesTask(tl_map["before_timeintegrator"], none);
+    pturb->IncludeAddForcingTask(tl_map["stagen"], none);
   } else {
     pturb = nullptr;
   }
