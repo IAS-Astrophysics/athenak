@@ -53,8 +53,6 @@
 // Notation: exclusively using "stage", equivalent in lit. to "substage" or "substep"
 // (infrequently "step"), to refer to the intermediate values of U^{l} between each
 // "timestep" = "cycle" in explicit, multistage methods.
-//
-// Driver::Execute() invokes the tasklist from stage=1 to stage=ptlist->nstages
 
 Driver::Driver(ParameterInput *pin, Mesh *pmesh, Real wtlim, Kokkos::Timer* ptimer) :
   tlim(-1.0),
@@ -238,6 +236,31 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh, Real wtlim, Kokkos::Timer* ptim
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn Driver::ExecuteTaskList()
+//! \brief Perform tasks over all MeshBlocks for the TaskList specified by string "tl".
+//! Integer argument "stage" can be used to indicate at which step in overall algorithm
+//! these tasks are to be performed, e.g. which stage of a multi-stage RK integrator.
+
+void Driver::ExecuteTaskList(Mesh *pm, std::string tl, int stage) {
+  MeshBlockPack* pmbp = pm->pmb_pack;
+  for (int p=0; p<(pm->nmb_packs_thisrank); ++p) {
+    if (!(pmbp->tl_map[tl]->Empty())) {pmbp->tl_map[tl]->Reset();}
+  }
+  int npack_left = (pm->nmb_packs_thisrank);
+  while (npack_left > 0) {
+    if (pmbp->tl_map[tl]->Empty()) {
+      npack_left--;
+    } else {
+      if (!pmbp->tl_map[tl]->IsComplete()) {
+        auto status = pmbp->tl_map[tl]->DoAvailable(this, stage);
+        if (status == TaskListStatus::complete) { npack_left--; }
+      }
+    }
+  }
+  return;
+}
+
+//----------------------------------------------------------------------------------------
 // Driver::Initialize()
 // Tasks to be performed before execution of Driver, such as setting ghost zones (BCs),
 //  outputting ICs, and computing initial time step
@@ -328,91 +351,22 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
     while ((pmesh->time < tlim) && (pmesh->ncycle < nlim || nlim < 0) &&
            (elapsed_time < wall_time)) {
       if (global_variable::my_rank == 0) {OutputCycleDiagnostics(pmesh);}
-      int npacks = 1;  // TODO(@user): extend for multiple MeshBlockPacks
-      MeshBlockPack* pmbp = pmesh->pmb_pack;
-      //---------------------------------------
-      // (1) Do *** operator split *** TaskList
-      {
-        for (int p=0; p<npacks; ++p) {
-          if (!(pmbp->operator_split_tl.Empty())) {pmbp->operator_split_tl.Reset();}
-        }
-        int npack_left = npacks;
-        while (npack_left > 0) {
-          if (pmbp->operator_split_tl.Empty()) {
-            npack_left--;
-          } else {
-            if (!pmbp->operator_split_tl.IsComplete()) {
-              // note 2nd argument to DoAvailable (stage) is not used, set to 0
-              auto status = pmbp->operator_split_tl.DoAvailable(this, 0);
-              if (status == TaskListStatus::complete) { npack_left--; }
-            }
-          }
-        }
+
+      // Execute TaskLists
+      // Work before time integrator indicated by "0" in stage
+      ExecuteTaskList(pmesh, "before_timeintegrator_tl",0);
+
+      // time-integrator tasks for each stage of integrator
+      for (int stage=1; stage<=(nexp_stages); ++stage) {
+        ExecuteTaskList(pmesh, "before_stagen_tl", stage);
+        ExecuteTaskList(pmesh, "stagen_tl", stage);
+        ExecuteTaskList(pmesh, "after_stagen_tl", stage);
       }
 
-      //--------------------------------------------------------------
-      // (2) Do *** explicit and ImEx RK time-integrator *** TaskLists
-      for (int stage=1; stage<=(nexp_stages); ++stage) {
-        // (2a) StageStart Tasks
-        // tasks that must be completed over all MBPacks at start of each explicit stage
-        {
-          for (int p=0; p<npacks; ++p) {
-            if (!(pmbp->start_tl.Empty())) {pmbp->start_tl.Reset();}
-          }
-          int npack_left = npacks;
-          while (npack_left > 0) {
-            if (pmbp->start_tl.Empty()) {
-              npack_left--;
-            } else {
-              if (!pmbp->start_tl.IsComplete()) {
-                auto status = pmbp->start_tl.DoAvailable(this, stage);
-                if (status == TaskListStatus::complete) { npack_left--; }
-              }
-            }
-          }
-        }
+      // Work after time integrator indicated by "1" in stage
+      ExecuteTaskList(pmesh, "after_timeintegrator_tl",1);
 
-        // (2b) StageRun Tasks
-        // tasks in each explicit stage
-        {
-          for (int p=0; p<npacks; ++p) {
-            if (!(pmbp->run_tl.Empty())) {pmbp->run_tl.Reset();}
-          }
-          int npack_left = npacks;
-          while (npack_left > 0) {
-            if (pmbp->run_tl.Empty()) {
-              npack_left--;
-            } else {
-              if (!pmbp->run_tl.IsComplete()) {
-                auto status = pmbp->run_tl.DoAvailable(this, stage);
-                if (status == TaskListStatus::complete) { npack_left--; }
-              }
-            }
-          }
-        }
-
-        // (2c) StageEnd Tasks
-        // tasks that must be completed over all MBs at end of each explicit stage
-        {
-          for (int p=0; p<npacks; ++p) {
-            if (!(pmbp->end_tl.Empty())) {pmbp->end_tl.Reset();}
-          }
-          int npack_left = npacks;
-          while (npack_left > 0) {
-            if (pmbp->end_tl.Empty()) {
-              npack_left--;
-            } else {
-              if (!pmbp->end_tl.IsComplete()) {
-                auto status = pmbp->end_tl.DoAvailable(this, stage);
-                if (status == TaskListStatus::complete) { npack_left--; }
-              }
-            }
-          }
-        }
-      } // end for loop over stages
-
-      //-------------------------------
-      // (3) Work outside of TaskLists:
+      // Work outside of TaskLists:
       // increment time, ncycle, etc.
       pmesh->time = pmesh->time + pmesh->dt;
       pmesh->ncycle++;
@@ -451,7 +405,7 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
       if (wall_time > 0.) {
         elapsed_time = pwall_clock_->seconds();
       }
-    }  // end while((t < tlim) && (n < nlim) && (elapsed_time < wall_time))
+    }  // end while
   }    // end of (time_evolution != tstatic) clause
   return;
 }

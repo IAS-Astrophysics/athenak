@@ -134,6 +134,7 @@ class Mesh {
   int ncycle;
   EventCounters ecounter;
 
+  int nmb_packs_thisrank;                  // number of MBPacks on this rank
   MeshBlockPack* pmb_pack;                 // container for MeshBlocks on this rank
   std::unique_ptr<ProblemGenerator> pgen;  // class containing functions to set ICs
   MeshRefinement *pmr=nullptr;             // mesh refinement data/functions (if needed)

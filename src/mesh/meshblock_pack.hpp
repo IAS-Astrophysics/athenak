@@ -68,6 +68,9 @@ class MeshBlockPack {
   TaskList operator_split_tl;            // operator-split physics
   TaskList start_tl, run_tl, end_tl;     // each stage of RK integrators
 
+  // map for task lists which operate over all MeshBlocks in this MeshBlockPack
+  std::map<std::string, std::shared_ptr<TaskList>> tl_map;
+
   // functions
   void AddPhysics(ParameterInput *pin);
   void AddMeshBlocks(ParameterInput *pin);
