@@ -1,9 +1,9 @@
 //========================================================================================
-// Radiation FEM_N code for Athena
-// Copyright (C) 2023 Maitraya Bhattacharyya <mbb6217@psu.edu> and David Radice <dur566@psu.edu>
-// AthenaXX copyright(C) James M. Stone <jmstone@ias.edu> and the Athena code team
-// Licensed under the 3-clause BSD License (the "LICENSE")
-//========================================================================================
+// Radiation FEM_N code for Athenasu.edu>
+// AthenaXX copyright(C) James M. Stone <jmstone@ias.edu> and t
+//// Copyright (C) 2023 Maitraya Bhattacharyya <mbb6217@psu.edu> and David Radice <dur566@p
+////=================================================================he Athena code team
+// Licensed under the 3-clause BSD License (the "LICENSE")=======================
 //! \file radiation_femn_quadrature.cpp
 //  \brief contains T2 quadrature weights. DO NOT EDIT.
 

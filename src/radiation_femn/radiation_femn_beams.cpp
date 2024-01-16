@@ -86,8 +86,8 @@ void RadiationFEMN::InitializeBeamsSourcesM1() {
   Real Fnorm = 1e-1;
   Real E = Fnorm;
   Real Fx = Fnorm * sin(beam_source_1_theta) * cos(beam_source_1_phi);
-  Real Fy = 0 * Fnorm * sin(beam_source_1_theta) * sin(beam_source_1_phi);
-  Real Fz = 0 * Fnorm * cos(beam_source_1_theta);
+  Real Fy = Fnorm * sin(beam_source_1_theta) * sin(beam_source_1_phi);
+  Real Fz = Fnorm * cos(beam_source_1_theta);
 
   beam_source_1_vals(0) = sqrt(4. * M_PI) * E;
   beam_source_1_vals(1) = -sqrt(4. * M_PI / 3.0) * Fx;
