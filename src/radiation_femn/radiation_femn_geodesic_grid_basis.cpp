@@ -24,7 +24,7 @@ namespace radiationfemn {
  * (xval, yval, zval): the cartesian coordinates of the point
  */
 inline void BarycentricToCartesian(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3,
-                                                   Real xi1, Real xi2, Real xi3, Real &xval, Real &yval, Real &zval) {
+                                   Real xi1, Real xi2, Real xi3, Real &xval, Real &yval, Real &zval) {
 
   xval = xi1 * x1 + xi2 * x2 + xi3 * x3;
   yval = xi1 * y1 + xi2 * y2 + xi3 * y3;
@@ -510,15 +510,19 @@ Real MomentumUnitEnergy(int mu, Real phi, Real theta) {
 // ------------------------------------------------------------------------
 // partial xi1 / partial phi
 Real pXi1pPhi(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
-  return (pow(x1 * xi1 + x2 * xi2 - x3 * (-1 + xi1 + xi2), 2) + pow(xi1 * y1 + xi2 * y2 + y3 - (xi1 + xi2) * y3, 2))
-      / (x3 * (y1 - xi2 * y1 + xi2 * y2) + x2 * xi2 * (y1 - y3) - x1 * (xi2 * y2 + y3 - xi2 * y3));
+  return (pow(x1 * xi1 + x2 * xi2 + x3 * xi3, 2) + pow(xi1 * y1 + xi2 * y2 + xi3 * y3, 2)) / (x2 * xi2 * y1 + x3 * xi3 * y1 - x1 * (xi2 * y2 + xi3 * y3));
 }
 
 // ------------------------------------------------------------------------
 // partial xi2 / partial phi
 Real pXi2pPhi(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
-  return (pow(x1 * xi1 + x2 * xi2 - x3 * (-1 + xi1 + xi2), 2) + pow(xi1 * y1 + xi2 * y2 + y3 - (xi1 + xi2) * y3, 2))
-      / (x3 * (xi1 * y1 + y2 - xi1 * y2) + x1 * xi1 * (y2 - y3) - x2 * (xi1 * (y1 - y3) + y3));
+  return (pow(x1 * xi1 + x2 * xi2 + x3 * xi3, 2) + pow(xi1 * y1 + xi2 * y2 + xi3 * y3, 2)) / ((x1 * xi1 + x3 * xi3) * y2 - x2 * (xi1 * y1 + xi3 * y3));
+}
+
+// ------------------------------------------------------------------------
+// partial xi3 / partial phi
+Real pXi3pPhi(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
+  return (pow(x1 * xi1 + x2 * xi2 + x3 * xi3, 2) + pow(xi1 * y1 + xi2 * y2 + xi3 * y3, 2)) / (-(x3 * (xi1 * y1 + xi2 * y2)) + (x1 * xi1 + x2 * xi2) * y3);
 }
 
 // ------------------------------------------------------------------------
