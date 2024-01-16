@@ -327,14 +327,9 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
 
 //----------------------------------------------------------------------------------------
 //! \fn Driver::Execute()
-//! \brief Executes all relevant task lists over all MeshBlockPacks.  For static
-//! (non-evolving) problems, currently implemented task lists are:
-//!  (1) TODO
-//! For dynamic (time-evolving) problems, currently implemented task lists are:
-//!  (1) operator split physics (operator_split_tl)
-//!  (2) each stage of both explicit and ImEx RK integrators (start_tl, run_tl, end_tl)
-//!  [Note for ImEx integrators, the first two fully implicit updates should be performed
-//!  at the start of the first stage.]
+//! \brief Executes "main loop" by running all relevant task lists over all MeshBlockPacks
+//! until a relevant stopping criteria is found (e.g. t > tlim). Calls AMR driver, and
+//! performs outputs. Updates counters like (ncycle, time, etc.)
 
 void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
   if (global_variable::my_rank == 0) {
@@ -354,17 +349,17 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
 
       // Execute TaskLists
       // Work before time integrator indicated by "0" in stage
-      ExecuteTaskList(pmesh, "before_timeintegrator_tl",0);
+      ExecuteTaskList(pmesh, "before_timeintegrator", 0);
 
       // time-integrator tasks for each stage of integrator
       for (int stage=1; stage<=(nexp_stages); ++stage) {
-        ExecuteTaskList(pmesh, "before_stagen_tl", stage);
-        ExecuteTaskList(pmesh, "stagen_tl", stage);
-        ExecuteTaskList(pmesh, "after_stagen_tl", stage);
+        ExecuteTaskList(pmesh, "before_stagen", stage);
+        ExecuteTaskList(pmesh, "stagen", stage);
+        ExecuteTaskList(pmesh, "after_stagen", stage);
       }
 
       // Work after time integrator indicated by "1" in stage
-      ExecuteTaskList(pmesh, "after_timeintegrator_tl",1);
+      ExecuteTaskList(pmesh, "after_timeintegrator", 1);
 
       // Work outside of TaskLists:
       // increment time, ncycle, etc.
