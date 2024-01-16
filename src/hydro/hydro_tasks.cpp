@@ -4,8 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file hydro_tasks.cpp
-//! \brief functions that control Hydro tasks in the four task lists stored in the
-//! MeshBlockPack: start_tl, run_tl, end_tl, operator_split_tl
+//! \brief functions that control Hydro tasks stored in tasklists in MeshBlockPack
 
 #include <iostream>
 
@@ -275,8 +274,7 @@ TaskStatus Hydro::ConToPrim(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskList Hydro::ClearSend
-//! \brief Wrapper task list function that checks all MPI sends have completed.  Called
-//! in end_tl, when all steps in run_tl over all MeshBlocks have completed.
+//! \brief Wrapper task list function that checks all MPI sends have completed.
 
 TaskStatus Hydro::ClearSend(Driver *pdrive, int stage) {
   // check sends of U complete

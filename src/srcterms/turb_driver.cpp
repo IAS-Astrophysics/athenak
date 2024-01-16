@@ -279,9 +279,10 @@ void TurbulenceDriver::Initialize() {
 //  random amplitudes and phases that can be used to evolve the force via an O-U process
 //  Called by MeshBlockPack::AddPhysics() function
 
-void TurbulenceDriver::IncludeInitializeModesTask(TaskList &tl, TaskID start) {
-  auto id_init = tl.AddTask(&TurbulenceDriver::InitializeModes, this, start);
-  auto id_add = tl.AddTask(&TurbulenceDriver::AddForcing, this, id_init);
+void TurbulenceDriver::IncludeInitializeModesTask(std::shared_ptr<TaskList> tl,
+                                                  TaskID start) {
+  auto id_init = tl->AddTask(&TurbulenceDriver::InitializeModes, this, start);
+  auto id_add = tl->AddTask(&TurbulenceDriver::AddForcing, this, id_init);
   return;
 }
 
@@ -291,19 +292,19 @@ void TurbulenceDriver::IncludeInitializeModesTask(TaskList &tl, TaskID start) {
 //  as an explicit source terms in each stage of integrator
 //  Called by MeshBlockPack::AddPhysics() function
 
-void TurbulenceDriver::IncludeAddForcingTask(TaskList &tl, TaskID start) {
+void TurbulenceDriver::IncludeAddForcingTask(std::shared_ptr<TaskList> tl, TaskID start) {
   // These must be inserted after update task, but before send_u
   if (pmy_pack->pionn == nullptr) {
     if (pmy_pack->phydro != nullptr) {
-      auto id = tl.InsertTask(&TurbulenceDriver::AddForcing, this,
+      auto id = tl->InsertTask(&TurbulenceDriver::AddForcing, this,
                               pmy_pack->phydro->id.flux, pmy_pack->phydro->id.expl);
     }
     if (pmy_pack->pmhd != nullptr) {
-      auto id = tl.InsertTask(&TurbulenceDriver::AddForcing, this,
+      auto id = tl->InsertTask(&TurbulenceDriver::AddForcing, this,
                               pmy_pack->pmhd->id.flux, pmy_pack->pmhd->id.expl);
     }
   } else {
-    auto id = tl.InsertTask(&TurbulenceDriver::AddForcing, this,
+    auto id = tl->InsertTask(&TurbulenceDriver::AddForcing, this,
                             pmy_pack->pionn->id.n_flux, pmy_pack->pionn->id.n_expl);
   }
 

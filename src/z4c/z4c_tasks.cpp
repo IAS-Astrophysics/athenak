@@ -4,8 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file z4c_tasks.cpp
-//! \brief implementation of functions that control z4c tasks in the task list:
-//  stagestart_tl, stagerun_tl, stageend_tl, operatorsplit_tl (currently not used)
+//! \brief functions that control z4c tasks in the appropriate task list
 
 #include <iostream>
 #include <cstdio>
@@ -22,51 +21,42 @@
 namespace z4c {
 //----------------------------------------------------------------------------------------
 //! \fn  void Z4c::AssembleZ4cTasks
-//! \brief Adds z4c tasks to stage start/run/end task lists
+//! \brief Adds z4c tasks to appropriate task lists used by time integrators.
 //  Called by MeshBlockPack::AddPhysics() function directly after Z4c constrctor
-//
-//  Stage start tasks are those that must be completed over all MeshBlocks before EACH
-//  stage can be run (such as posting MPI receives, setting BoundaryCommStatus flags, etc)
-//
-//  Stage run tasks are those performed in EACH stage
-//
-//  Stage end tasks are those that can only be cmpleted after all the stage run tasks are
-//  finished over all MeshBlocks for EACH stage, such as clearing all MPI non-blocking
-//  sends, etc.
 
-void Z4c::AssembleZ4cTasks(TaskList &start, TaskList &run, TaskList &end) {
+void Z4c::AssembleZ4cTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) {
   TaskID none(0);
   printf("AssembleZ4cTasks\n");
   auto &indcs = pmy_pack->pmesh->mb_indcs;
-  // start task list
-  id.irecv = start.AddTask(&Z4c::InitRecv, this, none);
+  // "before_stagen_tl" task list
+  id.irecv = tl["before_stagen_tl"]->AddTask(&Z4c::InitRecv, this, none);
 
-  // run task list
-  // id.ptrack = run.AddTask(&Z4c::PunctureTracker, this, none);
-  id.copyu = run.AddTask(&Z4c::CopyU, this, none); // id.ptrack);
+  // "stagen_tl" task list
+  // id.ptrack = tl["stagen_tl"]->AddTask(&Z4c::PunctureTracker, this, none);
+  id.copyu = tl["stagen_tl"]->AddTask(&Z4c::CopyU, this, none); // id.ptrack);
 
   switch (indcs.ng) {
-    case 2: id.crhs  = run.AddTask(&Z4c::CalcRHS<2>, this, id.copyu);
-            break;
-    case 3: id.crhs  = run.AddTask(&Z4c::CalcRHS<3>, this, id.copyu);
-            break;
-    case 4: id.crhs  = run.AddTask(&Z4c::CalcRHS<4>, this, id.copyu);
-            break;
+      case 2: id.crhs  = tl["stagen_tl"]->AddTask(&Z4c::CalcRHS<2>, this, id.copyu);
+              break;
+      case 3: id.crhs  = tl["stagen_tl"]->AddTask(&Z4c::CalcRHS<3>, this, id.copyu);
+              break;
+      case 4: id.crhs  = tl["stagen_tl"]->AddTask(&Z4c::CalcRHS<4>, this, id.copyu);
+              break;
   }
-  id.sombc = run.AddTask(&Z4c::Z4cBoundaryRHS, this, id.crhs);
-  id.expl  = run.AddTask(&Z4c::ExpRKUpdate, this, id.sombc);
-  id.restu = run.AddTask(&Z4c::RestrictU, this, id.expl);
-  id.sendu = run.AddTask(&Z4c::SendU, this, id.restu);
-  id.recvu = run.AddTask(&Z4c::RecvU, this, id.sendu);
-  id.bcs   = run.AddTask(&Z4c::ApplyPhysicalBCs, this, id.recvu);
-  id.prol  = run.AddTask(&Z4c::Prolongate, this, id.bcs);
-  id.algc  = run.AddTask(&Z4c::EnforceAlgConstr, this, id.prol);
-  id.newdt = run.AddTask(&Z4c::NewTimeStep, this, id.algc);
-  // end task list
-  id.csend = end.AddTask(&Z4c::ClearSend, this, none);
-  id.crecv = end.AddTask(&Z4c::ClearRecv, this, id.csend);
-  id.z4tad = end.AddTask(&Z4c::Z4cToADM_, this, id.crecv);
-  id.admc  = end.AddTask(&Z4c::ADMConstraints_, this, id.z4tad);
+  id.sombc = tl["stagen_tl"]->AddTask(&Z4c::Z4cBoundaryRHS, this, id.crhs);
+  id.expl  = tl["stagen_tl"]->AddTask(&Z4c::ExpRKUpdate, this, id.sombc);
+  id.restu = tl["stagen_tl"]->AddTask(&Z4c::RestrictU, this, id.expl);
+  id.sendu = tl["stagen_tl"]->AddTask(&Z4c::SendU, this, id.restu);
+  id.recvu = tl["stagen_tl"]->AddTask(&Z4c::RecvU, this, id.sendu);
+  id.bcs   = tl["stagen_tl"]->AddTask(&Z4c::ApplyPhysicalBCs, this, id.recvu);
+  id.prol  = tl["stagen_tl"]->AddTask(&Z4c::Prolongate, this, id.bcs);
+  id.algc  = tl["stagen_tl"]->AddTask(&Z4c::EnforceAlgConstr, this, id.prol);
+  id.newdt = tl["stagen_tl"]->AddTask(&Z4c::NewTimeStep, this, id.algc);
+  // "after_stagen_tl" task list
+  id.csend = tl["after_stagen_tl"]->AddTask(&Z4c::ClearSend, this, none);
+  id.crecv = tl["after_stagen_tl"]->AddTask(&Z4c::ClearRecv, this, id.csend);
+  id.z4tad = tl["after_stagen_tl"]->AddTask(&Z4c::Z4cToADM_, this, id.crecv);
+  id.admc  = tl["after_stagen_tl"]->AddTask(&Z4c::ADMConstraints_, this, id.z4tad);
   id.weyl_scalar  = end.AddTask(&Z4c::CalcWeylScalar_, this, id.admc);
   id.ptrck = end.AddTask(&Z4c::PunctureTracker, this, id.admc);
   return;
