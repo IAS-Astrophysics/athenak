@@ -113,10 +113,10 @@ class MHD {
   MHDTaskIDs id;
 
   // functions...
-  void AssembleMHDTasks(TaskList &start, TaskList &run, TaskList &end);
-  // ...in start task list
+  void AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
+  // ...in "before_stagen_tl" task list
   TaskStatus InitRecv(Driver *d, int stage);
-  // ...in run task list
+  // ...in "stagen_tl" task list
   TaskStatus CopyCons(Driver *d, int stage);
   TaskStatus Fluxes(Driver *d, int stage);
   TaskStatus SendFlux(Driver *d, int stage);
@@ -136,7 +136,7 @@ class MHD {
   TaskStatus Prolongate(Driver* pdrive, int stage);
   TaskStatus ConToPrim(Driver *d, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
-  // ...in end task list
+  // ...in "after_stagen_tl" task list
   TaskStatus ClearSend(Driver *d, int stage);
   TaskStatus ClearRecv(Driver *d, int stage);  // also in Driver::Initialize
 

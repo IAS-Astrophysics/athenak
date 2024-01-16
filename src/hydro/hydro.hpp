@@ -92,11 +92,10 @@ class Hydro {
   HydroTaskIDs id;
 
   // functions...
-  void AssembleHydroTasks(TaskList &start, TaskList &run, TaskList &end);
   void AssembleHydroTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
-  // ...in start task list
+  // ...in "before_stagen_tl" list
   TaskStatus InitRecv(Driver *d, int stage);
-  // ...in run task list
+  // ...in "stagen_tl" list
   TaskStatus CopyCons(Driver *d, int stage);
   TaskStatus Fluxes(Driver *d, int stage);
   TaskStatus SendFlux(Driver *d, int stage);
@@ -109,7 +108,7 @@ class Hydro {
   TaskStatus Prolongate(Driver* pdrive, int stage);
   TaskStatus ConToPrim(Driver *d, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
-  // ...in end task list
+  // ...in "after_stagen_tl" list
   TaskStatus ClearSend(Driver *d, int stage);
   TaskStatus ClearRecv(Driver *d, int stage);  // also in Driver::Initialize
 
