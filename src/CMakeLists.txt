@@ -55,7 +55,8 @@ add_executable(
         hydro/hydro_tasks.cpp
         hydro/hydro_update.cpp
 
-        ion-neutral/ion_neutral.cpp
+        ion-neutral/ion-neutral.cpp
+        ion-neutral/ion-neutral_tasks.cpp
 
         mesh/build_tree.cpp
         mesh/load_balance.cpp
