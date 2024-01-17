@@ -61,7 +61,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   bool &temperature_fix_turn_on_ = temperature_fix_turn_on;
   auto &tgas_radsource_ = tgas_radsource; // for saving final gas temperature
   bool cellavg_rad_source_ = true;
-  Real sigma_cold_cut_ = (is_mhd_enabled_) ? pmy_pack->pmhd->sigma_cold_cut : 1.e4;
+  Real sigma_cold_cut_ = (is_mhd_enabled_) ? pmy_pack->pmhd->sigma_cold_cut : 1.e1;
 
   // Extract coordinate/excision data
   auto &coord = pmy_pack->pcoord->coord_data;
@@ -211,16 +211,16 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
         Real b_3 = glower[3][0]*b0_ + glower[3][1]*b1_ + glower[3][2]*b2_ + glower[3][3]*b3_;
         Real b_sq = b0_*b_0 + b1_*b_1 + b2_*b_2 + b3_*b_3;
 
-        sigma_cold = b_sq/w.d;
+        sigma_cold = b_sq/wdn;
       } // endif (is_mhd_enabled_)
 
       if (sigma_cold > sigma_cold_cut_) {
-        int km1 = (k-1 < kl) ? kl : k-1;
-        int kp1 = (k+1 > ku) ? ku : k+1;
-        int jm1 = (j-1 < jl) ? jl : j-1;
-        int jp1 = (j+1 > ju) ? ju : j+1;
-        int im1 = (i-1 < il) ? il : i-1;
-        int ip1 = (i+1 > iu) ? iu : i+1;
+        int km1 = (k-1 < ks) ? ks : k-1;
+        int kp1 = (k+1 > ke) ? ke : k+1;
+        int jm1 = (j-1 < js) ? js : j-1;
+        int jp1 = (j+1 > je) ? je : j+1;
+        int im1 = (i-1 < is) ? is : i-1;
+        int ip1 = (i+1 > ie) ? ie : i+1;
         // averaging adjecent cells
         Real wdn_avg = 0.0;
         Real wen_avg = 0.0;
