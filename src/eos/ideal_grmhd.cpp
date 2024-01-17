@@ -267,6 +267,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
 
       // flag the cell if c2p succeeds or fails
       c2p_flag_(m,k,j,i) = !c2p_failure;
+      if (sigma_cold > sigma_cold_cut_) c2p_flag_(m,k,j,i) = false;
 
       // apply velocity ceiling if necessary
       Real tmp = glower[1][1]*SQR(w.vx)

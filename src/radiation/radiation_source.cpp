@@ -60,7 +60,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   bool &compton_use_artificial_mask_ = compton_use_artificial_mask;
   bool &temperature_fix_turn_on_ = temperature_fix_turn_on;
   auto &tgas_radsource_ = tgas_radsource; // for saving final gas temperature
-  bool cellavg_rad_source_ = true;
+  bool cellavg_rad_source_ = false;
   Real sigma_cold_cut_ = (is_mhd_enabled_) ? pmy_pack->pmhd->sigma_cold_cut : 1.e1;
 
   // Extract coordinate/excision data
