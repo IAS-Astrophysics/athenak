@@ -10,6 +10,8 @@
 #include <iostream>
 #include <string>
 #include <algorithm>
+#include <memory>    // make_unique, unique_ptr
+#include <vector>    // vector
 #include <Kokkos_Core.hpp>
 
 #include "athena.hpp"
@@ -56,7 +58,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   u0("u0 z4c",1,1,1,1,1),
   coarse_u0("coarse u0 z4c",1,1,1,1,1),
   u1("u1 z4c",1,1,1,1,1),
-  u_rhs("u_rhs z4c",1,1,1,1,1), 
+  u_rhs("u_rhs z4c",1,1,1,1,1),
   u_weyl("u_weyl",1,1,1,1,1),
   psi_out("psi_out",1,1,1) {
   // (1) read time-evolution option [already error checked in driver constructor]

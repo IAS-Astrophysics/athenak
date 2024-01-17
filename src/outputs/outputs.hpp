@@ -60,7 +60,7 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "z4c_alpha",
   "z4c_betax", "z4c_betay", "z4c_betaz",
   "z4c",
-  
+
   "weyl_rpsi4", "weyl_ipsi4",
   "weyl",
 

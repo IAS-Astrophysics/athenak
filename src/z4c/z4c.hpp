@@ -7,7 +7,8 @@
 //========================================================================================
 //! \file z4c.hpp
 //! \brief definitions for Z4c class
-
+#include <memory>    // make_unique, unique_ptr
+#include <vector>    // vector
 #include "athena.hpp"
 #include "utils/finite_diff.hpp"
 #include "parameter_input.hpp"

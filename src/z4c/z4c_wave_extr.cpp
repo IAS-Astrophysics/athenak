@@ -4,14 +4,14 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file calculate_weyl_scalars.cpp
-//  \brief implementation of functions in the Z4c class related to calculation of Weyl scalars
+//  \brief implementation of functions in the Z4c class to interpolate weyl scalar
+//  and output the waveform
 
 // C++ standard headers
-//#include <iostream>
+#include <unistd.h>
 #include <cstdio>
 #include <stdexcept>
 #include <sstream>
-#include <unistd.h>
 #include <iomanip>
 #include <iostream>
 #include <fstream>
@@ -31,25 +31,26 @@
 namespace z4c {
 
 //Factorial
-Real fac(Real n){
- if(n==0 || n==1){
-   return 1.0;
- }
- else{
-   n=n*fac(n-1);
-   return n;
- }
+Real fac(Real n) {
+  if(n==0 || n==1) {
+    return 1.0;
+  } else {
+    n=n*fac(n-1);
+    return n;
+  }
 }
 
-//Calculate spin weighted spherical harmonics sw=-2 using Wigner-d matrix notation see e.g. Eq II.7, II.8 in 0709.0093
-void swsh(Real * ylmR, Real * ylmI, int l, int m, Real theta, Real phi){
+// Calculate spin weighted spherical harmonics sw=-2 using Wigner-d matrix notation
+// see e.g. Eq II.7, II.8 in 0709.0093
+void swsh(Real * ylmR, Real * ylmI, int l, int m, Real theta, Real phi) {
   Real wignerd = 0;
   int k1,k2,k;
   k1 = std::max(0, m-2);
   k2 = std::min(l+m,l-2);
-  for (k = k1; k<k2+1; ++k){
-    wignerd += pow((-1),k)*sqrt(fac(l+m)*fac(l-m)*fac(l+2)*fac(l-2))*pow(std::cos(theta/2.0),2*l+m-2-2*k)
-    *pow(std::sin(theta/2.0),2*k+2-m)/(fac(l+m-k)*fac(l-2-k)*fac(k)*fac(k+2-m));
+  for (k = k1; k<k2+1; ++k) {
+    wignerd += pow((-1),k)*sqrt(fac(l+m)*fac(l-m)*fac(l+2)*fac(l-2))
+      *pow(std::cos(theta/2.0),2*l+m-2-2*k)*pow(std::sin(theta/2.0),2*k+2-m)
+      /(fac(l+m-k)*fac(l-2-k)*fac(k)*fac(k+2-m));
   }
   *ylmR = sqrt((2*l+1)/(4*M_PI))*wignerd*std::cos(m*phi);
   *ylmI = sqrt((2*l+1)/(4*M_PI))*wignerd*std::sin(m*phi);
@@ -63,7 +64,6 @@ int LmIndex(int l,int m) {
 //
 // This function operates only on the interior points of the MeshBlock
 void Z4c::WaveExtr(MeshBlockPack *pmbp) {
-
   // Spherical Grid for user-defined history
   auto &grids = pmbp->pz4c->spherical_grids;
   auto &u_weyl = pmbp->pz4c->u_weyl;
@@ -92,9 +92,12 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
             Real dataim = grids[g]->interp_vals.h_view(ip,1);
             Real weight = grids[g]->solid_angles.h_view(ip);
             swsh(&ylmR,&ylmI,l,m,theta,phi);
-            // The spherical harmonics transform as Y^s_{l m}( Pi-th, ph ) = (-1)^{l+s} Y^s_{l -m}(th, ph)
-            // but the PoisitionPolar function returns theta \in [0,\pi], so these are correct for bitant.
-            // With bitant, under reflection the imaginary part of the weyl scalar should pick a - sign,
+            // The spherical harmonics transform as
+            // Y^s_{l m}( Pi-th, ph ) = (-1)^{l+s} Y^s_{l -m}(th, ph)
+            // but the PoisitionPolar function returns theta \in [0,\pi],
+            // so these are correct for bitant.
+            // With bitant, under reflection the imaginary part of
+            // the weyl scalar should pick a - sign,
             // which is accounted for here.
             // Real bitant_z_fac = (bitant && theta > M_PI/2) ? -1 : 1;
             psilmR += weight*(datareal*ylmR + dataim*ylmI);
@@ -110,19 +113,23 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
   #if MPI_PARALLEL_ENABLED
   if (0 == global_variable::my_rank) {
     for (int g=0; g<nradii; ++g) {
-      for(int l=2;l<lmax+1;++l) {
-        for(int m=-l;m<l+1;++m) {
-        MPI_Reduce(MPI_IN_PLACE, &psi_out(g,LmIndex(l,m),0), 1, MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
-        MPI_Reduce(MPI_IN_PLACE, &psi_out(g,LmIndex(l,m),1), 1, MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
+      for(int l=2; l<lmax+1; ++l) {
+        for(int m=-l; m<l+1; ++m) {
+        MPI_Reduce(MPI_IN_PLACE, &psi_out(g,LmIndex(l,m),0), 1,
+          MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
+        MPI_Reduce(MPI_IN_PLACE, &psi_out(g,LmIndex(l,m),1), 1,
+          MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
         }
       }
     }
   } else {
     for (int g=0; g<nradii; ++g) {
-      for(int l=2;l<lmax+1;++l) {
-        for(int m=-l;m<l+1;++m) {
-        MPI_Reduce(&psi_out(g,LmIndex(l,m),0), &psi_out(g,LmIndex(l,m),0), 1, MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
-        MPI_Reduce(&psi_out(g,LmIndex(l,m),1), &psi_out(g,LmIndex(l,m),1), 1, MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
+      for(int l=2; l<lmax+1; ++l) {
+        for(int m=-l; m<l+1; ++m) {
+        MPI_Reduce(&psi_out(g,LmIndex(l,m),0), &psi_out(g,LmIndex(l,m),0), 1,
+          MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
+        MPI_Reduce(&psi_out(g,LmIndex(l,m),1), &psi_out(g,LmIndex(l,m),1), 1,
+          MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
         }
       }
     }
@@ -188,4 +195,4 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
 }
 
 
-}
+}  // namespace z4c

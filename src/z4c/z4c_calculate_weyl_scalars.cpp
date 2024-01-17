@@ -4,15 +4,16 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file calculate_weyl_scalars.cpp
-//  \brief implementation of functions in the Z4c class related to calculation of Weyl scalars
+//  \brief implementation of functions in the Z4c class related to calculation
+//  of Weyl scalars
 
 // C++ standard headers
 //#include <iostream>
+#include <stdio.h>
 #include <algorithm>
 #include <cinttypes>
 #include <iostream>
 #include <limits>
-#include <stdio.h>
 
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
@@ -83,15 +84,18 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
 
     // Symmetric tensors
     // Rank 2
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;        // inverse of conf. metric
+    // inverse of conf. metric
+    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> R_dd;        // Ricci tensor
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> K_ud;        // extrinsic curvature
 
     // Rank 3
     AthenaScratchTensor<Real, TensorSymm::SYM2,  3, 3> dg_ddd;      // metric 1st drvts
     AthenaScratchTensor<Real, TensorSymm::SYM2,  3, 3> dK_ddd;      // K 1st drvts
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_ddd;   // Christoffel symbols of 1st kind
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_udd;   // Christoffel symbols of 2nd kind
+    // Christoffel symbols of 1st kind
+    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_ddd;
+    // Christoffel symbols of 2nd kind
+    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_udd;
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> DK_ddd;      // differential of K
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> DK_udd;      // differential of K
 
@@ -150,8 +154,7 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
     for(int d = c; d < 3; ++d) {
       if(a == b) {
         ddg_dddd(a,b,c,d) = Dxx<NGHOST>(a, idx, adm.g_dd, m,c,d,k,j,i);
-      }
-      else {
+      } else {
         ddg_dddd(a,b,c,d) = Dxy<NGHOST>(a, b, idx, adm.g_dd, m,c,d,k,j,i);
       }
     }
@@ -159,8 +162,9 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
     // -----------------------------------------------------------------------------------
     // inverse metric
     //
-    detg = adm::SpatialDet(adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i), adm.g_dd(m,0,2,k,j,i),
-                          adm.g_dd(m,1,1,k,j,i), adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i));
+    detg = adm::SpatialDet(adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i),
+                           adm.g_dd(m,0,2,k,j,i), adm.g_dd(m,1,1,k,j,i),
+                           adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i));
     adm::SpatialInv(1.0/detg,
                 adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i), adm.g_dd(m,0,2,k,j,i),
                 adm.g_dd(m,1,1,k,j,i), adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i),
@@ -246,8 +250,8 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
     //------------------------------------------------------------------------------------
     //     Construct tetrad
     //
-    //     Initial tetrad guess. NB, aligned with z axis - possible problem if points lie on z axis
-    //     theta and phi vectors degenerate
+    //     Initial tetrad guess. NB, aligned with z axis - possible problem if points
+    //     lie on z axis theta and phi vectors degenerate
     //     Like BAM start with phi vector
     //     uvec = radial vec
     //     vvec = theta vec
@@ -266,69 +270,69 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
     wvec(2) = 0.0;
 
     //Gram-Schmidt orthonormalisation with spacetime metric.
-    
+
     // (1) normalize phi vec
     for(int a = 0; a<3; ++a) {
-	    for(int b = 0; b<3; ++b) {
+      for(int b = 0; b<3; ++b) {
           dotp1 += adm.g_dd(m,a,b,k,j,i)*wvec(a)*wvec(b);
-	    }
+      }
     }
     for(int a =0; a<3; ++a) {
-	      wvec(a) = wvec(a)/std::sqrt(dotp1);
+        wvec(a) = wvec(a)/std::sqrt(dotp1);
     }
 
     // (2) make radial vec orthogonal to phi vec
     dotp1 = 0;
     for(int a = 0; a<3; ++a) {
       for( int b = 0; b<3; ++b) {
-	      dotp1 += adm.g_dd(m,a,b,k,j,i)*wvec(a)*uvec(b);
+        dotp1 += adm.g_dd(m,a,b,k,j,i)*wvec(a)*uvec(b);
       }
     }
     for(int a = 0; a<3; ++a) {
-	    uvec(a) -= dotp1*wvec(a);
+      uvec(a) -= dotp1*wvec(a);
     }
 
     // (3) normalize radial vec
     dotp1 = 0;
     for(int a = 0; a<3; ++a) {
-	    for(int b = 0; b<3; ++b) {
-	        dotp1 += adm.g_dd(m,a,b,k,j,i)*uvec(a)*uvec(b);
-	    }
+      for(int b = 0; b<3; ++b) {
+          dotp1 += adm.g_dd(m,a,b,k,j,i)*uvec(a)*uvec(b);
+      }
     }
 
     for(int a =0; a<3; ++a) {
-	      uvec(a) = uvec(a)/std::sqrt(dotp1);
+        uvec(a) = uvec(a)/std::sqrt(dotp1);
     }
 
     // (4) make theta vec orthogonal to both radial and phi vec
     dotp1 = 0;
     for(int a = 0; a<3; ++a) {
       for(int b = 0; b<3; ++b) {
-	      dotp1 += adm.g_dd(m,a,b,k,j,i)*wvec(a)*vvec(b);
-	    }
+        dotp1 += adm.g_dd(m,a,b,k,j,i)*wvec(a)*vvec(b);
+      }
     }
 
     dotp2 = 0;
     for(int a = 0; a<3; ++a) {
-	    for( int b = 0; b<3; ++b) {
-	      dotp2 += adm.g_dd(m,a,b,k,j,i)*uvec(a)*vvec(b);
-	    }
+      for( int b = 0; b<3; ++b) {
+        dotp2 += adm.g_dd(m,a,b,k,j,i)*uvec(a)*vvec(b);
+      }
     }
 
     for(int a = 0; a<3; ++a) {
-	    vvec(a) -= dotp1*wvec(a)+dotp2*uvec(a);
+      vvec(a) -= dotp1*wvec(a)+dotp2*uvec(a);
     }
 
     // (3) normalize theta vec
     dotp1 = 0;
     for(int a = 0; a<3; ++a) {
-	    for( int b = 0; b<3; ++b) {
-	      dotp1 += adm.g_dd(m,a,b,k,j,i)*vvec(a)*vvec(b);
-	    }
+      for( int b = 0; b<3; ++b) {
+        dotp1 += adm.g_dd(m,a,b,k,j,i)*vvec(a)*vvec(b);
+      }
     }
 
     for(int a =0; a<3; ++a) {
-	    vvec(a) = vvec(a)/std::sqrt(dotp1);
+      vvec(a) = vvec(a)/std::sqrt(dotp1);
     }
 
     //   Riem3_dddd = Riemann tensor of spacelike hypersurface
@@ -387,7 +391,7 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
           weyl.ipsi4(m,k,j,i) += 0.5 * Riemm4_ddd(a,c,b) * uvec(c) * (
             -vvec(a) * wvec(b) - wvec(a)*vvec(b)
           );
-          for(int d = 0; d < 3; ++d){
+          for(int d = 0; d < 3; ++d) {
             weyl.rpsi4(m,k,j,i) += -FR4 * (Riemm4_dddd(d,a,c,b) * uvec(d) * uvec(c)) * (
               vvec(a) * vvec(b) - (-wvec(a)*(-wvec(b)))
             );
@@ -401,7 +405,7 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
     Real r = std::sqrt(SQR(x1v) +  SQR(x2v) + SQR(x3v));
     weyl.rpsi4(m,k,j,i) *= r;
     weyl.ipsi4(m,k,j,i) *= r;
-   });
+  });
 }
 
 template void Z4c::Z4cWeyl<2>(MeshBlockPack *pmbp);
