@@ -599,6 +599,16 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
         if (!(flag) || !(isfinite(tradnew))) {
           badcell = true;
         }
+
+        // if (fabs(coef[1]) > 1.0e-20) {
+        //   bool flag = FourthPolyRoot(coef[1], coef[0], tradnew);
+        //   if (!(flag) || !(isfinite(tradnew))) {
+        //     badcell = true;
+        //     tradnew = trad;
+        //   }
+        // } else {
+        //   tradnew = -coef[0];
+        // }
       }
 
       // Update the specific intensity
