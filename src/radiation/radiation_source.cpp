@@ -61,6 +61,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   bool &temperature_fix_turn_on_ = temperature_fix_turn_on;
   auto &tgas_radsource_ = tgas_radsource; // for saving final gas temperature
   bool cellavg_rad_source_ = true;
+  Real sigma_cold_cut_ = (is_mhd_enabled_) ? pmy_pack->pmhd->sigma_cold_cut : 1.e4;
 
   // Extract coordinate/excision data
   auto &coord = pmy_pack->pcoord->coord_data;
@@ -137,12 +138,13 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   Real dt_ = (pdriver->beta[stage-1])*(pmy_pack->pmesh->dt);
 
   // Call ConsToPrim over active zones prior to source term application
+  DvceArray5D<Real> bcc0_;
   if (!(fixed_fluid_)) {
     if (is_hydro_enabled_) {
       pmy_pack->phydro->peos->ConsToPrim(u0_,w0_,false,is,ie,js,je,ks,ke);
     } else if (is_mhd_enabled_) {
       auto &b0_ = pmy_pack->pmhd->b0;
-      auto &bcc0_ = pmy_pack->pmhd->bcc0;
+      bcc0_ = pmy_pack->pmhd->bcc0;
       pmy_pack->pmhd->peos->ConsToPrim(u0_,b0_,w0_,bcc0_,false,false,is,ie,js,je,ks,ke);
     }
   }
@@ -175,41 +177,77 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
     Real wen = w0_(m,IEN,k,j,i);
 
     // apply cell-averaged profile
-    if (cellavg_rad_source_ && !excise) {
-      int km1 = (k-1 < kl) ? kl : k-1;
-      int kp1 = (k+1 > ku) ? ku : k+1;
-      int jm1 = (j-1 < jl) ? jl : j-1;
-      int jp1 = (j+1 > ju) ? ju : j+1;
-      int im1 = (i-1 < il) ? il : i-1;
-      int ip1 = (i+1 > iu) ? iu : i+1;
+    if (cellavg_rad_source_ && !rad_mask_(m,k,j,i)) {
+      Real sigma_cold = 0.0;
+      if (is_mhd_enabled_) {
+        Real qq = glower[1][1]*wvx*wvx +2.0*glower[1][2]*wvx*wvy +2.0*glower[1][3]*wvx*wvz
+                + glower[2][2]*wvy*wvy +2.0*glower[2][3]*wvy*wvz
+                + glower[3][3]*wvz*wvz;
+        Real alpha = sqrt(-1.0/gupper[0][0]);
+        Real u0_norm = sqrt(1.0 + qq);
+        Real u0 = u0_norm / alpha;
+        Real u1 = wvx - alpha * u0_norm * gupper[0][1];
+        Real u2 = wvy - alpha * u0_norm * gupper[0][2];
+        Real u3 = wvz - alpha * u0_norm * gupper[0][3];
 
-      Real wdn_avg = 0.0;
-      Real wen_avg = 0.0;
-      int n_count = 0;
-      for (int kk=km1; kk<=kp1; ++kk) {
-        for (int jj=jm1; jj<=jp1; ++jj) {
-          for (int ii=im1; ii<=ip1; ++ii) {
-            if (!excise) {
-              wdn_avg += w0_(m,IDN,kk,jj,ii);
-              wen_avg += w0_(m,IEN,kk,jj,ii);
-              n_count += 1;
-            } // endif c2p_flag_(m,kk,jj,ii)
-          } // endfor ii
-        } // endfor jj
-      } // endfor kk
+        // lower vector indices
+        Real u_1 = glower[1][0]*u0 + glower[1][1]*u1 + glower[1][2]*u2 + glower[1][3]*u3;
+        Real u_2 = glower[2][0]*u0 + glower[2][1]*u1 + glower[2][2]*u2 + glower[2][3]*u3;
+        Real u_3 = glower[3][0]*u0 + glower[3][1]*u1 + glower[3][2]*u2 + glower[3][3]*u3;
 
-      if (n_count == 0) {
-        wdn_avg = w0_(m,IDN,k,j,i);
-        wen_avg = w0_(m,IEN,k,j,i);
-      } else {
-        wdn_avg = wdn_avg/n_count;
-        wen_avg = wen_avg/n_count;
-      }
+        // calculate 4-magnetic field
+        auto &bccx = bcc0_(m,IBX,k,j,i);
+        auto &bccy = bcc0_(m,IBY,k,j,i);
+        auto &bccz = bcc0_(m,IBZ,k,j,i);
+        Real b0_ = u_1*bccx + u_2*bccy + u_3*bccz;
+        Real b1_ = (bccx + b0_ * u1) / u0;
+        Real b2_ = (bccy + b0_ * u2) / u0;
+        Real b3_ = (bccz + b0_ * u3) / u0;
 
-      // assign cell-averaged density and pressure
-      wdn = wdn_avg;
-      wen = wen_avg;
-    }
+        // lower vector indices
+        Real b_0 = glower[0][0]*b0_ + glower[0][1]*b1_ + glower[0][2]*b2_ + glower[0][3]*b3_;
+        Real b_1 = glower[1][0]*b0_ + glower[1][1]*b1_ + glower[1][2]*b2_ + glower[1][3]*b3_;
+        Real b_2 = glower[2][0]*b0_ + glower[2][1]*b1_ + glower[2][2]*b2_ + glower[2][3]*b3_;
+        Real b_3 = glower[3][0]*b0_ + glower[3][1]*b1_ + glower[3][2]*b2_ + glower[3][3]*b3_;
+        Real b_sq = b0_*b_0 + b1_*b_1 + b2_*b_2 + b3_*b_3;
+
+        sigma_cold = b_sq/w.d;
+      } // endif (is_mhd_enabled_)
+
+      if (sigma_cold > sigma_cold_cut_) {
+        int km1 = (k-1 < kl) ? kl : k-1;
+        int kp1 = (k+1 > ku) ? ku : k+1;
+        int jm1 = (j-1 < jl) ? jl : j-1;
+        int jp1 = (j+1 > ju) ? ju : j+1;
+        int im1 = (i-1 < il) ? il : i-1;
+        int ip1 = (i+1 > iu) ? iu : i+1;
+        // averaging adjecent cells
+        Real wdn_avg = 0.0;
+        Real wen_avg = 0.0;
+        int n_count = 0;
+        for (int kk=km1; kk<=kp1; ++kk) {
+          for (int jj=jm1; jj<=jp1; ++jj) {
+            for (int ii=im1; ii<=ip1; ++ii) {
+              if (!rad_mask_(m,k,j,i)) {
+                wdn_avg += w0_(m,IDN,kk,jj,ii);
+                wen_avg += w0_(m,IEN,kk,jj,ii);
+                n_count += 1;
+              } // endif c2p_flag_(m,kk,jj,ii)
+            } // endfor ii
+          } // endfor jj
+        } // endfor kk
+        if (n_count == 0) {
+          wdn_avg = w0_(m,IDN,k,j,i);
+          wen_avg = w0_(m,IEN,k,j,i);
+        } else {
+          wdn_avg = wdn_avg/n_count;
+          wen_avg = wen_avg/n_count;
+        }
+        // assign cell-averaged density and pressure for source term calculation
+        wdn = wdn_avg;
+        wen = wen_avg;
+      } // endif (sigma_cold > sigma_cold_cut_)
+    } // endif (cellavg_rad_source_ && !rad_mask_(m,k,j,i))
 
     // derived quantities
     Real pgas = gm1*wen;
