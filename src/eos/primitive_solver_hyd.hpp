@@ -108,6 +108,13 @@ class PrimitiveSolverHydro {
     ps.GetRootSolverMutable().iterations = pin->GetOrAddInteger(block, "c2p_iter", 50);
     errcap = pin->GetOrAddInteger(block, "c2perrs", 1000);
     SetPolicyParams(block, pin);
+
+    for (int n = 0; n < ps.GetEOS().GetNSpecies(); n++) {
+      std::stringstream spec_name;
+      spec_name << "s" << (n + 1) << "_atmosphere";
+      ps.GetEOSMutable().SetSpeciesAtmosphere(
+          pin->GetOrAddReal(block, spec_name.str(), 0.0), n);
+    }
   }
 
   // The prim to con function used on the reconstructed states inside the Riemann solver.
