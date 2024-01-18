@@ -90,7 +90,7 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
       Real dtodx3 = beta_dt/size.d_view(m).dx3;
 
       // Estimate conserved variables
-      for (int n=0; n<nmhd_; ++n) {
+      for (int n=0; n<nmhd_ + nscal_; ++n) {
         Real divf = dtodx1*(flx1(m,n,k,j,i+1) - flx1(m,n,k,j,i));
         if (multi_d) {
           divf += dtodx2*(flx2(m,n,k,j+1,i) - flx2(m,n,k,j,i));
@@ -207,6 +207,15 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
       e3x1_(m, k, j, i) = bflux[IBY];
       e2x1_(m, k, j, i) = bflux[IBZ];
 
+      // Calculate fluxes of scalars
+      for (int n = 0; n < nscal_; n++) {
+        if (flx1(m, nmhd_ + n, k, j, i) >= 0.0) {
+          flx1(m, nmhd_ + n, k, j, i) = flx1(m,IDN,k,j,i)*wli[PYF + n];
+        } else {
+          flx1(m, nmhd_ + n, k, j, i) = flx1(m,IDN,k,j,i)*wri[PYF + n];
+        }
+      }
+
       if (multi_d) {
         Real wlj[NPRIM], *wrj;
         Real blj[NMAG], brj[NMAG];
@@ -233,6 +242,15 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         InsertFluxes(flux, flx2, m, k, j, i);
         e1x2_(m,k,j,i) = bflux[IBY];
         e3x2_(m,k,j,i) = bflux[IBZ];
+
+        // Calculate fluxes of scalars
+        for (int n = 0; n < nscal_; n++) {
+          if (flx2(m, nmhd_ + n, k, j, i) >= 0.0) {
+            flx2(m, nmhd_ + n, k, j, i) = flx2(m,IDN,k,j,i)*wlj[PYF + n];
+          } else {
+            flx2(m, nmhd_ + n, k, j, i) = flx2(m,IDN,k,j,i)*wrj[PYF + n];
+          }
+        }
       }
 
       if (three_d) {
@@ -261,6 +279,15 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         InsertFluxes(flux, flx3, m, k, j, i);
         e2x3_(m,k,j,i) = bflux[IBY];
         e1x3_(m,k,j,i) = bflux[IBZ];
+
+        // Calculate fluxes of scalars
+        for (int n = 0; n < nscal_; n++) {
+          if (flx3(m, nmhd_ + n, k, j, i) >= 0.0) {
+            flx3(m, nmhd_ + n, k, j, i) = flx3(m,IDN,k,j,i)*wmk[PYF + n];
+          } else {
+            flx3(m, nmhd_ + n, k, j, i) = flx3(m,IDN,k,j,i)*wpk[PYF + n];
+          }
+        }
       }
     }
   });
@@ -307,6 +334,15 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
       e3x1_(m, k, j, i+1) = bflux[IBY];
       e2x1_(m, k, j, i+1) = bflux[IBZ];
 
+      // Calculate fluxes of scalars
+      for (int n = 0; n < nscal_; n++) {
+        if (flx1(m, nmhd_ + n, k, j, i+1) >= 0.0) {
+          flx1(m, nmhd_ + n, k, j, i+1) = flx1(m,IDN,k,j,i+1)*wli[PYF + n];
+        } else {
+          flx1(m, nmhd_ + n, k, j, i+1) = flx1(m,IDN,k,j,i+1)*wri[PYF + n];
+        }
+      }
+
       if (multi_d) {
         Real *wlj, wrj[NPRIM];
         Real blj[NMAG], brj[NMAG];
@@ -333,6 +369,15 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         InsertFluxes(flux, flx2, m, k, j+1, i);
         e1x2_(m,k,j+1,i) = bflux[IBY];
         e3x2_(m,k,j+1,i) = bflux[IBZ];
+
+        // Calculate fluxes of scalars
+        for (int n = 0; n < nscal_; n++) {
+          if (flx2(m, nmhd_ + n, k, j+1, i) >= 0.0) {
+            flx2(m, nmhd_ + n, k, j+1, i) = flx2(m,IDN,k,j+1,i)*wlj[PYF + n];
+          } else {
+            flx2(m, nmhd_ + n, k, j+1, i) = flx2(m,IDN,k,j+1,i)*wrj[PYF + n];
+          }
+        }
       }
 
       if (three_d) {
@@ -361,6 +406,15 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         InsertFluxes(flux, flx3, m, k+1, j, i);
         e2x3_(m,k+1,j,i) = bflux[IBY];
         e1x3_(m,k+1,j,i) = bflux[IBZ];
+
+        // Calculate fluxes of scalars
+        for (int n = 0; n < nscal_; n++) {
+          if (flx3(m, nmhd_ + n, k+1, j, i) >= 0.0) {
+            flx3(m, nmhd_ + n, k+1, j, i) = flx3(m,IDN,k+1,j,i)*wmk[PYF + n];
+          } else {
+            flx3(m, nmhd_ + n, k+1, j, i) = flx3(m,IDN,k+1,j,i)*wpk[PYF + n];
+          }
+        }
       }
     }
   });

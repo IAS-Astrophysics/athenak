@@ -42,6 +42,7 @@ class PrimitiveSolverHydro {
     // Parameters for an ideal gas
     if constexpr(std::is_same_v<Primitive::IdealGas, EOSPolicy>) {
       ps.GetEOSMutable().SetGamma(pin->GetOrAddReal(block, "gamma", 5.0/3.0));
+      ps.GetEOSMutable().SetNSpecies(pin->GetOrAddInteger(block, "nscalars", 0));
     }
     // Parameters for a simple polytrope
     if constexpr(std::is_same_v<Primitive::Polytrope, EOSPolicy>) {
@@ -60,6 +61,7 @@ class PrimitiveSolverHydro {
                   << " too large; MAX_PIECES = " << N << std::endl;
         std::exit(EXIT_FAILURE);
       }
+      ps.GetEOSMutable().SetNSpecies(pin->GetOrAddInteger(block, "nscalars", 0));
 
       // Collect information about the pressure at the first polytrope division,
       // the baryon mass, and the minimum density for the EOS.
@@ -437,7 +439,7 @@ class PrimitiveSolverHydro {
         prim(m, IVZ, k, j, i) = prim_pt[PVZ];
         prim(m, IPR, k, j, i) = prim_pt[PPR];
         for (int n = 0; n < nscal; n++) {
-          prim(m, nhyd + n, k, j, i);
+          prim(m, nhyd + n, k, j, i) = prim_pt[PYF + n];
         }
 
         // If the conservative variables were floored or adjusted for consistency,
