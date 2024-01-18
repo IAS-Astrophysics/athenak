@@ -438,10 +438,10 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
           prim(m,IVZ,k,j,i) = w.vz;
           prim(m,IEN,k,j,i) = w.e;
         } else if (pfloor_flag_(m,k,j,i)) { // if pfloor is reached
-          w.d  = prim(m,IDN,k,j,i);
-          w.vx = prim(m,IVX,k,j,i);
-          w.vy = prim(m,IVY,k,j,i);
-          w.vz = prim(m,IVZ,k,j,i);
+          prim(m,IDN,k,j,i) = w.d;
+          prim(m,IVX,k,j,i) = w.vx;
+          prim(m,IVY,k,j,i) = w.vy;
+          prim(m,IVZ,k,j,i) = w.vz;
           prim(m,IEN,k,j,i) = w.e;
         }
 
