@@ -567,22 +567,88 @@ inline Real dFEMBasisdtheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2
       + dFEMBasisdxi(xi1, xi2, xi3, basis_index, 3) * pXi3pTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3);
 }
 
-Real PdFEMBasisdOmega(int ihat, int a, int t1, int t2, int t3, Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3,
-                      Real xi1, Real xi2, Real xi3, int basis_choice) {
+inline Real dJacxIxiJ(int i, int j, Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3) {
+
+  Real result;
+  if (i == 1 && j == 1) {
+    result = x1;
+  } else if (i == 1 && j == 2) {
+    result = x2;
+  } else if (i == 1 && j == 3) {
+    result = x3;
+  } else if (i == 2 && j == 1) {
+    result = y1;
+  } else if (i == 2 && j == 2) {
+    result = y2;
+  } else if (i == 2 && j == 3) {
+    result = y3;
+  } else if (i == 3 && j == 1) {
+    result = z1;
+  } else if (i == 3 && j == 2) {
+    result = z2;
+  } else {
+    result = z3;
+  }
+
+  return result;
+}
+
+inline Real dpIdxJ(int i, int j, Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
+
+  Real x = xi1 * x1 + xi2 * x2 + xi3 * x3;
+  Real y = xi1 * y1 + xi2 * y2 + xi3 * y3;
+  Real z = xi1 * z1 + xi2 * z2 + xi3 * z3;
+
+  Real result;
+  if (i == 1 && j == 1) {
+    result = (pow(y, 2) + pow(z, 2)) / pow(pow(x, 2) + pow(y, 2) + pow(z, 2), 1.5);
+  } else if ((i == 1 && j == 2) || (i == 2 && j == 1)) {
+    result = -((x * y) / pow(pow(x, 2) + pow(y, 2) + pow(z, 2), 1.5));
+  } else if ((i == 1 && j == 3) || (i == 3 && j == 1)) {
+    result = -((x * z) / pow(pow(x, 2) + pow(y, 2) + pow(z, 2), 1.5));
+  } else if (i == 2 && j == 2) {
+    result = (pow(x, 2) + pow(z, 2)) / pow(pow(x, 2) + pow(y, 2) + pow(z, 2), 1.5);
+  } else if ((i == 2 && j == 3) || (i == 3 && j == 2)) {
+    result = -((y * z) / pow(pow(x, 2) + pow(y, 2) + pow(z, 2), 1.5));
+  } else {
+    result = (pow(x, 2) + pow(y, 2)) / pow(pow(x, 2) + pow(y, 2) + pow(z, 2), 1.5);
+  }
+
+  return result;
+}
+
+inline Real dxiIdpJ(int i, int j, Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
+
+  Real result = dJacxIxiJ(i, 1, x1, y1, z1, x2, y2, z2, x3, y3, z3) * dpIdxJ(1, j, x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3)
+      + dJacxIxiJ(i, 2, x1, y1, z1, x2, y2, z2, x3, y3, z3) * dpIdxJ(2, j, x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3)
+      + dJacxIxiJ(i, 3, x1, y1, z1, x2, y2, z2, x3, y3, z3) * dpIdxJ(3, j, x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3);
+
+  return 1 / result;
+}
+
+Real dFEMBasisdp(int ihat, int a, int t1, int t2, int t3, Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3,
+                 Real xi1, Real xi2, Real xi3, int basis_choice) {
 
   int basis_index_a = (a == t1) * 1 + (a == t2) * 2 + (a == t3) * 3;
 
+  Real result = 0;
   if (ihat == 1) {
-    return -SinPhiCosecTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3) * dFEMBasisdphi(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, basis_index_a)
-        + CosPhiCosTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3) * dFEMBasisdtheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, basis_index_a);
+    result = dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, 1) * dxiIdpJ(1, ihat, x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3)
+        + dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, 2) * dxiIdpJ(2, ihat, x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3)
+        + dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, 3) * dxiIdpJ(3, ihat, x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3);
   } else if (ihat == 2) {
-    return CosPhiCosecTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3) * dFEMBasisdphi(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, basis_index_a)
-        + SinPhiCosTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3) * dFEMBasisdtheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, basis_index_a);
+    result = dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, 1) * dxiIdpJ(1, ihat, x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3)
+        + dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, 2) * dxiIdpJ(2, ihat, x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3)
+        + dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, 3) * dxiIdpJ(3, ihat, x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3);
   } else if (ihat == 3) {
-    return -SinTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3) * dFEMBasisdtheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, basis_index_a);
+    result = dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, 1) * dxiIdpJ(1, ihat, x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3)
+        + dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, 2) * dxiIdpJ(2, ihat, x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3)
+        + dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, 3) * dxiIdpJ(3, ihat, x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3);
   } else {
-    // std::cout << "Incorrect choice of index ihat!" << std::endl;
+    //std::cout << "Incorrect choice of index ihat!" << std::endl;
     exit(EXIT_FAILURE);
   }
+
+  return result;
 }
 } // namespace radiationfemn
