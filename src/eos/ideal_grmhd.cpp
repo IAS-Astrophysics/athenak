@@ -151,7 +151,10 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       }
     }
 
-    if (excised) c2p_flag_(m,k,j,i) = true;
+    if (excised) {
+      c2p_flag_(m,k,j,i) = true;
+      pfloor_flag_(m,k,j,i) = false;
+    }
 
     if (!(excised)) {
       // calculate SR conserved quantities
@@ -268,6 +271,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
 
       // flag the cell if c2p succeeds or fails
       c2p_flag_(m,k,j,i) = !c2p_failure;
+      pfloor_flag_(m,k,j,i) = false;
       if (efloor_used) pfloor_flag_(m,k,j,i) = true;
 
       // apply velocity ceiling if necessary
