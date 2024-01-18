@@ -54,6 +54,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
 
   // flags and variables for ad hoc fixes
   auto &c2p_flag_ = pmy_pack->pmhd->c2p_flag;
+  auto &pfloor_flag_ = pmy_pack->pmhd->pfloor_flag;
   auto &w0_old_ = pmy_pack->pmhd->w0_old;
   auto &is_radiation_enabled_ = pmy_pack->pmhd->is_radiation_enabled;
   DvceArray4D<Real> tgas_radsource_;
@@ -267,7 +268,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
 
       // flag the cell if c2p succeeds or fails
       c2p_flag_(m,k,j,i) = !c2p_failure;
-      // if (efloor_used) c2p_flag_(m,k,j,i) = false;
+      if (efloor_used) pfloor_flag_(m,k,j,i) = true;
 
       // apply velocity ceiling if necessary
       Real tmp = glower[1][1]*SQR(w.vx)
@@ -369,7 +370,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       }
 
       // Assign fallback state if inversion fails
-      if (!c2p_flag_(m,k,j,i) && !(excised)) {
+      if ((!c2p_flag_(m,k,j,i) || pfloor_flag_(m,k,j,i)) && !(excised)) {
         // Set indices around the problematic cell
         int km1 = (k-1 < kl) ? kl : k-1;
         int kp1 = (k+1 > ku) ? ku : k+1;
@@ -425,11 +426,20 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
           w.vz = w.vz/n_count;
           w.e  = w.e/n_count;
         }
-        prim(m,IDN,k,j,i) = w.d;
-        prim(m,IVX,k,j,i) = w.vx;
-        prim(m,IVY,k,j,i) = w.vy;
-        prim(m,IVZ,k,j,i) = w.vz;
-        prim(m,IEN,k,j,i) = w.e;
+
+        if (!c2p_flag_(m,k,j,i)) { // if variable inversion fails
+          prim(m,IDN,k,j,i) = w.d;
+          prim(m,IVX,k,j,i) = w.vx;
+          prim(m,IVY,k,j,i) = w.vy;
+          prim(m,IVZ,k,j,i) = w.vz;
+          prim(m,IEN,k,j,i) = w.e;
+        } else if (pfloor_flag_(m,k,j,i)) { // if pfloor is reached
+          w.d  = prim(m,IDN,k,j,i);
+          w.vx = prim(m,IVX,k,j,i);
+          w.vy = prim(m,IVY,k,j,i);
+          w.vz = prim(m,IVZ,k,j,i);
+          prim(m,IEN,k,j,i) = w.e;
+        }
 
         // Extract components of metric
         Real &x1min = size.d_view(m).x1min;

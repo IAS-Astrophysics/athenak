@@ -51,6 +51,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     bcctest("bcctest",1,1,1,1,1),
     fofc("fofc",1,1,1,1),
     c2p_flag("c2p_flag",1,1,1,1),
+    pfloor_flag("pfloor_flag",1,1,1,1),
     w0_old("w0_old",1,1,1,1,1) {
   // Total number of MeshBlocks on this rank to be used in array dimensioning
   int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_maxperrank));
@@ -161,6 +162,8 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     // allocate array of c2p flags
     Kokkos::realloc(c2p_flag, nmb, ncells3, ncells2, ncells1);
     Kokkos::deep_copy(c2p_flag, true);
+    Kokkos::realloc(pfloor_flag, nmb, ncells3, ncells2, ncells1);
+    Kokkos::deep_copy(pfloor_flag, false);
   }
 
   // allocate memory for conserved variables on coarse mesh
