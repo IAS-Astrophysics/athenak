@@ -19,7 +19,7 @@
     #error NHISTORY > NREDUCTION in outputs.hpp
 #endif
 
-#define NOUTPUT_CHOICES 139
+#define NOUTPUT_CHOICES 140
 // choices for output variables used in <ouput> blocks in input file
 // TO ADD MORE CHOICES:
 //   - add more strings to array below, change NOUTPUT_CHOICES above appropriately
@@ -72,7 +72,9 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "mat_rho",
   "mat_Sx", "mat_Sy", "mat_Sz",
   "mat_Sxx", "mat_Sxy", "mat_Sxz", "mat_Syy", "mat_Syz", "mat_Szz",
-  "mat"
+  "mat",
+
+  "all_particles"
 };
 
 // forward declarations

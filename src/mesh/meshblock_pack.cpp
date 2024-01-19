@@ -15,13 +15,14 @@
 #include "driver/driver.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "ion-neutral/ion-neutral.hpp"
 #include "adm/adm.hpp"
 #include "z4c/z4c.hpp"
-#include "ion-neutral/ion-neutral.hpp"
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
 #include "radiation/radiation.hpp"
 #include "srcterms/turb_driver.hpp"
+#include "particles/particles.hpp"
 #include "units/units.hpp"
 #include "meshblock_pack.hpp"
 
@@ -53,6 +54,7 @@ MeshBlockPack::~MeshBlockPack() {
   if (prad   != nullptr) {delete prad;}
   if (pturb  != nullptr) {delete pturb;}
   if (punit  != nullptr) {delete punit;}
+  if (ppart  != nullptr) {delete ppart;}
   // must be last, since it calls ~BoundaryValues() which (MPI) uses pmy_pack->pmb->nnghbr
   delete pmb;
 }
@@ -181,6 +183,16 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     } else {
       padm = nullptr;
     }
+  }
+
+  // (8) PARTICLES
+  // Create particles module.  Create tasklist.
+  if (pin->DoesBlockExist("particles")) {
+    ppart = new particles::Particles(this, pin);
+    nphysics++;
+//    prad->AssembleRadTasks(tl_map);
+  } else {
+    ppart = nullptr;
   }
 
   // Units
