@@ -83,47 +83,22 @@ void RadiationFEMN::InitializeBeamsSourcesM1() {
 
   std::cout << "Initializing beam sources for M1" << std::endl;
 
-  Real Fnorm = 1e-1;
+  Real Fnorm = 4.;
   Real E = Fnorm;
-  Real Fx = Fnorm * sin(beam_source_1_theta) * cos(beam_source_1_phi);
-  Real Fy = Fnorm * sin(beam_source_1_theta) * sin(beam_source_1_phi);
-  Real Fz = Fnorm * cos(beam_source_1_theta);
+  Real Fx = E;
+  //Real Fx = Fnorm * sin(beam_source_1_theta) * cos(beam_source_1_phi);
+  Real Fy = 0 * Fnorm * sin(beam_source_1_theta) * sin(beam_source_1_phi);
+  Real Fz = 0 * Fnorm * cos(beam_source_1_theta);
 
-  beam_source_1_vals(0) = sqrt(4. * M_PI) * E;
-  beam_source_1_vals(1) = -sqrt(4. * M_PI / 3.0) * Fx;
-  beam_source_1_vals(2) = -sqrt(4. * M_PI / 3.0) * Fy;
-  beam_source_1_vals(3) = sqrt(4. * M_PI / 3.0) * Fz;
-
-  // Normalized flux
-  Real fx = Fx / E;
-  Real fy = Fy / E;
-  Real fz = Fz / E;
-  Real fnorm = Fnorm / E;
-  Real fixed_fnorm = fmin(1.0, fnorm);
-
-  // Flux direction
-  Real nx = fx / fnorm;
-  Real ny = fy / fnorm;
-  Real nz = fz / fnorm;
-
-  // Eddington factor and closure
-  Real chi = (3. + 4. * fixed_fnorm * fixed_fnorm) / (5. + 2. * sqrt(4. - 3. * fixed_fnorm * fixed_fnorm));
-  Real a = (1. - chi) / 2.;
-  Real b = (3. * chi - 1.) / 2.;
-
-  // P_{ij} = [a \delta_{ij} + b n_i n_j] E
-  Real Pxx = (a + b * nx * nx) * E;
-  Real Pyy = (a + b * ny * ny) * E;
-  Real Pzz = (a + b * nz * nz) * E;
-  Real Pxy = b * nx * ny * E;
-  Real Pxz = b * nx * nz * E;
-  Real Pyz = b * ny * nz * E;
-
-  beam_source_1_vals(4) = sqrt(60. * M_PI) * Pxy / (4. * M_PI);
-  beam_source_1_vals(5) = -sqrt(60. * M_PI) * Pyz / (4. * M_PI);
-  beam_source_1_vals(6) = sqrt(5. * M_PI) * (3. * Pzz - E) / (4. * M_PI);
-  beam_source_1_vals(7) = -sqrt(60. * M_PI) * Pxz / (4. * M_PI);
-  beam_source_1_vals(8) = sqrt(15. * M_PI) * (Pxx - Pyy) / (4. * M_PI);
+  beam_source_1_vals(0) = (1. / sqrt(4. * M_PI)) * E;
+  beam_source_1_vals(1) = 0;
+  beam_source_1_vals(2) = 0;
+  beam_source_1_vals(3) = sqrt(3. / (4. * M_PI)) * Fx;
+  beam_source_1_vals(4) = 0;
+  beam_source_1_vals(5) = 0;
+  beam_source_1_vals(6) = 0;
+  beam_source_1_vals(7) = 0;
+  beam_source_1_vals(8) = 0;
 
 }
 
