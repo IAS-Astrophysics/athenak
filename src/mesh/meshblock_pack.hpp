@@ -19,11 +19,12 @@
 class MeshBlock;
 namespace hydro {class Hydro;}
 namespace mhd {class MHD;}
+namespace ion_neutral {class IonNeutral;}
+class TurbulenceDriver;
+namespace radiation {class Radiation;}
 namespace z4c {class Z4c;}
 namespace adm {class ADM;}
-namespace ion_neutral {class IonNeutral;}
-namespace radiation {class Radiation;}
-class TurbulenceDriver;
+namespace particles {class Particles;}
 namespace units {class Units;}
 
 //----------------------------------------------------------------------------------------
@@ -54,11 +55,14 @@ class MeshBlockPack {
   // physics (controlled by AddPhysics() function in meshblock_pack.cpp)
   hydro::Hydro *phydro=nullptr;
   mhd::MHD *pmhd=nullptr;
-  adm::ADM *padm=nullptr;
-  z4c::Z4c *pz4c=nullptr;
   ion_neutral::IonNeutral *pionn=nullptr;
-  radiation::Radiation *prad=nullptr;
   TurbulenceDriver *pturb=nullptr;
+  radiation::Radiation *prad=nullptr;
+  z4c::Z4c *pz4c=nullptr;
+  adm::ADM *padm=nullptr;
+  particles::Particles *ppart=nullptr;
+
+  // units (needed to convert code units to cgs for, e.g., cooling or radiation)
   units::Units *punit=nullptr;
 
   // map for task lists which operate over all MeshBlocks in this MeshBlockPack

@@ -27,7 +27,7 @@
 //----------------------------------------------------------------------------------------
 // ctor: also calls BaseTypeOutput base class constructor
 
-BinaryOutput::BinaryOutput(OutputParameters op, Mesh *pm) :
+MeshBinaryOutput::MeshBinaryOutput(OutputParameters op, Mesh *pm) :
   BaseTypeOutput(op, pm) {
   // create directories for outputs
   // useful for mpiio-based outputs because on some supercomputers you may need to
@@ -37,11 +37,11 @@ BinaryOutput::BinaryOutput(OutputParameters op, Mesh *pm) :
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void BinaryOutput:::WriteOutputFile(Mesh *pm)
+//! \fn void MeshBinaryOutput:::WriteOutputFile(Mesh *pm)
 //  \brief Cycles over all MeshBlocks and writes OutputData in binary format
 //   All MeshBlocks are written to the same file.
 
-void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
+void MeshBinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   // check if slicing
   bool bin_slice = (out_params.slice1 || out_params.slice2 || out_params.slice3);
 
@@ -99,8 +99,8 @@ void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   header_offset += sbuf.size()*sizeof(char);
   header_offset += msg.str().size();}
 
-  //  5. Data.  An arbitrary number of scalars and vectors can be written (every node
-  //  in the OutputData doubly linked lists), all in binary floats format
+  //  5. Data.  An arbitrary number of scalars and vectors can be written (every element
+  //  of the outvars vector), all in binary floats format
 
   int nout_vars = outvars.size();
   int nout_mbs = outmbs.size();

@@ -84,7 +84,8 @@ add_executable(
         outputs/formatted_table.cpp
         outputs/history.cpp
         outputs/restart.cpp
-        outputs/vtk.cpp
+        outputs/vtk_mesh.cpp
+        outputs/vtk_part.cpp
 
         particles/particles.cpp
         particles/particles_pushers.cpp
