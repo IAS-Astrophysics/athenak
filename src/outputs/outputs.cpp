@@ -87,6 +87,32 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
       opar.file_basename = pin->GetString("job","basename");
       opar.file_type = pin->GetString(opar.block_name,"file_type");
 
+      // set output variable and optional file id (default is output variable name)
+      if (opar.file_type.compare("hst") != 0 &&
+          opar.file_type.compare("rst") != 0 &&
+          opar.file_type.compare("log") != 0) {
+        opar.variable = pin->GetString(opar.block_name, "variable");
+        opar.file_id = pin->GetOrAddString(opar.block_name,"id",opar.variable);
+      }
+
+      // read ghost cell option
+      opar.include_gzs = pin->GetOrAddBoolean(opar.block_name, "ghost_zones", false);
+
+      // read MeshBlock ID (if specified)
+      opar.gid = pin->GetOrAddInteger(opar.block_name, "gid", -1);
+      if (opar.gid >= 0 && pm->nmb_total == 1) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+            << std::endl << "Cannot specify MeshBlock ID in output block '"
+            << opar.block_name << "' when there is only one" << std::endl;
+        exit(EXIT_FAILURE);
+      }
+      if (opar.gid > (pm->nmb_total-1)) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+            << std::endl << "MeshBlock gid=" << opar.gid << " in output block '"
+            << opar.block_name << "' exceeds total number of MeshBlocks" << std::endl;
+        exit(EXIT_FAILURE);
+      }
+
       // read slicing options.  Check that slice is within mesh
       if (pin->DoesParameterExist(opar.block_name,"slice_x1")) {
         Real x1 = pin->GetReal(opar.block_name,"slice_x1");
@@ -133,32 +159,6 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
         opar.slice3 = false;
       }
 
-      // read ghost cell option
-      opar.include_gzs = pin->GetOrAddBoolean(opar.block_name, "ghost_zones", false);
-
-      // read MeshBlock ID (if specified)
-      opar.gid = pin->GetOrAddInteger(opar.block_name, "gid", -1);
-      if (opar.gid >= 0 && pm->nmb_total == 1) {
-        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-            << std::endl << "Cannot specify MeshBlock ID in output block '"
-            << opar.block_name << "' when there is only one" << std::endl;
-        exit(EXIT_FAILURE);
-      }
-      if (opar.gid > (pm->nmb_total-1)) {
-        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-            << std::endl << "MeshBlock gid=" << opar.gid << " in output block '"
-            << opar.block_name << "' exceeds total number of MeshBlocks" << std::endl;
-        exit(EXIT_FAILURE);
-      }
-
-      // set output variable and optional file id (default is output variable name)
-      if (opar.file_type.compare("hst") != 0 &&
-          opar.file_type.compare("rst") != 0 &&
-          opar.file_type.compare("log") != 0) {
-        opar.variable = pin->GetString(opar.block_name, "variable");
-        opar.file_id = pin->GetOrAddString(opar.block_name,"id",opar.variable);
-      }
-
       // set optional boolean to output only user-defined history variables
       if (opar.file_type.compare("hst") == 0) {
         opar.user_hist_only =pin->GetOrAddBoolean(opar.block_name,"user_hist_only",false);
@@ -189,10 +189,13 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
         pout_list.insert(pout_list.begin(),pnode);
         num_log++;
       } else if (opar.file_type.compare("vtk") == 0) {
-        pnode = new VTKOutput(opar,pm);
+        pnode = new MeshVTKOutput(opar,pm);
+        pout_list.insert(pout_list.begin(),pnode);
+      } else if (opar.file_type.compare("pvtk") == 0) {
+        pnode = new ParticleVTKOutput(opar,pm);
         pout_list.insert(pout_list.begin(),pnode);
       } else if (opar.file_type.compare("bin") == 0) {
-        pnode = new BinaryOutput(opar,pm);
+        pnode = new MeshBinaryOutput(opar,pm);
         pout_list.insert(pout_list.begin(),pnode);
       } else if (opar.file_type.compare("rst") == 0) {
       // Add restarts to the tail end of BaseTypeOutput list, so file counters for other

@@ -50,6 +50,8 @@ using Real = double;
 enum VariableIndex {IDN=0, IM1=1, IVX=1, IM2=2, IVY=2, IM3=3, IVZ=3, IEN=4, ITM=4};
 // array indices for components of magnetic field
 enum BFieldIndex {IBX=0, IBY=1, IBZ=2};
+// array indices for particle arrays (x,y,z dimensions)
+enum ParticlesIndex {IPX=0, IPY=1, IPZ=2};
 
 // integer constants to specify spatial reconstruction methods
 enum ReconstructionMethod {dc, plm, ppm4, ppmx, wenoz};

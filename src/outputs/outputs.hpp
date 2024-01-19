@@ -83,24 +83,25 @@ class ParameterInput;
 
 //----------------------------------------------------------------------------------------
 //! \struct OutputParameters
-//  \brief  container for parameters read from <output> block in the input file
+//  \brief container for parameters read from <output> block in the input file by the
+//  Outputs constructor.
 
 struct OutputParameters {
   int block_number;
   std::string block_name;
-  std::string file_basename;
-  std::string file_id;
-  std::string file_type;
-  std::string variable;
-  std::string data_format;
   Real last_time, dt;
-  int dcycle;  // enables outputs every 'dcycle'
+  int dcycle;                 // enables outputs every 'dcycle'
   int file_number;
-  int gid;
+  std::string file_basename;
+  std::string file_type;
+  std::string file_id;
+  std::string variable;
   bool include_gzs;
+  int gid;
   bool slice1, slice2, slice3;
   Real slice_x1, slice_x2, slice_x3;
   bool user_hist_only;
+  std::string data_format;
   bool contains_derived=false;
 };
 
@@ -174,6 +175,19 @@ class BaseTypeOutput {
   virtual void LoadOutputData(Mesh *pm);
   virtual void WriteOutputFile(Mesh *pm, ParameterInput *pin) = 0;
 
+  // Functions to detect big endian machine, and to byte-swap 32-bit words.  The vtk
+  // legacy format requires data to be stored as big-endian.
+  int IsBigEndian() {
+    std::int32_t n = 1;
+    char *ep = reinterpret_cast<char *>(&n);
+    return (*ep == 0); // Returns 1 (true) on a big endian machine
+  }
+  inline void Swap4Bytes(void *vdat) {
+    char tmp, *dat = static_cast<char *>(vdat);
+    tmp = dat[0];  dat[0] = dat[3];  dat[3] = tmp;
+    tmp = dat[1];  dat[1] = dat[2];  dat[2] = tmp;
+  }
+
  protected:
   // CC output data on host with dims (n,m,k,j,i) except
   // for restarts, where dims are (m,n,k,j,i)
@@ -222,22 +236,37 @@ class HistoryOutput : public BaseTypeOutput {
 };
 
 //----------------------------------------------------------------------------------------
-//! \class VTKOutput
-//  \brief derived BaseTypeOutput class for vtk binary data (VTK legacy format)
+//! \class MeshVTKOutput
+//  \brief derived BaseTypeOutput class for mesh data in VTK (legacy) format
 
-class VTKOutput : public BaseTypeOutput {
+class MeshVTKOutput : public BaseTypeOutput {
  public:
-  VTKOutput(OutputParameters oparams, Mesh *pm);
+  MeshVTKOutput(OutputParameters oparams, Mesh *pm);
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
 };
 
 //----------------------------------------------------------------------------------------
-//! \class BinaryOutput
-//  \brief derived BaseTypeOutput class for binary grid data (nbf format in pegasus++)
+//! \class ParticleVTKOutput
+//  \brief derived BaseTypeOutput class for particle data in VTK (legacy) format
 
-class BinaryOutput : public BaseTypeOutput {
+class ParticleVTKOutput : public BaseTypeOutput {
  public:
-  BinaryOutput(OutputParameters oparams, Mesh *pm);
+  ParticleVTKOutput(OutputParameters oparams, Mesh *pm);
+  void LoadOutputData(Mesh *pm) override;
+  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+ protected:
+  int nout_part;
+  HostArray2D<Real> outpart_pos;
+  HostArray1D<int>  outpart_gid;
+};
+
+//----------------------------------------------------------------------------------------
+//! \class MeshBinaryOutput
+//  \brief derived BaseTypeOutput class for binary mesh data (nbf format in pegasus++)
+
+class MeshBinaryOutput : public BaseTypeOutput {
+ public:
+  MeshBinaryOutput(OutputParameters oparams, Mesh *pm);
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
 };
 

@@ -37,13 +37,12 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
     std::exit(EXIT_FAILURE);
   }
 
-  Kokkos::realloc(prtcl_x,  nparticles_thispack);
-  Kokkos::realloc(prtcl_y,  nparticles_thispack);
-  Kokkos::realloc(prtcl_z,  nparticles_thispack);
-  Kokkos::realloc(prtcl_vx, nparticles_thispack);
-  Kokkos::realloc(prtcl_vy, nparticles_thispack);
-  Kokkos::realloc(prtcl_vz, nparticles_thispack);
-  Kokkos::realloc(prtcl_gid,nparticles_thispack);
+  int ndim=1;
+  if (pmy_pack->pmesh->multi_d) {ndim++;}
+  if (pmy_pack->pmesh->three_d) {ndim++;}
+  Kokkos::realloc(prtcl_pos, nparticles_thispack, ndim);
+  Kokkos::realloc(prtcl_vel, nparticles_thispack, ndim);
+  Kokkos::realloc(prtcl_gid, nparticles_thispack, ndim);
 
   // allocate boundary buffers for conserved (cell-centered) variables
 

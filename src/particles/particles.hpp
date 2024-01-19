@@ -39,13 +39,13 @@ class Particles {
   // data
   ParticlesPusher pusher;
 
-  int nparticles_total;                           // total number of particles all ranks
-  int nparticles_thispack;                        // number of particles in this pack
-  DualArray1D<int> prtcl_gid;                     // GID of MeshBlock containing each par
-  DvceArray1D<Real> prtcl_x,  prtcl_y,  prtcl_z;  // positions
-  DvceArray1D<Real> prtcl_vx, prtcl_vy, prtcl_vz; // velocities
-  DvceArray2D<Real> prtcl_rprop;                  // real number properties each particle
-  DvceArray2D<int> prtcl_iprop;                   // integer properties each particle
+  int nparticles_total;            // total number of particles all ranks
+  int nparticles_thispack;         // number of particles in this pack
+  DualArray1D<int>  prtcl_gid;     // GID of MeshBlock containing each par
+  DvceArray2D<Real> prtcl_pos;     // positions
+  DvceArray2D<Real> prtcl_vel;     // velocities
+  DvceArray2D<Real> prtcl_rprop;   // real number properties each particle
+  DvceArray2D<int>  prtcl_iprop;   // integer properties each particle
 
   // Boundary communication buffers and functions for particles
 //  ParticlesBoundaryValues *pbval;
