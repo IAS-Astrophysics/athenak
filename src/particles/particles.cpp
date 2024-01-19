@@ -23,9 +23,17 @@ namespace particles {
 Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
     pmy_pack(ppack) {
   // read number of particles per cell, and calculate number of particles this pack
-  int ppc = pin->GetOrAddInteger("particles","ppc",1);
+  Real ppc = pin->GetOrAddReal("particles","ppc",1.0);
+
+  // compute number of particles as real number, since ppc can be < 1
   auto &indcs = pmy_pack->pmesh->mb_indcs;
-  nparticles_thispack = ppc*(pmy_pack->nmb_thispack)*indcs.nx1*indcs.nx2*indcs.nx3;
+  int ncells = indcs.nx1*indcs.nx2*indcs.nx3;
+  Real r_npart = ppc*static_cast<Real>((pmy_pack->nmb_thispack)*ncells);
+  // then cast to integer
+  nparticles_thispack = static_cast<int>(r_npart);
+  nparticles_total = nparticles_thispack;
+
+std::cout << "npart="<<nparticles_thispack<<std::endl;
 
   // select pusher algorithm
   std::string ppush = pin->GetString("particles","pusher");
@@ -42,7 +50,7 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
   if (pmy_pack->pmesh->three_d) {ndim++;}
   Kokkos::realloc(prtcl_pos, nparticles_thispack, ndim);
   Kokkos::realloc(prtcl_vel, nparticles_thispack, ndim);
-  Kokkos::realloc(prtcl_gid, nparticles_thispack, ndim);
+  Kokkos::realloc(prtcl_gid, nparticles_thispack);
 
   // allocate boundary buffers for conserved (cell-centered) variables
 
