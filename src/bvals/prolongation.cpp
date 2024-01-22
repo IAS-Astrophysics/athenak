@@ -31,7 +31,7 @@ void BoundaryValuesCC::FillCoarseInBndryCC(DvceArray5D<Real> &a, DvceArray5D<Rea
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
   MeshBlockPack* pmbp = pmy_pack->pmesh->pmb_pack;
-  z4c::Z4c* pz4c = pmbp->pz4c;
+  bool not_z4c = (pmbp->pz4c == nullptr)? true : false;
 
   int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
   int nmnv = nmb*nnghbr*nvar;
@@ -100,7 +100,7 @@ void BoundaryValuesCC::FillCoarseInBndryCC(DvceArray5D<Real> &a, DvceArray5D<Rea
                                  + a(m,v,kl,finej+1,finei) + a(m,v,kl,finej+1,finei+1));
           // restrict in 3D
           } else {
-            if (!is_z4c) {
+            if (not_z4c) {
               ca(m,v,k,j,i) = 0.125*(
                   a(m,v,finek  ,finej  ,finei) + a(m,v,finek  ,finej  ,finei+1)
                 + a(m,v,finek  ,finej+1,finei) + a(m,v,finek  ,finej+1,finei+1)
@@ -138,7 +138,7 @@ void BoundaryValuesCC::ProlongateCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca,
 
   // ptr to z4c, which requires different prolongation/restriction scheme
   MeshBlockPack* pmbp = pmy_pack->pmesh->pmb_pack;
-  z4c::Z4c* pz4c = pmbp->pz4c;
+  bool not_z4c = (pmbp->pz4c == nullptr)? true : false;
 
   int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
   int nmnv = nmb*nnghbr*nvar;
@@ -190,7 +190,7 @@ void BoundaryValuesCC::ProlongateCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca,
         int fj = (j - indcs.cjs)*2 + indcs.js;
         int fk = (k - indcs.cks)*2 + indcs.ks;
         // call inlined prolongation operator for CC variables
-        if (!is_z4c) {
+        if (not_z4c) {
           ProlongCC(m,v,k,j,i,fk,fj,fi,multi_d,three_d,ca,a);
         } else {
           switch (indcs.ng) {

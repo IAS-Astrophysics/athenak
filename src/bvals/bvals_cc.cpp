@@ -210,6 +210,7 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
   Kokkos::fence();
   int my_rank = global_variable::my_rank;
   auto &nghbr = pmy_pack->pmb->nghbr;
+  auto &is_z4c = is_z4c_;
   bool no_errors=true;
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
@@ -227,7 +228,7 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
           if ( nghbr.h_view(m,n).lev < pmy_pack->pmb->mb_lev.h_view(m) ) {
             data_size *= send_buf[n].icoar_ndat;
           } else if ( nghbr.h_view(m,n).lev == pmy_pack->pmb->mb_lev.h_view(m) ) {
-            if (is_z4c_) {
+            if (is_z4c) {
               data_size *= send_buf[n].isame_z4c_ndat;
             } else {
               data_size *= send_buf[n].isame_ndat;

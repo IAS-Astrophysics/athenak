@@ -499,7 +499,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
       chi_guarded * z4c.alpha(m,k,j,i) * K;
     rhs.vTheta(m,k,j,i) = LTheta + z4c.alpha(m,k,j,i) * (
         0.5*Ht - (2. + opt.damp_kappa2) * opt.damp_kappa1 * z4c.vTheta(m,k,j,i));
-    // Matter commented out -- JMF: this is already in the Hamiltonian constraint.
+    // Matter term
     rhs.vTheta(m,k,j,i) -= 8.*M_PI * z4c.alpha(m,k,j,i) * tmunu.E(m,k,j,i);
     // If BSSN is enabled, theta is disabled.
     rhs.vTheta(m,k,j,i) *= opt.use_z4c;
