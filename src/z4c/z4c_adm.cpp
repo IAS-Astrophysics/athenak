@@ -6,9 +6,10 @@
 //! \file adm_z4c.cpp
 //! \brief implementation of functions in the Z4c class related to ADM decomposition
 
+// C standard headers
+#include <math.h> // pow
 
 // C++ standard headers
-#include <cmath> // pow
 #include <iostream>
 #include <fstream>
 
@@ -72,8 +73,8 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
     Real detg = adm::SpatialDet(adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i),
                                 adm.g_dd(m,0,2,k,j,i), adm.g_dd(m,1,1,k,j,i),
                                 adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i));
-    Real oopsi4 = std::pow(detg, -1./3.);
-    z4c.chi(m,k,j,i) = std::pow(detg, 1./12.*opt.chi_psi_power);
+    Real oopsi4 = pow(detg, -1./3.);
+    z4c.chi(m,k,j,i) = pow(detg, 1./12.*opt.chi_psi_power);
 
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
@@ -97,8 +98,11 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
                                 z4c.vKhat(m,k,j,i) * z4c.g_dd(m,a,b,k,j,i);
     }
   });
+  Kokkos::fence();
 
   DvceArray5D<Real> g_uu("g_uu", nmb, 6, ncells3, ncells2, ncells1);
+  AthenaTensor<Real, TensorSymm::SYM2, 3, 2> g3u;
+  g3u.InitWithShallowSlice(g_uu, 0, 5);
   // GLOOP
   par_for("invert z4c metric",DevExeSpace(),
   0,nmb-1,ksg,keg,jsg,jeg,isg,ieg,
@@ -109,15 +113,15 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
     adm::SpatialInv(1.0/detg,
               z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i), z4c.g_dd(m,0,2,k,j,i),
               z4c.g_dd(m,1,1,k,j,i), z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i),
-              &g_uu(m,0,k,j,i), &g_uu(m,1,k,j,i), &g_uu(m,2,k,j,i),
-              &g_uu(m,3,k,j,i), &g_uu(m,4,k,j,i), &g_uu(m,5,k,j,i));
+              &g3u(m,0,0,k,j,i), &g3u(m,0,1,k,j,i), &g3u(m,0,2,k,j,i),
+              &g3u(m,1,1,k,j,i), &g3u(m,1,2,k,j,i), &g3u(m,2,2,k,j,i));
   });
   Kokkos::fence();
 
   // Compute Gammas
   // Compute only for internal points
   // ILOOP
-  int const &IZ4CGAMX = pmbp->pz4c->I_Z4C_GAMX;
+  /*int const &IZ4CGAMX = pmbp->pz4c->I_Z4C_GAMX;
   int const &IZ4CGAMY = pmbp->pz4c->I_Z4C_GAMY;
   int const &IZ4CGAMZ = pmbp->pz4c->I_Z4C_GAMZ;
   auto              &u0 = pmbp->pz4c->u0;
@@ -132,12 +136,28 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
   sub_DvceArray5D_0D g_12 = Kokkos::subview(g_uu, Kokkos::ALL, 4,
                             Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
   sub_DvceArray5D_0D g_22 = Kokkos::subview(g_uu, Kokkos::ALL, 5,
-                            Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+                            Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);*/
   par_for("initialize Gamma",DevExeSpace(),0,nmb-1,ks,ke,js,je,is,ie,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
     // Usage of Dx: pmbp->pz4c->Dx(blockn, posvar, k,j,i, dir, nghost, dx, quantity);
     Real idx[] = {1/size.d_view(m).dx1, 1/size.d_view(m).dx2, 1/size.d_view(m).dx3};
-    u0(m,IZ4CGAMX,k,j,i) = -Dx<NGHOST>(0, idx, g_00, m, k, j, i)  // d/dx g00
+    /*AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;
+    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_udd;
+    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> dg_ddd;
+    Real detg = adm::SpatialDet(z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i),
+                                z4c.g_dd(m,0,2,k,j,i), z4c.g_dd(m,1,1,k,j,i),
+                                z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i));
+    adm::SpatialInv(1.0/detg,
+              z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i), z4c.g_dd(m,0,2,k,j,i),
+              z4c.g_dd(m,1,1,k,j,i), z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i),
+              &g_uu(0,0), &g_uu(0,1), &g_uu(0,2),
+              &g_uu(1,1), &g_uu(1,2), &g_uu(2,2));
+    for (int a = 0; a < 3; ++a)
+    for (int b = 0; b < a; ++b)
+    for (int c = 0; c < 3; ++c) {
+      dg_ddd(c,a,b) = Dx<NGHOST>(c, idx, z4c.g_dd, m, a, b, k, j, i);
+    }*/
+    /*u0(m,IZ4CGAMX,k,j,i) = -Dx<NGHOST>(0, idx, g_00, m, k, j, i)  // d/dx g00
                            -Dx<NGHOST>(1, idx, g_01, m, k, j, i)  // d/dy g01
                            -Dx<NGHOST>(2, idx, g_02, m, k, j, i); // d/dz g02
     u0(m,IZ4CGAMY,k,j,i) = -Dx<NGHOST>(0, idx, g_01, m, k, j, i)  // d/dx g01
@@ -145,7 +165,27 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
                            -Dx<NGHOST>(2, idx, g_12, m, k, j, i); // d/dz g12
     u0(m,IZ4CGAMZ,k,j,i) = -Dx<NGHOST>(0, idx, g_02, m, k, j, i)  // d/dx g01
                            -Dx<NGHOST>(1, idx, g_12, m, k, j, i)  // d/dy g11
-                           -Dx<NGHOST>(2, idx, g_22, m, k, j, i); // d/dz g12
+                           -Dx<NGHOST>(2, idx, g_22, m, k, j, i); // d/dz g12*/
+    /*for (int a = 0; a < 3; ++a)
+    for (int b = 0; b < 3; ++b)
+    for (int c = 0; c < b; ++c) {
+      Gamma_udd(a, b, c) = 0.0;
+      for (int d = 0; d < 3; ++d) {
+        Gamma_udd(a, b, c) += 0.5*g_uu(a, d)*
+          (-dg_ddd(d, b, c) + dg_ddd(b, d, c) + dg_ddd(c, b, d));
+      }
+    }
+    for (int a = 0; a < 3; ++a)
+    for (int b = 0; b < 3; ++b)
+    for (int c = 0; c < 3; ++c) {
+      z4c.vGam_u(m, a, k, j, i) += g_uu(b, c)*Gamma_udd(a, b, c);
+    }*/
+    for (int a = 0; a < 3; ++a) {
+      z4c.vGam_u(m, a, k, j, i) = 0.0;
+      for (int b = 0; b < 3; ++b) {
+        z4c.vGam_u(m, a, k, j, i) -= Dx<NGHOST>(b, idx, g3u, m, b, a, k, j, i);
+      }
+    }
   });
   AlgConstr(pmbp);
   return;
@@ -177,7 +217,7 @@ void Z4c::Z4cToADM(MeshBlockPack *pmbp) {
   par_for("initialize z4c fields",DevExeSpace(),
   0,nmb-1,ksg,keg,jsg,jeg,isg,ieg,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    adm.psi4(m,k,j,i) = std::pow(z4c.chi(m,k,j,i), 4./opt.chi_psi_power);
+    adm.psi4(m,k,j,i) = pow(z4c.chi(m,k,j,i), 4./opt.chi_psi_power);
 
     // g_ab
     for(int a = 0; a < 3; ++a)
@@ -221,6 +261,7 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
   int nmb = pmbp->nmb_thispack;
 
   auto &z4c = pmbp->pz4c->z4c;
+  auto &opt = pmbp->pz4c->opt;
   auto &adm = pmbp->padm->adm;
   auto &tmunu = pmbp->ptmunu->tmunu;
   auto &u_con = pmbp->pz4c->u_con;
@@ -231,6 +272,7 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> Gamma_u;
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> M_u;
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> dphi_d;
 
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> R_dd;
@@ -305,6 +347,22 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
       for(int c = 0; c < 3; ++c) {
         Gamma_u(a) += g_uu(b,c)*Gamma_udd(a,b,c);
       }
+    }
+
+    // For the constraints, we actually need a contraction over the conformal Christoffels
+    // rather than the physical ones. Fortunately, the relationship between the two is
+    // straightforward and amounts to an extra term and a multiplication by the conformal
+    // factor.
+    Real chi_guarded = (z4c.chi(m,k,j,i)>opt.chi_div_floor)
+                    ? z4c.chi(m,k,j,i) : opt.chi_div_floor;
+    for (int a = 0; a < 3; ++a) {
+      dphi_d(a) = Dx<NGHOST>(a, idx, z4c.chi, m, k, j, i)/(chi_guarded*opt.chi_psi_power);
+    }
+    for (int a = 0; a < 3; ++a) {
+      for (int b = 0; b < 3; ++b) {
+        Gamma_u(a) += 2*g_uu(a,b)*dphi_d(b);
+      }
+      Gamma_u(a) *= adm.psi4(m, k, j, i);
     }
 
     // -----------------------------------------------------------------------------------
