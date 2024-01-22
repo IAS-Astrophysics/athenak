@@ -166,41 +166,6 @@ void SpacetimeUpperMetric(Real const alp,
   u[12] = u[3];
 }
 
-//----------------------------------------------------------------------------------------
-//! \fn void Face1Metric
-//! \brief computes components of (dynamically evolved) 3-metric, lapse and
-//  shift at faces in the x direction for use in Riemann solver
-//check your indices: interface i lives between cells i and i-1
-
-/*KOKKOS_INLINE_FUNCTION
-void Face1Metric(TeamMember_t const &member, const int m, const int k, const int j,
-     const int is,
-     const int ie, const AthenaTensor<Real, TensorSymm::SYM2, 3, 2> &g_dd,
-     const AthenaTensor<Real, TensorSymm::NONE, 3, 1> &beta_u,
-     const AthenaTensor<Real, TensorSymm::NONE, 3, 0> &alpha,
-     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> &gface1_dd,
-     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> &betaface1_u,
-     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> &alphaface1) {
-    par_for_inner(member, is, ie, [&](const int i) {
-         alphaface1(i) = (alpha(m,k,j,i) + alpha(m,k,j,i-1))*0.5;
-    });
-
-     for(int a=0; a < 3; ++a) {
-         par_for_inner(member, is, ie, [&](const int i) {
-             betaface1_u(a,i) = (beta_u(m,a,k,j,i) + beta_u(m,a,k,j,i-1))*0.5;
-         });
-      }
-
-     for(int a=0; a < 3; ++a) {
-         for(int b=a; b < 3; ++b) {
-            par_for_inner(member, is, ie, [&](const int i) {
-                gface1_dd(a,b,i) = (g_dd(m,a,b,k,j,i) + g_dd(m,a,b,k,j,i-1))*0.5;
-             });
-          }
-       }
-
-     return;
-}*/
 
 //----------------------------------------------------------------------------------------
 //! \fn void Face1Metric
@@ -231,42 +196,6 @@ void Face1Metric(const int m, const int k, const int j, const int i,
 }
 
 
-
-//----------------------------------------------------------------------------------------
-//! \fn void Face2Metric
-//! \brief computes components of (dynamically evolved) 3-metric, lapse and
-//  shift at faces in the y direction for use in Riemann solver
-//check your indices: interface i lives between cells i and i-1
-
-/*KOKKOS_INLINE_FUNCTION
-void Face2Metric(TeamMember_t const &member, const int m, const int k, const int j,
-     const int is,
-     const int ie, const AthenaTensor<Real, TensorSymm::SYM2, 3, 2> &g_dd,
-     const AthenaTensor<Real, TensorSymm::NONE, 3, 1> &beta_u,
-     const AthenaTensor<Real, TensorSymm::NONE, 3, 0> &alpha,
-     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> &gface2_dd,
-     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> &betaface2_u,
-     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> &alphaface2) {
-    par_for_inner(member, is, ie, [&](const int i) {
-         alphaface2(i) = (alpha(m,k,j,i) + alpha(m,k,j-1,i))*0.5;
-    });
-
-     for(int a=0; a < 3; ++a) {
-         par_for_inner(member, is, ie, [&](const int i) {
-             betaface2_u(a,i) = (beta_u(m,a,k,j,i) + beta_u(m,a,k,j-1,i))*0.5;
-         });
-     }
-     for(int a=0; a < 3; ++a) {
-         for(int b=a; b < 3; ++b) {
-            par_for_inner(member, is, ie, [&](const int i) {
-                gface2_dd(a,b,i) = (g_dd(m,a,b,k,j,i) + g_dd(m,a,b,k,j-1,i))*0.5;
-             });
-          }
-       }
-
-     return;
-}*/
-
 //----------------------------------------------------------------------------------------
 //! \fn void Face2Metric
 //! \brief computes components of (dynamically evolved) 3-metric, lapse and
@@ -295,41 +224,6 @@ void Face2Metric(const int m, const int k, const int j, const int i,
   return;
 }
 
-
-//----------------------------------------------------------------------------------------
-//! \fn void Face3Metric
-//! \brief computes components of (dynamically evolved) 3-metric, lapse and
-//  shift at faces in the y direction for use in Riemann solver
-//check your indices: interface i lives between cells i and i-1
-
-/*KOKKOS_INLINE_FUNCTION
-void Face3Metric(TeamMember_t const &member, const int m, const int k, const int j,
-     const int is,
-     const int ie, const AthenaTensor<Real, TensorSymm::SYM2, 3, 2> &g_dd,
-     const AthenaTensor<Real, TensorSymm::NONE, 3, 1> &beta_u,
-     const AthenaTensor<Real, TensorSymm::NONE, 3, 0> &alpha,
-     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> &gface3_dd,
-     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> &betaface3_u,
-     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> &alphaface3) {
-    par_for_inner(member, is, ie, [&](const int i) {
-         alphaface3(i) = (alpha(m,k,j,i) + alpha(m,k-1,j,i))*0.5;
-    });
-
-     for(int a=0; a < 3; ++a) {
-         par_for_inner(member, is, ie, [&](const int i) {
-             betaface3_u(a,i) = (beta_u(m,a,k,j,i) + beta_u(m,a,k-1,j,i))*0.5;
-         });
-      }
-     for(int a=0; a < 3; ++a) {
-         for(int b=a; b < 3; ++b) {
-            par_for_inner(member, is, ie, [&](const int i) {
-                gface3_dd(a,b,i) = (g_dd(m,a,b,k,j,i) + g_dd(m,a,b,k-1,j,i))*0.5;
-             });
-          }
-       }
-
-     return;
-}*/
 
 //----------------------------------------------------------------------------------------
 //! \fn void Face3Metric
