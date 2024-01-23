@@ -109,6 +109,11 @@ class PrimitiveSolverHydro {
     errcap = pin->GetOrAddInteger(block, "c2perrs", 1000);
     SetPolicyParams(block, pin);
 
+    // Calculate maximum allowed velocity
+    Real Wmax = pin->GetOrAddReal(block, "gamma_max", 50.0);
+    Real vmax = sqrt(1.0 - 1.0/(Wmax*Wmax));
+    ps.GetEOSMutable().SetMaxVelocity(vmax);
+
     for (int n = 0; n < ps.GetEOS().GetNSpecies(); n++) {
       std::stringstream spec_name;
       spec_name << "s" << (n + 1) << "_atmosphere";
