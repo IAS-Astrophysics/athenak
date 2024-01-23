@@ -211,6 +211,11 @@ class RadiationFEMN {
 };
 
 KOKKOS_INLINE_FUNCTION
+Real Sgn(Real x) {
+  return (x >= 0) ? +1. : -1.;
+}
+
+KOKKOS_INLINE_FUNCTION
 RadiationFEMNPhaseIndices IndicesComponent(int n, int num_points, int num_energy_bins = 1, int num_species = 1) {
   RadiationFEMNPhaseIndices idcs = {.combinedidx = n,
       .nuidx = int(n / (num_energy_bins * num_points)),
